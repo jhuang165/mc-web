@@ -41,6 +41,7 @@ export class PlayerAnimation {
     this.requested = 0;
     this.stepDistance = 0;
     this.eating = 0;
+    this.look = null;
   }
   swing() {
     if (this.swingTime >= SWING_SECONDS * 0.5) this.swingTime = 0;
@@ -54,6 +55,7 @@ export class PlayerAnimation {
       grounded = true,
       bobbing = true,
       eating = 0,
+      yaw = 0, pitch = 0,
     } = {},
   ) {
     this.swingTime += dt;
@@ -69,7 +71,15 @@ export class PlayerAnimation {
       Math.min(1, dt * 10);
     this.walk += speed * 20 * dt * 0.6;
     this.eating = eating;
+    if(!this.look)this.look={yaw,pitch};
+    const yawDelta = Math.atan2(Math.sin(yaw-this.look.yaw),Math.cos(yaw-this.look.yaw));
+    const sway={x:-(pitch-this.look.pitch)*.1,y:-yawDelta*.1};
+    const follow=1-Math.pow(.5,dt*20);
+    this.look.yaw+=yawDelta*follow;this.look.pitch+=(pitch-this.look.pitch)*follow;
+    const progress=Math.min(1,this.swingTime / SWING_SECONDS);
     return {
+      progress,
+      sway,
       bob: bobbing ? bobPose(-this.walk, this.amount) : bobPose(0, 0),
       swing: swingPose(Math.min(1, this.swingTime / SWING_SECONDS)),
       equip: this.equipped,

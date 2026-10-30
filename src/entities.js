@@ -28,7 +28,7 @@ export function actorCollides(world, x, y, z, w, h) {
   return false;
 }
 export function entityHit(origin, dir, e, reach) {
-  const t = ENTITY_TYPES[e.type];
+  const base = ENTITY_TYPES[e.type], scale=e.growingAge<0?.5:1,t={width:base.width*scale,height:base.height*scale};
   let near = 0,
     far = reach;
   for (const [axis, min, max] of [
@@ -78,6 +78,9 @@ export class EntityWorld {
           yaw: Number.isFinite(e.yaw) ? e.yaw : 0,
           gait: Number.isFinite(e.gait) ? e.gait : 0,
           age: Number.isFinite(e.age) ? e.age : 0,
+          growingAge:Number.isInteger(e.growingAge)?Math.max(-24000,Math.min(6000,e.growingAge)):0,
+          love:Number.isInteger(e.love)?Math.max(0,Math.min(600,e.love)):0,
+          mateTicks:0,
           wander: 0,
           hurt: 0,
           attack: 0,
@@ -115,6 +118,7 @@ export class EntityWorld {
       attack: 0,
       flee: 0,
       burn: 0,
+      growingAge:0,love:0,mateTicks:0,
     };
   }
   seedAnimals() {
@@ -167,6 +171,7 @@ export class EntityWorld {
     e.health -= damage;
     e.hurt = 10;
     e.flee = 60;
+    e.love=0;e.mateTicks=0;
     e.yaw = Math.atan2(e.x - player.x, e.z - player.z);
     e.vx = Math.sin(e.yaw) * 0.28;
     e.vz = Math.cos(e.yaw) * 0.28;
@@ -178,7 +183,8 @@ export class EntityWorld {
         sound: "mob." + e.type + (e.type === "cow" ? ".hurt" : ".death"),
         position: e,
       });
-      this.events.push({
+      if(e.growingAge>=0)this.events.push({xp:e.type==='zombie'?5:1+Math.floor(Math.random()*3),position:{x:e.x,y:e.y,z:e.z}});
+      if(e.growingAge>=0)this.events.push({
         drop: ENTITY_TYPES[e.type].drop,
         count:
           1 + Math.floor(hash(e.age, e.id.length, this.world.numericSeed) * 3),
@@ -192,7 +198,20 @@ export class EntityWorld {
       });
     return true;
   }
-  tick(player, survival) {
+  feed(e,id,survival){
+    if(!this.entities.includes(e)||e.health<=0||e.type!=='cow'||id!==305||(!survival.creative&&!survival.count(id)))return false;
+    if(e.growingAge!==0||e.love>0)return false;e.love=600;
+    if(!survival.creative)survival.take(id);this.events.push({hearts:true,position:{x:e.x,y:e.y+1,z:e.z}});return true;
+  }
+  breed(){
+    const cows=this.entities.filter(e=>e.type==='cow'&&e.health>0&&e.growingAge===0&&e.love>0);
+    for(const a of cows){if(!a.love)continue;const b=cows.find(b=>b!==a&&b.love>0&&Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z)<3);
+      if(!b){a.mateTicks=0;continue;}if(++a.mateTicks<60)continue;if(this.entities.length>=40)continue;
+      const baby=this.create('cow',a.x,a.y,a.z);baby.growingAge=-24000;this.entities.push(baby);a.growingAge=b.growingAge=6000;a.love=b.love=0;a.mateTicks=b.mateTicks=0;
+      this.events.push({hearts:true,position:{x:a.x,y:a.y+1,z:a.z}},{xp:1+Math.floor(Math.random()*7),position:{x:a.x,y:a.y,z:a.z}});
+    }
+  }
+  tick(player, survival, heldItem=0) {
     const night =
       survival.time % 24000 > 13000 && survival.time % 24000 < 23000;
     this.spawnClock++;
@@ -219,8 +238,11 @@ export class EntityWorld {
         e.death = (e.death || 0) + 1;
         continue;
       }
-      const t = ENTITY_TYPES[e.type];
+      const base=ENTITY_TYPES[e.type],scale=e.growingAge<0?.5:1,t={...base,width:base.width*scale,height:base.height*scale};
       e.age++;
+      if(e.growingAge<0)e.growingAge++;else if(e.growingAge>0)e.growingAge--;
+      e.love=Math.max(0,e.love-1);
+      if(e.love&&e.age%10===0)this.events.push({hearts:true,position:{x:e.x,y:e.y+1,z:e.z}});
       e.hurt = Math.max(0, e.hurt - 1);
       e.attack = Math.max(0, e.attack - 1);
       e.flee = Math.max(0, e.flee - 1);
@@ -252,6 +274,10 @@ export class EntityWorld {
           survival.damage(t.damage, "a zombie");
           e.attack = 20;
         }
+      } else if(e.type==='cow'&&!e.flee&&(e.love>0||(heldItem===305&&(survival.creative||survival.count(305))&&distance<10)||e.growingAge<0)){
+        const partner=e.love?this.entities.find(b=>b!==e&&b.type==='cow'&&b.love>0&&b.health>0&&b.growingAge===0):null;
+        const mother=e.growingAge<0?this.entities.find(b=>b!==e&&b.type==='cow'&&b.growingAge>=0&&b.health>0&&Math.hypot(b.x-e.x,b.z-e.z)<8):null;
+        const goal=partner||mother||player,d=Math.hypot(goal.x-e.x,goal.z-e.z);e.yaw=Math.atan2(goal.x-e.x,goal.z-e.z);speed=d>(partner?1:mother?2:2.5)?t.speed*1.25:0;e.walking=speed>0;
       } else if (e.flee) {
         speed = 0.13;
       } else {
@@ -337,6 +363,7 @@ export class EntityWorld {
         e.death = 20;
       }
     }
+    this.breed();
     this.entities = this.entities.filter((e) => e.health > 0 || e.death < 20);
   }
   serialize() {

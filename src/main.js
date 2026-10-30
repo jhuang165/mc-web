@@ -1,4 +1,5 @@
 import "./style.css";
+import "./minecraft-ui.css";
 import * as THREE from "three";
 import {
   World,
@@ -16,6 +17,8 @@ import { VoxelScene } from "./scene.js";
 import { SoundBank, blockSound } from "./audio.js";
 import { PlayerAnimation } from "./animation.js";
 import { FirstPerson, itemTexture } from "./first-person.js";
+import {Experience,ExperienceOrbs,oreExperience,SMELT_EXPERIENCE} from "./experience.js";
+import {ExperienceRenderer} from "./experience-renderer.js";
 import {Farming,cropDrops} from "./farming.js";
 import { EntityWorld } from "./entities.js";
 import { MobRenderer } from "./mob-renderer.js";
@@ -89,7 +92,7 @@ let screen = "home",
   lockFallback = false,
   saved = true,
   lastJump = 0;
-let farming;
+let farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer;
 let sounds,
   firstPerson,
   mobs,
@@ -111,20 +114,18 @@ let survival = new Survival({}, "creative"),
   craftGrid = [],
   inventoryIngredient = 0,
   inventorySearch = "",
+  furnaceLoadSlot = "input",
   openFurnaceKey = null,
   droppedInventories = [];
 $("#app").innerHTML = `
  <div id="viewport" aria-label="Interactive voxel world"></div><div id="vignette"></div>
- <main id="home">
-  <header class="header"><a class="brand" href="#" aria-label="Blockworld home">${cube}<span>BLOCKWORLD<small>JAVA → BROWSER</small></span></a><nav aria-label="Main navigation"><button class="nav active" data-action="home">Play <span class="nav-dot"></span></button><button class="nav" data-action="notes">Field notes ${arrow}</button><button class="nav" data-action="controls">How to play ${arrow}</button></nav><button class="icon-button settings-button" data-action="settings" aria-label="Settings">⚙</button></header>
-  <section class="hero"><div class="eyebrow"><span class="status-dot"></span> YOUR NEXT ADVENTURE, ONE BLOCK AWAY</div><h1>A small world.<br>Endless <em>possibilities.</em></h1><p>Get a little lost. Build something unexpected.<br>A familiar kind of freedom, right in your browser.</p><div class="hero-actions"><button class="button primary" id="enter">Enter your world <span>→</span></button><button class="button glass" data-action="create"><span>＋</span> Create a world</button></div><div class="hero-detail"><span class="tiny-cube">◇</span> No install. Just imagination.<span class="detail-separator">/</span> Creative & survival</div></section>
-  <div class="scene-caption"><span class="caption-cross">＋</span><div>THE OVERWORLD<small>Somewhere worth getting lost.</small></div><span class="coordinate">64° N · 128° W</span></div>
-  <section class="world-shelf"><div class="shelf-heading"><div><span class="eyebrow dark">PICK UP WHERE YOU LEFT OFF</span><h2>Your little corner of everything.</h2></div><button class="text-button" id="import">Import world <span>↓</span></button></div><div id="worlds" class="world-grid"></div><div class="shelf-footer"><span><i class="status-dot"></i> Worlds stay on this device</span><button class="text-button" data-action="controls">The world is yours. Here’s how to play <span>→</span></button></div></section>
-  <footer class="site-footer"><span>An experiment in play.</span><span>INSPIRED BY JAVA 1.7.10 <i>·</i> INDEPENDENT BROWSER RECREATION</span><button data-action="notes">Made of blocks & curiosity ${arrow}</button></footer>
+ <main id="home" class="minecraft-home">
+  <div class="title-screen"><div class="minecraft-logo" aria-label="Minecraft"><i></i><i></i></div><div class="title-buttons"><button class="button" id="enter">Singleplayer</button><button class="button" data-action="create">Create New World</button><button class="button" data-action="settings">Options...</button><button class="button" data-action="controls">Controls...</button></div><footer class="minecraft-footer"><span>Minecraft 1.7.10 · Web recreation</span><span>Copyright Mojang AB</span></footer></div>
+  <section class="world-shelf"><h2>Select World</h2><div id="worlds" class="world-grid"></div><div class="world-buttons"><button class="button" data-action="create">Create New World</button><button class="button" id="import">Import World</button><button class="button" id="world-select-back">Cancel</button></div></section>
  </main>
- <section id="hud" class="hidden" aria-label="Game heads-up display"><div class="game-top"><button class="game-brand" id="pause-button">${cube}<span>BLOCKWORLD<small id="world-label"></small></span><span class="pause-symbol">Ⅱ</span></button><div class="game-status"><span class="status-dot"></span><span id="save-label">Saved on this device</span><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div></div><div id="crosshair">＋</div><pre id="debug" class="hidden"></pre><div id="block-label"></div><div id="survival-hud" class="survival-hud hidden"></div><div id="mining-meter" class="mining-meter hidden" role="progressbar" aria-label="Mining progress" aria-valuemin="0" aria-valuemax="100"><i></i></div><div id="damage-flash"></div><div id="flight-label" class="flight-label"><span id="mode-label">CREATIVE</span> <span>·</span> <b id="movement-label">WALKING</b></div><div class="hotbar" id="hotbar"></div><div class="game-help">W A S D <span>move</span> <i>·</i> SPACE <span>jump</span> <i>·</i> LMB <span>break</span> <i>·</i> RMB <span>use / place</span> <i>·</i> E <span>inventory</span> <i>·</i> ESC <span>pause</span></div><div id="mobile-controls"><div class="dpad"><button data-key="KeyW">↑</button><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="touch-actions"><button id="touch-break">Break</button><button id="touch-place">Use</button><button id="touch-inventory">Bag</button><button id="touch-fly">Fly</button><button data-key="Space">Jump</button></div></div></section>
+ <section id="hud" class="hidden" aria-label="Game heads-up display"><div class="game-top"><button class="game-brand" id="pause-button">${cube}<span>BLOCKWORLD<small id="world-label"></small></span><span class="pause-symbol">Ⅱ</span></button><div class="game-status"><span class="status-dot"></span><span id="save-label">Saved on this device</span><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div></div><div id="crosshair">＋</div><pre id="debug" class="hidden"></pre><div id="block-label"></div><div id="experience-hud" class="hidden"><div id="experience-level"></div><div class="experience-track"><div id="experience-fill"></div></div></div><div id="survival-hud" class="survival-hud hidden"></div><div id="mining-meter" class="mining-meter hidden" role="progressbar" aria-label="Mining progress" aria-valuemin="0" aria-valuemax="100"><i></i></div><div id="damage-flash"></div><div id="flight-label" class="flight-label"><span id="mode-label">CREATIVE</span> <span>·</span> <b id="movement-label">WALKING</b></div><div class="hotbar" id="hotbar"></div><div class="game-help">W A S D <span>move</span> <i>·</i> SPACE <span>jump</span> <i>·</i> LMB <span>break</span> <i>·</i> RMB <span>use / place</span> <i>·</i> E <span>inventory</span> <i>·</i> ESC <span>pause</span></div><div id="mobile-controls"><div class="dpad"><button data-key="KeyW">↑</button><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="touch-actions"><button id="touch-break">Break</button><button id="touch-place">Use</button><button id="touch-inventory">Bag</button><button id="touch-fly">Fly</button><button data-key="Space">Jump</button></div></div></section>
  <div class="modal-overlay hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div><div id="toast" role="status"></div><input id="file-input" type="file" accept=".json,application/json" hidden>
- <div id="loading"><div class="loading-cube">${cube}</div><span>Making a little room for imagination…</span></div>`;
+ <div id="loading"><span>Loading terrain</span></div>`;
 
 const presets = [
   {
@@ -171,7 +172,7 @@ function renderWorlds() {
   $("#worlds").innerHTML = display
     .map(
       (w, i) =>
-        `<article class="world-card"><button class="world-open" data-world="${i}"><div class="world-thumb ${esc(w.biome)}"><span class="thumb-sun"></span><span class="thumb-hill h1"></span><span class="thumb-hill h2"></span><span class="thumb-tree t1"></span><span class="thumb-tree t2"></span><span class="thumb-tree t3"></span></div><div class="world-copy"><div class="world-meta"><span>${esc(w.tag || w.biome.toUpperCase())}</span><span>${w.mode === "survival" ? "SURVIVAL" : w.preset ? "READY TO EXPLORE" : "CREATIVE"}</span></div><h3>${esc(w.name)} <span>↗</span></h3><p>${esc(w.preset ? w.description : relativeDate(w.updated))}</p></div></button>${!w.preset ? `<button class="world-more" data-manage="${i}" aria-label="Manage ${esc(w.name)}">···</button>` : ""}</article>`,
+        `<article class="world-card"><button class="world-open" data-world="${i}"><div class="world-thumb ${esc(w.biome)}"><span class="thumb-sun"></span><span class="thumb-hill h1"></span><span class="thumb-hill h2"></span><span class="thumb-tree t1"></span><span class="thumb-tree t2"></span><span class="thumb-tree t3"></span></div><div class="world-copy"><div class="world-meta"><span>${esc(w.tag || w.biome.toUpperCase())}</span><span>${w.mode === "survival" ? "SURVIVAL" : w.preset ? "READY TO EXPLORE" : "CREATIVE"}</span></div><h3>${esc(w.name)} </h3><p>${esc(w.preset ? w.description : relativeDate(w.updated))}</p></div></button>${!w.preset ? `<button class="world-more" data-manage="${i}" aria-label="Manage ${esc(w.name)}">···</button>` : ""}</article>`,
     )
     .join("");
   document.querySelectorAll("[data-world]").forEach(
@@ -269,7 +270,7 @@ function modal(title, body, extra = "") {
   if (screen === "playing") screen = "paused";
   if (document.pointerLockElement) document.exitPointerLock();
   $("#modal").innerHTML =
-    `<div class="modal ${extra}"><div class="modal-top"><span class="eyebrow dark">BLOCKWORLD / ${screen === "home" ? "THE FIELD GUIDE" : "TAKE A BREATHER"}</span><button class="close-button" aria-label="Close dialog">×</button></div><h2 id="modal-title">${title}</h2>${body}</div>`;
+    `<div class="modal ${extra}"><div class="modal-top"><button class="close-button" aria-label="Close dialog">×</button></div><h2 id="modal-title">${title}</h2>${body}</div>`;
   $("#modal").classList.remove("hidden");
   $("#modal .close-button").onclick = () => {
     if (screen === "inventory") resume();
@@ -280,8 +281,8 @@ function modal(title, body, extra = "") {
 }
 function createWorld() {
   modal(
-    "Every world starts somewhere.",
-    `<p class="modal-subtitle">Choose your beginning. Build freely, or earn every block.</p><form id="create-form"><label>WORLD NAME<input id="new-name" maxlength="40" value="My little world" required></label><div class="form-columns"><label>GAME MODE<select id="new-mode"><option value="survival">Survival</option><option value="creative">Creative</option></select></label><label>LANDSCAPE<select id="new-biome"><option value="meadow">Meadow</option><option value="alpine">Highlands</option><option value="island">Island</option></select></label></div><label>SEED <span>Same seed, same beginning.</span><input id="new-seed" maxlength="80" placeholder="Leave blank for a surprise"></label><p class="form-note">Survival starts empty-handed. Gather wood, craft tools, and watch your health and hunger. 128 × 128 blocks; custom terrain.</p><button class="button primary full">Create & explore <span>→</span></button></form>`,
+    "Create New World",
+    `<p class="modal-subtitle"></p><form id="create-form"><label>WORLD NAME<input id="new-name" maxlength="40" value="New World" required></label><div class="form-columns"><label>GAME MODE<select id="new-mode"><option value="survival">Survival</option><option value="creative">Creative</option></select></label><label>LANDSCAPE<select id="new-biome"><option value="meadow">Meadow</option><option value="alpine">Highlands</option><option value="island">Island</option></select></label></div><label>SEED <span>Same seed, same beginning.</span><input id="new-seed" maxlength="80" placeholder="Leave blank for a surprise"></label><p class="form-note">Survival starts empty-handed. Gather wood, craft tools, and watch your health and hunger. 128 × 128 blocks; custom terrain.</p><button class="button primary full">Create New World</button></form>`,
   );
   $("#create-form").onsubmit = (e) => {
     e.preventDefault();
@@ -301,7 +302,7 @@ function createWorld() {
 }
 function controls() {
   modal(
-    "A few keys. A whole world.",
+    "Controls",
     `<p class="modal-subtitle">In Survival, start by punching a tree. In Creative, all materials are available.</p><div class="control-list">${[
       ["W A S D", "Move around"],
       ["MOUSE", "Look around"],
@@ -318,19 +319,19 @@ function controls() {
       .map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`)
       .join(
         "",
-      )}</div><p class="form-note">Right-click a crafting table for the 3 × 3 grid or a furnace to smelt. Put materials into the crafting grid, then take the result. Click an occupied grid cell to clear it.</p><p class="form-note">To farm: break tall grass for seeds, right-click exposed grass/dirt with a hoe, then plant seeds on the tilled soil. Water within four blocks keeps soil hydrated. Bone meal advances growth; harvest mature golden wheat and craft three wheat into bread.</p><p class="form-note">If mouse capture is unavailable, drag to look and click once to mine the targeted block. Touch controls include a Fly button in Creative.</p>`,
+      )}</div><p class="form-note">Right-click a crafting table for the 3 × 3 grid or a furnace to smelt. Put materials into the crafting grid, then take the result. Click an occupied grid cell to clear it.</p><p class="form-note">To farm: break tall grass for seeds, right-click exposed grass/dirt with a hoe, then plant seeds on the tilled soil. Hold wheat to lead cows; feed two adults to breed a calf. Water within four blocks keeps soil hydrated. Bone meal advances growth; harvest mature golden wheat and craft three wheat into bread.</p><p class="form-note">If mouse capture is unavailable, drag to look and click once to mine the targeted block. Touch controls include a Fly button in Creative.</p>`,
   );
 }
 function notes() {
   modal(
     "Rebuilding 1.7.10, system by system.",
-    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, regeneration, fall damage, drowning, death and recoverable inventory drops. Shaped crafting, a crafting table, a fuel-driven furnace, wood, stone, iron, diamond and gold tools with durability. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Caves, ores, torches, and a day/night lighting cycle. Wheat farming with five hoe tiers, seeds, moisture, eight growth stages, bone meal, harvesting and bread crafting.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, armor, enchantments, redstone, dimensions, structures, weather, Java saves, and multiplayer. The renderer, terrain, inventory layout, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
+    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. Shaped crafting, a crafting table, a fuel-driven furnace, wood, stone, iron, diamond and gold tools with durability. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Cows follow wheat and breed calves. Caves, ores, torches, and a day/night lighting cycle. Wheat farming with five hoe tiers, seeds, moisture, eight growth stages, bone meal, harvesting and bread crafting.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, armor, enchantments, redstone, dimensions, structures, weather, Java saves, and multiplayer. The renderer, terrain, inventory layout, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
     "notes-modal",
   );
 }
 function settings() {
   modal(
-    "Make yourself comfortable.",
+    "Options",
     `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>Field of view <output id="fov-value">${options.fov}°</output><input type="range" id="fov" min="50" max="100" value="${options.fov}"></label><label>Mouse sensitivity <output id="sensitivity-value">${options.sensitivity.toFixed(1)}×</output><input type="range" id="sensitivity" min="0.2" max="2" step="0.1" value="${options.sensitivity}"></label><label>View distance <output id="distance-value">${options.distance} blocks</output><input type="range" id="distance" min="70" max="200" step="5" value="${options.distance}"></label><label>Sound volume <output id="volume-value">${Math.round(options.volume * 100)}%</output><input type="range" id="volume" min="0" max="1" step=".05" value="${options.volume}"></label><label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
   );
   for (const key of [
@@ -386,6 +387,7 @@ function save() {
   active.drops = droppedInventories;
   active.entities = mobs?.serialize() || [];
   active.farms=farming?.serialize()||[];
+  active.experience=experience.serialize();active.xpOrbs=xpOrbs.serialize();
   active.updated = Date.now();
   const i = worlds.findIndex((w) => w.id === active.id);
   if (i < 0) worlds.unshift(active);
@@ -421,7 +423,7 @@ function exportWorld(record = active) {
 function manage(record) {
   modal(
     esc(record.name),
-    `<p class="modal-subtitle">A little world worth keeping.</p><div class="menu-actions"><button class="button primary full" id="manage-play">Continue exploring <span>→</span></button><button class="button secondary full" id="manage-export">Export world <span>↓</span></button><button class="text-button danger" id="manage-delete">Delete from this device</button></div>`,
+    `<p class="modal-subtitle">A little world worth keeping.</p><div class="menu-actions"><button class="button primary full" id="manage-play">Continue exploring </button><button class="button secondary full" id="manage-export">Export world <span>↓</span></button><button class="text-button danger" id="manage-delete">Delete from this device</button></div>`,
   );
   $("#manage-play").onclick = () => launch(record);
   $("#manage-export").onclick = () => exportWorld(record);
@@ -445,7 +447,7 @@ function requestLock() {
     const result = scene.renderer.domElement.requestPointerLock?.();
     result?.catch(() => {
       lockFallback = true;
-      toast("Drag to look · click to break · right-click to build");
+      toast("Drag to look. Left click to mine. Right click to use.");
     });
   } catch {
     lockFallback = true;
@@ -458,6 +460,7 @@ function launch(record) {
     world.restore(record.edits || []);
     scene.setWorld(world);
     farming=new Farming(world,record.farms);
+    experience=new Experience(record.experience);xpOrbs=new ExperienceOrbs(record.xpOrbs);
     mobs = new EntityWorld(world, record.entities);
     mobRenderer.clear();
     animation.reset();
@@ -536,6 +539,7 @@ function launch(record) {
     renderVitals();
     save();
     scene.setTime(survival.time);
+    scene.camera.position.copy(position);scene.camera.position.y+=PHYSICS.eye;scene.camera.rotation.set(pitch,yaw,0,"YXZ");
     if (survival.health <= 0 && !survival.creative) die();
     else {
       requestLock();
@@ -568,8 +572,8 @@ function pause() {
   keys.clear();
   save();
   modal(
-    "The world can wait.",
-    `<p class="modal-subtitle">${esc(active.name)} <span class="middle-dot">·</span> ${saved ? "Your changes are saved." : "Export your world to preserve your changes."}</p><div class="menu-actions"><button class="button primary full" id="resume">Back to your world <span>→</span></button><button class="button secondary full" data-action="settings">Settings <span>⚙</span></button><button class="button secondary full" data-action="controls">How to play <span>↗</span></button><button class="button secondary full" id="export-pause">Export world <span>↓</span></button><button class="text-button full" id="exit-world">Save & return home <span>←</span></button></div>`,
+    "Game menu",
+    `<p class="modal-subtitle"></p><div class="menu-actions"><button class="button primary full" id="resume">Back to Game</button><button class="button secondary full" data-action="settings">Options...</button><button class="button secondary full" data-action="controls">Controls...</button><button class="button secondary full" id="export-pause">Export world <span>↓</span></button><button class="text-button full" id="exit-world">Save and Quit to Title</button></div>`,
   );
   $("#resume").onclick = resume;
   $("#export-pause").onclick = () => exportWorld();
@@ -582,7 +586,7 @@ function goHome() {
   closeModal();
   keys.clear();
   if (document.pointerLockElement) document.exitPointerLock();
-  $("#home").classList.remove("hidden");
+  $("#home").classList.remove("hidden","selecting");
   $("#hud").classList.add("hidden");
   $("#vignette").classList.remove("in-game");
   renderWorlds();
@@ -604,14 +608,16 @@ function renderInventory() {
       (i) => i.id && i.id !== 10 && i.id !== 11 && !i.hidden,
     ),
     owned = creative ? all : all.filter((i) => survival.count(i.id));
+  const rest=owned.filter(i=>!HOTBAR.includes(i.id));
+  const inventorySlots=creative?owned:[...Array.from({length:Math.max(27,rest.length)},(_,i)=>rest[i]||null),...HOTBAR.map(id=>owned.find(i=>i.id===id)||null)];
   const result = matchRecipe(craftGrid, gridSize);
   modal(
     creative
-      ? "A world of materials."
+      ? "Creative Inventory"
       : gridSize === 3
-        ? "The crafting table."
-        : "Inventory & crafting.",
-    `<p class="modal-subtitle">${creative ? "Choose any material or tool for your selected slot." : "Choose an ingredient, then click cells to arrange a recipe. Click a filled cell to clear it."}</p><div class="inventory-layout"><div><input class="inventory-search" id="inventory-search" aria-label="Search inventory" placeholder="Find a material…" value="${esc(inventorySearch)}"><div class="inventory-grid bag-grid" id="bag-grid">${owned.map((i) => `<button data-item="${i.id}" data-name="${esc(i.name.toLowerCase())}" class="${inventoryIngredient === i.id ? "ingredient-selected" : ""}" title="${esc(i.name)}"><span>${icon(i.id)}</span><span>${esc(i.name)}</span>${!creative ? `<b>${survival.count(i.id)}</b>` : ""}</button>`).join("") || '<p class="empty-inventory">Empty hands, endless beginnings.<br>Punch an oak log to gather wood.</p>'}</div></div>${!creative ? `<div class="crafting-panel"><div class="eyebrow dark">CRAFTING · ${gridSize} × ${gridSize}</div><div class="crafting-grid" style="--grid-size:${gridSize}">${craftGrid.map((id, i) => `<button data-cell="${i}" aria-label="Crafting cell ${i + 1}: ${id ? ITEMS[id]?.name || "empty" : "empty"}">${id ? icon(id) : ""}</button>`).join("")}</div><div class="craft-arrow">↓</div><button class="craft-result" id="craft-result" ${!survival.canCraft(result) ? "disabled" : ""} aria-label="${result ? "Craft " + ITEMS[result.output].name : "No matching recipe"}">${result ? icon(result.output) : "<span>?</span>"}<span>${result ? `${result.count} × ${ITEMS[result.output].name}` : "Arrange a recipe"}</span></button><p class="form-note ingredient-note">${inventoryIngredient ? "Ingredient: " + esc(ITEMS[inventoryIngredient].name) : "Select an ingredient on the left."}</p><button class="text-button" id="clear-grid">Clear grid ↺</button></div>` : ""}</div>${
+        ? "Crafting"
+        : "Inventory",
+    `<p class="modal-subtitle">${creative ? "Choose any material or tool for your selected slot." : "Choose an ingredient, then click cells to arrange a recipe. Click a filled cell to clear it."}</p><div class="inventory-layout"><div><input class="inventory-search" id="inventory-search" aria-label="Search inventory" placeholder="Find a material…" value="${esc(inventorySearch)}"><div class="inventory-grid bag-grid" id="bag-grid">${inventorySlots.map((i) => i?`<button data-item="${i.id}" data-name="${esc(i.name.toLowerCase())}" class="${inventoryIngredient === i.id ? "ingredient-selected" : ""}" title="${esc(i.name)}" aria-label="${esc(i.name)} (${survival.count(i.id)})"><span>${icon(i.id)}</span><span>${esc(i.name)}</span>${!creative ? `<b>${survival.count(i.id)}</b>` : ""}</button>`:`<span class="empty-native-slot"></span>`).join("") || '<p class="empty-inventory">Inventory is empty.</p>'}</div></div>${!creative ? `<div class="crafting-panel"><div class="eyebrow dark">CRAFTING · ${gridSize} × ${gridSize}</div><div class="crafting-grid" style="--grid-size:${gridSize}">${craftGrid.map((id, i) => `<button data-cell="${i}" aria-label="Crafting cell ${i + 1}: ${id ? ITEMS[id]?.name || "empty" : "empty"}">${id ? icon(id) : ""}</button>`).join("")}</div><div class="craft-arrow">↓</div><button class="craft-result" id="craft-result" ${!survival.canCraft(result) ? "disabled" : ""} aria-label="${result ? "Craft " + ITEMS[result.output].name : "No matching recipe"}">${result ? icon(result.output) : "<span>?</span>"}<span>${result ? `${result.count} × ${ITEMS[result.output].name}` : "Arrange a recipe"}</span></button><p class="form-note ingredient-note">${inventoryIngredient ? "Ingredient: " + esc(ITEMS[inventoryIngredient].name) : "Select an ingredient on the left."}</p><button class="text-button" id="clear-grid">Clear grid ↺</button></div>` : ""}</div>${
       !creative
         ? `<details class="recipe-guide" ${guideOpen ? "open" : ""}><summary>Recipe guide · ${gridSize === 2 ? "2 × 2 recipes" : "all crafting recipes"}</summary><div class="recipe-list">${RECIPES.filter(
             (r) => r.width <= gridSize && r.height <= gridSize,
@@ -628,9 +634,13 @@ function renderInventory() {
             )
             .join("")}</div></details>`
         : ""
-    }<button class="button primary full inventory-back" id="inventory-back">Back to your world <span>→</span></button>`,
-    "inventory-modal",
+    }<button class="button primary full inventory-back" id="inventory-back">Back to Game</button>`,
+    "inventory-modal"+(creative?"":" native-inventory"+(gridSize===3?" native-workbench":"")),
   );
+  if(!creative){
+    const panel=$('.native-inventory');panel.insertAdjacentHTML('beforeend','<span class="native-bag-label">Inventory</span><span class="native-crafting-label">Crafting</span>');
+    if(gridSize===2)panel.insertAdjacentHTML('beforeend','<div class="native-player" aria-hidden="true"><i class="player-head"></i><i class="player-body"></i><i class="player-arm left"></i><i class="player-arm right"></i><i class="player-leg left"></i><i class="player-leg right"></i></div>');
+  }
   $("#inventory-search").oninput = (e) => {
     inventorySearch = e.target.value;
     document
@@ -707,6 +717,7 @@ function renderInventory() {
   $("#inventory-back").onclick = resume;
 }
 function renderVitals() {
+  $('#experience-hud').classList.toggle('hidden',survival.creative);$('#experience-level').textContent=experience.level||'';$('#experience-fill').style.width=(experience.progress*100)+'%';$('#experience-hud').setAttribute('aria-label',`Experience level ${experience.level}, ${experience.points} of ${experience.level>=30?62+(experience.level-30)*7:experience.level>=15?17+(experience.level-15)*3:17} points`);
   $("#survival-hud").classList.toggle("hidden", survival.creative);
   if (survival.creative) return;
   const hearts = Array.from(
@@ -752,8 +763,8 @@ function renderFurnace() {
       .map(Number)
       .filter((id) => survival.count(id));
   modal(
-    "A little heat goes a long way.",
-    `<p class="modal-subtitle">One smelt takes 10 seconds. Coal fuels eight smelts; wood fuels one and a half.</p><div class="furnace-panel"><div class="furnace-slots"><div><span class="eyebrow dark">INPUT</span><button class="furnace-slot" data-unload="input" aria-label="Take furnace input">${icon(f.input)}<b data-furnace-count="input">${f.inputCount || ""}</b></button><span id="furnace-input-name">${f.input ? ITEMS[f.input]?.name || "Empty" : "Empty"}</span></div><div class="smelt-progress"><span id="furnace-fire">♨</span><progress id="furnace-progress" max="200" value="${f.cook}" aria-label="Smelting progress"></progress><small id="furnace-time">${(f.cook / 20).toFixed(1)} / 10s</small></div><div><span class="eyebrow dark">OUTPUT</span><button class="furnace-slot" data-unload="output" aria-label="Take furnace output">${icon(f.output)}<b data-furnace-count="output">${f.outputCount || ""}</b></button><span id="furnace-output-name">${f.output ? ITEMS[f.output]?.name || "Empty" : "Empty"}</span></div></div><div class="furnace-fuel"><button class="furnace-slot" data-unload="fuel" aria-label="Take furnace fuel">${icon(f.fuel)}<b data-furnace-count="fuel">${f.fuelCount || ""}</b></button><div><span class="eyebrow dark">FUEL</span><p id="furnace-fuel-time">${(f.burn / 20).toFixed(1)}s remaining</p></div></div></div><div class="form-columns furnace-loaders"><label>LOAD INPUT<select id="smelt-input">${inputs.map((id) => `<option value="${id}">${ITEMS[id].name} (${survival.count(id)})</option>`).join("") || '<option value="0">Gather an ore or sand</option>'}</select><button id="load-input" class="button secondary full" ${!inputs.length ? "disabled" : ""}>Add one →</button></label><label>LOAD FUEL<select id="smelt-fuel">${fuels.map((id) => `<option value="${id}">${ITEMS[id].name} (${survival.count(id)})</option>`).join("") || '<option value="0">Gather coal or wood</option>'}</select><button id="load-fuel" class="button secondary full" ${!fuels.length ? "disabled" : ""}>Add one →</button></label></div><p class="form-note">Click a slot to take its contents. The furnace keeps working while its screen is open; pausing stops the world.</p><button class="button primary full" id="furnace-back">Back to your world <span>→</span></button>`,
+    "Furnace",
+    `<p class="modal-subtitle">One smelt takes 10 seconds. Coal fuels eight smelts; wood fuels one and a half.</p><div class="furnace-panel"><div class="furnace-slots"><div><span class="eyebrow dark">INPUT</span><button class="furnace-slot" data-unload="input" aria-label="Take furnace input">${icon(f.input)}<b data-furnace-count="input">${f.inputCount || ""}</b></button><span id="furnace-input-name">${f.input ? ITEMS[f.input]?.name || "Empty" : "Empty"}</span></div><div class="smelt-progress"><span id="furnace-fire">♨</span><progress id="furnace-progress" max="200" value="${f.cook}" aria-label="Smelting progress"></progress><small id="furnace-time">${(f.cook / 20).toFixed(1)} / 10s</small></div><div><span class="eyebrow dark">OUTPUT</span><button class="furnace-slot" data-unload="output" aria-label="Take furnace output">${icon(f.output)}<b data-furnace-count="output">${f.outputCount || ""}</b></button><span id="furnace-output-name">${f.output ? ITEMS[f.output]?.name || "Empty" : "Empty"}</span></div></div><div class="furnace-fuel"><button class="furnace-slot" data-unload="fuel" aria-label="Take furnace fuel">${icon(f.fuel)}<b data-furnace-count="fuel">${f.fuelCount || ""}</b></button><div><span class="eyebrow dark">FUEL</span><p id="furnace-fuel-time">${(f.burn / 20).toFixed(1)}s remaining</p></div></div></div><div class="form-columns furnace-loaders"><label>LOAD INPUT<select id="smelt-input">${inputs.map((id) => `<option value="${id}">${ITEMS[id].name} (${survival.count(id)})</option>`).join("") || '<option value="0">Gather an ore or sand</option>'}</select><button id="load-input" class="button secondary full" ${!inputs.length ? "disabled" : ""}>Add one →</button></label><label>LOAD FUEL<select id="smelt-fuel">${fuels.map((id) => `<option value="${id}">${ITEMS[id].name} (${survival.count(id)})</option>`).join("") || '<option value="0">Gather coal or wood</option>'}</select><button id="load-fuel" class="button secondary full" ${!fuels.length ? "disabled" : ""}>Add one →</button></label></div><p class="form-note">Click a slot to take its contents. The furnace keeps working while its screen is open; pausing stops the world.</p><button class="button primary full" id="furnace-back">Back to Game</button>`,
     "furnace-modal",
   );
   for (const slot of ["input", "fuel"])
@@ -767,12 +778,17 @@ function renderFurnace() {
   document.querySelectorAll("[data-unload]").forEach(
     (b) =>
       (b.onclick = () => {
-        survival.unloadFurnace(key, b.dataset.unload);
+        furnaceLoadSlot=b.dataset.unload;
+        const output=survival.furnace(key).output;
+        const taken=survival.unloadFurnace(key, b.dataset.unload);
+        if(b.dataset.unload==='output'&&!survival.creative){const raw=taken*(SMELT_EXPERIENCE[output]||0),whole=Math.floor(raw);xpOrbs.spawn(whole+(Math.random()<raw-whole?1:0),position);}
         renderFurnace();
         renderHotbar();
         save();
       }),
   );
+  const bag=document.createElement('div');bag.className='native-furnace-bag';bag.innerHTML=Object.values(ITEMS).filter(i=>survival.count(i.id)).map(i=>`<button data-furnace-load="${i.id}" aria-label="Add ${esc(i.name)}" title="${esc(i.name)}">${icon(i.id)}<b>${survival.count(i.id)}</b></button>`).join('');$('.furnace-modal').append(bag);
+  for(const b of bag.querySelectorAll('button'))b.onclick=()=>{const id=+b.dataset.furnaceLoad,slot=furnaceLoadSlot==='fuel'&&FUELS[id]?'fuel':SMELTING[id]?'input':FUELS[id]?'fuel':null;if(slot&&survival.loadFurnace(key,slot,id)){renderFurnace();renderHotbar();save();}};
   $("#furnace-back").onclick = resume;
 }
 function updateFurnace() {
@@ -808,15 +824,20 @@ function die() {
     survival.inventory = {};
     survival.durability = {};
   }
+  const deathScore=experience.score;xpOrbs.spawn(experience.death(),position);
+  HOTBAR.fill(0);renderHotbar();renderVitals();$("#block-label").classList.remove("visible");
   save();
   modal(
-    "You died.",
-    `<p class="modal-subtitle">Lost to ${esc(reason)}. Your items remain where you fell for five minutes of world time.</p><div class="menu-actions"><button class="button primary full" id="respawn">Respawn <span>→</span></button><button class="button secondary full" id="death-home">Save & return home <span>←</span></button></div>`,
+    "You died!",
+    `<p class="death-score">Score: <span>${deathScore}</span></p><div class="menu-actions"><button class="button primary full" id="respawn">Respawn</button><button class="button secondary full" id="death-home">Title screen</button></div>`,
+    'death-modal',
   );
   $("#modal .close-button").hidden = true;
+  const deathButtons=[$('#respawn'),$('#death-home')];for(const button of deathButtons)button.disabled=true;setTimeout(()=>{if(screen==='dead')for(const button of deathButtons)button.disabled=false;},1000);
   $("#respawn").onclick = () => {
     const time = survival.time;
-    survival = new Survival({ time }, "survival");
+    survival = new Survival({ time,furnaces:survival.furnaces }, "survival");
+    experience=new Experience();
     position.copy(new THREE.Vector3(...Object.values(world.spawn())));
     previous.copy(position);
     velocity.set(0, 0, 0);
@@ -897,6 +918,8 @@ function handleEntityEvents() {
   for (const event of mobs.drain()) {
     if (event.sound)
       sounds.play(event.sound, { position: event.position, volume: 0.6 });
+    if(event.xp&&!survival.creative)xpOrbs.spawn(event.xp,event.position);
+    if(event.hearts)mobRenderer.hearts(event.position);
     if (event.drop) {
       const left = event.count - acquire(event.drop, event.count);
       if (left)
@@ -931,7 +954,7 @@ function edit(place = false) {
     }
     return;
   }
-  if(place&&aimedEntity){if(!survival.creative&&item?.food)beginEating(id);return;}
+  if(place&&aimedEntity){if(mobs.feed(aimedEntity.entity,id,survival)){handleEntityEvents();renderHotbar();saved=false;}else if(!survival.creative&&item?.food)beginEating(id);return;}
   if (!target) {
     if (place && !survival.creative && item?.food) beginEating(id);
     return;
@@ -1038,6 +1061,7 @@ function breakBlock(p, creative = false) {
   farming.observe(...p);
   if (!creative) {
     for(const d of drops)acquire(d.id,d.count);
+    if(drop)xpOrbs.spawn(oreExperience(block),{x:p[0]+.5,y:p[1]+.1,z:p[2]+.5});
     survival.exhaust(0.025);
     if (survival.wear(tool))
       toast("Your " + ITEMS[tool].name.toLowerCase() + " broke.");
@@ -1199,7 +1223,8 @@ function movementTick() {
   tickSurvival(inWater, oldPosition);
   applyFarmUpdates(farming.tick(survival.time,scene.daylight));
   scene.setFurnaces(survival.furnaces);
-  mobs.tick(position, survival);
+  mobs.tick(position, survival, HOTBAR[selected]);
+  const oldLevel=experience.level;if(survival.health>0&&!survival.creative&&xpOrbs.tick(world,position,experience)){sounds.play(experience.level>oldLevel&&experience.level%5===0?"random.levelup":"random.orb",{volume:.4});renderVitals();}
   handleEntityEvents();
   const distance = Math.hypot(
     position.x - oldPosition.x,
@@ -1262,7 +1287,8 @@ function bindActions() {
       }),
   );
 }
-$("#enter").onclick = () => launch(worlds[0] || makeRecord(presets[0]));
+$("#enter").onclick = () => $("#home").classList.add("selecting");
+$("#world-select-back").onclick = () => $("#home").classList.remove("selecting");
 $("#pause-button").onclick = pause;
 $("#fullscreen").onclick = () => {
   try {
@@ -1304,11 +1330,12 @@ $("#file-input").onchange = async (e) => {
       drops: data.drops,
       entities: data.entities,
       farms:data.farms,
+      experience:data.experience,xpOrbs:data.xpOrbs,
     };
     worlds.unshift(record);
     persist();
     renderWorlds();
-    toast("World imported. Your next chapter is ready.");
+    toast("World imported.");
   } catch (err) {
     toast(err.message);
   }
@@ -1517,6 +1544,7 @@ function animate(now) {
         survival.creative || survival.count(HOTBAR[selected])
           ? HOTBAR[selected]
           : 0,
+      yaw, pitch,
       speed: Math.hypot(velocity.x, velocity.z),
       moving: keys.size > 0,
       grounded: grounded && !flying,
@@ -1564,19 +1592,21 @@ function animate(now) {
     if (elapsed - lastSave > 5) save();
     scene.effects.crack(mining?.block, mining?.progress);
   } else if (screen === "home") scene.preview(elapsed);
-  if (mobs) mobRenderer.update(mobs.entities);
+  if (mobs) mobRenderer.update(mobs.entities,dt);
+  if(xpRenderer)xpRenderer.update(xpOrbs.orbs,elapsed);
   scene.render(elapsed, dt);
   if (firstPerson && animate.pose)
     firstPerson.render(animate.pose, {
       visible: ["playing", "inventory", "paused"].includes(screen),
       daylight: scene.daylight,
       time: elapsed,
-      eating: eating ? (32 - eating.ticks) / 20 : 0,
+      eating: eating ? Math.max(0,eating.ticks-accumulator/PHYSICS.tick) : null,
     });
 }
 async function boot(){try {
   scene = new VoxelScene($("#viewport"));
   await scene.textures.ready;
+  xpRenderer=new ExperienceRenderer(scene.scene);
   sounds = new SoundBank(
     () => options,
     () => ({ ...position, yaw }),

@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { firstPersonMatrix } from "./first-person-pose.js";
+import { spriteGeometry } from "./sprite-geometry.js";
 import { ITEMS } from "./survival.js";
 import { blockTile,tileRect } from "./block-textures.js";
 const loader = new THREE.TextureLoader(),
@@ -63,7 +65,7 @@ export function itemTexture(id) {
     306: "brick",
     307: "clay_ball",
     308: "coal",
-    309:"seeds_wheat",310:"dye_powder_white",311:"bone",309:"seeds_wheat",310:"dye_powder_white",311:"bone",
+    309:"seeds_wheat",310:"dye_powder_white",311:"bone",
   };
   return names[id] ? "/media/1.7.10/items/" + names[id] + ".png" : null;
 }
@@ -73,22 +75,22 @@ export class FirstPerson {
     this.atlas = atlas;
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(
-      60,
+      70,
       innerWidth / innerHeight,
-      0.05,
+      0.01,
       10,
     );
     this.scene.add(new THREE.HemisphereLight("#fff6e2", "#71826c", 2.6));
     this.pivot = new THREE.Group();
+    this.pivot.matrixAutoUpdate = false;
     this.scene.add(this.pivot);
-    this.arm = new THREE.Mesh(
-      skinBox(4, 12, 4, 40, 16, 64, 32),
-      new THREE.MeshLambertMaterial({
-        map: pixelTexture("/media/1.7.10/entity/steve.png"),
-      }),
-    );
-    this.arm.position.y = -0.18;
-    this.arm.rotation.z = Math.PI;
+    this.arm = new THREE.Group();
+    const armGeometry=skinBox(4,12,4,40,16,64,32),armUv=armGeometry.attributes.uv;
+    // ModelBiped's local +Y points from shoulder to fingertips. Its UV rows
+    // increase in that direction, unlike the world-space upright skin boxes.
+    for(const face of [0,1,4,5]){const top=armUv.getY(face*4),bottom=armUv.getY(face*4+2);for(let v=0;v<4;v++)armUv.setY(face*4+v,top+bottom-armUv.getY(face*4+v));}
+    const armMesh=new THREE.Mesh(armGeometry,new THREE.MeshLambertMaterial({map:pixelTexture('/media/1.7.10/entity/steve.png')}));
+    armMesh.position.set(-1/16,4/16,0);this.arm.add(armMesh);this.arm.position.set(-5/16,2/16,0);this.arm.rotation.z=.1;
     this.pivot.add(this.arm);
     this.item = null;
     this.last = -1;
@@ -109,7 +111,7 @@ export class FirstPerson {
     const url = itemTexture(id);
     if (url) {
       mesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.64, 0.64),
+        spriteGeometry(),
         new THREE.MeshLambertMaterial({
           map: pixelTexture(url),
           transparent: true,
@@ -117,9 +119,9 @@ export class FirstPerson {
           side: THREE.DoubleSide,
         }),
       );
-      mesh.rotation.set(0, -0.35, 0.15);
+
     } else {
-      const g = new THREE.BoxGeometry(0.3, 0.3, 0.3),
+      const g = new THREE.BoxGeometry(1, 1, 1),
         uv = g.attributes.uv;
       for (let f = 0; f < 6; f++) {
         const r=tileRect(blockTile(id,f));uv.setXY(f*4,r.u0,r.v1);uv.setXY(f*4+1,r.u1,r.v1);uv.setXY(f*4+2,r.u0,r.v0);uv.setXY(f*4+3,r.u1,r.v0);
@@ -128,34 +130,20 @@ export class FirstPerson {
         g,
         new THREE.MeshLambertMaterial({ map: this.atlas,alphaTest:.4 }),
       );
-      mesh.rotation.set(0.2, -0.7, 0);
+      mesh.rotation.y = Math.PI / 2;
     }
-    mesh.position.set(0, -0.08, 0);
+    this.sprite = !!url;
     this.pivot.add(mesh);
     this.item = mesh;
   }
-  render(pose, { visible = true, daylight = 1, eating = 0, time = 0 } = {}) {
+  render(pose, { visible = true, daylight = 1, eating = null, time = 0 } = {}) {
     if (!visible) return;
     this.select(pose.item);
-    const s = pose.swing,
-      b = pose.bob;
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
-    this.pivot.position.set(
-      0.43 * Math.min(1, this.camera.aspect / 1.3) + s.x * 0.28 + b.x,
-      -0.4 - (1 - pose.equip) * 0.65 + s.y * 0.3 + b.y,
-      -0.85 + s.z * 0.35,
-    );
-    this.pivot.rotation.set(
-      s.rx * 0.6 - 0.25 + Math.sin(time * 1.34) * 0.05,
-      s.ry,
-      s.rz - 0.12 + Math.cos(time * 1.8) * 0.05 + 0.05,
-    );
-    if (eating) {
-      this.pivot.position.x -= 0.23;
-      this.pivot.position.y += 0.2 + Math.abs(Math.sin(eating * 22)) * 0.04;
-      this.pivot.rotation.z += 0.8;
-    }
+    this.pivot.matrix.copy(firstPersonMatrix(pose,{sprite:this.sprite,eatingTicks:eating}));
+    // Keep the native pose visible when the browser panel is narrower than a game window.
+    if(this.camera.aspect<1.3)this.pivot.matrix.premultiply(new THREE.Matrix4().makeTranslation((pose.item ? .56 : .64)*(this.camera.aspect/1.3-1),0,0));
     this.scene.children[0].intensity = 0.7 + daylight * 1.9;
     const clear = this.renderer.autoClear;
     this.renderer.autoClear = false;

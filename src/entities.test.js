@@ -72,3 +72,12 @@ test("nearby zombies damage survival players but not creative players", () => {
   a.tick({ x: 64, y: 0, z: 64 }, c);
   assert.equal(c.health, 20);
 });
+test('wheat feeds only adult ready cows, consumes one, and breeding creates one persistent calf',()=>{
+ const w=new EntityWorld(flat,[{id:'mob-1',type:'cow',x:64,y:0,z:64,health:10},{id:'mob-2',type:'cow',x:65,y:0,z:64,health:10}]),p=new Survival({inventory:{305:3}}),[a,b]=w.entities;
+ assert.equal(w.feed(a,309,p),false);assert.equal(w.feed(a,305,p),true);assert.equal(w.feed(a,305,p),false);assert.equal(w.feed(b,305,p),true);assert.equal(p.count(305),1);
+ for(let i=0;i<59;i++)w.tick({x:64,y:0,z:70},p,305);assert.equal(w.entities.length,2);w.tick({x:64,y:0,z:70},p,305);assert.equal(w.entities.length,3);const baby=w.entities.find(e=>e.growingAge<0);assert.equal(baby.growingAge,-24000);assert.equal(a.growingAge,6000);assert.equal(w.feed(a,305,p),false);assert.equal(w.feed(baby,305,p),false);assert.equal(w.drain().filter(e=>e.xp).length,1);
+ const saved=new EntityWorld(flat,w.serialize());assert.equal(saved.entities.find(e=>e.id===baby.id).growingAge,-24000);assert.equal(saved.entities.find(e=>e.id===a.id).growingAge,6000);
+});
+test('holding wheat attracts cows and baby hitboxes are half the adult size',()=>{
+ const w=new EntityWorld(flat,[{id:'mob-1',type:'cow',x:64,y:0,z:64,health:10}]),p=new Survival({inventory:{305:1}});const c=w.entities[0];w.tick({x:68,y:0,z:64},p,305);assert.ok(c.x>64);c.growingAge=-100;assert.equal(entityHit({x:c.x+.3,y:.8,z:60},{x:0,y:0,z:1},c,8),null);
+});

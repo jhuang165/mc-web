@@ -5,6 +5,8 @@ export class MobRenderer {
   constructor(scene) {
     this.scene = scene;
     this.rigs = new Map();
+    this.particles=[];
+    this.heartTexture=pixelTexture("/media/1.7.10/gui/icons.png").clone();this.heartTexture.repeat.set(9/256,9/256);this.heartTexture.offset.set(52/256,1-9/256);
   }
   create(e) {
     const root = new THREE.Group(),
@@ -104,7 +106,9 @@ export class MobRenderer {
     this.scene.add(root);
     return { root, limbs, materials, type: e.type };
   }
-  update(entities) {
+  hearts(p){for(let i=0;i<5;i++){const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:this.heartTexture,transparent:true,depthWrite:false}));sprite.position.set(p.x+(Math.random()-.5)*.8,p.y+Math.random()*.4,p.z+(Math.random()-.5)*.8);sprite.scale.setScalar(.22);this.scene.add(sprite);this.particles.push({sprite,life:1});}}
+  update(entities,dt=0) {
+    this.particles=this.particles.filter(p=>{p.life-=dt;p.sprite.position.y+=dt*.45;if(p.life>0)return true;this.scene.remove(p.sprite);p.sprite.material.dispose();return false;});
     const active = new Set(entities.map((e) => e.id));
     for (const [id, rig] of this.rigs)
       if (!active.has(id)) {
@@ -121,7 +125,7 @@ export class MobRenderer {
         r = this.create(e);
         this.rigs.set(e.id, r);
       }
-      r.root.position.set(e.x, e.y, e.z);
+      r.root.position.set(e.x, e.y, e.z);r.root.scale.setScalar(e.growingAge<0?.5:1);
       r.root.rotation.set(
         0,
         e.yaw,
@@ -146,6 +150,7 @@ export class MobRenderer {
     }
   }
   clear() {
+    for(const p of this.particles){this.scene.remove(p.sprite);p.sprite.material.dispose();}this.particles=[];
     this.update([]);
   }
 }
