@@ -40,6 +40,7 @@ export function skinBox(w, h, d, u, v, tw, th) {
 export function itemTexture(id) {
   const item = ITEMS[id];
   if(id===20||id===39)return "/media/1.7.10/blocks/"+(id===20?"torch_on":"tallgrass")+".png";
+  if(id===125)return "/media/1.7.10/items/shears.png";
   if (item?.kind) {
     const material = item.name.startsWith("Wooden")
       ? "wood"
@@ -62,6 +63,7 @@ export function itemTexture(id) {
     303: "diamond",
     304: "gold_ingot",
     305: "wheat",
+    312:"snowball",313:"flint",314:"book",
     306: "brick",
     307: "clay_ball",
     308: "coal",

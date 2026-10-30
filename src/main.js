@@ -1,5 +1,7 @@
 import "./style.css";
 import "./minecraft-ui.css";
+import "./container-ui.css";
+import {guiScale,stackCount} from "./gui.js";
 import * as THREE from "three";
 import {
   World,
@@ -59,6 +61,7 @@ let options = {
   fov: 75,
   distance: 155,
   sound: true,
+  guiScale:0,
 };
 try {
   options = {
@@ -66,6 +69,8 @@ try {
     ...JSON.parse(localStorage.getItem("blockworld.settings") || "{}"),
   };
 } catch {}
+function updateGuiScale(){document.documentElement.style.setProperty('--gui-scale',guiScale(innerWidth,innerHeight,Number(options.guiScale)||0));}
+window.addEventListener('resize',updateGuiScale);updateGuiScale();
 let screen = "home",
   world,
   active,
@@ -238,7 +243,7 @@ function renderHotbar() {
     const item = ITEMS[id],
       count = survival.count(id),
       durability = item?.durability && survival.durability[id];
-    return `<button class="slot ${i === selected ? "selected" : ""} ${!survival.creative && count === 0 ? "depleted" : ""}" data-slot="${i}" aria-label="Select ${id ? item?.name || "Empty hand" : "Empty hand"}" aria-pressed="${i === selected}">${icon(id)}<small>${i + 1}</small>${!survival.creative && count ? `<b class="stack-count">${count}</b>` : ""}${durability ? `<i class="durability-bar" style="--durability:${(durability / item.durability) * 100}%"></i>` : ""}</button>`;
+    return `<button class="slot ${i === selected ? "selected" : ""} ${!survival.creative && count === 0 ? "depleted" : ""}" data-slot="${i}" aria-label="Select ${id ? item?.name || "Empty hand" : "Empty hand"}" aria-pressed="${i === selected}">${icon(id)}<small>${i + 1}</small>${!survival.creative ? stackCount(count) : ""}${durability ? `<i class="durability-bar" style="--durability:${(durability / item.durability) * 100}%"></i>` : ""}</button>`;
   }).join("");
   document
     .querySelectorAll("[data-slot]")
@@ -319,7 +324,7 @@ function controls() {
       .map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`)
       .join(
         "",
-      )}</div><p class="form-note">Right-click a crafting table for the 3 × 3 grid or a furnace to smelt. Put materials into the crafting grid, then take the result. Click an occupied grid cell to clear it.</p><p class="form-note">To farm: break tall grass for seeds, right-click exposed grass/dirt with a hoe, then plant seeds on the tilled soil. Hold wheat to lead cows; feed two adults to breed a calf. Water within four blocks keeps soil hydrated. Bone meal advances growth; harvest mature golden wheat and craft three wheat into bread.</p><p class="form-note">If mouse capture is unavailable, drag to look and click once to mine the targeted block. Touch controls include a Fly button in Creative.</p>`,
+      )}</div><p class="form-note">Right-click a crafting table for the 3 × 3 grid or a furnace to smelt. Click an ingredient, fill the crafting grid, then take the result. Shift-click an inventory item to assign it to the selected hotbar slot. Click an occupied grid cell to clear it.</p><p class="form-note">To farm: break tall grass for seeds, right-click exposed grass/dirt with a hoe, then plant seeds on the tilled soil. Hold wheat to lead cows; feed two adults to breed a calf. Water within four blocks keeps soil hydrated. Bone meal advances growth; harvest mature golden wheat and craft three wheat into bread.</p><p class="form-note">If mouse capture is unavailable, drag to look and click once to mine the targeted block. Touch controls include a Fly button in Creative.</p>`,
   );
 }
 function notes() {
@@ -332,7 +337,7 @@ function notes() {
 function settings() {
   modal(
     "Options",
-    `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>Field of view <output id="fov-value">${options.fov}°</output><input type="range" id="fov" min="50" max="100" value="${options.fov}"></label><label>Mouse sensitivity <output id="sensitivity-value">${options.sensitivity.toFixed(1)}×</output><input type="range" id="sensitivity" min="0.2" max="2" step="0.1" value="${options.sensitivity}"></label><label>View distance <output id="distance-value">${options.distance} blocks</output><input type="range" id="distance" min="70" max="200" step="5" value="${options.distance}"></label><label>Sound volume <output id="volume-value">${Math.round(options.volume * 100)}%</output><input type="range" id="volume" min="0" max="1" step=".05" value="${options.volume}"></label><label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
+    `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>GUI Scale<select id="gui-scale">${[[0,"Auto"],[1,"Small"],[2,"Normal"],[3,"Large"],[4,"Larger"]].map(([v,label])=>`<option value="${v}" ${Number(options.guiScale||0)===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Field of view <output id="fov-value">${options.fov}°</output><input type="range" id="fov" min="50" max="100" value="${options.fov}"></label><label>Mouse sensitivity <output id="sensitivity-value">${options.sensitivity.toFixed(1)}×</output><input type="range" id="sensitivity" min="0.2" max="2" step="0.1" value="${options.sensitivity}"></label><label>View distance <output id="distance-value">${options.distance} blocks</output><input type="range" id="distance" min="70" max="200" step="5" value="${options.distance}"></label><label>Sound volume <output id="volume-value">${Math.round(options.volume * 100)}%</output><input type="range" id="volume" min="0" max="1" step=".05" value="${options.volume}"></label><label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
   );
   for (const key of [
     "fov",
@@ -363,6 +368,7 @@ function settings() {
         localStorage.setItem("blockworld.settings", JSON.stringify(options));
       } catch {}
     };
+  $("#gui-scale").onchange=e=>{options.guiScale=+e.target.value;updateGuiScale();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
   $("#test-sound").onclick = async () => {
     if (!options.sound) {
       $("#audio-status").textContent = "Sounds are muted.";
@@ -617,7 +623,7 @@ function renderInventory() {
       : gridSize === 3
         ? "Crafting"
         : "Inventory",
-    `<p class="modal-subtitle">${creative ? "Choose any material or tool for your selected slot." : "Choose an ingredient, then click cells to arrange a recipe. Click a filled cell to clear it."}</p><div class="inventory-layout"><div><input class="inventory-search" id="inventory-search" aria-label="Search inventory" placeholder="Find a material…" value="${esc(inventorySearch)}"><div class="inventory-grid bag-grid" id="bag-grid">${inventorySlots.map((i) => i?`<button data-item="${i.id}" data-name="${esc(i.name.toLowerCase())}" class="${inventoryIngredient === i.id ? "ingredient-selected" : ""}" title="${esc(i.name)}" aria-label="${esc(i.name)} (${survival.count(i.id)})"><span>${icon(i.id)}</span><span>${esc(i.name)}</span>${!creative ? `<b>${survival.count(i.id)}</b>` : ""}</button>`:`<span class="empty-native-slot"></span>`).join("") || '<p class="empty-inventory">Inventory is empty.</p>'}</div></div>${!creative ? `<div class="crafting-panel"><div class="eyebrow dark">CRAFTING · ${gridSize} × ${gridSize}</div><div class="crafting-grid" style="--grid-size:${gridSize}">${craftGrid.map((id, i) => `<button data-cell="${i}" aria-label="Crafting cell ${i + 1}: ${id ? ITEMS[id]?.name || "empty" : "empty"}">${id ? icon(id) : ""}</button>`).join("")}</div><div class="craft-arrow">↓</div><button class="craft-result" id="craft-result" ${!survival.canCraft(result) ? "disabled" : ""} aria-label="${result ? "Craft " + ITEMS[result.output].name : "No matching recipe"}">${result ? icon(result.output) : "<span>?</span>"}<span>${result ? `${result.count} × ${ITEMS[result.output].name}` : "Arrange a recipe"}</span></button><p class="form-note ingredient-note">${inventoryIngredient ? "Ingredient: " + esc(ITEMS[inventoryIngredient].name) : "Select an ingredient on the left."}</p><button class="text-button" id="clear-grid">Clear grid ↺</button></div>` : ""}</div>${
+    `<p class="modal-subtitle">${creative ? "Choose any material or tool for your selected slot." : "Choose an ingredient, then click cells to arrange a recipe. Click a filled cell to clear it."}</p><div class="inventory-layout"><div><input class="inventory-search" id="inventory-search" aria-label="Search inventory" placeholder="Find a material…" value="${esc(inventorySearch)}"><div class="inventory-grid bag-grid" id="bag-grid">${inventorySlots.map((i) => i?`<button data-item="${i.id}" data-name="${esc(i.name.toLowerCase())}" class="${inventoryIngredient === i.id ? "ingredient-selected" : ""}" title="${esc(i.name)}" aria-label="${esc(i.name)} (${survival.count(i.id)})"><span>${icon(i.id)}</span><span>${esc(i.name)}</span>${!creative ? stackCount(survival.count(i.id)) : ""}</button>`:`<span class="empty-native-slot"></span>`).join("") || '<p class="empty-inventory">Inventory is empty.</p>'}</div></div>${!creative ? `<div class="crafting-panel"><div class="eyebrow dark">CRAFTING · ${gridSize} × ${gridSize}</div><div class="crafting-grid" style="--grid-size:${gridSize}">${craftGrid.map((id, i) => `<button data-cell="${i}" aria-label="Crafting cell ${i + 1}: ${id ? ITEMS[id]?.name || "empty" : "empty"}">${id ? icon(id) : ""}</button>`).join("")}</div><div class="craft-arrow">↓</div><button class="craft-result" id="craft-result" ${!survival.canCraft(result) ? "disabled" : ""} aria-label="${result ? "Craft " + ITEMS[result.output].name : "No matching recipe"}">${result ? icon(result.output)+stackCount(result.count) : "<span>?</span>"}<span>${result ? `${result.count} × ${ITEMS[result.output].name}` : "Arrange a recipe"}</span></button><p class="form-note ingredient-note">${inventoryIngredient ? "Ingredient: " + esc(ITEMS[inventoryIngredient].name) : "Select an ingredient on the left."}</p><button class="text-button" id="clear-grid">Clear grid ↺</button></div>` : ""}</div>${
       !creative
         ? `<details class="recipe-guide" ${guideOpen ? "open" : ""}><summary>Recipe guide · ${gridSize === 2 ? "2 × 2 recipes" : "all crafting recipes"}</summary><div class="recipe-list">${RECIPES.filter(
             (r) => r.width <= gridSize && r.height <= gridSize,
@@ -652,10 +658,11 @@ function renderInventory() {
   };
   document.querySelectorAll("[data-item]").forEach(
     (b) =>
-      (b.onclick = () => {
+      (b.onclick = (event) => {
         const id = +b.dataset.item;
         if (creative) survival.add(id, ITEMS[id].stack);
-        HOTBAR[selected] = id;
+        if(creative)HOTBAR[selected]=id;
+        else if(event.shiftKey){const old=HOTBAR.indexOf(id);if(old>=0&&old!==selected)HOTBAR[old]=HOTBAR[selected];HOTBAR[selected]=id;}
         inventoryIngredient = id;
         renderHotbar();
         if (creative) {
@@ -764,7 +771,7 @@ function renderFurnace() {
       .filter((id) => survival.count(id));
   modal(
     "Furnace",
-    `<p class="modal-subtitle">One smelt takes 10 seconds. Coal fuels eight smelts; wood fuels one and a half.</p><div class="furnace-panel"><div class="furnace-slots"><div><span class="eyebrow dark">INPUT</span><button class="furnace-slot" data-unload="input" aria-label="Take furnace input">${icon(f.input)}<b data-furnace-count="input">${f.inputCount || ""}</b></button><span id="furnace-input-name">${f.input ? ITEMS[f.input]?.name || "Empty" : "Empty"}</span></div><div class="smelt-progress"><span id="furnace-fire">♨</span><progress id="furnace-progress" max="200" value="${f.cook}" aria-label="Smelting progress"></progress><small id="furnace-time">${(f.cook / 20).toFixed(1)} / 10s</small></div><div><span class="eyebrow dark">OUTPUT</span><button class="furnace-slot" data-unload="output" aria-label="Take furnace output">${icon(f.output)}<b data-furnace-count="output">${f.outputCount || ""}</b></button><span id="furnace-output-name">${f.output ? ITEMS[f.output]?.name || "Empty" : "Empty"}</span></div></div><div class="furnace-fuel"><button class="furnace-slot" data-unload="fuel" aria-label="Take furnace fuel">${icon(f.fuel)}<b data-furnace-count="fuel">${f.fuelCount || ""}</b></button><div><span class="eyebrow dark">FUEL</span><p id="furnace-fuel-time">${(f.burn / 20).toFixed(1)}s remaining</p></div></div></div><div class="form-columns furnace-loaders"><label>LOAD INPUT<select id="smelt-input">${inputs.map((id) => `<option value="${id}">${ITEMS[id].name} (${survival.count(id)})</option>`).join("") || '<option value="0">Gather an ore or sand</option>'}</select><button id="load-input" class="button secondary full" ${!inputs.length ? "disabled" : ""}>Add one →</button></label><label>LOAD FUEL<select id="smelt-fuel">${fuels.map((id) => `<option value="${id}">${ITEMS[id].name} (${survival.count(id)})</option>`).join("") || '<option value="0">Gather coal or wood</option>'}</select><button id="load-fuel" class="button secondary full" ${!fuels.length ? "disabled" : ""}>Add one →</button></label></div><p class="form-note">Click a slot to take its contents. The furnace keeps working while its screen is open; pausing stops the world.</p><button class="button primary full" id="furnace-back">Back to Game</button>`,
+    `<p class="modal-subtitle">One smelt takes 10 seconds. Coal fuels eight smelts; wood fuels one and a half.</p><div class="furnace-panel"><div class="furnace-slots"><div><span class="eyebrow dark">INPUT</span><button class="furnace-slot" data-unload="input" aria-label="Take furnace input">${icon(f.input)}${stackCount(f.inputCount)}</button><span id="furnace-input-name">${f.input ? ITEMS[f.input]?.name || "Empty" : "Empty"}</span></div><div class="smelt-progress"><span id="furnace-fire">♨</span><progress id="furnace-progress" max="200" value="${f.cook}" aria-label="Smelting progress"></progress><small id="furnace-time">${(f.cook / 20).toFixed(1)} / 10s</small></div><div><span class="eyebrow dark">OUTPUT</span><button class="furnace-slot" data-unload="output" aria-label="Take furnace output">${icon(f.output)}${stackCount(f.outputCount)}</button><span id="furnace-output-name">${f.output ? ITEMS[f.output]?.name || "Empty" : "Empty"}</span></div></div><div class="furnace-fuel"><button class="furnace-slot" data-unload="fuel" aria-label="Take furnace fuel">${icon(f.fuel)}${stackCount(f.fuelCount)}</button><div><span class="eyebrow dark">FUEL</span><p id="furnace-fuel-time">${(f.burn / 20).toFixed(1)}s remaining</p></div></div></div><div class="form-columns furnace-loaders"><label>LOAD INPUT<select id="smelt-input">${inputs.map((id) => `<option value="${id}">${ITEMS[id].name} (${survival.count(id)})</option>`).join("") || '<option value="0">Gather an ore or sand</option>'}</select><button id="load-input" class="button secondary full" ${!inputs.length ? "disabled" : ""}>Add one →</button></label><label>LOAD FUEL<select id="smelt-fuel">${fuels.map((id) => `<option value="${id}">${ITEMS[id].name} (${survival.count(id)})</option>`).join("") || '<option value="0">Gather coal or wood</option>'}</select><button id="load-fuel" class="button secondary full" ${!fuels.length ? "disabled" : ""}>Add one →</button></label></div><p class="form-note">Click a slot to take its contents. The furnace keeps working while its screen is open; pausing stops the world.</p><button class="button primary full" id="furnace-back">Back to Game</button>`,
     "furnace-modal",
   );
   for (const slot of ["input", "fuel"])
@@ -787,7 +794,7 @@ function renderFurnace() {
         save();
       }),
   );
-  const bag=document.createElement('div');bag.className='native-furnace-bag';bag.innerHTML=Object.values(ITEMS).filter(i=>survival.count(i.id)).map(i=>`<button data-furnace-load="${i.id}" aria-label="Add ${esc(i.name)}" title="${esc(i.name)}">${icon(i.id)}<b>${survival.count(i.id)}</b></button>`).join('');$('.furnace-modal').append(bag);
+  const bag=document.createElement('div');bag.className='native-furnace-bag';bag.innerHTML=Object.values(ITEMS).filter(i=>survival.count(i.id)).map(i=>`<button data-furnace-load="${i.id}" aria-label="Add ${esc(i.name)}" title="${esc(i.name)}">${icon(i.id)}${stackCount(survival.count(i.id))}</button>`).join('');$('.furnace-modal').append(bag);
   for(const b of bag.querySelectorAll('button'))b.onclick=()=>{const id=+b.dataset.furnaceLoad,slot=furnaceLoadSlot==='fuel'&&FUELS[id]?'fuel':SMELTING[id]?'input':FUELS[id]?'fuel':null;if(slot&&survival.loadFurnace(key,slot,id)){renderFurnace();renderHotbar();save();}};
   $("#furnace-back").onclick = resume;
 }
@@ -801,7 +808,7 @@ function updateFurnace() {
   $("#furnace-fire").classList.toggle("burning", f.burn > 0);
   for (const slot of ["input", "fuel", "output"]) {
     const b = $(`[data-unload="${slot}"]`);
-    if (b) b.innerHTML = icon(f[slot]) + `<b>${f[slot + "Count"] || ""}</b>`;
+    if (b) b.innerHTML = icon(f[slot]) + stackCount(f[slot + "Count"]);
     const name = $("#furnace-" + slot + "-name");
     if (name)
       name.textContent = f[slot] ? ITEMS[f[slot]]?.name || "Empty" : "Empty";
@@ -1008,10 +1015,14 @@ function edit(place = false) {
   } else {
     if (block === 11) return;
     if (survival.creative) {
+      if(item?.kind==='sword')return;
       breakBlock(target.block, true);
       mineCooldown = 5;
       return;
     }
+    if(mining&&mining.tool===id&&mining.block.every((v,i)=>v===target.block[i]))return;
+    const under=world.get(Math.floor(position.x),Math.floor(position.y+PHYSICS.eye),Math.floor(position.z))===10;
+    if(survival.mining(block,id,under,grounded).progress>=1){breakBlock(target.block);return;}
     mining = {
       block: [...target.block],
       type: block,
@@ -1031,8 +1042,10 @@ function breakBlock(p, creative = false) {
   let drop = harvest ? (m.drop ?? block) : 0,
     count = m.count || 1;
   if (block === 5 && Math.random() < 0.005) drop = 200;
-  if (block === 21) count = 3;
-  const crops=cropDrops(block);const drops=crops??(drop?[{id:drop,count}]:[]);
+  const shearing=ITEMS[tool]?.kind==='shears'&&survival.count(tool)>0;
+  if(shearing&&(block===5||block===39)){drop=block;count=1;}
+  if(block===25&&Math.random()<.1){drop=313;count=1;}
+  const crops=shearing&&block===39?null:cropDrops(block);const drops=crops??(drop?[{id:drop,count}]:[]);
   if (!creative && drops.some(d=>survival.room(d.id)<d.count)) {
     toast("No room for this drop. Make room in your inventory.");
     mining = null;
@@ -1063,7 +1076,7 @@ function breakBlock(p, creative = false) {
     for(const d of drops)acquire(d.id,d.count);
     if(drop)xpOrbs.spawn(oreExperience(block),{x:p[0]+.5,y:p[1]+.1,z:p[2]+.5});
     survival.exhaust(0.025);
-    if (survival.wear(tool))
+    if (survival.wearBlock(block,tool))
       toast("Your " + ITEMS[tool].name.toLowerCase() + " broke.");
   }
   scene.updateBlock(p[0], p[2]);
@@ -1079,13 +1092,14 @@ function tickMining() {
     mineCooldown--;
     return;
   }
-  if (aimedEntity) return;
+  if (aimedEntity) {mining=null;return;}
   if (!mining && mineHeld && target) edit(false);
   if (!mining) return;
   if (
     !target ||
     !target.block.every((v, i) => v === mining.block[i]) ||
     world.get(...mining.block) !== mining.type ||
+    HOTBAR[selected] !== mining.tool ||
     (!mining.auto && !mineHeld)
   ) {
     mining = null;
@@ -1102,12 +1116,12 @@ function tickMining() {
     sounds.play("dig." + blockSound(mining.type), { volume: 0.25, pitch: 0.5 });
     scene.effects.burst(mining.block, mining.type, 2);
   }
-  mining.progress += survival.mining(
+  mining.progress = Math.fround(mining.progress + survival.mining(
     mining.type,
     HOTBAR[selected],
     under,
     grounded,
-  ).progress;
+  ).progress);
   if (mining.progress >= 1) {
     const p = [...mining.block];
     mining = null;

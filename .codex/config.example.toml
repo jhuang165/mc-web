@@ -1,0 +1,6 @@
+# Run python3 tools/setup_bridge.py to generate this checkout's absolute paths.
+[mcp_servers.mc-web-memory]
+command = "python3"
+args = ["tools/memory_bridge.py"]
+startup_timeout_sec = 10
+tool_timeout_sec = 30

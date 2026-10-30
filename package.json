@@ -1,12 +1,17 @@
 {
   "name": "blockworld-web",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "test": "node --test src/*.test.js"
+    "test": "node --test src/*.test.js",
+    "setup:bridge": "python3 tools/setup_bridge.py",
+    "test:bridge": "python3 -m unittest discover -s tools -p 'test_memory_bridge.py'",
+    "push:github": "node tools/push-github.mjs",
+    "agent:codex": "node tools/start-codex.mjs",
+    "agent:claude": "claude"
   },
   "dependencies": {
     "three": "^0.180.0"

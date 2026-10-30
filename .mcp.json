@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "mc-web-memory": {
+      "type": "stdio",
+      "command": "python3",
+      "args": [
+        "-c",
+        "import os,runpy;from pathlib import Path;p=Path(os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd());p=p if (p/'tools/memory_bridge.py').is_file() else p/'game';runpy.run_path(str(p/'tools/memory_bridge.py'),run_name='__main__')"
+      ]
+    }
+  }
+}

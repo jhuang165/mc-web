@@ -31,3 +31,5 @@ Adult cows follow held wheat. Feeding two ready adults consumes one wheat each a
 ## Checks
 
 Tests cover native matrix amplitudes/equip lowering, separate arm paths, extruded sprite dimensions, level boundaries, death rewards, orb conservation/pickup/expiration, original-media hashes, feeding prerequisites/resource consumption, breeding uniqueness, and calf/cooldown persistence. Local browser checks exercise the menu, hand/item selection, XP pickup, inventory, feeding, death and respawn.
+
+Version 0.6 corrects the earlier container placements and unifies containers/HUD under integer GUI scaling. See [mining and layout](mining-and-layout.md); the earlier fixed scale-three layout is superseded.

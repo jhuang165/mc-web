@@ -158,7 +158,7 @@ export class EntityWorld {
     const item = ITEMS[tool],
       owned = survival.creative || survival.count(tool) > 0;
     let damage = 1;
-    if (owned && item?.kind) {
+    if (owned && ["sword","axe","pickaxe","shovel"].includes(item?.kind)) {
       damage =
         item.kind === "sword"
           ? 5 + (item.name.startsWith("Golden") ? 0 : item.tier)
@@ -177,7 +177,7 @@ export class EntityWorld {
     e.vz = Math.cos(e.yaw) * 0.28;
     e.vy = 0.2;
     survival.exhaust(0.3);
-    if (owned) survival.wear(tool);
+    if (owned&&["sword","axe","pickaxe","shovel"].includes(item?.kind)) survival.wear(tool,item.kind==='sword'?1:2);
     if (e.health <= 0) {
       this.events.push({
         sound: "mob." + e.type + (e.type === "cow" ? ".hurt" : ".death"),

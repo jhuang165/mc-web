@@ -1,0 +1,3 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {guiScale,stackCount} from './gui.js';
+test('GUI scaling keeps integer pixels and the original minimum 320 by 240 logical resolution',()=>{assert.equal(guiScale(740,988),2);assert.equal(guiScale(1280,720),3);assert.equal(guiScale(1920,1080),4);assert.equal(guiScale(375,667),1);assert.equal(guiScale(1280,720,2),2);assert.equal(guiScale(740,988,4),2);});
+test('native stack overlays omit singletons and empty stacks',()=>{for(const n of [0,1,undefined,NaN])assert.equal(stackCount(n),'');assert.equal(stackCount(64),'<b class="item-count">64</b>');assert.equal(stackCount(4),'<b class="item-count">4</b>');});

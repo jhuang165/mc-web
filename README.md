@@ -1,0 +1,49 @@
+# Minecraft Java 1.7.10 — Web recreation
+
+A partial browser recreation of Minecraft Java 1.7.10, investigated with [REA](https://github.com/morluto/rea), MCP SRG mappings and original-client bytecode. Full 1.7.10 parity is unfinished.
+
+[Play the owner-private Site](https://blockworld-mc-web-1030.jhuang165.chatgpt.site) · [Feature coverage](public/research/parity.md) · [Codex/Claude setup](docs/collaboration.md)
+
+## Run
+
+```sh
+npm ci
+npm run dev
+```
+
+Node 20.19+ and a browser with WebGL 2 are required. Build with `npm run build`; output is `dist/`.
+
+## Current implementation
+
+Finite seeded terrain, collision/movement/swimming/Creative flight, health/hunger, resources/tools, shaped 2×2 and 3×3 crafting, furnace smelting, original textures/audio, first-person motion, pigs/cows/zombies, wheat farming and cow breeding, XP, classic menus and persistent browser saves. Version 0.6 corrects container/count coordinates, integer GUI scaling, tool break times/harvest/wear and adds shears plus snowball/flint/book drops and recipes.
+
+Inventory storage, camera/terrain generation, AI and several interactions remain adapted. The complete block/mob registries, armor, enchanting, redstone, dimensions, original Java worlds/networking and full renderer parity are not implemented. Original imported artwork/audio remains © Mojang / Microsoft; media manifests preserve its hashes and provenance. No original game classes ship in the web build.
+
+## Validate
+
+```sh
+npm test
+npm run test:bridge
+npm run build
+```
+
+The suite includes regression coverage against 2,640 unchanged-original-tool cases. Optional research commands need a JDK and network access:
+
+```sh
+node tools/investigate.mjs
+node tools/verify-mining.mjs
+node tools/verify-food-stats.mjs
+```
+
+Raw client JARs, mappings and extracted classes stay in ignored `tools/research/`. [Mining/layout evidence](public/research/mining-and-layout.md) documents what the isolated harness checks and its limits.
+
+## Work with Claude Code and Codex
+
+```sh
+npm run setup:bridge
+claude
+```
+
+Read [the collaboration guide](docs/collaboration.md). Both agents share `AGENTS.md`, `.shared-memory/PROJECT.md`, revision-checked notes and advisory work claims through the local `mc-web-memory` MCP server. Claude's first project-server approval and Codex project trust remain client-controlled; restart sessions after setup. No global configuration is changed.
+
+GitHub is the `github` remote. Commit reviewed changes, then run `npm run push:github` to validate and push the current branch. GitHub Actions validates pushes and pull requests. Sites publication is separate and preserves the existing private audience.

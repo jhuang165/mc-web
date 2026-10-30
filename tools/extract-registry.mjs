@@ -1,0 +1,11 @@
+import {readFile,writeFile} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+const root=path.dirname(fileURLToPath(import.meta.url));
+const text=await readFile(path.join(root,'research/blocks-1.7.10-bytecode.txt'),'utf8');
+const pattern=/\d+: getstatic[^\n]+\/\/ Field c:Lcw;\n\s*\d+: (?:iconst_(\d)|(?:bipush|sipush)\s+(\d+))\n\s*\d+: ldc(?:_w)?\s+#[^\n]+\/\/ String ([a-z0-9_]+)/g;
+const blocks=[...text.matchAll(pattern)].map(m=>({id:Number(m[1]||m[2]),name:m[3]}));
+if(blocks.length!==171||new Set(blocks.map(b=>b.id)).size!==171)throw new Error('Unexpected registry shape: inspect the target and extractor before proceeding.');
+const registry={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',source:'Original aji (Block) registration bytecode; ID and name constants passed to cw.a(int,String,Object).',scope:'Base block registrations, including air and technical blocks. Metadata variants and behavior are not enumerated. This is an inventory, not a claim that all these blocks are implemented.',count:blocks.length,blocks};
+await writeFile(path.join(root,'../public/research/block-registry-1.7.10.json'),JSON.stringify(registry,null,2)+'\n');
+console.log(`Extracted ${blocks.length} original base block registrations.`);

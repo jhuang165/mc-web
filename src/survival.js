@@ -1,3 +1,4 @@
+import {miningState,blockWear} from "./mining.js";
 import { BLOCKS } from "./world.js";
 
 export const ITEMS = Object.fromEntries(
@@ -43,7 +44,9 @@ for (let kind = 0; kind < 4; kind++) {
   };
 }
 for(const [tier,name,durability,ingredient]of[[0,'Wooden',59,7],[1,'Stone',131,12],[2,'Iron',250,302],[3,'Diamond',1561,303],[0,'Golden',32,304]]){const id=120+Object.values(ITEMS).filter(i=>i.kind==='hoe').length;ITEMS[id]={id,name:name+' hoe',kind:'hoe',tier,durability,speed:1,ingredient,stack:1,color:'#b7a274',glyph:'⚒'};}
+ITEMS[125]={id:125,name:"Shears",kind:"shears",durability:238,speed:1,stack:1,color:"#d8d8d8"};
 for (const item of [
+  {id:312,name:"Snowball",color:"#fff",glyph:"●",stack:16},{id:313,name:"Flint",color:"#555",glyph:"◆"},{id:314,name:"Book",color:"#8d4f39",glyph:"▰"},
   {id:309,name:"Wheat seeds",color:"#8eab54",glyph:"·"},{id:310,name:"Bone meal",color:"#ede9d8",glyph:"●"},{id:311,name:"Bone",color:"#dedac6",glyph:"╱"},
   {
     id: 204,
@@ -111,7 +114,7 @@ for (const item of [
   { id: 307, name: "Clay ball", color: "#acb7bc", glyph: "●" },
   { id: 308, name: "Charcoal", color: "#4e554c", glyph: "◆" },
 ])
-  ITEMS[item.id] = { ...item, stack: 64 };
+  ITEMS[item.id] = { stack:64,...item };
 
 export const MATERIALS = {
   1: { hardness: 0.6, drop: 2 },
@@ -133,9 +136,9 @@ export const MATERIALS = {
   18: { hardness: 3, kind: "pickaxe", tier: 2 },
   19: { hardness: 0.8 },
   20: { hardness: 0 },
-  21: { hardness: 1.5, kind: "axe", drop: 7 },
+  21: { hardness: 1.5, kind: "axe", drop: 314, count:3 },
   22: { hardness: 50, kind: "pickaxe", tier: 3 },
-  23: { hardness: 0.2, kind: "shovel" },
+  23: { hardness: 0.2, kind: "shovel",drop:312,count:4 },
   24: { hardness: 0.6, kind: "shovel", drop: 307, count: 4 },
   25: { hardness: 0.6, kind: "shovel" },
   26: { hardness: 5, kind: "pickaxe", tier: 1 },
@@ -159,6 +162,9 @@ function recipe(id, name, rows, keys, output, count = 1) {
     count,
   });
 }
+recipe("shears","Shears",[" I","I "],{I:302},125);
+recipe("snow","Snow block",["SS","SS"],{S:312},23);
+recipe("bookshelf","Bookshelf",["PPP","BBB","PPP"],{P:7,B:314},21);
 recipe("planks", "Oak planks", ["L"], { L: 4 }, 7, 4);
 recipe("sticks", "Sticks", ["P", "P"], { P: 7 }, 300, 4);
 recipe("table", "Crafting table", ["PP", "PP"], { P: 7 }, 13);
@@ -367,10 +373,10 @@ export class Survival {
     );
     return true;
   }
-  wear(id) {
-    if (this.creative || !ITEMS[id]?.durability || !this.count(id))
+  wear(id,amount=1) {
+    if (amount<=0 || this.creative || !ITEMS[id]?.durability || !this.count(id))
       return false;
-    this.durability[id] = (this.durability[id] || ITEMS[id].durability) - 1;
+    this.durability[id] = (this.durability[id] || ITEMS[id].durability) - amount;
     if (this.durability[id] <= 0) {
       this.take(id);
       delete this.durability[id];
@@ -392,24 +398,10 @@ export class Survival {
     return true;
   }
   mining(block, toolId, underwater = false, onGround = true) {
-    const m = MATERIALS[block] || { hardness: 1 },
-      tool = ITEMS[toolId];
-    if (!Number.isFinite(m.hardness)) return { progress: 0, harvest: false };
-    const harvest =
-      m.tier === undefined ||
-      (tool?.kind === "pickaxe" &&
-        tool.tier >= m.tier &&
-        this.count(toolId) > 0);
-    let speed =
-      tool && tool.kind === m.kind && this.count(toolId) ? tool.speed : 1;
-    if (underwater) speed /= 5;
-    if (!onGround) speed /= 5;
-    return {
-      progress:
-        m.hardness === 0 ? 1 : speed / m.hardness / (harvest ? 30 : 100),
-      harvest,
-    };
+    return miningState(block,MATERIALS[block],this.count(toolId)?ITEMS[toolId]:null,{underwater,onGround});
   }
+  wearBlock(block,toolId){return this.wear(toolId,blockWear(block,MATERIALS[block]||{},ITEMS[toolId]));}
+
   tick({ underwater = false } = {}) {
     this.time++;
     this.hurtTicks = Math.max(0, this.hurtTicks - 1);
