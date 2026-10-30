@@ -1,0 +1,42 @@
+# Minecraft Java 1.7.10 feature coverage
+
+The target is the complete Java 1.7.10 feature set. **This build does not yet provide full parity.** “Implemented” below means a working browser implementation with the limitations stated; it does not mean original-client equivalence.
+
+## Working systems
+
+| System | Current browser implementation | Remaining differences |
+| --- | --- | --- |
+| Movement | 20 Hz controller, jumping, sprinting, gravity, collision, swimming, Creative flight | Simplified collision, stepping, water behavior, float arithmetic and camera effects |
+| Survival health | 20 health, fall damage, drowning, death, respawn | Armor, combat, fire/lava, status effects, full damage rules and difficulty selection |
+| Hunger | Food, saturation, exhaustion, natural regeneration, Normal-difficulty starvation | Seven isolated original-bytecode cases verified; other player/world interactions remain partial |
+| Inventory | Collected resources, hotbar, stack caps, per-tool durability, saving | Aggregate storage by item type; not Java's 36-slot container/cursor implementation |
+| Mining | Break progress, tool speed, harvest tiers, resource consumption/drop rules for the implemented blocks | Not all block/tool combinations, enchantments, animations or item entities |
+| Crafting | 2 × 2 and workstation 3 × 3 grids; shaped recipe offsets and mirroring; 30 recipes | Complete vanilla recipe registry, shapeless/special recipes, shift crafting, original UI |
+| Tools | Wooden, stone, iron and diamond pickaxes, axes, shovels and swords; durability | Gold tools, combat mechanics, repair, enchantments; sword combat is not implemented |
+| Furnace | Input/fuel/output storage, 200-tick smelting, coal/charcoal/wood/stick fuel, persistent progress | Experience, hoppers, original GUI/container semantics, complete fuel/recipe set |
+| Death drops | Recoverable inventory piles, 6,000-tick lifetime, save/reload | Simplified pile rendering/pickup, no individual stack entity physics |
+| World | Custom caves and coal/iron/gold/diamond ores; fixed 128 × 128 × 64 terrain | Original noise generator, infinite chunks, 256-block build height, Java seed compatibility |
+| Lighting | 24,000-tick day, sun/moon, dusk/night, nearby torch lights | Native 0–15 block/skylight propagation, lunar phases, weather and renderer parity |
+| Blocks | 29 internal block types including air, water and bedrock; 26 selectable building materials | Original registry contains 171 base registrations, plus metadata variants and behaviors |
+| Food | Apples, bread, raw/cooked porkchops with food/saturation values | Eating animation/duration, food acquisition via farming/mobs, remaining foods/effects |
+| Persistence | World edits, mode, health/hunger, resources, tools, furnace progress, clock, hotbar and death piles | Original Anvil region files, NBT interoperability and migrations between Java versions |
+
+## Systems not yet implemented
+
+- Complete block and item registries, metadata variants, block shapes, fluids and block update rules.
+- Passive and hostile mobs, spawning, AI, breeding, combat, bosses and entity interactions.
+- Farming, crop/plant growth, saplings, leaf decay, fishing and animal-derived resources.
+- Armor, experience, enchanting, brewing, potions, status effects, hunger/damage difficulty variants.
+- Redstone, circuits, pistons, rails, minecarts, boats, mechanisms and inventories such as chests/hoppers.
+- Original biomes, world generation, structures, villages, dungeons, weather, Nether and End.
+- Java multiplayer protocol/server compatibility, authentication, LAN play and server management.
+- Java save compatibility, commands, gamerules, achievements/statistics, resource packs and mod support.
+- Original textures, sounds, music, animation, menus, GUI behavior and full rendering behavior.
+
+## Evidence
+
+- [Original base block registry](block-registry-1.7.10.json): all 171 ID/name pairs extracted from the original registration method. This inventory does not imply these blocks are implemented.
+- [Original FoodStats reference outputs](foodstats-reference.json): seven boundary scenarios from the unchanged original class, run with minimal test doubles for its world/player dependencies. The JavaScript results agree within 1e-6 for all 28 numeric comparisons.
+- [Investigation](investigation.md): target integrity, REA inventory, mapped symbols, bytecode locations and known limits.
+
+Existing pre-update worlds keep generation version 1. New worlds use generation version 2 with custom caves and ores. The generation version travels with exports so old edits do not shift onto different terrain.

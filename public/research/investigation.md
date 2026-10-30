@@ -19,7 +19,7 @@ REA recognized a ZIP/JAR and inventoried 2,848 file occurrences and 2,825 unique
 
 Container evidence ID: `ev_d158c3b195b8a20e56b5d1e0bd446675a35bf3d015e5e876cf35369017128fd9`.
 
-The next investigation step used the published MCP SRG mapping archive to identify classes and methods, and the JDK's `javap -c -p` to inspect Java instructions. This is static inspection; the original game was not executed.
+The next investigation step used the published MCP SRG mapping archive to identify classes and methods, and the JDK's `javap -c -p` to inspect Java instructions. The original game was not launched. A later isolated FoodStats probe executes one unchanged class with minimal dependency test doubles; see below.
 
 ## Located classes and methods
 
@@ -60,8 +60,25 @@ The original method also contains water, lava, ladders, effects, entity-specific
 
 New code uses Three.js WebGL, chunked exposed-face meshes, a generated pixel atlas, seeded custom terrain, ray-selected mining and building, and localStorage edits. No Minecraft code, classes, sounds, or textures are redistributed.
 
-Available: creative building, gravity, jumping, flight, collision, water, inventory, world seeds, local saves, import/export, settings, and diagnostics.
+Available: Creative and Survival modes, gravity, jumping, flight, collision, health, hunger, food, fall damage, drowning, death/respawn and recoverable item piles, shaped crafting, a fuel-driven furnace, tool tiers/durability, custom caves/ores, torches, a day/night cycle, local saves, import/export, settings, and diagnostics.
 
-Not available: survival, mobs, crafting, redstone, multiplayer, Java world files, the Java protocol, original world generation, or complete Java 1.7.10 behavior. This is a bounded creative prototype informed by a real artifact investigation, not a completed Minecraft port.
+Not available: mobs, combat, farming, full block/item/recipe registries, redstone, multiplayer, Java world files, the Java protocol, original world generation, or complete Java 1.7.10 behavior. See [feature coverage](parity.md) for the complete gap list. Full Java 1.7.10 compatibility remains the target, not a claim of completion.
 
 Reproduction commands and source are in the repository README and `tools/investigate.mjs`. Original downloaded inputs and raw REA evidence remain local, outside the published build.
+
+
+## Survival and workstation investigation
+
+The follow-on investigation identifies `zr` as FoodStats, `yz` as EntityPlayer, `apg` as TileEntityFurnace, `aqo` as WorldProvider, and `afe`/`afk`/`afl` as the crafting manager/tool/weapon recipe classes.
+
+Observed FoodStats rules: initial food 20, saturation 5; exhaustion triggers a drain only when strictly greater than 4, consuming saturation before food. At food 18 or higher, natural regeneration heals one health point every 80 ticks and adds 3 exhaustion. Normal-difficulty starvation damages every 80 ticks and stops at one health point. Feeding adds `nutrition * saturationModifier * 2` saturation, capped at the resulting food level. Player jump exhaustion is 0.8 when sprinting and 0.2 otherwise.
+
+The original furnace increments its cooking counter to 200 before producing output. Coal provides 1,600 burning ticks, wooden blocks 300, and sticks 100. WorldProvider uses time modulo 24,000 for the day cycle. The tool recipe constructor contains pickaxe, shovel, axe and hoe patterns; this build implements the first three plus swords. Hoes and gold tools are still missing.
+
+### Original-bytecode comparison
+
+`node tools/verify-food-stats.mjs` verifies the JAR SHA-1, compiles our small player/world test doubles, extracts the unchanged `zr.class` into an ignored probe directory, and executes FoodStats against those dependencies. It does not launch or modify the signed game JAR. Seven scenarios cover initial state, exhaustion exactly at and just above the boundary, apple nutrition/saturation, regeneration at 79 and 80 ticks, and Normal starvation. The JavaScript implementation passes all 28 numeric comparisons within 1e-6.
+
+[Reference results and exact class SHA-256](foodstats-reference.json) are included as data, with no original class or source in the published app. These results validate only the isolated scenarios; they do not establish full game parity.
+
+`node tools/extract-registry.mjs` extracts all 171 base block ID/name registrations from the original Block registration bytecode. [Registry data](block-registry-1.7.10.json) supports a concrete content backlog. Metadata variants and block-specific behavior are not covered by that inventory.

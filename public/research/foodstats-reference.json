@@ -1,0 +1,58 @@
+{
+  "target": "Minecraft Java 1.7.10",
+  "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+  "class": "zr (FoodStats)",
+  "classSha256": "2fcb803a576beeec696612a00f2b8c1d708f245842e6f6fd5f530383de14ab16",
+  "method": "Original unchanged class run against minimal Normal-difficulty world/player test doubles; compared to JS within 1e-6.",
+  "cases": [
+    {
+      "case": "initial",
+      "health": 20,
+      "food": 20,
+      "saturation": 5,
+      "exhaustion": 0
+    },
+    {
+      "case": "exact-threshold",
+      "health": 20,
+      "food": 20,
+      "saturation": 5,
+      "exhaustion": 4
+    },
+    {
+      "case": "above-threshold",
+      "health": 20,
+      "food": 20,
+      "saturation": 4,
+      "exhaustion": 0.010000229
+    },
+    {
+      "case": "apple",
+      "health": 20,
+      "food": 16,
+      "saturation": 2.4,
+      "exhaustion": 0
+    },
+    {
+      "case": "regen-79",
+      "health": 18,
+      "food": 18,
+      "saturation": 5,
+      "exhaustion": 0
+    },
+    {
+      "case": "regen-80",
+      "health": 19,
+      "food": 18,
+      "saturation": 5,
+      "exhaustion": 3
+    },
+    {
+      "case": "normal-starvation",
+      "health": 1,
+      "food": 0,
+      "saturation": 0,
+      "exhaustion": 0
+    }
+  ]
+}
