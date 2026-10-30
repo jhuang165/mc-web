@@ -16,6 +16,7 @@ import { VoxelScene } from "./scene.js";
 import { SoundBank, blockSound } from "./audio.js";
 import { PlayerAnimation } from "./animation.js";
 import { FirstPerson, itemTexture } from "./first-person.js";
+import {Farming,cropDrops} from "./farming.js";
 import { EntityWorld } from "./entities.js";
 import { MobRenderer } from "./mob-renderer.js";
 import {
@@ -88,6 +89,7 @@ let screen = "home",
   lockFallback = false,
   saved = true,
   lastJump = 0;
+let farming;
 let sounds,
   firstPerson,
   mobs,
@@ -202,7 +204,7 @@ function makeRecord(p) {
     seed: String(p.seed).slice(0, 80),
     biome: p.biome || "meadow",
     mode: p.mode === "survival" ? "survival" : "creative",
-    generationVersion: 2,
+    generationVersion: 3,
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -223,6 +225,7 @@ function sound(place, block = target ? world.get(...target.block) : 3) {
 function icon(id) {
   const item = ITEMS[id];
   if (!id || !item) return '<span class="empty-hand">·</span>';
+  if(item.block)return `<img class="vanilla-item-icon vanilla-block-icon" src="${scene.textures.icon(id)}" alt="" aria-hidden="true">`;
   if (!item.block && itemTexture(id))
     return `<img class="vanilla-item-icon" src="${itemTexture(id)}" alt="" aria-hidden="true">`;
   if (!item.block)
@@ -315,13 +318,13 @@ function controls() {
       .map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`)
       .join(
         "",
-      )}</div><p class="form-note">Right-click a crafting table for the 3 × 3 grid or a furnace to smelt. Put materials into the crafting grid, then take the result. Click an occupied grid cell to clear it.</p><p class="form-note">If mouse capture is unavailable, drag to look and click once to mine the targeted block. Touch controls include a Fly button in Creative.</p>`,
+      )}</div><p class="form-note">Right-click a crafting table for the 3 × 3 grid or a furnace to smelt. Put materials into the crafting grid, then take the result. Click an occupied grid cell to clear it.</p><p class="form-note">To farm: break tall grass for seeds, right-click exposed grass/dirt with a hoe, then plant seeds on the tilled soil. Water within four blocks keeps soil hydrated. Bone meal advances growth; harvest mature golden wheat and craft three wheat into bread.</p><p class="form-note">If mouse capture is unavailable, drag to look and click once to mine the targeted block. Touch controls include a Fly button in Creative.</p>`,
   );
 }
 function notes() {
   modal(
     "Rebuilding 1.7.10, system by system.",
-    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, regeneration, fall damage, drowning, death and recoverable inventory drops. Shaped crafting, a crafting table, a fuel-driven furnace, wood, stone, iron, diamond and gold tools with durability. Original 1.7.10 effects and selected textures; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Caves, ores, torches, and a day/night lighting cycle.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, farming, advanced combat, armor, enchantments, redstone, dimensions, structures, weather, Java saves, and multiplayer. The renderer, block textures, terrain, inventory layout, entity AI and several interactions remain simplified. Selected original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
+    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, regeneration, fall damage, drowning, death and recoverable inventory drops. Shaped crafting, a crafting table, a fuel-driven furnace, wood, stone, iron, diamond and gold tools with durability. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Caves, ores, torches, and a day/night lighting cycle. Wheat farming with five hoe tiers, seeds, moisture, eight growth stages, bone meal, harvesting and bread crafting.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, armor, enchantments, redstone, dimensions, structures, weather, Java saves, and multiplayer. The renderer, terrain, inventory layout, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
     "notes-modal",
   );
 }
@@ -382,6 +385,7 @@ function save() {
   active.selected = selected;
   active.drops = droppedInventories;
   active.entities = mobs?.serialize() || [];
+  active.farms=farming?.serialize()||[];
   active.updated = Date.now();
   const i = worlds.findIndex((w) => w.id === active.id);
   if (i < 0) worlds.unshift(active);
@@ -453,6 +457,7 @@ function launch(record) {
     world = new World(record.seed, record.biome, record.generationVersion ?? 1);
     world.restore(record.edits || []);
     scene.setWorld(world);
+    farming=new Farming(world,record.farms);
     mobs = new EntityWorld(world, record.entities);
     mobRenderer.clear();
     animation.reset();
@@ -596,7 +601,7 @@ function renderInventory() {
   const guideOpen = $(".recipe-guide")?.open || false;
   const creative = survival.creative,
     all = Object.values(ITEMS).filter(
-      (i) => i.id && i.id !== 10 && i.id !== 11,
+      (i) => i.id && i.id !== 10 && i.id !== 11 && !i.hidden,
     ),
     owned = creative ? all : all.filter((i) => survival.count(i.id));
   const result = matchRecipe(craftGrid, gridSize);
@@ -712,10 +717,10 @@ function renderVitals() {
     food = Array.from(
       { length: 10 },
       (_, i) =>
-        `<span class="${survival.food > i * 2 ? "full" : "empty"}">◆</span>`,
+        `<span class="${survival.food > i * 2+1 ? "full" : survival.food>i*2?"half":"empty"}">◆</span>`,
     ).join("");
   $("#survival-hud").innerHTML =
-    `<div class="vital-row"><div class="hearts" aria-label="Health ${survival.health} of 20">${hearts}</div><div class="hunger" aria-label="Hunger ${survival.food} of 20">${food}</div></div>${survival.air < 300 ? `<div class="air" aria-label="Air ${Math.max(0, survival.air)} of 300">${"◉".repeat(Math.max(0, Math.ceil(survival.air / 30)))}</div>` : ""}`;
+    `<div class="vital-row"><div class="hearts" aria-label="Health ${survival.health} of 20">${hearts}</div><div class="hunger" aria-label="Hunger ${survival.food} of 20">${food}</div></div>${survival.air < 300 ? `<div class="air" aria-label="Air ${Math.max(0, survival.air)} of 300">${"<span></span>".repeat(Math.max(0, Math.ceil(survival.air / 30)))}</div>` : ""}`;
   $("#damage-flash").classList.toggle("hurt", survival.hurtTicks > 4);
 }
 function acquire(id, n = 1) {
@@ -887,6 +892,7 @@ function tickSurvival(inWater, oldPosition) {
   updateFurnace();
   if (survival.health <= 0 && !survival.creative) die();
 }
+function applyFarmUpdates(updates){const chunks=new Set();for(const[x,y,z]of updates)chunks.add([Math.floor(x/16)*16,Math.floor(z/16)*16].join(','));for(const key of chunks)scene.buildChunk(...key.split(',').map(Number));}
 function handleEntityEvents() {
   for (const event of mobs.drain()) {
     if (event.sound)
@@ -925,12 +931,21 @@ function edit(place = false) {
     }
     return;
   }
+  if(place&&aimedEntity){if(!survival.creative&&item?.food)beginEating(id);return;}
   if (!target) {
     if (place && !survival.creative && item?.food) beginEating(id);
     return;
   }
   const block = world.get(...target.block);
   if (place) {
+    const [x,y,z]=target.block;
+    if(item?.kind==='hoe'){
+      if(!survival.creative&&!survival.count(id)){toast('Craft a hoe first.');return;}
+      if(target.adjacent?.[1]!==y-1&&farming.till(x,y,z)){survival.wear(id);applyFarmUpdates(farming.drain());renderHotbar();sounds.play('step.gravel',{volume:.7});saved=false;}return;
+    }
+    if(id===309){if((survival.creative||survival.count(id))&&target.adjacent?.[1]===y+1&&farming.plant(x,y,z)){if(!survival.creative)survival.take(id);applyFarmUpdates(farming.drain());renderHotbar();saved=false;}return;}
+    if(id===310){if((survival.creative||survival.count(id))&&farming.fertilize(x,y,z)){if(!survival.creative)survival.take(id);applyFarmUpdates(farming.drain());renderHotbar();sounds.play('dig.grass',{volume:.4});saved=false;}return;}
+
     if (block === 13) {
       inventory(true);
       return;
@@ -961,6 +976,7 @@ function edit(place = false) {
       return;
     }
     world.set(...p, id);
+    farming.observe(...p);
     if (!survival.creative) survival.take(id);
     scene.updateBlock(p[0], p[2]);
     renderHotbar();
@@ -993,7 +1009,8 @@ function breakBlock(p, creative = false) {
     count = m.count || 1;
   if (block === 5 && Math.random() < 0.005) drop = 200;
   if (block === 21) count = 3;
-  if (!creative && drop && survival.room(drop) < count) {
+  const crops=cropDrops(block);const drops=crops??(drop?[{id:drop,count}]:[]);
+  if (!creative && drops.some(d=>survival.room(d.id)<d.count)) {
     toast("No room for this drop. Make room in your inventory.");
     mining = null;
     return false;
@@ -1018,8 +1035,9 @@ function breakBlock(p, creative = false) {
     delete survival.furnaces[key];
   }
   if (!world.set(...p, 0)) return false;
+  farming.observe(...p);
   if (!creative) {
-    if (drop) acquire(drop, count);
+    for(const d of drops)acquire(d.id,d.count);
     survival.exhaust(0.025);
     if (survival.wear(tool))
       toast("Your " + ITEMS[tool].name.toLowerCase() + " broke.");
@@ -1179,6 +1197,8 @@ function movementTick() {
       : "WALKING";
   const beforeHealth = survival.health;
   tickSurvival(inWater, oldPosition);
+  applyFarmUpdates(farming.tick(survival.time,scene.daylight));
+  scene.setFurnaces(survival.furnaces);
   mobs.tick(position, survival);
   handleEntityEvents();
   const distance = Math.hypot(
@@ -1283,6 +1303,7 @@ $("#file-input").onchange = async (e) => {
       selected: data.selected,
       drops: data.drops,
       entities: data.entities,
+      farms:data.farms,
     };
     worlds.unshift(record);
     persist();
@@ -1553,8 +1574,9 @@ function animate(now) {
       eating: eating ? (32 - eating.ticks) / 20 : 0,
     });
 }
-try {
+async function boot(){try {
   scene = new VoxelScene($("#viewport"));
+  await scene.textures.ready;
   sounds = new SoundBank(
     () => options,
     () => ({ ...position, yaw }),
@@ -1579,5 +1601,7 @@ try {
   requestAnimationFrame(animate);
 } catch (e) {
   $("#loading").innerHTML =
-    `<div class="loading-cube">${cube}</div><h2>This world needs WebGL.</h2><p>Enable hardware acceleration or open this page in a current desktop browser.</p><small>${esc(e.message)}</small>`;
+    `<div class="loading-cube">${cube}</div><h2>Couldn’t load the world.</h2><p>Try reloading in a current browser with WebGL enabled.</p><small>${esc(e.message)}</small>`;
 }
+}
+boot();

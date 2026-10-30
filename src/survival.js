@@ -42,7 +42,9 @@ for (let kind = 0; kind < 4; kind++) {
     glyph: ["⛏", "⚒", "♠", "†"][kind],
   };
 }
+for(const [tier,name,durability,ingredient]of[[0,'Wooden',59,7],[1,'Stone',131,12],[2,'Iron',250,302],[3,'Diamond',1561,303],[0,'Golden',32,304]]){const id=120+Object.values(ITEMS).filter(i=>i.kind==='hoe').length;ITEMS[id]={id,name:name+' hoe',kind:'hoe',tier,durability,speed:1,ingredient,stack:1,color:'#b7a274',glyph:'⚒'};}
 for (const item of [
+  {id:309,name:"Wheat seeds",color:"#8eab54",glyph:"·"},{id:310,name:"Bone meal",color:"#ede9d8",glyph:"●"},{id:311,name:"Bone",color:"#dedac6",glyph:"╱"},
   {
     id: 204,
     name: "Raw beef",
@@ -141,6 +143,7 @@ export const MATERIALS = {
   28: { hardness: 5, kind: "pickaxe", tier: 2 },
 };
 
+for(let id=29;id<=39;id++)MATERIALS[id]={hardness:id<=30?.6:0,kind:id<=30?'shovel':undefined,drop:id<=30?2:0};
 export const RECIPES = [];
 function recipe(id, name, rows, keys, output, count = 1) {
   const width = Math.max(...rows.map((r) => r.length));
@@ -202,6 +205,8 @@ for (let kind = 0; kind < 4; kind++) {
     id,
   );
 }
+for(let id=120;id<=124;id++)recipe(String(id),ITEMS[id].name,['XX',' S',' S'],{X:ITEMS[id].ingredient,S:300},id);
+recipe('bonemeal','Bone meal',['B'],{B:311},310,3);
 for (const [block, ingot] of [
   [26, 302],
   [27, 304],

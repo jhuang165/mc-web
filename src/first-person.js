@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { ITEMS } from "./survival.js";
-import { blockTile } from "./scene.js";
+import { blockTile,tileRect } from "./block-textures.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
 export function pixelTexture(url) {
@@ -37,6 +37,7 @@ export function skinBox(w, h, d, u, v, tw, th) {
 }
 export function itemTexture(id) {
   const item = ITEMS[id];
+  if(id===20||id===39)return "/media/1.7.10/blocks/"+(id===20?"torch_on":"tallgrass")+".png";
   if (item?.kind) {
     const material = item.name.startsWith("Wooden")
       ? "wood"
@@ -62,6 +63,7 @@ export function itemTexture(id) {
     306: "brick",
     307: "clay_ball",
     308: "coal",
+    309:"seeds_wheat",310:"dye_powder_white",311:"bone",309:"seeds_wheat",310:"dye_powder_white",311:"bone",
   };
   return names[id] ? "/media/1.7.10/items/" + names[id] + ".png" : null;
 }
@@ -120,17 +122,11 @@ export class FirstPerson {
       const g = new THREE.BoxGeometry(0.3, 0.3, 0.3),
         uv = g.attributes.uv;
       for (let f = 0; f < 6; f++) {
-        const t = blockTile(id, f),
-          u0 = (t * 16 + 0.2) / 512,
-          u1 = (t * 16 + 15.8) / 512;
-        uv.setXY(f * 4, u0, 0.985);
-        uv.setXY(f * 4 + 1, u1, 0.985);
-        uv.setXY(f * 4 + 2, u0, 0.015);
-        uv.setXY(f * 4 + 3, u1, 0.015);
+        const r=tileRect(blockTile(id,f));uv.setXY(f*4,r.u0,r.v1);uv.setXY(f*4+1,r.u1,r.v1);uv.setXY(f*4+2,r.u0,r.v0);uv.setXY(f*4+3,r.u1,r.v0);
       }
       mesh = new THREE.Mesh(
         g,
-        new THREE.MeshLambertMaterial({ map: this.atlas }),
+        new THREE.MeshLambertMaterial({ map: this.atlas,alphaTest:.4 }),
       );
       mesh.rotation.set(0.2, -0.7, 0);
     }

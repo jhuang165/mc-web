@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { WorldEffects } from "./effects.js";
-import { SIZE, HEIGHT, SEA, BLOCKS, hash } from "./world.js";
+import { SIZE, HEIGHT, SEA, BLOCKS, hash, blockHeight, isPlant } from "./world.js";
+import {createBlockAtlas,blockTile,tileRect} from "./block-textures.js";
+export {blockTile} from "./block-textures.js";
 const FACES = [
   {
     n: [1, 0, 0],
@@ -63,128 +65,6 @@ const FACES = [
     shade: 0.72,
   },
 ];
-function atlas() {
-  const canvas = document.createElement("canvas");
-  canvas.width = 32 * 16;
-  canvas.height = 16;
-  const c = canvas.getContext("2d");
-  const colors = [
-    "#79984b",
-    "#7d6345",
-    "#876745",
-    "#90918a",
-    "#77603e",
-    "#b49a65",
-    "#527d42",
-    "#dbcca0",
-    "#b99a69",
-    "#ac6b54",
-    "#bddedc",
-    "#629bb9",
-    "#474b43",
-    ...BLOCKS.slice(12).map((b) => b.color),
-  ];
-  colors.forEach((base, t) => {
-    c.fillStyle = base;
-    c.fillRect(t * 16, 0, 16, 16);
-    for (let x = 0; x < 16; x++)
-      for (let y = 0; y < 16; y++) {
-        const v = hash(x, y, t * 73);
-        c.fillStyle =
-          v > 0.55
-            ? `rgba(255,255,225,${(v - 0.55) * 0.28})`
-            : `rgba(25,26,15,${(0.55 - v) * 0.3})`;
-        c.fillRect(t * 16 + x, y, 1, 1);
-      }
-    if (t === 1) {
-      c.fillStyle = "#719648";
-      for (let x = 0; x < 16; x++)
-        c.fillRect(t * 16 + x, 0, 1, 3 + Math.floor(hash(x, 0, 4) * 4));
-    }
-    if (t === 4) {
-      c.fillStyle = "#58452c";
-      for (let x = 1; x < 16; x += 4) c.fillRect(t * 16 + x, 0, 1, 16);
-    }
-    if (t === 5) {
-      c.strokeStyle = "#80683e";
-      for (let k = 2; k < 8; k += 2)
-        c.strokeRect(t * 16 + k, k, 16 - k * 2, 16 - k * 2);
-    }
-    if (t === 8) {
-      c.fillStyle = "#8d744d";
-      for (let y = 3; y < 16; y += 4) c.fillRect(t * 16, y, 16, 1);
-      c.fillRect(t * 16 + 6, 0, 1, 4);
-      c.fillRect(t * 16 + 12, 4, 1, 4);
-    }
-    if (t === 9) {
-      c.fillStyle = "#d4bc9c";
-      for (let y = 3; y < 16; y += 4) {
-        c.fillRect(t * 16, y, 16, 1);
-        for (let x = y % 8; x < 16; x += 8) c.fillRect(t * 16 + x, y - 3, 1, 3);
-      }
-    }
-    if (t === 10) {
-      c.fillStyle = "#6e9690";
-      c.fillRect(t * 16, 0, 1, 16);
-      c.fillRect(t * 16, 15, 16, 1);
-      c.fillStyle = "#e2f0e8";
-      c.fillRect(t * 16 + 3, 4, 2, 6);
-      c.fillRect(t * 16 + 6, 2, 1, 3);
-    }
-    if (t === 13) {
-      c.strokeStyle = "#565e57";
-      for (let y = 0; y < 16; y += 5) {
-        c.beginPath();
-        c.moveTo(t * 16, y);
-        c.lineTo(t * 16 + 16, y);
-        c.stroke();
-        for (let x = (y % 2) * 3; x < 16; x += 7)
-          c.strokeRect(t * 16 + x, y, 7, 5);
-      }
-    }
-    if (t === 14) {
-      c.fillStyle = "#5e422a";
-      for (let x = 3; x < 16; x += 5) c.fillRect(t * 16 + x, 0, 1, 16);
-      for (let y = 3; y < 16; y += 5) c.fillRect(t * 16, y, 16, 1);
-    }
-    if (t === 15) {
-      c.fillStyle = "#464b45";
-      c.fillRect(t * 16 + 3, 3, 10, 4);
-      c.fillRect(t * 16 + 3, 9, 10, 5);
-    }
-    if (t >= 16 && t <= 19) {
-      c.fillStyle = ["#343e37", "#c8a48b", "#76e1d7", "#e5c967"][t - 16];
-      for (let i = 0; i < 9; i++) {
-        const x = 2 + Math.floor(hash(i, 3, t) * 11),
-          y = 2 + Math.floor(hash(i, 7, t) * 11);
-        c.fillRect(t * 16 + x, y, 2, 2);
-      }
-    }
-    if (t === 23) {
-      c.fillStyle = "#4b3d5c";
-      for (let i = 0; i < 9; i++)
-        c.fillRect(
-          t * 16 + Math.floor(hash(i, 2, 3) * 14),
-          Math.floor(hash(i, 6, 3) * 14),
-          3,
-          2,
-        );
-    }
-  });
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.magFilter = texture.minFilter = THREE.NearestFilter;
-  texture.generateMipmaps = false;
-  return texture;
-}
-export function blockTile(b, face) {
-  if (b === 1) return face === 2 ? 0 : face === 3 ? 2 : 1;
-  if (b === 2) return 2;
-  if (b === 3) return 3;
-  if (b === 4) return face === 2 || face === 3 ? 5 : 4;
-  if (b >= 12) return b + 1;
-  return { 5: 6, 6: 7, 7: 8, 8: 9, 9: 10, 10: 11, 11: 12 }[b] ?? 3;
-}
 export class VoxelScene {
   constructor(container) {
     this.renderer = new THREE.WebGLRenderer({
@@ -213,12 +93,13 @@ export class VoxelScene {
     this.sun.position.set(-60, 100, 40);
     this.scene.add(this.sun);
     this.sunDisc = new THREE.Mesh(
-      new THREE.BoxGeometry(7, 7, 0.25),
-      new THREE.MeshBasicMaterial({ color: "#fff3c4" }),
+      new THREE.PlaneGeometry(14,14),
+      new THREE.MeshBasicMaterial({ map:new THREE.TextureLoader().load("/media/1.7.10/environment/sun.png"),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false }),
     );
+    this.moonTexture=new THREE.TextureLoader().load("/media/1.7.10/environment/moon_phases.png");this.moonTexture.magFilter=this.moonTexture.minFilter=THREE.NearestFilter;this.moonTexture.repeat.set(.25,.5);
     this.moonDisc = new THREE.Mesh(
-      new THREE.BoxGeometry(5, 5, 0.25),
-      new THREE.MeshBasicMaterial({ color: "#c7d7db" }),
+      new THREE.PlaneGeometry(12,12),
+      new THREE.MeshBasicMaterial({map:this.moonTexture,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}),
     );
     this.scene.add(this.sunDisc, this.moonDisc);
     this.torchMaterial = new THREE.MeshLambertMaterial({ color: "#996b3f" });
@@ -230,10 +111,9 @@ export class VoxelScene {
     });
     this.skyColor = new THREE.Color();
     this.setTime(6000);
-    this.material = new THREE.MeshLambertMaterial({
-      map: atlas(),
-      vertexColors: true,
-    });
+    this.textures=createBlockAtlas();
+    this.material = new THREE.MeshLambertMaterial({map:this.textures.texture,vertexColors:true,alphaTest:.4,side:THREE.FrontSide});
+    this.torchMaterial=new THREE.MeshLambertMaterial({map:this.textures.texture,alphaTest:.1});
     this.waterTexture = new THREE.TextureLoader().load(
       "/media/1.7.10/blocks/water_still.png",
       (t) => {
@@ -243,7 +123,7 @@ export class VoxelScene {
     );
     this.waterMaterial = new THREE.MeshLambertMaterial({
       map: this.waterTexture,
-      color: "#81bfd0",
+      color: "#3f76e4",
       transparent: true,
       opacity: 0.66,
       side: THREE.DoubleSide,
@@ -292,6 +172,8 @@ export class VoxelScene {
   setWorld(world) {
     this.effects.clear();
     this.world = world;
+    this.textures.setBiome(world.biome);
+    this.litFurnaces=new Set();
     for (const v of this.chunks.values()) {
       this.scene.remove(v);
       for (const child of v.children) child.geometry.dispose();
@@ -323,6 +205,10 @@ export class VoxelScene {
         for (let y = 0; y < HEIGHT; y++) {
           const b = w.get(x, y, z);
           if (!b || b === 20) continue;
+          if(isPlant(b)){
+            const rect=tileRect(blockTile(b,0));
+            for(const corners of [[[.12,0,.12],[.88,0,.88],[.88,1,.88],[.12,1,.12]],[[.88,0,.12],[.12,0,.88],[.12,1,.88],[.88,1,.12]]]){for(const v of corners){p.push(x+v[0],y+v[1],z+v[2]);n.push(0,1,0);color.push(.95,.95,.95);}uv.push(rect.u0,rect.v0,rect.u1,rect.v0,rect.u1,rect.v1,rect.u0,rect.v1);idx.push(vi,vi+1,vi+2,vi,vi+2,vi+3,vi,vi+2,vi+1,vi,vi+3,vi+2);vi+=4;}continue;
+          }
           if (b === 10) {
             if (!w.get(x, y + 1, z)) {
               wp.push(
@@ -347,18 +233,17 @@ export class VoxelScene {
           }
           FACES.forEach((f, fi) => {
             const nb = w.get(x + f.n[0], y + f.n[1], z + f.n[2]);
-            if (nb && nb !== 10 && nb !== 20) return;
-            const t = blockTile(b, fi),
-              u0 = (t * 16 + 0.2) / 512,
-              u1 = (t * 16 + 15.8) / 512;
+            if(nb&&nb!==10&&nb!==20&&!isPlant(nb)&&nb!==5&&nb!==9&&blockHeight(nb)===1)return;
+            if((b===9&&nb===9)||(b===5&&nb===5))return;
+            const rect=tileRect(blockTile(b,fi,this.litFurnaces?.has(`${x},${y},${z}`)));
             const variation = 0.96 + hash(x, z, y) * 0.07;
             for (const v of f.v) {
-              p.push(x + v[0], y + v[1], z + v[2]);
+              p.push(x + v[0], y + v[1]*blockHeight(b), z + v[2]);
               n.push(...f.n);
               const shade = f.shade * variation;
               color.push(shade, shade, shade);
             }
-            uv.push(u0, 0.015, u1, 0.015, u1, 0.985, u0, 0.985);
+            uv.push(rect.u0,rect.v0,rect.u1,rect.v0,rect.u1,rect.v1,rect.u0,rect.v1);
             idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
             vi += 4;
           });
@@ -369,21 +254,14 @@ export class VoxelScene {
       for (let z = cz; z < cz + 16; z++)
         for (let y = 0; y < HEIGHT; y++)
           if (w.get(x, y, z) === 20) {
-            const stem = new THREE.Mesh(
-              new THREE.BoxGeometry(0.12, 0.5, 0.12),
-              this.torchMaterial,
-            );
-            stem.position.set(x + 0.5, y + 0.25, z + 0.5);
-            const flame = new THREE.Mesh(
-              new THREE.BoxGeometry(0.15, 0.16, 0.15),
-              this.flameMaterial,
-            );
-            flame.position.set(x + 0.5, y + 0.55, z + 0.5);
-            group.add(stem, flame);
+            const geometry=new THREE.BoxGeometry(.125,.625,.125),attr=geometry.attributes.uv,t=blockTile(20,0);const tx=t%16*16,ty=Math.floor(t/16)*16;
+            for(let f=0;f<6;f++){const x0=(tx+7)/256,x1=(tx+9)/256,y0=1-(ty+16)/48,y1=1-(ty+6)/48;attr.setXY(f*4,x0,y1);attr.setXY(f*4+1,x1,y1);attr.setXY(f*4+2,x0,y0);attr.setXY(f*4+3,x1,y0);}
+            const torch=new THREE.Mesh(geometry,this.torchMaterial);torch.position.set(x+.5,y+.3125,z+.5);group.add(torch);
             group.userData.torches.push(
               new THREE.Vector3(x + 0.5, y + 0.65, z + 0.5),
             );
           }
+    for(const key of this.litFurnaces||[]){const [x,y,z]=key.split(",").map(Number);if(x>=cx&&x<cx+16&&z>=cz&&z<cz+16)group.userData.torches.push(new THREE.Vector3(x+.5,y+.5,z+.5));}
     if (p.length) {
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
@@ -405,6 +283,7 @@ export class VoxelScene {
     this.chunks.set(key, group);
     this.scene.add(group);
   }
+  setFurnaces(data){const next=new Set(Object.entries(data).filter(([,f])=>f.burn>0).map(([key])=>key));const changed=[...new Set([...next,...this.litFurnaces||[]])].filter(k=>next.has(k)!==this.litFurnaces?.has(k));this.litFurnaces=next;const chunks=new Set(changed.map(k=>{const[x,,z]=k.split(',').map(Number);return[Math.floor(x/16)*16,Math.floor(z/16)*16].join(',');}));for(const k of chunks)this.buildChunk(...k.split(',').map(Number));}
   updateBlock(x, z) {
     const cx = Math.floor(x / 16) * 16,
       cz = Math.floor(z / 16) * 16;
@@ -425,6 +304,7 @@ export class VoxelScene {
     this.outline.visible = false;
   }
   setTime(ticks) {
+    if(this.moonTexture){const phase=Math.floor(ticks/24000)%8;this.moonTexture.offset.set(phase%4*.25,1-(Math.floor(phase/4)+1)*.5);}
     const a = ((ticks % 24000) / 24000 - 0.25) * Math.PI * 2;
     this.daylight = Math.max(0.04, Math.min(1, (Math.cos(a) + 0.2) * 1.7));
     this.skyColor
@@ -450,7 +330,7 @@ export class VoxelScene {
   }
   render(time, dt = 1 / 60) {
     this.effects.update(dt);
-    this.waterTexture.offset.y = 1 - ((Math.floor(time * 20) % 32) + 1) / 32;
+    this.waterTexture.offset.y = 1 - ((Math.floor(time * 10) % 32) + 1) / 32;
     this.clouds.position.x = Math.sin(time * 0.004) * 5;
     const torches = [...this.chunks.values()]
       .flatMap((c) => c.userData.torches || [])

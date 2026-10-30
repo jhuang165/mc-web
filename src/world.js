@@ -31,6 +31,10 @@ export const BLOCKS = [
   { name: "Iron block", color: "#c5ccca" },
   { name: "Gold block", color: "#e6c65d" },
   { name: "Diamond block", color: "#70cec5" },
+  {name:'Farmland',color:'#8c6243',hidden:true},
+  {name:'Moist farmland',color:'#65492f',hidden:true},
+  ...Array.from({length:8},(_,i)=>({name:'Wheat (stage '+i+')',color:i===7?'#d7b75e':'#709b43',hidden:true})),
+  {name:'Tall grass',color:'#82aa51'},
 ];
 export const HOTBAR = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 // Vanilla 1.7.10 values, located using MCP SRG mappings and javap; see research notes.
@@ -67,8 +71,11 @@ function noise(x, z, seed) {
     b = hash(ix, iz + 1, seed) * (1 - fx) + hash(ix + 1, iz + 1, seed) * fx;
   return a * (1 - fz) + b * fz;
 }
+export const isCrop=b=>b>=31&&b<=38;
+export const isPlant=b=>isCrop(b)||b===39;
+export const blockHeight=b=>b===29||b===30?15/16:1;
 export class World {
-  constructor(seed = "Overworld", biome = "meadow", generationVersion = 2) {
+  constructor(seed = "Overworld", biome = "meadow", generationVersion = 3) {
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
@@ -90,7 +97,7 @@ export class World {
   }
   solid(x, y, z) {
     const b = this.get(x, y, z);
-    return b !== 0 && b !== 10 && b !== 20;
+    return b !== 0 && b !== 10 && b !== 20 && !isPlant(b);
   }
   set(x, y, z, b, track = true) {
     if (
@@ -180,6 +187,8 @@ export class World {
               this.set(x + dx, h + trunk + dy, z + dz, 5, false);
             }
       }
+    if(this.generationVersion>=3)for(let x=2;x<SIZE-2;x++)for(let z=2;z<SIZE-2;z++){const y=heights[x*SIZE+z]+1;if(this.get(x,y-1,z)===1&&this.get(x,y,z)===0&&hash(x,z,s+603)<.095)this.set(x,y,z,39,false);}
+
   }
   spawn() {
     for (let r = 0; r < 40; r++)
@@ -233,7 +242,7 @@ export function collides(world, x, y, z) {
         bz <= Math.floor(z + r - 1e-6);
         bz++
       )
-        if (world.solid(bx, by, bz)) return true;
+        if (world.solid(bx, by, bz)&&y<by+blockHeight(world.get(bx,by,bz))-1e-6) return true;
   return false;
 }
 export function raycast(world, origin, dir, reach = 6) {

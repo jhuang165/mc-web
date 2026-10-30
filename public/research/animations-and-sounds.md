@@ -5,7 +5,7 @@ This update combines selected original media with newly implemented animation an
 ## Original media imported
 
 - **133 original sound clips**, approximately 1.1 MB, selected for the implemented interactions: footsteps; material-specific digging and breaking; damage; swimming/splashing; eating/burping; item pickup; and pig, cow and zombie effects.
-- **51 original PNG textures**: Steve's skin, pig/cow/zombie skins, the ten destroy-stage frames, item sprites including gold tools, and animated water/fire sheets. The fire sheet is retained for future work and is not currently rendered; daytime-burning zombies currently use damage/tint feedback.
+- **941 original PNG textures plus 13 animation metadata files**: the complete client texture tree, now including blocks, items, GUI sheets, colormaps, environment and entity art. Supported blocks, items and HUD elements use these files; importing a texture does not implement the associated feature. See [textures and farming](textures-and-farming.md). The fire sheet is retained for future work and is not currently rendered; daytime-burning zombies currently use damage/tint feedback.
 - Original sound event definitions retain their variant selection, pitch, volume and weights where present. Not every 1.7.10 sound event or music track is included or wired up.
 - Sound volume, mute and view-bobbing controls are available in Settings. Playback starts only after user interaction. Nearby mob sounds use approximate stereo positioning and distance attenuation.
 
@@ -28,7 +28,7 @@ MCP mappings identify `bly` as ItemRenderer, `blt` as EntityRenderer, `bhm` as M
 | Creature gait | `bhw.a(...)`: cosine of phase × 0.6662, multiplied by 1.4 and limb amplitude | Opposing leg pairs on the animal rigs and a related biped gait |
 | Eating | `acx.d(ItemStack)` returns 32 ticks | Food is consumed after 1.6 seconds, with a hand/item eating motion and original effects |
 | Block damage | Ten original `destroy_stage_0..9` PNGs | Frames advance with actual mining progress; cancellation removes the overlay |
-| Water | Original 16 × 512 water sheet | The 32 original frames advance at 20 Hz; fluid simulation is not implemented |
+| Water | Original 16 × 512 water sheet | The 32 original frames advance at 10 Hz, matching `frametime: 2`; fluid simulation is not implemented |
 
 Java's trigonometric lookup table and all floating-point intermediates are not emulated bit for bit. Model geometry, camera transforms, debris, eating presentation and creature death presentation remain adaptations. These are recovered curves and original frames in a new renderer, not every animation copied exactly.
 
@@ -48,4 +48,4 @@ npm test
 npm run build
 ```
 
-Original class/JAR research inputs remain under ignored `tools/research`; selected original media and its provenance are included in the private web build.
+Original class/JAR research inputs remain under ignored `tools/research`; original textures, selected sounds and their provenance are included in the private web build.
