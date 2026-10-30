@@ -190,6 +190,9 @@ export class EntityWorld {
           1 + Math.floor(hash(e.age, e.id.length, this.world.numericSeed) * 3),
         position: { x: e.x, y: e.y, z: e.z },
       });
+      // EntityCow.dropFewItems also drops zero to two leather.
+      const leather = e.type === "cow" && e.growingAge >= 0 ? Math.floor(hash(e.age + 7, e.id.length, this.world.numericSeed) * 3) : 0;
+      if (leather) this.events.push({ drop: 315, count: leather, position: { x: e.x, y: e.y, z: e.z } });
       e.death = 1;
     } else
       this.events.push({
@@ -271,7 +274,7 @@ export class EntityWorld {
             distance,
           )
         ) {
-          survival.damage(t.damage, "a zombie");
+          survival.damage(t.damage, "a zombie", true);
           e.attack = 20;
         }
       } else if(e.type==='cow'&&!e.flee&&(e.love>0||(heldItem===305&&(survival.creative||survival.count(305))&&distance<10)||e.growingAge<0)){

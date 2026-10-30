@@ -15,9 +15,9 @@ Node 20.19+ and a browser with WebGL 2 are required. Build with `npm run build`;
 
 ## Current implementation
 
-Finite seeded terrain, collision/movement/swimming/Creative flight, health/hunger, resources/tools, shaped 2×2 and 3×3 crafting, furnace smelting, original textures/audio, first-person motion, pigs/cows/zombies, wheat farming and cow breeding, XP, classic menus and persistent browser saves. Version 0.6 corrects container/count coordinates, integer GUI scaling, tool break times/harvest/wear and adds shears plus snowball/flint/book drops and recipes.
+Finite seeded terrain, collision/movement/swimming/Creative flight, health/hunger, resources/tools, shaped 2×2 and 3×3 crafting, furnace smelting, original textures/audio, first-person motion, pigs/cows/zombies, wheat farming and cow breeding, XP, classic menus and persistent browser saves. Version 0.6 corrects container/count coordinates, integer GUI scaling, tool break times/harvest/wear and adds shears plus snowball/flint/book drops and recipes. Version 0.7 replaces aggregate storage with the Java 36-slot inventory, cursor and container click rules, per-stack durability, tool repair and armor; 53 cases match the unchanged original classes (see `public/research/inventory.md`).
 
-Inventory storage, camera/terrain generation, AI and several interactions remain adapted. The complete block/mob registries, armor, enchanting, redstone, dimensions, original Java worlds/networking and full renderer parity are not implemented. Original imported artwork/audio remains © Mojang / Microsoft; media manifests preserve its hashes and provenance. No original game classes ship in the web build.
+The creative picker, camera/terrain generation, AI and several interactions remain adapted. The complete block/mob registries, armor rendering, enchanting, redstone, dimensions, original Java worlds/networking and full renderer parity are not implemented. Original imported artwork/audio remains © Mojang / Microsoft; media manifests preserve its hashes and provenance. No original game classes ship in the web build.
 
 ## Validate
 

@@ -26,7 +26,46 @@
 #hotbar .item-count{position:absolute;left:auto;right:var(--u);top:calc(11*var(--u));bottom:auto;width:auto;margin:0;padding:0;color:white;font-size:calc(8*var(--u));line-height:calc(8*var(--u));height:calc(8*var(--u));text-shadow:var(--u) var(--u) #3f3f3f;z-index:4;pointer-events:none}
 #experience-hud{width:calc(182*var(--u));height:calc(5*var(--u));bottom:calc(24*var(--u))}.experience-track{width:100%;height:100%;background-size:calc(256*var(--u)) calc(256*var(--u));background-position:0 calc(-64*var(--u))}#experience-fill{height:100%;background-size:calc(256*var(--u)) calc(256*var(--u));background-position:0 calc(-69*var(--u))}#experience-level{bottom:calc(3*var(--u));font-size:calc(8*var(--u));line-height:calc(8*var(--u));color:#80ff20;text-shadow:var(--u) var(--u) #203000}
 #survival-hud{width:calc(182*var(--u));max-width:none;bottom:calc(30*var(--u))}.vital-row{gap:calc(2*var(--u))}.hearts,.hunger{width:calc(90*var(--u));gap:0}.hearts>span,.hunger>span{width:calc(9*var(--u));height:calc(9*var(--u));flex:0 0 calc(9*var(--u));background-size:calc(256*var(--u)) calc(256*var(--u))}.hearts>.full{background-position:calc(-52*var(--u)) 0}.hearts>.half{background-position:calc(-61*var(--u)) 0}.hearts>.empty{background-position:calc(-16*var(--u)) 0}.hunger>.full{background-position:calc(-52*var(--u)) calc(-27*var(--u))}.hunger>.half{background-position:calc(-61*var(--u)) calc(-27*var(--u))}.hunger>.empty{background-position:calc(-16*var(--u)) calc(-27*var(--u))}
-#hotbar .durability-bar{left:calc(2*var(--u));right:auto;width:calc(13*var(--u));height:calc(2*var(--u));bottom:calc(2*var(--u));background:black;border-radius:0;z-index:3;overflow:hidden}#hotbar .durability-bar:after{height:var(--u);border-radius:0}
 #block-label,.survival #block-label{bottom:calc(52*var(--u));font-size:calc(8*var(--u));line-height:calc(8*var(--u))}
 @media(pointer:coarse){#hotbar{bottom:70px}#survival-hud{bottom:calc(70px + 30*var(--u))}#experience-hud{bottom:calc(70px + 24*var(--u))}#block-label,.survival #block-label{bottom:calc(70px + 52*var(--u))}}
 body:has(.native-inventory) #toast,body:has(.furnace-modal) #toast{display:none}
+/* Container screens: each Slot sits at its original x/y; the held stack follows the pointer. */
+.container-screen{touch-action:none;user-select:none;-webkit-user-select:none}
+.container-slots{position:absolute;inset:0;pointer-events:none}
+.container-slot{position:absolute!important;width:calc(16*var(--u))!important;height:calc(16*var(--u))!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:none!important;box-shadow:none!important;transform:none!important;line-height:0;overflow:visible;pointer-events:auto;cursor:default;outline:0}
+.container-slot:focus-visible{outline:var(--u) solid #fff}
+/* GuiContainer highlights the hovered slot and drag targets with 0x80FFFFFF over the item. */
+.container-slot.hovered:after,.container-slot.dragged:after{content:'';position:absolute;inset:0;background:rgba(255,255,255,.5);z-index:6;pointer-events:none}
+.container-slot .vanilla-item-icon,.cursor-stack .vanilla-item-icon{display:block;width:calc(16*var(--u));height:calc(16*var(--u));margin:0;padding:0;filter:none;image-rendering:pixelated}
+.container-slot .item-count,.cursor-stack .item-count{position:absolute;left:auto;right:calc(-1*var(--u));top:calc(9*var(--u));bottom:auto;margin:0;padding:0;height:calc(8*var(--u));white-space:nowrap;background:none;color:#fff;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-shadow:var(--u) var(--u) #3f3f3f;z-index:4;pointer-events:none}
+.item-count.empty,.item-count.full{color:#ff5!important;text-shadow:var(--u) var(--u) #3f3f15!important}
+.cursor-stack{position:fixed;z-index:1000;width:calc(16*var(--u));height:calc(16*var(--u));margin:calc(-8*var(--u)) 0 0 calc(-8*var(--u));pointer-events:none;line-height:0}
+/* RenderItem durability: black 13 x 2 bar at (2, 13), a 12-pixel shade row, then the green-to-red fill. */
+.durability-bar{position:absolute;left:calc(2*var(--u));top:calc(13*var(--u));right:auto;bottom:auto;width:calc(13*var(--u));height:calc(2*var(--u));background:#000;border-radius:0;z-index:3;overflow:hidden;pointer-events:none}
+.durability-bar:before{content:'';position:absolute;left:0;top:0;width:calc(12*var(--u));height:var(--u);background:var(--bar-shade)}
+.durability-bar:after{content:'';position:absolute;left:0;top:0;display:block;width:calc(var(--bar)*var(--u));height:var(--u);background:var(--bar-color);border-radius:0}
+#hotbar .durability-bar{left:calc(4*var(--u));top:calc(15*var(--u))}
+/* GuiScreen.drawHoveringText: mouse + (12, -12), 0xF0100010 fill, purple gradient border. */
+.slot-tooltip{position:fixed;z-index:1001;display:flex;flex-direction:column;margin:calc(-12*var(--u)) 0 0 calc(12*var(--u));padding:calc(3*var(--u)) calc(3*var(--u)) calc(1*var(--u));background:rgba(16,0,16,.94);border:var(--u) solid;border-image:linear-gradient(rgba(80,0,255,.31),rgba(40,0,127,.31)) 1;outline:var(--u) solid rgba(16,0,16,.94);font-size:calc(8*var(--u));line-height:calc(10*var(--u));color:#fff;text-shadow:var(--u) var(--u) #3f3f3f;white-space:nowrap;pointer-events:none}
+.slot-tooltip.hidden{display:none}.slot-tooltip .title{margin-bottom:calc(2*var(--u))}
+.slot-tooltip .gray{color:#aaa;text-shadow:var(--u) var(--u) #2a2a2a}.slot-tooltip .blue{color:#55f;text-shadow:var(--u) var(--u) #15153f}
+/* GuiFurnace: flame (176, 12 - h) drawn at (56, 48 - h); arrow (176, 14) drawn at (79, 34). */
+.furnace-flame,.furnace-arrow{position:absolute;background:url('/media/1.7.10/gui/container/furnace.png') no-repeat;background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated;pointer-events:none}
+.furnace-flame{left:calc(56*var(--u));top:calc((48 - var(--flame,0))*var(--u));width:calc(14*var(--u));height:calc((var(--flame,0) + 1)*var(--u));background-position:calc(-176*var(--u)) calc((var(--flame,0) - 12)*var(--u))}
+.furnace-flame[hidden]{display:none}
+.furnace-arrow{left:calc(79*var(--u));top:calc(34*var(--u));width:calc(var(--arrow,1)*var(--u));height:calc(16*var(--u));background-position:calc(-176*var(--u)) calc(-14*var(--u))}
+/* Empty armor slots show ItemArmor's empty_armor_slot silhouettes. */
+.container-slot[data-armor]:empty{background:center/100% 100% no-repeat!important;image-rendering:pixelated}
+.container-slot[data-armor=helmet]:empty{background-image:url('/media/1.7.10/items/empty_armor_slot_helmet.png')!important}
+.container-slot[data-armor=chestplate]:empty{background-image:url('/media/1.7.10/items/empty_armor_slot_chestplate.png')!important}
+.container-slot[data-armor=leggings]:empty{background-image:url('/media/1.7.10/items/empty_armor_slot_leggings.png')!important}
+.container-slot[data-armor=boots]:empty{background-image:url('/media/1.7.10/items/empty_armor_slot_boots.png')!important}
+.tinted-item{position:relative;display:block}.tinted-item>i,.tinted-item>img{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated}
+.tinted-item>i{background:var(--base) center/100% 100%,var(--tint);background-blend-mode:multiply;-webkit-mask:var(--base) center/100% 100%;mask:var(--base) center/100% 100%}
+#hotbar .slot>.tinted-item{width:calc(16*var(--u));height:calc(16*var(--u))}
+/* GuiIngame rows above the hearts (armor, left) and hunger (air, right), 10 pixels up. */
+#survival-hud{position:absolute}#survival-hud .armor-row,#survival-hud .air{position:absolute;bottom:calc(10*var(--u));display:flex;gap:0;height:calc(9*var(--u))}
+#survival-hud .armor-row{left:0}#survival-hud .air{right:0;flex-direction:row-reverse}
+#survival-hud .armor-row>span,#survival-hud .air>span{display:block;flex:0 0 calc(9*var(--u));width:calc(9*var(--u));height:calc(9*var(--u));background:url('/media/1.7.10/gui/icons.png') no-repeat;background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated}
+#survival-hud .armor-row>.full{background-position:calc(-34*var(--u)) calc(-9*var(--u))}#survival-hud .armor-row>.half{background-position:calc(-25*var(--u)) calc(-9*var(--u))}#survival-hud .armor-row>.empty{background-position:calc(-16*var(--u)) calc(-9*var(--u))}
+#survival-hud .air>span{background-position:calc(-16*var(--u)) calc(-18*var(--u))}#survival-hud .air>.pop{background-position:calc(-25*var(--u)) calc(-18*var(--u))}

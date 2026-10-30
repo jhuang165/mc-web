@@ -40,7 +40,7 @@ test("legacy sword damage wears the tool, suppresses duplicate hits, and emits o
     player = { x: 64, y: 0, z: 64 };
   assert.equal(a.attack(pig, 115, p, player), true);
   assert.equal(pig.health, 2);
-  assert.equal(p.durability[115], 1560);
+  assert.equal(p.inventory.main[p.inventory.find(115)].damage, 1);
   assert.equal(a.attack(pig, 115, p, player), false);
   for (let i = 0; i < 10; i++) a.tick(player, p);
   assert.equal(a.attack(pig, 115, p, player), true);
@@ -81,4 +81,4 @@ test('wheat feeds only adult ready cows, consumes one, and breeding creates one 
 test('holding wheat attracts cows and baby hitboxes are half the adult size',()=>{
  const w=new EntityWorld(flat,[{id:'mob-1',type:'cow',x:64,y:0,z:64,health:10}]),p=new Survival({inventory:{305:1}});const c=w.entities[0];w.tick({x:68,y:0,z:64},p,305);assert.ok(c.x>64);c.growingAge=-100;assert.equal(entityHit({x:c.x+.3,y:.8,z:60},{x:0,y:0,z:1},c,8),null);
 });
-test('shears and hoes deal finite bare-hand damage and do not wear on melee hits',()=>{for(const tool of [125,120]){const w=new EntityWorld(flat,[{id:'mob-1',type:'pig',x:64,y:0,z:64,health:10}]),p=new Survival({inventory:{[tool]:1}});w.attack(w.entities[0],tool,p,{x:62,y:0,z:64});assert.equal(w.entities[0].health,9);assert.equal(p.durability[tool],undefined);}});
+test('shears and hoes deal finite bare-hand damage and do not wear on melee hits',()=>{for(const tool of [125,120]){const w=new EntityWorld(flat,[{id:'mob-1',type:'pig',x:64,y:0,z:64,health:10}]),p=new Survival({inventory:{[tool]:1}});w.attack(w.entities[0],tool,p,{x:62,y:0,z:64});assert.equal(w.entities[0].health,9);assert.equal(p.inventory.main[p.inventory.find(tool)].damage,0);}});

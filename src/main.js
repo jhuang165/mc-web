@@ -1,14 +1,13 @@
 import "./style.css";
 import "./minecraft-ui.css";
 import "./container-ui.css";
-import {guiScale,stackCount} from "./gui.js";
+import {guiScale,stackCount,durabilityBar,tooltipLines} from "./gui.js";
 import * as THREE from "three";
 import {
   World,
   SIZE,
   HEIGHT,
   BLOCKS,
-  HOTBAR,
   PHYSICS,
   hashSeed,
   collides,
@@ -24,16 +23,8 @@ import {ExperienceRenderer} from "./experience-renderer.js";
 import {Farming,cropDrops} from "./farming.js";
 import { EntityWorld } from "./entities.js";
 import { MobRenderer } from "./mob-renderer.js";
-import {
-  Survival,
-  ITEMS,
-  RECIPES,
-  MATERIALS,
-  matchRecipe,
-  ingredients,
-  SMELTING,
-  FUELS,
-} from "./survival.js";
+import { Survival, ITEMS, MATERIALS } from "./survival.js";
+import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -74,7 +65,6 @@ window.addEventListener('resize',updateGuiScale);updateGuiScale();
 let screen = "home",
   world,
   active,
-  selected = 0,
   flying = false,
   grounded = false,
   yaw = 0,
@@ -115,12 +105,9 @@ let survival = new Survival({}, "creative"),
   mineHeld = false,
   mineCooldown = 0,
   fallDistance = 0,
-  gridSize = 2,
-  craftGrid = [],
-  inventoryIngredient = 0,
   inventorySearch = "",
-  furnaceLoadSlot = "input",
-  openFurnaceKey = null,
+  containerView = null,
+  f3Combo = false,
   droppedInventories = [];
 $("#app").innerHTML = `
  <div id="viewport" aria-label="Interactive voxel world"></div><div id="vignette"></div>
@@ -232,42 +219,55 @@ function icon(id) {
   const item = ITEMS[id];
   if (!id || !item) return '<span class="empty-hand">·</span>';
   if(item.block)return `<img class="vanilla-item-icon vanilla-block-icon" src="${scene.textures.icon(id)}" alt="" aria-hidden="true">`;
+  // Leather armor multiplies its base layer by the default 0xA06540 dye; the overlay stays untinted.
+  if (item.tint)
+    return `<span class="vanilla-item-icon tinted-item" style="--tint:${item.tint};--base:url('/media/1.7.10/items/${item.texture}.png')" aria-hidden="true"><i></i><img src="/media/1.7.10/items/${item.overlay}.png" alt=""></span>`;
   if (!item.block && itemTexture(id))
     return `<img class="vanilla-item-icon" src="${itemTexture(id)}" alt="" aria-hidden="true">`;
   if (!item.block)
     return `<span class="item-icon ${item.kind ? "tool-icon" : ""}" style="--item:${item.color}" aria-hidden="true">${item.glyph}</span>`;
   return `<span class="block-icon b${id}" style="--block:${item.color};--top:${item.top || item.color}"><i></i></span>`;
 }
+const heldId = () => survival.held?.id || 0;
+// Item, stack count and durability overlays, as RenderItem draws them.
+function stackHtml(s, count = s?.count) {
+  if (!s) return "";
+  return icon(s.id) + (count === 0 ? '<b class="item-count empty">0</b>' : stackCount(count)) + durabilityBar(s.damage, ITEMS[s.id]?.durability);
+}
+function stackLabel(s) {
+  if (!s) return "Empty";
+  const item = ITEMS[s.id];
+  return esc(item?.name || "Item") + (s.count > 1 ? " ×" + s.count : "") + (item?.durability && s.damage ? `, durability ${item.durability - s.damage} of ${item.durability}` : "");
+}
 function renderHotbar() {
-  $("#hotbar").innerHTML = HOTBAR.map((id, i) => {
-    const item = ITEMS[id],
-      count = survival.count(id),
-      durability = item?.durability && survival.durability[id];
-    return `<button class="slot ${i === selected ? "selected" : ""} ${!survival.creative && count === 0 ? "depleted" : ""}" data-slot="${i}" aria-label="Select ${id ? item?.name || "Empty hand" : "Empty hand"}" aria-pressed="${i === selected}">${icon(id)}<small>${i + 1}</small>${!survival.creative ? stackCount(count) : ""}${durability ? `<i class="durability-bar" style="--durability:${(durability / item.durability) * 100}%"></i>` : ""}</button>`;
-  }).join("");
+  const inv = survival.inventory;
+  $("#hotbar").innerHTML = inv.main.slice(0, 9).map((s, i) =>
+    `<button class="slot ${i === inv.current ? "selected" : ""}" data-slot="${i}" aria-label="Select ${s ? stackLabel(s) : "empty hand"}" aria-pressed="${i === inv.current}">${s ? stackHtml(s) : ""}<small>${i + 1}</small></button>`,
+  ).join("");
   document
-    .querySelectorAll("[data-slot]")
+    .querySelectorAll("#hotbar [data-slot]")
     .forEach((b) => (b.onclick = () => selectSlot(+b.dataset.slot)));
 }
 function selectSlot(i) {
-  selected = (i + 9) % 9;
+  survival.inventory.current = (i + 9) % 9;
   eating = null;
   mining = null;
   renderHotbar();
-  $("#block-label").textContent = HOTBAR[selected]
-    ? ITEMS[HOTBAR[selected]]?.name || "Empty hand"
-    : "Empty hand";
+  showHeldName();
+}
+function showHeldName() {
+  $("#block-label").textContent = ITEMS[heldId()]?.name || "Empty hand";
   $("#block-label").classList.add("visible");
-  clearTimeout(selectSlot.timer);
-  selectSlot.timer = setTimeout(
+  clearTimeout(showHeldName.timer);
+  showHeldName.timer = setTimeout(
     () => $("#block-label").classList.remove("visible"),
     1300,
   );
 }
 function closeModal() {
+  closeContainer();
   $("#modal").classList.add("hidden");
   $("#modal").innerHTML = "";
-  openFurnaceKey = null;
 }
 function modal(title, body, extra = "") {
   eating = null;
@@ -317,6 +317,8 @@ function controls() {
       ["LEFT CLICK", "Hold to mine · click in drag mode"],
       ["RIGHT CLICK", "Place, eat, or use a workstation"],
       ["1 – 9 / SCROLL", "Choose a slot"],
+      ["Q / CTRL + Q", "Drop one item / the whole stack"],
+      ["MIDDLE CLICK", "Pick the targeted block"],
       ["E", "Inventory & 2 × 2 crafting"],
       ["F3", "Coordinates, time & performance"],
       ["ESC", "Pause & save"],
@@ -324,13 +326,13 @@ function controls() {
       .map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`)
       .join(
         "",
-      )}</div><p class="form-note">Right-click a crafting table for the 3 × 3 grid or a furnace to smelt. Click an ingredient, fill the crafting grid, then take the result. Shift-click an inventory item to assign it to the selected hotbar slot. Click an occupied grid cell to clear it.</p><p class="form-note">To farm: break tall grass for seeds, right-click exposed grass/dirt with a hoe, then plant seeds on the tilled soil. Hold wheat to lead cows; feed two adults to breed a calf. Water within four blocks keeps soil hydrated. Bone meal advances growth; harvest mature golden wheat and craft three wheat into bread.</p><p class="form-note">If mouse capture is unavailable, drag to look and click once to mine the targeted block. Touch controls include a Fly button in Creative.</p>`,
+      )}</div><p class="form-note">Inventories use the 1.7.10 slot rules. Left-click picks up or places a stack; right-click picks up half or places one. Drag a held stack across slots to share it evenly (left) or one each (right). Shift-click moves a stack between sections; double-click gathers matching items. Over a slot, 1 – 9 swaps with the hotbar and Q / Ctrl + Q drops. Click outside the window to throw the held stack. Right-click a crafting table for the 3 × 3 grid or a furnace to smelt; two damaged tools of one kind repair each other. F3 + H shows durability in tooltips.</p><p class="form-note">To farm: break tall grass for seeds, right-click exposed grass/dirt with a hoe, then plant seeds on the tilled soil. Hold wheat to lead cows; feed two adults to breed a calf. Water within four blocks keeps soil hydrated. Bone meal advances growth; harvest mature golden wheat and craft three wheat into bread.</p><p class="form-note">If mouse capture is unavailable, drag to look and click once to mine the targeted block. Touch controls include a Fly button in Creative.</p>`,
   );
 }
 function notes() {
   modal(
     "Rebuilding 1.7.10, system by system.",
-    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. Shaped crafting, a crafting table, a fuel-driven furnace, wood, stone, iron, diamond and gold tools with durability. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Cows follow wheat and breed calves. Caves, ores, torches, and a day/night lighting cycle. Wheat farming with five hoe tiers, seeds, moisture, eight growth stages, bone meal, harvesting and bread crafting.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, armor, enchantments, redstone, dimensions, structures, weather, Java saves, and multiplayer. The renderer, terrain, inventory layout, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
+    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. The Java 36-slot inventory with cursor, drag-splitting, shift- and double-click rules; shaped crafting, a crafting table and a fuel-driven furnace on real slots; wood, stone, iron, diamond and gold tools with per-item durability and repair; leather, chain, iron, gold and diamond armor. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Cows follow wheat and breed calves. Caves, ores, torches, and a day/night lighting cycle. Wheat farming with five hoe tiers, seeds, moisture, eight growth stages, bone meal, harvesting and bread crafting.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, armor rendering, enchantments, chests, redstone, dimensions, structures, weather, Java saves, and multiplayer. The renderer, terrain, creative inventory, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
     "notes-modal",
   );
 }
@@ -387,10 +389,18 @@ function save() {
   active.edits = [...world.edits];
   active.position = { x: position.x, y: position.y, z: position.z, yaw, pitch };
   active.player = survival.serialize();
-  active.mode = survival.mode;
-  active.hotbar = [...HOTBAR];
-  active.selected = selected;
   active.drops = droppedInventories;
+  // Items on the cursor or in a crafting grid return to the saved inventory, as closing the screen would.
+  const pending = containerView ? [containerView.container.inv.cursor, ...(containerView.container.grid?.stacks || [])].filter(Boolean).map(copyStack) : [];
+  if (pending.length) {
+    const copy = new Survival(active.player, survival.mode),
+      left = pending.filter((s) => (copy.inventory.add(s), s.count > 0));
+    active.player = copy.serialize();
+    if (left.length) active.drops = [...droppedInventories, { position: { x: position.x, y: position.y, z: position.z }, stacks: left, expires: survival.time + 6000 }];
+  }
+  active.mode = survival.mode;
+  delete active.hotbar;
+  delete active.selected;
   active.entities = mobs?.serialize() || [];
   active.farms=farming?.serialize()||[];
   active.experience=experience.serialize();active.xpOrbs=xpOrbs.serialize();
@@ -459,6 +469,11 @@ function requestLock() {
     lockFallback = true;
   }
 }
+// Records before 0.7 kept the hotbar and selection beside an aggregate inventory.
+function legacyPlayer(record) {
+  const player = record.player && typeof record.player === "object" ? record.player : {};
+  return Array.isArray(player.slots) ? player : { ...player, hotbar: record.hotbar, current: record.selected };
+}
 function launch(record) {
   try {
     active = record;
@@ -473,7 +488,7 @@ function launch(record) {
     eating = null;
     stepDistance = 0;
     wasInWater = false;
-    survival = new Survival(record.player, record.mode || "creative");
+    survival = new Survival(legacyPlayer(record), record.mode || "creative");
     const p = record.position,
       valid =
         p &&
@@ -497,33 +512,25 @@ function launch(record) {
       valid && Number.isFinite(p.pitch)
         ? Math.max(-1.55, Math.min(1.55, p.pitch))
         : 0;
-    const defaultBar = survival.creative
-      ? [1, 2, 3, 4, 5, 6, 7, 8, 9]
-      : Array(9).fill(0);
-    HOTBAR.splice(0, 9, ...defaultBar);
-    if (Array.isArray(record.hotbar) && record.hotbar.length === 9)
-      record.hotbar.forEach((id, i) => {
-        if (ITEMS[id]) HOTBAR[i] = id;
-      });
-    selected = Number.isInteger(record.selected)
-      ? Math.max(0, Math.min(8, record.selected))
-      : 0;
     droppedInventories = (Array.isArray(record.drops) ? record.drops : [])
-      .slice(0, 32)
+      .slice(0, 64)
       .filter(
         (d) =>
-          d.position &&
+          d?.position &&
           [d.position.x, d.position.y, d.position.z, d.expires].every(
             Number.isFinite,
           ),
       )
       .map((d) => ({
-        ...d,
-        inventory: new Survival({ inventory: d.inventory }, "survival")
-          .inventory,
-        durability: new Survival({ durability: d.durability }, "survival")
-          .durability,
-      }));
+        position: { x: d.position.x, y: d.position.y, z: d.position.z },
+        expires: d.expires,
+        delay: Number.isFinite(d.delay) ? Math.max(0, Math.min(40, d.delay)) : 0,
+        death: !!d.death || !Array.isArray(d.stacks),
+        stacks: Array.isArray(d.stacks)
+          ? d.stacks.map((s) => survival.inventory.read(s)).filter(Boolean)
+          : new Survival({ inventory: d.inventory, durability: d.durability }).inventory.main.filter(Boolean),
+      }))
+      .filter((d) => d.stacks.length);
     velocity.set(0, 0, 0);
     flying = false;
     grounded = false;
@@ -598,130 +605,158 @@ function goHome() {
   renderWorlds();
 }
 function inventory(station = false) {
-  gridSize = station ? 3 : 2;
-  craftGrid = Array(gridSize * gridSize).fill(0);
-  inventoryIngredient = 0;
-  inventorySearch = "";
+  if (survival.creative && !station) {
+    inventorySearch = "";
+    screen = "inventory";
+    mining = null;
+    mineHeld = false;
+    renderCreative();
+    return;
+  }
+  openContainer(station ? survival.openWorkbench() : survival.openInventory(), station ? "workbench" : "inventory");
+}
+// Creative keeps a searchable picker that fills the selected hotbar slot.
+function renderCreative() {
+  const all = Object.values(ITEMS).filter((i) => i.id && i.id !== 10 && i.id !== 11 && !i.hidden);
+  modal(
+    "Creative Inventory",
+    `<p class="modal-subtitle">Choose any material or tool for your selected slot.</p><div class="inventory-layout"><div><input class="inventory-search" id="inventory-search" aria-label="Search items" placeholder="Find a material…" value="${esc(inventorySearch)}"><div class="inventory-grid bag-grid" id="bag-grid">${all.map((i) => `<button data-item="${i.id}" data-name="${esc(i.name.toLowerCase())}" title="${esc(i.name)}" aria-label="${esc(i.name)}"><span>${icon(i.id)}</span><span>${esc(i.name)}</span></button>`).join("")}</div></div></div><button class="button primary full inventory-back" id="inventory-back">Back to Game</button>`,
+    "inventory-modal",
+  );
+  const filter = () => document.querySelectorAll("[data-item]").forEach((b) => (b.hidden = !b.dataset.name.includes(inventorySearch.toLowerCase())));
+  $("#inventory-search").oninput = (e) => {
+    inventorySearch = e.target.value;
+    filter();
+  };
+  filter();
+  document.querySelectorAll("[data-item]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        const id = +b.dataset.item;
+        survival.inventory.main[survival.inventory.current] = makeStack(id, ITEMS[id].stack);
+        renderHotbar();
+        resume();
+        showHeldName();
+      }),
+  );
+  $("#inventory-back").onclick = resume;
+}
+const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace" };
+function openContainer(container, kind, key = null) {
   screen = "inventory";
   mining = null;
   mineHeld = false;
-  renderInventory();
-}
-function renderInventory() {
-  const guideOpen = $(".recipe-guide")?.open || false;
-  const creative = survival.creative,
-    all = Object.values(ITEMS).filter(
-      (i) => i.id && i.id !== 10 && i.id !== 11 && !i.hidden,
-    ),
-    owned = creative ? all : all.filter((i) => survival.count(i.id));
-  const rest=owned.filter(i=>!HOTBAR.includes(i.id));
-  const inventorySlots=creative?owned:[...Array.from({length:Math.max(27,rest.length)},(_,i)=>rest[i]||null),...HOTBAR.map(id=>owned.find(i=>i.id===id)||null)];
-  const result = matchRecipe(craftGrid, gridSize);
+  const decorations =
+    kind === "furnace"
+      ? '<i class="furnace-flame" id="furnace-flame"></i><i class="furnace-arrow" id="furnace-arrow"></i>'
+      : `<span class="native-bag-label">Inventory</span><span class="native-crafting-label">Crafting</span>${kind === "inventory" ? '<div class="native-player" aria-hidden="true"><i class="player-head"></i><i class="player-body"></i><i class="player-arm left"></i><i class="player-arm right"></i><i class="player-leg left"></i><i class="player-leg right"></i></div>' : ""}`;
   modal(
-    creative
-      ? "Creative Inventory"
-      : gridSize === 3
-        ? "Crafting"
-        : "Inventory",
-    `<p class="modal-subtitle">${creative ? "Choose any material or tool for your selected slot." : "Choose an ingredient, then click cells to arrange a recipe. Click a filled cell to clear it."}</p><div class="inventory-layout"><div><input class="inventory-search" id="inventory-search" aria-label="Search inventory" placeholder="Find a material…" value="${esc(inventorySearch)}"><div class="inventory-grid bag-grid" id="bag-grid">${inventorySlots.map((i) => i?`<button data-item="${i.id}" data-name="${esc(i.name.toLowerCase())}" class="${inventoryIngredient === i.id ? "ingredient-selected" : ""}" title="${esc(i.name)}" aria-label="${esc(i.name)} (${survival.count(i.id)})"><span>${icon(i.id)}</span><span>${esc(i.name)}</span>${!creative ? stackCount(survival.count(i.id)) : ""}</button>`:`<span class="empty-native-slot"></span>`).join("") || '<p class="empty-inventory">Inventory is empty.</p>'}</div></div>${!creative ? `<div class="crafting-panel"><div class="eyebrow dark">CRAFTING · ${gridSize} × ${gridSize}</div><div class="crafting-grid" style="--grid-size:${gridSize}">${craftGrid.map((id, i) => `<button data-cell="${i}" aria-label="Crafting cell ${i + 1}: ${id ? ITEMS[id]?.name || "empty" : "empty"}">${id ? icon(id) : ""}</button>`).join("")}</div><div class="craft-arrow">↓</div><button class="craft-result" id="craft-result" ${!survival.canCraft(result) ? "disabled" : ""} aria-label="${result ? "Craft " + ITEMS[result.output].name : "No matching recipe"}">${result ? icon(result.output)+stackCount(result.count) : "<span>?</span>"}<span>${result ? `${result.count} × ${ITEMS[result.output].name}` : "Arrange a recipe"}</span></button><p class="form-note ingredient-note">${inventoryIngredient ? "Ingredient: " + esc(ITEMS[inventoryIngredient].name) : "Select an ingredient on the left."}</p><button class="text-button" id="clear-grid">Clear grid ↺</button></div>` : ""}</div>${
-      !creative
-        ? `<details class="recipe-guide" ${guideOpen ? "open" : ""}><summary>Recipe guide · ${gridSize === 2 ? "2 × 2 recipes" : "all crafting recipes"}</summary><div class="recipe-list">${RECIPES.filter(
-            (r) => r.width <= gridSize && r.height <= gridSize,
-          )
-            .map(
-              (r) =>
-                `<button data-recipe="${r.id}">${icon(r.output)}<span>${r.count} × ${r.name}<small>${Object.entries(
-                  ingredients(r),
-                )
-                  .map(([id, n]) => `${n} ${ITEMS[id].name}`)
-                  .join(
-                    " · ",
-                  )}</small></span><b>${survival.canCraft(r) ? "✓" : "＋"}</b></button>`,
-            )
-            .join("")}</div></details>`
-        : ""
-    }<button class="button primary full inventory-back" id="inventory-back">Back to Game</button>`,
-    "inventory-modal"+(creative?"":" native-inventory"+(gridSize===3?" native-workbench":"")),
+    CONTAINER_TITLES[kind],
+    `<div class="container-slots">${container.slots.map((slot) => `<button class="container-slot" data-container-slot="${slot.number}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>${decorations}`,
+    kind === "furnace" ? "furnace-modal container-screen" : "inventory-modal native-inventory container-screen" + (kind === "workbench" ? " native-workbench" : ""),
   );
-  if(!creative){
-    const panel=$('.native-inventory');panel.insertAdjacentHTML('beforeend','<span class="native-bag-label">Inventory</span><span class="native-crafting-label">Crafting</span>');
-    if(gridSize===2)panel.insertAdjacentHTML('beforeend','<div class="native-player" aria-hidden="true"><i class="player-head"></i><i class="player-body"></i><i class="player-arm left"></i><i class="player-arm right"></i><i class="player-leg left"></i><i class="player-leg right"></i></div>');
-  }
-  $("#inventory-search").oninput = (e) => {
-    inventorySearch = e.target.value;
-    document
-      .querySelectorAll("[data-item]")
-      .forEach(
-        (b) =>
-          (b.hidden = !b.dataset.name.includes(inventorySearch.toLowerCase())),
-      );
+  $("#modal").insertAdjacentHTML("beforeend", '<div class="cursor-stack" id="cursor-stack" aria-hidden="true"></div><div class="slot-tooltip hidden" id="slot-tooltip" role="tooltip"></div>');
+  document.activeElement?.blur();
+  containerView = { container, gui: new ContainerScreen(container), kind, key, hovered: null, x: innerWidth / 2, y: innerHeight / 2, shown: [] };
+  const overlay = $("#modal"),
+    javaButton = (b) => (b === 2 ? 1 : b === 1 ? 2 : b),
+    at = (e) => {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      return { slot: container.slots[el?.closest("[data-container-slot]")?.dataset.containerSlot] ?? null, outside: !el?.closest(".container-screen") };
+    };
+  overlay.onpointerdown = (e) => {
+    if (!containerView || e.target.closest(".close-button")) return;
+    e.preventDefault();
+    const { slot, outside } = at(e);
+    containerView.gui.down(slot, javaButton(e.button), { outside, shift: e.shiftKey, time: performance.now() });
+    refreshContainer();
   };
-  document.querySelectorAll("[data-item]").forEach(
-    (b) =>
-      (b.onclick = (event) => {
-        const id = +b.dataset.item;
-        if (creative) survival.add(id, ITEMS[id].stack);
-        if(creative)HOTBAR[selected]=id;
-        else if(event.shiftKey){const old=HOTBAR.indexOf(id);if(old>=0&&old!==selected)HOTBAR[old]=HOTBAR[selected];HOTBAR[selected]=id;}
-        inventoryIngredient = id;
-        renderHotbar();
-        if (creative) {
-          resume();
-          selectSlot(selected);
-        } else renderInventory();
-      }),
-  );
-  document.querySelectorAll("[data-cell]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        const i = +b.dataset.cell;
-        if (craftGrid[i]) craftGrid[i] = 0;
-        else if (inventoryIngredient) {
-          const used = craftGrid.filter(
-            (id) => id === inventoryIngredient,
-          ).length;
-          if (used >= survival.count(inventoryIngredient)) {
-            toast("Every ingredient needs a collected item.");
-            return;
-          }
-          craftGrid[i] = inventoryIngredient;
-        }
-        renderInventory();
-      }),
-  );
-  document.querySelectorAll("[data-recipe]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        const r = RECIPES.find((r) => r.id === b.dataset.recipe);
-        craftGrid = Array(gridSize * gridSize).fill(0);
-        for (let y = 0; y < r.height; y++)
-          for (let x = 0; x < r.width; x++)
-            craftGrid[y * gridSize + x] = r.pattern[y * r.width + x];
-        renderInventory();
-        $("#craft-result").focus();
-      }),
-  );
-  document
-    .querySelectorAll("[data-item]")
-    .forEach(
-      (b) =>
-        (b.hidden = !b.dataset.name.includes(inventorySearch.toLowerCase())),
-    );
-  if ($("#craft-result"))
-    $("#craft-result").onclick = () => {
-      if (survival.craft(matchRecipe(craftGrid, gridSize))) {
-        renderInventory();
-        renderHotbar();
-        sound(true);
-        save();
-      }
-    };
-  if ($("#clear-grid"))
-    $("#clear-grid").onclick = () => {
-      craftGrid.fill(0);
-      renderInventory();
-    };
-  $("#inventory-back").onclick = resume;
+  overlay.onpointermove = (e) => {
+    if (!containerView) return;
+    containerView.x = e.clientX;
+    containerView.y = e.clientY;
+    const { slot } = at(e);
+    containerView.hovered = slot;
+    if (e.buttons) containerView.gui.move(slot);
+    refreshContainer();
+  };
+  overlay.onpointerup = (e) => {
+    if (!containerView) return;
+    const { slot, outside } = at(e);
+    containerView.gui.up(slot, javaButton(e.button), { outside, shift: e.shiftKey });
+    refreshContainer();
+  };
+  overlay.oncontextmenu = (e) => e.preventDefault();
+  // Keyboard activation of a focused slot acts as a left click.
+  overlay.onclick = (e) => {
+    const slot = container.slots[e.target.closest("[data-container-slot]")?.dataset.containerSlot];
+    if (!containerView || e.detail !== 0 || !slot) return;
+    containerView.gui.down(slot, 0, { time: performance.now() });
+    containerView.gui.up(slot, 0);
+    refreshContainer();
+  };
+  refreshContainer();
+}
+function closeContainer() {
+  if (!containerView) return;
+  const { container } = containerView;
+  containerView = null;
+  const overlay = $("#modal");
+  overlay.onpointerdown = overlay.onpointermove = overlay.onpointerup = overlay.oncontextmenu = overlay.onclick = null;
+  container.close();
+  throwStacks(container.drops.splice(0));
+  renderHotbar();
+  saved = false;
+}
+// Draws every slot, the held stack and drag previews; only changed slots are rebuilt.
+function refreshContainer() {
+  if (!containerView) return;
+  const view = containerView,
+    { container, gui } = view,
+    preview = gui.preview(),
+    dragging = gui.dragging && gui.dragSlots.size > 1;
+  container.slots.forEach((slot, i) => {
+    const shown = preview.slots.get(slot) ?? slot.stack,
+      over = preview.capped.has(slot),
+      key = shown ? `${shown.id},${shown.count},${shown.damage},${over}` : "",
+      b = document.querySelector(`[data-container-slot="${i}"]`);
+    if (!b) return;
+    b.classList.toggle("hovered", view.hovered === slot);
+    b.classList.toggle("dragged", dragging && gui.dragSlots.has(slot));
+    const label = stackLabel(slot.stack);
+    if (b.getAttribute("aria-label") !== label) b.setAttribute("aria-label", label);
+    if (view.shown[i] === key) return;
+    view.shown[i] = key;
+    b.innerHTML = stackHtml(shown);
+    b.querySelector(".item-count")?.classList.toggle("full", over);
+  });
+  const bar = JSON.stringify(survival.inventory.main.slice(0, 9));
+  if (view.hotbar !== bar) {
+    view.hotbar = bar;
+    renderHotbar();
+  }
+  const cursor = $("#cursor-stack"),
+    held = preview.cursor;
+  cursor.innerHTML = stackHtml(held);
+  cursor.style.left = view.x + "px";
+  cursor.style.top = view.y + "px";
+  throwStacks(container.drops.splice(0));
+  const tip = $("#slot-tooltip"),
+    hovered = view.hovered?.stack,
+    lines = !container.inv.cursor && hovered ? tooltipLines(ITEMS[hovered.id], hovered, options.advancedTooltips) : [];
+  tip.classList.toggle("hidden", !lines.length);
+  if (lines.length) {
+    tip.innerHTML = lines.map((l, i) => `<span class="${i ? l.color || "gray" : "title"}">${esc(l.text) || "&nbsp;"}</span>`).join("");
+    tip.style.left = view.x + "px";
+    tip.style.top = view.y + "px";
+  }
+  if (view.kind === "furnace") {
+    const f = survival.furnace(view.key),
+      flame = f.burn > 0 ? Math.floor((f.burn * 13) / (f.burnTotal || 200)) : -1;
+    $("#furnace-flame").style.setProperty("--flame", flame);
+    $("#furnace-flame").hidden = flame < 0;
+    $("#furnace-arrow").style.setProperty("--arrow", Math.floor((f.cook * 24) / 200) + 1);
+  }
 }
 function renderVitals() {
   $('#experience-hud').classList.toggle('hidden',survival.creative);$('#experience-level').textContent=experience.level||'';$('#experience-fill').style.width=(experience.progress*100)+'%';$('#experience-hud').setAttribute('aria-label',`Experience level ${experience.level}, ${experience.points} of ${experience.level>=30?62+(experience.level-30)*7:experience.level>=15?17+(experience.level-15)*3:17} points`);
@@ -736,103 +771,67 @@ function renderVitals() {
       { length: 10 },
       (_, i) =>
         `<span class="${survival.food > i * 2+1 ? "full" : survival.food>i*2?"half":"empty"}">◆</span>`,
-    ).join("");
+    ).join(""),
+    // GuiIngame: armor points above the hearts; air bubbles above hunger, with one popping.
+    armor = survival.armorValue,
+    armorRow = armor > 0 ? `<div class="armor-row" aria-label="Armor ${armor} of 20">${Array.from({ length: 10 }, (_, i) => `<span class="${i * 2 + 1 < armor ? "full" : i * 2 + 1 === armor ? "half" : "empty"}"></span>`).join("")}</div>` : "",
+    bubbles = Math.max(0, Math.ceil(((survival.air - 2) * 10) / 300)),
+    popping = Math.max(0, Math.ceil((survival.air * 10) / 300) - bubbles),
+    air = survival.air < 300 ? `<div class="air" aria-label="Air ${Math.max(0, survival.air)} of 300">${"<span></span>".repeat(bubbles)}${'<span class="pop"></span>'.repeat(popping)}</div>` : "";
   $("#survival-hud").innerHTML =
-    `<div class="vital-row"><div class="hearts" aria-label="Health ${survival.health} of 20">${hearts}</div><div class="hunger" aria-label="Hunger ${survival.food} of 20">${food}</div></div>${survival.air < 300 ? `<div class="air" aria-label="Air ${Math.max(0, survival.air)} of 300">${"<span></span>".repeat(Math.max(0, Math.ceil(survival.air / 30)))}</div>` : ""}`;
+    `<div class="vital-row"><div class="hearts" aria-label="Health ${Math.ceil(survival.health)} of 20">${hearts}</div><div class="hunger" aria-label="Hunger ${survival.food} of 20">${food}</div></div>${armorRow}${air}`;
   $("#damage-flash").classList.toggle("hurt", survival.hurtTicks > 4);
 }
-function acquire(id, n = 1) {
-  const added = survival.add(id, n);
-  if (added) {
-    if (!HOTBAR.includes(id)) {
-      const slot = HOTBAR.findIndex((b) => !b || !survival.count(b));
-      if (slot >= 0) HOTBAR[slot] = id;
-    }
-    renderHotbar();
-  }
-  return added;
+// Stores stacks through addItemStackToInventory; leftovers stay on the ground.
+function give(stacks, at) {
+  const left = stacks.filter((s) => s?.count > 0 && (survival.inventory.add(s), s.count > 0));
+  if (left.length) droppedInventories.push({ position: { ...at }, stacks: left, expires: survival.time + 6000, delay: 10 });
+  renderHotbar();
+}
+// Thrown items land ahead of the player and wait 40 ticks before pickup.
+function throwStacks(stacks) {
+  const list = stacks.filter((s) => s?.count > 0).map(copyStack);
+  if (!list.length || !world) return;
+  droppedInventories.push({ position: { x: position.x - Math.sin(yaw) * 1.2, y: position.y, z: position.z - Math.cos(yaw) * 1.2 }, stacks: list, expires: survival.time + 6000, delay: 40 });
+  saved = false;
 }
 function useFurnace(key) {
-  openFurnaceKey = key;
-  screen = "inventory";
-  mining = null;
-  mineHeld = false;
-  renderFurnace();
+  openContainer(survival.openFurnace(key, smelted), "furnace", key);
 }
-function renderFurnace() {
-  const key = openFurnaceKey;
-  if (!key) return;
-  const f = survival.furnace(key),
-    inputs = Object.keys(SMELTING)
-      .map(Number)
-      .filter((id) => survival.count(id)),
-    fuels = Object.keys(FUELS)
-      .map(Number)
-      .filter((id) => survival.count(id));
-  modal(
-    "Furnace",
-    `<p class="modal-subtitle">One smelt takes 10 seconds. Coal fuels eight smelts; wood fuels one and a half.</p><div class="furnace-panel"><div class="furnace-slots"><div><span class="eyebrow dark">INPUT</span><button class="furnace-slot" data-unload="input" aria-label="Take furnace input">${icon(f.input)}${stackCount(f.inputCount)}</button><span id="furnace-input-name">${f.input ? ITEMS[f.input]?.name || "Empty" : "Empty"}</span></div><div class="smelt-progress"><span id="furnace-fire">♨</span><progress id="furnace-progress" max="200" value="${f.cook}" aria-label="Smelting progress"></progress><small id="furnace-time">${(f.cook / 20).toFixed(1)} / 10s</small></div><div><span class="eyebrow dark">OUTPUT</span><button class="furnace-slot" data-unload="output" aria-label="Take furnace output">${icon(f.output)}${stackCount(f.outputCount)}</button><span id="furnace-output-name">${f.output ? ITEMS[f.output]?.name || "Empty" : "Empty"}</span></div></div><div class="furnace-fuel"><button class="furnace-slot" data-unload="fuel" aria-label="Take furnace fuel">${icon(f.fuel)}${stackCount(f.fuelCount)}</button><div><span class="eyebrow dark">FUEL</span><p id="furnace-fuel-time">${(f.burn / 20).toFixed(1)}s remaining</p></div></div></div><div class="form-columns furnace-loaders"><label>LOAD INPUT<select id="smelt-input">${inputs.map((id) => `<option value="${id}">${ITEMS[id].name} (${survival.count(id)})</option>`).join("") || '<option value="0">Gather an ore or sand</option>'}</select><button id="load-input" class="button secondary full" ${!inputs.length ? "disabled" : ""}>Add one →</button></label><label>LOAD FUEL<select id="smelt-fuel">${fuels.map((id) => `<option value="${id}">${ITEMS[id].name} (${survival.count(id)})</option>`).join("") || '<option value="0">Gather coal or wood</option>'}</select><button id="load-fuel" class="button secondary full" ${!fuels.length ? "disabled" : ""}>Add one →</button></label></div><p class="form-note">Click a slot to take its contents. The furnace keeps working while its screen is open; pausing stops the world.</p><button class="button primary full" id="furnace-back">Back to Game</button>`,
-    "furnace-modal",
-  );
-  for (const slot of ["input", "fuel"])
-    $("#load-" + slot).onclick = () => {
-      if (survival.loadFurnace(key, slot, +$("#smelt-" + slot).value)) {
-        renderFurnace();
-        renderHotbar();
-        save();
-      }
-    };
-  document.querySelectorAll("[data-unload]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        furnaceLoadSlot=b.dataset.unload;
-        const output=survival.furnace(key).output;
-        const taken=survival.unloadFurnace(key, b.dataset.unload);
-        if(b.dataset.unload==='output'&&!survival.creative){const raw=taken*(SMELT_EXPERIENCE[output]||0),whole=Math.floor(raw);xpOrbs.spawn(whole+(Math.random()<raw-whole?1:0),position);}
-        renderFurnace();
-        renderHotbar();
-        save();
-      }),
-  );
-  const bag=document.createElement('div');bag.className='native-furnace-bag';bag.innerHTML=Object.values(ITEMS).filter(i=>survival.count(i.id)).map(i=>`<button data-furnace-load="${i.id}" aria-label="Add ${esc(i.name)}" title="${esc(i.name)}">${icon(i.id)}${stackCount(survival.count(i.id))}</button>`).join('');$('.furnace-modal').append(bag);
-  for(const b of bag.querySelectorAll('button'))b.onclick=()=>{const id=+b.dataset.furnaceLoad,slot=furnaceLoadSlot==='fuel'&&FUELS[id]?'fuel':SMELTING[id]?'input':FUELS[id]?'fuel':null;if(slot&&survival.loadFurnace(key,slot,id)){renderFurnace();renderHotbar();save();}};
-  $("#furnace-back").onclick = resume;
+// SlotFurnace.onCrafting: fractional experience rounds up by chance.
+function smelted(stack, amount) {
+  if (survival.creative) return;
+  const f = SMELT_EXPERIENCE[stack.id] || 0;
+  let n = amount;
+  if (f === 0) n = 0;
+  else if (f < 1) {
+    const raw = Math.fround(amount * f);
+    n = Math.floor(raw);
+    if (n < Math.ceil(raw) && Math.random() < raw - n) n++;
+  }
+  xpOrbs.spawn(n, position);
 }
 function updateFurnace() {
-  if (!openFurnaceKey || !$("#furnace-progress")) return;
-  const f = survival.furnace(openFurnaceKey);
-  $("#furnace-progress").value = f.cook;
-  $("#furnace-time").textContent = (f.cook / 20).toFixed(1) + " / 10s";
-  $("#furnace-fuel-time").textContent =
-    (f.burn / 20).toFixed(1) + "s remaining";
-  $("#furnace-fire").classList.toggle("burning", f.burn > 0);
-  for (const slot of ["input", "fuel", "output"]) {
-    const b = $(`[data-unload="${slot}"]`);
-    if (b) b.innerHTML = icon(f[slot]) + stackCount(f[slot + "Count"]);
-    const name = $("#furnace-" + slot + "-name");
-    if (name)
-      name.textContent = f[slot] ? ITEMS[f[slot]]?.name || "Empty" : "Empty";
-  }
+  if (containerView) refreshContainer();
 }
 function die() {
   if (screen === "dead") return;
+  closeContainer();
   const reason = survival.lastDamage || "an accident";
   screen = "dead";
   keys.clear();
   mining = null;
   mineHeld = false;
-  if (Object.keys(survival.inventory).length) {
+  const stacks = survival.inventory.takeAll();
+  if (stacks.length)
     droppedInventories.push({
       position: { x: position.x, y: position.y, z: position.z },
-      inventory: { ...survival.inventory },
-      durability: { ...survival.durability },
+      stacks,
       expires: survival.time + 6000,
+      death: true,
     });
-    survival.inventory = {};
-    survival.durability = {};
-  }
   const deathScore=experience.score;xpOrbs.spawn(experience.death(),position);
-  HOTBAR.fill(0);renderHotbar();renderVitals();$("#block-label").classList.remove("visible");
+  renderHotbar();renderVitals();$("#block-label").classList.remove("visible");
   save();
   modal(
     "You died!",
@@ -843,13 +842,12 @@ function die() {
   const deathButtons=[$('#respawn'),$('#death-home')];for(const button of deathButtons)button.disabled=true;setTimeout(()=>{if(screen==='dead')for(const button of deathButtons)button.disabled=false;},1000);
   $("#respawn").onclick = () => {
     const time = survival.time;
-    survival = new Survival({ time,furnaces:survival.furnaces }, "survival");
+    survival = new Survival({ time, slots: [], furnaces: survival.furnaces }, "survival");
     experience=new Experience();
     position.copy(new THREE.Vector3(...Object.values(world.spawn())));
     previous.copy(position);
     velocity.set(0, 0, 0);
     fallDistance = 0;
-    HOTBAR.fill(0);
     renderHotbar();
     renderVitals();
     resume();
@@ -889,6 +887,10 @@ function tickSurvival(inWater, oldPosition) {
   }
   for (const drop of droppedInventories) {
     if (drop.expires <= survival.time) continue;
+    if (drop.delay > 0) {
+      drop.delay--;
+      continue;
+    }
     if (
       Math.hypot(
         position.x - drop.position.x,
@@ -896,23 +898,23 @@ function tickSurvival(inWater, oldPosition) {
         position.z - drop.position.z,
       ) < 2
     ) {
-      let count = 0;
-      for (const [id, n] of Object.entries(drop.inventory)) {
-        const added = acquire(+id, n);
-        drop.inventory[id] -= added;
-        if (drop.inventory[id] <= 0) delete drop.inventory[id];
-        if (added && drop.durability[id])
-          survival.durability[id] = Math.min(
-            survival.durability[id] || ITEMS[id].durability,
-            drop.durability[id],
-          );
-        count += added;
+      let picked = 0;
+      for (const s of drop.stacks) {
+        const before = s.count;
+        survival.inventory.add(s);
+        picked += before - s.count;
       }
-      if (count) toast("Recovered your dropped items.");
+      drop.stacks = drop.stacks.filter((s) => s.count > 0);
+      if (picked) {
+        sounds.play("random.pop", { volume: 0.2, pitch: ((Math.random() - Math.random()) * 0.7 + 1) * 2 });
+        if (drop.death) toast("Recovered your dropped items.");
+        renderHotbar();
+        saved = false;
+      }
     }
   }
   droppedInventories = droppedInventories.filter(
-    (d) => d.expires > survival.time && Object.keys(d.inventory).length,
+    (d) => d.expires > survival.time && d.stacks.length,
   );
   scene.setDrops(droppedInventories);
   scene.setTime(survival.time);
@@ -927,16 +929,7 @@ function handleEntityEvents() {
       sounds.play(event.sound, { position: event.position, volume: 0.6 });
     if(event.xp&&!survival.creative)xpOrbs.spawn(event.xp,event.position);
     if(event.hearts)mobRenderer.hearts(event.position);
-    if (event.drop) {
-      const left = event.count - acquire(event.drop, event.count);
-      if (left)
-        droppedInventories.push({
-          position: event.position,
-          inventory: { [event.drop]: left },
-          durability: {},
-          expires: survival.time + 6000,
-        });
-    }
+    if (event.drop) give([makeStack(event.drop, event.count)], event.position);
   }
 }
 function beginEating(id) {
@@ -950,7 +943,7 @@ function edit(place = false) {
   if (screen !== "playing") return;
   animation.swing();
   sounds.unlock();
-  const id = HOTBAR[selected],
+  const id = heldId(),
     item = ITEMS[id];
   if (!place && aimedEntity) {
     mining = null;
@@ -962,6 +955,18 @@ function edit(place = false) {
     return;
   }
   if(place&&aimedEntity){if(mobs.feed(aimedEntity.entity,id,survival)){handleEntityEvents();renderHotbar();saved=false;}else if(!survival.creative&&item?.food)beginEating(id);return;}
+  // ItemArmor.onItemRightClick: equip into an empty armor slot.
+  if (place && item?.armor !== undefined) {
+    const inv = survival.inventory, slot = 39 - item.armor;
+    if (!inv.getStack(slot)) {
+      inv.setStack(slot, copyStack(inv.held));
+      inv.main[inv.current] = null;
+      renderHotbar();
+      renderVitals();
+      saved = false;
+    }
+    return;
+  }
   if (!target) {
     if (place && !survival.creative && item?.food) beginEating(id);
     return;
@@ -1036,7 +1041,7 @@ function breakBlock(p, creative = false) {
   const block = world.get(...p),
     key = p.join(","),
     m = MATERIALS[block] || {},
-    tool = HOTBAR[selected];
+    tool = heldId();
   if (!block || block === 11) return false;
   const harvest = creative || survival.mining(block, tool).harvest;
   let drop = harvest ? (m.drop ?? block) : 0,
@@ -1046,38 +1051,20 @@ function breakBlock(p, creative = false) {
   if(shearing&&(block===5||block===39)){drop=block;count=1;}
   if(block===25&&Math.random()<.1){drop=313;count=1;}
   const crops=shearing&&block===39?null:cropDrops(block);const drops=crops??(drop?[{id:drop,count}]:[]);
-  if (!creative && drops.some(d=>survival.room(d.id)<d.count)) {
-    toast("No room for this drop. Make room in your inventory.");
-    mining = null;
-    return false;
-  }
   const f = survival.furnaces[key];
-  if (f) {
-    const needed = {};
-    for (const slot of ["input", "fuel", "output"])
-      if (f[slot] && f[slot + "Count"])
-        needed[f[slot]] = (needed[f[slot]] || 0) + f[slot + "Count"];
-    if (
-      !creative &&
-      Object.entries(needed).some(
-        ([id, n]) => survival.room(+id) < n + (+id === drop ? count : 0),
-      )
-    ) {
-      toast("Empty this furnace before breaking it.");
-      mining = null;
-      return false;
-    }
-    for (const [id, n] of Object.entries(needed)) acquire(+id, n);
-    delete survival.furnaces[key];
-  }
   if (!world.set(...p, 0)) return false;
   farming.observe(...p);
+  const at = { x: p[0] + 0.5, y: p[1] + 0.1, z: p[2] + 0.5 };
+  // BlockFurnace.breakBlock spills its contents whatever the game mode.
+  if (f) {
+    give(f.items.filter(Boolean), at);
+    delete survival.furnaces[key];
+  }
   if (!creative) {
-    for(const d of drops)acquire(d.id,d.count);
-    if(drop)xpOrbs.spawn(oreExperience(block),{x:p[0]+.5,y:p[1]+.1,z:p[2]+.5});
+    give(drops.map((d) => makeStack(d.id, d.count)), at);
+    if(drop)xpOrbs.spawn(oreExperience(block),at);
     survival.exhaust(0.025);
-    if (survival.wearBlock(block,tool))
-      toast("Your " + ITEMS[tool].name.toLowerCase() + " broke.");
+    survival.wearBlock(block,tool);
   }
   scene.updateBlock(p[0], p[2]);
   renderHotbar();
@@ -1085,6 +1072,24 @@ function breakBlock(p, creative = false) {
   scene.effects.burst(p, block);
   saved = false;
   return true;
+}
+// Block.getItem for middle-click: farmland gives dirt, crops give seeds, water nothing.
+const pickItem = (block) => (block === 29 || block === 30 ? 2 : block >= 31 && block <= 38 ? 309 : block !== 10 && ITEMS[block] ? block : 0);
+// EntityPlayer.dropOneItem: Q throws one item, Ctrl + Q the whole stack.
+function dropHeld(all) {
+  const inv = survival.inventory, s = inv.held;
+  if (!s) return;
+  throwStacks([inv.decr(inv.current, all ? s.count : 1)]);
+  eating = null;
+  renderHotbar();
+}
+// EntityLivingBase.renderBrokenItemStack plays the break sound.
+function reportBrokenTool() {
+  if (!survival.broken) return;
+  sounds.play("random.break", { volume: 0.8, pitch: 0.8 + Math.random() * 0.4 });
+  toast("Your " + (ITEMS[survival.broken]?.name || "tool").toLowerCase() + " broke.");
+  survival.broken = 0;
+  renderHotbar();
 }
 function tickMining() {
   if (screen !== "playing") return;
@@ -1099,7 +1104,7 @@ function tickMining() {
     !target ||
     !target.block.every((v, i) => v === mining.block[i]) ||
     world.get(...mining.block) !== mining.type ||
-    HOTBAR[selected] !== mining.tool ||
+    heldId() !== mining.tool ||
     (!mining.auto && !mineHeld)
   ) {
     mining = null;
@@ -1118,7 +1123,7 @@ function tickMining() {
   }
   mining.progress = Math.fround(mining.progress + survival.mining(
     mining.type,
-    HOTBAR[selected],
+    heldId(),
     under,
     grounded,
   ).progress);
@@ -1237,7 +1242,7 @@ function movementTick() {
   tickSurvival(inWater, oldPosition);
   applyFarmUpdates(farming.tick(survival.time,scene.daylight));
   scene.setFurnaces(survival.furnaces);
-  mobs.tick(position, survival, HOTBAR[selected]);
+  mobs.tick(position, survival, heldId());
   const oldLevel=experience.level;if(survival.health>0&&!survival.creative&&xpOrbs.tick(world,position,experience)){sounds.play(experience.level>oldLevel&&experience.level%5===0?"random.levelup":"random.orb",{volume:.4});renderVitals();}
   handleEntityEvents();
   const distance = Math.hypot(
@@ -1262,7 +1267,7 @@ function movementTick() {
   if (survival.health < beforeHealth)
     sounds.play("game.player.hurt", { volume: 0.8 });
   if (eating) {
-    if (HOTBAR[selected] !== eating.id || !survival.count(eating.id))
+    if (heldId() !== eating.id)
       eating = null;
     else {
       eating.ticks--;
@@ -1282,6 +1287,7 @@ function movementTick() {
   }
   if (survival.health <= 0 && !survival.creative) die();
   tickMining();
+  reportBrokenTool();
 }
 function bindActions() {
   document.querySelectorAll("[data-action]").forEach(
@@ -1338,9 +1344,7 @@ $("#file-input").onchange = async (e) => {
       position: data.position,
       generationVersion: data.generationVersion ?? 1,
       mode: data.mode === "survival" ? "survival" : "creative",
-      player: new Survival(data.player, data.mode).serialize(),
-      hotbar: Array.isArray(data.hotbar) ? data.hotbar : undefined,
-      selected: data.selected,
+      player: new Survival(legacyPlayer(data), data.mode).serialize(),
       drops: data.drops,
       entities: data.entities,
       farms:data.farms,
@@ -1374,6 +1378,17 @@ window.addEventListener("keydown", (e) => {
     resume();
     return;
   }
+  // GuiContainer.keyTyped: hotbar keys and Q act on the hovered slot.
+  if (screen === "inventory" && containerView) {
+    const digit = /^Digit([1-9])$/.exec(e.code);
+    if (digit) containerView.gui.hotbarKey(containerView.hovered, +digit[1] - 1);
+    if (e.code === "KeyQ") containerView.gui.dropKey(containerView.hovered, e.ctrlKey);
+    if (digit || e.code === "KeyQ") {
+      e.preventDefault();
+      refreshContainer();
+    }
+    return;
+  }
   if (screen !== "playing") return;
   if (["Space", "Tab", "KeyW", "KeyA", "KeyS", "KeyD", "F3"].includes(e.code))
     e.preventDefault();
@@ -1381,10 +1396,17 @@ window.addEventListener("keydown", (e) => {
     inventory();
     return;
   }
-  if (e.code === "F3" && !e.repeat) {
-    debug = !debug;
-    $("#debug").classList.toggle("hidden", !debug);
+  if (e.code === "F3" && !e.repeat) f3Combo = false;
+  // F3 + H toggles advanced tooltips (durability) instead of the debug screen.
+  if (e.code === "KeyH" && keys.has("F3") && !e.repeat) {
+    f3Combo = true;
+    options.advancedTooltips = !options.advancedTooltips;
+    try {
+      localStorage.setItem("blockworld.settings", JSON.stringify(options));
+    } catch {}
+    toast("Advanced tooltips: " + (options.advancedTooltips ? "shown" : "hidden"));
   }
+  if (e.code === "KeyQ" && !e.repeat) dropHeld(e.ctrlKey);
   if (
     e.code.startsWith("Digit") &&
     +e.code.slice(5) >= 1 &&
@@ -1403,7 +1425,13 @@ window.addEventListener("keydown", (e) => {
   }
   keys.add(e.code);
 });
-window.addEventListener("keyup", (e) => keys.delete(e.code));
+window.addEventListener("keyup", (e) => {
+  if (e.code === "F3" && keys.has("F3") && !f3Combo && screen === "playing") {
+    debug = !debug;
+    $("#debug").classList.toggle("hidden", !debug);
+  }
+  keys.delete(e.code);
+});
 window.addEventListener("blur", () => {
   keys.clear();
   if (screen === "playing") pause();
@@ -1423,7 +1451,7 @@ window.addEventListener(
   (e) => {
     if (screen === "playing") {
       e.preventDefault();
-      selectSlot(selected + (e.deltaY > 0 ? 1 : -1));
+      selectSlot(survival.inventory.current + (e.deltaY > 0 ? 1 : -1));
     }
   },
   { passive: false },
@@ -1456,12 +1484,13 @@ function setupPointer() {
       return;
     }
     if (e.button === 1) {
-      if (target) {
-        const b = world.get(...target.block);
-        if (b > 0 && b < 10) {
-          HOTBAR[selected] = b;
-          renderHotbar();
-        }
+      const id = target && pickItem(world.get(...target.block));
+      if (id) {
+        survival.inventory.pick(id, survival.creative);
+        mining = null;
+        eating = null;
+        renderHotbar();
+        showHeldName();
       }
       return;
     }
@@ -1554,10 +1583,7 @@ function animate(now) {
     scene.camera.position.lerpVectors(previous, position, t);
     scene.camera.position.y += PHYSICS.eye;
     const pose = animation.frame(dt, {
-      item:
-        survival.creative || survival.count(HOTBAR[selected])
-          ? HOTBAR[selected]
-          : 0,
+      item: heldId(),
       yaw, pitch,
       speed: Math.hypot(velocity.x, velocity.z),
       moving: keys.size > 0,

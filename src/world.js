@@ -35,6 +35,7 @@ export const BLOCKS = [
   {name:'Moist farmland',color:'#65492f',hidden:true},
   ...Array.from({length:8},(_,i)=>({name:'Wheat (stage '+i+')',color:i===7?'#d7b75e':'#709b43',hidden:true})),
   {name:'Tall grass',color:'#82aa51'},
+  {name:'Hardened clay',color:'#965c42'},
 ];
 export const HOTBAR = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 // Vanilla 1.7.10 values, located using MCP SRG mappings and javap; see research notes.

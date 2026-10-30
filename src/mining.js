@@ -5,7 +5,7 @@ export function digSpeed(block,tool){
  if(!tool?.kind)return 1;
  if(tool.kind==='shears')return block===5?15:block===19?5:1;
  if(tool.kind==='sword')return block===5||block>=31&&block<=39?1.5:1;
- const effective={shovel:[1,2,6,23,24,25,29,30],axe:[4,7,13,21,39,...Array.from({length:8},(_,i)=>31+i)],pickaxe:[3,8,12,14,15,16,17,18,22,26,27,28]};
+ const effective={shovel:[1,2,6,23,24,25,29,30],axe:[4,7,13,21,39,...Array.from({length:8},(_,i)=>31+i)],pickaxe:[3,8,12,14,15,16,17,18,22,26,27,28,40]};
  return effective[tool.kind]?.includes(block)?tool.speed:1;
 }
 export function canHarvest(block,material,tool){

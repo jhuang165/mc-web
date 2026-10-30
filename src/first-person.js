@@ -41,6 +41,7 @@ export function itemTexture(id) {
   const item = ITEMS[id];
   if(id===20||id===39)return "/media/1.7.10/blocks/"+(id===20?"torch_on":"tallgrass")+".png";
   if(id===125)return "/media/1.7.10/items/shears.png";
+  if(item?.texture)return "/media/1.7.10/items/"+item.texture+".png";
   if (item?.kind) {
     const material = item.name.startsWith("Wooden")
       ? "wood"

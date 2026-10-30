@@ -8,7 +8,7 @@ export class Experience {
 }
 export const splitExperience=n=>{const out=[];for(const size of [2477,1237,617,307,149,73,37,17,7,3,1])while(n>=size){out.push(size);n-=size;}return out;};
 export function oreExperience(block,random=Math.random){return block===15?Math.floor(random()*3):block===17?3+Math.floor(random()*5):0;}
-export const SMELT_EXPERIENCE={302:.7,304:1,9:.1,3:.1,308:.15,203:.35,205:.35,306:.3};
+export const SMELT_EXPERIENCE={302:.7,304:1,303:1,301:.1,9:.1,3:.1,308:.15,203:.35,205:.35,306:.3,40:.35};
 export class ExperienceOrbs {
  constructor(saved=[]){this.orbs=Array.isArray(saved)?saved.slice(0,512).filter(o=>o&&[o.x,o.y,o.z,o.value,o.life].every(Number.isFinite)&&o.value>0&&o.value<=2477&&o.life>0&&o.life<=6000).map(o=>({...o,vx:0,vy:0,vz:0})):[];}
  spawn(value,p){for(const n of splitExperience(Math.max(0,Math.floor(value))).slice(0,128))this.orbs.push({x:p.x,y:p.y+.5,z:p.z,value:n,life:6000,delay:10,vx:(Math.random()-.5)*.12,vy:.12,vz:(Math.random()-.5)*.12});}
