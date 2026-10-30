@@ -13,6 +13,11 @@ import {
   fallingVelocity,
 } from "./world.js";
 import { VoxelScene } from "./scene.js";
+import { SoundBank, blockSound } from "./audio.js";
+import { PlayerAnimation } from "./animation.js";
+import { FirstPerson, itemTexture } from "./first-person.js";
+import { EntityWorld } from "./entities.js";
+import { MobRenderer } from "./mob-renderer.js";
 import {
   Survival,
   ITEMS,
@@ -43,7 +48,14 @@ try {
 } catch {
   worlds = [];
 }
-let options = { sensitivity: 1, fov: 75, distance: 155, sound: true };
+let options = {
+  sensitivity: 1,
+  volume: 0.65,
+  bobbing: true,
+  fov: 75,
+  distance: 155,
+  sound: true,
+};
 try {
   options = {
     ...options,
@@ -76,7 +88,15 @@ let screen = "home",
   lockFallback = false,
   saved = true,
   lastJump = 0;
-let audio;
+let sounds,
+  firstPerson,
+  mobs,
+  mobRenderer,
+  aimedEntity = null,
+  eating = null;
+const animation = new PlayerAnimation();
+let stepDistance = 0,
+  wasInWater = false;
 let scene;
 let pointerX = 0,
   pointerY = 0;
@@ -100,7 +120,7 @@ $("#app").innerHTML = `
   <section class="world-shelf"><div class="shelf-heading"><div><span class="eyebrow dark">PICK UP WHERE YOU LEFT OFF</span><h2>Your little corner of everything.</h2></div><button class="text-button" id="import">Import world <span>↓</span></button></div><div id="worlds" class="world-grid"></div><div class="shelf-footer"><span><i class="status-dot"></i> Worlds stay on this device</span><button class="text-button" data-action="controls">The world is yours. Here’s how to play <span>→</span></button></div></section>
   <footer class="site-footer"><span>An experiment in play.</span><span>INSPIRED BY JAVA 1.7.10 <i>·</i> INDEPENDENT BROWSER RECREATION</span><button data-action="notes">Made of blocks & curiosity ${arrow}</button></footer>
  </main>
- <section id="hud" class="hidden" aria-label="Game heads-up display"><div class="game-top"><button class="game-brand" id="pause-button">${cube}<span>BLOCKWORLD<small id="world-label"></small></span><span class="pause-symbol">Ⅱ</span></button><div class="game-status"><span class="status-dot"></span><span id="save-label">Saved on this device</span><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div></div><div id="crosshair">＋</div><pre id="debug" class="hidden"></pre><div id="block-label"></div><div id="survival-hud" class="survival-hud hidden"></div><div id="mining-meter" class="mining-meter hidden" role="progressbar" aria-label="Mining progress" aria-valuemin="0" aria-valuemax="100"><i></i></div><div id="damage-flash"></div><div id="flight-label" class="flight-label"><span id="mode-label">CREATIVE</span> <span>·</span> <b id="movement-label">WALKING</b></div><div class="hotbar" id="hotbar"></div><div class="game-help">W A S D <span>move</span> <i>·</i> SPACE <span>jump</span> <i>·</i> LMB <span>break</span> <i>·</i> RMB <span>use / place</span> <i>·</i> E <span>blocks</span> <i>·</i> ESC <span>pause</span></div><div id="mobile-controls"><div class="dpad"><button data-key="KeyW">↑</button><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="touch-actions"><button id="touch-break">Break</button><button id="touch-place">Use</button><button id="touch-inventory">Bag</button><button id="touch-fly">Fly</button><button data-key="Space">Jump</button></div></div></section>
+ <section id="hud" class="hidden" aria-label="Game heads-up display"><div class="game-top"><button class="game-brand" id="pause-button">${cube}<span>BLOCKWORLD<small id="world-label"></small></span><span class="pause-symbol">Ⅱ</span></button><div class="game-status"><span class="status-dot"></span><span id="save-label">Saved on this device</span><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div></div><div id="crosshair">＋</div><pre id="debug" class="hidden"></pre><div id="block-label"></div><div id="survival-hud" class="survival-hud hidden"></div><div id="mining-meter" class="mining-meter hidden" role="progressbar" aria-label="Mining progress" aria-valuemin="0" aria-valuemax="100"><i></i></div><div id="damage-flash"></div><div id="flight-label" class="flight-label"><span id="mode-label">CREATIVE</span> <span>·</span> <b id="movement-label">WALKING</b></div><div class="hotbar" id="hotbar"></div><div class="game-help">W A S D <span>move</span> <i>·</i> SPACE <span>jump</span> <i>·</i> LMB <span>break</span> <i>·</i> RMB <span>use / place</span> <i>·</i> E <span>inventory</span> <i>·</i> ESC <span>pause</span></div><div id="mobile-controls"><div class="dpad"><button data-key="KeyW">↑</button><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="touch-actions"><button id="touch-break">Break</button><button id="touch-place">Use</button><button id="touch-inventory">Bag</button><button id="touch-fly">Fly</button><button data-key="Space">Jump</button></div></div></section>
  <div class="modal-overlay hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div><div id="toast" role="status"></div><input id="file-input" type="file" accept=".json,application/json" hidden>
  <div id="loading"><div class="loading-cube">${cube}</div><span>Making a little room for imagination…</span></div>`;
 
@@ -194,26 +214,17 @@ function toast(message) {
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => $("#toast").classList.remove("show"), 4000);
 }
-function sound(place) {
-  if (!options.sound) return;
-  try {
-    audio ??= new AudioContext();
-    audio.resume();
-    const osc = audio.createOscillator(),
-      gain = audio.createGain();
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(place ? 170 : 110, audio.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(45, audio.currentTime + 0.09);
-    gain.gain.setValueAtTime(0.06, audio.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.1);
-    osc.connect(gain).connect(audio.destination);
-    osc.start();
-    osc.stop(audio.currentTime + 0.1);
-  } catch {}
+function sound(place, block = target ? world.get(...target.block) : 3) {
+  sounds?.play(
+    !place && block === 9 ? "random.glass" : "dig." + blockSound(block),
+    { volume: place ? 0.8 : 1, pitch: 0.8 },
+  );
 }
 function icon(id) {
   const item = ITEMS[id];
   if (!id || !item) return '<span class="empty-hand">·</span>';
+  if (!item.block && itemTexture(id))
+    return `<img class="vanilla-item-icon" src="${itemTexture(id)}" alt="" aria-hidden="true">`;
   if (!item.block)
     return `<span class="item-icon ${item.kind ? "tool-icon" : ""}" style="--item:${item.color}" aria-hidden="true">${item.glyph}</span>`;
   return `<span class="block-icon b${id}" style="--block:${item.color};--top:${item.top || item.color}"><i></i></span>`;
@@ -231,6 +242,7 @@ function renderHotbar() {
 }
 function selectSlot(i) {
   selected = (i + 9) % 9;
+  eating = null;
   mining = null;
   renderHotbar();
   $("#block-label").textContent = HOTBAR[selected]
@@ -249,6 +261,7 @@ function closeModal() {
   openFurnaceKey = null;
 }
 function modal(title, body, extra = "") {
+  eating = null;
   keys.clear();
   if (screen === "playing") screen = "paused";
   if (document.pointerLockElement) document.exitPointerLock();
@@ -308,25 +321,37 @@ function controls() {
 function notes() {
   modal(
     "Rebuilding 1.7.10, system by system.",
-    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, regeneration, fall damage, drowning, death and recoverable inventory drops. Shaped crafting, a crafting table, a fuel-driven furnace, wood-to-diamond tools and durability. Caves, ores, torches, and a day/night lighting cycle.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, mobs, farming, combat, armor, enchantments, redstone, dimensions, structures, weather, Java saves, and multiplayer. The renderer, textures, terrain, inventory layout, and several interactions remain simplified.</p><div class="note-links"><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
+    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, regeneration, fall damage, drowning, death and recoverable inventory drops. Shaped crafting, a crafting table, a fuel-driven furnace, wood, stone, iron, diamond and gold tools with durability. Original 1.7.10 effects and selected textures; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Caves, ores, torches, and a day/night lighting cycle.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, farming, advanced combat, armor, enchantments, redstone, dimensions, structures, weather, Java saves, and multiplayer. The renderer, block textures, terrain, inventory layout, entity AI and several interactions remain simplified. Selected original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
     "notes-modal",
   );
 }
 function settings() {
   modal(
     "Make yourself comfortable.",
-    `<p class="modal-subtitle">A few small adjustments to make this world feel like yours.</p><div class="settings-list"><label>Field of view <output id="fov-value">${options.fov}°</output><input type="range" id="fov" min="50" max="100" value="${options.fov}"></label><label>Mouse sensitivity <output id="sensitivity-value">${options.sensitivity.toFixed(1)}×</output><input type="range" id="sensitivity" min="0.2" max="2" step="0.1" value="${options.sensitivity}"></label><label>View distance <output id="distance-value">${options.distance} blocks</output><input type="range" id="distance" min="70" max="200" step="5" value="${options.distance}"></label><label class="switch-label">Block sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label></div><p class="form-note">Changes are saved automatically. Lower view distance can improve performance.</p>`,
+    `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>Field of view <output id="fov-value">${options.fov}°</output><input type="range" id="fov" min="50" max="100" value="${options.fov}"></label><label>Mouse sensitivity <output id="sensitivity-value">${options.sensitivity.toFixed(1)}×</output><input type="range" id="sensitivity" min="0.2" max="2" step="0.1" value="${options.sensitivity}"></label><label>View distance <output id="distance-value">${options.distance} blocks</output><input type="range" id="distance" min="70" max="200" step="5" value="${options.distance}"></label><label>Sound volume <output id="volume-value">${Math.round(options.volume * 100)}%</output><input type="range" id="volume" min="0" max="1" step=".05" value="${options.volume}"></label><label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
   );
-  for (const key of ["fov", "sensitivity", "distance", "sound"])
+  for (const key of [
+    "fov",
+    "sensitivity",
+    "distance",
+    "volume",
+    "sound",
+    "bobbing",
+  ])
     $("#" + key).oninput = (e) => {
-      options[key] = key === "sound" ? e.target.checked : +e.target.value;
-      if (key !== "sound")
-        $("#" + key + "-value").textContent =
+      options[key] = ["sound", "bobbing"].includes(key)
+        ? e.target.checked
+        : +e.target.value;
+      const out = $("#" + key + "-value");
+      if (out)
+        out.textContent =
           key === "fov"
             ? options[key] + "°"
             : key === "distance"
               ? options[key] + " blocks"
-              : options[key].toFixed(1) + "×";
+              : key === "volume"
+                ? Math.round(options[key] * 100) + "%"
+                : options[key].toFixed(1) + "×";
       scene.camera.fov = options.fov;
       scene.camera.updateProjectionMatrix();
       scene.setDistance(options.distance);
@@ -334,7 +359,19 @@ function settings() {
         localStorage.setItem("blockworld.settings", JSON.stringify(options));
       } catch {}
     };
+  $("#test-sound").onclick = async () => {
+    if (!options.sound) {
+      $("#audio-status").textContent = "Sounds are muted.";
+      return;
+    }
+    sounds.unlock();
+    const played = await sounds.play("random.click", { volume: 1 });
+    $("#audio-status").textContent = played
+      ? "Original sound played."
+      : sounds.status;
+  };
 }
+
 function save() {
   if (!active || !world || screen === "home") return;
   active.edits = [...world.edits];
@@ -344,6 +381,7 @@ function save() {
   active.hotbar = [...HOTBAR];
   active.selected = selected;
   active.drops = droppedInventories;
+  active.entities = mobs?.serialize() || [];
   active.updated = Date.now();
   const i = worlds.findIndex((w) => w.id === active.id);
   if (i < 0) worlds.unshift(active);
@@ -415,6 +453,12 @@ function launch(record) {
     world = new World(record.seed, record.biome, record.generationVersion ?? 1);
     world.restore(record.edits || []);
     scene.setWorld(world);
+    mobs = new EntityWorld(world, record.entities);
+    mobRenderer.clear();
+    animation.reset();
+    eating = null;
+    stepDistance = 0;
+    wasInWater = false;
     survival = new Survival(record.player, record.mode || "creative");
     const p = record.position,
       valid =
@@ -843,16 +887,46 @@ function tickSurvival(inWater, oldPosition) {
   updateFurnace();
   if (survival.health <= 0 && !survival.creative) die();
 }
+function handleEntityEvents() {
+  for (const event of mobs.drain()) {
+    if (event.sound)
+      sounds.play(event.sound, { position: event.position, volume: 0.6 });
+    if (event.drop) {
+      const left = event.count - acquire(event.drop, event.count);
+      if (left)
+        droppedInventories.push({
+          position: event.position,
+          inventory: { [event.drop]: left },
+          durability: {},
+          expires: survival.time + 6000,
+        });
+    }
+  }
+}
+function beginEating(id) {
+  if (survival.food >= 20) {
+    toast("You are not hungry.");
+    return;
+  }
+  if (survival.count(id) && !eating) eating = { id, ticks: 32 };
+}
 function edit(place = false) {
   if (screen !== "playing") return;
+  animation.swing();
+  sounds.unlock();
   const id = HOTBAR[selected],
     item = ITEMS[id];
-  if (!target) {
-    if (place && !survival.creative && item?.food && survival.eat(id)) {
+  if (!place && aimedEntity) {
+    mining = null;
+    if (mobs.attack(aimedEntity.entity, id, survival, position)) {
+      handleEntityEvents();
       renderHotbar();
-      renderVitals();
-      sound(true);
+      saved = false;
     }
+    return;
+  }
+  if (!target) {
+    if (place && !survival.creative && item?.food) beginEating(id);
     return;
   }
   const block = world.get(...target.block);
@@ -866,11 +940,7 @@ function edit(place = false) {
       return;
     }
     if (!survival.creative && item?.food) {
-      if (survival.eat(id)) {
-        renderHotbar();
-        renderVitals();
-        sound(true);
-      } else toast("You are not hungry.");
+      beginEating(id);
       return;
     }
     const p = target.adjacent;
@@ -894,7 +964,7 @@ function edit(place = false) {
     if (!survival.creative) survival.take(id);
     scene.updateBlock(p[0], p[2]);
     renderHotbar();
-    sound(true);
+    sound(true, id);
     saved = false;
   } else {
     if (block === 11) return;
@@ -956,7 +1026,8 @@ function breakBlock(p, creative = false) {
   }
   scene.updateBlock(p[0], p[2]);
   renderHotbar();
-  sound(false);
+  sound(false, block);
+  scene.effects.burst(p, block);
   saved = false;
   return true;
 }
@@ -966,6 +1037,7 @@ function tickMining() {
     mineCooldown--;
     return;
   }
+  if (aimedEntity) return;
   if (!mining && mineHeld && target) edit(false);
   if (!mining) return;
   if (
@@ -983,6 +1055,11 @@ function tickMining() {
       Math.floor(position.y + PHYSICS.eye),
       Math.floor(position.z),
     ) === 10;
+  animation.swing();
+  if (survival.time % 4 === 0) {
+    sounds.play("dig." + blockSound(mining.type), { volume: 0.25, pitch: 0.5 });
+    scene.effects.burst(mining.block, mining.type, 2);
+  }
   mining.progress += survival.mining(
     mining.type,
     HOTBAR[selected],
@@ -1100,7 +1177,51 @@ function movementTick() {
     : inWater
       ? "SWIMMING"
       : "WALKING";
+  const beforeHealth = survival.health;
   tickSurvival(inWater, oldPosition);
+  mobs.tick(position, survival);
+  handleEntityEvents();
+  const distance = Math.hypot(
+    position.x - oldPosition.x,
+    position.z - oldPosition.z,
+  );
+  stepDistance += distance;
+  if (inWater && !wasInWater)
+    sounds.play("game.player.swim.splash", { volume: 0.5 });
+  wasInWater = inWater;
+  if (stepDistance > 1.667 && (grounded || inWater) && !flying) {
+    stepDistance = 0;
+    const b = world.get(
+      Math.floor(position.x),
+      Math.floor(position.y - 0.05),
+      Math.floor(position.z),
+    );
+    sounds.play(inWater ? "game.player.swim" : "step." + blockSound(b), {
+      volume: inWater ? 0.3 : 0.22,
+    });
+  }
+  if (survival.health < beforeHealth)
+    sounds.play("game.player.hurt", { volume: 0.8 });
+  if (eating) {
+    if (HOTBAR[selected] !== eating.id || !survival.count(eating.id))
+      eating = null;
+    else {
+      eating.ticks--;
+      if (eating.ticks % 4 === 0)
+        sounds.play("random.eat", {
+          volume: 0.5,
+          pitch: 0.9 + Math.random() * 0.2,
+        });
+      if (eating.ticks <= 0) {
+        if (survival.eat(eating.id)) {
+          sounds.play("random.burp", { volume: 0.5 });
+          renderHotbar();
+        }
+        eating = null;
+      }
+    }
+  }
+  if (survival.health <= 0 && !survival.creative) die();
   tickMining();
 }
 function bindActions() {
@@ -1161,6 +1282,7 @@ $("#file-input").onchange = async (e) => {
       hotbar: Array.isArray(data.hotbar) ? data.hotbar : undefined,
       selected: data.selected,
       drops: data.drops,
+      entities: data.entities,
     };
     worlds.unshift(record);
     persist();
@@ -1369,7 +1491,27 @@ function animate(now) {
     const t = accumulator / PHYSICS.tick;
     scene.camera.position.lerpVectors(previous, position, t);
     scene.camera.position.y += PHYSICS.eye;
-    scene.camera.rotation.set(pitch, yaw, 0, "YXZ");
+    const pose = animation.frame(dt, {
+      item:
+        survival.creative || survival.count(HOTBAR[selected])
+          ? HOTBAR[selected]
+          : 0,
+      speed: Math.hypot(velocity.x, velocity.z),
+      moving: keys.size > 0,
+      grounded: grounded && !flying,
+      bobbing: options.bobbing,
+    });
+    const b = pose.bob;
+    scene.camera.position.x += b.x * Math.cos(yaw);
+    scene.camera.position.z -= b.x * Math.sin(yaw);
+    scene.camera.position.y += b.y;
+    const hurt =
+      (Math.sin(Math.pow(survival.hurtTicks / 10, 4) * Math.PI) *
+        14 *
+        Math.PI) /
+      180;
+    scene.camera.rotation.set(pitch + b.rx, yaw, b.rz - hurt, "YXZ");
+    animate.pose = pose;
     const dir = new THREE.Vector3();
     scene.camera.getWorldDirection(dir);
     target = raycast(
@@ -1378,7 +1520,13 @@ function animate(now) {
       dir,
       survival.creative ? 6 : 4.5,
     );
-    scene.outline.visible = !!target;
+    aimedEntity = mobs.pick(
+      scene.camera.position,
+      dir,
+      survival.creative ? 5 : 3,
+      target?.distance ?? 6,
+    );
+    scene.outline.visible = !!target && !aimedEntity;
     if (target) scene.outline.position.set(...target.block.map((v) => v + 0.5));
     $("#mining-meter").classList.toggle("hidden", !mining);
     if (mining) {
@@ -1391,13 +1539,31 @@ function animate(now) {
     }
     if (debug)
       $("#debug").textContent =
-        `BLOCKWORLD / Java 1.7.10 study\n${fps} FPS · ${scene.renderer.info.render.triangles.toLocaleString()} triangles\nXYZ: ${position.x.toFixed(2)} / ${position.y.toFixed(2)} / ${position.z.toFixed(2)}\nSeed: ${active.seed}\n${survival.mode} · day ${Math.floor(survival.time / 24000) + 1} · ${survival.time % 24000} ticks\nHealth ${survival.health} · food ${survival.food} · saturation ${survival.saturation.toFixed(1)}\n${world.edits.size} edited blocks · ${droppedInventories.length} item piles\n${target ? BLOCKS[world.get(...target.block)].name : "Looking into the distance"}`;
+        `BLOCKWORLD / Java 1.7.10 study\n${fps} FPS · ${(scene.worldTriangles || 0).toLocaleString()} triangles\nXYZ: ${position.x.toFixed(2)} / ${position.y.toFixed(2)} / ${position.z.toFixed(2)}\nSeed: ${active.seed}\n${survival.mode} · day ${Math.floor(survival.time / 24000) + 1} · ${survival.time % 24000} ticks\nHealth ${survival.health} · food ${survival.food} · saturation ${survival.saturation.toFixed(1)}\n${world.edits.size} edited blocks · ${droppedInventories.length} item piles · ${mobs?.entities.length || 0} mobs\n${aimedEntity ? aimedEntity.entity.type + " · " + aimedEntity.entity.health + " health" : target ? BLOCKS[world.get(...target.block)].name : "Looking into the distance"}`;
     if (elapsed - lastSave > 5) save();
+    scene.effects.crack(mining?.block, mining?.progress);
   } else if (screen === "home") scene.preview(elapsed);
-  scene.render(elapsed);
+  if (mobs) mobRenderer.update(mobs.entities);
+  scene.render(elapsed, dt);
+  if (firstPerson && animate.pose)
+    firstPerson.render(animate.pose, {
+      visible: ["playing", "inventory", "paused"].includes(screen),
+      daylight: scene.daylight,
+      time: elapsed,
+      eating: eating ? (32 - eating.ticks) / 20 : 0,
+    });
 }
 try {
   scene = new VoxelScene($("#viewport"));
+  sounds = new SoundBank(
+    () => options,
+    () => ({ ...position, yaw }),
+  );
+  firstPerson = new FirstPerson(scene.renderer, scene.material.map);
+  mobRenderer = new MobRenderer(scene.scene);
+  document.addEventListener("pointerdown", () => sounds.unlock(), {
+    once: true,
+  });
   world = new World("Overworld");
   scene.setWorld(world);
   scene.camera.fov = options.fov;

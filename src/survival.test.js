@@ -3,6 +3,17 @@ import assert from "node:assert/strict";
 import { Survival, ITEMS, RECIPES, matchRecipe } from "./survival.js";
 import { World } from "./world.js";
 
+test("gold tools are fast but cannot harvest iron ore, and beef smelts into steak", () => {
+  const p = new Survival({ inventory: { 116: 1, 204: 1, 301: 1 } });
+  assert.ok(p.mining(3, 116).progress > p.mining(3, 0).progress);
+  assert.equal(p.mining(16, 116).harvest, false);
+  p.loadFurnace("1,2,3", "input", 204);
+  p.loadFurnace("1,2,3", "fuel", 301);
+  for (let i = 0; i < 200; i++) p.tick();
+  assert.equal(p.furnace("1,2,3").output, 205);
+  assert.equal(p.furnace("1,2,3").outputCount, 1);
+});
+
 test("1.7.10 exhaustion threshold is strictly greater than four; saturation drains first", () => {
   const p = new Survival({ food: 20, saturation: 5, exhaustion: 4 });
   p.tick();

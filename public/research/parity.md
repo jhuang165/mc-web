@@ -11,27 +11,29 @@ The target is the complete Java 1.7.10 feature set. **This build does not yet pr
 | Hunger | Food, saturation, exhaustion, natural regeneration, Normal-difficulty starvation | Seven isolated original-bytecode cases verified; other player/world interactions remain partial |
 | Inventory | Collected resources, hotbar, stack caps, per-tool durability, saving | Aggregate storage by item type; not Java's 36-slot container/cursor implementation |
 | Mining | Break progress, tool speed, harvest tiers, resource consumption/drop rules for the implemented blocks | Not all block/tool combinations, enchantments, animations or item entities |
-| Crafting | 2 × 2 and workstation 3 × 3 grids; shaped recipe offsets and mirroring; 30 recipes | Complete vanilla recipe registry, shapeless/special recipes, shift crafting, original UI |
-| Tools | Wooden, stone, iron and diamond pickaxes, axes, shovels and swords; durability | Gold tools, combat mechanics, repair, enchantments; sword combat is not implemented |
+| Crafting | 2 × 2 and workstation 3 × 3 grids; shaped recipe offsets and mirroring; 34 recipes | Complete vanilla recipe registry, shapeless/special recipes, shift crafting, original UI |
+| Tools | Wooden, stone, iron, diamond and gold pickaxes, axes, shovels and swords; durability | Hoes, full combat mechanics, repair, enchantments |
 | Furnace | Input/fuel/output storage, 200-tick smelting, coal/charcoal/wood/stick fuel, persistent progress | Experience, hoppers, original GUI/container semantics, complete fuel/recipe set |
 | Death drops | Recoverable inventory piles, 6,000-tick lifetime, save/reload | Simplified pile rendering/pickup, no individual stack entity physics |
 | World | Custom caves and coal/iron/gold/diamond ores; fixed 128 × 128 × 64 terrain | Original noise generator, infinite chunks, 256-block build height, Java seed compatibility |
 | Lighting | 24,000-tick day, sun/moon, dusk/night, nearby torch lights | Native 0–15 block/skylight propagation, lunar phases, weather and renderer parity |
 | Blocks | 29 internal block types including air, water and bedrock; 26 selectable building materials | Original registry contains 171 base registrations, plus metadata variants and behaviors |
-| Food | Apples, bread, raw/cooked porkchops with food/saturation values | Eating animation/duration, food acquisition via farming/mobs, remaining foods/effects |
+| Animation / audio | First-person hand/item animation, view bob, eating, cracks, debris, animated water; 133 original sound clips | Not all original animations/effects; adapted transforms, simplified particles and stereo positioning |
+| Creatures / combat | Pigs, cows, night-time zombies, melee hits, food drops, persistent health, simple wandering/chasing | Simplified AI/spawning/combat; no breeding, ranged attacks, full pathfinding or complete mob roster |
+| Food | Apples, bread, raw/cooked pork, raw beef/steak, rotten flesh; 32-tick eating | Farming, remaining foods, exact presentation and status effects |
 | Persistence | World edits, mode, health/hunger, resources, tools, furnace progress, clock, hotbar and death piles | Original Anvil region files, NBT interoperability and migrations between Java versions |
 
-## Systems not yet implemented
+## Systems not yet implemented or still incomplete
 
 - Complete block and item registries, metadata variants, block shapes, fluids and block update rules.
-- Passive and hostile mobs, spawning, AI, breeding, combat, bosses and entity interactions.
+- Full mob roster, original spawning/AI/pathfinding, breeding, bosses, ranged combat and advanced entity interactions. Pigs, cows and zombies now have a basic implementation.
 - Farming, crop/plant growth, saplings, leaf decay, fishing and animal-derived resources.
 - Armor, experience, enchanting, brewing, potions, status effects, hunger/damage difficulty variants.
 - Redstone, circuits, pistons, rails, minecarts, boats, mechanisms and inventories such as chests/hoppers.
 - Original biomes, world generation, structures, villages, dungeons, weather, Nether and End.
 - Java multiplayer protocol/server compatibility, authentication, LAN play and server management.
 - Java save compatibility, commands, gamerules, achievements/statistics, resource packs and mod support.
-- Original textures, sounds, music, animation, menus, GUI behavior and full rendering behavior.
+- Complete animation and rendering parity, remaining sound events, music, original menus and GUI behavior. Selected original media and recovered animation curves are now present; see [animation and audio](animations-and-sounds.md).
 
 ## Evidence
 

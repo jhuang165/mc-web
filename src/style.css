@@ -2094,3 +2094,39 @@ select:focus {
     margin-top: 5px;
   }
 }
+.vanilla-item-icon {
+  width: 33px;
+  height: 33px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(1px 2px 0 #0002);
+}
+.bag-grid .vanilla-item-icon {
+  width: 32px;
+  height: 32px;
+}
+.recipe-list .vanilla-item-icon {
+  width: 27px;
+  height: 27px;
+}
+.crafting-grid .vanilla-item-icon {
+  width: 29px;
+  height: 29px;
+}
+.furnace-slot .vanilla-item-icon {
+  width: 36px;
+  height: 36px;
+}
+.slot.depleted .vanilla-item-icon {
+  opacity: 0.2;
+}
+@media (max-width: 720px) {
+  .slot .vanilla-item-icon {
+    width: 25px;
+    height: 25px;
+  }
+  .bag-grid .vanilla-item-icon {
+    width: 26px;
+    height: 26px;
+  }
+}

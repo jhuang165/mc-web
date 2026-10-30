@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { WorldEffects } from "./effects.js";
 import { SIZE, HEIGHT, SEA, BLOCKS, hash } from "./world.js";
 const FACES = [
   {
@@ -176,7 +177,7 @@ function atlas() {
   texture.generateMipmaps = false;
   return texture;
 }
-function tile(b, face) {
+export function blockTile(b, face) {
   if (b === 1) return face === 2 ? 0 : face === 3 ? 2 : 1;
   if (b === 2) return 2;
   if (b === 3) return 3;
@@ -198,6 +199,7 @@ export class VoxelScene {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color("#c6dddd");
     this.scene.fog = new THREE.Fog("#c6dddd", 65, 155);
+    this.effects = new WorldEffects(this.scene);
     this.camera = new THREE.PerspectiveCamera(
       65,
       innerWidth / innerHeight,
@@ -232,7 +234,15 @@ export class VoxelScene {
       map: atlas(),
       vertexColors: true,
     });
+    this.waterTexture = new THREE.TextureLoader().load(
+      "/media/1.7.10/blocks/water_still.png",
+      (t) => {
+        t.magFilter = t.minFilter = THREE.NearestFilter;
+        t.repeat.set(1, 1 / 32);
+      },
+    );
     this.waterMaterial = new THREE.MeshLambertMaterial({
+      map: this.waterTexture,
       color: "#81bfd0",
       transparent: true,
       opacity: 0.66,
@@ -280,6 +290,7 @@ export class VoxelScene {
     window.addEventListener("resize", this.resize);
   }
   setWorld(world) {
+    this.effects.clear();
     this.world = world;
     for (const v of this.chunks.values()) {
       this.scene.remove(v);
@@ -302,6 +313,7 @@ export class VoxelScene {
       color = [],
       idx = [],
       wp = [],
+      wuv = [],
       wi = [];
     let vi = 0,
       wvi = 0;
@@ -327,6 +339,7 @@ export class VoxelScene {
                 y + 0.87,
                 z,
               );
+              wuv.push(0, 1, 1, 1, 1, 0, 0, 0);
               wi.push(wvi, wvi + 1, wvi + 2, wvi, wvi + 2, wvi + 3);
               wvi += 4;
             }
@@ -335,7 +348,7 @@ export class VoxelScene {
           FACES.forEach((f, fi) => {
             const nb = w.get(x + f.n[0], y + f.n[1], z + f.n[2]);
             if (nb && nb !== 10 && nb !== 20) return;
-            const t = tile(b, fi),
+            const t = blockTile(b, fi),
               u0 = (t * 16 + 0.2) / 512,
               u1 = (t * 16 + 15.8) / 512;
             const variation = 0.96 + hash(x, z, y) * 0.07;
@@ -384,6 +397,7 @@ export class VoxelScene {
     if (wp.length) {
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.Float32BufferAttribute(wp, 3));
+      g.setAttribute("uv", new THREE.Float32BufferAttribute(wuv, 2));
       g.setIndex(wi);
       g.computeVertexNormals();
       group.add(new THREE.Mesh(g, this.waterMaterial));
@@ -434,7 +448,9 @@ export class VoxelScene {
     );
     this.moonDisc.lookAt(64, 24, 64);
   }
-  render(time) {
+  render(time, dt = 1 / 60) {
+    this.effects.update(dt);
+    this.waterTexture.offset.y = 1 - ((Math.floor(time * 20) % 32) + 1) / 32;
     this.clouds.position.x = Math.sin(time * 0.004) * 5;
     const torches = [...this.chunks.values()]
       .flatMap((c) => c.userData.torches || [])
@@ -449,6 +465,7 @@ export class VoxelScene {
       if (torches[i]) light.position.copy(torches[i]);
     });
     this.renderer.render(this.scene, this.camera);
+    this.worldTriangles = this.renderer.info.render.triangles;
   }
   setDistance(distance) {
     this.scene.fog.near = distance * 0.48;

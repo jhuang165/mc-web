@@ -58,11 +58,11 @@ The original method also contains water, lava, ladders, effects, entity-specific
 
 ## Web implementation and limits
 
-New code uses Three.js WebGL, chunked exposed-face meshes, a generated pixel atlas, seeded custom terrain, ray-selected mining and building, and localStorage edits. No Minecraft code, classes, sounds, or textures are redistributed.
+New code uses Three.js WebGL, chunked exposed-face meshes, a generated pixel atlas, seeded custom terrain, ray-selected mining and building, and localStorage edits. No original Minecraft classes or Java source are shipped. The animation/audio update now bundles selected original sound effects, skins, item sprites, damage frames and water textures, with hashes and ownership credits; see [animation and audio](animations-and-sounds.md).
 
 Available: Creative and Survival modes, gravity, jumping, flight, collision, health, hunger, food, fall damage, drowning, death/respawn and recoverable item piles, shaped crafting, a fuel-driven furnace, tool tiers/durability, custom caves/ores, torches, a day/night cycle, local saves, import/export, settings, and diagnostics.
 
-Not available: mobs, combat, farming, full block/item/recipe registries, redstone, multiplayer, Java world files, the Java protocol, original world generation, or complete Java 1.7.10 behavior. See [feature coverage](parity.md) for the complete gap list. Full Java 1.7.10 compatibility remains the target, not a claim of completion.
+Not available: the full mob roster/AI/combat systems, farming, full block/item/recipe registries, redstone, multiplayer, Java world files, the Java protocol, original world generation, or complete Java 1.7.10 behavior. See [feature coverage](parity.md) for the complete gap list. Full Java 1.7.10 compatibility remains the target, not a claim of completion.
 
 Reproduction commands and source are in the repository README and `tools/investigate.mjs`. Original downloaded inputs and raw REA evidence remain local, outside the published build.
 

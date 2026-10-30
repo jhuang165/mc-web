@@ -1,0 +1,313 @@
+{
+  "target": "Minecraft Java 1.7.10",
+  "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+  "credit": "Selected original Minecraft textures © Mojang / Microsoft.",
+  "assets": [
+    {
+      "member": "assets/minecraft/textures/blocks/water_still.png",
+      "url": "/media/1.7.10/blocks/water_still.png",
+      "sha1": "d8a18892dff1b66e4cc039b35c4f1a67ace32954",
+      "bytes": 14567
+    },
+    {
+      "member": "assets/minecraft/textures/blocks/fire_layer_0.png",
+      "url": "/media/1.7.10/blocks/fire_layer_0.png",
+      "sha1": "e8f2b38a65f45fe2b414dc13881998c4bdef6f65",
+      "bytes": 16576
+    },
+    {
+      "member": "assets/minecraft/textures/entity/steve.png",
+      "url": "/media/1.7.10/entity/steve.png",
+      "sha1": "6b4aed21d7fad9a8549ebcef5489a21003467fe3",
+      "bytes": 1324
+    },
+    {
+      "member": "assets/minecraft/textures/entity/pig/pig.png",
+      "url": "/media/1.7.10/entity/pig/pig.png",
+      "sha1": "5e11b865d50ea568472a1326e02d501371048578",
+      "bytes": 3273
+    },
+    {
+      "member": "assets/minecraft/textures/entity/cow/cow.png",
+      "url": "/media/1.7.10/entity/cow/cow.png",
+      "sha1": "c5a387481a34cf2cd9f4bdf8ef6759d6853a6419",
+      "bytes": 1922
+    },
+    {
+      "member": "assets/minecraft/textures/entity/zombie/zombie.png",
+      "url": "/media/1.7.10/entity/zombie/zombie.png",
+      "sha1": "ef68c2614cb26027aa0cdd87ce5597563f6fa562",
+      "bytes": 2388
+    },
+    {
+      "member": "assets/minecraft/textures/blocks/destroy_stage_0.png",
+      "url": "/media/1.7.10/blocks/destroy_stage_0.png",
+      "sha1": "5a5d8bedea8032c1b0fed34c47b038f5c01c9813",
+      "bytes": 102
+    },
+    {
+      "member": "assets/minecraft/textures/blocks/destroy_stage_1.png",
+      "url": "/media/1.7.10/blocks/destroy_stage_1.png",
+      "sha1": "8afc6ac8ad9a26cd48ae093a313b33c293264d6d",
+      "bytes": 115
+    },
+    {
+      "member": "assets/minecraft/textures/blocks/destroy_stage_2.png",
+      "url": "/media/1.7.10/blocks/destroy_stage_2.png",
+      "sha1": "ad6b84771aecb4a4a708e9ecc8670557d1cbd561",
+      "bytes": 123
+    },
+    {
+      "member": "assets/minecraft/textures/blocks/destroy_stage_3.png",
+      "url": "/media/1.7.10/blocks/destroy_stage_3.png",
+      "sha1": "9ff64f2b4b0ca77763bd1e23de15ca436ef5d492",
+      "bytes": 145
+    },
+    {
+      "member": "assets/minecraft/textures/blocks/destroy_stage_4.png",
+      "url": "/media/1.7.10/blocks/destroy_stage_4.png",
+      "sha1": "2698265ab998f0364ea3eec5caaa1dce3a8804b4",
+      "bytes": 155
+    },
+    {
+      "member": "assets/minecraft/textures/blocks/destroy_stage_5.png",
+      "url": "/media/1.7.10/blocks/destroy_stage_5.png",
+      "sha1": "93c8f07033e808e7b1a6ea01f1a7cbf63f0b7f47",
+      "bytes": 169
+    },
+    {
+      "member": "assets/minecraft/textures/blocks/destroy_stage_6.png",
+      "url": "/media/1.7.10/blocks/destroy_stage_6.png",
+      "sha1": "0db33f2bc59816ca411099e2184e746f95d9a339",
+      "bytes": 179
+    },
+    {
+      "member": "assets/minecraft/textures/blocks/destroy_stage_7.png",
+      "url": "/media/1.7.10/blocks/destroy_stage_7.png",
+      "sha1": "96673326ef7e799203827b99d22cffc745f56ae4",
+      "bytes": 190
+    },
+    {
+      "member": "assets/minecraft/textures/blocks/destroy_stage_8.png",
+      "url": "/media/1.7.10/blocks/destroy_stage_8.png",
+      "sha1": "9f99c19569888fcaaff0223ebebc5de0c0861bc1",
+      "bytes": 211
+    },
+    {
+      "member": "assets/minecraft/textures/blocks/destroy_stage_9.png",
+      "url": "/media/1.7.10/blocks/destroy_stage_9.png",
+      "sha1": "7680dc836e8617a07c3eef4cc7dabc1fbecd1b4f",
+      "bytes": 218
+    },
+    {
+      "member": "assets/minecraft/textures/items/wood_pickaxe.png",
+      "url": "/media/1.7.10/items/wood_pickaxe.png",
+      "sha1": "c7dfb95e86a07987c467a83b60aca3c7f8879d6c",
+      "bytes": 180
+    },
+    {
+      "member": "assets/minecraft/textures/items/wood_axe.png",
+      "url": "/media/1.7.10/items/wood_axe.png",
+      "sha1": "237f79a8cb8539c619fcad94401106055f3a810d",
+      "bytes": 170
+    },
+    {
+      "member": "assets/minecraft/textures/items/wood_shovel.png",
+      "url": "/media/1.7.10/items/wood_shovel.png",
+      "sha1": "1dc40f6069c0e936943bb1d15ca3ceda008ee796",
+      "bytes": 153
+    },
+    {
+      "member": "assets/minecraft/textures/items/wood_sword.png",
+      "url": "/media/1.7.10/items/wood_sword.png",
+      "sha1": "0bc71f7b46801e1dea8d09c2da45bda3e34b7027",
+      "bytes": 181
+    },
+    {
+      "member": "assets/minecraft/textures/items/stone_pickaxe.png",
+      "url": "/media/1.7.10/items/stone_pickaxe.png",
+      "sha1": "998319e5446380711f52471f69f67c7047a3d996",
+      "bytes": 179
+    },
+    {
+      "member": "assets/minecraft/textures/items/stone_axe.png",
+      "url": "/media/1.7.10/items/stone_axe.png",
+      "sha1": "93f81b60ddc0dde55dec8ac26fccd865f2369e86",
+      "bytes": 170
+    },
+    {
+      "member": "assets/minecraft/textures/items/stone_shovel.png",
+      "url": "/media/1.7.10/items/stone_shovel.png",
+      "sha1": "3350125f275a3fca90c96dd7ee9edf326aa797d1",
+      "bytes": 154
+    },
+    {
+      "member": "assets/minecraft/textures/items/stone_sword.png",
+      "url": "/media/1.7.10/items/stone_sword.png",
+      "sha1": "a66abbb35155c1b4321cc9ae93824cd7bc3adb4b",
+      "bytes": 182
+    },
+    {
+      "member": "assets/minecraft/textures/items/iron_pickaxe.png",
+      "url": "/media/1.7.10/items/iron_pickaxe.png",
+      "sha1": "d5a3772679f33fb44dfaf9c5438e56c6a204ac7d",
+      "bytes": 178
+    },
+    {
+      "member": "assets/minecraft/textures/items/iron_axe.png",
+      "url": "/media/1.7.10/items/iron_axe.png",
+      "sha1": "a9cd0f8eead65907cc57d03d0b7f5b7706b777fa",
+      "bytes": 168
+    },
+    {
+      "member": "assets/minecraft/textures/items/iron_shovel.png",
+      "url": "/media/1.7.10/items/iron_shovel.png",
+      "sha1": "96773d5183732b668cdc2cbb9521a774276e3b94",
+      "bytes": 150
+    },
+    {
+      "member": "assets/minecraft/textures/items/iron_sword.png",
+      "url": "/media/1.7.10/items/iron_sword.png",
+      "sha1": "979bb02e0e475437fac82a722e3fab43b98cc7ad",
+      "bytes": 179
+    },
+    {
+      "member": "assets/minecraft/textures/items/diamond_pickaxe.png",
+      "url": "/media/1.7.10/items/diamond_pickaxe.png",
+      "sha1": "012b18a19ac5086ef344034ed82662b3bd50ab8b",
+      "bytes": 181
+    },
+    {
+      "member": "assets/minecraft/textures/items/diamond_axe.png",
+      "url": "/media/1.7.10/items/diamond_axe.png",
+      "sha1": "d358d37ce4e485ba093dc071742f18795eb22ec3",
+      "bytes": 171
+    },
+    {
+      "member": "assets/minecraft/textures/items/diamond_shovel.png",
+      "url": "/media/1.7.10/items/diamond_shovel.png",
+      "sha1": "c069a452413a71ecdcd34818c871eaa42201e064",
+      "bytes": 154
+    },
+    {
+      "member": "assets/minecraft/textures/items/diamond_sword.png",
+      "url": "/media/1.7.10/items/diamond_sword.png",
+      "sha1": "a387cf747ccd8eaee3937b0e83d000a7f4385dd0",
+      "bytes": 182
+    },
+    {
+      "member": "assets/minecraft/textures/items/gold_pickaxe.png",
+      "url": "/media/1.7.10/items/gold_pickaxe.png",
+      "sha1": "d035739ac0233c1f21e934b7e9e8054dea56f371",
+      "bytes": 181
+    },
+    {
+      "member": "assets/minecraft/textures/items/gold_axe.png",
+      "url": "/media/1.7.10/items/gold_axe.png",
+      "sha1": "adaaf5939aacfaf37d3bfcd83a30c1e62275e365",
+      "bytes": 171
+    },
+    {
+      "member": "assets/minecraft/textures/items/gold_shovel.png",
+      "url": "/media/1.7.10/items/gold_shovel.png",
+      "sha1": "e568f0ddbfe5626e5632c2d0581ea2db6c149a58",
+      "bytes": 154
+    },
+    {
+      "member": "assets/minecraft/textures/items/gold_sword.png",
+      "url": "/media/1.7.10/items/gold_sword.png",
+      "sha1": "8b73796e4b331d29954eae2cdc42f5720849b29e",
+      "bytes": 182
+    },
+    {
+      "member": "assets/minecraft/textures/items/apple.png",
+      "url": "/media/1.7.10/items/apple.png",
+      "sha1": "10f67f1e7ecfc857ab295e56ab5eb2ea99feebe1",
+      "bytes": 241
+    },
+    {
+      "member": "assets/minecraft/textures/items/bread.png",
+      "url": "/media/1.7.10/items/bread.png",
+      "sha1": "a5403095811fa771e9870f9cdf673ce24f46cf3d",
+      "bytes": 233
+    },
+    {
+      "member": "assets/minecraft/textures/items/porkchop_raw.png",
+      "url": "/media/1.7.10/items/porkchop_raw.png",
+      "sha1": "bd579051681ab9f6fbeb76db22749cf69a3eb841",
+      "bytes": 239
+    },
+    {
+      "member": "assets/minecraft/textures/items/porkchop_cooked.png",
+      "url": "/media/1.7.10/items/porkchop_cooked.png",
+      "sha1": "bb01bf5f34d6c7bbbd08d7fe5fcff9b9124db43f",
+      "bytes": 448
+    },
+    {
+      "member": "assets/minecraft/textures/items/beef_raw.png",
+      "url": "/media/1.7.10/items/beef_raw.png",
+      "sha1": "3945cd3a7484849797a33934632e6ef90f68b46c",
+      "bytes": 285
+    },
+    {
+      "member": "assets/minecraft/textures/items/beef_cooked.png",
+      "url": "/media/1.7.10/items/beef_cooked.png",
+      "sha1": "8ba863dd384c4a166130a1492cfc161cc26f0e89",
+      "bytes": 375
+    },
+    {
+      "member": "assets/minecraft/textures/items/rotten_flesh.png",
+      "url": "/media/1.7.10/items/rotten_flesh.png",
+      "sha1": "d31377ea7d2996873c55cc8c76a7b436ef2b1336",
+      "bytes": 456
+    },
+    {
+      "member": "assets/minecraft/textures/items/stick.png",
+      "url": "/media/1.7.10/items/stick.png",
+      "sha1": "4735ddff917c45e0eb1dcb6373e5934dea57c420",
+      "bytes": 277
+    },
+    {
+      "member": "assets/minecraft/textures/items/coal.png",
+      "url": "/media/1.7.10/items/coal.png",
+      "sha1": "e61c2008ea46672e93c319f922c3f0a9739ebc27",
+      "bytes": 267
+    },
+    {
+      "member": "assets/minecraft/textures/items/diamond.png",
+      "url": "/media/1.7.10/items/diamond.png",
+      "sha1": "ff8ffc1252d059f1cf78bc79f93db09987743bf4",
+      "bytes": 210
+    },
+    {
+      "member": "assets/minecraft/textures/items/iron_ingot.png",
+      "url": "/media/1.7.10/items/iron_ingot.png",
+      "sha1": "74232860338589e33acdab1ccff6c7e63e7546df",
+      "bytes": 191
+    },
+    {
+      "member": "assets/minecraft/textures/items/gold_ingot.png",
+      "url": "/media/1.7.10/items/gold_ingot.png",
+      "sha1": "781c420ffe1a01be808ddf2e6a8ca8569c770660",
+      "bytes": 198
+    },
+    {
+      "member": "assets/minecraft/textures/items/wheat.png",
+      "url": "/media/1.7.10/items/wheat.png",
+      "sha1": "5534970bd02d746dd9227773deb32ad5935bde0e",
+      "bytes": 283
+    },
+    {
+      "member": "assets/minecraft/textures/items/brick.png",
+      "url": "/media/1.7.10/items/brick.png",
+      "sha1": "1f8662d83e623f42cd4dbc22ffe52a15aa5cde37",
+      "bytes": 188
+    },
+    {
+      "member": "assets/minecraft/textures/items/clay_ball.png",
+      "url": "/media/1.7.10/items/clay_ball.png",
+      "sha1": "259e4f7a89a04af20ea34ea89ca4fb94a0faab82",
+      "bytes": 177
+    }
+  ]
+}

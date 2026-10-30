@@ -27,7 +27,46 @@ for (let kind = 0; kind < 4; kind++)
       glyph: ["⛏", "⚒", "♠", "†"][kind],
     };
   }
+for (let kind = 0; kind < 4; kind++) {
+  const id = 116 + kind;
+  ITEMS[id] = {
+    id,
+    name: `Golden ${toolKinds[kind]}`,
+    kind: toolKinds[kind],
+    tier: 0,
+    durability: 32,
+    speed: 12,
+    ingredient: 304,
+    stack: 1,
+    color: "#e5c35e",
+    glyph: ["⛏", "⚒", "♠", "†"][kind],
+  };
+}
 for (const item of [
+  {
+    id: 204,
+    name: "Raw beef",
+    food: 3,
+    saturation: 0.3,
+    color: "#b87266",
+    glyph: "◕",
+  },
+  {
+    id: 205,
+    name: "Steak",
+    food: 8,
+    saturation: 0.8,
+    color: "#8c5c40",
+    glyph: "◕",
+  },
+  {
+    id: 206,
+    name: "Rotten flesh",
+    food: 4,
+    saturation: 0.1,
+    color: "#8c7350",
+    glyph: "◕",
+  },
   {
     id: 200,
     name: "Apple",
@@ -148,6 +187,21 @@ for (let kind = 0; kind < 4; kind++)
       id,
     );
   }
+for (let kind = 0; kind < 4; kind++) {
+  const id = 116 + kind;
+  recipe(
+    String(id),
+    ITEMS[id].name,
+    [
+      ["XXX", " S ", " S "],
+      ["XX", "XS", " S"],
+      ["X", "S", "S"],
+      ["X", "X", "S"],
+    ][kind],
+    { X: 304, S: 300 },
+    id,
+  );
+}
 for (const [block, ingot] of [
   [26, 302],
   [27, 304],
@@ -190,6 +244,7 @@ export function ingredients(recipe) {
   return counts;
 }
 export const SMELTING = {
+  204: 205,
   12: 3,
   6: 9,
   16: 302,
