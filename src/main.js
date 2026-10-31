@@ -35,6 +35,7 @@ import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, 
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { Fluids, waterAcceleration, entityWaterBox, inLava, liquidInBox } from "./fluids.js";
+import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
 import { PlayerMotion, sneakEdge, moveWeights, isCritical, ATTACK_SLOWDOWN } from "./player-movement.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
@@ -102,6 +103,7 @@ let screen = "home",
   lockFallback = false,
   saved = true,
   lastJump = 0;
+let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
 let fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer;
 let sounds,
   firstPerson,
@@ -222,7 +224,7 @@ function makeRecord(p) {
     seed: String(p.seed).slice(0, 80),
     biome: p.biome || "meadow",
     mode: p.mode === "survival" ? "survival" : "creative",
-    generationVersion: 3,
+    generationVersion: 5,
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -1056,6 +1058,38 @@ function throwSnowball(id = 312) {
     saved = false;
   }
 }
+// EntityCow.interact, ItemBucket.onItemRightClick and ItemBucketMilk.onItemRightClick.
+function useBucketItem(id) {
+  const before = copyStack(survival.held), drop = (s) => items.dropPlayer(s, position, yaw, pitch);
+  let used = false;
+  if (id === MILK_BUCKET) {
+    // setItemInUse: always starts the 32-tick drink, even in Creative.
+    if (!eating) eating = { id, ticks: DRINK_TICKS, drink: true };
+    return;
+  }
+  if (aimedEntity?.entity.type === "cow" && aimedEntity.entity.health > 0 && milkCow(survival, { drop })) used = true;
+  else if (eyeRay) {
+    const hit = useBucket(world, survival, eyeRay.origin, eyeRay.dir, {
+      drop,
+      // World.func_147480_a: the replaced plant breaks with its drops, sound and particles.
+      destroy: (x, y, z, b) => {
+        fluids.wash(x, y, z, b);
+        scene.effects.burst([x, y, z], b);
+        sound(false, b);
+      },
+    });
+    if (hit) {
+      used = true;
+      for (const [x, y, z] of hit.cells) scene.updateBlock(x, z, y);
+    }
+  }
+  if (!used) return;
+  // PlayerControllerMP.sendUseItem resets the equip animation when the stack changed.
+  const now = survival.held;
+  if (before?.id !== now?.id || before?.count !== now?.count) animation.resetEquipped();
+  renderHotbar();
+  saved = false;
+}
 function edit(place = false) {
   if (screen !== "playing") return;
   sounds.unlock();
@@ -1068,6 +1102,12 @@ function edit(place = false) {
   const usesBlock = activates && !aimedEntity && target && [13, 14, CHEST].includes(world.get(...target.block));
   if (place && (id === 312 || id === 316) && (survival.creative || survival.count(id)) && !usesBlock) {
     throwSnowball(id);
+    return;
+  }
+  // ItemBucket / ItemBucketMilk: Minecraft.rightClickMouse tries the aimed entity (a cow
+  // takes an empty bucket) and block first, then onItemRightClick; neither swings.
+  if (place && isBucket(item) && !usesBlock) {
+    useBucketItem(id);
     return;
   }
   animation.swing();
@@ -1472,12 +1512,21 @@ function movementTick() {
       eating = null;
     else {
       eating.ticks--;
-      if (eating.ticks % 4 === 0)
+      if (!eating.drink && eating.ticks % 4 === 0)
         sounds.play("random.eat", {
           volume: 0.5,
           pitch: 0.9 + Math.random() * 0.2,
         });
-      if (eating.ticks <= 0) {
+      if (eating.drink) {
+        // EntityPlayer.onUpdate: sound while the count is 25 or less and a multiple of 4
+        // (count 32 down to 1), then ItemBucketMilk.onEaten when it reaches 0.
+        const count = eating.ticks + 1;
+        if (count <= 25 && count % 4 === 0) sounds.play("random.drink", { volume: 0.5, pitch: Math.random() * 0.1 + 0.9 });
+        if (eating.ticks <= 0) {
+          if (finishDrinking(survival)) { renderHotbar(); saved = false; }
+          eating = null;
+        }
+      } else if (eating.ticks <= 0) {
         if (survival.eat(eating.id)) {
           sounds.play("random.burp", { volume: 0.5 });
           renderHotbar();
@@ -1837,6 +1886,7 @@ function animate(now) {
       dir,
       survival.creative ? 6 : 4.5,
     );
+    eyeRay = { origin: [aim.x, aim.y, aim.z], dir: [dir.x, dir.y, dir.z] };
     aimedEntity = mobs.pick(
       aim,
       dir,

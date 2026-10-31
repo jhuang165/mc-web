@@ -423,6 +423,11 @@
       "sha1": "2fe092579d9637e2d160319820ee08e60a237bb7",
       "bytes": 7046
     },
+    "random/drink": {
+      "url": "/audio/1.7.10/random/drink.ogg",
+      "sha1": "857b75738992d25e338dee640ab191323bcbf798",
+      "bytes": 7734
+    },
     "random/eat1": {
       "url": "/audio/1.7.10/random/eat1.ogg",
       "sha1": "dfee39084c771182f6b9e7cfb8c8bc4e255747bc",
@@ -1131,6 +1136,12 @@
       "category": "block",
       "sounds": [
         "random/click"
+      ]
+    },
+    "random.drink": {
+      "category": "player",
+      "sounds": [
+        "random/drink"
       ]
     },
     "random.eat": {
