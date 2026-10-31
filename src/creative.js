@@ -24,14 +24,14 @@ export const CREATIVE_TABS = [
   tab(5, "search", "Search Items", { texture: "items/compass", frames: 32 }, [], { background: "item_search.png" }),
   tab(6, "food", "Foodstuffs", { id: 200 }, [200, 201, 202, 203, 204, 205, 318, 319, 206]),
   tab(7, "tools", "Tools", { id: 106 }, [110, 102, 106, 108, 100, 104, 109, 101, 105, 111, 103, 107, 118, 116, 117, 120, 121, 122, 123, 124, 125]),
-  tab(8, "combat", "Combat", { id: 119 }, [114, 112, 113, 115, 119, 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 416, 417, 418, 419, 412, 413, 414, 415]),
+  tab(8, "combat", "Combat", { id: 119 }, [127, 320, 114, 112, 113, 115, 119, 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 416, 417, 418, 419, 412, 413, 414, 415]),
   tab(9, "brewing", "Brewing", { potion: 0x385dc6 }, []),
-  tab(10, "materials", "Materials", { id: 300 }, [301, 308, 303, 302, 304, 300, 317, 309, 305, 313, 315, 306, 307, 316, ...DYES]),
+  tab(10, "materials", "Materials", { id: 300 }, [301, 308, 303, 302, 304, 300, 321, 317, 309, 305, 313, 315, 306, 307, 316, ...DYES]),
   tab(11, "inventory", "Survival Inventory", { id: 41 }, [], { background: "inventory.png", scrollbar: false, title: false }),
 ];
 export const SEARCH = CREATIVE_TABS[5], SURVIVAL_TAB = CREATIVE_TABS[11];
 // updateCreativeSearch walks Item.itemRegistry: items with a creative tab, by ID.
-export const SEARCH_ORDER = [3, 1, 2, 12, 7, 11, 6, 25, 18, 16, 15, 4, 5, 9, 39, ...WOOLS, YELLOW_FLOWER, ...RED_FLOWERS, 27, 26, 8, 21, 22, 20, 41, 17, 28, 13, 14, SNOW_LAYER, ICE, 23, 24, 40, 110, 102, 106, 200, 301, 308, 303, 302, 304, 114, 112, 108, 100, 104, 113, 109, 101, 105, 115, 111, 103, 107, 300, 119, 118, 116, 117, 317, 120, 121, 122, 123, 124, 309, 305, 201, 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 416, 417, 418, 419, 412, 413, 414, 415, 313, 202, 203, 340, 341, 342, 312, 315, 343, 306, 307, 314, 316, ...DYES, 311, 125, 204, 205, 318, 319, 206];
+export const SEARCH_ORDER = [3, 1, 2, 12, 7, 11, 6, 25, 18, 16, 15, 4, 5, 9, 39, ...WOOLS, YELLOW_FLOWER, ...RED_FLOWERS, 27, 26, 8, 21, 22, 20, 41, 17, 28, 13, 14, SNOW_LAYER, ICE, 23, 24, 40, 110, 102, 106, 200, 127, 320, 301, 308, 303, 302, 304, 114, 112, 108, 100, 104, 113, 109, 101, 105, 115, 111, 103, 107, 300, 119, 118, 116, 117, 321, 317, 120, 121, 122, 123, 124, 309, 305, 201, 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 416, 417, 418, 419, 412, 413, 414, 415, 313, 202, 203, 340, 341, 342, 312, 315, 343, 306, 307, 314, 316, ...DYES, 311, 125, 204, 205, 318, 319, 206];
 // Item.getCreativeTab, for the search tab's tooltip line.
 export const itemTab = (id) => CREATIVE_TABS.find((t) => t.items.some((e) => entryId(e) === id)) ?? null;
 export const GUI_WIDTH = 195, GUI_HEIGHT = 136, SEARCH_MAX = 15;

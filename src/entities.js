@@ -126,6 +126,10 @@ export const ENTITY_TYPES = {
     damage: 3,
     drop: 206,
   },
+  // EntitySkeleton (yl): 0.6 x 1.8, 20 health, speed 0.25 (applyEntityAttributes). Its
+  // arrow and bone drops are rolled in `kill`, so there is no `drop`; the task
+  // speeds (ArrowAttack 1.0, FleeSun 1.0, Wander 1.0) are in the AI's brain.
+  skeleton: { health: 20, width: 0.6, height: 1.8, movement: 0.25, ai: { wander: 1 }, drop: 0 },
 };
 // EntityMoveHelper.onUpdateMoveHelper (tv.c) hands EntityLiving.setAIMoveSpeed
 // (sw.i) `(float)(speed * movementSpeed)`; sw.i also sets moveForward to it. The
@@ -143,6 +147,12 @@ export const EGG = 316, FEATHER = 317, RAW_CHICKEN = 318, COOKED_CHICKEN = 319;
 const hurtSound = (type) => (type === "pig" ? "mob.pig.say" : type === "sheep" ? "mob.sheep.say" : "mob." + type + ".hurt");
 // EntityChicken's death sound is its hurt sound as well.
 const deathSound = (type) => (type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
+// Chunk.canBlockSeeTheSky without a height map (weather.js `canSeeSky` is the real one
+// that main.js hooks in): no solid block at or above (x, y, z).
+const openSky = (world, x, y, z) => {
+  for (let yy = Math.max(0, y); yy < HEIGHT; yy++) if (world.solid(x, yy, z)) return false;
+  return true;
+};
 export function actorCollides(world, x, y, z, w, h) {
   for (
     let bx = Math.floor(x - w / 2 + 0.001);
@@ -519,7 +529,7 @@ export class EntityWorld {
   // attacking entity at (fromX, fromZ): while hurtResistantTime > 10 (`hurt` > 0)
   // only damage above lastDamage counts, the difference being dealt; limbSwingAmount
   // jumps to 1.5, knockBack runs, then the mob dies or plays its hurt sound.
-  damage(e, amount, fromX, fromZ) {
+  damage(e, amount, fromX, fromZ, byPlayer = true) {
     if (!this.entities.includes(e) || e.health <= 0) return false;
     if (e.hurt > 0) {
       if (amount <= e.lastDamage) return false;
@@ -533,9 +543,10 @@ export class EntityWorld {
     // reads it any more) and resets love; EntityLivingBase.attackEntityFrom sets the
     // revenge target (the attacker, always the player here), which EntityAIPanic and
     // EntityAIHurtByTarget read. The mob is not turned: panic walks it away.
-    if (e.type !== "zombie") e.flee = 60;
+    if (e.type !== "zombie" && e.type !== "skeleton") e.flee = 60;
     e.love=0;e.mateTicks=0;
-    e.revenge = (e.age || 0) + 1;
+    // A mob shot by another mob's arrow has no player to take revenge on.
+    if (byPlayer) e.revenge = (e.age || 0) + 1;
     // EntityLivingBase.attackEntityFrom sets limbSwingAmount to 1.5.
     e.limbSwingAmount = 1.5;
     knockBack(e, fromX, fromZ);
@@ -583,7 +594,7 @@ export class EntityWorld {
       sound: deathSound(e.type),
       position: e,
     });
-    if(e.growingAge>=0)this.events.push({xp:e.type==='zombie'?5:1+Math.floor(Math.random()*3),position:{x:e.x,y:e.y,z:e.z}});
+    if(e.growingAge>=0)this.events.push({xp:e.type==='zombie'||e.type==='skeleton'?5:1+Math.floor(Math.random()*3),position:{x:e.x,y:e.y,z:e.z}});
     // EntitySheep.dropFewItems (wp.b): one wool of its colour unless sheared, young or old.
     if(e.type==='sheep'&&!e.sheared)this.events.push({drop:WOOL,count:1,damage:e.color,position:{x:e.x,y:e.y,z:e.z}});
     if(e.growingAge>=0&&ENTITY_TYPES[e.type].drop)this.events.push({
@@ -601,6 +612,13 @@ export class EntityWorld {
       const feathers = Math.floor(this.random() * 3);
       if (feathers) this.events.push({ drop: FEATHER, count: feathers, position: { x: e.x, y: e.y, z: e.z } });
       this.events.push({ drop: e.burn ? COOKED_CHICKEN : RAW_CHICKEN, count: 1, position: { x: e.x, y: e.y, z: e.z } });
+    }
+    // EntitySkeleton.dropFewItems (yl.b(ZI)): rand.nextInt(3 + looting) arrows, then
+    // rand.nextInt(3 + looting) bones (the wither skeleton's coal and skull are not ported).
+    if (e.type === "skeleton") {
+      const arrows = Math.floor(this.random() * 3), bones = Math.floor(this.random() * 3);
+      if (arrows) this.events.push({ drop: 320, count: arrows, position: { x: e.x, y: e.y, z: e.z } });
+      if (bones) this.events.push({ drop: 311, count: bones, position: { x: e.x, y: e.y, z: e.z } });
     }
     e.death = 1;
     if (e.eatTimer) e.eatTimer = 0;
@@ -712,6 +730,11 @@ export class EntityWorld {
       spawnBaby:(a,b)=>this.spawnBaby(a,b),
       eatGrass:(e)=>this.eatGrass(e),
       attackPlayer:(e,survival)=>survival.damage(ENTITY_TYPES[e.type].damage,"a zombie",true),
+      // EntitySkeleton.attackEntityWithRangedAttack: the arrow itself is made by bow.js
+      // (entities.js cannot import it: projectiles.js already imports this file).
+      rangedAttack:(e,target,scale)=>this.shoot?.(e,target,scale),
+      isDaytime:()=>this.day,
+      canSeeSky:(x,y,z)=>this.canSeeSky?this.canSeeSky(x,y,z):openSky(this.world,x,y,z),
       despawn:(e)=>{e.health=0;e.death=20;},
     });
   }
@@ -719,6 +742,8 @@ export class EntityWorld {
     const night =
       survival.time % 24000 > 13000 && survival.time % 24000 < 23000;
     this.spawnClock++;
+    // World.isDaytime (skylightSubtracted < 4); main.js hooks the real light level in.
+    this.day = this.isDaytime ? this.isDaytime() : !night;
     this.ai.beginTick(player, survival, heldItem);
     if (
       night &&
@@ -735,6 +760,28 @@ export class EntityWorld {
         const y = this.world.surface(x, z);
         if (this.world.get(x, y - 1, z) !== 1) continue;
         this.entities.push(this.create("zombie", x + 0.5, y, z + 0.5));
+        break;
+      }
+    }
+    // Skeletons come out at night with the zombies, on their own timer and cap (the
+    // original rolls both from one spawn pass over lit-dark cells within 24 to 128
+    // blocks; this build keeps its simpler ring around the player).
+    this.skeletonClock = (this.skeletonClock || 0) + 1;
+    if (
+      night &&
+      !survival.creative &&
+      this.skeletonClock >= 240 &&
+      this.entities.filter((e) => e.type === "skeleton").length < 3
+    ) {
+      this.skeletonClock = 0;
+      for (let i = 0; i < 16; i++) {
+        const a = hash(i + 100, survival.time, this.world.numericSeed) * Math.PI * 2,
+          x = Math.floor(player.x + Math.sin(a) * 24),
+          z = Math.floor(player.z + Math.cos(a) * 24);
+        if (x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
+        const y = this.world.surface(x, z);
+        if (this.world.get(x, y - 1, z) !== 1) continue;
+        this.entities.push(this.create("skeleton", x + 0.5, y, z + 0.5));
         break;
       }
     }
@@ -785,6 +832,14 @@ export class EntityWorld {
           e.lastDamage = 1;
         }
       } else e.burn = 0;
+      // EntitySkeleton.onLivingUpdate (yl.e): in daylight a skeleton under open sky
+      // (brightness > 0.5, with chance (brightness - 0.4) * 2 / 30 a tick) is set on fire
+      // for 8 s; burn() below takes the damage, water or rain puts it out. It wears no helmet.
+      if (e.type === "skeleton" && this.day) {
+        const bx = Math.floor(e.x), by = Math.floor(e.y + t.height * 0.66), bz = Math.floor(e.z),
+          light = this.ai.brightness(bx, by, bz);
+        if (light > 0.5 && f(this.random() * 30) < f(f(light - f(0.4)) * 2) && this.ai.deps.canSeeSky(bx, Math.floor(e.y), bz)) e.fire = Math.max(e.fire || 0, 160);
+      }
       if (e.inWater = inWater(this.world, e, t.width, t.height)) e.fallDistance = 0;
       this.burn(e, t);
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the

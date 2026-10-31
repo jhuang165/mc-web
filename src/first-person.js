@@ -15,7 +15,9 @@ export function pixelTexture(url) {
   }
   return cache.get(url);
 }
-export function skinBox(w, h, d, u, v, tw, th) {
+// `mirror` is ModelRenderer.mirror (the left arm and leg of a skeleton): every face is flipped
+// in u and the two side faces trade their regions.
+export function skinBox(w, h, d, u, v, tw, th, mirror = false) {
   const g = new THREE.BoxGeometry(w / 16, h / 16, d / 16);
   const regions = [
       [u + d + w, v + d, d, h],
@@ -26,9 +28,10 @@ export function skinBox(w, h, d, u, v, tw, th) {
       [u + d + w + d, v + d, w, h],
     ],
     uv = g.attributes.uv;
+  if (mirror) [regions[0], regions[1]] = [regions[1], regions[0]];
   regions.forEach(([x, y, rw, rh], face) => {
-    const a = x / tw,
-      b = (x + rw) / tw,
+    const a = (mirror ? x + rw : x) / tw,
+      b = (mirror ? x : x + rw) / tw,
       c = 1 - y / th,
       e = 1 - (y + rh) / th;
     uv.setXY(face * 4, a, c);
@@ -38,8 +41,10 @@ export function skinBox(w, h, d, u, v, tw, th) {
   });
   return g;
 }
-export function itemTexture(id, damage = 0) {
+// `use` is the bow's draw stage (bow.js bowStage: 0 standby, 1 to 3 bow_pulling_0 to 2).
+export function itemTexture(id, damage = 0, use = 0) {
   const item = ITEMS[id];
+  if (id === 127 && use > 0) return "/media/1.7.10/items/bow_pulling_" + (Math.min(3, use) - 1) + ".png";
   // Flowers are flat sprites cut from the terrain atlas textures; dyes are one item per damage.
   if(id===YELLOW_FLOWER)return "/media/1.7.10/blocks/flower_dandelion.png";
   if(id===RED_FLOWER)return "/media/1.7.10/blocks/flower_"+RED_FLOWERS[Math.max(0,Math.min(RED_FLOWERS.length-1,damage|0))].texture+".png";
@@ -109,8 +114,8 @@ export class FirstPerson {
     this.last = -1;
   }
   // `meta` is the wool colour (the stack's damage) of a held block.
-  select(id, meta = 0) {
-    const key = id + ":" + meta;
+  select(id, meta = 0, use = 0) {
+    const key = id + ":" + meta + ":" + use;
     if (key === this.last) return;
     this.last = key;
     if (this.item) {
@@ -124,7 +129,7 @@ export class FirstPerson {
     this.arm.visible = !id;
     if (!id || !data) return;
     let mesh;
-    const url = itemTexture(id, meta);
+    const url = itemTexture(id, meta, use);
     if (url) {
       mesh = new THREE.Mesh(
         spriteGeometry(),
@@ -158,12 +163,13 @@ export class FirstPerson {
     return m;
   }
   // `light` is the packed brightness at the player; `view` the world camera.
-  render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0 } = {}) {
+  render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0, bow = null } = {}) {
     if (!visible) return;
-    this.select(pose.item, pose.meta);
+    // `bow` is { stage, draw } while the bow is drawn (bow.js bowStage and the draw term).
+    this.select(pose.item, pose.meta, bow ? bow.stage : 0);
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
-    this.pivot.matrix.copy(firstPersonMatrix(pose,{sprite:this.sprite,eatingTicks:eating}));
+    this.pivot.matrix.copy(firstPersonMatrix(pose,{sprite:this.sprite,eatingTicks:eating,bowDraw:bow ? bow.draw : null}));
     // Keep the native pose visible when the browser panel is narrower than a game window.
     if(this.camera.aspect<1.3)this.pivot.matrix.premultiply(new THREE.Matrix4().makeTranslation((pose.item ? .56 : .64)*(this.camera.aspect/1.3-1),0,0));
     if (view) this.lights.forEach((l, i) => l.copy(ITEM_LIGHTS[i]).transformDirection(view.matrixWorldInverse));

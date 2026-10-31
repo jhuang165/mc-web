@@ -267,8 +267,9 @@ export function armorLayer(id, pass) {
 const FULL3D_KINDS = new Set(["pickaxe", "axe", "shovel", "hoe", "sword"]);
 // Item.isFull3D: tools, hoes and swords, plus the stick and bone (setFull3D).
 export const isFull3D = (id) => FULL3D_KINDS.has(ITEMS[id]?.kind) || id === 300 || id === 311;
-// "block" draws the cube, "tool" a full-3D sprite and "flat" any other sprite.
-export const heldKind = (id, damage = 0) => (itemTexture(id, damage) ? (isFull3D(id) ? "tool" : "flat") : "block");
+// "block" draws the cube, "tool" a full-3D sprite, "flat" any other sprite and "bow" the
+// bow's own transform (RenderPlayer and RenderBiped test `item.id == Items.bow.itemID`).
+export const heldKind = (id, damage = 0) => (id === 127 ? "bow" : itemTexture(id, damage) ? (isFull3D(id) ? "tool" : "flat") : "block");
 
 // The matrix from the right arm's frame (after postRender) to the item.
 export function heldItemMatrix(kind) {
@@ -285,7 +286,16 @@ export function heldItemMatrix(kind) {
     rotate("y", 45);
     scale(-s, -s, s);
   } else {
-    if (kind === "tool") {
+    if (kind === "bow") {
+      // The bow branch of RenderPlayer.renderSpecials (bop.a): it is held upright, a
+      // little in front of the hand, and turned 20 degrees about y.
+      const s = 0.625;
+      translate(0, 0.125, 0.3125);
+      rotate("y", -20);
+      scale(s, -s, s);
+      rotate("x", -100);
+      rotate("y", 45);
+    } else if (kind === "tool") {
       const s = 0.625;
       translate(0, 0.1875, 0);
       scale(s, -s, s);

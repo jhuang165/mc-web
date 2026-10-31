@@ -46,6 +46,8 @@ import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
+import { Arrows, arrowTargets, releaseBow, canDraw, bowStage, bowFov, easeFov, BOW, ARROW } from "./bow.js";
+import { canSeeSky } from "./weather.js";
 import { Fluids, waterAcceleration, entityWaterBox, inLava, liquidInBox } from "./fluids.js";
 import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
 import { PlayerMotion, sneakEdge, moveWeights, isCritical, ATTACK_SLOWDOWN } from "./player-movement.js";
@@ -149,6 +151,10 @@ let survival = new Survival({}, "creative"),
 const items = new ItemEntities();
 // Thrown snowballs and their particles (see projectiles.js).
 const projectiles = new Projectiles();
+// Arrows in flight or stuck in blocks (bow.js) and the eased field-of-view modifier the
+// bow draw drives (EntityRenderer.fovModifierHand and its previous value).
+const arrows = new Arrows();
+const bowFovState = { prev: 1, cur: 1 };
 $("#app").innerHTML = `
  <div id="viewport" aria-label="Interactive voxel world"></div><div id="vignette"></div>
  <main id="home" class="minecraft-home">
@@ -437,6 +443,7 @@ function save() {
   active.player = survival.serialize();
   active.drops = items.serialize();
   active.projectiles = projectiles.serialize();
+  active.arrows = arrows.serialize();
   active.weather = weather.save();
   // Items on the cursor or in a crafting grid return to the saved inventory, as closing the screen would.
   const pending = containerView ? [containerView.container.inv.cursor, ...(containerView.container.grid?.stacks || [])].filter(Boolean).map(copyStack) : [];
@@ -577,6 +584,12 @@ function launch(record) {
     mobs.lightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, scene.subtracted) : 15);
     // Entity.isWet: rain puts out burning mobs and stops zombies burning in the sun.
     mobs.wet = (e, height) => isWet(weather, world, e, height);
+    // World.isDaytime (skylightSubtracted < 4) and Chunk.canBlockSeeTheSky for the skeleton's
+    // sunburn and its sun tasks; EntitySkeleton's arrows come from bow.js.
+    mobs.isDaytime = () => (scene.subtracted ?? 0) < 4;
+    mobs.canSeeSky = (x, y, z) => canSeeSky(world, x, y, z);
+    mobs.shoot = (e, target, scale) => arrows.skeletonShoot(e, target, scale);
+    arrows.wet = (a) => isWet(weather, world, { x: a.x, y: a.y, z: a.z, inWater: a.water }, 0.5);
     mobRenderer.clear();
     animation.reset();
     eating = null;
@@ -622,6 +635,8 @@ function launch(record) {
       survival.time,
     );
     projectiles.load(record.projectiles);
+    arrows.load(record.arrows);
+    scene.setArrows(arrows.list);
     velocity.set(0, 0, 0);
     flying = false;
     grounded = false;
@@ -1094,12 +1109,41 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // EntityEgg.onImpact: hatched chicks join the mob list.
   for (const h of projectiles.drain()) if (mobs) for (let i = 0; i < h.chicks; i++) mobs.hatch(h.x, h.y, h.z, h.yaw);
   if (mobs) handleEntityEvents();
+  tickArrows();
   scene.setDrops(items.items);
   scene.setProjectiles(projectiles.balls, projectiles.particles);
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();
   if (survival.health <= 0 && !survival.creative) die();
+}
+// EntityArrow.onUpdate for every arrow, then the player's pickup of stuck ones
+// (EntityArrow.onCollideWithPlayer) and the sounds they made.
+function tickArrows() {
+  arrows.tick(world, { targets: arrowTargets(mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), survival.creative), mobs, survival, player: position });
+  if (survival.health > 0 && arrows.collect(entityBox(position, PHYSICS.width, PHYSICS.height), survival)) {
+    renderHotbar();
+    saved = false;
+  }
+  flushArrows();
+}
+// The sounds the arrows made (the bow's, the hits', the pickup's) and the arrows to draw.
+function flushArrows() {
+  for (const e of arrows.drain())
+    sounds.play(e.sound, e.position ? { volume: e.volume, pitch: e.pitch, position: e.position } : { volume: e.volume, pitch: e.pitch });
+  scene.setArrows(arrows.list);
+}
+// ItemBow.onPlayerStoppedUsing: the right button was let go after `eating.ticks` ticks of draw.
+function releaseBowUse() {
+  const draw = eating;
+  if (!draw?.bow) return;
+  eating = null;
+  if (screen !== "playing" || heldId() !== BOW) return;
+  if (releaseBow({ survival, arrows, ticks: draw.ticks, feet: position, yaw, pitch })) {
+    flushArrows();
+    renderHotbar();
+    saved = false;
+  }
 }
 function applyFarmUpdates(updates){const chunks=new Set();for(const[x,y,z]of updates)chunks.add([Math.floor(x/16)*16,Math.floor(z/16)*16].join(','));for(const key of chunks)scene.buildChunk(...key.split(',').map(Number));}
 function handleEntityEvents() {
@@ -1192,6 +1236,12 @@ function edit(place = false) {
   }
   // ItemBucket / ItemBucketMilk: Minecraft.rightClickMouse tries the aimed entity (a cow
   // takes an empty bucket) and block first, then onItemRightClick; neither swings.
+  // ItemBow.onItemRightClick (abm.a): with an arrow (or in Creative) the draw begins and
+  // runs while the button is held (setItemInUse); nothing else happens, and no swing.
+  if (place && id === BOW && !usesBlock) {
+    if (!eating && canDraw(survival)) eating = { id: BOW, ticks: 0, bow: true };
+    return;
+  }
   if (place && isBucket(item) && !usesBlock) {
     useBucketItem(id);
     return;
@@ -1631,7 +1681,10 @@ function movementTick() {
   if (eating) {
     if (heldId() !== eating.id)
       eating = null;
-    else {
+    else if (eating.bow) {
+      // EntityPlayer.onUpdate counts the use down; the draw length is the ticks since.
+      eating.ticks++;
+    } else {
       eating.ticks--;
       if (!eating.drink && eating.ticks % 4 === 0)
         sounds.play("random.eat", {
@@ -1657,6 +1710,8 @@ function movementTick() {
     }
   }
   if (survival.health <= 0 && !survival.creative) die();
+  // EntityRenderer.updateFovModifierHand: once a tick, toward the bow term of getFOVMultiplier.
+  easeFov(bowFovState, eating?.bow ? bowFov(eating.ticks) : 1);
   tickMining();
   reportBrokenTool();
 }
@@ -1892,6 +1947,7 @@ function setupPointer() {
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener("pointerup", (e) => {
+    if (e.button === 2) releaseBowUse();
     if (dragging && dragDistance < 5 && e.pointerType !== "touch") edit(false);
     dragging = false;
     mineHeld = false;
@@ -2051,6 +2107,12 @@ function animate(now) {
   if(xpRenderer)xpRenderer.update(xpOrbs.orbs,partial);
   scene.dropPartial = partial;
   scene.setShadows(screen === "home" ? [] : shadowCasters(scene.dropPartial), { x: position.x, y: position.y + PHYSICS.eye, z: position.z });
+  // EntityRenderer.getFOVModifier multiplies the field of view by the eased bow term.
+  const fov = options.fov * (bowFovState.prev + (bowFovState.cur - bowFovState.prev) * partial);
+  if (Math.abs(scene.camera.fov - fov) > 1e-9) {
+    scene.camera.fov = fov;
+    scene.camera.updateProjectionMatrix();
+  }
   scene.render(elapsed, dt);
   if (firstPerson && animate.pose)
     firstPerson.render(animate.pose, {
@@ -2058,7 +2120,9 @@ function animate(now) {
       light: scene.brightness(scene.camera.position.x, scene.camera.position.y, scene.camera.position.z),
       view: scene.camera,
       time: elapsed,
-      eating: eating ? Math.max(0,eating.ticks-accumulator/PHYSICS.tick) : null,
+      eating: eating && !eating.bow ? Math.max(0,eating.ticks-accumulator/PHYSICS.tick) : null,
+      // The bow's icon follows the whole ticks of draw; its pull uses the ticks - 1 + partial.
+      bow: eating?.bow ? { stage: bowStage(eating.ticks), draw: eating.ticks - 1 + partial } : null,
     });
 }
 // Entities that cast a shadow, as Java positions: an item's posY is 0.125
@@ -2102,7 +2166,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, get mobs() { return mobs; }, breakBlock, get weather() { return weather; } };
+    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, breakBlock, get weather() { return weather; } };
   scene.preview(0);
   scene.render(0);
   renderWorlds();

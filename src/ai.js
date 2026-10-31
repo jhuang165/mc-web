@@ -561,6 +561,105 @@ class AttackOnCollide extends Task {
     }
   }
 }
+// EntityAIArrowAttack (vd, speed 1.0, min 20, max 60, range 15), mutex 3, for the skeleton:
+// while it has an attack target it walks to it (the path is dropped once the target has been
+// seen for 20 ticks within the range), looks at it, and when the shot timer reaches 0 shoots
+// if the target is in range and seen, with a power of distance / range clamped to
+// [0.1, 1]; the next shot is floor(distance / range * (max - min) + min) ticks away.
+class ArrowAttack extends Task {
+  constructor(m, speed, min, max, range) {
+    super();
+    this.m = m;
+    this.speed = speed;
+    this.min = min;
+    this.max = max;
+    this.range = f(range);
+    this.rangeSq = f(this.range * this.range);
+    this.mutex = 3;
+    this.target = null;
+    this.time = -1;
+    this.seen = 0;
+  }
+  shouldExecute() {
+    const t = this.m.attackTarget;
+    if (!t) return false;
+    this.target = t;
+    return true;
+  }
+  continueExecuting() {
+    return this.shouldExecute() || !this.m.navigator.noPath();
+  }
+  resetTask() {
+    this.target = null;
+    this.seen = 0;
+    this.time = -1;
+  }
+  updateTask() {
+    const m = this.m, t = this.target, d = m.distSq(t), sees = m.canSee(t);
+    if (sees) this.seen++;
+    else this.seen = 0;
+    if (d <= this.rangeSq && this.seen >= 20) m.navigator.clearPathEntity();
+    else m.navigator.tryMoveToEntityLiving(t, this.speed);
+    m.lookHelper.setLookPositionWithEntity(t, 30, 30);
+    if (--this.time === 0) {
+      if (d > this.rangeSq || !sees) return;
+      const fraction = f(f(Math.sqrt(d)) / this.range), scale = fraction < f(0.1) ? f(0.1) : fraction > 1 ? 1 : fraction;
+      m.ai.rangedAttack(m, t, scale);
+      this.time = Math.floor(f(f(fraction * (this.max - this.min)) + this.min));
+    } else if (this.time < 0) {
+      const fraction = f(f(Math.sqrt(d)) / this.range);
+      this.time = Math.floor(f(f(fraction * (this.max - this.min)) + this.min));
+    }
+  }
+}
+// EntityAIRestrictSun (vf): in daylight the navigator avoids paths under open sky.
+class RestrictSun extends Task {
+  constructor(m) {
+    super();
+    this.m = m;
+  }
+  shouldExecute() {
+    return this.m.ai.isDaytime();
+  }
+  startExecuting() {
+    this.m.navigator.setAvoidSun(true);
+  }
+  resetTask() {
+    this.m.navigator.setAvoidSun(false);
+  }
+}
+// EntityAIFleeSun (ue, speed 1.0), mutex 1: a burning creature under open sky in daylight
+// looks for a shade (ten random cells within +-10, -3..+2, +-10 that cannot see the sky
+// and have a negative path weight) and walks to it.
+class FleeSun extends Task {
+  constructor(m, speed) {
+    super();
+    this.m = m;
+    this.speed = speed;
+    this.mutex = 1;
+    this.target = null;
+  }
+  shouldExecute() {
+    const m = this.m, ai = m.ai;
+    if (!ai.isDaytime() || !m.e.fire || m.e.fire <= 0) return false;
+    if (!ai.canSeeSky(Math.floor(m.x), Math.trunc(m.minY), Math.floor(m.z))) return false;
+    const r = m.rand;
+    for (let i = 0; i < 10; i++) {
+      const x = Math.floor(m.x + r.nextInt(20) - 10), y = Math.floor(m.minY + r.nextInt(6) - 3), z = Math.floor(m.z + r.nextInt(20) - 10);
+      if (!ai.canSeeSky(x, y, z) && m.getBlockPathWeight(x, y, z) < 0) {
+        this.target = { x, y, z };
+        return true;
+      }
+    }
+    return false;
+  }
+  continueExecuting() {
+    return !this.m.navigator.noPath();
+  }
+  startExecuting() {
+    this.m.navigator.tryMoveToXYZ(this.target.x, this.target.y, this.target.z, this.speed);
+  }
+}
 // EntityAINearestAttackableTarget (vo, EntityPlayer, chance 0, checks sight) and its
 // base EntityAITarget (vu), mutex 1. A suitable target is a living, not creative
 // player the mob can see; the nearest one in a box of follow range by 4 blocks (by
@@ -623,9 +722,10 @@ class NearestAttackable extends TargetBase {
 // player who hit it) becomes the attack target, sight not required, and idle mobs of
 // the kind within the follow range take it too.
 class HurtByTarget extends TargetBase {
-  constructor(m) {
+  constructor(m, help = true) {
     super(m, false);
     this.last = 0;
+    this.help = help;
   }
   shouldExecute() {
     const m = this.m;
@@ -636,7 +736,7 @@ class HurtByTarget extends TargetBase {
     m.attackTarget = m.revengeTarget;
     this.last = m.e.revenge;
     const d = this.range();
-    for (const o of m.nearby(d, 10, d, (b) => b.e.type === m.e.type, 1)) if (!o.attackTarget) o.attackTarget = m.revengeTarget;
+    if (this.help) for (const o of m.nearby(d, 10, d, (b) => b.e.type === m.e.type, 1)) if (!o.attackTarget) o.attackTarget = m.revengeTarget;
     super.startExecuting();
   }
 }
@@ -669,6 +769,19 @@ export class Brain {
       this.tasks.add(7, new WatchClosest(this, 8));
       this.tasks.add(8, new LookIdle(this));
       this.targets.add(1, new HurtByTarget(this));
+      this.targets.add(2, new NearestAttackable(this));
+    } else if (e.type === "skeleton") {
+      // EntitySkeleton (yl): swim 1, restrict sun 2, flee sun 3, the bow's arrow attack 4
+      // (setCombatTask, with a bow in hand), wander 5, watch the player 6, look idle 6;
+      // targets hurt-by 1 (no call for help) and the nearest visible player 2.
+      this.tasks.add(1, new Swim(this));
+      this.tasks.add(2, new RestrictSun(this));
+      this.tasks.add(3, new FleeSun(this, 1));
+      this.tasks.add(4, new ArrowAttack(this, 1, 20, 60, 15));
+      this.tasks.add(5, new Wander(this, A.wander));
+      this.tasks.add(6, new WatchClosest(this, 8));
+      this.tasks.add(6, new LookIdle(this));
+      this.targets.add(1, new HurtByTarget(this, false));
       this.targets.add(2, new NearestAttackable(this));
     } else {
       // EntityPig/Cow/Sheep/Chicken: swim 0, panic 1, mate 2, tempt 3, follow parent
@@ -788,7 +901,7 @@ export class Brain {
   // EntityMob (yg): 0.5 - brightness.
   getBlockPathWeight(x, y, z) {
     const w = this.ai.world;
-    if (this.e.type === "zombie") return f(f(0.5) - this.ai.brightness(x, y, z));
+    if (this.e.type === "zombie" || this.e.type === "skeleton") return f(f(0.5) - this.ai.brightness(x, y, z));
     return w.get(x, y - 1, z) === GRASS ? f(10) : f(this.ai.brightness(x, y, z) - f(0.5));
   }
   // sw.bn(): the AI half of onLivingUpdate. Despawning and the idle age come first, then
@@ -813,7 +926,7 @@ export class Brain {
   despawnEntity() {
     const e = this.e, p = this.ai.player;
     if ((e.idle & 31) !== 31 || !p) return;
-    const d3 = this.distSq(p), can = e.type === "zombie";
+    const d3 = this.distSq(p), can = e.type === "zombie" || e.type === "skeleton";
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
     if (d3 < 1024) e.idle = 0;
@@ -918,6 +1031,17 @@ export class MobAI {
         }
     }
     return BRIGHTNESS[Math.max(0, Math.min(15, level))];
+  }
+  // World.isDaytime and Chunk.canBlockSeeTheSky for the sun tasks (hooked by the world).
+  isDaytime() {
+    return !!this.deps.isDaytime?.();
+  }
+  canSeeSky(x, y, z) {
+    return !!this.deps.canSeeSky?.(x, y, z);
+  }
+  // EntitySkeleton.attackEntityWithRangedAttack: the shooter and the target's view.
+  rangedAttack(m, target, scale) {
+    this.deps.rangedAttack?.(m.e, target, scale);
   }
   spawnBaby(a, b) {
     return this.deps.spawnBaby(a.e, b.e);

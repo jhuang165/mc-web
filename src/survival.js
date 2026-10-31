@@ -58,6 +58,12 @@ for (const item of Object.values(ITEMS))
     item.attack = { sword: 4, axe: 3, pickaxe: 2, shovel: 1 }[item.kind] + (item.name.startsWith("Golden") ? 0 : item.tier);
 for(const [tier,name,durability,ingredient]of[[0,'Wooden',59,7],[1,'Stone',131,12],[2,'Iron',250,302],[3,'Diamond',1561,303],[0,'Golden',32,304]]){const id=120+Object.values(ITEMS).filter(i=>i.kind==='hoe').length;ITEMS[id]={id,name:name+' hoe',kind:'hoe',tier,durability,speed:1,ingredient,stack:1,color:'#b7a274',glyph:'⚒'};}
 ITEMS[125]={id:125,name:"Shears",kind:"shears",durability:238,speed:1,stack:1,color:"#d8d8d8"};
+// ItemBow (abq: Item.bow, Minecraft 261): stack 1, durability 384, EnumAction.bow, max use
+// duration 72000. Item.arrow (262) and Item.string (287) are plain items. The ids are this
+// build's own (127, 320, 321); see src/bow.js.
+ITEMS[127]={id:127,name:"Bow",kind:"bow",texture:"bow_standby",durability:384,stack:1,color:"#8d6a3f",glyph:")"};
+ITEMS[320]={id:320,name:"Arrow",texture:"arrow",stack:64,color:"#b0905f",glyph:"\u2191"};
+ITEMS[321]={id:321,name:"String",texture:"string",stack:64,color:"#eee",glyph:"~"};
 for (const item of [
   {id:312,name:"Snowball",color:"#fff",glyph:"●",stack:16},{id:315,name:"Leather",color:"#a06540",glyph:"▰",texture:"leather"},{id:313,name:"Flint",color:"#555",glyph:"◆"},{id:314,name:"Book",color:"#8d4f39",glyph:"▰"},
   // ItemEgg (344, stack 16), Item.feather (288), and ItemFood chicken (365: 2 hunger, 0.3
@@ -214,6 +220,10 @@ function recipe(id, name, rows, keys, output, count = 1) {
   });
 }
 recipe("shears","Shears",[" I","I "],{I:302},125);
+// RecipesWeapons (afl): bow " #X","# X"," #X" with stick and string (the mirror matches
+// too), arrow "X","#","Y" with flint, stick and feather for four arrows.
+recipe("bow","Bow",[" #X","# X"," #X"],{"#":300,X:321},127);
+recipe("arrow","Arrow",["X","#","Y"],{X:313,"#":300,Y:317},320,4);
 // CraftingManager: "# #", " # " of iron ingots makes one bucket.
 recipe("bucket","Bucket",["I I"," I "],{I:302},340);
 recipe("snow","Snow block",["SS","SS"],{S:312},23);

@@ -5,6 +5,8 @@ import { entityMaterial } from "./light-material.js";
 import { ENTITY_TYPES, mobPose } from "./entities.js";
 import { FLEECE_COLORS } from "./sheep.js";
 import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
+import { heldItemMatrix } from "./player-renderer.js";
+import { spriteGeometry } from "./sprite-geometry.js";
 const RAD = Math.PI / 180;
 export class MobRenderer {
   // `view` supplies the lightmap and world brightness (VoxelScene).
@@ -104,7 +106,57 @@ export class MobRenderer {
     this.scene.add(root);
     return { root, neck, limbs, wings, materials: [skin], type: "chicken" };
   }
+  // RenderSkeleton (bos) with ModelSkeleton (bic, skeleton.png 64 x 32) and RenderBiped's
+  // held item (the bow in the right hand). Pivots and boxes are the model's own at 1:1
+  // (ModelBiped is 32 pixels tall; the skeleton's box is 1.8): three.js gets
+  // (x, 24 - y, -z) / 16 like the sheep, and RendererLivingEntity's translate(0, -24 *
+  // 0.0625 - 0.0078125) lifts it by 1/128. The arms and legs are 2 x 12 x 2, the left pair
+  // mirrored.
+  createSkeleton() {
+    const root = new THREE.Group(), frame = new THREE.Group(), limbs = [],
+      material = entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/entity/skeleton/skeleton.png") }),
+      materials = [material];
+    frame.position.y = 1 / 128;
+    root.add(frame);
+    const part = (parent, w, h, d, u, v, ox, oy, oz, mirror = false) => {
+      const mesh = new THREE.Mesh(skinBox(w, h, d, u, v, 64, 32, mirror), material);
+      mesh.position.set((ox + w / 2) / 16, -(oy + h / 2) / 16, -(oz + d / 2) / 16);
+      parent.add(mesh);
+      return mesh;
+    };
+    const pivot = (x, y, z) => {
+      const g = new THREE.Group();
+      g.position.set(x / 16, (24 - y) / 16, -z / 16);
+      frame.add(g);
+      return g;
+    };
+    const neck = pivot(0, 0, 0);
+    neck.rotation.order = "YXZ";
+    part(neck, 8, 8, 8, 0, 0, -4, -8, -4);
+    part(frame, 8, 12, 4, 16, 16, -4, 0, -2);
+    // Right arm, left arm, right leg, left leg (the order limbAngles drives them in).
+    for (const [x, y, arm, mirror] of [[-5, 2, true, false], [5, 2, true, true], [-2, 12, false, false], [2, 12, false, true]]) {
+      const g = pivot(x, y, 0);
+      part(g, 2, 12, 2, arm ? 40 : 0, 16, -1, arm ? -2 : 0, -1, mirror);
+      if (arm) g.rotation.order = "ZYX";
+      limbs.push(g);
+    }
+    // RenderBiped.renderEquippedItems: after the right arm's postRender the bow's transform;
+    // the group undoes the (x, -y, -z) frame so the matrix is in the model's own axes.
+    const mc = new THREE.Group(), bow = new THREE.Mesh(spriteGeometry(), entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/items/bow_standby.png"), side: THREE.DoubleSide }));
+    materials.push(bow.material);
+    mc.scale.set(1, -1, -1);
+    const held = new THREE.Group();
+    held.matrixAutoUpdate = false;
+    held.matrix.copy(heldItemMatrix("bow"));
+    held.add(bow);
+    mc.add(held);
+    limbs[0].add(mc);
+    this.scene.add(root);
+    return { root, neck, limbs, materials, type: "skeleton" };
+  }
   create(e) {
+    if (e.type === "skeleton") return this.createSkeleton();
     if (e.type === "chicken") return this.createChicken();
     if (e.type === "sheep") return this.createSheep();
     const root = new THREE.Group(),
@@ -263,7 +315,7 @@ export class MobRenderer {
       // ageInTicks (ticksExisted + partial); the Java Y/Z angles flip sign here.
       const sway = mhSin(pose.age * 0.067) * 0.05, spread = mhCos(pose.age * 0.09) * 0.05 + 0.05;
       r.limbs.forEach((l, i) => {
-        if (e.type === "zombie" && i < 2) {
+        if ((e.type === "zombie" || e.type === "skeleton") && i < 2) {
           const side = i === 0 ? 1 : -1;
           l.rotation.set(-Math.PI / 2 + side * sway, side * 0.1, -side * spread);
         } else l.rotation.x = angles[i];

@@ -8,6 +8,7 @@ import { Sky, Clouds } from "./sky.js";
 import { liquidHeight, flowAngle, viewpointBlock } from "./fluids.js";
 import { DropRenderer } from "./drop-renderer.js";
 import { ProjectileRenderer } from "./projectile-renderer.js";
+import { ArrowRenderer } from "./arrow-renderer.js";
 import { ShadowRenderer } from "./shadows.js";
 import { WeatherRenderer } from "./weather-renderer.js";
 export { blockTile } from "./block-textures.js";
@@ -87,6 +88,8 @@ export class VoxelScene {
     this.drops = new DropRenderer(this.scene, this);
     this.projectiles = new ProjectileRenderer(this.scene, this);
     this.projectileList = { balls: [], particles: [] };
+    this.arrows = new ArrowRenderer(this.scene, this);
+    this.arrowList = [];
     this.shadows = new ShadowRenderer(this.scene, this.lighting);
     this.weather = null; // a Weather (weather.js), assigned by main.js
     this.weatherRenderer = new WeatherRenderer(this.scene, this.lighting, this);
@@ -148,6 +151,8 @@ export class VoxelScene {
     this.drops.clear();
     this.dropList = [];
     this.projectiles.clear();
+    this.arrows.clear();
+    this.arrowList = [];
     this.projectileList = { balls: [], particles: [] };
     this.world = world;
     this.textures.setBiome(world.biome);
@@ -400,6 +405,7 @@ export class VoxelScene {
     this.weatherRenderer.update(w, this.world, c, partial, time);
     this.drops.update(this.dropList, this.dropPartial, time * 20);
     this.projectiles.update(this.projectileList.balls, this.projectileList.particles, c, this.dropPartial);
+    this.arrows.update(this.arrowList, this.dropPartial);
     this.sky.render(this.renderer, c, new THREE.Color(...fog));
     this.renderer.render(this.scene, c);
     this.worldTriangles = this.renderer.info.render.triangles;
@@ -417,6 +423,10 @@ export class VoxelScene {
   // Thrown snowballs and their particles (see projectiles.js).
   setProjectiles(balls, particles) {
     this.projectileList = { balls, particles };
+  }
+  // Flying and stuck arrows (see bow.js).
+  setArrows(list) {
+    this.arrowList = list;
   }
   setDistance(distance) {
     this.distance = distance;
