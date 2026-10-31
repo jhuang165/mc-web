@@ -1,5 +1,6 @@
 // EntitySnowball (zj) from the 1.7.10 JAR, with EntityThrowable (zk) and
-// ItemSnowball (aed). Snowballs are 0.25 x 0.25 boxes thrown from the eye at
+// ItemSnowball (aed); EntityEgg (zl) shares all of it and differs only in onImpact
+// (see `layEggs`) and its item icon. Snowballs are 0.25 x 0.25 boxes thrown from the eye at
 // 1.5 blocks/tick with gaussian inaccuracy, drag 0.99 (0.8 in water), gravity
 // 0.03, a World.rayTraceBlocks (ahb.a) sweep each tick and an entity sweep
 // (expand 0.3) that skips the thrower for the first five ticks. A hit deals
@@ -36,6 +37,16 @@ export class GaussianRandom extends JavaRandom {
     return v1 * m;
   }
 }
+
+// java.util.Random.nextInt(bound): a power of two takes the high bits, otherwise
+// the value is redrawn while the modulo would be biased (int overflow).
+GaussianRandom.prototype.nextInt = function (bound) {
+  let r = this.next(31);
+  const m = bound - 1;
+  if ((bound & m) === 0) return Math.floor((bound * r) / 2 ** 31);
+  for (let u = r; ((u - (r = u % bound) + m) | 0) < 0; u = this.next(31));
+  return r;
+};
 
 // MathHelper.sqrt_double (qh.a(D)F).
 const sqrtF = (v) => f(Math.sqrt(v));
@@ -249,6 +260,7 @@ export class Projectiles {
     this.random = random;
     this.balls = [];
     this.particles = [];
+    this.events = [];
   }
   // Entity.rand is a fresh java.util.Random per entity.
   rng() {
@@ -256,11 +268,30 @@ export class Projectiles {
   }
   // ItemSnowball.onItemRightClick (aed.a) spawns this; the stack and sound are
   // the caller's. lastTickPos starts at the spawn point.
-  throwSnowball(feet, yaw, pitch) {
+  throwSnowball(feet, yaw, pitch, kind = "snowball") {
     const rand = this.rng(), h = launch(rand, feet, yaw, pitch),
-      ball = { ...h, px: h.x, py: h.y, pz: h.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand, dead: false };
+      ball = { ...h, kind, px: h.x, py: h.y, pz: h.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand, dead: false };
     this.balls.push(ball);
     return ball;
+  }
+  // ItemEgg.onItemRightClick (ack.a) spawns an EntityEgg (zl) the same way.
+  throwEgg(feet, yaw, pitch) {
+    return this.throwSnowball(feet, yaw, pitch, "egg");
+  }
+  // EntityEgg.onImpact (zl.a) after the 0-damage hit: with probability 1/8 a chick
+  // hatches (rand.nextInt(8) == 0), four of them with 1/32 (rand.nextInt(32) == 0),
+  // each a child (age -24000) at the egg's position with its rotationYaw and pitch 0.
+  // The caller turns the event into mobs; `yaw` is the egg's Java yaw in degrees.
+  layEggs(b) {
+    if (b.rand.nextInt(8) !== 0) return 0;
+    const count = b.rand.nextInt(32) === 0 ? 4 : 1;
+    this.events.push({ chicks: count, x: b.x, y: b.y, z: b.z, yaw: b.yaw });
+    return count;
+  }
+  drain() {
+    const events = this.events;
+    this.events = [];
+    return events;
   }
   // EntityThrowable.onUpdate (zk.h) for every ball, then EffectRenderer's
   // update of the particles. `onHit(ref, ball)` applies the 0-damage hit.
@@ -309,6 +340,7 @@ export class Projectiles {
       // EntitySnowball.onImpact (zj.a): attackEntityFrom(thrown damage 0),
       // eight snowballpoof at the ball's current position, then setDead.
       if (hit) onHit(hit.ref, b);
+      if (b.kind === "egg") this.layEggs(b);
       for (let i = 0; i < PARTICLES; i++) this.poof(b.x, b.y, b.z);
       b.dead = true;
       return;
@@ -415,7 +447,7 @@ export class Projectiles {
   // vestigial in-ground fields); ticksInAir is not saved, so loaded balls
   // start at 0. Particles are not saved.
   serialize() {
-    return this.balls.map((b) => ({ x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch }));
+    return this.balls.map((b) => ({ x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch, ...(b.kind === "egg" ? { kind: "egg" } : {}) }));
   }
   load(list) {
     this.clear();
@@ -423,11 +455,12 @@ export class Projectiles {
     for (const d of Array.isArray(list) ? list : [])
       if (d && [d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok)) {
         const yaw = ok(d.yaw) ? f(d.yaw) : 0, pitch = ok(d.pitch) ? f(d.pitch) : 0;
-        this.balls.push({ x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand: this.rng(), dead: false });
+        this.balls.push({ kind: d.kind === "egg" ? "egg" : "snowball", x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand: this.rng(), dead: false });
       }
   }
   clear() {
     this.balls = [];
     this.particles = [];
+    this.events = [];
   }
 }

@@ -16,6 +16,8 @@ export const SHADOWS = {
   pig: { size: f(0.7), opaque: 1 },
   cow: { size: f(0.7), opaque: 1 },
   sheep: { size: f(0.7), opaque: 1 },
+  // RenderChicken: super(new ModelChicken(), 0.3F).
+  chicken: { size: f(0.3), opaque: 1 },
   zombie: { size: f(0.5), opaque: 1 },
   // RenderPlayer: super(new ModelBiped(0), 0.5).
   player: { size: f(0.5), opaque: 1 },

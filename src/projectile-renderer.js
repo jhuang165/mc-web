@@ -9,7 +9,7 @@ import * as THREE from "three";
 import { entityMaterial } from "./light-material.js";
 import { itemTexture, pixelTexture } from "./first-person.js";
 
-const SNOWBALL = 312;
+const SNOWBALL = 312, EGG = 316;
 // Entity.getBrightnessForRender samples floor(posY - yOffset + height * 0.66):
 // 0.165 above the ball's posY, 0.032 above a particle's centre.
 const BALL_LIGHT = 0.25 * 0.66, FX_LIGHT = 0.2 * 0.66 - 0.2 / 2;
@@ -28,11 +28,13 @@ export class ProjectileRenderer {
     this.right = new THREE.Vector3();
     this.up = new THREE.Vector3();
   }
-  texture() {
-    return pixelTexture(itemTexture(SNOWBALL));
+  // RenderSnowball(item): an egg uses the egg icon, a snowball the snowball icon;
+  // the "snowballpoof" particles (EntityBreakingFX with Items.snowball) always show the snowball.
+  texture(kind) {
+    return pixelTexture(itemTexture(kind === "egg" ? EGG : SNOWBALL));
   }
-  material() {
-    return entityMaterial(this.view.lighting, { map: this.texture(), alphaTest: 0.1 });
+  material(kind) {
+    return entityMaterial(this.view.lighting, { map: this.texture(kind), alphaTest: 0.1 });
   }
   // `partial` is the fraction of the current tick; balls interpolate from
   // lastTickPos (RenderManager), particles from prevPos.
@@ -42,7 +44,7 @@ export class ProjectileRenderer {
       seen.add(b);
       let m = this.balls.get(b);
       if (!m) {
-        const material = this.material(), mesh = new THREE.Mesh(this.sprite, material);
+        const material = this.material(b.kind), mesh = new THREE.Mesh(this.sprite, material);
         mesh.scale.setScalar(0.5);
         mesh.frustumCulled = false;
         this.scene.add(mesh);

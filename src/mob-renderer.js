@@ -62,7 +62,50 @@ export class MobRenderer {
     this.scene.add(root);
     return { root, neck, limbs, fur, wool, materials: [skin, wool], type: "sheep" };
   }
+  // RenderChicken (bng) with ModelChicken (bhh, chicken.png 64x32). Same model->three.js
+  // mapping as the sheep: (x, 24 - y, -z) / 16, X rotations keep their sign and Z
+  // rotations flip. Head, bill and chin share the (0, 15, -4) pivot; the wings hang off
+  // (+-4, 13, 0) and flap by rotateAngleZ = +-(sin(flap) + 1) * flapSpeed.
+  createChicken() {
+    const root = new THREE.Group(), neck = new THREE.Group(), limbs = [], wings = [],
+      skin = entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/entity/chicken.png") });
+    neck.rotation.order = "YXZ";
+    neck.position.set(0, 9 / 16, 4 / 16);
+    root.add(neck);
+    // Box offsets are relative to the parent's rotation point, as ModelBox's are.
+    const part = (parent, w, h, d, u, v, ox, oy, oz) => {
+      const mesh = new THREE.Mesh(skinBox(w, h, d, u, v, 64, 32), skin);
+      mesh.position.set((ox + w / 2) / 16, -(oy + h / 2) / 16, -(oz + d / 2) / 16);
+      parent.add(mesh);
+      return mesh;
+    };
+    part(neck, 4, 6, 3, 0, 0, -2, -6, -2);
+    part(neck, 4, 2, 2, 14, 0, -2, -4, -4);
+    part(neck, 2, 2, 2, 14, 4, -1, -2, -3);
+    const body = new THREE.Group();
+    body.position.set(0, 8 / 16, 0);
+    body.rotation.x = Math.PI / 2;
+    root.add(body);
+    part(body, 6, 8, 6, 0, 9, -3, -4, -3);
+    for (const x of [-2, 1]) {
+      const leg = new THREE.Group();
+      leg.position.set(x / 16, 5 / 16, -1 / 16);
+      root.add(leg);
+      limbs.push(leg);
+      part(leg, 3, 5, 3, 26, 0, -1, 0, -3);
+    }
+    for (const side of [-1, 1]) {
+      const wing = new THREE.Group();
+      wing.position.set(side * 4 / 16, 11 / 16, 0);
+      root.add(wing);
+      wings.push(wing);
+      part(wing, 1, 4, 6, 24, 13, side < 0 ? 0 : -1, 0, -3);
+    }
+    this.scene.add(root);
+    return { root, neck, limbs, wings, materials: [skin], type: "chicken" };
+  }
   create(e) {
+    if (e.type === "chicken") return this.createChicken();
     if (e.type === "sheep") return this.createSheep();
     const root = new THREE.Group(),
       limbs = [],
@@ -204,6 +247,16 @@ export class MobRenderer {
         r.neck.scale.setScalar(baby ? 2 : 1);
         for (const m of r.fur) m.visible = !e.sheared;
         r.wool.uniforms.tint.value.set(...FLEECE_COLORS[e.color ?? 0]);
+      }
+      if (e.type === "chicken") {
+        // ModelChicken.render: a chick's head, bill and chin stay full size, moved down 5
+        // and back 2 (px / 16) before the rest shrinks to half; the root's x0.5 is undone here.
+        const baby = e.growingAge < 0;
+        r.neck.position.set(0, baby ? 0.5 : 9 / 16, baby ? 0.25 : 4 / 16);
+        r.neck.scale.setScalar(baby ? 2 : 1);
+        // rightWing.rotateAngleZ = flap, leftWing = -flap; Z flips sign in this frame.
+        r.wings[0].rotation.z = -pose.flap;
+        r.wings[1].rotation.z = pose.flap;
       }
       const angles = limbAngles(pose.limbSwing, pose.limbSwingAmount);
       // ModelZombie.setRotationAngles holds the arms out with a sway driven by

@@ -55,6 +55,11 @@ for(const [tier,name,durability,ingredient]of[[0,'Wooden',59,7],[1,'Stone',131,1
 ITEMS[125]={id:125,name:"Shears",kind:"shears",durability:238,speed:1,stack:1,color:"#d8d8d8"};
 for (const item of [
   {id:312,name:"Snowball",color:"#fff",glyph:"●",stack:16},{id:315,name:"Leather",color:"#a06540",glyph:"▰",texture:"leather"},{id:313,name:"Flint",color:"#555",glyph:"◆"},{id:314,name:"Book",color:"#8d4f39",glyph:"▰"},
+  // ItemEgg (344, stack 16), Item.feather (288), and ItemFood chicken (365: 2 hunger, 0.3
+  // saturation, 30 s Hunger effect at 30%) and cooked chicken (366: 6, 0.6). The hunger
+  // effect is not applied here (no status effects yet).
+  {id:316,name:"Egg",color:"#e8d8b0",glyph:"●",stack:16},{id:317,name:"Feather",color:"#eee",glyph:"╱"},
+  {id:318,name:"Raw chicken",food:2,saturation:0.3,color:"#d9a89a",glyph:"◕"},{id:319,name:"Cooked chicken",food:6,saturation:0.6,color:"#b9824f",glyph:"◕"},
   {id:309,name:"Wheat seeds",color:"#8eab54",glyph:"·"},{id:310,name:"Bone meal",color:"#ede9d8",glyph:"●"},{id:311,name:"Bone",color:"#dedac6",glyph:"╱"},
   {
     id: 204,
@@ -308,6 +313,7 @@ export const SMELTING = {
   18: 304,
   4: 308,
   202: 203,
+  318: 319,
   307: 306,
 };
 export const FUELS = {
