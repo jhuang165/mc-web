@@ -13,7 +13,7 @@
 .native-workbench .crafting-panel{left:calc(30*var(--u));top:calc(17*var(--u));width:calc(54*var(--u));height:calc(54*var(--u))}.native-workbench .crafting-grid{grid-template-columns:repeat(3,calc(18*var(--u)))}.native-workbench .craft-result{left:calc(94*var(--u));top:calc(18*var(--u))}
 .native-inventory .native-crafting-label{left:calc(86*var(--u));top:calc(16*var(--u))}.native-workbench .native-crafting-label{left:calc(28*var(--u));top:calc(6*var(--u))}.native-inventory .native-bag-label{display:none}.native-workbench .native-bag-label{display:block;left:calc(8*var(--u));top:calc(72*var(--u))}
 .native-inventory .native-crafting-label,.native-workbench .native-bag-label,.furnace-modal h2{font-size:calc(8*var(--u));line-height:calc(8*var(--u));margin:0;padding:0;text-shadow:none}
-.native-inventory:after,.furnace-modal:after{display:none}.native-player{left:calc(26*var(--u));top:calc(16*var(--u));transform:scale(calc(var(--gui-scale)*.48));transform-origin:top left}
+.native-inventory:after,.furnace-modal:after{display:none}.native-player{left:calc(28.5*var(--u));top:calc(15*var(--u));transform:scale(calc(var(--gui-scale)*.625));transform-origin:top left}
 .furnace-modal h2{top:calc(6*var(--u));left:0;right:0}.furnace-modal:before{left:calc(8*var(--u));top:calc(72*var(--u));font-size:calc(8*var(--u));line-height:calc(8*var(--u))}
 .furnace-modal .furnace-slots>div:first-child{left:calc(56*var(--u));top:calc(17*var(--u))}.furnace-modal .furnace-slots>div:last-child{left:calc(116*var(--u));top:calc(35*var(--u))}.furnace-modal .furnace-fuel{left:calc(56*var(--u));top:calc(53*var(--u))}
 .furnace-modal .furnace-slot{position:relative;display:block;width:calc(16*var(--u));height:calc(16*var(--u));min-height:0;line-height:0;margin:0!important;padding:0!important;overflow:visible}
@@ -82,3 +82,31 @@ body:has(.native-inventory) #toast,body:has(.furnace-modal) #toast{display:none}
 .chest-modal h2{top:calc(6*var(--u))}
 .chest-modal .chest-bag-label{top:calc((var(--rows)*18 + 20)*var(--u))}
 body:has(.chest-modal) #toast{display:none}
+/* GuiContainerCreative (bfl): xSize 195, ySize 136. tabs.png holds the 28 x 32 tab art (u = 28*column; v 0/32 top, 64/96 bottom when selected)
+   and the 12 x 15 scrollbar at u 232 (244 when nothing scrolls). Unselected tabs sit under the background, the selected one over it. */
+.creative-modal{position:relative;width:calc(195*var(--u));height:calc(136*var(--u));min-width:calc(195*var(--u));min-height:0;max-width:none;max-height:none;flex-shrink:0;margin:calc(32*var(--u)) 0;padding:0;border:0;border-radius:0;box-shadow:none;background:none;overflow:visible;transform:none!important;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u))}
+.creative-modal .modal-top{display:none}
+.creative-body{position:absolute;inset:0}
+.creative-background{position:absolute;left:0;top:0;width:calc(195*var(--u));height:calc(136*var(--u));background-repeat:no-repeat;background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated;pointer-events:none;z-index:1}
+.creative-tab{position:absolute!important;width:calc(28*var(--u))!important;height:calc(32*var(--u))!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background-color:transparent!important;background-image:url('/media/1.7.10/gui/container/creative_inventory/tabs.png')!important;background-repeat:no-repeat!important;background-size:calc(256*var(--u)) calc(256*var(--u))!important;image-rendering:pixelated;transform:none!important;z-index:0;cursor:default;outline:0}
+.creative-tab.selected{z-index:3}
+.creative-tab:focus-visible{outline:var(--u) solid #fff}
+.creative-tab>span{position:absolute;width:calc(16*var(--u));height:calc(16*var(--u));line-height:0;pointer-events:none}
+.creative-tab .vanilla-item-icon{display:block;width:calc(16*var(--u));height:calc(16*var(--u));margin:0;padding:0;filter:none;image-rendering:pixelated}
+.creative-strip{background:var(--strip) 0 0/100% calc(var(--frames)*100%) no-repeat}
+.creative-modal h2{position:absolute;left:calc(8*var(--u));top:calc(6*var(--u));margin:0;padding:0;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-align:left;text-shadow:none;white-space:nowrap;pointer-events:none;z-index:2}
+.creative-modal h2[hidden]{display:none}
+.creative-modal .container-slots{z-index:2}
+.container-slot[hidden]{display:none!important}
+/* GuiTextField without its background: white shadowed text at (82, 6), 89 wide; the cursor blinks every 6 ticks. */
+.creative-search{position:absolute;left:calc(82*var(--u));top:calc(6*var(--u));width:calc(89*var(--u));height:calc(9*var(--u));color:#fff;text-shadow:var(--u) var(--u) #3f3f3f;white-space:pre;overflow:hidden;pointer-events:none;z-index:2}
+.creative-search .caret{font-weight:normal;animation:creative-caret .6s steps(1) infinite}
+.creative-search .caret:not(.end){display:inline-block;vertical-align:top;width:var(--u);height:calc(11*var(--u));margin:calc(-1*var(--u)) calc(-1*var(--u)) 0 0;background:#fff;text-shadow:none}
+@keyframes creative-caret{50%{visibility:hidden}}
+.creative-scroll{position:absolute;left:calc(175*var(--u));top:calc(18*var(--u));width:calc(12*var(--u));height:calc(15*var(--u));background:url('/media/1.7.10/gui/container/creative_inventory/tabs.png') no-repeat calc(-232*var(--u)) 0/calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated;pointer-events:none;z-index:2}
+.creative-scroll.disabled{background-position:calc(-244*var(--u)) 0}
+/* func_147046_a(x, y, scale) puts the feet at (x, y), scale/16 pixels per model pixel; the markup is 3 px per model pixel
+   (32 tall, centred 12 across). Inventory (51, 75, 30) is set above; creative uses (43, 45, 20). */
+.creative-modal .native-player{left:calc(28*var(--u));top:calc(5*var(--u));transform:scale(calc(var(--gui-scale)*.41667));z-index:2}
+.slot-tooltip .bold{font-weight:bold}
+body:has(.creative-modal) #toast{display:none}

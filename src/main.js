@@ -27,6 +27,7 @@ import { ChestRenderer } from "./chest-renderer.js";
 import { CHEST, canPlaceChest, placeChest, settleFacing, chestPair, tickLid } from "./chest.js";
 import { Survival, ITEMS, MATERIALS } from "./survival.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
+import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
@@ -113,7 +114,6 @@ let survival = new Survival({}, "creative"),
   mineHeld = false,
   mineCooldown = 0,
   fallDistance = 0,
-  inventorySearch = "",
   containerView = null,
   f3Combo = false;
 // Dropped items as EntityItem physics objects (see item-entities.js).
@@ -335,13 +335,13 @@ function controls() {
       .map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`)
       .join(
         "",
-      )}</div><p class="form-note">Inventories use the 1.7.10 slot rules. Left-click picks up or places a stack; right-click picks up half or places one. Drag a held stack across slots to share it evenly (left) or one each (right). Shift-click moves a stack between sections; double-click gathers matching items. Over a slot, 1 – 9 swaps with the hotbar and Q / Ctrl + Q drops. Click outside the window to throw the held stack. Right-click a crafting table for the 3 × 3 grid, a furnace to smelt or a chest to store items (two side by side form a large chest; a solid block on top keeps the lid shut); two damaged tools of one kind repair each other. F3 + H shows durability in tooltips.</p><p class="form-note">To farm: break tall grass for seeds, right-click exposed grass/dirt with a hoe, then plant seeds on the tilled soil. Hold wheat to lead cows; feed two adults to breed a calf. Water within four blocks keeps soil hydrated. Bone meal advances growth; harvest mature golden wheat and craft three wheat into bread.</p><p class="form-note">If mouse capture is unavailable, drag to look and click once to mine the targeted block. Touch controls include a Fly button in Creative.</p>`,
+      )}</div><p class="form-note">Inventories use the 1.7.10 slot rules. Left-click picks up or places a stack; right-click picks up half or places one. Drag a held stack across slots to share it evenly (left) or one each (right). Shift-click moves a stack between sections; double-click gathers matching items. Over a slot, 1 – 9 swaps with the hotbar and Q / Ctrl + Q drops. Click outside the window to throw the held stack. Right-click a crafting table for the 3 × 3 grid, a furnace to smelt or a chest to store items (two side by side form a large chest; a solid block on top keeps the lid shut); two damaged tools of one kind repair each other. F3 + H shows durability in tooltips.</p><p class="form-note">In Creative, E opens the 1.7.10 tabbed inventory. Click a tab or press T to search; the wheel or scrollbar scrolls. Click an item to take one (Shift: a full stack); click the same item again to add one, or anything else to delete the held stack. The chest tab shows your survival inventory; its X slot destroys the held item (Shift-click clears everything).</p><p class="form-note">To farm: break tall grass for seeds, right-click exposed grass/dirt with a hoe, then plant seeds on the tilled soil. Hold wheat to lead cows; feed two adults to breed a calf. Water within four blocks keeps soil hydrated. Bone meal advances growth; harvest mature golden wheat and craft three wheat into bread.</p><p class="form-note">If mouse capture is unavailable, drag to look and click once to mine the targeted block. Touch controls include a Fly button in Creative.</p>`,
   );
 }
 function notes() {
   modal(
     "Rebuilding 1.7.10, system by system.",
-    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. Broken blocks, mob kills and thrown stacks drop item entities that fall, merge and are picked up. The Java 36-slot inventory with cursor, drag-splitting, shift- and double-click rules; shaped crafting, a crafting table, a fuel-driven furnace and single/large chests on real slots; wood, stone, iron, diamond and gold tools with per-item durability and repair; leather, chain, iron, gold and diamond armor. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Cows follow wheat and breed calves. Caves, ores and torches; 1.7.10 sky/block light, smooth lighting, lightmap, sky, stars, fog and fancy clouds. Wheat farming with five hoe tiers, seeds, moisture, eight growth stages, bone meal, harvesting and bread crafting.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, armor rendering, enchantments, hoppers and other storage, redstone, dimensions, structures, weather, void fog, Java saves, and multiplayer. The renderer, terrain, creative inventory, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/items.md" target="_blank" rel="noopener">Item drops ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
+    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. Broken blocks, mob kills and thrown stacks drop item entities that fall, merge and are picked up. The Java 36-slot inventory with cursor, drag-splitting, shift- and double-click rules; shaped crafting, a crafting table, a fuel-driven furnace and single/large chests on real slots; the tabbed creative inventory with search; wood, stone, iron, diamond and gold tools with per-item durability and repair; leather, chain, iron, gold and diamond armor. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Cows follow wheat and breed calves. Caves, ores and torches; 1.7.10 sky/block light, smooth lighting, lightmap, sky, stars, fog and fancy clouds. Wheat farming with five hoe tiers, seeds, moisture, eight growth stages, bone meal, harvesting and bread crafting.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, armor rendering, enchantments, hoppers and other storage, redstone, dimensions, structures, weather, void fog, Java saves, and multiplayer. The renderer, terrain, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/items.md" target="_blank" rel="noopener">Item drops ↗</a><a href="/research/creative.md" target="_blank" rel="noopener">Creative inventory ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
     "notes-modal",
   );
 }
@@ -614,44 +614,54 @@ function goHome() {
 }
 function inventory(station = false) {
   if (survival.creative && !station) {
-    inventorySearch = "";
-    screen = "inventory";
-    mining = null;
-    mineHeld = false;
-    renderCreative();
+    openCreative();
     return;
   }
   openContainer(station ? survival.openWorkbench() : survival.openInventory(), station ? "workbench" : "inventory");
 }
-// Creative keeps a searchable picker that fills the selected hotbar slot.
-function renderCreative() {
-  const all = Object.values(ITEMS).filter((i) => i.id && i.id !== 10 && i.id !== 11 && !i.hidden);
-  modal(
-    "Creative Inventory",
-    `<p class="modal-subtitle">Choose any material or tool for your selected slot.</p><div class="inventory-layout"><div><input class="inventory-search" id="inventory-search" aria-label="Search items" placeholder="Find a material…" value="${esc(inventorySearch)}"><div class="inventory-grid bag-grid" id="bag-grid">${all.map((i) => `<button data-item="${i.id}" data-name="${esc(i.name.toLowerCase())}" title="${esc(i.name)}" aria-label="${esc(i.name)}"><span>${icon(i.id)}</span><span>${esc(i.name)}</span></button>`).join("")}</div></div></div><button class="button primary full inventory-back" id="inventory-back">Back to Game</button>`,
-    "inventory-modal",
-  );
-  const filter = () => document.querySelectorAll("[data-item]").forEach((b) => (b.hidden = !b.dataset.name.includes(inventorySearch.toLowerCase())));
-  $("#inventory-search").oninput = (e) => {
-    inventorySearch = e.target.value;
-    filter();
-  };
-  filter();
-  document.querySelectorAll("[data-item]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        const id = +b.dataset.item;
-        survival.inventory.main[survival.inventory.current] = makeStack(id, ITEMS[id].stack);
-        renderHotbar();
-        resume();
-        showHeldName();
-      }),
-  );
-  $("#inventory-back").onclick = resume;
+// GuiContainerCreative: tabs, the scrolling 9 x 5 item grid, search and the survival inventory tab.
+function openCreative() {
+  const gui = new CreativeScreen(survival.inventory, {
+    playerContainer: () => survival.openInventory(),
+    tooltip: (s) => tooltipLines(ITEMS[s.id], s, options.advancedTooltips).map((l) => l.text),
+  });
+  openContainer(gui.container, "creative", null, gui);
 }
-const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace" },
-  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal" };
-function openContainer(container, kind, key = null) {
+function tabIcon(t) {
+  const i = t.icon;
+  if (i.id) return icon(i.id);
+  if (i.potion) return `<span class="vanilla-item-icon tinted-item" style="--tint:#${i.potion.toString(16).padStart(6, "0")};--base:url('/media/1.7.10/items/potion_overlay.png')"><i></i><img src="/media/1.7.10/items/potion_bottle_drinkable.png" alt=""></span>`;
+  // Animated strips (the compass) show their first frame.
+  if (i.frames) return `<span class="vanilla-item-icon creative-strip" style="--strip:url('/media/1.7.10/${i.texture}.png');--frames:${i.frames}"></span>`;
+  return `<img class="vanilla-item-icon" src="/media/1.7.10/${i.texture}.png" alt="">`;
+}
+// drawGuiContainerBackgroundLayer: unselected tabs, the tab background, search
+// field and scrollbar, then the selected tab on top.
+function renderCreativeBody() {
+  const view = containerView,
+    { gui, container } = view,
+    selected = gui.tab,
+    tabHtml = (t) => {
+      const a = tabArea(t, t === selected);
+      return `<button class="creative-tab${t === selected ? " selected" : ""}" data-creative-tab="${t.index}" aria-label="${esc(t.name)}" aria-pressed="${t === selected}" style="left:calc(${a.x}*var(--u));top:calc(${a.y}*var(--u));background-position:calc(${-a.u}*var(--u)) calc(${-a.v}*var(--u))!important"><span style="left:calc(${a.iconX - a.x}*var(--u));top:calc(${a.iconY - a.y}*var(--u))">${tabIcon(t)}</span></button>`;
+    };
+  $("#modal-title").textContent = selected.name;
+  $("#modal-title").hidden = !selected.title;
+  $("#modal .creative-body").innerHTML =
+    CREATIVE_TABS.filter((t) => t !== selected).map(tabHtml).join("") +
+    `<i class="creative-background" style="background-image:url('/media/1.7.10/gui/container/creative_inventory/tab_${selected.background}')"></i>` +
+    (selected === SEARCH ? '<span class="creative-search" id="creative-search" role="textbox" aria-label="Search items"></span>' : "") +
+    (selected.scrollbar ? '<i class="creative-scroll" id="creative-scroll"></i>' : "") +
+    tabHtml(selected) +
+    (selected === SURVIVAL_TAB ? '<div class="native-player creative-player" aria-hidden="true"><i class="player-head"></i><i class="player-body"></i><i class="player-arm left"></i><i class="player-arm right"></i><i class="player-leg left"></i><i class="player-leg right"></i></div>' : "") +
+    slotsHtml(container);
+  view.shown = [];
+}
+const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace", creative: "" },
+  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", creative: "creative-modal" };
+// Slots are addressed by list index: wrapped creative slots all keep slotNumber 0.
+const slotsHtml = (container) => `<div class="container-slots">${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""}${slot.x < -1000 ? " hidden" : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>`;
+function openContainer(container, kind, key = null, gui = new ContainerScreen(container)) {
   screen = "inventory";
   mining = null;
   mineHeld = false;
@@ -663,48 +673,80 @@ function openContainer(container, kind, key = null) {
         : `<span class="native-bag-label">Inventory</span><span class="native-crafting-label">Crafting</span>${kind === "inventory" ? '<div class="native-player" aria-hidden="true"><i class="player-head"></i><i class="player-body"></i><i class="player-arm left"></i><i class="player-arm right"></i><i class="player-leg left"></i><i class="player-leg right"></i></div>' : ""}`;
   modal(
     container.title ?? CONTAINER_TITLES[kind],
-    `<div class="container-slots">${container.slots.map((slot) => `<button class="container-slot" data-container-slot="${slot.number}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>${decorations}`,
+    kind === "creative" ? '<div class="creative-body"></div>' : slotsHtml(container) + decorations,
     CONTAINER_CLASSES[kind] ? `${CONTAINER_CLASSES[kind]} container-screen` : "inventory-modal native-inventory container-screen" + (kind === "workbench" ? " native-workbench" : ""),
   );
   if (kind === "chest") $("#modal .modal").style.setProperty("--rows", container.rows);
   $("#modal").insertAdjacentHTML("beforeend", '<div class="cursor-stack" id="cursor-stack" aria-hidden="true"></div><div class="slot-tooltip hidden" id="slot-tooltip" role="tooltip"></div>');
   document.activeElement?.blur();
-  containerView = { container, gui: new ContainerScreen(container), kind, key, hovered: null, x: innerWidth / 2, y: innerHeight / 2, shown: [] };
-  const overlay = $("#modal"),
+  containerView = { container, gui, kind, key, hovered: null, x: innerWidth / 2, y: innerHeight / 2, gx: -1, gy: -1, shown: [] };
+  const creative = kind === "creative",
+    overlay = $("#modal"),
     javaButton = (b) => (b === 2 ? 1 : b === 1 ? 2 : b),
+    // Pointer position in GUI pixels; creative tabs lie outside the 195 x 136 screen.
     at = (e) => {
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      return { slot: container.slots[el?.closest("[data-container-slot]")?.dataset.containerSlot] ?? null, outside: !el?.closest(".container-screen") };
+      const el = document.elementFromPoint(e.clientX, e.clientY),
+        box = $("#modal .container-screen").getBoundingClientRect(),
+        u = box.width / (creative ? GUI_WIDTH : 176),
+        x = Math.floor((e.clientX - box.left) / u),
+        y = Math.floor((e.clientY - box.top) / u);
+      return { slot: container.slots[el?.closest("[data-container-slot]")?.dataset.containerSlot] ?? null, outside: creative ? x < 0 || y < 0 || e.clientX >= box.right || e.clientY >= box.bottom : !el?.closest(".container-screen"), x, y };
+    },
+    // GuiContainerCreative.mouseMovedOrUp: releasing the left button over a tab selects it.
+    switchTab = (t) => {
+      const before = gui.tab;
+      gui.setTab(t);
+      if (gui.tab !== before) renderCreativeBody();
     };
+  if (creative) renderCreativeBody();
   overlay.onpointerdown = (e) => {
     if (!containerView || e.target.closest(".close-button")) return;
     e.preventDefault();
-    const { slot, outside } = at(e);
-    containerView.gui.down(slot, javaButton(e.button), { outside, shift: e.shiftKey, time: performance.now() });
+    const { slot, outside, x, y } = at(e), button = javaButton(e.button);
+    if (creative && button === 0) {
+      gui.press(x, y);
+      if (gui.tabAt(x, y)) return refreshContainer();
+    }
+    gui.down(slot, button, { outside, shift: e.shiftKey, time: performance.now() });
     refreshContainer();
   };
   overlay.onpointermove = (e) => {
     if (!containerView) return;
     containerView.x = e.clientX;
     containerView.y = e.clientY;
-    const { slot } = at(e);
-    containerView.hovered = slot;
-    if (e.buttons) containerView.gui.move(slot);
+    const { slot, x, y } = at(e);
+    Object.assign(containerView, { hovered: slot, gx: x, gy: y });
+    if (creative) {
+      if (!(e.buttons & 1)) gui.release();
+      gui.drag(y);
+    }
+    if (e.buttons) gui.move(slot);
     refreshContainer();
   };
   overlay.onpointerup = (e) => {
     if (!containerView) return;
-    const { slot, outside } = at(e);
-    containerView.gui.up(slot, javaButton(e.button), { outside, shift: e.shiftKey });
+    const { slot, outside, x, y } = at(e), button = javaButton(e.button), t = creative && button === 0 ? gui.tabAt(x, y) : null;
+    if (creative && button === 0) gui.release();
+    if (t) switchTab(t);
+    else gui.up(slot, button, { outside, shift: e.shiftKey });
+    refreshContainer();
+  };
+  overlay.onwheel = (e) => {
+    if (!creative || !containerView) return;
+    e.preventDefault();
+    gui.wheel(-e.deltaY);
     refreshContainer();
   };
   overlay.oncontextmenu = (e) => e.preventDefault();
-  // Keyboard activation of a focused slot acts as a left click.
+  // Keyboard activation of a focused slot or tab acts as a left click.
   overlay.onclick = (e) => {
+    if (!containerView || e.detail !== 0) return;
+    const tab = e.target.closest("[data-creative-tab]");
+    if (creative && tab) return switchTab(CREATIVE_TABS[tab.dataset.creativeTab]), refreshContainer();
     const slot = container.slots[e.target.closest("[data-container-slot]")?.dataset.containerSlot];
-    if (!containerView || e.detail !== 0 || !slot) return;
-    containerView.gui.down(slot, 0, { time: performance.now() });
-    containerView.gui.up(slot, 0);
+    if (!slot) return;
+    gui.down(slot, 0, { time: performance.now() });
+    gui.up(slot, 0);
     refreshContainer();
   };
   refreshContainer();
@@ -714,7 +756,7 @@ function closeContainer() {
   const { container } = containerView;
   containerView = null;
   const overlay = $("#modal");
-  overlay.onpointerdown = overlay.onpointermove = overlay.onpointerup = overlay.oncontextmenu = overlay.onclick = null;
+  overlay.onpointerdown = overlay.onpointermove = overlay.onpointerup = overlay.onwheel = overlay.oncontextmenu = overlay.onclick = null;
   container.close();
   throwStacks(container.drops.splice(0));
   renderHotbar();
@@ -754,8 +796,28 @@ function refreshContainer() {
   cursor.style.top = view.y + "px";
   throwStacks(container.drops.splice(0));
   const tip = $("#slot-tooltip"),
-    hovered = view.hovered?.stack,
-    lines = !container.inv.cursor && hovered ? tooltipLines(ITEMS[hovered.id], hovered, options.advancedTooltips) : [];
+    hovered = view.hovered?.stack;
+  let lines = !container.inv.cursor && hovered ? tooltipLines(ITEMS[hovered.id], hovered, options.advancedTooltips) : [];
+  if (view.kind === "creative") {
+    // renderToolTip: the search tab names each item's own tab in bold blue.
+    const own = hovered && gui.tab === SEARCH && itemTab(hovered.id);
+    if (lines.length && own) lines.splice(1, 0, { text: own.name, color: "blue bold" });
+    const label = gui.tabLabelAt(view.gx, view.gy);
+    if (label) lines = [{ text: label.name }];
+    else if (gui.overBin(view.gx, view.gy)) lines = [{ text: "Destroy Item" }];
+    const scroll = $("#creative-scroll"), search = $("#creative-search");
+    if (scroll) {
+      scroll.style.top = `calc(${gui.scrollbarY()}*var(--u))`;
+      scroll.classList.toggle("disabled", !gui.needsScroll());
+    }
+    const f = gui.field, typed = f.text + "\n" + f.cursor;
+    if (search && search.dataset.typed !== typed) {
+      const at = f.cursor === f.text.length;
+      search.dataset.typed = typed;
+      search.innerHTML = esc(f.text.slice(0, f.cursor)) + (at ? '<b class="caret end">_</b>' : '<b class="caret"></b>') + esc(f.text.slice(f.cursor));
+      search.setAttribute("aria-label", "Search items: " + f.text);
+    }
+  }
   tip.classList.toggle("hidden", !lines.length);
   if (lines.length) {
     tip.innerHTML = lines.map((l, i) => `<span class="${i ? l.color || "gray" : "title"}">${esc(l.text) || "&nbsp;"}</span>`).join("");
@@ -1000,7 +1062,7 @@ function edit(place = false) {
     }
     const p = target.adjacent;
     if (!p || p[1] === 0 || p[1] >= HEIGHT - 1 || !world.inside(...p)) return;
-    if (!item?.block || id === 10 || id === 11) {
+    if (!item?.block || id === 10) {
       toast("Select a building block, food, or workstation.");
       return;
     }
@@ -1025,7 +1087,8 @@ function edit(place = false) {
     sound(true, id);
     saved = false;
   } else {
-    if (block === 11) return;
+    // Creative breaks bedrock (Building Blocks lists it), except the world floor.
+    if (block === 11 && (!survival.creative || target.block[1] === 0)) return;
     if (survival.creative) {
       if(item?.kind==='sword')return;
       breakBlock(target.block, true);
@@ -1049,7 +1112,7 @@ function breakBlock(p, creative = false) {
     key = p.join(","),
     m = MATERIALS[block] || {},
     tool = heldId();
-  if (!block || block === 11) return false;
+  if (!block || (block === 11 && (!creative || p[1] === 0))) return false;
   const harvest = creative || survival.mining(block, tool).harvest;
   let drop = harvest ? (m.drop ?? block) : 0,
     count = m.count || 1;
@@ -1388,6 +1451,16 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (e.target.matches("input,select,textarea")) return;
+  // GuiContainerCreative.keyTyped: T opens search; the search field takes keys before E and Q.
+  if (screen === "inventory" && containerView?.kind === "creative") {
+    const gui = containerView.gui, before = gui.tab;
+    if (gui.typed({ code: e.code, key: e.key, ctrl: e.ctrlKey || e.metaKey }, containerView.hovered)) {
+      e.preventDefault();
+      if (gui.tab !== before) renderCreativeBody();
+      refreshContainer();
+      return;
+    }
+  }
   if (screen === "inventory" && e.code === "KeyE") {
     e.preventDefault();
     resume();
