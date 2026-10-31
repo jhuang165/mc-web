@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EntityWorld, entityHit, actorCollides } from "./entities.js";
+import { EntityWorld, entityHit, actorCollides, ENTITY_TYPES } from "./entities.js";
 import { Survival } from "./survival.js";
 const flat = {
   numericSeed: 123,
@@ -18,7 +18,13 @@ test("passive spawns are seeded, stand on the surface, and survive reload withou
   assert.equal(c.entities.length, 8);
   assert.equal(new Set(c.entities.map((e) => e.id)).size, 8);
   for (const e of c.entities)
-    assert.equal(actorCollides(flat, e.x, e.y, e.z, 0.9, 1.4), false);
+    assert.equal(actorCollides(flat, e.x, e.y, e.z, ENTITY_TYPES[e.type].width, ENTITY_TYPES[e.type].height), false);
+});
+test("mob boxes use the 1.7.10 setSize dimensions", () => {
+  const size = (t) => [ENTITY_TYPES[t].width, ENTITY_TYPES[t].height];
+  assert.deepEqual(size("pig"), [0.9, 0.9]);
+  assert.deepEqual(size("cow"), [0.9, 1.3]);
+  assert.deepEqual(size("zombie"), [0.6, 1.8]);
 });
 test("entity ray selection respects reach and block occlusion", () => {
   const a = new EntityWorld(flat, [

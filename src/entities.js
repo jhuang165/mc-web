@@ -1,8 +1,10 @@
 import { SIZE, HEIGHT, hash, raycast as voxelRay } from "./world.js";
 import { ITEMS } from "./survival.js";
+// Widths and heights are each 1.7.10 constructor's setSize: EntityPig (wo)
+// 0.9 x 0.9, EntityCow (wh) 0.9 x 1.3, EntityZombie (yq) 0.6 x 1.8.
 export const ENTITY_TYPES = {
   pig: { health: 10, width: 0.9, height: 0.9, speed: 0.045, drop: 202 },
-  cow: { health: 10, width: 0.9, height: 1.4, speed: 0.045, drop: 204 },
+  cow: { health: 10, width: 0.9, height: 1.3, speed: 0.045, drop: 204 },
   zombie: {
     health: 20,
     width: 0.6,
@@ -130,15 +132,13 @@ export class EntityWorld {
           x = Math.floor(spawn.x + Math.sin(angle) * r),
           z = Math.floor(spawn.z + Math.cos(angle) * r);
         if (x < 3 || z < 3 || x > SIZE - 3 || z > SIZE - 3) continue;
-        const y = this.world.surface(x, z);
+        const y = this.world.surface(x, z), type = i % 2 ? "cow" : "pig", t = ENTITY_TYPES[type];
         if (
           this.world.get(x, y - 1, z) !== 1 ||
-          actorCollides(this.world, x + 0.5, y, z + 0.5, 0.9, 1.4)
+          actorCollides(this.world, x + 0.5, y, z + 0.5, t.width, t.height)
         )
           continue;
-        this.entities.push(
-          this.create(i % 2 ? "cow" : "pig", x + 0.5, y, z + 0.5),
-        );
+        this.entities.push(this.create(type, x + 0.5, y, z + 0.5));
         break;
       }
     }
