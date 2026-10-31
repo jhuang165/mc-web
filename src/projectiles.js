@@ -150,7 +150,7 @@ export const rayBounds = (world, x, y, z, id) => (id === 41 ? blockBounds(world,
 export function rayTraceBlocks(world, start, end) {
   if (start.some(Number.isNaN) || end.some(Number.isNaN)) return null;
   const id = (x, y, z) => (y < 0 ? 0 : world.get(x, y, z)),
-    solid = (b) => b !== 0 && b !== 10,
+    solid = (b) => b !== 0 && b !== 10 && b !== 42,
     test = (x, y, z, a) => {
       const b = id(x, y, z);
       if (!solid(b)) return null;

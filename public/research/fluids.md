@@ -27,9 +27,9 @@ Saves keep the existing `edits` list. A tracked edit is stored as `block | meta 
 
 ## Differences
 
-- Lava does not exist in this build; every lava branch (tick rate 30, hardening, fizz sound, lava next to water) is left out.
+- Lava is block 42 and has its own page: [lava](lava.md). The water-only rules above are unchanged; the shared `Fluids` class branches on the block kind.
 - Cells outside the world (sides, the sky and the bedrock plane) count as solid; the original always has chunks loaded there.
 - Mobs are not pushed: `entities.js` moves them with its own damping instead of motion and drag, so an added 0.014 would not mean what it does in the original.
 - `Farming.nearWater` still reads block 10, so flowing water hydrates soil like any water.
 - Every flowed cell becomes a save edit; `restore` accepts at most 100,000 edits, so a flood larger than that cannot be saved.
-- Sounds for flowing water and the fizz of water meeting lava are not played.
+- Sounds for flowing water are not played (the fizz of water meeting lava is, see [lava](lava.md)).

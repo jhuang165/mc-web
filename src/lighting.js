@@ -25,12 +25,13 @@ export const BRIGHTNESS = Array.from({ length: 16 }, (_, i) => {
 // (func_149685_I: 0.2 for normal cubes) and getCanBlockGrass (s: materials
 // that let grass through, used by smooth lighting to decide corner samples).
 export function lightOpacity(b) {
-  if (b === 0 || b === 9 || b === 20 || b === 41 || isPlant(b)) return 0;
+  if (b === 0 || b === 9 || b === 20 || b === 41 || b === 42 || isPlant(b)) return 0;
   if (b === 5) return 1;
   if (b === 10) return 3;
   return 255;
 }
-export const lightEmission = (b, lit = false) => (b === 20 ? 14 : b === 14 && lit ? 13 : 0);
+// Lava: setLightLevel(1.0F), so (int)(15 * 1.0) = 15.
+export const lightEmission = (b, lit = false) => (b === 42 ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : 0);
 export const useNeighborBrightness = (b) => b === 20 || b === 9 || b === 41 || b === 29 || b === 30 || isPlant(b);
 const AO_SOLID = f(0.2);
 export const aoValue = (b) => (normalCube(b) ? AO_SOLID : 1);
@@ -106,7 +107,7 @@ export function cloudColor(angle) {
 }
 // EntityRenderer.updateFogColor. `look` is the view vector, `chunks` the render
 // distance in chunks and `brightness` the smoothed fogColor2/fogColor1 value.
-export function fogColor({ angle, temperature, look, chunks, brightness = 1, underwater = false }) {
+export function fogColor({ angle, temperature, look, chunks, brightness = 1, underwater = false, lava = false }) {
   const d = f(1 - f(Math.pow(f(0.25 + f(f(0.75 * chunks) / 16)), 0.25))),
     sky = skyColor(temperature, angle);
   let fog = providerFogColor(angle);
@@ -121,6 +122,7 @@ export function fogColor({ angle, temperature, look, chunks, brightness = 1, und
   }
   fog = fog.map((c, i) => f(c + f(f(sky[i] - c) * d)));
   if (underwater) fog = [f(0.02), f(0.02), f(0.2)];
+  else if (lava) fog = [f(0.6), f(0.1), 0];
   return fog.map((c) => f(c * brightness));
 }
 // EntityRenderer.updateTorchFlicker, once per tick.
@@ -371,6 +373,16 @@ export class JavaRandom {
   }
   nextFloat() {
     return this.next(24) / (1 << 24);
+  }
+  // Random.nextInt(bound), including its rejection loop for non powers of two.
+  nextInt(bound) {
+    if (bound === undefined) return this.next(32);
+    if (!(bound > 0)) throw new RangeError("bound must be positive");
+    let r = this.next(31);
+    const m = bound - 1;
+    if ((bound & m) === 0) return Math.floor((bound * r) / 2147483648);
+    for (let u = r; u - (r = u % bound) + m >= 2147483648; u = this.next(31));
+    return r;
   }
   nextDouble() {
     return (this.next(26) * 134217728 + this.next(27)) / 2 ** 53;
