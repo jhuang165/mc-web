@@ -43,6 +43,10 @@ export class PlayerAnimation {
     this.eating = 0;
     this.look = null;
   }
+  // ItemRenderer.resetEquippedProgress2 (bly.c): the held stack changed.
+  resetEquipped() {
+    this.equipped = 0;
+  }
   swing() {
     if (this.swingTime >= SWING_SECONDS * 0.5) this.swingTime = 0;
   }

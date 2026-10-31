@@ -30,6 +30,7 @@ import { Survival, ITEMS, MATERIALS } from "./survival.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
+import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -119,6 +120,8 @@ let survival = new Survival({}, "creative"),
   f3Combo = false;
 // Dropped items as EntityItem physics objects (see item-entities.js).
 const items = new ItemEntities();
+// Thrown snowballs and their particles (see projectiles.js).
+const projectiles = new Projectiles();
 $("#app").innerHTML = `
  <div id="viewport" aria-label="Interactive voxel world"></div><div id="vignette"></div>
  <main id="home" class="minecraft-home">
@@ -404,6 +407,7 @@ function save() {
   active.position = { x: position.x, y: position.y, z: position.z, yaw, pitch };
   active.player = survival.serialize();
   active.drops = items.serialize();
+  active.projectiles = projectiles.serialize();
   // Items on the cursor or in a crafting grid return to the saved inventory, as closing the screen would.
   const pending = containerView ? [containerView.container.inv.cursor, ...(containerView.container.grid?.stacks || [])].filter(Boolean).map(copyStack) : [];
   if (pending.length) {
@@ -540,6 +544,7 @@ function launch(record) {
       (st) => survival.inventory.read(st),
       survival.time,
     );
+    projectiles.load(record.projectiles);
     velocity.set(0, 0, 0);
     flying = false;
     grounded = false;
@@ -979,7 +984,10 @@ function tickSurvival(inWater, oldPosition) {
       saved = false;
     }
   }
+  projectiles.tick(world, mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), (e) => e !== "player" && thrownHit(mobs, e, position));
+  if (mobs) handleEntityEvents();
   scene.setDrops(items.items);
+  scene.setProjectiles(projectiles.balls, projectiles.particles);
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();
@@ -1002,12 +1010,33 @@ function beginEating(id) {
   }
   if (survival.count(id) && !eating) eating = { id, ticks: 32 };
 }
+// ItemSnowball.onItemRightClick (aed.a): take one unless Creative, play
+// random.bow at 0.5 volume and pitch 0.4 / (rand * 0.4 + 0.8), spawn the ball.
+// Minecraft.rightClickMouse swings only for blocks that consume the click, and
+// resets the equip animation (resetEquippedProgress2) only when the stack
+// changed, so Creative throws neither swing nor dip the hand.
+function throwSnowball() {
+  sounds.play("random.bow", { volume: 0.5, pitch: 0.4 / (Math.random() * 0.4 + 0.8) });
+  projectiles.throwSnowball(position, yaw, pitch);
+  if (!survival.creative) {
+    survival.take(312);
+    animation.resetEquipped();
+    renderHotbar();
+    saved = false;
+  }
+}
 function edit(place = false) {
   if (screen !== "playing") return;
-  animation.swing();
   sounds.unlock();
   const id = heldId(),
     item = ITEMS[id];
+  // A snowball in hand is thrown unless the aimed block takes the click first.
+  const usesBlock = !aimedEntity && target && [13, 14, CHEST].includes(world.get(...target.block));
+  if (place && id === 312 && (survival.creative || survival.count(id)) && !usesBlock) {
+    throwSnowball();
+    return;
+  }
+  animation.swing();
   if (!place && aimedEntity) {
     mining = null;
     if (mobs.attack(aimedEntity.entity, id, survival, position)) {
@@ -1774,7 +1803,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, look(p, y) { pitch = p; yaw = y; }, teleport(x, y, z) { position.set(x, y, z); }, items, get mobs() { return mobs; }, breakBlock };
+    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, look(p, y) { pitch = p; yaw = y; }, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, get mobs() { return mobs; }, breakBlock };
   scene.preview(0);
   scene.render(0);
   renderWorlds();
