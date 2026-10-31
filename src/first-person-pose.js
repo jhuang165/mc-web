@@ -2,7 +2,9 @@ import { Matrix4 } from 'three';
 const radians = degrees => degrees * Math.PI / 180;
 // OpenGL post-multiplies each operation. Preserve that order instead of
 // combining Y/Z/X rotations into a Three.js XYZ Euler rotation.
-export function firstPersonMatrix(pose, {empty = !pose.item, sprite = false, eatingTicks = null} = {}) {
+// `bowDraw` is ItemRenderer's bow term while the bow is drawn: getMaxItemUseDuration -
+// (itemInUseCount - partial + 1), i.e. the ticks of use - 1 + partial (null otherwise).
+export function firstPersonMatrix(pose, {empty = !pose.item, sprite = false, eatingTicks = null, bowDraw = null} = {}) {
   const matrix = new Matrix4(), scratch = new Matrix4();
   const translate = (x,y,z) => matrix.multiply(scratch.makeTranslation(x,y,z));
   const rotate = (axis,angle) => matrix.multiply(axis === 'x' ? scratch.makeRotationX(angle) : axis === 'y' ? scratch.makeRotationY(angle) : scratch.makeRotationZ(angle));
@@ -26,6 +28,18 @@ export function firstPersonMatrix(pose, {empty = !pose.item, sprite = false, eat
   }else translate(pose.swing.x,pose.swing.y,pose.swing.z);
   translate(.7*.8,-.65*.8-(1-pose.equip)*.6,-.9*.8);
   rotate('y',radians(45));rotate('y',pose.swing.ry);rotate('z',pose.swing.rz);rotate('x',pose.swing.rx);scale(.4);
+  if(bowDraw !== null){
+    // ItemRenderer.renderItemInFirstPerson (bly.a), EnumAction.bow: the pull tilts the bow,
+    // wobbles it once it is past 0.1, draws it back 0.1 and stretches it by 20% along z.
+    const f32 = Math.fround;
+    let pull = f32(bowDraw/20);pull = f32(f32(f32(pull*pull)+f32(pull*2))/3);if(pull>1)pull = 1;
+    rotate('z',radians(-18));rotate('y',radians(-12));rotate('x',radians(-8));translate(-.9,.2,0);
+    if(pull>.1)translate(0,Math.sin(f32(f32(bowDraw-.1)*1.3))*.01*(pull-.1),0);
+    translate(0,0,pull*.1);
+    rotate('z',radians(-335));rotate('y',radians(-50));translate(0,.5,0);
+    matrix.multiply(scratch.makeScale(1,1,1+pull*.2));
+    translate(0,-.5,0);rotate('y',radians(50));rotate('z',radians(335));
+  }
   if(sprite){translate(0,-.3,0);scale(1.5);rotate('y',radians(50));rotate('z',radians(335));translate(-.9375,-.0625,0);}
   return matrix;
 }

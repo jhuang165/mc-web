@@ -36,6 +36,10 @@ export class GaussianRandom extends JavaRandom {
     this.spare = v2 * m;
     return v1 * m;
   }
+  // java.util.Random.nextBoolean.
+  nextBoolean() {
+    return this.next(1) !== 0;
+  }
 }
 
 // java.util.Random.nextInt(bound): a power of two takes the high bits, otherwise
@@ -148,14 +152,16 @@ export const rayBounds = (world, x, y, z, id) => (id === 41 ? blockBounds(world,
 // World.rayTraceBlocks (ahb.a(Vec3, Vec3) = func_147447_a(false, false, false)):
 // walk the cells along the segment (at most 201 steps, each moving the start
 // vector to the cell's entry point) and return the first block that is not
-// air or water with its ray bounds hit. Below y 0 the world is air.
-export function rayTraceBlocks(world, start, end) {
+// air or water with its ray bounds hit. Below y 0 the world is air. `hasBox` is
+// func_147447_a's ignoreBlockWithoutBoundingBox (EntityArrow passes true): only
+// blocks with a collision box count, which leaves out torches and plants.
+export function rayTraceBlocks(world, start, end, hasBox = false) {
   if (start.some(Number.isNaN) || end.some(Number.isNaN)) return null;
   const id = (x, y, z) => (y < 0 ? 0 : world.get(x, y, z)),
     solid = (b) => b !== 0 && b !== 10 && b !== 42,
     test = (x, y, z, a) => {
       const b = id(x, y, z);
-      if (!solid(b)) return null;
+      if (!solid(b) || (hasBox && !world.solid(x, y, z))) return null;
       const [x0, y0, z0, x1, y1, z1] = rayBounds(world, x, y, z, b),
         hit = intercept([x0, y0, z0, x1, y1, z1], [a[0] - x, a[1] - y, a[2] - z], [end[0] - x, end[1] - y, end[2] - z]);
       return hit && { block: [x, y, z], side: hit.side, vec: [hit.vec[0] + x, hit.vec[1] + y, hit.vec[2] + z] };
@@ -249,7 +255,7 @@ export function mobTargets(entities, player, width = 0.6, height = 1.8) {
 // cancels love first, even for a rejected hit. Health never changes.
 export function thrownHit(mobs, e, from) {
   if (!mobs.entities.includes(e)) return false;
-  if (e.type !== "zombie") {
+  if (e.type !== "zombie" && e.type !== "skeleton") {
     e.flee = 60;
     e.love = 0;
     e.mateTicks = 0;
