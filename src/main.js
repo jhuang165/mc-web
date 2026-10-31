@@ -63,6 +63,7 @@ import { Fire, touchesFire, fireContact } from "./fire.js";
 import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
 import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, sneakEdge, moveWeights, isCritical, ATTACK_SLOWDOWN, groundAccel, airAccel, LIQUID_ACCEL, JUMP_MOTION, jumpExhaustion, sprintJumpPush, FLY_SPEED, FLY_Y_DRAG, flyVertical, fovMultiplier } from "./player-movement.js";
+import { spawnRunningParticles, freshRandom } from "./particles.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -145,6 +146,8 @@ let thirdPersonView = 0, playerRenderer;
 const playerBody = new PlayerBody();
 // Sprint/sneak state, move input and the sneak eye drop (player-movement.js).
 const motion = new PlayerMotion();
+// The player's Entity.rand (the sprint particle's offsets).
+const playerRandom = freshRandom();
 let collidedH = false, walkFrozen = false;
 let stepDistance = 0,
   wasInWater = false;
@@ -1145,6 +1148,11 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     fallDistance += Math.max(0, oldPosition.y - position.y);
   if (grounded) {
     if (fallDistance > 0) trampleFarmland(position, fallDistance);
+    // EntityLivingBase.updateFallState: level event 2006 (landing dust) from the block 0.2 below the feet.
+    if (fallDistance > 3) {
+      const bx = Math.floor(position.x), by = Math.floor(position.y - 0.20000000298023224), bz = Math.floor(position.z);
+      if (world.get(bx, by, bz)) scene.particles.landingDust(world, bx, by, bz, Math.ceil(Math.fround(fallDistance - 3)), [position.x, position.y + PHYSICS.eye, position.z]);
+    }
     if (!survival.creative && fallDistance > 3)
       survival.damage(Math.ceil(fallDistance - 3), "a fall");
     fallDistance = 0;
@@ -1224,7 +1232,7 @@ function handleEntityEvents() {
       const { x, y, z, block } = event.eatGrass;
       scene.updateBlock(x, z, y);
       sounds.play("dig." + blockSound(block), { position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 }, volume: 1, pitch: 0.8 });
-      scene.effects.burst([x, y, z], block);
+      scene.particles.destroyBlock(world, x, y, z, block);
       saved = false;
     }
   }
@@ -1269,7 +1277,7 @@ function useBucketItem(id) {
       // World.func_147480_a: the replaced plant breaks with its drops, sound and particles.
       destroy: (x, y, z, b) => {
         fluids.wash(x, y, z, b);
-        scene.effects.burst([x, y, z], b);
+        scene.particles.destroyBlock(world, x, y, z, b, world.getMeta(x, y, z));
         sound(false, b);
       },
     });
@@ -1527,7 +1535,8 @@ function breakBlock(p, creative = false) {
   scene.updateBlock(p[0], p[2], p[1]);
   renderHotbar();
   sound(false, block);
-  scene.effects.burst(p, block);
+  // Level event 2001: EffectRenderer.addBlockDestroyEffects with the block and metadata that were there.
+  scene.particles.destroyBlock(world, ...p, block, meta);
   saved = false;
   return true;
 }
@@ -1549,7 +1558,17 @@ function reportBrokenTool() {
   survival.broken = 0;
   renderHotbar();
 }
+// Minecraft.sendClickBlockToController: PlayerControllerMP.onPlayerDamageBlock, then
+// EffectRenderer.addBlockHitEffects on the face being hit every tick the button is held on
+// a block, during the hit delay and in Creative too; a block broken this tick is air by then.
 function tickMining() {
+  tickMiningProgress();
+  if (screen !== "playing" || !mineHeld || !target || aimedEntity || !world.get(...target.block)) return;
+  const [bx, by, bz] = target.block, [ax, ay, az] = target.adjacent ?? target.block,
+    side = ay < by ? 0 : ay > by ? 1 : az < bz ? 2 : az > bz ? 3 : ax < bx ? 4 : 5;
+  scene.particles.hitBlock(world, bx, by, bz, side);
+}
+function tickMiningProgress() {
   if (screen !== "playing") return;
   if (mineCooldown > 0) {
     mineCooldown--;
@@ -1575,10 +1594,7 @@ function tickMining() {
       Math.floor(position.z),
     ) === 10;
   animation.swing();
-  if (survival.time % 4 === 0) {
-    sounds.play("dig." + blockSound(mining.type), { volume: 0.25, pitch: 0.5 });
-    scene.effects.burst(mining.block, mining.type, 2);
-  }
+  if (survival.time % 4 === 0) sounds.play("dig." + blockSound(mining.type), { volume: 0.25, pitch: 0.5 });
   mining.progress = Math.fround(mining.progress + survival.mining(
     mining.type,
     heldId(),
@@ -2127,7 +2143,12 @@ function animate(now) {
       accumulator >= PHYSICS.tick &&
       (screen === "playing" || screen === "inventory")
     ) {
+      // --- Block particles (particles.js): Entity.onEntityUpdate's sprint particle uses the
+      // pre-move position, last tick's motion and in-water flag, before movementTick moves the
+      // player; EffectRenderer.updateEffects then runs after this tick's spawns. ---
+      if (motion.sprinting) spawnRunningParticles(scene.particles, world, { x: position.x, y: position.y, z: position.z, mx: velocity.x, mz: velocity.z, sprinting: true, inWater: wasInWater, ySize: motion.ySize }, playerRandom, [position.x, position.y + PHYSICS.eye, position.z]);
       movementTick();
+      scene.particles.tick(world);
       // The model stands at posY - yOffset, and posY is lowered by ySize (the sneak drop).
       const lowered = (p, drop) => ({ x: p.x, y: p.y - drop, z: p.z });
       playerBody.tick({ position: lowered(position, motion.ySize), previous: lowered(previous, motion.prevYSize), yaw, pitch, swinging: animation.swingTime < SWING_SECONDS });
@@ -2221,6 +2242,7 @@ function animate(now) {
   chestRenderer?.update(screen === "playing" || screen === "inventory" ? accumulator / PHYSICS.tick : 1);
   if(xpRenderer)xpRenderer.update(xpOrbs.orbs,partial);
   scene.dropPartial = partial;
+  scene.particleView = { yaw, pitch, mirror: thirdPersonView === 2 };
   scene.setShadows(screen === "home" ? [] : shadowCasters(scene.dropPartial), { x: position.x, y: position.y + PHYSICS.eye, z: position.z });
   // EntityRenderer.getFOVModifier multiplies the field of view by the eased modifier.
   const fov = options.fov * (bowFovState.prev + (bowFovState.cur - bowFovState.prev) * partial);
