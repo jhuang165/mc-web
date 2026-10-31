@@ -1,9 +1,10 @@
-import { SIZE, HEIGHT, hash, raycast as voxelRay, blockBounds, WOOL, isLiquid } from "./world.js";
+import { SIZE, HEIGHT, hash, blockBounds, WOOL, isLiquid } from "./world.js";
 import { ITEMS } from "./survival.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
 import { sheepColor, childColor } from "./sheep.js";
 import { sneakEdge, criticalDamage } from "./player-movement.js";
+import { MobAI } from "./ai.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
 export function wrapDegrees(a) {
@@ -32,7 +33,7 @@ const clampYaw = (from, to, max) => f(from - Math.min(Math.max(wrapDegrees(f(fro
 // to prevPos before every onUpdate), the Java-convention yaw/pitch degrees and
 // the limb swing. `gait` is the old limb phase from earlier saves.
 // Physics state is rebuilt on load as well: motion is already reset there.
-const TRANSIENT = ["onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "fire"];
+const TRANSIENT = ["onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "fire", "idle", "revenge"];
 const INTERPOLATED = [...TRANSIENT, "eggTimer", "wingRotation", "destPos", "oFlapSpeed", "oFlap", "wingRotDelta", "px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
 // Entity.rotationYaw is Java degrees (0 faces +z, increasing toward -x); e.yaw
 // is the radian bearing used by the movement code, which turns toward +x.
@@ -453,6 +454,8 @@ export class EntityWorld {
       hurt: 0,
       attack: 0,
       flee: 0,
+      revenge: 0,
+      idle: 0,
       burn: 0,
       growingAge:0,love:0,mateTicks:0,
       // EntitySheep.func_110161_a: a natural fleece colour; bit 16 of datawatcher
@@ -528,10 +531,13 @@ export class EntityWorld {
       e.hurt = 10;
     }
     e.lastDamage = amount;
-    // Panic (EntityAIPanic) starts for animals; zombies keep chasing.
+    // EntityAnimal.attackEntityFrom sets fleeingTick = 60 (kept as a counter; nothing
+    // reads it any more) and resets love; EntityLivingBase.attackEntityFrom sets the
+    // revenge target (the attacker, always the player here), which EntityAIPanic and
+    // EntityAIHurtByTarget read. The mob is not turned: panic walks it away.
     if (e.type !== "zombie") e.flee = 60;
     e.love=0;e.mateTicks=0;
-    e.yaw = Math.atan2(e.x - fromX, e.z - fromZ);
+    e.revenge = (e.age || 0) + 1;
     // EntityLivingBase.attackEntityFrom sets limbSwingAmount to 1.5.
     e.limbSwingAmount = 1.5;
     knockBack(e, fromX, fromZ);
@@ -637,28 +643,25 @@ export class EntityWorld {
       e.fire = Math.max(e.fire, 300);
       e.fallDistance *= 0.5;
     }
-    if (e.fire > 0) {
-      e.burn = 1;
-      if (e.type !== "zombie") e.flee = Math.max(e.flee, 2);
-    }
+    if (e.fire > 0) e.burn = 1;
   }
   feed(e,id,survival){
     if(!this.entities.includes(e)||e.health<=0||!BREED_ITEM[e.type]||id!==BREED_ITEM[e.type]||(!survival.creative&&!survival.count(id)))return false;
     if(e.growingAge!==0||e.love>0)return false;e.love=600;
     if(!survival.creative)survival.take(id);this.events.push({hearts:true,position:{x:e.x,y:e.y+1,z:e.z}});return true;
   }
-  breed(){
-    for(const type of Object.keys(BREED_ITEM)){
-    const adults=this.entities.filter(e=>e.type===type&&e.health>0&&e.growingAge===0&&e.love>0);
-    for(const a of adults){if(!a.love)continue;const b=adults.find(b=>b!==a&&b.love>0&&Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z)<3);
-      if(!b){a.mateTicks=0;continue;}if(++a.mateTicks<60)continue;if(this.entities.length>=40)continue;
-      const baby=this.create(type,a.x,a.y,a.z);baby.growingAge=-24000;
-      // EntitySheep.createChild (wp.b(rx)): the lamb's colour is the parents' dye mix.
-      if(type==='sheep')baby.color=childColor(a.color,b.color,this.random);
-      this.entities.push(baby);a.growingAge=b.growingAge=6000;a.love=b.love=0;a.mateTicks=b.mateTicks=0;
-      this.events.push({hearts:true,position:{x:a.x,y:a.y+1,z:a.z}},{xp:1+Math.floor(Math.random()*7),position:{x:a.x,y:a.y,z:a.z}});
-    }
-    }
+  // EntityAIMate.spawnBaby (ua.g): the child of two animals in love (growingAge -24000,
+  // at the mother's position, a sheep's colour from the parents' dyes), both parents'
+  // age set to 6000 and love cleared, hearts and 1 to 7 experience. A full world
+  // (40 mobs) keeps them waiting. Returns whether the baby was born.
+  spawnBaby(a,b){
+    if(this.entities.length>=40)return false;
+    const baby=this.create(a.type,a.x,a.y,a.z);baby.growingAge=-24000;
+    // EntitySheep.createChild (wp.b(rx)): the lamb's colour is the parents' dye mix.
+    if(a.type==='sheep')baby.color=childColor(a.color,b.color,this.random);
+    this.entities.push(baby);a.growingAge=b.growingAge=6000;a.love=b.love=0;a.mateTicks=b.mateTicks=0;
+    this.events.push({hearts:true,position:{x:a.x,y:a.y+1,z:a.z}},{xp:1+Math.floor(Math.random()*7),position:{x:a.x,y:a.y,z:a.z}});
+    return true;
   }
   // EntitySheep.interact (wp.a(yz)) with shears (ade.aZ) held: an unsheared adult
   // is sheared, drops 1 to 3 wool of its colour (entityDropItem(stack, 1.0F) with
@@ -674,54 +677,38 @@ export class EntityWorld {
     if(!survival.creative)survival.wear(id,1);
     return true;
   }
-  // EntityAIEatGrass (ud), mutexBits 7. EntityAITasks looks for new tasks every
-  // third tick: shouldExecute rolls 1 in 1000 (1 in 50 for a lamb) and needs tall
-  // grass at the feet or a grass block below. The timer starts at 40 (event 10 tells
-  // the client) and counts down; at 4 the tall grass is destroyed without a drop, or
-  // the grass block turns to dirt (level event 2001), and EntitySheep.eatGrassBonus
-  // (wp.p) clears the sheared flag and ages a lamb by 60 seconds. Returns whether
-  // the sheep is grazing this tick.
-  graze(e){
+  // The tick-4 step of EntityAIEatGrass (ud.e, task in ai.js): the tall grass at the feet
+  // is destroyed without a drop, or the grass block below turns to dirt (level event
+  // 2001), and EntitySheep.eatGrassBonus (wp.p) clears the sheared flag and ages a lamb
+  // by 60 seconds.
+  eatGrass(e){
     const w=this.world,x=Math.floor(e.x),y=Math.floor(e.y),z=Math.floor(e.z);
-    if(!e.eatTimer){
-      if(e.age%3!==0||Math.floor(this.random()*(e.growingAge<0?50:1000))!==0)return false;
-      if(w.get(x,y,z)!==39&&w.get(x,y-1,z)!==1)return false;
-      e.eatTimer=40;
+    let at=null;
+    if(w.get(x,y,z)===39)at=[x,y,z,39];else if(w.get(x,y-1,z)===1)at=[x,y-1,z,1];
+    if(at){
+      w.set?.(at[0],at[1],at[2],at[3]===39?0:2);
+      this.events.push({eatGrass:{x:at[0],y:at[1],z:at[2],block:at[3]}});
+      e.sheared=false;
+      if(e.growingAge<0)e.growingAge=Math.min(0,e.growingAge+1200);
     }
-    e.eatTimer=Math.max(0,e.eatTimer-1);
-    if(e.eatTimer===4){
-      let at=null;
-      if(w.get(x,y,z)===39)at=[x,y,z,39];else if(w.get(x,y-1,z)===1)at=[x,y-1,z,1];
-      if(at){
-        w.set?.(at[0],at[1],at[2],at[3]===39?0:2);
-        this.events.push({eatGrass:{x:at[0],y:at[1],z:at[2],block:at[3]}});
-        e.sheared=false;
-        if(e.growingAge<0)e.growingAge=Math.min(0,e.growingAge+1200);
-      }
-    }
-    return true;
   }
-  // Breeding partner, tempting player or parent a passive animal walks to this
-  // tick, in AI task priority order (mate 2, tempt 3, follow parent 4); null when
-  // panicking or when none applies. `stop` is how close it gets.
-  goal(e,player,survival,heldItem,distance,ai){
-    const wheat=BREED_ITEM[e.type];
-    if(!wheat||e.flee)return null;
-    if(e.love>0&&e.growingAge===0){
-      const partner=this.entities.find(b=>b!==e&&b.type===e.type&&b.love>0&&b.health>0&&b.growingAge===0);
-      if(partner)return{target:partner,speed:ai.mate,stop:1};
-    }
-    if(heldItem===wheat&&(survival.creative||survival.count(wheat))&&distance<10)return{target:player,speed:ai.tempt,stop:2.5};
-    if(e.growingAge<0){
-      const mother=this.entities.find(b=>b!==e&&b.type===e.type&&b.growingAge>=0&&b.health>0&&Math.hypot(b.x-e.x,b.z-e.z)<8);
-      if(mother)return{target:mother,speed:ai.follow,stop:2};
-    }
-    return null;
+  // The AI service: the brains (navigator, helpers and tasks per mob, see ai.js) hang off
+  // a WeakMap, so they are never saved and a loaded world starts them fresh.
+  get ai(){
+    return this.mobAI??=new MobAI(this,{
+      ENTITY_TYPES,BREED_ITEM,aiMoveSpeed,
+      mobSize:(e)=>{const base=ENTITY_TYPES[e.type],scale=e.growingAge<0?.5:1;return{width:base.width*scale,height:base.height*scale};},
+      spawnBaby:(a,b)=>this.spawnBaby(a,b),
+      eatGrass:(e)=>this.eatGrass(e),
+      attackPlayer:(e,survival)=>survival.damage(ENTITY_TYPES[e.type].damage,"a zombie",true),
+      despawn:(e)=>{e.health=0;e.death=20;},
+    });
   }
   tick(player, survival, heldItem=0) {
     const night =
       survival.time % 24000 > 13000 && survival.time % 24000 < 23000;
     this.spawnClock++;
+    this.ai.beginTick(player, survival, heldItem);
     if (
       night &&
       !survival.creative &&
@@ -740,7 +727,8 @@ export class EntityWorld {
         break;
       }
     }
-    for (const e of this.entities) {
+    // A mob spawned during the loop (a baby) joins the next tick's updates, as World.spawnEntityInWorld queues it.
+    for (const e of this.entities.slice()) {
       // World.updateEntityWithOptionalForce and EntityLivingBase.onEntityUpdate
       // keep last tick's state for RenderManager and RendererLivingEntity.
       e.px = e.x;
@@ -769,54 +757,9 @@ export class EntityWorld {
       e.hurt = Math.max(0, e.hurt - 1);
       e.attack = Math.max(0, e.attack - 1);
       e.flee = Math.max(0, e.flee - 1);
+      // EntityLivingBase.onEntityUpdate: the revenge target lapses after 100 ticks.
+      if (e.revenge && e.age + 1 - e.revenge > 100) e.revenge = 0;
       const distance = Math.hypot(e.x - player.x, e.z - player.z);
-      let speed = 0;
-      const goal = this.goal(e, player, survival, heldItem, distance, base.ai);
-      // Swimming (0), panic (1), mate (2), tempt (3) and follow parent (4) all take over from eating grass (5).
-      if (e.eatTimer && (e.flee || goal || e.inWater || e.inLava)) e.eatTimer = 0;
-      if (
-        e.type === "zombie" &&
-        !survival.creative &&
-        distance < 30 &&
-        survival.health > 0
-      ) {
-        e.yaw = Math.atan2(player.x - e.x, player.z - e.z);
-        speed = distance > 1.1 ? aiMoveSpeed(e, base.ai.chase) : 0;
-        if (
-          distance < 1.4 &&
-          Math.abs(e.y - player.y) < 1.5 &&
-          e.attack === 0 &&
-          !voxelRay(
-            this.world,
-            { x: e.x, y: e.y + 1.2, z: e.z },
-            {
-              x: (player.x - e.x) / Math.max(0.01, distance),
-              y: 0,
-              z: (player.z - e.z) / Math.max(0.01, distance),
-            },
-            distance,
-          )
-        ) {
-          survival.damage(t.damage, "a zombie", true);
-          e.attack = 20;
-        }
-      } else if (goal) {
-        e.yaw=Math.atan2(goal.target.x-e.x,goal.target.z-e.z);
-        speed=Math.hypot(goal.target.x-e.x,goal.target.z-e.z)>goal.stop?aiMoveSpeed(e,goal.speed):0;
-        e.walking=speed>0;
-      } else if (e.flee) {
-        speed = aiMoveSpeed(e, base.ai.panic);
-      } else if (e.type === "sheep" && this.graze(e)) {
-        // Grazing holds the sheep still (mutex bits 7: move, look and jump).
-      } else {
-        if (--e.wander <= 0) {
-          e.yaw =
-            hash(e.age, e.id.length, this.world.numericSeed) * Math.PI * 2;
-          e.wander = 60 + Math.floor(hash(e.age, 7, 4) * 120);
-          e.walking = hash(e.age, 1, e.id.length) > 0.35;
-        }
-        if (e.walking) speed = aiMoveSpeed(e, base.ai.wander);
-      }
       if (e.type === "zombie" && !night) {
         let sky = true;
         for (let y = Math.floor(e.y + t.height); y < HEIGHT; y++)
@@ -831,21 +774,11 @@ export class EntityWorld {
           e.lastDamage = 1;
         }
       } else e.burn = 0;
-      // EntityMoveHelper/EntityJumpHelper, simplified: a blocked mob hops a one-high
-      // step (jump 0.42 clears 1.25) and otherwise turns away; EntityAISwimming (uf)
-      // jumps 80% of ticks in water.
-      e.jumping = false;
       if (e.inWater = inWater(this.world, e, t.width, t.height)) e.fallDistance = 0;
       this.burn(e, t);
-      if ((e.inWater || e.inLava) && Math.random() < 0.8) e.jumping = true;
-      else if (speed > 0 && e.collidedH && e.onGround) {
-        const ax = e.x + Math.sin(e.yaw) * 0.5, az = e.z + Math.cos(e.yaw) * 0.5;
-        if (actorCollides(this.world, ax, e.y, az, t.width, t.height)) {
-          if (!actorCollides(this.world, e.x, e.y + 1, e.z, t.width, t.height) && !actorCollides(this.world, ax, e.y + 1, az, t.width, t.height)) e.jumping = true;
-          else e.yaw += Math.PI * 0.55;
-        }
-      }
-      this.walk(e, t, speed);
+      // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
+      // jump/move: tasks, navigator, move/look/jump helpers.
+      this.walk(e, t, 0, () => this.ai.think(e));
       if (e.type === "chicken") this.chickenUpdate(e);
       this.turnBody(e);
       this.swingLimbs(e);
@@ -868,22 +801,23 @@ export class EntityWorld {
         e.death = 20;
       }
     }
-    this.breed();
     this.entities = this.entities.filter((e) => e.health > 0 || e.death < 20);
   }
   // Motion half of EntityLivingBase.onLivingUpdate (sv.e()): jump delay, motion
   // below 0.005 snapped to 0, EntityMoveHelper (tv.c) turning a move target into
   // aiMoveSpeed and moveForward (zeroed when idle), the jump (0.04 in water, else
   // jump() on the ground every 10 ticks), moveForward x 0.98, then
-  // moveEntityWithHeading. `speed` is the setAIMoveSpeed value or 0.
-  walk(e, t, speed) {
+  // moveEntityWithHeading. `think` is the AI step (ai.js: tasks, navigator and the three
+  // helpers, which set moveForward, aiMoveSpeed, the yaw and the jump); without it
+  // `speed` is the setAIMoveSpeed value or 0.
+  walk(e, t, speed, think) {
     if (e.jumpTicks > 0) e.jumpTicks--;
     if (Math.abs(e.vx) < 0.005) e.vx = 0;
     if (Math.abs(e.vy) < 0.005) e.vy = 0;
     if (Math.abs(e.vz) < 0.005) e.vz = 0;
     e.moveForward = 0;
-    if (speed > 0) e.aiMoveSpeed = e.moveForward = speed;
-    this.aimYaw(e);
+    if (think) think();
+    else if (speed > 0) e.aiMoveSpeed = e.moveForward = speed;
     if (e.jumping) {
       if (e.inWater || e.inLava) e.vy += 0.03999999910593033;
       else if (e.onGround && e.jumpTicks === 0) {
@@ -928,18 +862,11 @@ export class EntityWorld {
       e.eggTimer = Math.floor(r() * 6000) + 6000;
     }
   }
-  // Entity.rotationYaw (Java degrees) follows the AI's e.yaw by the wrapped
-  // difference from last tick, so moveFlying sees this tick's heading.
-  aimYaw(e) {
-    e.rotationYaw = f(e.prevRotationYaw + wrapDegrees(f(javaYaw(e) - e.prevRotationYaw)));
-  }
   // EntityBodyHelper.func_75664_a (tr.a), reached through EntityLiving.func_110146_f
   // (sw.f) for AI-enabled mobs; the yaw wraps of EntityLivingBase.onUpdate (sv.h) follow.
-  // Simplified: the head faces e.yaw at once (no EntityLookHelper turn limit).
+  // rotationYaw is set by EntityMoveHelper and the head by EntityLookHelper (ai.js).
   turnBody(e) {
     const dx = e.x - e.px, dz = e.z - e.pz;
-    this.aimYaw(e);
-    e.rotationYawHead = e.rotationYaw;
     if (dx * dx + dz * dz > 2.500000277905201e-7) {
       e.renderYawOffset = e.rotationYaw;
       e.rotationYawHead = clampYaw(e.renderYawOffset, e.rotationYawHead, 75);
