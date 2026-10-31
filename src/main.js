@@ -543,6 +543,8 @@ function launch(record) {
     farming=new Farming(world,record.farms);
     experience=new Experience(record.experience);xpOrbs=new ExperienceOrbs(record.xpOrbs);
     mobs = new EntityWorld(world, record.entities);
+    // World.getLightBrightness for EntityAI.getBlockPathWeight: daylight-reduced sky or block light.
+    mobs.lightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, scene.subtracted) : 15);
     mobRenderer.clear();
     animation.reset();
     eating = null;

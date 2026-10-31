@@ -73,10 +73,11 @@ test("nearby zombies damage survival players but not creative players", () => {
       { type: "zombie", id: "mob-9", x: 65, y: 0, z: 64, health: 20 },
     ]),
     p = new Survival({ time: 14000 });
-  a.tick({ x: 64, y: 0, z: 64 }, p);
+  // EntityAIAttackOnCollide needs a path (the zombie must have landed) and the AI looks for tasks every third tick.
+  for (let i = 0; i < 6 && p.health === 20; i++) a.tick({ x: 64, y: 0, z: 64 }, p);
   assert.equal(p.health, 17);
   const c = new Survival({ time: 14000 }, "creative");
-  a.tick({ x: 64, y: 0, z: 64 }, c);
+  for (let i = 0; i < 12; i++) a.tick({ x: 64, y: 0, z: 64 }, c);
   assert.equal(c.health, 20);
 });
 test('wheat feeds only adult ready cows, consumes one, and breeding creates one persistent calf',()=>{
@@ -86,7 +87,7 @@ test('wheat feeds only adult ready cows, consumes one, and breeding creates one 
  const saved=new EntityWorld(flat,w.serialize());assert.equal(saved.entities.find(e=>e.id===baby.id).growingAge,-24000);assert.equal(saved.entities.find(e=>e.id===a.id).growingAge,6000);
 });
 test('holding wheat attracts cows and baby hitboxes are half the adult size',()=>{
- const w=new EntityWorld(flat,[{id:'mob-1',type:'cow',x:64,y:0,z:64,health:10}]),p=new Survival({inventory:{305:1}});const c=w.entities[0];w.tick({x:68,y:0,z:64},p,305);assert.ok(c.x>64);c.growingAge=-100;assert.equal(entityHit({x:c.x+.3,y:.8,z:60},{x:0,y:0,z:1},c,8),null);
+ const w=new EntityWorld(flat,[{id:'mob-1',type:'cow',x:64,y:0,z:64,health:10}]),p=new Survival({inventory:{305:1}});const c=w.entities[0];for(let i=0;i<5;i++)w.tick({x:68,y:0,z:64},p,305);assert.ok(c.x>64);c.growingAge=-100;assert.equal(entityHit({x:c.x+.3,y:.8,z:60},{x:0,y:0,z:1},c,8),null);
 });
 test('shears and hoes deal finite bare-hand damage and do not wear on melee hits',()=>{for(const tool of [125,120]){const w=new EntityWorld(flat,[{id:'mob-1',type:'pig',x:64,y:0,z:64,health:10}]),p=new Survival({inventory:{[tool]:1}});w.attack(w.entities[0],tool,p,{x:62,y:0,z:64});assert.equal(w.entities[0].health,9);assert.equal(p.inventory.main[p.inventory.find(tool)].damage,0);}});
 
@@ -134,11 +135,12 @@ test("spawned and loaded mobs start with every prev field equal, so nothing lerp
 });
 test("tick keeps lastTickPos and eases limbSwingAmount toward four times the travel", () => {
   const w = zombie(), e = w.entities[0], player = { x: 64, y: 0, z: 70 }, survival = new Survival();
+  // The AI no longer moves a mob on its first tick (no path yet), so a knockback-style push drives the motion.
+  e.vz = 0.1;
   w.tick(player, survival);
-  // First tick is airborne (onGround false): 0.02 acceleration, as the Java probe records.
   assert.equal(e.pz, 64);
-  near(e.z, 64.004508, 1e-6);
-  near(mobPose(e, 0.5).z, 64 + 0.004508 / 2, 1e-6);
+  assert.ok(e.z > 64.05);
+  near(mobPose(e, 0.5).z, 64 + (e.z - 64) / 2, 1e-6);
   const travel = Math.fround(e.z - 64);
   near(e.limbSwingAmount, Math.fround(Math.fround(travel * 4) * 0.4), 1e-6);
   assert.equal(e.prevLimbSwingAmount, 0);
@@ -155,16 +157,21 @@ test("tick keeps lastTickPos and eases limbSwingAmount toward four times the tra
 test("a turning mob swings its body through the wrapped angle and lags its head when idle", () => {
   const w = zombie({ yaw: (-170 * Math.PI) / 180 }), e = w.entities[0];
   assert.equal(e.rotationYaw, 170);
-  const a = (170 * Math.PI) / 180;
-  w.tick({ x: 64 + 10 * Math.sin(a), y: 0, z: 64 + 10 * Math.cos(a) }, new Survival());
-  near(e.rotationYaw, 190, 1e-3);
+  // EntityMoveHelper turns rotationYaw (here by 20 degrees, past the wrap); a moving mob's
+  // body takes it at once and the lerp goes the short way round.
+  e.prevRotationYaw = e.rotationYaw;
+  e.prevRenderYawOffset = e.renderYawOffset;
+  e.px = e.x;
+  e.x += 0.1;
+  e.rotationYaw = 190;
+  w.turnBody(e);
   near(e.renderYawOffset, 190, 1e-3);
   near(e.prevRenderYawOffset, 170, 1e-3);
   near(mobPose(e, 0.5).bodyYaw, 180, 1e-3);
   // EntityBodyHelper: standing still, the body trails the head by up to 75 degrees,
-  // then catches up over ten more ticks.
+  // then catches up over ten more ticks. (The head is turned by EntityLookHelper in ai.js.)
   const idle = zombie().entities[0], helper = zombie();
-  idle.yaw = -Math.PI / 2;
+  idle.rotationYaw = idle.rotationYawHead = 90;
   helper.turnBody(idle);
   near(idle.rotationYawHead, 90, 1e-4);
   near(idle.renderYawOffset, 15, 1e-4);

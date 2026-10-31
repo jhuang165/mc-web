@@ -99,11 +99,12 @@ test("sheep sounds: say, hurt and death are mob.sheep.say; other mobs keep their
 test("a sheep eats grass in 40 ticks: dirt below, bare fleece grows back, and the grazing timer drives the head", () => {
   const edits = [], world = { ...grass, get: (x, y, z) => (edits.some((e) => e[0] === x && e[1] === y && e[2] === z) ? edits.find((e) => e[0] === x && e[1] === y && e[2] === z)[3] : grass.get(x, y, z)), set: (x, y, z, b) => edits.push([x, y, z, b]) };
   world.get = (x, y, z) => ([...edits].reverse().find((e) => e[0] === x && e[1] === y && e[2] === z)?.[3] ?? (y < 0 ? 1 : 0));
-  // random() = 0 passes the 1-in-1000 roll on a tick divisible by 3.
-  const w = sheepWorld({ sheared: true, age: 2 }, world, () => 0), e = w.entities[0], p = new Survival();
+  // random() = 0 passes the 1-in-1000 roll on a tick where EntityAITasks looks for tasks:
+  // tickCount (= age - 1 here) divisible by 3, so the first tick of an age 0 sheep.
+  const w = sheepWorld({ sheared: true, age: 0 }, world, () => 0), e = w.entities[0], p = new Survival();
   w.tick(far, p);
   assert.equal(e.eatTimer, 39);
-  assert.equal(e.age % 3, 0);
+  assert.equal((e.age - 1) % 3, 0);
   for (let i = 0; i < 34; i++) w.tick(far, p);
   assert.equal(e.eatTimer, 5);
   assert.equal(e.sheared, true);
@@ -117,23 +118,24 @@ test("a sheep eats grass in 40 ticks: dirt below, bare fleece grows back, and th
 
 test("tall grass is destroyed instead of the dirt, a lamb grows 60 seconds, and panic interrupts grazing", () => {
   const edits = [], world = { ...grass, get: (x, y, z) => (y === 0 ? (edits.length ? 0 : 39) : y < 0 ? 1 : 0), set: (x, y, z, b) => edits.push([x, y, z, b]) },
-    w = sheepWorld({ growingAge: -2000, age: 2 }, world, () => 0), e = w.entities[0], p = new Survival();
+    w = sheepWorld({ growingAge: -2000, age: 0 }, world, () => 0), e = w.entities[0], p = new Survival();
   for (let i = 0; i < 37; i++) w.tick(far, p);
   assert.deepEqual(edits, [[64, 0, 64, 0]]);
   assert.ok(e.growingAge > -2000 + 1200 - 1 && e.growingAge < -2000 + 1200 + 40);
-  const q = sheepWorld({ age: 2 }, grass, () => 0), s = q.entities[0];
+  const q = sheepWorld({ age: 0 }, grass, () => 0), s = q.entities[0];
   q.tick(far, p);
   assert.ok(s.eatTimer > 0);
   q.damage(s, 1, 60, 64);
-  q.tick(far, p);
+  // EntityAIPanic (priority 1, mutex 1) starts on the next tick the list looks for tasks, which stops EntityAIEatGrass (mutex 7).
+  for (let i = 0; i < 3; i++) q.tick(far, p);
   assert.equal(s.eatTimer, 0);
 });
 
 test("grazing needs grass: no roll on stone, none when the timer cannot start", () => {
-  const stone = { ...grass, get: (x, y, z) => (y < 0 ? 3 : 0) }, w = sheepWorld({ age: 2 }, stone, () => 0), p = new Survival();
+  const stone = { ...grass, get: (x, y, z) => (y < 0 ? 3 : 0) }, w = sheepWorld({ age: 0 }, stone, () => 0), p = new Survival();
   for (let i = 0; i < 10; i++) w.tick(far, p);
   assert.equal(w.entities[0].eatTimer, 0);
-  const odd = sheepWorld({ age: 0 }, grass, () => 0);
+  const odd = sheepWorld({ age: 1 }, grass, () => 0);
   odd.tick(far, p);
   assert.equal(odd.entities[0].eatTimer, 0);
 });
@@ -175,7 +177,7 @@ test("wheat breeds sheep: the lamb mixes the parents' dye colours and the herd p
 
 test("holding wheat tempts sheep before they follow a parent; sheared state and colour survive reload", () => {
   const w = sheepWorld({ color: 7, sheared: true }), e = w.entities[0], p = new Survival({ inventory: { 305: 1 } });
-  w.tick({ x: 68, y: 0, z: 64 }, p, 305);
+  for (let i = 0; i < 5; i++) w.tick({ x: 68, y: 0, z: 64 }, p, 305);
   assert.ok(e.x > 64);
   const saved = w.serialize()[0];
   assert.deepEqual([saved.color, saved.sheared], [7, true]);

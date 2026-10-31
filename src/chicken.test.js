@@ -145,7 +145,8 @@ test("wheat seeds breed chickens, wheat does not, and the chick is a child with 
 
 test("a chicken walks toward the player holding seeds", () => {
   const ew = chickenWorld({ y: 0, eggTimer: 1e9 }), e = ew.entities[0], p = new Survival({ inventory: { 309: 1 } });
-  ew.tick({ x: 68, y: 0, z: 64 }, p, 309);
+  // The AI looks for tasks every third tick and a mob must have landed to path: a few ticks.
+  for (let i = 0; i < 5; i++) ew.tick({ x: 68, y: 0, z: 64 }, p, 309);
   assert.ok(e.x > 64);
 });
 
