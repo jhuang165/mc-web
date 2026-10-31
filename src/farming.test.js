@@ -10,3 +10,24 @@ test('hydrated soil and crop spacing use the original growth-rate formula',()=>{
 test('crops need light and progress through seven growth stages; bone meal adds two to five',()=>{const{w,f}=farm();f.till(20,40,20);f.plant(20,40,20);assert.equal(f.grow(20,41,20,0,()=>0),false);assert.equal(f.grow(20,41,20,1,()=>0),true);assert.equal(w.get(20,41,20),32);assert.equal(f.fertilize(20,41,20,()=>0),true);assert.equal(w.get(20,41,20),34);assert.equal(f.fertilize(20,41,20,()=>.999),true);assert.equal(w.get(20,41,20),38);assert.equal(f.fertilize(20,41,20),false);});
 test('harvesting returns mature wheat plus seed rolls; immature wheat returns its seed',()=>{assert.deepEqual(cropDrops(31),[{id:309,count:1}]);assert.deepEqual(cropDrops(38,()=>0),[{id:305,count:1},{id:309,count:3}]);assert.deepEqual(cropDrops(38,()=>.99),[{id:305,count:1}]);assert.deepEqual(cropDrops(39,()=>0),[{id:309,count:1}]);assert.deepEqual(cropDrops(39,()=>.5),[]);});
 test('moisture and crop stages survive reload and farmland has its fifteen-sixteenths height',()=>{const{w,f}=farm();f.till(20,40,20);w.set(21,40,20,10);f.soilTick(20,40,20);f.plant(20,40,20);f.fertilize(20,41,20,()=>0);const restored=new World('Farm','meadow',2);restored.restore([...w.edits]);const next=new Farming(restored,f.serialize());assert.equal(next.fields.get('20,40,20'),7);assert.equal(restored.get(20,41,20),33);assert.equal(collides(restored,20.5,40+15/16,20.5),false);assert.equal(collides(restored,20.5,40+15/16-.01,20.5),true);});
+
+test('landings trample dry or wet farmland using the 1.7.10 fall-distance roll',()=>{
+  const {w,f}=farm();
+  f.till(20,40,20);
+  assert.equal(f.trample(20,40,20,.5,()=>0),false);
+  assert.equal(f.trample(20,40,20,1,()=>.5),false);
+  assert.equal(f.trample(20,40,20,1,()=>.499),true);
+  assert.equal(w.get(20,40,20),2);
+  assert.equal(f.fields.has('20,40,20'),false);
+  assert.equal(f.trample(20,40,20,2,()=>0),false);
+  f.till(21,40,20);
+  w.set(22,40,20,10);
+  f.soilTick(21,40,20);
+  assert.equal(w.get(21,40,20),30);
+  assert.equal(f.trample(21,40,20,1.5,()=>.999),true);
+  const restored=new World('Farm','meadow',2);
+  restored.restore([...w.edits]);
+  const next=new Farming(restored,f.serialize());
+  assert.equal(restored.get(21,40,20),2);
+  assert.equal(next.fields.has('21,40,20'),false);
+});

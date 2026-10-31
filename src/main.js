@@ -615,6 +615,7 @@ function launch(record) {
     fire.wake();
     experience=new Experience(record.experience);xpOrbs=new ExperienceOrbs(record.xpOrbs);
     mobs = new EntityWorld(world, record.entities);
+    mobs.onLand = (entity, distance) => trampleFarmland(entity, distance);
     // World.getLightBrightness for EntityAI.getBlockPathWeight: daylight-reduced sky or block light.
     mobs.lightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, scene.subtracted) : 15);
     // Entity.isWet: rain puts out burning mobs and stops zombies burning in the sun.
@@ -1134,6 +1135,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   if (!inWater && !flying)
     fallDistance += Math.max(0, oldPosition.y - position.y);
   if (grounded) {
+    if (fallDistance > 0) trampleFarmland(position, fallDistance);
     if (!survival.creative && fallDistance > 3)
       survival.damage(Math.ceil(fallDistance - 3), "a fall");
     fallDistance = 0;
@@ -1189,6 +1191,13 @@ function releaseBowUse() {
   if (releaseBow({ survival, arrows, ticks: draw.ticks, feet: position, yaw, pitch })) {
     flushArrows();
     renderHotbar();
+    saved = false;
+  }
+}
+function trampleFarmland(entity, distance) {
+  const x = Math.floor(entity.x), y = Math.floor(entity.y - 0.2), z = Math.floor(entity.z);
+  if (farming.trample(x, y, z, distance)) {
+    applyFarmUpdates(farming.drain());
     saved = false;
   }
 }

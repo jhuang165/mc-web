@@ -1,0 +1,5 @@
+# Farmland trampling
+
+`BlockFarmland.onFallenUpon` in the original 1.7.10 class `aky` uses `world.rand.nextFloat() < fallDistance - 0.5F` to turn farmland into dirt. It permits players regardless of `mobGriefing`, and other entities when that game rule is enabled. The current game uses its default enabled behavior; the game rule itself is not implemented. The conversion sends the existing neighbor update, which drops unsupported crops, and the world edit and removal of soil moisture persist.
+
+Player and mob landing paths invoke the rule, including Creative players and chickens. Landing coordinates follow the existing entity position and collision model. Other falling entity types (including item entities) do not yet invoke farmland's callback. The current physics and random source are adaptations; the threshold is derived from the original bytecode, not an original-class replay. Farmland's collision bounds also remain adapted (rendered height 15/16 rather than the original full-height collision box).

@@ -964,6 +964,7 @@ export class EntityWorld {
     };
     edge("x", "vx");
     edge("z", "vz");
+    if (landed > 0) this.onLand?.(e, landed);
     // EntityChicken.fall (wg.b(F)) does nothing.
     if (landed > 0 && e.type !== "chicken") this.fall(e, landed);
   }
