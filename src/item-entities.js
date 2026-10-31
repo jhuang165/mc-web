@@ -41,10 +41,16 @@ export class ItemEntities {
     for (const s of stacks)
       for (let n = 0; n < s.count; n++) this.spawn({ ...s, count: 1 }, bx + spread(), by + spread(), bz + spread(), { delay: 10 });
   }
-  // EntityLiving.dropFewItems -> Entity.entityDropItem(stack, 0): one entity
-  // per item at the mob's position.
-  dropMob(id, count, at, damage = 0) {
-    for (let n = 0; n < count; n++) this.spawn({ id, count: 1, damage }, at.x, at.y, at.z, { delay: 10 });
+  // EntityLiving.dropFewItems -> Entity.entityDropItem(stack, offsetY): one entity
+  // per item at the mob's position, `offsetY` above it. `shear` ({offsetY, kick})
+  // is EntitySheep's: wool leaves 1.0 up with the kick [mx, my, mz] added to the
+  // usual random motion.
+  dropMob(id, count, at, damage = 0, shear = null) {
+    for (let n = 0; n < count; n++) {
+      const r = this.random, kick = shear?.kick,
+        motion = kick ? [f(f(r() * 0.2 - 0.1) + kick[0]), f(0.2 + kick[1]), f(f(r() * 0.2 - 0.1) + kick[2])] : null;
+      this.spawn({ id, count: 1, damage: damage || 0 }, at.x, at.y + (shear?.offsetY || 0), at.z, { delay: 10, motion });
+    }
   }
   // BlockFurnace/BlockChest.breakBlock: each stack leaves from a random point
   // 0.1-0.9 inside the block in pieces of 10-30, with gaussian motion x 0.05

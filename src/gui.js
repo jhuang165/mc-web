@@ -13,7 +13,7 @@ export function durabilityBar(damage,max){
 // F3+H advanced line "Durability: remaining / max" for damaged items.
 export function tooltipLines(item,stack,advanced=false){
  if(!item)return[];
- const lines=[{text:item.name}],attack=item.attack;
+ const lines=[{text:item.variants?.[stack.damage]??item.name}],attack=item.attack;
  if(attack)lines.push({text:''},{text:`+${attack} Attack Damage`,color:'blue'});
  if(advanced&&item.durability&&stack.damage>0)lines.push({text:`Durability: ${item.durability-stack.damage} / ${item.durability}`});
  return lines;

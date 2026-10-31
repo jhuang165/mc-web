@@ -20,19 +20,20 @@ export class DropRenderer {
     this.cubes = new Map();
     this.flying = [];
   }
-  cube(id) {
-    if (!this.cubes.has(id)) {
+  cube(id, damage = 0) {
+    const key = id + ":" + damage;
+    if (!this.cubes.has(key)) {
       const g = new THREE.BoxGeometry(0.25, 0.25, 0.25), uv = g.attributes.uv;
       for (let f = 0; f < 6; f++) {
-        const r = tileRect(blockTile(id, f));
+        const r = tileRect(blockTile(id, f, false, damage));
         uv.setXY(f * 4, r.u0, r.v1);
         uv.setXY(f * 4 + 1, r.u1, r.v1);
         uv.setXY(f * 4 + 2, r.u0, r.v0);
         uv.setXY(f * 4 + 3, r.u1, r.v0);
       }
-      this.cubes.set(id, g);
+      this.cubes.set(key, g);
     }
-    return this.cubes.get(id);
+    return this.cubes.get(key);
   }
   build(stack, hover) {
     const url = itemTexture(stack.id), group = new THREE.Group(), spin = new THREE.Group(), random = new JavaRandom(187),
@@ -46,7 +47,7 @@ export class DropRenderer {
         mesh.scale.setScalar(0.5);
         mesh.position.set(-0.25, -0.125, (i - (n - 1) / 2) * 0.042);
       } else {
-        mesh = new THREE.Mesh(this.cube(stack.id), material);
+        mesh = new THREE.Mesh(this.cube(stack.id, stack.damage || 0), material);
         // Extra copies scatter by (rand * 2 - 1) * 0.2 blocks on each axis.
         if (i) mesh.position.set((random.nextFloat() * 2 - 1) * 0.2, (random.nextFloat() * 2 - 1) * 0.2, (random.nextFloat() * 2 - 1) * 0.2);
       }
@@ -54,7 +55,7 @@ export class DropRenderer {
     }
     group.add(spin);
     this.scene.add(group);
-    return { group, spin, material, key: stack.id + ":" + copies(stack.count), hover };
+    return { group, spin, material, key: stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count), hover };
   }
   remove(pile) {
     this.scene.remove(pile.group);
@@ -82,7 +83,7 @@ export class DropRenderer {
       if (!stack) continue;
       seen.add(e);
       let pile = this.piles.get(e);
-      const key = stack.id + ":" + copies(stack.count);
+      const key = stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count);
       if (pile?.key !== key) {
         if (pile) this.remove(pile);
         pile = this.build(stack, e.hover);

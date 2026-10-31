@@ -8,13 +8,14 @@ import { FOG_PARS } from "./light-material.js";
 
 const f = Math.fround;
 // shadowSize and shadowOpaque as set by each renderer's constructor
-// (RenderManager registers RenderPig/RenderCow with 0.7, RenderZombie's
+// (RenderManager registers RenderPig/RenderCow/RenderSheep with 0.7, RenderZombie's
 // RenderBiped with 0.5; RenderItem and RenderXPOrb use 0.15 and 0.75).
 export const SHADOWS = {
   item: { size: f(0.15), opaque: f(0.75) },
   orb: { size: f(0.15), opaque: f(0.75) },
   pig: { size: f(0.7), opaque: 1 },
   cow: { size: f(0.7), opaque: 1 },
+  sheep: { size: f(0.7), opaque: 1 },
   zombie: { size: f(0.5), opaque: 1 },
   // RenderPlayer: super(new ModelBiped(0), 0.5).
   player: { size: f(0.5), opaque: 1 },

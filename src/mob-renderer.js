@@ -3,6 +3,7 @@ import { skinBox, pixelTexture } from "./first-person.js";
 import { limbAngles } from "./animation.js";
 import { entityMaterial } from "./light-material.js";
 import { ENTITY_TYPES, mobPose } from "./entities.js";
+import { FLEECE_COLORS } from "./sheep.js";
 import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
 const RAD = Math.PI / 180;
 export class MobRenderer {
@@ -14,7 +15,55 @@ export class MobRenderer {
     this.particles=[];
     this.heartTexture=pixelTexture("/media/1.7.10/gui/icons.png").clone();this.heartTexture.repeat.set(9/256,9/256);this.heartTexture.offset.set(52/256,1-9/256);
   }
+  // RenderSheep (boq) with ModelSheep2 (bhy, sheep.png) and its fur pass ModelSheep1
+  // (bhx, sheep_fur.png, tinted by the fleece colour, skipped once sheared). Boxes and
+  // pivots are the model's own: x stays, y runs down from 24 and z points to the
+  // back, so three.js gets (x, 24 - y, -z) / 16, and an X rotation keeps its sign.
+  createSheep() {
+    const root = new THREE.Group(), neck = new THREE.Group(), limbs = [], fur = [],
+      skin = entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/entity/sheep/sheep.png") }),
+      wool = entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/entity/sheep/sheep_fur.png") });
+    neck.rotation.order = "YXZ";
+    root.add(neck);
+    // A ModelBox at model offset (ox, oy, oz) inflated by `grow` on every side; the
+    // texture still maps the uninflated size, as ModelBox does.
+    const part = (material, parent, w, h, d, u, v, ox, oy, oz, grow = 0) => {
+      const g = skinBox(w, h, d, u, v, 64, 32);
+      if (grow) g.scale((w + 2 * grow) / w, (h + 2 * grow) / h, (d + 2 * grow) / d);
+      const mesh = new THREE.Mesh(g, material);
+      mesh.position.set((ox + w / 2) / 16, -(oy + h / 2) / 16, -(oz + d / 2) / 16);
+      parent.add(mesh);
+      if (material === wool) fur.push(mesh);
+      return mesh;
+    };
+    // Leg pivots (-3|3, 12, 7|-5) in ModelQuadruped order; limbAngles drives them as leg0..3.
+    for (const [x, z] of [[-3, 7], [3, 7], [-3, -5], [3, -5]]) {
+      const leg = new THREE.Group();
+      leg.position.set(x / 16, 12 / 16, -z / 16);
+      root.add(leg);
+      limbs.push(leg);
+    }
+    // ModelQuadruped turns the body box about (0, 5, 2) by pi / 2.
+    const body = new THREE.Group();
+    body.position.set(0, 19 / 16, -2 / 16);
+    body.rotation.x = Math.PI / 2;
+    root.add(body);
+    // Pass 1 is ModelSheep2 (head tex (0,0), body (28,8), legs (0,16) 12 high); pass 2 is
+    // ModelSheep1, inflated by 0.6 / 1.75 / 0.5 with a 6-high leg box and a head box that
+    // starts 2 pixels further back.
+    part(skin, neck, 6, 6, 8, 0, 0, -3, -4, -6);
+    part(skin, body, 8, 16, 6, 28, 8, -4, -10, -7);
+    part(wool, neck, 6, 6, 6, 0, 0, -3, -4, -4, 0.6);
+    part(wool, body, 8, 16, 6, 28, 8, -4, -10, -7, 1.75);
+    for (const leg of limbs) {
+      part(skin, leg, 4, 12, 4, 0, 16, -2, 0, -2);
+      part(wool, leg, 4, 6, 4, 0, 16, -2, 0, -2, 0.5);
+    }
+    this.scene.add(root);
+    return { root, neck, limbs, fur, wool, materials: [skin, wool], type: "sheep" };
+  }
   create(e) {
+    if (e.type === "sheep") return this.createSheep();
     const root = new THREE.Group(),
       limbs = [],
       materials = [],
@@ -146,7 +195,16 @@ export class MobRenderer {
       r.root.position.set(pose.x, pose.y, pose.z);r.root.scale.setScalar(e.growingAge<0?.5:1);
       // Java yaw turns the opposite way to three.js, hence the sign.
       r.root.rotation.set(0, -pose.bodyYaw * RAD, pose.death * RAD);
-      r.neck.rotation.set(pose.headPitch * RAD, -pose.headYaw * RAD, 0);
+      r.neck.rotation.set(e.type === "sheep" ? pose.headTilt : pose.headPitch * RAD, -pose.headYaw * RAD, 0);
+      if (e.type === "sheep") {
+        // ModelSheep2.setLivingAnimations: rotationPointY = 6 + func_70894_j * 9. A lamb's
+        // head is drawn at full size, moved down 8 and back 4 before the body shrinks (x0.5).
+        const baby = e.growingAge < 0, drop = 6 + pose.headDrop * 9;
+        r.neck.position.set(0, ((24 - drop) / 16 - (baby ? 8 / 16 : 0)) * (baby ? 2 : 1), 8 / 16);
+        r.neck.scale.setScalar(baby ? 2 : 1);
+        for (const m of r.fur) m.visible = !e.sheared;
+        r.wool.uniforms.tint.value.set(...FLEECE_COLORS[e.color ?? 0]);
+      }
       const angles = limbAngles(pose.limbSwing, pose.limbSwingAmount);
       // ModelZombie.setRotationAngles holds the arms out with a sway driven by
       // ageInTicks (ticksExisted + partial); the Java Y/Z angles flip sign here.

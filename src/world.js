@@ -38,6 +38,16 @@ export const BLOCKS = [
   {name:'Hardened clay',color:'#965c42'},
   {name:'Chest',color:'#a0742f'},
 ];
+// BlockColored (aka) metadata 0-15 in wool order: `texture` is the
+// wool_colored_<name> suffix (ItemDye.field_150921_b[~meta & 15]) and `label`
+// the item name ("tile.cloth.<name>.name"). The id 19 stack's damage is the metadata.
+export const WOOL_COLORS = [
+  ["white", "White"], ["orange", "Orange"], ["magenta", "Magenta"], ["light_blue", "Light blue"],
+  ["yellow", "Yellow"], ["lime", "Lime"], ["pink", "Pink"], ["gray", "Gray"],
+  ["silver", "Light gray"], ["cyan", "Cyan"], ["purple", "Purple"], ["blue", "Blue"],
+  ["brown", "Brown"], ["green", "Green"], ["red", "Red"], ["black", "Black"],
+].map(([texture, label]) => ({ texture, label }));
+export const WOOL = 19;
 export const HOTBAR = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 // Vanilla 1.7.10 values, located using MCP SRG mappings and javap; see research notes.
 export const PHYSICS = Object.freeze({
