@@ -58,6 +58,8 @@ for (const item of Object.values(ITEMS))
     item.attack = { sword: 4, axe: 3, pickaxe: 2, shovel: 1 }[item.kind] + (item.name.startsWith("Golden") ? 0 : item.tier);
 for(const [tier,name,durability,ingredient]of[[0,'Wooden',59,7],[1,'Stone',131,12],[2,'Iron',250,302],[3,'Diamond',1561,303],[0,'Golden',32,304]]){const id=120+Object.values(ITEMS).filter(i=>i.kind==='hoe').length;ITEMS[id]={id,name:name+' hoe',kind:'hoe',tier,durability,speed:1,ingredient,stack:1,color:'#b7a274',glyph:'⚒'};}
 ITEMS[125]={id:125,name:"Shears",kind:"shears",durability:238,speed:1,stack:1,color:"#d8d8d8"};
+// ItemFlintAndSteel (acw, vanilla 259): maxDamage 64, stack 1, Tools tab; use is in main.js.
+ITEMS[126]={id:126,name:"Flint and steel",kind:"flint_and_steel",durability:64,stack:1,texture:"flint_and_steel",color:"#8d8d90",glyph:"✦"};
 // ItemBow (abq: Item.bow, Minecraft 261): stack 1, durability 384, EnumAction.bow, max use
 // duration 72000. Item.arrow (262) and Item.string (287) are plain items. The ids are this
 // build's own (127, 320, 321); see src/bow.js.
@@ -313,6 +315,8 @@ const FLOWER_DYES = [1, 12, 13, 7, 1, 14, 7, 9, 7];
 shapeless(DYE, 1, 11, YELLOW_FLOWER);
 RED_FLOWERS.forEach((_, m) => shapeless(DYE, 1, FLOWER_DYES[m], [RED_FLOWER, m]));
 shapeless(DYE, 3, 15, 311);
+// RecipesTools: ShapelessRecipes iron ingot + flint -> flint and steel.
+shapeless(126, 1, 0, 302, 313);
 export function matchShapeless(stacks) {
   const filled = stacks.filter(Boolean);
   for (const r of SHAPELESS) {

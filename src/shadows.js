@@ -3,7 +3,7 @@
 // 2 x shadowSize, centred under the entity, laid 1/64 above the top of every
 // solid cube below it and faded by height, viewer distance and block light.
 import * as THREE from "three";
-import { isFlower } from "./world.js";
+import { isFlower, FIRE } from "./world.js";
 import { BRIGHTNESS } from "./lighting.js";
 import { FOG_PARS } from "./light-material.js";
 
@@ -28,7 +28,7 @@ export const SHADOWS = {
 // public/research/shadow-reference.json): glass, water, lava, torches, farmland,
 // wheat, tall grass, chests, fire (45) and the snow layer (46). Every block that does is a full cube
 // (ice does: it renders as a normal block).
-const NOT_NORMAL = new Set([9, 10, 20, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41, 42, 45, 46]);
+const NOT_NORMAL = new Set([9, 10, 20, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41, 42, FIRE, 46]);
 export const takesShadow = (b) => b !== 0 && !NOT_NORMAL.has(b) && !isFlower(b);
 
 // `e`: { x, y, z } interpolated Java position (posY, which for items and orbs

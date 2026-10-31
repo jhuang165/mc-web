@@ -15,8 +15,8 @@
 // infinite source, and lava may flow into water (it never lets water in). The
 // BlockLiquid.func_149805_n hardening (obsidian for a source, cobblestone for
 // level 4 or less, plus the fizz sound) runs on every neighbour change and on
-// placement. Static lava's random fire spread (ant.a(.., Random)) needs fire,
-// which this build does not have, and is not ported.
+// placement. Static lava's random fire spread (ant.a(.., Random)) lives in
+// fire.js (lavaTick), driven by the random block ticks of the Fire runtime.
 
 import { WATER, LAVA, isLiquid } from "./world.js";
 import { JavaRandom } from "./lighting.js";

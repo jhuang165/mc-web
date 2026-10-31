@@ -1,7 +1,7 @@
 {
   "target": "Minecraft Java 1.7.10",
   "assetIndexSha1": "1863782e33ce7b584fc45b037325a1964e095d3e",
-  "credit": "Original Minecraft sound effects © Mojang / Microsoft. These are original game resources, not newly synthesized effects.",
+  "credit": "Original Minecraft sound effects \u00a9 Mojang / Microsoft. These are original game resources, not newly synthesized effects.",
   "files": {
     "ambient/weather/thunder2": {
       "url": "/audio/1.7.10/ambient/weather/thunder2.ogg",
@@ -897,6 +897,16 @@
       "url": "/audio/1.7.10/random/bowhit4.ogg",
       "sha1": "9e5e2369fc354a082c861494cfe8767d327813d4",
       "bytes": 15430
+    },
+    "fire/ignite": {
+      "url": "/audio/1.7.10/fire/ignite.ogg",
+      "sha1": "a0d1fbff7e938e92c10c1576339dda668f40e111",
+      "bytes": 6418
+    },
+    "fire/fire": {
+      "url": "/audio/1.7.10/fire/fire.ogg",
+      "sha1": "8b260108a73470c16cd244325242d4780cfb7d78",
+      "bytes": 28689
     }
   },
   "events": {
@@ -1516,6 +1526,18 @@
           "type": "event",
           "name": "music.game"
         }
+      ]
+    },
+    "fire.fire": {
+      "category": "block",
+      "sounds": [
+        "fire/fire"
+      ]
+    },
+    "fire.ignite": {
+      "category": "block",
+      "sounds": [
+        "fire/ignite"
       ]
     }
   }

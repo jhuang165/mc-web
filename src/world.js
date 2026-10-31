@@ -46,9 +46,11 @@ export const BLOCKS = [
   // and referenced through the constants below, never by number.
   {name:'Dandelion',color:'#f1e04b'},
   {name:'Red flower',color:'#c9302a'},
-  // Id 45 is reserved for Fire (the fire port adds it); 46 and 47 are BlockSnow (snow_layer,
-  // metadata 0-7 = layers - 1) and BlockIce, referenced through the constants below.
-  {name:'Fire',color:'#e25822',hidden:true},
+  // BlockFire (alb, vanilla id 51): not in any creative tab. Logic in fire.js; its
+  // age is the metadata.
+  {name:'Fire',color:'#e2711d',hidden:true},
+  // 46 and 47 are BlockSnow (snow_layer, metadata 0-7 = layers - 1) and BlockIce, referenced
+  // through the constants below.
   {name:'Snow',color:'#f4fafa'},
   {name:'Ice',color:'#8cb4fe'},
 ];
@@ -57,6 +59,7 @@ export const SNOW_LAYER=46,ICE=47;
 export const isLiquid=b=>b===WATER||b===LAVA;
 export const YELLOW_FLOWER = BLOCKS.findIndex((b) => b.name === 'Dandelion');
 export const RED_FLOWER = BLOCKS.findIndex((b) => b.name === 'Red flower');
+export const FIRE = BLOCKS.findIndex((b) => b.name === 'Fire');
 export const TALL_GRASS = 39;
 // BlockFlower.field_149860_M / field_149861_a: red_flower metadata 0-8 names
 // and their textures (flower_<texture>.png). Dandelion has no variants.
@@ -128,11 +131,11 @@ export const blockHeight=b=>b===29||b===30?15/16:b===41?.875:b===SNOW_LAYER?.125
 // (ExtendedBlockStorage.getNeedsRandomTick), which WorldServer reads to pick sections.
 // Grass, leaves, farmland, crops, lava, snow layer and ice here; snow and ice are the ones
 // that act on a random tick in this port (snow.js).
-export const ticksRandomly=b=>b===1||b===5||b===29||b===30||(b>=31&&b<=38)||b===LAVA||b===SNOW_LAYER||b===ICE;
+export const ticksRandomly=b=>b===1||b===5||b===29||b===30||(b>=31&&b<=38)||b===LAVA||b===SNOW_LAYER||b===ICE||b===FIRE;
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE]);
+const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE]);
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 export const normalCube=b=>opaqueCube(b)&&b!==5;
 // setBlockBoundsBasedOnState: chests are inset by 1/16 except towards a partner.
@@ -184,7 +187,7 @@ export class World {
     const b = this.get(x, y, z);
     // A flat snow layer (meta 0) has no collision box, so it is not an obstacle.
     if (b === SNOW_LAYER) return (this.meta[this.index(x, y, z)] & 7) !== 0;
-    return b !== 0 && b !== 10 && b !== 42 && b !== 20 && !isPlant(b);
+    return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== FIRE && !isPlant(b);
   }
   // Section (16 high) random-tick refcounts, kept up to date by put() once built.
   sectionTickCount(cx, cz, s) {
@@ -398,7 +401,8 @@ export function raycast(world, origin, dir, reach = 6) {
     }
     if (last && p.every((v, i) => v === last[i])) continue;
     const hit = world.get(...p);
-    if (hit !== 0 && !isLiquid(hit)) {
+    // BlockFire.isCollidable is false, so the ray passes through it (clicks reach the block behind).
+    if (hit !== 0 && !isLiquid(hit) && hit !== FIRE) {
       // A snow layer is only selectable up to its selection height; above it the ray goes on
       // (and keeps being tested while it is inside the cell).
       if (hit === SNOW_LAYER && origin.y + dir.y * d - p[1] > snowSelectionHeight(world.getMeta(...p))) {
