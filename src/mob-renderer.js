@@ -7,6 +7,7 @@ import { FLEECE_COLORS } from "./sheep.js";
 import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
 import { heldItemMatrix } from "./player-renderer.js";
 import { spriteGeometry } from "./sprite-geometry.js";
+import { spiderLegs } from "./spider.js";
 const RAD = Math.PI / 180;
 export class MobRenderer {
   // `view` supplies the lightmap and world brightness (VoxelScene).
@@ -155,7 +156,42 @@ export class MobRenderer {
     this.scene.add(root);
     return { root, neck, limbs, materials, type: "skeleton" };
   }
+  // ModelSpider: head/body/rear at y=15, eight 16x2x2 legs. All boxes and
+  // pivots use the original pixel coordinates; (x,24-y,-z)/16 maps to three.js.
+  createSpider() {
+    const root = new THREE.Group(), frame = new THREE.Group(), limbs = [],
+      skin = entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/entity/spider/spider.png") }),
+      eyes = new THREE.MeshBasicMaterial({ map: pixelTexture("/media/1.7.10/entity/spider_eyes.png"), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    frame.position.y = 1 / 128;
+    root.add(frame);
+    const part = (parent, w, h, d, u, v, ox, oy, oz, glow = false) => {
+      const geometry = skinBox(w, h, d, u, v, 64, 32), mesh = new THREE.Mesh(geometry, skin);
+      mesh.position.set((ox + w / 2) / 16, -(oy + h / 2) / 16, -(oz + d / 2) / 16);
+      parent.add(mesh);
+      if (glow) { const pass = new THREE.Mesh(geometry.clone(), eyes); pass.position.copy(mesh.position); pass.renderOrder = 1; parent.add(pass); }
+    };
+    const pivot = (x, y, z) => {
+      const group = new THREE.Group();
+      group.position.set(x / 16, (24 - y) / 16, -z / 16);
+      group.rotation.order = "ZYX";
+      frame.add(group);
+      return group;
+    };
+    const neck = pivot(0, 15, -3);
+    neck.rotation.order = "YXZ";
+    part(neck, 8, 8, 8, 32, 4, -4, -4, -8, true);
+    part(pivot(0, 15, 0), 6, 6, 6, 0, 0, -3, -3, -3);
+    part(pivot(0, 15, 9), 10, 8, 12, 0, 12, -5, -4, -6);
+    for (const z of [2, 1, 0, -1]) for (const x of [-4, 4]) {
+      const leg = pivot(x, 15, z);
+      part(leg, 16, 2, 2, 18, 0, x < 0 ? -15 : -1, -1, -1);
+      limbs.push(leg);
+    }
+    this.scene.add(root);
+    return { root, neck, limbs, materials: [skin], eyes, type: "spider" };
+  }
   create(e) {
+    if (e.type === "spider") return this.createSpider();
     if (e.type === "skeleton") return this.createSkeleton();
     if (e.type === "chicken") return this.createChicken();
     if (e.type === "sheep") return this.createSheep();
@@ -278,6 +314,7 @@ export class MobRenderer {
           if (o.isMesh) o.geometry.dispose();
         });
         for (const m of rig.materials) m.dispose();
+        rig.eyes?.dispose();
         this.rigs.delete(id);
       }
     for (const e of entities) {
@@ -314,7 +351,9 @@ export class MobRenderer {
       // ModelZombie.setRotationAngles holds the arms out with a sway driven by
       // ageInTicks (ticksExisted + partial); the Java Y/Z angles flip sign here.
       const sway = mhSin(pose.age * 0.067) * 0.05, spread = mhCos(pose.age * 0.09) * 0.05 + 0.05;
+      const spider = e.type === "spider" ? spiderLegs(pose.limbSwing, pose.limbSwingAmount) : null;
       r.limbs.forEach((l, i) => {
+        if (spider) { l.rotation.set(0, -spider[i][0], -spider[i][1]); return; }
         if ((e.type === "zombie" || e.type === "skeleton") && i < 2) {
           const side = i === 0 ? 1 : -1;
           l.rotation.set(-Math.PI / 2 + side * sway, side * 0.1, -side * spread);

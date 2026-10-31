@@ -68,6 +68,7 @@ ITEMS[126]={id:126,name:"Flint and steel",kind:"flint_and_steel",durability:64,s
 // build's own (127, 320, 321); see src/bow.js.
 ITEMS[127]={id:127,name:"Bow",kind:"bow",texture:"bow_standby",durability:384,stack:1,color:"#8d6a3f",glyph:")"};
 ITEMS[320]={id:320,name:"Arrow",texture:"arrow",stack:64,color:"#b0905f",glyph:"\u2191"};
+ITEMS[326]={id:326,name:"Spider eye",texture:"spider_eye",food:2,saturation:0.8,stack:64,color:"#803f47",glyph:"●"};
 ITEMS[321]={id:321,name:"String",texture:"string",stack:64,color:"#eee",glyph:"~"};
 for (const item of [
   {id:312,name:"Snowball",color:"#fff",glyph:"●",stack:16},{id:315,name:"Leather",color:"#a06540",glyph:"▰",texture:"leather"},{id:313,name:"Flint",color:"#555",glyph:"◆"},{id:314,name:"Book",color:"#8d4f39",glyph:"▰"},
@@ -237,6 +238,7 @@ recipe("shears","Shears",[" I","I "],{I:302},125);
 // RecipesWeapons (afl): bow " #X","# X"," #X" with stick and string (the mirror matches
 // too), arrow "X","#","Y" with flint, stick and feather for four arrows.
 recipe("bow","Bow",[" #X","# X"," #X"],{"#":300,X:321},127);
+recipe("string-wool","Wool",["SS","SS"],{S:321},WOOL);
 recipe("arrow","Arrow",["X","#","Y"],{X:313,"#":300,Y:317},320,4);
 // CraftingManager: "# #", " # " of iron ingots makes one bucket.
 recipe("bucket","Bucket",["I I"," I "],{I:302},340);

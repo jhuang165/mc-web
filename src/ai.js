@@ -770,6 +770,8 @@ export class Brain {
       this.tasks.add(8, new LookIdle(this));
       this.targets.add(1, new HurtByTarget(this));
       this.targets.add(2, new NearestAttackable(this));
+    } else if (e.type === "spider") {
+      // EntitySpider uses legacy EntityCreature AI; EntityWorld.spiderThink drives it.
     } else if (e.type === "skeleton") {
       // EntitySkeleton (yl): swim 1, restrict sun 2, flee sun 3, the bow's arrow attack 4
       // (setCombatTask, with a bow in hand), wander 5, watch the player 6, look idle 6;
@@ -926,7 +928,7 @@ export class Brain {
   despawnEntity() {
     const e = this.e, p = this.ai.player;
     if ((e.idle & 31) !== 31 || !p) return;
-    const d3 = this.distSq(p), can = e.type === "zombie" || e.type === "skeleton";
+    const d3 = this.distSq(p), can = e.type === "zombie" || e.type === "skeleton" || e.type === "spider";
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
     if (d3 < 1024) e.idle = 0;

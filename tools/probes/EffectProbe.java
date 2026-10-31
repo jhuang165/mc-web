@@ -27,7 +27,7 @@ public class EffectProbe {
     aji.p();adb.l();sun.misc.Unsafe u=unsafe();
     W w=(W)u.allocateInstance(W.class);
     Method food=acx.class.getDeclaredMethod("c",add.class,ahb.class,yz.class);food.setAccessible(true);
-    for(int id:new int[]{365,367,394,391})for(float roll:new float[]{0f,.29999998f,.3f,.59999996f,.6f,.79999995f,.8f,.999f}){
+    for(int id:new int[]{365,367,394,391,375})for(float roll:new float[]{0f,.29999998f,.3f,.59999996f,.6f,.79999995f,.8f,.999f}){
       P p=(P)u.allocateInstance(P.class);p.init(20);
       final float value=roll;w.s=new Random(){public float nextFloat(){return value;}};
       food.invoke(adb.d(id),new add(adb.d(id)),w,p);rw e=p.received;

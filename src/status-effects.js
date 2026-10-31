@@ -2,6 +2,7 @@
 // Only food-borne Hunger and Poison are implemented; these use vanilla effect IDs.
 export const HUNGER = 17, POISON = 19;
 const FOOD_EFFECTS = {
+  326: { id: POISON, duration: 100, chance: 1 },
   318: { id: HUNGER, duration: 600, chance: 0.3 },
   206: { id: HUNGER, duration: 600, chance: 0.8 },
   325: { id: POISON, duration: 100, chance: 0.6 },

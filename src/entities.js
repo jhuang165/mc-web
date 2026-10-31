@@ -1,3 +1,4 @@
+import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE } from "./spider.js";
 import {CARROT,zombieRareDrop} from './crops.js';
 import { SIZE, HEIGHT, hash, slipperiness, blockBounds, WOOL, isLiquid, DYE } from "./world.js";
 import { ITEMS } from "./survival.js";
@@ -98,7 +99,7 @@ export function mobPose(e, partial) {
     x: lerp(e.px, e.x), y: lerp(e.py, e.y), z: lerp(e.pz, e.z),
     bodyYaw: body, headYaw: f(head - body),
     headPitch,
-    limbSwing: swing, limbSwingAmount: amount, age: e.age + p, death,
+    limbSwing: swing, limbSwingAmount: amount, age: e.age + p, death: e.type === "spider" ? death * 2 : death,
   };
 }
 // Widths and heights are each 1.7.10 constructor's setSize: EntityPig (wo)
@@ -128,6 +129,8 @@ export const ENTITY_TYPES = {
     damage: 3,
     drop: 206,
   },
+  // EntitySpider (yn): legacy AI uses speed 0.8 as input, fixed 0.1 land acceleration.
+  spider: { health: 16, width: f(1.4), height: f(0.9), movement: f(0.8), ai: { wander: 1 }, damage: 2, drop: 0 },
   // EntitySkeleton (yl): 0.6 x 1.8, 20 health, speed 0.25 (applyEntityAttributes). Its
   // arrow and bone drops are rolled in `kill`, so there is no `drop`; the task
   // speeds (ArrowAttack 1.0, FleeSun 1.0, Wander 1.0) are in the AI's brain.
@@ -147,7 +150,7 @@ const BREED_ITEM = { pig: CARROT, cow: 305, sheep: 305, chicken: 309 };
 export const EGG = 316, FEATHER = 317, RAW_CHICKEN = 318, COOKED_CHICKEN = 319;
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
 // its hurt sound, and the sheep uses mob.sheep.say for say, hurt and death alike.
-const hurtSound = (type) => (type === "pig" ? "mob.pig.say" : type === "sheep" ? "mob.sheep.say" : "mob." + type + ".hurt");
+const hurtSound = (type) => (type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider") ? "mob." + type + ".say" : "mob." + type + ".hurt");
 // EntityChicken's death sound is its hurt sound as well.
 const deathSound = (type) => (type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
 // Chunk.canBlockSeeTheSky without a height map (weather.js `canSeeSky` is the real one
@@ -307,16 +310,17 @@ function offsetInLiquid(world, e, w, h, dx, dy, dz) {
 export function jump(e) {
   e.vy = 0.41999998688697815;
 }
-// EntityLivingBase.moveEntityWithHeading (sv.e(FF)) without strafe or ladders
-// (isAIEnabled mobs): water accelerates at 0.04 and drags by 0.8, lava at 0.02
-// and 0.5 (gravity 0.02 in both); on land the block under the feet sets friction 0.91 * slipperiness and the ground
-// acceleration aiMoveSpeed * 0.16277136 / friction^3 (0.02 in the air).
+// EntityLivingBase.moveEntityWithHeading (sv.e(FF)), without strafe. AI mobs
+// accelerate at 0.04 in water (legacy spiders 0.02); drag is 0.8. Lava uses
+// acceleration 0.02 and drag 0.5; gravity is 0.02 in either liquid. On land,
+// friction is 0.91 * block slipperiness. Acceleration is aiMoveSpeed (spiders:
+// fixed 0.1) * 0.16277136 / friction^3; 0.02 in the air. Spiders can climb.
 // Gravity is 0.08 with 0.98 vertical drag. Returns the landing fall distance.
 export function moveEntityWithHeading(world, e, w, h, forward) {
   let landed;
   if (e.inWater) {
     const y0 = e.y;
-    moveFlying(e, 0, forward, f(0.04));
+    moveFlying(e, 0, forward, f(e.type === "spider" ? 0.02 : 0.04));
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz);
     e.vx *= 0.800000011920929;
     e.vy *= 0.800000011920929;
@@ -337,9 +341,16 @@ export function moveEntityWithHeading(world, e, w, h, forward) {
     const slip = () => (e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.91)) : f(0.91));
     let friction = slip();
     const accel = f(f(0.16277136) / f(f(friction * friction) * friction));
-    moveFlying(e, 0, forward, e.onGround ? f(e.aiMoveSpeed * accel) : JUMP_MOVEMENT_FACTOR);
+    moveFlying(e, 0, forward, e.onGround ? f((e.type === "spider" ? f(0.1) : e.aiMoveSpeed) * accel) : JUMP_MOVEMENT_FACTOR);
     friction = slip();
+    if (e.type === "spider" && e.climbing) {
+      e.vx = Math.max(-f(0.15), Math.min(f(0.15), e.vx));
+      e.vz = Math.max(-f(0.15), Math.min(f(0.15), e.vz));
+      e.vy = Math.max(-0.15, e.vy);
+      e.fallDistance = 0;
+    }
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz);
+    if (e.type === "spider" && e.collidedH && e.climbing) e.vy = 0.2;
     e.vy -= 0.08;
     e.vy *= 0.9800000190734863;
     e.vx *= friction;
@@ -429,6 +440,7 @@ export class EntityWorld {
           ...(e.type === "sheep" ? { color: Number.isInteger(e.color) && e.color >= 0 && e.color < 16 ? e.color : 0, sheared: e.sheared === true, eatTimer: 0 } : {}),
           // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
           ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
+          ...(e.type === "spider" ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
           wander: 0,
           hurt: 0,
           recentlyHit: 0,
@@ -476,6 +488,7 @@ export class EntityWorld {
       ...(type === "sheep" ? { color: sheepColor(random), sheared: false, eatTimer: 0 } : {}),
       // EntityChicken (wg): timeUntilNextEgg = rand.nextInt(6000) + 6000 (wg.bu; not saved in
       // 1.7.10), wingRotation/destPos and their previous values 0, wingRotDelta (bt) 1.0.
+      ...(type === "spider" ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
       ...(type === "chicken" ? { eggTimer: Math.floor(random() * 6000) + 6000, wingRotation: 0, destPos: 0, oFlapSpeed: 0, oFlap: 0, wingRotDelta: 1 } : {}),
       // EntityZombie.func_110161_a adds a 0 to 0.05 "Random spawn bonus" to knockbackResistance.
       knockbackResistance: type === "zombie" ? random() * 0.05000000074505806 : 0,
@@ -548,7 +561,7 @@ export class EntityWorld {
     // reads it any more) and resets love; EntityLivingBase.attackEntityFrom sets the
     // revenge target (the attacker, always the player here), which EntityAIPanic and
     // EntityAIHurtByTarget read. The mob is not turned: panic walks it away.
-    if (e.type !== "zombie" && e.type !== "skeleton") e.flee = 60;
+    if (e.type !== "zombie" && e.type !== "skeleton" && e.type !== "spider") e.flee = 60;
     e.love=0;e.mateTicks=0;
     // A mob shot by another mob's arrow has no player to take revenge on.
     if (byPlayer) { e.revenge = (e.age || 0) + 1; e.recentlyHit = 100; }
@@ -599,7 +612,7 @@ export class EntityWorld {
       sound: deathSound(e.type),
       position: e,
     });
-    if(e.growingAge>=0)this.events.push({xp:e.type==='zombie'||e.type==='skeleton'?5:1+Math.floor(Math.random()*3),position:{x:e.x,y:e.y,z:e.z}});
+    if(e.growingAge>=0)this.events.push({xp:e.type==='zombie'||e.type==='skeleton'||e.type==='spider'?5:1+Math.floor(Math.random()*3),position:{x:e.x,y:e.y,z:e.z}});
     // EntitySheep.dropFewItems (wp.b): one wool of its colour unless sheared, young or old.
     if(e.type==='sheep'&&!e.sheared)this.events.push({drop:WOOL,count:1,damage:e.color,position:{x:e.x,y:e.y,z:e.z}});
     if(e.growingAge>=0&&ENTITY_TYPES[e.type].drop)this.events.push({
@@ -624,6 +637,11 @@ export class EntityWorld {
       const arrows = Math.floor(this.random() * 3), bones = Math.floor(this.random() * 3);
       if (arrows) this.events.push({ drop: 320, count: arrows, position: { x: e.x, y: e.y, z: e.z } });
       if (bones) this.events.push({ drop: 311, count: bones, position: { x: e.x, y: e.y, z: e.z } });
+    }
+    if (e.type === "spider") {
+      const drops = spiderDrops(e.recentlyHit > 0, this.random);
+      for (const [drop, count] of [[STRING, drops.string], [SPIDER_EYE, drops.eye]])
+        if (count) this.events.push({ drop, count, position: { x: e.x, y: e.y, z: e.z } });
     }
     if(e.type==='zombie'){const drop=zombieRareDrop(e.recentlyHit,n=>Math.floor(this.random()*n));if(drop)this.events.push({drop,count:1,position:{x:e.x,y:e.y,z:e.z}});}
     e.death = 1;
@@ -742,7 +760,7 @@ export class EntityWorld {
       mobSize:(e)=>{const base=ENTITY_TYPES[e.type],scale=e.growingAge<0?.5:1;return{width:base.width*scale,height:base.height*scale};},
       spawnBaby:(a,b)=>this.spawnBaby(a,b),
       eatGrass:(e)=>this.eatGrass(e),
-      attackPlayer:(e,survival)=>survival.damage(ENTITY_TYPES[e.type].damage,"a zombie",true),
+      attackPlayer:(e,survival)=>survival.damage(ENTITY_TYPES[e.type].damage,"a " + e.type,true),
       // EntitySkeleton.attackEntityWithRangedAttack: the arrow itself is made by bow.js
       // (entities.js cannot import it: projectiles.js already imports this file).
       rangedAttack:(e,target,scale)=>this.shoot?.(e,target,scale),
@@ -795,6 +813,19 @@ export class EntityWorld {
         const y = this.world.surface(x, z);
         if (this.world.get(x, y - 1, z) !== 1) continue;
         this.entities.push(this.create("skeleton", x + 0.5, y, z + 0.5));
+        break;
+      }
+    }
+    this.spiderClock = (this.spiderClock || 0) + 1;
+    if (night && !survival.creative && this.spiderClock >= 260 && this.entities.filter(e => e.type === "spider").length < 3) {
+      this.spiderClock = 0;
+      for (let i = 0; i < 16; i++) {
+        const a = hash(i + 200, survival.time, this.world.numericSeed) * Math.PI * 2,
+          x = Math.floor(player.x + Math.sin(a) * 24), z = Math.floor(player.z + Math.cos(a) * 24);
+        if (x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
+        const y = this.world.surface(x, z), t = ENTITY_TYPES.spider;
+        if (this.world.get(x, y - 1, z) !== 1 || actorCollides(this.world, x + 0.5, y, z + 0.5, t.width, t.height)) continue;
+        this.entities.push(this.create("spider", x + 0.5, y, z + 0.5));
         break;
       }
     }
@@ -858,7 +889,19 @@ export class EntityWorld {
       this.burn(e, t);
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.
-      this.walk(e, t, 0, () => this.ai.think(e));
+      this.walk(e, t, 0, () => e.type === "spider" ? this.spiderThink(e) : this.ai.think(e));
+      if (e.type === "spider") {
+        e.climbing = e.collidedH;
+        // Entity.moveEntity's distanceWalkedOnStepModified (0.6 per block);
+        // EntitySpider has its own original step event at volume 0.15.
+        const dx = e.x - e.px, dy = e.climbing ? e.y - e.py : 0, dz = e.z - e.pz;
+        e.stepDistance = f((e.stepDistance || 0) + f(Math.sqrt(dx * dx + dy * dy + dz * dz) * 0.6));
+        const below = this.world.get(Math.floor(e.x), Math.floor(e.y - 0.2), Math.floor(e.z));
+        if (e.stepDistance > (e.nextStep || 1) && below) {
+          e.nextStep = Math.floor(e.stepDistance) + 1;
+          this.events.push({ sound: "mob.spider.step", volume: 0.15, pitch: 1, position: { x: e.x, y: e.y, z: e.z } });
+        }
+      }
       if (e.type === "chicken") this.chickenUpdate(e);
       this.turnBody(e);
       this.swingLimbs(e);
@@ -916,6 +959,49 @@ export class EntityWorld {
     edge("z", "vz");
     // EntityChicken.fall (wg.b(F)) does nothing.
     if (landed > 0 && e.type !== "chicken") this.fall(e, landed);
+  }
+  // Spider keeps EntityCreature's legacy aggression/leap rules. Navigation reuses
+  // the existing bounded PathFinder; its refresh/wander timing remains adapted.
+  spiderThink(e) {
+    const m = this.ai.brain(e), p = this.ai.player, s = this.ai.survival;
+    const light = this.ai.brightness(Math.floor(e.x), Math.floor(e.y + ENTITY_TYPES.spider.height * 0.66), Math.floor(e.z));
+    const distance = Math.sqrt(m.distSq(p));
+    e.idle = (e.idle || 0) + 1 + (light > 0.5 ? 2 : 0);
+    m.despawnEntity();
+    m.senseCache.clear();
+    if (!p.alive || s.creative) {
+      if (e.spiderTarget) m.navigator.clearPathEntity();
+      e.spiderTarget = false;
+    } else if (e.revenge && e.revenge !== e.spiderRevenge) {
+      e.spiderRevenge = e.revenge;
+      e.spiderTarget = true;
+    } else if (!e.spiderTarget && distance < 16 && spiderFindsPlayer(light)) e.spiderTarget = true;
+    if (e.spiderTarget) {
+      m.attackTarget = p;
+      if (m.canSee(p)) {
+        const result = spiderAttack(e, p, distance, light, this.random);
+        if (result === "forget") { e.spiderTarget = false; m.navigator.clearPathEntity(); }
+        else if (result === "hit") s.damage(2, "a spider", true);
+      }
+      if (e.spiderTarget) {
+        if (e.age % 10 === 0 || m.navigator.noPath()) m.navigator.tryMoveToEntityLiving(p, 1);
+        m.lookHelper.setLookPositionWithEntity(p, 30, 30);
+        // The legacy path cannot climb vertically; continue pushing toward the
+        // target when a wall stops the path, which sets the spider's ladder flag.
+        if (m.navigator.noPath() || e.climbing) m.moveHelper.setMoveTo(p.x, e.y, p.z, 1);
+      }
+    } else {
+      m.attackTarget = null;
+      if (e.age % 80 === 0) {
+        const a = this.random() * Math.PI * 2;
+        m.navigator.tryMoveToXYZ(e.x + Math.sin(a) * 6, e.y, e.z + Math.cos(a) * 6, 1);
+      }
+    }
+    m.navigator.onUpdateNavigation();
+    m.moveHelper.onUpdateMoveHelper();
+    m.lookHelper.onUpdateLook();
+    m.jumpHelper.doJump();
+    e.yaw = -e.rotationYaw * Math.PI / 180;
   }
   // The chicken half of EntityChicken.onLivingUpdate (wg.e()), run after the shared
   // movement: the previous wing values are kept, destPos moves 0.3 x (-1 on the

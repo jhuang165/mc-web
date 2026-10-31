@@ -5,14 +5,14 @@ import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 const root=path.dirname(fileURLToPath(import.meta.url)),exec=promisify(execFile);
-const output=path.join(root,'../public'),research=path.join(root,'research');
+const output=path.join(root,'../public'),research=process.env.MC_RESEARCH||path.join(root,'research');
 const sha1=b=>createHash('sha1').update(b).digest('hex');
 async function download(url,expected){const r=await fetch(url);if(!r.ok)throw new Error(`${r.status}: ${url}`);const b=Buffer.from(await r.arrayBuffer());if(expected&&sha1(b)!==expected)throw new Error('Asset integrity mismatch');return b;}
 const version=JSON.parse(await readFile(path.join(research,'version-1.7.10.json'),'utf8'));
 const indexBytes=await download(version.assetIndex.url,version.assetIndex.sha1),index=JSON.parse(indexBytes).objects;
 const definition=index['minecraft/sounds.json'];
 const sounds=JSON.parse(await download(`https://resources.download.minecraft.net/${definition.hash.slice(0,2)}/${definition.hash}`,definition.hash));
-const selected=Object.entries(index).filter(([name])=>/^minecraft\/sounds\/(?:ambient\/weather\/|fire\/(?:fire|ignite)|step\/|dig\/|damage\/|mob\/(?:pig|cow|sheep|zombie|chicken|skeleton)\/|liquid\/(?:swim|splash)|random\/(?:click|pop|break|glass|eat|drink|burp|fizz|successful_hit|orb|levelup|chestopen|chestclosed|bow\.|bowhit\d))/.test(name)&&name.endsWith('.ogg'));
+const selected=Object.entries(index).filter(([name])=>/^minecraft\/sounds\/(?:ambient\/weather\/|fire\/(?:fire|ignite)|step\/|dig\/|damage\/|mob\/(?:pig|cow|sheep|zombie|chicken|skeleton|spider)\/|liquid\/(?:swim|splash)|random\/(?:click|pop|break|glass|eat|drink|burp|fizz|successful_hit|orb|levelup|chestopen|chestclosed|bow\.|bowhit\d))/.test(name)&&name.endsWith('.ogg'));
 const audioRoot=path.join(output,'audio/1.7.10'),files={};await mkdir(audioRoot,{recursive:true});
 let cursor=0;
 await Promise.all(Array.from({length:6},async()=>{while(cursor<selected.length){const [name,asset]=selected[cursor++],relative=name.replace('minecraft/sounds/','');const destination=path.join(audioRoot,relative);await mkdir(path.dirname(destination),{recursive:true});let bytes;try{bytes=await readFile(destination);}catch{}if(!bytes||sha1(bytes)!==asset.hash){bytes=await download(`https://resources.download.minecraft.net/${asset.hash.slice(0,2)}/${asset.hash}`,asset.hash);await writeFile(destination,bytes);}files[relative.replace(/\.ogg$/,'')]={url:'/audio/1.7.10/'+relative,sha1:asset.hash,bytes:asset.size};}}));

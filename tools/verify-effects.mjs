@@ -22,7 +22,7 @@ const cp=[probe,classes,...libs].join(path.delimiter);
 await exec('javac',['-nowarn','-cp',cp,'-d',probe,path.join(root,'probes/EffectProbe.java')]);
 const {stdout}=await exec('java',['-cp',cp,'EffectProbe'],{maxBuffer:1<<26});
 const rows=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
-assert.equal(rows.length,109);
+assert.equal(rows.length,117);
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const names={acx:'ItemFood',rv:'Potion',rw:'PotionEffect',adi:'ItemBucketMilk'};
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}]))),method:'Unchanged food effect delivery, PotionEffect update/combine, Potion Poison/Hunger and milk methods. Minimal player captures damage/exhaustion/delivery/clearing; damage immunity and FoodStats integration are tested separately in JavaScript.',rows};

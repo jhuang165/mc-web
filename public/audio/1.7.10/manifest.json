@@ -1,7 +1,7 @@
 {
   "target": "Minecraft Java 1.7.10",
   "assetIndexSha1": "1863782e33ce7b584fc45b037325a1964e095d3e",
-  "credit": "Original Minecraft sound effects \u00a9 Mojang / Microsoft. These are original game resources, not newly synthesized effects.",
+  "credit": "Original Minecraft sound effects © Mojang / Microsoft. These are original game resources, not newly synthesized effects.",
   "files": {
     "ambient/weather/thunder2": {
       "url": "/audio/1.7.10/ambient/weather/thunder2.ogg",
@@ -907,6 +907,51 @@
       "url": "/audio/1.7.10/fire/fire.ogg",
       "sha1": "8b260108a73470c16cd244325242d4780cfb7d78",
       "bytes": 28689
+    },
+    "mob/spider/death": {
+      "url": "/audio/1.7.10/mob/spider/death.ogg",
+      "sha1": "4c69a6edc25d973999aa0db2bb46b583a31da278",
+      "bytes": 14380
+    },
+    "mob/spider/say1": {
+      "url": "/audio/1.7.10/mob/spider/say1.ogg",
+      "sha1": "65b49739d48ebc47879ca5528c8283329980b304",
+      "bytes": 9045
+    },
+    "mob/spider/say2": {
+      "url": "/audio/1.7.10/mob/spider/say2.ogg",
+      "sha1": "501b40b97ee55cb7a97943ee620aa05131089fc2",
+      "bytes": 7405
+    },
+    "mob/spider/say3": {
+      "url": "/audio/1.7.10/mob/spider/say3.ogg",
+      "sha1": "f9f79162efa6667b753c1fbb46ff9888e8ce5f32",
+      "bytes": 7709
+    },
+    "mob/spider/say4": {
+      "url": "/audio/1.7.10/mob/spider/say4.ogg",
+      "sha1": "3cf3e8d3aab0a3092f6c6bf681ff156bc9653859",
+      "bytes": 6343
+    },
+    "mob/spider/step1": {
+      "url": "/audio/1.7.10/mob/spider/step1.ogg",
+      "sha1": "8f7ff84e460ca507f654168f1d24e82637517940",
+      "bytes": 8826
+    },
+    "mob/spider/step2": {
+      "url": "/audio/1.7.10/mob/spider/step2.ogg",
+      "sha1": "a8eb0b1ce4abb53334ab75be82dc465135c4a27a",
+      "bytes": 9695
+    },
+    "mob/spider/step3": {
+      "url": "/audio/1.7.10/mob/spider/step3.ogg",
+      "sha1": "efa5acfa08b210ba3087b535c40549c0ed8916f0",
+      "bytes": 9237
+    },
+    "mob/spider/step4": {
+      "url": "/audio/1.7.10/mob/spider/step4.ogg",
+      "sha1": "7d801582e08be973d1a41469d1b92916278d1e88",
+      "bytes": 9326
     }
   },
   "events": {
@@ -1538,6 +1583,30 @@
       "category": "block",
       "sounds": [
         "fire/ignite"
+      ]
+    },
+    "mob.spider.death": {
+      "category": "hostile",
+      "sounds": [
+        "mob/spider/death"
+      ]
+    },
+    "mob.spider.say": {
+      "category": "hostile",
+      "sounds": [
+        "mob/spider/say1",
+        "mob/spider/say2",
+        "mob/spider/say3",
+        "mob/spider/say4"
+      ]
+    },
+    "mob.spider.step": {
+      "category": "hostile",
+      "sounds": [
+        "mob/spider/step1",
+        "mob/spider/step2",
+        "mob/spider/step3",
+        "mob/spider/step4"
       ]
     }
   }

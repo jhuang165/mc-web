@@ -6,6 +6,7 @@
 | --- | --- | --- | --- |
 | Raw chicken | Hunger I (17) | 30% | 600 ticks / 30 seconds |
 | Rotten flesh | Hunger I (17) | 80% | 600 ticks / 30 seconds |
+| Spider eye | Poison I (19) | 100% | 100 ticks / 5 seconds |
 | Poisonous potato | Poison I (19) | 60% | 100 ticks / 5 seconds |
 
 `ItemFood.onFoodEaten` uses a strict float comparison (`nextFloat() < probability`). Failed eating consumes no item and rolls no effect. The web build uses its existing random source, rounded to Java float for comparison; it does not reproduce a seeded world's random stream.
@@ -18,9 +19,9 @@ Matching effects combine using the original `PotionEffect.combine`: a stronger e
 
 ## Evidence and verification
 
-`node tools/verify-effects.mjs` compiles `tools/probes/EffectProbe.java` against the unchanged client JAR (SHA-1 `e80d9b3bf5085002218d4be59e668bac718abbc6`). [effects-reference.json](effects-reference.json) records hashes of `acx` ItemFood, `rv` Potion, `rw` PotionEffect and `adi` ItemBucketMilk and 109 cases:
+`node tools/verify-effects.mjs` compiles `tools/probes/EffectProbe.java` against the unchanged client JAR (SHA-1 `e80d9b3bf5085002218d4be59e668bac718abbc6`). [effects-reference.json](effects-reference.json) records hashes of `acx` ItemFood, `rv` Potion, `rw` PotionEffect and `adi` ItemBucketMilk and 117 cases:
 
-- 32 original food-delivery cases, including float probability boundaries and an unaffected food.
+- 40 original food-delivery cases, including float probability boundaries and an unaffected food.
 - 48 complete effect runs across duration boundaries and amplifiers 0, 1, 4 and 5; recorded damage tick indices, health, exhaustion and expiry.
 - 27 strength/duration combination cases.
 - Two milk cases, Survival and Creative, recording effect clearing and resulting bucket.

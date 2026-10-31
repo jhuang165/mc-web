@@ -1,0 +1,1 @@
+Spider eye is internal 326/original 375, 2 hunger/0.8 saturation, 100% Poison I/100 ticks. Creative/native mapping correct. Nine original spider sound clips added; all 190 shipped clips and original textures pass provenance hashes. Import helper accepts MC_RESEARCH. 441 JS tests pass; build passes.

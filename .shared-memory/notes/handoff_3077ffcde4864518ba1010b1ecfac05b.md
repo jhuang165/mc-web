@@ -1,0 +1,1 @@
+Spider bypasses modern AI task lists and uses EntityWorld.spiderThink with existing bounded navigator and helper objects; native attack/light rules and legacy .1 land/.02 water acceleration verified. Adapted wander/path timing/despawning explicitly documented in spiders.md. 441 tests/build pass.

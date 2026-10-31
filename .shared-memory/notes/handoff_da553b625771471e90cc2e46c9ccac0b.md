@@ -1,0 +1,1 @@
+verify-effects expects and generates 117 original cases, including eight spider-eye effect threshold cases; all replay successfully.

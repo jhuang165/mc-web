@@ -7,7 +7,7 @@ import { finishDrinking, MILK_BUCKET } from './buckets.js';
 import { makeStack } from './inventory.js';
 
 const { rows } = JSON.parse(readFileSync(new URL('../public/research/effects-reference.json', import.meta.url)));
-const itemIds = { 365: 318, 367: 206, 394: 325, 391: 322, 335: MILK_BUCKET, 325: 340 };
+const itemIds = { 375: 326, 365: 318, 367: 206, 394: 325, 391: 322, 335: MILK_BUCKET, 325: 340 };
 
 test('food effect chances and durations replay original ItemFood at threshold boundaries', () => {
   for (const row of rows.filter((r) => r.case === 'food')) {

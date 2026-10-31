@@ -19,6 +19,6 @@ Target: Minecraft Java 1.7.10. Names are the obfuscated classes of the unchanged
 ## Gaps
 
 - No dyes yet, so sheep cannot be recoloured and the dye recipes themselves are not craftable; only the mix table exists. The `jeb_` sheep name is ignored.
-- Wool is not yet a crafting input or output (beds, carpets, paintings).
+- Four string now craft white wool ([spiders](spiders.md)); beds, carpets and paintings remain unimplemented.
 - Sheep AI follows the existing simplified mob loop (no pathfinding, head turning limits, or per-task tick rates other than eat grass's third-tick check). Sheep spawn only when a world is created, with no despawn or periodic spawning.
 - The wool block-break particles use the registry block colour rather than the metadata colour.
