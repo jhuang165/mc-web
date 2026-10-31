@@ -1,9 +1,14 @@
 import * as THREE from "three";
 import { skinBox, pixelTexture } from "./first-person.js";
 import { limbAngles } from "./animation.js";
+import { entityMaterial } from "./light-material.js";
+import { ENTITY_TYPES } from "./entities.js";
+import { BRIGHTNESS } from "./lighting.js";
 export class MobRenderer {
-  constructor(scene) {
+  // `view` supplies the lightmap and world brightness (VoxelScene).
+  constructor(scene, view) {
     this.scene = scene;
+    this.view = view;
     this.rigs = new Map();
     this.particles=[];
     this.heartTexture=pixelTexture("/media/1.7.10/gui/icons.png").clone();this.heartTexture.repeat.set(9/256,9/256);this.heartTexture.offset.set(52/256,1-9/256);
@@ -19,7 +24,7 @@ export class MobRenderer {
         (zombie ? "zombie/zombie" : cow ? "cow/cow" : "pig/pig") +
         ".png",
     );
-    const material = new THREE.MeshLambertMaterial({ map: texture });
+    const material = entityMaterial(this.view.lighting, { map: texture });
     materials.push(material);
     function box(w, h, d, u, v, x, y, z) {
       const mesh = new THREE.Mesh(
@@ -94,7 +99,7 @@ export class MobRenderer {
         for (const x of [-0.2, 0.2]) {
           const horn = new THREE.Mesh(
             new THREE.BoxGeometry(0.06, 0.12, 0.06),
-            new THREE.MeshLambertMaterial({ color: "#d8d0b6" }),
+            materials[materials.push(entityMaterial(this.view.lighting, { color: [0.847, 0.816, 0.714] })) - 1],
           );
           horn.position.set(x, 0.24, 0);
           head.add(horn);
@@ -144,9 +149,19 @@ export class MobRenderer {
               ? -Math.PI / 2 + Math.sin(e.gait) * 0.07
               : angles[i]),
       );
-      r.materials.forEach((m) =>
-        m.color.set(e.hurt > 0 ? "#ff9d9d" : e.burn ? "#ffc5a3" : "#ffffff"),
-      );
+      // Entity.getBrightnessForRender samples 0.66 of the way up the body.
+      // RendererLivingEntity overlays (brightness, 0, 0, 0.4) while hurt or
+      // dying; the burning tint stands in for the fire overlay, which is not drawn.
+      const t = ENTITY_TYPES[e.type], h = (t?.height ?? 1.8) * (e.growingAge < 0 ? 0.5 : 1),
+        packed = this.view.brightness(e.x, e.y + h * 0.66, e.z),
+        level = Math.max(((packed >> 20) & 15) - (this.view.subtracted ?? 0), (packed >> 4) & 15),
+        b = BRIGHTNESS[Math.max(0, level)];
+      for (const m of r.materials) {
+        m.setLight(packed);
+        if (e.hurt > 0 || e.death) m.uniforms.overlay.value.set(b, 0, 0, 0.4);
+        else if (e.burn) m.uniforms.overlay.value.set(b, b * 0.5, 0, 0.2);
+        else m.uniforms.overlay.value.set(0, 0, 0, 0);
+      }
     }
   }
   clear() {

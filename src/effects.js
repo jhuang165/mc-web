@@ -1,8 +1,11 @@
 import * as THREE from "three";
 import { BLOCKS } from "./world.js";
 export class WorldEffects {
-  constructor(scene) {
+  constructor(scene, lighting) {
     this.scene = scene;
+    this.lighting = lighting;
+    this.light = null;
+    this.tint = new THREE.Color();
     const loader = new THREE.TextureLoader();
     this.cracks = Array.from({ length: 10 }, (_, i) => {
       const t = loader.load("/media/1.7.10/blocks/destroy_stage_" + i + ".png");
@@ -24,7 +27,8 @@ export class WorldEffects {
     this.particles = [];
     this.mesh = new THREE.InstancedMesh(
       new THREE.BoxGeometry(0.045, 0.045, 0.045),
-      new THREE.MeshLambertMaterial(),
+      // Particles take the lightmap colour at their cell, without face shading.
+      new THREE.MeshBasicMaterial(),
       256,
     );
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -79,7 +83,8 @@ export class WorldEffects {
       this.dummy.rotation.set(p.life * 2, p.life * 4, 0);
       this.dummy.updateMatrix();
       this.mesh.setMatrixAt(i, this.dummy.matrix);
-      this.mesh.setColorAt(i, p.color);
+      const rgb = this.light ? this.lighting.rgb(this.light.packed(Math.floor(p.p.x), Math.floor(p.p.y), Math.floor(p.p.z))) : [1, 1, 1];
+      this.mesh.setColorAt(i, this.tint.copy(p.color).multiply({ r: rgb[0], g: rgb[1], b: rgb[2] }));
     });
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;

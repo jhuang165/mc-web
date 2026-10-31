@@ -3,12 +3,12 @@ import { firstPersonMatrix } from "./first-person-pose.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { ITEMS } from "./survival.js";
 import { blockTile,tileRect } from "./block-textures.js";
+import { entityMaterial, ITEM_LIGHTS } from "./light-material.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
 export function pixelTexture(url) {
   if (!cache.has(url)) {
     const t = loader.load(url);
-    t.colorSpace = THREE.SRGBColorSpace;
     t.magFilter = t.minFilter = THREE.NearestFilter;
     cache.set(url, t);
   }
@@ -73,9 +73,14 @@ export function itemTexture(id) {
   return names[id] ? "/media/1.7.10/items/" + names[id] + ".png" : null;
 }
 export class FirstPerson {
-  constructor(renderer, atlas) {
+  constructor(renderer, atlas, lighting) {
     this.renderer = renderer;
     this.atlas = atlas;
+    this.lighting = lighting;
+    // ItemRenderer turns the standard item lights by the player's pitch and
+    // yaw, so they stay fixed in the world while the hand follows the view.
+    this.lights = ITEM_LIGHTS.map((l) => l.clone());
+    this.materials = [];
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(
       70,
@@ -83,7 +88,6 @@ export class FirstPerson {
       0.01,
       10,
     );
-    this.scene.add(new THREE.HemisphereLight("#fff6e2", "#71826c", 2.6));
     this.pivot = new THREE.Group();
     this.pivot.matrixAutoUpdate = false;
     this.scene.add(this.pivot);
@@ -92,7 +96,7 @@ export class FirstPerson {
     // ModelBiped's local +Y points from shoulder to fingertips. Its UV rows
     // increase in that direction, unlike the world-space upright skin boxes.
     for(const face of [0,1,4,5]){const top=armUv.getY(face*4),bottom=armUv.getY(face*4+2);for(let v=0;v<4;v++)armUv.setY(face*4+v,top+bottom-armUv.getY(face*4+v));}
-    const armMesh=new THREE.Mesh(armGeometry,new THREE.MeshLambertMaterial({map:pixelTexture('/media/1.7.10/entity/steve.png')}));
+    const armMesh=new THREE.Mesh(armGeometry,this.material({map:pixelTexture('/media/1.7.10/entity/steve.png')},true));
     armMesh.position.set(-1/16,4/16,0);this.arm.add(armMesh);this.arm.position.set(-5/16,2/16,0);this.arm.rotation.z=.1;
     this.pivot.add(this.arm);
     this.item = null;
@@ -105,6 +109,7 @@ export class FirstPerson {
       this.pivot.remove(this.item);
       this.item.geometry.dispose();
       this.item.material.dispose();
+      this.materials = this.materials.filter((m) => m !== this.item.material);
       this.item = null;
     }
     const data = ITEMS[id];
@@ -115,10 +120,10 @@ export class FirstPerson {
     if (url) {
       mesh = new THREE.Mesh(
         spriteGeometry(),
-        new THREE.MeshLambertMaterial({
+        this.material({
           map: pixelTexture(url),
           transparent: true,
-          alphaTest: 0.2,
+          alphaTest: 0.1,
           side: THREE.DoubleSide,
         }),
       );
@@ -131,7 +136,7 @@ export class FirstPerson {
       }
       mesh = new THREE.Mesh(
         g,
-        new THREE.MeshLambertMaterial({ map: this.atlas,alphaTest:.4 }),
+        this.material({ map: this.atlas,alphaTest:.1 }),
       );
       mesh.rotation.y = Math.PI / 2;
     }
@@ -139,7 +144,13 @@ export class FirstPerson {
     this.pivot.add(mesh);
     this.item = mesh;
   }
-  render(pose, { visible = true, daylight = 1, eating = null, time = 0 } = {}) {
+  material(options) {
+    const m = entityMaterial(this.lighting, { ...options, fog: false, lights: this.lights });
+    this.materials.push(m);
+    return m;
+  }
+  // `light` is the packed brightness at the player; `view` the world camera.
+  render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0 } = {}) {
     if (!visible) return;
     this.select(pose.item);
     this.camera.aspect = innerWidth / innerHeight;
@@ -147,7 +158,8 @@ export class FirstPerson {
     this.pivot.matrix.copy(firstPersonMatrix(pose,{sprite:this.sprite,eatingTicks:eating}));
     // Keep the native pose visible when the browser panel is narrower than a game window.
     if(this.camera.aspect<1.3)this.pivot.matrix.premultiply(new THREE.Matrix4().makeTranslation((pose.item ? .56 : .64)*(this.camera.aspect/1.3-1),0,0));
-    this.scene.children[0].intensity = 0.7 + daylight * 1.9;
+    if (view) this.lights.forEach((l, i) => l.copy(ITEM_LIGHTS[i]).transformDirection(view.matrixWorldInverse));
+    for (const m of this.materials) m.setLight(light);
     const clear = this.renderer.autoClear;
     this.renderer.autoClear = false;
     this.renderer.clearDepth();

@@ -55,6 +55,8 @@ let options = {
   distance: 155,
   sound: true,
   guiScale:0,
+  // GameSettings.gammaSetting: 0 Moody (the 1.7.10 default) to 1 Bright.
+  gamma: 0,
 };
 try {
   options = {
@@ -62,6 +64,8 @@ try {
     ...JSON.parse(localStorage.getItem("blockworld.settings") || "{}"),
   };
 } catch {}
+// GameSettings.getKeyBinding for GAMMA.
+const gammaLabel=g=>g<=0?"Moody":g>=1?"Bright":"+"+Math.round(g*100)+"%";
 function updateGuiScale(){document.documentElement.style.setProperty('--gui-scale',guiScale(innerWidth,innerHeight,Number(options.guiScale)||0));}
 window.addEventListener('resize',updateGuiScale);updateGuiScale();
 let screen = "home",
@@ -335,19 +339,20 @@ function controls() {
 function notes() {
   modal(
     "Rebuilding 1.7.10, system by system.",
-    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. The Java 36-slot inventory with cursor, drag-splitting, shift- and double-click rules; shaped crafting, a crafting table, a fuel-driven furnace and single/large chests on real slots; wood, stone, iron, diamond and gold tools with per-item durability and repair; leather, chain, iron, gold and diamond armor. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Cows follow wheat and breed calves. Caves, ores, torches, and a day/night lighting cycle. Wheat farming with five hoe tiers, seeds, moisture, eight growth stages, bone meal, harvesting and bread crafting.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, armor rendering, enchantments, hoppers and other storage, redstone, dimensions, structures, weather, Java saves, and multiplayer. The renderer, terrain, creative inventory, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
+    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. The Java 36-slot inventory with cursor, drag-splitting, shift- and double-click rules; shaped crafting, a crafting table, a fuel-driven furnace and single/large chests on real slots; wood, stone, iron, diamond and gold tools with per-item durability and repair; leather, chain, iron, gold and diamond armor. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Cows follow wheat and breed calves. Caves, ores and torches; 1.7.10 sky/block light, smooth lighting, lightmap, sky, stars, fog and fancy clouds. Wheat farming with five hoe tiers, seeds, moisture, eight growth stages, bone meal, harvesting and bread crafting.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, armor rendering, enchantments, hoppers and other storage, redstone, dimensions, structures, weather, void fog, Java saves, and multiplayer. The renderer, terrain, creative inventory, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
     "notes-modal",
   );
 }
 function settings() {
   modal(
     "Options",
-    `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>GUI Scale<select id="gui-scale">${[[0,"Auto"],[1,"Small"],[2,"Normal"],[3,"Large"],[4,"Larger"]].map(([v,label])=>`<option value="${v}" ${Number(options.guiScale||0)===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Field of view <output id="fov-value">${options.fov}°</output><input type="range" id="fov" min="50" max="100" value="${options.fov}"></label><label>Mouse sensitivity <output id="sensitivity-value">${options.sensitivity.toFixed(1)}×</output><input type="range" id="sensitivity" min="0.2" max="2" step="0.1" value="${options.sensitivity}"></label><label>View distance <output id="distance-value">${options.distance} blocks</output><input type="range" id="distance" min="70" max="200" step="5" value="${options.distance}"></label><label>Sound volume <output id="volume-value">${Math.round(options.volume * 100)}%</output><input type="range" id="volume" min="0" max="1" step=".05" value="${options.volume}"></label><label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
+    `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>GUI Scale<select id="gui-scale">${[[0,"Auto"],[1,"Small"],[2,"Normal"],[3,"Large"],[4,"Larger"]].map(([v,label])=>`<option value="${v}" ${Number(options.guiScale||0)===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Field of view <output id="fov-value">${options.fov}°</output><input type="range" id="fov" min="50" max="100" value="${options.fov}"></label><label>Mouse sensitivity <output id="sensitivity-value">${options.sensitivity.toFixed(1)}×</output><input type="range" id="sensitivity" min="0.2" max="2" step="0.1" value="${options.sensitivity}"></label><label>View distance <output id="distance-value">${options.distance} blocks</output><input type="range" id="distance" min="70" max="200" step="5" value="${options.distance}"></label><label>Brightness <output id="gamma-value">${gammaLabel(options.gamma)}</output><input type="range" id="gamma" min="0" max="1" step=".01" value="${options.gamma}"></label><label>Sound volume <output id="volume-value">${Math.round(options.volume * 100)}%</output><input type="range" id="volume" min="0" max="1" step=".05" value="${options.volume}"></label><label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
   );
   for (const key of [
     "fov",
     "sensitivity",
     "distance",
+    "gamma",
     "volume",
     "sound",
     "bobbing",
@@ -363,12 +368,15 @@ function settings() {
             ? options[key] + "°"
             : key === "distance"
               ? options[key] + " blocks"
+              : key === "gamma"
+                ? gammaLabel(options[key])
               : key === "volume"
                 ? Math.round(options[key] * 100) + "%"
                 : options[key].toFixed(1) + "×";
       scene.camera.fov = options.fov;
       scene.camera.updateProjectionMatrix();
       scene.setDistance(options.distance);
+      scene.setGamma(options.gamma);
       try {
         localStorage.setItem("blockworld.settings", JSON.stringify(options));
       } catch {}
@@ -1047,7 +1055,7 @@ function edit(place = false) {
     if (id === CHEST) placeChest(world, survival.chests, ...p, yaw);
     farming.observe(...p);
     if (!survival.creative) survival.take(id);
-    scene.updateBlock(p[0], p[2]);
+    scene.updateBlock(p[0], p[2], p[1]);
     renderHotbar();
     sound(true, id);
     saved = false;
@@ -1107,7 +1115,7 @@ function breakBlock(p, creative = false) {
     survival.exhaust(0.025);
     survival.wearBlock(block,tool);
   }
-  scene.updateBlock(p[0], p[2]);
+  scene.updateBlock(p[0], p[2], p[1]);
   renderHotbar();
   sound(false, block);
   scene.effects.burst(p, block);
@@ -1681,7 +1689,8 @@ function animate(now) {
   if (firstPerson && animate.pose)
     firstPerson.render(animate.pose, {
       visible: ["playing", "inventory", "paused"].includes(screen),
-      daylight: scene.daylight,
+      light: scene.brightness(scene.camera.position.x, scene.camera.position.y, scene.camera.position.z),
+      view: scene.camera,
       time: elapsed,
       eating: eating ? Math.max(0,eating.ticks-accumulator/PHYSICS.tick) : null,
     });
@@ -1694,9 +1703,9 @@ async function boot(){try {
     () => options,
     () => ({ ...position, yaw }),
   );
-  firstPerson = new FirstPerson(scene.renderer, scene.material.map);
-  mobRenderer = new MobRenderer(scene.scene);
-  chestRenderer = new ChestRenderer(scene.scene);
+  firstPerson = new FirstPerson(scene.renderer, scene.textures.texture, scene.lighting);
+  mobRenderer = new MobRenderer(scene.scene, scene);
+  chestRenderer = new ChestRenderer(scene.scene, scene);
   document.addEventListener("pointerdown", () => sounds.unlock(), {
     once: true,
   });
@@ -1705,7 +1714,11 @@ async function boot(){try {
   scene.camera.fov = options.fov;
   scene.camera.updateProjectionMatrix();
   scene.setDistance(options.distance);
+  scene.setGamma(Number(options.gamma) || 0);
   setupPointer();
+  // Development-only handle for browser checks; Vite strips it from builds.
+  if (import.meta.env.DEV)
+    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, look(p, y) { pitch = p; yaw = y; }, teleport(x, y, z) { position.set(x, y, z); } };
   scene.preview(0);
   scene.render(0);
   renderWorlds();

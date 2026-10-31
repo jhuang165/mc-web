@@ -1,167 +1,114 @@
 import * as THREE from "three";
 import { WorldEffects } from "./effects.js";
-import { SIZE, HEIGHT, SEA, BLOCKS, hash, blockHeight, isPlant } from "./world.js";
-import {createBlockAtlas,blockTile,tileRect,ATLAS_ROWS} from "./block-textures.js";
-export {blockTile} from "./block-textures.js";
+import { SIZE, HEIGHT, SEA, blockHeight, isPlant, isCrop, opaqueCube } from "./world.js";
+import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS } from "./block-textures.js";
+import { createLighting, worldMaterial } from "./light-material.js";
+import { LightVolume, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
+import { Sky, Clouds } from "./sky.js";
+import { DropRenderer } from "./drop-renderer.js";
+export { blockTile } from "./block-textures.js";
+
+// Face order +x, -x, +y, -y, +z, -z with RenderBlocks' AO-path shades:
+// 0.6 east/west, 0.8 north/south, 0.5 bottom, 1.0 top.
 const FACES = [
-  {
-    n: [1, 0, 0],
-    v: [
-      [1, 0, 1],
-      [1, 0, 0],
-      [1, 1, 0],
-      [1, 1, 1],
-    ],
-    shade: 0.78,
-  },
-  {
-    n: [-1, 0, 0],
-    v: [
-      [0, 0, 0],
-      [0, 0, 1],
-      [0, 1, 1],
-      [0, 1, 0],
-    ],
-    shade: 0.64,
-  },
-  {
-    n: [0, 1, 0],
-    v: [
-      [0, 1, 1],
-      [1, 1, 1],
-      [1, 1, 0],
-      [0, 1, 0],
-    ],
-    shade: 1,
-  },
-  {
-    n: [0, -1, 0],
-    v: [
-      [0, 0, 0],
-      [1, 0, 0],
-      [1, 0, 1],
-      [0, 0, 1],
-    ],
-    shade: 0.5,
-  },
-  {
-    n: [0, 0, 1],
-    v: [
-      [0, 0, 1],
-      [1, 0, 1],
-      [1, 1, 1],
-      [0, 1, 1],
-    ],
-    shade: 0.9,
-  },
-  {
-    n: [0, 0, -1],
-    v: [
-      [1, 0, 0],
-      [0, 0, 0],
-      [0, 1, 0],
-      [1, 1, 0],
-    ],
-    shade: 0.72,
-  },
+  { n: [1, 0, 0], v: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], shade: 0.6 },
+  { n: [-1, 0, 0], v: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], shade: 0.6 },
+  { n: [0, 1, 0], v: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]], shade: 1 },
+  { n: [0, -1, 0], v: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], shade: 0.5 },
+  { n: [0, 0, 1], v: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], shade: 0.8 },
+  { n: [0, 0, -1], v: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], shade: 0.8 },
 ];
+// Fancy graphics: leaves are not opaque at render time, so faces next to them draw.
+const hides = (b) => opaqueCube(b) && b !== 5;
+// Vanilla's world is 256 tall with clouds at 128 (65 above sea level 63);
+// this compressed world keeps the 65-block gap above its own sea level.
+const CLOUD_HEIGHT = SEA + 65;
+
+class Mesher {
+  constructor() {
+    this.p = [];
+    this.uv = [];
+    this.shade = [];
+    this.light = [];
+    this.idx = [];
+  }
+  // Four vertices with per-vertex (or shared) shade and packed brightness.
+  quad(verts, uvs, shade, packed, twoSided = false) {
+    const v = this.p.length / 3;
+    for (let i = 0; i < 4; i++) {
+      this.p.push(...verts[i]);
+      this.uv.push(...uvs[i]);
+      const s = Array.isArray(shade) ? shade[i] : shade, l = Array.isArray(packed) ? packed[i] : packed;
+      this.shade.push(s, s, s);
+      this.light.push(l & 0xffff, (l >> 16) & 0xffff);
+    }
+    this.idx.push(v, v + 1, v + 2, v, v + 2, v + 3);
+    if (twoSided) this.idx.push(v, v + 2, v + 1, v, v + 3, v + 2);
+  }
+  geometry() {
+    if (!this.idx.length) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(this.p, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(this.uv, 2));
+    g.setAttribute("shade", new THREE.Float32BufferAttribute(this.shade, 3));
+    g.setAttribute("lightCoord", new THREE.Float32BufferAttribute(this.light, 2));
+    g.setIndex(this.idx);
+    g.computeBoundingSphere();
+    return g;
+  }
+}
+const rectUvs = (r) => [[r.u0, r.v0], [r.u1, r.v0], [r.u1, r.v1], [r.u0, r.v1]];
+// BlockLiquid.getMixedBrightnessForBlock: the brighter of the cell and the one above.
+const maxPacked = (a, b) => Math.max(a & 0xffff, b & 0xffff) | (Math.max(a >>> 16, b >>> 16) << 16);
+
 export class VoxelScene {
   constructor(container) {
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: false,
-      powerPreference: "high-performance",
-    });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
     this.renderer.setSize(innerWidth, innerHeight);
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Colours stay in the game's own space end to end, as fixed-function GL did.
+    this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+    this.renderer.autoClear = false;
     container.appendChild(this.renderer.domElement);
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color("#c6dddd");
-    this.scene.fog = new THREE.Fog("#c6dddd", 65, 155);
-    this.effects = new WorldEffects(this.scene);
-    this.camera = new THREE.PerspectiveCamera(
-      65,
-      innerWidth / innerHeight,
-      0.1,
-      280,
-    );
+    this.lighting = createLighting();
+    this.flicker = new TorchFlicker();
+    this.effects = new WorldEffects(this.scene, this.lighting);
+    this.camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.05, 400);
     this.camera.rotation.order = "YXZ";
-    this.ambient = new THREE.HemisphereLight("#fff7df", "#68795b", 2.2);
-    this.scene.add(this.ambient);
-    this.sun = new THREE.DirectionalLight("#fff2d7", 2.3);
-    this.sun.position.set(-60, 100, 40);
-    this.scene.add(this.sun);
-    this.sunDisc = new THREE.Mesh(
-      new THREE.PlaneGeometry(14,14),
-      new THREE.MeshBasicMaterial({ map:new THREE.TextureLoader().load("/media/1.7.10/environment/sun.png"),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false }),
-    );
-    this.moonTexture=new THREE.TextureLoader().load("/media/1.7.10/environment/moon_phases.png");this.moonTexture.magFilter=this.moonTexture.minFilter=THREE.NearestFilter;this.moonTexture.repeat.set(.25,.5);
-    this.moonDisc = new THREE.Mesh(
-      new THREE.PlaneGeometry(12,12),
-      new THREE.MeshBasicMaterial({map:this.moonTexture,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}),
-    );
-    this.scene.add(this.sunDisc, this.moonDisc);
-    this.torchMaterial = new THREE.MeshLambertMaterial({ color: "#996b3f" });
-    this.flameMaterial = new THREE.MeshBasicMaterial({ color: "#ffcb76" });
-    this.torchLights = Array.from({ length: 4 }, () => {
-      const l = new THREE.PointLight("#ffbd67", 0, 13, 1.4);
-      this.scene.add(l);
-      return l;
-    });
-    this.skyColor = new THREE.Color();
-    this.setTime(6000);
-    this.textures=createBlockAtlas();
-    this.material = new THREE.MeshLambertMaterial({map:this.textures.texture,vertexColors:true,alphaTest:.4,side:THREE.FrontSide});
-    this.torchMaterial=new THREE.MeshLambertMaterial({map:this.textures.texture,alphaTest:.1});
-    this.waterTexture = new THREE.TextureLoader().load(
-      "/media/1.7.10/blocks/water_still.png",
-      (t) => {
-        t.magFilter = t.minFilter = THREE.NearestFilter;
-        t.repeat.set(1, 1 / 32);
-      },
-    );
-    this.waterMaterial = new THREE.MeshLambertMaterial({
-      map: this.waterTexture,
-      color: "#3f76e4",
-      transparent: true,
-      opacity: 0.66,
-      side: THREE.DoubleSide,
-    });
+    this.sky = new Sky();
+    this.clouds = new Clouds(this.lighting, CLOUD_HEIGHT);
+    this.scene.add(this.clouds.depth, this.clouds.mesh);
+    this.textures = createBlockAtlas();
+    this.drops = new DropRenderer(this.scene, this);
+    this.dropList = [];
+    this.material = worldMaterial(this.lighting, { map: this.textures.texture });
+    const animated = (url, frames, scale) => {
+      const t = new THREE.TextureLoader().load(url);
+      t.magFilter = t.minFilter = THREE.NearestFilter;
+      t.generateMipmaps = false;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      const uv = new THREE.Vector4(scale, 1 / frames, 0, 0);
+      // Fancy graphics draws translucent geometry twice: depth only, then colour,
+      // so only the nearest water surface shows.
+      const depth = worldMaterial(this.lighting, { map: t, alphaTest: 0, transparent: true, uvTransform: uv });
+      depth.colorWrite = false;
+      return { uv, frames, depth, color: worldMaterial(this.lighting, { map: t, alphaTest: 0, transparent: true, uvTransform: uv }) };
+    };
+    this.water = animated("/media/1.7.10/blocks/water_still.png", 32, 1);
+    this.flow = animated("/media/1.7.10/blocks/water_flow.png", 32, 1);
     this.chunks = new Map();
-    this.clouds = new THREE.Group();
-    const cm = new THREE.MeshLambertMaterial({
-      color: "#f7f4e7",
-      transparent: true,
-      opacity: 0.87,
-    });
-    for (let i = 0; i < 20; i++) {
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(
-          10 + hash(i, 2, 8) * 17,
-          1.3,
-          5 + hash(i, 4, 2) * 7,
-        ),
-        cm,
-      );
-      mesh.position.set(
-        hash(i, 0, 4) * 260 - 60,
-        58 + hash(i, 0, 7) * 8,
-        hash(i, 1, 3) * 220 - 40,
-      );
-      this.clouds.add(mesh);
-    }
-    this.scene.add(this.clouds);
+    this.dirty = new Set();
+    // RenderGlobal.drawSelectionBox: black lines at 40% alpha, grown by 0.002.
     this.outline = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.BoxGeometry(1.008, 1.008, 1.008)),
-      new THREE.LineBasicMaterial({
-        color: "#f9f9e5",
-        transparent: true,
-        opacity: 0.85,
-      }),
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(1.004, 1.004, 1.004)),
+      new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4 }),
     );
     this.scene.add(this.outline);
     this.outline.visible = false;
+    this.distance = 155;
+    this.fogBrightness = 1;
+    this.setTime(6000);
     this.resize = () => {
       this.camera.aspect = innerWidth / innerHeight;
       this.camera.updateProjectionMatrix();
@@ -171,213 +118,223 @@ export class VoxelScene {
   }
   setWorld(world) {
     this.effects.clear();
+    this.drops.clear();
+    this.dropList = [];
     this.world = world;
     this.textures.setBiome(world.biome);
-    this.litFurnaces=new Set();
-    for (const v of this.chunks.values()) {
-      this.scene.remove(v);
-      for (const child of v.children) child.geometry.dispose();
-    }
+    this.temperature = biomeTemperature(world.biome);
+    this.litFurnaces = new Set();
+    this.light = new LightVolume(world, (x, y, z, b) => (b === 20 ? 14 : b === 14 && this.litFurnaces.has(`${x},${y},${z}`) ? 13 : 0));
+    this.effects.light = this.light;
+    for (const v of this.chunks.values()) this.disposeChunk(v);
     this.chunks.clear();
-    for (let x = 0; x < SIZE; x += 16)
-      for (let z = 0; z < SIZE; z += 16) this.buildChunk(x, z);
+    this.dirty.clear();
+    for (let x = 0; x < SIZE; x += 16) for (let z = 0; z < SIZE; z += 16) this.buildChunk(x, z);
+  }
+  disposeChunk(group) {
+    this.scene.remove(group);
+    for (const child of group.children) child.geometry.dispose();
   }
   buildChunk(cx, cz) {
-    const key = `${cx},${cz}`,
-      old = this.chunks.get(key);
-    if (old) {
-      this.scene.remove(old);
-      for (const child of old.children) child.geometry.dispose();
-    }
-    const p = [],
-      n = [],
-      uv = [],
-      color = [],
-      idx = [],
-      wp = [],
-      wuv = [],
-      wi = [];
-    let vi = 0,
-      wvi = 0;
-    const w = this.world;
+    const key = `${cx},${cz}`, old = this.chunks.get(key);
+    if (old) this.disposeChunk(old);
+    this.dirty.delete(key);
+    const w = this.world, solid = new Mesher(), water = new Mesher(), flow = new Mesher();
     for (let x = cx; x < cx + 16; x++)
       for (let z = cz; z < cz + 16; z++)
         for (let y = 0; y < HEIGHT; y++) {
           const b = w.get(x, y, z);
-          if (!b || b === 20 || b === 41) continue;
-          if(isPlant(b)){
-            const rect=tileRect(blockTile(b,0));
-            for(const corners of [[[.12,0,.12],[.88,0,.88],[.88,1,.88],[.12,1,.12]],[[.88,0,.12],[.12,0,.88],[.12,1,.88],[.88,1,.12]]]){for(const v of corners){p.push(x+v[0],y+v[1],z+v[2]);n.push(0,1,0);color.push(.95,.95,.95);}uv.push(rect.u0,rect.v0,rect.u1,rect.v0,rect.u1,rect.v1,rect.u0,rect.v1);idx.push(vi,vi+1,vi+2,vi,vi+2,vi+3,vi,vi+2,vi+1,vi,vi+3,vi+2);vi+=4;}continue;
-          }
-          if (b === 10) {
-            if (!w.get(x, y + 1, z)) {
-              wp.push(
-                x,
-                y + 0.87,
-                z + 1,
-                x + 1,
-                y + 0.87,
-                z + 1,
-                x + 1,
-                y + 0.87,
-                z,
-                x,
-                y + 0.87,
-                z,
-              );
-              wuv.push(0, 1, 1, 1, 1, 0, 0, 0);
-              wi.push(wvi, wvi + 1, wvi + 2, wvi, wvi + 2, wvi + 3);
-              wvi += 4;
-            }
-            continue;
-          }
-          FACES.forEach((f, fi) => {
-            const nb = w.get(x + f.n[0], y + f.n[1], z + f.n[2]);
-            if(nb&&nb!==10&&nb!==20&&!isPlant(nb)&&nb!==5&&nb!==9&&blockHeight(nb)===1)return;
-            if((b===9&&nb===9)||(b===5&&nb===5))return;
-            const rect=tileRect(blockTile(b,fi,this.litFurnaces?.has(`${x},${y},${z}`)));
-            const variation = 0.96 + hash(x, z, y) * 0.07;
-            for (const v of f.v) {
-              p.push(x + v[0], y + v[1]*blockHeight(b), z + v[2]);
-              n.push(...f.n);
-              const shade = f.shade * variation;
-              color.push(shade, shade, shade);
-            }
-            uv.push(rect.u0,rect.v0,rect.u1,rect.v0,rect.u1,rect.v1,rect.u0,rect.v1);
-            idx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
-            vi += 4;
-          });
+          if (!b || b === 41) continue;
+          if (b === 20) this.torch(solid, x, y, z);
+          else if (isCrop(b)) this.crops(solid, b, x, y, z);
+          else if (isPlant(b)) this.crossed(solid, b, x, y, z);
+          else if (b === 10) this.liquid(water, flow, x, y, z);
+          else this.cube(solid, b, x, y, z);
         }
-    const group = new THREE.Group();
-    group.userData.torches = [];
-    for (let x = cx; x < cx + 16; x++)
-      for (let z = cz; z < cz + 16; z++)
-        for (let y = 0; y < HEIGHT; y++)
-          if (w.get(x, y, z) === 20) {
-            const geometry=new THREE.BoxGeometry(.125,.625,.125),attr=geometry.attributes.uv,t=blockTile(20,0);const tx=t%16*16,ty=Math.floor(t/16)*16;
-            for(let f=0;f<6;f++){const x0=(tx+7)/256,x1=(tx+9)/256,y0=1-(ty+16)/(ATLAS_ROWS*16),y1=1-(ty+6)/(ATLAS_ROWS*16);attr.setXY(f*4,x0,y1);attr.setXY(f*4+1,x1,y1);attr.setXY(f*4+2,x0,y0);attr.setXY(f*4+3,x1,y0);}
-            const torch=new THREE.Mesh(geometry,this.torchMaterial);torch.position.set(x+.5,y+.3125,z+.5);group.add(torch);
-            group.userData.torches.push(
-              new THREE.Vector3(x + 0.5, y + 0.65, z + 0.5),
-            );
-          }
-    for(const key of this.litFurnaces||[]){const [x,y,z]=key.split(",").map(Number);if(x>=cx&&x<cx+16&&z>=cz&&z<cz+16)group.userData.torches.push(new THREE.Vector3(x+.5,y+.5,z+.5));}
-    if (p.length) {
-      const g = new THREE.BufferGeometry();
-      g.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
-      g.setAttribute("normal", new THREE.Float32BufferAttribute(n, 3));
-      g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
-      g.setAttribute("color", new THREE.Float32BufferAttribute(color, 3));
-      g.setIndex(idx);
-      g.computeBoundingSphere();
-      group.add(new THREE.Mesh(g, this.material));
-    }
-    if (wp.length) {
-      const g = new THREE.BufferGeometry();
-      g.setAttribute("position", new THREE.Float32BufferAttribute(wp, 3));
-      g.setAttribute("uv", new THREE.Float32BufferAttribute(wuv, 2));
-      g.setIndex(wi);
-      g.computeVertexNormals();
-      group.add(new THREE.Mesh(g, this.waterMaterial));
-    }
+    const group = new THREE.Group(), add = (mesher, ...materials) => {
+      const g = mesher.geometry();
+      if (!g) return;
+      materials.forEach((m, i) => {
+        const mesh = new THREE.Mesh(g, m);
+        mesh.renderOrder = materials.length > 1 ? i + 1 : 0;
+        group.add(mesh);
+      });
+    };
+    add(solid, this.material);
+    add(water, this.water.depth, this.water.color);
+    add(flow, this.flow.depth, this.flow.color);
     this.chunks.set(key, group);
     this.scene.add(group);
   }
-  setFurnaces(data){const next=new Set(Object.entries(data).filter(([,f])=>f.burn>0).map(([key])=>key));const changed=[...new Set([...next,...this.litFurnaces||[]])].filter(k=>next.has(k)!==this.litFurnaces?.has(k));this.litFurnaces=next;const chunks=new Set(changed.map(k=>{const[x,,z]=k.split(',').map(Number);return[Math.floor(x/16)*16,Math.floor(z/16)*16].join(',');}));for(const k of chunks)this.buildChunk(...k.split(',').map(Number));}
-  updateBlock(x, z) {
-    const cx = Math.floor(x / 16) * 16,
-      cz = Math.floor(z / 16) * 16;
-    this.buildChunk(cx, cz);
-    if (x % 16 === 0 && cx > 0) this.buildChunk(cx - 16, cz);
-    if (x % 16 === 15 && cx + 16 < SIZE) this.buildChunk(cx + 16, cz);
-    if (z % 16 === 0 && cz > 0) this.buildChunk(cx, cz - 16);
-    if (z % 16 === 15 && cz + 16 < SIZE) this.buildChunk(cx, cz + 16);
+  // renderStandardBlockWithAmbientOcclusion; blocks that emit light (a lit
+  // furnace) take the flat colour-multiplier path with neighbour brightness.
+  cube(m, b, x, y, z) {
+    const w = this.world, L = this.light, h = blockHeight(b), lit = b === 14 && this.litFurnaces.has(`${x},${y},${z}`);
+    FACES.forEach((f, fi) => {
+      const boundary = fi !== 2 || h >= 1, nb = w.get(x + f.n[0], y + f.n[1], z + f.n[2]);
+      if (boundary && hides(nb)) return;
+      if (b === 9 && nb === 9) return;
+      const corners = f.v.map((v) => [v[0], v[1] * h, v[2]]), r = tileRect(blockTile(b, fi, lit)), uvs = rectUvs(r);
+      // Side faces of short blocks crop the texture from the top, as renderMaxY does.
+      if (fi !== 2 && fi !== 3 && h < 1) uvs[2][1] = uvs[3][1] = r.v0 + (r.v1 - r.v0) * h;
+      const verts = corners.map((v) => [x + v[0], y + v[1], z + v[2]]);
+      if (lit) m.quad(verts, uvs, f.shade, L.packed(x + f.n[0], y + f.n[1], z + f.n[2]));
+      else {
+        const s = smoothFace(L, x, y, z, fi, corners, boundary);
+        m.quad(verts, uvs, s.ao.map((a) => a * f.shade), s.packed);
+      }
+    });
+  }
+  // renderTorchAtAngle for a standing torch: four side planes 1/16 from the
+  // centre spanning the block, and a 2x2-pixel top at 10/16.
+  torch(m, x, y, z) {
+    const r = tileRect(blockTile(20, 0)), uvs = rectUvs(r), light = this.light.packed(x, y, z), d = 1 / 16,
+      t = blockTile(20, 0), tx = (t % ATLAS_COLUMNS) * 16, ty = Math.floor(t / ATLAS_COLUMNS) * 16, W = ATLAS_COLUMNS * 16, H = ATLAS_ROWS * 16;
+    m.quad([[x + 0.5 - d, y, z], [x + 0.5 - d, y, z + 1], [x + 0.5 - d, y + 1, z + 1], [x + 0.5 - d, y + 1, z]], uvs, 1, light);
+    m.quad([[x + 0.5 + d, y, z + 1], [x + 0.5 + d, y, z], [x + 0.5 + d, y + 1, z], [x + 0.5 + d, y + 1, z + 1]], uvs, 1, light);
+    m.quad([[x, y, z + 0.5 + d], [x + 1, y, z + 0.5 + d], [x + 1, y + 1, z + 0.5 + d], [x, y + 1, z + 0.5 + d]], uvs, 1, light);
+    m.quad([[x + 1, y, z + 0.5 - d], [x, y, z + 0.5 - d], [x, y + 1, z + 0.5 - d], [x + 1, y + 1, z + 0.5 - d]], uvs, 1, light);
+    const u0 = (tx + 7) / W, u1 = (tx + 9) / W, v0 = 1 - (ty + 8) / H, v1 = 1 - (ty + 6) / H, top = y + 0.625;
+    m.quad([[x + 0.5 - d, top, z + 0.5 + d], [x + 0.5 + d, top, z + 0.5 + d], [x + 0.5 + d, top, z + 0.5 - d], [x + 0.5 - d, top, z + 0.5 - d]], [[u0, v0], [u1, v0], [u1, v1], [u0, v1]], 1, light);
+  }
+  // renderCrossedSquares, with the tall-grass position jitter from the block coordinates.
+  crossed(m, b, x, y, z) {
+    let px = x, py = y, pz = z;
+    if (b === 39) {
+      let i = BigInt.asIntN(64, BigInt(Math.imul(x, 3129871)) ^ (BigInt(z) * 116129781n) ^ BigInt(y));
+      i = BigInt.asIntN(64, i * i * 42317861n + i * 11n);
+      const bits = (s) => Number((i >> BigInt(s)) & 15n) / 15;
+      px += (bits(16) - 0.5) * 0.5;
+      py += (bits(20) - 1) * 0.2;
+      pz += (bits(24) - 0.5) * 0.5;
+    }
+    const uvs = rectUvs(tileRect(blockTile(b, 0))), light = this.light.packed(x, y, z), a = 0.05, c = 0.95;
+    m.quad([[px + a, py, pz + a], [px + c, py, pz + c], [px + c, py + 1, pz + c], [px + a, py + 1, pz + a]], uvs, 1, light, true);
+    m.quad([[px + a, py, pz + c], [px + c, py, pz + a], [px + c, py + 1, pz + a], [px + a, py + 1, pz + c]], uvs, 1, light, true);
+  }
+  // renderBlockCropsImpl: a # of four planes at 1/4 and 3/4, sunk 1/16.
+  crops(m, b, x, y, z) {
+    const uvs = rectUvs(tileRect(blockTile(b, 0))), light = this.light.packed(x, y, z), y0 = y - 1 / 16, y1 = y0 + 1;
+    for (const o of [0.25, 0.75]) {
+      m.quad([[x + o, y0, z], [x + o, y0, z + 1], [x + o, y1, z + 1], [x + o, y1, z]], uvs, 1, light, true);
+      m.quad([[x, y0, z + o], [x + 1, y0, z + o], [x + 1, y1, z + o], [x, y1, z + o]], uvs, 1, light, true);
+    }
+  }
+  // RenderBlocks.getLiquidHeight for still water: the corner's four cells.
+  liquidHeight(x, y, z) {
+    let weight = 0, sum = 0;
+    for (let i = 0; i < 4; i++) {
+      const bx = x - (i & 1), bz = z - ((i >> 1) & 1);
+      if (this.world.get(bx, y + 1, bz) === 10) return 1;
+      const b = this.world.get(bx, y, bz);
+      if (b === 10) {
+        sum += (1 / 9) * 11;
+        weight += 11;
+      } else if (b === 0 || b === 20 || isPlant(b)) {
+        // Material.isSolid is false only for air, plants and torches here.
+        sum += 1;
+        weight += 1;
+      }
+    }
+    return 1 - sum / weight;
+  }
+  // renderBlockLiquid: top in still frames, sides in the flowing texture's
+  // top-left quarter, a 0.001 inset, and liquid brightness from the cell and above.
+  liquid(still, flow, x, y, z) {
+    const w = this.world, L = this.light, e = 0.001,
+      bright = (bx, by, bz) => maxPacked(L.packed(bx, by, bz), L.packed(bx, by + 1, bz)),
+      h = [[this.liquidHeight(x, y, z), this.liquidHeight(x, y, z + 1)], [this.liquidHeight(x + 1, y, z), this.liquidHeight(x + 1, y, z + 1)]];
+    if (w.get(x, y + 1, z) !== 10)
+      still.quad(
+        [[x, y + h[0][0] - e, z], [x, y + h[0][1] - e, z + 1], [x + 1, y + h[1][1] - e, z + 1], [x + 1, y + h[1][0] - e, z]],
+        [[0, 1], [0, 0], [1, 0], [1, 1]],
+        1,
+        bright(x, y, z),
+      );
+    const below = w.get(x, y - 1, z);
+    if (below !== 10 && !opaqueCube(below))
+      still.quad([[x, y + e, z], [x + 1, y + e, z], [x + 1, y + e, z + 1], [x, y + e, z + 1]], [[0, 1], [1, 1], [1, 0], [0, 0]], 0.5, bright(x, y - 1, z));
+    for (const fi of [0, 1, 4, 5]) {
+      const f = FACES[fi], nx = x + f.n[0], nz = z + f.n[2], nb = w.get(nx, y, nz);
+      if (nb === 10 || hides(nb)) continue;
+      const verts = f.v.map((v) => [x + v[0] - f.n[0] * e, y + (v[1] ? h[v[0]][v[2]] : 0), z + v[2] - f.n[2] * e]),
+        uvs = f.v.map((v, i) => [i === 1 || i === 2 ? 0.5 : 0, v[1] ? 1 - (1 - h[v[0]][v[2]]) * 0.5 : 0.5]);
+      flow.quad(verts, uvs, f.shade, bright(nx, y, nz));
+    }
+  }
+  setFurnaces(data) {
+    const next = new Set(Object.entries(data).filter(([, f]) => f.burn > 0).map(([key]) => key)),
+      changed = [...new Set([...next, ...(this.litFurnaces || [])])].filter((k) => next.has(k) !== this.litFurnaces?.has(k));
+    this.litFurnaces = next;
+    for (const k of changed) {
+      const [x, y, z] = k.split(",").map(Number);
+      this.updateBlock(x, z, y);
+    }
+  }
+  // Relights around an edit; the edited chunk and its touching neighbours
+  // rebuild now, the rest of the changed light box over the next frames.
+  updateBlock(x, z, y = 0) {
+    const box = this.light?.update(x, y, z), chunk = (v) => Math.floor(v / 16) * 16;
+    const now = new Set([[chunk(x), chunk(z)], [chunk(x - 1), chunk(z)], [chunk(x + 1), chunk(z)], [chunk(x), chunk(z - 1)], [chunk(x), chunk(z + 1)]].filter(([a, b]) => a >= 0 && b >= 0 && a < SIZE && b < SIZE).map((c) => c.join(",")));
+    if (box)
+      for (let a = chunk(Math.max(0, box.x0 - 1)); a <= chunk(Math.min(SIZE - 1, box.x1 + 1)); a += 16)
+        for (let b = chunk(Math.max(0, box.z0 - 1)); b <= chunk(Math.min(SIZE - 1, box.z1 + 1)); b += 16) if (!now.has(`${a},${b}`)) this.dirty.add(`${a},${b}`);
+    for (const k of now) this.buildChunk(...k.split(",").map(Number));
   }
   preview(time) {
     this.setTime(6000);
-    this.camera.position.set(
-      91 + Math.sin(time * 0.025) * 4,
-      48,
-      108 + Math.cos(time * 0.025) * 4,
-    );
+    this.camera.position.set(91 + Math.sin(time * 0.025) * 4, 48, 108 + Math.cos(time * 0.025) * 4);
     this.camera.lookAt(49, 20, 44);
     this.outline.visible = false;
   }
+  // Once per tick: torch flicker, the lightmap, and the fog-brightness easing
+  // from the light level at the camera (EntityRenderer.updateRenderer).
   setTime(ticks) {
-    if(this.moonTexture){const phase=Math.floor(ticks/24000)%8;this.moonTexture.offset.set(phase%4*.25,1-(Math.floor(phase/4)+1)*.5);}
-    const a = ((ticks % 24000) / 24000 - 0.25) * Math.PI * 2;
-    this.daylight = Math.max(0.04, Math.min(1, (Math.cos(a) + 0.2) * 1.7));
-    this.skyColor
-      .set("#152337")
-      .lerp(new THREE.Color("#c6dddd"), this.daylight);
-    this.scene.background.copy(this.skyColor);
-    this.scene.fog.color.copy(this.skyColor);
-    this.ambient.intensity = 0.19 + this.daylight * 2.01;
-    this.sun.intensity = 0.12 + this.daylight * 2.18;
-    this.sun.position.set(Math.sin(a) * 100, Math.cos(a) * 100, 40);
-    this.sunDisc.position.set(
-      64 + Math.sin(a) * 115,
-      24 + Math.cos(a) * 115,
-      15,
-    );
-    this.sunDisc.lookAt(64, 24, 64);
-    this.moonDisc.position.set(
-      64 - Math.sin(a) * 115,
-      24 - Math.cos(a) * 115,
-      100,
-    );
-    this.moonDisc.lookAt(64, 24, 64);
+    this.ticks = ticks;
+    this.angle = celestialAngle(ticks);
+    this.subtracted = skylightSubtracted(this.angle);
+    // Farming and mobs read the sky light that remains at this time of day.
+    this.daylight = (15 - this.subtracted) / 15;
+    this.lighting.update(sunBrightness(this.angle), this.flicker.tick(), this.gamma ?? 0);
+    const p = this.camera.position, chunks = this.distance / 16,
+      level = this.light ? this.light.level(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z), this.subtracted) : 15,
+      target = BRIGHTNESS[level] * (1 - chunks / 16) + chunks / 16;
+    this.fogBrightness += (target - this.fogBrightness) * 0.1;
+  }
+  setGamma(gamma) {
+    this.gamma = gamma;
+    this.lighting.update(sunBrightness(this.angle), this.flicker.x, gamma);
+  }
+  // Brightness for an entity or tile entity at a world position.
+  brightness(x, y, z) {
+    return this.light ? this.light.packed(Math.floor(x), Math.floor(y), Math.floor(z)) : 15 << 20;
   }
   render(time, dt = 1 / 60) {
     this.effects.update(dt);
-    this.waterTexture.offset.y = 1 - ((Math.floor(time * 10) % 32) + 1) / 32;
-    this.clouds.position.x = Math.sin(time * 0.004) * 5;
-    const torches = [...this.chunks.values()]
-      .flatMap((c) => c.userData.torches || [])
-      .filter((p) => p.distanceToSquared(this.camera.position) < 30 * 30)
-      .sort(
-        (a, b) =>
-          a.distanceToSquared(this.camera.position) -
-          b.distanceToSquared(this.camera.position),
-      );
-    this.torchLights.forEach((light, i) => {
-      light.intensity = torches[i] ? 6 : 0;
-      if (torches[i]) light.position.copy(torches[i]);
-    });
-    this.renderer.render(this.scene, this.camera);
+    this.water.uv.w = 1 - ((Math.floor(time * 10) % 32) + 1) / 32;
+    this.flow.uv.w = 1 - ((Math.floor(time * 20) % 32) + 1) / 32;
+    for (let budget = 2; budget > 0 && this.dirty.size; budget--) this.buildChunk(...this.dirty.values().next().value.split(",").map(Number));
+    const c = this.camera, look = c.getWorldDirection(new THREE.Vector3()), u = this.lighting.uniforms, angle = this.angle,
+      eye = this.world?.get(Math.floor(c.position.x), Math.floor(c.position.y), Math.floor(c.position.z)),
+      underwater = eye === 10 && c.position.y - Math.floor(c.position.y) < 8 / 9,
+      fog = fogColor({ angle, temperature: this.temperature ?? biomeTemperature("meadow"), look: [look.x, look.y, look.z], chunks: this.distance / 16, brightness: this.fogBrightness, underwater });
+    u.fogColor.value.set(...fog);
+    // setupFog: linear from 3/4 of the far plane; exponential 0.1 in water.
+    u.fogDensity.value = underwater ? 0.1 : 0;
+    u.fogNear.value = this.distance * 0.75;
+    u.fogFar.value = this.distance;
+    const sky = underwater ? fog : skyColor(this.temperature ?? 0.8, angle);
+    this.sky.update({ angle, sky, fog, sunrise: underwater ? null : sunriseColors(angle), stars: starBrightness(angle), moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater });
+    this.clouds.update(c, time * 20, cloudColor(angle));
+    this.drops.update(this.dropList, time * 20);
+    this.sky.render(this.renderer, c, new THREE.Color(...fog));
+    this.renderer.render(this.scene, c);
     this.worldTriangles = this.renderer.info.render.triangles;
   }
-  setDistance(distance) {
-    this.scene.fog.near = distance * 0.48;
-    this.scene.fog.far = distance;
-  }
   setDrops(drops) {
-    this.dropMarkers ??= [];
-    while (this.dropMarkers.length > drops.length) {
-      const m = this.dropMarkers.pop();
-      this.scene.remove(m);
-      m.geometry.dispose();
-      m.material.dispose();
-    }
-    drops.forEach((d, i) => {
-      if (!this.dropMarkers[i]) {
-        const m = new THREE.Mesh(
-          new THREE.BoxGeometry(0.4, 0.4, 0.4),
-          new THREE.MeshLambertMaterial({
-            color: "#d6c49a",
-            emissive: "#5b5038",
-            emissiveIntensity: 0.4,
-          }),
-        );
-        this.dropMarkers[i] = m;
-        this.scene.add(m);
-      }
-      this.dropMarkers[i].position.set(
-        d.position.x,
-        d.position.y + 0.3,
-        d.position.z,
-      );
-      this.dropMarkers[i].rotation.y = this.camera.rotation.y + 0.7;
-    });
+    this.dropList = drops;
+  }
+  setDistance(distance) {
+    this.distance = distance;
   }
 }
