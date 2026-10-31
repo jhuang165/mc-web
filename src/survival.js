@@ -1,7 +1,9 @@
 import {miningState,blockWear} from "./mining.js";
-import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WATER, LAVA } from "./world.js";
+import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WATER, LAVA, CARROTS, POTATOES } from "./world.js";
 import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,ChestContainer,makeStack} from "./inventory.js";
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
+
+import {CARROT,POTATO,BAKED_POTATO,POISONOUS_POTATO} from './crops.js';
 
 export const ITEMS = Object.fromEntries(
   BLOCKS.map((b, id) => [id, { ...b, id, block: id > 0, stack: 64 }]),
@@ -141,6 +143,13 @@ for (const item of [
   { id: 308, name: "Charcoal", color: "#4e554c", glyph: "◆" },
 ])
   ITEMS[item.id] = { stack:64,...item };
+// ItemSeedFood (carrot and potato) plant themselves; food values are 1.7.10's.
+for(const item of [
+ {id:CARROT,name:'Carrot',texture:'carrot',food:4,saturation:0.6,color:'#df8629'},
+ {id:POTATO,name:'Potato',texture:'potato',food:1,saturation:0.3,color:'#c4a76a'},
+ {id:BAKED_POTATO,name:'Baked potato',texture:'potato_baked',food:6,saturation:0.6,color:'#a47747'},
+ {id:POISONOUS_POTATO,name:'Poisonous potato',texture:'potato_poisonous',food:2,saturation:0.3,color:'#91a455'},
+])ITEMS[item.id]={stack:64,glyph:'●',...item};
 // ItemBucket (abo) and ItemBucketMilk (adi). The empty bucket stacks to 16, the filled
 // ones to 1. The ids are this build's own (Minecraft 325, 326, 327, 335); `contains` is
 // the liquid a filled bucket places and `bucket` marks every item that has bucket behaviour.
@@ -208,6 +217,7 @@ for(let id=29;id<=39;id++)MATERIALS[id]={hardness:id<=30?.6:0,kind:id<=30?'shove
 MATERIALS[YELLOW_FLOWER]=MATERIALS[RED_FLOWER]={hardness:0};
 // BlockSapling: instant break (hardness 0), drops itself (damage 0 for the oak).
 MATERIALS[SAPLING]={hardness:0};
+MATERIALS[CARROTS]=MATERIALS[POTATOES]={hardness:0,drop:0};
 export const RECIPES = [];
 function recipe(id, name, rows, keys, output, count = 1) {
   const width = Math.max(...rows.map((r) => r.length));
@@ -375,6 +385,7 @@ export function craftingResult(cells, size) {
 // FurnaceRecipes and TileEntityFurnace.getItemBurnTime for this build's items,
 // checked against the original classes in public/research/inventory-reference.json.
 export const SMELTING = {
+  [POTATO]: BAKED_POTATO,
   204: 205,
   12: 3,
   6: 9,

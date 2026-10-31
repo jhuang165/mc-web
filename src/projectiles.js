@@ -8,7 +8,7 @@
 // EntityBreakingFX (bju) particles and removes the ball. `y` is the bottom of
 // the box, which is also the entity's posY (yOffset 0).
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
-import { blockBounds, snowSelectionHeight, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
+import { blockBounds, snowSelectionHeight, CARROTS, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
 import { ENTITY_TYPES } from "./entities.js";
 
 const f = Math.fround;
@@ -145,6 +145,7 @@ const RAY_BOUNDS = {
   39: [0.09999999403953552, 0, 0.09999999403953552, 0.8999999761581421, 0.800000011920929, 0.8999999761581421],
 };
 for (let id = 31; id <= 38; id++) RAY_BOUNDS[id] = [0, 0, 0, 1, 0.25, 1];
+RAY_BOUNDS[CARROTS] = RAY_BOUNDS[POTATOES] = [0, 0, 0, 1, 0.25, 1];
 // BlockBush(f = 0.2): 0.5 - f .. 0.5 + f wide and f * 3 high (shadow-reference.json).
 RAY_BOUNDS[YELLOW_FLOWER] = RAY_BOUNDS[RED_FLOWER] = [f(0.5 - f(0.2)), 0, f(0.5 - f(0.2)), f(0.5 + f(0.2)), f(f(0.2) * 3), f(0.5 + f(0.2))];
 // BlockSapling(f = 0.4): 0.5 - f .. 0.5 + f wide and f * 2 high (shadow-reference.json).

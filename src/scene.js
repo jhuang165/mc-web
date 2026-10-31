@@ -273,7 +273,7 @@ export class VoxelScene {
   }
   // renderBlockCropsImpl: a # of four planes at 1/4 and 3/4, sunk 1/16.
   crops(m, b, x, y, z) {
-    const uvs = rectUvs(tileRect(blockTile(b, 0))), light = this.light.packed(x, y, z), y0 = y - 1 / 16, y1 = y0 + 1;
+    const uvs = rectUvs(tileRect(blockTile(b, 0, false, this.world.getMeta(x, y, z)))), light = this.light.packed(x, y, z), y0 = y - 1 / 16, y1 = y0 + 1;
     for (const o of [0.25, 0.75]) {
       m.quad([[x + o, y0, z], [x + o, y0, z + 1], [x + o, y1, z + 1], [x + o, y1, z]], uvs, 1, light, true);
       m.quad([[x, y0, z + o], [x + 1, y0, z + o], [x + 1, y1, z + o], [x, y1, z + o]], uvs, 1, light, true);

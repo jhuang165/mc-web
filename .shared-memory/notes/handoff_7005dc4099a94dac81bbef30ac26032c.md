@@ -1,0 +1,1 @@
+Root crops receive no shadow via isCrop; regenerated original shadow reference matches. All 422 tests pass.

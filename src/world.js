@@ -56,9 +56,12 @@ export const BLOCKS = [
   {name:'Ice',color:'#8cb4fe'},
   // Id 48 is BlockSapling (oak only: metadata 0, bit 8 = growth stage marked), see trees.js.
   {name:'Oak sapling',color:'#5f8f2f'},
+  {name:'Carrots',color:'#6c9634',hidden:true},
+  {name:'Potatoes',color:'#7f9a42',hidden:true},
 ];
 export const WATER=10,LAVA=42;
 export const SNOW_LAYER=46,ICE=47,SAPLING=48;
+export const CARROTS=49,POTATOES=50;
 export const isLiquid=b=>b===WATER||b===LAVA;
 export const YELLOW_FLOWER = BLOCKS.findIndex((b) => b.name === 'Dandelion');
 export const RED_FLOWER = BLOCKS.findIndex((b) => b.name === 'Red flower');
@@ -127,14 +130,17 @@ function noise(x, z, seed) {
     b = hash(ix, iz + 1, seed) * (1 - fx) + hash(ix + 1, iz + 1, seed) * fx;
   return a * (1 - fz) + b * fz;
 }
-export const isCrop=b=>b>=31&&b<=38;
+export const isCrop=b=>(b>=31&&b<=38)||b===CARROTS||b===POTATOES;
+// Wheat's stages retain their old internal IDs for save compatibility; root crops use metadata.
+export const cropAge=(b,meta=0)=>b>=31&&b<=38?b-31:meta&7;
+export const cropKind=b=>b>=31&&b<=38?31:b;
 export const isPlant=b=>isCrop(b)||b===39||isFlower(b)||b===SAPLING;
 export const blockHeight=b=>b===29||b===30?15/16:b===41?.875:b===SNOW_LAYER?.125:1;
 // Blocks with Block.tickRandomly: they count towards a section's random-tick refcount
 // (ExtendedBlockStorage.getNeedsRandomTick), which WorldServer reads to pick sections.
 // Grass, leaves, farmland, crops, lava, snow layer, ice and saplings here; snow and ice act on a
 // random tick in snow.js/weather.js, fire and still lava in fire.js, leaves (decay) and saplings (growth) in trees.js.
-export const ticksRandomly=b=>b===1||b===5||b===29||b===30||(b>=31&&b<=38)||b===LAVA||b===SNOW_LAYER||b===ICE||b===FIRE||b===SAPLING;
+export const ticksRandomly=b=>b===1||b===5||b===29||b===30||isCrop(b)||b===LAVA||b===SNOW_LAYER||b===ICE||b===FIRE||b===SAPLING;
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.

@@ -9,7 +9,7 @@ export class Experience {
 }
 export const splitExperience=n=>{const out=[];for(const size of [2477,1237,617,307,149,73,37,17,7,3,1])while(n>=size){out.push(size);n-=size;}return out;};
 export function oreExperience(block,random=Math.random){return block===15?Math.floor(random()*3):block===17?3+Math.floor(random()*5):0;}
-export const SMELT_EXPERIENCE={302:.7,304:1,303:1,301:.1,9:.1,3:.1,308:.15,203:.35,205:.35,306:.3,40:.35};
+export const SMELT_EXPERIENCE={324:.35,302:.7,304:1,303:1,301:.1,9:.1,3:.1,308:.15,203:.35,205:.35,306:.3,40:.35};
 // EntityXPOrb.getTextureByXP (sq.f): the 16x16 frame of experience_orb.png.
 export const orbIcon=v=>v>=2477?10:v>=1237?9:v>=617?8:v>=307?7:v>=149?6:v>=73?5:v>=37?4:v>=17?3:v>=7?2:v>=3?1:0;
 // RenderXPOrb.func_76986_a (bnp.a): the tint cycles with (xpColor + partial) / 2

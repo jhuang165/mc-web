@@ -1,3 +1,4 @@
+import {CARROT,zombieRareDrop} from './crops.js';
 import { SIZE, HEIGHT, hash, slipperiness, blockBounds, WOOL, isLiquid, DYE } from "./world.js";
 import { ITEMS } from "./survival.js";
 import { mhSin, mhCos } from "./lighting.js";
@@ -34,7 +35,7 @@ const clampYaw = (from, to, max) => f(from - Math.min(Math.max(wrapDegrees(f(fro
 // to prevPos before every onUpdate), the Java-convention yaw/pitch degrees and
 // the limb swing. `gait` is the old limb phase from earlier saves.
 // Physics state is rebuilt on load as well: motion is already reset there.
-const TRANSIENT = ["onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "fire", "idle", "revenge"];
+const TRANSIENT = ["onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "fire", "idle", "revenge", "recentlyHit"];
 const INTERPOLATED = [...TRANSIENT, "eggTimer", "wingRotation", "destPos", "oFlapSpeed", "oFlap", "wingRotDelta", "px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
 // Entity.rotationYaw is Java degrees (0 faces +z, increasing toward -x); e.yaw
 // is the radian bearing used by the movement code, which turns toward +x.
@@ -141,7 +142,8 @@ export function aiMoveSpeed(e, multiplier) {
 }
 // Wheat (ade.O) breeds and tempts cows and sheep; chickens take wheat seeds (309, any
 // ItemSeeds in the original) through EntityAITempt / isBreedingItem.
-const BREED_ITEM = { cow: 305, sheep: 305, chicken: 309 };
+// Pigs use only carrots (ade.bF), including the carrot held by EntityAITempt.
+const BREED_ITEM = { pig: CARROT, cow: 305, sheep: 305, chicken: 309 };
 export const EGG = 316, FEATHER = 317, RAW_CHICKEN = 318, COOKED_CHICKEN = 319;
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
 // its hurt sound, and the sheep uses mob.sheep.say for say, hurt and death alike.
@@ -429,6 +431,7 @@ export class EntityWorld {
           ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
           wander: 0,
           hurt: 0,
+          recentlyHit: 0,
           attack: 0,
           flee: 0,
           vx: 0,
@@ -464,6 +467,7 @@ export class EntityWorld {
       attack: 0,
       flee: 0,
       revenge: 0,
+      recentlyHit: 0,
       idle: 0,
       burn: 0,
       growingAge:0,love:0,mateTicks:0,
@@ -547,7 +551,7 @@ export class EntityWorld {
     if (e.type !== "zombie" && e.type !== "skeleton") e.flee = 60;
     e.love=0;e.mateTicks=0;
     // A mob shot by another mob's arrow has no player to take revenge on.
-    if (byPlayer) e.revenge = (e.age || 0) + 1;
+    if (byPlayer) { e.revenge = (e.age || 0) + 1; e.recentlyHit = 100; }
     // EntityLivingBase.attackEntityFrom sets limbSwingAmount to 1.5.
     e.limbSwingAmount = 1.5;
     knockBack(e, fromX, fromZ);
@@ -621,6 +625,7 @@ export class EntityWorld {
       if (arrows) this.events.push({ drop: 320, count: arrows, position: { x: e.x, y: e.y, z: e.z } });
       if (bones) this.events.push({ drop: 311, count: bones, position: { x: e.x, y: e.y, z: e.z } });
     }
+    if(e.type==='zombie'){const drop=zombieRareDrop(e.recentlyHit,n=>Math.floor(this.random()*n));if(drop)this.events.push({drop,count:1,position:{x:e.x,y:e.y,z:e.z}});}
     e.death = 1;
     if (e.eatTimer) e.eatTimer = 0;
   }
@@ -817,6 +822,7 @@ export class EntityWorld {
         continue;
       }
       e.age++;
+      if(e.recentlyHit>0)e.recentlyHit--;
       if(e.growingAge<0)e.growingAge++;else if(e.growingAge>0)e.growingAge--;
       e.love=Math.max(0,e.love-1);
       if(e.love&&e.age%10===0)this.events.push({hearts:true,position:{x:e.x,y:e.y+1,z:e.z}});
