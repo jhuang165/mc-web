@@ -190,6 +190,9 @@ export const MATERIALS = {
   27: { hardness: 3, kind: "pickaxe", tier: 2 },
   28: { hardness: 5, kind: "pickaxe", tier: 2 },
   40: { hardness: 1.25, kind: "pickaxe", tier: 0 },
+  // BlockSnow (hardness 0.1, shovel only, drops meta+1 snowballs) and BlockIce (0.5, no drop).
+  46: { hardness: 0.1, kind: "shovel", drop: 312 },
+  47: { hardness: 0.5, drop: 0 },
   41: { hardness: 2.5, kind: "axe" },
 };
 

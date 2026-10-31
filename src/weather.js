@@ -7,7 +7,9 @@
 // strengths, sky terms, strike rule and bolt state machine are replayed against
 // public/research/weather-reference.json by weather.test.js.
 import { JavaRandom, biomeTemperature, lightOpacity } from "./lighting.js";
-import { SIZE, HEIGHT, isPlant } from "./world.js";
+import { SIZE, HEIGHT, SNOW_LAYER, ICE, isPlant, ticksRandomly } from "./world.js";
+import { biomeFacts } from "./biomes.js";
+import { canBlockFreeze, canSnowAt, lightOf, meltResult } from "./snow.js";
 
 const f = Math.fround;
 
@@ -20,8 +22,9 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 // Material.blocksMovement || Material.isLiquid: the blocks Chunk.getPrecipitationHeight
 // stops at. Air, torches, crops, tall grass and flowers let rain through; leaves,
-// glass, water and lava do not. (The probe's block table is in weather-reference.json.)
-export const stopsPrecipitation = (b) => b !== 0 && b !== 20 && !isPlant(b);
+// glass, water, lava and ice do not; a snow layer (Material.snow) does not stop it either.
+// (The probe's block table is in weather-reference.json.)
+export const stopsPrecipitation = (b) => b !== 0 && b !== 20 && b !== SNOW_LAYER && !isPlant(b);
 // Chunk.getPrecipitationHeight (apx.d): one above the topmost such block, or -1.
 export function precipitationHeight(world, x, z) {
   if (x < 0 || z < 0 || x >= SIZE || z >= SIZE) return -1;
@@ -36,9 +39,9 @@ export function canSeeSky(world, x, y, z) {
   while (top >= 0 && lightOpacity(world.get(x, top, z)) === 0) top--;
   return y >= top + 1;
 }
-// Biome flags the overworld presets have: every biome here is at least 0.15, so
-// BiomeGenBase.getEnableSnow is false, canSpawnLightningBolt is true and
-// canSnowAt never holds. It always rains and never snows.
+// Biome flags (biomes.js): meadow, island and alpine are at least 0.15, so they rain, can be
+// struck and never snow; the snowy preset (Ice Plains, 0.0, enableSnow) snows instead
+// (EntityRenderer.renderRainSnow picks by temperature >= 0.15) and takes no lightning.
 export const rainsHere = (world) => biomeTemperature(world.biome) >= f(0.15);
 // World.canLightningStrikeAt (ahb.y), with the biome facts as arguments so the
 // probe table can replay it for every biome.
@@ -54,6 +57,8 @@ export function canLightningStrikeAt(weather, world, x, y, z) {
     precipitation: precipitationHeight(world, x, z),
     y,
     temperature: biomeTemperature(world.biome),
+    canSpawn: biomeFacts(world.biome).canSpawnLightning,
+    enableSnow: biomeFacts(world.biome).enableSnow,
   });
 }
 // Entity.isWet (sa.L): in water, or rained on at the feet or at the head.
@@ -225,16 +230,57 @@ export class Weather {
   // WorldServer's per-chunk roll: one in 100000 per tickable chunk per tick, in
   // a thunderstorm only; the strike lands in a random column of that chunk where
   // canLightningStrikeAt holds.
+  rollLightningChunk(world, cx, cz) {
+    if (this.random.nextInt(100000) !== 0 || !this.isRaining() || !this.isThundering()) return;
+    this.lcg = (Math.imul(this.lcg, 3) + 1013904223) | 0;
+    const j = this.lcg >> 2,
+      x = cx * 16 + (j & 15),
+      z = cz * 16 + ((j >> 8) & 15),
+      y = precipitationHeight(world, x, z);
+    if (canLightningStrikeAt(this, world, x, y, z)) this.bolts.push(new LightningBolt(x, y, z, new JavaRandom(Math.floor(Math.random() * 2 ** 48))));
+  }
   rollLightning(world, chunks) {
-    for (const [cx, cz] of chunks) {
-      if (this.random.nextInt(100000) !== 0 || !this.isRaining() || !this.isThundering()) continue;
+    for (const [cx, cz] of chunks) this.rollLightningChunk(world, cx, cz);
+  }
+  // A block change made by the tick: set and tracked, so it is saved and neighbours hear of it.
+  // main.js replaces this to also redraw the chunk.
+  apply(world, x, y, z, block, meta) {
+    world.set(x, y, z, block, true, meta);
+  }
+  // WorldServer.func_147456_g (mt.g) for one chunk, in its order (replayed against
+  // snow-reference.json "tick"): the lightning roll, then "iceandsnow" (one in 16 per tick:
+  // one random column, freeze naturally-freezable water under the precipitation height, and
+  // lay a snow layer there while it is raining), then three random block ticks (updateLCG
+  // picks x, z, y) in every 16-high section that has a randomly ticking block.
+  tickChunk(world, cx, cz) {
+    this.rollLightningChunk(world, cx, cz);
+    const bx = cx * 16, bz = cz * 16, light = lightOf(world);
+    if (this.random.nextInt(16) === 0) {
       this.lcg = (Math.imul(this.lcg, 3) + 1013904223) | 0;
       const j = this.lcg >> 2,
-        x = cx * 16 + (j & 15),
-        z = cz * 16 + ((j >> 8) & 15),
+        x = bx + (j & 15),
+        z = bz + ((j >> 8) & 15),
         y = precipitationHeight(world, x, z);
-      if (canLightningStrikeAt(this, world, x, y, z)) this.bolts.push(new LightningBolt(x, y, z, new JavaRandom(Math.floor(Math.random() * 2 ** 48))));
+      if (canBlockFreeze(world, x, y - 1, z, true, light)) this.apply(world, x, y - 1, z, ICE, 0);
+      if (this.isRaining() && canSnowAt(world, x, y, z, true, light)) this.apply(world, x, y, z, SNOW_LAYER, 0);
     }
+    for (let s = 0; s < HEIGHT / 16; s++) {
+      if (world.sectionTickCount && world.sectionTickCount(cx, cz, s) <= 0) continue;
+      for (let n = 0; n < 3; n++) {
+        this.lcg = (Math.imul(this.lcg, 3) + 1013904223) | 0;
+        const j = this.lcg >> 2,
+          x = bx + (j & 15),
+          z = bz + ((j >> 8) & 15),
+          y = s * 16 + ((j >> 16) & 15),
+          b = world.get(x, y, z);
+        if (!ticksRandomly(b)) continue;
+        const melt = meltResult(b, light(x, y, z));
+        if (melt) this.apply(world, x, y, z, melt.block, melt.meta);
+      }
+    }
+  }
+  tickChunks(world, chunks) {
+    for (const [cx, cz] of chunks) this.tickChunk(world, cx, cz);
   }
   // The chunks WorldServer ticks around a player: its view distance (10 by
   // default) clipped to the world.
@@ -249,7 +295,7 @@ export class Weather {
     if (this.lastLightning > 0) this.lastLightning--; // Minecraft.runTick
     this.struck.length = 0;
     this.updateWeather();
-    if (world) this.rollLightning(world, Weather.activeChunks(player?.x ?? SIZE / 2, player?.z ?? SIZE / 2));
+    if (world) this.tickChunks(world, Weather.activeChunks(player?.x ?? SIZE / 2, player?.z ?? SIZE / 2));
     for (const bolt of this.bolts) {
       if (bolt.tick(this.events)) {
         this.lastLightning = 2;

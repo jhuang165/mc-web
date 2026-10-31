@@ -5,7 +5,7 @@ export function blockSound(id) {
   if (id === 6) return "sand";
   if ([4, 7, 13, 20, 21].includes(id)) return "wood";
   if (id === 19) return "cloth";
-  if (id === 23) return "snow";
+  if (id === 23 || id === 46) return "snow";
   return "stone";
 }
 export class SoundBank {

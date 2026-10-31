@@ -201,11 +201,11 @@ const liquids = (w) => {
   for (let i = 0; i < w.data.length; i++) if (w.data[i] === WATER || w.data[i] === LAVA) out.push(i);
   return out;
 };
-test("lakes and springs generate deterministically for version 5 only", () => {
+test("lakes and springs generate deterministically from version 5", () => {
   const a = new World("Minecraft"), b = new World("Minecraft"), c = new World("Overworld");
   assert.deepEqual(a.data, b.data);
   assert.notDeepEqual(a.data, c.data);
-  assert.equal(a.generationVersion, 5);
+  assert.equal(a.generationVersion, 6); // the default; snow.test.js pins that 6 only adds snow and ice
   // Versions 1 to 3 are byte for byte what they were before lakes existed (sha1 of the
   // block array taken from the generator before this change), so old saves keep their terrain.
   const sha = (w) => createHash("sha1").update(w.data).digest("hex").slice(0, 12);

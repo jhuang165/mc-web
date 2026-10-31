@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { WorldEffects } from "./effects.js";
-import { SIZE, HEIGHT, SEA, blockHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
+import { SIZE, HEIGHT, SEA, SNOW_LAYER, ICE, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS } from "./block-textures.js";
 import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
@@ -105,6 +105,11 @@ export class VoxelScene {
       depth.colorWrite = false;
       return { uv, frames, depth, color: worldMaterial(this.lighting, { map: t, alphaTest: 0, transparent: true, uvTransform: uv }) };
     };
+    // BlockIce is a translucent-pass block (getRenderBlockPass 1): like water it
+    // draws a depth-only pass, then blended colour, from the terrain atlas.
+    this.iceDepth = worldMaterial(this.lighting, { map: this.textures.texture, alphaTest: 0, transparent: true });
+    this.iceDepth.colorWrite = false;
+    this.iceColor = worldMaterial(this.lighting, { map: this.textures.texture, alphaTest: 0, transparent: true });
     this.water = animated("/media/1.7.10/blocks/water_still.png", 32, 1);
     this.flow = animated("/media/1.7.10/blocks/water_flow.png", 32, 1);
     // Lava is an opaque-pass block (BlockLiquid.getRenderBlockPass is 0 for lava):
@@ -163,7 +168,7 @@ export class VoxelScene {
     const key = `${cx},${cz}`, old = this.chunks.get(key);
     if (old) this.disposeChunk(old);
     this.dirty.delete(key);
-    const w = this.world, solid = new Mesher(), water = new Mesher(), flow = new Mesher(), lava = new Mesher(), lavaFlow = new Mesher();
+    const w = this.world, solid = new Mesher(), water = new Mesher(), ice = new Mesher(), flow = new Mesher(), lava = new Mesher(), lavaFlow = new Mesher();
     for (let x = cx; x < cx + 16; x++)
       for (let z = cz; z < cz + 16; z++)
         for (let y = 0; y < HEIGHT; y++) {
@@ -174,7 +179,7 @@ export class VoxelScene {
           else if (isPlant(b)) this.crossed(solid, b, x, y, z);
           else if (b === 10) this.liquid(10, water, flow, x, y, z);
           else if (b === 42) this.liquid(42, lava, lavaFlow, x, y, z);
-          else this.cube(solid, b, x, y, z);
+          else this.cube(b === ICE ? ice : solid, b, x, y, z);
         }
     const group = new THREE.Group(), add = (mesher, ...materials) => {
       const g = mesher.geometry();
@@ -187,6 +192,7 @@ export class VoxelScene {
     };
     add(solid, this.material);
     add(water, this.water.depth, this.water.color);
+    add(ice, this.iceDepth, this.iceColor);
     add(flow, this.flow.depth, this.flow.color);
     add(lava, this.lavaStill.material);
     add(lavaFlow, this.lavaFlow.material);
@@ -196,12 +202,13 @@ export class VoxelScene {
   // renderStandardBlockWithAmbientOcclusion; blocks that emit light (a lit
   // furnace) take the flat colour-multiplier path with neighbour brightness.
   cube(m, b, x, y, z) {
-    const w = this.world, L = this.light, h = blockHeight(b), lit = b === 14 && this.litFurnaces.has(`${x},${y},${z}`);
+    const w = this.world, L = this.light, h = b === SNOW_LAYER ? snowSelectionHeight(w.getMeta(x, y, z)) : blockHeight(b), lit = b === 14 && this.litFurnaces.has(`${x},${y},${z}`);
     FACES.forEach((f, fi) => {
       const boundary = fi !== 2 || h >= 1, nb = w.get(x + f.n[0], y + f.n[1], z + f.n[2]);
-      if (boundary && hides(nb)) return;
-      if (b === 9 && nb === 9) return;
-      const corners = f.v.map((v) => [v[0], v[1] * h, v[2]]), r = tileRect(blockTile(b, fi, lit, b === 19 ? w.getMeta(x, y, z) : 0)), uvs = rectUvs(r);
+      // BlockSnow.shouldSideBeRendered always draws the top.
+      if (boundary && hides(nb) && !(b === SNOW_LAYER && fi === 2)) return;
+      if ((b === 9 || b === ICE) && nb === b) return;
+      const corners = f.v.map((v) => [v[0], v[1] * h, v[2]]), r = tileRect(blockTile(b, fi, lit, b === 19 ? w.getMeta(x, y, z) : 0, b === 1 && (w.get(x, y + 1, z) === SNOW_LAYER || w.get(x, y + 1, z) === 23))), uvs = rectUvs(r);
       // Side faces of short blocks crop the texture from the top, as renderMaxY does.
       if (fi !== 2 && fi !== 3 && h < 1) uvs[2][1] = uvs[3][1] = r.v0 + (r.v1 - r.v0) * h;
       const verts = corners.map((v) => [x + v[0], y + v[1], z + v[2]]);
