@@ -1000,6 +1000,8 @@ function tickSurvival(inWater, oldPosition) {
     }
   }
   projectiles.tick(world, mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), (e) => e !== "player" && thrownHit(mobs, e, position));
+  // EntityEgg.onImpact: hatched chicks join the mob list.
+  for (const h of projectiles.drain()) if (mobs) for (let i = 0; i < h.chicks; i++) mobs.hatch(h.x, h.y, h.z, h.yaw);
   if (mobs) handleEntityEvents();
   scene.setDrops(items.items);
   scene.setProjectiles(projectiles.balls, projectiles.particles);
@@ -1012,7 +1014,7 @@ function applyFarmUpdates(updates){const chunks=new Set();for(const[x,y,z]of upd
 function handleEntityEvents() {
   for (const event of mobs.drain()) {
     if (event.sound)
-      sounds.play(event.sound, { position: event.position, volume: event.volume ?? 0.6 });
+      sounds.play(event.sound, { position: event.position, volume: event.volume ?? 0.6, pitch: event.pitch });
     if(event.xp&&!survival.creative)xpOrbs.spawn(event.xp,event.position);
     if(event.hearts)mobRenderer.hearts(event.position);
     if (event.drop) items.dropMob(event.drop, event.count, event.position, event.damage, event);
@@ -1039,11 +1041,13 @@ function beginEating(id) {
 // Minecraft.rightClickMouse swings only for blocks that consume the click, and
 // resets the equip animation (resetEquippedProgress2) only when the stack
 // changed, so Creative throws neither swing nor dip the hand.
-function throwSnowball() {
+// ItemEgg.onItemRightClick (ack.a) is identical with an EntityEgg.
+function throwSnowball(id = 312) {
   sounds.play("random.bow", { volume: 0.5, pitch: 0.4 / (Math.random() * 0.4 + 0.8) });
-  projectiles.throwSnowball(position, yaw, pitch);
+  if (id === 316) projectiles.throwEgg(position, yaw, pitch);
+  else projectiles.throwSnowball(position, yaw, pitch);
   if (!survival.creative) {
-    survival.take(312);
+    survival.take(id);
     animation.resetEquipped();
     renderHotbar();
     saved = false;
@@ -1059,8 +1063,8 @@ function edit(place = false) {
   const activates = !(motion.sneaking && id);
   // A snowball in hand is thrown unless the aimed block takes the click first.
   const usesBlock = activates && !aimedEntity && target && [13, 14, CHEST].includes(world.get(...target.block));
-  if (place && id === 312 && (survival.creative || survival.count(id)) && !usesBlock) {
-    throwSnowball();
+  if (place && (id === 312 || id === 316) && (survival.creative || survival.count(id)) && !usesBlock) {
+    throwSnowball(id);
     return;
   }
   animation.swing();

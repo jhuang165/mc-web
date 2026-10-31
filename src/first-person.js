@@ -65,6 +65,7 @@ export function itemTexture(id) {
     304: "gold_ingot",
     305: "wheat",
     312:"snowball",313:"flint",314:"book",
+    316:"egg",317:"feather",318:"chicken_raw",319:"chicken_cooked",
     306: "brick",
     307: "clay_ball",
     308: "coal",

@@ -737,6 +737,46 @@
       "url": "/audio/1.7.10/mob/sheep/step5.ogg",
       "sha1": "c289aa46fcbcfaf21c8080d57953fd45a4939294",
       "bytes": 5185
+    },
+    "mob/chicken/hurt1": {
+      "url": "/audio/1.7.10/mob/chicken/hurt1.ogg",
+      "sha1": "31b52151bf2a6fa35d2d2aa72f832285d9e7d70d",
+      "bytes": 7740
+    },
+    "mob/chicken/step1": {
+      "url": "/audio/1.7.10/mob/chicken/step1.ogg",
+      "sha1": "e0f0ba416a5744036e11bb6a5fc5ac4b8c461873",
+      "bytes": 3702
+    },
+    "mob/chicken/step2": {
+      "url": "/audio/1.7.10/mob/chicken/step2.ogg",
+      "sha1": "bf7fadaf64945f6b31c803d086ac6a652aabef9b",
+      "bytes": 3838
+    },
+    "mob/chicken/plop": {
+      "url": "/audio/1.7.10/mob/chicken/plop.ogg",
+      "sha1": "ab5a32b70ef1e7aafc550b20afdb7dc8c0d5d901",
+      "bytes": 4680
+    },
+    "mob/chicken/say3": {
+      "url": "/audio/1.7.10/mob/chicken/say3.ogg",
+      "sha1": "49874e07369c3bb0bc8a2fba4f2096d2e9a36c9a",
+      "bytes": 7080
+    },
+    "mob/chicken/hurt2": {
+      "url": "/audio/1.7.10/mob/chicken/hurt2.ogg",
+      "sha1": "18752157f5d8718e2752805a657c74a73d2b88db",
+      "bytes": 6177
+    },
+    "mob/chicken/say1": {
+      "url": "/audio/1.7.10/mob/chicken/say1.ogg",
+      "sha1": "74e5422bd83bb2041a6f0d09644bc095c0e9e21a",
+      "bytes": 7956
+    },
+    "mob/chicken/say2": {
+      "url": "/audio/1.7.10/mob/chicken/say2.ogg",
+      "sha1": "3660e743db2bbbcff0866d3f1e606882f1aeb6ac",
+      "bytes": 9476
     }
   },
   "events": {
@@ -1264,6 +1304,34 @@
         "mob/sheep/step3",
         "mob/sheep/step4",
         "mob/sheep/step5"
+      ]
+    },
+    "mob.chicken.hurt": {
+      "category": "neutral",
+      "sounds": [
+        "mob/chicken/hurt1",
+        "mob/chicken/hurt2"
+      ]
+    },
+    "mob.chicken.plop": {
+      "category": "neutral",
+      "sounds": [
+        "mob/chicken/plop"
+      ]
+    },
+    "mob.chicken.say": {
+      "category": "neutral",
+      "sounds": [
+        "mob/chicken/say1",
+        "mob/chicken/say2",
+        "mob/chicken/say3"
+      ]
+    },
+    "mob.chicken.step": {
+      "category": "neutral",
+      "sounds": [
+        "mob/chicken/step1",
+        "mob/chicken/step2"
       ]
     }
   }

@@ -33,7 +33,7 @@ const clampYaw = (from, to, max) => f(from - Math.min(Math.max(wrapDegrees(f(fro
 // the limb swing. `gait` is the old limb phase from earlier saves.
 // Physics state is rebuilt on load as well: motion is already reset there.
 const TRANSIENT = ["onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage"];
-const INTERPOLATED = [...TRANSIENT, "px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
+const INTERPOLATED = [...TRANSIENT, "eggTimer", "wingRotation", "destPos", "oFlapSpeed", "oFlap", "wingRotDelta", "px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
 // Entity.rotationYaw is Java degrees (0 faces +z, increasing toward -x); e.yaw
 // is the radian bearing used by the movement code, which turns toward +x.
 const javaYaw = (e) => f((-e.yaw * 180) / Math.PI) + 0;
@@ -71,6 +71,13 @@ export function sheepHeadPitch(timer, partial, pitchDegrees = 0) {
   }
   return timer > 0 ? f(0.62831855) : f(pitchDegrees / 57.295776);
 }
+// RenderChicken.handleRotationFloat (bng.a(wg, F)F): the wing angle fed to the
+// model as ageInTicks, (sin(oFlap + (wingRotation - oFlap) * partial) + 1) *
+// (oFlapSpeed + (destPos - oFlapSpeed) * partial), with MathHelper.sin's table.
+export function chickenFlap(e, partial) {
+  const p = f(partial), a = f(e.oFlap + f(f(e.wingRotation - e.oFlap) * p)), b = f(e.oFlapSpeed + f(f(e.destPos - e.oFlapSpeed) * p));
+  return f(f(mhSin(a) + 1) * b);
+}
 export function mobPose(e, partial) {
   const p = f(partial), lerp = (a, b) => a + (b - a) * p,
     body = interpolateRotation(e.prevRenderYawOffset, e.renderYawOffset, p),
@@ -83,6 +90,7 @@ export function mobPose(e, partial) {
   if (e.death > 0) death = f(Math.min(1, f(Math.sqrt(f(f(f(f(e.death + p) - 1) / 20) * f(1.6))))) * 90);
   const headPitch = f(e.prevRotationPitch + f(f(e.rotationPitch - e.prevRotationPitch) * p));
   return {
+    ...(e.type === "chicken" ? { flap: chickenFlap(e, p) } : {}),
     ...(e.type === "sheep" ? { headDrop: sheepHeadDrop(e.eatTimer || 0, p), headTilt: sheepHeadPitch(e.eatTimer || 0, p, headPitch) } : {}),
     x: lerp(e.px, e.x), y: lerp(e.py, e.y), z: lerp(e.pz, e.z),
     bodyYaw: body, headYaw: f(head - body),
@@ -104,6 +112,10 @@ export const ENTITY_TYPES = {
   pig: { health: 10, width: 0.9, height: 0.9, movement: 0.25, ai: { wander: 1, mate: 1, panic: 1.25, tempt: 1.2, follow: 1.1 }, drop: 202 },
   cow: { health: 10, width: 0.9, height: 1.3, movement: f(0.2), ai: { wander: 1, mate: 1, panic: 2, tempt: 1.25, follow: 1.25 }, drop: 204 },
   sheep: { health: 8, width: 0.9, height: 1.3, movement: f(0.23), ai: { wander: 1, mate: 1, panic: 1.25, tempt: 1.1, follow: 1.1 }, drop: 0 },
+  // EntityChicken (wg): 0.3 x 0.7, 4 health, speed 0.25; panic 1.4, mate 1.0, tempt
+  // (wheat seeds, ade.N) 1.0, follow parent 1.1, wander 1.0. No `drop`: feathers and
+  // chicken come from its own dropFewItems (wg.b(ZI)).
+  chicken: { health: 4, width: f(0.3), height: f(0.7), movement: 0.25, ai: { wander: 1, mate: 1, panic: 1.4, tempt: 1, follow: 1.1 }, drop: 0 },
   zombie: {
     health: 20,
     width: 0.6,
@@ -121,12 +133,15 @@ export function aiMoveSpeed(e, multiplier) {
   const base = ENTITY_TYPES[e.type].movement;
   return f(multiplier * (e.type === "zombie" && e.growingAge < 0 ? base + base * 0.5 : base));
 }
-// Wheat (ade.O) breeds and tempts cows and sheep (EntityAITempt / isBreedingItem).
-const BREED_ITEM = { cow: 305, sheep: 305 };
+// Wheat (ade.O) breeds and tempts cows and sheep; chickens take wheat seeds (309, any
+// ItemSeeds in the original) through EntityAITempt / isBreedingItem.
+const BREED_ITEM = { cow: 305, sheep: 305, chicken: 309 };
+export const EGG = 316, FEATHER = 317, RAW_CHICKEN = 318, COOKED_CHICKEN = 319;
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
 // its hurt sound, and the sheep uses mob.sheep.say for say, hurt and death alike.
 const hurtSound = (type) => (type === "pig" ? "mob.pig.say" : type === "sheep" ? "mob.sheep.say" : "mob." + type + ".hurt");
-const deathSound = (type) => (type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" ? ".hurt" : ".death"));
+// EntityChicken's death sound is its hurt sound as well.
+const deathSound = (type) => (type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
 export function actorCollides(world, x, y, z, w, h) {
   for (
     let bx = Math.floor(x - w / 2 + 0.001);
@@ -379,8 +394,9 @@ export class EntityWorld {
           e.health <= 0
         )
           continue;
+        const fresh = this.create(e.type, e.x, e.y, e.z);
         this.entities.push(syncInterpolation({
-          ...this.create(e.type, e.x, e.y, e.z),
+          ...fresh,
           ...e,
           id: /^mob-\d+$/.test(e.id) ? e.id : "mob-" + this.nextId++,
           health: Math.min(t.health, e.health),
@@ -390,6 +406,8 @@ export class EntityWorld {
           love:Number.isInteger(e.love)?Math.max(0,Math.min(600,e.love)):0,
           mateTicks:0,
           ...(e.type === "sheep" ? { color: Number.isInteger(e.color) && e.color >= 0 && e.color < 16 ? e.color : 0, sheared: e.sheared === true, eatTimer: 0 } : {}),
+          // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
+          ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
           wander: 0,
           hurt: 0,
           attack: 0,
@@ -431,10 +449,25 @@ export class EntityWorld {
       // EntitySheep.func_110161_a: a natural fleece colour; bit 16 of datawatcher
       // byte 16 (`sheared`); and the grazing timer (EntityAIEatGrass, mirrored in wp.br).
       ...(type === "sheep" ? { color: sheepColor(random), sheared: false, eatTimer: 0 } : {}),
+      // EntityChicken (wg): timeUntilNextEgg = rand.nextInt(6000) + 6000 (wg.bu; not saved in
+      // 1.7.10), wingRotation/destPos and their previous values 0, wingRotDelta (bt) 1.0.
+      ...(type === "chicken" ? { eggTimer: Math.floor(random() * 6000) + 6000, wingRotation: 0, destPos: 0, oFlapSpeed: 0, oFlap: 0, wingRotDelta: 1 } : {}),
       // EntityZombie.func_110161_a adds a 0 to 0.05 "Random spawn bonus" to knockbackResistance.
       knockbackResistance: type === "zombie" ? random() * 0.05000000074505806 : 0,
       ...this.physics(),
     });
+  }
+  // EntityEgg.onImpact (zl.a): a chick (EntityChicken, setGrowingAge(-24000)) at the
+  // egg's position with the egg's rotationYaw (Java degrees) and pitch 0. Capped at
+  // the 40 mobs a save keeps.
+  hatch(x, y, z, yawDegrees) {
+    if (this.entities.length >= 40) return null;
+    const chick = this.create("chicken", x, y, z);
+    chick.growingAge = -24000;
+    chick.yaw = (-yawDegrees * Math.PI) / 180;
+    syncInterpolation(chick);
+    this.entities.push(chick);
+    return chick;
   }
   // Fresh motion state: grounded only after the first collision, no AI move target yet.
   physics() {
@@ -449,8 +482,8 @@ export class EntityWorld {
           x = Math.floor(spawn.x + Math.sin(angle) * r),
           z = Math.floor(spawn.z + Math.cos(angle) * r);
         if (x < 3 || z < 3 || x > SIZE - 3 || z > SIZE - 3) continue;
-        // SpawnListEntry weights for a plains biome's creatures: sheep 12, pig 10, cow 8.
-        const y = this.world.surface(x, z), roll = hash(i, 51, this.world.numericSeed) * 30, type = roll < 12 ? "sheep" : roll < 22 ? "pig" : "cow", t = ENTITY_TYPES[type];
+        // SpawnListEntry weights for a plains biome's creatures: sheep 12, pig 10, chicken 10, cow 8.
+        const y = this.world.surface(x, z), roll = hash(i, 51, this.world.numericSeed) * 40, type = roll < 12 ? "sheep" : roll < 22 ? "pig" : roll < 32 ? "chicken" : "cow", t = ENTITY_TYPES[type];
         if (
           this.world.get(x, y - 1, z) !== 1 ||
           actorCollides(this.world, x + 0.5, y, z + 0.5, t.width, t.height)
@@ -549,6 +582,13 @@ export class EntityWorld {
     // EntityCow.dropFewItems also drops zero to two leather.
     const leather = e.type === "cow" && e.growingAge >= 0 ? Math.floor(hash(e.age + 7, e.id.length, this.world.numericSeed) * 3) : 0;
     if (leather) this.events.push({ drop: 315, count: leather, position: { x: e.x, y: e.y, z: e.z } });
+    // EntityChicken.dropFewItems (wg.b(ZI)): rand.nextInt(3) + rand.nextInt(1 + looting)
+    // feathers, then raw chicken, or cooked when the chicken is burning.
+    if (e.type === "chicken" && e.growingAge >= 0) {
+      const feathers = Math.floor(this.random() * 3);
+      if (feathers) this.events.push({ drop: FEATHER, count: feathers, position: { x: e.x, y: e.y, z: e.z } });
+      this.events.push({ drop: e.burn ? COOKED_CHICKEN : RAW_CHICKEN, count: 1, position: { x: e.x, y: e.y, z: e.z } });
+    }
     e.death = 1;
     if (e.eatTimer) e.eatTimer = 0;
   }
@@ -685,6 +725,7 @@ export class EntityWorld {
         e.death = (e.death || 0) + 1;
         e.jumping = false;
         this.walk(e, t, 0);
+        if (e.type === "chicken") this.chickenUpdate(e);
         this.swingLimbs(e);
         continue;
       }
@@ -771,6 +812,7 @@ export class EntityWorld {
         }
       }
       this.walk(e, t, speed);
+      if (e.type === "chicken") this.chickenUpdate(e);
       this.turnBody(e);
       this.swingLimbs(e);
       if (e.age % 160 === 0 && distance < 18)
@@ -824,7 +866,33 @@ export class EntityWorld {
     };
     edge("x", "vx");
     edge("z", "vz");
-    if (landed > 0) this.fall(e, landed);
+    // EntityChicken.fall (wg.b(F)) does nothing.
+    if (landed > 0 && e.type !== "chicken") this.fall(e, landed);
+  }
+  // The chicken half of EntityChicken.onLivingUpdate (wg.e()), run after the shared
+  // movement: the previous wing values are kept, destPos moves 0.3 x (-1 on the
+  // ground, else 4) within [0, 1], wingRotDelta (bt) snaps up to 1 in the air and
+  // decays by 0.9, a falling chicken keeps 0.6 of its downward motion, and
+  // wingRotation advances by twice wingRotDelta. An adult that is not a jockey counts
+  // timeUntilNextEgg down and, at 0, plays mob.chicken.plop (volume 1, pitch
+  // (rand - rand) * 0.2 + 1), drops one egg (entityDropItem(egg, 0)) and rolls
+  // 6000 + rand.nextInt(6000) again.
+  chickenUpdate(e) {
+    e.oFlap = e.wingRotation;
+    e.oFlapSpeed = e.destPos;
+    e.destPos = f(e.destPos + (e.onGround ? -1 : 4) * 0.3);
+    if (e.destPos < 0) e.destPos = 0;
+    if (e.destPos > 1) e.destPos = 1;
+    if (!e.onGround && e.wingRotDelta < 1) e.wingRotDelta = 1;
+    e.wingRotDelta = f(e.wingRotDelta * 0.9);
+    if (!e.onGround && e.vy < 0) e.vy *= 0.6;
+    e.wingRotation = f(e.wingRotation + f(e.wingRotDelta * 2));
+    if (e.growingAge >= 0 && --e.eggTimer <= 0) {
+      const r = this.random, pitch = f(f(f(r() - r()) * f(0.2)) + 1);
+      this.events.push({ sound: "mob.chicken.plop", volume: 1, pitch, position: { x: e.x, y: e.y, z: e.z } });
+      this.events.push({ drop: EGG, count: 1, position: { x: e.x, y: e.y, z: e.z } });
+      e.eggTimer = Math.floor(r() * 6000) + 6000;
+    }
   }
   // Entity.rotationYaw (Java degrees) follows the AI's e.yaw by the wrapped
   // difference from last tick, so moveFlying sees this tick's heading.
