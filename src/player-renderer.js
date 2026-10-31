@@ -317,12 +317,13 @@ export function heldItemMatrix(kind) {
 // The local player's posY is its eye height (yOffset 1.62), so unlike mobs the
 // centre sits 2.52 above the feet; EntityPlayer does not override
 // getShadowSize. `partial` interpolates previous -> position.
-export function playerShadowCaster(position, previous, partial, size) {
+// `prevDrop`/`drop` are the sneak ySize (posY = minY + yOffset - ySize).
+export function playerShadowCaster(position, previous, partial, size, prevDrop = 0, drop = 0) {
   const lerp = (a, b) => a + (b - a) * partial, eye = PHYSICS.eye;
   return {
     ...size,
-    x: lerp(previous.x, position.x), y: lerp(previous.y, position.y) + eye, z: lerp(previous.z, position.z),
-    pos: { x: position.x, y: position.y + eye, z: position.z }, height: PHYSICS.height,
+    x: lerp(previous.x, position.x), y: lerp(previous.y - prevDrop, position.y - drop) + eye, z: lerp(previous.z, position.z),
+    pos: { x: position.x, y: position.y - drop + eye, z: position.z }, height: PHYSICS.height,
   };
 }
 

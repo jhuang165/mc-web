@@ -3,6 +3,7 @@ import { ITEMS } from "./survival.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { waterAcceleration, entityWaterBox } from "./fluids.js";
 import { sheepColor, childColor } from "./sheep.js";
+import { sneakEdge, criticalDamage } from "./player-movement.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
 export function wrapDegrees(a) {
@@ -193,6 +194,9 @@ export function moveEntity(world, e, w, h, dx, dy, dz) {
   // Entity.width/height are floats (setSize), so the box edges use their float values.
   w = f(w);
   h = f(h);
+  // A sneaking EntityPlayer on the ground never walks off an edge (player-movement.js).
+  if (e.sneaking && e.onGround)
+    [dx, dz] = sneakEdge(dx, dz, (ox, oz) => !collisionBoxes(world, [e.x - w / 2 + ox, e.y - 1, e.z - w / 2 + oz, e.x + w / 2 + ox, e.y - 1 + h, e.z + w / 2 + oz]).length);
   const odx = dx, ody = dy, odz = dz, half = w / 2,
     bb = [e.x - half, e.y, e.z - half, e.x + half, e.y + h, e.z + half],
     start = bb.slice(),
@@ -497,7 +501,8 @@ export class EntityWorld {
       });
     return true;
   }
-  attack(e, tool, survival, player, extraKnockback = 0) {
+  // `critical` is the jump-attack test of attackTargetEntityWithCurrentItem (damage * 1.5F).
+  attack(e, tool, survival, player, extraKnockback = 0, critical = false) {
     if (!this.entities.includes(e) || e.health <= 0) return false;
     const item = ITEMS[tool],
       owned = survival.creative || survival.count(tool) > 0;
@@ -512,13 +517,16 @@ export class EntityWorld {
               ? 3 + item.tier
               : 2 + item.tier;
     }
+    if (critical) damage = criticalDamage(damage);
     if (e.hurt > 0 && damage <= e.lastDamage) return false;
     if (!this.damage(e, damage, player.x, player.z)) return false;
-    // EntityPlayer.attackTargetEntityWithCurrentItem (yz.r): sprinting and Knockback
-    // add addVelocity(-sin(yaw) * n * 0.5, 0.1, cos(yaw) * n * 0.5) along the view.
-    // player.yaw is this build's radian view yaw (looking along -sin, -cos).
-    if (extraKnockback > 0 && Number.isFinite(player.yaw))
-      addVelocity(e, -Math.sin(player.yaw) * extraKnockback * 0.5, 0.1, -Math.cos(player.yaw) * extraKnockback * 0.5);
+    // EntityPlayer.attackTargetEntityWithCurrentItem (yz.r): sprinting and Knockback add
+    // addVelocity(-sin(yaw) * n * 0.5F, 0.1, cos(yaw) * n * 0.5F) with the sine table and
+    // Java floats; player.yaw is this build's radian view yaw (Java yaw = 180 - yaw degrees).
+    if (extraKnockback > 0 && Number.isFinite(player.yaw)) {
+      const rad = f(f(f(180 - player.yaw * (180 / Math.PI)) * f(Math.PI)) / 180);
+      addVelocity(e, f(f(-mhSin(rad) * extraKnockback) * 0.5), 0.1, f(f(mhCos(rad) * extraKnockback) * 0.5));
+    }
     survival.exhaust(0.3);
     if (owned&&["sword","axe","pickaxe","shovel"].includes(item?.kind)) survival.wear(tool,item.kind==='sword'?1:2);
     return true;
