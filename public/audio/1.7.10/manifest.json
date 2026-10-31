@@ -692,6 +692,51 @@
       "url": "/audio/1.7.10/random/bow.ogg",
       "sha1": "87edc11141fb5a045f2ed830b545aaa73f96ee99",
       "bytes": 6658
+    },
+    "mob/sheep/shear": {
+      "url": "/audio/1.7.10/mob/sheep/shear.ogg",
+      "sha1": "5d9055cf25f126c47e18637aeef917fa1ef61a42",
+      "bytes": 6870
+    },
+    "mob/sheep/step3": {
+      "url": "/audio/1.7.10/mob/sheep/step3.ogg",
+      "sha1": "101164ea1b442a8e1e8ca181d9cef833c57d7be3",
+      "bytes": 4843
+    },
+    "mob/sheep/say1": {
+      "url": "/audio/1.7.10/mob/sheep/say1.ogg",
+      "sha1": "a3ffeaa0a75b8d2bdc949c181a6f8db78f8976ca",
+      "bytes": 9784
+    },
+    "mob/sheep/say3": {
+      "url": "/audio/1.7.10/mob/sheep/say3.ogg",
+      "sha1": "c9ac72409cbe6093e84d72a2a5c719d9e4a0e6b2",
+      "bytes": 9150
+    },
+    "mob/sheep/step1": {
+      "url": "/audio/1.7.10/mob/sheep/step1.ogg",
+      "sha1": "5288cab96e26207edd31307c9c01b6902306e4f6",
+      "bytes": 4838
+    },
+    "mob/sheep/step2": {
+      "url": "/audio/1.7.10/mob/sheep/step2.ogg",
+      "sha1": "59034eb696e186d973dcea0b162f01e38f1b4f31",
+      "bytes": 4819
+    },
+    "mob/sheep/step4": {
+      "url": "/audio/1.7.10/mob/sheep/step4.ogg",
+      "sha1": "6ff26a1439fb6f9f353c2bd623edeb936e760855",
+      "bytes": 5018
+    },
+    "mob/sheep/say2": {
+      "url": "/audio/1.7.10/mob/sheep/say2.ogg",
+      "sha1": "1cfd864cbda555477ed9523e640de0d234c18858",
+      "bytes": 8875
+    },
+    "mob/sheep/step5": {
+      "url": "/audio/1.7.10/mob/sheep/step5.ogg",
+      "sha1": "c289aa46fcbcfaf21c8080d57953fd45a4939294",
+      "bytes": 5185
     }
   },
   "events": {
@@ -1195,6 +1240,30 @@
       "category": "neutral",
       "sounds": [
         "random/bow"
+      ]
+    },
+    "mob.sheep.say": {
+      "category": "neutral",
+      "sounds": [
+        "mob/sheep/say1",
+        "mob/sheep/say2",
+        "mob/sheep/say3"
+      ]
+    },
+    "mob.sheep.shear": {
+      "category": "neutral",
+      "sounds": [
+        "mob/sheep/shear"
+      ]
+    },
+    "mob.sheep.step": {
+      "category": "neutral",
+      "sounds": [
+        "mob/sheep/step1",
+        "mob/sheep/step2",
+        "mob/sheep/step3",
+        "mob/sheep/step4",
+        "mob/sheep/step5"
       ]
     }
   }

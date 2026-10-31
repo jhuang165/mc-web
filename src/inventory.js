@@ -8,7 +8,7 @@ export const OUTSIDE = -999, STACK_LIMIT = 64, DOUBLE_CLICK_MS = 250;
 export const makeStack = (id, count = 1, damage = 0) => ({ id, count, damage });
 export const copyStack = (s) => (s ? { id: s.id, count: s.count, damage: s.damage } : null);
 const split = (s, n) => { s.count -= n; return makeStack(s.id, n, s.damage); };
-// ItemStack.isItemEqual; these items have no NBT tags or metadata subtypes.
+// ItemStack.isItemEqual: id and damage (a metadata subtype such as wool colour, or wear); no NBT tags.
 const sameItem = (a, b) => a.id === b.id && a.damage === b.damage;
 export const dragButton = (event, mode) => (event & 3) | ((mode & 3) << 2);
 
@@ -28,7 +28,7 @@ export class PlayerInventory {
     const item = s && typeof s === "object" && s.id ? this.items[s.id] : null,
       count = Math.floor(Number(s?.count));
     if (!item || !(count > 0)) return null;
-    return makeStack(s.id, Math.min(count, item.stack ?? STACK_LIMIT), Math.max(0, Math.min(item.durability || 0, Math.floor(Number(s.damage) || 0))));
+    return makeStack(s.id, Math.min(count, item.stack ?? STACK_LIMIT), Math.max(0, Math.min(item.durability || (item.variants?.length ?? 1) - 1, Math.floor(Number(s.damage) || 0))));
   }
   maxStack(s) { return this.items[s.id]?.stack ?? STACK_LIMIT; }
   maxDamage(s) { return this.items[s.id]?.durability || 0; }
@@ -50,7 +50,7 @@ export class PlayerInventory {
   firstEmpty() { return this.main.findIndex((s) => !s); }
   find(id, damage) { return this.main.findIndex((s) => s?.id === id && (damage === undefined || s.damage === damage)); }
   storeItemStack(s) {
-    return this.main.findIndex((m) => m && m.id === s.id && this.stackable(m) && m.count < this.maxStack(m) && m.count < this.limit);
+    return this.main.findIndex((m) => m && m.id === s.id && m.damage === s.damage && this.stackable(m) && m.count < this.maxStack(m) && m.count < this.limit);
   }
   storePartial(s) {
     if (this.maxStack(s) === 1) {
@@ -99,20 +99,21 @@ export class PlayerInventory {
     if (s.count === 0) this.setStack(i, null);
     return true;
   }
-  // Middle-click pick block (func_146030_a without metadata).
-  pick(id, creative = this.creative) {
-    const previous = this.held, k = this.find(id);
+  // Middle-click pick block (func_146030_a); `damage` is the block's metadata
+  // for subtype items such as wool, otherwise any stack of the item matches.
+  pick(id, creative = this.creative, damage) {
+    const previous = this.held, k = this.find(id, damage);
     if (k >= 0 && k < 9) { this.current = k; return; }
     if (!creative || !this.items[id]) return;
     const j = this.firstEmpty();
     if (j >= 0 && j < 9) this.current = j;
     if (previous && this.maxStack(previous) === 1 && this.maxDamage(previous) && this.find(previous.id, previous.damage) === this.current) return;
-    const found = this.find(id, 0);
+    const found = this.find(id, damage ?? 0);
     if (found >= 0) {
       const n = this.main[found].count;
       this.main[found] = this.main[this.current];
-      this.main[this.current] = makeStack(id, n);
-    } else this.main[this.current] = makeStack(id, 1);
+      this.main[this.current] = makeStack(id, n, damage ?? 0);
+    } else this.main[this.current] = makeStack(id, 1, damage ?? 0);
   }
   takeAll() {
     const out = [...this.main, ...this.armor].filter(Boolean);
@@ -293,7 +294,7 @@ export class Container {
                 slot.put(held);
                 inv.cursor = here;
               }
-            } else if (here.id === held.id && inv.maxStack(held) > 1) {
+            } else if (sameItem(here, held) && inv.maxStack(held) > 1) {
               const n = here.count;
               if (n > 0 && n + held.count <= inv.maxStack(held)) {
                 held.count += n;
@@ -355,7 +356,7 @@ export class Container {
     if (inv.stackable(stack))
       for (; stack.count > 0 && inRange(k); k += step) {
         const slot = this.slots[k], here = slot.stack, max = inv.maxStack(stack);
-        if (!here || here.id !== stack.id) continue;
+        if (!here || !sameItem(here, stack)) continue;
         if (here.count + stack.count <= max) { here.count += stack.count; stack.count = 0; slot.changed(); merged = true; }
         else if (here.count < max) { stack.count -= max - here.count; here.count = max; slot.changed(); merged = true; }
       }

@@ -13,7 +13,7 @@ test("every shipped original sound and texture matches its recorded source hash"
         new URL("../public/media/1.7.10/provenance.json", import.meta.url),
       ),
     );
-  assert.equal(Object.keys(audio.files).length, 138);
+  assert.equal(Object.keys(audio.files).length, 147);
   for (const file of [...Object.values(audio.files), ...media.assets]) {
     const bytes = await readFile(
       new URL("../public" + file.url, import.meta.url),
@@ -36,6 +36,8 @@ test("every shipped original sound and texture matches its recorded source hash"
     "mob.pig.say",
     "mob.zombie.hurt",
     "random.bow",
+    "mob.sheep.say",
+    "mob.sheep.shear",
   ])
     assert.ok(audio.events[event], event);
 });

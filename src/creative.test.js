@@ -2,11 +2,12 @@ import {test} from 'node:test';import assert from 'node:assert/strict';import {r
 import {MC_IDS} from '../tools/inventory-replay.mjs';
 import {Survival,ITEMS} from './survival.js';
 import {OUTSIDE,makeStack} from './inventory.js';
-import {CREATIVE_TABS,SEARCH,SURVIVAL_TAB,SEARCH_ORDER,CreativeScreen,TextField,tabArea,overTab,overTabLabel,itemTab,resetCreativeTab} from './creative.js';
+import {CREATIVE_TABS,SEARCH,SURVIVAL_TAB,SEARCH_ORDER,CreativeScreen,TextField,tabArea,overTab,overTabLabel,itemTab,entryId,resetCreativeTab} from './creative.js';
 
 const reference=JSON.parse(await readFile(new URL('../public/research/creative-reference.json',import.meta.url)));
 // Original [id, metadata] to game item; unimplemented items drop out.
-const game=([id,meta])=>MC_IDS[id+':'+meta]??(meta===0?MC_IDS[id]:undefined);
+// Wool (35) keeps its colour as the stack's damage: a list entry is [19,colour], or 19 for white.
+const game=([id,meta])=>id===35?(meta?[19,meta]:19):MC_IDS[id+':'+meta]??(meta===0?MC_IDS[id]:undefined);
 const names=s=>[ITEMS[s.id].name];
 
 test('tabs keep the original order, placement and implemented contents',()=>{
@@ -19,9 +20,9 @@ test('tabs keep the original order, placement and implemented contents',()=>{
   if(t!==SEARCH)assert.deepEqual(t.items,r.items.map(game).filter(Boolean),r.label);
  }
  assert.deepEqual(SEARCH_ORDER,reference.tabs[5].items.map(game).filter(Boolean));
- const listed=new Set(CREATIVE_TABS.flatMap(t=>t.items));
- assert.deepEqual([...listed].sort((a,b)=>a-b),[...new Set(SEARCH_ORDER)].sort((a,b)=>a-b));
- assert.equal(itemTab(11).label,'buildingBlocks');assert.equal(itemTab(119).label,'combat');
+ const key=e=>[].concat(e).join(':'),listed=new Set(CREATIVE_TABS.flatMap(t=>t.items).map(key));
+ assert.deepEqual([...listed].sort(),[...new Set(SEARCH_ORDER.map(key))].sort());
+ assert.equal(itemTab(11).label,'buildingBlocks');assert.equal(itemTab(19).label,'buildingBlocks');assert.equal(itemTab(119).label,'combat');
 });
 
 test('tab art and click boxes follow drawTab and func_147049_a',()=>{
@@ -76,12 +77,12 @@ test('clicking outside throws the cursor, one item for the right button',()=>{
 test('scrolling moves the 9 x 5 window one row per notch and with the scrollbar',()=>{
  const {gui,c,slot}=open([],SEARCH.index);
  assert.equal(c.list.length,SEARCH_ORDER.length);assert.ok(gui.needsScroll());
- assert.equal(c.rows(),7);
+ assert.equal(c.rows(),8);
  gui.wheel(-1);gui.wheel(-1);
- assert.equal(gui.scroll,Math.fround(Math.fround(1/7)+1/7));assert.equal(gui.scrollbarY(),45);assert.equal(slot(0).stack.id,SEARCH_ORDER[18]);
- gui.wheel(1);assert.equal(slot(0).stack.id,SEARCH_ORDER[9]);
+ assert.equal(gui.scroll,Math.fround(Math.fround(1/8)+1/8));assert.equal(gui.scrollbarY(),41);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[18]));
+ gui.wheel(1);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[9]));
  for(let i=0;i<20;i++)gui.wheel(-1);
- assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);assert.equal(slot(27).stack.id,SEARCH_ORDER[90]);assert.equal(slot(36).stack,null);
+ assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);assert.equal(slot(27).stack.id,entryId(SEARCH_ORDER[99]));assert.equal(slot(42).stack,null);
  gui.press(176,60);assert.ok(gui.scrolling);gui.drag(25.5);assert.equal(gui.scroll,0);
  gui.drag(18+7.5+97/2);assert.equal(gui.scroll,.5);gui.release();gui.drag(200);assert.equal(gui.scroll,.5);
  gui.press(174,60);assert.ok(!gui.scrolling);
@@ -95,7 +96,7 @@ test('search filters tooltips; T opens it and the first key after a click clears
  assert.ok(gui.typed({code:'KeyT',key:'t'},null));assert.equal(gui.tab,SEARCH);
  for(const key of 'SWO')gui.typed({code:'Key'+key,key},null);
  assert.equal(gui.field.text,'SWO');
- assert.deepEqual(c.list.map(s=>s.id),SEARCH_ORDER.filter(id=>ITEMS[id].name.toLowerCase().includes('swo')));
+ assert.deepEqual(c.list.map(s=>s.id),SEARCH_ORDER.filter(e=>ITEMS[entryId(e)].name.toLowerCase().includes('swo')).map(entryId));
  // Digits act on the hovered slot first, otherwise they are typed.
  assert.ok(gui.typed({code:'Digit3',key:'3'},slot(0)));assert.equal(gui.field.text,'SWO');assert.equal(gui.inv.main[2].id,c.list[0].id);
  gui.down(slot(1),0,{time:0});gui.up(slot(1),0);

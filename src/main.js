@@ -13,6 +13,7 @@ import {
   collides,
   raycast,
   fallingVelocity,
+  WOOL,
 } from "./world.js";
 import { VoxelScene } from "./scene.js";
 import { SoundBank, blockSound } from "./audio.js";
@@ -229,10 +230,10 @@ function sound(place, block = target ? world.get(...target.block) : 3) {
     { volume: place ? 0.8 : 1, pitch: 0.8 },
   );
 }
-function icon(id) {
+function icon(id, damage = 0) {
   const item = ITEMS[id];
   if (!id || !item) return '<span class="empty-hand">·</span>';
-  if(item.block)return `<img class="vanilla-item-icon vanilla-block-icon" src="${scene.textures.icon(id)}" alt="" aria-hidden="true">`;
+  if(item.block)return `<img class="vanilla-item-icon vanilla-block-icon" src="${scene.textures.icon(id, damage)}" alt="" aria-hidden="true">`;
   // Leather armor multiplies its base layer by the default 0xA06540 dye; the overlay stays untinted.
   if (item.tint)
     return `<span class="vanilla-item-icon tinted-item" style="--tint:${item.tint};--base:url('/media/1.7.10/items/${item.texture}.png')" aria-hidden="true"><i></i><img src="/media/1.7.10/items/${item.overlay}.png" alt=""></span>`;
@@ -246,12 +247,12 @@ const heldId = () => survival.held?.id || 0;
 // Item, stack count and durability overlays, as RenderItem draws them.
 function stackHtml(s, count = s?.count) {
   if (!s) return "";
-  return icon(s.id) + (count === 0 ? '<b class="item-count empty">0</b>' : stackCount(count)) + durabilityBar(s.damage, ITEMS[s.id]?.durability);
+  return icon(s.id, s.damage) + (count === 0 ? '<b class="item-count empty">0</b>' : stackCount(count)) + durabilityBar(s.damage, ITEMS[s.id]?.durability);
 }
 function stackLabel(s) {
   if (!s) return "Empty";
   const item = ITEMS[s.id];
-  return esc(item?.name || "Item") + (s.count > 1 ? " ×" + s.count : "") + (item?.durability && s.damage ? `, durability ${item.durability - s.damage} of ${item.durability}` : "");
+  return esc(item?.variants?.[s.damage] ?? item?.name ?? "Item") + (s.count > 1 ? " ×" + s.count : "") + (item?.durability && s.damage ? `, durability ${item.durability - s.damage} of ${item.durability}` : "");
 }
 function renderHotbar() {
   const inv = survival.inventory;
@@ -270,7 +271,8 @@ function selectSlot(i) {
   showHeldName();
 }
 function showHeldName() {
-  $("#block-label").textContent = ITEMS[heldId()]?.name || "Empty hand";
+  const held = survival.held;
+  $("#block-label").textContent = ITEMS[held?.id]?.variants?.[held.damage] ?? ITEMS[heldId()]?.name ?? "Empty hand";
   $("#block-label").classList.add("visible");
   clearTimeout(showHeldName.timer);
   showHeldName.timer = setTimeout(
@@ -1001,10 +1003,19 @@ function applyFarmUpdates(updates){const chunks=new Set();for(const[x,y,z]of upd
 function handleEntityEvents() {
   for (const event of mobs.drain()) {
     if (event.sound)
-      sounds.play(event.sound, { position: event.position, volume: 0.6 });
+      sounds.play(event.sound, { position: event.position, volume: event.volume ?? 0.6 });
     if(event.xp&&!survival.creative)xpOrbs.spawn(event.xp,event.position);
     if(event.hearts)mobRenderer.hearts(event.position);
-    if (event.drop) items.dropMob(event.drop, event.count, event.position);
+    if (event.drop) items.dropMob(event.drop, event.count, event.position, event.damage, event);
+    // EntityAIEatGrass: Level event 2001 (block break sound and particles) for the
+    // tall grass or the grass block that was eaten; the world edit is already made.
+    if (event.eatGrass) {
+      const { x, y, z, block } = event.eatGrass;
+      scene.updateBlock(x, z, y);
+      sounds.play("dig." + blockSound(block), { position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 }, volume: 1, pitch: 0.8 });
+      scene.effects.burst([x, y, z], block);
+      saved = false;
+    }
   }
 }
 function beginEating(id) {
@@ -1050,7 +1061,7 @@ function edit(place = false) {
     }
     return;
   }
-  if(place&&aimedEntity){if(mobs.feed(aimedEntity.entity,id,survival)){handleEntityEvents();renderHotbar();saved=false;}else if(!survival.creative&&item?.food)beginEating(id);return;}
+  if(place&&aimedEntity){if(mobs.shear(aimedEntity.entity,id,survival)){handleEntityEvents();renderHotbar();saved=false;return;}if(mobs.feed(aimedEntity.entity,id,survival)){handleEntityEvents();renderHotbar();saved=false;}else if(!survival.creative&&item?.food)beginEating(id);return;}
   // ItemArmor.onItemRightClick: equip into an empty armor slot.
   if (place && item?.armor !== undefined) {
     const inv = survival.inventory, slot = 39 - item.armor;
@@ -1105,14 +1116,15 @@ function edit(place = false) {
       return;
     }
     if (id === CHEST && !canPlaceChest(world, ...p)) return;
-    const old = world.get(...p), oldMeta = world.getMeta(...p);
-    world.set(...p, id, false);
+    const old = world.get(...p), oldMeta = world.getMeta(...p),
+      meta = id === WOOL ? survival.held?.damage || 0 : 0;
+    world.set(...p, id, false, meta);
     if (collides(world, ...position.toArray())) {
       world.set(...p, old, false, oldMeta);
       toast("Give yourself a little room to build.");
       return;
     }
-    world.set(...p, id);
+    world.set(...p, id, true, meta);
     if (id === CHEST) placeChest(world, survival.chests, ...p, yaw);
     farming.observe(...p);
     if (!survival.creative) survival.take(id);
@@ -1156,7 +1168,8 @@ function breakBlock(p, creative = false) {
   if(block===25&&Math.random()<.1){drop=313;count=1;}
   const crops=shearing&&block===39?null:cropDrops(block);const drops=crops??(drop?[{id:drop,count}]:[]);
   const f = survival.furnaces[key],
-    chest = survival.chests[key];
+    chest = survival.chests[key],
+    meta = world.getMeta(...p);
   if (!world.set(...p, 0)) return false;
   farming.observe(...p);
   const at = { x: p[0] + 0.5, y: p[1] + 0.1, z: p[2] + 0.5 };
@@ -1172,7 +1185,7 @@ function breakBlock(p, creative = false) {
     delete survival.chests[key];
   }
   if (!creative) {
-    items.dropBlock(drops.map((d) => makeStack(d.id, d.count)), ...p);
+    items.dropBlock(drops.map((d) => makeStack(d.id, d.count, d.id === WOOL && block === WOOL ? meta : 0)), ...p);
     if(drop)xpOrbs.spawn(oreExperience(block),at);
     survival.exhaust(0.025);
     survival.wearBlock(block,tool);
@@ -1615,7 +1628,7 @@ function setupPointer() {
     if (e.button === 1) {
       const id = target && pickItem(world.get(...target.block));
       if (id) {
-        survival.inventory.pick(id, survival.creative);
+        survival.inventory.pick(id, survival.creative, id === WOOL ? world.getMeta(...target.block) : undefined);
         mining = null;
         eating = null;
         renderHotbar();
@@ -1719,6 +1732,8 @@ function animate(now) {
       grounded: grounded && !flying,
       bobbing: options.bobbing,
     });
+    // The held wool's colour (stack damage) rides along with the displayed item.
+    pose.meta = pose.item === WOOL ? survival.held?.damage || 0 : 0;
     const b = pose.bob;
     scene.camera.position.x += b.x * Math.cos(yaw);
     scene.camera.position.z -= b.x * Math.sin(yaw);

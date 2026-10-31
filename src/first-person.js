@@ -102,9 +102,11 @@ export class FirstPerson {
     this.item = null;
     this.last = -1;
   }
-  select(id) {
-    if (id === this.last) return;
-    this.last = id;
+  // `meta` is the wool colour (the stack's damage) of a held block.
+  select(id, meta = 0) {
+    const key = id + ":" + meta;
+    if (key === this.last) return;
+    this.last = key;
     if (this.item) {
       this.pivot.remove(this.item);
       this.item.geometry.dispose();
@@ -132,7 +134,7 @@ export class FirstPerson {
       const g = new THREE.BoxGeometry(1, 1, 1),
         uv = g.attributes.uv;
       for (let f = 0; f < 6; f++) {
-        const r=tileRect(blockTile(id,f));uv.setXY(f*4,r.u0,r.v1);uv.setXY(f*4+1,r.u1,r.v1);uv.setXY(f*4+2,r.u0,r.v0);uv.setXY(f*4+3,r.u1,r.v0);
+        const r=tileRect(blockTile(id,f,false,meta));uv.setXY(f*4,r.u0,r.v1);uv.setXY(f*4+1,r.u1,r.v1);uv.setXY(f*4+2,r.u0,r.v0);uv.setXY(f*4+3,r.u1,r.v0);
       }
       mesh = new THREE.Mesh(
         g,
@@ -152,7 +154,7 @@ export class FirstPerson {
   // `light` is the packed brightness at the player; `view` the world camera.
   render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0 } = {}) {
     if (!visible) return;
-    this.select(pose.item);
+    this.select(pose.item, pose.meta);
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
     this.pivot.matrix.copy(firstPersonMatrix(pose,{sprite:this.sprite,eatingTicks:eating}));

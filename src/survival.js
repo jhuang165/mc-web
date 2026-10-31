@@ -1,11 +1,13 @@
 import {miningState,blockWear} from "./mining.js";
-import { BLOCKS, HOTBAR } from "./world.js";
+import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS } from "./world.js";
 import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,ChestContainer,makeStack} from "./inventory.js";
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
 
 export const ITEMS = Object.fromEntries(
   BLOCKS.map((b, id) => [id, { ...b, id, block: id > 0, stack: 64 }]),
 );
+// ItemCloth: the stack's damage value is the wool colour and names the item.
+ITEMS[WOOL].variants = WOOL_COLORS.map((c) => c.label + " wool");
 const toolMaterials = [
   ["Wooden", 0, 59, 2, 7],
   ["Stone", 1, 131, 4, 12],
