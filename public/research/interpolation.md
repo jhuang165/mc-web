@@ -26,6 +26,6 @@ Frame `getTextureByXP` [sq.f] (thresholds 3, 7, 17, 37, 73, 149, 307, 617, 1237,
 ## Gaps
 
 - Mob AI is still the simplified one: `e.yaw` turns instantly and `rotationYawHead` equals it (no `EntityLookHelper` or `EntityMoveHelper` 30 degree turn limit), so the head only trails the body through `EntityBodyHelper`. Pitch is always zero.
-- Pig and cow walk speeds (0.045 per tick) are below the original, so `limbSwingAmount` settles near 0.18 and the legs swing less than before this change; the formula itself is the original.
+- Mob walking speeds now come from the 1.7.10 movement model (see `mob-movement.md`); a wandering pig's `limbSwingAmount` settles near 0.54.
 - The zombie attack swing (`swingProgress` in `ModelZombie`) is not drawn, only the `ageInTicks` arm sway. The orb quad's 128 alpha is not applied.
 - `deathTime` starts at 1 on the killing blow rather than on the mob's next tick, so the fall begins at most one tick early.

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EntityWorld, entityHit, actorCollides, ENTITY_TYPES, interpolateRotation, wrapDegrees, nearAngle, mobPose } from "./entities.js";
+import { readFile } from "node:fs/promises";
+import { EntityWorld, entityHit, actorCollides, ENTITY_TYPES, interpolateRotation, wrapDegrees, nearAngle, mobPose, moveEntityWithHeading, moveEntity, moveFlying, jump, knockBack, addVelocity, aiMoveSpeed } from "./entities.js";
 import { Survival } from "./survival.js";
 const flat = {
   numericSeed: 123,
@@ -134,17 +135,20 @@ test("spawned and loaded mobs start with every prev field equal, so nothing lerp
 test("tick keeps lastTickPos and eases limbSwingAmount toward four times the travel", () => {
   const w = zombie(), e = w.entities[0], player = { x: 64, y: 0, z: 70 }, survival = new Survival();
   w.tick(player, survival);
+  // First tick is airborne (onGround false): 0.02 acceleration, as the Java probe records.
   assert.equal(e.pz, 64);
-  near(e.z, 64.09);
-  near(mobPose(e, 0.5).z, 64.045);
-  near(e.limbSwingAmount, 0.4 * 0.36, 1e-6);
+  near(e.z, 64.004508, 1e-6);
+  near(mobPose(e, 0.5).z, 64 + 0.004508 / 2, 1e-6);
+  const travel = Math.fround(e.z - 64);
+  near(e.limbSwingAmount, Math.fround(Math.fround(travel * 4) * 0.4), 1e-6);
   assert.equal(e.prevLimbSwingAmount, 0);
   assert.equal(e.limbSwing, e.limbSwingAmount);
   const first = e.limbSwingAmount, z1 = e.z;
   w.tick(player, survival);
   assert.equal(e.prevLimbSwingAmount, first);
-  near(e.limbSwingAmount, Math.fround(first + Math.fround(Math.fround(0.36 - first) * 0.4)), 1e-6);
   assert.equal(e.pz, z1);
+  const target = Math.min(Math.fround(Math.fround(e.z - z1) * 4), 1);
+  near(e.limbSwingAmount, Math.fround(first + Math.fround(Math.fround(target - first) * 0.4)), 1e-6);
   w.attack(e, 0, survival, { x: 64, y: 0, z: 60 });
   assert.equal(e.limbSwingAmount, 1.5);
 });
@@ -166,4 +170,116 @@ test("a turning mob swings its body through the wrapped angle and lags its head 
   near(idle.renderYawOffset, 15, 1e-4);
   for (let i = 0; i < 20; i++) helper.turnBody(idle);
   near(idle.renderYawOffset, 90, 1e-3);
+});
+
+// --- 1.7.10 mob motion: replay of tools/probes/MobMoveProbe.java (verify-mobmove.mjs) ---
+const mobmove = JSON.parse(await readFile(new URL("../public/research/mobmove-reference.json", import.meta.url)));
+const stepWorld = (step) => ({ ...flat, solid: (x, y, z) => y < 0 || (step > 0 && z >= 2 && y < step), get: (x, y, z) => (y < 0 || (step > 0 && z >= 2 && y < step) ? 1 : 0) });
+// One onLivingUpdate tick as the probe runs it: prevPos, optional jump, setAIMoveSpeed,
+// moveForward * 0.98, moveEntityWithHeading, then the limbSwingAmount tail.
+const probeTick = (ew, e, speed, hop) => {
+  const t = ENTITY_TYPES[e.type];
+  e.px = e.x; e.pz = e.z;
+  if (hop) jump(e);
+  e.aiMoveSpeed = e.moveForward = speed;
+  e.moveForward = Math.fround(e.moveForward * Math.fround(0.98));
+  moveEntityWithHeading(ew.world, e, t.width, t.height, e.moveForward);
+  ew.swingLimbs(e);
+};
+const row = (e) => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, onGround: e.onGround, collidedH: e.collidedH, limbSwingAmount: e.limbSwingAmount, limbSwing: e.limbSwing });
+const sameRow = (label, got, want) => {
+  for (const k of Object.keys(want)) {
+    if (typeof want[k] === "boolean") assert.equal(got[k], want[k], `${label} ${k}`);
+    else if (k.startsWith("limbSwing")) assert.equal(got[k], Math.fround(want[k]), `${label} ${k}`); // Java floats
+    else near(got[k], want[k], 1e-12 * Math.max(1, Math.abs(want[k])));
+  }
+};
+test("mob motion matches the unchanged 1.7.10 classes: walks, hops, walls and knockback", () => {
+  assert.equal(mobmove.cases.length, 18);
+  const kinds = {};
+  for (const c of mobmove.cases) {
+    kinds[c.case] = (kinds[c.case] || 0) + 1;
+    const ew = new EntityWorld(stepWorld(c.case === "hop" ? 1 : c.case === "wall" ? 2 : 0), []),
+      start = c.case === "hop" || c.case === "wall" ? [64, 0, 0.5] : [64, 0, 64],
+      e = ew.create(c.type, ...start);
+    e.knockbackResistance = 0;
+    e.rotationYaw = c.yaw || 0;
+    const label = `${c.case} ${c.type} ${c.multiplier ?? c.attacker}`;
+    if (c.case === "knockback") {
+      const speed = aiMoveSpeed(e, 1);
+      for (let i = 0; i < 10; i++) probeTick(ew, e, speed, false);
+      assert.deepEqual([e.x, e.z].map((v) => Math.fround(v)), c.start.map((v) => Math.fround(v)));
+      assert.ok(knockBack(e, c.attacker[0], c.attacker[1]));
+      sameRow(label + " hit", row(e), { ...c.ticks[0], onGround: e.onGround, collidedH: e.collidedH, limbSwingAmount: e.limbSwingAmount, limbSwing: e.limbSwing, x: e.x, y: e.y, z: e.z });
+      c.ticks.slice(1).forEach((want, i) => {
+        probeTick(ew, e, 0, false);
+        sameRow(`${label} tick ${i}`, row(e), want);
+      });
+    } else {
+      const speed = c.case === "walk" ? aiMoveSpeed(e, c.multiplier) : aiMoveSpeed(e, 1);
+      assert.equal(speed, Math.fround(c.speed), label);
+      c.ticks.forEach((want, i) => {
+        probeTick(ew, e, speed, c.case === "hop" && e.collidedH && e.onGround);
+        sameRow(`${label} tick ${i}`, row(e), want);
+      });
+    }
+  }
+  assert.deepEqual(kinds, { walk: 9, hop: 2, wall: 1, knockback: 6 });
+});
+test("settled limbSwingAmount of a walking pig is about 0.54 and a panicking pig about 0.84", () => {
+  const settled = (type, m) => mobmove.cases.find((c) => c.case === "walk" && c.type === type && c.multiplier === m && !c.yaw).ticks.at(-1).limbSwingAmount;
+  near(settled("pig", 1), 0.54, 0.005);
+  near(settled("pig", 1.25), 0.843, 0.005);
+  near(settled("cow", 1), 0.345, 0.005);
+  assert.ok(settled("cow", 2) > 0.999);
+  near(settled("zombie", 1), 0.457, 0.005);
+});
+test("aiMoveSpeed multiplies the attribute, and baby zombies get the +50% modifier", () => {
+  assert.equal(aiMoveSpeed({ type: "pig" }, 1), 0.25);
+  assert.equal(aiMoveSpeed({ type: "pig" }, 1.25), Math.fround(0.3125));
+  assert.equal(aiMoveSpeed({ type: "cow", growingAge: 0 }, 2), Math.fround(Math.fround(0.2) * 2));
+  assert.equal(aiMoveSpeed({ type: "zombie", growingAge: 0 }, 1), Math.fround(0.23));
+  const base = Math.fround(0.23);
+  assert.equal(aiMoveSpeed({ type: "zombie", growingAge: -1 }, 1), Math.fround(base + base * 0.5));
+  assert.equal(aiMoveSpeed({ type: "cow", growingAge: -1 }, 1), Math.fround(0.2));
+});
+test("jump gives 0.42 upward and knockBack halves motion, adds 0.4 away from the attacker, and caps vy at 0.4", () => {
+  const e = { x: 0, y: 0, z: 0, vx: 0.2, vy: 0.1, vz: -0.2, knockbackResistance: 0 };
+  assert.ok(knockBack(e, 3, 0));
+  near(e.vx, 0.1 - Math.fround(0.4), 1e-9);
+  assert.equal(e.vy, 0.4000000059604645); // 0.05 + 0.4 is capped
+  near(e.vz, -0.1, 1e-9);
+  const up = { x: 0, y: 0, z: 0, vx: 0, vy: 0.9, vz: 0, knockbackResistance: 0 };
+  knockBack(up, 0, 4);
+  assert.equal(up.vy, 0.4000000059604645);
+  jump(up);
+  assert.equal(up.vy, Math.fround(0.42));
+  const guarded = { x: 0, y: 0, z: 0, vx: 1, vy: 0, vz: 0, knockbackResistance: 1 };
+  assert.equal(knockBack(guarded, 2, 0), false);
+  assert.equal(guarded.vx, 1);
+  const coincident = { x: 5, y: 0, z: 5, vx: 0, vy: 0, vz: 0, knockbackResistance: 0 };
+  let n = 0;
+  knockBack(coincident, 5, 5, () => [0.9, 0.1, 0.6, 0.1, 0.9][n++ % 5] );
+  assert.ok(Math.hypot(coincident.vx, coincident.vz) > 0.39);
+  addVelocity(coincident, 1, 2, 3);
+  assert.ok(coincident.vy > 2);
+});
+test("moveFlying uses the MathHelper sine table, and ground friction scales acceleration with the cube of slipperiness", () => {
+  const e = { vx: 0, vz: 0, rotationYaw: 90 };
+  moveFlying(e, 0, 1, 0.1);
+  near(e.vx, -0.1, 1e-6);
+  near(e.vz, 0, 1e-6);
+  // 0.6 slipperiness -> friction 0.546, a = speed * 0.16277136 / 0.546^3
+  const m = { x: 64, y: 0, z: 64, vx: 0, vy: 0, vz: 0, rotationYaw: 0, onGround: true, aiMoveSpeed: 0.25, inWater: false, fallDistance: 0 };
+  moveEntityWithHeading(flat, m, 0.9, 0.9, 0.245);
+  near(m.vz, 0.245 * 0.25 * 0.16277136 / (0.546 ** 3) * 0.546, 1e-6);
+});
+test("a mob falls with gravity 0.08 and 0.98 drag, takes ceil(distance - 3) damage and is stopped by walls", () => {
+  const w = new EntityWorld(flat, [{ id: "mob-1", type: "pig", x: 64, y: 8, z: 64, health: 10 }]), e = w.entities[0], s = new Survival();
+  for (let i = 0; i < 40 && !e.onGround; i++) w.tick({ x: 64, y: 0, z: 200 }, s);
+  assert.equal(e.y, 0);
+  assert.equal(e.fallDistance, 0);
+  assert.equal(e.health, 10 - Math.ceil(8 - 3));
+  const c = moveEntity(stepWorld(2), { x: 64, y: 0, z: 1, vx: 0, vy: 0, vz: 0, onGround: true, fallDistance: 0 }, 0.9, 0.9, 0, 0, 1);
+  assert.equal(c, 0);
 });

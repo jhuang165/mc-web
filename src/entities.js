@@ -1,5 +1,6 @@
-import { SIZE, HEIGHT, hash, raycast as voxelRay } from "./world.js";
+import { SIZE, HEIGHT, hash, raycast as voxelRay, blockBounds } from "./world.js";
 import { ITEMS } from "./survival.js";
+import { mhSin, mhCos } from "./lighting.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
 export function wrapDegrees(a) {
@@ -27,7 +28,9 @@ const clampYaw = (from, to, max) => f(from - Math.min(Math.max(wrapDegrees(f(fro
 // Transient render state, rebuilt on load: lastTickPos (which World sets equal
 // to prevPos before every onUpdate), the Java-convention yaw/pitch degrees and
 // the limb swing. `gait` is the old limb phase from earlier saves.
-const INTERPOLATED = ["px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
+// Physics state is rebuilt on load as well: motion is already reset there.
+const TRANSIENT = ["onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage"];
+const INTERPOLATED = [...TRANSIENT, "px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
 // Entity.rotationYaw is Java degrees (0 faces +z, increasing toward -x); e.yaw
 // is the radian bearing used by the movement code, which turns toward +x.
 const javaYaw = (e) => f((-e.yaw * 180) / Math.PI) + 0;
@@ -66,19 +69,33 @@ export function mobPose(e, partial) {
   };
 }
 // Widths and heights are each 1.7.10 constructor's setSize: EntityPig (wo)
-// 0.9 x 0.9, EntityCow (wh) 0.9 x 1.3, EntityZombie (yq) 0.6 x 1.8.
+// 0.9 x 0.9, EntityCow (wh) 0.9 x 1.3, EntityZombie (yq) 0.6 x 1.8. `movement`
+// is the applyEntityAttributes (aD) SharedMonsterAttributes.movementSpeed base
+// (pig 0.25, cow (double)0.2f, zombie (double)0.23f); `ai` holds the AI task
+// speed multipliers from each constructor: EntityAIPanic (uz) pig 1.25, cow 2.0;
+// EntityAITempt (vk) pig 1.2, cow 1.25; EntityAIFollowParent (uh) pig 1.1, cow
+// 1.25; EntityAIMate (ua) and EntityAIWander (vc) 1.0; the zombie's
+// EntityAIAttackOnCollide (us) and EntityAIWander 1.0.
 export const ENTITY_TYPES = {
-  pig: { health: 10, width: 0.9, height: 0.9, speed: 0.045, drop: 202 },
-  cow: { health: 10, width: 0.9, height: 1.3, speed: 0.045, drop: 204 },
+  pig: { health: 10, width: 0.9, height: 0.9, movement: 0.25, ai: { wander: 1, mate: 1, panic: 1.25, tempt: 1.2, follow: 1.1 }, drop: 202 },
+  cow: { health: 10, width: 0.9, height: 1.3, movement: f(0.2), ai: { wander: 1, mate: 1, panic: 2, tempt: 1.25, follow: 1.25 }, drop: 204 },
   zombie: {
     health: 20,
     width: 0.6,
     height: 1.8,
-    speed: 0.09,
+    movement: f(0.23),
+    ai: { wander: 1, chase: 1 },
     damage: 3,
     drop: 206,
   },
 };
+// EntityMoveHelper.onUpdateMoveHelper (tv.c) hands EntityLiving.setAIMoveSpeed
+// (sw.i) `(float)(speed * movementSpeed)`; sw.i also sets moveForward to it. The
+// zombie's "Baby speed boost" (yq.br) is operation 1: base * (1 + 0.5).
+export function aiMoveSpeed(e, multiplier) {
+  const base = ENTITY_TYPES[e.type].movement;
+  return f(multiplier * (e.type === "zombie" && e.growingAge < 0 ? base + base * 0.5 : base));
+}
 export function actorCollides(world, x, y, z, w, h) {
   for (
     let bx = Math.floor(x - w / 2 + 0.001);
@@ -93,6 +110,198 @@ export function actorCollides(world, x, y, z, w, h) {
       )
         if (world.solid(bx, by, bz)) return true;
   return false;
+}
+// --- Motion: Entity.moveEntity (sa.d) and EntityLivingBase.moveEntityWithHeading (sv.e(FF)) ---
+const STEP_HEIGHT = 0.5; // EntityLivingBase constructor: stepHeight = 0.5f
+const JUMP_MOVEMENT_FACTOR = f(0.02); // sv.aQ
+// Block.slipperiness (aji.K): 0.6f for every block in this build (there is no ice).
+const slipperiness = () => f(0.6);
+// World.getCollidingBoundingBoxes (ahb.a): block boxes overlapping `b`, as
+// [minX, minY, minZ, maxX, maxY, maxZ]. The scan starts a block low like the original.
+function collisionBoxes(world, b) {
+  const out = [];
+  for (let bx = Math.floor(b[0]); bx < Math.floor(b[3] + 1); bx++)
+    for (let by = Math.floor(b[1]) - 1; by < Math.floor(b[4] + 1); by++)
+      for (let bz = Math.floor(b[2]); bz < Math.floor(b[5] + 1); bz++)
+        if (world.solid(bx, by, bz)) {
+          const [a, c, d, g, h, i] = blockBounds(world, bx, by, bz);
+          if (bx + g > b[0] && bx + a < b[3] && by + h > b[1] && by + c < b[4] && bz + i > b[2] && bz + d < b[5]) out.push([bx + a, by + c, bz + d, bx + g, by + h, bz + i]);
+        }
+  return out;
+}
+// AxisAlignedBB.calculateXOffset/YOffset/ZOffset (azt.a/b/c): how far `bb` may still move along one axis.
+const offsetX = (o, bb, d) => {
+  if (bb[4] > o[1] && bb[1] < o[4] && bb[5] > o[2] && bb[2] < o[5]) {
+    if (d > 0 && bb[3] <= o[0]) d = Math.min(d, o[0] - bb[3]);
+    else if (d < 0 && bb[0] >= o[3]) d = Math.max(d, o[3] - bb[0]);
+  }
+  return d;
+};
+const offsetY = (o, bb, d) => {
+  if (bb[3] > o[0] && bb[0] < o[3] && bb[5] > o[2] && bb[2] < o[5]) {
+    if (d > 0 && bb[4] <= o[1]) d = Math.min(d, o[1] - bb[4]);
+    else if (d < 0 && bb[1] >= o[4]) d = Math.max(d, o[4] - bb[1]);
+  }
+  return d;
+};
+const offsetZ = (o, bb, d) => {
+  if (bb[3] > o[0] && bb[0] < o[3] && bb[4] > o[1] && bb[1] < o[4]) {
+    if (d > 0 && bb[5] <= o[2]) d = Math.min(d, o[2] - bb[5]);
+    else if (d < 0 && bb[2] >= o[5]) d = Math.max(d, o[5] - bb[2]);
+  }
+  return d;
+};
+const shift = (bb, dx, dy, dz) => {
+  bb[0] += dx; bb[3] += dx; bb[1] += dy; bb[4] += dy; bb[2] += dz; bb[5] += dz;
+};
+// Entity.moveEntity (sa.d(DDD)) for a walking mob: y first, then x, then z
+// against the block boxes; when a horizontal move is blocked while on the
+// ground, retry with stepHeight (0.5) and keep that result unless it is no
+// farther. Sets the collided/onGround flags, zeroes motion on blocked axes and
+// runs Entity.updateFallState (sa.a(DZ)V); returns the fall distance on landing.
+export function moveEntity(world, e, w, h, dx, dy, dz) {
+  // Entity.width/height are floats (setSize), so the box edges use their float values.
+  w = f(w);
+  h = f(h);
+  const odx = dx, ody = dy, odz = dz, half = w / 2,
+    bb = [e.x - half, e.y, e.z - half, e.x + half, e.y + h, e.z + half],
+    start = bb.slice(),
+    grow = (box, gx, gy, gz) => [gx < 0 ? box[0] + gx : box[0], gy < 0 ? box[1] + gy : box[1], gz < 0 ? box[2] + gz : box[2], gx > 0 ? box[3] + gx : box[3], gy > 0 ? box[4] + gy : box[4], gz > 0 ? box[5] + gz : box[5]];
+  let list = collisionBoxes(world, grow(bb, dx, dy, dz));
+  for (const o of list) dy = offsetY(o, bb, dy);
+  shift(bb, 0, dy, 0);
+  const grounded = e.onGround || (ody !== dy && ody < 0);
+  for (const o of list) dx = offsetX(o, bb, dx);
+  shift(bb, dx, 0, 0);
+  for (const o of list) dz = offsetZ(o, bb, dz);
+  shift(bb, 0, 0, dz);
+  if (grounded && (odx !== dx || odz !== dz)) {
+    const sx = dx, sy = dy, sz = dz, flat = bb.slice();
+    dx = odx; dy = STEP_HEIGHT; dz = odz;
+    bb.splice(0, 6, ...start);
+    list = collisionBoxes(world, grow(bb, odx, STEP_HEIGHT, odz));
+    for (const o of list) dy = offsetY(o, bb, dy);
+    shift(bb, 0, dy, 0);
+    for (const o of list) dx = offsetX(o, bb, dx);
+    shift(bb, dx, 0, 0);
+    for (const o of list) dz = offsetZ(o, bb, dz);
+    shift(bb, 0, 0, dz);
+    dy = -STEP_HEIGHT;
+    for (const o of list) dy = offsetY(o, bb, dy);
+    shift(bb, 0, dy, 0);
+    if (sx * sx + sz * sz >= dx * dx + dz * dz) {
+      dx = sx; dy = sy; dz = sz;
+      bb.splice(0, 6, ...flat);
+    }
+  }
+  e.x = (bb[0] + bb[3]) / 2;
+  e.y = bb[1];
+  e.z = (bb[2] + bb[5]) / 2;
+  e.collidedH = odx !== dx || odz !== dz;
+  e.onGround = ody !== dy && ody < 0;
+  if (odx !== dx) e.vx = 0;
+  if (ody !== dy) e.vy = 0;
+  if (odz !== dz) e.vz = 0;
+  let landed = 0;
+  if (e.onGround) {
+    landed = e.fallDistance;
+    e.fallDistance = 0;
+  } else if (dy < 0) e.fallDistance = f(e.fallDistance - dy);
+  return landed;
+}
+// Entity.moveFlying (sa.a(FFF)): `forward` (and `strafe`) scaled to `friction`,
+// rotated by rotationYaw through MathHelper's sine table and added to motion.
+export function moveFlying(e, strafe, forward, friction) {
+  let d = f(f(strafe * strafe) + f(forward * forward));
+  if (d < f(1e-4)) return;
+  d = f(Math.sqrt(d));
+  if (d < 1) d = 1;
+  d = f(friction / d);
+  strafe = f(strafe * d);
+  forward = f(forward * d);
+  const yaw = f(f(e.rotationYaw * f(Math.PI)) / 180), sin = mhSin(yaw), cos = mhCos(yaw);
+  e.vx += f(f(strafe * cos) - f(forward * sin));
+  e.vz += f(f(forward * cos) + f(strafe * sin));
+}
+// Entity.handleWaterMovement (sa.H): the box shrunk 0.4 vertically and 0.001 all
+// round touches a water cell below its liquid surface (BlockLiquid height 1/9 for a source).
+function inWater(world, e, w, h) {
+  const half = w / 2 - 0.001, y0 = e.y + 0.4 + 0.001, y1 = e.y + h - 0.4 - 0.001;
+  for (let bx = Math.floor(e.x - half); bx < Math.floor(e.x + half + 1); bx++)
+    for (let by = Math.floor(y0); by < Math.floor(y1 + 1); by++)
+      for (let bz = Math.floor(e.z - half); bz < Math.floor(e.z + half + 1); bz++)
+        if (world.get(bx, by, bz) === 10 && y1 >= f(by + 1 - f(1 / 9))) return true;
+  return false;
+}
+// Entity.func_70038_c / isOffsetPositionInLiquid (sa.c(DDD)): the box moved by
+// (dx, dy, dz) has no block in it and no water.
+function offsetInLiquid(world, e, w, h, dx, dy, dz) {
+  const half = w / 2, b = [e.x - half + dx, e.y + dy, e.z - half + dz, e.x + half + dx, e.y + h + dy, e.z + half + dz];
+  if (collisionBoxes(world, b).length) return false;
+  for (let bx = Math.floor(b[0]); bx < Math.floor(b[3] + 1); bx++)
+    for (let by = Math.floor(b[1]); by < Math.floor(b[4] + 1); by++)
+      for (let bz = Math.floor(b[2]); bz < Math.floor(b[5] + 1); bz++)
+        if (world.get(bx, by, bz) === 10) return false;
+  return true;
+}
+// EntityLivingBase.jump (sv.bj): 0.42 upward (no jump boost, no sprint).
+export function jump(e) {
+  e.vy = 0.41999998688697815;
+}
+// EntityLivingBase.moveEntityWithHeading (sv.e(FF)) without strafe, ladders or
+// lava (isAIEnabled mobs): water accelerates at 0.04 and drags by 0.8; on land
+// the block under the feet sets friction 0.91 * slipperiness and the ground
+// acceleration aiMoveSpeed * 0.16277136 / friction^3 (0.02 in the air).
+// Gravity is 0.08 with 0.98 vertical drag. Returns the landing fall distance.
+export function moveEntityWithHeading(world, e, w, h, forward) {
+  let landed;
+  if (e.inWater) {
+    const y0 = e.y;
+    moveFlying(e, 0, forward, f(0.04));
+    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz);
+    e.vx *= 0.800000011920929;
+    e.vy *= 0.800000011920929;
+    e.vz *= 0.800000011920929;
+    e.vy -= 0.02;
+    if (e.collidedH && offsetInLiquid(world, e, w, h, e.vx, e.vy + 0.6 - e.y + y0, e.vz)) e.vy = 0.30000001192092896;
+  } else {
+    // The block under the feet (floor(minY) - 1) only counts while on the ground.
+    const slip = () => (e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.91)) : f(0.91));
+    let friction = slip();
+    const accel = f(f(0.16277136) / f(f(friction * friction) * friction));
+    moveFlying(e, 0, forward, e.onGround ? f(e.aiMoveSpeed * accel) : JUMP_MOVEMENT_FACTOR);
+    friction = slip();
+    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz);
+    e.vy -= 0.08;
+    e.vy *= 0.9800000190734863;
+    e.vx *= friction;
+    e.vz *= friction;
+  }
+  return landed;
+}
+// EntityLivingBase.knockBack (sv.a(Entity, F, DD)V), reached from attackEntityFrom
+// with dx, dz = attacker - victim: the knockbackResistance roll, then half the
+// old motion plus 0.4 away from the attacker horizontally and 0.4 up (capped at
+// 0.4). attackEntityFrom nudges a coincident attacker by a random sliver first.
+export function knockBack(e, fromX, fromZ, random = Math.random) {
+  let dx = fromX - e.x, dz = fromZ - e.z;
+  while (dx * dx + dz * dz < 1e-4) {
+    dx = (random() - random()) * 0.01;
+    dz = (random() - random()) * 0.01;
+  }
+  if (random() < (e.knockbackResistance || 0)) return false;
+  const len = f(Math.sqrt(dx * dx + dz * dz)), k = f(0.4);
+  e.vx = e.vx / 2 - (dx / len) * k;
+  e.vy = e.vy / 2 + k;
+  e.vz = e.vz / 2 - (dz / len) * k;
+  if (e.vy > 0.4000000059604645) e.vy = 0.4000000059604645;
+  return true;
+}
+// Entity.addVelocity (sa.g(DDD)V).
+export function addVelocity(e, x, y, z) {
+  e.vx += x;
+  e.vy += y;
+  e.vz += z;
 }
 export function entityHit(origin, dir, e, reach) {
   const base = ENTITY_TYPES[e.type], scale=e.growingAge<0?.5:1,t={width:base.width*scale,height:base.height*scale};
@@ -154,6 +363,7 @@ export class EntityWorld {
           vx: 0,
           vz: 0,
           vy: 0,
+          ...this.physics(),
         }));
         this.nextId++;
       }
@@ -184,7 +394,14 @@ export class EntityWorld {
       flee: 0,
       burn: 0,
       growingAge:0,love:0,mateTicks:0,
+      // EntityZombie.func_110161_a adds a 0 to 0.05 "Random spawn bonus" to knockbackResistance.
+      knockbackResistance: type === "zombie" ? Math.random() * 0.05000000074505806 : 0,
+      ...this.physics(),
     });
+  }
+  // Fresh motion state: grounded only after the first collision, no AI move target yet.
+  physics() {
+    return { onGround: false, collidedH: false, inWater: false, fallDistance: 0, moveForward: 0, aiMoveSpeed: 0, jumping: false, jumpTicks: 0, lastDamage: 0 };
   }
   seedAnimals() {
     const spawn = this.world.spawn();
@@ -216,8 +433,37 @@ export class EntityWorld {
     }
     return result;
   }
-  attack(e, tool, survival, player) {
-    if (!this.entities.includes(e) || e.health <= 0 || e.hurt > 0) return false;
+  // EntityLivingBase.attackEntityFrom (sv.a(ro, F)) for a damage source with an
+  // attacking entity at (fromX, fromZ): while hurtResistantTime > 10 (`hurt` > 0)
+  // only damage above lastDamage counts, the difference being dealt; limbSwingAmount
+  // jumps to 1.5, knockBack runs, then the mob dies or plays its hurt sound.
+  damage(e, amount, fromX, fromZ) {
+    if (!this.entities.includes(e) || e.health <= 0) return false;
+    if (e.hurt > 0) {
+      if (amount <= e.lastDamage) return false;
+      e.health -= amount - e.lastDamage;
+    } else {
+      e.health -= amount;
+      e.hurt = 10;
+    }
+    e.lastDamage = amount;
+    // Panic (EntityAIPanic) starts for animals; zombies keep chasing.
+    if (e.type !== "zombie") e.flee = 60;
+    e.love=0;e.mateTicks=0;
+    e.yaw = Math.atan2(e.x - fromX, e.z - fromZ);
+    // EntityLivingBase.attackEntityFrom sets limbSwingAmount to 1.5.
+    e.limbSwingAmount = 1.5;
+    knockBack(e, fromX, fromZ);
+    if (e.health <= 0) this.kill(e);
+    else
+      this.events.push({
+        sound: e.type === "pig" ? "mob.pig.say" : "mob." + e.type + ".hurt",
+        position: e,
+      });
+    return true;
+  }
+  attack(e, tool, survival, player, extraKnockback = 0) {
+    if (!this.entities.includes(e) || e.health <= 0) return false;
     const item = ITEMS[tool],
       owned = survival.creative || survival.count(tool) > 0;
     let damage = 1;
@@ -231,40 +477,51 @@ export class EntityWorld {
               ? 3 + item.tier
               : 2 + item.tier;
     }
-    e.health -= damage;
-    e.hurt = 10;
-    e.flee = 60;
-    e.love=0;e.mateTicks=0;
-    e.yaw = Math.atan2(e.x - player.x, e.z - player.z);
-    e.vx = Math.sin(e.yaw) * 0.28;
-    e.vz = Math.cos(e.yaw) * 0.28;
-    e.vy = 0.2;
-    // EntityLivingBase.attackEntityFrom sets limbSwingAmount to 1.5.
-    e.limbSwingAmount = 1.5;
+    if (e.hurt > 0 && damage <= e.lastDamage) return false;
+    if (!this.damage(e, damage, player.x, player.z)) return false;
+    // EntityPlayer.attackTargetEntityWithCurrentItem (yz.r): sprinting and Knockback
+    // add addVelocity(-sin(yaw) * n * 0.5, 0.1, cos(yaw) * n * 0.5) along the view.
+    // player.yaw is this build's radian view yaw (looking along -sin, -cos).
+    if (extraKnockback > 0 && Number.isFinite(player.yaw))
+      addVelocity(e, -Math.sin(player.yaw) * extraKnockback * 0.5, 0.1, -Math.cos(player.yaw) * extraKnockback * 0.5);
     survival.exhaust(0.3);
     if (owned&&["sword","axe","pickaxe","shovel"].includes(item?.kind)) survival.wear(tool,item.kind==='sword'?1:2);
-    if (e.health <= 0) {
-      this.events.push({
-        sound: "mob." + e.type + (e.type === "cow" ? ".hurt" : ".death"),
-        position: e,
-      });
-      if(e.growingAge>=0)this.events.push({xp:e.type==='zombie'?5:1+Math.floor(Math.random()*3),position:{x:e.x,y:e.y,z:e.z}});
-      if(e.growingAge>=0)this.events.push({
-        drop: ENTITY_TYPES[e.type].drop,
-        count:
-          1 + Math.floor(hash(e.age, e.id.length, this.world.numericSeed) * 3),
-        position: { x: e.x, y: e.y, z: e.z },
-      });
-      // EntityCow.dropFewItems also drops zero to two leather.
-      const leather = e.type === "cow" && e.growingAge >= 0 ? Math.floor(hash(e.age + 7, e.id.length, this.world.numericSeed) * 3) : 0;
-      if (leather) this.events.push({ drop: 315, count: leather, position: { x: e.x, y: e.y, z: e.z } });
-      e.death = 1;
-    } else
-      this.events.push({
-        sound: e.type === "pig" ? "mob.pig.say" : "mob." + e.type + ".hurt",
-        position: e,
-      });
     return true;
+  }
+  // Death of a mob: sound, experience and the drops (EntityLiving.dropFewItems).
+  kill(e) {
+    this.events.push({
+      sound: "mob." + e.type + (e.type === "cow" ? ".hurt" : ".death"),
+      position: e,
+    });
+    if(e.growingAge>=0)this.events.push({xp:e.type==='zombie'?5:1+Math.floor(Math.random()*3),position:{x:e.x,y:e.y,z:e.z}});
+    if(e.growingAge>=0)this.events.push({
+      drop: ENTITY_TYPES[e.type].drop,
+      count:
+        1 + Math.floor(hash(e.age, e.id.length, this.world.numericSeed) * 3),
+      position: { x: e.x, y: e.y, z: e.z },
+    });
+    // EntityCow.dropFewItems also drops zero to two leather.
+    const leather = e.type === "cow" && e.growingAge >= 0 ? Math.floor(hash(e.age + 7, e.id.length, this.world.numericSeed) * 3) : 0;
+    if (leather) this.events.push({ drop: 315, count: leather, position: { x: e.x, y: e.y, z: e.z } });
+    e.death = 1;
+  }
+  // EntityLivingBase.fall (sv.b(F)): ceil(distance - 3) points of fall damage
+  // (no jump boost), through attackEntityFrom without an attacker, so no knockback.
+  fall(e, distance) {
+    const points = Math.ceil(f(distance - 3));
+    if (points <= 0 || e.health <= 0) return;
+    if (e.hurt > 0) {
+      if (points <= e.lastDamage) return;
+      e.health -= points - e.lastDamage;
+    } else {
+      e.health -= points;
+      e.hurt = 10;
+    }
+    e.lastDamage = points;
+    e.limbSwingAmount = 1.5;
+    if (e.health <= 0) this.kill(e);
+    else this.events.push({ sound: e.type === "pig" ? "mob.pig.say" : "mob." + e.type + ".hurt", position: e });
   }
   feed(e,id,survival){
     if(!this.entities.includes(e)||e.health<=0||e.type!=='cow'||id!==305||(!survival.creative&&!survival.count(id)))return false;
@@ -312,12 +569,16 @@ export class EntityWorld {
       e.prevRotationYawHead = e.rotationYawHead;
       e.prevRotationPitch = e.rotationPitch;
       e.prevLimbSwingAmount = e.limbSwingAmount;
+      const base=ENTITY_TYPES[e.type],scale=e.growingAge<0?.5:1,t={...base,width:base.width*scale,height:base.height*scale};
       if (e.health <= 0) {
+        // A dying mob still runs onLivingUpdate with its movement blocked (sv.bh):
+        // it slides on its knockback and falls, with no AI input.
         e.death = (e.death || 0) + 1;
+        e.jumping = false;
+        this.walk(e, t, 0);
         this.swingLimbs(e);
         continue;
       }
-      const base=ENTITY_TYPES[e.type],scale=e.growingAge<0?.5:1,t={...base,width:base.width*scale,height:base.height*scale};
       e.age++;
       if(e.growingAge<0)e.growingAge++;else if(e.growingAge>0)e.growingAge--;
       e.love=Math.max(0,e.love-1);
@@ -334,7 +595,7 @@ export class EntityWorld {
         survival.health > 0
       ) {
         e.yaw = Math.atan2(player.x - e.x, player.z - e.z);
-        speed = distance > 1.1 ? t.speed : 0;
+        speed = distance > 1.1 ? aiMoveSpeed(e, base.ai.chase) : 0;
         if (
           distance < 1.4 &&
           Math.abs(e.y - player.y) < 1.5 &&
@@ -356,9 +617,9 @@ export class EntityWorld {
       } else if(e.type==='cow'&&!e.flee&&(e.love>0||(heldItem===305&&(survival.creative||survival.count(305))&&distance<10)||e.growingAge<0)){
         const partner=e.love?this.entities.find(b=>b!==e&&b.type==='cow'&&b.love>0&&b.health>0&&b.growingAge===0):null;
         const mother=e.growingAge<0?this.entities.find(b=>b!==e&&b.type==='cow'&&b.growingAge>=0&&b.health>0&&Math.hypot(b.x-e.x,b.z-e.z)<8):null;
-        const goal=partner||mother||player,d=Math.hypot(goal.x-e.x,goal.z-e.z);e.yaw=Math.atan2(goal.x-e.x,goal.z-e.z);speed=d>(partner?1:mother?2:2.5)?t.speed*1.25:0;e.walking=speed>0;
+        const goal=partner||mother||player,d=Math.hypot(goal.x-e.x,goal.z-e.z);e.yaw=Math.atan2(goal.x-e.x,goal.z-e.z);speed=d>(partner?1:mother?2:2.5)?aiMoveSpeed(e,partner?base.ai.mate:mother?base.ai.follow:base.ai.tempt):0;e.walking=speed>0;
       } else if (e.flee) {
-        speed = 0.13;
+        speed = aiMoveSpeed(e, base.ai.panic);
       } else {
         if (--e.wander <= 0) {
           e.yaw =
@@ -366,7 +627,7 @@ export class EntityWorld {
           e.wander = 60 + Math.floor(hash(e.age, 7, 4) * 120);
           e.walking = hash(e.age, 1, e.id.length) > 0.35;
         }
-        if (e.walking) speed = t.speed;
+        if (e.walking) speed = aiMoveSpeed(e, base.ai.wander);
       }
       if (e.type === "zombie" && !night) {
         let sky = true;
@@ -379,47 +640,23 @@ export class EntityWorld {
         if (sky && e.age % 20 === 0) {
           e.health--;
           e.hurt = 8;
+          e.lastDamage = 1;
         }
       } else e.burn = 0;
-      const dx = Math.sin(e.yaw) * speed + e.vx,
-        dz = Math.cos(e.yaw) * speed + e.vz;
-      for (const [axis, delta] of [
-        ["x", dx],
-        ["z", dz],
-      ]) {
-        const next = Math.max(0.6, Math.min(SIZE - 0.6, e[axis] + delta)),
-          x = axis === "x" ? next : e.x,
-          z = axis === "z" ? next : e.z;
-        if (!actorCollides(this.world, x, e.y, z, t.width, t.height))
-          e[axis] = next;
-        else if (!actorCollides(this.world, x, e.y + 1, z, t.width, t.height)) {
-          e.y += 1;
-          e[axis] = next;
-        } else e.yaw += Math.PI * 0.55;
-      }
-      e.vx *= 0.65;
-      e.vz *= 0.65;
-      e.vy = Math.max(-0.7, (e.vy - 0.08) * 0.98);
-      let next = e.y + e.vy;
-      if (actorCollides(this.world, e.x, next, e.z, t.width, t.height)) {
-        if (e.vy < 0) {
-          let floor = Math.floor(e.y);
-          while (
-            floor > 0 &&
-            !actorCollides(
-              this.world,
-              e.x,
-              floor - 0.01,
-              e.z,
-              t.width,
-              t.height,
-            )
-          )
-            floor--;
-          e.y = Math.max(floor, e.y - 0.7);
+      // EntityMoveHelper/EntityJumpHelper, simplified: a blocked mob hops a one-high
+      // step (jump 0.42 clears 1.25) and otherwise turns away; EntityAISwimming (uf)
+      // jumps 80% of ticks in water.
+      e.jumping = false;
+      if (e.inWater = inWater(this.world, e, t.width, t.height)) e.fallDistance = 0;
+      if (e.inWater && Math.random() < 0.8) e.jumping = true;
+      else if (speed > 0 && e.collidedH && e.onGround) {
+        const ax = e.x + Math.sin(e.yaw) * 0.5, az = e.z + Math.cos(e.yaw) * 0.5;
+        if (actorCollides(this.world, ax, e.y, az, t.width, t.height)) {
+          if (!actorCollides(this.world, e.x, e.y + 1, e.z, t.width, t.height) && !actorCollides(this.world, ax, e.y + 1, az, t.width, t.height)) e.jumping = true;
+          else e.yaw += Math.PI * 0.55;
         }
-        e.vy = 0;
-      } else e.y = next;
+      }
+      this.walk(e, t, speed);
       this.turnBody(e);
       this.swingLimbs(e);
       if (e.age % 160 === 0 && distance < 18)
@@ -444,12 +681,48 @@ export class EntityWorld {
     this.breed();
     this.entities = this.entities.filter((e) => e.health > 0 || e.death < 20);
   }
+  // Motion half of EntityLivingBase.onLivingUpdate (sv.e()): jump delay, motion
+  // below 0.005 snapped to 0, EntityMoveHelper (tv.c) turning a move target into
+  // aiMoveSpeed and moveForward (zeroed when idle), the jump (0.04 in water, else
+  // jump() on the ground every 10 ticks), moveForward x 0.98, then
+  // moveEntityWithHeading. `speed` is the setAIMoveSpeed value or 0.
+  walk(e, t, speed) {
+    if (e.jumpTicks > 0) e.jumpTicks--;
+    if (Math.abs(e.vx) < 0.005) e.vx = 0;
+    if (Math.abs(e.vy) < 0.005) e.vy = 0;
+    if (Math.abs(e.vz) < 0.005) e.vz = 0;
+    e.moveForward = 0;
+    if (speed > 0) e.aiMoveSpeed = e.moveForward = speed;
+    this.aimYaw(e);
+    if (e.jumping) {
+      if (e.inWater) e.vy += 0.03999999910593033;
+      else if (e.onGround && e.jumpTicks === 0) {
+        jump(e);
+        e.jumpTicks = 10;
+      }
+    } else e.jumpTicks = 0;
+    e.moveForward = f(e.moveForward * f(0.98));
+    const landed = moveEntityWithHeading(this.world, e, t.width, t.height, e.moveForward);
+    // The finite world's edge stops a mob like a wall.
+    const edge = (axis, v) => {
+      const c = Math.max(0.6, Math.min(SIZE - 0.6, e[axis]));
+      if (c !== e[axis]) (e[axis] = c), (e[v] = 0);
+    };
+    edge("x", "vx");
+    edge("z", "vz");
+    if (landed > 0) this.fall(e, landed);
+  }
+  // Entity.rotationYaw (Java degrees) follows the AI's e.yaw by the wrapped
+  // difference from last tick, so moveFlying sees this tick's heading.
+  aimYaw(e) {
+    e.rotationYaw = f(e.prevRotationYaw + wrapDegrees(f(javaYaw(e) - e.prevRotationYaw)));
+  }
   // EntityBodyHelper.func_75664_a (tr.a), reached through EntityLiving.func_110146_f
   // (sw.f) for AI-enabled mobs; the yaw wraps of EntityLivingBase.onUpdate (sv.h) follow.
   // Simplified: the head faces e.yaw at once (no EntityLookHelper turn limit).
   turnBody(e) {
     const dx = e.x - e.px, dz = e.z - e.pz;
-    e.rotationYaw = f(e.prevRotationYaw + wrapDegrees(f(javaYaw(e) - e.prevRotationYaw)));
+    this.aimYaw(e);
     e.rotationYawHead = e.rotationYaw;
     if (dx * dx + dz * dz > 2.500000277905201e-7) {
       e.renderYawOffset = e.rotationYaw;
