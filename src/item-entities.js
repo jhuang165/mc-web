@@ -5,6 +5,7 @@
 // bottom of the box; EntityItem's posY sits half the height (0.125) above it.
 import { blockBounds, normalCube } from "./world.js";
 import { copyStack } from "./inventory.js";
+import { waterAcceleration } from "./fluids.js";
 
 const W = 0.125, H = 0.25, LIFETIME = 6000;
 const f = Math.fround;
@@ -177,6 +178,14 @@ export class ItemEntities {
   tick(world, maxStack = () => 64) {
     for (const e of this.items) {
       if (e.dead) continue;
+      // Entity.onUpdate runs handleWaterMovement first; EntityItem (xk.N) passes
+      // its own box to World.handleMaterialAcceleration, unshrunk.
+      if (world.getMeta) {
+        const { push } = waterAcceleration(world, this.box(e));
+        e.mx += push[0];
+        e.my += push[1];
+        e.mz += push[2];
+      }
       e.ticks++;
       if (e.delay > 0) e.delay--;
       e.px = e.x;
