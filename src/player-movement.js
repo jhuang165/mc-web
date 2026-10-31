@@ -81,6 +81,45 @@ export class PlayerMotion {
     this.lastForward = 0;
     this.ySize = 0;
     this.prevYSize = 0;
+    // EntityLivingBase.jumpTicks (sv.bq), EntityPlayer.flyToggleTimer (yz.bq) and the jump
+    // key of the previous tick (the "flag" local of EntityPlayerSP.onLivingUpdate).
+    this.jumpTicks = 0;
+    this.flyToggleTimer = 0;
+    this.lastJump = false;
+  }
+  // EntityPlayerSP.onLivingUpdate: a fresh jump press with allowFlying arms the 7-tick
+  // flyToggleTimer, and a second fresh press while it is still running toggles flight.
+  // EntityPlayer.onLivingUpdate then counts the timer down (after the toggle, same tick),
+  // so the second press must come within six ticks. Returns true when flight toggles.
+  toggleFlight(jump, allowFlying) {
+    let toggled = false;
+    if (allowFlying && !this.lastJump && jump) {
+      if (this.flyToggleTimer === 0) this.flyToggleTimer = 7;
+      else {
+        toggled = true;
+        this.flyToggleTimer = 0;
+      }
+    }
+    this.lastJump = !!jump;
+    if (this.flyToggleTimer > 0) this.flyToggleTimer--;
+    return toggled;
+  }
+  // EntityLivingBase.onLivingUpdate (sv.e()V): jumpTicks counts down; with the jump key
+  // held, water or lava adds 0.04 to motionY, and on the ground a jump fires only when
+  // jumpTicks is zero, which then resets it to 10. Releasing the key clears the delay.
+  // Returns "swim", "jump" or null.
+  jump(jumping, { inLiquid = false, onGround = false } = {}) {
+    if (this.jumpTicks > 0) this.jumpTicks--;
+    if (!jumping) {
+      this.jumpTicks = 0;
+      return null;
+    }
+    if (inLiquid) return "swim";
+    if (onGround && this.jumpTicks === 0) {
+      this.jumpTicks = JUMP_DELAY;
+      return "jump";
+    }
+    return null;
   }
   // One onLivingUpdate. `keys` are the pressed key counts, `state` the world-side flags:
   // onGround, collidedHorizontally, canSprint (food > 6 or may fly), usingItem, sprintKey.
@@ -113,6 +152,58 @@ export class PlayerMotion {
   drop(t = 1) {
     return this.prevYSize + (this.ySize - this.prevYSize) * t;
   }
+}
+
+// --- Movement speeds and the sprint field of view ---
+
+// EntityPlayer.applyEntityAttributes sets the movementSpeed base to 0.10000000149011612 (the
+// float 0.1F); EntityLivingBase.setSprinting (sv.c(Z)V) adds the "Sprinting speed boost"
+// modifier, 0.30000001192092896 with operation 2 (multiply the total), and
+// EntityPlayer.onLivingUpdate feeds the attribute value to setAIMoveSpeed as a float.
+export const MOVE_SPEED = 0.10000000149011612;
+export const SPRINT_BOOST = 0.30000001192092896;
+export const moveSpeed = (sprinting) => (sprinting ? MOVE_SPEED * (1 + SPRINT_BOOST) : MOVE_SPEED);
+// EntityLivingBase.moveEntityWithHeading (sv.e(FF)V) on the ground: aiMoveSpeed times
+// 0.16277136F / friction³ with friction = slipperiness * 0.91F, all in floats.
+export function groundAccel(sprinting, friction) {
+  return f(f(moveSpeed(sprinting)) * f(f(0.16277136) / f(f(friction * friction) * friction)));
+}
+// EntityPlayer.onLivingUpdate: jumpMovementFactor = speedInAir (0.02F), plus speedInAir * 0.3
+// (a double) while sprinting. Water and lava use moveFlying(..., 0.02F) whatever the sprint.
+export const SPEED_IN_AIR = f(0.02);
+export const airAccel = (sprinting) => (sprinting ? f(SPEED_IN_AIR + SPEED_IN_AIR * 0.3) : SPEED_IN_AIR);
+export const LIQUID_ACCEL = f(0.02);
+// EntityLivingBase.jump (sv.bj()V): motionY 0.41999998688697815 and, sprinting, a push of
+// 0.2F along the facing (MathHelper.sin/cos of yaw * 0.017453292F; this build's yaw is in
+// radians and faces -sin/-cos). EntityPlayer.jump adds 0.8F exhaustion sprinting, else 0.2F.
+export const JUMP_MOTION = 0.41999998688697815;
+export const SPRINT_JUMP_BOOST = f(0.2);
+export const JUMP_DELAY = 10;
+export const jumpExhaustion = (sprinting) => (sprinting ? f(0.8) : f(0.2));
+export function sprintJumpPush(yaw) {
+  return { x: -Math.sin(yaw) * SPRINT_JUMP_BOOST, z: -Math.cos(yaw) * SPRINT_JUMP_BOOST };
+}
+// PlayerCapabilities: flySpeed 0.05F, walkSpeed 0.1F. Flying, EntityPlayer.moveEntityWithHeading
+// sets jumpMovementFactor to flySpeed (1.7.10 does not double it while sprinting), runs the
+// living move with the 0.91F air friction and gravity, then restores motionY to 0.6 times its
+// value before the move. EntityPlayerSP.onLivingUpdate adds -0.15 for sneak, +0.15 for jump.
+export const FLY_SPEED = f(0.05);
+export const WALK_SPEED = f(0.1);
+export const FLY_VERTICAL = 0.15;
+export const FLY_Y_DRAG = 0.6;
+export function flyVertical(motionY, { jump = false, sneak = false } = {}) {
+  if (sneak) motionY -= FLY_VERTICAL;
+  if (jump) motionY += FLY_VERTICAL;
+  return motionY;
+}
+// EntityPlayerSP.getFOVMultiplier (blk.t()F): 1, times 1.1F while flying, times
+// (movementSpeed / walkSpeed + 1) / 2 in doubles, so sprinting widens the view by 1.15;
+// then the bow draw term (bow.js bowFov). EntityRenderer.updateFovModifierHand eases toward it.
+export function fovMultiplier({ flying = false, sprinting = false, bow = 1 } = {}) {
+  let m = 1;
+  if (flying) m = f(m * f(1.1));
+  m = f(m * ((moveSpeed(sprinting) / WALK_SPEED + 1) / 2));
+  return bow === 1 ? m : f(m * bow);
 }
 
 // EntityPlayer.attackTargetEntityWithCurrentItem (yz.r(Entity)V). `critical` is the

@@ -142,3 +142,91 @@ test("critical hits need a fall and multiply the damage by 1.5F; sprint knockbac
   near(two.e.vx - base2.e.vx, -1, 1e-6);
   near(two.e.vz - base2.e.vz, 0, 1e-6);
 });
+
+// --- sprint speed, sprint jump, flight and the field of view (EntityPlayerSP/EntityLivingBase) ---
+import {
+  moveSpeed, groundAccel, airAccel, LIQUID_ACCEL, JUMP_MOTION, JUMP_DELAY, jumpExhaustion, sprintJumpPush,
+  FLY_SPEED, flyVertical, FLY_Y_DRAG, fovMultiplier,
+} from "./player-movement.js";
+import { bowFov } from "./bow.js";
+
+test("sprinting multiplies the movement attribute by 1.3 and the air factor by 1.3", () => {
+  near(moveSpeed(false), 0.10000000149011612);
+  near(moveSpeed(true) / moveSpeed(false), 1.30000001192092896, 1e-15);
+  // Normal ground: slipperiness 0.6F * 0.91F; 0.16277136F / friction³ is exactly 1 at that friction.
+  const friction = f(f(0.6) * f(0.91));
+  near(groundAccel(false, friction), f(f(0.1) * f(f(0.16277136) / f(f(friction * friction) * friction))));
+  near(groundAccel(true, friction) / groundAccel(false, friction), 1.3, 1e-6);
+  assert.equal(airAccel(false), f(0.02));
+  // (float)(0.02F + 0.02F * 0.3D): one float step below f(0.026).
+  assert.equal(airAccel(true), f(f(0.02) + f(0.02) * 0.3));
+  near(airAccel(true), 0.026, 1e-8);
+  assert.equal(LIQUID_ACCEL, f(0.02));
+  // Steady ground speed: each tick moves d = v + a * 0.98 (moveWeights) and keeps v = d * friction,
+  // so d = 0.98a / (1 - friction).
+  const terminal = (a) => (a * f(0.98)) / (1 - friction);
+  near(terminal(groundAccel(false, friction)) * 20, 4.317, 2e-3); // blocks per second walking
+  near(terminal(groundAccel(true, friction)) * 20, 5.612, 2e-3); // sprinting
+});
+
+test("held jumps wait 10 ticks; releasing the key clears the delay; liquids lift 0.04", () => {
+  const p = new PlayerMotion();
+  assert.equal(p.jump(true, { onGround: true }), "jump");
+  assert.equal(p.jumpTicks, JUMP_DELAY);
+  const fired = [];
+  for (let t = 1; t <= 12; t++) fired.push(p.jump(true, { onGround: true }));
+  assert.equal(fired.indexOf("jump"), 9, "the next held jump is ten ticks after the first");
+  p.jump(false, { onGround: true });
+  assert.equal(p.jumpTicks, 0);
+  assert.equal(p.jump(true, { onGround: true }), "jump", "a fresh press jumps at once");
+  assert.equal(p.jump(true, { inLiquid: true, onGround: true }), "swim", "water wins over the ground");
+  assert.equal(p.jump(true, { onGround: false }), null);
+  assert.equal(JUMP_MOTION, 0.41999998688697815);
+  assert.equal(jumpExhaustion(true), f(0.8));
+  assert.equal(jumpExhaustion(false), f(0.2));
+  // Facing -z (yaw 0) the sprint jump pushes 0.2F forward.
+  const push = sprintJumpPush(0);
+  near(push.x, 0);
+  near(push.z, -f(0.2));
+});
+
+test("Creative flight toggles on a second fresh jump press within six ticks", () => {
+  const tap = (p, gap, allow = true) => {
+    // Press on tick 0, release, press again on tick `gap`.
+    let toggled = p.toggleFlight(true, allow);
+    for (let i = 1; i < gap; i++) p.toggleFlight(false, allow);
+    toggled = p.toggleFlight(true, allow) || toggled;
+    p.toggleFlight(false, allow);
+    return toggled;
+  };
+  for (let gap = 2; gap <= 6; gap++) assert.equal(tap(new PlayerMotion(), gap), true, `gap ${gap}`);
+  assert.equal(tap(new PlayerMotion(), 7), false, "seven ticks is too slow");
+  const held = new PlayerMotion();
+  held.toggleFlight(true, true);
+  for (let i = 0; i < 4; i++) assert.equal(held.toggleFlight(true, true), false, "holding the key is one press");
+  const survival = new PlayerMotion();
+  assert.equal(tap(survival, 2, false), false, "needs allowFlying");
+});
+
+test("flight moves 0.05F horizontally and keeps 0.6 of motionY; jump/sneak add 0.15", () => {
+  assert.equal(FLY_SPEED, f(0.05));
+  let vy = 0;
+  for (let i = 0; i < 40; i++) vy = flyVertical(vy, { jump: true }) * FLY_Y_DRAG;
+  near(vy, 0.225, 1e-9); // (v + 0.15) * 0.6 settles at 0.225 a tick
+  vy = 0;
+  for (let i = 0; i < 40; i++) vy = flyVertical(vy, { sneak: true }) * FLY_Y_DRAG;
+  near(vy, -0.225, 1e-9);
+  assert.equal(flyVertical(0.1, { jump: true, sneak: true }), 0.1);
+  // Horizontal: air friction 0.91F, so the move settles at 0.98 * 0.05 / 0.09, 10.9 blocks a second.
+  const air = f(0.91);
+  near(((FLY_SPEED * f(0.98)) / (1 - air)) * 20, 10.89, 1e-2);
+});
+
+test("getFOVMultiplier: sprint 1.15, flight 1.1, both 1.265, times the bow term", () => {
+  assert.equal(fovMultiplier(), 1);
+  near(fovMultiplier({ sprinting: true }), 1.15, 1e-6);
+  near(fovMultiplier({ flying: true }), 1.1, 1e-6);
+  near(fovMultiplier({ flying: true, sprinting: true }), 1.265, 1e-6);
+  near(fovMultiplier({ sprinting: true, bow: bowFov(20) }), 1.15 * 0.85, 1e-6);
+  assert.equal(fovMultiplier({ sprinting: true }), f(fovMultiplier({ sprinting: true })), "stays a float");
+});

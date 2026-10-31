@@ -62,7 +62,7 @@ import { Fluids, waterAcceleration, entityWaterBox, inLava, liquidInBox } from "
 import { Fire, touchesFire, fireContact } from "./fire.js";
 import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
 import { HUNGER, POISON } from "./status-effects.js";
-import { PlayerMotion, sneakEdge, moveWeights, isCritical, ATTACK_SLOWDOWN } from "./player-movement.js";
+import { PlayerMotion, sneakEdge, moveWeights, isCritical, ATTACK_SLOWDOWN, groundAccel, airAccel, LIQUID_ACCEL, JUMP_MOTION, jumpExhaustion, sprintJumpPush, FLY_SPEED, FLY_Y_DRAG, flyVertical, fovMultiplier } from "./player-movement.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -127,8 +127,7 @@ let screen = "home",
   dragging = false,
   dragDistance = 0,
   lockFallback = false,
-  saved = true,
-  lastJump = 0;
+  saved = true;
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer;
 let weather = new Weather(), trees;
@@ -372,7 +371,7 @@ function controls() {
       ["MOUSE", "Look around"],
       ["SPACE", "Jump · double tap to fly in Creative"],
       ["SHIFT", "Sneak (hold) · descend while flying"],
-      ["CTRL", "Sprint (requires food in Survival)"],
+      ["CTRL / W W", "Sprint: hold Ctrl or double-tap W (food above 3 hunger icons in Survival)"],
       ["LEFT CLICK", "Hold to mine · click in drag mode"],
       ["RIGHT CLICK", "Place, eat, or use a workstation"],
       ["1 – 9 / SCROLL", "Choose a slot"],
@@ -1633,52 +1632,62 @@ function movementTick() {
   const inLavaNow = inLava(world, playerBox()),
     lava = inLavaNow && !inWater && !flying;
   let slip = Math.fround(0.6);
-  if (flying) {
-    const speed = sprint ? 0.8 : 0.42;
-    velocity.x = (Math.cos(yaw) * dx - Math.sin(yaw) * dz) * speed;
-    velocity.z = (-Math.sin(yaw) * dx - Math.cos(yaw) * dz) * speed;
-    velocity.y =
-      ((keys.has("Space") ? 1 : 0) - (sneak ? 1 : 0)) *
-      speed;
-  } else {
-    // Entity.handleWaterMovement: running water pushes the player along.
+  const jumpKey = keys.has("Space");
+  // EntityPlayerSP.onLivingUpdate: a double tap of jump toggles Creative flight (tick-based).
+  if (motion.toggleFlight(jumpKey, survival.creative)) {
+    flying = !flying;
+    toast(flying ? "Flight enabled · Space up · Shift down" : "Back to walking");
+  }
+  // ... then, flying, the sneak and jump keys move 0.15 a tick down and up.
+  if (flying) velocity.y = flyVertical(velocity.y, { jump: jumpKey, sneak });
+  // Entity.handleWaterMovement: running water pushes the player along (not while flying).
+  if (!flying) {
     const r = PHYSICS.width / 2,
       { push } = waterAcceleration(world, entityWaterBox([position.x - r, position.y, position.z - r, position.x + r, position.y + PHYSICS.height, position.z + r]));
     velocity.x += push[0];
     velocity.y += push[1];
     velocity.z += push[2];
-    // EntityLivingBase.moveEntityWithHeading: friction is the slipperiness of the block under the feet, read before the move.
-    slip = slipperiness(world.get(Math.floor(position.x), Math.floor(position.y) - 1, Math.floor(position.z)));
-    const friction = grounded
-      ? slip * Math.fround(0.91)
-      : Math.fround(0.91);
-    const accel =
-      (grounded
-        ? (0.1 * 0.16277136) / (friction * friction * friction)
-        : 0.02) * (sprint ? 1.3 : 1);
-    // moveFlying(strafe, forward, 0.02f) in lava, whatever the ground or sprint.
-    const accelNow = lava ? 0.02 : accel;
-    velocity.x += (Math.cos(yaw) * dx - Math.sin(yaw) * dz) * accelNow;
-    velocity.z += (-Math.sin(yaw) * dx - Math.cos(yaw) * dz) * accelNow;
-    if (keys.has("Space") && grounded && !lava) {
-      velocity.y = PHYSICS.jump;
-      survival.exhaust(sprint ? 0.8 : 0.2);
-      grounded = false;
-      if (sprint) {
-        velocity.x -= Math.sin(yaw) * 0.2;
-        velocity.z -= Math.cos(yaw) * 0.2;
-      }
+  }
+  // EntityLivingBase.onLivingUpdate: with jump held, water or lava lift 0.04 a tick and the
+  // ground jump waits for jumpTicks (10 between held jumps).
+  const swimming = !flying && (inWater || lava);
+  const jumpAction = motion.jump(jumpKey, { inLiquid: inWater || inLavaNow, onGround: grounded });
+  if (jumpAction === "swim") velocity.y += 0.03999999910593033;
+  else if (jumpAction === "jump") {
+    velocity.y = JUMP_MOTION;
+    if (sprint) {
+      const push = sprintJumpPush(yaw);
+      velocity.x += push.x;
+      velocity.z += push.z;
     }
-    if (inWater && keys.has("Space"))
-      velocity.y = Math.min(0.16, velocity.y + 0.06);
-    // EntityLivingBase.onLivingUpdate: jumping in lava pushes up by 0.04.
-    else if (lava && keys.has("Space")) velocity.y += 0.04;
+    survival.exhaust(jumpExhaustion(sprint));
+    // jump() leaves onGround alone: this tick still moves with ground friction.
+  }
+  // EntityLivingBase.moveEntityWithHeading: water and lava use moveFlying(0.02F); on land the
+  // friction is the slipperiness under the feet (read before the move), and the acceleration
+  // is aiMoveSpeed * 0.16277136F / friction³ on the ground or jumpMovementFactor in the air.
+  // Flying replaces jumpMovementFactor with flySpeed.
+  slip = slipperiness(world.get(Math.floor(position.x), Math.floor(position.y) - 1, Math.floor(position.z)));
+  const onGroundMove = grounded && !flying;
+  const friction = onGroundMove ? Math.fround(slip * Math.fround(0.91)) : Math.fround(0.91);
+  const accel = swimming
+    ? LIQUID_ACCEL
+    : flying
+      ? FLY_SPEED
+      : onGroundMove
+        ? groundAccel(sprint, friction)
+        : airAccel(sprint);
+  velocity.x += (Math.cos(yaw) * dx - Math.sin(yaw) * dz) * accel;
+  velocity.z += (-Math.sin(yaw) * dx - Math.cos(yaw) * dz) * accel;
+  if (!flying) {
     // moveEntityWithHeading's land branch on a ladder: motion clamped to 0.15, sneaking holds on.
     if (!inWater && !lava && isOnLadder(world, position.x, position.y, position.z)) {
       ladderClamp(velocity, sneak);
       fallDistance = 0;
     }
   }
+  // EntityPlayer.moveEntityWithHeading keeps motionY from before the move when flying.
+  const flyY = velocity.y;
   let landed = false;
   collidedH = false;
   // Entity.moveEntity's sneak edge loop shortens this tick's x/z move, not the motion.
@@ -1716,35 +1725,34 @@ function movementTick() {
     landed || collides(world, position.x, position.y - 0.001, position.z);
   webContact(world, playerBox(), motion, flying);
   motion.endMove();
-  if (!flying) {
-    // Pushing into a wall while on a ladder climbs at 0.2 a tick.
-    if (!inWater && !lava && collidedH && isOnLadder(world, position.x, position.y, position.z)) velocity.y = LADDER_CLIMB;
-    velocity.y = lava
+  // Pushing into a wall while on a ladder climbs at 0.2 a tick.
+  if (!flying && !inWater && !lava && collidedH && isOnLadder(world, position.x, position.y, position.z)) velocity.y = LADDER_CLIMB;
+  // Water: motion * 0.8, then motionY - 0.02; lava: * 0.5, then - 0.02; land and flight: gravity
+  // 0.08 and drag 0.98 on motionY, friction on x/z (flight then sets motionY = before * 0.6).
+  velocity.y = flying
+    ? flyY * FLY_Y_DRAG
+    : lava
       ? velocity.y * 0.5 - 0.02
       : inWater
-      ? (velocity.y - 0.02) * 0.8
-      : fallingVelocity(velocity.y);
-    const f = lava
-      ? 0.5
-      : inWater
-      ? 0.8
-      : grounded
-        ? Math.fround(slip * Math.fround(0.91))
-        : Math.fround(0.91);
-    velocity.x *= f;
-    velocity.z *= f;
-    if (Math.abs(velocity.x) < 0.005) velocity.x = 0;
-    if (Math.abs(velocity.z) < 0.005) velocity.z = 0;
-    if (lava) {
-      // Step out of lava: pushed up 0.3 when blocked and the spot 0.6 higher is
-      // clear of blocks and liquid (Entity.isOffsetPositionInLiquid).
-      if (collidedH) {
-        const dy = velocity.y + 0.6 - (position.y - oldPosition.y), moved = playerBox(dy);
-        moved[0] += velocity.x; moved[3] += velocity.x; moved[2] += velocity.z; moved[5] += velocity.z;
-        const clear = !collides(world, position.x + velocity.x, position.y + dy, position.z + velocity.z) && !liquidInBox(world, moved, 10) && !liquidInBox(world, moved, 42);
-        if (clear) velocity.y = 0.30000001192092896;
-      }
-    }
+        ? velocity.y * 0.800000011920929 - 0.02
+        : fallingVelocity(velocity.y);
+  const drag = lava ? 0.5 : inWater && !flying ? 0.800000011920929 : friction;
+  velocity.x *= drag;
+  velocity.z *= drag;
+  if (Math.abs(velocity.x) < 0.005) velocity.x = 0;
+  if (Math.abs(velocity.z) < 0.005) velocity.z = 0;
+  if (swimming && collidedH) {
+    // Step out of water or lava: pushed up 0.3 when blocked and the spot 0.6 higher is
+    // clear of blocks and liquid (Entity.isOffsetPositionInLiquid).
+    const dy = velocity.y + 0.6 - (position.y - oldPosition.y), moved = playerBox(dy);
+    moved[0] += velocity.x; moved[3] += velocity.x; moved[2] += velocity.z; moved[5] += velocity.z;
+    const clear = !collides(world, position.x + velocity.x, position.y + dy, position.z + velocity.z) && !liquidInBox(world, moved, 10) && !liquidInBox(world, moved, 42);
+    if (clear) velocity.y = 0.30000001192092896;
+  }
+  // EntityPlayerSP.onLivingUpdate: touching the ground ends Creative flight.
+  if (flying && grounded) {
+    flying = false;
+    toast("Back to walking");
   }
   if (position.y < 1 || position.y > HEIGHT + 40) {
     position.copy(new THREE.Vector3(...Object.values(world.spawn())));
@@ -1823,8 +1831,8 @@ function movementTick() {
     }
   }
   if (survival.health <= 0 && !survival.creative) die();
-  // EntityRenderer.updateFovModifierHand: once a tick, toward the bow term of getFOVMultiplier.
-  easeFov(bowFovState, eating?.bow ? bowFov(eating.ticks) : 1);
+  // EntityRenderer.updateFovModifierHand: once a tick, toward getFOVMultiplier (flight, sprint, bow).
+  easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, bow: eating?.bow ? bowFov(eating.ticks) : 1 }));
   tickMining();
   reportBrokenTool();
 }
@@ -1939,7 +1947,9 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (screen !== "playing") return;
-  if (["Space", "Tab", "KeyW", "KeyA", "KeyS", "KeyD", "F3", "F5"].includes(e.code))
+  // Ctrl is the 1.7.10 sprint key, so Ctrl with a movement key must not reach the browser
+  // (Ctrl+W still closes the tab in some browsers; double-tapping W sprints as well).
+  if (["Space", "Tab", "KeyW", "KeyA", "KeyS", "KeyD", "F3", "F5"].includes(e.code) || (e.ctrlKey && !e.metaKey && /^Key[A-Z]$|^Space$/.test(e.code)))
     e.preventDefault();
   if (e.code === "F5" && !e.repeat) thirdPersonView = nextView(thirdPersonView);
   if (e.code === "KeyE" && !e.repeat) {
@@ -1963,16 +1973,6 @@ window.addEventListener("keydown", (e) => {
     +e.code.slice(5) <= 9
   )
     selectSlot(+e.code.slice(5) - 1);
-  if (e.code === "Space" && !e.repeat && survival.creative) {
-    if (performance.now() - lastJump < 280) {
-      flying = !flying;
-      velocity.y = 0;
-      lastJump = 0;
-      toast(
-        flying ? "Flight enabled · Space up · Shift down" : "Back to walking",
-      );
-    } else lastJump = performance.now();
-  }
   keys.add(e.code);
 });
 window.addEventListener("keyup", (e) => {
@@ -2222,7 +2222,7 @@ function animate(now) {
   if(xpRenderer)xpRenderer.update(xpOrbs.orbs,partial);
   scene.dropPartial = partial;
   scene.setShadows(screen === "home" ? [] : shadowCasters(scene.dropPartial), { x: position.x, y: position.y + PHYSICS.eye, z: position.z });
-  // EntityRenderer.getFOVModifier multiplies the field of view by the eased bow term.
+  // EntityRenderer.getFOVModifier multiplies the field of view by the eased modifier.
   const fov = options.fov * (bowFovState.prev + (bowFovState.cur - bowFovState.prev) * partial);
   if (Math.abs(scene.camera.fov - fov) > 1e-9) {
     scene.camera.fov = fov;
@@ -2281,7 +2281,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; } };
+    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; } };
   scene.preview(0);
   scene.render(0);
   renderWorlds();
