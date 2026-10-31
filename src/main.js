@@ -20,6 +20,7 @@ import {
   YELLOW_FLOWER,
   isFlower,
   SNOW_LAYER,
+  SAPLING,
   ICE,
   WATER,
   slipperiness,
@@ -29,6 +30,7 @@ import {
 } from "./world.js";
 import { snowCanStay, snowFalls, snowballsFor, iceLeavesWater, stackedSnowMeta } from "./snow.js";
 import { flowerCanStay, growGrass, JRandom } from "./flowers.js";
+import { Trees, saplingCanStay, leafDrops, placedLeavesMeta } from "./trees.js";
 import { VoxelScene } from "./scene.js";
 import { SoundBank, blockSound } from "./audio.js";
 import { Weather, isWet, canLightningStrikeAt, struckByLightning, strikeBox, overlaps, entityBox } from "./weather.js";
@@ -122,7 +124,7 @@ let screen = "home",
   lastJump = 0;
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer;
-let weather = new Weather();
+let weather = new Weather(), trees;
 let sounds,
   firstPerson,
   mobs,
@@ -246,7 +248,7 @@ function makeRecord(p) {
     seed: String(p.seed).slice(0, 80),
     biome: p.biome || "meadow",
     mode: p.mode === "survival" ? "survival" : "creative",
-    generationVersion: 6,
+    generationVersion: 7,
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -572,20 +574,28 @@ function launch(record) {
     // Block light for canBlockFreeze/canSnowAt/melting is the scene's light volume.
     world.blockLight = (x, y, z) => scene.light.blockAt(x, y, z);
     // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
-    fluids = new Fluids(world, { fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : cropDrops(b); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
+    fluids = new Fluids(world, { fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : b === SAPLING ? [{ id: b, count: 1, damage: world.getMeta(x, y, z) & 7 }] : cropDrops(b); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
     fluids.wake();
     watchFlowers();
     // BlockFire and the static-lava ignition roll: scheduled and random ticks (fire.js). Fire reaches the
     // weather through a closure because `weather` is replaced below.
     fire = new Fire(world, { weather: () => weather, stillLava: (x, y, z) => !fluids.pending.has(fluids.key(x, y, z, LAVA)) });
     fire.watch();
+    // Saplings, tree growth and leaf decay (trees.js); it wraps world.onChange after the flowers do.
+    trees = new Trees(world, {
+      light: (x, y, z) => (scene.light ? scene.light.level(x, y, z, scene.subtracted) : 15),
+      apply: (changes) => { scene.updateBlocks(changes); saved = false; },
+      drop: (stacks, x, y, z) => items.dropBlock(stacks.map((d) => makeStack(d.id, d.count, d.damage || 0)), x, y, z),
+    }).watch();
     farming=new Farming(world,record.farms);
     // Rain moistens farmland (BlockFarmland.updateTick: canLightningStrikeAt(x, y + 1, z)).
     farming.rained = (x, y, z) => canLightningStrikeAt(weather, world, x, y + 1, z);
     weather = new Weather().restore(record.weather);
     weather.apply = applyWeatherEdit;
     fire.sharedRandomTicks = true;
-    weather.blockTick = (x, y, z, b) => fire.randomTick(x, y, z, b);
+    // One WorldServer random-tick stream: fire and still lava (fire.js), saplings and leaves (trees.js),
+    // then snow and ice melting in Weather.tickChunk itself.
+    weather.blockTick = (x, y, z, b) => fire.randomTick(x, y, z, b) || trees.randomTick(x, y, z, b);
     scene.weather = weather;
     // EntityLightningBolt's fire, and the ticks of the fires saved with the world.
     weather.fire = fire.strikes;
@@ -1316,7 +1326,8 @@ function edit(place = false) {
     if(id===DYE&&survival.held?.damage===15){
       if(!survival.creative&&!survival.count(id))return;
       let used=false;
-      if(block===1){for(const q of growGrass(world,FLOWERS,boneRandom,world.biome,x,y,z))scene.updateBlock(q[0],q[2],q[1]);used=true;}
+      if(block===SAPLING){trees.boneMeal(x,y,z);used=true;}
+      else if(block===1){for(const q of growGrass(world,FLOWERS,boneRandom,world.biome,x,y,z))scene.updateBlock(q[0],q[2],q[1]);used=true;}
       else if(farming.fertilize(x,y,z)){applyFarmUpdates(farming.drain());used=true;}
       if(used){if(!survival.creative)survival.inventory.decr(survival.inventory.current,1);renderHotbar();sounds.play('dig.grass',{volume:.4});saved=false;}
       return;
@@ -1386,10 +1397,12 @@ function edit(place = false) {
     if (id === CHEST && !canPlaceChest(world, ...p)) return;
     // BlockBush.canPlaceBlockAt: grass, dirt or farmland below, and enough light.
     if (isFlower(id) && !flowerCanStay(world, FLOWERS, ...p)) return;
+    // BlockSapling.canPlaceBlockAt (BlockBush): grass, dirt or farmland below; BlockBush.canBlockStay has no light test in 1.7.10.
+    if (id === SAPLING && !saplingCanStay(world, ...p)) return;
     // BlockSnow.canPlaceBlockAt: never on ice, otherwise leaves, a full layer or an opaque cube.
     if (id === SNOW_LAYER && !snowCanStay(world, ...p)) return;
     const old = world.get(...p), oldMeta = world.getMeta(...p),
-      meta = id === WOOL || id === RED_FLOWER ? survival.held?.damage || 0 : 0;
+      meta = id === WOOL || id === RED_FLOWER ? survival.held?.damage || 0 : id === 5 ? placedLeavesMeta() : 0;
     world.set(...p, id, false, meta);
     if (collides(world, ...position.toArray())) {
       world.set(...p, old, false, oldMeta);
@@ -1448,11 +1461,10 @@ function breakBlock(p, creative = false) {
   const harvest = creative || survival.mining(block, tool).harvest;
   let drop = harvest ? (m.drop ?? block) : 0,
     count = block === SNOW_LAYER ? snowballsFor(world.getMeta(...p)) : m.count || 1;
-  if (block === 5 && Math.random() < 0.005) drop = 200;
   const shearing=ITEMS[tool]?.kind==='shears'&&survival.count(tool)>0;
   if(shearing&&(block===5||block===39)){drop=block;count=1;}
   if(block===25&&Math.random()<.1){drop=313;count=1;}
-  const crops=shearing&&block===39?null:cropDrops(block);const drops=crops??(drop?[{id:drop,count}]:[]);
+  const crops=shearing&&block===39?null:cropDrops(block);const leaves=block===5&&harvest&&!creative&&!shearing?leafDrops(trees.random,world.getMeta(...p)).map((d)=>({...d,count:1})):null;const drops=leaves??crops??(drop?[{id:drop,count}]:[]);
   const f = survival.furnaces[key],
     chest = survival.chests[key],
     meta = world.getMeta(...p);
@@ -1473,7 +1485,7 @@ function breakBlock(p, creative = false) {
     delete survival.chests[key];
   }
   if (!creative) {
-    items.dropBlock(drops.map((d) => makeStack(d.id, d.count, d.id === block && (block === WOOL || block === RED_FLOWER) ? meta : 0)), ...p);
+    items.dropBlock(drops.map((d) => makeStack(d.id, d.count, d.damage ?? (d.id === block && (block === WOOL || block === RED_FLOWER) ? meta : 0))), ...p);
     if(drop)xpOrbs.spawn(oreExperience(block),at);
     survival.exhaust(0.025);
     survival.wearBlock(block,tool);

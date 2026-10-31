@@ -223,9 +223,9 @@ test("existing presets generate exactly as before at version 6; the snowy preset
       assert.deepEqual(now.data, old.data, `${seed} ${biome}`);
       assert.deepEqual(now.meta, old.meta, `${seed} ${biome}`);
     }
-  assert.equal(new World("x").generationVersion, 6);
+  assert.equal(new World("x").generationVersion, 7); // 7 regrows trees (trees.test.js); 6 is pinned above
   for (const seed of ["Minecraft", "d"]) {
-    const a = new World(seed, "snowy"), b = new World(seed, "snowy"), old = new World(seed, "snowy", 5);
+    const a = new World(seed, "snowy", 6), b = new World(seed, "snowy", 6), old = new World(seed, "snowy", 5);
     assert.deepEqual(a.data, b.data);
     assert.equal(a.edits.size, 0); // generated blocks are not saved edits
     let ice = 0, snow = 0, grass = 0, change = 0;
@@ -265,7 +265,7 @@ test("snow layers: stacking, drops, selection ray and precipitation", () => {
   assert.equal(snowballsFor(7), 8);
   assert.equal(stopsPrecipitation(SNOW_LAYER), false);
   assert.equal(stopsPrecipitation(ICE), true);
-  const w = new World("snowray", "snowy");
+  const w = new World("snowray", "snowy", 6);
   w.set(50, 30, 50, 3, false);
   w.set(50, 31, 50, SNOW_LAYER, false, 1); // selection height 2/8
   const down = (y) => raycast(w, { x: 50.5, y, z: 50.5 }, { x: 0, y: -1, z: 0 }, 5);

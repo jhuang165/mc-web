@@ -1,6 +1,7 @@
 import { decorateFlowers } from "./flowers.js";
 import { generateLakes, generateSprings } from "./lakes.js";
 import { populateSnow } from "./snow.js";
+import { generateTreeAt } from "./trees.js";
 export const SIZE = 128,
   HEIGHT = 64,
   SEA = 16;
@@ -53,9 +54,11 @@ export const BLOCKS = [
   // through the constants below.
   {name:'Snow',color:'#f4fafa'},
   {name:'Ice',color:'#8cb4fe'},
+  // Id 48 is BlockSapling (oak only: metadata 0, bit 8 = growth stage marked), see trees.js.
+  {name:'Oak sapling',color:'#5f8f2f'},
 ];
 export const WATER=10,LAVA=42;
-export const SNOW_LAYER=46,ICE=47;
+export const SNOW_LAYER=46,ICE=47,SAPLING=48;
 export const isLiquid=b=>b===WATER||b===LAVA;
 export const YELLOW_FLOWER = BLOCKS.findIndex((b) => b.name === 'Dandelion');
 export const RED_FLOWER = BLOCKS.findIndex((b) => b.name === 'Red flower');
@@ -125,13 +128,13 @@ function noise(x, z, seed) {
   return a * (1 - fz) + b * fz;
 }
 export const isCrop=b=>b>=31&&b<=38;
-export const isPlant=b=>isCrop(b)||b===39||isFlower(b);
+export const isPlant=b=>isCrop(b)||b===39||isFlower(b)||b===SAPLING;
 export const blockHeight=b=>b===29||b===30?15/16:b===41?.875:b===SNOW_LAYER?.125:1;
 // Blocks with Block.tickRandomly: they count towards a section's random-tick refcount
 // (ExtendedBlockStorage.getNeedsRandomTick), which WorldServer reads to pick sections.
-// Grass, leaves, farmland, crops, lava, snow layer and ice here; snow and ice are the ones
-// that act on a random tick in this port (snow.js).
-export const ticksRandomly=b=>b===1||b===5||b===29||b===30||(b>=31&&b<=38)||b===LAVA||b===SNOW_LAYER||b===ICE||b===FIRE;
+// Grass, leaves, farmland, crops, lava, snow layer, ice and saplings here; snow and ice act on a
+// random tick in snow.js/weather.js, fire and still lava in fire.js, leaves (decay) and saplings (growth) in trees.js.
+export const ticksRandomly=b=>b===1||b===5||b===29||b===30||(b>=31&&b<=38)||b===LAVA||b===SNOW_LAYER||b===ICE||b===FIRE||b===SAPLING;
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
@@ -152,7 +155,7 @@ export function blockBounds(world,x,y,z){
   return[c(-1,0)?0:1/16,0,c(0,-1)?0:1/16,c(1,0)?1:15/16,.875,c(0,1)?1:15/16];
 }
 export class World {
-  constructor(seed = "Overworld", biome = "meadow", generationVersion = 6) {
+  constructor(seed = "Overworld", biome = "meadow", generationVersion = 7) {
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
@@ -305,6 +308,12 @@ export class World {
           (lakes && this.get(x, h, z) !== 1)
         )
           continue;
+        // Version 7 grows the original WorldGenTrees oak (trees.js) from a per-tree Random at the
+        // same positions; older versions keep the hand-made shape below.
+        if (this.generationVersion >= 7) {
+          generateTreeAt(this, x, h + 1, z, hash(x, z, s + 51), hash(x, z, s + 52));
+          continue;
+        }
         const trunk = 4 + Math.floor(hash(x, z, s + 51) * 3);
         for (let y = h + 1; y <= h + trunk; y++) this.set(x, y, z, 4, false);
         for (let dy = -2; dy <= 1; dy++)
