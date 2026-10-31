@@ -1,6 +1,7 @@
-import { isFlower, isCrop, LADDER } from "./world.js";
+import { isFlower, isCrop, LADDER, TNT } from "./world.js";
 export function blockSound(id) {
-  if ([1, 5, 39].includes(id)||isCrop(id)||isFlower(id)) return "grass";
+  // BlockTNT uses Block.soundTypeGrass.
+  if ([1, 5, 39, TNT].includes(id)||isCrop(id)||isFlower(id)) return "grass";
   if ([2, 24, 25,29,30].includes(id)) return "gravel";
   if (id === 6) return "sand";
   if ([4, 7, 13, 20, 21, LADDER].includes(id)) return "wood";

@@ -1,14 +1,33 @@
 import * as THREE from "three";
 import { skinBox, pixelTexture } from "./first-person.js";
 import { limbAngles } from "./animation.js";
-import { entityMaterial } from "./light-material.js";
+import { entityMaterial, FOG_PARS } from "./light-material.js";
 import { ENTITY_TYPES, mobPose } from "./entities.js";
 import { FLEECE_COLORS } from "./sheep.js";
 import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
 import { heldItemMatrix } from "./player-renderer.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { spiderLegs } from "./spider.js";
+import { creeperFlash, creeperScale, creeperWhite, creeperPose, armorScroll } from "./creeper.js";
 const RAD = Math.PI / 180;
+// RenderCreeper's powered pass (bni.a(xz, I, F), pass 1): creeper_armor.png with the texture
+// matrix translated by (scroll, scroll), colour 0.5, lighting off, blended GL_ONE, GL_ONE.
+// three.js flips v, so the scroll runs down v here. GL_REPEAT is the fract().
+function armorMaterial(lighting, map) {
+  return new THREE.ShaderMaterial({
+    uniforms: { ...lighting.uniforms, map: { value: map }, scroll: { value: 0 } },
+    vertexShader: `varying vec2 vUv;varying float vFogDistance;void main(){vUv=uv;vec4 mv=modelViewMatrix*vec4(position,1.);vFogDistance=length(mv.xyz);gl_Position=projectionMatrix*mv;}`,
+    fragmentShader: `uniform sampler2D map;uniform float scroll;varying vec2 vUv;${FOG_PARS}
+void main(){vec4 t=texture2D(map,fract(vUv+vec2(scroll,-scroll)));if(t.a<=.1)discard;gl_FragColor=vec4(applyFog(t.rgb*.5),1.);}`,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+}
+// RendererLivingEntity.doRender: rotateCorpse, scale(-1, -1, 1), preRenderCallback, then
+// translate(0, -24 * 0.0625 - 0.0078125, 0): RenderCreeper's swell scale is taken about the
+// point 1.5078125 above the feet, so the swollen feet sink a little.
+const MODEL_ORIGIN = 24 / 16 + 1 / 128;
 export class MobRenderer {
   // `view` supplies the lightmap and world brightness (VoxelScene).
   constructor(scene, view) {
@@ -190,7 +209,51 @@ export class MobRenderer {
     this.scene.add(root);
     return { root, neck, limbs, materials: [skin], eyes, type: "spider" };
   }
+  // RenderCreeper (bni) with ModelCreeper (bhj, creeper.png 64 x 32): head (0, 0) 8 x 8 x 8 and
+  // body (16, 16) 8 x 12 x 4 on pivots (0, 4, 0), four 4 x 6 x 4 legs (0, 16) on pivots
+  // (-2|2, 16, 4|-4) in the model's d, e, f, g order. ModelCreeper(2.0F) is the powered shell:
+  // every box grown by 2 pixels each way with the same texture layout. (x, 24 - y, -z) / 16 as
+  // for the skeleton; ModelCreeper's legs end at y = 22, so 1.7.10 creepers stand 2 pixels up.
+  createCreeper() {
+    const root = new THREE.Group(), swell = new THREE.Group(), frame = new THREE.Group(), limbs = [], shell = [],
+      skin = entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/entity/creeper/creeper.png") }),
+      armor = armorMaterial(this.view.lighting, pixelTexture("/media/1.7.10/entity/creeper/creeper_armor.png"));
+    swell.position.y = MODEL_ORIGIN;
+    frame.position.y = 1 / 128 - MODEL_ORIGIN;
+    root.add(swell);
+    swell.add(frame);
+    const part = (parent, w, h, d, u, v, ox, oy, oz) => {
+      const geometry = skinBox(w, h, d, u, v, 64, 32), mesh = new THREE.Mesh(geometry, skin);
+      mesh.position.set((ox + w / 2) / 16, -(oy + h / 2) / 16, -(oz + d / 2) / 16);
+      parent.add(mesh);
+      const pass = new THREE.Mesh(geometry, armor);
+      pass.position.copy(mesh.position);
+      pass.scale.set((w + 4) / w, (h + 4) / h, (d + 4) / d);
+      pass.renderOrder = 1;
+      pass.visible = false;
+      parent.add(pass);
+      shell.push(pass);
+    };
+    const pivot = (x, y, z) => {
+      const g = new THREE.Group();
+      g.position.set(x / 16, (24 - y) / 16, -z / 16);
+      frame.add(g);
+      return g;
+    };
+    const neck = pivot(0, 4, 0);
+    neck.rotation.order = "YXZ";
+    part(neck, 8, 8, 8, 0, 0, -4, -8, -4);
+    part(pivot(0, 4, 0), 8, 12, 4, 16, 16, -4, 0, -2);
+    for (const [x, z] of [[-2, 4], [2, 4], [-2, -4], [2, -4]]) {
+      const g = pivot(x, 16, z);
+      part(g, 4, 6, 4, 0, 16, -2, 0, -2);
+      limbs.push(g);
+    }
+    this.scene.add(root);
+    return { root, neck, limbs, materials: [skin], armor, shell, swell, type: "creeper" };
+  }
   create(e) {
+    if (e.type === "creeper") return this.createCreeper();
     if (e.type === "spider") return this.createSpider();
     if (e.type === "skeleton") return this.createSkeleton();
     if (e.type === "chicken") return this.createChicken();
@@ -315,6 +378,7 @@ export class MobRenderer {
         });
         for (const m of rig.materials) m.dispose();
         rig.eyes?.dispose();
+        rig.armor?.dispose();
         this.rigs.delete(id);
       }
     for (const e of entities) {
@@ -352,8 +416,10 @@ export class MobRenderer {
       // ageInTicks (ticksExisted + partial); the Java Y/Z angles flip sign here.
       const sway = mhSin(pose.age * 0.067) * 0.05, spread = mhCos(pose.age * 0.09) * 0.05 + 0.05;
       const spider = e.type === "spider" ? spiderLegs(pose.limbSwing, pose.limbSwingAmount) : null;
+      const creeper = e.type === "creeper" ? creeperPose(pose.limbSwing, pose.limbSwingAmount, pose.headYaw, pose.headPitch) : null;
       r.limbs.forEach((l, i) => {
         if (spider) { l.rotation.set(0, -spider[i][0], -spider[i][1]); return; }
+        if (creeper) { l.rotation.x = creeper[i + 1][0]; return; }
         if ((e.type === "zombie" || e.type === "skeleton") && i < 2) {
           const side = i === 0 ? 1 : -1;
           l.rotation.set(-Math.PI / 2 + side * sway, side * 0.1, -side * spread);
@@ -366,11 +432,27 @@ export class MobRenderer {
         packed = this.view.brightness(e.x, e.y + h * 0.66, e.z),
         level = Math.max(((packed >> 20) & 15) - (this.view.subtracted ?? 0), (packed >> 4) & 15),
         b = BRIGHTNESS[Math.max(0, level)];
+      // RenderCreeper: the swell scale (preRenderCallback), the powered shell, and the white
+      // getColorMultiplier pass drawn after the red one; the two blends fold into one mix.
+      let white = 0;
+      if (e.type === "creeper") {
+        const flash = creeperFlash(e, partial);
+        r.swell.scale.set(...creeperScale(flash));
+        white = creeperWhite(flash);
+        for (const m of r.shell) m.visible = !!e.powered;
+        r.armor.uniforms.scroll.value = armorScroll(pose.age);
+      }
       for (const m of r.materials) {
         m.setLight(packed);
-        if (e.hurt > 0 || e.death) m.uniforms.overlay.value.set(b, 0, 0, 0.4);
-        else if (e.burn) m.uniforms.overlay.value.set(b, b * 0.5, 0, 0.2);
-        else m.uniforms.overlay.value.set(0, 0, 0, 0);
+        const o = m.uniforms.overlay.value;
+        if (e.hurt > 0 || e.death) {
+          if (white > 0) {
+            const a = 1 - 0.6 * (1 - white), red = 0.4 * (1 - white);
+            o.set((red * b + white) / a, white / a, white / a, a);
+          } else o.set(b, 0, 0, 0.4);
+        } else if (white > 0) o.set(1, 1, 1, white);
+        else if (e.burn) o.set(b, b * 0.5, 0, 0.2);
+        else o.set(0, 0, 0, 0);
       }
     }
   }

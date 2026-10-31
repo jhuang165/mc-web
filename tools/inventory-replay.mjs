@@ -3,7 +3,7 @@
 import {Survival,ITEMS,burnTime,smeltingResult} from '../src/survival.js';
 import {makeStack,copyStack,ChestContainer,LargeChestInventory} from '../src/inventory.js';
 import {newChest,chestInventory} from '../src/chest.js';
-import {YELLOW_FLOWER,RED_FLOWER,DYE,SNOW_LAYER,ICE,SAPLING,WEB,LADDER} from '../src/world.js';
+import {YELLOW_FLOWER,RED_FLOWER,DYE,SNOW_LAYER,ICE,SAPLING,WEB,LADDER,TNT} from '../src/world.js';
 
 // Minecraft 1.7.10 numeric IDs (and metadata for subtypes) of this build's items.
 export const MC_IDS={
@@ -11,6 +11,7 @@ export const MC_IDS={
  256:110,257:102,258:106,259:126,260:200,263:301,264:303,265:302,266:304,267:114,268:112,269:108,270:100,271:104,272:113,273:109,274:101,275:105,276:115,277:111,278:103,279:107,
  280:300,283:119,284:118,285:116,286:117,290:120,291:121,292:122,293:123,294:124,295:309,296:305,297:201,318:313,319:202,320:203,332:312,344:316,288:317,365:318,366:319,336:306,337:307,340:314,352:311,359:125,261:127,262:320,287:321,363:204,364:205,367:206,334:315,'263:1':308,351:DYE,37:YELLOW_FLOWER,38:RED_FLOWER,
  375:326,391:322,392:323,393:324,394:325,325:340,326:341,327:342,335:343,
+ 46:TNT,289:330,
  298:400,299:401,300:402,301:403,302:404,303:405,304:406,305:407,306:408,307:409,308:410,309:411,310:416,311:417,312:418,313:419,314:412,315:413,316:414,317:415,
 };
 const GAME_IDS=Object.fromEntries(Object.entries(MC_IDS).map(([mc,id])=>[id,mc.split(':').map(Number)]));

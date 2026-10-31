@@ -3,7 +3,7 @@
 // (blm), RenderGlobal (bma) and Block (aji). The rain, thunder and lightning
 // terms are optional trailing arguments that default to 0 (clear sky); weather.js
 // supplies them. See public/research/lighting.md and weather.md.
-import { SIZE, HEIGHT, FIRE, WEB, LADDER, isPlant, normalCube, opaqueCube } from "./world.js";
+import { SIZE, HEIGHT, FIRE, WEB, LADDER, TNT, isPlant, normalCube, opaqueCube } from "./world.js";
 import { biomeFacts } from "./biomes.js";
 
 const f = Math.fround,
@@ -38,7 +38,9 @@ export function lightOpacity(b) {
 export const lightEmission = (b, lit = false) => (b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : 0);
 export const useNeighborBrightness = (b) => b === 20 || b === 9 || b === 41 || b === 29 || b === 30 || isPlant(b);
 const AO_SOLID = f(0.2);
-export const aoValue = (b) => (normalCube(b) ? AO_SOLID : 1);
+// Block.getAmbientOcclusionLightValue uses isBlockNormalCube (blocksMovement and a
+// normal render), which TNT passes although it is not isNormalCube.
+export const aoValue = (b) => (normalCube(b) || b === TNT ? AO_SOLID : 1);
 export const aoClear = (b) => b === 0 || b === 20 || b === FIRE || isPlant(b);
 
 // WorldProvider.calculateCelestialAngle.

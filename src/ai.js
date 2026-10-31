@@ -8,6 +8,7 @@
 import { PathNavigate } from "./pathfinding.js";
 import { raycast, HEIGHT } from "./world.js";
 import { BRIGHTNESS } from "./lighting.js";
+import { swellShould, swellState, creeperSafeTries } from "./creeper.js";
 const f = Math.fround;
 const GRASS = 1, TALL_GRASS = 39;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -612,6 +613,33 @@ class ArrowAttack extends Task {
     }
   }
 }
+// EntityAICreeperSwell (vi), mutex 1: a creeper already swelling, or with its attack target
+// within 3 blocks, stops its path and swells while the target stays in sight within 7
+// blocks (creeper.js swellShould / swellState). Being ahead of EntityAIAttackOnCollide on
+// a shared mutex bit, it keeps the creeper from ever striking.
+class CreeperSwell extends Task {
+  constructor(m) {
+    super();
+    this.m = m;
+    this.mutex = 1;
+    this.target = null;
+  }
+  shouldExecute() {
+    const m = this.m, t = m.attackTarget;
+    return swellShould(m.e.creeperState, t ? m.distSq(t) : null);
+  }
+  startExecuting() {
+    this.m.navigator.clearPathEntity();
+    this.target = this.m.attackTarget;
+  }
+  resetTask() {
+    this.target = null;
+  }
+  updateTask() {
+    const m = this.m, t = this.target;
+    m.e.creeperState = t ? swellState(m.distSq(t), m.canSee(t)) : -1;
+  }
+}
 // EntityAIRestrictSun (vf): in daylight the navigator avoids paths under open sky.
 class RestrictSun extends Task {
   constructor(m) {
@@ -772,6 +800,18 @@ export class Brain {
       this.targets.add(2, new NearestAttackable(this));
     } else if (e.type === "spider") {
       // EntitySpider uses legacy EntityCreature AI; EntityWorld.spiderThink drives it.
+    } else if (e.type === "creeper") {
+      // EntityCreeper (xz): swim 1, swell 2, (avoid ocelots 3: no ocelots), attack on
+      // collide 4 (1.0), wander 5 (0.8), watch the player 6, look idle 6; targets nearest
+      // visible player 1, hurt-by 2 (no call for help).
+      this.tasks.add(1, new Swim(this));
+      this.tasks.add(2, new CreeperSwell(this));
+      this.tasks.add(4, new AttackOnCollide(this, A.chase));
+      this.tasks.add(5, new Wander(this, A.wander));
+      this.tasks.add(6, new WatchClosest(this, 8));
+      this.tasks.add(6, new LookIdle(this));
+      this.targets.add(1, new NearestAttackable(this));
+      this.targets.add(2, new HurtByTarget(this, false));
     } else if (e.type === "skeleton") {
       // EntitySkeleton (yl): swim 1, restrict sun 2, flee sun 3, the bow's arrow attack 4
       // (setCombatTask, with a bow in hand), wander 5, watch the player 6, look idle 6;
@@ -803,6 +843,7 @@ export class Brain {
   }
   // sw.ax(): the safe-point tries of the PathFinder (the game plays on Normal).
   maxSafePointTries() {
+    if (this.e.type === "creeper") return creeperSafeTries(!!this.attackTarget, this.e.health);
     if (!this.attackTarget) return 3;
     const max = this.ai.types[this.e.type].health;
     let i = Math.trunc(f(this.e.health - f(max * f(0.33))));
@@ -903,7 +944,7 @@ export class Brain {
   // EntityMob (yg): 0.5 - brightness.
   getBlockPathWeight(x, y, z) {
     const w = this.ai.world;
-    if (this.e.type === "zombie" || this.e.type === "skeleton") return f(f(0.5) - this.ai.brightness(x, y, z));
+    if (this.e.type === "zombie" || this.e.type === "skeleton" || this.e.type === "creeper") return f(f(0.5) - this.ai.brightness(x, y, z));
     return w.get(x, y - 1, z) === GRASS ? f(10) : f(this.ai.brightness(x, y, z) - f(0.5));
   }
   // sw.bn(): the AI half of onLivingUpdate. Despawning and the idle age come first, then
@@ -928,7 +969,7 @@ export class Brain {
   despawnEntity() {
     const e = this.e, p = this.ai.player;
     if ((e.idle & 31) !== 31 || !p) return;
-    const d3 = this.distSq(p), can = e.type === "zombie" || e.type === "skeleton" || e.type === "spider";
+    const d3 = this.distSq(p), can = e.type === "zombie" || e.type === "skeleton" || e.type === "spider" || e.type === "creeper";
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
     if (d3 < 1024) e.idle = 0;

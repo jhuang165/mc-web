@@ -1,5 +1,6 @@
 import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE } from "./spider.js";
 import {CARROT,zombieRareDrop} from './crops.js';
+import { creeperFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from "./creeper.js";
 import { SIZE, HEIGHT, hash, slipperiness, blockBounds, WOOL, isLiquid, DYE } from "./world.js";
 import { isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
 import { ITEMS } from "./survival.js";
@@ -137,7 +138,14 @@ export const ENTITY_TYPES = {
   // arrow and bone drops are rolled in `kill`, so there is no `drop`; the task
   // speeds (ArrowAttack 1.0, FleeSun 1.0, Wander 1.0) are in the AI's brain.
   skeleton: { health: 20, width: 0.6, height: 1.8, movement: 0.25, ai: { wander: 1 }, drop: 0 },
+  // EntityCreeper (xz): 0.6 x 1.8, EntityMob's 20 health, speed 0.25; EntityAIAttackOnCollide
+  // 1.0 and EntityAIWander 0.8. `damage` is EntityMob's attackDamage 2, which the swell
+  // task (mutex 1, ahead of the attack) keeps from ever being dealt. Gunpowder comes from
+  // `kill` (creeper.js creeperDrops).
+  creeper: { health: 20, width: 0.6, height: 1.8, movement: 0.25, ai: { wander: 0.8, chase: 1 }, damage: 2, drop: 0 },
 };
+// EntityMob subclasses: no panic counter, 5 experience, despawning, 0.5 - brightness path weights.
+export const HOSTILE = new Set(["zombie", "skeleton", "spider", "creeper"]);
 // EntityMoveHelper.onUpdateMoveHelper (tv.c) hands EntityLiving.setAIMoveSpeed
 // (sw.i) `(float)(speed * movementSpeed)`; sw.i also sets moveForward to it. The
 // zombie's "Baby speed boost" (yq.br) is operation 1: base * (1 + 0.5).
@@ -152,7 +160,7 @@ const BREED_ITEM = { pig: CARROT, cow: 305, sheep: 305, chicken: 309 };
 export const EGG = 316, FEATHER = 317, RAW_CHICKEN = 318, COOKED_CHICKEN = 319;
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
 // its hurt sound, and the sheep uses mob.sheep.say for say, hurt and death alike.
-const hurtSound = (type) => (type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider") ? "mob." + type + ".say" : "mob." + type + ".hurt");
+const hurtSound = (type) => (type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
 // EntityChicken's death sound is its hurt sound as well.
 const deathSound = (type) => (type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
 // Chunk.canBlockSeeTheSky without a height map (weather.js `canSeeSky` is the real one
@@ -222,7 +230,8 @@ const shift = (bb, dx, dy, dz) => {
 // ground, retry with stepHeight (0.5) and keep that result unless it is no
 // farther. Sets the collided/onGround flags, zeroes motion on blocked axes and
 // runs Entity.updateFallState (sa.a(DZ)V); returns the fall distance on landing.
-export function moveEntity(world, e, w, h, dx, dy, dz) {
+// `step` is Entity.stepHeight (0 for EntityTNTPrimed, which never steps).
+export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT) {
   // Entity.width/height are floats (setSize), so the box edges use their float values.
   w = f(w);
   h = f(h);
@@ -235,7 +244,9 @@ export function moveEntity(world, e, w, h, dx, dy, dz) {
   if (e.sneaking && e.onGround)
     [dx, dz] = sneakEdge(dx, dz, (ox, oz) => !collisionBoxes(world, [e.x - w / 2 + ox, e.y - 1, e.z - w / 2 + oz, e.x + w / 2 + ox, e.y - 1 + h, e.z + w / 2 + oz]).length);
   const odx = dx, ody = dy, odz = dz, half = w / 2,
-    bb = [e.x - half, e.y, e.z - half, e.x + half, e.y + h, e.z + half],
+    // An entity that keeps its bounding box (`e.bb`, as Entity.boundingBox) moves that
+    // box itself, so its centre carries the same rounding as the original.
+    bb = e.bb ? e.bb.slice() : [e.x - half, e.y, e.z - half, e.x + half, e.y + h, e.z + half],
     start = bb.slice(),
     grow = (box, gx, gy, gz) => [gx < 0 ? box[0] + gx : box[0], gy < 0 ? box[1] + gy : box[1], gz < 0 ? box[2] + gz : box[2], gx > 0 ? box[3] + gx : box[3], gy > 0 ? box[4] + gy : box[4], gz > 0 ? box[5] + gz : box[5]];
   let list = collisionBoxes(world, grow(bb, dx, dy, dz));
@@ -246,18 +257,18 @@ export function moveEntity(world, e, w, h, dx, dy, dz) {
   shift(bb, dx, 0, 0);
   for (const o of list) dz = offsetZ(o, bb, dz);
   shift(bb, 0, 0, dz);
-  if (grounded && (odx !== dx || odz !== dz)) {
+  if (step > 0 && grounded && (odx !== dx || odz !== dz)) {
     const sx = dx, sy = dy, sz = dz, flat = bb.slice();
-    dx = odx; dy = STEP_HEIGHT; dz = odz;
+    dx = odx; dy = step; dz = odz;
     bb.splice(0, 6, ...start);
-    list = collisionBoxes(world, grow(bb, odx, STEP_HEIGHT, odz));
+    list = collisionBoxes(world, grow(bb, odx, step, odz));
     for (const o of list) dy = offsetY(o, bb, dy);
     shift(bb, 0, dy, 0);
     for (const o of list) dx = offsetX(o, bb, dx);
     shift(bb, dx, 0, 0);
     for (const o of list) dz = offsetZ(o, bb, dz);
     shift(bb, 0, 0, dz);
-    dy = -STEP_HEIGHT;
+    dy = -step;
     for (const o of list) dy = offsetY(o, bb, dy);
     shift(bb, 0, dy, 0);
     if (sx * sx + sz * sz >= dx * dx + dz * dz) {
@@ -268,6 +279,7 @@ export function moveEntity(world, e, w, h, dx, dy, dz) {
   e.x = (bb[0] + bb[3]) / 2;
   e.y = bb[1];
   e.z = (bb[2] + bb[5]) / 2;
+  if (e.bb) e.bb = bb;
   e.collidedH = odx !== dx || odz !== dz;
   e.onGround = ody !== dy && ody < 0;
   if (odx !== dx) e.vx = 0;
@@ -449,6 +461,9 @@ export class EntityWorld {
           // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
           ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
           ...(e.type === "spider" ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
+          // EntityCreeper.readEntityFromNBT: "powered" and "ignited" are saved, the swell
+          // state (datawatcher 16) and timeSinceIgnited start over.
+          ...(e.type === "creeper" ? { ...creeperFields(), powered: e.powered === true, ignited: e.ignited === true } : {}),
           wander: 0,
           hurt: 0,
           recentlyHit: 0,
@@ -497,6 +512,7 @@ export class EntityWorld {
       // EntityChicken (wg): timeUntilNextEgg = rand.nextInt(6000) + 6000 (wg.bu; not saved in
       // 1.7.10), wingRotation/destPos and their previous values 0, wingRotDelta (bt) 1.0.
       ...(type === "spider" ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
+      ...(type === "creeper" ? creeperFields() : {}),
       ...(type === "chicken" ? { eggTimer: Math.floor(random() * 6000) + 6000, wingRotation: 0, destPos: 0, oFlapSpeed: 0, oFlap: 0, wingRotDelta: 1 } : {}),
       // EntityZombie.func_110161_a adds a 0 to 0.05 "Random spawn bonus" to knockbackResistance.
       knockbackResistance: type === "zombie" ? random() * 0.05000000074505806 : 0,
@@ -569,7 +585,7 @@ export class EntityWorld {
     // reads it any more) and resets love; EntityLivingBase.attackEntityFrom sets the
     // revenge target (the attacker, always the player here), which EntityAIPanic and
     // EntityAIHurtByTarget read. The mob is not turned: panic walks it away.
-    if (e.type !== "zombie" && e.type !== "skeleton" && e.type !== "spider") e.flee = 60;
+    if (!HOSTILE.has(e.type)) e.flee = 60;
     e.love=0;e.mateTicks=0;
     // A mob shot by another mob's arrow has no player to take revenge on.
     if (byPlayer) { e.revenge = (e.age || 0) + 1; e.recentlyHit = 100; }
@@ -620,7 +636,7 @@ export class EntityWorld {
       sound: deathSound(e.type),
       position: e,
     });
-    if(e.growingAge>=0)this.events.push({xp:e.type==='zombie'||e.type==='skeleton'||e.type==='spider'?5:1+Math.floor(Math.random()*3),position:{x:e.x,y:e.y,z:e.z}});
+    if(e.growingAge>=0)this.events.push({xp:HOSTILE.has(e.type)?5:1+Math.floor(Math.random()*3),position:{x:e.x,y:e.y,z:e.z}});
     // EntitySheep.dropFewItems (wp.b): one wool of its colour unless sheared, young or old.
     if(e.type==='sheep'&&!e.sheared)this.events.push({drop:WOOL,count:1,damage:e.color,position:{x:e.x,y:e.y,z:e.z}});
     if(e.growingAge>=0&&ENTITY_TYPES[e.type].drop)this.events.push({
@@ -651,6 +667,11 @@ export class EntityWorld {
       for (const [drop, count] of [[STRING, drops.string], [SPIDER_EYE, drops.eye]])
         if (count) this.events.push({ drop, count, position: { x: e.x, y: e.y, z: e.z } });
     }
+    // EntityCreeper: EntityLiving.dropFewItems with gunpowder, rand.nextInt(3).
+    if (e.type === "creeper") {
+      const n = creeperDrops((k) => Math.floor(this.random() * k));
+      if (n) this.events.push({ drop: GUNPOWDER, count: n, position: { x: e.x, y: e.y, z: e.z } });
+    }
     if(e.type==='zombie'){const drop=zombieRareDrop(e.recentlyHit,n=>Math.floor(this.random()*n));if(drop)this.events.push({drop,count:1,position:{x:e.x,y:e.y,z:e.z}});}
     e.death = 1;
     if (e.eatTimer) e.eatTimer = 0;
@@ -659,6 +680,8 @@ export class EntityWorld {
   // (no jump boost), through attackEntityFrom without an attacker, so no knockback.
   fall(e, distance) {
     this.hazard(e, Math.ceil(f(distance - 3)));
+    // EntityCreeper.fall (xz.b(F)) then pushes the fuse on.
+    if (e.type === "creeper") creeperFall(e, distance);
   }
   // attackEntityFrom with a source that has no attacker (fall, fire, lava).
   hazard(e, points) {
@@ -837,6 +860,20 @@ export class EntityWorld {
         break;
       }
     }
+    // Creepers: the same night ring as the skeletons, with their own clock and cap.
+    this.creeperClock = (this.creeperClock || 0) + 1;
+    if (night && !survival.creative && this.creeperClock >= 250 && this.entities.filter((e) => e.type === "creeper").length < 3) {
+      this.creeperClock = 0;
+      for (let i = 0; i < 16; i++) {
+        const a = hash(i + 300, survival.time, this.world.numericSeed) * Math.PI * 2,
+          x = Math.floor(player.x + Math.sin(a) * 24), z = Math.floor(player.z + Math.cos(a) * 24);
+        if (x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
+        const y = this.world.surface(x, z), t = ENTITY_TYPES.creeper;
+        if (this.world.get(x, y - 1, z) !== 1 || actorCollides(this.world, x + 0.5, y, z + 0.5, t.width, t.height)) continue;
+        this.entities.push(this.create("creeper", x + 0.5, y, z + 0.5));
+        break;
+      }
+    }
     // A mob spawned during the loop (a baby) joins the next tick's updates, as World.spawnEntityInWorld queues it.
     for (const e of this.entities.slice()) {
       // World.updateEntityWithOptionalForce and EntityLivingBase.onEntityUpdate
@@ -859,6 +896,18 @@ export class EntityWorld {
         if (e.type === "chicken") this.chickenUpdate(e);
         this.swingLimbs(e);
         continue;
+      }
+      // EntityCreeper.onUpdate (xz.h) runs its fuse before EntityLivingBase.onUpdate. The
+      // explosion (mobGriefing on) is main.js's; the creeper is gone without drops.
+      if (e.type === "creeper") {
+        const out = creeperTick(e);
+        if (out.sound) this.events.push({ sound: out.sound.name, volume: out.sound.volume, pitch: out.sound.pitch, position: { x: e.x, y: e.y, z: e.z } });
+        if (out.explode) {
+          this.events.push({ explode: { ...out.explode, source: e } });
+          e.health = 0;
+          e.death = 20;
+          continue;
+        }
       }
       e.age++;
       if(e.recentlyHit>0)e.recentlyHit--;
@@ -913,7 +962,8 @@ export class EntityWorld {
       if (e.type === "chicken") this.chickenUpdate(e);
       this.turnBody(e);
       this.swingLimbs(e);
-      if (e.age % 160 === 0 && distance < 18)
+      // EntityCreeper has no getLivingSound.
+      if (e.age % 160 === 0 && distance < 18 && e.type !== "creeper")
         this.events.push({
           sound: "mob." + e.type + ".say",
           position: { x: e.x, y: e.y, z: e.z },

@@ -952,6 +952,56 @@
       "url": "/audio/1.7.10/mob/spider/step4.ogg",
       "sha1": "7d801582e08be973d1a41469d1b92916278d1e88",
       "bytes": 9326
+    },
+    "mob/creeper/death": {
+      "url": "/audio/1.7.10/mob/creeper/death.ogg",
+      "sha1": "fbc1b2c89c5c781e30d702b2885be3f485105869",
+      "bytes": 13005
+    },
+    "mob/creeper/say1": {
+      "url": "/audio/1.7.10/mob/creeper/say1.ogg",
+      "sha1": "74771428c2aa2acbd30638c6706867053bad64d3",
+      "bytes": 6647
+    },
+    "mob/creeper/say2": {
+      "url": "/audio/1.7.10/mob/creeper/say2.ogg",
+      "sha1": "c46c7d2a84749bfcbcf576aea0d66fd3deccba31",
+      "bytes": 6768
+    },
+    "mob/creeper/say3": {
+      "url": "/audio/1.7.10/mob/creeper/say3.ogg",
+      "sha1": "0979bf115d081d70a985f1cfcab1b9274d6be74e",
+      "bytes": 6787
+    },
+    "mob/creeper/say4": {
+      "url": "/audio/1.7.10/mob/creeper/say4.ogg",
+      "sha1": "85c860ea8c55984bf6cabb75354c78f3a603f98d",
+      "bytes": 7111
+    },
+    "random/explode1": {
+      "url": "/audio/1.7.10/random/explode1.ogg",
+      "sha1": "cd46e41023887558b134547e28327de6e7df189a",
+      "bytes": 19732
+    },
+    "random/explode2": {
+      "url": "/audio/1.7.10/random/explode2.ogg",
+      "sha1": "a116e396d95a0ee245000dd4cdcc333d38ea9e3b",
+      "bytes": 25246
+    },
+    "random/explode3": {
+      "url": "/audio/1.7.10/random/explode3.ogg",
+      "sha1": "a94a69e56568f5789cab05382cfd81f601189fd1",
+      "bytes": 25298
+    },
+    "random/explode4": {
+      "url": "/audio/1.7.10/random/explode4.ogg",
+      "sha1": "f259be40364341edcaf88e339bc24ab01e49845a",
+      "bytes": 25090
+    },
+    "random/fuse": {
+      "url": "/audio/1.7.10/random/fuse.ogg",
+      "sha1": "a92ba2b8f6abc41aa8d679ad808a81d0aafa04b2",
+      "bytes": 29271
     }
   },
   "events": {
@@ -1607,6 +1657,42 @@
         "mob/spider/step2",
         "mob/spider/step3",
         "mob/spider/step4"
+      ]
+    },
+    "mob.creeper.death": {
+      "category": "hostile",
+      "sounds": [
+        "mob/creeper/death"
+      ]
+    },
+    "mob.creeper.say": {
+      "category": "hostile",
+      "sounds": [
+        "mob/creeper/say1",
+        "mob/creeper/say2",
+        "mob/creeper/say3",
+        "mob/creeper/say4"
+      ]
+    },
+    "random.explode": {
+      "category": "block",
+      "sounds": [
+        "random/explode1",
+        "random/explode2",
+        "random/explode3",
+        "random/explode4"
+      ]
+    },
+    "game.tnt.primed": {
+      "category": "block",
+      "sounds": [
+        "random/fuse"
+      ]
+    },
+    "creeper.primed": {
+      "category": "hostile",
+      "sounds": [
+        "random/fuse"
       ]
     }
   }

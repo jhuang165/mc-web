@@ -62,10 +62,15 @@ export const BLOCKS = [
   {name:'Cobweb',color:'#dedede'},
   // BlockLadder (original id 65); metadata 2-5 is the wall it hangs on (ladders.js).
   {name:'Ladder',color:'#9b7d4a'},
+  // 53 and 54 are reserved for cactus and sugar cane (work/plants branch).
+  {name:'Reserved 53',color:'#000000',hidden:true,reserved:true},
+  {name:'Reserved 54',color:'#000000',hidden:true,reserved:true},
+  // BlockTNT (original id 46); primed TNT and explosions are in explosion.js.
+  {name:'TNT',color:'#db441a'},
 ];
 export const WATER=10,LAVA=42;
 export const SNOW_LAYER=46,ICE=47,SAPLING=48;
-export const CARROTS=49,POTATOES=50,WEB=51,LADDER=52;
+export const CARROTS=49,POTATOES=50,WEB=51,LADDER=52,TNT=55;
 export const isLiquid=b=>b===WATER||b===LAVA;
 export const YELLOW_FLOWER = BLOCKS.findIndex((b) => b.name === 'Dandelion');
 export const RED_FLOWER = BLOCKS.findIndex((b) => b.name === 'Red flower');
@@ -150,7 +155,9 @@ export const ticksRandomly=b=>b===1||b===5||b===29||b===30||isCrop(b)||b===LAVA|
 // while its fancy-graphics flag is still unset in the Block constructor.
 const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER]);
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
-export const normalCube=b=>opaqueCube(b)&&b!==5;
+// Block.isNormalCube: Material.tnt is translucent (isOpaque false), so TNT is an opaque
+// cube that is not a normal cube (no torches/ladders/fire tops on it).
+export const normalCube=b=>opaqueCube(b)&&b!==5&&b!==TNT;
 // setBlockBoundsBasedOnState: chests are inset by 1/16 except towards a partner.
 // A snow layer's collision box is meta * 1/8 tall (BlockSnow.getCollisionBoundingBoxFromPool: meta 0
 // is flat and has none); its selection box is (meta + 1) / 8 (snowSelectionHeight).
