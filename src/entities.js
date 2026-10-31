@@ -632,7 +632,7 @@ export class EntityWorld {
   // lava (handleLavaMovement) deals 4 (lava), sets fire for 15 s (counter 300) and
   // halves the fall distance. EntityAIPanic keeps animals running while they burn.
   burn(e, t) {
-    if (e.inWater) e.fire = 0;
+    if (e.inWater || this.wet?.(e, t.height)) e.fire = 0;
     if (e.fire > 0) {
       if (e.fire % 20 === 0) this.hazard(e, 1);
       e.fire--;
@@ -773,7 +773,7 @@ export class EntityWorld {
       // EntityLivingBase.onEntityUpdate: the revenge target lapses after 100 ticks.
       if (e.revenge && e.age + 1 - e.revenge > 100) e.revenge = 0;
       const distance = Math.hypot(e.x - player.x, e.z - player.z);
-      if (e.type === "zombie" && !night) {
+      if (e.type === "zombie" && !night && !this.wet?.(e, t.height)) {
         let sky = true;
         for (let y = Math.floor(e.y + t.height); y < HEIGHT; y++)
           if (this.world.solid(Math.floor(e.x), y, Math.floor(e.z))) {

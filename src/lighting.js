@@ -1,7 +1,8 @@
 // Minecraft Java 1.7.10 light rules, decoded with javap from WorldProvider
 // (aqo), World (ahb), BiomeGenBase (ahu), EntityRenderer (blt), RenderBlocks
-// (blm), RenderGlobal (bma) and Block (aji). Weather terms are omitted because
-// this build has no rain or thunder. See public/research/lighting.md.
+// (blm), RenderGlobal (bma) and Block (aji). The rain, thunder and lightning
+// terms are optional trailing arguments that default to 0 (clear sky); weather.js
+// supplies them. See public/research/lighting.md and weather.md.
 import { SIZE, HEIGHT, isPlant, normalCube, opaqueCube } from "./world.js";
 
 const f = Math.fround,
@@ -47,14 +48,22 @@ export function celestialAngle(ticks, partial = 0) {
   a = f(1 - f((Math.cos(a * Math.PI) + 1) / 2));
   return f(g + f(f(a - g) / 3));
 }
+// The rain and thunder dimming shared by getSunBrightness and
+// calculateSkylightSubtracted: `rain` is getRainStrength and `thunder`
+// getWeightedThunderStrength; each takes up to 5/16 of the light.
+const dim = (s, rain, thunder) => {
+  s = f(s * (1 - f(rain * 5) / 16));
+  return f(s * (1 - f(thunder * 5) / 16));
+};
 // World.getSunBrightness (func_72971_b), used by the lightmap.
-export function sunBrightness(angle) {
-  const s = f(1 - clamp01(f(1 - f(f(cycle(angle) * 2) + 0.2))));
-  return f(f(s * 0.8) + 0.2);
+export function sunBrightness(angle, rain = 0, thunder = 0) {
+  const s = dim(f(1 - clamp01(f(1 - f(f(cycle(angle) * 2) + f(0.2))))), rain, thunder);
+  return f(f(s * f(0.8)) + f(0.2));
 }
-// World.calculateSkylightSubtracted: 0 at noon, 11 at midnight.
-export function skylightSubtracted(angle) {
-  const s = f(1 - f(1 - clamp01(f(1 - f(f(cycle(angle) * 2) + 0.5)))));
+// World.calculateSkylightSubtracted: 0 at noon, 11 at midnight; 3 in rain at
+// noon and 5 in a thunderstorm.
+export function skylightSubtracted(angle, rain = 0, thunder = 0) {
+  const s = f(1 - dim(f(1 - clamp01(f(1 - f(f(cycle(angle) * 2) + 0.5)))), rain, thunder));
   return Math.trunc(f(s * 11));
 }
 // World.getStarBrightness (func_72880_h).
@@ -81,10 +90,25 @@ export function skyColorByTemp(temperature) {
 }
 // BiomeGenPlains is 0.8; BiomeGenHills (this build's alpine preset) is 0.2.
 export const biomeTemperature = (biome) => (biome === "alpine" ? f(0.2) : f(0.8));
-// World.getSkyColor.
-export function skyColor(temperature, angle) {
+// Pulls a colour toward its grey: grey = (0.3 r + 0.59 g + 0.11 b) * shade, with
+// k = 1 - strength * keep (World.getSkyColor and getCloudColour).
+const toGrey = (c, shade, strength, keep) => {
+  const g = f(f(f(f(c[0] * f(0.3)) + f(c[1] * f(0.59))) + f(c[2] * f(0.11))) * shade),
+    k = f(1 - f(strength * keep));
+  return c.map((v) => f(f(v * k) + f(g * f(1 - k))));
+};
+// World.getSkyColor. `lightning` is World.lastLightningBolt (a tick count) and
+// `partial` the frame fraction it is eased with.
+export function skyColor(temperature, angle, rain = 0, thunder = 0, lightning = 0, partial = 0) {
   const b = clamp01(f(f(cycle(angle) * 2) + 0.5));
-  return skyColorByTemp(temperature).map((c) => f(f(c / 255) * b));
+  let c = skyColorByTemp(temperature).map((v) => f(f(v / 255) * b));
+  if (rain > 0) c = toGrey(c, f(0.6), rain, f(0.75));
+  if (thunder > 0) c = toGrey(c, f(0.2), thunder, f(0.75));
+  if (lightning > 0) {
+    const l = f(Math.min(1, f(lightning - partial)) * f(0.45));
+    c = [f(f(c[0] * f(1 - l)) + f(f(0.8) * l)), f(f(c[1] * f(1 - l)) + f(f(0.8) * l)), f(f(c[2] * f(1 - l)) + l)];
+  }
+  return c;
 }
 // WorldProvider.getFogColor.
 export function providerFogColor(angle) {
@@ -100,16 +124,21 @@ export function sunriseColors(angle) {
   a = f(a * a);
   return [f(f(t * f(0.3)) + f(0.7)), f(f(f(t * t) * f(0.7)) + f(0.2)), f(0.2), a];
 }
-// World.getCloudColour.
-export function cloudColor(angle) {
+// World.getCloudColour: white clouds, greyed by rain (0.95) before and by
+// thunder (0.95) after the day factor.
+export function cloudColor(angle, rain = 0, thunder = 0) {
   const b = clamp01(f(f(cycle(angle) * 2) + 0.5));
-  return [f(f(b * f(0.9)) + f(0.1)), f(f(b * f(0.9)) + f(0.1)), f(f(b * f(0.85)) + f(0.15))];
+  let c = [1, 1, 1];
+  if (rain > 0) c = toGrey(c, f(0.6), rain, f(0.95));
+  c = [f(c[0] * f(f(b * f(0.9)) + f(0.1))), f(c[1] * f(f(b * f(0.9)) + f(0.1))), f(c[2] * f(f(b * f(0.85)) + f(0.15)))];
+  if (thunder > 0) c = toGrey(c, f(0.2), thunder, f(0.95));
+  return c;
 }
 // EntityRenderer.updateFogColor. `look` is the view vector, `chunks` the render
 // distance in chunks and `brightness` the smoothed fogColor2/fogColor1 value.
-export function fogColor({ angle, temperature, look, chunks, brightness = 1, underwater = false, lava = false }) {
+export function fogColor({ angle, temperature, look, chunks, brightness = 1, underwater = false, lava = false, rain = 0, thunder = 0, lightning = 0, partial = 0 }) {
   const d = f(1 - f(Math.pow(f(0.25 + f(f(0.75 * chunks) / 16)), 0.25))),
-    sky = skyColor(temperature, angle);
+    sky = skyColor(temperature, angle, rain, thunder, lightning, partial);
   let fog = providerFogColor(angle);
   if (chunks >= 4) {
     const dir = mhSin(f(f(angle * PI_F) * 2)) > 0 ? -1 : 1;
@@ -121,6 +150,10 @@ export function fogColor({ angle, temperature, look, chunks, brightness = 1, und
     }
   }
   fog = fog.map((c, i) => f(c + f(f(sky[i] - c) * d)));
+  // updateFogColor: rain darkens red and green by half of its strength and blue by 0.4;
+  // thunder darkens all three by half of its strength. The water and lava colours replace this.
+  if (rain > 0) fog = [f(fog[0] * f(1 - f(rain * f(0.5)))), f(fog[1] * f(1 - f(rain * f(0.5)))), f(fog[2] * f(1 - f(rain * f(0.4))))];
+  if (thunder > 0) fog = fog.map((c) => f(c * f(1 - f(thunder * f(0.5)))));
   if (underwater) fog = [f(0.02), f(0.02), f(0.2)];
   else if (lava) fog = [f(0.6), f(0.1), 0];
   return fog.map((c) => f(c * brightness));
@@ -142,7 +175,9 @@ export class TorchFlicker {
 }
 // EntityRenderer.updateLightmap: 16x16 RGBA, sky level down the rows and
 // block level across. `gamma` is the Brightness option (0 Moody, 1 Bright).
-export function lightmap(sun, flicker, gamma = 0, out = new Uint8Array(1024)) {
+// `flash` is World.lastLightningBolt > 0: the sky level then ignores the sun and
+// rain dimming (the sky term is the bare brightness table).
+export function lightmap(sun, flicker, gamma = 0, out = new Uint8Array(1024), flash = false) {
   const f4 = f(f(sun * f(0.95)) + f(0.05)),
     skyScale = f(f(sun * f(0.65)) + f(0.35)),
     blockScale = f(f(flicker * f(0.1)) + 1.5),
@@ -151,7 +186,7 @@ export function lightmap(sun, flicker, gamma = 0, out = new Uint8Array(1024)) {
       return f(1 - f(f(f(v * v) * v) * v));
     };
   for (let i = 0; i < 256; i++) {
-    const skyB = f(BRIGHTNESS[i >> 4] * f4),
+    const skyB = flash ? BRIGHTNESS[i >> 4] : f(BRIGHTNESS[i >> 4] * f4),
       blockB = f(BRIGHTNESS[i & 15] * blockScale);
     let rgb = [
       f(f(skyB * skyScale) + blockB),

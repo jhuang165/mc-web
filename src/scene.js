@@ -9,6 +9,7 @@ import { liquidHeight, flowAngle, viewpointBlock } from "./fluids.js";
 import { DropRenderer } from "./drop-renderer.js";
 import { ProjectileRenderer } from "./projectile-renderer.js";
 import { ShadowRenderer } from "./shadows.js";
+import { WeatherRenderer } from "./weather-renderer.js";
 export { blockTile } from "./block-textures.js";
 
 // Face order +x, -x, +y, -y, +z, -z with RenderBlocks' AO-path shades:
@@ -87,6 +88,8 @@ export class VoxelScene {
     this.projectiles = new ProjectileRenderer(this.scene, this);
     this.projectileList = { balls: [], particles: [] };
     this.shadows = new ShadowRenderer(this.scene, this.lighting);
+    this.weather = null; // a Weather (weather.js), assigned by main.js
+    this.weatherRenderer = new WeatherRenderer(this.scene, this.lighting, this);
     this.dropList = [];
     this.dropPartial = 1;
     this.material = worldMaterial(this.lighting, { map: this.textures.texture });
@@ -341,10 +344,13 @@ export class VoxelScene {
   setTime(ticks) {
     this.ticks = ticks;
     this.angle = celestialAngle(ticks);
-    this.subtracted = skylightSubtracted(this.angle);
+    const w = this.weather, rain = w ? w.rainStrength(1) : 0, thunder = w ? w.weightedThunder(1) : 0;
+    this.subtracted = skylightSubtracted(this.angle, rain, thunder);
+    this.sun = sunBrightness(this.angle, rain, thunder);
+    this.flash = !!w && w.lastLightning > 0;
     // Farming and mobs read the sky light that remains at this time of day.
     this.daylight = (15 - this.subtracted) / 15;
-    this.lighting.update(sunBrightness(this.angle), this.flicker.tick(), this.gamma ?? 0);
+    this.lighting.update(this.sun, this.flicker.tick(), this.gamma ?? 0, this.flash);
     const p = this.camera.position, chunks = this.distance / 16,
       level = this.light ? this.light.level(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z), this.subtracted) : 15,
       target = BRIGHTNESS[level] * (1 - chunks / 16) + chunks / 16;
@@ -352,7 +358,7 @@ export class VoxelScene {
   }
   setGamma(gamma) {
     this.gamma = gamma;
-    this.lighting.update(sunBrightness(this.angle), this.flicker.x, gamma);
+    this.lighting.update(this.sun ?? sunBrightness(this.angle), this.flicker.x, gamma, this.flash);
   }
   // Brightness for an entity or tile entity at a world position.
   brightness(x, y, z) {
@@ -373,15 +379,18 @@ export class VoxelScene {
       underwater = eye === 10 && c.position.y - Math.floor(c.position.y) < 8 / 9,
       // ActiveRenderInfo.getBlockAtEntityViewpoint: lava fog while the eye is in lava.
       lava = !!this.world && viewpointBlock(this.world, c.position.x, c.position.y, c.position.z) === 42,
-      fog = fogColor({ angle, temperature: this.temperature ?? biomeTemperature("meadow"), look: [look.x, look.y, look.z], chunks: this.distance / 16, brightness: this.fogBrightness, underwater, lava });
+      // The frame-eased rain, thunder and lightning terms (World.getRainStrength(partial) ...).
+      w = this.weather, partial = this.dropPartial, rain = w ? w.rainStrength(partial) : 0, thunder = w ? w.weightedThunder(partial) : 0, lightning = w ? w.lastLightning : 0,
+      fog = fogColor({ angle, temperature: this.temperature ?? biomeTemperature("meadow"), look: [look.x, look.y, look.z], chunks: this.distance / 16, brightness: this.fogBrightness, underwater, lava, rain, thunder, lightning, partial });
     u.fogColor.value.set(...fog);
     // setupFog: linear from 3/4 of the far plane; exponential 0.1 in water, 2.0 in lava.
     u.fogDensity.value = lava ? 2 : underwater ? 0.1 : 0;
     u.fogNear.value = this.distance * 0.75;
     u.fogFar.value = this.distance;
-    const sky = underwater || lava ? fog : skyColor(this.temperature ?? 0.8, angle);
-    this.sky.update({ angle, sky, fog, sunrise: underwater || lava ? null : sunriseColors(angle), stars: starBrightness(angle), moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater: underwater || lava });
-    this.clouds.update(c, time * 20, cloudColor(angle));
+    const sky = underwater || lava ? fog : skyColor(this.temperature ?? 0.8, angle, rain, thunder, lightning, partial);
+    this.sky.update({ angle, sky, fog, sunrise: underwater || lava ? null : sunriseColors(angle), stars: starBrightness(angle), moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater: underwater || lava, rain });
+    this.clouds.update(c, time * 20, cloudColor(angle, rain, thunder));
+    this.weatherRenderer.update(w, this.world, c, partial, time);
     this.drops.update(this.dropList, this.dropPartial, time * 20);
     this.projectiles.update(this.projectileList.balls, this.projectileList.particles, c, this.dropPartial);
     this.sky.render(this.renderer, c, new THREE.Color(...fog));
