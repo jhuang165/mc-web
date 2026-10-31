@@ -30,7 +30,7 @@ MCP mappings identify `bly` as ItemRenderer, `blt` as EntityRenderer, `bhm` as M
 | Block damage | Ten original `destroy_stage_0..9` PNGs | Frames advance with actual mining progress; cancellation removes the overlay |
 | Water | Original 16 × 512 water sheet | The 32 original frames advance at 10 Hz, matching `frametime: 2`; fluid simulation is not implemented |
 
-Java's trigonometric lookup table and all floating-point intermediates are not emulated bit for bit. Model geometry, camera transforms, debris, eating presentation and creature death presentation remain adaptations. These are recovered curves and original frames in a new renderer, not every animation copied exactly.
+Java's trigonometric lookup table and all floating-point intermediates are not emulated bit for bit. Model geometry, camera transforms, eating presentation and creature death presentation remain adaptations. These are recovered curves and original frames in a new renderer, not every animation copied exactly.
 
 ## Further gameplay added
 
