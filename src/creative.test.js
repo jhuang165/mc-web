@@ -77,16 +77,16 @@ test('clicking outside throws the cursor, one item for the right button',()=>{
 test('scrolling moves the 9 x 5 window one row per notch and with the scrollbar',()=>{
  const {gui,c,slot}=open([],SEARCH.index);
  assert.equal(c.list.length,SEARCH_ORDER.length);assert.ok(gui.needsScroll());
- // 160 search entries: rows = floor(160 / 9) - 5 + 1 = 13
+ // 161 search entries: rows = floor(161 / 9) - 5 + 1 = 13
  // (integer division, as GuiContainerCreative), so each notch moves 1/13; at full scroll the window starts at
- // entry 13 * 9 = 117, slot n shows entry 117 + n, the last entry (159) sits in slot 42 and slot 43 is empty.
+ // entry 13 * 9 = 117, slot n shows entry 117 + n, the last entry (160) sits in slot 43 and slot 44 is empty.
  assert.equal(c.rows(),13);
  gui.wheel(-1);gui.wheel(-1);
  assert.equal(gui.scroll,Math.fround(Math.fround(1/13)+1/13));assert.equal(gui.scrollbarY(),32);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[18]));
  gui.wheel(1);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[9]));
  for(let i=0;i<20;i++)gui.wheel(-1);
  assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);assert.equal(slot(27).stack.id,entryId(SEARCH_ORDER[144]));
- assert.equal(SEARCH_ORDER.length,160);assert.equal(slot(40).stack.id,entryId(SEARCH_ORDER[157]));assert.equal(slot(41).stack.id,entryId(SEARCH_ORDER[158]));assert.equal(slot(42).stack.id,entryId(SEARCH_ORDER[159]));assert.equal(slot(43).stack,null);
+ assert.equal(SEARCH_ORDER.length,161);assert.equal(slot(41).stack.id,entryId(SEARCH_ORDER[158]));assert.equal(slot(42).stack.id,entryId(SEARCH_ORDER[159]));assert.equal(slot(43).stack.id,entryId(SEARCH_ORDER[160]));assert.equal(slot(44).stack,null);
  gui.press(176,60);assert.ok(gui.scrolling);gui.drag(25.5);assert.equal(gui.scroll,0);
  gui.drag(18+7.5+97/2);assert.equal(gui.scroll,.5);gui.release();gui.drag(200);assert.equal(gui.scroll,.5);
  gui.press(174,60);assert.ok(!gui.scrolling);

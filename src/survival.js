@@ -1,5 +1,5 @@
 import {miningState,blockWear} from "./mining.js";
-import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WEB, WATER, LAVA, CARROTS, POTATOES } from "./world.js";
+import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WEB, LADDER, WATER, LAVA, CARROTS, POTATOES } from "./world.js";
 import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,ChestContainer,makeStack} from "./inventory.js";
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
 import { Effects } from "./status-effects.js";
@@ -219,6 +219,8 @@ MATERIALS[YELLOW_FLOWER]=MATERIALS[RED_FLOWER]={hardness:0};
 // BlockSapling: instant break (hardness 0), drops itself (damage 0 for the oak).
 MATERIALS[SAPLING]={hardness:0};
 MATERIALS[WEB]={hardness:4,drop:321};
+// BlockLadder: hardness 0.4, Material.circuits (no effective tool), drops itself.
+MATERIALS[LADDER]={hardness:.4};
 MATERIALS[CARROTS]=MATERIALS[POTATOES]={hardness:0,drop:0};
 export const RECIPES = [];
 function recipe(id, name, rows, keys, output, count = 1) {
@@ -247,6 +249,7 @@ recipe("snow","Snow block",["SS","SS"],{S:312},23);
 recipe("bookshelf","Bookshelf",["PPP","BBB","PPP"],{P:7,B:314},21);
 recipe("planks", "Oak planks", ["L"], { L: 4 }, 7, 4);
 recipe("sticks", "Sticks", ["P", "P"], { P: 7 }, 300, 4);
+recipe("ladder", "Ladder", ["S S", "SSS", "S S"], { S: 300 }, LADDER, 3);
 recipe("table", "Crafting table", ["PP", "PP"], { P: 7 }, 13);
 recipe("furnace", "Furnace", ["CCC", "C C", "CCC"], { C: 12 }, 14);
 recipe("chest", "Chest", ["PPP", "P P", "PPP"], { P: 7 }, 41);

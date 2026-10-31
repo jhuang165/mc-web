@@ -339,8 +339,9 @@ export class Fluids {
     }
   }
   // BlockDynamicLiquid.func_149807_p (akr.p): doors, signs, ladders, reeds and
-  // portals block liquid, as does any material that blocks movement. None of the
-  // first group exists here; air, liquids, torches and plants are the open cells.
+  // portals block liquid, as does any material that blocks movement. Of the first
+  // group only ladders exist here (they have a collision box); air, liquids,
+  // torches and plants are the open cells.
   blocked(x, y, z) {
     return solid(this.world, x, y, z);
   }

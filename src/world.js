@@ -2,6 +2,7 @@ import { decorateFlowers } from "./flowers.js";
 import { generateLakes, generateSprings } from "./lakes.js";
 import { populateSnow } from "./snow.js";
 import { generateTreeAt } from "./trees.js";
+import { ladderBounds } from "./ladders.js";
 export const SIZE = 128,
   HEIGHT = 64,
   SEA = 16;
@@ -59,10 +60,12 @@ export const BLOCKS = [
   {name:'Carrots',color:'#6c9634',hidden:true},
   {name:'Potatoes',color:'#7f9a42',hidden:true},
   {name:'Cobweb',color:'#dedede'},
+  // BlockLadder (original id 65); metadata 2-5 is the wall it hangs on (ladders.js).
+  {name:'Ladder',color:'#9b7d4a'},
 ];
 export const WATER=10,LAVA=42;
 export const SNOW_LAYER=46,ICE=47,SAPLING=48;
-export const CARROTS=49,POTATOES=50,WEB=51;
+export const CARROTS=49,POTATOES=50,WEB=51,LADDER=52;
 export const isLiquid=b=>b===WATER||b===LAVA;
 export const YELLOW_FLOWER = BLOCKS.findIndex((b) => b.name === 'Dandelion');
 export const RED_FLOWER = BLOCKS.findIndex((b) => b.name === 'Red flower');
@@ -145,7 +148,7 @@ export const ticksRandomly=b=>b===1||b===5||b===29||b===30||isCrop(b)||b===LAVA|
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB]);
+const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER]);
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 export const normalCube=b=>opaqueCube(b)&&b!==5;
 // setBlockBoundsBasedOnState: chests are inset by 1/16 except towards a partner.
@@ -157,6 +160,7 @@ export const snowSelectionHeight=meta=>((meta&7)+1)/8;
 export function blockBounds(world,x,y,z){
   const b=world.get(x,y,z);
   if(b===SNOW_LAYER)return[0,0,0,1,(world.getMeta(x,y,z)&7)*.125,1];
+  if(b===LADDER)return ladderBounds(world.getMeta(x,y,z));
   if(b!==41)return[0,0,0,1,blockHeight(b),1];
   const c=(dx,dz)=>world.get(x+dx,y,z+dz)===41;
   return[c(-1,0)?0:1/16,0,c(0,-1)?0:1/16,c(1,0)?1:15/16,.875,c(0,1)?1:15/16];
@@ -424,6 +428,14 @@ export function raycast(world, origin, dir, reach = 6) {
       if (hit === SNOW_LAYER && origin.y + dir.y * d - p[1] > snowSelectionHeight(world.getMeta(...p))) {
         passed = p;
         continue;
+      }
+      // A ladder is only selectable on its 0.125 plate.
+      if (hit === LADDER) {
+        const [x0, , z0, x1, , z1] = ladderBounds(world.getMeta(...p)), lx = origin.x + dir.x * d - p[0], lz = origin.z + dir.z * d - p[2];
+        if (lx < x0 || lx > x1 || lz < z0 || lz > z1) {
+          passed = p;
+          continue;
+        }
       }
       return { block: p, adjacent: last, distance: d };
     }

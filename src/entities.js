@@ -1,6 +1,7 @@
 import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE } from "./spider.js";
 import {CARROT,zombieRareDrop} from './crops.js';
 import { SIZE, HEIGHT, hash, slipperiness, blockBounds, WOOL, isLiquid, DYE } from "./world.js";
+import { isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
 import { ITEMS } from "./survival.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
@@ -350,14 +351,14 @@ export function moveEntityWithHeading(world, e, w, h, forward) {
     const accel = f(f(0.16277136) / f(f(friction * friction) * friction));
     moveFlying(e, 0, forward, e.onGround ? f((e.type === "spider" ? f(0.1) : e.aiMoveSpeed) * accel) : JUMP_MOVEMENT_FACTOR);
     friction = slip();
-    if (e.type === "spider" && e.climbing) {
-      e.vx = Math.max(-f(0.15), Math.min(f(0.15), e.vx));
-      e.vz = Math.max(-f(0.15), Math.min(f(0.15), e.vz));
-      e.vy = Math.max(-0.15, e.vy);
+    // isOnLadder: EntitySpider's override is its wall flag; others test the ladder cell (ladders.js).
+    const climbable = () => (e.type === "spider" ? e.climbing : isOnLadder(world, e.x, e.y, e.z));
+    if (climbable()) {
+      ladderClamp(e, e.player && e.sneaking, ["vx", "vy", "vz"]);
       e.fallDistance = 0;
     }
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz);
-    if (e.type === "spider" && e.collidedH && e.climbing) e.vy = 0.2;
+    if (e.collidedH && climbable()) e.vy = LADDER_CLIMB;
     e.vy -= 0.08;
     e.vy *= 0.9800000190734863;
     e.vx *= friction;
@@ -901,7 +902,7 @@ export class EntityWorld {
         e.climbing = e.collidedH;
         // Entity.moveEntity's distanceWalkedOnStepModified (0.6 per block);
         // EntitySpider has its own original step event at volume 0.15.
-        const dx = e.x - e.px, dy = e.climbing ? e.y - e.py : 0, dz = e.z - e.pz;
+        const dx = e.x - e.px, dy = countsVertical(this.world, e.x, e.y, e.z) ? e.y - e.py : 0, dz = e.z - e.pz;
         e.stepDistance = f((e.stepDistance || 0) + f(Math.sqrt(dx * dx + dy * dy + dz * dz) * 0.6));
         const below = this.world.get(Math.floor(e.x), Math.floor(e.y - 0.2), Math.floor(e.z));
         if (e.stepDistance > (e.nextStep || 1) && below) {

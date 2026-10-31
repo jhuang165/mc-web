@@ -30,12 +30,14 @@ import {
   snowSelectionHeight,
   FIRE,
   LAVA,
+  LADDER,
 } from "./world.js";
+import { ladderBounds, canPlaceLadder, placedLadderMeta, ladderSupported, clickedSide, isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
 import { snowCanStay, snowFalls, snowballsFor, iceLeavesWater, stackedSnowMeta } from "./snow.js";
 import { flowerCanStay, growGrass, JRandom } from "./flowers.js";
 import { Trees, saplingCanStay, leafDrops, placedLeavesMeta } from "./trees.js";
 import { VoxelScene } from "./scene.js";
-import { SoundBank, blockSound } from "./audio.js";
+import { SoundBank, blockSound, stepSound } from "./audio.js";
 import { Weather, isWet, canLightningStrikeAt, struckByLightning, strikeBox, overlaps, entityBox } from "./weather.js";
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
 import { PlayerBody, PlayerRenderer, nextView, thirdPersonCamera, playerShadowCaster } from "./player-renderer.js";
@@ -390,7 +392,7 @@ function controls() {
 function notes() {
   modal(
     "Rebuilding 1.7.10, system by system.",
-    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. Broken blocks, mob kills and thrown stacks drop item entities that fall, merge and are picked up. The Java 36-slot inventory with cursor, drag-splitting, shift- and double-click rules; shaped crafting, a crafting table, a fuel-driven furnace and single/large chests on real slots; the tabbed creative inventory with search; wood, stone, iron, diamond and gold tools with per-item durability and repair; leather, chain, iron, gold and diamond armor. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water, crack frames and entity shadows. Pigs, cows, sheep, chickens and night-time zombies with 1.7.10 movement, knockback, pathfinding and AI task lists, melee combat with sprint knockback and critical hits, and food drops. Cows and sheep follow wheat and breed, pigs follow carrots and breed, chickens follow seeds and lay eggs; sheep graze, can be sheared and dyed. Sneaking slows you, lowers the view and stops you at edges. Flowing water and lava spread, mix into obsidian, cobblestone and stone, and lava burns players, mobs and items; buckets pick up and place liquids and milk cows; lakes and springs generate; flowers grow and craft into 16 dyes for wool; snowballs and eggs can be thrown; F5 shows the player model with armor. Rain and thunderstorms follow the original weather timers, darken the sky and light, and bring lightning that strikes and starts fires; fire spreads through wood, wool and leaves and is lit with flint and steel. The Snowy Tundra landscape has snowfall, snow layers and ice. Bows draw and fire arrows, and skeletons shoot back at night and burn by day. Oak saplings grow into trees, with bone meal or over time, and leaves decay and drop saplings and apples. Caves, ores and torches; 1.7.10 sky/block light, smooth lighting, lightmap, sky, stars, fog and fancy clouds. Wheat, carrot and potato farming with five hoe tiers, moisture, eight growth stages, bone meal and harvesting; bread crafting and baked potatoes. Zombies rarely drop carrots, potatoes or iron when killed after a player hit.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, enchantments, hoppers and other storage, redstone, dimensions, structures, other biomes, void fog, Java saves, and multiplayer. The renderer, terrain, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/items.md" target="_blank" rel="noopener">Item drops ↗</a><a href="/research/creative.md" target="_blank" rel="noopener">Creative inventory ↗</a><a href="/research/shadows.md" target="_blank" rel="noopener">Entity shadows ↗</a><a href="/research/fluids.md" target="_blank" rel="noopener">Flowing water ↗</a><a href="/research/third-person.md" target="_blank" rel="noopener">Third person ↗</a><a href="/research/sheep.md" target="_blank" rel="noopener">Sheep & wool ↗</a><a href="/research/projectiles.md" target="_blank" rel="noopener">Snowballs ↗</a><a href="/research/lava.md" target="_blank" rel="noopener">Lava ↗</a><a href="/research/buckets.md" target="_blank" rel="noopener">Buckets & lakes ↗</a><a href="/research/chickens.md" target="_blank" rel="noopener">Chickens & eggs ↗</a><a href="/research/dyes.md" target="_blank" rel="noopener">Flowers & dyes ↗</a><a href="/research/sneaking.md" target="_blank" rel="noopener">Sneaking & attacks ↗</a><a href="/research/pathfinding.md" target="_blank" rel="noopener">Pathfinding & AI ↗</a><a href="/research/weather.md" target="_blank" rel="noopener">Weather ↗</a><a href="/research/fire.md" target="_blank" rel="noopener">Fire ↗</a><a href="/research/snow.md" target="_blank" rel="noopener">Snow & ice ↗</a><a href="/research/bows.md" target="_blank" rel="noopener">Bows & skeletons ↗</a><a href="/research/crops.md" target="_blank" rel="noopener">Crops & pigs ↗</a><a href="/research/trees.md" target="_blank" rel="noopener">Saplings & trees ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
+    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. Broken blocks, mob kills and thrown stacks drop item entities that fall, merge and are picked up. The Java 36-slot inventory with cursor, drag-splitting, shift- and double-click rules; shaped crafting, a crafting table, a fuel-driven furnace and single/large chests on real slots; the tabbed creative inventory with search; wood, stone, iron, diamond and gold tools with per-item durability and repair; leather, chain, iron, gold and diamond armor. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water, crack frames and entity shadows. Pigs, cows, sheep, chickens and night-time zombies with 1.7.10 movement, knockback, pathfinding and AI task lists, melee combat with sprint knockback and critical hits, and food drops. Cows and sheep follow wheat and breed, pigs follow carrots and breed, chickens follow seeds and lay eggs; sheep graze, can be sheared and dyed. Sneaking slows you, lowers the view and stops you at edges. Flowing water and lava spread, mix into obsidian, cobblestone and stone, and lava burns players, mobs and items; buckets pick up and place liquids and milk cows; lakes and springs generate; flowers grow and craft into 16 dyes for wool; snowballs and eggs can be thrown; ladders can be placed and climbed; F5 shows the player model with armor. Rain and thunderstorms follow the original weather timers, darken the sky and light, and bring lightning that strikes and starts fires; fire spreads through wood, wool and leaves and is lit with flint and steel. The Snowy Tundra landscape has snowfall, snow layers and ice. Bows draw and fire arrows, and skeletons shoot back at night and burn by day. Oak saplings grow into trees, with bone meal or over time, and leaves decay and drop saplings and apples. Caves, ores and torches; 1.7.10 sky/block light, smooth lighting, lightmap, sky, stars, fog and fancy clouds. Wheat, carrot and potato farming with five hoe tiers, moisture, eight growth stages, bone meal and harvesting; bread crafting and baked potatoes. Zombies rarely drop carrots, potatoes or iron when killed after a player hit.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, enchantments, hoppers and other storage, redstone, dimensions, structures, other biomes, void fog, Java saves, and multiplayer. The renderer, terrain, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/items.md" target="_blank" rel="noopener">Item drops ↗</a><a href="/research/creative.md" target="_blank" rel="noopener">Creative inventory ↗</a><a href="/research/shadows.md" target="_blank" rel="noopener">Entity shadows ↗</a><a href="/research/fluids.md" target="_blank" rel="noopener">Flowing water ↗</a><a href="/research/third-person.md" target="_blank" rel="noopener">Third person ↗</a><a href="/research/sheep.md" target="_blank" rel="noopener">Sheep & wool ↗</a><a href="/research/projectiles.md" target="_blank" rel="noopener">Snowballs ↗</a><a href="/research/lava.md" target="_blank" rel="noopener">Lava ↗</a><a href="/research/buckets.md" target="_blank" rel="noopener">Buckets & lakes ↗</a><a href="/research/chickens.md" target="_blank" rel="noopener">Chickens & eggs ↗</a><a href="/research/dyes.md" target="_blank" rel="noopener">Flowers & dyes ↗</a><a href="/research/sneaking.md" target="_blank" rel="noopener">Sneaking & attacks ↗</a><a href="/research/pathfinding.md" target="_blank" rel="noopener">Pathfinding & AI ↗</a><a href="/research/weather.md" target="_blank" rel="noopener">Weather ↗</a><a href="/research/fire.md" target="_blank" rel="noopener">Fire ↗</a><a href="/research/snow.md" target="_blank" rel="noopener">Snow & ice ↗</a><a href="/research/bows.md" target="_blank" rel="noopener">Bows & skeletons ↗</a><a href="/research/crops.md" target="_blank" rel="noopener">Crops & pigs ↗</a><a href="/research/trees.md" target="_blank" rel="noopener">Saplings & trees ↗</a><a href="/research/ladders.md" target="_blank" rel="noopener">Ladders ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
     "notes-modal",
   );
 }
@@ -561,6 +563,14 @@ function watchFlowers() {
       world.set(x,cy,z,0);
       items.dropBlock(drops.map(d=>makeStack(d.id,d.count)),x,cy,z);
       scene.updateBlock(x,z,cy);
+    }
+    // BlockLadder.onNeighborBlockChange: a ladder whose wall is no longer a normal cube drops itself.
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const lx = x + dx, lz = z + dz;
+      if (world.get(lx, y, lz) !== LADDER || ladderSupported(world, lx, y, lz)) continue;
+      world.set(lx, y, lz, 0);
+      items.dropBlock([makeStack(LADDER, 1)], lx, y, lz);
+      scene.updateBlock(lx, lz, y);
     }
     // BlockSnow.onNeighborBlockChange: a layer that can no longer stand vanishes without a drop.
     for (const [dx, dy, dz] of [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]) {
@@ -1424,8 +1434,10 @@ function edit(place = false) {
     if (id === SAPLING && !saplingCanStay(world, ...p)) return;
     // BlockSnow.canPlaceBlockAt: never on ice, otherwise leaves, a full layer or an opaque cube.
     if (id === SNOW_LAYER && !snowCanStay(world, ...p)) return;
+    // BlockLadder.canPlaceBlockAt: a normal cube beside the cell; onBlockPlaced picks the wall from the clicked face.
+    if (id === LADDER && !canPlaceLadder(world, ...p)) return;
     const old = world.get(...p), oldMeta = world.getMeta(...p),
-      meta = id === WOOL || id === RED_FLOWER ? survival.held?.damage || 0 : id === 5 ? placedLeavesMeta() : 0;
+      meta = id === WOOL || id === RED_FLOWER ? survival.held?.damage || 0 : id === 5 ? placedLeavesMeta() : id === LADDER ? placedLadderMeta(world, ...p, clickedSide(target.block, p)) : 0;
     world.set(...p, id, false, meta);
     if (collides(world, ...position.toArray())) {
       world.set(...p, old, false, oldMeta);
@@ -1661,6 +1673,11 @@ function movementTick() {
       velocity.y = Math.min(0.16, velocity.y + 0.06);
     // EntityLivingBase.onLivingUpdate: jumping in lava pushes up by 0.04.
     else if (lava && keys.has("Space")) velocity.y += 0.04;
+    // moveEntityWithHeading's land branch on a ladder: motion clamped to 0.15, sneaking holds on.
+    if (!inWater && !lava && isOnLadder(world, position.x, position.y, position.z)) {
+      ladderClamp(velocity, sneak);
+      fallDistance = 0;
+    }
   }
   let landed = false;
   collidedH = false;
@@ -1700,6 +1717,8 @@ function movementTick() {
   webContact(world, playerBox(), motion, flying);
   motion.endMove();
   if (!flying) {
+    // Pushing into a wall while on a ladder climbs at 0.2 a tick.
+    if (!inWater && !lava && collidedH && isOnLadder(world, position.x, position.y, position.z)) velocity.y = LADDER_CLIMB;
     velocity.y = lava
       ? velocity.y * 0.5 - 0.02
       : inWater
@@ -1748,22 +1767,25 @@ function movementTick() {
   mobs.tick(position, survival, heldId());
   const oldLevel=experience.level;if(survival.health>0&&!survival.creative&&xpOrbs.tick(world,position,experience)){sounds.play(experience.level>oldLevel&&experience.level%5===0?"random.levelup":"random.orb",{volume:.4});renderVitals();}
   handleEntityEvents();
+  // Entity.moveEntity: the vertical part of the move counts only with a ladder 0.2 below the feet.
+  const onLadderStep = !flying && countsVertical(world, position.x, position.y, position.z);
   const distance = Math.hypot(
     position.x - oldPosition.x,
+    onLadderStep ? position.y - oldPosition.y : 0,
     position.z - oldPosition.z,
   );
   if (!sneakOnGround) stepDistance += distance;
   if (inWater && !wasInWater)
     sounds.play("game.player.swim.splash", { volume: 0.5 });
   wasInWater = inWater;
-  if (stepDistance > 1.667 && (grounded || inWater) && !flying) {
+  if (stepDistance > 1.667 && (grounded || inWater || onLadderStep) && !flying) {
     stepDistance = 0;
-    const b = world.get(
+    const b = onLadderStep ? LADDER : world.get(
       Math.floor(position.x),
       Math.floor(position.y - 0.05),
       Math.floor(position.z),
     );
-    sounds.play(inWater ? "game.player.swim" : "step." + blockSound(b), {
+    sounds.play(inWater ? "game.player.swim" : "step." + stepSound(b), {
       volume: inWater ? 0.3 : 0.22,
     });
   }
@@ -2163,10 +2185,12 @@ function animate(now) {
     );
     scene.outline.visible = !!target && !aimedEntity;
     if (target) {
-      // BlockSnow.setBlockBoundsBasedOnState: the box is (meta + 1) / 8 high; other blocks keep the full cube here.
-      const snow = world.get(...target.block) === SNOW_LAYER, h = snow ? snowSelectionHeight(world.getMeta(...target.block)) : 1;
-      scene.outline.scale.y = (h + 0.004) / 1.004;
-      scene.outline.position.set(target.block[0] + 0.5, target.block[1] + (snow ? h / 2 : 0.5), target.block[2] + 0.5);
+      // setBlockBoundsBasedOnState: a snow layer's box is (meta + 1) / 8 high and a ladder's is its
+      // plate; other blocks keep the full cube here. The outline is the box grown by 0.002.
+      const b = world.get(...target.block), meta = world.getMeta(...target.block),
+        [x0, y0, z0, x1, y1, z1] = b === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(meta), 1] : b === LADDER ? ladderBounds(meta) : [0, 0, 0, 1, 1, 1];
+      scene.outline.scale.set((x1 - x0 + 0.004) / 1.004, (y1 - y0 + 0.004) / 1.004, (z1 - z0 + 0.004) / 1.004);
+      scene.outline.position.set(target.block[0] + (x0 + x1) / 2, target.block[1] + (y0 + y1) / 2, target.block[2] + (z0 + z1) / 2);
     }
     $("#mining-meter").classList.toggle("hidden", !mining);
     if (mining) {

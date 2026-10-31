@@ -8,7 +8,8 @@
 // EntityBreakingFX (bju) particles and removes the ball. `y` is the bottom of
 // the box, which is also the entity's posY (yOffset 0).
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
-import { blockBounds, snowSelectionHeight, CARROTS, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
+import { blockBounds, snowSelectionHeight, CARROTS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
+import { ladderBounds } from "./ladders.js";
 import { ENTITY_TYPES } from "./entities.js";
 
 const f = Math.fround;
@@ -150,9 +151,10 @@ RAY_BOUNDS[CARROTS] = RAY_BOUNDS[POTATOES] = [0, 0, 0, 1, 0.25, 1];
 RAY_BOUNDS[YELLOW_FLOWER] = RAY_BOUNDS[RED_FLOWER] = [f(0.5 - f(0.2)), 0, f(0.5 - f(0.2)), f(0.5 + f(0.2)), f(f(0.2) * 3), f(0.5 + f(0.2))];
 // BlockSapling(f = 0.4): 0.5 - f .. 0.5 + f wide and f * 2 high (shadow-reference.json).
 RAY_BOUNDS[SAPLING] = [f(0.5 - f(0.4)), 0, f(0.5 - f(0.4)), f(0.5 + f(0.4)), f(f(0.4) * 2), f(0.5 + f(0.4))];
-// A snow layer's selection box is (metadata + 1) / 8 high (BlockSnow.setBlockBoundsBasedOnState).
+// A snow layer's selection box is (metadata + 1) / 8 high (BlockSnow.setBlockBoundsBasedOnState);
+// a ladder's is its plate (BlockLadder.setBlockBoundsBasedOnState).
 export const rayBounds = (world, x, y, z, id) =>
-  id === 41 ? blockBounds(world, x, y, z) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
+  id === 41 ? blockBounds(world, x, y, z) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
 
 // World.rayTraceBlocks (ahb.a(Vec3, Vec3) = func_147447_a(false, false, false)):
 // walk the cells along the segment (at most 201 steps, each moving the start

@@ -1,13 +1,15 @@
-import { isFlower, isCrop } from "./world.js";
+import { isFlower, isCrop, LADDER } from "./world.js";
 export function blockSound(id) {
   if ([1, 5, 39].includes(id)||isCrop(id)||isFlower(id)) return "grass";
   if ([2, 24, 25,29,30].includes(id)) return "gravel";
   if (id === 6) return "sand";
-  if ([4, 7, 13, 20, 21].includes(id)) return "wood";
+  if ([4, 7, 13, 20, 21, LADDER].includes(id)) return "wood";
   if (id === 19) return "cloth";
   if (id === 23 || id === 46) return "snow";
   return "stone";
 }
+// Block.soundTypeLadder: digging and placing say dig.wood, steps say step.ladder.
+export const stepSound = (id) => (id === LADDER ? "ladder" : blockSound(id));
 export class SoundBank {
   constructor(options, listener) {
     this.options = options;
