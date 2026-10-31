@@ -1,4 +1,5 @@
 import { decorateFlowers } from "./flowers.js";
+import { generateLakes, generateSprings } from "./lakes.js";
 export const SIZE = 128,
   HEIGHT = 64,
   SEA = 16;
@@ -130,7 +131,7 @@ export function blockBounds(world,x,y,z){
   return[c(-1,0)?0:1/16,0,c(0,-1)?0:1/16,c(1,0)?1:15/16,.875,c(0,1)?1:15/16];
 }
 export class World {
-  constructor(seed = "Overworld", biome = "meadow", generationVersion = 4) {
+  constructor(seed = "Overworld", biome = "meadow", generationVersion = 5) {
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
@@ -246,13 +247,16 @@ export class World {
           this.data[this.index(x, y, z)] = b;
         }
       }
+    // Lakes are carved before trees, as in populate, so trees skip columns a lake took.
+    const lakes = this.generationVersion >= 5 ? generateLakes(this) : null;
     for (let x = 4; x < SIZE - 4; x++)
       for (let z = 4; z < SIZE - 4; z++) {
         const h = heights[x * SIZE + z];
         if (
           h < SEA + 3 ||
           hash(x, z, s + 99) < 0.988 ||
-          (Math.abs(x - 35) < 4 && Math.abs(z - 80) < 4)
+          (Math.abs(x - 35) < 4 && Math.abs(z - 80) < 4) ||
+          (lakes && this.get(x, h, z) !== 1)
         )
           continue;
         const trunk = 4 + Math.floor(hash(x, z, s + 51) * 3);
@@ -268,6 +272,8 @@ export class World {
     if(this.generationVersion>=3)for(let x=2;x<SIZE-2;x++)for(let z=2;z<SIZE-2;z++){const y=heights[x*SIZE+z]+1;if(this.get(x,y-1,z)===1&&this.get(x,y,z)===0&&hash(x,z,s+603)<.095)this.set(x,y,z,39,false);}
     // Version 4 adds BiomeDecorator's flowers; older saves keep their terrain.
     if(this.generationVersion>=4)decorateFlowers(this,{yellow:YELLOW_FLOWER,red:RED_FLOWER,heights,biome:this.biome});
+    // BiomeDecorator runs its liquid springs after the flowers (version 5).
+    if (lakes) generateSprings(this, lakes);
 
   }
   spawn() {

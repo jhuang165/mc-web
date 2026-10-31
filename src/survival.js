@@ -1,5 +1,5 @@
 import {miningState,blockWear} from "./mining.js";
-import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER } from "./world.js";
+import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, WATER, LAVA } from "./world.js";
 import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,ChestContainer,makeStack} from "./inventory.js";
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
 
@@ -133,6 +133,15 @@ for (const item of [
   { id: 308, name: "Charcoal", color: "#4e554c", glyph: "◆" },
 ])
   ITEMS[item.id] = { stack:64,...item };
+// ItemBucket (abo) and ItemBucketMilk (adi). The empty bucket stacks to 16, the filled
+// ones to 1. The ids are this build's own (Minecraft 325, 326, 327, 335); `contains` is
+// the liquid a filled bucket places and `bucket` marks every item that has bucket behaviour.
+for (const item of [
+  { id: 340, name: "Bucket", texture: "bucket_empty", stack: 16, bucket: "empty", color: "#c5d0cd", glyph: "U" },
+  { id: 341, name: "Water bucket", texture: "bucket_water", stack: 1, bucket: "filled", contains: WATER, color: "#5f9fbc", glyph: "U" },
+  { id: 342, name: "Lava bucket", texture: "bucket_lava", stack: 1, bucket: "filled", contains: LAVA, color: "#d4560f", glyph: "U" },
+  { id: 343, name: "Milk bucket", texture: "bucket_milk", stack: 1, bucket: "milk", color: "#f4f4f0", glyph: "U" },
+]) ITEMS[item.id] = item;
 
 // ItemArmor: ArmorMaterial durability factor x [11, 16, 15, 13] per piece and
 // damage-reduction points; armorType 0 helmet, 1 chestplate, 2 leggings, 3 boots.
@@ -202,6 +211,8 @@ function recipe(id, name, rows, keys, output, count = 1) {
   });
 }
 recipe("shears","Shears",[" I","I "],{I:302},125);
+// CraftingManager: "# #", " # " of iron ingots makes one bucket.
+recipe("bucket","Bucket",["I I"," I "],{I:302},340);
 recipe("snow","Snow block",["SS","SS"],{S:312},23);
 recipe("bookshelf","Bookshelf",["PPP","BBB","PPP"],{P:7,B:314},21);
 recipe("planks", "Oak planks", ["L"], { L: 4 }, 7, 4);
@@ -373,6 +384,10 @@ export const FUELS = {
   301: 1600,
   308: 1600,
 };
+// TileEntityFurnace.getItemBurnTime: a lava bucket burns 20000 ticks and, like every
+// Item with a container item, leaves the empty bucket behind when it is used up.
+FUELS[342] = 20000;
+const CONTAINER_ITEMS = { 342: 340 };
 const clamp = (v, min, max, fallback) =>
   Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
 export const burnTime = (s) => (s ? FUELS[s.id] || 0 : 0);
@@ -422,8 +437,8 @@ export class Survival {
       if (!/^\d+,\d+,\d+$/.test(key) || !f || typeof f !== "object") continue;
       this.furnaces[key] = {
         items: legacyFurnace(f, (s) => this.inventory.read(s)),
-        burn: Math.floor(clamp(f.burn, 0, 1600, 0)),
-        burnTotal: Math.floor(clamp(f.burnTotal, 0, 1600, 0)),
+        burn: Math.floor(clamp(f.burn, 0, 20000, 0)),
+        burnTotal: Math.floor(clamp(f.burnTotal, 0, 20000, 0)),
         cook: Math.floor(clamp(f.cook, 0, 199, 0)),
       };
     }
@@ -590,7 +605,8 @@ export class Survival {
       if (f.burn > 0) f.burn--;
       if (f.burn === 0 && this.canSmelt(f)) {
         f.burn = f.burnTotal = burnTime(f.items[1]);
-        if (f.burn > 0 && f.items[1] && --f.items[1].count === 0) f.items[1] = null;
+        // TileEntityFurnace.updateEntity: a used-up fuel stack becomes its container item.
+        if (f.burn > 0 && f.items[1] && --f.items[1].count === 0) f.items[1] = CONTAINER_ITEMS[f.items[1].id] ? makeStack(CONTAINER_ITEMS[f.items[1].id]) : null;
       }
       if (f.burn > 0 && this.canSmelt(f)) {
         if (++f.cook === 200) {
