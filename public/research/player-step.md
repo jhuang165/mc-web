@@ -24,9 +24,22 @@ Since 0.21.1 the player controller (`movementTick` in `src/main.js`) moves throu
 
 The browser check (muted, scratch "Step Check" creative world): walking +z rose to y + 0.375 on a 3/8 snow layer and y + 0.5 on a 4/8 layer, stepped down after each, and stopped at z = 88.7 (box edge flush) before a 5/8 layer and before farmland. A jump then landed on farmland at y + 1.
 
+## Push out of blocks (0.21.2)
+
+`EntityPlayerSP.onLivingUpdate` calls `func_145771_j` [blk.j(DDD)Z] right after the sneak ySize raise, so after `Entity.onEntityUpdate`'s water push and before the jump and `moveEntityWithHeading`. `pushOutOfBlocks` in `src/entities.js` ports it and `movementTick` calls it at the same point:
+
+- Four points, in this order: (posX − w, minY + 0.5, posZ + w), (−, −), (+, −), (+, +), with w = width (float 0.6) × 0.35.
+- A point acts when its cell or the cell above is `Block.isNormalCube` [aji.r(): opaque material, normal render, no power]. Glass, leaves, ice, TNT, chests, farmland and plants never push.
+- It picks the nearest of −x, +x, −z, +z whose two cells (the point's level and one up) are both not normal cubes, by the point's fraction in the cell. Each later side must be strictly nearer, so ties keep x before z. There is no up or down choice, unlike `Entity.func_145771_j` (items, `src/item-entities.js`).
+- It sets motionX or motionZ to ∓0.1F (0.10000000149011612) and leaves the other axis alone; a later point overwrites an earlier one. The return value is always false.
+- `moveEntity` does not clip a box against a block it already overlaps, so the motion carries the player out. Friction then slows it as usual.
+
+`tools/probes/PushOutProbe.java` calls the unchanged method at the four points and lists `aji.r()` for every original block id this build uses. `node tools/verify-pushout.mjs` (with `MC_RESEARCH`) writes `pushout-reference.json`: the normal-cube table plus 2,304 layouts, with the centre block (stone or glass) at the feet or head level, each side open, stone, or glass under stone, at several offsets and heights. `src/player-pushout.test.js` checks `normalCube` against the table and replays every layout exactly.
+
+Browser check (muted, scratch "Push Check" creative world): stone placed in both of the player's cells at (35.5, 22, 80.5) with the sides cleared pushed the player out to (36.41, 22, 80.09), the box clear of the block, where it stopped.
+
 ## Gaps
 
-- No `EntityPlayerSP.pushOutOfBlocks` [func_145771_j]: a player inside a block (falling sand, a block placed in the head) is not pushed out at 0.1 a tick, and `moveEntity` lets the box leave an overlapping block freely.
 - The finite world's x/z edge is a clamp at 0.31, which counts as a horizontal collision.
 - The player does not collide with entity boxes (`World.getCollidingBoundingBoxes` also returns boats and minecarts, which do not exist here).
 - Entity.moveEntity's block-collision callback (`func_145775_I`: cactus, webs, fire, portals) still runs through the existing per-system checks, not one callback.

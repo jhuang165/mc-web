@@ -1,7 +1,7 @@
 import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE } from "./spider.js";
 import {CARROT,zombieRareDrop} from './crops.js';
 import { creeperFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from "./creeper.js";
-import { SIZE, HEIGHT, hash, slipperiness, collisionBounds, WOOL, isLiquid, DYE } from "./world.js";
+import { SIZE, HEIGHT, hash, slipperiness, collisionBounds, normalCube, WOOL, isLiquid, DYE } from "./world.js";
 import { isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
 import { ITEMS } from "./survival.js";
 import { mhSin, mhCos } from "./lighting.js";
@@ -226,6 +226,31 @@ const offsetZ = (o, bb, d) => {
 const shift = (bb, dx, dy, dz) => {
   bb[0] += dx; bb[3] += dx; bb[1] += dy; bb[4] += dy; bb[2] += dz; bb[5] += dz;
 };
+// EntityPlayerSP.onLivingUpdate, after the sneak ySize raise: func_145771_j [blk.j(DDD)Z] at the
+// box's four corners (posX -/+ width * 0.35, minY + 0.5, posZ +/- width * 0.35) in this order.
+// A corner whose cell or the cell above is a normal cube sets motionX or motionZ to -/+0.1F
+// towards the nearest side whose two cells are clear (x tested before z, ties keep the first);
+// later corners overwrite earlier ones. Never up or down, unlike the Entity version in item-entities.js.
+const PUSH_OUT = f(0.1);
+export function pushOutOfBlocks(world, e, width) {
+  const r = f(width) * 0.35, y = e.y + 0.5;
+  for (const [sx, sz] of [[-1, 1], [-1, -1], [1, -1], [1, 1]]) pushOutCorner(world, e, e.x + sx * r, y, e.z + sz * r);
+}
+function pushOutCorner(world, e, px, py, pz) {
+  const x = Math.floor(px), y = Math.floor(py), z = Math.floor(pz), fx = px - x, fz = pz - z,
+    blocked = (dx, dz) => normalCube(world.get(x + dx, y, z + dz)) || normalCube(world.get(x + dx, y + 1, z + dz));
+  if (!blocked(0, 0)) return;
+  let side = -1, best = 9999;
+  if (!blocked(-1, 0) && fx < best) (best = fx), (side = 0);
+  if (!blocked(1, 0) && 1 - fx < best) (best = 1 - fx), (side = 1);
+  if (!blocked(0, -1) && fz < best) (best = fz), (side = 4);
+  if (!blocked(0, 1) && 1 - fz < best) (best = 1 - fz), (side = 5);
+  if (side === 0) e.vx = -PUSH_OUT;
+  if (side === 1) e.vx = PUSH_OUT;
+  if (side === 4) e.vz = -PUSH_OUT;
+  if (side === 5) e.vz = PUSH_OUT;
+}
+
 // Entity.moveEntity (sa.d(DDD)) for a walking mob: y first, then x, then z
 // against the block boxes; when a horizontal move is blocked while on the
 // ground, retry with stepHeight (0.5) and keep that result unless it is no

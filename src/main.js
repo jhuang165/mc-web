@@ -53,7 +53,7 @@ import {Experience,ExperienceOrbs,oreExperience,smeltExperience} from "./experie
 import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import {Farming,cropDrops} from "./farming.js";
-import { EntityWorld, ENTITY_TYPES, moveEntity } from "./entities.js";
+import { EntityWorld, ENTITY_TYPES, moveEntity, pushOutOfBlocks } from "./entities.js";
 import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
@@ -1843,6 +1843,12 @@ function movementTick() {
     velocity.y += push[1];
     velocity.z += push[2];
   }
+  // EntityPlayerSP.onLivingUpdate (after Entity.onEntityUpdate's water push): a corner of the
+  // box in or under a normal cube sets motionX/Z to 0.1 towards the nearest open side.
+  const pushed = { x: position.x, y: position.y, z: position.z, vx: velocity.x, vz: velocity.z };
+  pushOutOfBlocks(world, pushed, PHYSICS.width);
+  velocity.x = pushed.vx;
+  velocity.z = pushed.vz;
   // EntityLivingBase.onLivingUpdate: with jump held, water or lava lift 0.04 a tick and the
   // ground jump waits for jumpTicks (10 between held jumps).
   const swimming = !flying && (inWater || lava);
