@@ -15,7 +15,12 @@ import {
   fallingVelocity,
   WOOL,
   isLiquid,
+  DYE,
+  RED_FLOWER,
+  YELLOW_FLOWER,
+  isFlower,
 } from "./world.js";
+import { flowerCanStay, growGrass, JRandom } from "./flowers.js";
 import { VoxelScene } from "./scene.js";
 import { SoundBank, blockSound } from "./audio.js";
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
@@ -222,7 +227,7 @@ function makeRecord(p) {
     seed: String(p.seed).slice(0, 80),
     biome: p.biome || "meadow",
     mode: p.mode === "survival" ? "survival" : "creative",
-    generationVersion: 3,
+    generationVersion: 4,
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -247,8 +252,8 @@ function icon(id, damage = 0) {
   // Leather armor multiplies its base layer by the default 0xA06540 dye; the overlay stays untinted.
   if (item.tint)
     return `<span class="vanilla-item-icon tinted-item" style="--tint:${item.tint};--base:url('/media/1.7.10/items/${item.texture}.png')" aria-hidden="true"><i></i><img src="/media/1.7.10/items/${item.overlay}.png" alt=""></span>`;
-  if (!item.block && itemTexture(id))
-    return `<img class="vanilla-item-icon" src="${itemTexture(id)}" alt="" aria-hidden="true">`;
+  if (!item.block && itemTexture(id, damage))
+    return `<img class="vanilla-item-icon" src="${itemTexture(id, damage)}" alt="" aria-hidden="true">`;
   if (!item.block)
     return `<span class="item-icon ${item.kind ? "tool-icon" : ""}" style="--item:${item.color}" aria-hidden="true">${item.glyph}</span>`;
   return `<span class="block-icon b${id}" style="--block:${item.color};--top:${item.top || item.color}"><i></i></span>`;
@@ -506,6 +511,23 @@ function legacyPlayer(record) {
   const player = record.player && typeof record.player === "object" ? record.player : {};
   return Array.isArray(player.slots) ? player : { ...player, hotbar: record.hotbar, current: record.selected };
 }
+// BlockBush.onNeighborBlockChange: a flower whose ground or light is gone drops as an item.
+// Fluids owns world.onChange, so this wraps it.
+const FLOWERS = { yellow: YELLOW_FLOWER, red: RED_FLOWER }, boneRandom = new JRandom(Date.now());
+function watchFlowers() {
+  const next = world.onChange;
+  world.onChange = (x, y, z, old, now) => {
+    next?.(x, y, z, old, now);
+    for (const [dx, dy, dz] of [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]) {
+      const fx = x + dx, fy = y + dy, fz = z + dz, b = world.get(fx, fy, fz);
+      if (!isFlower(b) || flowerCanStay(world, FLOWERS, fx, fy, fz)) continue;
+      const meta = world.getMeta(fx, fy, fz);
+      world.set(fx, fy, fz, 0);
+      items.dropBlock([makeStack(b, 1, b === RED_FLOWER ? meta : 0)], fx, fy, fz);
+      scene.updateBlock(fx, fz, fy);
+    }
+  };
+}
 function launch(record) {
   try {
     active = record;
@@ -513,8 +535,9 @@ function launch(record) {
     world.restore(record.edits || []);
     scene.setWorld(world);
     // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
-    fluids = new Fluids(world, { fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === 20 ? [{ id: 20, count: 1 }] : cropDrops(b); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count)), x, y, z); } });
+    fluids = new Fluids(world, { fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : cropDrops(b); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
     fluids.wake();
+    watchFlowers();
     farming=new Farming(world,record.farms);
     experience=new Experience(record.experience);xpOrbs=new ExperienceOrbs(record.xpOrbs);
     mobs = new EntityWorld(world, record.entities);
@@ -1088,7 +1111,7 @@ function edit(place = false) {
     }
     return;
   }
-  if(place&&aimedEntity){if(mobs.shear(aimedEntity.entity,id,survival)){handleEntityEvents();renderHotbar();saved=false;return;}if(mobs.feed(aimedEntity.entity,id,survival)){handleEntityEvents();renderHotbar();saved=false;}else if(!survival.creative&&item?.food)beginEating(id);return;}
+  if(place&&aimedEntity){if(mobs.shear(aimedEntity.entity,id,survival)){handleEntityEvents();renderHotbar();saved=false;return;}if(mobs.feed(aimedEntity.entity,id,survival)){handleEntityEvents();renderHotbar();saved=false;}else if(mobs.dye(aimedEntity.entity,survival.held,survival)){handleEntityEvents();renderHotbar();saved=false;}else if(!survival.creative&&item?.food)beginEating(id);return;}
   // ItemArmor.onItemRightClick: equip into an empty armor slot.
   if (place && item?.armor !== undefined) {
     const inv = survival.inventory, slot = 39 - item.armor;
@@ -1113,7 +1136,15 @@ function edit(place = false) {
       if(target.adjacent?.[1]!==y-1&&farming.till(x,y,z)){survival.wear(id);applyFarmUpdates(farming.drain());renderHotbar();sounds.play('step.gravel',{volume:.7});saved=false;}return;
     }
     if(id===309){if((survival.creative||survival.count(id))&&target.adjacent?.[1]===y+1&&farming.plant(x,y,z)){if(!survival.creative)survival.take(id);applyFarmUpdates(farming.drain());renderHotbar();saved=false;}return;}
-    if(id===310){if((survival.creative||survival.count(id))&&farming.fertilize(x,y,z)){if(!survival.creative)survival.take(id);applyFarmUpdates(farming.drain());renderHotbar();sounds.play('dig.grass',{volume:.4});saved=false;}return;}
+    // ItemDye.onItemUse: damage 15 (bone meal) fertilizes crops (Farming) and grass (BlockGrass.func_149853_b).
+    if(id===DYE&&survival.held?.damage===15){
+      if(!survival.creative&&!survival.count(id))return;
+      let used=false;
+      if(block===1){for(const q of growGrass(world,FLOWERS,boneRandom,world.biome,x,y,z))scene.updateBlock(q[0],q[2],q[1]);used=true;}
+      else if(farming.fertilize(x,y,z)){applyFarmUpdates(farming.drain());used=true;}
+      if(used){if(!survival.creative)survival.inventory.decr(survival.inventory.current,1);renderHotbar();sounds.play('dig.grass',{volume:.4});saved=false;}
+      return;
+    }
 
     if (activates && block === 13) {
       inventory(true);
@@ -1143,8 +1174,10 @@ function edit(place = false) {
       return;
     }
     if (id === CHEST && !canPlaceChest(world, ...p)) return;
+    // BlockBush.canPlaceBlockAt: grass, dirt or farmland below, and enough light.
+    if (isFlower(id) && !flowerCanStay(world, FLOWERS, ...p)) return;
     const old = world.get(...p), oldMeta = world.getMeta(...p),
-      meta = id === WOOL ? survival.held?.damage || 0 : 0;
+      meta = id === WOOL || id === RED_FLOWER ? survival.held?.damage || 0 : 0;
     world.set(...p, id, false, meta);
     if (collides(world, ...position.toArray())) {
       world.set(...p, old, false, oldMeta);
@@ -1212,7 +1245,7 @@ function breakBlock(p, creative = false) {
     delete survival.chests[key];
   }
   if (!creative) {
-    items.dropBlock(drops.map((d) => makeStack(d.id, d.count, d.id === WOOL && block === WOOL ? meta : 0)), ...p);
+    items.dropBlock(drops.map((d) => makeStack(d.id, d.count, d.id === block && (block === WOOL || block === RED_FLOWER) ? meta : 0)), ...p);
     if(drop)xpOrbs.spawn(oreExperience(block),at);
     survival.exhaust(0.025);
     survival.wearBlock(block,tool);
@@ -1698,7 +1731,7 @@ function setupPointer() {
     if (e.button === 1) {
       const id = target && pickItem(world.get(...target.block));
       if (id) {
-        survival.inventory.pick(id, survival.creative, id === WOOL ? world.getMeta(...target.block) : undefined);
+        survival.inventory.pick(id, survival.creative, id === WOOL || id === RED_FLOWER ? world.getMeta(...target.block) : undefined);
         mining = null;
         eating = null;
         renderHotbar();
@@ -1809,7 +1842,7 @@ function animate(now) {
       freezeWalk: walkFrozen,
     });
     // The held wool's colour (stack damage) rides along with the displayed item.
-    pose.meta = pose.item === WOOL ? survival.held?.damage || 0 : 0;
+    pose.meta = pose.item === WOOL || pose.item === RED_FLOWER || pose.item === DYE ? survival.held?.damage || 0 : 0;
     const b = pose.bob;
     scene.camera.position.x += b.x * Math.cos(yaw);
     scene.camera.position.z -= b.x * Math.sin(yaw);
@@ -1867,6 +1900,7 @@ function animate(now) {
     swing: animate.pose ? (animate.pose.progress < 1 ? animate.pose.progress : 0) : 0,
     armor: survival?.inventory?.armor ?? [],
     held: heldId(),
+    heldDamage: survival.held?.damage || 0,
     hurt: survival.hurtTicks > 0,
     sneak: motion.sneaking,
   });

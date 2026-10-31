@@ -1,5 +1,6 @@
+import { isFlower } from "./world.js";
 export function blockSound(id) {
-  if ([1, 5].includes(id)||id>=31&&id<=39) return "grass";
+  if ([1, 5].includes(id)||id>=31&&id<=39||isFlower(id)) return "grass";
   if ([2, 24, 25,29,30].includes(id)) return "gravel";
   if (id === 6) return "sand";
   if ([4, 7, 13, 20, 21].includes(id)) return "wood";

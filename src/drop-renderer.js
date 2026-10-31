@@ -36,7 +36,7 @@ export class DropRenderer {
     return this.cubes.get(key);
   }
   build(stack, hover) {
-    const url = itemTexture(stack.id), group = new THREE.Group(), spin = new THREE.Group(), random = new JavaRandom(187),
+    const url = itemTexture(stack.id, stack.damage), group = new THREE.Group(), spin = new THREE.Group(), random = new JavaRandom(187),
       material = url
         ? entityMaterial(this.view.lighting, { map: pixelTexture(url), alphaTest: 0.1, side: THREE.DoubleSide })
         : entityMaterial(this.view.lighting, { map: this.view.textures.texture });

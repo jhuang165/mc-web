@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { WorldEffects } from "./effects.js";
-import { SIZE, HEIGHT, SEA, blockHeight, isPlant, isCrop, opaqueCube } from "./world.js";
+import { SIZE, HEIGHT, SEA, blockHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS } from "./block-textures.js";
 import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
@@ -223,16 +223,20 @@ export class VoxelScene {
   }
   // renderCrossedSquares, with the tall-grass position jitter from the block coordinates.
   crossed(m, b, x, y, z) {
+    const w = this.world;
     let px = x, py = y, pz = z;
-    if (b === 39) {
+    if (b === 39 || isFlower(b)) {
       let i = BigInt.asIntN(64, BigInt(Math.imul(x, 3129871)) ^ (BigInt(z) * 116129781n) ^ BigInt(y));
       i = BigInt.asIntN(64, i * i * 42317861n + i * 11n);
       const bits = (s) => Number((i >> BigInt(s)) & 15n) / 15;
-      px += (bits(16) - 0.5) * 0.5;
-      py += (bits(20) - 1) * 0.2;
-      pz += (bits(24) - 0.5) * 0.5;
+      // blm.l: tall grass moves 0.5 sideways and sinks; flowers (yellow and
+      // red) use the same hash for a 0.3 sideways jitter and do not sink.
+      const spread = b === 39 ? 0.5 : 0.3;
+      px += (bits(16) - 0.5) * spread;
+      if (b === 39) py += (bits(20) - 1) * 0.2;
+      pz += (bits(24) - 0.5) * spread;
     }
-    const uvs = rectUvs(tileRect(blockTile(b, 0))), light = this.light.packed(x, y, z), a = 0.05, c = 0.95;
+    const uvs = rectUvs(tileRect(blockTile(b, 0, false, w.getMeta(x, y, z)))), light = this.light.packed(x, y, z), a = 0.05, c = 0.95;
     m.quad([[px + a, py, pz + a], [px + c, py, pz + c], [px + c, py + 1, pz + c], [px + a, py + 1, pz + a]], uvs, 1, light, true);
     m.quad([[px + a, py, pz + c], [px + c, py, pz + a], [px + c, py + 1, pz + a], [px + a, py + 1, pz + c]], uvs, 1, light, true);
   }

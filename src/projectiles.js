@@ -8,7 +8,7 @@
 // EntityBreakingFX (bju) particles and removes the ball. `y` is the bottom of
 // the box, which is also the entity's posY (yOffset 0).
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
-import { blockBounds } from "./world.js";
+import { blockBounds, RED_FLOWER, YELLOW_FLOWER } from "./world.js";
 import { ENTITY_TYPES } from "./entities.js";
 
 const f = Math.fround;
@@ -141,6 +141,8 @@ const RAY_BOUNDS = {
   39: [0.09999999403953552, 0, 0.09999999403953552, 0.8999999761581421, 0.800000011920929, 0.8999999761581421],
 };
 for (let id = 31; id <= 38; id++) RAY_BOUNDS[id] = [0, 0, 0, 1, 0.25, 1];
+// BlockBush(f = 0.2): 0.5 - f .. 0.5 + f wide and f * 3 high (shadow-reference.json).
+RAY_BOUNDS[YELLOW_FLOWER] = RAY_BOUNDS[RED_FLOWER] = [f(0.5 - f(0.2)), 0, f(0.5 - f(0.2)), f(0.5 + f(0.2)), f(f(0.2) * 3), f(0.5 + f(0.2))];
 export const rayBounds = (world, x, y, z, id) => (id === 41 ? blockBounds(world, x, y, z) : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1]);
 
 // World.rayTraceBlocks (ahb.a(Vec3, Vec3) = func_147447_a(false, false, false)):

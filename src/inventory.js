@@ -25,6 +25,8 @@ export class PlayerInventory {
     if (Array.isArray(armor)) armor.slice(0, 4).forEach((s, i) => { const a = this.read(s); if (a && items[a.id]?.armor === 3 - i) this.armor[i] = a; });
   }
   read(s) {
+    // Saves from before ItemDye (id 351) kept bone meal as internal item 310.
+    if (s && typeof s === "object" && s.id === 310) s = { ...s, id: 351, damage: 15 };
     const item = s && typeof s === "object" && s.id ? this.items[s.id] : null,
       count = Math.floor(Number(s?.count));
     if (!item || !(count > 0)) return null;
