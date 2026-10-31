@@ -164,7 +164,7 @@ test("the viewpoint block is lava until the eye passes the surface", () => {
   assert.ok(liquidHeight(w, 40, 11, 40, LAVA) < 1);
 });
 
-test("an item in lava is thrown up with a fizz, burns and dies on the second tick", () => {
+test("an item in lava is thrown up with a fizz and dies on the first tick", () => {
   const { w } = arena();
   w.set(40, 11, 40, LAVA);
   const items = new ItemEntities(() => 0.5);
@@ -174,8 +174,10 @@ test("an item in lava is thrown up with a fizz, burns and dies on the second tic
   // The lava check of EntityItem.onUpdate runs when the item changes cell or on every 25th tick.
   e.ticks = 24;
   items.tick(w);
-  assert.equal(e.health, 1);
-  assert.equal(e.fire, 300);
+  // onEntityUpdate's lava 4, then moveEntity's tail: the box is burning (lava), inFire 1 and ++fire.
+  assert.equal(e.health, 0);
+  assert.equal(e.dead, true);
+  assert.equal(e.fire, 301);
   assert.equal(items.sounds.length, 1);
   assert.equal(items.sounds[0].name, "random.fizz");
   assert.equal(items.sounds[0].volume, 0.4);
@@ -200,7 +202,8 @@ test("an item that escapes the lava still burns to death within 20 ticks, and wa
   items.spawn({ id: 3, count: 1, damage: 0 }, 40.5, 11.5, 40.5, { motion: [0, 0, 0] });
   items.items[0].fire = 100;
   items.tick(wet.w);
-  assert.equal(items.items[0].fire, 0);
+  // handleWaterMovement zeroes it; the tail rests it at -fireResistance (1).
+  assert.equal(items.items[0].fire, -1);
 });
 
 test("the player: lava deals 4 (armour applies) then fire 1 per second, and water extinguishes", () => {
@@ -232,8 +235,9 @@ test("a mob in lava is damaged 4, burns for 15 s, sinks slowly and swims up", ()
   const world = new EntityWorld(w, [{ id: "mob-1", type: "pig", x: 40.5, y: 11, z: 40.5, health: 10 }]), e = world.entities[0];
   world.tick({ x: 40.5, y: 11, z: 90 }, new Survival());
   assert.equal(e.inLava, true);
+  // Lava 4; the tail's inFire 1 falls inside the hurt window. setFire(15) is 300 and the tail adds 1.
   assert.equal(e.health, 6);
-  assert.equal(e.fire, 300);
+  assert.equal(e.fire, 301);
   assert.equal(e.burn, 1);
   for (let i = 0; i < 60; i++) world.tick({ x: 40.5, y: 11, z: 90 }, new Survival());
   assert.ok(e.health <= 0 || e.death);

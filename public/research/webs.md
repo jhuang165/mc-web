@@ -6,7 +6,7 @@ Version 0.19 adds `BlockWeb` (original ID 30, internal block 51). Cobwebs use th
 
 `Entity.doBlockCollisions` scans the entity box inset by 0.001 on each side. `BlockWeb.onEntityCollidedWithBlock` calls `Entity.setInWeb`, setting the contact flag and clearing fall distance. On the **next** `moveEntity`, the flag is consumed: requested X/Z displacement is multiplied by 0.25, Y by the double value of `0.05f` (0.05000000074505806), and all three motion components become zero. Gravity and drag still run afterward. Contact after that move can set the flag again. Leaving a web therefore retains one slowed move.
 
-The shared functions in `src/webs.js` run around movement for the player, walking mobs, dropped items and XP orbs. Ordinary spiders override `setInWeb` with an empty method, so they are immune. `EntityPlayer.setInWeb` skips the base call while `capabilities.isFlying`; merely being in Creative does not grant immunity. The contact flag is transient and rebuilt after loading, as in the original.
+The shared functions in `src/webs.js` run around movement for the player, walking mobs, dropped items and XP orbs; since 0.21.3 the contact itself is part of the shared `moveEntity` tail in `src/block-collisions.js` ([player step](player-step.md)). Ordinary spiders override `setInWeb` with an empty method, so they are immune. `EntityPlayer.setInWeb` skips the base call while `capabilities.isFlying`; merely being in Creative does not grant immunity. The contact flag is transient and rebuilt after loading, as in the original.
 
 ## Harvesting and fluids
 

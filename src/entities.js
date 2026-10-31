@@ -9,9 +9,8 @@ import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
 import { sheepColor, childColor } from "./sheep.js";
 import { sneakEdge, criticalDamage } from "./player-movement.js";
 import { MobAI } from "./ai.js";
-import { touchesFire, fireContact } from "./fire.js";
-import { touchesCactus, CACTUS_DAMAGE } from "./plants.js";
-import { webMove, webContact } from './webs.js';
+import { webMove } from './webs.js';
+import { blockCollisions } from "./block-collisions.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
 export function wrapDegrees(a) {
@@ -257,8 +256,9 @@ function pushOutCorner(world, e, px, py, pz) {
 // farther. Sets the collided/onGround flags, zeroes motion on blocked axes and
 // runs Entity.updateFallState (sa.a(DZ)V); returns the fall distance on landing.
 // The player also passes `ySize` (after onLivingUpdate's sneak raise); it decays here.
-// `step` is Entity.stepHeight (0 for EntityTNTPrimed, which never steps).
-export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT) {
+// `step` is Entity.stepHeight (0 for EntityTNTPrimed, which never steps). The tail runs the block
+// collisions and the burning-box test (block-collisions.js) with `hooks`; without them only webs.
+export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks) {
   // Entity.width/height are floats (setSize), so the box edges use their float values.
   w = f(w);
   h = f(h);
@@ -322,7 +322,7 @@ export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT) {
     landed = e.fallDistance;
     e.fallDistance = 0;
   } else if (dy < 0) e.fallDistance = f(e.fallDistance - dy);
-  webContact(world, bb, e);
+  blockCollisions(world, bb, e, hooks);
   return landed;
 }
 // Entity.moveFlying (sa.a(FFF)): `forward` (and `strafe`) scaled to `friction`,
@@ -368,12 +368,12 @@ export function jump(e) {
 // friction is 0.91 * block slipperiness. Acceleration is aiMoveSpeed (spiders:
 // fixed 0.1) * 0.16277136 / friction^3; 0.02 in the air. Spiders can climb.
 // Gravity is 0.08 with 0.98 vertical drag. Returns the landing fall distance.
-export function moveEntityWithHeading(world, e, w, h, forward) {
+export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
   let landed;
   if (e.inWater) {
     const y0 = e.y;
     moveFlying(e, 0, forward, f(e.type === "spider" ? 0.02 : 0.04));
-    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz);
+    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, STEP_HEIGHT, hooks);
     e.vx *= 0.800000011920929;
     e.vy *= 0.800000011920929;
     e.vz *= 0.800000011920929;
@@ -382,7 +382,7 @@ export function moveEntityWithHeading(world, e, w, h, forward) {
   } else if (e.inLava) {
     const y0 = e.y;
     moveFlying(e, 0, forward, f(0.02));
-    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz);
+    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, STEP_HEIGHT, hooks);
     e.vx *= 0.5;
     e.vy *= 0.5;
     e.vz *= 0.5;
@@ -401,7 +401,7 @@ export function moveEntityWithHeading(world, e, w, h, forward) {
       ladderClamp(e, e.player && e.sneaking, ["vx", "vy", "vz"]);
       e.fallDistance = 0;
     }
-    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz);
+    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, STEP_HEIGHT, hooks);
     if (e.collidedH && climbable()) e.vy = LADDER_CLIMB;
     e.vy -= 0.08;
     e.vy *= 0.9800000190734863;
@@ -735,7 +735,8 @@ export class EntityWorld {
   // lava (handleLavaMovement) deals 4 (lava), sets fire for 15 s (counter 300) and
   // halves the fall distance. EntityAIPanic keeps animals running while they burn.
   burn(e, t) {
-    if (e.inWater || this.wet?.(e, t.height)) e.fire = 0;
+    // handleWaterMovement: only water; rain puts a burning mob out in moveEntity's tail.
+    if (e.inWater) e.fire = 0;
     if (e.fire > 0) {
       if (e.fire % 20 === 0) this.hazard(e, 1);
       e.fire--;
@@ -746,15 +747,7 @@ export class EntityWorld {
       e.fire = Math.max(e.fire, 300);
       e.fallDistance *= 0.5;
     }
-    // Entity.moveEntity's tail: a box touching fire (contracted 0.001) takes dealFireDamage(1)
-    // each tick and, unless wet, counts its fire up by one (setFire(8) when it was out).
-    if (touchesFire(this.world, [e.x - r, e.y, e.z - r, e.x + r, e.y + t.height, e.z + r])) {
-      const hit = fireContact(true, e.inWater || this.wet?.(e, t.height), e.fire);
-      this.hazard(e, hit.damage);
-      e.fire = hit.fire;
-    }
-    // Entity.doBlockCollisions -> BlockCactus.onEntityCollidedWithBlock: DamageSource.cactus, 1.
-    if (touchesCactus(this.world, [e.x - r, e.y, e.z - r, e.x + r, e.y + t.height, e.z + r])) this.hazard(e, CACTUS_DAMAGE);
+    // Fire blocks and cactus act in moveEntity's tail (walk, block-collisions.js).
     if (e.fire > 0) e.burn = 1;
   }
   feed(e,id,survival){
@@ -1041,7 +1034,13 @@ export class EntityWorld {
       }
     } else e.jumpTicks = 0;
     e.moveForward = f(e.moveForward * f(0.98));
-    const landed = moveEntityWithHeading(this.world, e, t.width, t.height, e.moveForward);
+    // moveEntity's tail: cactus and fire (inFire) damage, webs, the fire counter and the rain fizz.
+    const self = this, hooks = {
+      hurt: (source, points) => this.hazard(e, points),
+      get wet() { return e.inWater || !!self.wet?.(e, t.height); },
+      fizz: () => this.events.push({ sound: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(this.random() - this.random()) * 0.4)), position: { x: e.x, y: e.y, z: e.z } }),
+    };
+    const landed = moveEntityWithHeading(this.world, e, t.width, t.height, e.moveForward, hooks);
     // The finite world's edge stops a mob like a wall.
     const edge = (axis, v) => {
       const c = Math.max(0.6, Math.min(SIZE - 0.6, e[axis]));

@@ -7,10 +7,9 @@ import { collisionBounds, normalCube, slipperiness } from "./world.js";
 import { copyStack } from "./inventory.js";
 import { waterAcceleration, inLava } from "./fluids.js";
 import { LAVA } from "./world.js";
-import { touchesFire, fireContact } from "./fire.js";
-import { touchesCactus } from "./plants.js";
 
-import { webMove, webContact } from './webs.js';
+import { webMove } from './webs.js';
+import { blockCollisions } from "./block-collisions.js";
 
 const W = 0.125, H = 0.25, LIFETIME = 6000;
 const f = Math.fround;
@@ -133,8 +132,10 @@ export class ItemEntities {
     if (side === 5) e.mz = speed;
     return true;
   }
-  // Entity.moveEntity without stepping: y, then x, then z against block boxes.
-  move(world, e, noClip) {
+  // Entity.moveEntity without stepping: y, then x, then z against block boxes. The tail
+  // (block-collisions.js): cactus and fire take 1 of the item's 5 health, webs, the fire
+  // counter (fireResistance 1) and the wet fizz. A noClip move returns before it.
+  move(world, e, noClip, wet = false) {
     let dx = e.mx, dy = e.my, dz = e.mz;
     if (noClip) {
       e.x += dx;
@@ -174,7 +175,14 @@ export class ItemEntities {
     if (odx !== dx) e.mx = 0;
     if (odz !== dz) e.mz = 0;
     if (ody !== dy) e.my = 0;
-    webContact(world, this.box(e), e);
+    blockCollisions(world, this.box(e), e, {
+      hurt: (source, amount) => this.hurt(e, amount),
+      wet,
+      fizz: () => {
+        const r = this.random;
+        this.sounds.push({ name: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(r() - r()) * 0.4)), x: e.x, y: e.y, z: e.z });
+      },
+    });
   }
   // EntityItem.combineItems: the smaller stack joins the larger one.
   combine(e, other, maxStack) {
@@ -197,7 +205,8 @@ export class ItemEntities {
   // The fire and lava part of Entity.onEntityUpdate (sa.C), after the water
   // check: burning deals 1 (onFire) every 20 ticks of the counter; touching lava
   // deals 4 (lava) and sets fire for 15 s (setFire keeps the larger counter).
-  burn(world, e, wet = false) {
+  // Fire blocks and cactus act in move's tail.
+  burn(world, e) {
     if (e.fire > 0) {
       if (e.fire % 20 === 0) this.hurt(e, 1);
       e.fire--;
@@ -206,14 +215,6 @@ export class ItemEntities {
       this.hurt(e, 4);
       e.fire = Math.max(e.fire, 300);
     }
-    // Entity.moveEntity's tail: touching fire deals 1 a tick and sets the counter going.
-    if (touchesFire(world, this.box(e))) {
-      const hit = fireContact(true, wet, e.fire);
-      this.hurt(e, hit.damage);
-      e.fire = hit.fire;
-    }
-    // BlockCactus.onEntityCollidedWithBlock: EntityItem.attackEntityFrom(cactus, 1) takes 1 of its 5 health.
-    if (touchesCactus(world, this.box(e))) this.hurt(e, 1);
   }
   // EntityItem.onUpdate for every item.
   tick(world, maxStack = () => 64) {
@@ -230,7 +231,7 @@ export class ItemEntities {
         if (wet) e.fire = 0;
         wasWet = wet;
       }
-      this.burn(world, e, wasWet);
+      this.burn(world, e);
       e.ticks++;
       if (e.delay > 0) e.delay--;
       e.px = e.x;
@@ -238,7 +239,7 @@ export class ItemEntities {
       e.pz = e.z;
       e.my -= 0.03999999910593033;
       const noClip = this.pushOut(world, e);
-      this.move(world, e, noClip);
+      this.move(world, e, noClip, wasWet);
       const moved = Math.trunc(e.px) !== Math.trunc(e.x) || Math.trunc(e.py + W) !== Math.trunc(e.y + W) || Math.trunc(e.pz) !== Math.trunc(e.z);
       if (moved || e.ticks % 25 === 0) {
         // EntityItem.onUpdate: an item whose cell is lava is thrown up and

@@ -38,7 +38,12 @@ public class PlayerStepProbe {
 
   // As tools/probes/SneakProbe.java: an allocated EntityPlayerSP with its movement input.
   static blk spawn(sun.misc.Unsafe u, PlantProbe.W w, double x, double z, float yaw, boolean sneak, boolean onGround, float ySize) throws Exception {
-    blk e = (blk) u.allocateInstance(blk.class);
+    return spawn(u, w, blk.class, x, z, yaw, sneak, onGround, ySize);
+  }
+
+  // `cls` may be a recording subclass (tools/probes/BlockCollideProbe.java).
+  static blk spawn(sun.misc.Unsafe u, PlantProbe.W w, Class<? extends blk> cls, double x, double z, float yaw, boolean sneak, boolean onGround, float ySize) throws Exception {
+    blk e = (blk) u.allocateInstance(cls);
     set(e, "o", w);
     set(e, "Z", new java.util.Random(1));
     set(e, "C", azt.a(0, 0, 0, 0, 0, 0));

@@ -74,7 +74,7 @@ from `javap` only.
   (`collisionRayTrace`) hit the full cube.
 - **Damage** (probe): `Entity.doBlockCollisions` uses the entity box contracted by 0.001. A cactus in any cell it
   covers calls `attackEntityFrom(DamageSource.cactus, 1)`. The player and mobs take 1 point, with armour applied and
-  the usual hurt cooldown. Items have 5 health and take 1 each tick, so they are destroyed. XP orbs also have 5 health in the original (probe), but this build does not apply cactus damage to orbs.
+  the usual hurt cooldown. Items have 5 health and take 1 each tick, so they are destroyed. XP orbs also have 5 health and are destroyed the same way. Each cactus cell the box covers is a separate call, so an item across two cells loses 2 a tick; since 0.21.3 this runs in the shared `moveEntity` tail ([player step](player-step.md)).
 - **Render**: `renderBlockCactusImpl`, with no ambient occlusion. The four sides are full faces moved 1/16 inwards,
   always drawn, in the cell's own light. Top and bottom are drawn unless covered by an opaque cube, in the light of
   the cell beyond. `cactus_side`, `cactus_top` and `cactus_bottom` come from the original textures. Hardness 0.4,

@@ -19,6 +19,8 @@ Version 0.21.1 moves the player through the original [`Entity.moveEntity`](publi
 
 Version 0.21.2 adds the original `EntityPlayerSP.pushOutOfBlocks`: a player inside a full block (a block placed in their space, falling sand) is pushed out sideways at 0.1 a tick, matching 2,304 original-class cases.
 
+Version 0.21.3 runs cactus, cobweb, fire and lava contact through one port of the `Entity.moveEntity` tail for the player, mobs, items and XP orbs. The player now stands 20 ticks in fire before catching, rain puts burning mobs out with a hiss, and items and XP orbs are destroyed by cactus. It matches 768 original-class cases.
+
 Version 0.21 adds [sprinting and sprint-jumping](public/research/sprinting.md) with the 1.7.10 speeds, FOV and flight/swim physics; [block particles](public/research/particles.md); [creepers, explosions and TNT](public/research/creepers.md); and [sugar cane, cactus and falling sand/gravel](public/research/plants.md), backed by original-class probes.
 
 Version 0.20 adds [ladders](public/research/ladders.md): original placement, support drops, plate rendering and selection, and player and zombie climbing, sliding and sneak-holding, with 95 original-class reference records.

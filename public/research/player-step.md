@@ -38,8 +38,24 @@ The browser check (muted, scratch "Step Check" creative world): walking +z rose 
 
 Browser check (muted, scratch "Push Check" creative world): stone placed in both of the player's cells at (35.5, 22, 80.5) with the sides cleared pushed the player out to (36.41, 22, 80.09), the box clear of the block, where it stopped.
 
+## Block collisions and the fire counter (0.21.3)
+
+The tail of `Entity.moveEntity`, after `updateFallState`, is one function: `blockCollisions` in `src/block-collisions.js`. It replaces the separate cactus, web and fire-contact checks for the player, mobs, item entities and XP orbs. Falling blocks and primed TNT call it without hooks, so only webs act on them, as before.
+
+- `doBlockCollisions` [sa.I, `func_145775_I`] visits every cell from floor(min + 0.001) to floor(max − 0.001) of the box after the move, x then y then z, and calls `onEntityCollidedWithBlock`. `BlockCactus` [ajt] deals `DamageSource.cactus` 1 for each cell, so a box across two cactus cells is hit twice (the hurt window stops the second hit on living entities; items and XP orbs lose 2 health). `BlockWeb` [aok] calls `setInWeb`, which `EntityPlayer` skips while flying and `EntitySpider` overrides with an empty method.
+- Then `World.isBoundingBoxBurning` [ahb.e(azt)] on the box contracted by 0.001: fire, flowing lava or still lava. Inside it, `dealFireDamage(1)` (`inFire`), and unless `isWet`, `++fire`; when that reaches 0, `setFire(8)` (160 ticks, or more with Fire Protection). Outside it, a counter at or below 0 is set to `-fireResistance`.
+- `fireResistance` [sa.ab] is 1, and 20 for `EntityPlayer`. So a player stands 20 ticks in fire or lava before the counter catches; mobs, items and orbs catch at once. Lava's own `setFire(15)` in `onEntityUpdate` still lights the player on the first lava tick.
+- A wet entity (water or rain, `isWet` [sa.L]) whose counter is above 0 plays `random.fizz` (volume 0.7, pitch 1.6 ± 0.4) and is set to `-fireResistance`. `handleWaterMovement` sets the counter to 0 only in water, silently, so rain now puts burning mobs out through the tail rather than at once.
+- Order: `Entity.onEntityUpdate` (the burn countdown, water, lava) runs before the move, so the tail comes after it. The player's controller moves first and runs `survival.tick` afterwards, so `tickSurvival` calls the tail right after `survival.tick`, with the post-move box.
+- A `noClip` item (pushed out of a block) returns from `moveEntity` before the tail, so an item inside a cactus collision box is not hurt until it is out.
+- XP orbs gained the `onEntityUpdate` burn countdown and lava (4, `setFire(15)`) and the tail's cactus and fire damage; they have 5 health and die at 0. Their box and per-axis movement remain the existing simplification.
+
+`tools/probes/BlockCollideProbe.java` runs the unchanged `Entity.moveEntity` on an `EntityPlayerSP` subclass that only records `attackEntityFrom`, `setInWeb` and `playSound` and supplies `isWet`. It covers 12 layouts of cactus, web, fire and lava cells, 4 positions (centred, near an edge, 0.0005 from it, at a corner), start counters 0, −20 and 30, fireResistance 20 and 1, dry and wet, and flying for the web layouts. `node tools/verify-blockcollide.mjs` (with `MC_RESEARCH`) writes `blockcollide-reference.json`: 768 cases of 22 ticks each. `src/block-collisions.test.js` replays every tick (events, counter, web flag and fall distance) and checks items, orbs and mobs in the game classes.
+
+Browser check (muted, scratch "Push Check" world switched to Survival for the run): a fire block in the player's cell counted the counter −20 → −1 over 19 ticks and set 160 on tick 20; inFire took 1 health every 10 ticks (the hurt window), 20 → 17 over 26 ticks.
+
 ## Gaps
 
 - The finite world's x/z edge is a clamp at 0.31, which counts as a horizontal collision.
 - The player does not collide with entity boxes (`World.getCollidingBoundingBoxes` also returns boats and minecarts, which do not exist here).
-- Entity.moveEntity's block-collision callback (`func_145775_I`: cactus, webs, fire, portals) still runs through the existing per-system checks, not one callback.
+- No portals, pressure plates, tripwire or soul sand, so the other `onEntityCollidedWithBlock` blocks have nothing to do. The player's fire counter is not saved.

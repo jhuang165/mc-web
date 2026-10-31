@@ -1,4 +1,5 @@
-import { webMove, webContact } from './webs.js';
+import { webMove } from './webs.js';
+import { blockCollisions, PLAYER_FIRE_RESISTANCE } from './block-collisions.js';
 import "./style.css";
 import "./minecraft-ui.css";
 import "./container-ui.css";
@@ -37,7 +38,7 @@ import {
   CACTUS,
   REEDS,
 } from "./world.js";
-import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION, CACTUS_DAMAGE, touchesCactus, reedTarget, canPlaceReeds, cactusCanPlace } from "./plants.js";
+import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION, reedTarget, canPlaceReeds, cactusCanPlace } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
 import { ladderBounds, canPlaceLadder, placedLadderMeta, ladderSupported, clickedSide, isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
 import { snowCanStay, snowFalls, snowballsFor, iceLeavesWater, stackedSnowMeta } from "./snow.js";
@@ -66,7 +67,7 @@ import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { Arrows, arrowTargets, releaseBow, canDraw, bowStage, bowFov, easeFov, BOW, ARROW } from "./bow.js";
 import { canSeeSky } from "./weather.js";
 import { Fluids, waterAcceleration, entityWaterBox, inLava, liquidInBox } from "./fluids.js";
-import { Fire, touchesFire, fireContact } from "./fire.js";
+import { Fire } from "./fire.js";
 import { explodeBlocks, explosionImpact, primeTnt, tickTnt, TNT_POWER, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { powerCreeper } from "./creeper.js";
 import { JavaRandom } from "./lighting.js";
@@ -1158,18 +1159,20 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     ) === 10;
   tickWeather();
   const wet = isWet(weather, world, { x: position.x, y: position.y, z: position.z, inWater }, PHYSICS.height);
-  // Entity.moveEntity: a burning player that is wet is put out with a hiss (volume 0.7, pitch 1.6 +- 0.4).
-  if (wet && survival.fire > 0) sounds.play("random.fizz", { volume: 0.7, pitch: 1.6 + (Math.random() - Math.random()) * 0.4 });
-  survival.tick({ underwater, inWater: wet, inLava: inLavaNow });
-  // ... and standing in a fire block deals 1 every tick (armour and the hurt window still apply) and
-  // sets the counter going (160 = setFire(8)) unless wet; see fire.js fireContact.
-  if (fire && survival.health > 0 && touchesFire(world, entityBox(position, PHYSICS.width, PHYSICS.height))) {
-    const hit = fireContact(true, wet, survival.fire || 0);
-    survival.damage(hit.damage, "fire", true);
-    survival.fire = hit.fire;
-  }
-  // BlockCactus.onEntityCollidedWithBlock from Entity.doBlockCollisions: DamageSource.cactus, 1 point.
-  if (survival.health > 0 && touchesCactus(world, entityBox(position, PHYSICS.width, PHYSICS.height))) survival.damage(CACTUS_DAMAGE, "a cactus", true);
+  // Entity.onEntityUpdate: only water (handleWaterMovement) puts the fire out here; rain does in the tail below.
+  survival.tick({ underwater, inWater, inLava: inLavaNow });
+  // Entity.moveEntity's tail (block-collisions.js), after onEntityUpdate as in EntityLivingBase.onUpdate:
+  // cactus cells (cactus, 1 each) and webs (not while flying), then a box in fire or lava deals inFire 1
+  // and counts the fire up from -20 (fireResistance 20), so setFire(8) catches after 20 ticks unless
+  // wet; a wet burning player is put out with a hiss (volume 0.7, pitch 1.6 +- 0.4).
+  const tail = { fire: survival.fire || 0, inWeb: motion.inWeb, fallDistance: 0 };
+  blockCollisions(world, entityBox(position, PHYSICS.width, PHYSICS.height), tail, {
+    hurt: (source, n) => survival.health > 0 && survival.damage(n, source === "cactus" ? "a cactus" : "fire", true),
+    wet, flying, resistance: PLAYER_FIRE_RESISTANCE,
+    fizz: () => sounds.play("random.fizz", { volume: 0.7, pitch: 1.6 + (Math.random() - Math.random()) * 0.4 }),
+  });
+  survival.fire = tail.fire;
+  motion.inWeb = tail.inWeb;
   // Scheduled sand and gravel updates and the falling-block entities (WorldServer.tick).
   if (falling) {
     falling.tick();
@@ -1913,7 +1916,7 @@ function movementTick() {
     }
   }
   grounded = body.onGround;
-  webContact(world, playerBox(), motion, flying);
+  // The moveEntity tail (webs, cactus, fire) runs in tickSurvival after Entity.onEntityUpdate's part.
   motion.endMove();
   // Pushing into a wall while on a ladder climbs at 0.2 a tick.
   if (!flying && !inWater && !lava && collidedH && isOnLadder(world, position.x, position.y, position.z)) velocity.y = LADDER_CLIMB;

@@ -399,8 +399,11 @@ test("rain extinguishes burning mobs and zombies do not burn in the rain", () =>
   pig.tick({ x: 64, y: 1, z: 90 }, survival);
   assert.ok(pig.entities[0].fire > 0);
   pig.wet = () => true;
+  pig.events.length = 0;
   pig.tick({ x: 64, y: 1, z: 90 }, survival);
-  assert.equal(pig.entities[0].fire, 0);
+  // moveEntity's tail: wet and burning hisses and rests the counter at -fireResistance (1).
+  assert.equal(pig.entities[0].fire, -1);
+  assert.ok(pig.events.some((ev) => ev.sound === "random.fizz"));
 });
 
 test("rain moistens farmland under open sky without water nearby", () => {

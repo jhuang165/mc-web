@@ -1,4 +1,6 @@
-import { webMove, webContact } from './webs.js';
+import { webMove } from './webs.js';
+import { blockCollisions } from './block-collisions.js';
+import { inLava } from './fluids.js';
 import {mhSin} from "./lighting.js";
 export const levelCost = level => level >= 30 ? 62+(level-30)*7 : level >= 15 ? 17+(level-15)*3 : 17;
 export class Experience {
@@ -23,10 +25,17 @@ export function orbColor(color,partial){const f=Math.fround,t=f(f(color+f(partia
 // Interpolation state: px/py/pz (lastTickPos, equal to prevPos for an orb) and
 // `color` (xpColor, ticks since spawn). Neither is saved.
 const seed=o=>({...o,px:o.x,py:o.y,pz:o.z,color:0});
-const strip=({px,py,pz,color,inWeb,fallDistance,...o})=>o;
+const strip=({px,py,pz,color,inWeb,fallDistance,fire,...o})=>o;
+// EntityXPOrb.attackEntityFrom (sq.a): health 5 (saved), truncated per hit; the orb dies at 0.
+const hurt=(o,amount)=>{o.health=Math.trunc((Number.isFinite(o.health)?o.health:5)-amount);};
+// Entity.onEntityUpdate's fire part before the move: onFire 1 when the counter is a multiple of
+// 20, lava 4 with setFire(15). moveEntity's tail (block-collisions.js) then hurts the orb on
+// cactus and fire cells, slows it in webs and runs the fire counter.
+const burn=(world,o,box)=>{if(o.fire>0){if(o.fire%20===0)hurt(o,1);o.fire--;}if(world.getMeta&&inLava(world,box)){hurt(o,4);o.fire=Math.max(o.fire||0,300);}};
+const orbBox=o=>[o.x-.25,o.y,o.z-.25,o.x+.25,o.y+.5,o.z+.25];
 export class ExperienceOrbs {
  constructor(saved=[]){this.orbs=Array.isArray(saved)?saved.slice(0,512).filter(o=>o&&[o.x,o.y,o.z,o.value,o.life].every(Number.isFinite)&&o.value>0&&o.value<=2477&&o.life>0&&o.life<=6000).map(o=>seed({...o,vx:0,vy:0,vz:0})):[];}
  spawn(value,p){for(const n of splitExperience(Math.max(0,Math.floor(value))).slice(0,128))this.orbs.push(seed({x:p.x,y:p.y+.5,z:p.z,value:n,life:6000,delay:10,vx:(Math.random()-.5)*.12,vy:.12,vz:(Math.random()-.5)*.12}));}
- tick(world,player,xp){let picked=0;this.orbs=this.orbs.filter(o=>{o.px=o.x;o.py=o.y;o.pz=o.z;if(--o.life<=0)return false;o.delay=Math.max(0,(o.delay||0)-1);const dx=player.x-o.x,dy=player.y+.8-o.y,dz=player.z-o.z,d=Math.hypot(dx,dy,dz);if(d<1&&!o.delay){xp.add(o.value);picked+=o.value;return false;}if(d<8&&d>.01){const pull=(1-d/8)**2*.1;o.vx+=dx/d*pull;o.vy+=dy/d*pull;o.vz+=dz/d*pull;}o.vy-=.03;const move=webMove(o);for(const a of ['x','y','z']){const v='v'+a,p={...o,[a]:o[a]+move['xyz'.indexOf(a)]};if(!world.solid(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z)))o[a]=p[a];else o[v]*=a==='y'?-.6:-.4;}webContact(world,[o.x-.25,o.y,o.z-.25,o.x+.25,o.y+.5,o.z+.25],o);o.vx*=.98;o.vy*=.98;o.vz*=.98;o.color++;return true;});return picked;}
+ tick(world,player,xp){let picked=0;this.orbs=this.orbs.filter(o=>{o.px=o.x;o.py=o.y;o.pz=o.z;if(--o.life<=0)return false;o.delay=Math.max(0,(o.delay||0)-1);const dx=player.x-o.x,dy=player.y+.8-o.y,dz=player.z-o.z,d=Math.hypot(dx,dy,dz);if(d<1&&!o.delay){xp.add(o.value);picked+=o.value;return false;}if(d<8&&d>.01){const pull=(1-d/8)**2*.1;o.vx+=dx/d*pull;o.vy+=dy/d*pull;o.vz+=dz/d*pull;}burn(world,o,orbBox(o));o.vy-=.03;const move=webMove(o);for(const a of ['x','y','z']){const v='v'+a,p={...o,[a]:o[a]+move['xyz'.indexOf(a)]};if(!world.solid(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z)))o[a]=p[a];else o[v]*=a==='y'?-.6:-.4;}blockCollisions(world,orbBox(o),o,{hurt:(source,amount)=>hurt(o,amount)});if(o.health<=0)return false;o.vx*=.98;o.vy*=.98;o.vz*=.98;o.color++;return true;});return picked;}
  serialize(){return this.orbs.map(strip);}
 }
