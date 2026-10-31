@@ -19,7 +19,13 @@ import {
   RED_FLOWER,
   YELLOW_FLOWER,
   isFlower,
+  SNOW_LAYER,
+  ICE,
+  WATER,
+  slipperiness,
+  snowSelectionHeight,
 } from "./world.js";
+import { snowCanStay, snowFalls, snowballsFor, iceLeavesWater, stackedSnowMeta } from "./snow.js";
 import { flowerCanStay, growGrass, JRandom } from "./flowers.js";
 import { VoxelScene } from "./scene.js";
 import { SoundBank, blockSound } from "./audio.js";
@@ -231,7 +237,7 @@ function makeRecord(p) {
     seed: String(p.seed).slice(0, 80),
     biome: p.biome || "meadow",
     mode: p.mode === "survival" ? "survival" : "creative",
-    generationVersion: 5,
+    generationVersion: 6,
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -245,7 +251,7 @@ function toast(message) {
 }
 function sound(place, block = target ? world.get(...target.block) : 3) {
   sounds?.play(
-    !place && block === 9 ? "random.glass" : "dig." + blockSound(block),
+    !place && (block === 9 || block === 47) ? "random.glass" : "dig." + blockSound(block),
     { volume: place ? 0.8 : 1, pitch: 0.8 },
   );
 }
@@ -322,7 +328,7 @@ function modal(title, body, extra = "") {
 function createWorld() {
   modal(
     "Create New World",
-    `<p class="modal-subtitle"></p><form id="create-form"><label>WORLD NAME<input id="new-name" maxlength="40" value="New World" required></label><div class="form-columns"><label>GAME MODE<select id="new-mode"><option value="survival">Survival</option><option value="creative">Creative</option></select></label><label>LANDSCAPE<select id="new-biome"><option value="meadow">Meadow</option><option value="alpine">Highlands</option><option value="island">Island</option></select></label></div><label>SEED <span>Same seed, same beginning.</span><input id="new-seed" maxlength="80" placeholder="Leave blank for a surprise"></label><p class="form-note">Survival starts empty-handed. Gather wood, craft tools, and watch your health and hunger. 128 × 128 blocks; custom terrain.</p><button class="button primary full">Create New World</button></form>`,
+    `<p class="modal-subtitle"></p><form id="create-form"><label>WORLD NAME<input id="new-name" maxlength="40" value="New World" required></label><div class="form-columns"><label>GAME MODE<select id="new-mode"><option value="survival">Survival</option><option value="creative">Creative</option></select></label><label>LANDSCAPE<select id="new-biome"><option value="meadow">Meadow</option><option value="alpine">Highlands</option><option value="island">Island</option><option value="snowy">Snowy Tundra</option></select></label></div><label>SEED <span>Same seed, same beginning.</span><input id="new-seed" maxlength="80" placeholder="Leave blank for a surprise"></label><p class="form-note">Survival starts empty-handed. Gather wood, craft tools, and watch your health and hunger. 128 × 128 blocks; custom terrain.</p><button class="button primary full">Create New World</button></form>`,
   );
   $("#create-form").onsubmit = (e) => {
     e.preventDefault();
@@ -531,7 +537,21 @@ function watchFlowers() {
       items.dropBlock([makeStack(b, 1, b === RED_FLOWER ? meta : 0)], fx, fy, fz);
       scene.updateBlock(fx, fz, fy);
     }
+    // BlockSnow.onNeighborBlockChange: a layer that can no longer stand vanishes without a drop.
+    for (const [dx, dy, dz] of [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]) {
+      const fx = x + dx, fy = y + dy, fz = z + dz;
+      if (world.get(fx, fy, fz) !== SNOW_LAYER || !snowFalls(world, fx, fy, fz)) continue;
+      world.set(fx, fy, fz, 0);
+      scene.updateBlock(fx, fz, fy);
+    }
   };
+}
+// WorldServer's weather edits (freezing, snowfall, melting) go through the same tracked set and relight path as the player's.
+function applyWeatherEdit(w, x, y, z, block, meta) {
+  const old = w.get(x, y, z);
+  w.set(x, y, z, block, true, meta);
+  scene.updateBlocks([[x, y, z, old, block]]);
+  saved = false;
 }
 function launch(record) {
   try {
@@ -539,6 +559,8 @@ function launch(record) {
     world = new World(record.seed, record.biome, record.generationVersion ?? 1);
     world.restore(record.edits || []);
     scene.setWorld(world);
+    // Block light for canBlockFreeze/canSnowAt/melting is the scene's light volume.
+    world.blockLight = (x, y, z) => scene.light.blockAt(x, y, z);
     // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
     fluids = new Fluids(world, { fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : cropDrops(b); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
     fluids.wake();
@@ -547,6 +569,7 @@ function launch(record) {
     // Rain moistens farmland (BlockFarmland.updateTick: canLightningStrikeAt(x, y + 1, z)).
     farming.rained = (x, y, z) => canLightningStrikeAt(weather, world, x, y + 1, z);
     weather = new Weather().restore(record.weather);
+    weather.apply = applyWeatherEdit;
     scene.weather = weather;
     experience=new Experience(record.experience);xpOrbs=new ExperienceOrbs(record.xpOrbs);
     mobs = new EntityWorld(world, record.entities);
@@ -1243,7 +1266,25 @@ function edit(place = false) {
       beginEating(id);
       return;
     }
-    const p = target.adjacent;
+    // ItemSnow.onItemUse: the snow item clicked on a layer below full height adds a layer there.
+    const here = target.block, hereMeta = block === SNOW_LAYER ? world.getMeta(...here) : 0, stacked = stackedSnowMeta(hereMeta);
+    if (id === SNOW_LAYER && block === SNOW_LAYER && stacked !== null && (survival.creative || survival.count(id))) {
+      world.set(...here, SNOW_LAYER, false, stacked);
+      if (collides(world, ...position.toArray())) {
+        world.set(...here, SNOW_LAYER, false, hereMeta);
+        toast("Give yourself a little room to build.");
+        return;
+      }
+      world.set(...here, SNOW_LAYER, true, stacked);
+      if (!survival.creative) survival.take(id);
+      scene.updateBlock(here[0], here[2], here[1]);
+      renderHotbar();
+      sounds.play("dig.snow", { position: { x: here[0] + 0.5, y: here[1] + 0.5, z: here[2] + 0.5 }, volume: 1, pitch: 0.8 });
+      saved = false;
+      return;
+    }
+    // ItemBlock.onItemUse: a one-layer snow cell is replaced in place (the side becomes "top").
+    const p = block === SNOW_LAYER && !hereMeta ? [...here] : target.adjacent;
     if (!p || p[1] === 0 || p[1] >= HEIGHT - 1 || !world.inside(...p)) return;
     if (!item?.block || isLiquid(id)) {
       toast("Select a building block, food, or workstation.");
@@ -1256,6 +1297,8 @@ function edit(place = false) {
     if (id === CHEST && !canPlaceChest(world, ...p)) return;
     // BlockBush.canPlaceBlockAt: grass, dirt or farmland below, and enough light.
     if (isFlower(id) && !flowerCanStay(world, FLOWERS, ...p)) return;
+    // BlockSnow.canPlaceBlockAt: never on ice, otherwise leaves, a full layer or an opaque cube.
+    if (id === SNOW_LAYER && !snowCanStay(world, ...p)) return;
     const old = world.get(...p), oldMeta = world.getMeta(...p),
       meta = id === WOOL || id === RED_FLOWER ? survival.held?.damage || 0 : 0;
     world.set(...p, id, false, meta);
@@ -1301,7 +1344,7 @@ function breakBlock(p, creative = false) {
   if (!block || (block === 11 && (!creative || p[1] === 0))) return false;
   const harvest = creative || survival.mining(block, tool).harvest;
   let drop = harvest ? (m.drop ?? block) : 0,
-    count = m.count || 1;
+    count = block === SNOW_LAYER ? snowballsFor(world.getMeta(...p)) : m.count || 1;
   if (block === 5 && Math.random() < 0.005) drop = 200;
   const shearing=ITEMS[tool]?.kind==='shears'&&survival.count(tool)>0;
   if(shearing&&(block===5||block===39)){drop=block;count=1;}
@@ -1311,6 +1354,8 @@ function breakBlock(p, creative = false) {
     chest = survival.chests[key],
     meta = world.getMeta(...p);
   if (!world.set(...p, 0)) return false;
+  // BlockIce.harvestBlock (survival only): without silk touch it leaves flowing water over a solid or liquid cell.
+  if (block === ICE && !creative && iceLeavesWater(world.get(p[0], p[1] - 1, p[2]))) world.set(...p, WATER, true, 0);
   farming.observe(...p);
   const at = { x: p[0] + 0.5, y: p[1] + 0.1, z: p[2] + 0.5 };
   // BlockFurnace.breakBlock spills its contents whatever the game mode.
@@ -1437,6 +1482,7 @@ function movementTick() {
   };
   const inLavaNow = inLava(world, playerBox()),
     lava = inLavaNow && !inWater && !flying;
+  let slip = Math.fround(0.6);
   if (flying) {
     const speed = sprint ? 0.8 : 0.42;
     velocity.x = (Math.cos(yaw) * dx - Math.sin(yaw) * dz) * speed;
@@ -1451,8 +1497,10 @@ function movementTick() {
     velocity.x += push[0];
     velocity.y += push[1];
     velocity.z += push[2];
+    // EntityLivingBase.moveEntityWithHeading: friction is the slipperiness of the block under the feet, read before the move.
+    slip = slipperiness(world.get(Math.floor(position.x), Math.floor(position.y) - 1, Math.floor(position.z)));
     const friction = grounded
-      ? Math.fround(0.6) * Math.fround(0.91)
+      ? slip * Math.fround(0.91)
       : Math.fround(0.91);
     const accel =
       (grounded
@@ -1522,7 +1570,7 @@ function movementTick() {
       : inWater
       ? 0.8
       : grounded
-        ? Math.fround(Math.fround(0.6) * Math.fround(0.91))
+        ? Math.fround(slip * Math.fround(0.91))
         : Math.fround(0.91);
     velocity.x *= f;
     velocity.z *= f;
@@ -1656,7 +1704,7 @@ $("#file-input").onchange = async (e) => {
       data.version !== 1 ||
       typeof data.name !== "string" ||
       typeof data.seed !== "string" ||
-      !["meadow", "alpine", "island"].includes(data.biome)
+      !["meadow", "alpine", "island", "snowy"].includes(data.biome)
     )
       throw new Error("Choose a Blockworld export file");
     const check = new World(data.seed, data.biome, data.generationVersion ?? 1);
@@ -1967,7 +2015,12 @@ function animate(now) {
       target?.distance ?? 6,
     );
     scene.outline.visible = !!target && !aimedEntity;
-    if (target) scene.outline.position.set(...target.block.map((v) => v + 0.5));
+    if (target) {
+      // BlockSnow.setBlockBoundsBasedOnState: the box is (meta + 1) / 8 high; other blocks keep the full cube here.
+      const snow = world.get(...target.block) === SNOW_LAYER, h = snow ? snowSelectionHeight(world.getMeta(...target.block)) : 1;
+      scene.outline.scale.y = (h + 0.004) / 1.004;
+      scene.outline.position.set(target.block[0] + 0.5, target.block[1] + (snow ? h / 2 : 0.5), target.block[2] + 0.5);
+    }
     $("#mining-meter").classList.toggle("hidden", !mining);
     if (mining) {
       $("#mining-meter").setAttribute(

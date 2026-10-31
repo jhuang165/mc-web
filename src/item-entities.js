@@ -3,7 +3,7 @@
 // collision, func_145771_j push-out, merging with neighbours within 0.5
 // blocks, a 6,000-tick lifetime and EntityPlayer's pickup box. `y` is the
 // bottom of the box; EntityItem's posY sits half the height (0.125) above it.
-import { blockBounds, normalCube } from "./world.js";
+import { blockBounds, normalCube, slipperiness } from "./world.js";
 import { copyStack } from "./inventory.js";
 import { waterAcceleration, inLava } from "./fluids.js";
 import { LAVA } from "./world.js";
@@ -242,8 +242,8 @@ export class ItemEntities {
           if (e.dead) break;
         }
       }
-      // Block.slipperiness is 0.6 for every block in this build.
-      const drag = e.onGround ? f(f(0.6) * f(0.98)) : f(0.98);
+      // EntityItem.onUpdate: the block below the item's minY sets the ground drag (0.98 on ice).
+      const drag = e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.98)) : f(0.98);
       e.mx *= drag;
       e.my *= 0.9800000190734863;
       e.mz *= drag;

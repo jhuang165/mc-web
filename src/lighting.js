@@ -4,6 +4,7 @@
 // terms are optional trailing arguments that default to 0 (clear sky); weather.js
 // supplies them. See public/research/lighting.md and weather.md.
 import { SIZE, HEIGHT, isPlant, normalCube, opaqueCube } from "./world.js";
+import { biomeFacts } from "./biomes.js";
 
 const f = Math.fround,
   PI_F = f(Math.PI),
@@ -28,7 +29,8 @@ export const BRIGHTNESS = Array.from({ length: 16 }, (_, i) => {
 export function lightOpacity(b) {
   if (b === 0 || b === 9 || b === 20 || b === 41 || b === 42 || isPlant(b)) return 0;
   if (b === 5) return 1;
-  if (b === 10) return 3;
+  if (b === 10 || b === 47) return 3; // water; ice (setLightOpacity(3))
+  if (b === 46) return 0; // snow layer: not an opaque cube (probe: snow-reference.json "blocks")
   return 255;
 }
 // Lava: setLightLevel(1.0F), so (int)(15 * 1.0) = 15.
@@ -89,7 +91,8 @@ export function skyColorByTemp(temperature) {
   return hsbToRgb(f(f(0.62222224) - f(t * f(0.05))), f(0.5 + f(t * f(0.1))), 1);
 }
 // BiomeGenPlains is 0.8; BiomeGenHills (this build's alpine preset) is 0.2.
-export const biomeTemperature = (biome) => (biome === "alpine" ? f(0.2) : f(0.8));
+// BiomeGenSnow (Ice Plains, the "snowy" preset) is 0.0. See biomes.js.
+export const biomeTemperature = (biome) => biomeFacts(biome).temperature;
 // Pulls a colour toward its grey: grey = (0.3 r + 0.59 g + 0.11 b) * shade, with
 // k = 1 - strength * keep (World.getSkyColor and getCloudColour).
 const toGrey = (c, shade, strength, keep) => {
@@ -400,7 +403,11 @@ export function smoothFace(light, x, y, z, face, corners, boundary = true) {
 const MASK = (1n << 48n) - 1n;
 export class JavaRandom {
   constructor(seed) {
+    this.setSeed(seed);
+  }
+  setSeed(seed) {
     this.seed = (BigInt(seed) ^ 0x5deece66dn) & MASK;
+    this.haveNextGaussian = false;
   }
   next(bits) {
     this.seed = (this.seed * 0x5deece66dn + 0xbn) & MASK;
@@ -421,6 +428,23 @@ export class JavaRandom {
   }
   nextDouble() {
     return (this.next(26) * 134217728 + this.next(27)) / 2 ** 53;
+  }
+  // Random.nextGaussian: the polar method, caching the second value of each pair.
+  nextGaussian() {
+    if (this.haveNextGaussian) {
+      this.haveNextGaussian = false;
+      return this.nextGaussianValue;
+    }
+    let v1, v2, s;
+    do {
+      v1 = 2 * this.nextDouble() - 1;
+      v2 = 2 * this.nextDouble() - 1;
+      s = v1 * v1 + v2 * v2;
+    } while (s >= 1 || s === 0);
+    const multiplier = Math.sqrt((-2 * Math.log(s)) / s); // StrictMath.sqrt/log: close enough in doubles
+    this.nextGaussianValue = v2 * multiplier;
+    this.haveNextGaussian = true;
+    return v1 * multiplier;
   }
 }
 // RenderGlobal.renderStars: quads on a radius-100 sphere, four vertices each.

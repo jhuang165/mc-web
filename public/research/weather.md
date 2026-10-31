@@ -53,7 +53,7 @@ Evidence key: **probe** = replayed against the original classes in `weather-refe
 
 ## Differences and gaps (not ported)
 
-- **No snow.** The build's biome presets have temperature 0.8 (meadow, island) or 0.2 (alpine), both at least 0.15, so it always rains, never snows. `snow.png`, snow layers and ice are not used. Temperature is not lowered above y 64 (the world is 64 high).
+- **Snow only in the snowy preset.** Meadow, island and alpine (temperature 0.8, 0.8 and 0.2) still always rain and never snow. The "Snowy Tundra" preset (Ice Plains, temperature 0.0, `getEnableSnow`, no lightning) renders `environment/snow.png` columns instead of rain, freezes still water and settles snow layers through the `WorldServer.func_147456_g` tick, and melts them near light. Details, evidence and gaps are in [snow.md](snow.md). Temperature is not lowered above y 64 (the world is 64 high).
 - **Thunder timers do not depend on rain.** The original `updateWeather` rolls thunder and rain independently; thunder only matters while the rain strength is high enough (`weightedThunder` is thunder times rain). A storm therefore needs both. This differs from the simpler "thunder only while it rains" model.
 - **No `/weather` command.** `window.__mc.weather.set("rain" | "thunder" | "clear", seconds)` exists in dev builds only. It sets flags and timers; strengths still ramp at 0.01 per tick.
 - **Fire from lightning is not placed.** There is no fire block, so the `Blocks.fire` placement in the bolt constructor and its re-flash is skipped. Damage and `setFire` on entities are done. Because this build's extinguish sets `fire` to 0 rather than `-fireResistance`, a struck entity burns for a single tick, as a first strike does in vanilla.

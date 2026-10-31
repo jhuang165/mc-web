@@ -5,11 +5,11 @@ export function digSpeed(block,tool){
  if(!tool?.kind)return 1;
  if(tool.kind==='shears')return block===5?15:block===19?5:1;
  if(tool.kind==='sword')return block===5||block>=31&&block<=39?1.5:1;
- const effective={shovel:[1,2,6,23,24,25,29,30],axe:[4,7,13,21,39,...Array.from({length:8},(_,i)=>31+i)],pickaxe:[3,8,12,14,15,16,17,18,22,26,27,28,40]};
+ const effective={shovel:[1,2,6,23,24,25,29,30,46],axe:[4,7,13,21,39,...Array.from({length:8},(_,i)=>31+i)],pickaxe:[3,8,12,14,15,16,17,18,22,26,27,28,40,47]};
  return effective[tool.kind]?.includes(block)?tool.speed:1;
 }
 export function canHarvest(block,material,tool){
- if(block===23)return tool?.kind==='shovel';
+ if(block===23||block===46)return tool?.kind==='shovel';
  return material.tier===undefined||tool?.kind==='pickaxe'&&tool.tier>=material.tier;
 }
 export function miningState(block,material={},tool=null,{underwater=false,onGround=true,efficiency=0,haste=-1,fatigue=-1,aquaAffinity=false}={}){

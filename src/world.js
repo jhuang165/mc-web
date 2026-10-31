@@ -1,5 +1,6 @@
 import { decorateFlowers } from "./flowers.js";
 import { generateLakes, generateSprings } from "./lakes.js";
+import { populateSnow } from "./snow.js";
 export const SIZE = 128,
   HEIGHT = 64,
   SEA = 16;
@@ -45,8 +46,14 @@ export const BLOCKS = [
   // and referenced through the constants below, never by number.
   {name:'Dandelion',color:'#f1e04b'},
   {name:'Red flower',color:'#c9302a'},
+  // Id 45 is reserved for Fire (the fire port adds it); 46 and 47 are BlockSnow (snow_layer,
+  // metadata 0-7 = layers - 1) and BlockIce, referenced through the constants below.
+  {name:'Fire',color:'#e25822',hidden:true},
+  {name:'Snow',color:'#f4fafa'},
+  {name:'Ice',color:'#8cb4fe'},
 ];
 export const WATER=10,LAVA=42;
+export const SNOW_LAYER=46,ICE=47;
 export const isLiquid=b=>b===WATER||b===LAVA;
 export const YELLOW_FLOWER = BLOCKS.findIndex((b) => b.name === 'Dandelion');
 export const RED_FLOWER = BLOCKS.findIndex((b) => b.name === 'Red flower');
@@ -116,22 +123,33 @@ function noise(x, z, seed) {
 }
 export const isCrop=b=>b>=31&&b<=38;
 export const isPlant=b=>isCrop(b)||b===39||isFlower(b);
-export const blockHeight=b=>b===29||b===30?15/16:b===41?.875:1;
+export const blockHeight=b=>b===29||b===30?15/16:b===41?.875:b===SNOW_LAYER?.125:1;
+// Blocks with Block.tickRandomly: they count towards a section's random-tick refcount
+// (ExtendedBlockStorage.getNeedsRandomTick), which WorldServer reads to pick sections.
+// Grass, leaves, farmland, crops, lava, snow layer and ice here; snow and ice are the ones
+// that act on a random tick in this port (snow.js).
+export const ticksRandomly=b=>b===1||b===5||b===29||b===30||(b>=31&&b<=38)||b===LAVA||b===SNOW_LAYER||b===ICE;
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42]);
+const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE]);
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 export const normalCube=b=>opaqueCube(b)&&b!==5;
 // setBlockBoundsBasedOnState: chests are inset by 1/16 except towards a partner.
+// A snow layer's collision box is meta * 1/8 tall (BlockSnow.getCollisionBoundingBoxFromPool: meta 0
+// is flat and has none); its selection box is (meta + 1) / 8 (snowSelectionHeight).
+// Block.slipperiness (field_149765_K): 0.6 for every block here but ice, 0.98 (BlockIce).
+export const slipperiness=b=>b===ICE?Math.fround(0.98):Math.fround(0.6);
+export const snowSelectionHeight=meta=>((meta&7)+1)/8;
 export function blockBounds(world,x,y,z){
   const b=world.get(x,y,z);
+  if(b===SNOW_LAYER)return[0,0,0,1,(world.getMeta(x,y,z)&7)*.125,1];
   if(b!==41)return[0,0,0,1,blockHeight(b),1];
   const c=(dx,dz)=>world.get(x+dx,y,z+dz)===41;
   return[c(-1,0)?0:1/16,0,c(0,-1)?0:1/16,c(1,0)?1:15/16,.875,c(0,1)?1:15/16];
 }
 export class World {
-  constructor(seed = "Overworld", biome = "meadow", generationVersion = 5) {
+  constructor(seed = "Overworld", biome = "meadow", generationVersion = 6) {
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
@@ -142,6 +160,10 @@ export class World {
     this.meta = new Uint8Array(SIZE * SIZE * HEIGHT);
     this.edits = new Map();
     this.onChange = null;
+    // Saved block light (World.getSavedLightValue(EnumSkyBlock.Block)): the scene sets this to
+    // its LightVolume; until then snow.js works it out from the lava.
+    this.blockLight = null;
+    this.tickCounts = null;
     this.generate();
   }
   index(x, y, z) {
@@ -160,7 +182,23 @@ export class World {
   }
   solid(x, y, z) {
     const b = this.get(x, y, z);
+    // A flat snow layer (meta 0) has no collision box, so it is not an obstacle.
+    if (b === SNOW_LAYER) return (this.meta[this.index(x, y, z)] & 7) !== 0;
     return b !== 0 && b !== 10 && b !== 42 && b !== 20 && !isPlant(b);
+  }
+  // Section (16 high) random-tick refcounts, kept up to date by put() once built.
+  sectionTickCount(cx, cz, s) {
+    if (!this.tickCounts) {
+      const n = SIZE / 16;
+      this.tickCounts = new Int32Array(n * n * (HEIGHT / 16));
+      for (let x = 0; x < SIZE; x++)
+        for (let z = 0; z < SIZE; z++)
+          for (let y = 0; y < HEIGHT; y++) if (ticksRandomly(this.data[this.index(x, y, z)])) this.tickCounts[this.tickSection(x, y, z)]++;
+    }
+    return this.tickCounts[(cx * (SIZE / 16) + cz) * (HEIGHT / 16) + s];
+  }
+  tickSection(x, y, z) {
+    return ((x >> 4) * (SIZE / 16) + (z >> 4)) * (HEIGHT / 16) + (y >> 4);
   }
   // Writes a block and its metadata without telling onChange (fluids.js uses it
   // for its own edits). A tracked edit is saved as block | meta << 8, so saves
@@ -178,6 +216,11 @@ export class World {
     )
       return false;
     const i = this.index(x, y, z);
+    if (this.tickCounts) {
+      const section = this.tickSection(x, y, z);
+      if (ticksRandomly(this.data[i])) this.tickCounts[section]--;
+      if (ticksRandomly(b)) this.tickCounts[section]++;
+    }
     this.data[i] = b;
     this.meta[i] = meta;
     if (track) this.edits.set(`${x},${y},${z}`, meta ? b | (meta << 8) : b);
@@ -274,6 +317,10 @@ export class World {
     if(this.generationVersion>=4)decorateFlowers(this,{yellow:YELLOW_FLOWER,red:RED_FLOWER,heights,biome:this.biome});
     // BiomeDecorator runs its liquid springs after the flowers (version 5).
     if (lakes) generateSprings(this, lakes);
+    // Version 6: ChunkProviderGenerate.populate's last pass freezes exposed still water and lays
+    // snow where the biome is cold enough. Only the snowy preset is (Ice Plains, 0.0); the other
+    // presets are above 0.15, so they come out exactly as before.
+    if (this.generationVersion >= 6) populateSnow(this);
 
   }
   spawn() {
@@ -338,16 +385,28 @@ export function collides(world, x, y, z) {
   return false;
 }
 export function raycast(world, origin, dir, reach = 6) {
-  let last = null;
+  let last = null, passed = null;
   for (let d = 0; d <= reach; d += 0.025) {
     const p = [
       Math.floor(origin.x + dir.x * d),
       Math.floor(origin.y + dir.y * d),
       Math.floor(origin.z + dir.z * d),
     ];
+    if (passed && !p.every((v, i) => v === passed[i])) {
+      last = passed;
+      passed = null;
+    }
     if (last && p.every((v, i) => v === last[i])) continue;
-    if (world.get(...p) !== 0 && !isLiquid(world.get(...p)))
+    const hit = world.get(...p);
+    if (hit !== 0 && !isLiquid(hit)) {
+      // A snow layer is only selectable up to its selection height; above it the ray goes on
+      // (and keeps being tested while it is inside the cell).
+      if (hit === SNOW_LAYER && origin.y + dir.y * d - p[1] > snowSelectionHeight(world.getMeta(...p))) {
+        passed = p;
+        continue;
+      }
       return { block: p, adjacent: last, distance: d };
+    }
     last = p;
   }
   return null;

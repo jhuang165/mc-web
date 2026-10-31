@@ -4,8 +4,9 @@
 // public/research/weather.md for what is verified and what is simplified.
 import * as THREE from "three";
 import { FOG_PARS } from "./light-material.js";
-import { JavaRandom } from "./lighting.js";
-import { precipitationHeight, rainsHere } from "./weather.js";
+import { JavaRandom, biomeTemperature } from "./lighting.js";
+import { biomeFacts } from "./biomes.js";
+import { precipitationHeight } from "./weather.js";
 
 const f = Math.fround;
 const RADIUS = 10; // fancy graphics
@@ -150,6 +151,8 @@ export class WeatherRenderer {
   constructor(parent, lighting, scene) {
     this.scene = scene;
     this.rain = new Quads(SPAN * SPAN, quadMaterial(lighting, texture("/media/1.7.10/environment/rain.png"), 0.1));
+    // The snow branch of renderRainSnow draws the same columns with environment/snow.png.
+    this.snow = new Quads(SPAN * SPAN, quadMaterial(lighting, texture("/media/1.7.10/environment/snow.png"), 0.1));
     this.drops = new Quads(MAX_DROPS, quadMaterial(lighting, texture("/media/1.7.10/particle/particles.png"), 0.003921569));
     this.bolts = new THREE.Mesh(
       new THREE.BufferGeometry(),
@@ -165,7 +168,7 @@ export class WeatherRenderer {
     this.bolts.frustumCulled = false;
     this.bolts.visible = false;
     this.boltKey = "";
-    parent.add(this.rain.mesh, this.drops.mesh, this.bolts);
+    parent.add(this.rain.mesh, this.snow.mesh, this.drops.mesh, this.bolts);
     this.right = new THREE.Vector3();
     this.up = new THREE.Vector3();
   }
@@ -173,7 +176,7 @@ export class WeatherRenderer {
   // the fraction of the current tick.
   update(weather, world, camera, partial) {
     if (!weather || !world) {
-      this.rain.mesh.visible = this.drops.mesh.visible = this.bolts.visible = false;
+      this.rain.mesh.visible = this.snow.mesh.visible = this.drops.mesh.visible = this.bolts.visible = false;
       return;
     }
     this.columns(weather, world, camera, partial);
@@ -181,12 +184,16 @@ export class WeatherRenderer {
     this.lightning(weather);
   }
   // renderRainSnow: a 21 x 21 block area of slanted quads around the viewer,
-  // from the lower of 10 below and the precipitation height to 10 above, scrolling
-  // down 3 to 4 texture rows per tick.
+  // from the lower of 10 below and the precipitation height to 10 above. Rain
+  // scrolls down 3 to 4 texture rows per tick; snow (biome temperature below
+  // 0.15, in a biome that precipitates) drifts slowly with a gaussian sway and
+  // a brightness pulled toward full light (snow branch from bytecode only).
   columns(weather, world, camera, partial) {
-    const strength = weather.rainStrength(partial), q = this.rain;
-    q.begin();
-    if (strength > 0 && rainsHere(world)) {
+    const strength = weather.rainStrength(partial), facts = biomeFacts(world.biome),
+      snowing = biomeTemperature(world.biome) < f(0.15), q = snowing ? this.snow : this.rain;
+    this.rain.begin();
+    this.snow.begin();
+    if (strength > 0 && (facts.canSpawnLightning || facts.enableSnow)) {
       const px = camera.position.x, py = camera.position.y, pz = camera.position.z,
         i = Math.floor(px), j = Math.floor(py), k = Math.floor(pz), count = weather.clientTicks;
       for (let z = k - RADIUS; z <= k + RADIUS; z++)
@@ -200,11 +207,27 @@ export class WeatherRenderer {
           const sx = (Math.imul(Math.imul(x, x), 3121) + Math.imul(x, 45238971)) | 0,
             sz = (Math.imul(Math.imul(z, z), 418711) + Math.imul(z, 13761)) | 0,
             random = new JavaRandom(BigInt(sx ^ sz)),
-            wave = f(f(f(((count + sx + sz) & 31) + partial) / 32) * f(3 + random.nextFloat())),
             dx = x + 0.5 - px, dz = z + 0.5 - pz, dist = f(f(Math.sqrt(dx * dx + dz * dz)) / RADIUS);
           if (rainX[idx] !== rainX[idx]) continue; // the viewer's own column (0/0)
-          const mid = Math.max(top, j), a = f(f(f(f(1 - f(dist * dist)) * 0.5) + 0.5) * strength),
-            ox = f(rainX[idx] * 0.5), oz = f(rainZ[idx] * 0.5), v0 = low / 4 + wave, v1 = high / 4 + wave;
+          const mid = Math.max(top, j), ox = f(rainX[idx] * 0.5), oz = f(rainZ[idx] * 0.5);
+          if (snowing) {
+            // scroll, then u = nextFloat + t * 0.01 * nextGaussian and v = nextFloat + t * nextGaussian * 0.001.
+            const t = f(count + partial), scroll = f(f((count & 511) + partial) / 512),
+              u = f(random.nextFloat() + f(f(t * f(0.01)) * f(random.nextGaussian()))),
+              sway = f(random.nextFloat() + f(f(t * f(random.nextGaussian())) * f(0.001))),
+              v0 = low / 4 + scroll + sway, v1 = high / 4 + scroll + sway,
+              a = f(f(f(f(1 - f(dist * dist)) * f(0.3)) + 0.5) * strength),
+              // (getLightBrightnessForSkyBlocks * 3 + 15728880) / 4 in int arithmetic.
+              packed = Math.trunc((this.scene.brightness(x + 0.5, mid, z + 0.5) * 3 + 15728880) / 4);
+            q.add(
+              [[x - ox + 0.5, low, z - oz + 0.5, u, v0], [x + ox + 0.5, low, z + oz + 0.5, u + 1, v0], [x + ox + 0.5, high, z + oz + 0.5, u + 1, v1], [x - ox + 0.5, high, z - oz + 0.5, u, v1]],
+              packed,
+              a,
+            );
+            continue;
+          }
+          const wave = f(f(f(((count + sx + sz) & 31) + partial) / 32) * f(3 + random.nextFloat())),
+            a = f(f(f(f(1 - f(dist * dist)) * 0.5) + 0.5) * strength), v0 = low / 4 + wave, v1 = high / 4 + wave;
           q.add(
             [[x - ox + 0.5, low, z - oz + 0.5, 0, v0], [x + ox + 0.5, low, z + oz + 0.5, 1, v0], [x + ox + 0.5, high, z + oz + 0.5, 1, v1], [x - ox + 0.5, high, z - oz + 0.5, 0, v1]],
             this.scene.brightness(x + 0.5, mid, z + 0.5),
@@ -212,7 +235,8 @@ export class WeatherRenderer {
           );
         }
     }
-    q.end();
+    this.rain.end();
+    this.snow.end();
   }
   // EntityFX.renderParticle for the splashes: camera-facing quads of half-size
   // 0.1 * scale on the particle sheet (8 px tiles, 16 per row).

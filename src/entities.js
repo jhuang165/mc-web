@@ -1,4 +1,4 @@
-import { SIZE, HEIGHT, hash, blockBounds, WOOL, isLiquid, DYE } from "./world.js";
+import { SIZE, HEIGHT, hash, slipperiness, blockBounds, WOOL, isLiquid, DYE } from "./world.js";
 import { ITEMS } from "./survival.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
@@ -161,8 +161,6 @@ export function actorCollides(world, x, y, z, w, h) {
 // --- Motion: Entity.moveEntity (sa.d) and EntityLivingBase.moveEntityWithHeading (sv.e(FF)) ---
 const STEP_HEIGHT = 0.5; // EntityLivingBase constructor: stepHeight = 0.5f
 const JUMP_MOVEMENT_FACTOR = f(0.02); // sv.aQ
-// Block.slipperiness (aji.K): 0.6f for every block in this build (there is no ice).
-const slipperiness = () => f(0.6);
 // World.getCollidingBoundingBoxes (ahb.a): block boxes overlapping `b`, as
 // [minX, minY, minZ, maxX, maxY, maxZ]. The scan starts a block low like the original.
 function collisionBoxes(world, b) {
