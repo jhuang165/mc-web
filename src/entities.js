@@ -1,7 +1,7 @@
-import { SIZE, HEIGHT, hash, raycast as voxelRay, blockBounds, WOOL } from "./world.js";
+import { SIZE, HEIGHT, hash, raycast as voxelRay, blockBounds, WOOL, isLiquid } from "./world.js";
 import { ITEMS } from "./survival.js";
 import { mhSin, mhCos } from "./lighting.js";
-import { waterAcceleration, entityWaterBox } from "./fluids.js";
+import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
 import { sheepColor, childColor } from "./sheep.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -31,7 +31,7 @@ const clampYaw = (from, to, max) => f(from - Math.min(Math.max(wrapDegrees(f(fro
 // to prevPos before every onUpdate), the Java-convention yaw/pitch degrees and
 // the limb swing. `gait` is the old limb phase from earlier saves.
 // Physics state is rebuilt on load as well: motion is already reset there.
-const TRANSIENT = ["onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage"];
+const TRANSIENT = ["onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "fire"];
 const INTERPOLATED = [...TRANSIENT, "px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
 // Entity.rotationYaw is Java degrees (0 faces +z, increasing toward -x); e.yaw
 // is the radian bearing used by the movement code, which turns toward +x.
@@ -262,23 +262,23 @@ function inWater(world, e, w, h) {
   return wet;
 }
 // Entity.func_70038_c / isOffsetPositionInLiquid (sa.c(DDD)): the box moved by
-// (dx, dy, dz) has no block in it and no water.
+// (dx, dy, dz) has no block in it and no liquid.
 function offsetInLiquid(world, e, w, h, dx, dy, dz) {
   const half = w / 2, b = [e.x - half + dx, e.y + dy, e.z - half + dz, e.x + half + dx, e.y + h + dy, e.z + half + dz];
   if (collisionBoxes(world, b).length) return false;
   for (let bx = Math.floor(b[0]); bx < Math.floor(b[3] + 1); bx++)
     for (let by = Math.floor(b[1]); by < Math.floor(b[4] + 1); by++)
       for (let bz = Math.floor(b[2]); bz < Math.floor(b[5] + 1); bz++)
-        if (world.get(bx, by, bz) === 10) return false;
+        if (isLiquid(world.get(bx, by, bz))) return false;
   return true;
 }
 // EntityLivingBase.jump (sv.bj): 0.42 upward (no jump boost, no sprint).
 export function jump(e) {
   e.vy = 0.41999998688697815;
 }
-// EntityLivingBase.moveEntityWithHeading (sv.e(FF)) without strafe, ladders or
-// lava (isAIEnabled mobs): water accelerates at 0.04 and drags by 0.8; on land
-// the block under the feet sets friction 0.91 * slipperiness and the ground
+// EntityLivingBase.moveEntityWithHeading (sv.e(FF)) without strafe or ladders
+// (isAIEnabled mobs): water accelerates at 0.04 and drags by 0.8, lava at 0.02
+// and 0.5 (gravity 0.02 in both); on land the block under the feet sets friction 0.91 * slipperiness and the ground
 // acceleration aiMoveSpeed * 0.16277136 / friction^3 (0.02 in the air).
 // Gravity is 0.08 with 0.98 vertical drag. Returns the landing fall distance.
 export function moveEntityWithHeading(world, e, w, h, forward) {
@@ -290,6 +290,15 @@ export function moveEntityWithHeading(world, e, w, h, forward) {
     e.vx *= 0.800000011920929;
     e.vy *= 0.800000011920929;
     e.vz *= 0.800000011920929;
+    e.vy -= 0.02;
+    if (e.collidedH && offsetInLiquid(world, e, w, h, e.vx, e.vy + 0.6 - e.y + y0, e.vz)) e.vy = 0.30000001192092896;
+  } else if (e.inLava) {
+    const y0 = e.y;
+    moveFlying(e, 0, forward, f(0.02));
+    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz);
+    e.vx *= 0.5;
+    e.vy *= 0.5;
+    e.vz *= 0.5;
     e.vy -= 0.02;
     if (e.collidedH && offsetInLiquid(world, e, w, h, e.vx, e.vy + 0.6 - e.y + y0, e.vz)) e.vy = 0.30000001192092896;
   } else {
@@ -434,7 +443,7 @@ export class EntityWorld {
   }
   // Fresh motion state: grounded only after the first collision, no AI move target yet.
   physics() {
-    return { onGround: false, collidedH: false, inWater: false, fallDistance: 0, moveForward: 0, aiMoveSpeed: 0, jumping: false, jumpTicks: 0, lastDamage: 0 };
+    return { onGround: false, collidedH: false, inWater: false, inLava: false, fire: 0, fallDistance: 0, moveForward: 0, aiMoveSpeed: 0, jumping: false, jumpTicks: 0, lastDamage: 0 };
   }
   seedAnimals() {
     const spawn = this.world.spawn();
@@ -547,7 +556,10 @@ export class EntityWorld {
   // EntityLivingBase.fall (sv.b(F)): ceil(distance - 3) points of fall damage
   // (no jump boost), through attackEntityFrom without an attacker, so no knockback.
   fall(e, distance) {
-    const points = Math.ceil(f(distance - 3));
+    this.hazard(e, Math.ceil(f(distance - 3)));
+  }
+  // attackEntityFrom with a source that has no attacker (fall, fire, lava).
+  hazard(e, points) {
     if (points <= 0 || e.health <= 0) return;
     if (e.hurt > 0) {
       if (points <= e.lastDamage) return;
@@ -560,6 +572,27 @@ export class EntityWorld {
     e.limbSwingAmount = 1.5;
     if (e.health <= 0) this.kill(e);
     else this.events.push({ sound: hurtSound(e.type), position: e });
+  }
+  // The fire and lava part of Entity.onEntityUpdate (sa.C): water puts the fire
+  // out; a burning mob takes 1 (onFire) whenever the counter is a multiple of 20;
+  // lava (handleLavaMovement) deals 4 (lava), sets fire for 15 s (counter 300) and
+  // halves the fall distance. EntityAIPanic keeps animals running while they burn.
+  burn(e, t) {
+    if (e.inWater) e.fire = 0;
+    if (e.fire > 0) {
+      if (e.fire % 20 === 0) this.hazard(e, 1);
+      e.fire--;
+    }
+    const r = t.width / 2;
+    if ((e.inLava = inLava(this.world, [e.x - r, e.y, e.z - r, e.x + r, e.y + t.height, e.z + r]))) {
+      this.hazard(e, 4);
+      e.fire = Math.max(e.fire, 300);
+      e.fallDistance *= 0.5;
+    }
+    if (e.fire > 0) {
+      e.burn = 1;
+      if (e.type !== "zombie") e.flee = Math.max(e.flee, 2);
+    }
   }
   feed(e,id,survival){
     if(!this.entities.includes(e)||e.health<=0||!BREED_ITEM[e.type]||id!==BREED_ITEM[e.type]||(!survival.creative&&!survival.count(id)))return false;
@@ -691,7 +724,7 @@ export class EntityWorld {
       let speed = 0;
       const goal = this.goal(e, player, survival, heldItem, distance, base.ai);
       // Swimming (0), panic (1), mate (2), tempt (3) and follow parent (4) all take over from eating grass (5).
-      if (e.eatTimer && (e.flee || goal || e.inWater)) e.eatTimer = 0;
+      if (e.eatTimer && (e.flee || goal || e.inWater || e.inLava)) e.eatTimer = 0;
       if (
         e.type === "zombie" &&
         !survival.creative &&
@@ -754,7 +787,8 @@ export class EntityWorld {
       // jumps 80% of ticks in water.
       e.jumping = false;
       if (e.inWater = inWater(this.world, e, t.width, t.height)) e.fallDistance = 0;
-      if (e.inWater && Math.random() < 0.8) e.jumping = true;
+      this.burn(e, t);
+      if ((e.inWater || e.inLava) && Math.random() < 0.8) e.jumping = true;
       else if (speed > 0 && e.collidedH && e.onGround) {
         const ax = e.x + Math.sin(e.yaw) * 0.5, az = e.z + Math.cos(e.yaw) * 0.5;
         if (actorCollides(this.world, ax, e.y, az, t.width, t.height)) {
@@ -801,7 +835,7 @@ export class EntityWorld {
     if (speed > 0) e.aiMoveSpeed = e.moveForward = speed;
     this.aimYaw(e);
     if (e.jumping) {
-      if (e.inWater) e.vy += 0.03999999910593033;
+      if (e.inWater || e.inLava) e.vy += 0.03999999910593033;
       else if (e.onGround && e.jumpTicks === 0) {
         jump(e);
         e.jumpTicks = 10;

@@ -388,6 +388,7 @@ export class Survival {
       this.chests[key] = chest;
     }
     this.hurtTicks = 0;
+    this.fire = 0;
     this.lastDamage = "";
     this.broken = 0;
   }
@@ -480,10 +481,23 @@ export class Survival {
   }
   wearBlock(block,toolId){return this.wear(toolId,blockWear(block,MATERIALS[block]||{},ITEMS[toolId]));}
 
-  tick({ underwater = false } = {}) {
+  tick({ underwater = false, inWater = false, inLava = false } = {}) {
     this.time++;
     this.hurtTicks = Math.max(0, this.hurtTicks - 1);
     this.tickFurnaces();
+    // Entity.onEntityUpdate (sa.C): water puts the fire out; a burning entity takes
+    // 1 (onFire, ignores armor) whenever the counter is a multiple of 20; lava
+    // deals 4 (lava, armor applies) and sets fire for 15 s. The hurt-resistance
+    // window (hurtTicks) still gates every hit.
+    if (inWater) this.fire = 0;
+    if (this.fire > 0) {
+      if (this.fire % 20 === 0) this.damage(1, "burning");
+      this.fire--;
+    }
+    if (inLava) {
+      this.damage(4, "lava", true);
+      this.fire = Math.max(this.fire, 300);
+    }
     if (this.creative) return;
     if (underwater) {
       this.air--;

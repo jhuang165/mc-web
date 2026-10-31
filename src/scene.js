@@ -5,7 +5,7 @@ import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS } from
 import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
 import { Sky, Clouds } from "./sky.js";
-import { liquidHeight, flowAngle } from "./fluids.js";
+import { liquidHeight, flowAngle, viewpointBlock } from "./fluids.js";
 import { DropRenderer } from "./drop-renderer.js";
 import { ProjectileRenderer } from "./projectile-renderer.js";
 import { ShadowRenderer } from "./shadows.js";
@@ -104,6 +104,18 @@ export class VoxelScene {
     };
     this.water = animated("/media/1.7.10/blocks/water_still.png", 32, 1);
     this.flow = animated("/media/1.7.10/blocks/water_flow.png", 32, 1);
+    // Lava is an opaque-pass block (BlockLiquid.getRenderBlockPass is 0 for lava):
+    // no depth pre-pass and no blending, and its textures carry no alpha.
+    const opaque = (url, frames) => {
+      const t = new THREE.TextureLoader().load(url);
+      t.magFilter = t.minFilter = THREE.NearestFilter;
+      t.generateMipmaps = false;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      const uv = new THREE.Vector4(1, 1 / frames, 0, 0);
+      return { uv, frames, material: worldMaterial(this.lighting, { map: t, alphaTest: 0, uvTransform: uv }) };
+    };
+    this.lavaStill = opaque("/media/1.7.10/blocks/lava_still.png", 20);
+    this.lavaFlow = opaque("/media/1.7.10/blocks/lava_flow.png", 16);
     this.chunks = new Map();
     this.dirty = new Set();
     // RenderGlobal.drawSelectionBox: black lines at 40% alpha, grown by 0.002.
@@ -133,7 +145,7 @@ export class VoxelScene {
     this.textures.setBiome(world.biome);
     this.temperature = biomeTemperature(world.biome);
     this.litFurnaces = new Set();
-    this.light = new LightVolume(world, (x, y, z, b) => (b === 20 ? 14 : b === 14 && this.litFurnaces.has(`${x},${y},${z}`) ? 13 : 0));
+    this.light = new LightVolume(world, (x, y, z, b) => (b === 42 ? 15 : b === 20 ? 14 : b === 14 && this.litFurnaces.has(`${x},${y},${z}`) ? 13 : 0));
     this.effects.light = this.light;
     for (const v of this.chunks.values()) this.disposeChunk(v);
     this.chunks.clear();
@@ -148,7 +160,7 @@ export class VoxelScene {
     const key = `${cx},${cz}`, old = this.chunks.get(key);
     if (old) this.disposeChunk(old);
     this.dirty.delete(key);
-    const w = this.world, solid = new Mesher(), water = new Mesher(), flow = new Mesher();
+    const w = this.world, solid = new Mesher(), water = new Mesher(), flow = new Mesher(), lava = new Mesher(), lavaFlow = new Mesher();
     for (let x = cx; x < cx + 16; x++)
       for (let z = cz; z < cz + 16; z++)
         for (let y = 0; y < HEIGHT; y++) {
@@ -157,7 +169,8 @@ export class VoxelScene {
           if (b === 20) this.torch(solid, x, y, z);
           else if (isCrop(b)) this.crops(solid, b, x, y, z);
           else if (isPlant(b)) this.crossed(solid, b, x, y, z);
-          else if (b === 10) this.liquid(water, flow, x, y, z);
+          else if (b === 10) this.liquid(10, water, flow, x, y, z);
+          else if (b === 42) this.liquid(42, lava, lavaFlow, x, y, z);
           else this.cube(solid, b, x, y, z);
         }
     const group = new THREE.Group(), add = (mesher, ...materials) => {
@@ -172,6 +185,8 @@ export class VoxelScene {
     add(solid, this.material);
     add(water, this.water.depth, this.water.color);
     add(flow, this.flow.depth, this.flow.color);
+    add(lava, this.lavaStill.material);
+    add(lavaFlow, this.lavaFlow.material);
     this.chunks.set(key, group);
     this.scene.add(group);
   }
@@ -234,14 +249,14 @@ export class VoxelScene {
   // moves; both are drawn from either side. The four corner heights drop by
   // 0.001 when the top is drawn and the sides follow them. Sides use the
   // flowing texture's top-left quarter, a 0.001 inset and liquid brightness.
-  liquid(still, flow, x, y, z) {
+  liquid(kind, still, flow, x, y, z) {
     const w = this.world, L = this.light, e = 0.001, inset = 0.0010000000474974513,
       bright = (bx, by, bz) => maxPacked(L.packed(bx, by, bz), L.packed(bx, by + 1, bz)),
-      top = w.get(x, y + 1, z) !== 10,
-      h = [[liquidHeight(w, x, y, z), liquidHeight(w, x, y, z + 1)], [liquidHeight(w, x + 1, y, z), liquidHeight(w, x + 1, y, z + 1)]];
+      top = w.get(x, y + 1, z) !== kind,
+      h = [[liquidHeight(w, x, y, z, kind), liquidHeight(w, x, y, z + 1, kind)], [liquidHeight(w, x + 1, y, z, kind), liquidHeight(w, x + 1, y, z + 1, kind)]];
     if (top) {
       for (const row of h) for (let i = 0; i < 2; i++) row[i] -= inset;
-      const verts = [[x, y + h[0][0], z], [x, y + h[0][1], z + 1], [x + 1, y + h[1][1], z + 1], [x + 1, y + h[1][0], z]], angle = flowAngle(w, x, y, z);
+      const verts = [[x, y + h[0][0], z], [x, y + h[0][1], z + 1], [x + 1, y + h[1][1], z + 1], [x + 1, y + h[1][0], z]], angle = flowAngle(w, x, y, z, kind);
       if (angle > -999) {
         const a = Math.fround(angle), s = Math.fround(mhSin(a) * 0.25), c = Math.fround(mhCos(a) * 0.25),
           at = (du, dv) => [(8 + du * 16) / 16, 1 - (8 + dv * 16) / 16];
@@ -249,11 +264,11 @@ export class VoxelScene {
       } else still.quad(verts, [[0, 1], [0, 0], [1, 0], [1, 1]], 1, bright(x, y, z), true);
     }
     const below = w.get(x, y - 1, z);
-    if (below !== 10 && !opaqueCube(below))
+    if (below !== kind && !opaqueCube(below))
       still.quad([[x, y + e, z], [x + 1, y + e, z], [x + 1, y + e, z + 1], [x, y + e, z + 1]], [[0, 1], [1, 1], [1, 0], [0, 0]], 0.5, bright(x, y - 1, z));
     for (const fi of [0, 1, 4, 5]) {
       const f = FACES[fi], nx = x + f.n[0], nz = z + f.n[2], nb = w.get(nx, y, nz);
-      if (nb === 10 || hides(nb)) continue;
+      if (nb === kind || hides(nb)) continue;
       const verts = f.v.map((v) => [x + v[0] - f.n[0] * e, y + (v[1] ? h[v[0]][v[2]] : 0), z + v[2] - f.n[2] * e]),
         uvs = f.v.map((v, i) => [i === 1 || i === 2 ? 0.5 : 0, v[1] ? 1 - (1 - h[v[0]][v[2]]) * 0.5 : 0.5]);
       flow.quad(verts, uvs, f.shade, bright(nx, y, nz));
@@ -343,18 +358,25 @@ export class VoxelScene {
     this.effects.update(dt);
     this.water.uv.w = 1 - ((Math.floor(time * 10) % 32) + 1) / 32;
     this.flow.uv.w = 1 - ((Math.floor(time * 20) % 32) + 1) / 32;
+    // lava_still: frametime 2 over frames 0..19 and back down to 1 (38 steps);
+    // lava_flow: frametime 3 over 16 frames.
+    const step = Math.floor(time * 10) % 38;
+    this.lavaStill.uv.w = 1 - ((step < 20 ? step : 38 - step) + 1) / 20;
+    this.lavaFlow.uv.w = 1 - ((Math.floor((time * 20) / 3) % 16) + 1) / 16;
     for (let budget = 2; budget > 0 && this.dirty.size; budget--) this.buildChunk(...this.dirty.values().next().value.split(",").map(Number));
     const c = this.camera, look = c.getWorldDirection(new THREE.Vector3()), u = this.lighting.uniforms, angle = this.angle,
       eye = this.world?.get(Math.floor(c.position.x), Math.floor(c.position.y), Math.floor(c.position.z)),
       underwater = eye === 10 && c.position.y - Math.floor(c.position.y) < 8 / 9,
-      fog = fogColor({ angle, temperature: this.temperature ?? biomeTemperature("meadow"), look: [look.x, look.y, look.z], chunks: this.distance / 16, brightness: this.fogBrightness, underwater });
+      // ActiveRenderInfo.getBlockAtEntityViewpoint: lava fog while the eye is in lava.
+      lava = !!this.world && viewpointBlock(this.world, c.position.x, c.position.y, c.position.z) === 42,
+      fog = fogColor({ angle, temperature: this.temperature ?? biomeTemperature("meadow"), look: [look.x, look.y, look.z], chunks: this.distance / 16, brightness: this.fogBrightness, underwater, lava });
     u.fogColor.value.set(...fog);
-    // setupFog: linear from 3/4 of the far plane; exponential 0.1 in water.
-    u.fogDensity.value = underwater ? 0.1 : 0;
+    // setupFog: linear from 3/4 of the far plane; exponential 0.1 in water, 2.0 in lava.
+    u.fogDensity.value = lava ? 2 : underwater ? 0.1 : 0;
     u.fogNear.value = this.distance * 0.75;
     u.fogFar.value = this.distance;
-    const sky = underwater ? fog : skyColor(this.temperature ?? 0.8, angle);
-    this.sky.update({ angle, sky, fog, sunrise: underwater ? null : sunriseColors(angle), stars: starBrightness(angle), moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater });
+    const sky = underwater || lava ? fog : skyColor(this.temperature ?? 0.8, angle);
+    this.sky.update({ angle, sky, fog, sunrise: underwater || lava ? null : sunriseColors(angle), stars: starBrightness(angle), moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater: underwater || lava });
     this.clouds.update(c, time * 20, cloudColor(angle));
     this.drops.update(this.dropList, this.dropPartial, time * 20);
     this.projectiles.update(this.projectileList.balls, this.projectileList.particles, c, this.dropPartial);

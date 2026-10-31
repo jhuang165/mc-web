@@ -14,6 +14,7 @@ import {
   raycast,
   fallingVelocity,
   WOOL,
+  isLiquid,
 } from "./world.js";
 import { VoxelScene } from "./scene.js";
 import { SoundBank, blockSound } from "./audio.js";
@@ -33,7 +34,7 @@ import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
-import { Fluids, waterAcceleration, entityWaterBox } from "./fluids.js";
+import { Fluids, waterAcceleration, entityWaterBox, inLava, liquidInBox } from "./fluids.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -508,7 +509,7 @@ function launch(record) {
     world.restore(record.edits || []);
     scene.setWorld(world);
     // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
-    fluids = new Fluids(world, { wash: (x, y, z, b) => { const d = b === 20 ? [{ id: 20, count: 1 }] : cropDrops(b); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count)), x, y, z); } });
+    fluids = new Fluids(world, { fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === 20 ? [{ id: 20, count: 1 }] : cropDrops(b); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count)), x, y, z); } });
     fluids.wake();
     farming=new Farming(world,record.farms);
     experience=new Experience(record.experience);xpOrbs=new ExperienceOrbs(record.xpOrbs);
@@ -955,14 +956,16 @@ function die() {
   };
   $("#death-home").onclick = goHome;
 }
-function tickSurvival(inWater, oldPosition) {
+function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   const underwater =
     world.get(
       Math.floor(position.x),
       Math.floor(position.y + PHYSICS.eye),
       Math.floor(position.z),
     ) === 10;
-  survival.tick({ underwater });
+  survival.tick({ underwater, inWater, inLava: inLavaNow });
+  // Entity.onEntityUpdate: standing in lava halves the fall distance every tick.
+  if (inLavaNow) fallDistance *= 0.5;
   if (!survival.creative) {
     const distance = Math.hypot(
       position.x - oldPosition.x,
@@ -1115,7 +1118,7 @@ function edit(place = false) {
     }
     const p = target.adjacent;
     if (!p || p[1] === 0 || p[1] >= HEIGHT - 1 || !world.inside(...p)) return;
-    if (!item?.block || id === 10) {
+    if (!item?.block || isLiquid(id)) {
       toast("Select a building block, food, or workstation.");
       return;
     }
@@ -1206,7 +1209,7 @@ function breakBlock(p, creative = false) {
   return true;
 }
 // Block.getItem for middle-click: farmland gives dirt, crops give seeds, water nothing.
-const pickItem = (block) => (block === 29 || block === 30 ? 2 : block >= 31 && block <= 38 ? 309 : block !== 10 && ITEMS[block] ? block : 0);
+const pickItem = (block) => (block === 29 || block === 30 ? 2 : block >= 31 && block <= 38 ? 309 : !isLiquid(block) && ITEMS[block] ? block : 0);
 // EntityPlayer.dropOneItem: Q throws one item, Ctrl + Q the whole stack.
 function dropHeld(all) {
   const inv = survival.inventory, s = inv.held;
@@ -1287,6 +1290,14 @@ function movementTick() {
       Math.floor(position.y + 0.6),
       Math.floor(position.z),
     ) === 10;
+  // Entity.handleLavaMovement (sa.P) on the player's box; EntityLivingBase.
+  // moveEntityWithHeading only takes the lava branch outside water.
+  const playerBox = (dy = 0) => {
+    const r = PHYSICS.width / 2;
+    return [position.x - r, position.y + dy, position.z - r, position.x + r, position.y + dy + PHYSICS.height, position.z + r];
+  };
+  const inLavaNow = inLava(world, playerBox()),
+    lava = inLavaNow && !inWater && !flying;
   if (flying) {
     const speed = sprint ? 0.8 : 0.42;
     velocity.x = (Math.cos(yaw) * dx - Math.sin(yaw) * dz) * speed;
@@ -1309,9 +1320,11 @@ function movementTick() {
       (grounded
         ? (0.1 * 0.16277136) / (friction * friction * friction)
         : 0.02) * (sprint ? 1.3 : 1);
-    velocity.x += (Math.cos(yaw) * dx - Math.sin(yaw) * dz) * accel;
-    velocity.z += (-Math.sin(yaw) * dx - Math.cos(yaw) * dz) * accel;
-    if (keys.has("Space") && grounded) {
+    // moveFlying(strafe, forward, 0.02f) in lava, whatever the ground or sprint.
+    const accelNow = lava ? 0.02 : accel;
+    velocity.x += (Math.cos(yaw) * dx - Math.sin(yaw) * dz) * accelNow;
+    velocity.z += (-Math.sin(yaw) * dx - Math.cos(yaw) * dz) * accelNow;
+    if (keys.has("Space") && grounded && !lava) {
       velocity.y = PHYSICS.jump;
       survival.exhaust(sprint ? 0.8 : 0.2);
       grounded = false;
@@ -1322,8 +1335,10 @@ function movementTick() {
     }
     if (inWater && keys.has("Space"))
       velocity.y = Math.min(0.16, velocity.y + 0.06);
+    // EntityLivingBase.onLivingUpdate: jumping in lava pushes up by 0.04.
+    else if (lava && keys.has("Space")) velocity.y += 0.04;
   }
-  let landed = false;
+  let landed = false, hitHorizontal = false;
   for (const axis of ["y", "x", "z"]) {
     const delta = velocity[axis],
       substeps = Math.max(1, Math.ceil(Math.abs(delta) / 0.2));
@@ -1344,6 +1359,7 @@ function movementTick() {
         }
         position[axis] = before + Math.sign(delta) * low;
         velocity[axis] = 0;
+        if (axis !== "y") hitHorizontal = true;
         if (axis === "y" && delta < 0) landed = true;
         break;
       }
@@ -1352,10 +1368,14 @@ function movementTick() {
   grounded =
     landed || collides(world, position.x, position.y - 0.001, position.z);
   if (!flying) {
-    velocity.y = inWater
+    velocity.y = lava
+      ? velocity.y * 0.5 - 0.02
+      : inWater
       ? (velocity.y - 0.02) * 0.8
       : fallingVelocity(velocity.y);
-    const f = inWater
+    const f = lava
+      ? 0.5
+      : inWater
       ? 0.8
       : grounded
         ? Math.fround(Math.fround(0.6) * Math.fround(0.91))
@@ -1364,6 +1384,16 @@ function movementTick() {
     velocity.z *= f;
     if (Math.abs(velocity.x) < 0.005) velocity.x = 0;
     if (Math.abs(velocity.z) < 0.005) velocity.z = 0;
+    if (lava) {
+      // Step out of lava: pushed up 0.3 when blocked and the spot 0.6 higher is
+      // clear of blocks and liquid (Entity.isOffsetPositionInLiquid).
+      if (hitHorizontal) {
+        const dy = velocity.y + 0.6 - (position.y - oldPosition.y), moved = playerBox(dy);
+        moved[0] += velocity.x; moved[3] += velocity.x; moved[2] += velocity.z; moved[5] += velocity.z;
+        const clear = !collides(world, position.x + velocity.x, position.y + dy, position.z + velocity.z) && !liquidInBox(world, moved, 10) && !liquidInBox(world, moved, 42);
+        if (clear) velocity.y = 0.30000001192092896;
+      }
+    }
   }
   if (position.y < 1 || position.y > HEIGHT + 40) {
     position.copy(new THREE.Vector3(...Object.values(world.spawn())));
@@ -1377,7 +1407,7 @@ function movementTick() {
       ? "SWIMMING"
       : "WALKING";
   const beforeHealth = survival.health;
-  tickSurvival(inWater, oldPosition);
+  tickSurvival(inWater, oldPosition, inLavaNow);
   applyFarmUpdates(farming.tick(survival.time,scene.daylight));
   if(fluids)scene.updateBlocks(fluids.tick());
   scene.setFurnaces(survival.furnaces);

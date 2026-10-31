@@ -5,7 +5,8 @@
 // bottom of the box; EntityItem's posY sits half the height (0.125) above it.
 import { blockBounds, normalCube } from "./world.js";
 import { copyStack } from "./inventory.js";
-import { waterAcceleration } from "./fluids.js";
+import { waterAcceleration, inLava } from "./fluids.js";
+import { LAVA } from "./world.js";
 
 const W = 0.125, H = 0.25, LIFETIME = 6000;
 const f = Math.fround;
@@ -14,6 +15,8 @@ export class ItemEntities {
   constructor(random = Math.random) {
     this.random = random;
     this.items = [];
+    // Sounds items made this tick ({ name, volume, pitch, x, y, z }); the caller drains them.
+    this.sounds = [];
   }
   // EntityItem(world, x, posY, z, stack): random hover phase, motion
   // (rand * 0.2 - 0.1, 0.2, rand * 0.2 - 0.1); the pickup delay field starts at 0.
@@ -27,7 +30,7 @@ export class ItemEntities {
         my: motion ? motion[1] : 0.2,
         mz: motion ? motion[2] : f(r() * 0.2 - 0.1),
         hover: f(r() * Math.PI * 2),
-        age: 0, ticks: 0, delay, onGround: false, death,
+        age: 0, ticks: 0, delay, onGround: false, death, health: 5, fire: 0,
         px: x, py: posY - W, pz: z,
       };
     this.items.push(item);
@@ -180,6 +183,24 @@ export class ItemEntities {
     e.dead = true;
     return true;
   }
+  // EntityItem.attackEntityFrom (xk.a): health 5, the item dies at 0.
+  hurt(e, amount) {
+    e.health = Math.trunc(e.health - amount);
+    if (e.health <= 0) e.dead = true;
+  }
+  // The fire and lava part of Entity.onEntityUpdate (sa.C), after the water
+  // check: burning deals 1 (onFire) every 20 ticks of the counter; touching lava
+  // deals 4 (lava) and sets fire for 15 s (setFire keeps the larger counter).
+  burn(world, e) {
+    if (e.fire > 0) {
+      if (e.fire % 20 === 0) this.hurt(e, 1);
+      e.fire--;
+    }
+    if (inLava(world, this.box(e))) {
+      this.hurt(e, 4);
+      e.fire = Math.max(e.fire, 300);
+    }
+  }
   // EntityItem.onUpdate for every item.
   tick(world, maxStack = () => 64) {
     for (const e of this.items) {
@@ -187,11 +208,13 @@ export class ItemEntities {
       // Entity.onUpdate runs handleWaterMovement first; EntityItem (xk.N) passes
       // its own box to World.handleMaterialAcceleration, unshrunk.
       if (world.getMeta) {
-        const { push } = waterAcceleration(world, this.box(e));
+        const { wet, push } = waterAcceleration(world, this.box(e));
         e.mx += push[0];
         e.my += push[1];
         e.mz += push[2];
+        if (wet) e.fire = 0;
       }
+      this.burn(world, e);
       e.ticks++;
       if (e.delay > 0) e.delay--;
       e.px = e.x;
@@ -202,6 +225,15 @@ export class ItemEntities {
       this.move(world, e, noClip);
       const moved = Math.trunc(e.px) !== Math.trunc(e.x) || Math.trunc(e.py + W) !== Math.trunc(e.y + W) || Math.trunc(e.pz) !== Math.trunc(e.z);
       if (moved || e.ticks % 25 === 0) {
+        // EntityItem.onUpdate: an item whose cell is lava is thrown up and
+        // sideways with a fizz (volume 0.4, pitch 2 + 0.4 * random).
+        if (world.get(Math.floor(e.x), Math.floor(e.y + W), Math.floor(e.z)) === LAVA) {
+          const r = this.random;
+          e.my = 0.20000000298023224;
+          e.mx = f(f(r() - r()) * 0.2);
+          e.mz = f(f(r() - r()) * 0.2);
+          this.sounds.push({ name: "random.fizz", volume: 0.4, pitch: f(2 + f(f(r()) * 0.4)), x: e.x, y: e.y, z: e.z });
+        }
         const [a, b, c, d, g, h] = this.box(e);
         for (const o of this.items) {
           if (o === e || o.dead) continue;
