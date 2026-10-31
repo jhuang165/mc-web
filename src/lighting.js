@@ -3,7 +3,7 @@
 // (blm), RenderGlobal (bma) and Block (aji). The rain, thunder and lightning
 // terms are optional trailing arguments that default to 0 (clear sky); weather.js
 // supplies them. See public/research/lighting.md and weather.md.
-import { SIZE, HEIGHT, FIRE, WEB, LADDER, TNT, isPlant, normalCube, opaqueCube } from "./world.js";
+import { SIZE, HEIGHT, FIRE, WEB, LADDER, CACTUS, REEDS, TNT, isPlant, normalCube, opaqueCube } from "./world.js";
 import { biomeFacts } from "./biomes.js";
 
 const f = Math.fround,
@@ -27,7 +27,7 @@ export const BRIGHTNESS = Array.from({ length: 16 }, (_, i) => {
 // (func_149685_I: 0.2 for normal cubes) and getCanBlockGrass (s: materials
 // that let grass through, used by smooth lighting to decide corner samples).
 export function lightOpacity(b) {
-  if (b === 0 || b === 9 || b === 20 || b === 41 || b === 42 || b === FIRE || b === LADDER || isPlant(b)) return 0;
+  if (b === 0 || b === 9 || b === 20 || b === 41 || b === 42 || b === FIRE || b === LADDER || b === CACTUS || b === REEDS || isPlant(b)) return 0;
   if (b === 5 || b === WEB) return 1;
   if (b === 10 || b === 47) return 3; // water; ice (setLightOpacity(3))
   if (b === 46) return 0; // snow layer: not an opaque cube (probe: snow-reference.json "blocks")

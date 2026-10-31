@@ -1,5 +1,6 @@
 import {miningState,blockWear} from "./mining.js";
-import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WEB, LADDER, WATER, LAVA, CARROTS, POTATOES, TNT } from "./world.js";
+import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WEB, LADDER, WATER, LAVA, CARROTS, POTATOES, CACTUS, REEDS, TNT } from "./world.js";
+import { REEDS_ITEM, PAPER, SUGAR } from "./plants.js";
 import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,ChestContainer,makeStack} from "./inventory.js";
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
 import { Effects } from "./status-effects.js";
@@ -73,7 +74,10 @@ ITEMS[321]={id:321,name:"String",texture:"string",stack:64,color:"#eee",glyph:"~
 // Item.gunpowder (original 289, this build's 330): a plain item, Materials tab.
 ITEMS[330]={id:330,name:"Gunpowder",texture:"gunpowder",stack:64,color:"#5a5a5a",glyph:"*"};
 for (const item of [
-  {id:312,name:"Snowball",color:"#fff",glyph:"●",stack:16},{id:315,name:"Leather",color:"#a06540",glyph:"▰",texture:"leather"},{id:313,name:"Flint",color:"#555",glyph:"◆"},{id:314,name:"Book",color:"#8d4f39",glyph:"▰"},
+  {id:312,name:"Snowball",color:"#fff",glyph:"●",stack:16},{id:315,name:"Leather",color:"#a06540",glyph:"▰",texture:"leather"},{id:313,name:"Flint",color:"#555",glyph:"◆"},{id:314,name:"Book",texture:"book_normal",color:"#8d4f39",glyph:"▰"},
+  // ItemReed (Items.reeds, 338) places the sugar cane block; Items.paper (339) and Items.sugar (353)
+  // are plain items. Ids are this build's own.
+  {id:REEDS_ITEM,name:"Sugar cane",texture:"reeds",color:"#94c065",glyph:"|"},{id:PAPER,name:"Paper",texture:"paper",color:"#f2f2ea",glyph:"▭"},{id:SUGAR,name:"Sugar",texture:"sugar",color:"#f4f4f4",glyph:"·"},
   // ItemEgg (344, stack 16), Item.feather (288), and ItemFood chicken (365: 2 hunger, 0.3
   // saturation, 30 s Hunger effect at 30%) and cooked chicken (366: 6, 0.6).
   {id:316,name:"Egg",color:"#e8d8b0",glyph:"●",stack:16},{id:317,name:"Feather",color:"#eee",glyph:"╱"},
@@ -223,6 +227,10 @@ MATERIALS[SAPLING]={hardness:0};
 MATERIALS[WEB]={hardness:4,drop:321};
 // BlockLadder: hardness 0.4, Material.circuits (no effective tool), drops itself.
 MATERIALS[LADDER]={hardness:.4};
+// BlockCactus: hardness 0.4, Material.cactus (no effective tool, none needed), drops itself.
+// BlockReed: hardness 0, Material.plants, drops Items.reeds.
+MATERIALS[CACTUS]={hardness:.4};
+MATERIALS[REEDS]={hardness:0,drop:REEDS_ITEM};
 MATERIALS[CARROTS]=MATERIALS[POTATOES]={hardness:0,drop:0};
 // BlockTNT (original 46): hardness 0, Material.tnt, drops itself when broken (a plain
 // break never primes it: removedByPlayer passes metadata 0).
@@ -270,6 +278,8 @@ recipe(
   4,
 );
 recipe("bread", "Bread", ["WWW"], { W: 305 }, 201);
+// CraftingManager: "###" of sugar cane makes three paper.
+recipe("paper", "Paper", ["###"], { "#": REEDS_ITEM }, PAPER, 3);
 recipe("bricks", "Brick block", ["BB", "BB"], { B: 306 }, 8);
 for (let kind = 0; kind < 4; kind++)
   for (let tier = 0; tier < 4; tier++) {
@@ -342,6 +352,9 @@ RED_FLOWERS.forEach((_, m) => shapeless(DYE, 1, FLOWER_DYES[m], [RED_FLOWER, m])
 shapeless(DYE, 3, 15, 311);
 // RecipesTools: ShapelessRecipes iron ingot + flint -> flint and steel.
 shapeless(126, 1, 0, 302, 313);
+// CraftingManager: sugar from one sugar cane; a book from three paper and leather (shapeless).
+shapeless(SUGAR, 1, 0, REEDS_ITEM);
+shapeless(314, 1, 0, PAPER, PAPER, PAPER, 315);
 export function matchShapeless(stacks) {
   const filled = stacks.filter(Boolean);
   for (const r of SHAPELESS) {
@@ -411,6 +424,8 @@ export const SMELTING = {
   202: 203,
   318: 319,
   307: 306,
+  // FurnaceRecipes: cactus smelts to cactus green, dye damage 2 ([id, damage]).
+  [CACTUS]: [DYE, 2],
 };
 export const FUELS = {
   4: 300,
@@ -436,7 +451,10 @@ const CONTAINER_ITEMS = { 342: 340 };
 const clamp = (v, min, max, fallback) =>
   Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
 export const burnTime = (s) => (s ? FUELS[s.id] || 0 : 0);
-export const smeltingResult = (s) => (s && SMELTING[s.id] ? makeStack(SMELTING[s.id]) : null);
+export const smeltingResult = (s) => {
+  const r = s && SMELTING[s.id];
+  return !r ? null : Array.isArray(r) ? makeStack(r[0], 1, r[1]) : makeStack(r);
+};
 // Saves before 0.7 kept one aggregate count and remaining durability per item.
 // Hotbar choices keep their slots; everything else fills the main rows.
 function legacySlots({ inventory, durability, hotbar }, creative) {

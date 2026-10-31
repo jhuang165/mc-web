@@ -33,7 +33,12 @@ import {
   LADDER,
   TNT,
   opaqueCube,
+  SAND,
+  CACTUS,
+  REEDS,
 } from "./world.js";
+import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION, CACTUS_DAMAGE, touchesCactus, reedTarget, canPlaceReeds, cactusCanPlace } from "./plants.js";
+import { FallingBlocks } from "./falling.js";
 import { ladderBounds, canPlaceLadder, placedLadderMeta, ladderSupported, clickedSide, isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
 import { snowCanStay, snowFalls, snowballsFor, iceLeavesWater, stackedSnowMeta } from "./snow.js";
 import { flowerCanStay, growGrass, JRandom } from "./flowers.js";
@@ -44,7 +49,7 @@ import { Weather, isWet, canLightningStrikeAt, struckByLightning, strikeBox, ove
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
 import { PlayerBody, PlayerRenderer, nextView, thirdPersonCamera, playerShadowCaster } from "./player-renderer.js";
 import { FirstPerson, itemTexture } from "./first-person.js";
-import {Experience,ExperienceOrbs,oreExperience,SMELT_EXPERIENCE} from "./experience.js";
+import {Experience,ExperienceOrbs,oreExperience,smeltExperience} from "./experience.js";
 import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import {Farming,cropDrops} from "./farming.js";
@@ -137,7 +142,7 @@ let screen = "home",
   saved = true;
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer;
-let weather = new Weather(), trees;
+let weather = new Weather(), trees, plants, falling;
 // EntityTNTPrimed entities (explosion.js primeTnt), and the World.rand that Explosion draws
 // its ray lengths, drops, chained fuses and sound pitch from.
 let primed = [];
@@ -268,7 +273,7 @@ function makeRecord(p) {
     seed: String(p.seed).slice(0, 80),
     biome: p.biome || "meadow",
     mode: p.mode === "survival" ? "survival" : "creative",
-    generationVersion: 7,
+    generationVersion: 8,
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -486,6 +491,7 @@ function save() {
   active.entities = mobs?.serialize() || [];
   active.farms=farming?.serialize()||[];
   active.experience=experience.serialize();active.xpOrbs=xpOrbs.serialize();
+  active.falling=falling?.serialize()||[];
   active.updated = Date.now();
   const i = worlds.findIndex((w) => w.id === active.id);
   if (i < 0) worlds.unshift(active);
@@ -626,6 +632,19 @@ function launch(record) {
       apply: (changes) => { scene.updateBlocks(changes); saved = false; },
       drop: (stacks, x, y, z) => items.dropBlock(stacks.map((d) => makeStack(d.id, d.count, d.damage || 0)), x, y, z),
     }).watch();
+    // Sugar cane and cactus support, growth and breaking (plants.js), then falling sand and gravel
+    // (falling.js); both wrap world.onChange after the trees.
+    plants = new Plants(world, {
+      drop: (stacks, x, y, z) => items.dropBlock(stacks.map((d) => makeStack(d.id, d.count, d.damage || 0)), x, y, z),
+      broken: (x, y, z, b, meta = 0) => { sound(false, b); scene.particles.destroyBlock(world, x, y, z, b, meta); },
+      apply: (changes) => { scene.updateBlocks(changes); saved = false; },
+    }).watch();
+    // Entity.entityDropItem(stack, 0): EntityItem at the falling block's position, pickup delay 10.
+    falling = new FallingBlocks(world, {
+      drop: (stack, x, posY, z) => items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, posY, z, { delay: 10 }),
+      apply: (changes) => { scene.updateBlocks(changes); saved = false; },
+    }, record.falling).watch();
+    falling.wake();
     farming=new Farming(world,record.farms);
     // Rain moistens farmland (BlockFarmland.updateTick: canLightningStrikeAt(x, y + 1, z)).
     farming.rained = (x, y, z) => canLightningStrikeAt(weather, world, x, y + 1, z);
@@ -633,8 +652,8 @@ function launch(record) {
     weather.apply = applyWeatherEdit;
     fire.sharedRandomTicks = true;
     // One WorldServer random-tick stream: fire and still lava (fire.js), saplings and leaves (trees.js),
-    // then snow and ice melting in Weather.tickChunk itself.
-    weather.blockTick = (x, y, z, b) => fire.randomTick(x, y, z, b) || trees.randomTick(x, y, z, b);
+    // sugar cane and cactus (plants.js), then snow and ice melting in Weather.tickChunk itself.
+    weather.blockTick = (x, y, z, b) => fire.randomTick(x, y, z, b) || trees.randomTick(x, y, z, b) || plants.randomTick(x, y, z, b);
     scene.weather = weather;
     // EntityLightningBolt's fire, and the ticks of the fires saved with the world.
     weather.fire = fire.strikes;
@@ -1033,7 +1052,7 @@ function useFurnace(key) {
 // SlotFurnace.onCrafting: fractional experience rounds up by chance.
 function smelted(stack, amount) {
   if (survival.creative) return;
-  const f = SMELT_EXPERIENCE[stack.id] || 0;
+  const f = smeltExperience(stack);
   let n = amount;
   if (f === 0) n = 0;
   else if (f < 1) {
@@ -1148,6 +1167,13 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     const hit = fireContact(true, wet, survival.fire || 0);
     survival.damage(hit.damage, "fire", true);
     survival.fire = hit.fire;
+  }
+  // BlockCactus.onEntityCollidedWithBlock from Entity.doBlockCollisions: DamageSource.cactus, 1 point.
+  if (survival.health > 0 && touchesCactus(world, entityBox(position, PHYSICS.width, PHYSICS.height))) survival.damage(CACTUS_DAMAGE, "a cactus", true);
+  // Scheduled sand and gravel updates and the falling-block entities (WorldServer.tick).
+  if (falling) {
+    falling.tick();
+    scene.setFalling?.(falling.entities);
   }
   // BlockFire.randomDisplayTick's crackle around the viewer.
   fire?.ambient(position.x, position.y + PHYSICS.eye, position.z, (x, y, z, volume, pitch) => sounds.play("fire.fire", { volume, pitch, position: { x, y, z } }));
@@ -1469,6 +1495,21 @@ function edit(place = false) {
       saved = false;
       return;
     }
+    // ItemReed.onItemUse (abi.a): sugar cane goes in a one-layer snow or tall-grass cell, otherwise
+    // on the clicked face, where the cell is replaceable and BlockReed.canPlaceBlockAt holds.
+    if (id === REEDS_ITEM) {
+      const q = reedTarget(world, here, target.adjacent);
+      if (!q || q[1] === 0 || q[1] >= HEIGHT - 1 || !world.inside(...q)) return;
+      if (!survival.creative && !survival.count(id)) return;
+      if (!canPlaceReeds(world, ...q)) return;
+      world.set(...q, REEDS, true, 0);
+      if (!survival.creative) survival.take(id);
+      scene.updateBlock(q[0], q[2], q[1]);
+      renderHotbar();
+      sound(true, REEDS);
+      saved = false;
+      return;
+    }
     // ItemBlock.onItemUse: a one-layer snow cell is replaced in place (the side becomes "top").
     const p = block === SNOW_LAYER && !hereMeta ? [...here] : target.adjacent;
     if (!p || p[1] === 0 || p[1] >= HEIGHT - 1 || !world.inside(...p)) return;
@@ -1489,6 +1530,8 @@ function edit(place = false) {
     if (id === SNOW_LAYER && !snowCanStay(world, ...p)) return;
     // BlockLadder.canPlaceBlockAt: a normal cube beside the cell; onBlockPlaced picks the wall from the clicked face.
     if (id === LADDER && !canPlaceLadder(world, ...p)) return;
+    // BlockCactus.canPlaceBlockAt: nothing solid beside it, cactus or sand below.
+    if (id === CACTUS && !cactusCanPlace(world, ...p)) return;
     const old = world.get(...p), oldMeta = world.getMeta(...p),
       meta = id === WOOL || id === RED_FLOWER ? survival.held?.damage || 0 : id === 5 ? placedLeavesMeta() : id === LADDER ? placedLadderMeta(world, ...p, clickedSide(target.block, p)) : 0;
     world.set(...p, id, false, meta);
@@ -1626,7 +1669,6 @@ function explodeAt(x, y, z, size, { exploder = null, attacker = null } = {}) {
   // BlockTNT.onBlockDestroyedByExplosion: a primed TNT with fuse rand.nextInt(20) + 10, no sound.
   for (const p of out.primed) primed.push(primeTnt(p.x, p.y, p.z, { fuse: p.fuse, placer: attacker }));
   scene.updateBlocks(changes);
-  if (out.broken.length) scene.effects.burst([Math.floor(x), Math.floor(y), Math.floor(z)], out.broken[0].id, 48);
   chestRenderer.sync(world, survival.chests);
   renderVitals();
   saved = false;
@@ -1678,7 +1720,7 @@ function breakBlock(p, creative = false) {
   return true;
 }
 // Block.getItem for middle-click: farmland gives dirt, crops give seeds, water nothing.
-const pickItem = (block) => (block === 29 || block === 30 ? 2 : isCrop(block) ? cropItem(block) : !isLiquid(block) && ITEMS[block] ? block : 0);
+const pickItem = (block) => (block === 29 || block === 30 ? 2 : block === REEDS ? REEDS_ITEM : isCrop(block) ? cropItem(block) : !isLiquid(block) && ITEMS[block] ? block : 0);
 // EntityPlayer.dropOneItem: Q throws one item, Ctrl + Q the whole stack.
 function dropHeld(all) {
   const inv = survival.inventory, s = inv.held;
@@ -2048,7 +2090,7 @@ $("#file-input").onchange = async (e) => {
       drops: data.drops,
       entities: data.entities,
       farms:data.farms,
-      experience:data.experience,xpOrbs:data.xpOrbs,
+      experience:data.experience,xpOrbs:data.xpOrbs,falling:data.falling,
     };
     worlds.unshift(record);
     persist();
@@ -2346,7 +2388,7 @@ function animate(now) {
       // setBlockBoundsBasedOnState: a snow layer's box is (meta + 1) / 8 high and a ladder's is its
       // plate; other blocks keep the full cube here. The outline is the box grown by 0.002.
       const b = world.get(...target.block), meta = world.getMeta(...target.block),
-        [x0, y0, z0, x1, y1, z1] = b === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(meta), 1] : b === LADDER ? ladderBounds(meta) : [0, 0, 0, 1, 1, 1];
+        [x0, y0, z0, x1, y1, z1] = b === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(meta), 1] : b === LADDER ? ladderBounds(meta) : b === CACTUS ? CACTUS_SELECTION : b === REEDS ? REED_BOUNDS : [0, 0, 0, 1, 1, 1];
       scene.outline.scale.set((x1 - x0 + 0.004) / 1.004, (y1 - y0 + 0.004) / 1.004, (z1 - z0 + 0.004) / 1.004);
       scene.outline.position.set(target.block[0] + (x0 + x1) / 2, target.block[1] + (y0 + y1) / 2, target.block[2] + (z0 + z1) / 2);
     }

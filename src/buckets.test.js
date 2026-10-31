@@ -205,7 +205,7 @@ test("lakes and springs generate deterministically from version 5", () => {
   const a = new World("Minecraft"), b = new World("Minecraft"), c = new World("Overworld");
   assert.deepEqual(a.data, b.data);
   assert.notDeepEqual(a.data, c.data);
-  assert.equal(a.generationVersion, 7); // the default; snow.test.js pins that 6 only adds snow and ice, trees.test.js that 7 only regrows trees
+  assert.equal(a.generationVersion, 8); // the default; snow.test.js pins that 6 only adds snow and ice, trees.test.js that 7 only regrows trees, plants.test.js that 8 only adds beaches and sugar cane
   // Versions 1 to 3 are byte for byte what they were before lakes existed (sha1 of the
   // block array taken from the generator before this change), so old saves keep their terrain.
   const sha = (w) => createHash("sha1").update(w.data).digest("hex").slice(0, 12);

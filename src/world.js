@@ -3,6 +3,7 @@ import { generateLakes, generateSprings } from "./lakes.js";
 import { populateSnow } from "./snow.js";
 import { generateTreeAt } from "./trees.js";
 import { ladderBounds } from "./ladders.js";
+import { CACTUS_COLLISION, REED_BOUNDS, decorateSand, decorateReeds } from "./plants.js";
 export const SIZE = 128,
   HEIGHT = 64,
   SEA = 16;
@@ -62,15 +63,19 @@ export const BLOCKS = [
   {name:'Cobweb',color:'#dedede'},
   // BlockLadder (original id 65); metadata 2-5 is the wall it hangs on (ladders.js).
   {name:'Ladder',color:'#9b7d4a'},
-  // 53 and 54 are reserved for cactus and sugar cane (work/plants branch).
-  {name:'Reserved 53',color:'#000000',hidden:true,reserved:true},
-  {name:'Reserved 54',color:'#000000',hidden:true,reserved:true},
+  // BlockCactus (original id 81) and BlockReed (83, "reeds"): metadata is the growth age
+  // 0-15 (plants.js). Sugar cane is placed by its item (ItemReed, internal 327) and is
+  // not a creative entry itself.
+  {name:'Cactus',color:'#5f8a2e'},
+  {name:'Sugar cane',color:'#94c065',hidden:true},
   // BlockTNT (original id 46); primed TNT and explosions are in explosion.js.
   {name:'TNT',color:'#db441a'},
 ];
 export const WATER=10,LAVA=42;
 export const SNOW_LAYER=46,ICE=47,SAPLING=48;
 export const CARROTS=49,POTATOES=50,WEB=51,LADDER=52,TNT=55;
+// Sand (6, original 12) and gravel (25, original 13) are the BlockFalling blocks (falling.js).
+export const SAND=6,GRAVEL=25,CACTUS=53,REEDS=54;
 export const isLiquid=b=>b===WATER||b===LAVA;
 export const YELLOW_FLOWER = BLOCKS.findIndex((b) => b.name === 'Dandelion');
 export const RED_FLOWER = BLOCKS.findIndex((b) => b.name === 'Red flower');
@@ -149,11 +154,12 @@ export const blockHeight=b=>b===29||b===30?15/16:b===41?.875:b===SNOW_LAYER?.125
 // (ExtendedBlockStorage.getNeedsRandomTick), which WorldServer reads to pick sections.
 // Grass, leaves, farmland, crops, lava, snow layer, ice and saplings here; snow and ice act on a
 // random tick in snow.js/weather.js, fire and still lava in fire.js, leaves (decay) and saplings (growth) in trees.js.
-export const ticksRandomly=b=>b===1||b===5||b===29||b===30||isCrop(b)||b===LAVA||b===SNOW_LAYER||b===ICE||b===FIRE||b===SAPLING;
+// Cactus and sugar cane grow on a random tick (plants.js).
+export const ticksRandomly=b=>b===1||b===5||b===29||b===30||isCrop(b)||b===LAVA||b===SNOW_LAYER||b===ICE||b===FIRE||b===SAPLING||b===CACTUS||b===REEDS;
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER]);
+const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS]);
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 // Block.isNormalCube: Material.tnt is translucent (isOpaque false), so TNT is an opaque
 // cube that is not a normal cube (no torches/ladders/fire tops on it).
@@ -168,12 +174,21 @@ export function blockBounds(world,x,y,z){
   const b=world.get(x,y,z);
   if(b===SNOW_LAYER)return[0,0,0,1,(world.getMeta(x,y,z)&7)*.125,1];
   if(b===LADDER)return ladderBounds(world.getMeta(x,y,z));
+  // BlockCactus.getCollisionBoundingBoxFromPool: 1/16 in from the sides and the top.
+  if(b===CACTUS)return CACTUS_COLLISION;
   if(b!==41)return[0,0,0,1,blockHeight(b),1];
   const c=(dx,dz)=>world.get(x+dx,y,z+dz)===41;
   return[c(-1,0)?0:1/16,0,c(0,-1)?0:1/16,c(1,0)?1:15/16,.875,c(0,1)?1:15/16];
 }
+// World.solid's test for one cell: what has a collision box. Sugar cane has none
+// (BlockReed.getCollisionBoundingBoxFromPool returns null).
+export function solidBlock(b, meta = 0) {
+  // A flat snow layer (meta 0) has no collision box, so it is not an obstacle.
+  if (b === SNOW_LAYER) return (meta & 7) !== 0;
+  return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== FIRE && b !== WEB && b !== REEDS && !isPlant(b);
+}
 export class World {
-  constructor(seed = "Overworld", biome = "meadow", generationVersion = 7) {
+  constructor(seed = "Overworld", biome = "meadow", generationVersion = 8) {
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
@@ -206,9 +221,7 @@ export class World {
   }
   solid(x, y, z) {
     const b = this.get(x, y, z);
-    // A flat snow layer (meta 0) has no collision box, so it is not an obstacle.
-    if (b === SNOW_LAYER) return (this.meta[this.index(x, y, z)] & 7) !== 0;
-    return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== FIRE && b !== WEB && !isPlant(b);
+    return solidBlock(b, b === SNOW_LAYER ? this.meta[this.index(x, y, z)] : 0);
   }
   // Section (16 high) random-tick refcounts, kept up to date by put() once built.
   sectionTickCount(cx, cz, s) {
@@ -316,6 +329,9 @@ export class World {
       }
     // Lakes are carved before trees, as in populate, so trees skip columns a lake took.
     const lakes = this.generationVersion >= 5 ? generateLakes(this) : null;
+    // Version 8: BiomeDecorator's sand discs (WorldGenSand) come first in decoration, before
+    // the trees; the same per-chunk randoms then place the sugar cane after the flowers.
+    const plants = this.generationVersion >= 8 ? decorateSand(this) : null;
     for (let x = 4; x < SIZE - 4; x++)
       for (let z = 4; z < SIZE - 4; z++) {
         const h = heights[x * SIZE + z];
@@ -345,6 +361,7 @@ export class World {
     if(this.generationVersion>=3)for(let x=2;x<SIZE-2;x++)for(let z=2;z<SIZE-2;z++){const y=heights[x*SIZE+z]+1;if(this.get(x,y-1,z)===1&&this.get(x,y,z)===0&&hash(x,z,s+603)<.095)this.set(x,y,z,39,false);}
     // Version 4 adds BiomeDecorator's flowers; older saves keep their terrain.
     if(this.generationVersion>=4)decorateFlowers(this,{yellow:YELLOW_FLOWER,red:RED_FLOWER,heights,biome:this.biome});
+    if (plants) decorateReeds(this, plants);
     // BiomeDecorator runs its liquid springs after the flowers (version 5).
     if (lakes) generateSprings(this, lakes);
     // Version 6: ChunkProviderGenerate.populate's last pass freezes exposed still water and lays
@@ -436,9 +453,11 @@ export function raycast(world, origin, dir, reach = 6) {
         passed = p;
         continue;
       }
-      // A ladder is only selectable on its 0.125 plate.
-      if (hit === LADDER) {
-        const [x0, , z0, x1, , z1] = ladderBounds(world.getMeta(...p)), lx = origin.x + dir.x * d - p[0], lz = origin.z + dir.z * d - p[2];
+      // A ladder is only selectable on its 0.125 plate, sugar cane inside its block bounds. BlockCactus
+      // never changes its block bounds, so Block.collisionRayTrace hits the full cube (only the
+      // drawn selection box is inset).
+      if (hit === LADDER || hit === REEDS) {
+        const [x0, , z0, x1, , z1] = hit === LADDER ? ladderBounds(world.getMeta(...p)) : REED_BOUNDS, lx = origin.x + dir.x * d - p[0], lz = origin.z + dir.z * d - p[2];
         if (lx < x0 || lx > x1 || lz < z0 || lz > z1) {
           passed = p;
           continue;

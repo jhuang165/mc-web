@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import {biomeFacts} from './biomes.js';
-import {WOOL_COLORS,RED_FLOWER,RED_FLOWERS,YELLOW_FLOWER,SAPLING,WEB,LADDER,CARROTS,POTATOES,TNT,isCrop,isFlower} from './world.js';
+import {WOOL_COLORS,RED_FLOWER,RED_FLOWERS,YELLOW_FLOWER,SAPLING,WEB,LADDER,CARROTS,POTATOES,CACTUS,REEDS,TNT,isCrop,isFlower} from './world.js';
 export const ATLAS_COLUMNS=16,TILE_SIZE=16;
 export const TILES=['grass_top','grass_side','dirt','stone','log_oak','log_oak_top','leaves_oak','sand','planks_oak','brick','glass','bedrock','cobblestone','crafting_table_top','crafting_table_side','crafting_table_front','furnace_side','furnace_top','furnace_front_off','furnace_front_on','coal_ore','iron_ore','diamond_ore','gold_ore','wool_colored_white','torch_on','bookshelf','obsidian','snow','clay','gravel','iron_block','gold_block','diamond_block','farmland_dry','farmland_wet',...Array.from({length:8},(_,i)=>'wheat_stage_'+i),'tallgrass','hardened_clay','chest_front','chest_side','chest_top',...WOOL_COLORS.slice(1).map(c=>'wool_colored_'+c.texture)];
 // Item and particle faces for the chest, cut from its entity texture (ModelChest UVs).
 const CHEST_FACES={chest_front:[[14,33,14,10,1,6],[14,14,14,5,1,2],[1,1,2,4,7,5]],chest_side:[[0,33,14,10,1,6],[0,14,14,5,1,2]],chest_top:[[14,0,14,14,1,1]]};
 // BlockFlower textures: dandelion, then the red flower's nine species by metadata.
 TILES.push('web','flower_dandelion',...RED_FLOWERS.map(f=>'flower_'+f.texture),'ice','grass_side_snowed','sapling_oak','ladder','tnt_side','tnt_top','tnt_bottom',...['carrots','potatoes'].flatMap(n=>Array.from({length:4},(_,i)=>n+'_stage_'+i)));
+// BlockReed (one crossed texture, tinted by the biome grass colour) and BlockCactus's side, top and bottom.
+TILES.push('reeds','cactus_side','cactus_top','cactus_bottom');
 export const ATLAS_ROWS=Math.ceil(TILES.length/ATLAS_COLUMNS);
 const tile=name=>TILES.indexOf(name);
 // `meta` selects wool colours, flower variants and root-crop growth textures.
@@ -21,6 +23,8 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===LADDER)return tile('ladder');
  // BlockTNT.getIcon: tnt_bottom below (side 0), tnt_top above (side 1), tnt_side around.
  if(id===TNT)return tile(face===2?'tnt_top':face===3?'tnt_bottom':'tnt_side');
+ if(id===REEDS)return tile('reeds');
+ if(id===CACTUS)return tile(face===2?'cactus_top':face===3?'cactus_bottom':'cactus_side');
  if(id===SAPLING)return tile('sapling_oak');
  if(id===46)return tile('snow');
  if(id===47)return tile('ice');
@@ -40,10 +44,10 @@ export function createBlockAtlas(){
  const texture=new THREE.CanvasTexture(canvas);texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;const images=new Map(),icons=new Map();let biome='meadow';
  function tint(mapName){const facts=biomeFacts(biome),t=facts.temperature,rain=facts.rainfall*t;const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');x.drawImage(images.get('colormap/'+mapName),0,0);const color=x.getImageData(Math.floor((1-t)*255),Math.floor((1-rain)*255),1,1).data;return`rgb(${color[0]},${color[1]},${color[2]})`;}
  function tinted(source,color){const c=document.createElement('canvas');c.width=c.height=16;const x=c.getContext('2d');x.drawImage(source,0,0,16,16);x.globalCompositeOperation='multiply';x.fillStyle=color;x.fillRect(0,0,16,16);x.globalCompositeOperation='destination-in';x.drawImage(source,0,0,16,16);return c;}
- function redraw(){if(!images.size)return;icons.clear();ctx.clearRect(0,0,canvas.width,canvas.height);const grass=tint('grass'),leaves=tint('foliage');TILES.forEach((name,i)=>{const x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;if(CHEST_FACES[name]){for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])ctx.drawImage(images.get('entity/chest/normal'),u,v,w,h,x+dx,y+dy,w,h);return;}let source=images.get('blocks/'+name);if(['grass_top','tallgrass'].includes(name))source=tinted(source,grass);if(name==='leaves_oak')source=tinted(source,leaves);ctx.drawImage(source,0,0,16,16,x,y,16,16);if(name==='grass_side')ctx.drawImage(tinted(images.get('blocks/grass_side_overlay'),grass),x,y);});texture.needsUpdate=true;}
+ function redraw(){if(!images.size)return;icons.clear();ctx.clearRect(0,0,canvas.width,canvas.height);const grass=tint('grass'),leaves=tint('foliage');TILES.forEach((name,i)=>{const x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;if(CHEST_FACES[name]){for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])ctx.drawImage(images.get('entity/chest/normal'),u,v,w,h,x+dx,y+dy,w,h);return;}let source=images.get('blocks/'+name);if(['grass_top','tallgrass','reeds'].includes(name))source=tinted(source,grass);if(name==='leaves_oak')source=tinted(source,leaves);ctx.drawImage(source,0,0,16,16,x,y,16,16);if(name==='grass_side')ctx.drawImage(tinted(images.get('blocks/grass_side_overlay'),grass),x,y);});texture.needsUpdate=true;}
  function icon(id,damage=0){const key=id+':'+damage;if(icons.has(key))return icons.get(key);const c=document.createElement('canvas');c.width=64;c.height=70;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
   function face(index,matrix,shade,drop=0){x.save();x.setTransform(...matrix);const sx=index%ATLAS_COLUMNS*16,sy=Math.floor(index/ATLAS_COLUMNS)*16;x.drawImage(canvas,sx,sy,16,16-drop,0,drop,16,16-drop);if(shade){x.globalCompositeOperation='source-atop';x.fillStyle=`rgba(0,0,0,${shade})`;x.fillRect(0,0,16,16);}x.restore();}
-  if(id===20||id===39||id===SAPLING||id===WEB||id===LADDER||isFlower(id)||isCrop(id)){const i=blockTile(id,2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
+  if(id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||isFlower(id)||isCrop(id)){const i=blockTile(id,2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
   const url=c.toDataURL();icons.set(key,url);return url;
  }
  const ready=Promise.all([...TILES.filter(n=>!CHEST_FACES[n]).map(n=>'blocks/'+n),'entity/chest/normal','blocks/grass_side_overlay','colormap/grass','colormap/foliage'].map(async n=>images.set(n,await image(n)))).then(()=>redraw());

@@ -8,8 +8,9 @@
 // EntityBreakingFX (bju) particles and removes the ball. `y` is the bottom of
 // the box, which is also the entity's posY (yOffset 0).
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
-import { blockBounds, snowSelectionHeight, FIRE, CARROTS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
+import { blockBounds, snowSelectionHeight, FIRE, CARROTS, REEDS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
 import { ladderBounds } from "./ladders.js";
+import { REED_BOUNDS } from "./plants.js";
 import { ENTITY_TYPES } from "./entities.js";
 
 const f = Math.fround;
@@ -147,6 +148,8 @@ const RAY_BOUNDS = {
 };
 for (let id = 31; id <= 38; id++) RAY_BOUNDS[id] = [0, 0, 0, 1, 0.25, 1];
 RAY_BOUNDS[CARROTS] = RAY_BOUNDS[POTATOES] = [0, 0, 0, 1, 0.25, 1];
+// BlockReed: setBlockBounds(0.125, 0, 0.125, 0.875, 1, 0.875). BlockCactus keeps the full cube.
+RAY_BOUNDS[REEDS] = [...REED_BOUNDS];
 // BlockBush(f = 0.2): 0.5 - f .. 0.5 + f wide and f * 3 high (shadow-reference.json).
 RAY_BOUNDS[YELLOW_FLOWER] = RAY_BOUNDS[RED_FLOWER] = [f(0.5 - f(0.2)), 0, f(0.5 - f(0.2)), f(0.5 + f(0.2)), f(f(0.2) * 3), f(0.5 + f(0.2))];
 // BlockSapling(f = 0.4): 0.5 - f .. 0.5 + f wide and f * 2 high (shadow-reference.json).

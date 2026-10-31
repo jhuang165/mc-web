@@ -223,7 +223,7 @@ test("existing presets generate exactly as before at version 6; the snowy preset
       assert.deepEqual(now.data, old.data, `${seed} ${biome}`);
       assert.deepEqual(now.meta, old.meta, `${seed} ${biome}`);
     }
-  assert.equal(new World("x").generationVersion, 7); // 7 regrows trees (trees.test.js); 6 is pinned above
+  assert.equal(new World("x").generationVersion, 8); // 7 regrows trees (trees.test.js), 8 adds sand and sugar cane (plants.test.js); 6 is pinned above
   for (const seed of ["Minecraft", "d"]) {
     const a = new World(seed, "snowy", 6), b = new World(seed, "snowy", 6), old = new World(seed, "snowy", 5);
     assert.deepEqual(a.data, b.data);

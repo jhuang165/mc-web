@@ -10,6 +10,7 @@ import { sheepColor, childColor } from "./sheep.js";
 import { sneakEdge, criticalDamage } from "./player-movement.js";
 import { MobAI } from "./ai.js";
 import { touchesFire, fireContact } from "./fire.js";
+import { touchesCactus, CACTUS_DAMAGE } from "./plants.js";
 import { webMove, webContact } from './webs.js';
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -721,6 +722,8 @@ export class EntityWorld {
       this.hazard(e, hit.damage);
       e.fire = hit.fire;
     }
+    // Entity.doBlockCollisions -> BlockCactus.onEntityCollidedWithBlock: DamageSource.cactus, 1.
+    if (touchesCactus(this.world, [e.x - r, e.y, e.z - r, e.x + r, e.y + t.height, e.z + r])) this.hazard(e, CACTUS_DAMAGE);
     if (e.fire > 0) e.burn = 1;
   }
   feed(e,id,survival){

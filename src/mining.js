@@ -1,12 +1,13 @@
-import {isCrop,WEB,SAPLING} from './world.js';
+import {isCrop,WEB,SAPLING,REEDS} from './world.js';
 // Minecraft Java 1.7.10 ItemTool/ItemSword/ItemShears, Block and
 // PlayerControllerMP rules. Round each operation at Java float boundaries.
 const f = Math.fround;
 export function digSpeed(block,tool){
  if(!tool?.kind)return 1;
  if(tool.kind==='shears')return block===5||block===WEB?15:block===19?5:1;
- if(tool.kind==='axe'&&(isCrop(block)||block===SAPLING))return tool.speed;
- if(tool.kind==='sword')return block===WEB?15:block===5||isCrop(block)||block===39||block===SAPLING?1.5:1;
+ // Material.plants (crops, saplings, sugar cane) is an axe material and a 1.5 sword material.
+ if(tool.kind==='axe'&&(isCrop(block)||block===SAPLING||block===REEDS))return tool.speed;
+ if(tool.kind==='sword')return block===WEB?15:block===5||isCrop(block)||block===39||block===SAPLING||block===REEDS?1.5:1;
  const effective={shovel:[1,2,6,23,24,25,29,30,46],axe:[4,7,13,21,39,...Array.from({length:8},(_,i)=>31+i)],pickaxe:[3,8,12,14,15,16,17,18,22,26,27,28,40,47]};
  return effective[tool.kind]?.includes(block)?tool.speed:1;
 }

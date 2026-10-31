@@ -331,7 +331,7 @@ test("the oak sapling is block 48: a crossed plant that ticks randomly and block
 
 const ALLOWED = [0, 1, 2, 4, 5, 39, 43, 44];
 test("generation version 7 only regrows trees; versions up to 6 are untouched", () => {
-  assert.equal(new World("x").generationVersion, 7);
+  assert.equal(new World("x").generationVersion, 8); // 8 adds beaches and sugar cane (plants.test.js)
   for (const seed of ["Minecraft", "Overworld", "trees"]) {
     const a = new World(seed, "meadow", 6), b = new World(seed, "meadow", 7), b2 = new World(seed, "meadow", 7);
     assert.deepEqual(b.data, b2.data);

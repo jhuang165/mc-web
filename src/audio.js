@@ -1,11 +1,11 @@
-import { isFlower, isCrop, LADDER, TNT } from "./world.js";
+import { isFlower, isCrop, LADDER, CACTUS, REEDS, TNT } from "./world.js";
 export function blockSound(id) {
-  // BlockTNT uses Block.soundTypeGrass.
-  if ([1, 5, 39, TNT].includes(id)||isCrop(id)||isFlower(id)) return "grass";
+  // BlockReed and BlockTNT: soundTypeGrass; BlockCactus: soundTypeCloth.
+  if ([1, 5, 39, REEDS, TNT].includes(id)||isCrop(id)||isFlower(id)) return "grass";
   if ([2, 24, 25,29,30].includes(id)) return "gravel";
   if (id === 6) return "sand";
   if ([4, 7, 13, 20, 21, LADDER].includes(id)) return "wood";
-  if (id === 19) return "cloth";
+  if (id === 19 || id === CACTUS) return "cloth";
   if (id === 23 || id === 46) return "snow";
   return "stone";
 }
