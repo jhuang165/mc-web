@@ -96,7 +96,11 @@ export class World {
     this.generationVersion = generationVersion;
     this.numericSeed = hashSeed(seed);
     this.data = new Uint8Array(SIZE * SIZE * HEIGHT);
+    // Block metadata (a 4-bit value per cell, like Chunk's nibble array); only
+    // flowing water uses it. Generated water is level 0, a source.
+    this.meta = new Uint8Array(SIZE * SIZE * HEIGHT);
     this.edits = new Map();
+    this.onChange = null;
     this.generate();
   }
   index(x, y, z) {
@@ -110,21 +114,40 @@ export class World {
     if (!this.inside(x, y, z)) return 0;
     return this.data[this.index(x, y, z)];
   }
+  getMeta(x, y, z) {
+    return this.inside(x, y, z) ? this.meta[this.index(x, y, z)] : 0;
+  }
   solid(x, y, z) {
     const b = this.get(x, y, z);
     return b !== 0 && b !== 10 && b !== 20 && !isPlant(b);
   }
-  set(x, y, z, b, track = true) {
+  // Writes a block and its metadata without telling onChange (fluids.js uses it
+  // for its own edits). A tracked edit is saved as block | meta << 8, so saves
+  // from before metadata existed (plain block ids) read back as meta 0.
+  put(x, y, z, b, meta = 0, track = true) {
     if (
       !this.inside(x, y, z) ||
       y === 0 ||
       !Number.isInteger(b) ||
       b < 0 ||
-      b >= BLOCKS.length
+      b >= BLOCKS.length ||
+      !Number.isInteger(meta) ||
+      meta < 0 ||
+      meta > 15
     )
       return false;
-    this.data[this.index(x, y, z)] = b;
-    if (track) this.edits.set(`${x},${y},${z}`, b);
+    const i = this.index(x, y, z);
+    this.data[i] = b;
+    this.meta[i] = meta;
+    if (track) this.edits.set(`${x},${y},${z}`, meta ? b | (meta << 8) : b);
+    return true;
+  }
+  // `onChange(x, y, z, oldBlock, newBlock)` plays World.setBlock's neighbour
+  // notification for tracked edits that change the block or its metadata.
+  set(x, y, z, b, track = true, meta = 0) {
+    const old = this.get(x, y, z), oldMeta = this.getMeta(x, y, z);
+    if (!this.put(x, y, z, b, meta, track)) return false;
+    if (track && (old !== b || oldMeta !== meta)) this.onChange?.(x, y, z, old, b);
     return true;
   }
   surface(x, z) {
@@ -229,18 +252,21 @@ export class World {
     for (const entry of edits) {
       if (!Array.isArray(entry) || entry.length !== 2)
         throw new Error("Invalid edit");
-      const [key, b] = entry;
+      const [key, v] = entry;
+      const b = v & 255,
+        meta = v >> 8;
       const p = String(key).split(",").map(Number);
       if (
         p.length !== 3 ||
         !p.every(Number.isInteger) ||
         !this.inside(...p) ||
-        !Number.isInteger(b) ||
-        b < 0 ||
+        !Number.isInteger(v) ||
+        v < 0 ||
+        v > 0xfff ||
         b >= BLOCKS.length
       )
         throw new Error("Invalid block");
-      this.set(...p, b);
+      this.set(...p, b, true, meta);
     }
   }
 }

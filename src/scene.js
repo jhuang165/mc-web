@@ -3,8 +3,9 @@ import { WorldEffects } from "./effects.js";
 import { SIZE, HEIGHT, SEA, blockHeight, isPlant, isCrop, opaqueCube } from "./world.js";
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS } from "./block-textures.js";
 import { createLighting, worldMaterial } from "./light-material.js";
-import { LightVolume, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
+import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
 import { Sky, Clouds } from "./sky.js";
+import { liquidHeight, flowAngle } from "./fluids.js";
 import { DropRenderer } from "./drop-renderer.js";
 import { ShadowRenderer } from "./shadows.js";
 export { blockTile } from "./block-textures.js";
@@ -223,37 +224,25 @@ export class VoxelScene {
       m.quad([[x, y0, z + o], [x + 1, y0, z + o], [x + 1, y1, z + o], [x, y1, z + o]], uvs, 1, light, true);
     }
   }
-  // RenderBlocks.getLiquidHeight for still water: the corner's four cells.
-  liquidHeight(x, y, z) {
-    let weight = 0, sum = 0;
-    for (let i = 0; i < 4; i++) {
-      const bx = x - (i & 1), bz = z - ((i >> 1) & 1);
-      if (this.world.get(bx, y + 1, bz) === 10) return 1;
-      const b = this.world.get(bx, y, bz);
-      if (b === 10) {
-        sum += (1 / 9) * 11;
-        weight += 11;
-      } else if (b === 0 || b === 20 || isPlant(b)) {
-        // Material.isSolid is false only for air, plants and torches here.
-        sum += 1;
-        weight += 1;
-      }
-    }
-    return 1 - sum / weight;
-  }
-  // renderBlockLiquid: top in still frames, sides in the flowing texture's
-  // top-left quarter, a 0.001 inset, and liquid brightness from the cell and above.
+  // renderBlockLiquid (blm.d(Lawt;III)): the top uses the still frames, or the
+  // flowing ones turned to the flow direction (func_149802_a) when the water
+  // moves; both are drawn from either side. The four corner heights drop by
+  // 0.001 when the top is drawn and the sides follow them. Sides use the
+  // flowing texture's top-left quarter, a 0.001 inset and liquid brightness.
   liquid(still, flow, x, y, z) {
-    const w = this.world, L = this.light, e = 0.001,
+    const w = this.world, L = this.light, e = 0.001, inset = 0.0010000000474974513,
       bright = (bx, by, bz) => maxPacked(L.packed(bx, by, bz), L.packed(bx, by + 1, bz)),
-      h = [[this.liquidHeight(x, y, z), this.liquidHeight(x, y, z + 1)], [this.liquidHeight(x + 1, y, z), this.liquidHeight(x + 1, y, z + 1)]];
-    if (w.get(x, y + 1, z) !== 10)
-      still.quad(
-        [[x, y + h[0][0] - e, z], [x, y + h[0][1] - e, z + 1], [x + 1, y + h[1][1] - e, z + 1], [x + 1, y + h[1][0] - e, z]],
-        [[0, 1], [0, 0], [1, 0], [1, 1]],
-        1,
-        bright(x, y, z),
-      );
+      top = w.get(x, y + 1, z) !== 10,
+      h = [[liquidHeight(w, x, y, z), liquidHeight(w, x, y, z + 1)], [liquidHeight(w, x + 1, y, z), liquidHeight(w, x + 1, y, z + 1)]];
+    if (top) {
+      for (const row of h) for (let i = 0; i < 2; i++) row[i] -= inset;
+      const verts = [[x, y + h[0][0], z], [x, y + h[0][1], z + 1], [x + 1, y + h[1][1], z + 1], [x + 1, y + h[1][0], z]], angle = flowAngle(w, x, y, z);
+      if (angle > -999) {
+        const a = Math.fround(angle), s = Math.fround(mhSin(a) * 0.25), c = Math.fround(mhCos(a) * 0.25),
+          at = (du, dv) => [(8 + du * 16) / 16, 1 - (8 + dv * 16) / 16];
+        flow.quad(verts, [at(-c - s, -c + s), at(-c + s, c + s), at(c + s, c - s), at(c - s, -c - s)], 1, bright(x, y, z), true);
+      } else still.quad(verts, [[0, 1], [0, 0], [1, 0], [1, 1]], 1, bright(x, y, z), true);
+    }
     const below = w.get(x, y - 1, z);
     if (below !== 10 && !opaqueCube(below))
       still.quad([[x, y + e, z], [x + 1, y + e, z], [x + 1, y + e, z + 1], [x, y + e, z + 1]], [[0, 1], [1, 1], [1, 0], [0, 0]], 0.5, bright(x, y - 1, z));
@@ -283,6 +272,39 @@ export class VoxelScene {
       for (let a = chunk(Math.max(0, box.x0 - 1)); a <= chunk(Math.min(SIZE - 1, box.x1 + 1)); a += 16)
         for (let b = chunk(Math.max(0, box.z0 - 1)); b <= chunk(Math.min(SIZE - 1, box.z1 + 1)); b += 16) if (!now.has(`${a},${b}`)) this.dirty.add(`${a},${b}`);
     for (const k of now) this.buildChunk(...k.split(",").map(Number));
+  }
+  // Applies a tick's fluid edits ([x, y, z, oldBlock, newBlock] from
+  // Fluids.tick) in one pass. Cells around each edit are queued for a rebuild,
+  // the ones touching an edit first; only edits that change light opacity or
+  // emission relight, one LightVolume.relight per merged 31 x 31 box. The
+  // render loop then rebuilds the queue at its usual two chunks per frame.
+  updateBlocks(changes) {
+    if (!changes.length || !this.light) return;
+    const chunk = (v) => Math.floor(v / 16) * 16, first = new Set(), later = new Set(), boxes = [],
+      mark = (set, x0, x1, z0, z1) => {
+        for (let a = chunk(Math.max(0, x0)); a <= chunk(Math.min(SIZE - 1, x1)); a += 16)
+          for (let b = chunk(Math.max(0, z0)); b <= chunk(Math.min(SIZE - 1, z1)); b += 16) set.add(`${a},${b}`);
+      };
+    for (const [x, , z, old, now] of changes) {
+      mark(first, x - 1, x + 1, z - 1, z + 1);
+      if (lightOpacity(old) === lightOpacity(now) && lightEmission(old) === lightEmission(now)) continue;
+      this.light.column(x, z);
+      boxes.push([Math.max(0, x - 15), Math.min(SIZE - 1, x + 15), Math.max(0, z - 15), Math.min(SIZE - 1, z + 15)]);
+    }
+    // Overlapping boxes merge, so a spreading front relights once per tick.
+    for (let i = 0; i < boxes.length; i++)
+      for (let j = boxes.length - 1; j > i; j--) {
+        const a = boxes[i], b = boxes[j];
+        if (a[0] > b[1] || b[0] > a[1] || a[2] > b[3] || b[2] > a[3]) continue;
+        boxes[i] = [Math.min(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.max(a[3], b[3])];
+        boxes.splice(j, 1);
+        j = boxes.length;
+      }
+    for (const [x0, x1, z0, z1] of boxes) {
+      const box = this.light.relight(x0, x1, z0, z1);
+      if (box) mark(later, box.x0 - 1, box.x1 + 1, box.z0 - 1, box.z1 + 1);
+    }
+    this.dirty = new Set([...first, ...this.dirty, ...later]);
   }
   preview(time) {
     this.setTime(6000);

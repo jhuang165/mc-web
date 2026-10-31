@@ -30,6 +30,7 @@ import { Survival, ITEMS, MATERIALS } from "./survival.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
+import { Fluids, waterAcceleration, entityWaterBox } from "./fluids.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -96,7 +97,7 @@ let screen = "home",
   lockFallback = false,
   saved = true,
   lastJump = 0;
-let farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer;
+let fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer;
 let sounds,
   firstPerson,
   mobs,
@@ -494,6 +495,9 @@ function launch(record) {
     world = new World(record.seed, record.biome, record.generationVersion ?? 1);
     world.restore(record.edits || []);
     scene.setWorld(world);
+    // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
+    fluids = new Fluids(world, { wash: (x, y, z, b) => { const d = b === 20 ? [{ id: 20, count: 1 }] : cropDrops(b); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count)), x, y, z); } });
+    fluids.wake();
     farming=new Farming(world,record.farms);
     experience=new Experience(record.experience);xpOrbs=new ExperienceOrbs(record.xpOrbs);
     mobs = new EntityWorld(world, record.entities);
@@ -1072,10 +1076,10 @@ function edit(place = false) {
       return;
     }
     if (id === CHEST && !canPlaceChest(world, ...p)) return;
-    const old = world.get(...p);
+    const old = world.get(...p), oldMeta = world.getMeta(...p);
     world.set(...p, id, false);
     if (collides(world, ...position.toArray())) {
-      world.set(...p, old, false);
+      world.set(...p, old, false, oldMeta);
       toast("Give yourself a little room to build.");
       return;
     }
@@ -1242,6 +1246,12 @@ function movementTick() {
         (keys.has("ShiftLeft") || keys.has("ShiftRight") ? 1 : 0)) *
       speed;
   } else {
+    // Entity.handleWaterMovement: running water pushes the player along.
+    const r = PHYSICS.width / 2,
+      { push } = waterAcceleration(world, entityWaterBox([position.x - r, position.y, position.z - r, position.x + r, position.y + PHYSICS.height, position.z + r]));
+    velocity.x += push[0];
+    velocity.y += push[1];
+    velocity.z += push[2];
     const friction = grounded
       ? Math.fround(0.6) * Math.fround(0.91)
       : Math.fround(0.91);
@@ -1319,6 +1329,7 @@ function movementTick() {
   const beforeHealth = survival.health;
   tickSurvival(inWater, oldPosition);
   applyFarmUpdates(farming.tick(survival.time,scene.daylight));
+  if(fluids)scene.updateBlocks(fluids.tick());
   scene.setFurnaces(survival.furnaces);
   tickChests();
   mobs.tick(position, survival, heldId());
