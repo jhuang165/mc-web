@@ -37,7 +37,11 @@ export const BLOCKS = [
   {name:'Tall grass',color:'#82aa51'},
   {name:'Hardened clay',color:'#965c42'},
   {name:'Chest',color:'#a0742f'},
+  // Flowing and still lava are one block (see fluids.js), like water at id 10.
+  {name:'Lava',color:'#d4560f',hidden:true},
 ];
+export const WATER=10,LAVA=42;
+export const isLiquid=b=>b===WATER||b===LAVA;
 // BlockColored (aka) metadata 0-15 in wool order: `texture` is the
 // wool_colored_<name> suffix (ItemDye.field_150921_b[~meta & 15]) and `label`
 // the item name ("tile.cloth.<name>.name"). The id 19 stack's damage is the metadata.
@@ -89,7 +93,7 @@ export const blockHeight=b=>b===29||b===30?15/16:b===41?.875:1;
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([0,9,10,20,29,30,41]);
+const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42]);
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 export const normalCube=b=>opaqueCube(b)&&b!==5;
 // setBlockBoundsBasedOnState: chests are inset by 1/16 except towards a partner.
@@ -129,7 +133,7 @@ export class World {
   }
   solid(x, y, z) {
     const b = this.get(x, y, z);
-    return b !== 0 && b !== 10 && b !== 20 && !isPlant(b);
+    return b !== 0 && b !== 10 && b !== 42 && b !== 20 && !isPlant(b);
   }
   // Writes a block and its metadata without telling onChange (fluids.js uses it
   // for its own edits). A tracked edit is saved as block | meta << 8, so saves
@@ -308,7 +312,7 @@ export function raycast(world, origin, dir, reach = 6) {
       Math.floor(origin.z + dir.z * d),
     ];
     if (last && p.every((v, i) => v === last[i])) continue;
-    if (world.get(...p) !== 0 && world.get(...p) !== 10)
+    if (world.get(...p) !== 0 && !isLiquid(world.get(...p)))
       return { block: p, adjacent: last, distance: d };
     last = p;
   }

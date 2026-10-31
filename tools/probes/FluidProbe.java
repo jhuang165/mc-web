@@ -4,7 +4,10 @@
 // World.setBlock / setBlockMetadataWithNotify / notifyBlocksOfNeighborChange
 // and WorldServer scheduled-tick-list semantics (HashSet de-duplication, a
 // TreeSet ordered by time, priority and creation, at most 1000 ticks per
-// tick). Scenarios arrive on stdin (see tools/verify-fluids.mjs).
+// tick). The double also carries the world Random (ahb.s, which BlockDynamicLiquid
+// and BlockLiquid.func_149799_m draw from), the WorldProvider flags the lava
+// rules read (aqo.f hasNoSky, aqo.g isHellWorld) and records random.fizz
+// sounds. Scenarios arrive on stdin (see tools/verify-fluids.mjs).
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
@@ -14,8 +17,21 @@ class ahb implements ahl {
     aji[] blocks;
     int[] metas;
     long time = 0, serial = 0;
-    final aji air = aji.e(0), stone = aji.e(1);
-    final Random rand = new Random(0);
+    final aji air = aji.e(0), stone = aji.e(1), obsidian = aji.e(49), cobble = aji.e(4);
+    Random s = new Random(0);
+    aqo t = new Provider(false);
+    long tick = 0;
+    final List<String> fizzes = new ArrayList<>();
+    static class Provider extends aqo {
+        Provider(boolean nether) { f = nether; g = nether; }
+        public String l() { return "probe"; }
+    }
+    // World.playSoundEffect(x, y, z, name, volume, pitch).
+    public void a(double x, double y, double z, String name, float volume, float pitch) {
+        fizzes.add("[" + tick + "," + x + "," + y + "," + z + ",\"" + name + "\"," + volume + "," + pitch + "]");
+    }
+    // World.spawnParticle: not recorded.
+    public void a(String name, double x, double y, double z, double vx, double vy, double vz) {}
     static class Entry implements Comparable<Entry> {
         final int x, y, z; final aji block; long time; final long id;
         Entry(int x, int y, int z, aji block, long id) { this.x = x; this.y = y; this.z = z; this.block = block; this.id = id; }
@@ -89,13 +105,16 @@ class ahb implements ahl {
             tree.remove(e);
             set.remove(e);
             aji b = a(e.x, e.y, e.z);
-            if (b != air && b == e.block) b.a(this, e.x, e.y, e.z, rand);
+            if (b != air && b == e.block) b.a(this, e.x, e.y, e.z, s);
         }
     }
     char cell(int x, int y, int z) {
         aji b = a(x, y, z);
         if (b == air) return '.';
         if (b == stone) return '#';
+        if (b == obsidian) return '@';
+        if (b == cobble) return '%';
+        if (b == aji.e(10) || b == aji.e(11)) return (char) ('A' + e(x, y, z));
         return (char) ('a' + e(x, y, z));
     }
     String grid() {
@@ -109,28 +128,31 @@ public class FluidProbe {
     static int hash(String s) { int h = 0; for (int i = 0; i < s.length(); i++) h = 31 * h + s.charAt(i); return h; }
     public static void main(String[] args) throws Exception {
         aji.p(); // Block.registerBlocks
-        aji flowing = aji.e(8), still = aji.e(9);
+        aji flowing = aji.e(8), still = aji.e(9), lavaFlowing = aji.e(10), lavaStill = aji.e(11);
         Method flow = alw.class.getDeclaredMethod("f", ahl.class, int.class, int.class, int.class);
         flow.setAccessible(true);
         Field fx = azw.class.getDeclaredField("a"), fy = azw.class.getDeclaredField("b"), fz = azw.class.getDeclaredField("c");
         BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
         StringBuilder percents = new StringBuilder();
         for (int m = 0; m < 16; m++) percents.append(m > 0 ? "," : "").append(Float.toString(alw.b(m)));
-        System.out.println("{\"percent\":[" + percents + "]}");
+        System.out.println("{\"percent\":[" + percents + "],\"blocks\":{\"water\":[" + still.m() + "," + still.k() + "," + still.c() + "],\"lava\":[" + lavaStill.m() + "," + lavaStill.k() + "," + lavaStill.c() + "]}}");
         for (String line = in.readLine(); line != null; ) {
             String[] head = line.split(" ");
             if (!head[0].equals("scenario")) { line = in.readLine(); continue; }
             int dx = Integer.parseInt(head[2]), dy = Integer.parseInt(head[3]), dz = Integer.parseInt(head[4]), ticks = Integer.parseInt(head[5]);
             ahb w = new ahb(dx, dy, dz);
+            if (head.length > 6) w.s = new Random(Long.parseLong(head[6]));
+            if (head.length > 7) w.t = new ahb.Provider(head[7].equals("1"));
             String grid = in.readLine().substring(5);
             for (int x = 0; x < dx; x++) for (int y = 0; y < dy; y++) for (int z = 0; z < dz; z++) {
                 char c = grid.charAt((x * dy + y) * dz + z);
-                w.blocks[w.at(x, y, z)] = c == '#' ? w.stone : c == '~' ? still : w.air;
+                w.blocks[w.at(x, y, z)] = c == '#' ? w.stone : c == '~' ? still : c == 'L' ? lavaStill : w.air;
             }
             List<String[]> events = new ArrayList<>();
             for (line = in.readLine(); line != null && line.startsWith("event "); line = in.readLine()) events.add(line.split(" "));
             StringBuilder hashes = new StringBuilder();
             for (int t = 1; t <= ticks; t++) {
+                w.tick = t;
                 for (String[] e : events) if (Integer.parseInt(e[1]) == t) {
                     int x = Integer.parseInt(e[3]), y = Integer.parseInt(e[4]), z = Integer.parseInt(e[5]);
                     if (e[2].equals("remove")) w.d(x, y, z, w.air, 0, 3);
@@ -140,6 +162,10 @@ public class FluidProbe {
                         aji now = w.a(x, y, z);
                         if (!((now == flowing || now == still) && w.e(x, y, z) == 0)) w.d(x, y, z, flowing, 0, 3);
                     }
+                    else if (e[2].equals("lava")) {
+                        aji now = w.a(x, y, z);
+                        if (!((now == lavaFlowing || now == lavaStill) && w.e(x, y, z) == 0)) w.d(x, y, z, lavaFlowing, 0, 3);
+                    }
                 }
                 w.tick();
                 hashes.append(t > 1 ? "," : "").append(hash(w.grid()));
@@ -147,15 +173,16 @@ public class FluidProbe {
             StringBuilder flows = new StringBuilder();
             for (int x = 0; x < dx; x++) for (int y = 0; y < dy; y++) for (int z = 0; z < dz; z++) {
                 aji b = w.a(x, y, z);
-                if (b != flowing && b != still) continue;
+                boolean lava = b == lavaFlowing || b == lavaStill;
+                if (b != flowing && b != still && !lava) continue;
                 azw v = (azw) flow.invoke(b, w, x, y, z);
-                double angle = alw.a(w, x, y, z, awt.h);
+                double angle = alw.a(w, x, y, z, lava ? awt.i : awt.h);
                 flows.append(flows.length() > 0 ? "," : "").append("[").append(x).append(",").append(y).append(",").append(z).append(",")
                     .append(fx.getDouble(v)).append(",").append(fy.getDouble(v)).append(",").append(fz.getDouble(v)).append(",").append(angle).append("]");
             }
             StringBuilder pend = new StringBuilder();
-            for (ahb.Entry e : w.tree) pend.append(pend.length() > 0 ? "," : "").append("[").append(e.x).append(",").append(e.y).append(",").append(e.z).append(",").append(e.time - w.time).append(",\"").append(e.block == flowing ? "flowing" : e.block == still ? "still" : "other").append("\"]");
-            System.out.println("{\"name\":\"" + head[1] + "\",\"hashes\":[" + hashes + "],\"grid\":\"" + w.grid() + "\",\"pending\":" + w.tree.size() + ",\"pendingCells\":[" + pend + "],\"flows\":[" + flows + "]}");
+            for (ahb.Entry e : w.tree) pend.append(pend.length() > 0 ? "," : "").append("[").append(e.x).append(",").append(e.y).append(",").append(e.z).append(",").append(e.time - w.time).append(",\"").append(e.block == flowing ? "flowing" : e.block == still ? "still" : e.block == lavaFlowing ? "lavaFlowing" : e.block == lavaStill ? "lavaStill" : "other").append("\"]");
+            System.out.println("{\"name\":\"" + head[1] + "\",\"hashes\":[" + hashes + "],\"grid\":\"" + w.grid() + "\",\"fizz\":[" + String.join(",", w.fizzes) + "],\"rng\":" + w.s.nextInt() + ",\"pending\":" + w.tree.size() + ",\"pendingCells\":[" + pend + "],\"flows\":[" + flows + "]}");
         }
     }
 }

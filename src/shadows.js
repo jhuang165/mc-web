@@ -21,9 +21,9 @@ export const SHADOWS = {
   player: { size: f(0.5), opaque: 1 },
 };
 // Blocks whose renderAsNormalBlock is false take no shadow (probe evidence in
-// public/research/shadow-reference.json): glass, water, torches, farmland,
+// public/research/shadow-reference.json): glass, water, lava, torches, farmland,
 // wheat, tall grass and chests. Every block that does is a full cube.
-const NOT_NORMAL = new Set([9, 10, 20, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41]);
+const NOT_NORMAL = new Set([9, 10, 20, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41, 42]);
 export const takesShadow = (b) => b !== 0 && !NOT_NORMAL.has(b);
 
 // `e`: { x, y, z } interpolated Java position (posY, which for items and orbs
