@@ -31,6 +31,8 @@ import {
   FIRE,
   LAVA,
   LADDER,
+  TNT,
+  opaqueCube,
 } from "./world.js";
 import { ladderBounds, canPlaceLadder, placedLadderMeta, ladderSupported, clickedSide, isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
 import { snowCanStay, snowFalls, snowballsFor, iceLeavesWater, stackedSnowMeta } from "./snow.js";
@@ -60,6 +62,10 @@ import { Arrows, arrowTargets, releaseBow, canDraw, bowStage, bowFov, easeFov, B
 import { canSeeSky } from "./weather.js";
 import { Fluids, waterAcceleration, entityWaterBox, inLava, liquidInBox } from "./fluids.js";
 import { Fire, touchesFire, fireContact } from "./fire.js";
+import { explodeBlocks, explosionImpact, primeTnt, tickTnt, TNT_POWER, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
+import { powerCreeper } from "./creeper.js";
+import { JavaRandom } from "./lighting.js";
+import { TntRenderer } from "./tnt-renderer.js";
 import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
 import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, sneakEdge, moveWeights, isCritical, ATTACK_SLOWDOWN } from "./player-movement.js";
@@ -132,11 +138,16 @@ let screen = "home",
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer;
 let weather = new Weather(), trees;
+// EntityTNTPrimed entities (explosion.js primeTnt), and the World.rand that Explosion draws
+// its ray lengths, drops, chained fuses and sound pitch from.
+let primed = [];
+const blastRandom = new JavaRandom(Date.now());
 let sounds,
   firstPerson,
   mobs,
   mobRenderer,
   chestRenderer,
+  tntRenderer,
   aimedEntity = null,
   eating = null;
 const animation = new PlayerAnimation();
@@ -456,6 +467,8 @@ function save() {
   active.drops = items.serialize();
   active.projectiles = projectiles.serialize();
   active.arrows = arrows.serialize();
+  // EntityTNTPrimed.writeEntityToNBT keeps only the fuse (plus Entity's position and motion).
+  active.tnt = primed.map((e) => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse }));
   active.weather = weather.save();
   // Items on the cursor or in a crafting grid return to the saved inventory, as closing the screen would.
   const pending = containerView ? [containerView.container.inv.cursor, ...(containerView.container.grid?.stacks || [])].filter(Boolean).map(copyStack) : [];
@@ -602,7 +615,8 @@ function launch(record) {
     watchFlowers();
     // BlockFire and the static-lava ignition roll: scheduled and random ticks (fire.js). Fire reaches the
     // weather through a closure because `weather` is replaced below.
-    fire = new Fire(world, { weather: () => weather, stillLava: (x, y, z) => !fluids.pending.has(fluids.key(x, y, z, LAVA)) });
+    // BlockTNT.func_150114_a for TNT that burns away (BlockFire.tryCatchFire, metadata 1, no placer).
+    fire = new Fire(world, { weather: () => weather, stillLava: (x, y, z) => !fluids.pending.has(fluids.key(x, y, z, LAVA)), primeTnt: (x, y, z) => lightTnt(x, y, z, null) });
     fire.watch();
     // Saplings, tree growth and leaf decay (trees.js); it wraps world.onChange after the flowers do.
     trees = new Trees(world, {
@@ -681,6 +695,8 @@ function launch(record) {
       survival.time,
     );
     projectiles.load(record.projectiles);
+    primed = (Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz }));
+    tntRenderer?.clear();
     arrows.load(record.arrows);
     scene.setArrows(arrows.list);
     velocity.set(0, 0, 0);
@@ -1095,6 +1111,8 @@ function tickWeather() {
       const hit = struckByLightning(e.fire || 0);
       mobs.hazard(e, hit.damage);
       e.fire = hit.fire;
+      // EntityCreeper.onStruckByLightning: after Entity's fire damage, datawatcher 17 (powered).
+      if (e.type === "creeper") powerCreeper(e);
     }
     if (!survival.creative && survival.health > 0 && overlaps(entityBox(position, PHYSICS.width, PHYSICS.height), box)) {
       const hit = struckByLightning(survival.fire || 0);
@@ -1152,6 +1170,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   }
   if (inWater || motion.inWeb) fallDistance = 0;
   items.tick(world, (st) => survival.inventory.maxStack(st));
+  tickPrimedTnt();
   if (survival.health > 0) {
     const picked = items.collect(position, PHYSICS.width, PHYSICS.height, (st) => survival.inventory.add(st));
     for (const { item } of picked) {
@@ -1218,6 +1237,8 @@ function handleEntityEvents() {
       sounds.play(event.sound, { position: event.position, volume: event.volume ?? 0.6, pitch: event.pitch });
     if(event.xp&&!survival.creative)xpOrbs.spawn(event.xp,event.position);
     if(event.hearts)mobRenderer.hearts(event.position);
+    // EntityCreeper.func_146077_cc: world.createExplosion(creeper, x, y, z, radius, mobGriefing).
+    if (event.explode) explodeAt(event.explode.x, event.explode.y, event.explode.z, event.explode.size, { exploder: event.explode.source, attacker: event.explode.source });
     if (event.drop) items.dropMob(event.drop, event.count, event.position, event.damage, event);
     // EntityAIEatGrass: Level event 2001 (block break sound and particles) for the
     // tall grass or the grass block that was eaten; the world edit is already made.
@@ -1330,6 +1351,18 @@ function edit(place = false) {
     }
     return;
   }
+  // EntityCreeper.interact (xz.a(yz)): flint and steel plays fire.ignite at the creeper's
+  // position + 0.5 (pitch 0.8 to 1.2), ignites it (datawatcher 18) and wears the item by 1.
+  if (place && aimedEntity && item?.kind === "flint_and_steel" && aimedEntity.entity.type === "creeper" && aimedEntity.entity.health > 0) {
+    const e = aimedEntity.entity;
+    sounds.play("fire.ignite", { volume: 1, pitch: Math.random() * 0.4 + 0.8, position: { x: e.x + 0.5, y: e.y + 0.5, z: e.z + 0.5 } });
+    e.ignited = true;
+    if (!survival.creative) survival.wear(id);
+    reportBrokenTool();
+    renderHotbar();
+    saved = false;
+    return;
+  }
   if(place&&aimedEntity){if(mobs.shear(aimedEntity.entity,id,survival)){handleEntityEvents();renderHotbar();saved=false;return;}if(mobs.feed(aimedEntity.entity,id,survival)){handleEntityEvents();renderHotbar();saved=false;}else if(mobs.dye(aimedEntity.entity,survival.held,survival)){handleEntityEvents();renderHotbar();saved=false;}else if(!survival.creative&&item?.food)beginEating(id);return;}
   // ItemArmor.onItemRightClick: equip into an empty armor slot.
   if (place && item?.armor !== undefined) {
@@ -1366,6 +1399,19 @@ function edit(place = false) {
       return;
     }
 
+    // BlockTNT.onBlockActivated (aob): flint and steel primes the block (func_150114_a with
+    // metadata 1 and the player as placer), sets it to air and damages the item by 1.
+    if (activates && block === TNT && item?.kind === "flint_and_steel") {
+      lightTnt(x, y, z, "player");
+      world.set(x, y, z, 0);
+      farming.observe(x, y, z);
+      scene.updateBlock(x, z, y);
+      if (!survival.creative) survival.wear(id);
+      reportBrokenTool();
+      renderHotbar();
+      saved = false;
+      return;
+    }
     if (activates && block === 13) {
       inventory(true);
       return;
@@ -1486,6 +1532,97 @@ function edit(place = false) {
       auto: !mineHeld,
     };
   }
+}
+// BlockTNT.func_150114_a: an EntityTNTPrimed at the block centre (fuse 80) and
+// game.tnt.primed (volume 1, pitch 1). `placer` is "player" or null.
+function lightTnt(x, y, z, placer) {
+  const e = primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer });
+  primed.push(e);
+  sounds.play("game.tnt.primed", { volume: 1, pitch: 1, position: { x: e.x, y: e.y + TNT_Y_OFFSET, z: e.z } });
+  saved = false;
+}
+// EntityTNTPrimed.onUpdate for every primed TNT; a spent fuse removes it and explodes with
+// strength 4, the TNT as exploder and its placer as the damage source's attacker.
+function tickPrimedTnt() {
+  if (!primed.length) return;
+  for (const e of [...primed]) {
+    const at = tickTnt(world, e);
+    if (!at) continue;
+    primed.splice(primed.indexOf(e), 1);
+    explodeAt(at.x, at.y, at.z, TNT_POWER, { exploder: e, attacker: e.placer });
+  }
+}
+// World.newExplosion(exploder, x, y, z, size, false, true) on the integrated server:
+// Explosion.doExplosionA (explosion.js explosionBlocks for the rays; the entity half here),
+// then doExplosionB(true). DamageSource.setExplosionSource names the attacker: the creeper
+// itself, or the TNT's placer. The block edits run through world.set like breakBlock:
+// containers spill, farmland and crops update, and the edits are saved.
+function explodeAt(x, y, z, size, { exploder = null, attacker = null } = {}) {
+  const out = explodeBlocks(world, x, y, z, size, blastRandom, { opaque: opaqueCube });
+  // The entity half sees the world before any block is removed. Entities within 2 * size of
+  // the centre take damage and the push from the centre towards their eyes (posY + eye height).
+  const hitFrom = attacker === "player" ? position : attacker;
+  for (const e of mobs?.entities ?? []) {
+    if (e === exploder) continue;
+    const t = ENTITY_TYPES[e.type];
+    if (!t) continue;
+    const scale = e.growingAge < 0 ? 0.5 : 1, w = t.width * scale, h = t.height * scale;
+    const hit = explosionImpact(world, x, y, z, size, e.x, e.y, e.z, e.y + Math.fround(Math.fround(h) * Math.fround(0.85)), entityBox(e, w, h));
+    if (!hit) continue;
+    if (hitFrom) mobs.damage(e, hit.damage, hitFrom.x, hitFrom.z, attacker === "player");
+    else mobs.hazard(e, hit.damage);
+    e.vx += hit.push[0]; e.vy += hit.push[1]; e.vz += hit.push[2];
+  }
+  // EntityItem: posY is the box centre (yOffset 0.125), eyes at 0.85 of its 0.25 height; health 5.
+  for (const it of items.items) {
+    const py = it.y + 0.125, hit = explosionImpact(world, x, y, z, size, it.x, py, it.z, py + Math.fround(0.25 * 0.85), items.box(it));
+    if (!hit) continue;
+    items.hurt(it, hit.damage);
+    it.mx += hit.push[0]; it.my += hit.push[1]; it.mz += hit.push[2];
+  }
+  // Other primed TNT: Entity.attackEntityFrom does nothing, the push still lands.
+  for (const e of primed) {
+    if (e === exploder) continue;
+    const py = e.y + TNT_Y_OFFSET, hit = explosionImpact(world, x, y, z, size, e.x, py, e.z, py + Math.fround(TNT_SIZE * 0.85), [e.x - TNT_SIZE / 2, e.y, e.z - TNT_SIZE / 2, e.x + TNT_SIZE / 2, e.y + TNT_SIZE, e.z + TNT_SIZE / 2]);
+    if (hit) { e.vx += hit.push[0]; e.vy += hit.push[1]; e.vz += hit.push[2]; }
+  }
+  // The player (EntityPlayerMP: posY at the feet, eyes 1.62 up). Explosion damage is
+  // difficulty scaled (Normal: unchanged) and armour applies; Creative players are pushed only.
+  if (survival.health > 0) {
+    const hit = explosionImpact(world, x, y, z, size, position.x, position.y, position.z, position.y + PHYSICS.eye, entityBox(position, PHYSICS.width, PHYSICS.height));
+    if (hit) {
+      if (!survival.creative && survival.damage(hit.damage, attacker && attacker !== "player" ? "a " + attacker.type : "an explosion", true)) reportBrokenTool();
+      velocity.x += hit.push[0]; velocity.y += hit.push[1]; velocity.z += hit.push[2];
+    }
+  }
+  // doExplosionB: random.explode (volume 4) and the block removals in list order.
+  sounds.play("random.explode", { volume: 4, pitch: out.pitch, position: { x, y, z } });
+  const changes = [];
+  for (const b of out.broken) {
+    const key = b.x + "," + b.y + "," + b.z, f = survival.furnaces[key], chest = survival.chests[key];
+    if (!world.set(b.x, b.y, b.z, 0)) continue;
+    changes.push([b.x, b.y, b.z, b.id, 0]);
+    farming.observe(b.x, b.y, b.z);
+    // BlockFurnace/BlockChest.breakBlock spill their contents.
+    if (f) {
+      items.spill(f.items.filter(Boolean), b.x, b.y, b.z);
+      delete survival.furnaces[key];
+    }
+    if (chest) {
+      items.spill(chest.items.filter(Boolean).map(copyStack), b.x, b.y, b.z);
+      delete survival.chests[key];
+    }
+  }
+  // Block.dropBlockAsItemWithChance (chance 1 / size): one EntityItem per item, pickup delay 10.
+  for (const d of out.drops) items.spawn(makeStack(d.id, 1, d.damage || 0), d.x, d.y, d.z, { delay: 10 });
+  for (const o of out.xp) xpOrbs.spawn(o.value, o);
+  // BlockTNT.onBlockDestroyedByExplosion: a primed TNT with fuse rand.nextInt(20) + 10, no sound.
+  for (const p of out.primed) primed.push(primeTnt(p.x, p.y, p.z, { fuse: p.fuse, placer: attacker }));
+  scene.updateBlocks(changes);
+  if (out.broken.length) scene.effects.burst([Math.floor(x), Math.floor(y), Math.floor(z)], out.broken[0].id, 48);
+  chestRenderer.sync(world, survival.chests);
+  renderVitals();
+  saved = false;
 }
 function breakBlock(p, creative = false) {
   const block = world.get(...p),
@@ -2209,6 +2346,7 @@ function animate(now) {
   } else if (screen === "home") scene.preview(elapsed);
   const partial = Math.min(1, accumulator / PHYSICS.tick);
   if (mobs) mobRenderer.update(mobs.entities,dt,partial);
+  tntRenderer?.update(screen === "home" ? [] : primed, partial);
   playerRenderer?.update(playerBody, partial, {
     visible: thirdPersonView > 0 && ["playing", "inventory", "paused"].includes(screen),
     swing: animate.pose ? (animate.pose.progress < 1 ? animate.pose.progress : 0) : 0,
@@ -2247,6 +2385,8 @@ function shadowCasters(partial) {
   const list = [], lerp = (a, b) => a + (b - a) * partial;
   for (const e of items.items)
     if (e.stack) list.push({ ...SHADOWS.item, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + 0.125, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + 0.125, z: e.z }, height: 0.25 });
+  // RenderTNTPrimed: shadowSize 0.5 under the box (posY is its centre).
+  for (const e of primed) list.push({ ...SHADOWS.tnt, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + TNT_Y_OFFSET, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + TNT_Y_OFFSET, z: e.z }, height: TNT_SIZE });
   for (const o of xpOrbs.orbs) list.push({ ...SHADOWS.orb, x: lerp(o.px, o.x), y: lerp(o.py, o.y), z: lerp(o.pz, o.z), pos: o, height: 0.5 });
   // The local player casts a shadow only when it is on screen.
   if (thirdPersonView > 0) list.push(playerShadowCaster(position, previous, partial, SHADOWS.player, motion.prevYSize, motion.ySize));
@@ -2269,6 +2409,7 @@ async function boot(){try {
   mobRenderer = new MobRenderer(scene.scene, scene);
   playerRenderer = new PlayerRenderer(scene.scene, scene, scene.textures.texture);
   chestRenderer = new ChestRenderer(scene.scene, scene);
+  tntRenderer = new TntRenderer(scene.scene, scene);
   document.addEventListener("pointerdown", () => sounds.unlock(), {
     once: true,
   });

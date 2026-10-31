@@ -13,22 +13,23 @@
 // scheduleBlockUpdate, raining() is isRaining, strike(x, y, z) is
 // canLightningStrikeAt, humid(x, y, z) is isBlockHighHumidity, and `rand`,
 // `difficulty` and `fireTick` (the doFireTick game rule) complete it.
-import { FIRE, LAVA, HEIGHT, SIZE, isLiquid, normalCube } from "./world.js";
+import { FIRE, LAVA, HEIGHT, SIZE, TNT, isLiquid, normalCube } from "./world.js";
 import { Weather, canLightningStrikeAt, stopsPrecipitation } from "./weather.js";
 
 const f = Math.fround;
 
 // Blocks.fire.setFireInfo(block, chanceToEncourageFire, abilityToCatchFire) for the
 // blocks of this build (internal ids): logs 5/5, leaves 30/60, planks 5/20,
-// wool 30/60, bookshelf 30/20, tall grass and flowers 60/100. Other blocks have 0/0.
+// wool 30/60, bookshelf 30/20, tall grass and flowers 60/100, TNT 15/100. Other blocks have 0/0.
 // (The probe dumps the whole 256-entry table: fire-reference.json "table".)
-export const FIRE_INFO = { 4: [5, 5], 5: [30, 60], 7: [5, 20], 19: [30, 60], 21: [30, 20], 39: [60, 100], 43: [60, 100], 44: [60, 100] };
+export const FIRE_INFO = { 4: [5, 5], 5: [30, 60], 7: [5, 20], 19: [30, 60], 21: [30, 20], 39: [60, 100], 43: [60, 100], 44: [60, 100], [TNT]: [15, 100] };
 export const encouragement = (b) => FIRE_INFO[b]?.[0] ?? 0;
 export const flammability = (b) => FIRE_INFO[b]?.[1] ?? 0;
 // Material.getCanBurn (awt.h), which BlockStaticLiquid.func_149...(o) reads: wood, cloth,
 // leaves and plants. Logs, leaves, planks, crafting table, wool, bookshelf, chest,
-// tall grass; flowers (Material.plants) cannot burn, tall grass (Material.vine) can.
-export const BURNS = new Set([4, 5, 7, 13, 19, 21, 39, 41]);
+// tall grass, TNT (Material.tnt); flowers (Material.plants) cannot burn, tall grass
+// (Material.vine) can.
+export const BURNS = new Set([4, 5, 7, 13, 19, 21, 39, 41, TNT]);
 // World.doesBlockHaveSolidTopSurface (ahb.a(ahl, x, y, z)): an opaque normal cube.
 // Leaves, glass, farmland, chests, liquids and plants have none.
 export const solidTop = (b) => normalCube(b);
@@ -60,12 +61,14 @@ export function neighborsEncourage(L, x, y, z) {
 const quarter = (r) => (r.nextInt(5) / 4) | 0;
 
 // BlockFire.tryCatchFire (alb.a(ahb, x, y, z, chance, Random, age)): a roll against the
-// block's flammability burns it, becoming a younger fire or nothing (TNT is not in this build).
+// block's flammability burns it, becoming a younger fire or nothing. Burnt TNT then
+// primes (BlockTNT.onBlockDestroyedByPlayer with metadata 1, no placer): `L.primeTnt`.
 export function tryCatchFire(L, x, y, z, chance, age) {
-  const flam = flammability(L.get(x, y, z));
+  const b = L.get(x, y, z), flam = flammability(b);
   if (L.rand.nextInt(chance) >= flam) return;
   if (L.rand.nextInt(age + 10) < 5 && !L.strike(x, y, z)) L.setBlock(x, y, z, FIRE, Math.min(15, age + quarter(L.rand)));
   else L.setAir(x, y, z);
+  if (b === TNT) L.primeTnt?.(x, y, z);
 }
 
 // BlockFire.updateTick (alb.a(ahb, x, y, z, Random)). `flag` of the original (fire over
@@ -312,7 +315,8 @@ export const MAX_TICKS = 1000;
 const RANDOM_TICKS = new Uint8Array(256);
 for (const b of [1, 5, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 43, 44, LAVA, FIRE]) RANDOM_TICKS[b] = 1;
 export class Fire {
-  constructor(world, { weather, stillLava = () => true, difficulty = DIFFICULTY, fireTick = true } = {}) {
+  // `primeTnt(x, y, z)` spawns the primed TNT of a block that burnt (main.js).
+  constructor(world, { weather, stillLava = () => true, difficulty = DIFFICULTY, fireTick = true, primeTnt = null } = {}) {
     this.world = world;
     this.weather = weather;
     this.stillLava = stillLava;
@@ -349,7 +353,9 @@ export class Fire {
       },
       difficulty,
       fireTick,
+      primeTnt: (x, y, z) => self.primeTnt?.(x, y, z),
     };
+    this.primeTnt = primeTnt;
   }
   key(x, y, z) {
     return this.world.index(x, y, z);

@@ -8,7 +8,7 @@
 // EntityBreakingFX (bju) particles and removes the ball. `y` is the bottom of
 // the box, which is also the entity's posY (yOffset 0).
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
-import { blockBounds, snowSelectionHeight, CARROTS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
+import { blockBounds, snowSelectionHeight, FIRE, CARROTS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
 import { ladderBounds } from "./ladders.js";
 import { ENTITY_TYPES } from "./entities.js";
 
@@ -165,7 +165,8 @@ export const rayBounds = (world, x, y, z, id) =>
 export function rayTraceBlocks(world, start, end, hasBox = false) {
   if (start.some(Number.isNaN) || end.some(Number.isNaN)) return null;
   const id = (x, y, z) => (y < 0 ? 0 : world.get(x, y, z)),
-    solid = (b) => b !== 0 && b !== 10 && b !== 42,
+    // BlockFire.isCollidable is false, so canCollideCheck skips fire like air.
+    solid = (b) => b !== 0 && b !== 10 && b !== 42 && b !== FIRE,
     test = (x, y, z, a) => {
       const b = id(x, y, z);
       if (!solid(b) || (hasBox && !world.solid(x, y, z))) return null;

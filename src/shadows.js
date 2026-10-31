@@ -22,6 +22,9 @@ export const SHADOWS = {
   zombie: { size: f(0.5), opaque: 1 },
   spider: { size: 1, opaque: 1 },
   skeleton: { size: f(0.5), opaque: 1 },
+  // RenderCreeper: super(new ModelCreeper(), 0.5F); RenderTNTPrimed: shadowSize = 0.5F.
+  creeper: { size: f(0.5), opaque: 1 },
+  tnt: { size: f(0.5), opaque: 1 },
   // RenderPlayer: super(new ModelBiped(0), 0.5).
   player: { size: f(0.5), opaque: 1 },
 };
@@ -29,7 +32,8 @@ export const SHADOWS = {
 // public/research/shadow-reference.json): glass, water, lava, torches, farmland,
 // wheat, tall grass, chests, fire (45), the snow layer (46) and the sapling (48). Every block that does is a full cube
 // (ice does: it renders as a normal block).
-const NOT_NORMAL = new Set([9, 10, 20, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41, 42, FIRE, 46, 48, WEB, LADDER]);
+// 53 and 54 are reserved for cactus and sugar cane, which do not render as normal blocks.
+const NOT_NORMAL = new Set([9, 10, 20, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41, 42, FIRE, 46, 48, WEB, LADDER, 53, 54]);
 export const takesShadow = (b) => b !== 0 && !NOT_NORMAL.has(b) && !isFlower(b) && !isCrop(b);
 
 // `e`: { x, y, z } interpolated Java position (posY, which for items and orbs

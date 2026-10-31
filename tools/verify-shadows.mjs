@@ -20,7 +20,7 @@ async function library(prefix){
  throw new Error(`Missing ${prefix}*.jar; list library JARs in MC_PROBE_LIBS.`);
 }
 // Game block ID -> 1.7.10 block ID (src/world.js BLOCKS order).
-const MC_BLOCKS={1:2,2:3,3:1,4:17,5:18,6:12,7:5,8:45,9:20,10:9,11:7,12:4,13:58,14:61,15:16,16:15,17:56,18:14,19:35,20:50,21:47,22:49,23:80,24:82,25:13,26:42,27:41,28:57,29:60,30:60,31:59,32:59,33:59,34:59,35:59,36:59,37:59,38:59,39:31,40:172,41:54,42:11,43:37,44:38,45:51,46:78,47:79,48:6,49:141,50:142,51:30,52:65};
+const MC_BLOCKS={1:2,2:3,3:1,4:17,5:18,6:12,7:5,8:45,9:20,10:9,11:7,12:4,13:58,14:61,15:16,16:15,17:56,18:14,19:35,20:50,21:47,22:49,23:80,24:82,25:13,26:42,27:41,28:57,29:60,30:60,31:59,32:59,33:59,34:59,35:59,36:59,37:59,38:59,39:31,40:172,41:54,42:11,43:37,44:38,45:51,46:78,47:79,48:6,49:141,50:142,51:30,52:65,55:46};
 const libs=await Promise.all(['guava-','log4j-api-','commons-lang3-'].map(library));
 const classes=path.join(out,'classes');await rm(classes,{recursive:true,force:true});await mkdir(classes,{recursive:true});
 await exec('unzip',['-q','-o',jar,'*.class','-d',classes],{maxBuffer:1<<24});
