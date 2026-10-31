@@ -32,4 +32,4 @@ Everything here comes from the unchanged 1.7.10 client JAR (sha1 `e80d9b3b...`, 
 
 - The player still uses the simplified main.js collision (no 0.5 step-up, no exact `moveEntity` box sweep), so speeds against walls and on slopes can differ.
 - `isInWater` uses the block at feet + 0.6, not the shrunken `handleWaterMovement` box.
-- No sprint running particles, no speed/slowness potion terms in the FOV, no hunger-based sprint stop message.
+- Sprint running particles are in [particles](particles.md); no speed/slowness potion terms in the FOV, no hunger-based sprint stop message.
