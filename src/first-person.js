@@ -45,6 +45,7 @@ export function itemTexture(id, damage = 0) {
   if(id===RED_FLOWER)return "/media/1.7.10/blocks/flower_"+RED_FLOWERS[Math.max(0,Math.min(RED_FLOWERS.length-1,damage|0))].texture+".png";
   if(id===DYE)return "/media/1.7.10/items/dye_powder_"+DYES[Math.max(0,Math.min(15,damage|0))].texture+".png";
   if(id===20||id===39)return "/media/1.7.10/blocks/"+(id===20?"torch_on":"tallgrass")+".png";
+  if(id===48)return "/media/1.7.10/blocks/sapling_oak.png";
   if(id===125)return "/media/1.7.10/items/shears.png";
   if(item?.texture)return "/media/1.7.10/items/"+item.texture+".png";
   if (item?.kind) {

@@ -8,7 +8,7 @@
 // EntityBreakingFX (bju) particles and removes the ball. `y` is the bottom of
 // the box, which is also the entity's posY (yOffset 0).
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
-import { blockBounds, snowSelectionHeight, RED_FLOWER, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
+import { blockBounds, snowSelectionHeight, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
 import { ENTITY_TYPES } from "./entities.js";
 
 const f = Math.fround;
@@ -143,6 +143,8 @@ const RAY_BOUNDS = {
 for (let id = 31; id <= 38; id++) RAY_BOUNDS[id] = [0, 0, 0, 1, 0.25, 1];
 // BlockBush(f = 0.2): 0.5 - f .. 0.5 + f wide and f * 3 high (shadow-reference.json).
 RAY_BOUNDS[YELLOW_FLOWER] = RAY_BOUNDS[RED_FLOWER] = [f(0.5 - f(0.2)), 0, f(0.5 - f(0.2)), f(0.5 + f(0.2)), f(f(0.2) * 3), f(0.5 + f(0.2))];
+// BlockSapling(f = 0.4): 0.5 - f .. 0.5 + f wide and f * 2 high (shadow-reference.json).
+RAY_BOUNDS[SAPLING] = [f(0.5 - f(0.4)), 0, f(0.5 - f(0.4)), f(0.5 + f(0.4)), f(f(0.4) * 2), f(0.5 + f(0.4))];
 // A snow layer's selection box is (metadata + 1) / 8 high (BlockSnow.setBlockBoundsBasedOnState).
 export const rayBounds = (world, x, y, z, id) =>
   id === 41 ? blockBounds(world, x, y, z) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];

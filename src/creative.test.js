@@ -82,7 +82,7 @@ test('scrolling moves the 9 x 5 window one row per notch and with the scrollbar'
  assert.equal(gui.scroll,Math.fround(Math.fround(1/12)+1/12));assert.equal(gui.scrollbarY(),33);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[18]));
  gui.wheel(1);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[9]));
  for(let i=0;i<20;i++)gui.wheel(-1);
- assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);assert.equal(slot(27).stack.id,entryId(SEARCH_ORDER[135]));assert.equal(SEARCH_ORDER.length,149);assert.equal(slot(40).stack.id,entryId(SEARCH_ORDER[148]));assert.equal(slot(41).stack,null);
+ assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);assert.equal(slot(27).stack.id,entryId(SEARCH_ORDER[135]));/* the oak sapling is the 150th searchable entry (added with trees): 150 = 16 rows of 9 + 6, so the last row now holds slots 36-41 */assert.equal(SEARCH_ORDER.length,150);assert.equal(slot(41).stack.id,entryId(SEARCH_ORDER[149]));assert.equal(slot(42).stack,null);
  gui.press(176,60);assert.ok(gui.scrolling);gui.drag(25.5);assert.equal(gui.scroll,0);
  gui.drag(18+7.5+97/2);assert.equal(gui.scroll,.5);gui.release();gui.drag(200);assert.equal(gui.scroll,.5);
  gui.press(174,60);assert.ok(!gui.scrolling);
