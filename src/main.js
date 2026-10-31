@@ -16,7 +16,8 @@ import {
 } from "./world.js";
 import { VoxelScene } from "./scene.js";
 import { SoundBank, blockSound } from "./audio.js";
-import { PlayerAnimation } from "./animation.js";
+import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
+import { PlayerBody, PlayerRenderer, nextView, thirdPersonCamera, playerShadowCaster } from "./player-renderer.js";
 import { FirstPerson, itemTexture } from "./first-person.js";
 import {Experience,ExperienceOrbs,oreExperience,SMELT_EXPERIENCE} from "./experience.js";
 import {ExperienceRenderer} from "./experience-renderer.js";
@@ -106,6 +107,10 @@ let sounds,
   aimedEntity = null,
   eating = null;
 const animation = new PlayerAnimation();
+// GameSettings.thirdPersonView: 0 first person, 1 behind, 2 in front (F5).
+// Not saved, like 1.7.10.
+let thirdPersonView = 0, playerRenderer;
+const playerBody = new PlayerBody();
 let stepDistance = 0,
   wasInWater = false;
 let scene;
@@ -334,6 +339,7 @@ function controls() {
       ["MIDDLE CLICK", "Pick the targeted block"],
       ["E", "Inventory & 2 × 2 crafting"],
       ["F3", "Coordinates, time & performance"],
+      ["F5", "Cycle first person, behind and front view"],
       ["ESC", "Pause & save"],
     ]
       .map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`)
@@ -533,6 +539,7 @@ function launch(record) {
       valid && Number.isFinite(p.pitch)
         ? Math.max(-1.55, Math.min(1.55, p.pitch))
         : 0;
+    playerBody.reset(position, yaw, pitch);
     // Saved item entities; piles from before 0.10 (and pre-0.7 death piles
     // that stored a whole inventory) become one entity per stack.
     items.load(
@@ -932,6 +939,7 @@ function die() {
     experience=new Experience();
     position.copy(new THREE.Vector3(...Object.values(world.spawn())));
     previous.copy(position);
+    playerBody.reset(position, yaw, pitch);
     velocity.set(0, 0, 0);
     fallDistance = 0;
     renderHotbar();
@@ -1508,8 +1516,9 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (screen !== "playing") return;
-  if (["Space", "Tab", "KeyW", "KeyA", "KeyS", "KeyD", "F3"].includes(e.code))
+  if (["Space", "Tab", "KeyW", "KeyA", "KeyS", "KeyD", "F3", "F5"].includes(e.code))
     e.preventDefault();
+  if (e.code === "F5" && !e.repeat) thirdPersonView = nextView(thirdPersonView);
   if (e.code === "KeyE" && !e.repeat) {
     inventory();
     return;
@@ -1695,6 +1704,7 @@ function animate(now) {
       (screen === "playing" || screen === "inventory")
     ) {
       movementTick();
+      playerBody.tick({ position, previous, yaw, pitch, swinging: animation.swingTime < SWING_SECONDS });
       accumulator -= PHYSICS.tick;
     }
     const t = accumulator / PHYSICS.tick;
@@ -1721,14 +1731,22 @@ function animate(now) {
     animate.pose = pose;
     const dir = new THREE.Vector3();
     scene.camera.getWorldDirection(dir);
+    // Mining and picking start at the player's eye in every view.
+    const aim = scene.camera.position.clone();
+    if (thirdPersonView) {
+      // EntityRenderer.orientCamera: back off from the eye, pulled in by the world.
+      const cam = thirdPersonCamera(world, aim, yaw, pitch, thirdPersonView);
+      scene.camera.position.set(...cam.position);
+      scene.camera.rotation.set(cam.rotation.x + (thirdPersonView === 2 ? -b.rx : b.rx), cam.rotation.y, b.rz - hurt, "YXZ");
+    }
     target = raycast(
       world,
-      scene.camera.position,
+      aim,
       dir,
       survival.creative ? 6 : 4.5,
     );
     aimedEntity = mobs.pick(
-      scene.camera.position,
+      aim,
       dir,
       survival.creative ? 5 : 3,
       target?.distance ?? 6,
@@ -1752,6 +1770,13 @@ function animate(now) {
   } else if (screen === "home") scene.preview(elapsed);
   const partial = Math.min(1, accumulator / PHYSICS.tick);
   if (mobs) mobRenderer.update(mobs.entities,dt,partial);
+  playerRenderer?.update(playerBody, partial, {
+    visible: thirdPersonView > 0 && ["playing", "inventory", "paused"].includes(screen),
+    swing: animate.pose ? (animate.pose.progress < 1 ? animate.pose.progress : 0) : 0,
+    armor: survival?.inventory?.armor ?? [],
+    held: heldId(),
+    hurt: survival.hurtTicks > 0,
+  });
   chestRenderer?.update(screen === "playing" || screen === "inventory" ? accumulator / PHYSICS.tick : 1);
   if(xpRenderer)xpRenderer.update(xpOrbs.orbs,partial);
   scene.dropPartial = partial;
@@ -1759,7 +1784,7 @@ function animate(now) {
   scene.render(elapsed, dt);
   if (firstPerson && animate.pose)
     firstPerson.render(animate.pose, {
-      visible: ["playing", "inventory", "paused"].includes(screen),
+      visible: thirdPersonView === 0 && ["playing", "inventory", "paused"].includes(screen),
       light: scene.brightness(scene.camera.position.x, scene.camera.position.y, scene.camera.position.z),
       view: scene.camera,
       time: elapsed,
@@ -1774,6 +1799,8 @@ function shadowCasters(partial) {
   for (const e of items.items)
     if (e.stack) list.push({ ...SHADOWS.item, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + 0.125, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + 0.125, z: e.z }, height: 0.25 });
   for (const o of xpOrbs.orbs) list.push({ ...SHADOWS.orb, x: lerp(o.px, o.x), y: lerp(o.py, o.y), z: lerp(o.pz, o.z), pos: o, height: 0.5 });
+  // The local player casts a shadow only when it is on screen.
+  if (thirdPersonView > 0) list.push(playerShadowCaster(position, previous, partial, SHADOWS.player));
   for (const e of mobs?.entities ?? []) {
     const child = e.growingAge < 0;
     if (SHADOWS[e.type]) list.push({ ...SHADOWS[e.type], x: lerp(e.px, e.x), y: lerp(e.py, e.y), z: lerp(e.pz, e.z), pos: e, height: ENTITY_TYPES[e.type].height * (child ? 0.5 : 1), child });
@@ -1790,6 +1817,7 @@ async function boot(){try {
   );
   firstPerson = new FirstPerson(scene.renderer, scene.textures.texture, scene.lighting);
   mobRenderer = new MobRenderer(scene.scene, scene);
+  playerRenderer = new PlayerRenderer(scene.scene, scene, scene.textures.texture);
   chestRenderer = new ChestRenderer(scene.scene, scene);
   document.addEventListener("pointerdown", () => sounds.unlock(), {
     once: true,
@@ -1803,7 +1831,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, look(p, y) { pitch = p; yaw = y; }, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, get mobs() { return mobs; }, breakBlock };
+    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, get mobs() { return mobs; }, breakBlock };
   scene.preview(0);
   scene.render(0);
   renderWorlds();

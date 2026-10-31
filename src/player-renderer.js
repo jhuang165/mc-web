@@ -1,0 +1,478 @@
+import * as THREE from "three";
+import { pixelTexture, itemTexture } from "./first-person.js";
+import { entityMaterial } from "./light-material.js";
+import { ITEMS, ARMOR_MATERIALS } from "./survival.js";
+import { blockTile, tileRect } from "./block-textures.js";
+import { spriteGeometry } from "./sprite-geometry.js";
+import { mobPose, wrapDegrees, nearAngle } from "./entities.js";
+import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
+import { rayTraceBlocks } from "./projectiles.js";
+import { PHYSICS } from "./world.js";
+
+// Third-person player: EntityRenderer.orientCamera (blt.h), RenderPlayer (bop)
+// and ModelBiped (bhm), as read from the 1.7.10 bytecode. See
+// public/research/third-person.md.
+const f = Math.fround, RAD = Math.PI / 180, DEG = 180 / Math.PI;
+const ARMOR_URL = "/media/1.7.10/models/armor/";
+export const STEVE_URL = "/media/1.7.10/entity/steve.png";
+
+// ---------------------------------------------------------------------------
+// Camera (EntityRenderer.orientCamera, blt.h(F)V = func_78467_g)
+// ---------------------------------------------------------------------------
+
+// thirdPersonDistance (E) and ...Temp (F) are both 4.0 outside the F1 debug camera.
+export const THIRD_PERSON_DISTANCE = 4;
+// F5 (bao): `if (++thirdPersonView > 2) thirdPersonView = 0`.
+export const nextView = (view) => (view + 1 > 2 ? 0 : view + 1);
+
+// Eight rays, one per corner of a 0.2 cube around the eye, pull the camera in
+// to the nearest block. The corner offsets come from the bits of i (x: bit 0,
+// y: bit 1, z: bit 2). The end point adds f6 to x as well as z: 1.7.10 writes
+// `d0 - d3 + f4 + f6` for x, which this keeps. `yaw`/`pitch` are the view's
+// three.js angles; `mode` 2 looks back at the player (pitch + 180 in Java), so
+// the camera sits on the other side of the eye.
+export function cameraDistance(world, eye, yaw, pitch, mode = 1, distance = THIRD_PERSON_DISTANCE) {
+  const cp = Math.cos(pitch), s = mode === 2 ? -1 : 1,
+    d = [-Math.sin(yaw) * cp * distance * s, Math.sin(pitch) * distance * s, -Math.cos(yaw) * cp * distance * s];
+  let d7 = distance;
+  for (let i = 0; i < 8; i++) {
+    const a = ((i & 1) * 2 - 1) * 0.1, b = (((i >> 1) & 1) * 2 - 1) * 0.1, c = (((i >> 2) & 1) * 2 - 1) * 0.1,
+      hit = rayTraceBlocks(world, [eye.x + a, eye.y + b, eye.z + c], [eye.x - d[0] + a + c, eye.y - d[1] + b, eye.z - d[2] + c]);
+    if (hit) {
+      const dist = Math.hypot(hit.vec[0] - eye.x, hit.vec[1] - eye.y, hit.vec[2] - eye.z);
+      if (dist < d7) d7 = dist;
+    }
+  }
+  return d7;
+}
+
+// Camera position and orientation for view 1 (behind) or 2 (in front, facing
+// the player). Returns three.js Euler angles in "YXZ" order.
+export function thirdPersonCamera(world, eye, yaw, pitch, mode, distance = THIRD_PERSON_DISTANCE) {
+  const d = cameraDistance(world, eye, yaw, pitch, mode, distance), cp = Math.cos(pitch), s = mode === 2 ? -1 : 1,
+    look = [-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp];
+  return {
+    distance: d,
+    position: [eye.x - look[0] * s * d, eye.y - look[1] * s * d, eye.z - look[2] * s * d],
+    rotation: mode === 2 ? { x: -pitch, y: yaw + Math.PI, z: 0 } : { x: pitch, y: yaw, z: 0 },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Body state (EntityLivingBase.onUpdate / func_110146_f, sv.f(FF))
+// ---------------------------------------------------------------------------
+
+// Entity.rotationYaw is Java degrees (0 faces +z, increasing toward -x);
+// this game's yaw is three.js radians (0 faces -z, increasing toward -x).
+export const javaYaw = (yaw) => f(180 - yaw * DEG);
+// Java rotationPitch is positive looking down.
+export const javaPitch = (pitch) => f(-pitch * DEG);
+
+// The fields mobPose() reads, kept for the local player and stepped once per
+// 20 Hz tick. `position`/`previous` are the feet (lastTickPos and pos).
+export class PlayerBody {
+  constructor() {
+    this.reset({ x: 0, y: 0, z: 0 }, 0, 0);
+  }
+  reset(position, yaw, pitch) {
+    const j = javaYaw(yaw), p = javaPitch(pitch);
+    Object.assign(this, {
+      px: position.x, py: position.y, pz: position.z, x: position.x, y: position.y, z: position.z,
+      rotationYaw: j, renderYawOffset: j, prevRenderYawOffset: j, rotationYawHead: j, prevRotationYawHead: j,
+      rotationPitch: p, prevRotationPitch: p, limbSwing: 0, limbSwingAmount: 0, prevLimbSwingAmount: 0,
+      growingAge: 0, death: 0, age: 0,
+    });
+  }
+  // func_110146_f: the body follows the walking direction (or the head while
+  // swinging), turning 30% of the way each tick and never more than 75 degrees
+  // from the head.
+  turnBody(target) {
+    this.renderYawOffset = f(this.renderYawOffset + f(wrapDegrees(f(target - this.renderYawOffset)) * f(0.3)));
+    let d = wrapDegrees(f(this.rotationYaw - this.renderYawOffset));
+    d = Math.min(Math.max(d, -75), 75);
+    this.renderYawOffset = f(this.rotationYaw - d);
+    if (d * d > 2500) this.renderYawOffset = f(this.renderYawOffset + f(d * f(0.2)));
+  }
+  tick({ position, previous, yaw, pitch, swinging = false }) {
+    this.prevRenderYawOffset = this.renderYawOffset;
+    this.prevRotationYawHead = this.rotationYawHead;
+    this.prevRotationPitch = this.rotationPitch;
+    this.px = previous.x; this.py = previous.y; this.pz = previous.z;
+    this.x = position.x; this.y = position.y; this.z = position.z;
+    this.rotationYaw = javaYaw(yaw);
+    this.rotationPitch = javaPitch(pitch);
+    // The old-AI branch of onLivingUpdate sets rotationYawHead = rotationYaw.
+    this.rotationYawHead = this.rotationYaw;
+    const dx = f(position.x - previous.x), dz = f(position.z - previous.z), d2 = f(f(dx * dx) + f(dz * dz));
+    let target = this.renderYawOffset;
+    if (d2 > f(0.0025000002)) target = f(f(Math.atan2(dz, dx) * DEG) - 90);
+    if (swinging) target = this.rotationYaw;
+    this.turnBody(target);
+    this.prevRenderYawOffset = nearAngle(this.prevRenderYawOffset, this.renderYawOffset);
+    this.prevRotationPitch = nearAngle(this.prevRotationPitch, this.rotationPitch);
+    this.prevRotationYawHead = nearAngle(this.prevRotationYawHead, this.rotationYawHead);
+    // Tail of onLivingUpdate (sv.e(FF)): limb swing follows the horizontal speed.
+    this.prevLimbSwingAmount = this.limbSwingAmount;
+    const speed = Math.min(f(Math.sqrt(d2) * 4), 1);
+    this.limbSwingAmount = f(this.limbSwingAmount + f(f(speed - this.limbSwingAmount) * f(0.4)));
+    this.limbSwing = f(this.limbSwing + this.limbSwingAmount);
+    this.age++;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ModelBiped (bhm): boxes
+// ---------------------------------------------------------------------------
+
+// ModelBox (bis) + TexturedQuad (bhv). Returns a non-indexed geometry in model
+// space: pixels / 16, +y pointing down, as the model is drawn before the
+// renderer's (-1, -1, 1) scale. The quad corner table, UV rectangles, the
+// (u2,v1) (u1,v1) (u1,v2) (u2,v2) vertex mapping, the mirror's x swap plus
+// face flip and the normal (p1-p2) x (p1-p0) are all taken from the bytecode.
+export function modelBox(u, v, x, y, z, w, h, d, expand = 0, mirror = false, tw = 64, th = 32) {
+  let x1 = x - expand, y1 = y - expand, z1 = z - expand, x2 = x + w + expand, y2 = y + h + expand, z2 = z + d + expand;
+  if (mirror) [x1, x2] = [x2, x1];
+  const P = [[x1, y1, z1], [x2, y1, z1], [x2, y2, z1], [x1, y2, z1], [x1, y1, z2], [x2, y1, z2], [x2, y2, z2], [x1, y2, z2]],
+    quads = [
+      [[5, 1, 2, 6], u + d + w, v + d, u + d + w + d, v + d + h],
+      [[0, 4, 7, 3], u, v + d, u + d, v + d + h],
+      [[5, 4, 0, 1], u + d, v, u + d + w, v + d],
+      [[2, 3, 7, 6], u + d + w, v + d, u + d + w + w, v],
+      [[1, 0, 3, 2], u + d, v + d, u + d + w, v + d + h],
+      [[4, 5, 6, 7], u + d + w + d, v + d, u + d + w + d + w, v + d + h],
+    ],
+    pos = [], nor = [], uv = [];
+  for (const [index, u1, v1, u2, v2] of quads) {
+    const corners = index.map((i) => P[i].map((c) => c / 16)),
+      coords = [[u2, v1], [u1, v1], [u1, v2], [u2, v2]];
+    if (mirror) { corners.reverse(); coords.reverse(); }
+    const a = new THREE.Vector3(...corners[1]).sub(new THREE.Vector3(...corners[0])),
+      b = new THREE.Vector3(...corners[1]).sub(new THREE.Vector3(...corners[2])),
+      n = b.cross(a).normalize();
+    for (const i of [0, 1, 2, 0, 2, 3]) {
+      pos.push(...corners[i]);
+      nor.push(n.x, n.y, n.z);
+      uv.push(coords[i][0] / tw, 1 - coords[i][1] / th);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  return g;
+}
+
+// ModelBiped constructor boxes: texture offset, box (x, y, z, w, h, d), the
+// ModelRenderer rotation point and the extra expansion over the model's `f`.
+export const BIPED = {
+  head: { uv: [0, 0], box: [-4, -8, -4, 8, 8, 8], point: [0, 0, 0], extra: 0 },
+  hat: { uv: [32, 0], box: [-4, -8, -4, 8, 8, 8], point: [0, 0, 0], extra: 0.5 },
+  body: { uv: [16, 16], box: [-4, 0, -2, 8, 12, 4], point: [0, 0, 0], extra: 0 },
+  rightArm: { uv: [40, 16], box: [-3, -2, -2, 4, 12, 4], point: [-5, 2, 0], extra: 0 },
+  leftArm: { uv: [40, 16], box: [-1, -2, -2, 4, 12, 4], point: [5, 2, 0], extra: 0, mirror: true },
+  rightLeg: { uv: [0, 16], box: [-2, 0, -2, 4, 12, 4], point: [-1.9, 12, 0], extra: 0 },
+  leftLeg: { uv: [0, 16], box: [-2, 0, -2, 4, 12, 4], point: [1.9, 12, 0], extra: 0, mirror: true },
+};
+export const PART_NAMES = Object.keys(BIPED);
+
+// ModelBiped.setRotationAngles (bhm.a). `headYaw` is relative to the body, in
+// degrees; `swing` is onGround (swing progress 0..1); `heldRight`/`heldLeft` are
+// heldItemRight (m) / heldItemLeft (l). Returns each part's rotation point
+// (model pixels) and angles (radians). Riding and the bow pose are not ported.
+export function bipedPose({ limbSwing = 0, limbSwingAmount = 0, age = 0, headYaw = 0, headPitch = 0, swing = 0, sneak = false, heldRight = 0, heldLeft = 0 } = {}) {
+  const p = {};
+  for (const n of PART_NAMES) p[n] = { point: [...BIPED[n].point], rot: [0, 0, 0] };
+  const ls = limbSwing * 0.6662, lsa = limbSwingAmount, S = 57.295776;
+  p.head.rot[1] = headYaw / S;
+  p.head.rot[0] = headPitch / S;
+  p.rightArm.rot[0] = mhCos(ls + Math.PI) * 2 * lsa * 0.5;
+  p.leftArm.rot[0] = mhCos(ls) * 2 * lsa * 0.5;
+  p.rightLeg.rot[0] = mhCos(ls) * 1.4 * lsa;
+  p.leftLeg.rot[0] = mhCos(ls + Math.PI) * 1.4 * lsa;
+  if (heldLeft) p.leftArm.rot[0] = p.leftArm.rot[0] * 0.5 - 0.31415927 * heldLeft;
+  if (heldRight) p.rightArm.rot[0] = p.rightArm.rot[0] * 0.5 - 0.31415927 * heldRight;
+  // Attack swing (onGround is 0 at rest, which leaves these at their defaults).
+  if (swing > -9990) {
+    const body = mhSin(Math.sqrt(swing) * Math.PI * 2) * 0.2;
+    p.body.rot[1] = body;
+    p.rightArm.point[2] = mhSin(body) * 5;
+    p.rightArm.point[0] = -mhCos(body) * 5;
+    p.leftArm.point[2] = -mhSin(body) * 5;
+    p.leftArm.point[0] = mhCos(body) * 5;
+    p.rightArm.rot[1] += body;
+    p.leftArm.rot[1] += body;
+    p.leftArm.rot[0] += body;
+    let q = 1 - swing;
+    q *= q;
+    q *= q;
+    q = 1 - q;
+    const arc = mhSin(q * Math.PI), lift = mhSin(swing * Math.PI) * -(p.head.rot[0] - 0.7) * 0.75;
+    p.rightArm.rot[0] -= arc * 1.2 + lift;
+    p.rightArm.rot[1] += body * 2;
+    p.rightArm.rot[2] = mhSin(swing * Math.PI) * -0.4;
+  }
+  if (sneak) {
+    p.body.rot[0] = 0.5;
+    p.rightArm.rot[0] += 0.4;
+    p.leftArm.rot[0] += 0.4;
+    p.rightLeg.point[2] = p.leftLeg.point[2] = 4;
+    p.rightLeg.point[1] = p.leftLeg.point[1] = 9;
+    p.head.point[1] = 1;
+  } else {
+    p.body.rot[0] = 0;
+    p.rightLeg.point[2] = p.leftLeg.point[2] = 0.1;
+    p.rightLeg.point[1] = p.leftLeg.point[1] = 12;
+    p.head.point[1] = 0;
+  }
+  p.hat.rot = [...p.head.rot];
+  p.hat.point = [...p.head.point];
+  p.rightArm.rot[2] += mhCos(age * 0.09) * 0.05 + 0.05;
+  p.leftArm.rot[2] -= mhCos(age * 0.09) * 0.05 + 0.05;
+  p.rightArm.rot[0] += mhSin(age * 0.067) * 0.05;
+  p.leftArm.rot[0] -= mhSin(age * 0.067) * 0.05;
+  return p;
+}
+
+// ---------------------------------------------------------------------------
+// Armor (RenderPlayer.shouldRenderPass, bop.a(blg, int, float))
+// ---------------------------------------------------------------------------
+
+// Parts each pass shows: head and hat on pass 0, body on 1 and 2, arms on 1,
+// legs on 2 and 3.
+export const ARMOR_PASS_PARTS = [["head", "hat"], ["body", "rightArm", "leftArm"], ["body", "rightLeg", "leftLeg"], ["rightLeg", "leftLeg"]];
+// ItemArmor.getColor of an undyed leather piece.
+export const LEATHER_COLOR = 0xa06540;
+// `pass` 0..3 is helmet, chestplate, leggings, boots (stack armor[3 - pass]).
+// RenderBiped.getArmorResource picks layer 2 only for leggings (pass 2); the
+// leggings model (h) is expanded by 0.5, the others (g) by 1.0. Leather is
+// tinted and always gets its `_overlay` drawn untinted on top.
+export function armorLayer(id, pass) {
+  const item = ITEMS[id];
+  if (!item || item.armor === undefined || item.armor !== pass || !(id >= 400 && id < 400 + ARMOR_MATERIALS.length * 4)) return null;
+  const material = ARMOR_MATERIALS[Math.floor((id - 400) / 4)][4], leather = material === "leather",
+    base = `${ARMOR_URL}${material}_layer_${pass === 2 ? 2 : 1}`;
+  return {
+    url: base + ".png",
+    overlay: leather ? base + "_overlay.png" : null,
+    tint: leather ? [(LEATHER_COLOR >> 16) / 255, ((LEATHER_COLOR >> 8) & 255) / 255, (LEATHER_COLOR & 255) / 255] : null,
+    expand: pass === 2 ? 0.5 : 1,
+    parts: ARMOR_PASS_PARTS[pass],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Held item (RenderPlayer.renderSpecials, bop.a(blg, float))
+// ---------------------------------------------------------------------------
+
+const FULL3D_KINDS = new Set(["pickaxe", "axe", "shovel", "hoe", "sword"]);
+// Item.isFull3D: tools, hoes and swords, plus the stick and bone (setFull3D).
+export const isFull3D = (id) => FULL3D_KINDS.has(ITEMS[id]?.kind) || id === 300 || id === 311;
+// "block" draws the cube, "tool" a full-3D sprite and "flat" any other sprite.
+export const heldKind = (id) => (itemTexture(id) ? (isFull3D(id) ? "tool" : "flat") : "block");
+
+// The matrix from the right arm's frame (after postRender) to the item.
+export function heldItemMatrix(kind) {
+  const m = new THREE.Matrix4(), t = new THREE.Matrix4(),
+    translate = (x, y, z) => m.multiply(t.makeTranslation(x, y, z)),
+    rotate = (axis, deg) => m.multiply(axis === "x" ? t.makeRotationX(deg * RAD) : axis === "y" ? t.makeRotationY(deg * RAD) : t.makeRotationZ(deg * RAD)),
+    scale = (x, y, z) => m.multiply(t.makeScale(x, y, z));
+  translate(-0.0625, 0.4375, 0.0625);
+  if (kind === "block") {
+    let s = 0.5;
+    translate(0, 0.1875, -0.3125);
+    s *= 0.75;
+    rotate("x", 20);
+    rotate("y", 45);
+    scale(-s, -s, s);
+  } else {
+    if (kind === "tool") {
+      const s = 0.625;
+      translate(0, 0.1875, 0);
+      scale(s, -s, s);
+      rotate("x", -100);
+      rotate("y", 45);
+    } else {
+      const s = 0.375;
+      translate(0.25, 0.1875, -0.1875);
+      scale(s, s, s);
+      rotate("z", 60);
+      rotate("x", -90);
+      rotate("z", 20);
+    }
+    // ItemRenderer.renderItem's 2D branch.
+    translate(0, -0.3, 0);
+    scale(1.5, 1.5, 1.5);
+    rotate("y", 50);
+    rotate("z", 335);
+    translate(-0.9375, -0.0625, 0);
+  }
+  return m;
+}
+
+// ---------------------------------------------------------------------------
+// Shadow
+// ---------------------------------------------------------------------------
+
+// Render.renderShadow centres the shadow on lastTickPos/posY + height / 2.
+// The local player's posY is its eye height (yOffset 1.62), so unlike mobs the
+// centre sits 2.52 above the feet; EntityPlayer does not override
+// getShadowSize. `partial` interpolates previous -> position.
+export function playerShadowCaster(position, previous, partial, size) {
+  const lerp = (a, b) => a + (b - a) * partial, eye = PHYSICS.eye;
+  return {
+    ...size,
+    x: lerp(previous.x, position.x), y: lerp(previous.y, position.y) + eye, z: lerp(previous.z, position.z),
+    pos: { x: position.x, y: position.y + eye, z: position.z }, height: PHYSICS.height,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Renderer
+// ---------------------------------------------------------------------------
+
+const boxCache = new Map();
+function boxGeometry(name, expand) {
+  const key = name + "|" + expand;
+  if (!boxCache.has(key)) {
+    const b = BIPED[name];
+    boxCache.set(key, modelBox(...b.uv, ...b.box, expand + b.extra, !!b.mirror));
+  }
+  return boxCache.get(key);
+}
+
+export class PlayerRenderer {
+  // `view` supplies the lightmap and brightness (VoxelScene); `atlas` is the block atlas.
+  constructor(scene, view, atlas) {
+    this.scene = scene;
+    this.view = view;
+    this.atlas = atlas;
+    this.materials = [];
+    // bop: ModelBiped(0) at scale 0.9375, drawn with (-1, -1, 1) and shifted so
+    // the feet are at the entity position (24 * 0.0625 + 0.0078125 down).
+    this.root = new THREE.Group();
+    this.frame = new THREE.Group();
+    this.frame.scale.set(-0.9375, -0.9375, 0.9375);
+    this.model = new THREE.Group();
+    this.model.position.set(0, -1.5078125, 0);
+    this.frame.add(this.model);
+    this.root.add(this.frame);
+    this.root.visible = false;
+    this.base = this.material({ map: pixelTexture(STEVE_URL) });
+    this.pivots = {};
+    for (const name of PART_NAMES) {
+      const pivot = new THREE.Group();
+      pivot.rotation.order = "ZYX";
+      pivot.add(new THREE.Mesh(boxGeometry(name, 0), this.base));
+      this.pivots[name] = pivot;
+      this.model.add(pivot);
+    }
+    this.armorKey = "";
+    this.armorNodes = [];
+    this.armorMaterials = [];
+    this.heldId = 0;
+    this.held = null;
+    this.heldMaterial = null;
+    this.heldGeometry = null;
+    scene.add(this.root);
+  }
+  material(options) {
+    const m = entityMaterial(this.view.lighting, { ...options, side: THREE.DoubleSide });
+    this.materials.push(m);
+    return m;
+  }
+  forget(m) {
+    this.materials = this.materials.filter((x) => x !== m);
+    m.dispose();
+  }
+  // `ids` are the stack ids for passes 0..3 (helmet..boots), 0 for none.
+  syncArmor(ids) {
+    const key = ids.join(",");
+    if (key === this.armorKey) return;
+    this.armorKey = key;
+    for (const n of this.armorNodes) n.parent?.remove(n);
+    for (const m of this.armorMaterials) this.forget(m);
+    this.armorNodes = [];
+    this.armorMaterials = [];
+    ids.forEach((id, pass) => {
+      const layer = armorLayer(id, pass);
+      if (!layer) return;
+      const make = (url, tint, order) => {
+        const m = this.material({ map: pixelTexture(url), color: tint });
+        this.armorMaterials.push(m);
+        for (const name of layer.parts) {
+          const mesh = new THREE.Mesh(boxGeometry(name, layer.expand), m);
+          mesh.renderOrder = order;
+          this.pivots[name].add(mesh);
+          this.armorNodes.push(mesh);
+        }
+      };
+      make(layer.url, layer.tint, 0);
+      if (layer.overlay) make(layer.overlay, null, 1);
+    });
+  }
+  syncHeld(id) {
+    if (id === this.heldId) return;
+    this.heldId = id;
+    if (this.held) {
+      this.held.parent?.remove(this.held);
+      this.heldGeometry?.dispose();
+      this.forget(this.heldMaterial);
+      this.held = this.heldMaterial = this.heldGeometry = null;
+    }
+    if (!id || !ITEMS[id]) return;
+    const kind = heldKind(id), url = itemTexture(id);
+    let mesh;
+    if (url) {
+      this.heldGeometry = spriteGeometry();
+      this.heldMaterial = this.material({ map: pixelTexture(url) });
+      mesh = new THREE.Mesh(this.heldGeometry, this.heldMaterial);
+    } else {
+      const g = (this.heldGeometry = new THREE.BoxGeometry(1, 1, 1)), uv = g.attributes.uv;
+      for (let face = 0; face < 6; face++) {
+        const r = tileRect(blockTile(id, face));
+        uv.setXY(face * 4, r.u0, r.v1);
+        uv.setXY(face * 4 + 1, r.u1, r.v1);
+        uv.setXY(face * 4 + 2, r.u0, r.v0);
+        uv.setXY(face * 4 + 3, r.u1, r.v0);
+      }
+      this.heldMaterial = this.material({ map: this.atlas });
+      mesh = new THREE.Mesh(g, this.heldMaterial);
+      mesh.rotation.y = Math.PI / 2;
+    }
+    const group = new THREE.Group();
+    group.matrixAutoUpdate = false;
+    group.matrix.copy(heldItemMatrix(kind));
+    group.add(mesh);
+    this.pivots.rightArm.add(group);
+    this.held = group;
+  }
+  // `body` is a PlayerBody; `swing` is the swing progress (0 at rest); `armor`
+  // is inventory.armor (boots first); `held` the held item id.
+  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, hurt = false, sneak = false } = {}) {
+    this.root.visible = visible;
+    if (!visible) return;
+    const pose = mobPose(body, partial);
+    this.root.position.set(pose.x, pose.y, pose.z);
+    this.root.rotation.y = (180 - pose.bodyYaw) * RAD;
+    this.syncArmor([3, 2, 1, 0].map((slot) => armor[slot]?.id ?? 0));
+    this.syncHeld(held);
+    const parts = bipedPose({
+      limbSwing: pose.limbSwing, limbSwingAmount: pose.limbSwingAmount, age: pose.age,
+      headYaw: pose.headYaw, headPitch: pose.headPitch, swing, sneak, heldRight: held ? 1 : 0,
+    });
+    for (const name of PART_NAMES) {
+      const { point, rot } = parts[name], pivot = this.pivots[name];
+      pivot.position.set(point[0] / 16, point[1] / 16, point[2] / 16);
+      pivot.rotation.set(rot[0], rot[1], rot[2]);
+    }
+    // Entity.getBrightnessForRender samples feet + 0.66 * height. Hurt tints
+    // red like RendererLivingEntity (brightness, 0, 0, 0.4).
+    const packed = this.view.brightness(pose.x, pose.y + PHYSICS.height * 0.66, pose.z),
+      level = Math.max(((packed >> 20) & 15) - (this.view.subtracted ?? 0), (packed >> 4) & 15),
+      b = BRIGHTNESS[Math.max(0, level)];
+    for (const m of this.materials) {
+      m.setLight(packed);
+      m.uniforms.overlay.value.set(hurt ? b : 0, 0, 0, hurt ? 0.4 : 0);
+    }
+  }
+}
