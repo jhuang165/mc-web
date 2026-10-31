@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { WorldEffects } from "./effects.js";
+import { ParticleSystem } from "./particles.js";
+import { ParticleRenderer } from "./particle-renderer.js";
 import { SIZE, HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS } from "./block-textures.js";
 import { createLighting, worldMaterial } from "./light-material.js";
@@ -96,6 +98,11 @@ export class VoxelScene {
     this.weatherRenderer = new WeatherRenderer(this.scene, this.lighting, this);
     this.dropList = [];
     this.dropPartial = 1;
+    // Block particles (particles.js); main.js ticks them and sets particleView
+    // to the player's yaw, pitch and front-view flag each frame.
+    this.particles = new ParticleSystem();
+    this.particleRenderer = new ParticleRenderer(this.scene, this);
+    this.particleView = null;
     this.material = worldMaterial(this.lighting, { map: this.textures.texture });
     const animated = (url, frames, scale) => {
       const t = new THREE.TextureLoader().load(url);
@@ -151,6 +158,7 @@ export class VoxelScene {
   }
   setWorld(world) {
     this.effects.clear();
+    this.particles.clear();
     this.drops.clear();
     this.dropList = [];
     this.projectiles.clear();
@@ -162,7 +170,6 @@ export class VoxelScene {
     this.temperature = biomeTemperature(world.biome);
     this.litFurnaces = new Set();
     this.light = new LightVolume(world, (x, y, z, b) => (b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && this.litFurnaces.has(`${x},${y},${z}`) ? 13 : 0));
-    this.effects.light = this.light;
     for (const v of this.chunks.values()) this.disposeChunk(v);
     this.chunks.clear();
     this.dirty.clear();
@@ -407,7 +414,6 @@ export class VoxelScene {
     return this.light ? this.light.packed(Math.floor(x), Math.floor(y), Math.floor(z)) : 15 << 20;
   }
   render(time, dt = 1 / 60) {
-    this.effects.update(dt);
     this.water.uv.w = 1 - ((Math.floor(time * 10) % 32) + 1) / 32;
     this.flow.uv.w = 1 - ((Math.floor(time * 20) % 32) + 1) / 32;
     // lava_still: frametime 2 over frames 0..19 and back down to 1 (38 steps);
@@ -440,6 +446,7 @@ export class VoxelScene {
     this.drops.update(this.dropList, this.dropPartial, time * 20);
     this.projectiles.update(this.projectileList.balls, this.projectileList.particles, c, this.dropPartial);
     this.arrows.update(this.arrowList, this.dropPartial);
+    this.particleRenderer.update(this.particles.list, this.dropPartial, this.particleView ?? { yaw: c.rotation.y, pitch: c.rotation.x });
     this.sky.render(this.renderer, c, new THREE.Color(...fog));
     this.renderer.render(this.scene, c);
     this.worldTriangles = this.renderer.info.render.triangles;
