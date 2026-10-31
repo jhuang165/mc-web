@@ -42,7 +42,7 @@ export function createLighting() {
   return lighting;
 }
 
-const FOG_PARS = `uniform vec3 fogColor;uniform float fogNear,fogFar,fogDensity;varying float vFogDistance;
+export const FOG_PARS = `uniform vec3 fogColor;uniform float fogNear,fogFar,fogDensity;varying float vFogDistance;
 vec3 applyFog(vec3 c){float f=fogDensity>0.?1.-exp(-fogDensity*vFogDistance):clamp((vFogDistance-fogNear)/(fogFar-fogNear),0.,1.);return mix(c,fogColor,f);}`;
 
 // Chunk geometry: attributes `shade` (face shade x AO) and `lightCoord`

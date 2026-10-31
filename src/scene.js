@@ -6,6 +6,7 @@ import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
 import { Sky, Clouds } from "./sky.js";
 import { DropRenderer } from "./drop-renderer.js";
+import { ShadowRenderer } from "./shadows.js";
 export { blockTile } from "./block-textures.js";
 
 // Face order +x, -x, +y, -y, +z, -z with RenderBlocks' AO-path shades:
@@ -81,6 +82,7 @@ export class VoxelScene {
     this.scene.add(this.clouds.depth, this.clouds.mesh);
     this.textures = createBlockAtlas();
     this.drops = new DropRenderer(this.scene, this);
+    this.shadows = new ShadowRenderer(this.scene, this.lighting);
     this.dropList = [];
     this.dropPartial = 1;
     this.material = worldMaterial(this.lighting, { map: this.textures.texture });
@@ -331,6 +333,11 @@ export class VoxelScene {
     this.sky.render(this.renderer, c, new THREE.Color(...fog));
     this.renderer.render(this.scene, c);
     this.worldTriangles = this.renderer.info.render.triangles;
+  }
+  // Entity shadows for this frame; `viewer` is the player's eye position.
+  setShadows(casters, viewer) {
+    const w = this.world, light = this.light;
+    this.shadows.update(casters, viewer, w && light && { get: (x, y, z) => w.get(x, y, z), light: (x, y, z) => light.level(x, y, z, this.subtracted) });
   }
   // `partial` is how far the frame is into the next physics tick.
   setDrops(drops, partial = this.dropPartial) {
