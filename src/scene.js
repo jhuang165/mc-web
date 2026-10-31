@@ -6,6 +6,7 @@ import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
 import { Sky, Clouds } from "./sky.js";
 import { DropRenderer } from "./drop-renderer.js";
+import { ProjectileRenderer } from "./projectile-renderer.js";
 import { ShadowRenderer } from "./shadows.js";
 export { blockTile } from "./block-textures.js";
 
@@ -82,6 +83,8 @@ export class VoxelScene {
     this.scene.add(this.clouds.depth, this.clouds.mesh);
     this.textures = createBlockAtlas();
     this.drops = new DropRenderer(this.scene, this);
+    this.projectiles = new ProjectileRenderer(this.scene, this);
+    this.projectileList = { balls: [], particles: [] };
     this.shadows = new ShadowRenderer(this.scene, this.lighting);
     this.dropList = [];
     this.dropPartial = 1;
@@ -123,6 +126,8 @@ export class VoxelScene {
     this.effects.clear();
     this.drops.clear();
     this.dropList = [];
+    this.projectiles.clear();
+    this.projectileList = { balls: [], particles: [] };
     this.world = world;
     this.textures.setBiome(world.biome);
     this.temperature = biomeTemperature(world.biome);
@@ -330,6 +335,7 @@ export class VoxelScene {
     this.sky.update({ angle, sky, fog, sunrise: underwater ? null : sunriseColors(angle), stars: starBrightness(angle), moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater });
     this.clouds.update(c, time * 20, cloudColor(angle));
     this.drops.update(this.dropList, this.dropPartial, time * 20);
+    this.projectiles.update(this.projectileList.balls, this.projectileList.particles, c, this.dropPartial);
     this.sky.render(this.renderer, c, new THREE.Color(...fog));
     this.renderer.render(this.scene, c);
     this.worldTriangles = this.renderer.info.render.triangles;
@@ -343,6 +349,10 @@ export class VoxelScene {
   setDrops(drops, partial = this.dropPartial) {
     this.dropList = drops;
     this.dropPartial = partial;
+  }
+  // Thrown snowballs and their particles (see projectiles.js).
+  setProjectiles(balls, particles) {
+    this.projectileList = { balls, particles };
   }
   setDistance(distance) {
     this.distance = distance;
