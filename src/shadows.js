@@ -16,6 +16,8 @@ export const SHADOWS = {
   pig: { size: f(0.7), opaque: 1 },
   cow: { size: f(0.7), opaque: 1 },
   zombie: { size: f(0.5), opaque: 1 },
+  // RenderPlayer: super(new ModelBiped(0), 0.5).
+  player: { size: f(0.5), opaque: 1 },
 };
 // Blocks whose renderAsNormalBlock is false take no shadow (probe evidence in
 // public/research/shadow-reference.json): glass, water, torches, farmland,
