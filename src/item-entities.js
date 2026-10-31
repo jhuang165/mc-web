@@ -7,6 +7,7 @@ import { blockBounds, normalCube } from "./world.js";
 import { copyStack } from "./inventory.js";
 import { waterAcceleration, inLava } from "./fluids.js";
 import { LAVA } from "./world.js";
+import { touchesFire, fireContact } from "./fire.js";
 
 const W = 0.125, H = 0.25, LIFETIME = 6000;
 const f = Math.fround;
@@ -191,7 +192,7 @@ export class ItemEntities {
   // The fire and lava part of Entity.onEntityUpdate (sa.C), after the water
   // check: burning deals 1 (onFire) every 20 ticks of the counter; touching lava
   // deals 4 (lava) and sets fire for 15 s (setFire keeps the larger counter).
-  burn(world, e) {
+  burn(world, e, wet = false) {
     if (e.fire > 0) {
       if (e.fire % 20 === 0) this.hurt(e, 1);
       e.fire--;
@@ -200,11 +201,18 @@ export class ItemEntities {
       this.hurt(e, 4);
       e.fire = Math.max(e.fire, 300);
     }
+    // Entity.moveEntity's tail: touching fire deals 1 a tick and sets the counter going.
+    if (touchesFire(world, this.box(e))) {
+      const hit = fireContact(true, wet, e.fire);
+      this.hurt(e, hit.damage);
+      e.fire = hit.fire;
+    }
   }
   // EntityItem.onUpdate for every item.
   tick(world, maxStack = () => 64) {
     for (const e of this.items) {
       if (e.dead) continue;
+      let wasWet = false;
       // Entity.onUpdate runs handleWaterMovement first; EntityItem (xk.N) passes
       // its own box to World.handleMaterialAcceleration, unshrunk.
       if (world.getMeta) {
@@ -213,8 +221,9 @@ export class ItemEntities {
         e.my += push[1];
         e.mz += push[2];
         if (wet) e.fire = 0;
+        wasWet = wet;
       }
-      this.burn(world, e);
+      this.burn(world, e, wasWet);
       e.ticks++;
       if (e.delay > 0) e.delay--;
       e.px = e.x;

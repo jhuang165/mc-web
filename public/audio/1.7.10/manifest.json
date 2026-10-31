@@ -817,6 +817,16 @@
       "url": "/audio/1.7.10/mob/chicken/say2.ogg",
       "sha1": "3660e743db2bbbcff0866d3f1e606882f1aeb6ac",
       "bytes": 9476
+    },
+    "fire/ignite": {
+      "url": "/audio/1.7.10/fire/ignite.ogg",
+      "sha1": "a0d1fbff7e938e92c10c1576339dda668f40e111",
+      "bytes": 6418
+    },
+    "fire/fire": {
+      "url": "/audio/1.7.10/fire/fire.ogg",
+      "sha1": "8b260108a73470c16cd244325242d4780cfb7d78",
+      "bytes": 28689
     }
   },
   "events": {
@@ -1395,6 +1405,18 @@
       "sounds": [
         "mob/chicken/step1",
         "mob/chicken/step2"
+      ]
+    },
+    "fire.fire": {
+      "category": "block",
+      "sounds": [
+        "fire/fire"
+      ]
+    },
+    "fire.ignite": {
+      "category": "block",
+      "sounds": [
+        "fire/ignite"
       ]
     }
   }

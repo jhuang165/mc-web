@@ -5,6 +5,7 @@ import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
 import { sheepColor, childColor } from "./sheep.js";
 import { sneakEdge, criticalDamage } from "./player-movement.js";
 import { MobAI } from "./ai.js";
+import { touchesFire, fireContact } from "./fire.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
 export function wrapDegrees(a) {
@@ -642,6 +643,13 @@ export class EntityWorld {
       this.hazard(e, 4);
       e.fire = Math.max(e.fire, 300);
       e.fallDistance *= 0.5;
+    }
+    // Entity.moveEntity's tail: a box touching fire (contracted 0.001) takes dealFireDamage(1)
+    // each tick and, unless wet, counts its fire up by one (setFire(8) when it was out).
+    if (touchesFire(this.world, [e.x - r, e.y, e.z - r, e.x + r, e.y + t.height, e.z + r])) {
+      const hit = fireContact(true, e.inWater || this.wet?.(e, t.height), e.fire);
+      this.hazard(e, hit.damage);
+      e.fire = hit.fire;
     }
     if (e.fire > 0) e.burn = 1;
   }

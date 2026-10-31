@@ -19,6 +19,8 @@ import {
   RED_FLOWER,
   YELLOW_FLOWER,
   isFlower,
+  FIRE,
+  LAVA,
 } from "./world.js";
 import { flowerCanStay, growGrass, JRandom } from "./flowers.js";
 import { VoxelScene } from "./scene.js";
@@ -41,6 +43,7 @@ import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, 
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { Fluids, waterAcceleration, entityWaterBox, inLava, liquidInBox } from "./fluids.js";
+import { Fire, touchesFire, fireContact } from "./fire.js";
 import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
 import { PlayerMotion, sneakEdge, moveWeights, isCritical, ATTACK_SLOWDOWN } from "./player-movement.js";
 
@@ -110,7 +113,7 @@ let screen = "home",
   saved = true,
   lastJump = 0;
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
-let fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer;
+let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer;
 let weather = new Weather();
 let sounds,
   firstPerson,
@@ -543,11 +546,18 @@ function launch(record) {
     fluids = new Fluids(world, { fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : cropDrops(b); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
     fluids.wake();
     watchFlowers();
+    // BlockFire and the static-lava ignition roll: scheduled and random ticks (fire.js). Fire reaches the
+    // weather through a closure because `weather` is replaced below.
+    fire = new Fire(world, { weather: () => weather, stillLava: (x, y, z) => !fluids.pending.has(fluids.key(x, y, z, LAVA)) });
+    fire.watch();
     farming=new Farming(world,record.farms);
     // Rain moistens farmland (BlockFarmland.updateTick: canLightningStrikeAt(x, y + 1, z)).
     farming.rained = (x, y, z) => canLightningStrikeAt(weather, world, x, y + 1, z);
     weather = new Weather().restore(record.weather);
     scene.weather = weather;
+    // EntityLightningBolt's fire, and the ticks of the fires saved with the world.
+    weather.fire = fire.strikes;
+    fire.wake();
     experience=new Experience(record.experience);xpOrbs=new ExperienceOrbs(record.xpOrbs);
     mobs = new EntityWorld(world, record.entities);
     // World.getLightBrightness for EntityAI.getBlockPathWeight: daylight-reduced sky or block light.
@@ -1034,7 +1044,18 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     ) === 10;
   tickWeather();
   const wet = isWet(weather, world, { x: position.x, y: position.y, z: position.z, inWater }, PHYSICS.height);
+  // Entity.moveEntity: a burning player that is wet is put out with a hiss (volume 0.7, pitch 1.6 +- 0.4).
+  if (wet && survival.fire > 0) sounds.play("random.fizz", { volume: 0.7, pitch: 1.6 + (Math.random() - Math.random()) * 0.4 });
   survival.tick({ underwater, inWater: wet, inLava: inLavaNow });
+  // ... and standing in a fire block deals 1 every tick (armour and the hurt window still apply) and
+  // sets the counter going (160 = setFire(8)) unless wet; see fire.js fireContact.
+  if (fire && survival.health > 0 && touchesFire(world, entityBox(position, PHYSICS.width, PHYSICS.height))) {
+    const hit = fireContact(true, wet, survival.fire || 0);
+    survival.damage(hit.damage, "fire", true);
+    survival.fire = hit.fire;
+  }
+  // BlockFire.randomDisplayTick's crackle around the viewer.
+  fire?.ambient(position.x, position.y + PHYSICS.eye, position.z, (x, y, z, volume, pitch) => sounds.play("fire.fire", { volume, pitch, position: { x, y, z } }));
   // Entity.onEntityUpdate: standing in lava halves the fall distance every tick.
   if (inLavaNow) fallDistance *= 0.5;
   if (!survival.creative) {
@@ -1239,6 +1260,22 @@ function edit(place = false) {
       if (chest) openContainer(chest, "chest", target.block.join(","));
       return;
     }
+    // ItemFlintAndSteel.onItemUse (acw.a): the cell on the clicked face, if it is air, gets fire with
+    // fire.ignite (volume 1, pitch 0.8 to 1.2); the item always loses 1 durability (not in Creative).
+    if (item?.kind === "flint_and_steel") {
+      const q = target.adjacent;
+      if (!q || q[1] === 0 || q[1] >= HEIGHT - 1 || !world.inside(...q)) return;
+      if (world.get(...q) === 0) {
+        sounds.play("fire.ignite", { volume: 1, pitch: Math.random() * 0.4 + 0.8, position: { x: q[0] + 0.5, y: q[1] + 0.5, z: q[2] + 0.5 } });
+        fire.ignite(...q);
+        scene.updateBlocks(fire.drain());
+      }
+      if (!survival.creative) survival.wear(id);
+      reportBrokenTool();
+      renderHotbar();
+      saved = false;
+      return;
+    }
     if (!survival.creative && item?.food) {
       beginEating(id);
       return;
@@ -1273,6 +1310,20 @@ function edit(place = false) {
     sound(true, id);
     saved = false;
   } else {
+    // World.extinguishFire (ahb.a(yz, x, y, z, side)), called when the hit starts: fire on the clicked
+    // face is put out with a hiss (aux 1004: random.fizz, volume 0.5, pitch 2.6 +- 0.8). Creative stops
+    // there (ItemInWorldManager.onBlockClicked); Survival goes on to dig the block.
+    const burning = target.adjacent;
+    if (burning && world.get(...burning) === FIRE && (survival.creative || !(mining && mining.block.every((v, i) => v === target.block[i])))) {
+      fire.extinguish(...burning);
+      sounds.play("random.fizz", { volume: 0.5, pitch: 2.6 + (Math.random() - Math.random()) * 0.8, position: { x: burning[0] + 0.5, y: burning[1] + 0.5, z: burning[2] + 0.5 } });
+      scene.updateBlocks(fire.drain());
+      saved = false;
+      if (survival.creative) {
+        mineCooldown = 5;
+        return;
+      }
+    }
     // Creative breaks bedrock (Building Blocks lists it), except the world floor.
     if (block === 11 && (!survival.creative || target.block[1] === 0)) return;
     if (survival.creative) {
@@ -1554,6 +1605,7 @@ function movementTick() {
   tickSurvival(inWater, oldPosition, inLavaNow);
   applyFarmUpdates(farming.tick(survival.time,scene.daylight));
   if(fluids)scene.updateBlocks(fluids.tick());
+  if(fire)scene.updateBlocks(fire.tick(position.x,position.z));
   scene.setFurnaces(survival.furnaces);
   tickChests();
   mobs.tick(position, survival, heldId());
@@ -2049,7 +2101,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, get mobs() { return mobs; }, breakBlock, get weather() { return weather; } };
+    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, get mobs() { return mobs; }, breakBlock, get weather() { return weather; }, get fire() { return fire; } };
   scene.preview(0);
   scene.render(0);
   renderWorlds();

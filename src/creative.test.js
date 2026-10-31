@@ -82,7 +82,7 @@ test('scrolling moves the 9 x 5 window one row per notch and with the scrollbar'
  assert.equal(gui.scroll,Math.fround(Math.fround(1/12)+1/12));assert.equal(gui.scrollbarY(),33);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[18]));
  gui.wheel(1);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[9]));
  for(let i=0;i<20;i++)gui.wheel(-1);
- assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);assert.equal(slot(27).stack.id,entryId(SEARCH_ORDER[135]));assert.equal(slot(38).stack.id,entryId(SEARCH_ORDER[146]));assert.equal(slot(39).stack,null);
+ assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);assert.equal(slot(27).stack.id,entryId(SEARCH_ORDER[135]));assert.equal(slot(38).stack.id,entryId(SEARCH_ORDER[146]));assert.equal(slot(39).stack.id,entryId(SEARCH_ORDER[147]));assert.equal(slot(40).stack,null);
  gui.press(176,60);assert.ok(gui.scrolling);gui.drag(25.5);assert.equal(gui.scroll,0);
  gui.drag(18+7.5+97/2);assert.equal(gui.scroll,.5);gui.release();gui.drag(200);assert.equal(gui.scroll,.5);
  gui.press(174,60);assert.ok(!gui.scrolling);

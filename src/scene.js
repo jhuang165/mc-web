@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { WorldEffects } from "./effects.js";
-import { SIZE, HEIGHT, SEA, blockHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
+import { SIZE, HEIGHT, SEA, FIRE, blockHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS } from "./block-textures.js";
 import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
@@ -10,6 +10,7 @@ import { DropRenderer } from "./drop-renderer.js";
 import { ProjectileRenderer } from "./projectile-renderer.js";
 import { ShadowRenderer } from "./shadows.js";
 import { WeatherRenderer } from "./weather-renderer.js";
+import { fireVertices } from "./fire.js";
 export { blockTile } from "./block-textures.js";
 
 // Face order +x, -x, +y, -y, +z, -z with RenderBlocks' AO-path shades:
@@ -109,16 +110,18 @@ export class VoxelScene {
     this.flow = animated("/media/1.7.10/blocks/water_flow.png", 32, 1);
     // Lava is an opaque-pass block (BlockLiquid.getRenderBlockPass is 0 for lava):
     // no depth pre-pass and no blending, and its textures carry no alpha.
-    const opaque = (url, frames) => {
+    const opaque = (url, frames, alphaTest = 0) => {
       const t = new THREE.TextureLoader().load(url);
       t.magFilter = t.minFilter = THREE.NearestFilter;
       t.generateMipmaps = false;
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       const uv = new THREE.Vector4(1, 1 / frames, 0, 0);
-      return { uv, frames, material: worldMaterial(this.lighting, { map: t, alphaTest: 0, uvTransform: uv }) };
+      return { uv, frames, material: worldMaterial(this.lighting, { map: t, alphaTest, uvTransform: uv }) };
     };
     this.lavaStill = opaque("/media/1.7.10/blocks/lava_still.png", 20);
     this.lavaFlow = opaque("/media/1.7.10/blocks/lava_flow.png", 16);
+    // Fire: fire_layer_0 and fire_layer_1 (32 frames, one tick each), cut out by alpha.
+    this.fireLayers = [opaque("/media/1.7.10/blocks/fire_layer_0.png", 32, 0.1), opaque("/media/1.7.10/blocks/fire_layer_1.png", 32, 0.1)];
     this.chunks = new Map();
     this.dirty = new Set();
     // RenderGlobal.drawSelectionBox: black lines at 40% alpha, grown by 0.002.
@@ -148,7 +151,7 @@ export class VoxelScene {
     this.textures.setBiome(world.biome);
     this.temperature = biomeTemperature(world.biome);
     this.litFurnaces = new Set();
-    this.light = new LightVolume(world, (x, y, z, b) => (b === 42 ? 15 : b === 20 ? 14 : b === 14 && this.litFurnaces.has(`${x},${y},${z}`) ? 13 : 0));
+    this.light = new LightVolume(world, (x, y, z, b) => (b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && this.litFurnaces.has(`${x},${y},${z}`) ? 13 : 0));
     this.effects.light = this.light;
     for (const v of this.chunks.values()) this.disposeChunk(v);
     this.chunks.clear();
@@ -163,7 +166,7 @@ export class VoxelScene {
     const key = `${cx},${cz}`, old = this.chunks.get(key);
     if (old) this.disposeChunk(old);
     this.dirty.delete(key);
-    const w = this.world, solid = new Mesher(), water = new Mesher(), flow = new Mesher(), lava = new Mesher(), lavaFlow = new Mesher();
+    const w = this.world, solid = new Mesher(), water = new Mesher(), flow = new Mesher(), lava = new Mesher(), lavaFlow = new Mesher(), fire = [new Mesher(), new Mesher()];
     for (let x = cx; x < cx + 16; x++)
       for (let z = cz; z < cz + 16; z++)
         for (let y = 0; y < HEIGHT; y++) {
@@ -174,6 +177,7 @@ export class VoxelScene {
           else if (isPlant(b)) this.crossed(solid, b, x, y, z);
           else if (b === 10) this.liquid(10, water, flow, x, y, z);
           else if (b === 42) this.liquid(42, lava, lavaFlow, x, y, z);
+          else if (b === FIRE) this.fireBlock(fire, x, y, z);
           else this.cube(solid, b, x, y, z);
         }
     const group = new THREE.Group(), add = (mesher, ...materials) => {
@@ -190,8 +194,20 @@ export class VoxelScene {
     add(flow, this.flow.depth, this.flow.color);
     add(lava, this.lavaStill.material);
     add(lavaFlow, this.lavaFlow.material);
+    add(fire[0], this.fireLayers[0].material);
+    add(fire[1], this.fireLayers[1].material);
     this.chunks.set(key, group);
     this.scene.add(group);
+  }
+  // renderBlockFire (blm.a(alb, ...)): the vertex stream of fire.js, one layer per quad, at
+  // the cell's own brightness (block light 15) with no side shading. v is flipped for the
+  // bottom-up texture coordinates.
+  fireBlock(meshers, x, y, z) {
+    const get = (a, b, c) => this.world.get(a, b, c), light = this.light.packed(x, y, z), v = fireVertices(get, x, y, z);
+    for (let i = 0; i < v.length; i += 4) {
+      const q = v.slice(i, i + 4);
+      meshers[q[0][5]].quad(q.map((p) => [p[0], p[1], p[2]]), q.map((p) => [p[3], 1 - p[4]]), 1, light);
+    }
   }
   // renderStandardBlockWithAmbientOcclusion; blocks that emit light (a lit
   // furnace) take the flat colour-multiplier path with neighbour brightness.
@@ -373,6 +389,10 @@ export class VoxelScene {
     const step = Math.floor(time * 10) % 38;
     this.lavaStill.uv.w = 1 - ((step < 20 ? step : 38 - step) + 1) / 20;
     this.lavaFlow.uv.w = 1 - ((Math.floor((time * 20) / 3) % 16) + 1) / 16;
+    // fire_layer_0 plays frames 16..31 then 0..15 (its mcmeta), layer_1 plays in order; one tick each.
+    const fireStep = Math.floor(time * 20) % 32;
+    this.fireLayers[0].uv.w = 1 - (((fireStep + 16) % 32) + 1) / 32;
+    this.fireLayers[1].uv.w = 1 - (fireStep + 1) / 32;
     for (let budget = 2; budget > 0 && this.dirty.size; budget--) this.buildChunk(...this.dirty.values().next().value.split(",").map(Number));
     const c = this.camera, look = c.getWorldDirection(new THREE.Vector3()), u = this.lighting.uniforms, angle = this.angle,
       eye = this.world?.get(Math.floor(c.position.x), Math.floor(c.position.y), Math.floor(c.position.z)),

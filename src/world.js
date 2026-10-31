@@ -45,11 +45,15 @@ export const BLOCKS = [
   // and referenced through the constants below, never by number.
   {name:'Dandelion',color:'#f1e04b'},
   {name:'Red flower',color:'#c9302a'},
+  // BlockFire (alb, vanilla id 51): not in any creative tab. Logic in fire.js; its
+  // age is the metadata.
+  {name:'Fire',color:'#e2711d',hidden:true},
 ];
 export const WATER=10,LAVA=42;
 export const isLiquid=b=>b===WATER||b===LAVA;
 export const YELLOW_FLOWER = BLOCKS.findIndex((b) => b.name === 'Dandelion');
 export const RED_FLOWER = BLOCKS.findIndex((b) => b.name === 'Red flower');
+export const FIRE = BLOCKS.findIndex((b) => b.name === 'Fire');
 export const TALL_GRASS = 39;
 // BlockFlower.field_149860_M / field_149861_a: red_flower metadata 0-8 names
 // and their textures (flower_<texture>.png). Dandelion has no variants.
@@ -120,7 +124,7 @@ export const blockHeight=b=>b===29||b===30?15/16:b===41?.875:1;
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42]);
+const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,FIRE]);
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 export const normalCube=b=>opaqueCube(b)&&b!==5;
 // setBlockBoundsBasedOnState: chests are inset by 1/16 except towards a partner.
@@ -160,7 +164,7 @@ export class World {
   }
   solid(x, y, z) {
     const b = this.get(x, y, z);
-    return b !== 0 && b !== 10 && b !== 42 && b !== 20 && !isPlant(b);
+    return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== FIRE && !isPlant(b);
   }
   // Writes a block and its metadata without telling onChange (fluids.js uses it
   // for its own edits). A tracked edit is saved as block | meta << 8, so saves
@@ -346,7 +350,8 @@ export function raycast(world, origin, dir, reach = 6) {
       Math.floor(origin.z + dir.z * d),
     ];
     if (last && p.every((v, i) => v === last[i])) continue;
-    if (world.get(...p) !== 0 && !isLiquid(world.get(...p)))
+    // BlockFire.isCollidable is false, so the ray passes through it (clicks reach the block behind).
+    if (world.get(...p) !== 0 && !isLiquid(world.get(...p)) && world.get(...p) !== FIRE)
       return { block: p, adjacent: last, distance: d };
     last = p;
   }

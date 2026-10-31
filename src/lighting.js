@@ -3,7 +3,7 @@
 // (blm), RenderGlobal (bma) and Block (aji). The rain, thunder and lightning
 // terms are optional trailing arguments that default to 0 (clear sky); weather.js
 // supplies them. See public/research/lighting.md and weather.md.
-import { SIZE, HEIGHT, isPlant, normalCube, opaqueCube } from "./world.js";
+import { SIZE, HEIGHT, FIRE, isPlant, normalCube, opaqueCube } from "./world.js";
 
 const f = Math.fround,
   PI_F = f(Math.PI),
@@ -26,17 +26,18 @@ export const BRIGHTNESS = Array.from({ length: 16 }, (_, i) => {
 // (func_149685_I: 0.2 for normal cubes) and getCanBlockGrass (s: materials
 // that let grass through, used by smooth lighting to decide corner samples).
 export function lightOpacity(b) {
-  if (b === 0 || b === 9 || b === 20 || b === 41 || b === 42 || isPlant(b)) return 0;
+  if (b === 0 || b === 9 || b === 20 || b === 41 || b === 42 || b === FIRE || isPlant(b)) return 0;
   if (b === 5) return 1;
   if (b === 10) return 3;
   return 255;
 }
 // Lava: setLightLevel(1.0F), so (int)(15 * 1.0) = 15.
-export const lightEmission = (b, lit = false) => (b === 42 ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : 0);
+// Fire: setLightLevel(1.0F), 15 as well.
+export const lightEmission = (b, lit = false) => (b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : 0);
 export const useNeighborBrightness = (b) => b === 20 || b === 9 || b === 41 || b === 29 || b === 30 || isPlant(b);
 const AO_SOLID = f(0.2);
 export const aoValue = (b) => (normalCube(b) ? AO_SOLID : 1);
-export const aoClear = (b) => b === 0 || b === 20 || isPlant(b);
+export const aoClear = (b) => b === 0 || b === 20 || b === FIRE || isPlant(b);
 
 // WorldProvider.calculateCelestialAngle.
 export function celestialAngle(ticks, partial = 0) {

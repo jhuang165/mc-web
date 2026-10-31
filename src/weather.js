@@ -7,7 +7,7 @@
 // strengths, sky terms, strike rule and bolt state machine are replayed against
 // public/research/weather-reference.json by weather.test.js.
 import { JavaRandom, biomeTemperature, lightOpacity } from "./lighting.js";
-import { SIZE, HEIGHT, isPlant } from "./world.js";
+import { SIZE, HEIGHT, FIRE, isPlant } from "./world.js";
 
 const f = Math.fround;
 
@@ -21,7 +21,7 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 // Material.blocksMovement || Material.isLiquid: the blocks Chunk.getPrecipitationHeight
 // stops at. Air, torches, crops, tall grass and flowers let rain through; leaves,
 // glass, water and lava do not. (The probe's block table is in weather-reference.json.)
-export const stopsPrecipitation = (b) => b !== 0 && b !== 20 && !isPlant(b);
+export const stopsPrecipitation = (b) => b !== 0 && b !== 20 && b !== FIRE && !isPlant(b);
 // Chunk.getPrecipitationHeight (apx.d): one above the topmost such block, or -1.
 export function precipitationHeight(world, x, z) {
   if (x < 0 || z < 0 || x >= SIZE || z >= SIZE) return -1;
@@ -76,7 +76,10 @@ export const entityBox = (e, width, height) => [e.x - width / 2, e.y, e.z - widt
 
 // EntityLightningBolt (xh), as ticked on the client with the server's damage hook.
 export class LightningBolt {
-  constructor(x, y, z, random = new JavaRandom(Math.floor(Math.random() * 2 ** 48))) {
+  // `fire` is the optional {start(bolt), restrike(bolt)} hook that places fire (fire.js);
+  // without it the bolt only flashes, sounds and damages.
+  constructor(x, y, z, random = new JavaRandom(Math.floor(Math.random() * 2 ** 48)), fire = null) {
+    this.fire = fire;
     this.x = x;
     this.y = y;
     this.z = z;
@@ -85,6 +88,7 @@ export class LightningBolt {
     this.vertex = nextLong(random); // boltVertex: seeds the drawn path
     this.living = random.nextInt(3) + 1; // boltLivingTime
     this.dead = false;
+    fire?.start(this); // the constructor's fire placement, after its own two draws
   }
   // One tick; `events` receives the sounds. Returns true while the bolt flashes
   // the sky (lightningState >= 0), which also damages what stands in strikeBox.
@@ -102,7 +106,7 @@ export class LightningBolt {
         this.living--;
         this.state = 1;
         this.vertex = nextLong(r);
-        // (fire placement around the strike point is not ported: there is no fire block)
+        this.fire?.restrike(this);
       }
     }
     return this.state >= 0;
@@ -172,6 +176,7 @@ export class Weather {
     this.prevThunder = this.thunder = 0;
     this.lastLightning = 0; // World.lastLightningBolt: ticks of sky flash left
     this.bolts = [];
+    this.fire = null; // fire.js's bolt hook, handed to each new bolt
     this.events = []; // { sound, volume, pitch, x, y, z }, drained by drain()
     this.struck = []; // bolts that flashed this tick, drained by the damage hook
     this.clientTicks = 0; // EntityRenderer.rendererUpdateCount
@@ -233,7 +238,7 @@ export class Weather {
         x = cx * 16 + (j & 15),
         z = cz * 16 + ((j >> 8) & 15),
         y = precipitationHeight(world, x, z);
-      if (canLightningStrikeAt(this, world, x, y, z)) this.bolts.push(new LightningBolt(x, y, z, new JavaRandom(Math.floor(Math.random() * 2 ** 48))));
+      if (canLightningStrikeAt(this, world, x, y, z)) this.bolts.push(new LightningBolt(x, y, z, new JavaRandom(Math.floor(Math.random() * 2 ** 48)), this.fire));
     }
   }
   // The chunks WorldServer ticks around a player: its view distance (10 by
