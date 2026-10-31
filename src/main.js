@@ -34,6 +34,7 @@ import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, 
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { Fluids, waterAcceleration, entityWaterBox } from "./fluids.js";
+import { PlayerMotion, sneakEdge, moveWeights, isCritical, ATTACK_SLOWDOWN } from "./player-movement.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -113,6 +114,9 @@ const animation = new PlayerAnimation();
 // Not saved, like 1.7.10.
 let thirdPersonView = 0, playerRenderer;
 const playerBody = new PlayerBody();
+// Sprint/sneak state, move input and the sneak eye drop (player-movement.js).
+const motion = new PlayerMotion();
+let collidedH = false, walkFrozen = false;
 let stepDistance = 0,
   wasInWater = false;
 let scene;
@@ -333,7 +337,7 @@ function controls() {
       ["W A S D", "Move around"],
       ["MOUSE", "Look around"],
       ["SPACE", "Jump · double tap to fly in Creative"],
-      ["SHIFT", "Descend while flying"],
+      ["SHIFT", "Sneak (hold) · descend while flying"],
       ["CTRL", "Sprint (requires food in Survival)"],
       ["LEFT CLICK", "Hold to mine · click in drag mode"],
       ["RIGHT CLICK", "Place, eat, or use a workstation"],
@@ -561,6 +565,8 @@ function launch(record) {
     velocity.set(0, 0, 0);
     flying = false;
     grounded = false;
+    motion.reset();
+    collidedH = false;
     mining = null;
     mineHeld = false;
     mineCooldown = 0;
@@ -968,23 +974,18 @@ function tickSurvival(inWater, oldPosition) {
       position.x - oldPosition.x,
       position.z - oldPosition.z,
     );
-    survival.exhaust(
-      distance *
-        (inWater
-          ? 0.015
-          : keys.has("ControlLeft") && survival.food > 6
-            ? 0.1
-            : 0.01),
-    );
-    if (!inWater && !flying)
-      fallDistance += Math.max(0, oldPosition.y - position.y);
-    if (grounded) {
-      if (fallDistance > 3)
-        survival.damage(Math.ceil(fallDistance - 3), "a fall");
-      fallDistance = 0;
-    }
-    if (inWater) fallDistance = 0;
+    survival.exhaust(distance * (inWater ? 0.015 : motion.sprinting ? 0.1 : 0.01));
   }
+  // Entity.updateFallState: fallDistance grows while moving down in every mode (a
+  // Creative player can land a critical hit), the damage is Survival only.
+  if (!inWater && !flying)
+    fallDistance += Math.max(0, oldPosition.y - position.y);
+  if (grounded) {
+    if (!survival.creative && fallDistance > 3)
+      survival.damage(Math.ceil(fallDistance - 3), "a fall");
+    fallDistance = 0;
+  }
+  if (inWater) fallDistance = 0;
   items.tick(world, (st) => survival.inventory.maxStack(st));
   if (survival.health > 0) {
     const picked = items.collect(position, PHYSICS.width, PHYSICS.height, (st) => survival.inventory.add(st));
@@ -1053,8 +1054,11 @@ function edit(place = false) {
   sounds.unlock();
   const id = heldId(),
     item = ITEMS[id];
+  // PlayerControllerMP.onPlayerRightClick: onBlockActivated only runs unless the player is
+  // sneaking with an item in hand, otherwise the click places/uses the item against the block.
+  const activates = !(motion.sneaking && id);
   // A snowball in hand is thrown unless the aimed block takes the click first.
-  const usesBlock = !aimedEntity && target && [13, 14, CHEST].includes(world.get(...target.block));
+  const usesBlock = activates && !aimedEntity && target && [13, 14, CHEST].includes(world.get(...target.block));
   if (place && id === 312 && (survival.creative || survival.count(id)) && !usesBlock) {
     throwSnowball();
     return;
@@ -1062,7 +1066,15 @@ function edit(place = false) {
   animation.swing();
   if (!place && aimedEntity) {
     mining = null;
-    if (mobs.attack(aimedEntity.entity, id, survival, position)) {
+    // attackTargetEntityWithCurrentItem: sprinting adds one knockback level, a falling
+    // player (fallDistance > 0, airborne, not in water) lands a 1.5x critical.
+    const critical = isCritical({ fallDistance, onGround: grounded, inWater: wasInWater });
+    if (mobs.attack(aimedEntity.entity, id, survival, { x: position.x, z: position.z, yaw }, motion.sprinting ? 1 : 0, critical)) {
+      if (motion.sprinting) {
+        velocity.x *= ATTACK_SLOWDOWN;
+        velocity.z *= ATTACK_SLOWDOWN;
+        motion.sprinting = false;
+      }
       handleEntityEvents();
       renderHotbar();
       saved = false;
@@ -1096,15 +1108,15 @@ function edit(place = false) {
     if(id===309){if((survival.creative||survival.count(id))&&target.adjacent?.[1]===y+1&&farming.plant(x,y,z)){if(!survival.creative)survival.take(id);applyFarmUpdates(farming.drain());renderHotbar();saved=false;}return;}
     if(id===310){if((survival.creative||survival.count(id))&&farming.fertilize(x,y,z)){if(!survival.creative)survival.take(id);applyFarmUpdates(farming.drain());renderHotbar();sounds.play('dig.grass',{volume:.4});saved=false;}return;}
 
-    if (block === 13) {
+    if (activates && block === 13) {
       inventory(true);
       return;
     }
-    if (block === 14) {
+    if (activates && block === 14) {
       useFurnace(target.block.join(","));
       return;
     }
-    if (block === CHEST) {
+    if (activates && block === CHEST) {
       const chest = survival.openChest(world, ...target.block);
       if (chest) openContainer(chest, "chest", target.block.join(","));
       return;
@@ -1268,19 +1280,29 @@ function tickMining() {
 }
 function movementTick() {
   previous.copy(position);
-  const forward = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0),
-    strafe = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0),
-    sprint =
-      (keys.has("ControlLeft") || keys.has("ControlRight")) &&
-      (survival.creative || survival.food > 6);
+  // MovementInputFromOptions + EntityPlayerSP.onLivingUpdate: sneak scales input by 0.3 and
+  // sprinting needs forward input >= 0.8, so sneaking ends a sprint (player-movement.js).
+  const sneak = keys.has("ShiftLeft") || keys.has("ShiftRight");
+  const input = motion.update(
+    {
+      forward: (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0),
+      strafe: (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0),
+      sneak,
+    },
+    {
+      onGround: grounded,
+      collidedH,
+      canSprint: survival.creative || survival.food > 6,
+      usingItem: !!eating,
+      sprintKey: keys.has("ControlLeft") || keys.has("ControlRight"),
+    },
+  );
+  const sprint = motion.sprinting;
+  // Entity.moveEntity: a sneaking player on the ground takes no step sounds or walked distance.
+  const sneakOnGround = sneak && grounded;
+  walkFrozen = sneakOnGround;
   const oldPosition = position.clone();
-  let dx = strafe,
-    dz = forward;
-  const len = Math.hypot(dx, dz);
-  if (len > 0) {
-    dx = (dx / Math.max(1, len)) * 0.98;
-    dz = (dz / Math.max(1, len)) * 0.98;
-  }
+  const { strafe: dx, forward: dz } = moveWeights(input);
   const inWater =
     world.get(
       Math.floor(position.x),
@@ -1292,8 +1314,7 @@ function movementTick() {
     velocity.x = (Math.cos(yaw) * dx - Math.sin(yaw) * dz) * speed;
     velocity.z = (-Math.sin(yaw) * dx - Math.cos(yaw) * dz) * speed;
     velocity.y =
-      ((keys.has("Space") ? 1 : 0) -
-        (keys.has("ShiftLeft") || keys.has("ShiftRight") ? 1 : 0)) *
+      ((keys.has("Space") ? 1 : 0) - (sneak ? 1 : 0)) *
       speed;
   } else {
     // Entity.handleWaterMovement: running water pushes the player along.
@@ -1324,8 +1345,13 @@ function movementTick() {
       velocity.y = Math.min(0.16, velocity.y + 0.06);
   }
   let landed = false;
+  collidedH = false;
+  // Entity.moveEntity's sneak edge loop shortens this tick's x/z move, not the motion.
+  const moves = { x: velocity.x, y: velocity.y, z: velocity.z };
+  if (sneakOnGround)
+    [moves.x, moves.z] = sneakEdge(moves.x, moves.z, (ox, oz) => !collides(world, position.x + ox, position.y - 1, position.z + oz));
   for (const axis of ["y", "x", "z"]) {
-    const delta = velocity[axis],
+    const delta = moves[axis],
       substeps = Math.max(1, Math.ceil(Math.abs(delta) / 0.2));
     for (let i = 0; i < substeps; i++) {
       const before = position[axis];
@@ -1344,6 +1370,7 @@ function movementTick() {
         }
         position[axis] = before + Math.sign(delta) * low;
         velocity[axis] = 0;
+        if (axis !== "y") collidedH = true;
         if (axis === "y" && delta < 0) landed = true;
         break;
       }
@@ -1351,6 +1378,7 @@ function movementTick() {
   }
   grounded =
     landed || collides(world, position.x, position.y - 0.001, position.z);
+  motion.endMove();
   if (!flying) {
     velocity.y = inWater
       ? (velocity.y - 0.02) * 0.8
@@ -1389,7 +1417,7 @@ function movementTick() {
     position.x - oldPosition.x,
     position.z - oldPosition.z,
   );
-  stepDistance += distance;
+  if (!sneakOnGround) stepDistance += distance;
   if (inWater && !wasInWater)
     sounds.play("game.player.swim.splash", { volume: 0.5 });
   wasInWater = inWater;
@@ -1728,12 +1756,15 @@ function animate(now) {
       (screen === "playing" || screen === "inventory")
     ) {
       movementTick();
-      playerBody.tick({ position, previous, yaw, pitch, swinging: animation.swingTime < SWING_SECONDS });
+      // The model stands at posY - yOffset, and posY is lowered by ySize (the sneak drop).
+      const lowered = (p, drop) => ({ x: p.x, y: p.y - drop, z: p.z });
+      playerBody.tick({ position: lowered(position, motion.ySize), previous: lowered(previous, motion.prevYSize), yaw, pitch, swinging: animation.swingTime < SWING_SECONDS });
       accumulator -= PHYSICS.tick;
     }
     const t = accumulator / PHYSICS.tick;
     scene.camera.position.lerpVectors(previous, position, t);
-    scene.camera.position.y += PHYSICS.eye;
+    // Entity.posY = minY + yOffset - ySize: sneaking lowers the eye by 0.08 (interpolated).
+    scene.camera.position.y += PHYSICS.eye - motion.drop(t);
     const pose = animation.frame(dt, {
       item: heldId(),
       yaw, pitch,
@@ -1741,6 +1772,8 @@ function animate(now) {
       moving: keys.size > 0,
       grounded: grounded && !flying,
       bobbing: options.bobbing,
+      // distanceWalkedModified does not advance while sneaking on the ground.
+      freezeWalk: walkFrozen,
     });
     // The held wool's colour (stack damage) rides along with the displayed item.
     pose.meta = pose.item === WOOL ? survival.held?.damage || 0 : 0;
@@ -1802,6 +1835,7 @@ function animate(now) {
     armor: survival?.inventory?.armor ?? [],
     held: heldId(),
     hurt: survival.hurtTicks > 0,
+    sneak: motion.sneaking,
   });
   chestRenderer?.update(screen === "playing" || screen === "inventory" ? accumulator / PHYSICS.tick : 1);
   if(xpRenderer)xpRenderer.update(xpOrbs.orbs,partial);
@@ -1826,7 +1860,7 @@ function shadowCasters(partial) {
     if (e.stack) list.push({ ...SHADOWS.item, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + 0.125, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + 0.125, z: e.z }, height: 0.25 });
   for (const o of xpOrbs.orbs) list.push({ ...SHADOWS.orb, x: lerp(o.px, o.x), y: lerp(o.py, o.y), z: lerp(o.pz, o.z), pos: o, height: 0.5 });
   // The local player casts a shadow only when it is on screen.
-  if (thirdPersonView > 0) list.push(playerShadowCaster(position, previous, partial, SHADOWS.player));
+  if (thirdPersonView > 0) list.push(playerShadowCaster(position, previous, partial, SHADOWS.player, motion.prevYSize, motion.ySize));
   for (const e of mobs?.entities ?? []) {
     const child = e.growingAge < 0;
     if (SHADOWS[e.type]) list.push({ ...SHADOWS[e.type], x: lerp(e.px, e.x), y: lerp(e.py, e.y), z: lerp(e.pz, e.z), pos: e, height: ENTITY_TYPES[e.type].height * (child ? 0.5 : 1), child });

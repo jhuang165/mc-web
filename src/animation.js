@@ -59,6 +59,7 @@ export class PlayerAnimation {
       grounded = true,
       bobbing = true,
       eating = 0,
+      freezeWalk = false,
       yaw = 0, pitch = 0,
     } = {},
   ) {
@@ -73,7 +74,7 @@ export class PlayerAnimation {
     this.amount +=
       (Math.min(0.1, speed) * Number(moving && grounded) - this.amount) *
       Math.min(1, dt * 10);
-    this.walk += speed * 20 * dt * 0.6;
+    if (!freezeWalk) this.walk += speed * 20 * dt * 0.6;
     this.eating = eating;
     if(!this.look)this.look={yaw,pitch};
     const yawDelta = Math.atan2(Math.sin(yaw-this.look.yaw),Math.cos(yaw-this.look.yaw));
