@@ -27,6 +27,7 @@ import { ChestRenderer } from "./chest-renderer.js";
 import { CHEST, canPlaceChest, placeChest, settleFacing, chestPair, tickLid } from "./chest.js";
 import { Survival, ITEMS, MATERIALS } from "./survival.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
+import { ItemEntities } from "./item-entities.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -114,8 +115,9 @@ let survival = new Survival({}, "creative"),
   fallDistance = 0,
   inventorySearch = "",
   containerView = null,
-  f3Combo = false,
-  droppedInventories = [];
+  f3Combo = false;
+// Dropped items as EntityItem physics objects (see item-entities.js).
+const items = new ItemEntities();
 $("#app").innerHTML = `
  <div id="viewport" aria-label="Interactive voxel world"></div><div id="vignette"></div>
  <main id="home" class="minecraft-home">
@@ -339,7 +341,7 @@ function controls() {
 function notes() {
   modal(
     "Rebuilding 1.7.10, system by system.",
-    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. The Java 36-slot inventory with cursor, drag-splitting, shift- and double-click rules; shaped crafting, a crafting table, a fuel-driven furnace and single/large chests on real slots; wood, stone, iron, diamond and gold tools with per-item durability and repair; leather, chain, iron, gold and diamond armor. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Cows follow wheat and breed calves. Caves, ores and torches; 1.7.10 sky/block light, smooth lighting, lightmap, sky, stars, fog and fancy clouds. Wheat farming with five hoe tiers, seeds, moisture, eight growth stages, bone meal, harvesting and bread crafting.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, armor rendering, enchantments, hoppers and other storage, redstone, dimensions, structures, weather, void fog, Java saves, and multiplayer. The renderer, terrain, creative inventory, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
+    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. Broken blocks, mob kills and thrown stacks drop item entities that fall, merge and are picked up. The Java 36-slot inventory with cursor, drag-splitting, shift- and double-click rules; shaped crafting, a crafting table, a fuel-driven furnace and single/large chests on real slots; wood, stone, iron, diamond and gold tools with per-item durability and repair; leather, chain, iron, gold and diamond armor. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Cows follow wheat and breed calves. Caves, ores and torches; 1.7.10 sky/block light, smooth lighting, lightmap, sky, stars, fog and fancy clouds. Wheat farming with five hoe tiers, seeds, moisture, eight growth stages, bone meal, harvesting and bread crafting.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, armor rendering, enchantments, hoppers and other storage, redstone, dimensions, structures, weather, void fog, Java saves, and multiplayer. The renderer, terrain, creative inventory, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/items.md" target="_blank" rel="noopener">Item drops ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
     "notes-modal",
   );
 }
@@ -400,14 +402,14 @@ function save() {
   active.edits = [...world.edits];
   active.position = { x: position.x, y: position.y, z: position.z, yaw, pitch };
   active.player = survival.serialize();
-  active.drops = droppedInventories;
+  active.drops = items.serialize();
   // Items on the cursor or in a crafting grid return to the saved inventory, as closing the screen would.
   const pending = containerView ? [containerView.container.inv.cursor, ...(containerView.container.grid?.stacks || [])].filter(Boolean).map(copyStack) : [];
   if (pending.length) {
     const copy = new Survival(active.player, survival.mode),
       left = pending.filter((s) => (copy.inventory.add(s), s.count > 0));
     active.player = copy.serialize();
-    if (left.length) active.drops = [...droppedInventories, { position: { x: position.x, y: position.y, z: position.z }, stacks: left, expires: survival.time + 6000 }];
+    if (left.length) active.drops.push(...left.map((stack) => ({ stack, x: position.x, y: position.y, z: position.z, age: 0, delay: 0 })));
   }
   active.mode = survival.mode;
   delete active.hotbar;
@@ -526,25 +528,17 @@ function launch(record) {
       valid && Number.isFinite(p.pitch)
         ? Math.max(-1.55, Math.min(1.55, p.pitch))
         : 0;
-    droppedInventories = (Array.isArray(record.drops) ? record.drops : [])
-      .slice(0, 64)
-      .filter(
-        (d) =>
-          d?.position &&
-          [d.position.x, d.position.y, d.position.z, d.expires].every(
-            Number.isFinite,
-          ),
-      )
-      .map((d) => ({
-        position: { x: d.position.x, y: d.position.y, z: d.position.z },
-        expires: d.expires,
-        delay: Number.isFinite(d.delay) ? Math.max(0, Math.min(40, d.delay)) : 0,
-        death: !!d.death || !Array.isArray(d.stacks),
-        stacks: Array.isArray(d.stacks)
-          ? d.stacks.map((s) => survival.inventory.read(s)).filter(Boolean)
-          : new Survival({ inventory: d.inventory, durability: d.durability }).inventory.main.filter(Boolean),
-      }))
-      .filter((d) => d.stacks.length);
+    // Saved item entities; piles from before 0.10 (and pre-0.7 death piles
+    // that stored a whole inventory) become one entity per stack.
+    items.load(
+      (Array.isArray(record.drops) ? record.drops : []).map((d) =>
+        d && !d.stack && !Array.isArray(d.stacks) && d.inventory
+          ? { ...d, death: true, stacks: new Survival({ inventory: d.inventory, durability: d.durability }).inventory.main.filter(Boolean) }
+          : d,
+      ),
+      (st) => survival.inventory.read(st),
+      survival.time,
+    );
     velocity.set(0, 0, 0);
     flying = false;
     grounded = false;
@@ -800,17 +794,11 @@ function renderVitals() {
     `<div class="vital-row"><div class="hearts" aria-label="Health ${Math.ceil(survival.health)} of 20">${hearts}</div><div class="hunger" aria-label="Hunger ${survival.food} of 20">${food}</div></div>${armorRow}${air}`;
   $("#damage-flash").classList.toggle("hurt", survival.hurtTicks > 4);
 }
-// Stores stacks through addItemStackToInventory; leftovers stay on the ground.
-function give(stacks, at) {
-  const left = stacks.filter((s) => s?.count > 0 && (survival.inventory.add(s), s.count > 0));
-  if (left.length) droppedInventories.push({ position: { ...at }, stacks: left, expires: survival.time + 6000, delay: 10 });
-  renderHotbar();
-}
-// Thrown items land ahead of the player and wait 40 ticks before pickup.
+// EntityPlayer.dropOneItem / closing a screen with held items: thrown along
+// the view with a 40-tick pickup delay.
 function throwStacks(stacks) {
-  const list = stacks.filter((s) => s?.count > 0).map(copyStack);
-  if (!list.length || !world) return;
-  droppedInventories.push({ position: { x: position.x - Math.sin(yaw) * 1.2, y: position.y, z: position.z - Math.cos(yaw) * 1.2 }, stacks: list, expires: survival.time + 6000, delay: 40 });
+  if (!world) return;
+  for (const s of stacks) if (s?.count > 0) items.dropPlayer(copyStack(s), position, yaw, pitch);
   saved = false;
 }
 function useFurnace(key) {
@@ -858,13 +846,8 @@ function die() {
   mining = null;
   mineHeld = false;
   const stacks = survival.inventory.takeAll();
-  if (stacks.length)
-    droppedInventories.push({
-      position: { x: position.x, y: position.y, z: position.z },
-      stacks,
-      expires: survival.time + 6000,
-      death: true,
-    });
+  // EntityPlayer.onDeath -> InventoryPlayer.dropAllItems scatters every stack.
+  for (const s of stacks) items.dropPlayer(s, position, yaw, pitch, true, true);
   const deathScore=experience.score;xpOrbs.spawn(experience.death(),position);
   renderHotbar();renderVitals();$("#block-label").classList.remove("visible");
   save();
@@ -920,38 +903,20 @@ function tickSurvival(inWater, oldPosition) {
     }
     if (inWater) fallDistance = 0;
   }
-  for (const drop of droppedInventories) {
-    if (drop.expires <= survival.time) continue;
-    if (drop.delay > 0) {
-      drop.delay--;
-      continue;
+  items.tick(world, (st) => survival.inventory.maxStack(st));
+  if (survival.health > 0) {
+    const picked = items.collect(position, PHYSICS.width, PHYSICS.height, (st) => survival.inventory.add(st));
+    for (const { item } of picked) {
+      sounds.play("random.pop", { volume: 0.2, pitch: ((Math.random() - Math.random()) * 0.7 + 1) * 2 });
+      scene.drops.pickup(item, position);
+      if (item.death && !items.items.some((e) => e.death)) toast("Recovered your dropped items.");
     }
-    if (
-      Math.hypot(
-        position.x - drop.position.x,
-        position.y - drop.position.y,
-        position.z - drop.position.z,
-      ) < 2
-    ) {
-      let picked = 0;
-      for (const s of drop.stacks) {
-        const before = s.count;
-        survival.inventory.add(s);
-        picked += before - s.count;
-      }
-      drop.stacks = drop.stacks.filter((s) => s.count > 0);
-      if (picked) {
-        sounds.play("random.pop", { volume: 0.2, pitch: ((Math.random() - Math.random()) * 0.7 + 1) * 2 });
-        if (drop.death) toast("Recovered your dropped items.");
-        renderHotbar();
-        saved = false;
-      }
+    if (picked.length) {
+      renderHotbar();
+      saved = false;
     }
   }
-  droppedInventories = droppedInventories.filter(
-    (d) => d.expires > survival.time && d.stacks.length,
-  );
-  scene.setDrops(droppedInventories);
+  scene.setDrops(items.items);
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();
@@ -964,7 +929,7 @@ function handleEntityEvents() {
       sounds.play(event.sound, { position: event.position, volume: 0.6 });
     if(event.xp&&!survival.creative)xpOrbs.spawn(event.xp,event.position);
     if(event.hearts)mobRenderer.hearts(event.position);
-    if (event.drop) give([makeStack(event.drop, event.count)], event.position);
+    if (event.drop) items.dropMob(event.drop, event.count, event.position);
   }
 }
 function beginEating(id) {
@@ -1100,17 +1065,17 @@ function breakBlock(p, creative = false) {
   const at = { x: p[0] + 0.5, y: p[1] + 0.1, z: p[2] + 0.5 };
   // BlockFurnace.breakBlock spills its contents whatever the game mode.
   if (f) {
-    give(f.items.filter(Boolean), at);
+    items.spill(f.items.filter(Boolean), ...p);
     delete survival.furnaces[key];
   }
   // BlockChest.breakBlock spills the contents on the ground in any mode.
   if (chest) {
     const stacks = chest.items.filter(Boolean).map(copyStack);
-    if (stacks.length) droppedInventories.push({ position: at, stacks, expires: survival.time + 6000, delay: 10 });
+    items.spill(stacks, ...p);
     delete survival.chests[key];
   }
   if (!creative) {
-    give(drops.map((d) => makeStack(d.id, d.count)), at);
+    items.dropBlock(drops.map((d) => makeStack(d.id, d.count)), ...p);
     if(drop)xpOrbs.spawn(oreExperience(block),at);
     survival.exhaust(0.025);
     survival.wearBlock(block,tool);
@@ -1678,13 +1643,14 @@ function animate(now) {
     }
     if (debug)
       $("#debug").textContent =
-        `BLOCKWORLD / Java 1.7.10 study\n${fps} FPS · ${(scene.worldTriangles || 0).toLocaleString()} triangles\nXYZ: ${position.x.toFixed(2)} / ${position.y.toFixed(2)} / ${position.z.toFixed(2)}\nSeed: ${active.seed}\n${survival.mode} · day ${Math.floor(survival.time / 24000) + 1} · ${survival.time % 24000} ticks\nHealth ${survival.health} · food ${survival.food} · saturation ${survival.saturation.toFixed(1)}\n${world.edits.size} edited blocks · ${droppedInventories.length} item piles · ${mobs?.entities.length || 0} mobs\n${aimedEntity ? aimedEntity.entity.type + " · " + aimedEntity.entity.health + " health" : target ? BLOCKS[world.get(...target.block)].name : "Looking into the distance"}`;
+        `BLOCKWORLD / Java 1.7.10 study\n${fps} FPS · ${(scene.worldTriangles || 0).toLocaleString()} triangles\nXYZ: ${position.x.toFixed(2)} / ${position.y.toFixed(2)} / ${position.z.toFixed(2)}\nSeed: ${active.seed}\n${survival.mode} · day ${Math.floor(survival.time / 24000) + 1} · ${survival.time % 24000} ticks\nHealth ${survival.health} · food ${survival.food} · saturation ${survival.saturation.toFixed(1)}\n${world.edits.size} edited blocks · ${items.items.length} items · ${mobs?.entities.length || 0} mobs\n${aimedEntity ? aimedEntity.entity.type + " · " + aimedEntity.entity.health + " health" : target ? BLOCKS[world.get(...target.block)].name : "Looking into the distance"}`;
     if (elapsed - lastSave > 5) save();
     scene.effects.crack(mining?.block, mining?.progress);
   } else if (screen === "home") scene.preview(elapsed);
   if (mobs) mobRenderer.update(mobs.entities,dt);
   chestRenderer?.update(screen === "playing" || screen === "inventory" ? accumulator / PHYSICS.tick : 1);
   if(xpRenderer)xpRenderer.update(xpOrbs.orbs,elapsed);
+  scene.dropPartial = Math.min(1, accumulator / PHYSICS.tick);
   scene.render(elapsed, dt);
   if (firstPerson && animate.pose)
     firstPerson.render(animate.pose, {
@@ -1718,7 +1684,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, look(p, y) { pitch = p; yaw = y; }, teleport(x, y, z) { position.set(x, y, z); } };
+    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, look(p, y) { pitch = p; yaw = y; }, teleport(x, y, z) { position.set(x, y, z); }, items, get mobs() { return mobs; }, breakBlock };
   scene.preview(0);
   scene.render(0);
   renderWorlds();

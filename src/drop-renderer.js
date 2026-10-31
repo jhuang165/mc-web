@@ -1,5 +1,5 @@
-// RenderItem for EntityItem piles with fancy graphics: the first stack bobs
-// sin(age/10 + hover) * 0.1 + 0.1 and spins (age/20 + hover) radians; blocks
+// RenderItem for EntityItem with fancy graphics: items bob
+// sin(age/10 + hover) * 0.1 + 0.1 and spin (age/20 + hover) radians; blocks
 // draw as 1/4-scale cubes, other items as 1/2-scale extruded sprites, with
 // one to five copies by stack size.
 import * as THREE from "three";
@@ -18,6 +18,7 @@ export class DropRenderer {
     this.piles = new Map();
     this.sprite = spriteGeometry();
     this.cubes = new Map();
+    this.flying = [];
   }
   cube(id) {
     if (!this.cubes.has(id)) {
@@ -33,7 +34,7 @@ export class DropRenderer {
     }
     return this.cubes.get(id);
   }
-  build(stack) {
+  build(stack, hover) {
     const url = itemTexture(stack.id), group = new THREE.Group(), spin = new THREE.Group(), random = new JavaRandom(187),
       material = url
         ? entityMaterial(this.view.lighting, { map: pixelTexture(url), alphaTest: 0.1, side: THREE.DoubleSide })
@@ -53,39 +54,63 @@ export class DropRenderer {
     }
     group.add(spin);
     this.scene.add(group);
-    return { group, spin, material, key: stack.id + ":" + copies(stack.count), hover: Math.random() * Math.PI * 2, born: null };
+    return { group, spin, material, key: stack.id + ":" + copies(stack.count), hover };
   }
   remove(pile) {
     this.scene.remove(pile.group);
     pile.material.dispose();
   }
-  // `ticks` is a continuous client tick count, for the bob and spin.
-  update(drops, ticks) {
+  // RenderItem.doRender: bob and spin from the entity's age and hover phase.
+  place(pile, x, y, z, age) {
+    pile.group.position.set(x, y + 0.125 + Math.sin(age / 10 + pile.hover) * 0.1 + 0.1, z);
+    pile.spin.rotation.y = age / 20 + pile.hover;
+    pile.material.setLight(this.view.brightness(x, y + 0.17, z));
+  }
+  // EntityPickupFX: over three ticks the item moves to 0.5 below the player's
+  // eye (1.12 above the feet), eased by t squared. `target` is live.
+  pickup(item, target) {
+    const pile = this.piles.get(item);
+    if (!pile) return;
+    this.piles.delete(item);
+    this.flying.push({ pile, item, target, start: null });
+  }
+  // `partial` is the fraction of the current tick; `ticks` a continuous clock.
+  update(items, partial = 1, ticks = 0) {
     const seen = new Set();
-    for (const d of drops) {
-      const stack = d.stacks?.[0];
+    for (const e of items) {
+      const stack = e.stack;
       if (!stack) continue;
-      seen.add(d);
-      let pile = this.piles.get(d);
+      seen.add(e);
+      let pile = this.piles.get(e);
       const key = stack.id + ":" + copies(stack.count);
       if (pile?.key !== key) {
         if (pile) this.remove(pile);
-        pile = this.build(stack);
-        this.piles.set(d, pile);
+        pile = this.build(stack, e.hover);
+        this.piles.set(e, pile);
       }
-      pile.born ??= ticks;
-      const age = ticks - pile.born, bob = Math.sin(age / 10 + pile.hover) * 0.1 + 0.1;
-      pile.group.position.set(d.position.x, d.position.y + 0.125 + bob, d.position.z);
-      pile.spin.rotation.y = age / 20 + pile.hover;
-      pile.material.setLight(this.view.brightness(d.position.x, d.position.y + 0.17, d.position.z));
+      this.place(pile, e.px + (e.x - e.px) * partial, e.py + (e.y - e.py) * partial, e.pz + (e.z - e.pz) * partial, e.age + partial);
     }
-    for (const [d, pile] of this.piles)
-      if (!seen.has(d)) {
+    for (const [e, pile] of this.piles)
+      if (!seen.has(e)) {
         this.remove(pile);
-        this.piles.delete(d);
+        this.piles.delete(e);
       }
+    this.flying = this.flying.filter((fx) => {
+      fx.start ??= ticks;
+      let t = (ticks - fx.start) / 3;
+      if (t >= 1) {
+        this.remove(fx.pile);
+        return false;
+      }
+      t *= t;
+      const e = fx.item, p = fx.target;
+      this.place(fx.pile, e.x + (p.x - e.x) * t, e.y + (p.y + 1.12 - e.y) * t, e.z + (p.z - e.z) * t, e.age + (ticks - fx.start));
+      return true;
+    });
   }
   clear() {
     this.update([], 0);
+    for (const fx of this.flying) this.remove(fx.pile);
+    this.flying = [];
   }
 }

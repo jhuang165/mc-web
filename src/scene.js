@@ -82,6 +82,7 @@ export class VoxelScene {
     this.textures = createBlockAtlas();
     this.drops = new DropRenderer(this.scene, this);
     this.dropList = [];
+    this.dropPartial = 1;
     this.material = worldMaterial(this.lighting, { map: this.textures.texture });
     const animated = (url, frames, scale) => {
       const t = new THREE.TextureLoader().load(url);
@@ -326,13 +327,15 @@ export class VoxelScene {
     const sky = underwater ? fog : skyColor(this.temperature ?? 0.8, angle);
     this.sky.update({ angle, sky, fog, sunrise: underwater ? null : sunriseColors(angle), stars: starBrightness(angle), moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater });
     this.clouds.update(c, time * 20, cloudColor(angle));
-    this.drops.update(this.dropList, time * 20);
+    this.drops.update(this.dropList, this.dropPartial, time * 20);
     this.sky.render(this.renderer, c, new THREE.Color(...fog));
     this.renderer.render(this.scene, c);
     this.worldTriangles = this.renderer.info.render.triangles;
   }
-  setDrops(drops) {
+  // `partial` is how far the frame is into the next physics tick.
+  setDrops(drops, partial = this.dropPartial) {
     this.dropList = drops;
+    this.dropPartial = partial;
   }
   setDistance(distance) {
     this.distance = distance;
