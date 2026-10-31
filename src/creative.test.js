@@ -7,7 +7,7 @@ import {CREATIVE_TABS,SEARCH,SURVIVAL_TAB,SEARCH_ORDER,CreativeScreen,TextField,
 const reference=JSON.parse(await readFile(new URL('../public/research/creative-reference.json',import.meta.url)));
 // Original [id, metadata] to game item; unimplemented items drop out.
 // Wool (35) keeps its colour as the stack's damage: a list entry is [19,colour], or 19 for white.
-const game=([id,meta])=>id===35?(meta?[19,meta]:19):MC_IDS[id+':'+meta]??(meta===0?MC_IDS[id]:undefined);
+const game=([id,meta])=>id===35?(meta?[19,meta]:19):id===38||id===351?(meta?[MC_IDS[id],meta]:MC_IDS[id]):MC_IDS[id+':'+meta]??(meta===0?MC_IDS[id]:undefined);
 const names=s=>[ITEMS[s.id].name];
 
 test('tabs keep the original order, placement and implemented contents',()=>{
@@ -77,12 +77,12 @@ test('clicking outside throws the cursor, one item for the right button',()=>{
 test('scrolling moves the 9 x 5 window one row per notch and with the scrollbar',()=>{
  const {gui,c,slot}=open([],SEARCH.index);
  assert.equal(c.list.length,SEARCH_ORDER.length);assert.ok(gui.needsScroll());
- assert.equal(c.rows(),8);
+ assert.equal(c.rows(),11);
  gui.wheel(-1);gui.wheel(-1);
- assert.equal(gui.scroll,Math.fround(Math.fround(1/8)+1/8));assert.equal(gui.scrollbarY(),41);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[18]));
+ assert.equal(gui.scroll,Math.fround(Math.fround(1/11)+1/11));assert.equal(gui.scrollbarY(),35);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[18]));
  gui.wheel(1);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[9]));
  for(let i=0;i<20;i++)gui.wheel(-1);
- assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);assert.equal(slot(27).stack.id,entryId(SEARCH_ORDER[99]));assert.equal(slot(42).stack,null);
+ assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);assert.equal(slot(27).stack.id,entryId(SEARCH_ORDER[126]));assert.equal(slot(42).stack,null);
  gui.press(176,60);assert.ok(gui.scrolling);gui.drag(25.5);assert.equal(gui.scroll,0);
  gui.drag(18+7.5+97/2);assert.equal(gui.scroll,.5);gui.release();gui.drag(200);assert.equal(gui.scroll,.5);
  gui.press(174,60);assert.ok(!gui.scrolling);

@@ -1,4 +1,4 @@
-import { SIZE, HEIGHT, hash, raycast as voxelRay, blockBounds, WOOL } from "./world.js";
+import { SIZE, HEIGHT, hash, raycast as voxelRay, blockBounds, WOOL, DYE } from "./world.js";
 import { ITEMS } from "./survival.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { waterAcceleration, entityWaterBox } from "./fluids.js";
@@ -599,6 +599,19 @@ export class EntityWorld {
       this.events.push({drop:WOOL,count:1,damage:e.color,offsetY:1,kick:[mx,my,mz],position:{x:e.x,y:e.y,z:e.z}});}
     this.events.push({sound:'mob.sheep.shear',volume:1,position:{x:e.x,y:e.y,z:e.z}});
     if(!survival.creative)survival.wear(id,1);
+    return true;
+  }
+  // ItemDye.itemInteractionForEntity (acj.a(add, yz, sv)): after EntitySheep.interact
+  // declined (shears, wheat), a dye whose fleece colour (~damage & 15) differs from an
+  // unsheared sheep's sets it and loses one item (Creative restores the stack). Lambs
+  // are dyed too. Returns true for any sheep, as the original does.
+  dye(e,stack,survival){
+    if(!this.entities.includes(e)||e.health<=0||e.type!=='sheep'||stack?.id!==DYE)return false;
+    const colour=~stack.damage&15;
+    if(!e.sheared&&e.color!==colour){
+      e.color=colour;
+      if(!survival.creative)survival.inventory.decr(survival.inventory.current,1);
+    }
     return true;
   }
   // EntityAIEatGrass (ud), mutexBits 7. EntityAITasks looks for new tasks every

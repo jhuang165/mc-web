@@ -3,17 +3,21 @@
 // Tab lists keep the original order (CreativeTabs.displayAllReleventItems and the
 // search tab's registry walk); tools/verify-creative.mjs regenerates the
 // original lists in public/research/creative-reference.json.
+import { DYE, RED_FLOWER, YELLOW_FLOWER } from "./world.js";
 import { Container, ContainerScreen, Slot, StackArray, copyStack, makeStack, OUTSIDE } from "./inventory.js";
 
 // A list entry is an item id, or [id, damage] for a metadata subtype: BlockColored
 // (aka).func_149666_a lists the 16 wool colours in metadata order.
+// BlockFlower.getSubBlocks and ItemDye.getSubItems list metadata in order.
+const RED_FLOWERS = [RED_FLOWER, ...Array.from({ length: 8 }, (_, i) => [RED_FLOWER, i + 1])];
+const DYES = [DYE, ...Array.from({ length: 15 }, (_, i) => [DYE, i + 1])];
 const WOOLS = [19, ...Array.from({ length: 15 }, (_, i) => [19, i + 1])];
 export const entryId = (e) => (Array.isArray(e) ? e[0] : e);
 const tab = (index, label, name, icon, items, extra = {}) => ({ index, label, name, icon, items, column: index % 6, topRow: index < 6, background: "items.png", scrollbar: true, title: true, ...extra });
 // Game item IDs in original order; icons are the tab's getIconItemStack.
 export const CREATIVE_TABS = [
   tab(0, "buildingBlocks", "Building Blocks", { id: 8 }, [3, 1, 2, 12, 7, 11, 6, 25, 18, 16, 15, 4, 9, ...WOOLS, 27, 26, 8, 21, 22, 17, 28, 23, 24, 40]),
-  tab(1, "decorations", "Decoration Blocks", { texture: "blocks/double_plant_paeonia_top" }, [5, 39, 20, 41, 13, 14]),
+  tab(1, "decorations", "Decoration Blocks", { texture: "blocks/double_plant_paeonia_top" }, [5, 39, YELLOW_FLOWER, ...RED_FLOWERS, 20, 41, 13, 14]),
   tab(2, "redstone", "Redstone", { texture: "items/redstone_dust" }, []),
   tab(3, "transportation", "Transportation", { texture: "blocks/rail_golden" }, []),
   tab(4, "misc", "Miscellaneous", { texture: "items/bucket_lava" }, [312, 314, 311]),
@@ -22,12 +26,12 @@ export const CREATIVE_TABS = [
   tab(7, "tools", "Tools", { id: 106 }, [110, 102, 106, 108, 100, 104, 109, 101, 105, 111, 103, 107, 118, 116, 117, 120, 121, 122, 123, 124, 125]),
   tab(8, "combat", "Combat", { id: 119 }, [114, 112, 113, 115, 119, 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 416, 417, 418, 419, 412, 413, 414, 415]),
   tab(9, "brewing", "Brewing", { potion: 0x385dc6 }, []),
-  tab(10, "materials", "Materials", { id: 300 }, [301, 308, 303, 302, 304, 300, 309, 305, 313, 315, 306, 307, 310]),
+  tab(10, "materials", "Materials", { id: 300 }, [301, 308, 303, 302, 304, 300, 309, 305, 313, 315, 306, 307, ...DYES]),
   tab(11, "inventory", "Survival Inventory", { id: 41 }, [], { background: "inventory.png", scrollbar: false, title: false }),
 ];
 export const SEARCH = CREATIVE_TABS[5], SURVIVAL_TAB = CREATIVE_TABS[11];
 // updateCreativeSearch walks Item.itemRegistry: items with a creative tab, by ID.
-export const SEARCH_ORDER = [3, 1, 2, 12, 7, 11, 6, 25, 18, 16, 15, 4, 5, 9, 39, ...WOOLS, 27, 26, 8, 21, 22, 20, 41, 17, 28, 13, 14, 23, 24, 40, 110, 102, 106, 200, 301, 308, 303, 302, 304, 114, 112, 108, 100, 104, 113, 109, 101, 105, 115, 111, 103, 107, 300, 119, 118, 116, 117, 120, 121, 122, 123, 124, 309, 305, 201, 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 416, 417, 418, 419, 412, 413, 414, 415, 313, 202, 203, 312, 315, 306, 307, 314, 310, 311, 125, 204, 205, 206];
+export const SEARCH_ORDER = [3, 1, 2, 12, 7, 11, 6, 25, 18, 16, 15, 4, 5, 9, 39, ...WOOLS, YELLOW_FLOWER, ...RED_FLOWERS, 27, 26, 8, 21, 22, 20, 41, 17, 28, 13, 14, 23, 24, 40, 110, 102, 106, 200, 301, 308, 303, 302, 304, 114, 112, 108, 100, 104, 113, 109, 101, 105, 115, 111, 103, 107, 300, 119, 118, 116, 117, 120, 121, 122, 123, 124, 309, 305, 201, 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 416, 417, 418, 419, 412, 413, 414, 415, 313, 202, 203, 312, 315, 306, 307, 314, ...DYES, 311, 125, 204, 205, 206];
 // Item.getCreativeTab, for the search tab's tooltip line.
 export const itemTab = (id) => CREATIVE_TABS.find((t) => t.items.some((e) => entryId(e) === id)) ?? null;
 export const GUI_WIDTH = 195, GUI_HEIGHT = 136, SEARCH_MAX = 15;

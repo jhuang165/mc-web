@@ -1,3 +1,4 @@
+import { decorateFlowers } from "./flowers.js";
 export const SIZE = 128,
   HEIGHT = 64,
   SEA = 16;
@@ -37,7 +38,32 @@ export const BLOCKS = [
   {name:'Tall grass',color:'#82aa51'},
   {name:'Hardened clay',color:'#965c42'},
   {name:'Chest',color:'#a0742f'},
+  // BlockFlower (yellow_flower = dandelion, red_flower meta 0-8): appended last
+  // and referenced through the constants below, never by number.
+  {name:'Dandelion',color:'#f1e04b'},
+  {name:'Red flower',color:'#c9302a'},
 ];
+export const YELLOW_FLOWER = BLOCKS.findIndex((b) => b.name === 'Dandelion');
+export const RED_FLOWER = BLOCKS.findIndex((b) => b.name === 'Red flower');
+export const TALL_GRASS = 39;
+// BlockFlower.field_149860_M / field_149861_a: red_flower metadata 0-8 names
+// and their textures (flower_<texture>.png). Dandelion has no variants.
+export const RED_FLOWERS = [
+  ['rose', 'Poppy'], ['blue_orchid', 'Blue orchid'], ['allium', 'Allium'], ['houstonia', 'Azure bluet'],
+  ['tulip_red', 'Red tulip'], ['tulip_orange', 'Orange tulip'], ['tulip_white', 'White tulip'],
+  ['tulip_pink', 'Pink tulip'], ['oxeye_daisy', 'Oxeye daisy'],
+].map(([texture, label]) => ({ texture, label }));
+// ItemDye (acj) id 351, damage 0-15: field_150921_b gives the dye_powder_<texture>
+// suffix and the lang file the label. Damage 15 is bone meal (internal id 310
+// before this port; saves migrate it, see inventory.js).
+export const DYE = 351;
+export const DYES = [
+  ['black', 'Ink sac'], ['red', 'Rose red'], ['green', 'Cactus green'], ['brown', 'Cocoa beans'],
+  ['blue', 'Lapis lazuli'], ['purple', 'Purple dye'], ['cyan', 'Cyan dye'], ['silver', 'Light gray dye'],
+  ['gray', 'Gray dye'], ['pink', 'Pink dye'], ['lime', 'Lime dye'], ['yellow', 'Dandelion yellow'],
+  ['light_blue', 'Light blue dye'], ['magenta', 'Magenta dye'], ['orange', 'Orange dye'], ['white', 'Bone meal'],
+].map(([texture, label]) => ({ texture, label }));
+export const isFlower = (b) => b === YELLOW_FLOWER || b === RED_FLOWER;
 // BlockColored (aka) metadata 0-15 in wool order: `texture` is the
 // wool_colored_<name> suffix (ItemDye.field_150921_b[~meta & 15]) and `label`
 // the item name ("tile.cloth.<name>.name"). The id 19 stack's damage is the metadata.
@@ -84,7 +110,7 @@ function noise(x, z, seed) {
   return a * (1 - fz) + b * fz;
 }
 export const isCrop=b=>b>=31&&b<=38;
-export const isPlant=b=>isCrop(b)||b===39;
+export const isPlant=b=>isCrop(b)||b===39||isFlower(b);
 export const blockHeight=b=>b===29||b===30?15/16:b===41?.875:1;
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
@@ -100,7 +126,7 @@ export function blockBounds(world,x,y,z){
   return[c(-1,0)?0:1/16,0,c(0,-1)?0:1/16,c(1,0)?1:15/16,.875,c(0,1)?1:15/16];
 }
 export class World {
-  constructor(seed = "Overworld", biome = "meadow", generationVersion = 3) {
+  constructor(seed = "Overworld", biome = "meadow", generationVersion = 4) {
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
@@ -236,6 +262,8 @@ export class World {
             }
       }
     if(this.generationVersion>=3)for(let x=2;x<SIZE-2;x++)for(let z=2;z<SIZE-2;z++){const y=heights[x*SIZE+z]+1;if(this.get(x,y-1,z)===1&&this.get(x,y,z)===0&&hash(x,z,s+603)<.095)this.set(x,y,z,39,false);}
+    // Version 4 adds BiomeDecorator's flowers; older saves keep their terrain.
+    if(this.generationVersion>=4)decorateFlowers(this,{yellow:YELLOW_FLOWER,red:RED_FLOWER,heights,biome:this.biome});
 
   }
   spawn() {

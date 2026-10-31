@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { firstPersonMatrix } from "./first-person-pose.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { ITEMS } from "./survival.js";
+import { DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER } from "./world.js";
 import { blockTile,tileRect } from "./block-textures.js";
 import { entityMaterial, ITEM_LIGHTS } from "./light-material.js";
 const loader = new THREE.TextureLoader(),
@@ -37,8 +38,12 @@ export function skinBox(w, h, d, u, v, tw, th) {
   });
   return g;
 }
-export function itemTexture(id) {
+export function itemTexture(id, damage = 0) {
   const item = ITEMS[id];
+  // Flowers are flat sprites cut from the terrain atlas textures; dyes are one item per damage.
+  if(id===YELLOW_FLOWER)return "/media/1.7.10/blocks/flower_dandelion.png";
+  if(id===RED_FLOWER)return "/media/1.7.10/blocks/flower_"+RED_FLOWERS[Math.max(0,Math.min(RED_FLOWERS.length-1,damage|0))].texture+".png";
+  if(id===DYE)return "/media/1.7.10/items/dye_powder_"+DYES[Math.max(0,Math.min(15,damage|0))].texture+".png";
   if(id===20||id===39)return "/media/1.7.10/blocks/"+(id===20?"torch_on":"tallgrass")+".png";
   if(id===125)return "/media/1.7.10/items/shears.png";
   if(item?.texture)return "/media/1.7.10/items/"+item.texture+".png";
@@ -68,7 +73,7 @@ export function itemTexture(id) {
     306: "brick",
     307: "clay_ball",
     308: "coal",
-    309:"seeds_wheat",310:"dye_powder_white",311:"bone",
+    309:"seeds_wheat",311:"bone",
   };
   return names[id] ? "/media/1.7.10/items/" + names[id] + ".png" : null;
 }
@@ -118,7 +123,7 @@ export class FirstPerson {
     this.arm.visible = !id;
     if (!id || !data) return;
     let mesh;
-    const url = itemTexture(id);
+    const url = itemTexture(id, meta);
     if (url) {
       mesh = new THREE.Mesh(
         spriteGeometry(),

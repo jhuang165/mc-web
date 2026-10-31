@@ -268,7 +268,7 @@ const FULL3D_KINDS = new Set(["pickaxe", "axe", "shovel", "hoe", "sword"]);
 // Item.isFull3D: tools, hoes and swords, plus the stick and bone (setFull3D).
 export const isFull3D = (id) => FULL3D_KINDS.has(ITEMS[id]?.kind) || id === 300 || id === 311;
 // "block" draws the cube, "tool" a full-3D sprite and "flat" any other sprite.
-export const heldKind = (id) => (itemTexture(id) ? (isFull3D(id) ? "tool" : "flat") : "block");
+export const heldKind = (id, damage = 0) => (itemTexture(id, damage) ? (isFull3D(id) ? "tool" : "flat") : "block");
 
 // The matrix from the right arm's frame (after postRender) to the item.
 export function heldItemMatrix(kind) {
@@ -371,6 +371,7 @@ export class PlayerRenderer {
     this.armorNodes = [];
     this.armorMaterials = [];
     this.heldId = 0;
+    this.heldKey = "0:0";
     this.held = null;
     this.heldMaterial = null;
     this.heldGeometry = null;
@@ -411,8 +412,10 @@ export class PlayerRenderer {
       if (layer.overlay) make(layer.overlay, null, 1);
     });
   }
-  syncHeld(id) {
-    if (id === this.heldId) return;
+  syncHeld(id, damage = 0) {
+    const key = id + ":" + damage;
+    if (key === this.heldKey) return;
+    this.heldKey = key;
     this.heldId = id;
     if (this.held) {
       this.held.parent?.remove(this.held);
@@ -421,7 +424,7 @@ export class PlayerRenderer {
       this.held = this.heldMaterial = this.heldGeometry = null;
     }
     if (!id || !ITEMS[id]) return;
-    const kind = heldKind(id), url = itemTexture(id);
+    const kind = heldKind(id, damage), url = itemTexture(id, damage);
     let mesh;
     if (url) {
       this.heldGeometry = spriteGeometry();
@@ -449,14 +452,14 @@ export class PlayerRenderer {
   }
   // `body` is a PlayerBody; `swing` is the swing progress (0 at rest); `armor`
   // is inventory.armor (boots first); `held` the held item id.
-  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, hurt = false, sneak = false } = {}) {
+  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, hurt = false, sneak = false } = {}) {
     this.root.visible = visible;
     if (!visible) return;
     const pose = mobPose(body, partial);
     this.root.position.set(pose.x, pose.y, pose.z);
     this.root.rotation.y = (180 - pose.bodyYaw) * RAD;
     this.syncArmor([3, 2, 1, 0].map((slot) => armor[slot]?.id ?? 0));
-    this.syncHeld(held);
+    this.syncHeld(held, heldDamage);
     const parts = bipedPose({
       limbSwing: pose.limbSwing, limbSwingAmount: pose.limbSwingAmount, age: pose.age,
       headYaw: pose.headYaw, headPitch: pose.headPitch, swing, sneak, heldRight: held ? 1 : 0,

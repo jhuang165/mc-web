@@ -1,5 +1,5 @@
 import {miningState,blockWear} from "./mining.js";
-import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS } from "./world.js";
+import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER } from "./world.js";
 import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,ChestContainer,makeStack} from "./inventory.js";
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
 
@@ -8,6 +8,11 @@ export const ITEMS = Object.fromEntries(
 );
 // ItemCloth: the stack's damage value is the wool colour and names the item.
 ITEMS[WOOL].variants = WOOL_COLORS.map((c) => c.label + " wool");
+// BlockFlower: the red flower's metadata names the species. ItemDye (id 351):
+// damage 0-15 names the dye; damage 15 replaces the old internal bone meal.
+ITEMS[RED_FLOWER].variants = RED_FLOWERS.map((f) => f.label);
+ITEMS[YELLOW_FLOWER].name = "Dandelion";
+ITEMS[DYE] = { id: DYE, name: "Dye", variants: DYES.map((d) => d.label), stack: 64, color: "#ede9d8", glyph: "●" };
 const toolMaterials = [
   ["Wooden", 0, 59, 2, 7],
   ["Stone", 1, 131, 4, 12],
@@ -55,7 +60,7 @@ for(const [tier,name,durability,ingredient]of[[0,'Wooden',59,7],[1,'Stone',131,1
 ITEMS[125]={id:125,name:"Shears",kind:"shears",durability:238,speed:1,stack:1,color:"#d8d8d8"};
 for (const item of [
   {id:312,name:"Snowball",color:"#fff",glyph:"●",stack:16},{id:315,name:"Leather",color:"#a06540",glyph:"▰",texture:"leather"},{id:313,name:"Flint",color:"#555",glyph:"◆"},{id:314,name:"Book",color:"#8d4f39",glyph:"▰"},
-  {id:309,name:"Wheat seeds",color:"#8eab54",glyph:"·"},{id:310,name:"Bone meal",color:"#ede9d8",glyph:"●"},{id:311,name:"Bone",color:"#dedac6",glyph:"╱"},
+  {id:309,name:"Wheat seeds",color:"#8eab54",glyph:"·"},{id:311,name:"Bone",color:"#dedac6",glyph:"╱"},
   {
     id: 204,
     name: "Raw beef",
@@ -175,6 +180,7 @@ export const MATERIALS = {
 };
 
 for(let id=29;id<=39;id++)MATERIALS[id]={hardness:id<=30?.6:0,kind:id<=30?'shovel':undefined,drop:id<=30?2:0};
+MATERIALS[YELLOW_FLOWER]=MATERIALS[RED_FLOWER]={hardness:0};
 export const RECIPES = [];
 function recipe(id, name, rows, keys, output, count = 1) {
   const width = Math.max(...rows.map((r) => r.length));
@@ -241,7 +247,7 @@ for (let kind = 0; kind < 4; kind++) {
   );
 }
 for(let id=120;id<=124;id++)recipe(String(id),ITEMS[id].name,['XX',' S',' S'],{X:ITEMS[id].ingredient,S:300},id);
-recipe('bonemeal','Bone meal',['B'],{B:311},310,3);
+
 for (let id = 400; id < 420; id++)
   if (ITEMS[id].ingredient)
     recipe(String(id), ITEMS[id].name, [["XXX", "X X"], ["X X", "XXX", "XXX"], ["XXX", "X X", "X X"], ["X X", "X X"]][ITEMS[id].armor], { X: ITEMS[id].ingredient }, id);
@@ -258,6 +264,40 @@ for (const [block, ingot] of [
     block,
   );
   recipe("unpack-" + block, ITEMS[ingot].name, ["B"], { B: block }, ingot, 9);
+}
+// ShapelessRecipes (afi): the listed ingredients, as {id, damage} (damage null
+// matches any), must match the grid's non-empty stacks one to one in any order.
+// RecipesDyes order and counts, from public/research/dyes-reference.json.
+export const SHAPELESS = [];
+function shapeless(output, count, damage, ...ingredients) {
+  SHAPELESS.push({ output, count, damage, ingredients: ingredients.map((i) => (Array.isArray(i) ? { id: i[0], damage: i[1] } : { id: i, damage: null })) });
+}
+const dye = (n) => [DYE, n];
+for (let i = 0; i < 16; i++) shapeless(WOOL, 1, 15 - i, dye(i), [WOOL, 0]);
+shapeless(DYE, 4, 13, dye(4), dye(1), dye(1), dye(15));
+shapeless(DYE, 3, 7, dye(0), dye(15), dye(15));
+shapeless(DYE, 3, 13, dye(4), dye(1), dye(9));
+for (const [out, n, a, b] of [[9, 2, 1, 15], [14, 2, 1, 11], [10, 2, 2, 15], [8, 2, 0, 15], [7, 2, 8, 15], [12, 2, 4, 15], [6, 2, 4, 2], [5, 2, 4, 1], [13, 2, 5, 9]])
+  shapeless(DYE, n, out, dye(a), dye(b));
+// ItemStack -> dye: dandelion, red flowers (metadata -> dye) and bone.
+const FLOWER_DYES = [1, 12, 13, 7, 1, 14, 7, 9, 7];
+shapeless(DYE, 1, 11, YELLOW_FLOWER);
+RED_FLOWERS.forEach((_, m) => shapeless(DYE, 1, FLOWER_DYES[m], [RED_FLOWER, m]));
+shapeless(DYE, 3, 15, 311);
+export function matchShapeless(stacks) {
+  const filled = stacks.filter(Boolean);
+  for (const r of SHAPELESS) {
+    if (r.ingredients.length !== filled.length) continue;
+    const left = [...r.ingredients];
+    let ok = true;
+    for (const s of filled) {
+      const i = left.findIndex((w) => w.id === s.id && (w.damage === null || w.damage === s.damage));
+      if (i < 0) { ok = false; break; }
+      left.splice(i, 1);
+    }
+    if (ok) return r;
+  }
+  return null;
 }
 export function matchRecipe(grid, size) {
   for (const r of RECIPES) {
@@ -293,7 +333,9 @@ export function craftingResult(cells, size) {
   if (filled.length === 2 && a.id === b.id && a.count === 1 && b.count === 1 && max)
     return makeStack(a.id, 1, Math.max(0, max - (max - a.damage + max - b.damage + Math.floor((max * 5) / 100))));
   const r = matchRecipe(cells.map((c) => c?.id || 0), size);
-  return r ? makeStack(r.output, r.count) : null;
+  if (r) return makeStack(r.output, r.count);
+  const sl = matchShapeless(cells);
+  return sl ? makeStack(sl.output, sl.count, sl.damage) : null;
 }
 // FurnaceRecipes and TileEntityFurnace.getItemBurnTime for this build's items,
 // checked against the original classes in public/research/inventory-reference.json.
