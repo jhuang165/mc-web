@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { WorldEffects } from "./effects.js";
 import { SIZE, HEIGHT, SEA, BLOCKS, hash, blockHeight, isPlant } from "./world.js";
-import {createBlockAtlas,blockTile,tileRect} from "./block-textures.js";
+import {createBlockAtlas,blockTile,tileRect,ATLAS_ROWS} from "./block-textures.js";
 export {blockTile} from "./block-textures.js";
 const FACES = [
   {
@@ -204,7 +204,7 @@ export class VoxelScene {
       for (let z = cz; z < cz + 16; z++)
         for (let y = 0; y < HEIGHT; y++) {
           const b = w.get(x, y, z);
-          if (!b || b === 20) continue;
+          if (!b || b === 20 || b === 41) continue;
           if(isPlant(b)){
             const rect=tileRect(blockTile(b,0));
             for(const corners of [[[.12,0,.12],[.88,0,.88],[.88,1,.88],[.12,1,.12]],[[.88,0,.12],[.12,0,.88],[.12,1,.88],[.88,1,.12]]]){for(const v of corners){p.push(x+v[0],y+v[1],z+v[2]);n.push(0,1,0);color.push(.95,.95,.95);}uv.push(rect.u0,rect.v0,rect.u1,rect.v0,rect.u1,rect.v1,rect.u0,rect.v1);idx.push(vi,vi+1,vi+2,vi,vi+2,vi+3,vi,vi+2,vi+1,vi,vi+3,vi+2);vi+=4;}continue;
@@ -255,7 +255,7 @@ export class VoxelScene {
         for (let y = 0; y < HEIGHT; y++)
           if (w.get(x, y, z) === 20) {
             const geometry=new THREE.BoxGeometry(.125,.625,.125),attr=geometry.attributes.uv,t=blockTile(20,0);const tx=t%16*16,ty=Math.floor(t/16)*16;
-            for(let f=0;f<6;f++){const x0=(tx+7)/256,x1=(tx+9)/256,y0=1-(ty+16)/48,y1=1-(ty+6)/48;attr.setXY(f*4,x0,y1);attr.setXY(f*4+1,x1,y1);attr.setXY(f*4+2,x0,y0);attr.setXY(f*4+3,x1,y0);}
+            for(let f=0;f<6;f++){const x0=(tx+7)/256,x1=(tx+9)/256,y0=1-(ty+16)/(ATLAS_ROWS*16),y1=1-(ty+6)/(ATLAS_ROWS*16);attr.setXY(f*4,x0,y1);attr.setXY(f*4+1,x1,y1);attr.setXY(f*4+2,x0,y0);attr.setXY(f*4+3,x1,y0);}
             const torch=new THREE.Mesh(geometry,this.torchMaterial);torch.position.set(x+.5,y+.3125,z+.5);group.add(torch);
             group.userData.torches.push(
               new THREE.Vector3(x + 0.5, y + 0.65, z + 0.5),

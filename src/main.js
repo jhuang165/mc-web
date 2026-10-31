@@ -23,6 +23,8 @@ import {ExperienceRenderer} from "./experience-renderer.js";
 import {Farming,cropDrops} from "./farming.js";
 import { EntityWorld } from "./entities.js";
 import { MobRenderer } from "./mob-renderer.js";
+import { ChestRenderer } from "./chest-renderer.js";
+import { CHEST, canPlaceChest, placeChest, settleFacing, chestPair, tickLid } from "./chest.js";
 import { Survival, ITEMS, MATERIALS } from "./survival.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 
@@ -92,6 +94,7 @@ let sounds,
   firstPerson,
   mobs,
   mobRenderer,
+  chestRenderer,
   aimedEntity = null,
   eating = null;
 const animation = new PlayerAnimation();
@@ -326,13 +329,13 @@ function controls() {
       .map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`)
       .join(
         "",
-      )}</div><p class="form-note">Inventories use the 1.7.10 slot rules. Left-click picks up or places a stack; right-click picks up half or places one. Drag a held stack across slots to share it evenly (left) or one each (right). Shift-click moves a stack between sections; double-click gathers matching items. Over a slot, 1 – 9 swaps with the hotbar and Q / Ctrl + Q drops. Click outside the window to throw the held stack. Right-click a crafting table for the 3 × 3 grid or a furnace to smelt; two damaged tools of one kind repair each other. F3 + H shows durability in tooltips.</p><p class="form-note">To farm: break tall grass for seeds, right-click exposed grass/dirt with a hoe, then plant seeds on the tilled soil. Hold wheat to lead cows; feed two adults to breed a calf. Water within four blocks keeps soil hydrated. Bone meal advances growth; harvest mature golden wheat and craft three wheat into bread.</p><p class="form-note">If mouse capture is unavailable, drag to look and click once to mine the targeted block. Touch controls include a Fly button in Creative.</p>`,
+      )}</div><p class="form-note">Inventories use the 1.7.10 slot rules. Left-click picks up or places a stack; right-click picks up half or places one. Drag a held stack across slots to share it evenly (left) or one each (right). Shift-click moves a stack between sections; double-click gathers matching items. Over a slot, 1 – 9 swaps with the hotbar and Q / Ctrl + Q drops. Click outside the window to throw the held stack. Right-click a crafting table for the 3 × 3 grid, a furnace to smelt or a chest to store items (two side by side form a large chest; a solid block on top keeps the lid shut); two damaged tools of one kind repair each other. F3 + H shows durability in tooltips.</p><p class="form-note">To farm: break tall grass for seeds, right-click exposed grass/dirt with a hoe, then plant seeds on the tilled soil. Hold wheat to lead cows; feed two adults to breed a calf. Water within four blocks keeps soil hydrated. Bone meal advances growth; harvest mature golden wheat and craft three wheat into bread.</p><p class="form-note">If mouse capture is unavailable, drag to look and click once to mine the targeted block. Touch controls include a Fly button in Creative.</p>`,
   );
 }
 function notes() {
   modal(
     "Rebuilding 1.7.10, system by system.",
-    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. The Java 36-slot inventory with cursor, drag-splitting, shift- and double-click rules; shaped crafting, a crafting table and a fuel-driven furnace on real slots; wood, stone, iron, diamond and gold tools with per-item durability and repair; leather, chain, iron, gold and diamond armor. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Cows follow wheat and breed calves. Caves, ores, torches, and a day/night lighting cycle. Wheat farming with five hoe tiers, seeds, moisture, eight growth stages, bone meal, harvesting and bread crafting.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, armor rendering, enchantments, chests, redstone, dimensions, structures, weather, Java saves, and multiplayer. The renderer, terrain, creative inventory, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
+    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. The Java 36-slot inventory with cursor, drag-splitting, shift- and double-click rules; shaped crafting, a crafting table, a fuel-driven furnace and single/large chests on real slots; wood, stone, iron, diamond and gold tools with per-item durability and repair; leather, chain, iron, gold and diamond armor. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water and crack frames. Pigs, cows, night-time zombies, basic melee combat and food drops. Cows follow wheat and breed calves. Caves, ores, torches, and a day/night lighting cycle. Wheat farming with five hoe tiers, seeds, moisture, eight growth stages, bone meal, harvesting and bread crafting.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Original world generation and biomes, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, armor rendering, enchantments, hoppers and other storage, redstone, dimensions, structures, weather, Java saves, and multiplayer. The renderer, terrain, creative inventory, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
     "notes-modal",
   );
 }
@@ -489,6 +492,9 @@ function launch(record) {
     stepDistance = 0;
     wasInWater = false;
     survival = new Survival(legacyPlayer(record), record.mode || "creative");
+    // Chest blocks saved without tile data get the facing onBlockAdded gives them.
+    for (const [key, b] of world.edits) if (b === CHEST && !survival.chests[key]) settleFacing(world, survival.chests, ...key.split(",").map(Number));
+    chestRenderer.sync(world, survival.chests);
     const p = record.position,
       valid =
         p &&
@@ -641,7 +647,8 @@ function renderCreative() {
   );
   $("#inventory-back").onclick = resume;
 }
-const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace" };
+const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace" },
+  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal" };
 function openContainer(container, kind, key = null) {
   screen = "inventory";
   mining = null;
@@ -649,12 +656,15 @@ function openContainer(container, kind, key = null) {
   const decorations =
     kind === "furnace"
       ? '<i class="furnace-flame" id="furnace-flame"></i><i class="furnace-arrow" id="furnace-arrow"></i>'
-      : `<span class="native-bag-label">Inventory</span><span class="native-crafting-label">Crafting</span>${kind === "inventory" ? '<div class="native-player" aria-hidden="true"><i class="player-head"></i><i class="player-body"></i><i class="player-arm left"></i><i class="player-arm right"></i><i class="player-leg left"></i><i class="player-leg right"></i></div>' : ""}`;
+      : kind === "chest"
+        ? '<i class="chest-bottom" aria-hidden="true"></i><span class="chest-bag-label">Inventory</span>'
+        : `<span class="native-bag-label">Inventory</span><span class="native-crafting-label">Crafting</span>${kind === "inventory" ? '<div class="native-player" aria-hidden="true"><i class="player-head"></i><i class="player-body"></i><i class="player-arm left"></i><i class="player-arm right"></i><i class="player-leg left"></i><i class="player-leg right"></i></div>' : ""}`;
   modal(
-    CONTAINER_TITLES[kind],
+    container.title ?? CONTAINER_TITLES[kind],
     `<div class="container-slots">${container.slots.map((slot) => `<button class="container-slot" data-container-slot="${slot.number}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>${decorations}`,
-    kind === "furnace" ? "furnace-modal container-screen" : "inventory-modal native-inventory container-screen" + (kind === "workbench" ? " native-workbench" : ""),
+    CONTAINER_CLASSES[kind] ? `${CONTAINER_CLASSES[kind]} container-screen` : "inventory-modal native-inventory container-screen" + (kind === "workbench" ? " native-workbench" : ""),
   );
+  if (kind === "chest") $("#modal .modal").style.setProperty("--rows", container.rows);
   $("#modal").insertAdjacentHTML("beforeend", '<div class="cursor-stack" id="cursor-stack" aria-hidden="true"></div><div class="slot-tooltip hidden" id="slot-tooltip" role="tooltip"></div>');
   document.activeElement?.blur();
   containerView = { container, gui: new ContainerScreen(container), kind, key, hovered: null, x: innerWidth / 2, y: innerHeight / 2, shown: [] };
@@ -811,6 +821,23 @@ function smelted(stack, amount) {
   }
   xpOrbs.spawn(n, position);
 }
+// TileEntityChest.updateEntity for every chest with a moving or open lid.
+function tickChests() {
+  for (const [key, chest] of Object.entries(survival.chests)) {
+    const [x, y, z] = key.split(",").map(Number);
+    if (world.get(x, y, z) !== CHEST) {
+      delete survival.chests[key];
+      continue;
+    }
+    if (!chest.users && !chest.lid && !chest.prevLid) continue;
+    const pair = chestPair(world, x, y, z),
+      sound = tickLid(chest, pair.primary);
+    if (sound) sounds.play(sound, { volume: 0.5, pitch: Math.random() * 0.1 + 0.9, position: { x: x + (pair.east ? 1 : 0.5), y: y + 0.5, z: z + (pair.south ? 1 : 0.5) } });
+  }
+  chestRenderer.sync(world, survival.chests);
+  // Container.canInteractWith: the screen closes once its chest is gone.
+  if (containerView?.kind === "chest" && containerView.container.keys.some((k) => world.get(...k.split(",").map(Number)) !== CHEST)) resume();
+}
 function updateFurnace() {
   if (containerView) refreshContainer();
 }
@@ -842,7 +869,7 @@ function die() {
   const deathButtons=[$('#respawn'),$('#death-home')];for(const button of deathButtons)button.disabled=true;setTimeout(()=>{if(screen==='dead')for(const button of deathButtons)button.disabled=false;},1000);
   $("#respawn").onclick = () => {
     const time = survival.time;
-    survival = new Survival({ time, slots: [], furnaces: survival.furnaces }, "survival");
+    survival = new Survival({ time, slots: [], furnaces: survival.furnaces, chests: survival.chests }, "survival");
     experience=new Experience();
     position.copy(new THREE.Vector3(...Object.values(world.spawn())));
     previous.copy(position);
@@ -989,6 +1016,11 @@ function edit(place = false) {
       useFurnace(target.block.join(","));
       return;
     }
+    if (block === CHEST) {
+      const chest = survival.openChest(world, ...target.block);
+      if (chest) openContainer(chest, "chest", target.block.join(","));
+      return;
+    }
     if (!survival.creative && item?.food) {
       beginEating(id);
       return;
@@ -1003,6 +1035,7 @@ function edit(place = false) {
       toast("Gather this material first.");
       return;
     }
+    if (id === CHEST && !canPlaceChest(world, ...p)) return;
     const old = world.get(...p);
     world.set(...p, id, false);
     if (collides(world, ...position.toArray())) {
@@ -1011,6 +1044,7 @@ function edit(place = false) {
       return;
     }
     world.set(...p, id);
+    if (id === CHEST) placeChest(world, survival.chests, ...p, yaw);
     farming.observe(...p);
     if (!survival.creative) survival.take(id);
     scene.updateBlock(p[0], p[2]);
@@ -1051,7 +1085,8 @@ function breakBlock(p, creative = false) {
   if(shearing&&(block===5||block===39)){drop=block;count=1;}
   if(block===25&&Math.random()<.1){drop=313;count=1;}
   const crops=shearing&&block===39?null:cropDrops(block);const drops=crops??(drop?[{id:drop,count}]:[]);
-  const f = survival.furnaces[key];
+  const f = survival.furnaces[key],
+    chest = survival.chests[key];
   if (!world.set(...p, 0)) return false;
   farming.observe(...p);
   const at = { x: p[0] + 0.5, y: p[1] + 0.1, z: p[2] + 0.5 };
@@ -1059,6 +1094,12 @@ function breakBlock(p, creative = false) {
   if (f) {
     give(f.items.filter(Boolean), at);
     delete survival.furnaces[key];
+  }
+  // BlockChest.breakBlock spills the contents on the ground in any mode.
+  if (chest) {
+    const stacks = chest.items.filter(Boolean).map(copyStack);
+    if (stacks.length) droppedInventories.push({ position: at, stacks, expires: survival.time + 6000, delay: 10 });
+    delete survival.chests[key];
   }
   if (!creative) {
     give(drops.map((d) => makeStack(d.id, d.count)), at);
@@ -1242,6 +1283,7 @@ function movementTick() {
   tickSurvival(inWater, oldPosition);
   applyFarmUpdates(farming.tick(survival.time,scene.daylight));
   scene.setFurnaces(survival.furnaces);
+  tickChests();
   mobs.tick(position, survival, heldId());
   const oldLevel=experience.level;if(survival.health>0&&!survival.creative&&xpOrbs.tick(world,position,experience)){sounds.play(experience.level>oldLevel&&experience.level%5===0?"random.levelup":"random.orb",{volume:.4});renderVitals();}
   handleEntityEvents();
@@ -1633,6 +1675,7 @@ function animate(now) {
     scene.effects.crack(mining?.block, mining?.progress);
   } else if (screen === "home") scene.preview(elapsed);
   if (mobs) mobRenderer.update(mobs.entities,dt);
+  chestRenderer?.update(screen === "playing" || screen === "inventory" ? accumulator / PHYSICS.tick : 1);
   if(xpRenderer)xpRenderer.update(xpOrbs.orbs,elapsed);
   scene.render(elapsed, dt);
   if (firstPerson && animate.pose)
@@ -1653,6 +1696,7 @@ async function boot(){try {
   );
   firstPerson = new FirstPerson(scene.renderer, scene.material.map);
   mobRenderer = new MobRenderer(scene.scene);
+  chestRenderer = new ChestRenderer(scene.scene);
   document.addEventListener("pointerdown", () => sounds.unlock(), {
     once: true,
   });

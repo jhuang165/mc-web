@@ -1,6 +1,7 @@
 import {miningState,blockWear} from "./mining.js";
 import { BLOCKS, HOTBAR } from "./world.js";
-import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,makeStack} from "./inventory.js";
+import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,ChestContainer,makeStack} from "./inventory.js";
+import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
 
 export const ITEMS = Object.fromEntries(
   BLOCKS.map((b, id) => [id, { ...b, id, block: id > 0, stack: 64 }]),
@@ -168,6 +169,7 @@ export const MATERIALS = {
   27: { hardness: 3, kind: "pickaxe", tier: 2 },
   28: { hardness: 5, kind: "pickaxe", tier: 2 },
   40: { hardness: 1.25, kind: "pickaxe", tier: 0 },
+  41: { hardness: 2.5, kind: "axe" },
 };
 
 for(let id=29;id<=39;id++)MATERIALS[id]={hardness:id<=30?.6:0,kind:id<=30?'shovel':undefined,drop:id<=30?2:0};
@@ -193,6 +195,7 @@ recipe("planks", "Oak planks", ["L"], { L: 4 }, 7, 4);
 recipe("sticks", "Sticks", ["P", "P"], { P: 7 }, 300, 4);
 recipe("table", "Crafting table", ["PP", "PP"], { P: 7 }, 13);
 recipe("furnace", "Furnace", ["CCC", "C C", "CCC"], { C: 12 }, 14);
+recipe("chest", "Chest", ["PPP", "P P", "PPP"], { P: 7 }, 41);
 recipe("torch", "Torches", ["C", "S"], { C: 301, S: 300 }, 20, 4);
 recipe(
   "charcoal-torch",
@@ -310,6 +313,7 @@ export const FUELS = {
   7: 300,
   13: 300,
   21: 300,
+  41: 300,
   100: 200,
   104: 200,
   108: 200,
@@ -372,6 +376,14 @@ export class Survival {
         burnTotal: Math.floor(clamp(f.burnTotal, 0, 1600, 0)),
         cook: Math.floor(clamp(f.cook, 0, 199, 0)),
       };
+    }
+    // TileEntityChest contents and facing metadata; lid state is not saved.
+    this.chests = {};
+    for (const [key, c] of Object.entries(data.chests || {})) {
+      if (!/^\d+,\d+,\d+$/.test(key) || !c || typeof c !== "object") continue;
+      const chest = newChest(FACING[c.facing] ? c.facing : 3);
+      if (Array.isArray(c.items)) c.items.slice(0, CHEST_SLOTS).forEach((s, i) => (chest.items[i] = this.inventory.read(s)));
+      this.chests[key] = chest;
     }
     this.hurtTicks = 0;
     this.lastDamage = "";
@@ -456,6 +468,11 @@ export class Survival {
   openFurnace(key, onSmelt) {
     return new FurnaceContainer(this.inventory, this.furnace(key).items, { smelts: (s) => !!smeltingResult(s), burnTime, onSmelt });
   }
+  // BlockChest.onBlockActivated: null when the lid is blocked.
+  openChest(world, x, y, z) {
+    const found = openChest(world, this.chests, x, y, z);
+    return found && Object.assign(new ChestContainer(this.inventory, found.inventory), { title: found.title, keys: found.keys });
+  }
   mining(block, toolId, underwater = false, onGround = true) {
     return miningState(block,MATERIALS[block],this.count(toolId)?ITEMS[toolId]:null,{underwater,onGround});
   }
@@ -523,7 +540,7 @@ export class Survival {
     }
   }
   serialize() {
-    const { health, food, saturation, exhaustion, timer, air, time, furnaces } = this;
+    const { health, food, saturation, exhaustion, timer, air, time, furnaces, chests } = this;
     return {
       health,
       food,
@@ -536,6 +553,7 @@ export class Survival {
       armor: this.inventory.serializeArmor(),
       current: this.inventory.current,
       furnaces: structuredClone(furnaces),
+      chests: Object.fromEntries(Object.entries(chests).map(([key, c]) => [key, { facing: c.facing, items: c.items.map((s) => (s ? { ...s } : null)) }])),
     };
   }
 }

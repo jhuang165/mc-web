@@ -6,7 +6,8 @@ import java.util.List;
 
 // Runs scripted clicks through the unchanged 1.7.10 InventoryPlayer (yx),
 // Container (zs), ContainerPlayer (aap), ContainerWorkbench (aaf),
-// ContainerFurnace (aaj), CraftingManager (afe) and ItemStack (add) classes.
+// ContainerFurnace (aaj), ContainerChest (aad), InventoryLargeChest (ra),
+// TileEntityChest (aow), CraftingManager (afe) and ItemStack (add) classes.
 // Only the player and world are test doubles: they are allocated without
 // constructors and record dropped/broken stacks instead of spawning entities.
 public class InventoryProbe {
@@ -29,6 +30,13 @@ public class InventoryProbe {
     protected apu j() { return null; }
     protected int p() { return 0; }
     public sa a(int id) { return null; }
+  }
+
+  // Opening and closing a world-less TileEntityChest would post block events;
+  // only that user count is skipped, the slot storage is unchanged.
+  public static class ProbeChest extends aow {
+    public void f() {}
+    public void l_() {}
   }
 
   static sun.misc.Unsafe unsafe() throws Exception {
@@ -80,6 +88,8 @@ public class InventoryProbe {
         case "remote" -> world.E = true;
         case "workbench" -> { container = new aaf(inv, world, 0, 0, 0); player.bo = container; }
         case "furnace" -> { container = new aaj(inv, new apg()); player.bo = container; }
+        case "chest" -> { container = new aad(inv, new ProbeChest()); player.bo = container; }
+        case "largechest" -> { container = new aad(inv, new ra("container.chestDouble", new ProbeChest(), new ProbeChest())); player.bo = container; }
         case "inv" -> inv.a[Integer.parseInt(p[1])] = stack(p, 2);
         case "fill" -> { for (int i = 0; i < inv.a.length; i++) if (inv.a[i] == null) inv.a[i] = stack(p, 1); }
         case "burn" -> results.add(String.valueOf(apg.a(stack(p, 1))));

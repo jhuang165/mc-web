@@ -9,15 +9,15 @@ The target is the complete Java 1.7.10 feature set. **This build does not yet pr
 | Movement | 20 Hz controller, jumping, sprinting, gravity, collision, swimming, Creative flight | Simplified collision, stepping, water behavior, float arithmetic and camera effects |
 | Survival health | 20 health (float, as in Java), fall damage, drowning, death, respawn; armor reduces mob damage | Combat, fire/lava, status effects, full damage rules and difficulty selection |
 | Hunger | Food, saturation, exhaustion, natural regeneration, Normal-difficulty starvation | Seven isolated original-bytecode cases verified; other player/world interactions remain partial |
-| Inventory | Java 36-slot `InventoryPlayer`, four armor slots and a cursor; per-stack counts and damage; `Container.slotClick` modes 0–6 and `GuiContainer` drags, double-clicks, hotbar/drop keys; 53 cases match the original classes ([inventory](inventory.md)) | Creative tab GUI, item entities for thrown stacks, chests and other storage containers |
+| Inventory | Java 36-slot `InventoryPlayer`, four armor slots and a cursor; per-stack counts and damage; `Container.slotClick` modes 0–6 and `GuiContainer` drags, double-clicks, hotbar/drop keys; single and large chests (`ContainerChest`, `InventoryLargeChest`); 61 cases match the original classes ([inventory](inventory.md)) | Creative tab GUI, item entities for thrown stacks, trapped/ender chests, hoppers, dispensers and other storage |
 | Mining | Java-float break progress, recovered effective tools/harvest tiers, water/air penalties, instant breaks and correct wear; 2,640 original-tool cases verified | Not all block/tool combinations, enchantments, animations or item entities |
-| Crafting | 2 × 2 and workstation 3 × 3 slot grids; shaped recipe offsets and mirroring; result pickup, shift-crafting and tool repair as in `SlotCrafting`/`CraftingManager`; 59 recipes | Complete vanilla recipe registry and the remaining shapeless/special recipes |
+| Crafting | 2 × 2 and workstation 3 × 3 slot grids; shaped recipe offsets and mirroring; result pickup, shift-crafting and tool repair as in `SlotCrafting`/`CraftingManager`; 60 recipes | Complete vanilla recipe registry and the remaining shapeless/special recipes |
 | Tools | Wooden, stone, iron, diamond and gold pickaxes, axes, shovels, swords and hoes; shears; per-stack durability that breaks past the maximum; repair by combining; durability bars and F3 + H durability tooltips | Full combat mechanics, anvils and enchantments |
 | Furnace | Original slot container, any item by hand in input/fuel, 200-tick smelting, original flame/arrow sprites, persistent progress; fuel times and smelting results checked against the original classes for every mapped item | Hoppers; recipes for unimplemented items |
 | Death drops | Death and thrown stacks become recoverable piles with 6,000-tick lifetime and pickup delay; damage survives save/reload | Simplified pile rendering, no individual item entity physics |
 | World | Custom caves and coal/iron/gold/diamond ores; fixed 128 × 128 × 64 terrain | Original noise generator, infinite chunks, 256-block build height, Java seed compatibility |
 | Lighting | 24,000-tick day, sun/moon, dusk/night, nearby torch lights | Native 0–15 block/skylight propagation, weather and renderer parity |
-| Blocks | 41 internal block states including air, water, bedrock, dry/wet farmland, eight wheat stages, tall grass and hardened clay | Original registry contains 171 base registrations, plus metadata variants and behaviors |
+| Blocks | 42 internal block states including air, water, bedrock, dry/wet farmland, eight wheat stages, tall grass, hardened clay and chests | Original registry contains 171 base registrations, plus metadata variants and behaviors |
 | Textures / HUD | Original block face textures, biome colormaps, item sprites, hearts, hunger, bubbles, crosshair, hotbar, sun and eight moon phases; entire 941-PNG texture tree preserved | Many imported textures belong to features still unimplemented; renderer and menus remain adapted |
 | Farming | Five hoe tiers, tilled soil, moisture, water radius four, wheat planting/eight growth stages, bone meal, wheat/seed drops and bread | Approximate light and random-tick sampling; no trampling, full block-support updates, other crops or remaining animal breeding |
 | Animation / audio | First-person hand/item animation, view bob, eating, cracks, debris, animated water; 135 original sound clips | Not all original animations/effects; adapted transforms, simplified particles and stereo positioning |
@@ -34,7 +34,7 @@ The target is the complete Java 1.7.10 feature set. **This build does not yet pr
 - Full mob roster, original spawning/AI/pathfinding, remaining animal breeding, bosses, ranged combat and advanced entity interactions. Pigs, cows and zombies have a basic implementation; cows can breed with wheat.
 - Remaining crops/plant growth, saplings, leaf decay, fishing and animal-derived resources. Wheat farming is now implemented with the limits above.
 - Enchanting, brewing, potions, status effects, hunger/damage difficulty variants; armor rendering on the player.
-- Redstone, circuits, pistons, rails, minecarts, boats, mechanisms and storage containers such as chests, hoppers and dispensers.
+- Redstone, circuits, pistons, rails, minecarts, boats, mechanisms and storage containers such as trapped/ender chests, hoppers and dispensers.
 - Original biomes, world generation, structures, villages, dungeons, weather, Nether and End.
 - Java multiplayer protocol/server compatibility, authentication, LAN play and server management.
 - Java save compatibility, commands, gamerules, achievements/statistics, resource packs and mod support.
@@ -44,7 +44,7 @@ The target is the complete Java 1.7.10 feature set. **This build does not yet pr
 
 - [Original base block registry](block-registry-1.7.10.json): all 171 ID/name pairs extracted from the original registration method. This inventory does not imply these blocks are implemented.
 - [Original FoodStats reference outputs](foodstats-reference.json): seven boundary scenarios from the unchanged original class, run with minimal test doubles for its world/player dependencies. The JavaScript results agree within 1e-6 for all 28 numeric comparisons.
-- [Original inventory/container reference outputs](inventory-reference.json): 52 scripted click, crafting, furnace and armor cases plus fuel/smelting results for every mapped item, from the unchanged original classes. The JavaScript port matches all 53. See [inventory](inventory.md).
+- [Original inventory/container reference outputs](inventory-reference.json): 60 scripted click, crafting, furnace, chest and armor cases plus fuel/smelting results for every mapped item, from the unchanged original classes. The JavaScript port matches all 61, including eight chest and large-chest cases. See [inventory](inventory.md).
 - [Investigation](investigation.md): target integrity, REA inventory, mapped symbols, bytecode locations and known limits.
 
 Existing pre-update worlds keep generation version 1. Version 2 worlds preserve their caves and ores. New worlds use generation version 3, adding tall grass for seed collection. The generation version travels with exports so old edits do not shift onto different terrain.

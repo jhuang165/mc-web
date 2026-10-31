@@ -463,6 +463,45 @@ export class FurnaceContainer extends Container {
   }
 }
 
+// InventoryLargeChest (ra): the first chest's slots, then the second's.
+export class LargeChestInventory {
+  constructor(upper, lower) { Object.assign(this, { upper, lower }); }
+  get size() { return this.upper.size + this.lower.size; }
+  get limit() { return this.upper.limit; }
+  part(i) { return i >= this.upper.size ? [this.lower, i - this.upper.size] : [this.upper, i]; }
+  getStack(i) { const [inv, k] = this.part(i); return inv.getStack(k); }
+  setStack(i, s) { const [inv, k] = this.part(i); inv.setStack(k, s); }
+  decr(i, n) { const [inv, k] = this.part(i); return inv.decr(k, n); }
+  open() { this.upper.open?.(); this.lower.open?.(); }
+  closed() { this.upper.closed?.(); this.lower.closed?.(); }
+}
+// ContainerChest (aad): rows x 9 chest slots, then 27 main and 9 hotbar slots
+// shifted by (rows - 4) x 18 pixels, as GuiChest draws generic_54.png.
+export class ChestContainer extends Container {
+  constructor(inv, chest) {
+    super(inv);
+    this.chest = chest;
+    this.rows = Math.floor(chest.size / 9);
+    chest.open?.();
+    const shift = (this.rows - 4) * 18;
+    for (let row = 0; row < this.rows; row++) for (let col = 0; col < 9; col++) this.addSlot(new Slot(chest, col + row * 9, 8 + col * 18, 18 + row * 18));
+    for (let row = 0; row < 3; row++) for (let col = 0; col < 9; col++) this.addSlot(new Slot(inv, col + row * 9 + 9, 8 + col * 18, 103 + row * 18 + shift));
+    for (let col = 0; col < 9; col++) this.addSlot(new Slot(inv, col, 8 + col * 18, 161 + shift));
+  }
+  get height() { return 114 + this.rows * 18; }
+  // Unlike the other containers it returns the copy without calling onPickup.
+  transfer(index) {
+    const slot = this.slots[index], n = this.rows * 9;
+    if (!slot?.has) return null;
+    const s = slot.stack, moved = copyStack(s);
+    if (!(index < n ? this.merge(s, n, this.slots.length, true) : this.merge(s, 0, n, false))) return null;
+    if (s.count === 0) slot.put(null);
+    else slot.changed();
+    return moved;
+  }
+  close() { super.close(); this.chest.closed?.(); }
+}
+
 // GuiContainer mouse/key handling: chooses the slotClick mode from presses,
 // drags, releases, double-clicks and modifier keys.
 export class ContainerScreen {

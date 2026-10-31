@@ -36,6 +36,7 @@ export const BLOCKS = [
   ...Array.from({length:8},(_,i)=>({name:'Wheat (stage '+i+')',color:i===7?'#d7b75e':'#709b43',hidden:true})),
   {name:'Tall grass',color:'#82aa51'},
   {name:'Hardened clay',color:'#965c42'},
+  {name:'Chest',color:'#a0742f'},
 ];
 export const HOTBAR = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 // Vanilla 1.7.10 values, located using MCP SRG mappings and javap; see research notes.
@@ -74,7 +75,20 @@ function noise(x, z, seed) {
 }
 export const isCrop=b=>b>=31&&b<=38;
 export const isPlant=b=>isCrop(b)||b===39;
-export const blockHeight=b=>b===29||b===30?15/16:1;
+export const blockHeight=b=>b===29||b===30?15/16:b===41?.875:1;
+// Block.func_149730_j (opaque at construction) and isNormalCube for this
+// build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
+// while its fancy-graphics flag is still unset in the Block constructor.
+const SEE_THROUGH=new Set([0,9,10,20,29,30,41]);
+export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
+export const normalCube=b=>opaqueCube(b)&&b!==5;
+// setBlockBoundsBasedOnState: chests are inset by 1/16 except towards a partner.
+export function blockBounds(world,x,y,z){
+  const b=world.get(x,y,z);
+  if(b!==41)return[0,0,0,1,blockHeight(b),1];
+  const c=(dx,dz)=>world.get(x+dx,y,z+dz)===41;
+  return[c(-1,0)?0:1/16,0,c(0,-1)?0:1/16,c(1,0)?1:15/16,.875,c(0,1)?1:15/16];
+}
 export class World {
   constructor(seed = "Overworld", biome = "meadow", generationVersion = 3) {
     this.seed = String(seed);
@@ -243,7 +257,10 @@ export function collides(world, x, y, z) {
         bz <= Math.floor(z + r - 1e-6);
         bz++
       )
-        if (world.solid(bx, by, bz)&&y<by+blockHeight(world.get(bx,by,bz))-1e-6) return true;
+        if (world.solid(bx, by, bz)) {
+          const [x0, , z0, x1, y1, z1] = blockBounds(world, bx, by, bz);
+          if (y < by + y1 - 1e-6 && x - r < bx + x1 - 1e-6 && x + r > bx + x0 + 1e-6 && z - r < bz + z1 - 1e-6 && z + r > bz + z0 + 1e-6) return true;
+        }
   return false;
 }
 export function raycast(world, origin, dir, reach = 6) {

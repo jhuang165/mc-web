@@ -69,3 +69,14 @@ body:has(.native-inventory) #toast,body:has(.furnace-modal) #toast{display:none}
 #survival-hud .armor-row>span,#survival-hud .air>span{display:block;flex:0 0 calc(9*var(--u));width:calc(9*var(--u));height:calc(9*var(--u));background:url('/media/1.7.10/gui/icons.png') no-repeat;background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated}
 #survival-hud .armor-row>.full{background-position:calc(-34*var(--u)) calc(-9*var(--u))}#survival-hud .armor-row>.half{background-position:calc(-25*var(--u)) calc(-9*var(--u))}#survival-hud .armor-row>.empty{background-position:calc(-16*var(--u)) calc(-9*var(--u))}
 #survival-hud .air>span{background-position:calc(-16*var(--u)) calc(-18*var(--u))}#survival-hud .air>.pop{background-position:calc(-25*var(--u)) calc(-18*var(--u))}
+/* GuiChest (bfi): ySize 114 + rows*18; generic_54.png drawn as the top rows*18+17 pixels, then the 96-pixel player section from v=126. */
+.chest-modal{--rows:3;--sheet:url('/media/1.7.10/gui/container/generic_54.png');position:relative;width:calc(176*var(--u));height:calc((114 + var(--rows)*18)*var(--u));min-width:calc(176*var(--u));min-height:0;max-width:none;max-height:none;flex-shrink:0;padding:0;border:0;border-radius:0;box-shadow:none;background:none;overflow:visible;transform:none!important;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u))}
+.chest-modal:before,.chest-modal .chest-bottom{content:'';position:absolute;left:0;width:calc(176*var(--u));background:var(--sheet) no-repeat;background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated;pointer-events:none;z-index:0}
+.chest-modal:before{top:0;height:calc((var(--rows)*18 + 17)*var(--u));background-position:0 0}
+.chest-modal .chest-bottom{top:calc((var(--rows)*18 + 17)*var(--u));height:calc(96*var(--u));background-position:0 calc(-126*var(--u))}
+.chest-modal .container-slots{z-index:2}
+.chest-modal .modal-top{display:none}
+.chest-modal h2,.chest-modal .chest-bag-label{position:absolute;left:calc(8*var(--u));margin:0;padding:0;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-align:left;text-shadow:none;white-space:nowrap;pointer-events:none;z-index:1}
+.chest-modal h2{top:calc(6*var(--u))}
+.chest-modal .chest-bag-label{top:calc((var(--rows)*18 + 20)*var(--u))}
+body:has(.chest-modal) #toast{display:none}

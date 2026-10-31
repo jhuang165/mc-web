@@ -4,6 +4,8 @@
 # ContainerPlayer: 0 result, 1-4 grid, 5-8 armor, 9-35 main, 36-44 hotbar.
 # ContainerWorkbench: 0 result, 1-9 grid, 10-36 main, 37-45 hotbar.
 # ContainerFurnace: 0 input, 1 fuel, 2 output, 3-29 main, 30-38 hotbar.
+# ContainerChest: 0-26 chest, 27-53 main, 54-62 hotbar; with a large chest
+# 0-53 chest (first chest 0-26), 54-80 main, 81-89 hotbar.
 # click SLOT BUTTON MODE uses Container.slotClick modes 0-6.
 
 case add-merge-order
@@ -502,4 +504,96 @@ put 4 264 1 0
 put 6 264 1 0
 put 7 264 1 0
 put 9 264 1 0
+end
+
+case chest-shift-into
+chest
+inv 0 4 64 0
+inv 9 4 30 0
+inv 1 257 1 12
+put 0 4 50 0
+click 54 0 1
+click 27 0 1
+click 55 0 1
+end
+
+case chest-shift-out
+chest
+put 0 5 64 0
+put 5 5 20 0
+put 26 257 1 40
+inv 8 5 60 0
+click 0 0 1
+click 26 0 1
+click 5 1 1
+end
+
+case chest-shift-player-full
+chest
+fill 1 64 0
+put 0 3 10 0
+put 1 1 5 0
+click 0 0 1
+click 1 0 1
+click 30 0 1
+end
+
+case chest-drag-and-collect
+chest
+cursor 5 10 0
+click -999 0 5
+click 0 1 5
+click 1 1 5
+click 27 1 5
+click -999 2 5
+click 0 0 0
+click 0 0 0
+click 4 0 6
+put 9 5 7 0
+click 9 1 0
+click 9 0 0
+end
+
+case chest-hotbar-and-drop-keys
+chest
+put 3 265 5 0
+inv 2 260 3 0
+inv 0 4 16 0
+click 3 2 2
+click 4 0 2
+click 3 0 4
+click 4 1 4
+click 60 0 2
+end
+
+case chest-close-drops-cursor
+chest
+put 0 4 20 0
+click 0 1 0
+close
+end
+
+case largechest-shift
+largechest
+put 0 4 60 0
+put 30 4 10 0
+put 40 280 64 0
+inv 0 4 64 0
+inv 9 280 16 0
+click 81 0 1
+click 54 0 1
+click 40 0 1
+click 30 0 1
+end
+
+case largechest-double-click-and-hotbar
+largechest
+put 26 5 30 0
+put 27 5 30 0
+put 53 5 2 0
+inv 4 5 1 0
+click 85 0 0
+click 85 0 6
+click 27 3 2
+click 53 8 2
 end

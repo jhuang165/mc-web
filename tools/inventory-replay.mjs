@@ -1,11 +1,12 @@
 // Replays tools/probes/inventory-scenarios.txt against the JavaScript
 // inventory and produces the same JSON lines as InventoryProbe.java.
 import {Survival,ITEMS,burnTime,smeltingResult} from '../src/survival.js';
-import {makeStack,copyStack} from '../src/inventory.js';
+import {makeStack,copyStack,ChestContainer,LargeChestInventory} from '../src/inventory.js';
+import {newChest,chestInventory} from '../src/chest.js';
 
 // Minecraft 1.7.10 numeric IDs (and metadata for subtypes) of this build's items.
 export const MC_IDS={
- 1:3,2:1,3:2,4:12,5:7,7:11,12:6,13:25,14:18,15:16,16:15,17:4,18:5,20:9,'31:1':39,35:19,49:22,41:27,42:26,45:8,47:21,50:20,56:17,57:28,58:13,61:14,80:23,82:24,172:40,
+ 1:3,2:1,3:2,4:12,54:41,5:7,7:11,12:6,13:25,14:18,15:16,16:15,17:4,18:5,20:9,'31:1':39,35:19,49:22,41:27,42:26,45:8,47:21,50:20,56:17,57:28,58:13,61:14,80:23,82:24,172:40,
  256:110,257:102,258:106,260:200,263:301,264:303,265:302,266:304,267:114,268:112,269:108,270:100,271:104,272:113,273:109,274:101,275:105,276:115,277:111,278:103,279:107,
  280:300,283:119,284:118,285:116,286:117,290:120,291:121,292:122,293:123,294:124,295:309,296:305,297:201,318:313,319:202,320:203,332:312,336:306,337:307,340:314,352:311,359:125,363:204,364:205,367:206,334:315,'263:1':308,'351:15':310,
  298:400,299:401,300:402,301:403,302:404,303:405,304:406,305:407,306:408,307:409,308:410,309:411,310:416,311:417,312:418,313:419,314:412,315:413,316:414,317:415,
@@ -28,6 +29,8 @@ export function replay(script){
    case 'remote':break;
    case 'workbench':container=Object.assign(p.openWorkbench(),{drops});break;
    case 'furnace':container=Object.assign(p.openFurnace('0,0,0'),{drops});break;
+   case 'chest':container=Object.assign(new ChestContainer(inv,chestInventory(newChest())),{drops});break;
+   case 'largechest':container=Object.assign(new ChestContainer(inv,new LargeChestInventory(chestInventory(newChest()),chestInventory(newChest()))),{drops});break;
    case 'inv':inv.main[+a[1]]=stack(a,2);break;
    case 'fill':for(let i=0;i<36;i++)inv.main[i]??=stack(a,1);break;
    case 'burn':results.push(burnTime(stack(a,1)));break;
