@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SNOW_LAYER, ICE, LADDER, slipperiness } from "./world.js";
+import { SNOW_LAYER, ICE, LADDER, CACTUS, slipperiness } from "./world.js";
 import { ITEMS, MATERIALS, Survival } from "./survival.js";
 import { breakTicks, canHarvest, digSpeed } from "./mining.js";
 import { blockSound } from "./audio.js";
@@ -57,7 +57,7 @@ test("creative lists place snow and ice where the original tabs do", () => {
   assert.equal(itemTab(ICE).label, "buildingBlocks");
   const blocks = CREATIVE_TABS[0].items;
   assert.deepEqual(blocks.slice(blocks.indexOf(ICE) - 1, blocks.indexOf(ICE) + 2), [28, ICE, 23]);
-  assert.deepEqual(SEARCH_ORDER.slice(SEARCH_ORDER.indexOf(SNOW_LAYER) - 1, SEARCH_ORDER.indexOf(SNOW_LAYER) + 4), [LADDER, SNOW_LAYER, ICE, 23, 24]);
+  assert.deepEqual(SEARCH_ORDER.slice(SEARCH_ORDER.indexOf(SNOW_LAYER) - 1, SEARCH_ORDER.indexOf(SNOW_LAYER) + 4), [LADDER, SNOW_LAYER, ICE, 23, CACTUS]);
 });
 
 test("a dropped item slides farther on ice (drag 0.98 * 0.98) than on stone (0.6 * 0.98)", () => {

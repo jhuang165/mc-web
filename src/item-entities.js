@@ -8,6 +8,7 @@ import { copyStack } from "./inventory.js";
 import { waterAcceleration, inLava } from "./fluids.js";
 import { LAVA } from "./world.js";
 import { touchesFire, fireContact } from "./fire.js";
+import { touchesCactus } from "./plants.js";
 
 import { webMove, webContact } from './webs.js';
 
@@ -211,6 +212,8 @@ export class ItemEntities {
       this.hurt(e, hit.damage);
       e.fire = hit.fire;
     }
+    // BlockCactus.onEntityCollidedWithBlock: EntityItem.attackEntityFrom(cactus, 1) takes 1 of its 5 health.
+    if (touchesCactus(world, this.box(e))) this.hurt(e, 1);
   }
   // EntityItem.onUpdate for every item.
   tick(world, maxStack = () => 64) {

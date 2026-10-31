@@ -18,7 +18,7 @@
 // placement. Static lava's random fire spread (ant.a(.., Random)) lives in
 // fire.js (lavaTick), driven by the random block ticks of the Fire runtime.
 
-import { WATER, LAVA, isLiquid } from "./world.js";
+import { WATER, LAVA, REEDS, isLiquid } from "./world.js";
 import { JavaRandom } from "./lighting.js";
 
 const f = Math.fround,
@@ -340,10 +340,10 @@ export class Fluids {
   }
   // BlockDynamicLiquid.func_149807_p (akr.p): doors, signs, ladders, reeds and
   // portals block liquid, as does any material that blocks movement. Of the first
-  // group only ladders exist here (they have a collision box); air, liquids,
-  // torches and plants are the open cells.
+  // group ladders (they have a collision box) and sugar cane exist here; air,
+  // liquids, torches and the other plants are the open cells.
   blocked(x, y, z) {
-    return solid(this.world, x, y, z);
+    return solid(this.world, x, y, z) || this.world.get(x, y, z) === REEDS;
   }
   // func_149809_q (akr.q): not the same liquid, not lava, and not blocked.
   // Water therefore never flows into lava, while lava can flow into water.

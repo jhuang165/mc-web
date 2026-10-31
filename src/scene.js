@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { WorldEffects } from "./effects.js";
-import { SIZE, HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
+import { SIZE, HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS } from "./block-textures.js";
 import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
@@ -157,6 +157,7 @@ export class VoxelScene {
     this.arrows.clear();
     this.arrowList = [];
     this.projectileList = { balls: [], particles: [] };
+    this.fallingList = [];
     this.world = world;
     this.textures.setBiome(world.biome);
     this.temperature = biomeTemperature(world.biome);
@@ -184,8 +185,9 @@ export class VoxelScene {
           if (!b || b === 41) continue;
           if (b === 20) this.torch(solid, x, y, z);
           else if (isCrop(b)) this.crops(solid, b, x, y, z);
-          else if (isPlant(b) || b === WEB) this.crossed(solid, b, x, y, z);
+          else if (isPlant(b) || b === WEB || b === REEDS) this.crossed(solid, b, x, y, z);
           else if (b === LADDER) this.ladder(solid, x, y, z);
+          else if (b === CACTUS) this.cactus(solid, x, y, z);
           else if (b === 10) this.liquid(10, water, flow, x, y, z);
           else if (b === 42) this.liquid(42, lava, lavaFlow, x, y, z);
           else if (b === FIRE) this.fireBlock(fire, x, y, z);
@@ -271,6 +273,42 @@ export class VoxelScene {
     const uvs = rectUvs(tileRect(blockTile(b, 0, false, w.getMeta(x, y, z)))), light = this.light.packed(x, y, z), a = 0.05, c = 0.95;
     m.quad([[px + a, py, pz + a], [px + c, py, pz + c], [px + c, py + 1, pz + c], [px + a, py + 1, pz + a]], uvs, 1, light, true);
     m.quad([[px + a, py, pz + c], [px + c, py, pz + a], [px + c, py + 1, pz + a], [px + a, py + 1, pz + c]], uvs, 1, light, true);
+  }
+  // RenderBlocks.renderBlockCactusImpl (render type 13): no ambient occlusion. The bottom and top
+  // follow shouldSideBeRendered (not under an opaque cube) in the brightness of the cell beyond;
+  // the four sides are full faces moved 1/16 inwards (Tessellator.addTranslation), always drawn,
+  // in the cactus cell's own brightness. Shades 0.5, 1, 0.8 (z) and 0.6 (x).
+  cactus(m, x, y, z) {
+    const w = this.world, L = this.light, t = 1 / 16, own = L.packed(x, y, z);
+    FACES.forEach((f, fi) => {
+      const vertical = fi === 2 || fi === 3;
+      if (vertical && hides(w.get(x, y + f.n[1], z))) return;
+      const verts = f.v.map((v) => [x + v[0] - f.n[0] * t, y + v[1], z + v[2] - f.n[2] * t]);
+      m.quad(verts, rectUvs(tileRect(blockTile(CACTUS, fi))), f.shade, vertical ? L.packed(x, y + f.n[1], z) : own);
+    });
+  }
+  // RenderFallingBlock -> RenderBlocks.renderBlockSandFalling: a unit cube centred on posY
+  // (the box's minY + 0.49), interpolated between ticks, every face in the brightness of the
+  // entity's cell with the usual face shades. Rebuilt each frame; there are rarely many.
+  updateFalling(partial) {
+    if (this.fallingMesh) {
+      this.scene.remove(this.fallingMesh);
+      this.fallingMesh.geometry.dispose();
+      this.fallingMesh = null;
+    }
+    const list = this.fallingList || [];
+    if (!list.length || !this.light) return;
+    const m = new Mesher();
+    for (const e of list) {
+      const x = e.px + (e.x - e.px) * partial, z = e.pz + (e.z - e.pz) * partial, y = e.py + (e.y - e.py) * partial + 0.49 - 0.5;
+      const light = this.light.packed(Math.floor(e.x), Math.floor(e.y + 0.49), Math.floor(e.z));
+      FACES.forEach((f, fi) => m.quad(f.v.map((v) => [x - 0.5 + v[0], y + v[1], z - 0.5 + v[2]]), rectUvs(tileRect(blockTile(e.block, fi, false, e.meta))), f.shade, light));
+    }
+    this.fallingMesh = new THREE.Mesh(m.geometry(), this.material);
+    this.scene.add(this.fallingMesh);
+  }
+  setFalling(list) {
+    this.fallingList = list;
   }
   // RenderBlocks.renderBlockLadder (render type 8): one quad 0.05 off the wall the metadata
   // names, facing away from it, in the cell's own brightness with no face shading.
@@ -438,6 +476,7 @@ export class VoxelScene {
     this.clouds.update(c, time * 20, cloudColor(angle, rain, thunder));
     this.weatherRenderer.update(w, this.world, c, partial, time);
     this.drops.update(this.dropList, this.dropPartial, time * 20);
+    this.updateFalling(this.dropPartial);
     this.projectiles.update(this.projectileList.balls, this.projectileList.particles, c, this.dropPartial);
     this.arrows.update(this.arrowList, this.dropPartial);
     this.sky.render(this.renderer, c, new THREE.Color(...fog));

@@ -77,16 +77,16 @@ test('clicking outside throws the cursor, one item for the right button',()=>{
 test('scrolling moves the 9 x 5 window one row per notch and with the scrollbar',()=>{
  const {gui,c,slot}=open([],SEARCH.index);
  assert.equal(c.list.length,SEARCH_ORDER.length);assert.ok(gui.needsScroll());
- // 161 search entries: rows = floor(161 / 9) - 5 + 1 = 13
- // (integer division, as GuiContainerCreative), so each notch moves 1/13; at full scroll the window starts at
- // entry 13 * 9 = 117, slot n shows entry 117 + n, the last entry (160) sits in slot 43 and slot 44 is empty.
- assert.equal(c.rows(),13);
+ // 165 search entries: rows = floor(165 / 9) - 5 + 1 = 14
+ // (integer division, as GuiContainerCreative), so each notch moves 1/14; at full scroll the window starts at
+ // entry 14 * 9 = 126, slot n shows entry 126 + n, the last entry (164) sits in slot 38 and slot 39 is empty.
+ assert.equal(c.rows(),14);
  gui.wheel(-1);gui.wheel(-1);
- assert.equal(gui.scroll,Math.fround(Math.fround(1/13)+1/13));assert.equal(gui.scrollbarY(),32);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[18]));
+ assert.equal(gui.scroll,Math.fround(Math.fround(1/14)+1/14));assert.equal(gui.scrollbarY(),31);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[18]));
  gui.wheel(1);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[9]));
  for(let i=0;i<20;i++)gui.wheel(-1);
- assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);assert.equal(slot(27).stack.id,entryId(SEARCH_ORDER[144]));
- assert.equal(SEARCH_ORDER.length,161);assert.equal(slot(41).stack.id,entryId(SEARCH_ORDER[158]));assert.equal(slot(42).stack.id,entryId(SEARCH_ORDER[159]));assert.equal(slot(43).stack.id,entryId(SEARCH_ORDER[160]));assert.equal(slot(44).stack,null);
+ assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);assert.equal(slot(27).stack.id,entryId(SEARCH_ORDER[153]));
+ assert.equal(SEARCH_ORDER.length,165);assert.equal(slot(36).stack.id,entryId(SEARCH_ORDER[162]));assert.equal(slot(37).stack.id,entryId(SEARCH_ORDER[163]));assert.equal(slot(38).stack.id,entryId(SEARCH_ORDER[164]));assert.equal(slot(39).stack,null);
  gui.press(176,60);assert.ok(gui.scrolling);gui.drag(25.5);assert.equal(gui.scroll,0);
  gui.drag(18+7.5+97/2);assert.equal(gui.scroll,.5);gui.release();gui.drag(200);assert.equal(gui.scroll,.5);
  gui.press(174,60);assert.ok(!gui.scrolling);
