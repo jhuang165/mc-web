@@ -45,7 +45,7 @@ The rules come from the bytecode of the original client JAR (javap), with 1.7.10
   - a held item sets `rightArm.x = rightArm.x * 0.5 - 0.31415927` (`heldItemRight` is 1);
   - the swing (`onGround`) twists the body by `sin(sqrt(p) * pi * 2) * 0.2`, moves the arm pivots, raises the right arm by `sin((1 - (1 - p)^4) * pi) * 1.2 + sin(p * pi) * -(head.x - 0.7) * 0.75` and rolls it by `sin(p * pi) * -0.4`;
   - the idle sway is `cos(age * 0.09) * 0.05 + 0.05` on the arms' z and `sin(age * 0.067) * 0.05` on x.
-- **Sneak** (body x 0.5, arms +0.4, legs at y 9 / z 4, head at y 1) is ported in `bipedPose` but not wired: this game has no sneak.
+- **Sneak** (body x 0.5, arms +0.4, legs at y 9 / z 4, head at y 1) is ported in `bipedPose` and driven by sneaking since 0.14 ([sneaking](sneaking.md)); the 0.125 RenderPlayer shift applies only to other players.
 - **Light and hurt.** The same `entityMaterial` and lightmap as mobs, sampled at feet + 0.66 * 1.8 (`Entity.getBrightnessForRender`). While `hurtTicks > 0` the model, armor and held item get the `(brightness, 0, 0, 0.4)` red overlay.
 
 ## Armor: `RenderPlayer.shouldRenderPass` (`bop.a(blg, int, float)`)
@@ -69,7 +69,7 @@ The item hangs off the right arm after its rotation: `translate(-0.0625, 0.4375,
 
 ## Differences
 
-- No sneak, riding, bow or block poses; no cape, ears, pumpkin helmet or enchantment glint; no dyed leather.
+- No riding, bow or block poses; no cape, ears, pumpkin helmet or enchantment glint; no dyed leather.
 - The death roll is not drawn on the player model.
 - Held items use a simplified item mesh, not `ItemRenderer` and `RenderBlocks.renderBlockAsItem`; torches and other sprite blocks draw as flat sprites.
 - The view is not saved. There is no F1 debug camera.
