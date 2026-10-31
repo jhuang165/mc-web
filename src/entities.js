@@ -1,6 +1,7 @@
 import { SIZE, HEIGHT, hash, raycast as voxelRay, blockBounds } from "./world.js";
 import { ITEMS } from "./survival.js";
 import { mhSin, mhCos } from "./lighting.js";
+import { waterAcceleration, entityWaterBox } from "./fluids.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
 export function wrapDegrees(a) {
@@ -223,15 +224,13 @@ export function moveFlying(e, strafe, forward, friction) {
   e.vx += f(f(strafe * cos) - f(forward * sin));
   e.vz += f(f(forward * cos) + f(strafe * sin));
 }
-// Entity.handleWaterMovement (sa.H): the box shrunk 0.4 vertically and 0.001 all
-// round touches a water cell below its liquid surface (BlockLiquid height 1/9 for a source).
+// Entity.handleWaterMovement (sa.N) through World.handleMaterialAcceleration: the
+// box shrunk 0.4 vertically and 0.001 all round is wet below each cell's liquid
+// surface, and living entities are pushed 0.014 along the summed flow vector.
 function inWater(world, e, w, h) {
-  const half = w / 2 - 0.001, y0 = e.y + 0.4 + 0.001, y1 = e.y + h - 0.4 - 0.001;
-  for (let bx = Math.floor(e.x - half); bx < Math.floor(e.x + half + 1); bx++)
-    for (let by = Math.floor(y0); by < Math.floor(y1 + 1); by++)
-      for (let bz = Math.floor(e.z - half); bz < Math.floor(e.z + half + 1); bz++)
-        if (world.get(bx, by, bz) === 10 && y1 >= f(by + 1 - f(1 / 9))) return true;
-  return false;
+  const r = w / 2, { wet, push } = waterAcceleration(world, entityWaterBox([e.x - r, e.y, e.z - r, e.x + r, e.y + h, e.z + r]));
+  addVelocity(e, ...push);
+  return wet;
 }
 // Entity.func_70038_c / isOffsetPositionInLiquid (sa.c(DDD)): the box moved by
 // (dx, dy, dz) has no block in it and no water.
