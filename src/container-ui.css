@@ -65,6 +65,13 @@ body:has(.native-inventory) #toast,body:has(.furnace-modal) #toast{display:none}
 .tinted-item{position:relative;display:block}.tinted-item>i,.tinted-item>img{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated}
 .tinted-item>i{background:var(--base) center/100% 100%,var(--tint);background-blend-mode:multiply;-webkit-mask:var(--base) center/100% 100%;mask:var(--base) center/100% 100%}
 #hotbar .slot>.tinted-item{width:calc(16*var(--u));height:calc(16*var(--u))}
+/* GuiIngame: Poison adds 36 to the heart fill U; Hunger adds 36 to the
+   food fill U and uses the container at U=16+13*9. */
+.hearts.poisoned>.full{background-position:calc(-88*var(--u)) 0,calc(-16*var(--u)) 0}
+.hearts.poisoned>.half{background-position:calc(-97*var(--u)) 0,calc(-16*var(--u)) 0}
+.hunger.afflicted>.full{background-position:calc(-88*var(--u)) calc(-27*var(--u)),calc(-133*var(--u)) calc(-27*var(--u))}
+.hunger.afflicted>.half{background-position:calc(-97*var(--u)) calc(-27*var(--u)),calc(-133*var(--u)) calc(-27*var(--u))}
+.hunger.afflicted>.empty{background-position:calc(-133*var(--u)) calc(-27*var(--u)),calc(-133*var(--u)) calc(-27*var(--u))}
 /* GuiIngame rows above the hearts (armor, left) and hunger (air, right), 10 pixels up. */
 #survival-hud{position:absolute}#survival-hud .armor-row,#survival-hud .air{position:absolute;bottom:calc(10*var(--u));display:flex;gap:0;height:calc(9*var(--u))}
 #survival-hud .armor-row{left:0}#survival-hud .air{right:0;flex-direction:row-reverse}#survival-hud .air>span{margin:0 0 0 calc(-1*var(--u))}

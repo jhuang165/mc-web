@@ -57,6 +57,7 @@ import { canSeeSky } from "./weather.js";
 import { Fluids, waterAcceleration, entityWaterBox, inLava, liquidInBox } from "./fluids.js";
 import { Fire, touchesFire, fireContact } from "./fire.js";
 import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
+import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, sneakEdge, moveWeights, isCritical, ATTACK_SLOWDOWN } from "./player-movement.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
@@ -985,7 +986,7 @@ function renderVitals() {
     popping = Math.max(0, Math.ceil((survival.air * 10) / 300) - bubbles),
     air = survival.air < 300 ? `<div class="air" aria-label="Air ${Math.max(0, survival.air)} of 300">${"<span></span>".repeat(bubbles)}${'<span class="pop"></span>'.repeat(popping)}</div>` : "";
   $("#survival-hud").innerHTML =
-    `<div class="vital-row"><div class="hearts" aria-label="Health ${Math.ceil(survival.health)} of 20">${hearts}</div><div class="hunger" aria-label="Hunger ${survival.food} of 20">${food}</div></div>${armorRow}${air}`;
+    `<div class="vital-row"><div class="hearts${survival.effects.has(POISON) ? ' poisoned' : ''}" aria-label="Health ${Math.ceil(survival.health)} of 20${survival.effects.has(POISON) ? ', Poison' : ''}">${hearts}</div><div class="hunger${survival.effects.has(HUNGER) ? ' afflicted' : ''}" aria-label="Hunger ${survival.food} of 20${survival.effects.has(HUNGER) ? ', Hunger effect' : ''}">${food}</div></div>${armorRow}${air}`;
   $("#damage-flash").classList.toggle("hurt", survival.hurtTicks > 4);
 }
 // EntityPlayer.dropOneItem / closing a screen with held items: thrown along

@@ -175,11 +175,11 @@ export function milkCow(player, hooks = {}) {
 }
 
 // ItemBucketMilk.onEaten (adi.b): one milk bucket is used up unless Creative, and the
-// stack becomes an empty bucket (EntityPlayer.clearActivePotions has nothing to clear:
-// there are no potion effects yet).
+// stack becomes an empty bucket. clearActivePotions also runs in Creative.
 export function finishDrinking(player) {
   const inv = player.inventory, held = inv.held;
   if (!held || held.id !== MILK_BUCKET) return false;
   if (!player.creative && --held.count <= 0) inv.main[inv.current] = makeStack(BUCKET);
+  player.effects.clear();
   return true;
 }

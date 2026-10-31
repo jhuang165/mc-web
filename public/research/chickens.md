@@ -32,14 +32,13 @@ Target: Minecraft Java 1.7.10. Names are the obfuscated classes of the unchanged
 - Drops: `nextInt(3)` feathers plus one raw chicken, cooked when burning; hurt and death both play `mob.chicken.hurt`; adult kills give animal XP like the other animals.
 - Breeding: wheat seeds (id 309) tempt, feed and breed; the chick is a child (`-24000`) with the shared parent cooldown, hearts and XP.
 - Thrown eggs: `ItemEgg` throws an `EntityEgg` through the existing `EntityThrowable` port (same launch, gravity 0.03, drag, block and mob sweep). A 0-damage hit; at impact `nextInt(8) == 0` hatches a chick, and `nextInt(32) == 0` among those makes it four, each a child at the egg's position and yaw; eight `snowballpoof` particles (the snowball icon, as in the original); the throw sound is `random.bow`. Eggs save and load with their kind. `GaussianRandom.nextInt` is `java.util.Random.nextInt(bound)`.
-- Items (internal ids 316 to 319, mapped to Minecraft 344, 288, 365, 366 in the inventory and creative checks): egg, feather, raw chicken (food 2, saturation 0.3), cooked chicken (food 6, saturation 0.6) with their items-atlas icons. Furnace smelting raw to cooked chicken. Creative tab placement follows `creative-reference.json` (food and materials tabs, and the search tab).
+- Items (internal ids 316 to 319, mapped to Minecraft 344, 288, 365, 366 in the inventory and creative checks): egg, feather, raw chicken (food 2, saturation 0.3), cooked chicken (food 6, saturation 0.6) with their items-atlas icons. Furnace smelting raw to cooked chicken. Raw chicken has a 30% chance of Hunger I for 600 ticks ([food effects](effects.md)). Creative tab placement follows `creative-reference.json` (food and materials tabs, and the search tab).
 - Model and render: `ModelChicken` boxes and pivots as in the bytecode (head, bill and chin at (0, 15, -4), body turned pi / 2, legs, wings at (+-4, 13, 0)), leg swing `cos(limbSwing * 0.6662) * 1.4 * amount`, wing rotateAngleZ = +-`(sin(flap) + 1) * flapSpeed` through `chickenFlap` with the `MathHelper` sine table, `chicken.png`, a chick draws its head, bill and chin at full size 5 down and 2 back while the rest is halved, shadow size 0.3.
 - Spawning: fresh worlds seed passive mobs at the weights sheep 12, pig 10, chicken 10, cow 8.
 - Sounds: `mob.chicken.say`, `hurt`, `step` and `plop` are imported through `tools/import-vanilla-media.mjs` (the regex now includes `chicken`) and appended to `public/audio/1.7.10/manifest.json`; the other manifest entries were left untouched.
 
 ## Missing
 
-- Raw chicken's 30 percent Hunger effect (0 to 600 ticks of food poisoning): there are no status effects yet.
 - Chicken jockeys (`bv` / `bZ`), the jockey's 10 XP, and the zombie-baby riding that creates them.
 - `mob.chicken.step` is imported but unplayed: no mob has step sounds wired.
 - Only wheat seeds exist, so pumpkin and melon seeds do not tempt or breed chickens (any `ItemSeeds` does in 1.7.10).
