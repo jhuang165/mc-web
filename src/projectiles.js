@@ -230,11 +230,10 @@ export function mobTargets(entities, player, width = 0.6, height = 1.8) {
 
 // EntityLivingBase.attackEntityFrom (sv.a) with the zero damage of
 // DamageSource.causeThrownDamage: it still counts as a hit unless the target
-// is dead or inside its 10-tick hurt window, so the mob flashes, plays its hurt
-// sound and is knocked away from the thrower (not along the ball's path).
-// EntityAnimal.attackEntityFrom sets fleeingTick 60 and cancels love first,
-// even for a rejected hit. Health never changes. entities.js `attack` models
-// the same hit with its own simplified knockback, copied here.
+// is dead or inside its hurt window, so the mob flashes, plays its hurt sound
+// and is knocked away from the thrower (not along the ball's path) through
+// EntityWorld.damage. EntityAnimal.attackEntityFrom sets fleeingTick 60 and
+// cancels love first, even for a rejected hit. Health never changes.
 export function thrownHit(mobs, e, from) {
   if (!mobs.entities.includes(e)) return false;
   if (e.type !== "zombie") {
@@ -242,14 +241,7 @@ export function thrownHit(mobs, e, from) {
     e.love = 0;
     e.mateTicks = 0;
   }
-  if (e.health <= 0 || e.hurt > 0) return false;
-  e.hurt = 10;
-  e.yaw = Math.atan2(e.x - from.x, e.z - from.z);
-  e.vx = Math.sin(e.yaw) * 0.28;
-  e.vz = Math.cos(e.yaw) * 0.28;
-  e.vy = 0.2;
-  mobs.events.push({ sound: e.type === "pig" ? "mob.pig.say" : "mob." + e.type + ".hurt", position: e });
-  return true;
+  return mobs.damage(e, 0, from.x, from.z);
 }
 
 export class Projectiles {

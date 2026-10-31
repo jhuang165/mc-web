@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { EntityWorld } from "./entities.js";
 import { GaussianRandom, Projectiles, heading, inWater, intercept, launch, mobTargets, rayBounds, rayTraceBlocks, thrownHit } from "./projectiles.js";
 
 // Stone below y = 10; extra cells (x,y,z -> id) override it.
@@ -204,16 +205,17 @@ test("a box that the ball begins inside is missed unless the ball leaves through
 });
 
 test("thrown damage is zero but still flashes, hurts out loud and knocks a mob away from the thrower", () => {
-  const e = { type: "pig", health: 10, hurt: 0, flee: 0, love: 600, mateTicks: 3, x: 5, y: 10, z: 5, yaw: 0, vx: 0, vy: 0, vz: 0 }, mobs = { entities: [e], events: [] };
+  const e = { type: "pig", health: 10, hurt: 0, flee: 0, love: 600, mateTicks: 3, x: 5, y: 10, z: 5, yaw: 0, vx: 0, vy: 0, vz: 0 }, mobs = Object.assign(Object.create(EntityWorld.prototype), { entities: [e], events: [] });
   assert.equal(thrownHit(mobs, e, { x: 5, y: 10, z: 8 }), true);
   assert.equal(e.health, 10);
   assert.equal(e.hurt, 10);
   assert.equal(e.flee, 60);
   assert.equal(e.love, 0);
   assert.equal(e.mateTicks, 0);
-  near(e.vz, -0.28, 1e-12);
+  // EntityLivingBase.knockBack (sv.a(Entity,F,DD)): 0.4 away from the thrower, 0.4 up.
+  near(e.vz, -0.4, 1e-7);
   near(e.vx, 0, 1e-12);
-  assert.equal(e.vy, 0.2);
+  near(e.vy, 0.4, 1e-7);
   assert.deepEqual(mobs.events, [{ sound: "mob.pig.say", position: e }]);
   // Inside the hurt window the hit is refused (but the animal still panics).
   e.flee = 0;
@@ -222,7 +224,7 @@ test("thrown damage is zero but still flashes, hurts out loud and knocks a mob a
   assert.equal(e.vy, 0);
   assert.equal(e.flee, 60);
   assert.equal(mobs.events.length, 1);
-  const z = { type: "zombie", health: 20, hurt: 0, flee: 0, x: 0, y: 0, z: 0 };
+  const z = { type: "zombie", health: 20, hurt: 0, flee: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };
   mobs.entities.push(z);
   thrownHit(mobs, z, { x: 3, y: 0, z: 0 });
   assert.equal(z.flee, 0);
