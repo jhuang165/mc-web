@@ -22,9 +22,9 @@ function quad(size, y, uvs) {
 }
 const texturedMaterial = (map) =>
   new THREE.ShaderMaterial({
-    uniforms: { map: { value: map }, uvRect: { value: new THREE.Vector4(0, 0, 1, 1) } },
+    uniforms: { map: { value: map }, uvRect: { value: new THREE.Vector4(0, 0, 1, 1) }, alpha: { value: 1 } },
     vertexShader: "uniform vec4 uvRect;varying vec2 vUv;void main(){vUv=uvRect.xy+uv*uvRect.zw;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}",
-    fragmentShader: "uniform sampler2D map;varying vec2 vUv;void main(){gl_FragColor=texture2D(map,vUv);}",
+    fragmentShader: "uniform sampler2D map;uniform float alpha;varying vec2 vUv;void main(){gl_FragColor=texture2D(map,vUv)*vec4(1.,1.,1.,alpha);}",
     ...additive,
   });
 
@@ -82,7 +82,8 @@ gl_FragColor=vec4(c,1.);}`,
   }
   // `state`: celestial angle, sky/fog colours (0-1), sunrise RGBA or null,
   // star brightness, moon phase, camera height above the horizon, far plane.
-  update({ angle, sky, fog, sunrise, stars, moonPhase, aboveHorizon, far, underwater = false }) {
+  // `rain` is getRainStrength: renderSky fades the sun, moon and stars by 1 - rain.
+  update({ angle, sky, fog, sunrise, stars, moonPhase, aboveHorizon, far, underwater = false, rain = 0 }) {
     const u = this.dome.material.uniforms;
     u.sky.value.set(...sky);
     u.fog.value.set(...fog);
@@ -112,8 +113,10 @@ gl_FragColor=vec4(c,1.);}`,
     this.celestial.rotation.set(angle * Math.PI * 2, -Math.PI / 2, 0);
     const l = moonPhase % 4, i = Math.floor(moonPhase / 4) % 2;
     this.moonMaterial.uniforms.uvRect.value.set(l / 4, 1 - (i + 1) / 2, 1 / 4, 1 / 2);
-    this.stars.material.uniforms.brightness.value = stars;
-    this.stars.visible = stars > 0;
+    const clear = 1 - rain;
+    this.sun.material.uniforms.alpha.value = this.moonMaterial.uniforms.alpha.value = clear;
+    this.stars.material.uniforms.brightness.value = stars * clear;
+    this.stars.visible = stars * clear > 0;
   }
   render(renderer, camera, clear) {
     this.camera.quaternion.copy(camera.quaternion);

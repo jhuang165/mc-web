@@ -3,6 +3,41 @@
   "assetIndexSha1": "1863782e33ce7b584fc45b037325a1964e095d3e",
   "credit": "Original Minecraft sound effects © Mojang / Microsoft. These are original game resources, not newly synthesized effects.",
   "files": {
+    "ambient/weather/rain1": {
+      "url": "/audio/1.7.10/ambient/weather/rain1.ogg",
+      "sha1": "d68bae1949299ccd8297aaa423dd12e041e83773",
+      "bytes": 13185
+    },
+    "ambient/weather/rain2": {
+      "url": "/audio/1.7.10/ambient/weather/rain2.ogg",
+      "sha1": "ba58e1b6c8cc814a210db268d3e59a06b7ac62be",
+      "bytes": 13301
+    },
+    "ambient/weather/rain3": {
+      "url": "/audio/1.7.10/ambient/weather/rain3.ogg",
+      "sha1": "4cdd8fc380e85409fd94b93abdcad077d75ec58f",
+      "bytes": 13322
+    },
+    "ambient/weather/rain4": {
+      "url": "/audio/1.7.10/ambient/weather/rain4.ogg",
+      "sha1": "08e555782cb2785b24e08a417a5e58aa08bd0695",
+      "bytes": 13955
+    },
+    "ambient/weather/thunder1": {
+      "url": "/audio/1.7.10/ambient/weather/thunder1.ogg",
+      "sha1": "671ef0ae7b59014a2f637d7af6d781324ab6309f",
+      "bytes": 24468
+    },
+    "ambient/weather/thunder2": {
+      "url": "/audio/1.7.10/ambient/weather/thunder2.ogg",
+      "sha1": "a20cbf2ddce541eaed520d7ec55665fe97428be6",
+      "bytes": 25571
+    },
+    "ambient/weather/thunder3": {
+      "url": "/audio/1.7.10/ambient/weather/thunder3.ogg",
+      "sha1": "9ead5c928f9122e3c2f5fc4f6ce7fb4054a2b578",
+      "bytes": 27653
+    },
     "dig/cloth1": {
       "url": "/audio/1.7.10/dig/cloth1.ogg",
       "sha1": "5fd568d724ba7d53911b6cccf5636f859d2662e8",
@@ -780,6 +815,23 @@
     }
   },
   "events": {
+    "ambient.weather.rain": {
+      "category": "weather",
+      "sounds": [
+        "ambient/weather/rain1",
+        "ambient/weather/rain2",
+        "ambient/weather/rain3",
+        "ambient/weather/rain4"
+      ]
+    },
+    "ambient.weather.thunder": {
+      "category": "weather",
+      "sounds": [
+        "ambient/weather/thunder1",
+        "ambient/weather/thunder2",
+        "ambient/weather/thunder3"
+      ]
+    },
     "game.player.hurt.fall.big": {
       "category": "player",
       "sounds": [

@@ -23,6 +23,7 @@ import {
 import { flowerCanStay, growGrass, JRandom } from "./flowers.js";
 import { VoxelScene } from "./scene.js";
 import { SoundBank, blockSound } from "./audio.js";
+import { Weather, isWet, canLightningStrikeAt, struckByLightning, strikeBox, overlaps, entityBox } from "./weather.js";
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
 import { PlayerBody, PlayerRenderer, nextView, thirdPersonCamera, playerShadowCaster } from "./player-renderer.js";
 import { FirstPerson, itemTexture } from "./first-person.js";
@@ -108,6 +109,7 @@ let screen = "home",
   saved = true,
   lastJump = 0;
 let fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer;
+let weather = new Weather();
 let sounds,
   firstPerson,
   mobs,
@@ -427,6 +429,7 @@ function save() {
   active.player = survival.serialize();
   active.drops = items.serialize();
   active.projectiles = projectiles.serialize();
+  active.weather = weather.save();
   // Items on the cursor or in a crafting grid return to the saved inventory, as closing the screen would.
   const pending = containerView ? [containerView.container.inv.cursor, ...(containerView.container.grid?.stacks || [])].filter(Boolean).map(copyStack) : [];
   if (pending.length) {
@@ -539,8 +542,14 @@ function launch(record) {
     fluids.wake();
     watchFlowers();
     farming=new Farming(world,record.farms);
+    // Rain moistens farmland (BlockFarmland.updateTick: canLightningStrikeAt(x, y + 1, z)).
+    farming.rained = (x, y, z) => canLightningStrikeAt(weather, world, x, y + 1, z);
+    weather = new Weather().restore(record.weather);
+    scene.weather = weather;
     experience=new Experience(record.experience);xpOrbs=new ExperienceOrbs(record.xpOrbs);
     mobs = new EntityWorld(world, record.entities);
+    // Entity.isWet: rain puts out burning mobs and stops zombies burning in the sun.
+    mobs.wet = (e, height) => isWet(weather, world, e, height);
     mobRenderer.clear();
     animation.reset();
     eating = null;
@@ -985,6 +994,33 @@ function die() {
   };
   $("#death-home").onclick = goHome;
 }
+// One weather tick: timers, lightning (flash, damage, sound) and the client's rain
+// splashes and rain sound (see weather.js).
+function tickWeather() {
+  weather.tick(world, position);
+  for (const bolt of weather.struck) {
+    const box = strikeBox(bolt);
+    for (const e of mobs?.entities || []) {
+      const t = ENTITY_TYPES[e.type];
+      if (!t || e.health <= 0 || !overlaps(entityBox(e, t.width, t.height), box)) continue;
+      const hit = struckByLightning(e.fire || 0);
+      mobs.hazard(e, hit.damage);
+      e.fire = hit.fire;
+    }
+    if (!survival.creative && survival.health > 0 && overlaps(entityBox(position, PHYSICS.width, PHYSICS.height), box)) {
+      const hit = struckByLightning(survival.fire || 0);
+      survival.damage(hit.damage, "lightning", true);
+      survival.fire = hit.fire;
+    }
+  }
+  weather.rainParticles(world, { x: position.x, y: position.y + PHYSICS.eye, z: position.z });
+  for (const e of weather.drain()) {
+    // Thunder is volume 10000 in vanilla, so it carries at any distance; the
+    // rain loop and the explosion are placed where they happen.
+    const far = e.sound === "ambient.weather.thunder";
+    sounds.play(e.sound, { volume: Math.min(1, e.volume), pitch: e.pitch, position: far ? null : { x: e.x, y: e.y, z: e.z } });
+  }
+}
 function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   const underwater =
     world.get(
@@ -992,7 +1028,9 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
       Math.floor(position.y + PHYSICS.eye),
       Math.floor(position.z),
     ) === 10;
-  survival.tick({ underwater, inWater, inLava: inLavaNow });
+  tickWeather();
+  const wet = isWet(weather, world, { x: position.x, y: position.y, z: position.z, inWater }, PHYSICS.height);
+  survival.tick({ underwater, inWater: wet, inLava: inLavaNow });
   // Entity.onEntityUpdate: standing in lava halves the fall distance every tick.
   if (inLavaNow) fallDistance *= 0.5;
   if (!survival.creative) {
@@ -1936,6 +1974,7 @@ function shadowCasters(partial) {
 }
 async function boot(){try {
   scene = new VoxelScene($("#viewport"));
+  scene.weather = weather;
   await scene.textures.ready;
   xpRenderer=new ExperienceRenderer(scene.scene);
   sounds = new SoundBank(
@@ -1958,7 +1997,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, get mobs() { return mobs; }, breakBlock };
+    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, get mobs() { return mobs; }, breakBlock, get weather() { return weather; } };
   scene.preview(0);
   scene.render(0);
   renderWorlds();
