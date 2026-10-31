@@ -8,6 +8,7 @@ import { sheepColor, childColor } from "./sheep.js";
 import { sneakEdge, criticalDamage } from "./player-movement.js";
 import { MobAI } from "./ai.js";
 import { touchesFire, fireContact } from "./fire.js";
+import { webMove, webContact } from './webs.js';
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
 export function wrapDegrees(a) {
@@ -36,7 +37,7 @@ const clampYaw = (from, to, max) => f(from - Math.min(Math.max(wrapDegrees(f(fro
 // to prevPos before every onUpdate), the Java-convention yaw/pitch degrees and
 // the limb swing. `gait` is the old limb phase from earlier saves.
 // Physics state is rebuilt on load as well: motion is already reset there.
-const TRANSIENT = ["onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "fire", "idle", "revenge", "recentlyHit"];
+const TRANSIENT = ["inWeb", "onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "fire", "idle", "revenge", "recentlyHit"];
 const INTERPOLATED = [...TRANSIENT, "eggTimer", "wingRotation", "destPos", "oFlapSpeed", "oFlap", "wingRotDelta", "px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
 // Entity.rotationYaw is Java degrees (0 faces +z, increasing toward -x); e.yaw
 // is the radian bearing used by the movement code, which turns toward +x.
@@ -224,6 +225,11 @@ export function moveEntity(world, e, w, h, dx, dy, dz) {
   // Entity.width/height are floats (setSize), so the box edges use their float values.
   w = f(w);
   h = f(h);
+  if (e.inWeb) {
+    const requested = { vx: dx, vy: dy, vz: dz };
+    [dx, dy, dz] = webMove(e, requested);
+    e.vx = e.vy = e.vz = 0;
+  }
   // A sneaking EntityPlayer on the ground never walks off an edge (player-movement.js).
   if (e.sneaking && e.onGround)
     [dx, dz] = sneakEdge(dx, dz, (ox, oz) => !collisionBoxes(world, [e.x - w / 2 + ox, e.y - 1, e.z - w / 2 + oz, e.x + w / 2 + ox, e.y - 1 + h, e.z + w / 2 + oz]).length);
@@ -271,6 +277,7 @@ export function moveEntity(world, e, w, h, dx, dy, dz) {
     landed = e.fallDistance;
     e.fallDistance = 0;
   } else if (dy < 0) e.fallDistance = f(e.fallDistance - dy);
+  webContact(world, bb, e);
   return landed;
 }
 // Entity.moveFlying (sa.a(FFF)): `forward` (and `strafe`) scaled to `friction`,

@@ -1,0 +1,1 @@
+Shadow probe maps internal cobweb51 to original30. Regenerated reference confirms renderAsNormalBlock false and full selection bounds; all prior block records unchanged. 447 tests/build pass; web excluded from shadow receivers.

@@ -1,0 +1,1 @@
+Cobweb native ID30 mapping to internal51 and README release documentation complete. All native creative tab/search and 63 inventory cases pass; 447 JS tests/build pass. Publication tracked in main 0.19 handoff.

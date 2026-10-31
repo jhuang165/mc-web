@@ -188,6 +188,6 @@ test("dye sets an unsheared sheep's fleece to 15 - damage and uses one dye in su
 
 test("creative lists flowers in Decorations and the sixteen dyes in Materials", () => {
   const decorations = CREATIVE_TABS[1].items, materials = CREATIVE_TABS[10].items;
-  assert.deepEqual(decorations.slice(3, 13), [YELLOW_FLOWER, RED_FLOWER, ...Array.from({ length: 8 }, (_, i) => [RED_FLOWER, i + 1])]);
+  assert.deepEqual(decorations.slice(4, 14), [YELLOW_FLOWER, RED_FLOWER, ...Array.from({ length: 8 }, (_, i) => [RED_FLOWER, i + 1])]);
   assert.deepEqual(materials.slice(-16), [DYE, ...Array.from({ length: 15 }, (_, i) => [DYE, i + 1])]);
 });

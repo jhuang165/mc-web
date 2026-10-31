@@ -9,6 +9,8 @@ import { waterAcceleration, inLava } from "./fluids.js";
 import { LAVA } from "./world.js";
 import { touchesFire, fireContact } from "./fire.js";
 
+import { webMove, webContact } from './webs.js';
+
 const W = 0.125, H = 0.25, LIFETIME = 6000;
 const f = Math.fround;
 
@@ -140,6 +142,7 @@ export class ItemEntities {
       e.onGround = false;
       return;
     }
+    [dx, dy, dz] = webMove(e, e, ['mx', 'my', 'mz']);
     const [a, b, c, d, g, h] = this.box(e),
       list = this.boxes(world, Math.min(a, a + dx), Math.min(b, b + dy), Math.min(c, c + dz), Math.max(d, d + dx), Math.max(g, g + dy), Math.max(h, h + dz)),
       box = [a, b, c, d, g, h];
@@ -170,6 +173,7 @@ export class ItemEntities {
     if (odx !== dx) e.mx = 0;
     if (odz !== dz) e.mz = 0;
     if (ody !== dy) e.my = 0;
+    webContact(world, this.box(e), e);
   }
   // EntityItem.combineItems: the smaller stack joins the larger one.
   combine(e, other, maxStack) {

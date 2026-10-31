@@ -58,10 +58,11 @@ export const BLOCKS = [
   {name:'Oak sapling',color:'#5f8f2f'},
   {name:'Carrots',color:'#6c9634',hidden:true},
   {name:'Potatoes',color:'#7f9a42',hidden:true},
+  {name:'Cobweb',color:'#dedede'},
 ];
 export const WATER=10,LAVA=42;
 export const SNOW_LAYER=46,ICE=47,SAPLING=48;
-export const CARROTS=49,POTATOES=50;
+export const CARROTS=49,POTATOES=50,WEB=51;
 export const isLiquid=b=>b===WATER||b===LAVA;
 export const YELLOW_FLOWER = BLOCKS.findIndex((b) => b.name === 'Dandelion');
 export const RED_FLOWER = BLOCKS.findIndex((b) => b.name === 'Red flower');
@@ -144,7 +145,7 @@ export const ticksRandomly=b=>b===1||b===5||b===29||b===30||isCrop(b)||b===LAVA|
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE]);
+const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB]);
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 export const normalCube=b=>opaqueCube(b)&&b!==5;
 // setBlockBoundsBasedOnState: chests are inset by 1/16 except towards a partner.
@@ -196,7 +197,7 @@ export class World {
     const b = this.get(x, y, z);
     // A flat snow layer (meta 0) has no collision box, so it is not an obstacle.
     if (b === SNOW_LAYER) return (this.meta[this.index(x, y, z)] & 7) !== 0;
-    return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== FIRE && !isPlant(b);
+    return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== FIRE && b !== WEB && !isPlant(b);
   }
   // Section (16 high) random-tick refcounts, kept up to date by put() once built.
   sectionTickCount(cx, cz, s) {

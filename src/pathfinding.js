@@ -2,7 +2,7 @@
 // (aye), Path (ayd, the binary heap), PathEntity (ayf), PathFinder (ayg) and
 // PathNavigate (vv). See public/research/pathfinding.md for the obfuscated names,
 // what is ported and the deliberate deviations (a node cap and a search budget).
-import { isPlant } from "./world.js";
+import { isPlant, WEB } from "./world.js";
 const f = Math.fround;
 const WATER = 10, LAVA = 42;
 const floor = Math.floor;
@@ -176,7 +176,7 @@ export function defaultClassify(id) {
   if (id === 0) return { air: true, passable: true };
   if (id === WATER) return { water: true, passable: true };
   if (id === LAVA) return { lava: true, passable: false };
-  if (id === 20 || isPlant(id)) return { passable: true };
+  if (id === 20 || id === WEB || isPlant(id)) return { passable: true };
   return { passable: false };
 }
 const classifyCache = new Map();

@@ -1,3 +1,4 @@
+import { webMove, webContact } from './webs.js';
 import "./style.css";
 import "./minecraft-ui.css";
 import "./container-ui.css";
@@ -22,6 +23,7 @@ import {
   isCrop,
   SNOW_LAYER,
   SAPLING,
+  WEB,
   ICE,
   WATER,
   slipperiness,
@@ -585,7 +587,7 @@ function launch(record) {
     // Block light for canBlockFreeze/canSnowAt/melting is the scene's light volume.
     world.blockLight = (x, y, z) => scene.light.blockAt(x, y, z);
     // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
-    fluids = new Fluids(world, { fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : b === SAPLING ? [{ id: b, count: 1, damage: world.getMeta(x, y, z) & 7 }] : cropDrops(b,Math.random,world.getMeta(x,y,z)); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
+    fluids = new Fluids(world, { fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === WEB ? [{ id: 321, count: 1 }] : b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : b === SAPLING ? [{ id: b, count: 1, damage: world.getMeta(x, y, z) & 7 }] : cropDrops(b,Math.random,world.getMeta(x,y,z)); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
     fluids.wake();
     watchFlowers();
     // BlockFire and the static-lava ignition roll: scheduled and random ticks (fire.js). Fire reaches the
@@ -1062,6 +1064,7 @@ function die() {
     playerBody.reset(position, yaw, pitch);
     velocity.set(0, 0, 0);
     fallDistance = 0;
+    motion.inWeb = false;
     renderHotbar();
     renderVitals();
     resume();
@@ -1135,7 +1138,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
       survival.damage(Math.ceil(fallDistance - 3), "a fall");
     fallDistance = 0;
   }
-  if (inWater) fallDistance = 0;
+  if (inWater || motion.inWeb) fallDistance = 0;
   items.tick(world, (st) => survival.inventory.maxStack(st));
   if (survival.health > 0) {
     const picked = items.collect(position, PHYSICS.width, PHYSICS.height, (st) => survival.inventory.add(st));
@@ -1653,7 +1656,8 @@ function movementTick() {
   let landed = false;
   collidedH = false;
   // Entity.moveEntity's sneak edge loop shortens this tick's x/z move, not the motion.
-  const moves = { x: velocity.x, y: velocity.y, z: velocity.z };
+  const [mx, my, mz] = webMove(motion, velocity, ['x', 'y', 'z']);
+  const moves = { x: mx, y: my, z: mz };
   if (sneakOnGround)
     [moves.x, moves.z] = sneakEdge(moves.x, moves.z, (ox, oz) => !collides(world, position.x + ox, position.y - 1, position.z + oz));
   for (const axis of ["y", "x", "z"]) {
@@ -1684,6 +1688,7 @@ function movementTick() {
   }
   grounded =
     landed || collides(world, position.x, position.y - 0.001, position.z);
+  webContact(world, playerBox(), motion, flying);
   motion.endMove();
   if (!flying) {
     velocity.y = lava

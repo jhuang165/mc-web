@@ -1,5 +1,5 @@
 import {miningState,blockWear} from "./mining.js";
-import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WATER, LAVA, CARROTS, POTATOES } from "./world.js";
+import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WEB, WATER, LAVA, CARROTS, POTATOES } from "./world.js";
 import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,ChestContainer,makeStack} from "./inventory.js";
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
 import { Effects } from "./status-effects.js";
@@ -218,6 +218,7 @@ for(let id=29;id<=39;id++)MATERIALS[id]={hardness:id<=30?.6:0,kind:id<=30?'shove
 MATERIALS[YELLOW_FLOWER]=MATERIALS[RED_FLOWER]={hardness:0};
 // BlockSapling: instant break (hardness 0), drops itself (damage 0 for the oak).
 MATERIALS[SAPLING]={hardness:0};
+MATERIALS[WEB]={hardness:4,drop:321};
 MATERIALS[CARROTS]=MATERIALS[POTATOES]={hardness:0,drop:0};
 export const RECIPES = [];
 function recipe(id, name, rows, keys, output, count = 1) {

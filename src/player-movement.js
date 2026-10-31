@@ -74,6 +74,7 @@ export class PlayerMotion {
     this.reset();
   }
   reset() {
+    this.inWeb = false;
     this.sprinting = false;
     this.sneaking = false;
     this.sprintToggleTimer = 0;

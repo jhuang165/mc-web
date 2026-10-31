@@ -3,7 +3,7 @@
 // World.rayTraceBlocks (ahb.a(azw, azw, Z, Z, Z)) and EntityCow.interact (wh.a(yz)).
 // Ids are this build's own; Minecraft's are 325 (bucket), 326 (water), 327 (lava) and
 // 335 (milk).
-import { WATER, LAVA, isLiquid, isPlant, isCrop, blockBounds } from "./world.js";
+import { WATER, LAVA, isLiquid, WEB, isPlant, isCrop, blockBounds } from "./world.js";
 import { makeStack } from "./inventory.js";
 import { ITEMS } from "./survival.js";
 
@@ -18,7 +18,7 @@ export const isBucket = (item) => !!item?.bucket;
 // Blocks without a collision box (Block.getCollisionBoundingBoxFromPool is null): the
 // liquids, torches and plants. rayTraceBlocks skips them when it ignores blocks
 // without a bounding box, which is what a filled bucket asks for.
-const noBox = (b) => isLiquid(b) || b === 20 || isPlant(b);
+const noBox = (b) => isLiquid(b) || b === 20 || b === WEB || isPlant(b);
 // Block.canCollideCheck (aji.a(IZ)Z): a liquid only counts as a hit when the ray
 // stops on liquids and the cell is a source (BlockLiquid.canCollideCheck).
 const canCollide = (b, meta, stopOnLiquid) => (isLiquid(b) ? stopOnLiquid && meta === 0 : true);
