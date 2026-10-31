@@ -1,5 +1,70 @@
 import { SIZE, HEIGHT, hash, raycast as voxelRay } from "./world.js";
 import { ITEMS } from "./survival.js";
+const f = Math.fround;
+// MathHelper.wrapAngleTo180_float (qh.g).
+export function wrapDegrees(a) {
+  a = f(a % 360);
+  if (a >= 180) a = f(a - 360);
+  if (a < -180) a = f(a + 360);
+  return a;
+}
+// sv.h shifts each prev angle by whole turns until it is within 180 degrees of
+// the current one, so the renderer's lerp never spins the long way round.
+export function nearAngle(prev, cur) {
+  while (f(cur - prev) < -180) prev = f(prev - 360);
+  while (f(cur - prev) >= 180) prev = f(prev + 360);
+  return prev;
+}
+// RendererLivingEntity.interpolateRotation (boh.a(FFF)F).
+export function interpolateRotation(prev, cur, partial) {
+  let d = f(cur - prev);
+  while (d < -180) d = f(d + 360);
+  while (d >= 180) d = f(d - 360);
+  return f(prev + f(partial * d));
+}
+// EntityBodyHelper.func_75665_a (tr.a(FFF)F): `to` turned toward `from`, at most `max` away.
+const clampYaw = (from, to, max) => f(from - Math.min(Math.max(wrapDegrees(f(from - to)), -max), max));
+// Transient render state, rebuilt on load: lastTickPos (which World sets equal
+// to prevPos before every onUpdate), the Java-convention yaw/pitch degrees and
+// the limb swing. `gait` is the old limb phase from earlier saves.
+const INTERPOLATED = ["px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
+// Entity.rotationYaw is Java degrees (0 faces +z, increasing toward -x); e.yaw
+// is the radian bearing used by the movement code, which turns toward +x.
+const javaYaw = (e) => f((-e.yaw * 180) / Math.PI) + 0;
+// Seed every prev field from the current state (spawn, load, reset): RenderManager
+// sets lastTickPos = pos at ticksExisted 0 so nothing interpolates from the origin.
+export function syncInterpolation(e) {
+  const yaw = javaYaw(e);
+  return Object.assign(e, {
+    px: e.x, py: e.y, pz: e.z,
+    rotationYaw: yaw, prevRotationYaw: yaw, renderYawOffset: yaw, prevRenderYawOffset: yaw,
+    rotationYawHead: yaw, prevRotationYawHead: yaw, rotationPitch: 0, prevRotationPitch: 0,
+    limbSwing: 0, limbSwingAmount: 0, prevLimbSwingAmount: 0, bodyTicks: 0, bodyHeadYaw: yaw,
+  });
+}
+// What RenderManager.renderEntitySimple and RendererLivingEntity.doRender feed
+// the model at `partial`: lastTickPos lerp, body/head yaw through
+// interpolateRotation (head relative to the body), pitch, limbSwing
+// (limbSwing - limbSwingAmount * (1 - partial), x3 for children) and
+// limbSwingAmount (lerped, capped at 1), age in ticks, and the death roll
+// (deathTime + partial - 1) / 20 * 1.6 -> sqrt, capped at 1, times 90 degrees.
+export function mobPose(e, partial) {
+  const p = f(partial), lerp = (a, b) => a + (b - a) * p,
+    body = interpolateRotation(e.prevRenderYawOffset, e.renderYawOffset, p),
+    head = interpolateRotation(e.prevRotationYawHead, e.rotationYawHead, p);
+  let swing = f(e.limbSwing - f(e.limbSwingAmount * f(1 - p))),
+    amount = f(e.prevLimbSwingAmount + f(f(e.limbSwingAmount - e.prevLimbSwingAmount) * p)),
+    death = 0;
+  if (e.growingAge < 0) swing = f(swing * 3);
+  if (amount > 1) amount = 1;
+  if (e.death > 0) death = f(Math.min(1, f(Math.sqrt(f(f(f(f(e.death + p) - 1) / 20) * f(1.6))))) * 90);
+  return {
+    x: lerp(e.px, e.x), y: lerp(e.py, e.y), z: lerp(e.pz, e.z),
+    bodyYaw: body, headYaw: f(head - body),
+    headPitch: f(e.prevRotationPitch + f(f(e.rotationPitch - e.prevRotationPitch) * p)),
+    limbSwing: swing, limbSwingAmount: amount, age: e.age + p, death,
+  };
+}
 // Widths and heights are each 1.7.10 constructor's setSize: EntityPig (wo)
 // 0.9 x 0.9, EntityCow (wh) 0.9 x 1.3, EntityZombie (yq) 0.6 x 1.8.
 export const ENTITY_TYPES = {
@@ -72,13 +137,12 @@ export class EntityWorld {
           e.health <= 0
         )
           continue;
-        this.entities.push({
+        this.entities.push(syncInterpolation({
           ...this.create(e.type, e.x, e.y, e.z),
           ...e,
           id: /^mob-\d+$/.test(e.id) ? e.id : "mob-" + this.nextId++,
           health: Math.min(t.health, e.health),
           yaw: Number.isFinite(e.yaw) ? e.yaw : 0,
-          gait: Number.isFinite(e.gait) ? e.gait : 0,
           age: Number.isFinite(e.age) ? e.age : 0,
           growingAge:Number.isInteger(e.growingAge)?Math.max(-24000,Math.min(6000,e.growingAge)):0,
           love:Number.isInteger(e.love)?Math.max(0,Math.min(600,e.love)):0,
@@ -90,7 +154,7 @@ export class EntityWorld {
           vx: 0,
           vz: 0,
           vy: 0,
-        });
+        }));
         this.nextId++;
       }
       this.nextId = Math.max(
@@ -102,7 +166,7 @@ export class EntityWorld {
     } else this.seedAnimals();
   }
   create(type, x, y, z) {
-    return {
+    return syncInterpolation({
       id: "mob-" + this.nextId++,
       type,
       x,
@@ -113,7 +177,6 @@ export class EntityWorld {
       vy: 0,
       vx: 0,
       vz: 0,
-      gait: 0,
       age: 0,
       wander: 0,
       hurt: 0,
@@ -121,7 +184,7 @@ export class EntityWorld {
       flee: 0,
       burn: 0,
       growingAge:0,love:0,mateTicks:0,
-    };
+    });
   }
   seedAnimals() {
     const spawn = this.world.spawn();
@@ -176,6 +239,8 @@ export class EntityWorld {
     e.vx = Math.sin(e.yaw) * 0.28;
     e.vz = Math.cos(e.yaw) * 0.28;
     e.vy = 0.2;
+    // EntityLivingBase.attackEntityFrom sets limbSwingAmount to 1.5.
+    e.limbSwingAmount = 1.5;
     survival.exhaust(0.3);
     if (owned&&["sword","axe","pickaxe","shovel"].includes(item?.kind)) survival.wear(tool,item.kind==='sword'?1:2);
     if (e.health <= 0) {
@@ -237,8 +302,19 @@ export class EntityWorld {
       }
     }
     for (const e of this.entities) {
+      // World.updateEntityWithOptionalForce and EntityLivingBase.onEntityUpdate
+      // keep last tick's state for RenderManager and RendererLivingEntity.
+      e.px = e.x;
+      e.py = e.y;
+      e.pz = e.z;
+      e.prevRotationYaw = e.rotationYaw;
+      e.prevRenderYawOffset = e.renderYawOffset;
+      e.prevRotationYawHead = e.rotationYawHead;
+      e.prevRotationPitch = e.rotationPitch;
+      e.prevLimbSwingAmount = e.limbSwingAmount;
       if (e.health <= 0) {
         e.death = (e.death || 0) + 1;
+        this.swingLimbs(e);
         continue;
       }
       const base=ENTITY_TYPES[e.type],scale=e.growingAge<0?.5:1,t={...base,width:base.width*scale,height:base.height*scale};
@@ -306,9 +382,7 @@ export class EntityWorld {
         }
       } else e.burn = 0;
       const dx = Math.sin(e.yaw) * speed + e.vx,
-        dz = Math.cos(e.yaw) * speed + e.vz,
-        oldX = e.x,
-        oldZ = e.z;
+        dz = Math.cos(e.yaw) * speed + e.vz;
       for (const [axis, delta] of [
         ["x", dx],
         ["z", dz],
@@ -346,7 +420,8 @@ export class EntityWorld {
         }
         e.vy = 0;
       } else e.y = next;
-      e.gait += Math.hypot(e.x - oldX, e.z - oldZ) * 4;
+      this.turnBody(e);
+      this.swingLimbs(e);
       if (e.age % 160 === 0 && distance < 18)
         this.events.push({
           sound: "mob." + e.type + ".say",
@@ -369,8 +444,46 @@ export class EntityWorld {
     this.breed();
     this.entities = this.entities.filter((e) => e.health > 0 || e.death < 20);
   }
+  // EntityBodyHelper.func_75664_a (tr.a), reached through EntityLiving.func_110146_f
+  // (sw.f) for AI-enabled mobs; the yaw wraps of EntityLivingBase.onUpdate (sv.h) follow.
+  // Simplified: the head faces e.yaw at once (no EntityLookHelper turn limit).
+  turnBody(e) {
+    const dx = e.x - e.px, dz = e.z - e.pz;
+    e.rotationYaw = f(e.prevRotationYaw + wrapDegrees(f(javaYaw(e) - e.prevRotationYaw)));
+    e.rotationYawHead = e.rotationYaw;
+    if (dx * dx + dz * dz > 2.500000277905201e-7) {
+      e.renderYawOffset = e.rotationYaw;
+      e.rotationYawHead = clampYaw(e.renderYawOffset, e.rotationYawHead, 75);
+      e.bodyHeadYaw = e.rotationYawHead;
+      e.bodyTicks = 0;
+    } else {
+      let limit = 75;
+      if (Math.abs(f(e.rotationYawHead - e.bodyHeadYaw)) > 15) {
+        e.bodyTicks = 0;
+        e.bodyHeadYaw = e.rotationYawHead;
+      } else if (++e.bodyTicks > 10) limit = f(Math.max(f(1 - f(f(e.bodyTicks - 10) / 10)), 0) * 75);
+      e.renderYawOffset = clampYaw(e.rotationYawHead, e.renderYawOffset, limit);
+    }
+    e.prevRotationYaw = nearAngle(e.prevRotationYaw, e.rotationYaw);
+    e.prevRenderYawOffset = nearAngle(e.prevRenderYawOffset, e.renderYawOffset);
+    e.prevRotationPitch = nearAngle(e.prevRotationPitch, e.rotationPitch);
+    e.prevRotationYawHead = nearAngle(e.prevRotationYawHead, e.rotationYawHead);
+  }
+  // Tail of EntityLivingBase.moveEntityWithHeading (sv.e(FF)): limbSwingAmount
+  // eases 0.4 of the way to four times this tick's horizontal travel (cap 1)
+  // and limbSwing advances by it. Dying mobs keep running it.
+  swingLimbs(e) {
+    const dx = e.x - e.px, dz = e.z - e.pz,
+      target = Math.min(f(f(Math.sqrt(dx * dx + dz * dz)) * 4), 1);
+    e.limbSwingAmount = f(e.limbSwingAmount + f(f(target - e.limbSwingAmount) * f(0.4)));
+    e.limbSwing = f(e.limbSwing + e.limbSwingAmount);
+  }
   serialize() {
-    return this.entities.filter((e) => e.health > 0).map((e) => ({ ...e }));
+    return this.entities.filter((e) => e.health > 0).map((e) => {
+      const saved = { ...e };
+      for (const key of INTERPOLATED) delete saved[key];
+      return saved;
+    });
   }
   drain() {
     const events = this.events;

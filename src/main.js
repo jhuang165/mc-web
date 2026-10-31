@@ -1721,10 +1721,11 @@ function animate(now) {
     if (elapsed - lastSave > 5) save();
     scene.effects.crack(mining?.block, mining?.progress);
   } else if (screen === "home") scene.preview(elapsed);
-  if (mobs) mobRenderer.update(mobs.entities,dt);
+  const partial = Math.min(1, accumulator / PHYSICS.tick);
+  if (mobs) mobRenderer.update(mobs.entities,dt,partial);
   chestRenderer?.update(screen === "playing" || screen === "inventory" ? accumulator / PHYSICS.tick : 1);
-  if(xpRenderer)xpRenderer.update(xpOrbs.orbs,elapsed);
-  scene.dropPartial = Math.min(1, accumulator / PHYSICS.tick);
+  if(xpRenderer)xpRenderer.update(xpOrbs.orbs,partial);
+  scene.dropPartial = partial;
   scene.setShadows(screen === "home" ? [] : shadowCasters(scene.dropPartial), { x: position.x, y: position.y + PHYSICS.eye, z: position.z });
   scene.render(elapsed, dt);
   if (firstPerson && animate.pose)
@@ -1737,15 +1738,16 @@ function animate(now) {
     });
 }
 // Entities that cast a shadow, as Java positions: an item's posY is 0.125
-// above its box (yOffset), and items are interpolated like their renderer.
+// above its box (yOffset); items, orbs and mobs are interpolated like their
+// renderers, with `pos` the tick position for the shadow's distance test.
 function shadowCasters(partial) {
   const list = [], lerp = (a, b) => a + (b - a) * partial;
   for (const e of items.items)
     if (e.stack) list.push({ ...SHADOWS.item, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + 0.125, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + 0.125, z: e.z }, height: 0.25 });
-  for (const o of xpOrbs.orbs) list.push({ ...SHADOWS.orb, x: o.x, y: o.y, z: o.z, height: 0.5 });
+  for (const o of xpOrbs.orbs) list.push({ ...SHADOWS.orb, x: lerp(o.px, o.x), y: lerp(o.py, o.y), z: lerp(o.pz, o.z), pos: o, height: 0.5 });
   for (const e of mobs?.entities ?? []) {
     const child = e.growingAge < 0;
-    if (SHADOWS[e.type]) list.push({ ...SHADOWS[e.type], x: e.x, y: e.y, z: e.z, height: ENTITY_TYPES[e.type].height * (child ? 0.5 : 1), child });
+    if (SHADOWS[e.type]) list.push({ ...SHADOWS[e.type], x: lerp(e.px, e.x), y: lerp(e.py, e.y), z: lerp(e.pz, e.z), pos: e, height: ENTITY_TYPES[e.type].height * (child ? 0.5 : 1), child });
   }
   return list;
 }

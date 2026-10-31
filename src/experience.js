@@ -1,3 +1,4 @@
+import {mhSin} from "./lighting.js";
 export const levelCost = level => level >= 30 ? 62+(level-30)*7 : level >= 15 ? 17+(level-15)*3 : 17;
 export class Experience {
  constructor(data={}){data=data&&typeof data==='object'?data:{};this.total=Number.isFinite(data.total)?Math.max(0,Math.min(1000000,Math.floor(data.total))):0;this.score=Number.isFinite(data.score)?Math.max(0,Math.min(2147483647,Math.floor(data.score))):this.total;this.update();}
@@ -9,9 +10,18 @@ export class Experience {
 export const splitExperience=n=>{const out=[];for(const size of [2477,1237,617,307,149,73,37,17,7,3,1])while(n>=size){out.push(size);n-=size;}return out;};
 export function oreExperience(block,random=Math.random){return block===15?Math.floor(random()*3):block===17?3+Math.floor(random()*5):0;}
 export const SMELT_EXPERIENCE={302:.7,304:1,303:1,301:.1,9:.1,3:.1,308:.15,203:.35,205:.35,306:.3,40:.35};
+// EntityXPOrb.getTextureByXP (sq.f): the 16x16 frame of experience_orb.png.
+export const orbIcon=v=>v>=2477?10:v>=1237?9:v>=617?8:v>=307?7:v>=149?6:v>=73?5:v>=37?4:v>=17?3:v>=7?2:v>=3?1:0;
+// RenderXPOrb.func_76986_a (bnp.a): the tint cycles with (xpColor + partial) / 2
+// through MathHelper.sin; each channel is truncated to 0..255.
+export function orbColor(color,partial){const f=Math.fround,t=f(f(color+f(partial))/2);return [Math.trunc(f(f(f(mhSin(t)+1)*0.5)*255)),255,Math.trunc(f(f(f(mhSin(f(t+f(4.1887903)))+1)*f(0.1))*255))];}
+// Interpolation state: px/py/pz (lastTickPos, equal to prevPos for an orb) and
+// `color` (xpColor, ticks since spawn). Neither is saved.
+const seed=o=>({...o,px:o.x,py:o.y,pz:o.z,color:0});
+const strip=({px,py,pz,color,...o})=>o;
 export class ExperienceOrbs {
- constructor(saved=[]){this.orbs=Array.isArray(saved)?saved.slice(0,512).filter(o=>o&&[o.x,o.y,o.z,o.value,o.life].every(Number.isFinite)&&o.value>0&&o.value<=2477&&o.life>0&&o.life<=6000).map(o=>({...o,vx:0,vy:0,vz:0})):[];}
- spawn(value,p){for(const n of splitExperience(Math.max(0,Math.floor(value))).slice(0,128))this.orbs.push({x:p.x,y:p.y+.5,z:p.z,value:n,life:6000,delay:10,vx:(Math.random()-.5)*.12,vy:.12,vz:(Math.random()-.5)*.12});}
- tick(world,player,xp){let picked=0;this.orbs=this.orbs.filter(o=>{if(--o.life<=0)return false;o.delay=Math.max(0,(o.delay||0)-1);const dx=player.x-o.x,dy=player.y+.8-o.y,dz=player.z-o.z,d=Math.hypot(dx,dy,dz);if(d<1&&!o.delay){xp.add(o.value);picked+=o.value;return false;}if(d<8&&d>.01){const pull=(1-d/8)**2*.1;o.vx+=dx/d*pull;o.vy+=dy/d*pull;o.vz+=dz/d*pull;}o.vy-=.03;for(const a of ['x','y','z']){const v='v'+a,p={...o,[a]:o[a]+o[v]};if(!world.solid(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z)))o[a]=p[a];else o[v]*=a==='y'?-.6:-.4;}o.vx*=.98;o.vy*=.98;o.vz*=.98;return true;});return picked;}
- serialize(){return this.orbs.map(o=>({...o}));}
+ constructor(saved=[]){this.orbs=Array.isArray(saved)?saved.slice(0,512).filter(o=>o&&[o.x,o.y,o.z,o.value,o.life].every(Number.isFinite)&&o.value>0&&o.value<=2477&&o.life>0&&o.life<=6000).map(o=>seed({...o,vx:0,vy:0,vz:0})):[];}
+ spawn(value,p){for(const n of splitExperience(Math.max(0,Math.floor(value))).slice(0,128))this.orbs.push(seed({x:p.x,y:p.y+.5,z:p.z,value:n,life:6000,delay:10,vx:(Math.random()-.5)*.12,vy:.12,vz:(Math.random()-.5)*.12}));}
+ tick(world,player,xp){let picked=0;this.orbs=this.orbs.filter(o=>{o.px=o.x;o.py=o.y;o.pz=o.z;if(--o.life<=0)return false;o.delay=Math.max(0,(o.delay||0)-1);const dx=player.x-o.x,dy=player.y+.8-o.y,dz=player.z-o.z,d=Math.hypot(dx,dy,dz);if(d<1&&!o.delay){xp.add(o.value);picked+=o.value;return false;}if(d<8&&d>.01){const pull=(1-d/8)**2*.1;o.vx+=dx/d*pull;o.vy+=dy/d*pull;o.vz+=dz/d*pull;}o.vy-=.03;for(const a of ['x','y','z']){const v='v'+a,p={...o,[a]:o[a]+o[v]};if(!world.solid(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z)))o[a]=p[a];else o[v]*=a==='y'?-.6:-.4;}o.vx*=.98;o.vy*=.98;o.vz*=.98;o.color++;return true;});return picked;}
+ serialize(){return this.orbs.map(strip);}
 }
