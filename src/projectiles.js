@@ -8,7 +8,7 @@
 // EntityBreakingFX (bju) particles and removes the ball. `y` is the bottom of
 // the box, which is also the entity's posY (yOffset 0).
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
-import { blockBounds, snowSelectionHeight, FIRE, CARROTS, REEDS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
+import { blockBounds, collisionBounds, snowSelectionHeight, FIRE, CARROTS, REEDS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
 import { ladderBounds } from "./ladders.js";
 import { REED_BOUNDS } from "./plants.js";
 import { ENTITY_TYPES } from "./entities.js";
@@ -411,7 +411,7 @@ export class Projectiles {
       for (let by = Math.floor(y0) - 1; by < Math.floor(y1 + 1); by++)
         for (let bz = Math.floor(z0); bz < Math.floor(z1 + 1); bz++)
           if (world.solid(bx, by, bz)) {
-            const [a, b, c, d, e, g] = blockBounds(world, bx, by, bz);
+            const [a, b, c, d, e, g] = collisionBounds(world, bx, by, bz);
             if (bx + d > x0 && bx + a < x1 && by + e > y0 && by + b < y1 && bz + g > z0 && bz + c < z1) out.push([bx + a, by + b, bz + c, bx + d, by + e, bz + g]);
           }
     return out;

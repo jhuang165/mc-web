@@ -58,7 +58,8 @@ export function moveWeights({ forward, strafe }) {
 // at least 0.2 while the sneak key is down, and Entity.moveEntity scales ySize by 0.4 every
 // tick and places posY at minY + yOffset - ySize. So a sneaking eye sits 0.2 * 0.4 = 0.08
 // lower the moment the key is down, and rises back as 0.08, 0.032, 0.0128... (no easing of
-// its own). Steps up stairs also feed ySize in the original; this build has no step-up.
+// its own). Steps do not feed ySize in 1.7.10 (only Entity.setPositionAndRotation resets it),
+// but moveEntity refuses the 0.5 step while ySize >= 0.05 unless sneaking on the ground.
 export const SNEAK_YSIZE = 0.2;
 export const YSIZE_DECAY = 0.4;
 export function nextYSize(ySize, sneaking) {

@@ -53,7 +53,7 @@ import {Experience,ExperienceOrbs,oreExperience,smeltExperience} from "./experie
 import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import {Farming,cropDrops} from "./farming.js";
-import { EntityWorld, ENTITY_TYPES } from "./entities.js";
+import { EntityWorld, ENTITY_TYPES, moveEntity } from "./entities.js";
 import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
@@ -73,7 +73,7 @@ import { JavaRandom } from "./lighting.js";
 import { TntRenderer } from "./tnt-renderer.js";
 import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
 import { HUNGER, POISON } from "./status-effects.js";
-import { PlayerMotion, sneakEdge, moveWeights, isCritical, ATTACK_SLOWDOWN, groundAccel, airAccel, LIQUID_ACCEL, JUMP_MOTION, jumpExhaustion, sprintJumpPush, FLY_SPEED, FLY_Y_DRAG, flyVertical, fovMultiplier } from "./player-movement.js";
+import { PlayerMotion, SNEAK_YSIZE, moveWeights, isCritical, ATTACK_SLOWDOWN, groundAccel, airAccel, LIQUID_ACCEL, JUMP_MOTION, jumpExhaustion, sprintJumpPush, FLY_SPEED, FLY_Y_DRAG, flyVertical, fovMultiplier } from "./player-movement.js";
 import { spawnRunningParticles, freshRandom } from "./particles.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
@@ -1883,41 +1883,30 @@ function movementTick() {
   }
   // EntityPlayer.moveEntityWithHeading keeps motionY from before the move when flying.
   const flyY = velocity.y;
-  let landed = false;
-  collidedH = false;
-  // Entity.moveEntity's sneak edge loop shortens this tick's x/z move, not the motion.
+  // Entity.moveEntity (entities.js, replayed against the original player class): y, x, z
+  // against the block collision boxes, the 0.5 stepHeight retry and the sneak edge loop,
+  // both shortening this tick's move (after the web slowdown), not the motion.
   const [mx, my, mz] = webMove(motion, velocity, ['x', 'y', 'z']);
-  const moves = { x: mx, y: my, z: mz };
-  if (sneakOnGround)
-    [moves.x, moves.z] = sneakEdge(moves.x, moves.z, (ox, oz) => !collides(world, position.x + ox, position.y - 1, position.z + oz));
-  for (const axis of ["y", "x", "z"]) {
-    const delta = moves[axis],
-      substeps = Math.max(1, Math.ceil(Math.abs(delta) / 0.2));
-    for (let i = 0; i < substeps; i++) {
-      const before = position[axis];
-      position[axis] += delta / substeps;
-      position.x = Math.max(0.31, Math.min(SIZE - 0.31, position.x));
-      position.z = Math.max(0.31, Math.min(SIZE - 0.31, position.z));
-      if (collides(world, ...position.toArray())) {
-        position[axis] = before;
-        let low = 0,
-          high = Math.abs(delta / substeps);
-        for (let k = 0; k < 12; k++) {
-          const mid = (low + high) / 2;
-          position[axis] = before + Math.sign(delta) * mid;
-          if (collides(world, ...position.toArray())) high = mid;
-          else low = mid;
-        }
-        position[axis] = before + Math.sign(delta) * low;
-        velocity[axis] = 0;
-        if (axis !== "y") collidedH = true;
-        if (axis === "y" && delta < 0) landed = true;
-        break;
-      }
+  const body = {
+    x: position.x, y: position.y, z: position.z, vx: velocity.x, vy: velocity.y, vz: velocity.z,
+    onGround: grounded, sneaking: sneak, fallDistance: 0,
+    // onLivingUpdate's sneak raise; moveEntity applies the * 0.4 decay before its step test.
+    ySize: sneak && motion.ySize < Math.fround(SNEAK_YSIZE) ? Math.fround(SNEAK_YSIZE) : motion.ySize,
+  };
+  moveEntity(world, body, PHYSICS.width, PHYSICS.height, mx, my, mz);
+  position.set(body.x, body.y, body.z);
+  velocity.set(body.vx, body.vy, body.vz);
+  collidedH = body.collidedH;
+  // The finite world's edge acts as a wall.
+  for (const axis of ["x", "z"]) {
+    const held = Math.max(0.31, Math.min(SIZE - 0.31, position[axis]));
+    if (held !== position[axis]) {
+      position[axis] = held;
+      velocity[axis] = 0;
+      collidedH = true;
     }
   }
-  grounded =
-    landed || collides(world, position.x, position.y - 0.001, position.z);
+  grounded = body.onGround;
   webContact(world, playerBox(), motion, flying);
   motion.endMove();
   // Pushing into a wall while on a ladder climbs at 0.2 a tick.

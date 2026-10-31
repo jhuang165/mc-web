@@ -180,6 +180,12 @@ export function blockBounds(world,x,y,z){
   const c=(dx,dz)=>world.get(x+dx,y,z+dz)===41;
   return[c(-1,0)?0:1/16,0,c(0,-1)?0:1/16,c(1,0)?1:15/16,.875,c(0,1)?1:15/16];
 }
+// Block.getCollisionBoundingBoxFromPool: as blockBounds, except BlockFarmland (aky) collides
+// as a full cube although it renders and selects 15/16 high.
+export function collisionBounds(world,x,y,z){
+  const b=world.get(x,y,z);
+  return b===29||b===30?[0,0,0,1,1,1]:blockBounds(world,x,y,z);
+}
 // World.solid's test for one cell: what has a collision box. Sugar cane has none
 // (BlockReed.getCollisionBoundingBoxFromPool returns null).
 export function solidBlock(b, meta = 0) {
@@ -426,7 +432,7 @@ export function collides(world, x, y, z) {
         bz++
       )
         if (world.solid(bx, by, bz)) {
-          const [x0, , z0, x1, y1, z1] = blockBounds(world, bx, by, bz);
+          const [x0, , z0, x1, y1, z1] = collisionBounds(world, bx, by, bz);
           if (y < by + y1 - 1e-6 && x - r < bx + x1 - 1e-6 && x + r > bx + x0 + 1e-6 && z - r < bz + z1 - 1e-6 && z + r > bz + z0 + 1e-6) return true;
         }
   return false;

@@ -1,7 +1,7 @@
 import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE } from "./spider.js";
 import {CARROT,zombieRareDrop} from './crops.js';
 import { creeperFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from "./creeper.js";
-import { SIZE, HEIGHT, hash, slipperiness, blockBounds, WOOL, isLiquid, DYE } from "./world.js";
+import { SIZE, HEIGHT, hash, slipperiness, collisionBounds, WOOL, isLiquid, DYE } from "./world.js";
 import { isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
 import { ITEMS } from "./survival.js";
 import { mhSin, mhCos } from "./lighting.js";
@@ -196,7 +196,7 @@ function collisionBoxes(world, b) {
     for (let by = Math.floor(b[1]) - 1; by < Math.floor(b[4] + 1); by++)
       for (let bz = Math.floor(b[2]); bz < Math.floor(b[5] + 1); bz++)
         if (world.solid(bx, by, bz)) {
-          const [a, c, d, g, h, i] = blockBounds(world, bx, by, bz);
+          const [a, c, d, g, h, i] = collisionBounds(world, bx, by, bz);
           if (bx + g > b[0] && bx + a < b[3] && by + h > b[1] && by + c < b[4] && bz + i > b[2] && bz + d < b[5]) out.push([bx + a, by + c, bz + d, bx + g, by + h, bz + i]);
         }
   return out;
@@ -231,6 +231,7 @@ const shift = (bb, dx, dy, dz) => {
 // ground, retry with stepHeight (0.5) and keep that result unless it is no
 // farther. Sets the collided/onGround flags, zeroes motion on blocked axes and
 // runs Entity.updateFallState (sa.a(DZ)V); returns the fall distance on landing.
+// The player also passes `ySize` (after onLivingUpdate's sneak raise); it decays here.
 // `step` is Entity.stepHeight (0 for EntityTNTPrimed, which never steps).
 export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT) {
   // Entity.width/height are floats (setSize), so the box edges use their float values.
@@ -241,8 +242,11 @@ export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT) {
     [dx, dy, dz] = webMove(e, requested);
     e.vx = e.vy = e.vz = 0;
   }
+  // Entity.moveEntity begins with ySize *= 0.4F (only the player's eye drop uses it).
+  if (e.ySize !== undefined) e.ySize = f(e.ySize * f(0.4));
   // A sneaking EntityPlayer on the ground never walks off an edge (player-movement.js).
-  if (e.sneaking && e.onGround)
+  const sneakEdgeOn = !!(e.sneaking && e.onGround);
+  if (sneakEdgeOn)
     [dx, dz] = sneakEdge(dx, dz, (ox, oz) => !collisionBoxes(world, [e.x - w / 2 + ox, e.y - 1, e.z - w / 2 + oz, e.x + w / 2 + ox, e.y - 1 + h, e.z + w / 2 + oz]).length);
   const odx = dx, ody = dy, odz = dz, half = w / 2,
     // An entity that keeps its bounding box (`e.bb`, as Entity.boundingBox) moves that
@@ -258,7 +262,9 @@ export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT) {
   shift(bb, dx, 0, 0);
   for (const o of list) dz = offsetZ(o, bb, dz);
   shift(bb, 0, 0, dz);
-  if (step > 0 && grounded && (odx !== dx || odz !== dz)) {
+  // The step retry also needs the sneak-edge flag or ySize < 0.05F: an eye still lowered
+  // from sneaking (0.08 on the first tick after release) does not step.
+  if (step > 0 && grounded && (sneakEdgeOn || !(e.ySize >= f(0.05))) && (odx !== dx || odz !== dz)) {
     const sx = dx, sy = dy, sz = dz, flat = bb.slice();
     dx = odx; dy = step; dz = odz;
     bb.splice(0, 6, ...start);

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {World,collides} from './world.js';
+import {World,collides,blockHeight} from './world.js';
 import {Farming,cropDrops} from './farming.js';
 import {craftingResult} from './survival.js';import {makeStack} from './inventory.js';
 function farm(){const w=new World('Farm','meadow',2);for(let x=19;x<=23;x++)for(let z=19;z<=23;z++){w.set(x,40,z,2);w.set(x,41,z,0);}return{w,f:new Farming(w)};}
@@ -9,7 +9,8 @@ test('water hydrates farmland within four blocks, and unplanted dry soil reverts
 test('hydrated soil and crop spacing use the original growth-rate formula',()=>{const{w,f}=farm();for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)w.set(20+dx,40,20+dz,30);f.plant(20,40,20);assert.equal(f.growthRate(20,41,20),10);w.set(21,41,20,31);assert.equal(f.growthRate(20,41,20),10);w.set(21,41,21,31);assert.equal(f.growthRate(20,41,20),5);});
 test('crops need light and progress through seven growth stages; bone meal adds two to five',()=>{const{w,f}=farm();f.till(20,40,20);f.plant(20,40,20);assert.equal(f.grow(20,41,20,0,()=>0),false);assert.equal(f.grow(20,41,20,1,()=>0),true);assert.equal(w.get(20,41,20),32);assert.equal(f.fertilize(20,41,20,()=>0),true);assert.equal(w.get(20,41,20),34);assert.equal(f.fertilize(20,41,20,()=>.999),true);assert.equal(w.get(20,41,20),38);assert.equal(f.fertilize(20,41,20),false);});
 test('harvesting returns mature wheat plus seed rolls; immature wheat returns its seed',()=>{assert.deepEqual(cropDrops(31),[{id:309,count:1}]);assert.deepEqual(cropDrops(38,()=>0),[{id:305,count:1},{id:309,count:3}]);assert.deepEqual(cropDrops(38,()=>.99),[{id:305,count:1}]);assert.deepEqual(cropDrops(39,()=>0),[{id:309,count:1}]);assert.deepEqual(cropDrops(39,()=>.5),[]);});
-test('moisture and crop stages survive reload and farmland has its fifteen-sixteenths height',()=>{const{w,f}=farm();f.till(20,40,20);w.set(21,40,20,10);f.soilTick(20,40,20);f.plant(20,40,20);f.fertilize(20,41,20,()=>0);const restored=new World('Farm','meadow',2);restored.restore([...w.edits]);const next=new Farming(restored,f.serialize());assert.equal(next.fields.get('20,40,20'),7);assert.equal(restored.get(20,41,20),33);assert.equal(collides(restored,20.5,40+15/16,20.5),false);assert.equal(collides(restored,20.5,40+15/16-.01,20.5),true);});
+// BlockFarmland renders and selects 15/16 high but its collision box is a full cube.
+test('moisture and crop stages survive reload and farmland collides as a full cube',()=>{const{w,f}=farm();f.till(20,40,20);w.set(21,40,20,10);f.soilTick(20,40,20);f.plant(20,40,20);f.fertilize(20,41,20,()=>0);const restored=new World('Farm','meadow',2);restored.restore([...w.edits]);const next=new Farming(restored,f.serialize());assert.equal(next.fields.get('20,40,20'),7);assert.equal(restored.get(20,41,20),33);assert.equal(collides(restored,20.5,40+15/16,20.5),true);assert.equal(collides(restored,20.5,41,20.5),false);assert.equal(blockHeight(restored.get(20,40,20)),15/16);});
 
 test('landings trample dry or wet farmland using the 1.7.10 fall-distance roll',()=>{
   const {w,f}=farm();

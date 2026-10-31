@@ -36,7 +36,7 @@ Everything here comes from the unchanged 1.7.10 client JAR (sha1 `e80d9b3b...`, 
 
 - Critical-hit particles (`EntityPlayer.onCriticalHit`, 1.7.10 spawns "crit" particles) are not drawn; the damage is.
 - The Knockback enchantment does not exist yet; `attack(..., extraKnockback)` takes any level, main.js passes sprint only.
-- No step-up `ySize` feed (`sa.d` adds the step height to ySize when climbing a one-block step), so the eye does not glide up stairs or blocks.
+- Correction (0.21.1): 1.7.10 has no step-up `ySize` feed. `sa.d` only decays ySize, and refuses the 0.5 step while it is >= 0.05 unless sneaking on the ground ([player step](player-step.md)). Only `setPositionAndRotation` resets it to 0.
 - Underwater tint, block picking and the camera in water do not use the sneak drop; only the eye position does.
 - Cape and nameplate sneak effects are not ported; there is no touch sneak button.
 - Creative flight is not a physics port: Shift stays "descend" and the horizontal input is x0.3.
