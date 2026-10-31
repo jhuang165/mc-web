@@ -687,6 +687,11 @@
       "url": "/audio/1.7.10/random/chestopen.ogg",
       "sha1": "186d5d9481d59cc99bc4be1b5fbb98d0ef877b8e",
       "bytes": 8703
+    },
+    "random/bow": {
+      "url": "/audio/1.7.10/random/bow.ogg",
+      "sha1": "87edc11141fb5a045f2ed830b545aaa73f96ee99",
+      "bytes": 6658
     }
   },
   "events": {
@@ -1184,6 +1189,12 @@
           "type": "event",
           "name": "music.game"
         }
+      ]
+    },
+    "random.bow": {
+      "category": "neutral",
+      "sounds": [
+        "random/bow"
       ]
     }
   }
