@@ -313,25 +313,39 @@ export function particleBasis(yawDeg, pitchDeg, mirror = false) {
   return { x, z, yz: f(f(-z * mhSin(pitch)) * k), xy: f(f(x * mhSin(pitch)) * k), xz: mhCos(pitch) };
 }
 
-// EntityDiggingFX.renderParticle: four corners (s = 0.1 x scale) around the
-// interpolated position and their icon coordinates, a 4-pixel window of the
-// 16-pixel icon at the jitter offset (IIcon.getInterpolatedU/V). `u`/`v` are
-// the icon's [min, max]; v grows downwards as in the atlas image.
-export function particleQuad(p, partial, basis, [u0, u1] = [0, 1], [v0, v1] = [0, 1]) {
-  const s = f(0.1 * p.scale), x = p.px + (p.x - p.px) * partial, y = p.py + (p.y - p.py) * partial, z = p.pz + (p.z - p.pz) * partial,
-    { x: rx, z: rz, yz, xy, xz } = basis,
-    iu = (d) => u0 + (u1 - u0) * (d / 16), iv = (d) => v0 + (v1 - v0) * (d / 16),
-    ua = iu(f(f(p.jx / 4) * 16)), ub = iu(f(f(f(p.jx + 1) / 4) * 16)), va = iv(f(f(p.jy / 4) * 16)), vb = iv(f(f(f(p.jy + 1) / 4) * 16));
+// EntityFX.renderParticle's corners (bkm.a(bmh, F, FFFFF) and every override): the
+// position interpolated in double and cast to float (less `origin`, the interpPos the
+// original subtracts; the renderers draw in world space), then float sums of the camera
+// basis times the half-size `s`, as the Tessellator stores them. `uv` gives the corners'
+// texture coordinates in draw order.
+export function billboard(p, partial, { x: rx, z: rz, yz, xy, xz }, s, uv, [ox, oy, oz] = [0, 0, 0]) {
+  const x = f(p.px + (p.x - p.px) * partial - ox), y = f(p.py + (p.y - p.py) * partial - oy), z = f(p.pz + (p.z - p.pz) * partial - oz),
+    a = f(rx * s), b = f(yz * s), c = f(xz * s), d = f(rz * s), e = f(xy * s);
   return [
-    [x - rx * s - yz * s, y - xz * s, z - rz * s - xy * s, ua, vb],
-    [x - rx * s + yz * s, y + xz * s, z - rz * s + xy * s, ua, va],
-    [x + rx * s + yz * s, y + xz * s, z + rz * s + xy * s, ub, va],
-    [x + rx * s - yz * s, y - xz * s, z + rz * s - xy * s, ub, vb],
+    [f(f(x - a) - b), f(y - c), f(f(z - d) - e), ...uv[0]],
+    [f(f(x - a) + b), f(y + c), f(f(z - d) + e), ...uv[1]],
+    [f(f(x + a) + b), f(y + c), f(f(z + d) + e), ...uv[2]],
+    [f(f(x + a) - b), f(y - c), f(f(z + d) - e), ...uv[3]],
   ];
+}
+
+// EntityFX.renderParticle's sheet cell (u1, v1 first) for a sprite {u0, u1, v0, v1, size}.
+export const spriteQuad = (p, partial, basis, { u0, u1, v0, v1, size }, origin) =>
+  billboard(p, partial, basis, size, [[u1, v1], [u1, v0], [u0, v0], [u0, v1]], origin);
+
+// EntityDiggingFX / EntityBreakingFX.renderParticle: half-size 0.1 x scale and a 4-pixel
+// window of the 16-pixel icon at the jitter offset (IIcon.getInterpolatedU/V, u0 first).
+// `u`/`v` are the icon's [min, max]; v grows downwards as in the atlas image.
+export function particleQuad(p, partial, basis, [u0, u1] = [0, 1], [v0, v1] = [0, 1], origin) {
+  const iu = (d) => f(u0 + f(f(u1 - u0) * f(d / 16))), iv = (d) => f(v0 + f(f(v1 - v0) * f(d / 16))),
+    ua = iu(f(f(p.jx / 4) * 16)), ub = iu(f(f(f(p.jx + 1) / 4) * 16)), va = iv(f(f(p.jy / 4) * 16)), vb = iv(f(f(f(p.jy + 1) / 4) * 16));
+  return billboard(p, partial, basis, f(f(0.1) * p.scale), [[ua, vb], [ua, va], [ub, va], [ub, vb]], origin);
 }
 
 // Entity.getBrightnessForRender: the light at floor(posY - yOffset + height x 0.66).
 export const particleLightCell = (p) => [Math.floor(p.x), Math.floor(p.y - p.yOffset + (p.box[4] - p.box[1]) * 0.66), Math.floor(p.z)];
 
-// Tessellator.setColorOpaque_F: (int)(c * 255) per channel.
-export const quantize = (c) => Math.trunc(f(c * 255)) / 255;
+// Tessellator.setColorOpaque_F / setColorRGBA_F per channel, as a 0..1 shade.
+export const quantize = (c) => colorByte(c) / 255;
+// One channel of Tessellator.setColorRGBA_F: (int)(c * 255), clamped to 0..255.
+export const colorByte = (c) => Math.min(255, Math.max(0, Math.trunc(f(c * 255))));

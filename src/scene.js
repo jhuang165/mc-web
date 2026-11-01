@@ -496,10 +496,11 @@ export class VoxelScene {
     this.weatherRenderer.update(w, this.world, c, partial, time);
     this.drops.update(this.dropList, this.dropPartial, time * 20);
     this.updateFalling(this.dropPartial);
-    this.projectiles.update(this.projectileList.balls, this.effectRenderer.layers[2], c, this.dropPartial);
+    const particleView = this.particleView ?? { yaw: c.rotation.y, pitch: c.rotation.x };
+    this.projectiles.update(this.projectileList.balls, this.effectRenderer.layers[2], c, this.dropPartial, particleView);
     this.arrows.update(this.arrowList, this.dropPartial);
-    this.particleRenderer.update(this.particles.list, this.dropPartial, this.particleView ?? { yaw: c.rotation.y, pitch: c.rotation.x });
-    this.explosionParticleRenderer.update(this.effectRenderer, this.dropPartial, this.particleView ?? { yaw: c.rotation.y, pitch: c.rotation.x });
+    this.particleRenderer.update(this.particles.list, this.dropPartial, particleView);
+    this.explosionParticleRenderer.update(this.effectRenderer, this.dropPartial, particleView);
     this.sky.render(this.renderer, c, new THREE.Color(...fog));
     this.renderer.render(this.scene, c);
     this.worldTriangles = this.renderer.info.render.triangles;

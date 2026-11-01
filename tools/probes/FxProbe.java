@@ -1,5 +1,6 @@
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.*;
 
 // The particles.png and item-icon particles of the unchanged 1.7.10 client, spawned through
@@ -30,6 +31,69 @@ public class FxProbe extends ParticleProbe {
     public aji a(int x, int y, int z) { return allAir ? aji.e(0) : super.a(x, y, z); }
     // World.canLightningStrikeAt (ahb.y) for BlockLeaves.randomDisplayTick: the case says.
     public boolean y(int x, int y, int z) { return strike; }
+    // World.getLightBrightnessForSkyBlocks (ahb.c(IIII)) for the draw cases' getBrightnessForRender.
+    public int c(int x, int y, int z, int min) { return drawLight >= 0 ? drawLight : super.c(x, y, z, min); }
+  }
+  static int drawLight = -1;
+  // An atlas icon with real bounds, so IIcon.getInterpolatedU/V show in the vertices.
+  public static class BIcon implements rf {
+    public int a() { return 16; }
+    public int b() { return 16; }
+    public float c() { return 0.25f; }
+    public float d() { return 0.3125f; }
+    public float a(double d) { return 0.25f + 0.0625f * (float) d / 16f; }
+    public float e() { return 0.5f; }
+    public float f() { return 0.5625f; }
+    public float b(double d) { return 0.5f + 0.0625f * (float) d / 16f; }
+    public String g() { return "bicon"; }
+  }
+  static Object getIn(Class<?> c, Object o, String name) throws Exception {
+    Field f = c.getDeclaredField(name);
+    f.setAccessible(true);
+    return f.get(o);
+  }
+  // The particle's fields before a draw: prev/pos, age, max, scale, texture index, jitter,
+  // rgba, and every float its own classes (below EntityFX) declare.
+  static String drawState(bkm p) throws Exception {
+    StringBuilder own = new StringBuilder();
+    for (Class<?> c = p.getClass(); c != bkm.class; c = c.getSuperclass())
+      for (Field f : c.getDeclaredFields())
+        if (f.getType() == float.class && !Modifier.isStatic(f.getModifiers())) {
+          f.setAccessible(true);
+          own.append(own.length() > 0 ? "," : "").append("\"" + c.getName() + "." + f.getName() + "\":" + (double) f.getFloat(p));
+        }
+    return "{\"prev\":[" + p.p + "," + p.q + "," + p.r + "],\"pos\":[" + p.s + "," + p.t + "," + p.u + "],\"age\":" + getIn(bkm.class, p, "f") + ",\"max\":" + getIn(bkm.class, p, "g")
+      + ",\"scale\":" + (double) (Float) getIn(bkm.class, p, "h") + ",\"tex\":" + tex(p) + ",\"jitter\":[" + (double) (Float) getIn(bkm.class, p, "d") + "," + (double) (Float) getIn(bkm.class, p, "e")
+      + "],\"rgba\":[" + (double) (Float) getIn(bkm.class, p, "at") + "," + (double) (Float) getIn(bkm.class, p, "au") + "," + (double) (Float) getIn(bkm.class, p, "av") + "," + (double) (Float) getIn(bkm.class, p, "aw")
+      + "],\"box\":[" + p.C.b + "," + p.C.e + "],\"yOffset\":" + (double) p.L + ",\"layer\":" + p.a() + ",\"own\":{" + own + "}}";
+  }
+  // EffectRenderer.renderParticles for one particle: Tessellator.setBrightness(
+  // getBrightnessForRender(partial)), then renderParticle(tessellator, partial, rotationX,
+  // rotationXZ, rotationZ, rotationYZ, rotationXY). The four vertices are read back from the
+  // Tessellator's int buffer (x, y, z, u, v, colour, normal, brightness per vertex) and the
+  // buffer is reset without Tessellator.draw (the only OpenGL step).
+  static String draw(bkm p, float partial, float[] basis) throws Exception {
+    bmh t = bmh.a;
+    t.b();
+    int light = p.c(partial);
+    t.b(light);
+    p.a(t, partial, basis[0], basis[1], basis[2], basis[3], basis[4]);
+    int[] raw = (int[]) getIn(bmh.class, t, "f");
+    int used = (Integer) getIn(bmh.class, t, "p");
+    StringBuilder v = new StringBuilder();
+    for (int k = 0; k < used / 8; k++) {
+      int o = k * 8;
+      v.append(k > 0 ? "," : "").append("[" + (double) Float.intBitsToFloat(raw[o]) + "," + (double) Float.intBitsToFloat(raw[o + 1]) + "," + (double) Float.intBitsToFloat(raw[o + 2])
+        + "," + (double) Float.intBitsToFloat(raw[o + 3]) + "," + (double) Float.intBitsToFloat(raw[o + 4]) + "," + raw[o + 5] + "," + raw[o + 7] + "]");
+    }
+    Method reset = bmh.class.getDeclaredMethod("d");
+    reset.setAccessible(true);
+    reset.invoke(t);
+    Field drawing = bmh.class.getDeclaredField("x");
+    drawing.setAccessible(true);
+    drawing.setBoolean(t, false);
+    return "{\"partial\":" + (double) partial + ",\"basis\":[" + (double) basis[0] + "," + (double) basis[1] + "," + (double) basis[2] + "," + (double) basis[3] + "," + (double) basis[4]
+      + "],\"brightness\":" + light + ",\"vertices\":[" + v + "]}";
   }
   public static class Animal extends wf {
     Animal() { super((ahb) null); }
@@ -347,5 +411,39 @@ public class FxProbe extends ParticleProbe {
       System.out.println("{\"case\":\"voidfog\",\"seed\":" + seed + ",\"calls\":" + calls + ",\"after\":" + raw(r) + "}");
     }
     allAir = false;
+    // EffectRenderer.renderParticles / EntityFX.renderParticle for each kind this build draws,
+    // at construction and two ticks later, three partial ticks and two camera bases
+    // (ActiveRenderInfo rotationX, XZ, Z, YZ, XY for yaw 30 / pitch -20, and yaw 200 /
+    // pitch 65 in the mirrored front view). World light: sky 13, block 7.
+    drawLight = 13 << 20 | 7 << 4;
+    float[][] bases = new float[2][];
+    for (int b = 0; b < 2; b++) {
+      float yaw = (b == 0 ? 30f : 200f) * (float) Math.PI / 180f, pitch = (b == 0 ? -20f : 65f) * (float) Math.PI / 180f, k = b == 0 ? 1 : -1;
+      float rx = qh.b(yaw) * k, rz = qh.a(yaw) * k;
+      bases[b] = new float[] {rx, qh.b(pitch), rz, -rz * qh.a(pitch) * k, rx * qh.a(pitch) * k};
+    }
+    Object[][] draws = {
+      {"bubble", 1}, {"suspended", 1}, {"depthsuspend", 0}, {"townaura", 0}, {"happyVillager", 0}, {"crit", 0}, {"magicCrit", 0},
+      {"mobSpell", 0}, {"mobSpellAmbient", 0}, {"spell", 0}, {"flame", 0}, {"lava", 0}, {"splash", 0}, {"heart", 0}, {"angryVillager", 0},
+      {"dripWater", 4}, {"dripLava", 4}, {"explode", 0}, {"smoke", 0}, {"largesmoke", 0}, {"snowballpoof", 0}, {"iconcrack_297", 0},
+      {"blockcrack_1_0", 0}, {"blockdust_3_0", 0}, {"rain", 0},
+    };
+    for (Object[] c : draws) {
+      String kind = (String) c[0];
+      fixture((Integer) c[1]);
+      setRaw(mathRandom, M + n++);
+      bkm p = kind.equals("rain") ? new blf(world, 10.4, 64.6, 10.6) : render.b(kind, 10.45, (Integer) c[1] == 4 ? 68.95 : 64.6, 10.55, 0.02, 0.03, -0.01);
+      if (kind.startsWith("block")) p.a(new BIcon());
+      StringBuilder out = new StringBuilder();
+      for (int tick = 0; tick <= 2; tick += 2) {
+        if (tick > 0) { p.h(); p.h(); }
+        String state = drawState(p);
+        StringBuilder each = new StringBuilder();
+        for (float partial : new float[] {0f, 0.37f, 1f}) for (float[] basis : bases) each.append(each.length() > 0 ? "," : "").append(draw(p, partial, basis));
+        out.append(tick > 0 ? "," : "").append("{\"tick\":" + tick + ",\"state\":" + state + ",\"draws\":[" + each + "]}");
+      }
+      System.out.println("{\"case\":\"draw\",\"kind\":\"" + kind + "\",\"class\":\"" + p.getClass().getName() + "\",\"light\":" + drawLight + ",\"frames\":[" + out + "]}");
+    }
+    drawLight = -1;
   }
 }

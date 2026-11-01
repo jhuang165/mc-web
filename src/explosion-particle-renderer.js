@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {worldMaterial} from './light-material.js';
 import {pixelTexture} from './first-person.js';
-import {particleBasis,particleLightCell,quantize} from './particles.js';
+import {particleBasis,particleLightCell,quantize,spriteQuad} from './particles.js';
 
 // EffectRenderer layers 0 and 3: the particles.png sheet (every owner's sprites: smoke,
 // explode, flame, splash, bubbles, crits, hearts, spells, drips...) and the explosion sheet.
@@ -26,20 +26,14 @@ export class ExplosionParticleRenderer {
   // `effects` is the shared EffectRenderer; layers 0 then 3 are drawn.
   update(effects,partial,{yaw=0,pitch=0,mirror=false}={}){
     const list=[...effects.layers[0],...effects.layers[3]];
-    const {x:rx,z:rz,yz,xy,xz}=particleBasis(180-yaw*180/Math.PI,-pitch*180/Math.PI,mirror);
+    const basis=particleBasis(180-yaw*180/Math.PI,-pitch*180/Math.PI,mirror);
     for(const layer of this.layers){
       const a=layer.geometry.attributes,positions=a.position.array,uv=a.uv.array,shade=a.shade.array,light=a.lightCoord.array;
       let count=0;
       for(const p of list){
         if((p.kind==='largeexplode')!==layer.large||count>=this.limit)continue;
         const sprite=p.owner.sprite?.(p,partial);if(!sprite)continue;
-        const {u0,u1,v0,v1,size:s}=sprite,x=p.px+(p.x-p.px)*partial,y=p.py+(p.y-p.py)*partial,z=p.pz+(p.z-p.pz)*partial;
-        const corners=[
-          [x-rx*s-yz*s,y-xz*s,z-rz*s-xy*s,u1,v1],
-          [x-rx*s+yz*s,y+xz*s,z-rz*s+xy*s,u1,v0],
-          [x+rx*s+yz*s,y+xz*s,z+rz*s+xy*s,u0,v0],
-          [x+rx*s-yz*s,y-xz*s,z+rz*s-xy*s,u0,v1],
-        ];
+        const corners=spriteQuad(p,partial,basis,sprite);
         const base=this.view.light?.packed(...particleLightCell(p))??(15<<20);
         const packed=layer.large?240:(p.owner.brightness?.(p,partial,base)??base);
         const color=[quantize(p.r),quantize(p.g),quantize(p.b),quantize(p.a??1)];

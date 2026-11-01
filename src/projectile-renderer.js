@@ -2,18 +2,20 @@
 // item icon on a quad facing the camera at 0.5 scale, centred on the 0.25 box
 // (vertices (-0.5, -0.25) to (0.5, 0.75) x 0.5 about posY); the quad's normal
 // is (0, 1, 0) in its own frame so it takes the same two item lights as GL.
-// RenderSnowball leaves shadowSize at 0, so it casts no shadow. Particles are
-// camera-aligned quads of 0.2 x scale blocks, unlit by normals, showing a
-// quarter-size window of the 16-pixel icon at the particle's random offset
-// (every EntityBreakingFX in EffectRenderer layer 2: snowballpoof and iconcrack).
+// RenderSnowball leaves shadowSize at 0, so it casts no shadow. Particles
+// (every EntityBreakingFX in EffectRenderer layer 2: snowballpoof and iconcrack)
+// are EntityBreakingFX.renderParticle quads on the ActiveRenderInfo basis
+// (particleQuad, replayed against the original Tessellator output), lit only by
+// the lightmap at getBrightnessForRender's cell, as GL lighting is off for particles.
 import * as THREE from "three";
-import { entityMaterial } from "./light-material.js";
+import { entityMaterial, worldMaterial } from "./light-material.js";
 import { itemTexture, pixelTexture } from "./first-person.js";
+import { particleBasis, particleLightCell, particleQuad, quantize } from "./particles.js";
 
 const SNOWBALL = 312, EGG = 316;
 // Entity.getBrightnessForRender samples floor(posY - yOffset + height * 0.66):
-// 0.165 above the ball's posY, 0.032 above a particle's centre.
-const BALL_LIGHT = 0.25 * 0.66, FX_LIGHT = 0.2 * 0.66 - 0.2 / 2;
+// 0.165 above the ball's posY.
+const BALL_LIGHT = 0.25 * 0.66;
 
 export class ProjectileRenderer {
   constructor(scene, view) {
@@ -26,8 +28,6 @@ export class ProjectileRenderer {
     const n = g.attributes.normal;
     for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0);
     this.sprite = g;
-    this.right = new THREE.Vector3();
-    this.up = new THREE.Vector3();
   }
   // RenderSnowball(item): an egg uses the egg icon, a snowball the snowball icon;
   // the "snowballpoof" particles (EntityBreakingFX with Items.snowball) always show the snowball.
@@ -38,8 +38,9 @@ export class ProjectileRenderer {
     return entityMaterial(this.view.lighting, { map: this.texture(kind), alphaTest: 0.1 });
   }
   // `partial` is the fraction of the current tick; balls interpolate from
-  // lastTickPos (RenderManager), particles from prevPos.
-  update(balls, particles, camera, partial = 1) {
+  // lastTickPos (RenderManager), particles from prevPos. `view` is the player's
+  // rotation for the particle basis, as the other particle renderers take it.
+  update(balls, particles, camera, partial = 1, { yaw = 0, pitch = 0, mirror = false } = {}) {
     const seen = new Set(), lerp = (a, b) => a + (b - a) * partial;
     for (const b of balls) {
       seen.add(b);
@@ -62,37 +63,34 @@ export class ProjectileRenderer {
         m.material.dispose();
         this.balls.delete(b);
       }
-    this.right.set(1, 0, 0).applyQuaternion(camera.quaternion);
-    this.up.set(0, 1, 0).applyQuaternion(camera.quaternion);
-    const seenFx = new Set();
+    const basis = particleBasis(180 - (yaw * 180) / Math.PI, (-pitch * 180) / Math.PI, mirror), seenFx = new Set();
     for (const p of particles) {
       seenFx.add(p);
       let m = this.particles.get(p);
       if (!m) {
-        // The window is [j/4, (j + 1)/4] of the icon (j = rand * 3), measured
-        // from the top, so v runs the other way in texture space.
-        const u0 = p.jx / 4, u1 = (p.jx + 1) / 4, v0 = 1 - (p.jy + 1) / 4, v1 = 1 - p.jy / 4,
-          geometry = new THREE.BufferGeometry();
+        const geometry = new THREE.BufferGeometry();
         geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(12), 3));
-        geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]), 3));
-        geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([u0, v0, u1, v0, u1, v1, u0, v1]), 2));
+        geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(8), 2));
+        geometry.setAttribute("shade", new THREE.BufferAttribute(new Float32Array(12), 3));
+        geometry.setAttribute("lightCoord", new THREE.BufferAttribute(new Float32Array(8), 2));
         geometry.setIndex([0, 1, 2, 0, 2, 3]);
         // EffectRenderer layer 2: snowballpoof and iconcrack show their item's icon.
-        const material = entityMaterial(this.view.lighting, { map: pixelTexture(itemTexture(p.item ?? SNOWBALL, p.meta ?? 0)), alphaTest: 0.1 }),
+        const material = worldMaterial(this.view.lighting, { map: pixelTexture(itemTexture(p.item ?? SNOWBALL, p.meta ?? 0)), alphaTest: 0.003921569, side: THREE.DoubleSide }),
           mesh = new THREE.Mesh(geometry, material);
-        material.uniforms.alphaTest.value = 0.003921569;
         mesh.frustumCulled = false;
         this.scene.add(mesh);
         this.particles.set(p, (m = { mesh, geometry, material }));
       }
-      const x = lerp(p.px, p.x), y = lerp(p.py, p.y), z = lerp(p.pz, p.z), s = 0.1 * p.scale,
-        pos = m.geometry.attributes.position, { right: r, up: u } = this;
-      // Corners: bottom-left, bottom-right, top-right, top-left of the camera.
-      [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([a, c], i) =>
-        pos.setXYZ(i, x + (r.x * a + u.x * c) * s, y + (r.y * a + u.y * c) * s, z + (r.z * a + u.z * c) * s),
-      );
-      pos.needsUpdate = true;
-      m.material.setLight(this.view.brightness(x, y + FX_LIGHT, z));
+      // The icon is a whole texture here, so its bounds are 0..1 (v runs up in texture space).
+      const corners = particleQuad(p, partial, basis), a = m.geometry.attributes,
+        packed = this.view.brightness(...particleLightCell(p)), shade = [quantize(p.r ?? 1), quantize(p.g ?? 1), quantize(p.b ?? 1)];
+      corners.forEach(([x, y, z, u, v], i) => {
+        a.position.setXYZ(i, x, y, z);
+        a.uv.setXY(i, u, 1 - v);
+        a.shade.setXYZ(i, ...shade);
+        a.lightCoord.setXY(i, packed & 0xffff, (packed >> 16) & 0xffff);
+      });
+      for (const k of ["position", "uv", "shade", "lightCoord"]) a[k].needsUpdate = true;
     }
     for (const [p, m] of this.particles)
       if (!seenFx.has(p)) {

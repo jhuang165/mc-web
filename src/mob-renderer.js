@@ -80,7 +80,7 @@ export class MobRenderer {
       part(wool, leg, 4, 6, 4, 0, 16, -2, 0, -2, 0.5);
     }
     this.scene.add(root);
-    return { root, neck, limbs, fur, wool, materials: [skin, wool], type: "sheep" };
+    return { root, neck, limbs, fur, wool, materials: [skin, wool], type: "sheep", lift: 1 / 128 };
   }
   // RenderChicken (bng) with ModelChicken (bhh, chicken.png 64x32). Same model->three.js
   // mapping as the sheep: (x, 24 - y, -z) / 16, X rotations keep their sign and Z
@@ -122,7 +122,7 @@ export class MobRenderer {
       part(wing, 1, 4, 6, 24, 13, side < 0 ? 0 : -1, 0, -3);
     }
     this.scene.add(root);
-    return { root, neck, limbs, wings, materials: [skin], type: "chicken" };
+    return { root, neck, limbs, wings, materials: [skin], type: "chicken", lift: 1 / 128 };
   }
   // RenderSkeleton (bos) with ModelSkeleton (bic, skeleton.png 64 x 32) and RenderBiped's
   // held item (the bow in the right hand). Pivots and boxes are the model's own at 1:1
@@ -151,7 +151,7 @@ export class MobRenderer {
     const neck = pivot(0, 0, 0);
     neck.rotation.order = "YXZ";
     part(neck, 8, 8, 8, 0, 0, -4, -8, -4);
-    part(frame, 8, 12, 4, 16, 16, -4, 0, -2);
+    part(pivot(0, 0, 0), 8, 12, 4, 16, 16, -4, 0, -2);
     // Right arm, left arm, right leg, left leg (the order limbAngles drives them in).
     for (const [x, y, arm, mirror] of [[-5, 2, true, false], [5, 2, true, true], [-2, 12, false, false], [2, 12, false, true]]) {
       const g = pivot(x, y, 0);
@@ -250,118 +250,93 @@ export class MobRenderer {
     this.scene.add(root);
     return { root, neck, limbs, materials: [skin], armor, shell, swell, type: "creeper" };
   }
+  // RenderPig (boo) with ModelPig (bhu) and RenderCow (bnh) with ModelCow (bhi), both
+  // ModelQuadruped (bhw) on 64 x 32 skins. Boxes, texture offsets and pivots are the ones
+  // ModelProbe reads from the constructed models; (x, 24 - y, -z) / 16 as for the sheep.
+  // The pig's snout and the cow's horns sit on the head, the udder on the body.
+  createQuadruped(type) {
+    const cow = type === "cow", root = new THREE.Group(), limbs = [],
+      skin = entityMaterial(this.view.lighting, { map: pixelTexture(`/media/1.7.10/entity/${cow ? "cow/cow" : "pig/pig"}.png`) });
+    const part = (parent, w, h, d, u, v, ox, oy, oz) => {
+      const mesh = new THREE.Mesh(skinBox(w, h, d, u, v, 64, 32), skin);
+      mesh.position.set((ox + w / 2) / 16, -(oy + h / 2) / 16, -(oz + d / 2) / 16);
+      parent.add(mesh);
+    };
+    const pivot = (x, y, z) => {
+      const g = new THREE.Group();
+      g.position.set(x / 16, (24 - y) / 16, -z / 16);
+      root.add(g);
+      return g;
+    };
+    // ModelQuadruped(legHeight): head pivot (0, 18 - legHeight, -6), body (0, 17 - legHeight, 2)
+    // turned by pi / 2, legs (+-3, 24 - legHeight, 7 | -5); ModelCow moves the head to
+    // (0, 4, -8) and the legs to (+-4, 12, 7 | -6).
+    const head = cow ? [0, 4, -8] : [0, 12, -6], neck = pivot(...head);
+    neck.rotation.order = "YXZ";
+    const body = pivot(0, cow ? 5 : 11, 2);
+    body.rotation.x = Math.PI / 2;
+    if (cow) {
+      part(neck, 8, 8, 6, 0, 0, -4, -4, -6);
+      part(neck, 1, 3, 1, 22, 0, -5, -5, -4);
+      part(neck, 1, 3, 1, 22, 0, 4, -5, -4);
+      part(body, 12, 18, 10, 18, 4, -6, -10, -7);
+      part(body, 4, 6, 1, 52, 0, -2, 2, -8);
+    } else {
+      part(neck, 8, 8, 8, 0, 0, -4, -4, -8);
+      part(neck, 4, 3, 1, 16, 16, -2, 0, -9);
+      part(body, 10, 16, 8, 28, 8, -5, -10, -7);
+    }
+    const leg = cow ? 12 : 6, x = cow ? 4 : 3, back = 7, front = cow ? -6 : -5;
+    for (const [lx, lz] of [[-x, back], [x, back], [-x, front], [x, front]]) {
+      const g = pivot(lx, 24 - leg, lz);
+      part(g, 4, leg, 4, 0, 16, -2, 0, -2);
+      limbs.push(g);
+    }
+    this.scene.add(root);
+    // childYOffset / childZOffset: pig 4 / 4, cow 8 / 6.
+    return { root, neck, limbs, materials: [skin], type, head, child: cow ? [8, 6] : [4, 4], lift: 1 / 128 };
+  }
+  // RenderZombie (bpf) with ModelZombie (bip, ModelBiped on the 64 x 64 zombie.png): head
+  // (0, 0) and body (16, 16) on (0, 0, 0), 4 x 12 x 4 arms (40, 16) on (+-5, 2, 0) and legs
+  // (0, 16) on (+-1.9, 12, 0), the left pair mirrored. The headwear box (32, 0) is drawn by
+  // ModelBiped.render but zombie.png leaves it fully transparent, so it is omitted.
+  createZombie() {
+    const root = new THREE.Group(), frame = new THREE.Group(), limbs = [],
+      skin = entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/entity/zombie/zombie.png") });
+    root.add(frame);
+    const part = (parent, w, h, d, u, v, ox, oy, oz, mirror = false) => {
+      const mesh = new THREE.Mesh(skinBox(w, h, d, u, v, 64, 64, mirror), skin);
+      mesh.position.set((ox + w / 2) / 16, -(oy + h / 2) / 16, -(oz + d / 2) / 16);
+      parent.add(mesh);
+    };
+    const pivot = (x, y, z) => {
+      const g = new THREE.Group();
+      g.position.set(x / 16, (24 - y) / 16, -z / 16);
+      frame.add(g);
+      return g;
+    };
+    const neck = pivot(0, 0, 0);
+    neck.rotation.order = "YXZ";
+    part(neck, 8, 8, 8, 0, 0, -4, -8, -4);
+    part(pivot(0, 0, 0), 8, 12, 4, 16, 16, -4, 0, -2);
+    for (const [x, y, ox, arm, mirror] of [[-5, 2, -3, true, false], [5, 2, -1, true, true], [-1.9, 12, -2, false, false], [1.9, 12, -2, false, true]]) {
+      const g = pivot(x, y, 0);
+      part(g, 4, 12, 4, arm ? 40 : 0, 16, ox, arm ? -2 : 0, -2, mirror);
+      // ModelRenderer applies Z, then Y, then X.
+      if (arm) g.rotation.order = "ZYX";
+      limbs.push(g);
+    }
+    this.scene.add(root);
+    return { root, neck, limbs, materials: [skin], type: "zombie", lift: 1 / 128 };
+  }
   create(e) {
     if (e.type === "creeper") return this.createCreeper();
     if (e.type === "spider") return this.createSpider();
     if (e.type === "skeleton") return this.createSkeleton();
     if (e.type === "chicken") return this.createChicken();
     if (e.type === "sheep") return this.createSheep();
-    const root = new THREE.Group(),
-      limbs = [],
-      materials = [],
-      zombie = e.type === "zombie",
-      cow = e.type === "cow";
-    const texture = pixelTexture(
-      "/media/1.7.10/entity/" +
-        (zombie ? "zombie/zombie" : cow ? "cow/cow" : "pig/pig") +
-        ".png",
-    );
-    const material = entityMaterial(this.view.lighting, { map: texture });
-    materials.push(material);
-    // ModelBiped/ModelQuadruped turn the head about its rotation point; the head
-    // boxes hang off this neck pivot (pig 0,.75,.375; cow 0,1.25,.5; zombie at
-    // the base of the head) with their offsets kept relative to it.
-    const neck = new THREE.Group();
-    neck.rotation.order = "YXZ";
-    neck.position.set(0, zombie ? 1.3 : cow ? 1.25 : 0.75, zombie ? 0 : cow ? 0.5 : 0.375);
-    root.add(neck);
-    function box(w, h, d, u, v, x, y, z, parent = root) {
-      const mesh = new THREE.Mesh(
-        skinBox(w, h, d, u, v, 64, zombie ? 64 : 32),
-        material,
-      );
-      mesh.position.set(x, y, z);
-      parent.add(mesh);
-      return mesh;
-    }
-    if (zombie) {
-      box(8, 8, 8, 0, 0, 0, 0.25, 0, neck);
-      box(8, 12, 4, 16, 16, 0, 1.02, 0);
-      for (let i = 0; i < 4; i++) {
-        const arm = i < 2,
-          pivot = new THREE.Group();
-        pivot.position.set(
-          arm ? (i === 0 ? -0.375 : 0.375) : i === 2 ? -0.125 : 0.125,
-          arm ? 1.35 : 0.65,
-          0,
-        );
-        const mesh = new THREE.Mesh(
-          skinBox(4, 12, 4, arm ? 40 : 0, 16, 64, 64),
-          material,
-        );
-        mesh.position.y = -0.35;
-        pivot.add(mesh);
-        // ModelRenderer applies Z, then Y, then X.
-        if (arm) pivot.rotation.order = "ZYX";
-        root.add(pivot);
-        limbs.push(pivot);
-      }
-    } else {
-      const head = box(
-        8,
-        8,
-        cow ? 6 : 8,
-        0,
-        0,
-        0,
-        -0.1,
-        cow ? 0.05 : 0.225,
-        neck,
-      );
-      const body = box(
-        10,
-        cow ? 18 : 16,
-        8,
-        cow ? 18 : 28,
-        cow ? 4 : 8,
-        0,
-        cow ? 0.85 : 0.6,
-        0,
-      );
-      body.rotation.x = Math.PI / 2;
-      const leg = cow ? 12 : 6;
-      for (const [x, z] of [
-        [-0.1875, 0.4375],
-        [0.1875, 0.4375],
-        [-0.1875, -0.4375],
-        [0.1875, -0.4375],
-      ]) {
-        const pivot = new THREE.Group();
-        pivot.position.set(x, leg / 16, z);
-        const mesh = new THREE.Mesh(
-          skinBox(4, leg, 4, 0, 16, 64, 32),
-          material,
-        );
-        mesh.position.y = -leg / 32;
-        pivot.add(mesh);
-        root.add(pivot);
-        limbs.push(pivot);
-      }
-      if (cow) {
-        for (const x of [-0.2, 0.2]) {
-          const horn = new THREE.Mesh(
-            new THREE.BoxGeometry(0.06, 0.12, 0.06),
-            materials[materials.push(entityMaterial(this.view.lighting, { color: [0.847, 0.816, 0.714] })) - 1],
-          );
-          horn.position.set(x, 0.24, 0);
-          head.add(horn);
-        }
-      } else {
-        const snout = box(4, 3, 1, 16, 16, 0, -0.14, 0.5, neck);
-      }
-    }
-    this.scene.add(root);
-    return { root, neck, limbs, materials, type: e.type };
+    if (e.type === "zombie") return this.createZombie();
+    return this.createQuadruped(e.type);
   }
   // `partial` is the fraction of the current tick elapsed (mobPose interpolates).
   update(entities,dt=0,partial=1) {
@@ -384,23 +359,35 @@ export class MobRenderer {
         this.rigs.set(e.id, r);
       }
       const pose = mobPose(e, partial);
-      r.root.position.set(pose.x, pose.y, pose.z);r.root.scale.setScalar(e.growingAge<0?.5:1);
+      const baby = e.growingAge < 0;
+      // RendererLivingEntity's 1/128 lift, for rigs that do not carry it in a frame.
+      r.root.position.set(pose.x, pose.y + (r.lift ?? 0), pose.z);
+      r.root.scale.setScalar(baby ? 0.5 : 1);
       // Java yaw turns the opposite way to three.js, hence the sign.
       r.root.rotation.set(0, -pose.bodyYaw * RAD, pose.death * RAD);
       r.neck.rotation.set(e.type === "sheep" ? pose.headTilt : pose.headPitch * RAD, -pose.headYaw * RAD, 0);
       if (e.type === "sheep") {
         // ModelSheep2.setLivingAnimations: rotationPointY = 6 + func_70894_j * 9. A lamb's
         // head is drawn at full size, moved down 8 and back 4 before the body shrinks (x0.5).
-        const baby = e.growingAge < 0, drop = 6 + pose.headDrop * 9;
+        const drop = 6 + pose.headDrop * 9;
         r.neck.position.set(0, ((24 - drop) / 16 - (baby ? 8 / 16 : 0)) * (baby ? 2 : 1), 8 / 16);
         r.neck.scale.setScalar(baby ? 2 : 1);
         for (const m of r.fur) m.visible = !e.sheared;
         r.wool.uniforms.tint.value.set(...FLEECE_COLORS[e.color ?? 0]);
       }
+      if (r.child) {
+        // ModelQuadruped.render: a child's head is drawn full size, moved down childYOffset
+        // and back childZOffset pixels; the body and legs shrink by half about the feet.
+        const [, y, z] = r.head, [dy, dz] = baby ? r.child : [0, 0], k = baby ? 2 : 1;
+        r.neck.position.set(0, (24 - y - dy) / 16 * k, (-z - dz) / 16 * k);
+        r.neck.scale.setScalar(k);
+      }
+      // ModelBiped.render: a child zombie's head is scaled 0.75 (1.5 against the halved body)
+      // and moved down 16 of those pixels, which leaves its pivot where the root puts it.
+      if (e.type === "zombie") r.neck.scale.setScalar(baby ? 1.5 : 1);
       if (e.type === "chicken") {
         // ModelChicken.render: a chick's head, bill and chin stay full size, moved down 5
         // and back 2 (px / 16) before the rest shrinks to half; the root's x0.5 is undone here.
-        const baby = e.growingAge < 0;
         r.neck.position.set(0, baby ? 0.5 : 9 / 16, baby ? 0.25 : 4 / 16);
         r.neck.scale.setScalar(baby ? 2 : 1);
         // rightWing.rotateAngleZ = flap, leftWing = -flap; Z flips sign in this frame.

@@ -195,5 +195,31 @@ FxProbe adds three leaves cases (rain, rain over stone, dry; 420 seeded runs), f
 Still open:
 
 - Mob potion effects: nothing in this build gives mobs effects, so they have no swirls.
-- GL drawing formulas (billboards, UV inset, brightness) come from bytecode, not from a probe run.
+- GL drawing formulas (billboards, UV inset, brightness) come from bytecode, not from a probe run (closed in 0.22.10).
 - Particles spawned between ticks are drawn once before their first update.
+
+## 0.22.10: drawing
+
+FxProbe now runs `EffectRenderer.renderParticles` for one particle of each of the 25 kinds this build draws, all except the large explosion, which binds its own texture and draws itself.
+
+- **Kinds.** bubble, suspended, depthsuspend, townaura, happyVillager, crit, magicCrit, mobSpell, mobSpellAmbient, spell, flame, lava, splash, heart, angryVillager, dripWater, dripLava, explode, smoke, largesmoke, snowballpoof, iconcrack_297, blockcrack_1_0, blockdust_3_0 and EntityRainFX.
+- **What the probe calls.** For each particle it runs `Tessellator.setBrightness(getBrightnessForRender(partial))` and the unchanged `renderParticle`. It reads the four vertices (x, y, z, u, v, colour int, brightness) back from the Tessellator's int buffer and resets the buffer without `draw`, the only OpenGL step.
+- **Cases.** Each particle is drawn at construction and two ticks later, at partial ticks 0, 0.37 and 1, and on two `ActiveRenderInfo` bases (yaw 30 / pitch −20, and the mirrored yaw 200 / pitch 65).
+- **Inputs.** `World.getLightBrightnessForSkyBlocks` answers sky 13 / block 7. Blocks use a test icon with real atlas bounds; items use the 0..1 icon.
+
+`src/fx-draw.test.js` replays all 25 records (113 records in [fx-reference.json](fx-reference.json)):
+
+- Positions and texture coordinates must match exactly.
+- The colour int must match, including the negative mobSpell channel clamped to 0 and the 0.15 ambient alpha.
+- So must the brightness: flame's growing block light, lava's 240 and the lava drip's 257.
+
+The corner math is now one function, `billboard` in particles.js (with `spriteQuad` for the particles.png cell order and `particleQuad` for icon particles). The two orders differ: EntityFX starts at (u1, v1), EntityDiggingFX and EntityBreakingFX at (u0, v1). It works in float as the original does: the interpolated position is cast to float, then basis × half-size is summed in float.
+
+The replay found two drawing differences, both fixed:
+
+- **Icon half-size rounding.** Icon particles computed the half-size as `0.1 * scale` in double, which was one ulp off. It is now `0.1F * scale`.
+- **Thrown-item crumbs.** Crumbs (snowballpoof and iconcrack, layer 2) used the camera quaternion, the interpolated position + 0.032 for light, and the item-lit entity shader. They now use the ActiveRenderInfo basis, the current-position `getBrightnessForRender` cell and the lightmap only (GL lighting is off for particles), like the other layers.
+
+Positions are drawn in world space. The original subtracts interpPos before the float cast, so far from the origin the float rounding differs slightly. The replay runs with interpPos 0.
+
+Still open: mob potion effects. This build has nothing that gives a mob an effect: no splash potions, beacons, witches or wither skeletons, and difficulty is fixed at Normal, so the Hard-only spider spawn effects never apply. `potionParticles` is ready for the first source.
