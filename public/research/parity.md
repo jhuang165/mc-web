@@ -2,7 +2,7 @@
 
 The target is the complete Java 1.7.10 feature set. **This build does not yet provide full parity.** “Implemented” below means a working browser implementation with the limitations stated; it does not mean original-client equivalence.
 
-See the [accepted roadmap and execution tracker](parity-roadmap.md) and [original base-block catalogue](block-parity-catalogue.md). A registry mapping is not verification of behavior. Expanded audit catalogues cover [items and Creative subtypes](item-parity-catalogue.md), [block metadata](block-metadata-catalogue.md), [entity registrations](entity-parity-catalogue.md), [biome slots](biome-parity-catalogue.md), [default gamerules](gamerule-parity-catalogue.md) and [crafting/smelting](recipe-parity-catalogue.md). Semantic variants and the remaining catalogue categories are still open.
+See the [accepted roadmap and execution tracker](parity-roadmap.md) and [original base-block catalogue](block-parity-catalogue.md). A registry mapping is not verification of behavior. Expanded audit catalogues cover [items and Creative subtypes](item-parity-catalogue.md), [block metadata](block-metadata-catalogue.md), [entity registrations](entity-parity-catalogue.md), [biome slots](biome-parity-catalogue.md), [default gamerules](gamerule-parity-catalogue.md), [crafting/smelting](recipe-parity-catalogue.md), [commands](command-parity-catalogue.md), [GUIs](gui-parity-catalogue.md) and [structures/generators](structure-parity-catalogue.md). Semantic variants and the remaining catalogue categories are still open.
 
 ## Working systems
 
@@ -62,6 +62,8 @@ See the [accepted roadmap and execution tracker](parity-roadmap.md) and [origina
 - Complete animation and rendering parity, remaining sound events, music, remaining menu and GUI behavior. Selected original media and recovered animation curves are now present; see [animation and audio](animations-and-sounds.md).
 
 ## Evidence
+
+- [Original command/GUI/structure enumeration outputs](surface-registry-reference.json): 48 command registrations with aliases/default permission/usage and native registration lookup maps for integrated/dedicated profiles; five structure starts and 48 pieces from unchanged static registration. Original class-header inspection separately inventories 58 GuiScreen descendants/bases, 66 other mapped GUI namespace classes/interfaces, ten MapGen drivers/frameworks and 41 WorldGen feature classes. `tools/verify-surface-catalogue.mjs` distinguishes executed registration/getter evidence from inspected constructor control flow/class hierarchy. No command bodies, permission outcomes, GUI or generation behavior are executed.
 
 - [Original recipe registry and matching outputs](recipe-registry-reference.json): all 317 ordered crafting registrations (258 shaped, 54 shapeless, five special handlers), 22 smelting entries and the separate 22-entry output/XP map. `tools/verify-recipe-catalogue.mjs` executes 2,756 fixed-recipe matching samples against the original manager; `src/recipe-catalogue.test.js` replays 1,172 mapped samples across 110 fixed recipes plus 14 mapped smelting output/XP cases. Special recipes, repair semantics beyond existing inventory cases, complete wildcard/NBT values and full acceptance remain open.
 

@@ -1,0 +1,2649 @@
+{
+  "target": "Minecraft Java 1.7.10",
+  "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+  "mappingSha256": "43d4376110b2638213d3096f80f8395c076eb05b58d6c0dbd22c0d999b37a357",
+  "classes": {
+    "bl": {
+      "class": "bl",
+      "superClass": "z",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/command/ServerCommandManager",
+      "sha256": "7649b430fa5aecd321f32d6a4e079d34cfca18e4158c67bf0df7acadced392e6"
+    },
+    "z": {
+      "class": "z",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/command/CommandHandler",
+      "sha256": "733a3b7fe72e4e9767838999abcad814c140620263f1a3ba51c93e8ea6222e3c"
+    },
+    "y": {
+      "class": "y",
+      "superClass": "java/lang/Object",
+      "abstract": true,
+      "interface": false,
+      "mappedName": "net/minecraft/command/CommandBase",
+      "sha256": "920cdbb8ce963fa16d2c1d068752be19955e3e4371adddae0c692b8cb2f771e4"
+    },
+    "aa": {
+      "class": "aa",
+      "superClass": "java/lang/Object",
+      "abstract": true,
+      "interface": true,
+      "mappedName": "net/minecraft/command/ICommand",
+      "sha256": "7ff9281e34812fd45a7c7393af21fb82f6932035d1981e2451ec6bef12188871"
+    },
+    "avi": {
+      "class": "avi",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/structure/MapGenStructureIO",
+      "sha256": "33b94703695be0172df48a1fba9905fa8fcf374ee66463677ecb0d98ada8da67"
+    }
+  },
+  "method": "Command profile membership and registration order inspected from original ServerCommandManager constructor bytecode (one isDedicatedServer branch). Individual unchanged command constructors/name/alias/default-permission/usage getters and original CommandHandler.registerCommand run; two alias lookup maps reconstructed in native registration order. ServerCommandManager constructor, permission outcomes and command execution not run; no server started. MapGenStructureIO unchanged static registration and forward/reverse maps run for all starts/pieces. GuiScreen inheritance/abstract/interface flags, other mapped client/gui namespace support classes, top-level MapGen drivers/frameworks (excluding structure IO/data helpers) and WorldGen feature classes read directly from all original JAR class headers, named by MCP SRG mapping; no GUI constructors, GL renderer, world generation or behavior executed. Class/registry enumeration is not whole-feature verification.",
+  "commands": [
+    {
+      "scope": "common",
+      "class": "bz",
+      "name": "time",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.time.usage",
+      "mappedName": "net/minecraft/command/CommandTime"
+    },
+    {
+      "scope": "common",
+      "class": "ar",
+      "name": "gamemode",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.gamemode.usage",
+      "mappedName": "net/minecraft/command/CommandGameMode"
+    },
+    {
+      "scope": "common",
+      "class": "aq",
+      "name": "difficulty",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.difficulty.usage",
+      "mappedName": "net/minecraft/command/CommandDifficulty"
+    },
+    {
+      "scope": "common",
+      "class": "al",
+      "name": "defaultgamemode",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.defaultgamemode.usage",
+      "mappedName": "net/minecraft/command/CommandDefaultGameMode"
+    },
+    {
+      "scope": "common",
+      "class": "aw",
+      "name": "kill",
+      "aliases": [],
+      "permissionLevel": 0,
+      "customPermission": false,
+      "usage": "commands.kill.usage",
+      "mappedName": "net/minecraft/command/CommandKill"
+    },
+    {
+      "scope": "common",
+      "class": "ca",
+      "name": "toggledownfall",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.downfall.usage",
+      "mappedName": "net/minecraft/command/CommandToggleDownfall"
+    },
+    {
+      "scope": "common",
+      "class": "cb",
+      "name": "weather",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.weather.usage",
+      "mappedName": "net/minecraft/command/CommandWeather"
+    },
+    {
+      "scope": "common",
+      "class": "ap",
+      "name": "xp",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.xp.usage",
+      "mappedName": "net/minecraft/command/CommandXP"
+    },
+    {
+      "scope": "common",
+      "class": "bv",
+      "name": "tp",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.tp.usage",
+      "mappedName": "net/minecraft/command/server/CommandTeleport"
+    },
+    {
+      "scope": "common",
+      "class": "at",
+      "name": "give",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.give.usage",
+      "mappedName": "net/minecraft/command/CommandGive"
+    },
+    {
+      "scope": "common",
+      "class": "am",
+      "name": "effect",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.effect.usage",
+      "mappedName": "net/minecraft/command/CommandEffect"
+    },
+    {
+      "scope": "common",
+      "class": "ao",
+      "name": "enchant",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.enchant.usage",
+      "mappedName": "net/minecraft/command/CommandEnchant"
+    },
+    {
+      "scope": "common",
+      "class": "an",
+      "name": "me",
+      "aliases": [],
+      "permissionLevel": 0,
+      "customPermission": false,
+      "usage": "commands.me.usage",
+      "mappedName": "net/minecraft/command/server/CommandEmote"
+    },
+    {
+      "scope": "common",
+      "class": "bq",
+      "name": "seed",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": true,
+      "usage": "commands.seed.usage",
+      "mappedName": "net/minecraft/command/CommandShowSeed"
+    },
+    {
+      "scope": "common",
+      "class": "au",
+      "name": "help",
+      "aliases": [
+        "?"
+      ],
+      "permissionLevel": 0,
+      "customPermission": false,
+      "usage": "commands.help.usage",
+      "mappedName": "net/minecraft/command/CommandHelp"
+    },
+    {
+      "scope": "common",
+      "class": "ak",
+      "name": "debug",
+      "aliases": [],
+      "permissionLevel": 3,
+      "customPermission": false,
+      "usage": "commands.debug.usage",
+      "mappedName": "net/minecraft/command/CommandDebug"
+    },
+    {
+      "scope": "common",
+      "class": "az",
+      "name": "tell",
+      "aliases": [
+        "w",
+        "msg"
+      ],
+      "permissionLevel": 0,
+      "customPermission": false,
+      "usage": "commands.message.usage",
+      "mappedName": "net/minecraft/command/server/CommandMessage"
+    },
+    {
+      "scope": "common",
+      "class": "ah",
+      "name": "say",
+      "aliases": [],
+      "permissionLevel": 1,
+      "customPermission": false,
+      "usage": "commands.say.usage",
+      "mappedName": "net/minecraft/command/server/CommandBroadcast"
+    },
+    {
+      "scope": "common",
+      "class": "bp",
+      "name": "spawnpoint",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.spawnpoint.usage",
+      "mappedName": "net/minecraft/command/CommandSetSpawnpoint"
+    },
+    {
+      "scope": "common",
+      "class": "bn",
+      "name": "setworldspawn",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.setworldspawn.usage",
+      "mappedName": "net/minecraft/command/server/CommandSetDefaultSpawnpoint"
+    },
+    {
+      "scope": "common",
+      "class": "as",
+      "name": "gamerule",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.gamerule.usage",
+      "mappedName": "net/minecraft/command/CommandGameRule"
+    },
+    {
+      "scope": "common",
+      "class": "ai",
+      "name": "clear",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.clear.usage",
+      "mappedName": "net/minecraft/command/CommandClearInventory"
+    },
+    {
+      "scope": "common",
+      "class": "by",
+      "name": "testfor",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.testfor.usage",
+      "mappedName": "net/minecraft/command/server/CommandTestFor"
+    },
+    {
+      "scope": "common",
+      "class": "br",
+      "name": "spreadplayers",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.spreadplayers.usage",
+      "mappedName": "net/minecraft/command/CommandSpreadPlayers"
+    },
+    {
+      "scope": "common",
+      "class": "bf",
+      "name": "playsound",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.playsound.usage",
+      "mappedName": "net/minecraft/command/CommandPlaySound"
+    },
+    {
+      "scope": "common",
+      "class": "bk",
+      "name": "scoreboard",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.scoreboard.usage",
+      "mappedName": "net/minecraft/command/server/CommandScoreboard"
+    },
+    {
+      "scope": "common",
+      "class": "ae",
+      "name": "achievement",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.achievement.usage",
+      "mappedName": "net/minecraft/command/server/CommandAchievement"
+    },
+    {
+      "scope": "common",
+      "class": "bu",
+      "name": "summon",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.summon.usage",
+      "mappedName": "net/minecraft/command/server/CommandSummon"
+    },
+    {
+      "scope": "common",
+      "class": "bm",
+      "name": "setblock",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.setblock.usage",
+      "mappedName": "net/minecraft/command/server/CommandSetBlock"
+    },
+    {
+      "scope": "common",
+      "class": "bx",
+      "name": "testforblock",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.testforblock.usage",
+      "mappedName": "net/minecraft/command/server/CommandTestForBlock"
+    },
+    {
+      "scope": "common",
+      "class": "ba",
+      "name": "tellraw",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.tellraw.usage",
+      "mappedName": "net/minecraft/command/server/CommandMessageRaw"
+    },
+    {
+      "scope": "dedicated",
+      "class": "bc",
+      "name": "op",
+      "aliases": [],
+      "permissionLevel": 3,
+      "customPermission": false,
+      "usage": "commands.op.usage",
+      "mappedName": "net/minecraft/command/server/CommandOp"
+    },
+    {
+      "scope": "dedicated",
+      "class": "aj",
+      "name": "deop",
+      "aliases": [],
+      "permissionLevel": 3,
+      "customPermission": false,
+      "usage": "commands.deop.usage",
+      "mappedName": "net/minecraft/command/server/CommandDeOp"
+    },
+    {
+      "scope": "dedicated",
+      "class": "bt",
+      "name": "stop",
+      "aliases": [],
+      "permissionLevel": 4,
+      "customPermission": false,
+      "usage": "commands.stop.usage",
+      "mappedName": "net/minecraft/command/server/CommandStop"
+    },
+    {
+      "scope": "dedicated",
+      "class": "bh",
+      "name": "save-all",
+      "aliases": [],
+      "permissionLevel": 4,
+      "customPermission": false,
+      "usage": "commands.save.usage",
+      "mappedName": "net/minecraft/command/server/CommandSaveAll"
+    },
+    {
+      "scope": "dedicated",
+      "class": "bi",
+      "name": "save-off",
+      "aliases": [],
+      "permissionLevel": 4,
+      "customPermission": false,
+      "usage": "commands.save-off.usage",
+      "mappedName": "net/minecraft/command/server/CommandSaveOff"
+    },
+    {
+      "scope": "dedicated",
+      "class": "bj",
+      "name": "save-on",
+      "aliases": [],
+      "permissionLevel": 4,
+      "customPermission": false,
+      "usage": "commands.save-on.usage",
+      "mappedName": "net/minecraft/command/server/CommandSaveOn"
+    },
+    {
+      "scope": "dedicated",
+      "class": "af",
+      "name": "ban-ip",
+      "aliases": [],
+      "permissionLevel": 3,
+      "customPermission": true,
+      "usage": "commands.banip.usage",
+      "mappedName": "net/minecraft/command/server/CommandBanIp"
+    },
+    {
+      "scope": "dedicated",
+      "class": "bd",
+      "name": "pardon-ip",
+      "aliases": [],
+      "permissionLevel": 3,
+      "customPermission": true,
+      "usage": "commands.unbanip.usage",
+      "mappedName": "net/minecraft/command/server/CommandPardonIp"
+    },
+    {
+      "scope": "dedicated",
+      "class": "ag",
+      "name": "ban",
+      "aliases": [],
+      "permissionLevel": 3,
+      "customPermission": true,
+      "usage": "commands.ban.usage",
+      "mappedName": "net/minecraft/command/server/CommandBanPlayer"
+    },
+    {
+      "scope": "dedicated",
+      "class": "ax",
+      "name": "banlist",
+      "aliases": [],
+      "permissionLevel": 3,
+      "customPermission": true,
+      "usage": "commands.banlist.usage",
+      "mappedName": "net/minecraft/command/server/CommandListBans"
+    },
+    {
+      "scope": "dedicated",
+      "class": "be",
+      "name": "pardon",
+      "aliases": [],
+      "permissionLevel": 3,
+      "customPermission": true,
+      "usage": "commands.unban.usage",
+      "mappedName": "net/minecraft/command/server/CommandPardonPlayer"
+    },
+    {
+      "scope": "dedicated",
+      "class": "av",
+      "name": "kick",
+      "aliases": [],
+      "permissionLevel": 2,
+      "customPermission": false,
+      "usage": "commands.kick.usage",
+      "mappedName": "net/minecraft/command/CommandServerKick"
+    },
+    {
+      "scope": "dedicated",
+      "class": "ay",
+      "name": "list",
+      "aliases": [],
+      "permissionLevel": 0,
+      "customPermission": false,
+      "usage": "commands.players.usage",
+      "mappedName": "net/minecraft/command/server/CommandListPlayers"
+    },
+    {
+      "scope": "dedicated",
+      "class": "cc",
+      "name": "whitelist",
+      "aliases": [],
+      "permissionLevel": 3,
+      "customPermission": false,
+      "usage": "commands.whitelist.usage",
+      "mappedName": "net/minecraft/command/server/CommandWhitelist"
+    },
+    {
+      "scope": "dedicated",
+      "class": "bo",
+      "name": "setidletimeout",
+      "aliases": [],
+      "permissionLevel": 3,
+      "customPermission": false,
+      "usage": "commands.setidletimeout.usage",
+      "mappedName": "net/minecraft/command/CommandSetPlayerTimeout"
+    },
+    {
+      "scope": "dedicated",
+      "class": "bb",
+      "name": "netstat",
+      "aliases": [],
+      "permissionLevel": 0,
+      "customPermission": false,
+      "usage": "commands.players.usage",
+      "mappedName": "net/minecraft/command/server/CommandNetstat"
+    },
+    {
+      "scope": "integrated",
+      "class": "bg",
+      "name": "publish",
+      "aliases": [],
+      "permissionLevel": 4,
+      "customPermission": false,
+      "usage": "commands.publish.usage",
+      "mappedName": "net/minecraft/command/server/CommandPublishLocalServer"
+    }
+  ],
+  "profiles": [
+    {
+      "profile": "integrated",
+      "lookup": [
+        {
+          "key": "?",
+          "name": "help",
+          "class": "au"
+        },
+        {
+          "key": "achievement",
+          "name": "achievement",
+          "class": "ae"
+        },
+        {
+          "key": "clear",
+          "name": "clear",
+          "class": "ai"
+        },
+        {
+          "key": "debug",
+          "name": "debug",
+          "class": "ak"
+        },
+        {
+          "key": "defaultgamemode",
+          "name": "defaultgamemode",
+          "class": "al"
+        },
+        {
+          "key": "difficulty",
+          "name": "difficulty",
+          "class": "aq"
+        },
+        {
+          "key": "effect",
+          "name": "effect",
+          "class": "am"
+        },
+        {
+          "key": "enchant",
+          "name": "enchant",
+          "class": "ao"
+        },
+        {
+          "key": "gamemode",
+          "name": "gamemode",
+          "class": "ar"
+        },
+        {
+          "key": "gamerule",
+          "name": "gamerule",
+          "class": "as"
+        },
+        {
+          "key": "give",
+          "name": "give",
+          "class": "at"
+        },
+        {
+          "key": "help",
+          "name": "help",
+          "class": "au"
+        },
+        {
+          "key": "kill",
+          "name": "kill",
+          "class": "aw"
+        },
+        {
+          "key": "me",
+          "name": "me",
+          "class": "an"
+        },
+        {
+          "key": "msg",
+          "name": "tell",
+          "class": "az"
+        },
+        {
+          "key": "playsound",
+          "name": "playsound",
+          "class": "bf"
+        },
+        {
+          "key": "publish",
+          "name": "publish",
+          "class": "bg"
+        },
+        {
+          "key": "say",
+          "name": "say",
+          "class": "ah"
+        },
+        {
+          "key": "scoreboard",
+          "name": "scoreboard",
+          "class": "bk"
+        },
+        {
+          "key": "seed",
+          "name": "seed",
+          "class": "bq"
+        },
+        {
+          "key": "setblock",
+          "name": "setblock",
+          "class": "bm"
+        },
+        {
+          "key": "setworldspawn",
+          "name": "setworldspawn",
+          "class": "bn"
+        },
+        {
+          "key": "spawnpoint",
+          "name": "spawnpoint",
+          "class": "bp"
+        },
+        {
+          "key": "spreadplayers",
+          "name": "spreadplayers",
+          "class": "br"
+        },
+        {
+          "key": "summon",
+          "name": "summon",
+          "class": "bu"
+        },
+        {
+          "key": "tell",
+          "name": "tell",
+          "class": "az"
+        },
+        {
+          "key": "tellraw",
+          "name": "tellraw",
+          "class": "ba"
+        },
+        {
+          "key": "testfor",
+          "name": "testfor",
+          "class": "by"
+        },
+        {
+          "key": "testforblock",
+          "name": "testforblock",
+          "class": "bx"
+        },
+        {
+          "key": "time",
+          "name": "time",
+          "class": "bz"
+        },
+        {
+          "key": "toggledownfall",
+          "name": "toggledownfall",
+          "class": "ca"
+        },
+        {
+          "key": "tp",
+          "name": "tp",
+          "class": "bv"
+        },
+        {
+          "key": "w",
+          "name": "tell",
+          "class": "az"
+        },
+        {
+          "key": "weather",
+          "name": "weather",
+          "class": "cb"
+        },
+        {
+          "key": "xp",
+          "name": "xp",
+          "class": "ap"
+        }
+      ]
+    },
+    {
+      "profile": "dedicated",
+      "lookup": [
+        {
+          "key": "?",
+          "name": "help",
+          "class": "au"
+        },
+        {
+          "key": "achievement",
+          "name": "achievement",
+          "class": "ae"
+        },
+        {
+          "key": "ban",
+          "name": "ban",
+          "class": "ag"
+        },
+        {
+          "key": "ban-ip",
+          "name": "ban-ip",
+          "class": "af"
+        },
+        {
+          "key": "banlist",
+          "name": "banlist",
+          "class": "ax"
+        },
+        {
+          "key": "clear",
+          "name": "clear",
+          "class": "ai"
+        },
+        {
+          "key": "debug",
+          "name": "debug",
+          "class": "ak"
+        },
+        {
+          "key": "defaultgamemode",
+          "name": "defaultgamemode",
+          "class": "al"
+        },
+        {
+          "key": "deop",
+          "name": "deop",
+          "class": "aj"
+        },
+        {
+          "key": "difficulty",
+          "name": "difficulty",
+          "class": "aq"
+        },
+        {
+          "key": "effect",
+          "name": "effect",
+          "class": "am"
+        },
+        {
+          "key": "enchant",
+          "name": "enchant",
+          "class": "ao"
+        },
+        {
+          "key": "gamemode",
+          "name": "gamemode",
+          "class": "ar"
+        },
+        {
+          "key": "gamerule",
+          "name": "gamerule",
+          "class": "as"
+        },
+        {
+          "key": "give",
+          "name": "give",
+          "class": "at"
+        },
+        {
+          "key": "help",
+          "name": "help",
+          "class": "au"
+        },
+        {
+          "key": "kick",
+          "name": "kick",
+          "class": "av"
+        },
+        {
+          "key": "kill",
+          "name": "kill",
+          "class": "aw"
+        },
+        {
+          "key": "list",
+          "name": "list",
+          "class": "ay"
+        },
+        {
+          "key": "me",
+          "name": "me",
+          "class": "an"
+        },
+        {
+          "key": "msg",
+          "name": "tell",
+          "class": "az"
+        },
+        {
+          "key": "netstat",
+          "name": "netstat",
+          "class": "bb"
+        },
+        {
+          "key": "op",
+          "name": "op",
+          "class": "bc"
+        },
+        {
+          "key": "pardon",
+          "name": "pardon",
+          "class": "be"
+        },
+        {
+          "key": "pardon-ip",
+          "name": "pardon-ip",
+          "class": "bd"
+        },
+        {
+          "key": "playsound",
+          "name": "playsound",
+          "class": "bf"
+        },
+        {
+          "key": "save-all",
+          "name": "save-all",
+          "class": "bh"
+        },
+        {
+          "key": "save-off",
+          "name": "save-off",
+          "class": "bi"
+        },
+        {
+          "key": "save-on",
+          "name": "save-on",
+          "class": "bj"
+        },
+        {
+          "key": "say",
+          "name": "say",
+          "class": "ah"
+        },
+        {
+          "key": "scoreboard",
+          "name": "scoreboard",
+          "class": "bk"
+        },
+        {
+          "key": "seed",
+          "name": "seed",
+          "class": "bq"
+        },
+        {
+          "key": "setblock",
+          "name": "setblock",
+          "class": "bm"
+        },
+        {
+          "key": "setidletimeout",
+          "name": "setidletimeout",
+          "class": "bo"
+        },
+        {
+          "key": "setworldspawn",
+          "name": "setworldspawn",
+          "class": "bn"
+        },
+        {
+          "key": "spawnpoint",
+          "name": "spawnpoint",
+          "class": "bp"
+        },
+        {
+          "key": "spreadplayers",
+          "name": "spreadplayers",
+          "class": "br"
+        },
+        {
+          "key": "stop",
+          "name": "stop",
+          "class": "bt"
+        },
+        {
+          "key": "summon",
+          "name": "summon",
+          "class": "bu"
+        },
+        {
+          "key": "tell",
+          "name": "tell",
+          "class": "az"
+        },
+        {
+          "key": "tellraw",
+          "name": "tellraw",
+          "class": "ba"
+        },
+        {
+          "key": "testfor",
+          "name": "testfor",
+          "class": "by"
+        },
+        {
+          "key": "testforblock",
+          "name": "testforblock",
+          "class": "bx"
+        },
+        {
+          "key": "time",
+          "name": "time",
+          "class": "bz"
+        },
+        {
+          "key": "toggledownfall",
+          "name": "toggledownfall",
+          "class": "ca"
+        },
+        {
+          "key": "tp",
+          "name": "tp",
+          "class": "bv"
+        },
+        {
+          "key": "w",
+          "name": "tell",
+          "class": "az"
+        },
+        {
+          "key": "weather",
+          "name": "weather",
+          "class": "cb"
+        },
+        {
+          "key": "whitelist",
+          "name": "whitelist",
+          "class": "cc"
+        },
+        {
+          "key": "xp",
+          "name": "xp",
+          "class": "ap"
+        }
+      ]
+    }
+  ],
+  "screens": [
+    {
+      "class": "bct",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiChat",
+      "sha256": "023bc88c45afbec5b66d95ceaef32fd8aed7f9e30c67c91df525dcfe15fcca3b"
+    },
+    {
+      "class": "bfh",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiCommandBlock",
+      "sha256": "012fd67d02cf810c72dd410f9f1d8a89429989fec8ba9783cb29ab84530906ea"
+    },
+    {
+      "class": "bcu",
+      "superClass": "bcw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiConfirmOpenLink",
+      "sha256": "76dbe7625e6c43ccd3a9ffabf9b2f9bcb4151aeca2daaa2b6bd9caf162aed6ef"
+    },
+    {
+      "class": "bew",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiControls",
+      "sha256": "6b9c555ab0f65f093601ddc99930e50bd91e34b2b8f60b29d482d5f96ad0abfd"
+    },
+    {
+      "class": "bcz",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiCreateFlatWorld",
+      "sha256": "478616f2d009357c3f83f3e92a750702221534aa0e6586b58f7d49688571347e"
+    },
+    {
+      "class": "bdb",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiCreateWorld",
+      "sha256": "1084a66ebe949eac8e97ceee5db8336fc020326103f479c141fc8779bbcd2e79"
+    },
+    {
+      "class": "bdf",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiDisconnected",
+      "sha256": "e9308299c00fa52e5034d4b0294777189676f791a6e0602c97197b54d07deb47"
+    },
+    {
+      "class": "bdu",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiDownloadTerrain",
+      "sha256": "7f9ab75da1941e6af7db63ed1c7323b47cddb5c903a7db6e4143462363c87f66"
+    },
+    {
+      "class": "bfq",
+      "superClass": "bex",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiEnchantment",
+      "sha256": "426fb8479d0f2fb28ec20561392bbc095056344ca6a811888bacc393383469e4"
+    },
+    {
+      "class": "bdh",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiErrorScreen",
+      "sha256": "b5de0e5f73bc28724bc52e3cd2e5e9c048d2705ac262adff7a70f50dfaf7dda1"
+    },
+    {
+      "class": "bdq",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiFlatPresets",
+      "sha256": "413edee44e6bc6cac3c6c9df41632de1116fb303f42bbec19fa901480d5f71f9"
+    },
+    {
+      "class": "bdc",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiGameOver",
+      "sha256": "c2fb2ee051f22941724a58dd95c0d0747a110b20ab88a689a136d09452559c1f"
+    },
+    {
+      "class": "bfs",
+      "superClass": "bex",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiHopper",
+      "sha256": "4fb2ba8ccb25e30a61775845fc80225aa179c7cf9c93263ecff4e81c2d35e485"
+    },
+    {
+      "class": "bdp",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiIngameMenu",
+      "sha256": "ee9fba311874895e398793ed3af7df467f577cc4611601ecbd7e36320f384428"
+    },
+    {
+      "class": "bdj",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiLanguage",
+      "sha256": "384be3fd4f44ea010a094605a7c58edef0d04a4e0881a42925ad180668a54d9b"
+    },
+    {
+      "class": "bee",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiMainMenu",
+      "sha256": "a00845683db7252168eb58f7982c9f6559c9ef03009943a40764611c2cdfc622"
+    },
+    {
+      "class": "bdo",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiMemoryErrorScreen",
+      "sha256": "48560242d3181c19b053e82cc5ecbefa5b04141e662220b53cf36e837d01a60a"
+    },
+    {
+      "class": "bfv",
+      "superClass": "bex",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiMerchant",
+      "sha256": "ba7b543e85f3e7f15a13c3574f0dc0ad9d667e3c0a5ae8f99eebb9c3ce116d89"
+    },
+    {
+      "class": "bfz",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiMultiplayer",
+      "sha256": "1e97a4b457f8115ae6cc176575e182ff889b6a2b3b19926eb11352cc0e3f7914"
+    },
+    {
+      "class": "bdm",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiOptions",
+      "sha256": "759ff37cf6525e5c58766197391759f273c719ea5c87877cb3fa6a96c1bc2a53"
+    },
+    {
+      "class": "bdv",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiRenameWorld",
+      "sha256": "192610a8a045b4bac36bdb647b292e4a258ffd92e4fa49508c1b2200c0dd8df2"
+    },
+    {
+      "class": "bey",
+      "superClass": "bex",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiRepair",
+      "sha256": "14db7ec725f529adaceab8f6a1e5f7bf13cd21012e091f0c7161703001bc3728"
+    },
+    {
+      "class": "bdw",
+      "superClass": "bbw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiScreen",
+      "sha256": "70761126a8f9b6d0298e3205afb55caf01b8a0682b92dd82cb0b7ca807cb07cf"
+    },
+    {
+      "class": "bdg",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiScreenAddServer",
+      "sha256": "6772f254c7db021973422dd6a148062a6595ed207bddb20e7cf852d200a10a16"
+    },
+    {
+      "class": "bfe",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiScreenBook",
+      "sha256": "c3cbf52f475afea6ff285198f0d6ea25d79fff4e039495e994e1ab23873f53ca"
+    },
+    {
+      "class": "bdd",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiScreenDemo",
+      "sha256": "1e65a312e8f385a22806d845575b8ab72502d4c593b3f13132d6826c2a318c86"
+    },
+    {
+      "class": "bec",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiScreenOptionsSounds",
+      "sha256": "c1cf7a958584a1f738605ee69d62d10c345a152815564053fbb473af79d9296a"
+    },
+    {
+      "class": "bcq",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiScreenRealmsProxy",
+      "sha256": "3c8dfa4994183539cdff7ed1bd85ffea11e54a3fe1da77ba921a05ef821e3c96"
+    },
+    {
+      "class": "bgf",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiScreenResourcePacks",
+      "sha256": "da2a56573de9a2764ed601164028d4fc24909e824a10bed0629350d3c9293cd0"
+    },
+    {
+      "class": "bde",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiScreenServerList",
+      "sha256": "145e1ce3d7e54d8c1a9fc2c44645496fb851fa1c5605fb9616860417e37481fa"
+    },
+    {
+      "class": "bdt",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiScreenWorking",
+      "sha256": "14da1b5bd7d407efd34070e9cc576ea5808d98acd7d53d434c564e2165c4aab1"
+    },
+    {
+      "class": "bdx",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiSelectWorld",
+      "sha256": "eb271bae8e2a8f9d673192693d67f44b393c4f16f2ac2e6ae97b720b8053f167"
+    },
+    {
+      "class": "bdz",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiShareToLan",
+      "sha256": "c6bf44c0311a374fe4feb04a7d3426de9b30a8fa94fc8de341fea5fb8053f5ef"
+    },
+    {
+      "class": "bdi",
+      "superClass": "bct",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiSleepMP",
+      "sha256": "f28870b1c5eda1da817d7c109093b69f97ddc65216af3c0c403e28cf3798c306"
+    },
+    {
+      "class": "bea",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiSnooper",
+      "sha256": "4016c1789a9cc0d868cc70f7a4cab51722030f4662e27a868cc7ed01c0128f8a"
+    },
+    {
+      "class": "bef",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiVideoSettings",
+      "sha256": "6d3a659b7fb008de69d9ad2316be6fccd857f1d6e45c554f557ea01ebb344e51"
+    },
+    {
+      "class": "beg",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiWinGame",
+      "sha256": "face07336cd97cabfcfbcd257a10afd3019bcd601fb57d334d15267b158eb7b4"
+    },
+    {
+      "class": "bcw",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiYesNo",
+      "sha256": "4f045db91e3a72768b30882752424a209400810bf49c238df907f6e5c79aab31"
+    },
+    {
+      "class": "bcs",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/ScreenChatOptions",
+      "sha256": "0418262c0611f8cb33e03c2d459e015fe5fb88ec0dd4e860ef750ad98001ae4a"
+    },
+    {
+      "class": "bei",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/achievement/GuiAchievements",
+      "sha256": "4fe841b70c1a1a76d117b8ee032937f87ccea23669ec762ad141691b7d55347e"
+    },
+    {
+      "class": "bej",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/achievement/GuiStats",
+      "sha256": "5a51291ced422305915884b1da89cb1a3e99b2d6a475f12c5867eba3dca73237"
+    },
+    {
+      "class": "bez",
+      "superClass": "bex",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiBeacon",
+      "sha256": "e9d7d2840307dddab30bae0d1b938327452605ecfde49743b022522779a4f567"
+    },
+    {
+      "class": "bfg",
+      "superClass": "bex",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiBrewingStand",
+      "sha256": "dd88ff5e6d2bcda060f22b518cfc64a24787bc0299a198eb743cf9113e9064d4"
+    },
+    {
+      "class": "bfi",
+      "superClass": "bex",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiChest",
+      "sha256": "de9af57c6b10a07afc7caa533a04fadc371aee778630e52f1d2110e46b8f70d9"
+    },
+    {
+      "class": "bex",
+      "superClass": "bdw",
+      "abstract": true,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiContainer",
+      "sha256": "c9f8b3b8a42fd7877c94e0ebdc8521fe8dc37025851b3a62ed1d1ebe19e78c44"
+    },
+    {
+      "class": "bfl",
+      "superClass": "bfo",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiContainerCreative",
+      "sha256": "5b63b26f09ebf14908ac020c5ec57489787a89fbe15fdc4e465476b4c35545c3"
+    },
+    {
+      "class": "bfj",
+      "superClass": "bex",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiCrafting",
+      "sha256": "8bf500d8a1ec60a5c4e09eceba051df1da03fc626f53696c30b664a9480f6b5b"
+    },
+    {
+      "class": "bfy",
+      "superClass": "bex",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiDispenser",
+      "sha256": "3a130a68787aea7c70278bd9df5d2f7ed3d41460420e32bc5bf6b6b679bcd005"
+    },
+    {
+      "class": "bfx",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiEditSign",
+      "sha256": "eeb309dedbbab42036bc29e9f85074052320a771fe51f99ecd49514d9b820fd9"
+    },
+    {
+      "class": "bfr",
+      "superClass": "bex",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiFurnace",
+      "sha256": "bea5f2746a0af881518bf6f2c94356d59bcac38c40affbe94eec97214838c42b"
+    },
+    {
+      "class": "bfu",
+      "superClass": "bfo",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiInventory",
+      "sha256": "a8ddd329e7b2e13646c235adddf58c124fcce823221e7fadf1838440b41f3281"
+    },
+    {
+      "class": "bft",
+      "superClass": "bex",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiScreenHorseInventory",
+      "sha256": "836428be5c6069339453f9aeaee647ba0cc7d60c03537c91f1880268006f5e12"
+    },
+    {
+      "class": "bgm",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/stream/GuiIngestServers",
+      "sha256": "51434aaff920b293663fdb40b490927186ac3c38e3473cdcb1d01c923c2fee55"
+    },
+    {
+      "class": "bgo",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/stream/GuiStreamOptions",
+      "sha256": "aa19a56ac3921621158ba7db74bd09b1b2520ee6252f4b712770ba7d7d32a9af"
+    },
+    {
+      "class": "bgp",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/stream/GuiStreamUnavailable",
+      "sha256": "9e962e0bcada7579cc837849e008357829e1691e70604d27eca0818dc6a12eac"
+    },
+    {
+      "class": "bgs",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/stream/GuiTwitchUserMode",
+      "sha256": "810e4ea02d9249be96bc58a1a94bbf8db7a7897c073da63918dc2a5f1e477048"
+    },
+    {
+      "class": "bcx",
+      "superClass": "bdw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/multiplayer/GuiConnecting",
+      "sha256": "5473947a848fc9ee7538a7cb614f1e542c24be41b0293ea6fe62f229ff22d110"
+    },
+    {
+      "class": "bfo",
+      "superClass": "bex",
+      "abstract": true,
+      "interface": false,
+      "mappedName": "net/minecraft/client/renderer/InventoryEffectRenderer",
+      "sha256": "c62a057afa7d2d094f5a32d9e24f09b14d6884ad0ada16b1be42274f48bc943e"
+    }
+  ],
+  "guiSupport": [
+    {
+      "class": "bak",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/ChatLine",
+      "sha256": "c265136c6d900f8ce9f4a9b907772971f0eadd0a86171372ed1902360aec4e1a"
+    },
+    {
+      "class": "bbu",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/FontRenderer",
+      "sha256": "9144384cf19786b12e3507f5b00f1ab396ecdbb7b6f7f8f09516ee8a1ee28a0d"
+    },
+    {
+      "class": "bbw",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/Gui",
+      "sha256": "91cf39ead2595aa51bb603f690a8c46ae98aa1fe47d5ad91e27fdb335b0dc83c"
+    },
+    {
+      "class": "bcb",
+      "superClass": "bbw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiButton",
+      "sha256": "72aafe98f2ef7b5f49d81b0767c7c1fb87b2ca5373198df0894712ebd61adb78"
+    },
+    {
+      "class": "bcf",
+      "superClass": "bcb",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiButtonLanguage",
+      "sha256": "54c7085570f08fccec22f9e2dd2932f7032a2bb0cd8b7d41d71b4d064efedbf5"
+    },
+    {
+      "class": "bcp",
+      "superClass": "bcb",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiButtonRealmsProxy",
+      "sha256": "5412080ed9c99c76762dd0895f37f245210d00073c5a0abcaaeecebd57fe018b"
+    },
+    {
+      "class": "bda",
+      "superClass": "bcm",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiCreateFlatWorld$Details",
+      "sha256": "ef6d9ed0b262696206c56e58b66bece3d9c4b7a7699e5b11ce60e0a44e69fa05"
+    },
+    {
+      "class": "bdr",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiFlatPresets$LayerItem",
+      "sha256": "f9a3fd196bbb4f585f6c61d523699bd1a59c641e37ed6bf5aa8f46b72b34d80e"
+    },
+    {
+      "class": "bds",
+      "superClass": "bcm",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiFlatPresets$ListSlot",
+      "sha256": "a37bddb8d07fa281d05a8db29502997b1cc21e82e3a17e439d64a8af3e150393"
+    },
+    {
+      "class": "bbv",
+      "superClass": "bbw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiIngame",
+      "sha256": "0e5e7784b6132c6890bded7074a3a5b3bf103132b54e32800c37de82e1a4b888"
+    },
+    {
+      "class": "bes",
+      "superClass": "bch",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiKeyBindingList",
+      "sha256": "6221ce27ef1d8c8ad68e6258f34fcbe997fdd8d3126680d2bddeedef0deba391"
+    },
+    {
+      "class": "bet",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiKeyBindingList$1",
+      "sha256": "5abfe5625535c224058d2acaf0e100c324086868a4c06eaceb2928f83a9c3036"
+    },
+    {
+      "class": "beu",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiKeyBindingList$CategoryEntry",
+      "sha256": "1ec1b4583be9280fbdf059174b2a3380d56e292badc4b594c0ac45dc3a682975"
+    },
+    {
+      "class": "bev",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiKeyBindingList$KeyEntry",
+      "sha256": "55d7e3cf6899b58c75d62aa15c52577143f60a2b66bab9f150acc2ee2cabfae7"
+    },
+    {
+      "class": "bce",
+      "superClass": "bbw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiLabel",
+      "sha256": "02a256a2405d50e6092f5cda2bf008fc068d4183a80ecee327123c86ddb1e0b2"
+    },
+    {
+      "class": "bdk",
+      "superClass": "bcm",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiLanguage$List",
+      "sha256": "d47103490e3f9112a80f29477b39ee735cf4558873f306f74982b47756c4b442"
+    },
+    {
+      "class": "bch",
+      "superClass": "bcm",
+      "abstract": true,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiListExtended",
+      "sha256": "b4151486033eb6881effbf4cdcdc548940697b445cbd20d83b30e1d0f340a14f"
+    },
+    {
+      "class": "bci",
+      "superClass": "java/lang/Object",
+      "abstract": true,
+      "interface": true,
+      "mappedName": "net/minecraft/client/gui/GuiListExtended$IGuiListEntry",
+      "sha256": "27e676c8d6934dac1065e95a1eb3649b355780cc873ccc76ef636cc2c462f73d"
+    },
+    {
+      "class": "bfw",
+      "superClass": "bcb",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiMerchant$MerchantButton",
+      "sha256": "e7e3b7bf85e33371e92c2fef2e48bc9c513a126b147656ce240bbb08d4437fcc"
+    },
+    {
+      "class": "bcc",
+      "superClass": "bbw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiNewChat",
+      "sha256": "dad8c62d6efe0d1667ae603d2ad73ad84b733a086ff7efe26e981d16f4c2bd88"
+    },
+    {
+      "class": "bcj",
+      "superClass": "bcb",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiOptionButton",
+      "sha256": "d6f85e9facc09c69b2dfa6efccfef0b60b175d70e3a07b85fba81970a7874cfd"
+    },
+    {
+      "class": "bcn",
+      "superClass": "bcb",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiOptionSlider",
+      "sha256": "730c93cf7d58be4253c72a4676710e0b94666341d6f24bb58e655c6f644db04e"
+    },
+    {
+      "class": "bdn",
+      "superClass": "bcb",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiOptions$1",
+      "sha256": "4220172073691d9c518f61cf2020ec87c7b5c41c4e8c9929161ea4578805bf42"
+    },
+    {
+      "class": "bck",
+      "superClass": "bch",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiOptionsRowList",
+      "sha256": "f4009c9bc75559d903f2952930ac29819721526d9eea8230a36b0fec858d224c"
+    },
+    {
+      "class": "bcl",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiOptionsRowList$Row",
+      "sha256": "1cb34adce354daf5bd620f00c9502877a8ecc58194b24d4d21fff91aa39a1d7b"
+    },
+    {
+      "class": "bjl",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiPlayerInfo",
+      "sha256": "50ecad7445422ea0a8d00ef75d160b29c17322d385d497fe0f52c76c4b7cadac"
+    },
+    {
+      "class": "bgj",
+      "superClass": "bgk",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiResourcePackAvailable",
+      "sha256": "bcce20a416d230079ca55020a8d5fcc1d032901077b8f6597b7f8f1c9d046fb0"
+    },
+    {
+      "class": "bgk",
+      "superClass": "bch",
+      "abstract": true,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiResourcePackList",
+      "sha256": "82e19043e6d297d64dc1d9752e0c99eda328e557d001871146076ec71bdab738"
+    },
+    {
+      "class": "bgl",
+      "superClass": "bgk",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiResourcePackSelected",
+      "sha256": "beb8ddcb2117293de51f147581bd925a5b8e81f28662d20ac01df0e47baf4f71"
+    },
+    {
+      "class": "bff",
+      "superClass": "bcb",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiScreenBook$NextPageButton",
+      "sha256": "d8a8e3137d707aeb4318b8ac47463ab60433ff1a27be0f93b804238a1e220447"
+    },
+    {
+      "class": "bed",
+      "superClass": "bcb",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiScreenOptionsSounds$Button",
+      "sha256": "c9027141565f79113ec6169875d72e21f19f1ffc0246c3894b6253d53ef27fca"
+    },
+    {
+      "class": "bdy",
+      "superClass": "bcm",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiSelectWorld$List",
+      "sha256": "5864632771b1e98f9b2f8ae5c78dc4a8f614d115d2920a13ff1fd2d7c23d3075"
+    },
+    {
+      "class": "bcm",
+      "superClass": "java/lang/Object",
+      "abstract": true,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiSlot",
+      "sha256": "9addb640d3f0a5cc1cfa3a05db6d62d3c0b5a3ad044d68f45fdc6a68a34eb967"
+    },
+    {
+      "class": "bcr",
+      "superClass": "bcm",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiSlotRealmsProxy",
+      "sha256": "4b300468a70db2371163f401be2227b2a664f7de27a54f1a454b868fdfcd56ce"
+    },
+    {
+      "class": "beb",
+      "superClass": "bcm",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiSnooper$List",
+      "sha256": "00caee663b2be294a6178c65ba31251633d6687a55bdbc5574c5b856cb7bbc2e"
+    },
+    {
+      "class": "bco",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiStreamIndicator",
+      "sha256": "c634480b36880172a896c8b7223e69cf103201f99cbf0d98bafa06257e66f140"
+    },
+    {
+      "class": "bcd",
+      "superClass": "bbw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/GuiTextField",
+      "sha256": "66bb09dfe77c1f52ebe00c38b7c6e4b30c30974db16c62a3c2aa3c573a9085fa"
+    },
+    {
+      "class": "bcv",
+      "superClass": "java/lang/Object",
+      "abstract": true,
+      "interface": true,
+      "mappedName": "net/minecraft/client/gui/GuiYesNoCallback",
+      "sha256": "2407a08085f6ae522a8502c8427506fd9d490097247a2a868dad39aa98d79ac5"
+    },
+    {
+      "class": "ber",
+      "superClass": "java/lang/Object",
+      "abstract": true,
+      "interface": true,
+      "mappedName": "net/minecraft/client/gui/IProgressMeter",
+      "sha256": "f80b9fa937c08694389883f7c885a0ef484d6b2a25104670cc8cc8f139469e8d"
+    },
+    {
+      "class": "bbx",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/MapItemRenderer",
+      "sha256": "0e1da4ef3ae4958f08851f5ff69483fc4b1c99f75ca2e1ef72517b9f71876bd8"
+    },
+    {
+      "class": "bby",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/MapItemRenderer$1",
+      "sha256": "0bb2661925c3ebd6321df4aa6d05c0cdd3051ba29b3756399e831618dd71bb13"
+    },
+    {
+      "class": "bbz",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/MapItemRenderer$Instance",
+      "sha256": "4c2ab95fb0d6d9d79f43c81b210430bb0877f7d1cc9e0e0a331c35249f0072c8"
+    },
+    {
+      "class": "bca",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/ScaledResolution",
+      "sha256": "aa13527bdaf2ff624a803ba508d7bb7b938dde87439f3545b0f1591d2b6d391a"
+    },
+    {
+      "class": "bgb",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/ServerListEntryLanDetected",
+      "sha256": "ce57336ed3870838f47ca621e7d0006e889f3c2ca560ee2991a9cb9b865069db"
+    },
+    {
+      "class": "bga",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/ServerListEntryLanScan",
+      "sha256": "cb317027882c0ffed999940018dfdbed1ab674af73815836d926b586348c264c"
+    },
+    {
+      "class": "bgc",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/ServerListEntryNormal",
+      "sha256": "fce3472b252e0f948679339b338d87a1ecf0314fff0ab8aa5d88b2574181f533"
+    },
+    {
+      "class": "bgd",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/ServerListEntryNormal$1",
+      "sha256": "db828f6667a65b814f6645bc93ca6f80fcd7e041e5ccbdcaec06429b8b8aaba0"
+    },
+    {
+      "class": "bge",
+      "superClass": "bch",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/ServerSelectionList",
+      "sha256": "abb6775db55de0eabbff9f155ca255c56df128cb1e0e54951486547768d6123d"
+    },
+    {
+      "class": "beh",
+      "superClass": "bbw",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/achievement/GuiAchievement",
+      "sha256": "49cddd8a331c41794bf52d596ea4b466ee25f3cf2889dac6717fd1de0b6418c6"
+    },
+    {
+      "class": "beq",
+      "superClass": "bcm",
+      "abstract": true,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/achievement/GuiStats$Stats",
+      "sha256": "3d698317531292fccc052e6f655e9f9f9b4b256ed48a4eea4256228ff9842f92"
+    },
+    {
+      "class": "bek",
+      "superClass": "beq",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/achievement/GuiStats$StatsBlock",
+      "sha256": "2922bc180348e671acb390a212b0221b37eeff050c0e0e903ab03dd8a4626596"
+    },
+    {
+      "class": "bel",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/achievement/GuiStats$StatsBlock$1",
+      "sha256": "249b3164e01c7f305e2f1a48bdf5ae74d4da56a141d7617871148630437a94a1"
+    },
+    {
+      "class": "bem",
+      "superClass": "bcm",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/achievement/GuiStats$StatsGeneral",
+      "sha256": "909b13dd035be29893c08207d5c0297d47082836c8bd1123cab4923b67aaa7b2"
+    },
+    {
+      "class": "ben",
+      "superClass": "beq",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/achievement/GuiStats$StatsItem",
+      "sha256": "6ff20ec8a4dc8a5160f62ef16ceecb584292e13064c64d95010bfa96860a87a5"
+    },
+    {
+      "class": "beo",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/achievement/GuiStats$StatsItem$1",
+      "sha256": "a231b6ab2386e88475c321f229fa75d6400b32fb8fefb5501f00e0b1e5f41f70"
+    },
+    {
+      "class": "bep",
+      "superClass": "bcm",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/achievement/GuiStats$StatsMobsList",
+      "sha256": "a3f6e040e837d89fdc3e5e2ee2f24ae085cdb219310230debd46408acbabe1de"
+    },
+    {
+      "class": "bfk",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/CreativeCrafting",
+      "sha256": "8a9703932556c329eab4595112b2b6e5f936dc21b820777f29c3906f86b3a93e"
+    },
+    {
+      "class": "bfd",
+      "superClass": "bcb",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiBeacon$Button",
+      "sha256": "edfd460d51f013b3aa7f43867f1f3a55257c43d7e21d8dd9633485f3034f3dd2"
+    },
+    {
+      "class": "bfa",
+      "superClass": "bfd",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiBeacon$CancelButton",
+      "sha256": "835a03c81d7b6f2e83d19d659761b4c2e326e28dcb5a21cf9a53fbb6ae17f462"
+    },
+    {
+      "class": "bfb",
+      "superClass": "bfd",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiBeacon$ConfirmButton",
+      "sha256": "ff2c969c79e5d285a0ece8d81e6f388b98fb44ba9c1350a2743b9f33e58efba0"
+    },
+    {
+      "class": "bfc",
+      "superClass": "bfd",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiBeacon$PowerButton",
+      "sha256": "972cb61ad344838d36755cfb7187689f3f7689c619dcad5fa0d4c0ea6b8d75b8"
+    },
+    {
+      "class": "bfm",
+      "superClass": "zs",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiContainerCreative$ContainerCreative",
+      "sha256": "71c95f9003d60be8dd6f22854ef97834bccd0e007459295799627b08722eb93c"
+    },
+    {
+      "class": "bfn",
+      "superClass": "aay",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/inventory/GuiContainerCreative$CreativeSlot",
+      "sha256": "13312c50042ff8b76b38e53ac1c97476b42dc99a4f17ab392da70025c2339219"
+    },
+    {
+      "class": "bgn",
+      "superClass": "bcm",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/stream/GuiIngestServers$ServerList",
+      "sha256": "c4b9f433adbb24ed05eb11fcf706e366b81dc5fac30c580f07743fb8f8f6a7a2"
+    },
+    {
+      "class": "bgr",
+      "superClass": "java/lang/Enum",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/stream/GuiStreamUnavailable$Reason",
+      "sha256": "c271f547944990f7f2a4d3ef7374e710e6ae68e24d29135258bda4ae1a8a07f6"
+    },
+    {
+      "class": "bgq",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/client/gui/stream/GuiStreamUnavailable$SwitchReason",
+      "sha256": "ee829194258c10b6d34754c2afc726af57e5574d4a5635e6f5e565edb1fb7271"
+    }
+  ],
+  "structureStarts": [
+    {
+      "id": "Fortress",
+      "class": "ate",
+      "mappedName": "net/minecraft/world/gen/structure/MapGenNetherBridge$Start"
+    },
+    {
+      "id": "Mineshaft",
+      "class": "atc",
+      "mappedName": "net/minecraft/world/gen/structure/StructureMineshaftStart"
+    },
+    {
+      "id": "Stronghold",
+      "class": "auh",
+      "mappedName": "net/minecraft/world/gen/structure/MapGenStronghold$Start"
+    },
+    {
+      "id": "Temple",
+      "class": "aty",
+      "mappedName": "net/minecraft/world/gen/structure/MapGenScatteredFeature$Start"
+    },
+    {
+      "id": "Village",
+      "class": "avo",
+      "mappedName": "net/minecraft/world/gen/structure/MapGenVillage$Start"
+    }
+  ],
+  "structurePieces": [
+    {
+      "id": "MSCorridor",
+      "class": "asy",
+      "mappedName": "net/minecraft/world/gen/structure/StructureMineshaftPieces$Corridor"
+    },
+    {
+      "id": "MSCrossing",
+      "class": "asz",
+      "mappedName": "net/minecraft/world/gen/structure/StructureMineshaftPieces$Cross"
+    },
+    {
+      "id": "MSRoom",
+      "class": "ata",
+      "mappedName": "net/minecraft/world/gen/structure/StructureMineshaftPieces$Room"
+    },
+    {
+      "id": "MSStairs",
+      "class": "atb",
+      "mappedName": "net/minecraft/world/gen/structure/StructureMineshaftPieces$Stairs"
+    },
+    {
+      "id": "NeBCr",
+      "class": "atg",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$Crossing3"
+    },
+    {
+      "id": "NeBEF",
+      "class": "ath",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$End"
+    },
+    {
+      "id": "NeBS",
+      "class": "ati",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$Straight"
+    },
+    {
+      "id": "NeCCS",
+      "class": "atj",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$Corridor3"
+    },
+    {
+      "id": "NeCE",
+      "class": "atl",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$Entrance"
+    },
+    {
+      "id": "NeCSR",
+      "class": "atq",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$NetherStalkRoom"
+    },
+    {
+      "id": "NeCTB",
+      "class": "atk",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$Corridor4"
+    },
+    {
+      "id": "NeMT",
+      "class": "atr",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$Throne"
+    },
+    {
+      "id": "NeRC",
+      "class": "atu",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$Crossing"
+    },
+    {
+      "id": "NeSC",
+      "class": "ato",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$Corridor5"
+    },
+    {
+      "id": "NeSCLT",
+      "class": "atn",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$Corridor"
+    },
+    {
+      "id": "NeSCRT",
+      "class": "atp",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$Corridor2"
+    },
+    {
+      "id": "NeSCSC",
+      "class": "atm",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$Crossing2"
+    },
+    {
+      "id": "NeSR",
+      "class": "atv",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$Stairs"
+    },
+    {
+      "id": "NeStart",
+      "class": "atw",
+      "mappedName": "net/minecraft/world/gen/structure/StructureNetherBridgePieces$Start"
+    },
+    {
+      "id": "SH5C",
+      "class": "auo",
+      "mappedName": "net/minecraft/world/gen/structure/StructureStrongholdPieces$Crossing"
+    },
+    {
+      "id": "SHCC",
+      "class": "aum",
+      "mappedName": "net/minecraft/world/gen/structure/StructureStrongholdPieces$ChestCorridor"
+    },
+    {
+      "id": "SHFC",
+      "class": "aun",
+      "mappedName": "net/minecraft/world/gen/structure/StructureStrongholdPieces$Corridor"
+    },
+    {
+      "id": "SHLT",
+      "class": "aup",
+      "mappedName": "net/minecraft/world/gen/structure/StructureStrongholdPieces$LeftTurn"
+    },
+    {
+      "id": "SHLi",
+      "class": "auq",
+      "mappedName": "net/minecraft/world/gen/structure/StructureStrongholdPieces$Library"
+    },
+    {
+      "id": "SHPH",
+      "class": "aut",
+      "mappedName": "net/minecraft/world/gen/structure/StructureStrongholdPieces$Prison"
+    },
+    {
+      "id": "SHPR",
+      "class": "aus",
+      "mappedName": "net/minecraft/world/gen/structure/StructureStrongholdPieces$PortalRoom"
+    },
+    {
+      "id": "SHRC",
+      "class": "auv",
+      "mappedName": "net/minecraft/world/gen/structure/StructureStrongholdPieces$RoomCrossing"
+    },
+    {
+      "id": "SHRT",
+      "class": "auu",
+      "mappedName": "net/minecraft/world/gen/structure/StructureStrongholdPieces$RightTurn"
+    },
+    {
+      "id": "SHS",
+      "class": "ava",
+      "mappedName": "net/minecraft/world/gen/structure/StructureStrongholdPieces$Straight"
+    },
+    {
+      "id": "SHSD",
+      "class": "auy",
+      "mappedName": "net/minecraft/world/gen/structure/StructureStrongholdPieces$Stairs"
+    },
+    {
+      "id": "SHSSD",
+      "class": "avb",
+      "mappedName": "net/minecraft/world/gen/structure/StructureStrongholdPieces$StairsStraight"
+    },
+    {
+      "id": "SHStart",
+      "class": "auz",
+      "mappedName": "net/minecraft/world/gen/structure/StructureStrongholdPieces$Stairs2"
+    },
+    {
+      "id": "TeDP",
+      "class": "aub",
+      "mappedName": "net/minecraft/world/gen/structure/ComponentScatteredFeaturePieces$DesertPyramid"
+    },
+    {
+      "id": "TeJP",
+      "class": "auc",
+      "mappedName": "net/minecraft/world/gen/structure/ComponentScatteredFeaturePieces$JunglePyramid"
+    },
+    {
+      "id": "TeSH",
+      "class": "auf",
+      "mappedName": "net/minecraft/world/gen/structure/ComponentScatteredFeaturePieces$SwampHut"
+    },
+    {
+      "id": "ViBH",
+      "class": "avq",
+      "mappedName": "net/minecraft/world/gen/structure/StructureVillagePieces$House1"
+    },
+    {
+      "id": "ViDF",
+      "class": "avr",
+      "mappedName": "net/minecraft/world/gen/structure/StructureVillagePieces$Field1"
+    },
+    {
+      "id": "ViF",
+      "class": "avs",
+      "mappedName": "net/minecraft/world/gen/structure/StructureVillagePieces$Field2"
+    },
+    {
+      "id": "ViL",
+      "class": "avt",
+      "mappedName": "net/minecraft/world/gen/structure/StructureVillagePieces$Torch"
+    },
+    {
+      "id": "ViPH",
+      "class": "avv",
+      "mappedName": "net/minecraft/world/gen/structure/StructureVillagePieces$Hall"
+    },
+    {
+      "id": "ViS",
+      "class": "avz",
+      "mappedName": "net/minecraft/world/gen/structure/StructureVillagePieces$House2"
+    },
+    {
+      "id": "ViSH",
+      "class": "avw",
+      "mappedName": "net/minecraft/world/gen/structure/StructureVillagePieces$House4Garden"
+    },
+    {
+      "id": "ViSR",
+      "class": "awb",
+      "mappedName": "net/minecraft/world/gen/structure/StructureVillagePieces$Path"
+    },
+    {
+      "id": "ViST",
+      "class": "avy",
+      "mappedName": "net/minecraft/world/gen/structure/StructureVillagePieces$Church"
+    },
+    {
+      "id": "ViSmH",
+      "class": "avx",
+      "mappedName": "net/minecraft/world/gen/structure/StructureVillagePieces$WoodHut"
+    },
+    {
+      "id": "ViStart",
+      "class": "awa",
+      "mappedName": "net/minecraft/world/gen/structure/StructureVillagePieces$Start"
+    },
+    {
+      "id": "ViTRH",
+      "class": "awc",
+      "mappedName": "net/minecraft/world/gen/structure/StructureVillagePieces$House3"
+    },
+    {
+      "id": "ViW",
+      "class": "awf",
+      "mappedName": "net/minecraft/world/gen/structure/StructureVillagePieces$Well"
+    }
+  ],
+  "mapGenerators": [
+    {
+      "class": "aqx",
+      "superClass": "java/lang/Object",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/MapGenBase",
+      "sha256": "ad397216fd59c7690824a29178553d96c7561baefa51d014b4079f9c7775b5af"
+    },
+    {
+      "class": "aqw",
+      "superClass": "aqx",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/MapGenCaves",
+      "sha256": "b5f112a51a6de947b00d21bf9de67a1ef52ed4091d96b6e41693c7a72eda3155"
+    },
+    {
+      "class": "aqy",
+      "superClass": "aqx",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/MapGenCavesHell",
+      "sha256": "1b2ed2bd732e87971d1d5e01036d254bf2b07f857d7e91ecd47005eb7c09d069"
+    },
+    {
+      "class": "aqs",
+      "superClass": "aqx",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/MapGenRavine",
+      "sha256": "1e0ce7c2724dcb4a7026747f38a30b4534c01825df84bb9ab6a4ddb792285c25"
+    },
+    {
+      "class": "asw",
+      "superClass": "ave",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/structure/MapGenMineshaft",
+      "sha256": "f511ddc6a2eb4fe6a6996939f82bcfa3358781c982691e6ff7e3a86baa573ae1"
+    },
+    {
+      "class": "atd",
+      "superClass": "ave",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/structure/MapGenNetherBridge",
+      "sha256": "99319896449e246140e96c71031c7db7181d5e0ba6ba71c058b1b59c33367e1c"
+    },
+    {
+      "class": "atx",
+      "superClass": "ave",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/structure/MapGenScatteredFeature",
+      "sha256": "5e64326dbae7e825be3e4a81193bb65b8cf62e261a39c5a000267453e437b81b"
+    },
+    {
+      "class": "aug",
+      "superClass": "ave",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/structure/MapGenStronghold",
+      "sha256": "aa722228dd6312aaa6d9850850c2296fd8ca6fd8becea6e06074447335eda733"
+    },
+    {
+      "class": "ave",
+      "superClass": "aqx",
+      "abstract": true,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/structure/MapGenStructure",
+      "sha256": "b4aa2c6dd54f756633555cf15f06e3849de47561c494268290a4f90bad273638"
+    },
+    {
+      "class": "avn",
+      "superClass": "ave",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/structure/MapGenVillage",
+      "sha256": "c70cbcbe1ca410fc1dad9c3771b2a4b21b0aa319b6d52ec54ba03bd6c0690d86"
+    }
+  ],
+  "features": [
+    {
+      "class": "arc",
+      "superClass": "arn",
+      "abstract": true,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenAbstractTree",
+      "sha256": "624f3e8fefbf9fd1d35a67014800a51962fec690a5fe3bda8a492b3724656305"
+    },
+    {
+      "class": "aru",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenBigMushroom",
+      "sha256": "b8fbe12a87e07af7dfefd79aeecfad6699d62965ca6a88ec0a4f9fafe37316ab"
+    },
+    {
+      "class": "ard",
+      "superClass": "arc",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenBigTree",
+      "sha256": "cbc933a4785681125c8bb89da35841d3fc359435cfd460a23f3aef9f3af2eb06"
+    },
+    {
+      "class": "arf",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenBlockBlob",
+      "sha256": "2e5db2a8ffd0568fadd31ac0c31415d3b023512abd4ee842f4ea5dd7d01bb889"
+    },
+    {
+      "class": "arh",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenCactus",
+      "sha256": "0ce6b9f00e077ec116e54af62c5a9ef896b11f807594cb4fc65512f3e6d990bb"
+    },
+    {
+      "class": "asi",
+      "superClass": "arc",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenCanopyTree",
+      "sha256": "e55a31268f0bed3159f8b9e66ce58948d67c46a376c10bcb5028a10f1a48f569"
+    },
+    {
+      "class": "arj",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenClay",
+      "sha256": "4727300613f9d61f70565a29e1ea8122462d87c245083331d2bf144b400ceadc"
+    },
+    {
+      "class": "ark",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenDeadBush",
+      "sha256": "a6220e04045ed3481d23557a98b372eb45245add766725030c107aefe6ed1a54"
+    },
+    {
+      "class": "arl",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenDesertWells",
+      "sha256": "8e8b156e52b31641d8efd1135a3193821eda9e50b2477fcb7b7d30fc9c2a3fd2"
+    },
+    {
+      "class": "arm",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenDoublePlant",
+      "sha256": "acc089b2dbbc3d9101b4d2a64e4bd4b9681466428d174efcdf1ca2a7d362e72d"
+    },
+    {
+      "class": "asd",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenDungeons",
+      "sha256": "b091025bb278d3426e660acafab74f020d027575e2d481c3411d298652f05c72"
+    },
+    {
+      "class": "arq",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenFire",
+      "sha256": "df8240c89bcb8163eedcb9049959e80eaafef50b03efee3803923a2cb507fffb"
+    },
+    {
+      "class": "aro",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenFlowers",
+      "sha256": "b240b3127ea351305a77128ad7704cfe56f40962c1156b49bd4cd7999596da3e"
+    },
+    {
+      "class": "are",
+      "superClass": "arc",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenForest",
+      "sha256": "992b1ef54a81fd32db9f30bd20e4c326cf2c7d5bf5355d22cccf4d0f01cc526d"
+    },
+    {
+      "class": "ary",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenGlowStone1",
+      "sha256": "9fdcafaeb3e3587977121b71f4fb617501d4c872cff0cf996dc1b5fdd2838a77"
+    },
+    {
+      "class": "arr",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenGlowStone2",
+      "sha256": "448805bcfe7a824cc7158084b7222e052cd27e33e60cde18300a2ebd68ed2d85"
+    },
+    {
+      "class": "ars",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenHellLava",
+      "sha256": "b1392c2362688e307b25711c318f8150c20439018502a508e2d87da66738ff05"
+    },
+    {
+      "class": "asb",
+      "superClass": "arc",
+      "abstract": true,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenHugeTrees",
+      "sha256": "b7f7e13479924611fb01d6b9b7abbccf8602cfeb3f57f50ab00a9cbb57b5370b"
+    },
+    {
+      "class": "arv",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenIcePath",
+      "sha256": "802aeb2ad8d79711d6e05de12274e6b0d7720b0a6cac190649ce3478fec3dc95"
+    },
+    {
+      "class": "arw",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenIceSpike",
+      "sha256": "d2f18c54df0d65a629075bf78070092a0543e8d5959ba1452c60db74b782e597"
+    },
+    {
+      "class": "arx",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenLakes",
+      "sha256": "eac4e3ba7277142514f132874f83ab995ef4e78fc2b38bd40913027be72ff459"
+    },
+    {
+      "class": "asm",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenLiquids",
+      "sha256": "2aa0c929979bacfaab840cdb9ac2a34748cfc77092282f1f88ab29f2e87e2873"
+    },
+    {
+      "class": "arz",
+      "superClass": "asb",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenMegaJungle",
+      "sha256": "f42663e3d3b3a00e501fe7afc34cbbe82fc71c99b6b5647e2ba1100ce55689be"
+    },
+    {
+      "class": "asa",
+      "superClass": "asb",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenMegaPineTree",
+      "sha256": "87cd5c8416d731738a652db9623f7ba94cd62e0efeb2d1be904916c167e03a3c"
+    },
+    {
+      "class": "asc",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenMelon",
+      "sha256": "9dd8fd8863b095d4ebeeff13911dce65e7c26f389c9408001706c50b8a33b6c6"
+    },
+    {
+      "class": "ase",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenMinable",
+      "sha256": "cf1ed9583cab2e05f96553fdf63d7256fbc897d5af35fc2a77e66059175dfb31"
+    },
+    {
+      "class": "asg",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenPumpkin",
+      "sha256": "a06623aff362b7f92656ce00584c7d826801ab372965993733d9f2cad499e4fd"
+    },
+    {
+      "class": "ash",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenReed",
+      "sha256": "5e88328832f5968bc042664682fa68500e2bc5b7c9b5d89376a0c41243c30301"
+    },
+    {
+      "class": "asj",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenSand",
+      "sha256": "5be81bff3c3610ef4da764b7097a5206a5f036d36ed5e61b86c354009e43833b"
+    },
+    {
+      "class": "ask",
+      "superClass": "arc",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenSavannaTree",
+      "sha256": "fc08c2165888ac28135eb9fed8d6a9e440b19936756176c7ed549e68c4d478a1"
+    },
+    {
+      "class": "arp",
+      "superClass": "asq",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenShrub",
+      "sha256": "9785a37b22f7ca37c01db3ff08df906758b917665c1de2c4a1cf70650cac3bec"
+    },
+    {
+      "class": "asl",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenSpikes",
+      "sha256": "04dda97f3371acef8594c3ecacaa9729c7ccdd5bafe5fe58ce8a534900fe5c6b"
+    },
+    {
+      "class": "aso",
+      "superClass": "arc",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenSwamp",
+      "sha256": "3e5fc6da6a2a46be126e9397897c1a419b3902f1e5bd6b6eacffc722d8795a12"
+    },
+    {
+      "class": "asf",
+      "superClass": "arc",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenTaiga1",
+      "sha256": "1774c66c2f4ad4e00051670a0691141c746a42b99d207a9ea33b10fcb9498462"
+    },
+    {
+      "class": "asn",
+      "superClass": "arc",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenTaiga2",
+      "sha256": "31b43cd342b8a3ac624305ab1be1cec85ca824dfe0f15f8f9d6e160c319c8649"
+    },
+    {
+      "class": "asp",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenTallGrass",
+      "sha256": "60d67b99606539605c4648b0740cb568ce647ea3e2d479484c4be370127accf8"
+    },
+    {
+      "class": "asq",
+      "superClass": "arc",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenTrees",
+      "sha256": "4f790cdb9b3407e181e05bab23d211682fdcd1fdaadf37aa4a3d127d13d3a370"
+    },
+    {
+      "class": "asr",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenVines",
+      "sha256": "29cf7774c4b5add2fe1075e6a6ba03969bd70acf6b396f59c76b02475f1e80df"
+    },
+    {
+      "class": "aiz",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenWaterlily",
+      "sha256": "483329ef1037473d6bc508fc11565895ebaad630c9a55978a72f5fcd7407b551"
+    },
+    {
+      "class": "arn",
+      "superClass": "java/lang/Object",
+      "abstract": true,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGenerator",
+      "sha256": "c450205b80789bc32a2479f73e82e723f93dea72f00dbb39a5e5c8785dd0b30c"
+    },
+    {
+      "class": "arg",
+      "superClass": "arn",
+      "abstract": false,
+      "interface": false,
+      "mappedName": "net/minecraft/world/gen/feature/WorldGeneratorBonusChest",
+      "sha256": "d3d91eb6a507d945496e442b49dca67fa83358f9568b9d6e97d7c7acb4761965"
+    }
+  ]
+}
