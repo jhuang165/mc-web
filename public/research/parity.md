@@ -2,7 +2,7 @@
 
 The target is the complete Java 1.7.10 feature set. **This build does not yet provide full parity.** “Implemented” below means a working browser implementation with the limitations stated; it does not mean original-client equivalence.
 
-See the [accepted roadmap and execution tracker](parity-roadmap.md) and [original base-block catalogue](block-parity-catalogue.md). A registry mapping is not verification of behavior.
+See the [accepted roadmap and execution tracker](parity-roadmap.md) and [original base-block catalogue](block-parity-catalogue.md). A registry mapping is not verification of behavior. Expanded audit catalogues cover [items and Creative subtypes](item-parity-catalogue.md), [block metadata](block-metadata-catalogue.md), [entity registrations](entity-parity-catalogue.md), [biome slots](biome-parity-catalogue.md) and [default gamerules](gamerule-parity-catalogue.md). Semantic variants and the remaining catalogue categories are still open.
 
 ## Working systems
 
@@ -62,6 +62,8 @@ See the [accepted roadmap and execution tracker](parity-roadmap.md) and [origina
 - Complete animation and rendering parity, remaining sound events, music, remaining menu and GUI behavior. Selected original media and recovered animation curves are now present; see [animation and audio](animations-and-sounds.md).
 
 ## Evidence
+
+- [Original content registry/subtype outputs](content-registry-reference.json): 315 item registrations, 171 block registrations with Creative item subtypes, 606 Creative search entries (76 additional enchanted books retaining NBT), 57 numeric EntityList registrations, 61 occupied biome slots and nine default gamerules. `tools/verify-catalogue.mjs` executes unchanged original registration/subtype classes; `tools/build-content-catalogue.mjs` generates conservative audit tables and matches the 167 browser search entries. This is enumeration evidence, not feature-behavior verification; world metadata semantics and remaining feature categories stay open.
 
 - [Explosion/smoke particle reference outputs](explosion-particles-reference.json): 41 original-class records covering four particle classes through full lifetimes and eight collision fixtures, client blast spawn calls and TNT fuse smoke; `src/explosion-particles.test.js` replays them.
 
