@@ -72,3 +72,83 @@ test("invalid or missing world-random envelopes retain legacy startup state atom
     assert.deepEqual(weather.saveSimulation(), saved);
   }
 });
+
+test("weather, fluid and tree updates share one restored stream through interleaved reloads", async () => {
+  const { Fluids } = await import("./fluids.js");
+  const { Trees } = await import("./trees.js");
+  const { Fire } = await import("./fire.js");
+  const { importedRuntime } = await import("./world-import.js");
+  const { LAVA, SAPLING, FIRE } = await import("./world.js");
+  const LEAVES = 5;
+  const makeWorld = edits => {
+    const w = new World("shared-block-random");
+    for (let x = 20; x < 52; x++) for (let z = 20; z < 52; z++)
+      for (let y = 1; y < 64; y++) w.put(x, y, z, y < 10 ? 3 : y === 10 ? 1 : 0, 0, false);
+    if (edits) w.restore(edits);
+    return w;
+  };
+  const create = (w, payload) => {
+    const weather = payload ? new Weather().restore(payload.weather).restoreSimulation(payload.worldRandom)
+      : new Weather({ random: new JavaRandom(137), lcg: -97531 });
+    const fizz = [], drops = [];
+    const fluids = new Fluids(w, { random: weather.random, fizz: (...a) => fizz.push(a) });
+    fluids.load(payload?.fluidTicks ?? { version: 1, time: 0, entries: [] });
+    const trees = new Trees(w, { random: weather.random, light: () => 15, drop: (...a) => drops.push(a) }).watch();
+    const fire = new Fire(w, { weather: () => weather });
+    fire.watch();
+    fire.sharedRandomTicks = true;
+    fire.load(payload?.fireTicks ?? { version: 1, time: 0, entries: [] });
+    weather.blockTick = (x, y, z, b) => fire.randomTick(x, y, z, b) || trees.randomTick(x, y, z, b);
+    assert.equal(fluids.random, weather.random);
+    assert.equal(trees.random, weather.random);
+    assert.equal(fire.L.rand, weather.random);
+    return { w, weather, fluids, trees, fire, fizz, drops };
+  };
+  const snapshot = r => json({ edits: [...r.w.edits], weather: r.weather.save(), worldRandom: r.weather.saveSimulation(),
+    fluidTicks: r.fluids.save(), fireTicks: r.fire.save() });
+  const reload = r => {
+    const saved = snapshot(r), payload = importedRuntime(saved);
+    const next = create(makeWorld(saved.edits), payload);
+    assert.deepEqual(next.weather.saveSimulation(), payload.worldRandom, "constructors and queue loads consume no saved draws");
+    return next;
+  };
+  const original = create(makeWorld());
+  original.w.set(40, 11, 40, SAPLING);
+  original.w.set(44, 11, 44, FIRE);
+  original.fire.drain();
+  let restored = reload(original), grew = false, lavaRandom = false, leafDrops = 0;
+  const step = (r, tick) => {
+    r.fizz.length = r.drops.length = 0;
+    r.weather.updateWeather();
+    // A controlled receding-lava cell exercises the random 30/120-tick delay.
+    if (tick % 20 === 0) {
+      r.w.put(24, 11, 24, LAVA, 1);
+      r.w.put(25, 11, 24, LAVA, 3);
+      const before = r.weather.random.seed;
+      r.fluids.updateTick(24, 11, 24);
+      lavaRandom ||= r.weather.random.seed !== before;
+    }
+    // Use real public block hooks; scheduled fluid/fire queues continue between inputs.
+    r.fluids.tick();
+    r.fire.tick();
+    r.trees.randomTick(40, 11, 40, r.w.get(40, 11, 40));
+    grew ||= r.w.get(40, 11, 40) === 4;
+    r.w.put(46, 15, 46, LEAVES, 8);
+    r.trees.randomTick(46, 15, 46, LEAVES);
+    leafDrops += r.drops.length;
+    for (const [cx, cz] of [[1, 1], [2, 2]]) r.weather.tickChunk(r.w, cx, cz);
+    return { fizz: r.fizz, drops: r.drops };
+  };
+  for (let tick = 0; tick < 160; tick++) {
+    if ([1, 19, 63, 100].includes(tick)) restored = reload(restored);
+    assert.deepEqual(step(restored, tick), step(original, tick), `effects at ${tick}`);
+    assert.deepEqual(restored.w.data, original.w.data, `blocks at ${tick}`);
+    assert.deepEqual(restored.w.meta, original.w.meta, `metadata at ${tick}`);
+    assert.deepEqual(restored.fluids.save(), original.fluids.save(), `fluid queue at ${tick}`);
+    assert.deepEqual(restored.fire.save(), original.fire.save(), `fire queue at ${tick}`);
+    assert.deepEqual(restored.weather.saveSimulation(), original.weather.saveSimulation(), `random state at ${tick}`);
+  }
+  assert.ok(grew, "sapling growth was exercised");
+  assert.ok(lavaRandom, "lava slowdown consumed a shared draw");
+  assert.ok(leafDrops > 0, "decaying leaves produced drops");
+});

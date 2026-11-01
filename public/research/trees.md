@@ -51,15 +51,14 @@ code path the probe does not reach).
   `lcg = lcg * 3 + 1013904223`, `j = lcg >> 2`, x = `j & 15`, z = `(j >> 8) & 15`, y = `(j >> 16) & 15` (bytecode of
   `WorldServer.func_147456_g`; the test checks the picks). Active chunks come from the weather module's player radius.
 - **Items**: placed leaves carry bit 4 (no decay), shears give the leaves block, creative and survival lists include the sapling.
-- **World generation version 7** (default for new worlds): trees come from the ported generator with a per-tree `Random`
+- **World generation version 7** (introduced tree generation; current new-world default is version 8): trees come from the ported generator with a per-tree `Random`
   at the same positions as before. Versions up to 6 are byte-identical to previous builds.
 
 ## Gaps (not parity)
 
 - **WorldGenBigTree (`ard`) is not ported.** The original grows it on 1 of 10 sapling growths; here that draw is made and a
   normal oak is generated instead (reported as `"big"` in the events). The probe stops at this draw.
-- The independent random-tick stream of `WorldServer` is not reproduced; the browser uses its own seed, so tick sequences
-  match the original only for a given Random, not for a given world.
+- Weather/fluid/fire/tree updates share the restored world stream since 0.22.5, but initial seeding and full native tick order remain adapted. Native sequences match only for the stated Random/scenario, not for a Java world seed.
 - World height is 64 (the finite world), the original build height is 256; `maxY` in `trees.js` is 64 (tests use 256).
 - Meta writes on a cell that has become air after a drop are skipped.
 - Old saves keep their hand-made trees; their leaves have no bit 4 and will decay once marked, as with natural leaves.
@@ -67,3 +66,9 @@ code path the probe does not reach).
 - Worldgen v7 does not apply the log/leaf breakBlock marks; v7 also moves flowers and tall grass indirectly because the
   new crowns occupy different cells.
 - Sapling light is the browser's own light value, not the original chunk's light update queue.
+
+## Shared world random and reloads (0.22.5)
+
+The game injects the restored Weather World.rand into Trees, sharing it with fluid/fire/weather updates. Sapling rolls, oak growth, leaf drops and tree bone meal now consume that stream instead of an independent clock-seeded generator. The standalone tree generator/tests retain their explicitly seeded inputs. The standalone Trees.lcg is not used by the game’s shared Weather.tickChunk loop.
+
+Original WorldServer call-site bytecode passes its world Random to random and scheduled Block.updateTick calls; existing native tree algorithm replays remain unchanged. A controlled 160-step port regression interleaves lava slowdown, weather draws, fire queues, sapling growth and leaf decay/drop checks, then reloads multiple times through the shared import payload; blocks, metadata, queues, effects/drops and random state match uninterrupted execution. This does not verify full native cross-system tick ordering, Java world RNG serialization or Java-seed terrain parity. Other random sources remain open, and upgrading changes future rolls from the previously independent streams while retaining saved terrain.

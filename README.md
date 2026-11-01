@@ -15,6 +15,8 @@ Node 20.19+ and a browser with WebGL 2 are required. Build with `npm run build`;
 
 ## Current implementation
 
+Version 0.22.5 connects fluid and tree updates to the restored World.rand already used by weather and fire. Lava slowdown/fizz, sapling growth and leaf drops now advance that shared stream and retain it across saves/imports. Interleaved reload regressions cover these interactions; other random streams and unified tick ordering remain unfinished.
+
 Version 0.22.4 preserves the player’s signed fire counter across saves/imports (15 original Entity NBT cases), and snapshots the weather World.rand state plus block-tick updateLCG for browser reload continuity. Other random streams and cross-system update ordering remain unfinished. The random snapshot is a browser save extension, separate from Java WorldInfo fields.
 
 Version 0.22.3 preserves pending sand/gravel update deadlines, block identity and queue order across local saves and export/import. Repeated reloads mid-fall match uninterrupted column updates in port regression tests; old saves retain the legacy wake migration. World random continuity and unified cross-system tick ordering remain open.

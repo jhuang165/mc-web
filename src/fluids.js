@@ -189,14 +189,15 @@ export class Fluids {
   // `wash(x, y, z, block)` is called before water replaces a block that is not
   // air (Block.dropBlockAsItem); the caller drops its items. `fizz(x, y, z,
   // pitch)` is BlockLiquid.func_149799_m's random.fizz at volume 0.5. `seed`
-  // seeds the world Random (ahb.s) that lava ticks and fizz pitches draw from;
+  // seeds a standalone Random; the game supplies World.rand as `random` so lava
+  // ticks and fizz pitches share it with weather/fire/trees as in ahb.s.
   // `nether` selects the lava tick rate 10 and level step 1 of the Nether.
-  constructor(world, { wash = () => {}, fizz = () => {}, seed = 0, nether = false } = {}) {
+  constructor(world, { wash = () => {}, fizz = () => {}, seed = 0, random = new JavaRandom(seed), nether = false } = {}) {
     this.world = world;
     this.wash = wash;
     this.onFizz = fizz;
     this.nether = nether;
-    this.random = new JavaRandom(seed);
+    this.random = random;
     this.time = 0;
     this.serial = 0;
     this.heap = [];

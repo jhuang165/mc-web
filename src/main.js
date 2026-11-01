@@ -620,20 +620,23 @@ function launch(record) {
     active = record;
     world = new World(record.seed, record.biome, record.generationVersion ?? 1);
     world.restore(record.edits || []);
+    // Restore World.rand before constructing the block runtimes that share it.
+    weather = new Weather().restore(record.weather).restoreSimulation(record.worldRandom);
     scene.setWorld(world);
     // Block light for canBlockFreeze/canSnowAt/melting is the scene's light volume.
     world.blockLight = (x, y, z) => scene.light.blockAt(x, y, z);
     // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
-    fluids = new Fluids(world, { fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === WEB ? [{ id: 321, count: 1 }] : b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : b === SAPLING ? [{ id: b, count: 1, damage: world.getMeta(x, y, z) & 7 }] : cropDrops(b,Math.random,world.getMeta(x,y,z)); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
+    fluids = new Fluids(world, { random: weather.random, fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === WEB ? [{ id: 321, count: 1 }] : b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : b === SAPLING ? [{ id: b, count: 1, damage: world.getMeta(x, y, z) & 7 }] : cropDrops(b,Math.random,world.getMeta(x,y,z)); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
     fluids.load(record.fluidTicks);
     watchFlowers();
     // BlockFire and the static-lava ignition roll: scheduled and random ticks (fire.js). Fire reaches the
-    // weather through a closure because `weather` is replaced below.
+    // weather through a closure that follows the active world's runtime.
     // BlockTNT.func_150114_a for TNT that burns away (BlockFire.tryCatchFire, metadata 1, no placer).
     fire = new Fire(world, { weather: () => weather, stillLava: (x, y, z) => !fluids.pending.has(fluids.key(x, y, z, LAVA)), primeTnt: (x, y, z) => lightTnt(x, y, z, null) });
     fire.watch();
     // Saplings, tree growth and leaf decay (trees.js); it wraps world.onChange after the flowers do.
     trees = new Trees(world, {
+      random: weather.random,
       light: (x, y, z) => (scene.light ? scene.light.level(x, y, z, scene.subtracted) : 15),
       apply: (changes) => { scene.updateBlocks(changes); saved = false; },
       drop: (stacks, x, y, z) => items.dropBlock(stacks.map((d) => makeStack(d.id, d.count, d.damage || 0)), x, y, z),
@@ -654,7 +657,6 @@ function launch(record) {
     farming=new Farming(world,record.farms);
     // Rain moistens farmland (BlockFarmland.updateTick: canLightningStrikeAt(x, y + 1, z)).
     farming.rained = (x, y, z) => canLightningStrikeAt(weather, world, x, y + 1, z);
-    weather = new Weather().restore(record.weather).restoreSimulation(record.worldRandom);
     weather.apply = applyWeatherEdit;
     fire.sharedRandomTicks = true;
     // One WorldServer random-tick stream: fire and still lava (fire.js), saplings and leaves (trees.js),
