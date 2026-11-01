@@ -15,6 +15,8 @@ Node 20.19+ and a browser with WebGL 2 are required. Build with `npm run build`;
 
 ## Current implementation
 
+Version 0.22.6 connects authoritative explosion rays, sound pitch, block drops/ore XP and chained TNT fuses to the saved World.rand stream. Repeated JSON/import reload regressions compare complete blast results interleaved with weather/chunk ticks. Client particles keep their separate stream; entity randomness and unified tick ordering remain unfinished.
+
 Version 0.22.5 connects fluid and tree updates to the restored World.rand already used by weather and fire. Lava slowdown/fizz, sapling growth and leaf drops now advance that shared stream and retain it across saves/imports. Interleaved reload regressions cover these interactions; other random streams and unified tick ordering remain unfinished.
 
 Version 0.22.4 preserves the player’s signed fire counter across saves/imports (15 original Entity NBT cases), and snapshots the weather World.rand state plus block-tick updateLCG for browser reload continuity. Other random streams and cross-system update ordering remain unfinished. The random snapshot is a browser save extension, separate from Java WorldInfo fields.

@@ -70,7 +70,6 @@ import { Fluids, waterAcceleration, entityWaterBox, inLava, liquidInBox } from "
 import { Fire } from "./fire.js";
 import { explodeBlocks, explosionImpact, explodeTnt, primeTnt, tickTnt, TNT_POWER, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { powerCreeper } from "./creeper.js";
-import { JavaRandom } from "./lighting.js";
 import { TntRenderer } from "./tnt-renderer.js";
 import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
 import { HUNGER, POISON } from "./status-effects.js";
@@ -145,10 +144,9 @@ let screen = "home",
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer,playerTicks=0;
 let weather = new Weather(), trees, plants, falling;
-// EntityTNTPrimed entities (explosion.js primeTnt), and the World.rand that Explosion draws
-// its ray lengths, drops, chained fuses and sound pitch from.
+// EntityTNTPrimed entities (explosion.js primeTnt). Explosions draw ray lengths,
+// drops, chained fuses and sound pitch from the saved weather.random World.rand.
 let primed = [];
-const blastRandom = new JavaRandom(Date.now());
 let sounds,
   firstPerson,
   mobs,
@@ -1626,7 +1624,7 @@ function tickPrimedTnt() {
 // itself, or the TNT's placer. The block edits run through world.set like breakBlock:
 // containers spill, farmland and crops update, and the edits are saved.
 function explodeAt(x, y, z, size, { exploder = null, attacker = null } = {}) {
-  const out = explodeBlocks(world, x, y, z, size, blastRandom, { opaque: opaqueCube });
+  const out = explodeBlocks(world, x, y, z, size, weather.random, { opaque: opaqueCube });
   // The entity half sees the world before any block is removed. Entities within 2 * size of
   // the centre take damage and the push from the centre towards their eyes (posY + eye height).
   const hitFrom = attacker === "player" ? position : attacker;

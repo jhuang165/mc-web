@@ -152,3 +152,52 @@ test("weather, fluid and tree updates share one restored stream through interlea
   assert.ok(lavaRandom, "lava slowdown consumed a shared draw");
   assert.ok(leafDrops > 0, "decaying leaves produced drops");
 });
+
+test("blast rays, drops, ore XP and chain fuses resume the shared weather stream after import", async () => {
+  const { explodeBlocks } = await import("./explosion.js");
+  const { importedRuntime } = await import("./world-import.js");
+  const { TNT } = await import("./world.js");
+  const make = payload => {
+    const w = new World("blast-random-continuity");
+    if (payload) w.restore(payload.edits);
+    const weather = payload ? new Weather().restore(payload.weather).restoreSimulation(payload.worldRandom)
+      : new Weather({ random: new JavaRandom(9876), lcg: -123 });
+    return { w, weather };
+  };
+  const reload = r => {
+    const data = json({ edits: [...r.w.edits], weather: r.weather.save(), worldRandom: r.weather.saveSimulation() });
+    return make({ ...importedRuntime(data), edits: data.edits });
+  };
+  const original = make();
+  let resumed = reload(original), drops = 0, xp = 0, chains = 0;
+  const step = (r, tick) => {
+    r.weather.updateWeather();
+    // Real chunk sampling interleaves World.rand and updateLCG with blast draws.
+    r.weather.tickChunk(r.w, 0, 0);
+    const x = 32 + tick * 12, y = 55, z = 32;
+    for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++)
+      for (let dy = -3; dy <= 3; dy++) r.w.set(x + dx, y + dy, z + dz, 0);
+    // Guaranteed close TNT and ores plus random-drop gravel/leaves and metadata wool.
+    for (const [dx, dy, dz, id, meta] of [[0, 0, 0, TNT, 0], [1, 0, 0, 17, 0],
+      [-1, 0, 0, 15, 0], [0, -1, 0, 25, 0], [0, 1, 0, 5, 0], [0, 0, 1, 8, 7]])
+      r.w.set(x + dx, y + dy, z + dz, id, true, meta);
+    const before = r.weather.random.save();
+    const out = explodeBlocks(r.w, x + 0.5, y + 0.5, z + 0.5, 3, r.weather.random);
+    assert.notDeepEqual(r.weather.random.save(), before, "blasts advance the saved world stream");
+    for (const b of out.broken) r.w.set(b.x, b.y, b.z, 0);
+    return out;
+  };
+  for (let tick = 0; tick < 6; tick++) {
+    // Reload before and after separate blasts, retaining the accumulated edits.
+    resumed = reload(resumed);
+    const expected = step(original, tick), actual = step(resumed, tick);
+    assert.deepEqual(actual, expected, `complete blast result ${tick}`);
+    assert.deepEqual(resumed.w.data, original.w.data);
+    assert.deepEqual(resumed.w.meta, original.w.meta);
+    assert.deepEqual(resumed.weather.saveSimulation(), original.weather.saveSimulation());
+    drops += actual.drops.length; xp += actual.xp.length; chains += actual.primed.length;
+  }
+  assert.ok(drops > 0, "item drop rolls and positions exercised");
+  assert.ok(xp > 0, "ore XP rolls exercised");
+  assert.equal(chains, 6, "chained TNT fuse rolls exercised on every reload");
+});
