@@ -1,5 +1,5 @@
 import {miningState,blockWear} from "./mining.js";
-import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WEB, LADDER, WATER, LAVA, CARROTS, POTATOES, CACTUS, REEDS, TNT } from "./world.js";
+import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WEB, LADDER, SNOW_LAYER, WATER, LAVA, CARROTS, POTATOES, CACTUS, REEDS, TNT } from "./world.js";
 import { REEDS_ITEM, PAPER, SUGAR } from "./plants.js";
 import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,ChestContainer,makeStack} from "./inventory.js";
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
@@ -259,6 +259,10 @@ recipe("arrow","Arrow",["X","#","Y"],{X:313,"#":300,Y:317},320,4);
 // CraftingManager: "# #", " # " of iron ingots makes one bucket.
 recipe("bucket","Bucket",["I I"," I "],{I:302},340);
 recipe("snow","Snow block",["SS","SS"],{S:312},23);
+// CraftingManager: three snow blocks make six layers; four clay balls
+// recombine into a clay block (original recipe catalogue entries 192/173).
+recipe("snow-layers","Snow layers",["SSS"],{S:23},SNOW_LAYER,6);
+recipe("clay","Clay block",["CC","CC"],{C:307},24);
 recipe("bookshelf","Bookshelf",["PPP","BBB","PPP"],{P:7,B:314},21);
 recipe("planks", "Oak planks", ["L"], { L: 4 }, 7, 4);
 recipe("sticks", "Sticks", ["P", "P"], { P: 7 }, 300, 4);

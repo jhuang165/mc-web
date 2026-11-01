@@ -17,7 +17,7 @@ export class Experience {
 }
 export const splitExperience=n=>{const out=[];for(const size of [2477,1237,617,307,149,73,37,17,7,3,1])while(n>=size){out.push(size);n-=size;}return out;};
 export function oreExperience(block,random=Math.random){return block===15?Math.floor(random()*3):block===17?3+Math.floor(random()*5):0;}
-export const SMELT_EXPERIENCE={324:.35,302:.7,304:1,303:1,301:.1,9:.1,3:.1,308:.15,203:.35,205:.35,306:.3,40:.35};
+export const SMELT_EXPERIENCE={324:.35,302:.7,304:1,303:1,301:.1,9:.1,3:.1,308:.15,203:.35,205:.35,319:.35,306:.3,40:.35};
 // FurnaceRecipes.func_151398_b keys the experience by the output stack; cactus green (dye
 // damage 2) gives 0.2, so damaged outputs are looked up as "id:damage" first.
 SMELT_EXPERIENCE["351:2"]=.2;

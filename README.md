@@ -15,6 +15,8 @@ Node 20.19+ and a browser with WebGL 2 are required. Build with `npm run build`;
 
 ## Current implementation
 
+Version 0.22.2 adds the original clay-block and snow-layer recipes and fixes cooked chicken's missing 0.35 smelting XP. The [recipe catalogue](public/research/recipe-parity-catalogue.md) inventories all 317 native crafting entries, 22 smelting entries and the separate output/XP map, with 1,172 mapped crafting samples and 14 mapped furnace result/XP checks replayed against original-class evidence. Dynamic recipe semantics and broader acceptance remain unfinished.
+
 Version 0.22.1 preserves pending fluid/fire update delays and ordering across saves, and retains weather, projectiles, arrows, TNT and pending updates when importing exports. Legacy saves still load through the existing wake migration. The [roadmap](public/research/parity-roadmap.md) tracks the remaining work, with all 171 original base block IDs inventoried separately from verified behavior.
 
 Version 0.21.1 moves the player through the original [`Entity.moveEntity`](public/research/player-step.md): the 0.5 step-up onto snow layers and other low blocks, and full-height farmland collision, checked against 589 original-class cases.

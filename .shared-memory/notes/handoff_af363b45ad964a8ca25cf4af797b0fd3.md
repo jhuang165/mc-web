@@ -1,0 +1,1 @@
+0.22.2: native furnace lookup replay exposed cooked chicken (internal319) missing smelting XP; set0.35 original value. All14 mapped native furnace output/float32 XP replays pass. Included in main recipe catalogue tranche;534 JS tests/build pass. Reviewed commit/push follows, no Site publication.
