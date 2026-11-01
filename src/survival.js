@@ -4,6 +4,7 @@ import { REEDS_ITEM, PAPER, SUGAR } from "./plants.js";
 import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,ChestContainer,makeStack} from "./inventory.js";
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
 import { Effects } from "./status-effects.js";
+import { NORMAL, scaleDamage, starvationHurts, hungerDrops, peacefulRegen } from "./difficulty.js";
 
 import {CARROT,POTATO,BAKED_POTATO,POISONOUS_POTATO} from './crops.js';
 
@@ -519,6 +520,10 @@ export class Survival {
       this.chests[key] = chest;
     }
     this.hurtTicks = 0;
+    // World.difficultySetting (difficulty.js); main.js sets it from the Difficulty option.
+    this.difficulty = NORMAL;
+    // Entity.ticksExisted, which is not saved.
+    this.ticks = 0;
     // Entity's Fire NBT tag is a signed short, including negative ignition delay.
     this.fire = Number.isInteger(data.fire) && data.fire >= -32768 && data.fire <= 32767 ? data.fire : 0;
     this.lastDamage = "";
@@ -552,6 +557,12 @@ export class Survival {
   exhaust(n) {
     if (!this.creative)
       this.exhaustion = Math.fround(Math.min(40, this.exhaustion + n));
+  }
+  // EntityPlayer.attackEntityFrom with a difficulty-scaled source (mob melee, explosions):
+  // the scaled amount, then armour. A scaled 0 (Peaceful) is no hit at all.
+  scaledDamage(n, reason) {
+    const amount = scaleDamage(this.difficulty, n);
+    return amount > 0 && this.damage(amount, reason, true);
   }
   // Mob attacks are blockable; falls, drowning and starvation bypass armor.
   damage(n, reason = "an accident", blockable = false) {
@@ -616,6 +627,7 @@ export class Survival {
 
   tick({ underwater = false, inWater = false, inLava = false } = {}) {
     this.time++;
+    this.ticks++;
     this.hurtTicks = Math.max(0, this.hurtTicks - 1);
     this.tickFurnaces();
     // Entity.onEntityUpdate (sa.C): water puts the fire out; a burning entity takes
@@ -642,11 +654,18 @@ export class Survival {
         this.damage(2, "drowning");
       }
     } else this.air = 300;
+    // EntityPlayer.onLivingUpdate: Peaceful heals 1 every 20 ticks (naturalRegeneration on).
+    if (peacefulRegen(this.difficulty, this.ticks) && this.health > 0 && this.health < 20) this.health = Math.min(20, this.health + 1);
+    this.foodTick();
+  }
+  // FoodStats.onUpdate (zr.a(yz)): exhaustion over 4 takes saturation, or food except on
+  // Peaceful; food 18+ heals every 80 ticks; at food 0 starvation hurts per difficulty.
+  foodTick() {
     if (this.exhaustion > 4) {
       this.exhaustion = Math.fround(this.exhaustion - 4);
       if (this.saturation > 0)
         this.saturation = Math.max(0, this.saturation - 1);
-      else this.food = Math.max(0, this.food - 1);
+      else if (hungerDrops(this.difficulty)) this.food = Math.max(0, this.food - 1);
     }
     if (this.food >= 18 && this.health < 20 && this.health > 0) {
       if (++this.timer >= 80) {
@@ -656,7 +675,7 @@ export class Survival {
       }
     } else if (this.food <= 0) {
       if (++this.timer >= 80) {
-        if (this.health > 1) this.damage(1, "starvation");
+        if (starvationHurts(this.difficulty, this.health)) this.damage(1, "starvation");
         this.timer = 0;
       }
     } else this.timer = 0;

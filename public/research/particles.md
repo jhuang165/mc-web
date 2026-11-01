@@ -194,7 +194,7 @@ FxProbe adds three leaves cases (rain, rain over stone, dry; 420 seeded runs), f
 
 Still open:
 
-- Mob potion effects: nothing in this build gives mobs effects, so they have no swirls.
+- Mob potion effects: nothing in this build gives mobs effects, so they have no swirls (closed in 0.22.11).
 - GL drawing formulas (billboards, UV inset, brightness) come from bytecode, not from a probe run (closed in 0.22.10).
 - Particles spawned between ticks are drawn once before their first update.
 
@@ -223,3 +223,7 @@ The replay found two drawing differences, both fixed:
 Positions are drawn in world space. The original subtracts interpPos before the float cast, so far from the origin the float rounding differs slightly. The replay runs with interpPos 0.
 
 Still open: mob potion effects. This build has nothing that gives a mob an effect: no splash potions, beacons, witches or wither skeletons, and difficulty is fixed at Normal, so the Hard-only spider spawn effects never apply. `potionParticles` is ready for the first source.
+
+## 0.22.11: mob potion swirls
+
+The Difficulty option makes Hard spiders the first source. `tickMobEffects` (mob-effects.js) runs `updatePotionEffects` at the end of each mob's onEntityUpdate. The swirls draw from the mob's own Random in the effects' liquid colour, through `potionParticles`. Invisibility (colour 8356754) makes them rarer. The DifficultyProbe "potion" cases replay the swirl draws for Speed, Strength, Regeneration and Invisibility ([difficulty](difficulty.md)).

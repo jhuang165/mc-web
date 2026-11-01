@@ -441,8 +441,9 @@ export function burst(fx, name, count, e, rand, up = 0) {
 }
 
 // PotionHelper.calcPotionLiquidColor over the active effects (ascending ids; each counted
-// amplifier + 1 times): datawatcher 7, 0 without effects. Hunger 0x587653, Poison 0x4E9331.
-const LIQUID_COLOR = { 17: 5797459, 19: 5149489 };
+// amplifier + 1 times): datawatcher 7, 0 without effects. Potion.liquidColor: speed 0x7CAFC6,
+// strength 0x932423, regeneration 0xCD5CAB, invisibility 0x7F8392, hunger 0x587653, poison 0x4E9331.
+const LIQUID_COLOR = { 1: 8171462, 5: 9643043, 10: 13458603, 14: 8356754, 17: 5797459, 19: 5149489 };
 export function potionColor(effects) {
   let r = 0, g = 0, b = 0, n = 0;
   for (const e of [...effects].sort((a, c) => a.id - c.id)) {

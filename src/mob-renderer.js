@@ -9,6 +9,7 @@ import { heldItemMatrix } from "./player-renderer.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { spiderLegs } from "./spider.js";
 import { creeperFlash, creeperScale, creeperWhite, creeperPose, armorScroll } from "./creeper.js";
+import { isInvisible } from "./mob-effects.js";
 const RAD = Math.PI / 180;
 // RenderCreeper's powered pass (bni.a(xz, I, F), pass 1): creeper_armor.png with the texture
 // matrix translated by (scroll, scroll), colour 0.5, lighting off, blended GL_ONE, GL_ONE.
@@ -176,7 +177,7 @@ export class MobRenderer {
   // ModelSpider: head/body/rear at y=15, eight 16x2x2 legs. All boxes and
   // pivots use the original pixel coordinates; (x,24-y,-z)/16 maps to three.js.
   createSpider() {
-    const root = new THREE.Group(), frame = new THREE.Group(), limbs = [],
+    const root = new THREE.Group(), frame = new THREE.Group(), limbs = [], skinMeshes = [],
       skin = entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/entity/spider/spider.png") }),
       eyes = new THREE.MeshBasicMaterial({ map: pixelTexture("/media/1.7.10/entity/spider_eyes.png"), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
     frame.position.y = 1 / 128;
@@ -185,6 +186,7 @@ export class MobRenderer {
       const geometry = skinBox(w, h, d, u, v, 64, 32), mesh = new THREE.Mesh(geometry, skin);
       mesh.position.set((ox + w / 2) / 16, -(oy + h / 2) / 16, -(oz + d / 2) / 16);
       parent.add(mesh);
+      skinMeshes.push(mesh);
       if (glow) { const pass = new THREE.Mesh(geometry.clone(), eyes); pass.position.copy(mesh.position); pass.renderOrder = 1; parent.add(pass); }
     };
     const pivot = (x, y, z) => {
@@ -205,7 +207,7 @@ export class MobRenderer {
       limbs.push(leg);
     }
     this.scene.add(root);
-    return { root, neck, limbs, materials: [skin], eyes, type: "spider" };
+    return { root, neck, limbs, materials: [skin], eyes, skinMeshes, type: "spider" };
   }
   // RenderCreeper (bni) with ModelCreeper (bhj, creeper.png 64 x 32): head (0, 0) 8 x 8 x 8 and
   // body (16, 16) 8 x 12 x 4 on pivots (0, 4, 0), four 4 x 6 x 4 legs (0, 16) on pivots
@@ -360,6 +362,11 @@ export class MobRenderer {
       }
       const pose = mobPose(e, partial);
       const baby = e.growingAge < 0;
+      // RendererLivingEntity.renderModel draws no model for an invisible mob (an Invisibility
+      // effect); RenderSpider's eye pass still runs, with the depth mask off.
+      const invisible = isInvisible(e);
+      if (r.skinMeshes) for (const m of r.skinMeshes) m.visible = !invisible;
+      else r.root.visible = !invisible;
       // RendererLivingEntity's 1/128 lift, for rigs that do not carry it in a frame.
       r.root.position.set(pose.x, pose.y + (r.lift ?? 0), pose.z);
       r.root.scale.setScalar(baby ? 0.5 : 1);

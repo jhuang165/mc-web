@@ -36,7 +36,7 @@ export const BURNS = new Set([4, 5, 7, 13, 19, 21, 39, 41, TNT]);
 export const solidTop = (b) => normalCube(b);
 // Material.blocksMovement (awt.c): everything but air, liquids, torches, plants and fire.
 export const blocksMovement = (b) => stopsPrecipitation(b) && !isLiquid(b);
-// The difficulty is not a setting of this build: Normal (EnumDifficulty id 2) is assumed.
+// The default difficulty, Normal (EnumDifficulty id 2); main.js sets L.difficulty from the settings.
 export const DIFFICULTY = 2;
 // Entity.setFire(8) is 8 * 20 ticks; the burning-ticks counter this build keeps has 0 where
 // vanilla has -fireResistance.

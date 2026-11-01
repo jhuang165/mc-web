@@ -5,7 +5,7 @@ import { EntityWorld, ENTITY_TYPES } from "./entities.js";
 
 const grass = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 64.5, y: 0, z: 64.5 }) };
 const player = (x = 64, z = 64) => ({ x, y: 0, z });
-const survival = { health: 20, creative: false, time: 6000, damage() {}, count: () => 0 };
+const survival = { health: 20, creative: false, time: 6000, damage() {}, scaledDamage() {}, count: () => 0 };
 
 class Probe extends Task {
   constructor(mutex, { run = true, keep = true, interruptible = true } = {}) {

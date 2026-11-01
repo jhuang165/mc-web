@@ -69,6 +69,8 @@ import { Arrows, arrowTargets, releaseBow, canDraw, bowStage, bowFov, easeFov, B
 import { canSeeSky } from "./weather.js";
 import { Fluids, waterAcceleration, entityWaterBox, inLava, liquidInBox, eyeInWater } from "./fluids.js";
 import { Fire } from "./fire.js";
+import { DIFFICULTY_NAMES, difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.js";
+import { isInvisible } from "./mob-effects.js";
 import { explodeBlocks, explosionImpact, explodeTnt, primeTnt, tickTnt, TNT_POWER, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { powerCreeper } from "./creeper.js";
 import { TntRenderer } from "./tnt-renderer.js";
@@ -109,6 +111,9 @@ let options = {
   sound: true,
   guiScale:0,
   particles:0,
+  // GameSettings.difficulty: the EnumDifficulty id, Normal by default; singleplayer applies it
+  // to the world being played.
+  difficulty:2,
   // GameSettings.gammaSetting: 0 Moody (the 1.7.10 default) to 1 Bright.
   gamma: 0,
 };
@@ -119,6 +124,14 @@ try {
   };
 } catch {}
 options.particles = particleSetting(options.particles);
+options.difficulty = difficultySetting(options.difficulty);
+// The difficulty in every system that reads World.difficultySetting.
+function updateDifficulty() {
+  const d = difficultySetting(options.difficulty);
+  if (survival) survival.difficulty = d;
+  if (mobs) mobs.difficulty = d;
+  if (fire) fire.L.difficulty = d;
+}
 // Apply the saved client preference to current runtimes (weather is replaced on load).
 function updateParticleOptions() {
   const setting = particleSetting(options.particles);
@@ -187,6 +200,7 @@ let stepDistance = 0,
 let scene;
 let pointerX = 0,
   pointerY = 0;
+let inhabited = new InhabitedTime();
 let survival = new Survival({}, "creative"),
   mining = null,
   mineHeld = false,
@@ -434,7 +448,7 @@ function notes() {
 function settings() {
   modal(
     "Options",
-    `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>GUI Scale<select id="gui-scale">${[[0,"Auto"],[1,"Small"],[2,"Normal"],[3,"Large"],[4,"Larger"]].map(([v,label])=>`<option value="${v}" ${Number(options.guiScale||0)===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Particles<select id="particles">${["All","Decreased","Minimal"].map((label,v)=>`<option value="${v}" ${options.particles===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Field of view <output id="fov-value">${options.fov}°</output><input type="range" id="fov" min="50" max="100" value="${options.fov}"></label><label>Mouse sensitivity <output id="sensitivity-value">${options.sensitivity.toFixed(1)}×</output><input type="range" id="sensitivity" min="0.2" max="2" step="0.1" value="${options.sensitivity}"></label><label>View distance <output id="distance-value">${options.distance} blocks</output><input type="range" id="distance" min="70" max="200" step="5" value="${options.distance}"></label><label>Brightness <output id="gamma-value">${gammaLabel(options.gamma)}</output><input type="range" id="gamma" min="0" max="1" step=".01" value="${options.gamma}"></label><label>Sound volume <output id="volume-value">${Math.round(options.volume * 100)}%</output><input type="range" id="volume" min="0" max="1" step=".05" value="${options.volume}"></label><label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
+    `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>GUI Scale<select id="gui-scale">${[[0,"Auto"],[1,"Small"],[2,"Normal"],[3,"Large"],[4,"Larger"]].map(([v,label])=>`<option value="${v}" ${Number(options.guiScale||0)===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Difficulty<select id="difficulty">${DIFFICULTY_NAMES.map((label,v)=>`<option value="${v}" ${options.difficulty===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Particles<select id="particles">${["All","Decreased","Minimal"].map((label,v)=>`<option value="${v}" ${options.particles===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Field of view <output id="fov-value">${options.fov}°</output><input type="range" id="fov" min="50" max="100" value="${options.fov}"></label><label>Mouse sensitivity <output id="sensitivity-value">${options.sensitivity.toFixed(1)}×</output><input type="range" id="sensitivity" min="0.2" max="2" step="0.1" value="${options.sensitivity}"></label><label>View distance <output id="distance-value">${options.distance} blocks</output><input type="range" id="distance" min="70" max="200" step="5" value="${options.distance}"></label><label>Brightness <output id="gamma-value">${gammaLabel(options.gamma)}</output><input type="range" id="gamma" min="0" max="1" step=".01" value="${options.gamma}"></label><label>Sound volume <output id="volume-value">${Math.round(options.volume * 100)}%</output><input type="range" id="volume" min="0" max="1" step=".05" value="${options.volume}"></label><label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
   );
   for (const key of [
     "fov",
@@ -469,6 +483,7 @@ function settings() {
         localStorage.setItem("blockworld.settings", JSON.stringify(options));
       } catch {}
     };
+  $("#difficulty").onchange=e=>{options.difficulty=difficultySetting(+e.target.value);updateDifficulty();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
   $("#particles").onchange=e=>{options.particles=particleSetting(+e.target.value);updateParticleOptions();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
   $("#gui-scale").onchange=e=>{options.guiScale=+e.target.value;updateGuiScale();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
   $("#test-sound").onclick = async () => {
@@ -498,6 +513,8 @@ function save() {
   active.worldRandom = weather.saveSimulation();
   active.fluidTicks = fluids.save();
   active.fireTicks = fire.save();
+  // Chunk.InhabitedTime (one value stands for every chunk; see difficulty.js).
+  active.inhabited = inhabited.save(survival.time);
   // Items on the cursor or in a crafting grid return to the saved inventory, as closing the screen would.
   const pending = containerView ? [containerView.container.inv.cursor, ...(containerView.container.grid?.stacks || [])].filter(Boolean).map(copyStack) : [];
   if (pending.length) {
@@ -700,7 +717,10 @@ function launch(record) {
     // sunburn and its sun tasks; EntitySkeleton's arrows come from bow.js.
     mobs.isDaytime = () => (scene.subtracted ?? 0) < 4;
     mobs.canSeeSky = (x, y, z) => canSeeSky(world, x, y, z);
-    mobs.shoot = (e, target, scale) => arrows.skeletonShoot(e, target, scale);
+    mobs.shoot = (e, target, scale) => arrows.skeletonShoot(e, target, scale, mobs.difficulty);
+    // World.rand for EntityLiving.onSpawnWithEgg, and World.func_147462_b at a block.
+    mobs.worldRandom = weather.random;
+    mobs.localDifficulty = (x, y, z) => localDifficulty(mobs.difficulty, survival.time, inhabited.value, x >= 0 && z >= 0 && x < SIZE && z < SIZE && y >= 0 && y < HEIGHT);
     arrows.wet = (a) => isWet(weather, world, { x: a.x, y: a.y, z: a.z, inWater: a.water }, 0.5);
     mobRenderer.clear();
     animation.reset();
@@ -708,6 +728,8 @@ function launch(record) {
     stepDistance = 0;
     wasInWater = false;
     survival = new Survival(legacyPlayer(record), record.mode || "creative");
+    inhabited = new InhabitedTime(record.inhabited, survival.time);
+    updateDifficulty();
     // Chest blocks saved without tile data get the facing onBlockAdded gives them.
     for (const [key, b] of world.edits) if (b === CHEST && !survival.chests[key]) settleFacing(world, survival.chests, ...key.split(",").map(Number));
     chestRenderer.sync(world, survival.chests);
@@ -1139,6 +1161,7 @@ function die() {
   $("#respawn").onclick = () => {
     const time = survival.time;
     survival = new Survival({ time, slots: [], furnaces: survival.furnaces, chests: survival.chests }, "survival");
+    updateDifficulty();
     experience=new Experience();
     position.copy(new THREE.Vector3(...Object.values(world.spawn())));
     previous.copy(position);
@@ -1700,11 +1723,11 @@ function explodeAt(x, y, z, size, { exploder = null, attacker = null } = {}) {
   falling?.explode(x, y, z, size, exploder);
   for (const e of primed) if (e !== exploder) explodeTnt(world, e, x, y, z, size);
   // The player (EntityPlayerMP: posY at the feet, eyes 1.62 up). Explosion damage is
-  // difficulty scaled (Normal: unchanged) and armour applies; Creative players are pushed only.
+  // difficulty scaled (Survival.scaledDamage; Peaceful deals none) and armour applies; Creative players are pushed only.
   if (survival.health > 0) {
     const hit = explosionImpact(world, x, y, z, size, position.x, position.y, position.z, position.y + PHYSICS.eye, entityBox(position, PHYSICS.width, PHYSICS.height));
     if (hit) {
-      if (!survival.creative && survival.damage(hit.damage, attacker && attacker !== "player" ? "a " + attacker.type : "an explosion", true)) reportBrokenTool();
+      if (!survival.creative && survival.scaledDamage(hit.damage, attacker && attacker !== "player" ? "a " + attacker.type : "an explosion")) reportBrokenTool();
       velocity.x += hit.push[0]; velocity.y += hit.push[1]; velocity.z += hit.push[2];
     }
   }
@@ -2016,6 +2039,7 @@ function movementTick() {
   if(fire)scene.updateBlocks(fire.tick(position.x,position.z));
   scene.setFurnaces(survival.furnaces);
   tickChests();
+  inhabited.tick(survival.time);
   mobs.tick(position, survival, heldId());
   // EntityXPOrb.onUpdate in every game mode (orbs aim at the feet + 1.62 of the server player),
   // then EntityPlayer.onLivingUpdate's pickup for a living player, as for items.
@@ -2535,7 +2559,8 @@ function shadowCasters(partial) {
   if (thirdPersonView > 0) list.push(playerShadowCaster(position, previous, partial, SHADOWS.player, motion.prevYSize, motion.ySize));
   for (const e of mobs?.entities ?? []) {
     const child = e.growingAge < 0;
-    if (SHADOWS[e.type]) list.push({ ...SHADOWS[e.type], x: lerp(e.px, e.x), y: lerp(e.py, e.y), z: lerp(e.pz, e.z), pos: e, height: ENTITY_TYPES[e.type].height * (child ? 0.5 : 1), child });
+    // RendererLivingEntity passes Render.doRenderShadowAndFire no shadow for an invisible mob.
+    if (SHADOWS[e.type] && !isInvisible(e)) list.push({ ...SHADOWS[e.type], x: lerp(e.px, e.x), y: lerp(e.py, e.y), z: lerp(e.pz, e.z), pos: e, height: ENTITY_TYPES[e.type].height * (child ? 0.5 : 1), child });
   }
   return list;
 }

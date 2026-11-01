@@ -12,6 +12,8 @@ import { sneakEdge, criticalDamage } from "./player-movement.js";
 import { MobAI } from "./ai.js";
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
+import { NORMAL, PEACEFUL, attributeValue, spiderSpawnRolls, zombieSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
+import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage } from "./mob-effects.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
 export function wrapDegrees(a) {
@@ -156,10 +158,11 @@ export const ENTITY_TYPES = {
 export const HOSTILE = new Set(["zombie", "skeleton", "spider", "creeper"]);
 // EntityMoveHelper.onUpdateMoveHelper (tv.c) hands EntityLiving.setAIMoveSpeed
 // (sw.i) `(float)(speed * movementSpeed)`; sw.i also sets moveForward to it. The
-// zombie's "Baby speed boost" (yq.br) is operation 1: base * (1 + 0.5).
+// zombie's "Baby speed boost" (yq.br) is operation 1: base * (1 + 0.5); a Speed effect
+// (mob-effects.js) is operation 2.
 export function aiMoveSpeed(e, multiplier) {
-  const base = ENTITY_TYPES[e.type].movement;
-  return f(multiplier * (e.type === "zombie" && e.growingAge < 0 ? base + base * 0.5 : base));
+  const boost = e.type === "zombie" && e.growingAge < 0 ? [[0.5, 1]] : [];
+  return f(multiplier * attributeValue(ENTITY_TYPES[e.type].movement, [...boost, ...speedModifiers(e)]));
 }
 // Wheat (ade.O) breeds and tempts cows and sheep; chickens take wheat seeds (309, any
 // ItemSeeds in the original) through EntityAITempt / isBreedingItem.
@@ -514,6 +517,11 @@ export class EntityWorld {
     this.entities = [];
     this.nextId = 1;
     this.spawnClock = 0;
+    // EnumDifficulty id (difficulty.js); main.js sets it from the settings. `worldRandom` is
+    // World.rand and `localDifficulty(x, y, z)` World.func_147462_b, both hooked in by main.js.
+    this.difficulty = NORMAL;
+    this.worldRandom = null;
+    this.localDifficulty = null;
     if (Array.isArray(saved)) {
       for (const e of saved.slice(0, 40)) {
         const t = ENTITY_TYPES[e.type];
@@ -547,6 +555,11 @@ export class EntityWorld {
           // EntityCreeper.readEntityFromNBT: "powered" and "ignited" are saved, the swell
           // state (datawatcher 16) and timeSinceIgnited start over.
           ...(e.type === "creeper" ? { ...creeperFields(), powered: e.powered === true, ignited: e.ignited === true } : {}),
+          // NBT ActiveEffects and the Attributes the spawn rolls modified.
+          effects: readMobEffects(e.effects),
+          knockbackResistance: Number.isFinite(e.knockbackResistance) ? Math.min(1, Math.max(0, e.knockbackResistance)) : fresh.knockbackResistance,
+          ...(Number.isFinite(e.followRange) ? { followRange: Math.min(2048, Math.max(0, e.followRange)) } : { followRange: undefined }),
+          ...(e.type === "zombie" ? { reinforcement: Number.isFinite(e.reinforcement) ? reinforcementChance(e.reinforcement) : fresh.reinforcement } : {}),
           wander: 0,
           hurt: 0,
           recentlyHit: 0,
@@ -599,6 +612,9 @@ export class EntityWorld {
       ...(type === "chicken" ? { eggTimer: Math.floor(random() * 6000) + 6000, wingRotation: 0, destPos: 0, oFlapSpeed: 0, oFlap: 0, wingRotDelta: 1 } : {}),
       // EntityZombie.func_110161_a adds a 0 to 0.05 "Random spawn bonus" to knockbackResistance.
       knockbackResistance: type === "zombie" ? random() * 0.05000000074505806 : 0,
+      // EntityZombie.applyEntityAttributes: zombie.spawnReinforcements.
+      ...(type === "zombie" ? { reinforcement: reinforcementBase(random) } : {}),
+      effects: [],
       ...this.physics(),
     });
   }
@@ -681,7 +697,78 @@ export class EntityWorld {
         sound: hurtSound(e.type),
         position: e,
       });
+    if (e.type === "zombie") this.callReinforcement(e, byPlayer);
     return true;
+  }
+  // EntityZombie.attackEntityFrom (yq.a(ro, F)) once the hit counts, even a killing one. The
+  // target is the attack target, else the revenge target, else the attacker; only the player
+  // is a target here, so a hit by a skeleton's arrow on a zombie with no target calls no one.
+  // The new zombie stands at the integer corner of its block, as setPosition puts it.
+  callReinforcement(e, byPlayer) {
+    const player = this.ai.player;
+    if (!(byPlayer || e.revenge || this.ai.brain(e).attackTarget === player) || this.entities.length >= 40) return null;
+    const t = ENTITY_TYPES.zombie, w = t.width / 2;
+    const spot = zombieReinforcement(entityRandom(e), this.difficulty, e.reinforcement ?? 0, e.x, e.y, e.z, {
+      solidTop: (x, y, z) => y >= 0 && y < HEIGHT && normalCube(this.world.get(x, y, z)),
+      light: (x, y, z) => (this.lightAt ? this.lightAt(x, y, z) : 0),
+      fits: (x, y, z) => {
+        if (x < 1 || z < 1 || x >= SIZE - 1 || z >= SIZE - 1 || y < 0 || y + t.height > HEIGHT) return false;
+        const box = [x - w, y, z - w, x + w, y + t.height, z + w];
+        const meets = (o, ow, oh) => o.x + ow > box[0] && o.x - ow < box[3] && o.y + oh > box[1] && o.y < box[4] && o.z + ow > box[2] && o.z - ow < box[5];
+        // World.checkNoEntityCollision: living mobs and the player.
+        if (player.alive && meets(player, 0.3, 1.8)) return false;
+        for (const o of this.entities) {
+          if (o.health <= 0) continue;
+          const s = this.ai.size(o);
+          if (meets(o, s.width / 2, s.height)) return false;
+        }
+        if (collisionBoxes(this.world, box).length) return false;
+        for (let bx = Math.floor(box[0]); bx < Math.floor(box[3] + 1); bx++)
+          for (let by = Math.floor(box[1]); by < Math.floor(box[4] + 1); by++)
+            for (let bz = Math.floor(box[2]); bz < Math.floor(box[5] + 1); bz++) if (isLiquid(this.world.get(bx, by, bz))) return false;
+        return true;
+      },
+    });
+    if (!spot) return null;
+    const z = this.spawnNatural("zombie", spot.x, spot.y, spot.z);
+    this.ai.brain(z).attackTarget = player;
+    e.reinforcement = reinforcementChance(e.reinforcement + REINFORCEMENT_CHARGE);
+    z.reinforcement = reinforcementChance(z.reinforcement + REINFORCEMENT_CHARGE);
+    return z;
+  }
+  // A mob from SpawnerAnimals (or a reinforcement), with EntityLiving.onSpawnWithEgg's rolls
+  // (difficulty.js): the spider's Hard potion effect; the zombie's knockback, follow range and
+  // leader bonus. Rolls this build has no use for (equipment, children, villagers, jockeys,
+  // loot pickup, door breaking, the leader's health) are drawn and dropped.
+  spawnNatural(type, x, y, z) {
+    const e = this.create(type, x, y, z), rand = entityRandom(e);
+    const world = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
+    const local = this.localDifficulty ? this.localDifficulty(Math.floor(x), Math.floor(y), Math.floor(z)) : 0;
+    if (type === "spider") {
+      const r = spiderSpawnRolls(rand, world, this.difficulty, local);
+      e.followRange = r.followRange;
+      if (r.effect) addMobEffect(e, r.effect);
+    } else if (type === "zombie") {
+      const now = new Date(), r = zombieSpawnRolls(rand, world, this.difficulty, local, { month: now.getMonth() + 1, day: now.getDate() });
+      if (!r.diverged) {
+        e.knockbackResistance = r.knockback;
+        e.followRange = r.followRange;
+        e.reinforcement = reinforcementChance(e.reinforcement + r.reinforcementBonus);
+      }
+    }
+    this.entities.push(e);
+    return e;
+  }
+  // EntityMob.attackEntityAsMob (yg.n(sa)): the attackDamage attribute (Strength applies) as a
+  // mob damage source, which EntityPlayer.attackEntityFrom scales by difficulty
+  // (Survival.scaledDamage); a burning zombie with an empty hand may set the player alight.
+  hitPlayer(e, survival) {
+    const hit = survival.scaledDamage(attackDamage(e, ENTITY_TYPES[e.type].damage), "a " + e.type);
+    if (hit && e.type === "zombie") {
+      const ticks = zombieFireOnHit(entityRandom(e), this.difficulty, e.burn > 0 || e.fire > 0);
+      if (ticks) survival.fire = Math.max(survival.fire, ticks);
+    }
+    return hit;
   }
   // `critical` is the jump-attack test of attackTargetEntityWithCurrentItem (damage * 1.5F).
   // The entity as Crit2FX follows it: position, box floor, size (halved for a child), motion.
@@ -893,7 +980,8 @@ export class EntityWorld {
       mobSize:(e)=>{const base=ENTITY_TYPES[e.type],scale=e.growingAge<0?.5:1;return{width:base.width*scale,height:base.height*scale};},
       spawnBaby:(a,b)=>this.spawnBaby(a,b),
       eatGrass:(e)=>this.eatGrass(e),
-      attackPlayer:(e,survival)=>survival.damage(ENTITY_TYPES[e.type].damage,"a " + e.type,true),
+      attackPlayer:(e,survival)=>this.hitPlayer(e,survival),
+      difficulty:()=>this.difficulty,
       // EntitySkeleton.attackEntityWithRangedAttack: the arrow itself is made by bow.js
       // (entities.js cannot import it: projectiles.js already imports this file).
       rangedAttack:(e,target,scale)=>this.shoot?.(e,target,scale),
@@ -909,8 +997,10 @@ export class EntityWorld {
     // World.isDaytime (skylightSubtracted < 4); main.js hooks the real light level in.
     this.day = this.isDaytime ? this.isDaytime() : !night;
     this.ai.beginTick(player, survival, heldItem);
+    // SpawnerAnimals.findChunksForSpawning: no monsters on Peaceful.
+    const hostile = this.difficulty !== PEACEFUL;
     if (
-      night &&
+      night && hostile &&
       !survival.creative &&
       this.spawnClock >= 200 &&
       this.entities.filter((e) => e.type === "zombie").length < 5
@@ -923,7 +1013,7 @@ export class EntityWorld {
         if (x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
         const y = this.world.surface(x, z);
         if (this.world.get(x, y - 1, z) !== 1) continue;
-        this.entities.push(this.create("zombie", x + 0.5, y, z + 0.5));
+        this.spawnNatural("zombie", x + 0.5, y, z + 0.5);
         break;
       }
     }
@@ -932,7 +1022,7 @@ export class EntityWorld {
     // blocks; this build keeps its simpler ring around the player).
     this.skeletonClock = (this.skeletonClock || 0) + 1;
     if (
-      night &&
+      night && hostile &&
       !survival.creative &&
       this.skeletonClock >= 240 &&
       this.entities.filter((e) => e.type === "skeleton").length < 3
@@ -945,12 +1035,12 @@ export class EntityWorld {
         if (x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
         const y = this.world.surface(x, z);
         if (this.world.get(x, y - 1, z) !== 1) continue;
-        this.entities.push(this.create("skeleton", x + 0.5, y, z + 0.5));
+        this.spawnNatural("skeleton", x + 0.5, y, z + 0.5);
         break;
       }
     }
     this.spiderClock = (this.spiderClock || 0) + 1;
-    if (night && !survival.creative && this.spiderClock >= 260 && this.entities.filter(e => e.type === "spider").length < 3) {
+    if (night && hostile && !survival.creative && this.spiderClock >= 260 && this.entities.filter(e => e.type === "spider").length < 3) {
       this.spiderClock = 0;
       for (let i = 0; i < 16; i++) {
         const a = hash(i + 200, survival.time, this.world.numericSeed) * Math.PI * 2,
@@ -958,13 +1048,13 @@ export class EntityWorld {
         if (x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
         const y = this.world.surface(x, z), t = ENTITY_TYPES.spider;
         if (this.world.get(x, y - 1, z) !== 1 || actorCollides(this.world, x + 0.5, y, z + 0.5, t.width, t.height)) continue;
-        this.entities.push(this.create("spider", x + 0.5, y, z + 0.5));
+        this.spawnNatural("spider", x + 0.5, y, z + 0.5);
         break;
       }
     }
     // Creepers: the same night ring as the skeletons, with their own clock and cap.
     this.creeperClock = (this.creeperClock || 0) + 1;
-    if (night && !survival.creative && this.creeperClock >= 250 && this.entities.filter((e) => e.type === "creeper").length < 3) {
+    if (night && hostile && !survival.creative && this.creeperClock >= 250 && this.entities.filter((e) => e.type === "creeper").length < 3) {
       this.creeperClock = 0;
       for (let i = 0; i < 16; i++) {
         const a = hash(i + 300, survival.time, this.world.numericSeed) * Math.PI * 2,
@@ -972,7 +1062,7 @@ export class EntityWorld {
         if (x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
         const y = this.world.surface(x, z), t = ENTITY_TYPES.creeper;
         if (this.world.get(x, y - 1, z) !== 1 || actorCollides(this.world, x + 0.5, y, z + 0.5, t.width, t.height)) continue;
-        this.entities.push(this.create("creeper", x + 0.5, y, z + 0.5));
+        this.spawnNatural("creeper", x + 0.5, y, z + 0.5);
         break;
       }
     }
@@ -989,6 +1079,12 @@ export class EntityWorld {
       e.prevRotationPitch = e.rotationPitch;
       e.prevLimbSwingAmount = e.limbSwingAmount;
       const base=ENTITY_TYPES[e.type],scale=e.growingAge<0?.5:1,t={...base,width:base.width*scale,height:base.height*scale};
+      // EntityMob.onUpdate (yg.h): on Peaceful the mob is setDead, with no death or drops.
+      if (HOSTILE.has(e.type) && this.difficulty === PEACEFUL) {
+        e.health = 0;
+        e.death = 20;
+        continue;
+      }
       if (e.health <= 0) {
         // A dying mob still runs onLivingUpdate with its movement blocked (sv.bh):
         // it slides on its knockback and falls, with no AI input.
@@ -1056,6 +1152,8 @@ export class EntityWorld {
       }
       this.burn(e, t);
       this.breathe(e, t);
+      // EntityLivingBase.updatePotionEffects, the end of onEntityUpdate.
+      tickMobEffects(e, t, base.health, entityRandom(e), this.fx);
       this.talk(e);
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.
@@ -1153,7 +1251,7 @@ export class EntityWorld {
       if (m.canSee(p)) {
         const result = spiderAttack(e, p, distance, light, this.random);
         if (result === "forget") { e.spiderTarget = false; m.navigator.clearPathEntity(); }
-        else if (result === "hit") s.damage(2, "a spider", true);
+        else if (result === "hit") this.hitPlayer(e, s);
       }
       if (e.spiderTarget) {
         if (e.age % 10 === 0 || m.navigator.noPath()) m.navigator.tryMoveToEntityLiving(p, 1);

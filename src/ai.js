@@ -9,6 +9,7 @@ import { PathNavigate } from "./pathfinding.js";
 import { raycast, HEIGHT } from "./world.js";
 import { BRIGHTNESS } from "./lighting.js";
 import { swellShould, swellState, creeperSafeTries } from "./creeper.js";
+import { maxSafePointTries } from "./difficulty.js";
 const f = Math.fround;
 const GRASS = 1, TALL_GRASS = 39;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -780,7 +781,7 @@ export class Brain {
     this.verticalFaceSpeed = 40;
     this.isPlayer = false;
     const type = ai.types[e.type];
-    this.navigator = new PathNavigate(this, ai.world, { followRange: e.type === "zombie" ? 40 : 16, budget: ai.budget });
+    this.navigator = new PathNavigate(this, ai.world, { followRange: Number.isFinite(e.followRange) ? e.followRange : e.type === "zombie" ? 40 : 16, budget: ai.budget });
     this.moveHelper = new MoveHelper(this);
     this.lookHelper = new LookHelper(this);
     this.jumpHelper = new JumpHelper(this);
@@ -841,14 +842,10 @@ export class Brain {
       this.tasks.add(p++, new LookIdle(this));
     }
   }
-  // sw.ax(): the safe-point tries of the PathFinder (the game plays on Normal).
+  // sw.ax(): the safe-point tries of the PathFinder, by difficulty (difficulty.js).
   maxSafePointTries() {
     if (this.e.type === "creeper") return creeperSafeTries(!!this.attackTarget, this.e.health);
-    if (!this.attackTarget) return 3;
-    const max = this.ai.types[this.e.type].health;
-    let i = Math.trunc(f(this.e.health - f(max * f(0.33))));
-    i -= (3 - 2) * 4;
-    return (i < 0 ? 0 : i) + 3;
+    return maxSafePointTries(!!this.attackTarget, this.e.health, this.ai.types[this.e.type].health, this.ai.deps.difficulty ? this.ai.deps.difficulty() : 2);
   }
   get x() {
     return this.e.x;
@@ -1008,7 +1005,7 @@ class PlayerView {
 
 // --- The world's AI service ---
 // `deps`: ENTITY_TYPES, BREED_ITEM, aiMoveSpeed(e, multiplier), mobSize(e), spawnBaby(a, b)
-// -> boolean, eatGrass(e), attackPlayer(e, survival), despawn(e), lightAt(x, y, z).
+// -> boolean, eatGrass(e), attackPlayer(e, survival), despawn(e), lightAt(x, y, z), difficulty().
 export class MobAI {
   constructor(ew, deps) {
     this.ew = ew;
