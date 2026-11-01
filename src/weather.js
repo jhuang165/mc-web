@@ -8,7 +8,7 @@
 // public/research/weather-reference.json by weather.test.js.
 import { JavaRandom, biomeTemperature, lightOpacity } from "./lighting.js";
 import { rainParticleAttempts } from "./particle-settings.js";
-import { SIZE, HEIGHT, FIRE, SNOW_LAYER, ICE, isPlant, ticksRandomly } from "./world.js";
+import { SIZE, HEIGHT, FIRE, LAVA, SNOW_LAYER, ICE, isPlant, ticksRandomly } from "./world.js";
 import { biomeFacts } from "./biomes.js";
 import { canBlockFreeze, canSnowAt, lightOf, meltResult } from "./snow.js";
 
@@ -119,55 +119,6 @@ export class LightningBolt {
   }
 }
 
-// RainFX (blf): a splash particle that hops off the surface. Collision is
-// simplified to the precipitation surface of the column it is in.
-export class RainDrop {
-  // EntityFX's constructor draws from Math.random (not the renderer's seeded
-  // Random): a random direction scaled to 0.4 * (0.15 to 0.45), then EntityRainFX
-  // keeps 0.3 of the horizontal part and replaces the vertical with 0.1 to 0.3.
-  constructor(x, y, z) {
-    this.x = this.px = x;
-    this.y = this.py = y;
-    this.z = this.pz = z;
-    const c = () => f(f(Math.random() * 2 - 1) * f(0.4)),
-      a = c(), b = c(), d = c(),
-      scale = f(f(Math.random() + Math.random() + 1) * f(0.15)),
-      length = f(Math.sqrt(a * a + b * b + d * d));
-    this.vx = ((a / length) * scale * f(0.4)) * f(0.3);
-    this.vz = ((d / length) * scale * f(0.4)) * f(0.3);
-    this.vy = f(f(f(Math.random()) * f(0.2)) + f(0.1));
-    this.texture = 19 + Math.floor(Math.random() * 4);
-    this.scale = f(f(f(Math.random() * 0.5) + 0.5) * 2); // EntityFX.particleScale
-    this.age = Math.trunc(8 / (Math.random() * 0.8 + 0.2));
-    this.dead = false;
-    this.onGround = false;
-  }
-  tick(surface) {
-    this.px = this.x;
-    this.py = this.y;
-    this.pz = this.z;
-    this.vy -= 0.06;
-    this.x += this.vx;
-    this.z += this.vz;
-    this.y += this.vy;
-    this.onGround = false;
-    if (surface !== undefined && this.y <= surface && this.vy < 0) {
-      this.y = surface;
-      this.vy = 0;
-      this.onGround = true;
-    }
-    this.vx *= 0.98;
-    this.vy *= 0.98;
-    this.vz *= 0.98;
-    if (this.age-- <= 0) this.dead = true;
-    if (this.onGround) {
-      if (Math.random() < 0.5) this.dead = true;
-      this.vx *= 0.7;
-      this.vz *= 0.7;
-    }
-  }
-}
-
 export class Weather {
   // `random` is World.rand (timers and the lightning roll); `lcg` is World.updateLCG.
   constructor({ random = new JavaRandom(Math.floor(Math.random() * 2 ** 48)), lcg = new JavaRandom(Math.floor(Math.random() * 2 ** 48)).nextInt() } = {}) {
@@ -188,7 +139,6 @@ export class Weather {
     this.clientTicks = 0; // EntityRenderer.rendererUpdateCount
     this.rainSoundCounter = 0;
     this.particleSetting = 0;
-    this.drops = [];
   }
   // WorldInfo's NBT fields (RainTime, raining, ThunderTime, thundering).
   save() {
@@ -328,13 +278,12 @@ export class Weather {
     return this.events.splice(0);
   }
   // EntityRenderer.addRainParticles (blt.l) for one client tick: up to
-  // 100 * rain^2 candidate columns within 9 blocks of the viewer, a splash in each
-  // that rains, and the rain loop sound. The viewer is {x, y, z}.
-  rainParticles(world, viewer) {
+  // 100 * rain^2 candidate columns within 9 blocks of the viewer, an EntityRainFX
+  // on each that rains (EntitySmokeFX over lava), added straight to the
+  // EffectRenderer with `add(kind, x, y, z)`, and the rain loop sound. The viewer
+  // is {x, y, z}.
+  rainParticles(world, viewer, add = () => {}) {
     const strength = this.rainStrength(1);
-    this.drops = this.drops.filter((d) => !d.dead);
-    for (const d of this.drops) d.tick(precipitationHeight(world, Math.floor(d.x), Math.floor(d.z)));
-    this.drops = this.drops.filter((d) => !d.dead);
     if (strength === 0 || !rainsHere(world)) return;
     const random = new JavaRandom(BigInt(this.clientTicks) * 312987231n),
       i = Math.floor(viewer.x), j = Math.floor(viewer.y), k = Math.floor(viewer.z),
@@ -347,15 +296,20 @@ export class Weather {
         block = top > 0 ? world.get(x, top - 1, z) : 0;
       if (top > j + 10 || top < j - 10) continue;
       const fx = random.nextFloat(), fz = random.nextFloat();
-      if (block === 42) continue; // lava: smoke instead (not ported)
+      // (float)x + f2, (float)top + 0.1F - getBlockBoundsMinY (0 for the blocks here).
+      const px = f(x + fx), py = f(top + f(0.1)), pz = f(z + fz);
+      if (block === LAVA) {
+        add("smoke", px, py, pz);
+        continue;
+      }
       if (block === 0) continue; // Material.air
       l++;
       if (random.nextInt(l) === 0) {
-        sx = x + fx;
-        sy = top + f(0.1); // - getBlockBoundsMinY, 0 for the blocks here
-        sz = z + fz;
+        sx = px;
+        sy = py;
+        sz = pz;
       }
-      if (this.drops.length < 1500) this.drops.push(new RainDrop(x + fx, top + f(0.1), z + fz));
+      add("rain", px, py, pz);
     }
     if (l > 0 && random.nextInt(3) < this.rainSoundCounter++) {
       this.rainSoundCounter = 0;

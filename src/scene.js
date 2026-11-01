@@ -3,6 +3,8 @@ import { WorldEffects } from "./effects.js";
 import { ExplosionParticles } from "./explosion-particles.js";
 import { ExplosionParticleRenderer } from "./explosion-particle-renderer.js";
 import { ParticleSystem } from "./particles.js";
+import { EffectRenderer } from "./effect-renderer.js";
+import { Fx } from "./fx.js";
 import { ParticleRenderer } from "./particle-renderer.js";
 import { SIZE, HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS } from "./block-textures.js";
@@ -102,8 +104,13 @@ export class VoxelScene {
     this.dropPartial = 1;
     // Block particles (particles.js); main.js ticks them and sets particleView
     // to the player's yaw, pitch and front-view flag each frame.
-    this.particles = new ParticleSystem();
-    this.explosionParticles = new ExplosionParticles();
+    // effectRenderer is the shared EffectRenderer pool (effect-renderer.js):
+    // main.js ticks it once per client tick, every system adds to it.
+    this.effectRenderer = new EffectRenderer();
+    this.particles = new ParticleSystem({ effects: this.effectRenderer });
+    this.explosionParticles = new ExplosionParticles({ effects: this.effectRenderer });
+    // World.spawnParticle for the particles.png and item-icon kinds (fx.js).
+    this.fx = new Fx({ effects: this.effectRenderer, explosions: this.explosionParticles });
     this.explosionParticleRenderer = new ExplosionParticleRenderer(this.scene, this);
     this.particleRenderer = new ParticleRenderer(this.scene, this);
     this.particleView = null;
@@ -162,8 +169,8 @@ export class VoxelScene {
   }
   setWorld(world) {
     this.effects.clear();
-    this.particles.clear();
-    this.explosionParticles.clear();
+    this.effectRenderer.clear();
+    this.fx.world = world;
     this.explosionParticleRenderer.clear();
     this.drops.clear();
     this.dropList = [];
@@ -489,10 +496,10 @@ export class VoxelScene {
     this.weatherRenderer.update(w, this.world, c, partial, time);
     this.drops.update(this.dropList, this.dropPartial, time * 20);
     this.updateFalling(this.dropPartial);
-    this.projectiles.update(this.projectileList.balls, this.projectileList.particles, c, this.dropPartial);
+    this.projectiles.update(this.projectileList.balls, this.effectRenderer.layers[2], c, this.dropPartial);
     this.arrows.update(this.arrowList, this.dropPartial);
     this.particleRenderer.update(this.particles.list, this.dropPartial, this.particleView ?? { yaw: c.rotation.y, pitch: c.rotation.x });
-    this.explosionParticleRenderer.update(this.explosionParticles.list, this.dropPartial, this.particleView ?? { yaw: c.rotation.y, pitch: c.rotation.x });
+    this.explosionParticleRenderer.update(this.effectRenderer, this.dropPartial, this.particleView ?? { yaw: c.rotation.y, pitch: c.rotation.x });
     this.sky.render(this.renderer, c, new THREE.Color(...fog));
     this.renderer.render(this.scene, c);
     this.worldTriangles = this.renderer.info.render.triangles;

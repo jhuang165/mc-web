@@ -4,7 +4,8 @@ import { creeperFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from
 import { SIZE, HEIGHT, hash, slipperiness, collisionBounds, normalCube, WOOL, isLiquid, DYE } from "./world.js";
 import { isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
 import { ITEMS } from "./survival.js";
-import { mhSin, mhCos } from "./lighting.js";
+import { mhSin, mhCos, JavaRandom } from "./lighting.js";
+import { enterWater, burst } from "./fx.js";
 import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
 import { sheepColor, childColor } from "./sheep.js";
 import { sneakEdge, criticalDamage } from "./player-movement.js";
@@ -39,6 +40,13 @@ const clampYaw = (from, to, max) => f(from - Math.min(Math.max(wrapDegrees(f(fro
 // to prevPos before every onUpdate), the Java-convention yaw/pitch degrees and
 // the limb swing. `gait` is the old limb phase from earlier saves.
 // Physics state is rebuilt on load as well: motion is already reset there.
+// Entity.rand, one java.util.Random per entity; never saved.
+const RANDOMS = new WeakMap();
+export const entityRandom = (e) => {
+  let r = RANDOMS.get(e);
+  if (!r) RANDOMS.set(e, (r = new JavaRandom(Math.floor(Math.random() * 2 ** 48))));
+  return r;
+};
 const TRANSIENT = ["inWeb", "onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "fire", "idle", "revenge", "recentlyHit"];
 const INTERPOLATED = [...TRANSIENT, "eggTimer", "wingRotation", "destPos", "oFlapSpeed", "oFlap", "wingRotDelta", "px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
 // Entity.rotationYaw is Java degrees (0 faces +z, increasing toward -x); e.yaw
@@ -476,6 +484,8 @@ export class EntityWorld {
   constructor(world, saved, random = Math.random) {
     this.world = world;
     this.random = random;
+    // The client Fx (main.js) the death puffs, splashes and feeding hearts spawn into.
+    this.fx = null;
     this.events = [];
     this.entities = [];
     this.nextId = 1;
@@ -582,7 +592,7 @@ export class EntityWorld {
   }
   // Fresh motion state: grounded only after the first collision, no AI move target yet.
   physics() {
-    return { onGround: false, collidedH: false, inWater: false, inLava: false, fire: 0, fallDistance: 0, moveForward: 0, aiMoveSpeed: 0, jumping: false, jumpTicks: 0, lastDamage: 0 };
+    return { onGround: false, collidedH: false, inWater: null, inLava: false, fire: 0, fallDistance: 0, moveForward: 0, aiMoveSpeed: 0, jumping: false, jumpTicks: 0, lastDamage: 0 };
   }
   seedAnimals() {
     const spawn = this.world.spawn();
@@ -650,6 +660,11 @@ export class EntityWorld {
     return true;
   }
   // `critical` is the jump-attack test of attackTargetEntityWithCurrentItem (damage * 1.5F).
+  // The entity as Crit2FX follows it: position, box floor, size (halved for a child), motion.
+  fxTarget(e) {
+    const t = ENTITY_TYPES[e.type], s = e.growingAge < 0 ? 0.5 : 1;
+    return { x: e.x, z: e.z, minY: e.y, width: f(t.width * s), height: f(t.height * s), mx: e.vx, my: e.vy, mz: e.vz };
+  }
   attack(e, tool, survival, player, extraKnockback = 0, critical = false) {
     if (!this.entities.includes(e) || e.health <= 0) return false;
     const item = ITEMS[tool],
@@ -770,11 +785,15 @@ export class EntityWorld {
   feed(e,id,survival){
     if(!this.entities.includes(e)||e.health<=0||!BREED_ITEM[e.type]||id!==BREED_ITEM[e.type]||(!survival.creative&&!survival.count(id)))return false;
     if(e.growingAge!==0||e.love>0)return false;e.love=600;
-    if(!survival.creative)survival.take(id);this.events.push({hearts:true,position:{x:e.x,y:e.y+1,z:e.z}});return true;
+    if(!survival.creative)survival.take(id);
+    // EntityAnimal.func_146082_f: World.setEntityState(18), which the client shows as 7 hearts.
+    if(this.fx){const t=ENTITY_TYPES[e.type];burst(this.fx,'heart',7,{x:e.x,y:e.y,z:e.z,width:t.width,height:t.height},entityRandom(e),0.5);}
+    return true;
   }
   // EntityAIMate.spawnBaby (ua.g): the child of two animals in love (growingAge -24000,
   // at the mother's position, a sheep's colour from the parents' dyes), both parents'
-  // age set to 6000 and love cleared, hearts and 1 to 7 experience. A full world
+  // age set to 6000 and love cleared, and 1 to 7 experience (its hearts are a server
+  // spawnParticle, which singleplayer never shows). A full world
   // (40 mobs) keeps them waiting. Returns whether the baby was born.
   spawnBaby(a,b){
     if(this.entities.length>=40)return false;
@@ -782,7 +801,7 @@ export class EntityWorld {
     // EntitySheep.createChild (wp.b(rx)): the lamb's colour is the parents' dye mix.
     if(a.type==='sheep')baby.color=childColor(a.color,b.color,this.random);
     this.entities.push(baby);a.growingAge=b.growingAge=6000;a.love=b.love=0;a.mateTicks=b.mateTicks=0;
-    this.events.push({hearts:true,position:{x:a.x,y:a.y+1,z:a.z}},{xp:1+Math.floor(Math.random()*7),position:{x:a.x,y:a.y,z:a.z}});
+    this.events.push({xp:1+Math.floor(Math.random()*7),position:{x:a.x,y:a.y,z:a.z}});
     return true;
   }
   // EntitySheep.interact (wp.a(yz)) with shears (ade.aZ) held: an unsheared adult
@@ -935,6 +954,8 @@ export class EntityWorld {
         // A dying mob still runs onLivingUpdate with its movement blocked (sv.bh):
         // it slides on its knockback and falls, with no AI input.
         e.death = (e.death || 0) + 1;
+        // EntityLivingBase.onDeathUpdate: at deathTime 20 the body goes up in 20 "explode".
+        if (e.death === 20 && this.fx) burst(this.fx, "explode", 20, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, entityRandom(e));
         e.jumping = false;
         this.walk(e, t, 0);
         if (e.type === "chicken") this.chickenUpdate(e);
@@ -957,7 +978,8 @@ export class EntityWorld {
       if(e.recentlyHit>0)e.recentlyHit--;
       if(e.growingAge<0)e.growingAge++;else if(e.growingAge>0)e.growingAge--;
       e.love=Math.max(0,e.love-1);
-      if(e.love&&e.age%10===0)this.events.push({hearts:true,position:{x:e.x,y:e.y+1,z:e.z}});
+      // The inLove countdown's hearts (every 10 ticks) run on the server's copy only: the
+      // client never learns inLove, so 1.7.10 singleplayer shows none.
       e.hurt = Math.max(0, e.hurt - 1);
       e.attack = Math.max(0, e.attack - 1);
       e.flee = Math.max(0, e.flee - 1);
@@ -986,7 +1008,14 @@ export class EntityWorld {
           light = this.ai.brightness(bx, by, bz);
         if (light > 0.5 && f(this.random() * 30) < f(f(light - f(0.4)) * 2) && this.ai.deps.canSeeSky(bx, Math.floor(e.y), bz)) e.fire = Math.max(e.fire || 0, 160);
       }
+      const wasInWater = e.inWater;
       if (e.inWater = inWater(this.world, e, t.width, t.height)) e.fallDistance = 0;
+      // Entity.handleWaterMovement: entering water (not on the entity's first update, when
+      // inWater is still unset) splashes. EntityMob plays the hostile sound.
+      if (e.inWater && wasInWater === false) {
+        const s = enterWater(this.fx, { x: e.x, z: e.z, minY: e.y, width: t.width, mx: e.vx, my: e.vy, mz: e.vz }, entityRandom(e));
+        this.events.push({ sound: HOSTILE.has(e.type) ? "game.hostile.swim.splash" : "game.neutral.swim.splash", volume: s.volume, pitch: s.pitch, position: { x: e.x, y: e.y, z: e.z } });
+      }
       this.burn(e, t);
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.

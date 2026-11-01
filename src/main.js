@@ -76,6 +76,9 @@ import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS 
 import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, SNEAK_YSIZE, moveWeights, isCritical, ATTACK_SLOWDOWN, groundAccel, airAccel, LIQUID_ACCEL, JUMP_MOTION, jumpExhaustion, sprintJumpPush, FLY_SPEED, FLY_Y_DRAG, flyVertical, fovMultiplier } from "./player-movement.js";
 import { spawnRunningParticles, freshRandom } from "./particles.js";
+import { enterWater, drownBubbles, potionColor, potionParticles, itemCrumbs, boneMealSparkles } from "./fx.js";
+import { JavaRandom } from "./lighting.js";
+import { displayTicks } from "./display-ticks.js";
 import { importedRuntime } from "./world-import.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
@@ -119,12 +122,12 @@ options.particles = particleSetting(options.particles);
 // Apply the saved client preference to current runtimes (weather is replaced on load).
 function updateParticleOptions() {
   const setting = particleSetting(options.particles);
-  scene.particles.setting = scene.explosionParticles.setting = setting;
+  scene.particles.setting = scene.explosionParticles.setting = scene.fx.setting = setting;
   projectiles.particleSetting = weather.particleSetting = setting;
   // RenderGlobal uses one client World.rand; keep it separate from server simulation.
-  scene.particles.worldRandom = projectiles.particleRandom = scene.explosionParticles.worldRandom;
+  scene.particles.worldRandom = projectiles.particleRandom = scene.fx.worldRandom = scene.explosionParticles.worldRandom;
   const viewer = [position.x, position.y + PHYSICS.eye, position.z];
-  scene.explosionParticles.viewer = projectiles.particleViewer = viewer;
+  scene.explosionParticles.viewer = projectiles.particleViewer = scene.fx.viewer = viewer;
 }
 // GameSettings.getKeyBinding for GAMMA.
 const gammaLabel=g=>g<=0?"Moody":g>=1?"Bright":"+"+Math.round(g*100)+"%";
@@ -176,7 +179,8 @@ const playerBody = new PlayerBody();
 // Sprint/sneak state, move input and the sneak eye drop (player-movement.js).
 const motion = new PlayerMotion();
 // The player's Entity.rand (the sprint particle's offsets).
-const playerRandom = freshRandom();
+// Entity.rand of the player (java.util.Random, seeded from the clock).
+const playerRandom = new JavaRandom(Math.floor(Math.random() * 2 ** 48));
 let collidedH = false, walkFrozen = false;
 let stepDistance = 0,
   wasInWater = false;
@@ -583,6 +587,8 @@ function legacyPlayer(record) {
 // BlockBush.onNeighborBlockChange: flowers and crops drop when their support is lost.
 // Fluids owns world.onChange, so this wraps it.
 const FLOWERS = { yellow: YELLOW_FLOWER, red: RED_FLOWER }, boneRandom = new JRandom(Date.now());
+// Item.itemRand, the static Random of every Item.
+const itemRand = new JavaRandom(Math.floor(Math.random() * 2 ** 48));
 function watchFlowers() {
   const next = world.onChange;
   world.onChange = (x, y, z, old, now) => {
@@ -682,6 +688,7 @@ function launch(record) {
     // Entity.isWet for orbs: rain only (EntityXPOrb.handleWaterMovement never sets inWater).
     xpOrbs.wet = (o) => isWet(weather, world, { x: o.x, y: o.posY, z: o.z, inWater: false }, 0.5);
     mobs = new EntityWorld(world, record.entities);
+    mobs.fx = scene.fx;
     mobs.onLand = (entity, distance) => trampleFarmland(entity, distance);
     // World.getLightBrightness for EntityAI.getBlockPathWeight: daylight-reduced sky or block light.
     mobs.lightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, scene.subtracted) : 15);
@@ -1164,7 +1171,7 @@ function tickWeather() {
       survival.fire = hit.fire;
     }
   }
-  weather.rainParticles(world, { x: position.x, y: position.y + PHYSICS.eye, z: position.z });
+  weather.rainParticles(world, { x: position.x, y: position.y + PHYSICS.eye, z: position.z }, (kind, x, y, z) => scene.fx.addDirect(kind, x, y, z));
   for (const e of weather.drain()) {
     // Thunder is volume 10000 in vanilla, so it carries at any distance; the
     // rain loop and the explosion are placed where they happen.
@@ -1183,6 +1190,14 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   const wet = isWet(weather, world, { x: position.x, y: position.y, z: position.z, inWater }, PHYSICS.height);
   // Entity.onEntityUpdate: only water (handleWaterMovement) puts the fire out here; rain does in the tail below.
   survival.tick({ underwater, inWater, inLava: inLavaNow });
+  // EntityLivingBase.onEntityUpdate: drowning damage comes with 8 bubbles around posY, then
+  // updatePotionEffects spawns "mobSpell" in the colour of the active effects.
+  const posY = position.y + Math.fround(PHYSICS.eye);
+  if (survival.drowned) {
+    survival.drowned = false;
+    drownBubbles(scene.fx, { x: position.x, y: posY, z: position.z, mx: velocity.x, my: velocity.y, mz: velocity.z }, playerRandom);
+  }
+  potionParticles(scene.fx, { x: position.x, y: posY, z: position.z, yOffset: Math.fround(PHYSICS.eye), width: PHYSICS.width, height: PHYSICS.height }, potionColor(survival.effects.active.values()), playerRandom);
   // Entity.moveEntity's tail (block-collisions.js), after onEntityUpdate as in EntityLivingBase.onUpdate:
   // cactus cells (cactus, 1 each) and webs (not while flying), then a box in fire or lava deals inFire 1
   // and counts the fire up from -20 (fireResistance 20), so setFire(8) catches after 20 ticks unless
@@ -1200,8 +1215,15 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     falling.tick();
     scene.setFalling?.(falling.entities);
   }
-  // BlockFire.randomDisplayTick's crackle around the viewer.
-  fire?.ambient(position.x, position.y + PHYSICS.eye, position.z, (x, y, z, volume, pitch) => sounds.play("fire.fire", { volume, pitch, position: { x, y, z } }));
+  // WorldClient.doVoidFogParticles: Block.randomDisplayTick around the viewer (torch and
+  // furnace flames, fire smoke and crackle, water and lava particles, sounds and drips).
+  displayTicks(world, Math.floor(position.x), Math.floor(position.y + PHYSICS.eye), Math.floor(position.z), {
+    rand: scene.explosionParticles.worldRandom,
+    fx: scene.fx,
+    weather,
+    lit: (x, y, z) => scene.litFurnaces.has(`${x},${y},${z}`),
+    sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }),
+  });
   // Entity.onEntityUpdate: standing in lava halves the fall distance every tick.
   if (inLavaNow) fallDistance *= 0.5;
   if (!survival.creative) {
@@ -1243,7 +1265,10 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   }
   projectiles.tick(world, mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), (e) => e !== "player" && thrownHit(mobs, e, position));
   // EntityEgg.onImpact: hatched chicks join the mob list.
-  for (const h of projectiles.drain()) if (mobs) for (let i = 0; i < h.chicks; i++) mobs.hatch(h.x, h.y, h.z, h.yaw);
+  for (const h of projectiles.drain()) {
+    if (h.sound) sounds.play(h.sound, { position: h.position, volume: h.volume, pitch: h.pitch });
+    else if (mobs) for (let i = 0; i < h.chicks; i++) mobs.hatch(h.x, h.y, h.z, h.yaw);
+  }
   if (mobs) handleEntityEvents();
   tickArrows();
   scene.setDrops(items.items);
@@ -1297,7 +1322,6 @@ function handleEntityEvents() {
     if (event.sound)
       sounds.play(event.sound, { position: event.position, volume: event.volume ?? 0.6, pitch: event.pitch });
     if(event.xp&&!survival.creative)xpOrbs.spawn(event.xp,event.position);
-    if(event.hearts)mobRenderer.hearts(event.position);
     // EntityCreeper.func_146077_cc: world.createExplosion(creeper, x, y, z, radius, mobGriefing).
     if (event.explode) explodeAt(event.explode.x, event.explode.y, event.explode.z, event.explode.size, { exploder: event.explode.source, attacker: event.explode.source });
     if (event.drop) items.dropMob(event.drop, event.count, event.position, event.damage, event);
@@ -1311,6 +1335,12 @@ function handleEntityEvents() {
       saved = false;
     }
   }
+}
+// EntityPlayer.updateItemUse for food: n "iconcrack" crumbs and random.eat from Entity.rand.
+const playerEye = () => ({ x: position.x, y: position.y + Math.fround(PHYSICS.eye) + Math.fround(0.12), z: position.z, yaw: Math.fround(180 - (yaw * 180) / Math.PI), pitch: Math.fround((-pitch * 180) / Math.PI) });
+function eatEffects(id, n) {
+  itemCrumbs(scene.fx, n, "iconcrack_" + id, playerEye(), playerRandom);
+  sounds.play("random.eat", { volume: 0.5 + 0.5 * playerRandom.nextInt(2), pitch: (playerRandom.nextFloat() - playerRandom.nextFloat()) * 0.2 + 1 });
 }
 function beginEating(id) {
   if (survival.food >= 20) {
@@ -1401,6 +1431,11 @@ function edit(place = false) {
     // player (fallDistance > 0, airborne, not in water) lands a 1.5x critical.
     const critical = isCritical({ fallDistance, onGround: grounded, inWater: wasInWater });
     if (mobs.attack(aimedEntity.entity, id, survival, { x: position.x, z: position.z, yaw }, motion.sprinting ? 1 : 0, critical)) {
+      // EntityPlayerSP.onCriticalHit after a successful critical: the Crit2FX emitter.
+      if (critical) {
+        const e = aimedEntity.entity;
+        scene.fx.crit2(() => mobs.fxTarget(e));
+      }
       if (motion.sprinting) {
         velocity.x *= ATTACK_SLOWDOWN;
         velocity.z *= ATTACK_SLOWDOWN;
@@ -1456,7 +1491,9 @@ function edit(place = false) {
       if(block===SAPLING){trees.boneMeal(x,y,z);used=true;}
       else if(block===1){for(const q of growGrass(world,FLOWERS,boneRandom,world.biome,x,y,z))scene.updateBlock(q[0],q[2],q[1]);used=true;}
       else if(farming.fertilize(x,y,z)){applyFarmUpdates(farming.drain());used=true;}
-      if(used){if(!survival.creative)survival.inventory.decr(survival.inventory.current,1);renderHotbar();sounds.play('dig.grass',{volume:.4});saved=false;}
+      if(used){if(!survival.creative)survival.inventory.decr(survival.inventory.current,1);renderHotbar();sounds.play('dig.grass',{volume:.4});saved=false;
+        // Level event 2005 on the cell as it is now (BlockSapling 0.8 high, BlockCrops 0.25).
+        const now=world.get(x,y,z);boneMealSparkles(scene.fx,now,x,y,z,now===SAPLING?Math.fround(0.8):isCrop(now)?Math.fround(0.25):1,itemRand);}
       return;
     }
 
@@ -1753,10 +1790,11 @@ function dropHeld(all) {
   eating = null;
   renderHotbar();
 }
-// EntityLivingBase.renderBrokenItemStack plays the break sound.
+// EntityLivingBase.renderBrokenItemStack plays the break sound and throws 5 crumbs of it.
 function reportBrokenTool() {
   if (!survival.broken) return;
   sounds.play("random.break", { volume: 0.8, pitch: 0.8 + Math.random() * 0.4 });
+  itemCrumbs(scene.fx, 5, "iconcrack_" + survival.broken, playerEye(), playerRandom);
   toast("Your " + (ITEMS[survival.broken]?.name || "tool").toLowerCase() + " broke.");
   survival.broken = 0;
   renderHotbar();
@@ -2011,8 +2049,11 @@ function movementTick() {
     position.z - oldPosition.z,
   );
   if (!sneakOnGround) stepDistance += distance;
-  if (inWater && !wasInWater)
-    sounds.play("game.player.swim.splash", { volume: 0.5 });
+  // Entity.handleWaterMovement: the splash volume follows the entry speed.
+  if (inWater && !wasInWater) {
+    const s = enterWater(scene.fx, { x: position.x, z: position.z, minY: position.y, width: PHYSICS.width, mx: velocity.x, my: velocity.y, mz: velocity.z }, playerRandom);
+    sounds.play("game.player.swim.splash", { volume: s.volume, pitch: s.pitch });
+  }
   wasInWater = inWater;
   if (stepDistance > 1.667 && (grounded || inWater || onLadderStep) && !flying) {
     stepDistance = 0;
@@ -2034,18 +2075,19 @@ function movementTick() {
       // EntityPlayer.onUpdate counts the use down; the draw length is the ticks since.
       eating.ticks++;
     } else {
+      // EntityPlayer.onUpdate: updateItemUse(5) while the count is 25 or less and a
+      // multiple of 4, then onItemUseFinish's updateItemUse(16) when it reaches 0.
+      const count = eating.ticks;
+      if (!eating.drink && count <= 25 && count % 4 === 0) eatEffects(eating.id, 5);
       eating.ticks--;
-      if (!eating.drink && eating.ticks % 4 === 0)
-        sounds.play("random.eat", {
-          volume: 0.5,
-          pitch: 0.9 + Math.random() * 0.2,
-        });
+      if (!eating.drink && eating.ticks <= 0) eatEffects(eating.id, 16);
       if (eating.drink) {
         // EntityPlayer.onUpdate: sound while the count is 25 or less and a multiple of 4
         // (count 32 down to 1), then ItemBucketMilk.onEaten when it reaches 0.
         const count = eating.ticks + 1;
         if (count <= 25 && count % 4 === 0) sounds.play("random.drink", { volume: 0.5, pitch: Math.random() * 0.1 + 0.9 });
         if (eating.ticks <= 0) {
+          sounds.play("random.drink", { volume: 0.5, pitch: Math.random() * 0.1 + 0.9 });
           if (finishDrinking(survival)) { renderHotbar(); saved = false; }
           eating = null;
         }
@@ -2357,8 +2399,7 @@ function animate(now) {
       // player; EffectRenderer.updateEffects then runs after this tick's spawns. ---
       if (motion.sprinting) spawnRunningParticles(scene.particles, world, { x: position.x, y: position.y, z: position.z, mx: velocity.x, mz: velocity.z, sprinting: true, inWater: wasInWater, ySize: motion.ySize }, playerRandom, [position.x, position.y + PHYSICS.eye, position.z]);
       movementTick();
-      scene.particles.tick(world);
-      scene.explosionParticles.tick(world);
+      scene.effectRenderer.tick(world);
       // The model stands at posY - yOffset, and posY is lowered by ySize (the sneak drop).
       const lowered = (p, drop) => ({ x: p.x, y: p.y - drop, z: p.z });
       playerBody.tick({ position: lowered(position, motion.ySize), previous: lowered(previous, motion.prevYSize), yaw, pitch, swinging: animation.swingTime < SWING_SECONDS });
@@ -2494,6 +2535,9 @@ function shadowCasters(partial) {
 async function boot(){try {
   scene = new VoxelScene($("#viewport"));
   scene.weather = weather;
+  projectiles.useEffects(scene.effectRenderer);
+  projectiles.spawner = scene.fx;
+  arrows.fx = scene.fx;
   await scene.textures.ready;
   xpRenderer=new ExperienceRenderer(scene.scene);
   sounds = new SoundBank(

@@ -1,27 +1,33 @@
 // EntityHugeExplodeFX, EntityLargeExplodeFX, EntityExplodeFX and EntitySmokeFX, Java 1.7.10.
 // Original-class constructor/update records: public/research/explosion-particles-reference.json.
-import { ParticleSystem, moveParticleEntity } from './particles.js';
+// The particles live in the shared EffectRenderer: smoke and explode in layer 0, the huge
+// emitter in layer 1 and the large puffs in layer 3 (EntityFX.getFXLayer).
+import { moveParticleEntity } from './particles.js';
 import { acceptsParticle } from './particle-settings.js';
+import { EffectRenderer, entityFX } from './effect-renderer.js';
 import { JavaRandom } from './lighting.js';
 const f=Math.fround;
+const LAYER={hugeexplosion:1,largeexplode:3,explode:0,smoke:0,largesmoke:0};
 export class ExplosionParticles {
-  constructor({random=Math.random,entityRandom=()=>new JavaRandom(Math.floor(Math.random()*2**48)),worldRandom=new JavaRandom(Date.now()),limit=4000}={}) {
-    this.random=random;this.entityRandom=entityRandom;this.worldRandom=worldRandom;this.limit=limit;
+  constructor({random=Math.random,entityRandom=()=>new JavaRandom(Math.floor(Math.random()*2**48)),worldRandom=new JavaRandom(Date.now()),limit=4000,effects=new EffectRenderer({limit})}={}) {
+    this.random=random;this.entityRandom=entityRandom;this.worldRandom=worldRandom;this.effects=effects;
     this.setting=0;this.viewer=null;
-    this.list=[];this.emitters=[];this.counts=[0,0];
-    // The common EntityFX constructor, already replayed for block particles.
-    this.base=new ParticleSystem({random,entityRandom});
   }
-  clear(){this.list=[];this.emitters=[];this.counts=[0,0];}
+  // This system's particles: sprites (layer 0) and large puffs (layer 3); emitters (layer 1).
+  get list(){return [...this.effects.layers[0],...this.effects.layers[3]].filter(p=>p.owner===this);}
+  get emitters(){return this.effects.layers[1].filter(p=>p.owner===this);}
+  clear(){this.effects.clear();}
   spawn(kind,x,y,z,vx=0,vy=0,vz=0,viewer=this.viewer){
     if(!acceptsParticle(kind,this.setting,this.worldRandom,x,y,z,viewer))return null;
+    return this.effects.add(this.make(kind,x,y,z,vx,vy,vz));
+  }
+  // The constructors. EntitySmokeFX(..., 2.5F) is RenderGlobal's "largesmoke".
+  make(kind,x,y,z,vx=0,vy=0,vz=0){
     const rand=this.entityRandom(), r=this.random;
-    this.base.entityRandom=()=>rand;
-    const p=this.base.digging(x,y,z,kind==='explode'?vx:0,kind==='explode'?vy:0,kind==='explode'?vz:0,3);
-    Object.assign(p,{kind,rand,scale:f(p.scale*2),gravity:0,r:1,g:1,b:1,frame:0});
-    if(kind==='hugeexplosion'){
-      p.age=0;p.max=8;if(this.emitters.length>=this.limit)this.emitters.shift();this.emitters.push(p);return p;
-    }
+    const p=entityFX(x,y,z,kind==='explode'?vx:0,kind==='explode'?vy:0,kind==='explode'?vz:0,rand,r);
+    if(!(kind in LAYER))throw new Error('Unknown explosion particle: '+kind);
+    Object.assign(p,{kind,rand,frame:0,layer:LAYER[kind],owner:this});
+    if(kind==='hugeexplosion'){p.age=0;p.max=8;return p;}
     if(kind==='largeexplode'){
       p.max=6+rand.nextInt(4);p.r=p.g=p.b=f(f(rand.nextFloat()*f(0.6))+f(0.4));
       p.size=f(2*f(1-f(f(vx)*f(0.5))));
@@ -30,17 +36,14 @@ export class ExplosionParticles {
       p.r=p.g=p.b=f(f(rand.nextFloat()*f(0.3))+f(0.7));
       p.scale=f(f(f(rand.nextFloat()*rand.nextFloat())*6)+1);
       p.max=Math.trunc(16/(rand.nextFloat()*0.8+0.2))+2;
-    } else if(kind==='smoke'){
+    } else {
+      const k=kind==='largesmoke'?f(2.5):1;
+      p.kind='smoke';
       p.mx=p.mx*0.10000000149011612+vx;p.my=p.my*0.10000000149011612+vy;p.mz=p.mz*0.10000000149011612+vz;
-      p.r=p.g=p.b=f(r()*0.30000001192092896);p.scale=f(p.scale*f(0.75));
-      p.max=Math.trunc(8/(r()*0.8+0.2));
-    } else throw new Error('Unknown explosion particle: '+kind);
-    // EffectRenderer keeps separate 4000-entry texture layers (regular sprites / custom puffs).
-    const layer=kind==='largeexplode', index=layer?1:0;
-    if(this.counts[index]>=this.limit){
-      this.list.splice(this.list.findIndex(q=>(q.kind==='largeexplode')===layer),1);
-    } else this.counts[index]++;
-    this.list.push(p);return p;
+      p.r=p.g=p.b=f(r()*0.30000001192092896);p.scale=f(f(p.scale*f(0.75))*k);
+      p.max=Math.trunc(f(Math.trunc(8/(r()*0.8+0.2))*k));
+    }
+    return p;
   }
   // Client Explosion.doExplosionB(true). World.rand is separate from server drops/terrain RNG.
   burst(x,y,z,size,positions,{smoking=true,viewer=null}={}){
@@ -60,21 +63,17 @@ export class ExplosionParticles {
     }
     this.viewer=previousViewer;
   }
-  tick(world){
-    // EffectRenderer updates sprite layers before the custom-particle layer. New puffs from
-    // the huge emitter (sprite layer) therefore receive their first update later this tick.
-    for(const p of this.list.filter(p=>p.kind!=='largeexplode'))this.step(world,p);
-    for(const p of this.emitters){
+  // The billboard EffectRenderer draws (explosion-particle-renderer.js).
+  sprite(p,partial){return explosionSprite(p,partial);}
+  // EffectRenderer.updateEffects for the whole pool (main.js ticks the shared one).
+  tick(world){this.effects.tick(world);}
+  step(world,p){
+    if(p.kind==='hugeexplosion'){
       const r=p.rand;
       for(let i=0;i<6;i++)this.spawn('largeexplode',p.x+(r.nextDouble()-r.nextDouble())*4,p.y+(r.nextDouble()-r.nextDouble())*4,p.z+(r.nextDouble()-r.nextDouble())*4,f(p.age/p.max),0,0);
       if(++p.age===p.max)p.dead=true;
+      return;
     }
-    this.emitters=this.emitters.filter(p=>!p.dead);
-    for(const p of this.list.filter(p=>p.kind==='largeexplode'))this.step(world,p);
-    this.list=this.list.filter(p=>!p.dead);
-    this.counts=[0,0];for(const p of this.list)this.counts[p.kind==='largeexplode'?1:0]++;
-  }
-  step(world,p){
     p.px=p.x;p.py=p.y;p.pz=p.z;
     if(p.kind==='largeexplode'){if(++p.age===p.max)p.dead=true;return;}
     if(p.age++>=p.max)p.dead=true;

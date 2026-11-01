@@ -442,6 +442,9 @@ export class JavaRandom {
     for (let u = r; u - (r = u % bound) + m >= 2147483648; u = this.next(31));
     return r;
   }
+  nextBoolean() {
+    return this.next(1) !== 0;
+  }
   nextDouble() {
     return (this.next(26) * 134217728 + this.next(27)) / 2 ** 53;
   }

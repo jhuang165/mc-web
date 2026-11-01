@@ -472,15 +472,4 @@ export class Fire {
     this.changes = [];
     return changes;
   }
-  // BlockFire.randomDisplayTick's sound: WorldClient samples 1000 cells within 15 blocks
-  // of the viewer per tick (rand.nextInt(16) - rand.nextInt(16) on each axis); a fire cell
-  // crackles one time in 24, "fire.fire" at volume 1 + rand and pitch 0.3 + 0.7 * rand.
-  // Calls `play(x, y, z, volume, pitch)`. The original uses an unseeded Random.
-  ambient(px, py, pz, play, random = Math.random) {
-    const n = (m) => Math.floor(random() * m), w = this.world, x0 = Math.floor(px), y0 = Math.floor(py), z0 = Math.floor(pz);
-    for (let i = 0; i < 1000; i++) {
-      const x = x0 + n(16) - n(16), y = y0 + n(16) - n(16), z = z0 + n(16) - n(16);
-      if (w.get(x, y, z) === FIRE && n(24) === 0) play(x + 0.5, y + 0.5, z + 0.5, f(1 + f(random())), f(f(f(random()) * f(0.7)) + f(0.3)));
-    }
-  }
 }

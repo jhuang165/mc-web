@@ -102,7 +102,7 @@ The test also checks:
 - **Spawning between ticks.** A particle spawned between ticks, such as a Creative break from a click, is drawn once at its spawn point before its first update. In the original, `clickMouse` runs inside the tick, before `updateEffects`.
 - **Landing dust timing.** In the original, landing dust is a server event that reaches the client in the next packet batch. Here it spawns in the same tick.
 - **Particle setting.** Since 0.22.7 Options has the 1.7.10 Particles choice (All, Decreased, Minimal), saved in this device's settings. See "Particle options" below for what is and is not covered.
-- **Other particle types.** Block particles and the explosion/smoke families are ported (see below). Flame, splash, bubbles, crit, portal, item-break and the others keep their existing or missing implementations.
+- **Other particle types.** Block particles, the explosion/smoke families and (since 0.22.8) the particles.png and item-icon kinds of existing content are ported (see below). Kinds whose content doesn't exist here (portal, note, reddust, slime, snowshovel, cloud, enchantmenttable, fireworks, footstep, instantSpell, witchMagic, mobappearance and the others) are missing.
 - **Collision.** There are no entity bounding boxes (boats and minecarts don't exist here). Particles use the shared `collisionBounds`, including full-cube farmland, inset cactus and ladder plates.
 - **Farmland for the player.** Since 0.21.1, the player and particles both use the original full-cube farmland collision; its render/selection height remains 15/16.
 - **Hit bounds.** Hit particles use this build's selection bounds (`rayBounds`), which the original's block bound fields equal after the ray trace.
@@ -121,7 +121,7 @@ The test also checks:
 
 `tools/probes/ExplosionParticleProbe.java` and `tools/verify-explosion-particles.mjs` produce [41 original-class records](explosion-particles-reference.json): 32 constructor/lifetime/collision cases (four classes × eight fixtures: open, wall, ceiling, web, ground, cactus, farmland, ladder), eight client blast call sequences and a TNT fuse-smoke sequence. `src/explosion-particles.test.js` matches constructors and every tick exactly, plus checks frame/UV formulas, 48-puff emission, caps and clear. Render frames/UVs are bytecode-derived; the OpenGL renderer is not probe-run.
 
-`VoxelScene` owns `explosionParticles` and the two-buffer `ExplosionParticleRenderer`, using the original imported sheets. The renderer uses this build's camera/light/fog pipeline. Layer caps are separate from existing block and thrown-item particle pools; a single shared native EffectRenderer remains unfinished. No new assets were generated or imported.
+`VoxelScene` owns `explosionParticles` and the two-buffer `ExplosionParticleRenderer`, using the original imported sheets. The renderer uses this build's camera/light/fog pipeline. Since 0.22.8 they live in the shared EffectRenderer pool with every other particle (see below). No new assets were generated or imported.
 
 ## Particle options (0.22.7)
 
@@ -135,4 +135,58 @@ The test also checks:
 
 `ParticleProbe` now also runs the unchanged `RenderGlobal.doSpawnParticle` for seven kinds × three settings × distances 0, 16 and 16.0001 × seeds 0–7. That gives 504 `setting` records in [particle-reference.json](particle-reference.json) (529 records in total), each with the accepted flag and the exact `World.rand` state after the call. No render method or GL call runs. `src/particle-settings.test.js` replays all 504 records, including random consumption. It also checks that constructors are skipped, that Minimal keeps destroy/hit particles and all 48 huge-explosion puffs even out of range, that Decreased draws once per explosion attempt, and the rain counts and sound.
 
-Still open: each system keeps its own cap rather than a shared native `EffectRenderer` pool and layer order (FX-01). Lava rain smoke, flame, splash, bubbles, crit, portal, item-break and the other kinds don't exist here. In-world browser acceptance covered the Options menu, persistence and runtime state, not counts of particles on screen.
+In-world browser acceptance covered the Options menu, persistence and runtime state, not counts of particles on screen. 0.22.8 closes the shared pool and adds the remaining kinds for existing content (next section).
+
+## Shared EffectRenderer and the particles.png kinds (0.22.8)
+
+`src/effect-renderer.js` is `EffectRenderer` (`bkn`): one pool of four layers keyed by `EntityFX.getFXLayer`. Layer 0 is the particles.png sheet, 1 the block atlas (digging, block dust and the huge-explosion emitter), 2 the item atlas (`snowballpoof`, `iconcrack`) and 3 the self-drawing particles (large puffs, Crit2FX). `addEffect` caps each layer at 4000 and drops the oldest. `updateEffects` walks layers 0 to 3 by index against the live size, so a particle added during the pass gets its first update in the same tick. The F3 count covers layers 0 to 2. Block particles, explosion/smoke, thrown-item poofs and everything below share it, and `VoxelScene.effectRenderer` is ticked once per client tick. `entityFX` is the shared `EntityFX` constructor: four `Entity.rand` draws, then the `Math.random` motion kick.
+
+`src/fx.js` (`Fx`) is `World.spawnParticle` for the other names this build spawns. It applies the RenderGlobal filter, then the original constructor and `onUpdate` of `EntityBubbleFX`, `EntitySuspendFX`, `EntityAuraFX` (depthsuspend, townaura, happyVillager), `EntityCritFX` (crit, magicCrit), `EntityCrit2FX`, `EntitySpellParticleFX` (mobSpell, mobSpellAmbient, spell), `EntityFlameFX`, `EntityLavaFX` (with its smoke trail), `EntityRainFX`/`EntitySplashFX`, `EntityHeartFX` (heart, angryVillager), `EntityDropParticleFX` (dripWater, dripLava, with the splash on landing) and `EntityBreakingFX` (`iconcrack_<item>[_<meta>]`). Also ported: render-time scale (crit, heart, flame, lava), colour alpha (ambient spells 0.15), and the flame, lava and lava-drip brightness overrides.
+
+Spawn sites wired:
+
+- **Water entry** (`Entity.handleWaterMovement`): the splash sound at the original volume and pitch, then 1 + width × 20 bubbles and splashes. This covers the player, mobs, arrows, snowballs and eggs. An entity's first update only marks it wet.
+- **In water:** arrows and thrown items emit four bubbles per tick, and critical arrows trail four `crit` per tick.
+- **Combat and mobs:**
+  - A critical melee hit spawns Crit2FX: three updates of up to 16 `crit` around the target.
+  - Feeding an animal gives the 7 hearts of status 18. The love countdown, mating and baby hearts are server-only `spawnParticle` calls in single player, so the client doesn't show them, and the old client hearts are gone.
+  - A mob's death poof is 20 `explode` at deathTime 20.
+- **Player:**
+  - Drowning gives 8 bubbles at air -20.
+  - Poison or Hunger swirl `mobSpell` particles in the effect colour (`PotionHelper.calcPotionLiquidColor`) half the ticks.
+  - Eating throws 5 `iconcrack` crumbs every fourth tick from count 25, and 16 on finishing. The eat sound uses the original volume/pitch roll; drinks play `random.drink`.
+  - A breaking tool throws 5 crumbs.
+- **Bone meal:** 15 `happyVillager` sparkles up to the block's maxY (sapling 0.8, crops 0.25, otherwise 1).
+- **Rain:** `EntityRainFX` drops now collide like other particles, replacing the old surface-only drop. Rain over lava makes `EntitySmokeFX` instead.
+- **Display ticks** (`src/display-ticks.js`, `WorldClient.doVoidFogParticles`): each tick, 1000 cells within 15 blocks of the viewer from the client World.rand run `randomDisplayTick` with one fresh Random.
+  - Torches (5 facings) and the lit furnace give smoke and flame.
+  - Fire gives three `largesmoke` over a solid or burnable floor, otherwise two by each burnable neighbour, plus the 1-in-24 `fire.fire` crackle. This replaces `Fire.ambient`.
+  - Water gives `suspended` in still or falling cells and the `liquid.water` gurgle in flowing ones.
+  - Lava under air gives `lava` pops with `liquid.lavapop`, plus `liquid.lava`.
+  - Water and lava drip below a stone-topped ceiling.
+  - Leaves drip while raining.
+  - Air below y 8 rolls the void-fog `depthsuspend`.
+  - The three liquid sounds were imported with their asset-index hashes (203 clips).
+
+`tools/probes/FxProbe.java` (extending ParticleProbe) and `tools/verify-fx.mjs` write [79 original-class records](fx-reference.json):
+
+- 31 constructors through `RenderGlobal.doSpawnParticle`, with every update until death or 140 ticks, in five fixtures (open, water pool, ceiling, lava pool, high ceiling). The Math.random and rewound Entity.rand states are recorded.
+- Crit2FX.
+- Five water entries, including the first-update skip.
+- Feeding hearts and the death poof.
+- 15 potion runs: five effect sets × normal, ambient and the player yOffset, 40 ticks each.
+- Four crumb rotations.
+- Four bone-meal blocks.
+- 14 display-tick scenarios with 1,602 seeded runs, including calls, sounds and the Random state after each.
+- Three void-fog loops.
+
+`src/fx.test.js` replays them all exactly. The exception is gaussian velocities (hearts, death poof, bone meal), which are compared within 1e-16, because `JavaRandom.nextGaussian` uses `Math.log` where Java has `StrictMath.log`. The replay exposed and fixed the ambient-potion roll: Java's `&=` draws `nextInt(5)` even when the first roll failed. The browser check (scratch world, audio off) covered feeding hearts, the death poof, Crit2FX crits, potion swirls in the Hunger colour and bone-meal sparkles, rendered through the shared pool with no console errors.
+
+Still open:
+
+- The player's death poof is missing.
+- The player's water-entry test uses the cell at feet + 0.6, not `handleMaterialAcceleration` on the contracted box.
+- Mobs have no air supply or potion effects, so they show no drowning bubbles or swirls.
+- The leaves drip needs `canLightningStrikeAt`. It is bytecode-derived and not probe-run.
+- GL drawing formulas (billboards, UV inset, brightness) come from bytecode, not from a probe run.
+- Particles spawned between ticks are drawn once before their first update.

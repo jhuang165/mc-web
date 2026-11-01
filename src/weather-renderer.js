@@ -1,5 +1,6 @@
-// Weather drawing: EntityRenderer.renderRainSnow (blt.e) rain columns, the
-// EntityRainFX splashes (blf / bkm.renderParticle) and RenderLightningBolt (bog).
+// Weather drawing: EntityRenderer.renderRainSnow (blt.e) rain columns and
+// RenderLightningBolt (bog). The EntityRainFX splashes are EffectRenderer
+// particles (fx.js) drawn with the rest of layer 0.
 // Geometry and the per-column/per-bolt random streams follow the bytecode; see
 // public/research/weather.md for what is verified and what is simplified.
 import * as THREE from "three";
@@ -11,7 +12,6 @@ import { precipitationHeight } from "./weather.js";
 const f = Math.fround;
 const RADIUS = 10; // fancy graphics
 const SPAN = 2 * RADIUS + 1;
-const MAX_DROPS = 1500;
 
 // EntityRenderer's constructor tables: unit vectors perpendicular to the
 // direction from the viewer, so every rain quad faces the viewer. The centre
@@ -153,7 +153,6 @@ export class WeatherRenderer {
     this.rain = new Quads(SPAN * SPAN, quadMaterial(lighting, texture("/media/1.7.10/environment/rain.png"), 0.1));
     // The snow branch of renderRainSnow draws the same columns with environment/snow.png.
     this.snow = new Quads(SPAN * SPAN, quadMaterial(lighting, texture("/media/1.7.10/environment/snow.png"), 0.1));
-    this.drops = new Quads(MAX_DROPS, quadMaterial(lighting, texture("/media/1.7.10/particle/particles.png"), 0.003921569));
     this.bolts = new THREE.Mesh(
       new THREE.BufferGeometry(),
       new THREE.ShaderMaterial({
@@ -168,7 +167,7 @@ export class WeatherRenderer {
     this.bolts.frustumCulled = false;
     this.bolts.visible = false;
     this.boltKey = "";
-    parent.add(this.rain.mesh, this.snow.mesh, this.drops.mesh, this.bolts);
+    parent.add(this.rain.mesh, this.snow.mesh, this.bolts);
     this.right = new THREE.Vector3();
     this.up = new THREE.Vector3();
   }
@@ -176,11 +175,10 @@ export class WeatherRenderer {
   // the fraction of the current tick.
   update(weather, world, camera, partial) {
     if (!weather || !world) {
-      this.rain.mesh.visible = this.snow.mesh.visible = this.drops.mesh.visible = this.bolts.visible = false;
+      this.rain.mesh.visible = this.snow.mesh.visible = this.bolts.visible = false;
       return;
     }
     this.columns(weather, world, camera, partial);
-    this.splashes(weather, camera, partial);
     this.lightning(weather);
   }
   // renderRainSnow: a 21 x 21 block area of slanted quads around the viewer,
@@ -237,23 +235,6 @@ export class WeatherRenderer {
     }
     this.rain.end();
     this.snow.end();
-  }
-  // EntityFX.renderParticle for the splashes: camera-facing quads of half-size
-  // 0.1 * scale on the particle sheet (8 px tiles, 16 per row).
-  splashes(weather, camera, partial) {
-    const q = this.drops;
-    q.begin();
-    camera.updateMatrixWorld();
-    this.right.setFromMatrixColumn(camera.matrixWorld, 0);
-    this.up.setFromMatrixColumn(camera.matrixWorld, 1);
-    const r = this.right, u = this.up;
-    for (const d of weather.drops) {
-      const x = d.px + (d.x - d.px) * partial, y = d.py + (d.y - d.py) * partial, z = d.pz + (d.z - d.pz) * partial,
-        s = f(0.1 * d.scale), u0 = (d.texture % 16) / 16, v0 = Math.floor(d.texture / 16) / 16, u1 = u0 + 0.0624375, v1 = v0 + 0.0624375,
-        corner = (a, b, tu, tv) => [x + r.x * s * a + u.x * s * b, y + r.y * s * a + u.y * s * b, z + r.z * s * a + u.z * s * b, tu, tv];
-      q.add([corner(-1, -1, u1, v1), corner(-1, 1, u1, v0), corner(1, 1, u0, v0), corner(1, -1, u0, v1)], this.scene.brightness(d.x, d.y, d.z), 1);
-    }
-    q.end();
   }
   lightning(weather) {
     const live = weather.bolts;

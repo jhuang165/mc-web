@@ -4,8 +4,10 @@
 // doSpawnParticle's "blockcrack_" and "blockdust_" and playAuxSFX(2006) (landing
 // dust), and Entity.onEntityUpdate's sprint particle (sa.C). Rules and the probe
 // records they replay are in public/research/particles.md and
-// particle-reference.json. Pure logic; particle-renderer.js draws `list`.
+// particle-reference.json. Pure logic; the particles live in an
+// EffectRenderer (effect-renderer.js) layer 1 and particle-renderer.js draws them.
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
+import { EffectRenderer, PARTICLE_LIMIT, entityFX } from "./effect-renderer.js";
 import { acceptsParticle } from "./particle-settings.js";
 import { collisionBounds, FIRE, LAVA, WATER, WEB } from "./world.js";
 import { blockTile, TILES } from "./block-textures.js";
@@ -13,13 +15,10 @@ import { rayBounds } from "./projectiles.js";
 import { touchesWeb } from "./webs.js";
 
 const f = Math.fround;
-// EffectRenderer.addEffect: a layer holds at most 4000; the oldest is removed first.
-export const PARTICLE_LIMIT = 4000;
-// EntityFX: setSize(0.2F, 0.2F), yOffset = height / 2.
-const SIZE = f(0.2), Y_OFFSET = f(SIZE / 2);
-const F01 = f(0.1), F04 = f(0.4), F015 = f(0.15), F09 = f(0.9), F06 = f(0.6), F02 = f(0.2);
-// The constants the bytecode widens from float (0.1F, 0.2F, 0.4F, 0.98F, 0.7F).
-const D01 = 0.10000000149011612, D02 = 0.20000000298023224, D04 = 0.4000000059604645, DRAG = 0.9800000190734863, GROUND = 0.699999988079071;
+export { PARTICLE_LIMIT };
+const SIZE = f(0.2), F06 = f(0.6), F02 = f(0.2);
+// The constants the bytecode widens from float (0.1F, 0.2F, 0.98F, 0.7F).
+const D01 = 0.10000000149011612, D02 = 0.20000000298023224, DRAG = 0.9800000190734863, GROUND = 0.699999988079071;
 
 // This build's block ids against 1.7.10's, with the metadata the original block
 // would carry (wheat stages are separate ids here; furnaces 61/62 by `lit`).
@@ -79,6 +78,20 @@ function collisionBoxes(world, x0, y0, z0, x1, y1, z1) {
 // from its bottom + yOffset, onGround, motion zeroed on blocked axes, then
 // doBlockCollisions (BlockWeb.onEntityCollidedWithBlock sets isInWeb).
 export function moveParticleEntity(world, p, dx, dy, dz) {
+  // noClip: the box is offset and the position follows; nothing else runs.
+  if (p.noClip) {
+    const b = p.box;
+    b[0] += dx;
+    b[1] += dy;
+    b[2] += dz;
+    b[3] += dx;
+    b[4] += dy;
+    b[5] += dz;
+    p.x = (b[0] + b[3]) / 2;
+    p.y = b[1] + p.yOffset;
+    p.z = (b[2] + b[5]) / 2;
+    return;
+  }
   if (p.inWeb) {
     p.inWeb = false;
     dx *= 0.25;
@@ -123,49 +136,39 @@ export class ParticleSystem {
   // `random` stands for Math.random (the EntityFX motion kick), `entityRandom`
   // returns each new particle's Entity.rand, and `rand` is EffectRenderer.rand
   // (hit positions); `worldRandom` is the client World.rand (landing dust).
-  constructor({ random = Math.random, entityRandom = freshRandom, rand = { nextDouble: Math.random }, worldRandom = new JavaRandom(Math.floor(Math.random() * 2 ** 48)), limit = PARTICLE_LIMIT } = {}) {
+  // `effects` is the shared EffectRenderer; a private one by default.
+  constructor({ random = Math.random, entityRandom = freshRandom, rand = { nextDouble: Math.random }, worldRandom = new JavaRandom(Math.floor(Math.random() * 2 ** 48)), limit = PARTICLE_LIMIT, effects = new EffectRenderer({ limit }) } = {}) {
     this.random = random;
     this.entityRandom = entityRandom;
     this.rand = rand;
     this.worldRandom = worldRandom;
-    this.limit = limit;
+    this.effects = effects;
     // GameSettings.particleSetting: 0 all, 1 decreased, 2 minimal.
     this.setting = 0;
-    this.list = [];
+  }
+  // This system's particles in the terrain layer (the huge-explosion emitter shares it).
+  get list() {
+    return this.effects.layers[1].filter((p) => p.owner === this);
   }
   clear() {
-    this.list = [];
+    this.effects.clear();
   }
   // EffectRenderer.addEffect (terrain layer).
   add(p) {
-    if (this.list.length >= this.limit) this.list.shift();
-    this.list.push(p);
-    return p;
+    return this.effects.add(p);
   }
   // new EntityDiggingFX(world, x, y, z, vx, vy, vz, block, meta): the EntityFX
   // constructor (box, Entity.rand jitter/scale/lifetime), the 7-argument
   // EntityFX motion (Math.random), then the block icon, blockParticleGravity
   // (1.0 for every block here), colour 0.6 and half the scale.
   digging(x, y, z, vx, vy, vz, id, meta = 0, lit = false) {
-    const rand = this.entityRandom(), r = this.random,
-      jx = f(rand.nextFloat() * 3), jy = f(rand.nextFloat() * 3),
-      scale = f(f(f(rand.nextFloat() * 0.5) + 0.5) * 2),
-      max = Math.trunc(f(4 / f(f(rand.nextFloat() * F09) + F01)));
-    let mx = vx + f(f(r() * 2 - 1) * F04), my = vy + f(f(r() * 2 - 1) * F04), mz = vz + f(f(r() * 2 - 1) * F04);
-    const speed = f(f(r() + r() + 1) * F015), n = f(Math.sqrt(mx * mx + my * my + mz * mz));
-    mx = (mx / n) * speed * D04;
-    my = (my / n) * speed * D04 + D01;
-    mz = (mz / n) * speed * D04;
-    const half = f(SIZE / 2), y0 = y - Y_OFFSET;
-    return {
-      x, y, z, px: x, py: y, pz: z, mx, my, mz,
-      box: [x - half, y0, z - half, x + half, y0 + SIZE, z + half],
-      width: SIZE, height: SIZE, yOffset: Y_OFFSET,
-      jx, jy, scale: f(scale / 2), age: 0, max, gravity: 1,
+    const p = entityFX(x, y, z, vx, vy, vz, this.entityRandom(), this.random);
+    return Object.assign(p, {
+      scale: f(p.scale / 2), gravity: 1,
       r: F06, g: F06, b: F06,
       tile: particleTile(id, meta, lit), id, meta,
-      onGround: false, inWeb: false, dead: false,
-    };
+      layer: 1, owner: this,
+    });
   }
   // EntityDiggingFX.applyColourMultiplier / applyRenderColor: multiply by the
   // block colour unless the block is grass.
@@ -273,25 +276,25 @@ export class ParticleSystem {
     const x = e.x + (rand.nextFloat() - 0.5) * width, y = e.y + 0.1, z = e.z + (rand.nextFloat() - 0.5) * width;
     return this.spawn("blockcrack", id, meta, x, y, z, -e.mx * 4, 1.5, -e.mz * 4, viewer);
   }
-  // EntityFX.onUpdate for every particle, then removal of the dead ones
-  // (EffectRenderer.updateEffects). A particle still moves on the tick it dies.
-  tick(world) {
-    for (const p of this.list) {
-      p.px = p.x;
-      p.py = p.y;
-      p.pz = p.z;
-      if (p.age++ >= p.max) p.dead = true;
-      p.my -= 0.04 * p.gravity;
-      moveParticleEntity(world, p, p.mx, p.my, p.mz);
-      p.mx *= DRAG;
-      p.my *= DRAG;
-      p.mz *= DRAG;
-      if (p.onGround) {
-        p.mx *= GROUND;
-        p.mz *= GROUND;
-      }
+  // EntityFX.onUpdate (bkm.h). A particle still moves on the tick it dies.
+  step(world, p) {
+    p.px = p.x;
+    p.py = p.y;
+    p.pz = p.z;
+    if (p.age++ >= p.max) p.dead = true;
+    p.my -= 0.04 * p.gravity;
+    moveParticleEntity(world, p, p.mx, p.my, p.mz);
+    p.mx *= DRAG;
+    p.my *= DRAG;
+    p.mz *= DRAG;
+    if (p.onGround) {
+      p.mx *= GROUND;
+      p.mz *= GROUND;
     }
-    if (this.list.some((p) => p.dead)) this.list = this.list.filter((p) => !p.dead);
+  }
+  // EffectRenderer.updateEffects for the whole pool (main.js ticks the shared one).
+  tick(world) {
+    this.effects.tick(world);
   }
 }
 

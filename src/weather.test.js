@@ -5,9 +5,10 @@ import {
   JavaRandom, sunBrightness, skylightSubtracted, starBrightness, skyColor, cloudColor, providerFogColor, fogColor, lightmap, biomeTemperature,
 } from "./lighting.js";
 import {
-  Weather, LightningBolt, RainDrop, nextLong, stopsPrecipitation, precipitationHeight, canSeeSky, strikeRule, canLightningStrikeAt, isWet,
+  Weather, LightningBolt, nextLong, stopsPrecipitation, precipitationHeight, canSeeSky, strikeRule, canLightningStrikeAt, isWet,
   struckByLightning, strikeBox, overlaps, entityBox, rainsHere,
 } from "./weather.js";
+import { Fx } from "./fx.js";
 import { boltGeometry } from "./weather-renderer.js";
 import { World, SIZE } from "./world.js";
 import { EntityWorld } from "./entities.js";
@@ -321,12 +322,15 @@ test("rain splashes: up to 100 * rain^2 candidate columns around the viewer, eac
   for (let i = 0; i < 100; i++) w.updateWeather();
   const viewer = { x: 64, y: 41.6, z: 64 };
   w.clientTicks = 7;
-  w.rainParticles(ground, viewer);
-  assert.ok(w.drops.length > 0 && w.drops.length <= 100);
-  for (const d of w.drops) {
+  // EntityRainFX goes straight to the EffectRenderer (fx.addDirect).
+  const fx = new Fx(), add = (k, x, y, z) => fx.addDirect(k, x, y, z), drops = () => fx.list;
+  w.rainParticles(ground, viewer, add);
+  assert.ok(drops().length > 0 && drops().length <= 100);
+  for (const d of drops()) {
+    assert.equal(d.kind, "rain");
     assert.ok(Math.abs(d.x - 64) < 11 && Math.abs(d.z - 64) < 11);
-    assert.ok(d.y >= 40 + f(0.1) - 1e-6 && d.y < 41);
-    assert.ok(d.texture >= 19 && d.texture <= 22);
+    assert.equal(d.y, f(40 + f(0.1))); // (float)top + 0.1F
+    assert.ok(d.tex >= 19 && d.tex <= 22);
     assert.ok(d.scale >= 1 && d.scale < 2);
   }
   const sounds = [];
@@ -337,16 +341,23 @@ test("rain splashes: up to 100 * rain^2 candidate columns around the viewer, eac
   }
   assert.ok(sounds.length > 0 && sounds.every((s) => s.sound === "ambient.weather.rain"));
   assert.ok(sounds.every((s) => s.volume === f(0.2) && s.pitch === 1)); // nothing overhead
-  const dry = new Weather();
-  dry.rainParticles(ground, viewer);
-  assert.equal(dry.drops.length, 0);
-  // The same tick number replays the same splashes.
-  const a = new Weather(), b = new Weather();
-  for (const x of [a, b]) {
+  const dry = new Weather(), none = [];
+  dry.rainParticles(ground, viewer, (...a) => none.push(a));
+  assert.equal(none.length, 0);
+  // The same tick number replays the same splash positions.
+  const a = new Weather(), b = new Weather(), at = [[], []];
+  [a, b].forEach((x, i) => {
     Object.assign(x, { rain: 1, prevRain: 1, clientTicks: 11 });
-    x.rainParticles(ground, viewer);
-  }
-  assert.deepEqual(a.drops.map((d) => [d.x, d.z]), b.drops.map((d) => [d.x, d.z]));
+    x.rainParticles(ground, viewer, (k, px, py, pz) => at[i].push([k, px, pz]));
+  });
+  assert.deepEqual(at[0], at[1]);
+  // A lava surface gets EntitySmokeFX instead, which neither counts for the sound nor rains.
+  const lava = { biome: "meadow", get: (x, y) => (y < 39 ? 3 : y === 39 ? 42 : 0) }, kinds = new Set();
+  const l = new Weather();
+  Object.assign(l, { rain: 1, prevRain: 1, clientTicks: 3, rainSoundCounter: 100 });
+  l.rainParticles(lava, viewer, (k) => kinds.add(k));
+  assert.deepEqual([...kinds], ["smoke"]);
+  assert.deepEqual(l.drain(), []);
 });
 
 test("rain under a roof sounds quieter and lower (volume 0.1, pitch 0.5)", () => {
@@ -364,19 +375,20 @@ test("rain under a roof sounds quieter and lower (volume 0.1, pitch 0.5)", () =>
 });
 
 test("a splash hops up, falls under gravity 0.06 and lives 8 to 40 ticks", () => {
+  const air = { get: () => 0, getMeta: () => 0, solid: () => false }, fx = new Fx({ world: air });
   for (let i = 0; i < 50; i++) {
-    const d = new RainDrop(1, 41.1, 1);
-    assert.ok(d.vy >= f(0.1) && d.vy <= f(0.3) + 1e-6);
-    assert.ok(Math.hypot(d.vx, d.vz) < 0.2);
-    assert.ok(d.age >= 8 && d.age <= 40);
+    const d = fx.make("rain", 1, 41.1, 1);
+    assert.ok(d.my >= f(0.1) && d.my <= f(0.3) + 1e-6);
+    assert.ok(Math.hypot(d.mx, d.mz) < 0.2);
+    assert.ok(d.max >= 8 && d.max <= 40);
   }
-  const d = new RainDrop(1, 41.1, 1);
-  d.vx = d.vz = 0;
-  d.vy = 0.2;
+  const d = fx.make("rain", 1, 41.1, 1);
+  d.mx = d.mz = 0;
+  d.my = 0.2;
   const top = d.y;
-  d.tick(41);
-  assert.ok(Math.abs(d.y - (top + 0.2 - 0.06)) < 1e-9);
-  assert.ok(Math.abs(d.vy - (0.2 - 0.06) * 0.98) < 1e-9);
+  fx.step(air, d);
+  assert.ok(Math.abs(d.y - (top + 0.2 - f(0.06))) < 1e-9);
+  assert.ok(Math.abs(d.my - (0.2 - f(0.06)) * f(0.98)) < 1e-9);
 });
 
 test("rain extinguishes burning mobs and zombies do not burn in the rain", () => {

@@ -47,13 +47,16 @@ vec3 applyFog(vec3 c){float f=fogDensity>0.?1.-exp(-fogDensity*vFogDistance):cla
 
 // Chunk geometry: attributes `shade` (face shade x AO) and `lightCoord`
 // (packed block and sky brightness, 0-240 each).
-export function worldMaterial(lighting, { map, alphaTest = 0.1, transparent = false, uvTransform = new THREE.Vector4(1, 1, 0, 0), side = THREE.FrontSide } = {}) {
+// `vertexAlpha` makes `shade` a vec4 whose alpha multiplies the texel's before the
+// alpha test (EntityFX colour alpha under glAlphaFunc).
+export function worldMaterial(lighting, { map, alphaTest = 0.1, transparent = false, uvTransform = new THREE.Vector4(1, 1, 0, 0), side = THREE.FrontSide, vertexAlpha = false } = {}) {
+  const S = vertexAlpha ? "vec4" : "vec3";
   return new THREE.ShaderMaterial({
     uniforms: { ...lighting.uniforms, map: { value: map }, alphaTest: { value: alphaTest }, uvTransform: { value: uvTransform } },
-    vertexShader: `attribute vec3 shade;attribute vec2 lightCoord;uniform vec4 uvTransform;varying vec2 vUv;varying vec3 vShade;varying vec2 vLight;varying float vFogDistance;
+    vertexShader: `attribute ${S} shade;attribute vec2 lightCoord;uniform vec4 uvTransform;varying vec2 vUv;varying ${S} vShade;varying vec2 vLight;varying float vFogDistance;
 void main(){vUv=uv*uvTransform.xy+uvTransform.zw;vShade=shade;vLight=(lightCoord+8.)/256.;vec4 mv=modelViewMatrix*vec4(position,1.);vFogDistance=length(mv.xyz);gl_Position=projectionMatrix*mv;}`,
-    fragmentShader: `uniform sampler2D map,lightmap;uniform float alphaTest;varying vec2 vUv;varying vec3 vShade;varying vec2 vLight;${FOG_PARS}
-void main(){vec4 t=texture2D(map,vUv);if(t.a<=alphaTest)discard;gl_FragColor=vec4(applyFog(t.rgb*vShade*texture2D(lightmap,vLight).rgb),t.a);}`,
+    fragmentShader: `uniform sampler2D map,lightmap;uniform float alphaTest;varying vec2 vUv;varying ${S} vShade;varying vec2 vLight;${FOG_PARS}
+void main(){vec4 t=texture2D(map,vUv)${vertexAlpha ? "*vec4(1.,1.,1.,vShade.a)" : ""};if(t.a<=alphaTest)discard;gl_FragColor=vec4(applyFog(t.rgb*vShade.rgb*texture2D(lightmap,vLight).rgb),t.a);}`,
     transparent,
     side,
   });

@@ -1002,6 +1002,21 @@
       "url": "/audio/1.7.10/random/fuse.ogg",
       "sha1": "a92ba2b8f6abc41aa8d679ad808a81d0aafa04b2",
       "bytes": 29271
+    },
+    "liquid/lava": {
+      "url": "/audio/1.7.10/liquid/lava.ogg",
+      "sha1": "9272aef9f27dfcc10b6e3879b7a2a67f8faa1a83",
+      "bytes": 65328
+    },
+    "liquid/lavapop": {
+      "url": "/audio/1.7.10/liquid/lavapop.ogg",
+      "sha1": "19a5aae31c3e0018a960b709a9f0240d8d47dda7",
+      "bytes": 5609
+    },
+    "liquid/water": {
+      "url": "/audio/1.7.10/liquid/water.ogg",
+      "sha1": "3483650440deb3934255e044ddabff5b01a65356",
+      "bytes": 36329
     }
   },
   "events": {
@@ -1693,6 +1708,24 @@
       "category": "hostile",
       "sounds": [
         "random/fuse"
+      ]
+    },
+    "liquid.lava": {
+      "category": "block",
+      "sounds": [
+        "liquid/lava"
+      ]
+    },
+    "liquid.lavapop": {
+      "category": "block",
+      "sounds": [
+        "liquid/lavapop"
+      ]
+    },
+    "liquid.water": {
+      "category": "block",
+      "sounds": [
+        "liquid/water"
       ]
     }
   }

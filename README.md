@@ -15,6 +15,8 @@ Node 20.19+ and a browser with WebGL 2 are required. Build with `npm run build`;
 
 ## Current implementation
 
+Version 0.22.8 puts every particle into one shared 1.7.10 EffectRenderer pool and adds the particle types of existing content: torch, furnace and fire flames and smoke, water and lava drips, lava pops and liquid sounds, water-entry splashes and bubbles, crits, feeding hearts, death poofs, potion swirls, eating and broken-tool crumbs, bone-meal sparkles and lava rain smoke. 79 cases from the unchanged original classes are replayed. The player death poof and mob drowning/potion particles remain unfinished.
+
 Version 0.22.7 adds the 1.7.10 Particles option (All, Decreased, Minimal). The original RenderGlobal filter runs before particles are made, including the Decreased `nextInt(3)` draw and the large/huge explosion exemptions. Rain splashes are halved or removed. 504 cases from the unchanged original class are replayed. A shared native particle pool remains unfinished.
 
 Version 0.22.6 connects authoritative explosion rays, sound pitch, block drops/ore XP and chained TNT fuses to the saved World.rand stream. Repeated JSON/import reload regressions compare complete blast results interleaved with weather/chunk ticks. Client particles keep their separate stream; entity randomness and unified tick ordering remain unfinished.

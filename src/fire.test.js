@@ -345,18 +345,6 @@ test("a bolt handed to the Weather places fire through the Fire hook", () => {
   assert.ok(bolt.dead === false);
 });
 
-test("the crackle samples cells near the viewer and plays fire.fire", () => {
-  const { world, fire } = rig();
-  world.set(30, 11, 30, FIRE, true);
-  const heard = [];
-  for (let i = 0; i < 400; i++) fire.ambient(30.5, 11.5, 30.5, (...a) => heard.push(a));
-  assert.ok(heard.length > 0);
-  for (const [x, y, z, vol, pitch] of heard) {
-    assert.deepEqual([x, y, z], [30.5, 11.5, 30.5]);
-    assert.ok(vol >= 1 && vol < 2 && pitch >= f(0.3) && pitch < 1.0001);
-  }
-});
-
 test("canCatchFire and canNeighborBurn read the encouragement table", () => {
   const L = level([5, 5, 5, 17, 0, 6, 5, 5, 35, 0, 5, 4, 5, 1, 0], {});
   assert.equal(canCatchFire(L, 5, 5, 5), true);

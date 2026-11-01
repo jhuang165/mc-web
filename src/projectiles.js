@@ -9,6 +9,7 @@
 // the box, which is also the entity's posY (yOffset 0).
 import { explosionImpact } from "./explosion.js";
 import { acceptsParticle } from "./particle-settings.js";
+import { EffectRenderer } from "./effect-renderer.js";
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
 import { blockBounds, collisionBounds, snowSelectionHeight, FIRE, CARROTS, REEDS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
 import { ladderBounds } from "./ladders.js";
@@ -283,8 +284,21 @@ export class Projectiles {
     this.particleRandom = new JavaRandom(Math.floor(Math.random() * 2 ** 48));
     this.particleViewer = null;
     this.balls = [];
-    this.particles = [];
     this.events = [];
+    // The client Fx (main.js) for the bubbles and water-entry splash.
+    this.spawner = null;
+    this.useEffects(null);
+  }
+  // The EffectRenderer the snowballpoof particles go to (layer 2); a private one
+  // (ticked by tick) unless main.js shares the scene's pool.
+  useEffects(effects) {
+    this.ownsEffects = !effects;
+    this.effects = effects ?? new EffectRenderer();
+    // EffectRenderer.updateEffects calls owner.step for each snowballpoof.
+    this.fx ??= { step: (world, p) => this.moveParticle(world, p) };
+  }
+  get particles() {
+    return this.effects.layers[2].filter((p) => p.owner === this.fx);
   }
   // Entity.rand is a fresh java.util.Random per entity.
   rng() {
@@ -331,8 +345,7 @@ export class Projectiles {
   tick(world, targets = [], onHit = () => {}) {
     for (const b of this.balls) if (!b.dead) this.step(world, b, targets, onHit);
     this.balls = this.balls.filter((b) => !b.dead);
-    for (const p of this.particles) this.moveParticle(world, p);
-    this.particles = this.particles.filter((p) => !p.dead);
+    if (this.ownsEffects) this.effects.tick(world);
   }
   step(world, b, targets, onHit) {
     b.px = b.x;
@@ -341,7 +354,13 @@ export class Projectiles {
     // Entity.onEntityUpdate: previous rotation, water, the -64 void.
     b.prevYaw = b.yaw;
     b.prevPitch = b.pitch;
+    const wasWater = b.water;
     b.water = inWater(world, b.x, b.y, b.z);
+    // Entity.handleWaterMovement: the first tick in water (not the first update) splashes.
+    if (b.water && wasWater === false) {
+      const s = enterWater(this.spawner, { x: b.x, z: b.z, minY: b.y, width: f(0.25), mx: b.mx, my: b.my, mz: b.mz }, b.rand);
+      this.events.push({ sound: "game.neutral.swim.splash", volume: s.volume, pitch: s.pitch, position: { x: b.x, y: b.y, z: b.z } });
+    }
     if (b.y < -64) b.dead = true;
     b.ticks++;
     const start = [b.x, b.y, b.z], far = [b.x + b.mx, b.y + b.my, b.z + b.mz],
@@ -391,8 +410,8 @@ export class Projectiles {
     while (f(b.yaw - b.prevYaw) >= 180) b.prevYaw = f(b.prevYaw + 360);
     b.pitch = f(b.prevPitch + f(f(b.pitch - b.prevPitch) * f(0.2)));
     b.yaw = f(b.prevYaw + f(f(b.yaw - b.prevYaw) * f(0.2)));
-    // Drag 0.99 (0.8 in water: the original also emits four bubbles, omitted
-    // here along with the splash sound) and gravity 0.03.
+    // Drag 0.99 (0.8 in water, with four "bubble" a quarter tick behind) and gravity 0.03.
+    if (b.water && this.spawner) for (let i = 0; i < 4; i++) this.spawner.spawn("bubble", b.x - b.mx * 0.25, b.y - b.my * 0.25, b.z - b.mz * 0.25, b.mx, b.my, b.mz);
     const drag = f(b.water ? 0.8 : 0.99);
     b.mx *= drag;
     b.my *= drag;
@@ -414,10 +433,10 @@ export class Projectiles {
     mx = (mx / n) * speed * 0.4000000059604645;
     my = (my / n) * speed * 0.4000000059604645 + 0.10000000149011612;
     mz = (mz / n) * speed * 0.4000000059604645;
-    const p = { x, y, z, px: x, py: y, pz: z, mx, my, mz, jx, jy, scale: f(scale / 2), max, age: 0, dead: false, onGround: false };
-    this.particles.push(p);
-    return p;
+    const p = { x, y, z, px: x, py: y, pz: z, mx, my, mz, jx, jy, scale: f(scale / 2), max, age: 0, dead: false, onGround: false, item: 312, layer: 2, owner: this.fx };
+    return this.effects.add(p);
   }
+
   // Solid block boxes overlapping the volume (World.getCollidingBoundingBoxes);
   // the same walk as ItemEntities.boxes.
   boxes(world, x0, y0, z0, x1, y1, z1) {
@@ -494,7 +513,8 @@ export class Projectiles {
   }
   clear() {
     this.balls = [];
-    this.particles = [];
+    const list = this.effects.layers[2];
+    for (let i = 0; i < list.length; i++) if (list[i].owner === this.fx) list.splice(i--, 1);
     this.events = [];
   }
 }

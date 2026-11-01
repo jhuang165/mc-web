@@ -9,6 +9,7 @@ import { explosionImpact } from "./explosion.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { HEIGHT, TNT, blockBounds } from "./world.js";
 import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
+import { enterWater } from "./fx.js";
 import { GaussianRandom, intercept, rayTraceBlocks } from "./projectiles.js";
 
 const f = Math.fround;
@@ -146,6 +147,8 @@ export class Arrows {
     this.random = random;
     this.list = [];
     this.events = [];
+    // The client Fx (main.js) for crit trails, bubbles and splashes.
+    this.fx = null;
     // Item.itemRand and the skeletons' Entity.rand (one stream per mob).
     this.itemRand = this.rng();
     this.mobRands = new WeakMap();
@@ -167,7 +170,7 @@ export class Arrows {
       yaw: h.yaw, pitch: h.pitch, prevYaw: h.yaw, prevPitch: h.pitch,
       xTile: -1, yTile: -1, zTile: -1, inTile: 0, inData: 0, inGround: false, shake: 0,
       ticksInGround: 0, ticksInAir: 0, pickup: 0, damage: 2, knockback: 0, crit: false, fire: 0,
-      shooter: null, water: false, rand, dead: false, ...extra,
+      shooter: null, water: null, rand, dead: false, ...extra,
     };
   }
   // ItemBow's arrow (see releaseBow): canBePickedUp 1, or 2 when no arrow was consumed.
@@ -226,7 +229,13 @@ export class Arrows {
     a.prevYaw = a.yaw;
     a.prevPitch = a.pitch;
     const wetBox = entityWaterBox(box(a)), wet = a.y < 0 ? { wet: false, push: [0, 0, 0] } : waterAcceleration(world, wetBox);
+    const wasWater = a.water;
     a.water = wet.wet;
+    // Entity.handleWaterMovement: entering water after the first update splashes.
+    if (a.water && wasWater === false) {
+      const s = enterWater(this.fx, { x: a.x, z: a.z, minY: a.y, width: WIDTH, mx: a.mx, my: a.my, mz: a.mz }, a.rand);
+      this.sound(a, "game.neutral.swim.splash", s.volume, s.pitch);
+    }
     a.mx += wet.push[0];
     a.my += wet.push[1];
     a.mz += wet.push[2];
@@ -337,6 +346,9 @@ export class Arrows {
         if (a.inTile === TNT && a.fire > 0) ctx.igniteTnt?.(bx, by, bz, a.shooter);
       }
     }
+    // A critical arrow trails four "crit" along this tick's motion, thrown backwards.
+    if (a.crit && this.fx)
+      for (let n = 0; n < 4; n++) this.fx.spawn("crit", a.x + (a.mx * n) / 4, a.y + (a.my * n) / 4, a.z + (a.mz * n) / 4, -a.mx, -a.my + 0.2, -a.mz);
     a.x += a.mx;
     a.y += a.my;
     a.z += a.mz;
@@ -350,8 +362,9 @@ export class Arrows {
     while (f(a.yaw - a.prevYaw) >= 180) a.prevYaw = f(a.prevYaw + 360);
     a.pitch = f(a.prevPitch + f(f(a.pitch - a.prevPitch) * f(0.2)));
     a.yaw = f(a.prevYaw + f(f(a.yaw - a.prevYaw) * f(0.2)));
-    // Drag 0.99 (0.8 in water; the original also emits four bubbles, not drawn here),
-    // rain or water puts a burning arrow out, gravity 0.05.
+    // Drag 0.99 (0.8 in water, with four "bubble" a quarter tick behind), rain or water
+    // puts a burning arrow out, gravity 0.05.
+    if (a.water && this.fx) for (let i = 0; i < 4; i++) this.fx.spawn("bubble", a.x - a.mx * 0.25, a.y - a.my * 0.25, a.z - a.mz * 0.25, a.mx, a.my, a.mz);
     const drag = f(a.water ? 0.8 : 0.99);
     if (a.fire > 0 && (a.water || this.wet?.(a))) a.fire = 0;
     a.mx *= drag;

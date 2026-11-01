@@ -637,6 +637,8 @@ export class Survival {
       this.air--;
       if (this.air === -20) {
         this.air = 0;
+        // EntityLivingBase.onEntityUpdate's 8 bubbles (main.js spawns them); not saved.
+        this.drowned = true;
         this.damage(2, "drowning");
       }
     } else this.air = 300;

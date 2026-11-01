@@ -34,8 +34,6 @@ export class MobRenderer {
     this.scene = scene;
     this.view = view;
     this.rigs = new Map();
-    this.particles=[];
-    this.heartTexture=pixelTexture("/media/1.7.10/gui/icons.png").clone();this.heartTexture.repeat.set(9/256,9/256);this.heartTexture.offset.set(52/256,1-9/256);
   }
   // RenderSheep (boq) with ModelSheep2 (bhy, sheep.png) and its fur pass ModelSheep1
   // (bhx, sheep_fur.png, tinted by the fleece colour, skipped once sheared). Boxes and
@@ -365,10 +363,8 @@ export class MobRenderer {
     this.scene.add(root);
     return { root, neck, limbs, materials, type: e.type };
   }
-  hearts(p){for(let i=0;i<5;i++){const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:this.heartTexture,transparent:true,depthWrite:false}));sprite.position.set(p.x+(Math.random()-.5)*.8,p.y+Math.random()*.4,p.z+(Math.random()-.5)*.8);sprite.scale.setScalar(.22);this.scene.add(sprite);this.particles.push({sprite,life:1});}}
   // `partial` is the fraction of the current tick elapsed (mobPose interpolates).
   update(entities,dt=0,partial=1) {
-    this.particles=this.particles.filter(p=>{p.life-=dt;p.sprite.position.y+=dt*.45;if(p.life>0)return true;this.scene.remove(p.sprite);p.sprite.material.dispose();return false;});
     const active = new Set(entities.map((e) => e.id));
     for (const [id, rig] of this.rigs)
       if (!active.has(id)) {
@@ -457,7 +453,6 @@ export class MobRenderer {
     }
   }
   clear() {
-    for(const p of this.particles){this.scene.remove(p.sprite);p.sprite.material.dispose();}this.particles=[];
     this.update([]);
   }
 }

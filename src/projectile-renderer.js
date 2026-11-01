@@ -4,7 +4,8 @@
 // is (0, 1, 0) in its own frame so it takes the same two item lights as GL.
 // RenderSnowball leaves shadowSize at 0, so it casts no shadow. Particles are
 // camera-aligned quads of 0.2 x scale blocks, unlit by normals, showing a
-// quarter-size window of the 16-pixel icon at the particle's random offset.
+// quarter-size window of the 16-pixel icon at the particle's random offset
+// (every EntityBreakingFX in EffectRenderer layer 2: snowballpoof and iconcrack).
 import * as THREE from "three";
 import { entityMaterial } from "./light-material.js";
 import { itemTexture, pixelTexture } from "./first-person.js";
@@ -76,7 +77,9 @@ export class ProjectileRenderer {
         geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]), 3));
         geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([u0, v0, u1, v0, u1, v1, u0, v1]), 2));
         geometry.setIndex([0, 1, 2, 0, 2, 3]);
-        const material = this.material(), mesh = new THREE.Mesh(geometry, material);
+        // EffectRenderer layer 2: snowballpoof and iconcrack show their item's icon.
+        const material = entityMaterial(this.view.lighting, { map: pixelTexture(itemTexture(p.item ?? SNOWBALL, p.meta ?? 0)), alphaTest: 0.1 }),
+          mesh = new THREE.Mesh(geometry, material);
         material.uniforms.alphaTest.value = 0.003921569;
         mesh.frustumCulled = false;
         this.scene.add(mesh);

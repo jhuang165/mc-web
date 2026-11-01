@@ -68,7 +68,7 @@ test("decreased explosion filtering advances the client stream separately for ev
   assert.deepEqual(random.save(), expected.save());
 });
 
-test("rain options halve attempts or suppress splashes and rain sound without clearing existing drops", () => {
+test("rain options halve attempts or suppress splashes and rain sound", () => {
   for (const strength of [0, Math.fround(0.3), 0.5, 1]) {
     const all = Math.trunc(Math.fround(Math.fround(100 * strength) * strength));
     assert.equal(rainParticleAttempts(strength, 0), all);
@@ -78,12 +78,11 @@ test("rain options halve attempts or suppress splashes and rain sound without cl
   const weather = new Weather({ random: new JavaRandom(7), lcg: 0 });
   weather.rain = 1; weather.particleSetting = 2;
   weather.rainSoundCounter = 100;
-  let updated = 0;
-  weather.drops.push({ dead: false, tick: () => updated++ });
+  // Drops already spawned live in the EffectRenderer and are not touched here.
+  const added = [];
   const world = { biome: "meadow", get: () => 3 };
-  weather.rainParticles(world, { x: 5, y: 64, z: 5 });
-  assert.equal(updated, 1);
-  assert.equal(weather.drops.length, 1);
+  weather.rainParticles(world, { x: 5, y: 64, z: 5 }, (...a) => added.push(a));
+  assert.deepEqual(added, []);
   assert.deepEqual(weather.drain(), []);
   for (const bad of [undefined, null, "1", -1, 3, 1.5, NaN]) assert.equal(particleSetting(bad), 0);
 });
