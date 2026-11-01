@@ -144,4 +144,3 @@ from `javap` only.
   the original `setBlock` calls and this build's `world.set` are not modelled.
 - The cactus inventory icon is a plain isometric cube, not the inset item render.
 - No desert biome, so no natural cactus. Swamp `reedsPerChunk` is unused.
-- XP orbs are not destroyed by cactus.

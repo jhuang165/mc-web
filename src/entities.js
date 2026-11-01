@@ -200,6 +200,23 @@ function collisionBoxes(world, b) {
         }
   return out;
 }
+// Entity.func_145771_j [sa.j(DDD)Z], used by items and XP orbs (the player overrides it,
+// pushOutOfBlocks): when the box overlaps a block collision box or the cell of (cx, cy, cz) is a
+// normal cube, push towards the nearest side whose neighbour is not a normal cube, never down and
+// up by default, at rand.nextFloat() * 0.2F + 0.1F. Returns [axis (0 x, 1 y, 2 z), motion] or null.
+export function entityPushOut(world, cx, cy, cz, box, random) {
+  const x = Math.floor(cx), y = Math.floor(cy), z = Math.floor(cz);
+  if (!collisionBoxes(world, box).length && !normalCube(world.get(x, y, z))) return null;
+  const fx = cx - x, fy = cy - y, fz = cz - z, open = (dx, dy, dz) => !normalCube(world.get(x + dx, y + dy, z + dz));
+  let side = 3, best = 9999;
+  if (open(-1, 0, 0) && fx < best) (best = fx), (side = 0);
+  if (open(1, 0, 0) && 1 - fx < best) (best = 1 - fx), (side = 1);
+  if (open(0, 1, 0) && 1 - fy < best) (best = 1 - fy), (side = 3);
+  if (open(0, 0, -1) && fz < best) (best = fz), (side = 4);
+  if (open(0, 0, 1) && 1 - fz < best) (best = 1 - fz), (side = 5);
+  const speed = f(f(f(random()) * f(0.2)) + f(0.1));
+  return side === 0 ? [0, -speed] : side === 1 ? [0, speed] : side === 3 ? [1, speed] : side === 4 ? [2, -speed] : [2, speed];
+}
 // AxisAlignedBB.calculateXOffset/YOffset/ZOffset (azt.a/b/c): how far `bb` may still move along one axis.
 const offsetX = (o, bb, d) => {
   if (bb[4] > o[1] && bb[1] < o[4] && bb[5] > o[2] && bb[2] < o[5]) {

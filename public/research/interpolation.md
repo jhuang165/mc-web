@@ -21,7 +21,7 @@ Decoded with javap from the 1.7.10 JAR (obfuscated names in brackets). The game 
 
 ## RenderXPOrb [bnp.a(sq, DDDFF)]
 
-Frame `getTextureByXP` [sq.f] (thresholds 3, 7, 17, 37, 73, 149, 307, 617, 1237, 2477; 16x16 cells of a 64x64 sheet), tint `r = (sin(t) + 1) * 0.5 * 255`, `g = 255`, `b = (sin(t + 4.1887903) + 1) * 0.1 * 255` with `t = (xpColor + partial) / 2` and `MathHelper.sin` (the 65536-entry table), channels truncated. The quad is 0.3 wide and spans y -0.25 to 0.75, so its centre sits 0.075 above the orb position.
+Frame `getTextureByXP` [sq.f] (thresholds 3, 7, 17, 37, 73, 149, 307, 617, 1237, 2477; 16x16 cells of a 64x64 sheet), tint `r = (sin(t) + 1) * 0.5 * 255`, `g = 255`, `b = (sin(t + 4.1887903) + 1) * 0.1 * 255` with `t = (xpColor + partial) / 2` and `MathHelper.sin` (the 65536-entry table), channels truncated. The quad is 0.3 wide and spans y -0.25 to 0.75, so its centre sits 0.075 above the orb position (posY, 0.25 above the box bottom; before 0.21.4 the quad was drawn from the box bottom).
 
 ## Gaps
 

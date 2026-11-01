@@ -3,13 +3,14 @@
 // collision, func_145771_j push-out, merging with neighbours within 0.5
 // blocks, a 6,000-tick lifetime and EntityPlayer's pickup box. `y` is the
 // bottom of the box; EntityItem's posY sits half the height (0.125) above it.
-import { collisionBounds, normalCube, slipperiness } from "./world.js";
+import { collisionBounds, slipperiness } from "./world.js";
 import { copyStack } from "./inventory.js";
 import { waterAcceleration, inLava } from "./fluids.js";
 import { LAVA } from "./world.js";
 
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
+import { entityPushOut } from "./entities.js";
 
 const W = 0.125, H = 0.25, LIFETIME = 6000;
 const f = Math.fround;
@@ -110,26 +111,11 @@ export class ItemEntities {
           }
     return out;
   }
-  // Entity.func_145771_j: inside an occupied cell, push towards the nearest
-  // side whose neighbour is not a normal cube (never down; up by default).
+  // Entity.func_145771_j at the item's centre (entities.js entityPushOut).
   pushOut(world, e) {
-    const cx = e.x, cy = e.y + W, cz = e.z,
-      x = Math.floor(cx), y = Math.floor(cy), z = Math.floor(cz),
-      [a, b, c, d, g, h] = this.box(e);
-    if (!this.boxes(world, a, b, c, d, g, h).length && !normalCube(world.get(x, y, z))) return false;
-    const fx = cx - x, fy = cy - y, fz = cz - z, open = (dx, dy, dz) => !normalCube(world.get(x + dx, y + dy, z + dz));
-    let side = 3, best = 9999;
-    if (open(-1, 0, 0) && fx < best) (best = fx), (side = 0);
-    if (open(1, 0, 0) && 1 - fx < best) (best = 1 - fx), (side = 1);
-    if (open(0, 1, 0) && 1 - fy < best) (best = 1 - fy), (side = 3);
-    if (open(0, 0, -1) && fz < best) (best = fz), (side = 4);
-    if (open(0, 0, 1) && 1 - fz < best) (best = 1 - fz), (side = 5);
-    const speed = f(f(this.random() * 0.2) + 0.1);
-    if (side === 0) e.mx = -speed;
-    if (side === 1) e.mx = speed;
-    if (side === 3) e.my = speed;
-    if (side === 4) e.mz = -speed;
-    if (side === 5) e.mz = speed;
+    const p = entityPushOut(world, e.x, e.y + W, e.z, this.box(e), this.random);
+    if (!p) return false;
+    e[["mx", "my", "mz"][p[0]]] = p[1];
     return true;
   }
   // Entity.moveEntity without stepping: y, then x, then z against block boxes. The tail

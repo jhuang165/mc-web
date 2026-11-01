@@ -22,7 +22,7 @@ Menus and container art now follow the original style. Inventory remains aggrega
 
 Orbs spawn from harvestable coal/diamond ore, retrieved furnace results, player melee kills of adult creatures, and cow breeding. They attract within eight blocks, can be collected, expire after 6,000 ticks, and save/reload with their values. The HUD shows native XP bar sprites and green levels; pickup/level-up sounds use two additional original clips (135 shipped effects total). Death resets levels/progress and drops `min(level*7,100)` points; the score shows accumulated XP before respawn. Respawn clears the score as well.
 
-Orb movement/rendering/pickup cadence and precise kill eligibility are simplified. XP cannot yet be spent on enchanting or anvils; neither system is implemented. Creative mode hides the XP HUD and does not earn rewards.
+Orb movement and pickup cadence follow `EntityXPOrb` since 0.21.4 ([XP orbs](xp-orbs.md)); precise kill eligibility is simplified. XP cannot yet be spent on enchanting or anvils; neither system is implemented. Creative mode hides the XP HUD and does not earn rewards.
 
 ## Cow breeding
 

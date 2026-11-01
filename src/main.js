@@ -142,7 +142,7 @@ let screen = "home",
   lockFallback = false,
   saved = true;
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
-let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer;
+let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer,playerTicks=0;
 let weather = new Weather(), trees, plants, falling;
 // EntityTNTPrimed entities (explosion.js primeTnt), and the World.rand that Explosion draws
 // its ray lengths, drops, chained fuses and sound pitch from.
@@ -659,7 +659,9 @@ function launch(record) {
     // EntityLightningBolt's fire, and the ticks of the fires saved with the world.
     weather.fire = fire.strikes;
     fire.wake();
-    experience=new Experience(record.experience);xpOrbs=new ExperienceOrbs(record.xpOrbs);
+    experience=new Experience(record.experience);xpOrbs=new ExperienceOrbs(record.xpOrbs);playerTicks=0;
+    // Entity.isWet for orbs: rain only (EntityXPOrb.handleWaterMovement never sets inWater).
+    xpOrbs.wet = (o) => isWet(weather, world, { x: o.x, y: o.posY, z: o.z, inWater: false }, 0.5);
     mobs = new EntityWorld(world, record.entities);
     mobs.onLand = (entity, distance) => trampleFarmland(entity, distance);
     // World.getLightBrightness for EntityAI.getBlockPathWeight: daylight-reduced sky or block light.
@@ -1061,7 +1063,8 @@ function smelted(stack, amount) {
     n = Math.floor(raw);
     if (n < Math.ceil(raw) && Math.random() < raw - n) n++;
   }
-  xpOrbs.spawn(n, position);
+  // SlotFurnace.onCrafting: at (posX, posY + 0.5, posZ + 0.5) of the player.
+  xpOrbs.spawn(n, { x: position.x, y: position.y + 0.5, z: position.z + 0.5 });
 }
 // TileEntityChest.updateEntity for every chest with a moving or open lid.
 function tickChests() {
@@ -1696,7 +1699,6 @@ function breakBlock(p, creative = false) {
   // BlockIce.harvestBlock (survival only): without silk touch it leaves flowing water over a solid or liquid cell.
   if (block === ICE && !creative && iceLeavesWater(world.get(p[0], p[1] - 1, p[2]))) world.set(...p, WATER, true, 0);
   farming.observe(...p);
-  const at = { x: p[0] + 0.5, y: p[1] + 0.1, z: p[2] + 0.5 };
   // BlockFurnace.breakBlock spills its contents whatever the game mode.
   if (f) {
     items.spill(f.items.filter(Boolean), ...p);
@@ -1710,7 +1712,8 @@ function breakBlock(p, creative = false) {
   }
   if (!creative) {
     items.dropBlock(drops.map((d) => makeStack(d.id, d.count, d.damage ?? (d.id === block && (block === WOOL || block === RED_FLOWER) ? meta : 0))), ...p);
-    if(drop)xpOrbs.spawn(oreExperience(block),at);
+    // Block.dropXpOnBlockBreak: the orbs start at the block's centre.
+    if(drop)xpOrbs.spawn(oreExperience(block),{x:p[0]+.5,y:p[1]+.5,z:p[2]+.5});
     survival.exhaust(0.025);
     survival.wearBlock(block,tool);
   }
@@ -1966,7 +1969,21 @@ function movementTick() {
   scene.setFurnaces(survival.furnaces);
   tickChests();
   mobs.tick(position, survival, heldId());
-  const oldLevel=experience.level;if(survival.health>0&&!survival.creative&&xpOrbs.tick(world,position,experience)){sounds.play(experience.level>oldLevel&&experience.level%5===0?"random.levelup":"random.orb",{volume:.4});renderVitals();}
+  // EntityXPOrb.onUpdate in every game mode (orbs aim at the feet + 1.62 of the server player),
+  // then EntityPlayer.onLivingUpdate's pickup for a living player, as for items.
+  playerTicks++;
+  xpOrbs.tick(world, position);
+  if (survival.health > 0) {
+    const oldLevel = experience.level, n = xpOrbs.collect(position, PHYSICS.width, PHYSICS.height);
+    if (n) {
+      experience.add(n);
+      const volume = experience.levelUp(oldLevel, playerTicks);
+      if (volume) sounds.play("random.levelup", { volume, pitch: 1 });
+      renderVitals();
+      saved = false;
+    }
+  }
+  for (const s of xpOrbs.sounds.splice(0)) sounds.play(s.name, { volume: s.volume, pitch: s.pitch, position: s.name === "random.orb" ? undefined : { x: s.x, y: s.y, z: s.z } });
   handleEntityEvents();
   // Entity.moveEntity: the vertical part of the move counts only with a ladder 0.2 below the feet.
   const onLadderStep = !flying && countsVertical(world, position.x, position.y, position.z);
@@ -2449,7 +2466,7 @@ function shadowCasters(partial) {
     if (e.stack) list.push({ ...SHADOWS.item, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + 0.125, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + 0.125, z: e.z }, height: 0.25 });
   // RenderTNTPrimed: shadowSize 0.5 under the box (posY is its centre).
   for (const e of primed) list.push({ ...SHADOWS.tnt, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + TNT_Y_OFFSET, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + TNT_Y_OFFSET, z: e.z }, height: TNT_SIZE });
-  for (const o of xpOrbs.orbs) list.push({ ...SHADOWS.orb, x: lerp(o.px, o.x), y: lerp(o.py, o.y), z: lerp(o.pz, o.z), pos: o, height: 0.5 });
+  for (const o of xpOrbs.orbs) list.push({ ...SHADOWS.orb, x: lerp(o.px, o.x), y: lerp(o.py, o.y) + 0.25, z: lerp(o.pz, o.z), pos: { x: o.x, y: o.posY, z: o.z }, height: 0.5 });
   // The local player casts a shadow only when it is on screen.
   if (thirdPersonView > 0) list.push(playerShadowCaster(position, previous, partial, SHADOWS.player, motion.prevYSize, motion.ySize));
   for (const e of mobs?.entities ?? []) {
@@ -2484,7 +2501,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, explodeAt, lightTnt };
+    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
   scene.preview(0);
   scene.render(0);
   renderWorlds();
