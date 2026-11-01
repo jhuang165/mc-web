@@ -293,6 +293,14 @@ export function primeTnt(x, posY, z, { fuse = TNT_FUSE, placer = null, random = 
     fuse, placer, onGround: false, collidedH: false, fallDistance: 0,
   };
 }
+// Explosion.doExplosionA applies knockback to other primed TNT even though damage is ignored.
+// posY includes yOffset; EntityTNTPrimed inherits Entity.getEyeHeight = 0.
+export function explodeTnt(world, e, x, y, z, size) {
+  const posY = e.y + TNT_Y_OFFSET, half = TNT_SIZE / 2;
+  const hit = explosionImpact(world, x, y, z, size, e.x, posY, e.z, posY,
+    [e.x - half, e.y, e.z - half, e.x + half, e.y + TNT_SIZE, e.z + half]);
+  if (hit) { e.vx += hit.push[0]; e.vy += hit.push[1]; e.vz += hit.push[2]; }
+}
 // EntityTNTPrimed.onUpdate (xw.h): gravity 0.04, Entity.moveEntity (stepHeight 0),
 // drag 0.98, ground friction 0.7 and a -0.5 bounce; `if (fuse-- <= 0)` explodes at
 // posY (the box centre) with strength 4. Returns the explosion centre or null.

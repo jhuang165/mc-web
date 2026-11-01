@@ -3,6 +3,7 @@
 // collision, func_145771_j push-out, merging with neighbours within 0.5
 // blocks, a 6,000-tick lifetime and EntityPlayer's pickup box. `y` is the
 // bottom of the box; EntityItem's posY sits half the height (0.125) above it.
+import { explosionImpact } from "./explosion.js";
 import { collisionBounds, slipperiness } from "./world.js";
 import { copyStack } from "./inventory.js";
 import { waterAcceleration, inLava } from "./fluids.js";
@@ -187,6 +188,16 @@ export class ItemEntities {
   hurt(e, amount) {
     e.health = Math.trunc(e.health - amount);
     if (e.health <= 0) e.dead = true;
+  }
+  // Explosion.doExplosionA: posY is the box centre, with inherited eye height 0.
+  explode(world, x, y, z, size, exploder = null) {
+    for (const e of this.items) {
+      if (e.dead || e === exploder) continue;
+      const posY = e.y + W, hit = explosionImpact(world, x, y, z, size, e.x, posY, e.z, posY, this.box(e));
+      if (!hit) continue;
+      this.hurt(e, hit.damage);
+      e.mx += hit.push[0]; e.my += hit.push[1]; e.mz += hit.push[2];
+    }
   }
   // The fire and lava part of Entity.onEntityUpdate (sa.C), after the water
   // check: burning deals 1 (onFire) every 20 ticks of the counter; touching lava

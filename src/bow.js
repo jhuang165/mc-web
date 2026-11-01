@@ -5,6 +5,7 @@
 // Obfuscated names used in the comments: zc EntityArrow, abm ItemBow, yl EntitySkeleton,
 // vd EntityAIArrowAttack, sa Entity, sv EntityLivingBase, yz EntityPlayer, ro
 // DamageSource, qh MathHelper (qh.a(D)F is sqrt as a float), blk EntityPlayerSP.
+import { explosionImpact } from "./explosion.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { HEIGHT, blockBounds } from "./world.js";
 import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
@@ -199,6 +200,16 @@ export class Arrows {
   }
   sound(a, name, volume, pitch) {
     this.events.push({ sound: name, volume, pitch, position: { x: a.x, y: a.y, z: a.z } });
+  }
+  // Explosion.doExplosionA pushes arrows even though Entity.attackEntityFrom returns false.
+  // posY is the box bottom; inherited Entity.getEyeHeight is 0. A stuck arrow remains stuck
+  // until its next onUpdate sees that the supporting block changed or disappeared.
+  explode(world, x, y, z, size, exploder = null) {
+    for (const a of this.list) {
+      if (a.dead || a === exploder) continue;
+      const hit = explosionImpact(world, x, y, z, size, a.x, a.y, a.z, a.y, box(a));
+      if (hit) { a.mx += hit.push[0]; a.my += hit.push[1]; a.mz += hit.push[2]; }
+    }
   }
   // EntityArrow.onUpdate for every arrow. `ctx`: targets (arrowTargets), mobs (the
   // EntityWorld, for damage), survival (the player's) and player ({ x, z }, for knockback).

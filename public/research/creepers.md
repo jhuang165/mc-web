@@ -190,10 +190,19 @@ The creeper, explosion and fuse sounds were imported with `tools/import-vanilla-
 - Missing explosion effects:
   - client explosion particles (`hugeexplosion`/`largeexplode`, `explode` and `smoke`);
   - Blast Protection;
-  - Arrows still ignore explosion knockback. XP orb damage and knockback are implemented since 0.21.5, with 72 original-class targets ([XP orbs](xp-orbs.md)).
+  - Other entity families, such as thrown eggs/snowballs and falling blocks, are not yet included in the blast entity pass.
 - Fidelity limits:
   - `HashSet` bins never treeify, which the probe showed does not happen at these sizes;
   - a mob standing exactly at the attacker's x/z gets a random knockback heading;
   - the sound range is the browser's 20-block falloff, not 64 blocks.
 - Creeper spawning uses the simplified night ring, not `SpawnerAnimals`.
 - The placer of a primed TNT is not saved, so TNT reloaded mid-fuse explodes without an attacker.
+
+
+## Non-living entity blasts (0.21.5–0.21.6)
+
+XP orbs gained damage and knockback in 0.21.5 ([XP orbs](xp-orbs.md)). Since 0.21.6, arrows also receive explosion knockback. `Entity.attackEntityFrom` returns false for arrows and primed TNT, but `Explosion.doExplosionA` still adds the push to their motion. An arrow stays embedded during the blast; its next `onUpdate` releases it if its block changed, scaling the blast-altered motion by three `rand.nextFloat() * 0.2F` rolls. Shake, pickup rules and saved motion are preserved.
+
+Dropped items and primed TNT now use their posY directly for the direction vector. They inherit `Entity.getEyeHeight = 0`, as arrows and XP orbs do. Previously their push used a guessed eye height of 85% of the entity height, giving equal-height blasts an upward bias. Item/TNT posY is the box centre; arrow posY is the box bottom. Item damage still starts from 5 health, with integer truncation per hit. Arrows and TNT ignore damage.
+
+`tools/probes/ExplosionEntityProbe.java` calls the unchanged `Explosion.doExplosionA` on the original `EntityArrow`, `EntityItem` (stone stacks) and `EntityTNTPrimed` classes. `node tools/verify-explosion-entities.mjs` regenerates [the reference](explosion-entities-reference.json): 27 scenarios / 216 targets, powers 3/4/6, open air/full stone wall/partial cover, centre/radius/out-of-range targets, and both flying and embedded arrows. `src/explosion-entities.test.js` replays motion, item health, death and embedded state exactly, and checks support loss, save/load motion and excluded/dead entities. Entity blast processing happens before block removal.

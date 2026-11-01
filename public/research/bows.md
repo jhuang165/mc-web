@@ -55,3 +55,8 @@ Pieces marked "bytecode only" were read from the disassembly and are checked in 
 - No skeleton armour or helmet, no wither skeletons, no spider jockeys, no skeleton step sounds, no skeleton-vs-mob targeting.
 - Skeletons spawn on a simplified clock and ring, already holding a bow; the zombie's sunburn remains the earlier approximation while the skeleton's follows `yl.e`.
 - Difficulty is fixed at Normal (2); hit and damage paths, `ItemBow`, `EntitySkeleton` and the AI timers are not run against the original class, only derived from its bytecode.
+
+
+## Explosion knockback (0.21.6)
+
+Arrows now receive `Explosion.doExplosionA` knockback, including while embedded. Damage is ignored by the inherited `Entity.attackEntityFrom`, but the push still applies. Their blast direction uses posY at the box bottom with `Entity.getEyeHeight = 0`. The existing arrow tick releases an embedded arrow only when its block changes; the blast does not reset shake, pickup rules or embedded state. See [non-living entity blast evidence](creepers.md) (72 original arrow targets among 216 non-living targets).

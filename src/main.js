@@ -68,7 +68,7 @@ import { Arrows, arrowTargets, releaseBow, canDraw, bowStage, bowFov, easeFov, B
 import { canSeeSky } from "./weather.js";
 import { Fluids, waterAcceleration, entityWaterBox, inLava, liquidInBox } from "./fluids.js";
 import { Fire } from "./fire.js";
-import { explodeBlocks, explosionImpact, primeTnt, tickTnt, TNT_POWER, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
+import { explodeBlocks, explosionImpact, explodeTnt, primeTnt, tickTnt, TNT_POWER, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { powerCreeper } from "./creeper.js";
 import { JavaRandom } from "./lighting.js";
 import { TntRenderer } from "./tnt-renderer.js";
@@ -1629,20 +1629,10 @@ function explodeAt(x, y, z, size, { exploder = null, attacker = null } = {}) {
     else mobs.hazard(e, hit.damage);
     e.vx += hit.push[0]; e.vy += hit.push[1]; e.vz += hit.push[2];
   }
-  // EntityItem: posY is the box centre (yOffset 0.125), eyes at 0.85 of its 0.25 height; health 5.
-  for (const it of items.items) {
-    const py = it.y + 0.125, hit = explosionImpact(world, x, y, z, size, it.x, py, it.z, py + Math.fround(0.25 * 0.85), items.box(it));
-    if (!hit) continue;
-    items.hurt(it, hit.damage);
-    it.mx += hit.push[0]; it.my += hit.push[1]; it.mz += hit.push[2];
-  }
+  items.explode(world, x, y, z, size, exploder);
   xpOrbs.explode(world, x, y, z, size, exploder);
-  // Other primed TNT: Entity.attackEntityFrom does nothing, the push still lands.
-  for (const e of primed) {
-    if (e === exploder) continue;
-    const py = e.y + TNT_Y_OFFSET, hit = explosionImpact(world, x, y, z, size, e.x, py, e.z, py + Math.fround(TNT_SIZE * 0.85), [e.x - TNT_SIZE / 2, e.y, e.z - TNT_SIZE / 2, e.x + TNT_SIZE / 2, e.y + TNT_SIZE, e.z + TNT_SIZE / 2]);
-    if (hit) { e.vx += hit.push[0]; e.vy += hit.push[1]; e.vz += hit.push[2]; }
-  }
+  arrows.explode(world, x, y, z, size, exploder);
+  for (const e of primed) if (e !== exploder) explodeTnt(world, e, x, y, z, size);
   // The player (EntityPlayerMP: posY at the feet, eyes 1.62 up). Explosion damage is
   // difficulty scaled (Normal: unchanged) and armour applies; Creative players are pushed only.
   if (survival.health > 0) {

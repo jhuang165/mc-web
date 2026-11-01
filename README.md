@@ -19,6 +19,8 @@ Version 0.21.1 moves the player through the original [`Entity.moveEntity`](publi
 
 Version 0.21.2 adds the original `EntityPlayerSP.pushOutOfBlocks`: a player inside a full block (a block placed in their space, falling sand) is pushed out sideways at 0.1 a tick, matching 2,304 original-class cases.
 
+Version 0.21.6 adds arrow explosion knockback and corrects blast push origins for dropped items and primed TNT (216 targets replayed against the original classes). Embedded arrows keep their state until their supporting block changes.
+
 Version 0.21.5 adds explosion damage and knockback for XP orbs, including block shielding, range boundaries and immediate removal on death (72 targets checked against the unchanged original classes).
 
 Version 0.21.4 ports [XP orb physics](public/research/xp-orbs.md): `EntityXPOrb.onUpdate` with the water push, lava fizz, push-out, the id-timed player search, the pull towards the eye of the server player, ground bounce and friction, and pickup one orb every other tick in any game mode. It matches 19 original-class replays tick for tick.
