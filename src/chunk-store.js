@@ -106,7 +106,15 @@ export class Chunk {
     this.biomes = new Int8Array(256).fill(-1);
     this.heightMap = new Int32Array(256);
     this.precipitationHeightMap = new Int32Array(256).fill(-999);
-    this.modified = false;
+    this.modified = false; // isModified
+    // Lifecycle state ChunkProviderServer and PlayerManager use (chunk-provider.js, player-chunks.js).
+    this.isChunkLoaded = false;
+    this.isTerrainPopulated = false;
+    this.isLightPopulated = false;
+    this.isTicked = false; // field_150815_m: set by the first block tick near a player
+    this.hasEntities = false;
+    this.lastSaveTime = 0;
+    this.inhabitedTime = 0;
   }
   // Chunk(World, Block[], byte[], x, z), the generator constructor: index x * k * 16 | z * k | y with
   // k = length / 256; air (id 0) and missing (negative) cells are skipped; meta is written for the rest.
@@ -186,6 +194,54 @@ export class Chunk {
     for (let s = SECTION_COUNT - 1; s >= 0; s--) if (this.sections[s]) return this.sections[s].yBase;
     return 0;
   }
+  // onChunkLoad / onChunkUnload: the chunk's tile entities and entity lists join or leave the world
+  // (world.chunkLoaded / chunkUnloaded hooks; this storage has no entity lists of its own yet).
+  onChunkLoad(world) {
+    this.isChunkLoaded = true;
+    world?.chunkLoaded?.(this);
+  }
+  onChunkUnload(world) {
+    this.isChunkLoaded = false;
+    world?.chunkUnloaded?.(this);
+  }
+  // needsSaving: on a full save, entities and an unsaved tick or any change; otherwise entities
+  // every 600 ticks, or a change.
+  needsSaving(all, totalTime) {
+    if (all) {
+      if ((this.hasEntities && totalTime !== this.lastSaveTime) || this.modified) return true;
+    } else if (this.hasEntities && totalTime >= this.lastSaveTime + 600) return true;
+    return this.modified;
+  }
+  // func_150802_k: the chunk has ticked and is populated and lit, so PlayerInstance sends it.
+  isReadyToSend() {
+    return this.isTicked && this.isTerrainPopulated && this.isLightPopulated;
+  }
+  // populateChunk(p1, p2, x, z): each newly loaded chunk tries to populate itself and the three
+  // chunks to its west/north once the 2 x 2 square each one decorates is loaded. As in the original,
+  // the second check tests (x - 1, z + 1) twice and the third tests (x + 1, z - 1) twice.
+  populateChunk(p1, p2, x, z) {
+    if (!this.isTerrainPopulated && p1.chunkExists(x + 1, z + 1) && p1.chunkExists(x, z + 1) && p1.chunkExists(x + 1, z)) p1.populate(p2, x, z);
+    if (p1.chunkExists(x - 1, z) && !p1.provideChunk(x - 1, z).isTerrainPopulated && p1.chunkExists(x - 1, z + 1) && p1.chunkExists(x, z + 1) && p1.chunkExists(x - 1, z + 1))
+      p1.populate(p2, x - 1, z);
+    if (p1.chunkExists(x, z - 1) && !p1.provideChunk(x, z - 1).isTerrainPopulated && p1.chunkExists(x + 1, z - 1) && p1.chunkExists(x + 1, z - 1) && p1.chunkExists(x + 1, z))
+      p1.populate(p2, x, z - 1);
+    if (p1.chunkExists(x - 1, z - 1) && !p1.provideChunk(x - 1, z - 1).isTerrainPopulated && p1.chunkExists(x, z - 1) && p1.chunkExists(x - 1, z))
+      p1.populate(p2, x - 1, z - 1);
+  }
+}
+
+// EmptyChunk: what provideChunk returns for a chunk it will not load. Reads are air; writes, load,
+// unload and modification do nothing; it never needs saving.
+export class EmptyChunk extends Chunk {
+  getBlock() { return 0; }
+  getMeta() { return 0; }
+  setMeta() { return false; }
+  setBlockState() { return false; }
+  onChunkLoad() {}
+  onChunkUnload() {}
+  needsSaving() { return false; }
+  get modified() { return false; }
+  set modified(v) {}
 }
 
 // ChunkCoordIntPair.chunkXZ2Int as the original signed long (BigInt), and its hashCode.

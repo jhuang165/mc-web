@@ -26,5 +26,55 @@ All of them matched on the first run.
 
 - Light values are stored but not computed in chunks; height maps, precipitation heights and biomes stay at their constructor values.
 - No tile entities, entity lists, neighbour updates, block-added/removed hooks, scheduled or random ticks per section.
-- No loading, unloading or chunk generation, and no Anvil/NBT format.
+- No chunk generation and no Anvil/NBT format. Loading and unloading are below (WORLD-02a).
 - The live `World`, renderer and saves still use the legacy arrays.
+
+## Chunk lifecycle (WORLD-02a)
+
+The first WORLD-02 slice ports when the original server loads, populates, queues, saves and unloads chunks, and which chunks each player keeps. It runs in tests over stub storage and generation only. The live world is not streamed yet.
+
+`tools/probes/ChunkProviderProbe.java` and `tools/verify-chunk-provider.mjs` record the unchanged `ChunkProviderServer`, `PlayerManager`, `PlayerInstance` and `WorldServer.saveAllChunks` in [chunk-provider-reference.json](chunk-provider-reference.json), with class hashes.
+
+- **Stubs.** A stub chunk loader stores TerrainPopulated, LightPopulated, InhabitedTime and hasEntities. A stub generator logs provide, populate and recreateStructures.
+- **Allocation.** WorldServer, PlayerManager and the players are allocated without constructors. Only the fields these methods read are set. Each player gets its own entity id, because `Entity.equals` compares ids.
+- **Ticks** follow `WorldServer.tick`: unload queued chunks, then add 1 to totalWorldTime, then update the player instances.
+- **`prepare`** is `MinecraftServer.initialWorldChunkLoad`'s 25 × 25 loop.
+
+`src/chunk-provider.test.js` replays every step: each event, the loaded-chunk list with its flags, save time and inhabited time, the unload queue order, the watcher list and every player's send queue. All of them match.
+
+| Scenario | What it covers |
+| --- | --- |
+| spawn | 625 spawn chunks, then a player walks 800 blocks away. Chunks within 128 blocks of spawn are never queued; the rest drain 100 per tick. Incremental (24-chunk) and full saves; walking back reloads saved chunks |
+| walk | 50 moves of 3–5 blocks: the 8-block threshold, square shifts by one and two chunks, the spiral send queue, and a diagonal jump |
+| teleport | 441 chunks queued at once, drained in queue order. Teleporting back rescues the chunks still queued and reloads the rest without populating them again |
+| noRespawn | A dimension players cannot respawn in: chunks queue regardless of spawn, and an empty world queues every chunk each tick |
+| view | Two overlapping players; view distance 10 → 4 → 15 → 3 → 25 (clamped to 20) → 1 (clamped to 3). Shrinking creates and loads a watcher for every chunk outside the new square before removing the player from it |
+| save | Modified chunks; hasEntities chunks every 600 ticks; the full save; unwatched chunks queued by a save; level saving blocking saves and unloads |
+| inhabit | provideChunk with and without load-on-request (a queued chunk stays queued), and inhabited time from the 8000-tick sweep and from the last player leaving |
+
+### What exists
+
+- **`src/chunk-provider.js`**
+  - `ChunkProviderServer` extends `ChunkStore`. It has `loadChunk`, `provideChunk` (with `EmptyChunk`), `populate`, `unloadChunksIfNotNearSpawn`, `unloadAllChunks`, `unloadQueuedChunks` (100 per tick, each saved unconditionally) and `saveChunks` (24 per incremental save).
+  - `prepareSpawnArea`, `saveAllChunks` and `tickChunks` are the WorldServer steps.
+- **`ChunkKeySet`** reproduces the unload queue's iteration order. The queue is a `Collections.newSetFromMap(new ConcurrentHashMap())` of chunk keys, so it drains in ConcurrentHashMap order. That order covers:
+  - 16 bins at the start, doubled at three-quarters load;
+  - resize splits;
+  - red-black tree bins and their conversion back to lists;
+  - presizing a small table.
+
+  The port follows the JDK source. Seeded stress runs check it: ten runs of 23,000 operations in total, with 92 order checkpoints, `set` records in the reference. The same runs on the launcher's bundled Java 8u74 classes (the runtime it uses for 1.7.10) give the same order at all 92 checkpoints. Java 6/7's segmented map would drain in a different order.
+- **`src/player-chunks.js`**
+  - `PlayerManager`: watcher squares, the spiral `filterChunkLoadQueue`, the 8-block move rule, `setViewDistance` (3–20) and `isPlayerWatchingChunk`.
+  - `PlayerInstance`: inhabited time.
+- **`Chunk` state in `chunk-store.js`**
+  - Lifecycle fields: populated, light populated, ticked, hasEntities, lastSaveTime, inhabitedTime and loaded.
+  - Methods: `populateChunk`, with the original's four neighbour checks, two of which test one neighbour twice; `needsSaving`; and `onChunkLoad`/`onChunkUnload` hooks.
+
+### Not done (later WORLD-02 slices)
+
+- **Not connected.** The live `World`, generation, renderer, lighting and saves still use the 128 × 128 × 64 arrays.
+- **Lighting.** The probe world has no sky, so `func_150809_p` skips its lighting. Sky-light population is a `lightPopulate` hook.
+- **Entities, tile entities and pending ticks** don't move with chunks yet. The load and unload hooks are where they will attach.
+- **No networking parts.** Block-change batching (`flagChunkForUpdate`/`sendChunkUpdate`) and chunk packets are not ported; the send queue is kept as an order only. `isTicked` is never set, because block ticking does not run here.
+- **Storage.** No Anvil/region format and no asynchronous chunk I/O.
