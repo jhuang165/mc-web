@@ -6,7 +6,7 @@
 // records they replay are in public/research/particles.md and
 // particle-reference.json. Pure logic; particle-renderer.js draws `list`.
 import { mhSin, mhCos } from "./lighting.js";
-import { blockBounds, FIRE, LAVA, WATER, WEB } from "./world.js";
+import { collisionBounds, FIRE, LAVA, WATER, WEB } from "./world.js";
 import { blockTile, TILES } from "./block-textures.js";
 import { rayBounds } from "./projectiles.js";
 import { touchesWeb } from "./webs.js";
@@ -19,7 +19,6 @@ const SIZE = f(0.2), Y_OFFSET = f(SIZE / 2);
 const F01 = f(0.1), F04 = f(0.4), F015 = f(0.15), F09 = f(0.9), F06 = f(0.6), F02 = f(0.2);
 // The constants the bytecode widens from float (0.1F, 0.2F, 0.4F, 0.98F, 0.7F).
 const D01 = 0.10000000149011612, D02 = 0.20000000298023224, D04 = 0.4000000059604645, DRAG = 0.9800000190734863, GROUND = 0.699999988079071;
-const FULL = [0, 0, 0, 1, 1, 1];
 
 // This build's block ids against 1.7.10's, with the metadata the original block
 // would carry (wheat stages are separate ids here; furnaces 61/62 by `lit`).
@@ -67,7 +66,7 @@ function collisionBoxes(world, x0, y0, z0, x1, y1, z1) {
     for (let bz = Math.floor(z0); bz < Math.floor(z1 + 1); bz++)
       for (let by = Math.floor(y0) - 1; by < Math.floor(y1 + 1); by++) {
         if (!world.solid(bx, by, bz)) continue;
-        const id = world.get(bx, by, bz), [a, b, c, d, e, g] = id === 29 || id === 30 ? FULL : blockBounds(world, bx, by, bz);
+        const [a, b, c, d, e, g] = collisionBounds(world, bx, by, bz);
         if (bx + d > x0 && bx + a < x1 && by + e > y0 && by + b < y1 && bz + g > z0 && bz + c < z1) out.push([bx + a, by + b, bz + c, bx + d, by + e, bz + g]);
       }
   return out;
@@ -78,7 +77,7 @@ function collisionBoxes(world, x0, y0, z0, x1, y1, z1) {
 // boxes (AxisAlignedBB.calculate*Offset), posX/posZ from the box centre and posY
 // from its bottom + yOffset, onGround, motion zeroed on blocked axes, then
 // doBlockCollisions (BlockWeb.onEntityCollidedWithBlock sets isInWeb).
-function moveEntity(world, p, dx, dy, dz) {
+export function moveParticleEntity(world, p, dx, dy, dz) {
   if (p.inWeb) {
     p.inWeb = false;
     dx *= 0.25;
@@ -288,7 +287,7 @@ export class ParticleSystem {
       p.pz = p.z;
       if (p.age++ >= p.max) p.dead = true;
       p.my -= 0.04 * p.gravity;
-      moveEntity(world, p, p.mx, p.my, p.mz);
+      moveParticleEntity(world, p, p.mx, p.my, p.mz);
       p.mx *= DRAG;
       p.my *= DRAG;
       p.mz *= DRAG;

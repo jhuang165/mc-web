@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { WorldEffects } from "./effects.js";
+import { ExplosionParticles } from "./explosion-particles.js";
+import { ExplosionParticleRenderer } from "./explosion-particle-renderer.js";
 import { ParticleSystem } from "./particles.js";
 import { ParticleRenderer } from "./particle-renderer.js";
 import { SIZE, HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
@@ -101,6 +103,8 @@ export class VoxelScene {
     // Block particles (particles.js); main.js ticks them and sets particleView
     // to the player's yaw, pitch and front-view flag each frame.
     this.particles = new ParticleSystem();
+    this.explosionParticles = new ExplosionParticles();
+    this.explosionParticleRenderer = new ExplosionParticleRenderer(this.scene, this);
     this.particleRenderer = new ParticleRenderer(this.scene, this);
     this.particleView = null;
     this.material = worldMaterial(this.lighting, { map: this.textures.texture });
@@ -159,6 +163,8 @@ export class VoxelScene {
   setWorld(world) {
     this.effects.clear();
     this.particles.clear();
+    this.explosionParticles.clear();
+    this.explosionParticleRenderer.clear();
     this.drops.clear();
     this.dropList = [];
     this.projectiles.clear();
@@ -486,6 +492,7 @@ export class VoxelScene {
     this.projectiles.update(this.projectileList.balls, this.projectileList.particles, c, this.dropPartial);
     this.arrows.update(this.arrowList, this.dropPartial);
     this.particleRenderer.update(this.particles.list, this.dropPartial, this.particleView ?? { yaw: c.rotation.y, pitch: c.rotation.x });
+    this.explosionParticleRenderer.update(this.explosionParticles.list, this.dropPartial, this.particleView ?? { yaw: c.rotation.y, pitch: c.rotation.x });
     this.sky.render(this.renderer, c, new THREE.Color(...fog));
     this.renderer.render(this.scene, c);
     this.worldTriangles = this.renderer.info.render.triangles;

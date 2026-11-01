@@ -21,11 +21,13 @@ await writeFile(path.join(probe,'GameProfile.java'),'package com.mojang.authlib;
 const cp=[probe,classes,...libs].join(path.delimiter);
 await exec('javac',['-nowarn','-cp',cp,'-d',probe,path.join(probe,'GameProfile.java'),path.join(root,'probes/MobMoveProbe.java'),path.join(root,'probes/PlantProbe.java'),path.join(root,'probes/PlayerStepProbe.java'),path.join(root,'probes/XpOrbProbe.java'),path.join(root,'probes/ExplosionEntityProbe.java')]);
 const {stdout}=await exec('java',['-cp',cp,'ExplosionEntityProbe'],{maxBuffer:1<<26});
-const cases=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse);
-assert.equal(cases.length,27,'three entity types, three blast powers, three shielding fixtures');
+const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse);
+const cases=records.filter(c=>c.kind!=='ignition'), ignition=records.filter(c=>c.kind==='ignition');
+assert.equal(ignition.length,48);
+assert.equal(cases.length,54,'six entity types, three blast powers, three shielding fixtures');
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
-const names={sa:'Entity',zc:'EntityArrow',xk:'EntityItem',xw:'EntityTNTPrimed',agw:'Explosion',ahb:'World'};
+const names={sa:'Entity',zc:'EntityArrow',xk:'EntityItem',xw:'EntityTNTPrimed',zj:'EntitySnowball',zl:'EntityEgg',xj:'EntityFallingBlock',aob:'BlockTNT',agw:'Explosion',ahb:'World'};
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}]))),
- method:'Unchanged Explosion.doExplosionA against original EntityArrow, EntityItem (stone stack) and EntityTNTPrimed, on XpOrbProbe.XW map-backed World. Entity positions and motion are set after construction; only World block lookup and entity query are doubled. Powers 3/4/6, open/full/partial stone cover; records posY, motion, item health, death and arrow inGround. All three entity types inherit Entity.getEyeHeight=0. No game classes patched.',cases};
+ method:'Unchanged Explosion.doExplosionA against original EntityArrow, EntityItem (stone stack), EntityTNTPrimed, EntitySnowball, EntityEgg and EntityFallingBlock (sand), on XpOrbProbe.XW map-backed World. Entity positions and motion are set after construction; only World block lookup and entity query are doubled. Powers 3/4/6, open/full/partial stone cover; records posY, motion, item health, death and arrow inGround. All six entity types inherit Entity.getEyeHeight=0. Ignition records run unchanged EntityArrow.onUpdate against TNT with fire counters -1/0/1/2/20/300, water/dry, shooter/null and direct/grazing box contact, recording primed TNT fuse, placer and sound. No game classes patched.',cases,ignition};
 await writeFile(path.join(root,'../public/research/explosion-entities-reference.json'),JSON.stringify(reference)+'\n');
 console.log(`${cases.length} explosion entity cases`);

@@ -60,3 +60,8 @@ Pieces marked "bytecode only" were read from the disassembly and are checked in 
 ## Explosion knockback (0.21.6)
 
 Arrows now receive `Explosion.doExplosionA` knockback, including while embedded. Damage is ignored by the inherited `Entity.attackEntityFrom`, but the push still applies. Their blast direction uses posY at the box bottom with `Entity.getEyeHeight = 0`. The existing arrow tick releases an embedded arrow only when its block changes; the blast does not reset shake, pickup rules or embedded state. See [non-living entity blast evidence](creepers.md) (72 original arrow targets among 216 non-living targets).
+
+
+## Burning arrows and TNT (0.22)
+
+A burning arrow now primes TNT through its original block callback, both on a direct ray hit and when the final arrow box grazes the block. The direct-hit callback runs before the arrow's end-of-flight wet check; the final-box callback follows it. Water handling and the fire countdown run before either. The TNT keeps the arrow's shooter as placer, uses the ordinary 80-tick fuse and priming sound, and removes the block. The arrow is not consumed. `ExplosionEntityProbe` includes 48 unchanged `EntityArrow.onUpdate` cases covering direct/grazing contact, dry/water, six fire-counter boundaries and shooter/null; browser rendering was checked separately for TNT smoke and blast effects.

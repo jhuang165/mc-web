@@ -123,17 +123,18 @@ All random draws come from one `world.rand` stream. `main.js` applies the edits 
 
 **Crafting.** Five gunpowder and four sand in an X craft one TNT. It appears in the Redstone tab, and in Search between bricks and the bookshelf, in registry order. Gunpowder follows the feather in Materials and Search.
 
-**Lighting it.** TNT is primed in three ways:
+**Lighting it.** TNT is primed in four ways:
 
 - **Flint and steel:** `onBlockActivated`, without sneaking with an item. It primes at the block centre with the player as placer, plays `game.tnt.primed`, sets the cell to air and wears the item.
 - **Fire:** burning TNT in `BlockFire.tryCatchFire` primes with no placer.
 - **Explosions:** with a chained fuse.
+- **Burning arrows** (since 0.22): `BlockTNT.onEntityCollidedWithBlock` primes from a burning arrow on either the direct ray impact or its final contracted collision box (including grazing contact). The arrow stays alive, and its living shooter becomes the placer. Water extinguishes the arrow before the impact; a fire counter of 1 expires before the impact.
 
 **EntityTNTPrimed:**
 
 - Box 0.98, yOffset 0.49, and a Math.random 0.02 heading with 0.2 up.
 - Gravity 0.04, `moveEntity` with no step height, drag 0.98, and ground friction 0.7 with a −0.5 bounce.
-- `fuse-- <= 0` explodes with strength 4 at posY.
+- `fuse-- <= 0` explodes with strength 4 at posY. Until then, one `smoke` particle per tick at posY + 0.5 (since 0.22).
 - It is saved with its position, motion and fuse. The placer is not saved.
 
 **Rendering.** `RenderTNTPrimed` swells the block by up to 30% over the last 10 ticks. On every other 5-tick period it draws an additive white copy at `(1 − (fuse − partial + 1) / 100) × 0.8`. The shadow is size 0.5.
@@ -184,13 +185,9 @@ The creeper, explosion and fuse sounds were imported with `tools/import-vanilla-
 
 - The ocelot `EntityAIAvoidEntity` task is missing (there are no ocelots).
 - Missing TNT triggers and drops:
-  - burning arrows do not light TNT;
   - redstone does not prime TNT;
   - music-disc drops are not implemented.
-- Missing explosion effects:
-  - client explosion particles (`hugeexplosion`/`largeexplode`, `explode` and `smoke`);
-  - Blast Protection;
-  - Other entity families, such as thrown eggs/snowballs and falling blocks, are not yet included in the blast entity pass.
+- Blast Protection is not implemented.
 - Fidelity limits:
   - `HashSet` bins never treeify, which the probe showed does not happen at these sizes;
   - a mob standing exactly at the attacker's x/z gets a random knockback heading;
@@ -199,10 +196,19 @@ The creeper, explosion and fuse sounds were imported with `tools/import-vanilla-
 - The placer of a primed TNT is not saved, so TNT reloaded mid-fuse explodes without an attacker.
 
 
-## Non-living entity blasts (0.21.5–0.21.6)
+## Non-living entity blasts (0.21.5–0.22)
 
 XP orbs gained damage and knockback in 0.21.5 ([XP orbs](xp-orbs.md)). Since 0.21.6, arrows also receive explosion knockback. `Entity.attackEntityFrom` returns false for arrows and primed TNT, but `Explosion.doExplosionA` still adds the push to their motion. An arrow stays embedded during the blast; its next `onUpdate` releases it if its block changed, scaling the blast-altered motion by three `rand.nextFloat() * 0.2F` rolls. Shake, pickup rules and saved motion are preserved.
 
 Dropped items and primed TNT now use their posY directly for the direction vector. They inherit `Entity.getEyeHeight = 0`, as arrows and XP orbs do. Previously their push used a guessed eye height of 85% of the entity height, giving equal-height blasts an upward bias. Item/TNT posY is the box centre; arrow posY is the box bottom. Item damage still starts from 5 health, with integer truncation per hit. Arrows and TNT ignore damage.
 
-`tools/probes/ExplosionEntityProbe.java` calls the unchanged `Explosion.doExplosionA` on the original `EntityArrow`, `EntityItem` (stone stacks) and `EntityTNTPrimed` classes. `node tools/verify-explosion-entities.mjs` regenerates [the reference](explosion-entities-reference.json): 27 scenarios / 216 targets, powers 3/4/6, open air/full stone wall/partial cover, centre/radius/out-of-range targets, and both flying and embedded arrows. `src/explosion-entities.test.js` replays motion, item health, death and embedded state exactly, and checks support loss, save/load motion and excluded/dead entities. Entity blast processing happens before block removal.
+`tools/probes/ExplosionEntityProbe.java` calls the unchanged `Explosion.doExplosionA` on the original `EntityArrow`, `EntityItem` (stone stacks) `EntityTNTPrimed`, `EntitySnowball`, `EntityEgg` and `EntityFallingBlock` classes. `node tools/verify-explosion-entities.mjs` regenerates [the reference](explosion-entities-reference.json): 54 scenarios / 432 targets, powers 3/4/6, open air/full stone wall/partial cover, centre/radius/out-of-range targets, and both flying and embedded arrows. `src/explosion-entities.test.js` replays motion, item health, death and embedded state exactly, and checks support loss, save/load motion and excluded/dead entities. Entity blast processing happens before block removal.
+
+
+## Explosion effects and remaining entity families (0.22)
+
+`Projectiles.explode` and `FallingBlocks.explode` apply the same damage-ignoring knockback to thrown snowballs/eggs and falling sand/gravel. Their changed motion persists through save/load; an explosion does not hatch an egg or break a falling block. The non-living reference now covers all six families, with 48 additional `EntityArrow.onUpdate` cases for dry/water, fire counters −1/0/1/2/20/300, shooter/null and direct/grazing contact with TNT.
+
+`ExplosionParticles` and `ExplosionParticleRenderer` add client `Explosion.doExplosionB(true)` effects using a separate client random stream: a central `hugeexplosion` for smoking blasts of power >= 2, otherwise `largeexplode`, then `explode` and `smoke` for each affected position (including air). Huge effects emit six large puffs per tick for eight ticks. Puffs use the original `entity/explosion.png` 4×4 sheet; small particles use `particle/particles.png`. The original constructors, lifetime, movement, collision, colour and random draws are replayed; the custom render frames/UVs follow the bytecode. See [particle evidence](explosion-particles-reference.json).
+
+The visual pass uses pooled buffers, 4000-per-texture-layer caps, alpha blending, depth testing and the lightmap. Small particles and fuse smoke respect the 16-block view range; central large effects bypass it as in `RenderGlobal`. Effects are transient and are cleared when switching worlds. The original OpenGL render method is not executed by the probe. Browser checks in the Creative scratch world “Explosion Parity Check” confirmed fuse smoke, puff/smoke effects, craters and drops, with no console warnings/errors.

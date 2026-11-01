@@ -1,6 +1,7 @@
 // Falling sand and gravel, Minecraft Java 1.7.10: BlockFalling (akx), BlockSand (anh, original
 // id 12, here 6), BlockGravel (ali, original 13, here 25) and EntityFallingBlock (xj). Checked
 // against the unchanged classes by tools/verify-plants.mjs (public/research/plant-reference.json).
+import { explosionImpact } from "./explosion.js";
 import { WATER, LAVA, FIRE, SAND, GRAVEL } from "./world.js";
 import { moveEntity } from "./entities.js";
 import { replaceable } from "./plants.js";
@@ -84,6 +85,17 @@ export class FallingBlocks {
     }
     for (const e of this.entities) if (!e.dead) this.tickEntity(e);
     this.entities = this.entities.filter((e) => !e.dead);
+  }
+  // EntityFallingBlock ignores blast damage but receives knockback. Its posY is the box centre.
+  explode(x, y, z, size, exploder = null) {
+    const half = f(FALLING_SIZE) / 2;
+    for (const e of this.entities) {
+      if (e.dead || e === exploder) continue;
+      const posY = e.y + FALLING_Y_OFFSET;
+      const hit = explosionImpact(this.world, x, y, z, size, e.x, posY, e.z, posY,
+        [e.x - half, e.y, e.z - half, e.x + half, e.y + f(FALLING_SIZE), e.z + half]);
+      if (hit) { e.vx += hit.push[0]; e.vy += hit.push[1]; e.vz += hit.push[2]; }
+    }
   }
   // EntityFallingBlock.onUpdate (xj.h).
   tickEntity(e) {

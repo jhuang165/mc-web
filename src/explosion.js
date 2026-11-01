@@ -304,7 +304,7 @@ export function explodeTnt(world, e, x, y, z, size) {
 // EntityTNTPrimed.onUpdate (xw.h): gravity 0.04, Entity.moveEntity (stepHeight 0),
 // drag 0.98, ground friction 0.7 and a -0.5 bounce; `if (fuse-- <= 0)` explodes at
 // posY (the box centre) with strength 4. Returns the explosion centre or null.
-export function tickTnt(world, e) {
+export function tickTnt(world, e, smoke = null) {
   e.px = e.x; e.py = e.y; e.pz = e.z;
   e.vy -= 0.03999999910593033;
   moveEntity(world, e, TNT_SIZE, TNT_SIZE, e.vx, e.vy, e.vz, 0);
@@ -317,6 +317,7 @@ export function tickTnt(world, e) {
     e.vy *= -0.5;
   }
   if (e.fuse-- <= 0) return { x: e.x, y: e.y + TNT_Y_OFFSET, z: e.z };
+  smoke?.(e.x, e.y + TNT_Y_OFFSET + 0.5, e.z);
   return null;
 }
 // RenderTNTPrimed (boy.a(xw, ...)): in the last 10 ticks the block swells by up to 30%

@@ -7,7 +7,7 @@
 // DamageSource, qh MathHelper (qh.a(D)F is sqrt as a float), blk EntityPlayerSP.
 import { explosionImpact } from "./explosion.js";
 import { mhSin, mhCos } from "./lighting.js";
-import { HEIGHT, blockBounds } from "./world.js";
+import { HEIGHT, TNT, blockBounds } from "./world.js";
 import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
 import { GaussianRandom, intercept, rayTraceBlocks } from "./projectiles.js";
 
@@ -332,6 +332,9 @@ export class Arrows {
         a.inGround = true;
         a.shake = 7;
         a.crit = false;
+        // BlockTNT.onEntityCollidedWithBlock is called on the block hit, before the arrow
+        // advances to the backed-off hit point. Only a burning arrow primes it; keep shooter.
+        if (a.inTile === TNT && a.fire > 0) ctx.igniteTnt?.(bx, by, bz, a.shooter);
       }
     }
     a.x += a.mx;
@@ -355,6 +358,15 @@ export class Arrows {
     a.my *= drag;
     a.mz *= drag;
     a.my -= f(0.05);
+    // Entity.doBlockCollisions at the final box also calls BlockTNT for a grazing arrow
+    // whose centre ray missed the block. Rain/water extinguishing above precedes this pass.
+    if (a.fire > 0 && ctx.igniteTnt) {
+      const b=box(a);
+      for(let x=Math.floor(b[0]+0.001);x<=Math.floor(b[3]-0.001);x++)
+        for(let y=Math.floor(b[1]+0.001);y<=Math.floor(b[4]-0.001);y++)
+          for(let z=Math.floor(b[2]+0.001);z<=Math.floor(b[5]-0.001);z++)
+            if(world.get(x,y,z)===TNT)ctx.igniteTnt(x,y,z,a.shooter);
+    }
   }
   // Entity.addVelocity on a mob.
   push(mobs, e, x, y, z) {

@@ -102,8 +102,23 @@ The test also checks:
 - **Spawning between ticks.** A particle spawned between ticks, such as a Creative break from a click, is drawn once at its spawn point before its first update. In the original, `clickMouse` runs inside the tick, before `updateEffects`.
 - **Landing dust timing.** In the original, landing dust is a server event that reaches the client in the next packet batch. Here it spawns in the same tick.
 - **Particle setting.** The setting is fixed at "All", so there is no option UI for it.
-- **Other particle types.** Only block particles are ported. Smoke, flame, splash, bubbles, crit, explosion, portal, item-break and the others keep their existing or missing implementations.
-- **Collision.** There are no entity bounding boxes (boats and minecarts don't exist here). Particles collide with this build's block boxes: farmland's collision is a full cube, matching `BlockFarmland`, and the other blocks use `blockBounds`.
-- **Farmland for the player.** The player's own collision still uses the 15/16 farmland height. In 1.7.10 the farmland collision box is a full cube, and only its render and selection bounds are 15/16. Particles use the original rule; player movement was not changed.
+- **Other particle types.** Block particles and the explosion/smoke families are ported (see below). Flame, splash, bubbles, crit, portal, item-break and the others keep their existing or missing implementations.
+- **Collision.** There are no entity bounding boxes (boats and minecarts don't exist here). Particles use the shared `collisionBounds`, including full-cube farmland, inset cactus and ladder plates.
+- **Farmland for the player.** Since 0.21.1, the player and particles both use the original full-cube farmland collision; its render/selection height remains 15/16.
 - **Hit bounds.** Hit particles use this build's selection bounds (`rayBounds`), which the original's block bound fields equal after the ray trace.
 - **Precision.** Floating-point arithmetic follows the bytecode's float/double widening. The billboard basis uses `MathHelper`'s sin table.
+
+
+## Explosion and smoke particles (0.22)
+
+`src/explosion-particles.js` ports `EntityExplodeFX` (bka), `EntitySmokeFX` (bkv), `EntityLargeExplodeFX` (bki) and `EntityHugeExplodeFX` (bkj). It shares the block particle collision sweep through `moveParticleEntity` and `collisionBounds`.
+
+- Small explosion particles use the original three 0.05F motion jitters, random grayscale/scale/lifetime, 0.004 rise, 0.9F drag, animated eight-frame sprite and ground friction.
+- Smoke uses the base EntityFX motion ×0.1 plus the requested motion, random dark grayscale and lifetime, 0.004 rise, 0.96F drag, the blocked-rise horizontal boost, ground friction and initial scale growth.
+- Large puffs stay still for 6–9 ticks, use 15 frame transitions over the original 4×4 explosion sheet, grayscale and scale from the original constructor, and the render method's lightmap brightness 240.
+- Huge emitters spawn six large puffs per tick for eight ticks, with positions `(r.nextDouble() - r.nextDouble()) * 4` and shrinking puff size. Update ordering follows EffectRenderer's sprite/emitter/custom layers.
+- Client `doExplosionB(true)` emits the centre and paired small explosion/smoke calls for every affected position. Client random is separate from server ray/drop random. TNT emits smoke at posY + 0.5 until its fuse expires.
+
+`tools/probes/ExplosionParticleProbe.java` and `tools/verify-explosion-particles.mjs` produce [41 original-class records](explosion-particles-reference.json): 32 constructor/lifetime/collision cases (four classes × eight fixtures: open, wall, ceiling, web, ground, cactus, farmland, ladder), eight client blast call sequences and a TNT fuse-smoke sequence. `src/explosion-particles.test.js` matches constructors and every tick exactly, plus checks frame/UV formulas, 48-puff emission, caps and clear. Render frames/UVs are bytecode-derived; the OpenGL renderer is not probe-run.
+
+`VoxelScene` owns `explosionParticles` and the two-buffer `ExplosionParticleRenderer`, using the original imported sheets. The renderer uses this build's camera/light/fog pipeline. Layer caps are separate from existing block and thrown-item particle pools; full particle-setting UI and a single shared native EffectRenderer remain unfinished. No new assets were generated or imported.

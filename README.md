@@ -19,6 +19,8 @@ Version 0.21.1 moves the player through the original [`Entity.moveEntity`](publi
 
 Version 0.21.2 adds the original `EntityPlayerSP.pushOutOfBlocks`: a player inside a full block (a block placed in their space, falling sand) is pushed out sideways at 0.1 a tick, matching 2,304 original-class cases.
 
+Version 0.22.0 adds the original explosion puff/smoke effects and TNT fuse smoke, blast knockback for snowballs, eggs and falling sand/gravel, and burning-arrow TNT ignition (including grazing contact). Evidence includes 432 non-living blast targets, 48 arrow/TNT interactions and 41 particle records from the unchanged 1.7.10 classes. Particle collision now uses the shared collision bounds for cactus, ladders and farmland.
+
 Version 0.21.6 adds arrow explosion knockback and corrects blast push origins for dropped items and primed TNT (216 targets replayed against the original classes). Embedded arrows keep their state until their supporting block changes.
 
 Version 0.21.5 adds explosion damage and knockback for XP orbs, including block shielding, range boundaries and immediate removal on death (72 targets checked against the unchanged original classes).

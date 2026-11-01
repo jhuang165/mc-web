@@ -36,3 +36,8 @@ Billboard of the item icon at 0.5 scale about the box's centre; normal (0, 1, 0)
 - Blaze damage; zombies' revenge-target (none of the hit effects depend on it here).
 - Saved balls restore Pos/Motion/Rotation only (vanilla also stores the vestigial in-ground fields); particles are not saved.
 - Hurt sound volume follows the existing mob events (0.6).
+
+
+## Blast deflection (0.22)
+
+Snowballs and eggs receive `Explosion.doExplosionA` knockback before any blocks are removed. They ignore damage, use posY at the box bottom and inherited eye height 0, and continue their normal flight/impact behavior. Blasts alone do not cause egg hatching or impact particles. Motion remains saved. The original [non-living entity reference](explosion-entities-reference.json) includes 144 snowball/egg targets in open/full/partial cover at explosion powers 3/4/6.

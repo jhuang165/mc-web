@@ -7,6 +7,7 @@
 // 0 damage (3 for blazes, which this build lacks), spawns eight snowballpoof
 // EntityBreakingFX (bju) particles and removes the ball. `y` is the bottom of
 // the box, which is also the entity's posY (yOffset 0).
+import { explosionImpact } from "./explosion.js";
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
 import { blockBounds, collisionBounds, snowSelectionHeight, FIRE, CARROTS, REEDS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
 import { ladderBounds } from "./ladders.js";
@@ -311,6 +312,15 @@ export class Projectiles {
     const events = this.events;
     this.events = [];
     return events;
+  }
+  // EntityThrowable inherits zero eye height and ignores damage; explosions still add motion.
+  explode(world, x, y, z, size, exploder = null) {
+    for (const b of this.balls) {
+      if (b.dead || b === exploder) continue;
+      const hit = explosionImpact(world, x, y, z, size, b.x, b.y, b.z, b.y,
+        [b.x - HW, b.y, b.z - HW, b.x + HW, b.y + HEIGHT, b.z + HW]);
+      if (hit) { b.mx += hit.push[0]; b.my += hit.push[1]; b.mz += hit.push[2]; }
+    }
   }
   // EntityThrowable.onUpdate (zk.h) for every ball, then EffectRenderer's
   // update of the particles. `onHit(ref, ball)` applies the 0-damage hit.

@@ -144,3 +144,8 @@ from `javap` only.
   the original `setBlock` calls and this build's `world.set` are not modelled.
 - The cactus inventory icon is a plain isometric cube, not the inset item render.
 - No desert biome, so no natural cactus. Swamp `reedsPerChunk` is unused.
+
+
+## Falling-block blast deflection (0.22)
+
+Falling sand/gravel now receive explosion knockback, without taking damage or immediately dropping their carried block. The blast direction uses posY at the 0.98F box centre and inherited eye height 0. Deflected velocity persists through save/load and continues through normal falling/landing rules. `ExplosionEntityProbe` replays 72 original falling-sand blast targets; sand and gravel share the same entity class. See [reference](explosion-entities-reference.json).
