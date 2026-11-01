@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { spiderAttack, spiderDrops, spiderLegs, spiderFindsPlayer } from "./spider.js";
-import { EntityWorld, ENTITY_TYPES, moveEntityWithHeading } from "./entities.js";
+import { EntityWorld, ENTITY_TYPES, moveEntityWithHeading, setEntityRandom } from "./entities.js";
 import { Survival, ITEMS, craftingResult } from "./survival.js";
 import { makeStack } from "./inventory.js";
 import { JavaRandom } from "./lighting.js";
@@ -62,9 +62,10 @@ test('night spawns and save reload preserve spider health and clear transient ag
   assert.equal(loaded.health,9);assert.equal(loaded.spiderTarget,false);assert.equal(loaded.climbing,false);
 });
 test('spider kill supplies string, recent player hits permit eyes and five XP', () => {
-  const ew=new EntityWorld(flat,[],()=>0),e=ew.create('spider',64,0,64);ew.entities.push(e);
-  ew.damage(e,20,63,64);const events=ew.drain();assert.equal(events.find(e=>e.xp)?.xp,5);assert.equal(events.find(e=>e.drop===326)?.count,1);
-  const env=new EntityWorld(flat,[],()=>0),other=env.create('spider',64,0,64);env.entities.push(other);env.damage(other,20,63,64,false);
+  const zero={nextInt:()=>0,nextFloat:()=>0,nextDouble:()=>0.5,nextGaussian:()=>0};
+  const ew=new EntityWorld(flat,[],()=>0),e=ew.create('spider',64,0,64);ew.entities.push(e);setEntityRandom(e,zero);
+  ew.damage(e,20,63,64);for(let i=0;i<20;i++)ew.deathUpdate(e,ENTITY_TYPES.spider);const events=ew.drain();assert.equal(events.find(e=>e.xp)?.xp,5);assert.equal(events.find(e=>e.drop===326)?.count,1);
+  const env=new EntityWorld(flat,[],()=>0),other=env.create('spider',64,0,64);env.entities.push(other);setEntityRandom(other,zero);env.damage(other,20,63,64,false);
   assert.equal(env.drain().some(e=>e.drop===326),false);
 });
 test('four string craft white wool in both grids; eyes consume and always poison', () => {

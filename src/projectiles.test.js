@@ -216,7 +216,9 @@ test("thrown damage is zero but still flashes, hurts out loud and knocks a mob a
   near(e.vz, -0.4, 1e-7);
   near(e.vx, 0, 1e-12);
   near(e.vy, 0.4, 1e-7);
-  assert.deepEqual(mobs.events, [{ sound: "mob.pig.say", position: e }]);
+  // getSoundVolume 1 and getSoundPitch's (rand - rand) * 0.2 + 1 on Entity.rand.
+  assert.deepEqual(mobs.events.map((x) => [x.sound, x.volume, x.position]), [["mob.pig.say", 1, e]]);
+  assert.ok(Math.abs(mobs.events[0].pitch - 1) <= 0.2);
   // Inside the hurt window the hit is refused (but the animal still panics).
   e.flee = 0;
   e.vy = 0;

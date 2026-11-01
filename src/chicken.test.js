@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { EntityWorld, ENTITY_TYPES, mobPose, chickenFlap, EGG, FEATHER, RAW_CHICKEN, COOKED_CHICKEN } from "./entities.js";
+import { EntityWorld, ENTITY_TYPES, mobPose, chickenFlap, EGG, FEATHER, RAW_CHICKEN, COOKED_CHICKEN, setEntityRandom } from "./entities.js";
 import { GaussianRandom, Projectiles } from "./projectiles.js";
 import { JavaRandom, mhSin } from "./lighting.js";
 import { Survival, ITEMS, SMELTING, smeltingResult } from "./survival.js";
@@ -13,6 +13,8 @@ const reference = JSON.parse(await readFile(new URL("../public/research/chicken-
 const f = Math.fround;
 const grass = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 64.5, y: 0, z: 64.5 }) };
 const far = { x: 64, y: 0, z: 100 };
+// Entity.rand stand-in that returns the same fraction for every draw.
+const fixedRand = (v) => ({ nextInt: (n) => Math.floor(v * n), nextFloat: () => v, nextDouble: () => v, nextGaussian: () => 0 });
 const chickenWorld = (extra = {}, random = () => 0.5, list = [{ id: "mob-1", type: "chicken", x: 64, y: 6, z: 64, health: 4, ...extra }]) => new EntityWorld(grass, list, random);
 // A random() that replays java.util.Random(seed) nextFloat draws.
 const floats = (seed) => {
@@ -103,8 +105,10 @@ test("a dead chicken drops 0 to 2 feathers and one raw chicken, cooked when burn
   assert.deepEqual(Object.keys(feathers.false).sort(), ["0", "1", "2"]);
   for (const burning of [false, true])
     for (const n of [0, 1, 2]) {
-      // random() is rolled for the feather count: floor(r * 3) = n.
-      const ew = chickenWorld({ growingAge: 0, burn: burning ? 40 : 0 }, () => (n + 0.5) / 3), e = ew.entities[0];
+      // Entity.rand: nextInt(3) + nextInt(1) feathers = n; isBurning cooks the meat.
+      const ew = chickenWorld({ growingAge: 0 }), e = ew.entities[0];
+      e.fire = burning ? 40 : 0;
+      setEntityRandom(e, fixedRand((n + 0.5) / 3));
       ew.kill(e);
       const drops = ew.drain().filter((x) => x.drop);
       assert.equal(drops.filter((x) => x.drop === FEATHER).reduce((s, x) => s + x.count, 0), n);
@@ -123,8 +127,12 @@ test("chickens say, hurt and die with the hurt sound of mob.chicken", () => {
   const ew = chickenWorld({ y: 0, eggTimer: 1e9 }), e = ew.entities[0];
   ew.damage(e, 1, 60, 64);
   assert.equal(ew.drain().find((x) => x.sound).sound, "mob.chicken.hurt");
+  // A killing top-up inside the hurt window is silent; a fresh killing hit plays the death sound.
   ew.damage(e, 10, 60, 64);
-  assert.ok(ew.drain().some((x) => x.sound === "mob.chicken.hurt"));
+  assert.ok(!ew.drain().some((x) => x.sound));
+  const fresh = chickenWorld({ y: 0, eggTimer: 1e9 });
+  fresh.damage(fresh.entities[0], 10, 60, 64);
+  assert.ok(fresh.drain().some((x) => x.sound === "mob.chicken.hurt"));
 });
 
 test("wheat seeds breed chickens, wheat does not, and the chick is a child with its own egg timer", () => {

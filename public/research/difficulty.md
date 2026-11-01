@@ -64,5 +64,5 @@ Other gaps:
 
 - Skeleton and creeper spawn rolls (follow-range bonus, skeleton equipment) are not run.
 - Reinforcements only answer hits whose target is the player.
-- Hurt sounds and knockback in this build draw from `Math.random`, not from the zombie's own Random, so live games do not reproduce the original's exact reinforcement spots. The replay does.
+- Hurt sounds and knockback draw on the zombie's own Random since 0.22.12 ([combat](combat.md)), but live entity update order still differs from the original's, so live games do not reproduce its exact reinforcement spots. The replay does.
 - Hard-only content that this build lacks is missing: cave spider poison, wither effects, villager conversion, and the Hardcore lock.

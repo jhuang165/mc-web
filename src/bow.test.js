@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { EntityWorld, ENTITY_TYPES } from "./entities.js";
+import { EntityWorld, ENTITY_TYPES, setEntityRandom } from "./entities.js";
 import { ITEMS, RECIPES, craftingResult } from "./survival.js";
 import { makeStack } from "./inventory.js";
 import { GaussianRandom } from "./projectiles.js";
@@ -363,6 +363,8 @@ test("arrows are saved and loaded with their stuck state and a bad record is dro
 
 const grass = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 64.5, y: 0, z: 64.5 }) };
 const survival = { health: 20, creative: false, time: 6000, damage() {}, count: () => 0 };
+// Entity.rand stand-in that returns the same fraction for every draw.
+const fixedRand = (v) => ({ nextInt: (n) => Math.floor(v * n), nextFloat: () => v, nextDouble: () => v, nextGaussian: () => 0 });
 const mobs = (list, random = () => 0.5) => new EntityWorld(grass, list.map((m, i) => ({ id: `m${i}`, health: 20, ...m })), random);
 
 test("the skeleton is 0.6 x 1.8 with 20 health at speed 0.25", () => {
@@ -390,15 +392,20 @@ test("a skeleton's arrow leaves from the eye, with the target a third of its hei
   assert.deepEqual(spread, same);
 });
 
-test("a killed skeleton drops up to two arrows and two bones and gives 5 experience", () => {
-  const w = mobs([{ type: "skeleton", x: 64, y: 0, z: 64 }], () => 0.99), e = w.entities[0];
+test("a killed skeleton drops up to two arrows and two bones, maybe its worn bow, and 6 to 8 experience at deathTime 20", () => {
+  const w = mobs([{ type: "skeleton", x: 64, y: 0, z: 64 }]), e = w.entities[0];
+  setEntityRandom(e, fixedRand(0.99));
   w.kill(e);
+  for (let i = 0; i < 20; i++) w.deathUpdate(e, ENTITY_TYPES.skeleton);
   const events = w.drain();
-  assert.deepEqual(events.filter((x) => x.drop).map((x) => [x.drop, x.count]), [[ARROW, 2], [311, 2]]);
-  assert.equal(events.find((x) => x.xp !== undefined).xp, 5);
-  const none = mobs([{ type: "skeleton", x: 64, y: 0, z: 64 }], () => 0), n = none.entities[0];
+  assert.deepEqual(events.filter((x) => x.drop).map((x) => [x.drop, x.count]), [[ARROW, 1], [ARROW, 1], [311, 1], [311, 1]]);
+  // EntityMob's 5, plus 1 + rand.nextInt(3) for the bow (drop chance 0.085 <= 1).
+  assert.equal(events.find((x) => x.xp !== undefined).xp, 8);
+  const none = mobs([{ type: "skeleton", x: 64, y: 0, z: 64 }]), n = none.entities[0];
+  setEntityRandom(n, fixedRand(0));
   none.kill(n);
-  assert.deepEqual(none.drain().filter((x) => x.drop), []);
+  // nextFloat() < 0.085 drops the bow at maxDamage - nextInt(1 + nextInt(359)), held to 359.
+  assert.deepEqual(none.drain().filter((x) => x.drop).map((x) => [x.drop, x.damage]), [[127, 359]]);
 });
 
 test("damage from an arrow does not turn a mob on the player or make a skeleton flee", () => {

@@ -86,6 +86,8 @@ test("sheep sounds: say, hurt and death are mob.sheep.say; other mobs keep their
   const w = sheepWorld({ health: 8 });
   w.damage(w.entities[0], 1, 60, 64);
   assert.equal(w.drain()[0].sound, "mob.sheep.say");
+  // The killing hit must be a fresh one (outside the hurt window) to make a sound.
+  w.entities[0].hurt = 0;
   w.damage(w.entities[0], 99, 60, 64);
   assert.ok(w.drain().some((x) => x.sound === "mob.sheep.say"));
   const cow = new EntityWorld(grass, [{ id: "mob-1", type: "cow", x: 64, y: 0, z: 64, health: 10 }]);

@@ -6,7 +6,7 @@ import {CARROT,POTATO,BAKED_POTATO,POISONOUS_POTATO,rootDrops,zombieRareDrop,cro
 import {Farming,cropDrops} from './farming.js';
 import {ITEMS,Survival} from './survival.js';
 import {makeStack} from './inventory.js';
-import {EntityWorld} from './entities.js';
+import {EntityWorld,setEntityRandom} from './entities.js';
 import {TILES,blockTile} from './block-textures.js';
 import {itemTexture} from './first-person.js';
 import {SMELT_EXPERIENCE} from './experience.js';
@@ -89,7 +89,7 @@ test('zombie rare-drop boundary rolls require recent player damage and select ir
   assert.equal(zombieRareDrop(0,()=>{throw Error('must not roll');}),0);
   for(const [pick,id]of [302,CARROT,POTATO].entries()){const rolls=[4,pick];assert.equal(zombieRareDrop(100,n=>{assert.equal(n,rolls.length===2?200:3);return rolls.shift();}),id);}
   assert.equal(zombieRareDrop(100,()=>5),0);
-  const w=new EntityWorld(flat,[]);w.random=()=>0;const z=w.create('zombie',64,0,64);w.entities.push(z);
+  const w=new EntityWorld(flat,[]);const z=w.create('zombie',64,0,64);w.entities.push(z);setEntityRandom(z,{nextInt:()=>0,nextFloat:()=>0,nextDouble:()=>0.5});
   w.damage(z,30,63,64);assert.equal(w.drain().find(e=>e.drop===302)?.count,1);
   const unhit=w.create('zombie',64,0,64);w.entities.push(unhit);w.hazard(unhit,30);assert.equal(w.drain().some(e=>e.drop===302),false);
 });

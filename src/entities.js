@@ -14,6 +14,7 @@ import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
 import { NORMAL, PEACEFUL, attributeValue, spiderSpawnRolls, zombieSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
 import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage } from "./mob-effects.js";
+import { armorReduced, soundVolume, soundPitch, mobDrops, experiencePoints, applyEntityCollision, boxesMeet, ANIMALS, FEATHER, RAW_CHICKEN, COOKED_CHICKEN } from "./combat.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
 export function wrapDegrees(a) {
@@ -49,6 +50,8 @@ export const entityRandom = (e) => {
   if (!r) RANDOMS.set(e, (r = new JavaRandom(Math.floor(Math.random() * 2 ** 48))));
   return r;
 };
+// Seeds Entity.rand (the combat replay in combat.test.js).
+export const setEntityRandom = (e, rand) => RANDOMS.set(e, rand);
 const TRANSIENT = ["inWeb", "onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "fire", "idle", "revenge", "recentlyHit"];
 const INTERPOLATED = [...TRANSIENT, "eggTimer", "wingRotation", "destPos", "oFlapSpeed", "oFlap", "wingRotDelta", "px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
 // Entity.rotationYaw is Java degrees (0 faces +z, increasing toward -x); e.yaw
@@ -168,12 +171,20 @@ export function aiMoveSpeed(e, multiplier) {
 // ItemSeeds in the original) through EntityAITempt / isBreedingItem.
 // Pigs use only carrots (ade.bF), including the carrot held by EntityAITempt.
 const BREED_ITEM = { pig: CARROT, cow: 305, sheep: 305, chicken: 309 };
-export const EGG = 316, FEATHER = 317, RAW_CHICKEN = 318, COOKED_CHICKEN = 319;
+export const EGG = 316;
+export { FEATHER, RAW_CHICKEN, COOKED_CHICKEN };
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
 // its hurt sound, and the sheep uses mob.sheep.say for say, hurt and death alike.
 const hurtSound = (type) => (type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
 // EntityChicken's death sound is its hurt sound as well.
 const deathSound = (type) => (type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
+// Entity.setPosition's box (half width and height in floats) and Entity.canBePushed:
+// living entities until setDead (deathTime 20, or removal).
+export const pushBox = (o, width, height) => {
+  const w = f(f(width) / 2), h = f(height);
+  return [o.x - w, o.y, o.z - w, o.x + w, o.y + h, o.z + w];
+};
+const pushable = (o) => o.health > 0 || (o.death ?? 0) < 20;
 // Chunk.canBlockSeeTheSky without a height map (weather.js `canSeeSky` is the real one
 // that main.js hooks in): no solid block at or above (x, y, z).
 const openSky = (world, x, y, z) => {
@@ -465,12 +476,13 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
 // EntityLivingBase.knockBack (sv.a(Entity, F, DD)V), reached from attackEntityFrom
 // with dx, dz = attacker - victim: the knockbackResistance roll, then half the
 // old motion plus 0.4 away from the attacker horizontally and 0.4 up (capped at
-// 0.4). attackEntityFrom nudges a coincident attacker by a random sliver first.
-export function knockBack(e, fromX, fromZ, random = Math.random) {
+// 0.4). attackEntityFrom nudges a coincident attacker by a random sliver first, with
+// Math.random (`nudge`); the resistance roll is Entity.rand.nextDouble() there.
+export function knockBack(e, fromX, fromZ, random = Math.random, nudge = random) {
   let dx = fromX - e.x, dz = fromZ - e.z;
   while (dx * dx + dz * dz < 1e-4) {
-    dx = (random() - random()) * 0.01;
-    dz = (random() - random()) * 0.01;
+    dx = (nudge() - nudge()) * 0.01;
+    dz = (nudge() - nudge()) * 0.01;
   }
   if (random() < (e.knockbackResistance || 0)) return false;
   const len = f(Math.sqrt(dx * dx + dz * dz)), k = f(0.4);
@@ -666,39 +678,55 @@ export class EntityWorld {
     }
     return result;
   }
-  // EntityLivingBase.attackEntityFrom (sv.a(ro, F)) for a damage source with an
-  // attacking entity at (fromX, fromZ): while hurtResistantTime > 10 (`hurt` > 0)
-  // only damage above lastDamage counts, the difference being dealt; limbSwingAmount
-  // jumps to 1.5, knockBack runs, then the mob dies or plays its hurt sound.
-  damage(e, amount, fromX, fromZ, byPlayer = true) {
-    if (!this.entities.includes(e) || e.health <= 0) return false;
+  // A damage source with an attacking entity at (fromX, fromZ): `byPlayer` for the player
+  // (melee, its arrows and snowballs), else `attacker` names the mob (a skeleton's arrow, a
+  // creeper's blast). See attackEntityFrom.
+  damage(e, amount, fromX, fromZ, byPlayer = true, attacker = null) {
+    return this.attackEntityFrom(e, amount, { from: { x: fromX, z: fromZ }, player: byPlayer, attacker, name: byPlayer ? "player" : "mob" });
+  }
+  // EntityLivingBase.attackEntityFrom (sv.a(ro, F)); `source` is { name, from, player,
+  // attacker }. EntityAnimal's part comes first, even for a rejected hit: fleeingTick 60 (a
+  // counter nothing reads any more) and love reset. limbSwingAmount jumps to 1.5. While
+  // hurtResistantTime > 10 (`hurt` > 0) only damage above lastDamage counts, the difference
+  // being dealt, and the hit is not fresh. damageEntity takes armour off (the zombie's 2
+  // points). A player attacker sets recentlyHit 100 and the revenge that EntityAIPanic and
+  // EntityAIHurtByTarget read (only the player is a target here). A fresh hit then rolls
+  // setBeenAttacked (not for drowning) and, with an attacker, knockBack on Entity.rand, and
+  // plays the hurt or death sound with getSoundPitch; a top-up hit is silent and pushes nothing.
+  attackEntityFrom(e, amount, source = {}) {
+    if (!this.entities.includes(e)) return false;
+    if (ANIMALS.has(e.type)) { e.flee = 60; e.love = 0; e.mateTicks = 0; }
+    if (e.health <= 0) return false;
+    const rand = entityRandom(e), name = source.name ?? "generic";
+    e.limbSwingAmount = 1.5;
+    let fresh = true;
     if (e.hurt > 0) {
       if (amount <= e.lastDamage) return false;
-      e.health -= amount - e.lastDamage;
+      this.damageEntity(e, amount - e.lastDamage, name);
+      e.lastDamage = amount;
+      fresh = false;
     } else {
-      e.health -= amount;
+      e.lastDamage = amount;
+      this.damageEntity(e, amount, name);
       e.hurt = 10;
     }
-    e.lastDamage = amount;
-    // EntityAnimal.attackEntityFrom sets fleeingTick = 60 (kept as a counter; nothing
-    // reads it any more) and resets love; EntityLivingBase.attackEntityFrom sets the
-    // revenge target (the attacker, always the player here), which EntityAIPanic and
-    // EntityAIHurtByTarget read. The mob is not turned: panic walks it away.
-    if (!HOSTILE.has(e.type)) e.flee = 60;
-    e.love=0;e.mateTicks=0;
-    // A mob shot by another mob's arrow has no player to take revenge on.
-    if (byPlayer) { e.revenge = (e.age || 0) + 1; e.recentlyHit = 100; }
-    // EntityLivingBase.attackEntityFrom sets limbSwingAmount to 1.5.
-    e.limbSwingAmount = 1.5;
-    knockBack(e, fromX, fromZ);
-    if (e.health <= 0) this.kill(e);
-    else
-      this.events.push({
-        sound: hurtSound(e.type),
-        position: e,
-      });
-    if (e.type === "zombie") this.callReinforcement(e, byPlayer);
+    if (source.player) { e.revenge = (e.age || 0) + 1; e.recentlyHit = 100; }
+    if (fresh) {
+      if (name !== "drown") rand.nextDouble();
+      if (source.from) knockBack(e, source.from.x, source.from.z, () => rand.nextDouble(), Math.random);
+    }
+    const child = e.growingAge < 0, sound = { volume: soundVolume(e.type), position: e };
+    if (e.health <= 0) {
+      if (fresh) this.events.push({ sound: deathSound(e.type), ...sound, pitch: soundPitch(rand, child) });
+      this.onDeath(e, source);
+    } else if (fresh) this.events.push({ sound: hurtSound(e.type), ...sound, pitch: soundPitch(rand, child) });
+    if (e.type === "zombie") this.callReinforcement(e, !!source.player);
     return true;
+  }
+  // EntityLivingBase.damageEntity: armour, then setHealth (a float, clamped at 0).
+  damageEntity(e, amount, name) {
+    amount = armorReduced(e.type, amount, name);
+    if (amount !== 0) e.health = Math.max(0, f(e.health - amount));
   }
   // EntityZombie.attackEntityFrom (yq.a(ro, F)) once the hit counts, even a killing one. The
   // target is the attack target, else the revenge target, else the attacker; only the player
@@ -805,78 +833,56 @@ export class EntityWorld {
     if (owned&&["sword","axe","pickaxe","shovel"].includes(item?.kind)) survival.wear(tool,item.kind==='sword'?1:2);
     return true;
   }
-  // Death of a mob: sound, experience and the drops (EntityLiving.dropFewItems).
-  kill(e) {
-    this.events.push({
-      sound: deathSound(e.type),
-      position: e,
-    });
-    if(e.growingAge>=0)this.events.push({xp:HOSTILE.has(e.type)?5:1+Math.floor(Math.random()*3),position:{x:e.x,y:e.y,z:e.z}});
-    // EntitySheep.dropFewItems (wp.b): one wool of its colour unless sheared, young or old.
-    if(e.type==='sheep'&&!e.sheared)this.events.push({drop:WOOL,count:1,damage:e.color,position:{x:e.x,y:e.y,z:e.z}});
-    if(e.growingAge>=0&&ENTITY_TYPES[e.type].drop)this.events.push({
-      drop: ENTITY_TYPES[e.type].drop,
-      count:
-        1 + Math.floor(hash(e.age, e.id.length, this.world.numericSeed) * 3),
-      position: { x: e.x, y: e.y, z: e.z },
-    });
-    // EntityCow.dropFewItems also drops zero to two leather.
-    const leather = e.type === "cow" && e.growingAge >= 0 ? Math.floor(hash(e.age + 7, e.id.length, this.world.numericSeed) * 3) : 0;
-    if (leather) this.events.push({ drop: 315, count: leather, position: { x: e.x, y: e.y, z: e.z } });
-    // EntityChicken.dropFewItems (wg.b(ZI)): rand.nextInt(3) + rand.nextInt(1 + looting)
-    // feathers, then raw chicken, or cooked when the chicken is burning.
-    if (e.type === "chicken" && e.growingAge >= 0) {
-      const feathers = Math.floor(this.random() * 3);
-      if (feathers) this.events.push({ drop: FEATHER, count: feathers, position: { x: e.x, y: e.y, z: e.z } });
-      this.events.push({ drop: e.burn ? COOKED_CHICKEN : RAW_CHICKEN, count: 1, position: { x: e.x, y: e.y, z: e.z } });
+  // EntityLivingBase.onDeath: a mob that is not a child drops its items (combat.js
+  // mobDrops) on Entity.rand; the experience waits for deathTime 20 (deathUpdate). The death
+  // counter starts on the next onEntityUpdate, or in this one for fire and drowning.
+  onDeath(e, source = {}) {
+    if (e.growingAge >= 0) {
+      const at = { x: e.x, y: e.y, z: e.z };
+      for (const [drop, damage] of mobDrops(e, { playerHit: e.recentlyHit > 0, burning: e.fire > 0, bySkeleton: source.attacker === "skeleton" }, entityRandom(e)))
+        this.events.push({ drop, count: 1, ...(damage ? { damage } : {}), position: at });
     }
-    // EntitySkeleton.dropFewItems (yl.b(ZI)): rand.nextInt(3 + looting) arrows, then
-    // rand.nextInt(3 + looting) bones (the wither skeleton's coal and skull are not ported).
-    if (e.type === "skeleton") {
-      const arrows = Math.floor(this.random() * 3), bones = Math.floor(this.random() * 3);
-      if (arrows) this.events.push({ drop: 320, count: arrows, position: { x: e.x, y: e.y, z: e.z } });
-      if (bones) this.events.push({ drop: 311, count: bones, position: { x: e.x, y: e.y, z: e.z } });
-    }
-    if (e.type === "spider") {
-      const drops = spiderDrops(e.recentlyHit > 0, this.random);
-      for (const [drop, count] of [[STRING, drops.string], [SPIDER_EYE, drops.eye]])
-        if (count) this.events.push({ drop, count, position: { x: e.x, y: e.y, z: e.z } });
-    }
-    // EntityCreeper: EntityLiving.dropFewItems with gunpowder, rand.nextInt(3).
-    if (e.type === "creeper") {
-      const n = creeperDrops((k) => Math.floor(this.random() * k));
-      if (n) this.events.push({ drop: GUNPOWDER, count: n, position: { x: e.x, y: e.y, z: e.z } });
-    }
-    if(e.type==='zombie'){const drop=zombieRareDrop(e.recentlyHit,n=>Math.floor(this.random()*n));if(drop)this.events.push({drop,count:1,position:{x:e.x,y:e.y,z:e.z}});}
-    e.death = 1;
+    e.death = 0;
     if (e.eatTimer) e.eatTimer = 0;
+  }
+  // The player's kill (main.js /kill, tests): a generic death with the player as attacker.
+  kill(e) {
+    if (e.health <= 0) return;
+    e.health = 0;
+    e.recentlyHit = 100;
+    this.events.push({ sound: deathSound(e.type), volume: soundVolume(e.type), pitch: soundPitch(entityRandom(e), e.growingAge < 0), position: e });
+    this.onDeath(e, { player: true });
+  }
+  // EntityLivingBase.onDeathUpdate (sv.aF): at deathTime 20 a mob a player hit within the
+  // last 100 ticks, not a child, leaves its experience (split into orbs by xpOrbs.spawn),
+  // then is setDead with 20 "explode" puffs drawn on Entity.rand.
+  deathUpdate(e, t) {
+    e.death = (e.death || 0) + 1;
+    if (e.death !== 20) return;
+    const rand = entityRandom(e);
+    if (e.recentlyHit > 0 && e.growingAge >= 0) {
+      const world = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
+      this.events.push({ xp: experiencePoints(e, rand, world), position: { x: e.x, y: e.y, z: e.z } });
+    }
+    if (this.fx) burst(this.fx, "explode", 20, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, rand);
   }
   // EntityLivingBase.fall (sv.b(F)): ceil(distance - 3) points of fall damage
   // (no jump boost), through attackEntityFrom without an attacker, so no knockback.
   fall(e, distance) {
-    this.hazard(e, Math.ceil(f(distance - 3)));
+    const points = Math.ceil(f(distance - 3));
+    if (points > 0) this.hazard(e, points, "fall");
     // EntityCreeper.fall (xz.b(F)) then pushes the fuse on.
     if (e.type === "creeper") creeperFall(e, distance);
   }
-  // attackEntityFrom with a source that has no attacker (fall, fire, lava).
-  hazard(e, points) {
-    if (points <= 0 || e.health <= 0) return;
-    if (e.hurt > 0) {
-      if (points <= e.lastDamage) return;
-      e.health -= points - e.lastDamage;
-    } else {
-      e.health -= points;
-      e.hurt = 10;
-    }
-    e.lastDamage = points;
-    e.limbSwingAmount = 1.5;
-    if (e.health <= 0) this.kill(e);
-    else this.events.push({ sound: hurtSound(e.type), position: e });
+  // attackEntityFrom with a source that has no attacker: fall, onFire, lava, drown,
+  // inFire (fire blocks, lightning), cactus, explosion (unowned TNT), generic.
+  hazard(e, points, name = "generic") {
+    return this.attackEntityFrom(e, points, { name });
   }
   // EntityLivingBase.onEntityUpdate's air (see `breathe` below): drowning deals 2 with no
   // attacker, so no knockback or revenge. The air is saved with the mob.
   breathe(e, t) {
-    if (breathe(this.world, e, t.height, entityRandom(e), this.fx)) this.hazard(e, 2);
+    if (breathe(this.world, e, t.height, entityRandom(e), this.fx)) this.hazard(e, 2, "drown");
   }
   // EntityLiving.onEntityUpdate (sw.C), after the air: rand.nextInt(1000) < livingSoundTime++
   // resets the time to -getTalkInterval (EntityAnimal 120, else 80) and plays the living sound
@@ -896,17 +902,17 @@ export class EntityWorld {
     // handleWaterMovement: only water; rain puts a burning mob out in moveEntity's tail.
     if (e.inWater) e.fire = 0;
     if (e.fire > 0) {
-      if (e.fire % 20 === 0) this.hazard(e, 1);
+      if (e.fire % 20 === 0) this.hazard(e, 1, "onFire");
       e.fire--;
     }
     const r = t.width / 2;
     if ((e.inLava = inLava(this.world, [e.x - r, e.y, e.z - r, e.x + r, e.y + t.height, e.z + r]))) {
-      this.hazard(e, 4);
+      this.hazard(e, 4, "lava");
       e.fire = Math.max(e.fire, 300);
       e.fallDistance *= 0.5;
     }
     // Fire blocks and cactus act in moveEntity's tail (walk, block-collisions.js).
-    if (e.fire > 0) e.burn = 1;
+    e.burn = e.fire > 0 ? 1 : 0;
   }
   feed(e,id,survival){
     if(!this.entities.includes(e)||e.health<=0||!BREED_ITEM[e.type]||id!==BREED_ITEM[e.type]||(!survival.creative&&!survival.count(id)))return false;
@@ -1086,15 +1092,10 @@ export class EntityWorld {
         continue;
       }
       if (e.health <= 0) {
-        // A dying mob still runs onLivingUpdate with its movement blocked (sv.bh):
-        // it slides on its knockback and falls, with no AI input.
-        e.death = (e.death || 0) + 1;
-        // EntityLivingBase.onDeathUpdate: at deathTime 20 the body goes up in 20 "explode".
-        if (e.death === 20 && this.fx) burst(this.fx, "explode", 20, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, entityRandom(e));
-        e.jumping = false;
-        this.walk(e, t, 0);
-        if (e.type === "chicken") this.chickenUpdate(e);
-        this.swingLimbs(e);
+        // Entity.onEntityUpdate still runs the fire (attackEntityFrom refuses the hits).
+        this.burn(e, t);
+        e.hurt = Math.max(0, e.hurt - 1);
+        this.dying(e, t);
         continue;
       }
       // EntityCreeper.onUpdate (xz.h) runs its fuse before EntityLivingBase.onUpdate. The
@@ -1110,38 +1111,14 @@ export class EntityWorld {
         }
       }
       e.age++;
-      if(e.recentlyHit>0)e.recentlyHit--;
       if(e.growingAge<0)e.growingAge++;else if(e.growingAge>0)e.growingAge--;
       e.love=Math.max(0,e.love-1);
       // The inLove countdown's hearts (every 10 ticks) run on the server's copy only: the
       // client never learns inLove, so 1.7.10 singleplayer shows none.
-      e.hurt = Math.max(0, e.hurt - 1);
       e.attack = Math.max(0, e.attack - 1);
       e.flee = Math.max(0, e.flee - 1);
       // EntityLivingBase.onEntityUpdate: the revenge target lapses after 100 ticks.
       if (e.revenge && e.age + 1 - e.revenge > 100) e.revenge = 0;
-      if (e.type === "zombie" && !night && !this.wet?.(e, t.height)) {
-        let sky = true;
-        for (let y = Math.floor(e.y + t.height); y < HEIGHT; y++)
-          if (this.world.solid(Math.floor(e.x), y, Math.floor(e.z))) {
-            sky = false;
-            break;
-          }
-        e.burn = sky ? 1 : 0;
-        if (sky && e.age % 20 === 0) {
-          e.health--;
-          e.hurt = 8;
-          e.lastDamage = 1;
-        }
-      } else e.burn = 0;
-      // EntitySkeleton.onLivingUpdate (yl.e): in daylight a skeleton under open sky
-      // (brightness > 0.5, with chance (brightness - 0.4) * 2 / 30 a tick) is set on fire
-      // for 8 s; burn() below takes the damage, water or rain puts it out. It wears no helmet.
-      if (e.type === "skeleton" && this.day) {
-        const bx = Math.floor(e.x), by = Math.floor(e.y + t.height * 0.66), bz = Math.floor(e.z),
-          light = this.ai.brightness(bx, by, bz);
-        if (light > 0.5 && f(this.random() * 30) < f(f(light - f(0.4)) * 2) && this.ai.deps.canSeeSky(bx, Math.floor(e.y), bz)) e.fire = Math.max(e.fire || 0, 160);
-      }
       const wasInWater = e.inWater;
       if (e.inWater = inWater(this.world, e, t.width, t.height)) e.fallDistance = 0;
       // Entity.handleWaterMovement: entering water (not on the entity's first update, when
@@ -1152,12 +1129,31 @@ export class EntityWorld {
       }
       this.burn(e, t);
       this.breathe(e, t);
+      // EntityLivingBase.onEntityUpdate after the fire and air: hurtTime and
+      // hurtResistantTime run down, a mob at 0 health goes on to onDeathUpdate (a mob the
+      // fire or water killed counts its first death tick now), then recentlyHit runs down.
+      e.hurt = Math.max(0, e.hurt - 1);
+      if (e.health <= 0) {
+        this.dying(e, t);
+        continue;
+      }
+      if (e.recentlyHit > 0) e.recentlyHit--;
       // EntityLivingBase.updatePotionEffects, the end of onEntityUpdate.
       tickMobEffects(e, t, base.health, entityRandom(e), this.fx);
       this.talk(e);
+      // EntityZombie and EntitySkeleton.onLivingUpdate (yq.e, yl.e), before the AI: in daylight
+      // a mob (a zombie only when adult) at brightness > 0.5 with rand.nextFloat() * 30 <
+      // (brightness - 0.4) * 2 under open sky is set on fire for 8 s; burn() takes the damage,
+      // water or rain puts it out. None wears a helmet here.
+      if (((e.type === "zombie" && e.growingAge >= 0) || e.type === "skeleton") && this.day) {
+        const bx = Math.floor(e.x), by = Math.floor(e.y + t.height * 0.66), bz = Math.floor(e.z),
+          light = this.ai.brightness(bx, by, bz);
+        if (light > 0.5 && f(entityRandom(e).nextFloat() * 30) < f(f(light - f(0.4)) * 2) && this.ai.deps.canSeeSky(bx, Math.floor(e.y), bz)) e.fire = Math.max(e.fire || 0, 160);
+      }
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.
       this.walk(e, t, 0, () => e.type === "spider" ? this.spiderThink(e) : this.ai.think(e));
+      this.push(e, t);
       if (e.type === "spider") {
         e.climbing = e.collidedH;
         // Entity.moveEntity's distanceWalkedOnStepModified (0.6 per block);
@@ -1173,21 +1169,45 @@ export class EntityWorld {
       if (e.type === "chicken") this.chickenUpdate(e);
       this.turnBody(e);
       this.swingLimbs(e);
-      if (e.health <= 0 && !e.death) {
-        e.death = 1;
-        this.events.push({ sound: "mob.zombie.death", position: e });
-        this.events.push({
-          drop: t.drop,
-          count: 1,
-          position: { x: e.x, y: e.y, z: e.z },
-        });
-      }
       if (e.y < 0) {
         e.health = 0;
         e.death = 20;
       }
     }
+    // EntityPlayerMP.onLivingUpdate's collideWithNearbyEntities, in the network tick after the
+    // world's entities: each mob beside the player is pushed away once more (the server's copy
+    // of the player is pushed too, which the client never sees).
+    const p = this.ai.player;
+    if (p?.alive) {
+      const box = pushBox(p, p.width, p.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
+      for (const o of this.entities) if (pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) applyEntityCollision(o, p, true, false);
+    }
     this.entities = this.entities.filter((e) => e.health > 0 || e.death < 20);
+  }
+  // A dying mob: onDeathUpdate, recentlyHit running down, then onLivingUpdate with its movement
+  // blocked (sv.bh): it slides on its knockback, falls and is pushed, with no AI input.
+  dying(e, t) {
+    this.deathUpdate(e, t);
+    if (e.recentlyHit > 0) e.recentlyHit--;
+    e.jumping = false;
+    this.walk(e, t, 0);
+    this.push(e, t);
+    if (e.type === "chicken") this.chickenUpdate(e);
+    this.swingLimbs(e);
+  }
+  size(o) {
+    const base = ENTITY_TYPES[o.type], s = o.growingAge < 0 ? 0.5 : 1;
+    return [base.width * s, base.height * s];
+  }
+  // EntityLivingBase.collideWithNearbyEntities (sv.bo), the end of onLivingUpdate on the
+  // server: every pushable entity (living mobs until setDead, and the player) whose box meets
+  // this one's grown by 0.2 sideways runs applyEntityCollision against it.
+  push(e, t) {
+    const box = pushBox(e, t.width, t.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
+    for (const o of this.entities)
+      if (o !== e && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) applyEntityCollision(o, e);
+    const p = this.ai.player;
+    if (p?.alive && boxesMeet(near, pushBox(p, p.width, p.height))) applyEntityCollision(p, e, false, true);
   }
   // Motion half of EntityLivingBase.onLivingUpdate (sv.e()): jump delay, motion
   // below 0.005 snapped to 0, EntityMoveHelper (tv.c) turning a move target into
@@ -1214,7 +1234,7 @@ export class EntityWorld {
     e.moveForward = f(e.moveForward * f(0.98));
     // moveEntity's tail: cactus and fire (inFire) damage, webs, the fire counter and the rain fizz.
     const self = this, hooks = {
-      hurt: (source, points) => this.hazard(e, points),
+      hurt: (source, points) => this.hazard(e, points, source),
       get wet() { return e.inWater || !!self.wet?.(e, t.height); },
       fizz: () => this.events.push({ sound: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(this.random() - this.random()) * 0.4)), position: { x: e.x, y: e.y, z: e.z } }),
     };

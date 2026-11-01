@@ -11,7 +11,7 @@ import {
 import { Fx } from "./fx.js";
 import { boltGeometry } from "./weather-renderer.js";
 import { World, SIZE } from "./world.js";
-import { EntityWorld } from "./entities.js";
+import { EntityWorld, setEntityRandom } from "./entities.js";
 import { Survival } from "./survival.js";
 import { Farming } from "./farming.js";
 
@@ -395,17 +395,22 @@ test("rain extinguishes burning mobs and zombies do not burn in the rain", () =>
   const flat = { get: (x, y) => (y < 0 ? 11 : y === 0 ? 1 : 0), solid: (x, y) => y <= 0, biome: "meadow" };
   const survival = new Survival();
   survival.time = 6000;
+  // EntityZombie.onLivingUpdate sets it on fire (rand.nextFloat() * 30 < (1 - 0.4) * 2 under
+  // open sky); the flag the renderer reads is set at the next onEntityUpdate, by which time
+  // rain has put the fire out in moveEntity's tail.
   const zombie = (wet) => {
     const w = new EntityWorld(flat, [{ id: "mob-1", type: "zombie", x: 64, y: 1, z: 64, health: 20 }]);
+    setEntityRandom(w.entities[0], new JavaRandom(7));
     if (wet) w.wet = () => true;
-    return w;
+    let burned = 0;
+    for (let i = 0; i < 200; i++) {
+      w.tick({ x: 64, y: 1, z: 80 }, survival);
+      burned += w.entities[0].burn;
+    }
+    return burned;
   };
-  const dry = zombie(false);
-  dry.tick({ x: 64, y: 1, z: 80 }, survival);
-  assert.equal(dry.entities[0].burn, 1);
-  const rainy = zombie(true);
-  rainy.tick({ x: 64, y: 1, z: 80 }, survival);
-  assert.equal(rainy.entities[0].burn, 0);
+  assert.ok(zombie(false) > 0);
+  assert.equal(zombie(true), 0);
   const pig = new EntityWorld(flat, [{ id: "mob-2", type: "pig", x: 64, y: 1, z: 64, health: 10 }]);
   pig.entities[0].fire = 100;
   pig.tick({ x: 64, y: 1, z: 90 }, survival);

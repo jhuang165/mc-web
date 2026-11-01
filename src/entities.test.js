@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { EntityWorld, entityHit, actorCollides, ENTITY_TYPES, interpolateRotation, wrapDegrees, nearAngle, mobPose, moveEntityWithHeading, moveEntity, moveFlying, jump, knockBack, addVelocity, aiMoveSpeed } from "./entities.js";
+import { EntityWorld, setEntityRandom, entityHit, actorCollides, ENTITY_TYPES, interpolateRotation, wrapDegrees, nearAngle, mobPose, moveEntityWithHeading, moveEntity, moveFlying, jump, knockBack, addVelocity, aiMoveSpeed } from "./entities.js";
 import { Survival } from "./survival.js";
 const flat = {
   numericSeed: 123,
@@ -45,6 +45,8 @@ test("legacy sword damage wears the tool, suppresses duplicate hits, and emits o
     p = new Survival({ inventory: { 115: 1 } }),
     pig = a.entities[0],
     player = { x: 64, y: 0, z: 64 };
+  // Entity.rand: nextInt(3) + 1 + nextInt(1) = 1 porkchop.
+  setEntityRandom(pig, { nextInt: () => 0, nextFloat: () => 0.5, nextDouble: () => 0.5, nextGaussian: () => 0 });
   assert.equal(a.attack(pig, 115, p, player), true);
   assert.equal(pig.health, 2);
   assert.equal(p.inventory.main[p.inventory.find(115)].damage, 1);
@@ -52,8 +54,12 @@ test("legacy sword damage wears the tool, suppresses duplicate hits, and emits o
   for (let i = 0; i < 10; i++) a.tick(player, p);
   assert.equal(a.attack(pig, 115, p, player), true);
   assert.equal(a.drain().filter((e) => e.drop === 202).length, 1);
-  assert.ok(pig.death > 0);
+  assert.equal(pig.health, 0);
   assert.equal(a.serialize().length, 0);
+  // deathTime counts from the next onEntityUpdate.
+  assert.equal(pig.death, 0);
+  a.tick(player, p);
+  assert.equal(pig.death, 1);
   for (let i = 0; i < 20; i++) a.tick(player, p);
   assert.equal(a.entities.length, 0);
 });

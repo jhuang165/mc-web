@@ -1186,7 +1186,7 @@ function tickWeather() {
       const t = ENTITY_TYPES[e.type];
       if (!t || e.health <= 0 || !overlaps(entityBox(e, t.width, t.height), box)) continue;
       const hit = struckByLightning(e.fire || 0);
-      mobs.hazard(e, hit.damage);
+      mobs.hazard(e, hit.damage, "inFire");
       e.fire = hit.fire;
       // EntityCreeper.onStruckByLightning: after Entity's fire damage, datawatcher 17 (powered).
       if (e.type === "creeper") powerCreeper(e);
@@ -1712,8 +1712,8 @@ function explodeAt(x, y, z, size, { exploder = null, attacker = null } = {}) {
     const scale = e.growingAge < 0 ? 0.5 : 1, w = t.width * scale, h = t.height * scale;
     const hit = explosionImpact(world, x, y, z, size, e.x, e.y, e.z, e.y + Math.fround(Math.fround(h) * Math.fround(0.85)), entityBox(e, w, h));
     if (!hit) continue;
-    if (hitFrom) mobs.damage(e, hit.damage, hitFrom.x, hitFrom.z, attacker === "player");
-    else mobs.hazard(e, hit.damage);
+    if (hitFrom) mobs.damage(e, hit.damage, hitFrom.x, hitFrom.z, attacker === "player", attacker?.type ?? null);
+    else mobs.hazard(e, hit.damage, "explosion");
     e.vx += hit.push[0]; e.vy += hit.push[1]; e.vz += hit.push[2];
   }
   items.explode(world, x, y, z, size, exploder);

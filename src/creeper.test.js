@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { JavaRandom } from "./lighting.js";
 import { creeperFields, creeperTick, creeperFlash, creeperFall, swellShould, swellState, creeperSafeTries, creeperDrops, creeperPose, creeperScale, creeperWhite, CREEPER_FUSE, CREEPER_RADIUS, GUNPOWDER } from "./creeper.js";
-import { ENTITY_TYPES, EntityWorld } from "./entities.js";
+import { ENTITY_TYPES, EntityWorld, setEntityRandom } from "./entities.js";
 
 const ref = JSON.parse(readFileSync(new URL("../public/research/creeper-reference.json", import.meta.url)));
 const records = (c) => ref.records.filter((r) => r.case === c);
@@ -106,12 +106,13 @@ test("EntityWorld creepers explode, drop gunpowder and keep powered/ignited acro
   assert.equal(boom.explode.source, e);
   assert.ok(w.events.some((ev) => ev.sound === "creeper.primed" && ev.pitch === 0.5));
   assert.equal(w.entities.includes(e), false);
-  // Killed: 5 XP and nextInt(3) gunpowder, no ambient say.
+  // Killed: nextInt(3) gunpowder on Entity.rand, then 5 XP at deathTime 20; no ambient say.
   const w2 = new EntityWorld(ground, [{ id: "mob-1", type: "creeper", x: 64.5, y: 32, z: 64.5, health: 20 }]);
-  w2.random = () => 0.99;
+  setEntityRandom(w2.entities[0], { nextInt: (n) => n - 1, nextFloat: () => 0.99, nextDouble: () => 0.99, nextGaussian: () => 0 });
   w2.damage(w2.entities[0], 30, 64, 64);
+  assert.equal(w2.events.filter((ev) => ev.drop === GUNPOWDER && ev.count === 1).length, 2);
+  for (let i = 0; i < 20; i++) w2.deathUpdate(w2.entities[0], ENTITY_TYPES.creeper);
   assert.ok(w2.events.some((ev) => ev.xp === 5));
-  assert.ok(w2.events.some((ev) => ev.drop === GUNPOWDER && ev.count === 2));
   assert.ok(w2.events.some((ev) => ev.sound === "mob.creeper.death"));
   const w3 = new EntityWorld(ground, [{ id: "mob-1", type: "creeper", x: 64.5, y: 32, z: 64.5, health: 20 }]);
   w3.damage(w3.entities[0], 1, 64, 64);
