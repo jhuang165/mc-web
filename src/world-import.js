@@ -3,7 +3,7 @@
 // world/player fields are built by the caller rather than copied from the file.
 const RUNTIME_FIELDS = [
   "position", "drops", "entities", "farms", "experience", "xpOrbs", "falling",
-  "weather", "projectiles", "arrows", "tnt", "fluidTicks", "fireTicks",
+  "weather", "projectiles", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks",
 ];
 
 export function importedRuntime(data) {

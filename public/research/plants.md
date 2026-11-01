@@ -149,3 +149,9 @@ from `javap` only.
 ## Falling-block blast deflection (0.22)
 
 Falling sand/gravel now receive explosion knockback, without taking damage or immediately dropping their carried block. The blast direction uses posY at the 0.98F box centre and inherited eye height 0. Deflected velocity persists through save/load and continues through normal falling/landing rules. `ExplosionEntityProbe` replays 72 original falling-sand blast targets; sand and gravel share the same entity class. See [reference](explosion-entities-reference.json).
+
+## Pending falling-block updates (0.22.3)
+
+Local saves and exports store `fallingTicks` separately from the existing `falling` entity array. The versioned queue retains remaining delays, scheduled block identity and insertion order for equal deadlines. A stale entry remains until due and suppresses duplicate requests for the same position/block. Valid empty queues stay asleep; missing or unsupported envelopes use the legacy edited-block wake migration. Invalid individual entries are skipped.
+
+`src/scheduled-ticks.test.js` compares repeated JSON reloads during a sand/gravel column fall against uninterrupted updates, including active entities, red-sand metadata and final blocks; it also checks stale identities, duplicates, ties, overdue ordering and malformed data. `src/world-import.test.js` checks that import retains the queue. These are port regression tests; original falling behavior probes are unchanged and original Java TileTicks serialization is not executed. Unified fluid/fire/falling queue ordering and world random continuity remain open.

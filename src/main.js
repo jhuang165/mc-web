@@ -496,6 +496,7 @@ function save() {
   active.farms=farming?.serialize()||[];
   active.experience=experience.serialize();active.xpOrbs=xpOrbs.serialize();
   active.falling=falling?.serialize()||[];
+  active.fallingTicks = falling?.save();
   active.updated = Date.now();
   const i = worlds.findIndex((w) => w.id === active.id);
   if (i < 0) worlds.unshift(active);
@@ -648,7 +649,7 @@ function launch(record) {
       drop: (stack, x, posY, z) => items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, posY, z, { delay: 10 }),
       apply: (changes) => { scene.updateBlocks(changes); saved = false; },
     }, record.falling).watch();
-    falling.wake();
+    falling.load(record.fallingTicks);
     farming=new Farming(world,record.farms);
     // Rain moistens farmland (BlockFarmland.updateTick: canLightningStrikeAt(x, y + 1, z)).
     farming.rained = (x, y, z) => canLightningStrikeAt(weather, world, x, y + 1, z);

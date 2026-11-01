@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { World, WATER, LAVA, FIRE } from "./world.js";
+import { World, WATER, LAVA, FIRE, SAND, GRAVEL } from "./world.js";
 import { Fluids } from "./fluids.js";
 import { Fire } from "./fire.js";
 import { Weather } from "./weather.js";
+import { FallingBlocks } from "./falling.js";
 import { JavaRandom } from "./lighting.js";
 
 const json = (value) => JSON.parse(JSON.stringify(value));
@@ -113,4 +114,79 @@ test("malformed tick entries are skipped, and overdue work retains order", () =>
   fl.updateTick = (...xyz) => seen.push(xyz);
   fl.tick();
   assert.deepEqual(seen, [[26, 11, 26]]);
+});
+
+
+test("falling columns retain one-tick deadlines and active entities across repeated reloads", () => {
+  const w = world(), original = new FallingBlocks(w).watch();
+  w.set(26, 19, 26, SAND, true, 1);
+  w.set(26, 20, 26, GRAVEL);
+  w.set(26, 21, 26, SAND);
+  original.tick();
+  assert.equal(original.save().entries[0].delay, 1);
+  let restored = new FallingBlocks(copy(w), {}, json(original.serialize())).watch();
+  restored.load(json(original.save()));
+  for (let i = 0; i < 50; i++) {
+    // Reload while a mixture of entities and pending column updates exists.
+    if (i === 2 || i === 5) {
+      const next = new FallingBlocks(copy(restored.world), {}, json(restored.serialize())).watch();
+      next.load(json(restored.save()));
+      restored = next;
+    }
+    original.tick(); restored.tick();
+    assert.deepEqual(restored.serialize(), original.serialize(), `entities at tick ${i}`);
+    assert.deepEqual(restored.save(), original.save(), `pending work at tick ${i}`);
+    assert.deepEqual(restored.world.data, w.data, `blocks at tick ${i}`);
+    assert.deepEqual(restored.world.meta, w.meta, `metadata at tick ${i}`);
+  }
+  assert.deepEqual([11, 12, 13].map(y => w.get(26, y, 26)), [SAND, GRAVEL, SAND]);
+  assert.equal(w.getMeta(26, 11, 26), 1);
+});
+
+test("falling queues keep stale identities, duplicate suppression and equal-time order", () => {
+  const w = world(), original = new FallingBlocks(w);
+  w.put(26, 19, 26, SAND, 0);
+  original.schedule(26, 19, 26);
+  w.put(26, 19, 26, GRAVEL, 0);
+  original.schedule(26, 19, 26);
+  w.put(27, 19, 26, SAND, 0);
+  original.schedule(27, 19, 26);
+  original.tick();
+  const restored = new FallingBlocks(copy(w));
+  restored.load(json(original.save()));
+  restored.schedule(26, 19, 26);
+  assert.deepEqual(restored.save(), original.save(), "repeat request keeps the earlier deadline");
+  const visited = [];
+  restored.fall = (x, y, z) => visited.push([x, y, z, restored.world.get(x, y, z)]);
+  restored.tick();
+  assert.deepEqual(visited, [[26, 19, 26, GRAVEL], [27, 19, 26, SAND]]);
+});
+
+test("falling queues validate imports, order overdue work and preserve explicit empty queues", () => {
+  const w = world(), falling = new FallingBlocks(w);
+  w.set(26, 19, 26, SAND);
+  for (const data of [undefined, { version: 2, time: 20, entries: [] }, { version: 1, time: -1, entries: [] }]) {
+    falling.pending.clear();
+    falling.load(data);
+    assert.ok(falling.pending.size > 0, "legacy or unsupported envelopes wake edited blocks");
+  }
+  falling.load({ version: 1, time: 20, entries: [] });
+  falling.tick(); falling.tick();
+  assert.equal(w.get(26, 19, 26), SAND, "an explicit empty queue stays asleep");
+  assert.equal(falling.pending.size, 0);
+  w.set(27, 19, 26, GRAVEL);
+  const entry = { x: 26, y: 19, z: 26, block: SAND, delay: -2 };
+  falling.load({ version: 1, time: 100, entries: [
+    null, { ...entry, x: -1 }, { ...entry, y: 1.5 }, { ...entry, block: WATER },
+    { ...entry, delay: Infinity }, { ...entry, delay: Number.MAX_SAFE_INTEGER },
+    entry, { ...entry, delay: -10 },
+    { x: 27, y: 19, z: 26, block: GRAVEL, delay: -3 },
+  ] });
+  assert.deepEqual(falling.save().entries, [
+    { x: 27, y: 19, z: 26, block: GRAVEL, delay: -3 }, entry,
+  ], "first duplicate wins; earliest deadline runs first");
+  const visited = [];
+  falling.fall = (x, y, z) => visited.push([x, y, z]);
+  falling.tick();
+  assert.deepEqual(visited, [[27, 19, 26], [26, 19, 26]]);
 });

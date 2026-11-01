@@ -5,6 +5,7 @@ import { explosionImpact } from "./explosion.js";
 import { WATER, LAVA, FIRE, SAND, GRAVEL } from "./world.js";
 import { moveEntity } from "./entities.js";
 import { replaceable } from "./plants.js";
+import { saveTicks, readTicks } from "./scheduled-ticks.js";
 
 const f = Math.fround;
 export const FLINT = 313;
@@ -39,8 +40,25 @@ export class FallingBlocks {
   }
   // BlockFalling.onBlockAdded and onNeighborBlockChange both schedule an update in tickRate (2).
   schedule(x, y, z, b = this.world.get(x, y, z)) {
+    this.enqueue(x, y, z, b, FALL_DELAY);
+  }
+  enqueue(x, y, z, b, delay) {
     const k = key(x, y, z) + ":" + b;
-    if (!this.pending.has(k)) this.pending.set(k, { x, y, z, block: b, time: this.time + FALL_DELAY });
+    if (!this.pending.has(k)) this.pending.set(k, { x, y, z, block: b, time: this.time + delay });
+  }
+  // Keep scheduled work separate from the existing falling-entity save array.
+  save() {
+    return saveTicks([...this.pending.values()].map((e, id) => ({ ...e, id })), this.time);
+  }
+  load(data) {
+    const state = readTicks(data, this.world, isFallingBlock);
+    if (!state) { this.wake(); return; }
+    this.time = state.time;
+    this.pending.clear();
+    // Preserve the first entry per block/position, even when it is now stale.
+    for (const e of state.entries) this.enqueue(e.x, e.y, e.z, e.block, e.delay);
+    // Stable sort also handles imported entries that are not already time-ordered.
+    this.pending = new Map([...this.pending].sort((a, b) => a[1].time - b[1].time));
   }
   watch() {
     const next = this.world.onChange;
@@ -54,7 +72,7 @@ export class FallingBlocks {
     };
     return this;
   }
-  // A saved world's edited sand and gravel: anything left unsupported falls once loaded.
+  // Legacy saves without a queue: edited unsupported sand/gravel falls once loaded.
   wake() {
     for (const k of this.world.edits.keys()) {
       const [x, y, z] = k.split(",").map(Number);
