@@ -184,9 +184,9 @@ test("a mid-smelt save resumes without duplicating or losing inputs and fuel", (
 test("old terrain is stable, new terrain adds ore, and both have safe spawns", () => {
   const old = new World("Overworld", "meadow", 1),
     modern = new World("Overworld", "meadow", 2);
-  assert.equal(old.data.includes(16), false);
-  assert.equal(modern.data.includes(16), true);
-  assert.notDeepEqual(old.data, modern.data);
+  assert.equal(old.snapshot().data.includes(16), false);
+  assert.equal(modern.snapshot().data.includes(16), true);
+  assert.notDeepEqual(old.snapshot().data, modern.snapshot().data);
 });
 test("untrusted saved resources and stats are bounded", () => {
   const p = new Survival({

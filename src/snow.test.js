@@ -220,30 +220,30 @@ test("existing presets generate exactly as before at version 6; the snowy preset
   for (const seed of ["Minecraft", "d", "a", "Overworld"])
     for (const biome of ["meadow", "alpine", "island"]) {
       const old = new World(seed, biome, 5), now = new World(seed, biome, 6);
-      assert.deepEqual(now.data, old.data, `${seed} ${biome}`);
-      assert.deepEqual(now.meta, old.meta, `${seed} ${biome}`);
+      assert.deepEqual(now.snapshot(), old.snapshot(), `${seed} ${biome}`);
     }
   assert.equal(new World("x").generationVersion, 8); // 7 regrows trees (trees.test.js), 8 adds sand and sugar cane (plants.test.js); 6 is pinned above
   for (const seed of ["Minecraft", "d"]) {
     const a = new World(seed, "snowy", 6), b = new World(seed, "snowy", 6), old = new World(seed, "snowy", 5);
-    assert.deepEqual(a.data, b.data);
+    const A = a.snapshot(), O = old.snapshot();
+    assert.deepEqual(A.data, b.snapshot().data);
     assert.equal(a.edits.size, 0); // generated blocks are not saved edits
     let ice = 0, snow = 0, grass = 0, change = 0;
-    for (let i = 0; i < a.data.length; i++) {
-      if (a.data[i] === ICE) ice++;
-      if (a.data[i] === SNOW_LAYER) snow++;
-      if (a.data[i] === 1) grass++;
-      if (a.data[i] !== old.data[i]) {
+    for (let i = 0; i < A.data.length; i++) {
+      if (A.data[i] === ICE) ice++;
+      if (A.data[i] === SNOW_LAYER) snow++;
+      if (A.data[i] === 1) grass++;
+      if (A.data[i] !== O.data[i]) {
         change++;
-        assert.ok(a.data[i] === ICE || a.data[i] === SNOW_LAYER, "only ice and snow differ");
+        assert.ok(A.data[i] === ICE || A.data[i] === SNOW_LAYER, "only ice and snow differ");
       }
-      assert.ok(a.meta[i] === 0 || ![SNOW_LAYER, ICE].includes(a.data[i]));
+      assert.ok(A.meta[i] === 0 || ![SNOW_LAYER, ICE].includes(A.data[i]));
     }
     // Grass stays the top layer (Ice Plains' spikes flag is off); the surface is snow and ice.
     assert.ok(ice > 100 && snow > 4000 && grass > 4000, `${seed}: ${ice} ice ${snow} snow ${grass} grass`);
     assert.equal(change, ice + snow);
     // Version 5 snowy worlds stay bare.
-    assert.ok(!old.data.includes(SNOW_LAYER) && !old.data.includes(ICE));
+    assert.ok(!O.data.includes(SNOW_LAYER) && !O.data.includes(ICE));
     // Every exposed top is done: no unfrozen source water under the open sky (dark enough), and
     // every layer stands on something that can hold it.
     const light = generationLight(a);

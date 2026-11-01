@@ -5,8 +5,8 @@ test("terrain is deterministic and seeds produce different worlds", () => {
   const a = new World("a"),
     b = new World("a"),
     c = new World("b");
-  assert.deepEqual(a.data, b.data);
-  assert.notDeepEqual(a.data, c.data);
+  assert.deepEqual(a.snapshot(), b.snapshot());
+  assert.notDeepEqual(a.snapshot().data, c.snapshot().data);
   assert.equal(a.edits.size, 0);
 });
 test("edits survive save / restore; bedrock cannot be destroyed", () => {
@@ -16,7 +16,7 @@ test("edits survive save / restore; bedrock cannot be destroyed", () => {
   assert.equal(a.set(20, 0, 20, 0), false);
   const b = new World("save");
   b.restore([...a.edits]);
-  assert.deepEqual(a.data, b.data);
+  assert.deepEqual(a.snapshot(), b.snapshot());
   assert.throws(() => b.restore([["1,2,3", 900]]));
 });
 test("ray selection finds a block and correct placement neighbor", () => {

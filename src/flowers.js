@@ -145,8 +145,8 @@ export function populateSeed(worldSeed, cx, cz) {
 }
 // BiomeDecorator.func_150513_a flower loop, for every 16x16 chunk whose
 // decoration area (offset by 8) touches the world.
-export function decorateFlowers(world, { yellow, red, biome }) {
-  const ids = { yellow, red }, size = Math.sqrt(world.data.length / 64) | 0;
+export function decorateFlowers(world, { yellow, red, biome, size }) {
+  const ids = { yellow, red };
   for (let cx = -1; cx * 16 < size; cx++)
     for (let cz = -1; cz * 16 < size; cz++) {
       const random = new JRandom(populateSeed(world.numericSeed, cx, cz));

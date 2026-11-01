@@ -142,8 +142,7 @@ test("weather, fluid and tree updates share one restored stream through interlea
   for (let tick = 0; tick < 160; tick++) {
     if ([1, 19, 63, 100].includes(tick)) restored = reload(restored);
     assert.deepEqual(step(restored, tick), step(original, tick), `effects at ${tick}`);
-    assert.deepEqual(restored.w.data, original.w.data, `blocks at ${tick}`);
-    assert.deepEqual(restored.w.meta, original.w.meta, `metadata at ${tick}`);
+    assert.deepEqual(restored.w.snapshot(), original.w.snapshot(), `blocks at ${tick}`);
     assert.deepEqual(restored.fluids.save(), original.fluids.save(), `fluid queue at ${tick}`);
     assert.deepEqual(restored.fire.save(), original.fire.save(), `fire queue at ${tick}`);
     assert.deepEqual(restored.weather.saveSimulation(), original.weather.saveSimulation(), `random state at ${tick}`);
@@ -192,8 +191,7 @@ test("blast rays, drops, ore XP and chain fuses resume the shared weather stream
     resumed = reload(resumed);
     const expected = step(original, tick), actual = step(resumed, tick);
     assert.deepEqual(actual, expected, `complete blast result ${tick}`);
-    assert.deepEqual(resumed.w.data, original.w.data);
-    assert.deepEqual(resumed.w.meta, original.w.meta);
+    assert.deepEqual(resumed.w.snapshot(), original.w.snapshot());
     assert.deepEqual(resumed.weather.saveSimulation(), original.weather.saveSimulation());
     drops += actual.drops.length; xp += actual.xp.length; chains += actual.primed.length;
   }

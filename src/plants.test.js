@@ -257,7 +257,7 @@ test("a running world: support breaks cascade, water loss drops cane, a placed n
 });
 
 test("generation version 8 adds beaches and sugar cane by water; versions 4 to 7 are untouched", () => {
-  const sha = (w) => createHash("sha1").update(w.data).digest("hex").slice(0, 12);
+  const sha = (w) => createHash("sha1").update(w.snapshot().data).digest("hex").slice(0, 12);
   // sha1 of the block array before this change.
   const pinned = {
     4: ["ea4ae0578e79", "de21ca021ce6", "ed79be5969e0", "5fa3e6f6a18d"], 5: ["08a2947897be", "ee85cecbc9dd", "6ccaa0e0dec5", "39a9b41c4c8b"],
@@ -271,16 +271,16 @@ test("generation version 8 adds beaches and sugar cane by water; versions 4 to 7
   let reeds = 0, sand = 0;
   for (const seed of ["Overworld", "Minecraft", "d"]) {
     const a = new World(seed, "meadow", 8), b = new World(seed, "meadow", 8), old = new World(seed, "meadow", 7);
-    assert.deepEqual(a.data, b.data);
-    assert.deepEqual(a.meta, b.meta);
+    assert.deepEqual(a.snapshot(), b.snapshot());
     assert.equal(a.edits.size, 0);
-    for (let i = 0; i < a.data.length; i++) {
-      if (a.data[i] === old.data[i]) continue;
+    const A = a.snapshot().data, O = old.snapshot().data;
+    for (let i = 0; i < A.length; i++) {
+      if (A[i] === O[i]) continue;
       // Only sand over dirt or grass, sugar cane in air, and the knock-on changes of the later
       // decorators (trees and flowers, which read the new ground).
-      if (a.data[i] === SAND) assert.ok([1, 2].includes(old.data[i]), `${seed} sand over ${old.data[i]}`);
-      if (a.data[i] === REEDS) reeds++;
-      if (a.data[i] === SAND) sand++;
+      if (A[i] === SAND) assert.ok([1, 2].includes(O[i]), `${seed} sand over ${O[i]}`);
+      if (A[i] === REEDS) reeds++;
+      if (A[i] === SAND) sand++;
     }
     for (let x = 0; x < SIZE; x++)
       for (let z = 0; z < SIZE; z++)

@@ -162,15 +162,17 @@ test("legacy 128 x 128 x 64 worlds migrate to chunks and back without moving or 
   assert.equal(store.getBlock(5, 0, 5), 7, "bedrock floor at y 0");
   assert.equal(store.getBlock(5, -1, 5), 0, "the port's virtual bedrock below y 0 is not a stored cell");
   assert.equal(store.getBlock(-1, 20, 5), 0, "nothing outside the legacy area");
-  const back = { data: new Uint8Array(world.data.length), meta: new Uint8Array(world.meta.length) };
-  const { inexact, state } = toLegacyWorld(store, back);
+  // A differently seeded world: every cell is overwritten.
+  const into = new World("chunk-migration-back", "alpine", 8);
+  const { inexact, state } = toLegacyWorld(store, into);
+  const back = into.snapshot(), cells = world.snapshot();
   assert.deepEqual(inexact, [], "every stored cell is an exact original state");
   // Only stray metadata on blocks whose original state is fixed (stone meta 3, say) is dropped.
-  for (let i = 0; i < world.data.length; i++) {
-    if (back.data[i] === world.data[i] && back.meta[i] === world.meta[i]) continue;
+  for (let i = 0; i < cells.data.length; i++) {
+    if (back.data[i] === cells.data[i] && back.meta[i] === cells.meta[i]) continue;
     assert.equal(i % HEIGHT, row);
-    assert.equal(back.data[i], world.data[i]);
-    assert.ok(world.meta[i] !== 0 && back.meta[i] === 0);
+    assert.equal(back.data[i], cells.data[i]);
+    assert.ok(cells.meta[i] !== 0 && back.meta[i] === 0);
   }
   for (let id = 1; id < BLOCKS.length; id++) {
     const i = ((p) => (p[0] * SIZE + p[2]) * HEIGHT + p[1])(at(id, 0));

@@ -92,7 +92,7 @@ test('1.7.10 swords and shears harvest string; shears never return a cobweb with
 test('web edits and stacks survive save/restore; water washes the block away', async () => {
   const { Fluids } = await import('./fluids.js');
   const w=new World('web persistence');
-  w.data.fill(0);w.meta.fill(0);w.edits.clear();
+  for(const c of w.chunks.values()){c.blocks.fill(0);c.meta.fill(0);c.tickCounts=null;}w.edits.clear();
   w.set(64,40,64,WEB);
   const restored=new World('web persistence');restored.restore([...w.edits]);
   assert.equal(restored.get(64,40,64),WEB);

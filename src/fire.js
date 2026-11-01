@@ -421,8 +421,8 @@ export class Fire {
     const w = this.world, n = SIZE / 16, secs = HEIGHT / 16, marks = new Uint8Array(n * n * secs);
     for (let x = 0; x < SIZE; x++)
       for (let z = 0; z < SIZE; z++) {
-        const base = (x >> 4) * n * secs + (z >> 4) * secs, col = w.index(x, 0, z);
-        for (let y = 0; y < HEIGHT; y++) if (RANDOM_TICKS[w.data[col + y]]) marks[base + (y >> 4)] = 1;
+        const base = (x >> 4) * n * secs + (z >> 4) * secs;
+        for (let y = 0; y < HEIGHT; y++) if (RANDOM_TICKS[w.get(x, y, z)]) marks[base + (y >> 4)] = 1;
       }
     this.marks = marks;
   }

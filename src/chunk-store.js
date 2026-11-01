@@ -305,11 +305,11 @@ export function fromLegacyWorld(world, { stateAt = null, hasSky = true } = {}) {
       const blocks = new Int16Array(256 * k), meta = new Uint8Array(256 * k);
       for (let lx = 0; lx < 16; lx++)
         for (let lz = 0; lz < 16; lz++) {
-          const x = cx * 16 + lx, z = cz * 16 + lz, src = (x * SIZE + z) * HEIGHT;
+          const x = cx * 16 + lx, z = cz * 16 + lz;
           for (let y = 0; y < HEIGHT; y++) {
-            const id = world.data[src + y];
+            const id = world.get(x, y, z);
             if (id === 0) continue;
-            const m = world.meta[src + y], mapped = toOriginal(id, m, stateAt?.(x, y, z, id, m));
+            const m = world.getMeta(x, y, z), mapped = toOriginal(id, m, stateAt?.(x, y, z, id, m));
             if (!mapped) throw new RangeError(`no original block for internal id ${id}`);
             const i = lx * k * 16 + lz * k + y;
             blocks[i] = mapped[0];
@@ -321,23 +321,21 @@ export function fromLegacyWorld(world, { stateAt = null, hasSky = true } = {}) {
   return store;
 }
 
-// Writes the legacy area of a store back into a World's data/meta arrays. Returns the cells that
+// Writes the legacy area of a store back into a World's cells. Returns the cells that
 // changed meaning: [x, y, z, originalId, originalMeta] for original blocks without a port family or
 // without an exact port state, and the side state fromOriginal produced, keyed "x,y,z".
 export function toLegacyWorld(store, world) {
   const inexact = [], state = new Map();
   for (let x = 0; x < SIZE; x++)
     for (let z = 0; z < SIZE; z++) {
-      const c = store.getChunk(x >> 4, z >> 4), dst = (x * SIZE + z) * HEIGHT;
+      const c = store.getChunk(x >> 4, z >> 4);
       for (let y = 0; y < HEIGHT; y++) {
         const mc = c ? c.getBlock(x & 15, y, z & 15) : 0, mm = c ? c.getMeta(x & 15, y, z & 15) : 0;
         const r = mc === 0 && mm === 0 ? { id: 0, meta: 0, exact: true } : fromOriginal(mc, mm);
-        world.data[dst + y] = r ? r.id : 0;
-        world.meta[dst + y] = r ? r.meta : 0;
+        world.setRaw(x, y, z, r ? r.id : 0, r ? r.meta : 0);
         if (!r || !r.exact) inexact.push([x, y, z, mc, mm]);
         if (r?.state) state.set(`${x},${y},${z}`, r.state);
       }
     }
-  world.tickCounts = null;
   return { inexact, state };
 }

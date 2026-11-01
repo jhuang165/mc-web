@@ -275,8 +275,7 @@ test("meta saves and loads; old saves without it load as sources; bad meta is re
   const saved = JSON.parse(JSON.stringify([...w.edits]));
   const r = clear(new World("fluids"));
   r.restore(saved);
-  assert.deepEqual(r.data, w.data);
-  assert.deepEqual(r.meta, w.meta);
+  assert.deepEqual(r.snapshot(), w.snapshot());
   const old = clear(new World("fluids"));
   old.restore([["40,11,40", WATER]]);
   assert.equal(old.get(40, 11, 40), WATER);
@@ -296,8 +295,7 @@ test("a loaded world wakes the water that touches edits and settles again", () =
   f2.wake();
   assert.ok(f2.pending.size > 0);
   run(f2, 200);
-  assert.deepEqual(r.data, w.data);
-  assert.deepEqual(r.meta, w.meta);
+  assert.deepEqual(r.snapshot(), w.snapshot());
 });
 
 // public/research/fluids-reference.json holds what the unchanged original

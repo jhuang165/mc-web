@@ -231,7 +231,7 @@ export class LightVolume {
   }
   column(x, z) {
     let y = HEIGHT - 1;
-    while (y >= 0 && lightOpacity(this.world.data[(x * SIZE + z) * HEIGHT + y]) === 0) y--;
+    while (y >= 0 && lightOpacity(this.world.get(x, y, z)) === 0) y--;
     this.heights[x * SIZE + z] = y + 1;
   }
   skyAt(x, y, z) {
@@ -278,7 +278,7 @@ export class LightVolume {
     for (let x = x0; x <= x1; x++)
       for (let z = z0; z <= z1; z++)
         for (let y = 0; y < H; y++, k++) {
-          const i = (x * SIZE + z) * H + y, b = w.data[i], op = lightOpacity(b), e = b ? this.emission(x, y, z, b) : 0;
+          const i = (x * SIZE + z) * H + y, b = w.get(x, y, z), op = lightOpacity(b), e = b ? this.emission(x, y, z, b) : 0;
           oldSky[k] = this.sky[i];
           oldBlock[k] = this.block[i];
           emit[k] = e;

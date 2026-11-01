@@ -193,55 +193,98 @@ export function solidBlock(b, meta = 0) {
   if (b === SNOW_LAYER) return (meta & 7) !== 0;
   return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== FIRE && b !== WEB && b !== REEDS && !isPlant(b);
 }
+// One 16 x 16 chunk column of the live world (WORLD-02b): port block ids and 4-bit metadata, one byte
+// each, at (lx * 16 + lz) * HEIGHT + y, and the random-tick refcount of each 16-high section
+// (ExtendedBlockStorage.tickRefCount), built on first use. Ids are this build's internal ones;
+// chunk-store.js holds the original-id form.
+export class WorldChunk {
+  constructor(x, z) {
+    this.x = x;
+    this.z = z;
+    this.blocks = new Uint8Array(16 * 16 * HEIGHT);
+    this.meta = new Uint8Array(16 * 16 * HEIGHT);
+    this.tickCounts = null;
+  }
+  sectionTickCount(s) {
+    if (!this.tickCounts) {
+      this.tickCounts = new Int32Array(HEIGHT / 16);
+      for (let i = 0; i < this.blocks.length; i++) if (ticksRandomly(this.blocks[i])) this.tickCounts[(i % HEIGHT) >> 4]++;
+    }
+    return this.tickCounts[s];
+  }
+}
+const cellIndex = (x, y, z) => ((x & 15) * 16 + (z & 15)) * HEIGHT + y;
+// Chunk map key; the live world's chunks stay well inside +-2^15.
+const columnKey = (cx, cz) => (cx + 32768) * 65536 + (cz + 32768);
 export class World {
   constructor(seed = "Overworld", biome = "meadow", generationVersion = 8) {
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
     this.numericSeed = hashSeed(seed);
-    this.data = new Uint8Array(SIZE * SIZE * HEIGHT);
-    // Block metadata (a 4-bit value per cell, like Chunk's nibble array); only
-    // flowing water uses it. Generated water is level 0, a source.
-    this.meta = new Uint8Array(SIZE * SIZE * HEIGHT);
+    // Cells live in 16 x 16 columns keyed by chunk coordinate; this world still has exactly the
+    // SIZE / 16 x SIZE / 16 columns at 0..SIZE - 1. Metadata is a 4-bit value per cell, like Chunk's
+    // nibble array. Generated water is level 0, a source.
+    this.chunks = new Map();
+    for (let cx = 0; cx < SIZE / 16; cx++) for (let cz = 0; cz < SIZE / 16; cz++) this.chunks.set(columnKey(cx, cz), new WorldChunk(cx, cz));
+    this.lastChunk = null;
     this.edits = new Map();
     this.onChange = null;
     // Saved block light (World.getSavedLightValue(EnumSkyBlock.Block)): the scene sets this to
     // its LightVolume; until then snow.js works it out from the lava.
     this.blockLight = null;
-    this.tickCounts = null;
     this.generate();
   }
+  // A number unique to each cell, in the legacy x-major order (fire and fluid queues key by it).
   index(x, y, z) {
     return (x * SIZE + z) * HEIGHT + y;
   }
   inside(x, y, z) {
     return x >= 0 && x < SIZE && z >= 0 && z < SIZE && y >= 0 && y < HEIGHT;
   }
+  // The column holding chunk (cx, cz), or null.
+  chunkAt(cx, cz) {
+    const c = this.lastChunk;
+    if (c && c.x === cx && c.z === cz) return c;
+    const found = this.chunks.get(columnKey(cx, cz)) || null;
+    if (found) this.lastChunk = found;
+    return found;
+  }
   get(x, y, z) {
     if (y < 0) return 11;
     if (!this.inside(x, y, z)) return 0;
-    return this.data[this.index(x, y, z)];
+    return this.chunkAt(x >> 4, z >> 4).blocks[cellIndex(x, y, z)];
   }
   getMeta(x, y, z) {
-    return this.inside(x, y, z) ? this.meta[this.index(x, y, z)] : 0;
+    return this.inside(x, y, z) ? this.chunkAt(x >> 4, z >> 4).meta[cellIndex(x, y, z)] : 0;
   }
   solid(x, y, z) {
     const b = this.get(x, y, z);
-    return solidBlock(b, b === SNOW_LAYER ? this.meta[this.index(x, y, z)] : 0);
+    return solidBlock(b, b === SNOW_LAYER ? this.getMeta(x, y, z) : 0);
   }
   // Section (16 high) random-tick refcounts, kept up to date by put() once built.
   sectionTickCount(cx, cz, s) {
-    if (!this.tickCounts) {
-      const n = SIZE / 16;
-      this.tickCounts = new Int32Array(n * n * (HEIGHT / 16));
-      for (let x = 0; x < SIZE; x++)
-        for (let z = 0; z < SIZE; z++)
-          for (let y = 0; y < HEIGHT; y++) if (ticksRandomly(this.data[this.index(x, y, z)])) this.tickCounts[this.tickSection(x, y, z)]++;
-    }
-    return this.tickCounts[(cx * (SIZE / 16) + cz) * (HEIGHT / 16) + s];
+    return this.chunkAt(cx, cz).sectionTickCount(s);
   }
-  tickSection(x, y, z) {
-    return ((x >> 4) * (SIZE / 16) + (z >> 4)) * (HEIGHT / 16) + (y >> 4);
+  // Every cell as flat block and metadata arrays in index() order (tests and whole-world copies).
+  snapshot() {
+    const data = new Uint8Array(SIZE * SIZE * HEIGHT), meta = new Uint8Array(SIZE * SIZE * HEIGHT);
+    for (const c of this.chunks.values())
+      for (let lx = 0; lx < 16; lx++)
+        for (let lz = 0; lz < 16; lz++) {
+          const from = (lx * 16 + lz) * HEIGHT, to = this.index(c.x * 16 + lx, 0, c.z * 16 + lz);
+          data.set(c.blocks.subarray(from, from + HEIGHT), to);
+          meta.set(c.meta.subarray(from, from + HEIGHT), to);
+        }
+    return { data, meta };
+  }
+  // Writes a cell with no bounds, edit or tick-count bookkeeping (generation and migration).
+  // Tick counts are rebuilt on next use.
+  setRaw(x, y, z, b, meta = 0) {
+    const c = this.chunkAt(x >> 4, z >> 4), i = cellIndex(x, y, z);
+    c.blocks[i] = b;
+    c.meta[i] = meta;
+    c.tickCounts = null;
   }
   // Writes a block and its metadata without telling onChange (fluids.js uses it
   // for its own edits). A tracked edit is saved as block | meta << 8, so saves
@@ -258,14 +301,14 @@ export class World {
       meta > 15
     )
       return false;
-    const i = this.index(x, y, z);
-    if (this.tickCounts) {
-      const section = this.tickSection(x, y, z);
-      if (ticksRandomly(this.data[i])) this.tickCounts[section]--;
-      if (ticksRandomly(b)) this.tickCounts[section]++;
+    const c = this.chunkAt(x >> 4, z >> 4), i = cellIndex(x, y, z);
+    if (c.tickCounts) {
+      const section = y >> 4;
+      if (ticksRandomly(c.blocks[i])) c.tickCounts[section]--;
+      if (ticksRandomly(b)) c.tickCounts[section]++;
     }
-    this.data[i] = b;
-    this.meta[i] = meta;
+    c.blocks[i] = b;
+    c.meta[i] = meta;
     if (track) this.edits.set(`${x},${y},${z}`, meta ? b | (meta << 8) : b);
     return true;
   }
@@ -330,7 +373,7 @@ export class World {
             )
               b = 0;
           }
-          this.data[this.index(x, y, z)] = b;
+          if (b) this.setRaw(x, y, z, b);
         }
       }
     // Lakes are carved before trees, as in populate, so trees skip columns a lake took.
@@ -366,7 +409,7 @@ export class World {
       }
     if(this.generationVersion>=3)for(let x=2;x<SIZE-2;x++)for(let z=2;z<SIZE-2;z++){const y=heights[x*SIZE+z]+1;if(this.get(x,y-1,z)===1&&this.get(x,y,z)===0&&hash(x,z,s+603)<.095)this.set(x,y,z,39,false);}
     // Version 4 adds BiomeDecorator's flowers; older saves keep their terrain.
-    if(this.generationVersion>=4)decorateFlowers(this,{yellow:YELLOW_FLOWER,red:RED_FLOWER,heights,biome:this.biome});
+    if(this.generationVersion>=4)decorateFlowers(this,{yellow:YELLOW_FLOWER,red:RED_FLOWER,heights,biome:this.biome,size:SIZE});
     if (plants) decorateReeds(this, plants);
     // BiomeDecorator runs its liquid springs after the flowers (version 5).
     if (lakes) generateSprings(this, lakes);

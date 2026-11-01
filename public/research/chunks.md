@@ -27,7 +27,7 @@ All of them matched on the first run.
 - Light values are stored but not computed in chunks; height maps, precipitation heights and biomes stay at their constructor values.
 - No tile entities, entity lists, neighbour updates, block-added/removed hooks, scheduled or random ticks per section.
 - No chunk generation and no Anvil/NBT format. Loading and unloading are below (WORLD-02a).
-- The live `World`, renderer and saves still use the legacy arrays.
+- The live `World` moved into chunk columns in WORLD-02b (below); the renderer and saves still go through its legacy API.
 
 ## Chunk lifecycle (WORLD-02a)
 
@@ -73,8 +73,27 @@ The first WORLD-02 slice ports when the original server loads, populates, queues
 
 ### Not done (later WORLD-02 slices)
 
-- **Not connected.** The live `World`, generation, renderer, lighting and saves still use the 128 × 128 × 64 arrays.
+- **Not connected.** The live `World` keeps its cells in chunk columns since WORLD-02b, but generation, the renderer, lighting and saves still treat it as one 128 × 128 × 64 world.
 - **Lighting.** The probe world has no sky, so `func_150809_p` skips its lighting. Sky-light population is a `lightPopulate` hook.
 - **Entities, tile entities and pending ticks** don't move with chunks yet. The load and unload hooks are where they will attach.
 - **No networking parts.** Block-change batching (`flagChunkForUpdate`/`sendChunkUpdate`) and chunk packets are not ported; the send queue is kept as an order only. `isTicked` is never set, because block ticking does not run here.
 - **Storage.** No Anvil/region format and no asynchronous chunk I/O.
+
+## Live World in chunk columns (WORLD-02b)
+
+The live `World` no longer keeps two flat 128 × 128 × 64 arrays. Its cells now live in 64 `WorldChunk` columns (16 × 16 × 64, chunk coordinates 0–7 on both axes) in a `Map` keyed by chunk coordinate, with a one-entry lookup cache. The API is unchanged: `get`, `getMeta`, `solid`, `put` and `set` behave as before, and the finite bounds stay. Reads below y 0 return the virtual bedrock; reads outside the edges or above the top return air; writes outside the bounds and to the bedrock layer are refused.
+
+- **Layout.** In each column, cell `(x, y, z)` is at `((x & 15) * 16 + (z & 15)) * 64 + y`. `World.index()` keeps the old flat order, because the fire and fluid queues use it as a cell key.
+- **Tick counts.** Each column keeps its own section random-tick counts, the per-column analogue of `ExtendedBlockStorage.tickRefCount`. They are built lazily and updated on `put`.
+- **`snapshot()`** returns flat `{ data, meta }` in `index()` order, for tests and whole-world copies. **`setRaw()`** writes a cell with no bounds checks or edit bookkeeping; generation and `toLegacyWorld` use it.
+- **Readers moved off the arrays.** `lighting.js`, `snow.js` (generation light), `fire.js`, `flowers.js` and `chunk-store.js` now read cells through `get`, `getMeta` or `snapshot()`.
+
+`src/world-chunks.test.js` compares against sha1 fingerprints of the flat arrays, recorded before the change. It covers 14 worlds (terrain versions 1–8 with seed "Overworld", plus meadow, alpine, island and snowy worlds, and older snowy and alpine versions) and the `LightVolume` after five edits. All are byte-identical. In the browser, a freshly created world gives the same fingerprint as in node, renders all 64 chunk meshes, and relights correctly when blocks are broken on either side of a column boundary.
+
+Node timings, before → after: generating the 14 worlds, 385 → 381 ms; the full `LightVolume`, 111 → 122 ms; 5 million `get` calls, 16 → 20 ms.
+
+### Not done
+
+- `ChunkProviderServer` and `PlayerManager` are not connected to the game loop. Columns are never loaded, unloaded or generated on demand, and the world stays 128 × 128 × 64.
+- `LightVolume` is still one flat volume, not per-chunk light arrays. Saves are still edit lists over regenerated terrain.
+- Rendering still builds one mesh per 16 × 16 column from `World.get`; it does not read `WorldChunk` directly.

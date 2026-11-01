@@ -197,18 +197,18 @@ test("java.util.Random matches the JDK for known seeds", () => {
 
 // World generation: lakes and springs from generationVersion 5.
 const liquids = (w) => {
-  const out = [];
-  for (let i = 0; i < w.data.length; i++) if (w.data[i] === WATER || w.data[i] === LAVA) out.push(i);
+  const out = [], data = w.snapshot().data;
+  for (let i = 0; i < data.length; i++) if (data[i] === WATER || data[i] === LAVA) out.push(i);
   return out;
 };
 test("lakes and springs generate deterministically from version 5", () => {
   const a = new World("Minecraft"), b = new World("Minecraft"), c = new World("Overworld");
-  assert.deepEqual(a.data, b.data);
-  assert.notDeepEqual(a.data, c.data);
+  assert.deepEqual(a.snapshot(), b.snapshot());
+  assert.notDeepEqual(a.snapshot().data, c.snapshot().data);
   assert.equal(a.generationVersion, 8); // the default; snow.test.js pins that 6 only adds snow and ice, trees.test.js that 7 only regrows trees, plants.test.js that 8 only adds beaches and sugar cane
   // Versions 1 to 3 are byte for byte what they were before lakes existed (sha1 of the
   // block array taken from the generator before this change), so old saves keep their terrain.
-  const sha = (w) => createHash("sha1").update(w.data).digest("hex").slice(0, 12);
+  const sha = (w) => createHash("sha1").update(w.snapshot().data).digest("hex").slice(0, 12);
   const pinned = { "1:Overworld": "d3d75dd65871", "1:Minecraft": "ebcdf3132eac", "2:Overworld": "1d1b3410087d",
     "2:Minecraft": "20a9cba14ab9", "3:Overworld": "86feac00a1f0", "3:Minecraft": "4d89721f604a" };
   for (const [key, hash] of Object.entries(pinned)) {
@@ -224,7 +224,8 @@ test("generated liquid is settled: untracked, source level, and no fluid ticks o
     const w = new World(seed);
     assert.equal(w.edits.size, 0);
     // Generated liquid is all source level (red flowers carry their own metadata).
-    assert.equal(w.meta.every((m, i) => m === 0 || (w.data[i] !== WATER && w.data[i] !== LAVA)), true);
+    const { data, meta } = w.snapshot();
+    assert.equal(meta.every((m, i) => m === 0 || (data[i] !== WATER && data[i] !== LAVA)), true);
     const fl = new Fluids(w);
     fl.wake(); // wakes liquid next to saved edits: there are none
     assert.equal(fl.pending.size, 0);
@@ -233,7 +234,7 @@ test("generated liquid is settled: untracked, source level, and no fluid ticks o
   // 'd' has a lava lake: lava exists, and it is walled with stone and open above.
   const w = new World("d");
   let lava = 0;
-  for (let i = 0; i < w.data.length; i++) if (w.data[i] === LAVA) lava++;
+  for (const b of w.snapshot().data) if (b === LAVA) lava++;
   assert.ok(lava > 20);
 });
 

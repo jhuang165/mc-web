@@ -38,8 +38,7 @@ test("water resumes at its remaining delay and matches uninterrupted flow after 
     assert.deepEqual(restored.tick(), original.tick(), `flow at tick ${i}`);
     assert.deepEqual(restored.save(), original.save(), `pending work at tick ${i}`);
   }
-  assert.deepEqual(restoredWorld.data, w.data);
-  assert.deepEqual(restoredWorld.meta, w.meta);
+  assert.deepEqual(restoredWorld.snapshot(), w.snapshot());
 });
 
 test("water and lava keep distinct block identities, stale entries, duplicate suppression and equal-time order", () => {
@@ -82,8 +81,7 @@ test("fire keeps its remaining delay without drawing a replacement wake delay", 
     assert.deepEqual(restored.save(), original.save());
     assert.deepEqual(restoredWeather.saveSimulation(), weather.saveSimulation());
   }
-  assert.deepEqual(restored.world.data, w.data);
-  assert.deepEqual(restored.world.meta, w.meta);
+  assert.deepEqual(restored.world.snapshot(), w.snapshot());
 });
 
 test("explicit empty queues keep settled blocks asleep; missing and unsupported data use legacy wake", () => {
@@ -136,8 +134,7 @@ test("falling columns retain one-tick deadlines and active entities across repea
     original.tick(); restored.tick();
     assert.deepEqual(restored.serialize(), original.serialize(), `entities at tick ${i}`);
     assert.deepEqual(restored.save(), original.save(), `pending work at tick ${i}`);
-    assert.deepEqual(restored.world.data, w.data, `blocks at tick ${i}`);
-    assert.deepEqual(restored.world.meta, w.meta, `metadata at tick ${i}`);
+    assert.deepEqual(restored.world.snapshot(), w.snapshot(), `blocks at tick ${i}`);
   }
   assert.deepEqual([11, 12, 13].map(y => w.get(26, y, 26)), [SAND, GRAVEL, SAND]);
   assert.equal(w.getMeta(26, 11, 26), 1);

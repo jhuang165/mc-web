@@ -124,12 +124,11 @@ test("a flower stays only on grass, dirt or farmland with light", () => {
 });
 
 test("flower generation arrives with generation version 4 and only on grass or dirt", () => {
-  const count = (w) => { let n = 0; for (let i = 0; i < w.data.length; i++) if (w.data[i] === YELLOW_FLOWER || w.data[i] === RED_FLOWER) n++; return n; };
+  const count = (w) => w.snapshot().data.filter((b) => b === YELLOW_FLOWER || b === RED_FLOWER).length;
   assert.equal(count(new World("Farm", "meadow", 3)), 0);
   const a = new World("Farm", "meadow", 4), b = new World("Farm", "meadow", 4);
   assert.ok(count(a) > 100);
-  assert.deepEqual(a.data, b.data);
-  assert.deepEqual(a.meta, b.meta);
+  assert.deepEqual(a.snapshot(), b.snapshot());
   for (let x = 0; x < 128; x++)
     for (let z = 0; z < 128; z++)
       for (let y = 1; y < 64; y++) {
@@ -139,7 +138,8 @@ test("flower generation arrives with generation version 4 and only on grass or d
   assert.ok(count(new World("Farm", "alpine", 4)) > 0);
   // Older terrain is untouched: the version 3 world is the version 4 world without flowers.
   const old = new World("Farm", "meadow", 3);
-  for (let i = 0; i < old.data.length; i++) if (!isFlower(a.data[i])) assert.equal(a.data[i], old.data[i]);
+  const A = a.snapshot().data, O = old.snapshot().data;
+  for (let i = 0; i < O.length; i++) if (!isFlower(A[i])) assert.equal(A[i], O[i]);
 });
 
 test("bone meal on grass plants tall grass and flowers on air above grass only", () => {

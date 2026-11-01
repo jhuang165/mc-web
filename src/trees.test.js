@@ -334,20 +334,20 @@ test("generation version 7 only regrows trees; versions up to 6 are untouched", 
   assert.equal(new World("x").generationVersion, 8); // 8 adds beaches and sugar cane (plants.test.js)
   for (const seed of ["Minecraft", "Overworld", "trees"]) {
     const a = new World(seed, "meadow", 6), b = new World(seed, "meadow", 7), b2 = new World(seed, "meadow", 7);
-    assert.deepEqual(b.data, b2.data);
-    assert.deepEqual(b.meta, b2.meta);
+    assert.deepEqual(b.snapshot(), b2.snapshot());
     assert.equal(b.edits.size, 0);
     let diff = 0, logs = 0, leaves = 0;
-    for (let i = 0; i < a.data.length; i++) {
-      if (b.data[i] === 4) logs++;
-      if (b.data[i] === 5) leaves++;
-      if (a.data[i] === b.data[i]) continue;
+    const A = a.snapshot(), B = b.snapshot();
+    for (let i = 0; i < A.data.length; i++) {
+      if (B.data[i] === 4) logs++;
+      if (B.data[i] === 5) leaves++;
+      if (A.data[i] === B.data[i]) continue;
       diff++;
       // Trees (air, leaves, logs, the dirt under a trunk, grass) and the flowers and tall grass whose light and ground depend on the crowns.
-      assert.ok(ALLOWED.includes(a.data[i]) && ALLOWED.includes(b.data[i]), `${a.data[i]} -> ${b.data[i]}`);
+      assert.ok(ALLOWED.includes(A.data[i]) && ALLOWED.includes(B.data[i]), `${A.data[i]} -> ${B.data[i]}`);
     }
     assert.ok(diff > 20 && logs > 8 && leaves > 100, `${seed}: ${diff} ${logs} ${leaves}`);
-    assert.ok(b.meta.every((m, i) => m === 0 || ![4, 5].includes(b.data[i]))); // generated trees carry no metadata
+    assert.ok(B.meta.every((m, i) => m === 0 || ![4, 5].includes(B.data[i]))); // generated trees carry no metadata
   }
   // Every v7 trunk stands on dirt (the grass under a trunk becomes dirt) and carries a crown.
   const w = new World("Minecraft", "meadow", 7);

@@ -19,15 +19,14 @@ export const ICE_LIGHT_OPACITY = 3;
 // EnumSkyBlock.Block): a flood fill from every lava cell, 15 at the source and one less per
 // step, stopped by cells with light opacity 255 (a step through partial opacity costs it).
 export function generationLight(world) {
-  const light = new Uint8Array(SIZE * SIZE * HEIGHT), queue = [];
-  for (let i = 0; i < world.data.length; i++) if (world.data[i] === LAVA) { light[i] = 15; queue.push(i); }
-  const H = HEIGHT, XS = SIZE * H;
+  const H = HEIGHT, XS = SIZE * H, light = new Uint8Array(SIZE * SIZE * H), blocks = world.snapshot().data, queue = [];
+  for (let i = 0; i < blocks.length; i++) if (blocks[i] === LAVA) { light[i] = 15; queue.push(i); }
   for (let q = 0; q < queue.length; q++) {
     const i = queue[q], v = light[i];
     if (v <= 1) continue;
     const y = i % H, t = (i - y) / H, z = t % SIZE, x = (t - z) / SIZE;
     const spread = (j) => {
-      const cost = Math.max(1, lightOpacity(world.data[j]));
+      const cost = Math.max(1, lightOpacity(blocks[j]));
       if (cost < 15 && v - cost > light[j]) { light[j] = v - cost; queue.push(j); }
     };
     if (y + 1 < H) spread(i + 1);
