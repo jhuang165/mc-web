@@ -1636,6 +1636,7 @@ function explodeAt(x, y, z, size, { exploder = null, attacker = null } = {}) {
     items.hurt(it, hit.damage);
     it.mx += hit.push[0]; it.my += hit.push[1]; it.mz += hit.push[2];
   }
+  xpOrbs.explode(world, x, y, z, size, exploder);
   // Other primed TNT: Entity.attackEntityFrom does nothing, the push still lands.
   for (const e of primed) {
     if (e === exploder) continue;

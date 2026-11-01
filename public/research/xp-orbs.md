@@ -20,6 +20,7 @@
   8. Friction 0.98F, or block slipperiness × 0.98F on the ground. Vertical drag 0.98, and on the ground motionY × −0.9.
   9. xpColor and xpOrbAge go up by 1; the orb dies at age 6,000.
 - **Damage** [sq.a(ro, F)]: 5 health, truncated per hit, dead at 0. Hits keep counting within the tick, so lava then fire leaves −2.
+- **Explosions** (since 0.21.5): existing orbs take `Explosion.doExplosionA` damage and knockback before block removal and ore XP spawning. The push uses posY directly (`Entity.getEyeHeight` is 0 for orbs). Even fully shielded orbs take the minimum 1 damage; an orb at the exact blast centre is skipped because its direction has zero length. Dead orbs are removed before rendering, saving or pickup.
 - **Pickup** [sq.b_(yz)]:
   - The player collides with orbs (any game mode, while alive) using its box grown by (1, 0.5, 1); the overlap test is strict.
   - Pickup needs `xpCooldown` [yz.bt] at 0. It then sets the cooldown to 2, plays `random.orb` at volume 0.1 and pitch 0.5 × ((r − r) × 0.7 + 1.8), and adds the value.
@@ -33,12 +34,13 @@
 
 `tools/probes/XpOrbProbe.java` builds the unchanged `EntityXPOrb` on a map-backed World double that extends `World` directly, so `isMaterialInBB` and `handleMaterialAcceleration` are the original methods. It sets the motion, entityId and rand, then calls `onUpdate` for up to 120 ticks. The target is an `EntityPlayerSP` whose `getEyeHeight` returns `EntityPlayerMP`'s 1.62F (EntityPlayerMP itself needs netty to load).
 
-`node tools/verify-xporbs.mjs` (with `MC_RESEARCH`) writes `xporb-reference.json`. It holds 19 cases:
+`node tools/verify-xporbs.mjs` (with `MC_RESEARCH`) writes `xporb-reference.json`. It holds 19 movement cases plus 9 explosion scenarios (72 targets):
 
 - drop, rest, ice slide, wall, ceiling;
 - pulls from 3, 5.7 and 6.9 blocks, out of range, from above, a player who leaves at tick 30, and touching range, with entityId 0–120;
 - still lava, a lava edge, a water stream, fire, two cactus cells;
-- inside stone, centred and off-centre.
+- inside stone, centred and off-centre;
+- explosion powers 3, 4 and 6, each in open air, behind a full stone wall and behind a single block, with targets at the centre, on the radius, beyond range, and at different heights. These call the unchanged `Explosion.doExplosionA` against the unchanged `EntityXPOrb.attackEntityFrom`; motion and health match exactly.
 
 `src/xp-orbs.test.js` replays every tick exactly: position, motion, onGround, fire, health, death, xpTargetColor, the target, and each attackEntityFrom and playSound call. The probe caught the push-out speed's `0.2F` and `0.1F` float constants, which the item port had computed in double; items now use the shared, corrected function.
 
@@ -48,5 +50,5 @@ Browser check (muted, scratch "Ladder Check" Creative world): 25 XP spawned 4 bl
 
 - Pickup runs after the orbs move, as for items. The server handles the player's movement packet before the world's entity tick, so the original order within a tick may differ.
 - One player only. Orbs keep aiming at the player's death position until respawn, as the original keeps a dead player in `playerEntities`.
-- Kill-reward eligibility (`recentlyHit`, Creative kills) is unchanged. Orbs are not damaged by explosions.
+- Kill-reward eligibility (`recentlyHit`, Creative kills) is unchanged.
 - `ticksExisted` for the level-up throttle restarts on load, not on respawn.

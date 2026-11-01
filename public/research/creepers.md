@@ -190,7 +190,7 @@ The creeper, explosion and fuse sounds were imported with `tools/import-vanilla-
 - Missing explosion effects:
   - client explosion particles (`hugeexplosion`/`largeexplode`, `explode` and `smoke`);
   - Blast Protection;
-  - XP orbs and arrows are not damaged or pushed.
+  - Arrows still ignore explosion knockback. XP orb damage and knockback are implemented since 0.21.5, with 72 original-class targets ([XP orbs](xp-orbs.md)).
 - Fidelity limits:
   - `HashSet` bins never treeify, which the probe showed does not happen at these sizes;
   - a mob standing exactly at the attacker's x/z gets a random knockback heading;

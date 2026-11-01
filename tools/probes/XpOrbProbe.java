@@ -21,6 +21,12 @@ public class XpOrbProbe {
   public static class XW extends ahb {
     XW() { super((azc) null, null, (aqo) null, (ahj) null, null); }
     Map<Long, int[]> cells = new HashMap<>();
+    List<sa> entities = new ArrayList<>();
+    public List b(sa except, azt box) {
+      List<sa> out = new ArrayList<>();
+      for (sa e : entities) if (e != except && !e.K && e.C.b(box)) out.add(e);
+      return out;
+    }
     int[] cell(int x, int y, int z) { int[] c = cells.get(PlantProbe.W.key(x, y, z)); return c != null ? c : new int[] {y < 0 ? 1 : 0, 0}; }
     void put(int x, int y, int z, int id, int meta) { cells.put(PlantProbe.W.key(x, y, z), new int[] {id, meta}); }
     protected apu j() { return null; }
@@ -61,6 +67,7 @@ public class XpOrbProbe {
     MobMoveProbe.field(ahb.class, "h").set(w, new ArrayList());
     MobMoveProbe.field(ahb.class, "L").set(w, new ArrayList());
     w.cells = new HashMap<>();
+    w.entities = new ArrayList<>();
     for (int[] c : cells) w.put(c[0], c[1], c[2], c[3], c.length > 4 ? c[4] : 0);
     return w;
   }
@@ -84,6 +91,33 @@ public class XpOrbProbe {
   public static void main(String[] args) throws Exception {
     aji.p();
     PlantProbe.unsafe = MobMoveProbe.unsafe();
+    // The unchanged Explosion.doExplosionA with real XP orb targets. A stone wall gives
+    // complete shielding; a single low block gives partial shielding of the 0.5-high box.
+    for (int shield = 0; shield < 3; shield++) for (float size : new float[] {3f, 4f, 6f}) {
+      List<int[]> cells = new ArrayList<>();
+      if (shield == 1) for (int y = 0; y < 5; y++) for (int z = -2; z < 3; z++) cells.add(new int[] {1,y,z,1});
+      if (shield == 2) cells.add(new int[] {1,1,0,1});
+      XW w = world(cells.toArray(new int[0][]));
+      double[][] points = {{0.5,1.5,0.5},{1.5,1.5,0.5},{3.0,1.5,0.5},{6.5,1.5,0.5},{8.5,1.5,0.5},{12.5,1.5,0.5},{12.5001,1.5,0.5},{2.5,2.0,1.5}};
+      for (double[] p : points) {
+        Rec o = new Rec(w,p[0],p[1],p[2],7);
+        o.v=0.01; o.w=-0.02; o.x=0.03;
+        w.entities.add(o);
+      }
+      log.setLength(0);
+      new agw(w,null,0.5,1.5,0.5,size).a();
+      StringBuilder targets = new StringBuilder();
+      for (sa e : w.entities) {
+        Rec o = (Rec)e;
+        if(targets.length()>0)targets.append(',');
+        targets.append("[").append(o.s).append(',').append(o.t).append(',').append(o.u).append(',')
+          .append(o.v).append(',').append(o.w).append(',').append(o.x).append(',')
+          .append(PlayerStepProbe.field(sq.class,"d").getInt(o)).append(',').append(o.K).append(']');
+      }
+      StringBuilder blocks = new StringBuilder();
+      for(int[] c : cells) {if(blocks.length()>0)blocks.append(',');blocks.append("[").append(c[0]).append(',').append(c[1]).append(',').append(c[2]).append(",1]");}
+      System.out.println("{\"case\":\"explosion\",\"shield\":"+shield+",\"size\":"+size+",\"cells\":["+blocks+"],\"targets\":["+targets+"]}");
+    }
     int[][] none = {};
     double[] p1 = {3.5, 0, 0.5}, p2 = {6.2, 0, 0.5}, p3 = {0.5, 0, 7.4}, p4 = {9.5, 0, 0.5}, p5 = {2.3, 2, 1.7}, p6 = {0.5, 0, 1.2};
     CASES = new Object[][] {

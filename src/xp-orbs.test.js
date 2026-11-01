@@ -95,3 +95,47 @@ test("orb saves keep age, health, fire and motion; older saves convert life to a
   assert.equal(new ExperienceOrbs([{ x: 1, y: 1, z: 1, value: 3, age: 6000 }]).orbs.length, 0);
   assert.equal(new ExperienceOrbs([{ x: 1, y: 1, z: 1, value: 3, health: 0 }]).orbs.length, 0);
 });
+
+
+test("explosions replay original XP orb damage and knockback through full and partial shielding", () => {
+  assert.equal(ref.explosions.length, 9);
+  for (const c of ref.explosions) {
+    const orbs = new ExperienceOrbs(), world = probeWorld(c.cells);
+    const targets = c.targets.map(([x, y, z]) => {
+      const o = newOrb(7, x, y, z, () => 0);
+      [o.vx, o.vy, o.vz] = [0.01, -0.02, 0.03];
+      return o;
+    });
+    orbs.orbs.push(...targets);
+    orbs.explode(world, 0.5, 1.5, 0.5, c.size);
+    targets.forEach((o, i) => {
+      assert.deepEqual([o.x, o.posY, o.z, o.vx, o.vy, o.vz, o.health, !!o.dead], c.targets[i], `shield ${c.shield}, size ${c.size}, target ${i}`);
+      assert.equal(orbs.orbs.includes(o), !o.dead);
+    });
+    // An orb killed in the blast must disappear from rendering, saves and pickup immediately.
+    assert.ok(orbs.serialize().every(o => o.health > 0));
+  }
+  const open = ref.explosions.find(c => c.shield === 0 && c.size === 3);
+  const wall = ref.explosions.find(c => c.shield === 1 && c.size === 3);
+  assert.equal(open.targets[0][6], 5); // Coincident centre has a zero-length push and is skipped.
+  assert.equal(open.targets[1][7], true);
+  assert.equal(wall.targets[2][6], 4); // Even zero exposure deals the minimum one damage.
+  assert.equal(open.targets[3][6], 4); // Exactly radius 6: minimum damage, no push.
+  assert.equal(open.targets[4][6], 5); // Outside radius.
+});
+
+test("orb explosions skip the exploder and remove casualties before newly dropped ore XP", () => {
+  const orbs = new ExperienceOrbs(), world = probeWorld([]);
+  const excluded = newOrb(7, 1.5, 1.5, 0.5, () => 0);
+  const casualty = newOrb(3, 1.5, 1.5, 0.5, () => 0);
+  orbs.orbs.push(excluded, casualty);
+  orbs.explode(world, 0.5, 1.5, 0.5, 3, excluded);
+  assert.equal(excluded.health, 5);
+  assert.ok(casualty.dead);
+  assert.deepEqual(orbs.orbs, [excluded]);
+  orbs.spawn(1, {x: 1.5, y: 1.5, z: 0.5});
+  assert.equal(orbs.orbs[1].health, 5);
+  assert.equal(orbs.collect({x: 1.5, y: 0, z: 0.5}), 7);
+  assert.equal(orbs.collect({x: 1.5, y: 0, z: 0.5}), 0);
+  assert.equal(orbs.collect({x: 1.5, y: 0, z: 0.5}), 1);
+});

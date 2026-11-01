@@ -1,6 +1,7 @@
 import { inLava, waterAcceleration } from './fluids.js';
 import { moveEntity, entityPushOut } from './entities.js';
 import { LAVA, slipperiness } from './world.js';
+import { explosionImpact } from './explosion.js';
 import {mhSin} from "./lighting.js";
 export const levelCost = level => level >= 30 ? 62+(level-30)*7 : level >= 15 ? 17+(level-15)*3 : 17;
 export class Experience {
@@ -59,6 +60,19 @@ export class ExperienceOrbs {
  // EntityXPOrb.attackEntityFrom [sq.a(ro,F)]: health -= amount, truncated; dead at 0. It does
  // not check isDead, so later hits in the same tick keep counting down.
  hurt(o,source,amount){o.health=Math.trunc(o.health-amount);if(o.health<=0)o.dead=true;}
+ // Explosion.doExplosionA visits existing orbs before any blocks are removed or ore XP spawns.
+ // EntityXPOrb inherits Entity.getEyeHeight = 0: use posY (the box centre) for the push.
+ explode(world,x,y,z,size,exploder=null){
+  for(const o of this.orbs){
+   if(o.dead||o===exploder)continue;
+   const hit=explosionImpact(world,x,y,z,size,o.x,o.posY,o.z,o.posY,o.bb);
+   if(!hit)continue;
+   this.hurt(o,'explosion',hit.damage);
+   // Explosion applies motion even when attackEntityFrom returns false or kills the entity.
+   o.vx+=hit.push[0];o.vy+=hit.push[1];o.vz+=hit.push[2];
+  }
+  this.orbs=this.orbs.filter(o=>!o.dead);
+ }
  // EntityPlayer.onLivingUpdate (alive players, any game mode) collides the player's box grown by
  // (1, 0.5, 1) with each orb; EntityXPOrb.onCollideWithPlayer [sq.b_] needs xpCooldown 0 and
  // sets it to 2, plays random.orb (0.1, 0.5 * ((r - r) * 0.7 + 1.8)) at the player and adds
