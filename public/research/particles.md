@@ -168,7 +168,7 @@ Spawn sites wired:
   - Air below y 8 rolls the void-fog `depthsuspend`.
   - The three liquid sounds were imported with their asset-index hashes (203 clips).
 
-`tools/probes/FxProbe.java` (extending ParticleProbe) and `tools/verify-fx.mjs` write [79 original-class records](fx-reference.json):
+`tools/probes/FxProbe.java` (extending ParticleProbe) and `tools/verify-fx.mjs` write [79 original-class records](fx-reference.json) (88 since 0.22.9):
 
 - 31 constructors through `RenderGlobal.doSpawnParticle`, with every update until death or 140 ticks, in five fixtures (open, water pool, ceiling, lava pool, high ceiling). The Math.random and rewound Entity.rand states are recorded.
 - Crit2FX.
@@ -182,11 +182,18 @@ Spawn sites wired:
 
 `src/fx.test.js` replays them all exactly. The exception is gaussian velocities (hearts, death poof, bone meal), which are compared within 1e-16, because `JavaRandom.nextGaussian` uses `Math.log` where Java has `StrictMath.log`. The replay exposed and fixed the ambient-potion roll: Java's `&=` draws `nextInt(5)` even when the first roll failed. The browser check (scratch world, audio off) covered feeding hearts, the death poof, Crit2FX crits, potion swirls in the Hunger colour and bone-meal sparkles, rendered through the shared pool with no console errors.
 
+## 0.22.9
+
+- **Player death poof.** The client player never runs `EntityPlayer.onDeath` (only the server copy shrinks to 0.2), so it stays 0.6 × 1.8. On the death screen `EntityLivingBase.onDeathUpdate` counts `deathTime`; at 20 it spawns 20 `explode` from the eye position. While dead only that counter and the particle pool tick, and the camera rolls by `EntityRenderer.hurtCameraEffect`'s 40 − 8000 / (deathTime + partial + 200) degrees.
+- **Player water test.** Entering water and swimming now use `handleMaterialAcceleration` on the contracted box (the same test as mobs) instead of the cell at feet + 0.6. Air and the underwater dig penalty use `Entity.isInsideOfMaterial(water)` at the eye: the eye's cell must be water and the eye below (j + 1) − (percent(meta) − 1/9). Air uses EntityPlayerMP's 1.62 eye above the feet; mining uses the client eye.
+- **Mob air.** Mobs breathe like `EntityLivingBase.onEntityUpdate`: with the eye (height × 0.85) inside water the air counts down from 300 without Respiration; at −20 it is set to 0, eight bubbles spawn around the feet with the mob's motion, and the mob takes 2 drowning damage. Out of water it resets to 300.
+- **Living sounds.** The 160-tick mob sound timer is replaced by `EntityLiving`'s roll: each tick `nextInt(1000) < livingSoundTime++` plays the living sound and resets the counter to −80 (hostile) or −120 (animals). Cows play at 0.4 volume; pitch is (rand − rand) × 0.2 + 1, or + 1.5 for babies. Creepers roll and reset but have no sound. The roll draws from the entity Random every tick, which the drowning replay needs.
+- **Leaves drip.** The display tick now gets `World.canLightningStrikeAt` for the cell above, and the probe runs it.
+
+FxProbe adds three leaves cases (rain, rain over stone, dry; 420 seeded runs), five `isInsideOfMaterial` sweeps over water levels 0, 1, 3, 7 and 8, and a 25-tick drowning run of `EntityLiving.onEntityUpdate` with `attackEntityFrom` recorded: 88 records, all replayed. Browser check (scratch world, audio stubbed): a pig sealed under water counted down, bubbled and lost 2 health at −20; the player sank with swim physics in a pool; on death the camera rolled and 17 particles became 34 at deathTime 20; respawn reset the roll. No console errors.
+
 Still open:
 
-- The player's death poof is missing.
-- The player's water-entry test uses the cell at feet + 0.6, not `handleMaterialAcceleration` on the contracted box.
-- Mobs have no air supply or potion effects, so they show no drowning bubbles or swirls.
-- The leaves drip needs `canLightningStrikeAt`. It is bytecode-derived and not probe-run.
+- Mob potion effects: nothing in this build gives mobs effects, so they have no swirls.
 - GL drawing formulas (billboards, UV inset, brightness) come from bytecode, not from a probe run.
 - Particles spawned between ticks are drawn once before their first update.

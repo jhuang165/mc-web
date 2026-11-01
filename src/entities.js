@@ -5,8 +5,8 @@ import { SIZE, HEIGHT, hash, slipperiness, collisionBounds, normalCube, WOOL, is
 import { isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
 import { ITEMS } from "./survival.js";
 import { mhSin, mhCos, JavaRandom } from "./lighting.js";
-import { enterWater, burst } from "./fx.js";
-import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
+import { enterWater, burst, drownBubbles } from "./fx.js";
+import { waterAcceleration, entityWaterBox, inLava, eyeInWater } from "./fluids.js";
 import { sheepColor, childColor } from "./sheep.js";
 import { sneakEdge, criticalDamage } from "./player-movement.js";
 import { MobAI } from "./ai.js";
@@ -381,6 +381,30 @@ function offsetInLiquid(world, e, w, h, dx, dy, dz) {
     for (let by = Math.floor(b[1]); by < Math.floor(b[4] + 1); by++)
       for (let bz = Math.floor(b[2]); bz < Math.floor(b[5] + 1); bz++)
         if (isLiquid(world.get(bx, by, bz))) return false;
+  return true;
+}
+// The air part of EntityLivingBase.onEntityUpdate (sv.C): with the eye (posY + height * 0.85F)
+// inside water the air supply drops by 1 (no Respiration, so no draw); at -20 it is set to 0
+// and 8 "bubble" from Entity.rand go up around posY. Out of water it is back to 300. Returns
+// true when attackEntityFrom(drown, 2) follows.
+export function breathe(world, e, height, rand, fx) {
+  if (!eyeInWater(world, e.x, e.y + f(f(height) * f(0.85)), e.z)) {
+    e.air = 300;
+    return false;
+  }
+  e.air = (e.air ?? 300) - 1;
+  if (e.air !== -20) return false;
+  e.air = 0;
+  drownBubbles(fx ?? { spawn() {} }, { x: e.x, y: e.y, z: e.z, mx: e.vx, my: e.vy, mz: e.vz }, rand);
+  return true;
+}
+// EntityLiving.onEntityUpdate's roll: true (and livingSoundTime set to -interval) when
+// rand.nextInt(1000) < livingSoundTime++.
+export function livingSoundRoll(e, rand, interval) {
+  const time = e.livingSoundTime ?? 0;
+  e.livingSoundTime = time + 1;
+  if (rand.nextInt(1000) >= time) return false;
+  e.livingSoundTime = -interval;
   return true;
 }
 // EntityLivingBase.jump (sv.bj): 0.42 upward (no jump boost, no sprint).
@@ -762,6 +786,21 @@ export class EntityWorld {
     if (e.health <= 0) this.kill(e);
     else this.events.push({ sound: hurtSound(e.type), position: e });
   }
+  // EntityLivingBase.onEntityUpdate's air (see `breathe` below): drowning deals 2 with no
+  // attacker, so no knockback or revenge. The air is saved with the mob.
+  breathe(e, t) {
+    if (breathe(this.world, e, t.height, entityRandom(e), this.fx)) this.hazard(e, 2);
+  }
+  // EntityLiving.onEntityUpdate (sw.C), after the air: rand.nextInt(1000) < livingSoundTime++
+  // resets the time to -getTalkInterval (EntityAnimal 120, else 80) and plays the living sound
+  // at getSoundVolume (EntityCow 0.4, else 1) and getSoundPitch ((rand - rand) * 0.2 + 1, 1.5
+  // for a child). EntityCreeper has no living sound but still rolls and resets.
+  talk(e) {
+    const rand = entityRandom(e);
+    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) ? 80 : 120) || e.type === "creeper") return;
+    const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
+    this.events.push({ sound: "mob." + e.type + ".say", volume: e.type === "cow" ? f(0.4) : 1, pitch, position: { x: e.x, y: e.y, z: e.z } });
+  }
   // The fire and lava part of Entity.onEntityUpdate (sa.C): water puts the fire
   // out; a burning mob takes 1 (onFire) whenever the counter is a multiple of 20;
   // lava (handleLavaMovement) deals 4 (lava), sets fire for 15 s (counter 300) and
@@ -985,7 +1024,6 @@ export class EntityWorld {
       e.flee = Math.max(0, e.flee - 1);
       // EntityLivingBase.onEntityUpdate: the revenge target lapses after 100 ticks.
       if (e.revenge && e.age + 1 - e.revenge > 100) e.revenge = 0;
-      const distance = Math.hypot(e.x - player.x, e.z - player.z);
       if (e.type === "zombie" && !night && !this.wet?.(e, t.height)) {
         let sky = true;
         for (let y = Math.floor(e.y + t.height); y < HEIGHT; y++)
@@ -1017,6 +1055,8 @@ export class EntityWorld {
         this.events.push({ sound: HOSTILE.has(e.type) ? "game.hostile.swim.splash" : "game.neutral.swim.splash", volume: s.volume, pitch: s.pitch, position: { x: e.x, y: e.y, z: e.z } });
       }
       this.burn(e, t);
+      this.breathe(e, t);
+      this.talk(e);
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.
       this.walk(e, t, 0, () => e.type === "spider" ? this.spiderThink(e) : this.ai.think(e));
@@ -1035,12 +1075,6 @@ export class EntityWorld {
       if (e.type === "chicken") this.chickenUpdate(e);
       this.turnBody(e);
       this.swingLimbs(e);
-      // EntityCreeper has no getLivingSound.
-      if (e.age % 160 === 0 && distance < 18 && e.type !== "creeper")
-        this.events.push({
-          sound: "mob." + e.type + ".say",
-          position: { x: e.x, y: e.y, z: e.z },
-        });
       if (e.health <= 0 && !e.death) {
         e.death = 1;
         this.events.push({ sound: "mob.zombie.death", position: e });

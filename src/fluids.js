@@ -173,6 +173,13 @@ export function liquidInBox(w, [x0, y0, z0, x1, y1, z1], kind = LAVA) {
   for (let x = ax; x < bx; x++) for (let y = ay; y < by; y++) for (let z = az; z < bz; z++) if (w.get(x, y, z) === kind) return true;
   return false;
 }
+// Entity.isInsideOfMaterial(water) (sa.a(awt)) at eye height `y` (posY + getEyeHeight): the
+// eye's cell is water and the eye is below (j + 1) - (percent(meta) - 1/9).
+export function eyeInWater(w, x, y, z) {
+  const bx = Math.floor(x), by = Math.floor(y), bz = Math.floor(z);
+  if (w.get(bx, by, bz) !== WATER) return false;
+  return y < f(f(by + 1) - f(liquidHeightPercent(w.getMeta?.(bx, by, bz) ?? 0) - f(0.11111111)));
+}
 // ActiveRenderInfo.getBlockAtEntityViewpoint (baj.a): the block at the eye, or
 // the one above it once the eye is at least `meta / 9` below the top of a liquid
 // cell (percent(meta) - 1/9). Water's own fog test in scene.js is separate.

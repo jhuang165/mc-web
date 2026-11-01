@@ -1,7 +1,8 @@
 // Replays public/research/fx-reference.json (tools/probes/FxProbe.java through
 // tools/verify-fx.mjs): the particles.png EntityFX constructors and every onUpdate, and the
 // entity spawn sites (water entry, feeding hearts, death poof, potion swirls, item crumbs,
-// bone meal sparkles, Crit2FX), Block.randomDisplayTick and WorldClient.doVoidFogParticles.
+// bone meal sparkles, Crit2FX), Block.randomDisplayTick, WorldClient.doVoidFogParticles,
+// Entity.isInsideOfMaterial and the drowning part of EntityLivingBase.onEntityUpdate.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -10,6 +11,8 @@ import { WATER, LAVA } from "./world.js";
 import { ExplosionParticles } from "./explosion-particles.js";
 import { randomDisplayTick, displayTicks } from "./display-ticks.js";
 import { Fx, enterWater, burst, potionColor, potionParticles, itemCrumbs, boneMealSparkles } from "./fx.js";
+import { eyeInWater } from "./fluids.js";
+import { breathe, livingSoundRoll } from "./entities.js";
 
 const ref = JSON.parse(await readFile(new URL("../public/research/fx-reference.json", import.meta.url)));
 const records = (name) => ref.records.filter((c) => c.case === name);
@@ -158,12 +161,12 @@ test("bone meal sparkles reach the block's maxY and skip air", () => {
 });
 
 // Original ids of the display-tick records -> this build's: torch, lit furnace, fire, stone,
-// planks, flowing/still water, flowing/still lava.
-const DISPLAY_ID = { 50: 20, 62: 14, 51: 45, 1: STONE, 5: 7, 8: WATER, 9: WATER, 10: LAVA, 11: LAVA };
+// planks, leaves, flowing/still water, flowing/still lava.
+const DISPLAY_ID = { 50: 20, 62: 14, 51: 45, 1: STONE, 5: 7, 18: 5, 8: WATER, 9: WATER, 10: LAVA, 11: LAVA };
 
-test("torch, lit furnace, fire and liquid display ticks replay the original calls, sounds and draws", () => {
+test("torch, lit furnace, fire, leaves and liquid display ticks replay the original calls, sounds and draws", () => {
   const list = records("display");
-  assert.equal(list.length, 14);
+  assert.equal(list.length, 17);
   for (const c of list) {
     const cells = new Map([[`10,70,10`, [DISPLAY_ID[c.block], c.meta]]]);
     for (const [x, y, z, id, meta] of c.cells) cells.set(`${x},${y},${z}`, [DISPLAY_ID[id], meta]);
@@ -172,7 +175,11 @@ test("torch, lit furnace, fire and liquid display ticks replay the original call
     for (const [seed, expected, expectedSounds, after] of c.runs) {
       const calls = [], sounds = [], rand = new JavaRandom(seed);
       const fx = { spawn: (name, x, y, z, vx = 0, vy = 0, vz = 0) => calls.push([name, x, y, z, vx, vy, vz]) };
-      randomDisplayTick(w, 10, 70, 10, w.get(10, 70, 10), rand, { fx, lit: () => true, sound: (...a) => sounds.push(a) });
+      const canStrike = (x, y, z) => {
+        assert.deepEqual([x, y, z], [10, 71, 10]);
+        return c.strike;
+      };
+      randomDisplayTick(w, 10, 70, 10, w.get(10, 70, 10), rand, { fx, lit: () => true, canStrike, sound: (...a) => sounds.push(a) });
       const what = `${c.name} seed ${seed}`;
       assert.deepEqual(calls, expected, what);
       assert.deepEqual(sounds, expectedSounds, what + " sounds");
@@ -191,4 +198,33 @@ test("void fog rolls depthsuspend for air below y 8 from World.rand", () => {
     assert.deepEqual(calls, c.calls, `seed ${c.seed}`);
     assert.equal(rand.seed, BigInt(c.after), `seed ${c.seed} draws`);
   }
+});
+
+test("isInsideOfMaterial(water) compares the eye with the cell's liquid surface", () => {
+  const list = records("inside");
+  assert.equal(list.length, 5);
+  for (const c of list) {
+    assert.equal(c.eye, Math.fround(Math.fround(c.height) * Math.fround(0.85)));
+    const w = { get: (x, y, z) => (x === 10 && y === 65 && z === 10 ? WATER : y < 64 ? STONE : 0), getMeta: () => c.meta };
+    for (const [y, inside] of c.grid) assert.equal(eyeInWater(w, 10.5, y + c.eye, 10.5), inside, `meta ${c.meta} feet ${y}`);
+  }
+});
+
+test("a mob under water counts its air down to -20, then bubbles and drowns, with the living-sound roll", () => {
+  const [c] = records("drown"), w = world(1), rand = new JavaRandom(c.seed);
+  const [mx, my, mz] = c.motion, e = { x: c.x, y: c.y, z: c.z, vx: mx, vy: my, vz: mz, air: c.air };
+  c.ticks.forEach(([air, expected, attacks], t) => {
+    const calls = [], fx = { spawn: (...a) => calls.push(a) };
+    // The probe's entity starts dry, so its first tick is the water-entry splash.
+    if (t === 0) enterWater(fx, { x: e.x, z: e.z, minY: e.y, width: Math.fround(0.9), mx, my, mz }, rand);
+    const drowned = breathe(w, e, Math.fround(1.3), rand, fx);
+    // EntityLiving.onEntityUpdate then rolls the living sound (EntityAnimal: 120 ticks).
+    livingSoundRoll(e, rand, 120);
+    assert.equal(e.air, air, `tick ${t} air`);
+    assert.deepEqual(calls, expected, `tick ${t} calls`);
+    assert.deepEqual(drowned ? [["drown", 2]] : [], attacks, `tick ${t} attack`);
+  });
+  const dry = { x: 10.5, y: 70, z: 10.5, air: -5 };
+  assert.equal(breathe(w, dry, 1.3, rand, null), false);
+  assert.equal(dry.air, 300);
 });

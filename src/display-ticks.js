@@ -10,7 +10,6 @@ import { JavaRandom } from "./lighting.js";
 import { WATER, LAVA, FIRE, SNOW_LAYER, normalCube } from "./world.js";
 import { canCatchFire } from "./fire.js";
 import { blocksMovement } from "./plants.js";
-import { canLightningStrikeAt } from "./weather.js";
 
 const f = Math.fround;
 const TORCH = 20, FURNACE = 14, LEAVES = 5;
@@ -22,8 +21,8 @@ export function solidTopSurface(world, x, y, z) {
 }
 
 // `rand` is the client World.rand, shared with RenderGlobal's filter; `lit(x, y, z)` says
-// whether a furnace is burning; `weather` answers canLightningStrikeAt for the leaves.
-export function displayTicks(world, cx, cy, cz, { rand, fx, sound = () => {}, lit = () => false, weather = null, voidFog = true, random = new JavaRandom(Math.floor(Math.random() * 2 ** 48)) }) {
+// whether a furnace is burning; `canStrike(x, y, z)` is World.canLightningStrikeAt for the leaves.
+export function displayTicks(world, cx, cy, cz, { rand, fx, sound = () => {}, lit = () => false, canStrike = () => false, voidFog = true, random = new JavaRandom(Math.floor(Math.random() * 2 ** 48)) }) {
   for (let i = 0; i < 1000; i++) {
     const x = cx + rand.nextInt(16) - rand.nextInt(16), y = cy + rand.nextInt(16) - rand.nextInt(16), z = cz + rand.nextInt(16) - rand.nextInt(16);
     const b = world.get(x, y, z);
@@ -33,17 +32,18 @@ export function displayTicks(world, cx, cy, cz, { rand, fx, sound = () => {}, li
       fx.spawn("depthsuspend", f(x + rand.nextFloat()), f(y + rand.nextFloat()), f(z + rand.nextFloat()));
       continue;
     }
-    randomDisplayTick(world, x, y, z, b, random, { fx, sound, lit, weather });
+    randomDisplayTick(world, x, y, z, b, random, { fx, sound, lit, canStrike });
   }
 }
 
-export function randomDisplayTick(world, x, y, z, b, random, { fx, sound = () => {}, lit = () => false, weather = null }) {
+export function randomDisplayTick(world, x, y, z, b, random, { fx, sound = () => {}, lit = () => false, canStrike = () => false }) {
   if (b === TORCH) torch(world, x, y, z, fx);
   else if (b === FURNACE) {
     if (lit(x, y, z)) furnace(x, y, z, random, fx);
   } else if (b === FIRE) fire(world, x, y, z, random, fx, sound);
   else if (b === LEAVES) {
-    if (weather && canLightningStrikeAt(weather, world, x, y + 1, z) && !solidTopSurface(world, x, y - 1, z) && random.nextInt(15) === 1)
+    // BlockLeaves.randomDisplayTick: a drip under rain-exposed leaves with nothing solid below.
+    if (canStrike(x, y + 1, z) && !solidTopSurface(world, x, y - 1, z) && random.nextInt(15) === 1)
       fx.spawn("dripWater", f(x + random.nextFloat()), y - 0.05, f(z + random.nextFloat()));
   } else if (b === WATER || b === LAVA) liquid(world, x, y, z, b, random, fx, sound);
 }

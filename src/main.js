@@ -67,7 +67,7 @@ import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { Arrows, arrowTargets, releaseBow, canDraw, bowStage, bowFov, easeFov, BOW, ARROW } from "./bow.js";
 import { canSeeSky } from "./weather.js";
-import { Fluids, waterAcceleration, entityWaterBox, inLava, liquidInBox } from "./fluids.js";
+import { Fluids, waterAcceleration, entityWaterBox, inLava, liquidInBox, eyeInWater } from "./fluids.js";
 import { Fire } from "./fire.js";
 import { explodeBlocks, explosionImpact, explodeTnt, primeTnt, tickTnt, TNT_POWER, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { powerCreeper } from "./creeper.js";
@@ -76,7 +76,7 @@ import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS 
 import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, SNEAK_YSIZE, moveWeights, isCritical, ATTACK_SLOWDOWN, groundAccel, airAccel, LIQUID_ACCEL, JUMP_MOTION, jumpExhaustion, sprintJumpPush, FLY_SPEED, FLY_Y_DRAG, flyVertical, fovMultiplier } from "./player-movement.js";
 import { spawnRunningParticles, freshRandom } from "./particles.js";
-import { enterWater, drownBubbles, potionColor, potionParticles, itemCrumbs, boneMealSparkles } from "./fx.js";
+import { enterWater, drownBubbles, burst, potionColor, potionParticles, itemCrumbs, boneMealSparkles } from "./fx.js";
 import { JavaRandom } from "./lighting.js";
 import { displayTicks } from "./display-ticks.js";
 import { importedRuntime } from "./world-import.js";
@@ -589,6 +589,8 @@ function legacyPlayer(record) {
 const FLOWERS = { yellow: YELLOW_FLOWER, red: RED_FLOWER }, boneRandom = new JRandom(Date.now());
 // Item.itemRand, the static Random of every Item.
 const itemRand = new JavaRandom(Math.floor(Math.random() * 2 ** 48));
+// EntityLivingBase.deathTime of the client player, counted on the death screen.
+let deathTime = 0;
 function watchFlowers() {
   const next = world.onChange;
   world.onChange = (x, y, z, old, now) => {
@@ -1117,6 +1119,7 @@ function die() {
   closeContainer();
   const reason = survival.lastDamage || "an accident";
   screen = "dead";
+  deathTime = 0;
   keys.clear();
   mining = null;
   mineHeld = false;
@@ -1180,12 +1183,9 @@ function tickWeather() {
   }
 }
 function tickSurvival(inWater, oldPosition, inLavaNow = false) {
-  const underwater =
-    world.get(
-      Math.floor(position.x),
-      Math.floor(position.y + PHYSICS.eye),
-      Math.floor(position.z),
-    ) === 10;
+  // EntityLivingBase.onEntityUpdate's air test, isInsideOfMaterial(water), on the server's
+  // EntityPlayerMP: posY is the feet there and getEyeHeight 1.62F.
+  const underwater = eyeInWater(world, position.x, position.y + Math.fround(PHYSICS.eye), position.z);
   tickWeather();
   const wet = isWet(weather, world, { x: position.x, y: position.y, z: position.z, inWater }, PHYSICS.height);
   // Entity.onEntityUpdate: only water (handleWaterMovement) puts the fire out here; rain does in the tail below.
@@ -1220,7 +1220,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   displayTicks(world, Math.floor(position.x), Math.floor(position.y + PHYSICS.eye), Math.floor(position.z), {
     rand: scene.explosionParticles.worldRandom,
     fx: scene.fx,
-    weather,
+    canStrike: (x, y, z) => canLightningStrikeAt(weather, world, x, y, z),
     lit: (x, y, z) => scene.litFurnaces.has(`${x},${y},${z}`),
     sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }),
   });
@@ -1338,6 +1338,9 @@ function handleEntityEvents() {
 }
 // EntityPlayer.updateItemUse for food: n "iconcrack" crumbs and random.eat from Entity.rand.
 const playerEye = () => ({ x: position.x, y: position.y + Math.fround(PHYSICS.eye) + Math.fround(0.12), z: position.z, yaw: Math.fround(180 - (yaw * 180) / Math.PI), pitch: Math.fround((-pitch * 180) / Math.PI) });
+// EntityPlayer.getBreakSpeed's isInsideOfMaterial(water) on the client player, whose posY is
+// the eye (yOffset 1.62F) and getEyeHeight 0.12F.
+const clientEyeInWater = () => eyeInWater(world, position.x, playerEye().y, position.z);
 function eatEffects(id, n) {
   itemCrumbs(scene.fx, n, "iconcrack_" + id, playerEye(), playerRandom);
   sounds.play("random.eat", { volume: 0.5 + 0.5 * playerRandom.nextInt(2), pitch: (playerRandom.nextFloat() - playerRandom.nextFloat()) * 0.2 + 1 });
@@ -1637,7 +1640,7 @@ function edit(place = false) {
       return;
     }
     if(mining&&mining.tool===id&&mining.block.every((v,i)=>v===target.block[i]))return;
-    const under=world.get(Math.floor(position.x),Math.floor(position.y+PHYSICS.eye),Math.floor(position.z))===10;
+    const under=clientEyeInWater();
     if(survival.mining(block,id,under,grounded).progress>=1){breakBlock(target.block);return;}
     mining = {
       block: [...target.block],
@@ -1828,12 +1831,7 @@ function tickMiningProgress() {
     mining = null;
     return;
   }
-  const under =
-    world.get(
-      Math.floor(position.x),
-      Math.floor(position.y + PHYSICS.eye),
-      Math.floor(position.z),
-    ) === 10;
+  const under = clientEyeInWater();
   animation.swing();
   if (survival.time % 4 === 0) sounds.play("dig." + blockSound(mining.type), { volume: 0.25, pitch: 0.5 });
   mining.progress = Math.fround(mining.progress + survival.mining(
@@ -1874,12 +1872,14 @@ function movementTick() {
   walkFrozen = sneakOnGround;
   const oldPosition = position.clone();
   const { strafe: dx, forward: dz } = moveWeights(input);
-  const inWater =
-    world.get(
-      Math.floor(position.x),
-      Math.floor(position.y + 0.6),
-      Math.floor(position.z),
-    ) === 10;
+  // Entity.handleWaterMovement (sa.N): the box shrunk 0.4 vertically and 0.001 all round is
+  // wet below a water cell's surface; running water pushes it unless flying
+  // (EntityPlayer.isPushedByWater). Entity.onEntityUpdate runs it before onLivingUpdate.
+  const waterBox = entityWaterBox([position.x - PHYSICS.width / 2, position.y, position.z - PHYSICS.width / 2, position.x + PHYSICS.width / 2, position.y + PHYSICS.height, position.z + PHYSICS.width / 2]),
+    { wet: inWater, push: waterPush } = waterAcceleration(world, waterBox, !flying);
+  velocity.x += waterPush[0];
+  velocity.y += waterPush[1];
+  velocity.z += waterPush[2];
   // Entity.handleLavaMovement (sa.P) on the player's box; EntityLivingBase.
   // moveEntityWithHeading only takes the lava branch outside water.
   const playerBox = (dy = 0) => {
@@ -1897,14 +1897,6 @@ function movementTick() {
   }
   // ... then, flying, the sneak and jump keys move 0.15 a tick down and up.
   if (flying) velocity.y = flyVertical(velocity.y, { jump: jumpKey, sneak });
-  // Entity.handleWaterMovement: running water pushes the player along (not while flying).
-  if (!flying) {
-    const r = PHYSICS.width / 2,
-      { push } = waterAcceleration(world, entityWaterBox([position.x - r, position.y, position.z - r, position.x + r, position.y + PHYSICS.height, position.z + r]));
-    velocity.x += push[0];
-    velocity.y += push[1];
-    velocity.z += push[2];
-  }
   // EntityPlayerSP.onLivingUpdate (after Entity.onEntityUpdate's water push): a corner of the
   // box in or under a normal cube sets motionX/Z to 0.1 towards the nearest open side.
   const pushed = { x: position.x, y: position.y, z: position.z, vx: velocity.x, vz: velocity.z };
@@ -2478,6 +2470,21 @@ function animate(now) {
         `BLOCKWORLD / Java 1.7.10 study\n${fps} FPS · ${(scene.worldTriangles || 0).toLocaleString()} triangles\nXYZ: ${position.x.toFixed(2)} / ${position.y.toFixed(2)} / ${position.z.toFixed(2)}\nSeed: ${active.seed}\n${survival.mode} · day ${Math.floor(survival.time / 24000) + 1} · ${survival.time % 24000} ticks\nHealth ${survival.health} · food ${survival.food} · saturation ${survival.saturation.toFixed(1)}\n${world.edits.size} edited blocks · ${items.items.length} items · ${mobs?.entities.length || 0} mobs\n${aimedEntity ? aimedEntity.entity.type + " · " + aimedEntity.entity.health + " health" : target ? BLOCKS[world.get(...target.block)].name : "Looking into the distance"}`;
     if (elapsed - lastSave > 5) save();
     scene.effects.crack(mining?.block, mining?.progress);
+  } else if (screen === "dead") {
+    // GuiGameOver does not pause the game. Here only EntityLivingBase.onDeathUpdate and the
+    // particles keep ticking (the rest of the world waits on the death screen): at deathTime
+    // 20 the client player, still 0.6 x 1.8 (onDeath's setSize runs on the server), goes up
+    // in 20 "explode" from posY, which is its eye.
+    accumulator += dt;
+    while (accumulator >= PHYSICS.tick) {
+      if (++deathTime === 20) burst(scene.fx, "explode", 20, { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z, width: PHYSICS.width, height: PHYSICS.height }, playerRandom);
+      scene.effectRenderer.tick(world);
+      accumulator -= PHYSICS.tick;
+    }
+    // EntityRenderer.hurtCameraEffect: a dead view rolls 40 - 8000 / (deathTime + partial + 200)
+    // degrees about the view axis (the same sign convention as the hurt tilt and view bob).
+    const roll = ((40 - 8000 / (deathTime + accumulator / PHYSICS.tick + 200)) * Math.PI) / 180;
+    scene.camera.rotation.z = roll;
   } else if (screen === "home") scene.preview(elapsed);
   const partial = Math.min(1, accumulator / PHYSICS.tick);
   if (mobs) mobRenderer.update(mobs.entities,dt,partial);

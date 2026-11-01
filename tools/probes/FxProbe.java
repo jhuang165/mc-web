@@ -9,10 +9,13 @@ import java.util.*;
 // (sa.N), EntityAnimal.handleHealthUpdate(18) (wf.a(byte)), EntityLivingBase.onDeathUpdate
 // (sv.aF), updatePotionEffects (sv.aO), renderBrokenItemStack (sv.a(add)), PotionHelper's
 // liquid colour (aen.a), ItemDye's bone-meal sparkles (acj.a), Block.randomDisplayTick of the
-// torch, lit furnace, fire and liquids, and WorldClient.doVoidFogParticles (bjf.C). Same world double and
-// random handling as ParticleProbe; no classes patched, no GL call.
+// torch, lit furnace, fire, leaves and liquids, WorldClient.doVoidFogParticles (bjf.C),
+// Entity.isInsideOfMaterial (sa.a(awt)) and the air and living-sound parts of
+// EntityLiving.onEntityUpdate (sw.C). Same world double and random handling as ParticleProbe;
+// no classes patched, no GL call.
 public class FxProbe extends ParticleProbe {
-  static boolean wet, allAir;
+  static boolean wet, allAir, strike;
+  static List<String> attacks = new ArrayList<>();
   static List<String> sounds = new ArrayList<>();
   public static class FW extends PWorld {
     FW() { super(); }
@@ -25,10 +28,18 @@ public class FxProbe extends ParticleProbe {
     }
     // The void-fog case reads an all-air world.
     public aji a(int x, int y, int z) { return allAir ? aji.e(0) : super.a(x, y, z); }
+    // World.canLightningStrikeAt (ahb.y) for BlockLeaves.randomDisplayTick: the case says.
+    public boolean y(int x, int y, int z) { return strike; }
   }
   public static class Animal extends wf {
     Animal() { super((ahb) null); }
     public rx a(rx other) { return null; }
+    // EntityAnimal.attackEntityFrom (wf.a(ro, F)), recorded and refused: the drowning case
+    // needs the call, not the damage path (armor and attributes the double lacks).
+    public boolean a(ro source, float amount) {
+      attacks.add("[\"" + (source == ro.e ? "drown" : "other") + "\"," + (double) amount + "]");
+      return false;
+    }
   }
   // particleTextureIndexX + 16 * Y, age, max age.
   static int tex(bkm p) throws Exception { return i(p, "b") + i(p, "c") * 16; }
@@ -271,6 +282,9 @@ public class FxProbe extends ParticleProbe {
       {"falling water", 8, 8, 60, new int[][] {}},
       {"lava ceiling", 11, 0, 600, new int[][] {{10, 69, 10, 1, 0}}},
       {"covered lava", 11, 0, 60, new int[][] {{10, 71, 10, 1, 0}}},
+      {"leaves in rain", 18, 0, 300, new int[][] {}, true},
+      {"leaves in rain over stone", 18, 0, 60, new int[][] {{10, 69, 10, 1, 0}}, true},
+      {"leaves dry", 18, 0, 60, new int[][] {}, false},
     };
     for (Object[] c : display) {
       fixture(0);
@@ -279,14 +293,49 @@ public class FxProbe extends ParticleProbe {
       for (int[] e : extra) put(e[0], e[1], e[2], e[3], e[4]);
       StringBuilder runs = new StringBuilder(), cellText = new StringBuilder();
       for (int[] e : extra) cellText.append(cellText.length() > 0 ? "," : "").append(Arrays.toString(e));
+      strike = c.length > 5 && (Boolean) c[5];
       for (int seed = 0; seed < (Integer) c[3]; seed++) {
         calls.clear(); sounds.clear();
         Random r = new Random(seed);
         aji.e((Integer) c[1]).b(world, 10, 70, 10, r);
         runs.append(seed > 0 ? "," : "").append("[" + seed + "," + calls + "," + sounds + "," + raw(r) + "]");
       }
-      System.out.println("{\"case\":\"display\",\"name\":\"" + c[0] + "\",\"block\":" + c[1] + ",\"meta\":" + c[2] + ",\"cells\":[" + cellText + "],\"runs\":[" + runs + "]}");
+      System.out.println("{\"case\":\"display\",\"name\":\"" + c[0] + "\",\"block\":" + c[1] + ",\"meta\":" + c[2] + ",\"strike\":" + strike + ",\"cells\":[" + cellText + "],\"runs\":[" + runs + "]}");
     }
+    strike = false;
+    // Entity.isInsideOfMaterial(water) (sa.a(awt)) for a 0.9 x 1.3 body (eye 1.105) whose feet
+    // step 0.05 at a time through one water cell at y 65 of each level: [feetY, inside].
+    for (int meta : new int[] {0, 1, 3, 7, 8}) {
+      fixture(0);
+      put(10, 65, 10, meta == 0 ? 9 : 8, meta);
+      StringBuilder grid = new StringBuilder();
+      for (int k = 0; k <= 40; k++) {
+        double y = 63.4 + k * 0.05;
+        Animal e = animal(1, 10.5, y, 10.5, 0.9f, 1.3f);
+        grid.append(k > 0 ? "," : "").append("[" + e.t + "," + e.a(awt.h) + "]");
+      }
+      System.out.println("{\"case\":\"inside\",\"meta\":" + meta + ",\"width\":" + (double) 0.9f + ",\"height\":" + (double) 1.3f + ",\"eye\":" + (double) (1.3f * 0.85f) + ",\"grid\":[" + grid + "]}");
+    }
+    // EntityLivingBase.onEntityUpdate (sv.C) for an animal whose eye is under the still pool
+    // (fixture 1), 25 ticks from 3 air: [air, World.spawnParticle calls, attackEntityFrom
+    // calls] per tick, and Entity.rand rewound to the start.
+    fixture(1);
+    wet = true;
+    setIn(ahb.class, world, "C", new qi());
+    {
+      Animal e = animal(91, 10.5, 64.0, 10.5, 0.9f, 1.3f);
+      e.af.a(6, Float.valueOf(10f));
+      e.h(3);
+      e.v = 0.01; e.w = -0.02; e.x = 0.03;
+      StringBuilder ticks = new StringBuilder();
+      for (int t = 0; t < 25; t++) {
+        calls.clear(); attacks.clear();
+        e.C();
+        ticks.append(t > 0 ? "," : "").append("[" + e.ar() + "," + calls + "," + attacks + "]");
+      }
+      System.out.println("{\"case\":\"drown\",\"seed\":91,\"x\":" + e.s + ",\"y\":" + e.t + ",\"z\":" + e.u + ",\"motion\":[" + e.v + "," + e.w + "," + e.x + "],\"air\":3,\"ticks\":[" + ticks + "]}");
+    }
+    wet = false;
     // WorldClient.doVoidFogParticles over an all-air world (no display ticks run): 1000 cells
     // within 15 blocks of (10, 4, 10) from World.rand; air below y 8 rolls depthsuspend.
     allAir = true;
