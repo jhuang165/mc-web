@@ -1,0 +1,107 @@
+// The port's internal block ids against the original 1.7.10 block registry (Block.registerBlocks).
+// Chunk storage (chunk-store.js) holds original ids and metadata, so a cell converts through
+// toOriginal / fromOriginal. State the browser keeps outside the cell (fluid ticks, farmland moisture
+// in farming.js, chest facing in chest.js, the furnace runtime) travels in `state`:
+//   flowing   true for flowing_water/flowing_lava (8/10); still water/lava (9/11) otherwise
+//   moisture  BlockFarmland metadata 0-7 (internal 29 is dry, 30 any moisture above 0)
+//   facing    BlockChest / BlockFurnace metadata 2-5
+//   lit       lit_furnace (62)
+// Original blocks the port has no family for map to null. Ids and flags: tools/probes/ChunkProbe.java,
+// public/research/chunk-reference.json.
+import { BLOCKS, WATER, LAVA } from "./world.js";
+
+// Block.blockRegistry: ids 0-175 except 165-169 (unused in 1.7.10). Everything else reads as air.
+export const ORIGINAL_BLOCK_IDS = Array.from({ length: 176 }, (_, i) => i).filter((i) => i < 165 || i > 169);
+const REGISTERED = new Uint8Array(4096);
+for (const id of ORIGINAL_BLOCK_IDS) REGISTERED[id] = 1;
+// Block.getTickRandomly (aji.t) for registered blocks.
+export const ORIGINAL_RANDOM_TICK = [
+  2, 6, 8, 10, 11, 18, 28, 31, 32, 37, 38, 39, 40, 50, 51, 59, 60, 70, 72, 74, 75, 76, 77, 78, 79, 80, 81, 83, 86, 90,
+  91, 92, 104, 105, 106, 110, 111, 115, 127, 131, 132, 141, 142, 143, 147, 148, 161, 171, 175,
+];
+const TICKING = new Uint8Array(4096);
+for (const id of ORIGINAL_RANDOM_TICK) TICKING[id] = 1;
+// BlockContainer (akw) subclasses: their cells own tile entities in the original Chunk.
+export const ORIGINAL_CONTAINERS = [23, 25, 36, 52, 54, 61, 62, 63, 68, 84, 116, 117, 119, 130, 137, 138, 140, 144, 146, 149, 150, 151, 154, 158];
+// Block.getBlockById (aji.e) of an unregistered id is air, so it reads back as 0.
+export const isRegistered = (id) => id >= 0 && id < 4096 && REGISTERED[id] === 1;
+export const ticksRandomlyOriginal = (id) => id >= 0 && id < 4096 && TICKING[id] === 1;
+
+const same = (mc) => ({ mc, to: (meta) => [mc, meta & 15], from: (meta) => ({ meta, exact: true }) });
+// One original state; others of the same original id come back inexactly.
+const fixed = (mc, value = 0) => ({ mc, to: () => [mc, value], from: (meta) => ({ meta: 0, exact: meta === value }) });
+const fluid = (still) => ({
+  mc: still,
+  also: [still - 1],
+  to: (meta, state) => [state.flowing ? still - 1 : still, meta & 15],
+  from: (meta, mc) => ({ meta, state: mc === still - 1 ? { flowing: true } : undefined, exact: true }),
+});
+const facing = (state) => (state.facing >= 2 && state.facing <= 5 ? state.facing : 3);
+
+// Internal id -> mapping. Identity metadata ("same") where the port stores the original meaning.
+const MAP = {
+  0: fixed(0), 1: fixed(2), 2: fixed(3), 3: fixed(1), 4: same(17), 5: same(18), 6: fixed(12), 7: fixed(5),
+  8: fixed(45), 9: fixed(20), [WATER]: fluid(9), 11: fixed(7), 12: fixed(4), 13: fixed(58),
+  // BlockFurnace: facing 2-5 (3 is func_149930_e's open-neighbour default); lit_furnace is 62.
+  14: {
+    mc: 61, also: [62],
+    to: (meta, state) => [state.lit ? 62 : 61, facing(state)],
+    from: (meta, mc) => ({ meta: 0, state: { facing: meta, ...(mc === 62 ? { lit: true } : {}) }, exact: meta >= 2 && meta <= 5 }),
+  },
+  15: fixed(16), 16: fixed(15), 17: fixed(56), 18: fixed(14), 19: same(35),
+  // Port torches always stand on the floor: BlockTorch metadata 5.
+  20: fixed(50, 5),
+  21: fixed(47), 22: fixed(49), 23: fixed(80), 24: fixed(82), 25: fixed(13), 26: fixed(42), 27: fixed(41), 28: fixed(57),
+  // BlockFarmland metadata is the moisture 0-7; the port splits dry (29) from moist (30).
+  29: { mc: 60, to: () => [60, 0], from: (meta) => (meta === 0 ? { meta: 0, exact: true } : null) },
+  30: {
+    mc: 60,
+    to: (meta, state) => [60, state.moisture >= 1 && state.moisture <= 7 ? state.moisture : 7],
+    from: (meta) => (meta === 0 ? null : { meta: 0, state: { moisture: Math.min(meta, 7) }, exact: meta <= 7 }),
+  },
+  // BlockCrops (wheat, 59): the port keeps the age in the id 31-38.
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, age) => [31 + age, {
+    mc: 59, to: () => [59, age], from: (meta) => ((meta & 7) === age ? { meta: 0, exact: meta === age } : null),
+  }])),
+  // BlockTallGrass metadata 1 (grass); 0 dead shrub and 2 fern have no port block.
+  39: fixed(31, 1),
+  40: fixed(172),
+  41: { mc: 54, to: (meta, state) => [54, facing(state)], from: (meta) => ({ meta: 0, state: { facing: meta }, exact: meta >= 2 && meta <= 5 }) },
+  [LAVA]: fluid(11),
+  43: fixed(37), 44: same(38), 45: same(51), 46: same(78), 47: fixed(79), 48: same(6), 49: same(141), 50: same(142),
+  51: fixed(30), 52: same(65), 53: same(81), 54: same(83), 55: fixed(46),
+};
+if (Object.keys(MAP).length !== BLOCKS.length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");
+
+// Original id -> internal ids that can represent it, in internal id order.
+const BY_ORIGINAL = new Map();
+for (const [id, m] of Object.entries(MAP))
+  for (const mc of [m.mc, ...(m.also || [])]) {
+    if (!BY_ORIGINAL.has(mc)) BY_ORIGINAL.set(mc, []);
+    BY_ORIGINAL.get(mc).push(Number(id));
+  }
+
+// [original id, original meta] for an internal cell, or null for an unknown id.
+export function toOriginal(id, meta = 0, state = {}) {
+  const m = MAP[id];
+  return m ? m.to(meta, state || {}) : null;
+}
+
+// {id, meta, state?, exact} for an original cell; exact is false when the port keeps less (a wall
+// torch becomes a standing torch). null when no port block represents the original id.
+export function fromOriginal(mc, meta = 0) {
+  const ids = BY_ORIGINAL.get(mc);
+  if (!ids) return null;
+  let fallback = null;
+  for (const id of ids) {
+    const r = MAP[id].from(meta & 15, mc);
+    if (!r) continue;
+    const out = { id, meta: r.meta, exact: r.exact };
+    if (r.state) out.state = r.state;
+    if (r.exact) return out;
+    fallback ??= out;
+  }
+  return fallback;
+}
+
+export const internalIdsFor = (mc) => BY_ORIGINAL.get(mc)?.slice() || [];
