@@ -67,7 +67,7 @@ export const isWet = (weather, world, e, height = 0) =>
 // Entity.onStruckByLightning (sa.a(xh)): 5 fire damage, then ++fire and setFire(8)
 // (160 ticks) when that reaches 0. A fresh entity has fire 0, so it lands on 1 and
 // burns for a tick; only one that rain had put out (fire -1 in vanilla) ignites.
-// This build's extinguish sets 0 rather than -fireResistance, so that case is not modelled.
+// Wet burning counters rest at -fireResistance in block-collisions.js.
 export function struckByLightning(fire) {
   const next = fire + 1;
   return { damage: 5, fire: next === 0 ? 160 : next };
@@ -191,6 +191,16 @@ export class Weather {
   // WorldInfo's NBT fields (RainTime, raining, ThunderTime, thundering).
   save() {
     return { rainTime: this.rainTime, thunderTime: this.thunderTime, raining: this.raining, thundering: this.thundering };
+  }
+  // Browser continuity snapshot, separate from WorldInfo's four native fields.
+  // Java world NBT does not promise to resume these random streams on reload.
+  saveSimulation() {
+    return { version: 1, random: this.random.save(), lcg: this.lcg };
+  }
+  restoreSimulation(data) {
+    if (data?.version === 1 && Number.isInteger(data.lcg) && data.lcg >= -2147483648 && data.lcg <= 2147483647
+      && this.random.restore(data.random)) this.lcg = data.lcg;
+    return this;
   }
   // World.calculateInitialWeather (ahb.a): a raining world starts at full rain,
   // and at full thunder when it is thundering too.

@@ -412,6 +412,19 @@ export class JavaRandom {
     this.seed = (BigInt(seed) ^ 0x5deece66dn) & MASK;
     this.haveNextGaussian = false;
   }
+  // Browser snapshot of the internal state; feeding this through setSeed would
+  // scramble it a second time. Keep the cached Gaussian as well as the LCG.
+  save() {
+    return { version: 1, seed: this.seed.toString(), gaussian: this.haveNextGaussian ? this.nextGaussianValue : null };
+  }
+  restore(data) {
+    if (!data || data.version !== 1 || typeof data.seed !== "string" || !/^(0|[1-9]\d{0,14})$/.test(data.seed)
+      || BigInt(data.seed) > MASK || (data.gaussian !== null && !Number.isFinite(data.gaussian))) return false;
+    this.seed = BigInt(data.seed);
+    this.haveNextGaussian = data.gaussian !== null;
+    this.nextGaussianValue = this.haveNextGaussian ? data.gaussian : 0;
+    return true;
+  }
   next(bits) {
     this.seed = (this.seed * 0x5deece66dn + 0xbn) & MASK;
     return Number(BigInt.asIntN(32, this.seed >> BigInt(48 - bits)));

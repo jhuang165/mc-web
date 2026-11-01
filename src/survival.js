@@ -519,7 +519,8 @@ export class Survival {
       this.chests[key] = chest;
     }
     this.hurtTicks = 0;
-    this.fire = 0;
+    // Entity's Fire NBT tag is a signed short, including negative ignition delay.
+    this.fire = Number.isInteger(data.fire) && data.fire >= -32768 && data.fire <= 32767 ? data.fire : 0;
     this.lastDamage = "";
     this.broken = 0;
   }
@@ -690,7 +691,7 @@ export class Survival {
     }
   }
   serialize() {
-    const { health, food, saturation, exhaustion, timer, air, time, furnaces, chests } = this;
+    const { health, food, saturation, exhaustion, timer, air, time, fire, furnaces, chests } = this;
     return {
       health,
       food,
@@ -699,6 +700,7 @@ export class Survival {
       timer,
       air,
       time,
+      fire,
       effects: this.effects.serialize(),
       slots: this.inventory.serialize(),
       armor: this.inventory.serializeArmor(),

@@ -72,8 +72,7 @@ test("fire keeps its remaining delay without drawing a replacement wake delay", 
   for (let i = 0; i < 17; i++) original.tick();
   const { runtime: restored, weather: restoredWeather } = fire(copy(w));
   restored.watch();
-  // This isolates scheduling from the still-incomplete world RNG persistence.
-  restoredWeather.random.seed = weather.random.seed;
+  restoredWeather.restoreSimulation(json(weather.saveSimulation()));
   const seed = restoredWeather.random.seed;
   restored.load(json(original.save()));
   assert.equal(restoredWeather.random.seed, seed, "load consumes no world random draws");
@@ -81,6 +80,7 @@ test("fire keeps its remaining delay without drawing a replacement wake delay", 
   for (let i = 0; i < 80; i++) {
     assert.deepEqual(restored.tick(), original.tick());
     assert.deepEqual(restored.save(), original.save());
+    assert.deepEqual(restoredWeather.saveSimulation(), weather.saveSimulation());
   }
   assert.deepEqual(restored.world.data, w.data);
   assert.deepEqual(restored.world.meta, w.meta);

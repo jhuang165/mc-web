@@ -41,7 +41,7 @@ Evidence key: **probe** = replayed against the original classes in `weather-refe
 | `WorldServer` lightning roll: per active chunk each tick `rand.nextInt(100000) == 0` while raining and thundering; column from `updateLCG = updateLCG * 3 + 1013904223`, `j = lcg >> 2`, `x = j & 15`, `z = (j >> 8) & 15` | `weather.js` `rollLightning` | **bytecode** (LCG and flow) |
 | `EntityLightningBolt`: state 2, `boltLivingTime` 1 to 3, `nextLong` path seed, thunder (volume 10000, pitch 0.8 to 1.0) and `random.explode` (volume 2, pitch 0.5 to 0.7) on state 2, re-flash `state < -nextInt(10)` with a new seed, `lastLightningBolt = 2` while `state >= 0` | `weather.js` | **probe**: 36 runs (every seed and life count), per tick state, life, seed, flash, death and sounds |
 | `Entity.onStruckByLightning`: 5 fire damage in a box 3 either side horizontally, 3 below and 9 above the strike, then `++fire` and `setFire(8)` when that reaches 0 | `weather.js`, `main.js` | **bytecode** |
-| `Entity.isWet` (in water, or rain reaches the feet or the head): extinguishes burning entities; the player's `fire` is zeroed the same way | `weather.js`, `entities.js`, `main.js` | **bytecode**; unit test |
+| `Entity.isWet` (in water, or rain reaches the feet or the head): extinguishes burning entities; wet burning counters rest at `-fireResistance` in the movement tail | `weather.js`, `entities.js`, `main.js` | **bytecode**; unit test |
 | Zombies do not burn in rain (vanilla sets them alight and `isWet` puts them out the same tick) | `entities.js` | unit test |
 | Rain moistens farmland (`BlockFarmland.updateTick` uses `canLightningStrikeAt(x, y + 1, z)`) | `farming.js`, `main.js` | unit test |
 | `renderRainSnow`: 21 x 21 columns, `rainXCoords/rainYCoords` billboard tables, per-column seed `x*x*3121 + x*45238971 ^ z*z*418711 + z*13761`, scroll `((count + ...) & 31 + partial) / 32 * (3 + nextFloat)`, V `y / 4 + scroll`, alpha `((1 - (d/10)^2) * 0.5 + 0.5) * rain`, lightmap at `(x, max(precipHeight, eye y), z)`, `rain.png` nearest and repeating | `weather-renderer.js` | **bytecode**; browser check |
@@ -58,7 +58,7 @@ Evidence key: **probe** = replayed against the original classes in `weather-refe
 - **No `/weather` command.** `window.__mc.weather.set("rain" | "thunder" | "clear", seconds)` exists in dev builds only. It sets flags and timers; strengths still ramp at 0.01 per tick.
 - **Fire from lightning is placed.** The `Blocks.fire` placement in the bolt constructor and its re-flash are ported in `fire.js` (`boltStart`, `boltRestrike`) and checked against the original classes (see [fire](fire.md)). `onStruckByLightning` adds 1 to the counter and calls `setFire(8)` if that makes 0. Since 0.21.3 a counter out of fire rests at `-fireResistance` as in vanilla ([player step](player-step.md)), so a bolt lights a mob (−1 → 0) but not a player standing clear of fire (−20 → −19).
 - **Damage ticks.** Damage and ignition are applied on each tick the bolt flashes (`Weather.struck`), through this build's existing `hazard`/`damage` paths and their invulnerability rules. The original code path was not probed.
-- **Sounds.** Thunder plays once. Single-player 1.7.10 plays it twice (the server-side bolt and the client copy). `random.explode` is not in the audio manifest and is skipped. Thunder is played without a position at volume 1 (vanilla uses volume 10000, so it is audible at any distance).
+- **Sounds.** Thunder plays once. Single-player 1.7.10 plays it twice (the server-side bolt and the client copy). `random.explode` is present in the audio manifest and plays at the bolt position. Thunder is played without a position at volume 1 (vanilla uses volume 10000, so it is audible at any distance).
 - **Splash collision** is simplified to the precipitation surface of the column the particle is in, rather than `EntityFX.moveEntity` against block boxes; the lava smoke variant is not ported.
 - **Fast graphics** variant (radius 5, half density) is not ported; fancy only.
 - **Lightning bolt fog.** The bolt is drawn unfogged. In vanilla the fixed-function fog applies.
@@ -73,3 +73,9 @@ node tools/verify-weather.mjs
 ```
 
 Requires a JDK, the client JAR and the extracted classes under `tools/research/` (ignored by Git).
+
+## Browser random continuity (0.22.4)
+
+The native four-field `weather` payload remains unchanged. A separate, versioned `worldRandom` snapshot preserves Weather's World.rand (internal 48-bit state and any cached Gaussian) and signed 32-bit World.updateLCG. Restoring raw state avoids applying setSeed's XOR twice and consumes no random draws. Imports retain the snapshot; missing, unsupported or malformed envelopes leave the newly initialized stream untouched. State validation is atomic. This is a browser continuity extension, not a claim that Java WorldInfo NBT saves these streams.
+
+`src/random-persistence.test.js` compares mixed generator draws and repeated weather reloads through timer rolls and block-tick selections. The fire schedule regression now restores this snapshot rather than assigning the raw seed. These are port regression tests; existing native weather/fire probes remain unchanged. The native calculateInitialWeather strength reset is retained. Active bolts and their private RNG, tree/fluid/blast/entity and other random streams, client particles and cross-system scheduler ordering remain outside this change, so whole-world deterministic reload acceptance remains open.

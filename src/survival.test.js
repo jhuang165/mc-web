@@ -232,3 +232,41 @@ test("armor reduces blockable damage, wears each piece, and survives saves", () 
   assert.equal(ITEMS[409].durability, 240);
   assert.equal(craftingResult([302, 0, 302, 302, 302, 302, 302, 302, 302].map((id) => (id ? makeStack(id) : null)), 3).id, 409);
 });
+
+test("player fire counters round-trip like the original Entity Fire NBT cases", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const ref = JSON.parse(await readFile(new URL("../public/research/fire-save-reference.json", import.meta.url)));
+  assert.equal(ref.cases.length, 15);
+  for (const c of ref.cases) {
+    const p = new Survival(c.missing ? {} : { fire: c.fire });
+    assert.equal(p.fire, c.loaded);
+    assert.equal(new Survival(JSON.parse(JSON.stringify(p.serialize()))).fire, c.loaded);
+  }
+  for (const fire of [null, "20", 1.5, Infinity, NaN, 32768, -32769]) assert.equal(new Survival({ fire }).fire, 0);
+});
+
+test("saving a burning player retains burn cadence, and water still extinguishes after reload", () => {
+  const original = new Survival({ fire: 199, saturation: 0, food: 17 });
+  let restored = new Survival(JSON.parse(JSON.stringify(original.serialize())));
+  for (let t = 0; t < 45; t++) {
+    if (t === 4 || t === 28) restored = new Survival(JSON.parse(JSON.stringify(restored.serialize())));
+    original.tick(); restored.tick();
+    assert.deepEqual(restored.serialize(), original.serialize(), `tick ${t}`);
+  }
+  restored.tick({ inWater: true });
+  assert.equal(restored.fire, 0);
+  restored.fire = 300;
+  assert.equal(new Survival(JSON.parse(JSON.stringify(restored.serialize())), "creative").fire, 300);
+});
+
+test("negative player fire counters retain progress toward ignition through reload", async () => {
+  const { blockCollisions } = await import("./block-collisions.js");
+  const original = new Survival({ fire: -12 }), restored = new Survival(JSON.parse(JSON.stringify(original.serialize())));
+  const burning = { get: () => 45 }, box = [0.2, 0, 0.2, 0.8, 1.8, 0.8];
+  for (let t = 0; t < 12; t++) {
+    blockCollisions(burning, box, original, { resistance: 20 });
+    blockCollisions(burning, box, restored, { resistance: 20 });
+    assert.equal(restored.fire, original.fire);
+  }
+  assert.equal(restored.fire, 160);
+});

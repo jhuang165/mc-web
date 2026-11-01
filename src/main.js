@@ -479,6 +479,7 @@ function save() {
   // EntityTNTPrimed.writeEntityToNBT keeps only the fuse (plus Entity's position and motion).
   active.tnt = primed.map((e) => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse }));
   active.weather = weather.save();
+  active.worldRandom = weather.saveSimulation();
   active.fluidTicks = fluids.save();
   active.fireTicks = fire.save();
   // Items on the cursor or in a crafting grid return to the saved inventory, as closing the screen would.
@@ -653,7 +654,7 @@ function launch(record) {
     farming=new Farming(world,record.farms);
     // Rain moistens farmland (BlockFarmland.updateTick: canLightningStrikeAt(x, y + 1, z)).
     farming.rained = (x, y, z) => canLightningStrikeAt(weather, world, x, y + 1, z);
-    weather = new Weather().restore(record.weather);
+    weather = new Weather().restore(record.weather).restoreSimulation(record.worldRandom);
     weather.apply = applyWeatherEdit;
     fire.sharedRandomTicks = true;
     // One WorldServer random-tick stream: fire and still lava (fire.js), saplings and leaves (trees.js),

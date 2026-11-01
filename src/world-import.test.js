@@ -17,7 +17,10 @@ test("an exported world retains weather, projectiles, TNT and scheduled work on 
   const falling = new FallingBlocks(w);
   falling.schedule(31, 50, 30);
   falling.tick();
+  const weather = new Weather();
+  weather.updateWeather();
   const data = JSON.parse(JSON.stringify({
+    worldRandom: weather.saveSimulation(),
     weather: { rainTime: 123, thunderTime: 456, raining: true, thundering: false },
     projectiles: [{ kind: "egg", x: 30, y: 50, z: 30, mx: 0.1, my: 0.2, mz: 0.3, yaw: 0, pitch: 0 }],
     arrows: [{ x: 31, y: 50, z: 30, mx: 0.4, my: 0.1, mz: 0.2, yaw: 0, pitch: 0, inGround: false }],
@@ -30,9 +33,10 @@ test("an exported world retains weather, projectiles, TNT and scheduled work on 
   assert.equal(payload.id, undefined);
   assert.equal(payload.mode, undefined);
   assert.equal(payload.unknown, undefined);
-  for (const key of ["weather", "projectiles", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "position", "drops", "entities", "farms", "experience", "xpOrbs", "falling"])
+  for (const key of ["weather", "worldRandom", "projectiles", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "position", "drops", "entities", "farms", "experience", "xpOrbs", "falling"])
     assert.deepEqual(payload[key], data[key], key);
   assert.deepEqual(new Weather().restore(payload.weather).save(), data.weather);
+  assert.deepEqual(new Weather().restoreSimulation(payload.worldRandom).saveSimulation(), data.worldRandom);
   const projectiles = new Projectiles(), arrows = new Arrows();
   projectiles.load(payload.projectiles);
   arrows.load(payload.arrows);

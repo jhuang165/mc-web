@@ -1,0 +1,95 @@
+{
+  "target": "Minecraft Java 1.7.10",
+  "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+  "classes": {
+    "sa": {
+      "name": "Entity",
+      "sha256": "01b0b4c808c23eb5e4860e0d638edc242ed0f1c2952109c18fdb3db18f73c360"
+    },
+    "dh": {
+      "name": "NBTTagCompound",
+      "sha256": "7153e0ab037fd41d499e34a3dcf472cab3d0b74eb79ef9c071261abba843aedd"
+    },
+    "dw": {
+      "name": "NBTTagShort",
+      "sha256": "ee8c3efb62bac3a4aa2b7e6a90e58c97dcfc7a1df96c7cd605a8a82b484a18fb"
+    }
+  },
+  "method": "An empty concrete Entity subclass supplies only the three abstract subtype hooks. The inherited unchanged Entity.writeToNBT (sa.e) and Entity.readFromNBT (sa.f) execute against the original NBTTagCompound. Reflection supplies and reads the private fire counter (sa.e). Fourteen signed-short values cover ignition delay, zero, burning cadence and endpoints; the fifteenth removes the Fire tag before reading. No player-specific NBT methods, file IO, entity ticks or complete player-save acceptance run.",
+  "cases": [
+    {
+      "fire": -32768,
+      "stored": -32768,
+      "loaded": -32768
+    },
+    {
+      "fire": -20,
+      "stored": -20,
+      "loaded": -20
+    },
+    {
+      "fire": -19,
+      "stored": -19,
+      "loaded": -19
+    },
+    {
+      "fire": -1,
+      "stored": -1,
+      "loaded": -1
+    },
+    {
+      "fire": 0,
+      "stored": 0,
+      "loaded": 0
+    },
+    {
+      "fire": 1,
+      "stored": 1,
+      "loaded": 1
+    },
+    {
+      "fire": 19,
+      "stored": 19,
+      "loaded": 19
+    },
+    {
+      "fire": 20,
+      "stored": 20,
+      "loaded": 20
+    },
+    {
+      "fire": 21,
+      "stored": 21,
+      "loaded": 21
+    },
+    {
+      "fire": 159,
+      "stored": 159,
+      "loaded": 159
+    },
+    {
+      "fire": 160,
+      "stored": 160,
+      "loaded": 160
+    },
+    {
+      "fire": 299,
+      "stored": 299,
+      "loaded": 299
+    },
+    {
+      "fire": 300,
+      "stored": 300,
+      "loaded": 300
+    },
+    {
+      "fire": 32767,
+      "stored": 32767,
+      "loaded": 32767
+    },
+    {
+      "missing": true,
+      "loaded": 0
+    }
+  ]
+}

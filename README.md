@@ -15,6 +15,8 @@ Node 20.19+ and a browser with WebGL 2 are required. Build with `npm run build`;
 
 ## Current implementation
 
+Version 0.22.4 preserves the player’s signed fire counter across saves/imports (15 original Entity NBT cases), and snapshots the weather World.rand state plus block-tick updateLCG for browser reload continuity. Other random streams and cross-system update ordering remain unfinished. The random snapshot is a browser save extension, separate from Java WorldInfo fields.
+
 Version 0.22.3 preserves pending sand/gravel update deadlines, block identity and queue order across local saves and export/import. Repeated reloads mid-fall match uninterrupted column updates in port regression tests; old saves retain the legacy wake migration. World random continuity and unified cross-system tick ordering remain open.
 
 Version 0.22.2 adds the original clay-block and snow-layer recipes and fixes cooked chicken's missing 0.35 smelting XP. The [recipe catalogue](public/research/recipe-parity-catalogue.md) inventories all 317 native crafting entries, 22 smelting entries and the separate output/XP map, with 1,172 mapped crafting samples and 14 mapped furnace result/XP checks replayed against original-class evidence. Dynamic recipe semantics and broader acceptance remain unfinished.
