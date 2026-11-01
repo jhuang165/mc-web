@@ -20,6 +20,7 @@
 
 import { WATER, LAVA, REEDS, isLiquid } from "./world.js";
 import { JavaRandom } from "./lighting.js";
+import { saveTicks, readTicks } from "./scheduled-ticks.js";
 
 const f = Math.fround,
   STONE = 3,
@@ -208,9 +209,22 @@ export class Fluids {
       this.notify(x, y, z);
     };
   }
-  // Saves keep no scheduled ticks (the original stores them as TileTicks), so a
-  // loaded world wakes every liquid cell touching an edited cell; a settled one
-  // goes back to rest after a single tick.
+  save() {
+    return saveTicks(this.pending.values(), this.time);
+  }
+  load(data) {
+    const state = readTicks(data, this.world, isLiquid);
+    if (!state) { this.wake(); return; }
+    this.time = state.time;
+    this.serial = 0;
+    this.heap = [];
+    this.pending.clear();
+    // Keep the scheduled block even if the cell has since changed. Until its
+    // due tick, that entry must still suppress duplicates of the same block.
+    for (const e of state.entries) this.enqueue(e.x, e.y, e.z, e.block, e.delay);
+  }
+  // Legacy saves have no TileTicks equivalent. Wake liquids next to edits only
+  // for those saves; an explicitly saved empty queue means settled liquids.
   wake() {
     const w = this.world, seen = new Set();
     for (const key of w.edits.keys()) {
@@ -233,9 +247,12 @@ export class Fluids {
   schedule(x, y, z, delay) {
     const block = this.world.get(x, y, z);
     if (!this.world.inside(x, y, z) || !isLiquid(block)) return;
+    this.enqueue(x, y, z, block, delay ?? tickRate(block, this.nether));
+  }
+  enqueue(x, y, z, block, delay) {
     const key = this.key(x, y, z, block);
     if (this.pending.has(key)) return;
-    const entry = { x, y, z, key, block, time: this.time + (delay ?? tickRate(block, this.nether)), id: this.serial++ };
+    const entry = { x, y, z, key, block, time: this.time + delay, id: this.serial++ };
     this.pending.set(key, entry);
     // Binary heap ordered like NextTickListEntry.compareTo: time, then creation order.
     const h = this.heap, less = (a, b) => a.time < b.time || (a.time === b.time && a.id < b.id);

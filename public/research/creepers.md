@@ -193,7 +193,7 @@ The creeper, explosion and fuse sounds were imported with `tools/import-vanilla-
   - a mob standing exactly at the attacker's x/z gets a random knockback heading;
   - the sound range is the browser's 20-block falloff, not 64 blocks.
 - Creeper spawning uses the simplified night ring, not `SpawnerAnimals`.
-- The placer of a primed TNT is not saved, so TNT reloaded mid-fuse explodes without an attacker.
+- Native save behavior (intentional): `EntityTNTPrimed.writeEntityToNBT` does not save the placer, so TNT reloaded mid-fuse explodes without an attacker. This is not a missing parity feature.
 
 
 ## Non-living entity blasts (0.21.5–0.22)

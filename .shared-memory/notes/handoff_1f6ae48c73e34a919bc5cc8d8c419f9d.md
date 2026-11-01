@@ -1,0 +1,1 @@
+Added tools/build-parity-catalogue.mjs: JDK-free regeneration of all 171 original base-block rows from original registry + shadow mapping, explicitly merged fluid IDs and conservative audit-required status. Ran successfully; metadata/behavior/item/entity/etc expansion remains PLAN-03. Part of 0.22.1 reviewed commit/push; no Site publication.

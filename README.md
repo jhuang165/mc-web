@@ -2,7 +2,7 @@
 
 A partial browser recreation of Minecraft Java 1.7.10, investigated with [REA](https://github.com/morluto/rea), MCP SRG mappings and original-client bytecode. Full 1.7.10 parity is unfinished.
 
-[Play the owner-private Site](https://blockworld-mc-web-1030.jhuang165.chatgpt.site) · [Feature coverage](public/research/parity.md) · [Codex/Claude setup](docs/collaboration.md)
+[Play the owner-private Site](https://blockworld-mc-web-1030.jhuang165.chatgpt.site) · [Feature coverage](public/research/parity.md) · [Parity roadmap](public/research/parity-roadmap.md) · [Codex/Claude setup](docs/collaboration.md)
 
 ## Run
 
@@ -14,6 +14,8 @@ npm run dev
 Node 20.19+ and a browser with WebGL 2 are required. Build with `npm run build`; output is `dist/`.
 
 ## Current implementation
+
+Version 0.22.1 preserves pending fluid/fire update delays and ordering across saves, and retains weather, projectiles, arrows, TNT and pending updates when importing exports. Legacy saves still load through the existing wake migration. The [roadmap](public/research/parity-roadmap.md) tracks the remaining work, with all 171 original base block IDs inventoried separately from verified behavior.
 
 Version 0.21.1 moves the player through the original [`Entity.moveEntity`](public/research/player-step.md): the 0.5 step-up onto snow layers and other low blocks, and full-height farmland collision, checked against 589 original-class cases.
 
@@ -37,7 +39,7 @@ Version 0.19 adds [cobwebs](public/research/webs.md): original movement slowdown
 
 Finite seeded terrain, collision/movement/swimming/Creative flight, health/hunger, resources/tools, shaped 2×2 and 3×3 crafting, furnace smelting, original textures/audio, first-person motion, pigs/cows/zombies, wheat farming and cow breeding, XP, classic menus and persistent browser saves. Version 0.6 corrects container/count coordinates, integer GUI scaling, tool break times/harvest/wear and adds shears plus snowball/flint/book drops and recipes. Version 0.7 replaces aggregate storage with the Java 36-slot inventory, cursor and container click rules, per-stack durability, tool repair and armor; 53 cases match the unchanged original classes (see `public/research/inventory.md`).
 
-The creative picker, camera/terrain generation, AI and several interactions remain adapted. The complete block/mob registries, armor rendering, enchanting, redstone, dimensions, original Java worlds/networking and full renderer parity are not implemented. Original imported artwork/audio remains © Mojang / Microsoft; media manifests preserve its hashes and provenance. No original game classes ship in the web build.
+The creative picker, camera/terrain generation, AI and several interactions remain adapted. The complete block/mob registries, enchanting, redstone, dimensions, original Java worlds/networking and full renderer parity remain unfinished. Third-person armor rendering is present, with limitations documented in the feature coverage. Original imported artwork/audio remains © Mojang / Microsoft; media manifests preserve its hashes and provenance. No original game classes ship in the web build.
 
 ## Validate
 
@@ -47,7 +49,7 @@ npm run test:bridge
 npm run build
 ```
 
-The suite includes regression coverage against 2,640 unchanged-original-tool cases. Optional research commands need a JDK and network access:
+The suite includes regression coverage against 3,344 unchanged-original-tool cases. Optional research commands need a JDK and network access:
 
 ```sh
 node tools/investigate.mjs

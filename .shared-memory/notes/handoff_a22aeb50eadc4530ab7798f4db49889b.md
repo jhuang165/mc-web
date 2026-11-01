@@ -1,0 +1,1 @@
+Completed scheduled-tick snapshot validation and runtime import helpers with seven combined regressions. See 0.22.1 primary handoff (baseline 2f845f0): npm test 532/532, build passes. Native TNT placer omission is intentional. World RNG/unified scheduling still open. Changes to be committed/pushed with roadmap; no Site publication.

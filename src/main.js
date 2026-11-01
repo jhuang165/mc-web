@@ -76,6 +76,7 @@ import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS 
 import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, SNEAK_YSIZE, moveWeights, isCritical, ATTACK_SLOWDOWN, groundAccel, airAccel, LIQUID_ACCEL, JUMP_MOTION, jumpExhaustion, sprintJumpPush, FLY_SPEED, FLY_Y_DRAG, flyVertical, fovMultiplier } from "./player-movement.js";
 import { spawnRunningParticles, freshRandom } from "./particles.js";
+import { importedRuntime } from "./world-import.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -478,6 +479,8 @@ function save() {
   // EntityTNTPrimed.writeEntityToNBT keeps only the fuse (plus Entity's position and motion).
   active.tnt = primed.map((e) => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse }));
   active.weather = weather.save();
+  active.fluidTicks = fluids.save();
+  active.fireTicks = fire.save();
   // Items on the cursor or in a crafting grid return to the saved inventory, as closing the screen would.
   const pending = containerView ? [containerView.container.inv.cursor, ...(containerView.container.grid?.stacks || [])].filter(Boolean).map(copyStack) : [];
   if (pending.length) {
@@ -620,7 +623,7 @@ function launch(record) {
     world.blockLight = (x, y, z) => scene.light.blockAt(x, y, z);
     // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
     fluids = new Fluids(world, { fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === WEB ? [{ id: 321, count: 1 }] : b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : b === SAPLING ? [{ id: b, count: 1, damage: world.getMeta(x, y, z) & 7 }] : cropDrops(b,Math.random,world.getMeta(x,y,z)); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
-    fluids.wake();
+    fluids.load(record.fluidTicks);
     watchFlowers();
     // BlockFire and the static-lava ignition roll: scheduled and random ticks (fire.js). Fire reaches the
     // weather through a closure because `weather` is replaced below.
@@ -658,7 +661,7 @@ function launch(record) {
     scene.weather = weather;
     // EntityLightningBolt's fire, and the ticks of the fires saved with the world.
     weather.fire = fire.strikes;
-    fire.wake();
+    fire.load(record.fireTicks);
     experience=new Experience(record.experience);xpOrbs=new ExperienceOrbs(record.xpOrbs);playerTicks=0;
     // Entity.isWet for orbs: rain only (EntityXPOrb.handleWaterMovement never sets inWater).
     xpOrbs.wet = (o) => isWet(weather, world, { x: o.x, y: o.posY, z: o.z, inWater: false }, 0.5);
@@ -2096,15 +2099,11 @@ $("#file-input").onchange = async (e) => {
     check.restore(data.edits);
     const record = {
       ...makeRecord(data),
+      ...importedRuntime(data),
       edits: [...check.edits],
-      position: data.position,
       generationVersion: data.generationVersion ?? 1,
       mode: data.mode === "survival" ? "survival" : "creative",
       player: new Survival(legacyPlayer(data), data.mode).serialize(),
-      drops: data.drops,
-      entities: data.entities,
-      farms:data.farms,
-      experience:data.experience,xpOrbs:data.xpOrbs,falling:data.falling,
     };
     worlds.unshift(record);
     persist();

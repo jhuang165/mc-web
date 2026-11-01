@@ -15,6 +15,7 @@
 // `difficulty` and `fireTick` (the doFireTick game rule) complete it.
 import { FIRE, LAVA, HEIGHT, SIZE, TNT, isLiquid, normalCube } from "./world.js";
 import { Weather, canLightningStrikeAt, stopsPrecipitation } from "./weather.js";
+import { saveTicks, readTicks } from "./scheduled-ticks.js";
 
 const f = Math.fround;
 
@@ -377,8 +378,17 @@ export class Fire {
       for (const [dx, dy, dz] of SIDES) if (this.world.get(x + dx, y + dy, z + dz) === FIRE) neighborChange(this.L, x + dx, y + dy, z + dz);
     };
   }
-  // Saves keep no scheduled ticks (the original saves TileTicks): every saved fire gets one
-  // after 30 to 39 ticks.
+  save() {
+    return saveTicks(this.queue.pending.values(), this.time, FIRE);
+  }
+  load(data) {
+    const state = readTicks(data, this.world, (block) => block === FIRE);
+    if (!state) { this.wake(); return; }
+    this.time = state.time;
+    this.queue = new TickQueue();
+    for (const e of state.entries) this.schedule(e.x, e.y, e.z, e.delay);
+  }
+  // Legacy saves have no TileTicks equivalent: reschedule each saved fire.
   wake() {
     for (const [key, v] of this.world.edits) {
       if ((v & 255) !== FIRE) continue;
