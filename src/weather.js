@@ -7,6 +7,7 @@
 // strengths, sky terms, strike rule and bolt state machine are replayed against
 // public/research/weather-reference.json by weather.test.js.
 import { JavaRandom, biomeTemperature, lightOpacity } from "./lighting.js";
+import { rainParticleAttempts } from "./particle-settings.js";
 import { SIZE, HEIGHT, FIRE, SNOW_LAYER, ICE, isPlant, ticksRandomly } from "./world.js";
 import { biomeFacts } from "./biomes.js";
 import { canBlockFreeze, canSnowAt, lightOf, meltResult } from "./snow.js";
@@ -186,6 +187,7 @@ export class Weather {
     this.struck = []; // bolts that flashed this tick, drained by the damage hook
     this.clientTicks = 0; // EntityRenderer.rendererUpdateCount
     this.rainSoundCounter = 0;
+    this.particleSetting = 0;
     this.drops = [];
   }
   // WorldInfo's NBT fields (RainTime, raining, ThunderTime, thundering).
@@ -336,7 +338,7 @@ export class Weather {
     if (strength === 0 || !rainsHere(world)) return;
     const random = new JavaRandom(BigInt(this.clientTicks) * 312987231n),
       i = Math.floor(viewer.x), j = Math.floor(viewer.y), k = Math.floor(viewer.z),
-      count = Math.trunc(f(f(f(100 * strength) * strength)));
+      count = rainParticleAttempts(strength, this.particleSetting);
     let l = 0, sx = 0, sy = 0, sz = 0;
     for (let n = 0; n < count; n++) {
       const x = i + random.nextInt(10) - random.nextInt(10),

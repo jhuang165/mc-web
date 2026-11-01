@@ -8,6 +8,7 @@
 // EntityBreakingFX (bju) particles and removes the ball. `y` is the bottom of
 // the box, which is also the entity's posY (yOffset 0).
 import { explosionImpact } from "./explosion.js";
+import { acceptsParticle } from "./particle-settings.js";
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
 import { blockBounds, collisionBounds, snowSelectionHeight, FIRE, CARROTS, REEDS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
 import { ladderBounds } from "./ladders.js";
@@ -278,6 +279,9 @@ export function thrownHit(mobs, e, from) {
 export class Projectiles {
   constructor(random = Math.random) {
     this.random = random;
+    this.particleSetting = 0;
+    this.particleRandom = new JavaRandom(Math.floor(Math.random() * 2 ** 48));
+    this.particleViewer = null;
     this.balls = [];
     this.particles = [];
     this.events = [];
@@ -400,6 +404,7 @@ export class Projectiles {
   // Math.random the motion: each axis gets a +-0.4 kick, and the vector is
   // rescaled to length f * 0.4 with +0.1 upwards.
   poof(x, y, z) {
+    if (!acceptsParticle("snowballpoof", this.particleSetting, this.particleRandom, x, y, z, this.particleViewer)) return null;
     const rand = this.rng(), r = this.random,
       jx = f(rand.nextFloat() * 3), jy = f(rand.nextFloat() * 3),
       scale = f(f(f(rand.nextFloat() * 0.5) + 0.5) * 2),

@@ -71,6 +71,8 @@ See the [accepted roadmap and execution tracker](parity-roadmap.md) and [origina
 
 - [Original content registry/subtype outputs](content-registry-reference.json): 315 item registrations, 171 block registrations with Creative item subtypes, 606 Creative search entries (76 additional enchanted books retaining NBT), 57 numeric EntityList registrations, 61 occupied biome slots and nine default gamerules. `tools/verify-catalogue.mjs` executes unchanged original registration/subtype classes; `tools/build-content-catalogue.mjs` generates conservative audit tables and matches the 167 browser search entries. This is enumeration evidence, not feature-behavior verification; world metadata semantics and remaining feature categories stay open.
 
+- [Block particle and particle-option reference outputs](particle-reference.json): 529 original-class records; 504 run the unchanged RenderGlobal.doSpawnParticle filter for seven kinds, all three Particles settings, distances 0/16/16.0001 and eight seeds. `src/particle-settings.test.js` replays accepted flags and exact World.rand consumption.
+
 - [Explosion/smoke particle reference outputs](explosion-particles-reference.json): 41 original-class records covering four particle classes through full lifetimes and eight collision fixtures, client blast spawn calls and TNT fuse smoke; `src/explosion-particles.test.js` replays them.
 
 - [Non-living explosion reference outputs](explosion-entities-reference.json): 54 scenarios / 432 original arrow, item, primed-TNT, snowball, egg and falling-block targets; exact blast motion, item health/death and arrow embedded state replays in `src/explosion-entities.test.js` ([explosions](creepers.md)).

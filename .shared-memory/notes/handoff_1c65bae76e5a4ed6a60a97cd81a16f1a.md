@@ -1,0 +1,1 @@
+Released by Claude Code continuing Codex's interrupted FX-01 session (Codex hit usage limit). particles.test.js record count 25->529 for 504 added setting cases; included in the 0.22.7 commit.

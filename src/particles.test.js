@@ -92,7 +92,7 @@ function sameTracks(system, made, rec, name) {
 
 test("the probe ran on the unchanged 1.7.10 client", () => {
   assert.equal(reference.clientSha1, "e80d9b3bf5085002218d4be59e668bac718abbc6");
-  assert.equal(reference.records.length, 25);
+  assert.equal(reference.records.length, 529);
 });
 
 test("Block.getIcon(0, meta), the particle icon, for every block of this build", () => {

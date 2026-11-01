@@ -5,7 +5,8 @@
 // dust), and Entity.onEntityUpdate's sprint particle (sa.C). Rules and the probe
 // records they replay are in public/research/particles.md and
 // particle-reference.json. Pure logic; particle-renderer.js draws `list`.
-import { mhSin, mhCos } from "./lighting.js";
+import { JavaRandom, mhSin, mhCos } from "./lighting.js";
+import { acceptsParticle } from "./particle-settings.js";
 import { collisionBounds, FIRE, LAVA, WATER, WEB } from "./world.js";
 import { blockTile, TILES } from "./block-textures.js";
 import { rayBounds } from "./projectiles.js";
@@ -122,7 +123,7 @@ export class ParticleSystem {
   // `random` stands for Math.random (the EntityFX motion kick), `entityRandom`
   // returns each new particle's Entity.rand, and `rand` is EffectRenderer.rand
   // (hit positions); `worldRandom` is the client World.rand (landing dust).
-  constructor({ random = Math.random, entityRandom = freshRandom, rand = { nextDouble: Math.random }, worldRandom = { nextFloat: freshRandom().nextFloat }, limit = PARTICLE_LIMIT } = {}) {
+  constructor({ random = Math.random, entityRandom = freshRandom, rand = { nextDouble: Math.random }, worldRandom = new JavaRandom(Math.floor(Math.random() * 2 ** 48)), limit = PARTICLE_LIMIT } = {}) {
     this.random = random;
     this.entityRandom = entityRandom;
     this.rand = rand;
@@ -232,13 +233,7 @@ export class ParticleSystem {
   // the view entity's position (the eye) is more than 16 blocks away or the
   // particle setting is minimal.
   spawn(kind, id, meta, x, y, z, vx, vy, vz, viewer, worldRandom = this.worldRandom) {
-    let setting = this.setting;
-    if (setting === 1 && Math.floor(worldRandom.nextFloat() * 3) === 0) setting = 2;
-    if (viewer) {
-      const dx = viewer[0] - x, dy = viewer[1] - y, dz = viewer[2] - z;
-      if (dx * dx + dy * dy + dz * dz > 256) return null;
-    }
-    if (setting > 1 || particleTile(id, meta) < 0) return null;
+    if (!acceptsParticle(kind, this.setting, worldRandom, x, y, z, viewer) || particleTile(id, meta) < 0) return null;
     const p = this.tint(this.digging(x, y, z, vx, vy, vz, id, meta), id);
     if (kind === "blockdust") {
       p.mx = vx;

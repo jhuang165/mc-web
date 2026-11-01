@@ -1,3 +1,4 @@
+import { particleSetting } from "./particle-settings.js";
 import { webMove } from './webs.js';
 import { blockCollisions, PLAYER_FIRE_RESISTANCE } from './block-collisions.js';
 import "./style.css";
@@ -104,6 +105,7 @@ let options = {
   distance: 155,
   sound: true,
   guiScale:0,
+  particles:0,
   // GameSettings.gammaSetting: 0 Moody (the 1.7.10 default) to 1 Bright.
   gamma: 0,
 };
@@ -113,6 +115,17 @@ try {
     ...JSON.parse(localStorage.getItem("blockworld.settings") || "{}"),
   };
 } catch {}
+options.particles = particleSetting(options.particles);
+// Apply the saved client preference to current runtimes (weather is replaced on load).
+function updateParticleOptions() {
+  const setting = particleSetting(options.particles);
+  scene.particles.setting = scene.explosionParticles.setting = setting;
+  projectiles.particleSetting = weather.particleSetting = setting;
+  // RenderGlobal uses one client World.rand; keep it separate from server simulation.
+  scene.particles.worldRandom = projectiles.particleRandom = scene.explosionParticles.worldRandom;
+  const viewer = [position.x, position.y + PHYSICS.eye, position.z];
+  scene.explosionParticles.viewer = projectiles.particleViewer = viewer;
+}
 // GameSettings.getKeyBinding for GAMMA.
 const gammaLabel=g=>g<=0?"Moody":g>=1?"Bright":"+"+Math.round(g*100)+"%";
 function updateGuiScale(){document.documentElement.style.setProperty('--gui-scale',guiScale(innerWidth,innerHeight,Number(options.guiScale)||0));}
@@ -417,7 +430,7 @@ function notes() {
 function settings() {
   modal(
     "Options",
-    `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>GUI Scale<select id="gui-scale">${[[0,"Auto"],[1,"Small"],[2,"Normal"],[3,"Large"],[4,"Larger"]].map(([v,label])=>`<option value="${v}" ${Number(options.guiScale||0)===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Field of view <output id="fov-value">${options.fov}°</output><input type="range" id="fov" min="50" max="100" value="${options.fov}"></label><label>Mouse sensitivity <output id="sensitivity-value">${options.sensitivity.toFixed(1)}×</output><input type="range" id="sensitivity" min="0.2" max="2" step="0.1" value="${options.sensitivity}"></label><label>View distance <output id="distance-value">${options.distance} blocks</output><input type="range" id="distance" min="70" max="200" step="5" value="${options.distance}"></label><label>Brightness <output id="gamma-value">${gammaLabel(options.gamma)}</output><input type="range" id="gamma" min="0" max="1" step=".01" value="${options.gamma}"></label><label>Sound volume <output id="volume-value">${Math.round(options.volume * 100)}%</output><input type="range" id="volume" min="0" max="1" step=".05" value="${options.volume}"></label><label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
+    `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>GUI Scale<select id="gui-scale">${[[0,"Auto"],[1,"Small"],[2,"Normal"],[3,"Large"],[4,"Larger"]].map(([v,label])=>`<option value="${v}" ${Number(options.guiScale||0)===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Particles<select id="particles">${["All","Decreased","Minimal"].map((label,v)=>`<option value="${v}" ${options.particles===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Field of view <output id="fov-value">${options.fov}°</output><input type="range" id="fov" min="50" max="100" value="${options.fov}"></label><label>Mouse sensitivity <output id="sensitivity-value">${options.sensitivity.toFixed(1)}×</output><input type="range" id="sensitivity" min="0.2" max="2" step="0.1" value="${options.sensitivity}"></label><label>View distance <output id="distance-value">${options.distance} blocks</output><input type="range" id="distance" min="70" max="200" step="5" value="${options.distance}"></label><label>Brightness <output id="gamma-value">${gammaLabel(options.gamma)}</output><input type="range" id="gamma" min="0" max="1" step=".01" value="${options.gamma}"></label><label>Sound volume <output id="volume-value">${Math.round(options.volume * 100)}%</output><input type="range" id="volume" min="0" max="1" step=".05" value="${options.volume}"></label><label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
   );
   for (const key of [
     "fov",
@@ -452,6 +465,7 @@ function settings() {
         localStorage.setItem("blockworld.settings", JSON.stringify(options));
       } catch {}
     };
+  $("#particles").onchange=e=>{options.particles=particleSetting(+e.target.value);updateParticleOptions();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
   $("#gui-scale").onchange=e=>{options.guiScale=+e.target.value;updateGuiScale();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
   $("#test-sound").onclick = async () => {
     if (!options.sound) {
@@ -1611,7 +1625,7 @@ function tickPrimedTnt() {
   if (!primed.length) return;
   for (const e of [...primed]) {
     const at = tickTnt(world, e, (x, y, z) => {
-      if ((x-position.x)**2 + (y-position.y-PHYSICS.eye)**2 + (z-position.z)**2 <= 256) scene.explosionParticles.spawn("smoke", x, y, z);
+      scene.explosionParticles.spawn("smoke", x, y, z);
     });
     if (!at) continue;
     primed.splice(primed.indexOf(e), 1);
@@ -2337,6 +2351,7 @@ function animate(now) {
       accumulator >= PHYSICS.tick &&
       (screen === "playing" || screen === "inventory")
     ) {
+      updateParticleOptions();
       // --- Block particles (particles.js): Entity.onEntityUpdate's sprint particle uses the
       // pre-move position, last tick's motion and in-water flag, before movementTick moves the
       // player; EffectRenderer.updateEffects then runs after this tick's spawns. ---
@@ -2499,6 +2514,7 @@ async function boot(){try {
   scene.camera.updateProjectionMatrix();
   scene.setDistance(options.distance);
   scene.setGamma(Number(options.gamma) || 0);
+  updateParticleOptions();
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)

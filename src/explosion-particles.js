@@ -1,17 +1,20 @@
 // EntityHugeExplodeFX, EntityLargeExplodeFX, EntityExplodeFX and EntitySmokeFX, Java 1.7.10.
 // Original-class constructor/update records: public/research/explosion-particles-reference.json.
 import { ParticleSystem, moveParticleEntity } from './particles.js';
+import { acceptsParticle } from './particle-settings.js';
 import { JavaRandom } from './lighting.js';
 const f=Math.fround;
 export class ExplosionParticles {
   constructor({random=Math.random,entityRandom=()=>new JavaRandom(Math.floor(Math.random()*2**48)),worldRandom=new JavaRandom(Date.now()),limit=4000}={}) {
     this.random=random;this.entityRandom=entityRandom;this.worldRandom=worldRandom;this.limit=limit;
+    this.setting=0;this.viewer=null;
     this.list=[];this.emitters=[];this.counts=[0,0];
     // The common EntityFX constructor, already replayed for block particles.
     this.base=new ParticleSystem({random,entityRandom});
   }
   clear(){this.list=[];this.emitters=[];this.counts=[0,0];}
-  spawn(kind,x,y,z,vx=0,vy=0,vz=0){
+  spawn(kind,x,y,z,vx=0,vy=0,vz=0,viewer=this.viewer){
+    if(!acceptsParticle(kind,this.setting,this.worldRandom,x,y,z,viewer))return null;
     const rand=this.entityRandom(), r=this.random;
     this.base.entityRandom=()=>rand;
     const p=this.base.digging(x,y,z,kind==='explode'?vx:0,kind==='explode'?vy:0,kind==='explode'?vz:0,3);
@@ -41,21 +44,21 @@ export class ExplosionParticles {
   }
   // Client Explosion.doExplosionB(true). World.rand is separate from server drops/terrain RNG.
   burst(x,y,z,size,positions,{smoking=true,viewer=null}={}){
-    const r=this.worldRandom;
+    const r=this.worldRandom, previousViewer=this.viewer;
+    this.viewer=viewer??previousViewer;
     r.nextFloat();r.nextFloat(); // the sound's pitch consumes two floats before particle positions
     this.spawn(size>=2&&smoking?'hugeexplosion':'largeexplode',x,y,z,1,0,0);
-    if(!smoking)return;
+    if(!smoking){this.viewer=previousViewer;return;}
     for(const [bx,by,bz] of positions){
       const px=f(f(bx)+r.nextFloat()),py=f(f(by)+r.nextFloat()),pz=f(f(bz)+r.nextFloat());
       let dx=px-x,dy=py-y,dz=pz-z;
       const d=f(Math.sqrt(dx*dx+dy*dy+dz*dz));
       const speed=0.5/(d/size+0.1)*f(f(r.nextFloat()*r.nextFloat())+f(0.3));
       dx=dx/d*speed;dy=dy/d*speed;dz=dz/d*speed;
-      // RenderGlobal limits the small particle branches to 16 blocks from the viewer.
-      const visible=(a,b,c)=>!viewer||(a-viewer[0])**2+(b-viewer[1])**2+(c-viewer[2])**2<=256;
-      if(visible((px+x)/2,(py+y)/2,(pz+z)/2))this.spawn('explode',(px+x)/2,(py+y)/2,(pz+z)/2,dx,dy,dz);
-      if(visible(px,py,pz))this.spawn('smoke',px,py,pz,dx,dy,dz);
+      this.spawn('explode',(px+x)/2,(py+y)/2,(pz+z)/2,dx,dy,dz);
+      this.spawn('smoke',px,py,pz,dx,dy,dz);
     }
+    this.viewer=previousViewer;
   }
   tick(world){
     // EffectRenderer updates sprite layers before the custom-particle layer. New puffs from

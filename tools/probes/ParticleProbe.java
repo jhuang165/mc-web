@@ -302,5 +302,21 @@ public class ParticleProbe {
     }
     world.s = new Random(5);
     System.out.println(run("dust-air", wrap(() -> render.a((yz) null, 2006, 52, 70, 52, 4)), 0));
+    adb.l(); // snowball item used by RenderGlobal snowballpoof
+    // Original RenderGlobal filtering, including the pre-filter random draw and
+    // large/huge explosion exceptions. No render method or GL call is executed.
+    set(viewer, "s", 0.0); set(viewer, "t", 70.0); set(viewer, "u", 0.0);
+    for (String kind : new String[] {"blockcrack_1_0", "blockdust_1_0", "smoke", "explode", "snowballpoof", "largeexplode", "hugeexplosion"})
+      for (int setting = 0; setting < 3; setting++)
+        for (double distance : new double[] {0.0, 16.0, 16.0001})
+          for (int seed = 0; seed < 8; seed++) {
+            settings.aJ = setting;
+            world.s = new Random(seed);
+            bkm result = render.b(kind, distance, 70, 0, 0, 0, 0);
+            System.out.println("{\"case\":\"setting\",\"kind\":\"" + kind + "\",\"setting\":" + setting
+              + ",\"distance\":" + distance + ",\"seed\":" + seed + ",\"accepted\":" + (result != null)
+              + ",\"worldSeed\":\"" + raw(world.s) + "\"}");
+          }
+
   }
 }

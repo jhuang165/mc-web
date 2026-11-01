@@ -101,7 +101,7 @@ The test also checks:
 - **Leaf tint.** The block atlas already bakes the biome colour into `leaves_oak` and `tallgrass`, so this build's colour multiplier is white for every block. Destroy and hit particles therefore match. A `blockcrack` or `blockdust` on leaves (sprinting on, or landing on, leaves) should use `getRenderColor` = 0x48B518. Here it uses the biome foliage colour instead.
 - **Spawning between ticks.** A particle spawned between ticks, such as a Creative break from a click, is drawn once at its spawn point before its first update. In the original, `clickMouse` runs inside the tick, before `updateEffects`.
 - **Landing dust timing.** In the original, landing dust is a server event that reaches the client in the next packet batch. Here it spawns in the same tick.
-- **Particle setting.** The setting is fixed at "All", so there is no option UI for it.
+- **Particle setting.** Since 0.22.7 Options has the 1.7.10 Particles choice (All, Decreased, Minimal), saved in this device's settings. See "Particle options" below for what is and is not covered.
 - **Other particle types.** Block particles and the explosion/smoke families are ported (see below). Flame, splash, bubbles, crit, portal, item-break and the others keep their existing or missing implementations.
 - **Collision.** There are no entity bounding boxes (boats and minecarts don't exist here). Particles use the shared `collisionBounds`, including full-cube farmland, inset cactus and ladder plates.
 - **Farmland for the player.** Since 0.21.1, the player and particles both use the original full-cube farmland collision; its render/selection height remains 15/16.
@@ -121,4 +121,18 @@ The test also checks:
 
 `tools/probes/ExplosionParticleProbe.java` and `tools/verify-explosion-particles.mjs` produce [41 original-class records](explosion-particles-reference.json): 32 constructor/lifetime/collision cases (four classes × eight fixtures: open, wall, ceiling, web, ground, cactus, farmland, ladder), eight client blast call sequences and a TNT fuse-smoke sequence. `src/explosion-particles.test.js` matches constructors and every tick exactly, plus checks frame/UV formulas, 48-puff emission, caps and clear. Render frames/UVs are bytecode-derived; the OpenGL renderer is not probe-run.
 
-`VoxelScene` owns `explosionParticles` and the two-buffer `ExplosionParticleRenderer`, using the original imported sheets. The renderer uses this build's camera/light/fog pipeline. Layer caps are separate from existing block and thrown-item particle pools; full particle-setting UI and a single shared native EffectRenderer remain unfinished. No new assets were generated or imported.
+`VoxelScene` owns `explosionParticles` and the two-buffer `ExplosionParticleRenderer`, using the original imported sheets. The renderer uses this build's camera/light/fog pipeline. Layer caps are separate from existing block and thrown-item particle pools; a single shared native EffectRenderer remains unfinished. No new assets were generated or imported.
+
+## Particle options (0.22.7)
+
+`src/particle-settings.js` ports the filter at the top of `RenderGlobal.doSpawnParticle` (`bma.b`). Decreased draws `World.rand.nextInt(3)` on every call, and a zero turns that call into Minimal. The draw happens before the exemptions, so distant and exempt particles still consume it. `hugeexplosion`, `largeexplode` and `fireworksSpark` are made before the range test and ignore both the 16-block limit and Minimal. Every other kind is refused beyond 16 blocks from the view entity or on Minimal, before any `EntityFX` constructor runs, so a refused particle draws no `Math.random` or `Entity.rand`.
+
+- The filter covers `blockcrack` (sprint), `blockdust` (landing), small `explode` and `smoke` from client explosions, TNT fuse smoke, the large puffs from huge-explosion emitters and `snowballpoof`.
+- Breaking and mining-hit particles go straight to `EffectRenderer.addEffect` in the original, so no setting removes them.
+- `EntityRenderer.addRainParticles` (`blt.l`) does its own count change: Decreased halves the attempts (`>> 1`) and Minimal makes none. With no splash positions, the rain loop sound is skipped too. Drops that already exist keep updating.
+- One client `World.rand` (a `JavaRandom`) is shared by block dust, explosion and snowball filtering. It is client-only, separate from the saved server `World.rand`, and not saved.
+- Explosion bursts and fuse smoke now go through the same filter as other particles. The old per-call distance checks in `burst` and `tickPrimedTnt` are gone.
+
+`ParticleProbe` now also runs the unchanged `RenderGlobal.doSpawnParticle` for seven kinds × three settings × distances 0, 16 and 16.0001 × seeds 0–7. That gives 504 `setting` records in [particle-reference.json](particle-reference.json) (529 records in total), each with the accepted flag and the exact `World.rand` state after the call. No render method or GL call runs. `src/particle-settings.test.js` replays all 504 records, including random consumption. It also checks that constructors are skipped, that Minimal keeps destroy/hit particles and all 48 huge-explosion puffs even out of range, that Decreased draws once per explosion attempt, and the rain counts and sound.
+
+Still open: each system keeps its own cap rather than a shared native `EffectRenderer` pool and layer order (FX-01). Lava rain smoke, flame, splash, bubbles, crit, portal, item-break and the other kinds don't exist here. In-world browser acceptance covered the Options menu, persistence and runtime state, not counts of particles on screen.
