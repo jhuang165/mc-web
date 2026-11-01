@@ -1,4 +1,4 @@
-# Mob hurt, death, rewards and pushing (0.22.12)
+# Mob hurt, death, rewards and pushing (0.22.12, 0.22.13)
 
 `tools/probes/CombatProbe.java` and `tools/verify-combat.mjs` run the unchanged 1.7.10 classes and write [combat-reference.json](combat-reference.json): 1,113 records, with the sha256 of every class used. `src/combat.test.js` replays them through `EntityWorld` (`src/entities.js`), with the rules in `src/combat.js`.
 
@@ -27,7 +27,7 @@
   - creeper: 0 to 2 gunpowder.
 
   Meat is cooked when the mob dies burning. After a player hit, a skeleton drops its bow with chance 0.085, worn by a random amount. Also after a player hit, a zombie has a 5 in 200 rare drop: an iron ingot, carrot or potato. Children drop nothing.
-- **Experience.** At death tick 20, a mob hit by the player in the last 100 ticks drops experience: animals 1 to 3, monsters 5, and a skeleton 1 to 3 more for its bow. Children give none. The 20 `explode` particles follow.
+- **Experience.** At death tick 20, a mob hit by the player in the last 100 ticks drops experience: animals 1 to 3, monsters 5, and a skeleton 1 to 3 more for its bow. Children give none. The orbs drop in every game mode, and Creative players collect them too (since 0.22.13). The 20 `explode` particles follow.
 - **Death timing.** A mob killed by a hit counts its first death tick on its next update. A mob killed by fire or drowning counts it in the same update. A dying mob still burns, slides on its knockback and is pushed.
 - **Pushing.** Each living mob pushes every pushable entity whose box meets its own box grown by 0.2 horizontally. The push is 0.05 along the square root of the larger axis distance, and nothing happens within 0.01. Mobs push the player's box but never move the player; the player's own update pushes nearby mobs away.
 - **Sun burning.** Adult zombies and skeletons in daylight above brightness 0.5 with open sky catch fire for 8 seconds when `nextFloat × 30 < (brightness − 0.4) × 2`, checked before the AI as in `onLivingUpdate`.
@@ -40,4 +40,3 @@
 - Revenge targets come only from player hits; mobs do not retaliate against other mobs.
 - Mobs are updated in this build's entity list order, not the original's chunk order, so pushes between three or more mobs can land in a different order.
 - Every skeleton is assumed to hold a bow; spawn equipment rolls are not run.
-- In Creative, kills drop no experience orbs (`main.js`). The original drops them in every game mode.

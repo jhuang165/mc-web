@@ -1344,7 +1344,8 @@ function handleEntityEvents() {
   for (const event of mobs.drain()) {
     if (event.sound)
       sounds.play(event.sound, { position: event.position, volume: event.volume ?? 0.6, pitch: event.pitch });
-    if(event.xp&&!survival.creative)xpOrbs.spawn(event.xp,event.position);
+    // EntityLivingBase.onDeathUpdate spawns the orbs in every game mode; Creative players collect them too.
+    if(event.xp)xpOrbs.spawn(event.xp,event.position);
     // EntityCreeper.func_146077_cc: world.createExplosion(creeper, x, y, z, radius, mobGriefing).
     if (event.explode) explodeAt(event.explode.x, event.explode.y, event.explode.z, event.explode.size, { exploder: event.explode.source, attacker: event.explode.source });
     if (event.drop) items.dropMob(event.drop, event.count, event.position, event.damage, event);
