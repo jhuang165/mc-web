@@ -7,7 +7,7 @@ The live game offers finite 128 × 128 × 256 Java worlds (generation version 9,
 | GEN-01 | Biome layers (`GenLayer.initializeAllBiomeGenerators`), the `BiomeGenBase` registry, `WorldChunkManager` | Done, wired into Java worlds |
 | GEN-02 | Noise octaves and `ChunkProviderGenerate` terrain density, biome surface blocks, sea level 63 | Done, wired into Java worlds |
 | GEN-03 | `MapGenCaves`, `MapGenRavine` | Done, wired into Java worlds |
-| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores and GEN-04b lakes replay exactly; standalone, not wired into Java worlds |
+| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes and GEN-04c dungeons replay exactly; standalone, not wired into Java worlds |
 | GEN-05 | Structures (villages, strongholds, mineshafts, temples) | Open |
 | GEN-06 | Integration: streamed world, new generation version, seed entry | Partial: version 9 is playable at 256 height; finite viewport, no streaming |
 
@@ -158,3 +158,17 @@ Preserved details: four to seven intersecting ellipsoids; X/Z/Y loop order; boun
 World services (skylight, biome top and freezing) are explicit fixtures even on native terrain inputs. The probe does not execute native Chunk storage, lighting, notifications or the full provider population method. No browser QA is needed for an unused module. Dungeons, provider gates and preceding RNG, biome overrides/decorators/trees/plants/springs/snow, structures and versioned cross-chunk runtime integration remain open. No live lake placement or complete population parity is claimed.
 
 GEN-04b validation: `npm test` **678/678**, `npm run build` and **5/5** memory-bridge tests pass; native reference regeneration is byte-identical.
+
+## GEN-04c: dungeons, chest loot and spawners
+
+`src/dungeon-generator.js` ports unchanged 1.7.10 `WorldGenDungeons.generate` (`asd`) with its chest loot (`WeightedRandomChestContent`), the level-30 enchanted book (`ItemEnchantedBook.func_92114_b`, `EnchantmentHelper.buildEnchantmentList`) and the spawner mob pick. It uses original numeric IDs and a block-access adapter: block reads, `Material.isSolid` by ID, isAir, setters, setBlockToAir and tile lookup; chest tiles take `setSlot(index, stack)`, spawners `setEntityName`. Stacks are `[itemId, count, metadata, [[storedEnchantmentId, level], ...]]`. Runtime stays 0.23.0, generation version 9.
+
+`tools/probes/DungeonProbe.java` and `node tools/verify-dungeons.mjs` execute the SHA-1-pinned classes unchanged. [dungeon-reference.json](dungeon-reference.json) holds 632 records: the native loot table, 24 enchantment level ranges and compatibility lists, and material solidity 0–255; enchantment candidate maps at levels 1–60; 256 seeded enchanted books with the next Random long; and 316 dungeon cases. These cover six seeds including both signed-long extrema across twelve synthetic fixtures (tunnel, solid, too many/five/six openings, floor and roof holes, unsupported floor, water, plants, missing chest/spawner tiles), 64 extra seeds, low/high/world-edge positions, and twelve rooms (six accepted) across 48 native terrain/surface/cave/ravine chunks with independently replayed input hashes.
+
+`src/dungeon-generator.test.js` exactly matches return values, every ordered setter (coordinates, ID, metadata, flags), final chest slots and ordered slot writes with stored-enchantment tags, the spawner mob, the count and SHA-1 of ordered block/air/setter/tile calls, and the following Random long.
+
+Preserved details: room half-sizes drawn before any lookup; floor/roof vetoes and the one-to-five two-high wall-opening count inside a single X/Y/Z scan; carving from y+3 down to y-1; boundary cells become air when the block below is not solid, else mossy cobblestone (3 in 4 on the floor) or cobblestone only where solid; two chests, three placement attempts each, requiring exactly one solid horizontal neighbour. The enchanted book is generated (two `nextInt(1)` enchantability draws, level, weighted picks over Java `HashMap` iteration order, compatibility filtering and halving extra-pick loop) before the tile lookup, so it consumes Random even when the chest tile is missing. Eight weighted picks overwrite random slots without merging. Rooms at y=1 lose their whole floor, because y=0 has no solid block below (reads below y=0 return air). A book with no candidates would stay a plain book (ID 340); this cannot happen at level 30.
+
+No native Chunk mutations, neighbour/lighting notifications, live container acceptance, spawner ticking or provider placement are executed. Natural cases use isolated feature seeds (1000+), not post-lake provider streams. Provider placement and its RNG (eight dungeon attempts at x+nextInt(16)+8, nextInt(256), z+nextInt(16)+8 after the lakes), biome decorators/trees/plants/springs/snow, structures and versioned cross-chunk runtime integration remain open. The browser has no loot-chest generation, spawner block or enchanted books yet.
+
+GEN-04c validation: `npm test` **682/682**, `npm run build` and **5/5** memory-bridge tests pass; native reference regeneration is byte-identical.
