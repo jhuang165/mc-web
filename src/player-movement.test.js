@@ -230,3 +230,27 @@ test("getFOVMultiplier: sprint 1.15, flight 1.1, both 1.265, times the bow term"
   near(fovMultiplier({ sprinting: true, bow: bowFov(20) }), 1.15 * 0.85, 1e-6);
   assert.equal(fovMultiplier({ sprinting: true }), f(fovMultiplier({ sprinting: true })), "stays a float");
 });
+
+// Entity.updateFallState inside moveEntity, as main.js now drives the player: on the landing move
+// fall() gets the distance gathered before it, so the clipped landing move never counts. Damage is
+// EntityLivingBase.fall's ceil(distance - 3). The player used to add the landing move first, so a jump
+// off a 2-block ledge (3.25 descended) or an exact 3-block drop hurt.
+test("player fall damage needs more than 3 blocks gathered before the landing move", async () => {
+  const { fallingVelocity } = await import("./world.js");
+  const ledge = (h) => { const s = (x, y) => (x < 64 ? y < h : y < 0); return { numericSeed: 1, solid: (x, y) => s(x, y), get: (x, y, z) => (s(x, y) ? 1 : 0), surface: () => 0, spawn: () => ({ x: 0, y: 0, z: 0 }) }; };
+  const drop = (h, jump) => {
+    const w = ledge(h), e = { x: 64.5, y: h, z: 64.5, vx: 0, vy: jump ? f(0.41999998688697815) : 0, vz: 0, onGround: false, collidedH: false, fallDistance: 0, sneaking: false, ySize: 0 };
+    for (let t = 0; t < 200; t++) {
+      const landed = moveEntity(w, e, 0.6, 1.8, 0, e.vy, 0);
+      if (e.onGround) return { landed, damage: landed > 3 ? Math.ceil(f(landed - 3)) : 0, y: e.y };
+      e.vy = fallingVelocity(e.vy);
+    }
+    throw new Error("never landed");
+  };
+  for (const h of [1, 2, 3]) assert.equal(drop(h, false).damage, 0, `${h}-block drop`);
+  assert.equal(drop(2, true).damage, 0, "jump off a 2-block ledge");
+  assert.ok(drop(2, true).landed < 3);
+  assert.equal(drop(4, false).damage, 1, "4-block drop");
+  assert.equal(drop(5, false).damage, 2, "5-block drop");
+  for (const h of [1, 2, 3, 4, 5]) assert.equal(drop(h, false).y, 0);
+});

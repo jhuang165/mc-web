@@ -220,6 +220,7 @@ let survival = new Survival({}, "creative"),
   mineHeld = false,
   mineCooldown = 0,
   fallDistance = 0,
+  landedFall = 0,
   containerView = null,
   f3Combo = false;
 // Dropped items as EntityItem physics objects (see item-entities.js).
@@ -1286,19 +1287,20 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     );
     survival.exhaust(distance * (inWater ? 0.015 : motion.sprinting ? 0.1 : 0.01));
   }
-  // Entity.updateFallState: fallDistance grows while moving down in every mode (a
-  // Creative player can land a critical hit), the damage is Survival only.
-  if (!inWater && !flying)
-    fallDistance += Math.max(0, oldPosition.y - position.y);
+  // Entity.updateFallState (in movementTick's moveEntity): fallDistance grows while moving down in
+  // every mode (a Creative player can land a critical hit); `landedFall` is the distance a landing
+  // passed to fall(), without the landing move. The damage is Survival only.
   if (grounded) {
-    if (fallDistance > 0) trampleFarmland(position, fallDistance);
+    const distance = landedFall;
+    landedFall = 0;
+    if (distance > 0) trampleFarmland(position, distance);
     // EntityLivingBase.updateFallState: level event 2006 (landing dust) from the block 0.2 below the feet.
-    if (fallDistance > 3) {
+    if (distance > 3) {
       const bx = Math.floor(position.x), by = Math.floor(position.y - 0.20000000298023224), bz = Math.floor(position.z);
-      if (world.get(bx, by, bz)) scene.particles.landingDust(world, bx, by, bz, Math.ceil(Math.fround(fallDistance - 3)), [position.x, position.y + PHYSICS.eye, position.z]);
+      if (world.get(bx, by, bz)) scene.particles.landingDust(world, bx, by, bz, Math.ceil(Math.fround(distance - 3)), [position.x, position.y + PHYSICS.eye, position.z]);
     }
-    if (!survival.creative && fallDistance > 3)
-      survival.damage(Math.ceil(fallDistance - 3), "a fall");
+    if (!survival.creative && distance > 3)
+      survival.damage(Math.ceil(Math.fround(distance - 3)), "a fall");
     fallDistance = 0;
   }
   if (inWater || motion.inWeb) fallDistance = 0;
@@ -2003,11 +2005,17 @@ function movementTick() {
   const [mx, my, mz] = webMove(motion, velocity, ['x', 'y', 'z']);
   const body = {
     x: position.x, y: position.y, z: position.z, vx: velocity.x, vy: velocity.y, vz: velocity.z,
-    onGround: grounded, sneaking: sneak, fallDistance: 0,
+    onGround: grounded, sneaking: sneak, fallDistance: flying ? 0 : fallDistance,
     // onLivingUpdate's sneak raise; moveEntity applies the * 0.4 decay before its step test.
     ySize: sneak && motion.ySize < Math.fround(SNEAK_YSIZE) ? Math.fround(SNEAK_YSIZE) : motion.ySize,
   };
-  moveEntity(world, body, PHYSICS.width, PHYSICS.height, mx, my, mz);
+  // Entity.updateFallState runs inside moveEntity: on landing it passes the distance gathered
+  // before this move (the landing move itself does not count), else a downward move adds to it.
+  const landed = moveEntity(world, body, PHYSICS.width, PHYSICS.height, mx, my, mz);
+  if (!flying) {
+    landedFall = landed;
+    fallDistance = body.fallDistance;
+  }
   position.set(body.x, body.y, body.z);
   velocity.set(body.vx, body.vy, body.vz);
   collidedH = body.collidedH;
