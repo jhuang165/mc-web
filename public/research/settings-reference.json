@@ -1,0 +1,2874 @@
+{
+  "target": "Minecraft Java 1.7.10",
+  "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+  "mappingSha256": "43d4376110b2638213d3096f80f8395c076eb05b58d6c0dbd22c0d999b37a357",
+  "classes": {
+    "bbj": {
+      "mappedName": "net/minecraft/client/settings/GameSettings",
+      "sha256": "f4cca0fbdb6d112de5348e8c98ff61a3871aecc10fe98abb77605ce1498f4410"
+    },
+    "bbm": {
+      "mappedName": "net/minecraft/client/settings/GameSettings$Options",
+      "sha256": "f40be56170737aecb2e273e90748066f3c3ee49820c16b021841ccf8dd285414"
+    },
+    "bal": {
+      "mappedName": "net/minecraft/client/settings/KeyBinding",
+      "sha256": "a9fcb56f81cfbea6d2da2fd7abdb199951a3f0c580c6d7fa74298714e547168d"
+    },
+    "w": {
+      "mappedName": "net/minecraft/client/audio/SoundCategory",
+      "sha256": "eab9e8db53019f799cd69a0daaedb9fa5ee43c2d8ba1fbd083f737af3eda954c"
+    },
+    "rd": {
+      "mappedName": "net/minecraft/world/EnumDifficulty",
+      "sha256": "de67f1b87767bb67123d3341c947a028c7adecd170901b855a1020d4c1a50194"
+    },
+    "zb": {
+      "mappedName": "net/minecraft/entity/player/EntityPlayer$EnumChatVisibility",
+      "sha256": "aa3fbd73fd6f158d9426f88ee09d572891fbf7721e9254cf759dab8a42da9a2d"
+    },
+    "bef": {
+      "mappedName": "net/minecraft/client/gui/GuiVideoSettings",
+      "sha256": "6d3a659b7fb008de69d9ad2316be6fccd857f1d6e45c554f557ea01ebb344e51"
+    },
+    "bcs": {
+      "mappedName": "net/minecraft/client/gui/ScreenChatOptions",
+      "sha256": "0418262c0611f8cb33e03c2d459e015fe5fb88ec0dd4e860ef750ad98001ae4a"
+    },
+    "bdm": {
+      "mappedName": "net/minecraft/client/gui/GuiOptions",
+      "sha256": "759ff37cf6525e5c58766197391759f273c719ea5c87877cb3fa6a96c1bc2a53"
+    },
+    "bew": {
+      "mappedName": "net/minecraft/client/gui/GuiControls",
+      "sha256": "6b9c555ab0f65f093601ddc99930e50bd91e34b2b8f60b29d482d5f96ad0abfd"
+    },
+    "bec": {
+      "mappedName": "net/minecraft/client/gui/GuiScreenOptionsSounds",
+      "sha256": "c1cf7a958584a1f738605ee69d62d10c345a152815564053fbb473af79d9296a"
+    },
+    "bdj": {
+      "mappedName": "net/minecraft/client/gui/GuiLanguage",
+      "sha256": "384be3fd4f44ea010a094605a7c58edef0d04a4e0881a42925ad180668a54d9b"
+    },
+    "bea": {
+      "mappedName": "net/minecraft/client/gui/GuiSnooper",
+      "sha256": "4016c1789a9cc0d868cc70f7a4cab51722030f4662e27a868cc7ed01c0128f8a"
+    },
+    "bgf": {
+      "mappedName": "net/minecraft/client/gui/GuiScreenResourcePacks",
+      "sha256": "da2a56573de9a2764ed601164028d4fc24909e824a10bed0629350d3c9293cd0"
+    }
+  },
+  "method": "Native-executed: GameSettings.Options enum static initialization (ordinal/name/translation key/flags/min/max/step and the slider normalize/denormalize/snap methods), the unchanged GameSettings constructor headlessly with a null Minecraft instance and an absent options file (so loadOptions finds no file and every field keeps its constructor default; no log output), all constructor-created KeyBindings in the keyBindings, hotbar and static registration lists, SoundCategory constants and constructed volumes, GameSettings private string value arrays, EnumDifficulty and EnumChatVisibility constants, and the static option arrays of GuiVideoSettings, ScreenChatOptions, GuiOptions and GuiControls. Bytecode-read (javap, not executed): saveOptions/loadOptions key order and field binding, and the ordered string constants/widget classes in each option screen initGui and draw method. No GUI constructors, GL, audio, I18n/lang resources or Minecraft instance run, so localized display strings, the English controls-screen sort order (category and description are sorted by localized text), widget coordinates, and per-click cycling arithmetic are not executed. Enumeration is not whole-feature verification.",
+  "options": [
+    {
+      "ordinal": 0,
+      "name": "INVERT_MOUSE",
+      "translationKey": "options.invertMouse",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 0,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": false,
+      "slider": null,
+      "mappedConstant": "INVERT_MOUSE"
+    },
+    {
+      "ordinal": 1,
+      "name": "SENSITIVITY",
+      "translationKey": "options.sensitivity",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 1,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": 0.5,
+      "slider": {
+        "rawAt0": 0,
+        "rawAt1": 1,
+        "rawAt0_5": 0.5,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 0.37
+      },
+      "mappedConstant": "SENSITIVITY"
+    },
+    {
+      "ordinal": 2,
+      "name": "FOV",
+      "translationKey": "options.fov",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 2,
+      "min": 30,
+      "max": 110,
+      "step": 1,
+      "default": 70,
+      "slider": {
+        "rawAt0": 30,
+        "rawAt1": 110,
+        "rawAt0_5": 70,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 60
+      },
+      "mappedConstant": "FOV"
+    },
+    {
+      "ordinal": 3,
+      "name": "GAMMA",
+      "translationKey": "options.gamma",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 3,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": 0,
+      "slider": {
+        "rawAt0": 0,
+        "rawAt1": 1,
+        "rawAt0_5": 0.5,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 0.37
+      },
+      "mappedConstant": "GAMMA"
+    },
+    {
+      "ordinal": 4,
+      "name": "SATURATION",
+      "translationKey": "options.saturation",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 4,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": 0,
+      "slider": {
+        "rawAt0": 0,
+        "rawAt1": 1,
+        "rawAt0_5": 0.5,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 0.37
+      },
+      "mappedConstant": "SATURATION"
+    },
+    {
+      "ordinal": 5,
+      "name": "RENDER_DISTANCE",
+      "translationKey": "options.renderDistance",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 5,
+      "min": 2,
+      "max": 16,
+      "step": 1,
+      "default": 12,
+      "slider": {
+        "rawAt0": 2,
+        "rawAt1": 16,
+        "rawAt0_5": 9,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 7
+      },
+      "mappedConstant": "RENDER_DISTANCE"
+    },
+    {
+      "ordinal": 6,
+      "name": "VIEW_BOBBING",
+      "translationKey": "options.viewBobbing",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 6,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": true,
+      "slider": null,
+      "mappedConstant": "VIEW_BOBBING"
+    },
+    {
+      "ordinal": 7,
+      "name": "ANAGLYPH",
+      "translationKey": "options.anaglyph",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 7,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": false,
+      "slider": null,
+      "mappedConstant": "ANAGLYPH"
+    },
+    {
+      "ordinal": 8,
+      "name": "ADVANCED_OPENGL",
+      "translationKey": "options.advancedOpengl",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 8,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": false,
+      "slider": null,
+      "mappedConstant": "ADVANCED_OPENGL"
+    },
+    {
+      "ordinal": 9,
+      "name": "FRAMERATE_LIMIT",
+      "translationKey": "options.framerateLimit",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 9,
+      "min": 10,
+      "max": 260,
+      "step": 10,
+      "default": 120,
+      "slider": {
+        "rawAt0": 10,
+        "rawAt1": 260,
+        "rawAt0_5": 140,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 100
+      },
+      "mappedConstant": "FRAMERATE_LIMIT"
+    },
+    {
+      "ordinal": 10,
+      "name": "FBO_ENABLE",
+      "translationKey": "options.fboEnable",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 10,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": true,
+      "slider": null,
+      "mappedConstant": "FBO_ENABLE"
+    },
+    {
+      "ordinal": 11,
+      "name": "DIFFICULTY",
+      "translationKey": "options.difficulty",
+      "isFloat": false,
+      "isBoolean": false,
+      "returnedOrdinal": 11,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": null,
+      "slider": null,
+      "mappedConstant": "DIFFICULTY"
+    },
+    {
+      "ordinal": 12,
+      "name": "GRAPHICS",
+      "translationKey": "options.graphics",
+      "isFloat": false,
+      "isBoolean": false,
+      "returnedOrdinal": 12,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": null,
+      "slider": null,
+      "mappedConstant": "GRAPHICS"
+    },
+    {
+      "ordinal": 13,
+      "name": "AMBIENT_OCCLUSION",
+      "translationKey": "options.ao",
+      "isFloat": false,
+      "isBoolean": false,
+      "returnedOrdinal": 13,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": null,
+      "slider": null,
+      "mappedConstant": "AMBIENT_OCCLUSION"
+    },
+    {
+      "ordinal": 14,
+      "name": "GUI_SCALE",
+      "translationKey": "options.guiScale",
+      "isFloat": false,
+      "isBoolean": false,
+      "returnedOrdinal": 14,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": null,
+      "slider": null,
+      "mappedConstant": "GUI_SCALE"
+    },
+    {
+      "ordinal": 15,
+      "name": "RENDER_CLOUDS",
+      "translationKey": "options.renderClouds",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 15,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": true,
+      "slider": null,
+      "mappedConstant": "RENDER_CLOUDS"
+    },
+    {
+      "ordinal": 16,
+      "name": "PARTICLES",
+      "translationKey": "options.particles",
+      "isFloat": false,
+      "isBoolean": false,
+      "returnedOrdinal": 16,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": null,
+      "slider": null,
+      "mappedConstant": "PARTICLES"
+    },
+    {
+      "ordinal": 17,
+      "name": "CHAT_VISIBILITY",
+      "translationKey": "options.chat.visibility",
+      "isFloat": false,
+      "isBoolean": false,
+      "returnedOrdinal": 17,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": null,
+      "slider": null,
+      "mappedConstant": "CHAT_VISIBILITY"
+    },
+    {
+      "ordinal": 18,
+      "name": "CHAT_COLOR",
+      "translationKey": "options.chat.color",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 18,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": true,
+      "slider": null,
+      "mappedConstant": "CHAT_COLOR"
+    },
+    {
+      "ordinal": 19,
+      "name": "CHAT_LINKS",
+      "translationKey": "options.chat.links",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 19,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": true,
+      "slider": null,
+      "mappedConstant": "CHAT_LINKS"
+    },
+    {
+      "ordinal": 20,
+      "name": "CHAT_OPACITY",
+      "translationKey": "options.chat.opacity",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 20,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": 1,
+      "slider": {
+        "rawAt0": 0,
+        "rawAt1": 1,
+        "rawAt0_5": 0.5,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 0.37
+      },
+      "mappedConstant": "CHAT_OPACITY"
+    },
+    {
+      "ordinal": 21,
+      "name": "CHAT_LINKS_PROMPT",
+      "translationKey": "options.chat.links.prompt",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 21,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": true,
+      "slider": null,
+      "mappedConstant": "CHAT_LINKS_PROMPT"
+    },
+    {
+      "ordinal": 22,
+      "name": "SNOOPER_ENABLED",
+      "translationKey": "options.snooper",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 22,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": true,
+      "slider": null,
+      "mappedConstant": "SNOOPER_ENABLED"
+    },
+    {
+      "ordinal": 23,
+      "name": "USE_FULLSCREEN",
+      "translationKey": "options.fullscreen",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 23,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": false,
+      "slider": null,
+      "mappedConstant": "USE_FULLSCREEN"
+    },
+    {
+      "ordinal": 24,
+      "name": "ENABLE_VSYNC",
+      "translationKey": "options.vsync",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 24,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": true,
+      "slider": null,
+      "mappedConstant": "ENABLE_VSYNC"
+    },
+    {
+      "ordinal": 25,
+      "name": "SHOW_CAPE",
+      "translationKey": "options.showCape",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 25,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": true,
+      "slider": null,
+      "mappedConstant": "SHOW_CAPE"
+    },
+    {
+      "ordinal": 26,
+      "name": "TOUCHSCREEN",
+      "translationKey": "options.touchscreen",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 26,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": false,
+      "slider": null,
+      "mappedConstant": "TOUCHSCREEN"
+    },
+    {
+      "ordinal": 27,
+      "name": "CHAT_SCALE",
+      "translationKey": "options.chat.scale",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 27,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": 1,
+      "slider": {
+        "rawAt0": 0,
+        "rawAt1": 1,
+        "rawAt0_5": 0.5,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 0.37
+      },
+      "mappedConstant": "CHAT_SCALE"
+    },
+    {
+      "ordinal": 28,
+      "name": "CHAT_WIDTH",
+      "translationKey": "options.chat.width",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 28,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": 1,
+      "slider": {
+        "rawAt0": 0,
+        "rawAt1": 1,
+        "rawAt0_5": 0.5,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 0.37
+      },
+      "mappedConstant": "CHAT_WIDTH"
+    },
+    {
+      "ordinal": 29,
+      "name": "CHAT_HEIGHT_FOCUSED",
+      "translationKey": "options.chat.height.focused",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 29,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": 1,
+      "slider": {
+        "rawAt0": 0,
+        "rawAt1": 1,
+        "rawAt0_5": 0.5,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 0.37
+      },
+      "mappedConstant": "CHAT_HEIGHT_FOCUSED"
+    },
+    {
+      "ordinal": 30,
+      "name": "CHAT_HEIGHT_UNFOCUSED",
+      "translationKey": "options.chat.height.unfocused",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 30,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": 0.44366196,
+      "slider": {
+        "rawAt0": 0,
+        "rawAt1": 1,
+        "rawAt0_5": 0.5,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 0.37
+      },
+      "mappedConstant": "CHAT_HEIGHT_UNFOCUSED"
+    },
+    {
+      "ordinal": 31,
+      "name": "MIPMAP_LEVELS",
+      "translationKey": "options.mipmapLevels",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 31,
+      "min": 0,
+      "max": 4,
+      "step": 1,
+      "default": 4,
+      "slider": {
+        "rawAt0": 0,
+        "rawAt1": 4,
+        "rawAt0_5": 2,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 1
+      },
+      "mappedConstant": "MIPMAP_LEVELS"
+    },
+    {
+      "ordinal": 32,
+      "name": "ANISOTROPIC_FILTERING",
+      "translationKey": "options.anisotropicFiltering",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 32,
+      "min": 1,
+      "max": 16,
+      "step": 0,
+      "default": 1,
+      "slider": {
+        "rawAt0": 1,
+        "rawAt1": 16,
+        "rawAt0_5": 8,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 8
+      },
+      "mappedConstant": "ANISOTROPIC_FILTERING"
+    },
+    {
+      "ordinal": 33,
+      "name": "FORCE_UNICODE_FONT",
+      "translationKey": "options.forceUnicodeFont",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 33,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": false,
+      "slider": null,
+      "mappedConstant": "FORCE_UNICODE_FONT"
+    },
+    {
+      "ordinal": 34,
+      "name": "STREAM_BYTES_PER_PIXEL",
+      "translationKey": "options.stream.bytesPerPixel",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 34,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": 0.5,
+      "slider": {
+        "rawAt0": 0,
+        "rawAt1": 1,
+        "rawAt0_5": 0.5,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 0.37
+      },
+      "mappedConstant": "STREAM_BYTES_PER_PIXEL"
+    },
+    {
+      "ordinal": 35,
+      "name": "STREAM_VOLUME_MIC",
+      "translationKey": "options.stream.micVolumne",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 35,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": 1,
+      "slider": {
+        "rawAt0": 0,
+        "rawAt1": 1,
+        "rawAt0_5": 0.5,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 0.37
+      },
+      "mappedConstant": "STREAM_VOLUME_MIC"
+    },
+    {
+      "ordinal": 36,
+      "name": "STREAM_VOLUME_SYSTEM",
+      "translationKey": "options.stream.systemVolume",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 36,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": 1,
+      "slider": {
+        "rawAt0": 0,
+        "rawAt1": 1,
+        "rawAt0_5": 0.5,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 0.37
+      },
+      "mappedConstant": "STREAM_VOLUME_SYSTEM"
+    },
+    {
+      "ordinal": 37,
+      "name": "STREAM_KBPS",
+      "translationKey": "options.stream.kbps",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 37,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": 0.5412844,
+      "slider": {
+        "rawAt0": 0,
+        "rawAt1": 1,
+        "rawAt0_5": 0.5,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 0.37
+      },
+      "mappedConstant": "STREAM_KBPS"
+    },
+    {
+      "ordinal": 38,
+      "name": "STREAM_FPS",
+      "translationKey": "options.stream.fps",
+      "isFloat": true,
+      "isBoolean": false,
+      "returnedOrdinal": 38,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": 0.31690142,
+      "slider": {
+        "rawAt0": 0,
+        "rawAt1": 1,
+        "rawAt0_5": 0.5,
+        "normalizedMin": 0,
+        "normalizedMax": 1,
+        "snap": 0.37
+      },
+      "mappedConstant": "STREAM_FPS"
+    },
+    {
+      "ordinal": 39,
+      "name": "STREAM_COMPRESSION",
+      "translationKey": "options.stream.compression",
+      "isFloat": false,
+      "isBoolean": false,
+      "returnedOrdinal": 39,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": null,
+      "slider": null,
+      "mappedConstant": "STREAM_COMPRESSION"
+    },
+    {
+      "ordinal": 40,
+      "name": "STREAM_SEND_METADATA",
+      "translationKey": "options.stream.sendMetadata",
+      "isFloat": false,
+      "isBoolean": true,
+      "returnedOrdinal": 40,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": true,
+      "slider": null,
+      "mappedConstant": "STREAM_SEND_METADATA"
+    },
+    {
+      "ordinal": 41,
+      "name": "STREAM_CHAT_ENABLED",
+      "translationKey": "options.stream.chat.enabled",
+      "isFloat": false,
+      "isBoolean": false,
+      "returnedOrdinal": 41,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": null,
+      "slider": null,
+      "mappedConstant": "STREAM_CHAT_ENABLED"
+    },
+    {
+      "ordinal": 42,
+      "name": "STREAM_CHAT_USER_FILTER",
+      "translationKey": "options.stream.chat.userFilter",
+      "isFloat": false,
+      "isBoolean": false,
+      "returnedOrdinal": 42,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": null,
+      "slider": null,
+      "mappedConstant": "STREAM_CHAT_USER_FILTER"
+    },
+    {
+      "ordinal": 43,
+      "name": "STREAM_MIC_TOGGLE_BEHAVIOR",
+      "translationKey": "options.stream.micToggleBehavior",
+      "isFloat": false,
+      "isBoolean": false,
+      "returnedOrdinal": 43,
+      "min": 0,
+      "max": 1,
+      "step": 0,
+      "default": null,
+      "slider": null,
+      "mappedConstant": "STREAM_MIC_TOGGLE_BEHAVIOR"
+    }
+  ],
+  "renderDistanceByJvm": {
+    "java64bit": 12,
+    "java32bit": 8
+  },
+  "gameSettingsFields": [
+    {
+      "obfField": "a",
+      "srgField": "field_74341_c",
+      "optionsKey": "mouseSensitivity",
+      "defaultValue": 0.5
+    },
+    {
+      "obfField": "b",
+      "srgField": "field_74338_d",
+      "optionsKey": "invertYMouse",
+      "defaultValue": false
+    },
+    {
+      "obfField": "c",
+      "srgField": "field_151451_c",
+      "optionsKey": "renderDistance",
+      "defaultValue": 12
+    },
+    {
+      "obfField": "d",
+      "srgField": "field_74336_f",
+      "optionsKey": "bobView",
+      "defaultValue": true
+    },
+    {
+      "obfField": "e",
+      "srgField": "field_74337_g",
+      "optionsKey": "anaglyph3d",
+      "defaultValue": false
+    },
+    {
+      "obfField": "f",
+      "srgField": "field_74349_h",
+      "optionsKey": "advancedOpengl",
+      "defaultValue": false
+    },
+    {
+      "obfField": "g",
+      "srgField": "field_151448_g",
+      "optionsKey": "fboEnable",
+      "defaultValue": true
+    },
+    {
+      "obfField": "h",
+      "srgField": "field_74350_i",
+      "optionsKey": "maxFps",
+      "defaultValue": 120
+    },
+    {
+      "obfField": "i",
+      "srgField": "field_74347_j",
+      "optionsKey": "fancyGraphics",
+      "defaultValue": true
+    },
+    {
+      "obfField": "j",
+      "srgField": "field_74348_k",
+      "optionsKey": "ao",
+      "defaultValue": 2
+    },
+    {
+      "obfField": "k",
+      "srgField": "field_74345_l",
+      "optionsKey": "clouds",
+      "defaultValue": true
+    },
+    {
+      "obfField": "l",
+      "srgField": "field_151453_l",
+      "optionsKey": "resourcePacks",
+      "defaultValue": []
+    },
+    {
+      "obfField": "m",
+      "srgField": "field_74343_n",
+      "optionsKey": "chatVisibility",
+      "defaultValue": "FULL"
+    },
+    {
+      "obfField": "n",
+      "srgField": "field_74344_o",
+      "optionsKey": "chatColors",
+      "defaultValue": true
+    },
+    {
+      "obfField": "o",
+      "srgField": "field_74359_p",
+      "optionsKey": "chatLinks",
+      "defaultValue": true
+    },
+    {
+      "obfField": "p",
+      "srgField": "field_74358_q",
+      "optionsKey": "chatLinksPrompt",
+      "defaultValue": true
+    },
+    {
+      "obfField": "q",
+      "srgField": "field_74357_r",
+      "optionsKey": "chatOpacity",
+      "defaultValue": 1
+    },
+    {
+      "obfField": "r",
+      "srgField": "field_74355_t",
+      "optionsKey": "snooperEnabled",
+      "defaultValue": true
+    },
+    {
+      "obfField": "s",
+      "srgField": "field_74353_u",
+      "optionsKey": "fullscreen",
+      "defaultValue": false
+    },
+    {
+      "obfField": "t",
+      "srgField": "field_74352_v",
+      "optionsKey": "enableVsync",
+      "defaultValue": true
+    },
+    {
+      "obfField": "u",
+      "srgField": "field_80005_w",
+      "optionsKey": "hideServerAddress",
+      "defaultValue": false
+    },
+    {
+      "obfField": "v",
+      "srgField": "field_82882_x",
+      "optionsKey": "advancedItemTooltips",
+      "defaultValue": false
+    },
+    {
+      "obfField": "w",
+      "srgField": "field_82881_y",
+      "optionsKey": "pauseOnLostFocus",
+      "defaultValue": true
+    },
+    {
+      "obfField": "x",
+      "srgField": "field_82880_z",
+      "optionsKey": "showCape",
+      "defaultValue": true
+    },
+    {
+      "obfField": "y",
+      "srgField": "field_85185_A",
+      "optionsKey": "touchscreen",
+      "defaultValue": false
+    },
+    {
+      "obfField": "z",
+      "srgField": "field_92118_B",
+      "optionsKey": "overrideWidth",
+      "defaultValue": 0
+    },
+    {
+      "obfField": "A",
+      "srgField": "field_92119_C",
+      "optionsKey": "overrideHeight",
+      "defaultValue": 0
+    },
+    {
+      "obfField": "B",
+      "srgField": "field_92117_D",
+      "optionsKey": "heldItemTooltips",
+      "defaultValue": true
+    },
+    {
+      "obfField": "C",
+      "srgField": "field_96691_E",
+      "optionsKey": "chatScale",
+      "defaultValue": 1
+    },
+    {
+      "obfField": "D",
+      "srgField": "field_96692_F",
+      "optionsKey": "chatWidth",
+      "defaultValue": 1
+    },
+    {
+      "obfField": "E",
+      "srgField": "field_96693_G",
+      "optionsKey": "chatHeightUnfocused",
+      "defaultValue": 0.44366196
+    },
+    {
+      "obfField": "F",
+      "srgField": "field_96694_H",
+      "optionsKey": "chatHeightFocused",
+      "defaultValue": 1
+    },
+    {
+      "obfField": "G",
+      "srgField": "field_151441_H",
+      "optionsKey": "showInventoryAchievementHint",
+      "defaultValue": true
+    },
+    {
+      "obfField": "H",
+      "srgField": "field_151442_I",
+      "optionsKey": "mipmapLevels",
+      "defaultValue": 4
+    },
+    {
+      "obfField": "I",
+      "srgField": "field_151443_J",
+      "optionsKey": "anisotropicFiltering",
+      "defaultValue": 1
+    },
+    {
+      "obfField": "aW",
+      "srgField": "field_151446_aD",
+      "optionsKey": null,
+      "defaultValue": {}
+    },
+    {
+      "obfField": "J",
+      "srgField": "field_152400_J",
+      "optionsKey": "streamBytesPerPixel",
+      "defaultValue": 0.5
+    },
+    {
+      "obfField": "K",
+      "srgField": "field_152401_K",
+      "optionsKey": "streamMicVolume",
+      "defaultValue": 1
+    },
+    {
+      "obfField": "L",
+      "srgField": "field_152402_L",
+      "optionsKey": "streamSystemVolume",
+      "defaultValue": 1
+    },
+    {
+      "obfField": "M",
+      "srgField": "field_152403_M",
+      "optionsKey": "streamKbps",
+      "defaultValue": 0.5412844
+    },
+    {
+      "obfField": "N",
+      "srgField": "field_152404_N",
+      "optionsKey": "streamFps",
+      "defaultValue": 0.31690142
+    },
+    {
+      "obfField": "O",
+      "srgField": "field_152405_O",
+      "optionsKey": "streamCompression",
+      "defaultValue": 1
+    },
+    {
+      "obfField": "P",
+      "srgField": "field_152406_P",
+      "optionsKey": "streamSendMetadata",
+      "defaultValue": true
+    },
+    {
+      "obfField": "Q",
+      "srgField": "field_152407_Q",
+      "optionsKey": "streamPreferredServer",
+      "defaultValue": ""
+    },
+    {
+      "obfField": "R",
+      "srgField": "field_152408_R",
+      "optionsKey": "streamChatEnabled",
+      "defaultValue": 0
+    },
+    {
+      "obfField": "S",
+      "srgField": "field_152409_S",
+      "optionsKey": "streamChatUserFilter",
+      "defaultValue": 0
+    },
+    {
+      "obfField": "T",
+      "srgField": "field_152410_T",
+      "optionsKey": "streamMicToggleBehavior",
+      "defaultValue": 0
+    },
+    {
+      "obfField": "au",
+      "srgField": "field_74318_M",
+      "optionsKey": "difficulty",
+      "defaultValue": "NORMAL"
+    },
+    {
+      "obfField": "av",
+      "srgField": "field_74319_N",
+      "optionsKey": null,
+      "defaultValue": false
+    },
+    {
+      "obfField": "aw",
+      "srgField": "field_74320_O",
+      "optionsKey": null,
+      "defaultValue": 0
+    },
+    {
+      "obfField": "ax",
+      "srgField": "field_74330_P",
+      "optionsKey": null,
+      "defaultValue": false
+    },
+    {
+      "obfField": "ay",
+      "srgField": "field_74329_Q",
+      "optionsKey": null,
+      "defaultValue": false
+    },
+    {
+      "obfField": "az",
+      "srgField": "field_74332_R",
+      "optionsKey": "lastServer",
+      "defaultValue": ""
+    },
+    {
+      "obfField": "aA",
+      "srgField": "field_74331_S",
+      "optionsKey": null,
+      "defaultValue": false
+    },
+    {
+      "obfField": "aB",
+      "srgField": "field_74326_T",
+      "optionsKey": null,
+      "defaultValue": false
+    },
+    {
+      "obfField": "aC",
+      "srgField": "field_74325_U",
+      "optionsKey": null,
+      "defaultValue": false
+    },
+    {
+      "obfField": "aD",
+      "srgField": "field_74328_V",
+      "optionsKey": null,
+      "defaultValue": 1
+    },
+    {
+      "obfField": "aE",
+      "srgField": "field_74327_W",
+      "optionsKey": null,
+      "defaultValue": 1
+    },
+    {
+      "obfField": "aF",
+      "srgField": "field_74334_X",
+      "optionsKey": "fov",
+      "defaultValue": 70
+    },
+    {
+      "obfField": "aG",
+      "srgField": "field_74333_Y",
+      "optionsKey": "gamma",
+      "defaultValue": 0
+    },
+    {
+      "obfField": "aH",
+      "srgField": "field_151452_as",
+      "optionsKey": "saturation",
+      "defaultValue": 0
+    },
+    {
+      "obfField": "aI",
+      "srgField": "field_74335_Z",
+      "optionsKey": "guiScale",
+      "defaultValue": 0
+    },
+    {
+      "obfField": "aJ",
+      "srgField": "field_74362_aa",
+      "optionsKey": "particles",
+      "defaultValue": 0
+    },
+    {
+      "obfField": "aK",
+      "srgField": "field_74363_ab",
+      "optionsKey": "lang",
+      "defaultValue": "en_US"
+    },
+    {
+      "obfField": "aL",
+      "srgField": "field_151455_aw",
+      "optionsKey": "forceUnicodeFont",
+      "defaultValue": false
+    }
+  ],
+  "valueSets": [
+    {
+      "field": "aP",
+      "values": [
+        "options.guiScale.auto",
+        "options.guiScale.small",
+        "options.guiScale.normal",
+        "options.guiScale.large"
+      ],
+      "srgField": "field_74367_ae",
+      "role": "GUI_SCALES"
+    },
+    {
+      "field": "aQ",
+      "values": [
+        "options.particles.all",
+        "options.particles.decreased",
+        "options.particles.minimal"
+      ],
+      "srgField": "field_74364_ag",
+      "role": "PARTICLES"
+    },
+    {
+      "field": "aR",
+      "values": [
+        "options.ao.off",
+        "options.ao.min",
+        "options.ao.max"
+      ],
+      "srgField": "field_98303_au",
+      "role": "AMBIENT_OCCLUSION"
+    },
+    {
+      "field": "aS",
+      "values": [
+        "options.stream.compression.low",
+        "options.stream.compression.medium",
+        "options.stream.compression.high"
+      ],
+      "srgField": "field_152391_aS",
+      "role": "STREAM_COMPRESSION"
+    },
+    {
+      "field": "aT",
+      "values": [
+        "options.stream.chat.enabled.streaming",
+        "options.stream.chat.enabled.always",
+        "options.stream.chat.enabled.never"
+      ],
+      "srgField": "field_152392_aT",
+      "role": "STREAM_CHAT_ENABLED"
+    },
+    {
+      "field": "aU",
+      "values": [
+        "options.stream.chat.userFilter.all",
+        "options.stream.chat.userFilter.subs",
+        "options.stream.chat.userFilter.mods"
+      ],
+      "srgField": "field_152393_aU",
+      "role": "STREAM_CHAT_USER_FILTER"
+    },
+    {
+      "field": "aV",
+      "values": [
+        "options.stream.mic_toggle.mute",
+        "options.stream.mic_toggle.talk"
+      ],
+      "srgField": "field_152394_aV",
+      "role": "STREAM_MIC_TOGGLE_BEHAVIOR"
+    }
+  ],
+  "enums": [
+    {
+      "class": "rd",
+      "constants": [
+        {
+          "name": "PEACEFUL",
+          "ordinal": 0,
+          "f": 0,
+          "g": "options.difficulty.peaceful"
+        },
+        {
+          "name": "EASY",
+          "ordinal": 1,
+          "f": 1,
+          "g": "options.difficulty.easy"
+        },
+        {
+          "name": "NORMAL",
+          "ordinal": 2,
+          "f": 2,
+          "g": "options.difficulty.normal"
+        },
+        {
+          "name": "HARD",
+          "ordinal": 3,
+          "f": 3,
+          "g": "options.difficulty.hard"
+        }
+      ],
+      "mappedClass": "net/minecraft/world/EnumDifficulty"
+    },
+    {
+      "class": "zb",
+      "constants": [
+        {
+          "name": "FULL",
+          "ordinal": 0,
+          "e": 0,
+          "f": "options.chat.visibility.full"
+        },
+        {
+          "name": "SYSTEM",
+          "ordinal": 1,
+          "e": 1,
+          "f": "options.chat.visibility.system"
+        },
+        {
+          "name": "HIDDEN",
+          "ordinal": 2,
+          "e": 2,
+          "f": "options.chat.visibility.hidden"
+        }
+      ],
+      "mappedClass": "net/minecraft/entity/player/EntityPlayer$EnumChatVisibility"
+    }
+  ],
+  "soundCategories": [
+    {
+      "enum": "MASTER",
+      "ordinal": 0,
+      "key": "master",
+      "id": 0,
+      "default": 1
+    },
+    {
+      "enum": "MUSIC",
+      "ordinal": 1,
+      "key": "music",
+      "id": 1,
+      "default": 1
+    },
+    {
+      "enum": "RECORDS",
+      "ordinal": 2,
+      "key": "record",
+      "id": 2,
+      "default": 1
+    },
+    {
+      "enum": "WEATHER",
+      "ordinal": 3,
+      "key": "weather",
+      "id": 3,
+      "default": 1
+    },
+    {
+      "enum": "BLOCKS",
+      "ordinal": 4,
+      "key": "block",
+      "id": 4,
+      "default": 1
+    },
+    {
+      "enum": "MOBS",
+      "ordinal": 5,
+      "key": "hostile",
+      "id": 5,
+      "default": 1
+    },
+    {
+      "enum": "ANIMALS",
+      "ordinal": 6,
+      "key": "neutral",
+      "id": 6,
+      "default": 1
+    },
+    {
+      "enum": "PLAYERS",
+      "ordinal": 7,
+      "key": "player",
+      "id": 7,
+      "default": 1
+    },
+    {
+      "enum": "AMBIENT",
+      "ordinal": 8,
+      "key": "ambient",
+      "id": 8,
+      "default": 1
+    }
+  ],
+  "keyBindings": [
+    {
+      "index": 0,
+      "description": "key.attack",
+      "defaultKey": -100,
+      "category": "key.categories.gameplay",
+      "currentKey": -100
+    },
+    {
+      "index": 1,
+      "description": "key.use",
+      "defaultKey": -99,
+      "category": "key.categories.gameplay",
+      "currentKey": -99
+    },
+    {
+      "index": 2,
+      "description": "key.forward",
+      "defaultKey": 17,
+      "category": "key.categories.movement",
+      "currentKey": 17
+    },
+    {
+      "index": 3,
+      "description": "key.left",
+      "defaultKey": 30,
+      "category": "key.categories.movement",
+      "currentKey": 30
+    },
+    {
+      "index": 4,
+      "description": "key.back",
+      "defaultKey": 31,
+      "category": "key.categories.movement",
+      "currentKey": 31
+    },
+    {
+      "index": 5,
+      "description": "key.right",
+      "defaultKey": 32,
+      "category": "key.categories.movement",
+      "currentKey": 32
+    },
+    {
+      "index": 6,
+      "description": "key.jump",
+      "defaultKey": 57,
+      "category": "key.categories.movement",
+      "currentKey": 57
+    },
+    {
+      "index": 7,
+      "description": "key.sneak",
+      "defaultKey": 42,
+      "category": "key.categories.movement",
+      "currentKey": 42
+    },
+    {
+      "index": 8,
+      "description": "key.drop",
+      "defaultKey": 16,
+      "category": "key.categories.gameplay",
+      "currentKey": 16
+    },
+    {
+      "index": 9,
+      "description": "key.inventory",
+      "defaultKey": 18,
+      "category": "key.categories.inventory",
+      "currentKey": 18
+    },
+    {
+      "index": 10,
+      "description": "key.chat",
+      "defaultKey": 20,
+      "category": "key.categories.multiplayer",
+      "currentKey": 20
+    },
+    {
+      "index": 11,
+      "description": "key.playerlist",
+      "defaultKey": 15,
+      "category": "key.categories.multiplayer",
+      "currentKey": 15
+    },
+    {
+      "index": 12,
+      "description": "key.pickItem",
+      "defaultKey": -98,
+      "category": "key.categories.gameplay",
+      "currentKey": -98
+    },
+    {
+      "index": 13,
+      "description": "key.command",
+      "defaultKey": 53,
+      "category": "key.categories.multiplayer",
+      "currentKey": 53
+    },
+    {
+      "index": 14,
+      "description": "key.screenshot",
+      "defaultKey": 60,
+      "category": "key.categories.misc",
+      "currentKey": 60
+    },
+    {
+      "index": 15,
+      "description": "key.togglePerspective",
+      "defaultKey": 63,
+      "category": "key.categories.misc",
+      "currentKey": 63
+    },
+    {
+      "index": 16,
+      "description": "key.smoothCamera",
+      "defaultKey": 0,
+      "category": "key.categories.misc",
+      "currentKey": 0
+    },
+    {
+      "index": 17,
+      "description": "key.sprint",
+      "defaultKey": 29,
+      "category": "key.categories.gameplay",
+      "currentKey": 29
+    },
+    {
+      "index": 18,
+      "description": "key.streamStartStop",
+      "defaultKey": 64,
+      "category": "key.categories.stream",
+      "currentKey": 64
+    },
+    {
+      "index": 19,
+      "description": "key.streamPauseUnpause",
+      "defaultKey": 65,
+      "category": "key.categories.stream",
+      "currentKey": 65
+    },
+    {
+      "index": 20,
+      "description": "key.streamCommercial",
+      "defaultKey": 0,
+      "category": "key.categories.stream",
+      "currentKey": 0
+    },
+    {
+      "index": 21,
+      "description": "key.streamToggleMic",
+      "defaultKey": 0,
+      "category": "key.categories.stream",
+      "currentKey": 0
+    },
+    {
+      "index": 22,
+      "description": "key.fullscreen",
+      "defaultKey": 87,
+      "category": "key.categories.misc",
+      "currentKey": 87
+    },
+    {
+      "index": 23,
+      "description": "key.hotbar.1",
+      "defaultKey": 2,
+      "category": "key.categories.inventory",
+      "currentKey": 2
+    },
+    {
+      "index": 24,
+      "description": "key.hotbar.2",
+      "defaultKey": 3,
+      "category": "key.categories.inventory",
+      "currentKey": 3
+    },
+    {
+      "index": 25,
+      "description": "key.hotbar.3",
+      "defaultKey": 4,
+      "category": "key.categories.inventory",
+      "currentKey": 4
+    },
+    {
+      "index": 26,
+      "description": "key.hotbar.4",
+      "defaultKey": 5,
+      "category": "key.categories.inventory",
+      "currentKey": 5
+    },
+    {
+      "index": 27,
+      "description": "key.hotbar.5",
+      "defaultKey": 6,
+      "category": "key.categories.inventory",
+      "currentKey": 6
+    },
+    {
+      "index": 28,
+      "description": "key.hotbar.6",
+      "defaultKey": 7,
+      "category": "key.categories.inventory",
+      "currentKey": 7
+    },
+    {
+      "index": 29,
+      "description": "key.hotbar.7",
+      "defaultKey": 8,
+      "category": "key.categories.inventory",
+      "currentKey": 8
+    },
+    {
+      "index": 30,
+      "description": "key.hotbar.8",
+      "defaultKey": 9,
+      "category": "key.categories.inventory",
+      "currentKey": 9
+    },
+    {
+      "index": 31,
+      "description": "key.hotbar.9",
+      "defaultKey": 10,
+      "category": "key.categories.inventory",
+      "currentKey": 10
+    }
+  ],
+  "hotbarKeys": [
+    {
+      "index": 0,
+      "description": "key.hotbar.1",
+      "defaultKey": 2
+    },
+    {
+      "index": 1,
+      "description": "key.hotbar.2",
+      "defaultKey": 3
+    },
+    {
+      "index": 2,
+      "description": "key.hotbar.3",
+      "defaultKey": 4
+    },
+    {
+      "index": 3,
+      "description": "key.hotbar.4",
+      "defaultKey": 5
+    },
+    {
+      "index": 4,
+      "description": "key.hotbar.5",
+      "defaultKey": 6
+    },
+    {
+      "index": 5,
+      "description": "key.hotbar.6",
+      "defaultKey": 7
+    },
+    {
+      "index": 6,
+      "description": "key.hotbar.7",
+      "defaultKey": 8
+    },
+    {
+      "index": 7,
+      "description": "key.hotbar.8",
+      "defaultKey": 9
+    },
+    {
+      "index": 8,
+      "description": "key.hotbar.9",
+      "defaultKey": 10
+    }
+  ],
+  "keyFields": [
+    {
+      "field": "U",
+      "description": "key.forward",
+      "srgField": "field_74351_w"
+    },
+    {
+      "field": "V",
+      "description": "key.left",
+      "srgField": "field_74370_x"
+    },
+    {
+      "field": "W",
+      "description": "key.back",
+      "srgField": "field_74368_y"
+    },
+    {
+      "field": "X",
+      "description": "key.right",
+      "srgField": "field_74366_z"
+    },
+    {
+      "field": "Y",
+      "description": "key.jump",
+      "srgField": "field_74314_A"
+    },
+    {
+      "field": "Z",
+      "description": "key.sneak",
+      "srgField": "field_74311_E"
+    },
+    {
+      "field": "aa",
+      "description": "key.inventory",
+      "srgField": "field_151445_Q"
+    },
+    {
+      "field": "ab",
+      "description": "key.use",
+      "srgField": "field_74313_G"
+    },
+    {
+      "field": "ac",
+      "description": "key.drop",
+      "srgField": "field_74316_C"
+    },
+    {
+      "field": "ad",
+      "description": "key.attack",
+      "srgField": "field_74312_F"
+    },
+    {
+      "field": "ae",
+      "description": "key.pickItem",
+      "srgField": "field_74322_I"
+    },
+    {
+      "field": "af",
+      "description": "key.sprint",
+      "srgField": "field_151444_V"
+    },
+    {
+      "field": "ag",
+      "description": "key.chat",
+      "srgField": "field_74310_D"
+    },
+    {
+      "field": "ah",
+      "description": "key.playerlist",
+      "srgField": "field_74321_H"
+    },
+    {
+      "field": "ai",
+      "description": "key.command",
+      "srgField": "field_74323_J"
+    },
+    {
+      "field": "aj",
+      "description": "key.screenshot",
+      "srgField": "field_151447_Z"
+    },
+    {
+      "field": "ak",
+      "description": "key.togglePerspective",
+      "srgField": "field_151457_aa"
+    },
+    {
+      "field": "al",
+      "description": "key.smoothCamera",
+      "srgField": "field_151458_ab"
+    },
+    {
+      "field": "am",
+      "description": "key.fullscreen",
+      "srgField": "field_152395_am"
+    },
+    {
+      "field": "an",
+      "description": "key.streamStartStop",
+      "srgField": "field_152396_an"
+    },
+    {
+      "field": "ao",
+      "description": "key.streamPauseUnpause",
+      "srgField": "field_152397_ao"
+    },
+    {
+      "field": "ap",
+      "description": "key.streamCommercial",
+      "srgField": "field_152398_ap"
+    },
+    {
+      "field": "aq",
+      "description": "key.streamToggleMic",
+      "srgField": "field_152399_aq"
+    }
+  ],
+  "keyRegistrationOrder": [
+    {
+      "index": 0,
+      "description": "key.forward"
+    },
+    {
+      "index": 1,
+      "description": "key.left"
+    },
+    {
+      "index": 2,
+      "description": "key.back"
+    },
+    {
+      "index": 3,
+      "description": "key.right"
+    },
+    {
+      "index": 4,
+      "description": "key.jump"
+    },
+    {
+      "index": 5,
+      "description": "key.sneak"
+    },
+    {
+      "index": 6,
+      "description": "key.inventory"
+    },
+    {
+      "index": 7,
+      "description": "key.use"
+    },
+    {
+      "index": 8,
+      "description": "key.drop"
+    },
+    {
+      "index": 9,
+      "description": "key.attack"
+    },
+    {
+      "index": 10,
+      "description": "key.pickItem"
+    },
+    {
+      "index": 11,
+      "description": "key.sprint"
+    },
+    {
+      "index": 12,
+      "description": "key.chat"
+    },
+    {
+      "index": 13,
+      "description": "key.playerlist"
+    },
+    {
+      "index": 14,
+      "description": "key.command"
+    },
+    {
+      "index": 15,
+      "description": "key.screenshot"
+    },
+    {
+      "index": 16,
+      "description": "key.togglePerspective"
+    },
+    {
+      "index": 17,
+      "description": "key.smoothCamera"
+    },
+    {
+      "index": 18,
+      "description": "key.fullscreen"
+    },
+    {
+      "index": 19,
+      "description": "key.streamStartStop"
+    },
+    {
+      "index": 20,
+      "description": "key.streamPauseUnpause"
+    },
+    {
+      "index": 21,
+      "description": "key.streamCommercial"
+    },
+    {
+      "index": 22,
+      "description": "key.streamToggleMic"
+    },
+    {
+      "index": 23,
+      "description": "key.hotbar.1"
+    },
+    {
+      "index": 24,
+      "description": "key.hotbar.2"
+    },
+    {
+      "index": 25,
+      "description": "key.hotbar.3"
+    },
+    {
+      "index": 26,
+      "description": "key.hotbar.4"
+    },
+    {
+      "index": 27,
+      "description": "key.hotbar.5"
+    },
+    {
+      "index": 28,
+      "description": "key.hotbar.6"
+    },
+    {
+      "index": 29,
+      "description": "key.hotbar.7"
+    },
+    {
+      "index": 30,
+      "description": "key.hotbar.8"
+    },
+    {
+      "index": 31,
+      "description": "key.hotbar.9"
+    }
+  ],
+  "keyCategoryHashSet": [
+    "key.categories.misc",
+    "key.categories.gameplay",
+    "key.categories.multiplayer",
+    "key.categories.stream",
+    "key.categories.movement",
+    "key.categories.inventory"
+  ],
+  "screenArrays": [
+    {
+      "class": "bef",
+      "field": "i",
+      "options": [
+        "GRAPHICS",
+        "RENDER_DISTANCE",
+        "AMBIENT_OCCLUSION",
+        "FRAMERATE_LIMIT",
+        "ANAGLYPH",
+        "VIEW_BOBBING",
+        "GUI_SCALE",
+        "ADVANCED_OPENGL",
+        "GAMMA",
+        "RENDER_CLOUDS",
+        "PARTICLES",
+        "USE_FULLSCREEN",
+        "ENABLE_VSYNC",
+        "MIPMAP_LEVELS",
+        "ANISOTROPIC_FILTERING"
+      ],
+      "mappedClass": "net/minecraft/client/gui/GuiVideoSettings",
+      "srgField": "field_146502_i"
+    },
+    {
+      "class": "bcs",
+      "field": "a",
+      "options": [
+        "CHAT_VISIBILITY",
+        "CHAT_COLOR",
+        "CHAT_LINKS",
+        "CHAT_OPACITY",
+        "CHAT_LINKS_PROMPT",
+        "CHAT_SCALE",
+        "CHAT_HEIGHT_FOCUSED",
+        "CHAT_HEIGHT_UNFOCUSED",
+        "CHAT_WIDTH"
+      ],
+      "mappedClass": "net/minecraft/client/gui/ScreenChatOptions",
+      "srgField": "field_146399_a"
+    },
+    {
+      "class": "bcs",
+      "field": "f",
+      "options": [
+        "SHOW_CAPE"
+      ],
+      "mappedClass": "net/minecraft/client/gui/ScreenChatOptions",
+      "srgField": "field_146395_f"
+    },
+    {
+      "class": "bdm",
+      "field": "f",
+      "options": [
+        "FOV",
+        "DIFFICULTY"
+      ],
+      "mappedClass": "net/minecraft/client/gui/GuiOptions",
+      "srgField": "field_146440_f"
+    },
+    {
+      "class": "bew",
+      "field": "h",
+      "options": [
+        "INVERT_MOUSE",
+        "SENSITIVITY",
+        "TOUCHSCREEN"
+      ],
+      "mappedClass": "net/minecraft/client/gui/GuiControls",
+      "srgField": "field_146492_g"
+    }
+  ],
+  "screenLayouts": [
+    {
+      "class": "bdm",
+      "mappedClass": "net/minecraft/client/gui/GuiOptions",
+      "initMethod": "public void b();",
+      "initEvents": [
+        {
+          "string": "options.title"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiOptionSlider"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiOptionButton"
+        },
+        {
+          "string": "options.difficulty"
+        },
+        {
+          "string": ":"
+        },
+        {
+          "string": "options.difficulty.hardcore"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiOptions$1"
+        },
+        {
+          "string": "Super Secret Settings..."
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "options.sounds"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "options.stream"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "options.video"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "options.controls"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "options.language"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "options.multiplayer.title"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "options.resourcepack"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "options.snooper.view"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "gui.done"
+        }
+      ],
+      "drawStrings": []
+    },
+    {
+      "class": "bef",
+      "mappedClass": "net/minecraft/client/gui/GuiVideoSettings",
+      "initMethod": "public void b();",
+      "initEvents": [
+        {
+          "string": "options.videoTitle"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "gui.done"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiOptionsRowList"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiOptionsRowList"
+        }
+      ],
+      "drawStrings": []
+    },
+    {
+      "class": "bcs",
+      "mappedClass": "net/minecraft/client/gui/ScreenChatOptions",
+      "initMethod": "public void b();",
+      "initEvents": [
+        {
+          "string": "options.chat.title"
+        },
+        {
+          "string": "options.multiplayer.title"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiOptionSlider"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiOptionButton"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiOptionSlider"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiOptionButton"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "gui.done"
+        }
+      ],
+      "drawStrings": []
+    },
+    {
+      "class": "bec",
+      "mappedClass": "net/minecraft/client/gui/GuiScreenOptionsSounds",
+      "initMethod": "public void b();",
+      "initEvents": [
+        {
+          "string": "options.sounds.title"
+        },
+        {
+          "string": "options.off"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiScreenOptionsSounds$Button"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiScreenOptionsSounds$Button"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "gui.done"
+        }
+      ],
+      "drawStrings": []
+    },
+    {
+      "class": "bew",
+      "mappedClass": "net/minecraft/client/gui/GuiControls",
+      "initMethod": "public void b();",
+      "initEvents": [
+        {
+          "widget": "net/minecraft/client/gui/GuiKeyBindingList"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "gui.done"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "controls.resetAll"
+        },
+        {
+          "string": "controls.title"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiOptionSlider"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiOptionButton"
+        }
+      ],
+      "drawStrings": []
+    },
+    {
+      "class": "bdj",
+      "mappedClass": "net/minecraft/client/gui/GuiLanguage",
+      "initMethod": "public void b();",
+      "initEvents": [
+        {
+          "widget": "net/minecraft/client/gui/GuiOptionButton"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiOptionButton"
+        },
+        {
+          "string": "gui.done"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiLanguage$List"
+        }
+      ],
+      "drawStrings": [
+        "options.language",
+        "(",
+        "options.languageWarning",
+        ")"
+      ]
+    },
+    {
+      "class": "bea",
+      "mappedClass": "net/minecraft/client/gui/GuiSnooper",
+      "initMethod": "public void b();",
+      "initEvents": [
+        {
+          "string": "options.snooper.title"
+        },
+        {
+          "string": "options.snooper.desc"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiButton"
+        },
+        {
+          "string": "gui.done"
+        },
+        {
+          "string": "C"
+        },
+        {
+          "string": "S"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiSnooper$List"
+        }
+      ],
+      "drawStrings": []
+    },
+    {
+      "class": "bgf",
+      "mappedClass": "net/minecraft/client/gui/GuiScreenResourcePacks",
+      "initMethod": "public void b();",
+      "initEvents": [
+        {
+          "widget": "net/minecraft/client/gui/GuiOptionButton"
+        },
+        {
+          "string": "resourcePack.openFolder"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiOptionButton"
+        },
+        {
+          "string": "gui.done"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiResourcePackAvailable"
+        },
+        {
+          "widget": "net/minecraft/client/gui/GuiResourcePackSelected"
+        }
+      ],
+      "drawStrings": [
+        "resourcePack.title",
+        "resourcePack.folderInfo"
+      ]
+    }
+  ],
+  "optionsFile": {
+    "saveOrder": [
+      {
+        "key": "invertYMouse",
+        "field": "b",
+        "srgField": "field_74338_d"
+      },
+      {
+        "key": "mouseSensitivity",
+        "field": "a",
+        "srgField": "field_74341_c"
+      },
+      {
+        "key": "fov",
+        "field": "aF",
+        "srgField": "field_74334_X"
+      },
+      {
+        "key": "gamma",
+        "field": "aG",
+        "srgField": "field_74333_Y"
+      },
+      {
+        "key": "saturation",
+        "field": "aH",
+        "srgField": "field_151452_as"
+      },
+      {
+        "key": "renderDistance",
+        "field": "c",
+        "srgField": "field_151451_c"
+      },
+      {
+        "key": "guiScale",
+        "field": "aI",
+        "srgField": "field_74335_Z"
+      },
+      {
+        "key": "particles",
+        "field": "aJ",
+        "srgField": "field_74362_aa"
+      },
+      {
+        "key": "bobView",
+        "field": "d",
+        "srgField": "field_74336_f"
+      },
+      {
+        "key": "anaglyph3d",
+        "field": "e",
+        "srgField": "field_74337_g"
+      },
+      {
+        "key": "advancedOpengl",
+        "field": "f",
+        "srgField": "field_74349_h"
+      },
+      {
+        "key": "maxFps",
+        "field": "h",
+        "srgField": "field_74350_i"
+      },
+      {
+        "key": "fboEnable",
+        "field": "g",
+        "srgField": "field_151448_g"
+      },
+      {
+        "key": "difficulty",
+        "field": "au",
+        "srgField": "field_74318_M"
+      },
+      {
+        "key": "fancyGraphics",
+        "field": "i",
+        "srgField": "field_74347_j"
+      },
+      {
+        "key": "ao",
+        "field": "j",
+        "srgField": "field_74348_k"
+      },
+      {
+        "key": "clouds",
+        "field": "k",
+        "srgField": "field_74345_l"
+      },
+      {
+        "key": "resourcePacks",
+        "field": "l",
+        "srgField": "field_151453_l"
+      },
+      {
+        "key": "lastServer",
+        "field": "az",
+        "srgField": "field_74332_R"
+      },
+      {
+        "key": "lang",
+        "field": "aK",
+        "srgField": "field_74363_ab"
+      },
+      {
+        "key": "chatVisibility",
+        "field": "m",
+        "srgField": "field_74343_n"
+      },
+      {
+        "key": "chatColors",
+        "field": "n",
+        "srgField": "field_74344_o"
+      },
+      {
+        "key": "chatLinks",
+        "field": "o",
+        "srgField": "field_74359_p"
+      },
+      {
+        "key": "chatLinksPrompt",
+        "field": "p",
+        "srgField": "field_74358_q"
+      },
+      {
+        "key": "chatOpacity",
+        "field": "q",
+        "srgField": "field_74357_r"
+      },
+      {
+        "key": "snooperEnabled",
+        "field": "r",
+        "srgField": "field_74355_t"
+      },
+      {
+        "key": "fullscreen",
+        "field": "s",
+        "srgField": "field_74353_u"
+      },
+      {
+        "key": "enableVsync",
+        "field": "t",
+        "srgField": "field_74352_v"
+      },
+      {
+        "key": "hideServerAddress",
+        "field": "u",
+        "srgField": "field_80005_w"
+      },
+      {
+        "key": "advancedItemTooltips",
+        "field": "v",
+        "srgField": "field_82882_x"
+      },
+      {
+        "key": "pauseOnLostFocus",
+        "field": "w",
+        "srgField": "field_82881_y"
+      },
+      {
+        "key": "showCape",
+        "field": "x",
+        "srgField": "field_82880_z"
+      },
+      {
+        "key": "touchscreen",
+        "field": "y",
+        "srgField": "field_85185_A"
+      },
+      {
+        "key": "overrideWidth",
+        "field": "z",
+        "srgField": "field_92118_B"
+      },
+      {
+        "key": "overrideHeight",
+        "field": "A",
+        "srgField": "field_92119_C"
+      },
+      {
+        "key": "heldItemTooltips",
+        "field": "B",
+        "srgField": "field_92117_D"
+      },
+      {
+        "key": "chatHeightFocused",
+        "field": "F",
+        "srgField": "field_96694_H"
+      },
+      {
+        "key": "chatHeightUnfocused",
+        "field": "E",
+        "srgField": "field_96693_G"
+      },
+      {
+        "key": "chatScale",
+        "field": "C",
+        "srgField": "field_96691_E"
+      },
+      {
+        "key": "chatWidth",
+        "field": "D",
+        "srgField": "field_96692_F"
+      },
+      {
+        "key": "showInventoryAchievementHint",
+        "field": "G",
+        "srgField": "field_151441_H"
+      },
+      {
+        "key": "mipmapLevels",
+        "field": "H",
+        "srgField": "field_151442_I"
+      },
+      {
+        "key": "anisotropicFiltering",
+        "field": "I",
+        "srgField": "field_151443_J"
+      },
+      {
+        "key": "streamBytesPerPixel",
+        "field": "J",
+        "srgField": "field_152400_J"
+      },
+      {
+        "key": "streamMicVolume",
+        "field": "K",
+        "srgField": "field_152401_K"
+      },
+      {
+        "key": "streamSystemVolume",
+        "field": "L",
+        "srgField": "field_152402_L"
+      },
+      {
+        "key": "streamKbps",
+        "field": "M",
+        "srgField": "field_152403_M"
+      },
+      {
+        "key": "streamFps",
+        "field": "N",
+        "srgField": "field_152404_N"
+      },
+      {
+        "key": "streamCompression",
+        "field": "O",
+        "srgField": "field_152405_O"
+      },
+      {
+        "key": "streamSendMetadata",
+        "field": "P",
+        "srgField": "field_152406_P"
+      },
+      {
+        "key": "streamPreferredServer",
+        "field": "Q",
+        "srgField": "field_152407_Q"
+      },
+      {
+        "key": "streamChatEnabled",
+        "field": "R",
+        "srgField": "field_152408_R"
+      },
+      {
+        "key": "streamChatUserFilter",
+        "field": "S",
+        "srgField": "field_152409_S"
+      },
+      {
+        "key": "streamMicToggleBehavior",
+        "field": "T",
+        "srgField": "field_152410_T"
+      },
+      {
+        "key": "forceUnicodeFont",
+        "field": "aL",
+        "srgField": "field_151455_aw"
+      },
+      {
+        "key": "key_*",
+        "field": null,
+        "note": "one line per keyBindings entry: key_<description>:<keycode>",
+        "srgField": null
+      },
+      {
+        "key": "soundCategory_*",
+        "field": null,
+        "note": "one line per SoundCategory: soundCategory_<name>:<volume>",
+        "srgField": null
+      }
+    ],
+    "loadOrder": [
+      {
+        "key": "mouseSensitivity",
+        "field": "a",
+        "srgField": "field_74341_c"
+      },
+      {
+        "key": "invertYMouse",
+        "field": "b",
+        "srgField": "field_74338_d"
+      },
+      {
+        "key": "fov",
+        "field": "aF",
+        "srgField": "field_74334_X"
+      },
+      {
+        "key": "gamma",
+        "field": "aG",
+        "srgField": "field_74333_Y"
+      },
+      {
+        "key": "saturation",
+        "field": "aH",
+        "srgField": "field_151452_as"
+      },
+      {
+        "key": "renderDistance",
+        "field": "c",
+        "srgField": "field_151451_c"
+      },
+      {
+        "key": "guiScale",
+        "field": "aI",
+        "srgField": "field_74335_Z"
+      },
+      {
+        "key": "particles",
+        "field": "aJ",
+        "srgField": "field_74362_aa"
+      },
+      {
+        "key": "bobView",
+        "field": "d",
+        "srgField": "field_74336_f"
+      },
+      {
+        "key": "anaglyph3d",
+        "field": "e",
+        "srgField": "field_74337_g"
+      },
+      {
+        "key": "advancedOpengl",
+        "field": "f",
+        "srgField": "field_74349_h"
+      },
+      {
+        "key": "maxFps",
+        "field": "h",
+        "srgField": "field_74350_i"
+      },
+      {
+        "key": "fboEnable",
+        "field": "g",
+        "srgField": "field_151448_g"
+      },
+      {
+        "key": "difficulty",
+        "field": "au",
+        "srgField": "field_74318_M"
+      },
+      {
+        "key": "fancyGraphics",
+        "field": "i",
+        "srgField": "field_74347_j"
+      },
+      {
+        "key": "ao",
+        "field": "j",
+        "srgField": "field_74348_k"
+      },
+      {
+        "key": "clouds",
+        "field": "k",
+        "srgField": "field_74345_l"
+      },
+      {
+        "key": "resourcePacks",
+        "field": "l",
+        "srgField": "field_151453_l"
+      },
+      {
+        "key": "lastServer",
+        "field": "az",
+        "srgField": "field_74332_R"
+      },
+      {
+        "key": "lang",
+        "field": "aK",
+        "srgField": "field_74363_ab"
+      },
+      {
+        "key": "chatVisibility",
+        "field": "m",
+        "srgField": "field_74343_n"
+      },
+      {
+        "key": "chatColors",
+        "field": "n",
+        "srgField": "field_74344_o"
+      },
+      {
+        "key": "chatLinks",
+        "field": "o",
+        "srgField": "field_74359_p"
+      },
+      {
+        "key": "chatLinksPrompt",
+        "field": "p",
+        "srgField": "field_74358_q"
+      },
+      {
+        "key": "chatOpacity",
+        "field": "q",
+        "srgField": "field_74357_r"
+      },
+      {
+        "key": "snooperEnabled",
+        "field": "r",
+        "srgField": "field_74355_t"
+      },
+      {
+        "key": "fullscreen",
+        "field": "s",
+        "srgField": "field_74353_u"
+      },
+      {
+        "key": "enableVsync",
+        "field": "t",
+        "srgField": "field_74352_v"
+      },
+      {
+        "key": "hideServerAddress",
+        "field": "u",
+        "srgField": "field_80005_w"
+      },
+      {
+        "key": "advancedItemTooltips",
+        "field": "v",
+        "srgField": "field_82882_x"
+      },
+      {
+        "key": "pauseOnLostFocus",
+        "field": "w",
+        "srgField": "field_82881_y"
+      },
+      {
+        "key": "showCape",
+        "field": "x",
+        "srgField": "field_82880_z"
+      },
+      {
+        "key": "touchscreen",
+        "field": "y",
+        "srgField": "field_85185_A"
+      },
+      {
+        "key": "overrideHeight",
+        "field": "A",
+        "srgField": "field_92119_C"
+      },
+      {
+        "key": "overrideWidth",
+        "field": "z",
+        "srgField": "field_92118_B"
+      },
+      {
+        "key": "heldItemTooltips",
+        "field": "B",
+        "srgField": "field_92117_D"
+      },
+      {
+        "key": "chatHeightFocused",
+        "field": "F",
+        "srgField": "field_96694_H"
+      },
+      {
+        "key": "chatHeightUnfocused",
+        "field": "E",
+        "srgField": "field_96693_G"
+      },
+      {
+        "key": "chatScale",
+        "field": "C",
+        "srgField": "field_96691_E"
+      },
+      {
+        "key": "chatWidth",
+        "field": "D",
+        "srgField": "field_96692_F"
+      },
+      {
+        "key": "showInventoryAchievementHint",
+        "field": "G",
+        "srgField": "field_151441_H"
+      },
+      {
+        "key": "mipmapLevels",
+        "field": "H",
+        "srgField": "field_151442_I"
+      },
+      {
+        "key": "anisotropicFiltering",
+        "field": "I",
+        "srgField": "field_151443_J"
+      },
+      {
+        "key": "streamBytesPerPixel",
+        "field": "J",
+        "srgField": "field_152400_J"
+      },
+      {
+        "key": "streamMicVolume",
+        "field": "K",
+        "srgField": "field_152401_K"
+      },
+      {
+        "key": "streamSystemVolume",
+        "field": "L",
+        "srgField": "field_152402_L"
+      },
+      {
+        "key": "streamKbps",
+        "field": "M",
+        "srgField": "field_152403_M"
+      },
+      {
+        "key": "streamFps",
+        "field": "N",
+        "srgField": "field_152404_N"
+      },
+      {
+        "key": "streamCompression",
+        "field": "O",
+        "srgField": "field_152405_O"
+      },
+      {
+        "key": "streamSendMetadata",
+        "field": "P",
+        "srgField": "field_152406_P"
+      },
+      {
+        "key": "streamPreferredServer",
+        "field": "Q",
+        "srgField": "field_152407_Q"
+      },
+      {
+        "key": "streamChatEnabled",
+        "field": "R",
+        "srgField": "field_152408_R"
+      },
+      {
+        "key": "streamChatUserFilter",
+        "field": "S",
+        "srgField": "field_152409_S"
+      },
+      {
+        "key": "streamMicToggleBehavior",
+        "field": "T",
+        "srgField": "field_152410_T"
+      },
+      {
+        "key": "forceUnicodeFont",
+        "field": "aL",
+        "srgField": "field_151455_aw"
+      }
+    ]
+  },
+  "optionDisplayStrings": [
+    ":",
+    "options.sensitivity.min",
+    "options.sensitivity.max",
+    "%",
+    "options.fov.min",
+    "options.fov.max",
+    "options.framerateLimit.max",
+    " fps",
+    "options.gamma.min",
+    "options.gamma.max",
+    "+",
+    "px",
+    " chunks",
+    "options.off",
+    " Kbps",
+    "%.3f bpp",
+    "options.on",
+    "options.graphics.fancy",
+    "options.graphics.fast"
+  ],
+  "optionCycleStrings": []
+}
