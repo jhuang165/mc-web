@@ -33,7 +33,6 @@ import {
   LAVA,
   LADDER,
   TNT,
-  opaqueCube,
   SAND,
   CACTUS,
   REEDS,
@@ -41,17 +40,17 @@ import {
 import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION, reedTarget, canPlaceReeds, cactusCanPlace } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
 import { ladderBounds, canPlaceLadder, placedLadderMeta, ladderSupported, clickedSide, countsVertical } from "./ladders.js";
-import { snowCanStay, snowFalls, snowballsFor, iceLeavesWater, stackedSnowMeta } from "./snow.js";
+import { snowCanStay, snowFalls, stackedSnowMeta } from "./snow.js";
 import { flowerCanStay, growGrass, JRandom } from "./flowers.js";
-import { Trees, saplingCanStay, leafDrops, placedLeavesMeta } from "./trees.js";
+import { Trees, saplingCanStay, placedLeavesMeta } from "./trees.js";
 import { VoxelScene } from "./scene.js";
 import { SoundBank, blockSound, stepSound } from "./audio.js";
-import { Weather, isWet, canLightningStrikeAt, entityBox } from "./weather.js";
+import { Weather, isWet, canLightningStrikeAt } from "./weather.js";
 import { tickWeatherSimulation } from "./weather-simulation.js";
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
 import { PlayerBody, PlayerRenderer, nextView, thirdPersonCamera, playerShadowCaster } from "./player-renderer.js";
 import { FirstPerson, itemTexture } from "./first-person.js";
-import {Experience,ExperienceOrbs,oreExperience,smeltExperience} from "./experience.js";
+import {Experience,ExperienceOrbs,smeltExperience} from "./experience.js";
 import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import {Farming,cropDrops} from "./farming.js";
@@ -61,7 +60,7 @@ import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
 import { CHEST, canPlaceChest, placeChest, settleFacing, chestPair, tickLid } from "./chest.js";
-import { Survival, ITEMS, MATERIALS } from "./survival.js";
+import { Survival, ITEMS } from "./survival.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
@@ -72,7 +71,7 @@ import { Fluids, eyeInWater } from "./fluids.js";
 import { Fire } from "./fire.js";
 import { DIFFICULTY_NAMES, difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.js";
 import { isInvisible } from "./mob-effects.js";
-import { explodeBlocks, explosionImpact, explodeTnt, primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
+import { primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { TntRenderer } from "./tnt-renderer.js";
 import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
 import { HUNGER, POISON } from "./status-effects.js";
@@ -90,6 +89,8 @@ import { tickEntitySimulation } from "./entity-simulation.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { tickLivingSimulation, drainMobEvents } from "./living-simulation.js";
 import { tickPlayerMining } from "./player-mining.js";
+import { applyExplosion } from "./explosion-simulation.js";
+import { breakPlayerBlock } from "./block-break-simulation.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -1655,115 +1656,31 @@ function lightTnt(x, y, z, placer) {
   saved = false;
 }
 // World.newExplosion(exploder, x, y, z, size, false, true) on the integrated server:
-// Explosion.doExplosionA (explosion.js explosionBlocks for the rays; the entity half here),
+// Explosion.doExplosionA (rays in explosion.js; orchestration in explosion-simulation.js),
 // then doExplosionB(true). DamageSource.setExplosionSource names the attacker: the creeper
 // itself, or the TNT's placer. The block edits run through world.set like breakBlock:
 // containers spill, farmland and crops update, and the edits are saved.
 function explodeAt(x, y, z, size, { exploder = null, attacker = null } = {}) {
-  const out = explodeBlocks(world, x, y, z, size, weather.random, { opaque: opaqueCube });
-  // The entity half sees the world before any block is removed. Entities within 2 * size of
-  // the centre take damage and the push from the centre towards their eyes (posY + eye height).
-  const hitFrom = attacker === "player" ? position : attacker;
-  for (const e of mobs?.entities ?? []) {
-    if (e === exploder) continue;
-    const t = ENTITY_TYPES[e.type];
-    if (!t) continue;
-    const scale = e.growingAge < 0 ? 0.5 : 1, w = t.width * scale, h = t.height * scale;
-    const hit = explosionImpact(world, x, y, z, size, e.x, e.y, e.z, e.y + Math.fround(Math.fround(h) * Math.fround(0.85)), entityBox(e, w, h));
-    if (!hit) continue;
-    if (hitFrom) mobs.damage(e, hit.damage, hitFrom.x, hitFrom.z, attacker === "player", attacker?.type ?? null);
-    else mobs.hazard(e, hit.damage, "explosion");
-    e.vx += hit.push[0]; e.vy += hit.push[1]; e.vz += hit.push[2];
-  }
-  items.explode(world, x, y, z, size, exploder);
-  xpOrbs.explode(world, x, y, z, size, exploder);
-  arrows.explode(world, x, y, z, size, exploder);
-  projectiles.explode(world, x, y, z, size, exploder);
-  falling?.explode(x, y, z, size, exploder);
-  for (const e of primed) if (e !== exploder) explodeTnt(world, e, x, y, z, size);
-  // The player (EntityPlayerMP: posY at the feet, eyes 1.62 up). Explosion damage is
-  // difficulty scaled (Survival.scaledDamage; Peaceful deals none) and armour applies; Creative players are pushed only.
-  if (survival.health > 0) {
-    const hit = explosionImpact(world, x, y, z, size, position.x, position.y, position.z, position.y + PHYSICS.eye, entityBox(position, PHYSICS.width, PHYSICS.height));
-    if (hit) {
-      if (!survival.creative && survival.scaledDamage(hit.damage, attacker && attacker !== "player" ? "a " + attacker.type : "an explosion")) reportBrokenTool();
-      velocity.x += hit.push[0]; velocity.y += hit.push[1]; velocity.z += hit.push[2];
-    }
-  }
-  scene.explosionParticles.burst(x, y, z, size, out.list, { viewer: [position.x, position.y + PHYSICS.eye, position.z] });
-  // doExplosionB: random.explode (volume 4) and the block removals in list order.
-  sounds.play("random.explode", { volume: 4, pitch: out.pitch, position: { x, y, z } });
-  const changes = [];
-  for (const b of out.broken) {
-    const key = b.x + "," + b.y + "," + b.z, f = survival.furnaces[key], chest = survival.chests[key];
-    if (!world.set(b.x, b.y, b.z, 0)) continue;
-    changes.push([b.x, b.y, b.z, b.id, 0]);
-    farming.observe(b.x, b.y, b.z);
-    // BlockFurnace/BlockChest.breakBlock spill their contents.
-    if (f) {
-      items.spill(f.items.filter(Boolean), b.x, b.y, b.z);
-      delete survival.furnaces[key];
-    }
-    if (chest) {
-      items.spill(chest.items.filter(Boolean).map(copyStack), b.x, b.y, b.z);
-      delete survival.chests[key];
-    }
-  }
-  // Block.dropBlockAsItemWithChance (chance 1 / size): one EntityItem per item, pickup delay 10.
-  for (const d of out.drops) items.spawn(makeStack(d.id, 1, d.damage || 0), d.x, d.y, d.z, { delay: 10 });
-  for (const o of out.xp) xpOrbs.spawn(o.value, o);
-  // BlockTNT.onBlockDestroyedByExplosion: a primed TNT with fuse rand.nextInt(20) + 10, no sound.
-  for (const p of out.primed) primed.push(primeTnt(p.x, p.y, p.z, { fuse: p.fuse, placer: attacker }));
-  scene.updateBlocks(changes);
-  chestRenderer.sync(world, survival.chests);
-  renderVitals();
-  saved = false;
+  applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed,
+    survival, position, velocity, farming }, { x, y, z, size, exploder, attacker }, {
+    brokenTool: reportBrokenTool,
+    burst: (...args) => scene.explosionParticles.burst(...args),
+    sound: (name, options) => sounds.play(name, options),
+    updateBlocks: changes => scene.updateBlocks(changes),
+    syncChests: () => chestRenderer.sync(world, survival.chests),
+    renderVitals,
+    markDirty: () => { saved = false; },
+  });
 }
 function breakBlock(p, creative = false) {
-  const block = world.get(...p),
-    key = p.join(","),
-    m = MATERIALS[block] || {},
-    tool = heldId();
-  if (!block || (block === 11 && !creative)) return false;
-  const harvest = creative || survival.mining(block, tool).harvest;
-  let drop = harvest ? (m.drop ?? block) : 0,
-    count = block === SNOW_LAYER ? snowballsFor(world.getMeta(...p)) : m.count || 1;
-  const shearing=ITEMS[tool]?.kind==='shears'&&survival.count(tool)>0;
-  if(shearing&&(block===5||block===39)){drop=block;count=1;}
-  if(block===25&&Math.random()<.1){drop=313;count=1;}
-  const crops=shearing&&block===39?null:cropDrops(block,Math.random,world.getMeta(...p));const leaves=block===5&&harvest&&!creative&&!shearing?leafDrops(trees.random,world.getMeta(...p)).map((d)=>({...d,count:1})):null;const drops=leaves??crops??(drop?[{id:drop,count}]:[]);
-  const f = survival.furnaces[key],
-    chest = survival.chests[key],
-    meta = world.getMeta(...p);
-  if (!world.set(...p, 0)) return false;
-  // BlockIce.harvestBlock (survival only): without silk touch it leaves flowing water over a solid or liquid cell.
-  if (block === ICE && !creative && iceLeavesWater(world.get(p[0], p[1] - 1, p[2]))) world.set(...p, WATER, true, 0);
-  farming.observe(...p);
-  // BlockFurnace.breakBlock spills its contents whatever the game mode.
-  if (f) {
-    items.spill(f.items.filter(Boolean), ...p);
-    delete survival.furnaces[key];
-  }
-  // BlockChest.breakBlock spills the contents on the ground in any mode.
-  if (chest) {
-    const stacks = chest.items.filter(Boolean).map(copyStack);
-    items.spill(stacks, ...p);
-    delete survival.chests[key];
-  }
-  if (!creative) {
-    items.dropBlock(drops.map((d) => makeStack(d.id, d.count, d.damage ?? (d.id === block && (block === WOOL || block === RED_FLOWER || block === 6 || block === 56 || block === 58) ? meta : 0))), ...p);
-    // Block.dropXpOnBlockBreak: the orbs start at the block's centre.
-    if(drop)xpOrbs.spawn(oreExperience(block),{x:p[0]+.5,y:p[1]+.5,z:p[2]+.5});
-    survival.exhaust(0.025);
-    survival.wearBlock(block,tool);
-  }
-  scene.updateBlock(p[0], p[2], p[1]);
-  renderHotbar();
-  sound(false, block);
-  // Level event 2001: EffectRenderer.addBlockDestroyEffects with the block and metadata that were there.
-  scene.particles.destroyBlock(world, ...p, block, meta);
-  saved = false;
-  return true;
+  return breakPlayerBlock({ world, survival, items, xpOrbs, farming, trees, heldTool: heldId() }, p, {
+    creative,
+    updateBlock: (x, z, y) => scene.updateBlock(x, z, y),
+    renderHotbar,
+    playBlockSound: sound,
+    destroyParticles: (...args) => scene.particles.destroyBlock(...args),
+    markUnsaved: () => { saved = false; },
+  });
 }
 // Block.getItem for middle-click: farmland gives dirt, crops give seeds, water nothing.
 const pickItem = (block) => (block === 29 || block === 30 ? 2 : block === REEDS ? REEDS_ITEM : isCrop(block) ? cropItem(block) : !isLiquid(block) && ITEMS[block] ? block : 0);
