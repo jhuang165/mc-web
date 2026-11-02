@@ -1,0 +1,1 @@
+Updated only src/block-break-simulation.test.js: imported CHEST from chest.js and used CHEST (41) for the Creative chest-spill fixture; renamed the internal block-1 drop-order test from dirt to grass. Focused run `node --test src/block-break-simulation.test.js` passes 10/10. No other files changed, no commits or pushes.
