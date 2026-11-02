@@ -7,6 +7,7 @@ import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,Ches
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
 import { Effects } from "./status-effects.js";
 import { NORMAL, scaleDamage, starvationHurts, hungerDrops, peacefulRegen } from "./difficulty.js";
+import { installPopulationItems, installPopulationMaterials, installPopulationRecipes, populationCraftingResult, installPopulationSmelting } from './population-content.js';
 
 import {CARROT,POTATO,BAKED_POTATO,POISONOUS_POTATO} from './crops.js';
 // The lastDamage reason of DamageSource.outOfWorld (death-messages.js).
@@ -208,6 +209,7 @@ ARMOR_MATERIALS.forEach(([name, factor, defense, ingredient, texture], m) =>
   }),
 );
 
+installPopulationItems(ITEMS);
 export const MATERIALS = {
   1: { hardness: 0.6, drop: 2 },
   2: { hardness: 0.5 },
@@ -268,6 +270,7 @@ MATERIALS[TNT]={hardness:0};
 MATERIALS[FENCE]={hardness:2,kind:"axe"};
 MATERIALS[RAIL]={hardness:.7};
 MATERIALS[MOB_SPAWNER]={hardness:SPAWNER_HARDNESS,kind:"pickaxe",tier:0,drop:0,xp:spawnerXp};
+installPopulationMaterials(MATERIALS);
 export const RECIPES = [];
 function recipe(id, name, rows, keys, output, count = 1) {
   const width = Math.max(...rows.map((r) => r.length));
@@ -398,6 +401,7 @@ shapeless(126, 1, 0, 302, 313);
 // CraftingManager: sugar from one sugar cane; a book from three paper and leather (shapeless).
 shapeless(SUGAR, 1, 0, REEDS_ITEM);
 shapeless(314, 1, 0, PAPER, PAPER, PAPER, 315);
+installPopulationRecipes({recipe,shapeless});
 export function matchShapeless(stacks) {
   const filled = stacks.filter(Boolean);
   for (const r of SHAPELESS) {
@@ -446,6 +450,8 @@ export function craftingResult(cells, size) {
   const filled = cells.filter(Boolean), [a, b] = filled, max = a && ITEMS[a.id]?.durability;
   if (filled.length === 2 && a.id === b.id && a.count === 1 && b.count === 1 && max)
     return makeStack(a.id, 1, Math.max(0, max - (max - a.damage + max - b.damage + Math.floor((max * 5) / 100))));
+  const population=populationCraftingResult(cells,size);
+  if(population)return makeStack(population.id,population.count,population.damage);
   const r = matchRecipe(cells.map((c) => c?.id || 0), size);
   if (r) return makeStack(r.output, r.count);
   const sl = matchShapeless(cells);
@@ -470,7 +476,9 @@ export const SMELTING = {
   // FurnaceRecipes: cactus smelts to cactus green, dye damage 2 ([id, damage]).
   [CACTUS]: [DYE, 2],
 };
+installPopulationSmelting(SMELTING);
 export const FUELS = {
+  70:300,77:300,78:300,
   4: 300,
   7: 300,
   13: 300,
@@ -678,6 +686,7 @@ export class Survival {
       this.saturation + item.food * item.saturation * 2,
     );
     this.effects.food(id, random);
+    if(item.container)this.inventory.add(makeStack(item.container));
     return true;
   }
   // Damages the held stack (or the first of that item); `broken` names a break.

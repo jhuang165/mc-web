@@ -1,3 +1,4 @@
+import {growSapling} from './tree-growth.js';
 // Oak saplings, tree growth, leaf decay and leaf drops, ported from the 1.7.10 JAR
 // (public/research/trees.md; replayed against public/research/trees-reference.json by
 // trees.test.js): BlockSapling (anj) with BlockBush (ajr), WorldGenTrees (asq, the oak
@@ -88,9 +89,9 @@ export function markLeaves(world, x, y, z, range) {
     for (let dy = -range; dy <= range; dy++)
       for (let dz = -range; dz <= range; dz++) {
         const a = x + dx, b = y + dy, c = z + dz;
-        if (world.get(a, b, c) !== LEAVES) continue;
+        if (![LEAVES,71].includes(world.get(a,b,c))) continue;
         const meta = world.getMeta(a, b, c);
-        if (!(meta & LEAF_CHECK) && world.put(a, b, c, LEAVES, meta | LEAF_CHECK, true)) n++;
+        if (!(meta & LEAF_CHECK) && world.put(a, b, c, world.get(a,b,c), meta | LEAF_CHECK, true)) n++;
       }
   return n;
 }
@@ -107,7 +108,7 @@ export function leafConnected(world, x, y, z) {
     for (let dy = -REACH; dy <= REACH; dy++)
       for (let dz = -REACH; dz <= REACH; dz++) {
         const b = world.get(x + dx, y + dy, z + dz);
-        dist[((dx + REACH) * BOX + dy + REACH) * BOX + dz + REACH] = b === LOG ? 0 : b === LEAVES ? -2 : -1;
+        dist[((dx + REACH) * BOX + dy + REACH) * BOX + dz + REACH] = (b === LOG||b===70) ? 0 : (b === LEAVES||b===71) ? -2 : -1;
       }
   for (let pass = 1; pass <= REACH; pass++)
     for (let dx = -REACH; dx <= REACH; dx++)
@@ -141,13 +142,13 @@ const spawn = (random) => { random.nextFloat(); random.nextFloat(); random.nextF
 // fortune)) with BlockOldLeaf's chances, for fortune 0: a sapling (damage meta & 3) one time in 20
 // (40 for jungle), then, for oak (meta & 3 == 0) only, an apple one time in 200. Each dropped
 // stack takes the three position floats from the same Random. Returns [{id, damage}].
-export function leafDrops(random, meta) {
-  const out = [], type = meta & 3;
+export function leafDrops(random, meta, block=5) {
+  const out = [], type = (meta & 3)+(block===71?4:0);
   if (random.nextInt(type === 3 ? 40 : 20) === 0) {
     out.push({ id: SAPLING, damage: type });
     spawn(random);
   }
-  if (type === 0 && random.nextInt(200) === 0) {
+  if ((type === 0||type===5) && random.nextInt(200) === 0) {
     out.push({ id: APPLE, damage: 0 });
     spawn(random);
   }
@@ -188,8 +189,8 @@ export class Trees {
       this.changes.push([x, y, z, old, block]);
       // Chunk.func_150807_a runs the old block's breakBlock for every flag, so a silent write marks too.
       if (!notify) {
-        if (old === LOG) markLeaves(this.world, x, y, z, 4);
-        else if (old === LEAVES) markLeaves(this.world, x, y, z, 1);
+        if (old === LOG||old===70) markLeaves(this.world, x, y, z, 4);
+        else if (old === LEAVES||old===71) markLeaves(this.world, x, y, z, 1);
       }
     }
     return ok;
@@ -206,8 +207,8 @@ export class Trees {
   // world.onChange (main.js wraps the existing handler).
   onChange(x, y, z, old, now) {
     if (old !== now) {
-      if (old === LOG) markLeaves(this.world, x, y, z, 4);
-      else if (old === LEAVES) markLeaves(this.world, x, y, z, 1);
+      if (old === LOG||old===70) markLeaves(this.world, x, y, z, 4);
+      else if (old === LEAVES||old===71) markLeaves(this.world, x, y, z, 1);
     }
     for (const [dx, dy, dz] of [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]) {
       const a = x + dx, b = y + dy, c = z + dz;
@@ -260,6 +261,7 @@ export class Trees {
   // The sapling cell is cleared with flag 4 first and put back
   // with its stage bit cleared (meta & 7) when the tree does not fit.
   growTree(x, y, z, { notify = true } = {}) {
+    if(this.world.generationVersion>=11||(this.world.getMeta(x,y,z)&7)!==0)return growSapling(this,x,y,z,{notify});
     const meta = this.world.getMeta(x, y, z) & 7, big = this.random.nextInt(10) === 0;
     this.world.put(x, y, z, 0, 0, true);
     const world = this.world;
@@ -283,11 +285,11 @@ export class Trees {
   }
   // BlockLeaves.updateTick.
   tickLeaves(x, y, z) {
-    if (this.world.get(x, y, z) !== LEAVES) return false;
+    if (![LEAVES,71].includes(this.world.get(x,y,z))) return false;
     const r = leafTick(this.world, x, y, z);
     if (!r) return false;
     if (!r.decay) {
-      this.world.put(x, y, z, LEAVES, r.meta, true);
+      this.world.put(x, y, z, this.world.get(x,y,z), r.meta, true);
       return true;
     }
     this.decayLeaf(x, y, z, r.meta);
@@ -295,7 +297,7 @@ export class Trees {
   }
   // BlockLeaves.func_150126_e (removeLeaves): dropBlockAsItem(fortune 0), then setBlockToAir.
   decayLeaf(x, y, z, meta = this.world.getMeta(x, y, z)) {
-    const stacks = leafDrops(this.random, meta).map((d) => ({ ...d, count: 1 }));
+    const stacks = leafDrops(this.random, meta,this.world.get(x,y,z)).map((d) => ({ ...d, count: 1 }));
     this.world.set(x, y, z, 0);
     this.changes.push([x, y, z, LEAVES, 0]);
     if (stacks.length) this.drop?.(stacks, x, y, z);
@@ -313,14 +315,14 @@ export class Trees {
         const j = this.lcg >> 2, x = bx + (j & 15), z = bz + ((j >> 8) & 15), y = s * 16 + ((j >> 16) & 15), b = this.world.get(x, y, z);
         if (!ticksRandomly(b)) continue;
         if (b === SAPLING) this.tickSapling(x, y, z);
-        else if (b === LEAVES) this.tickLeaves(x, y, z);
+        else if ((b === LEAVES||b===71)) this.tickLeaves(x, y, z);
       }
     }
   }
   // One random block tick from the game's shared loop (Weather.tickChunk). True when handled.
   randomTick(x, y, z, b) {
     if (b === SAPLING) this.tickSapling(x, y, z);
-    else if (b === LEAVES) this.tickLeaves(x, y, z);
+    else if ((b === LEAVES||b===71)) this.tickLeaves(x, y, z);
     else return false;
     return true;
   }

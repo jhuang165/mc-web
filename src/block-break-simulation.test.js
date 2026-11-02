@@ -113,7 +113,7 @@ test('leaf chance uses Trees.random, while shears route the original metadata pa
   const sheared = fixture(5, { meta: 2, slots: [{ id: 125, count: 1 }] });
   sheared.heldTool = 125;
   assert.equal(breakPlayerBlock(sheared, POS), true);
-  assert.deepEqual(sheared.items.items.map((e) => e.stack), [makeStack(5)]);
+  assert.deepEqual(sheared.items.items.map((e) => e.stack), [makeStack(5,1,2)]);
 });
 
 test('Survival ice leaves water over a solid floor and observes the final cell', () => {

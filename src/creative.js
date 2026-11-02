@@ -1,3 +1,4 @@
+import {POPULATION_CREATIVE} from './population-creative.js';
 // Minecraft Java 1.7.10 creative inventory: CreativeTabs (abt),
 // GuiContainerCreative (bfl), its ContainerCreative (bfm) and CreativeSlot (bfn).
 // Tab lists keep the original order (CreativeTabs.displayAllReleventItems and the
@@ -40,9 +41,10 @@ export const CREATIVE_TABS = [
   tab(10, "materials", "Materials", { id: 300 }, [301, 308, 303, 302, 304, 300, 321, 317, 330, 309, 305, 313, 315, 306, 307, REEDS_ITEM, 316, ...DYES, SUGAR, PUMPKIN_SEEDS, MELON_SEEDS]),
   tab(11, "inventory", "Survival Inventory", { id: 41 }, [], { background: "inventory.png", scrollbar: false, title: false }),
 ];
+for(const t of CREATIVE_TABS)if(t.index!==5&&t.index!==11)t.items=[...POPULATION_CREATIVE[t.index],...(t.index===7?TOOL_BOOKS:t.index===8?COMBAT_BOOKS:[])];
 export const SEARCH = CREATIVE_TABS[5], SURVIVAL_TAB = CREATIVE_TABS[11];
 // updateCreativeSearch walks Item.itemRegistry: items with a creative tab, by ID.
-export const SEARCH_ORDER = [3, 1, 2, 12, 7, SAPLING, 11, 6, 25, 18, 16, 15, 4, 5, 9, WEB, 39, ...WOOLS, YELLOW_FLOWER, ...RED_FLOWERS, 27, 26, 8, TNT, 21, 22, 20, 41, 17, 28, 13, 14, LADDER, RAIL, SNOW_LAYER, ICE, 23, CACTUS, 24, FENCE, 40, 110, 102, 106, 126, 200, 127, 320, 301, 308, 303, 302, 304, 114, 112, 108, 100, 104, 113, 109, 101, 105, 115, 111, 103, 107, 300, 119, 118, 116, 117, 321, 317, 330, 120, 121, 122, 123, 124, 309, 305, 201, 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 416, 417, 418, 419, 412, 413, 414, 415, 313, 202, 203, 340, 341, 342, MINECART, SADDLE, REDSTONE, 312, 315, 343, 306, 307, REEDS_ITEM, PAPER, 314, 316, ...DYES, 311, SUGAR, 125, PUMPKIN_SEEDS, MELON_SEEDS, 204, 205, 318, 319, 206, 326, 322, 323, 324, 325, IRON_HORSE_ARMOR, ...SEARCH_BOOKS];
+export const SEARCH_ORDER = [...POPULATION_CREATIVE[5],...SEARCH_BOOKS];
 // Item.getCreativeTab, for the search tab's tooltip line.
 export const itemTab = (id) => CREATIVE_TABS.find((t) => t.items.some((e) => entryId(e) === id)) ?? null;
 export const GUI_WIDTH = 195, GUI_HEIGHT = 136, SEARCH_MAX = 15;

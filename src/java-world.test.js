@@ -183,3 +183,11 @@ test("generationVersion 9 Java worlds stay byte-identical now that version 10 ad
     assert.equal(world.generatedStructures, undefined);
   }
 });
+
+test('version 10 fingerprints match f42986f before population v11',async()=>{
+  const {originalBlockMapperReady}=await import('./mineshaft-world.js');await originalBlockMapperReady;
+  for(const [seed,biome,want]of[
+    ['0','java','75f20ae0490a3310e1ae4b55af56bb08da45aeae'],['17','java','278d7ff9ecf63bdb650feb877edd95251d9a59a4'],
+    ['10','javaAmplified','72f364839715f09a5febe7080ee32715fd5c3684'],['0','javaLargeBiomes','bd9ef31bb40adb6a5a8b399b886ece5458b144ca'],
+  ]){const {data,meta}=new World(seed,biome,10).snapshot();assert.equal(createHash('sha1').update(data).update(meta).digest('hex'),want);}
+});

@@ -29,15 +29,16 @@ export const BRIGHTNESS = Array.from({ length: 16 }, (_, i) => {
 // (func_149685_I: 0.2 for normal cubes) and getCanBlockGrass (s: materials
 // that let grass through, used by smooth lighting to decide corner samples).
 export function lightOpacity(b) {
+  if (b===72||b===73) return 0;
   if (b === 0 || b === 9 || b === 20 || b === 41 || b === 42 || b === FIRE || b === LADDER || b === CACTUS || b === REEDS || b === LILY_PAD || b === FENCE || b === RAIL || b === MOB_SPAWNER || isPlant(b)) return 0;
-  if (b === 5 || b === WEB) return 1;
+  if (b === 5 || b===71 || b === WEB) return 1;
   if (b === 10 || b === 47) return 3; // water; ice (setLightOpacity(3))
   if (b === 46) return 0; // snow layer: not an opaque cube (probe: snow-reference.json "blocks")
   return 255;
 }
 // Lava: setLightLevel(1.0F), so (int)(15 * 1.0) = 15.
 // Fire: setLightLevel(1.0F), 15 as well.
-export const lightEmission = (b, lit = false) => (b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : 0);
+export const lightEmission = (b, lit = false) => (b===65?9:b===75?1:b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : 0);
 export const useNeighborBrightness = (b) => b === 20 || b === 9 || b === 41 || b === 29 || b === 30 || b === FENCE || b === RAIL || b === MOB_SPAWNER || isPlant(b);
 const AO_SOLID = f(0.2);
 // Block.getAmbientOcclusionLightValue uses isBlockNormalCube (blocksMovement and a

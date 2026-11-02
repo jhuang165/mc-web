@@ -4,9 +4,9 @@
 import { FENCE, normalCube } from "./world.js";
 
 // BlockFence.canConnectFenceTo (akz.e): another fence or a fence gate, else a block whose material
-// is opaque, that renders as a normal block, and is not Material.gourd. The port has no fence gate
-// or pumpkin, and that test is normalCube for every port block (fence.test.js replays it).
-export const fenceConnectsTo = (b) => b === FENCE || normalCube(b);
+// is opaque, that renders as a normal block, and is not Material.gourd. There is no fence gate
+// here. Gourds (pumpkin/melon) are explicitly excluded; fence.test.js replays the predicate.
+export const fenceConnectsTo = (b) => b === FENCE || (b!==67&&b!==81&&normalCube(b));
 
 // Neighbour mask: bit 0 z-1 (north), bit 1 z+1 (south), bit 2 x-1 (west), bit 3 x+1 (east).
 export function fenceMask(world, x, y, z) {

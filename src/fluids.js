@@ -368,7 +368,7 @@ export class Fluids {
   // group ladders (they have a collision box) and sugar cane exist here; air,
   // liquids, torches and the other plants are the open cells.
   blocked(x, y, z) {
-    return solid(this.world, x, y, z) || this.world.get(x, y, z) === REEDS;
+    return (this.world.get(x,y,z)!==73&&solid(this.world, x, y, z)) || this.world.get(x, y, z) === REEDS;
   }
   // func_149809_q (akr.q): not the same liquid, not lava, and not blocked.
   // Water therefore never flows into lava, while lava can flow into water.

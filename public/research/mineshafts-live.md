@@ -1,5 +1,7 @@
 # Mineshafts in live worlds (GEN-05b integration)
 
+Current live status (0.25.0): new Java worlds use **generation version 11** with the full ported Overworld population chain and mineshafts in their native population position. V9/v10 saved-world paths remain unchanged. Twelve native area replays and the live mapping pass; see [live population](population-live.md) for order/edges, content, saves, timing, browser evidence and explicit losses. The version-specific sections below retain the earlier standalone/v10 evidence.
+
 Target: Minecraft Java 1.7.10. This page covers how the generated mineshafts (`src/mineshaft-world.js`), their cave spider spawners (`src/mob-spawner.js`) and their chest minecarts (`src/minecarts.js`) reach a world you play in. It does not mean full mineshaft or minecart parity.
 
 ## What is live

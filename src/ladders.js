@@ -40,8 +40,8 @@ export function clickedSide(block, adjacent) {
   return d[1] < 0 ? 0 : d[1] > 0 ? 1 : d[2] < 0 ? 2 : d[2] > 0 ? 3 : d[0] < 0 ? 4 : 5;
 }
 // EntityLivingBase.isOnLadder: the block at floor(posX), floor(boundingBox.minY), floor(posZ)
-// is a ladder (or vines, not in this build). EntitySpider overrides it with its wall flag.
-export const isOnLadder = (world, x, minY, z) => world.get(Math.floor(x), Math.floor(minY), Math.floor(z)) === LADDER;
+// is a ladder or vines. EntitySpider overrides it with its wall flag.
+export const isOnLadder = (world, x, minY, z) => [LADDER,72].includes(world.get(Math.floor(x), Math.floor(minY), Math.floor(z)));
 // Before the move: horizontal motion clamped to 0.15F, falls to -0.15 (0 for a sneaking
 // EntityPlayer), fallDistance reset. `m` holds the motion under keys x/y/z.
 export function ladderClamp(m, sneakingPlayer, keys = ["x", "y", "z"]) {
@@ -55,4 +55,4 @@ export function ladderClamp(m, sneakingPlayer, keys = ["x", "y", "z"]) {
 export const LADDER_CLIMB = 0.2;
 // Entity.moveEntity: the vertical part of a move counts towards the step distance only
 // when the block 0.2 below the feet is a ladder.
-export const countsVertical = (world, x, y, z) => world.get(Math.floor(x), Math.floor(y - 0.2), Math.floor(z)) === LADDER;
+export const countsVertical = (world, x, y, z) => [LADDER,72].includes(world.get(Math.floor(x), Math.floor(y - 0.2), Math.floor(z)));

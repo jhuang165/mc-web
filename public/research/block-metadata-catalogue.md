@@ -17,7 +17,7 @@ All **171 block registrations** x 16 raw 4-bit values = **2736 ID/metadata combi
 
 **Bytecode evidence** (javap): overrides of the block's own class chain and inner classes that call World/IBlockAccess/TileEntity getBlockMetadata, use a metadata argument, or call such a method; the RenderBlocks render method of each render type that reads world metadata other than straight into getIcon(side, meta). **Not analysed**: other blocks, items and entities reading this block's metadata, tile-entity code and renderers (tile-entity blocks never get aliases), persistence.
 
-Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item damage, not world metadata); **Item-placed** are metadata values produced by onBlockPlaced from any item damage 0–15; **Unexecuted readers** counts metadata readers not executed conclusively (class-chain overrides, the render method, a tile entity; see JSON `bytecode.unexecutedMetadataReaders`); **Browser mapping** counts values with an exact, approximate (fallback) or no mapping in `fromOriginal` today (394 exact, 534 approximate, 1808 none of 2736). Placement across all values: 315 reachable from Creative item damage, 270 only from other item damage, 2151 not produced by item placement (they may still arise from world generation, updates or commands).
+Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item damage, not world metadata); **Item-placed** are metadata values produced by onBlockPlaced from any item damage 0–15; **Unexecuted readers** counts metadata readers not executed conclusively (class-chain overrides, the render method, a tile entity; see JSON `bytecode.unexecutedMetadataReaders`); **Browser mapping** counts values with an exact, approximate (fallback) or no mapping in `fromOriginal` today (566 exact, 682 approximate, 1488 none of 2736). Placement across all values: 315 reachable from Creative item damage, 270 only from other item damage, 2151 not produced by item placement (they may still arise from world generation, updates or commands).
 
 | Java block ID | Registry name | Creative stacks | Item-placed | Semantic | Alias (→canonical) | Invalid | Unclassified | Unexecuted readers | Browser mapping |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -26,7 +26,7 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 2 | minecraft:grass | 2:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 3 | minecraft:dirt | 3:0, 3:2 | 0–15 | 0, 2–15 | 1→0 | — | — | — | exact all 16 |
 | 4 | minecraft:cobblestone | 4:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
-| 5 | minecraft:planks | 5:0, 5:1, 5:2, 5:3, 5:4, 5:5 | 0–15 | 0–15 | — | — | — | — | exact 0; approximate 1–15 |
+| 5 | minecraft:planks | 5:0, 5:1, 5:2, 5:3, 5:4, 5:5 | 0–15 | 0–15 | — | — | — | — | exact all 16 |
 | 6 | minecraft:sapling | 6:0, 6:1, 6:2, 6:3, 6:4, 6:5 | 0–15 | 0–6, 13 | — | — | 7–12, 14, 15 | — | exact all 16 |
 | 7 | minecraft:bedrock | 7:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 8 | minecraft:flowing_water | — | 0 | 0–15 | — | — | — | 2 | exact all 16 |
@@ -42,7 +42,7 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 18 | minecraft:leaves | 18:0, 18:1, 18:2, 18:3 | 4–7, 12–15 | 0–11 | 12→4; 13→5; 14→6; 15→7 | — | — | — | exact all 16 |
 | 19 | minecraft:sponge | 19:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
 | 20 | minecraft:glass | 20:0 | 0 | 0–15 | — | — | — | — | exact 0; approximate 1–15 |
-| 21 | minecraft:lapis_ore | 21:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
+| 21 | minecraft:lapis_ore | 21:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 22 | minecraft:lapis_block | 22:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
 | 23 | minecraft:dispenser | 23:0 | 0 | 0–6, 8–14 | — | — | 7, 15 | 1 | none all 16 |
 | 24 | minecraft:sandstone | 24:0, 24:1, 24:2 | 0–15 | 0–15 | — | — | — | — | exact all 16 |
@@ -52,24 +52,24 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 28 | minecraft:detector_rail | 28:0 | 0 | 0–2, 6, 8–10, 14 | — | — | 3–5, 7, 11–13, 15 | 1 | none all 16 |
 | 29 | minecraft:sticky_piston | 29:0 | 7 | 0–6, 8–15 | — | — | 7 | 3 | none all 16 |
 | 30 | minecraft:web | 30:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
-| 31 | minecraft:tallgrass | 31:1, 31:2 | 0–15 | 0–15 | — | — | — | — | exact 1; approximate 0, 2–15 |
-| 32 | minecraft:deadbush | 32:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
+| 31 | minecraft:tallgrass | 31:1, 31:2 | 0–15 | 0–15 | — | — | — | — | exact 0–2; approximate 3–15 |
+| 32 | minecraft:deadbush | 32:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 33 | minecraft:piston | 33:0 | 7 | 0–6, 8–15 | — | — | 7 | 3 | none all 16 |
 | 34 | minecraft:piston_head | — | — | 0–5, 8–13 | — | — | 6, 7, 14, 15 | 1 | none all 16 |
 | 35 | minecraft:wool | 35:0, 35:1, 35:2, 35:3, 35:4, 35:5, 35:6, 35:7, 35:8, 35:9, 35:10, 35:11, 35:12, 35:13, 35:14, 35:15 | 0–15 | 0–15 | — | — | — | — | exact all 16 |
 | 36 | minecraft:piston_extension | — | — | 0 | — | — | 1–15 | 1 | none all 16 |
 | 37 | minecraft:yellow_flower | 37:0 | 0–15 | 0–15 | — | — | — | — | exact 0; approximate 1–15 |
 | 38 | minecraft:red_flower | 38:0, 38:1, 38:2, 38:3, 38:4, 38:5, 38:6, 38:7, 38:8 | 0–15 | 0–15 | — | — | — | — | exact all 16 |
-| 39 | minecraft:brown_mushroom | 39:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
-| 40 | minecraft:red_mushroom | 40:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
+| 39 | minecraft:brown_mushroom | 39:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
+| 40 | minecraft:red_mushroom | 40:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 41 | minecraft:gold_block | 41:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 42 | minecraft:iron_block | 42:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 43 | minecraft:double_stone_slab | — | 0–15 | 0–9, 15 | 10→2; 11→3; 12→4; 13→5; 14→6 | — | — | — | none all 16 |
-| 44 | minecraft:stone_slab | 44:0, 44:1, 44:3, 44:4, 44:5, 44:6, 44:7 | 0–15 | 0–15 | — | — | — | — | none all 16 |
+| 44 | minecraft:stone_slab | 44:0, 44:1, 44:3, 44:4, 44:5, 44:6, 44:7 | 0–15 | 0–15 | — | — | — | — | exact 1; approximate 0, 2–15 |
 | 45 | minecraft:brick_block | 45:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 46 | minecraft:tnt | 46:0 | 0 | 0, 1 | 2, 4, 6, 8, 10, 12, 14→0; 3, 5, 7, 9, 11, 13, 15→1 | — | — | — | exact 0; approximate 1–15 |
 | 47 | minecraft:bookshelf | 47:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
-| 48 | minecraft:mossy_cobblestone | 48:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
+| 48 | minecraft:mossy_cobblestone | 48:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 49 | minecraft:obsidian | 49:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 50 | minecraft:torch | 50:0 | 0 | 0–5, 9–12 | — | — | 6–8, 13–15 | 1 | exact 1–5; approximate 0, 6–15 |
 | 51 | minecraft:fire | — | 0 | 0–4, 15 | 5–14→4 | — | — | — | exact all 16 |
@@ -94,8 +94,8 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 70 | minecraft:stone_pressure_plate | 70:0 | 0 | 0, 1 | 2–15→0 | — | — | — | none all 16 |
 | 71 | minecraft:iron_door | — | — | 0–15 | — | — | — | 1 | none all 16 |
 | 72 | minecraft:wooden_pressure_plate | 72:0 | 0 | 0, 1 | 2–15→0 | — | — | — | none all 16 |
-| 73 | minecraft:redstone_ore | 73:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
-| 74 | minecraft:lit_redstone_ore | — | — | 0 | 1–15→0 | — | — | — | none all 16 |
+| 73 | minecraft:redstone_ore | 73:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
+| 74 | minecraft:lit_redstone_ore | — | — | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 75 | minecraft:unlit_redstone_torch | — | — | 0–6, 9–12 | — | — | 7, 8, 13–15 | 1 | none all 16 |
 | 76 | minecraft:redstone_torch | 76:0 | 0 | 0–6, 9–12 | — | — | 7, 8, 13–15 | 1 | none all 16 |
 | 77 | minecraft:stone_button | 77:0 | 1 | 0–6, 8–14 | 7→6; 15→14 | — | — | — | none all 16 |
@@ -107,7 +107,7 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 83 | minecraft:reeds | — | — | 0 | 1–15→0 | — | — | — | exact all 16 |
 | 84 | minecraft:jukebox | 84:0 | 0 | 0, 1 | — | — | 2–15 | 2 | none all 16 |
 | 85 | minecraft:fence | 85:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
-| 86 | minecraft:pumpkin | 86:0 | 0 | 0–4 | 5–15→4 | — | — | — | none all 16 |
+| 86 | minecraft:pumpkin | 86:0 | 0 | 0–4 | 5–15→4 | — | — | — | exact all 16 |
 | 87 | minecraft:netherrack | 87:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
 | 88 | minecraft:soul_sand | 88:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
 | 89 | minecraft:glowstone | 89:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
@@ -118,16 +118,16 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 94 | minecraft:powered_repeater | — | — | 0–15 | — | — | — | 1 | none all 16 |
 | 95 | minecraft:stained_glass | 95:0, 95:1, 95:2, 95:3, 95:4, 95:5, 95:6, 95:7, 95:8, 95:9, 95:10, 95:11, 95:12, 95:13, 95:14, 95:15 | 0–15 | 0–15 | — | — | — | — | none all 16 |
 | 96 | minecraft:trapdoor | 96:0 | 0–3, 8–11 | 0–15 | — | — | — | — | none all 16 |
-| 97 | minecraft:monster_egg | 97:0, 97:1, 97:2, 97:3, 97:4, 97:5 | 0–15 | 0–15 | — | — | — | — | none all 16 |
+| 97 | minecraft:monster_egg | 97:0, 97:1, 97:2, 97:3, 97:4, 97:5 | 0–15 | 0–15 | — | — | — | — | exact all 16 |
 | 98 | minecraft:stonebrick | 98:0, 98:1, 98:2, 98:3 | 0–15 | 0–15 | — | — | — | — | none all 16 |
-| 99 | minecraft:brown_mushroom_block | — | 0 | 0–10, 14, 15 | 11–13→0 | — | — | — | none all 16 |
-| 100 | minecraft:red_mushroom_block | — | 0 | 0–10, 14, 15 | 11–13→0 | — | — | — | none all 16 |
+| 99 | minecraft:brown_mushroom_block | — | 0 | 0–10, 14, 15 | 11–13→0 | — | — | — | exact all 16 |
+| 100 | minecraft:red_mushroom_block | — | 0 | 0–10, 14, 15 | 11–13→0 | — | — | — | exact all 16 |
 | 101 | minecraft:iron_bars | 101:0 | 0 | 0 | — | — | 1–15 | 1 | none all 16 |
 | 102 | minecraft:glass_pane | 102:0 | 0 | 0 | — | — | 1–15 | 1 | none all 16 |
-| 103 | minecraft:melon_block | 103:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
+| 103 | minecraft:melon_block | 103:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 104 | minecraft:pumpkin_stem | — | — | 0–15 | — | — | — | — | none all 16 |
 | 105 | minecraft:melon_stem | — | — | 0–15 | — | — | — | — | none all 16 |
-| 106 | minecraft:vine | 106:0 | 0–15 | 0–4, 8 | — | — | 5–7, 9–15 | 1 | none all 16 |
+| 106 | minecraft:vine | 106:0 | 0–15 | 0–4, 8 | — | — | 5–7, 9–15 | 1 | exact all 16 |
 | 107 | minecraft:fence_gate | 107:0 | 0 | 0, 1, 4, 5, 8, 10, 12, 14 | — | — | 2, 3, 6, 7, 9, 11, 13, 15 | 1 | none all 16 |
 | 108 | minecraft:brick_stairs | 108:0 | 0, 4 | 0–13 | 14→6; 15→7 | — | — | — | none all 16 |
 | 109 | minecraft:stone_brick_stairs | 109:0 | 0, 4 | 0–13 | 14→6; 15→7 | — | — | — | none all 16 |
@@ -148,9 +148,9 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 124 | minecraft:lit_redstone_lamp | — | — | 0 | 1–15→0 | — | — | — | none all 16 |
 | 125 | minecraft:double_wooden_slab | — | 0–15 | 0–7 | 8→0; 9→1; 10→2; 11→3; 12→4; 13→5; 14→6; 15→7 | — | — | — | none all 16 |
 | 126 | minecraft:wooden_slab | 126:0, 126:1, 126:2, 126:3, 126:4, 126:5 | 0–15 | 0–15 | — | — | — | — | none all 16 |
-| 127 | minecraft:cocoa | — | 0–3 | 0–15 | — | — | — | 1 | none all 16 |
+| 127 | minecraft:cocoa | — | 0–3 | 0–15 | — | — | — | 1 | exact all 16 |
 | 128 | minecraft:sandstone_stairs | 128:0 | 0, 4 | 0–13 | 14→6; 15→7 | — | — | — | none all 16 |
-| 129 | minecraft:emerald_ore | 129:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
+| 129 | minecraft:emerald_ore | 129:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 130 | minecraft:ender_chest | 130:0 | 0 | 0 | — | — | 1–15 | 1 | none all 16 |
 | 131 | minecraft:tripwire_hook | 131:0 | 0 | 0–11 | — | — | 12–15 | 1 | none all 16 |
 | 132 | minecraft:tripwire | — | — | 0–3, 6, 7 | — | — | 4, 5, 8–15 | 1 | none all 16 |
@@ -182,13 +182,13 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 158 | minecraft:dropper | 158:0 | 0 | 0–6, 8–14 | — | — | 7, 15 | 2 | none all 16 |
 | 159 | minecraft:stained_hardened_clay | 159:0, 159:1, 159:2, 159:3, 159:4, 159:5, 159:6, 159:7, 159:8, 159:9, 159:10, 159:11, 159:12, 159:13, 159:14, 159:15 | 0–15 | 0–15 | — | — | — | — | exact all 16 |
 | 160 | minecraft:stained_glass_pane | 160:0, 160:1, 160:2, 160:3, 160:4, 160:5, 160:6, 160:7, 160:8, 160:9, 160:10, 160:11, 160:12, 160:13, 160:14, 160:15 | 0–15 | 0–15 | — | — | — | 1 | none all 16 |
-| 161 | minecraft:leaves2 | 161:0, 161:1 | 4–7, 12–15 | 0–11 | 12→4; 13→5; 14→6; 15→7 | — | — | — | none all 16 |
-| 162 | minecraft:log2 | 162:0, 162:1 | 0–11 | 0–15 | — | — | — | 1 | none all 16 |
+| 161 | minecraft:leaves2 | 161:0, 161:1 | 4–7, 12–15 | 0–11 | 12→4; 13→5; 14→6; 15→7 | — | — | — | exact all 16 |
+| 162 | minecraft:log2 | 162:0, 162:1 | 0–11 | 0–15 | — | — | — | 1 | exact all 16 |
 | 163 | minecraft:acacia_stairs | 163:0 | 0, 4 | 0–13 | 14→6; 15→7 | — | — | — | none all 16 |
 | 164 | minecraft:dark_oak_stairs | 164:0 | 0, 4 | 0–13 | 14→6; 15→7 | — | — | — | none all 16 |
 | 170 | minecraft:hay_block | 170:0 | 0, 4, 8 | 0–15 | — | — | — | 1 | none all 16 |
 | 171 | minecraft:carpet | 171:0, 171:1, 171:2, 171:3, 171:4, 171:5, 171:6, 171:7, 171:8, 171:9, 171:10, 171:11, 171:12, 171:13, 171:14, 171:15 | 0–15 | 0–15 | — | — | — | — | none all 16 |
 | 172 | minecraft:hardened_clay | 172:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 173 | minecraft:coal_block | 173:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
-| 174 | minecraft:packed_ice | 174:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
-| 175 | minecraft:double_plant | 175:0, 175:1, 175:2, 175:3, 175:4, 175:5 | 0–15 | 0–5, 8–15 | — | 6, 7 | — | 1 | none all 16 |
+| 174 | minecraft:packed_ice | 174:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
+| 175 | minecraft:double_plant | 175:0, 175:1, 175:2, 175:3, 175:4, 175:5 | 0–15 | 0–5, 8–15 | — | 6, 7 | — | 1 | exact all 16 |

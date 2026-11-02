@@ -34,7 +34,7 @@ export const SHADOWS = {
 // public/research/shadow-reference.json): glass, water, lava, torches, farmland,
 // wheat, tall grass, chests, fire (45), the snow layer (46), the sapling (48), fences and rails. Every block that does is a full cube
 // (ice does: it renders as a normal block).
-const NOT_NORMAL = new Set([9, 10, 20, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41, 42, FIRE, 46, 48, WEB, LADDER, CACTUS, REEDS, LILY_PAD, FENCE, RAIL]);
+const NOT_NORMAL = new Set([69,72,73,75,76,79,82,83,84,9, 10, 20, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41, 42, FIRE, 46, 48, WEB, LADDER, CACTUS, REEDS, LILY_PAD, FENCE, RAIL]);
 export const takesShadow = (b) => b !== 0 && !NOT_NORMAL.has(b) && !isFlower(b) && !isCrop(b);
 
 // `e`: { x, y, z } interpolated Java position (posY, which for items and orbs

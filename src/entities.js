@@ -548,15 +548,15 @@ export class EntityWorld {
     this.worldRandom = null;
     this.localDifficulty = null;
     if (Array.isArray(saved)) {
-      for (const e of saved.slice(0, 40)) {
+      for (const e of saved.slice(0, 256)) {
         const t = ENTITY_TYPES[e.type];
         if (
           !t ||
           ![e.x, e.y, e.z, e.health].every(Number.isFinite) ||
-          e.x < 1 ||
-          e.x >= SIZE - 1 ||
-          e.z < 1 ||
-          e.z >= SIZE - 1 ||
+          e.x < 0 ||
+          e.x >= SIZE ||
+          e.z < 0 ||
+          e.z >= SIZE ||
           e.y < -64 ||
           e.y >= (world.height ?? HEIGHT) ||
           e.health <= 0

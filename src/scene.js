@@ -6,7 +6,7 @@ import { ParticleSystem } from "./particles.js";
 import { EffectRenderer } from "./effect-renderer.js";
 import { Fx } from "./fx.js";
 import { ParticleRenderer } from "./particle-renderer.js";
-import { SIZE, HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
+import { SIZE, HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS } from "./block-textures.js";
 import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
@@ -185,7 +185,7 @@ export class VoxelScene {
     this.temperature = world.temperatureAt?.(64, world.seaLevel, 64) ?? biomeTemperature(world.biome);
     this.clouds.height = world.height === 256 ? 128 : CLOUD_HEIGHT;
     this.litFurnaces = new Set();
-    this.light = new LightVolume(world, (x, y, z, b) => (b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && this.litFurnaces.has(`${x},${y},${z}`) ? 13 : 0));
+    this.light = new LightVolume(world, (x, y, z, b) => lightEmission(b, b === 14 && this.litFurnaces.has(`${x},${y},${z}`)));
     for (const v of this.chunks.values()) this.disposeChunk(v);
     this.chunks.clear();
     this.dirty.clear();
@@ -207,6 +207,8 @@ export class VoxelScene {
           if (!b || b === 41) continue;
           if (b === 20) this.torch(solid, x, y, z);
           else if (isCrop(b)) this.crops(solid, b, x, y, z);
+          else if (b===COCOA||b===SANDSTONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z));
+          else if (b===VINE) this.vine(solid,x,y,z);
           else if (isPlant(b) || b === WEB || b === REEDS) this.crossed(solid, b, x, y, z);
           else if (b === LADDER) this.ladder(solid, x, y, z);
           else if (b === FENCE) for (const box of fenceRenderBoxes(fenceMask(w, x, y, z))) this.box(solid, b, x, y, z, box);
@@ -331,6 +333,11 @@ export class VoxelScene {
     // Original (maxU, minV), (maxU, maxV), (minU, maxV), (minU, minV); minV is the tile's top.
     m.quad([[ax, ay, az], [bx, by, bz], [cx, cy, cz], [dx, dy, dz]], [[r.u1, r.v1], [r.u1, r.v0], [r.u0, r.v0], [r.u0, r.v1]], 1, light, true);
   }
+  vine(m,x,y,z) {
+    const w=this.world,meta=w.getMeta(x,y,z),uv=rectUvs(tileRect(blockTile(VINE,0))),light=this.light.packed(x,y,z),e=1/64;
+    for(const [bit,v] of [[1,[[0,0,1-e],[1,0,1-e],[1,1,1-e],[0,1,1-e]]],[2,[[e,0,0],[e,0,1],[e,1,1],[e,1,0]]],[4,[[1,0,e],[0,0,e],[0,1,e],[1,1,e]]],[8,[[1-e,0,1],[1-e,0,0],[1-e,1,0],[1-e,1,1]]]])
+      if(meta&bit)m.quad(v.map(p=>[x+p[0],y+p[1],z+p[2]]),uv,1,light,true);
+  }
   // renderCrossedSquares, with the tall-grass position jitter from the block coordinates.
   crossed(m, b, x, y, z) {
     const w = this.world;
@@ -346,7 +353,8 @@ export class VoxelScene {
       if (b === 39) py += (bits(20) - 1) * 0.2;
       pz += (bits(24) - 0.5) * spread;
     }
-    const uvs = rectUvs(tileRect(blockTile(b, 0, false, w.getMeta(x, y, z)))), light = this.light.packed(x, y, z), a = 0.05, c = 0.95;
+    const raw=w.getMeta(x,y,z), plantMeta=b===DOUBLE_PLANT&&(raw&8)?(w.getMeta(x,y-1,z)&7)|8:raw;
+    const uvs = rectUvs(tileRect(blockTile(b, 0, false, plantMeta))), light = this.light.packed(x, y, z), a = 0.05, c = 0.95;
     m.quad([[px + a, py, pz + a], [px + c, py, pz + c], [px + c, py + 1, pz + c], [px + a, py + 1, pz + a]], uvs, 1, light, true);
     m.quad([[px + a, py, pz + c], [px + c, py, pz + a], [px + c, py + 1, pz + a], [px + a, py + 1, pz + c]], uvs, 1, light, true);
   }

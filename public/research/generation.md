@@ -1,5 +1,7 @@
 # Java world generation (WORLD-02c)
 
+Current live status (0.25.0): new Java worlds use **generation version 11** with the full ported Overworld population chain and mineshafts in their native population position. V9/v10 saved-world paths remain unchanged. Twelve native area replays and the live mapping pass; see [live population](population-live.md) for order/edges, content, saves, timing, browser evidence and explicit losses. The version-specific sections below retain the earlier standalone/v10 evidence.
+
 The live game offers finite 128 × 128 × 256 Java worlds (generation version 9, GEN-01 through GEN-03). Existing worlds and legacy landscape choices retain custom 128 × 128 × 64 terrain (versions 1–8). Generation ports are replayed against unchanged 1.7.10 classes; population, structures and streamed-world integration remain unfinished.
 
 | Slice | Scope | Status |

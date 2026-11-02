@@ -13,11 +13,35 @@ TILES.push('reeds','cactus_side','cactus_top','cactus_bottom');
 // Mineshaft blocks: BlockRail uses rail_normal_turned for the curves (metadata 6-9).
 TILES.push('rail_normal','rail_normal_turned','mob_spawner');
 TILES.push('red_sand','dirt_podzol_top','dirt_podzol_side','sandstone_top','sandstone_bottom','sandstone_normal','sandstone_carved','sandstone_smooth','mycelium_top','mycelium_side','waterlily',...WOOL_COLORS.map(c=>'hardened_clay_stained_'+c.texture));
+const TREE_TEXTURES=['oak','spruce','birch','jungle','acacia','big_oak'];
+TILES.push(...TREE_TEXTURES.slice(1).map(t=>'planks_'+t),'lapis_ore','redstone_ore','emerald_ore','pumpkin_side','pumpkin_top','pumpkin_face_off','vine','cocoa_stage_0','cocoa_stage_1','cocoa_stage_2','cobblestone_mossy','mushroom_brown','mushroom_red','mushroom_block_skin_brown','mushroom_block_skin_red','mushroom_block_skin_stem','mushroom_block_inside','deadbush','ice_packed','melon_side','melon_top','fern',
+  ...TREE_TEXTURES.slice(1).flatMap(t=>['log_'+t,'log_'+t+'_top','leaves_'+t,'sapling_'+(t==='big_oak'?'roofed_oak':t)]),
+  ...['sunflower','syringa','grass','fern','rose','paeonia'].flatMap(t=>['double_plant_'+t+'_bottom','double_plant_'+t+'_top']));
 export const ATLAS_ROWS=Math.ceil(TILES.length/ATLAS_COLUMNS);
 const tile=name=>TILES.indexOf(name);
 // `meta` selects wool colours, flower variants and root-crop growth textures.
 // `snowy` is true when the block above is a snow layer or snow block: BlockGrass then shows grass_side_snowed on its sides.
 export function blockTile(id,face,lit=false,meta=0,snowy=false){
+ if(id===7)return tile('planks_'+(TREE_TEXTURES[meta&7]??'oak'));
+ if(id===63)return tile('lapis_ore');
+ if(id===64||id===65)return tile('redstone_ore');
+ if(id===66)return tile('emerald_ore');
+ if(id===67)return tile(face===2||face===3?'pumpkin_top':face===[4,0,5,1][meta&3]?'pumpkin_face_off':'pumpkin_side');
+ if(id===68)return tile(meta===1?'cobblestone':'stone');
+ if(id===69)return tile('double_plant_'+['sunflower','syringa','grass','fern','rose','paeonia'][meta&7]+'_'+(meta&8?'top':'bottom'));
+ if(id===4||id===70){const type=TREE_TEXTURES[(id===70?4:0)+(meta&3)]??'oak',axis=meta&12;return tile('log_'+type+((axis===0&&(face===2||face===3)||axis===4&&(face===0||face===1)||axis===8&&(face===4||face===5))?'_top':''));}
+ if(id===5||id===71)return tile('leaves_'+(TREE_TEXTURES[(id===71?4:0)+(meta&3)]??'oak'));
+ if(id===48)return tile('sapling_'+((meta&7)===5?'roofed_oak':TREE_TEXTURES[meta&7]??'oak'));
+ if(id===72)return tile('vine');
+ if(id===73)return tile('cocoa_stage_'+Math.min(2,meta>>2));
+ if(id===74)return tile('cobblestone_mossy');
+ if(id===75||id===76)return tile(id===75?'mushroom_brown':'mushroom_red');
+ if(id===77||id===78){const cap=meta>=1&&meta<=9&&(face===2||face===0&&[3,6,9].includes(meta)||face===1&&[1,4,7].includes(meta)||face===4&&meta<=3||face===5&&meta>=7);return tile(cap?(id===77?'mushroom_block_skin_brown':'mushroom_block_skin_red'):meta===10&&face!==2&&face!==3?'mushroom_block_skin_stem':'mushroom_block_inside');}
+ if(id===79||id===83)return tile('deadbush');
+ if(id===80)return tile('ice_packed');
+ if(id===81)return tile(face===2||face===3?'melon_top':'melon_side');
+ if(id===82)return tile(face===2?'sandstone_top':face===3?'sandstone_bottom':'sandstone_normal');
+ if(id===84)return tile('fern');
  if(id===2&&meta===2)return tile(face===2?'dirt_podzol_top':face===3?'dirt':'dirt_podzol_side');
  if(id===6&&meta===1)return tile('red_sand');
  if(id===SANDSTONE)return tile(face===2?'sandstone_top':face===3?'sandstone_bottom':meta===1?'sandstone_carved':meta===2?'sandstone_smooth':'sandstone_normal');
@@ -57,13 +81,13 @@ export function createBlockAtlas(){
  const texture=new THREE.CanvasTexture(canvas);texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;const images=new Map(),icons=new Map();let biome='meadow';
  function tint(mapName){const facts=biomeFacts(biome),t=facts.temperature,rain=facts.rainfall*t;const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');x.drawImage(images.get('colormap/'+mapName),0,0);const color=x.getImageData(Math.floor((1-t)*255),Math.floor((1-rain)*255),1,1).data;return`rgb(${color[0]},${color[1]},${color[2]})`;}
  function tinted(source,color){const c=document.createElement('canvas');c.width=c.height=16;const x=c.getContext('2d');x.drawImage(source,0,0,16,16);x.globalCompositeOperation='multiply';x.fillStyle=color;x.fillRect(0,0,16,16);x.globalCompositeOperation='destination-in';x.drawImage(source,0,0,16,16);return c;}
- function redraw(){if(!images.size)return;icons.clear();ctx.clearRect(0,0,canvas.width,canvas.height);const grass=tint('grass'),leaves=tint('foliage');TILES.forEach((name,i)=>{const x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;if(CHEST_FACES[name]){for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])ctx.drawImage(images.get('entity/chest/normal'),u,v,w,h,x+dx,y+dy,w,h);return;}let source=images.get('blocks/'+name);if(['grass_top','tallgrass','reeds'].includes(name))source=tinted(source,grass);if(name==='leaves_oak')source=tinted(source,leaves);ctx.drawImage(source,0,0,16,16,x,y,16,16);if(name==='grass_side')ctx.drawImage(tinted(images.get('blocks/grass_side_overlay'),grass),x,y);});texture.needsUpdate=true;}
+ function redraw(){if(!images.size)return;icons.clear();ctx.clearRect(0,0,canvas.width,canvas.height);const grass=tint('grass'),leaves=tint('foliage');TILES.forEach((name,i)=>{const x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;if(CHEST_FACES[name]){for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])ctx.drawImage(images.get('entity/chest/normal'),u,v,w,h,x+dx,y+dy,w,h);return;}let source=images.get('blocks/'+name);if(['grass_top','tallgrass','reeds','fern','vine','double_plant_grass_bottom','double_plant_grass_top','double_plant_fern_bottom','double_plant_fern_top'].includes(name))source=tinted(source,grass);if(name.startsWith('leaves_'))source=tinted(source,name==='leaves_spruce'?'rgb(97,153,97)':name==='leaves_birch'?'rgb(128,167,85)':leaves);ctx.drawImage(source,0,0,16,16,x,y,16,16);if(name==='grass_side')ctx.drawImage(tinted(images.get('blocks/grass_side_overlay'),grass),x,y);});texture.needsUpdate=true;}
  function icon(id,damage=0){const key=id+':'+damage;if(icons.has(key))return icons.get(key);const c=document.createElement('canvas');c.width=64;c.height=70;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
   function face(index,matrix,shade,drop=0){x.save();x.setTransform(...matrix);const sx=index%ATLAS_COLUMNS*16,sy=Math.floor(index/ATLAS_COLUMNS)*16;x.drawImage(canvas,sx,sy,16,16-drop,0,drop,16,16-drop);if(shade){x.globalCompositeOperation='source-atop';x.fillStyle=`rgba(0,0,0,${shade})`;x.fillRect(0,0,16,16);}x.restore();}
   // RenderBlocks.renderBlockAsItem for the fence (render type 11): two posts and two bars along z,
   // painted back to front in the inventory projection (z across, x into the picture).
   if(id===FENCE){fenceIcon(x);const url=c.toDataURL();icons.set(key,url);return url;}
-  if(id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||isFlower(id)||isCrop(id)){const i=blockTile(id,2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
+  if([69,72,75,76,79,83,84].includes(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||isFlower(id)||isCrop(id)){const i=blockTile(id,2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
   const url=c.toDataURL();icons.set(key,url);return url;
  }
  // Item projection P(a,b,h) = (32 + 1.75(a-b), 2 + a + b + 2(16-h)) in pixels, a = 16z, b = 16x.

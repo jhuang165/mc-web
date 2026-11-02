@@ -4,6 +4,9 @@ import {isCrop,WEB,SAPLING,REEDS,FENCE,RAIL,MOB_SPAWNER} from './world.js';
 const f = Math.fround;
 export function digSpeed(block,tool){
  if(!tool?.kind)return 1;
+ if([63,64,65,66,74,82].includes(block)&&tool.kind==='pickaxe')return tool.speed;
+ if([67,70,77,78,81].includes(block)&&tool.kind==='axe')return tool.speed;
+ if([71,72].includes(block)&&tool.kind==='shears')return block===71?15:2;
  if(tool.kind==='shears')return block===5||block===WEB?15:block===19?5:1;
  // Material.plants (crops, saplings, sugar cane) is an axe material and a 1.5 sword material.
  if(tool.kind==='axe'&&(isCrop(block)||block===SAPLING||block===REEDS))return tool.speed;

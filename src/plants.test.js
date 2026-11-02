@@ -211,7 +211,7 @@ test("creative tabs and search keep the original registration order", () => {
   assert.deepEqual(misc.slice(misc.indexOf(343), misc.indexOf(343) + 3), [343, PAPER, 314]);
   assert.deepEqual(materials.slice(materials.indexOf(307), materials.indexOf(307) + 3), [307, REEDS_ITEM, 316]);
   // Pumpkin (361) and melon seeds (362) follow sugar (353), as in creative-reference.json.
-  assert.deepEqual(materials.slice(materials.indexOf(SUGAR)), [SUGAR, 361, 362]);
+  assert.deepEqual(materials.slice(materials.indexOf(SUGAR),materials.indexOf(SUGAR)+3), [SUGAR, 361, 362]);
   const at = (id) => SEARCH_ORDER.indexOf(id);
   assert.deepEqual(SEARCH_ORDER.slice(at(23), at(23) + 3), [23, CACTUS, 24]);
   assert.deepEqual(SEARCH_ORDER.slice(at(307), at(307) + 4), [307, REEDS_ITEM, PAPER, 314]);

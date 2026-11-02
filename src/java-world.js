@@ -10,6 +10,7 @@ import { BIOMES_TO_SPAWN_IN } from "./biome-layers.js";
 import { stringHash } from "./java-long.js";
 import { NoiseGeneratorPerlin } from "./noise.js";
 import { generateLiveMineshafts } from "./mineshaft-world.js";
+import { generateLivePopulation } from './population-world.js';
 export const JAVA_TERRAIN_BLOCKS = Object.freeze({
   0: 0,
   1: 3,
@@ -104,7 +105,11 @@ export function generateJavaWorld(world) {
           world.biomeIds[(cx * 16 + x) * 128 + cz * 16 + z] =
             chunk.biomes[x + z * 16];
     }
-  if (originals)
+  if (world.generationVersion >= 11)
+    generateLivePopulation(world, {seed, originals, ringTerrain: (x,z) => {
+      const chunk=gen.provideChunk(x,z); caves.generate(x,z,chunk.blocks); ravines.generate(x,z,chunk.blocks); return chunk;
+    }});
+  else if (originals)
     generateLiveMineshafts(world, {
       seed,
       originals,

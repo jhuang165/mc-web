@@ -1,5 +1,7 @@
 # Java 1.7.10 structures (GEN-05)
 
+Current live status (0.25.0): new Java worlds use **generation version 11** with the full ported Overworld population chain and mineshafts in their native population position. V9/v10 saved-world paths remain unchanged. Twelve native area replays and the live mapping pass; see [live population](population-live.md) for order/edges, content, saves, timing, browser evidence and explicit losses. The version-specific sections below retain the earlier standalone/v10 evidence.
+
 Status: **partial**. GEN-05a ports the shared structure framework and mineshafts as standalone
 modules, checked against the unchanged pinned 1.7.10 classes. They are not yet called from
 live world generation. Villages, strongholds, temples and nether fortresses are not ported.

@@ -83,7 +83,21 @@ export const BLOCKS = [
   {name:'Fence',color:'#b49462'},
   {name:'Rail',color:'#8a7b62'},
   {name:'Monster spawner',color:'#1d2a36',hidden:true},
+  ...[
+    ['Lapis lazuli ore','#5676ba'],['Redstone ore','#944947'],['Glowing redstone ore','#c14839'],
+    ['Emerald ore','#52946e'],['Pumpkin','#d78125'],['Monster egg','#888888'],['Double plant','#6c9b3c'],
+    ['Acacia log','#827566'],['Acacia leaves','#65883f'],['Vines','#437536'],['Cocoa','#90602d'],
+    ['Mossy cobblestone','#647857'],['Brown mushroom','#96754f'],['Red mushroom','#bb4537'],
+    ['Brown mushroom block','#957253'],['Red mushroom block','#b83b2e'],['Dead bush','#8b683b'],
+    ['Packed ice','#9db6e5'],['Melon','#98a934'],['Sandstone slab','#d9cba4'],
+    ['Dead shrub','#8b683b'],['Fern','#669646'],
+  ].map(([name,color])=>({name,color})),
 ];
+export const LAPIS_ORE=63,REDSTONE_ORE=64,LIT_REDSTONE_ORE=65,EMERALD_ORE=66,PUMPKIN=67,MONSTER_EGG=68,DOUBLE_PLANT=69,
+  LOG2=70,LEAVES2=71,VINE=72,COCOA=73,MOSSY_COBBLE=74,BROWN_MUSHROOM=75,RED_MUSHROOM=76,
+  BROWN_MUSHROOM_BLOCK=77,RED_MUSHROOM_BLOCK=78,DEAD_BUSH=79,PACKED_ICE=80,MELON=81,SANDSTONE_SLAB=82,DEAD_SHRUB=83,FERN=84;
+export const TREE_TYPES=['Oak','Spruce','Birch','Jungle','Acacia','Dark oak'];
+export const DOUBLE_PLANTS=['Sunflower','Lilac','Double tallgrass','Large fern','Rose bush','Peony'];
 export const SANDSTONE=56,MYCELIUM=57,STAINED_CLAY=58,LILY_PAD=59;
 export const TORCH=20,FENCE=60,RAIL=61,MOB_SPAWNER=62;
 export const WATER=10,LAVA=42;
@@ -163,32 +177,37 @@ export const isCrop=b=>(b>=31&&b<=38)||b===CARROTS||b===POTATOES;
 // Wheat's stages retain their old internal IDs for save compatibility; root crops use metadata.
 export const cropAge=(b,meta=0)=>b>=31&&b<=38?b-31:meta&7;
 export const cropKind=b=>b>=31&&b<=38?31:b;
-export const isPlant=b=>isCrop(b)||b===39||isFlower(b)||b===SAPLING;
+export const isPlant=b=>isCrop(b)||b===39||isFlower(b)||b===SAPLING||[DOUBLE_PLANT,BROWN_MUSHROOM,RED_MUSHROOM,DEAD_BUSH,DEAD_SHRUB,FERN].includes(b);
 export const blockHeight=b=>b===LILY_PAD?1/64:b===29||b===30?15/16:b===41?.875:b===SNOW_LAYER?.125:1;
 // Blocks with Block.tickRandomly: they count towards a section's random-tick refcount
 // (ExtendedBlockStorage.getNeedsRandomTick), which WorldServer reads to pick sections.
 // Grass, leaves, farmland, crops, lava, snow layer, ice and saplings here; snow and ice act on a
 // random tick in snow.js/weather.js, fire and still lava in fire.js, leaves (decay) and saplings (growth) in trees.js.
 // Cactus and sugar cane grow on a random tick (plants.js).
-export const ticksRandomly=b=>b===1||b===5||b===29||b===30||isCrop(b)||b===LAVA||b===SNOW_LAYER||b===ICE||b===FIRE||b===SAPLING||b===CACTUS||b===REEDS;
+export const ticksRandomly=b=>b===1||b===5||b===LEAVES2||b===LIT_REDSTONE_ORE||b===COCOA||b===29||b===30||isCrop(b)||b===LAVA||b===SNOW_LAYER||b===ICE||b===FIRE||b===SAPLING||b===CACTUS||b===REEDS;
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,RAIL,MOB_SPAWNER]);
+const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,RAIL,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB]);
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 // Block.isNormalCube: Material.tnt is translucent (isOpaque false), so TNT is an opaque
 // cube that is not a normal cube (no torches/ladders/fire tops on it).
 // BlockMobSpawner (ama) is not an opaque cube (isOpaqueCube false: it is drawn as a cage and
 // hides nothing) but Material.rock and renderAsNormalBlock make it a normal cube.
-export const normalCube=b=>(opaqueCube(b)&&b!==5&&b!==TNT)||b===MOB_SPAWNER;
+export const normalCube=b=>(opaqueCube(b)&&b!==5&&b!==LEAVES2&&b!==TNT)||b===MOB_SPAWNER;
 // setBlockBoundsBasedOnState: chests are inset by 1/16 except towards a partner.
 // A snow layer's collision box is meta * 1/8 tall (BlockSnow.getCollisionBoundingBoxFromPool: meta 0
 // is flat and has none); its selection box is (meta + 1) / 8 (snowSelectionHeight).
 // Block.slipperiness (field_149765_K): 0.6 for every block here but ice, 0.98 (BlockIce).
-export const slipperiness=b=>b===ICE?Math.fround(0.98):Math.fround(0.6);
+export const slipperiness=b=>b===ICE||b===PACKED_ICE?Math.fround(0.98):Math.fround(0.6);
 export const snowSelectionHeight=meta=>((meta&7)+1)/8;
 export function blockBounds(world,x,y,z){
   const b=world.get(x,y,z);
+  if(b===75||b===76)return[.3,0,.3,.7,.4,.7];
+  if([79,83,84].includes(b))return[0.09999999403953552,0,0.09999999403953552,0.8999999761581421,0.800000011920929,0.8999999761581421];
+  if(b===VINE){const m=world.getMeta(x,y,z),boxes=[];if(m&1)boxes.push([0,0,15/16,1,1,1]);if(m&2)boxes.push([0,0,0,1/16,1,1]);if(m&4)boxes.push([0,0,0,1,1,1/16]);if(m&8)boxes.push([15/16,0,0,1,1,1]);return boxes.length?[...Array(3)].map((_,i)=>Math.min(...boxes.map(b=>b[i]))).concat([...Array(3)].map((_,i)=>Math.max(...boxes.map(b=>b[i+3])))):[0,15/16,0,1,1,1];}
+  if(b===SANDSTONE_SLAB)return[0,0,0,1,.5,1];
+  if(b===COCOA){const m=world.getMeta(x,y,z),age=(m>>2)&3,w=(4+age*2)/16,h=(5+age*2)/16;const d=m&3;return d===0?[.5-w/2,.75-h,15/16-w,.5+w/2,.75,15/16]:d===1?[1/16,.75-h,.5-w/2,1/16+w,.75,.5+w/2]:d===2?[.5-w/2,.75-h,1/16,.5+w/2,.75,1/16+w]:[15/16-w,.75-h,.5-w/2,15/16,.75,.5+w/2];}
   if(b===SNOW_LAYER)return[0,0,0,1,(world.getMeta(x,y,z)&7)*.125,1];
   if(b===LADDER)return ladderBounds(world.getMeta(x,y,z));
   // BlockCactus.getCollisionBoundingBoxFromPool: 1/16 in from the sides and the top.
@@ -230,7 +249,7 @@ export function solidBlock(b, meta = 0) {
   // A flat snow layer (meta 0) has no collision box, so it is not an obstacle.
   if (b === SNOW_LAYER) return (meta & 7) !== 0;
   // Rails have no collision box either (BlockRailBase.getCollisionBoundingBoxFromPool is null).
-  return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== FIRE && b !== WEB && b !== REEDS && b !== RAIL && !isPlant(b);
+  return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== FIRE && b !== WEB && b !== REEDS && b !== RAIL && b !== VINE && !isPlant(b);
 }
 // One 16 x 16 chunk column of the live world (WORLD-02b): port block ids and 4-bit metadata, one byte
 // each, at (lx * 16 + lz) * HEIGHT + y, and the random-tick refcount of each 16-high section
@@ -257,7 +276,7 @@ const cellIndex = (x, y, z, height) => ((x & 15) * 16 + (z & 15)) * height + y;
 // Chunk map key; the live world's chunks stay well inside +-2^15.
 const columnKey = (cx, cz) => (cx + 32768) * 65536 + (cz + 32768);
 export class World {
-  constructor(seed = "Overworld", biome = "meadow", generationVersion = isJavaLandscape(biome) ? 10 : 8) {
+  constructor(seed = "Overworld", biome = "meadow", generationVersion = isJavaLandscape(biome) ? 11 : 8) {
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;

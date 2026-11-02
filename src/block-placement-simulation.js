@@ -11,7 +11,7 @@ import { canPlaceLadder, placedLadderMeta, clickedSide } from "./ladders.js";
 import { placedTorchMeta } from "./torches.js";
 import { railCanPlace, railAdded } from "./rails.js";
 
-const BLOCK_MAX = new Set([WOOL, RED_FLOWER, 2, 6, 56, 58]);
+const BLOCK_MAX = new Set([4,5,7,48,69,70,71,82,WOOL, RED_FLOWER, 2, 6, 56, 58]);
 const result = (placed, reason, block = null, position = null) => ({ placed, reason, block, position });
 
 /**
@@ -78,6 +78,18 @@ export function placeHeldBlock(state, request, hooks = {}) {
   // clicked block and placement uses the adjacent target.
   const p = block === SNOW_LAYER && !hereMeta ? here : adjacent;
   if (!withinBounds(p)) return result(false, "invalid-position", id, p);
+  if(id===351&&survival.held?.damage===3){
+    if(!survival.creative&&!survival.count(id))return result(false,"empty-stack",73,p);
+    if(block!==4||(world.getMeta(...here)&3)!==3||p[1]!==here[1]||world.get(...p)!==0)return result(false,'cocoa-support',73,p);
+    const dx=here[0]-p[0],dz=here[2]-p[2],dir=dz===1?0:dx===-1?1:dz===-1?2:3;
+    world.set(...p,73,true,dir);if(!survival.creative)survival.take(id);updateBlock(p[0],p[2],p[1]);markUnsaved();return result(true,'cocoa',73,p);
+  }
+  if(id===69){
+    if(![1,2,29,30].includes(world.get(p[0],p[1]-1,p[2]))||world.get(...p)!==0||world.get(p[0],p[1]+1,p[2])!==0||!withinBounds([p[0],p[1]+1,p[2]]))return result(false,'double-plant-support',id,p);
+    if(!survival.creative&&!survival.count(id))return result(false,'empty-stack',id,p);
+    world.put(...p,id,survival.held?.damage||0,true);world.set(p[0],p[1]+1,p[2],id,true,8);
+    if(!survival.creative)survival.take(id);updateBlock(p[0],p[2],p[1]);updateBlock(p[0],p[2],p[1]+1);markUnsaved();return result(true,'double-plant',id,p);
+  }
   if (!item?.block || isLiquid(id)) {
     toast("Select a building block, food, or workstation.");
     return result(false, "not-a-building-block", id, p);
@@ -99,9 +111,8 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if (torchMeta < 0) return result(false, "torch-support", id, p);
 
   const old = world.get(...p), oldMeta = world.getMeta(...p);
-  const meta = BLOCK_MAX.has(id) ? survival.held?.damage || 0
-    : id === 5 ? placedLeavesMeta()
-      : id === LADDER ? placedLadderMeta(world, ...p, clickedSide(here, p))
+  const meta = id===5||id===71?placedLeavesMeta(survival.held?.damage||0):BLOCK_MAX.has(id) ? survival.held?.damage || 0
+    : id === LADDER ? placedLadderMeta(world, ...p, clickedSide(here, p))
         : id === TORCH ? torchMeta
           : 0;
   world.set(...p, id, false, meta);

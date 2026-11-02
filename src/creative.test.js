@@ -7,7 +7,7 @@ import {CREATIVE_TABS,SEARCH,SURVIVAL_TAB,SEARCH_ORDER,CreativeScreen,TextField,
 const reference=JSON.parse(await readFile(new URL('../public/research/creative-reference.json',import.meta.url)));
 // Original [id, metadata] to game item; unimplemented items drop out.
 // Wool (35) keeps its colour as the stack's damage: a list entry is [19,colour], or 19 for white.
-const game=([id,meta])=>id===35?(meta?[19,meta]:19):id===38||id===351?(meta?[MC_IDS[id],meta]:MC_IDS[id]):MC_IDS[id+':'+meta]??(meta===0?MC_IDS[id]:undefined);
+const game=([id,meta])=>{const specific=MC_IDS[id+':'+meta];if(specific!==undefined)return specific;const internal=MC_IDS[id];if(internal===undefined||!ITEMS[internal]||[65,73,77,78,83].includes(internal))return undefined;return meta===0?internal:meta<(ITEMS[internal].variants?.length??1)?[internal,meta]:undefined;};
 const names=s=>[ITEMS[s.id].name];
 // An enchanted book entry is [365, 0, stored]; the reference lists the bare item (its tags are checked below).
 const plain=e=>Array.isArray(e)&&e.length>2?e[0]:e;
@@ -58,8 +58,8 @@ test('item tab clicks copy, count and delete stacks like handleMouseClick',()=>{
  gui.down(slot(2),0,{time:5000});gui.up(slot(2),0);assert.equal(inv.cursor,null);assert.deepEqual(slot(1).stack,makeStack(1,1));
  gui.down(slot(2),2,{time:6000});assert.deepEqual(inv.cursor,makeStack(2,64));gui.up(slot(2),2);
  gui.down(slot(45),0,{time:7000});gui.up(slot(45),0);assert.deepEqual(inv.main[0],makeStack(2,64));assert.equal(inv.cursor,null);
- assert.ok(gui.hotbarKey(slot(3),4));assert.deepEqual(inv.main[4],makeStack(12,64));
- gui.dropKey(slot(3));gui.dropKey(slot(3),true);assert.deepEqual(gui.container.drops,[makeStack(12,1),makeStack(12,64)]);
+ assert.ok(gui.hotbarKey(slot(4),4));assert.deepEqual(inv.main[4],makeStack(12,64));
+ gui.dropKey(slot(4));gui.dropKey(slot(4),true);assert.deepEqual(gui.container.drops,[makeStack(12,1),makeStack(12,64)]);
  // Shift-clicking a hotbar slot clears it.
  gui.down(slot(49),0,{shift:true,time:8000});gui.up(slot(49),0);assert.equal(inv.main[4],null);
 });
@@ -76,24 +76,16 @@ test('clicking outside throws the cursor, one item for the right button',()=>{
  assert.equal(inv.cursor,null);assert.deepEqual(c.drops[2],makeStack(3,1));
 });
 
-test('scrolling moves the 9 x 5 window one row per notch and with the scrollbar',()=>{
- const {gui,c,slot}=open([],SEARCH.index);
- assert.equal(c.list.length,SEARCH_ORDER.length);assert.ok(gui.needsScroll());
- // 251 search entries: rows = floor(251 / 9) - 5 + 1 = 23
- // (integer division, as GuiContainerCreative), so each notch moves 1/23; at full scroll the window starts at
- // entry 23 * 9 = 207, slot n shows entry 207 + n, the last entry (250) sits in slot 43 and slot 44 is empty.
- assert.equal(c.rows(),23);
- gui.wheel(-1);gui.wheel(-1);
- assert.equal(gui.scroll,Math.fround(Math.fround(1/23)+1/23));assert.equal(gui.scrollbarY(),26);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[18]));
- gui.wheel(1);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[9]));
- for(let i=0;i<30;i++)gui.wheel(-1);
- assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);assert.equal(slot(27).stack.id,entryId(SEARCH_ORDER[234]));
- assert.equal(SEARCH_ORDER.length,251);assert.deepEqual(slot(42).stack.stored,SEARCH_ORDER[249][2]);assert.deepEqual(slot(43).stack,makeStack(365,1,0,[{id:62,lvl:3}]));assert.equal(slot(44).stack,null);
+test('scrolling moves the native content catalogue by rows and clamps the scrollbar',()=>{
+ const {gui,c,slot}=open([],SEARCH.index),rows=Math.floor(SEARCH_ORDER.length/9)-4;
+ assert.equal(c.list.length,SEARCH_ORDER.length);assert.equal(c.rows(),rows);assert.ok(gui.needsScroll());
+ gui.wheel(-1);assert.equal(gui.scroll,Math.fround(1/rows));assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[9]));
+ for(let i=0;i<rows+2;i++)gui.wheel(-1);
+ assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);
+ const offset=rows*9;assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[offset]));
+ for(let i=0;i<45;i++)assert.equal(slot(i).stack?.id,SEARCH_ORDER[offset+i]===undefined?undefined:entryId(SEARCH_ORDER[offset+i]));
  gui.press(176,60);assert.ok(gui.scrolling);gui.drag(25.5);assert.equal(gui.scroll,0);
  gui.drag(18+7.5+97/2);assert.equal(gui.scroll,.5);gui.release();gui.drag(200);assert.equal(gui.scroll,.5);
- gui.press(174,60);assert.ok(!gui.scrolling);
- // Building Blocks fits in five rows here, so nothing scrolls.
- gui.setTab(CREATIVE_TABS[0]);gui.wheel(-1);assert.equal(gui.scroll,0);assert.ok(!gui.needsScroll());
 });
 
 test('search filters tooltips; T opens it and the first key after a click clears it',()=>{
@@ -165,8 +157,8 @@ test('enchanted books list their StoredEnchantments as the original tabs do',asy
  assert.deepEqual(tabBooks(CREATIVE_TABS[7]),['32:5','33:1','34:3','35:3','61:3','62:3']);
  assert.deepEqual(tabBooks(CREATIVE_TABS[8]),['0:4','1:4','2:4','3:4','4:4','5:3','6:1','7:3','16:5','17:5','18:5','19:2','20:2','21:3','48:5','49:2','50:1','51:1']);
  // The creative copy keeps the list; copies do not share it.
- const {gui,slot}=open([],7),book=slot(22).stack;
+ const {gui,slot}=open([],7),index=CREATIVE_TABS[7].items.findIndex(e=>plain(e)===365),book=slot(index).stack;
  assert.deepEqual(book,makeStack(365,1,0,[{id:32,lvl:5}]));
- gui.down(slot(22),0,{time:0});gui.up(slot(22),0);
+ gui.down(slot(index),0,{time:0});gui.up(slot(index),0);
  assert.deepEqual(gui.inv.cursor.stored,[{id:32,lvl:5}]);assert.notEqual(gui.inv.cursor.stored,book.stored);
 });

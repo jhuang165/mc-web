@@ -1,3 +1,4 @@
+import {populationDrops,populationXp} from './population-content.js';
 import { ICE, WATER, WOOL, RED_FLOWER, SNOW_LAYER } from './world.js';
 import { snowballsFor, iceLeavesWater } from './snow.js';
 import { cropDrops } from './farming.js';
@@ -26,13 +27,13 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
   let drop = harvest ? (m.drop ?? block) : 0,
     count = block === SNOW_LAYER ? snowballsFor(world.getMeta(...p)) : m.count || 1;
   const shearing = ITEMS[tool]?.kind === 'shears' && survival.count(tool) > 0;
-  if (shearing && (block === 5 || block === 39)) { drop = block; count = 1; }
+  if (shearing && (block === 5 || block===71 || block === 39)) { drop = block; count = 1; }
   if (block === 25 && random() < 0.1) { drop = 313; count = 1; }
   const crops = shearing && block === 39 ? null : cropDrops(block, random, world.getMeta(...p));
-  const leaves = block === 5 && harvest && !creative && !shearing
-    ? leafDrops(leafRandom, world.getMeta(...p)).map((d) => ({ ...d, count: 1 }))
+  const leaves = (block === 5||block===71) && harvest && !creative && !shearing
+    ? leafDrops(leafRandom, world.getMeta(...p),block).map((d) => ({ ...d, count: 1 }))
     : null;
-  const drops = leaves ?? crops ?? (drop ? [{ id: drop, count }] : []);
+  const drops = (harvest ? populationDrops(block,world.getMeta(...p),{random,shears:shearing}) : null) ?? leaves ?? crops ?? (drop ? [{ id: drop, count }] : []);
   const furnace = survival.furnaces[key], chest = survival.chests[key], meta = world.getMeta(...p);
 
   if (!world.set(...p, 0)) return false;
@@ -53,9 +54,9 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
     items.dropBlock(drops.map((d) => makeStack(
       d.id,
       d.count,
-      d.damage ?? (d.id === block && (block === WOOL || block === RED_FLOWER || block === 6 || block === 56 || block === 58) ? meta : 0),
+      d.damage ?? (d.id === block && (block === WOOL || block === RED_FLOWER || block === 6 || block === 56 || block === 58 || block === 4 || block === 48 || block===5 || block===71) ? ((block===4||block===5||block===71)?meta&3:block===48?meta&7:meta) : 0),
     )), ...p);
-    if (drop) xpOrbs.spawn(oreExperience(block, random), { x: p[0] + 0.5, y: p[1] + 0.5, z: p[2] + 0.5 });
+    if (drop) xpOrbs.spawn(populationXp(block,random)||oreExperience(block, random), { x: p[0] + 0.5, y: p[1] + 0.5, z: p[2] + 0.5 });
     // BlockMobSpawner.dropBlockAsItemWithChance: experience without an item, when harvested.
     else if (harvest && m.xp) xpOrbs.spawn(m.xp(random), { x: p[0] + 0.5, y: p[1] + 0.5, z: p[2] + 0.5 });
     survival.exhaust(0.025);

@@ -18,7 +18,7 @@ public class PushOutProbe {
   public static void main(String[] args) throws Exception {
     aji.p();
     sun.misc.Unsafe u = MobMoveProbe.unsafe();
-    for (int id : IDS) System.out.println("{\"case\":\"cube\",\"id\":" + id + ",\"normal\":" + aji.e(id).r() + "}");
+    for (int id=0;id<176;id++) System.out.println("{\"case\":\"cube\",\"id\":" + id + ",\"normal\":" + aji.e(id).r() + "}");
 
     Method push = PlayerStepProbe.method(blk.class, "j", double.class, double.class, double.class);
     // Layouts around the cell (64, 0, 64): the centre block at the feet or the head

@@ -13,7 +13,7 @@ const reference = JSON.parse(await readFile(new URL("../public/research/fire-ref
 const f = Math.fround;
 
 // The probe's block ids are 1.7.10's; this build numbers its blocks differently.
-const TO_BUILD = { 0: 0, 1: 3, 2: 1, 3: 2, 5: 7, 9: WATER, 10: LAVA, 11: LAVA, 12: 6, 13: 25, 17: 4, 18: 5, 20: 9, 31: 39, 35: 19, 37: 43, 38: 44, 45: 8, 46: TNT, 47: 21, 50: 20, 51: FIRE, 54: 41, 58: 13 };
+const TO_BUILD = {175:69,162:70,161:71,106:72,99:77,100:78,32:79,127:73,174:80,103:81,44:82, 0: 0, 1: 3, 2: 1, 3: 2, 5: 7, 9: WATER, 10: LAVA, 11: LAVA, 12: 6, 13: 25, 17: 4, 18: 5, 20: 9, 31: 39, 35: 19, 37: 43, 38: 44, 45: 8, 46: TNT, 47: 21, 50: 20, 51: FIRE, 54: 41, 58: 13 };
 const build = (id) => {
   assert.ok(id in TO_BUILD, `unmapped probe block ${id}`);
   return TO_BUILD[id];
@@ -98,8 +98,8 @@ test("the encouragement, flammability and material tables are the original's for
   // every other table entry of the original that burns is a block this build lacks
   const have = new Set(Object.keys(TO_BUILD).map(Number));
   const lacking = reference.table.filter((r) => r[1] > 0 && !have.has(r[0])).map((r) => r[0]);
-  assert.deepEqual(lacking, [53, 85, 106, 125, 126, 134, 135, 136, 161, 162, 170, 171, 173, 175]);
-  assert.deepEqual(Object.keys(FIRE_INFO).map(Number).sort((a, b) => a - b), [4, 5, 7, 19, 21, 39, 43, 44, TNT]);
+  assert.deepEqual(lacking, [53, 85, 125, 126, 134, 135, 136, 170, 171, 173]);
+  assert.deepEqual(Object.keys(FIRE_INFO).map(Number).sort((a, b) => a - b), [4, 5, 7, 19, 21, 39, 43, 44, TNT,69,70,71,72,83,84]);
 });
 
 test("canPlaceBlockAt, onNeighborBlockChange and onBlockAdded match alb", () => {

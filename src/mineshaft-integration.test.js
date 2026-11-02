@@ -21,7 +21,7 @@ import {
 
 await originalBlockMapperReady;
 const worlds = new Map();
-const java = (seed, biome = "java", version) => {
+const java = (seed, biome = "java", version=10) => {
   const key = `${seed}/${biome}/${version}`;
   if (!worlds.has(key)) worlds.set(key, version === undefined ? new World(seed, biome) : new World(seed, biome, version));
   return worlds.get(key);
@@ -36,8 +36,8 @@ const saveRecord = (record, world, live) => JSON.parse(JSON.stringify({ ...recor
 const near = (cart, x, y, z) => Math.abs(cart.x - x) < 1e-9 && Math.abs(cart.posY - y) < 1e-9 && Math.abs(cart.z - z) < 1e-9;
 const cartItems = (cart) => cart.slots.filter(Boolean).length + cart.unmapped.filter(Boolean).length;
 
-test("GEN-05b live: new Java worlds default to generation version 10; legacy landscapes keep 8", () => {
-  assert.equal(java("0").generationVersion, 10);
+test("GEN-05b live: new Java worlds default to generation version 11; legacy landscapes keep 8", () => {
+  assert.equal(new World("0","java").generationVersion,11);
   assert.ok(java("0").generatedStructures);
   assert.equal(new World("0", "meadow").generationVersion, 8);
 });

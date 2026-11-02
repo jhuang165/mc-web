@@ -25,7 +25,7 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 // stops at. Air, torches, crops, tall grass and flowers let rain through; leaves,
 // glass, water, lava and ice do not; a snow layer (Material.snow) does not stop it either.
 // (The probe's block table is in weather-reference.json.)
-export const stopsPrecipitation = (b) => b !== 0 && b !== 20 && b !== SNOW_LAYER && b !== FIRE && b !== 59 && !isPlant(b);
+export const stopsPrecipitation = (b) => b !== 72 && b !== 73 && b !== 0 && b !== 20 && b !== SNOW_LAYER && b !== FIRE && b !== 59 && !isPlant(b);
 // Chunk.getPrecipitationHeight (apx.d): one above the topmost such block, or -1.
 export function precipitationHeight(world, x, z) {
   if (x < 0 || z < 0 || x >= SIZE || z >= SIZE) return -1;

@@ -10,6 +10,7 @@ import { chunkFromNbt } from './chunk-nbt.js';
 import { NBT } from './nbt.js';
 import { ITEMS, burnTime } from './survival.js';
 import { CHEST, CHEST_SLOTS } from './chest.js';
+import { POPULATION_ITEMS } from './population-content.js';
 
 export const LIVE_CHUNKS = SIZE / 16;
 // World.restore and the Import screen's file-size check (main.js).
@@ -38,9 +39,10 @@ export const ORIGINAL_ITEMS = Object.freeze({
   85: FENCE, 66: RAIL, 331: 360, 361: 361, 362: 362, 329: 363, 417: 364, 403: 365,
   // Empty and chest cart items (internal 342 is the lava bucket).
   328: 366, 342: 450,
+  ...POPULATION_ITEMS,
 });
 // Subtype families whose stack damage the browser stores as the same variant index.
-const VARIANT_DAMAGE = new Set([35, 38, 351]);
+const VARIANT_DAMAGE = new Set([35, 38, 351, 3, 6, 12, 17, 18, 24, 44, 97, 159, 161, 162, 175]);
 
 /** Browser stack fields for an original item ID/damage, or null when the build has no such item. */
 export function itemFromOriginal(id, damage = 0) {

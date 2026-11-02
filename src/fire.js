@@ -23,14 +23,14 @@ const f = Math.fround;
 // blocks of this build (internal ids): logs 5/5, leaves 30/60, planks 5/20,
 // wool 30/60, bookshelf 30/20, tall grass and flowers 60/100, TNT 15/100. Other blocks have 0/0.
 // (The probe dumps the whole 256-entry table: fire-reference.json "table".)
-export const FIRE_INFO = { 4: [5, 5], 5: [30, 60], 7: [5, 20], 19: [30, 60], 21: [30, 20], 39: [60, 100], 43: [60, 100], 44: [60, 100], [TNT]: [15, 100] };
+export const FIRE_INFO = {69:[60,100],70:[5,5],71:[30,60],72:[15,100],83:[60,100],84:[60,100], 4: [5, 5], 5: [30, 60], 7: [5, 20], 19: [30, 60], 21: [30, 20], 39: [60, 100], 43: [60, 100], 44: [60, 100], [TNT]: [15, 100] };
 export const encouragement = (b) => FIRE_INFO[b]?.[0] ?? 0;
 export const flammability = (b) => FIRE_INFO[b]?.[1] ?? 0;
 // Material.getCanBurn (awt.h), which BlockStaticLiquid.func_149...(o) reads: wood, cloth,
 // leaves and plants. Logs, leaves, planks, crafting table, wool, bookshelf, chest,
 // tall grass, TNT (Material.tnt); flowers (Material.plants) cannot burn, tall grass
 // (Material.vine) can.
-export const BURNS = new Set([4, 5, 7, 13, 19, 21, 39, 41, TNT]);
+export const BURNS = new Set([70,71,72,77,78,79,83,84,4, 5, 7, 13, 19, 21, 39, 41, TNT]);
 // World.doesBlockHaveSolidTopSurface (ahb.a(ahl, x, y, z)): an opaque normal cube.
 // Leaves, glass, farmland, chests, liquids and plants have none.
 export const solidTop = (b) => normalCube(b);

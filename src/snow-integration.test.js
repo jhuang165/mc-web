@@ -56,9 +56,9 @@ test("creative lists place snow and ice where the original tabs do", () => {
   assert.equal(itemTab(SNOW_LAYER).label, "decorations");
   assert.equal(itemTab(ICE).label, "buildingBlocks");
   const blocks = CREATIVE_TABS[0].items;
-  assert.deepEqual(blocks.slice(blocks.indexOf(ICE) - 1, blocks.indexOf(ICE) + 2), [28, ICE, 23]);
+  assert.deepEqual(blocks.slice(blocks.indexOf(ICE) - 1, blocks.indexOf(ICE) + 2), [64, ICE, 23]);
   // The rail (66) sits between the ladder (65) and the snow layer (78).
-  assert.deepEqual(SEARCH_ORDER.slice(SEARCH_ORDER.indexOf(SNOW_LAYER) - 2, SEARCH_ORDER.indexOf(SNOW_LAYER) + 4), [LADDER, RAIL, SNOW_LAYER, ICE, 23, CACTUS]);
+  assert.deepEqual(SEARCH_ORDER.slice(SEARCH_ORDER.indexOf(SNOW_LAYER) - 2, SEARCH_ORDER.indexOf(SNOW_LAYER) + 4), [RAIL, 64, SNOW_LAYER, ICE, 23, CACTUS]);
 });
 
 test("a dropped item slides farther on ice (drag 0.98 * 0.98) than on stone (0.6 * 0.98)", () => {

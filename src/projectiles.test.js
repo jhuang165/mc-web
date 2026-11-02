@@ -137,7 +137,7 @@ test("block ray bounds agree with the original defaults where the ray box is the
     // The torch's ray box is set in BlockTorch.collisionRayTrace, not by default.
     if (Number(id) === 20) continue;
     // A fence's ray box is its connection bounds (BlockFence.setBlockBoundsBasedOnState), tested below.
-    if (Number(id) === 60) continue;
+    if ([60,69,72,73].includes(Number(id))) continue; // State-dependent bounds; constructor defaults are not ray boxes.
     assert.deepEqual(rayBounds(w, 1, 1, 1, Number(id)).map((v) => Math.fround(v)), b.bounds.map((v) => Math.fround(v)), "block " + id);
   }
   assert.deepEqual(rayBounds(stage(), 1, 1, 1, 20), [0.4000000059604645, 0, 0.4000000059604645, 0.6000000238418579, 0.6000000238418579, 0.6000000238418579]);

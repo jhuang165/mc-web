@@ -1,3 +1,4 @@
+import {itemFromOriginal} from '../src/region-import.js';
 // Conservative native stack conversion for offline recipe audits/replays.
 // Undefined means unsupported; null is an actual empty slot/result.
 import { MC_IDS } from './inventory-replay.mjs';
@@ -9,12 +10,8 @@ import { isDeepStrictEqual } from 'node:util';
 export function browserStack(s) {
   if (s == null) return null;
   if (s.tag != null) return undefined;
-  let id, damage = 0;
-  if ([35, 38, 351].includes(s.id)) { id = MC_IDS[s.id]; damage = s.damage; }
-  else id = MC_IDS[`${s.id}:${s.damage}`] ?? (s.damage === 0 ? MC_IDS[s.id] : undefined);
-  if (id == null || !ITEMS[id]) return undefined;
-  if (damage >= (ITEMS[id].variants?.length ?? 1)) return undefined;
-  return makeStack(id, s.count, damage);
+  const mapped=itemFromOriginal(s.id,s.damage);
+  return mapped&&!mapped.clamped?makeStack(mapped.id,s.count,mapped.damage):undefined;
 }
 
 export function auditRecipes(reference) {
