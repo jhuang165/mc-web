@@ -35,6 +35,8 @@ Internal blocks are appended after the previous end of `BLOCKS`; nothing was ren
 | 363 | 329 | Saddle | 1 |
 | 364 | 417 | Iron Horse Armor | 1 |
 | 365 | 403 | Enchanted Book | 1 |
+| 366 | 328 | Minecart | 1 |
+| 450 | 342 | Minecart with Chest | 1 |
 
 `ORIGINAL_ITEMS` (src/region-import.js) and `MC_IDS` (tools/inventory-replay.mjs) carry the same entries.
 

@@ -1,6 +1,6 @@
 # Empty and chest minecarts
 
-Target: Minecraft Java 1.7.10 `EntityMinecartChest` (`xm`), `EntityMinecartContainer` (`xp`), `EntityMinecart` (`xl`), `RenderMinecart` (`boi`) and `ModelMinecart` (`bhq`). This covers empty rideable carts and the chest carts that mineshaft corridors place on their rails. It is not full minecart parity.
+Target: Minecraft Java 1.7.10 `EntityMinecartEmpty` (`xs`), `ItemMinecart` (`adj`), `EntityMinecartChest` (`xm`), `EntityMinecartContainer` (`xp`), `EntityMinecart` (`xl`), `RenderMinecart` (`boi`) and `ModelMinecart` (`bhq`). This covers empty rideable carts and the chest carts that mineshaft corridors place on their rails. It is not full minecart parity.
 
 ## Placing and riding (VEHICLE-01)
 
@@ -102,5 +102,5 @@ Additional port tests cover JSON actions, inventory use, crafting, mounted reloa
 - Powered rail redstone propagation and detector rail output. The meta bits are read, but nothing powers or unpowers rails.
 - Client interpolation (`setPositionAndRotation2`) and the 0.5 shadow.
 - Carts have no blocking box for player movement, natively; the shared cart-push path remains adapted to the browser tick.
-- `inventory.js copyStack` drops `stored` and `name` when a stack moves through the container or becomes an item entity.
+- `inventory.js copyStack` preserves stored enchantments but still drops custom item names when a stack moves through the container or becomes an item entity.
 - Unmapped original loot still has no live dropped-item representation.
