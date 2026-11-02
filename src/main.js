@@ -88,6 +88,8 @@ import { movePlayer } from "./player-physics.js";
 import { tickPlayerEnvironment, finishPlayerMovement } from "./player-environment.js";
 import { tickEntitySimulation } from "./entity-simulation.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
+import { tickLivingSimulation, drainMobEvents } from "./living-simulation.js";
+import { tickPlayerMining } from "./player-mining.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -1312,25 +1314,22 @@ function trampleFarmland(entity, distance) {
   }
 }
 function applyFarmUpdates(updates){const chunks=new Set();for(const[x,y,z]of updates)chunks.add([Math.floor(x/16)*16,Math.floor(z/16)*16].join(','));for(const key of chunks)scene.buildChunk(...key.split(',').map(Number));}
-function handleEntityEvents() {
-  for (const event of mobs.drain()) {
-    if (event.sound)
-      sounds.play(event.sound, { position: event.position, volume: event.volume ?? 0.6, pitch: event.pitch });
-    // EntityLivingBase.onDeathUpdate spawns the orbs in every game mode; Creative players collect them too.
-    if(event.xp)xpOrbs.spawn(event.xp,event.position);
-    // EntityCreeper.func_146077_cc: world.createExplosion(creeper, x, y, z, radius, mobGriefing).
-    if (event.explode) explodeAt(event.explode.x, event.explode.y, event.explode.z, event.explode.size, { exploder: event.explode.source, attacker: event.explode.source });
-    if (event.drop) items.dropMob(event.drop, event.count, event.position, event.damage, event);
-    // EntityAIEatGrass: Level event 2001 (block break sound and particles) for the
-    // tall grass or the grass block that was eaten; the world edit is already made.
-    if (event.eatGrass) {
-      const { x, y, z, block } = event.eatGrass;
+// Shared synchronous event routing, also used immediately after player attacks/interaction.
+function mobEventHooks() {
+  return {
+    sound: event => sounds.play(event.sound, { position: event.position, volume: event.volume, pitch: event.pitch }),
+    explode: explodeAt,
+    // EntityAIEatGrass: the edit already happened; level event 2001 updates its presentation.
+    eatGrass: ({ x, y, z, block }) => {
       scene.updateBlock(x, z, y);
       sounds.play("dig." + blockSound(block), { position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 }, volume: 1, pitch: 0.8 });
       scene.particles.destroyBlock(world, x, y, z, block);
       saved = false;
-    }
-  }
+    },
+  };
+}
+function handleEntityEvents() {
+  drainMobEvents({ mobs, xpOrbs, items }, mobEventHooks());
 }
 // EntityPlayer.updateItemUse for food: n "iconcrack" crumbs and random.eat from Entity.rand.
 const playerEye = () => ({ x: position.x, y: position.y + Math.fround(PHYSICS.eye) + Math.fround(0.12), z: position.z, yaw: Math.fround(180 - (yaw * 180) / Math.PI), pitch: Math.fround((-pitch * 180) / Math.PI) });
@@ -1789,46 +1788,23 @@ function reportBrokenTool() {
 // EffectRenderer.addBlockHitEffects on the face being hit every tick the button is held on
 // a block, during the hit delay and in Creative too; a block broken this tick is air by then.
 function tickMining() {
-  tickMiningProgress();
-  if (screen !== "playing" || !mineHeld || !target || aimedEntity || !world.get(...target.block)) return;
-  const [bx, by, bz] = target.block, [ax, ay, az] = target.adjacent ?? target.block,
-    side = ay < by ? 0 : ay > by ? 1 : az < bz ? 2 : az > bz ? 3 : ax < bx ? 4 : 5;
-  scene.particles.hitBlock(world, bx, by, bz, side);
-}
-function tickMiningProgress() {
-  if (screen !== "playing") return;
-  if (mineCooldown > 0) {
-    mineCooldown--;
-    return;
-  }
-  if (aimedEntity) {mining=null;return;}
-  if (!mining && mineHeld && target) edit(false);
-  if (!mining) return;
-  if (
-    !target ||
-    !target.block.every((v, i) => v === mining.block[i]) ||
-    world.get(...mining.block) !== mining.type ||
-    heldId() !== mining.tool ||
-    (!mining.auto && !mineHeld)
-  ) {
-    mining = null;
-    return;
-  }
-  const under = clientEyeInWater();
-  animation.swing();
-  if (survival.time % 4 === 0) sounds.play("dig." + blockSound(mining.type), { volume: 0.25, pitch: 0.5 });
-  mining.progress = Math.fround(mining.progress + survival.mining(
-    mining.type,
-    heldId(),
-    under,
-    grounded,
-  ).progress);
-  if (mining.progress >= 1) {
-    const p = [...mining.block];
-    mining = null;
-    breakBlock(p);
-    mineCooldown = 5;
-  }
+  const state = { playing: screen === "playing", mineHeld, target, aimedEntity, mining,
+    cooldown: mineCooldown, survival, heldTool: heldId(), grounded };
+  tickPlayerMining(state, {
+    getBlock: (x, y, z) => world.get(x, y, z),
+    eyeInWater: clientEyeInWater,
+    edit: place => {
+      edit(place);
+      // edit can start mining or break instantly; keep its mutations in this same tick.
+      return { mining, cooldown: mineCooldown };
+    },
+    swing: () => animation.swing(),
+    digSound: type => sounds.play("dig." + blockSound(type), { volume: 0.25, pitch: 0.5 }),
+    breakBlock,
+    hitParticles: (x, y, z, side) => scene.particles.hitBlock(world, x, y, z, side),
+  });
+  mining = state.mining;
+  mineCooldown = state.cooldown;
 }
 function movementTick(controls) {
   const state = { world, position, previous, velocity, motion, survival, yaw, eating,
@@ -1847,24 +1823,16 @@ function movementTick(controls) {
     { farming: applyFarmUpdates, fluids: changes => scene.updateBlocks(changes), fire: changes => scene.updateBlocks(changes) });
   scene.setFurnaces(survival.furnaces);
   tickChests();
-  inhabited.tick(survival.time);
-  mobs.tick(position, survival, heldId());
-  // EntityXPOrb.onUpdate in every game mode (orbs aim at the feet + 1.62 of the server player),
-  // then EntityPlayer.onLivingUpdate's pickup for a living player, as for items.
-  playerTicks++;
-  xpOrbs.tick(world, position);
-  if (survival.health > 0) {
-    const oldLevel = experience.level, n = xpOrbs.collect(position, PHYSICS.width, PHYSICS.height);
-    if (n) {
-      experience.add(n);
-      const volume = experience.levelUp(oldLevel, playerTicks);
-      if (volume) sounds.play("random.levelup", { volume, pitch: 1 });
-      renderVitals();
-      saved = false;
-    }
-  }
-  for (const s of xpOrbs.sounds.splice(0)) sounds.play(s.name, { volume: s.volume, pitch: s.pitch, position: s.name === "random.orb" ? undefined : { x: s.x, y: s.y, z: s.z } });
-  handleEntityEvents();
+  const living = { world, position, survival, inhabited, mobs, xpOrbs, experience, items,
+    playerTicks, width: PHYSICS.width, height: PHYSICS.height };
+  playerTicks = tickLivingSimulation(living, {
+    ...mobEventHooks(),
+    heldItem: heldId,
+    levelUpSound: volume => sounds.play("random.levelup", { volume, pitch: 1 }),
+    experienceCollected: () => { renderVitals(); saved = false; },
+    orbSound: s => sounds.play(s.name, { volume: s.volume, pitch: s.pitch,
+      position: s.name === "random.orb" ? undefined : { x: s.x, y: s.y, z: s.z } }),
+  });
   // Entity.moveEntity: the vertical part of the move counts only with a ladder 0.2 below the feet.
   const onLadderStep = !flying && countsVertical(world, position.x, position.y, position.z);
   const distance = Math.hypot(
