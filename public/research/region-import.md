@@ -1,0 +1,49 @@
+# Import a Java 1.7.10 region area (WORLD-03g)
+
+`src/region-import.js` converts up to 8×8 chunks (128×128 blocks, Y 0–255) from one or more 1.7.10 `.mca` files into a new Blockworld export. The existing **Import** screen accepts it unchanged. It extends the single-chunk [terrain preview](chunk-preview.md) and composes [region containers](region-file.md), [chunk NBT](chunk-nbt.md) and the block registry. It is a one-way conversion. It does not open a Java world in place or write anything back, and it is not full save migration.
+
+```sh
+# Generator area of the source seed (recommended): surrounding and untouched terrain match.
+node tools/import-java-region.mjs --seed -4172144997902289642 --out spawn.blockworld.json world/region/r.-1.0.mca world/region/r.-1.1.mca
+# Any area of up to 8x8 chunks, north-west corner at chunk (-3, 30):
+node tools/import-java-region.mjs --area -3,30,4,4 --out base.blockworld.json world/region/r.-1.0.mca
+```
+
+Options: `--landscape java|javaAmplified|javaLargeBiomes` (match level.dat `generatorName`), `--destination cx,cz`, `--missing generated|air`, `--survival`, `--name`, `--no-sky`, and `--report report.json`. Inputs open read-only, are capped at 64 MiB each, and must have canonical `r.<x>.<z>.mca` names. Outputs must be new files. The JSON report goes to stdout. A rejected conversion still prints its report when one exists.
+
+## How the export is built
+
+The browser has no Java save loader. An imported version-9 Java world is its seed's generated 128×128 area plus a list of per-cell `edits` (`World.restore`). The converter generates the base world for `--seed`, maps every source cell through `fromOriginal`, and records only the cells that differ.
+
+- **Placement.** Source chunk `(area.chunkX + i, area.chunkZ + j)` becomes live chunk `(destination.chunkX + i, destination.chunkZ + j)`. Local cell offsets and Y are kept. Region, slot and embedded `xPos`/`zPos` are all checked. Negative chunks use Java signed shifts. Tile entities and dropped items move by the same block offset. The default destination is the generator position when the area lies inside the base world's generated chunks; otherwise the area is centred.
+- **Edit budget.** `World.restore` accepts 100,000 edits, and the Import screen accepts files of at most 8 MiB. When the base seed is the source world's seed and the area is its generator area, only player edits and population need edits: ores, trees and structures. Terrain shape, caves and ravines regenerate identically. An unrelated base seed differs at nearly every surface and cave cell. With an unrelated seed, expect only a few chunks to fit; check the report's `edits`. A full 8×8 area does not fit. Over-budget conversions fail and report the edit count. They are never truncated.
+- **Missing chunks** (an empty slot or a region file that was not supplied) are listed with the reason. `generated` (default) keeps the base world's terrain there. `air` clears the full column to void, which costs edits.
+- **Light** is not carried. The browser recomputes sky and block light from cells on launch, as it does for every import. Source `SkyLight`/`BlockLight` arrays are only validated.
+- **Biomes** are not carried: the export format has no biome field, and the generator supplies biomes. The report compares source `Biomes` bytes with the base world's: `compared`, `matching`, `differing`, `unset` (255).
+
+## Contents
+
+- **Blocks** use `fromOriginal`. Unsupported states become air; the report lists them by `id:meta` as `unmapped` (registered) or `unregistered` (unknown, including Add-nibble high IDs). Approximations list the browser target and any runtime state the export cannot hold: fluid `flowing`, farmland `moisture`, furnace `facing`/`lit`. Chest facing is not counted as an approximation because each chest cell gets a chest record with its facing.
+- **Chests** (`Chest` tile entities on a chest cell) carry 27 slots (`Slot & 255`, like TileEntityChest). **Furnaces** carry three slots (signed Slot), `BurnTime` and `CookTime`. The fuel's burn time is recomputed, matching TileEntityFurnace.readFromNBT. These records go in `player.chests`/`player.furnaces`, which `legacyPlayer` and `Survival` already load. Omitting `player.slots` keeps the default Creative hotbar.
+- **Items** map through the same original-ID table as the item catalogue (`tools/inventory-replay.mjs` `MC_IDS`, checked equal in the tests). Durability is kept (clamped to the maximum). Wool, flower and dye damage are kept as variants. Other non-zero damage values are unsupported. Item NBT tags (enchantments, names) are stripped and counted. Counts above the browser stack limit are clamped. Non-positive counts and unmapped items are lost by `id:damage`.
+- **Entities**: only dropped items (`Item`) convert, to saved drops. Pos, Motion, Age (≤5,999) and PickupDelay (≤40, the browser cap) are kept, up to the 512-drop load limit. All other entities, mounts (`Riding`) and drops outside the area are counted by ID. Mobs need entity factories that do not exist yet.
+- **Other tile entities** (signs, spawners, chests without a chest cell, entries outside their chunk) and **scheduled ticks** (`TileTicks`) are counted as lost.
+
+The default mode is Creative. The start position is above the area's centre column.
+
+## Evidence
+
+`src/region-import.test.js` writes regions with the JS NBT/region writers, then re-imports every export through the Import screen's acceptance path: the envelope checks, `World.restore`, `importedRuntime`, `Survival` and `ItemEntities.load`. Cases:
+
+- a 2×2 area across four negative/positive regions, with a missing region and an unused region;
+- chest, furnace and item-entity conversion, plus lost signs, mobs, riders, bad slots, tags and an off-chunk tile;
+- unmapped, unregistered high-ID and approximated states;
+- a full 8×8 generator area rebuilt from its own seed in exactly two edits, with all 16,384 biome bytes matching; the same chunks under a misaligned base exceed the budget;
+- three original AnvilChunkLoader payloads from [chunk-nbt-reference.json](chunk-nbt-reference.json), whose cell inventory equals [region inspection](region-inspection.md);
+- malformed names, duplicates, oversized areas and slot/payload coordinate mismatches.
+
+No real Java save with tile entities is checked in. Chest/furnace NBT layouts were read from the pinned JAR's `aow`/`apg` readFromNBT.
+
+## Open
+
+The browser still lacks streaming beyond 128×128, a compact cell payload (the 100,000-edit limit dominates), biome and light import, mob/tile-entity factories, item NBT, pending ticks, level.dat/player data, and Java write-back.
