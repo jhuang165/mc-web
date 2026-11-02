@@ -72,7 +72,7 @@ import { Fluids, eyeInWater } from "./fluids.js";
 import { Fire } from "./fire.js";
 import { DIFFICULTY_NAMES, difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.js";
 import { isInvisible } from "./mob-effects.js";
-import { explodeBlocks, explosionImpact, explodeTnt, primeTnt, tickTnt, TNT_POWER, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
+import { explodeBlocks, explosionImpact, explodeTnt, primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { TntRenderer } from "./tnt-renderer.js";
 import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
 import { HUNGER, POISON } from "./status-effects.js";
@@ -86,6 +86,8 @@ import { tickBlockSystems } from "./world-tick.js";
 import { captureMovementInput } from "./player-input.js";
 import { movePlayer } from "./player-physics.js";
 import { tickPlayerEnvironment, finishPlayerMovement } from "./player-environment.js";
+import { tickEntitySimulation } from "./entity-simulation.js";
+import { tickPlayerItemUse } from "./player-item-use.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -1250,47 +1252,39 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     landingDust: (x, y, z, count) => scene.particles.landingDust(world, x, y, z, count, [position.x, position.y + PHYSICS.eye, position.z]),
   });
   ({ fallDistance, landedFall } = movement);
-  items.tick(world, (st) => survival.inventory.maxStack(st));
-  tickPrimedTnt();
-  if (survival.health > 0) {
-    const picked = items.collect(position, PHYSICS.width, PHYSICS.height, (st) => survival.inventory.add(st));
-    for (const { item } of picked) {
+  tickEntitySimulation({ world, items, primed, projectiles, arrows, mobs, survival, position,
+    width: PHYSICS.width, height: PHYSICS.height }, {
+    maxStack: st => survival.inventory.maxStack(st),
+    smoke: (x, y, z) => scene.explosionParticles.spawn("smoke", x, y, z),
+    explodeTnt: explodeAt,
+    itemPicked: ({ item }) => {
       sounds.play("random.pop", { volume: 0.2, pitch: ((Math.random() - Math.random()) * 0.7 + 1) * 2 });
       scene.drops.pickup(item, position);
       if (item.death && !items.items.some((e) => e.death)) toast("Recovered your dropped items.");
-    }
-    if (picked.length) {
-      renderHotbar();
-      saved = false;
-    }
-  }
-  projectiles.tick(world, mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), (e) => e !== "player" && thrownHit(mobs, e, position));
-  // EntityEgg.onImpact: hatched chicks join the mob list.
-  for (const h of projectiles.drain()) {
-    if (h.sound) sounds.play(h.sound, { position: h.position, volume: h.volume, pitch: h.pitch });
-    else if (mobs) for (let i = 0; i < h.chicks; i++) mobs.hatch(h.x, h.y, h.z, h.yaw);
-  }
-  if (mobs) handleEntityEvents();
-  tickArrows();
+    },
+    itemsCollected: () => { renderHotbar(); saved = false; },
+    projectileTargets: () => mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height),
+    projectileHit: e => e !== "player" && thrownHit(mobs, e, position),
+    // EntityEgg.onImpact: hatched chicks join the mob list before mob events drain.
+    projectileEvent: h => {
+      if (h.sound) sounds.play(h.sound, { position: h.position, volume: h.volume, pitch: h.pitch });
+      else if (mobs) for (let i = 0; i < h.chicks; i++) mobs.hatch(h.x, h.y, h.z, h.yaw);
+    },
+    handleEntityEvents,
+    arrowOptions: () => ({ targets: arrowTargets(mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), survival.creative),
+      mobs, survival, player: position, igniteTnt: (x, y, z, placer) => {
+        lightTnt(x, y, z, placer);
+        if (world.set(x, y, z, 0)) scene.updateBlocks([[x, y, z, TNT, 0]]);
+      } }),
+    arrowsCollected: () => { renderHotbar(); saved = false; },
+    flushArrows,
+  });
   scene.setDrops(items.items);
   scene.setProjectiles(projectiles.balls, projectiles.particles);
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();
   if (survival.health <= 0) die();
-}
-// EntityArrow.onUpdate for every arrow, then the player's pickup of stuck ones
-// (EntityArrow.onCollideWithPlayer) and the sounds they made.
-function tickArrows() {
-  arrows.tick(world, { targets: arrowTargets(mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), survival.creative), mobs, survival, player: position, igniteTnt: (x, y, z, placer) => {
-    lightTnt(x, y, z, placer);
-    if (world.set(x, y, z, 0)) scene.updateBlocks([[x, y, z, TNT, 0]]);
-  } });
-  if (survival.health > 0 && arrows.collect(entityBox(position, PHYSICS.width, PHYSICS.height), survival)) {
-    renderHotbar();
-    saved = false;
-  }
-  flushArrows();
 }
 // The sounds the arrows made (the bow's, the hits', the pickup's) and the arrows to draw.
 function flushArrows() {
@@ -1661,19 +1655,6 @@ function lightTnt(x, y, z, placer) {
   sounds.play("game.tnt.primed", { volume: 1, pitch: 1, position: { x: e.x, y: e.y + TNT_Y_OFFSET, z: e.z } });
   saved = false;
 }
-// EntityTNTPrimed.onUpdate for every primed TNT; a spent fuse removes it and explodes with
-// strength 4, the TNT as exploder and its placer as the damage source's attacker.
-function tickPrimedTnt() {
-  if (!primed.length) return;
-  for (const e of [...primed]) {
-    const at = tickTnt(world, e, (x, y, z) => {
-      scene.explosionParticles.spawn("smoke", x, y, z);
-    });
-    if (!at) continue;
-    primed.splice(primed.indexOf(e), 1);
-    explodeAt(at.x, at.y, at.z, TNT_POWER, { exploder: e, attacker: e.placer });
-  }
-}
 // World.newExplosion(exploder, x, y, z, size, false, true) on the integrated server:
 // Explosion.doExplosionA (explosion.js explosionBlocks for the rays; the entity half here),
 // then doExplosionB(true). DamageSource.setExplosionSource names the attacker: the creeper
@@ -1910,38 +1891,14 @@ function movementTick(controls) {
     });
   }
   playHurtSounds();
-  if (eating) {
-    if (heldId() !== eating.id)
-      eating = null;
-    else if (eating.bow) {
-      // EntityPlayer.onUpdate counts the use down; the draw length is the ticks since.
-      eating.ticks++;
-    } else {
-      // EntityPlayer.onUpdate: updateItemUse(5) while the count is 25 or less and a
-      // multiple of 4, then onItemUseFinish's updateItemUse(16) when it reaches 0.
-      const count = eating.ticks;
-      if (!eating.drink && count <= 25 && count % 4 === 0) eatEffects(eating.id, 5);
-      eating.ticks--;
-      if (!eating.drink && eating.ticks <= 0) eatEffects(eating.id, 16);
-      if (eating.drink) {
-        // EntityPlayer.onUpdate: sound while the count is 25 or less and a multiple of 4
-        // (count 32 down to 1), then ItemBucketMilk.onEaten when it reaches 0.
-        const count = eating.ticks + 1;
-        if (count <= 25 && count % 4 === 0) sounds.play("random.drink", { volume: 0.5, pitch: Math.random() * 0.1 + 0.9 });
-        if (eating.ticks <= 0) {
-          sounds.play("random.drink", { volume: 0.5, pitch: Math.random() * 0.1 + 0.9 });
-          if (finishDrinking(survival)) { renderHotbar(); saved = false; }
-          eating = null;
-        }
-      } else if (eating.ticks <= 0) {
-        if (survival.eat(eating.id)) {
-          sounds.play("random.burp", { volume: 0.5 });
-          renderHotbar();
-        }
-        eating = null;
-      }
-    }
-  }
+  eating = tickPlayerItemUse(eating, heldId(), survival, {
+    foodEffects: eatEffects,
+    finishDrinking,
+    sound: (name, options) => sounds.play(name, options),
+    renderHotbar,
+    markUnsaved: () => { saved = false; },
+    random: Math.random,
+  }).use;
   if (survival.health <= 0) die();
   // EntityRenderer.updateFovModifierHand: once a tick, toward getFOVMultiplier (flight, sprint, bow).
   easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, bow: eating?.bow ? bowFov(eating.ticks) : 1 }));
