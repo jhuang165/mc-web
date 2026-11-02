@@ -93,7 +93,7 @@ export class PlayerBody {
     this.renderYawOffset = f(this.rotationYaw - d);
     if (d * d > 2500) this.renderYawOffset = f(this.renderYawOffset + f(d * f(0.2)));
   }
-  tick({ position, previous, yaw, pitch, swinging = false }) {
+  tick({ position, previous, yaw, pitch, swinging = false, riding = false }) {
     this.prevRenderYawOffset = this.renderYawOffset;
     this.prevRotationYawHead = this.rotationYawHead;
     this.prevRotationPitch = this.rotationPitch;
@@ -103,7 +103,7 @@ export class PlayerBody {
     this.rotationPitch = javaPitch(pitch);
     // The old-AI branch of onLivingUpdate sets rotationYawHead = rotationYaw.
     this.rotationYawHead = this.rotationYaw;
-    const dx = f(position.x - previous.x), dz = f(position.z - previous.z), d2 = f(f(dx * dx) + f(dz * dz));
+    const dx = f(position.x - previous.x), dz = f(position.z - previous.z), d2 = riding ? 0 : f(f(dx * dx) + f(dz * dz));
     let target = this.renderYawOffset;
     if (d2 > f(0.0025000002)) target = f(f(Math.atan2(dz, dx) * DEG) - 90);
     if (swinging) target = this.rotationYaw;
@@ -114,7 +114,7 @@ export class PlayerBody {
     // Tail of onLivingUpdate (sv.e(FF)): limb swing follows the horizontal speed.
     this.prevLimbSwingAmount = this.limbSwingAmount;
     const speed = Math.min(f(Math.sqrt(d2) * 4), 1);
-    this.limbSwingAmount = f(this.limbSwingAmount + f(f(speed - this.limbSwingAmount) * f(0.4)));
+    this.limbSwingAmount = riding ? 0 : f(this.limbSwingAmount + f(f(speed - this.limbSwingAmount) * f(0.4)));
     this.limbSwing = f(this.limbSwing + this.limbSwingAmount);
     this.age++;
   }
@@ -178,8 +178,8 @@ export const PART_NAMES = Object.keys(BIPED);
 // ModelBiped.setRotationAngles (bhm.a). `headYaw` is relative to the body, in
 // degrees; `swing` is onGround (swing progress 0..1); `heldRight`/`heldLeft` are
 // heldItemRight (m) / heldItemLeft (l). Returns each part's rotation point
-// (model pixels) and angles (radians). Riding and the bow pose are not ported.
-export function bipedPose({ limbSwing = 0, limbSwingAmount = 0, age = 0, headYaw = 0, headPitch = 0, swing = 0, sneak = false, heldRight = 0, heldLeft = 0 } = {}) {
+// (model pixels) and angles (radians). The riding branch is included; the bow pose is not.
+export function bipedPose({ limbSwing = 0, limbSwingAmount = 0, age = 0, headYaw = 0, headPitch = 0, swing = 0, sneak = false, riding = false, heldRight = 0, heldLeft = 0 } = {}) {
   const p = {};
   for (const n of PART_NAMES) p[n] = { point: [...BIPED[n].point], rot: [0, 0, 0] };
   const ls = limbSwing * 0.6662, lsa = limbSwingAmount, S = 57.295776;
@@ -189,6 +189,13 @@ export function bipedPose({ limbSwing = 0, limbSwingAmount = 0, age = 0, headYaw
   p.leftArm.rot[0] = mhCos(ls) * 2 * lsa * 0.5;
   p.rightLeg.rot[0] = mhCos(ls) * 1.4 * lsa;
   p.leftLeg.rot[0] = mhCos(ls + Math.PI) * 1.4 * lsa;
+  if (riding) {
+    p.rightArm.rot[0] -= Math.fround(Math.PI / 5);
+    p.leftArm.rot[0] -= Math.fround(Math.PI / 5);
+    p.rightLeg.rot[0] = p.leftLeg.rot[0] = -Math.fround(Math.fround(Math.PI) * Math.fround(2 / 5));
+    p.rightLeg.rot[1] = Math.fround(Math.PI / 10);
+    p.leftLeg.rot[1] = -Math.fround(Math.PI / 10);
+  }
   if (heldLeft) p.leftArm.rot[0] = p.leftArm.rot[0] * 0.5 - 0.31415927 * heldLeft;
   if (heldRight) p.rightArm.rot[0] = p.rightArm.rot[0] * 0.5 - 0.31415927 * heldRight;
   // Attack swing (onGround is 0 at rest, which leaves these at their defaults).
@@ -462,7 +469,7 @@ export class PlayerRenderer {
   }
   // `body` is a PlayerBody; `swing` is the swing progress (0 at rest); `armor`
   // is inventory.armor (boots first); `held` the held item id.
-  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, hurt = false, sneak = false } = {}) {
+  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, hurt = false, sneak = false, riding = false } = {}) {
     this.root.visible = visible;
     if (!visible) return;
     const pose = mobPose(body, partial);
@@ -472,7 +479,7 @@ export class PlayerRenderer {
     this.syncHeld(held, heldDamage);
     const parts = bipedPose({
       limbSwing: pose.limbSwing, limbSwingAmount: pose.limbSwingAmount, age: pose.age,
-      headYaw: pose.headYaw, headPitch: pose.headPitch, swing, sneak, heldRight: held ? 1 : 0,
+      headYaw: pose.headYaw, headPitch: pose.headPitch, swing, sneak, riding, heldRight: held ? 1 : 0,
     });
     for (const name of PART_NAMES) {
       const { point, rot } = parts[name], pivot = this.pivots[name];

@@ -17,6 +17,7 @@ import { collisionBounds, normalCube, CACTUS, WEB } from "./world.js";
 import { blockCollisions, setInWeb } from "./block-collisions.js";
 import { JavaRandom } from "./java-random.js";
 import { mhSin, mhCos } from "./lighting.js";
+import { solidTop } from "./rails.js";
 import { StackArray, ChestContainer } from "./inventory.js";
 import { ITEMS } from "./survival.js";
 import { itemFromOriginal, ORIGINAL_ITEMS } from "./region-import.js";
@@ -112,7 +113,7 @@ export class Minecarts {
   // { x, y, z, items: [{ slot, id, damage, count, stored? }] } with original item ids.
   spawnChest(record, { seed } = {}) {
     const cart = {
-      id: this.nextId++, x: 0, posY: 0, z: 0, y: 0, bb: null, vx: 0, vy: 0, vz: 0,
+      id: this.nextId++, type: record.type === 0 ? 0 : 1, rider: null, x: 0, posY: 0, z: 0, y: 0, bb: null, vx: 0, vy: 0, vz: 0,
       yaw: 0, pitch: 0, prevYaw: 0, prevPitch: 0, onGround: false, fallDistance: 0, inWeb: false, fire: 0,
       damage: 0, rolling: 0, rollingDir: 1, reverse: false, dead: false, customName: record.customName ?? null,
       slots: Array(CART_SLOTS).fill(null), unmapped: Array(CART_SLOTS).fill(null),
@@ -123,6 +124,42 @@ export class Minecarts {
     for (const it of record.items ?? []) this.put(cart, it.slot, it);
     this.carts.push(cart);
     return cart;
+  }
+  spawnEmpty(record, options) { return this.spawnChest({ ...record, type: 0, items: [] }, options); }
+  // EntityMinecart.getMountedYOffset, Entity.updateRiderPosition. Browser riders use feet,
+  // so the rider's getYOffset cancels its own setPosition yOffset (1.62F on the client).
+  getMountedYOffset() { return -f(0.3); }
+  updateRiderPosition(cart) {
+    if (!cart.rider) return;
+    // EntityPlayer.getYOffset is yOffset - 0.5F (not just yOffset).
+    Object.assign(cart.rider, { x: cart.x, y: cart.posY + this.getMountedYOffset() - 0.5, z: cart.z });
+  }
+  mount(cart, rider, { sneaking = false } = {}) {
+    if (cart.dead || cart.type !== 0 || sneaking || cart.rider || rider.vehicle) return false;
+    cart.rider = rider; rider.vehicle = cart;
+    this.updateRiderPosition(cart);
+    return true;
+  }
+  // EntityLivingBase.dismountEntity (server player mountEntity(null)). Its asymmetric
+  // dx=-1..1, dz=-1..0 search and Java double-to-int casts are intentional.
+  dismount(world, rider) {
+    const cart = rider.vehicle;
+    if (!cart) return false;
+    let x = cart.x, y = cart.bb[1] + CART_HEIGHT, z = cart.z;
+    const width = rider.width ?? f(0.6), height = rider.height ?? f(1.8), half = width / 2;
+    const clear = (dx, dz) => {
+      const box = [rider.x - half + dx, rider.y + 1, rider.z - half + dz, rider.x + half + dx, rider.y + 1 + height, rider.z + half + dz];
+      return this.boxes(world, cart, box, []).length === 0;
+    };
+    search: for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz < 1; dz++) {
+      if ((!dx && !dz) || !clear(dx, dz)) continue;
+      const bx = Math.trunc(rider.x + dx), by = Math.trunc(rider.y), bz = Math.trunc(rider.z + dz);
+      if (solidTop(world, bx, by, bz)) { x = rider.x + dx; y = rider.y + 1; z = rider.z + dz; break search; }
+      if (solidTop(world, bx, by - 1, bz) || world.get(bx, by - 1, bz) === W.WATER) { x = rider.x + dx; y = rider.y + 1; z = rider.z + dz; }
+    }
+    Object.assign(rider, { x, y, z, vehicle: null, fallDistance: 0 });
+    cart.rider = null;
+    return true;
   }
   // setInventorySlotContents with an original stack: counts above 64 are clipped.
   put(cart, slot, it) {
@@ -198,7 +235,7 @@ export class Minecarts {
             const [a, c, d, g, h, i] = collisionBounds(world, bx, by, bz);
             if (bx + g > b[0] && bx + a < b[3] && by + h > b[1] && by + c < b[4] && bz + i > b[2] && bz + d < b[5]) out.push([bx + a, by + c, bz + d, bx + g, by + h, bz + i]);
           }
-    for (const o of others) if (o !== cart && !o.dead && o.bb && intersects(o.bb, b)) out.push(o.bb);
+    for (const o of others) if (o !== cart && o !== cart.rider && !o.dead && o.bb && intersects(o.bb, b)) out.push(o.bb);
     return out;
   }
   // Entity.moveEntity (sa.d) with stepHeight 0: web slowdown, y/x/z offsets, flags, fall state,
@@ -223,7 +260,7 @@ export class Minecarts {
     cart.y = bb[1];
     cart.onGround = ody !== dy && ody < 0;
     // updateFallState: the cart's fall() only passes it to a rider.
-    if (cart.onGround) cart.fallDistance = 0;
+    if (cart.onGround) { if (cart.fallDistance > 0) cart.rider?.fall?.(cart.fallDistance); cart.fallDistance = 0; }
     else if (dy < 0) cart.fallDistance = f(cart.fallDistance - dy);
     if (odx !== dx) cart.vx = 0;
     if (ody !== dy) cart.vy = 0;
@@ -266,7 +303,7 @@ export class Minecarts {
   }
   // EntityMinecartContainer.applyDrag: 0.98 + 0.001 per missing comparator level.
   drag(cart) {
-    const k = f(f(0.98) + f(f(15 - this.comparator(cart)) * f(0.001)));
+    const k = cart.type === 0 ? (cart.rider ? f(0.997) : f(0.96)) : f(f(0.98) + f(f(15 - this.comparator(cart)) * f(0.001)));
     cart.vx *= k; cart.vy *= 0; cart.vz *= k;
   }
   // func_145821_a: one tick on the rail block (bx, by, bz).
@@ -291,6 +328,12 @@ export class Minecarts {
     if (speed > 2) speed = 2;
     cart.vx = (speed * ex) / len;
     cart.vz = (speed * ez) / len;
+    if (cart.rider?.moveForward > 0 && cart.vx * cart.vx + cart.vz * cart.vz < 0.01) {
+      const rad = f(f(f(cart.rider.yaw) * f(Math.PI)) / 180);
+      cart.vx += -Math.sin(rad) * 0.1;
+      cart.vz += Math.cos(rad) * 0.1;
+      brake = false;
+    }
     if (brake) {
       if (Math.sqrt(cart.vx * cart.vx + cart.vz * cart.vz) < 0.03) { cart.vx *= 0; cart.vy *= 0; cart.vz *= 0; }
       else { cart.vx *= 0.5; cart.vy *= 0; cart.vz *= 0.5; }
@@ -304,7 +347,8 @@ export class Minecarts {
     cart.x = ax + dx * t;
     cart.z = az + dz * t;
     this.setPosition(cart, cart.x, cart.posY + Y_OFFSET, cart.z);
-    const mx = Math.max(-d, Math.min(d, cart.vx)), mz = Math.max(-d, Math.min(d, cart.vz));
+    const ridden = cart.rider ? 0.75 : 1;
+    const mx = Math.max(-d, Math.min(d, cart.vx * ridden)), mz = Math.max(-d, Math.min(d, cart.vz * ridden));
     this.move(world, cart, mx, 0, mz, others);
     if (m[0][1] !== 0 && Math.floor(cart.x) - bx === m[0][0] && Math.floor(cart.z) - bz === m[0][2]) this.setPosition(cart, cart.x, cart.posY + m[0][1], cart.z);
     else if (m[1][1] !== 0 && Math.floor(cart.x) - bx === m[1][0] && Math.floor(cart.z) - bz === m[1][2]) this.setPosition(cart, cart.x, cart.posY + m[1][1], cart.z);
@@ -349,6 +393,16 @@ export class Minecarts {
     const kind = this.railKind(world, bx, by, bz);
     if (kind) this.onRail(world, cart, bx, by, bz, kind, world.getMeta?.(bx, by, bz) ?? 0, others);
     else this.offRail(world, cart, others);
+    // Browser adaptation: there are no streamed neighbours beyond the finite viewport.
+    // Stop at its boundary rather than letting a rider disappear into unloaded air.
+    if (world.inside) {
+      const x = Math.max(HALF, Math.min(W.SIZE - HALF, cart.x)), z = Math.max(HALF, Math.min(W.SIZE - HALF, cart.z));
+      if (x !== cart.x || z !== cart.z) {
+        if (x !== cart.x) cart.vx = 0;
+        if (z !== cart.z) cart.vz = 0;
+        this.setPosition(cart, x, cart.posY, z);
+      }
+    }
     this.touchBlocks(world, cart);
     cart.pitch = 0;
     const mx = cart.px - cart.x, mz = cart.pz - cart.z;
@@ -362,6 +416,7 @@ export class Minecarts {
     cart.pitch = f(cart.pitch % 360);
     const near = [cart.bb[0] - f(0.2), cart.bb[1], cart.bb[2] - f(0.2), cart.bb[3] + f(0.2), cart.bb[4], cart.bb[5] + f(0.2)];
     for (const o of this.carts) if (o !== cart && !o.dead && intersects(o.bb, near)) this.collide(o, cart);
+    if (cart.rider?.dead) { cart.rider.vehicle = null; cart.rider = null; }
   }
   tick(world, { entities = [] } = {}) {
     for (const cart of [...this.carts]) if (!cart.dead) this.tickCart(world, cart, entities);
@@ -372,7 +427,7 @@ export class Minecarts {
   // this for each pushable entity within 0.2) is pushed: returns the velocity [x, z] to add to it.
   // A chest cart never picks up a mob (only the empty cart, type 0, does).
   collide(cart, other) {
-    if (cart.dead) return [0, 0];
+    if (cart.dead || other === cart.rider) return [0, 0];
     let dx = other.x - cart.x, dz = other.z - cart.z, d = dx * dx + dz * dz;
     if (!(d >= 9.999999747378752e-5)) return [0, 0];
     d = f(Math.sqrt(d));
@@ -467,13 +522,13 @@ export class Minecarts {
     cart.dead = true;
     this.dropOriginal(cart, MINECART_ITEM, cart.customName);
     for (let n = 0; n < spilled.length * 3; n++) cart.random.nextFloat();
-    this.dropOriginal(cart, CHEST_ITEM);
+    if (cart.type !== 0) this.dropOriginal(cart, CHEST_ITEM);
   }
 
   // EntityMinecartContainer.interactFirst -> displayGUIChest: the cart's 27 slots as an IInventory
   // titled "Minecart" (container.minecart) or its custom name. Null once the cart is dead.
   interact(cart) {
-    if (cart.dead) return null;
+    if (cart.dead || cart.type === 0) return null;
     // A stack placed over a slot still holding an unmapped original item moves that item to the
     // first free slot (it stays hidden; it is not a native case, since the native slot holds it).
     const inv = new StackArray(cart.slots, () => {
@@ -519,6 +574,7 @@ export class Minecarts {
       Invulnerable: [1, 0], PortalCooldown: [3, 0], Items: [9, 10, items],
     };
     if (cart.customName) out.CustomName = [8, cart.customName];
+    if (cart.type === 0) delete out.Items;
     return out;
   }
   // Browser save: the fields EntityMinecartChest writes (damage, rolling and the reverse flag are
@@ -528,6 +584,7 @@ export class Minecarts {
     return {
       version: 1,
       carts: this.carts.filter((c) => !c.dead).map((c) => ({
+        type: c.type, rider: c.rider?.player === true || undefined,
         x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire, onGround: c.onGround,
         customName: c.customName || undefined,
         items: c.slots.flatMap((s, slot) => {
@@ -544,11 +601,12 @@ export class Minecarts {
     for (const c of Array.isArray(json?.carts) ? json.carts.slice(0, 1024) : []) {
       if (!ok(c?.x, c?.y, c?.z)) continue;
       const items = (Array.isArray(c.items) ? c.items : []).filter((it) => Number.isInteger(it?.slot) && Number.isInteger(it?.id) && Number.isInteger(it?.count) && (it.damage === undefined || Number.isInteger(it.damage)) && (it.stored === undefined || (Array.isArray(it.stored) && it.stored.every((e) => Number.isInteger(e?.id) && Number.isInteger(e?.lvl)))));
-      const cart = m.spawnChest({ x: c.x, y: c.y, z: c.z, items, customName: typeof c.customName === "string" && c.customName ? c.customName : null });
-      const v = Array.isArray(c.motion) && ok(...c.motion) ? c.motion : [0, 0, 0];
+      const cart = m.spawnChest({ type: c.type, x: c.x, y: c.y, z: c.z, items: c.type === 0 ? [] : items, customName: typeof c.customName === "string" && c.customName ? c.customName : null });
+      cart.restorePlayer = c.type === 0 && c.rider === true;
+      const v = Array.isArray(c.motion) && c.motion.length === 3 && ok(...c.motion) ? c.motion : [0, 0, 0];
       // Entity.readFromNBT: motion components above 10 in magnitude are dropped to 0.
       [cart.vx, cart.vy, cart.vz] = v.map((x) => (Math.abs(x) > 10 ? 0 : x));
-      if (Array.isArray(c.rotation) && ok(...c.rotation)) [cart.yaw, cart.pitch] = c.rotation.map(f);
+      if (Array.isArray(c.rotation) && c.rotation.length === 2 && ok(...c.rotation)) [cart.yaw, cart.pitch] = c.rotation.map(f);
       cart.prevYaw = cart.yaw; cart.prevPitch = cart.pitch;
       if (ok(c.fallDistance)) cart.fallDistance = f(c.fallDistance);
       if (Number.isInteger(c.fire)) cart.fire = c.fire;

@@ -64,7 +64,7 @@ Internal blocks are appended after the previous end of `BLOCKS`; nothing was ren
   - replayed against 80 probe scenarios
 - **Mining and drop:** hardness 0.7; ItemPickaxe lists the rail as effective.
 - **Crafting and Creative:** 6 iron plus 1 stick make 16 rails; listed in the Transportation tab.
-- Minecarts do not use rails here.
+- Empty and chest minecarts travel on these rails; see [minecarts](minecarts.md).
 
 ### Monster spawner (`src/spawner-block.js`)
 

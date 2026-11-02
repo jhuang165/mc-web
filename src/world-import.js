@@ -24,6 +24,7 @@ const SANITIZE = {
   minecarts: (v) => v && typeof v === "object" && Array.isArray(v.carts)
     ? { version: 1, carts: v.carts.filter((c) => c && typeof c === "object" && [c.x, c.y, c.z].every(finite)).slice(0, 1024).map((c) => ({
       x: c.x, y: c.y, z: c.z,
+      ...(c.type === 0 ? { type: 0, rider: c.rider === true } : c.type === 1 ? { type: 1 } : {}),
       ...(Array.isArray(c.motion) && c.motion.length === 3 && c.motion.every(finite) ? { motion: [...c.motion] } : {}),
       ...(Array.isArray(c.rotation) && c.rotation.length === 2 && c.rotation.every(finite) ? { rotation: [...c.rotation] } : {}),
       ...(finite(c.fallDistance) ? { fallDistance: c.fallDistance } : {}),

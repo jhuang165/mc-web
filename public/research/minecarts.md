@@ -1,6 +1,30 @@
-# Chest minecarts (mineshaft carts)
+# Empty and chest minecarts
 
-Target: Minecraft Java 1.7.10 `EntityMinecartChest` (`xm`), `EntityMinecartContainer` (`xp`), `EntityMinecart` (`xl`), `RenderMinecart` (`boi`) and `ModelMinecart` (`bhq`). This covers the chest carts that mineshaft corridors place on their rails. It is not full minecart parity.
+Target: Minecraft Java 1.7.10 `EntityMinecartChest` (`xm`), `EntityMinecartContainer` (`xp`), `EntityMinecart` (`xl`), `RenderMinecart` (`boi`) and `ModelMinecart` (`bhq`). This covers empty rideable carts and the chest carts that mineshaft corridors place on their rails. It is not full minecart parity.
+
+## Placing and riding (VEHICLE-01)
+
+`src/vehicle-simulation.js` owns player vehicle decisions behind SIM-01 actions. Use a Minecart (internal 366, original 328) on the **rail cell** to place an empty type-0 cart. ItemMinecart widens the float additions `x + 0.5F`, `y + 0.5F`, `z + 0.5F`; slopes get no extra placement offset. Non-rails reject placement. Survival consumes one item; Creative preserves it through the controller rule. Five iron ingots craft the empty cart. A chest above a cart crafts Minecart with Chest (internal 450, original 342); that item places type 1 and opens its 27-slot container. Chest carts, including mineshaft loot carts, cannot be ridden in 1.7.10.
+
+Right-click an unoccupied empty cart to mount; sneaking refuses mounting, and another player cannot replace its rider. Press sneak to dismount. The native `EntityMinecartEmpty.interactFirst` itself returns success for another player on an occupied cart while leaving that player unmounted; the browser also consumes that interaction. Sneak refusal is the requested input contract: the native cart method has no sneak test, while native player `updateRidden` immediately dismounts a sneaking rider.
+
+- `getMountedYOffset` is `-0.30000001192092896`; player `getYOffset` is **yOffset − 0.5F**. In the browser's feet coordinates the seat is cart posY − 0.30000001192092896 − 0.5, and the existing camera adds the player eye offset. Sneak eye-drop, walking bob, jumping, flight and the player's movement physics are suppressed while mounted. Looking around, hotbar selection, item use and attacks continue. The cart does not forcibly rotate the player's view; the native `Entity.updateRidden` yaw accumulator does not apply a player yaw turn in this version. F5 bends/spreads the legs using ModelBiped's riding branch, including armor.
+- Forward input greater than zero adds `(-sin(yaw × PI_float / 180), cos(...)) × 0.1` **only when motionX² + motionZ² < 0.01**. Input magnitude does not scale the push. A push also disables the golden-rail brake for that tick. Strafe/backwards do not propel the cart. The rail move uses motion × 0.75 before the ±0.4 clamp. Empty-cart drag is `(double)0.996999979019165F` with a rider, `(double)0.9599999785423279F` without one; chest drag stays inventory-dependent.
+- The rider's own box is excluded from its cart's movement and pushes. Other carts retain the native cart collision path. Rider fall distance resets while seated, but the cart's `Entity.fall` forwards its accumulated landing distance to the rider; Survival applies the existing fall-damage/hurt-resistance path. Environmental, mob and projectile damage still targets the seated player; death/breaking clears the mount.
+- Dismount runs the native server `EntityLivingBase.dismountEntity`: x offsets −1..1 and z offsets −1..0, Java truncation for support-cell coordinates, a clear box one block up, solid-top/water fallback and finally the cart's box top. This asymmetric search is intentional.
+- **Finite-world adaptation:** this app has no chunk streaming. Live carts stop at the 128×128 viewport edge, and dismount positions are bounded to the playable area. This is not native chunk-unload parity. Native off-edge fixtures use an unbounded map double and replay separately from this guard.
+
+Mount, cart attack/use and sneak-dismount requests are captured as JSON-safe `player-vehicle` records and applied synchronously; stale cart/item targets never become block clicks. Placement uses the existing captured `player-edit` block target. `main.js` supplies state and presentation adapters. This is a vehicle boundary, not a whole-world authoritative replay.
+
+### Save/export/import
+
+Each cart now carries `type` (0 empty, 1 chest); omitted types from 0.24.0 saves still mean chest carts. A cart carrying the local player writes `rider: true`. Local reload and export/import restore the player **mounted on that saved empty cart**, recompute seat position, and clear transient player velocity/fall distance. At most the first valid rider marker mounts; chest markers are ignored and dead players remain dismounted. Malformed motion/rotation values are rejected. Broken carts remain absent. This is a browser extension, not native player `Riding` NBT or Java world-file compatibility.
+
+### Native evidence
+
+`tools/verify-vehicles.mjs` compiles `tools/probes/VehicleProbe.java` against the SHA-1-pinned JAR and writes [vehicle-reference.json](vehicle-reference.json), with unchanged-class SHA-256 hashes. Its 38 records include 11 travel fixtures / 449 ticks, occupied mounting and offsets, Survival/Creative empty-cart break drops, plus 24 empty/chest item placement cases on air, stone and all four native rail families (flat/sloped). Travel includes straight forward/idle/back input, curves, slopes, ridden cart collisions, fall forwarding, void removal and dismount fallbacks. `src/vehicle-simulation.test.js` replays every recorded numeric state exactly after restoring Java float values. Full player onUpdate/health and integrated native WorldServer ticks are not executed; fall forwarding is recorded by a rider hook. The chosen heading fixtures replay exactly; arbitrary-angle Java/JavaScript sin/cos may differ by one ulp (observed for an experimental −90° forward push), so bit-exact transcendental agreement for all headings is not claimed. Item-drop constructor random motion remains excluded as in the existing 34 chest cases, which continue passing.
+
+Additional port tests cover JSON actions, inventory use, crafting, mounted reload/import, damage/death, finite edges and the F5 pose. Browser verification is recorded in the release handoff.
 
 ## What is ported (`src/minecarts.js`)
 
@@ -73,12 +97,10 @@ Target: Minecraft Java 1.7.10 `EntityMinecartChest` (`xm`), `EntityMinecartConta
 
 ## Gaps
 
-- Riding, mob pickup by empty carts, and furnace, TNT, hopper, spawner and command carts.
+- Mob pickup by empty carts, and furnace, TNT, hopper, spawner and command carts.
 - Hoppers pulling from carts, and the comparator output.
 - Powered rail redstone propagation and detector rail output. The meta bits are read, but nothing powers or unpowers rails.
-- Rail placement and shape logic (`BlockRailBase$Rail`).
-- The cart item and placement.
 - Client interpolation (`setPositionAndRotation2`) and the 0.5 shadow.
-- The player's own collision with the cart box: main.js has to treat carts as obstacles and call `pushEntity`.
+- Carts have no blocking box for player movement, natively; the shared cart-push path remains adapted to the browser tick.
 - `inventory.js copyStack` drops `stored` and `name` when a stack moves through the container or becomes an item entity.
-- 328 (minecart) and several loot items have no browser item yet, so they drop as unmapped records.
+- Unmapped original loot still has no live dropped-item representation.

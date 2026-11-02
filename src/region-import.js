@@ -36,8 +36,8 @@ export const ORIGINAL_ITEMS = Object.freeze({
   // Mineshaft blocks and loot: fence, rail, redstone, pumpkin/melon seeds, saddle, iron horse armor
   // and the enchanted book (its StoredEnchantments are not read from imported chests yet).
   85: FENCE, 66: RAIL, 331: 360, 361: 361, 362: 362, 329: 363, 417: 364, 403: 365,
-  // Items.minecart (a broken chest minecart's drop); inert in this build.
-  328: 366,
+  // Empty and chest cart items (internal 342 is the lava bucket).
+  328: 366, 342: 450,
 });
 // Subtype families whose stack damage the browser stores as the same variant index.
 const VARIANT_DAMAGE = new Set([35, 38, 351]);

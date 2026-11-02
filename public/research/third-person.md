@@ -69,7 +69,7 @@ The item hangs off the right arm after its rotation: `translate(-0.0625, 0.4375,
 
 ## Differences
 
-- No riding, bow or block poses; no cape, ears, pumpkin helmet or enchantment glint; no dyed leather.
+- Riding uses ModelBiped arm/leg angles and follows the cart seat (see [minecarts](minecarts.md)); no bow or block poses; no cape, ears, pumpkin helmet or enchantment glint; no dyed leather.
 - The death roll is not drawn on the player model.
 - Held items use a simplified item mesh, not `ItemRenderer` and `RenderBlocks.renderBlockAsItem`; torches and other sprite blocks draw as flat sprites.
 - The view is not saved. There is no F1 debug camera.

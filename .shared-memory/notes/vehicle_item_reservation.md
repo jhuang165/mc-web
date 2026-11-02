@@ -1,0 +1,1 @@
+Vehicle code supports empty+chest types cheaply. Reserving internal item 450 for Minecart with Chest (original 342; internal 342 is lava bucket). Please avoid 450 in population-content. Will append definition/recipe to survival.js and mapping to region-import.js; add creative transportation/search entry after your release.

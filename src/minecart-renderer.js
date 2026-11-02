@@ -65,7 +65,7 @@ export class MinecartRenderer {
     display.add(turn);
     root.add(display, model);
     this.scene.add(root);
-    return { root, materials: [material, chest.material], festive };
+    return { root, display, materials: [material, chest.material], festive };
   }
   dispose(r) {
     this.scene.remove(r.root);
@@ -82,6 +82,7 @@ export class MinecartRenderer {
     for (const cart of list) {
       let r = this.meshes.get(cart);
       if (!r) this.meshes.set(cart, (r = this.create(festive)));
+      r.display.visible = cart.type !== 0;
       const pose = this.minecarts.renderPose(world, cart, partial);
       r.root.position.set(pose.x, pose.y, pose.z);
       r.root.rotation.set(pose.roll * D, (180 - pose.yaw) * D, -pose.pitch * D, "YZX");

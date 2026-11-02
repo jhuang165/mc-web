@@ -16,6 +16,8 @@ export const attenuationDistance = (volume) => (Math.fround(volume) > 1 ? Math.f
 export class SoundBank {
   constructor(options, listener) {
     this.options = options;
+    // Local browser verification can silence this tab without touching saved options.
+    this.tabSilent = !!import.meta.env?.DEV && new URLSearchParams(globalThis.location?.search ?? '').has('silent');
     this.listener = listener;
     this.cache = new Map();
     this.active = new Map();
@@ -36,6 +38,7 @@ export class SoundBank {
       });
   }
   unlock() {
+    if (this.tabSilent) return;
     try {
       this.context ??= new AudioContext();
       this.context.resume().catch(() => {});
@@ -91,6 +94,7 @@ export class SoundBank {
   // Master level: SoundManager.playSound skips everything at master volume 0 and the sound system
   // applies it as master gain. Category volume: getNormalizedVolume, which skips a 0 result.
   master() {
+    if (this.tabSilent) return 0;
     return soundLevel(this.options().soundLevels, "master");
   }
   async play(event, { volume = 1, pitch = 1, position = null } = {}) {

@@ -1,6 +1,7 @@
 import { applyPlayerEdit } from './player-edit-simulation.js';
 import { copyBucketTarget } from './buckets-simulation.js';
 import { releaseHeldBow } from './player-throw-simulation.js';
+import { placeHeldMinecart } from './vehicle-simulation.js';
 
 // Version 2 adds the held bucket's own captured eye-ray trace (`bucket`, null otherwise).
 const VERSION = 2;
@@ -99,6 +100,10 @@ export function dispatchPlayerAction(state, action, hooks = {}) {
   // caller snapshots from live inventory before invoking it; never take the
   // tool from the captured action record.
   state.heldTool = currentHeldTool(state);
+  if (captured.place && !aimedEntity && captured.target && state.minecarts?.railKind(state.world, ...captured.target.block)) {
+    const placed = placeHeldMinecart(state, captured, hooks);
+    if (placed.handled) return placed;
+  }
   const { apply = applyPlayerEdit, ...editHooks } = hooks;
   // Coordinates are copied during normalization and this call stays synchronous:
   // recorded input never becomes a delayed action queue.

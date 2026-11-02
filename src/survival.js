@@ -89,9 +89,9 @@ ITEMS[361]={id:361,name:"Pumpkin seeds",texture:"seeds_pumpkin",stack:64,color:"
 ITEMS[362]={id:362,name:"Melon seeds",texture:"seeds_melon",stack:64,color:"#3a2a17",glyph:"·"};
 ITEMS[363]={id:363,name:"Saddle",texture:"saddle",stack:1,color:"#8a5a2b",glyph:"▰"};
 ITEMS[364]={id:364,name:"Iron horse armor",texture:"iron_horse_armor",stack:1,color:"#c8c8c8",glyph:"▣"};
-// Items.minecart (original 328): ItemMinecart's stack of 1. Inert here (no cart placement); it
-// exists so a broken chest minecart's own drop (EntityMinecart.killMinecart) is not lost.
-ITEMS[366]={id:366,name:"Minecart",texture:"minecart_normal",stack:1,color:"#8a8a8a",glyph:"\u25ad"};
+// ItemMinecart (original 328/342); placement and riding are in vehicle-simulation.js.
+ITEMS[366]={id:366,name:"Minecart",texture:"minecart_normal",stack:1,minecartType:0,color:"#8a8a8a",glyph:"\u25ad"};
+ITEMS[450]={id:450,name:"Minecart with Chest",texture:"minecart_chest",stack:1,minecartType:1,color:"#a0742f",glyph:"\u25ad"};
 // ItemEnchantedBook: stack 1; `stored` on the stack is its StoredEnchantments list.
 ITEMS[ENCHANTED_BOOK_ITEM]={id:ENCHANTED_BOOK_ITEM,name:"Enchanted book",texture:"book_enchanted",stack:1,storesEnchantments:true,color:"#a04fbf",glyph:"▰"};
 // Item.gunpowder (original 289, this build's 330): a plain item, Materials tab.
@@ -303,8 +303,9 @@ recipe("ladder", "Ladder", ["S S", "SSS", "S S"], { S: 300 }, LADDER, 3);
 // CraftingManager: 6 sticks make 2 fences; 6 iron ingots around a stick make 16 rails.
 recipe("fence", "Fence", ["###", "###"], { "#": 300 }, FENCE, 2);
 recipe("rail", "Rail", ["X X", "X#X", "X X"], { X: 302, "#": 300 }, RAIL, 16);
-// CraftingManager: "# #", "###" iron ingots make a minecart (inert here; it is not placed on rails yet).
+// CraftingManager: five iron ingots make a minecart; a chest above it makes a chest cart.
 recipe("minecart", "Minecart", ["X X", "XXX"], { X: 302 }, 366);
+recipe("chest-minecart", "Minecart with Chest", ["C", "M"], { C: 41, M: 366 }, 450);
 // CraftingManager: "X#X", "#X#", "X#X" with gunpowder (X) and sand (#) makes one TNT.
 recipe("tnt", "TNT", ["X#X", "#X#", "X#X"], { X: 330, "#": 6 }, TNT);
 recipe("table", "Crafting table", ["PP", "PP"], { P: 7 }, 13);

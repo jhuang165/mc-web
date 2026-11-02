@@ -63,15 +63,17 @@ export const playerBox = ({ x, y, z }, width, height) => mobBox(x, y, z, width, 
  * Returns the drops of this tick.
  */
 export function tickMinecartSimulation(state, hooks = {}) {
-  const { world, minecarts, mobs, position, velocity, width, height, alive = true } = state;
+  const { world, minecarts, mobs, position, velocity, width, height, alive = true, rider = null } = state;
   if (!minecarts?.carts.length) return [];
   const living = (mobs?.entities ?? []).filter((e) => e.health > 0 || (e.death ?? 0) < 20);
   const sized = (e) => { const [w, h] = mobs.size(e); return mobBox(e.x, e.y, e.z, w, h); };
   const pBox = playerBox(position, width, height);
-  const blockers = [...(alive ? [{ bb: pBox }] : []), ...living.map((e) => ({ bb: sized(e) }))];
+  // Keep rider identity: its own cart excludes it from collision boxes and pushes.
+  const player = rider ? Object.assign(rider, { x: position.x, y: position.y, z: position.z, bb: pBox }) : { ...position, bb: pBox };
+  const blockers = [...(alive ? [player] : []), ...living.map((e) => ({ bb: sized(e) }))];
   minecarts.tick(world, { entities: blockers });
   if (alive) {
-    const [vx, vz] = minecarts.pushEntity(position, pBox);
+    const [vx, vz] = minecarts.pushEntity(player, pBox);
     velocity.x += vx;
     velocity.z += vz;
   }
@@ -125,10 +127,11 @@ export function spawnerBurst(x, y, z, random, particle) {
  * collision border, the eye ray meets within `reach` and before `wallDistance`.
  * `dir` must be a unit vector. Returns { cart, distance } or null.
  */
-export function pickMinecart(minecarts, origin, dir, reach, wallDistance = reach) {
+export function pickMinecart(minecarts, origin, dir, reach, wallDistance = reach, ignoredCart = null) {
   let best = null;
   const limit = Math.min(reach, wallDistance);
   for (const cart of minecarts?.pickable() ?? []) {
+    if (cart === ignoredCart) continue;
     const b = cart.bb, lo = [b[0] - BORDER, b[1] - BORDER, b[2] - BORDER], hi = [b[3] + BORDER, b[4] + BORDER, b[5] + BORDER];
     const o = [origin.x, origin.y, origin.z], d = [dir.x, dir.y, dir.z];
     let near = 0, far = limit, inside = true;
