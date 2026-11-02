@@ -15,6 +15,8 @@ Node 20.19+ and a browser with WebGL 2 are required. Build with `npm run build`;
 
 ## Current implementation
 
+Version 0.23.4 opens the void: in Creative you can break the bedrock floor and fall out of the world, which kills you below y −64 as in 1.7.10 (mobs too); respawn keeps your game mode.
+
 Version 0.23.3 fixes fall damage: as in 1.7.10, a fall has to be more than 3 blocks to hurt (a jump off a 2-block ledge no longer does), because the landing move itself no longer counts. Suffocation, starvation and void deaths now post the original chat message, the hurt sound plays only for hits that start a new hurt window, and void damage passes spawn protection. Options gain Invert Mouse, the cinematic camera and the nine original sound-category sliders, and looking up or down stops at ±90°. The block-metadata audit now classifies all but 468 of the 2,736 raw values from the original classes.
 
 Version **0.23.0** makes the Java generation ports playable: Create New World offers **Java Overworld**, **Java Amplified** and **Java Large Biomes**, with native 1.7.10 biome layers, terrain surfaces, caves and ravines in a finite **128 × 128 × 256** area. Java worlds default to Creative because trees, ores, decoration and structures are still to come. Existing worlds and the legacy landscape choices keep their terrain and 64-block height. Native probes and runtime persistence checks are documented in [generation](public/research/generation.md).

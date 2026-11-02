@@ -259,8 +259,8 @@ export class World {
     if (found) this.lastChunk = found;
     return found;
   }
+  // World.getBlock: below y 0 (and above the top) is air, so a hole in the floor opens onto the void.
   get(x, y, z) {
-    if (y < 0) return 11;
     if (!this.inside(x, y, z)) return 0;
     return this.chunkAt(x >> 4, z >> 4).blocks[cellIndex(x, y, z, this.height)];
   }
@@ -301,7 +301,6 @@ export class World {
   put(x, y, z, b, meta = 0, track = true) {
     if (
       !this.inside(x, y, z) ||
-      y === 0 ||
       !Number.isInteger(b) ||
       b < 0 ||
       b >= BLOCKS.length ||
@@ -435,7 +434,8 @@ export class World {
       for (let radius=0;radius<61;radius++) for(let dx=-radius;dx<=radius;dx++) for(const dz of [-radius,radius]) {
         const x=64+dx,z=64+dz;if(x<3||z<3||x>=SIZE-3||z>=SIZE-3)continue;
         const y=this.surface(x,z);if(y+2>=this.height)continue;
-        if(this.get(x,y,z)===0&&this.get(x,y+1,z)===0&&this.get(x,y-1,z)!==11)return {x:x+0.5,y:y+0.01,z:z+0.5};
+        // A column opened onto the void has no ground (surface() falls back to 1), so it is skipped.
+        if(this.get(x,y,z)===0&&this.get(x,y+1,z)===0&&this.solid(x,y-1,z)&&this.get(x,y-1,z)!==11)return {x:x+0.5,y:y+0.01,z:z+0.5};
       }
       // Ocean-only viewports start above the water, rather than inside it or in stone.
       return {x:64.5,y:Math.max(this.seaLevel+1,this.surface(64,64))+0.01,z:64.5};

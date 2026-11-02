@@ -299,3 +299,23 @@ test("a mob falls with gravity 0.08 and 0.98 drag, takes ceil(distance - 3) dama
   const c = moveEntity(stepWorld(2), { x: 64, y: 0, z: 1, vx: 0, vy: 0, vz: 0, onGround: true, fallDistance: 0 }, 0.9, 0.9, 0, 0, 1);
   assert.equal(c, 0);
 });
+test("mobs survive below y 0 and take outOfWorld 4 under y -64, through the hurt window", () => {
+  const empty = { ...flat, solid: () => false, get: () => 0 };
+  const w = new EntityWorld(empty, [{ id: "mob-1", type: "zombie", x: 64, y: -10, z: 64, health: 20 }]), e = w.entities[0];
+  w.isDaytime = () => false;
+  const player = { x: 64, y: -100, z: 80 }, survival = new Survival();
+  w.tick(player, survival);
+  assert.equal(e.health, 20, "falling below the floor alone does no harm");
+  let firstHit = null;
+  for (let t = 1; t < 200 && e.health > 0; t++) {
+    w.tick(player, survival);
+    if (firstHit === null && e.health < 20) {
+      firstHit = t;
+      assert.ok(e.y < -64);
+      assert.equal(e.health, 16);
+    }
+  }
+  assert.equal(e.health, 0);
+  // Five hits of 4, one per 10-tick hurt window.
+  assert.ok(e.y < -64);
+});

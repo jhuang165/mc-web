@@ -814,7 +814,7 @@ function launch(record) {
     save();
     scene.setTime(survival.time);
     scene.camera.position.copy(position);scene.camera.position.y+=PHYSICS.eye;scene.camera.rotation.set(pitch,yaw,0,"YXZ");
-    if (survival.health <= 0 && !survival.creative) die();
+    if (survival.health <= 0) die();
     else {
       requestLock();
       toast(
@@ -828,7 +828,7 @@ function launch(record) {
   }
 }
 function resume() {
-  if (survival.health <= 0 && !survival.creative) {
+  if (survival.health <= 0) {
     screen = "playing";
     die();
     return;
@@ -1188,7 +1188,7 @@ function die() {
   const deathButtons=[$('#respawn'),$('#death-home')];for(const button of deathButtons)button.disabled=true;setTimeout(()=>{if(screen==='dead')for(const button of deathButtons)button.disabled=false;},1000);
   $("#respawn").onclick = () => {
     const time = survival.time;
-    survival = new Survival({ time, slots: [], furnaces: survival.furnaces, chests: survival.chests }, "survival");
+    survival = new Survival({ time, slots: [], furnaces: survival.furnaces, chests: survival.chests }, survival.mode);
     survival.protection = 60;
     updateDifficulty();
     experience=new Experience();
@@ -1331,7 +1331,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();
-  if (survival.health <= 0 && !survival.creative) die();
+  if (survival.health <= 0) die();
 }
 // EntityArrow.onUpdate for every arrow, then the player's pickup of stuck ones
 // (EntityArrow.onCollideWithPlayer) and the sounds they made.
@@ -1687,8 +1687,8 @@ function edit(place = false) {
         return;
       }
     }
-    // Creative breaks bedrock (Building Blocks lists it), except the world floor.
-    if (block === 11 && (!survival.creative || target.block[1] === 0)) return;
+    // Creative breaks bedrock (Building Blocks lists it), the floor at y 0 included.
+    if (block === 11 && !survival.creative) return;
     if (survival.creative) {
       if(item?.kind==='sword')return;
       breakBlock(target.block, true);
@@ -1798,7 +1798,7 @@ function breakBlock(p, creative = false) {
     key = p.join(","),
     m = MATERIALS[block] || {},
     tool = heldId();
-  if (!block || (block === 11 && (!creative || p[1] === 0))) return false;
+  if (!block || (block === 11 && !creative)) return false;
   const harvest = creative || survival.mining(block, tool).harvest;
   let drop = harvest ? (m.drop ?? block) : 0,
     count = block === SNOW_LAYER ? snowballsFor(world.getMeta(...p)) : m.count || 1;
@@ -2060,7 +2060,9 @@ function movementTick() {
     flying = false;
     toast("Back to walking");
   }
-  if (position.y < 1 || position.y > world.height + 40) {
+  // Below the floor is the void (Survival.tick's outOfWorld damage under y -64); only a player far
+  // above the finite world is put back at spawn.
+  if (position.y > world.height + 40) {
     position.copy(new THREE.Vector3(...Object.values(world.spawn())));
     previous.copy(position);
     velocity.set(0, 0, 0);
@@ -2153,7 +2155,7 @@ function movementTick() {
       }
     }
   }
-  if (survival.health <= 0 && !survival.creative) die();
+  if (survival.health <= 0) die();
   // EntityRenderer.updateFovModifierHand: once a tick, toward getFOVMultiplier (flight, sprint, bow).
   easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, bow: eating?.bow ? bowFov(eating.ticks) : 1 }));
   tickMining();

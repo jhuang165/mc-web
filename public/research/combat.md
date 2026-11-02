@@ -68,6 +68,6 @@
 
 - Looting is still not ported, because this build has no enchantments.
 - Death messages for falls (`death.fell.*`), mob and projectile kills, and the `.player` forms need the combat tracker's attacker and fall history.
-- The void cannot be reached yet (the safety teleport below y 1, lava below y 0), and Creative void deaths open no death screen.
+- 0.23.4 makes the void reachable: `World.get` returns air below y 0 (World.getBlock), a Creative player can break the y 0 bedrock, the low spawn teleport is gone, Creative players die there too (death screen, "Player fell out of the world", respawn keeps the mode) and mobs take the same outOfWorld 4 under y −64 instead of dying at y 0. Survival players still cannot break bedrock, so they reach the void only through an existing hole.
 - The client hurt timing (`setPlayerSPHealth`) was read from bytecode but not executed, and the chat line uses wall-clock time instead of the 200-tick counter.
 

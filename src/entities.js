@@ -545,7 +545,7 @@ export class EntityWorld {
           e.x >= SIZE - 1 ||
           e.z < 1 ||
           e.z >= SIZE - 1 ||
-          e.y < 0 ||
+          e.y < -64 ||
           e.y >= (world.height ?? HEIGHT) ||
           e.health <= 0
         )
@@ -1135,6 +1135,9 @@ export class EntityWorld {
         this.events.push({ sound: HOSTILE.has(e.type) ? "game.hostile.swim.splash" : "game.neutral.swim.splash", volume: s.volume, pitch: s.pitch, position: { x: e.x, y: e.y, z: e.z } });
       }
       this.burn(e, t);
+      // Entity.onEntityUpdate: below posY -64, kill(), which EntityLivingBase makes
+      // attackEntityFrom(outOfWorld, 4): no armour, the hurt window applies.
+      if (e.y < -64 && e.health > 0) this.hazard(e, 4, "outOfWorld");
       this.suffocate(e, t);
       this.breathe(e, t);
       // EntityLivingBase.onEntityUpdate after the fire and air: hurtTime and
@@ -1177,10 +1180,6 @@ export class EntityWorld {
       if (e.type === "chicken") this.chickenUpdate(e);
       this.turnBody(e);
       this.swingLimbs(e);
-      if (e.y < 0) {
-        e.health = 0;
-        e.death = 20;
-      }
     }
     // EntityPlayerMP.onLivingUpdate's collideWithNearbyEntities, in the network tick after the
     // world's entities: each mob beside the player is pushed away once more (the server's copy

@@ -56,14 +56,14 @@ test("cells live in their own 16 x 16 column; the world keeps its legacy bounds"
   for (const [other, hash] of before) if (other !== c) assert.equal(sha(other.blocks, other.meta), hash);
   assert.deepEqual([w.get(47, 40, 32), w.getMeta(47, 40, 32)], [8, 3]);
   assert.equal(w.edits.get("47,40,32"), 8 | (3 << 8));
-  // Outside: virtual bedrock below y 0, air beyond the edges and above the top; writes refused.
-  assert.equal(w.get(5, -1, 5), 11);
+  // Outside: air below y 0 (World.getBlock, the void), beyond the edges and above the top; writes refused.
+  assert.equal(w.get(5, -1, 5), 0);
   for (const p of [[-1, 30, 5], [SIZE, 30, 5], [5, 30, -1], [5, 30, SIZE], [5, HEIGHT, 5]]) {
     assert.equal(w.get(...p), 0);
     assert.equal(w.getMeta(...p), 0);
     assert.equal(w.put(...p, 3), false);
   }
-  assert.equal(w.put(5, 0, 5, 3), false, "bedrock layer");
+  assert.equal(w.put(5, -1, 5, 3), false, "below the floor");
   // index() keeps the flat order the fire and fluid queues key by.
   assert.equal(w.index(47, 40, 32), (47 * SIZE + 32) * HEIGHT + 40);
   const { data, meta } = w.snapshot();

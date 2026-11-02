@@ -9,11 +9,14 @@ test("terrain is deterministic and seeds produce different worlds", () => {
   assert.notDeepEqual(a.snapshot().data, c.snapshot().data);
   assert.equal(a.edits.size, 0);
 });
-test("edits survive save / restore; bedrock cannot be destroyed", () => {
+test("edits survive save / restore, the y 0 floor included", () => {
   const a = new World("save");
   a.set(20, 50, 20, 8);
   a.set(21, 20, 20, 0);
-  assert.equal(a.set(20, 0, 20, 0), false);
+  // Only Survival mining refuses bedrock (main.js); a Creative player can open the floor onto the void.
+  assert.equal(a.get(20, 0, 20), 11);
+  assert.equal(a.set(20, 0, 20, 0), true);
+  assert.equal(a.get(20, -1, 20), 0);
   const b = new World("save");
   b.restore([...a.edits]);
   assert.deepEqual(a.snapshot(), b.snapshot());
@@ -49,4 +52,13 @@ test("recovered 20 Hz vertical recurrence produces a vanilla-height jump", () =>
   assert.ok(Math.abs(max - 1.2522) < 0.001);
   assert.ok(y < 0);
   assert.equal(PHYSICS.tick, 0.05);
+});
+test("a spawn column dug through the floor is skipped", () => {
+  const w = new World("8675309", "java", 9);
+  assert.equal(w.height, 256);
+  const s = w.spawn(), x = Math.floor(s.x), z = Math.floor(s.z);
+  for (let y = w.height - 1; y >= 0; y--) w.set(x, y, z, 0);
+  const t = w.spawn();
+  assert.notDeepEqual([Math.floor(t.x), Math.floor(t.z)], [x, z]);
+  assert.ok(w.solid(Math.floor(t.x), Math.floor(t.y) - 1, Math.floor(t.z)));
 });
