@@ -1064,7 +1064,7 @@ export class MobAI {
     let level = this.ew.lightAt?.(x, y, z);
     if (level === undefined) {
       level = 15;
-      for (let yy = y + 1; yy < HEIGHT; yy++)
+      for (let yy = y + 1; yy < (this.world.height ?? HEIGHT); yy++)
         if (this.world.solid(x, yy, z)) {
           level = 0;
           break;

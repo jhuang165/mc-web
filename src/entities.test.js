@@ -142,6 +142,8 @@ test("spawned and loaded mobs start with every prev field equal, so nothing lerp
 test("tick keeps lastTickPos and eases limbSwingAmount toward four times the travel", () => {
   const w = zombie(), e = w.entities[0], player = { x: 64, y: 0, z: 70 }, survival = new Survival();
   // The AI no longer moves a mob on its first tick (no path yet), so a knockback-style push drives the motion.
+  // Sunlight ignition can otherwise trigger a hurt swing on tick two, outside this interpolation fixture.
+  w.day = false;
   e.vz = 0.1;
   w.tick(player, survival);
   assert.equal(e.pz, 64);

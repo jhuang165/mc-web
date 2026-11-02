@@ -1,3 +1,4 @@
+import { generateJavaWorld, isJavaLandscape } from "./java-world.js";
 import { decorateFlowers } from "./flowers.js";
 import { generateLakes, generateSprings } from "./lakes.js";
 import { populateSnow } from "./snow.js";
@@ -70,7 +71,12 @@ export const BLOCKS = [
   {name:'Sugar cane',color:'#94c065',hidden:true},
   // BlockTNT (original id 46); primed TNT and explosions are in explosion.js.
   {name:'TNT',color:'#db441a'},
+  {name:'Sandstone',color:'#d9cba4',hidden:true},
+  {name:'Mycelium',color:'#796b7d',hidden:true},
+  {name:'Stained clay',color:'#a26b51',hidden:true},
+  {name:'Lily pad',color:'#39772b',hidden:true},
 ];
+export const SANDSTONE=56,MYCELIUM=57,STAINED_CLAY=58,LILY_PAD=59;
 export const WATER=10,LAVA=42;
 export const SNOW_LAYER=46,ICE=47,SAPLING=48;
 export const CARROTS=49,POTATOES=50,WEB=51,LADDER=52,TNT=55;
@@ -149,7 +155,7 @@ export const isCrop=b=>(b>=31&&b<=38)||b===CARROTS||b===POTATOES;
 export const cropAge=(b,meta=0)=>b>=31&&b<=38?b-31:meta&7;
 export const cropKind=b=>b>=31&&b<=38?31:b;
 export const isPlant=b=>isCrop(b)||b===39||isFlower(b)||b===SAPLING;
-export const blockHeight=b=>b===29||b===30?15/16:b===41?.875:b===SNOW_LAYER?.125:1;
+export const blockHeight=b=>b===LILY_PAD?1/64:b===29||b===30?15/16:b===41?.875:b===SNOW_LAYER?.125:1;
 // Blocks with Block.tickRandomly: they count towards a section's random-tick refcount
 // (ExtendedBlockStorage.getNeedsRandomTick), which WorldServer reads to pick sections.
 // Grass, leaves, farmland, crops, lava, snow layer, ice and saplings here; snow and ice act on a
@@ -159,7 +165,7 @@ export const ticksRandomly=b=>b===1||b===5||b===29||b===30||isCrop(b)||b===LAVA|
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS]);
+const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD]);
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 // Block.isNormalCube: Material.tnt is translucent (isOpaque false), so TNT is an opaque
 // cube that is not a normal cube (no torches/ladders/fire tops on it).
@@ -198,35 +204,38 @@ export function solidBlock(b, meta = 0) {
 // (ExtendedBlockStorage.tickRefCount), built on first use. Ids are this build's internal ones;
 // chunk-store.js holds the original-id form.
 export class WorldChunk {
-  constructor(x, z) {
+  constructor(x, z, height = HEIGHT) {
+    this.height = height;
     this.x = x;
     this.z = z;
-    this.blocks = new Uint8Array(16 * 16 * HEIGHT);
-    this.meta = new Uint8Array(16 * 16 * HEIGHT);
+    this.blocks = new Uint8Array(16 * 16 * this.height);
+    this.meta = new Uint8Array(16 * 16 * this.height);
     this.tickCounts = null;
   }
   sectionTickCount(s) {
     if (!this.tickCounts) {
-      this.tickCounts = new Int32Array(HEIGHT / 16);
-      for (let i = 0; i < this.blocks.length; i++) if (ticksRandomly(this.blocks[i])) this.tickCounts[(i % HEIGHT) >> 4]++;
+      this.tickCounts = new Int32Array(this.height / 16);
+      for (let i = 0; i < this.blocks.length; i++) if (ticksRandomly(this.blocks[i])) this.tickCounts[(i % this.height) >> 4]++;
     }
     return this.tickCounts[s];
   }
 }
-const cellIndex = (x, y, z) => ((x & 15) * 16 + (z & 15)) * HEIGHT + y;
+const cellIndex = (x, y, z, height) => ((x & 15) * 16 + (z & 15)) * height + y;
 // Chunk map key; the live world's chunks stay well inside +-2^15.
 const columnKey = (cx, cz) => (cx + 32768) * 65536 + (cz + 32768);
 export class World {
-  constructor(seed = "Overworld", biome = "meadow", generationVersion = 8) {
+  constructor(seed = "Overworld", biome = "meadow", generationVersion = isJavaLandscape(biome) ? 9 : 8) {
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
+    this.height = generationVersion >= 9 && isJavaLandscape(biome) ? 256 : HEIGHT;
+    this.seaLevel = this.height === 256 ? 63 : SEA;
     this.numericSeed = hashSeed(seed);
     // Cells live in 16 x 16 columns keyed by chunk coordinate; this world still has exactly the
     // SIZE / 16 x SIZE / 16 columns at 0..SIZE - 1. Metadata is a 4-bit value per cell, like Chunk's
     // nibble array. Generated water is level 0, a source.
     this.chunks = new Map();
-    for (let cx = 0; cx < SIZE / 16; cx++) for (let cz = 0; cz < SIZE / 16; cz++) this.chunks.set(columnKey(cx, cz), new WorldChunk(cx, cz));
+    for (let cx = 0; cx < SIZE / 16; cx++) for (let cz = 0; cz < SIZE / 16; cz++) this.chunks.set(columnKey(cx, cz), new WorldChunk(cx, cz, this.height));
     this.lastChunk = null;
     this.edits = new Map();
     this.onChange = null;
@@ -237,10 +246,10 @@ export class World {
   }
   // A number unique to each cell, in the legacy x-major order (fire and fluid queues key by it).
   index(x, y, z) {
-    return (x * SIZE + z) * HEIGHT + y;
+    return (x * SIZE + z) * this.height + y;
   }
   inside(x, y, z) {
-    return x >= 0 && x < SIZE && z >= 0 && z < SIZE && y >= 0 && y < HEIGHT;
+    return x >= 0 && x < SIZE && z >= 0 && z < SIZE && y >= 0 && y < this.height;
   }
   // The column holding chunk (cx, cz), or null.
   chunkAt(cx, cz) {
@@ -253,10 +262,10 @@ export class World {
   get(x, y, z) {
     if (y < 0) return 11;
     if (!this.inside(x, y, z)) return 0;
-    return this.chunkAt(x >> 4, z >> 4).blocks[cellIndex(x, y, z)];
+    return this.chunkAt(x >> 4, z >> 4).blocks[cellIndex(x, y, z, this.height)];
   }
   getMeta(x, y, z) {
-    return this.inside(x, y, z) ? this.chunkAt(x >> 4, z >> 4).meta[cellIndex(x, y, z)] : 0;
+    return this.inside(x, y, z) ? this.chunkAt(x >> 4, z >> 4).meta[cellIndex(x, y, z, this.height)] : 0;
   }
   solid(x, y, z) {
     const b = this.get(x, y, z);
@@ -268,20 +277,20 @@ export class World {
   }
   // Every cell as flat block and metadata arrays in index() order (tests and whole-world copies).
   snapshot() {
-    const data = new Uint8Array(SIZE * SIZE * HEIGHT), meta = new Uint8Array(SIZE * SIZE * HEIGHT);
+    const data = new Uint8Array(SIZE * SIZE * this.height), meta = new Uint8Array(SIZE * SIZE * this.height);
     for (const c of this.chunks.values())
       for (let lx = 0; lx < 16; lx++)
         for (let lz = 0; lz < 16; lz++) {
-          const from = (lx * 16 + lz) * HEIGHT, to = this.index(c.x * 16 + lx, 0, c.z * 16 + lz);
-          data.set(c.blocks.subarray(from, from + HEIGHT), to);
-          meta.set(c.meta.subarray(from, from + HEIGHT), to);
+          const from = (lx * 16 + lz) * this.height, to = this.index(c.x * 16 + lx, 0, c.z * 16 + lz);
+          data.set(c.blocks.subarray(from, from + this.height), to);
+          meta.set(c.meta.subarray(from, from + this.height), to);
         }
     return { data, meta };
   }
   // Writes a cell with no bounds, edit or tick-count bookkeeping (generation and migration).
   // Tick counts are rebuilt on next use.
   setRaw(x, y, z, b, meta = 0) {
-    const c = this.chunkAt(x >> 4, z >> 4), i = cellIndex(x, y, z);
+    const c = this.chunkAt(x >> 4, z >> 4), i = cellIndex(x, y, z, this.height);
     c.blocks[i] = b;
     c.meta[i] = meta;
     c.tickCounts = null;
@@ -301,7 +310,7 @@ export class World {
       meta > 15
     )
       return false;
-    const c = this.chunkAt(x >> 4, z >> 4), i = cellIndex(x, y, z);
+    const c = this.chunkAt(x >> 4, z >> 4), i = cellIndex(x, y, z, this.height);
     if (c.tickCounts) {
       const section = y >> 4;
       if (ticksRandomly(c.blocks[i])) c.tickCounts[section]--;
@@ -321,10 +330,11 @@ export class World {
     return true;
   }
   surface(x, z) {
-    for (let y = HEIGHT - 1; y > 0; y--) if (this.solid(x, y, z)) return y + 1;
+    for (let y = this.height - 1; y > 0; y--) if (this.solid(x, y, z)) return y + 1;
     return 1;
   }
   generate() {
+    if (this.height === 256) { generateJavaWorld(this); return; }
     const s = this.numericSeed;
     const heights = new Uint8Array(SIZE * SIZE);
     for (let x = 0; x < SIZE; x++)
@@ -420,6 +430,16 @@ export class World {
 
   }
   spawn() {
+    if (this.height === 256) {
+      // Prefer dry land near the viewport centre, with two clear cells for the player.
+      for (let radius=0;radius<61;radius++) for(let dx=-radius;dx<=radius;dx++) for(const dz of [-radius,radius]) {
+        const x=64+dx,z=64+dz;if(x<3||z<3||x>=SIZE-3||z>=SIZE-3)continue;
+        const y=this.surface(x,z);if(y+2>=this.height)continue;
+        if(this.get(x,y,z)===0&&this.get(x,y+1,z)===0&&this.get(x,y-1,z)!==11)return {x:x+0.5,y:y+0.01,z:z+0.5};
+      }
+      // Ocean-only viewports start above the water, rather than inside it or in stone.
+      return {x:64.5,y:Math.max(this.seaLevel+1,this.surface(64,64))+0.01,z:64.5};
+    }
     for (let r = 0; r < 40; r++)
       for (let dx = -r; dx <= r; dx++)
         for (const dz of [-r, r]) {

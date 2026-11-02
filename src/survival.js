@@ -11,6 +11,10 @@ import {CARROT,POTATO,BAKED_POTATO,POISONOUS_POTATO} from './crops.js';
 export const ITEMS = Object.fromEntries(
   BLOCKS.map((b, id) => [id, { ...b, id, block: id > 0, stack: 64 }]),
 );
+ITEMS[2].variants=['Dirt','Coarse dirt','Podzol'];
+ITEMS[6].variants=['Sand','Red sand'];
+ITEMS[56].variants=['Sandstone','Chiseled sandstone','Smooth sandstone'];
+ITEMS[58].variants=WOOL_COLORS.map(c=>c.label+' stained clay');
 // ItemCloth: the stack's damage value is the wool colour and names the item.
 ITEMS[WOOL].variants = WOOL_COLORS.map((c) => c.label + " wool");
 // BlockFlower: the red flower's metadata names the species. ItemDye (id 351):
@@ -215,6 +219,10 @@ export const MATERIALS = {
   27: { hardness: 3, kind: "pickaxe", tier: 2 },
   28: { hardness: 5, kind: "pickaxe", tier: 2 },
   40: { hardness: 1.25, kind: "pickaxe", tier: 0 },
+  56: { hardness: 0.8, kind: "pickaxe", tier: 0 },
+  57: { hardness: 0.6, kind: "shovel", drop: 2 },
+  58: { hardness: 1.25, kind: "pickaxe", tier: 0 },
+  59: { hardness: 0 },
   // BlockSnow (hardness 0.1, shovel only, drops meta+1 snowballs) and BlockIce (0.5, no drop).
   46: { hardness: 0.1, kind: "shovel", drop: 312 },
   47: { hardness: 0.5, drop: 0 },

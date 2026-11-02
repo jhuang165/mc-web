@@ -11,7 +11,7 @@ import java.lang.reflect.Method;
 // EntityPlayerSP on the tools/probes/PlantProbe.java world double). tools/verify-pushout.mjs
 // writes public/research/pushout-reference.json; src/player-pushout.test.js replays it.
 public class PushOutProbe {
-  static final int[] IDS = {1, 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 14, 15, 16, 17, 18, 20, 30, 31, 35, 37, 38, 41, 42, 45, 46, 47, 49, 50, 51, 54, 56, 57, 58, 59, 60, 61, 65, 78, 79, 80, 81, 82, 83, 141, 142, 172};
+  static final int[] IDS = {1, 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 14, 15, 16, 17, 18, 20, 30, 31, 35, 37, 38, 41, 42, 45, 46, 47, 49, 50, 51, 54, 56, 57, 58, 59, 60, 61, 65, 78, 79, 80, 81, 82, 83, 141, 142, 172, 24, 110, 159, 111};
   static final double[] OFFSETS = {0.05, 0.3, 0.5, 0.7, 0.95};
   static final double[] FEET = {0.0, 0.3, 0.6, -0.5};
 

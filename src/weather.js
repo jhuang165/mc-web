@@ -25,25 +25,25 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 // stops at. Air, torches, crops, tall grass and flowers let rain through; leaves,
 // glass, water, lava and ice do not; a snow layer (Material.snow) does not stop it either.
 // (The probe's block table is in weather-reference.json.)
-export const stopsPrecipitation = (b) => b !== 0 && b !== 20 && b !== SNOW_LAYER && b !== FIRE && !isPlant(b);
+export const stopsPrecipitation = (b) => b !== 0 && b !== 20 && b !== SNOW_LAYER && b !== FIRE && b !== 59 && !isPlant(b);
 // Chunk.getPrecipitationHeight (apx.d): one above the topmost such block, or -1.
 export function precipitationHeight(world, x, z) {
   if (x < 0 || z < 0 || x >= SIZE || z >= SIZE) return -1;
-  for (let y = HEIGHT - 1; y >= 0; y--) if (stopsPrecipitation(world.get(x, y, z))) return y + 1;
+  for (let y = (world.height ?? HEIGHT) - 1; y >= 0; y--) if (stopsPrecipitation(world.get(x, y, z))) return y + 1;
   return -1;
 }
 // Chunk.canBlockSeeTheSky (apx.c): at or above the height map, which rests on
 // the topmost block with any light opacity (glass, torches and plants do not count).
 export function canSeeSky(world, x, y, z) {
   if (x < 0 || z < 0 || x >= SIZE || z >= SIZE) return false;
-  let top = HEIGHT - 1;
+  let top = (world.height ?? HEIGHT) - 1;
   while (top >= 0 && lightOpacity(world.get(x, top, z)) === 0) top--;
   return y >= top + 1;
 }
 // Biome flags (biomes.js): meadow, island and alpine are at least 0.15, so they rain, can be
 // struck and never snow; the snowy preset (Ice Plains, 0.0, enableSnow) snows instead
 // (EntityRenderer.renderRainSnow picks by temperature >= 0.15) and takes no lightning.
-export const rainsHere = (world) => biomeTemperature(world.biome) >= f(0.15);
+export const rainsHere = (world, x=64, y=64, z=64) => (world.temperatureAt?.(x,y,z) ?? biomeTemperature(world.biome)) >= f(0.15);
 // World.canLightningStrikeAt (ahb.y), with the biome facts as arguments so the
 // probe table can replay it for every biome.
 export function strikeRule({ raining, sees, precipitation, y, temperature, canSpawn = true, enableSnow = false }) {
@@ -57,9 +57,9 @@ export function canLightningStrikeAt(weather, world, x, y, z) {
     sees: canSeeSky(world, x, y, z),
     precipitation: precipitationHeight(world, x, z),
     y,
-    temperature: biomeTemperature(world.biome),
-    canSpawn: biomeFacts(world.biome).canSpawnLightning,
-    enableSnow: biomeFacts(world.biome).enableSnow,
+    temperature: world.temperatureAt?.(x,y,z) ?? biomeTemperature(world.biome),
+    canSpawn: world.biomeAt ? world.biomeAt(x,z).rainfall > 0 && !world.biomeAt(x,z).snowy : biomeFacts(world.biome).canSpawnLightning,
+    enableSnow: world.biomeAt ? world.biomeAt(x,z).snowy : biomeFacts(world.biome).enableSnow,
   });
 }
 // Entity.isWet (sa.L): in water, or rained on at the feet or at the head.
@@ -231,7 +231,7 @@ export class Weather {
       if (canBlockFreeze(world, x, y - 1, z, true, light)) this.apply(world, x, y - 1, z, ICE, 0);
       if (this.isRaining() && canSnowAt(world, x, y, z, true, light)) this.apply(world, x, y, z, SNOW_LAYER, 0);
     }
-    for (let s = 0; s < HEIGHT / 16; s++) {
+    for (let s = 0; s < (world.height ?? HEIGHT) / 16; s++) {
       if (world.sectionTickCount && world.sectionTickCount(cx, cz, s) <= 0) continue;
       for (let n = 0; n < 3; n++) {
         this.lcg = (Math.imul(this.lcg, 3) + 1013904223) | 0;

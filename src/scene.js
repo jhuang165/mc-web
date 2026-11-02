@@ -181,7 +181,8 @@ export class VoxelScene {
     this.fallingList = [];
     this.world = world;
     this.textures.setBiome(world.biome);
-    this.temperature = biomeTemperature(world.biome);
+    this.temperature = world.temperatureAt?.(64, world.seaLevel, 64) ?? biomeTemperature(world.biome);
+    this.clouds.height = world.height === 256 ? 128 : CLOUD_HEIGHT;
     this.litFurnaces = new Set();
     this.light = new LightVolume(world, (x, y, z, b) => (b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && this.litFurnaces.has(`${x},${y},${z}`) ? 13 : 0));
     for (const v of this.chunks.values()) this.disposeChunk(v);
@@ -200,7 +201,7 @@ export class VoxelScene {
     const w = this.world, solid = new Mesher(), water = new Mesher(), ice = new Mesher(), flow = new Mesher(), lava = new Mesher(), lavaFlow = new Mesher(), fire = [new Mesher(), new Mesher()];
     for (let x = cx; x < cx + 16; x++)
       for (let z = cz; z < cz + 16; z++)
-        for (let y = 0; y < HEIGHT; y++) {
+        for (let y = 0; y < (w.height ?? HEIGHT); y++) {
           const b = w.get(x, y, z);
           if (!b || b === 41) continue;
           if (b === 20) this.torch(solid, x, y, z);
@@ -252,7 +253,7 @@ export class VoxelScene {
       // BlockSnow.shouldSideBeRendered always draws the top.
       if (boundary && hides(nb) && !(b === SNOW_LAYER && fi === 2)) return;
       if ((b === 9 || b === ICE) && nb === b) return;
-      const corners = f.v.map((v) => [v[0], v[1] * h, v[2]]), r = tileRect(blockTile(b, fi, lit, b === 19 ? w.getMeta(x, y, z) : 0, b === 1 && (w.get(x, y + 1, z) === SNOW_LAYER || w.get(x, y + 1, z) === 23))), uvs = rectUvs(r);
+      const corners = f.v.map((v) => [v[0], v[1] * h, v[2]]), r = tileRect(blockTile(b, fi, lit, w.getMeta(x, y, z), b === 1 && (w.get(x, y + 1, z) === SNOW_LAYER || w.get(x, y + 1, z) === 23))), uvs = rectUvs(r);
       // Side faces of short blocks crop the texture from the top, as renderMaxY does.
       if (fi !== 2 && fi !== 3 && h < 1) uvs[2][1] = uvs[3][1] = r.v0 + (r.v1 - r.v0) * h;
       const verts = corners.map((v) => [x + v[0], y + v[1], z + v[2]]);

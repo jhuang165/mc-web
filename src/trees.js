@@ -75,7 +75,7 @@ export function generateTreeAt(world, x, y, z, hashA, hashB) {
   const seed = (BigInt(Math.floor(hashA * 4294967296)) << 16n) ^ BigInt(Math.floor(hashB * 4294967296));
   return generateTree(
     { get: (a, b, c) => world.get(a, b, c), set: (a, b, c, block, meta) => world.set(a, b, c, block, false, meta) },
-    new JavaRandom(seed), x, y, z, { maxY: HEIGHT },
+    new JavaRandom(seed), x, y, z, { maxY: world.height ?? HEIGHT },
   );
 }
 
@@ -176,7 +176,7 @@ export class Trees {
     this.light = options.light || (() => 15);
     this.apply = options.apply || null;
     this.drop = options.drop || null;
-    this.maxY = options.maxY ?? HEIGHT;
+    this.maxY = options.maxY ?? world.height ?? HEIGHT;
     this.changes = [];
   }
   // World.setBlock with the original flag: notify (flag 3) goes through world.set so onChange
@@ -306,7 +306,7 @@ export class Trees {
   // Weather.tickChunk's single stream through randomTick; this standalone one is for tests.
   tickChunk(cx, cz) {
     const bx = cx * 16, bz = cz * 16;
-    for (let s = 0; s < HEIGHT / 16; s++) {
+    for (let s = 0; s < (this.world.height ?? HEIGHT) / 16; s++) {
       if (this.world.sectionTickCount && this.world.sectionTickCount(cx, cz, s) <= 0) continue;
       for (let n = 0; n < 3; n++) {
         this.lcg = (Math.imul(this.lcg, 3) + 1013904223) | 0;

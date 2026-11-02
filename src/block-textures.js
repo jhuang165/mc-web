@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {biomeFacts} from './biomes.js';
-import {WOOL_COLORS,RED_FLOWER,RED_FLOWERS,YELLOW_FLOWER,SAPLING,WEB,LADDER,CARROTS,POTATOES,CACTUS,REEDS,TNT,isCrop,isFlower} from './world.js';
+import {WOOL_COLORS,RED_FLOWER,RED_FLOWERS,YELLOW_FLOWER,SAPLING,WEB,LADDER,CARROTS,POTATOES,CACTUS,REEDS,TNT,SANDSTONE,MYCELIUM,STAINED_CLAY,LILY_PAD,isCrop,isFlower} from './world.js';
 export const ATLAS_COLUMNS=16,TILE_SIZE=16;
 export const TILES=['grass_top','grass_side','dirt','stone','log_oak','log_oak_top','leaves_oak','sand','planks_oak','brick','glass','bedrock','cobblestone','crafting_table_top','crafting_table_side','crafting_table_front','furnace_side','furnace_top','furnace_front_off','furnace_front_on','coal_ore','iron_ore','diamond_ore','gold_ore','wool_colored_white','torch_on','bookshelf','obsidian','snow','clay','gravel','iron_block','gold_block','diamond_block','farmland_dry','farmland_wet',...Array.from({length:8},(_,i)=>'wheat_stage_'+i),'tallgrass','hardened_clay','chest_front','chest_side','chest_top',...WOOL_COLORS.slice(1).map(c=>'wool_colored_'+c.texture)];
 // Item and particle faces for the chest, cut from its entity texture (ModelChest UVs).
@@ -9,11 +9,18 @@ const CHEST_FACES={chest_front:[[14,33,14,10,1,6],[14,14,14,5,1,2],[1,1,2,4,7,5]
 TILES.push('web','flower_dandelion',...RED_FLOWERS.map(f=>'flower_'+f.texture),'ice','grass_side_snowed','sapling_oak','ladder','tnt_side','tnt_top','tnt_bottom',...['carrots','potatoes'].flatMap(n=>Array.from({length:4},(_,i)=>n+'_stage_'+i)));
 // BlockReed (one crossed texture, tinted by the biome grass colour) and BlockCactus's side, top and bottom.
 TILES.push('reeds','cactus_side','cactus_top','cactus_bottom');
+TILES.push('red_sand','dirt_podzol_top','dirt_podzol_side','sandstone_top','sandstone_bottom','sandstone_normal','sandstone_carved','sandstone_smooth','mycelium_top','mycelium_side','waterlily',...WOOL_COLORS.map(c=>'hardened_clay_stained_'+c.texture));
 export const ATLAS_ROWS=Math.ceil(TILES.length/ATLAS_COLUMNS);
 const tile=name=>TILES.indexOf(name);
 // `meta` selects wool colours, flower variants and root-crop growth textures.
 // `snowy` is true when the block above is a snow layer or snow block: BlockGrass then shows grass_side_snowed on its sides.
 export function blockTile(id,face,lit=false,meta=0,snowy=false){
+ if(id===2&&meta===2)return tile(face===2?'dirt_podzol_top':face===3?'dirt':'dirt_podzol_side');
+ if(id===6&&meta===1)return tile('red_sand');
+ if(id===SANDSTONE)return tile(face===2?'sandstone_top':face===3?'sandstone_bottom':meta===1?'sandstone_carved':meta===2?'sandstone_smooth':'sandstone_normal');
+ if(id===MYCELIUM)return tile(face===2?'mycelium_top':face===3?'dirt':'mycelium_side');
+ if(id===STAINED_CLAY)return tile('hardened_clay_stained_'+WOOL_COLORS[meta&15].texture);
+ if(id===LILY_PAD)return tile('waterlily');
  if(id===19)return tile('wool_colored_'+WOOL_COLORS[meta&15].texture);
  if(id===YELLOW_FLOWER)return tile('flower_dandelion');
  if(id===RED_FLOWER)return tile('flower_'+RED_FLOWERS[Math.min(meta,RED_FLOWERS.length-1)].texture);

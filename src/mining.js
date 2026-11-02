@@ -8,7 +8,7 @@ export function digSpeed(block,tool){
  // Material.plants (crops, saplings, sugar cane) is an axe material and a 1.5 sword material.
  if(tool.kind==='axe'&&(isCrop(block)||block===SAPLING||block===REEDS))return tool.speed;
  if(tool.kind==='sword')return block===WEB?15:block===5||isCrop(block)||block===39||block===SAPLING||block===REEDS?1.5:1;
- const effective={shovel:[1,2,6,23,24,25,29,30,46],axe:[4,7,13,21,39,...Array.from({length:8},(_,i)=>31+i)],pickaxe:[3,8,12,14,15,16,17,18,22,26,27,28,40,47]};
+ const effective={shovel:[1,2,6,23,24,25,29,30,46,57],axe:[4,7,13,21,39,...Array.from({length:8},(_,i)=>31+i)],pickaxe:[3,8,12,14,15,16,17,18,22,26,27,28,40,47,56,58]};
  return effective[tool.kind]?.includes(block)?tool.speed:1;
 }
 export function canHarvest(block,material,tool){

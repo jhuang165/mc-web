@@ -159,6 +159,7 @@ RAY_BOUNDS[YELLOW_FLOWER] = RAY_BOUNDS[RED_FLOWER] = [f(0.5 - f(0.2)), 0, f(0.5 
 RAY_BOUNDS[SAPLING] = [f(0.5 - f(0.4)), 0, f(0.5 - f(0.4)), f(0.5 + f(0.4)), f(f(0.4) * 2), f(0.5 + f(0.4))];
 // A snow layer's selection box is (metadata + 1) / 8 high (BlockSnow.setBlockBoundsBasedOnState);
 // a ladder's is its plate (BlockLadder.setBlockBoundsBasedOnState).
+RAY_BOUNDS[59] = [0, 0, 0, 1, 1/64, 1];
 export const rayBounds = (world, x, y, z, id) =>
   id === 41 ? blockBounds(world, x, y, z) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
 

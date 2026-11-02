@@ -188,7 +188,7 @@ const pushable = (o) => o.health > 0 || (o.death ?? 0) < 20;
 // Chunk.canBlockSeeTheSky without a height map (weather.js `canSeeSky` is the real one
 // that main.js hooks in): no solid block at or above (x, y, z).
 const openSky = (world, x, y, z) => {
-  for (let yy = Math.max(0, y); yy < HEIGHT; yy++) if (world.solid(x, yy, z)) return false;
+  for (let yy = Math.max(0, y); yy < (world.height ?? HEIGHT); yy++) if (world.solid(x, yy, z)) return false;
   return true;
 };
 export function actorCollides(world, x, y, z, w, h) {
@@ -545,7 +545,7 @@ export class EntityWorld {
           e.z < 1 ||
           e.z >= SIZE - 1 ||
           e.y < 0 ||
-          e.y >= HEIGHT ||
+          e.y >= (world.height ?? HEIGHT) ||
           e.health <= 0
         )
           continue;
@@ -737,10 +737,10 @@ export class EntityWorld {
     if (!(byPlayer || e.revenge || this.ai.brain(e).attackTarget === player) || this.entities.length >= 40) return null;
     const t = ENTITY_TYPES.zombie, w = t.width / 2;
     const spot = zombieReinforcement(entityRandom(e), this.difficulty, e.reinforcement ?? 0, e.x, e.y, e.z, {
-      solidTop: (x, y, z) => y >= 0 && y < HEIGHT && normalCube(this.world.get(x, y, z)),
+      solidTop: (x, y, z) => y >= 0 && y < (this.world.height ?? HEIGHT) && normalCube(this.world.get(x, y, z)),
       light: (x, y, z) => (this.lightAt ? this.lightAt(x, y, z) : 0),
       fits: (x, y, z) => {
-        if (x < 1 || z < 1 || x >= SIZE - 1 || z >= SIZE - 1 || y < 0 || y + t.height > HEIGHT) return false;
+        if (x < 1 || z < 1 || x >= SIZE - 1 || z >= SIZE - 1 || y < 0 || y + t.height > (this.world.height ?? HEIGHT)) return false;
         const box = [x - w, y, z - w, x + w, y + t.height, z + w];
         const meets = (o, ow, oh) => o.x + ow > box[0] && o.x - ow < box[3] && o.y + oh > box[1] && o.y < box[4] && o.z + ow > box[2] && o.z - ow < box[5];
         // World.checkNoEntityCollision: living mobs and the player.

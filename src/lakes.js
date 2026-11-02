@@ -70,7 +70,7 @@ export function generateLake(world, rand, x, y, z, liquid) {
           if (k < 4 && !world.solid(x + i, y + k, z + j) && b !== liquid) return false;
         }
   // This world is only 64 high; a lake that does not fit is dropped like a blocked one.
-  if (y + 8 > HEIGHT) return false;
+  if (y + 8 > (world.height ?? HEIGHT)) return false;
   for (let i = 0; i < 16; i++)
     for (let j = 0; j < 16; j++)
       for (let k = 0; k < 8; k++) if (at(i, j, k)) world.put(x + i, y + k, z + j, k >= 4 ? 0 : liquid, 0, false);
@@ -81,7 +81,7 @@ export function generateLake(world, rand, x, y, z, liquid) {
       for (let k = 4; k < 8; k++)
         if (at(i, j, k) && world.get(x + i, y + k - 1, z + j) === DIRT) {
           let open = true;
-          for (let h = y + k; h < HEIGHT && open; h++) if (world.solid(x + i, h, z + j)) open = false;
+          for (let h = y + k; h < (world.height ?? HEIGHT) && open; h++) if (world.solid(x + i, h, z + j)) open = false;
           if (open) world.put(x + i, y + k - 1, z + j, GRASS, 0, false);
         }
   // A lava lake is walled with stone: every solid rim cell below the surface line, and half

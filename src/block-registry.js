@@ -40,7 +40,7 @@ const facing = (state) => (state.facing >= 2 && state.facing <= 5 ? state.facing
 
 // Internal id -> mapping. Identity metadata ("same") where the port stores the original meaning.
 const MAP = {
-  0: fixed(0), 1: fixed(2), 2: fixed(3), 3: fixed(1), 4: same(17), 5: same(18), 6: fixed(12), 7: fixed(5),
+  0: fixed(0), 1: fixed(2), 2: same(3), 3: fixed(1), 4: same(17), 5: same(18), 6: same(12), 7: fixed(5),
   8: fixed(45), 9: fixed(20), [WATER]: fluid(9), 11: fixed(7), 12: fixed(4), 13: fixed(58),
   // BlockFurnace: facing 2-5 (3 is func_149930_e's open-neighbour default); lit_furnace is 62.
   14: {
@@ -69,7 +69,7 @@ const MAP = {
   41: { mc: 54, to: (meta, state) => [54, facing(state)], from: (meta) => ({ meta: 0, state: { facing: meta }, exact: meta >= 2 && meta <= 5 }) },
   [LAVA]: fluid(11),
   43: fixed(37), 44: same(38), 45: same(51), 46: same(78), 47: fixed(79), 48: same(6), 49: same(141), 50: same(142),
-  51: fixed(30), 52: same(65), 53: same(81), 54: same(83), 55: fixed(46),
+  51: fixed(30), 52: same(65), 53: same(81), 54: same(83), 55: fixed(46), 56: same(24), 57: fixed(110), 58: same(159), 59: fixed(111),
 };
 if (Object.keys(MAP).length !== BLOCKS.length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");
 

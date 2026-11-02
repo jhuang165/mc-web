@@ -65,7 +65,7 @@ test("side state: fluids, farmland moisture, chest/furnace facing and lit furnac
 test("original states the port only approximates, and blocks it lacks", () => {
   assert.deepEqual(fromOriginal(50, 1), { id: 20, meta: 0, exact: false }); // wall torch -> standing torch
   assert.deepEqual(fromOriginal(31, 2), { id: 39, meta: 0, exact: false }); // fern -> tall grass
-  assert.deepEqual(fromOriginal(3, 2), { id: 2, meta: 0, exact: false }); // podzol -> dirt
+  assert.deepEqual(fromOriginal(3, 2), { id: 2, meta: 2, exact: true }); // podzol metadata retained
   assert.deepEqual(fromOriginal(59, 5), { id: 36, meta: 0, exact: true });
   assert.deepEqual(fromOriginal(59, 13), { id: 36, meta: 0, exact: false });
   assert.equal(fromOriginal(19, 0), null); // sponge

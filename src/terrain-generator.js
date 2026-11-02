@@ -1,6 +1,6 @@
 // GEN-02: unchanged 1.7.10 ChunkProviderGenerate up to (but excluding) MapGenCaves.
 // Original numeric block IDs, air=0; index=(x*16+z)*256+y. Surfaces deliberately transpose x/z.
-import { JavaRandom } from "./lighting.js";
+import { JavaRandom } from "./java-random.js";
 import { WorldChunkManager } from "./biome-layers.js";
 import { getBiome } from "./java-biomes.js";
 import { NoiseGeneratorOctaves, NoiseGeneratorPerlin } from "./noise.js";
@@ -12,6 +12,10 @@ export const terrainIndex = (x, y, z) => (x * 16 + z) * 256 + y;
 export class BiomeTerrainState {
   constructor() {
     this.mesas = new Map();
+    this.surfaceTops = new Map();
+  }
+  topBlock(biome) {
+    return this.surfaceTops.get(biome.slot) ?? biome.topBlock;
   }
   mesa(slot, seed) {
     let m = this.mesas.get(slot);
@@ -296,6 +300,7 @@ export class ChunkProviderGenerate {
         topMeta = 1;
       }
     }
+    this.biomeState.surfaceTops.set(b.slot, top);
     const surfaceTop = top,
       surfaceMeta = topMeta,
       surfaceFiller = filler;

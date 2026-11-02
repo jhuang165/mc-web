@@ -19,7 +19,7 @@ export const ICE_LIGHT_OPACITY = 3;
 // EnumSkyBlock.Block): a flood fill from every lava cell, 15 at the source and one less per
 // step, stopped by cells with light opacity 255 (a step through partial opacity costs it).
 export function generationLight(world) {
-  const H = HEIGHT, XS = SIZE * H, light = new Uint8Array(SIZE * SIZE * H), blocks = world.snapshot().data, queue = [];
+  const H = world.height ?? HEIGHT, XS = SIZE * H, light = new Uint8Array(SIZE * SIZE * H), blocks = world.snapshot().data, queue = [];
   for (let i = 0; i < blocks.length; i++) if (blocks[i] === LAVA) { light[i] = 15; queue.push(i); }
   for (let q = 0; q < queue.length; q++) {
     const i = queue[q], v = light[i];
@@ -36,7 +36,7 @@ export function generationLight(world) {
     if (x + 1 < SIZE) spread(i + XS);
     if (x > 0) spread(i - XS);
   }
-  return (x, y, z) => (x < 0 || z < 0 || x >= SIZE || z >= SIZE || y < 0 || y >= HEIGHT ? 0 : light[(x * SIZE + z) * H + y]);
+  return (x, y, z) => (x < 0 || z < 0 || x >= SIZE || z >= SIZE || y < 0 || y >= H ? 0 : light[(x * SIZE + z) * H + y]);
 }
 export const lightOf = (world) => world.blockLight || (world.generationLight ||= generationLight(world));
 
@@ -44,7 +44,7 @@ export const lightOf = (world) => world.blockLight || (world.generationLight ||=
 // source block; with noWaterAdj (World.isBlockFreezableNaturally, ahb.s) it also needs at
 // least one horizontal neighbour that is not water. isBlockFreezable (ahb.r) is noWaterAdj false.
 export function canBlockFreeze(world, x, y, z, noWaterAdj, light = lightOf(world)) {
-  if (biomeTemperatureAt(world.biome, x, y, z) > FREEZE_LIMIT) return false;
+  if ((world.temperatureAt?.(x,y,z) ?? biomeTemperatureAt(world.biome, x, y, z)) > FREEZE_LIMIT) return false;
   if (y < 0 || y >= 256 || light(x, y, z) >= 10) return false;
   if (world.get(x, y, z) !== WATER || world.getMeta(x, y, z) !== 0) return false;
   if (!noWaterAdj) return true;
@@ -63,7 +63,7 @@ export function snowCanStay(world, x, y, z) {
 // World.func_147478_e (ahb.e) = canSnowAt: with its boolean set (the populate pass and the
 // weather tick pass true) the cell must also be dark, empty (Material.air) and take a snow layer.
 export function canSnowAt(world, x, y, z, checkLight, light = lightOf(world)) {
-  if (biomeTemperatureAt(world.biome, x, y, z) > FREEZE_LIMIT) return false;
+  if ((world.temperatureAt?.(x,y,z) ?? biomeTemperatureAt(world.biome, x, y, z)) > FREEZE_LIMIT) return false;
   if (!checkLight) return true;
   if (y < 0 || y >= 256 || light(x, y, z) >= 10) return false;
   return world.get(x, y, z) === 0 && snowCanStay(world, x, y, z);

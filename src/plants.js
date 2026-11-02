@@ -180,7 +180,7 @@ export function generateSand(world, rand, x, y, z, radius = 7, place = (px, py, 
 // movement and is not leaves. Water does not block movement, so under water this is the cell
 // above the bed.
 export function topSolidOrLiquid(world, x, z) {
-  for (let y = HEIGHT - 1; y > 0; y--) {
+  for (let y = (world.height ?? HEIGHT) - 1; y > 0; y--) {
     const b = world.get(x, y, z);
     if (blocksMovement(b) && b !== 5) return y + 1;
   }
@@ -188,7 +188,7 @@ export function topSolidOrLiquid(world, x, z) {
 }
 // Chunk.getHeightValue: one above the highest block with a light opacity.
 export function heightValue(world, x, z) {
-  for (let y = HEIGHT - 1; y > 0; y--) if (lightOpacity(world.get(x, y, z)) > 0) return y + 1;
+  for (let y = (world.height ?? HEIGHT) - 1; y > 0; y--) if (lightOpacity(world.get(x, y, z)) > 0) return y + 1;
   return 0;
 }
 
