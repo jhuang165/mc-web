@@ -50,7 +50,8 @@ import { flowerCanStay, growGrass, JRandom } from "./flowers.js";
 import { Trees, saplingCanStay, leafDrops, placedLeavesMeta } from "./trees.js";
 import { VoxelScene } from "./scene.js";
 import { SoundBank, blockSound, stepSound } from "./audio.js";
-import { Weather, isWet, canLightningStrikeAt, struckByLightning, strikeBox, overlaps, entityBox } from "./weather.js";
+import { Weather, isWet, canLightningStrikeAt, entityBox } from "./weather.js";
+import { tickWeatherSimulation } from "./weather-simulation.js";
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
 import { PlayerBody, PlayerRenderer, nextView, thirdPersonCamera, playerShadowCaster } from "./player-renderer.js";
 import { FirstPerson, itemTexture } from "./first-person.js";
@@ -77,7 +78,6 @@ import { Fire } from "./fire.js";
 import { DIFFICULTY_NAMES, difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.js";
 import { isInvisible } from "./mob-effects.js";
 import { explodeBlocks, explosionImpact, explodeTnt, primeTnt, tickTnt, TNT_POWER, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
-import { powerCreeper } from "./creeper.js";
 import { TntRenderer } from "./tnt-renderer.js";
 import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
 import { HUNGER, POISON } from "./status-effects.js";
@@ -88,6 +88,7 @@ import { JavaRandom } from "./lighting.js";
 import { displayTicks } from "./display-ticks.js";
 import { importedRuntime } from "./world-import.js";
 import { tickBlockSystems } from "./world-tick.js";
+import { captureMovementInput } from "./player-input.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -1209,24 +1210,7 @@ function die() {
 // One weather tick: timers, lightning (flash, damage, sound) and the client's rain
 // splashes and rain sound (see weather.js).
 function tickWeather() {
-  weather.tick(world, position);
-  for (const bolt of weather.struck) {
-    const box = strikeBox(bolt);
-    for (const e of mobs?.entities || []) {
-      const t = ENTITY_TYPES[e.type];
-      if (!t || e.health <= 0 || !overlaps(entityBox(e, t.width, t.height), box)) continue;
-      const hit = struckByLightning(e.fire || 0);
-      mobs.hazard(e, hit.damage, "inFire");
-      e.fire = hit.fire;
-      // EntityCreeper.onStruckByLightning: after Entity's fire damage, datawatcher 17 (powered).
-      if (e.type === "creeper") powerCreeper(e);
-    }
-    if (!survival.creative && survival.health > 0 && overlaps(entityBox(position, PHYSICS.width, PHYSICS.height), box)) {
-      const hit = struckByLightning(survival.fire || 0);
-      survival.damage(hit.damage, "lightning", true);
-      survival.fire = hit.fire;
-    }
-  }
+  tickWeatherSimulation({ world, weather, mobs, survival }, position, PHYSICS.width, PHYSICS.height);
   weather.rainParticles(world, { x: position.x, y: position.y + PHYSICS.eye, z: position.z }, (kind, x, y, z) => scene.fx.addDirect(kind, x, y, z));
   for (const e of weather.drain()) {
     // Thunder is volume 10000 in vanilla, so it carries at any distance; the
@@ -1904,15 +1888,15 @@ function tickMiningProgress() {
     mineCooldown = 5;
   }
 }
-function movementTick() {
+function movementTick(controls) {
   previous.copy(position);
   // MovementInputFromOptions + EntityPlayerSP.onLivingUpdate: sneak scales input by 0.3 and
   // sprinting needs forward input >= 0.8, so sneaking ends a sprint (player-movement.js).
-  const sneak = keys.has("ShiftLeft") || keys.has("ShiftRight");
+  const sneak = controls.sneak;
   const input = motion.update(
     {
-      forward: (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0),
-      strafe: (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0),
+      forward: controls.forward,
+      strafe: controls.strafe,
       sneak,
     },
     {
@@ -1920,7 +1904,7 @@ function movementTick() {
       collidedH,
       canSprint: survival.creative || survival.food > 6,
       usingItem: !!eating,
-      sprintKey: keys.has("ControlLeft") || keys.has("ControlRight"),
+      sprintKey: controls.sprint,
     },
   );
   const sprint = motion.sprinting;
@@ -1946,7 +1930,7 @@ function movementTick() {
   const inLavaNow = inLava(world, playerBox()),
     lava = inLavaNow && !inWater && !flying;
   let slip = Math.fround(0.6);
-  const jumpKey = keys.has("Space");
+  const jumpKey = controls.jump;
   // EntityPlayerSP.onLivingUpdate: a double tap of jump toggles Creative flight (tick-based).
   if (motion.toggleFlight(jumpKey, survival.creative)) {
     flying = !flying;
@@ -2452,7 +2436,7 @@ function animate(now) {
       // pre-move position, last tick's motion and in-water flag, before movementTick moves the
       // player; EffectRenderer.updateEffects then runs after this tick's spawns. ---
       if (motion.sprinting) spawnRunningParticles(scene.particles, world, { x: position.x, y: position.y, z: position.z, mx: velocity.x, mz: velocity.z, sprinting: true, inWater: wasInWater, ySize: motion.ySize }, playerRandom, [position.x, position.y + PHYSICS.eye, position.z]);
-      movementTick();
+      movementTick(captureMovementInput(keys));
       scene.effectRenderer.tick(world);
       // The model stands at posY - yOffset, and posY is lowered by ySize (the sneak drop).
       const lowered = (p, drop) => ({ x: p.x, y: p.y - drop, z: p.z });

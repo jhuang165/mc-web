@@ -7,6 +7,7 @@ import { Farming } from './farming.js';
 import { Fluids } from './fluids.js';
 import { Fire } from './fire.js';
 import { tickBlockSystems } from './world-tick.js';
+import { tickWeatherSimulation } from './weather-simulation.js';
 
 function fixture() {
   const world = new World('block-tick-boundary');
@@ -67,4 +68,57 @@ test('absent optional systems do not run their observers', () => {
     { time: 5, daylight: 0.5, x: 1, z: 2 },
     { farming: changes => calls.push(changes) });
   assert.deepEqual(calls, [[5, 0.5], ['farm']]);
+});
+
+test('headless weather and block steps resume their saved state through repeated reloads', () => {
+  const copy = value => JSON.parse(JSON.stringify(value));
+  const create = saved => {
+    const world = new World('headless-reload');
+    for (let x = 28; x < 40; x++) for (let z = 28; z < 40; z++)
+      for (let y = 9; y < 18; y++) world.put(x, y, z, y === 9 ? 3 : 0, 0, false);
+    if (saved) world.restore(saved.edits);
+    const weather = new Weather({ random: new JavaRandom(93), lcg: 19 });
+    if (saved) weather.restore(saved.weather).restoreSimulation(saved.worldRandom);
+    else weather.rainTime = weather.thunderTime = 1000;
+    const farming = new Farming(world, saved?.farms);
+    const fluids = new Fluids(world, { random: weather.random });
+    const fire = new Fire(world, { weather: () => weather });
+    fire.watch();
+    fire.sharedRandomTicks = true;
+    weather.blockTick = (x, y, z, block) => fire.randomTick(x, y, z, block);
+    if (saved) { fluids.load(saved.fluidTicks); fire.load(saved.fireTicks); }
+    const survival = { creative: true, health: 20 };
+    return { world, weather, farming, fluids, fire, survival, mobs: null };
+  };
+  const snapshot = state => copy({ edits: [...state.world.edits], weather: state.weather.save(),
+    worldRandom: state.weather.saveSimulation(), farms: state.farming.serialize(),
+    fluidTicks: state.fluids.save(), fireTicks: state.fire.save() });
+  const player = { x: 33, y: 15, z: 33 };
+  const run = (state, tick) => {
+    if (tick === 1) {
+      state.world.set(32, 10, 32, 29);
+      state.farming.observe(32, 10, 32);
+      state.world.set(32, 11, 32, 31);
+      state.world.set(35, 12, 35, WATER);
+      state.world.set(37, 10, 37, 4);
+      state.world.set(37, 11, 37, FIRE);
+    }
+    if (tick === 80) state.world.set(30, 13, 30, WATER);
+    tickWeatherSimulation(state, player, 0.6, 1.8);
+    const events = [];
+    tickBlockSystems(state, { time: tick, daylight: 1, x: player.x, z: player.z },
+      Object.fromEntries(['farming', 'fluids', 'fire'].map(name => [name, changes => events.push([name, copy(changes)])])));
+    return events;
+  };
+  const uninterrupted = create();
+  let resumed = create(), changed = 0;
+  for (let tick = 1; tick <= 160; tick++) {
+    if ([2, 19, 63, 100, 141].includes(tick)) resumed = create(snapshot(resumed));
+    const expected = run(uninterrupted, tick), actual = run(resumed, tick);
+    assert.deepEqual(actual, expected, `ordered changes at tick ${tick}`);
+    assert.deepEqual(snapshot(resumed), snapshot(uninterrupted), `saved state at tick ${tick}`);
+    changed += actual[1][1].length;
+  }
+  assert.ok(changed > 0, 'scheduled fluid changes occurred');
+  assert.deepEqual(resumed.world.snapshot(), uninterrupted.world.snapshot());
 });

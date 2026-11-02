@@ -2,6 +2,8 @@
 
 Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.23.4. Full parity is unfinished.
 
+SIM-01 continuation (2026-11-02): `weather-simulation.js` separates live weather/lightning damage from browser rain/audio, preserving hit order and Creeper power; real-bolt tests cover repeated flashes and exclusions. `player-input.js` captures movement controls once per tick as replayable data; 512 key combinations and `PlayerMotion` input-state replay pass. A 160-tick headless weather/block-system run compares state and effects through five browser-snapshot reloads in clear weather. No active-bolt/weather-strength continuity or complete player/world replay claimed. See `public/research/simulation.md`.
+
 SIM-01 (2026-11-02): `world-tick.js` extracts the live farming/fluid/fire tick segment behind a browser-independent function, preserving each synchronous scene observer's position in the sequence. A 70-tick headless port regression compares the old and extracted sequence using real systems, shared random state, blocks and pending queues. This is not the whole authoritative tick: input, player, weather, entities, saves and rendering remain coupled, callbacks may have presentation effects, and system schedulers remain separate. See `public/research/simulation.md`.
 
 WORLD-03e adds a read-only region inspection CLI with filename/slot checks and block mapping counts. See public/research/region-inspection.md.
