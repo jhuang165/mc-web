@@ -3,6 +3,8 @@ import { BOW, canDraw } from './bow.js';
 import { plantedBlock } from './crops.js';
 import { growGrass } from './flowers.js';
 import { isBucket } from './buckets.js';
+import { useHeldBucket } from './buckets-simulation.js';
+import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
 import {
@@ -14,12 +16,12 @@ import { copyStack } from './inventory.js';
 const STATIONS = new Set([13, 14, CHEST]);
 // PlayerControllerMP's edit(place) dispatcher with browser effects supplied by the
 // caller. `state` holds the live mutable gameplay state, `request` snapshots the two
-// ray targets and click button, and hooks run synchronously at the original call sites.
-// The bucket hook is an intentional adapter boundary: its existing ray origin/direction
-// and eyeRay remain browser-owned, while any item-use state change is returned as a patch.
-// All hooks keep their original argument list; only useBucketItem explicitly receives
-// state as a fourth argument because its browser adapter also updates `eating`.
-export function applyPlayerEdit(state, { place = false, target = null, aimedEntity = null } = {}, hooks = {}) {
+// ray targets, the held bucket's own captured trace and the click button, and hooks run
+// synchronously at the original call sites. Thrown items (player-throw-simulation.js) and
+// buckets (buckets-simulation.js) run headlessly against state.projectiles/items/fluids;
+// their presentation reaches the same playSound/sound/resetEquipped/destroyParticles/
+// updateBlock/renderHotbar/markUnsaved hooks.
+export function applyPlayerEdit(state, { place = false, target = null, aimedEntity = null, bucket = null } = {}, hooks = {}) {
   const random = hooks.random ?? Math.random;
   const act = (branch, extra = {}) => ({ handled: true, branch, ...extra }),
     hook = (name, ...args) => hooks[name]?.(...args);
@@ -31,20 +33,18 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   const usesBlock = activates && !aimedEntity && target && STATIONS.has(state.world.get(...target.block));
 
   // Snowball/egg, bow and buckets return before the vanilla hand swing.
-  if (place && (id === 312 || id === 316) && (state.survival.creative || state.survival.count(id)) && !usesBlock) {
-    hook('throwSnowball', id);
-    return act('throw-projectile');
+  if (place && isThrowable(id) && (state.survival.creative || state.survival.count(id)) && !usesBlock) {
+    const thrown = throwHeldItem(state, id, hooks);
+    return act('throw-projectile', { projectile: thrown.kind });
   }
   if (place && id === BOW && !usesBlock) {
     if (!state.eating && canDraw(state.survival)) state.eating = { id: BOW, ticks: 0, bow: true };
     return act('begin-bow-use');
   }
   if (place && isBucket(item) && !usesBlock) {
-    const patch = hooks.useBucketItem?.(id, aimedEntity, target, state);
-    // The existing bucket adapter owns eyeRay/global bucket helpers. Only its optional
-    // explicit eating patch is state; arbitrary callback return objects are ignored.
-    if (patch && Object.hasOwn(patch, 'eating')) state.eating = patch.eating;
-    return act('use-bucket');
+    // A stale or malformed bucket capture is consumed here; it never becomes a block click.
+    const used = useHeldBucket(state, { id, aimedEntity, bucket }, hooks);
+    return act('use-bucket', { bucket: used.branch, ...(used.skipped ? { skipped: true } : {}) });
   }
 
   hook('swing');

@@ -65,7 +65,7 @@ import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
-import { Arrows, arrowTargets, releaseBow, bowStage, bowFov, easeFov, BOW, ARROW } from "./bow.js";
+import { Arrows, arrowTargets, bowStage, bowFov, easeFov, ARROW } from "./bow.js";
 import { canSeeSky } from "./weather.js";
 import { Fluids, eyeInWater } from "./fluids.js";
 import { Fire } from "./fire.js";
@@ -73,7 +73,8 @@ import { DIFFICULTY_NAMES, difficultySetting, localDifficulty, InhabitedTime } f
 import { isInvisible } from "./mob-effects.js";
 import { primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { TntRenderer } from "./tnt-renderer.js";
-import { useBucket, milkCow, finishDrinking, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
+import { finishDrinking } from "./buckets.js";
+import { captureBucketTarget } from "./buckets-simulation.js";
 import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, fovMultiplier } from "./player-movement.js";
 import { spawnRunningParticles, freshRandom } from "./particles.js";
@@ -91,7 +92,7 @@ import { tickLivingSimulation, drainMobEvents } from "./living-simulation.js";
 import { tickPlayerMining } from "./player-mining.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
-import { capturePlayerAction, dispatchPlayerAction } from "./player-actions.js";
+import { capturePlayerAction, dispatchPlayerAction, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -185,7 +186,7 @@ let screen = "home",
   dragDistance = 0,
   lockFallback = false,
   saved = true;
-const editActionLog = []; // Development-only bounded click trace; never part of a save.
+const editActionLog = []; // Development-only bounded edit/release action trace; never part of a save.
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer,playerTicks=0;
 let weather = new Weather(), trees, plants, falling;
@@ -1298,17 +1299,14 @@ function flushArrows() {
     sounds.play(e.sound, e.position ? { volume: e.volume, pitch: e.pitch, position: e.position } : { volume: e.volume, pitch: e.pitch });
   scene.setArrows(arrows.list);
 }
-// ItemBow.onPlayerStoppedUsing: the right button was let go after `eating.ticks` ticks of draw.
+// ItemBow.onPlayerStoppedUsing: the right button was let go after `eating.ticks` ticks of
+// draw. The captured release dispatches immediately to player-throw-simulation.js.
 function releaseBowUse() {
-  const draw = eating;
-  if (!draw?.bow) return;
-  eating = null;
-  if (screen !== "playing" || heldId() !== BOW) return;
-  if (releaseBow({ survival, arrows, ticks: draw.ticks, feet: position, yaw, pitch })) {
-    flushArrows();
-    renderHotbar();
-    saved = false;
-  }
+  const action = captureReleaseAction();
+  traceAction(action);
+  const state = { screen, eating, survival, arrows, position, yaw, pitch };
+  dispatchReleaseAction(state, action, { flushArrows, renderHotbar, markUnsaved: () => { saved = false; } });
+  eating = state.eating;
 }
 function trampleFarmland(entity, distance) {
   const x = Math.floor(entity.x), y = Math.floor(entity.y - 0.2), z = Math.floor(entity.z);
@@ -1351,65 +1349,22 @@ function beginEating(id) {
   }
   if (survival.count(id) && !eating) eating = { id, ticks: 32 };
 }
-// ItemSnowball.onItemRightClick (aed.a): take one unless Creative, play
-// random.bow at 0.5 volume and pitch 0.4 / (rand * 0.4 + 0.8), spawn the ball.
-// Minecraft.rightClickMouse swings only for blocks that consume the click, and
-// resets the equip animation (resetEquippedProgress2) only when the stack
-// changed, so Creative throws neither swing nor dip the hand.
-// ItemEgg.onItemRightClick (ack.a) is identical with an EntityEgg.
-function throwSnowball(id = 312) {
-  sounds.play("random.bow", { volume: 0.5, pitch: 0.4 / (Math.random() * 0.4 + 0.8) });
-  if (id === 316) projectiles.throwEgg(position, yaw, pitch);
-  else projectiles.throwSnowball(position, yaw, pitch);
-  if (!survival.creative) {
-    survival.take(id);
-    animation.resetEquipped();
-    renderHotbar();
-    saved = false;
-  }
-}
-// EntityCow.interact, ItemBucket.onItemRightClick and ItemBucketMilk.onItemRightClick.
-function useBucketItem(id, entityTarget = aimedEntity) {
-  const before = copyStack(survival.held), drop = (s) => items.dropPlayer(s, position, yaw, pitch);
-  let used = false;
-  if (id === MILK_BUCKET) {
-    // setItemInUse: always starts the 32-tick drink, even in Creative.
-    if (!eating) eating = { id, ticks: DRINK_TICKS, drink: true };
-    return;
-  }
-  if (entityTarget?.entity.type === "cow" && entityTarget.entity.health > 0 && milkCow(survival, { drop })) used = true;
-  else if (eyeRay) {
-    const hit = useBucket(world, survival, eyeRay.origin, eyeRay.dir, {
-      drop,
-      // World.func_147480_a: the replaced plant breaks with its drops, sound and particles.
-      destroy: (x, y, z, b) => {
-        fluids.wash(x, y, z, b);
-        scene.particles.destroyBlock(world, x, y, z, b, world.getMeta(x, y, z));
-        sound(false, b);
-      },
-    });
-    if (hit) {
-      used = true;
-      for (const [x, y, z] of hit.cells) scene.updateBlock(x, z, y);
-    }
-  }
-  if (!used) return;
-  // PlayerControllerMP.sendUseItem resets the equip animation when the stack changed.
-  const now = survival.held;
-  if (before?.id !== now?.id || before?.count !== now?.count) animation.resetEquipped();
-  renderHotbar();
-  saved = false;
+// Development-only bounded trace of captured edit/release actions with their player tick.
+function traceAction(action) {
+  if (!import.meta.env.DEV) return;
+  editActionLog.push({ tick: survival.time, action });
+  if (editActionLog.length > 256) editActionLog.shift();
 }
 function edit(place = false) {
   if (screen !== "playing") return;
   const state = { screen, heldTool: heldId(), world, survival, position, velocity, motion, mobs,
-    farming, trees, fire, grounded, fallDistance, wasInWater, yaw, eating, mining, mineCooldown,
-    mineHeld, flowers: FLOWERS, boneRandom, itemRand };
-  const action = capturePlayerAction({ place, target, aimedEntity, heldTool: state.heldTool });
-  if (import.meta.env.DEV) {
-    editActionLog.push({ tick: survival.time, action });
-    if (editActionLog.length > 256) editActionLog.shift();
-  }
+    farming, trees, fire, fluids, items, projectiles, grounded, fallDistance, wasInWater, yaw, pitch,
+    eating, mining, mineCooldown, mineHeld, flowers: FLOWERS, boneRandom, itemRand };
+  // A right click with a bucket also captures the bucket's own fluid-aware trace along the
+  // last frame's eye ray (ItemBucket: 5 blocks, liquids only when empty).
+  const bucket = place ? captureBucketTarget(world, state.heldTool, eyeRay) : null;
+  const action = capturePlayerAction({ place, target, aimedEntity, heldTool: state.heldTool, bucket });
+  traceAction(action);
   const syncContainerState = () => {
     state.screen = screen;
     state.mining = mining;
@@ -1417,12 +1372,9 @@ function edit(place = false) {
   };
   dispatchPlayerAction(state, action, {
     unlock: () => sounds.unlock(),
-    throwSnowball,
-    useBucketItem: (id, selectedEntity) => {
-      useBucketItem(id, selectedEntity);
-      return { eating };
-    },
     swing: () => animation.swing(),
+    resetEquipped: () => animation.resetEquipped(),
+    destroyParticles: (x, y, z, block, meta) => scene.particles.destroyBlock(world, x, y, z, block, meta),
     criticalHit: entity => { scene.fx.crit2(() => mobs.fxTarget(entity)); },
     handleEntityEvents,
     renderHotbar,

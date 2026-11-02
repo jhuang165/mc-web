@@ -21,9 +21,9 @@ test('captured player edit is JSON-safe, detached from ray results, and resolves
   target.adjacent[1] = 99;
   entity.id = 'mob-99';
   assert.deepEqual(JSON.parse(JSON.stringify(action)), {
-    version: 1, type: 'player-edit', place: true, heldTool: WOOL,
+    version: 2, type: 'player-edit', place: true, heldTool: WOOL,
     target: { block: [12, 19, 12], adjacent: [12, 20, 12], distance: 1.25 },
-    aimedEntity: { id: 'mob-7' },
+    aimedEntity: { id: 'mob-7' }, bucket: null,
   });
   assert.equal(Object.hasOwn(action.aimedEntity, 'entity'), false);
 
@@ -50,8 +50,8 @@ test('selected entity with absent, malformed, or stale ID is consumed without bl
   const invoke = aimedEntity => {
     const calls = [];
     const result = dispatchPlayerAction(state, {
-      version: 1, type: 'player-edit', place: false, heldTool: WOOL,
-      target: { block: [4, 7, 4], adjacent: [4, 8, 4] }, aimedEntity,
+      version: 2, type: 'player-edit', place: false, heldTool: WOOL,
+      target: { block: [4, 7, 4], adjacent: [4, 8, 4] }, aimedEntity, bucket: null,
     }, { apply: () => { calls.push('called'); return { handled: true, branch: 'block-fallback' }; } });
     return { result, calls };
   };
@@ -61,8 +61,8 @@ test('selected entity with absent, malformed, or stale ID is consumed without bl
     assert.deepEqual(calls, []);
   }
   assert.deepEqual(dispatchPlayerAction(state, {
-    version: 1, type: 'player-edit', place: true, heldTool: WOOL, target: null,
-    aimedEntity: null,
+    version: 2, type: 'player-edit', place: true, heldTool: WOOL, target: null,
+    aimedEntity: null, bucket: null,
   }, { apply: () => ({ handled: true, branch: 'none' }) }), { handled: true, branch: 'none' });
 });
 
@@ -71,7 +71,7 @@ test('malformed non-null block targets fail closed during capture and dispatch',
   for (const target of [{ block: null }, { block: [1, 2] }, { block: [1, NaN, 3] }]) {
     const calls = [];
     const result = dispatchPlayerAction({ heldTool: WOOL }, {
-      version: 1, type: 'player-edit', place: true, heldTool: WOOL, target, aimedEntity: null,
+      version: 2, type: 'player-edit', place: true, heldTool: WOOL, target, aimedEntity: null, bucket: null,
     }, { apply: () => calls.push('called') });
     assert.deepEqual(result, { handled: true, branch: 'invalid-player-action', skipped: true });
     assert.deepEqual(calls, []);

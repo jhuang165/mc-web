@@ -8,6 +8,7 @@ import { Trees } from './trees.js';
 import { JavaRandom } from './java-random.js';
 import { BOW } from './bow.js';
 import { makeStack } from './inventory.js';
+import { Projectiles } from './projectiles.js';
 import { applyPlayerEdit } from './player-edit-simulation.js';
 
 const POS = [42, 12, 42];
@@ -42,11 +43,17 @@ test('not-playing gate skips unlock, swing and all requested effects', () => {
 
 test('snowball, bow and bucket paths retain their pre-swing precedence', () => {
   const snowball = fixture({ mode: 'creative', tool: 312, place: true });
+  snowball.state.pitch = 0;
+  snowball.state.projectiles = new Projectiles(() => 0.25);
   const calls = [];
-  assert.equal(applyPlayerEdit(snowball.state, snowball.request, {
-    unlock: () => calls.push('unlock'), throwSnowball: (id) => calls.push(`throw:${id}`), swing: () => calls.push('swing'),
-  }).branch, 'throw-projectile');
-  assert.deepEqual(calls, ['unlock', 'throw:312']);
+  assert.deepEqual(applyPlayerEdit(snowball.state, snowball.request, {
+    unlock: () => calls.push('unlock'), random: () => 0.5, swing: () => calls.push('swing'),
+    playSound: (name, options) => calls.push([name, options.volume, options.pitch]),
+    resetEquipped: () => calls.push('reset'),
+  }), { handled: true, branch: 'throw-projectile', projectile: 'snowball' });
+  assert.deepEqual(calls, ['unlock', ['random.bow', 0.5, 0.4 / (0.5 * 0.4 + 0.8)]]);
+  assert.equal(snowball.state.projectiles.balls.length, 1);
+  assert.equal(snowball.state.survival.count(312), 1, 'Creative keeps the stack');
 
   const bow = fixture({ mode: 'creative', tool: BOW, place: true });
   assert.equal(applyPlayerEdit(bow.state, bow.request, { swing: () => calls.push('bow-swing') }).branch, 'begin-bow-use');
@@ -54,10 +61,17 @@ test('snowball, bow and bucket paths retain their pre-swing precedence', () => {
   assert.equal(calls.includes('bow-swing'), false);
 
   const milk = fixture({ mode: 'creative', tool: 343, place: true });
-  applyPlayerEdit(milk.state, milk.request, { useBucketItem: () => ({ eating: { id: 343, ticks: 32, drink: true }, arbitrary: 1 }), swing: () => calls.push('milk-swing') });
+  assert.deepEqual(applyPlayerEdit(milk.state, milk.request, { swing: () => calls.push('milk-swing') }),
+    { handled: true, branch: 'use-bucket', bucket: 'begin-drinking' });
   assert.deepEqual(milk.state.eating, { id: 343, ticks: 32, drink: true });
-  assert.equal('arbitrary' in milk.state, false, 'only the explicit eating patch is accepted');
   assert.equal(calls.includes('milk-swing'), false);
+
+  // A filled bucket without its captured trace is consumed, not turned into a placement.
+  const water = fixture({ tool: 341, place: true, block: 1, target: { block: [...POS], adjacent: [POS[0], POS[1] + 1, POS[2]] } });
+  assert.deepEqual(applyPlayerEdit(water.state, water.request, { swing: () => calls.push('water-swing') }),
+    { handled: true, branch: 'use-bucket', bucket: 'invalid-bucket-target', skipped: true });
+  assert.equal(water.state.world.get(POS[0], POS[1] + 1, POS[2]), 0);
+  assert.equal(calls.includes('water-swing'), false);
 });
 
 test('a block station intercepts throwable activation and then receives the normal swing', () => {

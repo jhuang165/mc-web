@@ -142,10 +142,18 @@ export function placeContainedLiquid(world, x, y, z, liquid, destroy) {
 // block)` breaks a block the liquid replaces (drops, particles); `hooks.drop(stack)`
 // throws a filled bucket that did not fit. Returns what happened, or null.
 export function useBucket(world, player, eye, dir, hooks = {}) {
+  const held = player.inventory.held, kind = held && ITEMS[held.id]?.bucket;
+  if (kind !== "empty" && kind !== "filled") return null;
+  return useBucketAt(world, player, traceBucket(world, eye, dir, kind === "empty"), hooks);
+}
+
+// The part of onItemRightClick after getMovingObjectPositionFromPlayer: `hit` is the
+// traceBucket result for the held bucket ({ block, side }), or null when it missed.
+export function useBucketAt(world, player, hit, hooks = {}) {
   const inv = player.inventory, held = inv.held, item = held && ITEMS[held.id];
   const kind = item?.bucket;
   if (kind !== "empty" && kind !== "filled") return null;
-  const empty = kind === "empty", hit = traceBucket(world, eye, dir, empty);
+  const empty = kind === "empty";
   if (!hit) return null;
   let [x, y, z] = hit.block;
   if (empty) {
