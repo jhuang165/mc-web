@@ -1,6 +1,6 @@
 # Raw Java 1.7.10 NBT foundation (WORLD-03a)
 
-`src/nbt.js` provides a standalone, browser-compatible binary codec for the eleven payload tag types in the pinned Java 1.7.10 client. This advances the roadmap's registry/NBT foundation. It is not connected to inventories, the live world or browser saves; the app version and generation version are unchanged. Gzip/zlib, Anvil regions, tile-entity/item adapters and Java save interoperability remain open.
+`src/nbt.js` provides a standalone, browser-compatible binary codec for the eleven payload tag types in the pinned Java 1.7.10 client. `src/nbt-compression.js` adds bounded gzip/zlib wrappers (WORLD-03b). This advances the roadmap's registry/NBT foundation. It is not connected to inventories, the live world or browser saves; these modules do not change the app or generation version. Anvil regions, tile-entity/item adapters and complete Java save interoperability remain open.
 
 ## API and representation
 
@@ -38,4 +38,22 @@ The 73 native records cover signed numeric endpoints, longs beyond Number's exac
 
 `src/nbt.test.js` independently encodes expected typed trees to the exact native bytes, decodes every stream and re-encodes it. Separate port regressions cover view offsets, copied arrays, duplicate names, malformed strings, all truncation points of three representative documents, invalid types/lengths, canonicalization and resource limits. Those rejection tests are not evidence of native malformed-input acceptance. No whole-game, save-file or browser UI acceptance is claimed.
 
-Next steps: bounded compression adapters, typed item/NBT integration with migration, tile-entity payloads, chunk serialization, then region/file round trips and integrated acceptance. This tranche avoids runtime void and biome decorator work, and leaves shared roadmap/PROJECT edits to their current owners.
+## Compressed NBT (WORLD-03b)
+
+```js
+import {encodeCompressedNbt, decodeCompressedNbt} from './nbt-compression.js';
+
+const compressed = await encodeCompressedNbt(document); // gzip by default
+const loaded = await decodeCompressedNbt(compressed);
+const regionPayload = await encodeCompressedNbt(document, {format: 'zlib'});
+```
+
+The wrappers require the browser's CompressionStream/DecompressionStream APIs and use gzip or zlib-wrapped DEFLATE (`format: 'gzip' | 'zlib'`). The zlib option maps to the stream API's `deflate` format; raw DEFLATE is not accepted. There is no format guessing or silent fallback when browser APIs are absent. These wrappers operate on one NBT document, without region headers, sectors or chunk compression IDs.
+
+`maxCompressedBytes` bounds the supplied compressed view and encoded output (default 16 MiB). `maxBytes` bounds encoded raw NBT and collected decompressed output (default 16 MiB); `maxElements`, `maxDepth` and `allowTrailing` pass through to the raw codec. Decompression validates the complete stream before parsing, so a decoded compound is never returned before the stream's checksum/trailer is checked. `bytesRead` measures decompressed NBT bytes, not compressed bytes. The compressed input view is snapshotted before asynchronous reads. Over-limit streams are cancelled before the final output array is allocated. Browser compression engines can allocate internal buffers before producing a chunk; these limits bound application collection, not engine internals or total process memory. No unbounded response.arrayBuffer() is used.
+
+`node tools/verify-nbt-compression.mjs` regenerates [146 native compressed fixtures](nbt-compression-reference.json) from the 73 raw fixtures. It executes unchanged CompressedStreamTools gzip byte-array writing/reading, plus JDK DeflaterOutputStream/InflaterInputStream around original raw NBT methods for zlib. Every native compressed result decodes in JS; every JS gzip/zlib result then reads natively and reserializes to the expected native raw bytes. This executes stream interoperability, not the original RegionFile or Anvil save system. Native writing resets root names to empty; JS writing retains provided names. Compressed byte identity is not required: headers and compressor choices may differ across engines/JDKs, while the uncompressed NBT remains identical.
+
+`src/nbt-compression.test.js` replays all native inputs and checks all 146 JS outputs with independent Node zlib, preserving named roots. Eight test groups also cover offsets/snapshot ownership, truncated or corrupt headers/checksums/trailers, wrong formats, independent input/output/expansion bounds, raw parser validation and unavailable browser APIs. A separate headless Chrome smoke read all 146 native streams, completed 146 encode/decode round trips and checked bounds/corruption for both formats; its 146 compressed outputs were also read by the original NBT classes. No gameplay save/import/export UI has been added.
+
+Next steps: typed item/NBT integration with migration, tile-entity payloads, chunk serialization, then region/file round trips and integrated acceptance. These tranches avoid runtime void and biome decorator work, and leave shared roadmap/PROJECT edits to their current owners.
