@@ -1,0 +1,1 @@
+PLAN-03b done in 87d9f31, released in 0.23.1 (15743cc, pushed github main). 2,736 raw block metadata values classified: 853 semantic, 628 alias, 2 invalid, 1,253 unclassified; build-block-metadata-catalogue.mjs now owns block-metadata-catalogue.md. npm test 705/705, build OK. Open: entity placement, neighbor-dependent state, ticks/activation, tile entities.

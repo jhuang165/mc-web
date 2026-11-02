@@ -1,0 +1,1 @@
+PLAN-03i settings/controls catalogue done in f3ecf7f, released in 0.23.1 (15743cc, pushed github main). 44 options, 32 key bindings, 9 sound categories, 8 screens. Port mismatches pinned in settings-catalogue.test.js: FOV, render distance, sensitivity, master volume, GUI scale. Open: rebinding, options.txt persistence, chat/graphics options, localized layout.

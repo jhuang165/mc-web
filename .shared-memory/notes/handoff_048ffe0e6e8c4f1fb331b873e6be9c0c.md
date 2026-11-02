@@ -1,0 +1,1 @@
+Lily-pad shadow flag follows unchanged original-class evidence in 7d7b70f2ee5558a7cc23c71ba30043311f17505c, pushed github main. Full671 tests/build/bridge5 pass. See main GEN03 handoff; full lily-pad placement/boats remain open.

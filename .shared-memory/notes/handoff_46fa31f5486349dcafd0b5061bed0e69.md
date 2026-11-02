@@ -1,0 +1,1 @@
+Existing limb interpolation fixture now sets w.day=false to isolate interpolation from probabilistic sunlight ignition/hurt swings; gameplay unchanged by this test fix. Included in 7d7b70f2ee5558a7cc23c71ba30043311f17505c, pushed github main. Full671 tests pass in shared and clean committed checkout; build/bridge5 pass. No remaining work for this fixture; see main GEN03 handoff.

@@ -1,0 +1,6 @@
+GEN-04h done in commit 5bd1e09 (pushed to github main).
+- BiomeDecoration in src/biome-decorator.js ports BiomeGenBase.decorate and every 1.7.10 override: plains counts, double grass and sunflowers; desert wells; hills emeralds and monster eggs; forest double plants and the roofed grid; taiga boulders and ferns; ice spikes and paths; jungle melons and vines; savanna grass; mutated delegation.
+- src/biome-features.js holds the generators. gen-world.js adds BlockDoublePlant neighbour breaks and drops.
+- BiomeOverrideProbe produces 130 generator records (including notified double-plant breaks) and 80 decorate records (208 decorations, all 59 slots). All replay exactly in src/biome-overrides.test.js, mutation checks fail the replay, and regeneration is byte-identical.
+- npm test 742/742, build OK, bridge 5/5. Runtime 0.23.4, generation 9, no Site publish.
+- Remaining: worldgen animals and snow/ice, the whole populate chain on one GenWorld, and runtime integration. Handoff: .shared-memory/notes/handoff_gen_04h_biome_overrides.md.
