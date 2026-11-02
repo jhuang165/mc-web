@@ -31,8 +31,8 @@ assert.equal(Object.keys(OPTION_FILE_KEY).length, options.length);
 
 // Browser status. Conservative: Verified is never used here; Implemented requires an exact native value set/default plus a named test.
 const S = {
-  INVERT_MOUSE: ['Missing', 'No inversion in mouse-look handling (main.js).'],
-  SENSITIVITY: ['Partial', 'Since 0.23.2: slider 0-1 default 0.5 with the native EntityRenderer curve (settings.js lookScale, f=s*0.6+0.2, f^3*8*0.15 deg per pixel) and native *yawn*/HYPERSPEED!!!/percent labels (settings.test.js). Browser movement is in CSS pixels, not LWJGL device pixels; pitch clamp is +-1.55 rad, not +-90 degrees; smooth camera and invert open.'],
+  INVERT_MOUSE: ['Implemented', 'Saved invertMouse switch "Invert Mouse" (en_US.lang), default off; negates the pitch argument of setAngles in plain and cinematic look, as the -1 multiplier in EntityRenderer.updateCameraAndRender (mouse-look.js; mouse-look.test.js, settings-catalogue.test.js). Shown in the Options modal beside Sensitivity rather than on a Controls screen; a switch replaces the ON/OFF button.'],
+  SENSITIVITY: ['Partial', 'Since 0.23.2: slider 0-1 default 0.5 with the native EntityRenderer curve (settings.js lookCurve, f=s*0.6+0.2, f^3*8, Entity.setAngles 0.15 deg per unit) and native *yawn*/HYPERSPEED!!!/percent labels (settings.test.js). Mouse movement is gathered per frame, pitch clamps to +-90 degrees as in Entity.setAngles, and the cinematic camera (MouseFilter) uses the same curve (mouse-look.js). Browser movement is in CSS pixels, not LWJGL device pixels.'],
   FOV: ['Implemented', 'Since 0.23.2: slider 30-110 step 1, default 70, Normal/Quake Pro labels (main.js, settings.js; settings.test.js, settings-catalogue.test.js). Bow/sprint/flight FOV modifiers exist in bow.js and main.js; the modifier set is audited separately.'],
   GAMMA: ['Partial', 'Slider 0-1 default 0 (Moody) matches native range/default; scene.setGamma lightmap application and native label strings not audited against native output.'],
   SATURATION: ['Missing', 'Unused by 1.7.10 screens; no browser counterpart.'],
@@ -89,15 +89,23 @@ const KEY_STATUS = {
   'key.chat': ['Missing', 'No chat; T unbound.'], 'key.playerlist': ['Missing', 'No player list; Tab only default-prevented.'],
   'key.pickItem': ['Partial', 'Middle click pick block (main.js); fixed.'], 'key.command': ['Missing', 'No command/chat entry; "/" unbound.'],
   'key.screenshot': ['Missing', 'No F2 screenshot.'], 'key.togglePerspective': ['Partial', 'F5 cycles first/behind/front; fixed.'],
-  'key.smoothCamera': ['Missing', 'No cinematic camera (unbound by default natively).'], 'key.sprint': ['Partial', 'ControlLeft/ControlRight fixed.'],
+  'key.smoothCamera': ['Partial', 'Unbound by default natively, and Minecraft.runTick toggles smoothCamera only through this binding (no F8 check in 1.7.10). The Options switch "Toggle Cinematic Camera" stands in for the key; smoothCamera is session-only (not in options.txt). MouseFilter.smooth, the 0.05 x curve tick filter and the partial-tick spread are ported (mouse-look.js; mouse-look.test.js). Not rebindable.'], 'key.sprint': ['Partial', 'ControlLeft/ControlRight fixed.'],
   'key.streamStartStop': ['Missing', 'Twitch streaming.'], 'key.streamPauseUnpause': ['Missing', 'Twitch streaming.'], 'key.streamCommercial': ['Missing', 'Twitch streaming.'], 'key.streamToggleMic': ['Missing', 'Twitch streaming.'],
   'key.fullscreen': ['Missing', 'HUD button exists; F11 key unbound.'],
 };
 for (let i = 1; i <= 9; i++) KEY_STATUS[`key.hotbar.${i}`] = ['Partial', `Digit${i} fixed; scroll also selects slots.`];
 assert.deepEqual(Object.keys(KEY_STATUS).sort(), keyBindings.map(k => k.description).sort());
 
-const SOUND_STATUS = { MASTER: ['Partial', 'Since 0.23.2: Master Volume slider default 1.0 with OFF/percent label, plus a non-native Sounds toggle; the other eight categories are missing.'] };
-const soundStatus = c => SOUND_STATUS[c] ?? ['Missing', 'No per-category volume; category routing absent.'];
+// Every category has a 0-1 slider (default 1, "<soundCategory label>: OFF/N%") saved in soundLevels; audio.js applies
+// SoundManager.getNormalizedVolume with the sounds.json category of the played event (settings.js; settings.test.js).
+const ROUTED = 'Slider default 1 with the en_US label and OFF/percent value; audio.js multiplies sounds of this sounds.json category by its level inside getNormalizedVolume (clamp 0-1), skips 0 results and stops playing ones when set to 0 (settings.js normalizedVolume; settings.test.js).';
+const SOUND_STATUS = {
+  MASTER: ['Implemented', 'Master Volume slider default 1 with OFF/percent label. As in SoundManager: getSoundCategoryVolume(MASTER) is 1, the level is the master gain over every sound, and playSound skips all sounds at 0 (audio.js; settings.test.js). A non-native Sounds on/off switch remains.'],
+  MUSIC: ['Partial', 'Slider and gain path exist, but the port has no MusicTicker, so no music category sound plays.'],
+  RECORDS: ['Partial', 'Slider and gain path exist; no jukebox or note blocks play record sounds.'],
+  AMBIENT: ['Partial', 'Slider and gain path exist; no ambient category sounds (cave ambience) are played.'],
+};
+const soundStatus = c => SOUND_STATUS[c] ?? ['Implemented', ROUTED];
 
 const cell = v => String(v).replace(/\|/g, '\\|');
 const f = v => (Number.isInteger(v) ? String(v) : String(Number(v)));
@@ -143,8 +151,8 @@ const SCREEN_STATUS = {
   GuiOptions: 'Partial: one local modal (main.js) holds a subset of FOV, difficulty, sound, sensitivity and video controls; no sub-screens.',
   GuiVideoSettings: 'Partial: Particles, GUI scale, brightness, render distance (block units), view bobbing in the shared modal; Graphics, AO, clouds, framerate, anaglyph, mipmaps, anisotropy absent.',
   ScreenChatOptions: 'Missing (no chat).',
-  GuiScreenOptionsSounds: 'Partial: master volume and on/off only.',
-  GuiControls: 'Partial: read-only key reference list (main.js), no rebinding, no Reset All, no mouse options.',
+  GuiScreenOptionsSounds: 'Partial: all nine category sliders with the en_US "<category>: <value>" labels in ordinal order, inside the shared Options modal (no separate screen, no full-width master row, no gui.button.press on release); a non-native Sounds switch remains.',
+  GuiControls: 'Partial: read-only key reference list (main.js), no rebinding, no Reset All; Invert Mouse and Sensitivity live in the Options modal; no Touchscreen option.',
   GuiLanguage: 'Missing (English only).', GuiSnooper: 'Missing.', GuiScreenResourcePacks: 'Missing (fixed original assets).',
 };
 const screenStatusRows = screenLayouts.map(s => {
@@ -164,7 +172,7 @@ Generated by \`node tools/build-settings-catalogue.mjs\`; refresh original evide
 
 The original GameSettings.Options enum has **${counts.options} constants** (${counts.floats} float sliders, ${counts.bools} booleans, ${counts.enums} enumerated cycle options), plus **${keyBindings.length} KeyBindings** (23 named fields and 9 hotbar keys), **${soundCategories.length} SoundCategory entries** and **${screenLayouts.length} settings-related screens** inspected. Browser status counts: options ${statusCount(options.map(o => S[o.name]))}; key bindings ${statusCount(Object.values(KEY_STATUS))}; sound categories ${statusCount(soundCategories.map(c => soundStatus(c.enum)))}.
 
-Evidence classes. Native-executed: Options static initialization and slider conversion methods, the unchanged GameSettings constructor run headlessly (a null-field Minecraft instance supplying only the isJava64bit flag, no options file), every constructed KeyBinding, SoundCategory constants/volumes, private string value arrays, EnumDifficulty/EnumChatVisibility and the static option arrays of GuiVideoSettings, ScreenChatOptions, GuiOptions and GuiControls. Bytecode-read: options.txt save/load key order and field binding, widget/string order in each screen initGui, display/cycle strings. Not executed: localized text (no lang files available), widget coordinates, controls-screen English sort order, per-click cycle arithmetic, resource pack and language list contents, snooper data. Render distance is 12 chunks here because the probe sets the 64-bit flag; the 32-bit path gives 8.
+Evidence classes. Native-executed: Options static initialization and slider conversion methods, the unchanged GameSettings constructor run headlessly (a null-field Minecraft instance supplying only the isJava64bit flag, no options file), every constructed KeyBinding, SoundCategory constants/volumes, private string value arrays, EnumDifficulty/EnumChatVisibility and the static option arrays of GuiVideoSettings, ScreenChatOptions, GuiOptions and GuiControls. Bytecode-read: options.txt save/load key order and field binding, widget/string order in each screen initGui, display/cycle strings, and the mouse-look and sound gain constants (reference \`controls\`: EntityRenderer sensitivity curve, cinematic-camera factor 0.05, invert multiplier -1, MouseFilter.smooth, Entity.setAngles 0.15 degrees per unit and the [-90, 90] pitch clamp, SoundManager category/normalized volume clamp 0-1, pitch clamp 0.5-2, attenuation distance 16 x max(1, volume), and smoothCamera toggled only by key.smoothCamera). en_US.lang strings are read from the JAR (reference \`lang\`). Not executed: other locales, widget coordinates, controls-screen English sort order, per-click cycle arithmetic, resource pack and language list contents, snooper data. Render distance is 12 chunks here because the probe sets the 64-bit flag; the 32-bit path gives 8.
 
 ## Options (GameSettings.Options ordinal order)
 
