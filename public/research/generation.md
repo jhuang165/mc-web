@@ -7,7 +7,7 @@ The live game offers finite 128 × 128 × 256 Java worlds (generation version 9,
 | GEN-01 | Biome layers (`GenLayer.initializeAllBiomeGenerators`), the `BiomeGenBase` registry, `WorldChunkManager` | Done, wired into Java worlds |
 | GEN-02 | Noise octaves and `ChunkProviderGenerate` terrain density, biome surface blocks, sea level 63 | Done, wired into Java worlds |
 | GEN-03 | `MapGenCaves`, `MapGenRavine` | Done, wired into Java worlds |
-| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes, GEN-04c dungeons, the GEN-04d pre-decoration provider stage, GEN-04e decorator counts/simple features and GEN-04f tree generators/big mushrooms/biome tree pickers replay exactly; standalone, not wired into Java worlds |
+| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes, GEN-04c dungeons, the GEN-04d pre-decoration provider stage, GEN-04e decorator counts/simple features, GEN-04f tree generators/big mushrooms/biome tree pickers and GEN-04g springs and the BiomeDecorator driver replay exactly; standalone, not wired into Java worlds |
 | GEN-05 | Structures (villages, strongholds, mineshafts, temples) | Open |
 | GEN-06 | Integration: streamed world, new generation version, seed entry | Partial: version 9 is playable at 256 height; finite viewport, no streaming |
 
@@ -294,3 +294,53 @@ A mutation check fails the replay. The mutations were: resetting BigTree's heigh
 Still open: springs, the decorator driver with native heightmap and top-solid services, biome decorate overrides and flower picks, emeralds and monster eggs, worldgen animals and snow/ice, native Chunk storage, lighting and notifications, and live placement in Java worlds. `src/trees.js` (the sapling-growth oak port) is unchanged. Runtime stays 0.23.2, generation version 9.
 
 GEN-04f validation: `npm test` **711/711**, `npm run build` and **5/5** memory-bridge tests pass; native reference regeneration is byte-identical.
+
+## GEN-04g: springs and the BiomeDecorator driver
+
+`src/gen-world.js` is a generation world over native-layout chunk storage. `GenChunk` takes the `Chunk(World, Block[], byte[], x, z)` arrays, keeps 16-block sections, and builds the height map with `generateSkylightMap`. `GenWorld` provides the services worldgen calls in the native order:
+
+- block, metadata and block-light reads, `isAirBlock`, `getHeightValue` and `getTopSolidOrLiquidBlock`;
+- `setBlock` in `func_150807_a` order, `setBlockMetadataWithNotify`, `setBlockToAir` and `func_147480_a` destroy with item drops (the doTileDrops path, including tall-grass seeds, cocoa and reed items);
+- neighbour notification, `onBlockAdded` and `breakBlock` for the blocks worldgen touches. These cover liquids, sand/gravel, the bush family, reeds, cactus, vine, cocoa and leaf/log decay marks. Any other callback throws instead of guessing;
+- `scheduleBlockUpdate` with WorldServer semantics. In immediate mode, every block except fire (`func_149698_L`) runs `updateTick` at once with the world Random when chunks exist within 8 blocks. So liquids cascade and sand/gravel fall instantly. Otherwise each (x, y, z, block) is queued once.
+
+The full BlockDynamicLiquid/BlockStaticLiquid tick runs on top of this: flow costs, spread directions, hardening to obsidian, cobblestone or stone, and the lava fizz.
+
+`src/springs.js` ports `WorldGenLiquids`. It checks for stone above and below, then counts stone and air sides; with exactly three stone sides and one air side, it places the spring with flag 2 and ticks it immediately.
+
+`src/biome-decorator.js` ports `BiomeDecorator.decorateChunk` and `genDecorations`. `BiomeDecorator(slot)` holds one biome's decorator objects and counts, and `decorate(world, random, slot, blockX, blockZ, trees)` rejects re-entry with "Already decorating!!". The draw order is:
+
+1. base ores;
+2. sand, clay and gravel discs at the top solid or liquid block;
+3. trees, with a 1 in 10 extra tree; each pick from `pickTree` gets `setScale(1, 1, 1)`, then `generate`, then `func_150524_b` after a success;
+4. big mushrooms;
+5. flowers at `nextInt(height + 32)`. `pickFlower` ports `func_150572_a`: the base dandelion/poppy picker, the plains tulip noise and other plains flowers (slots 1 and 129), the flower forest noise (slot 132), and the swamp's blue orchid (slot 6). The noise is the class-static `NoiseGeneratorPerlin(Random(2345), 1)`;
+6. grass via `pickGrassMeta`, dead bushes and lilies (sinking through air);
+7. the per-count brown and red mushrooms, then one extra of each;
+8. reeds (count + 10), the 1 in 32 pumpkin and cacti;
+9. 50 water and 20 lava springs at the nested-`nextInt` heights.
+
+`BiomeDecorators` keeps one decorator per slot, and the shared `BiomeTrees` keeps generator state across chunks as one world does.
+
+SpringProbe and `tools/verify-springs.mjs` run the unchanged `WorldGenLiquids` over a World double backed by real `Chunk` storage, with WorldServer scheduling. The synthetic fixture is mirrored in the test: six stone cave layers of corridors and rooms, with mixed floors, plants, vines, cocoa, sand/gravel ceilings, shafts and liquid pools. [springs-reference.json](springs-reference.json) holds 140 records (748 placed and 73 rejected springs). `src/springs.test.js` replays, exactly:
+
+- per-attempt results;
+- the ordered call hash (block, metadata and light reads, setters, schedules) and the write hash;
+- pending ticks, item drops, sounds and aux effects;
+- a hash of the final chunk storage and height maps;
+- both Random streams.
+
+Coverage includes instant sand/gravel falls, obsidian/cobblestone/stone hardening, fizz, and plant, cactus and reed drops.
+
+BiomeDecoratorProbe and `tools/verify-biome-decorator.mjs` call each biome's own decorator object (`ahu.ar`) for all 59 slots whose decorator is the base class. The Nether slot 8 is skipped, and the End slot 9 has its own decorator. Each call uses the provider population Random. The world is the same Chunk-backed double over native terrain: 4×4-chunk regions of `ChunkProviderGenerate` terrain and biome blocks plus `MapGenCaves` and `MapGenRavine`, from five seeds. [biome-decorator-reference.json](biome-decorator-reference.json) holds the input chunk hashes and 70 records. Each record decorates one to four of a region's inner 2×2 chunks on a fresh world, with 178 decorations in all. Together they make 7,886,840 world calls, 251,664 writes, 39,000 pending ticks and 398 sounds. `src/biome-decorator.test.js` rebuilds the terrain in JS, checks the input hashes, then replays the same hashes and streams as the springs test, plus the next decorator long after each chunk. A mutation check fails the replay: it changed the flower-forest blue-orchid remap.
+
+Still open:
+
+- biome `decorate` overrides: hills emeralds and monster eggs, double plants, desert wells, the roofed-forest tree grid, ice spikes, mutated biomes delegating to the base decorator, and mesa/savanna/taiga extras;
+- worldgen animals and snow/ice;
+- the full `ChunkProviderGenerate.populate` chain on one world, light propagation;
+- live placement in Java worlds.
+
+Runtime stays 0.23.3, generation version 9.
+
+GEN-04g validation: `npm test` **730/730**, `npm run build` and **5/5** memory-bridge tests pass; regenerating both native references is byte-identical.
