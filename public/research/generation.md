@@ -7,7 +7,7 @@ The live game offers finite 128 × 128 × 256 Java worlds (generation version 9,
 | GEN-01 | Biome layers (`GenLayer.initializeAllBiomeGenerators`), the `BiomeGenBase` registry, `WorldChunkManager` | Done, wired into Java worlds |
 | GEN-02 | Noise octaves and `ChunkProviderGenerate` terrain density, biome surface blocks, sea level 63 | Done, wired into Java worlds |
 | GEN-03 | `MapGenCaves`, `MapGenRavine` | Done, wired into Java worlds |
-| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes, GEN-04c dungeons, the GEN-04d pre-decoration provider stage, GEN-04e decorator counts/simple features, GEN-04f tree generators/big mushrooms/biome tree pickers, GEN-04g springs and the BiomeDecorator driver, and GEN-04h biome decorate overrides replay exactly; standalone, not wired into Java worlds |
+| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes, GEN-04c dungeons, the GEN-04d pre-decoration provider stage, GEN-04e decorator counts/simple features, GEN-04f tree generators/big mushrooms/biome tree pickers, GEN-04g springs and the BiomeDecorator driver, GEN-04h biome decorate overrides, and GEN-04i worldgen animals and the freeze/snow pass replay exactly; standalone, not wired into Java worlds |
 | GEN-05 | Structures (villages, strongholds, mineshafts, temples) | Open |
 | GEN-06 | Integration: streamed world, new generation version, seed entry | Partial: version 9 is playable at 256 height; finite viewport, no streaming |
 
@@ -382,6 +382,52 @@ BiomeOverrideProbe and `tools/verify-biome-overrides.mjs` call unchanged `BiomeG
 
 The 1 in 1000 well roll inside decorate is drawn but never hits in these records; the well generator itself is replayed directly.
 
-Still open: worldgen animals and snow/ice, the full `populate` chain on one world with light, and live placement in Java worlds. Runtime stays 0.23.4, generation version 9.
+Still open: worldgen animals and snow/ice (done in GEN-04i, below), the full `populate` chain on one world with light, and live placement in Java worlds. Runtime stays 0.23.4, generation version 9.
 
 GEN-04h validation: `npm test` **742/742**, `npm run build` and **5/5** memory-bridge tests pass; regenerating the reference is byte-identical.
+
+## GEN-04i: worldgen animals and snow/ice
+
+`src/population-tail.js` ports the end of `ChunkProviderGenerate.populate` after the lakes and dungeons. `populateTail(world, random, decoration, chunkX, chunkZ)` reads the biome at (x + 16, z + 16), runs `BiomeDecoration.decorate`, then `SpawnerAnimals.performWorldGenSpawning` over the 16×16 square offset by 8 with the same population Random, then the freeze/snow loop:
+
+- `CREATURES` is each slot's `spawnableCreatureList` (eight distinct lists: farm animals, plus horses on plains 5 and savannas 1, wolves on forests 5 and taigas 8, a second chicken entry on jungles, mooshrooms only on mushroom islands, and nothing on oceans, rivers, deserts, beaches, ice plains and mountains, ice spikes and mesas). The spawning chance is 0.1 for every biome;
+- `performWorldGenSpawning`: while `nextFloat() < 0.1`, the entry comes from `WeightedRandom` on the world's Random, the group size and start from the population Random; each animal gets up to four tries at `getTopSolidOrLiquidBlock`, `setLocationAndAngles(x + 0.5f, y, z + 0.5f, nextFloat() * 360, 0)`, and a ±4 wander redrawn from the start until it lands back in the square (the native bound compares z with x + w, which is the same for 16×16);
+- `canCreatureSpawnAt`: a solid top surface below that is not bedrock, no normal cube or liquid at the feet and no normal cube at the head, each block read separately as natively. `gen-world.js` holds the native `isNormalCube` id set;
+- sheep then roll `getRandomFleeceColor` on the world's Random (5% black, 5% grey, 5% light grey, 3% brown, 1 in 500 of the rest pink);
+- `freezeAndSnow`: for each column, `getPrecipitationHeight`; `isBlockFreezable` (temperature ≤ 0.15 at that height, saved block light below 10, still or flowing water of level 0) places ice one below, then `func_147478_e` (temperature, block light, air, `BlockSnow.canPlaceBlockAt`: not on ice or packed ice; leaves, a full snow layer or an opaque cube that blocks movement) places a snow layer. Both write with flag 2. Temperatures use `javaTemperature` (the y > 64 Perlin(1234) falloff) with the world's `biomeAt`.
+
+`gen-world.js` gains `Chunk.getPrecipitationHeight` with its per-column cache. The cache is −999 until read, reset by `generateSkylightMap`, and cleared by `func_150807_a` for any write at or above the cached height − 1, before the same-block early return. It also gains `getSavedBlockLight` (call kind 6), `biomeAt`, `isNormalCube`, `isLiquid` and an `onEntity` hook for spawned animals.
+
+PopulationTailProbe and `tools/verify-population-tail.mjs` run the unchanged `aho.a` and populate's inline snow loop (copied with its native World calls) on the GEN-04h Chunk-backed world. The world double adds a synthetic saved block light (`floorMod(7x + 3y + 13z + lightBase, 14)`) and captures animals in `spawnEntityInWorld`. The verifier also extracts `en_US.lang` and adds commons-io, because `EntityHorse` names itself through `StringTranslate`; it fails if `SpawnerAnimals` prints a construction exception, rather than silently skipping a spawn. It uses the ten GEN-04h regions plus two cold ones (ice plains with frozen rivers, and plains/river/ice plains). [population-tail-reference.json](population-tail-reference.json) holds the creature lists, spawn chances and temperatures of all 59 slots, the normal-cube ids, and 144 records on fresh worlds:
+
+- 72 spawn records: 184 chunks over 58 slots (the natural biome, plains for the horse list, or the next slot of a shuffled cycle), 20 chained calls per chunk;
+- 24 snow records: the loop over all four inner chunks; then the first chunk populated again from decorate on; then every third column of the second chunk edited around its cached height (a block on top, the top removed, a floating block, a block removed lower down); then the loop over all four again, so cached heights are read after writes;
+- 48 tail records: 125 chunks through decorate, animals and snow with the population Random.
+
+In all there are 1,250 animals (336 sheep, 305 chickens, 296 pigs, 250 cows, 29 mooshrooms, 24 wolves, 10 horses), 1,574 ice and 9,107 snow writes, 4,916,235 calls, 254,397 writes and 45,413 pending ticks. Records list every animal (class, position, yaw/pitch float bits, fleece) and the GEN-04g hashes and streams. `src/population-tail.test.js` checks the tables, rebuilds the terrain, and replays every record exactly, including both Random streams after each chunk.
+
+Mutation checks that fail the replay:
+
+- block-light thresholds for freezing and snow, the freeze temperature and level-0 rule, and snow on packed ice;
+- spawning: the liquid feet check, the number of tries, a horse group size, the fleece thresholds and the pink roll;
+- the precipitation cache: dropping the invalidation, and invalidating only at or above the cached height;
+- precipitation height ignoring liquids.
+
+Not exercised by this data (the mutations survive):
+
+- freezing flowing water;
+- snow on a full snow layer;
+- an opaque cube that does not block movement;
+- bedrock under a spawn;
+- a normal cube at head height.
+
+Leaves pass either snow branch, because `BlockLeaves.isOpaqueCube` is true without fancy graphics. Over-invalidating the precipitation cache, and its reset in `generateSkylightMap`, only force a correct recompute, so neither is observable.
+
+Gaps:
+
+- each entity's own unseeded Random: the `onSpawnWithEgg` follow-range bonus, horse type and markings, and the chicken egg timer;
+- entity state beyond position, rotation and fleece.
+
+Still open: the full `populate` chain on one world (`population-stage.js`, then this tail), light propagation, and live placement in Java worlds. Runtime stays 0.23.4, generation version 9.
+
+GEN-04i validation: `npm test` **752/752**, `npm run build` and **5/5** memory-bridge tests pass; regenerating the reference is byte-identical.

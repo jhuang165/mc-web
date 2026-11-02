@@ -4,9 +4,10 @@
 // WorldServer tick scheduling with WorldGenLiquids' immediate mode (instant falling), and the block
 // callbacks worldgen reaches (BlockDynamicLiquid, BlockStaticLiquid, BlockFalling,
 // BlockBush family, double plants, reeds, cactus, vine, cocoa, leaves/log breakBlock, pumpkin, item
-// drops). Light propagation is not modelled; a callback this does not port throws.
-// Original numeric IDs. Replayed natively in springs.test.js, biome-decorator.test.js and
-// biome-overrides.test.js.
+// drops), Chunk.getPrecipitationHeight's column cache and the queries world spawning and the
+// freeze/snow pass make. Light propagation is not modelled; a callback this does not port throws.
+// Original numeric IDs. Replayed natively in springs.test.js, biome-decorator.test.js,
+// biome-overrides.test.js and population-tail.test.js.
 import { canBlockStay } from "./decoration-features.js";
 import { doublePlantCanStay } from "./biome-features.js";
 
@@ -29,6 +30,11 @@ const MATERIAL = new Array(256).fill(null), FLAGS = new Uint8Array(256), OPACITY
   }
 }
 export const materialOf = (id) => MATERIAL[id] ?? "a";
+// Block.isNormalCube (opaque, non-translucent material that blocks movement, renderAsNormalBlock,
+// not a power source), from PopulationTailProbe.
+const NORMAL_CUBE = new Set([1, 2, 3, 4, 5, 7, 12, 13, 14, 15, 16, 17, 19, 21, 22, 23, 24, 25, 35, 41, 42, 43, 45, 47, 48, 49, 52, 56,
+  57, 58, 61, 62, 73, 74, 80, 82, 84, 86, 87, 88, 91, 97, 98, 99, 100, 103, 110, 112, 120, 121, 123, 124, 125, 129, 133, 137, 153, 155,
+  158, 159, 162, 170, 172, 173, 174]);
 
 // Classes overriding onNeighborBlockChange / onBlockAdded / breakBlock / dropBlockAsItemWithChance (census).
 const NEIGHBOR = new Set([6, 8, 9, 10, 11, 12, 13, 23, 25, 26, 27, 28, 29, 31, 32, 33, 34, 36, 37, 38, 39, 40, 46, 50, 51, 54, 55, 59, 60, 63, 64, 65, 66, 68, 69, 70, 71, 72, 75, 76, 77, 78, 81, 83, 90, 92, 93, 94, 96, 104, 105, 106, 107, 111, 115, 122, 123, 124, 127, 131, 132, 137, 140, 141, 142, 143, 145, 146, 147, 148, 149, 150, 151, 154, 157, 158, 171, 175]);
@@ -52,6 +58,8 @@ class Section {
 export class GenChunk {
   constructor(x, z, blocks, meta) {
     this.x = x; this.z = z; this.sections = new Array(16).fill(null); this.heightMap = new Int32Array(256);
+    // precipitationHeightMap: -999 until getPrecipitationHeight fills the column.
+    this.precipitation = new Int32Array(256).fill(-999);
     // Chunk(World, Block[], byte[], x, z): non-air blocks indexed (x * 16 + z) * 256 + y.
     for (let lx = 0; lx < 16; lx++) for (let lz = 0; lz < 16; lz++) for (let y = 0; y < 256; y++) {
       const i = (lx * 16 + lz) * 256 + y, id = blocks[i];
@@ -64,9 +72,11 @@ export class GenChunk {
   getBlock(x, y, z) { const s = y >= 0 && y < 256 ? this.sections[y >> 4] : null; return s ? s.blocks[(y & 15) << 8 | z << 4 | x] : AIR; }
   getMeta(x, y, z) { const s = y >= 0 && y < 256 ? this.sections[y >> 4] : null; return s ? s.meta[(y & 15) << 8 | z << 4 | x] : 0; }
   topFilledSegment() { for (let i = 15; i >= 0; i--) if (this.sections[i]) return this.sections[i].base; return 0; }
-  // generateSkylightMap: the top block of the top section never counts; columns with nothing keep their value.
+  // generateSkylightMap: the top block of the top section never counts; columns with nothing keep
+  // their height. Every precipitation column is reset.
   generateSkylightMap() {
     const top = this.topFilledSegment();
+    this.precipitation.fill(-999);
     for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++)
       for (let l = top + 15; l > 0; l--) if (OPACITY[this.getBlock(x, l - 1, z)] !== 0) { this.heightMap[z << 4 | x] = l; break; }
   }
@@ -75,6 +85,20 @@ export class GenChunk {
     let i = Math.max(y, l);
     while (i > 0 && OPACITY[this.getBlock(x, i - 1, z)] === 0) i--;
     if (i !== l) this.heightMap[z << 4 | x] = i;
+  }
+  // getPrecipitationHeight: one above the highest block whose material blocks movement or is liquid.
+  precipitationHeight(x, z) {
+    const i = z << 4 | x;
+    if (this.precipitation[i] === -999) {
+      let y = this.topFilledSegment() + 15, h = -1;
+      while (y > 0 && h === -1) {
+        const id = this.getBlock(x, y, z);
+        if (FLAGS[id] & 2 || isLiquidMaterial(id)) h = y + 1;
+        else y--;
+      }
+      this.precipitation[i] = h;
+    }
+    return this.precipitation[i];
   }
   setMeta(x, y, z, meta) {
     const s = this.sections[y >> 4];
@@ -86,17 +110,20 @@ export class GenChunk {
   }
 }
 
+const isLiquidMaterial = (id) => { const m = MATERIAL[id]; return m === "h" || m === "i"; };
 const liquid = (id) => ({ id, material: id === FLOWING_WATER ? "h" : "i", adjacent: 0, cost: new Int32Array(4), flow: [false, false, false, false] });
 
 // A World over loaded GenChunks. Hooks (all optional): onCall(kind, ...ints) for every block
 // access (0 getBlock, 1 setBlock x/y/z/id/meta/flags, 2 getBlockMetadata, 3 block light,
-// 4 setBlockMetadata x/y/z/meta/flags, 5 schedule x/y/z/id/delay/priority); onWrite for each
-// change (metadata writes as id -1, recorded after its notifications); onSound, onAux, onItem.
+// 4 setBlockMetadata x/y/z/meta/flags, 5 schedule x/y/z/id/delay/priority, 6 saved block light);
+// onWrite for each change (metadata writes as id -1, recorded after its notifications); onSound,
+// onAux, onItem, onEntity. light is the full light value, blockLight the saved block-light value,
+// biomeAt(x, z) the World.getBiomeGenForCoords biome (with .temperature).
 export class GenWorld {
-  constructor({ rand, light = () => 0, hasNoSky = false, hellWorld = false } = {}) {
-    this.rand = rand; this.light = light; this.hasNoSky = hasNoSky; this.hellWorld = hellWorld;
+  constructor({ rand, light = () => 0, blockLight = () => 0, biomeAt = null, hasNoSky = false, hellWorld = false } = {}) {
+    this.rand = rand; this.light = light; this.blockLight = blockLight; this.biomeAt = biomeAt; this.hasNoSky = hasNoSky; this.hellWorld = hellWorld;
     this.chunks = new Map(); this.immediate = false; this.pending = []; this.pendingKeys = new Set();
-    this.onCall = null; this.onWrite = null; this.onSound = null; this.onAux = null; this.onItem = null;
+    this.onCall = null; this.onWrite = null; this.onSound = null; this.onAux = null; this.onItem = null; this.onEntity = null;
     this.liquids = new Map([[FLOWING_WATER, liquid(FLOWING_WATER)], [FLOWING_LAVA, liquid(FLOWING_LAVA)]]);
   }
   addChunk(x, z, blocks, meta) { const c = new GenChunk(x, z, blocks, meta); this.chunks.set(`${x},${z}`, c); return c; }
@@ -118,6 +145,10 @@ export class GenWorld {
     return inWorld(x, z) && y >= 0 && y < 256 ? this.chunk(x >> 4, z >> 4).getMeta(x & 15, y, z & 15) : 0;
   }
   getLight(x, y, z) { this.onCall?.(3, x, y, z); return this.light(x, y, z); }
+  getSavedBlockLight(x, y, z) { this.onCall?.(6, x, y, z); return this.blockLight(x, y, z); }
+  getPrecipitationHeight(x, z) { return this.chunk(x >> 4, z >> 4).precipitationHeight(x & 15, z & 15); }
+  // spawnEntityInWorld for worldgen animals.
+  spawnEntity(entity) { this.onEntity?.(entity); return true; }
   isAirBlock(x, y, z) { return materialOf(this.getBlock(x, y, z)) === "a"; }
   getHeightValue(x, z) {
     if (!inWorld(x, z)) return 64;
@@ -136,6 +167,8 @@ export class GenWorld {
   blocksMovement(id) { return (FLAGS[id] & 2) !== 0; }
   isReplaceable(id) { return (FLAGS[id] & 4) !== 0; }
   isOpaqueCube(id) { return (FLAGS[id] & 16) !== 0; }
+  isNormalCube(id) { return NORMAL_CUBE.has(id); }
+  isLiquid(id) { return isLiquidMaterial(id); }
   solidTop(id, meta) { return (TOP[id] >> meta & 1) !== 0; }
 
   setBlock(x, y, z, id, meta = 0, flags = 3) {
@@ -171,7 +204,9 @@ export class GenWorld {
   }
   // Chunk.func_150807_a.
   setBlockInChunk(c, x, y, z, id, meta) {
-    const column = z << 4 | x, height = c.heightMap[column], old = c.getBlock(x, y, z), oldMeta = c.getMeta(x, y, z);
+    const column = z << 4 | x;
+    if (y >= c.precipitation[column] - 1) c.precipitation[column] = -999;
+    const height = c.heightMap[column], old = c.getBlock(x, y, z), oldMeta = c.getMeta(x, y, z);
     if (old === id && oldMeta === meta) return false;
     let s = c.sections[y >> 4], created = false;
     if (!s) {
