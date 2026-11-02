@@ -1,0 +1,7 @@
+# Simulation boundary
+
+SIM-01 has begun with `tickBlockSystems` in `src/world-tick.js`. The live player tick passes its current time, daylight and player X/Z to this browser-independent function. It advances farming, fluids and fire in that order and invokes each supplied observer immediately after its system runs. The live observers rebuild farm chunks and apply fluid/fire changes to the scene. A headless caller can supply its own observers.
+
+`src/world-tick.test.js` runs 70 changing input ticks through the previous call sequence and the extracted function with real World, Farming, Fluids, Fire and shared Weather random state. It compares ordered observer results, blocks, farmland state, pending queues and random state on every tick; scheduled water changes and fire random draws are exercised. This is a port regression, not an original Java integrated-tick comparison.
+
+This is one segment of the existing tick, not a complete authoritative simulation. Player movement, weather, falling blocks, entities, mining, input capture, saves and presentation are still interleaved in `main.js`. Farming uses the supplied scene daylight. Fluid/fire callbacks can still produce presentation effects, and observers run synchronously, so callers must preserve their ordering and behavior. Separate per-system queues are not a native unified scheduler. Further work must move state ownership and effects across explicit interfaces, record/replay actual player inputs, and compare whole ticks and reloads before claiming headless or multiplayer readiness.

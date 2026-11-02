@@ -2,6 +2,8 @@
 
 Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.23.4. Full parity is unfinished.
 
+SIM-01 (2026-11-02): `world-tick.js` extracts the live farming/fluid/fire tick segment behind a browser-independent function, preserving each synchronous scene observer's position in the sequence. A 70-tick headless port regression compares the old and extracted sequence using real systems, shared random state, blocks and pending queues. This is not the whole authoritative tick: input, player, weather, entities, saves and rendering remain coupled, callbacks may have presentation effects, and system schedulers remain separate. See `public/research/simulation.md`.
+
 WORLD-03e adds a read-only region inspection CLI with filename/slot checks and block mapping counts. See public/research/region-inspection.md.
 
 WORLD-03d (2026-11-02): `region-file.js` adds bounded MCA header/sector parsing and compact rebuilding, gzip/zlib IDs, explicit timestamps and NBT/chunk helpers. Four real original RegionFile fixtures (empty/sparse/fragmented/all 1024 slots, 1,037 payloads) and five allocation probes; original reader accepts JS and Chrome rewrites. See `public/research/region-file.md`. Standalone only: no in-place allocator, runtime save UI, filesystem durability or complete Java save interchange.

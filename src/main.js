@@ -87,6 +87,7 @@ import { enterWater, drownBubbles, burst, potionColor, potionParticles, itemCrum
 import { JavaRandom } from "./lighting.js";
 import { displayTicks } from "./display-ticks.js";
 import { importedRuntime } from "./world-import.js";
+import { tickBlockSystems } from "./world-tick.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -2074,9 +2075,9 @@ function movementTick() {
       ? "SWIMMING"
       : "WALKING";
   tickSurvival(inWater, oldPosition, inLavaNow);
-  applyFarmUpdates(farming.tick(survival.time,scene.daylight));
-  if(fluids)scene.updateBlocks(fluids.tick());
-  if(fire)scene.updateBlocks(fire.tick(position.x,position.z));
+  tickBlockSystems({ farming, fluids, fire },
+    { time: survival.time, daylight: scene.daylight, x: position.x, z: position.z },
+    { farming: applyFarmUpdates, fluids: changes => scene.updateBlocks(changes), fire: changes => scene.updateBlocks(changes) });
   scene.setFurnaces(survival.furnaces);
   tickChests();
   inhabited.tick(survival.time);
