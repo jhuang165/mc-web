@@ -1,0 +1,1 @@
+Captured 295 browser-port movement ticks from pinned pre-extraction main.js (9447171) across seven scenarios, with reusable deterministic fixture. Not Java oracle. Regeneration byte-identical.
