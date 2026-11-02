@@ -157,7 +157,7 @@ export class VoxelScene {
     );
     this.scene.add(this.outline);
     this.outline.visible = false;
-    this.distance = 155;
+    this.distance = 192;
     this.fogBrightness = 1;
     this.setTime(6000);
     this.resize = () => {

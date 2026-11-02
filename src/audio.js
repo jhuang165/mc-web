@@ -121,7 +121,7 @@ export class SoundBank {
         1,
         volume *
           (clip.volume || 1) *
-          (this.options().volume ?? 0.65) *
+          (this.options().volume ?? 1) *
           attenuation,
       );
       source.connect(gain);

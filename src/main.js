@@ -6,6 +6,7 @@ import "./style.css";
 import "./minecraft-ui.css";
 import "./container-ui.css";
 import {guiScale,stackCount,durabilityBar,tooltipLines} from "./gui.js";
+import { migrateSettings, lookScale, optionLabel, renderDistanceBlocks, GUI_SCALE_NAMES } from "./settings.js";
 import * as THREE from "three";
 import {
   World,
@@ -104,12 +105,15 @@ try {
 } catch {
   worlds = [];
 }
+// Device preferences with the GameSettings defaults of 1.7.10 (settings.js): sensitivity 0..1,
+// FOV in degrees, render distance in chunks (12, the 64-bit JVM default), master volume 1.
 let options = {
-  sensitivity: 1,
-  volume: 0.65,
+  settingsVersion: 2,
+  sensitivity: 0.5,
+  volume: 1,
   bobbing: true,
-  fov: 75,
-  distance: 155,
+  fov: 70,
+  distance: 12,
   sound: true,
   guiScale:0,
   particles:0,
@@ -122,7 +126,7 @@ let options = {
 try {
   options = {
     ...options,
-    ...JSON.parse(localStorage.getItem("blockworld.settings") || "{}"),
+    ...migrateSettings(JSON.parse(localStorage.getItem("blockworld.settings") || "{}")),
   };
 } catch {}
 options.particles = particleSetting(options.particles);
@@ -450,7 +454,7 @@ function notes() {
 function settings() {
   modal(
     "Options",
-    `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>GUI Scale<select id="gui-scale">${[[0,"Auto"],[1,"Small"],[2,"Normal"],[3,"Large"],[4,"Larger"]].map(([v,label])=>`<option value="${v}" ${Number(options.guiScale||0)===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Difficulty<select id="difficulty">${DIFFICULTY_NAMES.map((label,v)=>`<option value="${v}" ${options.difficulty===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Particles<select id="particles">${["All","Decreased","Minimal"].map((label,v)=>`<option value="${v}" ${options.particles===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Field of view <output id="fov-value">${options.fov}°</output><input type="range" id="fov" min="50" max="100" value="${options.fov}"></label><label>Mouse sensitivity <output id="sensitivity-value">${options.sensitivity.toFixed(1)}×</output><input type="range" id="sensitivity" min="0.2" max="2" step="0.1" value="${options.sensitivity}"></label><label>View distance <output id="distance-value">${options.distance} blocks</output><input type="range" id="distance" min="70" max="200" step="5" value="${options.distance}"></label><label>Brightness <output id="gamma-value">${gammaLabel(options.gamma)}</output><input type="range" id="gamma" min="0" max="1" step=".01" value="${options.gamma}"></label><label>Sound volume <output id="volume-value">${Math.round(options.volume * 100)}%</output><input type="range" id="volume" min="0" max="1" step=".05" value="${options.volume}"></label><label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
+    `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>GUI Scale<select id="gui-scale">${GUI_SCALE_NAMES.map((label,v)=>`<option value="${v}" ${Number(options.guiScale||0)===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Difficulty<select id="difficulty">${DIFFICULTY_NAMES.map((label,v)=>`<option value="${v}" ${options.difficulty===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Particles<select id="particles">${["All","Decreased","Minimal"].map((label,v)=>`<option value="${v}" ${options.particles===v?"selected":""}>${label}</option>`).join("")}</select></label><label>FOV <output id="fov-value">${optionLabel("fov",options.fov)}</output><input type="range" id="fov" min="30" max="110" step="1" value="${options.fov}"></label><label>Sensitivity <output id="sensitivity-value">${optionLabel("sensitivity",options.sensitivity)}</output><input type="range" id="sensitivity" min="0" max="1" step="0.005" value="${options.sensitivity}"></label><label>Render Distance <output id="distance-value">${optionLabel("distance",options.distance)}</output><input type="range" id="distance" min="2" max="16" step="1" value="${options.distance}"></label><label>Brightness <output id="gamma-value">${gammaLabel(options.gamma)}</output><input type="range" id="gamma" min="0" max="1" step=".01" value="${options.gamma}"></label><label>Master Volume <output id="volume-value">${optionLabel("volume",options.volume)}</output><input type="range" id="volume" min="0" max="1" step=".05" value="${options.volume}"></label><label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
   );
   for (const key of [
     "fov",
@@ -467,19 +471,10 @@ function settings() {
         : +e.target.value;
       const out = $("#" + key + "-value");
       if (out)
-        out.textContent =
-          key === "fov"
-            ? options[key] + "°"
-            : key === "distance"
-              ? options[key] + " blocks"
-              : key === "gamma"
-                ? gammaLabel(options[key])
-              : key === "volume"
-                ? Math.round(options[key] * 100) + "%"
-                : options[key].toFixed(1) + "×";
+        out.textContent = key === "gamma" ? gammaLabel(options[key]) : optionLabel(key, options[key]);
       scene.camera.fov = options.fov;
       scene.camera.updateProjectionMatrix();
-      scene.setDistance(options.distance);
+      scene.setDistance(renderDistanceBlocks(options.distance));
       scene.setGamma(options.gamma);
       try {
         localStorage.setItem("blockworld.settings", JSON.stringify(options));
@@ -487,7 +482,7 @@ function settings() {
     };
   $("#difficulty").onchange=e=>{options.difficulty=difficultySetting(+e.target.value);updateDifficulty();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
   $("#particles").onchange=e=>{options.particles=particleSetting(+e.target.value);updateParticleOptions();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
-  $("#gui-scale").onchange=e=>{options.guiScale=+e.target.value;updateGuiScale();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
+  $("#gui-scale").onchange=e=>{options.guiScale=+e.target.value&3;updateGuiScale();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
   $("#test-sound").onclick = async () => {
     if (!options.sound) {
       $("#audio-status").textContent = "Sounds are muted.";
@@ -2374,10 +2369,12 @@ function setupPointer() {
             : e.clientY - pointerY;
       pointerX = e.clientX;
       pointerY = e.clientY;
-      yaw -= dx * 0.002 * options.sensitivity;
+      // EntityRenderer's sensitivity curve per pixel (settings.js); the browser reports CSS pixels.
+      const look = lookScale(options.sensitivity);
+      yaw -= dx * look;
       pitch = Math.max(
         -1.55,
-        Math.min(1.55, pitch - dy * 0.002 * options.sensitivity),
+        Math.min(1.55, pitch - dy * look),
       );
       dragDistance += Math.abs(dx) + Math.abs(dy);
     }
@@ -2596,7 +2593,7 @@ async function boot(){try {
   scene.setWorld(world);
   scene.camera.fov = options.fov;
   scene.camera.updateProjectionMatrix();
-  scene.setDistance(options.distance);
+  scene.setDistance(renderDistanceBlocks(options.distance));
   scene.setGamma(Number(options.gamma) || 0);
   updateParticleOptions();
   setupPointer();

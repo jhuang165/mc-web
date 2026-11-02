@@ -32,11 +32,11 @@ assert.equal(Object.keys(OPTION_FILE_KEY).length, options.length);
 // Browser status. Conservative: Verified is never used here; Implemented requires an exact native value set/default plus a named test.
 const S = {
   INVERT_MOUSE: ['Missing', 'No inversion in mouse-look handling (main.js).'],
-  SENSITIVITY: ['Partial', 'Slider 0.2-2.0x default 1.0 scaling 0.002 rad/px (main.js options.sensitivity), not native 0-1 default 0.5 and native curve.'],
-  FOV: ['Partial', 'Slider 50-100 default 75 (main.js); native 30-110 default 70. Bow/sprint/flight FOV modifiers exist in bow.js and main.js. MISMATCH (reported, unchanged).'],
+  SENSITIVITY: ['Partial', 'Since 0.23.2: slider 0-1 default 0.5 with the native EntityRenderer curve (settings.js lookScale, f=s*0.6+0.2, f^3*8*0.15 deg per pixel) and native *yawn*/HYPERSPEED!!!/percent labels (settings.test.js). Browser movement is in CSS pixels, not LWJGL device pixels; pitch clamp is +-1.55 rad, not +-90 degrees; smooth camera and invert open.'],
+  FOV: ['Implemented', 'Since 0.23.2: slider 30-110 step 1, default 70, Normal/Quake Pro labels (main.js, settings.js; settings.test.js, settings-catalogue.test.js). Bow/sprint/flight FOV modifiers exist in bow.js and main.js; the modifier set is audited separately.'],
   GAMMA: ['Partial', 'Slider 0-1 default 0 (Moody) matches native range/default; scene.setGamma lightmap application and native label strings not audited against native output.'],
   SATURATION: ['Missing', 'Unused by 1.7.10 screens; no browser counterpart.'],
-  RENDER_DISTANCE: ['Partial', 'Block-distance slider 70-200 default 155 (main.js options.distance); native chunk count 2-16, default 12 on 64-bit (8 on 32-bit). MISMATCH in units and range (reported, unchanged).'],
+  RENDER_DISTANCE: ['Partial', 'Since 0.23.2: chunk slider 2-16 step 1, default 12 (the 64-bit JVM default), "N chunks" label; fog far plane renderDistanceChunks*16 (settings.js renderDistanceBlocks). Chunk loading/culling by distance is open because worlds are finite columns.'],
   VIEW_BOBBING: ['Partial', 'Toggle default on matches native; bobbing application not audited here.'],
   ANAGLYPH: ['Missing', 'No 3D anaglyph rendering.'],
   ADVANCED_OPENGL: ['Missing', 'No occlusion-culling toggle (WebGL renderer).'],
@@ -45,7 +45,7 @@ const S = {
   DIFFICULTY: ['Implemented', 'Select Peaceful/Easy/Normal/Hard, default Normal (main.js, difficulty.js; difficulty.test.js, particle/difficulty references). Hardcore lock and server-side difficulty open.'],
   GRAPHICS: ['Missing', 'No Fast/Fancy toggle; one render quality.'],
   AMBIENT_OCCLUSION: ['Missing', 'Smooth lighting always on (scene.js smoothFace); no Off/Minimum/Maximum selector.'],
-  GUI_SCALE: ['Partial', 'Auto/Small/Normal/Large plus non-native "Larger"=4 (main.js); gui.js guiScale() uses the native 320x240 loop. EXTRA value (reported, unchanged).'],
+  GUI_SCALE: ['Implemented', 'Since 0.23.2: Auto/Small/Normal/Large only (settings.js GUI_SCALE_NAMES, values masked with & 3, saved "Larger" migrates to Large); gui.js guiScale() uses the native 320x240 loop. A select replaces the cycling button.'],
   RENDER_CLOUDS: ['Missing', 'Fancy clouds always rendered (sky.js); no toggle.'],
   PARTICLES: ['Implemented', 'All/Decreased/Minimal select, default All, native filtering and rain attempts (particle-settings.js; particle-settings.test.js).'],
   CHAT_VISIBILITY: ['Missing', 'No chat.'],
@@ -96,7 +96,7 @@ const KEY_STATUS = {
 for (let i = 1; i <= 9; i++) KEY_STATUS[`key.hotbar.${i}`] = ['Partial', `Digit${i} fixed; scroll also selects slots.`];
 assert.deepEqual(Object.keys(KEY_STATUS).sort(), keyBindings.map(k => k.description).sort());
 
-const SOUND_STATUS = { MASTER: ['Partial', 'Single volume slider plus Sounds toggle, default 0.65 (native 1.0; MISMATCH reported, unchanged).'] };
+const SOUND_STATUS = { MASTER: ['Partial', 'Since 0.23.2: Master Volume slider default 1.0 with OFF/percent label, plus a non-native Sounds toggle; the other eight categories are missing.'] };
 const soundStatus = c => SOUND_STATUS[c] ?? ['Missing', 'No per-category volume; category routing absent.'];
 
 const cell = v => String(v).replace(/\|/g, '\\|');

@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { DIFFICULTY_NAMES, NORMAL, difficultySetting } from './difficulty.js';
 import { particleSetting } from './particle-settings.js';
 import { guiScale } from './gui.js';
+import { GUI_SCALE_NAMES } from './settings.js';
 
 const read = name => readFile(new URL(name, import.meta.url), 'utf8');
 const ref = JSON.parse(await read('../public/research/settings-reference.json'));
@@ -84,18 +85,17 @@ test('port values that exist natively match the native defaults and value sets',
   assert.equal(guiScale(1920, 1080, 1), 1);
 });
 
-test('known port/native mismatches are tracked so a fix must update the catalogue', () => {
-  // Reported, not silently changed: update settings-parity-catalogue notes when any of these changes.
-  assert.equal(portOptions.fov, 75);
-  assert.notEqual(portOptions.fov, defaults.fov);
-  assert.deepEqual(slider('fov'), [50, 100]);
-  assert.notDeepEqual(slider('fov'), [option('FOV').min, option('FOV').max]);
-  assert.equal(portOptions.distance, 155);
-  assert.deepEqual(slider('distance'), [70, 200]);
-  assert.equal(portOptions.volume, 0.65);
-  assert.notEqual(portOptions.volume, ref.soundCategories[0].default);
-  assert.equal(portOptions.sensitivity, 1);
-  assert.notEqual(portOptions.sensitivity, defaults.mouseSensitivity);
-  assert(main.includes('[4,"Larger"]'), 'port GUI scale has a non-native fifth value');
-  for (const word of ['MISMATCH', 'EXTRA value']) assert(catalogue.includes(word), word);
+test('FOV, render distance, sensitivity, master volume and GUI scale use the native values', () => {
+  // Formerly pinned as port mismatches (75 / 50-100, 155 blocks, 1x, 0.65, a fifth "Larger" scale).
+  assert.equal(portOptions.fov, defaults.fov);
+  assert.deepEqual(slider('fov'), [option('FOV').min, option('FOV').max]);
+  assert.equal(portOptions.distance, ref.renderDistanceByJvm.java64bit);
+  assert.deepEqual(slider('distance'), [option('RENDER_DISTANCE').min, option('RENDER_DISTANCE').max]);
+  assert.equal(portOptions.sensitivity, defaults.mouseSensitivity);
+  assert.deepEqual(slider('sensitivity'), [option('SENSITIVITY').min, option('SENSITIVITY').max]);
+  assert.equal(portOptions.volume, ref.soundCategories[0].default);
+  // GameSettings.GUISCALES: options.guiScale.auto/small/normal/large, in that order.
+  assert.deepEqual(GUI_SCALE_NAMES.map(n => 'options.guiScale.' + n.toLowerCase()), ref.valueSets.find(v => v.role === 'GUI_SCALES').values);
+  assert(!main.includes('"Larger"'), 'no non-native fifth GUI scale');
+  for (const word of ['MISMATCH', 'EXTRA value']) assert(!catalogue.includes(word), word);
 });
