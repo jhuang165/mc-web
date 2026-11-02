@@ -7,7 +7,7 @@ The live game offers finite 128 × 128 × 256 Java worlds (generation version 9,
 | GEN-01 | Biome layers (`GenLayer.initializeAllBiomeGenerators`), the `BiomeGenBase` registry, `WorldChunkManager` | Done, wired into Java worlds |
 | GEN-02 | Noise octaves and `ChunkProviderGenerate` terrain density, biome surface blocks, sea level 63 | Done, wired into Java worlds |
 | GEN-03 | `MapGenCaves`, `MapGenRavine` | Done, wired into Java worlds |
-| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes and GEN-04c dungeons replay exactly; standalone, not wired into Java worlds |
+| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes, GEN-04c dungeons and the GEN-04d pre-decoration provider stage replay exactly; standalone, not wired into Java worlds |
 | GEN-05 | Structures (villages, strongholds, mineshafts, temples) | Open |
 | GEN-06 | Integration: streamed world, new generation version, seed entry | Partial: version 9 is playable at 256 height; finite viewport, no streaming |
 
@@ -172,3 +172,28 @@ Preserved details: room half-sizes drawn before any lookup; floor/roof vetoes an
 No native Chunk mutations, neighbour/lighting notifications, live container acceptance, spawner ticking or provider placement are executed. Natural cases use isolated feature seeds (1000+), not post-lake provider streams. Provider placement and its RNG (eight dungeon attempts at x+nextInt(16)+8, nextInt(256), z+nextInt(16)+8 after the lakes), biome decorators/trees/plants/springs/snow, structures and versioned cross-chunk runtime integration remain open. The browser has no loot-chest generation, spawner block or enchanted books yet.
 
 GEN-04c validation: `npm test` **682/682**, `npm run build` and **5/5** memory-bridge tests pass; native reference regeneration is byte-identical.
+
+## GEN-04d: provider population up to biome decoration
+
+`src/population-stage.js` (`populateBeforeDecoration`) ports `ChunkProviderGenerate.populate` from its first line to the `biome.decorate` call. It composes the GEN-04a seed and the GEN-04b/c generators in native order, over one world adapter covering both generators plus `biome(x, z)`:
+
+1. Read the biome at (chunkX·16 + 16, chunkZ·16 + 16) before reseeding; then reseed with `populationSeed`.
+2. Optional map features (`structures` callback): mineshaft, village, stronghold, scattered feature, on the same Random. Only the village result is kept.
+3. Water lake: skipped without a draw in Desert or Desert Hills (compared by biome object, slots 2 and 17; mutated Desert M is not excluded) or after a village; otherwise `nextInt(4) == 0`, then X = x0 + nextInt(16) + 8, Y = nextInt(256), Z = z0 + nextInt(16) + 8 and `WorldGenLakes(Blocks.water)` (still water, ID 9).
+4. Lava lake: skipped without a draw after a village; otherwise `nextInt(8) == 0`, then X, Y = `nextInt(nextInt(248) + 8)` (inner draw first), Z, and only at Y ≥ 63 a further `nextInt(10) == 0`. `WorldGenLakes(Blocks.lava)` (still lava, ID 11).
+5. Eight dungeon attempts, each X = x0 + nextInt(16) + 8, Y = nextInt(256), Z = z0 + nextInt(16) + 8, even after a village.
+
+The Random is then left exactly at the decorator's input. The gate order was read from `javap` bytecode and is now executed.
+
+`tools/probes/PopulationStageProbe.java` and `node tools/verify-population-stage.mjs` run the unchanged native method on a Random subclass that throws at the first draw whose stack holds any BiomeGenBase or BiomeDecorator class (24 classes). World calls from those frames stop it the same way. Decorator state is cleared afterwards. [population-stage-reference.json](population-stage-reference.json) has 77 records on 308 native terrain/surface/cave/ravine chunks, with input hashes for three world seeds:
+
+- chunks −1..2 squared per seed;
+- three chunks per seed in "stubs" and "village" map-feature modes, where stand-ins log their order and coordinates and draw nothing;
+- the nearest Desert and Desert Hills chunks per seed;
+- searched chunks until three dungeons are accepted (five chests), plus an accepted lava lake and both outcomes of the Y ≥ 63 lava draw.
+
+Six records place water lakes and two place lava lakes; others draw and reject them. `src/population-stage.test.js` replays every record exactly: the biome, the provider's own ordered `nextInt` bound/value draws, structure call order, write count/SHA-1/ID histogram, final chest slots/NBT and spawner names, 59,679 ordered block/light/biome/freeze/tile calls (count and SHA-1) and the next Random long at the decorator's input.
+
+Sky light and freeze results are explicit fixtures (`floorMod(31x + 7y + 17z, 5) == 0 ? 0 : 15`, `floorMod(7x + 13z, 11) == 0`), not native lighting or climate. Real structure generation and its Random consumption are GEN-05; the hook only fixes where it runs. Decoration (biome overrides, base decorator, trees, plants, springs), worldgen animals, snow/ice, native Chunk storage/lighting/notifications and live placement in Java worlds remain open. Runtime stays 0.23.0, generation version 9.
+
+GEN-04d validation: `npm test` **684/684**, `npm run build` and **5/5** memory-bridge tests pass; native reference regeneration is byte-identical.
