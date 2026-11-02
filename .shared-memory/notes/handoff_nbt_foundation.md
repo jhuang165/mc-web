@@ -1,0 +1,13 @@
+# WORLD-03a: raw NBT foundation
+
+Owner: codex-nbt-foundation. Implemented in the shared canonical game checkout, alongside Claude's void and GEN-04h work. Only separately claimed paths were edited. Runtime/version/shared PROJECT and roadmap files were deliberately left to their owners.
+
+Added src/nbt.js: browser-compatible uncompressed named-compound reader/writer for all Java 1.7.10 payload tag types 1–11, exact signed BigInt longs, modified UTF-8 (NUL/surrogates), signed arrays, Map compounds, list payloads, Java NaN and empty-list write canonicalization. Validates numeric types and bounds input/output bytes, aggregate entries/elements and depth. Defaults: 16 MiB, 1M elements, max depth 512. Resource limits and malformed-input rejection are deliberate port policy, not NBTSizeTracker parity.
+
+Native evidence: tools/probes/NbtProbe.java + tools/verify-nbt.mjs execute unchanged SHA-1-pinned original NBT writers and CompressedStreamTools reader. 73 records in public/research/nbt-reference.json include all types, numeric endpoints/subnormals/nonfinites/signed zero, max strings, Unicode, every list element type, arrays, dangerous names, synthetic section/chunk and depth 512. Every normalized native input/output tree agrees; native equals fails for NaN, so use normalized comparison. Reflect NBTTagList.b for inspection; dq.a(int) removes an element. Reference regeneration is byte-identical.
+
+Tests: 8 new src/nbt.test.js cases decode every native record, independently encode its expected typed tree to exact native bytes, and re-encode. Additional regressions: truncation points, malformed strings/lengths/types, copied view arrays, duplicate names, resource bounds, cyclic encode and rejection of lossy input. Full npm test: 740/740 on 295293a (includes concurrent void change). npm run build passes (0.23.4), Python bridge 5/5 passes.
+
+Scope/next: public/research/nbt.md documents API and evidence. Raw codec only; gzip/zlib, Anvil, item/tile adapters, gameplay integration, migration, and Java save round trips remain open. New compounds use Map insertion order rather than Java HashMap ordering; canonicalized inputs may not reproduce original noncanonical bytes. No UI/browser acceptance or Site publish claimed.
+
+Integrator: add WORLD-03a scoped foundation entry to parity-roadmap.md and PROJECT.md when those files are free. This does not close WORLD-01 or Java save interoperability. Check history for the commit titled "Add raw 1.7.10 NBT codec with native reference replays". Push validation runs manually because push:github refuses unrelated active/untracked Claude work and historical bridge notes; do not stage those files.
