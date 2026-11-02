@@ -79,3 +79,70 @@ byte-identical). Recorded JVM: 19.0.1.
 3. Strongholds (ring placement, biome search on the WorldChunkManager, portal room), villages
    (biome-checked start, roads, well, houses, villagers), scattered features (desert/jungle temples,
    witch huts) and nether fortresses on the same framework.
+
+## Live worlds (GEN-05b)
+
+`src/mineshaft-world.js` runs `MapGenMineshaft` in live Java worlds whose `generationVersion` is 10
+or higher. `java-world.js` calls `generateLiveMineshafts` once caves and ravines have run for all 64
+chunks. Version 9 worlds take the unchanged code path; `java-world.test.js` pins their snapshot
+SHA-1 values, which were recorded from the pre-GEN-05b module. The World default version is not
+changed here.
+
+- **Mineshaft-only population.** Each loaded chunk runs the 1.7.10 `provideChunk` (terrain, surface,
+  caves, ravines) and then the `func_151539_a` start search (range 8). The populate step is only the
+  population reseed followed by `generateStructuresInChunk`, over the native box (chunk*16+8 ..
+  +23). Villages, strongholds, temples, lakes, dungeons and decorators never run. Every mineshaft
+  write therefore sees terrain, caves, ravines and earlier mineshaft writes only. The native results
+  of this pass are not the results of a full native populate.
+- **Finite area.** The 8 × 8 live chunks and a one-chunk ring (chunks -1..8 on each axis) load in
+  x-outer, z-inner order, as `ChunkProviderServer.loadChunk` does, and fire the four
+  `Chunk.populateChunk` checks. That gives 81 populate calls over chunks -1..7. Every live column gets
+  exactly the writes native population gives it for this load order, so nothing in the live area is
+  lost. Ring terrain is built only when the pass reads or writes it, and writes that land in the
+  ring are discarded, the same way World bounds would discard them. Spawners, carts, pending ticks
+  and drops are filtered to the live area.
+- **Callbacks.** Chunk storage writes run `onBlockAdded`/`breakBlock` even for flag-2 writes.
+  `BlockTorch` (wall attachment, support, drops) and `BlockRail`/`BlockRailBase$Rail` (shape
+  logic, support drop, slope notification) are ported. A redstone power source next to a rail
+  throws, because it is unported.
+- **Live mapping.** Changed cells map through `block-registry` `fromOriginal(id, meta)`, and an
+  unmapped id throws. The mapper loads by dynamic import (an import cycle), so callers that build
+  a version-10 World at startup must `await originalBlockMapperReady` or call
+  `setOriginalBlockMapper` first.
+- **Output.** `world.generatedStructures = { mineshafts: [{chunkX, chunkZ, boundingBox}],
+  spawners: [{x, y, z, entityId}], minecartChests: [{x, y, z, items: [{slot, id, damage, count,
+  stored?}]}], pendingTicks, droppedItems }`. Coordinates are world-local, carts sit at the native
+  x+0.5/y+0.5/z+0.5, item ids are the original 1.7.10 ids, and records are in native creation order.
+
+Evidence: `tools/probes/MineshaftWorldProbe.java` and `tools/verify-mineshaft-world.mjs` write
+`mineshaft-world-reference.json` (84 KB). The probe runs unchanged `aqz.d`, `asw` and `ave` over
+real `apx` Chunk storage, with real World `setBlock`/notification code. It covers four worlds:
+default seeds 0 and 17, amplified 10 and large-biomes 0. Each record keeps:
+- the 100 input chunk hashes;
+- the population order;
+- per-chunk write and call hashes with cart inventories;
+- start bounding boxes and piece hashes;
+- spawners;
+- the 64 live-chunk cell hashes;
+- World.rand.
+
+`mineshaft-world.test.js` replays all of it in original-ID space. It also checks version-10 Worlds
+end to end: changed cells equal `fromOriginal`, other cells equal version 9, and the structure
+records match the probe.
+
+Visible example: in the default seed-0 world, a cave-spider spawner sits at world-local
+(120, 31, 37) and a chest minecart at (115.5, 43.5, 75.5). The start at local chunk (8, 5) spans
+x 91..210, y 24..50, z 17..162.
+
+Performance (median of 3, Node 20): building a 64-chunk World takes 360–400 ms at version 9 and
+440–480 ms at version 10, so mineshafts add 60–105 ms. That includes the ring terrain built
+lazily (15–36 extra chunks).
+
+Gaps:
+- No full population chain.
+- Powered-rail and redstone logic is unported.
+- Drops and pending ticks are counted or listed, not handed to the live world.
+- Cells follow the `fromOriginal` mapping. All 28,644 changed cells in the four worlds map
+  exactly, and no fluid `state` is returned, but `exact` is not enforced.
+- No structure NBT save.
+- The start map order is that of the recorded JVM's HashMap.

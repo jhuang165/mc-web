@@ -162,19 +162,19 @@ test('unsupported, unregistered and approximated block states are counted and re
   chunk.setBlockState(1, 1, 0, 95, 3);
   // Add nibble: unregistered high id 300 (setBlockState refuses it, so write the arrays).
   const storage = chunk.section(0); storage.lsb[(1 << 8) | 2] = 300 & 255; storage.createMsb().set(2, 1, 0, 300 >> 8);
-  chunk.setBlockState(3, 1, 0, 50, 1); // wall torch -> standing torch
+  chunk.setBlockState(3, 1, 0, 50, 1); // wall torch facing east: exact (meta 1)
   chunk.setBlockState(4, 1, 0, 8, 2); // flowing water
   chunk.setBlockState(5, 1, 0, 60, 3); // moist farmland
   chunk.setBlockState(6, 1, 0, 59, 7); // ripe wheat
   const {record, report} = await importJavaRegionArea(await regions([{chunk}]), {area: {chunkX: 0, chunkZ: 0, width: 1, depth: 1}, destination: {chunkX: 0, chunkZ: 7}});
   assert.equal(report.blocks.sourceCells, 7);
   assert.equal(report.blocks.omitted, 3);
-  assert.equal(report.blocks.exact, 1);
-  assert.equal(report.blocks.approximated, 3);
+  assert.equal(report.blocks.exact, 2);
+  assert.equal(report.blocks.approximated, 2);
   assert.deepEqual(report.blocks.unsupported, [{id: 95, meta: 3, cells: 2, reason: 'unmapped'}, {id: 300, meta: 0, cells: 1, reason: 'unregistered'}]);
-  assert.deepEqual(report.blocks.approximations.map(a => [a.id, a.meta, a.exact, a.state]), [[8, 2, true, ['flowing']], [50, 1, false, undefined], [60, 3, true, ['moisture']]]);
+  assert.deepEqual(report.blocks.approximations.map(a => [a.id, a.meta, a.exact, a.state]), [[8, 2, true, ['flowing']], [60, 3, true, ['moisture']]]);
   const {world} = importLikeScreen(record);
-  assert.deepEqual([0, 1, 2, 3, 4, 5, 6].map(x => [world.get(x, 1, 112), world.getMeta(x, 1, 112)]), [[0, 0], [0, 0], [0, 0], [20, 0], [WATER, 2], [30, 0], [38, 0]]);
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6].map(x => [world.get(x, 1, 112), world.getMeta(x, 1, 112)]), [[0, 0], [0, 0], [0, 0], [20, 1], [WATER, 2], [30, 0], [38, 0]]);
 });
 
 test('the source seed reproduces its 8x8 generator area with only the changed cells as edits', async () => {

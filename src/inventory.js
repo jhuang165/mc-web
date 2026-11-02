@@ -4,12 +4,16 @@
 // Stacks are mutable {id,count,damage} objects, so splits, merges and shared
 // references behave like ItemStack. tools/verify-inventory.mjs replays the same
 // scripts through the unchanged original classes.
+import { copyStored, sameStored, normalizeStored } from "./enchanted-books.js";
 export const OUTSIDE = -999, STACK_LIMIT = 64, DOUBLE_CLICK_MS = 250;
-export const makeStack = (id, count = 1, damage = 0) => ({ id, count, damage });
-export const copyStack = (s) => (s ? { id: s.id, count: s.count, damage: s.damage } : null);
-const split = (s, n) => { s.count -= n; return makeStack(s.id, n, s.damage); };
-// ItemStack.isItemEqual: id and damage (a metadata subtype such as wool colour, or wear); no NBT tags.
-const sameItem = (a, b) => a.id === b.id && a.damage === b.damage;
+// An enchanted book also carries `stored` (its StoredEnchantments list, enchanted-books.js); the
+// field is absent on every other stack, and copies, splits and saves deep-copy it.
+export const makeStack = (id, count = 1, damage = 0, stored) => (stored ? { id, count, damage, stored: copyStored(stored) } : { id, count, damage });
+export const copyStack = (s) => (s ? makeStack(s.id, s.count, s.damage, s.stored) : null);
+const split = (s, n) => { s.count -= n; return makeStack(s.id, n, s.damage, s.stored); };
+// ItemStack.isItemEqual (id and damage: a metadata subtype such as wool colour, or wear) and, for
+// merging, ItemStack.areItemStackTagsEqual on the only tag kept here (StoredEnchantments).
+const sameItem = (a, b) => a.id === b.id && a.damage === b.damage && sameStored(a.stored, b.stored);
 export const dragButton = (event, mode) => (event & 3) | ((mode & 3) << 2);
 
 export class PlayerInventory {
@@ -30,7 +34,7 @@ export class PlayerInventory {
     const item = s && typeof s === "object" && s.id ? this.items[s.id] : null,
       count = Math.floor(Number(s?.count));
     if (!item || !(count > 0)) return null;
-    return makeStack(s.id, Math.min(count, item.stack ?? STACK_LIMIT), Math.max(0, Math.min(item.durability || (item.variants?.length ?? 1) - 1, Math.floor(Number(s.damage) || 0))));
+    return makeStack(s.id, Math.min(count, item.stack ?? STACK_LIMIT), Math.max(0, Math.min(item.durability || (item.variants?.length ?? 1) - 1, Math.floor(Number(s.damage) || 0))), item.storesEnchantments ? normalizeStored(s.stored) ?? [] : undefined);
   }
   maxStack(s) { return this.items[s.id]?.stack ?? STACK_LIMIT; }
   maxDamage(s) { return this.items[s.id]?.durability || 0; }
@@ -52,7 +56,7 @@ export class PlayerInventory {
   firstEmpty() { return this.main.findIndex((s) => !s); }
   find(id, damage) { return this.main.findIndex((s) => s?.id === id && (damage === undefined || s.damage === damage)); }
   storeItemStack(s) {
-    return this.main.findIndex((m) => m && m.id === s.id && m.damage === s.damage && this.stackable(m) && m.count < this.maxStack(m) && m.count < this.limit);
+    return this.main.findIndex((m) => m && sameItem(m, s) && this.stackable(m) && m.count < this.maxStack(m) && m.count < this.limit);
   }
   storePartial(s) {
     if (this.maxStack(s) === 1) {
@@ -64,7 +68,7 @@ export class PlayerInventory {
     let j = this.storeItemStack(s);
     if (j < 0) j = this.firstEmpty();
     if (j < 0) return s.count;
-    const m = (this.main[j] ??= makeStack(s.id, 0, s.damage));
+    const m = (this.main[j] ??= makeStack(s.id, 0, s.damage, s.stored));
     const k = Math.min(s.count, this.maxStack(m) - m.count, this.limit - m.count);
     if (k === 0) return s.count;
     m.count += k;
@@ -242,7 +246,7 @@ export class Container {
           for (const slot of this.dragSlots)
             if (slot && canAddToSlot(slot, inv.cursor, true, inv) && slot.valid(inv.cursor) && inv.cursor.count >= this.dragSlots.size && this.canDrag(slot)) {
               const existing = slot.has ? slot.stack.count : 0,
-                placed = makeStack(source.id, Math.min(dragShare(source.count, this.dragSlots.size, this.dragMode, existing), inv.maxStack(source), slot.limit), source.damage);
+                placed = makeStack(source.id, Math.min(dragShare(source.count, this.dragSlots.size, this.dragMode, existing), inv.maxStack(source), slot.limit), source.damage, source.stored);
               left -= placed.count - existing;
               slot.put(placed);
             }
@@ -586,9 +590,9 @@ export class ContainerScreen {
           count = Math.min(want, inv.maxStack(held), slot.limit);
         if (want > count) capped.add(slot);
         left -= count - existing;
-        slots.set(slot, makeStack(held.id, count, held.damage));
+        slots.set(slot, makeStack(held.id, count, held.damage, held.stored));
       }
-      cursor = makeStack(held.id, left, held.damage);
+      cursor = makeStack(held.id, left, held.damage, held.stored);
     }
     return { slots, cursor, capped };
   }

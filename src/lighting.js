@@ -5,7 +5,7 @@ export { JavaRandom } from "./java-random.js";
 // (blm), RenderGlobal (bma) and Block (aji). The rain, thunder and lightning
 // terms are optional trailing arguments that default to 0 (clear sky); weather.js
 // supplies them. See public/research/lighting.md and weather.md.
-import { SIZE, HEIGHT, FIRE, WEB, LADDER, CACTUS, REEDS, LILY_PAD, TNT, isPlant, normalCube, opaqueCube } from "./world.js";
+import { SIZE, HEIGHT, FIRE, WEB, LADDER, CACTUS, REEDS, LILY_PAD, TNT, FENCE, RAIL, MOB_SPAWNER, isPlant, normalCube, opaqueCube } from "./world.js";
 import { biomeFacts } from "./biomes.js";
 
 const f = Math.fround,
@@ -29,7 +29,7 @@ export const BRIGHTNESS = Array.from({ length: 16 }, (_, i) => {
 // (func_149685_I: 0.2 for normal cubes) and getCanBlockGrass (s: materials
 // that let grass through, used by smooth lighting to decide corner samples).
 export function lightOpacity(b) {
-  if (b === 0 || b === 9 || b === 20 || b === 41 || b === 42 || b === FIRE || b === LADDER || b === CACTUS || b === REEDS || b === LILY_PAD || isPlant(b)) return 0;
+  if (b === 0 || b === 9 || b === 20 || b === 41 || b === 42 || b === FIRE || b === LADDER || b === CACTUS || b === REEDS || b === LILY_PAD || b === FENCE || b === RAIL || b === MOB_SPAWNER || isPlant(b)) return 0;
   if (b === 5 || b === WEB) return 1;
   if (b === 10 || b === 47) return 3; // water; ice (setLightOpacity(3))
   if (b === 46) return 0; // snow layer: not an opaque cube (probe: snow-reference.json "blocks")
@@ -38,12 +38,12 @@ export function lightOpacity(b) {
 // Lava: setLightLevel(1.0F), so (int)(15 * 1.0) = 15.
 // Fire: setLightLevel(1.0F), 15 as well.
 export const lightEmission = (b, lit = false) => (b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : 0);
-export const useNeighborBrightness = (b) => b === 20 || b === 9 || b === 41 || b === 29 || b === 30 || isPlant(b);
+export const useNeighborBrightness = (b) => b === 20 || b === 9 || b === 41 || b === 29 || b === 30 || b === FENCE || b === RAIL || b === MOB_SPAWNER || isPlant(b);
 const AO_SOLID = f(0.2);
 // Block.getAmbientOcclusionLightValue uses isBlockNormalCube (blocksMovement and a
 // normal render), which TNT passes although it is not isNormalCube.
 export const aoValue = (b) => (normalCube(b) || b === TNT ? AO_SOLID : 1);
-export const aoClear = (b) => b === 0 || b === 20 || b === FIRE || isPlant(b);
+export const aoClear = (b) => b === 0 || b === 20 || b === RAIL || b === FIRE || isPlant(b);
 
 // WorldProvider.calculateCelestialAngle.
 export function celestialAngle(ticks, partial = 0) {

@@ -170,3 +170,16 @@ test("Java surface IDs, metadata and original textures cover every emitted surfa
   assert.equal(TILES[blockTile(56, 2)], "sandstone_top");
   assert.equal(TILES[blockTile(57, 2)], "mycelium_top");
 });
+test("generationVersion 9 Java worlds stay byte-identical now that version 10 adds mineshafts", () => {
+  // sha1 (16 hex) of snapshot() block + metadata arrays, recorded from the pre-GEN-05b java-world.js.
+  for (const [seed, landscape, hash] of [
+    ["0", "java", "4ab1f3d71820030e"],
+    ["17", "java", "a9d39e3ed3d6302e"],
+    ["10", "javaAmplified", "dbf9dd86661990f9"],
+    ["0", "javaLargeBiomes", "22dc4cb94148f3eb"],
+  ]) {
+    const world = new World(seed, landscape, 9), { data, meta } = world.snapshot();
+    assert.equal(createHash("sha1").update(data).update(meta).digest("hex").slice(0, 16), hash, `${seed} ${landscape}`);
+    assert.equal(world.generatedStructures, undefined);
+  }
+});

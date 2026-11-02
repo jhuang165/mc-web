@@ -54,7 +54,7 @@ import {Experience,ExperienceOrbs,smeltExperience} from "./experience.js";
 import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import {Farming,cropDrops} from "./farming.js";
-import { EntityWorld, ENTITY_TYPES } from "./entities.js";
+import { EntityWorld, ENTITY_TYPES, heldAttackDamage } from "./entities.js";
 import { deathMessage, showChatLine } from "./death-messages.js";
 import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
@@ -93,6 +93,17 @@ import { tickPlayerMining } from "./player-mining.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
 import { capturePlayerAction, dispatchPlayerAction, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
+import { fromOriginal } from "./block-registry.js";
+import { setOriginalBlockMapper } from "./mineshaft-world.js";
+import { spawnerDisplayEntity } from "./mob-spawner.js";
+import { watchSpawnerBlocks } from "./spawner-block.js";
+import { Rails } from "./rails.js";
+import { Torches } from "./torches.js";
+import { MinecartRenderer } from "./minecart-renderer.js";
+import { restoreStructureEntities, saveStructureEntities, tickMinecartSimulation, tickSpawnerSimulation, tickSpawnersClient, spawnerBurst, pickMinecart, useMinecart } from "./structure-simulation.js";
+// Generation version 10 (live mineshafts) maps original block ids while a World is built; the
+// entry module already holds the registry, so the mapper is set before any World exists.
+setOriginalBlockMapper(fromOriginal);
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -201,6 +212,8 @@ let sounds,
   tntRenderer,
   aimedEntity = null,
   eating = null;
+// Generated-structure entities (structure-simulation.js): mineshaft spawners and chest minecarts.
+let spawners = null, minecarts = null, minecartRenderer = null, aimedCart = null;
 const animation = new PlayerAnimation();
 // GameSettings.thirdPersonView: 0 first person, 1 behind, 2 in front (F5).
 // Not saved, like 1.7.10.
@@ -326,7 +339,8 @@ function makeRecord(p) {
     seed: String(p.seed).slice(0, 80),
     biome: p.biome || "meadow",
     mode: p.mode === "survival" ? "survival" : "creative",
-    generationVersion: isJavaLandscape(p.biome) ? 9 : 8,
+    // Version 10 adds the live mineshafts (mineshaft-world.js) to Java landscapes; saves keep theirs.
+    generationVersion: isJavaLandscape(p.biome) ? 10 : 8,
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -463,7 +477,7 @@ function controls() {
 function notes() {
   modal(
     "Rebuilding 1.7.10, system by system.",
-    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. Broken blocks, mob kills and thrown stacks drop item entities that fall, merge and are picked up. The Java 36-slot inventory with cursor, drag-splitting, shift- and double-click rules; shaped crafting, a crafting table, a fuel-driven furnace and single/large chests on real slots; the tabbed creative inventory with search; wood, stone, iron, diamond and gold tools with per-item durability and repair; leather, chain, iron, gold and diamond armor. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water, crack frames and entity shadows. Pigs, cows, sheep, chickens and night-time zombies with 1.7.10 movement, knockback, pathfinding and AI task lists, melee combat with sprint knockback and critical hits, and food drops. Cows and sheep follow wheat and breed, pigs follow carrots and breed, chickens follow seeds and lay eggs; sheep graze, can be sheared and dyed. Sneaking slows you, lowers the view and stops you at edges. Flowing water and lava spread, mix into obsidian, cobblestone and stone, and lava burns players, mobs and items; buckets pick up and place liquids and milk cows; lakes and springs generate; flowers grow and craft into 16 dyes for wool; snowballs and eggs can be thrown; ladders can be placed and climbed; F5 shows the player model with armor. Rain and thunderstorms follow the original weather timers, darken the sky and light, and bring lightning that strikes and starts fires; fire spreads through wood, wool and leaves and is lit with flint and steel. The Snowy Tundra landscape has snowfall, snow layers and ice. Bows draw and fire arrows, and skeletons shoot back at night and burn by day. Oak saplings grow into trees, with bone meal or over time, and leaves decay and drop saplings and apples. Java worlds now use the original biome layers, terrain surfaces, caves and ravines at 256-block height; trees, ores and structures are not generated there yet. Legacy landscapes keep their existing decoration. Torches; 1.7.10 sky/block light, smooth lighting, lightmap, sky, stars, fog and fancy clouds. Wheat, carrot and potato farming with five hoe tiers, moisture, eight growth stages, bone meal and harvesting; bread crafting and baked potatoes. Zombies rarely drop carrots, potatoes or iron when killed after a player hit. Creepers and TNT explode with block shielding, entity knockback, original puff/smoke effects and item drops; burning arrows light TNT and its fuse emits smoke. Sugar cane and cactus grow, paper/sugar/books craft, and sand/gravel fall and can be deflected by explosions.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Java population/decorators and infinite chunk streaming, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, enchantments, hoppers and other storage, redstone, dimensions, structures, other biomes, void fog, Java saves, and multiplayer. The renderer, terrain, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/items.md" target="_blank" rel="noopener">Item drops ↗</a><a href="/research/creative.md" target="_blank" rel="noopener">Creative inventory ↗</a><a href="/research/shadows.md" target="_blank" rel="noopener">Entity shadows ↗</a><a href="/research/fluids.md" target="_blank" rel="noopener">Flowing water ↗</a><a href="/research/third-person.md" target="_blank" rel="noopener">Third person ↗</a><a href="/research/sheep.md" target="_blank" rel="noopener">Sheep & wool ↗</a><a href="/research/projectiles.md" target="_blank" rel="noopener">Snowballs ↗</a><a href="/research/lava.md" target="_blank" rel="noopener">Lava ↗</a><a href="/research/buckets.md" target="_blank" rel="noopener">Buckets & lakes ↗</a><a href="/research/chickens.md" target="_blank" rel="noopener">Chickens & eggs ↗</a><a href="/research/dyes.md" target="_blank" rel="noopener">Flowers & dyes ↗</a><a href="/research/sneaking.md" target="_blank" rel="noopener">Sneaking & attacks ↗</a><a href="/research/pathfinding.md" target="_blank" rel="noopener">Pathfinding & AI ↗</a><a href="/research/weather.md" target="_blank" rel="noopener">Weather ↗</a><a href="/research/fire.md" target="_blank" rel="noopener">Fire ↗</a><a href="/research/snow.md" target="_blank" rel="noopener">Snow & ice ↗</a><a href="/research/bows.md" target="_blank" rel="noopener">Bows & skeletons ↗</a><a href="/research/crops.md" target="_blank" rel="noopener">Crops & pigs ↗</a><a href="/research/trees.md" target="_blank" rel="noopener">Saplings & trees ↗</a><a href="/research/ladders.md" target="_blank" rel="noopener">Ladders ↗</a><a href="/research/generation.md" target="_blank" rel="noopener">Java generation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
+    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. Broken blocks, mob kills and thrown stacks drop item entities that fall, merge and are picked up. The Java 36-slot inventory with cursor, drag-splitting, shift- and double-click rules; shaped crafting, a crafting table, a fuel-driven furnace and single/large chests on real slots; the tabbed creative inventory with search; wood, stone, iron, diamond and gold tools with per-item durability and repair; leather, chain, iron, gold and diamond armor. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water, crack frames and entity shadows. Pigs, cows, sheep, chickens and night-time zombies with 1.7.10 movement, knockback, pathfinding and AI task lists, melee combat with sprint knockback and critical hits, and food drops. Cows and sheep follow wheat and breed, pigs follow carrots and breed, chickens follow seeds and lay eggs; sheep graze, can be sheared and dyed. Sneaking slows you, lowers the view and stops you at edges. Flowing water and lava spread, mix into obsidian, cobblestone and stone, and lava burns players, mobs and items; buckets pick up and place liquids and milk cows; lakes and springs generate; flowers grow and craft into 16 dyes for wool; snowballs and eggs can be thrown; ladders can be placed and climbed; F5 shows the player model with armor. Rain and thunderstorms follow the original weather timers, darken the sky and light, and bring lightning that strikes and starts fires; fire spreads through wood, wool and leaves and is lit with flint and steel. The Snowy Tundra landscape has snowfall, snow layers and ice. Bows draw and fire arrows, and skeletons shoot back at night and burn by day. Oak saplings grow into trees, with bone meal or over time, and leaves decay and drop saplings and apples. Java worlds now use the original biome layers, terrain surfaces, caves and ravines at 256-block height; new Java worlds also generate mineshafts with cave-spider spawners and chest minecarts; trees, ores and other structures are not generated there yet. Legacy landscapes keep their existing decoration. Torches; 1.7.10 sky/block light, smooth lighting, lightmap, sky, stars, fog and fancy clouds. Wheat, carrot and potato farming with five hoe tiers, moisture, eight growth stages, bone meal and harvesting; bread crafting and baked potatoes. Zombies rarely drop carrots, potatoes or iron when killed after a player hit. Creepers and TNT explode with block shielding, entity knockback, original puff/smoke effects and item drops; burning arrows light TNT and its fuse emits smoke. Sugar cane and cactus grow, paper/sugar/books craft, and sand/gravel fall and can be deflected by explosions.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Java population/decorators and infinite chunk streaming, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, enchantments, hoppers and other storage, redstone, dimensions, structures, other biomes, void fog, Java saves, and multiplayer. The renderer, terrain, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/items.md" target="_blank" rel="noopener">Item drops ↗</a><a href="/research/creative.md" target="_blank" rel="noopener">Creative inventory ↗</a><a href="/research/shadows.md" target="_blank" rel="noopener">Entity shadows ↗</a><a href="/research/fluids.md" target="_blank" rel="noopener">Flowing water ↗</a><a href="/research/third-person.md" target="_blank" rel="noopener">Third person ↗</a><a href="/research/sheep.md" target="_blank" rel="noopener">Sheep & wool ↗</a><a href="/research/projectiles.md" target="_blank" rel="noopener">Snowballs ↗</a><a href="/research/lava.md" target="_blank" rel="noopener">Lava ↗</a><a href="/research/buckets.md" target="_blank" rel="noopener">Buckets & lakes ↗</a><a href="/research/chickens.md" target="_blank" rel="noopener">Chickens & eggs ↗</a><a href="/research/dyes.md" target="_blank" rel="noopener">Flowers & dyes ↗</a><a href="/research/sneaking.md" target="_blank" rel="noopener">Sneaking & attacks ↗</a><a href="/research/pathfinding.md" target="_blank" rel="noopener">Pathfinding & AI ↗</a><a href="/research/weather.md" target="_blank" rel="noopener">Weather ↗</a><a href="/research/fire.md" target="_blank" rel="noopener">Fire ↗</a><a href="/research/snow.md" target="_blank" rel="noopener">Snow & ice ↗</a><a href="/research/bows.md" target="_blank" rel="noopener">Bows & skeletons ↗</a><a href="/research/crops.md" target="_blank" rel="noopener">Crops & pigs ↗</a><a href="/research/trees.md" target="_blank" rel="noopener">Saplings & trees ↗</a><a href="/research/ladders.md" target="_blank" rel="noopener">Ladders ↗</a><a href="/research/generation.md" target="_blank" rel="noopener">Java generation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
     "notes-modal",
   );
 }
@@ -553,6 +567,8 @@ function save() {
   active.experience=experience.serialize();active.xpOrbs=xpOrbs.serialize();
   active.falling=falling?.serialize()||[];
   active.fallingTicks = falling?.save();
+  // Live spawner and minecart state; regeneration never refills them (structure-simulation.js).
+  if (spawners || minecarts) Object.assign(active, saveStructureEntities({ spawners, minecarts }));
   active.updated = Date.now();
   const i = worlds.findIndex((w) => w.id === active.id);
   if (i < 0) worlds.unshift(active);
@@ -728,6 +744,20 @@ function launch(record) {
     experience=new Experience(record.experience);xpOrbs=new ExperienceOrbs(record.xpOrbs);playerTicks=0;
     // Entity.isWet for orbs: rain only (EntityXPOrb.handleWaterMovement never sets inWater).
     xpOrbs.wet = (o) => isWet(weather, world, { x: o.x, y: o.posY, z: o.z, inWater: false }, 0.5);
+    // BlockRailBase and BlockTorch.onNeighborBlockChange: unsupported rails and torches drop.
+    const dropBlock = (stacks, x, y, z) => items.dropBlock(stacks.map((d) => makeStack(d.id, d.count, d.damage || 0)), x, y, z);
+    new Rails(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
+    new Torches(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
+    // Mineshaft spawners and chest minecarts: generation records on a world's first launch, the
+    // saved live state afterwards. A broken spawner block removes its tile entity.
+    ({ spawners, minecarts } = (() => {
+      const restored = restoreStructureEntities(record, world);
+      for (const t of restored.pendingTicks) fluids.schedule(t.x, t.y, t.z, t.delay);
+      return restored;
+    })());
+    watchSpawnerBlocks(world, spawners);
+    aimedCart = null;
+    if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
     mobs = new EntityWorld(world, record.entities);
     mobs.fx = scene.fx;
     mobs.onLand = (entity, distance) => trampleFarmland(entity, distance);
@@ -1081,7 +1111,8 @@ function refreshContainer() {
   }
   tip.classList.toggle("hidden", !lines.length);
   if (lines.length) {
-    tip.innerHTML = lines.map((l, i) => `<span class="${i ? l.color || "gray" : "title"}">${esc(l.text) || "&nbsp;"}</span>`).join("");
+    // The title keeps its rarity colour (an enchanted book's yellow name); later lines default to gray.
+    tip.innerHTML = lines.map((l, i) => `<span class="${i ? l.color || "gray" : "title" + (l.color ? " " + l.color : "")}">${esc(l.text) || "&nbsp;"}</span>`).join("");
     tip.style.left = view.x + "px";
     tip.style.top = view.y + "px";
   }
@@ -1156,7 +1187,7 @@ function tickChests() {
   }
   chestRenderer.sync(world, survival.chests);
   // Container.canInteractWith: the screen closes once its chest is gone.
-  if (containerView?.kind === "chest" && containerView.container.keys.some((k) => world.get(...k.split(",").map(Number)) !== CHEST)) resume();
+  if (containerView?.kind === "chest" && containerView.container.keys?.some((k) => world.get(...k.split(",").map(Number)) !== CHEST)) resume();
 }
 function updateFurnace() {
   if (containerView) refreshContainer();
@@ -1253,6 +1284,9 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     lit: (x, y, z) => scene.litFurnaces.has(`${x},${y},${z}`),
     sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }),
   });
+  // MobSpawnerBaseLogic.updateSpawner on the client: smoke and flame, the display mob's spin.
+  tickSpawnersClient({ spawners, random: scene.explosionParticles.worldRandom, eye: { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z } },
+    { particle: (name, x, y, z) => scene.fx.spawn(name, x, y, z) });
   const movement = { world, position, survival, motion, grounded, fallDistance, landedFall };
   finishPlayerMovement(movement, { inWater, inLavaNow, oldPosition }, {
     trample: trampleFarmland,
@@ -1286,6 +1320,12 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     arrowsCollected: () => { renderHotbar(); saved = false; },
     flushArrows,
   });
+  // EntityMinecartChest.onUpdate and the player's and mobs' pushes against carts; spilled
+  // contents and the broken cart's items become item entities.
+  if (tickMinecartSimulation({ world, minecarts, mobs, position, velocity, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }, {
+    drop: (d) => { if (d.stack) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); },
+  }).length) saved = false;
+  if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
   scene.setDrops(items.items);
   scene.setProjectiles(projectiles.balls, projectiles.particles);
   scene.setTime(survival.time);
@@ -1357,6 +1397,21 @@ function traceAction(action) {
 }
 function edit(place = false) {
   if (screen !== "playing") return;
+  // A chest minecart under the crosshair (nearer than any block or mob): attack or open it.
+  if (aimedCart && !aimedCart.cart.dead) {
+    mining = null;
+    const done = useMinecart({ minecarts, survival, position, velocity, motion, yaw }, { place, cart: aimedCart.cart }, {
+      swing: () => animation.swing(),
+      damage: () => heldAttackDamage(heldId(), survival),
+      openContainer: (container) => openContainer(container, "chest"),
+    });
+    if (done.handled) {
+      traceAction({ place, minecart: aimedCart.cart.id, branch: done.branch });
+      renderVitals();
+      saved = false;
+      return;
+    }
+  }
   const state = { screen, heldTool: heldId(), world, survival, position, velocity, motion, mobs,
     farming, trees, fire, fluids, items, projectiles, grounded, fallDistance, wasInWater, yaw, pitch,
     eating, mining, mineCooldown, mineHeld, flowers: FLOWERS, boneRandom, itemRand };
@@ -1455,7 +1510,7 @@ function reportBrokenTool() {
 // EffectRenderer.addBlockHitEffects on the face being hit every tick the button is held on
 // a block, during the hit delay and in Creative too; a block broken this tick is air by then.
 function tickMining() {
-  const state = { playing: screen === "playing", mineHeld, target, aimedEntity, mining,
+  const state = { playing: screen === "playing", mineHeld, target, aimedEntity: aimedEntity || aimedCart, mining,
     cooldown: mineCooldown, survival, heldTool: heldId(), grounded };
   tickPlayerMining(state, {
     getBlock: (x, y, z) => world.get(x, y, z),
@@ -1500,6 +1555,18 @@ function movementTick(controls) {
     orbSound: s => sounds.play(s.name, { volume: s.volume, pitch: s.pitch,
       position: s.name === "random.orb" ? undefined : { x: s.x, y: s.y, z: s.z } }),
   });
+  // MobSpawnerBaseLogic.updateSpawner on the server (tile entities tick after the entities).
+  if (mobs && spawners?.size) {
+    const level = (x, y, z, sub) => (scene.light ? scene.light.level(x, y, z, sub) : 15);
+    const spawned = tickSpawnerSimulation({ spawners, mobs, minecarts, random: weather.random,
+      feet: survival.health > 0 ? { x: position.x, y: position.y, z: position.z } : null }, {
+      skyLight: (x, y, z) => (scene.light ? scene.light.skyAt(x, y, z) : 15),
+      lightValue: (x, y, z) => level(x, y, z, scene.subtracted ?? 0),
+      thunderLightValue: (x, y, z) => level(x, y, z, 10),
+      thundering: () => weather.isThundering(),
+    }, { spawnParticles: (x, y, z) => spawnerBurst(x, y, z, scene.explosionParticles.worldRandom, (name, px, py, pz) => scene.fx.spawn(name, px, py, pz)) });
+    if (spawned.length) { handleEntityEvents(); saved = false; }
+  }
   // Entity.moveEntity: the vertical part of the move counts only with a ladder 0.2 below the feet.
   const onLadderStep = !flying && countsVertical(world, position.x, position.y, position.z);
   const distance = Math.hypot(
@@ -1896,7 +1963,11 @@ function animate(now) {
       survival.creative ? 5 : 3,
       target?.distance ?? 6,
     );
-    scene.outline.visible = !!target && !aimedEntity;
+    // EntityRenderer.getMouseOver: the nearest entity box (a cart grown by its 0.1 border) wins.
+    aimedCart = pickMinecart(minecarts, aim, dir, survival.creative ? 5 : 3, target?.distance ?? 6);
+    if (aimedCart && aimedEntity && aimedEntity.distance <= aimedCart.distance) aimedCart = null;
+    if (aimedCart) aimedEntity = null;
+    scene.outline.visible = !!target && !aimedEntity && !aimedCart;
     if (target) {
       // setBlockBoundsBasedOnState: a snow layer's box is (meta + 1) / 8 high and a ladder's is its
       // plate; other blocks keep the full cube here. The outline is the box grown by 0.002.
@@ -1936,7 +2007,10 @@ function animate(now) {
     scene.camera.rotation.z = roll;
   } else if (screen === "home") scene.preview(elapsed);
   const partial = Math.min(1, accumulator / PHYSICS.tick);
-  if (mobs) mobRenderer.update(mobs.entities,dt,partial);
+  // TileEntityMobSpawnerRenderer: the spinning display mob of each spawner within 64 blocks.
+  const shown = spawners?.size && screen !== "home" ? spawners.values().filter((sp) => (sp.x + 0.5 - position.x) ** 2 + (sp.y + 0.5 - position.y) ** 2 + (sp.z + 0.5 - position.z) ** 2 < 4096).map((sp) => spawnerDisplayEntity(sp, partial)).filter(Boolean) : [];
+  if (mobs) mobRenderer.update(shown.length ? [...mobs.entities, ...shown] : mobs.entities,dt,partial);
+  minecartRenderer?.update(screen === "home" || !minecarts ? [] : minecarts.carts, partial, world);
   tntRenderer?.update(screen === "home" ? [] : primed, partial);
   playerRenderer?.update(playerBody, partial, {
     visible: thirdPersonView > 0 && ["playing", "inventory", "paused"].includes(screen),
@@ -2006,6 +2080,7 @@ async function boot(){try {
   playerRenderer = new PlayerRenderer(scene.scene, scene, scene.textures.texture);
   chestRenderer = new ChestRenderer(scene.scene, scene);
   tntRenderer = new TntRenderer(scene.scene, scene);
+  minecartRenderer = new MinecartRenderer(scene.scene, scene, null);
   document.addEventListener("pointerdown", () => sounds.unlock(), {
     once: true,
   });
@@ -2019,7 +2094,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
+    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get minecarts() { return minecarts; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
   scene.preview(0);
   scene.render(0);
   renderWorlds();

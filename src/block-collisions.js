@@ -12,7 +12,7 @@ const SET_FIRE = 8 * 20;
 
 // Entity.setInWeb [sa.as]; EntityPlayer skips it while flying and EntitySpider's override is empty.
 export function setInWeb(e, flying = false) {
-  if (flying || e.type === "spider") return;
+  if (flying || e.type === "spider" || e.type === "cave_spider") return;
   e.inWeb = true;
   e.fallDistance = 0;
 }

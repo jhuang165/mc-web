@@ -176,9 +176,11 @@ export class MobRenderer {
   }
   // ModelSpider: head/body/rear at y=15, eight 16x2x2 legs. All boxes and
   // pivots use the original pixel coordinates; (x,24-y,-z)/16 maps to three.js.
-  createSpider() {
+  // RenderCaveSpider (bnf) is RenderSpider with textures/entity/spider/cave_spider.png and
+  // preRenderCallback glScalef(0.7, 0.7, 0.7) (applied in update); the eye pass is the same.
+  createSpider(cave = false) {
     const root = new THREE.Group(), frame = new THREE.Group(), limbs = [], skinMeshes = [],
-      skin = entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/entity/spider/spider.png") }),
+      skin = entityMaterial(this.view.lighting, { map: pixelTexture(`/media/1.7.10/entity/spider/${cave ? "cave_spider" : "spider"}.png`) }),
       eyes = new THREE.MeshBasicMaterial({ map: pixelTexture("/media/1.7.10/entity/spider_eyes.png"), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
     frame.position.y = 1 / 128;
     root.add(frame);
@@ -207,7 +209,7 @@ export class MobRenderer {
       limbs.push(leg);
     }
     this.scene.add(root);
-    return { root, neck, limbs, materials: [skin], eyes, skinMeshes, type: "spider" };
+    return { root, neck, limbs, materials: [skin], eyes, skinMeshes, type: cave ? "cave_spider" : "spider", scale: cave ? Math.fround(0.7) : 1 };
   }
   // RenderCreeper (bni) with ModelCreeper (bhj, creeper.png 64 x 32): head (0, 0) 8 x 8 x 8 and
   // body (16, 16) 8 x 12 x 4 on pivots (0, 4, 0), four 4 x 6 x 4 legs (0, 16) on pivots
@@ -333,7 +335,7 @@ export class MobRenderer {
   }
   create(e) {
     if (e.type === "creeper") return this.createCreeper();
-    if (e.type === "spider") return this.createSpider();
+    if (e.type === "spider" || e.type === "cave_spider") return this.createSpider(e.type === "cave_spider");
     if (e.type === "skeleton") return this.createSkeleton();
     if (e.type === "chicken") return this.createChicken();
     if (e.type === "sheep") return this.createSheep();
@@ -369,9 +371,16 @@ export class MobRenderer {
       else r.root.visible = !invisible;
       // RendererLivingEntity's 1/128 lift, for rigs that do not carry it in a frame.
       r.root.position.set(pose.x, pose.y + (r.lift ?? 0), pose.z);
-      r.root.scale.setScalar(baby ? 0.5 : 1);
+      r.root.scale.setScalar((baby ? 0.5 : 1) * (r.scale ?? 1));
       // Java yaw turns the opposite way to three.js, hence the sign.
       r.root.rotation.set(0, -pose.bodyYaw * RAD, pose.death * RAD);
+      // A spawner's display mob (mob-spawner.js spawnerDisplayEntity): the
+      // TileEntityMobSpawnerRenderer matrix ahead of the usual living-entity transform.
+      if (e.displayMatrix) {
+        r.root.matrixAutoUpdate = false;
+        r.root.updateMatrix();
+        r.root.matrix.premultiply(new THREE.Matrix4().fromArray(e.displayMatrix));
+      }
       r.neck.rotation.set(e.type === "sheep" ? pose.headTilt : pose.headPitch * RAD, -pose.headYaw * RAD, 0);
       if (e.type === "sheep") {
         // ModelSheep2.setLivingAnimations: rotationPointY = 6 + func_70894_j * 9. A lamb's
@@ -405,7 +414,7 @@ export class MobRenderer {
       // ModelZombie.setRotationAngles holds the arms out with a sway driven by
       // ageInTicks (ticksExisted + partial); the Java Y/Z angles flip sign here.
       const sway = mhSin(pose.age * 0.067) * 0.05, spread = mhCos(pose.age * 0.09) * 0.05 + 0.05;
-      const spider = e.type === "spider" ? spiderLegs(pose.limbSwing, pose.limbSwingAmount) : null;
+      const spider = e.type === "spider" || e.type === "cave_spider" ? spiderLegs(pose.limbSwing, pose.limbSwingAmount) : null;
       const creeper = e.type === "creeper" ? creeperPose(pose.limbSwing, pose.limbSwingAmount, pose.headYaw, pose.headPitch) : null;
       r.limbs.forEach((l, i) => {
         if (spider) { l.rotation.set(0, -spider[i][0], -spider[i][1]); return; }
@@ -419,7 +428,8 @@ export class MobRenderer {
       // RendererLivingEntity overlays (brightness, 0, 0, 0.4) while hurt or
       // dying; the burning tint stands in for the fire overlay, which is not drawn.
       const t = ENTITY_TYPES[e.type], h = (t?.height ?? 1.8) * (e.growingAge < 0 ? 0.5 : 1),
-        packed = this.view.brightness(e.x, e.y + h * 0.66, e.z),
+        // A display mob takes the spawner block's lightmap (TileEntityRendererDispatcher).
+        packed = e.lightPos ? this.view.brightness(e.lightPos.x, e.lightPos.y, e.lightPos.z) : this.view.brightness(e.x, e.y + h * 0.66, e.z),
         level = Math.max(((packed >> 20) & 15) - (this.view.subtracted ?? 0), (packed >> 4) & 15),
         b = BRIGHTNESS[Math.max(0, level)];
       // RenderCreeper: the swell scale (preRenderCallback), the powered shell, and the white

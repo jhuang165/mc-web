@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { World, SAND, GRAVEL, CACTUS, REEDS, WATER, LAVA, FIRE, SAPLING, WEB, LADDER, SNOW_LAYER, ICE, YELLOW_FLOWER, SIZE, HEIGHT, solidBlock, blockBounds, raycast } from "./world.js";
+import { World, SAND, GRAVEL, CACTUS, REEDS, WATER, LAVA, FIRE, SAPLING, WEB, LADDER, SNOW_LAYER, ICE, YELLOW_FLOWER, FENCE, SIZE, HEIGHT, solidBlock, blockBounds, raycast } from "./world.js";
 import { JRandom } from "./lakes.js";
 import {
   Plants, REEDS_ITEM, PAPER, SUGAR, CACTUS_COLLISION, CACTUS_SELECTION, REED_BOUNDS, materialSolid, replaceable, reedCanStay, cactusCanStay, cactusCanPlace,
@@ -206,10 +206,12 @@ test("smelting cactus green and the paper, sugar and book recipes", () => {
 
 test("creative tabs and search keep the original registration order", () => {
   const decorations = CREATIVE_TABS[1].items, misc = CREATIVE_TABS[4].items, materials = CREATIVE_TABS[10].items;
-  assert.deepEqual(decorations.slice(-2), [SNOW_LAYER, CACTUS]);
+  // The oak fence (85) follows the cactus (81) in block-id order.
+  assert.deepEqual(decorations.slice(decorations.indexOf(SNOW_LAYER), decorations.indexOf(SNOW_LAYER) + 3), [SNOW_LAYER, CACTUS, FENCE]);
   assert.deepEqual(misc.slice(misc.indexOf(343), misc.indexOf(343) + 3), [343, PAPER, 314]);
   assert.deepEqual(materials.slice(materials.indexOf(307), materials.indexOf(307) + 3), [307, REEDS_ITEM, 316]);
-  assert.equal(materials.at(-1), SUGAR);
+  // Pumpkin (361) and melon seeds (362) follow sugar (353), as in creative-reference.json.
+  assert.deepEqual(materials.slice(materials.indexOf(SUGAR)), [SUGAR, 361, 362]);
   const at = (id) => SEARCH_ORDER.indexOf(id);
   assert.deepEqual(SEARCH_ORDER.slice(at(23), at(23) + 3), [23, CACTUS, 24]);
   assert.deepEqual(SEARCH_ORDER.slice(at(307), at(307) + 4), [307, REEDS_ITEM, PAPER, 314]);

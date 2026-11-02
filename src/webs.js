@@ -12,7 +12,7 @@ export function touchesWeb(world, box) {
 }
 // Called at moveEntity's tail, after updateFallState. Spider's override is empty.
 export function webContact(world, box, state, flying = false) {
-  if (flying || state.type === 'spider' || !touchesWeb(world, box)) return false;
+  if (flying || state.type === 'spider' || state.type === 'cave_spider' || !touchesWeb(world, box)) return false;
   state.inWeb = true;
   state.fallDistance = 0;
   return true;

@@ -5,6 +5,9 @@ import { populateSnow } from "./snow.js";
 import { generateTreeAt } from "./trees.js";
 import { ladderBounds } from "./ladders.js";
 import { CACTUS_COLLISION, REED_BOUNDS, decorateSand, decorateReeds } from "./plants.js";
+import { fenceMask, fenceBounds, fenceCollisionUnion, fenceCollisionBoxes } from "./fences.js";
+import { railBounds } from "./rails.js";
+import { torchBounds } from "./torches.js";
 export const SIZE = 128,
   HEIGHT = 64,
   SEA = 16;
@@ -75,8 +78,14 @@ export const BLOCKS = [
   {name:'Mycelium',color:'#796b7d',hidden:true},
   {name:'Stained clay',color:'#a26b51',hidden:true},
   {name:'Lily pad',color:'#39772b',hidden:true},
+  // Mineshaft blocks (public/research/mineshaft-blocks.md): BlockFence (original 85), BlockRail (66)
+  // and BlockMobSpawner (52). Appended; internal ids are never renumbered.
+  {name:'Fence',color:'#b49462'},
+  {name:'Rail',color:'#8a7b62'},
+  {name:'Monster spawner',color:'#1d2a36',hidden:true},
 ];
 export const SANDSTONE=56,MYCELIUM=57,STAINED_CLAY=58,LILY_PAD=59;
+export const TORCH=20,FENCE=60,RAIL=61,MOB_SPAWNER=62;
 export const WATER=10,LAVA=42;
 export const SNOW_LAYER=46,ICE=47,SAPLING=48;
 export const CARROTS=49,POTATOES=50,WEB=51,LADDER=52,TNT=55;
@@ -165,11 +174,13 @@ export const ticksRandomly=b=>b===1||b===5||b===29||b===30||isCrop(b)||b===LAVA|
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD]);
+const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,RAIL,MOB_SPAWNER]);
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 // Block.isNormalCube: Material.tnt is translucent (isOpaque false), so TNT is an opaque
 // cube that is not a normal cube (no torches/ladders/fire tops on it).
-export const normalCube=b=>opaqueCube(b)&&b!==5&&b!==TNT;
+// BlockMobSpawner (ama) is not an opaque cube (isOpaqueCube false: it is drawn as a cage and
+// hides nothing) but Material.rock and renderAsNormalBlock make it a normal cube.
+export const normalCube=b=>(opaqueCube(b)&&b!==5&&b!==TNT)||b===MOB_SPAWNER;
 // setBlockBoundsBasedOnState: chests are inset by 1/16 except towards a partner.
 // A snow layer's collision box is meta * 1/8 tall (BlockSnow.getCollisionBoundingBoxFromPool: meta 0
 // is flat and has none); its selection box is (meta + 1) / 8 (snowSelectionHeight).
@@ -182,6 +193,11 @@ export function blockBounds(world,x,y,z){
   if(b===LADDER)return ladderBounds(world.getMeta(x,y,z));
   // BlockCactus.getCollisionBoundingBoxFromPool: 1/16 in from the sides and the top.
   if(b===CACTUS)return CACTUS_COLLISION;
+  // BlockFence.setBlockBoundsBasedOnState (union of post and arms, 1 high), BlockRailBase (0.125, or
+  // 0.625 ascending) and BlockTorch's per-metadata box (collisionRayTrace).
+  if(b===FENCE)return fenceBounds(fenceMask(world,x,y,z));
+  if(b===RAIL)return railBounds(world.getMeta(x,y,z));
+  if(b===TORCH)return torchBounds(world.getMeta(x,y,z));
   if(b!==41)return[0,0,0,1,blockHeight(b),1];
   const c=(dx,dz)=>world.get(x+dx,y,z+dz)===41;
   return[c(-1,0)?0:1/16,0,c(0,-1)?0:1/16,c(1,0)?1:15/16,.875,c(0,1)?1:15/16];
@@ -190,14 +206,31 @@ export function blockBounds(world,x,y,z){
 // as a full cube although it renders and selects 15/16 high.
 export function collisionBounds(world,x,y,z){
   const b=world.get(x,y,z);
+  // A fence collides 1.5 high (BlockFence.addCollisionBoxesToList). Callers that take one box get
+  // the union of its arms; collisionBoxes has the original separate boxes.
+  if(b===FENCE)return fenceCollisionUnion(fenceMask(world,x,y,z));
   return b===29||b===30?[0,0,0,1,1,1]:blockBounds(world,x,y,z);
+}
+// Block.addCollisionBoxesToList: the cell's collision boxes in block-local coordinates ([] without one).
+export function collisionBoxes(world,x,y,z){
+  if(!world.solid(x,y,z))return[];
+  return world.get(x,y,z)===FENCE?fenceCollisionBoxes(fenceMask(world,x,y,z)):[collisionBounds(world,x,y,z)];
+}
+// Block.getSelectedBoundingBoxFromPool (the drawn outline), block-local. BlockCactus draws its
+// collision box inset; sugar cane its block bounds.
+export function selectionBounds(world,x,y,z){
+  const b=world.get(x,y,z);
+  if(b===SNOW_LAYER)return[0,0,0,1,snowSelectionHeight(world.getMeta(x,y,z)),1];
+  if(b===REEDS)return[...REED_BOUNDS];
+  return blockBounds(world,x,y,z);
 }
 // World.solid's test for one cell: what has a collision box. Sugar cane has none
 // (BlockReed.getCollisionBoundingBoxFromPool returns null).
 export function solidBlock(b, meta = 0) {
   // A flat snow layer (meta 0) has no collision box, so it is not an obstacle.
   if (b === SNOW_LAYER) return (meta & 7) !== 0;
-  return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== FIRE && b !== WEB && b !== REEDS && !isPlant(b);
+  // Rails have no collision box either (BlockRailBase.getCollisionBoundingBoxFromPool is null).
+  return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== FIRE && b !== WEB && b !== REEDS && b !== RAIL && !isPlant(b);
 }
 // One 16 x 16 chunk column of the live world (WORLD-02b): port block ids and 4-bit metadata, one byte
 // each, at (lx * 16 + lz) * HEIGHT + y, and the random-tick refcount of each 16-high section
@@ -224,7 +257,7 @@ const cellIndex = (x, y, z, height) => ((x & 15) * 16 + (z & 15)) * height + y;
 // Chunk map key; the live world's chunks stay well inside +-2^15.
 const columnKey = (cx, cz) => (cx + 32768) * 65536 + (cz + 32768);
 export class World {
-  constructor(seed = "Overworld", biome = "meadow", generationVersion = isJavaLandscape(biome) ? 9 : 8) {
+  constructor(seed = "Overworld", biome = "meadow", generationVersion = isJavaLandscape(biome) ? 10 : 8) {
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
@@ -485,7 +518,8 @@ export function collides(world, x, y, z) {
   const r = PHYSICS.width / 2;
   for (let bx = Math.floor(x - r + 1e-6); bx <= Math.floor(x + r - 1e-6); bx++)
     for (
-      let by = Math.floor(y + 1e-6);
+      // One cell lower too: a fence's 1.5-high box reaches into the cell above it.
+      let by = Math.floor(y + 1e-6) - 1;
       by <= Math.floor(y + PHYSICS.height - 1e-6);
       by++
     )
@@ -494,9 +528,8 @@ export function collides(world, x, y, z) {
         bz <= Math.floor(z + r - 1e-6);
         bz++
       )
-        if (world.solid(bx, by, bz)) {
-          const [x0, , z0, x1, y1, z1] = collisionBounds(world, bx, by, bz);
-          if (y < by + y1 - 1e-6 && x - r < bx + x1 - 1e-6 && x + r > bx + x0 + 1e-6 && z - r < bz + z1 - 1e-6 && z + r > bz + z0 + 1e-6) return true;
+        for (const [x0, y0, z0, x1, y1, z1] of collisionBoxes(world, bx, by, bz)) {
+          if (y < by + y1 - 1e-6 && y + PHYSICS.height > by + y0 + 1e-6 && x - r < bx + x1 - 1e-6 && x + r > bx + x0 + 1e-6 && z - r < bz + z1 - 1e-6 && z + r > bz + z0 + 1e-6) return true;
         }
   return false;
 }
@@ -525,6 +558,15 @@ export function raycast(world, origin, dir, reach = 6) {
       // A ladder is only selectable on its 0.125 plate, sugar cane inside its block bounds. BlockCactus
       // never changes its block bounds, so Block.collisionRayTrace hits the full cube (only the
       // drawn selection box is inset).
+      // Fences, rails and torches are only hit inside their selection box (Block.collisionRayTrace
+      // after setBlockBoundsBasedOnState).
+      if (hit === FENCE || hit === RAIL || hit === TORCH) {
+        const [x0, y0, z0, x1, y1, z1] = blockBounds(world, ...p), lx = origin.x + dir.x * d - p[0], ly = origin.y + dir.y * d - p[1], lz = origin.z + dir.z * d - p[2];
+        if (lx < x0 || lx > x1 || ly < y0 || ly > y1 || lz < z0 || lz > z1) {
+          passed = p;
+          continue;
+        }
+      }
       if (hit === LADDER || hit === REEDS) {
         const [x0, , z0, x1, , z1] = hit === LADDER ? ladderBounds(world.getMeta(...p)) : REED_BOUNDS, lx = origin.x + dir.x * d - p[0], lz = origin.z + dir.z * d - p[2];
         if (lx < x0 || lx > x1 || lz < z0 || lz > z1) {

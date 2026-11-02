@@ -50,7 +50,7 @@ body:has(.native-inventory) #toast,body:has(.furnace-modal) #toast{display:none}
 /* GuiScreen.drawHoveringText: mouse + (12, -12), 0xF0100010 fill, purple gradient border. */
 .slot-tooltip{position:fixed;z-index:1001;display:flex;flex-direction:column;margin:calc(-12*var(--u)) 0 0 calc(12*var(--u));padding:calc(3*var(--u)) calc(3*var(--u)) calc(1*var(--u));background:rgba(16,0,16,.94);border:var(--u) solid;border-image:linear-gradient(rgba(80,0,255,.31),rgba(40,0,127,.31)) 1;outline:var(--u) solid rgba(16,0,16,.94);font-size:calc(8*var(--u));line-height:calc(10*var(--u));color:#fff;text-shadow:var(--u) var(--u) #3f3f3f;white-space:nowrap;pointer-events:none}
 .slot-tooltip.hidden{display:none}.slot-tooltip .title{margin-bottom:calc(2*var(--u))}
-.slot-tooltip .gray{color:#aaa;text-shadow:var(--u) var(--u) #2a2a2a}.slot-tooltip .blue{color:#55f;text-shadow:var(--u) var(--u) #15153f}
+.slot-tooltip .gray{color:#aaa;text-shadow:var(--u) var(--u) #2a2a2a}.slot-tooltip .blue{color:#55f;text-shadow:var(--u) var(--u) #15153f}.slot-tooltip .yellow{color:#ff5;text-shadow:var(--u) var(--u) #3f3f15}
 /* GuiFurnace: flame (176, 12 - h) drawn at (56, 48 - h); arrow (176, 14) drawn at (79, 34). */
 .furnace-flame,.furnace-arrow{position:absolute;background:url('/media/1.7.10/gui/container/furnace.png') no-repeat;background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated;pointer-events:none}
 .furnace-flame{left:calc(56*var(--u));top:calc((48 - var(--flame,0))*var(--u));width:calc(14*var(--u));height:calc((var(--flame,0) + 1)*var(--u));background-position:calc(-176*var(--u)) calc((var(--flame,0) - 12)*var(--u))}

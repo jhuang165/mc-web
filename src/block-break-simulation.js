@@ -56,6 +56,8 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
       d.damage ?? (d.id === block && (block === WOOL || block === RED_FLOWER || block === 6 || block === 56 || block === 58) ? meta : 0),
     )), ...p);
     if (drop) xpOrbs.spawn(oreExperience(block, random), { x: p[0] + 0.5, y: p[1] + 0.5, z: p[2] + 0.5 });
+    // BlockMobSpawner.dropBlockAsItemWithChance: experience without an item, when harvested.
+    else if (harvest && m.xp) xpOrbs.spawn(m.xp(random), { x: p[0] + 0.5, y: p[1] + 0.5, z: p[2] + 0.5 });
     survival.exhaust(0.025);
     survival.wearBlock(block, tool);
   }

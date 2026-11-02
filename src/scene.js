@@ -6,7 +6,7 @@ import { ParticleSystem } from "./particles.js";
 import { EffectRenderer } from "./effect-renderer.js";
 import { Fx } from "./fx.js";
 import { ParticleRenderer } from "./particle-renderer.js";
-import { SIZE, HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
+import { SIZE, HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS } from "./block-textures.js";
 import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
@@ -18,6 +18,7 @@ import { ArrowRenderer } from "./arrow-renderer.js";
 import { ShadowRenderer } from "./shadows.js";
 import { WeatherRenderer } from "./weather-renderer.js";
 import { fireVertices } from "./fire.js";
+import { fenceMask, fenceRenderBoxes } from "./fences.js";
 export { blockTile } from "./block-textures.js";
 
 // Face order +x, -x, +y, -y, +z, -z with RenderBlocks' AO-path shades:
@@ -208,6 +209,8 @@ export class VoxelScene {
           else if (isCrop(b)) this.crops(solid, b, x, y, z);
           else if (isPlant(b) || b === WEB || b === REEDS) this.crossed(solid, b, x, y, z);
           else if (b === LADDER) this.ladder(solid, x, y, z);
+          else if (b === FENCE) for (const box of fenceRenderBoxes(fenceMask(w, x, y, z))) this.box(solid, b, x, y, z, box);
+          else if (b === RAIL) this.rail(solid, x, y, z);
           else if (b === CACTUS) this.cactus(solid, x, y, z);
           else if (b === 10) this.liquid(10, water, flow, x, y, z);
           else if (b === 42) this.liquid(42, lava, lavaFlow, x, y, z);
@@ -264,17 +267,69 @@ export class VoxelScene {
       }
     });
   }
-  // renderTorchAtAngle for a standing torch: four side planes 1/16 from the
-  // centre spanning the block, and a 2x2-pixel top at 10/16.
+  // RenderBlocks.renderBlockTorch (blm.c(aji, III)) and renderTorchAtAngle: wall torches
+  // (metadata 1-4) move 0.1 towards their wall, rise 0.2 and lean 0.4 over their 1-block height;
+  // metadata 5 (the port's 0) stands upright. A 2x2-pixel top at 10/16 above the base, a 2x2
+  // bottom from pixels 7-9 / 13-15, and four sides 1/16 from the centre, all in the cell's own
+  // brightness with no face shading. Vertices follow the original order.
   torch(m, x, y, z) {
-    const r = tileRect(blockTile(20, 0)), uvs = rectUvs(r), light = this.light.packed(x, y, z), d = 1 / 16,
-      t = blockTile(20, 0), tx = (t % ATLAS_COLUMNS) * 16, ty = Math.floor(t / ATLAS_COLUMNS) * 16, W = ATLAS_COLUMNS * 16, H = ATLAS_ROWS * 16;
-    m.quad([[x + 0.5 - d, y, z], [x + 0.5 - d, y, z + 1], [x + 0.5 - d, y + 1, z + 1], [x + 0.5 - d, y + 1, z]], uvs, 1, light);
-    m.quad([[x + 0.5 + d, y, z + 1], [x + 0.5 + d, y, z], [x + 0.5 + d, y + 1, z], [x + 0.5 + d, y + 1, z + 1]], uvs, 1, light);
-    m.quad([[x, y, z + 0.5 + d], [x + 1, y, z + 0.5 + d], [x + 1, y + 1, z + 0.5 + d], [x, y + 1, z + 0.5 + d]], uvs, 1, light);
-    m.quad([[x + 1, y, z + 0.5 - d], [x, y, z + 0.5 - d], [x, y + 1, z + 0.5 - d], [x + 1, y + 1, z + 0.5 - d]], uvs, 1, light);
-    const u0 = (tx + 7) / W, u1 = (tx + 9) / W, v0 = 1 - (ty + 8) / H, v1 = 1 - (ty + 6) / H, top = y + 0.625;
-    m.quad([[x + 0.5 - d, top, z + 0.5 + d], [x + 0.5 + d, top, z + 0.5 + d], [x + 0.5 + d, top, z + 0.5 - d], [x + 0.5 - d, top, z + 0.5 - d]], [[u0, v0], [u1, v0], [u1, v1], [u0, v1]], 1, light);
+    const meta = this.world.getMeta(x, y, z), light = this.light.packed(x, y, z), t = blockTile(20, 0),
+      tx = (t % ATLAS_COLUMNS) * 16, ty = Math.floor(t / ATLAS_COLUMNS) * 16, W = ATLAS_COLUMNS * 16, H = ATLAS_ROWS * 16,
+      uv = (u, v) => [(tx + u) / W, 1 - (ty + v) / H];
+    const lean = Math.fround(0.4), wall = 0.5 - lean, rise = Math.fround(0.2);
+    let px = x, py = y, pz = z, dx = 0, dz = 0;
+    if (meta === 1) [px, py, dx] = [x - wall, y + rise, -lean];
+    else if (meta === 2) [px, py, dx] = [x + wall, y + rise, lean];
+    else if (meta === 3) [pz, py, dz] = [z - wall, y + rise, -lean];
+    else if (meta === 4) [pz, py, dz] = [z + wall, y + rise, lean];
+    const r = 0.0625, h = 0.625, cx = px + 0.5, cz = pz + 0.5, x0 = cx - 0.5, x1 = cx + 0.5, z0 = cz - 0.5, z1 = cz + 0.5,
+      tx0 = cx + dx * (1 - h), tz0 = cz + dz * (1 - h);
+    const quads = [
+      [[tx0 - r, py + h, tz0 - r, 7, 6], [tx0 - r, py + h, tz0 + r, 7, 8], [tx0 + r, py + h, tz0 + r, 9, 8], [tx0 + r, py + h, tz0 - r, 9, 6]],
+      [[cx + r + dx, py, cz - r + dz, 9, 13], [cx + r + dx, py, cz + r + dz, 9, 15], [cx - r + dx, py, cz + r + dz, 7, 15], [cx - r + dx, py, cz - r + dz, 7, 13]],
+      [[cx - r, py + 1, z0, 0, 0], [cx - r + dx, py, z0 + dz, 0, 16], [cx - r + dx, py, z1 + dz, 16, 16], [cx - r, py + 1, z1, 16, 0]],
+      [[cx + r, py + 1, z1, 0, 0], [cx + dx + r, py, z1 + dz, 0, 16], [cx + dx + r, py, z0 + dz, 16, 16], [cx + r, py + 1, z0, 16, 0]],
+      [[x0, py + 1, cz + r, 0, 0], [x0 + dx, py, cz + r + dz, 0, 16], [x1 + dx, py, cz + r + dz, 16, 16], [x1, py + 1, cz + r, 16, 0]],
+      [[x1, py + 1, cz - r, 0, 0], [x1 + dx, py, cz - r + dz, 0, 16], [x0 + dx, py, cz - r + dz, 16, 16], [x0, py + 1, cz - r, 16, 0]],
+    ];
+    for (const q of quads) m.quad(q.map((p) => [p[0], p[1], p[2]]), q.map((p) => uv(p[3], p[4])), 1, light);
+  }
+  // RenderBlocks.renderStandardBlock over setRenderBounds (used by renderBlockFence): each face of
+  // the box with the ambient-occlusion path. Texture coordinates follow renderFace*: u = x on the
+  // top, bottom and south faces, z on the west face, 1 - x north and 1 - z east (the mirrored
+  // field_152631_f mapping, which for the centred fence post equals the plain one); v = z on the
+  // top and bottom, 1 - y on the sides. A face on the cell boundary is skipped next to an opaque cube.
+  box(m, b, x, y, z, [x0, y0, z0, x1, y1, z1], meta = 0) {
+    const w = this.world, L = this.light, lo = [x0, y0, z0], hi = [x1, y1, z1];
+    FACES.forEach((f, fi) => {
+      const axis = fi >> 1, positive = (fi & 1) === 0, boundary = positive ? hi[axis] >= 1 : lo[axis] <= 0;
+      if (boundary && hides(w.get(x + f.n[0], y + f.n[1], z + f.n[2]))) return;
+      const r = tileRect(blockTile(b, fi, false, meta)),
+        corners = f.v.map((v) => [v[0] ? x1 : x0, v[1] ? y1 : y0, v[2] ? z1 : z0]),
+        st = (p) => [[1 - p[2], 1 - p[1]], [p[2], 1 - p[1]], [p[0], p[2]], [p[0], p[2]], [p[0], 1 - p[1]], [1 - p[0], 1 - p[1]]][fi],
+        uvs = corners.map((p) => {
+          const [s, t] = st(p);
+          return [r.u0 + (r.u1 - r.u0) * s, r.v1 - (r.v1 - r.v0) * t];
+        }),
+        s = smoothFace(L, x, y, z, fi, corners, boundary);
+      m.quad(corners.map((p) => [x + p[0], y + p[1], z + p[2]]), uvs, s.ao.map((a) => a * f.shade), s.packed);
+    });
+  }
+  // RenderBlocks.renderBlockMinecartTrack (blm.a(aje, III), render type 9): one quad 1/16 above
+  // the cell floor, drawn from both sides, its corners rotated per metadata and the raised edge
+  // of an ascending rail (2-5) lifted by one block; the cell's mixed brightness, colour 1.
+  rail(m, x, y, z) {
+    const meta = this.world.getMeta(x, y, z), r = tileRect(blockTile(RAIL, 0, false, meta)), light = this.light.packed(x, y, z);
+    let ax = x + 1, bx = x + 1, cx = x, dx = x, az = z, bz = z + 1, cz = z + 1, dz = z;
+    if (meta === 1 || meta === 2 || meta === 3 || meta === 7) [ax, dx, bx, cx, az, bz, cz, dz] = [x + 1, x + 1, x, x, z + 1, z + 1, z, z];
+    else if (meta === 8) [ax, bx, cx, dx, az, dz, bz, cz] = [x, x, x + 1, x + 1, z + 1, z + 1, z, z];
+    else if (meta === 9) [ax, dx, bx, cx, az, bz, cz, dz] = [x, x, x + 1, x + 1, z, z, z + 1, z + 1];
+    const h = y + 0.0625;
+    let ay = h, by = h, cy = h, dy = h;
+    if (meta === 2 || meta === 4) { ay += 1; dy += 1; }
+    else if (meta === 3 || meta === 5) { by += 1; cy += 1; }
+    // Original (maxU, minV), (maxU, maxV), (minU, maxV), (minU, minV); minV is the tile's top.
+    m.quad([[ax, ay, az], [bx, by, bz], [cx, cy, cz], [dx, dy, dz]], [[r.u1, r.v1], [r.u1, r.v0], [r.u0, r.v0], [r.u0, r.v1]], 1, light, true);
   }
   // renderCrossedSquares, with the tall-grass position jitter from the block coordinates.
   crossed(m, b, x, y, z) {

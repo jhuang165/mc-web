@@ -1,3 +1,4 @@
+import {storedEnchantmentLines} from './enchanted-books.js';
 // ScaledResolution keeps at least a 320 x 240 logical viewport.
 export function guiScale(width,height,requested=0){let scale=1;const limit=requested>0?requested:1000;while(scale<limit&&width/(scale+1)>=320&&height/(scale+1)>=240)scale++;return scale;}
 export function stackCount(count){return Number.isFinite(count)&&count>1?`<b class="item-count">${Math.floor(count)}</b>`:'';}
@@ -14,6 +15,10 @@ export function durabilityBar(damage,max){
 export function tooltipLines(item,stack,advanced=false){
  if(!item)return[];
  const lines=[{text:item.variants?.[stack.damage]??item.name}],attack=item.attack;
+ // ItemEnchantedBook: EnumRarity.uncommon (yellow name) while it stores enchantments, and
+ // addInformation lists them; renderToolTip draws every later line gray.
+ const stored=storedEnchantmentLines(stack?.stored);
+ if(stored.length){lines[0].color='yellow';for(const text of stored)lines.push({text,color:'gray'});}
  if(attack)lines.push({text:''},{text:`+${attack} Attack Damage`,color:'blue'});
  if(advanced&&item.durability&&stack.damage>0)lines.push({text:`Durability: ${item.durability-stack.damage} / ${item.durability}`});
  return lines;

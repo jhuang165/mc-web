@@ -46,6 +46,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false }, 
     case "zombie": add(FLESH, rand.nextInt(3)); break;
     case "skeleton": add(ARROW, rand.nextInt(3)); add(BONE, rand.nextInt(3)); break;
     case "spider":
+    case "cave_spider": // EntityCaveSpider inherits EntitySpider.dropFewItems
       add(STRING, rand.nextInt(3));
       if (playerHit && (rand.nextInt(3) === 0 || rand.nextInt(1) > 0)) add(SPIDER_EYE);
       break;

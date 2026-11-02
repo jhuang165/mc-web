@@ -136,9 +136,16 @@ test("block ray bounds agree with the original defaults where the ray box is the
     const w = stage({ [[1, 1, 1]]: Number(id) });
     // The torch's ray box is set in BlockTorch.collisionRayTrace, not by default.
     if (Number(id) === 20) continue;
+    // A fence's ray box is its connection bounds (BlockFence.setBlockBoundsBasedOnState), tested below.
+    if (Number(id) === 60) continue;
     assert.deepEqual(rayBounds(w, 1, 1, 1, Number(id)).map((v) => Math.fround(v)), b.bounds.map((v) => Math.fround(v)), "block " + id);
   }
   assert.deepEqual(rayBounds(stage(), 1, 1, 1, 20), [0.4000000059604645, 0, 0.4000000059604645, 0.6000000238418579, 0.6000000238418579, 0.6000000238418579]);
+  // Fence: the post alone, or the post widened towards connected sides; rails rise to 0.625 ascending.
+  assert.deepEqual(rayBounds(stage({ [[1, 11, 1]]: 60 }), 1, 11, 1, 60), [0.375, 0, 0.375, 0.625, 1, 0.625]);
+  assert.deepEqual(rayBounds(stage({ [[1, 11, 1]]: 60, [[2, 11, 1]]: 3 }), 1, 11, 1, 60), [0.375, 0, 0.375, 1, 1, 0.625]);
+  assert.deepEqual(rayBounds({ ...stage(), getMeta: () => 2 }, 1, 11, 1, 61), [0, 0, 0, 1, 0.625, 1]);
+  assert.deepEqual(rayBounds({ ...stage(), getMeta: () => 1 }, 1, 11, 1, 20), [0, 0.20000000298023224, 0.3499999940395355, 0.30000001192092896, 0.800000011920929, 0.6499999761581421]);
 });
 
 test("intercept picks the nearest face and ignores near-parallel planes", () => {

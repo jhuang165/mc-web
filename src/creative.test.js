@@ -9,6 +9,8 @@ const reference=JSON.parse(await readFile(new URL('../public/research/creative-r
 // Wool (35) keeps its colour as the stack's damage: a list entry is [19,colour], or 19 for white.
 const game=([id,meta])=>id===35?(meta?[19,meta]:19):id===38||id===351?(meta?[MC_IDS[id],meta]:MC_IDS[id]):MC_IDS[id+':'+meta]??(meta===0?MC_IDS[id]:undefined);
 const names=s=>[ITEMS[s.id].name];
+// An enchanted book entry is [365, 0, stored]; the reference lists the bare item (its tags are checked below).
+const plain=e=>Array.isArray(e)&&e.length>2?e[0]:e;
 
 test('tabs keep the original order, placement and implemented contents',()=>{
  assert.equal(reference.clientSha1,'e80d9b3bf5085002218d4be59e668bac718abbc6');
@@ -17,10 +19,10 @@ test('tabs keep the original order, placement and implemented contents',()=>{
   const t=CREATIVE_TABS[r.index];
   assert.deepEqual([t.label,t.background,t.column,t.topRow,t.scrollbar,t.title],[r.label,r.background,r.column,r.topRow,r.scrollbar,r.title],r.label);
   if(t.icon.id)assert.equal(t.icon.id,game(r.icon),r.label);
-  if(t!==SEARCH)assert.deepEqual(t.items,r.items.map(game).filter(Boolean),r.label);
+  if(t!==SEARCH)assert.deepEqual(t.items.map(plain),r.items.map(game).filter(Boolean),r.label);
  }
- assert.deepEqual(SEARCH_ORDER,reference.tabs[5].items.map(game).filter(Boolean));
- const key=e=>[].concat(e).join(':'),listed=new Set(CREATIVE_TABS.flatMap(t=>t.items).map(key));
+ assert.deepEqual(SEARCH_ORDER.map(plain),reference.tabs[5].items.map(game).filter(Boolean));
+ const key=e=>[].concat(plain(e)).join(':'),listed=new Set(CREATIVE_TABS.flatMap(t=>t.items).map(key));
  assert.deepEqual([...listed].sort(),[...new Set(SEARCH_ORDER.map(key))].sort());
  assert.equal(itemTab(11).label,'buildingBlocks');assert.equal(itemTab(19).label,'buildingBlocks');assert.equal(itemTab(119).label,'combat');
 });
@@ -77,16 +79,16 @@ test('clicking outside throws the cursor, one item for the right button',()=>{
 test('scrolling moves the 9 x 5 window one row per notch and with the scrollbar',()=>{
  const {gui,c,slot}=open([],SEARCH.index);
  assert.equal(c.list.length,SEARCH_ORDER.length);assert.ok(gui.needsScroll());
- // 167 search entries: rows = floor(167 / 9) - 5 + 1 = 14
- // (integer division, as GuiContainerCreative), so each notch moves 1/14; at full scroll the window starts at
- // entry 14 * 9 = 126, slot n shows entry 126 + n, the last entry (166) sits in slot 40 and slot 41 is empty.
- assert.equal(c.rows(),14);
+ // 251 search entries: rows = floor(251 / 9) - 5 + 1 = 23
+ // (integer division, as GuiContainerCreative), so each notch moves 1/23; at full scroll the window starts at
+ // entry 23 * 9 = 207, slot n shows entry 207 + n, the last entry (250) sits in slot 43 and slot 44 is empty.
+ assert.equal(c.rows(),23);
  gui.wheel(-1);gui.wheel(-1);
- assert.equal(gui.scroll,Math.fround(Math.fround(1/14)+1/14));assert.equal(gui.scrollbarY(),31);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[18]));
+ assert.equal(gui.scroll,Math.fround(Math.fround(1/23)+1/23));assert.equal(gui.scrollbarY(),26);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[18]));
  gui.wheel(1);assert.equal(slot(0).stack.id,entryId(SEARCH_ORDER[9]));
- for(let i=0;i<20;i++)gui.wheel(-1);
- assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);assert.equal(slot(27).stack.id,entryId(SEARCH_ORDER[153]));
- assert.equal(SEARCH_ORDER.length,167);assert.equal(slot(38).stack.id,entryId(SEARCH_ORDER[164]));assert.equal(slot(39).stack.id,entryId(SEARCH_ORDER[165]));assert.equal(slot(40).stack.id,entryId(SEARCH_ORDER[166]));assert.equal(slot(41).stack,null);
+ for(let i=0;i<30;i++)gui.wheel(-1);
+ assert.equal(gui.scroll,1);assert.equal(gui.scrollbarY(),113);assert.equal(slot(27).stack.id,entryId(SEARCH_ORDER[234]));
+ assert.equal(SEARCH_ORDER.length,251);assert.deepEqual(slot(42).stack.stored,SEARCH_ORDER[249][2]);assert.deepEqual(slot(43).stack,makeStack(365,1,0,[{id:62,lvl:3}]));assert.equal(slot(44).stack,null);
  gui.press(176,60);assert.ok(gui.scrolling);gui.drag(25.5);assert.equal(gui.scroll,0);
  gui.drag(18+7.5+97/2);assert.equal(gui.scroll,.5);gui.release();gui.drag(200);assert.equal(gui.scroll,.5);
  gui.press(174,60);assert.ok(!gui.scrolling);
@@ -151,4 +153,20 @@ test('right-clicking outside in the survival tab throws the whole cursor',()=>{
  gui.down(null,1,{outside:true,time:1000});gui.up(null,1,{outside:true});
  assert.equal(inv.cursor,null);assert.deepEqual(c.drops,[makeStack(4,10)]);
  assert.equal(gui.send(null,OUTSIDE,0,0),null);
+});
+
+test('enchanted books list their StoredEnchantments as the original tabs do',async()=>{
+ const registry=JSON.parse(await readFile(new URL('../public/research/content-registry-reference.json',import.meta.url)));
+ const tag=e=>`{StoredEnchantments:[${e[2].map((s,i)=>`${i}:{lvl:${s.lvl}s,id:${s.id}s,},`).join('')}],}`;
+ const searchBooks=SEARCH_ORDER.filter(e=>plain(e)===365);
+ assert.equal(searchBooks.length,76);
+ assert.deepEqual(searchBooks.map(tag),registry.searchEnchantedBooks.map(b=>b.tag));
+ const tabBooks=t=>t.items.filter(e=>plain(e)===365).map(e=>e[2].map(s=>s.id+':'+s.lvl).join());
+ assert.deepEqual(tabBooks(CREATIVE_TABS[7]),['32:5','33:1','34:3','35:3','61:3','62:3']);
+ assert.deepEqual(tabBooks(CREATIVE_TABS[8]),['0:4','1:4','2:4','3:4','4:4','5:3','6:1','7:3','16:5','17:5','18:5','19:2','20:2','21:3','48:5','49:2','50:1','51:1']);
+ // The creative copy keeps the list; copies do not share it.
+ const {gui,slot}=open([],7),book=slot(22).stack;
+ assert.deepEqual(book,makeStack(365,1,0,[{id:32,lvl:5}]));
+ gui.down(slot(22),0,{time:0});gui.up(slot(22),0);
+ assert.deepEqual(gui.inv.cursor.stored,[{id:32,lvl:5}]);assert.notEqual(gui.inv.cursor.stored,book.stored);
 });

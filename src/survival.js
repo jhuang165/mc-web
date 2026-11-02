@@ -1,5 +1,7 @@
 import {miningState,blockWear} from "./mining.js";
-import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WEB, LADDER, SNOW_LAYER, WATER, LAVA, CARROTS, POTATOES, CACTUS, REEDS, TNT } from "./world.js";
+import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WEB, LADDER, SNOW_LAYER, WATER, LAVA, CARROTS, POTATOES, CACTUS, REEDS, TNT, FENCE, RAIL, MOB_SPAWNER } from "./world.js";
+import { SPAWNER_HARDNESS, spawnerXp } from "./spawner-block.js";
+import { ENCHANTED_BOOK_ITEM } from "./enchanted-books.js";
 import { REEDS_ITEM, PAPER, SUGAR } from "./plants.js";
 import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,ChestContainer,makeStack} from "./inventory.js";
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
@@ -78,6 +80,20 @@ ITEMS[127]={id:127,name:"Bow",kind:"bow",texture:"bow_standby",durability:384,st
 ITEMS[320]={id:320,name:"Arrow",texture:"arrow",stack:64,color:"#b0905f",glyph:"\u2191"};
 ITEMS[326]={id:326,name:"Spider eye",texture:"spider_eye",food:2,saturation:0.8,stack:64,color:"#803f47",glyph:"●"};
 ITEMS[321]={id:321,name:"String",texture:"string",stack:64,color:"#eee",glyph:"~"};
+// Mineshaft loot items (StructureMineshaftPieces chest list): Items.redstone (331), pumpkin and
+// melon seeds (361, 362), saddle (329), iron horse armor (417) and the enchanted book (403). Only
+// the book does anything here (its stored enchantments show in the tooltip); redstone does not
+// place wire, the seeds do not plant and there are no horses. Ids are this build's own.
+ITEMS[360]={id:360,name:"Redstone",texture:"redstone_dust",stack:64,color:"#b01010",glyph:"·"};
+ITEMS[361]={id:361,name:"Pumpkin seeds",texture:"seeds_pumpkin",stack:64,color:"#e0d68a",glyph:"·"};
+ITEMS[362]={id:362,name:"Melon seeds",texture:"seeds_melon",stack:64,color:"#3a2a17",glyph:"·"};
+ITEMS[363]={id:363,name:"Saddle",texture:"saddle",stack:1,color:"#8a5a2b",glyph:"▰"};
+ITEMS[364]={id:364,name:"Iron horse armor",texture:"iron_horse_armor",stack:1,color:"#c8c8c8",glyph:"▣"};
+// Items.minecart (original 328): ItemMinecart's stack of 1. Inert here (no cart placement); it
+// exists so a broken chest minecart's own drop (EntityMinecart.killMinecart) is not lost.
+ITEMS[366]={id:366,name:"Minecart",texture:"minecart_normal",stack:1,color:"#8a8a8a",glyph:"\u25ad"};
+// ItemEnchantedBook: stack 1; `stored` on the stack is its StoredEnchantments list.
+ITEMS[ENCHANTED_BOOK_ITEM]={id:ENCHANTED_BOOK_ITEM,name:"Enchanted book",texture:"book_enchanted",stack:1,storesEnchantments:true,color:"#a04fbf",glyph:"▰"};
 // Item.gunpowder (original 289, this build's 330): a plain item, Materials tab.
 ITEMS[330]={id:330,name:"Gunpowder",texture:"gunpowder",stack:64,color:"#5a5a5a",glyph:"*"};
 for (const item of [
@@ -246,6 +262,12 @@ MATERIALS[CARROTS]=MATERIALS[POTATOES]={hardness:0,drop:0};
 // BlockTNT (original 46): hardness 0, Material.tnt, drops itself when broken (a plain
 // break never primes it: removedByPlayer passes metadata 0).
 MATERIALS[TNT]={hardness:0};
+// BlockFence: hardness 2, Material.wood (axe), drops itself. BlockRail: hardness 0.7,
+// Material.circuits (no tool needed; ItemPickaxe lists it), drops itself. BlockMobSpawner:
+// hardness 5, Material.rock (pickaxe needed), no item; 15 + rand(15) + rand(15) experience.
+MATERIALS[FENCE]={hardness:2,kind:"axe"};
+MATERIALS[RAIL]={hardness:.7};
+MATERIALS[MOB_SPAWNER]={hardness:SPAWNER_HARDNESS,kind:"pickaxe",tier:0,drop:0,xp:spawnerXp};
 export const RECIPES = [];
 function recipe(id, name, rows, keys, output, count = 1) {
   const width = Math.max(...rows.map((r) => r.length));
@@ -278,6 +300,11 @@ recipe("bookshelf","Bookshelf",["PPP","BBB","PPP"],{P:7,B:314},21);
 recipe("planks", "Oak planks", ["L"], { L: 4 }, 7, 4);
 recipe("sticks", "Sticks", ["P", "P"], { P: 7 }, 300, 4);
 recipe("ladder", "Ladder", ["S S", "SSS", "S S"], { S: 300 }, LADDER, 3);
+// CraftingManager: 6 sticks make 2 fences; 6 iron ingots around a stick make 16 rails.
+recipe("fence", "Fence", ["###", "###"], { "#": 300 }, FENCE, 2);
+recipe("rail", "Rail", ["X X", "X#X", "X X"], { X: 302, "#": 300 }, RAIL, 16);
+// CraftingManager: "# #", "###" iron ingots make a minecart (inert here; it is not placed on rails yet).
+recipe("minecart", "Minecart", ["X X", "XXX"], { X: 302 }, 366);
 // CraftingManager: "X#X", "#X#", "X#X" with gunpowder (X) and sand (#) makes one TNT.
 recipe("tnt", "TNT", ["X#X", "#X#", "X#X"], { X: 330, "#": 6 }, TNT);
 recipe("table", "Crafting table", ["PP", "PP"], { P: 7 }, 13);
@@ -458,6 +485,8 @@ export const FUELS = {
   308: 1600,
   // TileEntityFurnace.getItemBurnTime: a sapling burns for 100 ticks.
   [SAPLING]: 100,
+  // Material.wood blocks burn 300 ticks.
+  [FENCE]: 300,
 };
 // TileEntityFurnace.getItemBurnTime: a lava bucket burns 20000 ticks and, like every
 // Item with a container item, leaves the empty bucket behind when it is used up.

@@ -1,13 +1,15 @@
 // Ordinary held-block placement from main.js edit(place = true). The world and
 // Survival own gameplay state; synchronous hooks keep UI/audio observers in
 // their original positions without requiring a browser or scene.
-import { collides, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, isLiquid, isFlower } from "./world.js";
+import { collides, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, isLiquid, isFlower } from "./world.js";
 import { stackedSnowMeta, snowCanStay } from "./snow.js";
 import { reedTarget, canPlaceReeds, cactusCanPlace, REEDS_ITEM } from "./plants.js";
 import { canPlaceChest, placeChest, CHEST } from "./chest.js";
 import { flowerCanStay } from "./flowers.js";
 import { saplingCanStay, placedLeavesMeta } from "./trees.js";
 import { canPlaceLadder, placedLadderMeta, clickedSide } from "./ladders.js";
+import { placedTorchMeta } from "./torches.js";
+import { railCanPlace, railAdded } from "./rails.js";
 
 const BLOCK_MAX = new Set([WOOL, RED_FLOWER, 2, 6, 56, 58]);
 const result = (placed, reason, block = null, position = null) => ({ placed, reason, block, position });
@@ -90,12 +92,18 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if (id === SNOW_LAYER && !snowCanStay(world, ...p)) return result(false, "snow-support", id, p);
   if (id === LADDER && !canPlaceLadder(world, ...p)) return result(false, "ladder-support", id, p);
   if (id === CACTUS && !cactusCanPlace(world, ...p)) return result(false, "cactus-support", id, p);
+  if (id === RAIL && !railCanPlace(world, ...p)) return result(false, "rail-support", id, p);
+  // BlockTorch.canPlaceBlockAt, then onBlockPlaced/onBlockAdded pick the wall (1-4) or floor
+  // metadata; replacing a snow layer counts as clicking its top (side 1).
+  const torchMeta = id === TORCH ? placedTorchMeta(world, ...p, p === here ? 1 : clickedSide(here, p)) : 0;
+  if (torchMeta < 0) return result(false, "torch-support", id, p);
 
   const old = world.get(...p), oldMeta = world.getMeta(...p);
   const meta = BLOCK_MAX.has(id) ? survival.held?.damage || 0
     : id === 5 ? placedLeavesMeta()
       : id === LADDER ? placedLadderMeta(world, ...p, clickedSide(here, p))
-        : 0;
+        : id === TORCH ? torchMeta
+          : 0;
   world.set(...p, id, false, meta);
   if (intersects(world, position.x, position.y, position.z)) {
     world.set(...p, old, false, oldMeta);
@@ -104,6 +112,8 @@ export function placeHeldBlock(state, request, hooks = {}) {
   }
   world.set(...p, id, true, meta);
   if (id === CHEST) placeChest(world, survival.chests, ...p, yaw);
+  // BlockRailBase.onBlockAdded: the rail takes its shape and reshapes the rails it joins.
+  if (id === RAIL) railAdded(world, ...p);
   farming.observe(...p);
   if (!survival.creative) survival.take(id);
   updateBlock(p[0], p[2], p[1]);

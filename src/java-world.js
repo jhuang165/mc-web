@@ -9,6 +9,7 @@ import { JavaRandom } from "./java-random.js";
 import { BIOMES_TO_SPAWN_IN } from "./biome-layers.js";
 import { stringHash } from "./java-long.js";
 import { NoiseGeneratorPerlin } from "./noise.js";
+import { generateLiveMineshafts } from "./mineshaft-world.js";
 export const JAVA_TERRAIN_BLOCKS = Object.freeze({
   0: 0,
   1: 3,
@@ -79,6 +80,8 @@ export function generateJavaWorld(world) {
   const topAt = (x, z) => state.topBlock(manager.biomeAt(x, z)),
     caves = new MapGenCaves(seed, manager, topAt),
     ravines = new MapGenRavine(seed, manager, topAt);
+  // Generation version 10 adds mineshafts (mineshaft-world.js), which need the original-ID chunks.
+  const originals = world.generationVersion >= 10 ? new Map() : null;
   for (let cx = 0; cx < 8; cx++)
     for (let cz = 0; cz < 8; cz++) {
       const chunk = gen.provideChunk(
@@ -87,6 +90,7 @@ export function generateJavaWorld(world) {
       );
       caves.generate(chunk.x, chunk.z, chunk.blocks);
       ravines.generate(chunk.x, chunk.z, chunk.blocks);
+      originals?.set(`${chunk.x},${chunk.z}`, chunk);
       const live = world.chunkAt(cx, cz);
       for (let i = 0; i < 65536; i++) {
         const id = JAVA_TERRAIN_BLOCKS[chunk.blocks[i]];
@@ -100,4 +104,15 @@ export function generateJavaWorld(world) {
           world.biomeIds[(cx * 16 + x) * 128 + cz * 16 + z] =
             chunk.biomes[x + z * 16];
     }
+  if (originals)
+    generateLiveMineshafts(world, {
+      seed,
+      originals,
+      ringTerrain: (x, z) => {
+        const chunk = gen.provideChunk(x, z);
+        caves.generate(chunk.x, chunk.z, chunk.blocks);
+        ravines.generate(chunk.x, chunk.z, chunk.blocks);
+        return chunk;
+      },
+    });
 }

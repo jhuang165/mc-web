@@ -3,7 +3,7 @@
 import {Survival,ITEMS,burnTime,smeltingResult} from '../src/survival.js';
 import {makeStack,copyStack,ChestContainer,LargeChestInventory} from '../src/inventory.js';
 import {newChest,chestInventory} from '../src/chest.js';
-import {YELLOW_FLOWER,RED_FLOWER,DYE,SNOW_LAYER,ICE,SAPLING,WEB,LADDER,CACTUS,TNT} from '../src/world.js';
+import {YELLOW_FLOWER,RED_FLOWER,DYE,SNOW_LAYER,ICE,SAPLING,WEB,LADDER,CACTUS,TNT,FENCE,RAIL} from '../src/world.js';
 
 // Minecraft 1.7.10 numeric IDs (and metadata for subtypes) of this build's items.
 export const MC_IDS={
@@ -14,6 +14,7 @@ export const MC_IDS={
  46:TNT,289:330,
  81:CACTUS,338:327,339:328,353:329,
  298:400,299:401,300:402,301:403,302:404,303:405,304:406,305:407,306:408,307:409,308:410,309:411,310:416,311:417,312:418,313:419,314:412,315:413,316:414,317:415,
+ 85:FENCE,66:RAIL,331:360,361:361,362:362,329:363,417:364,403:365,328:366,
 };
 const GAME_IDS=Object.fromEntries(Object.entries(MC_IDS).map(([mc,id])=>[id,mc.split(':').map(Number)]));
 const toGame=(id,count,damage)=>{const subtype=MC_IDS[id+':'+damage],game=subtype??MC_IDS[id];if(!game)throw new Error('No game item for Minecraft ID '+id+':'+damage);return makeStack(game,count,subtype?0:damage);};

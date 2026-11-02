@@ -1,7 +1,9 @@
-import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE } from "./spider.js";
+import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE, isSpider, soundType, caveSpiderPoisonTicks } from "./spider.js";
+import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox } from "./mob-spawner.js";
+import { POISON } from "./status-effects.js";
 import {CARROT,zombieRareDrop} from './crops.js';
 import { creeperFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from "./creeper.js";
-import { SIZE, HEIGHT, hash, slipperiness, collisionBounds, normalCube, WOOL, isLiquid, DYE } from "./world.js";
+import { SIZE, HEIGHT, hash, slipperiness, collisionBoxes as cellCollisionBoxes, normalCube, WOOL, isLiquid, DYE } from "./world.js";
 import { isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
 import { ITEMS } from "./survival.js";
 import { insideOpaqueBlock, mobEyeHeight } from "./suffocation.js";
@@ -116,7 +118,7 @@ export function mobPose(e, partial) {
     x: lerp(e.px, e.x), y: lerp(e.py, e.y), z: lerp(e.pz, e.z),
     bodyYaw: body, headYaw: f(head - body),
     headPitch,
-    limbSwing: swing, limbSwingAmount: amount, age: e.age + p, death: e.type === "spider" ? death * 2 : death,
+    limbSwing: swing, limbSwingAmount: amount, age: e.age + p, death: isSpider(e.type) ? death * 2 : death,
   };
 }
 // Widths and heights are each 1.7.10 constructor's setSize: EntityPig (wo)
@@ -148,6 +150,9 @@ export const ENTITY_TYPES = {
   },
   // EntitySpider (yn): legacy AI uses speed 0.8 as input, fixed 0.1 land acceleration.
   spider: { health: 16, width: f(1.4), height: f(0.9), movement: f(0.8), ai: { wander: 1 }, damage: 2, drop: 0 },
+  // EntityCaveSpider (xy) extends EntitySpider: setSize(0.7, 0.5) and maxHealth 12 (xy.aD);
+  // speed, damage and the legacy AI are the spider's. Spawners only: never spawned naturally.
+  cave_spider: { health: 12, width: f(0.7), height: f(0.5), movement: f(0.8), ai: { wander: 1 }, damage: 2, drop: 0 },
   // EntitySkeleton (yl): 0.6 x 1.8, 20 health, speed 0.25 (applyEntityAttributes). Its
   // arrow and bone drops are rolled in `kill`, so there is no `drop`; the task
   // speeds (ArrowAttack 1.0, FleeSun 1.0, Wander 1.0) are in the AI's brain.
@@ -159,7 +164,7 @@ export const ENTITY_TYPES = {
   creeper: { health: 20, width: 0.6, height: 1.8, movement: 0.25, ai: { wander: 0.8, chase: 1 }, damage: 2, drop: 0 },
 };
 // EntityMob subclasses: no panic counter, 5 experience, despawning, 0.5 - brightness path weights.
-export const HOSTILE = new Set(["zombie", "skeleton", "spider", "creeper"]);
+export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper"]);
 // EntityMoveHelper.onUpdateMoveHelper (tv.c) hands EntityLiving.setAIMoveSpeed
 // (sw.i) `(float)(speed * movementSpeed)`; sw.i also sets moveForward to it. The
 // zombie's "Baby speed boost" (yq.br) is operation 1: base * (1 + 0.5); a Speed effect
@@ -176,9 +181,10 @@ export const EGG = 316;
 export { FEATHER, RAW_CHICKEN, COOKED_CHICKEN };
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
 // its hurt sound, and the sheep uses mob.sheep.say for say, hurt and death alike.
-const hurtSound = (type) => (type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
+// EntityCaveSpider inherits the spider's sounds.
+const hurtSound = (type) => (type = soundType(type), type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
 // EntityChicken's death sound is its hurt sound as well.
-const deathSound = (type) => (type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
+const deathSound = (type) => (type = soundType(type), type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
 // Entity.setPosition's box (half width and height in floats) and Entity.canBePushed:
 // living entities until setDead (deathTime 20, or removal).
 export const pushBox = (o, width, height) => {
@@ -217,10 +223,9 @@ function collisionBoxes(world, b) {
   for (let bx = Math.floor(b[0]); bx < Math.floor(b[3] + 1); bx++)
     for (let by = Math.floor(b[1]) - 1; by < Math.floor(b[4] + 1); by++)
       for (let bz = Math.floor(b[2]); bz < Math.floor(b[5] + 1); bz++)
-        if (world.solid(bx, by, bz)) {
-          const [a, c, d, g, h, i] = collisionBounds(world, bx, by, bz);
+        // Block.addCollisionBoxesToList: a fence gives its post and each arm as separate boxes.
+        for (const [a, c, d, g, h, i] of cellCollisionBoxes(world, bx, by, bz))
           if (bx + g > b[0] && bx + a < b[3] && by + h > b[1] && by + c < b[4] && bz + i > b[2] && bz + d < b[5]) out.push([bx + a, by + c, bz + d, bx + g, by + h, bz + i]);
-        }
   return out;
 }
 // Entity.func_145771_j [sa.j(DDD)Z], used by items and XP orbs (the player overrides it,
@@ -436,7 +441,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
   let landed;
   if (e.inWater) {
     const y0 = e.y;
-    moveFlying(e, 0, forward, f(e.type === "spider" ? 0.02 : 0.04));
+    moveFlying(e, 0, forward, f(isSpider(e.type) ? 0.02 : 0.04));
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, STEP_HEIGHT, hooks);
     e.vx *= 0.800000011920929;
     e.vy *= 0.800000011920929;
@@ -457,10 +462,10 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
     const slip = () => (e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.91)) : f(0.91));
     let friction = slip();
     const accel = f(f(0.16277136) / f(f(friction * friction) * friction));
-    moveFlying(e, 0, forward, e.onGround ? f((e.type === "spider" ? f(0.1) : e.aiMoveSpeed) * accel) : JUMP_MOVEMENT_FACTOR);
+    moveFlying(e, 0, forward, e.onGround ? f((isSpider(e.type) ? f(0.1) : e.aiMoveSpeed) * accel) : JUMP_MOVEMENT_FACTOR);
     friction = slip();
     // isOnLadder: EntitySpider's override is its wall flag; others test the ladder cell (ladders.js).
-    const climbable = () => (e.type === "spider" ? e.climbing : isOnLadder(world, e.x, e.y, e.z));
+    const climbable = () => (isSpider(e.type) ? e.climbing : isOnLadder(world, e.x, e.y, e.z));
     if (climbable()) {
       ladderClamp(e, e.player && e.sneaking, ["vx", "vy", "vz"]);
       e.fallDistance = 0;
@@ -520,6 +525,13 @@ export function entityHit(origin, dir, e, reach) {
   }
   return near <= reach ? near : null;
 }
+// The player's attackDamage attribute with the held item's modifier (1 bare-handed): swords
+// 5 + tier (gold 5), axes 4, pickaxes 3 and shovels 2 + tier, only for an item actually held.
+export function heldAttackDamage(tool, survival) {
+  const item = ITEMS[tool];
+  if (!(survival.creative || survival.count(tool) > 0) || !["sword", "axe", "pickaxe", "shovel"].includes(item?.kind)) return 1;
+  return item.kind === "sword" ? 5 + (item.name.startsWith("Golden") ? 0 : item.tier) : item.kind === "axe" ? 4 + item.tier : item.kind === "pickaxe" ? 3 + item.tier : 2 + item.tier;
+}
 export class EntityWorld {
   constructor(world, saved, random = Math.random) {
     this.world = world;
@@ -564,7 +576,7 @@ export class EntityWorld {
           ...(e.type === "sheep" ? { color: Number.isInteger(e.color) && e.color >= 0 && e.color < 16 ? e.color : 0, sheared: e.sheared === true, eatTimer: 0 } : {}),
           // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
           ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
-          ...(e.type === "spider" ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
+          ...(isSpider(e.type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
           // EntityCreeper.readEntityFromNBT: "powered" and "ignited" are saved, the swell
           // state (datawatcher 16) and timeSinceIgnited start over.
           ...(e.type === "creeper" ? { ...creeperFields(), powered: e.powered === true, ignited: e.ignited === true } : {}),
@@ -620,7 +632,7 @@ export class EntityWorld {
       ...(type === "sheep" ? { color: sheepColor(random), sheared: false, eatTimer: 0 } : {}),
       // EntityChicken (wg): timeUntilNextEgg = rand.nextInt(6000) + 6000 (wg.bu; not saved in
       // 1.7.10), wingRotation/destPos and their previous values 0, wingRotDelta (bt) 1.0.
-      ...(type === "spider" ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
+      ...(isSpider(type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
       ...(type === "creeper" ? creeperFields() : {}),
       ...(type === "chicken" ? { eggTimer: Math.floor(random() * 6000) + 6000, wingRotation: 0, destPos: 0, oFlapSpeed: 0, oFlap: 0, wingRotDelta: 1 } : {}),
       // EntityZombie.func_110161_a adds a 0 to 0.05 "Random spawn bonus" to knockbackResistance.
@@ -770,7 +782,15 @@ export class EntityWorld {
   // leader bonus. Rolls this build has no use for (equipment, children, villagers, jockeys,
   // loot pickup, door breaking, the leader's health) are drawn and dropped.
   spawnNatural(type, x, y, z) {
-    const e = this.create(type, x, y, z), rand = entityRandom(e);
+    const e = this.create(type, x, y, z);
+    this.onSpawnWithEgg(e);
+    this.entities.push(e);
+    return e;
+  }
+  // EntityLiving.onSpawnWithEgg(null) and its overrides. EntityCaveSpider's (xy.a(sy)) returns
+  // its argument without calling super: no follow-range roll, no jockey, no effect.
+  onSpawnWithEgg(e) {
+    const type = e.type, x = e.x, y = e.y, z = e.z, rand = entityRandom(e);
     const world = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
     const local = this.localDifficulty ? this.localDifficulty(Math.floor(x), Math.floor(y), Math.floor(z)) : 0;
     if (type === "spider") {
@@ -785,8 +805,61 @@ export class EntityWorld {
         e.reinforcement = reinforcementChance(e.reinforcement + r.reinforcementBonus);
       }
     }
-    this.entities.push(e);
     return e;
+  }
+  // The mob-spawner.js context hooks for this world (MobSpawnerBaseLogic.updateSpawner). `env`
+  // supplies the light: skyLight(x, y, z) (the saved sky value), lightValue(x, y, z)
+  // (World.getBlockLightValue), thundering() and thunderLightValue(x, y, z) (skylightSubtracted
+  // 10); `extraCollision(box)` adds boats/minecarts (preventEntitySpawning and their boxes).
+  // A spawn beyond the 40 mobs a save keeps is refused after its rolls (createMob null).
+  spawnerHooks(env = {}) {
+    const height = this.world.height ?? HEIGHT;
+    const sized = (o) => { const s = this.size(o); return mobBox(o.x, o.y, o.z, s[0], s[1]); };
+    const light = (fn, fallback) => fn ?? ((x, y, z) => (this.lightAt ? this.lightAt(x, y, z) : fallback));
+    const lightEnv = {
+      skyLight: env.skyLight ?? (() => 0),
+      lightValue: light(env.lightValue, 0),
+      thunderLightValue: light(env.thunderLightValue ?? env.lightValue, 0),
+    };
+    const blocked = (box) => {
+      const p = this.ai?.player;
+      if (p?.alive && boxesIntersect(box, mobBox(p.x, p.y, p.z, 0.6, 1.8))) return true;
+      // World.checkNoEntityCollision: not yet setDead (a dying mob still counts).
+      for (const o of this.entities) if (pushable(o) && boxesIntersect(box, sized(o))) return true;
+      return !!env.extraCollision?.(box);
+    };
+    const liquid = (box) => {
+      for (let bx = Math.floor(box[0]); bx < Math.floor(box[3] + 1); bx++)
+        for (let by = Math.floor(box[1]); by < Math.floor(box[4] + 1); by++)
+          for (let bz = Math.floor(box[2]); bz < Math.floor(box[5] + 1); bz++) if (by >= 0 && by < height && isLiquid(this.world.get(bx, by, bz))) return true;
+      return false;
+    };
+    return {
+      countNearby: (type, box) => this.entities.reduce((n, o) => n + (countsAs(type, o.type) && boxesIntersect(box, sized(o)) ? 1 : 0), 0),
+      createMob: (type, x, y, z, yaw) => {
+        if (!ENTITY_TYPES[type] || this.entities.length >= 40) return null;
+        const e = this.create(type, x, y, z);
+        // setLocationAndAngles(x, y, z, yaw, 0).
+        for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) e[k] = yaw;
+        e.yaw = (-yaw * Math.PI) / 180;
+        return e;
+      },
+      canSpawnHere: (e) => {
+        const t = ENTITY_TYPES[e.type], box = { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height };
+        if (HOSTILE.has(e.type))
+          return monsterCanSpawnHere(box, { difficulty: this.difficulty, thundering: !!env.thundering?.(), ...lightEnv, entityCollision: blocked, blockCollision: (b) => collisionBoxes(this.world, b).length > 0, liquid }, entityRandom(e));
+        // EntityAnimal.getCanSpawnHere: grass below and full light above 8, then EntityLiving's checks.
+        const x = Math.floor(e.x), y = Math.floor(e.y), z = Math.floor(e.z), b = mobBox(e.x, e.y, e.z, t.width, t.height);
+        return this.world.get(x, y - 1, z) === 2 && (env.fullLight ?? lightEnv.lightValue)(x, y, z) > 8 && !blocked(b) && !collisionBoxes(this.world, b).length && !liquid(b);
+      },
+      initMob: (e) => this.onSpawnWithEgg(e),
+      addMob: (e) => this.entities.push(e),
+      // EntityLiving.spawnExplosionParticle (entity status 20 on the client): 20 explode puffs.
+      explosionParticles: (e) => {
+        const t = ENTITY_TYPES[e.type];
+        if (this.fx) burst(this.fx, "explode", 20, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, entityRandom(e));
+      },
+    };
   }
   // EntityMob.attackEntityAsMob (yg.n(sa)): the attackDamage attribute (Strength applies) as a
   // mob damage source, which EntityPlayer.attackEntityFrom scales by difficulty
@@ -796,6 +869,11 @@ export class EntityWorld {
     if (hit && e.type === "zombie") {
       const ticks = zombieFireOnHit(entityRandom(e), this.difficulty, e.burn > 0 || e.fire > 0);
       if (ticks) survival.fire = Math.max(survival.fire, ticks);
+    }
+    // EntityCaveSpider.attackEntityAsMob: addPotionEffect(new PotionEffect(poison, ticks, 0)).
+    if (hit && e.type === "cave_spider") {
+      const ticks = caveSpiderPoisonTicks(this.difficulty);
+      if (ticks > 0) survival.effects?.add({ id: POISON, duration: ticks, amplifier: 0 });
     }
     return hit;
   }
@@ -809,17 +887,7 @@ export class EntityWorld {
     if (!this.entities.includes(e) || e.health <= 0) return false;
     const item = ITEMS[tool],
       owned = survival.creative || survival.count(tool) > 0;
-    let damage = 1;
-    if (owned && ["sword","axe","pickaxe","shovel"].includes(item?.kind)) {
-      damage =
-        item.kind === "sword"
-          ? 5 + (item.name.startsWith("Golden") ? 0 : item.tier)
-          : item.kind === "axe"
-            ? 4 + item.tier
-            : item.kind === "pickaxe"
-              ? 3 + item.tier
-              : 2 + item.tier;
-    }
+    let damage = heldAttackDamage(tool, survival);
     if (critical) damage = criticalDamage(damage);
     if (e.hurt > 0 && damage <= e.lastDamage) return false;
     if (!this.damage(e, damage, player.x, player.z)) return false;
@@ -899,7 +967,7 @@ export class EntityWorld {
     const rand = entityRandom(e);
     if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) ? 80 : 120) || e.type === "creeper") return;
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
-    this.events.push({ sound: "mob." + e.type + ".say", volume: e.type === "cow" ? f(0.4) : 1, pitch, position: { x: e.x, y: e.y, z: e.z } });
+    this.events.push({ sound: "mob." + soundType(e.type) + ".say", volume: e.type === "cow" ? f(0.4) : 1, pitch, position: { x: e.x, y: e.y, z: e.z } });
   }
   // The fire and lava part of Entity.onEntityUpdate (sa.C): water puts the fire
   // out; a burning mob takes 1 (onFire) whenever the counter is a multiple of 20;
@@ -1163,9 +1231,9 @@ export class EntityWorld {
       }
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.
-      this.walk(e, t, 0, () => e.type === "spider" ? this.spiderThink(e) : this.ai.think(e));
+      this.walk(e, t, 0, () => isSpider(e.type) ? this.spiderThink(e) : this.ai.think(e));
       this.push(e, t);
-      if (e.type === "spider") {
+      if (isSpider(e.type)) {
         e.climbing = e.collidedH;
         // Entity.moveEntity's distanceWalkedOnStepModified (0.6 per block);
         // EntitySpider has its own original step event at volume 0.15.
@@ -1261,7 +1329,7 @@ export class EntityWorld {
   // the existing bounded PathFinder; its refresh/wander timing remains adapted.
   spiderThink(e) {
     const m = this.ai.brain(e), p = this.ai.player, s = this.ai.survival;
-    const light = this.ai.brightness(Math.floor(e.x), Math.floor(e.y + ENTITY_TYPES.spider.height * 0.66), Math.floor(e.z));
+    const height = ENTITY_TYPES[e.type].height, light = this.ai.brightness(Math.floor(e.x), Math.floor(e.y + height * 0.66), Math.floor(e.z));
     const distance = Math.sqrt(m.distSq(p));
     e.idle = (e.idle || 0) + 1 + (light > 0.5 ? 2 : 0);
     m.despawnEntity();
@@ -1276,7 +1344,7 @@ export class EntityWorld {
     if (e.spiderTarget) {
       m.attackTarget = p;
       if (m.canSee(p)) {
-        const result = spiderAttack(e, p, distance, light, this.random);
+        const result = spiderAttack(e, p, distance, light, this.random, height);
         if (result === "forget") { e.spiderTarget = false; m.navigator.clearPathEntity(); }
         else if (result === "hit") this.hitPlayer(e, s);
       }

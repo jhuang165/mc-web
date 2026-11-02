@@ -4,8 +4,41 @@
 const RUNTIME_FIELDS = [
   "position", "drops", "entities", "farms", "experience", "xpOrbs", "falling",
   "weather", "worldRandom", "projectiles", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "inhabited",
+  "spawners", "minecarts",
 ];
 
+const int = Number.isInteger, finite = Number.isFinite;
+const stored = (v) => v.filter((e) => int(e?.id) && int(e?.lvl)).slice(0, 64).map((e) => ({ id: e.id, lvl: e.lvl }));
+const SPAWNER_NUMBERS = ["Delay", "MinSpawnDelay", "MaxSpawnDelay", "SpawnCount", "MaxNearbyEntities", "RequiredPlayerRange", "SpawnRange"];
+// Generated-structure state (structure-simulation.js) is rebuilt field by field: a record that is
+// not the expected shape is dropped, and an export without these fields gets the generation's
+// spawners and full carts on its first launch, as an older save does.
+const SANITIZE = {
+  spawners: (v) => Array.isArray(v)
+    ? v.filter((t) => t && typeof t === "object" && [t.x, t.y, t.z].every(int)).slice(0, 4096).map((t) => ({
+      x: t.x, y: t.y, z: t.z,
+      ...(typeof t.EntityId === "string" ? { EntityId: t.EntityId.slice(0, 64) } : {}),
+      ...Object.fromEntries(SPAWNER_NUMBERS.filter((k) => int(t[k])).map((k) => [k, t[k]])),
+    }))
+    : undefined,
+  minecarts: (v) => v && typeof v === "object" && Array.isArray(v.carts)
+    ? { version: 1, carts: v.carts.filter((c) => c && typeof c === "object" && [c.x, c.y, c.z].every(finite)).slice(0, 1024).map((c) => ({
+      x: c.x, y: c.y, z: c.z,
+      ...(Array.isArray(c.motion) && c.motion.length === 3 && c.motion.every(finite) ? { motion: [...c.motion] } : {}),
+      ...(Array.isArray(c.rotation) && c.rotation.length === 2 && c.rotation.every(finite) ? { rotation: [...c.rotation] } : {}),
+      ...(finite(c.fallDistance) ? { fallDistance: c.fallDistance } : {}),
+      ...(int(c.fire) ? { fire: c.fire } : {}),
+      onGround: c.onGround === true,
+      ...(typeof c.customName === "string" && c.customName ? { customName: c.customName.slice(0, 64) } : {}),
+      items: (Array.isArray(c.items) ? c.items : [])
+        .filter((it) => int(it?.slot) && it.slot >= 0 && it.slot < 27 && int(it.id) && int(it.count) && it.count > 0 && (it.damage === undefined || int(it.damage)))
+        .map((it) => ({ slot: it.slot, id: it.id, damage: it.damage ?? 0, count: Math.min(64, it.count), ...(Array.isArray(it.stored) ? { stored: stored(it.stored) } : {}) })),
+    })) }
+    : undefined,
+};
+
 export function importedRuntime(data) {
-  return Object.fromEntries(RUNTIME_FIELDS.filter((key) => Object.hasOwn(data, key)).map((key) => [key, data[key]]));
+  return Object.fromEntries(RUNTIME_FIELDS.filter((key) => Object.hasOwn(data, key))
+    .map((key) => [key, SANITIZE[key] ? SANITIZE[key](data[key]) : data[key]])
+    .filter(([, value]) => value !== undefined));
 }

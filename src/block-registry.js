@@ -49,8 +49,13 @@ const MAP = {
     from: (meta, mc) => ({ meta: 0, state: { facing: meta, ...(mc === 62 ? { lit: true } : {}) }, exact: meta >= 2 && meta <= 5 }),
   },
   15: fixed(16), 16: fixed(15), 17: fixed(56), 18: fixed(14), 19: same(35),
-  // Port torches always stand on the floor: BlockTorch metadata 5.
-  20: fixed(50, 5),
+  // BlockTorch: metadata 1-4 on a wall, 5 standing. The port stores a standing torch as 0 (and
+  // reads 5 the same way); both are written as 5.
+  20: {
+    mc: 50,
+    to: (meta) => [50, meta >= 1 && meta <= 4 ? meta : 5],
+    from: (meta) => (meta >= 1 && meta <= 4 ? { meta, exact: true } : { meta: 0, exact: meta === 5 }),
+  },
   21: fixed(47), 22: fixed(49), 23: fixed(80), 24: fixed(82), 25: fixed(13), 26: fixed(42), 27: fixed(41), 28: fixed(57),
   // BlockFarmland metadata is the moisture 0-7; the port splits dry (29) from moist (30).
   29: { mc: 60, to: () => [60, 0], from: (meta) => (meta === 0 ? { meta: 0, exact: true } : null) },
@@ -70,6 +75,11 @@ const MAP = {
   [LAVA]: fluid(11),
   43: fixed(37), 44: same(38), 45: same(51), 46: same(78), 47: fixed(79), 48: same(6), 49: same(141), 50: same(142),
   51: fixed(30), 52: same(65), 53: same(81), 54: same(83), 55: fixed(46), 56: same(24), 57: fixed(110), 58: same(159), 59: fixed(111),
+  // BlockFence (85) has no metadata; BlockRail (66) keeps its shape 0-9; BlockMobSpawner (52) keeps
+  // its tile entity outside the cell (mob-spawner.js).
+  60: fixed(85),
+  61: { mc: 66, to: (meta) => [66, meta <= 9 ? meta : 0], from: (meta) => ({ meta: meta <= 9 ? meta : 0, exact: meta <= 9 }) },
+  62: fixed(52),
 };
 if (Object.keys(MAP).length !== BLOCKS.length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");
 

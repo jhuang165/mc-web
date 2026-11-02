@@ -1,8 +1,16 @@
-// Minecraft Java 1.7.10 EntitySpider (yn), EntityMob (yg), ModelSpider (big).
+// Minecraft Java 1.7.10 EntitySpider (yn), EntityCaveSpider (xy), EntityMob (yg), ModelSpider (big).
 import { mhSin, mhCos } from "./lighting.js";
 const f = Math.fround;
 export const STRING = 321, SPIDER_EYE = 326;
 const nextInt = (random, n) => typeof random === "function" ? Math.floor(random() * n) : random.nextInt(n);
+// EntityCaveSpider extends EntitySpider: the same AI, climbing, web immunity, sounds, drops
+// and experience; only its size, health, onSpawnWithEgg and attackEntityAsMob differ.
+export const isSpider = (type) => type === "spider" || type === "cave_spider";
+// The sound names the original resolves for a type (EntityCaveSpider keeps mob.spider.*).
+export const soundType = (type) => (type === "cave_spider" ? "spider" : type);
+// EntityCaveSpider.attackEntityAsMob (xy.n): after a successful hit on a living target,
+// Poison (amplifier 0) for 7 s on Normal or 15 s on Hard, none on Easy or Peaceful.
+export const caveSpiderPoisonTicks = (difficulty) => (difficulty === 2 ? 7 : difficulty === 3 ? 15 : 0) * 20;
 export const spiderFindsPlayer = (brightness) => f(brightness) < 0.5;
 export function spiderDrops(playerHit, random = Math.random, looting = 0) {
   const string = nextInt(random, 3) + (looting > 0 ? nextInt(random, looting + 1) : 0);
@@ -10,8 +18,9 @@ export function spiderDrops(playerHit, random = Math.random, looting = 0) {
   return { string, eye };
 }
 // Called only with a visible target. Returns "forget", "leap", "hit" or "none".
+// `height` is the attacker's own (EntitySpider 0.9, EntityCaveSpider 0.5).
 // The 1-in-10 leap roll happens before onGround is checked, exactly as yn.a.
-export function spiderAttack(e, target, distance, brightness, random = Math.random) {
+export function spiderAttack(e, target, distance, brightness, random = Math.random, height = f(0.9)) {
   if (f(brightness) > 0.5 && nextInt(random, 100) === 0) return "forget";
   distance = f(distance);
   if (distance > 2 && distance < 6 && nextInt(random, 10) === 0) {
@@ -24,7 +33,7 @@ export function spiderAttack(e, target, distance, brightness, random = Math.rand
     }
     return "leap";
   }
-  if (e.attack <= 0 && distance < 2 && target.y + target.height > e.y && target.y < e.y + f(0.9)) {
+  if (e.attack <= 0 && distance < 2 && target.y + target.height > e.y && target.y < e.y + height) {
     e.attack = 20;
     return "hit";
   }

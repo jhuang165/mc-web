@@ -2,7 +2,7 @@
 // Import screen. The export is a version-9 Java world record whose `edits` rebuild the area over the
 // generated terrain of `seed`; supported chest/furnace contents and dropped items travel in the player
 // and runtime fields the importer already reads. Everything else is counted in the loss report.
-import { World, SIZE, SAPLING, WEB, LADDER, YELLOW_FLOWER, RED_FLOWER, DYE, SNOW_LAYER, ICE, CACTUS, TNT } from './world.js';
+import { World, SIZE, SAPLING, WEB, LADDER, YELLOW_FLOWER, RED_FLOWER, DYE, SNOW_LAYER, ICE, CACTUS, TNT, FENCE, RAIL } from './world.js';
 import { isJavaLandscape } from './java-world.js';
 import { fromOriginal, isRegistered } from './block-registry.js';
 import { readRegion, decodeRegionChunk, regionAddress, regionSlot } from './region-file.js';
@@ -33,6 +33,11 @@ export const ORIGINAL_ITEMS = Object.freeze({
   81: CACTUS, 338: 327, 339: 328, 353: 329,
   298: 400, 299: 401, 300: 402, 301: 403, 302: 404, 303: 405, 304: 406, 305: 407, 306: 408, 307: 409, 308: 410, 309: 411, 310: 416, 311: 417,
   312: 418, 313: 419, 314: 412, 315: 413, 316: 414, 317: 415,
+  // Mineshaft blocks and loot: fence, rail, redstone, pumpkin/melon seeds, saddle, iron horse armor
+  // and the enchanted book (its StoredEnchantments are not read from imported chests yet).
+  85: FENCE, 66: RAIL, 331: 360, 361: 361, 362: 362, 329: 363, 417: 364, 403: 365,
+  // Items.minecart (a broken chest minecart's drop); inert in this build.
+  328: 366,
 });
 // Subtype families whose stack damage the browser stores as the same variant index.
 const VARIANT_DAMAGE = new Set([35, 38, 351]);

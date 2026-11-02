@@ -799,8 +799,8 @@ export class Brain {
       this.tasks.add(8, new LookIdle(this));
       this.targets.add(1, new HurtByTarget(this));
       this.targets.add(2, new NearestAttackable(this));
-    } else if (e.type === "spider") {
-      // EntitySpider uses legacy EntityCreature AI; EntityWorld.spiderThink drives it.
+    } else if (e.type === "spider" || e.type === "cave_spider") {
+      // EntitySpider (and EntityCaveSpider) use legacy EntityCreature AI; EntityWorld.spiderThink drives it.
     } else if (e.type === "creeper") {
       // EntityCreeper (xz): swim 1, swell 2, (avoid ocelots 3: no ocelots), attack on
       // collide 4 (1.0), wander 5 (0.8), watch the player 6, look idle 6; targets nearest
@@ -966,7 +966,7 @@ export class Brain {
   despawnEntity() {
     const e = this.e, p = this.ai.player;
     if ((e.idle & 31) !== 31 || !p) return;
-    const d3 = this.distSq(p), can = e.type === "zombie" || e.type === "skeleton" || e.type === "spider" || e.type === "creeper";
+    const d3 = this.distSq(p), can = e.type === "zombie" || e.type === "skeleton" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper";
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
     if (d3 < 1024) e.idle = 0;

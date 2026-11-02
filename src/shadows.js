@@ -3,7 +3,7 @@
 // 2 x shadowSize, centred under the entity, laid 1/64 above the top of every
 // solid cube below it and faded by height, viewer distance and block light.
 import * as THREE from "three";
-import { isFlower, isCrop, FIRE, WEB, LADDER, CACTUS, REEDS, LILY_PAD } from "./world.js";
+import { isFlower, isCrop, FIRE, WEB, LADDER, CACTUS, REEDS, LILY_PAD, FENCE, RAIL } from "./world.js";
 import { BRIGHTNESS } from "./lighting.js";
 import { FOG_PARS } from "./light-material.js";
 
@@ -21,6 +21,8 @@ export const SHADOWS = {
   chicken: { size: f(0.3), opaque: 1 },
   zombie: { size: f(0.5), opaque: 1 },
   spider: { size: 1, opaque: 1 },
+  // RenderCaveSpider: shadowSize *= 0.7F on RenderSpider's 1.0.
+  cave_spider: { size: f(0.7), opaque: 1 },
   skeleton: { size: f(0.5), opaque: 1 },
   // RenderCreeper: super(new ModelCreeper(), 0.5F); RenderTNTPrimed: shadowSize = 0.5F.
   creeper: { size: f(0.5), opaque: 1 },
@@ -30,9 +32,9 @@ export const SHADOWS = {
 };
 // Blocks whose renderAsNormalBlock is false take no shadow (probe evidence in
 // public/research/shadow-reference.json): glass, water, lava, torches, farmland,
-// wheat, tall grass, chests, fire (45), the snow layer (46) and the sapling (48). Every block that does is a full cube
+// wheat, tall grass, chests, fire (45), the snow layer (46), the sapling (48), fences and rails. Every block that does is a full cube
 // (ice does: it renders as a normal block).
-const NOT_NORMAL = new Set([9, 10, 20, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41, 42, FIRE, 46, 48, WEB, LADDER, CACTUS, REEDS, LILY_PAD]);
+const NOT_NORMAL = new Set([9, 10, 20, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41, 42, FIRE, 46, 48, WEB, LADDER, CACTUS, REEDS, LILY_PAD, FENCE, RAIL]);
 export const takesShadow = (b) => b !== 0 && !NOT_NORMAL.has(b) && !isFlower(b) && !isCrop(b);
 
 // `e`: { x, y, z } interpolated Java position (posY, which for items and orbs

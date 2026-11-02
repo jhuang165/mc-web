@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {biomeFacts} from './biomes.js';
-import {WOOL_COLORS,RED_FLOWER,RED_FLOWERS,YELLOW_FLOWER,SAPLING,WEB,LADDER,CARROTS,POTATOES,CACTUS,REEDS,TNT,SANDSTONE,MYCELIUM,STAINED_CLAY,LILY_PAD,isCrop,isFlower} from './world.js';
+import {WOOL_COLORS,RED_FLOWER,RED_FLOWERS,YELLOW_FLOWER,SAPLING,WEB,LADDER,CARROTS,POTATOES,CACTUS,REEDS,TNT,SANDSTONE,MYCELIUM,STAINED_CLAY,LILY_PAD,FENCE,RAIL,MOB_SPAWNER,isCrop,isFlower} from './world.js';
+import {FENCE_ITEM_BOXES} from './fences.js';
 export const ATLAS_COLUMNS=16,TILE_SIZE=16;
 export const TILES=['grass_top','grass_side','dirt','stone','log_oak','log_oak_top','leaves_oak','sand','planks_oak','brick','glass','bedrock','cobblestone','crafting_table_top','crafting_table_side','crafting_table_front','furnace_side','furnace_top','furnace_front_off','furnace_front_on','coal_ore','iron_ore','diamond_ore','gold_ore','wool_colored_white','torch_on','bookshelf','obsidian','snow','clay','gravel','iron_block','gold_block','diamond_block','farmland_dry','farmland_wet',...Array.from({length:8},(_,i)=>'wheat_stage_'+i),'tallgrass','hardened_clay','chest_front','chest_side','chest_top',...WOOL_COLORS.slice(1).map(c=>'wool_colored_'+c.texture)];
 // Item and particle faces for the chest, cut from its entity texture (ModelChest UVs).
@@ -9,6 +10,8 @@ const CHEST_FACES={chest_front:[[14,33,14,10,1,6],[14,14,14,5,1,2],[1,1,2,4,7,5]
 TILES.push('web','flower_dandelion',...RED_FLOWERS.map(f=>'flower_'+f.texture),'ice','grass_side_snowed','sapling_oak','ladder','tnt_side','tnt_top','tnt_bottom',...['carrots','potatoes'].flatMap(n=>Array.from({length:4},(_,i)=>n+'_stage_'+i)));
 // BlockReed (one crossed texture, tinted by the biome grass colour) and BlockCactus's side, top and bottom.
 TILES.push('reeds','cactus_side','cactus_top','cactus_bottom');
+// Mineshaft blocks: BlockRail uses rail_normal_turned for the curves (metadata 6-9).
+TILES.push('rail_normal','rail_normal_turned','mob_spawner');
 TILES.push('red_sand','dirt_podzol_top','dirt_podzol_side','sandstone_top','sandstone_bottom','sandstone_normal','sandstone_carved','sandstone_smooth','mycelium_top','mycelium_side','waterlily',...WOOL_COLORS.map(c=>'hardened_clay_stained_'+c.texture));
 export const ATLAS_ROWS=Math.ceil(TILES.length/ATLAS_COLUMNS);
 const tile=name=>TILES.indexOf(name);
@@ -28,6 +31,9 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===CARROTS||id===POTATOES)return tile((id===CARROTS?'carrots':'potatoes')+'_stage_'+(meta>=7?3:meta===6?2:meta>>1));
  if(id===WEB)return tile('web');
  if(id===LADDER)return tile('ladder');
+ if(id===FENCE)return tile('planks_oak');
+ if(id===RAIL)return tile(meta>=6?'rail_normal_turned':'rail_normal');
+ if(id===MOB_SPAWNER)return tile('mob_spawner');
  // BlockTNT.getIcon: tnt_bottom below (side 0), tnt_top above (side 1), tnt_side around.
  if(id===TNT)return tile(face===2?'tnt_top':face===3?'tnt_bottom':'tnt_side');
  if(id===REEDS)return tile('reeds');
@@ -54,8 +60,24 @@ export function createBlockAtlas(){
  function redraw(){if(!images.size)return;icons.clear();ctx.clearRect(0,0,canvas.width,canvas.height);const grass=tint('grass'),leaves=tint('foliage');TILES.forEach((name,i)=>{const x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;if(CHEST_FACES[name]){for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])ctx.drawImage(images.get('entity/chest/normal'),u,v,w,h,x+dx,y+dy,w,h);return;}let source=images.get('blocks/'+name);if(['grass_top','tallgrass','reeds'].includes(name))source=tinted(source,grass);if(name==='leaves_oak')source=tinted(source,leaves);ctx.drawImage(source,0,0,16,16,x,y,16,16);if(name==='grass_side')ctx.drawImage(tinted(images.get('blocks/grass_side_overlay'),grass),x,y);});texture.needsUpdate=true;}
  function icon(id,damage=0){const key=id+':'+damage;if(icons.has(key))return icons.get(key);const c=document.createElement('canvas');c.width=64;c.height=70;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
   function face(index,matrix,shade,drop=0){x.save();x.setTransform(...matrix);const sx=index%ATLAS_COLUMNS*16,sy=Math.floor(index/ATLAS_COLUMNS)*16;x.drawImage(canvas,sx,sy,16,16-drop,0,drop,16,16-drop);if(shade){x.globalCompositeOperation='source-atop';x.fillStyle=`rgba(0,0,0,${shade})`;x.fillRect(0,0,16,16);}x.restore();}
-  if(id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||isFlower(id)||isCrop(id)){const i=blockTile(id,2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
+  // RenderBlocks.renderBlockAsItem for the fence (render type 11): two posts and two bars along z,
+  // painted back to front in the inventory projection (z across, x into the picture).
+  if(id===FENCE){fenceIcon(x);const url=c.toDataURL();icons.set(key,url);return url;}
+  if(id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||isFlower(id)||isCrop(id)){const i=blockTile(id,2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
   const url=c.toDataURL();icons.set(key,url);return url;
+ }
+ // Item projection P(a,b,h) = (32 + 1.75(a-b), 2 + a + b + 2(16-h)) in pixels, a = 16z, b = 16x.
+ function fenceIcon(x){const t=blockTile(FENCE,0),sx=t%ATLAS_COLUMNS*16,sy=Math.floor(t/ATLAS_COLUMNS)*16;
+  const shaded=(shade)=>{const s=document.createElement('canvas');s.width=s.height=16;const g=s.getContext('2d');g.drawImage(canvas,sx,sy,16,16,0,0,16,16);if(shade){g.globalCompositeOperation='source-atop';g.fillStyle=`rgba(0,0,0,${shade})`;g.fillRect(0,0,16,16);}return s;};
+  const tiles=[shaded(.2),shaded(.08),shaded(0)],wrap=(u)=>((u%16)+16)%16;
+  const quad=(src,matrix,u0,v0,u1,v1)=>{if(u1<=u0||v1<=v0)return;x.save();x.setTransform(...matrix);const su=wrap(u0),sv=wrap(v0);x.drawImage(src,su,sv,u1-u0,v1-v0,u0,v0,u1-u0,v1-v0);x.restore();};
+  const [p1,p2,top,bottom]=FENCE_ITEM_BOXES,bars=(z0,z1)=>[bottom,top].map(b=>[b[0],b[1],z0,b[3],b[4],z1]);
+  for(const [x0,y0,z0,x1,y1,z1] of [...bars(-.125,0),p1,...bars(.25,.75),p2,...bars(1,1.125)]){
+   const a0=z0*16,a1=z1*16,b0=x0*16,b1=x1*16,h0=y0*16,h1=y1*16;
+   quad(tiles[0],[1.75,1,0,2,32-1.75*b1,2+b1],a0,16-h1,a1,16-h0);
+   quad(tiles[1],[1.75,-1,0,2,32+1.75*(a1-16),18+a1],16-b1,16-h1,16-b0,16-h0);
+   quad(tiles[2],[1.75,1,-1.75,1,32,2+2*(16-h1)],a0,b0,a1,b1);
+  }
  }
  const ready=Promise.all([...TILES.filter(n=>!CHEST_FACES[n]).map(n=>'blocks/'+n),'entity/chest/normal','blocks/grass_side_overlay','colormap/grass','colormap/foliage'].map(async n=>images.set(n,await image(n)))).then(()=>redraw());
  return{texture,canvas,ready,icon,setBiome(value){biome=value;redraw();}};
