@@ -1,0 +1,1 @@
+Updated `src/player-edit-simulation.test.js` to import `YELLOW_FLOWER` and `RED_FLOWER` from `world.js` instead of hard-coded IDs. `node --test src/player-actions.test.js src/player-edit-simulation.test.js src/block-placement-simulation.test.js` passes 27/27. No source behavior change.
