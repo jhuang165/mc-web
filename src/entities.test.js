@@ -143,7 +143,8 @@ test("tick keeps lastTickPos and eases limbSwingAmount toward four times the tra
   const w = zombie(), e = w.entities[0], player = { x: 64, y: 0, z: 70 }, survival = new Survival();
   // The AI no longer moves a mob on its first tick (no path yet), so a knockback-style push drives the motion.
   // Sunlight ignition can otherwise trigger a hurt swing on tick two, outside this interpolation fixture.
-  w.day = false;
+  // tick() recomputes `day` from the clock unless the isDaytime hook is set, so set the hook.
+  w.isDaytime = () => false;
   e.vz = 0.1;
   w.tick(player, survival);
   assert.equal(e.pz, 64);
