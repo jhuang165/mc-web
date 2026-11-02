@@ -1,6 +1,5 @@
 import {isJavaLandscape} from "./java-world.js";
 import { particleSetting } from "./particle-settings.js";
-import { blockCollisions, PLAYER_FIRE_RESISTANCE } from './block-collisions.js';
 import "./style.css";
 import "./minecraft-ui.css";
 import "./container-ui.css";
@@ -57,7 +56,6 @@ import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import {Farming,cropDrops} from "./farming.js";
 import { EntityWorld, ENTITY_TYPES } from "./entities.js";
-import { insideOpaqueBlock, PLAYER_EYE } from "./suffocation.js";
 import { deathMessage, showChatLine } from "./death-messages.js";
 import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
@@ -87,6 +85,7 @@ import { importedRuntime } from "./world-import.js";
 import { tickBlockSystems } from "./world-tick.js";
 import { captureMovementInput } from "./player-input.js";
 import { movePlayer } from "./player-physics.js";
+import { tickPlayerEnvironment, finishPlayerMovement } from "./player-environment.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -1218,35 +1217,19 @@ function tickWeather() {
   }
 }
 function tickSurvival(inWater, oldPosition, inLavaNow = false) {
-  // EntityLivingBase.onEntityUpdate's air test, isInsideOfMaterial(water), on the server's
-  // EntityPlayerMP: posY is the feet there and getEyeHeight 1.62F.
-  const underwater = eyeInWater(world, position.x, position.y + Math.fround(PHYSICS.eye), position.z);
-  tickWeather();
-  const wet = isWet(weather, world, { x: position.x, y: position.y, z: position.z, inWater }, PHYSICS.height);
-  // Entity.onEntityUpdate: only water (handleWaterMovement) puts the fire out here; rain does in the tail below.
-  // Entity.isEntityInsideOpaqueBlock on the server's EntityPlayerMP: feet posY, eye 1.62F (suffocation.js).
-  const inWall = insideOpaqueBlock(world, position.x, position.y, position.z, PHYSICS.width, PLAYER_EYE);
-  survival.tick({ underwater, inWater, inLava: inLavaNow, inWall, outOfWorld: position.y < -64 });
-  // EntityLivingBase.onEntityUpdate: drowning damage comes with 8 bubbles around posY, then
-  // updatePotionEffects spawns "mobSpell" in the colour of the active effects.
-  const posY = position.y + Math.fround(PHYSICS.eye);
-  if (survival.drowned) {
-    survival.drowned = false;
-    drownBubbles(scene.fx, { x: position.x, y: posY, z: position.z, mx: velocity.x, my: velocity.y, mz: velocity.z }, playerRandom);
-  }
-  potionParticles(scene.fx, { x: position.x, y: posY, z: position.z, yOffset: Math.fround(PHYSICS.eye), width: PHYSICS.width, height: PHYSICS.height }, potionColor(survival.effects.active.values()), playerRandom);
-  // Entity.moveEntity's tail (block-collisions.js), after onEntityUpdate as in EntityLivingBase.onUpdate:
-  // cactus cells (cactus, 1 each) and webs (not while flying), then a box in fire or lava deals inFire 1
-  // and counts the fire up from -20 (fireResistance 20), so setFire(8) catches after 20 ticks unless
-  // wet; a wet burning player is put out with a hiss (volume 0.7, pitch 1.6 +- 0.4).
-  const tail = { fire: survival.fire || 0, inWeb: motion.inWeb, fallDistance: 0 };
-  blockCollisions(world, entityBox(position, PHYSICS.width, PHYSICS.height), tail, {
-    hurt: (source, n) => survival.health > 0 && survival.damage(n, source === "cactus" ? "a cactus" : "fire", true),
-    wet, flying, resistance: PLAYER_FIRE_RESISTANCE,
+  tickPlayerEnvironment({ world, weather, position, survival, motion, flying }, { inWater, inLavaNow }, {
+    tickWeather,
+    afterSurvival: () => {
+      // Drowning bubbles and potion particles run before the block-collision tail.
+      const posY = position.y + Math.fround(PHYSICS.eye);
+      if (survival.drowned) {
+        survival.drowned = false;
+        drownBubbles(scene.fx, { x: position.x, y: posY, z: position.z, mx: velocity.x, my: velocity.y, mz: velocity.z }, playerRandom);
+      }
+      potionParticles(scene.fx, { x: position.x, y: posY, z: position.z, yOffset: Math.fround(PHYSICS.eye), width: PHYSICS.width, height: PHYSICS.height }, potionColor(survival.effects.active.values()), playerRandom);
+    },
     fizz: () => sounds.play("random.fizz", { volume: 0.7, pitch: 1.6 + (Math.random() - Math.random()) * 0.4 }),
   });
-  survival.fire = tail.fire;
-  motion.inWeb = tail.inWeb;
   // Scheduled sand and gravel updates and the falling-block entities (WorldServer.tick).
   if (falling) {
     falling.tick();
@@ -1261,32 +1244,12 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     lit: (x, y, z) => scene.litFurnaces.has(`${x},${y},${z}`),
     sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }),
   });
-  // Entity.onEntityUpdate: standing in lava halves the fall distance every tick.
-  if (inLavaNow) fallDistance *= 0.5;
-  if (!survival.creative) {
-    const distance = Math.hypot(
-      position.x - oldPosition.x,
-      position.z - oldPosition.z,
-    );
-    survival.exhaust(distance * (inWater ? 0.015 : motion.sprinting ? 0.1 : 0.01));
-  }
-  // Entity.updateFallState (in movementTick's moveEntity): fallDistance grows while moving down in
-  // every mode (a Creative player can land a critical hit); `landedFall` is the distance a landing
-  // passed to fall(), without the landing move. The damage is Survival only.
-  if (grounded) {
-    const distance = landedFall;
-    landedFall = 0;
-    if (distance > 0) trampleFarmland(position, distance);
-    // EntityLivingBase.updateFallState: level event 2006 (landing dust) from the block 0.2 below the feet.
-    if (distance > 3) {
-      const bx = Math.floor(position.x), by = Math.floor(position.y - 0.20000000298023224), bz = Math.floor(position.z);
-      if (world.get(bx, by, bz)) scene.particles.landingDust(world, bx, by, bz, Math.ceil(Math.fround(distance - 3)), [position.x, position.y + PHYSICS.eye, position.z]);
-    }
-    if (!survival.creative && distance > 3)
-      survival.damage(Math.ceil(Math.fround(distance - 3)), "a fall");
-    fallDistance = 0;
-  }
-  if (inWater || motion.inWeb) fallDistance = 0;
+  const movement = { world, position, survival, motion, grounded, fallDistance, landedFall };
+  finishPlayerMovement(movement, { inWater, inLavaNow, oldPosition }, {
+    trample: trampleFarmland,
+    landingDust: (x, y, z, count) => scene.particles.landingDust(world, x, y, z, count, [position.x, position.y + PHYSICS.eye, position.z]),
+  });
+  ({ fallDistance, landedFall } = movement);
   items.tick(world, (st) => survival.inventory.maxStack(st));
   tickPrimedTnt();
   if (survival.health > 0) {
