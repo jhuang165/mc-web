@@ -7,7 +7,7 @@ The live game offers finite 128 × 128 × 256 Java worlds (generation version 9,
 | GEN-01 | Biome layers (`GenLayer.initializeAllBiomeGenerators`), the `BiomeGenBase` registry, `WorldChunkManager` | Done, wired into Java worlds |
 | GEN-02 | Noise octaves and `ChunkProviderGenerate` terrain density, biome surface blocks, sea level 63 | Done, wired into Java worlds |
 | GEN-03 | `MapGenCaves`, `MapGenRavine` | Done, wired into Java worlds |
-| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes, GEN-04c dungeons, the GEN-04d pre-decoration provider stage and GEN-04e decorator counts/simple features replay exactly; standalone, not wired into Java worlds |
+| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes, GEN-04c dungeons, the GEN-04d pre-decoration provider stage, GEN-04e decorator counts/simple features and GEN-04f tree generators/big mushrooms/biome tree pickers replay exactly; standalone, not wired into Java worlds |
 | GEN-05 | Structures (villages, strongholds, mineshafts, temples) | Open |
 | GEN-06 | Integration: streamed world, new generation version, seed entry | Partial: version 9 is playable at 256 height; finite viewport, no streaming |
 
@@ -246,7 +246,7 @@ The driver order, read from `aia.a(ahu)` bytecode and not yet executed, is:
 
 Still open:
 
-- trees and big mushrooms;
+- trees and big mushrooms (done in GEN-04f below);
 - springs (`WorldGenLiquids` ticks the fluid immediately);
 - the driver with native heightmap and top-solid services;
 - biome decorate overrides (they draw before the base decorator) and biome flower and grass picks;
@@ -258,3 +258,39 @@ Still open:
 Runtime stays 0.23.0, generation version 9.
 
 GEN-04e validation: `npm test` **687/687**, `npm run build` and **5/5** memory-bridge tests pass; native reference regeneration is byte-identical. A mutation check (mushroom light threshold, cactus soil, disc height) fails the replay.
+
+## GEN-04f: tree generators, big mushrooms and biome tree pickers
+
+`src/tree-generators.js` ports the 1.7.10 worldgen trees over an original-ID adapter (`getBlock`, `setBlock(x, y, z, id, meta, flags)`, `isOpaqueCube`). isAirBlock is a block read of 0, and `setBlockAndNotifyAdequately` uses flag 3 with notify and 2 without. The ported classes are:
+
+- `WorldGenTrees` (oak, jungle with vines and cocoa, fixed wood/leaf metadata) and its subclass `WorldGenShrub`, which always reports success;
+- `WorldGenBigTree` (big oak), including the branch logs with metadata 4 or 8;
+- `WorldGenForest` (birch, and tall birch for roofed forests and mutated birch forests);
+- `WorldGenSwamp`, which sinks through water at the origin's own height and hangs vines;
+- `WorldGenTaiga1` and `WorldGenTaiga2` (spruce);
+- `WorldGenHugeTrees` with `WorldGenMegaJungle` and `WorldGenMegaPineTree` (mega spruce and mega pine). The soil writes always use flag 2. Mega pine's `func_150524_b` turns the first grass or dirt from y + 2 down to y − 3 into podzol;
+- `WorldGenSavannaTree` (acacia) and `WorldGenCanopyTree` (dark oak, whose leaves replace air only);
+- `WorldGenBigMushroom` (random type, brown or red). Native compares `y < y + height − 1`, which is always true, so metadata-0 inner blocks are never placed.
+
+Generators keep native per-instance state. `WorldGenBigTree` sets its height limit on the first `generate` and reuses it on every later call, and `setScale(1, 1, 1)` sets its height-limit cap (12), leaf distance (5), width scale and leaf density. Biomes share instances, so `BiomeTrees` holds one world's shared objects:
+
+- per-slot oak (`az`), big oak (`aA`) and swamp (`aB`) fields, and Extreme Hills' spruce (`aD`);
+- class statics for birch, tall birch, roofed, acacia, taiga 1/2, mega spruce and mega pine.
+
+`pickTree(slot, random, trees)` ports `func_150567_a` for all 61 registry slots; `BIOME_TREE_PICKERS` records each slot's picker and its parameter. Ice plains, jungle shrubs, mega jungle and jungle trees are constructed fresh on each pick. Mutated biomes delegate to their base biome's picker, so they hand out the base slot's shared big oak; mutated birch forests are the one override. `pickGrassMeta` ports `func_150569_a`; only the jungle and taiga classes draw.
+
+TreeGeneratorProbe and `tools/verify-tree-generators.mjs` run the unchanged classes on a synthetic World double, mirrored in the test. The fixture has:
+
+- 5×5 steps at y 62..63 over dirt and stone, with per-column surfaces (grass, dirt, farmland, mycelium, sand, stone) and sparse obstacles (log, log2, leaves, leaves2, vine, sapling, stone, tall grass);
+- a swamp floor under still or flowing water to y 61, mostly at y 60, with y 59 pits and y 62 islands;
+- a y = 250 grass plateau.
+
+[tree-generators-reference.json](tree-generators-reference.json) holds 672 records, 24 for each of 28 constructor configurations. Each record runs one generator over one to three chained origins on one world and one Random, as a shared biome instance would be reused, and calls `func_150524_b` after a success as BiomeDecorator does. `src/tree-generators.test.js` replays the per-origin results and write counts, the write hash, per-ID/metadata counts, the ordered block-read/setter call hash and the next Random long exactly. The coverage checks require placements and rejections for every class (the shrub cannot fail), vines from oak/jungle, swamp and mega jungle, cocoa, podzol, both mushroom blocks, x and z branch logs, and chained BigTree and mega-pine successes.
+
+The file also holds 244 picker records: 61 slots × 4 seeds, each with six tree picks (the native owner field or static, or a fresh object, with its constructor arguments), three grass picks and the next long. Origins and seeds come from a fixture-selection procedure, so the tree RNG inputs are not post-provider decorator streams.
+
+A mutation check fails the replay. The mutations were: resetting BigTree's height, breaking podzol at the first match, skipping mushroom metadata 0, letting canopy leaves replace leaves, allowing deeper swamp water, moving the canopy root column, and giving mutated biomes their own picker objects.
+
+Still open: springs, the decorator driver with native heightmap and top-solid services, biome decorate overrides and flower picks, emeralds and monster eggs, worldgen animals and snow/ice, native Chunk storage, lighting and notifications, and live placement in Java worlds. `src/trees.js` (the sapling-growth oak port) is unchanged. Runtime stays 0.23.2, generation version 9.
+
+GEN-04f validation: `npm test` **711/711**, `npm run build` and **5/5** memory-bridge tests pass; native reference regeneration is byte-identical.
