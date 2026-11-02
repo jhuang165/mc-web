@@ -7,7 +7,7 @@ The live game offers finite 128 × 128 × 256 Java worlds (generation version 9,
 | GEN-01 | Biome layers (`GenLayer.initializeAllBiomeGenerators`), the `BiomeGenBase` registry, `WorldChunkManager` | Done, wired into Java worlds |
 | GEN-02 | Noise octaves and `ChunkProviderGenerate` terrain density, biome surface blocks, sea level 63 | Done, wired into Java worlds |
 | GEN-03 | `MapGenCaves`, `MapGenRavine` | Done, wired into Java worlds |
-| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding and base ore pass replay exactly; standalone, not wired into Java worlds |
+| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores and GEN-04b lakes replay exactly; standalone, not wired into Java worlds |
 | GEN-05 | Structures (villages, strongholds, mineshafts, temples) | Open |
 | GEN-06 | Integration: streamed world, new generation version, seed entry | Partial: version 9 is playable at 256 height; finite viewport, no streaming |
 
@@ -144,3 +144,17 @@ The verifier also records the full provider `populate` invocation order from `ja
 Next GEN-04 work: lake and dungeon generators and their pre-decoration random consumption, followed by biome-specific decoration hooks, plants/trees/springs and snow/ice. Runtime integration needs a new generation version and cross-chunk population ownership so existing saves retain their baseline. GEN-05 structures and complete population-order/load-order acceptance remain open.
 
 GEN-04a validation: `npm test` **675/675**, `npm run build` and **5/5** memory-bridge tests pass. Native reference regeneration is byte-identical. No browser QA was needed for this standalone module; live Java-world population is unchanged.
+
+## GEN-04b: water and lava lakes
+
+`src/lake-generator.js` ports unchanged 1.7.10 `WorldGenLakes.generate` (`arx`). It accepts original numeric water/lava IDs and a block-access adapter with material predicates, skylight, biome top block and freeze services. `isSolid` means `Material.isSolid`, not normal-cube or collision solidity. The caller owns bounds, neighboring chunks and the Random stream after provider gates. This standalone tranche keeps the runtime at 0.23.0 and generation version 9 unchanged.
+
+`tools/probes/LakeProbe.java` and `node tools/verify-lakes.mjs` execute the SHA-1-pinned native lake class without modification. [lake-reference.json](lake-reference.json) records 516 cases: six seeds including both signed-long extrema; water/lava, flowing/still identity and material vetoes; solid/surface/dark/mycelium/cold/air/hollow/plant fixtures; descent and low/high Y; negative and horizontal world-edge coordinates. Twelve cases run across 48 native terrain/surface/cave/ravine chunks, with independently replayed input hashes. Their lake RNG starts at isolated seed 1234, not a claimed post-provider stream.
+
+`src/lake-generator.test.js` exactly matches return values, every ordered setter call (coordinates, ID, metadata, flag two), the count and SHA-1 of ordered block/light/biome/freeze calls, and the following Random long. The reference also captures original material solidity/liquidity for numeric lookups 0–255 and class/SRG hashes, including material subclasses. Unregistered lookups resolve as the native registry does; this table does not enumerate additional registered blocks.
+
+Preserved details: four to seven intersecting ellipsoids; X/Z/Y loop order; boundary validation before any carving; a second lower-boundary block lookup only for non-solid materials; exact block identity when retaining an existing liquid; grass/mycelium restoration only above lit dirt; lava rim random draws only on upper boundary cells (before checking solidity); water's 256 freeze-service calls at base+4, including columns outside the cavity. The cold fixture deliberately returns synthetic freeze decisions to verify caller behavior rather than certify native climate rules.
+
+World services (skylight, biome top and freezing) are explicit fixtures even on native terrain inputs. The probe does not execute native Chunk storage, lighting, notifications or the full provider population method. No browser QA is needed for an unused module. Dungeons, provider gates and preceding RNG, biome overrides/decorators/trees/plants/springs/snow, structures and versioned cross-chunk runtime integration remain open. No live lake placement or complete population parity is claimed.
+
+GEN-04b validation: `npm test` **678/678**, `npm run build` and **5/5** memory-bridge tests pass; native reference regeneration is byte-identical.
