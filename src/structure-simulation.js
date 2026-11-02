@@ -69,7 +69,7 @@ export function tickMinecartSimulation(state, hooks = {}) {
   const sized = (e) => { const [w, h] = mobs.size(e); return mobBox(e.x, e.y, e.z, w, h); };
   const pBox = playerBox(position, width, height);
   // Keep rider identity: its own cart excludes it from collision boxes and pushes.
-  const player = rider ? Object.assign(rider, { x: position.x, y: position.y, z: position.z, bb: pBox }) : { ...position, bb: pBox };
+  const player = rider ? Object.assign(rider, { x: position.x, y: position.y, z: position.z, dead: !alive, bb: pBox }) : { ...position, bb: pBox };
   const blockers = [...(alive ? [player] : []), ...living.map((e) => ({ bb: sized(e) }))];
   minecarts.tick(world, { entities: blockers });
   if (alive) {

@@ -19,7 +19,7 @@ Target: Minecraft Java 1.7.10. This page covers how the generated mineshafts (`s
   - **Breaking.** Survival breaks the cart once damage exceeds 40, dropping its contents plus a Minecart and a Chest. Creative breaks it at once and spills only the contents.
   - **Using.** A right click opens the 27-slot "Minecart" chest screen. The screen closes once the cart is dead or more than 8 blocks away.
   - **Rendering.** `MinecartRenderer` draws each cart and is cleared on every world switch.
-- **Minecart item.** Original item 328 is now browser item 366. It is listed in the Transportation tab and in search, and it is crafted from five iron ingots in the native `"# #", "###"` shape. It is inert: it cannot be placed on rails.
+- **Minecart item.** Original item 328 is now browser item 366. It is listed in the Transportation tab and in search, and it is crafted from five iron ingots in the native `"# #", "###"` shape. Since 0.26.0, Use on a rail places an empty cart. Right-click boards it and Shift dismounts; a chest above a cart crafts the placeable chest-cart item (internal450/original342). Generated chest carts keep their container interaction and cannot be ridden, as in 1.7.10; see [minecarts](minecarts.md).
 - **Rails and torches.** `Rails` and `Torches` watch neighbour changes, so an unsupported rail or torch drops as an item. Mineshaft torches emit block light 14, because the light volume is built from the generated cells.
 - **Fences.** Mob movement collides with the fence post and each arm as separate boxes (`world.collisionBoxes`) instead of the full cell, which is what `Block.addCollisionBoxesToList` does.
 
@@ -34,7 +34,7 @@ A save stores the seed plus edits, and every load regenerates the world, `world.
 `spawners` uses `TileEntityMobSpawner` NBT names. `minecarts` is `{ version: 1, carts: [...] }`, with original item ids, so items that have no browser mapping survive a round trip. Exports carry both fields. `world-import.js` rebuilds them field by field:
 
 - Spawners need integer coordinates.
-- Carts need finite positions. Item slots must be 0-26, counts 1-64, and stored enchantments must be integer id/level pairs.
+- Carts need finite positions; type0 means empty and type1 (or an omitted legacy type) means chest. A validated rider marker on an empty cart restores the local player mounted, at most once. Item slots must be 0-26, counts 1-64, and stored enchantments must be integer id/level pairs.
 - A malformed field is dropped, and the world then launches as a first launch.
 - Exports without the fields import as before.
 
@@ -59,7 +59,7 @@ A save stores the seed plus edits, and every load regenerates the world, `world.
 
 ## Gaps
 
-- Carts cannot be placed, ridden, powered or pushed along a powered rail. The Minecart item is inert.
+- Powered/detector/activator rails and live redstone remain absent. Empty-cart placement/riding and chest-cart placement are live since 0.26.0.
 - Hoppers and comparators do not interact with carts.
 - The display mob is lit by the spawner cell, as natively, so it is very dark without a light source.
 - Spawner rendering, ticking and cart ticking cover the 128 x 128 live area only; there is no chunk streaming or unloading.
@@ -67,3 +67,7 @@ A save stores the seed plus edits, and every load regenerates the world, `world.
 - A cart drop whose original item has no browser mapping (`drop.original`) is not spawned in the live world; it is lost when the cart is broken. Saved carts do keep such items.
 - `SpawnPotentials` and spawner NBT edits are not supported.
 - The cart chest screen plays no open or close sound. `EntityMinecartContainer` has none natively either, but this has not been checked against the client.
+
+## Vehicle continuation browser check (0.26.0)
+
+On localhost:5179 with development `?silent` (no AudioContext/playback and no saved options changes), a Survival item placed an empty cart on a generated seed0/v10 mineshaft rail near (116,43,73); right-click mounted it, W moved it across the rail gap into off-rail travel, and Shift safely dismounted. One fixture torch supplied light. The generated loot cart is a chest cart, so it remains a container, not a mount. A separate authored loop exercised curves, F5, hotbar selection, local mounted reload, mounted export/import and dismount. All three vehicle scratch worlds were deleted; browser console had no errors/warnings. These are port integration observations, not native WorldServer acceptance.

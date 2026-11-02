@@ -104,7 +104,8 @@ import { watchSpawnerBlocks } from "./spawner-block.js";
 import { Rails } from "./rails.js";
 import { Torches } from "./torches.js";
 import { MinecartRenderer } from "./minecart-renderer.js";
-import { restoreStructureEntities, saveStructureEntities, tickMinecartSimulation, tickSpawnerSimulation, tickSpawnersClient, spawnerBurst, pickMinecart, useMinecart } from "./structure-simulation.js";
+import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
+import { restoreStructureEntities, saveStructureEntities, tickMinecartSimulation, tickSpawnerSimulation, tickSpawnersClient, spawnerBurst, pickMinecart } from "./structure-simulation.js";
 // Generation version 10 (live mineshafts) maps original block ids while a World is built; the
 // entry module already holds the registry, so the mapper is set before any World exists.
 setOriginalBlockMapper(fromOriginal);
@@ -220,6 +221,7 @@ let sounds,
   eating = null;
 // Generated-structure entities (structure-simulation.js): mineshaft spawners and chest minecarts.
 let spawners = null, minecarts = null, minecartRenderer = null, aimedCart = null;
+let rider = createPlayerRider();
 const animation = new PlayerAnimation();
 // GameSettings.thirdPersonView: 0 first person, 1 behind, 2 in front (F5).
 // Not saved, like 1.7.10.
@@ -846,6 +848,12 @@ function launch(record) {
     mineCooldown = 0;
     if (import.meta.env.DEV) editActionLog.length = 0;
     fallDistance = 0;
+    rider = createPlayerRider();
+    const vehicle = vehicleState();
+    restorePlayerVehicle(vehicle);
+    applyVehicleState(vehicle);
+    previous.copy(position);
+    playerBody.reset(position, yaw, pitch);
     keys.clear();
     accumulator = 0;
     screen = "playing";
@@ -1209,6 +1217,9 @@ function playHurtSounds() {
 }
 function die() {
   if (screen === "dead") return;
+  const vehicle = vehicleState();
+  detachPlayerVehicle(vehicle);
+  applyVehicleState(vehicle);
   playHurtSounds();
   // EntityPlayerMP.onDeath broadcasts the death message to chat at the moment of death.
   const message = survival.died && deathMessage(survival.lastDamage);
@@ -1331,9 +1342,12 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   });
   // EntityMinecartChest.onUpdate and the player's and mobs' pushes against carts; spilled
   // contents and the broken cart's items become item entities.
-  if (tickMinecartSimulation({ world, minecarts, mobs, position, velocity, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }, {
+  if (tickMinecartSimulation({ world, minecarts, mobs, position, velocity, rider, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }, {
     drop: (d) => { if (d.stack) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); },
   }).length) saved = false;
+  const vehicle = vehicleState();
+  finishVehicleTick(vehicle);
+  applyVehicleState(vehicle);
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
   scene.setDrops(items.items);
   scene.setProjectiles(projectiles.balls, projectiles.particles);
@@ -1404,25 +1418,38 @@ function traceAction(action) {
   editActionLog.push({ tick: survival.time, action });
   if (editActionLog.length > 256) editActionLog.shift();
 }
+// Browser adapters transfer live references and scalar movement state synchronously.
+function vehicleState() {
+  return { screen, world, minecarts, rider, position, previous, velocity, motion, survival, yaw, eating,
+    grounded, collidedH, flying, fallDistance, landedFall };
+}
+function applyVehicleState(state) {
+  ({ grounded, collidedH, flying, fallDistance, landedFall } = state);
+}
 function edit(place = false) {
   if (screen !== "playing") return;
   if(target?.block)world.populationBlocks?.touch(...target.block);
   // A chest minecart under the crosshair (nearer than any block or mob): attack or open it.
   if (aimedCart && !aimedCart.cart.dead) {
     mining = null;
-    const done = useMinecart({ minecarts, survival, position, velocity, motion, yaw }, { place, cart: aimedCart.cart }, {
+    const state = vehicleState();
+    const action = captureVehicleAction({ cartId: aimedCart.cart.id, place, sneak: captureMovementInput(keys).sneak, heldTool: heldId() });
+    traceAction(action);
+    const done = dispatchVehicleAction(state, action, {
       swing: () => animation.swing(),
       damage: () => heldAttackDamage(heldId(), survival),
       openContainer: (container) => openContainer(container, "chest"),
+      toast,
+      markUnsaved: () => { saved = false; },
     });
+    applyVehicleState(state);
     if (done.handled) {
-      traceAction({ place, minecart: aimedCart.cart.id, branch: done.branch });
       renderVitals();
       saved = false;
       return;
     }
   }
-  const state = { screen, heldTool: heldId(), world, survival, position, velocity, motion, mobs,
+  const state = { screen, heldTool: heldId(), world, survival, position, velocity, motion, mobs, minecarts,
     farming, trees, fire, fluids, items, projectiles, grounded, fallDistance, wasInWater, yaw, pitch,
     eating, mining, mineCooldown, mineHeld, flowers: FLOWERS, boneRandom, itemRand };
   // A right click with a bucket also captures the bucket's own fluid-aware trace along the
@@ -1539,12 +1566,13 @@ function tickMining() {
   mineCooldown = state.cooldown;
 }
 function movementTick(controls) {
-  const state = { world, position, previous, velocity, motion, survival, yaw, eating,
+  const state = { world, position, previous, velocity, motion, survival, yaw, eating, minecarts, rider,
     grounded, collidedH, flying, fallDistance, landedFall };
-  const { inWater, inLavaNow, sneakOnGround, oldPosition } = movePlayer(state, controls, toast);
+  const { inWater, inLavaNow, sneakOnGround, oldPosition } = moveRidingPlayer(state, controls,
+    { trace: traceAction, markUnsaved: () => { saved = false; } }) ?? movePlayer(state, controls, toast);
   ({ grounded, collidedH, flying, fallDistance, landedFall } = state);
   walkFrozen = sneakOnGround;
-  $("#movement-label").textContent = flying
+  $("#movement-label").textContent = rider.vehicle ? "RIDING" : flying
     ? "FLYING"
     : inWater
       ? "SWIMMING"
@@ -1912,7 +1940,7 @@ function animate(now) {
       scene.effectRenderer.tick(world);
       // The model stands at posY - yOffset, and posY is lowered by ySize (the sneak drop).
       const lowered = (p, drop) => ({ x: p.x, y: p.y - drop, z: p.z });
-      playerBody.tick({ position: lowered(position, motion.ySize), previous: lowered(previous, motion.prevYSize), yaw, pitch, swinging: animation.swingTime < SWING_SECONDS });
+      playerBody.tick({ position: lowered(position, motion.ySize), previous: lowered(previous, motion.prevYSize), yaw, pitch, swinging: animation.swingTime < SWING_SECONDS, riding: !!rider.vehicle });
       // EntityRenderer.updateRenderer: the cinematic camera filters advance once per tick.
       mouseLook.tick(options.sensitivity, smoothCamera);
       accumulator -= PHYSICS.tick;
@@ -1975,7 +2003,7 @@ function animate(now) {
       target?.distance ?? 6,
     );
     // EntityRenderer.getMouseOver: the nearest entity box (a cart grown by its 0.1 border) wins.
-    aimedCart = pickMinecart(minecarts, aim, dir, survival.creative ? 5 : 3, target?.distance ?? 6);
+    aimedCart = pickMinecart(minecarts, aim, dir, survival.creative ? 5 : 3, target?.distance ?? 6, rider.vehicle);
     if (aimedCart && aimedEntity && aimedEntity.distance <= aimedCart.distance) aimedCart = null;
     if (aimedCart) aimedEntity = null;
     scene.outline.visible = !!target && !aimedEntity && !aimedCart;
@@ -2031,6 +2059,7 @@ function animate(now) {
     heldDamage: survival.held?.damage || 0,
     hurt: survival.hurtTime > 0,
     sneak: motion.sneaking,
+    riding: !!rider.vehicle,
   });
   chestRenderer?.update(screen === "playing" || screen === "inventory" ? accumulator / PHYSICS.tick : 1);
   if(xpRenderer)xpRenderer.update(xpOrbs.orbs,partial);
@@ -2105,7 +2134,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get minecarts() { return minecarts; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
+    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
   scene.preview(0);
   scene.render(0);
   renderWorlds();

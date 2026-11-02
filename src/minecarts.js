@@ -53,13 +53,10 @@ function originalOf(stack) {
   return o ? { id: o.id, damage: o.damage ?? stack.damage ?? 0 } : null;
 }
 
-// Default rail kinds by internal block id: the plain rail once world.js exports RAIL (original 66).
+// Live rail kinds by internal block id. Other native rail kinds are supplied by probe adapters.
 // Kinds: "rail", "golden" (powered; meta bit 8), "detector" and "activator" (meta & 7 shapes).
 function defaultRails() {
-  const rails = {};
-  if (W.RAIL !== undefined) rails[W.RAIL] = "rail";
-  if (W.GOLDEN_RAIL !== undefined) rails[W.GOLDEN_RAIL] = "golden";
-  return rails;
+  return { [W.RAIL]: "rail" };
 }
 const intersects = (a, b) => b[3] > a[0] && b[0] < a[3] && b[4] > a[1] && b[1] < a[4] && b[5] > a[2] && b[2] < a[5];
 const grow = (b, x, y, z) => [x < 0 ? b[0] + x : b[0], y < 0 ? b[1] + y : b[1], z < 0 ? b[2] + z : b[2], x > 0 ? b[3] + x : b[3], y > 0 ? b[4] + y : b[4], z > 0 ? b[5] + z : b[5]];

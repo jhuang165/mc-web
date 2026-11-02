@@ -100,9 +100,8 @@ Internal blocks are appended after the previous end of `BLOCKS`; nothing was ren
 
 ## Gaps
 
-- `main.js` does not yet color the tooltip title or render the gray lines' class. It also does not wire the `Rails`/`Torches` watchers, `watchSpawnerBlocks`, or spawner tile saves.
-- `entities.js` collision still uses one union box per block, so mobs treat an L-shaped fence as its bounding square.
+- `main.js` does not yet color the tooltip title or render the gray lines' class. The watchers, spawner saves and minecart runtime are wired; see [live mineshafts](mineshafts-live.md).
 - Ascending rails' extra notify of the block above is not replayed.
 - Enchanted books have no glint and no anvil use.
 - Region import does not read `StoredEnchantments`.
-- Fence gates, powered/detector/activator rails and minecart movement are not ported.
+- Fence gates and powered/detector/activator rails are not ported; empty/chest cart travel and empty-cart riding are live (see [minecarts](minecarts.md)).

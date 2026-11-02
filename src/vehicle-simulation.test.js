@@ -38,6 +38,9 @@ for (const c of ref.cases.filter(c=>c.kind==='travel')) test(`native empty cart:
 test('native empty mount offset, occupied cart and break drops',()=>{
  const c=ref.cases.find(c=>c.kind==='mount'),m=new Minecarts(),a=m.spawnEmpty({x:.5,y:.5,z:.5}),p={yaw:0,fallen:0},q={};
  assert.equal(m.mount(a,p),c.first); assert.equal(m.mount(a,q),false); assert.equal(!!q.vehicle,c.secondMounted);
+ assert.equal(a.rider===p,c.firstRider);
+ const other=state();other.minecarts=m;other.rider=q;
+ assert.equal(dispatchVehicleAction(other,captureVehicleAction({cartId:a.id})).handled,c.occupied);
  assert.equal(m.getMountedYOffset(),c.offset); assert.deepEqual(ps(p),c.position);
  for(const c of ref.cases.filter(c=>c.kind==='break')){
   const a=m.spawnEmpty({x:1.5,y:.5,z:.5});m.attack(a,5,{creative:c.creative});assert.equal(a.dead,c.dead);
