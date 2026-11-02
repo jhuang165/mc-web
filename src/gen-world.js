@@ -4,16 +4,20 @@
 // WorldServer tick scheduling with WorldGenLiquids' immediate mode (instant falling), and the block
 // callbacks worldgen reaches (BlockDynamicLiquid, BlockStaticLiquid, BlockFalling,
 // BlockBush family, double plants, reeds, cactus, vine, cocoa, leaves/log breakBlock, pumpkin, item
-// drops), Chunk.getPrecipitationHeight's column cache and the queries world spawning and the
-// freeze/snow pass make. Light propagation is not modelled; a callback this does not port throws.
+// drops), Chunk.getPrecipitationHeight's column cache, the queries world spawning and the
+// freeze/snow pass make, the lake and dungeon services (saved sky light, biome top block,
+// isBlockFreezable) and chest and mob spawner tile entities in the chunk maps (Chunk.func_150806_e
+// creation, updateContainingBlockInfo, BlockChest's facing unification and markDirty's comparator
+// neighbour reads). Light propagation is not modelled; a callback this does not port throws.
 // Original numeric IDs. Replayed natively in springs.test.js, biome-decorator.test.js,
-// biome-overrides.test.js and population-tail.test.js.
+// biome-overrides.test.js, population-tail.test.js and populate-chunk.test.js.
 import { canBlockStay } from "./decoration-features.js";
 import { doublePlantCanStay } from "./biome-features.js";
+import { canBlockFreeze } from "./population-tail.js";
 
 export const AIR = 0, STONE = 1, COBBLESTONE = 4, FLOWING_WATER = 8, WATER = 9, FLOWING_LAVA = 10, LAVA = 11, SAND = 12, GRAVEL = 13,
   LOG = 17, LEAVES = 18, TALL_GRASS = 31, DEAD_BUSH = 32, OBSIDIAN = 49, FIRE = 51, CACTUS = 81, REEDS = 83, PUMPKIN = 86,
-  LIT_PUMPKIN = 91, VINE = 106, COCOA = 127, LEAVES2 = 161, LOG2 = 162, DOUBLE_PLANT = 175;
+  LIT_PUMPKIN = 91, VINE = 106, COCOA = 127, LEAVES2 = 161, LOG2 = 162, DOUBLE_PLANT = 175, MOB_SPAWNER = 52, CHEST = 54, TRAPPED_CHEST = 146;
 
 // Block.getMaterial letter (Material field name), material isSolid/blocksMovement/isReplaceable,
 // renderAsNormalBlock, isOpaqueCube (flags base 36), getLightOpacity (absent: 255) and
@@ -40,6 +44,12 @@ const NORMAL_CUBE = new Set([1, 2, 3, 4, 5, 7, 12, 13, 14, 15, 16, 17, 19, 21, 2
 const NEIGHBOR = new Set([6, 8, 9, 10, 11, 12, 13, 23, 25, 26, 27, 28, 29, 31, 32, 33, 34, 36, 37, 38, 39, 40, 46, 50, 51, 54, 55, 59, 60, 63, 64, 65, 66, 68, 69, 70, 71, 72, 75, 76, 77, 78, 81, 83, 90, 92, 93, 94, 96, 104, 105, 106, 107, 111, 115, 122, 123, 124, 127, 131, 132, 137, 140, 141, 142, 143, 145, 146, 147, 148, 149, 150, 151, 154, 157, 158, 171, 175]);
 const ADDED = new Set([8, 9, 10, 11, 12, 13, 23, 25, 27, 28, 29, 33, 36, 46, 50, 51, 52, 53, 54, 55, 61, 62, 63, 66, 67, 68, 75, 76, 84, 86, 91, 93, 94, 108, 109, 114, 116, 117, 119, 122, 123, 124, 128, 130, 132, 134, 135, 136, 137, 138, 140, 144, 145, 146, 149, 150, 151, 154, 156, 157, 158, 163, 164]);
 const BROKEN = new Set([17, 18, 23, 25, 27, 28, 34, 36, 52, 53, 54, 55, 61, 62, 63, 66, 67, 68, 69, 70, 72, 75, 76, 77, 84, 93, 94, 108, 109, 114, 116, 117, 119, 128, 130, 131, 132, 134, 135, 136, 137, 138, 140, 143, 144, 146, 147, 148, 149, 150, 151, 154, 156, 157, 158, 161, 162, 163, 164]);
+// Block.hasComparatorInputOverride, ITileEntityProvider and the redstone comparators (BlockRedstoneComparator.func_149907_e).
+const COMPARATOR_INPUT = new Set([23, 28, 54, 61, 62, 84, 117, 118, 120, 137, 146, 154, 158]);
+const TILE_PROVIDERS = new Set([23, 25, 36, 52, 54, 61, 62, 63, 68, 84, 116, 117, 119, 130, 137, 138, 140, 144, 146, 149, 150, 151, 154, 158]);
+const COMPARATORS = new Set([149, 150]);
+// Direction.offsetX / offsetZ.
+const DIRECTION_X = [0, -1, 0, 1], DIRECTION_Z = [1, 0, -1, 0];
 // Bush blocks whose canBlockStay decoration-features.js ports (others in the family throw).
 const BUSHES = new Set([6, 31, 32, 37, 38, 39, 40, 111]);
 // BlockLiquid.func_149807_p blockers: wooden door, iron door, standing sign, ladder, reeds.
@@ -58,6 +68,8 @@ class Section {
 export class GenChunk {
   constructor(x, z, blocks, meta) {
     this.x = x; this.z = z; this.sections = new Array(16).fill(null); this.heightMap = new Int32Array(256);
+    // chunkTileEntityMap, keyed (y << 8 | z << 4 | x).
+    this.tiles = new Map();
     // precipitationHeightMap: -999 until getPrecipitationHeight fills the column.
     this.precipitation = new Int32Array(256).fill(-999);
     // Chunk(World, Block[], byte[], x, z): non-air blocks indexed (x * 16 + z) * 256 + y.
@@ -115,13 +127,15 @@ const liquid = (id) => ({ id, material: id === FLOWING_WATER ? "h" : "i", adjace
 
 // A World over loaded GenChunks. Hooks (all optional): onCall(kind, ...ints) for every block
 // access (0 getBlock, 1 setBlock x/y/z/id/meta/flags, 2 getBlockMetadata, 3 block light,
-// 4 setBlockMetadata x/y/z/meta/flags, 5 schedule x/y/z/id/delay/priority, 6 saved block light);
+// 4 setBlockMetadata x/y/z/meta/flags, 5 schedule x/y/z/id/delay/priority, 6 saved block light,
+// 7 saved sky light);
 // onWrite for each change (metadata writes as id -1, recorded after its notifications); onSound,
 // onAux, onItem, onEntity. light is the full light value, blockLight the saved block-light value,
-// biomeAt(x, z) the World.getBiomeGenForCoords biome (with .temperature).
+// skyLight the saved sky-light value, biomeAt(x, z) the World.getBiomeGenForCoords biome (with
+// .slot, .temperature and .topBlock).
 export class GenWorld {
-  constructor({ rand, light = () => 0, blockLight = () => 0, biomeAt = null, hasNoSky = false, hellWorld = false } = {}) {
-    this.rand = rand; this.light = light; this.blockLight = blockLight; this.biomeAt = biomeAt; this.hasNoSky = hasNoSky; this.hellWorld = hellWorld;
+  constructor({ rand, light = () => 0, blockLight = () => 0, skyLight = () => 15, biomeAt = null, hasNoSky = false, hellWorld = false } = {}) {
+    this.rand = rand; this.light = light; this.blockLight = blockLight; this.skyLight = skyLight; this.biomeAt = biomeAt; this.hasNoSky = hasNoSky; this.hellWorld = hellWorld;
     this.chunks = new Map(); this.immediate = false; this.pending = []; this.pendingKeys = new Set();
     this.onCall = null; this.onWrite = null; this.onSound = null; this.onAux = null; this.onItem = null; this.onEntity = null;
     this.liquids = new Map([[FLOWING_WATER, liquid(FLOWING_WATER)], [FLOWING_LAVA, liquid(FLOWING_LAVA)]]);
@@ -146,6 +160,12 @@ export class GenWorld {
   }
   getLight(x, y, z) { this.onCall?.(3, x, y, z); return this.light(x, y, z); }
   getSavedBlockLight(x, y, z) { this.onCall?.(6, x, y, z); return this.blockLight(x, y, z); }
+  // The WorldGenLakes services: getSavedLightValue(Sky), getBiomeGenForCoords(x, z).topBlock and
+  // World.isBlockFreezable.
+  getSkyLight(x, y, z) { this.onCall?.(7, x, y, z); return this.skyLight(x, y, z); }
+  biome(x, z) { return this.biomeAt(x, z); }
+  biomeTop(x, z) { return this.biomeAt(x, z).topBlock; }
+  canFreeze(x, y, z) { return canBlockFreeze(this, x, y, z); }
   getPrecipitationHeight(x, z) { return this.chunk(x >> 4, z >> 4).precipitationHeight(x & 15, z & 15); }
   // spawnEntityInWorld for worldgen animals.
   spawnEntity(entity) { this.onEntity?.(entity); return true; }
@@ -177,7 +197,10 @@ export class GenWorld {
     const c = this.chunk(x >> 4, z >> 4), old = flags & 1 ? c.getBlock(x & 15, y, z & 15) : null;
     const changed = this.setBlockInChunk(c, x & 15, y, z & 15, id, meta);
     if (changed) {
-      if (flags & 1) this.notifyNeighbors(x, y, z, old);
+      if (flags & 1) {
+        this.notifyNeighbors(x, y, z, old);
+        if (COMPARATOR_INPUT.has(id)) this.notifyComparators(x, y, z, id);
+      }
       this.onWrite?.(x, y, z, id, meta, flags);
     }
     return changed;
@@ -188,10 +211,119 @@ export class GenWorld {
     if (!inWorld(x, z) || y < 0 || y >= 256) return false;
     const c = this.chunk(x >> 4, z >> 4), changed = c.setMeta(x & 15, y, z & 15, meta);
     if (changed) {
-      if (flags & 1) this.notifyNeighbors(x, y, z, c.getBlock(x & 15, y, z & 15));
+      const id = c.getBlock(x & 15, y, z & 15);
+      // Chunk.setBlockMetadata refreshes a provider's tile entity, creating it if missing.
+      if (TILE_PROVIDERS.has(id)) { const t = this.chunkTile(c, x & 15, y, z & 15); if (t) { this.tileChanged(t); t.meta = meta; } }
+      if (flags & 1) {
+        this.notifyNeighbors(x, y, z, id);
+        if (COMPARATOR_INPUT.has(id)) this.notifyComparators(x, y, z, id);
+      }
       this.onWrite?.(x, y, z, -1, meta, flags);
     }
     return changed;
+  }
+  // World.func_147453_f: comparators beside the block, or behind a normal cube beside it.
+  notifyComparators(x, y, z, source) {
+    for (let i = 0; i < 4; i++) {
+      let nx = x + DIRECTION_X[i], nz = z + DIRECTION_Z[i];
+      const id = this.getBlock(nx, y, nz);
+      if (COMPARATORS.has(id)) unported("comparator neighbour", id);
+      if (!this.isNormalCube(id)) continue;
+      nx += DIRECTION_X[i]; nz += DIRECTION_Z[i];
+      const behind = this.getBlock(nx, y, nz);
+      if (COMPARATORS.has(behind)) unported("comparator neighbour", behind);
+    }
+  }
+
+  // Tile entities. Chunk.func_150806_e: the map entry, or a new one when the chunk's block is a
+  // provider (created with the chunk metadata and added through World.setTileEntity).
+  chunkTile(c, x, y, z) {
+    const key = y << 8 | z << 4 | x;
+    let t = c.tiles.get(key);
+    if (!t) {
+      const id = c.getBlock(x, y, z);
+      if (!TILE_PROVIDERS.has(id)) return null;
+      t = this.createTile(id, c.x * 16 + x, y, c.z * 16 + z, c.getMeta(x, y, z));
+      c.tiles.set(key, t);
+    }
+    return t;
+  }
+  createTile(id, x, y, z, meta) {
+    // TileEntity's cached block type and metadata (getBlockType, blockMetadata).
+    const t = { x, y, z, block: null, meta };
+    if (id === CHEST) {
+      Object.assign(t, { kind: "chest", size: 27, slots: new Array(27).fill(null), type: -1 });
+      t.setSlot = (i, stack) => this.setChestSlot(t, i, stack);
+    } else if (id === MOB_SPAWNER) {
+      Object.assign(t, { kind: "spawner", name: "Pig" });
+      t.setEntityName = (name) => { t.name = name; };
+    } else unported("tile entity", id);
+    return t;
+  }
+  // World.getTileEntity.
+  getTileEntity(x, y, z) {
+    if (y < 0 || y >= 256) return null;
+    return this.chunkTile(this.chunk(x >> 4, z >> 4), x & 15, y, z & 15);
+  }
+  // World.removeTileEntity: the lookup (which may create one), then Chunk.removeTileEntity on a
+  // loaded chunk removes and invalidates it.
+  removeTileEntity(x, y, z) {
+    const t = this.getTileEntity(x, y, z);
+    if (!t) return;
+    this.chunk(x >> 4, z >> 4).tiles.delete(y << 8 | (z & 15) << 4 | (x & 15));
+    if (t.kind === "chest") this.invalidateChest(t);
+  }
+  // TileEntityChest.invalidate: updateContainingBlockInfo, then checkForAdjacentChests looks up
+  // each neighbour chest of its own type (read from its now-replaced block, cached once a chest).
+  invalidateChest(t) {
+    this.tileChanged(t);
+    const type = () => {
+      if (t.type !== -1) return t.type;
+      t.block ??= this.getBlock(t.x, t.y, t.z);
+      if (t.block !== CHEST && t.block !== TRAPPED_CHEST) return 0;
+      return (t.type = t.block === CHEST ? 0 : 1);
+    };
+    for (const [dx, dz] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const id = this.getBlock(t.x + dx, t.y, t.z + dz);
+      if ((id === CHEST || id === TRAPPED_CHEST) && (id === CHEST ? 0 : 1) === type()) this.getTileEntity(t.x + dx, t.y, t.z + dz);
+    }
+  }
+  // TileEntity.updateContainingBlockInfo.
+  tileChanged(t) { t.block = null; t.meta = -1; }
+  // TileEntityChest.setInventorySlotContents, then markDirty: the metadata, the cached block, and
+  // comparator updates.
+  setChestSlot(t, i, stack) {
+    if (stack && stack[1] > 64) stack[1] = 64;
+    t.slots[i] = stack;
+    t.meta = this.getBlockMetadata(t.x, t.y, t.z);
+    t.block ??= this.getBlock(t.x, t.y, t.z);
+    if (t.block !== AIR) this.notifyComparators(t.x, t.y, t.z, t.block);
+  }
+  // BlockChest.func_149954_e: face away from an opaque side, matching an adjacent chest.
+  unifyChest(x, y, z) {
+    const op = (id) => this.isOpaqueCube(id);
+    const north = this.getBlock(x, y, z - 1), south = this.getBlock(x, y, z + 1), west = this.getBlock(x - 1, y, z), east = this.getBlock(x + 1, y, z);
+    let facing = 4;
+    if (north === CHEST || south === CHEST) {
+      const oz = north === CHEST ? z - 1 : z + 1, a = this.getBlock(x - 1, y, oz), b = this.getBlock(x + 1, y, oz);
+      facing = 5;
+      if (this.getBlockMetadata(x, y, oz) === 4) facing = 4;
+      if ((op(west) || op(a)) && !op(east) && !op(b)) facing = 5;
+      if ((op(east) || op(b)) && !op(west) && !op(a)) facing = 4;
+    } else if (west === CHEST || east === CHEST) {
+      const ox = west === CHEST ? x - 1 : x + 1, a = this.getBlock(ox, y, z - 1), b = this.getBlock(ox, y, z + 1);
+      facing = 3;
+      if (this.getBlockMetadata(ox, y, z) === 2) facing = 2;
+      if ((op(north) || op(a)) && !op(south) && !op(b)) facing = 3;
+      if ((op(south) || op(b)) && !op(north) && !op(a)) facing = 2;
+    } else {
+      facing = 3;
+      if (op(north) && !op(south)) facing = 3;
+      if (op(south) && !op(north)) facing = 2;
+      if (op(west) && !op(east)) facing = 5;
+      if (op(east) && !op(west)) facing = 4;
+    }
+    this.setBlockMetadata(x, y, z, facing, 3);
   }
   // World.func_147480_a: destroy a block with its break effect and optional drops.
   destroyBlock(x, y, z, drop) {
@@ -222,7 +354,9 @@ export class GenWorld {
     if (created) c.generateSkylightMap();
     else if (OPACITY[id] > 0) { if (y >= height) c.relightBlock(x, y + 1, z); }
     else if (y === height - 1) c.relightBlock(x, y, z);
+    if (TILE_PROVIDERS.has(old)) { const t = this.chunkTile(c, x, y, z); if (t) this.tileChanged(t); }
     this.blockAdded(id, wx, y, wz);
+    if (TILE_PROVIDERS.has(id)) { const t = this.chunkTile(c, x, y, z); if (t) this.tileChanged(t); }
     return true;
   }
   notifyNeighbors(x, y, z, source) {
@@ -312,6 +446,7 @@ export class GenWorld {
       case COCOA:
         if (!this.cocoaCanStay(x, y, z)) { this.dropBlockAsItem(COCOA, x, y, z, this.getBlockMetadata(x, y, z), 0); this.setBlock(x, y, z, AIR, 0, 2); }
         return;
+      case CHEST: { const t = this.getTileEntity(x, y, z); if (t) this.tileChanged(t); return; }
     }
     if (BUSHES.has(id)) {
       if (!canBlockStay(this, id, x, y, z)) { this.dropBlockAsItem(id, x, y, z, this.getBlockMetadata(x, y, z), 0); this.setBlock(x, y, z, AIR, 0, 2); }
@@ -325,6 +460,18 @@ export class GenWorld {
         return;
       case WATER: case LAVA: this.harden(id, x, y, z); return;
       case SAND: case GRAVEL: this.scheduleBlockUpdate(x, y, z, id, 2); return;
+      case MOB_SPAWNER: return;
+      case CHEST:
+        // BlockChest.onBlockAdded: unify this chest, then each adjacent one.
+        this.unifyChest(x, y, z);
+        {
+          const north = this.getBlock(x, y, z - 1), south = this.getBlock(x, y, z + 1), west = this.getBlock(x - 1, y, z), east = this.getBlock(x + 1, y, z);
+          if (north === CHEST) this.unifyChest(x, y, z - 1);
+          if (south === CHEST) this.unifyChest(x, y, z + 1);
+          if (west === CHEST) this.unifyChest(x - 1, y, z);
+          if (east === CHEST) this.unifyChest(x + 1, y, z);
+        }
+        return;
       case PUMPKIN: case LIT_PUMPKIN:
         // BlockPumpkin.onBlockAdded: snow golem and iron golem checks.
         if (this.getBlock(x, y - 1, z) === 80 && this.getBlock(x, y - 2, z) === 80) unported("snow golem", id);
@@ -346,7 +493,17 @@ export class GenWorld {
           const m = this.getBlockMetadata(x + dx, y + dy, z + dz);
           if ((m & 8) === 0) this.setBlockMetadata(x + dx, y + dy, z + dz, m | 8, 4);
         }
-    } else if (BROKEN.has(id)) unported("breakBlock", id);
+    } else if (id === CHEST) {
+      // BlockChest.breakBlock drops the contents with its own unseeded Random, then BlockContainer
+      // removes the tile entity.
+      const t = this.getTileEntity(x, y, z);
+      if (t) {
+        if (t.slots?.some((s) => s)) unported("chest contents drop", id);
+        this.notifyComparators(x, y, z, id);
+      }
+      this.removeTileEntity(x, y, z);
+    } else if (id === MOB_SPAWNER) this.removeTileEntity(x, y, z);
+    else if (BROKEN.has(id)) unported("breakBlock", id);
   }
   updateTick(id, x, y, z, rand) {
     if (id === FLOWING_WATER || id === FLOWING_LAVA) this.flow(this.liquids.get(id), x, y, z, rand);

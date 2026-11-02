@@ -7,7 +7,7 @@ The live game offers finite 128 × 128 × 256 Java worlds (generation version 9,
 | GEN-01 | Biome layers (`GenLayer.initializeAllBiomeGenerators`), the `BiomeGenBase` registry, `WorldChunkManager` | Done, wired into Java worlds |
 | GEN-02 | Noise octaves and `ChunkProviderGenerate` terrain density, biome surface blocks, sea level 63 | Done, wired into Java worlds |
 | GEN-03 | `MapGenCaves`, `MapGenRavine` | Done, wired into Java worlds |
-| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes, GEN-04c dungeons, the GEN-04d pre-decoration provider stage, GEN-04e decorator counts/simple features, GEN-04f tree generators/big mushrooms/biome tree pickers, GEN-04g springs and the BiomeDecorator driver, GEN-04h biome decorate overrides, and GEN-04i worldgen animals and the freeze/snow pass replay exactly; standalone, not wired into Java worlds |
+| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes, GEN-04c dungeons, the GEN-04d pre-decoration provider stage, GEN-04e decorator counts/simple features, GEN-04f tree generators/big mushrooms/biome tree pickers, GEN-04g springs and the BiomeDecorator driver, GEN-04h biome decorate overrides, GEN-04i worldgen animals and the freeze/snow pass, and the GEN-04j full populate chain on one world (map features off) replay exactly; standalone, not wired into Java worlds |
 | GEN-05 | Structures (villages, strongholds, mineshafts, temples) | Open |
 | GEN-06 | Integration: streamed world, new generation version, seed entry | Partial: version 9 is playable at 256 height; finite viewport, no streaming |
 
@@ -428,6 +428,57 @@ Gaps:
 - each entity's own unseeded Random: the `onSpawnWithEgg` follow-range bonus, horse type and markings, and the chicken egg timer;
 - entity state beyond position, rotation and fleece.
 
-Still open: the full `populate` chain on one world (`population-stage.js`, then this tail), light propagation, and live placement in Java worlds. Runtime stays 0.23.4, generation version 9.
+Still open: the full `populate` chain on one world (done in GEN-04j, below), light propagation, and live placement in Java worlds. Runtime stays 0.23.4, generation version 9.
 
 GEN-04i validation: `npm test` **752/752**, `npm run build` and **5/5** memory-bridge tests pass; regenerating the reference is byte-identical.
+
+## GEN-04j: the populate chain on one world
+
+`src/populate-chunk.js` runs `ChunkProviderGenerate.populate` with map features off on one `gen-world.js` world. `populateChunk(world, random, worldSeed, decoration, chunkX, chunkZ)` calls `populateBeforeDecoration` (GEN-04d: the biome at (x + 16, z + 16) read before the reseed, the water lake gated on desert/desert hills and `nextInt(4)`, the lava lake, eight dungeon attempts), then `populateTail` (GEN-04i: decorate, animals, freeze/snow) with that biome and the same Random. No structure runs.
+
+To host the lakes and dungeons, `gen-world.js` gains:
+
+- `getSkyLight` (call kind 7, `skyLight` option) and `biomeTop` for the lake's grass test, plus `canFreeze` for its ice;
+- tile entities in each chunk's map, created by `Chunk.func_150806_e` on lookup when the chunk block is a provider (the native `BlockContainer` id set). Chests have 27 slots and a type; spawners have the entity name ("Pig" until set). Other providers are unported;
+- `TileEntity.updateContainingBlockInfo` wherever native code calls it: after a provider's block is replaced or added in `func_150807_a`, after `setBlockMetadata` on a provider, and in `BlockChest.onNeighborBlockChange`. `setInventorySlotContents` clamps to 64 and calls `markDirty`, which records the metadata read and, on a cold cache, the block read, then the comparator update;
+- `func_147453_f` (comparator input), called from `setBlock` and `setBlockMetadataWithNotify` for the native `hasComparatorInputOverride` ids. It reads each horizontal neighbour, and two blocks out past a normal cube; a comparator there is unported;
+- `BlockChest.onBlockAdded` (`unifyAdjacentChests` on itself, then on each neighbour chest, north, south, west, east) and `BlockChest.breakBlock`. A chest with contents drops them with an unseeded `new Random()`, so that case throws;
+- `World.removeTileEntity`, which is the lookup then `Chunk.removeTileEntity`. A chest's `invalidate` runs `checkForAdjacentChests`: it reads x − 1, x + 1, z − 1 and z + 1, and for a neighbour chest compares chest types, reading its own (now replaced) block once to get its type, then looks the neighbour's tile entity up. Spawners are removed via `BlockContainer.breakBlock`.
+
+PopulateChainProbe and `tools/verify-populate-chain.mjs` run the unchanged `aqz.a(provider, x, z)` (built with map features off) on the GEN-04i Chunk-backed world. It adds the synthetic saved sky light `floorMod(3x + 5y + 7z + lightBase, 16)` and marks every chunk loaded: `Chunk.removeTileEntity` acts only on loaded chunks, and `ChunkProviderServer` only populates loaded ones. It uses 17 regions of 6×6 native terrain, caves and ravines:
+
+- four GEN-04i regions shifted out by one chunk;
+- thirteen regions around chunks whose dungeons succeed on pre-population terrain (a JS scan of six seeds found successful dungeons in under 1% of chunks).
+
+Each region has two records on a fresh world and provider. The first populates all sixteen inner chunks in shuffled order; the second populates a shuffled subset of 4 to 12. After both, every tile entity is removed in x, z, y order, as a later lake or dungeon overlapping it would. Chests are emptied slot by slot through `setInventorySlotContents` and set to air with notification. Spawners are overwritten with stone at flag 2. Records give each step's biome, animal count and the provider Random's next long, the spawned animals, the tile entities before removal (chest slots with stored enchantments, spawner names) and the empty listing after it. The GEN-04g call, write, pending, effect, state and world-Random hashes come after the removals.
+
+[populate-chain-reference.json](populate-chain-reference.json) holds the comparator and tile-provider id sets and 34 records: 407 populated chunks over 18 biomes, 20,227,421 calls, 633,238 writes and 101,201 pending ticks. The replay covers:
+
+- 30 water and 17 lava lakes (of 80 and 40 attempts);
+- 40 dungeons (of 3,256 attempts), with 49 chests (two of them double) holding one enchanted book, and 21 zombie, 10 skeleton and 9 spider spawners;
+- 80 animals;
+- 89 tile-entity removals, one of which reaches a neighbour chest in `checkForAdjacentChests`.
+
+`src/populate-chunk.test.js` rebuilds the terrain, replays every record and checks the biome, entities and Random after each chunk, the tile entities before and after removal, and every hash.
+
+Mutation checks that fail the replay:
+
+- the order of the invalidate neighbour reads, and an unrecorded own-block read;
+- skipping the chest invalidation;
+- skipping the cache reset in `BlockChest.onNeighborBlockChange`;
+- the lake grass test using block light instead of sky light;
+- allowing desert lakes.
+
+Not exercised: the mycelium shore (no region has a mushroom island), so a mutation that always places grass survives. No comparator, other tile provider or chest drop occurs.
+
+Gaps:
+
+- structures (map features on);
+- light propagation: saved light is synthetic;
+- live placement in Java worlds;
+- chest drops with contents, comparators, and tile entities other than chests and spawners;
+- tile-entity ticking.
+
+Runtime stays 0.23.4, generation version 9.
+
+GEN-04j validation: `npm test` **753/753**, `npm run build` and **5/5** memory-bridge tests pass; regenerating the reference is byte-identical.
