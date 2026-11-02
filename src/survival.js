@@ -794,7 +794,8 @@ export class Survival {
     return total <= 64 && total <= (ITEMS[output.id]?.stack ?? 64);
   }
   tickFurnaces() {
-    for (const f of Object.values(this.furnaces)) {
+    for (const [key, f] of Object.entries(this.furnaces)) {
+      if (this.furnaceActive && !this.furnaceActive(key)) continue;
       if (f.burn > 0) f.burn--;
       if (f.burn === 0 && this.canSmelt(f)) {
         f.burn = f.burnTotal = burnTime(f.items[1]);

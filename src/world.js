@@ -273,13 +273,17 @@ export class WorldChunk {
   }
 }
 const cellIndex = (x, y, z, height) => ((x & 15) * 16 + (z & 15)) * height + y;
-// Chunk map key; the live world's chunks stay well inside +-2^15.
-const columnKey = (cx, cz) => (cx + 32768) * 65536 + (cz + 32768);
+// Coordinate pairs stay distinct throughout the native world border.
+const columnKey = (cx, cz) => `${cx},${cz}`;
 export class World {
-  constructor(seed = "Overworld", biome = "meadow", generationVersion = isJavaLandscape(biome) ? 11 : 8) {
+  constructor(seed = "Overworld", biome = "meadow", generationVersion = biome === 'javaStreamed' ? 12 : isJavaLandscape(biome) ? 11 : 8) {
+    if (biome === 'javaStreamed' && generationVersion !== 12) throw new Error('Unsupported streamed world generation version');
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
+    this.streaming = biome === 'javaStreamed';
+    this.minX = this.minZ = 0;
+    this.maxX = this.maxZ = SIZE;
     this.height = generationVersion >= 9 && isJavaLandscape(biome) ? 256 : HEIGHT;
     this.seaLevel = this.height === 256 ? 63 : SEA;
     this.numericSeed = hashSeed(seed);
@@ -290,18 +294,62 @@ export class World {
     for (let cx = 0; cx < SIZE / 16; cx++) for (let cz = 0; cz < SIZE / 16; cz++) this.chunks.set(columnKey(cx, cz), new WorldChunk(cx, cz, this.height));
     this.lastChunk = null;
     this.edits = new Map();
+    this.chunkEdits = new Map();
     this.onChange = null;
     // Saved block light (World.getSavedLightValue(EnumSkyBlock.Block)): the scene sets this to
     // its LightVolume; until then snow.js works it out from the lava.
     this.blockLight = null;
     this.generate();
   }
-  // A number unique to each cell, in the legacy x-major order (fire and fluid queues key by it).
+  // Legacy numeric cell order; streaming uses a coordinate key without finite-width aliases.
   index(x, y, z) {
+    if (this.streaming) return `${x},${y},${z}`;
     return (x * SIZE + z) * this.height + y;
   }
   inside(x, y, z) {
+    if (this.streaming) return Number.isInteger(x) && Number.isInteger(y) && Number.isInteger(z)
+      && x + this.originX >= -30000000 && x + this.originX < 30000000
+      && z + this.originZ >= -30000000 && z + this.originZ < 30000000 && y >= 0 && y < this.height;
     return x >= 0 && x < SIZE && z >= 0 && z < SIZE && y >= 0 && y < this.height;
+  }
+  isLoaded(x, z) { return !!this.chunkAt(Math.floor(x / 16), Math.floor(z / 16)); }
+  // A one-chunk halo keeps block and entity updates away from unloaded neighbours.
+  // This is a browser working set, not the native spawn-ticket/watch-distance policy.
+  isTicking(x, z) {
+    return !this.streaming || x >= this.minX + 16 && x < this.maxX - 16 && z >= this.minZ + 16 && z < this.maxZ - 16;
+  }
+  streamAround(x, z) {
+    if (!this.streaming || !Number.isFinite(x) || !Number.isFinite(z)) return null;
+    const minX = Math.max(-30000000-this.originX, Math.min(29999872-this.originX, (Math.floor(x / 16) - 4) * 16));
+    const minZ = Math.max(-30000000-this.originZ, Math.min(29999872-this.originZ, (Math.floor(z / 16) - 4) * 16));
+    if (this.minX === minX && this.minZ === minZ) return null;
+    // Generate the next working set before eviction. A generator failure leaves the old set intact.
+    const next = new Map(), added = [], removed = [];
+    for (let cx = minX / 16; cx < minX / 16 + 8; cx++) for (let cz = minZ / 16; cz < minZ / 16 + 8; cz++) {
+      const key = columnKey(cx, cz);
+      let c = this.chunks.get(key);
+      if (!c) {
+        const generated = this.generateTerrainChunk(cx, cz);
+        c = new WorldChunk(cx, cz, this.height);
+        c.blocks.set(generated.blocks); c.meta.set(generated.metadata);
+        for (const [cell, value] of this.chunkEdits.get(key) ?? []) {
+          c.blocks[cell] = value & 255; c.meta[cell] = value >> 8;
+        }
+        added.push(c);
+      }
+      next.set(key, c);
+    }
+    for (const [key, c] of this.chunks) if (!next.has(key)) removed.push(c);
+    this.chunks = next; this.lastChunk = null;
+    this.minX = minX; this.minZ = minZ; this.maxX = minX + SIZE; this.maxZ = minZ + SIZE;
+    // WorldChunkManager's standalone cache has no expiry. Retain the working set
+    // and a biome halo here instead of retaining every explored biome array.
+    for (const key of this.javaGenerator.manager.cache.keys()) {
+      const [cx,cz] = key.split(',').map(Number);
+      const x = cx*16-this.originX, z = cz*16-this.originZ;
+      if (x < minX-16 || x >= this.maxX+16 || z < minZ-16 || z >= this.maxZ+16) this.javaGenerator.manager.cache.delete(key);
+    }
+    return { added, removed };
   }
   // The column holding chunk (cx, cz), or null.
   chunkAt(cx, cz) {
@@ -314,10 +362,10 @@ export class World {
   // World.getBlock: below y 0 (and above the top) is air, so a hole in the floor opens onto the void.
   get(x, y, z) {
     if (!this.inside(x, y, z)) return 0;
-    return this.chunkAt(x >> 4, z >> 4).blocks[cellIndex(x, y, z, this.height)];
+    return this.chunkAt(x >> 4, z >> 4)?.blocks[cellIndex(x, y, z, this.height)] ?? 0;
   }
   getMeta(x, y, z) {
-    return this.inside(x, y, z) ? this.chunkAt(x >> 4, z >> 4).meta[cellIndex(x, y, z, this.height)] : 0;
+    return this.inside(x, y, z) ? this.chunkAt(x >> 4, z >> 4)?.meta[cellIndex(x, y, z, this.height)] ?? 0 : 0;
   }
   solid(x, y, z) {
     const b = this.get(x, y, z);
@@ -325,10 +373,11 @@ export class World {
   }
   // Section (16 high) random-tick refcounts, kept up to date by put() once built.
   sectionTickCount(cx, cz, s) {
-    return this.chunkAt(cx, cz).sectionTickCount(s);
+    return this.chunkAt(cx, cz)?.sectionTickCount(s) ?? 0;
   }
   // Every cell as flat block and metadata arrays in index() order (tests and whole-world copies).
   snapshot() {
+    if (this.streaming) throw new Error('Streamed worlds use chunk columns, not a finite snapshot');
     const data = new Uint8Array(SIZE * SIZE * this.height), meta = new Uint8Array(SIZE * SIZE * this.height);
     for (const c of this.chunks.values())
       for (let lx = 0; lx < 16; lx++)
@@ -353,6 +402,7 @@ export class World {
   put(x, y, z, b, meta = 0, track = true) {
     if (
       !this.inside(x, y, z) ||
+      !this.isLoaded(x, z) ||
       !Number.isInteger(b) ||
       b < 0 ||
       b >= BLOCKS.length ||
@@ -369,8 +419,17 @@ export class World {
     }
     c.blocks[i] = b;
     c.meta[i] = meta;
-    if (track) this.edits.set(`${x},${y},${z}`, meta ? b | (meta << 8) : b);
+    if (track) this.rememberEdit(x, y, z, b | (meta << 8));
     return true;
+  }
+  rememberEdit(x, y, z, value) {
+    this.edits.set(`${x},${y},${z}`, value);
+    if (this.streaming) {
+      const key = columnKey(x >> 4, z >> 4);
+      let edits = this.chunkEdits.get(key);
+      if (!edits) this.chunkEdits.set(key, edits = new Map());
+      edits.set(cellIndex(x, y, z, this.height), value);
+    }
   }
   // `onChange(x, y, z, oldBlock, newBlock)` plays World.setBlock's neighbour
   // notification for tracked edits that change the block or its metadata.
@@ -510,7 +569,7 @@ export class World {
     return { x: 35.5, y: 50, z: 80.5 };
   }
   restore(edits) {
-    if (!Array.isArray(edits) || edits.length > 100000)
+    if (!Array.isArray(edits) || edits.length > (this.streaming ? 2000000 : 100000))
       throw new Error("Invalid world edits");
     for (const entry of edits) {
       if (!Array.isArray(entry) || entry.length !== 2)
@@ -529,7 +588,8 @@ export class World {
         b >= BLOCKS.length
       )
         throw new Error("Invalid block");
-      this.set(...p, b, true, meta);
+      if (this.streaming && !this.isLoaded(p[0], p[2])) this.rememberEdit(...p, v);
+      else this.set(...p, b, true, meta);
     }
   }
 }

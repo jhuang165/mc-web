@@ -1,3 +1,4 @@
+import { entityActive } from './streaming-ticks.js';
 // EntitySnowball (zj) from the 1.7.10 JAR, with EntityThrowable (zk) and
 // ItemSnowball (aed); EntityEgg (zl) shares all of it and differs only in onImpact
 // (see `layEggs`) and its item icon. Snowballs are 0.25 x 0.25 boxes thrown from the eye at
@@ -349,7 +350,7 @@ export class Projectiles {
   // EntityThrowable.onUpdate (zk.h) for every ball, then EffectRenderer's
   // update of the particles. `onHit(ref, ball)` applies the 0-damage hit.
   tick(world, targets = [], onHit = () => {}) {
-    for (const b of this.balls) if (!b.dead) this.step(world, b, targets, onHit);
+    for (const b of this.balls) if (!b.dead && entityActive(world,b)) this.step(world, b, targets, onHit);
     this.balls = this.balls.filter((b) => !b.dead);
     if (this.ownsEffects) this.effects.tick(world);
   }

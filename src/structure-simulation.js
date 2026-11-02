@@ -38,7 +38,7 @@ export function restoreStructureEntities(record, world, { minecartOptions } = {}
     for (const s of generated.spawners ?? []) spawners.add(s);
     for (const c of generated.minecartChests ?? []) minecarts.spawnChest(c);
   }
-  for (const s of spawners.values()) if (world.get(s.x, s.y, s.z) !== MOB_SPAWNER) spawners.remove(s.x, s.y, s.z);
+  for (const s of spawners.values()) if ((!world.streaming || world.isLoaded(s.x,s.z)) && world.get(s.x, s.y, s.z) !== MOB_SPAWNER) spawners.remove(s.x, s.y, s.z);
   const pendingTicks = fresh && generated ? (generated.pendingTicks ?? []).filter((t) => ORIGINAL_LIQUIDS.has(t.id)) : [];
   return { spawners, minecarts, fresh, pendingTicks };
 }

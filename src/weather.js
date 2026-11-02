@@ -28,14 +28,14 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 export const stopsPrecipitation = (b) => b !== 72 && b !== 73 && b !== 0 && b !== 20 && b !== SNOW_LAYER && b !== FIRE && b !== 59 && !isPlant(b);
 // Chunk.getPrecipitationHeight (apx.d): one above the topmost such block, or -1.
 export function precipitationHeight(world, x, z) {
-  if (x < 0 || z < 0 || x >= SIZE || z >= SIZE) return -1;
+  if (world.streaming ? !world.isLoaded(x,z) : x < 0 || z < 0 || x >= SIZE || z >= SIZE) return -1;
   for (let y = (world.height ?? HEIGHT) - 1; y >= 0; y--) if (stopsPrecipitation(world.get(x, y, z))) return y + 1;
   return -1;
 }
 // Chunk.canBlockSeeTheSky (apx.c): at or above the height map, which rests on
 // the topmost block with any light opacity (glass, torches and plants do not count).
 export function canSeeSky(world, x, y, z) {
-  if (x < 0 || z < 0 || x >= SIZE || z >= SIZE) return false;
+  if (world.streaming ? !world.isLoaded(x,z) : x < 0 || z < 0 || x >= SIZE || z >= SIZE) return false;
   let top = (world.height ?? HEIGHT) - 1;
   while (top >= 0 && lightOpacity(world.get(x, top, z)) === 0) top--;
   return y >= top + 1;
@@ -253,7 +253,8 @@ export class Weather {
   }
   // The chunks WorldServer ticks around a player: its view distance (10 by
   // default) clipped to the world.
-  static activeChunks(px, pz, radius = 10) {
+  static activeChunks(px, pz, radius = 10, world = null) {
+    if (world?.streaming) return [...world.chunks.values()].filter(c=>Math.abs(c.x-Math.floor(px/16))<=radius && Math.abs(c.z-Math.floor(pz/16))<=radius && world.isTicking(c.x*16,c.z*16)).map(c=>[c.x,c.z]);
     const out = [], n = SIZE / 16, cx = Math.floor(px / 16), cz = Math.floor(pz / 16);
     for (let x = Math.max(0, cx - radius); x <= Math.min(n - 1, cx + radius); x++)
       for (let z = Math.max(0, cz - radius); z <= Math.min(n - 1, cz + radius); z++) out.push([x, z]);
@@ -264,7 +265,7 @@ export class Weather {
     if (this.lastLightning > 0) this.lastLightning--; // Minecraft.runTick
     this.struck.length = 0;
     this.updateWeather();
-    if (world) this.tickChunks(world, Weather.activeChunks(player?.x ?? SIZE / 2, player?.z ?? SIZE / 2));
+    if (world) this.tickChunks(world, Weather.activeChunks(player?.x ?? SIZE / 2, player?.z ?? SIZE / 2, 10, world));
     for (const bolt of this.bolts) {
       if (bolt.tick(this.events)) {
         this.lastLightning = 2;

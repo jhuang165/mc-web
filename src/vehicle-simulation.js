@@ -79,8 +79,8 @@ function applySeat(state) {
 }
 export function releaseRider(state) {
   Object.assign(state.position,{x:state.rider.x,y:state.rider.y,z:state.rider.z});
-  // The finite viewport has no neighbouring chunks; keep dismounts in its playable area.
-  if (state.world.inside) for (const axis of ['x','z']) state.position[axis]=Math.max(.31,Math.min(SIZE-.31,state.position[axis]));
+  // Keep dismounts inside resident terrain (the fixed viewport for legacy worlds).
+  if (state.world.inside) for (const axis of ['x','z']) state.position[axis]=Math.max((state.world[axis === "x" ? "minX" : "minZ"] ?? 0)+.31,Math.min((state.world[axis === "x" ? "maxX" : "maxZ"] ?? SIZE)-.31,state.position[axis]));
   Object.assign(state.velocity,{x:0,y:0,z:0});
   Object.assign(state,{grounded:false,fallDistance:0,landedFall:0});
   state.motion.sneaking=false;

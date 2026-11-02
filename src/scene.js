@@ -6,7 +6,8 @@ import { ParticleSystem } from "./particles.js";
 import { EffectRenderer } from "./effect-renderer.js";
 import { Fx } from "./fx.js";
 import { ParticleRenderer } from "./particle-renderer.js";
-import { SIZE, HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
+import { HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
+import { StreamingLight } from './streaming-light.js';
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS } from "./block-textures.js";
 import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
@@ -185,11 +186,26 @@ export class VoxelScene {
     this.temperature = world.temperatureAt?.(64, world.seaLevel, 64) ?? biomeTemperature(world.biome);
     this.clouds.height = world.height === 256 ? 128 : CLOUD_HEIGHT;
     this.litFurnaces = new Set();
-    this.light = new LightVolume(world, (x, y, z, b) => lightEmission(b, b === 14 && this.litFurnaces.has(`${x},${y},${z}`)));
+    this.resetLight();
     for (const v of this.chunks.values()) this.disposeChunk(v);
     this.chunks.clear();
     this.dirty.clear();
-    for (let x = 0; x < SIZE; x += 16) for (let z = 0; z < SIZE; z += 16) this.buildChunk(x, z);
+    for (const c of world.chunks.values()) this.buildChunk(c.x*16, c.z*16);
+  }
+  resetLight() {
+    const Light = this.world.streaming ? StreamingLight : LightVolume;
+    this.light = new Light(this.world, (x,y,z,b) => lightEmission(b,b===14 && this.litFurnaces.has(`${x},${y},${z}`)));
+  }
+  syncChunks() {
+    const x = this.world.minX+64, z = this.world.minZ+64;
+    const wanted = new Set([...this.world.chunks.values()]
+      .sort((a,b)=>(a.x*16-x)**2+(a.z*16-z)**2-((b.x*16-x)**2+(b.z*16-z)**2))
+      .map(c=>`${c.x*16},${c.z*16}`));
+    for (const [key, group] of this.chunks) if (!wanted.has(key)) {
+      this.disposeChunk(group); this.chunks.delete(key);
+    }
+    this.resetLight();
+    this.dirty = wanted;
   }
   disposeChunk(group) {
     this.scene.remove(group);
@@ -458,10 +474,10 @@ export class VoxelScene {
   // rebuild now, the rest of the changed light box over the next frames.
   updateBlock(x, z, y = 0) {
     const box = this.light?.update(x, y, z), chunk = (v) => Math.floor(v / 16) * 16;
-    const now = new Set([[chunk(x), chunk(z)], [chunk(x - 1), chunk(z)], [chunk(x + 1), chunk(z)], [chunk(x), chunk(z - 1)], [chunk(x), chunk(z + 1)]].filter(([a, b]) => a >= 0 && b >= 0 && a < SIZE && b < SIZE).map((c) => c.join(",")));
+    const now = new Set([[chunk(x), chunk(z)], [chunk(x - 1), chunk(z)], [chunk(x + 1), chunk(z)], [chunk(x), chunk(z - 1)], [chunk(x), chunk(z + 1)]].filter(([a, b]) => this.world.isLoaded(a, b)).map((c) => c.join(",")));
     if (box)
-      for (let a = chunk(Math.max(0, box.x0 - 1)); a <= chunk(Math.min(SIZE - 1, box.x1 + 1)); a += 16)
-        for (let b = chunk(Math.max(0, box.z0 - 1)); b <= chunk(Math.min(SIZE - 1, box.z1 + 1)); b += 16) if (!now.has(`${a},${b}`)) this.dirty.add(`${a},${b}`);
+      for (let a = chunk(Math.max(this.world.minX, box.x0 - 1)); a <= chunk(Math.min(this.world.maxX - 1, box.x1 + 1)); a += 16)
+        for (let b = chunk(Math.max(this.world.minZ, box.z0 - 1)); b <= chunk(Math.min(this.world.maxZ - 1, box.z1 + 1)); b += 16) if (!now.has(`${a},${b}`)) this.dirty.add(`${a},${b}`);
     for (const k of now) this.buildChunk(...k.split(",").map(Number));
   }
   // Applies a tick's fluid edits ([x, y, z, oldBlock, newBlock] from
@@ -473,14 +489,14 @@ export class VoxelScene {
     if (!changes.length || !this.light) return;
     const chunk = (v) => Math.floor(v / 16) * 16, first = new Set(), later = new Set(), boxes = [],
       mark = (set, x0, x1, z0, z1) => {
-        for (let a = chunk(Math.max(0, x0)); a <= chunk(Math.min(SIZE - 1, x1)); a += 16)
-          for (let b = chunk(Math.max(0, z0)); b <= chunk(Math.min(SIZE - 1, z1)); b += 16) set.add(`${a},${b}`);
+        for (let a = chunk(Math.max(this.world.minX, x0)); a <= chunk(Math.min(this.world.maxX - 1, x1)); a += 16)
+          for (let b = chunk(Math.max(this.world.minZ, z0)); b <= chunk(Math.min(this.world.maxZ - 1, z1)); b += 16) set.add(`${a},${b}`);
       };
     for (const [x, , z, old, now] of changes) {
       mark(first, x - 1, x + 1, z - 1, z + 1);
       if (lightOpacity(old) === lightOpacity(now) && lightEmission(old) === lightEmission(now)) continue;
       this.light.column(x, z);
-      boxes.push([Math.max(0, x - 15), Math.min(SIZE - 1, x + 15), Math.max(0, z - 15), Math.min(SIZE - 1, z + 15)]);
+      boxes.push([Math.max(this.world.minX, x - 15), Math.min(this.world.maxX - 1, x + 15), Math.max(this.world.minZ, z - 15), Math.min(this.world.maxZ - 1, z + 15)]);
     }
     // Overlapping boxes merge, so a spreading front relights once per tick.
     for (let i = 0; i < boxes.length; i++)

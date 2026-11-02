@@ -1,3 +1,4 @@
+import { entityActive } from './streaming-ticks.js';
 import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE, isSpider, soundType, caveSpiderPoisonTicks } from "./spider.js";
 import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox } from "./mob-spawner.js";
 import { POISON } from "./status-effects.js";
@@ -553,10 +554,7 @@ export class EntityWorld {
         if (
           !t ||
           ![e.x, e.y, e.z, e.health].every(Number.isFinite) ||
-          e.x < 0 ||
-          e.x >= SIZE ||
-          e.z < 0 ||
-          e.z >= SIZE ||
+          (world.streaming ? !world.inside(Math.floor(e.x),0,Math.floor(e.z)) : e.x < 0 || e.x >= SIZE || e.z < 0 || e.z >= SIZE) ||
           e.y < -64 ||
           e.y >= (world.height ?? HEIGHT) ||
           e.health <= 0
@@ -753,7 +751,7 @@ export class EntityWorld {
       solidTop: (x, y, z) => y >= 0 && y < (this.world.height ?? HEIGHT) && normalCube(this.world.get(x, y, z)),
       light: (x, y, z) => (this.lightAt ? this.lightAt(x, y, z) : 0),
       fits: (x, y, z) => {
-        if (x < 1 || z < 1 || x >= SIZE - 1 || z >= SIZE - 1 || y < 0 || y + t.height > (this.world.height ?? HEIGHT)) return false;
+        if ((this.world.streaming ? !this.world.isTicking(x,z) : x < 1 || z < 1 || x >= SIZE - 1 || z >= SIZE - 1) || y < 0 || y + t.height > (this.world.height ?? HEIGHT)) return false;
         const box = [x - w, y, z - w, x + w, y + t.height, z + w];
         const meets = (o, ow, oh) => o.x + ow > box[0] && o.x - ow < box[3] && o.y + oh > box[1] && o.y < box[4] && o.z + ow > box[2] && o.z - ow < box[5];
         // World.checkNoEntityCollision: living mobs and the player.
@@ -1091,7 +1089,7 @@ export class EntityWorld {
         const a = hash(i, survival.time, this.world.numericSeed) * Math.PI * 2,
           x = Math.floor(player.x + Math.sin(a) * 24),
           z = Math.floor(player.z + Math.cos(a) * 24);
-        if (x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
+        if (this.world.streaming ? !this.world.isTicking(x,z) : x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
         const y = this.world.surface(x, z);
         if (this.world.get(x, y - 1, z) !== 1) continue;
         this.spawnNatural("zombie", x + 0.5, y, z + 0.5);
@@ -1113,7 +1111,7 @@ export class EntityWorld {
         const a = hash(i + 100, survival.time, this.world.numericSeed) * Math.PI * 2,
           x = Math.floor(player.x + Math.sin(a) * 24),
           z = Math.floor(player.z + Math.cos(a) * 24);
-        if (x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
+        if (this.world.streaming ? !this.world.isTicking(x,z) : x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
         const y = this.world.surface(x, z);
         if (this.world.get(x, y - 1, z) !== 1) continue;
         this.spawnNatural("skeleton", x + 0.5, y, z + 0.5);
@@ -1126,7 +1124,7 @@ export class EntityWorld {
       for (let i = 0; i < 16; i++) {
         const a = hash(i + 200, survival.time, this.world.numericSeed) * Math.PI * 2,
           x = Math.floor(player.x + Math.sin(a) * 24), z = Math.floor(player.z + Math.cos(a) * 24);
-        if (x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
+        if (this.world.streaming ? !this.world.isTicking(x,z) : x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
         const y = this.world.surface(x, z), t = ENTITY_TYPES.spider;
         if (this.world.get(x, y - 1, z) !== 1 || actorCollides(this.world, x + 0.5, y, z + 0.5, t.width, t.height)) continue;
         this.spawnNatural("spider", x + 0.5, y, z + 0.5);
@@ -1140,7 +1138,7 @@ export class EntityWorld {
       for (let i = 0; i < 16; i++) {
         const a = hash(i + 300, survival.time, this.world.numericSeed) * Math.PI * 2,
           x = Math.floor(player.x + Math.sin(a) * 24), z = Math.floor(player.z + Math.cos(a) * 24);
-        if (x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
+        if (this.world.streaming ? !this.world.isTicking(x,z) : x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
         const y = this.world.surface(x, z), t = ENTITY_TYPES.creeper;
         if (this.world.get(x, y - 1, z) !== 1 || actorCollides(this.world, x + 0.5, y, z + 0.5, t.width, t.height)) continue;
         this.spawnNatural("creeper", x + 0.5, y, z + 0.5);
@@ -1149,6 +1147,7 @@ export class EntityWorld {
     }
     // A mob spawned during the loop (a baby) joins the next tick's updates, as World.spawnEntityInWorld queues it.
     for (const e of this.entities.slice()) {
+      if (!entityActive(this.world,e)) continue;
       // World.updateEntityWithOptionalForce and EntityLivingBase.onEntityUpdate
       // keep last tick's state for RenderManager and RendererLivingEntity.
       e.px = e.x;
@@ -1316,7 +1315,7 @@ export class EntityWorld {
     const landed = moveEntityWithHeading(this.world, e, t.width, t.height, e.moveForward, hooks);
     // The finite world's edge stops a mob like a wall.
     const edge = (axis, v) => {
-      const c = Math.max(0.6, Math.min(SIZE - 0.6, e[axis]));
+      const c = Math.max((this.world[axis === "x" ? "minX" : "minZ"] ?? 0)+0.6, Math.min((this.world[axis === "x" ? "maxX" : "maxZ"] ?? SIZE)-0.6, e[axis]));
       if (c !== e[axis]) (e[axis] = c), (e[v] = 0);
     };
     edge("x", "vx");

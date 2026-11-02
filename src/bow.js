@@ -1,3 +1,4 @@
+import { entityActive } from './streaming-ticks.js';
 // ItemBow (abm), EntityArrow (zc) and the arrow half of EntitySkeleton (yl) from the
 // 1.7.10 JAR. Evidence, class digests and gaps: public/research/bows.md; the numbers
 // below are replayed against public/research/bow-reference.json by bow.test.js.
@@ -217,7 +218,7 @@ export class Arrows {
   // EntityArrow.onUpdate for every arrow. `ctx`: targets (arrowTargets), mobs (the
   // EntityWorld, for damage), survival (the player's) and player ({ x, z }, for knockback).
   tick(world, ctx = {}) {
-    for (const a of this.list) if (!a.dead) this.step(world, a, ctx);
+    for (const a of this.list) if (!a.dead && entityActive(world,a)) this.step(world, a, ctx);
     this.list = this.list.filter((a) => !a.dead);
   }
   step(world, a, ctx) {

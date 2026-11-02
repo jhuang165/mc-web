@@ -125,9 +125,9 @@ export function movePlayer(state, controls, toast = () => {}) {
   Object.assign(position, { x: body.x, y: body.y, z: body.z });
   Object.assign(velocity, { x: body.vx, y: body.vy, z: body.vz });
   collidedH = body.collidedH;
-  // The finite world's edge acts as a wall.
+  // Stay inside resident terrain; streamed windows advance before movement.
   for (const axis of ["x", "z"]) {
-    const held = Math.max(0.31, Math.min(SIZE - 0.31, position[axis]));
+    const held = Math.max((world[axis === "x" ? "minX" : "minZ"] ?? 0) + 0.31, Math.min((world[axis === "x" ? "maxX" : "maxZ"] ?? SIZE) - 0.31, position[axis]));
     if (held !== position[axis]) {
       position[axis] = held;
       velocity[axis] = 0;

@@ -21,6 +21,7 @@
 import { WATER, LAVA, REEDS, isLiquid } from "./world.js";
 import { JavaRandom } from "./lighting.js";
 import { saveTicks, readTicks } from "./scheduled-ticks.js";
+import { pauseUnloadedTicks } from './streaming-ticks.js';
 
 const f = Math.fround,
   STONE = 3,
@@ -247,6 +248,7 @@ export class Fluids {
     }
   }
   key(x, y, z, block) {
+    if (this.world.streaming) return `${x},${y},${z}:${block}`;
     return this.world.index(x, y, z) * 2 + (block === LAVA ? 1 : 0);
   }
   // World.scheduleBlockUpdate (mt.a(IIILaji;II)): one entry per position and
@@ -334,6 +336,7 @@ export class Fluids {
   // y, z, oldBlock, newBlock] (equal blocks mean only the level changed).
   tick() {
     this.time++;
+    pauseUnloadedTicks(this.world, this.heap);
     for (let n = Math.min(this.heap.length, MAX_TICKS); n > 0 && this.heap[0].time <= this.time; n--) {
       const { x, y, z, key, block } = this.pop();
       this.pending.delete(key);

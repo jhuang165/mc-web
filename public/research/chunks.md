@@ -1,5 +1,7 @@
 # Chunk storage and the block registry (WORLD-01)
 
+**Current status (0.27.0):** an opt-in generation-12 terrain preview now streams live columns, light/meshes and saved edits. See [WORLD-02d streaming](streaming.md) for the current behavior, acceptance evidence and remaining work. The sections below describe their historical standalone/finite milestones; the native provider/player-manager policy remains unconnected. Populated Java worlds still use finite v11.
+
 WORLD-01 sets the storage and addressing the streamed world will use, without changing the current terrain. The game still runs on the fixed 128 × 128 × 64 `World` arrays. Nothing in `main.js`, rendering, lighting or saving reads the new storage yet; that is WORLD-02.
 
 `tools/probes/ChunkProbe.java` and `tools/verify-chunks.mjs` run the unchanged 1.7.10 classes from the SHA-1-pinned client and write [chunk-reference.json](chunk-reference.json), with the sha256 of every class used. `src/chunk-store.test.js` and `src/block-registry.test.js` replay it.

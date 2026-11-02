@@ -2,6 +2,7 @@
 // player tick. Entity systems own their state; callers provide world-specific
 // targets and synchronous effects at the same points used by main.js.
 import { tickTnt, TNT_POWER } from "./explosion.js";
+import { entityActive } from './streaming-ticks.js';
 
 /**
  * Advance primed TNT in insertion order using a snapshot, as main.js did.
@@ -16,6 +17,7 @@ import { tickTnt, TNT_POWER } from "./explosion.js";
 export function tickPrimedTnt(world, primed, { smoke = null, explode = () => {} } = {}) {
   if (!primed.length) return;
   for (const entity of [...primed]) {
+    if (!entityActive(world,entity)) continue;
     const at = tickTnt(world, entity, smoke);
     if (!at) continue;
     const index = primed.indexOf(entity);

@@ -1,3 +1,4 @@
+import { entityActive } from './streaming-ticks.js';
 // EntityItem (xk) from the 1.7.10 JAR: 0.25 x 0.25 boxes with gravity 0.04,
 // 0.98 drag (block slipperiness x 0.98 on the ground), Entity.moveEntity
 // collision, func_145771_j push-out, merging with neighbours within 0.5
@@ -216,7 +217,7 @@ export class ItemEntities {
   // EntityItem.onUpdate for every item.
   tick(world, maxStack = () => 64) {
     for (const e of this.items) {
-      if (e.dead) continue;
+      if (e.dead || !entityActive(world,e)) continue;
       let wasWet = false;
       // Entity.onUpdate runs handleWaterMovement first; EntityItem (xk.N) passes
       // its own box to World.handleMaterialAcceleration, unshrunk.

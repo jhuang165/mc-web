@@ -1,3 +1,4 @@
+import { entityActive } from './streaming-ticks.js';
 import { inLava, waterAcceleration } from './fluids.js';
 import { moveEntity, entityPushOut } from './entities.js';
 import { LAVA, slipperiness } from './world.js';
@@ -64,6 +65,7 @@ export class ExperienceOrbs {
  // EntityXPOrb inherits Entity.getEyeHeight = 0: use posY (the box centre) for the push.
  explode(world,x,y,z,size,exploder=null){
   for(const o of this.orbs){
+   if(!entityActive(world,o))continue;
    if(o.dead||o===exploder)continue;
    const hit=explosionImpact(world,x,y,z,size,o.x,o.posY,o.z,o.posY,o.bb);
    if(!hit)continue;
@@ -97,6 +99,7 @@ export class ExperienceOrbs {
  // getEyeHeight 1.62F) or null.
  tick(world,player){
   for(const o of this.orbs){
+   if(!entityActive(world,o))continue;
    o.px=o.x;o.py=o.y;o.pz=o.z;
    // Entity.onEntityUpdate: EntityXPOrb.handleWaterMovement pushes with the unshrunk box only;
    // then the fire countdown (onFire 1 when the counter is a multiple of 20) and lava (lava 4,

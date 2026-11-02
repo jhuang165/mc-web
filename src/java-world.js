@@ -37,6 +37,7 @@ export const JAVA_LANDSCAPES = Object.freeze({
   java: "default",
   javaAmplified: "amplified",
   javaLargeBiomes: "largeBiomes",
+  javaStreamed: "default",
 });
 export const isJavaLandscape = (biome) => Object.hasOwn(JAVA_LANDSCAPES, biome);
 export function javaSeed(value) {
@@ -81,6 +82,19 @@ export function generateJavaWorld(world) {
   const topAt = (x, z) => state.topBlock(manager.biomeAt(x, z)),
     caves = new MapGenCaves(seed, manager, topAt),
     ravines = new MapGenRavine(seed, manager, topAt);
+  // The streaming preview deliberately uses terrain/caves only. It does not silently
+  // replace the order-dependent v11 population of existing finite worlds.
+  world.generateTerrainChunk = (cx, cz) => {
+    const chunk = gen.provideChunk(cx + world.originX / 16, cz + world.originZ / 16);
+    caves.generate(chunk.x, chunk.z, chunk.blocks);
+    ravines.generate(chunk.x, chunk.z, chunk.blocks);
+    for (let i = 0; i < chunk.blocks.length; i++) {
+      const id = JAVA_TERRAIN_BLOCKS[chunk.blocks[i]];
+      if (id === undefined) throw new Error(`Unmapped Java terrain block ${chunk.blocks[i]}`);
+      chunk.blocks[i] = id;
+    }
+    return chunk;
+  };
   // Generation version 10 adds mineshafts (mineshaft-world.js), which need the original-ID chunks.
   const originals = world.generationVersion >= 10 ? new Map() : null;
   for (let cx = 0; cx < 8; cx++)
@@ -105,6 +119,7 @@ export function generateJavaWorld(world) {
           world.biomeIds[(cx * 16 + x) * 128 + cz * 16 + z] =
             chunk.biomes[x + z * 16];
     }
+  if (world.streaming) return;
   if (world.generationVersion >= 11)
     generateLivePopulation(world, {seed, originals, ringTerrain: (x,z) => {
       const chunk=gen.provideChunk(x,z); caves.generate(x,z,chunk.blocks); ravines.generate(x,z,chunk.blocks); return chunk;

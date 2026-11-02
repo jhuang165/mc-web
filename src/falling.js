@@ -6,6 +6,7 @@ import { WATER, LAVA, FIRE, SAND, GRAVEL } from "./world.js";
 import { moveEntity } from "./entities.js";
 import { replaceable } from "./plants.js";
 import { saveTicks, readTicks } from "./scheduled-ticks.js";
+import { entityActive } from './streaming-ticks.js';
 
 const f = Math.fround;
 export const FLINT = 313;
@@ -97,11 +98,12 @@ export class FallingBlocks {
   tick() {
     this.time++;
     for (const [k, u] of this.pending) {
+      if (!entityActive(this.world,u)) { u.time++; continue; }
       if (u.time > this.time) continue;
       this.pending.delete(k);
       if (this.world.get(u.x, u.y, u.z) === u.block) this.fall(u.x, u.y, u.z);
     }
-    for (const e of this.entities) if (!e.dead) this.tickEntity(e);
+    for (const e of this.entities) if (!e.dead && entityActive(this.world,e)) this.tickEntity(e);
     this.entities = this.entities.filter((e) => !e.dead);
   }
   // EntityFallingBlock ignores blast damage but receives knockback. Its posY is the box centre.

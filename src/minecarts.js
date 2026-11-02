@@ -1,3 +1,4 @@
+import { entityActive } from './streaming-ticks.js';
 // EntityMinecartChest (xm) with EntityMinecartContainer (xp) and EntityMinecart (xl) from the
 // Minecraft Java 1.7.10 JAR: a 0.98 x 0.7 box with yOffset 0.35, gravity 0.04, the derailed
 // func_94088_b (0.4 clamp, x0.5 on the ground, x0.95 in the air), rail travel through
@@ -390,10 +391,10 @@ export class Minecarts {
     const kind = this.railKind(world, bx, by, bz);
     if (kind) this.onRail(world, cart, bx, by, bz, kind, world.getMeta?.(bx, by, bz) ?? 0, others);
     else this.offRail(world, cart, others);
-    // Browser adaptation: there are no streamed neighbours beyond the finite viewport.
-    // Stop at its boundary rather than letting a rider disappear into unloaded air.
+    // Stop at resident bounds. Streaming advances the window before rider movement;
+    // finite worlds retain their existing viewport guard.
     if (world.inside) {
-      const x = Math.max(HALF, Math.min(W.SIZE - HALF, cart.x)), z = Math.max(HALF, Math.min(W.SIZE - HALF, cart.z));
+      const x = Math.max((world.minX ?? 0)+HALF, Math.min((world.maxX ?? W.SIZE) - HALF, cart.x)), z = Math.max((world.minZ ?? 0)+HALF, Math.min((world.maxZ ?? W.SIZE) - HALF, cart.z));
       if (x !== cart.x || z !== cart.z) {
         if (x !== cart.x) cart.vx = 0;
         if (z !== cart.z) cart.vz = 0;
@@ -416,7 +417,7 @@ export class Minecarts {
     if (cart.rider?.dead) { cart.rider.vehicle = null; cart.rider = null; }
   }
   tick(world, { entities = [] } = {}) {
-    for (const cart of [...this.carts]) if (!cart.dead) this.tickCart(world, cart, entities);
+    for (const cart of [...this.carts]) if (!cart.dead && entityActive(world,cart)) this.tickCart(world, cart, entities);
     this.carts = this.carts.filter((c) => !c.dead);
   }
   // EntityMinecart.applyEntityCollision(other) on `cart`. Another cart trades motion along the
