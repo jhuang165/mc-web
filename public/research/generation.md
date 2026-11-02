@@ -7,7 +7,7 @@ The live game offers finite 128 × 128 × 256 Java worlds (generation version 9,
 | GEN-01 | Biome layers (`GenLayer.initializeAllBiomeGenerators`), the `BiomeGenBase` registry, `WorldChunkManager` | Done, wired into Java worlds |
 | GEN-02 | Noise octaves and `ChunkProviderGenerate` terrain density, biome surface blocks, sea level 63 | Done, wired into Java worlds |
 | GEN-03 | `MapGenCaves`, `MapGenRavine` | Done, wired into Java worlds |
-| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Open |
+| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding and base ore pass replay exactly; standalone, not wired into Java worlds |
 | GEN-05 | Structures (villages, strongholds, mineshafts, temples) | Open |
 | GEN-06 | Integration: streamed world, new generation version, seed entry | Partial: version 9 is playable at 256 height; finite viewport, no streaming |
 
@@ -109,3 +109,38 @@ Browser QA uses a separate local server with AudioContext stubbed before startup
 Trees, ores, lakes, springs, decoration and initial snow population are **GEN-04**; structures are **GEN-05**. Java worlds are currently undecorated, so Creative is recommended. Streaming, per-chunk lighting/saves, exact biome tinting and broader integrated acceptance remain GEN-06. No full-generation or full-game parity is claimed.
 
 0.23.0 validation: `npm test` **671/671**, `npm run build` and **5/5** memory-bridge tests pass. Browser save/reload/resume at y=181 passes with no console warnings/errors and audio stubbed.
+
+## GEN-04a: population seeding and base ore generation
+
+`src/ore-generator.js` ports `WorldGenMinable.generate` and the base `BiomeDecorator.generateOres` phase. It consumes original numeric block IDs through a world adapter (`getBlock` / `setBlock`) and the caller's Random stream. The caller must supply the stream **after preceding population stages**; directly seeding the ore pass with the population seed would put ores in the wrong places. This tranche is standalone; version-9 worlds and the app version remain 0.23.0.
+
+`populationSeed` matches `ChunkProviderGenerate.populate` reseeding: two signed `nextLong / 2 * 2 + 1` multipliers, chunk coordinates, signed-long overflow and world-seed XOR. Java division truncates toward zero, so replacing that operation with a bitwise odd-number mask would change negative values.
+
+The base decorator runs these passes in this exact order:
+
+| Deposit | Attempts | Vein size | Starting Y |
+| --- | --- | --- | --- |
+| Dirt | 20 | 32 | Uniform 0–255 |
+| Gravel | 10 | 32 | Uniform 0–255 |
+| Coal | 20 | 16 | Uniform 0–127 |
+| Iron | 20 | 8 | Uniform 0–63 |
+| Gold | 2 | 8 | Uniform 0–31 |
+| Redstone | 8 | 7 | Uniform 0–15 |
+| Diamond | 1 | 7 | Uniform 0–15 |
+| Lapis | 1 | 6 | `nextInt(16) + nextInt(16)` (0–30) |
+
+Each pass replaces only original stone. Coordinates are drawn X, Y, Z without an extra eight-block origin offset; the minable generator itself offsets its vein endpoints by eight. Vein size controls the path, not a guaranteed block count. The port retains Java float endpoint/trigonometric math, inclusive path and cell loops, strict ellipsoid tests, X/Y/Z read order, metadata zero and update flag two, and unconditional true return even with no replacements. Bounds belong to the world adapter.
+
+`tools/probes/PopulationProbe.java` and `node tools/verify-population.mjs` generate [population-reference.json](population-reference.json) from the unchanged SHA-1-pinned original classes, with class/SRG identities. Evidence includes:
+
+- **24 population-seed records:** execute the real provider method up to its second `Random.setSeed`, then stop before features. Seeds include both signed-long extrema; chunks include negative and near-world-limit positions.
+- **468 vein records:** six seeds, six sizes, solid/mixed materials, air/non-stone custom targets, same-target writes, crossing chunk boundaries, y=0/y=255 and both horizontal world edges. Every candidate read coordinate is SHA-1 hashed as three little-endian int32 values; every write records coordinates, block ID, metadata and flags in order, followed by the next random long.
+- **42 complete base ore passes:** native constructor configuration and helper distributions, all 82 attempt positions, candidate reads, ordered writes and final Random state. Six cases run on 96 native terrain/surface/cave/ravine chunks, whose input hashes are independently replayed before applying ores. Their ore stream deliberately starts at 1234 to isolate this stage; it is not claimed to be the stream after lakes/dungeons.
+
+`src/ore-generator.test.js` replays all 534 records exactly, including block query order and RNG. The native generator and decorator methods execute unchanged; World is a block-access double. Native Chunk mutation, lighting, notifications and whole-world population are not executed.
+
+The verifier also records the full provider `populate` invocation order from `javap` bytecode, separately from execution: reseed; optional mineshaft/village/stronghold/scattered-feature population; conditional water and lava lakes; eight dungeon attempts; biome decoration; worldgen animals; ice/snow. Biome overrides may consume random draws before the base decorator's ore phase, and hills later add emeralds/monster eggs. An invocation listing does not prove execution of those branches.
+
+Next GEN-04 work: lake and dungeon generators and their pre-decoration random consumption, followed by biome-specific decoration hooks, plants/trees/springs and snow/ice. Runtime integration needs a new generation version and cross-chunk population ownership so existing saves retain their baseline. GEN-05 structures and complete population-order/load-order acceptance remain open.
+
+GEN-04a validation: `npm test` **675/675**, `npm run build` and **5/5** memory-bridge tests pass. Native reference regeneration is byte-identical. No browser QA was needed for this standalone module; live Java-world population is unchanged.
