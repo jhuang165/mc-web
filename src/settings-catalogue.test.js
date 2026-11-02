@@ -93,9 +93,36 @@ test('FOV, render distance, sensitivity, master volume and GUI scale use the nat
   assert.deepEqual(slider('distance'), [option('RENDER_DISTANCE').min, option('RENDER_DISTANCE').max]);
   assert.equal(portOptions.sensitivity, defaults.mouseSensitivity);
   assert.deepEqual(slider('sensitivity'), [option('SENSITIVITY').min, option('SENSITIVITY').max]);
-  assert.equal(portOptions.volume, ref.soundCategories[0].default);
+  assert.equal(portOptions.invertMouse, defaults.invertYMouse);
+  assert.match(main, /soundLevels: Object\.fromEntries\(SOUND_CATEGORIES\.map\(\(\[k\]\) => \[k, 1\]\)\)/);
+  assert(ref.soundCategories.every(c => c.default === 1));
   // GameSettings.GUISCALES: options.guiScale.auto/small/normal/large, in that order.
   assert.deepEqual(GUI_SCALE_NAMES.map(n => 'options.guiScale.' + n.toLowerCase()), ref.valueSets.find(v => v.role === 'GUI_SCALES').values);
   assert(!main.includes('"Larger"'), 'no non-native fifth GUI scale');
   for (const word of ['MISMATCH', 'EXTRA value']) assert(!catalogue.includes(word), word);
+});
+
+test('invert mouse, cinematic camera, pitch clamp and sound categories are no longer open', () => {
+  // Options UI labels are the en_US.lang strings read from the JAR.
+  assert.equal(ref.lang['options.invertMouse'], 'Invert Mouse');
+  assert(main.includes(`>${ref.lang['options.invertMouse']}<input type="checkbox" id="invertMouse"`));
+  assert(main.includes(`>${ref.lang['key.smoothCamera']}<input type="checkbox" id="smooth-camera"`));
+  assert(main.includes('id="sound-${k}" min="0" max="1"'));
+  // key.smoothCamera is unbound in 1.7.10 and runTick has no F8 check; the port binds no key either.
+  assert.equal(ref.keyBindings.find(k => k.description === 'key.smoothCamera').defaultKey, 0);
+  assert.equal(ref.controls.mouseLook.smoothCameraToggle.lwjglF8Checks, 0);
+  assert(!/"F8"/.test(main));
+  // smoothCamera has no options.txt key, so the port does not save it.
+  assert(!ref.optionsFile.saveOrder.some(r => r.srgField === 'field_74326_T'));
+  assert(!/options\.smoothCamera/.test(main));
+  // The old radian clamp is gone.
+  assert(!main.includes('1.55'));
+  const row = name => catalogue.split('\n').find(l => l.startsWith(`| ${ref.options.find(o => o.name === name).ordinal} | ${name} |`));
+  assert.match(row('INVERT_MOUSE'), /\| Implemented: /);
+  assert(!/smooth camera and invert open|pitch clamp is \+-1\.55/.test(catalogue));
+  for (const c of ref.soundCategories) {
+    const line = catalogue.split('\n').find(l => l.startsWith(`| ${c.ordinal} | ${c.enum} |`));
+    assert(!/\| Missing: /.test(line), c.enum);
+  }
+  assert.match(catalogue.split('\n').find(l => l.includes('| key.smoothCamera |')), /\| Partial: /);
 });

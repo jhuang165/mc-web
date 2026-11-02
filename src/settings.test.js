@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { lookScale, sensitivityForScale, optionLabel, migrateSettings, renderDistanceBlocks, SETTINGS_VERSION } from './settings.js';
+import { readFileSync } from 'node:fs';
+import { lookScale, sensitivityForScale, optionLabel, migrateSettings, renderDistanceBlocks, SETTINGS_VERSION, SOUND_CATEGORIES, soundLevel, categoryVolume, normalizedVolume, normalizedPitch } from './settings.js';
+import { attenuationDistance } from './audio.js';
 
 const deg = Math.PI / 180;
 const perPixel = (k) => k * 0.15 * Math.PI / 180;
@@ -42,17 +44,64 @@ test('settings saved before version 2 move to the native scales once', () => {
   assert.equal(old.fov, 90);
   assert.ok(Math.abs(lookScale(old.sensitivity) - 0.003) < 1e-9);
   assert.equal(old.distance, 13);
-  assert.equal(old.volume, 0.3);
+  assert.deepEqual(old.soundLevels, { master: 0.3 });
   assert.equal(old.guiScale, 2);
   // The old 0.2x-2x range lies inside the native turn rates (0.0096 to 0.6144 degrees per pixel).
   for (const m of [0.2, 2]) assert.ok(Math.abs(lookScale(migrateSettings({ sensitivity: m }).sensitivity) - 0.002 * m) < 1e-9);
   assert.equal(migrateSettings({ distance: 70 }).distance, 4);
   assert.equal(migrateSettings({ distance: 0 }).distance, 2);
   assert.equal(migrateSettings({ settingsVersion: 2, sensitivity: 5, volume: -1 }).sensitivity, 1);
-  assert.equal(migrateSettings({ settingsVersion: 2, volume: -1 }).volume, 0);
-  // Current saves are not converted again, only validated.
+  assert.deepEqual(migrateSettings({ settingsVersion: 2, volume: -1 }).soundLevels, { master: 0 });
+  // Version 2 saves are not converted again; their single volume becomes the master level.
   assert.deepEqual(migrateSettings({ settingsVersion: 2, fov: 75, sensitivity: 1, distance: 9, volume: 0.65 }),
-    { settingsVersion: 2, fov: 75, sensitivity: 1, distance: 9, volume: 0.65 });
-  assert.deepEqual(migrateSettings({ settingsVersion: 2, fov: 200, distance: 'far', guiScale: 7 }), { settingsVersion: 2, fov: 110, guiScale: 3 });
-  for (const bad of [null, [], 'x', 3]) assert.deepEqual(migrateSettings(bad), { settingsVersion: 2 });
+    { settingsVersion: SETTINGS_VERSION, fov: 75, sensitivity: 1, distance: 9, soundLevels: { master: 0.65 } });
+  assert.deepEqual(migrateSettings({ settingsVersion: 2, fov: 200, distance: 'far', guiScale: 7 }), { settingsVersion: SETTINGS_VERSION, fov: 110, guiScale: 3 });
+  for (const bad of [null, [], 'x', 3]) assert.deepEqual(migrateSettings(bad), { settingsVersion: SETTINGS_VERSION });
+});
+
+test('version 3 keeps one level per SoundCategory and the invert mouse flag', () => {
+  assert.equal(SETTINGS_VERSION, 3);
+  // A version 1 save: the old 0.65 default is dropped (master stays at the native 1), other values move.
+  assert.deepEqual(migrateSettings({ volume: 0.65 }), { settingsVersion: 3 });
+  assert.deepEqual(migrateSettings({ volume: 0.3 }), { settingsVersion: 3, soundLevels: { master: 0.3 } });
+  assert.deepEqual(migrateSettings({ settingsVersion: 2, volume: -1 }), { settingsVersion: 3, soundLevels: { master: 0 } });
+  assert.deepEqual(migrateSettings({ settingsVersion: 2, volume: 'loud' }), { settingsVersion: 3, soundLevels: {} });
+  // Current saves are validated only: known categories, numbers clamped to 0..1, booleans for invertMouse.
+  const s = migrateSettings({ settingsVersion: 3, invertMouse: true, volume: 0.2, soundLevels: { master: 0.4, music: 2, hostile: -1, weather: 'x', mobs: 0.5 } });
+  assert.deepEqual(s, { settingsVersion: 3, invertMouse: true, volume: 0.2, soundLevels: { master: 0.4, music: 1, hostile: 0 } });
+  assert.deepEqual(migrateSettings({ settingsVersion: 3, invertMouse: 'yes', soundLevels: [1] }), { settingsVersion: 3, soundLevels: {} });
+});
+
+test('sound categories, labels and SoundManager gain follow the original', () => {
+  const ref = JSON.parse(readFileSync(new URL('../public/research/settings-reference.json', import.meta.url), 'utf8'));
+  // Names in SoundCategory ordinal order and the soundCategory.<name> strings of en_US.lang.
+  assert.deepEqual(SOUND_CATEGORIES.map(([k]) => k), ref.soundCategories.map(c => c.key));
+  for (const [k, label] of SOUND_CATEGORIES) assert.equal(label, ref.lang['soundCategory.' + k], k);
+  // GameSettings.getSoundLevel: 1 when the category is missing, as every constructor default is.
+  for (const c of ref.soundCategories) assert.equal(soundLevel({}, c.key), c.default);
+  assert.equal(soundLevel({ music: 0.25 }, 'music'), 0.25);
+  // getSoundCategoryVolume: null and MASTER are 1, whatever the master level.
+  const levels = { master: 0.1, block: 0.5, hostile: 0 };
+  assert.equal(categoryVolume(levels, null), 1);
+  assert.equal(categoryVolume(levels, 'master'), 1);
+  assert.equal(categoryVolume(levels, 'block'), 0.5);
+  assert.equal(categoryVolume(levels, 'neutral'), 1);
+  // getNormalizedVolume: clamp(volume * entry * category, 0, 1) as a float.
+  const { normalizedVolumeClamp, normalizedPitchClamp, attenuationDistance: dist } = ref.controls.sound;
+  assert.deepEqual([normalizedVolumeClamp, normalizedPitchClamp, dist], [[0, 1], [0.5, 2], 16]);
+  assert.equal(normalizedVolume(0.8, 1, levels, 'block'), Math.fround(0.4));
+  assert.equal(normalizedVolume(4, 1, levels, 'block'), 1);
+  assert.equal(normalizedVolume(1, 1, levels, 'hostile'), 0);
+  assert.equal(normalizedVolume(0.5, 0.5, levels, 'master'), 0.25);
+  // getNormalizedPitch: clamp(pitch * entry pitch, 0.5, 2).
+  assert.equal(normalizedPitch(0.4, 1), 0.5);
+  assert.equal(normalizedPitch(2.6, 1), 2);
+  assert.equal(normalizedPitch(0.8, 1), Math.fround(0.8));
+  // SoundManager.playSound: attenuation distance 16, or 16 * volume above 1.
+  assert.equal(attenuationDistance(1), 16);
+  assert.equal(attenuationDistance(0.5), 16);
+  assert.equal(attenuationDistance(4), 64);
+  // GuiScreenOptionsSounds: "<label>: " + OFF at 0, else (int)(level * 100) + "%".
+  assert.equal(ref.lang['options.off'], optionLabel('volume', 0));
+  assert.equal(optionLabel('volume', 0.333), '33%');
 });

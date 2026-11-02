@@ -114,12 +114,55 @@ for(const cls of screenClasses){
 const strings=sig=>[...new Set([...body(sig).matchAll(/ldc\s+#\d+\s+\/\/ String (.+)$/gm)].map(m=>m[1]))];
 const optionDisplayStrings=strings('public java.lang.String c(bbm);'),optionCycleStrings=strings('public void a(bbm, int);');
 assert(optionDisplayStrings.includes('options.graphics.fancy')&&optionDisplayStrings.includes('options.graphics.fast'));
-const providers=['bbj','bbm','bal','w','rd','zb','bef','bcs','bdm','bew','bec','bdj','bea','bgf'];
+
+// Mouse look and sound gain constants (bytecode-read, not executed): EntityRenderer (blt) updateRenderer d()
+// and updateCameraAndRender b(float), MouseFilter (qm), Entity.setAngles (sa.c(FF)), SoundManager (btj),
+// and the smoothCamera toggle in Minecraft.runTick (bao).
+const code=(cls,ms,sig)=>{const m=ms.get(sig);assert(m,`missing ${cls} ${sig}`);return m.join('\n');};
+const numbers=text=>[...text.matchAll(/\/\/ (float|double) (-?[\d.E-]+)[fd]$/gm)].map(m=>Number(m[2]));
+const ops=text=>[...text.matchAll(/^\s+\d+: (\w+)/gm)].map(m=>m[1]);
+const blt=await methods('blt'),qm=await methods('qm'),sa=await methods('sa'),btj=await methods('btj'),bao=await methods('bao');
+const tick=code('blt',blt,'public void d();'),render=code('blt',blt,'public void b(float);');
+const smoothTick=tick.slice(tick.indexOf('bbj.aB:Z'),tick.lastIndexOf('Method qm.a:(FF)F'));
+assert.deepEqual(numbers(smoothTick),[0.6,0.2,8,0.05,0.05]);
+assert.match(render,/bbj\.b:Z\n\s+\d+: ifeq\s+\d+\n\s+\d+: iconst_m1/);
+const mouseRead=render.slice(render.indexOf('Method bbg.c:()V'),render.indexOf('Method qi.b:()V',render.indexOf('Method bbg.c:()V')));
+assert.deepEqual(numbers(mouseRead),[0.6,0.2,8]);
+assert.equal((mouseRead.match(/Method bjk\.c:\(FF\)V/g)||[]).length,2);
+const filter=code('qm',qm,'public float a(float, float);'),angles=code('sa',sa,'public void c(float, float);');
+assert.deepEqual(numbers(filter),[0.5]);
+assert.deepEqual(numbers(angles),[0.15,0.15,-90,-90,90,90]);
+assert.deepEqual(ops(angles).filter(o=>o==='dadd'||o==='dsub'),['dadd','dsub']);
+const catVolume=code('btj',btj,'private float a(w);'),normVolume=code('btj',btj,'private float a(bst, bti, w);'),normPitch=code('btj',btj,'private float a(bst, bti);'),play=code('btj',btj,'public void c(bst);');
+assert.match(catVolume,/getstatic\s+#\d+\s+\/\/ Field w\.a:Lw;\n\s+\d+: if_acmpne\s+\d+\n\s+\d+: fconst_1/);
+assert.deepEqual(ops(normVolume).filter(o=>/^d(const|mul)/.test(o)),['dmul','dmul','dconst_0','dconst_1']);
+assert.deepEqual(numbers(normPitch),[0.5,2]);
+assert.deepEqual(numbers(play),[16]);
+assert.match(play,/float 16\.0f\n\s+\d+: fstore\s+5\n\s+\d+: fload\s+4\n\s+\d+: fconst_1\n\s+\d+: fcmpl\n\s+\d+: ifle\s+\d+\n\s+\d+: fload\s+5\n\s+\d+: fload\s+4\n\s+\d+: fmul/);
+const toggles=[...bao].filter(([,lines])=>lines.some(l=>/putfield\s+#\d+\s+\/\/ Field bbj\.aB:Z/.test(l)));
+assert.equal(toggles.length,1);
+assert.match(toggles[0][1].join('\n'),/Field bbj\.al:Lbal;\n\s+\d+: invokevirtual\s+#\d+\s+\/\/ Method bal\.f:\(\)Z\n\s+\d+: ifeq[\s\S]{0,400}putfield\s+#\d+\s+\/\/ Field bbj\.aB:Z/);
+const f8Checks=[...bao.values()].flat().filter(l=>/bipush\s+66$/.test(l)).length;
+const controls={
+ mouseLook:{sensitivityCurve:{scale:0.6,offset:0.2,cubeFactor:8},smoothFilterFactor:0.05,invertMultiplier:-1,setAnglesDegreesPerUnit:0.15,pitchClamp:[-90,90],yawAdds:true,pitchSubtracts:true,
+  mouseFilterHalf:numbers(filter)[0],mouseFilterOps:ops(filter),smoothCameraToggle:{method:toggles[0][0],keyField:fd('bbj','al'),lwjglF8Checks:f8Checks}},
+ sound:{categoryVolumeMasterIsOne:true,normalizedVolumeClamp:[0,1],normalizedPitchClamp:numbers(normPitch),attenuationDistance:16,attenuationDistanceScalesAboveVolume:1},
+};
+// en_US.lang (in the client JAR) strings for options, key bindings, sound categories and value sets.
+const langText=(await exec('unzip',['-p',jar,'assets/minecraft/lang/en_US.lang'],{maxBuffer:1<<24})).stdout;
+const langAll=new Map(langText.split('\n').map(l=>l.replace(/\r$/,'')).filter(l=>l.includes('=')&&!l.startsWith('#')).map(l=>[l.slice(0,l.indexOf('=')),l.slice(l.indexOf('=')+1)]));
+const langKeys=[...new Set([...options.map(o=>o.translationKey),...keyBindings.map(k=>k.description),...keyBindings.map(k=>k.category),...soundCategories.map(c=>'soundCategory.'+c.key),...valueSets.flatMap(v=>v.values),...optionDisplayStrings,...optionCycleStrings,...screenLayouts.flatMap(s=>s.initEvents.map(e=>e.string).filter(Boolean))])].filter(k=>langAll.has(k)).sort();
+const lang=Object.fromEntries(langKeys.map(k=>[k,langAll.get(k)]));
+assert.equal(lang['options.invertMouse'],'Invert Mouse');
+assert.equal(lang['key.smoothCamera'],'Toggle Cinematic Camera');
+const providers=['bbj','bbm','bal','w','rd','zb','bef','bcs','bdm','bew','bec','bdj','bea','bgf','blt','qm','sa','btj','bao'];
 const classHashes=Object.fromEntries(await Promise.all(providers.map(async c=>[c,{mappedName:mc(c),sha256:createHash('sha256').update(await readFile(path.join(classes,c+'.class'))).digest('hex')}])));
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',mappingSha256:createHash('sha256').update(mappings).digest('hex'),classes:classHashes,
  method:'Native-executed: GameSettings.Options enum static initialization (ordinal/name/translation key/flags/min/max/step and the slider normalize/denormalize/snap methods), the unchanged GameSettings constructor headlessly with a null Minecraft instance and an absent options file (so loadOptions finds no file and every field keeps its constructor default; no log output), all constructor-created KeyBindings in the keyBindings, hotbar and static registration lists, SoundCategory constants and constructed volumes, GameSettings private string value arrays, EnumDifficulty and EnumChatVisibility constants, and the static option arrays of GuiVideoSettings, ScreenChatOptions, GuiOptions and GuiControls. Bytecode-read (javap, not executed): saveOptions/loadOptions key order and field binding, and the ordered string constants/widget classes in each option screen initGui and draw method. No GUI constructors, GL, audio, I18n/lang resources or Minecraft instance run, so localized display strings, the English controls-screen sort order (category and description are sorted by localized text), widget coordinates, and per-click cycling arithmetic are not executed. Enumeration is not whole-feature verification.',
  options,renderDistanceByJvm:byKind('renderDistanceByJvm')[0],gameSettingsFields:settingsFields,valueSets,enums,soundCategories,keyBindings,hotbarKeys:hotbar,keyFields,keyRegistrationOrder,keyCategoryHashSet:byKind('keyCategories')[0].hashSetIterationOrder,
- screenArrays,screenLayouts,optionsFile:{saveOrder,loadOrder},optionDisplayStrings,optionCycleStrings};
+ screenArrays,screenLayouts,optionsFile:{saveOrder,loadOrder},optionDisplayStrings,optionCycleStrings,
+ controlsMethod:'Bytecode-read (javap, not executed): EntityRenderer.updateRenderer smooth-camera filter constants, updateCameraAndRender sensitivity curve/invert sign/two setAngles calls, MouseFilter.smooth, Entity.setAngles constants and add/subtract, SoundManager getSoundCategoryVolume/getNormalizedVolume/getNormalizedPitch clamps and the playSound attenuation distance, and the single smoothCamera toggle in Minecraft (keyBindSmoothCamera, LWJGL F8 checks counted). The sound library attenuation curve is outside the JAR. lang holds en_US.lang values from the JAR for the keys referenced above.',
+ controls,lang};
 assert.equal(options.length,options.at(-1).ordinal+1);
 await writeFile(path.join(root,'../public/research/settings-reference.json'),JSON.stringify(reference,null,2)+'\n');
 console.log(JSON.stringify({options:options.length,float:options.filter(o=>o.isFloat).length,boolean:options.filter(o=>o.isBoolean).length,keyBindings:keyBindings.length,hotbar:hotbar.length,soundCategories:soundCategories.length,screens:screenLayouts.length,saveKeys:saveSimple.length,loadKeys:loadSimple.length}));

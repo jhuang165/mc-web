@@ -6,7 +6,8 @@ import "./style.css";
 import "./minecraft-ui.css";
 import "./container-ui.css";
 import {guiScale,stackCount,durabilityBar,tooltipLines} from "./gui.js";
-import { migrateSettings, lookScale, optionLabel, renderDistanceBlocks, GUI_SCALE_NAMES } from "./settings.js";
+import { migrateSettings, optionLabel, renderDistanceBlocks, GUI_SCALE_NAMES, SOUND_CATEGORIES, soundLevel } from "./settings.js";
+import { MouseLook, setAngles } from "./mouse-look.js";
 import * as THREE from "three";
 import {
   World,
@@ -106,11 +107,13 @@ try {
   worlds = [];
 }
 // Device preferences with the GameSettings defaults of 1.7.10 (settings.js): sensitivity 0..1,
-// FOV in degrees, render distance in chunks (12, the 64-bit JVM default), master volume 1.
+// FOV in degrees, render distance in chunks (12, the 64-bit JVM default), invertMouse off and a
+// level of 1 for every SoundCategory (soundLevel reads a missing category as 1).
 let options = {
-  settingsVersion: 2,
+  settingsVersion: 3,
   sensitivity: 0.5,
-  volume: 1,
+  invertMouse: false,
+  soundLevels: Object.fromEntries(SOUND_CATEGORIES.map(([k]) => [k, 1])),
   bobbing: true,
   fov: 70,
   distance: 12,
@@ -206,6 +209,10 @@ let stepDistance = 0,
 let scene;
 let pointerX = 0,
   pointerY = 0;
+// Mouse movement gathered between frames (MouseHelper deltas), the cinematic camera filters, and
+// GameSettings.smoothCamera: not saved to options.txt, so it starts off every session.
+const mouseLook = new MouseLook(), mouseDelta = { x: 0, y: 0 };
+let smoothCamera = false;
 let inhabited = new InhabitedTime();
 let survival = new Survival({}, "creative"),
   mining = null,
@@ -454,19 +461,19 @@ function notes() {
 function settings() {
   modal(
     "Options",
-    `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>GUI Scale<select id="gui-scale">${GUI_SCALE_NAMES.map((label,v)=>`<option value="${v}" ${Number(options.guiScale||0)===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Difficulty<select id="difficulty">${DIFFICULTY_NAMES.map((label,v)=>`<option value="${v}" ${options.difficulty===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Particles<select id="particles">${["All","Decreased","Minimal"].map((label,v)=>`<option value="${v}" ${options.particles===v?"selected":""}>${label}</option>`).join("")}</select></label><label>FOV <output id="fov-value">${optionLabel("fov",options.fov)}</output><input type="range" id="fov" min="30" max="110" step="1" value="${options.fov}"></label><label>Sensitivity <output id="sensitivity-value">${optionLabel("sensitivity",options.sensitivity)}</output><input type="range" id="sensitivity" min="0" max="1" step="0.005" value="${options.sensitivity}"></label><label>Render Distance <output id="distance-value">${optionLabel("distance",options.distance)}</output><input type="range" id="distance" min="2" max="16" step="1" value="${options.distance}"></label><label>Brightness <output id="gamma-value">${gammaLabel(options.gamma)}</output><input type="range" id="gamma" min="0" max="1" step=".01" value="${options.gamma}"></label><label>Master Volume <output id="volume-value">${optionLabel("volume",options.volume)}</output><input type="range" id="volume" min="0" max="1" step=".05" value="${options.volume}"></label><label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
+    `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>GUI Scale<select id="gui-scale">${GUI_SCALE_NAMES.map((label,v)=>`<option value="${v}" ${Number(options.guiScale||0)===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Difficulty<select id="difficulty">${DIFFICULTY_NAMES.map((label,v)=>`<option value="${v}" ${options.difficulty===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Particles<select id="particles">${["All","Decreased","Minimal"].map((label,v)=>`<option value="${v}" ${options.particles===v?"selected":""}>${label}</option>`).join("")}</select></label><label>FOV <output id="fov-value">${optionLabel("fov",options.fov)}</output><input type="range" id="fov" min="30" max="110" step="1" value="${options.fov}"></label><label>Sensitivity <output id="sensitivity-value">${optionLabel("sensitivity",options.sensitivity)}</output><input type="range" id="sensitivity" min="0" max="1" step="0.005" value="${options.sensitivity}"></label><label class="switch-label">Invert Mouse<input type="checkbox" id="invertMouse" ${options.invertMouse ? "checked" : ""}></label><label class="switch-label" title="key.smoothCamera is unbound by default in 1.7.10; this switch stands in for the key and is not saved">Toggle Cinematic Camera<input type="checkbox" id="smooth-camera" ${smoothCamera ? "checked" : ""}></label><label>Render Distance <output id="distance-value">${optionLabel("distance",options.distance)}</output><input type="range" id="distance" min="2" max="16" step="1" value="${options.distance}"></label><label>Brightness <output id="gamma-value">${gammaLabel(options.gamma)}</output><input type="range" id="gamma" min="0" max="1" step=".01" value="${options.gamma}"></label>${SOUND_CATEGORIES.map(([k,label])=>`<label>${label}: <output id="sound-${k}-value">${optionLabel("volume",soundLevel(options.soundLevels,k))}</output><input type="range" id="sound-${k}" min="0" max="1" step=".01" value="${soundLevel(options.soundLevels,k)}"></label>`).join("")}<label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
   );
   for (const key of [
     "fov",
     "sensitivity",
     "distance",
     "gamma",
-    "volume",
     "sound",
     "bobbing",
+    "invertMouse",
   ])
     $("#" + key).oninput = (e) => {
-      options[key] = ["sound", "bobbing"].includes(key)
+      options[key] = ["sound", "bobbing", "invertMouse"].includes(key)
         ? e.target.checked
         : +e.target.value;
       const out = $("#" + key + "-value");
@@ -480,6 +487,15 @@ function settings() {
         localStorage.setItem("blockworld.settings", JSON.stringify(options));
       } catch {}
     };
+  // GameSettings.setSoundLevel: store the level and regain playing sounds (SoundManager).
+  for (const [k] of SOUND_CATEGORIES)
+    $("#sound-" + k).oninput = (e) => {
+      options.soundLevels = { ...options.soundLevels, [k]: +e.target.value };
+      $("#sound-" + k + "-value").textContent = optionLabel("volume", options.soundLevels[k]);
+      sounds.updateVolumes();
+      try { localStorage.setItem("blockworld.settings", JSON.stringify(options)); } catch {}
+    };
+  $("#smooth-camera").onchange = (e) => { smoothCamera = e.target.checked; };
   $("#difficulty").onchange=e=>{options.difficulty=difficultySetting(+e.target.value);updateDifficulty();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
   $("#particles").onchange=e=>{options.particles=particleSetting(+e.target.value);updateParticleOptions();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
   $("#gui-scale").onchange=e=>{options.guiScale=+e.target.value&3;updateGuiScale();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
@@ -753,7 +769,7 @@ function launch(record) {
     yaw = valid && Number.isFinite(p.yaw) ? p.yaw : 0;
     pitch =
       valid && Number.isFinite(p.pitch)
-        ? Math.max(-1.55, Math.min(1.55, p.pitch))
+        ? Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p.pitch))
         : 0;
     playerBody.reset(position, yaw, pitch);
     // Saved item entities; piles from before 0.10 (and pre-0.7 death piles
@@ -2369,13 +2385,9 @@ function setupPointer() {
             : e.clientY - pointerY;
       pointerX = e.clientX;
       pointerY = e.clientY;
-      // EntityRenderer's sensitivity curve per pixel (settings.js); the browser reports CSS pixels.
-      const look = lookScale(options.sensitivity);
-      yaw -= dx * look;
-      pitch = Math.max(
-        -1.55,
-        Math.min(1.55, pitch - dy * look),
-      );
+      // Gathered until the frame applies it (MouseHelper.mouseXYChange); CSS pixels, y down.
+      mouseDelta.x += dx;
+      mouseDelta.y += dy;
       dragDistance += Math.abs(dx) + Math.abs(dy);
     }
   });
@@ -2424,9 +2436,18 @@ function animate(now) {
       // The model stands at posY - yOffset, and posY is lowered by ySize (the sneak drop).
       const lowered = (p, drop) => ({ x: p.x, y: p.y - drop, z: p.z });
       playerBody.tick({ position: lowered(position, motion.ySize), previous: lowered(previous, motion.prevYSize), yaw, pitch, swinging: animation.swingTime < SWING_SECONDS });
+      // EntityRenderer.updateRenderer: the cinematic camera filters advance once per tick.
+      mouseLook.tick(options.sensitivity, smoothCamera);
       accumulator -= PHYSICS.tick;
     }
     const t = accumulator / PHYSICS.tick;
+    // EntityRenderer.updateCameraAndRender: this frame's mouse movement turns the player while the
+    // game has focus (mouse-look.js: sensitivity curve, invertMouse, smoothCamera, +-90 degree pitch).
+    if (screen === "playing") {
+      const [turnYaw, turnPitch] = mouseLook.frame(mouseDelta.x, -mouseDelta.y, t, { sensitivity: options.sensitivity, invertMouse: options.invertMouse, smoothCamera });
+      ({ yaw, pitch } = setAngles({ yaw, pitch }, turnYaw, turnPitch));
+    }
+    mouseDelta.x = mouseDelta.y = 0;
     scene.camera.position.lerpVectors(previous, position, t);
     // Entity.posY = minY + yOffset - ySize: sneaking lowers the eye by 0.08 (interpolated).
     scene.camera.position.y += PHYSICS.eye - motion.drop(t);
