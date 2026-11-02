@@ -139,7 +139,7 @@ public class BlockMetadataProbe {
       System.out.println("{\"id\":" + id + ",\"class\":" + q(b.getClass().getName()) + ",\"chain\":[" + String.join(",", chain)
         + "],\"itemId\":" + (item == null ? "null" : adb.b(item)) + ",\"creativeDamages\":" + creativeDamages
         + ",\"itemMetadata\":[" + itemMeta + "],\"placedAll\":" + placedAll + ",\"placedCreative\":" + placedCreative
-        + ",\"placeErrors\":" + q(placeErr.toString().trim()) + ",\"meta\":[" + metas + "]}");
+        + ",\"placeErrors\":" + q(placeErr.toString().trim()) + ",\"meta\":[" + metas + "],\"ext\":" + BlockMetadataExtProbe.run(b, item) + "}");
     }
   }
 }
