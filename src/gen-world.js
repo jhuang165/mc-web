@@ -3,14 +3,16 @@
 // World.setBlock / setBlockMetadataWithNotify / notifyBlocksOfNeighborChange order,
 // WorldServer tick scheduling with WorldGenLiquids' immediate mode (instant falling), and the block
 // callbacks worldgen reaches (BlockDynamicLiquid, BlockStaticLiquid, BlockFalling,
-// BlockBush family, reeds, cactus, vine, cocoa, leaves/log breakBlock, pumpkin, item
+// BlockBush family, double plants, reeds, cactus, vine, cocoa, leaves/log breakBlock, pumpkin, item
 // drops). Light propagation is not modelled; a callback this does not port throws.
-// Original numeric IDs. Replayed natively in springs.test.js and biome-decorator.test.js.
+// Original numeric IDs. Replayed natively in springs.test.js, biome-decorator.test.js and
+// biome-overrides.test.js.
 import { canBlockStay } from "./decoration-features.js";
+import { doublePlantCanStay } from "./biome-features.js";
 
 export const AIR = 0, STONE = 1, COBBLESTONE = 4, FLOWING_WATER = 8, WATER = 9, FLOWING_LAVA = 10, LAVA = 11, SAND = 12, GRAVEL = 13,
   LOG = 17, LEAVES = 18, TALL_GRASS = 31, DEAD_BUSH = 32, OBSIDIAN = 49, FIRE = 51, CACTUS = 81, REEDS = 83, PUMPKIN = 86,
-  LIT_PUMPKIN = 91, VINE = 106, COCOA = 127, LEAVES2 = 161, LOG2 = 162;
+  LIT_PUMPKIN = 91, VINE = 106, COCOA = 127, LEAVES2 = 161, LOG2 = 162, DOUBLE_PLANT = 175;
 
 // Block.getMaterial letter (Material field name), material isSolid/blocksMovement/isReplaceable,
 // renderAsNormalBlock, isOpaqueCube (flags base 36), getLightOpacity (absent: 255) and
@@ -37,7 +39,7 @@ const BUSHES = new Set([6, 31, 32, 37, 38, 39, 40, 111]);
 // BlockLiquid.func_149807_p blockers: wooden door, iron door, standing sign, ladder, reeds.
 const LIQUID_BLOCKERS = new Set([64, 71, 63, 65, 83]);
 // Item drops: Item.getItemFromBlock or the override, damageDropped (meta, meta & 7, 0).
-const DROPS = new Map([[6, [6, 7]], [31, null], [32, null], [37, [37, 15]], [38, [38, 15]], [39, [39, 0]], [40, [40, 0]], [81, [81, 0]], [83, [338, 0]], [106, null], [111, [111, 0]]]);
+const DROPS = new Map([[6, [6, 7]], [31, null], [32, null], [37, [37, 15]], [38, [38, 15]], [39, [39, 0]], [40, [40, 0]], [81, [81, 0]], [83, [338, 0]], [106, null], [111, [111, 0]], [175, [175, 7]]]);
 const SEEDS = 295, REEDS_ITEM = 338, DYE = 351;
 const unported = (what, id) => { throw new Error(`gen-world: unported ${what} for block ${id}`); };
 const BOUND = 30000000;
@@ -217,6 +219,11 @@ export class GenWorld {
   // Block.dropBlockAsItem(world, x, y, z, meta, fortune) with chance 1.
   dropBlockAsItem(id, x, y, z, meta, fortune) {
     if (id === AIR) return;
+    // BlockDoublePlant.getItemDropped: nothing for the top half, double grass or large fern.
+    if (id === DOUBLE_PLANT && ((meta & 8) !== 0 || (meta & 7) === 2 || (meta & 7) === 3)) {
+      this.rand.nextFloat();
+      return;
+    }
     if (id === COCOA) {
       for (let k = ((meta & 12) >> 2) >= 2 ? 3 : 1; k > 0; k--) this.spawnItem(x, y, z, DYE, 1, 3);
       return;
@@ -255,6 +262,17 @@ export class GenWorld {
         return;
       case VINE:
         if (!this.vineCanStay(x, y, z)) { this.dropBlockAsItem(VINE, x, y, z, this.getBlockMetadata(x, y, z), 0); this.setBlockToAir(x, y, z); }
+        return;
+      case DOUBLE_PLANT:
+        // BlockDoublePlant.func_149855_e: a broken bottom half drops and clears the top first.
+        if (!doublePlantCanStay(this, x, y, z)) {
+          const meta = this.getBlockMetadata(x, y, z);
+          if ((meta & 8) === 0) {
+            this.dropBlockAsItem(DOUBLE_PLANT, x, y, z, meta, 0);
+            if (this.getBlock(x, y + 1, z) === DOUBLE_PLANT) this.setBlock(x, y + 1, z, AIR, 0, 2);
+          }
+          this.setBlock(x, y, z, AIR, 0, 2);
+        }
         return;
       case COCOA:
         if (!this.cocoaCanStay(x, y, z)) { this.dropBlockAsItem(COCOA, x, y, z, this.getBlockMetadata(x, y, z), 0); this.setBlock(x, y, z, AIR, 0, 2); }

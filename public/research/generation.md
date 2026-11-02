@@ -7,7 +7,7 @@ The live game offers finite 128 × 128 × 256 Java worlds (generation version 9,
 | GEN-01 | Biome layers (`GenLayer.initializeAllBiomeGenerators`), the `BiomeGenBase` registry, `WorldChunkManager` | Done, wired into Java worlds |
 | GEN-02 | Noise octaves and `ChunkProviderGenerate` terrain density, biome surface blocks, sea level 63 | Done, wired into Java worlds |
 | GEN-03 | `MapGenCaves`, `MapGenRavine` | Done, wired into Java worlds |
-| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes, GEN-04c dungeons, the GEN-04d pre-decoration provider stage, GEN-04e decorator counts/simple features, GEN-04f tree generators/big mushrooms/biome tree pickers and GEN-04g springs and the BiomeDecorator driver replay exactly; standalone, not wired into Java worlds |
+| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes, GEN-04c dungeons, the GEN-04d pre-decoration provider stage, GEN-04e decorator counts/simple features, GEN-04f tree generators/big mushrooms/biome tree pickers, GEN-04g springs and the BiomeDecorator driver, and GEN-04h biome decorate overrides replay exactly; standalone, not wired into Java worlds |
 | GEN-05 | Structures (villages, strongholds, mineshafts, temples) | Open |
 | GEN-06 | Integration: streamed world, new generation version, seed entry | Partial: version 9 is playable at 256 height; finite viewport, no streaming |
 
@@ -336,7 +336,7 @@ BiomeDecoratorProbe and `tools/verify-biome-decorator.mjs` call each biome's own
 
 Still open:
 
-- biome `decorate` overrides: hills emeralds and monster eggs, double plants, desert wells, the roofed-forest tree grid, ice spikes, mutated biomes delegating to the base decorator, and mesa/savanna/taiga extras;
+- biome `decorate` overrides (done in GEN-04h, below);
 - worldgen animals and snow/ice;
 - the full `ChunkProviderGenerate.populate` chain on one world, light propagation;
 - live placement in Java worlds.
@@ -344,3 +344,44 @@ Still open:
 Runtime stays 0.23.3, generation version 9.
 
 GEN-04g validation: `npm test` **730/730**, `npm run build` and **5/5** memory-bridge tests pass; regenerating both native references is byte-identical.
+
+## GEN-04h: biome decorate overrides
+
+`BiomeDecoration` in `src/biome-decorator.js` ports `BiomeGenBase.decorate` and every 1.7.10 override. It holds one world's `BiomeDecorators`, its shared `BiomeTrees`, and the class-static `WorldGenDoublePlant` (`field_150610_ae`), whose type is set before each use. `decorate(world, random, slot, blockX, blockZ)` dispatches on `BIOME_DECORATE`, the [class, parameter] table by registry slot:
+
+- plains (`aip`, slots 1 and 129):
+  - the `(x + 8) / 200` noise sets the decorator's flower/grass counts to 15/5, or to 4/10 plus 7 double grass;
+  - sunflower plains adds 10 sunflowers;
+  - the counts stay on the decorator object, as natively;
+- desert (`aic`): the base decorate, then a 1 in 1000 desert well at height + 1;
+- extreme hills (`aid`): the base decorate, then 3–8 emerald ore tries in stone at y 4–31, then 7 monster-egg `WorldGenMinable(97, 8)` veins below y 64;
+- forest (`aif`):
+  - the roofed forest (type 3) first runs the 4×4 grid: a 1 in 20 big mushroom, otherwise a picked tree;
+  - all forests then draw `nextInt(5) − 3` double plants (+2 for the flower forest), each a lilac, rose bush or peony with up to five tries;
+- taiga (`aiw`): mega taigas draw `nextInt(3)` mossy-cobblestone `WorldGenBlockBlob`s, then every taiga adds 7 large ferns;
+- ice plains (`aij`): ice plains spikes add 3 `WorldGenIceSpike` and 2 `WorldGenIcePath(4)`;
+- jungle (`aik`): the base decorate, one `WorldGenMelon` patch, and 50 `WorldGenVines` calls at y 128, which only draw positions because the loop runs below 128;
+- savanna (`ais`): 7 double grass;
+- mutated biomes (`ain`, `aig`): the base biome's decorator object with the mutated biome. The mutated roofed forest (`aih`) runs the whole base biome decorate. The mutated savannas (`ait`) use their own decorator and skip the double grass;
+- BiomeGenMesa and the classes without an override run the base decorate.
+
+`src/biome-features.js` ports the generators: `WorldGenDoublePlant`, `WorldGenDesertWells`, `WorldGenMelon`, `WorldGenVines`, `WorldGenIceSpike` (float math through `Math.fround`), `WorldGenIcePath` and `WorldGenBlockBlob`, along with the `BlockDoublePlant` placement and stay rules. `gen-world.js` gains the `BlockDoublePlant` neighbour change: a broken bottom half drops its item and clears the top with flag 2. Its drops are nothing for the top half, double grass or large fern, and otherwise the item with `meta & 7`.
+
+BiomeOverrideProbe and `tools/verify-biome-overrides.mjs` call unchanged `BiomeGenBase.decorate` (`ahu.a(World, Random, int, int)`) on the GEN-04g Chunk-backed world over native terrain, caves and ravines. There are ten 4×4-chunk regions whose inner chunks share a natural biome: ice plains spikes, desert, mega taiga, jungle, sunflower plains, flower forest, roofed forest, extreme hills, savanna and mutated roofed forest. [biome-overrides-reference.json](biome-overrides-reference.json) holds:
+
+- the class and parameter of all 59 slots;
+- 130 feature records: each generator at six chained origins (780 calls, 512 successes), plus a `dpbreak` pass where every planted bottom half in turn loses its soil, its top or itself with notification (202 drops);
+- 80 decorate records with 208 decorations, covering every slot; each decorates one to four inner chunks, as the natural biome or the next slot of a shuffled cycle. In all: 6,540,889 calls, 321,920 writes, 58,707 pending ticks and 276 sounds. Biome objects persist across records, as in one JVM.
+
+`src/biome-overrides.test.js` checks the class table, rebuilds the terrain, and replays every record with the GEN-04g hashes and streams. Mutation checks each fail the replay:
+
+- roofed grid offset, plains grass count, sunflower count;
+- emerald height, mutated delegation, vine call count;
+- ice spike edge chance, blob passes and flags;
+- the double-plant top clearing and drop rule.
+
+The 1 in 1000 well roll inside decorate is drawn but never hits in these records; the well generator itself is replayed directly.
+
+Still open: worldgen animals and snow/ice, the full `populate` chain on one world with light, and live placement in Java worlds. Runtime stays 0.23.4, generation version 9.
+
+GEN-04h validation: `npm test` **742/742**, `npm run build` and **5/5** memory-bridge tests pass; regenerating the reference is byte-identical.
