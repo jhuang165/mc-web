@@ -64,10 +64,11 @@ test('Poison bypasses armor, respects the existing hurt window and stops at one 
   player.tick();
   assert.equal(player.health, 19);
   assert.deepEqual(player.inventory.serializeArmor(), armor);
-  player.damage(4, 'a zombie', true); // poison already started the hurt window
-  assert.equal(player.health, 19);
+  player.damage(4, 'a zombie', true); // poison's 1 opened the hurt window: only the armoured difference of 3 lands
+  const topped = Math.fround(19 - 3 * (1 - 3 / 25));
+  assert.equal(player.health, topped);
   for (let i = 0; i < 99; i++) player.tick();
-  assert.equal(player.health, 16);
+  assert.equal(player.health, Math.fround(topped - 3)); // poison at remaining durations 75, 50 and 25
   assert.equal(player.effects.has(POISON), false);
   const weak = new Survival({ health: 1, food: 10, effects: [{ id: POISON, duration: 100 }] });
   for (let i = 0; i < 100; i++) weak.tick();

@@ -57,6 +57,7 @@ import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import {Farming,cropDrops} from "./farming.js";
 import { EntityWorld, ENTITY_TYPES, moveEntity, pushOutOfBlocks } from "./entities.js";
+import { insideOpaqueBlock, PLAYER_EYE } from "./suffocation.js";
 import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
@@ -729,6 +730,8 @@ function launch(record) {
     stepDistance = 0;
     wasInWater = false;
     survival = new Survival(legacyPlayer(record), record.mode || "creative");
+    // A new EntityPlayerMP is spawn-protected for 60 ticks (damage is refused, Creative or not).
+    survival.protection = 60;
     inhabited = new InhabitedTime(record.inhabited, survival.time);
     updateDifficulty();
     // Chest blocks saved without tile data get the facing onBlockAdded gives them.
@@ -1162,6 +1165,7 @@ function die() {
   $("#respawn").onclick = () => {
     const time = survival.time;
     survival = new Survival({ time, slots: [], furnaces: survival.furnaces, chests: survival.chests }, "survival");
+    survival.protection = 60;
     updateDifficulty();
     experience=new Experience();
     position.copy(new THREE.Vector3(...Object.values(world.spawn())));
@@ -1213,7 +1217,9 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   tickWeather();
   const wet = isWet(weather, world, { x: position.x, y: position.y, z: position.z, inWater }, PHYSICS.height);
   // Entity.onEntityUpdate: only water (handleWaterMovement) puts the fire out here; rain does in the tail below.
-  survival.tick({ underwater, inWater, inLava: inLavaNow });
+  // Entity.isEntityInsideOpaqueBlock on the server's EntityPlayerMP: feet posY, eye 1.62F (suffocation.js).
+  const inWall = insideOpaqueBlock(world, position.x, position.y, position.z, PHYSICS.width, PLAYER_EYE);
+  survival.tick({ underwater, inWater, inLava: inLavaNow, inWall });
   // EntityLivingBase.onEntityUpdate: drowning damage comes with 8 bubbles around posY, then
   // updatePotionEffects spawns "mobSpell" in the colour of the active effects.
   const posY = position.y + Math.fround(PHYSICS.eye);

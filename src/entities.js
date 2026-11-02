@@ -4,6 +4,7 @@ import { creeperFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from
 import { SIZE, HEIGHT, hash, slipperiness, collisionBounds, normalCube, WOOL, isLiquid, DYE } from "./world.js";
 import { isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
 import { ITEMS } from "./survival.js";
+import { insideOpaqueBlock, mobEyeHeight } from "./suffocation.js";
 import { mhSin, mhCos, JavaRandom } from "./lighting.js";
 import { enterWater, burst, drownBubbles } from "./fx.js";
 import { waterAcceleration, entityWaterBox, inLava, eyeInWater } from "./fluids.js";
@@ -879,6 +880,12 @@ export class EntityWorld {
   hazard(e, points, name = "generic") {
     return this.attackEntityFrom(e, points, { name });
   }
+  // EntityLivingBase.onEntityUpdate after the fire (Entity.onEntityUpdate) and before the air: a mob
+  // that is still alive and has a corner of its eye box (suffocation.js) inside a normal cube takes
+  // attackEntityFrom(inWall, 1): armour is bypassed, the hurt window applies, no knockback.
+  suffocate(e, t) {
+    if (e.health > 0 && insideOpaqueBlock(this.world, e.x, e.y, e.z, t.width, mobEyeHeight(t.height))) this.hazard(e, 1, "inWall");
+  }
   // EntityLivingBase.onEntityUpdate's air (see `breathe` below): drowning deals 2 with no
   // attacker, so no knockback or revenge. The air is saved with the mob.
   breathe(e, t) {
@@ -1128,6 +1135,7 @@ export class EntityWorld {
         this.events.push({ sound: HOSTILE.has(e.type) ? "game.hostile.swim.splash" : "game.neutral.swim.splash", volume: s.volume, pitch: s.pitch, position: { x: e.x, y: e.y, z: e.z } });
       }
       this.burn(e, t);
+      this.suffocate(e, t);
       this.breathe(e, t);
       // EntityLivingBase.onEntityUpdate after the fire and air: hurtTime and
       // hurtResistantTime run down, a mob at 0 health goes on to onDeathUpdate (a mob the

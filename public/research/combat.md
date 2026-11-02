@@ -36,7 +36,14 @@
 
 - Looting is not ported (there are no enchantments).
 - Creepers killed by a skeleton draw the record roll, but this build has no records.
-- Suffocation (`inWall`) damage is not ported.
 - Revenge targets come only from player hits; mobs do not retaliate against other mobs.
 - Mobs are updated in this build's entity list order, not the original's chunk order, so pushes between three or more mobs can land in a different order.
 - Every skeleton is assumed to hold a bow; spawn equipment rolls are not run.
+
+## Suffocation
+
+`suffocation-reference.json` (218 records, regenerate with `node tools/verify-suffocation.mjs`) is recorded from the unchanged client by `tools/probes/SuffocationProbe.java`: `Block.isNormalCube` for 38 ids, `Entity.isEntityInsideOpaqueBlock` over position sweeps for ten entity sizes (stone fully swept; glass, leaves, water, slabs and others for the player, zombie, pig and chicken), and 78 tick sequences through `EntityLivingBase.onEntityUpdate`.
+
+- `isEntityInsideOpaqueBlock` samples eight corners (width * 0.8, 0.1 tall) at the eye (`height * 0.85F` for mobs; the server player uses posY + 1.62F, sneaking or not) with `isNormalCube`. Leaves, glass, water, snow layers, TNT, farmland, cactus, chests, ladders and torches do not count; stone, sand, gravel, clay, bedrock, soul sand and dirt do. `world.js` `normalCube` already agreed, so no new predicate was added (`src/suffocation.js`).
+- A living, inside entity takes `DamageSource.inWall` 1.0 each update through the hurt pipeline: no armour, no Creative, no damage during 60 ticks of spawn protection, a hit every 10 ticks. A larger hit during the window deals only the difference (the player previously refused it; `Survival.damage` now tops up). Mob replays include sounds, hurt resistance and death ticks (`src/suffocation.test.js`).
+- Not ported: slabs, stairs and fences (their native values are recorded), the void exception to spawn protection, the player's "suffocated in a wall" death text (`lastDamage` is `suffocation`).
