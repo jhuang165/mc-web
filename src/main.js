@@ -37,12 +37,12 @@ import {
   CACTUS,
   REEDS,
 } from "./world.js";
-import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION, reedTarget, canPlaceReeds, cactusCanPlace } from "./plants.js";
+import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
-import { ladderBounds, canPlaceLadder, placedLadderMeta, ladderSupported, clickedSide, countsVertical } from "./ladders.js";
-import { snowCanStay, snowFalls, stackedSnowMeta } from "./snow.js";
-import { flowerCanStay, growGrass, JRandom } from "./flowers.js";
-import { Trees, saplingCanStay, placedLeavesMeta } from "./trees.js";
+import { ladderBounds, ladderSupported, countsVertical } from "./ladders.js";
+import { snowFalls } from "./snow.js";
+import { flowerCanStay, JRandom } from "./flowers.js";
+import { Trees } from "./trees.js";
 import { VoxelScene } from "./scene.js";
 import { SoundBank, blockSound, stepSound } from "./audio.js";
 import { Weather, isWet, canLightningStrikeAt } from "./weather.js";
@@ -59,13 +59,13 @@ import { deathMessage, showChatLine } from "./death-messages.js";
 import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
-import { CHEST, canPlaceChest, placeChest, settleFacing, chestPair, tickLid } from "./chest.js";
+import { CHEST, settleFacing, chestPair, tickLid } from "./chest.js";
 import { Survival, ITEMS } from "./survival.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
-import { Arrows, arrowTargets, releaseBow, canDraw, bowStage, bowFov, easeFov, BOW, ARROW } from "./bow.js";
+import { Arrows, arrowTargets, releaseBow, bowStage, bowFov, easeFov, BOW, ARROW } from "./bow.js";
 import { canSeeSky } from "./weather.js";
 import { Fluids, eyeInWater } from "./fluids.js";
 import { Fire } from "./fire.js";
@@ -73,9 +73,9 @@ import { DIFFICULTY_NAMES, difficultySetting, localDifficulty, InhabitedTime } f
 import { isInvisible } from "./mob-effects.js";
 import { primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { TntRenderer } from "./tnt-renderer.js";
-import { useBucket, milkCow, finishDrinking, isBucket, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
+import { useBucket, milkCow, finishDrinking, MILK_BUCKET, DRINK_TICKS } from "./buckets.js";
 import { HUNGER, POISON } from "./status-effects.js";
-import { PlayerMotion, isCritical, ATTACK_SLOWDOWN, fovMultiplier } from "./player-movement.js";
+import { PlayerMotion, fovMultiplier } from "./player-movement.js";
 import { spawnRunningParticles, freshRandom } from "./particles.js";
 import { enterWater, drownBubbles, burst, potionColor, potionParticles, itemCrumbs, boneMealSparkles } from "./fx.js";
 import { JavaRandom } from "./lighting.js";
@@ -91,6 +91,7 @@ import { tickLivingSimulation, drainMobEvents } from "./living-simulation.js";
 import { tickPlayerMining } from "./player-mining.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
+import { capturePlayerAction, dispatchPlayerAction } from "./player-actions.js";
 
 const cube = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="m16 1 15 8.5v17L16 35 1 26.5v-17Z" fill="currentColor"/><path d="m1 9.5 15 8.7 15-8.7M16 18v17" stroke="#192a22" stroke-width="1.5"/><path d="M8.5 5.2 23.5 14M8.5 14 23.5 5.2M8.5 14v16.7M23.5 14v16.7M1 18l15 8.5L31 18" stroke="#192a22" stroke-width="1" opacity=".4"/></svg>`;
 const arrow = '<span aria-hidden="true">↗</span>';
@@ -184,6 +185,7 @@ let screen = "home",
   dragDistance = 0,
   lockFallback = false,
   saved = true;
+const editActionLog = []; // Development-only bounded click trace; never part of a save.
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer,playerTicks=0;
 let weather = new Weather(), trees, plants, falling;
@@ -802,6 +804,7 @@ function launch(record) {
     mining = null;
     mineHeld = false;
     mineCooldown = 0;
+    if (import.meta.env.DEV) editActionLog.length = 0;
     fallDistance = 0;
     keys.clear();
     accumulator = 0;
@@ -1366,7 +1369,7 @@ function throwSnowball(id = 312) {
   }
 }
 // EntityCow.interact, ItemBucket.onItemRightClick and ItemBucketMilk.onItemRightClick.
-function useBucketItem(id) {
+function useBucketItem(id, entityTarget = aimedEntity) {
   const before = copyStack(survival.held), drop = (s) => items.dropPlayer(s, position, yaw, pitch);
   let used = false;
   if (id === MILK_BUCKET) {
@@ -1374,7 +1377,7 @@ function useBucketItem(id) {
     if (!eating) eating = { id, ticks: DRINK_TICKS, drink: true };
     return;
   }
-  if (aimedEntity?.entity.type === "cow" && aimedEntity.entity.health > 0 && milkCow(survival, { drop })) used = true;
+  if (entityTarget?.entity.type === "cow" && entityTarget.entity.health > 0 && milkCow(survival, { drop })) used = true;
   else if (eyeRay) {
     const hit = useBucket(world, survival, eyeRay.origin, eyeRay.dir, {
       drop,
@@ -1399,253 +1402,48 @@ function useBucketItem(id) {
 }
 function edit(place = false) {
   if (screen !== "playing") return;
-  sounds.unlock();
-  const id = heldId(),
-    item = ITEMS[id];
-  // PlayerControllerMP.onPlayerRightClick: onBlockActivated only runs unless the player is
-  // sneaking with an item in hand, otherwise the click places/uses the item against the block.
-  const activates = !(motion.sneaking && id);
-  // A snowball in hand is thrown unless the aimed block takes the click first.
-  const usesBlock = activates && !aimedEntity && target && [13, 14, CHEST].includes(world.get(...target.block));
-  if (place && (id === 312 || id === 316) && (survival.creative || survival.count(id)) && !usesBlock) {
-    throwSnowball(id);
-    return;
+  const state = { screen, heldTool: heldId(), world, survival, position, velocity, motion, mobs,
+    farming, trees, fire, grounded, fallDistance, wasInWater, yaw, eating, mining, mineCooldown,
+    mineHeld, flowers: FLOWERS, boneRandom, itemRand };
+  const action = capturePlayerAction({ place, target, aimedEntity, heldTool: state.heldTool });
+  if (import.meta.env.DEV) {
+    editActionLog.push({ tick: survival.time, action });
+    if (editActionLog.length > 256) editActionLog.shift();
   }
-  // ItemBucket / ItemBucketMilk: Minecraft.rightClickMouse tries the aimed entity (a cow
-  // takes an empty bucket) and block first, then onItemRightClick; neither swings.
-  // ItemBow.onItemRightClick (abm.a): with an arrow (or in Creative) the draw begins and
-  // runs while the button is held (setItemInUse); nothing else happens, and no swing.
-  if (place && id === BOW && !usesBlock) {
-    if (!eating && canDraw(survival)) eating = { id: BOW, ticks: 0, bow: true };
-    return;
-  }
-  if (place && isBucket(item) && !usesBlock) {
-    useBucketItem(id);
-    return;
-  }
-  animation.swing();
-  if (!place && aimedEntity) {
-    mining = null;
-    // attackTargetEntityWithCurrentItem: sprinting adds one knockback level, a falling
-    // player (fallDistance > 0, airborne, not in water) lands a 1.5x critical.
-    const critical = isCritical({ fallDistance, onGround: grounded, inWater: wasInWater });
-    if (mobs.attack(aimedEntity.entity, id, survival, { x: position.x, z: position.z, yaw }, motion.sprinting ? 1 : 0, critical)) {
-      // EntityPlayerSP.onCriticalHit after a successful critical: the Crit2FX emitter.
-      if (critical) {
-        const e = aimedEntity.entity;
-        scene.fx.crit2(() => mobs.fxTarget(e));
-      }
-      if (motion.sprinting) {
-        velocity.x *= ATTACK_SLOWDOWN;
-        velocity.z *= ATTACK_SLOWDOWN;
-        motion.sprinting = false;
-      }
-      handleEntityEvents();
-      renderHotbar();
-      saved = false;
-    }
-    return;
-  }
-  // EntityCreeper.interact (xz.a(yz)): flint and steel plays fire.ignite at the creeper's
-  // position + 0.5 (pitch 0.8 to 1.2), ignites it (datawatcher 18) and wears the item by 1.
-  if (place && aimedEntity && item?.kind === "flint_and_steel" && aimedEntity.entity.type === "creeper" && aimedEntity.entity.health > 0) {
-    const e = aimedEntity.entity;
-    sounds.play("fire.ignite", { volume: 1, pitch: Math.random() * 0.4 + 0.8, position: { x: e.x + 0.5, y: e.y + 0.5, z: e.z + 0.5 } });
-    e.ignited = true;
-    if (!survival.creative) survival.wear(id);
-    reportBrokenTool();
-    renderHotbar();
-    saved = false;
-    return;
-  }
-  if(place&&aimedEntity){if(mobs.shear(aimedEntity.entity,id,survival)){handleEntityEvents();renderHotbar();saved=false;return;}if(mobs.feed(aimedEntity.entity,id,survival)){handleEntityEvents();renderHotbar();saved=false;}else if(mobs.dye(aimedEntity.entity,survival.held,survival)){handleEntityEvents();renderHotbar();saved=false;}else if(!survival.creative&&item?.food)beginEating(id);return;}
-  // ItemArmor.onItemRightClick: equip into an empty armor slot.
-  if (place && item?.armor !== undefined) {
-    const inv = survival.inventory, slot = 39 - item.armor;
-    if (!inv.getStack(slot)) {
-      inv.setStack(slot, copyStack(inv.held));
-      inv.main[inv.current] = null;
-      renderHotbar();
-      renderVitals();
-      saved = false;
-    }
-    return;
-  }
-  if (!target) {
-    if (place && !survival.creative && item?.food) beginEating(id);
-    return;
-  }
-  const block = world.get(...target.block);
-  if (place) {
-    const [x,y,z]=target.block;
-    if(item?.kind==='hoe'){
-      if(!survival.creative&&!survival.count(id)){toast('Craft a hoe first.');return;}
-      if(target.adjacent?.[1]!==y-1&&farming.till(x,y,z)){survival.wear(id);applyFarmUpdates(farming.drain());renderHotbar();sounds.play('step.gravel',{volume:.7});saved=false;}return;
-    }
-    if(plantedBlock(id)){if((survival.creative||survival.count(id))&&target.adjacent?.[1]===y+1&&farming.plant(x,y,z,id)){if(!survival.creative)survival.take(id);applyFarmUpdates(farming.drain());renderHotbar();saved=false;return;}if(id===309)return;}
-    // ItemDye.onItemUse: damage 15 (bone meal) fertilizes crops (Farming) and grass (BlockGrass.func_149853_b).
-    if(id===DYE&&survival.held?.damage===15){
-      if(!survival.creative&&!survival.count(id))return;
-      let used=false;
-      if(block===SAPLING){trees.boneMeal(x,y,z);used=true;}
-      else if(block===1){for(const q of growGrass(world,FLOWERS,boneRandom,world.biome,x,y,z))scene.updateBlock(q[0],q[2],q[1]);used=true;}
-      else if(farming.fertilize(x,y,z)){applyFarmUpdates(farming.drain());used=true;}
-      if(used){if(!survival.creative)survival.inventory.decr(survival.inventory.current,1);renderHotbar();sounds.play('dig.grass',{volume:.4});saved=false;
-        // Level event 2005 on the cell as it is now (BlockSapling 0.8 high, BlockCrops 0.25).
-        const now=world.get(x,y,z);boneMealSparkles(scene.fx,now,x,y,z,now===SAPLING?Math.fround(0.8):isCrop(now)?Math.fround(0.25):1,itemRand);}
-      return;
-    }
-
-    // BlockTNT.onBlockActivated (aob): flint and steel primes the block (func_150114_a with
-    // metadata 1 and the player as placer), sets it to air and damages the item by 1.
-    if (activates && block === TNT && item?.kind === "flint_and_steel") {
-      lightTnt(x, y, z, "player");
-      world.set(x, y, z, 0);
-      farming.observe(x, y, z);
-      scene.updateBlock(x, z, y);
-      if (!survival.creative) survival.wear(id);
-      reportBrokenTool();
-      renderHotbar();
-      saved = false;
-      return;
-    }
-    if (activates && block === 13) {
-      inventory(true);
-      return;
-    }
-    if (activates && block === 14) {
-      useFurnace(target.block.join(","));
-      return;
-    }
-    if (activates && block === CHEST) {
-      const chest = survival.openChest(world, ...target.block);
-      if (chest) openContainer(chest, "chest", target.block.join(","));
-      return;
-    }
-    // ItemFlintAndSteel.onItemUse (acw.a): the cell on the clicked face, if it is air, gets fire with
-    // fire.ignite (volume 1, pitch 0.8 to 1.2); the item always loses 1 durability (not in Creative).
-    if (item?.kind === "flint_and_steel") {
-      const q = target.adjacent;
-      if (!q || q[1] === 0 || q[1] >= (world.height === 256 ? 256 : world.height - 1) || !world.inside(...q)) return;
-      if (world.get(...q) === 0) {
-        sounds.play("fire.ignite", { volume: 1, pitch: Math.random() * 0.4 + 0.8, position: { x: q[0] + 0.5, y: q[1] + 0.5, z: q[2] + 0.5 } });
-        fire.ignite(...q);
-        scene.updateBlocks(fire.drain());
-      }
-      if (!survival.creative) survival.wear(id);
-      reportBrokenTool();
-      renderHotbar();
-      saved = false;
-      return;
-    }
-    if (!survival.creative && item?.food) {
-      beginEating(id);
-      return;
-    }
-    // ItemSnow.onItemUse: the snow item clicked on a layer below full height adds a layer there.
-    const here = target.block, hereMeta = block === SNOW_LAYER ? world.getMeta(...here) : 0, stacked = stackedSnowMeta(hereMeta);
-    if (id === SNOW_LAYER && block === SNOW_LAYER && stacked !== null && (survival.creative || survival.count(id))) {
-      world.set(...here, SNOW_LAYER, false, stacked);
-      if (collides(world, ...position.toArray())) {
-        world.set(...here, SNOW_LAYER, false, hereMeta);
-        toast("Give yourself a little room to build.");
-        return;
-      }
-      world.set(...here, SNOW_LAYER, true, stacked);
-      if (!survival.creative) survival.take(id);
-      scene.updateBlock(here[0], here[2], here[1]);
-      renderHotbar();
-      sounds.play("dig.snow", { position: { x: here[0] + 0.5, y: here[1] + 0.5, z: here[2] + 0.5 }, volume: 1, pitch: 0.8 });
-      saved = false;
-      return;
-    }
-    // ItemReed.onItemUse (abi.a): sugar cane goes in a one-layer snow or tall-grass cell, otherwise
-    // on the clicked face, where the cell is replaceable and BlockReed.canPlaceBlockAt holds.
-    if (id === REEDS_ITEM) {
-      const q = reedTarget(world, here, target.adjacent);
-      if (!q || q[1] === 0 || q[1] >= (world.height === 256 ? 256 : world.height - 1) || !world.inside(...q)) return;
-      if (!survival.creative && !survival.count(id)) return;
-      if (!canPlaceReeds(world, ...q)) return;
-      world.set(...q, REEDS, true, 0);
-      if (!survival.creative) survival.take(id);
-      scene.updateBlock(q[0], q[2], q[1]);
-      renderHotbar();
-      sound(true, REEDS);
-      saved = false;
-      return;
-    }
-    // ItemBlock.onItemUse: a one-layer snow cell is replaced in place (the side becomes "top").
-    const p = block === SNOW_LAYER && !hereMeta ? [...here] : target.adjacent;
-    if (!p || p[1] === 0 || p[1] >= (world.height === 256 ? 256 : world.height - 1) || !world.inside(...p)) return;
-    if (!item?.block || isLiquid(id)) {
-      toast("Select a building block, food, or workstation.");
-      return;
-    }
-    if (!survival.creative && !survival.count(id)) {
-      toast("Gather this material first.");
-      return;
-    }
-    if (id === CHEST && !canPlaceChest(world, ...p)) return;
-    // BlockBush.canPlaceBlockAt: grass, dirt or farmland below, and enough light.
-    if (isFlower(id) && !flowerCanStay(world, FLOWERS, ...p)) return;
-    // BlockSapling.canPlaceBlockAt (BlockBush): grass, dirt or farmland below; BlockBush.canBlockStay has no light test in 1.7.10.
-    if (id === SAPLING && !saplingCanStay(world, ...p)) return;
-    // BlockSnow.canPlaceBlockAt: never on ice, otherwise leaves, a full layer or an opaque cube.
-    if (id === SNOW_LAYER && !snowCanStay(world, ...p)) return;
-    // BlockLadder.canPlaceBlockAt: a normal cube beside the cell; onBlockPlaced picks the wall from the clicked face.
-    if (id === LADDER && !canPlaceLadder(world, ...p)) return;
-    // BlockCactus.canPlaceBlockAt: nothing solid beside it, cactus or sand below.
-    if (id === CACTUS && !cactusCanPlace(world, ...p)) return;
-    const old = world.get(...p), oldMeta = world.getMeta(...p),
-      meta = id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? survival.held?.damage || 0 : id === 5 ? placedLeavesMeta() : id === LADDER ? placedLadderMeta(world, ...p, clickedSide(target.block, p)) : 0;
-    world.set(...p, id, false, meta);
-    if (collides(world, ...position.toArray())) {
-      world.set(...p, old, false, oldMeta);
-      toast("Give yourself a little room to build.");
-      return;
-    }
-    world.set(...p, id, true, meta);
-    if (id === CHEST) placeChest(world, survival.chests, ...p, yaw);
-    farming.observe(...p);
-    if (!survival.creative) survival.take(id);
-    scene.updateBlock(p[0], p[2], p[1]);
-    renderHotbar();
-    sound(true, id);
-    saved = false;
-  } else {
-    // World.extinguishFire (ahb.a(yz, x, y, z, side)), called when the hit starts: fire on the clicked
-    // face is put out with a hiss (aux 1004: random.fizz, volume 0.5, pitch 2.6 +- 0.8). Creative stops
-    // there (ItemInWorldManager.onBlockClicked); Survival goes on to dig the block.
-    const burning = target.adjacent;
-    if (burning && world.get(...burning) === FIRE && (survival.creative || !(mining && mining.block.every((v, i) => v === target.block[i])))) {
-      fire.extinguish(...burning);
-      sounds.play("random.fizz", { volume: 0.5, pitch: 2.6 + (Math.random() - Math.random()) * 0.8, position: { x: burning[0] + 0.5, y: burning[1] + 0.5, z: burning[2] + 0.5 } });
-      scene.updateBlocks(fire.drain());
-      saved = false;
-      if (survival.creative) {
-        mineCooldown = 5;
-        return;
-      }
-    }
-    // Creative breaks bedrock (Building Blocks lists it), the floor at y 0 included.
-    if (block === 11 && !survival.creative) return;
-    if (survival.creative) {
-      if(item?.kind==='sword')return;
-      breakBlock(target.block, true);
-      mineCooldown = 5;
-      return;
-    }
-    if(mining&&mining.tool===id&&mining.block.every((v,i)=>v===target.block[i]))return;
-    const under=clientEyeInWater();
-    if(survival.mining(block,id,under,grounded).progress>=1){breakBlock(target.block);return;}
-    mining = {
-      block: [...target.block],
-      type: block,
-      progress: 0,
-      tool: id,
-      auto: !mineHeld,
-    };
-  }
+  const syncContainerState = () => {
+    state.screen = screen;
+    state.mining = mining;
+    state.mineHeld = mineHeld;
+  };
+  dispatchPlayerAction(state, action, {
+    unlock: () => sounds.unlock(),
+    throwSnowball,
+    useBucketItem: (id, selectedEntity) => {
+      useBucketItem(id, selectedEntity);
+      return { eating };
+    },
+    swing: () => animation.swing(),
+    criticalHit: entity => { scene.fx.crit2(() => mobs.fxTarget(entity)); },
+    handleEntityEvents,
+    renderHotbar,
+    renderVitals,
+    markUnsaved: () => { saved = false; },
+    playSound: (name, options) => sounds.play(name, options),
+    sound,
+    reportBrokenTool,
+    toast,
+    applyFarmUpdates,
+    updateBlock: (x, z, y) => scene.updateBlock(x, z, y),
+    updateBlocks: changes => scene.updateBlocks(changes),
+    boneMealSparkles: (block, x, y, z, height, random) => { boneMealSparkles(scene.fx, block, x, y, z, height, random); },
+    lightTnt,
+    openInventory: station => { inventory(station); syncContainerState(); },
+    useFurnace: key => { useFurnace(key); syncContainerState(); },
+    openChest: (chest, key) => { openContainer(chest, "chest", key); syncContainerState(); },
+    breakBlock,
+    clientEyeInWater,
+  });
+  ({ eating, mining, mineCooldown } = state);
 }
 // BlockTNT.func_150114_a: an EntityTNTPrimed at the block centre (fuse 80) and
 // game.tnt.primed (volume 1, pitch 1). `placer` is "player" or null.
@@ -2269,7 +2067,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get survival() { return survival; }, get world() { return world; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
+    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
   scene.preview(0);
   scene.render(0);
   renderWorlds();
