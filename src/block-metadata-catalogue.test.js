@@ -28,14 +28,20 @@ test("reference covers every registered block with 16 classified values", () => 
 
 test("categories follow their definitions", () => {
   for (const b of reference.blocks) {
-    const readers = b.bytecode.unprobedMetadataReaders.length;
+    // Unprobed metadata readers must have been executed conclusively (or be absent) before any alias is claimed.
+    const readers = b.bytecode.unexecutedMetadataReaders.length;
+    for (const k of b.bytecode.unprobedMetadataReaders) assert.ok(b.bytecode.readerCoverage[k], `${b.name} ${k} has no coverage record`);
+    const tileEntity = b.bytecode.overrides.some((o) => /^(?!aji\.)\w+\.a:\(Lahb;I\)Laor;/.test(o));
     const grouped = b.groups.flatMap((g) => g.values);
     assert.equal(new Set(grouped).size, grouped.length, `${b.name} groups overlap`);
     for (const g of b.groups) assert.deepEqual(g.values, [...g.values].sort((x, y) => x - y));
     for (const v of b.values) {
       const where = `${b.name}:${v.meta}`;
       if (v.category === "alias") {
-        assert.equal(readers, 0, `${where} alias with unprobed metadata readers`);
+        assert.equal(readers, 0, `${where} alias with unexecuted metadata readers`);
+        assert.ok(!tileEntity, `${where} alias of a tile-entity block`);
+        const render = reference.renderTypeReaders[b.baseSurface.renderType];
+        assert.ok(!render || !render.endsWith("reads-metadata"), `${where} alias with a metadata-reading render method`);
         assert.ok(v.aliasOf < v.meta, where);
         assert.equal(b.groups.find((x) => x.values.includes(v.meta)).values[0], v.aliasOf, where);
         assert.equal(b.values[v.aliasOf].category, "semantic", `${where} must alias a semantic value`);
@@ -50,8 +56,10 @@ test("categories follow their definitions", () => {
       if (v.category === "unclassified") assert.ok(v.reason, `${where} needs a reason`);
       if (v.aliasCandidateOf !== undefined) assert.equal(v.category, "unclassified", where);
     }
-    const surfaces = new Set(b.groups.map((g) => JSON.stringify(g.differsFromFirstGroup)));
-    assert.equal(surfaces.size, b.groups.length, `${b.name} duplicate group surface`);
+    // A later group with the first group's probed surface must differ in executed outcomes.
+    b.groups.forEach((g, i) => {
+      if (i && !Object.keys(g.differsFromFirstGroup).length) assert.ok(g.executedDiffers > 0, `${b.name} group ${g.values[0]} differs in nothing`);
+    });
   }
 });
 
@@ -62,7 +70,29 @@ test("known native facts", () => {
   for (let m = 0; m < 16; m++) assert.equal(cat(35, m).category, "semantic"); // wool colour
   for (let m = 0; m < 4; m++) assert.equal(cat(17, m).category, "semantic"); // log type
   assert.equal(cat(59, 7).category, "semantic"); // crop age 7
-  assert.equal(cat(59, 9).category, "unclassified"); // crop value above age 7: tick behavior not executed
+  // Crop values above age 7: the executed tick/bone-meal behaviour separates 8 and 9 from lower ages; 10-13 match 9.
+  assert.equal(cat(59, 9).category, "semantic");
+  for (let m = 10; m < 14; m++) assert.deepEqual([cat(59, m).category, cat(59, m).aliasOf], ["alias", 9]);
+  for (let m = 0; m < 16; m++) assert.equal(cat(8, m).category, "semantic"); // flowing water level/falling bit
+  for (let m = 0; m < 16; m++) assert.equal(cat(20, m).category, "semantic"); // glass compares neighbour metadata
+  assert.deepEqual([cat(53, 14).aliasOf, cat(53, 15).aliasOf], [6, 7]); // stairs: bit 8 unused
+  // Tile-entity metadata (chest/sign facing) and metadata-reading render methods are not executed: no aliases.
+  for (const id of [54, 63, 120, 154]) for (let m = 1; m < 16; m++) assert.notEqual(cat(id, m).category, "alias", `${id}:${m}`);
+});
+
+test("render dispatch and outcome normalisation helpers", async () => {
+  const { normalise, refineAll } = await import("../tools/block-metadata-classify.mjs");
+  assert.equal(reference.renderTypeReaders[0], "blm.q:(Laji;III)Z"); // standard block: no metadata read
+  assert.match(reference.renderTypeReaders[26], /reads-metadata$/); // end portal frame
+  // Own-item stack damage is ignored symmetrically when stackEcho is set and kept raw otherwise.
+  assert.equal(normalise("x |held stack:102:1:0", 102, 0, new Map(), true), normalise("x |held stack:102:1:1", 102, 1, new Map(), true));
+  assert.notEqual(normalise("x |held stack:102:1:0", 102, 0, new Map(), false), normalise("x |held stack:102:1:1", 102, 1, new Map(), false));
+  // A value that only carries itself into a written cell is not distinct by its number.
+  const mk = (outs) => ({ id: 5, itemId: null, nonExcluded: [0, 1, 2], baseKey: () => "b", fields: [{ codes: outs.map((o) => outs.indexOf(o)), outs }] });
+  const echo = refineAll([mk(["r |cells 8,64,8=5:0", "r |cells 8,64,8=5:1", "r |cells 8,64,8=5:2"])], true, (b) => b.fields).get(5);
+  assert.equal(new Set([0, 1, 2].map((v) => echo.get(v))).size, 1);
+  const real = refineAll([mk(["r |cells 8,64,8=5:0", "s |cells 8,64,8=5:1", "r |cells 8,64,8=5:2"])], true, (b) => b.fields).get(5);
+  assert.equal(new Set([0, 1, 2].map((v) => real.get(v))).size, 2);
 });
 
 test("catalogue markdown is the deterministic render of the reference", () => {
