@@ -528,6 +528,11 @@ export class Survival {
       this.chests[key] = chest;
     }
     this.hurtTicks = 0;
+    // EntityLivingBase.lastDamage (the amount of the hit that opened the window) and the number of
+    // fresh hits; EntityPlayerMP.field_147101_bU, the spawn protection main.js sets to 60 on a join.
+    this.hurtAmount = 0;
+    this.hurtCount = 0;
+    this.protection = 0;
     // World.difficultySetting (difficulty.js); main.js sets it from the Difficulty option.
     this.difficulty = NORMAL;
     // Entity.ticksExisted, which is not saved.
@@ -572,14 +577,31 @@ export class Survival {
     const amount = scaleDamage(this.difficulty, n);
     return amount > 0 && this.damage(amount, reason, true);
   }
-  // Mob attacks are blockable; falls, drowning and starvation bypass armor.
+  // EntityPlayerMP.attackEntityFrom and EntityLivingBase.attackEntityFrom. Spawn protection
+  // (60 ticks after joining or respawning, `protection`) refuses everything; Creative and a
+  // dead player refuse too. While hurtResistantTime is above 10 (`hurtTicks` > 0) a hit no
+  // larger than the last one is refused and a larger one deals only the difference, with no
+  // new window and no hurt flash or sound; otherwise it starts the window (`hurtCount` counts
+  // those fresh hits). Mob attacks are blockable; falls, drowning, starvation and suffocation
+  // bypass armor.
   damage(n, reason = "an accident", blockable = false) {
-    if (this.creative || this.health <= 0 || n <= 0 || this.hurtTicks > 0)
+    if (this.creative || this.health <= 0 || n <= 0 || this.protection > 0)
       return false;
-    if (blockable) n = this.applyArmor(n);
-    this.health = Math.max(0, Math.fround(this.health - n));
+    n = Math.fround(n);
+    let fresh = true;
+    if (this.hurtTicks > 0) {
+      if (n <= this.hurtAmount) return false;
+      fresh = false;
+    }
+    let dealt = fresh ? n : Math.fround(n - this.hurtAmount);
+    if (blockable) dealt = this.applyArmor(dealt);
+    this.health = Math.max(0, Math.fround(this.health - dealt));
+    this.hurtAmount = n;
     this.lastDamage = reason;
-    this.hurtTicks = 10;
+    if (fresh) {
+      this.hurtTicks = 10;
+      this.hurtCount++;
+    }
     return true;
   }
   get armorValue() {
@@ -633,9 +655,12 @@ export class Survival {
   }
   wearBlock(block,toolId){return this.wear(toolId,blockWear(block,MATERIALS[block]||{},ITEMS[toolId]));}
 
-  tick({ underwater = false, inWater = false, inLava = false } = {}) {
+  tick({ underwater = false, inWater = false, inLava = false, inWall = false } = {}) {
     this.time++;
     this.ticks++;
+    // EntityPlayerMP.onUpdateEntity: --field_147101_bU and --hurtResistantTime (the latter is
+    // skipped for the player in onEntityUpdate), before the update.
+    this.protection = Math.max(0, this.protection - 1);
     this.hurtTicks = Math.max(0, this.hurtTicks - 1);
     this.tickFurnaces();
     // Entity.onEntityUpdate (sa.C): water puts the fire out; a burning entity takes
@@ -651,6 +676,9 @@ export class Survival {
       this.damage(4, "lava", true);
       this.fire = Math.max(this.fire, 300);
     }
+    // EntityLivingBase.onEntityUpdate: alive and inside an opaque block (suffocation.js, computed
+    // by the caller), attackEntityFrom(inWall, 1), which bypasses armor; Creative refuses it.
+    if (inWall && this.health > 0) this.damage(1, "suffocation");
     this.effects.tick(this);
     if (this.creative) return;
     if (underwater) {
