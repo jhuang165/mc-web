@@ -7,7 +7,7 @@ The live game offers finite 128 × 128 × 256 Java worlds (generation version 9,
 | GEN-01 | Biome layers (`GenLayer.initializeAllBiomeGenerators`), the `BiomeGenBase` registry, `WorldChunkManager` | Done, wired into Java worlds |
 | GEN-02 | Noise octaves and `ChunkProviderGenerate` terrain density, biome surface blocks, sea level 63 | Done, wired into Java worlds |
 | GEN-03 | `MapGenCaves`, `MapGenRavine` | Done, wired into Java worlds |
-| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes, GEN-04c dungeons and the GEN-04d pre-decoration provider stage replay exactly; standalone, not wired into Java worlds |
+| GEN-04 | `populate`: lakes, dungeons, `BiomeDecorator` ores/plants/trees, snow and ice | Partial: GEN-04a population seeding/base ores, GEN-04b lakes, GEN-04c dungeons, the GEN-04d pre-decoration provider stage and GEN-04e decorator counts/simple features replay exactly; standalone, not wired into Java worlds |
 | GEN-05 | Structures (villages, strongholds, mineshafts, temples) | Open |
 | GEN-06 | Integration: streamed world, new generation version, seed entry | Partial: version 9 is playable at 256 height; finite viewport, no streaming |
 
@@ -197,3 +197,64 @@ Six records place water lakes and two place lava lakes; others draw and reject t
 Sky light and freeze results are explicit fixtures (`floorMod(31x + 7y + 17z, 5) == 0 ? 0 : 15`, `floorMod(7x + 13z, 11) == 0`), not native lighting or climate. Real structure generation and its Random consumption are GEN-05; the hook only fixes where it runs. Decoration (biome overrides, base decorator, trees, plants, springs), worldgen animals, snow/ice, native Chunk storage/lighting/notifications and live placement in Java worlds remain open. Runtime stays 0.23.0, generation version 9.
 
 GEN-04d validation: `npm test` **684/684**, `npm run build` and **5/5** memory-bridge tests pass; native reference regeneration is byte-identical.
+
+## GEN-04e: decorator counts and simple decoration features
+
+`src/decoration-features.js` ports the base decorator's simple features over an original-ID adapter (`getBlock`, `getBlockMetadata`, `getLight` for full-block light, `setBlock`, `hasNoSky`, plus `isSolid`/`isReplaceable`/`isOpaqueCube`/`solidTop` block properties):
+
+- `WorldGenClay(4)` and `WorldGenSand(sand, 7)` / `(gravel, 6)` discs. Each needs water material at the origin and uses radius `nextInt(r − 2) + 2`. Clay replaces dirt or clay one block up and down; sand and gravel replace dirt or grass two up and down.
+- `WorldGenFlowers`: 64 tries with an 8/4/8 spread and the `!hasNoSky || y < 255` gate. It covers yellow and red flower variants and brown and red mushrooms.
+- `WorldGenTallGrass` (128 tries) and `WorldGenDeadBush` (4 tries). Both first descend through air and leaves while y > 0.
+- `WorldGenWaterlily` (10 tries) and `WorldGenReed` (20 tries in a 4/0/4 spread). Reeds need water at y − 1 beside the column and grow 2 + `nextInt(nextInt(3) + 1)` tall, with no break on failure.
+- `WorldGenPumpkin` (64 tries; needs grass below; facing `nextInt(4)` is drawn only on placement) and `WorldGenCactus` (10 tries; 1 + `nextInt(nextInt(3) + 1)` tall).
+
+These generators call the real block rules, ported in `canBlockStay` and `canPlaceBlockAt`:
+
+- BlockBush soil checks: grass, dirt or farmland.
+- Dead bush soil: sand, hardened clay, stained clay or dirt.
+- Mushroom: mycelium, podzol (dirt with metadata 2), or light below 13 over an opaque cube.
+- Lily pad: still water (ID 9) below.
+- Reed and cactus neighbour rules.
+- Pumpkin: a replaceable block over a `doesBlockHaveSolidTopSurface` block.
+
+`DECORATOR_COUNTS` holds every registered biome's BiomeDecorator fields after construction, for all 61 occupied slots, in genDecorations order. Slots 130–167 are BiomeGenMutated objects whose own counts are defaults, because their decorate delegates to the base biome's decorator.
+
+`tools/probes/DecorationFeatureProbe.java` and `node tools/verify-decoration-features.mjs` run the unchanged classes on a synthetic World double. The test mirrors the fixture, which contains:
+
+- 3×3 plateaus at y 62–64 with per-column surfaces, ponds, plants and leaves;
+- an all-air void;
+- a desert region;
+- a y = 254 plateau.
+
+Full-block light is `floorMod(5x + 11y + 3z, 16)`, and the surface WorldProvider has `hasNoSky` set per record. [decoration-features-reference.json](decoration-features-reference.json) holds 624 records, 48 for each of 13 generator variants, covering placements and non-placements for each and rejected discs. A y = 255 flower is placed only with sky. It also records native block properties (air, water and leaves material identity; solidity, replaceability, opaque cube; and the solid-top metadata mask). `src/decoration-features.test.js` replays every write, result, ordered block/metadata/light/setter call hash and the next Random long exactly. Origins come from a fixture-selection procedure, so the feature RNG inputs are not post-provider streams.
+
+The driver order, read from `aia.a(ahu)` bytecode and not yet executed, is:
+
+1. Ores.
+2. F sand discs, G clay discs and E gravel discs at x0 + nextInt(16) + 8, then z0 + nextInt(16) + 8 and `getTopSolidOrLiquidBlock`.
+3. Trees: count + (nextInt(10) == 0), at `getHeightValue`, using `biome.func_150567_a`, `setScale(1, 1, 1)` and `func_150524_b` on success.
+4. H big mushrooms at the height value.
+5. Flowers at nextInt(height + 32), using the biome flower pick and skipping air.
+6. Grass via the biome grass generator at nextInt(2 · height).
+7. Dead bushes.
+8. Lily pads, descending through air.
+9. Mushrooms: per count, brown at the height value on nextInt(4) == 0 and red on nextInt(8) == 0; then one extra brown and one extra red roll, both at nextInt(2 · height).
+10. Reeds: the count plus 10 more.
+11. Pumpkin on nextInt(32) == 0.
+12. Cacti.
+13. If `generateLakes`: 50 flowing-water springs at Y = nextInt(nextInt(248) + 8) and 20 flowing-lava springs at Y = nextInt(nextInt(nextInt(240) + 8) + 8). Springs evaluate x, then y, then z.
+
+Still open:
+
+- trees and big mushrooms;
+- springs (`WorldGenLiquids` ticks the fluid immediately);
+- the driver with native heightmap and top-solid services;
+- biome decorate overrides (they draw before the base decorator) and biome flower and grass picks;
+- emeralds and monster eggs;
+- worldgen animals and snow/ice;
+- native Chunk storage, lighting and notifications (including pumpkin `onBlockAdded`);
+- live placement in Java worlds.
+
+Runtime stays 0.23.0, generation version 9.
+
+GEN-04e validation: `npm test` **687/687**, `npm run build` and **5/5** memory-bridge tests pass; native reference regeneration is byte-identical. A mutation check (mushroom light threshold, cactus soil, disc height) fails the replay.
