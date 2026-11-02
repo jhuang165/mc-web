@@ -59,6 +59,7 @@ import {plantedBlock,cropItem} from './crops.js';
 import {Farming,cropDrops} from "./farming.js";
 import { EntityWorld, ENTITY_TYPES, moveEntity, pushOutOfBlocks } from "./entities.js";
 import { insideOpaqueBlock, PLAYER_EYE } from "./suffocation.js";
+import { deathMessage, showChatLine } from "./death-messages.js";
 import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
@@ -1089,7 +1090,7 @@ function renderVitals() {
     air = survival.air < 300 ? `<div class="air" aria-label="Air ${Math.max(0, survival.air)} of 300">${"<span></span>".repeat(bubbles)}${'<span class="pop"></span>'.repeat(popping)}</div>` : "";
   $("#survival-hud").innerHTML =
     `<div class="vital-row"><div class="hearts${survival.effects.has(POISON) ? ' poisoned' : ''}" aria-label="Health ${Math.ceil(survival.health)} of 20${survival.effects.has(POISON) ? ', Poison' : ''}">${hearts}</div><div class="hunger${survival.effects.has(HUNGER) ? ' afflicted' : ''}" aria-label="Hunger ${survival.food} of 20${survival.effects.has(HUNGER) ? ', Hunger effect' : ''}">${food}</div></div>${armorRow}${air}`;
-  $("#damage-flash").classList.toggle("hurt", survival.hurtTicks > 4);
+  $("#damage-flash").classList.toggle("hurt", survival.hurtTime > 4);
 }
 // EntityPlayer.dropOneItem / closing a screen with held items: thrown along
 // the view with a 40-tick pickup delay.
@@ -1135,8 +1136,19 @@ function tickChests() {
 function updateFurnace() {
   if (containerView) refreshContainer();
 }
+// The client's hurt (status 2, fresh hits only) and death (status 3) sounds:
+// EntityLivingBase.handleHealthUpdate, volume getSoundVolume() 1, pitch (r - r) * 0.2 + 1.
+function playHurtSounds() {
+  for (const name of survival.hurtSounds.splice(0))
+    sounds.play(name, { volume: 1, pitch: (Math.random() - Math.random()) * 0.2 + 1 });
+}
 function die() {
   if (screen === "dead") return;
+  playHurtSounds();
+  // EntityPlayerMP.onDeath broadcasts the death message to chat at the moment of death.
+  const message = survival.died && deathMessage(survival.lastDamage);
+  survival.died = false;
+  if (message) showChatLine(document, message);
   closeContainer();
   const reason = survival.lastDamage || "an accident";
   screen = "dead";
@@ -1214,7 +1226,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // Entity.onEntityUpdate: only water (handleWaterMovement) puts the fire out here; rain does in the tail below.
   // Entity.isEntityInsideOpaqueBlock on the server's EntityPlayerMP: feet posY, eye 1.62F (suffocation.js).
   const inWall = insideOpaqueBlock(world, position.x, position.y, position.z, PHYSICS.width, PLAYER_EYE);
-  survival.tick({ underwater, inWater, inLava: inLavaNow, inWall });
+  survival.tick({ underwater, inWater, inLava: inLavaNow, inWall, outOfWorld: position.y < -64 });
   // EntityLivingBase.onEntityUpdate: drowning damage comes with 8 bubbles around posY, then
   // updatePotionEffects spawns "mobSpell" in the colour of the active effects.
   const posY = position.y + Math.fround(PHYSICS.eye);
@@ -2035,7 +2047,6 @@ function movementTick() {
     : inWater
       ? "SWIMMING"
       : "WALKING";
-  const beforeHealth = survival.health;
   tickSurvival(inWater, oldPosition, inLavaNow);
   applyFarmUpdates(farming.tick(survival.time,scene.daylight));
   if(fluids)scene.updateBlocks(fluids.tick());
@@ -2085,8 +2096,7 @@ function movementTick() {
       volume: inWater ? 0.3 : 0.22,
     });
   }
-  if (survival.health < beforeHealth)
-    sounds.play("game.player.hurt", { volume: 0.8 });
+  playHurtSounds();
   if (eating) {
     if (heldId() !== eating.id)
       eating = null;
@@ -2447,7 +2457,7 @@ function animate(now) {
     scene.camera.position.z -= b.x * Math.sin(yaw);
     scene.camera.position.y += b.y;
     const hurt =
-      (Math.sin(Math.pow(survival.hurtTicks / 10, 4) * Math.PI) *
+      (Math.sin(Math.pow(survival.hurtTime / 10, 4) * Math.PI) *
         14 *
         Math.PI) /
       180;
@@ -2524,7 +2534,7 @@ function animate(now) {
     armor: survival?.inventory?.armor ?? [],
     held: heldId(),
     heldDamage: survival.held?.damage || 0,
-    hurt: survival.hurtTicks > 0,
+    hurt: survival.hurtTime > 0,
     sneak: motion.sneaking,
   });
   chestRenderer?.update(screen === "playing" || screen === "inventory" ? accumulator / PHYSICS.tick : 1);

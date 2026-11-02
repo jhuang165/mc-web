@@ -1,0 +1,17 @@
+# PLAYER-01 follow-ups: top-up sounds, void protection exception, suffocation death message (2026-11-01)
+
+Branch `worktree-agent-af2df24cf0b234f2f`, commit 073b011 (not pushed, no version bump). The integrator updates parity.md, parity-roadmap.md and PROJECT.md.
+
+Evidence: new `tools/probes/PlayerDamageProbe.java` and `tools/verify-player-damage.mjs` run the unchanged classes and write `public/research/player-damage-reference.json`. Command: `MC_RESEARCH=<tools/research> node tools/verify-player-damage.mjs`. The JAR goes on the classpath so en_US.lang loads. 116 records: 30 hits, 77 protection, 9 void. The real EntityPlayerMP is used and its onDeath records only CombatTracker.func_151521_b. Client classes were read with javap but not run: EntityPlayerSP.setPlayerSPHealth `blk.n`, handleHealthUpdate `sv.a(B)` and GuiGameOver `bdc`. Details are in `public/research/combat.md#player-hurt-rules`.
+
+Findings and changes:
+- **Top-up sound (item 2).** In 1.7.10 a top-up sends no status 2 and plays no sound. The player only hears its own hurt through status 2, because the server's own sound uses playSoundToNearExcept. A death sends status 3 → `game.player.die`. Top-ups do restart the client hurtTime=10 (setPlayerSPHealth). Changes: the port used to play `game.player.hurt` at volume 0.8 on every health drop. It now plays hurt only for fresh hits and die on death, both at volume 1 with pitch (r-r)*0.2+1, through `Survival.hurtSounds`. The new `Survival.hurtTime` drives the camera tilt, the damage flash and the F5 tint.
+- **Void exception (item 3).** EntityPlayerMP refuses everything during field_147101_bU except outOfWorld. outOfWorld also passes Creative and armour. Entity.onEntityUpdate calls kill() when posY < -64, which is attackEntityFrom(outOfWorld, 4), so 4 every 10 ticks and death at tick 40. Implemented in `Survival.damage`/`tick({ outOfWorld })`, with main.js passing `position.y < -64`. **Not reachable yet:** main.js still teleports a player below y 1 to spawn, and `world.get` returns lava (11) below y 0. main.js die() is also gated on !creative. I left all three alone (world.js and the movement code are shared).
+- **Death message (item 1).** onDeath broadcasts to chat. GuiGameOver shows no cause. New `src/death-messages.js` gives `inWall` "Player suffocated in a wall", `starve` and `outOfWorld`, the only sources with no `.player` form, so their text does not depend on the attacker. They show as a GuiNewChat-style line created in JS (inline styles, `--u`). Other causes return null. "Player" stands in for the account name.
+- **Looting (item 4).** Skipped. This build has no enchantments.
+
+main.js edits are small and local: import, `playHurtSounds()` + die() message, tickSurvival `outOfWorld`, the hurt sound line, and three hurtTicks→hurtTime reads (camera, flash, F5 tint). I did not touch the mouse-look code.
+
+Tests: `npm test` 714/714 (6 new in `src/player-damage.test.js`), `npm run build` OK. No browser check: the preview tool started the main checkout's server on 5179 instead of this worktree, so I stopped it at once. The chat line has not been checked in a browser.
+
+Open: fall/mob/projectile death messages and `.player` forms (need the combat tracker's attacker and fall state); making the void reachable (y<1 teleport, lava below 0) and Creative void deaths; looting; mob-versus-mob revenge; chunk-order entity updates; the client hurtTime is not tick-replayed.
