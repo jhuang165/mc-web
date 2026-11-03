@@ -15,12 +15,14 @@ export function tickPlayerEnvironment({ world, weather, position, survival, moti
   const inWall = insideOpaqueBlock(world, position.x, position.y, position.z, PHYSICS.width, PLAYER_EYE);
   survival.tick({ underwater, inWater, inLava: inLavaNow, inWall, outOfWorld: position.y < -64 });
   afterSurvival();
-  const tail = { fire: survival.fire || 0, inWeb: motion.inWeb, fallDistance: 0 };
+  const tail = { fire: survival.fire || 0, inWeb: motion.inWeb, fallDistance: 0 }, fireBefore = tail.fire;
   blockCollisions(world, entityBox(position, PHYSICS.width, PHYSICS.height), tail, {
     hurt: (source, n) => survival.health > 0 && survival.damage(n, source === 'cactus' ? 'a cactus' : 'fire', true),
     wet, flying, resistance: PLAYER_FIRE_RESISTANCE, fizz,
   });
-  survival.fire = tail.fire;
+  // blockCollisions catches fire with setFire(8): 160 ticks, which Fire Protection shortens (Entity.setFire).
+  if (fireBefore < 0 && tail.fire === 160 && survival.setFire) { survival.fire = 0; survival.setFire(8); }
+  else survival.fire = tail.fire;
   motion.inWeb = tail.inWeb;
   return { underwater, wet, inWall };
 }

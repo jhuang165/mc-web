@@ -12,6 +12,7 @@ import { HEIGHT, TNT, blockBounds } from "./world.js";
 import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
 import { enterWater } from "./fx.js";
 import { GaussianRandom, intercept, rayTraceBlocks } from "./projectiles.js";
+import { applyBowEnchantments, bowEnchantments } from "./armor-enchantments.js";
 
 const f = Math.fround;
 const PI_F = f(Math.PI), PI_D = 3.1415927410125732;
@@ -115,8 +116,8 @@ export function mobArrow(rand, shooter, target, velocity, inaccuracy) {
   return { x: shooter.x + d0 / d3, y, z: shooter.z + d2 / d3, ...h };
 }
 // EntitySkeleton.attackEntityWithRangedAttack (yl.a(sv, F)) damage roll:
-// f * 2 + nextGaussian * 0.25 + difficulty * 0.11F (power, punch and flame enchantments
-// on the held bow are not ported; a skeleton's bow is never enchanted on Normal here).
+// f * 2 + nextGaussian * 0.25 + difficulty * 0.11F, then Power (+ level * 0.5 + 0.5) and Punch/Flame of the
+// held bow; a skeleton's bow is never enchanted in this port, so those terms are zero.
 export const skeletonDamage = (rand, scale, difficulty = 2) => f(scale * 2) + rand.nextGaussian() * 0.25 + f(difficulty * f(0.11));
 // EntityAIArrowAttack's clamp of the distance fraction: MathHelper.clamp_float(f, 0.1F, 1.0F).
 export const rangeScale = (fraction) => (fraction < f(0.1) ? f(0.1) : fraction > 1 ? 1 : fraction);
@@ -142,6 +143,8 @@ const bound = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 export function arrowTargets(mobTargetList, creative) {
   return mobTargetList.map((t) => (t.ref === "player" ? { ...t, immune: !!creative } : t));
 }
+
+const mobsHas = (mobs, mob) => !!mobs?.entities?.includes(mob) && typeof mobs.attackEntityFrom === "function";
 
 export class Arrows {
   constructor(random = Math.random) {
@@ -394,7 +397,20 @@ export class Arrows {
   // attackEntityFrom. A mob's knockback comes from the shooter (the source's entity),
   // or from the arrow when there is none; a mob shot by a mob does not turn on the player.
   damageTarget(a, ref, dmg, ctx) {
-    if (ref === "player") return !!ctx.survival?.damage(dmg, "an arrow", true);
+    if (ref === "player") {
+      const survival = ctx.survival, shooter = a.shooter;
+      if (!survival) return false;
+      // zc.h: a burning arrow does setFire(5) on its target before attackEntityFrom (Fire Protection shortens it).
+      if (a.fire > 0) survival.setFire?.(5);
+      const hit = !!survival.damage(dmg, "an arrow", true);
+      // A hit by an arrow a mob shot runs the wearer's Thorns on the shooter (EnchantmentHelper.func_151384_a).
+      if (hit && shooter && typeof shooter === "object" && mobsHas(ctx.mobs, shooter))
+        survival.thorns?.({
+          hurt: (damage) => ctx.mobs.attackEntityFrom(shooter, damage, { from: ctx.player ? { x: ctx.player.x, z: ctx.player.z } : { x: a.x, z: a.z }, player: true, name: "thorns" }),
+          sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: shooter.x, y: shooter.y, z: shooter.z } }),
+        });
+      return hit;
+    }
     const mobs = ctx.mobs;
     if (!mobs?.entities?.includes(ref) || ref.health <= 0) return false;
     if (a.fire > 0) ref.fire = Math.max(ref.fire || 0, 100);
@@ -440,7 +456,7 @@ export class Arrows {
             xTile: int(d.xTile, -1, 2 ** 15, -1), yTile: int(d.yTile, -1, 255, -1), zTile: int(d.zTile, -1, 2 ** 15, -1),
             ticksInGround: int(d.life, 0, DESPAWN, 0), inTile: int(d.inTile, 0, 255, 0), inData: int(d.inData, 0, 15, 0),
             shake: int(d.shake, 0, 127, 0), inGround: d.inGround === true, pickup: int(d.pickup, 0, 2, 1),
-            damage: ok(d.damage) ? d.damage : 2, fire: int(d.fire, 0, 400, 0),
+            damage: ok(d.damage) ? d.damage : 2, fire: int(d.fire, 0, 2000, 0),
           }),
         );
       }
@@ -451,22 +467,29 @@ export class Arrows {
   }
 }
 
-// ItemBow.onPlayerStoppedUsing (abm.a) and what follows: with the stack held, in Creative or
-// with an arrow in the inventory, a draw of `ticks` of at least 0.1 power launches an
+// ItemBow.onPlayerStoppedUsing (abm.a) and what follows: with the stack held, in Creative, with Infinity
+// or with an arrow in the inventory, a draw of `ticks` of at least 0.1 power launches an
 // arrow at power * 2 (a critical one at full power), the bow loses 1 durability,
 // `random.bow` plays at volume 1 and pitch 1 / (itemRand * 0.4 + 1.2) + power * 0.5, and
 // in Survival one arrow is used up (otherwise the arrow cannot be picked up as an item).
+// The bow's enchantments follow the launch, in ItemBow's order: Power (damage + level * 0.5 + 0.5), Punch
+// (knockbackStrength), Flame (setFire(100)), then the bow's durability and the sound. Infinity behaves as
+// Creative does here: no arrow is needed or consumed and the arrow is canBePickedUp 2.
 // Returns the arrow, or null when nothing was shot.
 export function releaseBow({ survival, arrows, ticks, feet, yaw, pitch }) {
-  const creative = survival.creative;
-  if (!creative && !survival.count(ARROW)) return null;
+  const creative = survival.creative, inv = survival.inventory,
+    at = inv?.held?.id === BOW ? inv.current : inv?.find?.(BOW), bow = at >= 0 && at != null ? inv.getStack(at) : null,
+    flag = creative || bowEnchantments(bow).infinity > 0;
+  if (!flag && !survival.count(ARROW)) return null;
   const power = releasePower(ticks);
   if (power === null) return null;
-  const arrow = arrows.shootPlayer(feet, yaw, pitch, f(power * 2), { creative, crit: power === 1 });
+  const arrow = arrows.shootPlayer(feet, yaw, pitch, f(power * 2), { creative: flag, crit: power === 1 });
+  applyBowEnchantments(arrow, bow, creative);
   survival.wear(BOW, 1);
   arrows.events.push({ sound: "random.bow", volume: 1, pitch: shotPitch(arrows.itemRand, power) });
-  if (!creative) survival.take(ARROW);
+  if (!flag) survival.take(ARROW);
   return arrow;
 }
-// ItemBow.onItemRightClick (abm.a(add, ahb, yz)): the draw starts in Creative or with an arrow.
+// ItemBow.onItemRightClick (abm.a(add, ahb, yz)): the draw starts in Creative or with an arrow (the Infinity
+// shortcut applies only on release, as in the original, so the draw itself still needs one).
 export const canDraw = (survival) => survival.creative || survival.count(ARROW) > 0;

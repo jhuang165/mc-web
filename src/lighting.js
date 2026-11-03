@@ -5,7 +5,7 @@ export { JavaRandom } from "./java-random.js";
 // (blm), RenderGlobal (bma) and Block (aji). The rain, thunder and lightning
 // terms are optional trailing arguments that default to 0 (clear sky); weather.js
 // supplies them. See public/research/lighting.md and weather.md.
-import { SIZE, HEIGHT, FIRE, WEB, LADDER, CACTUS, REEDS, LILY_PAD, TNT, FENCE, RAIL, MOB_SPAWNER, ANVIL, isPlant, normalCube, opaqueCube } from "./world.js";
+import { SIZE, HEIGHT, FIRE, WEB, LADDER, CACTUS, REEDS, LILY_PAD, TNT, FENCE, RAIL, MOB_SPAWNER, ANVIL, ENCHANTING_TABLE, isPlant, normalCube, opaqueCube } from "./world.js";
 import { biomeFacts } from "./biomes.js";
 
 const f = Math.fround,
@@ -30,7 +30,7 @@ export const BRIGHTNESS = Array.from({ length: 16 }, (_, i) => {
 // that let grass through, used by smooth lighting to decide corner samples).
 export function lightOpacity(b) {
   if (b===72||b===73) return 0;
-  if (b === 0 || b === 9 || b === 20 || b === 41 || b === 42 || b === FIRE || b === LADDER || b === CACTUS || b === REEDS || b === LILY_PAD || b === FENCE || b === RAIL || b === MOB_SPAWNER || b === ANVIL || isPlant(b)) return 0;
+  if (b === 0 || b === 9 || b === 20 || b === 41 || b === 42 || b === FIRE || b === LADDER || b === CACTUS || b === REEDS || b === LILY_PAD || b === FENCE || b === RAIL || b === MOB_SPAWNER || b === ANVIL || b === ENCHANTING_TABLE || isPlant(b)) return 0;
   if (b === 5 || b===71 || b === WEB) return 1;
   if (b === 10 || b === 47) return 3; // water; ice (setLightOpacity(3))
   if (b === 46) return 0; // snow layer: not an opaque cube (probe: snow-reference.json "blocks")

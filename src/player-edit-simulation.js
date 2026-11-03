@@ -7,13 +7,14 @@ import { useHeldBucket } from './buckets-simulation.js';
 import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
+import { playerMiningState } from './enchantment-effects.js';
 import {
-  DYE, FIRE, SAPLING, SNOW_LAYER, TNT, ANVIL, isCrop,
+  DYE, FIRE, SAPLING, SNOW_LAYER, TNT, ANVIL, ENCHANTING_TABLE, isCrop,
 } from './world.js';
 import { ITEMS } from './survival.js';
 import { copyStack } from './inventory.js';
 
-const STATIONS = new Set([13, 14, CHEST, ANVIL]);
+const STATIONS = new Set([13, 14, CHEST, ANVIL, ENCHANTING_TABLE]);
 // PlayerControllerMP's edit(place) dispatcher with browser effects supplied by the
 // caller. `state` holds the live mutable gameplay state, `request` snapshots the two
 // ray targets, the held bucket's own captured trace and the click button, and hooks run
@@ -51,6 +52,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   if (!place && aimedEntity?.entity) {
     state.mining = null;
     const critical = isCritical({ fallDistance: state.fallDistance, onGround: state.grounded, inWater: state.wasInWater });
+    const info = {};
     const hit = state.mobs.attack(
       aimedEntity.entity,
       id,
@@ -58,10 +60,13 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       { x: state.position.x, z: state.position.z, yaw: state.yaw },
       state.motion.sprinting ? 1 : 0,
       critical,
+      info,
     );
     if (hit) {
       if (critical) hook('criticalHit', aimedEntity.entity);
-      if (state.motion.sprinting) {
+      if (info.enchantCritical) hook('enchantmentCriticalHit', aimedEntity.entity);
+      // The push counts the Knockback enchantment as well as sprinting (EntityPlayer.attackTargetEntityWithCurrentItem).
+      if (info.knockback !== undefined ? info.knockback > 0 : state.motion.sprinting) {
         state.velocity.x *= ATTACK_SLOWDOWN;
         state.velocity.z *= ATTACK_SLOWDOWN;
         state.motion.sprinting = false;
@@ -178,6 +183,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     if (activates && block === 13) { hook('openInventory', true); return act('open-workbench'); }
     if (activates && block === 14) { hook('useFurnace', target.block.join(',')); return act('open-furnace'); }
     if (activates && block === ANVIL) { hook('useAnvil', target.block.join(',')); return act('open-anvil'); }
+    if (activates && block === ENCHANTING_TABLE) { hook('useEnchantingTable', target.block.join(',')); return act('open-enchanting-table'); }
     if (activates && block === CHEST) {
       const chest = state.survival.openChest(state.world, ...target.block);
       if (chest) hook('openChest', chest, target.block.join(','), target.block);
@@ -236,7 +242,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   }
   if (state.mining && state.mining.tool === id && state.mining.block.every((v, i) => v === target.block[i])) return act('mining-already-started');
   const under = hook('clientEyeInWater');
-  if (state.survival.mining(block, id, !!under, state.grounded).progress >= 1) {
+  if (playerMiningState(state.survival, block, id, !!under, state.grounded).progress >= 1) {
     hook('breakBlock', target.block);
     return act('instant-break');
   }

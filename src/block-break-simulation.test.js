@@ -175,3 +175,51 @@ test('failed world removal consumes earlier gravel randomness but runs no post-e
   assert.deepEqual(order, []);
   assert.equal(state.world.get(...POS), 25);
 });
+
+// ---- live Silk Touch / Fortune (1.7.10 Block.harvestBlock) ----------------
+const { fromOriginal } = await import('./block-registry.js');
+const { itemFromOriginal } = await import('./region-import.js');
+const enchantedPick = (id, lvl, tool = 257) => [{ ...makeStack(itemFromOriginal(tool, 0).id), enchantments: [{ id, lvl }] }];
+const dropped = (state) => state.items.items.map((e) => [e.stack.id, e.stack.count, e.stack.damage || 0]);
+
+test('Silk Touch keeps the block itself, draws no quantity or XP, and keeps ice from leaving water', () => {
+  const stone = fromOriginal(1, 0).id, cobble = fromOriginal(4, 0).id;
+  const plain = fixture(stone, { slots: enchantedPick(33, 1) });
+  const r = run(plain, POS, { dropRandom: new JavaRandom(5) });
+  assert.equal(r.result, true);
+  assert.deepEqual(dropped(plain), [[stone, 1, 0]]);
+  const normal = fixture(stone, { slots: [makeStack(itemFromOriginal(257, 0).id)] });
+  run(normal);
+  assert.deepEqual(dropped(normal), [[cobble, 1, 0]]);
+  const ore = fromOriginal(56, 0).id, silkOre = fixture(ore, { slots: enchantedPick(33, 1) });
+  run(silkOre, POS, { dropRandom: new JavaRandom(5) });
+  assert.deepEqual(dropped(silkOre), [[ore, 1, 0]]);
+  assert.equal(silkOre.xpOrbs.orbs.length, 0);
+  const ice = fixture(ICE, { slots: enchantedPick(33, 1) });
+  ice.world.set(POS[0], POS[1] - 1, POS[2], 3, false);
+  run(ice, POS, { dropRandom: new JavaRandom(5) });
+  assert.equal(ice.world.get(...POS), 0);
+  assert.deepEqual(dropped(ice), [[ICE, 1, 0]]);
+});
+
+test('Fortune quantities follow BlockOre.quantityDroppedWithBonus on the supplied World.rand', () => {
+  const ore = fromOriginal(56, 0).id, diamond = itemFromOriginal(264, 0).id;
+  const counts = new Set();
+  for (let seed = 1; seed <= 40; seed++) {
+    const state = fixture(ore, { slots: enchantedPick(35, 3) });
+    run(state, POS, { dropRandom: new JavaRandom(seed) });
+    // nextInt(fortune + 2) - 1, floored at 0, plus the base count of one (bonus applies only above one).
+    const expected = Math.max(1, Math.max(0, new JavaRandom(seed).nextInt(5) - 1) + 1);
+    assert.equal(dropped(state).filter((d) => d[0] === diamond).length, expected, `seed ${seed}`);
+    counts.add(expected);
+    assert.ok(state.xpOrbs.orbs.length > 0, 'ore experience is still granted without Silk Touch');
+  }
+  assert.ok(counts.size > 1, 'Fortune III varies the count');
+});
+
+test('Creative breaks ignore Silk Touch and drop nothing', () => {
+  const stone = fromOriginal(1, 0).id;
+  const creative = fixture(stone, { mode: 'creative', slots: enchantedPick(33, 1) });
+  run(creative, POS, { creative: true, dropRandom: new JavaRandom(5) });
+  assert.deepEqual(dropped(creative), []);
+});

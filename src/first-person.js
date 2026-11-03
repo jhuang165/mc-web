@@ -23,6 +23,34 @@ function anvilItemGeometry(meta){
  }
  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setIndex(indices);g.computeVertexNormals();return g;
 }
+// RenderItem.renderEffect / ItemRenderer glint (ItemStack.hasEffect): the item's geometry again, with
+// misc/enchanted_item_glint.png added over its opaque pixels (the original redraws with depth func EQUAL and the
+// colour 0.5, 0.25, 0.8, blend SRC_COLOR, ONE), two layers scrolling at -50 and 10 degrees with periods of 3000 and
+// 4873 ms. The scroll scale and offsets are an APPROXIMATION in item UV space (the original scrolls atlas UVs, whose
+// scale depends on where the icon sits in the atlas), so the pattern is not pixel exact; the silhouette and the
+// colour/blend are the original's.
+let glintTexture = null;
+export function glintMesh(geometry, map) {
+  if (!glintTexture) {
+    glintTexture = loader.load("/media/1.7.10/misc/enchanted_item_glint.png");
+    glintTexture.wrapS = glintTexture.wrapT = THREE.RepeatWrapping;
+  }
+  const material = new THREE.ShaderMaterial({
+    uniforms: { item: { value: map }, glint: { value: glintTexture }, time: { value: 0 } },
+    vertexShader: "varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}",
+    fragmentShader: `uniform sampler2D item,glint;uniform float time;varying vec2 vUv;
+vec2 turn(vec2 p,float degrees){float a=radians(degrees),c=cos(a),s=sin(a);return vec2(c*p.x-s*p.y,s*p.x+c*p.y);}
+void main(){if(texture2D(item,vUv).a<=0.1)discard;
+vec3 a=texture2D(glint,turn(vUv*.5,-50.)+vec2(mod(time*1000.,3000.)/3000.,0.)).rgb,b=texture2D(glint,turn(vUv*.5,10.)+vec2(-mod(time*1000.,4873.)/4873.,0.)).rgb;
+gl_FragColor=vec4((a+b)*vec3(.5,.25,.8),1.);}`,
+    transparent: true, depthWrite: false, blending: THREE.CustomBlending, blendSrc: THREE.SrcColorFactor, blendDst: THREE.OneFactor,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.renderOrder = 2;
+  mesh.onBeforeRender = () => { material.uniforms.time.value = performance.now() / 1000; };
+  return mesh;
+}
 export function pixelTexture(url) {
   if (!cache.has(url)) {
     const t = loader.load(url);
@@ -132,14 +160,15 @@ export class FirstPerson {
     this.last = -1;
   }
   // `meta` is the wool colour (the stack's damage) of a held block.
-  select(id, meta = 0, use = 0) {
-    const key = id + ":" + meta + ":" + use;
+  select(id, meta = 0, use = 0, glint = false) {
+    const key = id + ":" + meta + ":" + use + ":" + (glint ? 1 : 0);
     if (key === this.last) return;
     this.last = key;
     if (this.item) {
       this.pivot.remove(this.item);
       this.item.geometry.dispose();
       this.item.material.dispose();
+      for (const child of this.item.children) child.material.dispose();
       this.materials = this.materials.filter((m) => m !== this.item.material);
       this.item = null;
     }
@@ -175,6 +204,7 @@ export class FirstPerson {
       mesh.rotation.y = Math.PI / 2;
     }
     this.sprite = !!url;
+    if (glint) mesh.add(glintMesh(mesh.geometry, url ? pixelTexture(url) : this.atlas));
     this.pivot.add(mesh);
     this.item = mesh;
   }
@@ -184,10 +214,10 @@ export class FirstPerson {
     return m;
   }
   // `light` is the packed brightness at the player; `view` the world camera.
-  render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0, bow = null } = {}) {
+  render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0, bow = null, glint = false } = {}) {
     if (!visible) return;
     // `bow` is { stage, draw } while the bow is drawn (bow.js bowStage and the draw term).
-    this.select(pose.item, pose.meta, bow ? bow.stage : 0);
+    this.select(pose.item, pose.meta, bow ? bow.stage : 0, glint);
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
     this.pivot.matrix.copy(firstPersonMatrix(pose,{sprite:this.sprite,eatingTicks:eating,bowDraw:bow ? bow.draw : null}));

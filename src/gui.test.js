@@ -30,3 +30,9 @@ test('GUI scaling keeps integer pixels and the original minimum 320 by 240 logic
 test('native stack overlays omit singletons and empty stacks',()=>{for(const n of [0,1,undefined,NaN])assert.equal(stackCount(n),'');assert.equal(stackCount(64),'<b class="item-count">64</b>');assert.equal(stackCount(4),'<b class="item-count">4</b>');});
 test('durability bars follow RenderItem: hidden when undamaged, green to red, shrinking from 13 pixels',async()=>{const {durabilityBar,tooltipLines}=await import('./gui.js');assert.equal(durabilityBar(0,59),'');assert.match(durabilityBar(1,59),/--bar:13;--bar-color:rgb\(4,251,0\);--bar-shade:rgb\(1,63,0\)/);assert.match(durabilityBar(30,59),/--bar:6;--bar-color:rgb\(130,125,0\)/);assert.match(durabilityBar(59,59),/--bar:0;--bar-color:rgb\(255,0,0\);--bar-shade:rgb\(63,63,0\)/);
  assert.deepEqual(tooltipLines({name:'Iron sword',attack:6,durability:250},{damage:10},true).map(l=>l.text),['Iron sword','','+6 Attack Damage','Durability: 240 / 250']);assert.deepEqual(tooltipLines({name:'Dirt'},{damage:0},true).map(l=>l.text),['Dirt']);});
+test('save snapshots keep the enchanting table input and the cursor',()=>{
+ const input={id:102,count:1,damage:3};
+ const view={kind:'enchanting',container:{inv:{cursor:{id:302,count:2,damage:0}},inputs:{stacks:[input]}}};
+ const pending=pendingContainerStacks(view);assert.equal(pending.length,2);assert.equal(pending[1].id,102);
+ assert.notEqual(pending[1],input);
+});

@@ -1,7 +1,7 @@
 // Content reached by Java 1.7.10 Overworld population. Internal ids append after 0.24.0.
 // Kept independent of survival/world module initialization so both can use the same catalogue.
-import { ANVIL } from './world.js';
-export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97:68,175:69,162:70,161:71,106:72,127:73,48:74,39:75,40:76,99:77,100:78,32:79,174:80,103:81,'44:1':82,'31:0':83,'31:2':84,24:56,110:57,159:58,111:59,145:ANVIL,
+import { ANVIL, ENCHANTING_TABLE } from './world.js';
+export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97:68,175:69,162:70,161:71,106:72,127:73,48:74,39:75,40:76,99:77,100:78,32:79,174:80,103:81,'44:1':82,'31:0':83,'31:2':84,24:56,110:57,159:58,111:59,145:ANVIL,116:ENCHANTING_TABLE,
   388:367,360:368,357:369,282:370,281:371,322:372,2256:373,2257:374,421:375,418:376,419:377});
 export const TREE_NAMES=['Oak','Spruce','Birch','Jungle','Acacia','Dark oak'];
 export const DOUBLE_NAMES=['Sunflower','Lilac','Double tallgrass','Large fern','Rose bush','Peony'];
@@ -23,10 +23,14 @@ export function installPopulationMaterials(m){
     63:{hardness:3,kind:'pickaxe',tier:1,drop:351},64:{hardness:3,kind:'pickaxe',tier:2,drop:360},65:{hardness:3,kind:'pickaxe',tier:2,drop:360},66:{hardness:3,kind:'pickaxe',tier:2,drop:367},
     67:{hardness:1,kind:'axe'},68:{hardness:.75,drop:0},69:{hardness:0,drop:0},70:{hardness:2,kind:'axe'},71:{hardness:.2,drop:0},72:{hardness:.2,drop:0},73:{hardness:.2,drop:351},74:{hardness:2,kind:'pickaxe',tier:0},75:{hardness:0},76:{hardness:0},77:{hardness:.2,drop:75},78:{hardness:.2,drop:76},79:{hardness:0,drop:0},80:{hardness:.5,drop:0},81:{hardness:1,kind:'axe',drop:368},82:{hardness:2,kind:'pickaxe',tier:0},83:{hardness:0,drop:0},84:{hardness:0,drop:0},
     [ANVIL]:{hardness:5,kind:'pickaxe',tier:0},
+    // BlockEnchantmentTable: Material.rock, hardness 5 (block-metadata-reference.json); drops itself.
+    [ENCHANTING_TABLE]:{hardness:5,kind:'pickaxe',tier:0},
   });
 }
 export function installPopulationRecipes({recipe,shapeless}){
   recipe('anvil','Anvil',['BBB',' I ','III'],{B:26,I:302},ANVIL);
+  // " B " / "D#D" / "###": book, two diamonds, four obsidian (CraftingManager).
+  recipe('enchanting-table','Enchanting table',[' B ','DOD','OOO'],{B:314,D:303,O:22},ENCHANTING_TABLE);
   recipe('golden-apple','Golden apple',['GGG','GAG','GGG'],{G:304,A:200},372);
   recipe('sandstone','Sandstone',['SS','SS'],{S:6},56);
   recipe('bowl','Bowls',['W W',' W '],{W:7},371,4);

@@ -93,6 +93,7 @@ export const BLOCKS = [
     ['Dead shrub','#8b683b'],['Fern','#669646'],
   ].map(([name,color])=>({name,color})),
   {name:'Anvil',color:'#555b5d'},
+  {name:'Enchanting table',color:'#7b2d3c'},
 ];
 export const LAPIS_ORE=63,REDSTONE_ORE=64,LIT_REDSTONE_ORE=65,EMERALD_ORE=66,PUMPKIN=67,MONSTER_EGG=68,DOUBLE_PLANT=69,
   LOG2=70,LEAVES2=71,VINE=72,COCOA=73,MOSSY_COBBLE=74,BROWN_MUSHROOM=75,RED_MUSHROOM=76,
@@ -103,6 +104,8 @@ export const SANDSTONE=56,MYCELIUM=57,STAINED_CLAY=58,LILY_PAD=59;
 export const TORCH=20,FENCE=60,RAIL=61,MOB_SPAWNER=62;
 // Original BlockAnvil id 145, appended to preserve every existing internal ID.
 export const ANVIL=85;
+// Original BlockEnchantmentTable id 116 (0.75 high, light opacity 0), appended after the anvil.
+export const ENCHANTING_TABLE=86;
 export const WATER=10,LAVA=42;
 export const SNOW_LAYER=46,ICE=47,SAPLING=48;
 export const CARROTS=49,POTATOES=50,WEB=51,LADDER=52,TNT=55;
@@ -181,7 +184,7 @@ export const isCrop=b=>(b>=31&&b<=38)||b===CARROTS||b===POTATOES;
 export const cropAge=(b,meta=0)=>b>=31&&b<=38?b-31:meta&7;
 export const cropKind=b=>b>=31&&b<=38?31:b;
 export const isPlant=b=>isCrop(b)||b===39||isFlower(b)||b===SAPLING||[DOUBLE_PLANT,BROWN_MUSHROOM,RED_MUSHROOM,DEAD_BUSH,DEAD_SHRUB,FERN].includes(b);
-export const blockHeight=b=>b===LILY_PAD?1/64:b===29||b===30?15/16:b===41?.875:b===SNOW_LAYER?.125:1;
+export const blockHeight=b=>b===LILY_PAD?1/64:b===29||b===30?15/16:b===41?.875:b===SNOW_LAYER?.125:b===ENCHANTING_TABLE?.75:1;
 // Blocks with Block.tickRandomly: they count towards a section's random-tick refcount
 // (ExtendedBlockStorage.getNeedsRandomTick), which WorldServer reads to pick sections.
 // Grass, leaves, farmland, crops, lava, snow layer, ice and saplings here; snow and ice act on a
@@ -191,7 +194,7 @@ export const ticksRandomly=b=>b===1||b===5||b===LEAVES2||b===LIT_REDSTONE_ORE||b
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,RAIL,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB,ANVIL]);
+const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,RAIL,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB,ANVIL,ENCHANTING_TABLE]);
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 // Block.isNormalCube: Material.tnt is translucent (isOpaque false), so TNT is an opaque
 // cube that is not a normal cube (no torches/ladders/fire tops on it).

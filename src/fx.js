@@ -267,9 +267,10 @@ export class Fx {
   }
   // EntityPlayerSP.onCriticalHit: new EntityCrit2FX(world, target), added directly.
   // `target()` gives the entity's live x, z, box minY, width, height and motion.
-  crit2(target) {
+  // EntityPlayerSP.onEnchantmentCritical is the same with "magicCrit" (the tinted crit particle).
+  crit2(target, magic = false) {
     const t = target(), p = this.base("crit2", t.x, t.minY + f(t.height / 2), t.z, t.mx, t.my, t.mz);
-    Object.assign(p, { target, age: 0, max: 3, particle: "crit" });
+    Object.assign(p, { target, age: 0, max: 3, particle: magic ? "magicCrit" : "crit" });
     this.step(this.world, p);
     return this.effects.add(p);
   }

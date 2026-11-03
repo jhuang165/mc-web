@@ -6,6 +6,7 @@ import { REEDS_ITEM, PAPER, SUGAR } from "./plants.js";
 import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,ChestContainer,makeStack,copyStack} from "./inventory.js";
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
 import { Effects } from "./status-effects.js";
+import { damageSourceKey, enchantedDamage, setFireTicks, decreaseAir, thornsReaction } from "./armor-enchantments.js";
 import { NORMAL, scaleDamage, starvationHurts, hungerDrops, peacefulRegen } from "./difficulty.js";
 import { installPopulationItems, installPopulationMaterials, installPopulationRecipes, populationCraftingResult, installPopulationSmelting } from './population-content.js';
 
@@ -622,10 +623,31 @@ export class Survival {
       this.exhaustion = Math.fround(Math.min(40, this.exhaustion + n));
   }
   // EntityPlayer.attackEntityFrom with a difficulty-scaled source (mob melee, explosions):
-  // the scaled amount, then armour. A scaled 0 (Peaceful) is no hit at all.
-  scaledDamage(n, reason) {
+  // the scaled amount, then armour. A scaled 0 (Peaceful) is no hit at all. `options.source` names the
+  // DamageSource ("explosion", otherwise a mob's); `options.attacker` ({ hurt(damage), sound() }) is the
+  // attacking mob, which a successful hit exposes to the Thorns reaction (EntityMob.attackEntityAsMob).
+  scaledDamage(n, reason, options = {}) {
     const amount = scaleDamage(this.difficulty, n);
-    return amount > 0 && this.damage(amount, reason, true);
+    const hit = amount > 0 && this.damage(amount, reason, true, options.source);
+    if (hit && options.attacker) this.thorns(options.attacker);
+    return hit;
+  }
+  // Entity.setFire(seconds) (sa.e): seconds * 20 shortened by Fire Protection, and the counter only grows.
+  setFire(seconds) {
+    this.fire = setFireTicks(this.inventory.armor, this.fire, seconds);
+  }
+  // EnchantmentHelper.func_151384_a(this, attacker): the Thorns of every armour piece, rolled on the player's
+  // Entity.rand (the inventory's saved random, which durability damage also uses). The piece that carries Thorns
+  // loses 3 durability on a hit and 1 on a miss; a broken piece sets `broken`. Returns the damage dealt per hit.
+  thorns({ hurt, sound } = {}) {
+    const inv = this.inventory;
+    return thornsReaction({
+      items: () => inv.armor, random: inv.random, hurt, sound,
+      wear: (i, amount) => {
+        const s = inv.getStack(36 + i);
+        if (s && inv.damage(36 + i, amount)) this.broken = s.id;
+      },
+    });
   }
   // EntityLivingBase.attackEntityFrom for DamageSource.anvil. The helmet receives
   // its special hit before hurt-resistance filtering; wearing one also reduces the
@@ -652,7 +674,8 @@ export class Survival {
   // only the difference, with no new window and no hurt status, so no hurt sound; otherwise it
   // starts the window (`hurtCount` counts those fresh hits). Mob attacks are blockable; falls,
   // drowning, starvation, suffocation and the void bypass armor. player-damage-reference.json.
-  damage(n, reason = "an accident", blockable = false) {
+  // `source` is an optional DamageSource key (armor-enchantments.js damageSourceKey), else the reason names it.
+  damage(n, reason = "an accident", blockable = false, source = undefined) {
     const outOfWorld = reason === VOID;
     if ((this.creative && !outOfWorld) || this.health <= 0 || n <= 0 || (this.protection > 0 && !outOfWorld))
       return false;
@@ -664,6 +687,9 @@ export class Survival {
     }
     let dealt = fresh ? n : Math.fround(n - this.hurtAmount);
     if (blockable) dealt = this.applyArmor(dealt);
+    // EntityLivingBase.applyPotionDamageCalculations: the enchantment step comes after armour, also for the
+    // sources that bypass armour (fall, drowning, magic ...), and is skipped only for starvation.
+    dealt = enchantedDamage(this.inventory.armor, damageSourceKey(source ?? reason), dealt);
     const before = this.health;
     this.health = Math.max(0, Math.fround(this.health - dealt));
     this.hurtAmount = n;
@@ -752,7 +778,7 @@ export class Survival {
     }
     if (inLava) {
       this.damage(4, "lava", true);
-      this.fire = Math.max(this.fire, 300);
+      this.setFire(15);
     }
     // Entity.onEntityUpdate [sa.C]: below posY -64 (the caller's `outOfWorld`), kill(), which
     // EntityLivingBase makes attackEntityFrom(outOfWorld, 4) [sv.G]. It passes spawn protection,
@@ -764,7 +790,8 @@ export class Survival {
     this.effects.tick(this);
     if (this.creative) return;
     if (underwater) {
-      this.air--;
+      // EntityLivingBase.decreaseAirSupply: Respiration (best armour piece) may keep the air for a tick.
+      this.air = decreaseAir(this.inventory.armor, this.air, this.inventory.random);
       if (this.air === -20) {
         this.air = 0;
         // EntityLivingBase.onEntityUpdate's 8 bubbles (main.js spawns them); not saved.

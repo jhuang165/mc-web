@@ -32,33 +32,39 @@ const BOW_DROP = f(0.085), BOW_DURABILITY = 384;
 // zombie has one), then EntityCreeper's record roll when a skeleton's arrow killed it (no
 // records in this build: the roll is drawn and nothing drops). Each entry is one EntityItem:
 // [id, damage]. `burning` is isBurning (cooked meat).
-export function mobDrops(e, { playerHit, burning = false, bySkeleton = false }, rand) {
+// `looting` is EnchantmentHelper.getLootingModifier of the player's held item (only a player kill
+// carries it): the extra nextInt(looting + 1) of the bonus drops, nextInt(3 + looting) for skeleton
+// arrows and bones, the equipment drop's nextFloat - looting * 0.01F and the rare drop's
+// nextInt(200) - looting. EntityLiving.dropFewItems draws its bonus only when looting > 0; the
+// animals' drop formulas always draw nextInt(1 + looting).
+export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, looting = 0 }, rand) {
   const out = [], add = (id, n = 1, damage = 0) => { for (let i = 0; i < n; i++) out.push([id, damage]); };
+  const generic = () => rand.nextInt(3) + (looting > 0 ? rand.nextInt(looting + 1) : 0);
   switch (e.type) {
-    case "pig": add(burning ? COOKED_PORK : PORK, rand.nextInt(3) + 1 + rand.nextInt(1)); break;
+    case "pig": add(burning ? COOKED_PORK : PORK, rand.nextInt(3) + 1 + rand.nextInt(1 + looting)); break;
     case "cow": {
-      add(LEATHER, rand.nextInt(3) + rand.nextInt(1));
-      add(burning ? STEAK : BEEF, rand.nextInt(3) + 1 + rand.nextInt(1));
+      add(LEATHER, rand.nextInt(3) + rand.nextInt(1 + looting));
+      add(burning ? STEAK : BEEF, rand.nextInt(3) + 1 + rand.nextInt(1 + looting));
       break;
     }
     case "sheep": if (!e.sheared) add(WOOL, 1, e.color || 0); break;
-    case "chicken": add(FEATHER, rand.nextInt(3) + rand.nextInt(1)); add(burning ? COOKED_CHICKEN : RAW_CHICKEN); break;
-    case "zombie": add(FLESH, rand.nextInt(3)); break;
-    case "skeleton": add(ARROW, rand.nextInt(3)); add(BONE, rand.nextInt(3)); break;
+    case "chicken": add(FEATHER, rand.nextInt(3) + rand.nextInt(1 + looting)); add(burning ? COOKED_CHICKEN : RAW_CHICKEN); break;
+    case "zombie": add(FLESH, generic()); break;
+    case "skeleton": add(ARROW, rand.nextInt(3 + looting)); add(BONE, rand.nextInt(3 + looting)); break;
     case "spider":
     case "cave_spider": // EntityCaveSpider inherits EntitySpider.dropFewItems
-      add(STRING, rand.nextInt(3));
-      if (playerHit && (rand.nextInt(3) === 0 || rand.nextInt(1) > 0)) add(SPIDER_EYE);
+      add(STRING, generic());
+      if (playerHit && (rand.nextInt(3) === 0 || rand.nextInt(1 + looting) > 0)) add(SPIDER_EYE);
       break;
-    case "creeper": add(GUNPOWDER, rand.nextInt(3)); break;
+    case "creeper": add(GUNPOWDER, generic()); break;
   }
   // EntityLiving.dropEquipment: a damageable item drops worn, maxDamage minus
   // nextInt(1 + nextInt(maxDamage - 25)), kept within [1, maxDamage - 25].
-  if (e.type === "skeleton" && playerHit && rand.nextFloat() < BOW_DROP) {
+  if (e.type === "skeleton" && playerHit && f(rand.nextFloat() - f(looting * f(0.01))) < BOW_DROP) {
     const k = Math.max(BOW_DURABILITY - 25, 1);
     add(BOW, 1, Math.min(k, Math.max(1, BOW_DURABILITY - rand.nextInt(rand.nextInt(k) + 1))));
   }
-  if (playerHit && rand.nextInt(200) < 5 && e.type === "zombie") add([IRON, CARROT, POTATO][rand.nextInt(3)]);
+  if (playerHit && rand.nextInt(200) - looting < 5 && e.type === "zombie") add([IRON, CARROT, POTATO][rand.nextInt(3)]);
   if (e.type === "creeper" && bySkeleton) rand.nextInt(12);
   return out;
 }

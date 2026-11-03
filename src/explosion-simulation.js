@@ -6,6 +6,7 @@ import { ENTITY_TYPES } from "./entities.js";
 import { makeStack, copyStack } from "./inventory.js";
 import { PHYSICS, opaqueCube } from "./world.js";
 import { entityBox } from "./weather.js";
+import { blastKnockback } from "./armor-enchantments.js";
 
 /**
  * Apply an integrated-server explosion in main.js order. Explosion rays and
@@ -84,9 +85,11 @@ export function applyExplosion(state, request, hooks = {}) {
     if (playerHit) {
       if (!survival.creative && survival.scaledDamage(
         playerHit.damage,
-        attacker && attacker !== "player" ? "a " + attacker.type : "an explosion",
+        attacker && attacker !== "player" ? "a " + attacker.type : "an explosion", { source: "explosion" },
       )) brokenTool();
-      velocity.x += playerHit.push[0]; velocity.y += playerHit.push[1]; velocity.z += playerHit.push[2];
+      // Explosion.doExplosionA: knockback is impact less floor(impact * Blast Protection level * 0.15F).
+      const kick = blastKnockback(survival.inventory?.armor ?? [], playerHit.impact), scale = playerHit.impact && kick !== playerHit.impact ? kick / playerHit.impact : 1;
+      velocity.x += playerHit.push[0] * scale; velocity.y += playerHit.push[1] * scale; velocity.z += playerHit.push[2] * scale;
     }
   }
 

@@ -8,7 +8,7 @@
 //   lit       lit_furnace (62)
 // Original blocks the port has no family for map to null. Ids and flags: tools/probes/ChunkProbe.java,
 // public/research/chunk-reference.json.
-import { BLOCKS, WATER, LAVA, ANVIL } from "./world.js";
+import { BLOCKS, WATER, LAVA, ANVIL, ENCHANTING_TABLE } from "./world.js";
 
 // Block.blockRegistry: ids 0-175 except 165-169 (unused in 1.7.10). Everything else reads as air.
 export const ORIGINAL_BLOCK_IDS = Array.from({ length: 176 }, (_, i) => i).filter((i) => i < 165 || i > 169);
@@ -84,6 +84,8 @@ const MAP = {
   70: same(162),71: same(161),72: same(106),73: same(127),74: fixed(48),75: fixed(39),76: fixed(40),
   77: same(99),78: same(100),79: fixed(32),80: fixed(174),81: fixed(103),82: fixed(44,1),83: fixed(31,0),84: fixed(31,2),
   // BlockAnvil: low two bits are orientation; high bits are damage stage.
+  // BlockEnchantmentTable: one state; its book tile entity is presentation-only here (enchanting-table.md).
+  [ENCHANTING_TABLE]: fixed(116),
   [ANVIL]: { mc: 145, to: (meta) => [145, meta & 15], from: (meta) => ({ meta, exact: true }) },
 };
 if (Object.keys(MAP).length !== BLOCKS.length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");

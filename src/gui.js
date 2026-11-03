@@ -1,9 +1,10 @@
 import {storedEnchantmentLines} from './enchanted-books.js';
 import {copyStack} from './inventory.js';
+import {stackHasEffect} from './armor-enchantments.js';
 // A save snapshots unfinished input/cursor stacks, never a calculated output.
 export function pendingContainerStacks(view){
  const c=view?.container;if(!c)return[];
- return [c.inv.cursor,...(c.grid?.stacks??[]),...(view.kind==='anvil'?c.inputs.stacks:[])].filter(Boolean).map(copyStack);
+ return [c.inv.cursor,...(c.grid?.stacks??[]),...(view.kind==='anvil'||view.kind==='enchanting'?c.inputs.stacks:[])].filter(Boolean).map(copyStack);
 }
 // GuiRepair's 40-character field and ChatAllowedCharacters filter.
 export const anvilName = text => String(text).replace(/[\u0000-\u001f\u007f\u00a7]/g,'').slice(0,40);
@@ -42,4 +43,12 @@ export function tooltipLines(item,stack,advanced=false){
  if(stack.unbreakable)lines.push({text:'Unbreakable',color:'blue'});
  if(advanced&&item.durability&&stack.damage>0)lines.push({text:`Durability: ${item.durability-stack.damage} / ${item.durability}`});
  return lines;
+}
+// ItemStack.hasEffect: RenderItem.renderEffect draws the enchantment glint over an item's icon. The glint is an
+// overlay carrying the icon's silhouette as a mask (container-ui.css .enchant-glint); the original's texture-matrix
+// scroll of misc/enchanted_item_glint.png is approximated by a CSS animation, not replayed pixel for pixel.
+export function withGlint(iconHtml,stack,item){
+ if(!stackHasEffect(stack,item))return iconHtml;
+ const m=/src="([^"]+)"/.exec(iconHtml)||/--base:url\('([^']+)'\)/.exec(iconHtml);
+ return iconHtml+(m?`<i class="enchant-glint" style="--glint-mask:url('${m[1]}')"></i>`:'');
 }

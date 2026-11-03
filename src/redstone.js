@@ -21,9 +21,19 @@
 //   BlockPressurePlateWeighted (aol, light 147 / heavy 148) over a scripted entity-box list;
 //   Block.dropBlockAsItemWithChance / dropBlockAsItem_do world-Random draws.
 //
+// Pistons (REDSTONE-04, see the "Pistons" section below): BlockPistonBase (app, 29 / 33),
+//   BlockPistonExtension (apq, 34), BlockPistonMoving (apr, 36) and TileEntityPiston (aps) with
+//   the World / Chunk tile-entity bookkeeping they depend on (setTileEntity, getTileEntity,
+//   removeTileEntity, the scanning flag and added list, Chunk.func_150806_e / func_150812_a /
+//   removeChunkBlockTileEntity, World.updateEntities' tile-entity loop) and the WorldServer
+//   double-buffered block event list (addBlockEvent / sendQueuedBlockEvents).
+//
 // Evidence: tools/probes/RedstoneProbe.java runs those classes in a real World and Chunks
 // and records public/research/redstone-reference.json; src/redstone.test.js replays every
-// scenario here. Not ported: pistons, tripwire, daylight refresh scheduling, powered rails/doors/TNT/
+// scenario here. tools/probes/PistonProbe.java does the same for pistons and records
+// public/research/piston-reference.json, replayed by src/pistons.test.js. Not ported: entity
+// pushing by TileEntityPiston (scripted entity list stays empty), creative-mode head harvest,
+// tripwire, daylight refresh scheduling, powered rails/doors/TNT/
 // note blocks and unported inventory block behaviors, entity physics, random ticks, lighting,
 // rendering. This module is not wired into the live game.
 import { JavaRandom } from "./java-random.js";
@@ -65,6 +75,12 @@ export const WOOD_PLATE = 72;
 export const LIGHT_PLATE = 147;
 export const HEAVY_PLATE = 148;
 export const REDSTONE_ITEM = 331;
+export const BEDROCK = 7;
+export const STICKY_PISTON = 29;
+export const PISTON = 33;
+export const PISTON_HEAD = 34;
+export const PISTON_MOVING = 36;
+export const OBSIDIAN = 49;
 
 // Native block properties for every registered 1.7.10 block id, as dumped by RedstoneProbe:
 // "id(base36).flags[.top(base36)]"; flags = materialOpaque*4 + renderAsNormalBlock*2 +
@@ -178,6 +194,13 @@ export class RedstoneWorld {
     this.sounds = [];
     this.drops = [];
     this.log = log ? [] : null;
+    // Pistons: WorldServer block events (two ArrayLists swapped by index) and the World tile-entity lists.
+    this.blockEvents = [[], []]; // WorldServer.blockEventCache
+    this.blockEventIndex = 0; // WorldServer.blockEventCacheIndex
+    this.chunkTiles = new Map(); // Chunk.chunkTileEntityMap by "x,y,z" (every chunk is loaded)
+    this.loadedTiles = []; // World.loadedTileEntityList
+    this.addedTiles = []; // World.addedTileEntityList
+    this.scanning = false; // World.field_147481_N (set while updateEntities runs its tile-entity loop)
   }
   record(entry) {
     if (this.log) this.log.push(entry);
@@ -231,7 +254,9 @@ export class RedstoneWorld {
     BEHAVIOUR[old]?.breakBlock?.(this, x, y, z, old, oldMeta);
     if (s.ids[i] !== id) return false;
     s.meta[i] = meta;
+    if (old === PISTON_MOVING) this.chunkTile(x, y, z);
     BEHAVIOUR[id]?.onBlockAdded?.(this, x, y, z);
+    if (id === PISTON_MOVING && !this.chunkTile(x, y, z)) this.setTileEntity(x, y, z, createNewTileEntity(id));
     if ((flags & 1) !== 0) {
       this.notifyBlocksOfNeighborChange(x, y, z, before);
       if (hasComparatorOverride(id)) this.updateNeighbourForOutputSignal(x, y, z, id);
@@ -462,6 +487,139 @@ export class RedstoneWorld {
       if (p > best) best = p;
     }
     return best;
+  }
+  // WorldServer.addBlockEvent: skip an event equal to one already in the list being filled.
+  addBlockEvent(x, y, z, id, event, param) {
+    this.record(`b,${x},${y},${z},${id},${event},${param}`);
+    for (const d of this.blockEvents[this.blockEventIndex])
+      if (d.x === x && d.y === y && d.z === z && d.id === id && d.event === event && d.param === param) return;
+    this.blockEvents[this.blockEventIndex].push({ x, y, z, id, event, param });
+  }
+  // WorldServer.sendQueuedBlockEvents: deliver one list while new events fill the other, until both are empty.
+  // An event whose block no longer stands at its position is dropped.
+  sendQueuedBlockEvents() {
+    while (this.blockEvents[this.blockEventIndex].length) {
+      const i = this.blockEventIndex;
+      this.blockEventIndex ^= 1;
+      for (const d of this.blockEvents[i]) {
+        const id = this.getBlock(d.x, d.y, d.z);
+        if (id !== d.id) continue;
+        this.record(`v,${d.x},${d.y},${d.z},${id},${d.event},${d.param}`);
+        const r = BEHAVIOUR[id]?.onBlockEventReceived?.(this, d.x, d.y, d.z, d.event, d.param) ?? false;
+        this.record(`r,${r ? 1 : 0}`);
+      }
+      this.blockEvents[i].length = 0;
+    }
+  }
+  queuedBlockEvents() {
+    return this.blockEvents[this.blockEventIndex].map((d) => ({ ...d }));
+  }
+  // Chunk.func_150806_e (getTileEntity with creation) for the piston-moving block, the only tile entity
+  // block modelled here: a missing entry makes the block's createNewTileEntity (null) go through
+  // World.setTileEntity; an invalidated entry is dropped.
+  chunkTile(x, y, z) {
+    const key = `${x},${y},${z}`;
+    let te = this.chunkTiles.get(key);
+    if (!te) {
+      const id = this.getBlock(x, y, z);
+      if (id !== PISTON_MOVING) return null;
+      te = createNewTileEntity(id);
+      this.setTileEntity(x, y, z, te);
+    }
+    if (te && te.invalid) {
+      this.chunkTiles.delete(key);
+      return null;
+    }
+    return te;
+  }
+  // Chunk.func_150812_a (setChunkBlockTileEntity): only for a tile-entity block; replaces and invalidates the old entry.
+  chunkSetTile(x, y, z, te) {
+    te.world = true;
+    te.x = x;
+    te.y = y;
+    te.z = z;
+    if (this.getBlock(x, y, z) !== PISTON_MOVING) return;
+    const key = `${x},${y},${z}`,
+      old = this.chunkTiles.get(key);
+    if (old) old.invalid = true;
+    te.invalid = false;
+    this.chunkTiles.set(key, te);
+  }
+  // Chunk.removeChunkBlockTileEntity.
+  chunkRemoveTile(x, y, z) {
+    const key = `${x},${y},${z}`,
+      te = this.chunkTiles.get(key);
+    if (!te) return;
+    this.chunkTiles.delete(key);
+    te.invalid = true;
+  }
+  // World.getTileEntity.
+  getTileEntity(x, y, z) {
+    if (y < 0 || y >= 256) return null;
+    let te = null;
+    if (this.scanning) te = this.addedTiles.find((t) => !t.invalid && t.x === x && t.y === y && t.z === z) ?? null;
+    if (!te) te = this.chunkTile(x, y, z);
+    if (!te) te = this.addedTiles.find((t) => !t.invalid && t.x === x && t.y === y && t.z === z) ?? null;
+    return te;
+  }
+  // World.setTileEntity (logged even for null, as the chunk's creation path calls it with null).
+  setTileEntity(x, y, z, te) {
+    this.record(`k,${x},${y},${z}`);
+    if (!te || te.invalid) return;
+    if (this.scanning) {
+      te.x = x;
+      te.y = y;
+      te.z = z;
+      this.addedTiles = this.addedTiles.filter((t) => {
+        if (t.x === x && t.y === y && t.z === z) {
+          t.invalid = true;
+          return false;
+        }
+        return true;
+      });
+      this.addedTiles.push(te);
+    } else {
+      this.loadedTiles.push(te);
+      this.chunkSetTile(x, y, z, te);
+    }
+  }
+  // World.removeTileEntity.
+  removeTileEntity(x, y, z) {
+    this.record(`K,${x},${y},${z}`);
+    const te = this.getTileEntity(x, y, z);
+    if (te && this.scanning) {
+      te.invalid = true;
+      this.addedTiles = this.addedTiles.filter((t) => t !== te);
+    } else {
+      if (te) {
+        this.addedTiles = this.addedTiles.filter((t) => t !== te);
+        this.loadedTiles = this.loadedTiles.filter((t) => t !== te);
+      }
+      this.chunkRemoveTile(x, y, z);
+    }
+  }
+  // The tile-entity part of World.updateEntities: update every loaded entity (tile entities created while
+  // scanning wait in the added list), drop invalid ones and their chunk entry, then adopt the added ones.
+  updateTileEntities() {
+    this.scanning = true;
+    for (let i = 0; i < this.loadedTiles.length; ) {
+      const te = this.loadedTiles[i];
+      if (!te.invalid && te.world && te.y >= 0 && te.y < 256) tileUpdate(this, te);
+      if (te.invalid) {
+        this.loadedTiles.splice(i, 1);
+        this.chunkRemoveTile(te.x, te.y, te.z);
+      } else i++;
+    }
+    this.scanning = false;
+    for (const te of this.addedTiles) {
+      if (te.invalid) continue;
+      if (!this.loadedTiles.includes(te)) this.loadedTiles.push(te);
+      this.chunkSetTile(te.x, te.y, te.z, te);
+    }
+    this.addedTiles = [];
+  }
+  pistonTiles() {
+    return this.loadedTiles.filter((t) => t.kind === "piston");
   }
   playSoundEffect(x, y, z, name, volume, pitch) {
     this.record(`p,${name}`);
@@ -1253,6 +1411,311 @@ function pressurePlate(id, { mode, max, rate, weighted }) {
   };
 }
 
+// ---- Pistons (REDSTONE-04) ----
+// Native Block.getBlockHardness == -1, getMobilityFlag, ITileEntityProvider and Material.air for every
+// registered id below 256 as dumped by tools/probes/PistonProbe.java ("id.hardnessMinusOne.mobility.tile.air";
+// rows equal to 0.0.0.0.0 are left out). Mobility: 0 normal, 1 destroyed by a piston, 2 immovable.
+const PISTON_PACKED =
+  "0.0.0.0.1 6.0.1.0.0 7.1.0.0.0 8.0.1.0.0 9.0.1.0.0 10.0.1.0.0 11.0.1.0.0 18.0.1.0.0 23.0.0.1.0 25.0.0.1.0 26.0.1.0.0 29.0.2.0.0 30.0.1.0.0 31.0.1.0.0 32.0.1.0.0 33.0.2.0.0 34.0.2.0.0 36.1.2.1.0 37.0.1.0.0 38.0.1.0.0 39.0.1.0.0 40.0.1.0.0 50.0.1.0.0 51.0.1.0.0 52.0.0.1.0 54.0.0.1.0 55.0.1.0.0 59.0.1.0.0 61.0.0.1.0 62.0.0.1.0 63.0.0.1.0 64.0.1.0.0 65.0.1.0.0 68.0.0.1.0 69.0.1.0.0 70.0.1.0.0 71.0.1.0.0 72.0.1.0.0 75.0.1.0.0 76.0.1.0.0 77.0.1.0.0 78.0.1.0.0 81.0.1.0.0 83.0.1.0.0 84.0.0.1.0 86.0.1.0.0 90.1.2.0.0 91.0.1.0.0 92.0.1.0.0 93.0.1.0.0 94.0.1.0.0 103.0.1.0.0 104.0.1.0.0 105.0.1.0.0 106.0.1.0.0 111.0.1.0.0 115.0.1.0.0 116.0.0.1.0 117.0.0.1.0 119.1.2.1.0 120.1.0.0.0 122.0.1.0.0 127.0.1.0.0 130.0.0.1.0 131.0.1.0.0 132.0.1.0.0 137.1.0.1.0 138.0.0.1.0 140.0.1.1.0 141.0.1.0.0 142.0.1.0.0 143.0.1.0.0 144.0.1.1.0 145.0.2.0.0 146.0.0.1.0 147.0.1.0.0 148.0.1.0.0 149.0.1.1.0 150.0.1.1.0 151.0.0.1.0 154.0.0.1.0 158.0.0.1.0 161.0.1.0.0 175.0.1.0.0";
+const NO_HARDNESS = new Uint8Array(256),
+  MOBILITY = new Uint8Array(256),
+  TILE_PROVIDER = new Uint8Array(256),
+  AIR_MATERIAL = new Uint8Array(256);
+for (const entry of PISTON_PACKED.split(" ")) {
+  const [id, hard, mobility, tile, air] = entry.split(".").map(Number);
+  NO_HARDNESS[id] = hard;
+  MOBILITY[id] = mobility;
+  TILE_PROVIDER[id] = tile;
+  AIR_MATERIAL[id] = air;
+}
+// [id, hardness == -1, getMobilityFlag, ITileEntityProvider, material air] rows for every registered id.
+export function pistonBlockProperties() {
+  const rows = [];
+  for (let id = 0; id < 256; id++)
+    if (REGISTERED[id]) rows.push([id, NO_HARDNESS[id], MOBILITY[id], TILE_PROVIDER[id], AIR_MATERIAL[id]]);
+  return rows;
+}
+const isAirMaterial = (id) => AIR_MATERIAL[id] === 1 || !REGISTERED[id];
+const isPistonBase = (id) => id === PISTON || id === STICKY_PISTON;
+const isExtended = (meta) => (meta & 8) !== 0; // BlockPistonBase.isExtended
+const pistonFacing = (meta) => meta & 7; // BlockPistonBase.getPistonOrientation
+const F025 = Math.fround(0.25),
+  F015 = Math.fround(0.15),
+  F06 = Math.fround(0.6);
+
+// Block.createNewTileEntity: BlockPistonMoving returns null (the entity is attached by the piston).
+function createNewTileEntity() {
+  return null;
+}
+// BlockPistonMoving.func_149962_a: a TileEntityPiston holding `block` with `meta`, moving along `facing`.
+export function pistonTile(block, meta, facing, extending, renderHead) {
+  return { kind: "piston", block, meta, facing, extending, renderHead, progress: 0, lastProgress: 0, invalid: false, world: false, x: 0, y: 0, z: 0 };
+}
+// TileEntityPiston.clearPistonTileEntity: finish the move at once and put the stored block in place.
+function tileClear(w, te) {
+  if (te.lastProgress < 1 && te.world) {
+    te.progress = te.lastProgress = 1;
+    w.removeTileEntity(te.x, te.y, te.z);
+    te.invalid = true;
+    if (w.getBlock(te.x, te.y, te.z) === PISTON_MOVING) {
+      w.setBlock(te.x, te.y, te.z, te.block, te.meta, 3);
+      w.notifyBlockOfNeighborChange(te.x, te.y, te.z, te.block);
+    }
+  }
+}
+// TileEntityPiston.updateEntity: progress 0 -> 0.5 -> 1.0, then the next update replaces the moving block.
+// Entity pushing (func_145863_a) is not ported: the scripted entity list is empty in every scenario.
+function tileUpdate(w, te) {
+  te.lastProgress = te.progress;
+  if (te.lastProgress >= 1) {
+    w.removeTileEntity(te.x, te.y, te.z);
+    te.invalid = true;
+    if (w.getBlock(te.x, te.y, te.z) === PISTON_MOVING) {
+      w.setBlock(te.x, te.y, te.z, te.block, te.meta, 3);
+      w.notifyBlockOfNeighborChange(te.x, te.y, te.z, te.block);
+    }
+    return;
+  }
+  te.progress += 0.5;
+  if (te.progress >= 1) te.progress = 1;
+}
+// BlockPistonBase.canPushBlock.
+function canPushBlock(w, id, x, y, z, allowDestroy) {
+  if (id === OBSIDIAN) return false;
+  if (isPistonBase(id)) {
+    if (isExtended(w.getBlockMetadata(x, y, z))) return false;
+  } else {
+    if (NO_HARDNESS[id] === 1) return false;
+    if (MOBILITY[id] === 2) return false;
+    if (MOBILITY[id] === 1) return allowDestroy;
+  }
+  return TILE_PROVIDER[id] !== 1;
+}
+// BlockPistonBase.func_150077_h (canExtend): the push line may hold at most 12 blocks and ends at air or a
+// block the piston destroys; y must stay inside 1..254.
+function canExtend(w, x, y, z, facing) {
+  let x1 = x + FACING_X[facing],
+    y1 = y + FACING_Y[facing],
+    z1 = z + FACING_Z[facing];
+  for (let i = 0; i < 13; i++) {
+    if (y1 <= 0 || y1 >= 255) return false;
+    const id = w.getBlock(x1, y1, z1);
+    if (isAirMaterial(id)) break;
+    if (!canPushBlock(w, id, x1, y1, z1, true)) return false;
+    if (MOBILITY[id] === 1) break;
+    if (i === 12) return false;
+    x1 += FACING_X[facing];
+    y1 += FACING_Y[facing];
+    z1 += FACING_Z[facing];
+  }
+  return true;
+}
+// BlockPistonBase.func_150079_i (tryExtend): break a mobility-1 block at the end of the line (drop, then
+// setBlockToAir), then move the line one cell with piston-moving blocks (flags 4) from the far end back, and
+// notify the neighbours of every vacated cell in the same order.
+function tryExtend(w, self, x, y, z, facing) {
+  let x1 = x + FACING_X[facing],
+    y1 = y + FACING_Y[facing],
+    z1 = z + FACING_Z[facing];
+  for (let i = 0; i < 13; i++) {
+    if (y1 <= 0 || y1 >= 255) return false;
+    const id = w.getBlock(x1, y1, z1);
+    if (isAirMaterial(id)) break;
+    if (!canPushBlock(w, id, x1, y1, z1, true)) return false;
+    if (MOBILITY[id] === 1) {
+      w.dropBlockAsItem(x1, y1, z1, id, w.getBlockMetadata(x1, y1, z1));
+      w.setBlockToAir(x1, y1, z1);
+      break;
+    }
+    if (i === 12) return false;
+    x1 += FACING_X[facing];
+    y1 += FACING_Y[facing];
+    z1 += FACING_Z[facing];
+  }
+  const endX = x1,
+    endY = y1,
+    endZ = z1,
+    moved = [],
+    sticky = self === STICKY_PISTON ? 8 : 0;
+  while (x1 !== x || y1 !== y || z1 !== z) {
+    const px = x1 - FACING_X[facing],
+      py = y1 - FACING_Y[facing],
+      pz = z1 - FACING_Z[facing],
+      id = w.getBlock(px, py, pz),
+      meta = w.getBlockMetadata(px, py, pz);
+    if (id === self && px === x && py === y && pz === z) {
+      w.setBlock(x1, y1, z1, PISTON_MOVING, facing | sticky, 4);
+      w.setTileEntity(x1, y1, z1, pistonTile(PISTON_HEAD, facing | sticky, facing, true, false));
+    } else {
+      w.setBlock(x1, y1, z1, PISTON_MOVING, meta, 4);
+      w.setTileEntity(x1, y1, z1, pistonTile(id, meta, facing, true, false));
+    }
+    moved.push(id);
+    x1 = px;
+    y1 = py;
+    z1 = pz;
+  }
+  x1 = endX;
+  y1 = endY;
+  z1 = endZ;
+  let n = 0;
+  while (x1 !== x || y1 !== y || z1 !== z) {
+    x1 -= FACING_X[facing];
+    y1 -= FACING_Y[facing];
+    z1 -= FACING_Z[facing];
+    w.notifyBlocksOfNeighborChange(x1, y1, z1, moved[n++]);
+  }
+  return true;
+}
+// BlockPistonBase.isIndirectlyPowered (func_150072_a): the sides but the face, then the same checks for the
+// cell itself and the cells one above it (quasi-connectivity), in this order (east before west).
+function isIndirectlyPowered(w, x, y, z, facing) {
+  const f = (a, b, c, d) => w.isBlockIndirectlyProvidingPowerTo(a, b, c, d);
+  return (
+    (facing !== 0 && f(x, y - 1, z, 0)) ||
+    (facing !== 1 && f(x, y + 1, z, 1)) ||
+    (facing !== 2 && f(x, y, z - 1, 2)) ||
+    (facing !== 3 && f(x, y, z + 1, 3)) ||
+    (facing !== 5 && f(x + 1, y, z, 5)) ||
+    (facing !== 4 && f(x - 1, y, z, 4)) ||
+    f(x, y, z, 0) ||
+    f(x, y + 2, z, 1) ||
+    f(x, y + 1, z - 1, 2) ||
+    f(x, y + 1, z + 1, 3) ||
+    f(x - 1, y + 1, z, 4) ||
+    f(x + 1, y + 1, z, 5)
+  );
+}
+// BlockPistonBase.func_150078_e (updatePistonState).
+function updatePistonState(w, self, x, y, z) {
+  const meta = w.getBlockMetadata(x, y, z),
+    facing = pistonFacing(meta);
+  if (facing === 7) return;
+  const powered = isIndirectlyPowered(w, x, y, z, facing);
+  if (powered && !isExtended(meta)) {
+    if (canExtend(w, x, y, z, facing)) w.addBlockEvent(x, y, z, self, 0, facing);
+  } else if (!powered && isExtended(meta)) {
+    w.setBlockMetadataWithNotify(x, y, z, facing, 2);
+    w.addBlockEvent(x, y, z, self, 1, facing);
+  }
+}
+// BlockPistonBase.determineOrientation for a placer { x, y, z (feet), yaw } with eye height 1.62.
+export function pistonOrientation(x, y, z, placer) {
+  const f32 = Math.fround;
+  if (Math.abs(f32(f32(placer.x) - x)) < 2 && Math.abs(f32(f32(placer.z) - z)) < 2) {
+    const eye = placer.y + 1.82 - f32(1.62);
+    if (eye - y > 2) return 1;
+    if (y - eye > 0) return 0;
+  }
+  const l = Math.floor(f32(f32(f32(placer.yaw) * 4) / 360) + 0.5) & 3;
+  return l === 0 ? 2 : l === 1 ? 5 : l === 2 ? 3 : l === 3 ? 4 : 0;
+}
+function pistonBase(self) {
+  const sticky = self === STICKY_PISTON;
+  return {
+    onBlockAdded(w, x, y, z) {
+      if (!w.getTileEntity(x, y, z)) updatePistonState(w, self, x, y, z);
+    },
+    onNeighborBlockChange(w, x, y, z) {
+      updatePistonState(w, self, x, y, z);
+    },
+    onBlockPlacedBy(w, x, y, z, placer) {
+      w.setBlockMetadataWithNotify(x, y, z, pistonOrientation(x, y, z, placer), 2);
+      updatePistonState(w, self, x, y, z);
+    },
+    // BlockPistonBase.onBlockEventReceived: event 0 extends, 1 retracts; a retract event that finds the piston
+    // powered again only re-sets the extended bit, an extend event without power does nothing.
+    onBlockEventReceived(w, x, y, z, event, facing) {
+      const powered = isIndirectlyPowered(w, x, y, z, facing);
+      if (powered && event === 1) {
+        w.setBlockMetadataWithNotify(x, y, z, facing | 8, 2);
+        return false;
+      }
+      if (!powered && event === 0) return false;
+      if (event === 0) {
+        if (!tryExtend(w, self, x, y, z, facing)) return false;
+        w.setBlockMetadataWithNotify(x, y, z, facing | 8, 2);
+        w.playSoundEffect(x + 0.5, y + 0.5, z + 0.5, "tile.piston.out", 0.5, Math.fround(Math.fround(w.rand.nextFloat() * F025) + F06));
+      } else if (event === 1) {
+        const front = w.getTileEntity(x + FACING_X[facing], y + FACING_Y[facing], z + FACING_Z[facing]);
+        if (front && front.kind === "piston") tileClear(w, front);
+        w.setBlock(x, y, z, PISTON_MOVING, facing, 3);
+        w.setTileEntity(x, y, z, pistonTile(self, facing, facing, false, true));
+        if (sticky) {
+          const nx = x + FACING_X[facing] * 2,
+            ny = y + FACING_Y[facing] * 2,
+            nz = z + FACING_Z[facing] * 2;
+          let id = w.getBlock(nx, ny, nz),
+            meta = w.getBlockMetadata(nx, ny, nz),
+            completed = false;
+          if (id === PISTON_MOVING) {
+            const te = w.getTileEntity(nx, ny, nz);
+            if (te && te.kind === "piston" && te.facing === facing && te.extending) {
+              tileClear(w, te);
+              id = te.block;
+              meta = te.meta;
+              completed = true;
+            }
+          }
+          if (!completed && !isAirMaterial(id) && canPushBlock(w, id, nx, ny, nz, false) && (MOBILITY[id] === 0 || isPistonBase(id))) {
+            x += FACING_X[facing];
+            y += FACING_Y[facing];
+            z += FACING_Z[facing];
+            w.setBlock(x, y, z, PISTON_MOVING, meta, 3);
+            w.setTileEntity(x, y, z, pistonTile(id, meta, facing, false, false));
+            w.setBlockToAir(nx, ny, nz);
+          } else if (!completed) w.setBlockToAir(x + FACING_X[facing], y + FACING_Y[facing], z + FACING_Z[facing]);
+        } else w.setBlockToAir(x + FACING_X[facing], y + FACING_Y[facing], z + FACING_Z[facing]);
+        w.playSoundEffect(x + 0.5, y + 0.5, z + 0.5, "tile.piston.in", 0.5, Math.fround(Math.fround(w.rand.nextFloat() * F015) + F06));
+      }
+      return true;
+    },
+  };
+}
+// BlockPistonExtension (the piston head, metadata = facing + 8 when sticky).
+const pistonHead = {
+  // breakBlock: removing the head drops and removes an extended base behind it.
+  breakBlock(w, x, y, z, old, meta) {
+    const dir = ROTATE_FACING_OPPOSITE[Math.min(meta & 7, 5)],
+      bx = x + FACING_X[dir],
+      by = y + FACING_Y[dir],
+      bz = z + FACING_Z[dir],
+      id = w.getBlock(bx, by, bz);
+    if (isPistonBase(id)) {
+      const m = w.getBlockMetadata(bx, by, bz);
+      if (isExtended(m)) {
+        w.dropBlockAsItem(bx, by, bz, id, m);
+        w.setBlockToAir(bx, by, bz);
+      }
+    }
+  },
+  // onNeighborBlockChange: a head without its base disappears, otherwise the base re-evaluates its state.
+  onNeighborBlockChange(w, x, y, z, source) {
+    const dir = Math.min(w.getBlockMetadata(x, y, z) & 7, 5),
+      bx = x - FACING_X[dir],
+      by = y - FACING_Y[dir],
+      bz = z - FACING_Z[dir],
+      id = w.getBlock(bx, by, bz);
+    if (!isPistonBase(id)) w.setBlockToAir(x, y, z);
+    else BEHAVIOUR[id].onNeighborBlockChange(w, bx, by, bz, source);
+  },
+};
+// BlockPistonMoving.
+const pistonMoving = {
+  // breakBlock: replacing a moving block finishes its tile entity; without one BlockContainer.breakBlock
+  // removes the tile entity.
+  breakBlock(w, x, y, z) {
+    const te = w.getTileEntity(x, y, z);
+    if (te && te.kind === "piston") tileClear(w, te);
+    else w.removeTileEntity(x, y, z);
+  },
+  onNeighborBlockChange(w, x, y, z) {
+    w.getTileEntity(x, y, z);
+  },
+};
+// Facing.opposite for the head's breakBlock (q.a): down/up, north/south, west/east.
+const ROTATE_FACING_OPPOSITE = [1, 0, 3, 2, 5, 4];
+
 const BEHAVIOUR = {
   [WIRE]: wire,
   [TORCH]: redstoneTorch(true),
@@ -1273,6 +1736,10 @@ const BEHAVIOUR = {
   [WOOD_PLATE]: pressurePlate(WOOD_PLATE, { mode: "all", rate: 20 }),
   [LIGHT_PLATE]: pressurePlate(LIGHT_PLATE, { max: 15, rate: 10, weighted: true }),
   [HEAVY_PLATE]: pressurePlate(HEAVY_PLATE, { max: 150, rate: 10, weighted: true }),
+  [PISTON]: pistonBase(PISTON),
+  [STICKY_PISTON]: pistonBase(STICKY_PISTON),
+  [PISTON_HEAD]: pistonHead,
+  [PISTON_MOVING]: pistonMoving,
 };
 export const PORTED_BLOCKS = Object.keys(BEHAVIOUR).map(Number);
 
@@ -1313,6 +1780,7 @@ export function replayScenario(s) {
     prevSig = signals();
   const frames = [],
     tiles = [],
+    te = [],
     calls = [],
     sounds = [],
     drops = [];
@@ -1331,6 +1799,11 @@ export function replayScenario(s) {
       else if (op === "air") w.setBlockToAir(x, y, z);
       else if (op === "use") w.activate(x, y, z);
       else if (op === "placeby") w.placeBy(x, y, z, id, meta);
+      else if (op === "placepiston") {
+        // ItemBlock.placeBlockAt: setBlock(id, 0, 3), then onBlockPlacedBy for a placer standing at (px, py, pz).
+        const [, px, py, pz, yaw] = args;
+        if (w.setBlock(x, y, z, id, 0, 3) && w.getBlock(x, y, z) === id) BEHAVIOUR[id]?.onBlockPlacedBy?.(w, x, y, z, { x: ox + px, y: oy + py, z: oz + pz, yaw });
+      }
       else if (op === "cauldron") {
         // BlockCauldron.func_150024_a(setWaterLevel): clamp 0..3, metadata flags 2, then the comparator update.
         w.setBlockMetadataWithNotify(x, y, z, Math.min(Math.max(id, 0), 3), 2);
@@ -1362,6 +1835,8 @@ export function replayScenario(s) {
     w.time++;
     w.record("T");
     w.tickUpdates();
+    w.sendQueuedBlockEvents();
+    w.updateTileEntities();
     const now = snapshot(),
       diff = [];
     for (let i = 0; i < now.length; i++)
@@ -1374,6 +1849,7 @@ export function replayScenario(s) {
       if (sig[i] !== prevSig[i]) tdiff.push([Math.floor(i / (dy * dz)), Math.floor(i / dz) % dy, i % dz, sig[i]]);
     prevSig = sig;
     tiles.push(tdiff);
+    te.push(w.pistonTiles().map((t) => [t.x - ox, t.y - oy, t.z - oz, t.block, t.meta, t.facing, t.extending ? 1 : 0, t.renderHead ? 1 : 0, t.progress, t.lastProgress]));
     calls.push(w.log.join(" "));
     for (const e of w.sounds.slice(soundStart)) sounds.push([t, e.x, e.y, e.z, e.name, e.volume, e.pitch]);
     for (const e of w.drops.slice(dropStart)) drops.push([t, e.x, e.y, e.z, e.item, e.count, e.damage]);
@@ -1381,6 +1857,8 @@ export function replayScenario(s) {
   return {
     frames,
     tiles,
+    te,
+    queued: w.queuedBlockEvents().map((d) => [d.x - ox, d.y - oy, d.z - oz, d.id, d.event, d.param]),
     calls,
     final: prev.map(([id, m]) => (m ? `${id}:${m}` : `${id}`)).join(","),
     pending: w.pendingTicks().map((e) => [e.x - ox, e.y - oy, e.z - oz, e.id, e.time - w.time, e.priority]),

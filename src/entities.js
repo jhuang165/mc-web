@@ -7,6 +7,7 @@ import { creeperFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from
 import { SIZE, HEIGHT, hash, slipperiness, collisionBoxes as cellCollisionBoxes, normalCube, WOOL, isLiquid, DYE } from "./world.js";
 import { isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
 import { ITEMS } from "./survival.js";
+import { weaponEnchantments, arthropodSlowness, javaLikeRandom } from "./enchantment-effects.js";
 import { insideOpaqueBlock, mobEyeHeight } from "./suffocation.js";
 import { mhSin, mhCos, JavaRandom } from "./lighting.js";
 import { enterWater, burst, drownBubbles } from "./fx.js";
@@ -692,8 +693,8 @@ export class EntityWorld {
   // A damage source with an attacking entity at (fromX, fromZ): `byPlayer` for the player
   // (melee, its arrows and snowballs), else `attacker` names the mob (a skeleton's arrow, a
   // creeper's blast). See attackEntityFrom.
-  damage(e, amount, fromX, fromZ, byPlayer = true, attacker = null) {
-    return this.attackEntityFrom(e, amount, { from: { x: fromX, z: fromZ }, player: byPlayer, attacker, name: byPlayer ? "player" : "mob" });
+  damage(e, amount, fromX, fromZ, byPlayer = true, attacker = null, extra = null) {
+    return this.attackEntityFrom(e, amount, { from: { x: fromX, z: fromZ }, player: byPlayer, attacker, name: byPlayer ? "player" : "mob", ...extra });
   }
   // EntityLivingBase.attackEntityFrom (sv.a(ro, F)); `source` is { name, from, player,
   // attacker }. EntityAnimal's part comes first, even for a rejected hit: fleeingTick 60 (a
@@ -863,10 +864,15 @@ export class EntityWorld {
   // mob damage source, which EntityPlayer.attackEntityFrom scales by difficulty
   // (Survival.scaledDamage); a burning zombie with an empty hand may set the player alight.
   hitPlayer(e, survival) {
-    const hit = survival.scaledDamage(attackDamage(e, ENTITY_TYPES[e.type].damage), "a " + e.type);
+    // Thorns (EnchantmentHelper.func_151384_a) hurts the mob as a player-caused hit that knocks it back from the player.
+    const wearer = this.ai?.player, thorns = {
+      hurt: (damage) => this.attackEntityFrom(e, damage, { from: wearer && { x: wearer.x, z: wearer.z }, player: true, name: "thorns" }),
+      sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: e.x, y: e.y, z: e.z } }),
+    };
+    const hit = survival.scaledDamage(attackDamage(e, ENTITY_TYPES[e.type].damage), "a " + e.type, { attacker: thorns });
     if (hit && e.type === "zombie") {
       const ticks = zombieFireOnHit(entityRandom(e), this.difficulty, e.burn > 0 || e.fire > 0);
-      if (ticks) survival.fire = Math.max(survival.fire, ticks);
+      if (ticks) survival.setFire(ticks / 20);
     }
     // EntityCaveSpider.attackEntityAsMob: addPotionEffect(new PotionEffect(poison, ticks, 0)).
     if (hit && e.type === "cave_spider") {
@@ -881,24 +887,44 @@ export class EntityWorld {
     const t = ENTITY_TYPES[e.type], s = e.growingAge < 0 ? 0.5 : 1;
     return { x: e.x, z: e.z, minY: e.y, width: f(t.width * s), height: f(t.height * s), mx: e.vx, my: e.vy, mz: e.vz };
   }
-  attack(e, tool, survival, player, extraKnockback = 0, critical = false) {
+  // EntityPlayer.attackTargetEntityWithCurrentItem (yz.r) with the held weapon's enchantments, in the
+  // original's order: damage f (x 1.5 for a critical hit) plus Sharpness/Smite/Bane f1; Fire Aspect sets
+  // the target alight for 1 s before the hit (undone when the hit does not land); the hit (Looting rides on
+  // the source into onDeath); on a landed hit the Knockback + sprint push, then Bane of Arthropods'
+  // slowness roll on the player's Random; the tool wears and, for Fire Aspect, the target burns for
+  // level * 4 s. `info` receives {knockback, enchantCritical, slowness} for the caller (the player's
+  // own slowdown, the magic-crit particles, the hotbar).
+  attack(e, tool, survival, player, extraKnockback = 0, critical = false, info = {}) {
     if (!this.entities.includes(e) || e.health <= 0) return false;
     const item = ITEMS[tool],
-      owned = survival.creative || survival.count(tool) > 0;
+      owned = survival.creative || survival.count(tool) > 0,
+      held = owned && survival.held?.id === tool ? survival.held : null,
+      weapon = weaponEnchantments(held, e.type);
     let damage = heldAttackDamage(tool, survival);
     if (critical) damage = criticalDamage(damage);
-    if (e.hurt > 0 && damage <= e.lastDamage) return false;
-    if (!this.damage(e, damage, player.x, player.z)) return false;
-    // EntityPlayer.attackTargetEntityWithCurrentItem (yz.r): sprinting and Knockback add
-    // addVelocity(-sin(yaw) * n * 0.5F, 0.1, cos(yaw) * n * 0.5F) with the sine table and
-    // Java floats; player.yaw is this build's radian view yaw (Java yaw = 180 - yaw degrees).
-    if (extraKnockback > 0 && Number.isFinite(player.yaw)) {
-      const rad = f(f(f(180 - player.yaw * (180 / Math.PI)) * f(Math.PI)) / 180);
-      addVelocity(e, f(f(-mhSin(rad) * extraKnockback) * 0.5), 0.1, f(f(mhCos(rad) * extraKnockback) * 0.5));
+    damage = f(damage + weapon.damage);
+    const knockback = extraKnockback + weapon.knockback, ignite = weapon.fireAspect > 0 && !(e.fire > 0);
+    if (ignite) e.fire = Math.max(e.fire || 0, 20);
+    const landed = !(e.hurt > 0 && damage <= e.lastDamage) && this.damage(e, damage, player.x, player.z, true, null, { looting: weapon.looting });
+    if (landed) {
+      // Entity.addVelocity(-sin(yaw) * n * 0.5F, 0.1, cos(yaw) * n * 0.5F) with the sine table and Java
+      // floats; player.yaw is this build's radian view yaw (Java yaw = 180 - yaw degrees).
+      if (knockback > 0 && Number.isFinite(player.yaw)) {
+        const rad = f(f(f(180 - player.yaw * (180 / Math.PI)) * f(Math.PI)) / 180);
+        addVelocity(e, f(f(-mhSin(rad) * knockback) * 0.5), 0.1, f(f(mhCos(rad) * knockback) * 0.5));
+      }
+      info.knockback = knockback;
+      info.enchantCritical = weapon.damage > 0;
+      info.slowness = arthropodSlowness(survival.inventory?.armor, held, e.type, info.playerRandom ?? (this.playerRandom ??= javaLikeRandom(this.random)));
     }
-    survival.exhaust(0.3);
-    if (owned&&["sword","axe","pickaxe","shovel"].includes(item?.kind)) survival.wear(tool,item.kind==='sword'?1:2);
-    return true;
+    // The reference shows no tool wear when the hit is refused by the hurt window.
+    if (landed) {
+      if (owned && ["sword", "axe", "pickaxe", "shovel"].includes(item?.kind)) survival.wear(tool, item.kind === "sword" ? 1 : 2);
+      survival.exhaust(0.3);
+    }
+    if (weapon.fireAspect > 0 && landed) e.fire = Math.max(e.fire || 0, weapon.fireAspect * 80);
+    else if (ignite) e.fire = 0;
+    return landed;
   }
   // EntityLivingBase.onDeath: a mob that is not a child drops its items (combat.js
   // mobDrops) on Entity.rand; the experience waits for deathTime 20 (deathUpdate). The death
@@ -906,7 +932,7 @@ export class EntityWorld {
   onDeath(e, source = {}) {
     if (e.growingAge >= 0) {
       const at = { x: e.x, y: e.y, z: e.z };
-      for (const [drop, damage] of mobDrops(e, { playerHit: e.recentlyHit > 0, burning: e.fire > 0, bySkeleton: source.attacker === "skeleton" }, entityRandom(e)))
+      for (const [drop, damage] of mobDrops(e, { playerHit: e.recentlyHit > 0, burning: e.fire > 0, bySkeleton: source.attacker === "skeleton", looting: source.player ? source.looting || 0 : 0 }, entityRandom(e)))
         this.events.push({ drop, count: 1, ...(damage ? { damage } : {}), position: at });
     }
     e.death = 0;

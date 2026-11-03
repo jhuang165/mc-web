@@ -1,3 +1,4 @@
+import { playerMiningState } from './enchantment-effects.js';
 // PlayerControllerMP mining progress and PlayerControllerMP click particles from the
 // live tick. Inputs are plain tick state; rendering, sound, edit dispatch and block
 // removal stay synchronous caller hooks so they keep their original position in order.
@@ -38,7 +39,8 @@ export function tickPlayerMining(state, {
           const under = eyeInWater();
           swing();
           if (state.survival.time % 4 === 0) digSound(mine.type);
-          mine.progress = Math.fround(mine.progress + state.survival.mining(
+          mine.progress = Math.fround(mine.progress + playerMiningState(
+            state.survival,
             mine.type,
             state.heldTool,
             under,

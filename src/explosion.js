@@ -5,7 +5,7 @@
 import { JavaRandom } from "./lighting.js";
 import { rayTraceBlocks } from "./projectiles.js";
 import { moveEntity } from "./entities.js";
-import { TNT, WOOL, RED_FLOWER, SAPLING, SNOW_LAYER, ICE, FIRE, CARROTS, POTATOES, WEB, LADDER, YELLOW_FLOWER } from "./world.js";
+import { TNT, WOOL, RED_FLOWER, SAPLING, SNOW_LAYER, ICE, FIRE, CARROTS, POTATOES, WEB, LADDER, YELLOW_FLOWER, ENCHANTING_TABLE } from "./world.js";
 import { leafDrops } from "./trees.js";
 
 const f = Math.fround;
@@ -17,7 +17,7 @@ const RESIST = {
   1: 0.6, 2: 0.5, 3: 6, 4: 2, 5: 0.2, 6: 0.5, 7: 3, 8: 6, 9: 0.3, 10: 100, 11: 3600000, 12: 6, 13: 2.5, 14: 3.5,
   15: 3, 16: 3, 17: 3, 18: 3, 19: 0.8, 20: 0, 21: 1.5, 22: 1200, 23: 0.2, 24: 0.6, 25: 0.6, 26: 6, 27: 6, 28: 6,
   29: 0.6, 30: 0.6, 39: 0, 40: 4.2, 41: 2.5, 42: 100, 43: 0, 44: 0, 45: 0, 46: 0.1, 47: 0.5, 48: 0, 49: 0, 50: 0,
-  51: 4, 52: 0.4, [TNT]: 0,
+  51: 4, 52: 0.4, [TNT]: 0, [ENCHANTING_TABLE]: 1200, // BlockEnchantmentTable: setResistance(2000), see enchanting-table-reference.json
 };
 for (let id = 31; id <= 38; id++) RESIST[id] = 0;
 export const explosionResistance = (id) => f(RESIST[id] ?? 0);

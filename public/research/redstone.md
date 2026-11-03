@@ -142,6 +142,29 @@ Mutation checks were run against the reference: changing the lamp delay, the bur
 
 One native quirk is reproduced: a lamp's pending turn-off tick is not cancelled when the lamp is re-powered. So if power is removed again just before that old tick fires, the lamp goes dark at once, not 4 ticks later (`lamp-delay`, ticks 12 to 16).
 
+## Pistons (REDSTONE-04, standalone)
+
+Pistons live in `src/redstone.js` next to the other blocks and stay unwired from live play. Evidence: `tools/probes/PistonProbe.java` and `tools/verify-pistons.mjs` replay the unchanged 1.7.10 classes and write `public/research/piston-reference.json` (class sha256 digests, decompiled method text, block tables, 30 scenarios, 710 ticks, 48,886 logged calls, 200 delivered block events, 1,165 cell changes, 584 piston tile-entity states, 279 sounds, 15 drops). `src/pistons.test.js` replays every scenario: call log, block changes and tile-entity state per tick, final grid, pending ticks, queued events, sounds, drops and the RNG state. `redstone-reference.json` is unchanged and its tests pass as before.
+
+Ported:
+
+- BlockPistonBase (33 normal, 29 sticky): facing from metadata and the extended bit 8, `isIndirectlyPowered` including the quasi-connectivity check one block up, `onBlockPlacedBy` and `determineOrientation`, `canPushBlock` (obsidian, hardness -1, mobility 1 break-and-drop, mobility 2 immovable, tile-entity blocks, extended pistons), the 12-block limit and the y bounds, event 0 extend and event 1 retract including the sticky pull and its 1.7.10 moving-block branch.
+- BlockPistonExtension (34): removes itself without a base, breaking it drops and removes the extended base.
+- BlockPistonMoving (36) with TileEntityPiston: progress 0, 0.5, 1 and finalisation, `clearPistonTileEntity`.
+- World block events: `addBlockEvent` de-duplication, the double-buffered list, `sendQueuedBlockEvents` re-checking the block id at delivery. Tick order in the replay: scripted events, tick updates, block events, tile entities.
+- Sounds `tile.piston.out` (pitch rand*0.25+0.6) and `tile.piston.in` (rand*0.15+0.6), and item drops for pushed mobility-1 blocks.
+- Tile-entity bookkeeping (setTileEntity, getTileEntity, removeTileEntity, the added-while-scanning list and chunk map) is modelled for block 36 only.
+
+Scenarios: single push and sticky pull, 12 blocks, 13 refused, a 13th placed after the event is queued, a torch at the 13th cell, immovable lanes, drops, 1 to 6 tick pulses, sticky pull exceptions, quasi-connectivity, redstone blocks and lamps pushed, double extenders, flicker inside one tick, placement orientation, placement beside power, head and base removal, top and bottom height limits, all six facings, event order, every power source kind, a repeater ring clock driving a normal and a sticky piston, and retraction from a pre-extended state.
+
+Limits:
+
+- Entity pushing (TileEntityPiston moving entities) is not ported or recorded. The probe's entity list is empty.
+- Creative-mode head removal (the harvest skip) is not ported.
+- Only block 36 is a tile-entity provider for the k/K bookkeeping. Chests and comparators keep the older sidecar maps.
+- No client rendering, no piston textures, no live world, chunk loading or saving. Not wired into `main.js`.
+- Evidence covers the recorded scenarios only. Same Java 8 HashSet caveat as above. No later-version behaviour (no slime blocks).
+
 ## Deviations and modelling limits
 
 - **HashSet order is that of Java 8 and later.** The probe ran on a modern JDK. Original 1.7.10 shipped on Java 6/7, whose HashMap spreads hashes differently. The iteration order, and with it the notification order (not the final power levels), can differ on a Java 7 server. The set never holds more than 7 entries, so resize and treeify never occur; tree bins throw if they are reached.
@@ -159,7 +182,7 @@ One native quirk is reproduced: a lamp's pending turn-off tick is not cancelled 
 
 ## Open items
 
-- Pistons and sticky pistons (BUD behaviour).
+- Pistons: live-game integration and entity pushing (the headless core is in the Pistons section).
 - Tripwire and hooks, detector and powered rails; automatic daylight refresh scheduling with world time.
 - Comparator inputs from brewing stands, jukeboxes, item frames and cake; live container behavior and tile-entity save/load.
 - Entity-driven pressure plates in a live world (real entity boxes, arrows, falling items, minecarts).

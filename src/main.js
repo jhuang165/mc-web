@@ -15,8 +15,11 @@ import "./menu-screens.css";
 import { Gui } from "./menu-ui.js";
 import { createMenus } from "./menus.js";
 import { folderName } from "./menu-screens.js";
-import {guiScale,stackCount,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks} from "./gui.js";
+import {guiScale,stackCount,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks,withGlint} from "./gui.js";
+import { stackHasEffect } from "./armor-enchantments.js";
 import {AnvilContainer,nativeStackToLive} from './anvil-container.js';
+import {EnchantingContainer} from './enchanting-container.js';
+import {withinEnchantReach} from './enchanting-table.js';
 import {damagedAnvilMetadata,ANVIL_DAMAGE_CHANCE} from './anvil.js';
 import { migrateSettings, renderDistanceBlocks, SOUND_CATEGORIES, soundLevel } from "./settings.js";
 import { MouseLook, setAngles } from "./mouse-look.js";
@@ -50,6 +53,7 @@ import {
   CACTUS,
   REEDS,
   ANVIL,
+  ENCHANTING_TABLE,
 } from "./world.js";
 import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
@@ -362,7 +366,7 @@ const heldId = () => survival.held?.id || 0;
 // Item, stack count and durability overlays, as RenderItem draws them.
 function stackHtml(s, count = s?.count) {
   if (!s) return "";
-  return icon(s.id, s.damage) + (count === 0 ? '<b class="item-count empty">0</b>' : stackCount(count)) + durabilityBar(s.damage, ITEMS[s.id]?.durability);
+  return withGlint(icon(s.id, s.damage), s, ITEMS[s.id]) + (count === 0 ? '<b class="item-count empty">0</b>' : stackCount(count)) + durabilityBar(s.damage, ITEMS[s.id]?.durability);
 }
 function stackLabel(s) {
   if (!s) return "Empty";
@@ -948,8 +952,8 @@ function renderCreativeBody() {
     slotsHtml(container);
   view.shown = [];
 }
-const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace", creative: "", anvil: "Repair & Name" },
-  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", creative: "creative-modal", anvil: "anvil-modal" };
+const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace", creative: "", anvil: "Repair & Name", enchanting: "Enchant" },
+  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", creative: "creative-modal", anvil: "anvil-modal", enchanting: "enchanting-modal" };
 // Slots are addressed by list index: wrapped creative slots all keep slotNumber 0.
 const slotsHtml = (container) => `<div class="container-slots">${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""}${slot.x < -1000 ? " hidden" : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>`;
 function openContainer(container, kind, key = null, gui = new ContainerScreen(container)) {
@@ -957,7 +961,9 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   mining = null;
   mineHeld = false;
   const decorations =
-    kind === "anvil"
+    kind === "enchanting"
+      ? `${[0, 1, 2].map((i) => `<button class="enchant-option off" data-enchant-option="${i}" style="top:calc(${14 + 19 * i}*var(--u))" aria-label="Enchantment option ${i + 1}"><i class="enchant-icon"></i><b class="enchant-level"></b></button>`).join("")}<span class="enchant-shelves" id="enchant-shelves" aria-live="polite"></span>`
+      : kind === "anvil"
       ? '<i class="anvil-name-background" id="anvil-name-background"></i><input id="anvil-name" aria-label="Item name" maxlength="40" autocomplete="off" spellcheck="false" disabled><span id="anvil-cost" class="anvil-cost" aria-live="polite"></span><i class="anvil-error" id="anvil-error" hidden></i>'
       : kind === "furnace"
       ? '<i class="furnace-flame" id="furnace-flame"></i><i class="furnace-arrow" id="furnace-arrow"></i>'
@@ -995,6 +1001,13 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   overlay.onpointerdown = (e) => {
     if (!containerView || e.target.closest(".close-button")) return;
     if (e.target.closest('#anvil-name')) return;
+    const option = e.target.closest("[data-enchant-option]");
+    if (option) {
+      // GuiEnchantment.mouseClicked: any button on an option sends enchantItem.
+      e.preventDefault();
+      if (container.enchant(+option.dataset.enchantOption)) saved = false;
+      return refreshContainer();
+    }
     e.preventDefault();
     const { slot, outside, x, y } = at(e), button = javaButton(e.button);
     if (creative && button === 0) {
@@ -1019,7 +1032,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   };
   overlay.onpointerup = (e) => {
     if (!containerView) return;
-    if (e.target.closest('#anvil-name')) return;
+    if (e.target.closest('#anvil-name') || e.target.closest("[data-enchant-option]")) return;
     const { slot, outside, x, y } = at(e), button = javaButton(e.button), t = creative && button === 0 ? gui.tabAt(x, y) : null;
     if (creative && button === 0) gui.release();
     if (t) switchTab(t);
@@ -1036,6 +1049,11 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   // Keyboard activation of a focused slot or tab acts as a left click.
   overlay.onclick = (e) => {
     if (!containerView || e.detail !== 0) return;
+    const option = e.target.closest("[data-enchant-option]");
+    if (option) {
+      if (container.enchant(+option.dataset.enchantOption)) saved = false;
+      return refreshContainer();
+    }
     const tab = e.target.closest("[data-creative-tab]");
     if (creative && tab) return switchTab(CREATIVE_TABS[tab.dataset.creativeTab]), refreshContainer();
     const slot = container.slots[e.target.closest("[data-container-slot]")?.dataset.containerSlot];
@@ -1072,10 +1090,21 @@ function refreshContainer() {
     $('#anvil-cost').classList.toggle('unavailable',cost.unavailable);
     $('#anvil-error').hidden=!(left||container.inputs.getStack(1))||!!container.output;
   }
+  if (view.kind === "enchanting") {
+    const levels = container.levels, shelves = `Bookshelves: ${container.bookshelves}`;
+    for (const b of document.querySelectorAll("[data-enchant-option]")) {
+      const i = +b.dataset.enchantOption, state = levels[i] === 0 ? "off" : container.canEnchant(i) ? "on" : "poor";
+      b.className = `enchant-option ${state}`;
+      b.setAttribute("aria-disabled", String(state !== "on"));
+      b.querySelector(".enchant-level").textContent = levels[i] ? String(levels[i]) : "";
+      b.setAttribute("aria-label", levels[i] ? `Enchantment option ${i + 1}: level ${levels[i]}${state === "poor" ? " (not enough experience levels)" : ""}` : `Enchantment option ${i + 1}: unavailable`);
+    }
+    if ($("#enchant-shelves").textContent !== shelves) $("#enchant-shelves").textContent = shelves;
+  }
   container.slots.forEach((slot, i) => {
     const shown = preview.slots.get(slot) ?? slot.stack,
       over = preview.capped.has(slot),
-      key = shown ? `${shown.id},${shown.count},${shown.damage},${over}` : "",
+      key = shown ? `${shown.id},${shown.count},${shown.damage},${over},${stackHasEffect(shown, ITEMS[shown.id])}` : "",
       b = document.querySelector(`[data-container-slot="${i}"]`);
     if (!b) return;
     b.classList.toggle("hovered", view.hovered === slot);
@@ -1197,6 +1226,20 @@ function useAnvil(key){
   const field=$('#anvil-name');
   field.oninput=()=>{field.value=anvilName(field.value);container.setName(field.value);refreshContainer();};
 }
+// BlockEnchantmentTable.onBlockActivated: ContainerEnchantment with the saved player Random as its rand.
+function useEnchantingTable(key) {
+  const [x, y, z] = key.split(",").map(Number);
+  openContainer(
+    new EnchantingContainer({
+      inventory: survival.inventory, world, x, y, z, creative: () => survival.creative,
+      experienceLevel: () => experience.level,
+      payExperienceLevels: (cost) => { experience.addLevels(-cost); renderVitals(); saved = false; },
+      onUse: () => { saved = false; },
+    }),
+    "enchanting",
+    key,
+  );
+}
 // SlotFurnace.onCrafting: fractional experience rounds up by chance.
 function smelted(stack, amount) {
   if (survival.creative) return;
@@ -1228,6 +1271,11 @@ function tickChests() {
   chestRenderer.sync(world, survival.chests);
   // Container.canInteractWith: the screen closes once its chest is gone.
   if (containerView?.kind === "chest" && containerView.container.keys?.some((k) => world.get(...k.split(",").map(Number)) !== CHEST)) resume();
+  if (containerView?.kind === "enchanting") {
+    // ContainerEnchantment.canInteractWith: the table must still exist and be within 8 blocks.
+    const [x, y, z] = containerView.key.split(",").map(Number);
+    if (world.get(x, y, z) !== ENCHANTING_TABLE || !withinEnchantReach(position, x, y, z)) resume();
+  }
   if(containerView?.kind==='anvil'){
     const [x,y,z]=containerView.key.split(',').map(Number);
     if(world.get(x,y,z)!==ANVIL||(position.x-x-.5)**2+(position.y-y-.5)**2+(position.z-z-.5)**2>64)resume();
@@ -1501,6 +1549,7 @@ function edit(place = false) {
     resetEquipped: () => animation.resetEquipped(),
     destroyParticles: (x, y, z, block, meta) => scene.particles.destroyBlock(world, x, y, z, block, meta),
     criticalHit: entity => { scene.fx.crit2(() => mobs.fxTarget(entity)); },
+    enchantmentCriticalHit: entity => { scene.fx.crit2(() => mobs.fxTarget(entity), true); },
     handleEntityEvents,
     renderHotbar,
     renderVitals,
@@ -1518,6 +1567,7 @@ function edit(place = false) {
     openInventory: station => { inventory(station); syncContainerState(); },
     useFurnace: key => { useFurnace(key); syncContainerState(); },
     useAnvil: key => { useAnvil(key); syncContainerState(); },
+    useEnchantingTable: key => { useEnchantingTable(key); syncContainerState(); },
     openChest: (chest, key) => { openContainer(chest, "chest", key); syncContainerState(); },
     breakBlock,
     clientEyeInWater,
@@ -2157,6 +2207,7 @@ function animate(now) {
       eating: eating && !eating.bow ? Math.max(0,eating.ticks-accumulator/PHYSICS.tick) : null,
       // The bow's icon follows the whole ticks of draw; its pull uses the ticks - 1 + partial.
       bow: eating?.bow ? { stage: bowStage(eating.ticks), draw: eating.ticks - 1 + partial } : null,
+      glint: stackHasEffect(survival.held, ITEMS[survival.held?.id]),
     });
 }
 // Entities that cast a shadow, as Java positions: an item's posY is 0.125

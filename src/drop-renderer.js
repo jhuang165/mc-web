@@ -4,7 +4,9 @@
 // one to five copies by stack size.
 import * as THREE from "three";
 import { entityMaterial } from "./light-material.js";
-import { itemTexture, pixelTexture } from "./first-person.js";
+import { itemTexture, pixelTexture, glintMesh } from "./first-person.js";
+import { stackHasEffect } from "./armor-enchantments.js";
+import { ITEMS } from "./survival.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { blockTile, tileRect } from "./block-textures.js";
 import { JavaRandom } from "./lighting.js";
@@ -36,7 +38,7 @@ export class DropRenderer {
     return this.cubes.get(key);
   }
   build(stack, hover) {
-    const url = itemTexture(stack.id, stack.damage), group = new THREE.Group(), spin = new THREE.Group(), random = new JavaRandom(187),
+    const glint = stackHasEffect(stack, ITEMS[stack.id]), url = itemTexture(stack.id, stack.damage), group = new THREE.Group(), spin = new THREE.Group(), random = new JavaRandom(187),
       material = url
         ? entityMaterial(this.view.lighting, { map: pixelTexture(url), alphaTest: 0.1, side: THREE.DoubleSide })
         : entityMaterial(this.view.lighting, { map: this.view.textures.texture });
@@ -51,11 +53,13 @@ export class DropRenderer {
         // Extra copies scatter by (rand * 2 - 1) * 0.2 blocks on each axis.
         if (i) mesh.position.set((random.nextFloat() * 2 - 1) * 0.2, (random.nextFloat() * 2 - 1) * 0.2, (random.nextFloat() * 2 - 1) * 0.2);
       }
+      // ItemStack.hasEffect: the dropped item's glint pass (first-person.js glintMesh, an approximated scroll).
+      if (glint) mesh.add(glintMesh(mesh.geometry, url ? pixelTexture(url) : this.view.textures.texture));
       spin.add(mesh);
     }
     group.add(spin);
     this.scene.add(group);
-    return { group, spin, material, key: stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count), hover };
+    return { group, spin, material, key: stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + (glint ? 1 : 0), hover };
   }
   remove(pile) {
     this.scene.remove(pile.group);
@@ -83,7 +87,7 @@ export class DropRenderer {
       if (!stack) continue;
       seen.add(e);
       let pile = this.piles.get(e);
-      const key = stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count);
+      const key = stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + (stackHasEffect(stack, ITEMS[stack.id]) ? 1 : 0);
       if (pile?.key !== key) {
         if (pile) this.remove(pile);
         pile = this.build(stack, e.hover);
