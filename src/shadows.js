@@ -25,6 +25,8 @@ export const SHADOWS = {
   spider: { size: 1, opaque: 1 },
   // RenderCaveSpider: shadowSize *= 0.7F on RenderSpider's 1.0.
   cave_spider: { size: f(0.7), opaque: 1 },
+  // RenderSilverfish: super(new ModelSilverfish(), 0.3F).
+  silverfish: { size: f(0.3), opaque: 1 },
   skeleton: { size: f(0.5), opaque: 1 },
   // RenderCreeper: super(new ModelCreeper(), 0.5F); RenderTNTPrimed: shadowSize = 0.5F.
   creeper: { size: f(0.5), opaque: 1 },

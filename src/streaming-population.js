@@ -19,7 +19,7 @@
 // column. A column hands its records to the live runtime once, the first time it is resident; the
 // world remembers claimed columns (a bitmask per cell, saved with the record) so looted chests and
 // killed animals are never refilled.
-import { PopulationArea, populationBlockMapper } from './population-world.js';
+import { PopulationArea, StructureCache, populationBlockMapper, structureTileRecords, structureSummaries } from './population-world.js';
 
 export const CELL = 8;
 const key = (x, z) => `${x},${z}`;
@@ -44,13 +44,18 @@ export class StreamingPopulation {
   // `terrain(x, z)`: original-ID chunk (blocks, metadata) after caves and ravines at native chunk
   // coordinates; `biomeAt(x, z)`: native block coordinates; `terrainOnly(lcx, lcz)`: the unpopulated
   // live column, used only if a cell cannot be generated.
-  constructor({ seed, originX, originZ, terrain, biomeAt, terrainOnly, mapBlock = null, cells = 6, terrainChunks = 192 }) {
+  //
+  // `manager` (the WorldChunkManager) switches on the full four-feature structure chain of generation
+  // version 15; without it the cell runs mineshafts only (version 13). The stronghold ring (a biome
+  // search) is computed once per population object, i.e. once per world or worker, never per cell.
+  constructor({ seed, originX, originZ, terrain, biomeAt, terrainOnly, mapBlock = null, cells = 6, terrainChunks = 192, manager = null }) {
     this.seed = BigInt(seed);
     this.originChunkX = originX >> 4; this.originChunkZ = originZ >> 4;
     this.terrain = terrain; this.biomeAt = biomeAt; this.terrainOnly = terrainOnly; this.mapBlock = mapBlock;
     this.originals = new Lru(terrainChunks); this.cells = new Lru(cells);
     this.materialized = new Map();
     this.generated = 0;
+    this.structureCache = manager ? new StructureCache(seed, manager) : null;
   }
   original(x, z) {
     const k = key(x, z);
@@ -86,6 +91,7 @@ export class StreamingPopulation {
     const pass = new PopulationArea({
       seed: this.seed, chunkX: baseX, chunkZ: baseZ, size: CELL, margin: 1,
       terrain: (x, z) => this.original(x, z), biomeAt: this.biomeAt,
+      structures: !!this.structureCache, manager: this.structureCache?.manager, structureCache: this.structureCache,
     }).run();
     const w = pass.world;
     // (original id, metadata) -> live id << 4 | live metadata, resolved once per state.
@@ -123,7 +129,7 @@ export class StreamingPopulation {
     const at = (x, z) => {
       const k = key(Math.floor((x - ox) / 16), Math.floor((z - oz) / 16));
       let r = records.get(k);
-      if (!r) records.set(k, r = { chests: [], animals: [], spawners: [], minecartChests: [], pendingTicks: [] });
+      if (!r) records.set(k, r = { chests: [], animals: [], spawners: [], minecartChests: [], pendingTicks: [], ...(pass.structures ? { dispensers: [], pots: [] } : {}) });
       return r;
     };
     for (const t of w.liveSpawners()) if (inside(t.x, t.z)) at(t.x, t.z).spawners.push({ x: t.x - ox, y: t.y, z: t.z - oz, entityId: t.name });
@@ -131,12 +137,8 @@ export class StreamingPopulation {
       const x = Math.floor(e.x), z = Math.floor(e.z);
       if (inside(x, z)) at(x, z).minecartChests.push({ x: e.x - ox, y: e.y, z: e.z - oz, items: e.slots.flatMap((s, i) => (s ? [stackRecord(s, i)] : [])) });
     }
-    for (const c of w.chunks.values()) for (const t of c.tiles.values()) {
-      if (t.kind === 'chest' && inside(t.x, t.z)) at(t.x, t.z).chests.push({
-        x: t.x - ox, y: t.y, z: t.z - oz, facing: w.getBlockMetadata(t.x, t.y, t.z),
-        items: t.slots.flatMap((s, i) => (s ? [stackRecord(s, i)] : [])),
-      });
-    }
+    const tiles = structureTileRecords(w, inside);
+    for (const name of ['chests', 'dispensers', 'pots']) for (const t of tiles[name]) at(t.x, t.z)[name].push({ ...t, x: t.x - ox, z: t.z - oz });
     for (const e of w.animals) {
       const x = Math.floor(e.x), z = Math.floor(e.z);
       if (inside(x, z)) at(x, z).animals.push({ ...e, x: e.x - ox, z: e.z - oz });
@@ -146,7 +148,10 @@ export class StreamingPopulation {
     const mineshafts = [...pass.mineshafts.structureMap.values()]
       .filter((s) => s.boundingBox.intersectsWithXZ(x0, z0, x0 + CELL * 16 - 1, z0 + CELL * 16 - 1))
       .map((s) => ({ chunkX: s.chunkX - this.originChunkX, chunkZ: s.chunkZ - this.originChunkZ, boundingBox: local(s.boundingBox) }));
-    return { cellX, cellZ, columns, records, mineshafts, populates: pass.order.length, failed: null };
+    const summaries = pass.structures
+      ? structureSummaries(pass, (b) => b.intersectsWithXZ(x0, z0, x0 + CELL * 16 - 1, z0 + CELL * 16 - 1), local,
+        (s) => ({ chunkX: s.chunkX - this.originChunkX, chunkZ: s.chunkZ - this.originChunkZ })) : {};
+    return { cellX, cellZ, columns, records, mineshafts, ...summaries, populates: pass.order.length, failed: null };
   }
   // A cell built elsewhere (the generation worker runs this same class) joins the cache unless the
   // cell was already built here; generation is a pure function of the seed, so either copy serves.

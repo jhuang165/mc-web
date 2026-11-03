@@ -16,6 +16,8 @@ export function drainMobEvents({ mobs, xpOrbs, items }, hooks = {}) {
     sound = () => {},
     explode = () => {},
     eatGrass = () => {},
+    doorUpdate = () => {},
+    blockEdit = () => {},
   } = hooks;
   const events = mobs.drain();
   for (const event of events) {
@@ -32,6 +34,10 @@ export function drainMobEvents({ mobs, xpOrbs, items }, hooks = {}) {
     );
     if (event.drop) items.dropMob(event.drop, event.count, event.position, event.damage, event);
     if (event.eatGrass) eatGrass(event.eatGrass, event);
+    // A villager's EntityAIOpenDoor swung a door: its two cells need redrawing.
+    if (event.doorUpdate) doorUpdate(event.doorUpdate, event);
+    // A silverfish hid in or woke a monster egg: its cells need redrawing (blockBreak: break sound and particles).
+    if (event.blockEdit) blockEdit(event.blockEdit, event);
   }
   return events;
 }
@@ -58,6 +64,8 @@ export function tickLivingSimulation(state, hooks = {}) {
     sound = () => {},
     explode = () => {},
     eatGrass = () => {},
+    doorUpdate = () => {},
+    blockEdit = () => {},
   } = hooks;
 
   inhabited.tick(survival.time);
@@ -75,6 +83,6 @@ export function tickLivingSimulation(state, hooks = {}) {
     }
   }
   for (const event of xpOrbs.sounds.splice(0)) orbSound(event);
-  drainMobEvents({ mobs, xpOrbs, items }, { sound, explode, eatGrass });
+  drainMobEvents({ mobs, xpOrbs, items }, { sound, explode, eatGrass, doorUpdate, blockEdit });
   return state.playerTicks;
 }

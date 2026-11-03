@@ -1,6 +1,7 @@
 import { entityActive } from './streaming-ticks.js';
 import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE, isSpider, soundType, caveSpiderPoisonTicks } from "./spider.js";
-import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox } from "./mob-spawner.js";
+import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, SPAWN_BRIGHTNESS } from "./mob-spawner.js";
+import { SILVERFISH, SILVERFISH_SOUNDS, silverfishActionState, legacyFields as silverfishFields, silverfishCanSpawnHere, hurtSummon, attackReady, closestVulnerablePlayer, pathWeight as silverfishPathWeight, eggSpawn } from "./silverfish.js";
 import { POISON } from "./status-effects.js";
 import {CARROT,zombieRareDrop} from './crops.js';
 import { creeperFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from "./creeper.js";
@@ -15,6 +16,7 @@ import { waterAcceleration, entityWaterBox, inLava, eyeInWater } from "./fluids.
 import { sheepColor, childColor } from "./sheep.js";
 import { sneakEdge, criticalDamage } from "./player-movement.js";
 import { MobAI } from "./ai.js";
+import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields, readProfession, readRiches } from "./villager.js";
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
 import { NORMAL, PEACEFUL, attributeValue, spiderSpawnRolls, zombieSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
@@ -120,7 +122,7 @@ export function mobPose(e, partial) {
     x: lerp(e.px, e.x), y: lerp(e.py, e.y), z: lerp(e.pz, e.z),
     bodyYaw: body, headYaw: f(head - body),
     headPitch,
-    limbSwing: swing, limbSwingAmount: amount, age: e.age + p, death: isSpider(e.type) ? death * 2 : death,
+    limbSwing: swing, limbSwingAmount: amount, age: e.age + p, death: isSpider(e.type) || e.type === "silverfish" ? death * 2 : death,
   };
 }
 // Widths and heights are each 1.7.10 constructor's setSize: EntityPig (wo)
@@ -164,9 +166,13 @@ export const ENTITY_TYPES = {
   // task (mutex 1, ahead of the attack) keeps from ever being dealt. Gunpowder comes from
   // `kill` (creeper.js creeperDrops).
   creeper: { health: 20, width: 0.6, height: 1.8, movement: 0.25, ai: { wander: 0.8, chase: 1 }, damage: 2, drop: 0 },
+  // EntityVillager (yv): 0.6 x 1.8, 20 health, speed 0.5, no drops or experience (villager.js).
+  villager: VILLAGER_TYPE,
+  // EntitySilverfish (yk): 0.3 x 0.7, 8 health, speed 0.6, damage 1; legacy AI (silverfish.js), no drops.
+  silverfish: { health: SILVERFISH.health, width: SILVERFISH.width, height: SILVERFISH.height, movement: f(SILVERFISH.speed), ai: { wander: 1 }, damage: SILVERFISH.damage, drop: 0 },
 };
 // EntityMob subclasses: no panic counter, 5 experience, despawning, 0.5 - brightness path weights.
-export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper"]);
+export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper", "silverfish"]);
 // EntityMoveHelper.onUpdateMoveHelper (tv.c) hands EntityLiving.setAIMoveSpeed
 // (sw.i) `(float)(speed * movementSpeed)`; sw.i also sets moveForward to it. The
 // zombie's "Baby speed boost" (yq.br) is operation 1: base * (1 + 0.5); a Speed effect
@@ -184,9 +190,9 @@ export { FEATHER, RAW_CHICKEN, COOKED_CHICKEN };
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
 // its hurt sound, and the sheep uses mob.sheep.say for say, hurt and death alike.
 // EntityCaveSpider inherits the spider's sounds.
-const hurtSound = (type) => (type = soundType(type), type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
+const hurtSound = (type) => (type = soundType(type), type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
 // EntityChicken's death sound is its hurt sound as well.
-const deathSound = (type) => (type = soundType(type), type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
+const deathSound = (type) => (type = soundType(type), type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
 // Entity.setPosition's box (half width and height in floats) and Entity.canBePushed:
 // living entities until setDead (deathTime 20, or removal).
 export const pushBox = (o, width, height) => {
@@ -443,7 +449,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
   let landed;
   if (e.inWater) {
     const y0 = e.y;
-    moveFlying(e, 0, forward, f(isSpider(e.type) ? 0.02 : 0.04));
+    moveFlying(e, 0, forward, f(isSpider(e.type) || e.type === "silverfish" ? 0.02 : 0.04));
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, STEP_HEIGHT, hooks);
     e.vx *= 0.800000011920929;
     e.vy *= 0.800000011920929;
@@ -464,7 +470,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
     const slip = () => (e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.91)) : f(0.91));
     let friction = slip();
     const accel = f(f(0.16277136) / f(f(friction * friction) * friction));
-    moveFlying(e, 0, forward, e.onGround ? f((isSpider(e.type) ? f(0.1) : e.aiMoveSpeed) * accel) : JUMP_MOVEMENT_FACTOR);
+    moveFlying(e, 0, forward, e.onGround ? f((isSpider(e.type) || e.type === "silverfish" ? f(0.1) : e.aiMoveSpeed) * accel) : JUMP_MOVEMENT_FACTOR);
     friction = slip();
     // isOnLadder: EntitySpider's override is its wall flag; others test the ladder cell (ladders.js).
     const climbable = () => (isSpider(e.type) ? e.climbing : isOnLadder(world, e.x, e.y, e.z));
@@ -548,6 +554,7 @@ export class EntityWorld {
     // World.rand and `localDifficulty(x, y, z)` World.func_147462_b, both hooked in by main.js.
     this.difficulty = NORMAL;
     this.worldRandom = null;
+    this.fishStates = new WeakMap(); // silverfish.js legacy AI state, never saved
     this.localDifficulty = null;
     if (Array.isArray(saved)) {
       for (const e of saved.slice(0, 256)) {
@@ -572,10 +579,14 @@ export class EntityWorld {
           growingAge:Number.isInteger(e.growingAge)?Math.max(-24000,Math.min(6000,e.growingAge)):0,
           love:Number.isInteger(e.love)?Math.max(0,Math.min(600,e.love)):0,
           mateTicks:0,
+          // EntityVillager.readEntityFromNBT: Profession and Riches (Offers are trading, not kept).
+          ...(e.type === "villager" ? { profession: readProfession(e.profession), riches: readRiches(e.riches) } : {}),
           ...(e.type === "sheep" ? { color: Number.isInteger(e.color) && e.color >= 0 && e.color < 16 ? e.color : 0, sheared: e.sheared === true, eatTimer: 0 } : {}),
           // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
           ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
           ...(isSpider(e.type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
+          // EntitySilverfish has no NBT of its own: the summon cooldown starts over.
+          ...(e.type === "silverfish" ? { summonCooldown: 0 } : {}),
           // EntityCreeper.readEntityFromNBT: "powered" and "ignited" are saved, the swell
           // state (datawatcher 16) and timeSinceIgnited start over.
           ...(e.type === "creeper" ? { ...creeperFields(), powered: e.powered === true, ignited: e.ignited === true } : {}),
@@ -629,10 +640,12 @@ export class EntityWorld {
       // EntitySheep.func_110161_a: a natural fleece colour; bit 16 of datawatcher
       // byte 16 (`sheared`); and the grazing timer (EntityAIEatGrass, mirrored in wp.br).
       ...(type === "sheep" ? { color: sheepColor(random), sheared: false, eatTimer: 0 } : {}),
+      ...(type === "villager" ? villagerFields() : {}),
       // EntityChicken (wg): timeUntilNextEgg = rand.nextInt(6000) + 6000 (wg.bu; not saved in
       // 1.7.10), wingRotation/destPos and their previous values 0, wingRotDelta (bt) 1.0.
       ...(isSpider(type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
       ...(type === "creeper" ? creeperFields() : {}),
+      ...(type === "silverfish" ? { summonCooldown: 0 } : {}),
       ...(type === "chicken" ? { eggTimer: Math.floor(random() * 6000) + 6000, wingRotation: 0, destPos: 0, oFlapSpeed: 0, oFlap: 0, wingRotDelta: 1 } : {}),
       // EntityZombie.func_110161_a adds a 0 to 0.05 "Random spawn bonus" to knockbackResistance.
       knockbackResistance: type === "zombie" ? random() * 0.05000000074505806 : 0,
@@ -707,6 +720,7 @@ export class EntityWorld {
   // plays the hurt or death sound with getSoundPitch; a top-up hit is silent and pushes nothing.
   attackEntityFrom(e, amount, source = {}) {
     if (!this.entities.includes(e)) return false;
+    if (e.type === "silverfish") this.silverfishHurt(e, source);
     if (ANIMALS.has(e.type)) { e.flee = 60; e.love = 0; e.mateTicks = 0; }
     if (e.health <= 0) return false;
     const rand = entityRandom(e), name = source.name ?? "generic";
@@ -733,6 +747,8 @@ export class EntityWorld {
       this.onDeath(e, source);
     } else if (fresh) this.events.push({ sound: hurtSound(e.type), ...sound, pitch: soundPitch(rand, child) });
     if (e.type === "zombie") this.callReinforcement(e, !!source.player);
+    // EntityMob.attackEntityFrom: a hit that counted makes the attacker the target (only the player here).
+    if (e.type === "silverfish" && source.player && e.health > 0) this.silverfishState(e).target = this.ai.player;
     return true;
   }
   // EntityLivingBase.damageEntity: armour, then setHealth (a float, clamped at 0).
@@ -845,6 +861,16 @@ export class EntityWorld {
       },
       canSpawnHere: (e) => {
         const t = ENTITY_TYPES[e.type], box = { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height };
+        if (e.type === "silverfish") {
+          // EntitySilverfish.getCanSpawnHere: no light rolls (isValidLightLevel is true), stone-friendly path weight, no player within 5.
+          const p = this.ai?.player;
+          return silverfishCanSpawnHere(e, {
+            difficulty: this.difficulty, entityCollision: blocked, blockCollision: (b) => collisionBoxes(this.world, b).length > 0, liquid,
+            belowId: (x, y, z) => this.world.get(x, y, z),
+            brightness: (x, y, z) => SPAWN_BRIGHTNESS[lightEnv.lightValue(x, y, z)],
+            playerWithin: (x, y, z, range) => !!p?.alive && (p.x - x) ** 2 + (p.y - y) ** 2 + (p.z - z) ** 2 < range * range,
+          }, (m) => mobBox(m.x, m.y, m.z, t.width, t.height));
+        }
         if (HOSTILE.has(e.type))
           return monsterCanSpawnHere(box, { difficulty: this.difficulty, thundering: !!env.thundering?.(), ...lightEnv, entityCollision: blocked, blockCollision: (b) => collisionBoxes(this.world, b).length > 0, liquid }, entityRandom(e));
         // EntityAnimal.getCanSpawnHere: grass below and full light above 8, then EntityLiving's checks.
@@ -989,9 +1015,9 @@ export class EntityWorld {
   // for a child). EntityCreeper has no living sound but still rolls and resets.
   talk(e) {
     const rand = entityRandom(e);
-    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) ? 80 : 120) || e.type === "creeper") return;
+    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper") return;
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
-    this.events.push({ sound: "mob." + soundType(e.type) + ".say", volume: e.type === "cow" ? f(0.4) : 1, pitch, position: { x: e.x, y: e.y, z: e.z } });
+    this.events.push({ sound: e.type === "villager" ? VILLAGER_SOUNDS.idle : "mob." + soundType(e.type) + ".say", volume: e.type === "cow" ? f(0.4) : 1, pitch, position: { x: e.x, y: e.y, z: e.z } });
   }
   // The fire and lava part of Entity.onEntityUpdate (sa.C): water puts the fire
   // out; a burning mob takes 1 (onFire) whenever the counter is a multiple of 20;
@@ -1081,7 +1107,7 @@ export class EntityWorld {
   // a WeakMap, so they are never saved and a loaded world starts them fresh.
   get ai(){
     return this.mobAI??=new MobAI(this,{
-      ENTITY_TYPES,BREED_ITEM,aiMoveSpeed,
+      ENTITY_TYPES,BREED_ITEM,aiMoveSpeed,entityRandom,isRaining:()=>this.isRaining?.(),
       mobSize:(e)=>{const base=ENTITY_TYPES[e.type],scale=e.growingAge<0?.5:1;return{width:base.width*scale,height:base.height*scale};},
       spawnBaby:(a,b)=>this.spawnBaby(a,b),
       eatGrass:(e)=>this.eatGrass(e),
@@ -1256,7 +1282,7 @@ export class EntityWorld {
       }
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.
-      this.walk(e, t, 0, () => isSpider(e.type) ? this.spiderThink(e) : this.ai.think(e));
+      this.walk(e, t, 0, () => isSpider(e.type) ? this.spiderThink(e) : e.type === "silverfish" ? this.silverfishThink(e) : this.ai.think(e));
       this.push(e, t);
       if (isSpider(e.type)) {
         e.climbing = e.collidedH;
@@ -1392,6 +1418,76 @@ export class EntityWorld {
     m.lookHelper.onUpdateLook();
     m.jumpHelper.doJump();
     e.yaw = -e.rotationYaw * Math.PI / 180;
+  }
+  // EntitySilverfish.attackEntityFrom (yk.a): an entity or magic source arms the 20 tick summon cooldown.
+  silverfishHurt(e, source) {
+    const name = source.name ?? "generic", entity = !!(source.player || source.attacker || name === "mob" || name === "thorns");
+    e.summonCooldown = hurtSummon(e.summonCooldown ?? 0, { entity, type: name });
+  }
+  // The legacy AI fields of one silverfish (silverfish.js): kept off the saved record.
+  silverfishState(e) {
+    let st = this.fishStates.get(e);
+    if (!st) this.fishStates.set(e, (st = { ...silverfishFields(), persistent: false }));
+    return st;
+  }
+  // Adds a silverfish at the centre of a block cell (BlockSilverfish.onBlockDestroyedByPlayer /
+  // dropBlockAsItemWithChance spawnEntityInWorld at x + 0.5, y, z + 0.5, yaw 0). The save keeps 40 mobs.
+  spawnSilverfishAt(x, y, z) {
+    if (this.entities.length >= 40) return null;
+    const at = eggSpawn(x, y, z), e = this.create("silverfish", at.x, at.y, at.z);
+    for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) e[k] = at.yaw;
+    e.yaw = 0;
+    this.entities.push(e);
+    return e;
+  }
+  // EntitySilverfish.updateEntityActionState through EntityCreature's legacy flow (silverfish.js), with the
+  // live PathFinder, world, player and sound services. The fixed-seed ground truth is silverfish-reference.json.
+  silverfishThink(e) {
+    const m = this.ai.brain(e), p = this.ai.player, s = this.ai.survival, st = this.silverfishState(e), t = ENTITY_TYPES.silverfish;
+    st.x = e.x; st.y = e.y; st.z = e.z; st.width = t.width; st.inWater = e.inWater; st.inLava = e.inLava;
+    st.collidedH = e.collidedH; st.rotationYaw = e.rotationYaw; st.rotationPitch = e.rotationPitch || 0;
+    st.summonCooldown = e.summonCooldown ?? 0; st.jumping = false;
+    if (st.attackTime > 0) st.attackTime--;
+    m.senseCache.clear();
+    const world = this.world, rand = entityRandom(e), cell = (x, y, z) => { this.events.push({ blockEdit: [[x, y, z]] }); };
+    const path = (make) => (m.navigator.spend() ? make(m.navigator.finder()) : null);
+    const env = {
+      rand, remote: false, mobGriefing: true,
+      closestPlayer: (me, range) => (p?.alive && (range < 0 || m.distSq(p) < range * range) ? p : null),
+      findPlayerToAttack: (me) => (p?.alive && closestVulnerablePlayer(me, [{ x: p.x, y: p.y, z: p.z, creative: !!s.creative, alive: true }], 8) ? p : null),
+      isAlive: (x) => (x === p ? !!p.alive : true),
+      isCreative: () => !!s.creative,
+      eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : 1.62),
+      boxMidY: (x) => x.y,
+      canSee: (me, target) => m.canSee(target),
+      attackEntity: (me, target, d) => {
+        if (attackReady({ y: me.y, attackTime: me.attackTime }, target.y, target.y + 1.8, d)) {
+          me.attackTime = 20;
+          this.hitPlayer(e, s);
+        }
+      },
+      pathToEntity: (me, target, range) => path((fn) => fn.createEntityPathToEntity(m, target, range)),
+      pathToBlock: (me, x, y, z, range) => path((fn) => fn.createEntityPathToBlock(m, x, y, z, range)),
+      pathWeight: (me, x, y, z) => silverfishPathWeight(world.get(x, y - 1, z), this.ai.brightness(x, y, z)),
+      getBlock: (x, y, z) => world.get(x, y, z),
+      getMeta: (x, y, z) => world.getMeta(x, y, z),
+      setBlock: (x, y, z, id, meta) => { world.set(x, y, z, id, true, meta); cell(x, y, z); },
+      // World.func_147480_a(x, y, z, false): the block goes without drops, with its break effects (level event 2001).
+      breakBlock: (x, y, z) => {
+        const block = world.get(x, y, z);
+        world.set(x, y, z, 0);
+        this.events.push({ blockEdit: [[x, y, z]], blockBreak: { x, y, z, block } });
+      },
+      releaseEgg: (x, y, z) => { this.spawnSilverfishAt(x, y, z); },
+      explosionParticle: () => {
+        if (this.fx) burst(this.fx, "explode", 20, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
+      },
+      setDead: () => this.ai.despawn(e),
+    };
+    silverfishActionState(st, env);
+    e.rotationYaw = st.rotationYaw; e.rotationPitch = st.rotationPitch;
+    e.moveForward = st.moveForward; e.jumping = st.jumping; e.summonCooldown = st.summonCooldown;
+    e.yaw = (-e.rotationYaw * Math.PI) / 180;
   }
   // The chicken half of EntityChicken.onLivingUpdate (wg.e()), run after the shared
   // movement: the previous wing values are kept, destPos moves 0.3 x (-1 on the

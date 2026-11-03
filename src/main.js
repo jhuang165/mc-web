@@ -337,8 +337,9 @@ function makeRecord(p) {
     seed: String(p.seed).slice(0, 80),
     biome: p.biome || "meadow",
     mode: p.mode === "survival" ? "survival" : "creative",
-    // Version 11 adds full Java population; saves retain their existing generator.
-    generationVersion: p.biome === "javaStreamed" ? 13 : isJavaLandscape(p.biome) ? 11 : 8,
+    // Version 11 adds full Java population; 14 (finite) and 15 (streamed) add villages, strongholds and
+    // temples. Saves retain their existing generator.
+    generationVersion: p.biome === "javaStreamed" ? 15 : isJavaLandscape(p.biome) ? 14 : 8,
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -777,6 +778,7 @@ async function launch(record, prepared) {
     // sunburn and its sun tasks; EntitySkeleton's arrows come from bow.js.
     mobs.isDaytime = () => (scene.subtracted ?? 0) < 4;
     mobs.canSeeSky = (x, y, z) => canSeeSky(world, x, y, z);
+    mobs.isRaining = () => weather.isRaining();
     mobs.shoot = (e, target, scale) => arrows.skeletonShoot(e, target, scale, mobs.difficulty);
     // World.rand for EntityLiving.onSpawnWithEgg, and World.func_147462_b at a block.
     mobs.worldRandom = weather.random;
@@ -1480,6 +1482,18 @@ function mobEventHooks() {
   return {
     sound: event => sounds.play(event.sound, { position: event.position, volume: event.volume, pitch: event.pitch }),
     explode: explodeAt,
+    // A villager's EntityAIOpenDoor swung a door: redraw both halves.
+    doorUpdate: (cells) => { for (const [x, y, z] of cells) scene.updateBlock(x, z, y); saved = false; },
+    // A silverfish hid in or released a monster egg (EntitySilverfish.updateEntityActionState).
+    blockEdit: (cells, event) => {
+      for (const [x, y, z] of cells) scene.updateBlock(x, z, y);
+      const b = event.blockBreak;
+      if (b) {
+        sounds.play("dig." + blockSound(b.block), { position: { x: b.x + 0.5, y: b.y + 0.5, z: b.z + 0.5 }, volume: 1, pitch: 0.8 });
+        scene.particles.destroyBlock(world, b.x, b.y, b.z, b.block);
+      }
+      saved = false;
+    },
     // EntityAIEatGrass: the edit already happened; level event 2001 updates its presentation.
     eatGrass: ({ x, y, z, block }) => {
       scene.updateBlock(x, z, y);
@@ -1623,6 +1637,7 @@ function breakBlock(p, creative = false) {
     playBlockSound: sound,
     destroyParticles: (...args) => scene.particles.destroyBlock(...args),
     markUnsaved: () => { saved = false; },
+    releaseSilverfish: (x, y, z) => mobs.spawnSilverfishAt?.(x, y, z),
   });
 }
 // Block.getItem for middle-click: farmland gives dirt, crops give seeds, water nothing.
@@ -1673,7 +1688,7 @@ function materializeFresh() {
   const columns = world.claimFreshColumns();
   if (columns.length) {
     const handed = restorePopulationColumns(columns, { world, survival, mobs, spawners, minecarts, fluids });
-    if (handed.animals || handed.chests || handed.spawners || handed.carts || handed.ticks) saved = false;
+    if (handed.animals || handed.chests || handed.dispensers || handed.pots || handed.spawners || handed.carts || handed.ticks) saved = false;
   }
   // Chest models follow the resident columns (chests of columns that left the window are removed).
   chestRenderer?.sync(world, survival.chests);

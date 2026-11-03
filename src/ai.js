@@ -10,6 +10,7 @@ import { raycast, HEIGHT } from "./world.js";
 import { BRIGHTNESS } from "./lighting.js";
 import { swellShould, swellState, creeperSafeTries } from "./creeper.js";
 import { maxSafePointTries } from "./difficulty.js";
+import { buildVillagerTasks, updateVillagerAI } from "./villager.js";
 const f = Math.fround;
 const GRASS = 1, TALL_GRASS = 39;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -799,8 +800,16 @@ export class Brain {
       this.tasks.add(8, new LookIdle(this));
       this.targets.add(1, new HurtByTarget(this));
       this.targets.add(2, new NearestAttackable(this));
-    } else if (e.type === "spider" || e.type === "cave_spider") {
-      // EntitySpider (and EntityCaveSpider) use legacy EntityCreature AI; EntityWorld.spiderThink drives it.
+    } else if (e.type === "villager") {
+      // EntityVillager (yv): its task list is villager.js; it draws on Entity.rand (the entity's own
+      // java.util.Random, shared with the living-sound roll) and runs updateAITick after the navigator.
+      if (ai.deps.entityRandom) this.rand = ai.deps.entityRandom(e);
+      this.randomTickDivider = 0;
+      this.updateAITick = () => updateVillagerAI(this);
+      buildVillagerTasks(this, { Task, Swim, Wander, WatchClosest });
+    } else if (e.type === "spider" || e.type === "cave_spider" || e.type === "silverfish") {
+      // EntitySpider (and EntityCaveSpider) use legacy EntityCreature AI; EntityWorld.spiderThink drives it. So does
+      // EntitySilverfish (silverfishThink): no tasks.
     } else if (e.type === "creeper") {
       // EntityCreeper (xz): swim 1, swell 2, (avoid ocelots 3: no ocelots), attack on
       // collide 4 (1.0), wander 5 (0.8), watch the player 6, look idle 6; targets nearest
@@ -941,6 +950,7 @@ export class Brain {
   // EntityMob (yg): 0.5 - brightness.
   getBlockPathWeight(x, y, z) {
     const w = this.ai.world;
+    if (this.e.type === "villager") return f(0); // EntityCreature.getBlockPathWeight
     if (this.e.type === "zombie" || this.e.type === "skeleton" || this.e.type === "creeper") return f(f(0.5) - this.ai.brightness(x, y, z));
     return w.get(x, y - 1, z) === GRASS ? f(10) : f(this.ai.brightness(x, y, z) - f(0.5));
   }
@@ -955,6 +965,7 @@ export class Brain {
     this.targets.tick();
     this.tasks.tick();
     this.navigator.onUpdateNavigation();
+    this.updateAITick?.();
     this.moveHelper.onUpdateMoveHelper();
     this.lookHelper.onUpdateLook();
     this.jumpHelper.doJump();
@@ -1078,6 +1089,10 @@ export class MobAI {
   }
   canSeeSky(x, y, z) {
     return !!this.deps.canSeeSky?.(x, y, z);
+  }
+  // World.isRaining (hooked by the world; false without one).
+  isRaining() {
+    return !!this.deps.isRaining?.();
   }
   // EntitySkeleton.attackEntityWithRangedAttack: the shooter and the target's view.
   rangedAttack(m, target, scale) {

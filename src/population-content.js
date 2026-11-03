@@ -14,7 +14,8 @@ export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97
   98:ITEM_STONE_BRICKS,44:ITEM_STONE_SLAB,120:ITEM_END_PORTAL_FRAME,380:ITEM_CAULDRON,390:ITEM_FLOWER_POT,
   // Redstone components (redstone-blocks-reference.json): lever 69, plates 70/72, button 77 and hook 131 are 1000 + block id; the repeater item 356 keeps its number; dust (331) and string (287) are the existing items 360 and 321.
   ...REDSTONE_ITEM_IDS,
-  388:367,360:368,357:369,282:370,281:371,322:372,2256:373,2257:374,421:375,418:376,419:377});
+  // Structure loot (strongholds): ender pearl 368, empty map 395 and compass 345 are internal 378-380 (inert items).
+  368:378,395:379,345:380,388:367,360:368,357:369,282:370,281:371,322:372,2256:373,2257:374,421:375,418:376,419:377});
 export const TREE_NAMES=['Oak','Spruce','Birch','Jungle','Acacia','Dark oak'];
 export const DOUBLE_NAMES=['Sunflower','Lilac','Double tallgrass','Large fern','Rose bush','Peony'];
 export const POPULATION_VARIANTS={7:TREE_NAMES.map(s=>s+' planks'),4:TREE_NAMES.slice(0,4).map(s=>s+' log'),5:TREE_NAMES.slice(0,4).map(s=>s+' leaves'),48:TREE_NAMES.map(s=>s+' sapling'),69:DOUBLE_NAMES,70:TREE_NAMES.slice(4).map(s=>s+' log'),71:TREE_NAMES.slice(4).map(s=>s+' leaves'),68:['Stone monster egg','Cobblestone monster egg','Stone brick monster egg']};
@@ -36,6 +37,7 @@ export function installPopulationItems(items){
     [ITEM_LEVER,REDSTONE_ITEM_NAMES[ITEM_LEVER],undefined,{block:true}],[ITEM_STONE_PLATE,REDSTONE_ITEM_NAMES[ITEM_STONE_PLATE],undefined,{block:true}],[ITEM_WOODEN_PLATE,REDSTONE_ITEM_NAMES[ITEM_WOODEN_PLATE],undefined,{block:true}],[ITEM_STONE_BUTTON,REDSTONE_ITEM_NAMES[ITEM_STONE_BUTTON],undefined,{block:true}],[ITEM_TRIPWIRE_HOOK,REDSTONE_ITEM_NAMES[ITEM_TRIPWIRE_HOOK],undefined,{block:true}],[ITEM_REPEATER,REDSTONE_ITEM_NAMES[ITEM_REPEATER],'repeater'],
     [ITEM_CAULDRON,'Cauldron','cauldron'],[ITEM_FLOWER_POT,'Flower pot','flower_pot'],
     [373,'Music disc 13','record_13',{stack:1}],[374,'Music disc cat','record_cat',{stack:1}],
+    [378,'Ender Pearl','ender_pearl',{stack:16}],[379,'Empty Map','map_empty'],[380,'Compass','compass_static'],
     [375,'Name tag','name_tag'],[376,'Golden horse armor','gold_horse_armor',{stack:1}], [377,'Diamond horse armor','diamond_horse_armor',{stack:1}],
   ]) items[id]={id,name,texture,stack:64,color:'#8caa59',...extra};
 }
@@ -64,6 +66,9 @@ export function installPopulationRecipes({recipe,shapeless}){
   recipe('anvil','Anvil',['BBB',' I ','III'],{B:26,I:302},ANVIL);
   // " B " / "D#D" / "###": book, two diamonds, four obsidian (CraftingManager).
   recipe('enchanting-table','Enchanting table',[' B ','DOD','OOO'],{B:314,D:303,O:22},ENCHANTING_TABLE);
+  // Native recipes 102/103: iron ingots around redstone make a compass (345 -> 380); paper around a compass makes an empty map (395 -> 379).
+  recipe('compass','Compass',[' I ','IRI',' I '],{I:302,R:360},380);
+  recipe('empty-map','Empty Map',['PPP','PCP','PPP'],{P:328,C:380},379);
   // CraftingManager: ItemDoor.wood "##","##","##" planks; iron "##" x3 ingots; panes: 6 glass in two rows of three (16); bars: 6 iron ingots (16).
   recipe('wooden-door','Wooden Door',['PP','PP','PP'],{P:7},470,1);
   recipe('iron-door','Iron Door',['II','II','II'],{I:302},471,1);

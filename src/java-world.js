@@ -78,6 +78,7 @@ export function streamedSource({ seed, generationVersion, originX, originZ, gen 
   if (generationVersion < 13) return { gen, population: null, column: terrain };
   const population = new StreamingPopulation({
     seed, originX, originZ, terrainOnly: terrain, terrain: original, biomeAt: (x, z) => manager.biomeAt(x, z),
+    manager: generationVersion >= 15 ? manager : null,
   });
   return { gen, population, column: (cx, cz) => population.column(cx, cz) };
 }

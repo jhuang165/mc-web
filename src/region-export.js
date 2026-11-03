@@ -13,6 +13,7 @@ import { TNT_Y_OFFSET } from './explosion.js';
 import { Experience } from './experience.js';
 import { splitRuntime } from './chunk-runtime.js';
 import { populationBlockMapperReady } from './population-world.js';
+import { structureDataFiles } from './structure-data.js';
 const tag=(type,value)=>({type,value}), comp=value=>tag(NBT.COMPOUND,new Map(Object.entries(value))), list=(type,items)=>tag(NBT.LIST,{elementType:type,items});
 const byte=v=>tag(NBT.BYTE,(v<<24)>>24), short=v=>tag(NBT.SHORT,v), int=v=>tag(NBT.INT,v), str=v=>tag(NBT.STRING,v), float=v=>tag(NBT.FLOAT,v), long=v=>tag(NBT.LONG,BigInt(Math.trunc(v)));
 const reverse=new Map();
@@ -34,7 +35,7 @@ function stackNbt(s,slot,report,original=false) {
  return new Map(Object.entries(entry));
 }
 const inventory=(items,report)=>list(NBT.COMPOUND,(items??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];}));
-const NAMES={pig:'Pig',cow:'Cow',sheep:'Sheep',chicken:'Chicken',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper'};
+const NAMES={pig:'Pig',cow:'Cow',sheep:'Sheep',chicken:'Chicken',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish'};
 function entity(e,name,ox,oz) {
  return {id:str(name),Pos:list(NBT.DOUBLE,[e.x+ox,e.posY??e.y,e.z+oz]),Motion:list(NBT.DOUBLE,e.motion??[e.vx??e.mx??0,e.vy??e.my??0,e.vz??e.mz??0]),
  Rotation:list(NBT.FLOAT,e.rotation??(name==='Player'?[(Math.PI-(e.yaw??0))*180/Math.PI,-(e.pitch??0)*180/Math.PI]:[e.rotationYaw??(-(e.yaw??0)*180/Math.PI+0),e.rotationPitch??0])),FallDistance:float(e.fallDistance??0),Fire:short(e.fire??-1),Air:short(e.air??300),OnGround:byte(e.onGround?1:0),Dimension:int(0),Invulnerable:byte(0),PortalCooldown:int(0)};
@@ -44,6 +45,8 @@ function payload(state,ox,oz,report) {
  for(const wrapped of state.entities??[]) {const e=wrapped.value,name=NAMES[e.type];if(!name){report.unsupportedEntities++;continue;}
   const n=entity(e,name,ox,oz);Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
   if(e.type==='sheep'){n.Color=byte(e.color??0);n.Sheared=byte(e.sheared?1:0);}
+  // EntityVillager.writeEntityToNBT: Profession and Riches (no Offers: trading is not kept); EntityAgeable's Age is written above, InLove is EntityAnimal's.
+  if(e.type==='villager'){n.Profession=int(e.profession??0);n.Riches=int(e.riches??0);delete n.InLove;}
   entities.push(new Map(Object.entries(n)));
  }
  for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),PickupDelay:short(e.delay??0),Health:short(5)})));}
@@ -96,7 +99,7 @@ export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChu
  const report={format:'Java 1.7.10 Anvil snapshot',columns:owned.size,unmappedItems:0,unsupportedEntities:0,notes:[
  'Unzip this directory under the Java 1.7.10 saves directory. blockworld.json is the complete browser backup.',
  'Provided columns are marked terrain-populated. Java generates outside them using the seed; border features can differ from browser population.',
- 'LightPopulated is false: Java must rebuild light. Structure starts, village reputation, AI/RNG state, player status effects and cross-system tick order are not converted.',
+ 'LightPopulated is false: Java must rebuild light. Village reputation, AI/RNG state, player status effects and cross-system tick order are not converted.',
  'Thrown projectiles and arrows are counted as unsupported entities. Other entities use supported position/motion/health/basic age fields; advanced fields use native defaults.',
  'Browser legacy landscapes export their finite area; Java generates default terrain outside it.'
  ]}, regions=new Map();let count=0;
@@ -113,6 +116,9 @@ export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChu
  }
  const files=new Map();for(const [k,entries] of regions){const [x,z]=k.split(',');files.set(`region/r.${x}.${z}.mca`,writeRegion(entries));}
  files.set('level.dat',await encodeCompressedNbt(levelNbt(record,w,report)));
+ // Structure starts: v14/v15 rerun the four range-8 searches over the exported native chunks; imported data/*.dat is merged (native precedence).
+ {const {files:sd,report:sr}=await structureDataFiles({record,seed:w.javaSeed??record.seed,generationVersion:record.generationVersion??w.generationVersion,chunks:[...owned].map(k=>{const [x,z]=k.split(',').map(Number);return [x+ox/16,z+oz/16];})});
+  for(const [n,b] of sd)files.set(n,b);if(sd.size)report.structureData=sr;else report.notes.push('Structure starts are not saved for this generation version; Java regenerates them from the seed.');}
  const {chunked,runtimeChunked,editSequence,...backup}=record,encode=new TextEncoder();
  files.set('blockworld.json',encode.encode(JSON.stringify({...backup,format:'blockworld',version:1})));
  files.set('conversion-notes.json',encode.encode(JSON.stringify(report,null,2)));

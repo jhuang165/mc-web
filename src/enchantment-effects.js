@@ -31,6 +31,8 @@ const SILK = {
   20: SELF, 95: META, 102: SELF, 160: META, 79: SELF, 174: SELF, 80: SELF, 82: SELF, 103: SELF, 47: SELF,
   110: SELF, 99: SELF, 100: SELF, 30: SELF, 120: SELF,
   101: SELF, // BlockPane.canSilkHarvest: iron bars (102, the glass pane, is above)
+  // BlockSilverfish.createStackedBlock: the block the egg imitates (stone, cobblestone, a stone brick variant).
+  97: (id, meta) => (meta === 1 ? META(4, 0) : meta >= 2 && meta <= 5 ? META(98, meta - 2) : META(1, 0)),
 };
 // Silk results are keyed by (id, meta): SELF ignores the meta, META keeps it.
 const silkStack = (id, meta) => { const s = SILK[id]; if (!s) return null; const r = s === SELF ? SELF(id) : s(id, meta); return r; };

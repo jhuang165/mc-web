@@ -8,8 +8,10 @@ import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
 import { heldItemMatrix } from "./player-renderer.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { spiderLegs } from "./spider.js";
+import { SILVERFISH_MODEL, silverfishPose } from "./silverfish.js";
 import { creeperFlash, creeperScale, creeperWhite, creeperPose, armorScroll } from "./creeper.js";
 import { isInvisible } from "./mob-effects.js";
+import { createVillagerRig, villagerLegAngle } from "./villager-renderer.js";
 const RAD = Math.PI / 180;
 // RenderCreeper's powered pass (bni.a(xz, I, F), pass 1): creeper_armor.png with the texture
 // matrix translated by (scroll, scroll), colour 0.5, lighting off, blended GL_ONE, GL_ONE.
@@ -211,6 +213,29 @@ export class MobRenderer {
     this.scene.add(root);
     return { root, neck, limbs, materials: [skin], eyes, skinMeshes, type: cave ? "cave_spider" : "spider", scale: cave ? Math.fround(0.7) : 1 };
   }
+  // RenderSilverfish (bor) with ModelSilverfish (bia, silverfish.png 64 x 32): seven segments and three
+  // layer boxes on pivots (0, y, z); setRotationAngles sways each pivot's x and yaw with the entity age
+  // (silverfish.js), the layers copying segments 2, 4 and 1. Same pixel frame as ModelSpider.
+  createSilverfish() {
+    const root = new THREE.Group(), frame = new THREE.Group(), neck = new THREE.Group(), segments = [], layers = [],
+      skin = entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/entity/silverfish.png") });
+    frame.position.y = 1 / 128;
+    root.add(frame);
+    const part = (m) => {
+      const [x0, y0, z0, x1, y1, z1] = m.box, group = new THREE.Group();
+      group.position.set(0, (24 - m.y) / 16, -m.z / 16);
+      group.rotation.order = "ZYX";
+      const mesh = new THREE.Mesh(skinBox(x1 - x0, y1 - y0, z1 - z0, m.uv[0], m.uv[1], 64, 32), skin);
+      mesh.position.set((x0 + (x1 - x0) / 2) / 16, -(y0 + (y1 - y0) / 2) / 16, -(z0 + (z1 - z0) / 2) / 16);
+      group.add(mesh);
+      frame.add(group);
+      return group;
+    };
+    for (const m of SILVERFISH_MODEL.segments) segments.push(part(m));
+    for (const m of SILVERFISH_MODEL.layers) layers.push(part(m));
+    this.scene.add(root);
+    return { root, neck, limbs: [], silverfish: { segments, layers }, materials: [skin], type: "silverfish" };
+  }
   // RenderCreeper (bni) with ModelCreeper (bhj, creeper.png 64 x 32): head (0, 0) 8 x 8 x 8 and
   // body (16, 16) 8 x 12 x 4 on pivots (0, 4, 0), four 4 x 6 x 4 legs (0, 16) on pivots
   // (-2|2, 16, 4|-4) in the model's d, e, f, g order. ModelCreeper(2.0F) is the powered shell:
@@ -336,10 +361,12 @@ export class MobRenderer {
   create(e) {
     if (e.type === "creeper") return this.createCreeper();
     if (e.type === "spider" || e.type === "cave_spider") return this.createSpider(e.type === "cave_spider");
+    if (e.type === "silverfish") return this.createSilverfish();
     if (e.type === "skeleton") return this.createSkeleton();
     if (e.type === "chicken") return this.createChicken();
     if (e.type === "sheep") return this.createSheep();
     if (e.type === "zombie") return this.createZombie();
+    if (e.type === "villager") return createVillagerRig(this, e);
     return this.createQuadruped(e.type);
   }
   // `partial` is the fraction of the current tick elapsed (mobPose interpolates).
@@ -416,9 +443,16 @@ export class MobRenderer {
       const sway = mhSin(pose.age * 0.067) * 0.05, spread = mhCos(pose.age * 0.09) * 0.05 + 0.05;
       const spider = e.type === "spider" || e.type === "cave_spider" ? spiderLegs(pose.limbSwing, pose.limbSwingAmount) : null;
       const creeper = e.type === "creeper" ? creeperPose(pose.limbSwing, pose.limbSwingAmount, pose.headYaw, pose.headPitch) : null;
+      if (r.silverfish) {
+        // ModelSilverfish.setRotationAngles: rotationPointX and rotateAngleY per segment; Java's Y turns the other way here.
+        const sf = silverfishPose(pose.age);
+        sf.segments.forEach((s, i) => { r.silverfish.segments[i].position.x = s.x / 16; r.silverfish.segments[i].rotation.y = -s.yaw; });
+        sf.layers.forEach((s, i) => { r.silverfish.layers[i].position.x = s.x / 16; r.silverfish.layers[i].rotation.y = -s.yaw; });
+      }
       r.limbs.forEach((l, i) => {
         if (spider) { l.rotation.set(0, -spider[i][0], -spider[i][1]); return; }
         if (creeper) { l.rotation.x = creeper[i + 1][0]; return; }
+        if (e.type === "villager") { l.rotation.x = villagerLegAngle(pose.limbSwing, pose.limbSwingAmount, i); return; }
         if ((e.type === "zombie" || e.type === "skeleton") && i < 2) {
           const side = i === 0 ? 1 : -1;
           l.rotation.set(-Math.PI / 2 + side * sway, side * 0.1, -side * spread);

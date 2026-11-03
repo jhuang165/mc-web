@@ -57,6 +57,7 @@ const LIQUID_BLOCKERS = new Set([64, 71, 63, 65, 83]);
 // Item drops: Item.getItemFromBlock or the override, damageDropped (meta, meta & 7, 0).
 const DROPS = new Map([[6, [6, 7]], [31, null], [32, null], [37, [37, 15]], [38, [38, 15]], [39, [39, 0]], [40, [40, 0]], [81, [81, 0]], [83, [338, 0]], [106, null], [111, [111, 0]], [175, [175, 7]]]);
 const SEEDS = 295, REEDS_ITEM = 338, DYE = 351;
+const FLOWER_POT_CONTENTS = [[-1, 0], [38, 0], [37, 0], [6, 0], [6, 1], [6, 2], [6, 3], [40, 0], [39, 0], [81, 0], [32, 0], [31, 2], [6, 4], [6, 5]];
 const unported = (what, id) => { throw new Error(`gen-world: unported ${what} for block ${id}`); };
 const BOUND = 30000000;
 const inWorld = (x, z) => x >= -BOUND && z >= -BOUND && x < BOUND && z < BOUND;
@@ -257,6 +258,15 @@ export class GenWorld {
     } else if (id === MOB_SPAWNER) {
       Object.assign(t, { kind: "spawner", name: "Pig" });
       t.setEntityName = (name) => { t.name = name; };
+    } else if (id === 23 || id === 61 || id === 62) {
+      // TileEntityDispenser (9 slots) and TileEntityFurnace (3 slots); structures only fill the dispenser.
+      const size = id === 23 ? 9 : 3;
+      Object.assign(t, { kind: id === 23 ? "dispenser" : "furnace", size, slots: new Array(size).fill(null) });
+      t.setSlot = (i, stack) => { t.slots[i] = stack; };
+    } else if (id === 140) {
+      // BlockFlowerPot.createNewTileEntity: the metadata names the plant (native-checked for 7, red mushroom).
+      const [item, data] = FLOWER_POT_CONTENTS[meta] ?? [-1, 0];
+      Object.assign(t, { kind: "flowerPot", item, data });
     } else unported("tile entity", id);
     return t;
   }

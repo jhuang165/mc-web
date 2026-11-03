@@ -351,7 +351,7 @@ export const WORLD_TYPES = [
   { biome: "java", name: t("generator.default"), notice: "Browser world: a 128 x 128 block area" },
   { biome: "javaLargeBiomes", name: t("generator.largeBiomes"), notice: "Browser world: a 128 x 128 block area" },
   { biome: "javaAmplified", name: t("generator.amplified"), notice: t("generator.amplified.info") },
-  { biome: "javaStreamed", name: "Streamed", notice: "Browser preview: endless terrain; no villages, strongholds or temples yet" },
+  { biome: "javaStreamed", name: "Streamed", notice: "Browser preview: endless terrain" },
   { biome: "meadow", name: "Meadow", notice: "Browser landscape: rolling hills and a river" },
   { biome: "alpine", name: "Highlands", notice: "Browser landscape: high mountains" },
   { biome: "island", name: "Island", notice: "Browser landscape: a small island in the sea" },

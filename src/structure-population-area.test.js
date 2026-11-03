@@ -54,14 +54,9 @@ test("combined structure population replays native provider writes and side effe
     assert.deepEqual(area.order, [[x, z]]);
     assert.equal(row.writeCount, nativeStep.writeCount, `ordered writes ${rec.seed} ${x},${z}`);
     assert.equal(row.writesSha1, nativeStep.writesSha1, `ordered write hash ${rec.seed} ${x},${z}`);
-    // The temple call hash differs; its population still matches ordered writes,
-    // provider/World RNG, tiles, ticks and final chunk. Record the exact call delta.
-    if (rec.seed === "17" && x === 10 && z === -53) {
-      assert.equal(nativeStep.callCount - row.callCount, 319, "temple native call stream count delta");
-    } else {
-      assert.equal(row.callCount, nativeStep.callCount, `ordered world calls ${rec.seed} ${x},${z}`);
-      assert.equal(row.callsSha1, nativeStep.callsSha1, `ordered call hash ${rec.seed} ${x},${z}`);
-    }
+    // BlockTNT.onBlockAdded reads (indirect power) closed the old 319-call desert temple gap.
+    assert.equal(row.callCount, nativeStep.callCount, `ordered world calls ${rec.seed} ${x},${z}`);
+    assert.equal(row.callsSha1, nativeStep.callsSha1, `ordered call hash ${rec.seed} ${x},${z}`);
     assert.equal(row.nextLong, nativeStep.providerNextLong, `provider Random ${rec.seed} ${x},${z}`);
     assert.equal(row.village, nativeStep.populateResults.includes("village:true"), `village gate ${rec.seed} ${x},${z}`);
     assert.equal(randomLong(area.world.rand).toString(), rec.worldNextLong, `World.rand ${rec.seed} ${x},${z}`);

@@ -10,6 +10,7 @@ import { isDoor, doorHarvested } from './doors-panes.js';
 import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, headBaseId, itemForBlock } from './dispenser-piston.js';
 import { FLOWER_POT, potContents } from './stone-utility.js';
 import { enchantedBreakDrops, javaLikeRandom, playerMiningState } from './enchantment-effects.js';
+import { MONSTER_EGG, eggBreak } from './silverfish.js';
 
 // The authoritative live player block-break path, with synchronous presentation
 // hooks. Random sources stay separate: Math.random drives gravel/crops/ore XP, while
@@ -24,6 +25,7 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
   playBlockSound = () => {},
   destroyParticles = () => {},
   markUnsaved = () => {},
+  releaseSilverfish = () => {}, // (x, y, z): a monster egg let a silverfish out
 } = {}) {
   const p = coords, block = world.get(...p), key = p.join(','), m = MATERIALS[block] || {}, tool = heldTool;
   if (!block || (block === 11 && !creative)) return false;
@@ -57,6 +59,9 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
   if (block === ICE && !creative && !enchanted?.silk && iceLeavesWater(world.get(p[0], p[1] - 1, p[2])))
     world.set(...p, WATER, true, 0);
   farming.observe(...p);
+  // BlockSilverfish.onBlockDestroyedByPlayer (one silverfish) and, outside Creative, dropBlockAsItemWithChance (a second
+  // one) unless Silk Touch drops the stacked block instead.
+  if (block === MONSTER_EGG) for (let i = eggBreak({ creative, silkTouch: !!enchanted?.silk, meta }).spawns; i > 0; i--) releaseSilverfish(...p);
   if (furnace) {
     items.spill(furnace.items.filter(Boolean), ...p);
     delete survival.furnaces[key];

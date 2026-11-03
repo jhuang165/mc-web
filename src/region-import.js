@@ -2,6 +2,7 @@
 // Import screen. The export is a version-9 Java world record whose `edits` rebuild the area over the
 // generated terrain of `seed`; supported chest/furnace contents and dropped items travel in the player
 // and runtime fields the importer already reads. Everything else is counted in the loss report.
+import { parseStructureDataFiles } from './structure-data.js';
 import { World, SIZE, SAPLING, WEB, LADDER, YELLOW_FLOWER, RED_FLOWER, DYE, SNOW_LAYER, ICE, CACTUS, TNT, FENCE, RAIL } from './world.js';
 import { isJavaLandscape } from './java-world.js';
 import { fromOriginal, isRegistered } from './block-registry.js';
@@ -354,6 +355,10 @@ export async function importJavaRegionArea(regions, options = {}) {
     throw error;
   }
 
+  // data/*.dat (options.structureData: iterable of {filename, bytes}): kept unchanged in native coordinates, which
+  // only match the browser world's native frame when the area is aligned; unknown start ids are counted, never fatal.
+  const parsedStructures = options.structureData ? await parseStructureDataFiles(options.structureData) : null;
+  if (parsedStructures) report.structures = { ...parsedStructures.report, kept: aligned && Object.keys(parsedStructures.structureData).length > 0 };
   // Start above the centre of the area, on its highest solid block.
   const px = destination.chunkX * 16 + area.width * 8, pz = destination.chunkZ * 16 + area.depth * 8;
   let py = height - 1;
@@ -366,6 +371,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     // legacyPlayer() keeps these fields; without `slots` the Creative hotbar defaults apply.
     player: { chests, furnaces, dispensers },
     drops,
+    ...(report.structures?.kept ? { structureData: parsedStructures.structureData } : {}),
   };
   report.bytes = new TextEncoder().encode(JSON.stringify(record)).length;
   if (report.bytes > IMPORT_BYTE_LIMIT) {
