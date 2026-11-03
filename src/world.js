@@ -296,7 +296,11 @@ export class World {
     for (let cx = 0; cx < SIZE / 16; cx++) for (let cz = 0; cz < SIZE / 16; cz++) this.chunks.set(columnKey(cx, cz), new WorldChunk(cx, cz, this.height));
     this.lastChunk = null;
     this.edits = new Map();
+    // Streamed worlds: each column's edits by cell index, stored as order * 4096 + value, where
+    // order is the edit's position in this.edits (first-edit order); and the columns edited since
+    // the last takeDirtyColumns (world-storage.js writes those).
     this.chunkEdits = new Map();
+    this.dirtyColumns = new Set();
     this.onChange = null;
     // Saved block light (World.getSavedLightValue(EnumSkyBlock.Block)): the scene sets this to
     // its LightVolume; until then snow.js works it out from the lava.
@@ -340,7 +344,8 @@ export class World {
         const generated = this.generateTerrainChunk(cx, cz);
         c = new WorldChunk(cx, cz, this.height);
         c.blocks.set(generated.blocks); c.meta.set(generated.metadata);
-        for (const [cell, value] of this.chunkEdits.get(key) ?? []) {
+        for (const [cell, stored] of this.chunkEdits.get(key) ?? []) {
+          const value = stored % 4096;
           c.blocks[cell] = value & 255; c.meta[cell] = value >> 8;
         }
         added.push(c);
@@ -445,13 +450,36 @@ export class World {
     return true;
   }
   rememberEdit(x, y, z, value) {
+    const order = this.edits.size;
     this.edits.set(`${x},${y},${z}`, value);
     if (this.streaming) {
-      const key = columnKey(x >> 4, z >> 4);
+      const key = columnKey(x >> 4, z >> 4), cell = cellIndex(x, y, z, this.height);
       let edits = this.chunkEdits.get(key);
       if (!edits) this.chunkEdits.set(key, edits = new Map());
-      edits.set(cellIndex(x, y, z, this.height), value);
+      const old = edits.get(cell);
+      edits.set(cell, (old === undefined ? order : Math.floor(old / 4096)) * 4096 + value);
+      this.dirtyColumns.add(key);
     }
+  }
+  // Column records (world-storage.js chunkRecords form, without the world id) of every column
+  // edited since the last call. Each holds all of that column's edits.
+  takeDirtyColumns() {
+    const out = [];
+    for (const key of this.dirtyColumns) {
+      const edits = this.chunkEdits.get(key), [x, z] = key.split(",").map(Number), n = edits.size,
+        cells = new Uint16Array(n), values = new Uint16Array(n), order = new Uint32Array(n);
+      let i = 0;
+      for (const [cell, stored] of edits) {
+        cells[i] = cell; values[i] = stored % 4096; order[i++] = Math.floor(stored / 4096);
+      }
+      out.push({ x, z, cells, values, order });
+    }
+    this.dirtyColumns.clear();
+    return out;
+  }
+  // After a failed write: those columns are written again with the next save.
+  markColumnsDirty(columns) {
+    for (const c of columns) this.dirtyColumns.add(columnKey(c.x, c.z));
   }
   // `onChange(x, y, z, oldBlock, newBlock)` plays World.setBlock's neighbour
   // notification for tracked edits that change the block or its metadata.

@@ -15,6 +15,8 @@ Node 20.19+ and a browser with WebGL 2 are required. Build with `npm run build`;
 
 ## Current implementation
 
+Version **0.31.0** stores streamed-world edits per chunk column: a save writes only the columns you changed since the last one, together with the world record in one transaction. Worlds saved by earlier versions, and imported files, convert on their first save, and exports still contain every edit; see [streaming](public/research/streaming.md).
+
 Version **0.30.0** makes the streamed light shift about five times cheaper (roughly 15–20 ms per chunk crossing instead of about 100 ms) and full light builds about three times cheaper, with the same light values; see [streaming](public/research/streaming.md).
 
 Version **0.29.0** moves streamed-world generation off the main thread: a Web Worker builds upcoming areas ahead of the player, and the light volume follows the player by relighting only the strips a move can change (about 100 ms per chunk crossing instead of a full ~265 ms rebuild plus a full remesh). The rest of this paragraph describes 0.28.0.

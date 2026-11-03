@@ -1,4 +1,4 @@
-# Live Java terrain streaming (WORLD-02d/02e/02f/02g, app 0.30.0)
+# Live Java terrain streaming (WORLD-02d to 02h, app 0.31.0)
 
 Create New World → **Java streaming preview** selects generation version 13 (`javaStreamed`): the default Java biome, terrain, surface, cave and ravine ports (the version-12 terrain preview, WORLD-02d) plus per-area Java population from the seed (WORLD-02e, below). Worlds saved as version 12 keep their terrain-only generator and are never populated retroactively. The finite v9/v10/v11 and legacy generators retain their terrain and save representation. This is an incremental release, not full WORLD-02 or native streaming parity.
 
@@ -39,7 +39,46 @@ Only resident columns accept writes. Unloaded reads return air. A one-chunk halo
 
 `StreamingLight` translates absolute coordinates into the existing 128×128 light solver. Shifts move the bounded light volume incrementally (above; relighting cost reduced in 0.30.0); `VoxelScene` disposes outgoing meshes and queues only the columns a shift can change, nearby first. Existing finite light arrays and their regression fixtures remain unchanged. Light is still one 128×128 volume rather than per-chunk arrays. The working set is fixed at eight chunks per axis and does not implement the render-distance option's native ticket policy.
 
-Streamed world records use IndexedDB (`blockworld.storage.v1`, `worlds`). The existing localStorage shelf contains only their summary and ID. Save completion is displayed after the database transaction and shelf write succeed. Legacy records retain localStorage. Export is self-contained; imports validate all edits, including unloaded ones. Streamed imports allow up to 2,000,000 edits and 128 MiB files; finite edit limits stay at 100,000. The edit journal and all runtime state are still rewritten as one world record, loaded at startup and retained in memory. Incremental per-chunk transactions, recovery/version conflicts, cross-tab synchronization, arbitrary-size worlds and Java region saves remain open. Browser storage remains origin-specific, so keep exports when moving hosts/ports. Autosaves run every five seconds and on pause; an abrupt browser/process termination can lose unsaved work.
+Streamed world records use IndexedDB (`blockworld.storage.v1`, `worlds`). The existing localStorage shelf contains only their summary and ID. Save completion is displayed after the database transaction and shelf write succeed. Legacy records retain localStorage. Export is self-contained; imports validate all edits, including unloaded ones. Streamed imports allow up to 2,000,000 edits and 128 MiB files; finite edit limits stay at 100,000. Since 0.31.0 the edit journal is stored per chunk column (below); the rest of the runtime state is still one world record, rewritten on each save. Every edit is still loaded when the world opens and kept in memory. Recovery/version conflicts, cross-tab synchronization, arbitrary-size worlds and Java region saves remain open. Browser storage remains origin-specific, so keep exports when moving hosts/ports. Autosaves run every five seconds and on pause; an abrupt browser/process termination can lose unsaved work.
+
+## Per-chunk edit storage (WORLD-02h, 0.31.0)
+
+The database (`blockworld.storage.v1`, now version 2) gains a `chunks` object store keyed by `[world, x, z]` with a `world` index. Each streamed world has one record per edited chunk column. It holds three typed arrays:
+
+- `cells`: the local cell, as x << 12 | z << 8 | y;
+- `values`: block | meta << 8, as in `World.edits`;
+- `order`: each cell's position in the world's first-edit order.
+
+The world record keeps the player, entities, pending ticks and the population mask, with `chunked: true` and no `edits` array.
+
+`World.rememberEdit` marks the column dirty. `World.takeDirtyColumns` returns every column edited since the last save, each with all of its edits. `save()` passes those columns to `writeWorldShelf`, which writes them in the same transaction as the world records, so a save is atomic. If the write fails, the columns are marked dirty again (`markColumnsDirty`) and go out with the next save. An autosave therefore writes only what changed, instead of serialising every edit of the world (up to 2,000,000) every five seconds. Startup reads only the small world records; a world's column records are read when it is opened (`readChunkEdits`), sorted back into first-edit order and replayed through `World.restore`. That order is what iteration over `World.edits` sees, for example farmland and the legacy wake-ups, so it is the same before and after a reload.
+
+Saves in the single-record form are converted on their first write, in one transaction: streamed records from 0.27.0–0.30.0, imported files and new worlds. A world opened from that form keeps every column dirty, and its fresh columns are queued after the converted copies, so the newer data wins. Until that write commits, the old record stays as it was. Exports remain self-contained: the active world exports `World.edits`, and a stored world reads its columns back into the file. Deleting a world removes its column records in the same transaction. Older app versions cannot open the version-2 database, so they cannot misread a chunked record.
+
+Checks:
+
+- `src/world-storage.test.js` runs against an in-memory IndexedDB with ordered requests, commit/abort and structured cloning. It covers:
+  - column records round-tripping, negative coordinates included;
+  - dirty-column tracking with whole-column records and first-edit order across re-edits;
+  - unloaded columns and re-requeuing after a failure;
+  - conversion of single-record saves, where the fresh columns win;
+  - a save writing only the edited column;
+  - an aborted transaction changing nothing and keeping the single-record copy;
+  - deletion.
+- Chrome on localhost:5181 with `?silent`, starting from a version-1 database seeded with a 0.30.0-style generation-13 record of four edits (including metadata), then:
+  - opening it upgraded the database to version 2, with the old record untouched;
+  - the first save moved its edits, plus the weather edits made at launch, into 26 column records, and the world record lost its `edits` array;
+  - after more play and saves, 1,430 edits in 27 columns came back after a reload in the same order, with nothing dirty at launch and the metadata intact;
+  - export from the pause menu and from the world list both produced 1,430-edit files without the `chunked` flag;
+  - importing that file stored 27 column records;
+  - deleting both worlds through Delete left 0 world and 0 chunk records;
+  - the console showed no warnings or errors.
+
+Still open:
+
+- reading columns lazily as they load, instead of all edits on open;
+- storing entities, tile state and pending ticks per chunk;
+- cross-tab coordination and Java region (Anvil) saves.
 
 ## Evidence
 
@@ -63,4 +102,4 @@ Earlier (WORLD-02d) Chrome localhost:5182, isolated headless profile, `?silent`:
 
 ## Next work
 
-Villages, strongholds and temples are still absent from streamed worlds, and population composes per cell rather than in native on-demand chunk order. Replace the working-set activity policy with the existing native provider/player-manager lifecycle, move entities/tiles/pending work into chunk-owned durable records, and move the remaining shift relight (about 100 ms) off the main thread or into per-chunk light arrays, and add per-chunk storage; record the claimed-column mask and cell records per chunk instead of one world record. Preserve existing populated and generation-12 saves during that transition. No Site publication.
+Villages, strongholds and temples are still absent from streamed worlds, and population composes per cell rather than in native on-demand chunk order. Replace the working-set activity policy with the existing native provider/player-manager lifecycle, move entities/tiles/pending work into chunk-owned durable records, and move the remaining shift relight (about 15–20 ms since 0.30.0) off the main thread or into per-chunk light arrays, load stored columns lazily instead of all edits on open (0.31.0 stores edits per column), and record the claimed-column mask and runtime state per chunk instead of in the world record. Preserve existing populated and generation-12 saves during that transition. No Site publication.

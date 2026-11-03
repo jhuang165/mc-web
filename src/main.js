@@ -1,4 +1,4 @@
-import { readWorldShelf, writeWorldShelf, deleteStoredWorld } from './world-storage.js';
+import { readWorldShelf, writeWorldShelf, deleteStoredWorld, readChunkEdits } from './world-storage.js';
 import {PopulationBlocks} from './population-blocks.js';
 import {hasSavedStructures as hasSavedPopulation} from './structure-simulation.js';
 import {restorePopulation,restorePopulationColumns} from './population-runtime.js';
@@ -278,7 +278,7 @@ const menuContext = {
   saveOptions,
   soundLevel: (k) => soundLevel(options.soundLevels, k),
   makeRecord,
-  launch,
+  launch: openWorld,
   exportWorld,
   importWorld: () => $("#file-input").click(),
   deleteWorld,
@@ -301,9 +301,10 @@ const gui = new Gui($("#gui"), {
 const menus = createMenus(gui, menuContext);
 addEventListener("resize", () => gui.build());
 
-async function persist() {
+// `columns`: the active streamed world's edited column records (world-storage.js).
+async function persist(columns = []) {
   try {
-    await writeWorldShelf(worlds, localStorage, storageKey);
+    await writeWorldShelf(worlds, localStorage, storageKey, columns);
     return true;
   } catch {
     toast("Device storage is unavailable or full. Export your world to keep a copy.");
@@ -461,7 +462,9 @@ async function renameWorld(record, name) {
 
 function save() {
   if (!active || !world || screen === "home") return;
-  active.edits = [...world.edits];
+  // Streamed worlds store edits per column: only the columns edited since the last save are written.
+  const columns = world.streaming ? world.takeDirtyColumns().map((c) => ({ world: active.id, ...c })) : [];
+  if (!world.streaming) active.edits = [...world.edits];
   if (world.population) active.populatedColumns = world.saveClaimedColumns();
   active.position = { x: position.x, y: position.y, z: position.z, yaw, pitch };
   active.player = survival.serialize();
@@ -498,22 +501,31 @@ function save() {
   const i = worlds.findIndex((w) => w.id === active.id);
   if (i < 0) worlds.unshift(active);
   else worlds[i] = active;
-  const savingId = active.id;
+  const savingId = active.id, savingWorld = world;
   $("#save-label").textContent = "Saving…";
-  persist().then(ok => {
+  persist(columns).then(ok => {
+    if (!ok) savingWorld.markColumnsDirty(columns);
     if (active?.id !== savingId) return;
     saved = ok;
     $("#save-label").textContent = ok ? "Saved on this device" : "Export to save your changes";
   });
   lastSave = elapsed;
 }
-function exportWorld(record = active) {
+async function exportWorld(record = active) {
   if (record === active) save();
+  // Exports stay self-contained: a chunked world's edits are read back into the file.
+  let edits = record.edits;
+  if (record === active && world?.streaming) edits = [...world.edits];
+  else if (record.chunked) {
+    try { edits = await readChunkEdits(record.id); }
+    catch (e) { toast("Could not read this world: " + e.message); return; }
+  }
+  const { chunked, ...rest } = record;
   const url = URL.createObjectURL(
     new Blob(
       [
         JSON.stringify(
-          { ...record, format: "blockworld", version: 1 },
+          { ...rest, edits, format: "blockworld", version: 1 },
           null,
           2,
         ),
@@ -597,11 +609,23 @@ function applyWeatherEdit(w, x, y, z, block, meta) {
   scene.updateBlocks([[x, y, z, old, block]]);
   saved = false;
 }
-function launch(record) {
+// A chunked streamed world reads its column records first (world-storage.js).
+async function openWorld(record) {
+  let edits = record.edits || [];
+  if (record.chunked) {
+    try { edits = await readChunkEdits(record.id); }
+    catch (e) { toast("Could not open this world: " + e.message); return; }
+  }
+  launch(record, edits);
+}
+function launch(record, edits = record.edits || []) {
   try {
     active = record;
     world = new World(record.seed, record.biome, record.generationVersion ?? 1);
-    world.restore(record.edits || []);
+    world.restore(edits);
+    // Columns that came from storage are already written. A world still in the single-record
+    // form stays dirty everywhere, so its first save writes every column it has.
+    if (record.chunked) world.dirtyColumns.clear();
     world.restoreClaimedColumns(record.populatedColumns);
     if (world.streaming && record.position && [record.position.x,record.position.z].every(Number.isFinite)) world.streamAround(record.position.x,record.position.z);
     startPrefetch();

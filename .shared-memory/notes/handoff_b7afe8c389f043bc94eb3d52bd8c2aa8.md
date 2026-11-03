@@ -1,0 +1,1 @@
+WORLD-02g / 0.30.0 done: commits e5a65e9 (exact relight speed-up, shift ~15-20 ms from ~100 ms, identical light) and 57629ee (handoff note 2026-11-02-world-02g-relight-speedup). Tests 1091/1091, build passes, pushed to github main. In-game syncChunks not re-measured. Open: per-chunk light arrays/storage, villages/strongholds/temples, native chunk order.
