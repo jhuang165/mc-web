@@ -1,0 +1,1 @@
+Reviewed Luna outcomes and evidence limits recorded in parity-roadmap.md, parity.md and PROJECT.md; commit258c3cf. Full1189/1189 tests/build pass; no live structure/redstone integration or Site publication.

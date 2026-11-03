@@ -1,0 +1,1 @@
+Item metadata tooltips integrated in 258c3cf; GUI regressions and full1189 tests/build pass. Name text remains HTML-escaped. Native formatting inspected via pinned bytecode; no imported-tooltip browser acceptance because Chrome file upload unavailable.
