@@ -6,6 +6,9 @@ import { leafDrops } from './trees.js';
 import { oreExperience } from './experience.js';
 import { ITEMS, MATERIALS } from './survival.js';
 import { makeStack, copyStack } from './inventory.js';
+import { isDoor, doorHarvested } from './doors-panes.js';
+import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, headBaseId, itemForBlock } from './dispenser-piston.js';
+import { FLOWER_POT, potContents } from './stone-utility.js';
 import { enchantedBreakDrops, javaLikeRandom, playerMiningState } from './enchantment-effects.js';
 
 // The authoritative live player block-break path, with synchronous presentation
@@ -41,9 +44,15 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
     ? leafDrops(leafRandom, world.getMeta(...p),block).map((d) => ({ ...d, count: 1 }))
     : null;
   const drops = enchanted?.drops ?? (harvest ? populationDrops(block,world.getMeta(...p),{random,shears:shearing}) : null) ?? leaves ?? crops ?? (drop ? [{ id: drop, count }] : []);
-  const furnace = survival.furnaces[key], chest = survival.chests[key], meta = world.getMeta(...p);
+  // BlockFlowerPot.breakBlock: the pot's plant drops alongside the pot (world.pots, read before the cell is cleared).
+  const potPlant = block === FLOWER_POT ? potContents(world, ...p) : null;
+  if (potPlant) drops.push({ id: potPlant.id, count: 1, damage: potPlant.damage });
+  const furnace = survival.furnaces[key], chest = survival.chests[key], dispenser = survival.dispensers?.[key], meta = world.getMeta(...p);
 
-  if (!world.set(...p, 0)) return false;
+  // BlockDoor.onBlockHarvested: a Creative player breaking the upper half removes the lower half first.
+  const door = isDoor(block);
+  if (door) doorHarvested(world, ...p, creative);
+  if (!world.set(...p, 0) && !(door && creative && !world.get(...p))) return false;
   // BlockIce.harvestBlock leaves flowing water over a solid/liquid cell in Survival.
   if (block === ICE && !creative && !enchanted?.silk && iceLeavesWater(world.get(p[0], p[1] - 1, p[2])))
     world.set(...p, WATER, true, 0);
@@ -56,6 +65,24 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
     const stacks = chest.items.filter(Boolean).map(copyStack);
     items.spill(stacks, ...p);
     delete survival.chests[key];
+  }
+  if (dispenser) {
+    items.spill(dispenser.items.filter(Boolean).map(copyStack), ...p);
+    delete survival.dispensers[key];
+  }
+  // BlockPistonExtension.breakBlock/onBlockHarvested: the base behind the head is removed (and drops itself in Survival);
+  // an extended base's head is left without a base and vanishes.
+  if (block === PISTON_HEAD) {
+    const base = baseOfHead(...p, meta);
+    if (isPistonBase(world.get(...base)) && pistonExtended(world.getMeta(...base))) {
+      const baseBlock = world.get(...base);
+      world.set(...base, 0);
+      if (!creative) items.dropBlock([makeStack(itemForBlock(baseBlock), 1, 0)], ...base);
+      updateBlock(base[0], base[2], base[1]);
+    }
+  } else if (isPistonBase(block) && pistonExtended(meta)) {
+    const head = headOfBase(...p, meta);
+    if (world.get(...head) === PISTON_HEAD) { world.set(...head, 0); updateBlock(head[0], head[2], head[1]); }
   }
   if (!creative) {
     items.dropBlock(drops.map((d) => makeStack(

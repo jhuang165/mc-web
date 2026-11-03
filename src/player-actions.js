@@ -10,6 +10,8 @@ const RELEASE_TYPE = 'player-release-use';
 // EntityWorld restores exactly /^mob-\d+$/ IDs (including legacy mob-0).
 const mobIdPattern = /^mob-\d+$/;
 
+// The ray's exact hit vector (onBlockPlaced's hit x/y/z); kept only when it is three finite numbers.
+const copyHit = (value) => (Array.isArray(value) && value.length === 3 && value.every(Number.isFinite) ? { hit: [...value] } : {});
 const copyPosition = (value) => {
   if (value == null) return null;
   if (!Array.isArray(value) || value.length !== 3 || !value.every(Number.isSafeInteger)) return undefined;
@@ -40,7 +42,7 @@ export function capturePlayerAction({ place = false, target = null, aimedEntity 
     type: TYPE,
     place: Boolean(place),
     heldTool,
-    target: target ? { block, adjacent, ...(distance === undefined ? {} : { distance }) } : null,
+    target: target ? { block, adjacent, ...(distance === undefined ? {} : { distance }), ...copyHit(target.hit) } : null,
     // Null means no entity was selected. An object with id:null means an entity
     // was selected but cannot be addressed safely, and must never become a block click.
     aimedEntity: aimedEntity ? { id: selectedEntityId(aimedEntity) } : null,
@@ -58,7 +60,7 @@ function normalizeAction(action) {
     const adjacent = action.target.adjacent == null ? null : copyPosition(action.target.adjacent);
     if (block === null || block === undefined || adjacent === undefined ||
         (action.target.distance !== undefined && !Number.isFinite(action.target.distance))) return null;
-    target = { block, adjacent, ...(action.target.distance === undefined ? {} : { distance: action.target.distance }) };
+    target = { block, adjacent, ...(action.target.distance === undefined ? {} : { distance: action.target.distance }), ...copyHit(action.target.hit) };
   }
   let aimedEntity = null;
   if (action.aimedEntity !== null) {

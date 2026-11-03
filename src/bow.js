@@ -9,6 +9,7 @@ import { entityActive } from './streaming-ticks.js';
 import { explosionImpact } from "./explosion.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { HEIGHT, TNT, blockBounds } from "./world.js";
+import { isStair, stairBoxes } from "./stairs.js";
 import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
 import { enterWater } from "./fx.js";
 import { GaussianRandom, intercept, rayTraceBlocks } from "./projectiles.js";
@@ -256,8 +257,8 @@ export class Arrows {
     // Is the block it last stuck in still around it?
     const px = a.xTile, py = a.yTile, pz = a.zTile;
     if (blockAt(world, px, py, pz) !== 0) {
-      const b = collisionBox(world, px, py, pz);
-      if (b && strictInside(b, px, py, pz, [a.x, a.y, a.z])) a.inGround = true;
+      const boxes = isStair(blockAt(world, px, py, pz)) ? stairBoxes(world, px, py, pz) : [collisionBox(world, px, py, pz)];
+      if (boxes.some((b) => b && strictInside(b, px, py, pz, [a.x, a.y, a.z]))) a.inGround = true;
     }
     if (a.shake > 0) a.shake--;
     if (a.inGround) {

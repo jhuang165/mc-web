@@ -7,6 +7,7 @@
 // The rules here work on ORIGINAL block and item ids (the port keeps its own ids; callers map through
 // block-registry.js / region-import.js). `rand` is a JavaRandom (World.rand); the draw order is the
 // original's, including the three nextFloat draws of Block.dropBlockAsItem for every spawned stack.
+import { blockItemId } from './doors-panes.js';
 import {
   ENCHANTMENT, getEnchantmentLevel, getEfficiencyModifier, getSilkTouchModifier, getFortuneModifier,
   getLootingModifier, getAquaAffinityModifier, getKnockbackModifier, getFireAspectModifier,
@@ -29,6 +30,7 @@ const SILK = {
   18: (id, meta) => META(id, meta & 3), 161: (id, meta) => META(id, meta & 3),
   20: SELF, 95: META, 102: SELF, 160: META, 79: SELF, 174: SELF, 80: SELF, 82: SELF, 103: SELF, 47: SELF,
   110: SELF, 99: SELF, 100: SELF, 30: SELF, 120: SELF,
+  101: SELF, // BlockPane.canSilkHarvest: iron bars (102, the glass pane, is above)
 };
 // Silk results are keyed by (id, meta): SELF ignores the meta, META keeps it.
 const silkStack = (id, meta) => { const s = SILK[id]; if (!s) return null; const r = s === SELF ? SELF(id) : s(id, meta); return r; };
@@ -147,7 +149,7 @@ export function enchantedBreakDrops(block, meta, held, rand) {
   if (!r) return null;
   const drops = [];
   for (const d of r.drops) {
-    if (silkTaken) drops.push({ id: fromOriginal(d.id, d.damage).id, count: d.count });
+    if (silkTaken) drops.push({ id: blockItemId(fromOriginal(d.id, d.damage).id), count: d.count });
     else {
       const item = itemFromOriginal(d.id, d.damage);
       if (!item) continue;

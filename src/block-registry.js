@@ -8,7 +8,9 @@
 //   lit       lit_furnace (62)
 // Original blocks the port has no family for map to null. Ids and flags: tools/probes/ChunkProbe.java,
 // public/research/chunk-reference.json.
-import { BLOCKS, WATER, LAVA, ANVIL, ENCHANTING_TABLE } from "./world.js";
+import { BLOCKS, WATER, LAVA, ANVIL, ENCHANTING_TABLE,
+  OAK_STAIRS, COBBLESTONE_STAIRS, STONE_BRICK_STAIRS, SANDSTONE_STAIRS, SPRUCE_STAIRS, BIRCH_STAIRS, JUNGLE_STAIRS, BRICK_STAIRS, ACACIA_STAIRS, DARK_OAK_STAIRS, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE, STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, REDSTONE_WIRE, LEVER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, DISPENSER, STICKY_PISTON, PISTON, PISTON_HEAD,
+} from "./world.js";
 
 // Block.blockRegistry: ids 0-175 except 165-169 (unused in 1.7.10). Everything else reads as air.
 export const ORIGINAL_BLOCK_IDS = Array.from({ length: 176 }, (_, i) => i).filter((i) => i < 165 || i > 169);
@@ -87,6 +89,46 @@ const MAP = {
   // BlockEnchantmentTable: one state; its book tile entity is presentation-only here (enchanting-table.md).
   [ENCHANTING_TABLE]: fixed(116),
   [ANVIL]: { mc: 145, to: (meta) => [145, meta & 15], from: (meta) => ({ meta, exact: true }) },
+  // Structure families: provisional identity-metadata mappings; each family's owner refines its own entries.
+  [OAK_STAIRS]: same(53),
+  [COBBLESTONE_STAIRS]: same(67),
+  [STONE_BRICK_STAIRS]: same(109),
+  [SANDSTONE_STAIRS]: same(128),
+  [SPRUCE_STAIRS]: same(134),
+  [BIRCH_STAIRS]: same(135),
+  [JUNGLE_STAIRS]: same(136),
+  [BRICK_STAIRS]: same(108),
+  [ACACIA_STAIRS]: same(163),
+  [DARK_OAK_STAIRS]: same(164),
+  [WOODEN_DOOR]: same(64),
+  [IRON_DOOR]: same(71),
+  [IRON_BARS]: same(101),
+  [GLASS_PANE]: same(102),
+  [STONE_BRICKS]: same(98),
+  [DOUBLE_STONE_SLAB]: same(43),
+  // BlockStoneSlab 44: every state but 44:1 (bottom sandstone slab, internal 82, which stays the home of old saves);
+  // 103:1 is never written, so it exports as 44:0 and the exact round trip skips it.
+  [STONE_SLAB]: { mc: 44, to: (meta) => [44, (meta & 15) === 1 ? 0 : meta & 15], from: (meta) => ({ meta, exact: true }) },
+  [END_PORTAL_FRAME]: same(120),
+  [CAULDRON]: same(118),
+  [FLOWER_POT]: same(140),
+  [REDSTONE_WIRE]: same(55),
+  [LEVER]: same(69),
+  [STONE_PRESSURE_PLATE]: same(70),
+  [WOODEN_PRESSURE_PLATE]: same(72),
+  [STONE_BUTTON]: same(77),
+  // BlockRedstoneRepeater: 93 unpowered / 94 powered share one internal id; `powered` is side state like furnace `lit`.
+  [REPEATER]: {
+    mc: 93, also: [94],
+    to: (meta, state) => [state.powered ? 94 : 93, meta & 15],
+    from: (meta, mc) => ({ meta, state: mc === 94 ? { powered: true } : undefined, exact: true }),
+  },
+  [TRIPWIRE_HOOK]: same(131),
+  [TRIPWIRE]: same(132),
+  [DISPENSER]: same(23),
+  [STICKY_PISTON]: same(29),
+  [PISTON]: same(33),
+  [PISTON_HEAD]: same(34),
 };
 if (Object.keys(MAP).length !== BLOCKS.length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");
 

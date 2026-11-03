@@ -3,7 +3,9 @@
 // 2 x shadowSize, centred under the entity, laid 1/64 above the top of every
 // solid cube below it and faded by height, viewer distance and block light.
 import * as THREE from "three";
-import { isFlower, isCrop, FIRE, WEB, LADDER, CACTUS, REEDS, LILY_PAD, FENCE, RAIL, ANVIL, ENCHANTING_TABLE } from "./world.js";
+import { STAIRS } from "./stairs.js";
+import { STONE_SLAB, CAULDRON, FLOWER_POT } from "./stone-utility.js";
+import { isFlower, isCrop, FIRE, WEB, LADDER, CACTUS, REEDS, LILY_PAD, FENCE, RAIL, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE } from "./world.js";
 import { BRIGHTNESS } from "./lighting.js";
 import { FOG_PARS } from "./light-material.js";
 
@@ -34,7 +36,7 @@ export const SHADOWS = {
 // public/research/shadow-reference.json): glass, water, lava, torches, farmland,
 // wheat, tall grass, chests, fire (45), the snow layer (46), the sapling (48), fences and rails. Every block that does is a full cube
 // (ice does: it renders as a normal block).
-const NOT_NORMAL = new Set([69,72,73,75,76,79,82,83,84,ANVIL,ENCHANTING_TABLE,9, 10, 20, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41, 42, FIRE, 46, 48, WEB, LADDER, CACTUS, REEDS, LILY_PAD, FENCE, RAIL]);
+const NOT_NORMAL = new Set([STONE_SLAB,CAULDRON,FLOWER_POT,...Object.keys(STAIRS).map(Number),WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,107,108,109,110,111,112,113,114,116,117,118,69,72,73,75,76,79,82,83,84,ANVIL,ENCHANTING_TABLE,9, 10, 20, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41, 42, FIRE, 46, 48, WEB, LADDER, CACTUS, REEDS, LILY_PAD, FENCE, RAIL]);
 export const takesShadow = (b) => b !== 0 && !NOT_NORMAL.has(b) && !isFlower(b) && !isCrop(b);
 
 // `e`: { x, y, z } interpolated Java position (posY, which for items and orbs

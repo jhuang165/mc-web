@@ -5,7 +5,7 @@ export function blockSound(id) {
   if ([1, 5, 39, REEDS, TNT].includes(id)||isCrop(id)||isFlower(id)) return "grass";
   if ([2, 24, 25,29,30].includes(id)) return "gravel";
   if (id === 6) return "sand";
-  if ([4, 7, 13, 20, 21, LADDER].includes(id)) return "wood";
+  if ([4, 7, 13, 20, 21, LADDER, 108, 110, 112, 87, 91, 92, 93, 95, 96, 97].includes(id)) return "wood"; // 97: the wooden door // 87-96: stairs share the base block sound (wood ones here)
   if (id === 19 || id === CACTUS) return "cloth";
   if (id === 23 || id === 46) return "snow";
   return "stone";

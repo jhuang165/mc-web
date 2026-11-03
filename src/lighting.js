@@ -5,7 +5,8 @@ export { JavaRandom } from "./java-random.js";
 // (blm), RenderGlobal (bma) and Block (aji). The rain, thunder and lightning
 // terms are optional trailing arguments that default to 0 (clear sky); weather.js
 // supplies them. See public/research/lighting.md and weather.md.
-import { SIZE, HEIGHT, FIRE, WEB, LADDER, CACTUS, REEDS, LILY_PAD, TNT, FENCE, RAIL, MOB_SPAWNER, ANVIL, ENCHANTING_TABLE, isPlant, normalCube, opaqueCube } from "./world.js";
+import { isStair } from "./stairs.js";
+import { SIZE, HEIGHT, FIRE, WEB, LADDER, CACTUS, REEDS, LILY_PAD, TNT, FENCE, RAIL, MOB_SPAWNER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, GLASS_PANE, DOUBLE_STONE_SLAB, END_PORTAL_FRAME, FLOWER_POT, isPlant, normalCube, opaqueCube } from "./world.js";
 import { biomeFacts } from "./biomes.js";
 
 const f = Math.fround,
@@ -30,6 +31,10 @@ export const BRIGHTNESS = Array.from({ length: 16 }, (_, i) => {
 // that let grass through, used by smooth lighting to decide corner samples).
 export function lightOpacity(b) {
   if (b===72||b===73) return 0;
+  if (b >= END_PORTAL_FRAME && b <= FLOWER_POT) return 0; // end portal frame, cauldron and flower pot (stone-utility-reference.json); slabs keep 255
+  if (b >= 116 && b <= 118) return 0; // piston base, sticky piston and head: isOpaqueCube false
+  if (b >= 107 && b <= 114) return 0; // redstone components (redstone-blocks-reference.json): dust, lever, plates, button, repeater, hook, tripwire
+  if (b >= WOODEN_DOOR && b <= GLASS_PANE) return 0; // doors, iron bars and glass panes are not opaque cubes
   if (b === 0 || b === 9 || b === 20 || b === 41 || b === 42 || b === FIRE || b === LADDER || b === CACTUS || b === REEDS || b === LILY_PAD || b === FENCE || b === RAIL || b === MOB_SPAWNER || b === ANVIL || b === ENCHANTING_TABLE || isPlant(b)) return 0;
   if (b === 5 || b===71 || b === WEB) return 1;
   if (b === 10 || b === 47) return 3; // water; ice (setLightOpacity(3))
@@ -38,8 +43,8 @@ export function lightOpacity(b) {
 }
 // Lava: setLightLevel(1.0F), so (int)(15 * 1.0) = 15.
 // Fire: setLightLevel(1.0F), 15 as well.
-export const lightEmission = (b, lit = false) => (b===65?9:b===75?1:b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : 0);
-export const useNeighborBrightness = (b) => b === 20 || b === 9 || b === 41 || b === 29 || b === 30 || b === FENCE || b === RAIL || b === MOB_SPAWNER || isPlant(b);
+export const lightEmission = (b, lit = false) => (b===65?9:b===75?1:b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : b === END_PORTAL_FRAME ? 1 : 0);
+export const useNeighborBrightness = (b) => isStair(b) || b === 82 || (b >= DOUBLE_STONE_SLAB && b <= FLOWER_POT) || b === 20 || b === 9 || b === 41 || b === 29 || b === 30 || b === FENCE || b === RAIL || b === MOB_SPAWNER || isPlant(b);
 const AO_SOLID = f(0.2);
 // Block.getAmbientOcclusionLightValue uses isBlockNormalCube (blocksMovement and a
 // normal render), which TNT passes although it is not isNormalCube.

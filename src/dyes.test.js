@@ -23,6 +23,8 @@ const cells = (items, size) => {
 };
 // RecipesDyes results only; the reference also lists carpet, buttons and the like, which this build lacks.
 const dyeResult = ([id]) => id === 351 || id === 35;
+// Non-dye RecipesDyes-universe results this build has: one stone makes a stone button (77, item 1111), two a stone pressure plate (70, item 1109), three six stone slabs (44, item 1103).
+const OTHER = { 77: 1111, 70: 1109, 44: 1103 };
 
 test("dye and wool recipes match the original CraftingManager for every grid of up to three items", () => {
   const u = reference.universe.map(game), expected = new Map(reference.recipes.map(([picks, out]) => [picks.join(), out]));
@@ -34,7 +36,8 @@ test("dye and wool recipes match the original CraftingManager for every grid of 
       matched++;
       const [id, count, damage] = want;
       assert.deepEqual(out && [out.id, out.count, out.damage], [id === 35 ? WOOL : DYE, count, damage], picks.map((i) => reference.universe[i]).join(" "));
-    } else assert.equal(out, null, picks.map((i) => reference.universe[i]).join(" "));
+    } else if (want && OTHER[want[0]]) assert.deepEqual(out && [out.id, out.count], [OTHER[want[0]], want[1]], picks.map((i) => reference.universe[i]).join(" "));
+    else assert.equal(out, null, picks.map((i) => reference.universe[i]).join(" "));
   };
   const n = u.length;
   for (let a = 0; a < n; a++) {

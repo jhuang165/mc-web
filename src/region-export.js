@@ -52,7 +52,7 @@ function payload(state,ox,oz,report) {
  for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta);entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET},'FallingSand',ox,oz),TileID:int(o[0]),Data:byte(o[1]),Time:byte(e.ticks&255),DropItem:byte(1)})));}
  for(const {value:e} of state.carts??[]) {const items=(e.items??[]).map(s=>stackNbt(s,s.slot,report,true)).filter(Boolean),n=entity(e,e.type===0?'MinecartRideable':'MinecartChest',ox,oz);if(e.type!==0)n.Items=list(NBT.COMPOUND,items);if(e.customName)n.CustomName=str(e.customName);entities.push(new Map(Object.entries(n)));}
  for(const name of ['projectiles','arrows'])report.unsupportedEntities+=(state[name]??[]).length;
- for(const name of ['chests','furnaces'])for(const [k,e] of Object.entries(state[name]??{})) {const [x,y,z]=k.split(',').map(Number),n={id:str(name==='chests'?'Chest':'Furnace'),x:int(x+ox),y:int(y),z:int(z+oz),Items:inventory(e.items,report)};
+ for(const name of ['chests','furnaces','dispensers'])for(const [k,e] of Object.entries(state[name]??{})) {const [x,y,z]=k.split(',').map(Number),n={id:str(name==='chests'?'Chest':name==='dispensers'?'Trap':'Furnace'),x:int(x+ox),y:int(y),z:int(z+oz),Items:inventory(e.items,report)};
   if(name==='furnaces'){n.BurnTime=short(e.burn??0);n.CookTime=short(e.cook??0);}tiles.push(new Map(Object.entries(n)));
  }
  for(const {value:e} of state.spawners??[]) {const n={id:str('MobSpawner'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz)};for(const [k,v] of Object.entries(e))if(!['x','y','z'].includes(k))n[k]=typeof v==='string'?str(v):short(v);tiles.push(new Map(Object.entries(n)));}

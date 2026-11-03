@@ -1,4 +1,6 @@
 import { CHEST } from './chest.js';
+import { DISPENSER } from './dispenser-piston.js';
+import { newDispenser } from './dispenser-container.js';
 import { BOW, canDraw } from './bow.js';
 import { plantedBlock } from './crops.js';
 import { growGrass } from './flowers.js';
@@ -9,12 +11,15 @@ import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
 import { playerMiningState } from './enchantment-effects.js';
 import {
-  DYE, FIRE, SAPLING, SNOW_LAYER, TNT, ANVIL, ENCHANTING_TABLE, isCrop,
+  DYE, FIRE, SAPLING, SNOW_LAYER, TNT, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, isCrop,
 } from './world.js';
+import { isDoor, activateDoor } from './doors-panes.js';
 import { ITEMS } from './survival.js';
-import { copyStack } from './inventory.js';
+import { LEVER, STONE_BUTTON, REPEATER, redstoneActivate } from './redstone-blocks.js';
+import { copyStack, makeStack } from './inventory.js';
+import { CAULDRON, FLOWER_POT, BUCKET_ITEM, cauldronUse, potUse, setPotContents } from './stone-utility.js';
 
-const STATIONS = new Set([13, 14, CHEST, ANVIL, ENCHANTING_TABLE]);
+const STATIONS = new Set([13, 14, CHEST, DISPENSER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, LEVER, STONE_BUTTON, REPEATER]);
 // PlayerControllerMP's edit(place) dispatcher with browser effects supplied by the
 // caller. `state` holds the live mutable gameplay state, `request` snapshots the two
 // ray targets, the held bucket's own captured trace and the click button, and hooks run
@@ -31,7 +36,12 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   hook('unlock');
   const id = state.heldTool, item = ITEMS[id];
   const activates = !(state.motion.sneaking && id);
-  const usesBlock = activates && !aimedEntity && target && STATIONS.has(state.world.get(...target.block));
+  // The cauldron consumes the click for an empty hand or a water bucket, the flower pot when it is empty and the item is a plant it takes
+  // (BlockCauldron/BlockFlowerPot.onBlockActivated); every other item falls through to its own use.
+  const targetBlock = activates && !aimedEntity && target ? state.world.get(...target.block) : 0;
+  const usesStoneUtility = targetBlock === CAULDRON ? cauldronUse(id, 0, true).handled
+    : targetBlock === FLOWER_POT && !!potUse(state.world, ...target.block, id, state.survival.held?.damage || 0);
+  const usesBlock = activates && !aimedEntity && target && (STATIONS.has(state.world.get(...target.block)) || usesStoneUtility);
 
   // Snowball/egg, bow and buckets return before the vanilla hand swing.
   if (place && isThrowable(id) && (state.survival.creative || state.survival.count(id)) && !usesBlock) {
@@ -183,11 +193,68 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     if (activates && block === 13) { hook('openInventory', true); return act('open-workbench'); }
     if (activates && block === 14) { hook('useFurnace', target.block.join(',')); return act('open-furnace'); }
     if (activates && block === ANVIL) { hook('useAnvil', target.block.join(',')); return act('open-anvil'); }
+    // BlockDoor.onBlockActivated: a wooden door swings (aux effect 1003); an iron door consumes the click and stays shut.
+    if (activates && isDoor(block)) {
+      const used = activateDoor(state.world, x, y, z, random);
+      if (used.changed) {
+        for (const c of used.cells) hook('updateBlock', c[0], c[2], c[1]);
+        hook('playSound', used.sound.event, { volume: used.sound.volume, pitch: used.sound.pitch, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
+        hook('markUnsaved');
+      }
+      return act('use-door', { door: used });
+    }
+    // Lever, stone button and repeater right-clicks (redstone-blocks.js): local state only, no power network.
+    if (activates && (block === LEVER || block === STONE_BUTTON || block === REPEATER)) {
+      const used = redstoneActivate(block, state.world.getMeta(x, y, z));
+      if (used.meta !== state.world.getMeta(x, y, z)) {
+        state.world.set(x, y, z, block, true, used.meta);
+        hook('updateBlock', x, z, y);
+        if (used.release) state.world.redstoneBlocks?.schedule(x, y, z, used.release);
+        hook('markUnsaved');
+      }
+      // A pressed button reloaded from a save has no pending release: the next click schedules one (documented deviation).
+      else if (used.handled && !state.world.redstoneBlocks?.scheduled(x, y, z)) state.world.redstoneBlocks?.schedule(x, y, z, 20);
+      if (used.sound) hook('playSound', used.sound[0], { volume: used.sound[1], pitch: used.sound[2], position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
+      return act('use-redstone', { used });
+    }
+    // BlockCauldron.onBlockActivated: a water bucket fills it to level 3 and leaves an empty bucket (Survival, below level 3).
+    if (activates && block === CAULDRON) {
+      const level = state.world.getMeta(x, y, z) & 3, used = cauldronUse(id, level, state.survival.creative);
+      if (used.handled) {
+        if (used.level !== level) {
+          state.world.set(x, y, z, CAULDRON, true, used.level);
+          hook('updateBlock', x, z, y);
+          hook('playSound', 'liquid.splash', { volume: 1, pitch: 1, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
+          hook('markUnsaved');
+        }
+        if (used.bucket) { const inv = state.survival.inventory; inv.main[inv.current] = makeStack(BUCKET_ITEM); hook('renderHotbar'); hook('markUnsaved'); }
+        return act('use-cauldron', { level: used.level });
+      }
+    }
+    // BlockFlowerPot.onBlockActivated: an empty pot takes one plant; the block metadata becomes the plant's native damage.
+    if (activates && block === FLOWER_POT) {
+      const planted = potUse(state.world, x, y, z, id, state.survival.held?.damage || 0);
+      if (planted) {
+        setPotContents(state.world, x, y, z, planted.content);
+        state.world.set(x, y, z, FLOWER_POT, true, planted.meta);
+        if (!state.survival.creative) state.survival.take(id);
+        hook('updateBlock', x, z, y);
+        hook('renderHotbar');
+        hook('markUnsaved');
+        return act('use-flower-pot');
+      }
+    }
     if (activates && block === ENCHANTING_TABLE) { hook('useEnchantingTable', target.block.join(',')); return act('open-enchanting-table'); }
     if (activates && block === CHEST) {
       const chest = state.survival.openChest(state.world, ...target.block);
       if (chest) hook('openChest', chest, target.block.join(','), target.block);
       return act('open-chest');
+    }
+    if (activates && block === DISPENSER) {
+      // BlockDispenser.onBlockActivated: the tile entity's nine-slot GUI (a missing tile, e.g. an imported block, is created empty).
+      const key = target.block.join(','), dispenser = ((state.survival.dispensers ??= {})[key] ??= newDispenser());
+      hook('openDispenser', dispenser, key, target.block);
+      return act('open-dispenser');
     }
     if (item?.kind === 'flint_and_steel') {
       const q = target.adjacent;

@@ -5,7 +5,7 @@ import { entityActive } from './streaming-ticks.js';
 // blocks, a 6,000-tick lifetime and EntityPlayer's pickup box. `y` is the
 // bottom of the box; EntityItem's posY sits half the height (0.125) above it.
 import { explosionImpact } from "./explosion.js";
-import { collisionBounds, slipperiness } from "./world.js";
+import { collisionBoxList, slipperiness } from "./world.js";
 import { copyStack, sameStackItem } from "./inventory.js";
 import { waterAcceleration, inLava } from "./fluids.js";
 import { LAVA } from "./world.js";
@@ -107,10 +107,9 @@ export class ItemEntities {
     for (let bx = Math.floor(x0); bx < Math.floor(x1 + 1); bx++)
       for (let by = Math.floor(y0) - 1; by < Math.floor(y1 + 1); by++)
         for (let bz = Math.floor(z0); bz < Math.floor(z1 + 1); bz++)
-          if (world.solid(bx, by, bz)) {
-            const [a, b, c, d, e, g] = collisionBounds(world, bx, by, bz);
-            if (bx + d > x0 && bx + a < x1 && by + e > y0 && by + b < y1 && bz + g > z0 && bz + c < z1) out.push([bx + a, by + b, bz + c, bx + d, by + e, bz + g]);
-          }
+          if (world.solid(bx, by, bz))
+            for (const [a, b, c, d, e, g] of collisionBoxList(world, bx, by, bz))
+              if (bx + d > x0 && bx + a < x1 && by + e > y0 && by + b < y1 && bz + g > z0 && bz + c < z1) out.push([bx + a, by + b, bz + c, bx + d, by + e, bz + g]);
     return out;
   }
   // Entity.func_145771_j at the item's centre (entities.js entityPushOut).

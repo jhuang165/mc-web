@@ -8,7 +8,11 @@ import { Fx } from "./fx.js";
 import { ParticleRenderer } from "./particle-renderer.js";
 import { HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, ANVIL, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
 import { StreamingLight } from './streaming-light.js';
-import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS } from "./block-textures.js";
+import { STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, endFrameBoxes, cauldronBoxes, cauldronWaterHeight, CAULDRON_FLOOR, CAULDRON_WALL, potContents, POT_BOUNDS, potPlantOf } from './stone-utility.js';
+import { REDSTONE_WIRE, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, LEVER, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, isRedstoneBlock, redstoneBounds, wireArms, wireClimbs, wireTint } from './redstone-blocks.js';
+import { tileByName } from './block-textures.js';
+import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS, namedTile } from "./block-textures.js";
+import { pistonQuads, isPistonBase, PISTON_HEAD } from "./dispenser-piston.js";
 import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
 import { Sky, Clouds } from "./sky.js";
@@ -21,6 +25,8 @@ import { WeatherRenderer } from "./weather-renderer.js";
 import { fireVertices } from "./fire.js";
 import { fenceMask, fenceRenderBoxes } from "./fences.js";
 import { anvilModelBoxes } from './anvil-block.js';
+import { isStair, stairBoxes } from './stairs.js';
+import { isDoor, isPane, doorFlags, doorBoundsFor, doorFaceFlip, paneMask, paneArms, paneSideRendered } from './doors-panes.js';
 export { blockTile } from "./block-textures.js";
 
 // Face order +x, -x, +y, -y, +z, -z with RenderBlocks' AO-path shades:
@@ -238,11 +244,20 @@ export class VoxelScene {
           if (b === 20) this.torch(solid, x, y, z);
           else if (isCrop(b)) this.crops(solid, b, x, y, z);
           else if (b===COCOA||b===SANDSTONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z));
+          else if (b===STONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z),w.getMeta(x,y,z));
+          else if (b===END_PORTAL_FRAME) this.endFrame(solid,x,y,z);
+          else if (b===CAULDRON) this.cauldron(solid,x,y,z);
+          else if (b===FLOWER_POT) this.flowerPot(solid,x,y,z);
           else if (b===ANVIL) this.anvil(solid,x,y,z);
+          else if (isPistonBase(b)||b===PISTON_HEAD) this.piston(solid,b,x,y,z);
+          else if (isStair(b)) this.stairs(solid,b,x,y,z);
+          else if (isDoor(b)) this.door(solid,b,x,y,z);
+          else if (isPane(b)) this.pane(solid,b,x,y,z);
           else if (b===VINE) this.vine(solid,x,y,z);
           else if (isPlant(b) || b === WEB || b === REEDS) this.crossed(solid, b, x, y, z);
           else if (b === LADDER) this.ladder(solid, x, y, z);
           else if (b === FENCE) for (const box of fenceRenderBoxes(fenceMask(w, x, y, z))) this.box(solid, b, x, y, z, box);
+          else if (isRedstoneBlock(b)) this.redstone(solid, b, x, y, z);
           else if (b === RAIL) this.rail(solid, x, y, z);
           else if (b === CACTUS) this.cactus(solid, x, y, z);
           else if (b === 10) this.liquid(10, water, flow, x, y, z);
@@ -348,9 +363,100 @@ export class VoxelScene {
       m.quad(corners.map((p) => [x + p[0], y + p[1], z + p[2]]), uvs, s.ao.map((a) => a * f.shade), s.packed);
     });
   }
+  // RenderBlocks.renderBlockStairs (render type 10): the half block with the usual face culling, then
+  // the second box and the optional inner-corner box with renderAllFaces set (stairBoxes).
+  stairs(m,b,x,y,z) {
+    stairBoxes(this.world,x,y,z).forEach((box,i)=>this.box(m,b,x,y,z,box,0,i>0));
+  }
+  // RenderBlocks.renderBlockDoor (render type 7): the half's bounds as a box with the usual face culling, each side
+  // face using BlockDoor.getIcon's flipped or plain texture (doorFaceFlip); the top and bottom use the lower texture.
+  door(m,b,x,y,z) {
+    const w=this.world,L=this.light,flags=doorFlags(w,x,y,z),[x0,y0,z0,x1,y1,z1]=doorBoundsFor(flags),lo=[x0,y0,z0],hi=[x1,y1,z1],
+      SIDE=[5,4,1,0,3,2],half=(flags&8)?8:0;
+    FACES.forEach((f,fi)=>{
+      const axis=fi>>1,positive=(fi&1)===0,boundary=positive?hi[axis]>=1:lo[axis]<=0;
+      if(boundary&&hides(w.get(x+f.n[0],y+f.n[1],z+f.n[2])))return;
+      const flip=fi<2||fi>3?doorFaceFlip(flags,SIDE[fi]):false,
+        r=tileRect(blockTile(b,fi,false,fi===2||fi===3?0:half)),
+        corners=f.v.map(v=>[v[0]?x1:x0,v[1]?y1:y0,v[2]?z1:z0]),
+        st=(p)=>[[1-p[2],1-p[1]],[p[2],1-p[1]],[p[0],p[2]],[p[0],p[2]],[p[0],1-p[1]],[1-p[0],1-p[1]]][fi],
+        uvs=corners.map(p=>{const [s0,t]=st(p),s=flip?1-s0:s0;return[r.u0+(r.u1-r.u0)*s,r.v1-(r.v1-r.v0)*t];}),
+        sm=smoothFace(L,x,y,z,fi,corners,boundary);
+      m.quad(corners.map(p=>[x+p[0],y+p[1],z+p[2]]),uvs,sm.ao.map(a=>a*f.shade),sm.packed);
+    });
+  }
+  // RenderBlocks.renderBlockPane (render types 18 and 41): thin planes through the cell's centre line for each
+  // arm (a half plane per one-sided connection, a full one through or with none), the side texture's matching
+  // half, 2-pixel caps (u 7-9 of the top texture) where a lone arm ends, and top and bottom strips.
+  pane(m,b,x,y,z) {
+    const w=this.world,mask=paneMask(w,x,y,z),side=tileRect(blockTile(b,0)),top=tileRect(blockTile(b,2)),light=this.light.packed(x,y,z),
+      lerp=(a,c,t)=>a+(c-a)*t,c0=0.4375,c1=0.5625,
+      plane=(axis,from,to)=>{
+        const sa=from,sb=to,v=axis==='x'?[[x+from,y+1,z+.5],[x+from,y,z+.5],[x+to,y,z+.5],[x+to,y+1,z+.5]]:[[x+.5,y+1,z+from],[x+.5,y,z+from],[x+.5,y,z+to],[x+.5,y+1,z+to]];
+        m.quad(v,[[lerp(side.u0,side.u1,sa),side.v1],[lerp(side.u0,side.u1,sa),side.v0],[lerp(side.u0,side.u1,sb),side.v0],[lerp(side.u0,side.u1,sb),side.v1]],1,light,true);
+      },
+      cap=(axis)=>{ // the plane through x = 0.5 (or z = 0.5) spanning the 2-pixel post on the other axis
+        const v=axis==='x'?[[x+.5,y+1,z+c0],[x+.5,y,z+c0],[x+.5,y,z+c1],[x+.5,y+1,z+c1]]:[[x+c0,y+1,z+.5],[x+c0,y,z+.5],[x+c1,y,z+.5],[x+c1,y+1,z+.5]];
+        m.quad(v,[[lerp(top.u0,top.u1,7/16),top.v1],[lerp(top.u0,top.u1,7/16),top.v0],[lerp(top.u0,top.u1,9/16),top.v0],[lerp(top.u0,top.u1,9/16),top.v1]],1,light,true);
+      },
+      strip=(axis,from,to,yy)=>{
+        const v=axis==='x'?[[x+from,y+yy,z+c0],[x+to,y+yy,z+c0],[x+to,y+yy,z+c1],[x+from,y+yy,z+c1]]:[[x+c0,y+yy,z+from],[x+c1,y+yy,z+from],[x+c1,y+yy,z+to],[x+c0,y+yy,z+to]],
+          ua=lerp(top.u0,top.u1,7/16),ub=lerp(top.u0,top.u1,9/16),va=lerp(top.v0,top.v1,from),vb=lerp(top.v0,top.v1,to);
+        m.quad(v,[[ua,va],[ua,vb],[ub,vb],[ub,va]],1,light,true);
+      };
+    const arms=paneArms(mask),above=paneSideRendered(b,w.get(x,y+1,z)),below=paneSideRendered(b,w.get(x,y-1,z));
+    for(const a of arms){
+      plane(a.axis,a.from,a.to);
+      // A one-sided arm ends at the centre; it gets a cap unless an arm on the other axis closes it.
+      if((a.to-a.from)<1&&arms.length===1)cap(a.axis);
+      if(above)strip(a.axis,a.from,a.to,1);
+      if(below)strip(a.axis,a.from,a.to,0);
+    }
+  }
+  // RenderBlocks render type 16/17 (piston base/extension): rotated native quads from dispenser-piston.js,
+  // flat cell brightness instead of per-vertex AO.
+  piston(m,b,x,y,z) {
+    const meta=this.world.getMeta(x,y,z),light=this.light.packed(x,y,z);
+    for(const q of pistonQuads(b,meta)){
+      const r=tileRect(namedTile(q.icon));
+      m.quad(q.verts.map(v=>[x+v[0],y+v[1],z+v[2]]),q.verts.map(v=>[r.u0+(r.u1-r.u0)*v[3],r.v1-(r.v1-r.v0)*v[4]]),q.shade,light,true);
+    }
+  }
   // RenderBlocks render type 35: native four-piece metal silhouette, with the
   // metadata orientation and damaged top tile. BlockAnvil.shouldSideBeRendered
   // returns true, so all outward faces remain visible beside full cubes.
+  // RenderBlocks.renderBlockEndPortalFrame (render type 26): the 13/16 base, then the eye's smaller box with every face
+  // drawn in the endframe_eye texture (blockTile reads meta bit 16 as that override).
+  endFrame(m,x,y,z) {
+    const meta=this.world.getMeta(x,y,z);
+    endFrameBoxes(meta).forEach((box,i)=>this.box(m,END_PORTAL_FRAME,x,y,z,box,i?16:meta,i>0));
+  }
+  // RenderBlocks.renderBlockCauldron (render type 24): the outer boxes (floor and four walls) in the cauldron textures, the
+  // inner faces of floor and walls in cauldron_inner, and the water surface (water_still, not biome tinted) at 6/16 + 3/16 per level.
+  cauldron(m,x,y,z) {
+    cauldronBoxes().forEach(box=>this.box(m,CAULDRON,x,y,z,box,0,true));
+    const own=this.light.packed(x,y,z);
+    // blockTile reads meta bit 16 as cauldron_inner and bit 32 as water_still.
+    const innerUv=rectUvs(tileRect(blockTile(CAULDRON,0,false,16))),F=CAULDRON_FLOOR,W=CAULDRON_WALL,e=0.002;
+    m.quad([[x+W,y+F+e,z+W],[x+1-W,y+F+e,z+W],[x+1-W,y+F+e,z+1-W],[x+W,y+F+e,z+1-W]],innerUv,0.9,own,true);
+    // inner wall faces, bottom edge first
+    for(const q of [
+      [[W,F,W],[1-W,F,W],[1-W,1,W],[W,1,W]], [[W,F,1-W],[1-W,F,1-W],[1-W,1,1-W],[W,1,1-W]],
+      [[W,F,W],[W,F,1-W],[W,1,1-W],[W,1,W]], [[1-W,F,W],[1-W,F,1-W],[1-W,1,1-W],[1-W,1,W]],
+    ])m.quad(q.map(p=>[x+p[0],y+p[1],z+p[2]]),innerUv,0.8,own,true);
+    const level=this.world.getMeta(x,y,z)&3;
+    if(level>0){const h=cauldronWaterHeight(level),wuv=rectUvs(tileRect(blockTile(CAULDRON,0,false,32)));
+      m.quad([[x+W,y+h,z+W],[x+1-W,y+h,z+W],[x+1-W,y+h,z+1-W],[x+W,y+h,z+1-W]],wuv,1,own,true);}
+  }
+  // BlockFlowerPot (render type 33): the 6/16 pot in the flower_pot texture and its plant as crossed quads sunk into the pot.
+  flowerPot(m,x,y,z) {
+    this.box(m,FLOWER_POT,x,y,z,[...POT_BOUNDS],0,true);
+    const c=potContents(this.world,x,y,z);
+    if(!c||!potPlantOf(c.id,c.damage))return;
+    const uvs=rectUvs(tileRect(blockTile(c.id,0,false,c.damage))),light=this.light.packed(x,y,z),py=y+0.1875,a=0.1875,d=0.8125;
+    m.quad([[x+a,py+0.1875,z+a],[x+d,py+0.1875,z+d],[x+d,py+1.0,z+d],[x+a,py+1.0,z+a]],uvs,1,light,true);
+    m.quad([[x+a,py+0.1875,z+d],[x+d,py+0.1875,z+a],[x+d,py+1.0,z+a],[x+a,py+1.0,z+d]],uvs,1,light,true);
+  }
   anvil(m,x,y,z) {
     const meta=this.world.getMeta(x,y,z);
     for(const [x0,y0,z0,x1,y1,z1] of anvilModelBoxes(meta))
@@ -371,6 +477,116 @@ export class VoxelScene {
     else if (meta === 3 || meta === 5) { by += 1; cy += 1; }
     // Original (maxU, minV), (maxU, maxV), (minU, maxV), (minU, minV); minV is the tile's top.
     m.quad([[ax, ay, az], [bx, by, bz], [cx, cy, cz], [dx, dy, dz]], [[r.u1, r.v1], [r.u1, r.v0], [r.u0, r.v0], [r.u0, r.v1]], 1, light, true);
+  }
+  // Redstone components (redstone-blocks.js). Inert: the dust is always drawn at power 0 and the lever,
+  // repeater and button show their stored state only. Dust follows RenderBlocks.renderBlockRedstoneWire
+  // (base quad 0.015625 up, tint, overlay, climbing strips); the lever, repeater, hook and
+  // tripwire models are drawn from the class descriptions, not replayed against the native renderer.
+  redstone(m, b, x, y, z) {
+    const w = this.world, meta = w.getMeta(x, y, z), light = this.light.packed(x, y, z);
+    if (b === REDSTONE_WIRE) this.wire(m, x, y, z, light);
+    else if (b === STONE_PRESSURE_PLATE || b === WOODEN_PRESSURE_PLATE || b === STONE_BUTTON) this.box(m, b, x, y, z, redstoneBounds(b, meta), meta, true);
+    else if (b === LEVER) this.lever(m, x, y, z, meta, light);
+    else if (b === REPEATER) this.repeater(m, x, y, z, meta, light);
+    else if (b === TRIPWIRE_HOOK) this.hook(m, x, y, z, meta, light);
+    else if (b === TRIPWIRE) this.tripwire(m, x, y, z, meta, light);
+  }
+  wire(m, x, y, z, light) {
+    const { w, e, n, s } = wireArms(this.world, x, y, z), climb = wireClimbs(this.world, x, y, z), tint = wireTint(0);
+    const lineX = (w || e) && !n && !s, lineZ = (n || s) && !w && !e, cross = !lineX && !lineZ;
+    const uOf = (r, p) => r.u0 + ((r.u1 - r.u0) * p) / 16, vOf = (r, p) => r.v1 - ((r.v1 - r.v0) * p) / 16;
+    const setTint = (c) => { const k = m.shade.length - 12; for (let i = 0; i < 4; i++) { m.shade[k + i * 3] = c[0]; m.shade[k + i * 3 + 1] = c[1]; m.shade[k + i * 3 + 2] = c[2]; } };
+    const y0 = y + 0.015625, px = [0, 0, 16, 16];
+    let x0 = x, x1 = x + 1, z0 = z, z1 = z + 1;
+    if (cross) {
+      if (!w) { x0 += 0.3125; px[0] = 5; }
+      if (!e) { x1 -= 0.3125; px[2] = 11; }
+      if (!n) { z0 += 0.3125; px[1] = 5; }
+      if (!s) { z1 -= 0.3125; px[3] = 11; }
+    }
+    const names = cross ? ["redstone_dust_cross", "redstone_dust_cross_overlay"] : ["redstone_dust_line", "redstone_dust_line_overlay"];
+    names.forEach((name, k) => {
+      const r = tileRect(tileByName(name)), verts = [[x0, y0, z1], [x1, y0, z1], [x1, y0, z0], [x0, y0, z0]],
+        pts = [[px[0], px[3]], [px[2], px[3]], [px[2], px[1]], [px[0], px[1]]];
+      m.quad(verts, pts.map(([u, v]) => (lineX ? [uOf(r, v), vOf(r, u)] : [uOf(r, u), vOf(r, v)])), 1, light, true);
+      setTint(k === 0 ? tint : [1, 1, 1]);
+    });
+    // Strips up the side of a normal cube that carries dust on top.
+    const top = y + 1.021875, q = 0.015625;
+    const strips = [[climb.w, x + q, null], [climb.e, x + 1 - q, null], [climb.n, null, z + q], [climb.s, null, z + 1 - q]];
+    for (const [on, sx, sz] of strips) {
+      if (!on) continue;
+      const verts = sx !== null ? [[sx, top, z + 1], [sx, y, z + 1], [sx, y, z], [sx, top, z]] : [[x, top, sz], [x, y, sz], [x + 1, y, sz], [x + 1, top, sz]];
+      ["redstone_dust_line", "redstone_dust_line_overlay"].forEach((name, k) => {
+        const r = tileRect(tileByName(name));
+        m.quad(verts, [[r.u0, r.v1], [r.u0, r.v0], [r.u1, r.v0], [r.u1, r.v1]], 1, light, true);
+        setTint(k === 0 ? tint : [1, 1, 1]);
+      });
+    }
+  }
+  // Axis-aligned textured box with the whole tile on every face (shaded by direction).
+  tbox(m, name, x, y, z, [x0, y0, z0, x1, y1, z1], light) {
+    const uv = rectUvs(tileRect(tileByName(name)));
+    for (const f of FACES) m.quad(f.v.map((v) => [x + (v[0] ? x1 : x0), y + (v[1] ? y1 : y0), z + (v[2] ? z1 : z0)]), uv, f.shade, light);
+  }
+  // A square prism from centre a to centre b with half-width hw, textured with a tile sub-rectangle (pixels).
+  stick(m, name, a, b, hw, light, [pu0, pv0, pu1, pv1]) {
+    const r = tileRect(tileByName(name)), U = (p) => r.u0 + ((r.u1 - r.u0) * p) / 16, V = (p) => r.v1 - ((r.v1 - r.v0) * p) / 16;
+    const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], len = Math.hypot(...d), dn = d.map((c) => c / len);
+    const h = Math.abs(dn[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+    const cr = (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
+    let u = cr(dn, h); const ul = Math.hypot(...u); u = u.map((c) => (c / ul) * hw);
+    let v = cr(dn, u); const vl = Math.hypot(...v); v = v.map((c) => (c / vl) * hw);
+    const ring = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([s, t]) => [0, 1, 2].map((i) => s * u[i] + t * v[i])), add = (p, o) => [p[0] + o[0], p[1] + o[1], p[2] + o[2]];
+    for (let i = 0; i < 4; i++) {
+      const o0 = ring[i], o1 = ring[(i + 1) % 4];
+      m.quad([add(a, o0), add(a, o1), add(b, o1), add(b, o0)], [[U(pu0), V(pv1)], [U(pu1), V(pv1)], [U(pu1), V(pv0)], [U(pu0), V(pv0)]], 0.8, light, true);
+    }
+    m.quad(ring.map((o) => add(b, o)), [[U(pu0), V(pv0 + 2)], [U(pu1), V(pv0 + 2)], [U(pu1), V(pv0)], [U(pu0), V(pv0)]], 1, light, true);
+  }
+  // Lever/hook local frame: local y runs away from the supporting face. Returns a cell-space mapper for a
+  // lever metadata (5/6 floor, 7/0 ceiling, 1-4 walls).
+  leverFrame(meta, x, y, z) {
+    const f = { 5: (a, b, c) => [a, b, c], 6: (a, b, c) => [c, b, a], 7: (a, b, c) => [a, -b, c], 0: (a, b, c) => [c, -b, a],
+      1: (a, b, c) => [b, a, c], 2: (a, b, c) => [-b, a, c], 3: (a, b, c) => [c, a, b], 4: (a, b, c) => [c, a, -b] }[meta & 7] || ((a, b, c) => [a, b, c]);
+    return ([lx, ly, lz]) => { const [a, b, c] = f(lx - 0.5, ly - 0.5, lz - 0.5); return [x + 0.5 + a, y + 0.5 + b, z + 0.5 + c]; };
+  }
+  localBox(T, [x0, y0, z0, x1, y1, z1]) {
+    const p = [T([x0, y0, z0]), T([x1, y1, z1])];
+    return [0, 1, 2].map((i) => Math.min(p[0][i], p[1][i])).concat([0, 1, 2].map((i) => Math.max(p[0][i], p[1][i])));
+  }
+  // BlockLever (render type 12): a cobblestone base and a stick that leans one way off and the other on.
+  lever(m, x, y, z, meta, light) {
+    const T = this.leverFrame(meta, x, y, z), base = this.localBox(T, [0.25, 0, 0.25, 0.75, 0.1875, 0.75]), tilt = meta & 8 ? 0.25 : -0.25;
+    this.tbox(m, "cobblestone", 0, 0, 0, base, light);
+    this.stick(m, "lever", T([0.5, 0.1875, 0.5]), T([0.5 + tilt, 0.6875, 0.5]), 0.0625, light, [7, 6, 9, 16]);
+  }
+  // BlockRedstoneRepeater (render type 15): a 1/8 slab with its top texture, and two torches (fixed and delay).
+  repeater(m, x, y, z, meta, light) {
+    this.box(m, REPEATER, x, y, z, [0, 0, 0, 1, 0.125, 1], meta, true);
+    const dir = meta & 3, delay = (meta >> 2) & 3, val = [-0.0625, 0.0625, 0.1875, 0.3125][delay], r = 0.0625;
+    const t = tileRect(tileByName("redstone_torch_off")), U = (p) => t.u0 + ((t.u1 - t.u0) * p) / 16, V = (p) => t.v1 - ((t.v1 - t.v0) * p) / 16;
+    for (const d of [-0.3125, val]) {
+      const cx = x + 0.5 + (dir === 1 ? -d : dir === 3 ? d : 0), cz = z + 0.5 + (dir === 0 ? d : dir === 2 ? -d : 0), y0 = y + 0.125, y1 = y0 + 0.625;
+      const sides = [[[-r, -r], [r, -r]], [[r, -r], [r, r]], [[r, r], [-r, r]], [[-r, r], [-r, -r]]];
+      for (const [[ax, az], [bx, bz]] of sides) m.quad([[cx + ax, y0, cz + az], [cx + bx, y0, cz + bz], [cx + bx, y1, cz + bz], [cx + ax, y1, cz + az]], [[U(7), V(16)], [U(9), V(16)], [U(9), V(0)], [U(7), V(0)]], 1, light, true);
+      m.quad([[cx - r, y1, cz + r], [cx + r, y1, cz + r], [cx + r, y1, cz - r], [cx - r, y1, cz - r]], [[U(7), V(8)], [U(9), V(8)], [U(9), V(6)], [U(7), V(6)]], 1, light, true);
+    }
+  }
+  // BlockTripWireHook: a plank plate on its wall and the hook sprite.
+  hook(m, x, y, z, meta, light) {
+    const T = this.leverFrame([3, 2, 4, 1][meta & 3], x, y, z), plate = this.localBox(T, [0.375, 0, 0.3125, 0.625, 0.125, 0.6875]);
+    this.tbox(m, "planks_oak", 0, 0, 0, plate, light);
+    const r = tileRect(tileByName("trip_wire_source"));
+    m.quad([[0.2, 0.125, 0.5], [0.8, 0.125, 0.5], [0.8, 0.6875, 0.5], [0.2, 0.6875, 0.5]].map((p) => T(p)), [[r.u0, r.v0], [r.u1, r.v0], [r.u1, r.v1], [r.u0, r.v1]], 1, light, true);
+  }
+  // BlockTripWire (render type 30): a thin strip along the axis its neighbours (tripwire or hook) lie on.
+  tripwire(m, x, y, z, meta, light) {
+    const w = this.world, linked = (px, pz) => { const q = w.get(px, y, pz); return q === TRIPWIRE || q === TRIPWIRE_HOOK; };
+    const alongX = linked(x - 1, z) || linked(x + 1, z), h = y + (meta & 2 ? 0.1 : 0.0625), r = tileRect(tileByName("trip_wire"));
+    const a = 0.4375, b = 0.5625;
+    const verts = alongX ? [[x, h, z + a], [x + 1, h, z + a], [x + 1, h, z + b], [x, h, z + b]] : [[x + a, h, z], [x + b, h, z], [x + b, h, z + 1], [x + a, h, z + 1]];
+    m.quad(verts, [[r.u0, r.v0], [r.u1, r.v0], [r.u1, r.v1], [r.u0, r.v1]], 1, light, true);
   }
   vine(m,x,y,z) {
     const w=this.world,meta=w.getMeta(x,y,z),uv=rectUvs(tileRect(blockTile(VINE,0))),light=this.light.packed(x,y,z),e=1/64;

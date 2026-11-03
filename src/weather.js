@@ -11,6 +11,7 @@ import { rainParticleAttempts } from "./particle-settings.js";
 import { SIZE, HEIGHT, FIRE, LAVA, SNOW_LAYER, ICE, isPlant, ticksRandomly } from "./world.js";
 import { biomeFacts } from "./biomes.js";
 import { canBlockFreeze, canSnowAt, lightOf, meltResult } from "./snow.js";
+import { CAULDRON, cauldronRain } from "./stone-utility.js";
 
 const f = Math.fround;
 
@@ -230,6 +231,11 @@ export class Weather {
         y = precipitationHeight(world, x, z);
       if (canBlockFreeze(world, x, y - 1, z, true, light)) this.apply(world, x, y - 1, z, ICE, 0);
       if (this.isRaining() && canSnowAt(world, x, y, z, true, light)) this.apply(world, x, y, z, SNOW_LAYER, 0);
+      // BlockCauldron.fillWithRain: rain on a cauldron's open top raises its level on a one-in-twenty roll (drawn only when a cauldron is there).
+      if (this.isRaining() && world.get(x, y - 1, z) === CAULDRON && canLightningStrikeAt(this, world, x, y, z)) {
+        const level = world.getMeta(x, y - 1, z) & 3, next = cauldronRain(level, this.random.nextInt(20));
+        if (next !== level) this.apply(world, x, y - 1, z, CAULDRON, next);
+      }
     }
     for (let s = 0; s < (world.height ?? HEIGHT) / 16; s++) {
       if (world.sectionTickCount && world.sectionTickCount(cx, cz, s) <= 0) continue;

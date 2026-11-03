@@ -12,7 +12,8 @@ import { explosionImpact } from "./explosion.js";
 import { acceptsParticle } from "./particle-settings.js";
 import { EffectRenderer } from "./effect-renderer.js";
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
-import { blockBounds, collisionBounds, snowSelectionHeight, FENCE, RAIL, TORCH, FIRE, CARROTS, REEDS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER, ANVIL, ENCHANTING_TABLE } from "./world.js";
+import { isStair, stairRayTrace } from "./stairs.js";
+import { blockBounds, collisionBoxList, snowSelectionHeight, FENCE, RAIL, TORCH, FIRE, CARROTS, REEDS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE } from "./world.js";
 import { ladderBounds } from "./ladders.js";
 import { fenceBounds, fenceMask } from "./fences.js";
 import { railBounds } from "./rails.js";
@@ -167,7 +168,7 @@ RAY_BOUNDS[59] = [0, 0, 0, 1, 1/64, 1];
 // Chests, fences (connection bounds), rails (0.125 or 0.625 ascending) and torches (per-metadata box)
 // set their ray box from the cell, as setBlockBoundsBasedOnState / BlockTorch.collisionRayTrace do.
 export const rayBounds = (world, x, y, z, id) =>
-  [41,69,72,73,75,76,79,82,83,84,ANVIL,ENCHANTING_TABLE].includes(id) ? blockBounds(world, x, y, z) : id === FENCE ? fenceBounds(fenceMask(world, x, y, z)) : id === RAIL ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id === TORCH ? torchBounds(world.getMeta?.(x, y, z) ?? 0) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
+  [107,108,109,110,111,112,113,114,116,117,118,41,69,72,73,75,76,79,82,83,84,103,104,106,ANVIL,ENCHANTING_TABLE,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE].includes(id) ? blockBounds(world, x, y, z) : id === FENCE ? fenceBounds(fenceMask(world, x, y, z)) : id === RAIL ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id === TORCH ? torchBounds(world.getMeta?.(x, y, z) ?? 0) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
 
 // World.rayTraceBlocks (ahb.a(Vec3, Vec3) = func_147447_a(false, false, false)):
 // walk the cells along the segment (at most 201 steps, each moving the start
@@ -183,6 +184,8 @@ export function rayTraceBlocks(world, start, end, hasBox = false) {
     test = (x, y, z, a) => {
       const b = id(x, y, z);
       if (!solid(b) || (hasBox && !world.solid(x, y, z))) return null;
+      // BlockStairs.collisionRayTrace: the eight octants, the nearest hit.
+      if (isStair(b)) { const h = stairRayTrace(world.getMeta(x, y, z), x, y, z, a, end); return h && { block: [x, y, z], side: h.side, vec: h.vec }; }
       const [x0, y0, z0, x1, y1, z1] = rayBounds(world, x, y, z, b),
         hit = intercept([x0, y0, z0, x1, y1, z1], [a[0] - x, a[1] - y, a[2] - z], [end[0] - x, end[1] - y, end[2] - z]);
       return hit && { block: [x, y, z], side: hit.side, vec: [hit.vec[0] + x, hit.vec[1] + y, hit.vec[2] + z] };
@@ -451,10 +454,9 @@ export class Projectiles {
     for (let bx = Math.floor(x0); bx < Math.floor(x1 + 1); bx++)
       for (let by = Math.floor(y0) - 1; by < Math.floor(y1 + 1); by++)
         for (let bz = Math.floor(z0); bz < Math.floor(z1 + 1); bz++)
-          if (world.solid(bx, by, bz)) {
-            const [a, b, c, d, e, g] = collisionBounds(world, bx, by, bz);
-            if (bx + d > x0 && bx + a < x1 && by + e > y0 && by + b < y1 && bz + g > z0 && bz + c < z1) out.push([bx + a, by + b, bz + c, bx + d, by + e, bz + g]);
-          }
+          if (world.solid(bx, by, bz))
+            for (const [a, b, c, d, e, g] of collisionBoxList(world, bx, by, bz))
+              if (bx + d > x0 && bx + a < x1 && by + e > y0 && by + b < y1 && bz + g > z0 && bz + c < z1) out.push([bx + a, by + b, bz + c, bx + d, by + e, bz + g]);
     return out;
   }
   // EntityFX.onUpdate (bkm.h): age, gravity 0.04, Entity.moveEntity (y, x, z

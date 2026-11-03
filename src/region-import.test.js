@@ -60,7 +60,7 @@ test('item table matches the inventory replay mapping and keeps only supported s
   assert.deepEqual(itemFromOriginal(35, 14), {id: 19, damage: 14, clamped: false});
   assert.deepEqual(itemFromOriginal(257, 9999), {id: 102, damage: 250, clamped: true});
   assert.deepEqual(itemFromOriginal(1, -3), {id: 3, damage: 0, clamped: false});
-  assert.equal(itemFromOriginal(5, 1), null); // spruce planks: no browser variant
+  assert.deepEqual(itemFromOriginal(5, 1), {id: 7, damage: 1, clamped: false}); // spruce planks (stairs recipes need them)
   assert.equal(itemFromOriginal(321, 0), null); // painting
   assert.equal(itemFromOriginal(38, 9), null);
 });

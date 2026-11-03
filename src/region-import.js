@@ -10,6 +10,8 @@ import { chunkFromNbt } from './chunk-nbt.js';
 import { NBT } from './nbt.js';
 import { ITEMS, burnTime } from './survival.js';
 import { CHEST, CHEST_SLOTS } from './chest.js';
+import { DISPENSER } from './dispenser-piston.js';
+import { DISPENSER_SLOTS } from './dispenser-container.js';
 import { POPULATION_ITEMS } from './population-content.js';
 
 export const LIVE_CHUNKS = SIZE / 16;
@@ -42,7 +44,7 @@ export const ORIGINAL_ITEMS = Object.freeze({
   ...POPULATION_ITEMS,
 });
 // Subtype families whose stack damage the browser stores as the same variant index.
-const VARIANT_DAMAGE = new Set([35, 38, 351, 3, 6, 12, 17, 18, 24, 44, 97, 145, 159, 161, 162, 175]);
+const VARIANT_DAMAGE = new Set([35, 38, 351, 3, 5, 6, 12, 17, 18, 24, 44, 98, 97, 145, 159, 161, 162, 175]);
 
 /** Browser stack fields for an original item ID/damage, or null when the build has no such item. */
 export function itemFromOriginal(id, damage = 0) {
@@ -169,7 +171,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   };
   const unsupported = new Map(), approximations = new Map(), tileLost = new Map(), tileConverted = new Map();
   const itemLost = new Map(), entityLost = new Map(), entityConverted = new Map();
-  const chests = {}, furnaces = {}, drops = [];
+  const chests = {}, furnaces = {}, dispensers = {}, drops = [];
   let edits = 0;
   const write = (x, y, z, block, meta) => {
     if (world.get(x, y, z) === block && world.getMeta(x, y, z) === meta) return;
@@ -297,6 +299,10 @@ export async function importJavaRegionArea(regions, options = {}) {
       if (inside && id === 'Chest' && chests[key]) {
         chests[key].items = slotItems(tile, CHEST_SLOTS, true);
         tally(tileConverted, id);
+      } else if (inside && id === 'Trap' && world.get(lx, y, lz) === DISPENSER) {
+        // TileEntityDispenser.readFromNBT: nine slots, Slot read as an unsigned byte.
+        dispensers[key] = { items: slotItems(tile, DISPENSER_SLOTS, true) };
+        tally(tileConverted, id);
       } else if (inside && id === 'Furnace' && world.get(lx, y, lz) === FURNACE) {
         const items = slotItems(tile, 3, false);
         // TileEntityFurnace.readFromNBT: currentItemBurnTime is recomputed from the fuel slot.
@@ -358,7 +364,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     edits: [...world.edits],
     position: { x: px + 0.5, y: py + 1.01, z: pz + 0.5, yaw: 0, pitch: 0 },
     // legacyPlayer() keeps these fields; without `slots` the Creative hotbar defaults apply.
-    player: { chests, furnaces },
+    player: { chests, furnaces, dispensers },
     drops,
   };
   report.bytes = new TextEncoder().encode(JSON.stringify(record)).length;

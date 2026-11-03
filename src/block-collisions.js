@@ -2,6 +2,7 @@
 // doBlockCollisions [sa.I] and the burning-box test. Replayed against the unchanged
 // EntityPlayerSP in src/block-collisions.test.js (tools/probes/BlockCollideProbe.java).
 import { CACTUS, WEB } from "./world.js";
+import { CAULDRON, cauldronExtinguishes } from "./stone-utility.js";
 import { boundingBoxBurning, contract } from "./fire.js";
 
 // Entity.fireResistance [sa.ab]: 1, and 20 for EntityPlayer. A counter at or below 0 that is
@@ -35,6 +36,10 @@ export function blockCollisions(world, box, e, hooks) {
         else if (b === WEB) {
           hooks?.web?.();
           setInWeb(e, hooks?.flying);
+        } else if (b === CAULDRON && hooks && e.fire > 0) {
+          // BlockCauldron.onEntityCollidedWithBlock: a burning entity low enough in a filled cauldron is put out and uses one level.
+          const level = world.getMeta(x, y, z) & 3;
+          if (cauldronExtinguishes(level, true, box[1], y)) { e.fire = 0; world.set(x, y, z, CAULDRON, true, level - 1); }
         }
       }
   if (!hooks) return;

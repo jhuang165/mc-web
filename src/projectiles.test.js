@@ -137,7 +137,7 @@ test("block ray bounds agree with the original defaults where the ray box is the
     // The torch's ray box is set in BlockTorch.collisionRayTrace, not by default.
     if (Number(id) === 20) continue;
     // A fence's ray box is its connection bounds (BlockFence.setBlockBoundsBasedOnState), tested below.
-    if ([60,69,72,73].includes(Number(id))) continue; // State-dependent bounds; constructor defaults are not ray boxes.
+    if ([60,69,72,73,97,98,99,100,104,107,108,109,110,111,112,113,114,118].includes(Number(id))) continue; // State-dependent bounds (doors and panes: doors-panes.test.js); constructor defaults are not ray boxes. 107-114: redstone components, per-metadata boxes (redstone-blocks.test.js). 104: the raw field stays 1.0, but BlockEndPortalFrame.addCollisionBoxesToList ends with setBlockBoundsForItemRender (0.8125), which is the ray box in play (stone-utility.test.js). 118: the piston head's box follows its facing metadata (dispenser-piston.test.js).
     assert.deepEqual(rayBounds(w, 1, 1, 1, Number(id)).map((v) => Math.fround(v)), b.bounds.map((v) => Math.fround(v)), "block " + id);
   }
   assert.deepEqual(rayBounds(stage(), 1, 1, 1, 20), [0.4000000059604645, 0, 0.4000000059604645, 0.6000000238418579, 0.6000000238418579, 0.6000000238418579]);

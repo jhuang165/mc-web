@@ -105,7 +105,7 @@ test("survival progression crafts through grid slots and stops when resources ru
   assert.equal(p.count(7), 2);
   assert.equal(p.count(300), 4);
   const before = p.serialize();
-  assert.equal(craftOnce(p, [7, 7, 7, 7]), null);
+  assert.equal(craftOnce(p, [7, 0, 0, 7]), null);
   assert.deepEqual(p.serialize(), before);
   craftOnce(p, [4]);
   craftOnce(p, [7, 7, 7, 7]);

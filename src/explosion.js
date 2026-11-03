@@ -5,7 +5,10 @@
 import { JavaRandom } from "./lighting.js";
 import { rayTraceBlocks } from "./projectiles.js";
 import { moveEntity } from "./entities.js";
-import { TNT, WOOL, RED_FLOWER, SAPLING, SNOW_LAYER, ICE, FIRE, CARROTS, POTATOES, WEB, LADDER, YELLOW_FLOWER, ENCHANTING_TABLE } from "./world.js";
+import { STAIRS, stairExplosionResistance } from "./stairs.js";
+import { DISPENSER, STICKY_PISTON, PISTON, PISTON_HEAD, DISPENSER_ITEM, STICKY_PISTON_ITEM, PISTON_ITEM } from "./dispenser-piston.js";
+import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, ITEM_STONE_BRICKS, ITEM_CAULDRON, ITEM_FLOWER_POT, slabItem } from "./stone-utility.js";
+import { TNT, WOOL, RED_FLOWER, SAPLING, SNOW_LAYER, ICE, FIRE, CARROTS, POTATOES, WEB, LADDER, YELLOW_FLOWER, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE } from "./world.js";
 import { leafDrops } from "./trees.js";
 
 const f = Math.fround;
@@ -20,6 +23,15 @@ const RESIST = {
   51: 4, 52: 0.4, [TNT]: 0, [ENCHANTING_TABLE]: 1200, // BlockEnchantmentTable: setResistance(2000), see enchanting-table-reference.json
 };
 for (let id = 31; id <= 38; id++) RESIST[id] = 0;
+// BlockDoor, BlockPane getExplosionResistance (doors-panes-reference.json facts): wooden door 3, iron door 5, iron bars 6, glass pane 0.3.
+RESIST[WOODEN_DOOR] = 3; RESIST[IRON_DOOR] = 5; RESIST[IRON_BARS] = 6; RESIST[GLASS_PANE] = 0.3;
+// BlockStairs.getExplosionResistance: the model block's resistance / 5 (stairs-reference.json).
+for (const id of Object.keys(STAIRS)) RESIST[id] = stairExplosionResistance(Number(id));
+// Stone bricks, both slab blocks (resistance field 30 / 5), the end portal frame (setResistance(6000000) -> 3600000), the cauldron (2) and the pot (0): stone-utility-reference.json.
+for (let id = 107; id <= 114; id++) RESIST[id] = id >= 108 && id <= 111 ? 0.5 : 0; // redstone components: native resistance 2.5 for lever, plates and button, else 0
+RESIST[STONE_BRICKS] = RESIST[DOUBLE_STONE_SLAB] = RESIST[STONE_SLAB] = 6; RESIST[82] = 6; RESIST[END_PORTAL_FRAME] = 3600000; RESIST[CAULDRON] = 2; RESIST[FLOWER_POT] = 0;
+// BlockDispenser (hardness 3.5), BlockPistonBase and BlockPistonExtension (hardness 0.5): dispenser-piston-reference.json.
+RESIST[DISPENSER] = 3.5; RESIST[STICKY_PISTON] = RESIST[PISTON] = RESIST[PISTON_HEAD] = 0.5;
 export const explosionResistance = (id) => f(RESIST[id] ?? 0);
 
 // java.util.HashSet<ChunkPosition> (a Java 8 HashMap): ChunkPosition.hashCode is
@@ -177,6 +189,21 @@ function itemDropped(id, meta, rand) {
     case 23: return [SNOWBALL, 0];
     case WEB: return [STRING, 0];
     case WOOL: case RED_FLOWER: return [id, meta];
+    // BlockDoor.getItemDropped: the lower half's door item (original 324 and 330), nothing for the upper half; BlockPane (glass) drops nothing.
+    case WOODEN_DOOR: return meta & 8 ? null : [470, 0];
+    case IRON_DOOR: return meta & 8 ? null : [471, 0];
+    case GLASS_PANE: return null;
+    // BlockStoneBrick drops its metadata, BlockSlab its type (the sandstone slab keeps item 82), the frame nothing; the cauldron and pot their items.
+    case STONE_BRICKS: return [ITEM_STONE_BRICKS, meta];
+    case DOUBLE_STONE_SLAB: case STONE_SLAB: { const s = slabItem(meta & 7); return [s.id, s.damage]; }
+    case END_PORTAL_FRAME: return null;
+    case CAULDRON: return [ITEM_CAULDRON, 0];
+    case FLOWER_POT: return [ITEM_FLOWER_POT, 0];
+    // The dispenser and both bases drop their own items; the head (getItemDropped null) nothing.
+    case DISPENSER: return [DISPENSER_ITEM, 0];
+    case STICKY_PISTON: return [STICKY_PISTON_ITEM, 0];
+    case PISTON: return [PISTON_ITEM, 0];
+    case PISTON_HEAD: return null;
     default: return [id, 0];
   }
 }
@@ -186,6 +213,7 @@ function quantity(id, rand) {
   if (id === 9 || id === ICE || id === FIRE || id === SNOW_LAYER || id === 10 || id === 42) return 0;
   if (id === 21) return 3;
   if (id === 24 || id === 23) return 4;
+  if (id === DOUBLE_STONE_SLAB) return 2; // BlockSlab.quantityDropped
   return 1;
 }
 // Block.dropBlockAsItemWithChance(world, x, y, z, meta, chance, 0) as each block of this

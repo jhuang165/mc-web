@@ -10,6 +10,7 @@ import { JavaRandom } from "./lighting.js";
 import { WATER, LAVA, FIRE, SNOW_LAYER, normalCube } from "./world.js";
 import { canCatchFire } from "./fire.js";
 import { blocksMovement } from "./plants.js";
+import { isStair, stairSolidTop } from "./stairs.js";
 
 const f = Math.fround;
 const TORCH = 20, FURNACE = 14, LEAVES = 5;
@@ -17,6 +18,9 @@ const TORCH = 20, FURNACE = 14, LEAVES = 5;
 // World.doesBlockHaveSolidTopSurface: an opaque full cube, or a full snow layer (meta 7).
 export function solidTopSurface(world, x, y, z) {
   const b = world.get(x, y, z);
+  if (isStair(b)) return stairSolidTop(world.getMeta(x, y, z));
+  if (b === 103) return (world.getMeta(x, y, z) & 8) !== 0; // a top stone slab (stone-utility.js STONE_SLAB)
+  if (b === 104) return true; // the end portal frame counts as a solid top (fence-rail-reference.json)
   return normalCube(b) || (b === SNOW_LAYER && (world.getMeta(x, y, z) & 7) === 7);
 }
 

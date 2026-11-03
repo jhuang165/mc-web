@@ -50,7 +50,7 @@ test("ItemAnvil.onItemUse yaw conversion and carried damage bits", () => {
 });
 
 test("native anvil item labels, Creative damage subtypes, and 31-ingot recipe shape", () => {
-  const items = Array.from({ length: ANVIL + 1 }, (_, id) => ({ id }));
+  const items = Array.from({ length: BLOCKS.length }, (_, id) => ({ id }));
   installPopulationItems(items);
   assert.deepEqual(items[ANVIL].variants, ["Anvil", "Slightly Damaged Anvil", "Very Damaged Anvil"]);
   assert.deepEqual(CREATIVE_TABS[1].items.filter((s) => Array.isArray(s) ? s[0] === ANVIL : s === ANVIL), [ANVIL, [ANVIL, 1], [ANVIL, 2]]);

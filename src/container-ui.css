@@ -89,6 +89,16 @@ body:has(.native-inventory) #toast,body:has(.furnace-modal) #toast{display:none}
 .chest-modal h2{top:calc(6*var(--u))}
 .chest-modal .chest-bag-label{top:calc((var(--rows)*18 + 20)*var(--u))}
 body:has(.chest-modal) #toast{display:none}
+/* GuiDispenser (bem): 176 x 166 gui/container/dispenser.png, title centred at y 6, "Inventory" at y 72. */
+.dispenser-modal{position:relative;width:calc(176*var(--u));height:calc(166*var(--u));min-width:calc(176*var(--u));min-height:0;max-width:none;max-height:none;flex-shrink:0;padding:0;border:0;border-radius:0;box-shadow:none;background:none;overflow:visible;transform:none!important;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u))}
+.dispenser-modal:before{content:'';position:absolute;left:0;top:0;width:calc(176*var(--u));height:calc(166*var(--u));background:url('/media/1.7.10/gui/container/dispenser.png') no-repeat;background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated;pointer-events:none;z-index:0}
+.dispenser-modal .chest-bottom{display:none}
+.dispenser-modal .container-slots{z-index:2}
+.dispenser-modal .modal-top{display:none}
+.dispenser-modal h2,.dispenser-modal .chest-bag-label{position:absolute;margin:0;padding:0;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-shadow:none;white-space:nowrap;pointer-events:none;z-index:1}
+.dispenser-modal h2{top:calc(6*var(--u));left:0;right:0;text-align:center}
+.dispenser-modal .chest-bag-label{left:calc(8*var(--u));top:calc(72*var(--u))}
+body:has(.dispenser-modal) #toast{display:none}
 /* GuiContainerCreative (bfl): xSize 195, ySize 136. tabs.png holds the 28 x 32 tab art (u = 28*column; v 0/32 top, 64/96 bottom when selected)
    and the 12 x 15 scrollbar at u 232 (244 when nothing scrolls). Unselected tabs sit under the background, the selected one over it. */
 .creative-modal{position:relative;width:calc(195*var(--u));height:calc(136*var(--u));min-width:calc(195*var(--u));min-height:0;max-width:none;max-height:none;flex-shrink:0;margin:calc(32*var(--u)) 0;padding:0;border:0;border-radius:0;box-shadow:none;background:none;overflow:visible;transform:none!important;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u))}

@@ -14,7 +14,7 @@ import { entityActive } from './streaming-ticks.js';
 // region-import.js itemFromOriginal; an original item this build cannot map stays in `unmapped`
 // (same slot) so it is saved and re-mapped later, and it still takes its native spill randoms.
 import * as W from "./world.js";
-import { collisionBounds, normalCube, CACTUS, WEB } from "./world.js";
+import { collisionBoxList, normalCube, CACTUS, WEB } from "./world.js";
 import { blockCollisions, setInWeb } from "./block-collisions.js";
 import { JavaRandom } from "./java-random.js";
 import { mhSin, mhCos } from "./lighting.js";
@@ -249,10 +249,9 @@ export class Minecarts {
     for (let bx = Math.floor(b[0]); bx < Math.floor(b[3] + 1); bx++)
       for (let by = Math.floor(b[1]) - 1; by < Math.floor(b[4] + 1); by++)
         for (let bz = Math.floor(b[2]); bz < Math.floor(b[5] + 1); bz++)
-          if (world.solid(bx, by, bz) && !this.railKind(world, bx, by, bz)) {
-            const [a, c, d, g, h, i] = collisionBounds(world, bx, by, bz);
-            if (bx + g > b[0] && bx + a < b[3] && by + h > b[1] && by + c < b[4] && bz + i > b[2] && bz + d < b[5]) out.push([bx + a, by + c, bz + d, bx + g, by + h, bz + i]);
-          }
+          if (world.solid(bx, by, bz) && !this.railKind(world, bx, by, bz))
+            for (const [a, c, d, g, h, i] of collisionBoxList(world, bx, by, bz))
+              if (bx + g > b[0] && bx + a < b[3] && by + h > b[1] && by + c < b[4] && bz + i > b[2] && bz + d < b[5]) out.push([bx + a, by + c, bz + d, bx + g, by + h, bz + i]);
     for (const o of others) if (o !== cart && o !== cart.rider && !o.dead && o.bb && intersects(o.bb, b)) out.push(o.bb);
     return out;
   }

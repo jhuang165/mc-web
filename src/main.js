@@ -54,6 +54,8 @@ import {
   REEDS,
   ANVIL,
   ENCHANTING_TABLE,
+  WOODEN_DOOR,
+  IRON_DOOR,
 } from "./world.js";
 import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
@@ -78,6 +80,8 @@ import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
 import { CHEST, settleFacing, chestPair, tickLid } from "./chest.js";
+import { DISPENSER, PISTON_HEAD, isDispenserPiston, itemForBlock, headBaseId } from "./dispenser-piston.js";
+import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
 import { Survival, ITEMS } from "./survival.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
@@ -110,6 +114,7 @@ import { tickLivingSimulation, drainMobEvents } from "./living-simulation.js";
 import { tickPlayerMining } from "./player-mining.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
+import { stoneUtilityPick, serializePots, restorePots } from "./stone-utility.js";
 import { capturePlayerAction, dispatchPlayerAction, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
 import { fromOriginal } from "./block-registry.js";
 import { setOriginalBlockMapper } from "./mineshaft-world.js";
@@ -117,6 +122,8 @@ import { spawnerDisplayEntity } from "./mob-spawner.js";
 import { watchSpawnerBlocks } from "./spawner-block.js";
 import { Rails } from "./rails.js";
 import { Torches } from "./torches.js";
+import { RedstoneBlocks, isRedstoneBlock, itemOfBlock as redstoneItemOf } from "./redstone-blocks.js";
+import { Doors, WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, blockItemId } from "./doors-panes.js";
 import { MinecartRenderer } from "./minecart-renderer.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
@@ -504,6 +511,7 @@ function save() {
   delete active.selected;
   active.entities = mobs?.serialize() || [];
   active.farms=farming?.serialize()||[];
+  active.pots=serializePots(world);
   active.experience=experience.serialize();active.xpOrbs=xpOrbs.serialize();
   active.falling=falling?.serialize()||[];
   active.fallingTicks = falling?.save();
@@ -723,6 +731,7 @@ async function launch(record, prepared) {
     }, record.falling).watch();
     falling.load(record.fallingTicks);
     farming=new Farming(world,record.farms);
+    restorePots(world,record.pots);
     // Rain moistens farmland (BlockFarmland.updateTick: canLightningStrikeAt(x, y + 1, z)).
     farming.rained = (x, y, z) => canLightningStrikeAt(weather, world, x, y + 1, z);
     weather.apply = applyWeatherEdit;
@@ -743,6 +752,10 @@ async function launch(record, prepared) {
     const dropBlock = (stacks, x, y, z) => items.dropBlock(stacks.map((d) => makeStack(d.id, d.count, d.damage || 0)), x, y, z);
     new Rails(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
     new Torches(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
+    // BlockDoor.onNeighborBlockChange: a door without its other half or a solid top below pops off as one item.
+    new Doors(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
+    // Redstone components (inert, no power): unsupported ones drop; a pressed stone button releases 20 ticks later.
+    world.redstoneBlocks = new RedstoneBlocks(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; }, sound: (name, volume, pitch, x, y, z) => sounds.play(name, { volume, pitch, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } }) }).watch();
     // Mineshaft spawners and chest minecarts: generation records on a world's first launch, the
     // saved live state afterwards. A broken spawner block removes its tile entity.
     ({ spawners, minecarts } = (() => {
@@ -953,7 +966,7 @@ function renderCreativeBody() {
   view.shown = [];
 }
 const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace", creative: "", anvil: "Repair & Name", enchanting: "Enchant" },
-  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", creative: "creative-modal", anvil: "anvil-modal", enchanting: "enchanting-modal" };
+  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", dispenser: "dispenser-modal", creative: "creative-modal", anvil: "anvil-modal", enchanting: "enchanting-modal" };
 // Slots are addressed by list index: wrapped creative slots all keep slotNumber 0.
 const slotsHtml = (container) => `<div class="container-slots">${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""}${slot.x < -1000 ? " hidden" : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>`;
 function openContainer(container, kind, key = null, gui = new ContainerScreen(container)) {
@@ -967,7 +980,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
       ? '<i class="anvil-name-background" id="anvil-name-background"></i><input id="anvil-name" aria-label="Item name" maxlength="40" autocomplete="off" spellcheck="false" disabled><span id="anvil-cost" class="anvil-cost" aria-live="polite"></span><i class="anvil-error" id="anvil-error" hidden></i>'
       : kind === "furnace"
       ? '<i class="furnace-flame" id="furnace-flame"></i><i class="furnace-arrow" id="furnace-arrow"></i>'
-      : kind === "chest"
+      : kind === "chest" || kind === "dispenser"
         ? '<i class="chest-bottom" aria-hidden="true"></i><span class="chest-bag-label">Inventory</span>'
         : `<span class="native-bag-label">Inventory</span><span class="native-crafting-label">Crafting</span>${kind === "inventory" ? '<div class="native-player" aria-hidden="true"><i class="player-head"></i><i class="player-body"></i><i class="player-arm left"></i><i class="player-arm right"></i><i class="player-leg left"></i><i class="player-leg right"></i></div>' : ""}`;
   modal(
@@ -1270,6 +1283,7 @@ function tickChests() {
   }
   chestRenderer.sync(world, survival.chests);
   // Container.canInteractWith: the screen closes once its chest is gone.
+  if (containerView?.kind === "dispenser" && world.get(...containerView.key.split(",").map(Number)) !== DISPENSER) resume();
   if (containerView?.kind === "chest" && containerView.container.keys?.some((k) => world.get(...k.split(",").map(Number)) !== CHEST)) resume();
   if (containerView?.kind === "enchanting") {
     // ContainerEnchantment.canInteractWith: the table must still exist and be within 8 blocks.
@@ -1325,7 +1339,7 @@ function die() {
     try {
     const spawn=await spawnPosition();
     const time = survival.time;
-    survival = new Survival({ time, slots: [], furnaces: survival.furnaces, chests: survival.chests }, survival.mode);
+    survival = new Survival({ time, slots: [], furnaces: survival.furnaces, chests: survival.chests, dispensers: survival.dispensers }, survival.mode);
     survival.protection = 60;
     survival.furnaceActive = key => !world.streaming || world.isTicking(...[key.split(",")[0],key.split(",")[2]].map(Number));
     updateDifficulty();
@@ -1374,6 +1388,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // Scheduled sand and gravel updates and the falling-block entities (WorldServer.tick).
   if (falling) {
     falling.tick();
+    world.redstoneBlocks?.tick();
     scene.setFalling?.(falling.entities);
   }
   // WorldClient.doVoidFogParticles: Block.randomDisplayTick around the viewer (torch and
@@ -1569,6 +1584,7 @@ function edit(place = false) {
     useAnvil: key => { useAnvil(key); syncContainerState(); },
     useEnchantingTable: key => { useEnchantingTable(key); syncContainerState(); },
     openChest: (chest, key) => { openContainer(chest, "chest", key); syncContainerState(); },
+    openDispenser: (dispenser, key) => { openContainer(Object.assign(new DispenserContainer(survival.inventory, dispenser, () => { saved = false; }), { title: DISPENSER_TITLE }), "dispenser", key); syncContainerState(); },
     breakBlock,
     clientEyeInWater,
   });
@@ -1610,7 +1626,7 @@ function breakBlock(p, creative = false) {
   });
 }
 // Block.getItem for middle-click: farmland gives dirt, crops give seeds, water nothing.
-const pickItem = (block) => (block === 29 || block === 30 ? 2 : block === REEDS ? REEDS_ITEM : isCrop(block) ? cropItem(block) : !isLiquid(block) && ITEMS[block] ? block : 0);
+const pickItem = (block, meta = 0) => isDispenserPiston(block) ? (block === PISTON_HEAD ? itemForBlock(headBaseId(meta)) : itemForBlock(block)) : isRedstoneBlock(block) ? redstoneItemOf(block) : (block === 29 || block === 30 ? 2 : block === WOODEN_DOOR ? WOODEN_DOOR_ITEM : block === IRON_DOOR ? IRON_DOOR_ITEM : block === REEDS ? REEDS_ITEM : isCrop(block) ? cropItem(block) : !isLiquid(block) && ITEMS[block] ? blockItemId(block) : 0);
 // EntityPlayer.dropOneItem: Q throws one item, Ctrl + Q the whole stack.
 function dropHeld(all) {
   const inv = survival.inventory, s = inv.held;
@@ -1963,9 +1979,10 @@ function setupPointer() {
       return;
     }
     if (e.button === 1) {
-      const id = target && pickItem(world.get(...target.block));
+      const stonePick = target && stoneUtilityPick(world, ...target.block);
+      const id = stonePick?.id ?? (target && pickItem(world.get(...target.block), world.getMeta(...target.block)));
       if (id) {
-        survival.inventory.pick(id, survival.creative, id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined);
+        survival.inventory.pick(id, survival.creative, stonePick ? stonePick.damage : id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined);
         mining = null;
         eating = null;
         renderHotbar();

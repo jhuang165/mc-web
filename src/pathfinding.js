@@ -3,6 +3,7 @@
 // PathNavigate (vv). See public/research/pathfinding.md for the obfuscated names,
 // what is ported and the deliberate deviations (a node cap and a search budget).
 import { isPlant, WEB, LADDER, REEDS } from "./world.js";
+import { isDoor, doorPassable } from "./doors-panes.js";
 const f = Math.fround;
 const WATER = 10, LAVA = 42;
 const floor = Math.floor;
@@ -181,7 +182,9 @@ export function defaultClassify(id) {
   return { passable: false };
 }
 const classifyCache = new Map();
-const cachedClassify = (id) => {
+// BlockDoor.getBlocksMovement reads the metadata (an open door lets mobs through), so doors are classified per cell.
+const cachedClassify = (id, world, x, y, z) => {
+  if (isDoor(id)) return { door: true, passable: !!world && doorPassable(world, x, y, z) };
   let c = classifyCache.get(id);
   if (!c) classifyCache.set(id, (c = defaultClassify(id)));
   return c;
@@ -195,7 +198,7 @@ export function getVerticalOffset(entity, x, y, z, size, avoidWater, breakDoors,
   for (let i = x; i < x + size.x; i++)
     for (let j = y; j < y + size.y; j++)
       for (let k = z; k < z + size.z; k++) {
-        const id = world.get(i, j, k), b = classify(id);
+        const id = world.get(i, j, k), b = classify(id, world, i, j, k);
         if (b.air) continue;
         if (b.trapdoor) flag = true;
         else if (b.water) {
@@ -574,7 +577,7 @@ export class PathNavigate {
         for (let zz = z; zz < z + sz; zz++) {
           const px = xx + 0.5 - from.x, pz = zz + 0.5 - from.z;
           if (px * dx + pz * dz < 0) continue;
-          if (!this.classify(this.world.get(xx, yy, zz)).passable) return false;
+          if (!this.classify(this.world.get(xx, yy, zz), this.world, xx, yy, zz).passable) return false;
         }
     return true;
   }

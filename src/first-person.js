@@ -4,6 +4,7 @@ import { spriteGeometry } from "./sprite-geometry.js";
 import { ITEMS } from "./survival.js";
 import { DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, ANVIL } from "./world.js";
 import { anvilModelBoxes } from './anvil-block.js';
+import { STAIRS, STAIR_ITEM_BOXES } from './stairs.js';
 import { blockTile,tileRect } from "./block-textures.js";
 import { entityMaterial, ITEM_LIGHTS } from "./light-material.js";
 const loader = new THREE.TextureLoader(),
@@ -13,12 +14,15 @@ const BLOCK_FACES=[
   {v:[[0,1,1],[1,1,1],[1,1,0],[0,1,0]]},{v:[[0,0,0],[1,0,0],[1,0,1],[0,0,1]]},
   {v:[[0,0,1],[1,0,1],[1,1,1],[0,1,1]]},{v:[[1,0,0],[0,0,0],[0,1,0],[1,1,0]]},
 ];
-function anvilItemGeometry(meta){
+function anvilItemGeometry(meta){return boxItemGeometry(anvilModelBoxes(meta),(fi)=>blockTile(ANVIL,fi,false,meta));}
+// RenderBlocks.renderBlockAsItem for render type 10 (STAIR_ITEM_BOXES), at `scale` of a block.
+export function stairItemGeometry(id,scale=1){return boxItemGeometry(STAIR_ITEM_BOXES,(fi)=>blockTile(id,fi),scale);}
+function boxItemGeometry(boxes,tileOf,scale=1){
  const positions=[],uvs=[],indices=[];
- for(const [x0,y0,z0,x1,y1,z1] of anvilModelBoxes(meta))for(let fi=0;fi<BLOCK_FACES.length;fi++){
-  const face=BLOCK_FACES[fi],tile=blockTile(ANVIL,fi,false,meta),r=tileRect(tile),base=positions.length/3;
+ for(const [x0,y0,z0,x1,y1,z1] of boxes)for(let fi=0;fi<BLOCK_FACES.length;fi++){
+  const face=BLOCK_FACES[fi],tile=tileOf(fi),r=tileRect(tile),base=positions.length/3;
   const rect=[[r.u0,r.v0],[r.u1,r.v0],[r.u1,r.v1],[r.u0,r.v1]];
-  for(let i=0;i<4;i++){const v=face.v[i];positions.push((v[0]?x1:x0)-.5,(v[1]?y1:y0)-.5,(v[2]?z1:z0)-.5);uvs.push(...rect[i]);}
+  for(let i=0;i<4;i++){const v=face.v[i];positions.push(((v[0]?x1:x0)-.5)*scale,((v[1]?y1:y0)-.5)*scale,((v[2]?z1:z0)-.5)*scale);uvs.push(...rect[i]);}
   indices.push(base,base+1,base+2,base,base+2,base+3);
  }
  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setIndex(indices);g.computeVertexNormals();return g;
@@ -95,6 +99,10 @@ export function itemTexture(id, damage = 0, use = 0) {
   if(id===DYE)return "/media/1.7.10/items/dye_powder_"+DYES[Math.max(0,Math.min(15,damage|0))].texture+".png";
   if(id===20||id===39)return "/media/1.7.10/blocks/"+(id===20?"torch_on":"tallgrass")+".png";
   if(id===51)return "/media/1.7.10/blocks/web.png";
+  // BlockPane items are flat sprites of the side texture (ItemBlock icon of render types 18 and 41).
+  if(id===99||id===1100)return "/media/1.7.10/blocks/"+(id===99?"iron_bars":"glass")+".png";
+  // Lever and tripwire hook items are flat sprites of their block textures (ItemBlock icons of render types 12 and 29).
+  if(id===1108||id===1113)return "/media/1.7.10/blocks/"+(id===1108?"lever":"trip_wire_source")+".png";
   if(id===48)return "/media/1.7.10/blocks/sapling_oak.png";
   if(id===125)return "/media/1.7.10/items/shears.png";
   if(item?.texture)return "/media/1.7.10/items/"+item.texture+".png";
@@ -177,8 +185,8 @@ export class FirstPerson {
     if (!id || !data) return;
     let mesh;
     const url = itemTexture(id, meta, use);
-    if(id===ANVIL){
-      mesh=new THREE.Mesh(anvilItemGeometry(meta),this.material({map:this.atlas,alphaTest:.1}));
+    if(id===ANVIL||STAIRS[id]){
+      mesh=new THREE.Mesh(STAIRS[id]?stairItemGeometry(id):anvilItemGeometry(meta),this.material({map:this.atlas,alphaTest:.1}));
       mesh.rotation.y=Math.PI/2;
     } else if (url) {
       mesh = new THREE.Mesh(

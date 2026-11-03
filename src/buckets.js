@@ -4,6 +4,7 @@
 // Ids are this build's own; Minecraft's are 325 (bucket), 326 (water), 327 (lava) and
 // 335 (milk).
 import { WATER, LAVA, isLiquid, WEB, LADDER, isPlant, isCrop, blockBounds } from "./world.js";
+import { isStair, stairRayTrace } from "./stairs.js";
 import { makeStack } from "./inventory.js";
 import { ITEMS } from "./survival.js";
 
@@ -35,6 +36,8 @@ function bounds(world, x, y, z, b) {
 // 0 bottom, 1 top, 2 north (z - 1), 3 south, 4 west (x - 1), 5 east.
 const FACES = [[4, 5], [0, 1], [2, 3]]; // [low, high] side per axis x, y, z
 function collisionRayTrace(world, x, y, z, b, start, end) {
+  // BlockStairs.collisionRayTrace: the eight octants, the nearest hit.
+  if (isStair(b)) { const h = stairRayTrace(world.getMeta(x, y, z), x, y, z, start, end); return h && { block: [x, y, z], side: h.side, point: h.vec }; }
   const [x0, y0, z0, x1, y1, z1] = bounds(world, x, y, z, b),
     lo = [x + x0, y + y0, z + z0], hi = [x + x1, y + y1, z + z1],
     d = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];

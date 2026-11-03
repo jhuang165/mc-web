@@ -9,7 +9,7 @@
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
 import { EffectRenderer, PARTICLE_LIMIT, entityFX } from "./effect-renderer.js";
 import { acceptsParticle } from "./particle-settings.js";
-import { collisionBounds, FIRE, LAVA, WATER, WEB } from "./world.js";
+import { collisionBoxList, FIRE, LAVA, WATER, WEB } from "./world.js";
 import { blockTile, TILES } from "./block-textures.js";
 import { rayBounds } from "./projectiles.js";
 import { touchesWeb } from "./webs.js";
@@ -66,8 +66,8 @@ function collisionBoxes(world, x0, y0, z0, x1, y1, z1) {
     for (let bz = Math.floor(z0); bz < Math.floor(z1 + 1); bz++)
       for (let by = Math.floor(y0) - 1; by < Math.floor(y1 + 1); by++) {
         if (!world.solid(bx, by, bz)) continue;
-        const [a, b, c, d, e, g] = collisionBounds(world, bx, by, bz);
-        if (bx + d > x0 && bx + a < x1 && by + e > y0 && by + b < y1 && bz + g > z0 && bz + c < z1) out.push([bx + a, by + b, bz + c, bx + d, by + e, bz + g]);
+        for (const [a, b, c, d, e, g] of collisionBoxList(world, bx, by, bz))
+          if (bx + d > x0 && bx + a < x1 && by + e > y0 && by + b < y1 && bz + g > z0 && bz + c < z1) out.push([bx + a, by + b, bz + c, bx + d, by + e, bz + g]);
       }
   return out;
 }

@@ -11,6 +11,7 @@ import { NORMAL, scaleDamage, starvationHurts, hungerDrops, peacefulRegen } from
 import { installPopulationItems, installPopulationMaterials, installPopulationRecipes, populationCraftingResult, installPopulationSmelting } from './population-content.js';
 
 import {CARROT,POTATO,BAKED_POTATO,POISONOUS_POTATO} from './crops.js';
+import {newDispenser,DISPENSER_SLOTS} from './dispenser-container.js';
 // The lastDamage reason of DamageSource.outOfWorld (death-messages.js).
 export const VOID = "void";
 
@@ -568,6 +569,14 @@ export class Survival {
       if (Array.isArray(c.items)) c.items.slice(0, CHEST_SLOTS).forEach((s, i) => (chest.items[i] = this.inventory.read(s)));
       this.chests[key] = chest;
     }
+    // TileEntityDispenser contents (Trap tile entity, nine slots); dispensing itself is inert.
+    this.dispensers = {};
+    for (const [key, d] of Object.entries(data.dispensers || {})) {
+      if (!/^-?\d+,\d+,-?\d+$/.test(key) || !d || typeof d !== "object") continue;
+      const dispenser = newDispenser();
+      if (Array.isArray(d.items)) d.items.slice(0, DISPENSER_SLOTS).forEach((s, i) => (dispenser.items[i] = this.inventory.read(s)));
+      this.dispensers[key] = dispenser;
+    }
     this.hurtTicks = 0;
     // EntityLivingBase.lastDamage (the amount of the hit that opened the window) and the number of
     // fresh hits; EntityPlayerMP.field_147101_bU, the spawn protection main.js sets to 60 on a join.
@@ -858,7 +867,7 @@ export class Survival {
     }
   }
   serialize() {
-    const { health, food, saturation, exhaustion, timer, air, time, fire, furnaces, chests } = this;
+    const { health, food, saturation, exhaustion, timer, air, time, fire, furnaces, chests, dispensers } = this;
     return {
       health,
       food,
@@ -875,6 +884,7 @@ export class Survival {
       current: this.inventory.current,
       furnaces: structuredClone(furnaces),
       chests: Object.fromEntries(Object.entries(chests).map(([key, c]) => [key, { facing: c.facing, items: c.items.map(copyStack) }])),
+      dispensers: Object.fromEntries(Object.entries(dispensers).map(([key, d]) => [key, { items: d.items.map(copyStack) }])),
     };
   }
 }

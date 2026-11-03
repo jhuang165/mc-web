@@ -7,6 +7,7 @@ import { makeStack, copyStack } from "./inventory.js";
 import { PHYSICS, opaqueCube } from "./world.js";
 import { entityBox } from "./weather.js";
 import { blastKnockback } from "./armor-enchantments.js";
+import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, itemForBlock } from "./dispenser-piston.js";
 
 /**
  * Apply an integrated-server explosion in main.js order. Explosion rays and
@@ -99,7 +100,7 @@ export function applyExplosion(state, request, hooks = {}) {
   const changes = [];
   for (const block of explosion.broken) {
     const key = block.x + "," + block.y + "," + block.z;
-    const furnace = survival.furnaces[key], chest = survival.chests[key];
+    const furnace = survival.furnaces[key], chest = survival.chests[key], dispenser = survival.dispensers?.[key], pistonMeta = world.getMeta(block.x, block.y, block.z);
     if (!world.set(block.x, block.y, block.z, 0)) continue;
     changes.push([block.x, block.y, block.z, block.id, 0]);
     farming.observe(block.x, block.y, block.z);
@@ -110,6 +111,21 @@ export function applyExplosion(state, request, hooks = {}) {
     if (chest) {
       items.spill(chest.items.filter(Boolean).map(copyStack), block.x, block.y, block.z);
       delete survival.chests[key];
+    }
+    if (dispenser) {
+      items.spill(dispenser.items.filter(Boolean).map(copyStack), block.x, block.y, block.z);
+      delete survival.dispensers[key];
+    }
+    // A destroyed piston head takes its base along (the base drops itself); a destroyed extended base removes its head.
+    if (block.id === PISTON_HEAD) {
+      const base = baseOfHead(block.x, block.y, block.z, pistonMeta), baseBlock = world.get(...base);
+      if (isPistonBase(baseBlock) && pistonExtended(world.getMeta(...base)) && world.set(...base, 0)) {
+        changes.push([...base, baseBlock, 0]);
+        items.dropBlock([makeStack(itemForBlock(baseBlock), 1, 0)], ...base);
+      }
+    } else if (isPistonBase(block.id) && pistonExtended(pistonMeta)) {
+      const head = headOfBase(block.x, block.y, block.z, pistonMeta);
+      if (world.get(...head) === PISTON_HEAD && world.set(...head, 0)) changes.push([...head, PISTON_HEAD, 0]);
     }
   }
   for (const drop of explosion.drops)

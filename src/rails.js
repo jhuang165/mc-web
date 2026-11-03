@@ -4,6 +4,7 @@
 // (public/research/fence-rail-reference.json). Golden, detector and activator rails, powered
 // shapes and minecart movement are not part of this build.
 import { RAIL, SNOW_LAYER, normalCube } from "./world.js";
+import { isStair, stairSolidTop } from "./stairs.js";
 
 // Metadata: 0 north-south, 1 east-west, 2-5 ascending east/west/north/south, 6-9 curves
 // (6 south-east, 7 south-west, 8 north-west, 9 north-east).
@@ -14,6 +15,9 @@ export const railBounds = (meta) => [0, 0, 0, 1, RAIL_ASCENDING(meta) ? 0.625 : 
 // World.doesBlockHaveSolidTopSurface for this build's blocks: a normal cube, or a full snow layer.
 export function solidTop(world, x, y, z) {
   const b = world.get(x, y, z);
+  if (isStair(b)) return stairSolidTop(world.getMeta(x, y, z)); // upside-down stairs only
+  if (b === 103) return (world.getMeta(x, y, z) & 8) !== 0; // a top stone slab (stone-utility.js STONE_SLAB)
+  if (b === 104) return true; // the end portal frame counts as a solid top (fence-rail-reference.json)
   return normalCube(b) || (b === SNOW_LAYER && (world.getMeta(x, y, z) & 7) === 7);
 }
 // BlockRailBase.canPlaceBlockAt: a solid top surface below.
