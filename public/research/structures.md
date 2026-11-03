@@ -4,7 +4,7 @@ Current live status (0.25.0): new Java worlds use **generation version 11** with
 
 Status: **partial**. GEN-05a ports the shared structure framework and mineshafts as standalone
 modules, checked against the unchanged pinned 1.7.10 classes. They are not yet called from
-live world generation. Village/stronghold/temple placement predicates are now standalone (below); their buildings and population, and nether fortresses, are not ported.
+live world generation. Village/stronghold/temple placement predicates are standalone (below). Since 2026-11-03 their buildings and population are also standalone ports replayed against native classes: [villages](villages.md) (GEN-05c), [strongholds](strongholds.md) (GEN-05d) and [desert/jungle temples and swamp huts](scattered-features.md) (GEN-05e). None is called from live generation; nether fortresses are not ported.
 This is not a parity claim for structures.
 
 ## Native village, temple and stronghold placement research (0.32.0)

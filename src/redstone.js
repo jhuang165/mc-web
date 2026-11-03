@@ -12,13 +12,20 @@
 //   BlockRedstoneWire (ana), BlockRedstoneTorch (anc) + BlockTorch (aoc) support,
 //   BlockLever (alv), BlockButton (ajs, stone anx / wood aon), BlockRedstoneLight (anb),
 //   BlockCompressedPowered (ams, block of redstone);
+//   BlockRedstoneDiode (akj) + BlockRedstoneRepeater (anf, ids 93/94): delay, locking,
+//   scheduled-tick priorities, facing; BlockRedstoneComparator (akc, ids 149/150) with its
+//   TileEntityComparator output signal (aoz), compare/subtract mode and the container
+//   comparator-override input (cauldron 118 and end portal frame 120 are the metadata-driven
+//   overrides; inventories are not ported); World.func_147453_f (updateNeighbourForOutputSignal);
+//   BlockBasePressurePlate (ajd) with BlockPressurePlate (amu, stone 70 / wood 72) and
+//   BlockPressurePlateWeighted (aol, light 147 / heavy 148) over a scripted entity-box list;
 //   Block.dropBlockAsItemWithChance / dropBlockAsItem_do world-Random draws.
 //
 // Evidence: tools/probes/RedstoneProbe.java runs those classes in a real World and Chunks
 // and records public/research/redstone-reference.json; src/redstone.test.js replays every
-// scenario here. Not ported: repeaters, comparators, pistons, pressure plates, tripwire,
-// daylight sensors, powered rails/doors/TNT/note blocks, random ticks, lighting, rendering.
-// This module is not wired into the live game.
+// scenario here. Not ported: pistons, tripwire, daylight sensors, powered rails/doors/TNT/
+// note blocks, inventory comparator overrides, entity physics, random ticks, lighting,
+// rendering. This module is not wired into the live game.
 import { JavaRandom } from "./java-random.js";
 
 export const AIR = 0;
@@ -37,11 +44,17 @@ export const POWERED_REPEATER = 94;
 export const NETHER_FENCE = 113;
 export const LAMP = 123;
 export const LIT_LAMP = 124;
+export const CAULDRON = 118;
+export const END_PORTAL_FRAME = 120;
 export const COBBLE_WALL = 139;
 export const WOOD_BUTTON = 143;
 export const COMPARATOR = 149;
 export const POWERED_COMPARATOR = 150;
 export const REDSTONE_BLOCK = 152;
+export const STONE_PLATE = 70;
+export const WOOD_PLATE = 72;
+export const LIGHT_PLATE = 147;
+export const HEAVY_PLATE = 148;
 export const REDSTONE_ITEM = 331;
 
 // Native block properties for every registered 1.7.10 block id, as dumped by RedstoneProbe:
@@ -147,6 +160,8 @@ export class RedstoneWorld {
     this.wiresProvidePower = true; // BlockRedstoneWire.wiresProvidePower
     this.torchToggles = null; // BlockRedstoneTorch.toggles.get(world)
     this.doTileDrops = true;
+    this.tiles = new Map(); // TileEntityComparator by "x,y,z": { signal }
+    this.entities = []; // scripted entity boxes for pressure plates: { kind, box: [x0,y0,z0,x1,y1,z1] }
     this.sounds = [];
     this.drops = [];
     this.log = log ? [] : null;
@@ -203,7 +218,10 @@ export class RedstoneWorld {
     if (s.ids[i] !== id) return false;
     s.meta[i] = meta;
     BEHAVIOUR[id]?.onBlockAdded?.(this, x, y, z);
-    if ((flags & 1) !== 0) this.notifyBlocksOfNeighborChange(x, y, z, before);
+    if ((flags & 1) !== 0) {
+      this.notifyBlocksOfNeighborChange(x, y, z, before);
+      if (hasComparatorOverride(id)) this.updateNeighbourForOutputSignal(x, y, z, id);
+    }
     return true;
   }
   setBlockToAir(x, y, z) {
@@ -218,7 +236,10 @@ export class RedstoneWorld {
     const i = RedstoneWorld.index(x, y, z);
     if (s.meta[i] === meta) return false;
     s.meta[i] = meta;
-    if ((flags & 1) !== 0) this.notifyBlocksOfNeighborChange(x, y, z, s.ids[i]);
+    if ((flags & 1) !== 0) {
+      this.notifyBlocksOfNeighborChange(x, y, z, s.ids[i]);
+      if (hasComparatorOverride(s.ids[i])) this.updateNeighbourForOutputSignal(x, y, z, s.ids[i]);
+    }
     return true;
   }
   // World.notifyBlocksOfNeighborChange: x-1, x+1, y-1, y+1, z-1, z+1.
@@ -229,6 +250,40 @@ export class RedstoneWorld {
     this.notifyBlockOfNeighborChange(x, y + 1, z, source);
     this.notifyBlockOfNeighborChange(x, y, z - 1, source);
     this.notifyBlockOfNeighborChange(x, y, z + 1, source);
+  }
+  // World.func_147441_b: notifyBlocksOfNeighborChange without the neighbour on `side`
+  // (Facing index of the neighbour to skip: 0 y-1, 1 y+1, 2 z-1, 3 z+1, 4 x-1, 5 x+1).
+  notifyBlocksOfNeighborChangeExcept(x, y, z, source, side) {
+    if (side !== 4) this.notifyBlockOfNeighborChange(x - 1, y, z, source);
+    if (side !== 5) this.notifyBlockOfNeighborChange(x + 1, y, z, source);
+    if (side !== 0) this.notifyBlockOfNeighborChange(x, y - 1, z, source);
+    if (side !== 1) this.notifyBlockOfNeighborChange(x, y + 1, z, source);
+    if (side !== 2) this.notifyBlockOfNeighborChange(x, y, z - 1, source);
+    if (side !== 3) this.notifyBlockOfNeighborChange(x, y, z + 1, source);
+  }
+  // World.func_147453_f: tell comparators beside a comparator-override block (or one solid
+  // block further) that the block's output changed. Calls onNeighborBlockChange directly
+  // (no notifyBlockOfNeighborChange, so nothing is logged for the call itself).
+  updateNeighbourForOutputSignal(x, y, z, source) {
+    for (let i = 0; i < 4; i++) {
+      let nx = x + DIR_X[i],
+        nz = z + DIR_Z[i];
+      let id = this.getBlock(nx, y, nz);
+      if (isComparatorId(id)) BEHAVIOUR[id].onNeighborBlockChange(this, nx, y, nz, source);
+      else if (this.isNormalCube(id)) {
+        nx += DIR_X[i];
+        nz += DIR_Z[i];
+        id = this.getBlock(nx, y, nz);
+        if (isComparatorId(id)) BEHAVIOUR[id].onNeighborBlockChange(this, nx, y, nz, source);
+      }
+    }
+  }
+  // World.getTileEntity for a comparator: Chunk.func_150806_e creates one lazily when absent.
+  comparatorTile(x, y, z) {
+    const key = `${x},${y},${z}`;
+    let t = this.tiles.get(key);
+    if (!t) this.tiles.set(key, (t = { signal: 0 }));
+    return t;
   }
   notifyBlockOfNeighborChange(x, y, z, source) {
     this.record(`n,${x},${y},${z},${source}`);
@@ -284,9 +339,35 @@ export class RedstoneWorld {
   pendingTicks() {
     return this.tree.map((e) => ({ ...e }));
   }
-  // Player right click: Block.onBlockActivated (lever and buttons).
+  // Player right click: Block.onBlockActivated (lever, buttons, repeater, comparator).
   activate(x, y, z) {
     return BEHAVIOUR[this.getBlock(x, y, z)]?.onBlockActivated?.(this, x, y, z) ?? false;
+  }
+  // ItemReed.onItemUse for a diode: setBlock(id, 0, 3) then Block.onBlockPlacedBy with a placer
+  // looking along `yaw` degrees (EntityLivingBase.rotationYaw).
+  placeBy(x, y, z, id, yaw) {
+    if (!this.setBlock(x, y, z, id, 0, 3) || this.getBlock(x, y, z) !== id) return false;
+    BEHAVIOUR[id]?.onBlockPlacedBy?.(this, x, y, z, yaw);
+    return true;
+  }
+  // Entity touches the block (Block.onEntityCollidedWithBlock), for pressure plates.
+  collide(x, y, z) {
+    BEHAVIOUR[this.getBlock(x, y, z)]?.onEntityCollidedWithBlock?.(this, x, y, z);
+  }
+  // World.getEntitiesWithinAABB over the scripted list. `mode` is the class asked for: "all"
+  // (Entity), "living" (EntityLivingBase: mobs and players) or "player". The boxes intersect
+  // with AxisAlignedBB.intersectsWith (strict on every axis).
+  getEntities(mode, [x0, y0, z0, x1, y1, z1]) {
+    return this.entities.filter(
+      (e) =>
+        (mode === "all" || (mode === "living" && e.kind !== "item") || (mode === "player" && e.kind === "player")) &&
+        e.box[3] > x0 &&
+        e.box[0] < x1 &&
+        e.box[4] > y0 &&
+        e.box[1] < y1 &&
+        e.box[5] > z0 &&
+        e.box[2] < z1,
+    );
   }
 
   isNormalCube(id) {
@@ -374,7 +455,31 @@ const FACING_X = [0, 0, 0, 0, -1, 1],
   FACING_Z = [0, 0, -1, 1, 0, 0];
 // Direction.rotateOpposite.
 const ROTATE_OPPOSITE = [2, 3, 0, 1];
-const DROP_ITEM = { [WIRE]: REDSTONE_ITEM, [UNLIT_TORCH]: TORCH, [LIT_LAMP]: LAMP };
+const DROP_ITEM = {
+  [WIRE]: REDSTONE_ITEM,
+  [UNLIT_TORCH]: TORCH,
+  [LIT_LAMP]: LAMP,
+  [REPEATER]: 356,
+  [POWERED_REPEATER]: 356,
+  [COMPARATOR]: 404,
+  [POWERED_COMPARATOR]: 404,
+};
+// Direction.offsetX / offsetZ and directionToFacing (south, west, north, east).
+const DIR_X = [0, -1, 0, 1],
+  DIR_Z = [1, 0, -1, 0],
+  DIR_TO_FACING = [3, 4, 2, 5];
+function isComparatorId(id) {
+  return id === COMPARATOR || id === POWERED_COMPARATOR;
+}
+// Block.hasComparatorInputOverride among the ported ids: cauldron and end portal frame only.
+function hasComparatorOverride(id) {
+  return id === CAULDRON || id === END_PORTAL_FRAME;
+}
+// Block.getComparatorInputOverride: cauldron level (metadata), end portal frame eye (15 or 0).
+function comparatorOverride(w, id, x, y, z) {
+  const m = w.getBlockMetadata(x, y, z);
+  return id === CAULDRON ? m : (m & 4) !== 0 ? 15 : 0;
+}
 function compareEntries(a, b) {
   if (a.time !== b.time) return a.time < b.time ? -1 : 1;
   if (a.priority !== b.priority) return a.priority - b.priority;
@@ -786,6 +891,289 @@ function lamp(lit) {
   };
 }
 
+// ---- BlockRedstoneDiode (akj), BlockRedstoneRepeater (anf), BlockRedstoneComparator (akc) ----
+// Direction metadata is meta & 3 (BlockDirectional.getDirection); the input is at
+// (x + offsetX[dir], z + offsetZ[dir]) and the output on the opposite face.
+const dirOf = (m) => m & 3;
+function isDiodeId(id) {
+  return id === REPEATER || id === POWERED_REPEATER || id === COMPARATOR || id === POWERED_COMPARATOR;
+}
+// BlockRedstoneDiode.func_149911_e: notify the block in front, skipping its facing back to us.
+function diodeNotifyFront(w, x, y, z, self) {
+  const d = dirOf(w.getBlockMetadata(x, y, z));
+  if (d === 1) {
+    w.notifyBlockOfNeighborChange(x + 1, y, z, self);
+    w.notifyBlocksOfNeighborChangeExcept(x + 1, y, z, self, 4);
+  }
+  if (d === 3) {
+    w.notifyBlockOfNeighborChange(x - 1, y, z, self);
+    w.notifyBlocksOfNeighborChangeExcept(x - 1, y, z, self, 5);
+  }
+  if (d === 2) {
+    w.notifyBlockOfNeighborChange(x, y, z + 1, self);
+    w.notifyBlocksOfNeighborChangeExcept(x, y, z + 1, self, 2);
+  }
+  if (d === 0) {
+    w.notifyBlockOfNeighborChange(x, y, z - 1, self);
+    w.notifyBlocksOfNeighborChangeExcept(x, y, z - 1, self, 3);
+  }
+}
+// BlockRedstoneDiode.func_149903_h: power arriving at the input side (indirect power, or wire).
+function diodeInput(w, x, y, z, m) {
+  const d = dirOf(m),
+    x1 = x + DIR_X[d],
+    z1 = z + DIR_Z[d],
+    p = w.getIndirectPowerLevelTo(x1, y, z1, DIR_TO_FACING[d]);
+  if (p >= 15) return p;
+  return Math.max(p, w.getBlock(x1, y, z1) === WIRE ? w.getBlockMetadata(x1, y, z1) : 0);
+}
+// BlockRedstoneDiode.func_149913_i with this block's isPowerSource (func_149908_a).
+function diodeSideSource(w, x, y, z, side, repeater) {
+  const id = w.getBlock(x, y, z);
+  if (repeater ? !isDiodeId(id) : !w.canProvidePower(id)) return 0;
+  return id === WIRE ? w.getBlockMetadata(x, y, z) : w.isBlockProvidingPowerTo(x, y, z, side);
+}
+// BlockRedstoneDiode.func_149902_h: strongest power from the two sides.
+function diodeSides(w, x, y, z, m, repeater) {
+  const d = dirOf(m);
+  if (d === 0 || d === 2) return Math.max(diodeSideSource(w, x - 1, y, z, 4, repeater), diodeSideSource(w, x + 1, y, z, 5, repeater));
+  if (d === 1 || d === 3) return Math.max(diodeSideSource(w, x, y, z + 1, 3, repeater), diodeSideSource(w, x, y, z - 1, 2, repeater));
+  return 0;
+}
+// BlockRedstoneDiode.func_149912_i (isFacingTowardsRepeater): a diode feeds us from behind
+// and is not facing the same way.
+function diodeFacingTowardsDiode(w, x, y, z, m) {
+  const d = dirOf(m),
+    bx = x - DIR_X[d],
+    bz = z - DIR_Z[d];
+  return isDiodeId(w.getBlock(bx, y, bz)) ? dirOf(w.getBlockMetadata(bx, y, bz)) !== d : false;
+}
+const diodeCanStay = (w, x, y, z) => w.doesBlockHaveSolidTopSurface(x, y - 1, z);
+// onBlockPlacedBy: direction from the placer's yaw; schedule a tick when already powered.
+function diodePlacedBy(w, x, y, z, self, yaw, gettingInput) {
+  const f = Math.fround(Math.fround(Math.fround(yaw) * 4) / 360),
+    d = ((Math.floor(f + 0.5) & 3) + 2) % 4;
+  w.setBlockMetadataWithNotify(x, y, z, d, 3);
+  if (gettingInput(w, x, y, z, d)) w.scheduleBlockUpdate(x, y, z, self, 1);
+}
+// onNeighborBlockChange: drop when the support is gone, otherwise updateState.
+function diodeNeighbourChange(w, x, y, z, self, updateState) {
+  if (diodeCanStay(w, x, y, z)) return updateState(w, x, y, z, self);
+  w.dropBlockAsItem(x, y, z, self, w.getBlockMetadata(x, y, z));
+  w.setBlockToAir(x, y, z);
+  w.notifyBlocksOfNeighborChange(x + 1, y, z, self);
+  w.notifyBlocksOfNeighborChange(x - 1, y, z, self);
+  w.notifyBlocksOfNeighborChange(x, y, z + 1, self);
+  w.notifyBlocksOfNeighborChange(x, y, z - 1, self);
+  w.notifyBlocksOfNeighborChange(x, y - 1, z, self);
+  w.notifyBlocksOfNeighborChange(x, y + 1, z, self);
+}
+// strong (and weak) output: only through the front face, only while powered.
+function diodeOutput(w, x, y, z, side, powered, signal) {
+  const m = w.getBlockMetadata(x, y, z);
+  if (!powered(w, x, y, z, m)) return 0;
+  const d = dirOf(m);
+  if ((d === 0 && side === 3) || (d === 1 && side === 4) || (d === 2 && side === 2) || (d === 3 && side === 5)) return signal(w, x, y, z, m);
+  return 0;
+}
+
+function repeater(lit) {
+  const self = lit ? POWERED_REPEATER : REPEATER,
+    delay = (m) => [1, 2, 3, 4][(m & 12) >> 2] * 2,
+    locked = (w, x, y, z, m) => diodeSides(w, x, y, z, m, true) > 0,
+    gettingInput = (w, x, y, z, m) => diodeInput(w, x, y, z, m) > 0;
+  const updateState = (w, x, y, z) => {
+    const m = w.getBlockMetadata(x, y, z);
+    if (locked(w, x, y, z, m)) return;
+    const input = gettingInput(w, x, y, z, m);
+    if (((lit && !input) || (!lit && input)) && !w.isBlockTickScheduledThisTick(x, y, z, self)) {
+      let priority = -1;
+      if (diodeFacingTowardsDiode(w, x, y, z, m)) priority = -3;
+      else if (lit) priority = -2;
+      w.scheduleBlockUpdate(x, y, z, self, delay(m), priority);
+    }
+  };
+  const output = (w, x, y, z, side) => diodeOutput(w, x, y, z, side, () => lit, () => 15);
+  return {
+    onBlockAdded: (w, x, y, z) => diodeNotifyFront(w, x, y, z, self),
+    breakBlock: (w, x, y, z) => diodeNotifyFront(w, x, y, z, self),
+    onNeighborBlockChange: (w, x, y, z) => diodeNeighbourChange(w, x, y, z, self, updateState),
+    updateTick(w, x, y, z) {
+      const m = w.getBlockMetadata(x, y, z);
+      if (locked(w, x, y, z, m)) return;
+      const input = gettingInput(w, x, y, z, m);
+      if (lit && !input) w.setBlock(x, y, z, REPEATER, m, 2);
+      else if (!lit) {
+        w.setBlock(x, y, z, POWERED_REPEATER, m, 2);
+        if (!input) w.scheduleBlockUpdate(x, y, z, POWERED_REPEATER, delay(m), -1);
+      }
+    },
+    // BlockRedstoneRepeater.onBlockActivated: next delay (metadata bits 2 and 3), flags 3.
+    onBlockActivated(w, x, y, z) {
+      const m = w.getBlockMetadata(x, y, z),
+        next = ((((m & 12) >> 2) + 1) << 2) & 12;
+      w.setBlockMetadataWithNotify(x, y, z, next | (m & 3), 3);
+      return true;
+    },
+    onBlockPlacedBy: (w, x, y, z, yaw) => diodePlacedBy(w, x, y, z, self, yaw, gettingInput),
+    weak: output,
+    strong: output,
+  };
+}
+
+// ---- BlockRedstoneComparator (akc) with TileEntityComparator (aoz) ----
+// metadata: bits 0-1 direction, bit 4 subtract mode, bit 8 powered (the lit block 150 only
+// appears when placed raw; its first tick turns it into 149 with bit 8 set).
+function comparatorInput(w, x, y, z, m) {
+  let l = diodeInput(w, x, y, z, m);
+  const d = dirOf(m);
+  let x1 = x + DIR_X[d],
+    z1 = z + DIR_Z[d],
+    id = w.getBlock(x1, y, z1);
+  if (hasComparatorOverride(id)) l = comparatorOverride(w, id, x1, y, z1);
+  else if (l < 15 && w.isNormalCube(id)) {
+    x1 += DIR_X[d];
+    z1 += DIR_Z[d];
+    id = w.getBlock(x1, y, z1);
+    if (hasComparatorOverride(id)) l = comparatorOverride(w, id, x1, y, z1);
+  }
+  return l;
+}
+const comparatorSides = (w, x, y, z, m) => diodeSides(w, x, y, z, m, false);
+// func_149970_j: the signal the comparator should output.
+function comparatorTarget(w, x, y, z, m) {
+  const input = comparatorInput(w, x, y, z, m);
+  return (m & 4) === 4 ? Math.max(input - comparatorSides(w, x, y, z, m), 0) : input;
+}
+// func_149900_a: whether the input still counts as powered (rear input vs side input).
+function comparatorGettingInput(w, x, y, z, m) {
+  const l = comparatorInput(w, x, y, z, m);
+  if (l >= 15) return true;
+  if (l === 0) return false;
+  const side = comparatorSides(w, x, y, z, m);
+  return side === 0 ? true : l >= side;
+}
+function comparator(lit) {
+  const self = lit ? POWERED_COMPARATOR : COMPARATOR,
+    powered = (w, x, y, z, m) => lit || (m & 8) !== 0;
+  // func_149972_c: store the new output, flip the powered bit, notify the front.
+  const updateOutput = (w, x, y, z) => {
+    const m = w.getBlockMetadata(x, y, z),
+      target = comparatorTarget(w, x, y, z, m),
+      tile = w.comparatorTile(x, y, z),
+      old = tile.signal;
+    tile.signal = target;
+    if (old !== target || (m & 4) !== 4) {
+      const input = comparatorGettingInput(w, x, y, z, m),
+        on = lit || (m & 8) !== 0;
+      if (on && !input) w.setBlockMetadataWithNotify(x, y, z, m & -9, 2);
+      else if (!on && input) w.setBlockMetadataWithNotify(x, y, z, m | 8, 2);
+      diodeNotifyFront(w, x, y, z, self);
+    }
+  };
+  const updateState = (w, x, y, z) => {
+    if (w.isBlockTickScheduledThisTick(x, y, z, self)) return;
+    const m = w.getBlockMetadata(x, y, z);
+    if (comparatorTarget(w, x, y, z, m) !== w.comparatorTile(x, y, z).signal || powered(w, x, y, z, m) !== comparatorGettingInput(w, x, y, z, m))
+      w.scheduleBlockUpdate(x, y, z, self, 2, diodeFacingTowardsDiode(w, x, y, z, m) ? -1 : 0);
+  };
+  const output = (w, x, y, z, side) => diodeOutput(w, x, y, z, side, powered, (ww, xx, yy, zz) => ww.comparatorTile(xx, yy, zz).signal);
+  return {
+    onBlockAdded(w, x, y, z) {
+      diodeNotifyFront(w, x, y, z, self);
+      w.tiles.set(`${x},${y},${z}`, { signal: 0 });
+    },
+    breakBlock(w, x, y, z) {
+      w.tiles.delete(`${x},${y},${z}`);
+      diodeNotifyFront(w, x, y, z, self);
+    },
+    onNeighborBlockChange: (w, x, y, z) => diodeNeighbourChange(w, x, y, z, self, updateState),
+    updateTick(w, x, y, z) {
+      if (lit) w.setBlock(x, y, z, COMPARATOR, w.getBlockMetadata(x, y, z) | 8, 4);
+      updateOutput(w, x, y, z);
+    },
+    // onBlockActivated: toggle compare/subtract (bit 4); click pitch 0.55 into subtract, else 0.5.
+    onBlockActivated(w, x, y, z) {
+      const m = w.getBlockMetadata(x, y, z),
+        on = lit || (m & 8) !== 0,
+        subtract = (m & 4) !== 4;
+      const next = (subtract ? 4 : 0) | (on ? 8 : 0);
+      w.playSoundEffect(x + 0.5, y + 0.5, z + 0.5, "random.click", Math.fround(0.3), subtract ? Math.fround(0.55) : Math.fround(0.5));
+      w.setBlockMetadataWithNotify(x, y, z, next | (m & 3), 2);
+      updateOutput(w, x, y, z);
+      return true;
+    },
+    onBlockPlacedBy: (w, x, y, z, yaw) => diodePlacedBy(w, x, y, z, self, yaw, comparatorGettingInput),
+    weak: output,
+    strong: output,
+  };
+}
+
+// ---- BlockBasePressurePlate (ajd): stone / wood (amu) and weighted (aol) ----
+// getEntitiesWithinAABB for the plate's sensing box, over the scripted entity list.
+function plateBox(x, y, z) {
+  const f = (v) => Math.fround(Math.fround(v) + 0.125),
+    g = (v) => Math.fround(Math.fround(v + 1) - 0.125);
+  return [f(x), y, f(z), g(x), y + 0.25, g(z)];
+}
+const plateCanStay = (w, x, y, z) => {
+  const below = w.getBlock(x, y - 1, z);
+  return w.doesBlockHaveSolidTopSurface(x, y - 1, z) || below === FENCE || below === NETHER_FENCE;
+};
+function pressurePlate(id, { mode, max, rate, weighted }) {
+  const powerOf = weighted ? (m) => m : (m) => (m === 1 ? 15 : 0),
+    metaOf = weighted ? (p) => p : (p) => (p > 0 ? 1 : 0);
+  const notify = (w, x, y, z) => {
+    w.notifyBlocksOfNeighborChange(x, y, z, id);
+    w.notifyBlocksOfNeighborChange(x, y - 1, z, id);
+  };
+  // computeRedstoneStrength: the first triggering entity (stone/wood) or the weighted count.
+  const strength = (w, x, y, z) => {
+    const list = w.getEntities(weighted ? "all" : mode, plateBox(x, y, z));
+    if (!weighted) return list.length > 0 ? 15 : 0;
+    const n = Math.min(list.length, max);
+    if (n <= 0) return 0;
+    const f = Math.fround(Math.fround(Math.min(max, n)) / Math.fround(max)),
+      v = Math.fround(f * 15),
+      i = Math.trunc(v);
+    return v > i ? i + 1 : i;
+  };
+  // func_150062_a (setStateIfMobInteractsWithPlate).
+  const refresh = (w, x, y, z, old) => {
+    const now = strength(w, x, y, z),
+      was = old > 0,
+      is = now > 0;
+    if (old !== now) {
+      w.setBlockMetadataWithNotify(x, y, z, metaOf(now), 2);
+      notify(w, x, y, z);
+    }
+    if (!is && was) w.playSoundEffect(x + 0.5, y + 0.1, z + 0.5, "random.click", Math.fround(0.3), Math.fround(0.5));
+    else if (is && !was) w.playSoundEffect(x + 0.5, y + 0.1, z + 0.5, "random.click", Math.fround(0.3), Math.fround(0.6));
+    if (is) w.scheduleBlockUpdate(x, y, z, id, rate);
+  };
+  const power = (w, x, y, z) => powerOf(w.getBlockMetadata(x, y, z));
+  return {
+    onNeighborBlockChange(w, x, y, z) {
+      if (plateCanStay(w, x, y, z)) return;
+      w.dropBlockAsItem(x, y, z, id, w.getBlockMetadata(x, y, z));
+      w.setBlockToAir(x, y, z);
+    },
+    updateTick(w, x, y, z) {
+      const p = power(w, x, y, z);
+      if (p > 0) refresh(w, x, y, z, p);
+    },
+    onEntityCollidedWithBlock(w, x, y, z) {
+      const p = power(w, x, y, z);
+      if (p === 0) refresh(w, x, y, z, p);
+    },
+    breakBlock(w, x, y, z, old, meta) {
+      if (powerOf(meta) > 0) notify(w, x, y, z);
+    },
+    weak: (w, x, y, z) => power(w, x, y, z),
+    strong: (w, x, y, z, side) => (side === 1 ? power(w, x, y, z) : 0),
+  };
+}
+
 const BEHAVIOUR = {
   [WIRE]: wire,
   [TORCH]: redstoneTorch(true),
@@ -797,6 +1185,14 @@ const BEHAVIOUR = {
   [LIT_LAMP]: lamp(true),
   // BlockCompressedPowered: weak power 15 on every side, no strong power.
   [REDSTONE_BLOCK]: { weak: () => 15 },
+  [REPEATER]: repeater(false),
+  [POWERED_REPEATER]: repeater(true),
+  [COMPARATOR]: comparator(false),
+  [POWERED_COMPARATOR]: comparator(true),
+  [STONE_PLATE]: pressurePlate(STONE_PLATE, { mode: "living", rate: 20 }),
+  [WOOD_PLATE]: pressurePlate(WOOD_PLATE, { mode: "all", rate: 20 }),
+  [LIGHT_PLATE]: pressurePlate(LIGHT_PLATE, { max: 15, rate: 10, weighted: true }),
+  [HEAVY_PLATE]: pressurePlate(HEAVY_PLATE, { max: 150, rate: 10, weighted: true }),
 };
 export const PORTED_BLOCKS = Object.keys(BEHAVIOUR).map(Number);
 
@@ -822,8 +1218,21 @@ export function replayScenario(s) {
         for (let z = 0; z < dz; z++) out.push([w.getBlock(ox + x, oy + y, oz + z), w.getBlockMetadata(ox + x, oy + y, oz + z)]);
     return out;
   };
-  let prev = snapshot();
+  // TileEntityComparator output signal of every comparator block (ids 149 and 150) in the region, else 0.
+  const signals = () => {
+    const out = [];
+    for (let x = 0; x < dx; x++)
+      for (let y = 0; y < dy; y++)
+        for (let z = 0; z < dz; z++) {
+          const id = w.getBlock(ox + x, oy + y, oz + z);
+          out.push(isComparatorId(id) ? w.comparatorTile(ox + x, oy + y, oz + z).signal : 0);
+        }
+    return out;
+  };
+  let prev = snapshot(),
+    prevSig = signals();
   const frames = [],
+    tiles = [],
     calls = [],
     sounds = [],
     drops = [];
@@ -840,6 +1249,17 @@ export function replayScenario(s) {
       if (op === "place") w.setBlock(x, y, z, id, meta, 3);
       else if (op === "air") w.setBlockToAir(x, y, z);
       else if (op === "use") w.activate(x, y, z);
+      else if (op === "placeby") w.placeBy(x, y, z, id, meta);
+      else if (op === "cauldron") {
+        // BlockCauldron.func_150024_a(setWaterLevel): clamp 0..3, metadata flags 2, then the comparator update.
+        w.setBlockMetadataWithNotify(x, y, z, Math.min(Math.max(id, 0), 3), 2);
+        w.updateNeighbourForOutputSignal(x, y, z, CAULDRON);
+      } else if (op === "entity") {
+        // Scripted entity standing in cell (x, y, z): 0.25-wide box at the cell centre, on the floor.
+        const kind = ["item", "mob", "player"][id];
+        w.entities.push({ kind, cell: [x, y, z], box: [x + 0.375, y, z + 0.375, x + 0.625, y + 0.25, z + 0.625] });
+      } else if (op === "unentity") w.entities = w.entities.filter((e) => !(e.cell[0] === x && e.cell[1] === y && e.cell[2] === z));
+      else if (op === "collide") w.collide(x, y, z);
       else throw new Error(`Unknown event ${op}`);
     }
     w.time++;
@@ -851,12 +1271,19 @@ export function replayScenario(s) {
       if (now[i][0] !== prev[i][0] || now[i][1] !== prev[i][1]) diff.push([Math.floor(i / (dy * dz)), Math.floor(i / dz) % dy, i % dz, now[i][0], now[i][1]]);
     prev = now;
     frames.push(diff);
+    const sig = signals(),
+      tdiff = [];
+    for (let i = 0; i < sig.length; i++)
+      if (sig[i] !== prevSig[i]) tdiff.push([Math.floor(i / (dy * dz)), Math.floor(i / dz) % dy, i % dz, sig[i]]);
+    prevSig = sig;
+    tiles.push(tdiff);
     calls.push(w.log.join(" "));
     for (const e of w.sounds.slice(soundStart)) sounds.push([t, e.x, e.y, e.z, e.name, e.volume, e.pitch]);
     for (const e of w.drops.slice(dropStart)) drops.push([t, e.x, e.y, e.z, e.item, e.count, e.damage]);
   }
   return {
     frames,
+    tiles,
     calls,
     final: prev.map(([id, m]) => (m ? `${id}:${m}` : `${id}`)).join(","),
     pending: w.pendingTicks().map((e) => [e.x - ox, e.y - oy, e.z - oz, e.id, e.time - w.time, e.priority]),

@@ -1,0 +1,34 @@
+# Java 1.7.10 scattered features (GEN-05e)
+
+Status: **partial, standalone**. `src/scattered-feature-generator.js` ports the desert pyramid, jungle pyramid and swamp hut with their start/placement classes. It is checked against the unchanged pinned 1.7.10 classes and is **not wired into live world generation**. This is not a parity claim for structures; villages, strongholds, nether fortresses and ocean features are separate work.
+
+## Evidence
+
+`node tools/verify-scattered-features.mjs` compiles `tools/probes/ScatteredFeatureProbe.java` against the SHA-1-pinned `minecraft-1.7.10.jar` (inputs in the ignored `tools/research/`; JDK 19.0.1 recorded) and writes `public/research/scattered-feature-reference.json` (about 1.3 MB). `src/scattered-feature-generator.test.js` replays it with `node --test`.
+
+Unchanged native classes executed: MapGenBase/MapGenStructure (`aqx`/`ave`) and its `HashMap<Long, StructureStart>`, MapGenScatteredFeature (`atx`) with its Start (`aty`), the ComponentScatteredFeaturePieces `Feature` base (`aue`), DesertPyramid (`aub`), JunglePyramid (`auc`) with the Stones selector (`aud`), SwampHut (`auf`), StructureComponent/StructureBoundingBox, WeightedRandomChestContent, the level-30 enchanted book, the real `TileEntityChest` and `TileEntityDispenser`, and the real `EntityWitch`. The World is an explicit block-access double (see limits).
+
+Replayed exactly by the test:
+
+- Constants and tables: biome slots, `Direction` offsets, `BlockLever.invertMetadata`, the three loot tables (desert chests, jungle chests, jungle trap dispenser), the witch spawn list entry and average ground level (64, 4 for superflat).
+- Start choice: 2,196 rows, every BiomeGenBase registry slot x 3 world seeds x 12 chunks. Piece type (jungle and jungle hills give a jungle pyramid, swampland a swamp hut, every other biome a desert pyramid), saved fields, orientation (all four `coordBaseMode` values for all three types), bounding box and the Random state after the start.
+- MapGenBase placement: 4 world seeds over 24 x 24 chunk grids with the real WorldChunkManager. Random state after each chunk, start map keys and iteration order, 58 start boxes with full piece lists, and 1,102 `func_143030_a` swamp-hut queries (inside, edge and outside points).
+- Population: 30 `generateStructuresInChunk` runs (100 chunk-bounded `addComponentParts` calls, 98,199 block writes) for desert, jungle and swamp at all four orientations over stone, hilly (sand, water, trees, tall grass, superflat ground level) and water fixtures, at positive and negative chunk coordinates. Per call: setter x/y/z/id/meta/flags and read-order SHA-1 hashes, with the full write list kept for 40 chunk calls; witch spawns; chest and dispenser contents with every `setInventorySlotContents` call; the piece fields after each call (`hPos` and the once-only placed flags); and the Random state afterwards.
+- Direct piece calls: 36 pieces, 396 calls (245,857 writes) with partial, thin and Y-limited boxes and boxes missing ground height, sharing one Random stream across calls. This replays the once-only chest, dispenser, trap and witch flags across calls, including the native behaviour that loot Random is consumed on every call while a chest is not yet placed, even when its position is outside the box.
+
+## Rules ported (1.7.10)
+
+- `Feature` constructor draws `nextInt(4)` for orientation; boxes use width x depth for modes 0/2 and depth x width for modes 1/3.
+- `func_74935_a` averages `max(World.func_72825_h(x, z), averageGroundLevel)` over columns of the piece inside the clip box (z outer, x inner), fails if none, and shifts the piece once (`hPos >= 0` short-circuits). The desert pyramid does not call it; its start Y is the fixed 64 and its box is already placed.
+- Chests are placed through `generateStructureChestContents` and the jungle trap dispensers through the dispenser overload, with metadata mapped by `getMetadataWithOffset`. Redstone parts (wire, repeaters, levers, tripwire hooks, pistons, pressure plate, TNT) are placed as raw id/metadata only.
+- The jungle `Stones` selector (cobblestone or mossy cobblestone, 0.4) and the swamp hut witch spawn at `x+0.5, y, z+0.5` (one witch, once).
+- Placement reuses `templeCandidate` from `src/structure-placement.js`; MapGenScatteredFeature keeps salt 14357617, `distance` 32 and temple biome slots 2, 17, 21, 22, 6.
+
+## Limits
+
+- Not wired into world generation; no NBT round trip (`describe()` lists the fields the native piece would save); MapGenStructureData persistence is not modelled.
+- The World double has no native Chunk storage, notifications, lighting, entity ticking, block updates, redstone power simulation or flower pot tile entity (the pot contents are not modelled).
+- Native terrain/surface/cave chunks were not used as input; terrain comes from synthetic fixtures. `World.func_72825_h` is implemented as in 1.7.10 over the fixture, so interaction with real generated terrain is unverified here.
+- Start and population records inject a forced biome or start for per-type coverage; natural placement is verified separately with the real biome manager (grid records).
+- The `StructureMap` iteration order is JVM dependent (recorded on JDK 19.0.1).
+- Framework gaps worked around inside the module (no framework file edited): `getStructureAt`-based `isSwampHut`, the dispenser contents overload, the average-height adjust and the `Stones` selector are implemented in `scattered-feature-generator.js`.
