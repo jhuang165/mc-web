@@ -297,10 +297,11 @@ export class World {
     this.lastChunk = null;
     this.edits = new Map();
     // Streamed worlds: each column's edits by cell index, stored as order * 4096 + value, where
-    // order is the edit's position in this.edits (first-edit order); and the columns edited since
+    // order is a monotonic first-edit ordinal, retained even after cache eviction; and the columns edited since
     // the last takeDirtyColumns (world-storage.js writes those).
     this.chunkEdits = new Map();
     this.dirtyColumns = new Set();
+    this.savingColumns = new Map();
     this.nextEditOrder = 0;
     this.onChange = null;
     // Saved block light (World.getSavedLightValue(EnumSkyBlock.Block)): the scene sets this to
@@ -473,7 +474,7 @@ export class World {
     }
     for (const r of records) {
       const key=columnKey(r.x,r.z);
-      if (this.dirtyColumns.has(key)) continue;
+      if (this.dirtyColumns.has(key) || this.savingColumns.has(key)) continue;
       const edits=new Map(), chunk=this.chunks.get(key);
       for (let i=0;i<r.cells.length;i++) {
         const cell=r.cells[i], value=r.values[i];
@@ -504,6 +505,31 @@ export class World {
   // After a failed write: those columns are written again with the next save.
   markColumnsDirty(columns) {
     for (const c of columns) this.dirtyColumns.add(columnKey(c.x, c.z));
+  }
+  // A taken dirty batch is still the only copy until its transaction commits.
+  // Counts protect columns shared by overlapping saves, including newer edits.
+  beginColumnSave(columns) {
+    for (const c of columns) {
+      const key = columnKey(c.x, c.z);
+      this.savingColumns.set(key, (this.savingColumns.get(key) ?? 0) + 1);
+    }
+  }
+  finishColumnSave(columns, ok) {
+    if (!ok) this.markColumnsDirty(columns);
+    for (const c of columns) {
+      const key = columnKey(c.x, c.z), remaining = (this.savingColumns.get(key) ?? 1) - 1;
+      if (remaining) this.savingColumns.set(key, remaining);
+      else this.savingColumns.delete(key);
+    }
+  }
+  // Forget only durable, nonresident edits. Returning must read the column again.
+  forgetColumn(key) {
+    if (!this.streaming || this.chunks.has(key) || this.dirtyColumns.has(key) || this.savingColumns.has(key)) return false;
+    const [x, z] = key.split(',').map(Number);
+    for (const cell of this.chunkEdits.get(key)?.keys() ?? [])
+      this.edits.delete(`${x*16+(cell>>12)},${cell&255},${z*16+((cell>>8)&15)}`);
+    this.chunkEdits.delete(key);
+    return true;
   }
   // `onChange(x, y, z, oldBlock, newBlock)` plays World.setBlock's neighbour
   // notification for tracked edits that change the block or its metadata.

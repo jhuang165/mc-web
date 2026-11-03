@@ -5,7 +5,9 @@ const key=(x,z)=>`${x},${z}`;
 export class StreamStorage {
   constructor(world,id,{read=readChunkColumns,onError=()=>{}}={}) {
     this.world=world;this.id=id;this.read=read;this.onError=onError;
-    this.loaded=new Set();this.pending=new Map();this.disposed=false;this.failed=null;
+    // Legacy/imported edits are already in memory and dirty until first save.
+    this.loaded=new Set(world.chunkEdits.keys());this.pending=new Map();this.disposed=false;this.failed=null;
+    this.wanted=new Set([...world.chunks.keys()]);
   }
   columns(x,z,margin=0) {
     const {minX,minZ}=this.world.windowAt(x,z), out=[];
@@ -25,7 +27,19 @@ export class StreamStorage {
     }
     await Promise.all([...new Set(columns.map(c=>this.pending.get(key(...c))).filter(Boolean))]);
   }
-  update(x,z) {if(!this.failed&&!this.disposed)this.ensure(this.columns(x,z,1)).catch(()=>{});}
+  trim() {
+    if(this.disposed)return;
+    for(const k of this.loaded) {
+      if(!this.wanted.has(k)&&!this.pending.has(k)&&this.world.forgetColumn(k))this.loaded.delete(k);
+    }
+  }
+  update(x,z) {
+    if(this.disposed)return;
+    const columns=this.columns(x,z,1);
+    this.wanted=new Set(columns.map(c=>key(...c)));
+    this.trim();
+    if(!this.failed)this.ensure(columns).catch(()=>{});
+  }
   ready(x,z) {return this.columns(x,z).every(c=>this.loaded.has(key(...c)));}
   dispose() {this.disposed=true;}
 }

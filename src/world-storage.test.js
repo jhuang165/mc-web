@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World } from './world.js';
+import { StreamStorage } from './streaming-storage.js';
 import { chunkRecords, editsFromChunks, writeWorldShelf, readWorldShelf, readChunkEdits, deleteStoredWorld } from './world-storage.js';
 
 // A small in-memory IndexedDB: object stores with key paths and one index, readwrite transactions
@@ -176,4 +177,30 @@ test('overlapping first saves cannot replay a stale split over a successful fres
  const first=writeWorldShelf([record],storage,'overlap',chunkRecords(record.id,[['1,70,1',20],['32,70,32',9]]));
  const second=writeWorldShelf([record],storage,'overlap',chunkRecords(record.id,[['1,70,1',3]]));
  await Promise.all([first,second]);assert.deepEqual(await readChunkEdits(record.id),[['1,70,1',3],['32,70,32',9]]);
+});
+
+test('column eviction waits for durable saves, retries an aborted migration and reloads exact edits',async()=>{
+ const w=streamed(), storage=shelf(), record={id:'eviction',biome:'javaStreamed',edits:[['1,0,1',0],['2,200,2',35|(14<<8)],['-1000,200,-1000',20]]};
+ w.restore(record.edits);
+ const loader=new StreamStorage(w,record.id);
+ const save=async()=>{
+  const columns=w.takeDirtyColumns().map(c=>({world:record.id,...c}));
+  w.beginColumnSave(columns);
+  try {await writeWorldShelf([record],storage,'eviction',columns);w.finishColumnSave(columns,true);}
+  catch(e){w.finishColumnSave(columns,false);throw e;}
+  finally{loader.trim();}
+ };
+ const travel=async(x,z)=>{loader.update(x,z);await loader.ensure(loader.columns(x,z,1));w.streamAround(x,z);loader.trim();};
+ idb.db.failNext=true;await assert.rejects(save(),/quota/);
+ assert.ok(w.dirtyColumns.has('-63,-63'));assert.ok(w.edits.has('-1000,200,-1000'));
+ await save();assert.equal(record.chunked,true);assert.equal(w.chunkEdits.has('-63,-63'),false);
+ assert.deepEqual(await readChunkEdits(record.id),[['1,0,1',0],['2,200,2',35|(14<<8)],['-1000,200,-1000',20]]);
+ await travel(400,64);assert.equal(w.edits.size,0);
+ await travel(64,64);assert.equal(w.get(1,0,1),0);assert.equal(w.getMeta(2,200,2),14);
+ w.set(2,200,2,35,true,5);w.set(3,200,3,9);
+ const saving=save();await travel(400,64);await saving;
+ assert.equal(w.edits.size,0);
+ await travel(64,64);assert.equal(w.getMeta(2,200,2),5);assert.equal(w.get(3,200,3),9);
+ assert.deepEqual((await readChunkEdits(record.id)).map(([k])=>k),['1,0,1','2,200,2','-1000,200,-1000','3,200,3']);
+ await deleteStoredWorld(record.id);
 });
