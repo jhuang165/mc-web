@@ -241,3 +241,10 @@ test('station precedence includes chest even when the held item would otherwise 
   assert.equal(result.branch, 'open-chest');
   assert.deepEqual(calls, ['swing', ['open', target.block.join(','), true]]);
 });
+
+test('anvil activation takes precedence over a held projectile and uses a captured block key',()=>{
+ const target={block:[...POS],adjacent:[POS[0]+1,POS[1],POS[2]]};
+ const f=fixture({mode:'creative',tool:316,block:85,target,place:true}),calls=[];
+ const result=applyPlayerEdit(f.state,f.request,{swing:()=>calls.push('swing'),useAnvil:key=>calls.push(['anvil',key])});
+ assert.equal(result.branch,'open-anvil');assert.deepEqual(calls,['swing',['anvil',target.block.join(',')]]);
+});

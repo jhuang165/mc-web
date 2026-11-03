@@ -23,7 +23,7 @@
 //
 // Evidence: tools/probes/RedstoneProbe.java runs those classes in a real World and Chunks
 // and records public/research/redstone-reference.json; src/redstone.test.js replays every
-// scenario here. Not ported: pistons, tripwire, daylight sensors, powered rails/doors/TNT/
+// scenario here. Not ported: pistons, tripwire, daylight refresh scheduling, powered rails/doors/TNT/
 // note blocks and unported inventory block behaviors, entity physics, random ticks, lighting,
 // rendering. This module is not wired into the live game.
 import { JavaRandom } from "./java-random.js";
@@ -46,6 +46,8 @@ export const LAMP = 123;
 export const LIT_LAMP = 124;
 export const CAULDRON = 118;
 export const END_PORTAL_FRAME = 120;
+export const DAYLIGHT_SENSOR = 151;
+export const JUKEBOX = 84;
 export const CHEST = 54;
 export const FURNACE = 61;
 export const LIT_FURNACE = 62;
@@ -155,10 +157,14 @@ const F07 = Math.fround(0.7),
 // native setBlock/notification semantics, a WorldServer pending-tick list, the world Random
 // and the redstone blocks above. Other block ids are inert (no callbacks, no power).
 export class RedstoneWorld {
-  constructor({ seed = 0, log = false } = {}) {
+  constructor({ seed = 0, log = false, sky = 15, skylightSubtracted = 0, celestialAngle = 0, noSky = false } = {}) {
     this.sections = new Map();
     this.rand = new JavaRandom(seed);
     this.time = 0; // WorldInfo total world time
+    this.sky = sky;
+    this.skylightSubtracted = skylightSubtracted;
+    this.celestialAngle = celestialAngle;
+    this.noSky = noSky;
     this.pending = new Map(); // pendingTickListEntriesHashSet
     this.tree = []; // pendingTickListEntriesTreeSet, sorted
     this.thisTick = []; // pendingTickListEntriesThisTick
@@ -297,8 +303,8 @@ export class RedstoneWorld {
     const key = `${x},${y},${z}`;
     let tile = this.tiles.get(key);
     if (!tile || !tile.slots) {
-      const size = id === CHEST || id === TRAPPED_CHEST ? 27 : id === HOPPER ? 5 : id === DISPENSER || id === DROPPER ? 9 : 3;
-      tile = { slots: Array(size).fill(null), id };
+      const size = id === CHEST || id === TRAPPED_CHEST ? 27 : id === HOPPER ? 5 : id === DISPENSER || id === DROPPER ? 9 : id === JUKEBOX ? 1 : 3;
+      tile = { slots: Array(size).fill(null), id, record: null };
       this.tiles.set(key, tile);
     }
     return tile;
@@ -536,6 +542,22 @@ function containerComparatorSignal(w, x, y, z, id) {
   }
   fullness = Math.fround(fullness / slots.length);
   return occupied ? Math.floor(Math.fround(fullness * 14)) + 1 : 0;
+}
+const SIN_TABLE = Float32Array.from({ length: 65536 }, (_, i) => Math.fround(Math.sin((i * Math.PI * 2) / 65536)));
+function daylightCos(angle) {
+  const scaled = Math.fround(Math.fround(angle) * Math.fround(10430.378));
+  const index = Math.trunc(Math.fround(scaled + 16384)) & 65535;
+  return SIN_TABLE[index];
+}
+export function refreshDaylightSensor(w, x, y, z) {
+  if (w.noSky) return;
+  const sky = w.sky - w.skylightSubtracted;
+  let angle = Math.fround(w.celestialAngle);
+  if (angle < Math.fround(3.1415927)) angle = Math.fround(angle + Math.fround(Math.fround(0 - angle) * Math.fround(0.2)));
+  else angle = Math.fround(angle + Math.fround(Math.fround(Math.fround(6.2831855) - angle) * Math.fround(0.2)));
+  let signal = Math.floor(Math.fround(Math.fround(Math.fround(sky) * daylightCos(angle)) + 0.5));
+  signal = Math.max(0, Math.min(15, signal));
+  if (w.getBlockMetadata(x, y, z) !== signal) w.setBlockMetadataWithNotify(x, y, z, signal, 3);
 }
 function compareEntries(a, b) {
   if (a.time !== b.time) return a.time < b.time ? -1 : 1;
@@ -1242,6 +1264,7 @@ const BEHAVIOUR = {
   [LIT_LAMP]: lamp(true),
   // BlockCompressedPowered: weak power 15 on every side, no strong power.
   [REDSTONE_BLOCK]: { weak: () => 15 },
+  [DAYLIGHT_SENSOR]: { weak: (w, x, y, z) => w.getBlockMetadata(x, y, z) },
   [REPEATER]: repeater(false),
   [POWERED_REPEATER]: repeater(true),
   [COMPARATOR]: comparator(false),
@@ -1260,7 +1283,7 @@ export const PORTED_BLOCKS = Object.keys(BEHAVIOUR).map(Number);
 export function replayScenario(s) {
   const [ox, oy, oz] = s.origin,
     [dx, dy, dz] = s.size,
-    w = new RedstoneWorld({ seed: s.seed, log: true }),
+    w = new RedstoneWorld({ seed: s.seed, log: true, sky: s.sky ?? 15, skylightSubtracted: s.skylightSubtracted ?? 0, celestialAngle: s.angle ?? 0, noSky: s.noSky ?? false }),
     cells = s.grid.split(",");
   for (let x = 0; x < dx; x++)
     for (let y = 0; y < dy; y++)
@@ -1323,6 +1346,17 @@ export function replayScenario(s) {
         w.containerTile(x, y, z, id);
       } else if (op === "slot") w.setContainerSlot(x, y, z, id, meta, args[2], args[4] ?? itemStackLimit(meta), args[3] ?? 0);
       else if (op === "notify") w.notifyBlockOfNeighborChange(x, y, z, id);
+      else if (op === "cake") w.setBlockMetadataWithNotify(x, y, z, id, 3);
+      else if (op === "record") {
+        w.containerTile(x, y, z, JUKEBOX).record = id;
+        w.setBlockMetadataWithNotify(x, y, z, 1, 2);
+        w.record(`q,${Math.max(0, id + 1 - 2256)}`);
+      }
+      else if (op === "power") w.record(`q,${w.strongPower(x, y, z, id)},${w.weakPower(x, y, z, id)},${Number(w.isBlockIndirectlyGettingPowered(x + 1, y, z))}`);
+      else if (op === "daylight") refreshDaylightSensor(w, x, y, z);
+      else if (op === "fixture") {
+        w.sky = id; w.skylightSubtracted = meta; w.celestialAngle = args[2]; w.noSky = Boolean(args[3]);
+      }
       else throw new Error(`Unknown event ${op}`);
     }
     w.time++;

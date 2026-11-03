@@ -1,7 +1,7 @@
 // Ordinary held-block placement from main.js edit(place = true). The world and
 // Survival own gameplay state; synchronous hooks keep UI/audio observers in
 // their original positions without requiring a browser or scene.
-import { collides, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, isLiquid, isFlower } from "./world.js";
+import { collides, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, ANVIL, isLiquid, isFlower } from "./world.js";
 import { stackedSnowMeta, snowCanStay } from "./snow.js";
 import { reedTarget, canPlaceReeds, cactusCanPlace, REEDS_ITEM } from "./plants.js";
 import { canPlaceChest, placeChest, CHEST } from "./chest.js";
@@ -10,6 +10,7 @@ import { saplingCanStay, placedLeavesMeta } from "./trees.js";
 import { canPlaceLadder, placedLadderMeta, clickedSide } from "./ladders.js";
 import { placedTorchMeta } from "./torches.js";
 import { railCanPlace, railAdded } from "./rails.js";
+import { anvilPlacementMeta } from './anvil-block.js';
 
 const BLOCK_MAX = new Set([4,5,7,48,69,70,71,82,WOOL, RED_FLOWER, 2, 6, 56, 58]);
 const result = (placed, reason, block = null, position = null) => ({ placed, reason, block, position });
@@ -33,6 +34,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
     renderHotbar = () => {},
     sound = () => {},
     playSound = () => {},
+    scheduleFalling = () => {},
     markUnsaved = () => {},
   } = hooks;
   if (!target?.block) return result(false, "no-target");
@@ -114,6 +116,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
   const meta = id===5||id===71?placedLeavesMeta(survival.held?.damage||0):BLOCK_MAX.has(id) ? survival.held?.damage || 0
     : id === LADDER ? placedLadderMeta(world, ...p, clickedSide(here, p))
         : id === TORCH ? torchMeta
+          : id === ANVIL ? anvilPlacementMeta(yaw,survival.held?.damage||0)
           : 0;
   world.set(...p, id, false, meta);
   if (intersects(world, position.x, position.y, position.z)) {
@@ -123,6 +126,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
   }
   world.set(...p, id, true, meta);
   if (id === CHEST) placeChest(world, survival.chests, ...p, yaw);
+  if (id === ANVIL) scheduleFalling(...p);
   // BlockRailBase.onBlockAdded: the rail takes its shape and reshapes the rails it joins.
   if (id === RAIL) railAdded(world, ...p);
   farming.observe(...p);

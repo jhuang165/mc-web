@@ -10,6 +10,7 @@ import {
   RedstoneWorld,
   WIRE,
   LEVER,
+  DAYLIGHT_SENSOR,
   TORCH,
   UNLIT_TORCH,
   LAMP,
@@ -28,6 +29,7 @@ import {
   HEAVY_PLATE,
   LIGHT_PLATE,
   itemStackLimit,
+  refreshDaylightSensor,
 } from "./redstone.js";
 
 // Recorded by tools/verify-redstone.mjs from the unchanged 1.7.10 classes.
@@ -84,8 +86,34 @@ test("reference covers the required behaviours", () => {
     "comparator-modes", "comparator-container", "comparator-clock", "comparator-mixed", "comparator-placement", "comparator-chest-fullness", "comparator-stack-limits", "comparator-double-chest", "comparator-chest-through-stone", "comparator-chest-blocked", "comparator-double-chest-blocked", "comparator-furnace", "comparator-furnace-under-block", "comparator-hopper", "comparator-dispenser", "comparator-dropper", "comparator-trapped-chest", "pressure-plates", "pressure-plate-support",
   ])
     assert.ok(names.includes(n), n);
-  assert.equal(reference.scenarios.length, 48);
+  for (const n of ["daylight-midnight", "daylight-morning", "daylight-sunset", "daylight-late-night", "daylight-cycle-wrap", "daylight-skylight-subtraction", "daylight-no-sky-dimension", "daylight-comparator-notification", "daylight-wire-lamp"])
+    assert.ok(names.includes(n), n);
+  for (const n of ["comparator-cake-no-override", "comparator-jukebox"])
+    assert.ok(names.includes(n), n);
+  assert.equal(reference.scenarios.length, 59);
+  const daylightLevel = (name) => {
+    const s = reference.scenarios.find((v) => v.name === name);
+    const [id, meta = 0] = s.final.split(",")[(1 * s.size[1] + 1) * s.size[2] + 1].split(":").map(Number);
+    assert.equal(id, 151);
+    return meta;
+  };
+  for (const [name, signal] of [["daylight-midnight",15],["daylight-morning",5],["daylight-sunset",0],["daylight-late-night",5],["daylight-cycle-wrap",15],["daylight-skylight-subtraction",4]]) {
+    assert.equal(daylightLevel(name), signal, `${name} outputs ${signal}`);
+  }
+  const noSky = reference.scenarios.find((s) => s.name === "daylight-no-sky-dimension");
+  assert.equal(noSky.final.split(",")[(1 * 3 + 1) * 3 + 1], "151:7", "no-sky provider leaves sensor metadata intact");
   const changes = (name) => reference.scenarios.find((s) => s.name === name).tiles?.flat() ?? [];
+  const sensorComparator = reference.scenarios.find((s) => s.name === "daylight-comparator-notification");
+  assert.match(sensorComparator.calls[5], /n,2,1,1,0/, "sensor metadata changes notify the adjacent comparator");
+  assert.equal(changes("daylight-comparator-notification").length, 0, "recorded sensor fixture does not change comparator output");
+  const daylightCircuit = reference.scenarios.find((s) => s.name === "daylight-wire-lamp");
+  assert.match(daylightCircuit.calls[2], /q,0,15,1/, "native sensor getter reports weak power 15 and the adjacent wire sees indirect power");
+  assert.ok(daylightCircuit.frames[1].some((c) => c[0] === 4 && c[1] === 1 && c[2] === 1 && c[3] === LIT_LAMP), "daylight turns on the downstream lamp");
+  assert.ok(daylightCircuit.frames[10].some((c) => c[0] === 4 && c[1] === 1 && c[2] === 1 && c[3] === LAMP), "night signal turns the lamp off after its native delay");
+  assert.deepEqual(daylightCircuit.frames[1].filter((c) => c[3] === WIRE).map((c) => c[4]), [15, 14, 13], "native daylight level propagates over three dust blocks");
+  assert.deepEqual(daylightCircuit.frames[7].filter((c) => c[3] === WIRE).map((c) => c[4]), [0, 0, 0], "night refresh clears all three dust levels");
+  assert.equal(changes("comparator-cake-no-override").length, 0, "cake metadata does not provide comparator input in 1.7.10");
+  assert.equal(changes("comparator-jukebox").length, 0, "jukebox record insertion did not update this comparator in the native fixture");
   assert.ok(changes("comparator-stack-limits").some((t) => t[3] === 15), "all 27 snowball stacks fill the chest to comparator strength 15");
   assert.ok(changes("comparator-double-chest").some((t) => t[3] === 1), "one double-chest stack is one of 54 slots");
   for (const [name, strength] of [["comparator-furnace", 5], ["comparator-furnace-under-block", 5], ["comparator-hopper", 3], ["comparator-dispenser", 2], ["comparator-dropper", 2]])
@@ -98,6 +126,21 @@ test("reference covers the required behaviours", () => {
   assert.ok(clicks.length >= 2, "comparator mode click recorded");
   const dropped = new Set(reference.scenarios.flatMap((s) => s.drops).map((d) => d[4]));
   for (const item of [356, 404, 70, 72, 147]) assert.ok(dropped.has(item), `item ${item} dropped`);
+});
+
+test("exported daylight refresh helper updates sensor metadata directly", () => {
+  const w = new RedstoneWorld({ seed: 1, sky: 15, celestialAngle: 0, log: true });
+  w.setRaw(0, 1, 0, DAYLIGHT_SENSOR, 0);
+  refreshDaylightSensor(w, 0, 1, 0);
+  assert.equal(w.getBlockMetadata(0, 1, 0), 15);
+  assert.match(w.log.join(" "), /m,0,1,0,15,3/);
+  w.celestialAngle = Math.PI;
+  refreshDaylightSensor(w, 0, 1, 0);
+  assert.equal(w.getBlockMetadata(0, 1, 0), 0);
+  w.noSky = true;
+  w.setBlockMetadataWithNotify(0, 1, 0, 7, 2);
+  refreshDaylightSensor(w, 0, 1, 0);
+  assert.equal(w.getBlockMetadata(0, 1, 0), 7);
 });
 
 // ---- Unit checks of the diode, comparator and plate rules (the replays above carry the native evidence) ----

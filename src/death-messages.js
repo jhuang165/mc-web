@@ -5,16 +5,16 @@
 // the player when that key exists. player-damage-reference.json records the original text of
 // each source alone and after a zombie hit.
 //
-// Only the sources with no ".player" form are mapped here, because this build does not keep the
-// combat tracker's attacker: suffocation (inWall), starvation (starve) and the void (outOfWorld).
-// Other causes return null (no message), as before.
+// Sources with no ".player" form that this build can produce are mapped here; causes whose
+// death text requires a tracked attacker still return null.
 export const DEATH_TEXT = {
   inWall: "%1$s suffocated in a wall",
   starve: "%1$s starved to death",
   outOfWorld: "%1$s fell out of the world",
+  anvil: "%1$s was squashed by a falling anvil",
 };
 // Survival.lastDamage reasons and the DamageSource each one is.
-const SOURCE = { suffocation: "inWall", starvation: "starve", void: "outOfWorld" };
+const SOURCE = { suffocation: "inWall", starvation: "starve", void: "outOfWorld", anvil: "anvil" };
 
 // This build has no account name; "Player" stands in for the profile name.
 export const PLAYER_NAME = "Player";

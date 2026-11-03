@@ -15,7 +15,9 @@ import "./menu-screens.css";
 import { Gui } from "./menu-ui.js";
 import { createMenus } from "./menus.js";
 import { folderName } from "./menu-screens.js";
-import {guiScale,stackCount,durabilityBar,tooltipLines} from "./gui.js";
+import {guiScale,stackCount,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks} from "./gui.js";
+import {AnvilContainer,nativeStackToLive} from './anvil-container.js';
+import {damagedAnvilMetadata,ANVIL_DAMAGE_CHANCE} from './anvil.js';
 import { migrateSettings, renderDistanceBlocks, SOUND_CATEGORIES, soundLevel } from "./settings.js";
 import { MouseLook, setAngles } from "./mouse-look.js";
 import * as THREE from "three";
@@ -47,6 +49,7 @@ import {
   SAND,
   CACTUS,
   REEDS,
+  ANVIL,
 } from "./world.js";
 import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
@@ -65,7 +68,7 @@ import {Experience,ExperienceOrbs,smeltExperience} from "./experience.js";
 import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import {Farming,cropDrops} from "./farming.js";
-import { EntityWorld, ENTITY_TYPES, heldAttackDamage } from "./entities.js";
+import { EntityWorld, ENTITY_TYPES, heldAttackDamage, pushBox } from "./entities.js";
 import { deathMessage, showChatLine } from "./death-messages.js";
 import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
@@ -364,12 +367,12 @@ function stackHtml(s, count = s?.count) {
 function stackLabel(s) {
   if (!s) return "Empty";
   const item = ITEMS[s.id];
-  return esc(item?.variants?.[s.damage] ?? item?.name ?? "Item") + (s.count > 1 ? " ×" + s.count : "") + (item?.durability && s.damage ? `, durability ${item.durability - s.damage} of ${item.durability}` : "");
+  return (s.displayName ?? item?.variants?.[s.damage] ?? item?.name ?? "Item") + (s.count > 1 ? " ×" + s.count : "") + (item?.durability && s.damage ? `, durability ${item.durability - s.damage} of ${item.durability}` : "");
 }
 function renderHotbar() {
   const inv = survival.inventory;
   $("#hotbar").innerHTML = inv.main.slice(0, 9).map((s, i) =>
-    `<button class="slot ${i === inv.current ? "selected" : ""}" data-slot="${i}" aria-label="Select ${s ? stackLabel(s) : "empty hand"}" aria-pressed="${i === inv.current}">${s ? stackHtml(s) : ""}<small>${i + 1}</small></button>`,
+    `<button class="slot ${i === inv.current ? "selected" : ""}" data-slot="${i}" aria-label="Select ${s ? esc(stackLabel(s)) : "empty hand"}" aria-pressed="${i === inv.current}">${s ? stackHtml(s) : ""}<small>${i + 1}</small></button>`,
   ).join("");
   document
     .querySelectorAll("#hotbar [data-slot]")
@@ -384,7 +387,7 @@ function selectSlot(i) {
 }
 function showHeldName() {
   const held = survival.held;
-  $("#block-label").textContent = ITEMS[held?.id]?.variants?.[held.damage] ?? ITEMS[heldId()]?.name ?? "Empty hand";
+  $("#block-label").textContent = held?.displayName ?? ITEMS[held?.id]?.variants?.[held.damage] ?? ITEMS[heldId()]?.name ?? "Empty hand";
   $("#block-label").classList.add("visible");
   clearTimeout(showHeldName.timer);
   showHeldName.timer = setTimeout(
@@ -485,7 +488,7 @@ function save() {
   // Chunk.InhabitedTime (one value stands for every chunk; see difficulty.js).
   active.inhabited = inhabited.save(survival.time);
   // Items on the cursor or in a crafting grid return to the saved inventory, as closing the screen would.
-  const pending = containerView ? [containerView.container.inv.cursor, ...(containerView.container.grid?.stacks || [])].filter(Boolean).map(copyStack) : [];
+  const pending = pendingContainerStacks(containerView);
   if (pending.length) {
     const copy = new Survival(active.player, survival.mode),
       left = pending.filter((s) => (copy.inventory.add(s), s.count > 0));
@@ -706,6 +709,13 @@ async function launch(record, prepared) {
     falling = new FallingBlocks(world, {
       drop: (stack, x, posY, z) => items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, posY, z, { delay: 10 }),
       apply: (changes) => { scene.updateBlocks(changes); saved = false; },
+      sound:(event,{x,y,z,volume,pitch})=>sounds.play(event,{volume,pitch,position:{x,y,z}}),
+      hurt:(box,amount)=>{
+        const intersects=b=>box[3]>b[0]&&box[0]<b[3]&&box[4]>b[1]&&box[1]<b[4]&&box[5]>b[2]&&box[2]<b[5];
+        if(intersects(pushBox(position,PHYSICS.width,PHYSICS.height)))survival.anvilDamage(amount);
+        for(const e of mobs.entities){const size=ENTITY_TYPES[e.type];if(intersects(pushBox(e,size.width,size.height)))mobs.attackEntityFrom(e,amount,{name:'anvil'});}
+        saved=false;
+      },
     }, record.falling).watch();
     falling.load(record.fallingTicks);
     farming=new Farming(world,record.farms);
@@ -938,8 +948,8 @@ function renderCreativeBody() {
     slotsHtml(container);
   view.shown = [];
 }
-const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace", creative: "" },
-  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", creative: "creative-modal" };
+const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace", creative: "", anvil: "Repair & Name" },
+  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", creative: "creative-modal", anvil: "anvil-modal" };
 // Slots are addressed by list index: wrapped creative slots all keep slotNumber 0.
 const slotsHtml = (container) => `<div class="container-slots">${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""}${slot.x < -1000 ? " hidden" : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>`;
 function openContainer(container, kind, key = null, gui = new ContainerScreen(container)) {
@@ -947,7 +957,9 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   mining = null;
   mineHeld = false;
   const decorations =
-    kind === "furnace"
+    kind === "anvil"
+      ? '<i class="anvil-name-background" id="anvil-name-background"></i><input id="anvil-name" aria-label="Item name" maxlength="40" autocomplete="off" spellcheck="false" disabled><span id="anvil-cost" class="anvil-cost" aria-live="polite"></span><i class="anvil-error" id="anvil-error" hidden></i>'
+      : kind === "furnace"
       ? '<i class="furnace-flame" id="furnace-flame"></i><i class="furnace-arrow" id="furnace-arrow"></i>'
       : kind === "chest"
         ? '<i class="chest-bottom" aria-hidden="true"></i><span class="chest-bag-label">Inventory</span>'
@@ -982,6 +994,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   if (creative) renderCreativeBody();
   overlay.onpointerdown = (e) => {
     if (!containerView || e.target.closest(".close-button")) return;
+    if (e.target.closest('#anvil-name')) return;
     e.preventDefault();
     const { slot, outside, x, y } = at(e), button = javaButton(e.button);
     if (creative && button === 0) {
@@ -1006,6 +1019,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   };
   overlay.onpointerup = (e) => {
     if (!containerView) return;
+    if (e.target.closest('#anvil-name')) return;
     const { slot, outside, x, y } = at(e), button = javaButton(e.button), t = creative && button === 0 ? gui.tabAt(x, y) : null;
     if (creative && button === 0) gui.release();
     if (t) switchTab(t);
@@ -1050,6 +1064,14 @@ function refreshContainer() {
     { container, gui } = view,
     preview = gui.preview(),
     dragging = gui.dragging && gui.dragSlots.size > 1;
+  if(view.kind==='anvil'){
+    const left=container.inputs.getStack(0), cost=anvilCost(container);
+    $('#anvil-name').disabled=!left;
+    $('#anvil-name-background').classList.toggle('active',!!left);
+    $('#anvil-cost').textContent=cost.text;
+    $('#anvil-cost').classList.toggle('unavailable',cost.unavailable);
+    $('#anvil-error').hidden=!(left||container.inputs.getStack(1))||!!container.output;
+  }
   container.slots.forEach((slot, i) => {
     const shown = preview.slots.get(slot) ?? slot.stack,
       over = preview.capped.has(slot),
@@ -1148,6 +1170,33 @@ function throwStacks(stacks) {
 function useFurnace(key) {
   openContainer(survival.openFurnace(key, smelted), "furnace", key);
 }
+function useAnvil(key){
+  const [x,y,z]=key.split(',').map(Number);
+  const itemName=native=>{const stack=nativeStackToLive(native),item=ITEMS[stack?.id];return item?.variants?.[stack.damage]??item?.name??'';};
+  let container;
+  container=new AnvilContainer({inventory:survival.inventory,creative:()=>survival.creative,
+    experienceLevel:()=>experience.level,
+    payExperienceLevels:cost=>{experience.addLevels(-cost);renderVitals();saved=false;},
+    itemName,
+    onInputChanged:({current,currentNative})=>{
+      const name=current?anvilName(current.displayName??itemName(currentNative)):'';
+      const field=$('#anvil-name');if(field)field.value=name;
+      container.setName(current&&typeof current.displayName==='string'?name:'');
+    },
+    onUse:({creative})=>{
+      let broken=false;
+      if(!creative&&world.get(x,y,z)===ANVIL&&survival.inventory.random.nextFloat()<ANVIL_DAMAGE_CHANCE){
+        const meta=damagedAnvilMetadata(world.getMeta(x,y,z));broken=meta<0;
+        world.set(x,y,z,broken?0:ANVIL,true,broken?0:meta);scene.updateBlock(x,z,y);
+      }
+      sounds.play(broken?'random.anvil_break':'random.anvil_use',{volume:1,pitch:1,position:{x:x+.5,y:y+.5,z:z+.5}});
+      saved=false;
+    },
+  });
+  openContainer(container,'anvil',key);
+  const field=$('#anvil-name');
+  field.oninput=()=>{field.value=anvilName(field.value);container.setName(field.value);refreshContainer();};
+}
 // SlotFurnace.onCrafting: fractional experience rounds up by chance.
 function smelted(stack, amount) {
   if (survival.creative) return;
@@ -1179,6 +1228,10 @@ function tickChests() {
   chestRenderer.sync(world, survival.chests);
   // Container.canInteractWith: the screen closes once its chest is gone.
   if (containerView?.kind === "chest" && containerView.container.keys?.some((k) => world.get(...k.split(",").map(Number)) !== CHEST)) resume();
+  if(containerView?.kind==='anvil'){
+    const [x,y,z]=containerView.key.split(',').map(Number);
+    if(world.get(x,y,z)!==ANVIL||(position.x-x-.5)**2+(position.y-y-.5)**2+(position.z-z-.5)**2>64)resume();
+  }
 }
 function updateFurnace() {
   if (containerView) refreshContainer();
@@ -1453,6 +1506,7 @@ function edit(place = false) {
     renderVitals,
     markUnsaved: () => { saved = false; },
     playSound: (name, options) => sounds.play(name, options),
+    scheduleFalling:(x,y,z)=>falling.schedule(x,y,z,ANVIL),
     sound,
     reportBrokenTool,
     toast,
@@ -1463,6 +1517,7 @@ function edit(place = false) {
     lightTnt,
     openInventory: station => { inventory(station); syncContainerState(); },
     useFurnace: key => { useFurnace(key); syncContainerState(); },
+    useAnvil: key => { useAnvil(key); syncContainerState(); },
     openChest: (chest, key) => { openContainer(chest, "chest", key); syncContainerState(); },
     breakBlock,
     clientEyeInWater,

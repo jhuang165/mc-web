@@ -42,7 +42,7 @@ export const ORIGINAL_ITEMS = Object.freeze({
   ...POPULATION_ITEMS,
 });
 // Subtype families whose stack damage the browser stores as the same variant index.
-const VARIANT_DAMAGE = new Set([35, 38, 351, 3, 6, 12, 17, 18, 24, 44, 97, 159, 161, 162, 175]);
+const VARIANT_DAMAGE = new Set([35, 38, 351, 3, 6, 12, 17, 18, 24, 44, 97, 145, 159, 161, 162, 175]);
 
 /** Browser stack fields for an original item ID/damage, or null when the build has no such item. */
 export function itemFromOriginal(id, damage = 0) {

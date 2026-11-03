@@ -12,7 +12,7 @@ import { explosionImpact } from "./explosion.js";
 import { acceptsParticle } from "./particle-settings.js";
 import { EffectRenderer } from "./effect-renderer.js";
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
-import { blockBounds, collisionBounds, snowSelectionHeight, FENCE, RAIL, TORCH, FIRE, CARROTS, REEDS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER } from "./world.js";
+import { blockBounds, collisionBounds, snowSelectionHeight, FENCE, RAIL, TORCH, FIRE, CARROTS, REEDS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER, ANVIL } from "./world.js";
 import { ladderBounds } from "./ladders.js";
 import { fenceBounds, fenceMask } from "./fences.js";
 import { railBounds } from "./rails.js";
@@ -167,7 +167,7 @@ RAY_BOUNDS[59] = [0, 0, 0, 1, 1/64, 1];
 // Chests, fences (connection bounds), rails (0.125 or 0.625 ascending) and torches (per-metadata box)
 // set their ray box from the cell, as setBlockBoundsBasedOnState / BlockTorch.collisionRayTrace do.
 export const rayBounds = (world, x, y, z, id) =>
-  [41,69,72,73,75,76,79,82,83,84].includes(id) ? blockBounds(world, x, y, z) : id === FENCE ? fenceBounds(fenceMask(world, x, y, z)) : id === RAIL ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id === TORCH ? torchBounds(world.getMeta?.(x, y, z) ?? 0) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
+  [41,69,72,73,75,76,79,82,83,84,ANVIL].includes(id) ? blockBounds(world, x, y, z) : id === FENCE ? fenceBounds(fenceMask(world, x, y, z)) : id === RAIL ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id === TORCH ? torchBounds(world.getMeta?.(x, y, z) ?? 0) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
 
 // World.rayTraceBlocks (ahb.a(Vec3, Vec3) = func_147447_a(false, false, false)):
 // walk the cells along the segment (at most 201 steps, each moving the start

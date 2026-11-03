@@ -1,6 +1,6 @@
 # Item tags and anvil persistence foundation
 
-This tranche makes the supported 1.7.10 `ItemStack` tags survive browser inventory operations and save conversion. It builds on the standalone anvil rules in [anvil.md](anvil.md); it does not connect `ContainerRepair` to a live anvil block or screen.
+This foundation makes the supported 1.7.10 `ItemStack` tags survive browser inventory operations and save conversion. Version 0.35.0 also connects those tags to the [live anvil container](anvil-container.md) and adds [Unbreaking durability](item-durability.md).
 
 ## Stack representation
 
@@ -26,7 +26,7 @@ Regression coverage includes stack split/copy/save round trips, tag-sensitive in
 
 ## Remaining limits
 
-- The anvil block, repair GUI, input/output slots, rename packet and live repair-cost transactions are not wired into gameplay. The anvil module remains standalone.
-- Enchantment glint and gameplay effects are not implemented. The supported `Unbreakable` tag only stops item durability loss.
+- The live anvil uses a local name field and transactions; the multiplayer rename packet remains unimplemented.
+- Enchantment glint and effects other than Unbreaking are not implemented. The supported `Unbreakable` tag stops item durability loss.
 - Java region import does not convert minecart entities yet; their item metadata is retained through browser cart saves and Java export when a cart already exists in a browser world.
 - Unrecognized item NBT is not round-tripped. The Java save probe parses the exported native storage and sections; it does not instantiate every entity/tile or prove a fully playable Java reload.

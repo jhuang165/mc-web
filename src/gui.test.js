@@ -1,5 +1,21 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {guiScale,stackCount} from './gui.js';
 import {tooltipLines} from './gui.js';
+import {anvilName,anvilCost} from './gui.js';
+import {pendingContainerStacks} from './gui.js';
+test('save snapshots preserve anvil inputs and cursor tags without duplicating the calculated result',()=>{
+ const input={id:102,count:1,damage:20,enchantments:[{id:34,lvl:2}],displayName:'Saved pick'};
+ const view={kind:'anvil',container:{inv:{cursor:{id:302,count:2,damage:0}},inputs:{stacks:[input,null]},output:{...input,damage:0}}};
+ const pending=pendingContainerStacks(view);assert.equal(pending.length,2);assert.equal(pending[1].damage,20);
+ pending[1].enchantments[0].lvl=5;assert.equal(input.enchantments[0].lvl,2);
+ assert.deepEqual(pendingContainerStacks(null),[]);
+});
+test('repair screen filters its name field and distinguishes excessive and unaffordable costs',()=>{
+ assert.equal(anvilName('A\nB\u00a7c\u007f'), 'ABc');assert.equal(anvilName('x'.repeat(41)).length,40);
+ assert.deepEqual(anvilCost({maximumCost:40,tooExpensive:true}),{text:'Too Expensive!',unavailable:true});
+ assert.deepEqual(anvilCost({maximumCost:7,output:{},canTake:()=>false}),{text:'Enchantment Cost: 7',unavailable:true});
+ assert.deepEqual(anvilCost({maximumCost:7,output:{},canTake:()=>true}),{text:'Enchantment Cost: 7',unavailable:false});
+ assert.equal(anvilCost({maximumCost:7,output:null}).text,'');
+});
 test('preserved item metadata appears in tooltips without duplicating the legacy book alias',()=>{
  const item={name:'Iron sword',attack:6,durability:250};
  const stack={damage:10,displayName:'<Moon & Stars>',enchantments:[{id:16,lvl:2},{id:255,lvl:1}],unbreakable:true};

@@ -1017,6 +1017,21 @@
       "url": "/audio/1.7.10/liquid/water.ogg",
       "sha1": "3483650440deb3934255e044ddabff5b01a65356",
       "bytes": 36329
+    },
+    "random/anvil_use": {
+      "url": "/audio/1.7.10/random/anvil_use.ogg",
+      "sha1": "88a792430dfff97582ab49b8dc9477cd9d4e5ebb",
+      "bytes": 13633
+    },
+    "random/anvil_break": {
+      "url": "/audio/1.7.10/random/anvil_break.ogg",
+      "sha1": "705a155201cc388a0c0c6f7435ddbc0fcc56b5f2",
+      "bytes": 13741
+    },
+    "random/anvil_land": {
+      "url": "/audio/1.7.10/random/anvil_land.ogg",
+      "sha1": "934b16e82b94d5790175615303594f0ec28da4a0",
+      "bytes": 9210
     }
   },
   "events": {
@@ -1726,6 +1741,24 @@
       "category": "block",
       "sounds": [
         "liquid/water"
+      ]
+    },
+    "random.anvil_use": {
+      "category": "block",
+      "sounds": [
+        "random/anvil_use"
+      ]
+    },
+    "random.anvil_break": {
+      "category": "block",
+      "sounds": [
+        "random/anvil_break"
+      ]
+    },
+    "random.anvil_land": {
+      "category": "block",
+      "sounds": [
+        "random/anvil_land"
       ]
     }
   }

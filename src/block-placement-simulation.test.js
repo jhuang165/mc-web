@@ -1,10 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { placeHeldBlock } from "./block-placement-simulation.js";
-import { World, WATER, SNOW_LAYER, ICE, TALL_GRASS, REEDS, WOOL, YELLOW_FLOWER, RED_FLOWER, LADDER, CACTUS, SAPLING } from "./world.js";
+import { World, WATER, SNOW_LAYER, ICE, TALL_GRASS, REEDS, WOOL, YELLOW_FLOWER, RED_FLOWER, LADDER, CACTUS, SAPLING, ANVIL } from "./world.js";
 import { Survival, ITEMS } from "./survival.js";
 import { CHEST } from "./chest.js";
 import { REEDS_ITEM } from "./plants.js";
+import { anvilPlacementMeta } from "./anvil-block.js";
 
 const FLOWERS = { yellow: YELLOW_FLOWER, red: RED_FLOWER };
 const putStack = (survival, id, count = 4, damage = 0) => survival.inventory.setStack(0, { id, count, damage });
@@ -198,4 +199,22 @@ test("ItemBlock count feedback and legacy versus Java top-layer bounds are retai
   assert.equal(itemBlock(62).reason, "empty-stack", "legacy world's highest placeable cell is y=62");
   assert.equal(itemBlock(63).reason, "invalid-position", "legacy top layer y=63 remains reserved");
   assert.equal(itemBlock(0).reason, "invalid-position", "bedrock layer is not a placement target");
+});
+
+test("anvil ItemBlock placement keeps native yaw quadrants, item damage, and schedules falling", () => {
+  const quarterTurns = [0, Math.PI / 2, Math.PI, -Math.PI / 2], expectedFacing = [0, 3, 2, 1];
+  for (let damage = 0; damage <= 2; damage++) for (let i = 0; i < quarterTurns.length; i++) {
+    const world = new World(`anvil-placement-${damage}-${i}`, "meadow", 1), survival = new Survival();
+    const support = [12, 20, 12], cell = [12, 21, 12];
+    world.set(...support, 1); putStack(survival, ANVIL, 2, damage);
+    const state = stateFor(world, survival); state.yaw = quarterTurns[i];
+    const scheduled = [];
+    const placed = placeHeldBlock(state, { id: ANVIL, item: ITEMS[ANVIL], target: targetAt(support, cell) }, { collides: () => false, scheduleFalling: (...p) => scheduled.push(p) });
+    assert.equal(placed.placed, true);
+    assert.equal(world.get(...cell), ANVIL);
+    assert.equal(world.getMeta(...cell), anvilPlacementMeta(quarterTurns[i], damage));
+    assert.equal(world.getMeta(...cell) & 3, expectedFacing[i]);
+    assert.deepEqual(scheduled, [cell], "successful ItemBlock set is silent; schedule its BlockFalling update explicitly");
+    assert.equal(survival.count(ANVIL), 1);
+  }
 });

@@ -6,7 +6,7 @@ import { ParticleSystem } from "./particles.js";
 import { EffectRenderer } from "./effect-renderer.js";
 import { Fx } from "./fx.js";
 import { ParticleRenderer } from "./particle-renderer.js";
-import { HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
+import { HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, ANVIL, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
 import { StreamingLight } from './streaming-light.js';
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS } from "./block-textures.js";
 import { createLighting, worldMaterial } from "./light-material.js";
@@ -20,6 +20,7 @@ import { ShadowRenderer } from "./shadows.js";
 import { WeatherRenderer } from "./weather-renderer.js";
 import { fireVertices } from "./fire.js";
 import { fenceMask, fenceRenderBoxes } from "./fences.js";
+import { anvilModelBoxes } from './anvil-block.js';
 export { blockTile } from "./block-textures.js";
 
 // Face order +x, -x, +y, -y, +z, -z with RenderBlocks' AO-path shades:
@@ -237,6 +238,7 @@ export class VoxelScene {
           if (b === 20) this.torch(solid, x, y, z);
           else if (isCrop(b)) this.crops(solid, b, x, y, z);
           else if (b===COCOA||b===SANDSTONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z));
+          else if (b===ANVIL) this.anvil(solid,x,y,z);
           else if (b===VINE) this.vine(solid,x,y,z);
           else if (isPlant(b) || b === WEB || b === REEDS) this.crossed(solid, b, x, y, z);
           else if (b === LADDER) this.ladder(solid, x, y, z);
@@ -330,11 +332,11 @@ export class VoxelScene {
   // top, bottom and south faces, z on the west face, 1 - x north and 1 - z east (the mirrored
   // field_152631_f mapping, which for the centred fence post equals the plain one); v = z on the
   // top and bottom, 1 - y on the sides. A face on the cell boundary is skipped next to an opaque cube.
-  box(m, b, x, y, z, [x0, y0, z0, x1, y1, z1], meta = 0) {
+  box(m, b, x, y, z, [x0, y0, z0, x1, y1, z1], meta = 0, renderAllFaces = false) {
     const w = this.world, L = this.light, lo = [x0, y0, z0], hi = [x1, y1, z1];
     FACES.forEach((f, fi) => {
       const axis = fi >> 1, positive = (fi & 1) === 0, boundary = positive ? hi[axis] >= 1 : lo[axis] <= 0;
-      if (boundary && hides(w.get(x + f.n[0], y + f.n[1], z + f.n[2]))) return;
+      if (!renderAllFaces && boundary && hides(w.get(x + f.n[0], y + f.n[1], z + f.n[2]))) return;
       const r = tileRect(blockTile(b, fi, false, meta)),
         corners = f.v.map((v) => [v[0] ? x1 : x0, v[1] ? y1 : y0, v[2] ? z1 : z0]),
         st = (p) => [[1 - p[2], 1 - p[1]], [p[2], 1 - p[1]], [p[0], p[2]], [p[0], p[2]], [p[0], 1 - p[1]], [1 - p[0], 1 - p[1]]][fi],
@@ -345,6 +347,14 @@ export class VoxelScene {
         s = smoothFace(L, x, y, z, fi, corners, boundary);
       m.quad(corners.map((p) => [x + p[0], y + p[1], z + p[2]]), uvs, s.ao.map((a) => a * f.shade), s.packed);
     });
+  }
+  // RenderBlocks render type 35: native four-piece metal silhouette, with the
+  // metadata orientation and damaged top tile. BlockAnvil.shouldSideBeRendered
+  // returns true, so all outward faces remain visible beside full cubes.
+  anvil(m,x,y,z) {
+    const meta=this.world.getMeta(x,y,z);
+    for(const [x0,y0,z0,x1,y1,z1] of anvilModelBoxes(meta))
+      this.box(m,ANVIL,x,y,z,[x0,y0,z0,x1,y1,z1],meta,true);
   }
   // RenderBlocks.renderBlockMinecartTrack (blm.a(aje, III), render type 9): one quad 1/16 above
   // the cell floor, drawn from both sides, its corners rotated per metadata and the raised edge
@@ -415,13 +425,22 @@ export class VoxelScene {
     for (const e of list) {
       const x = e.px + (e.x - e.px) * partial, z = e.pz + (e.z - e.pz) * partial, y = e.py + (e.y - e.py) * partial + 0.49 - 0.5;
       const light = this.light.packed(Math.floor(e.x), Math.floor(e.y + 0.49), Math.floor(e.z));
-      FACES.forEach((f, fi) => m.quad(f.v.map((v) => [x - 0.5 + v[0], y + v[1], z - 0.5 + v[2]]), rectUvs(tileRect(blockTile(e.block, fi, false, e.meta))), f.shade, light));
+      if(e.block===ANVIL){
+        for(const [x0,y0,z0,x1,y1,z1] of anvilModelBoxes(e.meta,x-0.5,y,z-0.5))
+          this.fallingAnvil(m,[x0,y0,z0,x1,y1,z1],e.meta,light);
+      } else FACES.forEach((f, fi) => m.quad(f.v.map((v) => [x - 0.5 + v[0], y + v[1], z - 0.5 + v[2]]), rectUvs(tileRect(blockTile(e.block, fi, false, e.meta))), f.shade, light));
     }
     this.fallingMesh = new THREE.Mesh(m.geometry(), this.material);
     this.scene.add(this.fallingMesh);
   }
   setFalling(list) {
     this.fallingList = list;
+  }
+  fallingAnvil(m,[x0,y0,z0,x1,y1,z1],meta,light){
+    for(const [fi,f] of FACES.entries()){
+      const corners=f.v.map(v=>[v[0]?x1:x0,v[1]?y1:y0,v[2]?z1:z0]);
+      m.quad(corners,rectUvs(tileRect(blockTile(ANVIL,fi,false,meta))),f.shade,light);
+    }
   }
   // RenderBlocks.renderBlockLadder (render type 8): one quad 0.05 off the wall the metadata
   // names, facing away from it, in the cell's own brightness with no face shading.

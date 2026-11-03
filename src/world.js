@@ -92,6 +92,7 @@ export const BLOCKS = [
     ['Packed ice','#9db6e5'],['Melon','#98a934'],['Sandstone slab','#d9cba4'],
     ['Dead shrub','#8b683b'],['Fern','#669646'],
   ].map(([name,color])=>({name,color})),
+  {name:'Anvil',color:'#555b5d'},
 ];
 export const LAPIS_ORE=63,REDSTONE_ORE=64,LIT_REDSTONE_ORE=65,EMERALD_ORE=66,PUMPKIN=67,MONSTER_EGG=68,DOUBLE_PLANT=69,
   LOG2=70,LEAVES2=71,VINE=72,COCOA=73,MOSSY_COBBLE=74,BROWN_MUSHROOM=75,RED_MUSHROOM=76,
@@ -100,6 +101,8 @@ export const TREE_TYPES=['Oak','Spruce','Birch','Jungle','Acacia','Dark oak'];
 export const DOUBLE_PLANTS=['Sunflower','Lilac','Double tallgrass','Large fern','Rose bush','Peony'];
 export const SANDSTONE=56,MYCELIUM=57,STAINED_CLAY=58,LILY_PAD=59;
 export const TORCH=20,FENCE=60,RAIL=61,MOB_SPAWNER=62;
+// Original BlockAnvil id 145, appended to preserve every existing internal ID.
+export const ANVIL=85;
 export const WATER=10,LAVA=42;
 export const SNOW_LAYER=46,ICE=47,SAPLING=48;
 export const CARROTS=49,POTATOES=50,WEB=51,LADDER=52,TNT=55;
@@ -188,7 +191,7 @@ export const ticksRandomly=b=>b===1||b===5||b===LEAVES2||b===LIT_REDSTONE_ORE||b
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,RAIL,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB]);
+const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,RAIL,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB,ANVIL]);
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 // Block.isNormalCube: Material.tnt is translucent (isOpaque false), so TNT is an opaque
 // cube that is not a normal cube (no torches/ladders/fire tops on it).
@@ -203,6 +206,9 @@ export const slipperiness=b=>b===ICE||b===PACKED_ICE?Math.fround(0.98):Math.frou
 export const snowSelectionHeight=meta=>((meta&7)+1)/8;
 export function blockBounds(world,x,y,z){
   const b=world.get(x,y,z);
+  // BlockAnvil.setBlockBoundsBasedOnState: metadata low bits 0/2 narrow X,
+  // 1/3 narrow Z. The render model itself uses four native component boxes.
+  if(b===ANVIL)return (world.getMeta(x,y,z)&1)?[0,0,1/8,1,1,7/8]:[1/8,0,0,7/8,1,1];
   if(b===75||b===76)return[.3,0,.3,.7,.4,.7];
   if([79,83,84].includes(b))return[0.09999999403953552,0,0.09999999403953552,0.8999999761581421,0.800000011920929,0.8999999761581421];
   if(b===VINE){const m=world.getMeta(x,y,z),boxes=[];if(m&1)boxes.push([0,0,15/16,1,1,1]);if(m&2)boxes.push([0,0,0,1/16,1,1]);if(m&4)boxes.push([0,0,0,1,1,1/16]);if(m&8)boxes.push([15/16,0,0,1,1,1]);return boxes.length?[...Array(3)].map((_,i)=>Math.min(...boxes.map(b=>b[i]))).concat([...Array(3)].map((_,i)=>Math.max(...boxes.map(b=>b[i+3])))):[0,15/16,0,1,1,1];}

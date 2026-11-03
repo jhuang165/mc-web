@@ -546,7 +546,7 @@ export class Survival {
     this.air = Math.floor(clamp(data.air, -20, 300, 300));
     this.time = Math.floor(clamp(data.time, 0, Number.MAX_SAFE_INTEGER, 0));
     this.effects = new Effects(data.effects);
-    this.inventory = new PlayerInventory(ITEMS, Array.isArray(data.slots) ? data.slots : legacySlots(data, this.creative), data.armor);
+    this.inventory = new PlayerInventory(ITEMS, Array.isArray(data.slots) ? data.slots : legacySlots(data, this.creative), data.armor, data.inventoryRandom);
     this.inventory.creative = this.creative;
     this.inventory.current = Math.floor(clamp(data.current, 0, 8, 0));
     this.furnaces = {};
@@ -626,6 +626,23 @@ export class Survival {
   scaledDamage(n, reason) {
     const amount = scaleDamage(this.difficulty, n);
     return amount > 0 && this.damage(amount, reason, true);
+  }
+  // EntityLivingBase.attackEntityFrom for DamageSource.anvil. The helmet receives
+  // its special hit before hurt-resistance filtering; wearing one also reduces the
+  // incoming amount by 25% before normal armour calculations. EntityPlayerMP
+  // spawn protection and Creative immunity reject the whole hit before helmet wear.
+  anvilDamage(amount) {
+    if (this.creative || this.health <= 0 || this.protection > 0 || !(amount > 0)) return false;
+    amount = Math.fround(amount);
+    const helmet = this.inventory.getStack(39);
+    if (helmet) {
+      // EntityLivingBase: (amount * 4 + rand.nextFloat() * amount * 2) cast to int.
+      const randomPart = Math.fround(Math.fround(this.inventory.random.nextFloat() * amount) * 2),
+        helmetWear = Math.trunc(Math.fround(Math.fround(amount * 4) + randomPart));
+      if (helmetWear > 0 && this.inventory.damage(39, helmetWear)) this.broken = helmet.id;
+      amount = Math.fround(amount * Math.fround(0.75));
+    }
+    return this.damage(amount, "anvil", true);
   }
   // EntityPlayerMP.attackEntityFrom and EntityLivingBase.attackEntityFrom. Spawn protection
   // (60 ticks after joining or respawning, `protection`) refuses everything but the void
@@ -827,6 +844,7 @@ export class Survival {
       effects: this.effects.serialize(),
       slots: this.inventory.serialize(),
       armor: this.inventory.serializeArmor(),
+      inventoryRandom: this.inventory.serializeRandom(),
       current: this.inventory.current,
       furnaces: structuredClone(furnaces),
       chests: Object.fromEntries(Object.entries(chests).map(([key, c]) => [key, { facing: c.facing, items: c.items.map(copyStack) }])),

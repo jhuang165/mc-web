@@ -1,0 +1,1 @@
+Added original 1.7.10 anvil use/break/land audio selection and assets with provenance hashes. Audio manifest/hash verification passed; no commit/push.

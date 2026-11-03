@@ -2,15 +2,17 @@
 // id 12, here 6), BlockGravel (ali, original 13, here 25) and EntityFallingBlock (xj). Checked
 // against the unchanged classes by tools/verify-plants.mjs (public/research/plant-reference.json).
 import { explosionImpact } from "./explosion.js";
-import { WATER, LAVA, FIRE, SAND, GRAVEL } from "./world.js";
+import { WATER, LAVA, FIRE, SAND, GRAVEL, ANVIL } from "./world.js";
 import { moveEntity } from "./entities.js";
 import { replaceable } from "./plants.js";
 import { saveTicks, readTicks } from "./scheduled-ticks.js";
 import { entityActive } from './streaming-ticks.js';
+import { JavaRandom } from './java-random.js';
+import { anvilDropDamage, anvilImpact } from './anvil-block.js';
 
 const f = Math.fround;
 export const FLINT = 313;
-export const isFallingBlock = (b) => b === SAND || b === GRAVEL;
+export const isFallingBlock = (b) => b === SAND || b === GRAVEL || b === ANVIL;
 // BlockFalling.func_149831_e (canFallBelow): air, fire, or a water or lava material.
 export const canFallBelow = (b) => b === 0 || b === FIRE || b === WATER || b === LAVA;
 // BlockGravel.getItemDropped: flint when nextInt(10 - fortune * 3) is 0 (fortune capped at 3).
@@ -30,10 +32,13 @@ const key = (x, y, z) => `${x},${y},${z}`;
 // 0): one item entity at the falling block's position. `apply(changes)` gets [x, y, z, old, new]
 // entries for the renderer.
 export class FallingBlocks {
-  constructor(world, { drop = () => {}, apply = () => {} } = {}, saved = []) {
+  constructor(world, { drop = () => {}, apply = () => {}, hurt = () => {}, sound = () => {}, entityRandom = () => new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))) } = {}, saved = []) {
     this.world = world;
     this.drop = drop;
     this.apply = apply;
+    this.hurt = hurt;
+    this.sound = sound;
+    this.entityRandom = entityRandom;
     this.time = 0;
     this.pending = new Map();
     this.entities = [];
@@ -89,7 +94,7 @@ export class FallingBlocks {
   fall(x, y, z) {
     const w = this.world, b = w.get(x, y, z);
     if (!canFallBelow(w.get(x, y - 1, z)) || y < 0) return null;
-    const e = spawnFalling(b, w.getMeta(x, y, z), x, y, z);
+    const e = spawnFalling(b, w.getMeta(x, y, z), x, y, z, this.entityRandom());
     this.entities.push(e);
     return e;
   }
@@ -129,7 +134,7 @@ export class FallingBlocks {
     e.pz = e.z;
     e.ticks++;
     e.vy -= 0.03999999910593033;
-    moveEntity(w, e, FALLING_SIZE, FALLING_SIZE, e.vx, e.vy, e.vz);
+    const landedDistance=moveEntity(w, e, FALLING_SIZE, FALLING_SIZE, e.vx, e.vy, e.vz);
     e.vx *= 0.9800000190734863;
     e.vy *= 0.9800000190734863;
     e.vz *= 0.9800000190734863;
@@ -147,10 +152,22 @@ export class FallingBlocks {
       e.vz *= 0.699999988079071;
       e.vy *= -0.5;
       e.dead = true;
+      if(e.block===ANVIL){
+        const impact=anvilImpact(e.meta,landedDistance,e.rand);
+        e.meta=impact.meta;
+        e.brokenOnImpact=impact.broken;
+        if(impact.damage>0){
+          const half=FALLING_SIZE/2,
+            box=[e.x-half,e.y,e.z-half,e.x+half,e.y+FALLING_SIZE,e.z+half];
+          this.hurt(box,impact.damage,'anvil',e);
+        }
+      }
       // canPlaceEntityOnSide(block, i, j, k, true, 1): a replaceable cell; nothing to fall into below.
       const old = w.get(i, j, k);
-      if (replaceable(old) && !canFallBelow(w.get(i, j - 1, k)) && w.set(i, j, k, e.block, true, e.meta)) this.apply([[i, j, k, old, e.block]]);
-      else this.dropItem(e, posY);
+      if (!e.brokenOnImpact && replaceable(old) && !canFallBelow(w.get(i, j - 1, k)) && w.set(i, j, k, e.block, true, e.meta)) {
+        this.apply([[i, j, k, old, e.block]]);
+        if(e.block===ANVIL)this.sound('random.anvil_land',{x:i+0.5,y:j+0.5,z:k+0.5,volume:1,pitch:1});
+      } else if(!e.brokenOnImpact) this.dropItem(e, posY);
     } else if ((e.ticks > 100 && (j < 1 || j > 256)) || e.ticks > 600) {
       this.dropItem(e, posY);
       e.dead = true;
@@ -158,21 +175,21 @@ export class FallingBlocks {
   }
   // damageDropped: sand keeps its metadata (red sand), gravel drops metadata 0.
   dropItem(e, posY) {
-    this.drop({ id: e.block, count: 1, damage: e.block === SAND ? e.meta : 0 }, e.x, posY, e.z);
+    this.drop({ id: e.block, count: 1, damage: e.block === SAND ? e.meta : e.block === ANVIL ? anvilDropDamage(e.meta) : 0 }, e.x, posY, e.z);
   }
   serialize() {
-    return this.entities.map(({ block, meta, x, y, z, vx, vy, vz, ticks, onGround }) => ({ block, meta, x, y, z, vx, vy, vz, ticks, onGround }));
+    return this.entities.map(({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance }) => ({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance }));
   }
   restoreEntity(s) {
     if (!s || !isFallingBlock(s.block) || ![s.x, s.y, s.z, s.vx, s.vy, s.vz, s.ticks].every(Number.isFinite)) return;
-    const e = spawnFalling(s.block, Number.isInteger(s.meta) ? s.meta & 15 : 0, 0, 0, 0);
-    Object.assign(e, { x: s.x, y: s.y, z: s.z, px: s.x, py: s.y, pz: s.z, vx: s.vx, vy: s.vy, vz: s.vz, ticks: Math.max(1, Math.floor(s.ticks)), onGround: !!s.onGround });
+    const e = spawnFalling(s.block, Number.isInteger(s.meta) ? s.meta & 15 : 0, 0, 0, 0, this.entityRandom());
+    Object.assign(e, { x: s.x, y: s.y, z: s.z, px: s.x, py: s.y, pz: s.z, vx: s.vx, vy: s.vy, vz: s.vz, ticks: Math.max(1, Math.floor(s.ticks)), onGround: !!s.onGround, fallDistance: Number.isFinite(s.fallDistance)&&s.fallDistance>0?s.fallDistance:0 });
     this.entities.push(e);
   }
 }
 // new EntityFallingBlock(world, x + 0.5, y + 0.5, z + 0.5, block, meta): setPosition puts the
 // box's bottom at posY - yOffset. `y` here is the box's minY, as for every entity in this build.
-export function spawnFalling(block, meta, x, y, z) {
+export function spawnFalling(block, meta, x, y, z, rand = new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48)))) {
   const cx = x + 0.5, cy = y + 0.5, cz = z + 0.5, minY = cy - FALLING_Y_OFFSET;
-  return { block, meta, x: cx, y: minY, z: cz, px: cx, py: minY, pz: cz, vx: 0, vy: 0, vz: 0, ticks: 0, onGround: false, fallDistance: 0, inWeb: false, dead: false };
+  return { block, meta, x: cx, y: minY, z: cz, px: cx, py: minY, pz: cz, vx: 0, vy: 0, vz: 0, ticks: 0, onGround: false, fallDistance: 0, inWeb: false, dead: false, rand };
 }

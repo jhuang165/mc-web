@@ -8,12 +8,12 @@ import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
 import {
-  DYE, FIRE, SAPLING, SNOW_LAYER, TNT, isCrop,
+  DYE, FIRE, SAPLING, SNOW_LAYER, TNT, ANVIL, isCrop,
 } from './world.js';
 import { ITEMS } from './survival.js';
 import { copyStack } from './inventory.js';
 
-const STATIONS = new Set([13, 14, CHEST]);
+const STATIONS = new Set([13, 14, CHEST, ANVIL]);
 // PlayerControllerMP's edit(place) dispatcher with browser effects supplied by the
 // caller. `state` holds the live mutable gameplay state, `request` snapshots the two
 // ray targets, the held bucket's own captured trace and the click button, and hooks run
@@ -177,6 +177,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     }
     if (activates && block === 13) { hook('openInventory', true); return act('open-workbench'); }
     if (activates && block === 14) { hook('useFurnace', target.block.join(',')); return act('open-furnace'); }
+    if (activates && block === ANVIL) { hook('useAnvil', target.block.join(',')); return act('open-anvil'); }
     if (activates && block === CHEST) {
       const chest = state.survival.openChest(state.world, ...target.block);
       if (chest) hook('openChest', chest, target.block.join(','), target.block);
@@ -210,6 +211,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       markUnsaved: hooks.markUnsaved,
       sound: hooks.sound,
       playSound: hooks.playSound,
+      scheduleFalling: hooks.scheduleFalling,
       collides: hooks.collides,
     });
     return act(result?.placed ? 'place-block' : `placement-${result?.reason || 'handled'}`, { placement: result });

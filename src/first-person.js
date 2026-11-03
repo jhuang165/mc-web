@@ -2,11 +2,27 @@ import * as THREE from "three";
 import { firstPersonMatrix } from "./first-person-pose.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { ITEMS } from "./survival.js";
-import { DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER } from "./world.js";
+import { DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, ANVIL } from "./world.js";
+import { anvilModelBoxes } from './anvil-block.js';
 import { blockTile,tileRect } from "./block-textures.js";
 import { entityMaterial, ITEM_LIGHTS } from "./light-material.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
+const BLOCK_FACES=[
+  {v:[[1,0,1],[1,0,0],[1,1,0],[1,1,1]]},{v:[[0,0,0],[0,0,1],[0,1,1],[0,1,0]]},
+  {v:[[0,1,1],[1,1,1],[1,1,0],[0,1,0]]},{v:[[0,0,0],[1,0,0],[1,0,1],[0,0,1]]},
+  {v:[[0,0,1],[1,0,1],[1,1,1],[0,1,1]]},{v:[[1,0,0],[0,0,0],[0,1,0],[1,1,0]]},
+];
+function anvilItemGeometry(meta){
+ const positions=[],uvs=[],indices=[];
+ for(const [x0,y0,z0,x1,y1,z1] of anvilModelBoxes(meta))for(let fi=0;fi<BLOCK_FACES.length;fi++){
+  const face=BLOCK_FACES[fi],tile=blockTile(ANVIL,fi,false,meta),r=tileRect(tile),base=positions.length/3;
+  const rect=[[r.u0,r.v0],[r.u1,r.v0],[r.u1,r.v1],[r.u0,r.v1]];
+  for(let i=0;i<4;i++){const v=face.v[i];positions.push((v[0]?x1:x0)-.5,(v[1]?y1:y0)-.5,(v[2]?z1:z0)-.5);uvs.push(...rect[i]);}
+  indices.push(base,base+1,base+2,base,base+2,base+3);
+ }
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setIndex(indices);g.computeVertexNormals();return g;
+}
 export function pixelTexture(url) {
   if (!cache.has(url)) {
     const t = loader.load(url);
@@ -132,7 +148,10 @@ export class FirstPerson {
     if (!id || !data) return;
     let mesh;
     const url = itemTexture(id, meta, use);
-    if (url) {
+    if(id===ANVIL){
+      mesh=new THREE.Mesh(anvilItemGeometry(meta),this.material({map:this.atlas,alphaTest:.1}));
+      mesh.rotation.y=Math.PI/2;
+    } else if (url) {
       mesh = new THREE.Mesh(
         spriteGeometry(),
         this.material({

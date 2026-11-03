@@ -2,14 +2,16 @@
 // BlockTorch (aoc), BlockLever (alv), BlockButton (ajs/anx/aon),
 // BlockRedstoneLight (anb), BlockCompressedPowered (ams), BlockRedstoneDiode (akj) with
 // BlockRedstoneRepeater (anf), BlockRedstoneComparator (akc) with TileEntityComparator (aoz),
+// BlockDaylightDetector (akg),
 // BlockBasePressurePlate (ajd) with BlockPressurePlate (amu) and BlockPressurePlateWeighted (aol),
-// and the comparator-override blocks BlockCauldron (ajw) and BlockEndPortalFrame (aku) inside a real
+// and the comparator-override blocks BlockCauldron (ajw) and BlockEndPortalFrame (aku), all inside a real
 // World (ahb) whose chunk provider hands out real Chunk (apx) objects. The
 // World subclass is allocated without its constructor (as TerrainProbe does)
 // and keeps the native World.setBlock, setBlockMetadataWithNotify,
 // notifyBlocksOfNeighborChange, notifyBlockOfNeighborChange, power queries
 // (getBlockPowerInput, getIndirectPowerLevelTo, isBlockIndirectlyGettingPowered,
-// getStrongestIndirectPower), doesBlockHaveSolidTopSurface and
+// getStrongestIndirectPower), plus explicit sky-brightness, skylight-subtraction and celestial-angle fixtures
+// for BlockDaylightDetector.updateLightLevel, doesBlockHaveSolidTopSurface and
 // isBlockNormalCubeDefault. Only these are replaced:
 //   - scheduleBlockUpdate / WithPriority / func_147446_b / isBlockTickScheduledThisTick:
 //     copies of the WorldServer pending-tick code (HashSet + TreeSet of the
@@ -51,7 +53,7 @@ public class RedstoneProbe {
   }
   public static class W extends ahb {
     W() { super((azc) null, null, (aqo) null, (ahj) null, null); }
-    long time; agy rules; StringBuilder log; int calls; long tick;
+    long time; agy rules; StringBuilder log; int calls; long tick; int sky = 15; float angle;
     List<String> sounds, drops;
     List<Object[]> ents; // {entity, double[6] box}
     Set<ahs> M; TreeSet<ahs> N; List<ahs> V;
@@ -60,6 +62,8 @@ public class RedstoneProbe {
     public sa a(int id) { return null; }
     void add(String s) { if (log.length() > 0) log.append(' '); log.append(s); calls++; }
     public long I() { return time; }
+    public int b(ahn type, int x, int y, int z) { return sky; }
+    public float d(float partial) { return angle; }
     public agy O() { return rules; }
     public boolean t(int x, int y, int z) { return false; }
     public boolean c(ahn type, int x, int y, int z) { return false; }
@@ -141,15 +145,19 @@ public class RedstoneProbe {
       st[y >> 4].a(x & 15, y & 15, z & 15, b); st[y >> 4].a(x & 15, y & 15, z & 15, meta);
     }
   }
-  static W world(long seed) throws Exception {
+  static W world(long seed) throws Exception { return world(seed, 15, 0, 0f, false); }
+  static W world(long seed, int sky, int subtraction, float angle, boolean noSky) throws Exception {
     W w = (W) unsafe.allocateInstance(W.class);
-    field(ahb.class, "t").set(w, new Provider());
+    Provider provider = new Provider(); provider.g = noSky;
+    field(ahb.class, "t").set(w, provider);
+    field(ahb.class, "j").setInt(w, subtraction);
     field(ahb.class, "s").set(w, new Random(seed));
     field(ahb.class, "u").set(w, new ArrayList());
     field(ahb.class, "C").set(w, new qi());
     field(ahb.class, "v").set(w, new Chunks(w));
     field(ahb.class, "a").set(w, new ArrayList());  // addedTileEntityList
     field(ahb.class, "g").set(w, new ArrayList());  // loadedTileEntityList
+    w.sky = sky; w.angle = angle;
     w.rules = new agy(); w.log = new StringBuilder(); w.sounds = new ArrayList<>(); w.drops = new ArrayList<>(); w.ents = new ArrayList<>();
     w.M = new HashSet<>(); w.N = new TreeSet<>(); w.V = new ArrayList<>();
     return w;
@@ -176,14 +184,14 @@ public class RedstoneProbe {
     for (String n : names) ids.append(ids.length() > 0 ? "," : "").append(q(n)).append(":").append(aji.b((aji) ajn.class.getField(n).get(null)));
     // Ids of the repeater/comparator/plate/override blocks and their original classes, and drop items.
     StringBuilder cls = new StringBuilder();
-    for (int id : new int[] {70, 72, 93, 94, 118, 120, 147, 148, 149, 150}) cls.append(cls.length() > 0 ? "," : "").append(q(String.valueOf(id))).append(":").append(q(aji.e(id).getClass().getName()));
+    for (int id : new int[] {70, 72, 84, 92, 93, 94, 118, 120, 147, 148, 149, 150, 151}) cls.append(cls.length() > 0 ? "," : "").append(q(String.valueOf(id))).append(":").append(q(aji.e(id).getClass().getName()));
     StringBuilder limits = new StringBuilder();
     for (int id = 0; id < 4096; id++) {
       adb item = adb.d(id);
       if (item != null && item.m() != 64) limits.append(limits.length() > 0 ? "," : "").append("[").append(id).append(",").append(item.m()).append("]");
     }
     StringBuilder tileClasses = new StringBuilder();
-    int[] containerIds = {23, 54, 61, 62, 146, 154, 158};
+    int[] containerIds = {23, 54, 61, 62, 84, 146, 154, 158};
     for (int id : containerIds) {
       W tw = world(0); tw.raw(0, 1, 0, aji.e(id), 0);
       aor te = tw.o(0, 1, 0);
@@ -198,7 +206,10 @@ public class RedstoneProbe {
       int ox = Integer.parseInt(h[2]), oy = Integer.parseInt(h[3]), oz = Integer.parseInt(h[4]);
       int dx = Integer.parseInt(h[5]), dy = Integer.parseInt(h[6]), dz = Integer.parseInt(h[7]), ticks = Integer.parseInt(h[8]);
       long seed = Long.parseLong(h[9]);
-      W w = world(seed);
+      int sky = h.length > 10 ? Integer.parseInt(h[10]) : 15, subtraction = h.length > 11 ? Integer.parseInt(h[11]) : 0;
+      float angle = h.length > 12 ? Float.parseFloat(h[12]) : 0f;
+      boolean noSky = h.length > 13 && Integer.parseInt(h[13]) != 0;
+      W w = world(seed, sky, subtraction, angle, noSky);
       wireSet.set(ajn.af, new HashSet());
       String[] cells = in.readLine().substring(5).split(",");
       for (int x = 0; x < dx; x++) for (int y = 0; y < dy; y++) for (int z = 0; z < dz; z++) {
@@ -239,6 +250,15 @@ public class RedstoneProbe {
               break;
             }
             case "notify": w.e(x, y, z, aji.e(Integer.parseInt(e[6]))); break;
+            case "daylight": ((akg) aji.e(151)).e((ahb) w, x, y, z); break;
+            case "power": w.add("q," + w.e(x, y, z, Integer.parseInt(e[6])) + "," + w.g(x, y, z, Integer.parseInt(e[6])) + "," + (w.v(x + 1, y, z) ? 1 : 0)); break;
+            case "fixture": w.sky = Integer.parseInt(e[6]); field(ahb.class, "j").setInt(w, Integer.parseInt(e[7])); w.angle = Float.parseFloat(e[8]); ((aqo) field(ahb.class, "t").get(w)).g = Integer.parseInt(e[9]) != 0; break;
+            case "cake": w.a(x, y, z, Integer.parseInt(e[6]), 3); break;
+            case "record": {
+              ((alq) aji.e(84)).b((ahb) w, x, y, z, new add(adb.d(Integer.parseInt(e[6])), 1));
+              w.add("q," + ((alq) aji.e(84)).g((ahb) w, x, y, z, 0));
+              break;
+            }
             // Scripted entity stand-ins in one cell: 0.25 wide, 0.25 tall box on the cell floor. kind 0 item, 1 mob, 2 player.
             case "entity": {
               int kind = Integer.parseInt(e[6]);

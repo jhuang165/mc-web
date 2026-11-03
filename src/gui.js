@@ -1,4 +1,18 @@
 import {storedEnchantmentLines} from './enchanted-books.js';
+import {copyStack} from './inventory.js';
+// A save snapshots unfinished input/cursor stacks, never a calculated output.
+export function pendingContainerStacks(view){
+ const c=view?.container;if(!c)return[];
+ return [c.inv.cursor,...(c.grid?.stacks??[]),...(view.kind==='anvil'?c.inputs.stacks:[])].filter(Boolean).map(copyStack);
+}
+// GuiRepair's 40-character field and ChatAllowedCharacters filter.
+export const anvilName = text => String(text).replace(/[\u0000-\u001f\u007f\u00a7]/g,'').slice(0,40);
+export function anvilCost(container){
+ if(!(container.maximumCost>0))return {text:'',unavailable:false};
+ if(container.tooExpensive)return {text:'Too Expensive!',unavailable:true};
+ if(!container.output)return {text:'',unavailable:false};
+ return {text:`Enchantment Cost: ${container.maximumCost}`,unavailable:!container.canTake()};
+}
 // ScaledResolution keeps at least a 320 x 240 logical viewport.
 export function guiScale(width,height,requested=0){let scale=1;const limit=requested>0?requested:1000;while(scale<limit&&width/(scale+1)>=320&&height/(scale+1)>=240)scale++;return scale;}
 export function stackCount(count){return Number.isFinite(count)&&count>1?`<b class="item-count">${Math.floor(count)}</b>`:'';}

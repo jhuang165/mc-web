@@ -1,13 +1,13 @@
 # Redstone power (1.7.10): headless port
 
-Status: **core redstone power, repeaters, comparators and pressure plates are ported as a standalone module and replayed exactly against the original classes, for the recorded scenarios only.** It is not wired into the live game. Many redstone components are not ported yet (see Open items); this is not full parity.
+Status: **core redstone power, repeaters, comparators, pressure plates and explicit daylight-detector refreshes are ported as a standalone module and replayed exactly against the original classes, for the recorded scenarios only.** Inventory comparator readings are ported for the tested containers. Jukebox/cake comparator behavior is not claimed. Nothing here is wired into the live game; many redstone components remain unported.
 
 ## Files
 
 - `src/redstone.js`: headless port. It has no imports from the live game.
 - `src/redstone.test.js`: replays every recorded scenario and adds unit checks.
 - `tools/probes/RedstoneProbe.java` and `tools/verify-redstone.mjs`: the native recorder and comparator. These need a JDK, the pinned client JAR (sha1 `e80d9b3b…`) in `tools/research/`, and guava, log4j-api, commons-lang3 and netty-all (the last is needed to allocate the scripted player entity).
-- `public/research/redstone-reference.json`: the recorded evidence. It holds class sha256 digests, the block property table, and 48 scenarios over 1,484 ticks. Those scenarios logged 252,541 calls, 1,739 cell changes, 88 comparator output changes, 236 sounds and 19 item drops. The reference also records native tile-entity classes and all 90 non-64 Item stack limits. Before REDSTONE-02 the file had 21 scenarios, 578 ticks, 104,645 calls, 708 cell changes, 77 sounds and 9 drops; those 21 scenarios are unchanged and replay exactly.
+- `public/research/redstone-reference.json`: the recorded evidence. It holds class sha256 digests, the block property table, and 59 scenarios over 1,564 ticks. Those scenarios logged 254,886 calls, 1,767 cell changes, 88 comparator output changes, 236 sounds and 19 item drops. The reference also records native tile-entity classes and all 90 non-64 Item stack limits. Before REDSTONE-02 the file had 21 scenarios, 578 ticks, 104,645 calls, 708 cell changes, 77 sounds and 9 drops; those 21 scenarios are unchanged and replay exactly.
 
 ## What is ported
 
@@ -78,6 +78,12 @@ Status: **core redstone power, repeaters, comparators and pressure plates are po
 - `World.func_147453_f`: a change of a block with a comparator override (and the cauldron water-level setter) updates comparators beside it and through one normal cube.
 - Native overrides include the cauldron (metadata level), end portal frame (15 with an eye), chest/trapped chest, furnace, hopper, dispenser and dropper inventories. Container fullness uses the average of each occupied stack divided by min(inventory limit, item stack limit), then floor(fullness × 14) + 1, or 0 for empty inventories. The inventory setter paths are native-probed for chest changes; furnace/hopper/dispenser/dropper readings are refreshed through native comparator neighbor updates. Drops item 404 when the floor goes.
 
+**Daylight detector (151)**
+- Exported `refreshDaylightSensor(world,x,y,z)` uses native 1.7.10 arithmetic: sky brightness minus `skylightSubtracted`, celestial angle eased 20% toward 0 or 2π, the original 65,536-entry float sine/cosine table, `Math.round`, then clamp to 0–15. The replay harness invokes the same helper through its `daylight` event.
+- `daylight` is a scripted refresh event with native sky/time fixtures. The no-sky provider returns without changing metadata. A changed level uses `setBlockMetadataWithNotify(..., 3)`, so the probe records native neighbor notifications; the adjacent-comparator fixture confirms callbacks, while its output remains zero for this weak-power source.
+- The probe does not claim real world-time refresh cadence or random/server scheduling: it explicitly invokes the detector's refresh method at chosen ticks, including unchanged repeats. A changed sensor updates neighboring blocks using the native metadata path. In the recorded adjacent-comparator fixture, neighbor callbacks occur but the comparator tile output stays at 0; no successful daylight-to-comparator signal is claimed.
+- `daylight-wire-lamp` places the detector at `(0,1,1)`, dust from x=1 through x=3 and a lamp at `(4,1,1)`. A daytime refresh outputs 15, propagates dust levels 15/14/13 and lights the lamp. A sunset refresh outputs 0, clears the dust and turns the lamp off following the native pending-tick behavior. Native block changes, direct weak-power getter (15) and indirect power query from the first dust (true) are recorded. The fixture still uses explicit refresh calls; it does not simulate automatic day/night scheduling.
+
 **Pressure plates (stone 70, wood 72, weighted light 147 and heavy 148)**
 - Entity counting follows the original sensing box (x+0.125, z+0.125 inset, 0.25 high, strict intersection). Stone plates count living entities, wooden plates every entity, weighted plates every entity with strength `ceil(min(n, max) / max * 15)` (max 15 or 150).
 - Tick rates are 20 (stone, wood) and 10 (weighted). Weak power to every side, strong power downward; drops itself when the floor loses its top surface.
@@ -126,6 +132,7 @@ Scenarios:
 - `repeater-mixed`: wire, repeater, torch inverter and repeater in one line; `repeater-placement`: placement at 8 yaws, delay cycling, support loss drops
 - `comparator-modes`: compare and subtract with wire and lever side inputs, mode toggled at runtime
 - `comparator-container`: cauldron levels and end portal frame eyes read directly and through a stone block, plus subtract with a side lever
+- Daylight fixtures: noon, morning, sunset, late night, cycle wrap, sky-subtraction, no-sky, adjacent-comparator notification and a native sensor→dust→lamp day/night circuit; refreshes are explicit, not an engine cadence simulation.
 - Native inventory readings: chest half/full/empty transitions, a 54-slot double chest, single/double chest lid blockers, chest input through one stone block, a 27-slot chest filled with 16-stack snowballs, furnace under a solid block, hopper, dispenser, dropper and trapped chest. Inventory writes use original tile-entity setters; comparator refreshes follow the native chest change path or an explicit neighboring-block update where that setter emits none. The recorded signals verify Java float fullness arithmetic, stack limits and slot counts (one full slot gives furnace 5, hopper 3, dispenser/dropper 2); chest changes behind stone reach comparators through `World.func_147453_f`.
 - `comparator-clock`: a subtract comparator looped into its own side
 - `comparator-mixed`: comparator chain with repeaters and a solid block; `comparator-placement`: placement at 4 yaws, mode clicks, support loss drops
@@ -143,7 +150,7 @@ One native quirk is reproduced: a lamp's pending turn-off tick is not cancelled 
   - Lighting updates.
   - Particles (the Random draws are kept).
   - Real entities. Wooden buttons are never held down by arrows. Pressure plates see only the scripted entity list, whose boxes are all 0.25 wide at the cell centre; nothing moves, spawns, dies or gets removed on its own. The `collide` event calls the plate with a null entity, so entity-specific rules (such as arrow or projectile handling) are not exercised.
-  - Full interactive container behavior is not ported. Comparator overrides are modelled for chest, trapped chest, furnace, hopper, dispenser and dropper inventories; brewing stands, jukeboxes, item frames and cake remain unsupported. The harness initializes container blocks as existing terrain cells and does not test container users, hopper transfer ticks, all slot restrictions, the ocelot chest-opening restriction or native tile-entity save/load.
+  - Full interactive container behavior is not ported. Comparator overrides are modelled for chest, trapped chest, furnace, hopper, dispenser and dropper inventories. Cake bites do not produce a comparator output in the recorded negative fixture. The jukebox probe confirms the native record getter returns 1 for disc 2256, but inserting it then placing an adjacent comparator produced no output change; jukebox comparator behavior is therefore not modeled or claimed. Brewing stands, item frames, ocelot chest-opening restrictions and native tile-entity save/load remain untested.
   - Player placement beyond yaw: `placeby` runs `onBlockPlacedBy` with a placer yaw after a plain setBlock. Hit-side rules, `canPlaceBlockAt` and item consumption are not run; other events place an explicit id and meta with flags 3.
   - Player removal: creative-style setBlockToAir, with no harvest drops.
 - Terrain outside the ported ids is inert: no callbacks and no power.
@@ -153,7 +160,7 @@ One native quirk is reproduced: a lamp's pending turn-off tick is not cancelled 
 ## Open items
 
 - Pistons and sticky pistons (BUD behaviour).
-- Tripwire and hooks, daylight sensors, trapped chests, detector and powered rails.
+- Tripwire and hooks, detector and powered rails; automatic daylight refresh scheduling with world time.
 - Comparator inputs from brewing stands, jukeboxes, item frames and cake; live container behavior and tile-entity save/load.
 - Entity-driven pressure plates in a live world (real entity boxes, arrows, falling items, minecarts).
 - Repeater and comparator placement from the real item-use path, and tile entity save/load.

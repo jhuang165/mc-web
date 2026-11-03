@@ -31,7 +31,7 @@ const CHEST = 54, FURNACE = 61, DISPENSER = 23, HOPPER = 154, DROPPER = 158;
 // 2 = input from -z, output to +z; 0 = output to -z), bits 2-3 repeater delay index, comparator bit 4 subtract.
 const rep = (dir, delay = 0) => `${REPEATER}:${dir | (delay << 2)}`,
   cmp = (dir, subtract = false) => `${COMPARATOR}:${dir | (subtract ? 4 : 0)}`;
-function scenario(name, { origin = [0, 0, 0], size, ticks, seed = 1, floor = true, cells = {}, events = [], note }) {
+function scenario(name, { origin = [0, 0, 0], size, ticks, seed = 1, floor = true, cells = {}, events = [], note, sky = 15, skylightSubtracted = 0, angle = 0, noSky = false }) {
   const [dx, dy, dz] = size,
     grid = [];
   for (let x = 0; x < dx; x++)
@@ -40,7 +40,7 @@ function scenario(name, { origin = [0, 0, 0], size, ticks, seed = 1, floor = tru
         const v = cells[`${x},${y},${z}`] ?? (floor && y === 0 ? STONE : AIR);
         grid.push(String(v));
       }
-  return { name, note, origin, size, ticks, seed, grid: grid.join(","), events };
+  return { name, note, origin, size, ticks, seed, sky, skylightSubtracted, angle, noSky, grid: grid.join(","), events };
 }
 const put = (cells, x, y, z, v) => ((cells[`${x},${y},${z}`] = v), cells);
 const line = (cells, x0, x1, y, z, v = WIRE) => {
@@ -103,6 +103,38 @@ for (const [name, id] of [["furnace", FURNACE], ["hopper", HOPPER], ["dispenser"
   put(c, 1, 1, 2, FURNACE); put(c, 1, 2, 2, STONE); put(c, 2, 1, 2, cmp(1));
   ev.push([1, "container", 1, 1, 2, FURNACE, 0], [2, "slot", 1, 1, 2, 0, 1, 64, 0], [4, "notify", 2, 1, 2, FURNACE]);
   SCENARIOS.push(scenario("comparator-furnace-under-block", { size: [5, 4, 5], ticks: 12, cells: c, events: ev, note: "furnace comparator input remains readable below an opaque block" }));
+}
+// Daylight detector signal refreshes (native BlockDaylightDetector.updateLightLevel).
+for (const [name, angle, sky, subtraction] of [
+  ["midnight", 0, 15, 0], ["morning", Math.PI / 2, 15, 0], ["sunset", Math.PI, 15, 0], ["late-night", Math.PI * 1.5, 15, 0], ["cycle-wrap", Math.PI * 2, 15, 0], ["skylight-subtraction", 0, 15, 11],
+]) {
+  const c = {}; put(c, 1, 1, 1, 151);
+  SCENARIOS.push(scenario(`daylight-${name}`, { size: [3, 3, 3], ticks: 3, cells: c, sky, skylightSubtracted: subtraction, angle, events: [[1, "daylight", 1, 1, 1], [2, "daylight", 1, 1, 1]], note: `native daylight refresh at celestial angle ${angle}, sky ${sky}, subtraction ${subtraction}` }));
+}
+{
+  const c = {}; put(c, 1, 1, 1, "151:7");
+  SCENARIOS.push(scenario("daylight-no-sky-dimension", { size: [3, 3, 3], ticks: 2, noSky: true, cells: c, events: [[1, "daylight", 1, 1, 1]], note: "native no-sky provider skips daylight refresh and preserves metadata" }));
+}
+{
+  const c = {};
+  put(c, 1, 1, 1, 151); put(c, 2, 1, 1, cmp(1)); put(c, 3, 1, 1, WIRE); put(c, 4, 1, 1, LAMP);
+  SCENARIOS.push(scenario("daylight-comparator-notification", { size: [6, 3, 3], ticks: 16, events: [[1, "daylight", 1, 1, 1], [1, "place", 2, 1, 1, COMPARATOR, 1], [6, "fixture", 0, 0, 0, 15, 11, 0, 0], [6, "daylight", 1, 1, 1], [11, "fixture", 0, 0, 0, 15, 15, 0, 0], [11, "daylight", 1, 1, 1]], note: "daylight metadata changes notify a real adjacent comparator; the comparator output stays 0 in this fixture" }));
+}
+{
+  const c = {};
+  put(c, 0, 1, 1, 151);
+  const events = [];
+  for (let x = 1; x <= 3; x++) events.push([1, "place", x, 1, 1, WIRE, 0]);
+  events.push([1, "place", 4, 1, 1, LAMP, 0], [2, "daylight", 0, 1, 1], [3, "power", 0, 1, 1, 5], [8, "fixture", 0, 0, 0, 15, 0, Math.PI, 0], [8, "daylight", 0, 1, 1]);
+  SCENARIOS.push(scenario("daylight-wire-lamp", { size: [6, 3, 3], ticks: 20, cells: c, events, note: "explicit daytime refresh powers a three-wire run and lamp; sunset refresh turns the circuit off after the native lamp delay" }));
+}
+{
+  const c = {};
+  put(c, 1, 1, 1, 92); put(c, 2, 1, 1, cmp(1)); put(c, 3, 1, 1, WIRE);
+  SCENARIOS.push(scenario("comparator-cake-no-override", { size: [5, 3, 3], ticks: 12, events: [[1, "cake", 1, 1, 1, 1], [5, "cake", 1, 1, 1, 6]], note: "negative native check: cake bites change metadata but do not provide a comparator override in 1.7.10" }));
+}
+{
+  SCENARIOS.push(scenario("comparator-jukebox", { size: [5, 3, 3], ticks: 12, events: [[1, "place", 1, 1, 1, 84, 0], [2, "record", 1, 1, 1, 2256], [3, "place", 2, 1, 1, COMPARATOR, 1]], note: "native jukebox record 2256 insertion followed by comparator placement; BlockJukebox override reads strength 1" }));
 }
 // Straight 16-wire line from a floor lever: 15 at the lever, 0 at the far end.
 SCENARIOS.push(scenario("line-lever", {
@@ -529,7 +561,7 @@ await rm(probe, { recursive: true, force: true });
 await mkdir(probe, { recursive: true });
 const cp = [probe, classes, ...libs].join(path.delimiter);
 await exec("javac", ["-nowarn", "-cp", cp, "-d", probe, path.join(root, "probes/RedstoneProbe.java")]);
-const input = SCENARIOS.map((s) => `scenario ${s.name} ${s.origin.join(" ")} ${s.size.join(" ")} ${s.ticks} ${s.seed}\ngrid ${s.grid}\n${s.events.map((e) => `event ${e.join(" ")}`).join("\n")}\n`).join("");
+const input = SCENARIOS.map((s) => `scenario ${s.name} ${s.origin.join(" ")} ${s.size.join(" ")} ${s.ticks} ${s.seed} ${s.sky} ${s.skylightSubtracted} ${s.angle} ${s.noSky ? 1 : 0}\ngrid ${s.grid}\n${s.events.map((e) => `event ${e.join(" ")}`).join("\n")}\n`).join("");
 const child = spawn("java", ["-cp", cp, "RedstoneProbe"], { stdio: ["pipe", "pipe", "pipe"] });
 let stdout = "", stderr = "";
 child.stdout.on("data", (d) => (stdout += d));
@@ -580,14 +612,16 @@ for (const [i, native] of lines.entries()) {
 }
 const digest = async (name) => createHash("sha256").update((await exec("unzip", ["-p", jar, name + ".class"], { encoding: "buffer", maxBuffer: 1 << 24 })).stdout).digest("hex");
 const names = { ana: "BlockRedstoneWire", anc: "BlockRedstoneTorch", and: "BlockRedstoneTorch$Toggle", aoc: "BlockTorch", alv: "BlockLever", ajs: "BlockButton", anx: "BlockButtonStone", aon: "BlockButtonWood", anb: "BlockRedstoneLight", ams: "BlockCompressedPowered", anf: "BlockRedstoneRepeater", akj: "BlockRedstoneDiode", akc: "BlockRedstoneComparator", aoz: "TileEntityComparator", amu: "BlockPressurePlate", aol: "BlockPressurePlateWeighted", ajd: "BlockBasePressurePlate", ajw: "BlockCauldron", aku: "BlockEndPortalFrame", agt: "ChunkPosition", ahs: "NextTickListEntry", ahb: "World", apx: "Chunk", apz: "ExtendedBlockStorage", aji: "Block" };
-const tileNames = { 23: "TileEntityDispenser", 54: "TileEntityChest", 61: "TileEntityFurnace", 62: "TileEntityFurnace", 146: "TileEntityChest", 154: "TileEntityHopper", 158: "TileEntityDropper" };
+const blockNames = { 84: "BlockJukebox", 92: "BlockCake", 151: "BlockDaylightDetector" };
+for (const [id, cls] of Object.entries(blocks.classes)) if (blockNames[id]) names[cls] = blockNames[id];
+const tileNames = { 23: "TileEntityDispenser", 54: "TileEntityChest", 61: "TileEntityFurnace", 62: "TileEntityFurnace", 84: "TileEntityRecordPlayer", 146: "TileEntityChest", 154: "TileEntityHopper", 158: "TileEntityDropper" };
 for (const [id, cls] of Object.entries(blocks.tileClasses)) names[cls] = tileNames[id] ?? `TileEntityBlock${id}`;
 const reference = {
   target: "Minecraft Java 1.7.10",
   clientSha1,
   classes: Object.fromEntries(await Promise.all(Object.entries(names).map(async ([c, n]) => [c, { name: n, sha256: await digest(c) }]))),
   method:
-    "Unchanged original redstone block classes run inside a real World (ahb, allocated without its constructor) with real Chunk (apx) and ExtendedBlockStorage objects from a stub chunk provider. Native: World.setBlock, setBlockMetadataWithNotify, notifyBlocksOfNeighborChange, notifyBlockOfNeighborChange, power queries, doesBlockHaveSolidTopSurface, isBlockNormalCubeDefault, Chunk.func_150807_a/setBlockMetadata, Block drops. Replaced: WorldServer scheduled ticks (copied: HashSet + TreeSet of original NextTickListEntry, 1000 cap, this-tick list), getTotalWorldTime, getGameRules (default GameRules), playSoundEffect/spawnEntityInWorld (recorded), spawnParticle (ignored), getEntitiesWithinAABB (a scripted entity list with strict AABB intersection: allocated item xk, zombie yq and player mw objects), loaded tile entity lists (empty ArrayLists), lighting updates (disabled). Real: TileEntityComparator (aoz) plus TileEntityChest (aow), Furnace (apg), Dispenser (apb), Hopper (api) and Dropper (apc) in native Chunk tile maps; native inventory setter calls, BlockChest blocked/double behavior, World.func_147453_f comparator updates, container comparator fullness/stack-limit reads, BlockCauldron.func_150024_a and BlockEndPortalFrame overrides, ItemReed-style placement (setBlock(block,0,3) then onBlockPlacedBy with a placer yaw). The wire's blocksNeedingUpdate HashSet is replaced by a fresh one per scenario; the JVM is Java 8+ (HashMap iteration order of Java 8 and later). Terrain is written straight into chunk sections; events of tick t run before tick t (world time advances, then tickUpdates). No random block ticks. Per tick: changed region cells [x,y,z,id,meta], and the call log: E,op event; s,x,y,z,id,meta,flags setBlock; m,x,y,z,meta,flags setBlockMetadataWithNotify; n,x,y,z,source notifyBlockOfNeighborChange; t,x,y,z,id,delay,priority scheduled tick; u,x,y,z,id updateTick; p,name sound; e,item dropped item; T world tick; scripted events place, air, use, placeby (block, yaw), cauldron (water level), container (block id), slot (slot, item, count, damage), notify (target cell, source id), entity (0 item, 1 mob, 2 player), unentity, collide (onEntityCollidedWithBlock with a null entity). tiles (only when non-empty): per tick [x,y,z,signal] changes of the TileEntityComparator output signal. sounds: [tick,x,y,z,name,volume,pitch]; drops: [tick,x,y,z,item,count,damage]; pending: [x,y,z,id,ticksLeft,priority]; rng: world Random nextInt() after the run.",
+    "Unchanged original redstone block classes run inside a real World (ahb, allocated without its constructor) with real Chunk (apx) and ExtendedBlockStorage objects from a stub chunk provider. Native: World.setBlock, setBlockMetadataWithNotify, notifyBlocksOfNeighborChange, notifyBlockOfNeighborChange, power queries, doesBlockHaveSolidTopSurface, isBlockNormalCubeDefault, Chunk.func_150807_a/setBlockMetadata, Block drops. Replaced: WorldServer scheduled ticks (copied: HashSet + TreeSet of original NextTickListEntry, 1000 cap, this-tick list), getTotalWorldTime, getGameRules (default GameRules), playSoundEffect/spawnEntityInWorld (recorded), spawnParticle (ignored), getEntitiesWithinAABB (a scripted entity list with strict AABB intersection: allocated item xk, zombie yq and player mw objects), loaded tile entity lists (empty ArrayLists), lighting updates (disabled). Real: TileEntityComparator (aoz) plus TileEntityChest (aow), Furnace (apg), Dispenser (apb), Hopper (api) and Dropper (apc) in native Chunk tile maps; native inventory setter calls, BlockChest blocked/double behavior, World.func_147453_f comparator updates, container comparator fullness/stack-limit reads, BlockDaylightDetector (akg) refreshes with explicit sky brightness, skylight subtraction and celestial-angle fixtures, BlockCauldron.func_150024_a and BlockEndPortalFrame overrides, ItemReed-style placement (setBlock(block,0,3) then onBlockPlacedBy with a placer yaw). The wire's blocksNeedingUpdate HashSet is replaced by a fresh one per scenario; the JVM is Java 8+ (HashMap iteration order of Java 8 and later). Terrain is written straight into chunk sections; events of tick t run before tick t (world time advances, then tickUpdates). No random block ticks. Per tick: changed region cells [x,y,z,id,meta], and the call log: E,op event; s,x,y,z,id,meta,flags setBlock; m,x,y,z,meta,flags setBlockMetadataWithNotify; n,x,y,z,source notifyBlockOfNeighborChange; t,x,y,z,id,delay,priority scheduled tick; u,x,y,z,id updateTick; p,name sound; e,item dropped item; T world tick; scripted events place, air, use, placeby (block, yaw), cauldron (water level), container (block id), slot (slot, item, count, damage), notify (target cell, source id), daylight (native refresh), fixture (sky, subtraction, angle, no-sky), entity (0 item, 1 mob, 2 player), unentity, collide (onEntityCollidedWithBlock with a null entity). tiles (only when non-empty): per tick [x,y,z,signal] changes of the TileEntityComparator output signal. sounds: [tick,x,y,z,name,volume,pitch]; drops: [tick,x,y,z,item,count,damage]; pending: [x,y,z,id,ticksLeft,priority]; scenario fixtures sky/skylightSubtracted/angle/noSky are native World inputs; rng: world Random nextInt() after the run.",
   blocks,
   scenarios: results,
 };

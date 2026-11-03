@@ -3,10 +3,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { World, SAND, GRAVEL, CACTUS, WATER, HEIGHT } from "./world.js";
+import { World, SAND, GRAVEL, CACTUS, WATER, ANVIL, HEIGHT } from "./world.js";
 import { JRandom } from "./lakes.js";
 import { FallingBlocks, canFallBelow, gravelDrop, FALL_DELAY, FALLING_Y_OFFSET, isFallingBlock, spawnFalling } from "./falling.js";
 import { MockWorld, toGame } from "../tools/plant-fixtures.mjs";
+import { JavaRandom } from "./java-random.js";
 
 const reference = JSON.parse(await readFile(new URL("../public/research/plant-reference.json", import.meta.url)));
 const records = (name) => reference.records.filter((r) => r.case === name);
@@ -130,4 +131,33 @@ test("wake: edited sand left unsupported in a save falls once loaded", () => {
   fb.wake();
   for (let t = 0; t < 40; t++) fb.tick();
   assert.equal(w.get(40, 10, 40), SAND);
+});
+
+test("anvil falls damage targets, degrade metadata on impact, land with sound, and save fall distance", () => {
+  const w = new MockWorld((_x, y) => y < 7 ? [1, 0] : [0, 0]);
+  const hits = [], sounds = [], drops = [];
+  const fb = new FallingBlocks(w, {
+    entityRandom: () => new JavaRandom(0n),
+    hurt: (...args) => hits.push(args),
+    sound: (...args) => sounds.push(args),
+    drop: (stack) => drops.push(stack),
+  });
+  w.put(30, 20, 30, ANVIL, 0);
+  const e = spawnFalling(ANVIL, 0, 30, 20, 30, new JavaRandom(0n));
+  e.ticks = 1;
+  e.fallDistance = 12.5;
+  fb.entities.push(e);
+  const saved = fb.serialize();
+  assert.equal(saved[0].fallDistance, 12.5);
+  const restored = new FallingBlocks(w, {}, JSON.parse(JSON.stringify(saved))).entities[0];
+  assert.equal(restored.fallDistance, 12.5);
+  for (let n = 0; n < 200 && !e.dead; n++) fb.tickEntity(e);
+  assert.equal(e.dead, true);
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0][2], "anvil");
+  assert.ok(hits[0][1] > 0 && hits[0][1] <= 40);
+  assert.deepEqual(sounds.map(([name]) => name), ["random.anvil_land"]);
+  assert.equal(w.get(30, 7, 30), ANVIL);
+  assert.equal(w.getMeta(30, 7, 30) >> 2, 1);
+  assert.deepEqual(drops, []);
 });

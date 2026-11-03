@@ -1,8 +1,10 @@
 # Minecraft Java 1.7.10 feature coverage
 
-The 2026-11-03 continuation preserves supported item tags (repair cost, custom name, enchantments, stored enchantments and Unbreakable) through inventory operations, local saves and Java conversion. Item merges compare these tags; tooltips display the name/enchantments, and Unbreakable prevents durability loss. The anvil block and repair screen remain unfinished. See [item-tag persistence](anvil-persistence.md).
+0.35.0 connects anvils to gameplay: block placement and mining, a repair/name screen, native cost and material rules, XP-level payment, use damage and falling impacts. Unbreaking now affects live durability, and its scoped item RNG survives saves. See [anvil container](anvil-container.md), [anvil block](anvil-blocks.md) and [durability](item-durability.md) for evidence and limits. Full enchantment effects and glint remain unfinished.
 
-Standalone packages also cover [combined structure search/population orchestration](structure-population.md) and [inventory comparator readings](redstone.md). Native structure-search fixtures verify all four start maps and world RNG state; combined population writes remain unverified. Structures and redstone are still awaiting live integration.
+The 2026-11-03 continuation preserves supported item tags (repair cost, custom name, enchantments, stored enchantments and Unbreakable) through inventory operations, local saves and Java conversion. Item merges compare these tags; tooltips display the name/enchantments, and Unbreakable prevents durability loss. See [item-tag persistence](anvil-persistence.md).
+
+Standalone packages also cover [combined structure population](structure-population-world.md), with 21,713 native ordered writes replayed across five worlds, and [inventory comparator/daylight sensor behavior](redstone.md). Temple read-call counts remain different. Structures and redstone are still awaiting live integration.
 
 0.34.0 (WORLD-02k) loads chest/furnace inventories by column and evicts durable distant copies. IndexedDB v4 migrates old runtime inventories atomically; scoped saves preserve unseen columns, failed/overlapping saves retain new changes, and backups still include unloaded inventories. Other entity/tick runtime remains global. Write fingerprints are bounded to 256 columns. See [streaming](streaming.md).
 

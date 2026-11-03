@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { Survival, ITEMS, RECIPES, matchRecipe, craftingResult } from "./survival.js";
 import { makeStack } from "./inventory.js";
 import { World } from "./world.js";
+import { JavaRandom } from "./java-random.js";
+import { attemptDamageItem } from "./enchantments.js";
 
 // Lays one item per filled cell through real slot clicks, then takes one result.
 function craftOnce(p, cells, size = 2) {
@@ -269,4 +271,55 @@ test("negative player fire counters retain progress toward ignition through relo
     assert.equal(restored.fire, original.fire);
   }
   assert.equal(restored.fire, 160);
+});
+
+test("falling anvil wears helmet first, scales damage by 0.75, then applies armour", () => {
+  const seed = 17, amount = 4, expectedRandom = new JavaRandom(seed),
+    helmetWear = Math.trunc(Math.fround(Math.fround(amount * 4) + Math.fround(Math.fround(expectedRandom.nextFloat() * amount) * 2))),
+    p = new Survival({ health: 20, inventoryRandom: new JavaRandom(seed).save(), armor: [null, null, makeStack(401), makeStack(400)] });
+  assert.equal(p.anvilDamage(amount), true);
+  const amountAfterHelmet = Math.fround(amount * Math.fround(0.75)), reduced = Math.fround(Math.fround(amountAfterHelmet * 21) / 25);
+  assert.equal(p.health, Math.fround(20 - reduced));
+  assert.equal(p.inventory.armor[3].damage, helmetWear + 1);
+  assert.equal(p.inventory.armor[2].damage, 1);
+  assert.equal(p.lastDamage, "anvil");
+  assert.deepEqual(p.inventory.random.save(), expectedRandom.save());
+});
+
+test("falling anvil damage is not scaled when the player has no helmet", () => {
+  const p = new Survival({ health: 20, inventoryRandom: new JavaRandom(31).save() }), beforeRandom = p.inventory.random.save();
+  assert.equal(p.anvilDamage(4), true);
+  assert.equal(p.health, 16);
+  assert.equal(p.hurtAmount, 4);
+  assert.deepEqual(p.inventory.random.save(), beforeRandom);
+});
+
+test("anvil helmet wear precedes hurt-window rejection and consumes Unbreaking from inventory RNG", () => {
+  const seed = 5, metadata = { enchantments: [{ id: 34, lvl: 3 }] }, expectedRandom = new JavaRandom(seed),
+    nativeHelmet = { id: 298, count: 1, damage: 0, ...metadata },
+    p = new Survival({ health: 20, inventoryRandom: new JavaRandom(seed).save(), armor: [null, null, makeStack(401), makeStack(400, 1, 0, undefined, metadata)] });
+  const wear = () => Math.trunc(Math.fround(Math.fround(4 * 4) + Math.fround(Math.fround(expectedRandom.nextFloat() * 4) * 2)));
+  attemptDamageItem(nativeHelmet, wear(), expectedRandom);
+  attemptDamageItem(nativeHelmet, 1, expectedRandom);
+  assert.equal(p.anvilDamage(4), true);
+  assert.equal(p.inventory.armor[3].damage, nativeHelmet.damage);
+  const health = p.health, chestWear = p.inventory.armor[2].damage;
+  attemptDamageItem(nativeHelmet, wear(), expectedRandom);
+  assert.equal(p.anvilDamage(4), false);
+  assert.equal(p.health, health);
+  assert.equal(p.inventory.armor[2].damage, chestWear);
+  assert.equal(p.inventory.armor[3].damage, nativeHelmet.damage);
+  assert.deepEqual(p.inventory.random.save(), expectedRandom.save());
+});
+
+test("Creative mode and spawn protection reject anvil hits before helmet wear or RNG", () => {
+  const state = new JavaRandom(9).save(), helmet = makeStack(400),
+    creative = new Survival({ inventoryRandom: state, armor: [null, null, null, helmet] }, "creative"),
+    protectedPlayer = new Survival({ inventoryRandom: state, armor: [null, null, null, helmet] });
+  protectedPlayer.protection = 20;
+  for (const p of [creative, protectedPlayer]) {
+    assert.equal(p.anvilDamage(4), false);
+    assert.equal(p.inventory.armor[3].damage, 0);
+    assert.deepEqual(p.inventory.random.save(), state);
+  }
 });

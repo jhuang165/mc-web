@@ -5,6 +5,8 @@
 // references behave like ItemStack. tools/verify-inventory.mjs replays the same
 // scripts through the unchanged original classes.
 import { copyStored, normalizeStored } from "./enchanted-books.js";
+import { JavaRandom } from "./java-random.js";
+import { damageLiveItemStack } from "./item-durability.js";
 export const OUTSIDE = -999, STACK_LIMIT = 64, DOUBLE_CLICK_MS = 250;
 // Legacy enchanted books carry `stored` (StoredEnchantments, enchanted-books.js). Native item tags
 // use enchantments/storedEnchantments, displayName, repairCost and unbreakable. Copies and splits
@@ -30,13 +32,15 @@ export const sameStackItem = (a, b) => !!a && !!b && a.id === b.id && (a.damage 
 export const dragButton = (event, mode) => (event & 3) | ((mode & 3) << 2);
 
 export class PlayerInventory {
-  constructor(items, saved = [], armor = []) {
+  constructor(items, saved = [], armor = [], randomState) {
     this.items = items;
     this.main = Array(36).fill(null);
     this.armor = Array(4).fill(null);
     this.cursor = null;
     this.current = 0;
     this.creative = false;
+    this.random = new JavaRandom(0);
+    if (randomState) this.random.restore(randomState);
     if (Array.isArray(saved)) saved.slice(0, 36).forEach((s, i) => (this.main[i] = this.read(s)));
     // armor[0] boots ... armor[3] helmet, as InventoryPlayer.armorInventory.
     if (Array.isArray(armor)) armor.slice(0, 4).forEach((s, i) => { const a = this.read(s); if (a && items[a.id]?.armor === 3 - i) this.armor[i] = a; });
@@ -117,8 +121,8 @@ export class PlayerInventory {
   damage(i, amount = 1) {
     const s = this.getStack(i);
     if (!s || this.creative || s.unbreakable === true || amount <= 0 || !this.maxDamage(s)) return false;
-    s.damage += amount;
-    if (s.damage <= this.maxDamage(s)) return false;
+    const item = this.items[s.id];
+    if (!damageLiveItemStack(s, item, amount, this.random)) return false;
     s.count = Math.max(0, s.count - 1);
     s.damage = 0;
     if (s.count === 0) this.setStack(i, null);
@@ -148,6 +152,7 @@ export class PlayerInventory {
   }
   serialize() { return this.main.map(copyStack); }
   serializeArmor() { return this.armor.map(copyStack); }
+  serializeRandom() { return this.random.save(); }
 }
 
 // A fixed array of stacks (InventoryCrafting, TileEntityFurnace).
@@ -265,7 +270,7 @@ export class Container {
           for (const slot of this.dragSlots)
             if (slot && canAddToSlot(slot, inv.cursor, true, inv) && slot.valid(inv.cursor) && inv.cursor.count >= this.dragSlots.size && this.canDrag(slot)) {
               const existing = slot.has ? slot.stack.count : 0,
-                placed = makeStack(source.id, Math.min(dragShare(source.count, this.dragSlots.size, this.dragMode, existing), inv.maxStack(source), slot.limit), source.damage, source.stored);
+                placed = makeStack(source.id, Math.min(dragShare(source.count, this.dragSlots.size, this.dragMode, existing), inv.maxStack(source), slot.limit), source.damage, source.stored, source);
               left -= placed.count - existing;
               slot.put(placed);
             }
@@ -609,9 +614,9 @@ export class ContainerScreen {
           count = Math.min(want, inv.maxStack(held), slot.limit);
         if (want > count) capped.add(slot);
         left -= count - existing;
-        slots.set(slot, makeStack(held.id, count, held.damage, held.stored));
+        slots.set(slot, makeStack(held.id, count, held.damage, held.stored, held));
       }
-      cursor = makeStack(held.id, left, held.damage, held.stored);
+      cursor = makeStack(held.id, left, held.damage, held.stored, held);
     }
     return { slots, cursor, capped };
   }
