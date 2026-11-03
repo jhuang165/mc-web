@@ -1,0 +1,1 @@
+Regenerated deterministic block metadata audit for new anvil mapping, committed dac80b9. Prior six integration failures repaired; focused41/41 and full1227/1227 pass.
