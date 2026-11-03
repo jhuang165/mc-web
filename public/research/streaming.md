@@ -1,4 +1,4 @@
-# Live Java terrain streaming (WORLD-02d to 02j, app 0.33.0)
+# Live Java terrain streaming (WORLD-02d to 02k, app 0.34.0)
 
 Create New World → **Java streaming preview** selects generation version 13 (`javaStreamed`): the default Java biome, terrain, surface, cave and ravine ports (the version-12 terrain preview, WORLD-02d) plus per-area Java population from the seed (WORLD-02e, below). Worlds saved as version 12 keep their terrain-only generator and are never populated retroactively. The finite v9/v10/v11 and legacy generators retain their terrain and save representation. This is an incremental release, not full WORLD-02 or native streaming parity.
 
@@ -102,6 +102,22 @@ Four new port regressions cover ten distant windows with exactly 100 cached colu
 
 Chrome localhost:5181 `?silent`, seed17 generation13 Creative: created a new world through the UI, travelled from x63.5 to x225.7, saw the cached edit count fall from2,697 to767 while 64 terrain columns stayed resident, saved/quit/reloaded, and flew back to x22.96 through evicted columns. Reopen and return succeeded with no application console errors; options were untouched. The ten-window numeric cache bound and exact cell preservation are tested headlessly, not inferred from this UI count.
 
+## Lazy chest and furnace inventories (WORLD-02k, 0.34.0)
+
+IndexedDB version 4 adds `containers`, keyed `[world,x,z]` with a world index. The upgrade transaction scans the old `runtime` records once, moves chest/furnace inventories into the new store, and retains their other fields; container-only runtime rows are removed. Both stores and the schema upgrade commit atomically. Old single-record worlds/imports still restore their full inventories on first open and convert on the next successful save. World generation versions do not change.
+
+Cold opens now read inventories only for the 64 resident columns. `ContainerResidency` prefetches the one-column halo using exact-key reads, gates movement/respawn on required reads, and hydrates inventories before first-time population materialization. Prefetched inventories remain raw until their terrain becomes resident. Returning therefore restores the existing empty/looted chest instead of generating new loot. A failed or malformed read cannot admit the column, and a response from a disposed loader cannot change the new session.
+
+Steady healthy residency retains at most the 100 target/halo columns; the old resident square and unsaved columns can temporarily exceed that bound. Save scopes enumerate only columns actually hydrated by the session. Each transaction replaces/deletes inventories in that scope and leaves every unseen column intact. Outgoing inventories stay pinned while any overlapping save is in flight, and can evict only when their current persisted representation exactly matches a successful save. Snapshots deep-copy nested book enchantments too. Failed saves and mutations after a snapshot retain the newer inventory for retry. Eviction releases both the live maps and their copy in the last autosave record; late completion from a disposed/reopened session cannot prune the new record. Chest facing and furnace items/burn/cook counters survive return; unloaded furnaces keep their existing pause policy.
+
+Browser/Java exports combine all durable inventory columns with the current session's scoped snapshot, including unsaved empty/broken containers after a failed save. The internal scope is omitted from storage metadata and exports. Deleting a world deletes its container rows too. Write fingerprints now retain at most 256 columns across runtime/container stores and worlds, and exports do not populate this cache. Evicted fingerprints may cause an unchanged payload to be written again; they never remove durable data.
+
+Eleven new regressions exercise bounded travel, negative coordinates, exact furnace pause/resume, delayed/failed/malformed/disposed reads, overlapping writes, post-snapshot/nested-book changes, empty/broken chests, autosave-copy release, v3 mixed/container-only migration, scoped deletion, distant export overlays after an aborted write, concurrent scope capture, and bounded fingerprint/deleted-world invalidation. Full suite: 1,120 tests; production build passes with existing warnings. Migration is tested through the actual upgrade callback using an in-memory IndexedDB double. No native Java lifecycle parity is claimed.
+
+Chrome localhost:5181 `?silent`, existing seed-17 generation-13 QA world: v3→v4 upgrade and reopen succeeded; travel from x18.87 to x228.70 reduced live inventory count from two to zero. The UI JSON download still held both chests and 9,897 edits with no scope flag. After a cold reopen and return to x−20.06, two containers were live again; a second JSON export retained identical chest inventory objects (11,421 edits after continued random ticks). Application console clean, settings untouched. Both backups and the QA world were retained for review. Furnace pause/resume and failure paths are headless checks rather than browser claims.
+
+Still global: moving entities/items/projectiles/carts, XP/falling entities, spawners, farm state and pending tick queues. Their residency and the claimed population mask remain future work; this tranche bounds chest/furnace inventories and write fingerprints only.
+
 ## Evidence
 
 `src/streaming-world.test.js` (pinned to generation 12) contains seven acceptance regressions:
@@ -124,4 +140,4 @@ Earlier (WORLD-02d) Chrome localhost:5182, isolated headless profile, `?silent`:
 
 ## Next work
 
-Villages, strongholds and temples are still absent from streamed worlds, and population composes per cell rather than in native on-demand chunk order. Replace the working-set activity policy with the existing native provider/player-manager lifecycle, hydrate and evict the chunk-owned runtime records lazily, move the remaining shift relight (about 15–20 ms since 0.30.0) off the main thread or into per-chunk light arrays, and record the claimed-column mask per chunk instead of in the world record. Preserve existing populated and generation-12 saves during that transition. No Site publication.
+Villages, strongholds and temples are still absent from streamed worlds, and population composes per cell rather than in native on-demand chunk order. Replace the working-set activity policy with the existing native provider/player-manager lifecycle, hydrate and evict the remaining entity/queue/farm/spawner runtime records lazily, move the remaining shift relight (about 15–20 ms since 0.30.0) off the main thread or into per-chunk light arrays, and record the claimed-column mask per chunk instead of in the world record. Preserve existing populated and generation-12 saves during that transition. No Site publication.

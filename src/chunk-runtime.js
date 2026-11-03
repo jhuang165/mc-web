@@ -5,6 +5,7 @@ const TICKS = ['fluidTicks','fireTicks','fallingTicks'];
 const key = (x,z) => `${Math.floor(x/16)},${Math.floor(z/16)}`;
 export function splitRuntime(record) {
   const metadata = structuredClone(record), columns = new Map();
+  delete metadata.containerScope;
   const column = (x,z) => {
     const k=key(x,z); let c=columns.get(k);
     if (!c) { const [cx,cz]=k.split(',').map(Number); columns.set(k,c={world:record.id,x:cx,z:cz,state:{}}); }
@@ -49,3 +50,34 @@ export function joinRuntime(metadata, columns) {
   return record;
 }
 export function hasRuntime(record) { return ARRAYS.some(n=>n in record)||TICKS.some(n=>n in record)||'minecarts' in record||!!record.player?.chests||!!record.player?.furnaces; }
+
+// Stationary inventories have their own store so window reads do not deserialize
+// the inventories of every visited column just to restore moving entities.
+export function separateContainers(columns) {
+  const runtime=[], containers=[];
+  for (const c of columns) {
+    const {chests,furnaces,...state}=c.state, inventories={};
+    if(chests&&Object.keys(chests).length)inventories.chests=chests;
+    if(furnaces&&Object.keys(furnaces).length)inventories.furnaces=furnaces;
+    if(Object.keys(state).length)runtime.push({...c,state});
+    if(Object.keys(inventories).length)containers.push({...c,state:inventories});
+  }
+  return {runtime,containers};
+}
+
+export function validateContainerColumns(records,coordinates) {
+  const requested=new Set(coordinates.map(c=>c.join(','))),seen=new Set();
+  for(const c of records) {
+    const k=`${c?.x},${c?.z}`;
+    if(!Number.isInteger(c?.x)||!Number.isInteger(c?.z)||!requested.has(k)||seen.has(k)||!c.state||typeof c.state!=='object'||Array.isArray(c.state))throw new Error('Saved containers are damaged');
+    seen.add(k);
+    for(const [name,values] of Object.entries(c.state)) {
+      if(!['chests','furnaces'].includes(name)||!values||typeof values!=='object'||Array.isArray(values))throw new Error('Saved containers are damaged');
+      for(const [position,value] of Object.entries(values)) {
+        const [x,,z]=position.split(',').map(Number);
+        if(!/^-?\d+,\d+,-?\d+$/.test(position)||key(x,z)!==k||!value||typeof value!=='object'||Array.isArray(value))throw new Error('Saved containers are damaged');
+      }
+    }
+  }
+  if(seen.size!==requested.size)throw new Error('Saved containers are missing');
+}

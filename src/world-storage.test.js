@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World } from './world.js';
 import { StreamStorage } from './streaming-storage.js';
-import { chunkRecords, editsFromChunks, writeWorldShelf, readWorldShelf, readChunkEdits, deleteStoredWorld } from './world-storage.js';
+import { chunkRecords, editsFromChunks, writeWorldShelf, readWorldShelf, readChunkEdits, deleteStoredWorld, readRuntimeState, readContainerColumns } from './world-storage.js';
 
 // A small in-memory IndexedDB: object stores with key paths and one index, readwrite transactions
 // whose requests run in order and that commit (or abort) after their last request, and structured
@@ -11,7 +11,7 @@ function fakeIndexedDB() {
   const stores = new Map(), names = { contains: (n) => stores.has(n) };
   const keyOf = (store, value) => JSON.stringify(Array.isArray(store.keyPath) ? store.keyPath.map((k) => value[k]) : value[store.keyPath]);
   const db = {
-    objectStoreNames: names, failNext: false, writes: [],
+    objectStoreNames: names, failNext: false, writes: [], reads: [],
     createObjectStore(name, { keyPath }) {
       const store = { keyPath, rows: new Map(), indexes: new Map() };
       stores.set(name, store);
@@ -34,12 +34,22 @@ function fakeIndexedDB() {
         const store = stores.get(name);
         return {
           put: (value) => request(() => { rows(name).set(keyOf(store, value), structuredClone(value)); db.writes.push([name, keyOf(store, value)]); }),
-          get: (key) => request(() => structuredClone(rows(name).get(JSON.stringify(key)))),
+          get: (key) => request(() => {db.reads.push([name,structuredClone(key)]);return structuredClone(rows(name).get(JSON.stringify(key)));}),
+          openCursor: () => {
+            const r={},keys=[...rows(name).keys()];let i=0;
+            const next=()=>queue.push(()=>{
+              const k=keys[i++];
+              r.result=k===undefined?null:{value:structuredClone(rows(name).get(k)),
+                update:value=>request(()=>rows(name).set(k,structuredClone(value))),
+                delete:()=>request(()=>rows(name).delete(k)),continue:next};
+              r.onsuccess?.();
+            });next();return r;
+          },
           delete: (key) => request(() => { rows(name).delete(JSON.stringify(key)); }),
           index: (index) => {
             const path = store.indexes.get(index), match = (v) => [...rows(name).entries()].filter(([, row]) => row[path] === v);
             return {
-              getAll: (v) => request(() => match(v).map(([, row]) => structuredClone(row))),
+              getAll: (v) => request(() => {db.reads.push([name,'all',v]);return match(v).map(([, row]) => structuredClone(row));}),
               getAllKeys: (v) => request(() => match(v).map(([k]) => JSON.parse(k))),
             };
           },
@@ -55,11 +65,17 @@ function fakeIndexedDB() {
     },
     count: (name, pred = () => true) => [...stores.get(name).rows.values()].filter(pred).length,
   };
+  // Start from an existing v3 database so the real upgrade callback is tested.
+  db.createObjectStore('worlds',{keyPath:'id'});
+  for(const name of ['chunks','runtime'])db.createObjectStore(name,{keyPath:['world','x','z']}).createIndex('world','world');
+  const migrated={world:'v3',x:-1,z:-2,state:{entities:[{order:0,value:{type:'pig',x:-1,y:70,z:-17}}],chests:{'-1,70,-17':{facing:5,items:[{id:322,count:7,damage:0}]}}}};
+  stores.get('runtime').rows.set(JSON.stringify(['v3',-1,-2]),migrated);
+  stores.get('runtime').rows.set(JSON.stringify(['v3',2,0]),{world:'v3',x:2,z:0,state:{furnaces:{'32,70,0':{items:[],burn:23,cook:4}}}});
   return {
     db,
     open() {
       const r = { result: db };
-      setTimeout(() => { r.onupgradeneeded?.(); r.onsuccess?.(); });
+      setTimeout(() => {r.transaction=db.transaction([...stores.keys()],'readwrite');r.transaction.oncomplete=()=>r.onsuccess?.();r.onupgradeneeded?.();});
       return r;
     },
   };
@@ -202,5 +218,80 @@ test('column eviction waits for durable saves, retries an aborted migration and 
  assert.equal(w.edits.size,0);
  await travel(64,64);assert.equal(w.getMeta(2,200,2),5);assert.equal(w.get(3,200,3),9);
  assert.deepEqual((await readChunkEdits(record.id)).map(([k])=>k),['1,0,1','2,200,2','-1000,200,-1000','3,200,3']);
+ await deleteStoredWorld(record.id);
+});
+
+
+test('v3 upgrade separates mixed and container-only columns without losing other runtime fields',async()=>{
+ const r=await readRuntimeState({id:'v3',runtimeChunked:true});
+ assert.equal(r.player.chests['-1,70,-17'].items[0].count,7);
+ assert.equal(r.player.furnaces['32,70,0'].burn,23);assert.equal(r.entities[0].type,'pig');
+ assert.equal(idb.db.count('containers',c=>c.world==='v3'),2);
+ assert.equal(idb.db.count('runtime',c=>c.world==='v3'),1,'container-only runtime row removed');
+});
+
+test('windowed container saves preserve unseen columns, delete observed empties, and export failed-save overlays',async()=>{
+ const record={id:'scoped',biome:'javaStreamed',edits:[],player:{health:19,chests:{'1,70,1':{facing:5,items:[{id:322,count:7,damage:0}]},'-1000,70,-1000':{facing:3,items:[]}},furnaces:{'9000,70,9000':{items:[],burn:23,cook:4}}},entities:[{x:1,y:70,z:1,type:'pig'}]},storage=shelf();
+ await writeWorldShelf([record],storage,'scoped');
+ const [stored]=await readWorldShelf([{id:record.id,storage:'indexeddb'}]);
+ idb.db.reads.length=0;
+ const loaded=await readRuntimeState(stored,{containerColumns:[[0,0],[1,0]]});
+ assert.deepEqual(Object.keys(loaded.player.chests),['1,70,1']);assert.deepEqual(loaded.player.furnaces,{});
+ assert.deepEqual(idb.db.reads.filter(([name])=>name==='containers'),[['containers',['scoped',0,0]],['containers',['scoped',1,0]]],'cold open never scans distant inventories');
+ assert.equal(loaded.entities[0].type,'pig');assert.equal(stored.containerScope,undefined);
+ loaded.player.chests['1,70,1'].items[0].count=2;
+ await writeWorldShelf([loaded],storage,'scoped');
+ assert.equal(idb.db.count('containers',c=>c.world==='scoped'),3);
+ let exported=await readRuntimeState(loaded);
+ assert.equal(exported.player.chests['1,70,1'].items[0].count,2);
+ assert.ok(exported.player.chests['-1000,70,-1000']);assert.equal(exported.player.furnaces['9000,70,9000'].burn,23);
+ assert.equal(exported.containerScope,undefined,'scope never leaks into a backup');
+ loaded.player.chests={};
+ idb.db.failNext=true;await assert.rejects(writeWorldShelf([loaded],storage,'scoped'),/quota/);
+ exported=await readRuntimeState(loaded);assert.equal(exported.player.chests['1,70,1'],undefined,'unsaved break wins over durable inventory in export');
+ assert.ok(exported.player.chests['-1000,70,-1000']);
+ assert.equal((await readContainerColumns(record.id,[[0,0]]))[0].state.chests['1,70,1'].items[0].count,2,'aborted write leaves durable data alone');
+ await writeWorldShelf([loaded],storage,'scoped');
+ assert.equal((await readContainerColumns(record.id,[[0,0]]))[0].state.chests,undefined);
+ assert.equal(idb.db.count('containers',c=>c.world==='scoped'),2,'unseen columns remain after deleting an observed chest');
+ await deleteStoredWorld(record.id);assert.equal(idb.db.count('containers',c=>c.world==='scoped'),0);
+});
+
+test('overlapping scoped saves snapshot their scopes and do not delete each other’s distant containers',async()=>{
+ const record={id:'container-overlap',biome:'javaStreamed',edits:[],player:{chests:{'1,70,1':{items:[]},'320,70,1':{items:[]}}}},storage=shelf();
+ await writeWorldShelf([record],storage,'container-overlap');
+ const [stored]=await readWorldShelf([{id:record.id,storage:'indexeddb'}]);
+ const a=await readRuntimeState(stored,{containerColumns:[[0,0]]}), b=await readRuntimeState(stored,{containerColumns:[[20,0]]});
+ a.player.chests={};b.player.chests['320,70,1'].facing=5;
+ const first=writeWorldShelf([a],storage,'container-overlap');
+ const second=writeWorldShelf([b],storage,'container-overlap');
+ b.containerScope.push([0,0]); // Captured scope must not expand with later mutations.
+ await Promise.all([first,second]);
+ const all=await readRuntimeState(stored);assert.equal(all.player.chests['1,70,1'],undefined);assert.equal(all.player.chests['320,70,1'].facing,5);
+ await deleteStoredWorld(record.id);
+});
+
+test('bounded fingerprints may rewrite unchanged columns and never skip a recreated world’s inventories',async()=>{
+ const record={id:'fingerprints',biome:'javaStreamed',edits:[],player:{chests:Object.fromEntries(Array.from({length:300},(_,i)=>[`${i*16},70,0`,{facing:3,items:[]}]))}},storage=shelf();
+ await writeWorldShelf([record],storage,'fingerprints');
+ idb.db.writes.length=0;await writeWorldShelf([record],storage,'fingerprints');
+ assert.equal(idb.db.writes.filter(([name])=>name==='containers').length,44,'only 256 column fingerprints are retained');
+ assert.equal(idb.db.count('containers',c=>c.world===record.id),300,'cache eviction never deletes durable inventories');
+ await deleteStoredWorld(record.id);
+ await writeWorldShelf([record],storage,'fingerprints');
+ assert.equal(idb.db.count('containers',c=>c.world===record.id),300,'deleting a world invalidates its write fingerprints');
+ await deleteStoredWorld(record.id);
+});
+
+test('damaged container ownership fails cold-window and complete-backup reads before hydration',async()=>{
+ await new Promise((resolve,reject)=>{
+  const tx=idb.db.transaction('containers','readwrite');
+  tx.objectStore('containers').put({world:'damaged-inventory',x:0,z:0,state:{chests:{'320,70,0':{items:[]}}}});
+  tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);
+ });
+ const record={id:'damaged-inventory',runtimeChunked:true};
+ await assert.rejects(readRuntimeState(record,{containerColumns:[[0,0]]}),/damaged/);
+ await assert.rejects(readRuntimeState(record),/damaged/);
+ assert.equal(record.player,undefined);
  await deleteStoredWorld(record.id);
 });

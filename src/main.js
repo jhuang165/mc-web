@@ -1,4 +1,5 @@
 import { StreamStorage } from './streaming-storage.js';
+import { ContainerResidency } from './container-residency.js';
 import { acquireWorldWriter } from './world-lock.js';
 import { readWorldShelf, writeWorldShelf, deleteStoredWorld, readChunkEdits, readRuntimeState } from './world-storage.js';
 import {PopulationBlocks} from './population-blocks.js';
@@ -502,6 +503,8 @@ function save() {
   // Live spawner and minecart state; regeneration never refills them (structure-simulation.js).
   if (spawners || minecarts) Object.assign(active, saveStructureEntities({ spawners, minecarts }));
   active.updated = Date.now();
+  const savingContainers=containerResidency, containerSave=savingContainers?.beginSave(active.player);
+  if(containerSave)active.containerScope=savingContainers.scope(containerSave);
   const i = worlds.findIndex((w) => w.id === active.id);
   if (i < 0) worlds.unshift(active);
   else worlds[i] = active;
@@ -510,6 +513,10 @@ function save() {
   const completion = persist(columns).then(ok => {
     savingWorld.finishColumnSave(columns, ok);
     savingStorage?.trim();
+    if(containerSave) {
+      savingContainers.finishSave(containerSave,ok);
+      if(containerResidency===savingContainers&&active?.id===savingId)savingContainers.pruneRecord(active);
+    }
     if (active?.id !== savingId) return;
     saved = ok;
     $("#save-label").textContent = ok ? "Saved on this device" : "Export to save your changes";
@@ -648,12 +655,12 @@ async function openWorld(record) {
   if(openingWorld)return;
   openingWorld=true;
   try {
-    record=await readRuntimeState(record);
     const prepared=new World(record.seed,record.biome,record.generationVersion??1);
     if (!record.chunked) prepared.restore(record.edits??[]);
     prepared.restoreClaimedColumns(record.populatedColumns);
     const p=record.position;
     if(prepared.streaming&&p&&[p.x,p.z].every(Number.isFinite))prepared.streamAround(p.x,p.z);
+    record=await readRuntimeState(record,prepared.streaming?{containerColumns:[...prepared.chunks.values()].map(c=>[c.x,c.z])}:{});
     const storage=prepared.streaming?new StreamStorage(prepared,record.id,{onError:e=>{pause();toast('Could not load saved columns. Reopen the world to retry: '+e.message);}}):null;
     prepared.nextEditOrder=Math.max(prepared.nextEditOrder,record.editSequence??(record.chunked?2000000:0));
     if(storage)await storage.ensure([...prepared.chunks.values()].map(c=>[c.x,c.z]));
@@ -754,6 +761,8 @@ async function launch(record, prepared) {
     stepDistance = 0;
     wasInWater = false;
     survival = new Survival(legacyPlayer(record), record.mode || "creative");
+    containerResidency?.dispose();
+    containerResidency=world.streaming?new ContainerResidency(world,record.id,survival,{scope:record.containerScope,onError:e=>{pause();toast('Could not load saved containers. Reopen the world to retry: '+e.message);}}):null;
     survival.furnaceActive = key => !world.streaming || world.isTicking(...[key.split(",")[0],key.split(",")[2]].map(Number));
     restorePopulation(record,world,survival,mobs);
     materializeFresh();
@@ -1539,6 +1548,7 @@ function tickMining() {
 // Streamed population (version 13): chests, animals, spawners, carts and liquid ticks of columns that
 // just became resident for the first time. Resident columns already claimed are never handed over again.
 function materializeFresh() {
+  containerResidency?.admit();
   const columns = world.claimFreshColumns();
   if (columns.length) {
     const handed = restorePopulationColumns(columns, { world, survival, mobs, spawners, minecarts, fluids });
@@ -1549,7 +1559,7 @@ function materializeFresh() {
 }
 // Streamed worlds build upcoming cells/columns in a worker (streaming-generator.js); without one,
 // generation stays synchronous.
-let streamPrefetch = null, streamStorage = null;
+let streamPrefetch = null, streamStorage = null, containerResidency = null;
 function startPrefetch() {
   streamPrefetch?.dispose();
   streamPrefetch = null;
@@ -1562,11 +1572,16 @@ function startPrefetch() {
 }
 async function spawnPosition() {
   if(streamStorage)await streamStorage.ensure(streamStorage.columns(64,64));
+  if(containerResidency)await containerResidency.ensure(containerResidency.columns(64,64));
   const change = world.streaming && world.streamAround(64,64);
   if (change) { scene.syncChunks(change); materializeFresh(); }
   return world.spawn();
 }
 function movementTick(controls) {
+  if(containerResidency) {
+    if(containerResidency.update(position.x,position.z).length)containerResidency.pruneRecord(active);
+    if(!containerResidency.ready(position.x,position.z))return;
+  }
   if(streamStorage) {
     streamStorage.update(position.x,position.z);
     if(!streamStorage.ready(position.x,position.z))return;
@@ -2030,7 +2045,7 @@ function animate(now) {
     }
     if (debug)
       $("#debug").textContent =
-        `BLOCKWORLD / Java 1.7.10 study\n${fps} FPS · ${(scene.worldTriangles || 0).toLocaleString()} triangles\nXYZ: ${position.x.toFixed(2)} / ${position.y.toFixed(2)} / ${position.z.toFixed(2)}\nSeed: ${active.seed}\n${survival.mode} · day ${Math.floor(survival.time / 24000) + 1} · ${survival.time % 24000} ticks\nHealth ${survival.health} · food ${survival.food} · saturation ${survival.saturation.toFixed(1)}\n${world.streaming ? world.chunks.size+" loaded chunks · " : ""}${world.edits.size} ${world.streaming ? "cached edited blocks" : "edited blocks"} · ${items.items.length} items · ${mobs?.entities.length || 0} mobs\n${aimedEntity ? aimedEntity.entity.type + " · " + aimedEntity.entity.health + " health" : target ? BLOCKS[world.get(...target.block)].name : "Looking into the distance"}`;
+        `BLOCKWORLD / Java 1.7.10 study\n${fps} FPS · ${(scene.worldTriangles || 0).toLocaleString()} triangles\nXYZ: ${position.x.toFixed(2)} / ${position.y.toFixed(2)} / ${position.z.toFixed(2)}\nSeed: ${active.seed}\n${survival.mode} · day ${Math.floor(survival.time / 24000) + 1} · ${survival.time % 24000} ticks\nHealth ${survival.health} · food ${survival.food} · saturation ${survival.saturation.toFixed(1)}\n${world.streaming ? world.chunks.size+" loaded chunks · " : ""}${world.edits.size} ${world.streaming ? "cached edited blocks" : "edited blocks"} · ${Object.keys(survival.chests).length + Object.keys(survival.furnaces).length} containers · ${items.items.length} items · ${mobs?.entities.length || 0} mobs\n${aimedEntity ? aimedEntity.entity.type + " · " + aimedEntity.entity.health + " health" : target ? BLOCKS[world.get(...target.block)].name : "Looking into the distance"}`;
     if (elapsed - lastSave > 5) save();
     scene.effects.crack(mining?.block, mining?.progress);
   } else if (screen === "dead") {
@@ -2144,7 +2159,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
+    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
   scene.preview(0);
   // The title screen's splash texts (assets/minecraft/texts/splashes.txt).
   menuContext.splashes = await fetch("/media/1.7.10/texts/splashes.txt").then((r) => (r.ok ? r.text() : "")).catch(() => "");
