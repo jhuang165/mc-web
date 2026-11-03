@@ -31,7 +31,7 @@ assert.equal(Object.keys(OPTION_FILE_KEY).length, options.length);
 
 // Browser status. Conservative: Verified is never used here; Implemented requires an exact native value set/default plus a named test.
 const S = {
-  INVERT_MOUSE: ['Implemented', 'Saved invertMouse switch "Invert Mouse" (en_US.lang), default off; negates the pitch argument of setAngles in plain and cinematic look, as the -1 multiplier in EntityRenderer.updateCameraAndRender (mouse-look.js; mouse-look.test.js, settings-catalogue.test.js). Shown in the Options modal beside Sensitivity rather than on a Controls screen; a switch replaces the ON/OFF button.'],
+  INVERT_MOUSE: ['Implemented', 'Saved invertMouse switch "Invert Mouse" (en_US.lang), default off; negates the pitch argument of setAngles in plain and cinematic look, as the -1 multiplier in EntityRenderer.updateCameraAndRender (mouse-look.js; mouse-look.test.js, settings-catalogue.test.js). The "Invert Mouse: ON/OFF" button sits on the Controls screen beside Sensitivity, as in GuiControls (menus.js).'],
   SENSITIVITY: ['Partial', 'Since 0.23.2: slider 0-1 default 0.5 with the native EntityRenderer curve (settings.js lookCurve, f=s*0.6+0.2, f^3*8, Entity.setAngles 0.15 deg per unit) and native *yawn*/HYPERSPEED!!!/percent labels (settings.test.js). Mouse movement is gathered per frame, pitch clamps to +-90 degrees as in Entity.setAngles, and the cinematic camera (MouseFilter) uses the same curve (mouse-look.js). Browser movement is in CSS pixels, not LWJGL device pixels.'],
   FOV: ['Implemented', 'Since 0.23.2: slider 30-110 step 1, default 70, Normal/Quake Pro labels (main.js, settings.js; settings.test.js, settings-catalogue.test.js). Bow/sprint/flight FOV modifiers exist in bow.js and main.js; the modifier set is audited separately.'],
   GAMMA: ['Partial', 'Slider 0-1 default 0 (Moody) matches native range/default; scene.setGamma lightmap application and native label strings not audited against native output.'],
@@ -89,7 +89,7 @@ const KEY_STATUS = {
   'key.chat': ['Missing', 'No chat; T unbound.'], 'key.playerlist': ['Missing', 'No player list; Tab only default-prevented.'],
   'key.pickItem': ['Partial', 'Middle click pick block (main.js); fixed.'], 'key.command': ['Missing', 'No command/chat entry; "/" unbound.'],
   'key.screenshot': ['Missing', 'No F2 screenshot.'], 'key.togglePerspective': ['Partial', 'F5 cycles first/behind/front; fixed.'],
-  'key.smoothCamera': ['Partial', 'Unbound by default natively, and Minecraft.runTick toggles smoothCamera only through this binding (no F8 check in 1.7.10). The Options switch "Toggle Cinematic Camera" stands in for the key; smoothCamera is session-only (not in options.txt). MouseFilter.smooth, the 0.05 x curve tick filter and the partial-tick spread are ported (mouse-look.js; mouse-look.test.js). Not rebindable.'], 'key.sprint': ['Partial', 'ControlLeft/ControlRight fixed.'],
+  'key.smoothCamera': ['Partial', 'Unbound by default natively, and Minecraft.runTick toggles smoothCamera only through this binding (no F8 check in 1.7.10). Options > Controls rebinds it to a key or mouse button (saved on the device in options.keys; menus.js); smoothCamera is session-only (not in options.txt). MouseFilter.smooth, the 0.05 x curve tick filter and the partial-tick spread are ported (mouse-look.js; mouse-look.test.js). Not rebindable.'], 'key.sprint': ['Partial', 'ControlLeft/ControlRight fixed.'],
   'key.streamStartStop': ['Missing', 'Twitch streaming.'], 'key.streamPauseUnpause': ['Missing', 'Twitch streaming.'], 'key.streamCommercial': ['Missing', 'Twitch streaming.'], 'key.streamToggleMic': ['Missing', 'Twitch streaming.'],
   'key.fullscreen': ['Missing', 'HUD button exists; F11 key unbound.'],
 };
@@ -148,12 +148,12 @@ const layoutNote = s => s.initEvents.map(e => e.string ?? e.widget?.replace(/^ne
 const arrayRows = screenArrays.map(a => `| ${a.mappedClass.replace(/^net\/minecraft\/client\/gui\//, '')}.${a.srgField} | ${a.options.map((o, i) => `${i + 1} ${o}`).join(', ')} |`);
 const layoutRows = screenLayouts.map(s => `| ${s.mappedClass.replace(/^net\/minecraft\/client\/gui\//, '')} | ${cell(layoutNote(s))} |`);
 const SCREEN_STATUS = {
-  GuiOptions: 'Partial: one local modal (main.js) holds a subset of FOV, difficulty, sound, sensitivity and video controls; no sub-screens.',
-  GuiVideoSettings: 'Partial: Particles, GUI scale, brightness, render distance (block units), view bobbing in the shared modal; Graphics, AO, clouds, framerate, anaglyph, mipmaps, anisotropy absent.',
+  GuiOptions: 'Partial: the 1.7.10 layout and buttons (menus.js, menu-screens.js); FOV, difficulty (in a world), Music & Sounds, Video Settings, Controls and Language work; Super Secret Settings, Broadcast, Multiplayer, Resource Packs and Snooper are drawn disabled and explain why.',
+  GuiVideoSettings: 'Partial: the GuiOptionsRowList of two-column options (without Advanced OpenGL); render distance, view bobbing, GUI scale, brightness, particles and fullscreen work; Graphics, Smooth Lighting, Max Framerate, 3D Anaglyph, Clouds, VSync, Mipmap Levels and Anisotropic Filtering show the renderer\'s fixed state, disabled.',
   ScreenChatOptions: 'Missing (no chat).',
-  GuiScreenOptionsSounds: 'Partial: all nine category sliders with the en_US "<category>: <value>" labels in ordinal order, inside the shared Options modal (no separate screen, no full-width master row, no gui.button.press on release); a non-native Sounds switch remains.',
-  GuiControls: 'Partial: read-only key reference list (main.js), no rebinding, no Reset All; Invert Mouse and Sensitivity live in the Options modal; no Touchscreen option.',
-  GuiLanguage: 'Missing (English only).', GuiSnooper: 'Missing.', GuiScreenResourcePacks: 'Missing (fixed original assets).',
+  GuiScreenOptionsSounds: 'Partial: its own screen with the full-width Master Volume row and the eight category sliders in two columns, en_US "<category>: <value>" labels, gui.button.press on release (menus.js).',
+  GuiControls: 'Partial: Invert Mouse, Sensitivity and a disabled Touchscreen Mode button above the sorted GuiKeyBindingList with Reset and Reset Keys (menus.js); only key.smoothCamera can be rebound, the other keys are fixed by the browser game loop.',
+  GuiLanguage: 'Partial: the screen with a one-entry list (English (US), the only bundled lang file), the accuracy warning and a disabled Force Unicode Font button.', GuiSnooper: 'Missing.', GuiScreenResourcePacks: 'Missing (fixed original assets).',
 };
 const screenStatusRows = screenLayouts.map(s => {
   const n = s.mappedClass.split('/').pop();

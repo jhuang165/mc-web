@@ -8,8 +8,12 @@ import { particleSetting } from "./particle-settings.js";
 import "./style.css";
 import "./minecraft-ui.css";
 import "./container-ui.css";
+import "./menu-screens.css";
+import { Gui } from "./menu-ui.js";
+import { createMenus } from "./menus.js";
+import { folderName } from "./menu-screens.js";
 import {guiScale,stackCount,durabilityBar,tooltipLines} from "./gui.js";
-import { migrateSettings, optionLabel, renderDistanceBlocks, GUI_SCALE_NAMES, SOUND_CATEGORIES, soundLevel } from "./settings.js";
+import { migrateSettings, renderDistanceBlocks, SOUND_CATEGORIES, soundLevel } from "./settings.js";
 import { MouseLook, setAngles } from "./mouse-look.js";
 import * as THREE from "three";
 import {
@@ -73,7 +77,7 @@ import { Arrows, arrowTargets, bowStage, bowFov, easeFov, ARROW } from "./bow.js
 import { canSeeSky } from "./weather.js";
 import { Fluids, eyeInWater } from "./fluids.js";
 import { Fire } from "./fire.js";
-import { DIFFICULTY_NAMES, difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.js";
+import { difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.js";
 import { isInvisible } from "./mob-effects.js";
 import { primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { TntRenderer } from "./tnt-renderer.js";
@@ -158,6 +162,8 @@ try {
   };
 } catch {}
 options.particles = particleSetting(options.particles);
+// GuiScreenOptionsSounds has no mute switch: Master Volume is the only off control.
+options.sound = true;
 options.difficulty = difficultySetting(options.difficulty);
 // The difficulty in every system that reads World.difficultySetting.
 function updateDifficulty() {
@@ -176,8 +182,6 @@ function updateParticleOptions() {
   const viewer = [position.x, position.y + PHYSICS.eye, position.z];
   scene.explosionParticles.viewer = projectiles.particleViewer = scene.fx.viewer = viewer;
 }
-// GameSettings.getKeyBinding for GAMMA.
-const gammaLabel=g=>g<=0?"Moody":g>=1?"Bright":"+"+Math.round(g*100)+"%";
 function updateGuiScale(){document.documentElement.style.setProperty('--gui-scale',guiScale(innerWidth,innerHeight,Number(options.guiScale)||0));}
 window.addEventListener('resize',updateGuiScale);updateGuiScale();
 let screen = "home",
@@ -262,40 +266,41 @@ const arrows = new Arrows();
 const bowFovState = { prev: 1, cur: 1 };
 $("#app").innerHTML = `
  <div id="viewport" aria-label="Interactive voxel world"></div><div id="vignette"></div>
- <main id="home" class="minecraft-home">
-  <div class="title-screen"><div class="minecraft-logo" aria-label="Minecraft"><i></i><i></i></div><div class="title-buttons"><button class="button" id="enter">Singleplayer</button><button class="button" data-action="create">Create New World</button><button class="button" data-action="settings">Options...</button><button class="button" data-action="controls">Controls...</button></div><footer class="minecraft-footer"><span>Minecraft 1.7.10 · Web recreation</span><span>Copyright Mojang AB</span></footer></div>
-  <section class="world-shelf"><h2>Select World</h2><div id="worlds" class="world-grid"></div><div class="world-buttons"><button class="button" data-action="create">Create New World</button><button class="button" id="import">Import World</button><button class="button" id="world-select-back">Cancel</button></div></section>
- </main>
+ <div id="gui" class="hidden"></div>
  <section id="hud" class="hidden" aria-label="Game heads-up display"><div class="game-top"><button class="game-brand" id="pause-button">${cube}<span>BLOCKWORLD<small id="world-label"></small></span><span class="pause-symbol">Ⅱ</span></button><div class="game-status"><span class="status-dot"></span><span id="save-label">Saved on this device</span><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div></div><div id="crosshair">＋</div><pre id="debug" class="hidden"></pre><div id="block-label"></div><div id="experience-hud" class="hidden"><div id="experience-level"></div><div class="experience-track"><div id="experience-fill"></div></div></div><div id="survival-hud" class="survival-hud hidden"></div><div id="mining-meter" class="mining-meter hidden" role="progressbar" aria-label="Mining progress" aria-valuemin="0" aria-valuemax="100"><i></i></div><div id="damage-flash"></div><div id="flight-label" class="flight-label"><span id="mode-label">CREATIVE</span> <span>·</span> <b id="movement-label">WALKING</b></div><div class="hotbar" id="hotbar"></div><div class="game-help">W A S D <span>move</span> <i>·</i> SPACE <span>jump</span> <i>·</i> LMB <span>break</span> <i>·</i> RMB <span>use / place</span> <i>·</i> E <span>inventory</span> <i>·</i> ESC <span>pause</span></div><div id="mobile-controls"><div class="dpad"><button data-key="KeyW">↑</button><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="touch-actions"><button id="touch-break">Break</button><button id="touch-place">Use</button><button id="touch-inventory">Bag</button><button id="touch-fly">Fly</button><button data-key="Space">Jump</button></div></div></section>
  <div class="modal-overlay hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div><div id="toast" role="status"></div><input id="file-input" type="file" accept=".json,application/json" hidden>
  <div id="loading"><span>Loading terrain</span></div>`;
+// The 1.7.10 menu screens (menus.js) drawn over the game in #gui.
+const menuContext = {
+  get options() { return options; },
+  get worlds() { return worlds; },
+  splashes: "",
+  saveOptions,
+  soundLevel: (k) => soundLevel(options.soundLevels, k),
+  makeRecord,
+  launch,
+  exportWorld,
+  importWorld: () => $("#file-input").click(),
+  deleteWorld,
+  renameWorld,
+  resume,
+  goHome,
+  toggleFullscreen,
+  inGame: () => screen !== "home",
+  notice: toast,
+  // Minecraft.displayGuiScreen(null): back to the game, or the title screen without a world.
+  closeScreen: () => (screen === "home" ? gui.show(menus.mainMenu()) : resume()),
+};
+const gui = new Gui($("#gui"), {
+  scale: () => guiScale(innerWidth, innerHeight, Number(options.guiScale) || 0),
+  // GuiButton.func_146113_a: gui.button.press at volume 0.25, pitch 1.
+  sound: () => sounds?.play("gui.button.press", { volume: 0.25, pitch: 1 }),
+  notice: toast,
+  inGame: () => screen !== "home",
+});
+const menus = createMenus(gui, menuContext);
+addEventListener("resize", () => gui.build());
 
-const presets = [
-  {
-    name: "The Overworld",
-    seed: "Overworld",
-    biome: "meadow",
-    description: "Rolling hills. A river. A fresh start.",
-    tag: "MEADOW",
-    icon: "↟",
-  },
-  {
-    name: "Higher Ground",
-    seed: "Summit 1710",
-    biome: "alpine",
-    description: "For a different point of view.",
-    tag: "HIGHLANDS",
-    icon: "△",
-  },
-  {
-    name: "A Place Apart",
-    seed: "Castaway",
-    biome: "island",
-    description: "A small escape, surrounded by blue.",
-    tag: "ISLAND",
-    icon: "≈",
-  },
-];
 async function persist() {
   try {
     await writeWorldShelf(worlds, localStorage, storageKey);
@@ -305,46 +310,12 @@ async function persist() {
     return false;
   }
 }
-function renderWorlds() {
-  const display = [...worlds];
-  for (const p of presets) {
-    if (display.length >= 3) break;
-    if (!display.some((w) => w.seed === p.seed))
-      display.push({ ...p, preset: true });
-  }
-  $("#worlds").innerHTML = display
-    .map(
-      (w, i) =>
-        `<article class="world-card"><button class="world-open" data-world="${i}"><div class="world-thumb ${esc(w.biome)}"><span class="thumb-sun"></span><span class="thumb-hill h1"></span><span class="thumb-hill h2"></span><span class="thumb-tree t1"></span><span class="thumb-tree t2"></span><span class="thumb-tree t3"></span></div><div class="world-copy"><div class="world-meta"><span>${esc(w.tag || w.biome.toUpperCase())}</span><span>${w.mode === "survival" ? "SURVIVAL" : w.preset ? "READY TO EXPLORE" : "CREATIVE"}</span></div><h3>${esc(w.name)} </h3><p>${esc(w.preset ? w.description : relativeDate(w.updated))}</p></div></button>${!w.preset ? `<button class="world-more" data-manage="${i}" aria-label="Manage ${esc(w.name)}">···</button>` : ""}</article>`,
-    )
-    .join("");
-  document.querySelectorAll("[data-world]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        const w = display[+b.dataset.world];
-        launch(w.preset ? makeRecord(w) : w);
-      }),
-  );
-  document
-    .querySelectorAll("[data-manage]")
-    .forEach((b) => (b.onclick = () => manage(display[+b.dataset.manage])));
-}
-function relativeDate(d) {
-  const diff = Date.now() - d;
-  if (diff < 60000) return "Just explored";
-  if (diff < 3600000) {
-    const n = Math.floor(diff / 60000);
-    return `${n} minute${n === 1 ? "" : "s"} ago`;
-  }
-  return new Date(d).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
 function makeRecord(p) {
   return {
     id: crypto.randomUUID(),
     name: p.name.slice(0, 40),
+    // The save folder GuiCreateWorld derived from the name (menu-screens.js folderName).
+    ...(typeof p.folder === "string" && p.folder ? { folder: p.folder.slice(0, 80) } : {}),
     seed: String(p.seed).slice(0, 80),
     biome: p.biome || "meadow",
     mode: p.mode === "survival" ? "survival" : "creative",
@@ -437,52 +408,6 @@ function modal(title, body, extra = "") {
   };
   $("#modal").querySelector("button,input")?.focus();
 }
-function createWorld() {
-  modal(
-    "Create New World",
-    `<p class="modal-subtitle"></p><form id="create-form"><label>WORLD NAME<input id="new-name" maxlength="40" value="New World" required></label><div class="form-columns"><label>GAME MODE<select id="new-mode"><option value="survival">Survival</option><option value="creative" selected>Creative</option></select></label><label>LANDSCAPE<select id="new-biome"><option value="java" selected>Java Overworld</option><option value="javaStreamed">Java streaming preview</option><option value="javaAmplified">Java Amplified</option><option value="javaLargeBiomes">Java Large Biomes</option><option value="meadow">Meadow</option><option value="alpine">Highlands</option><option value="island">Island</option><option value="snowy">Snowy Tundra</option></select></label></div><label>SEED <span>Same seed, same beginning.</span><input id="new-seed" maxlength="80" placeholder="Leave blank for a surprise"></label><p class="form-note">Streaming preview: explore beyond the starting area, including negative coordinates. Terrain, caves, ravines, ores, trees, lakes, dungeons, mineshafts, animals and snow are generated per area from the seed; villages, strongholds and temples are unfinished. New areas are built in the background ahead of you; moving very fast can still pause briefly. Saved locally on this browser. Other Java worlds: 128 × 128 × 256 blocks, with caves and ravines. New worlds include ores, trees, lakes, dungeons, mineshafts, animals and snow. Villages, strongholds and temples are unfinished. Meadow, Highlands, Island and Snowy Tundra keep their decorated terrain.</p><button class="button primary full">Create New World</button></form>`,
-  );
-  $("#create-form").onsubmit = (e) => {
-    e.preventDefault();
-    const name = $("#new-name").value.trim();
-    if (!name) return;
-    launch(
-      makeRecord({
-        name,
-        seed:
-          $("#new-seed").value.trim() ||
-          String(Math.floor(Math.random() * 2147483647)),
-        biome: $("#new-biome").value,
-        mode: $("#new-mode").value,
-      }),
-    );
-  };
-}
-function controls() {
-  modal(
-    "Controls",
-    `<p class="modal-subtitle">In Survival, start by punching a tree. In Creative, all materials are available.</p><div class="control-list">${[
-      ["W A S D", "Move around"],
-      ["MOUSE", "Look around"],
-      ["SPACE", "Jump · double tap to fly in Creative"],
-      ["SHIFT", "Sneak (hold) · descend while flying"],
-      ["CTRL / W W", "Sprint: hold Ctrl or double-tap W (food above 3 hunger icons in Survival)"],
-      ["LEFT CLICK", "Hold to mine · click in drag mode"],
-      ["RIGHT CLICK", "Place, eat, or use a workstation"],
-      ["1 – 9 / SCROLL", "Choose a slot"],
-      ["Q / CTRL + Q", "Drop one item / the whole stack"],
-      ["MIDDLE CLICK", "Pick the targeted block"],
-      ["E", "Inventory & 2 × 2 crafting"],
-      ["F3", "Coordinates, time & performance"],
-      ["F5", "Cycle first person, behind and front view"],
-      ["ESC", "Pause & save"],
-    ]
-      .map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`)
-      .join(
-        "",
-      )}</div><p class="form-note">Inventories use the 1.7.10 slot rules. Left-click picks up or places a stack; right-click picks up half or places one. Drag a held stack across slots to share it evenly (left) or one each (right). Shift-click moves a stack between sections; double-click gathers matching items. Over a slot, 1 – 9 swaps with the hotbar and Q / Ctrl + Q drops. Click outside the window to throw the held stack. Right-click a crafting table for the 3 × 3 grid, a furnace to smelt or a chest to store items (two side by side form a large chest; a solid block on top keeps the lid shut); two damaged tools of one kind repair each other. F3 + H shows durability in tooltips.</p><p class="form-note">In Creative, E opens the 1.7.10 tabbed inventory. Click a tab or press T to search; the wheel or scrollbar scrolls. Click an item to take one (Shift: a full stack); click the same item again to add one, or anything else to delete the held stack. The chest tab shows your survival inventory; its X slot destroys the held item (Shift-click clears everything).</p><p class="form-note">To farm: break tall grass for seeds, right-click exposed grass/dirt with a hoe, then plant seeds on the tilled soil. Hold wheat to lead cows and sheep, seeds for chickens, or carrots for pigs; feed two adults to breed. Plant carrots or potatoes directly on tilled soil. Mature roots provide more for replanting; bake potatoes in a furnace. Zombies rarely drop the first carrots and potatoes. Water within four blocks keeps soil hydrated. Bone meal advances growth; harvest mature golden wheat and craft three wheat into bread.</p><p class="form-note">If mouse capture is unavailable, drag to look and click once to mine the targeted block. Touch controls include a Fly button in Creative.</p>`,
-  );
-}
 function notes() {
   modal(
     "Rebuilding 1.7.10, system by system.",
@@ -490,58 +415,48 @@ function notes() {
     "notes-modal",
   );
 }
-function settings() {
-  modal(
-    "Options",
-    `<p class="modal-subtitle">Original Minecraft 1.7.10 effects. Your preferences stay on this device.</p><div class="settings-list"><label>GUI Scale<select id="gui-scale">${GUI_SCALE_NAMES.map((label,v)=>`<option value="${v}" ${Number(options.guiScale||0)===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Difficulty<select id="difficulty">${DIFFICULTY_NAMES.map((label,v)=>`<option value="${v}" ${options.difficulty===v?"selected":""}>${label}</option>`).join("")}</select></label><label>Particles<select id="particles">${["All","Decreased","Minimal"].map((label,v)=>`<option value="${v}" ${options.particles===v?"selected":""}>${label}</option>`).join("")}</select></label><label>FOV <output id="fov-value">${optionLabel("fov",options.fov)}</output><input type="range" id="fov" min="30" max="110" step="1" value="${options.fov}"></label><label>Sensitivity <output id="sensitivity-value">${optionLabel("sensitivity",options.sensitivity)}</output><input type="range" id="sensitivity" min="0" max="1" step="0.005" value="${options.sensitivity}"></label><label class="switch-label">Invert Mouse<input type="checkbox" id="invertMouse" ${options.invertMouse ? "checked" : ""}></label><label class="switch-label" title="key.smoothCamera is unbound by default in 1.7.10; this switch stands in for the key and is not saved">Toggle Cinematic Camera<input type="checkbox" id="smooth-camera" ${smoothCamera ? "checked" : ""}></label><label>Render Distance <output id="distance-value">${optionLabel("distance",options.distance)}</output><input type="range" id="distance" min="2" max="16" step="1" value="${options.distance}"></label><label>Brightness <output id="gamma-value">${gammaLabel(options.gamma)}</output><input type="range" id="gamma" min="0" max="1" step=".01" value="${options.gamma}"></label>${SOUND_CATEGORIES.map(([k,label])=>`<label>${label}: <output id="sound-${k}-value">${optionLabel("volume",soundLevel(options.soundLevels,k))}</output><input type="range" id="sound-${k}" min="0" max="1" step=".01" value="${soundLevel(options.soundLevels,k)}"></label>`).join("")}<label class="switch-label">Sounds<input type="checkbox" id="sound" ${options.sound ? "checked" : ""}></label><label class="switch-label">View bobbing<input type="checkbox" id="bobbing" ${options.bobbing ? "checked" : ""}></label><button class="button secondary full" id="test-sound">Test original sound <span>♪</span></button><p class="form-note" id="audio-status" role="status">${esc(sounds.status)}</p></div>`,
-  );
-  for (const key of [
-    "fov",
-    "sensitivity",
-    "distance",
-    "gamma",
-    "sound",
-    "bobbing",
-    "invertMouse",
-  ])
-    $("#" + key).oninput = (e) => {
-      options[key] = ["sound", "bobbing", "invertMouse"].includes(key)
-        ? e.target.checked
-        : +e.target.value;
-      const out = $("#" + key + "-value");
-      if (out)
-        out.textContent = key === "gamma" ? gammaLabel(options[key]) : optionLabel(key, options[key]);
-      scene.camera.fov = options.fov;
-      scene.camera.updateProjectionMatrix();
-      scene.setDistance(renderDistanceBlocks(options.distance));
-      scene.setGamma(options.gamma);
-      try {
-        localStorage.setItem("blockworld.settings", JSON.stringify(options));
-      } catch {}
-    };
-  // GameSettings.setSoundLevel: store the level and regain playing sounds (SoundManager).
-  for (const [k] of SOUND_CATEGORIES)
-    $("#sound-" + k).oninput = (e) => {
-      options.soundLevels = { ...options.soundLevels, [k]: +e.target.value };
-      $("#sound-" + k + "-value").textContent = optionLabel("volume", options.soundLevels[k]);
-      sounds.updateVolumes();
-      try { localStorage.setItem("blockworld.settings", JSON.stringify(options)); } catch {}
-    };
-  $("#smooth-camera").onchange = (e) => { smoothCamera = e.target.checked; };
-  $("#difficulty").onchange=e=>{options.difficulty=difficultySetting(+e.target.value);updateDifficulty();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
-  $("#particles").onchange=e=>{options.particles=particleSetting(+e.target.value);updateParticleOptions();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
-  $("#gui-scale").onchange=e=>{options.guiScale=+e.target.value&3;updateGuiScale();try{localStorage.setItem("blockworld.settings",JSON.stringify(options));}catch{}};
-  $("#test-sound").onclick = async () => {
-    if (!options.sound) {
-      $("#audio-status").textContent = "Sounds are muted.";
-      return;
-    }
-    sounds.unlock();
-    const played = await sounds.play("random.click", { volume: 1 });
-    $("#audio-status").textContent = played
-      ? "Original sound played."
-      : sounds.status;
-  };
+// GameSettings.setOptionValue / setOptionFloatValue: apply a change from the menu screens and
+// save the device preferences (options.txt).
+function saveOptions() {
+  options.particles = particleSetting(options.particles);
+  options.difficulty = difficultySetting(options.difficulty);
+  options.guiScale = (Number(options.guiScale) || 0) & 3;
+  scene.camera.fov = options.fov;
+  scene.camera.updateProjectionMatrix();
+  scene.setDistance(renderDistanceBlocks(options.distance));
+  scene.setGamma(Number(options.gamma) || 0);
+  sounds.updateVolumes();
+  updateParticleOptions();
+  updateDifficulty();
+  updateGuiScale();
+  try {
+    localStorage.setItem("blockworld.settings", JSON.stringify(options));
+  } catch {}
+}
+async function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch {
+    toast("Fullscreen is unavailable in this browser.");
+  }
+}
+// GuiYesNo from GuiSelectWorld: remove the world from the shelf and its streamed chunks.
+async function deleteWorld(record) {
+  const before = worlds;
+  worlds = worlds.filter((w) => w.id !== record.id);
+  if (!await persist()) { worlds = before; return; }
+  if (record.biome === 'javaStreamed') {
+    try { await deleteStoredWorld(record.id); }
+    catch { toast('World removed from the shelf; its stored data could not be cleared.'); }
+  }
+}
+// GuiRenameWorld: the display name changes; the save folder keeps its name.
+async function renameWorld(record, name) {
+  record.folder ??= folderName(record.name || "World");
+  record.name = name.slice(0, 40);
+  if (active?.id === record.id) $("#world-label").textContent = record.name;
+  await persist();
 }
 
 function save() {
@@ -613,32 +528,6 @@ function exportWorld(record = active) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   toast("Your world is ready to take with you.");
-}
-function manage(record) {
-  modal(
-    esc(record.name),
-    `<p class="modal-subtitle">A little world worth keeping.</p><div class="menu-actions"><button class="button primary full" id="manage-play">Continue exploring </button><button class="button secondary full" id="manage-export">Export world <span>↓</span></button><button class="text-button danger" id="manage-delete">Delete from this device</button></div>`,
-  );
-  $("#manage-play").onclick = () => launch(record);
-  $("#manage-export").onclick = () => exportWorld(record);
-  $("#manage-delete").onclick = () => {
-    modal(
-      "Let this world go?",
-      `<p class="modal-subtitle">“${esc(record.name)}” will be removed from this device. Export a copy first if you want to keep it.</p><div class="menu-actions"><button class="button primary full" id="confirm-delete">Delete world</button><button class="button secondary full" id="cancel-delete">Keep exploring</button></div>`,
-    );
-    $("#confirm-delete").onclick = async () => {
-      const before = worlds;
-      worlds = worlds.filter((w) => w.id !== record.id);
-      if (!await persist()) { worlds = before; return; }
-      if (record.biome === 'javaStreamed') {
-        try { await deleteStoredWorld(record.id); }
-        catch { toast('World removed from the shelf; its stored data could not be cleared.'); }
-      }
-      renderWorlds();
-      closeModal();
-    };
-    $("#cancel-delete").onclick = () => manage(record);
-  };
 }
 function requestLock() {
   if (screen !== "playing") return;
@@ -872,7 +761,7 @@ function launch(record) {
     keys.clear();
     accumulator = 0;
     screen = "playing";
-    $("#home").classList.add("hidden");
+    gui.hide();
     $("#hud").classList.remove("hidden");
     $("#vignette").classList.add("in-game");
     $("#world-label").textContent = record.name;
@@ -905,6 +794,7 @@ function resume() {
     return;
   }
   closeModal();
+  gui.hide();
   screen = "playing";
   keys.clear();
   requestLock();
@@ -913,17 +803,14 @@ function pause() {
   if (screen === "home" || screen === "dead") return;
   mining = null;
   mineHeld = false;
+  eating = null;
+  closeModal();
   screen = "paused";
   keys.clear();
   save();
-  modal(
-    "Game menu",
-    `<p class="modal-subtitle"></p><div class="menu-actions"><button class="button primary full" id="resume">Back to Game</button><button class="button secondary full" data-action="settings">Options...</button><button class="button secondary full" data-action="controls">Controls...</button><button class="button secondary full" id="export-pause">Export world <span>↓</span></button><button class="text-button full" id="exit-world">Save and Quit to Title</button></div>`,
-  );
-  $("#resume").onclick = resume;
-  $("#export-pause").onclick = () => exportWorld();
-  $("#exit-world").onclick = goHome;
-  bindActions();
+  if (document.pointerLockElement) document.exitPointerLock();
+  // GuiIngameMenu (menus.js).
+  gui.show(menus.ingameMenu());
 }
 function goHome() {
   save();
@@ -931,10 +818,9 @@ function goHome() {
   closeModal();
   keys.clear();
   if (document.pointerLockElement) document.exitPointerLock();
-  $("#home").classList.remove("hidden","selecting");
   $("#hud").classList.add("hidden");
   $("#vignette").classList.remove("in-game");
-  renderWorlds();
+  gui.show(menus.mainMenu());
 }
 function inventory(station = false) {
   if (survival.creative && !station) {
@@ -1704,10 +1590,7 @@ function bindActions() {
       (b.onclick = (e) => {
         e.preventDefault();
         ({
-          settings,
-          controls,
           notes,
-          create: createWorld,
           home: () => {
             if (screen !== "home") goHome();
             else closeModal();
@@ -1716,21 +1599,8 @@ function bindActions() {
       }),
   );
 }
-$("#enter").onclick = () => $("#home").classList.add("selecting");
-$("#world-select-back").onclick = () => $("#home").classList.remove("selecting");
 $("#pause-button").onclick = pause;
-$("#fullscreen").onclick = () => {
-  try {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else
-      document.documentElement
-        .requestFullscreen()
-        .catch(() => toast("Fullscreen is unavailable in this browser."));
-  } catch {
-    toast("Fullscreen is unavailable in this browser.");
-  }
-};
-$("#import").onclick = () => $("#file-input").click();
+$("#fullscreen").onclick = toggleFullscreen;
 $("#file-input").onchange = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -1757,7 +1627,7 @@ $("#file-input").onchange = async (e) => {
     };
     worlds.unshift(record);
     if (!await persist()) throw new Error('World imported in memory. Export a copy because device storage is unavailable.');
-    renderWorlds();
+    if (gui.screen?.id === "select-world") gui.build();
     toast("World imported.");
   } catch (err) {
     toast(err.message);
@@ -1766,6 +1636,13 @@ $("#file-input").onchange = async (e) => {
 };
 
 window.addEventListener("keydown", (e) => {
+  // An open menu screen takes every key (GuiScreen.handleKeyboardInput).
+  if (gui.open) {
+    gui.key(e);
+    return;
+  }
+  // KeyBinding key.smoothCamera (unbound by default; Options > Controls can bind it).
+  if (screen === "playing" && options.keys?.["key.smoothCamera"] && e.code === options.keys["key.smoothCamera"] && !e.repeat) smoothCamera = !smoothCamera;
   if (e.code === "Escape") {
     e.preventDefault();
     if (screen === "dead") return;
@@ -1887,6 +1764,7 @@ function setupPointer() {
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   canvas.addEventListener("pointerdown", (e) => {
     if (screen !== "playing") return;
+    if (options.keys?.["key.smoothCamera"] === "Mouse" + e.button) smoothCamera = !smoothCamera;
     if (e.button === 2) {
       edit(true);
       return;
@@ -2125,7 +2003,8 @@ function animate(now) {
     scene.camera.fov = fov;
     scene.camera.updateProjectionMatrix();
   }
-  scene.render(elapsed, dt);
+  // The title and world screens cover the view; a paused world still draws behind its menu.
+  if (screen !== "home") scene.render(elapsed, dt);
   if (firstPerson && animate.pose)
     firstPerson.render(animate.pose, {
       visible: thirdPersonView === 0 && ["playing", "inventory", "paused"].includes(screen),
@@ -2190,8 +2069,9 @@ async function boot(){try {
   if (import.meta.env.DEV)
     window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
   scene.preview(0);
-  scene.render(0);
-  renderWorlds();
+  // The title screen's splash texts (assets/minecraft/texts/splashes.txt).
+  menuContext.splashes = await fetch("/media/1.7.10/texts/splashes.txt").then((r) => (r.ok ? r.text() : "")).catch(() => "");
+  gui.show(menus.mainMenu());
   renderHotbar();
   bindActions();
   $("#loading").classList.add("hidden");
