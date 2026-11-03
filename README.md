@@ -11,9 +11,11 @@ npm ci
 npm run dev
 ```
 
-Node 20.19+ and a browser with WebGL 2 are required. Build with `npm run build`; output is `dist/`.
+Node 20.19+ and a browser with WebGL 2 and Web Locks (HTTPS or localhost) are required. Build with `npm run build`; output is `dist/`.
 
 ## Current implementation
+
+Version **0.32.0** loads saved edits only as columns enter range, stores entity/container/pending-tick payloads per column, and prevents stale saves from competing tabs with one writable app per origin. Export now offers Java 1.7.10 ZIP saves (`level.dat` + Anvil regions), alongside the browser backup and explicit conversion notes. Runtime payloads still hydrate globally; full Java save parity remains unfinished. Native village/temple candidate decisions and stronghold positions are researched and replayed against the installed JDK; their buildings/population are still missing. See [streaming](public/research/streaming.md) and [structures](public/research/structures.md).
 
 Version **0.31.0** stores streamed-world edits per chunk column: a save writes only the columns you changed since the last one, together with the world record in one transaction. Worlds saved by earlier versions, and imported files, convert on their first save, and exports still contain every edit; see [streaming](public/research/streaming.md).
 

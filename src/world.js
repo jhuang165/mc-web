@@ -301,6 +301,7 @@ export class World {
     // the last takeDirtyColumns (world-storage.js writes those).
     this.chunkEdits = new Map();
     this.dirtyColumns = new Set();
+    this.nextEditOrder = 0;
     this.onChange = null;
     // Saved block light (World.getSavedLightValue(EnumSkyBlock.Block)): the scene sets this to
     // its LightVolume; until then snow.js works it out from the lava.
@@ -450,15 +451,38 @@ export class World {
     return true;
   }
   rememberEdit(x, y, z, value) {
-    const order = this.edits.size;
+    const order = this.streaming ? this.nextEditOrder : this.edits.size;
     this.edits.set(`${x},${y},${z}`, value);
     if (this.streaming) {
       const key = columnKey(x >> 4, z >> 4), cell = cellIndex(x, y, z, this.height);
       let edits = this.chunkEdits.get(key);
       if (!edits) this.chunkEdits.set(key, edits = new Map());
       const old = edits.get(cell);
+      if (old === undefined) this.nextEditOrder++;
       edits.set(cell, (old === undefined ? order : Math.floor(old / 4096)) * 4096 + value);
       this.dirtyColumns.add(key);
+    }
+  }
+  // Hydrate a saved column without notifications, new scheduling, or marking it dirty.
+  restoreColumns(records) {
+    // Validate the batch before touching any column, including resident ones.
+    for (const r of records) {
+      const n=r?.cells?.length;
+      if (!Number.isInteger(r?.x)||!Number.isInteger(r?.z)||!Number.isInteger(n)||r.values?.length!==n||r.order?.length!==n) throw new Error('Saved chunk is damaged');
+      for(let i=0;i<n;i++)if(!Number.isInteger(r.cells[i])||r.cells[i]<0||r.cells[i]>65535||!Number.isInteger(r.values[i])||r.values[i]<0||r.values[i]>4095||(r.values[i]&255)>=BLOCKS.length||!Number.isInteger(r.order[i])||r.order[i]<0||r.order[i]>4294967295)throw new Error('Saved chunk is damaged');
+    }
+    for (const r of records) {
+      const key=columnKey(r.x,r.z);
+      if (this.dirtyColumns.has(key)) continue;
+      const edits=new Map(), chunk=this.chunks.get(key);
+      for (let i=0;i<r.cells.length;i++) {
+        const cell=r.cells[i], value=r.values[i];
+        edits.set(cell,r.order[i]*4096+value);
+        this.nextEditOrder=Math.max(this.nextEditOrder,r.order[i]+1);
+        this.edits.set(`${r.x*16+(cell>>12)},${cell&255},${r.z*16+((cell>>8)&15)}`,value);
+        if (chunk) {chunk.blocks[cell]=value&255;chunk.meta[cell]=value>>8;chunk.tickCounts=null;}
+      }
+      this.chunkEdits.set(key,edits);
     }
   }
   // Column records (world-storage.js chunkRecords form, without the world id) of every column

@@ -1,3 +1,4 @@
+import { splitRuntime, joinRuntime, hasRuntime } from './chunk-runtime.js';
 // Streamed records live in IndexedDB rather than the small synchronous
 // localStorage quota. The shelf keeps only their identity/summary there. Legacy
 // records retain their existing representation. Publish the shelf only after
@@ -9,7 +10,8 @@
 // writes the world record and only the columns edited since the last save in one
 // transaction. Records written before then (or imported) carry an `edits` array;
 // their first write moves it into column records.
-const DB = 'blockworld.storage.v1', STORE = 'worlds', CHUNKS = 'chunks';
+const DB = 'blockworld.storage.v1', STORE = 'worlds', CHUNKS = 'chunks', RUNTIME = 'runtime';
+const runtimeCopies = new Map();
 let database, opening;
 let writes = Promise.resolve();
 const serializeWrite = task => {
@@ -22,11 +24,12 @@ export async function openWorldStorage(indexed = globalThis.indexedDB) {
   if (opening) return opening;
   if (!indexed) throw new Error('This browser cannot store streamed worlds');
   opening = new Promise((resolve,reject)=>{
-    const request = indexed.open(DB,2);
+    const request = indexed.open(DB,3);
     let abandoned = false;
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE,{keyPath:'id'});
+      if (!db.objectStoreNames.contains(RUNTIME)) db.createObjectStore(RUNTIME,{keyPath:['world','x','z']}).createIndex('world','world');
       if (!db.objectStoreNames.contains(CHUNKS)) db.createObjectStore(CHUNKS,{keyPath:['world','x','z']}).createIndex('world','world');
     };
     request.onsuccess = () => abandoned ? request.result.close() : resolve(request.result);
@@ -95,7 +98,10 @@ export async function writeWorldShelf(records, storage, key, chunks = []) {
   // Capture now; live simulation continues while the transaction is running.
   // Records still in the single-record form are split into column records.
   const splits = streamed.filter(unsplit).map(r=>[r, r.edits, chunkRecords(r.id, r.edits)]);
-  const snapshots = streamed.map(r=>{
+  const runtimes = streamed.filter(r=>hasRuntime(r)||!r.runtimeChunked).map(r=>[r,splitRuntime(r)]);
+  const runtimeById = new Map(runtimes.map(([r,s])=>[r.id,s]));
+  const snapshots = streamed.map(original=>{
+    const r=runtimeById.get(original.id)?.metadata??original;
     if (!unsplit(r)) return structuredClone(r);
     const { edits, ...rest } = r;
     return { ...structuredClone(rest), chunked:true };
@@ -107,14 +113,22 @@ export async function writeWorldShelf(records, storage, key, chunks = []) {
     if (snapshots.length || database) {
       const db = await openWorldStorage();
       await new Promise((resolve,reject)=>{
-        const tx = db.transaction([STORE,CHUNKS],'readwrite'), store = tx.objectStore(STORE), chunkStore = tx.objectStore(CHUNKS);
+        const tx = db.transaction([STORE,CHUNKS,RUNTIME],'readwrite'), store = tx.objectStore(STORE), chunkStore = tx.objectStore(CHUNKS);
+        for (const [r,{columns:payloads}] of runtimes) {
+          const runtimeStore=tx.objectStore(RUNTIME), next=new Map(payloads.map(c=>[JSON.stringify([c.world,c.x,c.z]),JSON.stringify(c)]));
+          const previous=runtimeCopies.get(r.id);
+          for (const c of payloads) { const k=JSON.stringify([c.world,c.x,c.z]); if (previous?.get(k)!==next.get(k)) runtimeStore.put(c); }
+          const keys=runtimeStore.index('world').getAllKeys(r.id);
+          keys.onsuccess=()=>{for(const k of keys.result) if(!next.has(JSON.stringify(k))) runtimeStore.delete(k);};
+        }
         for (const r of snapshots) store.put(r);
         // Requests run in order: a column passed in `chunks` replaces its split copy.
-        for (const [,,split] of splits) for (const c of split) chunkStore.put(c);
+        for (const [r,edits,split] of splits) if (r.edits === edits) for (const c of split) chunkStore.put(c);
         for (const c of columns) chunkStore.put(c);
         tx.oncomplete = resolve;
         tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('World save failed'));
       });
+      for (const [r,{columns:payloads}] of runtimes) { runtimeCopies.set(r.id,new Map(payloads.map(c=>[JSON.stringify([c.world,c.x,c.z]),JSON.stringify(c)]))); r.runtimeChunked=true; }
       // The shelf now holds the split form; drop the copy unless the record changed meanwhile.
       for (const [r,edits] of splits) if (r.edits === edits) { delete r.edits; r.chunked = true; }
     }
@@ -135,11 +149,36 @@ export async function deleteStoredWorld(id) {
   return serializeWrite(async()=>{
     const db = await openWorldStorage();
     await new Promise((resolve,reject)=>{
-      const tx = db.transaction([STORE,CHUNKS],'readwrite'), chunkStore = tx.objectStore(CHUNKS);
+      const tx = db.transaction([STORE,CHUNKS,RUNTIME],'readwrite'), chunkStore = tx.objectStore(CHUNKS);
+      const runtimeStore=tx.objectStore(RUNTIME), runtimeKeys=runtimeStore.index('world').getAllKeys(id);
+      runtimeKeys.onsuccess=()=>{for(const k of runtimeKeys.result) runtimeStore.delete(k);};
       tx.objectStore(STORE).delete(id);
       const keys = chunkStore.index('world').getAllKeys(id);
       keys.onsuccess = () => { for (const k of keys.result) chunkStore.delete(k); };
       tx.oncomplete=resolve; tx.onabort=tx.onerror=()=>reject(tx.error);
     });
   });
+}
+
+// Exact-key reads only; exploring a column never scans another column's edits.
+export async function readChunkColumns(id, columns) {
+  const db=await openWorldStorage();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(CHUNKS), out=[];
+    for (const [x,z] of columns) {
+      const request=tx.objectStore(CHUNKS).get([id,x,z]);
+      request.onsuccess=()=>{out.push(request.result??{world:id,x,z,cells:new Uint16Array(),values:new Uint16Array(),order:new Uint32Array()});};
+    }
+    tx.oncomplete=()=>resolve(out); tx.onabort=tx.onerror=()=>reject(tx.error??new Error('Could not read columns'));
+  });
+}
+export async function readRuntimeState(record) {
+  if (!record.runtimeChunked||hasRuntime(record)) return record;
+  const db=await openWorldStorage();
+  const columns=await new Promise((resolve,reject)=>{
+    const request=db.transaction(RUNTIME).objectStore(RUNTIME).index('world').getAll(record.id);
+    request.onsuccess=()=>resolve(request.result); request.onerror=()=>reject(request.error);
+  });
+  runtimeCopies.set(record.id,new Map(columns.map(c=>[JSON.stringify([c.world,c.x,c.z]),JSON.stringify(c)])));
+  return joinRuntime(record,columns);
 }

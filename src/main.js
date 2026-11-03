@@ -1,4 +1,6 @@
-import { readWorldShelf, writeWorldShelf, deleteStoredWorld, readChunkEdits } from './world-storage.js';
+import { StreamStorage } from './streaming-storage.js';
+import { acquireWorldWriter } from './world-lock.js';
+import { readWorldShelf, writeWorldShelf, deleteStoredWorld, readChunkEdits, readRuntimeState } from './world-storage.js';
 import {PopulationBlocks} from './population-blocks.js';
 import {hasSavedStructures as hasSavedPopulation} from './structure-simulation.js';
 import {restorePopulation,restorePopulationColumns} from './population-runtime.js';
@@ -279,7 +281,7 @@ const menuContext = {
   soundLevel: (k) => soundLevel(options.soundLevels, k),
   makeRecord,
   launch: openWorld,
-  exportWorld,
+  exportWorld: chooseExport,
   importWorld: () => $("#file-input").click(),
   deleteWorld,
   renameWorld,
@@ -465,6 +467,7 @@ function save() {
   // Streamed worlds store edits per column: only the columns edited since the last save are written.
   const columns = world.streaming ? world.takeDirtyColumns().map((c) => ({ world: active.id, ...c })) : [];
   if (!world.streaming) active.edits = [...world.edits];
+  if (world.streaming) active.editSequence = world.nextEditOrder;
   if (world.population) active.populatedColumns = world.saveClaimedColumns();
   active.position = { x: position.x, y: position.y, z: position.z, yaw, pitch };
   active.player = survival.serialize();
@@ -503,24 +506,29 @@ function save() {
   else worlds[i] = active;
   const savingId = active.id, savingWorld = world;
   $("#save-label").textContent = "Saving…";
-  persist(columns).then(ok => {
+  const completion = persist(columns).then(ok => {
     if (!ok) savingWorld.markColumnsDirty(columns);
     if (active?.id !== savingId) return;
     saved = ok;
     $("#save-label").textContent = ok ? "Saved on this device" : "Export to save your changes";
   });
   lastSave = elapsed;
+  return completion;
 }
 async function exportWorld(record = active) {
-  if (record === active) save();
+  const exportingWorld=record===active?world:null;
+  if (exportingWorld) await save();
+  try {record = structuredClone(await readRuntimeState(record));}
+  catch(e) {toast('Could not read this world: '+e.message);return;}
   // Exports stay self-contained: a chunked world's edits are read back into the file.
   let edits = record.edits;
-  if (record === active && world?.streaming) edits = [...world.edits];
-  else if (record.chunked) {
-    try { edits = await readChunkEdits(record.id); }
+  if (record.chunked) {
+    try { edits = await readChunkEdits(record.id);
+      if(exportingWorld?.streaming)edits=[...new Map([...edits,...exportingWorld.edits])];
+    }
     catch (e) { toast("Could not read this world: " + e.message); return; }
   }
-  const { chunked, ...rest } = record;
+  const { chunked, runtimeChunked, editSequence, ...rest } = record;
   const url = URL.createObjectURL(
     new Blob(
       [
@@ -540,6 +548,30 @@ async function exportWorld(record = active) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   toast("Your world is ready to take with you.");
+}
+let openingWorld=false, exportBusy=false;
+function chooseExport(record=active) {
+  if(exportBusy)return;
+  gui.hide();
+  const back=()=>{closeModal();if(screen==='home')gui.show(menus.selectWorld());else pause();};
+  modal('Export World', '<p>Keep a browser backup, or download a Java 1.7.10 save with region files and conversion notes.</p><div class="menu-actions"><button class="button primary full" id="export-browser">Browser backup (.json)</button><button class="button secondary full" id="export-java">Java 1.7.10 save (.zip)</button></div>');
+  $('#modal .close-button').onclick=back;
+  $('#export-browser').onclick=()=>{back();exportWorld(record);};
+  $('#export-java').onclick=async()=>{
+    exportBusy=true;
+    const buttons=$('#modal').querySelectorAll('button');for(const b of buttons)b.disabled=true;
+    try {
+      const exportingWorld=record===active?world:null;
+      if(exportingWorld)await save();
+      const snapshot=structuredClone(await readRuntimeState(record));
+      if(snapshot.chunked) {snapshot.edits=await readChunkEdits(snapshot.id);if(exportingWorld?.streaming)snapshot.edits=[...new Map([...snapshot.edits,...exportingWorld.edits])];}
+      const {exportJavaSave}=await import('./region-export.js');
+      const result=await exportJavaSave(snapshot,{onProgress:(n,total)=>{$('#export-java').textContent=`Exporting ${n} / ${total} columns…`;}});
+      const url=URL.createObjectURL(new Blob([result.zip],{type:'application/zip'})),a=document.createElement('a');a.href=url;a.download=record.name.replace(/[^a-z0-9]/gi,'-').toLowerCase()+'.java-1.7.10.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      back();toast(`Java save exported (${result.report.columns} columns). Unzip it into the Java saves folder; conversion notes are included.`);
+    }catch(e){toast('Could not export Java save: '+e.message);for(const b of buttons)b.disabled=false;$('#export-java').textContent='Java 1.7.10 save (.zip)';}
+    finally{exportBusy=false;}
+  };
 }
 function requestLock() {
   if (screen !== "playing") return;
@@ -609,25 +641,29 @@ function applyWeatherEdit(w, x, y, z, block, meta) {
   scene.updateBlocks([[x, y, z, old, block]]);
   saved = false;
 }
-// A chunked streamed world reads its column records first (world-storage.js).
+// Hydrate only the resident window before constructing block runtimes and lighting.
 async function openWorld(record) {
-  let edits = record.edits || [];
-  if (record.chunked) {
-    try { edits = await readChunkEdits(record.id); }
-    catch (e) { toast("Could not open this world: " + e.message); return; }
-  }
-  launch(record, edits);
+  if(openingWorld)return;
+  openingWorld=true;
+  try {
+    record=await readRuntimeState(record);
+    const prepared=new World(record.seed,record.biome,record.generationVersion??1);
+    if (!record.chunked) prepared.restore(record.edits??[]);
+    prepared.restoreClaimedColumns(record.populatedColumns);
+    const p=record.position;
+    if(prepared.streaming&&p&&[p.x,p.z].every(Number.isFinite))prepared.streamAround(p.x,p.z);
+    const storage=record.chunked?new StreamStorage(prepared,record.id,{onError:e=>{pause();toast('Could not load saved columns. Reopen the world to retry: '+e.message);}}):null;
+    prepared.nextEditOrder=Math.max(prepared.nextEditOrder,record.editSequence??(record.chunked?2000000:0));
+    if(storage)await storage.ensure([...prepared.chunks.values()].map(c=>[c.x,c.z]));
+    streamStorage?.dispose();streamStorage=storage;
+    await launch(record,prepared);
+  } catch(e) {toast('Could not open this world: '+e.message);}
+  finally{openingWorld=false;}
 }
-function launch(record, edits = record.edits || []) {
+async function launch(record, prepared) {
   try {
     active = record;
-    world = new World(record.seed, record.biome, record.generationVersion ?? 1);
-    world.restore(edits);
-    // Columns that came from storage are already written. A world still in the single-record
-    // form stays dirty everywhere, so its first save writes every column it has.
-    if (record.chunked) world.dirtyColumns.clear();
-    world.restoreClaimedColumns(record.populatedColumns);
-    if (world.streaming && record.position && [record.position.x,record.position.z].every(Number.isFinite)) world.streamAround(record.position.x,record.position.z);
+    world = prepared;
     startPrefetch();
     // Restore World.rand before constructing the block runtimes that share it.
     weather = new Weather().restore(record.weather).restoreSimulation(record.worldRandom);
@@ -739,10 +775,10 @@ function launch(record, edits = record.edits || []) {
     position.copy(
       valid
         ? new THREE.Vector3(p.x, p.y, p.z)
-        : new THREE.Vector3(...Object.values(spawnPosition())),
+        : new THREE.Vector3(...Object.values(await spawnPosition())),
     );
     if (collides(world, ...position.toArray()))
-      position.copy(new THREE.Vector3(...Object.values(spawnPosition())));
+      position.copy(new THREE.Vector3(...Object.values(await spawnPosition())));
     previous.copy(position);
     yaw = valid && Number.isFinite(p.yaw) ? p.yaw : 0;
     pitch =
@@ -1172,14 +1208,17 @@ function die() {
   );
   $("#modal .close-button").hidden = true;
   const deathButtons=[$('#respawn'),$('#death-home')];for(const button of deathButtons)button.disabled=true;setTimeout(()=>{if(screen==='dead')for(const button of deathButtons)button.disabled=false;},1000);
-  $("#respawn").onclick = () => {
+  $("#respawn").onclick = async () => {
+    for(const button of deathButtons)button.disabled=true;
+    try {
+    const spawn=await spawnPosition();
     const time = survival.time;
     survival = new Survival({ time, slots: [], furnaces: survival.furnaces, chests: survival.chests }, survival.mode);
     survival.protection = 60;
     survival.furnaceActive = key => !world.streaming || world.isTicking(...[key.split(",")[0],key.split(",")[2]].map(Number));
     updateDifficulty();
     experience=new Experience();
-    position.copy(new THREE.Vector3(...Object.values(spawnPosition())));
+    position.copy(new THREE.Vector3(...Object.values(spawn)));
     previous.copy(position);
     playerBody.reset(position, yaw, pitch);
     velocity.set(0, 0, 0);
@@ -1189,6 +1228,8 @@ function die() {
     renderVitals();
     resume();
     save();
+    } catch(e) {toast('Could not load the respawn area. Reopen the world to retry: '+e.message);}
+    finally {if(screen==='dead')for(const button of deathButtons)button.disabled=false;}
   };
   $("#death-home").onclick = goHome;
 }
@@ -1506,7 +1547,7 @@ function materializeFresh() {
 }
 // Streamed worlds build upcoming cells/columns in a worker (streaming-generator.js); without one,
 // generation stays synchronous.
-let streamPrefetch = null;
+let streamPrefetch = null, streamStorage = null;
 function startPrefetch() {
   streamPrefetch?.dispose();
   streamPrefetch = null;
@@ -1517,12 +1558,17 @@ function startPrefetch() {
     console.error(`streaming-generator: no worker, generating on the main thread: ${e.message}`);
   }
 }
-function spawnPosition() {
+async function spawnPosition() {
+  if(streamStorage)await streamStorage.ensure(streamStorage.columns(64,64));
   const change = world.streaming && world.streamAround(64,64);
   if (change) { scene.syncChunks(change); materializeFresh(); }
   return world.spawn();
 }
 function movementTick(controls) {
+  if(streamStorage) {
+    streamStorage.update(position.x,position.z);
+    if(!streamStorage.ready(position.x,position.z))return;
+  }
   // While the worker is still building the next square, the shift waits as long as the player is
   // inside the ticking area; past it the square is generated here.
   const hold = streamPrefetch && world.isTicking(position.x, position.z) && !streamPrefetch.ready(position.x, position.z);
@@ -1660,6 +1706,7 @@ $("#file-input").onchange = async (e) => {
 };
 
 window.addEventListener("keydown", (e) => {
+  if(exportBusy){e.preventDefault();return;}
   // An open menu screen takes every key (GuiScreen.handleKeyboardInput).
   if (gui.open) {
     gui.key(e);
@@ -2060,6 +2107,10 @@ function shadowCasters(partial) {
   return list;
 }
 async function boot(){try {
+  await acquireWorldWriter();
+  // Read the shelf under ownership: another tab may have finished a save while
+  // this page was starting up, before the browser granted its lock.
+  try {const shelf=JSON.parse(localStorage.getItem(storageKey)||'[]');worlds=Array.isArray(shelf)?shelf:[];}catch{worlds=[];}
   worlds = await readWorldShelf(worlds);
   scene = new VoxelScene($("#viewport"));
   scene.weather = weather;

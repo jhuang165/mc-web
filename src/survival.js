@@ -551,7 +551,7 @@ export class Survival {
     this.inventory.current = Math.floor(clamp(data.current, 0, 8, 0));
     this.furnaces = {};
     for (const [key, f] of Object.entries(data.furnaces || {})) {
-      if (!/^\d+,\d+,\d+$/.test(key) || !f || typeof f !== "object") continue;
+      if (!/^-?\d+,\d+,-?\d+$/.test(key) || !f || typeof f !== "object") continue;
       this.furnaces[key] = {
         items: legacyFurnace(f, (s) => this.inventory.read(s)),
         burn: Math.floor(clamp(f.burn, 0, 20000, 0)),
@@ -562,7 +562,7 @@ export class Survival {
     // TileEntityChest contents and facing metadata; lid state is not saved.
     this.chests = {};
     for (const [key, c] of Object.entries(data.chests || {})) {
-      if (!/^\d+,\d+,\d+$/.test(key) || !c || typeof c !== "object") continue;
+      if (!/^-?\d+,\d+,-?\d+$/.test(key) || !c || typeof c !== "object") continue;
       const chest = newChest(FACING[c.facing] ? c.facing : 3);
       if (Array.isArray(c.items)) c.items.slice(0, CHEST_SLOTS).forEach((s, i) => (chest.items[i] = this.inventory.read(s)));
       this.chests[key] = chest;

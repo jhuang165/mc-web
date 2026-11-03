@@ -150,3 +150,30 @@ test('streamed saves write only edited columns, convert single-record saves and 
   assert.equal(idb.db.count('worlds', (r) => r.id === 'a'), 0);
   assert.equal(idb.db.count('chunks', (r) => r.world === 'b'), 1, 'other worlds keep theirs');
 });
+
+test('v3 runtime migration is atomic, changed columns only write, emptied/moved payloads are removed', async()=>{
+  const {readRuntimeState,readChunkColumns}=await import('./world-storage.js');
+  const record={id:'runtime',biome:'javaStreamed',edits:[['1,70,1',20],['9000,70,9000',9]],player:{health:19,chests:{'1,70,1':{items:[]}},furnaces:{}},entities:[{x:1,y:70,z:1,type:'pig'}],fluidTicks:{version:1,time:80,entries:[{x:1,y:71,z:1,block:10,delay:2}]}}, storage=shelf();
+  idb.db.failNext=true;await assert.rejects(writeWorldShelf([record],storage,'runtime'));
+  assert.equal(record.runtimeChunked,undefined);assert.equal(idb.db.count('runtime',c=>c.world==='runtime'),0);
+  await writeWorldShelf([record],storage,'runtime');
+  const [stored]=await readWorldShelf([{id:record.id,storage:'indexeddb'}]);
+  assert.equal(stored.entities,undefined);assert.equal(stored.player.chests,undefined);assert.equal(stored.fluidTicks,undefined);
+  const loaded=await readRuntimeState(stored);assert.deepEqual(loaded.entities,record.entities);assert.deepEqual(loaded.fluidTicks,record.fluidTicks);
+  assert.deepEqual(editsFromChunks(await readChunkColumns(record.id,[[0,0]])),[['1,70,1',20]],'unrequested distant edits are not read');
+  idb.db.writes.length=0;await writeWorldShelf([loaded],storage,'runtime');
+  assert.equal(idb.db.writes.filter(([s])=>s==='runtime').length,0,'unchanged payloads do not write');
+  loaded.entities[0].x=-20;loaded.player.chests={};loaded.fluidTicks.entries=[];
+  await writeWorldShelf([loaded],storage,'runtime');
+  assert.equal(idb.db.count('runtime',c=>c.world===record.id),1,'empty former column removed');
+  const [moved]=await readWorldShelf([{id:record.id,storage:'indexeddb'}]);
+  const restored=await readRuntimeState(moved);assert.equal(restored.entities[0].x,-20);assert.deepEqual(restored.player.chests,{});assert.deepEqual(restored.fluidTicks.entries,[]);
+  await deleteStoredWorld(record.id);assert.equal(idb.db.count('runtime',c=>c.world===record.id),0);
+});
+
+test('overlapping first saves cannot replay a stale split over a successful fresh column',async()=>{
+ const record={id:'overlap',biome:'javaStreamed',edits:[['1,70,1',1],['32,70,32',4]]}, storage=shelf();
+ const first=writeWorldShelf([record],storage,'overlap',chunkRecords(record.id,[['1,70,1',20],['32,70,32',9]]));
+ const second=writeWorldShelf([record],storage,'overlap',chunkRecords(record.id,[['1,70,1',3]]));
+ await Promise.all([first,second]);assert.deepEqual(await readChunkEdits(record.id),[['1,70,1',3],['32,70,32',9]]);
+});

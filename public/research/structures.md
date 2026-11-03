@@ -4,8 +4,16 @@ Current live status (0.25.0): new Java worlds use **generation version 11** with
 
 Status: **partial**. GEN-05a ports the shared structure framework and mineshafts as standalone
 modules, checked against the unchanged pinned 1.7.10 classes. They are not yet called from
-live world generation. Villages, strongholds, temples and nether fortresses are not ported.
+live world generation. Village/stronghold/temple placement predicates are now standalone (below); their buildings and population, and nether fortresses, are not ported.
 This is not a parity claim for structures.
+
+## Native village, temple and stronghold placement research (0.32.0)
+
+The installed JDK 19.0.1 runs `tools/probes/StructurePlacementProbe.java` through `node tools/verify-structure-placement.mjs`. The unchanged pinned 1.7.10 classes (`avn`, `atx`, `aug`) execute their candidate predicates with the real WorldChunkManager and World.setRandomSeed. `structure-placement-reference.json` records JAR/class hashes, 950,272 grid decisions (negative/custom-spacing/native-border cases, four seeds including Long.MIN_VALUE), 24 native stronghold layouts (3 and 8 positions, default/amplified/largeBiomes), allowed biome lists, and sampled native start piece boxes (23 village pieces, one temple, 181 stronghold pieces).
+
+`src/structure-placement.js` ports the placement predicates and stronghold ring/biome search as standalone functions. `structure-placement.test.js` replays every grid decision and stronghold coordinate exactly. Native details include floor division for negative region coordinates, village salt 10387312, temple salt 14357617, distance 32 with an 8-chunk exclusion, and the original stronghold `i == spread` transition (after four positions at the default spread of three). Villages allow Plains/Desert/Savanna; temples allow Desert/DesertHills/Jungle/JungleHills/Swamp, not JungleEdge. World.setRandomSeed also mutates World.rand; this must be retained when these generators enter the live population chain.
+
+These functions are **not wired into generation 13**: existing saved terrain stays unchanged. Candidate placement is not building generation. Remaining work is to port the village roads/buildings/villagers, stronghold weighted pieces/portal room, and desert/jungle temple/witch-hut population; supply missing block/content mappings, doors/dispenser helpers and structure-start persistence; then record native ordered writes and RNG through the full population chain before introducing a new generation version. There is no longer a missing-JDK prerequisite.
 
 ## Ported (GEN-05a)
 

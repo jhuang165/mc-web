@@ -4,6 +4,8 @@ Owner accepted 2026-11-01. The complete roadmap and rationale are durable shared
 
 Status: **Missing** = no implementation; **Partial** = some behavior exists; **Implemented** = acceptance behavior works; **Verified** = named evidence passes, limited to its stated scope. Original-class execution, bytecode inspection, browser observation and port-only regression tests are distinct evidence. A work package is complete only when all its criteria pass.
 
+0.32.0 continuation: WORLD-02i adds lazy edit reads, durable per-column runtime payloads, exclusive tab ownership and Java 1.7.10 snapshot export. GEN-05 placement predicates/rings are now native-replayed standalone; building/population ports are still missing. Details and limits: [streaming](streaming.md), [structures](structures.md).
+
 ## Immediate backlog
 
 | ID | Priority | Work | Status / acceptance |
