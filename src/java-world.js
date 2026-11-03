@@ -54,6 +54,33 @@ export function javaTemperature(b, x, y, z) {
   const n = f(f(temperatureNoise.value(x / 8, z / 8)) * 4);
   return f(b.temperature - f(f(f(f(n + f(y)) - 64) * f(0.05)) / 30));
 }
+// The streamed generator chain at local chunk coordinates (native chunk = local + origin / 16).
+// Generation 12 is terrain, caves and ravines with live block ids; 13 populates per cell
+// (streaming-population.js). `column(cx, cz)` returns { blocks, metadata } in WorldChunk order.
+export function streamedSource({ seed, generationVersion, originX, originZ, gen = new ChunkProviderGenerate(seed, "default", new BiomeTerrainState()) }) {
+  const manager = gen.manager, topAt = (x, z) => gen.biomeState.topBlock(manager.biomeAt(x, z)),
+    caves = new MapGenCaves(seed, manager, topAt),
+    ravines = new MapGenRavine(seed, manager, topAt);
+  const original = (x, z) => {
+    const chunk = gen.provideChunk(x, z);
+    caves.generate(x, z, chunk.blocks); ravines.generate(x, z, chunk.blocks);
+    return chunk;
+  };
+  const terrain = (cx, cz) => {
+    const chunk = original(cx + originX / 16, cz + originZ / 16);
+    for (let i = 0; i < chunk.blocks.length; i++) {
+      const id = JAVA_TERRAIN_BLOCKS[chunk.blocks[i]];
+      if (id === undefined) throw new Error(`Unmapped Java terrain block ${chunk.blocks[i]}`);
+      chunk.blocks[i] = id;
+    }
+    return chunk;
+  };
+  if (generationVersion < 13) return { gen, population: null, column: terrain };
+  const population = new StreamingPopulation({
+    seed, originX, originZ, terrainOnly: terrain, terrain: original, biomeAt: (x, z) => manager.biomeAt(x, z),
+  });
+  return { gen, population, column: (cx, cz) => population.column(cx, cz) };
+}
 export function generateJavaWorld(world) {
   const seed = javaSeed(world.seed),
     state = new BiomeTerrainState(),
@@ -83,37 +110,25 @@ export function generateJavaWorld(world) {
   const topAt = (x, z) => state.topBlock(manager.biomeAt(x, z)),
     caves = new MapGenCaves(seed, manager, topAt),
     ravines = new MapGenRavine(seed, manager, topAt);
-  // The streaming preview deliberately uses terrain/caves only. It does not silently
-  // replace the order-dependent v11 population of existing finite worlds.
-  world.generateTerrainChunk = (cx, cz) => {
-    const chunk = gen.provideChunk(cx + world.originX / 16, cz + world.originZ / 16);
-    caves.generate(chunk.x, chunk.z, chunk.blocks);
-    ravines.generate(chunk.x, chunk.z, chunk.blocks);
-    for (let i = 0; i < chunk.blocks.length; i++) {
-      const id = JAVA_TERRAIN_BLOCKS[chunk.blocks[i]];
-      if (id === undefined) throw new Error(`Unmapped Java terrain block ${chunk.blocks[i]}`);
-      chunk.blocks[i] = id;
+  // Streamed worlds regenerate columns from the seed. Columns the worker (streaming-generator.js)
+  // built ahead of the player wait in `pregenerated` and are used once; it runs the same chain.
+  if (world.streaming) {
+    const source = streamedSource({ seed, gen, originX: world.originX, originZ: world.originZ, generationVersion: world.generationVersion });
+    if (source.population) world.population = source.population;
+    world.pregenerated = new Map();
+    world.generateTerrainChunk = (cx, cz) => {
+      const k = `${cx},${cz}`, hit = world.pregenerated.get(k);
+      if (!hit) return source.column(cx, cz);
+      world.pregenerated.delete(k);
+      return hit;
+    };
+    if (source.population) {
+      for (let cx = 0; cx < 8; cx++) for (let cz = 0; cz < 8; cz++) {
+        const column = source.population.column(cx, cz), live = world.chunkAt(cx, cz);
+        live.blocks.set(column.blocks); live.meta.set(column.metadata);
+      }
+      return;
     }
-    return chunk;
-  };
-  // Generation version 13 (streamed worlds) populates per cell from the seed (streaming-population.js).
-  if (world.streaming && world.generationVersion >= 13) {
-    const population = new StreamingPopulation({
-      seed, originX: world.originX, originZ: world.originZ, terrainOnly: world.generateTerrainChunk,
-      terrain: (x, z) => {
-        const chunk = gen.provideChunk(x, z);
-        caves.generate(x, z, chunk.blocks); ravines.generate(x, z, chunk.blocks);
-        return chunk;
-      },
-      biomeAt: (x, z) => manager.biomeAt(x, z),
-    });
-    world.population = population;
-    world.generateTerrainChunk = (cx, cz) => population.column(cx, cz);
-    for (let cx = 0; cx < 8; cx++) for (let cz = 0; cz < 8; cz++) {
-      const column = population.column(cx, cz), live = world.chunkAt(cx, cz);
-      live.blocks.set(column.blocks); live.meta.set(column.metadata);
-    }
-    return;
   }
   // Generation version 10 adds mineshafts (mineshaft-world.js), which need the original-ID chunks.
   const originals = world.generationVersion >= 10 ? new Map() : null;

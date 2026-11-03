@@ -1,5 +1,7 @@
 # Minecraft Java 1.7.10 feature coverage
 
+0.29.0 (WORLD-02f) builds streamed cells and columns in a Web Worker ahead of the player (same generator chain; worker results equal synchronous ones) and shifts streamed light incrementally, exactly equal to a fresh build; a chunk crossing still costs about 100 ms of relighting on the main thread. See [streaming](streaming.md).
+
 0.28.0 adds Java population to the streaming preview (generation 13, WORLD-02e): per-area ores, trees, lakes, dungeons with loot, mineshafts, animals, spawners, mineshaft chest carts and snow from the seed, each column handing its chests/animals/spawners to the live world once and remembering that across reloads. Border-straddling features can differ from native in rare overlaps, each new area costs about a second of synchronous generation, and villages, strongholds and temples are still missing. Evidence is port regression plus a localhost walk; no new native probe. Generation-12 saves stay terrain-only. See [streaming evidence and limits](streaming.md).
 
 0.27.0 adds an opt-in Java streaming terrain preview (generation 12): bounded resident columns, negative coordinates, moving light/mesh windows, indexed edits, paused unloaded work and IndexedDB world records. UI travel, return, reload, export/import and larger-save checks pass. Streamed population/structures, native tickets, per-chunk entity/storage ownership and incremental lighting remain open. Existing populated Java worlds retain v11. See [streaming evidence and limits](streaming.md).

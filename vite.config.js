@@ -1,2 +1,4 @@
 import {defineConfig} from 'vite';
-export default defineConfig({build:{rollupOptions:{output:{manualChunks:{three:['three']}}}}});
+// The streaming generation worker (src/streaming-worker.js) is a module worker that shares the
+// page's generator code, including its dynamic import of the block registry.
+export default defineConfig({build:{rollupOptions:{output:{manualChunks:{three:['three']}}}},worker:{format:'es'}});

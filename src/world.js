@@ -320,10 +320,16 @@ export class World {
   isTicking(x, z) {
     return !this.streaming || x >= this.minX + 16 && x < this.maxX - 16 && z >= this.minZ + 16 && z < this.maxZ - 16;
   }
+  // The resident square's corner for a player at (x, z): eight columns per axis, clamped to the border.
+  windowAt(x, z) {
+    return {
+      minX: Math.max(-30000000-this.originX, Math.min(29999872-this.originX, (Math.floor(x / 16) - 4) * 16)),
+      minZ: Math.max(-30000000-this.originZ, Math.min(29999872-this.originZ, (Math.floor(z / 16) - 4) * 16)),
+    };
+  }
   streamAround(x, z) {
     if (!this.streaming || !Number.isFinite(x) || !Number.isFinite(z)) return null;
-    const minX = Math.max(-30000000-this.originX, Math.min(29999872-this.originX, (Math.floor(x / 16) - 4) * 16));
-    const minZ = Math.max(-30000000-this.originZ, Math.min(29999872-this.originZ, (Math.floor(z / 16) - 4) * 16));
+    const { minX, minZ } = this.windowAt(x, z);
     if (this.minX === minX && this.minZ === minZ) return null;
     // Generate the next working set before eviction. A generator failure leaves the old set intact.
     const next = new Map(), added = [], removed = [];

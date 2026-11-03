@@ -105,6 +105,7 @@ import { Rails } from "./rails.js";
 import { Torches } from "./torches.js";
 import { MinecartRenderer } from "./minecart-renderer.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
+import { StreamPrefetch } from "./streaming-generator.js";
 import { restoreStructureEntities, saveStructureEntities, tickMinecartSimulation, tickSpawnerSimulation, tickSpawnersClient, spawnerBurst, pickMinecart } from "./structure-simulation.js";
 // Generation version 10 (live mineshafts) maps original block ids while a World is built; the
 // entry module already holds the registry, so the mapper is set before any World exists.
@@ -439,7 +440,7 @@ function modal(title, body, extra = "") {
 function createWorld() {
   modal(
     "Create New World",
-    `<p class="modal-subtitle"></p><form id="create-form"><label>WORLD NAME<input id="new-name" maxlength="40" value="New World" required></label><div class="form-columns"><label>GAME MODE<select id="new-mode"><option value="survival">Survival</option><option value="creative" selected>Creative</option></select></label><label>LANDSCAPE<select id="new-biome"><option value="java" selected>Java Overworld</option><option value="javaStreamed">Java streaming preview</option><option value="javaAmplified">Java Amplified</option><option value="javaLargeBiomes">Java Large Biomes</option><option value="meadow">Meadow</option><option value="alpine">Highlands</option><option value="island">Island</option><option value="snowy">Snowy Tundra</option></select></label></div><label>SEED <span>Same seed, same beginning.</span><input id="new-seed" maxlength="80" placeholder="Leave blank for a surprise"></label><p class="form-note">Streaming preview: explore beyond the starting area, including negative coordinates. Terrain, caves, ravines, ores, trees, lakes, dungeons, mineshafts, animals and snow are generated per area from the seed; villages, strongholds and temples are unfinished, and each new area takes about a second to build. Saved locally on this browser. Other Java worlds: 128 × 128 × 256 blocks, with caves and ravines. New worlds include ores, trees, lakes, dungeons, mineshafts, animals and snow. Villages, strongholds and temples are unfinished. Meadow, Highlands, Island and Snowy Tundra keep their decorated terrain.</p><button class="button primary full">Create New World</button></form>`,
+    `<p class="modal-subtitle"></p><form id="create-form"><label>WORLD NAME<input id="new-name" maxlength="40" value="New World" required></label><div class="form-columns"><label>GAME MODE<select id="new-mode"><option value="survival">Survival</option><option value="creative" selected>Creative</option></select></label><label>LANDSCAPE<select id="new-biome"><option value="java" selected>Java Overworld</option><option value="javaStreamed">Java streaming preview</option><option value="javaAmplified">Java Amplified</option><option value="javaLargeBiomes">Java Large Biomes</option><option value="meadow">Meadow</option><option value="alpine">Highlands</option><option value="island">Island</option><option value="snowy">Snowy Tundra</option></select></label></div><label>SEED <span>Same seed, same beginning.</span><input id="new-seed" maxlength="80" placeholder="Leave blank for a surprise"></label><p class="form-note">Streaming preview: explore beyond the starting area, including negative coordinates. Terrain, caves, ravines, ores, trees, lakes, dungeons, mineshafts, animals and snow are generated per area from the seed; villages, strongholds and temples are unfinished. New areas are built in the background ahead of you; moving very fast can still pause briefly. Saved locally on this browser. Other Java worlds: 128 × 128 × 256 blocks, with caves and ravines. New worlds include ores, trees, lakes, dungeons, mineshafts, animals and snow. Villages, strongholds and temples are unfinished. Meadow, Highlands, Island and Snowy Tundra keep their decorated terrain.</p><button class="button primary full">Create New World</button></form>`,
   );
   $("#create-form").onsubmit = (e) => {
     e.preventDefault();
@@ -714,6 +715,7 @@ function launch(record) {
     world.restore(record.edits || []);
     world.restoreClaimedColumns(record.populatedColumns);
     if (world.streaming && record.position && [record.position.x,record.position.z].every(Number.isFinite)) world.streamAround(record.position.x,record.position.z);
+    startPrefetch();
     // Restore World.rand before constructing the block runtimes that share it.
     weather = new Weather().restore(record.weather).restoreSimulation(record.worldRandom);
     scene.setWorld(world);
@@ -1592,17 +1594,36 @@ function materializeFresh() {
   // Chest models follow the resident columns (chests of columns that left the window are removed).
   chestRenderer?.sync(world, survival.chests);
 }
+// Streamed worlds build upcoming cells/columns in a worker (streaming-generator.js); without one,
+// generation stays synchronous.
+let streamPrefetch = null;
+function startPrefetch() {
+  streamPrefetch?.dispose();
+  streamPrefetch = null;
+  if (!world.streaming || typeof Worker !== "function") return;
+  try {
+    streamPrefetch = new StreamPrefetch(world, new Worker(new URL("./streaming-worker.js", import.meta.url), { type: "module" }));
+  } catch (e) {
+    console.error(`streaming-generator: no worker, generating on the main thread: ${e.message}`);
+  }
+}
 function spawnPosition() {
-  if (world.streaming && world.streamAround(64,64)) { scene.syncChunks(); materializeFresh(); }
+  const change = world.streaming && world.streamAround(64,64);
+  if (change) { scene.syncChunks(change); materializeFresh(); }
   return world.spawn();
 }
 function movementTick(controls) {
-  if (world.streamAround(position.x,position.z)) { scene.syncChunks(); materializeFresh(); }
+  // While the worker is still building the next square, the shift waits as long as the player is
+  // inside the ticking area; past it the square is generated here.
+  const hold = streamPrefetch && world.isTicking(position.x, position.z) && !streamPrefetch.ready(position.x, position.z);
+  const change = !hold && world.streamAround(position.x,position.z);
+  if (change) { scene.syncChunks(change); materializeFresh(); }
   const state = { world, position, previous, velocity, motion, survival, yaw, eating, minecarts, rider,
     grounded, collidedH, flying, fallDistance, landedFall };
   const { inWater, inLavaNow, sneakOnGround, oldPosition } = moveRidingPlayer(state, controls,
     { trace: traceAction, markUnsaved: () => { saved = false; } }) ?? movePlayer(state, controls, toast);
   ({ grounded, collidedH, flying, fallDistance, landedFall } = state);
+  streamPrefetch?.update(position.x, position.z);
   walkFrozen = sneakOnGround;
   $("#movement-label").textContent = rider.vehicle ? "RIDING" : flying
     ? "FLYING"

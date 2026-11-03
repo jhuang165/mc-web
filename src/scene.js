@@ -196,16 +196,29 @@ export class VoxelScene {
     const Light = this.world.streaming ? StreamingLight : LightVolume;
     this.light = new Light(this.world, (x,y,z,b) => lightEmission(b,b===14 && this.litFurnaces.has(`${x},${y},${z}`)));
   }
-  syncChunks() {
-    const x = this.world.minX+64, z = this.world.minZ+64;
-    const wanted = new Set([...this.world.chunks.values()]
-      .sort((a,b)=>(a.x*16-x)**2+(a.z*16-z)**2-((b.x*16-x)**2+(b.z*16-z)**2))
-      .map(c=>`${c.x*16},${c.z*16}`));
-    for (const [key, group] of this.chunks) if (!wanted.has(key)) {
+  // After World.streamAround({ added, removed }): the light volume follows the square
+  // (StreamingLight.shift), and only new columns, columns beside an added or removed one (their
+  // faces and corner shading saw the old neighbour) and columns whose light changed are remeshed,
+  // nearest first. Without a change list, or after a full relight, every column is.
+  syncChunks(change = null) {
+    const x = this.world.minX+64, z = this.world.minZ+64, resident = (k) => this.world.chunks.has(k.replace(/-?\d+/g, (v) => v / 16));
+    for (const [key, group] of this.chunks) if (!resident(key)) {
       this.disposeChunk(group); this.chunks.delete(key);
     }
-    this.resetLight();
-    this.dirty = wanted;
+    let boxes = null;
+    if (change && this.light?.shift) boxes = this.light.shift(); else this.resetLight();
+    const wanted = new Set([...this.dirty].filter(resident));
+    if (!boxes) for (const c of this.world.chunks.values()) wanted.add(`${c.x*16},${c.z*16}`);
+    else {
+      const mark = (x0, x1, z0, z1) => {
+        for (let a = Math.floor(x0 / 16); a <= Math.floor(x1 / 16); a++)
+          for (let b = Math.floor(z0 / 16); b <= Math.floor(z1 / 16); b++) if (this.world.chunkAt(a, b)) wanted.add(`${a*16},${b*16}`);
+      };
+      for (const c of [...change.added, ...change.removed]) mark(c.x*16 - 16, c.x*16 + 16, c.z*16 - 16, c.z*16 + 16);
+      for (const b of boxes) mark(b.x0 - 1, b.x1 + 1, b.z0 - 1, b.z1 + 1);
+    }
+    this.dirty = new Set([...wanted].map((k) => k.split(',').map(Number))
+      .sort((a,b)=>(a[0]-x)**2+(a[1]-z)**2-((b[0]-x)**2+(b[1]-z)**2)).map((c) => c.join(',')));
   }
   disposeChunk(group) {
     this.scene.remove(group);

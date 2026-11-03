@@ -148,6 +148,21 @@ export class StreamingPopulation {
       .map((s) => ({ chunkX: s.chunkX - this.originChunkX, chunkZ: s.chunkZ - this.originChunkZ, boundingBox: local(s.boundingBox) }));
     return { cellX, cellZ, columns, records, mineshafts, populates: pass.order.length, failed: null };
   }
+  // A cell built elsewhere (the generation worker runs this same class) joins the cache unless the
+  // cell was already built here; generation is a pure function of the seed, so either copy serves.
+  hasCell(cellX, cellZ) { return this.cells.map.has(key(cellX, cellZ)); }
+  adopt(cell) {
+    const k = key(cell.cellX, cell.cellZ);
+    if (this.cells.map.has(k)) return false;
+    this.cells.set(k, cell);
+    return true;
+  }
+  // Builds a cell for another thread: the result is not cached here, its arrays are handed over.
+  export(cellX, cellZ) {
+    const cell = this.cell(cellX, cellZ);
+    this.cells.map.delete(key(cellX, cellZ));
+    return cell;
+  }
   // The live column (original blocks mapped to live ids) at local chunk coordinates.
   column(lcx, lcz) { return this.cell(lcx >> 3, lcz >> 3).columns.get(key(lcx, lcz)); }
   bit(lcx, lcz) { return 1n << BigInt((lcx & 7) * 8 + (lcz & 7)); }
