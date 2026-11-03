@@ -106,6 +106,19 @@ test("Minecarts replays the original EntityMinecartChest tick for tick", () => {
   assert.equal(ticks, 1213);
 });
 
+test('chest-cart items retain anvil tags through JSON and Java entity NBT',()=>{
+ const carts=new Minecarts({rails});
+ const tags={enchantments:[{id:16,lvl:3}],repairCost:8,displayName:'Cart sword',unbreakable:true};
+ const cart=carts.spawnChest({x:0,y:1,z:0,items:[{slot:0,id:276,damage:4,count:1,...tags}]});
+ const saved=carts.toJSON(),loaded=Minecarts.fromJSON(saved,{rails}),restored=loaded.list[0];
+ assert.deepEqual(restored.slots[0],{id:115,count:1,damage:4,...tags});
+ const item=loaded.toNBT(restored).Items[2][0];
+ assert.equal(item.id[1],276);assert.equal(item.Damage[1],4);
+ assert.deepEqual(item.tag[1],{
+   ench:[9,10,[{id:[2,16],lvl:[2,3]}]],RepairCost:[3,8],display:[10,{Name:[8,'Cart sword']}],Unbreakable:[1,1],
+ });
+});
+
 test("the replay covers breaking, spilling, creative hits, rails and pushes", () => {
   const byName = Object.fromEntries(ref.cases.map((c) => [c.name, c]));
   const ids = (name) => replay(byName[name]).drops.map((d) => d.stack?.id ?? d.original.id);

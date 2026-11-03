@@ -76,7 +76,7 @@ await mkdir(probe, { recursive: true });
 const cp = [probe, classes, ...libs].join(path.delimiter);
 await exec('javac',['-nowarn','-cp',cp,'-d',probe,path.join(root,'probes/ChunkNbtProbe.java'),path.join(root,'probes/JavaSaveProbe.java')]);
 const w=new World('17','javaStreamed',12);w.restore([['-1,100,-1',41]]);
-const record={id:'native-export',name:'Native export',seed:'17',biome:'javaStreamed',generationVersion:12,mode:'creative',position:{x:-.5,y:101,z:-.5},edits:[...w.edits],player:{time:100,slots:[],chests:{'-1,100,-1':{facing:4,items:[{id:19,count:3,damage:14}]}},furnaces:{}},entities:[{type:'pig',x:-2,y:101,z:-2,health:9}],fluidTicks:{version:1,time:100,entries:[{x:-1,y:99,z:-1,block:10,delay:3}]}};
+const record={id:'native-export',name:'Native export',seed:'17',biome:'javaStreamed',generationVersion:12,mode:'creative',position:{x:-.5,y:101,z:-.5},edits:[...w.edits],player:{time:100,slots:[{id:103,count:1,damage:12,repairCost:7,displayName:'Mining pick',enchantments:[{id:32,lvl:3}],unbreakable:true}],chests:{'-1,100,-1':{facing:4,items:[{id:19,count:3,damage:14},{id:365,count:1,damage:0,stored:[{id:16,lvl:2}],repairCost:4,displayName:'Chest book'}]}},furnaces:{}},entities:[{type:'pig',x:-2,y:101,z:-2,health:9}],fluidTicks:{version:1,time:100,entries:[{x:-1,y:99,z:-1,block:10,delay:3}]}};
 const result=await exportJavaSave(record,{world:w}),save=path.join(out,'save');await mkdir(path.join(save,'region'),{recursive:true});
 for(const [name,bytes] of result.files)await writeFile(path.join(save,name),bytes);
 const {stdout}=await exec('java',['-cp',cp,'JavaSaveProbe',save]);console.log(stdout.trim());

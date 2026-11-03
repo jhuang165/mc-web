@@ -14,12 +14,18 @@ export function durabilityBar(damage,max){
 // F3+H advanced line "Durability: remaining / max" for damaged items.
 export function tooltipLines(item,stack,advanced=false){
  if(!item)return[];
- const lines=[{text:item.variants?.[stack.damage]??item.name}],attack=item.attack;
+ const named=typeof stack.displayName==='string';
+ const lines=[{text:named?stack.displayName:item.variants?.[stack.damage]??item.name}],attack=item.attack;
+ if(named)lines[0].italic=true;
  // ItemEnchantedBook: EnumRarity.uncommon (yellow name) while it stores enchantments, and
  // addInformation lists them; renderToolTip draws every later line gray.
- const stored=storedEnchantmentLines(stack?.stored);
- if(stored.length){lines[0].color='yellow';for(const text of stored)lines.push({text,color:'gray'});}
+ const stored=item.storesEnchantments?(stack.storedEnchantments??stack.stored):undefined;
+ if(Array.isArray(stack.enchantments))lines[0].color='aqua';
+ if(stored?.length)lines[0].color='yellow';
+ for(const text of storedEnchantmentLines(stored))lines.push({text,color:'gray'});
+ for(const text of storedEnchantmentLines(stack.enchantments))lines.push({text,color:'gray'});
  if(attack)lines.push({text:''},{text:`+${attack} Attack Damage`,color:'blue'});
+ if(stack.unbreakable)lines.push({text:'Unbreakable',color:'blue'});
  if(advanced&&item.durability&&stack.damage>0)lines.push({text:`Durability: ${item.durability-stack.damage} / ${item.durability}`});
  return lines;
 }

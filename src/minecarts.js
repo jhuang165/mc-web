@@ -19,7 +19,7 @@ import { blockCollisions, setInWeb } from "./block-collisions.js";
 import { JavaRandom } from "./java-random.js";
 import { mhSin, mhCos } from "./lighting.js";
 import { solidTop } from "./rails.js";
-import { StackArray, ChestContainer } from "./inventory.js";
+import { StackArray, ChestContainer, copyStack } from "./inventory.js";
 import { ITEMS } from "./survival.js";
 import { itemFromOriginal, ORIGINAL_ITEMS } from "./region-import.js";
 
@@ -52,6 +52,16 @@ function originalOf(stack) {
   }
   const o = REVERSE.get(stack.id);
   return o ? { id: o.id, damage: o.damage ?? stack.damage ?? 0 } : null;
+}
+function itemTagsNbt(stack) {
+  const tag = {}, list = (entries) => [9, 10, entries.map((e) => ({ id: [2, e.id], lvl: [2, e.lvl] }))];
+  if (Array.isArray(stack.enchantments)) tag.ench = list(stack.enchantments);
+  const stored = stack.storedEnchantments ?? (stack.stored?.length ? stack.stored : undefined);
+  if (Array.isArray(stored)) tag.StoredEnchantments = list(stored);
+  if (Number.isInteger(stack.repairCost)) tag.RepairCost = [3, stack.repairCost];
+  if (typeof stack.displayName === 'string') tag.display = [10, { Name: [8, stack.displayName] }];
+  if (typeof stack.unbreakable === 'boolean') tag.Unbreakable = [1, stack.unbreakable ? 1 : 0];
+  return tag;
 }
 
 // Live rail kinds by internal block id. Other native rail kinds are supplied by probe adapters.
@@ -164,11 +174,21 @@ export class Minecarts {
     if (!(slot >= 0 && slot < CART_SLOTS) || !(it?.count > 0)) return;
     const count = Math.min(64, it.count), mapped = itemFromOriginal(it.id, it.damage ?? 0);
     if (mapped) {
-      cart.slots[slot] = { id: mapped.id, count, damage: mapped.damage, ...(it.stored ? { stored: it.stored.map((e) => ({ ...e })) } : {}) };
+      cart.slots[slot] = copyStack({ id: mapped.id, count, damage: mapped.damage,
+        ...(it.stored ? { stored: it.stored } : {}), ...(it.enchantments ? { enchantments: it.enchantments } : {}),
+        ...(it.storedEnchantments ? { storedEnchantments: it.storedEnchantments } : {}),
+        ...(it.repairCost !== undefined ? { repairCost: it.repairCost } : {}),
+        ...(it.displayName !== undefined ? { displayName: it.displayName } : {}),
+        ...(it.unbreakable !== undefined ? { unbreakable: it.unbreakable } : {}) });
       cart.unmapped[slot] = null;
     } else {
       cart.slots[slot] = null;
-      cart.unmapped[slot] = { id: it.id, damage: it.damage ?? 0, count, ...(it.stored ? { stored: it.stored.map((e) => ({ ...e })) } : {}) };
+      cart.unmapped[slot] = copyStack({ id: it.id, damage: it.damage ?? 0, count,
+        ...(it.stored ? { stored: it.stored } : {}), ...(it.enchantments ? { enchantments: it.enchantments } : {}),
+        ...(it.storedEnchantments ? { storedEnchantments: it.storedEnchantments } : {}),
+        ...(it.repairCost !== undefined ? { repairCost: it.repairCost } : {}),
+        ...(it.displayName !== undefined ? { displayName: it.displayName } : {}),
+        ...(it.unbreakable !== undefined ? { unbreakable: it.unbreakable } : {}) });
     }
   }
   // Entity.setPosition: the box from posY - yOffset.
@@ -563,7 +583,8 @@ export class Minecarts {
       const o = s ? { ...originalOf(s), count: s.count, stored: s.stored } : u;
       if (!o?.id) continue;
       const item = { Slot: [1, i], id: [2, o.id], Count: [1, o.count], Damage: [2, o.damage ?? 0] };
-      if (o.stored?.length) item.tag = [10, { StoredEnchantments: [9, 10, o.stored.map((e) => ({ id: [2, e.id], lvl: [2, e.lvl] }))] }];
+      const nbt = itemTagsNbt(s ? { ...o, ...s } : o);
+      if (Object.keys(nbt).length) item.tag = [10, nbt];
       items.push(item);
     }
     const out = {
@@ -587,8 +608,8 @@ export class Minecarts {
         customName: c.customName || undefined,
         items: c.slots.flatMap((s, slot) => {
           const o = s ? originalOf(s) : null, u = c.unmapped[slot];
-          if (s && o) return [{ slot, id: o.id, damage: o.damage, count: s.count, ...(s.stored ? { stored: s.stored } : {}) }];
-          if (u) return [{ slot, ...u }];
+          if (s && o) return [{ slot, ...copyStack(s), id: o.id, damage: o.damage, count: s.count }];
+          if (u) return [{ slot, ...copyStack(u) }];
           return [];
         }),
       })),
@@ -598,7 +619,10 @@ export class Minecarts {
     const m = new Minecarts(options), ok = (...v) => v.every(Number.isFinite);
     for (const c of Array.isArray(json?.carts) ? json.carts.slice(0, 1024) : []) {
       if (!ok(c?.x, c?.y, c?.z)) continue;
-      const items = (Array.isArray(c.items) ? c.items : []).filter((it) => Number.isInteger(it?.slot) && Number.isInteger(it?.id) && Number.isInteger(it?.count) && (it.damage === undefined || Number.isInteger(it.damage)) && (it.stored === undefined || (Array.isArray(it.stored) && it.stored.every((e) => Number.isInteger(e?.id) && Number.isInteger(e?.lvl)))));
+      const items = (Array.isArray(c.items) ? c.items : []).filter((it) => Number.isInteger(it?.slot) && Number.isInteger(it?.id) && Number.isInteger(it?.count) &&
+        (it.damage === undefined || Number.isInteger(it.damage)) && [it.stored, it.enchantments, it.storedEnchantments].every((list) => list === undefined || (Array.isArray(list) && list.every((e) => Number.isInteger(e?.id) && Number.isInteger(e?.lvl)))) &&
+        (it.repairCost === undefined || Number.isInteger(it.repairCost)) && (it.displayName === undefined || typeof it.displayName === 'string') &&
+        (it.unbreakable === undefined || typeof it.unbreakable === 'boolean'));
       const cart = m.spawnChest({ type: c.type, x: c.x, y: c.y, z: c.z, items: c.type === 0 ? [] : items, customName: typeof c.customName === "string" && c.customName ? c.customName : null });
       cart.restorePlayer = c.type === 0 && c.rider === true;
       const v = Array.isArray(c.motion) && c.motion.length === 3 && ok(...c.motion) ? c.motion : [0, 0, 0];

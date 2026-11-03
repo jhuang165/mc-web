@@ -1,0 +1,1 @@
+Dropped item stack merge now uses sameStackItem so supported native item tags must match; regression covers name/repair/enchantment variants.

@@ -24,8 +24,9 @@ const exec = promisify(execFile),
 // ---- Scenarios (region-relative coordinates; y = 0 is usually a stone floor) ----
 const AIR = 0, STONE = 1, GLASS = 20, DOUBLE_SLAB = 43, SLAB = 44, WIRE = 55, LEVER = 69, STONE_PLATE = 70, WOOD_PLATE = 72,
   UNLIT_TORCH = 75, TORCH = 76, STONE_BUTTON = 77, GLOWSTONE = 89, REPEATER = 93, POWERED_REPEATER = 94, CAULDRON = 118,
-  END_PORTAL_FRAME = 120, LAMP = 123, WOOD_BUTTON = 143, LIGHT_PLATE = 147, HEAVY_PLATE = 148, COMPARATOR = 149,
+  END_PORTAL_FRAME = 120, LAMP = 123, WOOD_BUTTON = 143, TRAPPED_CHEST = 146, LIGHT_PLATE = 147, HEAVY_PLATE = 148, COMPARATOR = 149,
   POWERED_COMPARATOR = 150, REDSTONE_BLOCK = 152;
+const CHEST = 54, FURNACE = 61, DISPENSER = 23, HOPPER = 154, DROPPER = 158;
 // Repeater / comparator metadata: bits 0-1 direction (1 = input from -x, output to +x; 3 = output to -x;
 // 2 = input from -z, output to +z; 0 = output to -z), bits 2-3 repeater delay index, comparator bit 4 subtract.
 const rep = (dir, delay = 0) => `${REPEATER}:${dir | (delay << 2)}`,
@@ -48,6 +49,61 @@ const line = (cells, x0, x1, y, z, v = WIRE) => {
 };
 
 const SCENARIOS = [];
+// Native TileEntityInventory comparator overrides: fractional fullness, slot changes,
+// double chest capacity and reads through one solid block.
+{
+  const c = {}, ev = [];
+  put(c, 1, 1, 1, CHEST);
+  put(c, 2, 1, 1, cmp(1)); put(c, 3, 1, 1, WIRE); put(c, 4, 1, 1, LAMP);
+  ev.push([1, "container", 1, 1, 1, CHEST, 0], [2, "slot", 1, 1, 1, 0, 1, 32, 0], [8, "slot", 1, 1, 1, 0, 1, 64, 0], [14, "slot", 1, 1, 1, 0, 1, 0, 0]);
+  SCENARIOS.push(scenario("comparator-chest-fullness", { size: [6, 3, 3], ticks: 22, cells: c, events: ev, note: "single chest inventory changes: half stack, full stack, then empty; comparator output updates" }));
+}
+{
+  const c = {}, ev = [];
+  put(c, 1, 1, 1, CHEST); put(c, 2, 1, 1, cmp(1)); put(c, 3, 1, 1, WIRE);
+  ev.push([1, "container", 1, 1, 1, CHEST, 0]);
+  for (let slot = 0; slot < 27; slot++) ev.push([2, "slot", 1, 1, 1, slot, 332, 16, 0]);
+  SCENARIOS.push(scenario("comparator-stack-limits", { size: [5, 3, 3], ticks: 10, cells: c, events: ev, note: "all 27 chest slots filled with 16-stack snowballs; per-item max-stack fullness reaches comparator 15" }));
+}
+{
+  const c = {}, ev = [];
+  put(c, 1, 1, 2, CHEST); put(c, 2, 1, 2, CHEST);
+  put(c, 3, 1, 2, cmp(1)); put(c, 4, 1, 2, WIRE);
+  ev.push([1, "container", 1, 1, 2, CHEST, 0], [1, "container", 2, 1, 2, CHEST, 0], [2, "slot", 2, 1, 2, 0, 1, 64, 0]);
+  SCENARIOS.push(scenario("comparator-double-chest", { size: [6, 3, 5], ticks: 12, cells: c, events: ev, note: "double chest with one full stack across 54 slots, verifying combined capacity and comparator output" }));
+}
+{
+  const c = {}, ev = [];
+  put(c, 1, 1, 2, CHEST);
+  put(c, 2, 1, 2, STONE); put(c, 3, 1, 2, cmp(1)); put(c, 4, 1, 2, WIRE);
+  ev.push([1, "container", 1, 1, 2, CHEST, 0], [2, "slot", 1, 1, 2, 0, 267, 1, 0], [8, "slot", 1, 1, 2, 0, 267, 0, 0]);
+  SCENARIOS.push(scenario("comparator-chest-through-stone", { size: [6, 3, 5], ticks: 16, cells: c, events: ev, note: "comparator reads chest through one solid cube; non-stackable sword fullness and empty notification" }));
+}
+{
+  const c = {}, ev = [];
+  put(c, 1, 1, 2, CHEST); put(c, 1, 2, 2, STONE); put(c, 2, 1, 2, cmp(1));
+  ev.push([1, "container", 1, 1, 2, CHEST, 0], [2, "slot", 1, 1, 2, 0, 1, 64, 0], [4, "notify", 2, 1, 2, CHEST]);
+  SCENARIOS.push(scenario("comparator-chest-blocked", { size: [5, 4, 5], ticks: 12, cells: c, events: ev, note: "single chest inventory hidden by an opaque block above the lid" }));
+}
+{
+  const c = {}, ev = [];
+  put(c, 1, 1, 2, CHEST); put(c, 2, 1, 2, CHEST); put(c, 1, 2, 2, STONE); put(c, 3, 1, 2, cmp(1));
+  ev.push([1, "container", 1, 1, 2, CHEST, 0], [1, "container", 2, 1, 2, CHEST, 0], [2, "slot", 1, 1, 2, 0, 1, 64, 0], [4, "notify", 3, 1, 2, CHEST]);
+  SCENARIOS.push(scenario("comparator-double-chest-blocked", { size: [6, 4, 5], ticks: 12, cells: c, events: ev, note: "far half of a double chest blocked above its lid while comparator reads the near half" }));
+}
+for (const [name, id] of [["furnace", FURNACE], ["hopper", HOPPER], ["dispenser", DISPENSER], ["dropper", DROPPER], ["trapped-chest", TRAPPED_CHEST]]) {
+  const c = {}, ev = [];
+  put(c, 1, 1, 2, id);
+  put(c, 3, 1, 2, WIRE);
+  ev.push([1, "container", 1, 1, 2, id, 0], [2, "slot", 1, 1, 2, 0, 1, 64, 0], [3, "place", 2, 1, 2, COMPARATOR, 1], [4, "notify", 2, 1, 2, id]);
+  SCENARIOS.push(scenario(`comparator-${name}`, { size: [5, 3, 5], ticks: 14, cells: c, events: ev, note: `${name} native TileEntity fullness read on comparator placement` }));
+}
+{
+  const c = {}, ev = [];
+  put(c, 1, 1, 2, FURNACE); put(c, 1, 2, 2, STONE); put(c, 2, 1, 2, cmp(1));
+  ev.push([1, "container", 1, 1, 2, FURNACE, 0], [2, "slot", 1, 1, 2, 0, 1, 64, 0], [4, "notify", 2, 1, 2, FURNACE]);
+  SCENARIOS.push(scenario("comparator-furnace-under-block", { size: [5, 4, 5], ticks: 12, cells: c, events: ev, note: "furnace comparator input remains readable below an opaque block" }));
+}
 // Straight 16-wire line from a floor lever: 15 at the lever, 0 at the far end.
 SCENARIOS.push(scenario("line-lever", {
   size: [18, 3, 3], ticks: 30, note: "16 raw wires, floor lever placed, toggled on/off/on",
@@ -524,12 +580,14 @@ for (const [i, native] of lines.entries()) {
 }
 const digest = async (name) => createHash("sha256").update((await exec("unzip", ["-p", jar, name + ".class"], { encoding: "buffer", maxBuffer: 1 << 24 })).stdout).digest("hex");
 const names = { ana: "BlockRedstoneWire", anc: "BlockRedstoneTorch", and: "BlockRedstoneTorch$Toggle", aoc: "BlockTorch", alv: "BlockLever", ajs: "BlockButton", anx: "BlockButtonStone", aon: "BlockButtonWood", anb: "BlockRedstoneLight", ams: "BlockCompressedPowered", anf: "BlockRedstoneRepeater", akj: "BlockRedstoneDiode", akc: "BlockRedstoneComparator", aoz: "TileEntityComparator", amu: "BlockPressurePlate", aol: "BlockPressurePlateWeighted", ajd: "BlockBasePressurePlate", ajw: "BlockCauldron", aku: "BlockEndPortalFrame", agt: "ChunkPosition", ahs: "NextTickListEntry", ahb: "World", apx: "Chunk", apz: "ExtendedBlockStorage", aji: "Block" };
+const tileNames = { 23: "TileEntityDispenser", 54: "TileEntityChest", 61: "TileEntityFurnace", 62: "TileEntityFurnace", 146: "TileEntityChest", 154: "TileEntityHopper", 158: "TileEntityDropper" };
+for (const [id, cls] of Object.entries(blocks.tileClasses)) names[cls] = tileNames[id] ?? `TileEntityBlock${id}`;
 const reference = {
   target: "Minecraft Java 1.7.10",
   clientSha1,
   classes: Object.fromEntries(await Promise.all(Object.entries(names).map(async ([c, n]) => [c, { name: n, sha256: await digest(c) }]))),
   method:
-    "Unchanged original redstone block classes run inside a real World (ahb, allocated without its constructor) with real Chunk (apx) and ExtendedBlockStorage objects from a stub chunk provider. Native: World.setBlock, setBlockMetadataWithNotify, notifyBlocksOfNeighborChange, notifyBlockOfNeighborChange, power queries, doesBlockHaveSolidTopSurface, isBlockNormalCubeDefault, Chunk.func_150807_a/setBlockMetadata, Block drops. Replaced: WorldServer scheduled ticks (copied: HashSet + TreeSet of original NextTickListEntry, 1000 cap, this-tick list), getTotalWorldTime, getGameRules (default GameRules), playSoundEffect/spawnEntityInWorld (recorded), spawnParticle (ignored), getEntitiesWithinAABB (a scripted entity list with strict AABB intersection: allocated item xk, zombie yq and player mw objects), loaded tile entity lists (empty ArrayLists), lighting updates (disabled). Real: TileEntityComparator (aoz) created by the comparator block, Chunk tile entity maps, World.func_147453_f comparator updates, BlockCauldron.func_150024_a and BlockEndPortalFrame comparator overrides, ItemReed-style placement (setBlock(block,0,3) then onBlockPlacedBy with a placer yaw). The wire's blocksNeedingUpdate HashSet is replaced by a fresh one per scenario; the JVM is Java 8+ (HashMap iteration order of Java 8 and later). Terrain is written straight into chunk sections; events of tick t run before tick t (world time advances, then tickUpdates). No random block ticks. Per tick: changed region cells [x,y,z,id,meta], and the call log: E,op event; s,x,y,z,id,meta,flags setBlock; m,x,y,z,meta,flags setBlockMetadataWithNotify; n,x,y,z,source notifyBlockOfNeighborChange; t,x,y,z,id,delay,priority scheduled tick; u,x,y,z,id updateTick; p,name sound; e,item dropped item; T world tick; scripted events place, air, use, placeby (block, yaw), cauldron (water level), entity (0 item, 1 mob, 2 player), unentity, collide (onEntityCollidedWithBlock with a null entity). tiles (only when non-empty): per tick [x,y,z,signal] changes of the TileEntityComparator output signal. sounds: [tick,x,y,z,name,volume,pitch]; drops: [tick,x,y,z,item,count,damage]; pending: [x,y,z,id,ticksLeft,priority]; rng: world Random nextInt() after the run.",
+    "Unchanged original redstone block classes run inside a real World (ahb, allocated without its constructor) with real Chunk (apx) and ExtendedBlockStorage objects from a stub chunk provider. Native: World.setBlock, setBlockMetadataWithNotify, notifyBlocksOfNeighborChange, notifyBlockOfNeighborChange, power queries, doesBlockHaveSolidTopSurface, isBlockNormalCubeDefault, Chunk.func_150807_a/setBlockMetadata, Block drops. Replaced: WorldServer scheduled ticks (copied: HashSet + TreeSet of original NextTickListEntry, 1000 cap, this-tick list), getTotalWorldTime, getGameRules (default GameRules), playSoundEffect/spawnEntityInWorld (recorded), spawnParticle (ignored), getEntitiesWithinAABB (a scripted entity list with strict AABB intersection: allocated item xk, zombie yq and player mw objects), loaded tile entity lists (empty ArrayLists), lighting updates (disabled). Real: TileEntityComparator (aoz) plus TileEntityChest (aow), Furnace (apg), Dispenser (apb), Hopper (api) and Dropper (apc) in native Chunk tile maps; native inventory setter calls, BlockChest blocked/double behavior, World.func_147453_f comparator updates, container comparator fullness/stack-limit reads, BlockCauldron.func_150024_a and BlockEndPortalFrame overrides, ItemReed-style placement (setBlock(block,0,3) then onBlockPlacedBy with a placer yaw). The wire's blocksNeedingUpdate HashSet is replaced by a fresh one per scenario; the JVM is Java 8+ (HashMap iteration order of Java 8 and later). Terrain is written straight into chunk sections; events of tick t run before tick t (world time advances, then tickUpdates). No random block ticks. Per tick: changed region cells [x,y,z,id,meta], and the call log: E,op event; s,x,y,z,id,meta,flags setBlock; m,x,y,z,meta,flags setBlockMetadataWithNotify; n,x,y,z,source notifyBlockOfNeighborChange; t,x,y,z,id,delay,priority scheduled tick; u,x,y,z,id updateTick; p,name sound; e,item dropped item; T world tick; scripted events place, air, use, placeby (block, yaw), cauldron (water level), container (block id), slot (slot, item, count, damage), notify (target cell, source id), entity (0 item, 1 mob, 2 player), unentity, collide (onEntityCollidedWithBlock with a null entity). tiles (only when non-empty): per tick [x,y,z,signal] changes of the TileEntityComparator output signal. sounds: [tick,x,y,z,name,volume,pitch]; drops: [tick,x,y,z,item,count,damage]; pending: [x,y,z,id,ticksLeft,priority]; rng: world Random nextInt() after the run.",
   blocks,
   scenarios: results,
 };

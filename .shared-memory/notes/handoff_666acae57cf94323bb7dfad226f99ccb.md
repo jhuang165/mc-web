@@ -1,0 +1,1 @@
+Java region import now reads supported item NBT fields for supported container and dropped items; minecart inventory JSON/NBT retains metadata. Covered by focused tests and native Java save verification.

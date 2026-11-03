@@ -1,5 +1,9 @@
 # Minecraft Java 1.7.10 feature coverage
 
+The 2026-11-03 continuation preserves supported item tags (repair cost, custom name, enchantments, stored enchantments and Unbreakable) through inventory operations, local saves and Java conversion. Item merges compare these tags; tooltips display the name/enchantments, and Unbreakable prevents durability loss. The anvil block and repair screen remain unfinished. See [item-tag persistence](anvil-persistence.md).
+
+Standalone packages also cover [combined structure search/population orchestration](structure-population.md) and [inventory comparator readings](redstone.md). Native structure-search fixtures verify all four start maps and world RNG state; combined population writes remain unverified. Structures and redstone are still awaiting live integration.
+
 0.34.0 (WORLD-02k) loads chest/furnace inventories by column and evicts durable distant copies. IndexedDB v4 migrates old runtime inventories atomically; scoped saves preserve unseen columns, failed/overlapping saves retain new changes, and backups still include unloaded inventories. Other entity/tick runtime remains global. Write fingerprints are bounded to 256 columns. See [streaming](streaming.md).
 
 0.33.0 (WORLD-02j) evicts durable block-edit caches outside the resident/prefetch window while pinning unsaved edits and overlapping saves; return reads preserve air, metadata and edit order. Runtime hydration remains global. 0.32.0 adds lazy exact-key edit reads, column runtime storage, one-writer tab ownership and a Java save conversion snapshot. 0.31.0 stores streamed-world edits per chunk column in IndexedDB, so saves write only dirty columns atomically with the world record (older saves migrate; exports stay self-contained). 0.30.0 cuts the streamed light shift from about 100 ms to about 15–20 ms with identical light arrays. 0.29.0 prefetches generation in a Web Worker and shifts streamed light incrementally. See [streaming](streaming.md).

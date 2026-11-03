@@ -35,7 +35,7 @@ export const ORIGINAL_ITEMS = Object.freeze({
   298: 400, 299: 401, 300: 402, 301: 403, 302: 404, 303: 405, 304: 406, 305: 407, 306: 408, 307: 409, 308: 410, 309: 411, 310: 416, 311: 417,
   312: 418, 313: 419, 314: 412, 315: 413, 316: 414, 317: 415,
   // Mineshaft blocks and loot: fence, rail, redstone, pumpkin/melon seeds, saddle, iron horse armor
-  // and the enchanted book (its StoredEnchantments are not read from imported chests yet).
+  // and the enchanted book (whose StoredEnchantments are retained).
   85: FENCE, 66: RAIL, 331: 360, 361: 361, 362: 362, 329: 363, 417: 364, 403: 365,
   // Empty and chest cart items (internal 342 is the lava bucket).
   328: 366, 342: 450,
@@ -185,10 +185,31 @@ export async function importJavaRegionArea(regions, options = {}) {
       return null;
     }
     const limit = ITEMS[mapped.id].stack ?? 64;
-    if (compound.has('tag')) report.items.tagsStripped++;
+    const stack = { id: mapped.id, count: Math.min(count, limit), damage: mapped.damage };
+    const nbt = get(compound, 'tag', NBT.COMPOUND);
+    if (nbt) {
+      const readEnchantments = (key) => {
+        const value = get(nbt, key, NBT.LIST);
+        // NBTTagCompound.getTagList accepts any element type when the list is empty.
+        if (!value || (value.items.length && value.elementType !== NBT.COMPOUND)) return undefined;
+        return value.items.slice(0, 64).map((e) => ({ id: get(e, 'id', NBT.SHORT, 0), lvl: get(e, 'lvl', NBT.SHORT, 0) }));
+      };
+      const enchantments = readEnchantments('ench'), stored = readEnchantments('StoredEnchantments');
+      if (enchantments) stack.enchantments = enchantments;
+      if (stored) { stack.stored = stored; stack.storedEnchantments = stored.map((e) => ({ ...e })); }
+      const repairCost = get(nbt, 'RepairCost', NBT.INT);
+      if (repairCost !== undefined) stack.repairCost = repairCost | 0;
+      const display = get(nbt, 'display', NBT.COMPOUND), name = get(display, 'Name', NBT.STRING);
+      if (name !== undefined) stack.displayName = name;
+      const unbreakable = get(nbt, 'Unbreakable', NBT.BYTE);
+      if (unbreakable !== undefined) stack.unbreakable = unbreakable !== 0;
+      const recognized = new Set(['ench', 'StoredEnchantments', 'RepairCost', 'display', 'Unbreakable']);
+      if ([...nbt.keys()].some((key) => !recognized.has(key))) report.items.tagsStripped++;
+      else if (display && [...display.keys()].some((key) => key !== 'Name')) report.items.tagsStripped++;
+    }
     if (mapped.clamped || count > limit) report.items.clamped++;
     report.items.converted++;
-    return { id: mapped.id, count: Math.min(count, limit), damage: mapped.damage };
+    return stack;
   };
   const slotItems = (tile, size, unsigned) => {
     const items = Array(size).fill(null);

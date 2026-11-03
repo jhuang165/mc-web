@@ -1102,7 +1102,7 @@ function refreshContainer() {
   tip.classList.toggle("hidden", !lines.length);
   if (lines.length) {
     // The title keeps its rarity colour (an enchanted book's yellow name); later lines default to gray.
-    tip.innerHTML = lines.map((l, i) => `<span class="${i ? l.color || "gray" : "title" + (l.color ? " " + l.color : "")}">${esc(l.text) || "&nbsp;"}</span>`).join("");
+    tip.innerHTML = lines.map((l, i) => `<span class="${i ? l.color || "gray" : "title" + (l.color ? " " + l.color : "")}${l.italic ? " italic" : ""}">${esc(l.text) || "&nbsp;"}</span>`).join("");
     tip.style.left = view.x + "px";
     tip.style.top = view.y + "px";
   }

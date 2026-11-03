@@ -22,7 +22,15 @@ function stackNbt(s,slot,report,original=false) {
  if(!o){report.unmappedItems++;return null;}
  const entry={id:short(o.id),Count:byte(s.count),Damage:short(o.damage??s.damage??0)};
  if(slot!==undefined)entry.Slot=byte(slot>127?slot-256:slot);
- if(s.stored?.length)entry.tag=comp({StoredEnchantments:list(NBT.COMPOUND,s.stored.map(e=>new Map([['id',short(e.id)],['lvl',short(e.lvl)]])))});
+ const enchantList=values=>list(NBT.COMPOUND,values.map(e=>new Map([['id',short(e.id)],['lvl',short(e.lvl)]])));
+ const tagEntries={};
+ if(Array.isArray(s.enchantments))tagEntries.ench=enchantList(s.enchantments);
+ const stored=s.storedEnchantments??(s.stored?.length?s.stored:undefined);
+ if(Array.isArray(stored))tagEntries.StoredEnchantments=enchantList(stored);
+ if(Number.isInteger(s.repairCost))tagEntries.RepairCost=int(s.repairCost);
+ if(typeof s.displayName==='string')tagEntries.display=comp({Name:str(s.displayName)});
+ if(typeof s.unbreakable==='boolean')tagEntries.Unbreakable=byte(s.unbreakable?1:0);
+ if(Object.keys(tagEntries).length)entry.tag=comp(tagEntries);
  return new Map(Object.entries(entry));
 }
 const inventory=(items,report)=>list(NBT.COMPOUND,(items??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];}));

@@ -39,7 +39,13 @@ const SANITIZE = {
       ...(typeof c.customName === "string" && c.customName ? { customName: c.customName.slice(0, 64) } : {}),
       items: (Array.isArray(c.items) ? c.items : [])
         .filter((it) => int(it?.slot) && it.slot >= 0 && it.slot < 27 && int(it.id) && int(it.count) && it.count > 0 && (it.damage === undefined || int(it.damage)))
-        .map((it) => ({ slot: it.slot, id: it.id, damage: it.damage ?? 0, count: Math.min(64, it.count), ...(Array.isArray(it.stored) ? { stored: stored(it.stored) } : {}) })),
+        .map((it) => ({ slot: it.slot, id: it.id, damage: it.damage ?? 0, count: Math.min(64, it.count),
+          ...(Array.isArray(it.stored) ? { stored: stored(it.stored) } : {}),
+          ...(Array.isArray(it.enchantments) ? { enchantments: stored(it.enchantments) } : {}),
+          ...(Array.isArray(it.storedEnchantments) ? { storedEnchantments: stored(it.storedEnchantments) } : {}),
+          ...(Number.isInteger(it.repairCost) ? { repairCost: it.repairCost } : {}),
+          ...(typeof it.displayName === 'string' ? { displayName: it.displayName.slice(0, 32767) } : {}),
+          ...(typeof it.unbreakable === 'boolean' ? { unbreakable: it.unbreakable } : {}) })),
     })) }
     : undefined,
 };

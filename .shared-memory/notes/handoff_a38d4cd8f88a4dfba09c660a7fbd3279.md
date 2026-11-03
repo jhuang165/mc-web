@@ -1,0 +1,1 @@
+Player/chest/furnace save/load deep-copies metadata through Survival serialization; explicit Unbreakable tags stop durability loss. Focused tests pass.

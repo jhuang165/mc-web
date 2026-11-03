@@ -177,7 +177,19 @@ public class RedstoneProbe {
     // Ids of the repeater/comparator/plate/override blocks and their original classes, and drop items.
     StringBuilder cls = new StringBuilder();
     for (int id : new int[] {70, 72, 93, 94, 118, 120, 147, 148, 149, 150}) cls.append(cls.length() > 0 ? "," : "").append(q(String.valueOf(id))).append(":").append(q(aji.e(id).getClass().getName()));
-    System.out.println("{\"kind\":\"blocks\",\"props\":[" + props + "],\"fields\":{" + ids + "},\"items\":{\"redstone\":" + adb.b(ade.ax) + ",\"repeater\":" + adb.b(ade.aW) + ",\"comparator\":" + adb.b(ade.bS) + "},\"classes\":{" + cls + "}}");
+    StringBuilder limits = new StringBuilder();
+    for (int id = 0; id < 4096; id++) {
+      adb item = adb.d(id);
+      if (item != null && item.m() != 64) limits.append(limits.length() > 0 ? "," : "").append("[").append(id).append(",").append(item.m()).append("]");
+    }
+    StringBuilder tileClasses = new StringBuilder();
+    int[] containerIds = {23, 54, 61, 62, 146, 154, 158};
+    for (int id : containerIds) {
+      W tw = world(0); tw.raw(0, 1, 0, aji.e(id), 0);
+      aor te = tw.o(0, 1, 0);
+      tileClasses.append(tileClasses.length() > 0 ? "," : "").append(q(String.valueOf(id))).append(":").append(q(te.getClass().getName()));
+    }
+    System.out.println("{\"kind\":\"blocks\",\"props\":[" + props + "],\"fields\":{" + ids + "},\"items\":{\"redstone\":" + adb.b(ade.ax) + ",\"repeater\":" + adb.b(ade.aW) + ",\"comparator\":" + adb.b(ade.bS) + "},\"classes\":{" + cls + "},\"stackLimits\":[" + limits + "],\"tileClasses\":{" + tileClasses + "}}");
     BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
     for (String line = in.readLine(); line != null; ) {
       String[] h = line.split(" ");
@@ -218,6 +230,15 @@ public class RedstoneProbe {
             }
             // BlockCauldron.func_150024_a (setWaterLevel).
             case "cauldron": ((ajw) aji.e(118)).a((ahb) w, x, y, z, Integer.parseInt(e[6])); break;
+            case "container": w.d(x, y, z, aji.e(Integer.parseInt(e[6])), Integer.parseInt(e[7]), 3); break;
+            // IInventory.setInventorySlotContents; the tile-entity setter performs the native dirty/update call.
+            case "slot": {
+              Object inv = w.o(x, y, z);
+              int item = Integer.parseInt(e[7]), count = Integer.parseInt(e[8]), damage = Integer.parseInt(e[9]);
+              inv.getClass().getMethod("a", int.class, add.class).invoke(inv, Integer.parseInt(e[6]), count > 0 ? new add(adb.d(item), count, damage) : null);
+              break;
+            }
+            case "notify": w.e(x, y, z, aji.e(Integer.parseInt(e[6]))); break;
             // Scripted entity stand-ins in one cell: 0.25 wide, 0.25 tall box on the cell floor. kind 0 item, 1 mob, 2 player.
             case "entity": {
               int kind = Integer.parseInt(e[6]);

@@ -116,4 +116,5 @@ body:has(.chest-modal) #toast{display:none}
    (32 tall, centred 12 across). Inventory (51, 75, 30) is set above; creative uses (43, 45, 20). */
 .creative-modal .native-player{left:calc(28*var(--u));top:calc(5*var(--u));transform:scale(calc(var(--gui-scale)*.41667));z-index:2}
 .slot-tooltip .bold{font-weight:bold}
+.slot-tooltip .italic{font-style:italic}.slot-tooltip .aqua{color:#5ff;text-shadow:var(--u) var(--u) #153f3f}
 body:has(.creative-modal) #toast{display:none}

@@ -15,8 +15,8 @@
 //   BlockRedstoneDiode (akj) + BlockRedstoneRepeater (anf, ids 93/94): delay, locking,
 //   scheduled-tick priorities, facing; BlockRedstoneComparator (akc, ids 149/150) with its
 //   TileEntityComparator output signal (aoz), compare/subtract mode and the container
-//   comparator-override input (cauldron 118 and end portal frame 120 are the metadata-driven
-//   overrides; inventories are not ported); World.func_147453_f (updateNeighbourForOutputSignal);
+//   comparator-override input (cauldron 118, end portal frame 120 and native container fullness);
+//   World.func_147453_f (updateNeighbourForOutputSignal);
 //   BlockBasePressurePlate (ajd) with BlockPressurePlate (amu, stone 70 / wood 72) and
 //   BlockPressurePlateWeighted (aol, light 147 / heavy 148) over a scripted entity-box list;
 //   Block.dropBlockAsItemWithChance / dropBlockAsItem_do world-Random draws.
@@ -24,7 +24,7 @@
 // Evidence: tools/probes/RedstoneProbe.java runs those classes in a real World and Chunks
 // and records public/research/redstone-reference.json; src/redstone.test.js replays every
 // scenario here. Not ported: pistons, tripwire, daylight sensors, powered rails/doors/TNT/
-// note blocks, inventory comparator overrides, entity physics, random ticks, lighting,
+// note blocks and unported inventory block behaviors, entity physics, random ticks, lighting,
 // rendering. This module is not wired into the live game.
 import { JavaRandom } from "./java-random.js";
 
@@ -46,6 +46,13 @@ export const LAMP = 123;
 export const LIT_LAMP = 124;
 export const CAULDRON = 118;
 export const END_PORTAL_FRAME = 120;
+export const CHEST = 54;
+export const FURNACE = 61;
+export const LIT_FURNACE = 62;
+export const DISPENSER = 23;
+export const HOPPER = 154;
+export const DROPPER = 158;
+export const TRAPPED_CHEST = 146;
 export const COBBLE_WALL = 139;
 export const WOOD_BUTTON = 143;
 export const COMPARATOR = 149;
@@ -160,7 +167,7 @@ export class RedstoneWorld {
     this.wiresProvidePower = true; // BlockRedstoneWire.wiresProvidePower
     this.torchToggles = null; // BlockRedstoneTorch.toggles.get(world)
     this.doTileDrops = true;
-    this.tiles = new Map(); // TileEntityComparator by "x,y,z": { signal }
+    this.tiles = new Map(); // comparator and container tiles by "x,y,z"
     this.entities = []; // scripted entity boxes for pressure plates: { kind, box: [x0,y0,z0,x1,y1,z1] }
     this.sounds = [];
     this.drops = [];
@@ -214,6 +221,7 @@ export class RedstoneWorld {
     }
     const i = RedstoneWorld.index(x, y, z);
     s.ids[i] = id;
+    if (isContainerId(old) && old !== id) this.tiles.delete(`${x},${y},${z}`);
     BEHAVIOUR[old]?.breakBlock?.(this, x, y, z, old, oldMeta);
     if (s.ids[i] !== id) return false;
     s.meta[i] = meta;
@@ -284,6 +292,21 @@ export class RedstoneWorld {
     let t = this.tiles.get(key);
     if (!t) this.tiles.set(key, (t = { signal: 0 }));
     return t;
+  }
+  containerTile(x, y, z, id = this.getBlock(x, y, z)) {
+    const key = `${x},${y},${z}`;
+    let tile = this.tiles.get(key);
+    if (!tile || !tile.slots) {
+      const size = id === CHEST || id === TRAPPED_CHEST ? 27 : id === HOPPER ? 5 : id === DISPENSER || id === DROPPER ? 9 : 3;
+      tile = { slots: Array(size).fill(null), id };
+      this.tiles.set(key, tile);
+    }
+    return tile;
+  }
+  setContainerSlot(x, y, z, slot, item, count, max = itemStackLimit(item), meta = 0) {
+    const tile = this.containerTile(x, y, z);
+    tile.slots[slot] = count > 0 ? { item, count, max, meta } : null;
+    if (tile.id === CHEST || tile.id === TRAPPED_CHEST) this.updateNeighbourForOutputSignal(x, y, z, tile.id);
   }
   notifyBlockOfNeighborChange(x, y, z, source) {
     this.record(`n,${x},${y},${z},${source}`);
@@ -471,14 +494,48 @@ const DIR_X = [0, -1, 0, 1],
 function isComparatorId(id) {
   return id === COMPARATOR || id === POWERED_COMPARATOR;
 }
-// Block.hasComparatorInputOverride among the ported ids: cauldron and end portal frame only.
+// Block.hasComparatorInputOverride among the supported ids.
 function hasComparatorOverride(id) {
-  return id === CAULDRON || id === END_PORTAL_FRAME;
+  return id === CAULDRON || id === END_PORTAL_FRAME || isContainerId(id);
 }
 // Block.getComparatorInputOverride: cauldron level (metadata), end portal frame eye (15 or 0).
 function comparatorOverride(w, id, x, y, z) {
   const m = w.getBlockMetadata(x, y, z);
-  return id === CAULDRON ? m : (m & 4) !== 0 ? 15 : 0;
+  if (id === CAULDRON) return m;
+  if (id === END_PORTAL_FRAME) return (m & 4) !== 0 ? 15 : 0;
+  return containerComparatorSignal(w, x, y, z, id);
+}
+function isContainerId(id) {
+  return id === CHEST || id === TRAPPED_CHEST || id === FURNACE || id === LIT_FURNACE || id === DISPENSER || id === DROPPER || id === HOPPER;
+}
+export function itemStackLimit(item) {
+  return ITEM_STACK_LIMITS.get(item) ?? 64;
+}
+// Native Item.getItemStackLimit values for every non-64 item registered in 1.7.10.
+const ITEM_STACK_LIMITS = new Map([
+  ...[256,257,258,259,261,267,268,269,270,271,272,273,274,275,276,277,278,279,282,283,284,285,286,290,291,292,293,294,298,299,300,301,302,303,304,305,306,307,308,309,310,311,312,313,314,315,316,317,324,326,327,328,329,330,333,335,342,343,346,354,355,359,373,386,398,403,407,408,417,418,419,422,2256,2257,2258,2259,2260,2261,2262,2263,2264,2265,2266,2267].map((id) => [id, 1]),
+  ...[323,325,332,344,368,387].map((id) => [id, 16]),
+]);
+function containerComparatorSignal(w, x, y, z, id) {
+  if ((id === CHEST || id === TRAPPED_CHEST) && w.isNormalCube(w.getBlock(x, y + 1, z))) return 0;
+  let parts = [w.containerTile(x, y, z, id)];
+  if (id === CHEST || id === TRAPPED_CHEST) {
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (w.getBlock(x + dx, y, z + dz) === id) {
+        if (w.isNormalCube(w.getBlock(x + dx, y + 1, z + dz))) return 0;
+        parts = [parts[0], w.containerTile(x + dx, y, z + dz, id)];
+        break;
+      }
+    }
+  }
+  const slots = parts.flatMap((p) => p.slots);
+  let fullness = Math.fround(0), occupied = false;
+  for (const stack of slots) if (stack && stack.count > 0) {
+    occupied = true;
+    fullness = Math.fround(fullness + Math.fround(stack.count / Math.min(64, stack.max)));
+  }
+  fullness = Math.fround(fullness / slots.length);
+  return occupied ? Math.floor(Math.fround(fullness * 14)) + 1 : 0;
 }
 function compareEntries(a, b) {
   if (a.time !== b.time) return a.time < b.time ? -1 : 1;
@@ -1240,11 +1297,12 @@ export function replayScenario(s) {
     w.log.length = 0;
     const soundStart = w.sounds.length,
       dropStart = w.drops.length;
-    for (const [et, op, x0, y0, z0, id, meta] of s.events) {
+    for (const [et, op, x0, y0, z0, ...args] of s.events) {
       if (et !== t) continue;
       const x = ox + x0,
         y = oy + y0,
-        z = oz + z0;
+        z = oz + z0,
+        [id, meta] = args;
       w.record(`E,${op}`);
       if (op === "place") w.setBlock(x, y, z, id, meta, 3);
       else if (op === "air") w.setBlockToAir(x, y, z);
@@ -1260,6 +1318,11 @@ export function replayScenario(s) {
         w.entities.push({ kind, cell: [x, y, z], box: [x + 0.375, y, z + 0.375, x + 0.625, y + 0.25, z + 0.625] });
       } else if (op === "unentity") w.entities = w.entities.filter((e) => !(e.cell[0] === x && e.cell[1] === y && e.cell[2] === z));
       else if (op === "collide") w.collide(x, y, z);
+      else if (op === "container") {
+        w.setBlock(x, y, z, id, meta ?? 0, 3);
+        w.containerTile(x, y, z, id);
+      } else if (op === "slot") w.setContainerSlot(x, y, z, id, meta, args[2], args[4] ?? itemStackLimit(meta), args[3] ?? 0);
+      else if (op === "notify") w.notifyBlockOfNeighborChange(x, y, z, id);
       else throw new Error(`Unknown event ${op}`);
     }
     w.time++;

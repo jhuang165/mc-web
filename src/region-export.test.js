@@ -2,16 +2,22 @@ import test from 'node:test';import assert from 'node:assert/strict';import {mkd
 import {World} from './world.js';import {exportJavaSave} from './region-export.js';import {readRegion,decodeRegionChunk,regionAddress,regionSlot} from './region-file.js';import {chunkFromNbt} from './chunk-nbt.js';import {decodeCompressedNbt} from './nbt-compression.js';import {Survival} from './survival.js';
 test('Anvil ZIP restores edited negative columns, native coordinates, containers, ticks and player inventory',async()=>{
  const w=new World('17','javaStreamed',12);w.restore([['-1,100,-1',41],['-1,101,-1',19|(14<<8)],['2,70,2',14],['-1,99,-1',10]]);
- const player=new Survival({},'survival').serialize();player.chests={'-1,100,-1':{facing:4,items:[{id:19,count:4,damage:14}]}};player.furnaces={'2,70,2':{items:[{id:308,count:3,damage:0},null,null],burn:20,cook:70}};player.slots[0]={id:103,count:1,damage:12};
+ const player=new Survival({},'survival').serialize();player.chests={'-1,100,-1':{facing:4,items:[{id:19,count:4,damage:14,stored:[{id:16,lvl:2}],storedEnchantments:[{id:16,lvl:2}],repairCost:4,displayName:'Chest book'}]}};player.furnaces={'2,70,2':{items:[{id:308,count:3,damage:0},null,null],burn:20,cook:70}};player.slots[0]={id:103,count:1,damage:12,repairCost:7,displayName:'Mining pick',enchantments:[{id:32,lvl:3}],unbreakable:true};
  const r={id:'export',name:'Export',seed:'17',biome:'javaStreamed',generationVersion:12,mode:'survival',edits:[...w.edits],player,position:{x:-.5,y:102,z:-.5,yaw:0,pitch:0},fluidTicks:{version:1,time:80,entries:[{x:-1,y:99,z:-1,block:10,delay:3}]},entities:[{type:'pig',x:-2,y:102,z:-2,health:9,growingAge:-20}],falling:[{x:-3,y:101,z:-3,block:6,meta:1,ticks:200}],arrows:[{x:1,y:70,z:1}],minecarts:{version:1,carts:[]},updated:1700000000000};
  const {files,zip,report}=await exportJavaSave(r,{world:w});assert.equal(report.columns,65);assert.equal(report.unsupportedEntities,1);
  const cx=-1+w.originX/16,cz=-1+w.originZ/16,a=regionAddress(cx,cz),entries=readRegion(files.get(`region/r.${a.regionX}.${a.regionZ}.mca`)),c=chunkFromNbt(await decodeRegionChunk(entries.get(regionSlot(a.x,a.z))));
  assert.equal(c.chunk.x,cx);assert.equal(c.chunk.z,cz);assert.equal(c.chunk.getBlock(15,100,15),54);assert.equal(c.chunk.getMeta(15,100,15),4);assert.equal(c.chunk.getBlock(15,101,15),35);assert.equal(c.chunk.getMeta(15,101,15),14);assert.equal(c.chunk.isLightPopulated,false);
  assert.equal(c.tileEntities[0].get('x').value,w.originX-1);assert.equal(c.tileEntities[0].get('Items').value.items[0].get('Damage').value,14);
+ const chestTag=c.tileEntities[0].get('Items').value.items[0].get('tag').value;
+ assert.equal(chestTag.get('RepairCost').value,4);assert.equal(chestTag.get('display').value.get('Name').value,'Chest book');
+ assert.equal(chestTag.get('StoredEnchantments').value.items[0].get('id').value,16);
  assert.equal(c.tileTicks[0].get('t').value,3);assert.equal(c.tileTicks[0].get('i').value,8);assert.equal(c.entities[0].get('id').value,'Pig');assert.equal(c.entities[0].get('Rotation').value.items[0],0);assert.equal(c.entities.find(e=>e.get('id').value==='FallingSand').get('Time').value,-56);assert.equal(c.chunk.getBlock(15,99,15),8);
  const level=(await decodeCompressedNbt(files.get('level.dat'))).tag.value.get('Data').value;assert.equal(level.get('version').value,19133);assert.equal(level.get('RandomSeed').value,17n);assert.equal(level.get('Player').value.get('Pos').value.items[0],w.originX-.5);assert.equal(level.get('Player').value.get('Inventory').value.items[0].get('id').value,278);
+ const playerTag=level.get('Player').value.get('Inventory').value.items[0].get('tag').value;
+ assert.equal(playerTag.get('RepairCost').value,7);assert.equal(playerTag.get('display').value.get('Name').value,'Mining pick');
+ assert.equal(playerTag.get('ench').value.items[0].get('id').value,32);assert.equal(playerTag.get('Unbreakable').value,1);
  const backup=JSON.parse(new TextDecoder().decode(files.get('blockworld.json')));assert.deepEqual(backup.edits,r.edits);assert.deepEqual(backup.arrows,r.arrows);
  const dir=await mkdtemp(join(tmpdir(),'mc-region-export-'));try{const p=join(dir,'world.zip');await writeFile(p,zip);assert.match(execFileSync('unzip',['-t',p],{encoding:'utf8'}),/No errors detected/);}finally{await rm(dir,{recursive:true,force:true});}
- const restored=new Survival(player,'survival');assert.deepEqual(restored.chests['-1,100,-1'].items[0],{id:19,count:4,damage:14});
+ const restored=new Survival(player,'survival');assert.deepEqual(restored.chests['-1,100,-1'].items[0],{id:19,count:4,damage:14,stored:[{id:16,lvl:2}],storedEnchantments:[{id:16,lvl:2}],repairCost:4,displayName:'Chest book'});
  await assert.rejects(exportJavaSave(r,{world:w,maxChunks:1}),/limited/);
 });

@@ -1,4 +1,15 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {guiScale,stackCount} from './gui.js';
+import {tooltipLines} from './gui.js';
+test('preserved item metadata appears in tooltips without duplicating the legacy book alias',()=>{
+ const item={name:'Iron sword',attack:6,durability:250};
+ const stack={damage:10,displayName:'<Moon & Stars>',enchantments:[{id:16,lvl:2},{id:255,lvl:1}],unbreakable:true};
+ const lines=tooltipLines(item,stack,true);
+ assert.deepEqual(lines[0],{text:'<Moon & Stars>',italic:true,color:'aqua'});
+ assert.deepEqual(lines.map(l=>l.text),['<Moon & Stars>','Sharpness II','','+6 Attack Damage','Unbreakable','Durability: 240 / 250']);
+ const stored=[{id:34,lvl:3}],book=tooltipLines({name:'Enchanted Book',storesEnchantments:true},{damage:0,stored,storedEnchantments:stored});
+ assert.deepEqual(book,[{text:'Enchanted Book',color:'yellow'},{text:'Unbreaking III',color:'gray'}]);
+ assert.equal(tooltipLines(item,{damage:0,displayName:''})[0].text,'');
+});
 test('GUI scaling keeps integer pixels and the original minimum 320 by 240 logical resolution',()=>{assert.equal(guiScale(740,988),2);assert.equal(guiScale(1280,720),3);assert.equal(guiScale(1920,1080),4);assert.equal(guiScale(375,667),1);assert.equal(guiScale(1280,720,2),2);assert.equal(guiScale(740,988,4),2);});
 test('native stack overlays omit singletons and empty stacks',()=>{for(const n of [0,1,undefined,NaN])assert.equal(stackCount(n),'');assert.equal(stackCount(64),'<b class="item-count">64</b>');assert.equal(stackCount(4),'<b class="item-count">4</b>');});
 test('durability bars follow RenderItem: hidden when undamaged, green to red, shrinking from 13 pixels',async()=>{const {durabilityBar,tooltipLines}=await import('./gui.js');assert.equal(durabilityBar(0,59),'');assert.match(durabilityBar(1,59),/--bar:13;--bar-color:rgb\(4,251,0\);--bar-shade:rgb\(1,63,0\)/);assert.match(durabilityBar(30,59),/--bar:6;--bar-color:rgb\(130,125,0\)/);assert.match(durabilityBar(59,59),/--bar:0;--bar-color:rgb\(255,0,0\);--bar-shade:rgb\(63,63,0\)/);

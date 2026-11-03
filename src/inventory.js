@@ -4,16 +4,29 @@
 // Stacks are mutable {id,count,damage} objects, so splits, merges and shared
 // references behave like ItemStack. tools/verify-inventory.mjs replays the same
 // scripts through the unchanged original classes.
-import { copyStored, sameStored, normalizeStored } from "./enchanted-books.js";
+import { copyStored, normalizeStored } from "./enchanted-books.js";
 export const OUTSIDE = -999, STACK_LIMIT = 64, DOUBLE_CLICK_MS = 250;
-// An enchanted book also carries `stored` (its StoredEnchantments list, enchanted-books.js); the
-// field is absent on every other stack, and copies, splits and saves deep-copy it.
-export const makeStack = (id, count = 1, damage = 0, stored) => (stored ? { id, count, damage, stored: copyStored(stored) } : { id, count, damage });
-export const copyStack = (s) => (s ? makeStack(s.id, s.count, s.damage, s.stored) : null);
-const split = (s, n) => { s.count -= n; return makeStack(s.id, n, s.damage, s.stored); };
-// ItemStack.isItemEqual (id and damage: a metadata subtype such as wool colour, or wear) and, for
-// merging, ItemStack.areItemStackTagsEqual on the only tag kept here (StoredEnchantments).
-const sameItem = (a, b) => a.id === b.id && a.damage === b.damage && sameStored(a.stored, b.stored);
+// Legacy enchanted books carry `stored` (StoredEnchantments, enchanted-books.js). Native item tags
+// use enchantments/storedEnchantments, displayName, repairCost and unbreakable. Copies and splits
+// deep-copy the tag lists; `stored` stays accepted for old saves and creative-book call sites.
+const TAG_LISTS = ["enchantments", "storedEnchantments"];
+const clonePairs = (pairs) => Array.isArray(pairs) ? pairs.map((e) => ({ ...e })) : pairs;
+// Keep the old fourth `stored` argument for enchanted-book call sites; the optional fifth argument
+// carries the remaining native ItemStack tag fields introduced by enchanting/anvil persistence.
+export const makeStack = (id, count = 1, damage = 0, stored, metadata = {}) => {
+  const stack = { ...metadata, id, count, damage };
+  if (stored !== undefined) stack.stored = copyStored(stored);
+  for (const key of TAG_LISTS) if (Array.isArray(stack[key])) stack[key] = clonePairs(stack[key]);
+  return stack;
+};
+export const copyStack = (s) => (s ? makeStack(s.id, s.count, s.damage, s.stored, s) : null);
+const split = (s, n) => { s.count -= n; return copyStack({ ...s, count: n }); };
+const samePairs = (a, b) => Array.isArray(a) === Array.isArray(b) && (!Array.isArray(a) || (a.length === b.length && a.every((e, i) => e?.id === b[i]?.id && e?.lvl === b[i]?.lvl)));
+const storedTag = (s) => Array.isArray(s.storedEnchantments) ? s.storedEnchantments : s.stored?.length ? s.stored : undefined;
+const sameTag = (a, b) => a.repairCost === b.repairCost && a.displayName === b.displayName && a.unbreakable === b.unbreakable &&
+  samePairs(a.enchantments, b.enchantments) && samePairs(storedTag(a), storedTag(b));
+// ItemStack.areItemStackTagsEqual: every supported NBT tag participates in merge identity.
+export const sameStackItem = (a, b) => !!a && !!b && a.id === b.id && (a.damage ?? 0) === (b.damage ?? 0) && sameTag(a, b);
 export const dragButton = (event, mode) => (event & 3) | ((mode & 3) << 2);
 
 export class PlayerInventory {
@@ -34,7 +47,13 @@ export class PlayerInventory {
     const item = s && typeof s === "object" && s.id ? this.items[s.id] : null,
       count = Math.floor(Number(s?.count));
     if (!item || !(count > 0)) return null;
-    return makeStack(s.id, Math.min(count, item.stack ?? STACK_LIMIT), Math.max(0, Math.min(item.durability || (item.variants?.length ?? 1) - 1, Math.floor(Number(s.damage) || 0))), item.storesEnchantments ? normalizeStored(s.stored) ?? [] : undefined);
+    const metadata = {};
+    for (const key of TAG_LISTS) if (Array.isArray(s[key])) metadata[key] = s[key].filter((e) => Number.isFinite(e?.id) && Number.isFinite(e?.lvl)).slice(0, 64).map((e) => ({ id: (Math.trunc(e.id) << 16) >> 16, lvl: (Math.trunc(e.lvl) << 16) >> 16 }));
+    if (Number.isFinite(s.repairCost)) metadata.repairCost = s.repairCost | 0;
+    if (typeof s.displayName === "string") metadata.displayName = s.displayName;
+    if (typeof s.unbreakable === "boolean") metadata.unbreakable = s.unbreakable;
+    const storedList = item.storesEnchantments ? normalizeStored(s.storedEnchantments ?? s.stored) ?? [] : s.stored;
+    return makeStack(s.id, Math.min(count, item.stack ?? STACK_LIMIT), Math.max(0, Math.min(item.durability || (item.variants?.length ?? 1) - 1, Math.floor(Number(s.damage) || 0))), storedList, metadata);
   }
   maxStack(s) { return this.items[s.id]?.stack ?? STACK_LIMIT; }
   maxDamage(s) { return this.items[s.id]?.durability || 0; }
@@ -56,7 +75,7 @@ export class PlayerInventory {
   firstEmpty() { return this.main.findIndex((s) => !s); }
   find(id, damage) { return this.main.findIndex((s) => s?.id === id && (damage === undefined || s.damage === damage)); }
   storeItemStack(s) {
-    return this.main.findIndex((m) => m && sameItem(m, s) && this.stackable(m) && m.count < this.maxStack(m) && m.count < this.limit);
+    return this.main.findIndex((m) => m && sameStackItem(m, s) && this.stackable(m) && m.count < this.maxStack(m) && m.count < this.limit);
   }
   storePartial(s) {
     if (this.maxStack(s) === 1) {
@@ -68,7 +87,7 @@ export class PlayerInventory {
     let j = this.storeItemStack(s);
     if (j < 0) j = this.firstEmpty();
     if (j < 0) return s.count;
-    const m = (this.main[j] ??= makeStack(s.id, 0, s.damage, s.stored));
+    const m = (this.main[j] ??= copyStack({ ...s, count: 0 }));
     const k = Math.min(s.count, this.maxStack(m) - m.count, this.limit - m.count);
     if (k === 0) return s.count;
     m.count += k;
@@ -97,7 +116,7 @@ export class PlayerInventory {
   // ItemStack.damageItem, then destroyCurrentEquippedItem for an emptied stack.
   damage(i, amount = 1) {
     const s = this.getStack(i);
-    if (!s || this.creative || amount <= 0 || !this.maxDamage(s)) return false;
+    if (!s || this.creative || s.unbreakable === true || amount <= 0 || !this.maxDamage(s)) return false;
     s.damage += amount;
     if (s.damage <= this.maxDamage(s)) return false;
     s.count = Math.max(0, s.count - 1);
@@ -202,7 +221,7 @@ class FurnaceOutputSlot extends Slot {
 // Container.func_94527_a: whether a drag or collect may add `stack` to `slot`.
 export function canAddToSlot(slot, stack, ignoreSize, inv) {
   let ok = !slot || !slot.has;
-  if (slot?.has && stack && sameItem(stack, slot.stack)) ok ||= slot.stack.count + (ignoreSize ? 0 : stack.count) <= inv.maxStack(stack);
+  if (slot?.has && stack && sameStackItem(stack, slot.stack)) ok ||= slot.stack.count + (ignoreSize ? 0 : stack.count) <= inv.maxStack(stack);
   return ok;
 }
 // Container.func_94525_a: drag share for one slot, before stack-size caps.
@@ -291,7 +310,7 @@ export class Container {
               if (here.count === 0) slot.put(null);
               slot.onPickup(inv.cursor);
             } else if (slot.valid(held)) {
-              if (sameItem(here, held)) {
+              if (sameStackItem(here, held)) {
                 const n = Math.min(button === 0 ? held.count : 1, slot.limit - here.count, inv.maxStack(held) - here.count);
                 split(held, n);
                 if (held.count === 0) inv.cursor = null;
@@ -300,7 +319,7 @@ export class Container {
                 slot.put(held);
                 inv.cursor = here;
               }
-            } else if (sameItem(here, held) && inv.maxStack(held) > 1) {
+            } else if (sameStackItem(here, held) && inv.maxStack(held) > 1) {
               const n = here.count;
               if (n > 0 && n + held.count <= inv.maxStack(held)) {
                 held.count += n;
@@ -362,7 +381,7 @@ export class Container {
     if (inv.stackable(stack))
       for (; stack.count > 0 && inRange(k); k += step) {
         const slot = this.slots[k], here = slot.stack, max = inv.maxStack(stack);
-        if (!here || !sameItem(here, stack)) continue;
+        if (!here || !sameStackItem(here, stack)) continue;
         if (here.count + stack.count <= max) { here.count += stack.count; stack.count = 0; slot.changed(); merged = true; }
         else if (here.count < max) { stack.count -= max - here.count; here.count = max; slot.changed(); merged = true; }
       }

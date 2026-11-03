@@ -54,6 +54,16 @@ test("nearby equal items merge into the larger stack, keeping the longer delay a
   assert.ok(items.items.includes(c));
 });
 
+test('dropped stacks merge only when every supported ItemStack tag agrees',()=>{
+ const items=new ItemEntities(seeded(23)),pos=[2.5,10.125,2.5],motion={motion:[0,0,0]};
+ const one=items.spawn({id:3,count:1,displayName:'One',repairCost:2,enchantments:[{id:16,lvl:1}],unbreakable:false},...pos,motion);
+ const two=items.spawn({id:3,count:1,displayName:'Two',repairCost:2,enchantments:[{id:16,lvl:1}],unbreakable:false},2.6,10.125,2.5,motion);
+ const same=items.spawn({id:3,count:2,displayName:'One',repairCost:2,enchantments:[{id:16,lvl:1}],unbreakable:false},2.7,10.125,2.5,motion);
+ for(let i=0;i<25;i++)items.tick(world);
+ assert.equal(items.items.length,2);assert.equal(one.dead,true);assert.equal(!!two.dead,false);
+ assert.equal(same.stack.count,3);assert.equal(two.stack.displayName,'Two');
+});
+
 test("merging respects the stack limit", () => {
   const items = new ItemEntities(seeded(5));
   items.spawn(dirt(40), 2.5, 10.125, 2.5, { motion: [0, 0, 0] });

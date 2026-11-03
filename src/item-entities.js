@@ -6,7 +6,7 @@ import { entityActive } from './streaming-ticks.js';
 // bottom of the box; EntityItem's posY sits half the height (0.125) above it.
 import { explosionImpact } from "./explosion.js";
 import { collisionBounds, slipperiness } from "./world.js";
-import { copyStack } from "./inventory.js";
+import { copyStack, sameStackItem } from "./inventory.js";
 import { waterAcceleration, inLava } from "./fluids.js";
 import { LAVA } from "./world.js";
 
@@ -176,7 +176,7 @@ export class ItemEntities {
   combine(e, other, maxStack) {
     if (e === other || e.dead || other.dead) return false;
     const a = e.stack, b = other.stack;
-    if (a.id !== b.id || (a.damage || 0) !== (b.damage || 0)) return false;
+    if (!sameStackItem(a, b)) return false;
     if (b.count < a.count) return this.combine(other, e, maxStack);
     if (a.count + b.count > maxStack(b)) return false;
     b.count += a.count;

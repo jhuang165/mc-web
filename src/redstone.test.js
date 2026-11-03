@@ -27,10 +27,24 @@ import {
   COMPARATOR,
   HEAVY_PLATE,
   LIGHT_PLATE,
+  itemStackLimit,
 } from "./redstone.js";
 
 // Recorded by tools/verify-redstone.mjs from the unchanged 1.7.10 classes.
 const reference = JSON.parse(readFileSync(new URL("../public/research/redstone-reference.json", import.meta.url)));
+
+test("container slots use every native item stack limit without replay adapter hints", () => {
+  const limits = new Map(reference.blocks.stackLimits);
+  for (let id = 0; id < 4096; id++) assert.equal(itemStackLimit(id), limits.get(id) ?? 64, `item ${id}`);
+  const w = new RedstoneWorld({ seed: 1 });
+  w.setRaw(0, 0, 0, STONE, 0); w.setRaw(1, 0, 0, STONE, 0);
+  w.setRaw(0, 1, 0, 61, 0);
+  w.setRaw(1, 1, 0, COMPARATOR, 1);
+  w.setContainerSlot(0, 1, 0, 0, 267, 1);
+  w.notifyBlockOfNeighborChange(1, 1, 0, 61);
+  for (let i = 0; i < 3; i++) { w.time++; w.tickUpdates(); }
+  assert.equal(w.comparatorTile(1, 1, 0).signal, 5, "a sword fills one of the three furnace slots");
+});
 
 test("block property table and Blocks ids match the original registry", () => {
   assert.deepEqual(blockProperties(), reference.blocks.props);
@@ -67,10 +81,17 @@ test("reference covers the required behaviours", () => {
   assert.ok(fizz.length >= 2, "burnout recorded");
   for (const n of [
     "repeater-delays", "repeater-chain", "repeater-clock", "repeater-lock", "repeater-pulses", "repeater-solid", "repeater-mixed", "repeater-placement",
-    "comparator-modes", "comparator-container", "comparator-clock", "comparator-mixed", "comparator-placement", "pressure-plates", "pressure-plate-support",
+    "comparator-modes", "comparator-container", "comparator-clock", "comparator-mixed", "comparator-placement", "comparator-chest-fullness", "comparator-stack-limits", "comparator-double-chest", "comparator-chest-through-stone", "comparator-chest-blocked", "comparator-double-chest-blocked", "comparator-furnace", "comparator-furnace-under-block", "comparator-hopper", "comparator-dispenser", "comparator-dropper", "comparator-trapped-chest", "pressure-plates", "pressure-plate-support",
   ])
     assert.ok(names.includes(n), n);
-  assert.equal(reference.scenarios.length, 36);
+  assert.equal(reference.scenarios.length, 48);
+  const changes = (name) => reference.scenarios.find((s) => s.name === name).tiles?.flat() ?? [];
+  assert.ok(changes("comparator-stack-limits").some((t) => t[3] === 15), "all 27 snowball stacks fill the chest to comparator strength 15");
+  assert.ok(changes("comparator-double-chest").some((t) => t[3] === 1), "one double-chest stack is one of 54 slots");
+  for (const [name, strength] of [["comparator-furnace", 5], ["comparator-furnace-under-block", 5], ["comparator-hopper", 3], ["comparator-dispenser", 2], ["comparator-dropper", 2]])
+    assert.ok(changes(name).some((t) => t[3] === strength), `${name} one-full-slot signal`);
+  assert.equal(changes("comparator-chest-blocked").length, 0, "a solid lid blocker hides a chest");
+  assert.equal(changes("comparator-double-chest-blocked").length, 0, "a solid lid blocker hides a double chest inventory");
   const outputs = new Set(reference.scenarios.flatMap((s) => s.tiles?.flat() ?? []).map((t) => t[3]));
   for (const v of [0, 1, 2, 3, 9, 12, 13, 15]) assert.ok(outputs.has(v), `comparator output ${v} recorded`);
   const clicks = reference.scenarios.flatMap((s) => s.sounds).filter((x) => x[4] === "random.click" && x[6] === 0.55);

@@ -7,7 +7,7 @@ Status: **core redstone power, repeaters, comparators and pressure plates are po
 - `src/redstone.js`: headless port. It has no imports from the live game.
 - `src/redstone.test.js`: replays every recorded scenario and adds unit checks.
 - `tools/probes/RedstoneProbe.java` and `tools/verify-redstone.mjs`: the native recorder and comparator. These need a JDK, the pinned client JAR (sha1 `e80d9b3b…`) in `tools/research/`, and guava, log4j-api, commons-lang3 and netty-all (the last is needed to allocate the scripted player entity).
-- `public/research/redstone-reference.json`: the recorded evidence. It holds class sha256 digests, the block property table, and 36 scenarios over 1,318 ticks. Those scenarios logged 251,608 calls, 1,709 cell changes, 76 comparator output changes, 236 sounds and 19 item drops. Before REDSTONE-02 the file had 21 scenarios, 578 ticks, 104,645 calls, 708 cell changes, 77 sounds and 9 drops; those 21 scenarios are unchanged and replay exactly.
+- `public/research/redstone-reference.json`: the recorded evidence. It holds class sha256 digests, the block property table, and 48 scenarios over 1,484 ticks. Those scenarios logged 252,541 calls, 1,739 cell changes, 88 comparator output changes, 236 sounds and 19 item drops. The reference also records native tile-entity classes and all 90 non-64 Item stack limits. Before REDSTONE-02 the file had 21 scenarios, 578 ticks, 104,645 calls, 708 cell changes, 77 sounds and 9 drops; those 21 scenarios are unchanged and replay exactly.
 
 ## What is ported
 
@@ -76,7 +76,7 @@ Status: **core redstone power, repeaters, comparators and pressure plates are po
 - Compare mode outputs the rear value if it is at least the strongest side; subtract mode outputs rear minus side, floored at 0. The output tick is scheduled with the diode priority rules. The update is skipped in subtract mode when the output is unchanged.
 - Mode toggle plays `random.click` at 0.3 volume and pitch 0.55 (to subtract) or 0.5 (to compare).
 - `World.func_147453_f`: a change of a block with a comparator override (and the cauldron water-level setter) updates comparators beside it and through one normal cube.
-- The overrides that are native-verified here are the cauldron (water level 0 to 3) and the end portal frame (15 with an eye, otherwise 0). Drops item 404 when the floor goes.
+- Native overrides include the cauldron (metadata level), end portal frame (15 with an eye), chest/trapped chest, furnace, hopper, dispenser and dropper inventories. Container fullness uses the average of each occupied stack divided by min(inventory limit, item stack limit), then floor(fullness × 14) + 1, or 0 for empty inventories. The inventory setter paths are native-probed for chest changes; furnace/hopper/dispenser/dropper readings are refreshed through native comparator neighbor updates. Drops item 404 when the floor goes.
 
 **Pressure plates (stone 70, wood 72, weighted light 147 and heavy 148)**
 - Entity counting follows the original sensing box (x+0.125, z+0.125 inset, 0.25 high, strict intersection). Stone plates count living entities, wooden plates every entity, weighted plates every entity with strength `ceil(min(n, max) / max * 15)` (max 15 or 150).
@@ -89,7 +89,7 @@ Status: **core redstone power, repeaters, comparators and pressure plates are po
 
 ## Evidence
 
-`node tools/verify-redstone.mjs` runs the unchanged original classes (`ana anc and aoc alv ajs anx aon anb ams anf akj akc aoz amu aol ajd ajw aku`) inside a real `World`/`Chunk`, and runs `replayScenario` on the same input. It asserts that every tick has identical:
+`node tools/verify-redstone.mjs` runs the unchanged original classes (`ana anc and aoc alv ajs anx aon anb ams anf akj akc aoz amu aol ajd ajw aku`, plus native chest/furnace/dispenser/hopper inventory tiles) inside a real `World`/`Chunk`, and runs `replayScenario` on the same input. It asserts that every tick has identical:
 - call logs (setBlock, setMeta, neighbour notifications, scheduled ticks, updateTick, sounds, drops)
 - changed cells
 - comparator tile entity output signals (`tiles`, stored only for scenarios where it changes)
@@ -126,6 +126,7 @@ Scenarios:
 - `repeater-mixed`: wire, repeater, torch inverter and repeater in one line; `repeater-placement`: placement at 8 yaws, delay cycling, support loss drops
 - `comparator-modes`: compare and subtract with wire and lever side inputs, mode toggled at runtime
 - `comparator-container`: cauldron levels and end portal frame eyes read directly and through a stone block, plus subtract with a side lever
+- Native inventory readings: chest half/full/empty transitions, a 54-slot double chest, single/double chest lid blockers, chest input through one stone block, a 27-slot chest filled with 16-stack snowballs, furnace under a solid block, hopper, dispenser, dropper and trapped chest. Inventory writes use original tile-entity setters; comparator refreshes follow the native chest change path or an explicit neighboring-block update where that setter emits none. The recorded signals verify Java float fullness arithmetic, stack limits and slot counts (one full slot gives furnace 5, hopper 3, dispenser/dropper 2); chest changes behind stone reach comparators through `World.func_147453_f`.
 - `comparator-clock`: a subtract comparator looped into its own side
 - `comparator-mixed`: comparator chain with repeaters and a solid block; `comparator-placement`: placement at 4 yaws, mode clicks, support loss drops
 - `pressure-plates`: all four plate types with 1 to 151 scripted entities; `pressure-plate-support`: support loss and a pressed plate
@@ -142,7 +143,7 @@ One native quirk is reproduced: a lamp's pending turn-off tick is not cancelled 
   - Lighting updates.
   - Particles (the Random draws are kept).
   - Real entities. Wooden buttons are never held down by arrows. Pressure plates see only the scripted entity list, whose boxes are all 0.25 wide at the cell centre; nothing moves, spawns, dies or gets removed on its own. The `collide` event calls the plate with a null entity, so entity-specific rules (such as arrow or projectile handling) are not exercised.
-  - Comparator reads of real containers. Chests, furnaces, hoppers, dispensers, brewing stands, jukeboxes, item frames and cake have no ported block or inventory, so their override values are unreachable. Only the cauldron and the end portal frame (both metadata-driven) are native-verified.
+  - Full interactive container behavior is not ported. Comparator overrides are modelled for chest, trapped chest, furnace, hopper, dispenser and dropper inventories; brewing stands, jukeboxes, item frames and cake remain unsupported. The harness initializes container blocks as existing terrain cells and does not test container users, hopper transfer ticks, all slot restrictions, the ocelot chest-opening restriction or native tile-entity save/load.
   - Player placement beyond yaw: `placeby` runs `onBlockPlacedBy` with a placer yaw after a plain setBlock. Hit-side rules, `canPlaceBlockAt` and item consumption are not run; other events place an explicit id and meta with flags 3.
   - Player removal: creative-style setBlockToAir, with no harvest drops.
 - Terrain outside the ported ids is inert: no callbacks and no power.
@@ -153,7 +154,7 @@ One native quirk is reproduced: a lamp's pending turn-off tick is not cancelled 
 
 - Pistons and sticky pistons (BUD behaviour).
 - Tripwire and hooks, daylight sensors, trapped chests, detector and powered rails.
-- Comparator container inputs (inventories, jukebox, cake, item frame) and the comparator-reading behaviour of hoppers and similar blocks.
+- Comparator inputs from brewing stands, jukeboxes, item frames and cake; live container behavior and tile-entity save/load.
 - Entity-driven pressure plates in a live world (real entity boxes, arrows, falling items, minecarts).
 - Repeater and comparator placement from the real item-use path, and tile entity save/load.
 - Powered doors, trapdoors, fence gates, TNT, note blocks, dispensers and droppers, hoppers.
