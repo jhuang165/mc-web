@@ -1,6 +1,6 @@
 # Chunk storage and the block registry (WORLD-01)
 
-**Current status (0.29.0):** an opt-in streaming preview (generation 12 terrain, generation 13 terrain plus per-area population) streams live columns, light/meshes and saved edits; a Web Worker generates ahead of the player and light shifts incrementally (0.29.0). See [WORLD-02d/02e streaming](streaming.md) for the current behavior, acceptance evidence and remaining work. The sections below describe their historical standalone/finite milestones; the native provider/player-manager policy remains unconnected. Finite populated Java worlds still use v11.
+**Current status (0.29.0):** an opt-in streaming preview (generation 12 terrain, generation 13 terrain plus per-area population) streams live columns, light/meshes and saved edits; a Web Worker generates ahead of the player and light shifts incrementally (0.29.0, about 15–20 ms per crossing since 0.30.0). See [WORLD-02d/02e streaming](streaming.md) for the current behavior, acceptance evidence and remaining work. The sections below describe their historical standalone/finite milestones; the native provider/player-manager policy remains unconnected. Finite populated Java worlds still use v11.
 
 WORLD-01 sets the storage and addressing the streamed world will use, without changing the current terrain. The game still runs on the fixed 128 × 128 × 64 `World` arrays. Nothing in `main.js`, rendering, lighting or saving reads the new storage yet; that is WORLD-02.
 

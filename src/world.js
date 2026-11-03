@@ -379,6 +379,13 @@ export class World {
     if (!this.inside(x, y, z)) return 0;
     return this.chunkAt(x >> 4, z >> 4)?.blocks[cellIndex(x, y, z, this.height)] ?? 0;
   }
+  // The block ids of column (x, z) bottom to top, as a view of the chunk's array; null when the
+  // column is outside the world or not resident (all air to get).
+  columnBlocks(x, z) {
+    if (!this.inside(x, 0, z)) return null;
+    const c = this.chunkAt(x >> 4, z >> 4), start = ((x & 15) * 16 + (z & 15)) * this.height;
+    return c ? c.blocks.subarray(start, start + this.height) : null;
+  }
   getMeta(x, y, z) {
     return this.inside(x, y, z) ? this.chunkAt(x >> 4, z >> 4)?.meta[cellIndex(x, y, z, this.height)] ?? 0 : 0;
   }

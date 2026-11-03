@@ -15,7 +15,10 @@ import {
   aoBrightness,
   LightVolume,
   smoothFace,
+  lightOpacity,
+  lightEmission,
 } from "./lighting.js";
+import { World } from "./world.js";
 
 // A flat test world: stone below y = 10, air above.
 function flat() {
@@ -98,6 +101,60 @@ test("LightVolume propagates sky, torch and water light", () => {
   w.put(64, 10, 64, 0);
   assert.ok(light.update(64, 10, 64));
   assert.equal(light.blockAt(65, 10, 64), 0);
+});
+
+// The light rules written out plainly: every cell seeds its base value (open sky 15, emission) and a
+// FIFO relaxation runs to the fixed point. Outside the volume and above it reads as open sky.
+function referenceLight(w, H) {
+  const n = SIZE * SIZE * H, cost = new Uint8Array(n), out = {};
+  const heights = new Int32Array(SIZE * SIZE);
+  for (let x = 0; x < SIZE; x++) for (let z = 0; z < SIZE; z++) {
+    let y = H - 1;
+    while (y >= 0 && lightOpacity(w.get(x, y, z)) === 0) y--;
+    heights[x * SIZE + z] = y + 1;
+    for (let yy = 0; yy < H; yy++) {
+      const b = w.get(x, yy, z), op = lightOpacity(b);
+      cost[(x * SIZE + z) * H + yy] = op >= 15 && lightEmission(b) > 0 ? 1 : Math.max(1, Math.min(15, op));
+    }
+  }
+  for (const channel of ["sky", "block"]) {
+    const arr = new Uint8Array(n), queue = [], outside = channel === "sky" ? 15 : 0;
+    for (let x = 0; x < SIZE; x++) for (let z = 0; z < SIZE; z++) for (let y = 0; y < H; y++) {
+      const i = (x * SIZE + z) * H + y;
+      arr[i] = channel === "sky" ? (y >= heights[x * SIZE + z] ? 15 : 0) : lightEmission(w.get(x, y, z));
+      const edge = x === 0 || z === 0 || x === SIZE - 1 || z === SIZE - 1 || y === H - 1;
+      if (edge && cost[i] < 15) arr[i] = Math.max(arr[i], outside - cost[i]);
+      queue.push(i);
+    }
+    for (let q = 0; q < queue.length; q++) {
+      const i = queue[q], v = arr[i], y = i % H, t = (i - y) / H, z = t % SIZE, x = (t - z) / SIZE;
+      for (const [ok, j] of [[y + 1 < H, i + 1], [y > 0, i - 1], [z + 1 < SIZE, i + H], [z > 0, i - H], [x + 1 < SIZE, i + SIZE * H], [x > 0, i - SIZE * H]])
+        if (ok && cost[j] < 15 && v - cost[j] > arr[j]) { arr[j] = v - cost[j]; queue.push(j); }
+    }
+    out[channel] = arr;
+  }
+  return out;
+}
+
+test("LightVolume matches a plain reference solver on Java terrain, before and after edits", () => {
+  const w = new World("17", "javaStreamed", 12);
+  w.blockLight = () => 0;
+  const H = w.height, emission = (x, y, z, b) => lightEmission(b);
+  // Torches in a cave mouth and under an overhang, a glass-free roof, water and a hole to the void.
+  for (const [x, y, z, b] of [[40, 50, 40, 20], [41, 50, 40, 0], [90, 100, 90, 1], [90, 99, 90, 20], [10, 70, 100, 9], [127, 80, 64, 42], [0, 90, 0, 20]])
+    w.set(x, y, z, b);
+  for (let a = 80; a < 100; a++) for (let b = 80; b < 100; b++) w.set(a, 120, b, 1);
+  const light = new LightVolume(w, emission), same = (label) => {
+    const ref = referenceLight(w, H);
+    assert.ok(Buffer.from(light.sky).equals(Buffer.from(ref.sky)), `${label}: sky light`);
+    assert.ok(Buffer.from(light.block).equals(Buffer.from(ref.block)), `${label}: block light`);
+  };
+  same("fresh volume");
+  for (const [x, y, z, b] of [[90, 120, 90, 0], [85, 120, 85, 0], [40, 50, 41, 20], [64, w.surface(64, 64) - 1, 64, 0], [60, 140, 60, 1]]) {
+    w.set(x, y, z, b);
+    light.update(x, y, z);
+  }
+  same("after updates");
 });
 
 test("smooth lighting darkens a floor corner under an overhang", () => {

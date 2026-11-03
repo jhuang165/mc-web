@@ -219,9 +219,18 @@ export function aoBrightness(a, b, c, centre) {
   return ((a + b + c + centre) >> 2) & 0xff00ff;
 }
 
+// lightOpacity by block id, and whether lightEmission can be non-zero (a lit furnace included).
+let OPACITY = null, MAY_EMIT = null;
+function lightTables() {
+  OPACITY = new Uint8Array(256); MAY_EMIT = new Uint8Array(256);
+  for (let b = 0; b < 256; b++) { OPACITY[b] = Math.min(255, lightOpacity(b)); MAY_EMIT[b] = lightEmission(b, true) > 0 ? 1 : 0; }
+}
+
 // Sky and block light for the whole world, kept at World.computeLightValue's
 // fixed point: a cell takes its brightest neighbour minus max(1, opacity);
-// cells at or above the column height map see the sky at 15.
+// cells at or above the column height map see the sky at 15. `emission` refines
+// lightEmission by position (a lit furnace) and is only asked about blocks that
+// can emit. A world with columnBlocks(x, z) (World) is read a column at a time.
 export class LightVolume {
   constructor(world, emission = (x, y, z, b) => lightEmission(b)) {
     this.world = world;
@@ -278,16 +287,22 @@ export class LightVolume {
         const y = i % H, t = (i - y) / H, z = t % SIZE, x = (t - z) / SIZE;
         return ((x - x0) * (z1 - z0 + 1) + (z - z0)) * H + y;
       };
+    if (!OPACITY) lightTables();
+    const air = w.columnBlocks && new Uint8Array(H), emitters = [];
     let k = 0;
     for (let x = x0; x <= x1; x++)
-      for (let z = z0; z <= z1; z++)
-        for (let y = 0; y < H; y++, k++) {
-          const i = (x * SIZE + z) * H + y, b = w.get(x, y, z), op = lightOpacity(b), e = b ? this.emission(x, y, z, b) : 0;
-          oldSky[k] = this.sky[i];
-          oldBlock[k] = this.block[i];
-          emit[k] = e;
-          cost[k] = op >= 15 && e > 0 ? 1 : Math.max(1, Math.min(15, op));
+      for (let z = z0; z <= z1; z++, k += H) {
+        const base = (x * SIZE + z) * H, col = air && (w.columnBlocks(x, z) ?? air);
+        oldSky.set(this.sky.subarray(base, base + H), k);
+        oldBlock.set(this.block.subarray(base, base + H), k);
+        for (let y = 0; y < H; y++) {
+          const b = col ? col[y] : w.get(x, y, z), op = OPACITY[b] ?? lightOpacity(b),
+            e = b && MAY_EMIT[b] !== 0 ? this.emission(x, y, z, b) : 0;
+          emit[k + y] = e;
+          if (e > 1) emitters.push(k + y);
+          cost[k + y] = op >= 15 && e > 0 ? 1 : Math.max(1, Math.min(15, op));
         }
+      }
     for (const channel of ["sky", "block"]) {
       const arr = this[channel], buckets = Array.from({ length: 16 }, () => []);
       const raise = (i, v) => {
@@ -296,36 +311,45 @@ export class LightVolume {
           if (v > 1) buckets[v].push(i);
         }
       };
-      k = 0;
-      for (let x = x0; x <= x1; x++)
-        for (let z = z0; z <= z1; z++) {
-          const height = this.heights[x * SIZE + z];
-          for (let y = 0; y < H; y++, k++) {
-            const i = (x * SIZE + z) * H + y;
-            arr[i] = channel === "sky" ? (y >= height ? 15 : 0) : emit[k];
-            if (arr[i] > 1) buckets[arr[i]].push(i);
+      const sky = channel === "sky";
+      if (sky)
+        for (let x = x0; x <= x1; x++)
+          for (let z = z0; z <= z1; z++) {
+            const height = this.heights[x * SIZE + z], base = (x * SIZE + z) * H;
+            // An open-sky cell (15) at or above every in-box horizontal neighbour's height is surrounded
+            // by 15s (or, at the column's lowest open cell, the cell below it), so spreading it raises
+            // nothing. Only the open cells from the column's lowest up to its tallest neighbour's height
+            // seed the flood; the result is unchanged.
+            let seedTop = height + 1;
+            if (x > x0) seedTop = Math.max(seedTop, this.heights[(x - 1) * SIZE + z]);
+            if (x < x1) seedTop = Math.max(seedTop, this.heights[(x + 1) * SIZE + z]);
+            if (z > z0) seedTop = Math.max(seedTop, this.heights[x * SIZE + z - 1]);
+            if (z < z1) seedTop = Math.max(seedTop, this.heights[x * SIZE + z + 1]);
+            arr.fill(0, base, base + height);
+            arr.fill(15, base + height, base + H);
+            for (let y = height; y < Math.min(seedTop, H); y++) buckets[15].push(base + y);
           }
+      else {
+        k = 0;
+        for (let x = x0; x <= x1; x++)
+          for (let z = z0; z <= z1; z++, k += H) arr.set(emit.subarray(k, k + H), (x * SIZE + z) * H);
+        for (const kk of emitters) {
+          const y = kk % H, t = (kk - y) / H, nz = z1 - z0 + 1, lz = t % nz, lx = (t - lz) / nz;
+          buckets[emit[kk]].push(((lx + x0) * SIZE + lz + z0) * H + y);
         }
+      }
       // Light flowing in from cells outside the box (or outside the world).
       const outside = channel === "sky" ? 15 : 0;
-      const inflow = (x, y, z, i, kk) => {
-        if (cost[kk] >= 15) return;
-        let best = 0;
-        if (y === H - 1) best = outside;
-        for (const [dx, dz] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-          const nx = x + dx, nz = z + dz;
-          if (nx >= x0 && nx <= x1 && nz >= z0 && nz <= z1) continue;
-          const v = nx < 0 || nz < 0 || nx >= SIZE || nz >= SIZE ? outside : arr[(nx * SIZE + nz) * H + y];
-          if (v > best) best = v;
-        }
-        raise(i, best - cost[kk]);
-      };
+      const side = (nx, nz, y) =>
+        nx >= x0 && nx <= x1 && nz >= z0 && nz <= z1 ? 0 : nx < 0 || nz < 0 || nx >= SIZE || nz >= SIZE ? outside : arr[(nx * SIZE + nz) * H + y];
       for (let x = x0; x <= x1; x++)
         for (let z = z0; z <= z1; z++) {
-          const edge = x === x0 || x === x1 || z === z0 || z === z1;
+          const edge = x === x0 || x === x1 || z === z0 || z === z1, base = (x * SIZE + z) * H, kb = ((x - x0) * (z1 - z0 + 1) + (z - z0)) * H;
           for (let y = edge ? 0 : H - 1; y < H; y++) {
-            const i = (x * SIZE + z) * H + y;
-            inflow(x, y, z, i, local(i));
+            const c = cost[kb + y];
+            if (c >= 15) continue;
+            const best = Math.max(y === H - 1 ? outside : 0, edge ? Math.max(side(x - 1, z, y), side(x + 1, z, y), side(x, z - 1, y), side(x, z + 1, y)) : 0);
+            raise(base + y, best - c);
           }
         }
       for (let level = 15; level > 1; level--) {

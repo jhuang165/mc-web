@@ -9,7 +9,8 @@ export class StreamingLight {
     this.world = world;
     this.emission = emission;
     this.x = world.minX; this.z = world.minZ;
-    this.inner = new LightVolume({ height: world.height, get: (x,y,z) => world.get(x+this.x,y,z+this.z) },
+    this.inner = new LightVolume({ height: world.height, get: (x,y,z) => world.get(x+this.x,y,z+this.z),
+      columnBlocks: (x,z) => world.columnBlocks(x+this.x,z+this.z) },
       emission && ((x,y,z,b) => emission(x+this.x,y,z+this.z,b)));
   }
   skyAt(x,y,z) { return this.inner.skyAt(x-this.x,y,z-this.z); }
