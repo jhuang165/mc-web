@@ -24,11 +24,11 @@ import { tickPrimedTnt } from './entity-simulation.js';
 
 const sha = a => createHash('sha1').update(a).digest('hex');
 const json = v => JSON.parse(JSON.stringify(v));
-const world = () => { const w=new World('17','javaStreamed'); w.blockLight=()=>0; return w; };
+const world = () => { const w=new World('17','javaStreamed',12); w.blockLight=()=>0; return w; };
 
 test('streamed negative and distant chunks replay independent native cave/terrain fixtures',()=>{
   const ref=JSON.parse(readFileSync(new URL('../public/research/carver-reference.json',import.meta.url)));
-  const w=new World('0','javaStreamed');
+  const w=new World('0','javaStreamed',12);
   const samples=ref.records.filter(r=>r.kind==='chunk'&&r.type==='default'&&r.seed==='0');
   assert.ok(samples.length>=3);
   for(const r of samples){

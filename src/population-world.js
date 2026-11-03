@@ -11,8 +11,11 @@ import { populateTail } from './population-tail.js';
 
 const key = (x,z) => `${x},${z}`;
 export class PopulationArea {
-  constructor({seed, chunkX, chunkZ, size=8, terrain, biomeAt, worldRandSeed=0n}) {
-    this.seed=BigInt(seed); this.chunkX=chunkX; this.chunkZ=chunkZ; this.size=size;
+  // `margin` extra rows/columns on the -x/-z side are searched and populated too (streamed cells use
+  // 1, so every kept column receives the writes of the populate calls that overlap it). Finite v11
+  // worlds keep 0.
+  constructor({seed, chunkX, chunkZ, size=8, margin=0, terrain, biomeAt, worldRandSeed=0n}) {
+    this.seed=BigInt(seed); this.chunkX=chunkX; this.chunkZ=chunkZ; this.size=size; this.margin=margin;
     const Base=mineshaftGenWorldClass();
     this.world=new (class extends Base {
       // Halo terrain is available, but never populated or searched for new structure starts.
@@ -33,12 +36,12 @@ export class PopulationArea {
     this.decoration=new BiomeDecoration(); this.order=[];
   }
   run(hooks={}) {
-    const {world:w,chunkX:cx,chunkZ:cz,size,seed}=this;
-    for(let x=cx;x<cx+size;x++) for(let z=cz;z<cz+size;z++) {
+    const {world:w,chunkX:cx,chunkZ:cz,size,margin,seed}=this;
+    for(let x=cx-margin;x<cx+size;x++) for(let z=cz-margin;z<cz+size;z++) {
       this.mineshafts.generate(x,z); w.chunk(x,z);
     }
     const r=new JavaRandom(seed);
-    for(let x=cx;x<cx+size;x++) for(let z=cz;z<cz+size;z++) {
+    for(let x=cx-margin;x<cx+size;x++) for(let z=cz-margin;z<cz+size;z++) {
       this.order.push([x,z]); hooks.beforePopulate?.(x,z);
       const result=populateBeforeDecoration(w,r,seed,x,z,{structures:(random,a,b)=>{
         this.mineshafts.generateStructuresInChunk(w,random,a,b); return false;
@@ -52,6 +55,7 @@ export class PopulationArea {
 let mapper=null;
 export const populationBlockMapperReady=import("./block-registry.js").then(m=>(mapper??=m.fromOriginal));
 export function setPopulationBlockMapper(fn) { mapper=fn; }
+export const populationBlockMapper=()=>mapper;
 const stackRecord=(s,slot)=>({slot,id:s[0],count:s[1],damage:s[2],...(s[3]?.length?{stored:s[3].map(([id,lvl])=>({id,lvl}))}:{})});
 export function generateLivePopulation(world,{seed,originals,ringTerrain,mapBlock=mapper}) {
   if(!mapBlock) throw new Error('population-world: original block mapper not ready');

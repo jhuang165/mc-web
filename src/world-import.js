@@ -4,7 +4,7 @@
 const RUNTIME_FIELDS = [
   "position", "drops", "entities", "farms", "experience", "xpOrbs", "falling",
   "weather", "worldRandom", "projectiles", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "inhabited",
-  "spawners", "minecarts",
+  "spawners", "minecarts", "populatedColumns",
 ];
 
 const int = Number.isInteger, finite = Number.isFinite;
@@ -14,6 +14,12 @@ const SPAWNER_NUMBERS = ["Delay", "MinSpawnDelay", "MaxSpawnDelay", "SpawnCount"
 // not the expected shape is dropped, and an export without these fields gets the generation's
 // spawners and full carts on its first launch, as an older save does.
 const SANITIZE = {
+  // Streamed population (streaming-population.js): per-cell bitmask of columns whose generated
+  // chests/animals/spawners were already handed to the live world. Bad entries just hand over again.
+  populatedColumns: (v) => v && typeof v === "object" && v.version === 1 && v.cells && typeof v.cells === "object"
+    ? { version: 1, cells: Object.fromEntries(Object.entries(v.cells)
+      .filter(([k, hex]) => /^-?\d+,-?\d+$/.test(k) && typeof hex === "string" && /^[0-9a-f]{1,16}$/.test(hex)).slice(0, 262144)) }
+    : undefined,
   spawners: (v) => Array.isArray(v)
     ? v.filter((t) => t && typeof t === "object" && [t.x, t.y, t.z].every(int)).slice(0, 4096).map((t) => ({
       x: t.x, y: t.y, z: t.z,

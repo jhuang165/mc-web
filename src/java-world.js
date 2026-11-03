@@ -11,6 +11,7 @@ import { stringHash } from "./java-long.js";
 import { NoiseGeneratorPerlin } from "./noise.js";
 import { generateLiveMineshafts } from "./mineshaft-world.js";
 import { generateLivePopulation } from './population-world.js';
+import { StreamingPopulation } from './streaming-population.js';
 export const JAVA_TERRAIN_BLOCKS = Object.freeze({
   0: 0,
   1: 3,
@@ -95,6 +96,25 @@ export function generateJavaWorld(world) {
     }
     return chunk;
   };
+  // Generation version 13 (streamed worlds) populates per cell from the seed (streaming-population.js).
+  if (world.streaming && world.generationVersion >= 13) {
+    const population = new StreamingPopulation({
+      seed, originX: world.originX, originZ: world.originZ, terrainOnly: world.generateTerrainChunk,
+      terrain: (x, z) => {
+        const chunk = gen.provideChunk(x, z);
+        caves.generate(x, z, chunk.blocks); ravines.generate(x, z, chunk.blocks);
+        return chunk;
+      },
+      biomeAt: (x, z) => manager.biomeAt(x, z),
+    });
+    world.population = population;
+    world.generateTerrainChunk = (cx, cz) => population.column(cx, cz);
+    for (let cx = 0; cx < 8; cx++) for (let cz = 0; cz < 8; cz++) {
+      const column = population.column(cx, cz), live = world.chunkAt(cx, cz);
+      live.blocks.set(column.blocks); live.meta.set(column.metadata);
+    }
+    return;
+  }
   // Generation version 10 adds mineshafts (mineshaft-world.js), which need the original-ID chunks.
   const originals = world.generationVersion >= 10 ? new Map() : null;
   for (let cx = 0; cx < 8; cx++)

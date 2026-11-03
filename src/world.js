@@ -276,8 +276,10 @@ const cellIndex = (x, y, z, height) => ((x & 15) * 16 + (z & 15)) * height + y;
 // Coordinate pairs stay distinct throughout the native world border.
 const columnKey = (cx, cz) => `${cx},${cz}`;
 export class World {
-  constructor(seed = "Overworld", biome = "meadow", generationVersion = biome === 'javaStreamed' ? 12 : isJavaLandscape(biome) ? 11 : 8) {
-    if (biome === 'javaStreamed' && generationVersion !== 12) throw new Error('Unsupported streamed world generation version');
+  // Streamed worlds: version 12 is terrain, caves and ravines only; 13 adds per-cell Java population
+  // (streaming-population.js). Saved 12 worlds keep their generator.
+  constructor(seed = "Overworld", biome = "meadow", generationVersion = biome === 'javaStreamed' ? 13 : isJavaLandscape(biome) ? 11 : 8) {
+    if (biome === 'javaStreamed' && generationVersion !== 12 && generationVersion !== 13) throw new Error('Unsupported streamed world generation version');
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
@@ -351,6 +353,13 @@ export class World {
     }
     return { added, removed };
   }
+  // Population records (chests, animals, spawners, carts, liquid ticks) of resident columns that have
+  // never been claimed, once each; [] for worlds without streamed population.
+  claimFreshColumns() {
+    return this.population ? this.population.claim([...this.chunks.values()].map((c) => [c.x, c.z])) : [];
+  }
+  saveClaimedColumns() { return this.population ? this.population.saveMaterialized() : null; }
+  restoreClaimedColumns(saved) { this.population?.restoreMaterialized(saved); }
   // The column holding chunk (cx, cz), or null.
   chunkAt(cx, cz) {
     const c = this.lastChunk;

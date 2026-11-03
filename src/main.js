@@ -1,7 +1,7 @@
 import { readWorldShelf, writeWorldShelf, deleteStoredWorld } from './world-storage.js';
 import {PopulationBlocks} from './population-blocks.js';
 import {hasSavedStructures as hasSavedPopulation} from './structure-simulation.js';
-import {restorePopulation} from './population-runtime.js';
+import {restorePopulation,restorePopulationColumns} from './population-runtime.js';
 import {setPopulationBlockMapper} from './population-world.js';
 import {isJavaLandscape} from "./java-world.js";
 import { particleSetting } from "./particle-settings.js";
@@ -348,7 +348,7 @@ function makeRecord(p) {
     biome: p.biome || "meadow",
     mode: p.mode === "survival" ? "survival" : "creative",
     // Version 11 adds full Java population; saves retain their existing generator.
-    generationVersion: p.biome === "javaStreamed" ? 12 : isJavaLandscape(p.biome) ? 11 : 8,
+    generationVersion: p.biome === "javaStreamed" ? 13 : isJavaLandscape(p.biome) ? 11 : 8,
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -439,7 +439,7 @@ function modal(title, body, extra = "") {
 function createWorld() {
   modal(
     "Create New World",
-    `<p class="modal-subtitle"></p><form id="create-form"><label>WORLD NAME<input id="new-name" maxlength="40" value="New World" required></label><div class="form-columns"><label>GAME MODE<select id="new-mode"><option value="survival">Survival</option><option value="creative" selected>Creative</option></select></label><label>LANDSCAPE<select id="new-biome"><option value="java" selected>Java Overworld</option><option value="javaStreamed">Java streaming preview</option><option value="javaAmplified">Java Amplified</option><option value="javaLargeBiomes">Java Large Biomes</option><option value="meadow">Meadow</option><option value="alpine">Highlands</option><option value="island">Island</option><option value="snowy">Snowy Tundra</option></select></label></div><label>SEED <span>Same seed, same beginning.</span><input id="new-seed" maxlength="80" placeholder="Leave blank for a surprise"></label><p class="form-note">Streaming preview: explore beyond the starting area, including negative coordinates. Terrain, caves and ravines only; decoration and structures are unfinished. Saved locally on this browser. Other Java worlds: 128 × 128 × 256 blocks, with caves and ravines. New worlds include ores, trees, lakes, dungeons, mineshafts, animals and snow. Villages, strongholds and temples are unfinished. Meadow, Highlands, Island and Snowy Tundra keep their decorated terrain.</p><button class="button primary full">Create New World</button></form>`,
+    `<p class="modal-subtitle"></p><form id="create-form"><label>WORLD NAME<input id="new-name" maxlength="40" value="New World" required></label><div class="form-columns"><label>GAME MODE<select id="new-mode"><option value="survival">Survival</option><option value="creative" selected>Creative</option></select></label><label>LANDSCAPE<select id="new-biome"><option value="java" selected>Java Overworld</option><option value="javaStreamed">Java streaming preview</option><option value="javaAmplified">Java Amplified</option><option value="javaLargeBiomes">Java Large Biomes</option><option value="meadow">Meadow</option><option value="alpine">Highlands</option><option value="island">Island</option><option value="snowy">Snowy Tundra</option></select></label></div><label>SEED <span>Same seed, same beginning.</span><input id="new-seed" maxlength="80" placeholder="Leave blank for a surprise"></label><p class="form-note">Streaming preview: explore beyond the starting area, including negative coordinates. Terrain, caves, ravines, ores, trees, lakes, dungeons, mineshafts, animals and snow are generated per area from the seed; villages, strongholds and temples are unfinished, and each new area takes about a second to build. Saved locally on this browser. Other Java worlds: 128 × 128 × 256 blocks, with caves and ravines. New worlds include ores, trees, lakes, dungeons, mineshafts, animals and snow. Villages, strongholds and temples are unfinished. Meadow, Highlands, Island and Snowy Tundra keep their decorated terrain.</p><button class="button primary full">Create New World</button></form>`,
   );
   $("#create-form").onsubmit = (e) => {
     e.preventDefault();
@@ -546,6 +546,7 @@ function settings() {
 function save() {
   if (!active || !world || screen === "home") return;
   active.edits = [...world.edits];
+  if (world.population) active.populatedColumns = world.saveClaimedColumns();
   active.position = { x: position.x, y: position.y, z: position.z, yaw, pitch };
   active.player = survival.serialize();
   active.drops = items.serialize();
@@ -711,6 +712,7 @@ function launch(record) {
     active = record;
     world = new World(record.seed, record.biome, record.generationVersion ?? 1);
     world.restore(record.edits || []);
+    world.restoreClaimedColumns(record.populatedColumns);
     if (world.streaming && record.position && [record.position.x,record.position.z].every(Number.isFinite)) world.streamAround(record.position.x,record.position.z);
     // Restore World.rand before constructing the block runtimes that share it.
     weather = new Weather().restore(record.weather).restoreSimulation(record.worldRandom);
@@ -801,6 +803,7 @@ function launch(record) {
     survival = new Survival(legacyPlayer(record), record.mode || "creative");
     survival.furnaceActive = key => !world.streaming || world.isTicking(...[key.split(",")[0],key.split(",")[2]].map(Number));
     restorePopulation(record,world,survival,mobs);
+    materializeFresh();
     // A new EntityPlayerMP is spawn-protected for 60 ticks (damage is refused, Creative or not).
     survival.protection = 60;
     inhabited = new InhabitedTime(record.inhabited, survival.time);
@@ -1578,12 +1581,23 @@ function tickMining() {
   mining = state.mining;
   mineCooldown = state.cooldown;
 }
+// Streamed population (version 13): chests, animals, spawners, carts and liquid ticks of columns that
+// just became resident for the first time. Resident columns already claimed are never handed over again.
+function materializeFresh() {
+  const columns = world.claimFreshColumns();
+  if (columns.length) {
+    const handed = restorePopulationColumns(columns, { world, survival, mobs, spawners, minecarts, fluids });
+    if (handed.animals || handed.chests || handed.spawners || handed.carts || handed.ticks) saved = false;
+  }
+  // Chest models follow the resident columns (chests of columns that left the window are removed).
+  chestRenderer?.sync(world, survival.chests);
+}
 function spawnPosition() {
-  if (world.streaming && world.streamAround(64,64)) scene.syncChunks();
+  if (world.streaming && world.streamAround(64,64)) { scene.syncChunks(); materializeFresh(); }
   return world.spawn();
 }
 function movementTick(controls) {
-  if (world.streamAround(position.x,position.z)) scene.syncChunks();
+  if (world.streamAround(position.x,position.z)) { scene.syncChunks(); materializeFresh(); }
   const state = { world, position, previous, velocity, motion, survival, yaw, eating, minecarts, rider,
     grounded, collidedH, flying, fallDistance, landedFall };
   const { inWater, inLavaNow, sneakOnGround, oldPosition } = moveRidingPlayer(state, controls,
