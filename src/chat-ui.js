@@ -1,0 +1,145 @@
+// GuiNewChat (the lines at the bottom left) and GuiChat (the input row) drawn with DOM elements; the model is chat.js.
+// GuiIngame translates to (0, height - 48) and the chat adds (2, 20): the newest line's bottom edge sits 28 GUI pixels above
+// the window's bottom; each line is 9 pixels high with a black rectangle of alpha / 2 and white text with a shadow. GuiChat
+// draws its field at (4, height - 12) over a 50 % black rectangle from (2, height - 14) to (width - 2, height - 2).
+import { ChatLog, SentHistory, TabCompletion, CHAT, allowedText } from "./chat.js";
+import { textHtml } from "./menu-ui.js";
+
+// One chat for the whole page: death, bed and command messages and plain chat all print here (showChatLine uses it too).
+export const chat = new ChatLog();
+// Wall-clock ticks (50 ms) stand in for GuiIngame.getUpdateCounter.
+export const chatTick = () => Math.floor(performance.now() / 50);
+export const printChat = (text, id = 0) => chat.print(text, chatTick(), id);
+
+const STYLE = `
+#chat-log{position:fixed;left:calc(2*var(--u));bottom:calc(28*var(--u));z-index:9;pointer-events:none;transform-origin:0 100%;font-size:calc(8*var(--u))}
+#chat-log .chat-row{position:absolute;left:0;height:calc(9*var(--u));line-height:calc(9*var(--u));white-space:pre;overflow:hidden;color:#fff;padding-left:0}
+#chat-log .chat-row span{text-shadow:var(--u) var(--u) 0 var(--sh,#3f3f3f)}
+#chat-log .chat-bar{position:absolute;width:calc(2*var(--u));right:calc(-2*var(--u))}
+#chat-log.open,#chat-input-box.open{z-index:32}
+#chat-input-box{position:fixed;left:calc(2*var(--u));right:calc(2*var(--u));bottom:calc(2*var(--u));height:calc(12*var(--u));z-index:32;background:rgba(0,0,0,.5);display:none}
+#chat-input-box.open{display:block}
+#chat-input{position:absolute;left:calc(2*var(--u));right:0;top:0;bottom:0;width:calc(100% - 2*var(--u));background:transparent;border:0;outline:0;color:#e0e0e0;font-size:calc(8*var(--u));line-height:calc(12*var(--u));padding:0;margin:0;text-shadow:var(--u) var(--u) 0 #3f3f3f;caret-color:#fff}
+`;
+
+export class ChatUi {
+  // hooks: submit(text), complete(textBeforeCursor) -> string[], close(), visible() -> boolean
+  constructor(doc, hooks, log = chat) {
+    this.doc = doc;
+    this.hooks = hooks;
+    this.log = log;
+    this.isOpen = false;
+    this.history = new SentHistory(log);
+    this.tab = new TabCompletion();
+    const style = doc.createElement("style");
+    style.textContent = STYLE;
+    this.box = doc.createElement("div");
+    this.box.id = "chat-log";
+    this.box.setAttribute("role", "log");
+    this.inputBox = doc.createElement("div");
+    this.inputBox.id = "chat-input-box";
+    this.input = doc.createElement("input");
+    this.input.id = "chat-input";
+    this.input.type = "text";
+    this.input.autocomplete = "off";
+    this.input.spellcheck = false;
+    this.input.maxLength = CHAT.inputMaxLength;
+    this.input.setAttribute("aria-label", "Chat");
+    this.inputBox.append(this.input);
+    doc.head.append(style);
+    doc.body.append(this.box, this.inputBox);
+    this.input.addEventListener("keydown", (e) => this.key(e));
+    this.input.addEventListener("input", () => {
+      const clean = allowedText(this.input.value);
+      if (clean !== this.input.value) this.input.value = clean;
+      this.tab.reset();
+    });
+    this.box.addEventListener("wheel", () => {});
+    doc.addEventListener("wheel", (e) => {
+      if (!this.isOpen) return;
+      e.preventDefault();
+      // GuiChat.handleMouseInput: the wheel is clamped to one notch and multiplied by 7 unless Shift is held.
+      const n = Math.sign(-e.deltaY) * (e.shiftKey ? 1 : 7);
+      this.log.scroll(n);
+      this.render();
+    }, { passive: false });
+    log.listeners.add(() => this.render());
+    this.timer = setInterval(() => this.render(), 50);
+    this.render();
+  }
+  open(prefill = "") {
+    this.isOpen = true;
+    this.history.reset();
+    this.tab.reset();
+    this.log.resetScroll();
+    this.input.value = allowedText(prefill);
+    this.inputBox.classList.add("open");
+    this.box.classList.add("open");
+    this.input.focus();
+    this.input.setSelectionRange(this.input.value.length, this.input.value.length);
+    this.render();
+  }
+  close() {
+    if (!this.isOpen) return;
+    this.isOpen = false;
+    this.input.value = "";
+    this.input.blur();
+    this.inputBox.classList.remove("open");
+    this.box.classList.remove("open");
+    this.log.resetScroll();
+    this.render();
+  }
+  key(e) {
+    e.stopPropagation();
+    const code = e.code;
+    if (code !== "Tab") this.tab.reset();
+    if (code === "Escape") { e.preventDefault(); this.hooks.close(); return; }
+    if (code === "Enter" || code === "NumpadEnter") {
+      e.preventDefault();
+      const text = this.input.value.trim();
+      // GuiChat.keyTyped: a non-empty message joins the sent history and is sent; the screen closes either way.
+      if (text) { this.log.addSent(text); this.hooks.submit(text); }
+      // GuiSleepMP.keyTyped sends the message but keeps the bed screen (and its field) open; GuiChat closes.
+      if (this.hooks.stay?.()) { this.input.value = ""; this.history.reset(); } else this.hooks.close();
+      return;
+    }
+    if (code === "ArrowUp" || code === "ArrowDown") {
+      e.preventDefault();
+      this.input.value = this.history.step(code === "ArrowUp" ? -1 : 1, this.input.value);
+      this.input.setSelectionRange(this.input.value.length, this.input.value.length);
+      return;
+    }
+    if (code === "PageUp" || code === "PageDown") {
+      e.preventDefault();
+      this.log.scroll((code === "PageUp" ? 1 : -1) * (this.log.visibleLines(true) - 1));
+      this.render();
+      return;
+    }
+    if (code === "Tab") {
+      e.preventDefault();
+      const out = this.tab.next(this.input.value, this.input.selectionStart ?? this.input.value.length, (t) => this.hooks.complete(t), (t) => this.log.print(t, chatTick(), 1));
+      if (out) { this.input.value = out.text.slice(0, CHAT.inputMaxLength); this.input.setSelectionRange(out.cursor, out.cursor); }
+    }
+  }
+  render() {
+    const visible = this.hooks.visible?.() !== false;
+    this.inputBox.style.visibility = visible ? "" : "hidden";
+    const rows = visible ? this.log.draw(chatTick(), this.isOpen) : [];
+    const scale = this.log.settings.chatScale;
+    const sig = rows.map((r) => r.row + ":" + r.alpha + ":" + r.text).join("|") + "@" + this.log.scrollPos + this.isOpen + scale;
+    if (sig === this.sig) return;
+    this.sig = sig;
+    this.box.style.transform = scale === 1 ? "" : `scale(${scale})`;
+    const width = this.log.width + 4;
+    this.box.style.width = `calc(${width}*var(--u))`;
+    let html = "";
+    for (const r of rows) {
+      const a = r.alpha / 255;
+      html += `<div class="chat-row" style="bottom:calc(${r.row * CHAT.lineHeight}*var(--u));width:calc(${width}*var(--u));background:rgba(0,0,0,${(a / 2).toFixed(3)})"><span style="display:inline-block;padding-left:calc(2*var(--u));opacity:${a.toFixed(3)}">${textHtml(r.text)}</span></div>`;
+    }
+    const bar = this.isOpen && visible ? this.log.scrollBar(true) : null;
+    if (bar) html += `<div class="chat-bar" style="bottom:calc(${bar.offset}*var(--u));height:calc(${bar.height}*var(--u));background:${bar.newMessages ? "#cc3333" : "#3333aa"};opacity:${(bar.alpha / 255).toFixed(3)}"></div>`;
+    this.box.innerHTML = html;
+  }
+  destroy() { clearInterval(this.timer); this.box.remove(); this.inputBox.remove(); }
+}

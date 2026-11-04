@@ -1,0 +1,17 @@
+{
+ "source": "Material.isReplaceable of every registered Block of the unchanged Minecraft Java 1.7.10 client (tools/probes/ReplaceableProbe.java)",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "blocks": 171,
+ "replaceable": [
+  0,
+  8,
+  9,
+  10,
+  11,
+  31,
+  32,
+  51,
+  78,
+  106
+ ]
+}

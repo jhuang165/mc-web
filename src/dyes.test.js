@@ -69,7 +69,7 @@ test("four-dye grids give the original magenta recipe and nothing else", () => {
 test("dye damage names and textures follow ItemDye, and wool takes colour 15 - damage", () => {
   assert.deepEqual(DYES.map((d) => d.texture), reference.dyeTextures);
   assert.equal(ITEMS[DYE].variants.length, 16);
-  assert.equal(ITEMS[DYE].variants[15], "Bone meal");
+  assert.equal(ITEMS[DYE].variants[15], "Bone Meal");
   for (let d = 0; d < 16; d++) {
     const out = craftingResult([makeStack(DYE, 1, d), makeStack(WOOL, 1, 0), null, null], 2);
     assert.deepEqual([out.id, out.damage], [WOOL, 15 - d]);

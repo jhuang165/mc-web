@@ -40,6 +40,9 @@ export const JAVA_LANDSCAPES = Object.freeze({
   javaLargeBiomes: "largeBiomes",
   javaStreamed: "default",
 });
+// WorldType of a streamed world: the 1.7.10 DEFAULT, LARGE_BIOMES or AMPLIFIED generator (anything else is DEFAULT).
+export const STREAMED_WORLD_TYPES = Object.freeze(['default', 'largeBiomes', 'amplified']);
+export const streamedWorldType = (type) => STREAMED_WORLD_TYPES.includes(type) ? type : 'default';
 export const isJavaLandscape = (biome) => Object.hasOwn(JAVA_LANDSCAPES, biome);
 export function javaSeed(value) {
   const text = String(value);
@@ -57,7 +60,7 @@ export function javaTemperature(b, x, y, z) {
 // The streamed generator chain at local chunk coordinates (native chunk = local + origin / 16).
 // Generation 12 is terrain, caves and ravines with live block ids; 13 populates per cell
 // (streaming-population.js). `column(cx, cz)` returns { blocks, metadata } in WorldChunk order.
-export function streamedSource({ seed, generationVersion, originX, originZ, gen = new ChunkProviderGenerate(seed, "default", new BiomeTerrainState()) }) {
+export function streamedSource({ seed, generationVersion, originX, originZ, worldType = 'default', gen = new ChunkProviderGenerate(seed, streamedWorldType(worldType), new BiomeTerrainState()) }) {
   const manager = gen.manager, topAt = (x, z) => gen.biomeState.topBlock(manager.biomeAt(x, z)),
     caves = new MapGenCaves(seed, manager, topAt),
     ravines = new MapGenRavine(seed, manager, topAt);
@@ -85,7 +88,7 @@ export function streamedSource({ seed, generationVersion, originX, originZ, gen 
 export function generateJavaWorld(world) {
   const seed = javaSeed(world.seed),
     state = new BiomeTerrainState(),
-    gen = new ChunkProviderGenerate(seed, JAVA_LANDSCAPES[world.biome], state),
+    gen = new ChunkProviderGenerate(seed, world.streaming ? world.worldType : JAVA_LANDSCAPES[world.biome], state),
     manager = gen.manager;
   const spawn = manager.findBiomePosition(
     0,
@@ -114,7 +117,7 @@ export function generateJavaWorld(world) {
   // Streamed worlds regenerate columns from the seed. Columns the worker (streaming-generator.js)
   // built ahead of the player wait in `pregenerated` and are used once; it runs the same chain.
   if (world.streaming) {
-    const source = streamedSource({ seed, gen, originX: world.originX, originZ: world.originZ, generationVersion: world.generationVersion });
+    const source = streamedSource({ seed, gen, worldType: world.worldType, originX: world.originX, originZ: world.originZ, generationVersion: world.generationVersion });
     if (source.population) world.population = source.population;
     world.pregenerated = new Map();
     world.generateTerrainChunk = (cx, cz) => {

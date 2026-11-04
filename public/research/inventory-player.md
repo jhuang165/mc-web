@@ -1,0 +1,28 @@
+# Live player in the inventory (GuiInventory.func_147046_a)
+
+Added in 0.42.0 by `src/inventory-player.js`. Parity is not claimed.
+
+## Native-verified (javap of bfu / bfl, `tools/verify-inventory-player.mjs`, `public/research/inventory-player-reference.json`)
+- GuiInventory.func_146976_a (bfu.a(FII)V) calls `func_147046_a(guiLeft + 51, guiTop + 75, 30, guiLeft + 51 - mouseX, guiTop + 75 - 50 - mouseY, thePlayer)`. The creative inventory tab (bfl.a(FII)V, tab "inventory") calls it with `guiLeft + 43, guiTop + 45, 20, guiLeft + 43 - mouseX, guiTop + 45 - 30 - mouseY`.
+- func_147046_a: translate(x, y, 50), scale(-s, s, s), rotate 180 about z, rotate 135 / RenderHelper.enableStandardItemLighting / rotate -135 about y, rotate `-atan(my/40) * 20` about x, translate(0, yOffset, 0), then RenderManager.renderEntityWithPosYaw(entity, 0, 0, 0, 0, 1) with playerViewY = 180. The entity's fields are overwritten for the call and restored: renderYawOffset = atan(mx/40) * 20, rotationYaw = atan(mx/40) * 40, rotationPitch = -atan(my/40) * 20, rotationYawHead and its previous value = rotationYaw. mouseX/Y are the integer GUI-pixel coordinates; the float math was run in a JVM for offsets -400..400 (801 rows replayed by `src/inventory-player.test.js`).
+- Partial tick 1 means no interpolation: limb swing, the attack swing, the hurt tint, the held item and armour layers come from the current state.
+
+## Implemented as
+- A private WebGL canvas (`.paperdoll-canvas`) that covers the GUI (176 x 166 or 195 x 136 GUI pixels) at any GUI scale, drawn once per frame while the survival inventory or the creative "Survival Inventory" tab is open (also while an item is on the cursor). It reuses `PlayerRenderer` (skin, armour layers, held item with enchant glint, hurt tint, sneak, swing, invisibility), so the third-person view and the GUI show the same model.
+- The orthographic camera and matrix chain mirror the GL calls above; the two item lights are the RenderHelper directions run through the same matrices (mirror included); there is no lightmap and no fog, as in the GUI.
+
+## Approximated or missing
+- Fire on the entity (Render.doRenderShadowAndFire draws it in the GUI): the port has no entity fire renderer at all, so a burning player shows nothing.
+- Entity shadow from doRenderShadowAndFire: not drawn.
+- Stuck arrows are now implemented (see below); fire overlay, shadow, cape and enchant glint on armour are still missing.
+- Cape / deadmau5 ears: the port has no cape; armour enchant glint is not drawn on worn armour (the third-person view lacks it too).
+- Hurt tint brightness uses the real player's world light as in RendererLivingEntity; depth precision, texture filtering and the canvas clip to the GUI rectangle (native draws over the whole screen) are not replayed exactly.
+- Mouse X/Y use the last pointer position over the modal; before the first move it is the window centre.
+
+
+## Stuck arrows (native-verified)
+
+- Evidence: `tools/verify-stuck-arrows.mjs` runs the real ModelBiped and ModelBase.getRandomModelBox through `tools/probes/StuckArrowProbe.java` (9 entity ids x 12 arrows) and javap-checks the counter rules; output `public/research/stuck-arrows-reference.json`, replayed by `src/stuck-arrows.test.js`.
+- Count: EntityLivingBase DataWatcher byte 9, not in NBT (not saved). EntityArrow increments it on a landed hit on a living entity (byte wrap); onUpdate decays it: timer = 20 * (30 - count), one arrow drops when it runs out. Port: `survival.arrowCount`/`arrowHitTimer`, `bow.js` damageTarget, reset on death.
+- Render: Random(entityId), random ModelBox, point inside the box, yaw/pitch from atan2, drawn unlit through the part pivot, using the flying-arrow model and texture.
+- Limits: the entity id is the server-assigned id and unknowable here, so id 0 is used (placement is consistent but not the same arrows as a real server). Only RenderPlayer calls the stuck-arrow layer natively, so mobs show none and the port does not add any. The cape and ears have no pivot in the port, so arrows in them attach at the model origin.

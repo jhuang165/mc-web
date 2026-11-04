@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { World, RED_FLOWER, WOOL, YELLOW_FLOWER } from './world.js';
+import { World, RED_FLOWER, WOOL, YELLOW_FLOWER, SNOW_LAYER } from './world.js';
 import { Survival, ITEMS } from './survival.js';
 import { Farming } from './farming.js';
 import { makeStack } from './inventory.js';
@@ -82,7 +82,7 @@ test('repeated JSON-captured ItemBlock actions place immediately with real World
   const run = () => {
     const world = new World('player-actions-placement', 'meadow', 1), survival = new Survival();
     const block = [10, 19, 10], adjacent = [10, 20, 10];
-    world.set(...block, 1);
+    world.set(...block, 1); world.set(...adjacent, 0);
     survival.inventory.setStack(0, makeStack(WOOL, 3, 14));
     const state = {
       screen: 'playing', heldTool: WOOL, motion: { sneaking: false, sprinting: false },
@@ -118,7 +118,7 @@ test('repeated JSON-captured ItemBlock actions place immediately with real World
   const rollbackWorld = new World('player-actions-rollback', 'meadow', 1), rollbackPlayer = new Survival();
   const here = [14, 19, 14], occupied = [14, 20, 14];
   rollbackWorld.set(...here, 1);
-  rollbackWorld.set(...occupied, WOOL, true, 6);
+  rollbackWorld.set(...occupied, SNOW_LAYER, true, 6); // replaceable, so only the collision refuses it
   rollbackPlayer.inventory.setStack(0, makeStack(WOOL, 3, 14));
   const rollbackState = {
     screen: 'playing', heldTool: WOOL, motion: { sneaking: false }, world: rollbackWorld,
@@ -131,7 +131,7 @@ test('repeated JSON-captured ItemBlock actions place immediately with real World
     place: true, heldTool: WOOL, target: { block: here, adjacent: occupied },
   }), { collides: () => true });
   assert.equal(rollback.branch, 'placement-player-collision');
-  assert.equal(rollbackWorld.get(...occupied), WOOL);
+  assert.equal(rollbackWorld.get(...occupied), SNOW_LAYER);
   assert.equal(rollbackWorld.getMeta(...occupied), 6);
   assert.equal(rollbackPlayer.count(WOOL), 3);
 });

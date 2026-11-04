@@ -20,6 +20,7 @@ export function drainMobEvents({ mobs, xpOrbs, items }, hooks = {}) {
     blockEdit = () => {},
   } = hooks;
   const events = mobs.drain();
+  for (const e of mobs.drainClientSounds?.() ?? []) sound({ sound: e.sound, position: e.position, volume: e.volume ?? 0.6, pitch: e.pitch }, e);
   for (const event of events) {
     if (event.sound) sound({
       sound: event.sound,

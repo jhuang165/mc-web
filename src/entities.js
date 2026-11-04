@@ -25,6 +25,7 @@ import { blockCollisions } from "./block-collisions.js";
 import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
 import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage } from "./mob-effects.js";
 import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startConversionTicks, conversionBoost, canCure, startConversion, remedySound, auxSound, readZombieVillager } from "./zombie-villager.js";
+import { landingEffects, JUMP_BOOST, statusPitchRandom } from "./damage-fx.js";
 import { armorReduced, soundVolume, soundPitch, mobDrops, experiencePoints, applyEntityCollision, boxesMeet, ANIMALS, FEATHER, RAW_CHICKEN, COOKED_CHICKEN } from "./combat.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -558,6 +559,7 @@ export class EntityWorld {
     // The client Fx (main.js) the death puffs, splashes and feeding hearts spawn into.
     this.fx = null;
     this.events = [];
+    this.clientSounds = [];
     this.entities = [];
     this.nextId = 1;
     this.spawnClock = 0;
@@ -764,9 +766,15 @@ export class EntityWorld {
       if (source.from) knockBack(e, source.from.x, source.from.z, () => rand.nextDouble(), Math.random);
     }
     const child = e.growingAge < 0, sound = { volume: soundVolume(e.type), position: e };
+    // The server's own sound (hurt, or die when the hit kills) at getSoundPitch(): `events`, replayed against the original
+    // by combat-reference.json. A fresh hit also sends status 2 to the clients (handleHealthUpdate: the hurt sound at
+    // (r - r) * 0.2 + 1, no child pitch) and onDeath sends status 3 (the die sound the same way): the client's own
+    // sounds go to `clientSounds`, so a fresh hit is heard twice in 1.7.10 (damage-fx.md).
+    if (fresh) (this.clientSounds ??= []).push({ sound: hurtSound(e.type), ...sound, pitch: statusPitchRandom() });
     if (e.health <= 0) {
       if (fresh) this.events.push({ sound: deathSound(e.type), ...sound, pitch: soundPitch(rand, child) });
       this.onDeath(e, source);
+      if (fresh) (this.clientSounds ??= []).push({ sound: deathSound(e.type), ...sound, pitch: statusPitchRandom() });
     } else if (fresh) this.events.push({ sound: hurtSound(e.type), ...sound, pitch: soundPitch(rand, child) });
     if (e.type === "zombie") this.callReinforcement(e, !!source.player);
     // EntityMob.attackEntityFrom: a hit that counted makes the attacker the target (only the player here).
@@ -1018,8 +1026,15 @@ export class EntityWorld {
   // EntityLivingBase.fall (sv.b(F)): ceil(distance - 3) points of fall damage
   // (no jump boost), through attackEntityFrom without an attacker, so no knockback.
   fall(e, distance) {
-    const points = Math.ceil(f(distance - 3));
-    if (points > 0) this.hazard(e, points, "fall");
+    // Jump Boost (Potion.jump, id 8) takes amplifier + 1 off the distance; the fall sound plays first, then the damage
+    // and the landing block's step sound (EntityLivingBase.fall; EntityMob says "hostile", the rest "neutral").
+    const jump = e.effects?.find?.((x) => x.id === JUMP_BOOST), cell = [Math.floor(e.x), Math.floor(e.y - 0.20000000298023224), Math.floor(e.z)],
+      { points, sounds } = landingEffects(distance, { kind: HOSTILE.has(e.type) ? "hostile" : "neutral", amplifier: jump ? jump.amplifier : -1, blockUnder: this.world.get(...cell) });
+    if (points > 0) {
+      this.events.push({ sound: sounds[0].name, volume: 1, pitch: 1, position: e });
+      this.hazard(e, points, "fall");
+      for (const s of sounds.slice(1)) this.events.push({ sound: s.name, volume: s.volume, pitch: s.pitch, position: e });
+    }
     // EntityCreeper.fall (xz.b(F)) then pushes the fuse on.
     if (e.type === "creeper") creeperFall(e, distance);
   }
@@ -1745,6 +1760,12 @@ export class EntityWorld {
       for (const key of INTERPOLATED) delete saved[key];
       return saved;
     });
+  }
+  // The sounds each client plays for status 2 and 3 (EntityLivingBase.handleHealthUpdate), apart from the server's.
+  drainClientSounds() {
+    const sounds = this.clientSounds;
+    this.clientSounds = [];
+    return sounds;
   }
   drain() {
     const events = this.events;

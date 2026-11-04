@@ -1,3 +1,4 @@
+import { printChat } from "./chat-ui.js";
 // The 1.7.10 death message. EntityPlayerMP.onDeath [mw.a(ro)] first broadcasts
 // CombatTracker.func_151521_b [rn.b()] to chat; GuiGameOver [bdc] itself shows only the title
 // and the score. When the last hit is not a fall, the text is DamageSource.func_151519_b:
@@ -24,28 +25,9 @@ export function deathMessage(reason, name = PLAYER_NAME) {
   return text ? text.replace("%1$s", name) : null;
 }
 
-// GuiNewChat.drawChat [bcc.a(I)]: GuiIngame translates to (0, height - 48), the chat adds
-// (2, 20); the newest line's 50 % black rectangle spans y -9..0 and width 320 + 4 (chat width
-// 1.0), its text white with a shadow at y -8. A line shows for 200 ticks and fades over the
-// last 20 (alpha (10 * (1 - age / 200))^2). The chat is part of the HUD, so the death screen's
-// gradient covers it. Wall-clock timing approximates the tick counter here.
+// Death, bed and command messages all print to the one GuiNewChat model (chat.js), drawn by chat-ui.js: 100 stored
+// lines, wrapped to the chat width, shown for 200 ticks and faded over the last 20 unless the chat is open.
 export function showChatLine(doc, text) {
-  let line = doc.getElementById("chat-line");
-  if (!line) {
-    line = doc.createElement("div");
-    line.id = "chat-line";
-    line.setAttribute("role", "status");
-    Object.assign(line.style, {
-      position: "fixed", left: "calc(2 * var(--u))", bottom: "calc(28 * var(--u))", width: "calc(324 * var(--u))",
-      height: "calc(9 * var(--u))", background: "rgba(0,0,0,.5)", color: "#fff", fontSize: "calc(8 * var(--u))",
-      lineHeight: "calc(9 * var(--u))", textShadow: "var(--u) var(--u) #3f3f3f", whiteSpace: "nowrap", overflow: "hidden",
-      pointerEvents: "none", zIndex: 9, transition: "opacity 1s ease-in",
-    });
-    doc.body.appendChild(line);
-  }
-  line.textContent = text;
-  line.style.opacity = "1";
-  clearTimeout(showChatLine.timer);
-  showChatLine.timer = setTimeout(() => (line.style.opacity = "0"), 9000);
-  return line;
+  printChat(text);
+  return null;
 }

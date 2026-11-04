@@ -13,6 +13,8 @@ import { installPopulationItems, installPopulationMaterials, installPopulationRe
 import {CARROT,POTATO,BAKED_POTATO,POISONOUS_POTATO} from './crops.js';
 import {newDispenser,DISPENSER_SLOTS} from './dispenser-container.js';
 import { leatherDyeResult } from './leather-dye.js';
+import { stepStuckArrows } from "./stuck-arrows.js";
+import { applyNativeNames } from './item-names.js';
 // The lastDamage reason of DamageSource.outOfWorld (death-messages.js).
 export const VOID = "void";
 const FIRE_REASONS = new Set(["burning", "lava", "fire"]); // DamageSource.isFireDamage (onFire, inFire, lava)
@@ -214,6 +216,8 @@ ARMOR_MATERIALS.forEach(([name, factor, defense, ingredient, texture], m) =>
 );
 
 installPopulationItems(ITEMS);
+// Every item name and damage subtype is the 1.7.10 en_US display name (item-names.js); internal-only items get Title Case.
+applyNativeNames(ITEMS);
 export const MATERIALS = {
   1: { hardness: 0.6, drop: 2 },
   2: { hardness: 0.5 },
@@ -280,7 +284,7 @@ function recipe(id, name, rows, keys, output, count = 1) {
   const width = Math.max(...rows.map((r) => r.length));
   RECIPES.push({
     id,
-    name,
+    name: ITEMS[output]?.name ?? name, // the output item's 1.7.10 display name
     width,
     height: rows.length,
     pattern: rows.flatMap((row) =>
@@ -609,6 +613,14 @@ export class Survival {
     // restarts it at 10 whenever the server's health drops, so a top-up hit, which opens no new
     // window and sends no hurt status, restarts it too.
     this.hurtTime = 0;
+    // EntityLivingBase DataWatcher byte 9 (arrows stuck in the player) and arrowHitTimer; not saved (no NBT key).
+    this.arrowCount = 0;
+    this.arrowHitTimer = 0;
+    // The client player's hurtResistantTime (the hearts' blink, GuiIngame): setPlayerSPHealth sets it to 20 when the
+    // health the server sends drops and to 10 when it rises; it runs down by 1 a tick. `syncedHealth` is the health
+    // the client last saw (damage-hud.js).
+    this.clientResist = 0;
+    this.syncedHealth = this.health;
     // Client sounds of the hurt statuses (EntityLivingBase.handleHealthUpdate [sv.a(B)]): 2, sent
     // only for a fresh hit, plays game.player.hurt; 3, sent by onDeath, plays game.player.die.
     // main.js plays and clears them. `died` marks a death by a hit since main.js last looked,
@@ -741,9 +753,11 @@ export class Survival {
       this.hurtSounds.push("game.player.hurt");
     }
     if (fresh || this.health < before) this.hurtTime = 10;
+    if (this.health < before) { this.clientResist = 20; this.syncedHealth = this.health; }
     if (this.health <= 0) {
       this.hurtSounds.push("game.player.die");
       this.died = true;
+      this.arrowCount = 0; this.arrowHitTimer = 0;
     }
     return true;
   }
@@ -800,13 +814,17 @@ export class Survival {
   wearBlock(block,toolId){return this.wear(toolId,blockWear(block,MATERIALS[block]||{},ITEMS[toolId]));}
 
   tick({ underwater = false, inWater = false, inLava = false, inWall = false, outOfWorld = false } = {}) {
-    this.time++;
+    if (!this.timeFrozen) this.time++; // gamerule doDaylightCycle false stops the world clock
     this.ticks++;
     // EntityPlayerMP.onUpdateEntity: --field_147101_bU and --hurtResistantTime (the latter is
     // skipped for the player in onEntityUpdate), before the update.
     this.protection = Math.max(0, this.protection - 1);
     this.hurtTicks = Math.max(0, this.hurtTicks - 1);
     this.hurtTime = Math.max(0, this.hurtTime - 1);
+    ({ count: this.arrowCount, timer: this.arrowHitTimer } = stepStuckArrows(this.arrowCount, this.arrowHitTimer));
+    // EntityPlayerSP.setPlayerSPHealth for a change of health damage() did not report (regeneration, healing, commands).
+    if (this.health !== this.syncedHealth) { this.clientResist = this.health < this.syncedHealth ? 20 : 10; this.syncedHealth = this.health; }
+    else this.clientResist = Math.max(0, this.clientResist - 1);
     this.tickFurnaces();
     // Entity.onEntityUpdate (sa.C): water puts the fire out; a burning entity takes
     // 1 (onFire, ignores armor) whenever the counter is a multiple of 20; lava
@@ -853,7 +871,7 @@ export class Survival {
         this.saturation = Math.max(0, this.saturation - 1);
       else if (hungerDrops(this.difficulty)) this.food = Math.max(0, this.food - 1);
     }
-    if (this.food >= 18 && this.health < this.maxHealth && this.health > 0) {
+    if (this.naturalRegeneration !== false && this.food >= 18 && this.health < this.maxHealth && this.health > 0) { // gamerule naturalRegeneration
       if (++this.timer >= 80) {
         this.health = Math.min(this.maxHealth, this.health + 1);
         this.exhaust(3);

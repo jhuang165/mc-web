@@ -346,17 +346,23 @@ export function worldLines(record, index) {
 }
 // The world types the World Type button cycles through: 1.7.10's creatable WorldTypes (DEFAULT,
 // LARGE_BIOMES, AMPLIFIED; FLAT is not generated here) followed by the browser's own landscapes.
-// `notice` is drawn under the button as AMPLIFIED's info notice is.
+// The three Java types create endless worlds (biome javaStreamed, `worldType` picking the generator);
+// the finite 128 x 128 biomes java / javaLargeBiomes / javaAmplified only remain for saved worlds.
+// `notice` is drawn under the button as AMPLIFIED's info notice is (only AMPLIFIED has one).
 export const WORLD_TYPES = [
-  { biome: "java", name: t("generator.default"), notice: "Browser world: a 128 x 128 block area" },
-  { biome: "javaLargeBiomes", name: t("generator.largeBiomes"), notice: "Browser world: a 128 x 128 block area" },
-  { biome: "javaAmplified", name: t("generator.amplified"), notice: t("generator.amplified.info") },
-  { biome: "javaStreamed", name: "Streamed", notice: "Browser preview: endless terrain" },
+  { biome: "javaStreamed", worldType: "default", name: t("generator.default"), notice: "" },
+  { biome: "javaStreamed", worldType: "largeBiomes", name: t("generator.largeBiomes"), notice: "" },
+  { biome: "javaStreamed", worldType: "amplified", name: t("generator.amplified"), notice: t("generator.amplified.info") },
   { biome: "meadow", name: "Meadow", notice: "Browser landscape: rolling hills and a river" },
   { biome: "alpine", name: "Highlands", notice: "Browser landscape: high mountains" },
   { biome: "island", name: "Island", notice: "Browser landscape: a small island in the sea" },
   { biome: "snowy", name: "Snowy Tundra", notice: "Browser landscape: snow-covered plains" },
 ];
+// The WORLD_TYPES entry a saved world corresponds to (Re-Create): finite Java biomes map to their endless equivalent.
+export function worldTypeIndex(record) {
+  const wanted = { java: ["javaStreamed", "default"], javaLargeBiomes: ["javaStreamed", "largeBiomes"], javaAmplified: ["javaStreamed", "amplified"], javaStreamed: ["javaStreamed", record?.worldType || "default"] }[record?.biome] ?? [record?.biome];
+  return Math.max(0, WORLD_TYPES.findIndex((w) => w.biome === wanted[0] && (w.worldType ?? wanted[1]) === wanted[1]));
+}
 
 // --- Key bindings (GameSettings.keyBindings): description, category, LWJGL default and the
 // KeyboardEvent.code (or mouse button) the browser game reads for it. ---

@@ -12,8 +12,9 @@ import { placeHeldBlock } from './block-placement-simulation.js';
 import { hoeSound } from './block-sounds.js';
 import { playerMiningState } from './enchantment-effects.js';
 import {
-  DYE, FIRE, SAPLING, SNOW_LAYER, TNT, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, isCrop,
+  DYE, FIRE, SAPLING, SNOW_LAYER, TNT, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, BED, isCrop,
 } from './world.js';
+import { ITEM_BED, placeBed } from './bed.js';
 import { isDoor, activateDoor } from './doors-panes.js';
 import { ITEMS } from './survival.js';
 import { LEVER, STONE_BUTTON, REPEATER, redstoneActivate } from './redstone-blocks.js';
@@ -24,7 +25,7 @@ import { ITEM_POTION, ITEM_GLASS_BOTTLE, usePotion, useGlassBottle, bottleFromCa
 import { CAULDRON, FLOWER_POT, BUCKET_ITEM, cauldronUse, cauldronWash, potUse, setPotContents } from './stone-utility.js';
 
 const FARMLAND = 29; // farming.js till(): internal dry farmland (original 60, soundTypeGravel)
-const STATIONS = new Set([13, 14, BREWING_STAND, CHEST, DISPENSER, DROPPER, HOPPER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, LEVER, STONE_BUTTON, REPEATER]);
+const STATIONS = new Set([13, 14, BREWING_STAND, CHEST, DISPENSER, DROPPER, HOPPER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, BED, LEVER, STONE_BUTTON, REPEATER]);
 // PlayerControllerMP's edit(place) dispatcher with browser effects supplied by the
 // caller. `state` holds the live mutable gameplay state, `request` snapshots the two
 // ray targets, the held bucket's own captured trace and the click button, and hooks run
@@ -228,6 +229,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       }
       return act('use-door', { door: used });
     }
+    // BlockBed.onBlockActivated: either half starts sleeping (bed.js; the browser supplies the player and the time of day).
+    if (activates && block === BED) { hook('useBed', x, y, z); return act('use-bed'); }
     // Lever, stone button and repeater right-clicks (redstone-blocks.js): local state only, no power network.
     if (activates && (block === LEVER || block === STONE_BUTTON || block === REPEATER)) {
       const used = redstoneActivate(block, state.world.getMeta(x, y, z));
@@ -335,6 +338,13 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     }
     if (!state.survival.creative && item?.food) { beginEating(state, id, hook); return act('begin-eating'); }
 
+    // ItemBed.onItemUse (bed-reference.json): top face only, both cells air with a solid top below.
+    if (id === ITEM_BED) {
+      const placed = placeBed({ world: state.world, survival: state.survival, yaw: state.yaw, farming: state.farming }, { id, target }, {
+        updateBlock: hooks.updateBlock, renderHotbar: hooks.renderHotbar, markUnsaved: hooks.markUnsaved, sound: hooks.sound,
+      });
+      return act(placed.placed ? 'place-block' : `placement-${placed.reason}`, { placement: placed });
+    }
     const result = placeHeldBlock({
       world: state.world, survival: state.survival, position: state.position,
       flowers: state.flowers, yaw: state.yaw, farming: state.farming,

@@ -1,7 +1,7 @@
 // Ordinary held-block placement from main.js edit(place = true). The world and
 // Survival own gameplay state; synchronous hooks keep UI/audio observers in
 // their original positions without requiring a browser or scene.
-import { collides, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, ANVIL, isLiquid, isFlower } from "./world.js";
+import { collides, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, ANVIL, TALL_GRASS, VINE, DEAD_BUSH, DEAD_SHRUB, FERN, isLiquid, isFlower } from "./world.js";
 import { stackedSnowMeta, snowCanStay } from "./snow.js";
 import { placeSound } from "./block-sounds.js";
 import { reedTarget, canPlaceReeds, cactusCanPlace, REEDS_ITEM } from "./plants.js";
@@ -13,7 +13,7 @@ import { placedTorchMeta } from "./torches.js";
 import { railCanPlace, railAdded, railItemBlock, isRailId } from "./rails.js";
 import { anvilPlacementMeta } from './anvil-block.js';
 import { isStair, stairPlacementMeta } from './stairs.js';
-import { paneItemBlock, doorItemBlock, useDoorItem, doorRotationYaw, solidTopSurface } from './doors-panes.js';
+import { paneItemBlock, doorItemBlock, useDoorItem, doorRotationYaw, solidTopSurface, doorReplaceable } from './doors-panes.js';
 import { blockOfItem as stoneUtilityItemBlock, heldSlabType, planSlabUse, endFrameFacing, STONE_BRICKS, END_PORTAL_FRAME, FLOWER_POT } from './stone-utility.js';
 import { blockForItem as dispenserPistonItemBlock, isDispenserPiston, DISPENSER, DROPPER, pistonOrientation, minecraftYaw } from './dispenser-piston.js';
 import { newDispenser } from './dispenser-container.js';
@@ -23,6 +23,12 @@ import { blockOfItem as redstoneItemBlock, isRedstoneBlock, redstonePlacedMeta }
 
 const BLOCK_MAX = new Set([STONE_BRICKS,4,5,7,48,69,70,71,82,WOOL, RED_FLOWER, 2, 6, 56, 58]);
 const result = (placed, reason, block = null, position = null) => ({ placed, reason, block, position });
+// ItemBlock.onItemUse: clicking vines, tall grass (with its dead-shrub and fern variants) or a dead bush places into the
+// clicked cell itself instead of the neighbour on the clicked face.
+const CLICK_REPLACED = new Set([TALL_GRASS, VINE, DEAD_BUSH, DEAD_SHRUB, FERN]);
+// World.canPlaceEntityOnSide: the target cell's Material.isReplaceable (air, water, lava, fire, snow layer, Material.vine);
+// public/research/replaceable-reference.json holds the native flags for every original block.
+export const placementReplaceable = doorReplaceable;
 
 /**
  * Place the selected held ItemBlock/snow/reed at the request's copied target.
@@ -106,8 +112,10 @@ export function placeHeldBlock(state, request, hooks = {}) {
   }
   // ItemBlock.onItemUse: replace a one-layer snow cell; full snow remains the
   // clicked block and placement uses the adjacent target.
-  const p = block === SNOW_LAYER && !hereMeta ? here : adjacent;
+  // Snow counts as clicking its top face (side 1); the Material.vine blocks keep the clicked face.
+  const snowTop = block === SNOW_LAYER && !hereMeta, p = snowTop || CLICK_REPLACED.has(block) ? here : adjacent;
   if (!withinBounds(p)) return result(false, "invalid-position", id, p);
+  const side = snowTop || !adjacent ? 1 : clickedSide(here, adjacent);
   if(id===351&&survival.held?.damage===3){
     if(!survival.creative&&!survival.count(id))return result(false,"empty-stack",73,p);
     if(block!==4||(world.getMeta(...here)&3)!==3||p[1]!==here[1]||world.get(...p)!==0)return result(false,'cocoa-support',73,p);
@@ -115,7 +123,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
     world.set(...p,73,true,dir);if(!survival.creative)survival.take(id);updateBlock(p[0],p[2],p[1]);markUnsaved();return result(true,'cocoa',73,p);
   }
   if(id===69){
-    if(![1,2,29,30].includes(world.get(p[0],p[1]-1,p[2]))||world.get(...p)!==0||world.get(p[0],p[1]+1,p[2])!==0||!withinBounds([p[0],p[1]+1,p[2]]))return result(false,'double-plant-support',id,p);
+    if(![1,2,29,30].includes(world.get(p[0],p[1]-1,p[2]))||!placementReplaceable(world.get(...p))||world.get(p[0],p[1]+1,p[2])!==0||!withinBounds([p[0],p[1]+1,p[2]]))return result(false,'double-plant-support',id,p);
     if(!survival.creative&&!survival.count(id))return result(false,'empty-stack',id,p);
     world.put(...p,id,survival.held?.damage||0,true);world.set(p[0],p[1]+1,p[2],id,true,8);
     if(!survival.creative)survival.take(id);updateBlock(p[0],p[2],p[1]);updateBlock(p[0],p[2],p[1]+1);markUnsaved();return result(true,'double-plant',id,p);
@@ -125,7 +133,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
   const slabType = heldSlabType(itemId, survival.held?.damage || 0);
   if (slabType >= 0) {
     if (!survival.creative && !survival.count(itemId)) { toast("Gather this material first."); return result(false, "empty-stack", id, p); }
-    const side = p === here ? 1 : clickedSide(here, p), hitY = Math.fround(Math.fround(target.hit?.[1] ?? here[1] + 0.5) - here[1]);
+    const hitY = Math.fround(Math.fround(target.hit?.[1] ?? here[1] + 0.5) - here[1]);
     const plan = planSlabUse(slabType, { id: block, meta: world.getMeta(...here) }, { id: world.get(...p), meta: world.getMeta(...p) }, side, hitY);
     const cell = plan.merge === "clicked" ? here : p, was = world.get(...cell), wasMeta = world.getMeta(...cell);
     if (!withinBounds(cell)) return result(false, "invalid-position", plan.id, cell);
@@ -152,6 +160,9 @@ export function placeHeldBlock(state, request, hooks = {}) {
     toast("Gather this material first.");
     return result(false, "empty-stack", id, p);
   }
+  // World.canPlaceEntityOnSide: an occupied, non-replaceable cell (a torch, rail or flower the ray passed through, say)
+  // refuses the placement and keeps the item. Before this check the block was silently overwritten.
+  if (!placementReplaceable(world.get(...p))) return result(false, "occupied", id, p);
   if (id === CHEST && !canPlaceChest(world, ...p)) return result(false, "chest-support", id, p);
   if (isFlower(id) && !flowerCanStay(world, flowers, ...p)) return result(false, "flower-support", id, p);
   if (id === SAPLING && !saplingCanStay(world, ...p)) return result(false, "sapling-support", id, p);
@@ -163,26 +174,26 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if (id === FLOWER_POT && !solidTopSurface(world, p[0], p[1] - 1, p[2])) return result(false, "pot-support", id, p);
   // BlockTorch.canPlaceBlockAt, then onBlockPlaced/onBlockAdded pick the wall (1-4) or floor
   // metadata; replacing a snow layer counts as clicking its top (side 1).
-  const torchMeta = id === TORCH ? placedTorchMeta(world, ...p, p === here ? 1 : clickedSide(here, p)) : 0;
+  const torchMeta = id === TORCH ? placedTorchMeta(world, ...p, side) : 0;
   if (torchMeta < 0) return result(false, "torch-support", id, p);
 
   // Redstone components (redstone-blocks.js): metadata from the clicked face and yaw, and the support rule; the item is kept on failure.
-  const rsMeta = isRedstoneBlock(id) ? redstonePlacedMeta(world, id, ...p, p === here ? 1 : clickedSide(here, p), yaw) : 0;
+  const rsMeta = isRedstoneBlock(id) ? redstonePlacedMeta(world, id, ...p, side, yaw) : 0;
   if (rsMeta === null) return result(false, "redstone-support", id, p);
 
   const old = world.get(...p), oldMeta = world.getMeta(...p);
   const meta = id===5||id===71?placedLeavesMeta(survival.held?.damage||0):BLOCK_MAX.has(id) ? survival.held?.damage || 0
-    : id === LADDER ? placedLadderMeta(world, ...p, clickedSide(here, p))
+    : id === LADDER ? placedLadderMeta(world, ...p, side)
         : id === TORCH ? torchMeta
           : id === ANVIL ? anvilPlacementMeta(yaw,survival.held?.damage||0)
           // BlockEndPortalFrame.onBlockPlacedBy: facing from the yaw (Minecraft degrees = 180 - camera yaw).
           : id === END_PORTAL_FRAME ? endFrameFacing(Math.fround(180 - (yaw * 180) / Math.PI))
           // ItemBlock.onItemUse: onBlockPlaced(side, hit) sets the upside-down bit, onBlockPlacedBy the facing from the yaw.
-          : isStair(id) ? stairPlacementMeta(yaw, p === here ? 1 : clickedSide(here, p), Math.fround(Math.fround(target.hit?.[1] ?? here[1] + 0.5) - here[1]))
+          : isStair(id) ? stairPlacementMeta(yaw, side, Math.fround(Math.fround(target.hit?.[1] ?? here[1] + 0.5) - here[1]))
           : isRedstoneBlock(id) ? rsMeta
           // BlockPistonBase/BlockDispenser.onBlockPlacedBy -> determineOrientation: from the player's position and yaw (six facings).
           // BlockHopper.onBlockPlaced: the opposite of the clicked side (never up).
-          : id === HOPPER ? hopperPlacedMeta(p === here ? 1 : clickedSide(here, p))
+          : id === HOPPER ? hopperPlacedMeta(side)
           : isDispenserPiston(id) ? pistonOrientation(p[0], p[1], p[2], position.x, position.y, position.z, minecraftYaw(yaw))
           : 0;
   world.set(...p, id, false, meta);

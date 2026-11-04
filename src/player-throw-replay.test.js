@@ -113,6 +113,7 @@ function system(actions, functions) {
     renderHotbar: () => log.push("hotbar"), renderVitals: () => log.push("vitals"), toast: (m) => log.push(["toast", m]),
     applyFarmUpdates: () => log.push("farm"), reportBrokenTool: () => log.push("broken"), lightTnt: () => log.push("tnt"),
     inventory: (station) => log.push(["inventory", station]), useFurnace: () => log.push("furnace"),
+    useBed: (...args) => log.push(["bed", ...args]),
     openContainer: () => log.push("chest"), breakBlock: (...args) => log.push(["break", ...args]),
     clientEyeInWater: () => false, handleEntityEvents: () => log.push("events"), boneMealSparkles: () => log.push("sparkles"),
   };

@@ -1,4 +1,4 @@
-import { generateJavaWorld, isJavaLandscape } from "./java-world.js";
+import { generateJavaWorld, isJavaLandscape, JAVA_LANDSCAPES, streamedWorldType } from "./java-world.js";
 import { decorateFlowers } from "./flowers.js";
 import { generateLakes, generateSprings } from "./lakes.js";
 import { populateSnow } from "./snow.js";
@@ -156,6 +156,8 @@ export const BLOCKS = [
   {name:'Powered rail',color:'#c8a040'},
   {name:'Detector rail',color:'#8a6a50'},
   {name:'Activator rail',color:'#a05050'},
+  // 0.42.0: BlockBed (original id 26, bed.js).
+  {name:'Bed',color:'#a8322e'},
 ];
 export const LAPIS_ORE=63,REDSTONE_ORE=64,LIT_REDSTONE_ORE=65,EMERALD_ORE=66,PUMPKIN=67,MONSTER_EGG=68,DOUBLE_PLANT=69,
   LOG2=70,LEAVES2=71,VINE=72,COCOA=73,MOSSY_COBBLE=74,BROWN_MUSHROOM=75,RED_MUSHROOM=76,
@@ -173,6 +175,7 @@ export const OAK_STAIRS=87,COBBLESTONE_STAIRS=88,STONE_BRICK_STAIRS=89,SANDSTONE
 // 0.39.0 redstone blocks (redstone-blocks-2.js keeps the same numbers; the module cannot import these without a cycle).
 export const REDSTONE_TORCH_OFF=119,REDSTONE_TORCH=120,REDSTONE_LAMP=121,REDSTONE_LAMP_LIT=122,REDSTONE_BLOCK=123,WOODEN_BUTTON=124,LIGHT_PLATE=125,HEAVY_PLATE=126,COMPARATOR=127,COMPARATOR_POWERED=128,DAYLIGHT_SENSOR=129,PISTON_MOVING=130,GLOWSTONE=131;
 export const WATER=10,LAVA=42;
+export const BED=138;
 export const SNOW_LAYER=46,ICE=47,SAPLING=48;
 export const CARROTS=49,POTATOES=50,WEB=51,LADDER=52,TNT=55;
 // Sand (6, original 12) and gravel (25, original 13) are the BlockFalling blocks (falling.js).
@@ -250,7 +253,7 @@ export const isCrop=b=>(b>=31&&b<=38)||b===CARROTS||b===POTATOES;
 export const cropAge=(b,meta=0)=>b>=31&&b<=38?b-31:meta&7;
 export const cropKind=b=>b>=31&&b<=38?31:b;
 export const isPlant=b=>isCrop(b)||b===39||isFlower(b)||b===SAPLING||[DOUBLE_PLANT,BROWN_MUSHROOM,RED_MUSHROOM,DEAD_BUSH,DEAD_SHRUB,FERN].includes(b);
-export const blockHeight=b=>b===LILY_PAD?1/64:b===29||b===30?15/16:b===41?.875:b===SNOW_LAYER?.125:b===ENCHANTING_TABLE?.75:1;
+export const blockHeight=b=>b===LILY_PAD?1/64:b===29||b===30?15/16:b===41?.875:b===SNOW_LAYER?.125:b===ENCHANTING_TABLE?.75:b===BED?.5625:1;
 // Blocks with Block.tickRandomly: they count towards a section's random-tick refcount
 // (ExtendedBlockStorage.getNeedsRandomTick), which WorldServer reads to pick sections.
 // Grass, leaves, farmland, crops, lava, snow layer, ice and saplings here; snow and ice act on a
@@ -378,12 +381,14 @@ export class World {
   // Streamed worlds: version 12 is terrain, caves and ravines only; 13 adds per-cell Java population
   // (streaming-population.js); 15 adds villages, strongholds and temples. Finite Java worlds: 11 mineshafts, 14 all
   // structures. Saved worlds keep their generator.
-  constructor(seed = "Overworld", biome = "meadow", generationVersion = biome === 'javaStreamed' ? 13 : isJavaLandscape(biome) ? 11 : 8) {
+  constructor(seed = "Overworld", biome = "meadow", generationVersion = biome === 'javaStreamed' ? 13 : isJavaLandscape(biome) ? 11 : 8, worldType = 'default') {
     if (biome === 'javaStreamed' && ![12, 13, 15].includes(generationVersion)) throw new Error('Unsupported streamed world generation version');
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
     this.streaming = biome === 'javaStreamed';
+    // WorldType of the generator (java-world.js streamedWorldType); finite Java landscapes derive it from the biome.
+    this.worldType = this.streaming ? streamedWorldType(worldType) : (JAVA_LANDSCAPES[biome] ?? 'default');
     this.minX = this.minZ = 0;
     this.maxX = this.maxZ = SIZE;
     this.height = generationVersion >= 9 && isJavaLandscape(biome) ? 256 : HEIGHT;

@@ -60,17 +60,17 @@ test("real World collision rolls ItemBlock writes back and keeps old metadata/co
   const world = new World("block-placement-collision", "meadow", 1), survival = new Survival();
   const p = [15, 20, 15], here = [15, 19, 15];
   world.set(...here, 1);
-  world.set(...p, WOOL, true, 6);
+  world.set(...p, SNOW_LAYER, true, 6); // a replaceable cell; the rollback restores it with its metadata
   putStack(survival, 2, 3, 0);
   const calls = [], baseSet = world.set.bind(world);
   world.set = (...args) => { calls.push(args.slice(3)); return baseSet(...args); };
   const state = stateFor(world, survival, { x: 15.5, y: 20, z: 15.5 }), messages = [];
   const outcome = placeHeldBlock(state, { id: 2, item: ITEMS[2], target: targetAt(here, p) }, { toast: (m) => messages.push(m) });
   assert.equal(outcome.reason, "player-collision");
-  assert.equal(world.get(...p), WOOL);
+  assert.equal(world.get(...p), SNOW_LAYER);
   assert.equal(world.getMeta(...p), 6);
   assert.equal(survival.count(2), 3);
-  assert.deepEqual(calls.slice(-2), [[2, false, 0], [WOOL, false, 6]]);
+  assert.deepEqual(calls.slice(-2), [[2, false, 0], [SNOW_LAYER, false, 6]]);
   assert.deepEqual(messages, ["Give yourself a little room to build."]);
 });
 
@@ -161,7 +161,7 @@ test("Creative chest placement skips the count and sets orientation; support che
   }
   const flowerBase = [52, 20, 52], flowerCell = [52, 21, 52];
   world.set(...flowerBase, 1);
-  for (let y = 22; y < world.height; y++) world.set(52, y, 52, 0);
+  for (let y = 21; y < world.height; y++) world.set(52, y, 52, 0);
   const flower = placeHeldBlock(stateFor(world, creative, { x: 60.5, y: 20, z: 60.5 }), {
     id: YELLOW_FLOWER, item: ITEMS[YELLOW_FLOWER], target: targetAt(flowerBase, flowerCell),
   }, { collides: () => false });
@@ -206,7 +206,7 @@ test("anvil ItemBlock placement keeps native yaw quadrants, item damage, and sch
   for (let damage = 0; damage <= 2; damage++) for (let i = 0; i < quarterTurns.length; i++) {
     const world = new World(`anvil-placement-${damage}-${i}`, "meadow", 1), survival = new Survival();
     const support = [12, 20, 12], cell = [12, 21, 12];
-    world.set(...support, 1); putStack(survival, ANVIL, 2, damage);
+    world.set(...support, 1); world.set(...cell, 0); putStack(survival, ANVIL, 2, damage);
     const state = stateFor(world, survival); state.yaw = quarterTurns[i];
     const scheduled = [];
     const placed = placeHeldBlock(state, { id: ANVIL, item: ITEMS[ANVIL], target: targetAt(support, cell) }, { collides: () => false, scheduleFalling: (...p) => scheduled.push(p) });

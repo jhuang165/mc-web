@@ -215,7 +215,7 @@ test("sheared wool leaves 1.0 up with the sheep's extra motion, in the colour of
 
 test("wool is one block with 16 colours: names, face tiles and stack identity", () => {
   assert.equal(ITEMS[WOOL].variants.length, 16);
-  assert.deepEqual([ITEMS[WOOL].variants[0], ITEMS[WOOL].variants[8], ITEMS[WOOL].variants[15]], ["White wool", "Light gray wool", "Black wool"]);
+  assert.deepEqual([ITEMS[WOOL].variants[0], ITEMS[WOOL].variants[8], ITEMS[WOOL].variants[15]], ["Wool", "Light Gray Wool", "Black Wool"]);
   assert.equal(new Set(WOOL_COLORS.map((c, i) => blockTile(WOOL, 0, false, i))).size, 16);
   const inv = new Survival().inventory;
   inv.add(makeStack(WOOL, 5, 14));

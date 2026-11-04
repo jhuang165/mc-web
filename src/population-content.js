@@ -1,6 +1,6 @@
 // Content reached by Java 1.7.10 Overworld population. Internal ids append after 0.24.0.
 // Kept independent of survival/world module initialization so both can use the same catalogue.
-import { ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE } from './world.js';
+import { ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE, BED } from './world.js';
 import { STAIRS, stairRecipeResult } from './stairs.js';
 import { DISPENSER, STICKY_PISTON, PISTON, PISTON_HEAD, SLIMEBALL, DISPENSER_ITEM, DROPPER, DROPPER_ITEM, STICKY_PISTON_ITEM, PISTON_ITEM, ORIGINAL_ITEMS as DISPENSER_PISTON_ITEMS } from './dispenser-piston.js';
 import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, ITEM_STONE_BRICKS, ITEM_STONE_SLAB, ITEM_END_PORTAL_FRAME, ITEM_CAULDRON, ITEM_FLOWER_POT, STONE_BRICK_NAMES, SLAB_NAMES, slabDrops } from './stone-utility.js';
@@ -10,6 +10,8 @@ import { POTION_ITEM_ROWS } from './potion-items.js';
 export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97:68,175:69,162:70,161:71,106:72,127:73,48:74,39:75,40:76,99:77,100:78,32:79,174:80,103:81,'44:1':82,'31:0':83,'31:2':84,24:56,110:57,159:58,111:59,145:ANVIL,116:ENCHANTING_TABLE,53:87,67:88,109:89,128:90,134:91,135:92,136:93,108:94,163:95,164:96,
   // Doors (items 324/330 are internal 470/471), iron bars and glass panes (the block items).
   324:470,330:471,101:IRON_BARS,102:1100,
+  // ItemBed (original 355): one stack-of-one item placing both halves (bed-reference.json).
+  355:472,
   // Slimeball (341) and the dispenser and both pistons, whose block ids 115-117 collide with the tool item ids (dispenser-piston.js).
   ...DISPENSER_PISTON_ITEMS,
   // Stone utility blocks (stone-utility-reference.json): original stone bricks 98, slab 44 (damage = type; 44:1 above stays the sandstone slab), end frame 120, cauldron 380, flower pot 390. Tools own items 100-127, so the block items are 1000 + block id.
@@ -30,6 +32,7 @@ export const POPULATION_VARIANTS={7:TREE_NAMES.map(s=>s+' planks'),4:TREE_NAMES.
 export function installPopulationItems(items){
   for(const [id,variants] of Object.entries(POPULATION_VARIANTS)) items[id].variants=variants;
   items[ANVIL].variants=['Anvil','Slightly Damaged Anvil','Very Damaged Anvil'];
+  items[BED].hidden=true; // BlockBed has no item of its own: the bed item places it
   items[WOODEN_DOOR].hidden=true;items[IRON_DOOR].hidden=true; // BlockDoor has no item of its own: the door items place it
   // Slimeball (original 341) and the items of the dispenser, sticky piston and piston; the head has none.
   items[SLIMEBALL]={id:SLIMEBALL,name:'Slimeball',texture:'slimeball',stack:64,color:'#7ebf6e'};
@@ -40,7 +43,7 @@ export function installPopulationItems(items){
     [369,'Cookie','cookie',{food:2,saturation:.1}], [370,'Mushroom stew','mushroom_stew',{food:6,saturation:.6,stack:1,container:371}],
     [371,'Bowl','bowl'],
     // ItemDoor (items 324 and 330): stack limit 1, placed on the top face (doors-panes-reference.json).
-    [470,'Wooden Door','door_wood',{stack:1}],[1100,'Glass pane',undefined,{block:true}],[471,'Iron Door','door_iron',{stack:1}],[372,'Golden apple','apple_golden',{food:4,saturation:1.2}],
+    [470,'Wooden Door','door_wood',{stack:1}],[1100,'Glass pane',undefined,{block:true}],[471,'Iron Door','door_iron',{stack:1}],[472,'Bed','bed',{stack:1}],[372,'Golden apple','apple_golden',{food:4,saturation:1.2}],
     [ITEM_STONE_BRICKS,'Stone bricks',undefined,{block:true,variants:STONE_BRICK_NAMES}],[ITEM_STONE_SLAB,'Stone slab',undefined,{block:true,variants:SLAB_NAMES.slice(0,6)}],[ITEM_END_PORTAL_FRAME,'End portal frame',undefined,{block:true}],
     [ITEM_LEVER,REDSTONE_ITEM_NAMES[ITEM_LEVER],undefined,{block:true}],[ITEM_STONE_PLATE,REDSTONE_ITEM_NAMES[ITEM_STONE_PLATE],undefined,{block:true}],[ITEM_WOODEN_PLATE,REDSTONE_ITEM_NAMES[ITEM_WOODEN_PLATE],undefined,{block:true}],[ITEM_STONE_BUTTON,REDSTONE_ITEM_NAMES[ITEM_STONE_BUTTON],undefined,{block:true}],[ITEM_TRIPWIRE_HOOK,REDSTONE_ITEM_NAMES[ITEM_TRIPWIRE_HOOK],undefined,{block:true}],[ITEM_REPEATER,REDSTONE_ITEM_NAMES[ITEM_REPEATER],'repeater'],
     [1135,'Powered Rail',undefined,{block:true}],[1136,'Detector Rail',undefined,{block:true}],[1137,'Activator Rail',undefined,{block:true}],
@@ -66,6 +69,8 @@ export function installPopulationMaterials(m){
     // BlockEnchantmentTable: Material.rock, hardness 5 (block-metadata-reference.json); drops itself.
     [ENCHANTING_TABLE]:{hardness:5,kind:'pickaxe',tier:0},
     // BlockDoor (wood: hardness 3, any tool; iron: hardness 5, needs a pickaxe), BlockPane (iron bars: hardness 5 and a pickaxe, drops itself; glass pane: 0.3, drops nothing).
+    // BlockBed: Material.cloth, hardness 0.2, no tool; the foot half drops the bed item, the head half nothing.
+    [BED]:{hardness:.2,drop:472},
     [WOODEN_DOOR]:{hardness:3,kind:'axe',drop:470},[IRON_DOOR]:{hardness:5,kind:'pickaxe',tier:0,drop:471},
     // BlockDispenser (rock, hardness 3.5, pickaxe), BlockPistonBase and BlockPistonExtension (hardness 0.5, no tool; the head drops nothing): dispenser-piston-reference.json.
     [DISPENSER]:{hardness:3.5,kind:'pickaxe',tier:0,drop:DISPENSER_ITEM},[DROPPER]:{hardness:3.5,kind:'pickaxe',tier:0,drop:DROPPER_ITEM},[STICKY_PISTON]:{hardness:.5,drop:STICKY_PISTON_ITEM},[PISTON]:{hardness:.5,drop:PISTON_ITEM},[PISTON_HEAD]:{hardness:.5,drop:0},
@@ -93,6 +98,8 @@ export function installPopulationRecipes({recipe,shapeless}){
   // CraftingManager: ItemDoor.wood "##","##","##" planks; iron "##" x3 ingots; panes: 6 glass in two rows of three (16); bars: 6 iron ingots (16).
   recipe('wooden-door','Wooden Door',['PP','PP','PP'],{P:7},470,1);
   recipe('iron-door','Iron Door',['II','II','II'],{I:302},471,1);
+  // CraftingManager: three wool of any colour over three planks of any kind make one bed.
+  recipe('bed','Bed',['WWW','PPP'],{W:19,P:7},472,1);
   recipe('glass-pane','Glass pane',['GGG','GGG'],{G:9},1100,16);
   // CraftingManager (potion-items.js): glass bottle (3 glass in a V, 3 bottles), gold nugget both ways, blaze powder, magma cream, fermented spider eye, glistering melon, golden carrot, brewing stand.
   recipe('glass-bottle','Glass Bottle',['G G',' G '],{G:9},384,3);
@@ -154,6 +161,8 @@ export function populationDrops(id,meta,{random=Math.random,shears=false}={}){
   if(RS2.isRedstone2Block(id))return RS2.redstoneDrops2(id,meta,{random});
   // BlockDoor.getItemDropped: the lower half drops its door item, the upper half nothing; BlockPane (glass) drops nothing.
   if(id===WOODEN_DOOR||id===IRON_DOOR)return meta&8?[]:[{id:id===WOODEN_DOOR?470:471,count:1}];
+  // BlockBed.getItemDropped: the foot half drops the bed item, the head half (bit 3) nothing.
+  if(id===BED)return meta&8?[]:[{id:472,count:1}];
   if(id===63)return[{id:351,count:4+Math.floor(random()*5),damage:4}];
   if(id===64||id===65)return[{id:360,count:4+Math.floor(random()*2)}];
   if(id===66)return[{id:367,count:1}];

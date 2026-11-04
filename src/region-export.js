@@ -13,6 +13,7 @@ import { TNT_Y_OFFSET } from './explosion.js';
 import { Experience } from './experience.js';
 import { splitRuntime } from './chunk-runtime.js';
 import { populationBlockMapperReady } from './population-world.js';
+import { streamedWorldType } from './java-world.js';
 import { structureDataFiles } from './structure-data.js';
 import { villageDocument } from './village.js';
 const tag=(type,value)=>({type,value}), comp=value=>tag(NBT.COMPOUND,new Map(Object.entries(value))), list=(type,items)=>tag(NBT.LIST,{elementType:type,items});
@@ -84,7 +85,7 @@ function levelNbt(record,w,report) {
  delete player.id;
  const items=(p.slots??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];});
  (p.armor??[]).forEach((s,i)=>{const n=stackNbt(s,100+i,report);if(n)items.push(n);});player.Inventory=list(NBT.COMPOUND,items);
- const data={version:int(19133),initialized:byte(1),RandomSeed:tag(NBT.LONG,w.javaSeed??BigInt(w.numericSeed)),generatorName:str(record.biome==='javaLargeBiomes'?'largeBiomes':record.biome==='javaAmplified'?'amplified':'default'),generatorVersion:int(1),generatorOptions:str(''),MapFeatures:byte(1),LevelName:str(record.name??'Blockworld'),GameType:int(creative?1:0),hardcore:byte(0),allowCommands:byte(creative?1:0),Time:long(p.time??0),DayTime:long(p.time??0),LastPlayed:long(record.updated??0),SizeOnDisk:long(0),SpawnX:int(Math.floor(pos.x+(w.originX??0))),SpawnY:int(Math.floor(pos.y)),SpawnZ:int(Math.floor(pos.z+(w.originZ??0))),Difficulty:byte(2),Player:comp(player)};
+ const data={version:int(19133),initialized:byte(1),RandomSeed:tag(NBT.LONG,w.javaSeed??BigInt(w.numericSeed)),generatorName:str(record.biome==='javaStreamed'?streamedWorldType(record.worldType):record.biome==='javaLargeBiomes'?'largeBiomes':record.biome==='javaAmplified'?'amplified':'default'),generatorVersion:int(1),generatorOptions:str(''),MapFeatures:byte(1),LevelName:str(record.name??'Blockworld'),GameType:int(creative?1:0),hardcore:byte(0),allowCommands:byte(creative?1:0),Time:long(p.time??0),DayTime:long(p.time??0),LastPlayed:long(record.updated??0),SizeOnDisk:long(0),SpawnX:int(Math.floor(pos.x+(w.originX??0))),SpawnY:int(Math.floor(pos.y)),SpawnZ:int(Math.floor(pos.z+(w.originZ??0))),Difficulty:byte(2),Player:comp(player)};
  for(const name of ['rainTime','thunderTime'])data[name]=int(record.weather?.[name]??0);
  for(const name of ['raining','thundering'])data[name]=byte(record.weather?.[name]?1:0);
  return {name:'',tag:comp({Data:comp(data)})};
@@ -105,7 +106,7 @@ export function zipFiles(files) {
 }
 export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChunks=4096}={}) {
  await populationBlockMapperReady;
- const w=world??new World(record.seed,record.biome,record.generationVersion??1);
+ const w=world??new World(record.seed,record.biome,record.generationVersion??1,record.worldType);
  if(!world)w.restore(record.edits??[]);
  const ox=w.originX??0,oz=w.originZ??0,owned=new Set([...w.chunks.keys(),...w.chunkEdits.keys()]);
  const {columns}=splitRuntime(record),runtime=new Map(columns.map(c=>[`${c.x},${c.z}`,c.state]));

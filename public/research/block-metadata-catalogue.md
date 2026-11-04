@@ -17,7 +17,7 @@ All **171 block registrations** x 16 raw 4-bit values = **2736 ID/metadata combi
 
 **Bytecode evidence** (javap): overrides of the block's own class chain and inner classes that call World/IBlockAccess/TileEntity getBlockMetadata, use a metadata argument, or call such a method; the RenderBlocks render method of each render type that reads world metadata other than straight into getIcon(side, meta). **Not analysed**: other blocks, items and entities reading this block's metadata, tile-entity code and renderers (tile-entity blocks never get aliases), persistence.
 
-Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item damage, not world metadata); **Item-placed** are metadata values produced by onBlockPlaced from any item damage 0–15; **Unexecuted readers** counts metadata readers not executed conclusively (class-chain overrides, the render method, a tile entity; see JSON `bytecode.unexecutedMetadataReaders`); **Browser mapping** counts values with an exact, approximate (fallback) or no mapping in `fromOriginal` today (1332 exact, 764 approximate, 640 none of 2736). Placement across all values: 315 reachable from Creative item damage, 270 only from other item damage, 2151 not produced by item placement (they may still arise from world generation, updates or commands).
+Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item damage, not world metadata); **Item-placed** are metadata values produced by onBlockPlaced from any item damage 0–15; **Unexecuted readers** counts metadata readers not executed conclusively (class-chain overrides, the render method, a tile entity; see JSON `bytecode.unexecutedMetadataReaders`); **Browser mapping** counts values with an exact, approximate (fallback) or no mapping in `fromOriginal` today (1348 exact, 764 approximate, 624 none of 2736). Placement across all values: 315 reachable from Creative item damage, 270 only from other item damage, 2151 not produced by item placement (they may still arise from world generation, updates or commands).
 
 | Java block ID | Registry name | Creative stacks | Item-placed | Semantic | Alias (→canonical) | Invalid | Unclassified | Unexecuted readers | Browser mapping |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -47,7 +47,7 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 23 | minecraft:dispenser | 23:0 | 0 | 0–6, 8–14 | — | — | 7, 15 | 1 | exact all 16 |
 | 24 | minecraft:sandstone | 24:0, 24:1, 24:2 | 0–15 | 0–15 | — | — | — | — | exact all 16 |
 | 25 | minecraft:noteblock | 25:0 | 0 | 0 | — | — | 1–15 | 1 | none all 16 |
-| 26 | minecraft:bed | — | — | 0–3, 8–11 | — | — | 4–7, 12–15 | 2 | none all 16 |
+| 26 | minecraft:bed | — | — | 0–3, 8–11 | — | — | 4–7, 12–15 | 2 | exact all 16 |
 | 27 | minecraft:golden_rail | 27:0 | 0 | 0–2, 6, 8–10, 14 | — | — | 3–5, 7, 11–13, 15 | 1 | exact all 16 |
 | 28 | minecraft:detector_rail | 28:0 | 0 | 0–2, 6, 8–10, 14 | — | — | 3–5, 7, 11–13, 15 | 1 | exact all 16 |
 | 29 | minecraft:sticky_piston | 29:0 | 7 | 0–6, 8–15 | — | — | 7 | 3 | exact all 16 |

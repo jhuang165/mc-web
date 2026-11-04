@@ -32,7 +32,7 @@ export const BRIGHTNESS = Array.from({ length: 16 }, (_, i) => {
 // (func_149685_I: 0.2 for normal cubes) and getCanBlockGrass (s: materials
 // that let grass through, used by smooth lighting to decide corner samples).
 export function lightOpacity(b) {
-  if (b >= 132 && b <= 137) return lightOpacity3(b); // dropper, hopper, brewing stand, powered/detector/activator rails (blocks-0-40.js)
+  if (b >= 132 && b <= 138) return lightOpacity3(b); // dropper, hopper, brewing stand, powered/detector/activator rails (blocks-0-40.js)
   if (b >= 119 && b <= 131) return lightOpacity2(b); // redstone torches, lamps, block, button, plates, comparators, sensor, moving piston and glowstone (redstone-blocks-2.js)
   if (b===72||b===73) return 0;
   if (b >= END_PORTAL_FRAME && b <= FLOWER_POT) return 0; // end portal frame, cauldron and flower pot (stone-utility-reference.json); slabs keep 255

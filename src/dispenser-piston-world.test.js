@@ -19,7 +19,7 @@ test("block items place their native blocks with determineOrientation metadata",
   for (const [item, block] of [[DISPENSER_ITEM, DISPENSER], [STICKY_PISTON_ITEM, STICKY_PISTON], [PISTON_ITEM, PISTON]]) {
     for (const yaw of [0, 1, 2, 3, 4.5]) {
       const world = new World("dp-place", "meadow", 1), survival = new Survival();
-      world.set(10, 20, 10, 1);
+      world.set(10, 20, 10, 1); world.set(10, 21, 10, 0);
       const out = place(world, survival, item, yaw);
       assert.equal(out.placed, true);
       assert.equal(world.get(10, 21, 10), block);

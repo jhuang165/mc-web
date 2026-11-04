@@ -1,5 +1,6 @@
 import {populationDrops,populationXp} from './population-content.js';
-import { ICE, WATER, WOOL, RED_FLOWER, SNOW_LAYER } from './world.js';
+import { ICE, WATER, WOOL, RED_FLOWER, SNOW_LAYER, BED } from './world.js';
+import { bedHarvested } from './bed.js';
 import { snowballsFor, iceLeavesWater } from './snow.js';
 import { cropDrops } from './farming.js';
 import { leafDrops } from './trees.js';
@@ -54,7 +55,10 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
   // BlockDoor.onBlockHarvested: a Creative player breaking the upper half removes the lower half first.
   const door = isDoor(block);
   if (door) doorHarvested(world, ...p, creative);
-  if (!world.set(...p, 0) && !(door && creative && !world.get(...p))) return false;
+  // BlockBed.onBlockHarvested: a Creative player breaking the head removes the foot first (the head then goes with it).
+  const bed = block === BED;
+  if (bed) bedHarvested(world, ...p, creative);
+  if (!world.set(...p, 0) && !((door || bed) && creative && !world.get(...p))) return false;
   // BlockIce.harvestBlock leaves flowing water over a solid/liquid cell in Survival.
   if (block === ICE && !creative && !enchanted?.silk && iceLeavesWater(world.get(p[0], p[1] - 1, p[2])))
     world.set(...p, WATER, true, 0);

@@ -6,7 +6,7 @@ import { ParticleSystem } from "./particles.js";
 import { EffectRenderer } from "./effect-renderer.js";
 import { Fx } from "./fx.js";
 import { ParticleRenderer } from "./particle-renderer.js";
-import { HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, ANVIL, PISTON_MOVING, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
+import { HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, ANVIL, BED, PISTON_MOVING, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
 import { StreamingLight } from './streaming-light.js';
 import { STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, endFrameBoxes, cauldronBoxes, cauldronWaterHeight, CAULDRON_FLOOR, CAULDRON_WALL, potContents, POT_BOUNDS, potPlantOf } from './stone-utility.js';
 import { REDSTONE_WIRE, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, LEVER, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, isRedstoneBlock, redstoneBounds, wireArms, wireClimbs, wireTint } from './redstone-blocks.js';
@@ -28,6 +28,7 @@ import { fireVertices } from "./fire.js";
 import { fenceMask, fenceRenderBoxes } from "./fences.js";
 import { anvilModelBoxes } from './anvil-block.js';
 import { isStair, stairBoxes } from './stairs.js';
+import { BED_DIR, bedTexture } from './bed.js';
 import { isDoor, isPane, doorFlags, doorBoundsFor, doorFaceFlip, paneMask, paneArms, paneSideRendered } from './doors-panes.js';
 export { blockTile } from "./block-textures.js";
 
@@ -257,6 +258,7 @@ export class VoxelScene {
           else if (isPistonBase(b)||b===PISTON_HEAD) this.piston(solid,b,x,y,z);
           else if (isStair(b)) this.stairs(solid,b,x,y,z);
           else if (isDoor(b)) this.door(solid,b,x,y,z);
+          else if (b===BED) this.bed(solid,b,x,y,z);
           else if (isPane(b)) this.pane(solid,b,x,y,z);
           else if (b===VINE) this.vine(solid,x,y,z);
           else if (isPlant(b) || b === WEB || b === REEDS) this.crossed(solid, b, x, y, z);
@@ -386,6 +388,23 @@ export class VoxelScene {
         corners=f.v.map(v=>[v[0]?x1:x0,v[1]?y1:y0,v[2]?z1:z0]),
         st=(p)=>[[1-p[2],1-p[1]],[p[2],1-p[1]],[p[0],p[2]],[p[0],p[2]],[p[0],1-p[1]],[1-p[0],1-p[1]]][fi],
         uvs=corners.map(p=>{const [s0,t]=st(p),s=flip?1-s0:s0;return[r.u0+(r.u1-r.u0)*s,r.v1-(r.v1-r.v0)*t];}),
+        sm=smoothFace(L,x,y,z,fi,corners,boundary);
+      m.quad(corners.map(p=>[x+p[0],y+p[1],z+p[2]]),uvs,sm.ao.map(a=>a*f.shade),sm.packed);
+    });
+  }
+  // RenderBlocks.renderBlockBed (render type 14): the 9/16-high box whose bottom face (planks) sits 3/16 up; the side and
+  // end textures only use their lower 9 rows (the legs). u runs along the bed from the foot end to the head end.
+  bed(m,b,x,y,z) {
+    const w=this.world,L=this.light,meta=w.getMeta(x,y,z),[dx,dz]=BED_DIR[meta&3],SIDE=[5,4,1,0,3,2],top=.5625;
+    FACES.forEach((f,fi)=>{
+      const boundary=(fi>>1)!==1; // the side faces lie on the cell border, the 9/16 top and the raised bottom do not
+      if(boundary&&hides(w.get(x+f.n[0],y+f.n[1],z+f.n[2])))return;
+      const kind=bedTexture(SIDE[fi],meta).split('_').pop(),r=tileRect(blockTile(b,fi,false,meta)),
+        corners=f.v.map(v=>[v[0],v[1]?top:(fi===3?.1875:0),v[2]]),
+        along=(p)=>dz===1?p[2]:dz===-1?1-p[2]:dx===1?p[0]:1-p[0],
+        across=(p)=>dz===1?p[0]:dz===-1?1-p[0]:dx===1?1-p[2]:p[2],
+        st=(p)=>kind==='end'?[across(p),1-p[1]]:kind==='side'?[along(p),1-p[1]]:[along(p),across(p)],
+        uvs=corners.map(p=>{const [s,t]=st(p);return[r.u0+(r.u1-r.u0)*s,r.v1-(r.v1-r.v0)*t];}),
         sm=smoothFace(L,x,y,z,fi,corners,boundary);
       m.quad(corners.map(p=>[x+p[0],y+p[1],z+p[2]]),uvs,sm.ao.map(a=>a*f.shade),sm.packed);
     });

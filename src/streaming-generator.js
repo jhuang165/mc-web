@@ -18,9 +18,9 @@ const CELL_CACHE = 9;
 const key = (x, z) => `${x},${z}`;
 
 // Worker side: builds the requested cell or column and lists the buffers to transfer.
-export async function createStreamWorker({ seed, generationVersion, originX, originZ }) {
+export async function createStreamWorker({ seed, generationVersion, originX, originZ, worldType }) {
   await populationBlockMapperReady;
-  const source = streamedSource({ seed: BigInt(seed), generationVersion, originX, originZ });
+  const source = streamedSource({ seed: BigInt(seed), generationVersion, originX, originZ, worldType });
   return (request) => {
     if (request.type === 'cell') {
       const cell = source.population.export(request.x, request.z), transfer = [];
@@ -43,7 +43,7 @@ export class StreamPrefetch {
     if (this.cells) world.population.cells.max = Math.max(world.population.cells.max, CELL_CACHE);
     port.onmessage = ({ data }) => this.receive(data);
     port.onerror = (event) => this.fail(event?.message ?? 'worker error');
-    port.postMessage({ type: 'init', seed: String(world.javaSeed), generationVersion: world.generationVersion, originX: world.originX, originZ: world.originZ });
+    port.postMessage({ type: 'init', seed: String(world.javaSeed), generationVersion: world.generationVersion, originX: world.originX, originZ: world.originZ, worldType: world.worldType });
   }
   fail(reason) {
     if (this.failed) return;

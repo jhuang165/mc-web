@@ -6,7 +6,7 @@ import {PopulationBlocks} from './population-blocks.js';
 import {hasSavedStructures as hasSavedPopulation} from './structure-simulation.js';
 import {restorePopulation,restorePopulationColumns} from './population-runtime.js';
 import {setPopulationBlockMapper} from './population-world.js';
-import {isJavaLandscape} from "./java-world.js";
+import {isJavaLandscape, streamedWorldType} from "./java-world.js";
 import { particleSetting } from "./particle-settings.js";
 import "./style.css";
 import "./minecraft-ui.css";
@@ -58,6 +58,7 @@ import {
   ENCHANTING_TABLE,
   WOODEN_DOOR,
   IRON_DOOR,
+  BED,
   PUMPKIN,
 } from "./world.js";
 import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION } from "./plants.js";
@@ -74,12 +75,17 @@ import { tickWeatherSimulation } from "./weather-simulation.js";
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
 import { PlayerBody, PlayerRenderer, nextView, thirdPersonCamera, playerShadowCaster } from "./player-renderer.js";
 import { FirstPerson, itemTexture } from "./first-person.js";
+import { InventoryPlayerView, PAPERDOLL_LAYOUTS } from "./inventory-player.js";
 import {Experience,ExperienceOrbs,smeltExperience} from "./experience.js";
 import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import {Farming,cropDrops} from "./farming.js";
-import { EntityWorld, ENTITY_TYPES, heldAttackDamage, pushBox } from "./entities.js";
-import { deathMessage, showChatLine } from "./death-messages.js";
+import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox } from "./entities.js";
+import { BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
+import { deathMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
+import { ChatUi, printChat } from "./chat-ui.js";
+import { createCommandRunner, chatLine } from "./commands.js";
+import { createCommandHost, ruleOn } from "./command-host.js";
 import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
@@ -88,6 +94,7 @@ import { DISPENSER, DROPPER, PISTON_HEAD, isDispenserPiston, itemForBlock, headB
 import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
 import { HopperContainer, Hoppers, HOPPER } from "./hopper.js";
 import { Survival, ITEMS, burnTime } from "./survival.js";
+import { stackName } from "./item-names.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
@@ -115,6 +122,8 @@ import { PlayerMotion, fovMultiplier } from "./player-movement.js";
 import { spawnRunningParticles, freshRandom } from "./particles.js";
 import { enterWater, drownBubbles, burst, potionColor, potionParticles, itemCrumbs, boneMealSparkles } from "./fx.js";
 import { JavaRandom } from "./lighting.js";
+import { vitalsLayout, heartsHtml, foodHtml, REGENERATION, WITHER_EFFECT } from "./damage-hud.js";
+import { hurtCameraRoll } from "./damage-fx.js";
 import { displayTicks } from "./display-ticks.js";
 import { importedRuntime } from "./world-import.js";
 import { tickBlockSystems } from "./world-tick.js";
@@ -243,6 +252,7 @@ const editActionLog = []; // Development-only bounded edit/release action trace;
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer,playerTicks=0;
 let weather = new Weather(), trees, plants, falling;
+const bedSleep = new BedSleep(); // EntityPlayer's sleeping state and bed spawn point (bed.js)
 // EntityTNTPrimed entities (explosion.js primeTnt). Explosions draw ray lengths,
 // drops, chained fuses and sound pitch from the saved weather.random World.rand.
 let primed = [];
@@ -305,6 +315,8 @@ let survival = new Survival({}, "creative"),
   f3Combo = false;
 // Dropped items as EntityItem physics objects (see item-entities.js).
 const items = new ItemEntities();
+// gamerule doTileDrops: block drops are skipped while it is false (commands.js / command-host.js).
+{ const dropBlock = items.dropBlock; items.dropBlock = function (...a) { return active && !ruleOn(active, "doTileDrops") ? undefined : dropBlock.apply(this, a); }; }
 // Thrown snowballs and their particles (see projectiles.js).
 const projectiles = new Projectiles();
 // Arrows in flight or stuck in blocks (bow.js) and the eased field-of-view modifier the
@@ -314,7 +326,7 @@ const bowFovState = { prev: 1, cur: 1 };
 $("#app").innerHTML = `
  <div id="viewport" aria-label="Interactive voxel world"></div><div id="vignette"></div>
  <div id="gui" class="hidden"></div>
- <section id="hud" class="hidden" aria-label="Game heads-up display"><div class="game-top"><button class="game-brand" id="pause-button">${cube}<span>BLOCKWORLD<small id="world-label"></small></span><span class="pause-symbol">Ⅱ</span></button><div class="game-status"><span class="status-dot"></span><span id="save-label">Saved on this device</span><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div></div><div id="crosshair">＋</div><pre id="debug" class="hidden"></pre><div id="block-label"></div><div id="experience-hud" class="hidden"><div id="experience-level"></div><div class="experience-track"><div id="experience-fill"></div></div></div><div id="survival-hud" class="survival-hud hidden"></div><div id="mining-meter" class="mining-meter hidden" role="progressbar" aria-label="Mining progress" aria-valuemin="0" aria-valuemax="100"><i></i></div><div id="damage-flash"></div><div id="flight-label" class="flight-label"><span id="mode-label">CREATIVE</span> <span>·</span> <b id="movement-label">WALKING</b></div><div class="hotbar" id="hotbar"></div><div class="game-help">W A S D <span>move</span> <i>·</i> SPACE <span>jump</span> <i>·</i> LMB <span>break</span> <i>·</i> RMB <span>use / place</span> <i>·</i> E <span>inventory</span> <i>·</i> ESC <span>pause</span></div><div id="mobile-controls"><div class="dpad"><button data-key="KeyW">↑</button><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="touch-actions"><button id="touch-break">Break</button><button id="touch-place">Use</button><button id="touch-inventory">Bag</button><button id="touch-fly">Fly</button><button data-key="Space">Jump</button></div></div></section>
+ <section id="hud" class="hidden" aria-label="Game heads-up display"><div class="game-top"><button class="game-brand" id="pause-button">${cube}<span>BLOCKWORLD<small id="world-label"></small></span><span class="pause-symbol">Ⅱ</span></button><div class="game-status"><span class="status-dot"></span><span id="save-label">Saved on this device</span><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div></div><div id="crosshair">＋</div><pre id="debug" class="hidden"></pre><div id="block-label"></div><div id="experience-hud" class="hidden"><div id="experience-level"></div><div class="experience-track"><div id="experience-fill"></div></div></div><div id="survival-hud" class="survival-hud hidden"></div><div id="mining-meter" class="mining-meter hidden" role="progressbar" aria-label="Mining progress" aria-valuemin="0" aria-valuemax="100"><i></i></div><div id="flight-label" class="flight-label"><span id="mode-label">CREATIVE</span> <span>·</span> <b id="movement-label">WALKING</b></div><div class="hotbar" id="hotbar"></div><div class="game-help">W A S D <span>move</span> <i>·</i> SPACE <span>jump</span> <i>·</i> LMB <span>break</span> <i>·</i> RMB <span>use / place</span> <i>·</i> E <span>inventory</span> <i>·</i> ESC <span>pause</span></div><div id="mobile-controls"><div class="dpad"><button data-key="KeyW">↑</button><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="touch-actions"><button id="touch-break">Break</button><button id="touch-place">Use</button><button id="touch-inventory">Bag</button><button id="touch-fly">Fly</button><button data-key="Space">Jump</button></div></div></section>
  <div class="modal-overlay hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div><div id="toast" role="status"></div><input id="file-input" type="file" accept=".json,application/json" hidden>
  <div id="loading"><span>Loading terrain</span></div>`;
 // The 1.7.10 menu screens (menus.js) drawn over the game in #gui.
@@ -367,9 +379,14 @@ function makeRecord(p) {
     seed: String(p.seed).slice(0, 80),
     biome: p.biome || "meadow",
     mode: p.mode === "survival" ? "survival" : "creative",
+    // WorldInfo.allowCommands (GuiCreateWorld "Allow Cheats"). Records saved before 0.42.0 have no flag and read as
+    // WorldInfo(NBTTagCompound) does: cheats on for a creative world, off for survival (commands.js cheatsAllowed).
+    ...(typeof p.allowCommands === "boolean" ? { allowCommands: p.allowCommands } : {}),
     // Version 11 adds full Java population; 14 (finite) and 15 (streamed) add villages, strongholds and
     // temples. Saves retain their existing generator.
+    // Default, Large Biomes and Amplified worlds are streamed (endless) with the matching WorldType generator.
     generationVersion: p.biome === "javaStreamed" ? 15 : isJavaLandscape(p.biome) ? 14 : 8,
+    ...(p.biome === "javaStreamed" ? { worldType: streamedWorldType(p.worldType) } : {}),
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -412,7 +429,7 @@ function stackHtml(s, count = s?.count) {
 function stackLabel(s) {
   if (!s) return "Empty";
   const item = ITEMS[s.id];
-  return (s.displayName ?? item?.variants?.[s.damage] ?? item?.name ?? "Item") + (s.count > 1 ? " ×" + s.count : "") + (item?.durability && s.damage ? `, durability ${item.durability - s.damage} of ${item.durability}` : "");
+  return (stackName(s, ITEMS) || "Item") + (s.count > 1 ? " ×" + s.count : "") + (item?.durability && s.damage ? `, durability ${item.durability - s.damage} of ${item.durability}` : "");
 }
 function renderHotbar() {
   const inv = survival.inventory;
@@ -432,9 +449,11 @@ function selectSlot(i) {
 }
 function showHeldName() {
   const held = survival.held;
-  $("#block-label").textContent = held?.displayName ?? ITEMS[held?.id]?.variants?.[held.damage] ?? ITEMS[heldId()]?.name ?? "Empty hand";
-  $("#block-label").classList.add("visible");
   clearTimeout(showHeldName.timer);
+  // GuiIngame draws the highlighted item name only for a held stack: an empty hand (air) shows nothing.
+  if (!held?.id || held.count <= 0) { $("#block-label").classList.remove("visible"); return; }
+  $("#block-label").textContent = stackName(held, ITEMS) || ITEMS[held.id]?.name || "";
+  $("#block-label").classList.add("visible");
   showHeldName.timer = setTimeout(
     () => $("#block-label").classList.remove("visible"),
     1300,
@@ -528,6 +547,7 @@ function save() {
   // EntityTNTPrimed.writeEntityToNBT keeps only the fuse (plus Entity's position and motion).
   active.tnt = primed.map((e) => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse }));
   active.weather = weather.save();
+  active.bed = bedSleep.save();
   active.worldRandom = weather.saveSimulation();
   active.fluidTicks = fluids.save();
   active.fireTicks = fire.save();
@@ -707,7 +727,7 @@ async function openWorld(record) {
   if(openingWorld)return;
   openingWorld=true;
   try {
-    const prepared=new World(record.seed,record.biome,record.generationVersion??1);
+    const prepared=new World(record.seed,record.biome,record.generationVersion??1,record.worldType);
     if (!record.chunked) prepared.restore(record.edits??[]);
     prepared.restoreClaimedColumns(record.populatedColumns);
     const p=record.position;
@@ -728,6 +748,8 @@ async function launch(record, prepared) {
     startPrefetch();
     // Restore World.rand before constructing the block runtimes that share it.
     weather = new Weather().restore(record.weather).restoreSimulation(record.worldRandom);
+    hideBedScreen();
+    bedSleep.restore(record.bed); // the spawn point; a saved sleeping state is resumed after the player is placed
     scene.setWorld(world);
     // Block light for canBlockFreeze/canSnowAt/melting is the scene's light volume.
     world.blockLight = (x, y, z) => scene.light.blockAt(x, y, z);
@@ -791,6 +813,7 @@ async function launch(record, prepared) {
     new Torches(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
     // BlockDoor.onNeighborBlockChange: a door without its other half or a solid top below pops off as one item.
     new Doors(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
+    new Beds(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
     // Redstone components (inert, no power): unsupported ones drop; a pressed stone button releases 20 ticks later.
     world.redstoneBlocks = new RedstoneBlocks(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; }, sound: (name, volume, pitch, x, y, z) => sounds.play(name, { volume, pitch, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } }) }).watch();
     // Live redstone power and pistons (redstone-runtime.js). The inert RedstoneBlocks above keep only the tripwire
@@ -964,6 +987,7 @@ async function launch(record, prepared) {
     save();
     scene.setTime(survival.time);
     scene.camera.position.copy(position);scene.camera.position.y+=PHYSICS.eye;scene.camera.rotation.set(pitch,yaw,0,"YXZ");
+    restoreSleep(record.bed);
     if (survival.health <= 0) die();
     else {
       requestLock();
@@ -978,7 +1002,61 @@ async function launch(record, prepared) {
     toast("Could not open this world: " + e.message);
   }
 }
+// ---- Chat and commands (chat-ui.js GuiChat/GuiNewChat, commands.js ServerCommandManager, command-host.js game state) ----
+let chatOpen = false;
+const commandHost = createCommandHost({
+  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, survival: () => survival, experience: () => experience,
+  position: () => ({ x: position.x, y: position.y, z: position.z }),
+  seed: () => active.seed,
+  stackName: (s) => stackName(s, ITEMS) || ITEMS[s.id]?.name || "",
+  dropStack: (s) => items.dropPlayer(s, position, yaw, pitch, true, true),
+  refreshInventory: () => { renderHotbar(); renderVitals(); saved = false; },
+  changed: () => { saved = false; },
+  setTime: (t) => scene.setTime(t),
+  teleport: (x, y, z) => { position.set(x, y, z); previous.copy(position); velocity.set(0, 0, 0); fallDistance = 0; saved = false; },
+  setDifficulty: (d) => { options.difficulty = difficultySetting(d); updateDifficulty(); try { localStorage.setItem("blockworld.settings", JSON.stringify(options)); } catch {} },
+  setMode: (mode) => {
+    survival.mode = mode;
+    survival.inventory.creative = survival.creative;
+    if (!survival.creative) flying = false;
+    active.mode = mode;
+    $("#mode-label").textContent = mode.toUpperCase();
+    $("#hud").classList.toggle("survival", !survival.creative);
+    renderHotbar(); renderVitals(); saved = false;
+  },
+  updateBlock: (x, y, z) => scene.updateBlock(x, z, y),
+  destroyBlock: (x, y, z) => breakBlock([x, y, z], false),
+});
+const commands = createCommandRunner(commandHost);
+const chatUi = new ChatUi(document, {
+  // ServerConfigurationManager prints "<Player> message"; a leading "/" runs the command.
+  submit: (text) => { if (text.startsWith("/")) commands.run(text); else printChat(chatLine(PLAYER_NAME, text)); },
+  complete: (before) => commands.complete(before),
+  close: () => closeChat(),
+  stay: () => bedSleep.sleeping,
+  visible: () => !!active && screen !== "home",
+});
+// GuiChat: no pause, but the pointer is released and the movement keys stop (the same state the sleep screen uses).
+function openChat(prefill = "") {
+  if (chatOpen || screen !== "playing" || gui.open || survival.health <= 0) return;
+  chatOpen = true;
+  screen = "inventory";
+  mining = null; mineHeld = false; eating = null;
+  keys.clear();
+  if (document.pointerLockElement) document.exitPointerLock();
+  chatUi.open(prefill);
+}
+function closeChat() {
+  if (!chatOpen) return;
+  chatOpen = false;
+  chatUi.close();
+  if (screen === "inventory" && !containerView) resume();
+}
 function resume() {
+  chatOpen = false;
+  chatUi.close();
+  // GuiSleepMP: leaving the screen (Escape) sends the stop-sleeping action, wakeUpPlayer(true, true, false).
+  if (bedSleep.sleeping) { bedWake(true, false); return; }
   if (survival.health <= 0) {
     screen = "playing";
     die();
@@ -989,6 +1067,102 @@ function resume() {
   screen = "playing";
   keys.clear();
   requestLock();
+}
+// ---- Beds (bed.js): BlockBed.onBlockActivated, the sleeping pose, the sleep fade and waking up ----
+let bedFade = null, bedButton = null, lastHealth = 0;
+function showBedScreen() {
+  if (!bedFade) {
+    bedFade = document.createElement("div");
+    bedFade.style.cssText = "position:fixed;inset:0;z-index:30;pointer-events:none;background:#101020;opacity:0;display:none";
+    bedButton = document.createElement("button");
+    bedButton.className = "button secondary";
+    bedButton.textContent = BED_TEXT.leave; // multiplayer.stopSleeping
+    // GuiSleepMP.initGui: a 200x20 button at (width / 2 - 100, height - 40), in GUI pixels.
+    bedButton.style.cssText = "position:fixed;left:50%;bottom:calc(20*var(--u));transform:translateX(-50%);width:calc(200*var(--u));height:calc(20*var(--u));font-size:calc(8*var(--u));padding:0;z-index:31;display:none";
+    bedButton.onclick = () => bedWake(true, false);
+    document.body.append(bedFade, bedButton);
+  }
+  bedFade.style.display = "block";
+  bedButton.style.display = "block";
+  // GuiSleepMP extends GuiChat: the input field and the chat history are open above the Leave Bed button.
+  chatOpen = true;
+  chatUi.open();
+}
+function hideBedScreen() {
+  if (bedButton) bedButton.style.display = "none";
+  chatOpen = false;
+  chatUi.close();
+}
+// GuiIngame.renderSleepFade: the 0x101020 wash follows sleepTimer and fades over the ten ticks after waking.
+function updateBedFade() {
+  if (!bedFade) return;
+  const a = bedSleep.overlay;
+  bedFade.style.opacity = String(a);
+  if (a === 0 && !bedSleep.sleeping) bedFade.style.display = "none";
+}
+function enterSleep() {
+  screen = "inventory";
+  mining = null; mineHeld = false; eating = null;
+  keys.clear();
+  if (document.pointerLockElement) document.exitPointerLock();
+  // The body lies on the mattress (top 9/16); the camera override in the frame loop supplies the lying view.
+  position.set(bedSleep.pos.x, bedSleep.bed[1] + 0.5625, bedSleep.pos.z);
+  previous.copy(position);
+  velocity.set(0, 0, 0);
+  showBedScreen();
+}
+// BlockBed.onBlockActivated for a click on either half; the server-side checks are in bed.js.
+function useBed(x, y, z) {
+  if (survival.health <= 0 || bedSleep.sleeping) return;
+  const ctx = {
+    player: { x: position.x, y: position.y, z: position.z, alive: true },
+    daytime: (scene.subtracted ?? 0) < 4,
+    // EntityMob within 8 x 5 x 8 of the head cell (strict box intersection).
+    monsterNear: (b) => !!mobs?.entities.some((e) => {
+      if (!HOSTILE.has(e.type) || e.health <= 0) return false;
+      const size = ENTITY_TYPES[e.type], hw = size.width / 2;
+      return e.x + hw > b[0] && e.x - hw < b[3] && e.y + size.height > b[1] && e.y < b[4] && e.z + hw > b[2] && e.z - hw < b[5];
+    }),
+    otherSleeperAt: () => false,
+  };
+  const out = activateBed(world, x, y, z, bedSleep, ctx);
+  if (out.message) showChatLine(document, out.message);
+  if (bedSleep.sleeping) { enterSleep(); saved = false; lastHealth = survival.health; }
+}
+// EntityPlayer.wakeUpPlayer(resetTimer, update, setSpawn): stand beside the bed (or above its head), clear the occupied bit.
+function bedWake(resetTimer, setSpawn, leaveScreen = true) {
+  const head = bedSleep.bed, feet = bedSleep.wake(world, resetTimer, setSpawn);
+  if (!feet) return;
+  if (head) scene.updateBlock(head[0], head[2], head[1]);
+  position.set(feet.x, feet.y, feet.z);
+  previous.copy(position);
+  velocity.set(0, 0, 0);
+  hideBedScreen();
+  saved = false;
+  if (leaveScreen && screen === "inventory" && !containerView) resume();
+}
+// The per-tick sleep timer, the damage wake-up and WorldServer.tick's night skip once everyone (the one player) is fully asleep.
+function tickBed() {
+  if (!bedSleep.sleeping && bedSleep.timer === 0) { updateBedFade(); return; }
+  if (bedSleep.sleeping && survival.health < lastHealth) { lastHealth = survival.health; bedWake(true, false); return; }
+  lastHealth = survival.health;
+  const call = bedSleep.tick(world, (scene.subtracted ?? 0) < 4);
+  if (call) bedWake(call[0], call[2]);
+  else if (bedSleep.fullyAsleep) {
+    // doDaylightCycle: worldTime + 24000 rounded down to a whole day; resetRainAndThunder; wakeAllPlayers.
+    survival.time = nextMorning(survival.time);
+    weather.rainTime = 0; weather.thunderTime = 0; weather.raining = false; weather.thundering = false;
+    bedWake(false, true);
+  }
+  updateBedFade();
+}
+// A saved sleeping player lies down again when the bed is still there.
+function restoreSleep(data) {
+  if (!data?.sleeping || !Array.isArray(data.sleeping.bed) || world.get(...data.sleeping.bed) !== BED) return;
+  const [x, y, z] = data.sleeping.bed;
+  if (bedSleep.begin(world, x, y, z, { player: { x, y, z, alive: true }, daytime: false }) !== "OK") return;
+  bedSleep.timer = Math.max(0, Math.min(100, data.sleeping.timer | 0));
+  enterSleep();
 }
 function pause() {
   if (screen === "home" || screen === "dead") return;
@@ -1005,6 +1179,7 @@ function pause() {
 }
 function goHome() {
   save();
+  hideBedScreen();
   screen = "home";
   closeModal();
   keys.clear();
@@ -1054,9 +1229,10 @@ function renderCreativeBody() {
     (selected === SEARCH ? '<span class="creative-search" id="creative-search" role="textbox" aria-label="Search items"></span>' : "") +
     (selected.scrollbar ? '<i class="creative-scroll" id="creative-scroll"></i>' : "") +
     tabHtml(selected) +
-    (selected === SURVIVAL_TAB ? '<div class="native-player creative-player" aria-hidden="true"><i class="player-head"></i><i class="player-body"></i><i class="player-arm left"></i><i class="player-arm right"></i><i class="player-leg left"></i><i class="player-leg right"></i></div>' : "") +
+    "" +
     slotsHtml(container);
   view.shown = [];
+  attachPaperdoll(selected === SURVIVAL_TAB ? "creative" : null);
 }
 const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace", creative: "", anvil: "Repair & Name", enchanting: "Enchant", merchant: "Villager" },
   CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", dispenser: "dispenser-modal", brewing: "brewing-modal", hopper: "hopper-modal", creative: "creative-modal", anvil: "anvil-modal", enchanting: "enchanting-modal", merchant: "merchant-modal" };
@@ -1079,13 +1255,14 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
       ? '<i class="furnace-flame" id="furnace-flame"></i><i class="furnace-arrow" id="furnace-arrow"></i>'
       : kind === "chest" || kind === "dispenser" || kind === "hopper"
         ? '<i class="chest-bottom" aria-hidden="true"></i><span class="chest-bag-label">Inventory</span>'
-        : `<span class="native-bag-label">Inventory</span><span class="native-crafting-label">Crafting</span>${kind === "inventory" ? '<div class="native-player" aria-hidden="true"><i class="player-head"></i><i class="player-body"></i><i class="player-arm left"></i><i class="player-arm right"></i><i class="player-leg left"></i><i class="player-leg right"></i></div>' : ""}`;
+        : `<span class="native-bag-label">Inventory</span><span class="native-crafting-label">Crafting</span>`;
   modal(
     container.title ?? CONTAINER_TITLES[kind],
     kind === "creative" ? '<div class="creative-body"></div>' : slotsHtml(container) + decorations,
     CONTAINER_CLASSES[kind] ? `${CONTAINER_CLASSES[kind]} container-screen` : "inventory-modal native-inventory container-screen" + (kind === "workbench" ? " native-workbench" : ""),
   );
   if (kind === "inventory") $("#modal .container-screen")?.insertAdjacentHTML("beforeend", '<div class="effect-list" id="effect-list"></div>');
+  attachPaperdoll(kind === "inventory" ? "inventory" : null);
   if (kind === "chest") $("#modal .modal").style.setProperty("--rows", container.rows);
   $("#modal").insertAdjacentHTML("beforeend", '<div class="cursor-stack" id="cursor-stack" aria-hidden="true"></div><div class="slot-tooltip hidden" id="slot-tooltip" role="tooltip"></div>');
   document.activeElement?.blur();
@@ -1187,7 +1364,40 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   };
   refreshContainer();
 }
+// GuiInventory.func_147046_a: the live player in the survival inventory and the creative inventory tab (inventory-player.js).
+let paperdoll = null;
+function attachPaperdoll(mode) {
+  const screenEl = $("#modal .container-screen"), slots = screenEl?.querySelector(".container-slots") ?? null;
+  if (!mode || !slots || !scene) return paperdoll?.detach();
+  paperdoll ??= new InventoryPlayerView(scene);
+  paperdoll.attach(slots.parentNode, slots, mode);
+}
+function paperdollFrame() {
+  const box = $("#modal .container-screen")?.getBoundingClientRect();
+  if (!paperdoll?.mode || !box || !containerView) return;
+  const unit = box.width / PAPERDOLL_LAYOUTS[paperdoll.mode].width;
+  paperdoll.frame(
+    Math.floor((containerView.x - box.left) / unit),
+    Math.floor((containerView.y - box.top) / unit),
+    unit,
+    {
+      swing: animate.pose ? (animate.pose.progress < 1 ? animate.pose.progress : 0) : 0,
+      armor: survival?.inventory?.armor ?? [],
+      held: heldId(),
+      heldDamage: survival.held?.damage || 0,
+      heldColor: survival.held?.color,
+      heldGlint: stackHasEffect(survival.held, ITEMS[survival.held?.id]),
+      hurt: survival.hurtTime > 0,
+      sneak: motion.sneaking,
+      arrowCount: survival.arrowCount,
+      invisible: survival.effects.has(INVISIBILITY),
+    },
+    playerBody,
+    position,
+  );
+}
 function closeContainer() {
+  paperdoll?.detach();
   if (!containerView) return;
   const { container, kind, key } = containerView;
   containerView = null;
@@ -1323,25 +1533,18 @@ function renderVitals() {
   $('#experience-hud').classList.toggle('hidden',survival.creative);$('#experience-level').textContent=experience.level||'';$('#experience-fill').style.width=(experience.progress*100)+'%';$('#experience-hud').setAttribute('aria-label',`Experience level ${experience.level}, ${experience.points} of ${experience.level>=30?62+(experience.level-30)*7:experience.level>=15?17+(experience.level-15)*3:17} points`);
   $("#survival-hud").classList.toggle("hidden", survival.creative);
   if (survival.creative) return;
-  const hearts = Array.from(
-      { length: 10 },
-      (_, i) =>
-        `<span class="${survival.health > i * 2 + 1 ? "full" : survival.health > i * 2 ? "half" : "empty"}">♥</span>`,
-    ).join(""),
-    food = Array.from(
-      { length: 10 },
-      (_, i) =>
-        `<span class="${survival.food > i * 2+1 ? "full" : survival.food>i*2?"half":"empty"}">◆</span>`,
-    ).join(""),
+  // GuiIngame.renderPlayerStats (damage-hud.js): the hurt blink, low-health jiggle, regeneration wave, Absorption and hunger shake.
+  const vitals = vitalsLayout({ health: survival.health, maxHealth: survival.maxHealth, absorption: survival.absorption || 0, hurtResistantTime: survival.clientResist, updateCounter: survival.ticks, poison: survival.effects.has(POISON), wither: survival.effects.has(WITHER_EFFECT), regeneration: survival.effects.has(REGENERATION), food: survival.food, saturation: survival.saturation, hunger: survival.effects.has(HUNGER) }),
+    hearts = heartsHtml(vitals.hearts),
+    food = foodHtml(vitals.food),
     // GuiIngame: armor points above the hearts; air bubbles above hunger, with one popping.
     armor = survival.armorValue,
-    armorRow = armor > 0 ? `<div class="armor-row" aria-label="Armor ${armor} of 20">${Array.from({ length: 10 }, (_, i) => `<span class="${i * 2 + 1 < armor ? "full" : i * 2 + 1 === armor ? "half" : "empty"}"></span>`).join("")}</div>` : "",
+    armorRow = armor > 0 ? `<div class="armor-row" style="--lift:${vitals.lift}" aria-label="Armor ${armor} of 20">${Array.from({ length: 10 }, (_, i) => `<span class="${i * 2 + 1 < armor ? "full" : i * 2 + 1 === armor ? "half" : "empty"}"></span>`).join("")}</div>` : "",
     bubbles = Math.max(0, Math.ceil(((survival.air - 2) * 10) / 300)),
     popping = Math.max(0, Math.ceil((survival.air * 10) / 300) - bubbles),
     air = survival.air < 300 ? `<div class="air" aria-label="Air ${Math.max(0, survival.air)} of 300">${"<span></span>".repeat(bubbles)}${'<span class="pop"></span>'.repeat(popping)}</div>` : "";
   $("#survival-hud").innerHTML =
     `<div class="vital-row"><div class="hearts${survival.effects.has(POISON) ? ' poisoned' : ''}" aria-label="Health ${Math.ceil(survival.health)} of 20${survival.effects.has(POISON) ? ', Poison' : ''}">${hearts}</div><div class="hunger${survival.effects.has(HUNGER) ? ' afflicted' : ''}" aria-label="Hunger ${survival.food} of 20${survival.effects.has(HUNGER) ? ', Hunger effect' : ''}">${food}</div></div>${armorRow}${air}`;
-  $("#damage-flash").classList.toggle("hurt", survival.hurtTime > 4);
 }
 // EntityPlayer.dropOneItem / closing a screen with held items: thrown along
 // the view with a 40-tick pickup delay.
@@ -1380,7 +1583,7 @@ function renderMerchantView(view) {
 }
 function useAnvil(key){
   const [x,y,z]=key.split(',').map(Number);
-  const itemName=native=>{const stack=nativeStackToLive(native),item=ITEMS[stack?.id];return item?.variants?.[stack.damage]??item?.name??'';};
+  const itemName=native=>{const stack=nativeStackToLive(native);return stack?stackName(stack,ITEMS):'';};
   let container;
   container=new AnvilContainer({inventory:survival.inventory,creative:()=>survival.creative,
     experienceLevel:()=>experience.level,
@@ -1489,6 +1692,7 @@ function playHurtSounds() {
 }
 function die() {
   if (screen === "dead") return;
+  if (bedSleep.sleeping) bedWake(true, false, false);
   const vehicle = vehicleState();
   detachPlayerVehicle(vehicle);
   applyVehicleState(vehicle);
@@ -1504,10 +1708,12 @@ function die() {
   keys.clear();
   mining = null;
   mineHeld = false;
-  const stacks = survival.inventory.takeAll();
+  // gamerule keepInventory: the inventory is not dropped and the experience is kept (EntityPlayerMP.clonePlayer copies both).
+  const keep = !ruleOn(active, "keepInventory");
+  const stacks = keep ? survival.inventory.takeAll() : [];
   // EntityPlayer.onDeath -> InventoryPlayer.dropAllItems scatters every stack.
   for (const s of stacks) items.dropPlayer(s, position, yaw, pitch, true, true);
-  const deathScore=experience.score;xpOrbs.spawn(experience.death(),position);
+  const deathScore=experience.score;if(keep)xpOrbs.spawn(experience.death(),position);
   renderHotbar();renderVitals();$("#block-label").classList.remove("visible");
   save();
   modal(
@@ -1520,14 +1726,23 @@ function die() {
   $("#respawn").onclick = async () => {
     for(const button of deathButtons)button.disabled=true;
     try {
-    const spawn=await spawnPosition();
+    let spawn=await spawnPosition();
+    // EntityPlayer.verifyRespawnCoordinates: a bed spawn point must still be a bed with a free cell beside it.
+    if (bedSleep.spawn) {
+      const [bx, by, bz] = bedSleep.spawn;
+      if (world.streaming && !world.isLoaded(bx, bz) && streamStorage) { await streamStorage.ensure(streamStorage.columns(bx, bz)); const change = world.streamAround(bx, bz); if (change) { scene.syncChunks(change); materializeFresh(); } }
+      const cell = verifyRespawn(world, bedSleep.spawn, false);
+      if (cell) spawn = bedRespawnPosition(cell);
+      else { bedSleep.spawn = null; showChatLine(document, BED_TEXT.notValid); }
+    } else if (active.playerSpawn) spawn = { x: active.playerSpawn[0] + 0.5, y: active.playerSpawn[1], z: active.playerSpawn[2] + 0.5 }; // /spawnpoint
     const time = survival.time;
-    survival = new Survival({ time, slots: [], furnaces: survival.furnaces, chests: survival.chests, dispensers: survival.dispensers, hoppers: survival.hoppers, brewing: survival.brewing }, survival.mode);
+    const kept = ruleOn(active, "keepInventory") && { slots: survival.inventory.serialize(), armor: survival.inventory.serializeArmor() };
+    survival = new Survival({ time, slots: [], ...kept, furnaces: survival.furnaces, chests: survival.chests, dispensers: survival.dispensers, hoppers: survival.hoppers, brewing: survival.brewing }, survival.mode);
     survival.protection = 60;
     survival.furnaceActive = key => !world.streaming || world.isTicking(...[key.split(",")[0],key.split(",")[2]].map(Number));
     survival.furnaceChanged = key => redstoneRuntime?.containerClosed([key]);
     updateDifficulty();
-    experience=new Experience();
+    if (!kept) experience=new Experience();
     position.copy(new THREE.Vector3(...Object.values(spawn)));
     previous.copy(position);
     playerBody.reset(position, yaw, pitch);
@@ -1558,6 +1773,9 @@ function tickWeather() {
 // EntityPlayerSP.timeInPortal: Nausea longer than 60 ticks winds the screen warp up (potion-fx.js).
 const portalTimer = new PortalTimer();
 function tickSurvival(inWater, oldPosition, inLavaNow = false) {
+  // Game rules the Survival object reads (gamerule naturalRegeneration / doDaylightCycle).
+  survival.naturalRegeneration = ruleOn(active, "naturalRegeneration");
+  survival.timeFrozen = !ruleOn(active, "doDaylightCycle");
   portalTimer.tick(survival.effects.get(NAUSEA)?.duration ?? 0);
   tickPlayerEnvironment({ world, weather, position, survival, motion, flying }, { inWater, inLavaNow }, {
     tickWeather,
@@ -1593,6 +1811,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   const movement = { world, position, survival, motion, grounded, fallDistance, landedFall };
   finishPlayerMovement(movement, { inWater, inLavaNow, oldPosition }, {
     trample: trampleFarmland,
+    fallSound: (s) => sounds?.play(s.name, { volume: s.volume, pitch: s.pitch }),
     landingDust: (x, y, z, count) => scene.particles.landingDust(world, x, y, z, count, [position.x, position.y + PHYSICS.eye, position.z]),
   });
   ({ fallDistance, landedFall } = movement);
@@ -1804,6 +2023,7 @@ function edit(place = false) {
     openInventory: station => { inventory(station); syncContainerState(); },
     useFurnace: key => { useFurnace(key); syncContainerState(); },
     useAnvil: key => { useAnvil(key); syncContainerState(); },
+    useBed,
     openMerchant: entity => { const opened = useMerchant(entity); if (opened) syncContainerState(); return opened; },
     useEnchantingTable: key => { useEnchantingTable(key); syncContainerState(); },
     openChest: (chest, key) => { openContainer(chest, "chest", key); syncContainerState(); },
@@ -2066,7 +2286,7 @@ $("#file-input").onchange = async (e) => {
       (!["meadow", "alpine", "island", "snowy"].includes(data.biome) && !isJavaLandscape(data.biome))
     )
       throw new Error("Choose a Blockworld export file");
-    const check = new World(data.seed, data.biome, data.generationVersion ?? 1);
+    const check = new World(data.seed, data.biome, data.generationVersion ?? 1, data.worldType);
     check.restore(data.edits);
     const record = {
       ...makeRecord(data),
@@ -2141,6 +2361,12 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "F5" && !e.repeat) thirdPersonView = nextView(thirdPersonView);
   if (e.code === "KeyE" && !e.repeat) {
     inventory();
+    return;
+  }
+  // KeyBinding key.chat (T) opens the chat; key.command (/) opens it with "/" typed.
+  if (!e.repeat && (e.code === (options.keys?.["key.chat"] ?? "KeyT") || e.code === (options.keys?.["key.command"] ?? "Slash"))) {
+    e.preventDefault();
+    openChat(e.code === (options.keys?.["key.command"] ?? "Slash") ? "/" : "");
     return;
   }
   if (e.code === "F3" && !e.repeat) f3Combo = false;
@@ -2319,7 +2545,8 @@ function animate(now) {
       // pre-move position, last tick's motion and in-water flag, before movementTick moves the
       // player; EffectRenderer.updateEffects then runs after this tick's spawns. ---
       if (motion.sprinting) spawnRunningParticles(scene.particles, world, { x: position.x, y: position.y, z: position.z, mx: velocity.x, mz: velocity.z, sprinting: true, inWater: wasInWater, ySize: motion.ySize }, playerRandom, [position.x, position.y + PHYSICS.eye, position.z]);
-      movementTick(captureMovementInput(keys));
+      movementTick(captureMovementInput(bedSleep.sleeping ? new Set() : keys)); // a sleeping player ignores the keys
+      tickBed();
       populationBlocks?.touch(Math.floor(position.x),Math.floor(position.y-.01),Math.floor(position.z));
       scene.effectRenderer.tick(world);
       // The model stands at posY - yOffset, and posY is lowered by ySize (the sneak drop).
@@ -2356,12 +2583,16 @@ function animate(now) {
     scene.camera.position.x += b.x * Math.cos(yaw);
     scene.camera.position.z -= b.x * Math.sin(yaw);
     scene.camera.position.y += b.y;
-    const hurt =
-      (Math.sin(Math.pow(survival.hurtTime / 10, 4) * Math.PI) *
-        14 *
-        Math.PI) /
-      180;
+    // EntityRenderer.hurtCameraEffect with the frame's partial tick (damage-fx.js); the roll is a GL angle, which
+    // the camera's z rotation shares, so `- hurt` below adds it.
+    const hurt = -(hurtCameraRoll({ hurtTime: survival.hurtTime, health: survival.health }, Math.min(1, accumulator / PHYSICS.tick)) * Math.PI) / 180;
     scene.camera.rotation.set(pitch + b.rx, yaw, b.rz - hurt, "YXZ");
+    if (bedSleep.sleeping) {
+      // EntityRenderer.orientCamera while sleeping: the view lies on the mattress looking along the bed towards its foot (approximation of the native offsets).
+      const [hx, hz] = BED_DIR[bedSleep.facing];
+      scene.camera.position.set(bedSleep.pos.x, bedSleep.pos.y - 0.1, bedSleep.pos.z);
+      scene.camera.rotation.set(0, Math.atan2(hx, hz), 0, "YXZ");
+    }
     animate.pose = pose;
     const dir = new THREE.Vector3();
     scene.camera.getWorldDirection(dir);
@@ -2410,7 +2641,7 @@ function animate(now) {
     }
     if (debug)
       $("#debug").textContent =
-        `BLOCKWORLD / Java 1.7.10 study\n${fps} FPS · ${(scene.worldTriangles || 0).toLocaleString()} triangles\nXYZ: ${position.x.toFixed(2)} / ${position.y.toFixed(2)} / ${position.z.toFixed(2)}\nSeed: ${active.seed}\n${survival.mode} · day ${Math.floor(survival.time / 24000) + 1} · ${survival.time % 24000} ticks\nHealth ${survival.health} · food ${survival.food} · saturation ${survival.saturation.toFixed(1)}\n${world.streaming ? world.chunks.size+" loaded chunks · " : ""}${world.edits.size} ${world.streaming ? "cached edited blocks" : "edited blocks"} · ${Object.keys(survival.chests).length + Object.keys(survival.furnaces).length} containers · ${items.items.length} items · ${mobs?.entities.length || 0} mobs\n${aimedEntity ? aimedEntity.entity.type + " · " + aimedEntity.entity.health + " health" : target ? BLOCKS[world.get(...target.block)].name : "Looking into the distance"}`;
+        `BLOCKWORLD / Java 1.7.10 study\n${fps} FPS · ${(scene.worldTriangles || 0).toLocaleString()} triangles\nXYZ: ${position.x.toFixed(2)} / ${position.y.toFixed(2)} / ${position.z.toFixed(2)}\nSeed: ${active.seed}\n${survival.mode} · day ${Math.floor(survival.time / 24000) + 1} · ${survival.time % 24000} ticks\nHealth ${survival.health} · food ${survival.food} · saturation ${survival.saturation.toFixed(1)}\n${world.streaming ? world.chunks.size+" loaded chunks · " : ""}${world.edits.size} ${world.streaming ? "cached edited blocks" : "edited blocks"} · ${Object.keys(survival.chests).length + Object.keys(survival.furnaces).length} containers · ${items.items.length} items · ${mobs?.entities.length || 0} mobs\n${aimedEntity ? aimedEntity.entity.type + " · " + aimedEntity.entity.health + " health" : target ? (ITEMS[world.get(...target.block)]?.name ?? BLOCKS[world.get(...target.block)].name) : "Looking into the distance"}`;
     if (elapsed - lastSave > 5) save();
     scene.effects.crack(mining?.block, mining?.progress);
   } else if (screen === "dead") {
@@ -2420,13 +2651,14 @@ function animate(now) {
     // in 20 "explode" from posY, which is its eye.
     accumulator += dt;
     while (accumulator >= PHYSICS.tick) {
+      survival.hurtTime = Math.max(0, survival.hurtTime - 1);
       if (++deathTime === 20) burst(scene.fx, "explode", 20, { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z, width: PHYSICS.width, height: PHYSICS.height }, playerRandom);
       scene.effectRenderer.tick(world);
       accumulator -= PHYSICS.tick;
     }
     // EntityRenderer.hurtCameraEffect: a dead view rolls 40 - 8000 / (deathTime + partial + 200)
     // degrees about the view axis (the same sign convention as the hurt tilt and view bob).
-    const roll = ((40 - 8000 / (deathTime + accumulator / PHYSICS.tick + 200)) * Math.PI) / 180;
+    const roll = (hurtCameraRoll({ hurtTime: survival.hurtTime, health: 0, deathTime }, Math.min(1, accumulator / PHYSICS.tick)) * Math.PI) / 180;
     scene.camera.rotation.z = roll;
   } else if (screen === "home") scene.preview(elapsed);
   const partial = Math.min(1, accumulator / PHYSICS.tick);
@@ -2447,8 +2679,10 @@ function animate(now) {
     hurt: survival.hurtTime > 0,
     sneak: motion.sneaking,
     riding: !!rider.vehicle,
+    arrowCount: survival.arrowCount,
     invisible: survival.effects.has(INVISIBILITY),
   });
+  if (screen === "inventory") paperdollFrame();
   chestRenderer?.update(screen === "playing" || screen === "inventory" ? accumulator / PHYSICS.tick : 1);
   if(xpRenderer)xpRenderer.update(xpOrbs.orbs,partial);
   scene.dropPartial = partial;
@@ -2467,7 +2701,8 @@ function animate(now) {
   if (screen !== "home") scene.render(elapsed, dt);
   if (firstPerson && animate.pose)
     firstPerson.render(animate.pose, {
-      visible: thirdPersonView === 0 && ["playing", "inventory", "paused"].includes(screen),
+      // EntityRenderer.renderHand: first person only, and never while the player is sleeping.
+      visible: thirdPersonView === 0 && !bedSleep.sleeping && ["playing", "inventory", "paused"].includes(screen),
       light: scene.brightness(scene.camera.position.x, scene.camera.position.y, scene.camera.position.z),
       view: scene.camera,
       time: elapsed,
@@ -2533,7 +2768,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
+    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
   scene.preview(0);
   // The title screen's splash texts (assets/minecraft/texts/splashes.txt).
   menuContext.splashes = await fetch("/media/1.7.10/texts/splashes.txt").then((r) => (r.ok ? r.text() : "")).catch(() => "");

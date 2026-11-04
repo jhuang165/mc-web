@@ -1,0 +1,1 @@
+Beds added (block 138, item 472/355): place, break, sleep, skip night, respawn verify, save/load, render, textures, zombie-villager boost. Native probe bed-reference.json 1,298 records; src/bed.test.js 7 tests. npm test 1751 pass, build OK. Browser check only covered rendering. No commit made.

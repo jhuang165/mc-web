@@ -1,3 +1,4 @@
+import { landingEffects, JUMP_BOOST } from "./damage-fx.js";
 import { PHYSICS } from './world.js';
 import { eyeInWater } from './fluids.js';
 import { entityBox, isWet } from './weather.js';
@@ -30,7 +31,7 @@ export function tickPlayerEnvironment({ world, weather, position, survival, moti
 // This remains a separate step because falling blocks and client display ticks
 // occur between the environment step and landing handling in the live game.
 export function finishPlayerMovement(state, { inWater, inLavaNow, oldPosition },
-  { trample = () => {}, landingDust = () => {} } = {}) {
+  { trample = () => {}, landingDust = () => {}, fallSound = () => {} } = {}) {
   const { world, position, survival, motion, grounded } = state;
   let { fallDistance, landedFall } = state;
   if (inLavaNow) fallDistance *= 0.5;
@@ -46,7 +47,14 @@ export function finishPlayerMovement(state, { inWater, inLavaNow, oldPosition },
       const bx = Math.floor(position.x), by = Math.floor(position.y - 0.20000000298023224), bz = Math.floor(position.z);
       if (world.get(bx, by, bz)) landingDust(bx, by, bz, Math.ceil(Math.fround(distance - 3)));
     }
-    if (!survival.creative && distance > 3) survival.damage(Math.ceil(Math.fround(distance - 3)), 'a fall');
+    // EntityPlayer.fall skips Creative flight; EntityLivingBase.fall: ceil(distance - 3 - jump boost level), the fall sound
+    // (EntityPlayerSP plays it itself), the block's step sound, then the damage (damage-fx.js).
+    if (!survival.creative && distance > 0) {
+      const jump = survival.effects?.get?.(JUMP_BOOST), by = Math.floor(position.y - 0.20000000298023224),
+        fall = landingEffects(distance, { kind: "player", amplifier: jump ? jump.amplifier : -1, blockUnder: world.get(Math.floor(position.x), by, Math.floor(position.z)) });
+      for (const sound of fall.sounds) fallSound(sound);
+      if (fall.points > 0) survival.damage(fall.points, 'a fall');
+    }
     fallDistance = 0;
   }
   if (inWater || motion.inWeb) fallDistance = 0;

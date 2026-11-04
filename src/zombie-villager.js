@@ -10,7 +10,7 @@
 //   interact (yq.a(yz)): golden apple, damage 0, zombie is a villager and has Weakness: the stack shrinks (not in
 //   Creative) and startConversion(nextInt(2401) + 3600). onUpdate counts conversionTime down by getConversionTimeBoost.
 import { NORMAL, HARD } from "./difficulty.js";
-import { IRON_BARS } from "./world.js";
+import { IRON_BARS, BED } from "./world.js";
 
 export const GOLDEN_APPLE = 372; // this build's id for the plain golden apple (1.7.10 item 322, damage 0)
 export const WEAKNESS = 18, STRENGTH = 5, NAUSEA = 9; // Potion ids (rv.t, rv.g, rv.k)
@@ -18,8 +18,8 @@ export const CONVERSION_MIN = 3600, CONVERSION_SPREAD = 2401;
 export const CURE_NAUSEA_TICKS = 200;
 export const AUX_INFECT = 1016, AUX_CURE = 1017; // World.playAuxSFXAtEntity events; sounds mob.zombie.infect / unfect
 export const SOUNDS = Object.freeze({ infect: "mob.zombie.infect", unfect: "mob.zombie.unfect", remedy: "mob.zombie.remedy" });
-// getConversionTimeBoost counts iron bars (ajn.aY) and beds (ajn.C). This build has no bed block, so only bars count.
-export const BOOST_BLOCKS = new Set([IRON_BARS]);
+// getConversionTimeBoost counts iron bars (ajn.aY) and beds (ajn.C). Both are in this build.
+export const BOOST_BLOCKS = new Set([IRON_BARS, BED]);
 
 // yq.a(sv) (onKillEntity): the roll that decides whether a villager killed by a zombie converts. Normal draws
 // Entity.rand.nextBoolean() of the killing zombie (true = no conversion); Hard converts without a draw.

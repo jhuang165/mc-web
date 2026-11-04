@@ -10,6 +10,8 @@ import { rayTraceBlocks } from "./projectiles.js";
 import { PHYSICS } from "./world.js";
 import { LEATHER_ARMOR, LEATHER_COLOR, leatherColorComponents, leatherItemLayers } from "./leather-dye.js";
 import { glintMesh } from "./first-person.js";
+import { arrowGeometry } from "./arrow-renderer.js";
+import { stuckArrowPlacements } from "./stuck-arrows.js";
 export { LEATHER_COLOR } from "./leather-dye.js";
 
 // Third-person player: EntityRenderer.orientCamera (blt.h), RenderPlayer (bop)
@@ -388,6 +390,9 @@ export class PlayerRenderer {
     this.armorKey = "";
     this.armorNodes = [];
     this.armorMaterials = [];
+    this.arrowKey = "";
+    this.arrowNodes = [];
+    this.arrowMaterial = null;
     this.heldId = 0;
     this.heldKey = "0:0";
     this.held = null;
@@ -484,9 +489,35 @@ export class PlayerRenderer {
     this.pivots.rightArm.add(group);
     this.held = group;
   }
+  // RendererLivingEntity.func_85093_e: `count` arrows stuck in the model, placed from Random(entityId). Drawn between
+  // disableStandardItemLighting / enableStandardItemLighting, so the arrows are unlit (diffuse 1) and not hurt-tinted.
+  syncArrows(count, entityId = 0) {
+    const key = `${count | 0}:${entityId | 0}`;
+    if (key === this.arrowKey) return;
+    this.arrowKey = key;
+    for (const n of this.arrowNodes) n.parent?.remove(n);
+    this.arrowNodes = [];
+    if (!(count > 0)) return;
+    if (!this.arrowMaterial) {
+      this.arrowMaterial = entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/entity/arrow.png"), side: THREE.DoubleSide });
+      this.arrowMaterial.vertexShader = this.arrowMaterial.vertexShader.replace(/vDiffuse=min\([^;]*;/, "vDiffuse=1.;");
+      this.arrowMaterial.needsUpdate = true;
+      this.arrowGeometry = arrowGeometry();
+    }
+    for (const a of stuckArrowPlacements(entityId, count)) {
+      const mesh = new THREE.Mesh(this.arrowGeometry, this.arrowMaterial);
+      mesh.rotation.order = "YZX";
+      mesh.position.set(a.pos[0], a.pos[1], a.pos[2]);
+      mesh.rotation.set(Math.PI / 4, ((a.yaw - 90) * Math.PI) / 180, (a.pitch * Math.PI) / 180);
+      mesh.frustumCulled = false;
+      // hat shares the head's transform; the cape and ears have no pivot here (rotation point 0).
+      (this.pivots[a.name === "hat" ? "head" : a.name] ?? this.model).add(mesh);
+      this.arrowNodes.push(mesh);
+    }
+  }
   // `body` is a PlayerBody; `swing` is the swing progress (0 at rest); `armor`
   // is inventory.armor (boots first); `held` the held item id.
-  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, hurt = false, sneak = false, riding = false, invisible = false } = {}) {
+  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, hurt = false, sneak = false, riding = false, invisible = false, arrowCount = 0, arrowEntityId = 0 } = {}) {
     this.root.visible = visible;
     if (!visible) return;
     const pose = mobPose(body, partial);
@@ -494,6 +525,7 @@ export class PlayerRenderer {
     this.root.rotation.y = (180 - pose.bodyYaw) * RAD;
     this.syncArmor([3, 2, 1, 0].map((slot) => armor[slot]));
     this.syncHeld(held, heldDamage, heldColor, heldGlint);
+    this.syncArrows(arrowCount, arrowEntityId);
     const parts = bipedPose({
       limbSwing: pose.limbSwing, limbSwingAmount: pose.limbSwingAmount, age: pose.age,
       headYaw: pose.headYaw, headPitch: pose.headPitch, swing, sneak, riding, heldRight: held ? 1 : 0,
@@ -510,6 +542,7 @@ export class PlayerRenderer {
     const packed = this.view.brightness(pose.x, pose.y + PHYSICS.height * 0.66, pose.z),
       level = Math.max(((packed >> 20) & 15) - (this.view.subtracted ?? 0), (packed >> 4) & 15),
       b = BRIGHTNESS[Math.max(0, level)];
+    this.arrowMaterial?.setLight(packed);
     for (const m of this.materials) {
       m.setLight(packed);
       m.uniforms.overlay.value.set(hurt ? b : 0, 0, 0, hurt ? 0.4 : 0);

@@ -118,7 +118,7 @@ const unsplit = r => r.biome === 'javaStreamed' && Array.isArray(r.edits);
 export async function writeWorldShelf(records, storage, key, chunks = []) {
   const streamed = records.filter(r=>r.biome === 'javaStreamed');
   const shelf = records.map(r=>r.biome !== 'javaStreamed' ? r : {
-    id:r.id,name:r.name,seed:r.seed,biome:r.biome,mode:r.mode,updated:r.updated,storage:'indexeddb',
+    id:r.id,name:r.name,seed:r.seed,biome:r.biome,worldType:r.worldType,mode:r.mode,updated:r.updated,storage:'indexeddb',
   });
   const shelfJSON = JSON.stringify(shelf);
   // Capture now; live simulation continues while the transaction is running.

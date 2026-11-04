@@ -13,6 +13,7 @@ import { isStair, stairBoxes } from "./stairs.js";
 import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
 import { enterWater } from "./fx.js";
 import { GaussianRandom, intercept, rayTraceBlocks } from "./projectiles.js";
+import { addStuckArrow } from "./stuck-arrows.js";
 import { applyBowEnchantments, bowEnchantments } from "./armor-enchantments.js";
 
 const f = Math.fround;
@@ -404,6 +405,8 @@ export class Arrows {
       // zc.h: a burning arrow does setFire(5) on its target before attackEntityFrom (Fire Protection shortens it).
       if (a.fire > 0) survival.setFire?.(5);
       const hit = !!survival.damage(dmg, "an arrow", true);
+      // zc.h: a landed hit on a living entity does setArrowCountInEntity(count + 1).
+      if (hit && survival.health > 0) survival.arrowCount = addStuckArrow(survival.arrowCount);
       // A hit by an arrow a mob shot runs the wearer's Thorns on the shooter (EnchantmentHelper.func_151384_a).
       if (hit && shooter && typeof shooter === "object" && mobsHas(ctx.mobs, shooter))
         survival.thorns?.({

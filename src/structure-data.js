@@ -9,7 +9,7 @@
 import { StructurePopulation } from "./structure-population.js";
 import { STRUCTURE_DATA_NAMES, featuresToNbt, compoundTag } from "./structure-nbt.js";
 import { ChunkProviderGenerate, BiomeTerrainState } from "./terrain-generator.js";
-import { JAVA_LANDSCAPES, javaSeed } from "./java-world.js";
+import { JAVA_LANDSCAPES, javaSeed, streamedWorldType } from "./java-world.js";
 import { JavaRandom } from "./java-random.js";
 import { NBT } from "./nbt.js";
 import { encodeCompressedNbt, decodeCompressedNbt } from "./nbt-compression.js";
@@ -19,15 +19,15 @@ export const STRUCTURE_FILE_NAMES = Object.freeze(Object.values(STRUCTURE_DATA_N
 export const hasStructureData = (generationVersion) => STRUCTURE_DATA_VERSIONS.includes(generationVersion);
 
 // Generators exactly as generation constructs them: world seed plus the landscape's biome manager.
-export function structureGenerators({ seed, biome = "java" }) {
-  const numeric = javaSeed(seed), type = JAVA_LANDSCAPES[biome] ?? "default";
+export function structureGenerators({ seed, biome = "java", worldType }) {
+  const numeric = javaSeed(seed), type = biome === "javaStreamed" ? streamedWorldType(worldType) : JAVA_LANDSCAPES[biome] ?? "default";
   const manager = new ChunkProviderGenerate(numeric, type, new BiomeTerrainState()).manager;
   return new StructurePopulation({ worldSeed: numeric, manager, world: { rand: new JavaRandom(0n) } });
 }
 
 // Run the four searches for native chunk coordinates [[cx,cz],...] in provider order.
-export function searchStructureStarts({ seed, biome, chunks }) {
-  const population = structureGenerators({ seed, biome });
+export function searchStructureStarts({ seed, biome, worldType, chunks }) {
+  const population = structureGenerators({ seed, biome, worldType });
   const ordered = [...chunks].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   for (const [cx, cz] of ordered) population.searchChunk(cx, cz);
   return population.generators;
@@ -44,7 +44,7 @@ const dataDocument = (entries) => ({ name: "", tag: compoundTag([["data", compou
 // gzip .dat bytes per file name. `imported` is record.structureData ({Name: base64 gzip}) or undefined.
 export async function structureDataFiles({ record, seed, chunks, generationVersion }) {
   const files = new Map(), imported = record?.structureData ?? {};
-  const generated = hasStructureData(generationVersion) ? searchStructureStarts({ seed, biome: record.biome, chunks }) : null;
+  const generated = hasStructureData(generationVersion) ? searchStructureStarts({ seed, biome: record.biome, worldType: record.worldType, chunks }) : null;
   const report = { generated: 0, imported: 0, kept: 0, files: [] };
   for (const [name, dataName] of Object.entries(STRUCTURE_DATA_NAMES)) {
     const entries = new Map();

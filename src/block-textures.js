@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import {biomeFacts} from './biomes.js';
-import {WOOL_COLORS,RED_FLOWER,RED_FLOWERS,YELLOW_FLOWER,SAPLING,WEB,LADDER,CARROTS,POTATOES,CACTUS,REEDS,TNT,SANDSTONE,MYCELIUM,STAINED_CLAY,LILY_PAD,FENCE,RAIL,MOB_SPAWNER,ANVIL,ENCHANTING_TABLE,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,isCrop,isFlower} from './world.js';
+import {WOOL_COLORS,RED_FLOWER,RED_FLOWERS,YELLOW_FLOWER,SAPLING,WEB,LADDER,CARROTS,POTATOES,CACTUS,REEDS,TNT,SANDSTONE,MYCELIUM,STAINED_CLAY,LILY_PAD,FENCE,RAIL,MOB_SPAWNER,ANVIL,ENCHANTING_TABLE,BED,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,isCrop,isFlower} from './world.js';
 import {FENCE_ITEM_BOXES} from './fences.js';
+import {bedTexture} from './bed.js';
 import {anvilModelBoxes} from './anvil-block.js';
 import {REDSTONE_TILES} from './redstone-blocks.js';
 import {REDSTONE2_TILES,redstone2TileName} from './redstone-blocks-2.js';
@@ -33,6 +34,8 @@ TILES.push(...TREE_TEXTURES.slice(1).map(t=>'planks_'+t),'lapis_ore','redstone_o
 if(!TILES.includes('stonebrick'))TILES.push('stonebrick');
 // BlockDoor, BlockPane: the two halves of each door, the pane's end strip and the bars (blocks/ textures).
 for(const t of ['door_wood_lower','door_wood_upper','door_iron_lower','door_iron_upper','glass_pane_top','iron_bars'])if(!TILES.includes(t))TILES.push(t);
+// BlockBed: foot and head top, end and side textures (the bottom is planks_oak).
+for(const t of ['bed_feet_top','bed_feet_end','bed_feet_side','bed_head_top','bed_head_end','bed_head_side'])if(!TILES.includes(t))TILES.push(t);
 // BlockDispenser fronts and the piston's five textures (BlockPistonBase / BlockPistonExtension icons); furnace_top and furnace_side are shared with the furnace.
 for(const t of ['dispenser_front_horizontal','dispenser_front_vertical','dropper_front_horizontal','dropper_front_vertical','piston_top_normal','piston_top_sticky','piston_side','piston_bottom','piston_inner'])if(!TILES.includes(t))TILES.push(t);
 // Stone bricks, slabs, end portal frame, cauldron, flower pot (stone-utility-reference.json): original blocks/ textures.
@@ -68,6 +71,8 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(STAIRS[id]){const m=STAIRS[id].model;return tile(m==='planks'?'planks_'+TREE_TEXTURES[STAIRS[id].modelDamage]:m==='sandstone'?(face===2?'sandstone_top':face===3?'sandstone_bottom':'sandstone_normal'):m);}
  // BlockDoor.getIcon: the lower or upper half's texture by metadata (bit 3); BlockPane: glass / iron_bars sides, glass_pane_top ends.
  if(id===WOODEN_DOOR||id===IRON_DOOR)return tile((id===WOODEN_DOOR?'door_wood_':'door_iron_')+(meta&8?'upper':'lower'));
+ // BlockBed.getIcon; `face` is this renderer's face index (+x, -x, +y, -y, +z, -z), the icon wants Minecraft's side number.
+ if(id===BED)return tile(bedTexture([5,4,1,0,3,2][face]??1,meta));
  if(id===IRON_BARS)return tile('iron_bars');
  if(id===GLASS_PANE)return tile(face===2||face===3?'glass_pane_top':'glass');
  if(isDispenserPiston(id))return tile(iconNameForFace(id,meta,face));

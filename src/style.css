@@ -1701,17 +1701,6 @@ select:focus {
   height: 100%;
   background: #deedb8;
 }
-#damage-flash {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0;
-  box-shadow: inset 0 0 120px 30px #ac3c3466;
-  transition: opacity 0.1s;
-}
-#damage-flash.hurt {
-  opacity: 1;
-}
 .inventory-modal {
   width: 735px;
 }

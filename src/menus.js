@@ -7,7 +7,7 @@ import {
   t, textWidth, COLOR, pickSplash, splashScale, LOGO, MINCERAFT_LOGO,
   mainMenuLayout, selectWorldLayout, createWorldLayout, yesNoLayout, renameWorldLayout, ingameMenuLayout,
   optionsLayout, VIDEO_OPTIONS, videoSettingsLayout, CONTROLS_OPTIONS, controlsLayout, KEY_ENTRY, soundsLayout, languageLayout,
-  FLOAT_OPTIONS, denormalize, normalize, optionText, soundText, folderName, worldLines, WORLD_TYPES,
+  FLOAT_OPTIONS, denormalize, normalize, optionText, soundText, folderName, worldLines, WORLD_TYPES, worldTypeIndex,
   KEY_BINDINGS, REBINDABLE, keyListEntries, keyName,
 } from "./menu-screens.js";
 
@@ -30,7 +30,6 @@ export const UNAVAILABLE = {
   fixedVideo: "This renderer has no switch for this setting; the button shows what it always does.",
   mapFeatures: "Structure generation is fixed by the world type in this browser build.",
   bonusItems: "Bonus chests are not generated in this browser build.",
-  allowCommands: "There is no chat or commands in this browser build.",
   fixedKey: "This key is fixed in the browser build; only Toggle Cinematic Camera can be rebound.",
 };
 // The renderer's fixed state, shown by the disabled video buttons.
@@ -180,10 +179,14 @@ export function createMenus(gui, ctx) {
     const state = {
       name: from ? t("selectWorld.newWorld.copyOf", from.name) : t("selectWorld.newWorld"),
       seed: from ? String(from.seed ?? "") : "",
-      type: Math.max(0, from ? types.findIndex((w) => w.biome === from.biome) : 0),
+      type: Math.max(0, from ? worldTypeIndex(from) : 0),
       mode: from?.mode === "creative" ? "creative" : "survival",
       more: false,
       created: false,
+      // GuiCreateWorld.field_146340_t / field_146339_u: Allow Cheats is off by default; changing the game mode sets it (creative on,
+      // survival off) until the button has been pressed by hand.
+      allowCommands: false,
+      manualCommands: false,
     };
     let name, seed, create;
     const folder = () => folderName(state.name, (s) => ctx.worlds.some((w) => (w.folder || folderName(w.name || "World")) === s));
@@ -195,7 +198,9 @@ export function createMenus(gui, ctx) {
         folder: folder(),
         seed: state.seed.trim() || String(Math.floor(Math.random() * 2147483647)),
         biome: types[state.type].biome,
+        worldType: types[state.type].worldType,
         mode: state.mode,
+        allowCommands: state.allowCommands,
       }));
       // launch closes the screen; a world that failed to open leaves it usable.
       state.created = false;
@@ -233,8 +238,9 @@ export function createMenus(gui, ctx) {
           line2.set(t(`selectWorld.gameMode.${state.mode}.line2`));
           mapFeatures.set(t("selectWorld.mapFeatures") + " " + t(types[state.type].biome.startsWith("java") ? "options.on" : "options.off"));
           mapType.set(t("selectWorld.mapType") + " " + types[state.type].name);
+          allowCommands.set(t("selectWorld.allowCommands") + " " + t(state.allowCommands ? "options.on" : "options.off"));
           notice?.remove();
-          notice = state.more ? g.splitText(types[state.type].notice, ...L.notice, COLOR.label) : null;
+          notice = state.more && types[state.type].notice ? g.splitText(types[state.type].notice, ...L.notice, COLOR.label) : null;
         };
         const page = () => {
           // func_146316_a: which buttons and text the page shows.
@@ -252,12 +258,16 @@ export function createMenus(gui, ctx) {
         create = g.button(b.create, t("selectWorld.create"), submit);
         g.button(b.cancel, t("gui.cancel"), () => show(parent));
         // Survival -> Creative -> Survival; Hardcore is skipped (no hardcore worlds in this build).
-        const gameMode = g.button(b.gameMode, "", () => { state.mode = state.mode === "survival" ? "creative" : "survival"; update(); });
+        const gameMode = g.button(b.gameMode, "", () => {
+          state.mode = state.mode === "survival" ? "creative" : "survival";
+          if (!state.manualCommands) state.allowCommands = state.mode === "creative";
+          update();
+        });
         const moreOptions = g.button(b.moreOptions, "", () => { state.more = !state.more; page(); });
         const mapFeatures = g.button(b.mapFeatures, "", null, { reason: UNAVAILABLE.mapFeatures });
         const bonusItems = g.button(b.bonusItems, t("selectWorld.bonusItems") + " " + t("options.off"), null, { reason: UNAVAILABLE.bonusItems });
         const mapType = g.button(b.mapType, "", () => { state.type = (state.type + 1) % types.length; update(); });
-        const allowCommands = g.button(b.allowCommands, t("selectWorld.allowCommands") + " " + t("options.off"), null, { reason: UNAVAILABLE.allowCommands });
+        const allowCommands = g.button(b.allowCommands, t("selectWorld.allowCommands") + " " + t("options.off"), () => { state.manualCommands = true; state.allowCommands = !state.allowCommands; update(); });
         const customize = g.button(b.customize, t("selectWorld.customizeType"), null);
         name = g.field(L.field, { value: state.name, label: t("selectWorld.enterName"), input: (v) => { state.name = v; update(); } });
         seed = g.field(L.field, { value: state.seed, label: t("selectWorld.enterSeed"), input: (v) => { state.seed = v; } });
