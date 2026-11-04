@@ -115,13 +115,13 @@ export const lightOpacity2 = (b) => (b === REDSTONE_LAMP || b === REDSTONE_LAMP_
 // Block.useNeighborBrightness (probe): the partial blocks sample their neighbour's light.
 export const useNeighborBrightness2 = (b) => b === REDSTONE_TORCH_OFF || b === REDSTONE_TORCH || b === WOODEN_BUTTON || b === LIGHT_PLATE
   || b === HEAVY_PLATE || b === COMPARATOR || b === COMPARATOR_POWERED || b === DAYLIGHT_SENSOR || b === PISTON_MOVING;
-// Material and sound families (audio.js blockSound names): wood, stone, glass.
+// Material and sound families (checked against the native Block.SoundType table by block-sounds.test.js; block-sounds.js is the
+// source): wood, stone, glass. The redstone block is soundTypeMetal (stone files at frequency 1.5).
 export const SOUND2 = Object.freeze({
   [REDSTONE_TORCH_OFF]: "wood", [REDSTONE_TORCH]: "wood", [REDSTONE_LAMP]: "glass", [REDSTONE_LAMP_LIT]: "glass", [REDSTONE_BLOCK]: "stone",
   [WOODEN_BUTTON]: "wood", [LIGHT_PLATE]: "wood", [HEAVY_PLATE]: "wood", [COMPARATOR]: "wood", [COMPARATOR_POWERED]: "wood",
   [DAYLIGHT_SENSOR]: "wood", [PISTON_MOVING]: "stone", [GLOWSTONE]: "glass",
 });
-// The redstone block's sound type is pitched 1.5 (probe facts: sound.pitch).
 export const BREAK_PITCH2 = Object.freeze({ [REDSTONE_BLOCK]: 1.5 });
 // Tool rules of the mining table: the redstone block is Material.iron (a pickaxe is needed to harvest it) and so are the
 // weighted plates (probe requiresTool); the torches, lamps, button, comparators and sensor harvest by hand.

@@ -67,7 +67,8 @@ import { snowFalls } from "./snow.js";
 import { flowerCanStay, JRandom } from "./flowers.js";
 import { Trees } from "./trees.js";
 import { VoxelScene } from "./scene.js";
-import { SoundBank, blockSound, stepSound } from "./audio.js";
+import { SoundBank } from "./audio.js";
+import { breakSound, placeSound, hitSound, footstepSound, placesSilently } from "./block-sounds.js";
 import { Weather, isWet, canLightningStrikeAt } from "./weather.js";
 import { tickWeatherSimulation } from "./weather-simulation.js";
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
@@ -99,6 +100,7 @@ import { Fluids, eyeInWater } from "./fluids.js";
 import { Fire } from "./fire.js";
 import { difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.js";
 import { isInvisible } from "./mob-effects.js";
+import { PortalTimer, splashBreak, NIGHT_VISION, BLINDNESS, NAUSEA, INVISIBILITY } from "./potion-fx.js";
 import { primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { TntRenderer } from "./tnt-renderer.js";
 import { finishDrinking as finishBucketDrinking } from "./buckets.js";
@@ -379,11 +381,12 @@ function toast(message) {
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => $("#toast").classList.remove("show"), 4000);
 }
+// Block.SoundType through block-sounds.js: RenderGlobal.playAuxSFX 2001 for a break, ItemBlock.onItemUse for a placement
+// (ItemDoor, ItemBed, ItemSign, ItemRedstone and ItemSeeds place silently), both at the cell's centre.
 function sound(place, block = target ? world.get(...target.block) : 3) {
-  sounds?.play(
-    !place && (block === 9 || block === 47) ? "random.glass" : "dig." + blockSound(block),
-    { volume: place ? 0.8 : 1, pitch: 0.8 },
-  );
+  if (place && placesSilently(block)) return;
+  const s = place ? placeSound(block) : breakSound(block), cell = place ? target?.adjacent ?? target?.block : target?.block;
+  sounds?.play(s.name, { volume: s.volume, pitch: s.pitch, position: cell && { x: cell[0] + 0.5, y: cell[1] + 0.5, z: cell[2] + 0.5 } });
 }
 function icon(id, damage = 0, stack) {
   const item = ITEMS[id];
@@ -520,6 +523,7 @@ function save() {
   active.player = survival.serialize();
   active.drops = items.serialize();
   active.projectiles = projectiles.serialize();
+  active.thrownPotions = mobs?.potions?.serialize() ?? [];
   active.arrows = arrows.serialize();
   // EntityTNTPrimed.writeEntityToNBT keeps only the fuse (plus Entity's position and motion).
   active.tnt = primed.map((e) => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse }));
@@ -864,6 +868,7 @@ async function launch(record, prepared) {
     mobs.shoot = (e, target, scale) => arrows.skeletonShoot(e, target, scale, mobs.difficulty);
     // EntityWitch splash potions (witch-potions.js); EntityWorld.tick advances them.
     mobs.potions = new WitchPotions(mobs);
+    mobs.potions.load(record.thrownPotions);
     // World.rand for EntityLiving.onSpawnWithEgg, and World.func_147462_b at a block.
     mobs.worldRandom = weather.random;
     mobs.localDifficulty = (x, y, z) => localDifficulty(mobs.difficulty, survival.time, inhabited.value, world.isLoaded(x,z) && y >= 0 && y < world.height);
@@ -1550,7 +1555,10 @@ function tickWeather() {
     sounds.play(e.sound, { volume: Math.min(1, e.volume), pitch: e.pitch, position: far ? null : { x: e.x, y: e.y, z: e.z } });
   }
 }
+// EntityPlayerSP.timeInPortal: Nausea longer than 60 ticks winds the screen warp up (potion-fx.js).
+const portalTimer = new PortalTimer();
 function tickSurvival(inWater, oldPosition, inLavaNow = false) {
+  portalTimer.tick(survival.effects.get(NAUSEA)?.duration ?? 0);
   tickPlayerEnvironment({ world, weather, position, survival, motion, flying }, { inWater, inLavaNow }, {
     tickWeather,
     afterSurvival: () => {
@@ -1560,7 +1568,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
         survival.drowned = false;
         drownBubbles(scene.fx, { x: position.x, y: posY, z: position.z, mx: velocity.x, my: velocity.y, mz: velocity.z }, playerRandom);
       }
-      potionParticles(scene.fx, { x: position.x, y: posY, z: position.z, yOffset: Math.fround(PHYSICS.eye), width: PHYSICS.width, height: PHYSICS.height }, potionColor(survival.effects.active.values()), playerRandom);
+      potionParticles(scene.fx, { x: position.x, y: posY, z: position.z, yOffset: Math.fround(PHYSICS.eye), width: PHYSICS.width, height: PHYSICS.height }, potionColor(survival.effects.active.values()), playerRandom, { invisible: survival.effects.has(INVISIBILITY) });
     },
     fizz: () => sounds.play("random.fizz", { volume: 0.7, pitch: 1.6 + (Math.random() - Math.random()) * 0.4 }),
   });
@@ -1673,7 +1681,11 @@ function applyFarmUpdates(updates){const chunks=new Set();for(const[x,y,z]of upd
 // Shared synchronous event routing, also used immediately after player attacks/interaction.
 function mobEventHooks() {
   return {
-    sound: event => sounds.play(event.sound, { position: event.position, volume: event.volume, pitch: event.pitch }),
+    sound: (event, raw) => {
+      sounds.play(event.sound, { position: event.position, volume: event.volume, pitch: event.pitch });
+      // World event 2002 (EntityPotion.onImpact): the glass and spell particles at the impact block.
+      if (raw?.splashBreak) splashBreak(scene.fx, scene.fx.worldRandom, raw.splashBreak.damage, raw.splashBreak.x, raw.splashBreak.y, raw.splashBreak.z);
+    },
     explode: explodeAt,
     // A villager's EntityAIOpenDoor swung a door: redraw both halves.
     doorUpdate: (cells) => { for (const [x, y, z] of cells) scene.updateBlock(x, z, y); saved = false; },
@@ -1682,7 +1694,8 @@ function mobEventHooks() {
       for (const [x, y, z] of cells) scene.updateBlock(x, z, y);
       const b = event.blockBreak;
       if (b) {
-        sounds.play("dig." + blockSound(b.block), { position: { x: b.x + 0.5, y: b.y + 0.5, z: b.z + 0.5 }, volume: 1, pitch: 0.8 });
+        const s = breakSound(b.block);
+        sounds.play(s.name, { position: { x: b.x + 0.5, y: b.y + 0.5, z: b.z + 0.5 }, volume: s.volume, pitch: s.pitch });
         scene.particles.destroyBlock(world, b.x, b.y, b.z, b.block);
       }
       saved = false;
@@ -1690,7 +1703,8 @@ function mobEventHooks() {
     // EntityAIEatGrass: the edit already happened; level event 2001 updates its presentation.
     eatGrass: ({ x, y, z, block }) => {
       scene.updateBlock(x, z, y);
-      sounds.play("dig." + blockSound(block), { position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 }, volume: 1, pitch: 0.8 });
+      const s = breakSound(block);
+      sounds.play(s.name, { position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 }, volume: s.volume, pitch: s.pitch });
       scene.particles.destroyBlock(world, x, y, z, block);
       saved = false;
     },
@@ -1878,7 +1892,11 @@ function tickMining() {
       return { mining, cooldown: mineCooldown };
     },
     swing: () => animation.swing(),
-    digSound: type => sounds.play("dig." + blockSound(type), { volume: 0.25, pitch: 0.5 }),
+    // PlayerControllerMP.onPlayerDamageBlock: the step sound at (volume + 1) / 8, frequency * 0.5, at the block.
+    digSound: (type, cell) => {
+      const s = hitSound(type);
+      sounds.play(s.name, { volume: s.volume, pitch: s.pitch, position: cell && { x: cell[0] + 0.5, y: cell[1] + 0.5, z: cell[2] + 0.5 } });
+    },
     breakBlock,
     hitParticles: (x, y, z, side) => scene.particles.hitBlock(world, x, y, z, side),
   });
@@ -1992,14 +2010,15 @@ function movementTick(controls) {
   wasInWater = inWater;
   if (stepDistance > 1.667 && (grounded || inWater || onLadderStep) && !flying) {
     stepDistance = 0;
-    const b = onLadderStep ? LADDER : world.get(
-      Math.floor(position.x),
-      Math.floor(position.y - 0.05),
-      Math.floor(position.z),
-    );
-    sounds.play(inWater ? "game.player.swim" : "step." + stepSound(b), {
-      volume: inWater ? 0.3 : 0.22,
-    });
+    const sx = Math.floor(position.x), sy = Math.floor(position.y - 0.05), sz = Math.floor(position.z);
+    const b = onLadderStep ? LADDER : world.get(sx, sy, sz);
+    if (inWater) sounds.play("game.player.swim", { volume: 0.3 });
+    else {
+      // Entity.func_145780_a: Block.SoundType volume * 0.15 at its frequency; a snow layer on top substitutes the snow
+      // type and liquids stay silent (block-sounds.js).
+      const s = footstepSound(b, onLadderStep ? 0 : world.get(sx, sy + 1, sz));
+      if (s) sounds.play(s.name, { volume: s.volume, pitch: s.pitch });
+    }
   }
   playHurtSounds();
   eating = tickPlayerItemUse(eating, heldId(), survival, {
@@ -2428,11 +2447,15 @@ function animate(now) {
     hurt: survival.hurtTime > 0,
     sneak: motion.sneaking,
     riding: !!rider.vehicle,
+    invisible: survival.effects.has(INVISIBILITY),
   });
   chestRenderer?.update(screen === "playing" || screen === "inventory" ? accumulator / PHYSICS.tick : 1);
   if(xpRenderer)xpRenderer.update(xpOrbs.orbs,partial);
   scene.dropPartial = partial;
   scene.particleView = { yaw, pitch, mirror: thirdPersonView === 2 };
+  // EntityRenderer's potion terms (potion-fx.js): Night Vision / Blindness durations, the Nausea warp amount and the player's feet height.
+  const potionEffects = screen === "home" ? null : survival?.effects;
+  scene.potionView = potionEffects ? { nightVision: potionEffects.get(NIGHT_VISION)?.duration ?? 0, blindness: potionEffects.get(BLINDNESS)?.duration ?? 0, nausea: potionEffects.has(NAUSEA), warp: portalTimer.amount(partial), feetY: position.y } : null;
   scene.setShadows(screen === "home" ? [] : shadowCasters(scene.dropPartial), { x: position.x, y: position.y + PHYSICS.eye, z: position.z });
   // EntityRenderer.getFOVModifier multiplies the field of view by the eased modifier.
   const fov = options.fov * (bowFovState.prev + (bowFovState.cur - bowFovState.prev) * partial);
@@ -2466,7 +2489,7 @@ function shadowCasters(partial) {
   for (const e of primed) list.push({ ...SHADOWS.tnt, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + TNT_Y_OFFSET, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + TNT_Y_OFFSET, z: e.z }, height: TNT_SIZE });
   for (const o of xpOrbs.orbs) list.push({ ...SHADOWS.orb, x: lerp(o.px, o.x), y: lerp(o.py, o.y) + 0.25, z: lerp(o.pz, o.z), pos: { x: o.x, y: o.posY, z: o.z }, height: 0.5 });
   // The local player casts a shadow only when it is on screen.
-  if (thirdPersonView > 0) list.push(playerShadowCaster(position, previous, partial, SHADOWS.player, motion.prevYSize, motion.ySize));
+  if (thirdPersonView > 0 && !survival.effects.has(INVISIBILITY)) list.push(playerShadowCaster(position, previous, partial, SHADOWS.player, motion.prevYSize, motion.ySize));
   for (const e of mobs?.entities ?? []) {
     const child = e.growingAge < 0;
     // RendererLivingEntity passes Render.doRenderShadowAndFire no shadow for an invisible mob.

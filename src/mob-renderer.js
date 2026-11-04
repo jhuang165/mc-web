@@ -176,7 +176,7 @@ export class MobRenderer {
     mc.add(held);
     limbs[0].add(mc);
     this.scene.add(root);
-    return { root, neck, limbs, materials, type: "skeleton" };
+    return { root, neck, limbs, materials, type: "skeleton", keep: [bow] };
   }
   // ModelSpider: head/body/rear at y=15, eight 16x2x2 legs. All boxes and
   // pivots use the original pixel coordinates; (x,24-y,-z)/16 maps to three.js.
@@ -279,7 +279,7 @@ export class MobRenderer {
       limbs.push(g);
     }
     this.scene.add(root);
-    return { root, neck, limbs, materials: [skin], armor, shell, swell, type: "creeper" };
+    return { root, neck, limbs, materials: [skin], armor, shell, swell, type: "creeper", keep: shell };
   }
   // RenderPig (boo) with ModelPig (bhu) and RenderCow (bnh) with ModelCow (bhi), both
   // ModelQuadruped (bhw) on 64 x 32 skins. Boxes, texture offsets and pivots are the ones
@@ -331,9 +331,11 @@ export class MobRenderer {
   // (0, 0) and body (16, 16) on (0, 0, 0), 4 x 12 x 4 arms (40, 16) on (+-5, 2, 0) and legs
   // (0, 16) on (+-1.9, 12, 0), the left pair mirrored. The headwear box (32, 0) is drawn by
   // ModelBiped.render but zombie.png leaves it fully transparent, so it is omitted.
-  createZombie() {
+  // A zombie villager (ModelZombieVillager, bil, on zombie_villager.png) has a taller head, a 10-pixel box at (0, 32), and
+  // the villager's 2 x 4 x 2 nose at (24, 32) in front of it; the body and limbs are ModelBiped's.
+  createZombie(villager = false) {
     const root = new THREE.Group(), frame = new THREE.Group(), limbs = [],
-      skin = entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/entity/zombie/zombie.png") });
+      skin = entityMaterial(this.view.lighting, { map: pixelTexture(villager ? "/media/1.7.10/entity/zombie/zombie_villager.png" : "/media/1.7.10/entity/zombie/zombie.png") });
     root.add(frame);
     const part = (parent, w, h, d, u, v, ox, oy, oz, mirror = false) => {
       const mesh = new THREE.Mesh(skinBox(w, h, d, u, v, 64, 64, mirror), skin);
@@ -348,7 +350,10 @@ export class MobRenderer {
     };
     const neck = pivot(0, 0, 0);
     neck.rotation.order = "YXZ";
-    part(neck, 8, 8, 8, 0, 0, -4, -8, -4);
+    if (villager) {
+      part(neck, 8, 10, 8, 0, 32, -4, -10, -4);
+      part(neck, 2, 4, 2, 24, 32, -1, -3, -6);
+    } else part(neck, 8, 8, 8, 0, 0, -4, -8, -4);
     part(pivot(0, 0, 0), 8, 12, 4, 16, 16, -4, 0, -2);
     for (const [x, y, ox, arm, mirror] of [[-5, 2, -3, true, false], [5, 2, -1, true, true], [-1.9, 12, -2, false, false], [1.9, 12, -2, false, true]]) {
       const g = pivot(x, y, 0);
@@ -358,7 +363,7 @@ export class MobRenderer {
       limbs.push(g);
     }
     this.scene.add(root);
-    return { root, neck, limbs, materials: [skin], type: "zombie", lift: 1 / 128 };
+    return { root, neck, limbs, materials: [skin], type: "zombie", lift: 1 / 128, villager };
   }
   create(e) {
     if (e.type === "creeper") return this.createCreeper();
@@ -367,7 +372,7 @@ export class MobRenderer {
     if (e.type === "skeleton") return this.createSkeleton();
     if (e.type === "chicken") return this.createChicken();
     if (e.type === "sheep") return this.createSheep();
-    if (e.type === "zombie") return this.createZombie();
+    if (e.type === "zombie") return this.createZombie(e.villager === true);
     if (e.type === "villager") return createVillagerRig(this, e);
     if (e.type === "witch") return createWitchRig(this, e);
     if (e.type === "iron_golem") return createIronGolemRig(this);
@@ -399,7 +404,10 @@ export class MobRenderer {
       // effect); RenderSpider's eye pass still runs, with the depth mask off.
       const invisible = isInvisible(e);
       if (r.skinMeshes) for (const m of r.skinMeshes) m.visible = !invisible;
-      else r.root.visible = !invisible;
+      else if (r.keep) {
+        // Skeleton bow and the powered creeper pass are drawn apart from renderModel, so they stay with the body hidden.
+        if (!!r.hidden !== invisible) { r.hidden = invisible; r.root.traverse((o) => { if (o.isMesh && !r.keep.includes(o)) o.visible = !invisible; }); }
+      } else r.root.visible = !invisible;
       // RendererLivingEntity's 1/128 lift, for rigs that do not carry it in a frame.
       r.root.position.set(pose.x, pose.y + (r.lift ?? 0), pose.z);
       r.root.scale.setScalar((baby ? 0.5 : 1) * (r.scale ?? 1));

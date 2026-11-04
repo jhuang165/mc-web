@@ -53,8 +53,12 @@ function payload(state,ox,oz,report,world=null) {
   if(e.type==='villager'){n.Profession=int(e.profession??0);n.Riches=int(e.riches??0);delete n.InLove;
    if(Array.isArray(e.offers)){const bare=x=>{if(!x)return null;const c={...x};for(const k of ['enchantments','storedEnchantments'])if(Array.isArray(c[k])&&!c[k].length)delete c[k];return stackNbt(c,undefined,report,true);};
     n.Offers=comp({Recipes:list(NBT.COMPOUND,e.offers.map(r=>{const m=new Map([['buy',tag(NBT.COMPOUND,bare(r.buy))],['sell',tag(NBT.COMPOUND,bare(r.sell))],['uses',int(r.uses??0)],['maxUses',int(r.maxUses??7)]]);if(r.buyB)m.set('buyB',tag(NBT.COMPOUND,bare(r.buyB)));return m;}))});}}
+  // EntityZombie.writeEntityToNBT: IsBaby (only for a child), IsVillager (only for a zombie villager), ConversionTime (-1 when not curing) and CanBreakDoors. A zombie has no Age or InLove.
+  if(e.type==='zombie'){delete n.Age;delete n.InLove;if((e.growingAge??0)<0)n.IsBaby=byte(1);if(e.villager)n.IsVillager=byte(1);n.ConversionTime=int(Number.isInteger(e.conversionTime)?e.conversionTime:-1);n.CanBreakDoors=byte(0);}
   // EntityIronGolem.writeEntityToNBT: PlayerCreated (EntityAgeable's fields do not apply to a golem).
   if(e.type==='iron_golem'){n.PlayerCreated=byte(e.playerCreated?1:0);delete n.Age;delete n.InLove;}
+  // EntityLivingBase.writeEntityToNBT: ActiveEffects (Id, Amplifier, Duration, Ambient) for the effects this build models on mobs.
+  if(e.effects?.length&&['zombie','villager','iron_golem'].includes(e.type))n.ActiveEffects=list(NBT.COMPOUND,e.effects.map(x=>new Map([['Id',byte(x.id)],['Amplifier',byte(x.amplifier??0)],['Duration',int(x.duration)],['Ambient',byte(0)]])));
   entities.push(new Map(Object.entries(n)));
  }
  for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),PickupDelay:short(e.delay??0),Health:short(5)})));}

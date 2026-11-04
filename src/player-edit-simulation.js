@@ -9,6 +9,7 @@ import { useHeldBucket } from './buckets-simulation.js';
 import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
+import { hoeSound } from './block-sounds.js';
 import { playerMiningState } from './enchantment-effects.js';
 import {
   DYE, FIRE, SAPLING, SNOW_LAYER, TNT, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, isCrop,
@@ -22,6 +23,7 @@ import { BREWING_STAND, newBrewingTile } from './brewing.js';
 import { ITEM_POTION, ITEM_GLASS_BOTTLE, usePotion, useGlassBottle, bottleFromCauldron } from './potion-use.js';
 import { CAULDRON, FLOWER_POT, BUCKET_ITEM, cauldronUse, cauldronWash, potUse, setPotContents } from './stone-utility.js';
 
+const FARMLAND = 29; // farming.js till(): internal dry farmland (original 60, soundTypeGravel)
 const STATIONS = new Set([13, 14, BREWING_STAND, CHEST, DISPENSER, DROPPER, HOPPER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, LEVER, STONE_BUTTON, REPEATER]);
 // PlayerControllerMP's edit(place) dispatcher with browser effects supplied by the
 // caller. `state` holds the live mutable gameplay state, `request` snapshots the two
@@ -117,6 +119,11 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     const e = aimedEntity.entity;
     // EntityVillager.interact: an adult, living, idle villager opens the trading screen.
     if (e.type === 'villager' && hook('openMerchant', e)) return act('trade-villager');
+    // EntityZombie.interact: a golden apple on a weakened zombie villager starts the cure.
+    if (e.type === 'zombie' && state.mobs.cure(e, id, state.survival, state.survival.held?.damage ?? 0)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return act('cure-zombie-villager');
+    }
     if (state.mobs.shear(e, id, state.survival)) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return act('shear-entity');
@@ -159,7 +166,9 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
         state.survival.wear(id);
         hook('applyFarmUpdates', state.farming.drain());
         hook('renderHotbar');
-        hook('playSound', 'step.gravel', { volume: 0.7 });
+        // ItemHoe.func_150857_a: the tilled block's step sound at (volume + 1) / 2, frequency * 0.8, at the block.
+        const tilled = hoeSound(FARMLAND);
+        hook('playSound', tilled.name, { volume: tilled.volume, pitch: tilled.pitch, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
         hook('markUnsaved');
       }
       return act('use-hoe');
@@ -188,7 +197,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       if (used) {
         if (!state.survival.creative) state.survival.inventory.decr(state.survival.inventory.current, 1);
         hook('renderHotbar');
-        hook('playSound', 'dig.grass', { volume: 0.4 });
+        // ItemDye (bone meal) plays no sound in 1.7.10: only level event 2005 (the sparkles below); verified in block-sounds-reference.json.
         hook('markUnsaved');
         const now = state.world.get(x, y, z);
         hook('boneMealSparkles', now, x, y, z, now === SAPLING ? Math.fround(0.8) : isCrop(now) ? Math.fround(0.25) : 1, state.itemRand);

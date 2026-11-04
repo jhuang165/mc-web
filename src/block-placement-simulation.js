@@ -3,6 +3,7 @@
 // their original positions without requiring a browser or scene.
 import { collides, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, ANVIL, isLiquid, isFlower } from "./world.js";
 import { stackedSnowMeta, snowCanStay } from "./snow.js";
+import { placeSound } from "./block-sounds.js";
 import { reedTarget, canPlaceReeds, cactusCanPlace, REEDS_ITEM } from "./plants.js";
 import { canPlaceChest, placeChest, CHEST } from "./chest.js";
 import { flowerCanStay } from "./flowers.js";
@@ -65,7 +66,8 @@ export function placeHeldBlock(state, request, hooks = {}) {
     if (!survival.creative) survival.take(id);
     updateBlock(here[0], here[2], here[1]);
     renderHotbar();
-    playSound("dig.snow", { position: { x: here[0] + 0.5, y: here[1] + 0.5, z: here[2] + 0.5 }, volume: 1, pitch: 0.8 });
+    const placed = placeSound(SNOW_LAYER); // ItemSnow.onItemUse: the snow layer's place sound at (volume + 1) / 2, frequency * 0.8
+    playSound(placed.name, { position: { x: here[0] + 0.5, y: here[1] + 0.5, z: here[2] + 0.5 }, volume: placed.volume, pitch: placed.pitch });
     markUnsaved();
     return result(true, "stacked-snow", SNOW_LAYER, here);
   }

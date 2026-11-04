@@ -28,8 +28,8 @@ export function createLighting() {
       fogFar: { value: 160 },
       fogDensity: { value: 0 },
     },
-    update(sun, flicker, gamma, flash = false) {
-      lightmap(sun, flicker, gamma, data, flash);
+    update(sun, flicker, gamma, flash = false, nightVision = 0) {
+      lightmap(sun, flicker, gamma, data, flash, nightVision);
       texture.needsUpdate = true;
     },
     // CPU lookup of the lightmap for a packed brightness, as 0-1 RGB.

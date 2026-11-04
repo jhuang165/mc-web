@@ -1,17 +1,9 @@
-import { isFlower, isCrop, LADDER, CACTUS, REEDS, TNT } from "./world.js";
+import { soundTypeOf } from "./block-sounds.js";
 import { soundLevel, normalizedVolume, normalizedPitch } from "./settings.js";
-export function blockSound(id) {
-  // BlockReed and BlockTNT: soundTypeGrass; BlockCactus: soundTypeCloth.
-  if ([1, 5, 39, REEDS, TNT].includes(id)||isCrop(id)||isFlower(id)) return "grass";
-  if ([2, 24, 25,29,30].includes(id)) return "gravel";
-  if (id === 6) return "sand";
-  if ([4, 7, 13, 20, 21, 133, LADDER, 108, 110, 112, 87, 91, 92, 93, 95, 96, 97, 119, 120, 124, 125, 126, 127, 128, 129].includes(id)) return "wood"; // 119-129: redstone torches, button, plates, comparators and sensor (redstone-blocks-2.js SOUND2) // 97: the wooden door // 87-96: stairs share the base block sound (wood ones here)
-  if (id === 19 || id === CACTUS) return "cloth";
-  if (id === 23 || id === 46) return "snow";
-  return "stone";
-}
-// Block.soundTypeLadder: digging and placing say dig.wood, steps say step.ladder.
-export const stepSound = (id) => (id === LADDER ? "ladder" : blockSound(id));
+// The sound family of a block's Block.SoundType: its break event is "dig." + family and its step event "step." + stepSound.
+// One native table (block-sounds.js, public/research/block-sounds.md) replaces the old per-block choices.
+export const blockSound = (id) => soundTypeOf(id).break.slice(4);
+export const stepSound = (id) => soundTypeOf(id).step.slice(5);
 export const attenuationDistance = (volume) => (Math.fround(volume) > 1 ? Math.fround(16 * Math.fround(volume)) : 16);
 export class SoundBank {
   constructor(options, listener) {

@@ -16,6 +16,7 @@ import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS, named
 import { pistonQuads, isPistonBase, PISTON_HEAD } from "./dispenser-piston.js";
 import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
+import { nightVisionBrightness, blindnessFog, adjustFogColor, warpMatrix } from "./potion-fx.js";
 import { Sky, Clouds } from "./sky.js";
 import { liquidHeight, flowAngle, viewpointBlock } from "./fluids.js";
 import { DropRenderer } from "./drop-renderer.js";
@@ -169,6 +170,7 @@ export class VoxelScene {
     this.outline.visible = false;
     this.distance = 192;
     this.fogBrightness = 1;
+    this.warpM4 = new THREE.Matrix4();
     this.setTime(6000);
     this.resize = () => {
       this.camera.aspect = innerWidth / innerHeight;
@@ -895,7 +897,9 @@ export class VoxelScene {
     this.flash = !!w && w.lastLightning > 0;
     // Farming and mobs read the sky light that remains at this time of day.
     this.daylight = (15 - this.subtracted) / 15;
-    this.lighting.update(this.sun, this.flicker.tick(), this.gamma ?? 0, this.flash);
+    // EntityRenderer.updateLightmap: Night Vision brightness (partial 0 stands in for the first frame of the tick).
+    this.nightVision = this.potionView?.nightVision > 0 ? nightVisionBrightness(this.potionView.nightVision, 0) : 0;
+    this.lighting.update(this.sun, this.flicker.tick(), this.gamma ?? 0, this.flash, this.nightVision);
     const p = this.camera.position, chunks = this.distance / 16,
       level = this.light ? this.light.level(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z), this.subtracted) : 15,
       target = BRIGHTNESS[level] * (1 - chunks / 16) + chunks / 16;
@@ -903,7 +907,7 @@ export class VoxelScene {
   }
   setGamma(gamma) {
     this.gamma = gamma;
-    this.lighting.update(this.sun ?? sunBrightness(this.angle), this.flicker.x, gamma, this.flash);
+    this.lighting.update(this.sun ?? sunBrightness(this.angle), this.flicker.x, gamma, this.flash, this.nightVision ?? 0);
   }
   // Brightness for an entity or tile entity at a world position.
   brightness(x, y, z) {
@@ -922,7 +926,7 @@ export class VoxelScene {
     this.fireLayers[0].uv.w = 1 - (((fireStep + 16) % 32) + 1) / 32;
     this.fireLayers[1].uv.w = 1 - (fireStep + 1) / 32;
     for (let budget = 2; budget > 0 && this.dirty.size; budget--) this.buildChunk(...this.dirty.values().next().value.split(",").map(Number));
-    const c = this.camera, look = c.getWorldDirection(new THREE.Vector3()), u = this.lighting.uniforms, angle = this.angle,
+    let c = this.camera, look = c.getWorldDirection(new THREE.Vector3()), u = this.lighting.uniforms, angle = this.angle,
       eye = this.world?.get(Math.floor(c.position.x), Math.floor(c.position.y), Math.floor(c.position.z)),
       underwater = eye === 10 && c.position.y - Math.floor(c.position.y) < 8 / 9,
       // ActiveRenderInfo.getBlockAtEntityViewpoint: lava fog while the eye is in lava.
@@ -930,13 +934,17 @@ export class VoxelScene {
       // The frame-eased rain, thunder and lightning terms (World.getRainStrength(partial) ...).
       w = this.weather, partial = this.dropPartial, rain = w ? w.rainStrength(partial) : 0, thunder = w ? w.weightedThunder(partial) : 0, lightning = w ? w.lastLightning : 0,
       fog = fogColor({ angle, temperature: this.temperature ?? biomeTemperature("meadow"), look: [look.x, look.y, look.z], chunks: this.distance / 16, brightness: this.fogBrightness, underwater, lava, rain, thunder, lightning, partial });
+    // potion-fx.js: the void/Blindness/Night Vision terms of updateFogColor, and Blindness' own setupFog branch (it wins over water and lava).
+    const pv = this.potionView, blind = pv?.blindness > 0;
+    if (pv && (blind || pv.nightVision > 0 || pv.feetY !== undefined)) fog = adjustFogColor(fog, { feetY: pv.feetY ?? c.position.y - 1.62, blindness: pv.blindness, nightVision: pv.nightVision > 0 ? nightVisionBrightness(pv.nightVision, this.dropPartial) : 0 });
     u.fogColor.value.set(...fog);
     // setupFog: linear from 3/4 of the far plane; exponential 0.1 in water, 2.0 in lava.
-    u.fogDensity.value = lava ? 2 : underwater ? 0.1 : 0;
-    u.fogNear.value = this.distance * 0.75;
-    u.fogFar.value = this.distance;
-    const sky = underwater || lava ? fog : skyColor(this.temperature ?? 0.8, angle, rain, thunder, lightning, partial);
-    this.sky.update({ angle, sky, fog, sunrise: underwater || lava ? null : sunriseColors(angle), stars: starBrightness(angle), moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater: underwater || lava, rain });
+    u.fogDensity.value = blind ? 0 : lava ? 2 : underwater ? 0.1 : 0;
+    const bf = blind ? blindnessFog(pv.blindness, this.distance) : null;
+    u.fogNear.value = bf ? bf.start : this.distance * 0.75;
+    u.fogFar.value = bf ? bf.end : this.distance;
+    const sky = underwater || lava || blind ? fog : skyColor(this.temperature ?? 0.8, angle, rain, thunder, lightning, partial);
+    this.sky.update({ angle, sky, fog, sunrise: underwater || lava || blind ? null : sunriseColors(angle), stars: blind ? 0 : starBrightness(angle), moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater: underwater || lava || blind, rain });
     this.clouds.update(c, time * 20, cloudColor(angle, rain, thunder));
     this.weatherRenderer.update(w, this.world, c, partial, time);
     this.drops.update(this.dropList, this.dropPartial, time * 20);
@@ -947,8 +955,12 @@ export class VoxelScene {
     this.arrows.update(this.arrowList, this.dropPartial);
     this.particleRenderer.update(this.particles.list, this.dropPartial, particleView);
     this.explosionParticleRenderer.update(this.effectRenderer, this.dropPartial, particleView);
+    // EntityRenderer.setupCameraTransform: the Nausea / portal warp, a matrix applied to eye space ahead of the projection.
+    const proj = c.projectionMatrix, savedProj = pv?.warp > 0 ? proj.clone() : null;
+    if (savedProj) { proj.multiply(this.warpM4.fromArray(warpMatrix(pv.rendererTicks ?? this.ticks, this.dropPartial, pv.warp, pv.nausea))); c.projectionMatrixInverse.copy(proj).invert(); }
     this.sky.render(this.renderer, c, new THREE.Color(...fog));
     this.renderer.render(this.scene, c);
+    if (savedProj) { proj.copy(savedProj); c.projectionMatrixInverse.copy(proj).invert(); }
     this.worldTriangles = this.renderer.info.render.triangles;
   }
   // Entity shadows for this frame; `viewer` is the player's eye position.

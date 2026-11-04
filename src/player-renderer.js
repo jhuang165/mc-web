@@ -486,7 +486,7 @@ export class PlayerRenderer {
   }
   // `body` is a PlayerBody; `swing` is the swing progress (0 at rest); `armor`
   // is inventory.armor (boots first); `held` the held item id.
-  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, hurt = false, sneak = false, riding = false } = {}) {
+  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, hurt = false, sneak = false, riding = false, invisible = false } = {}) {
     this.root.visible = visible;
     if (!visible) return;
     const pose = mobPose(body, partial);
@@ -500,6 +500,8 @@ export class PlayerRenderer {
     });
     for (const name of PART_NAMES) {
       const { point, rot } = parts[name], pivot = this.pivots[name];
+      // RendererLivingEntity.renderModel draws no body for an invisible entity (Entity.isInvisibleToPlayer, no teams); armour and the held item still draw.
+      pivot.children[0].visible = !invisible;
       pivot.position.set(point[0] / 16, point[1] / 16, point[2] / 16);
       pivot.rotation.set(rot[0], rot[1], rot[2]);
     }

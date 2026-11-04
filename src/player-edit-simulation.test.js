@@ -188,7 +188,7 @@ test('hoe branch tills real soil before later placement dispatch and keeps obser
   });
   assert.equal(result.branch, 'use-hoe');
   assert.equal(f.state.world.get(...POS), 29);
-  assert.deepEqual(calls, [['farm', 1], 'hotbar', ['step.gravel', 0.7], 'dirty']);
+  assert.deepEqual(calls, [['farm', 1], 'hotbar', ['step.gravel', 1], 'dirty']);
 });
 
 test('TNT activation with flint primes and removes the clicked block before generic placement', () => {

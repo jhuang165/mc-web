@@ -15,6 +15,9 @@ import { DISPENSER } from './dispenser-piston.js';
 import { PISTON_MOVING } from './redstone-blocks-2.js';
 import { DISPENSER_SLOTS } from './dispenser-container.js';
 import { POPULATION_ITEMS } from './population-content.js';
+import { JAVA_MOBS, IMPORT_MOB_LIMIT, javaMobFromNbt } from './java-mobs.js';
+import { decodeCompressedNbt } from './nbt-compression.js';
+import { villagesFromNbt } from './village.js';
 
 export const LIVE_CHUNKS = SIZE / 16;
 // World.restore and the Import screen's file-size check (main.js).
@@ -175,7 +178,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   };
   const unsupported = new Map(), approximations = new Map(), tileLost = new Map(), tileConverted = new Map();
   const itemLost = new Map(), entityLost = new Map(), entityConverted = new Map();
-  const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [];
+  const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = [];
   let edits = 0;
   const write = (x, y, z, block, meta) => {
     if (world.get(x, y, z) === block && world.getMeta(x, y, z) === meta) return;
@@ -334,11 +337,19 @@ export async function importJavaRegionArea(regions, options = {}) {
       } else tally(tileLost, inside ? id : `${id} (outside its chunk)`);
     }
 
-    // Entities: dropped items only (EntityItem, Pos/Motion/Age/PickupDelay/Item). Riders count as lost.
+    // Entities: dropped items (EntityItem, Pos/Motion/Age/PickupDelay/Item) and the three mobs above. Riders count as lost.
     for (const entity of entities) {
       report.entities.total++;
       const id = get(entity, 'id', NBT.STRING, '?'), pos = doubles(entity, 'Pos'), motion = doubles(entity, 'Motion');
       for (const rider of [get(entity, 'Riding', NBT.COMPOUND)].filter(Boolean)) { report.entities.total++; tally(entityLost, get(rider, 'id', NBT.STRING, '?')); }
+      // Villager, VillagerGolem and Zombie (IsBaby / IsVillager / ConversionTime) become live mobs (java-mobs.js).
+      if (JAVA_MOBS[id] && pos?.every(Number.isFinite)) {
+        const mx = pos[0] + shiftX, mz = pos[2] + shiftZ;
+        const inArea = mx >= destination.chunkX * 16 && mx < (destination.chunkX + area.width) * 16 && mz >= destination.chunkZ * 16 && mz < (destination.chunkZ + area.depth) * 16;
+        const mob = inArea && mobs.length < IMPORT_MOB_LIMIT ? javaMobFromNbt(entity, { shiftX, shiftZ, convertItem }) : null;
+        if (mob) { mobs.push(mob); tally(entityConverted, id); } else tally(entityLost, !inArea ? `${id} (outside area)` : `${id} (over mob limit)`);
+        continue;
+      }
       if (id !== 'Item' || !pos || !pos.every(Number.isFinite)) { tally(entityLost, id); continue; }
       const x = pos[0] + shiftX, z = pos[2] + shiftZ;
       const insideArea = x >= destination.chunkX * 16 && x < (destination.chunkX + area.width) * 16 && z >= destination.chunkZ * 16 && z < (destination.chunkZ + area.depth) * 16;
@@ -378,8 +389,26 @@ export async function importJavaRegionArea(regions, options = {}) {
 
   // data/*.dat (options.structureData: iterable of {filename, bytes}): kept unchanged in native coordinates, which
   // only match the browser world's native frame when the area is aligned; unknown start ids are counted, never fatal.
-  const parsedStructures = options.structureData ? await parseStructureDataFiles(options.structureData) : null;
+  const isVillagesFile = ({ filename }) => /(^|\/)villages\.dat$/.test(filename);
+  const parsedStructures = options.structureData ? await parseStructureDataFiles([...options.structureData].filter((f) => !isVillagesFile(f))) : null;
   if (parsedStructures) report.structures = { ...parsedStructures.report, kept: aligned && Object.keys(parsedStructures.structureData).length > 0 };
+  // data/villages.dat (VillageCollection "villages"): the villages whose centre is inside the area, shifted like entities.
+  // Door rows keep their inside direction; reputations, golem counts and the tick counters come across unchanged.
+  let villages = null;
+  const villageFile = options.structureData ? [...options.structureData].find(isVillagesFile) : null;
+  report.villages = { found: !!villageFile, kept: 0, outside: 0 };
+  if (villageFile) {
+    try {
+      const root = (await decodeCompressedNbt(villageFile.bytes)).tag, data = root.value.get('data') ?? root;
+      const json = villagesFromNbt(data), inside = (v) => {
+        const x = v.c[0] + shiftX, z = v.c[2] + shiftZ;
+        return x >= destination.chunkX * 16 && x < (destination.chunkX + area.width) * 16 && z >= destination.chunkZ * 16 && z < (destination.chunkZ + area.depth) * 16;
+      };
+      const kept = json.villages.filter(inside);
+      report.villages.kept = kept.length; report.villages.outside = json.villages.length - kept.length;
+      if (kept.length) villages = { tick: json.tick, villages: kept.map((v) => ({ ...v, c: [v.c[0] + shiftX, v.c[1], v.c[2] + shiftZ], ac: [v.ac[0] + shiftX, v.ac[1], v.ac[2] + shiftZ], doors: v.doors.map((d) => [d[0] + shiftX, d[1], d[2] + shiftZ, ...d.slice(3)]) })) };
+    } catch (error) { report.villages.error = String(error?.message ?? error); }
+  }
   // Start above the centre of the area, on its highest solid block.
   const px = destination.chunkX * 16 + area.width * 8, pz = destination.chunkZ * 16 + area.depth * 8;
   let py = height - 1;
@@ -393,6 +422,8 @@ export async function importJavaRegionArea(regions, options = {}) {
     player: { chests, furnaces, dispensers, hoppers, brewing },
     pistons,
     drops,
+    ...(mobs.length ? { entities: mobs } : {}),
+    ...(villages ? { villages } : {}),
     ...(report.structures?.kept ? { structureData: parsedStructures.structureData } : {}),
   };
   report.bytes = new TextEncoder().encode(JSON.stringify(record)).length;

@@ -13,7 +13,8 @@ import { maxSafePointTries } from "./difficulty.js";
 import { buildVillagerTasks, updateVillagerAI } from "./villager.js";
 import { villageTasks, nearestVillage } from "./village-ai.js";
 import { setHomeArea, detachHome } from "./home-area.js";
-import { homeFilter } from "./home-area.js";
+import { homeFilter, isWithinHome } from "./home-area.js";
+import { zombieVillagerTargets } from "./zombie-villager.js";
 const f = Math.fround;
 const GRASS = 1, TALL_GRASS = 39;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -518,10 +519,14 @@ class EatGrass extends Task {
 // the search fails) when the target moved a block or at 5% a tick, and the mob hits
 // at reach (2 * width)^2 + target width with a 20 tick delay.
 class AttackOnCollide extends Task {
-  constructor(m, speed) {
+  // `kind` is the target class (null any, "player", "villager"); `longMemory` keeps the chase going while the target is
+  // inside the home area instead of while a path remains (uq's classTarget and field_75437_f).
+  constructor(m, speed, kind = null, longMemory = false) {
     super();
     this.m = m;
     this.speed = speed;
+    this.kind = kind;
+    this.longMemory = longMemory;
     this.mutex = 3;
     this.path = null;
     this.delay = 0;
@@ -531,12 +536,15 @@ class AttackOnCollide extends Task {
   shouldExecute() {
     const t = this.m.attackTarget;
     if (!t || !t.alive) return false;
+    if (this.kind && (this.kind === "player") !== !!t.isPlayer) return false;
+    if (this.kind === "villager" && t.e?.type !== "villager") return false;
     this.path = this.m.navigator.getPathToEntityLiving(t);
     return !!this.path;
   }
   continueExecuting() {
     const t = this.m.attackTarget;
     if (!t || !t.alive) return false;
+    if (this.longMemory) return isWithinHome(this.m.e, Math.floor(t.x), Math.floor(t.y), Math.floor(t.z));
     return !this.m.navigator.noPath();
   }
   startExecuting() {
@@ -564,7 +572,8 @@ class AttackOnCollide extends Task {
     this.attackTick = Math.max(this.attackTick - 1, 0);
     if (d <= reach && this.attackTick <= 20) {
       this.attackTick = 20;
-      m.ai.attackPlayer(m, t);
+      if (t.isPlayer) m.ai.attackPlayer(m, t);
+      else m.ai.attackMob(m, t);
     }
   }
 }
@@ -775,6 +784,10 @@ class HurtByTarget extends TargetBase {
   }
 }
 
+// The village tasks and the villager target a zombie uses, built once (they take Task/TargetBase from this file).
+let zombieKit = null;
+const zombieVillage = () => (zombieKit ??= { ...villageTasks({ Task, TargetBase }), ...zombieVillagerTargets({ TargetBase }) });
+
 // --- One mob's brain: the entity as the navigator, helpers and tasks see it ---
 export class Brain {
   constructor(e, ai) {
@@ -794,16 +807,20 @@ export class Brain {
     this.targets = new TaskList();
     const A = type.ai, wheat = ai.breedItems[e.type];
     if (e.type === "zombie") {
-      // EntityZombie (yq): swim 0, attack players 2, wander 6, watch 7, look idle 8;
-      // targets hurt-by 1 and nearest player 2. (Door breaking, villagers, restriction
-      // and village tasks need systems this build lacks.)
+      // EntityZombie (yq): swim 0, (break door 1: not run), attack players 2, attack villagers 4 (long memory),
+      // move towards restriction 5, move through village 6, wander 7, watch 8, look idle 8; targets hurt-by 1,
+      // nearest player 2 and nearest villager 2 (zombie-villager.md).
       this.tasks.add(0, new Swim(this));
-      this.tasks.add(2, new AttackOnCollide(this, A.chase));
-      this.tasks.add(6, new Wander(this, A.wander));
-      this.tasks.add(7, new WatchClosest(this, 8));
+      this.tasks.add(2, new AttackOnCollide(this, A.chase, "player"));
+      this.tasks.add(4, new AttackOnCollide(this, A.chase, "villager", true));
+      this.tasks.add(5, new (zombieVillage().MoveTowardsRestriction)(this, 1.0));
+      this.tasks.add(6, new (zombieVillage().MoveThroughVillage)(this, 1.0, false));
+      this.tasks.add(7, new Wander(this, A.wander));
+      this.tasks.add(8, new WatchClosest(this, 8));
       this.tasks.add(8, new LookIdle(this));
       this.targets.add(1, new HurtByTarget(this));
       this.targets.add(2, new NearestAttackable(this));
+      this.targets.add(2, new (zombieVillage().NearestVillager)(this));
     } else if (e.type === "villager") {
       // EntityVillager (yv): its task list is villager.js; it draws on Entity.rand (the entity's own
       // java.util.Random, shared with the living-sound roll) and runs updateAITick after the navigator.
@@ -1153,6 +1170,10 @@ export class MobAI {
   }
   attackPlayer(m, target) {
     this.deps.attackPlayer(m.e, target.survival);
+  }
+  // EntityMob.attackEntityAsMob against another creature (a zombie's villager).
+  attackMob(m, target) {
+    return this.deps.attackMob?.(m.e, target.e);
   }
   despawn(e) {
     this.deps.despawn(e);

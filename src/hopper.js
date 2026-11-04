@@ -43,7 +43,7 @@ export { HOPPER_BOUNDS, HOPPER_BOXES, HOPPER_UNION };
 
 // Block.setHardness(3), setResistance(8) (native field 24, stored / 5 by explosion.js), Material.iron (pickaxe to harvest),
 // BlockHopper.setStepSound(soundTypeWood).
-export const HOPPER_HARDNESS = 3, HOPPER_BLAST = 4.8, HOPPER_SOUND = "wood";
+export const HOPPER_HARDNESS = 3, HOPPER_BLAST = 4.8, HOPPER_SOUND = "wood"; // soundTypeWood; checked against block-sounds.js by block-sounds.test.js
 // Hopper -> item 1133; a broken hopper drops its own item (Items.hopper, original 410).
 export const hopperDrops = () => [{ id: ITEM_HOPPER, count: 1, damage: 0 }];
 

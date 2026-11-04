@@ -38,7 +38,9 @@ export function tickPlayerMining(state, {
         } else {
           const under = eyeInWater();
           swing();
-          if (state.survival.time % 4 === 0) digSound(mine.type);
+          // PlayerControllerMP.onPlayerDamageBlock: stepSoundTickCounter (reset with each new dig) plays on every 4th continued hit.
+          mine.hits = (mine.hits ?? 0) + 1;
+          if ((mine.hits - 1) % 4 === 0) digSound(mine.type, mine.block);
           mine.progress = Math.fround(mine.progress + playerMiningState(
             state.survival,
             mine.type,

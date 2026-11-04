@@ -28,7 +28,7 @@ const liquidOrSolid = (b) => isLiquid(b) || materialSolid(b);
 
 // EntityFX.getFXLayer for each kind here.
 const LAYER = { crit2: 3, iconcrack: 2 };
-const KINDS = new Set(["bubble", "suspended", "depthsuspend", "townaura", "crit", "magicCrit", "mobSpell", "mobSpellAmbient", "spell", "flame", "lava", "splash", "rain", "heart", "angryVillager", "happyVillager", "dripWater", "dripLava", "portal"]);
+const KINDS = new Set(["bubble", "suspended", "depthsuspend", "townaura", "crit", "magicCrit", "mobSpell", "mobSpellAmbient", "spell", "instantSpell", "flame", "lava", "splash", "rain", "heart", "angryVillager", "happyVillager", "dripWater", "dripLava", "portal"]);
 
 export class Fx {
   // `explosions` (ExplosionParticles) builds explode, smoke and largesmoke; `world` is the
@@ -132,8 +132,9 @@ export class Fx {
       }
       case "mobSpell":
       case "mobSpellAmbient":
+      case "instantSpell": // bma.b: the same EntitySpellParticleFX with setBaseSpellTextureIndex(144)
       case "spell": {
-        const colour = name !== "spell";
+        const colour = name !== "spell" && name !== "instantSpell";
         p = this.base("spell", x, y, z, colour ? 0 : vx, colour ? 0 : vy, colour ? 0 : vz);
         p.my *= f(0.2);
         if ((colour || vx === 0) && (colour || vz === 0)) {
@@ -142,7 +143,7 @@ export class Fx {
         }
         p.scale = f(p.scale * f(0.75));
         p.max = life(8, r);
-        p.baseTex = 128;
+        p.baseTex = name === "instantSpell" ? 144 : 128;
         if (name === "mobSpellAmbient") p.a = f(0.15);
         if (colour) {
           p.r = f(vx);

@@ -1,6 +1,6 @@
 // The witch's splash potions in flight: EntityWitch.attackEntityWithRangedAttack (witch.js chooses the potion and aims) spawns an
 // EntityPotion that flies with the throwable flight of projectiles.js (gravity 0.05) and breaks on EntityPotion.onImpact (witch.js
-// splashImpact). Held apart from the player's own Projectiles so saves are unaffected: potions in the air are not saved. main.js
+// splashImpact). Held apart from the player's own Projectiles; serialize()/load() save the potions in the air. main.js
 // creates one per world (`mobs.potions`), EntityWorld.tick calls tick(), the scene draws `balls`. See public/research/witch.md.
 import { Projectiles, heading, mobTargets } from "./projectiles.js";
 import { entityRandom, ENTITY_TYPES } from "./entities.js";
@@ -43,6 +43,21 @@ export class WitchPotions {
     this.projectiles.balls.push(ball);
     return ball;
   }
+  // Browser snapshot of the potions in flight (like Projectiles.serialize): Pos, Motion, Rotation, the potion damage value, the flight age and
+  // whether the local player threw it (a thrown-by-witch potion loses its owner, as an EntityPotion whose thrower did not load).
+  serialize() {
+    return this.projectiles.balls.filter((b) => !b.dead).map((b) => ({ x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch, damage: b.damage, ticks: b.ticks | 0, ...(b.owner === "player" ? { owner: "player" } : {}) }));
+  }
+  load(list) {
+    this.projectiles.balls.length = 0;
+    const ok = Number.isFinite;
+    for (const d of Array.isArray(list) ? list : []) {
+      if (!d || ![d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok) || !Number.isInteger(d.damage) || d.damage < 0) continue;
+      const yaw = ok(d.yaw) ? f(d.yaw) : 0, pitch = ok(d.pitch) ? f(d.pitch) : 0, rng = this.projectiles.rng();
+      this.projectiles.balls.push({ kind: "potion", damage: d.damage, owner: d.owner === "player" ? "player" : null, x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz,
+        yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: Math.max(0, d.ticks | 0), rand: rng, random: rng, dead: false });
+    }
+  }
   tick(player, survival) {
     const mobs = this.mobs, p = this.projectiles;
     if (!p.balls.length) return;
@@ -77,6 +92,9 @@ export class WitchPotions {
       if (r.heal > 0) e.health = Math.min(ENTITY_TYPES[e.type].health, f(e.health + r.heal));
       for (const effect of r.effects) addMobEffect(e, effect.id, effect.duration, effect.amplifier);
     }
-    mobs.events.push({ sound: "game.potion.smash", volume: 1, pitch: f(f(this.projectiles.rng().nextFloat() * f(0.1)) + f(0.9)), position: { x, y, z } });
+    // EntityPotion.onImpact: worldEvent 2002 at (Math.round x, y, z); the client plays the break particles (potion-fx.js splashBreak) and
+    // game.potion.smash at the block centre.
+    const rx = Math.round(x), ry = Math.round(y), rz = Math.round(z);
+    mobs.events.push({ sound: "game.potion.smash", volume: 1, pitch: f(f(this.projectiles.rng().nextFloat() * f(0.1)) + f(0.9)), position: { x: rx + 0.5, y: ry + 0.5, z: rz + 0.5 }, splashBreak: { x: rx, y: ry, z: rz, damage } });
   }
 }

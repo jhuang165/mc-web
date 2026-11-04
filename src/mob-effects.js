@@ -8,7 +8,8 @@ export const SPEED = 1, STRENGTH = 5, REGENERATION = 10, INVISIBILITY = 14;
 export const SLOWNESS = 2, INSTANT_HEALTH = 6, FIRE_RESISTANCE = 12, WATER_BREATHING = 13, WEAKNESS = 18, POISON = 19;
 // Speed, strength, regeneration and invisibility from the spider spawn roll, plus what an EntityWitch drinks (instant health, speed, fire
 // resistance, water breathing) or throws (slowness, weakness, poison; witch.js).
-const MOB_EFFECTS = new Set([SPEED, SLOWNESS, INSTANT_HEALTH, STRENGTH, REGENERATION, INVISIBILITY, FIRE_RESISTANCE, WATER_BREATHING, WEAKNESS, POISON]);
+// Nausea (9) is the cured zombie villager's villager (EntityZombie.convertToVillager); it has no effect on the mob here.
+const MOB_EFFECTS = new Set([SPEED, SLOWNESS, 9, INSTANT_HEALTH, STRENGTH, REGENERATION, INVISIBILITY, FIRE_RESISTANCE, WATER_BREATHING, WEAKNESS, POISON]);
 
 // NBT "ActiveEffects": Id, Amplifier (byte), Duration (int). Unknown ids and spent effects
 // are dropped.

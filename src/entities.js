@@ -22,8 +22,9 @@ import { createVillages, PLAYER_NAME } from "./village-host.js";
 import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
-import { NORMAL, PEACEFUL, attributeValue, spiderSpawnRolls, zombieSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
+import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
 import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage } from "./mob-effects.js";
+import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startConversionTicks, conversionBoost, canCure, startConversion, remedySound, auxSound, readZombieVillager } from "./zombie-villager.js";
 import { armorReduced, soundVolume, soundPitch, mobDrops, experiencePoints, applyEntityCollision, boxesMeet, ANIMALS, FEATHER, RAW_CHICKEN, COOKED_CHICKEN } from "./combat.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -608,7 +609,9 @@ export class EntityWorld {
           effects: readMobEffects(e.effects),
           knockbackResistance: Number.isFinite(e.knockbackResistance) ? Math.min(1, Math.max(0, e.knockbackResistance)) : fresh.knockbackResistance,
           ...(Number.isFinite(e.followRange) ? { followRange: Math.min(2048, Math.max(0, e.followRange)) } : { followRange: undefined }),
-          ...(e.type === "zombie" ? { reinforcement: Number.isFinite(e.reinforcement) ? reinforcementChance(e.reinforcement) : fresh.reinforcement } : {}),
+          ...(e.type === "zombie" ? { reinforcement: Number.isFinite(e.reinforcement) ? reinforcementChance(e.reinforcement) : fresh.reinforcement, villager: false, conversionTime: undefined, ...readZombieVillager(e) } : {}),
+          // yv.cd's flag is not saved; a cured villager's +5 reputation is given on its first village refresh.
+          defaultReputation: undefined,
           wander: 0,
           hurt: 0,
           recentlyHit: 0,
@@ -835,6 +838,9 @@ export class EntityWorld {
       if (r.effect) addMobEffect(e, r.effect);
     } else if (type === "zombie") {
       const now = new Date(), r = zombieSpawnRolls(rand, world, this.difficulty, local, { month: now.getMonth() + 1, day: now.getDate() });
+      // EntityZombie.GroupData: a child (isChild never ages out for a zombie) and a zombie villager.
+      if (r.child) e.growingAge = -1;
+      if (r.villager) e.villager = true;
       if (!r.diverged) {
         e.knockbackResistance = r.knockback;
         e.followRange = r.followRange;
@@ -978,13 +984,15 @@ export class EntityWorld {
   // counter starts on the next onEntityUpdate, or in this one for fire and drowning.
   onDeath(e, source = {}) {
     if (e.type === "villager") this.villagerDied(e, source);
-    if (e.growingAge >= 0) {
+    if (e.growingAge >= 0 || e.type === "zombie") {
       const at = { x: e.x, y: e.y, z: e.z };
       for (const [drop, damage] of mobDrops(e, { playerHit: e.recentlyHit > 0, burning: e.fire > 0, bySkeleton: source.attacker === "skeleton", looting: source.player ? source.looting || 0 : 0 }, entityRandom(e)))
         this.events.push({ drop, count: 1, ...(damage ? { damage } : {}), position: at });
     }
     e.death = 0;
     if (e.eatTimer) e.eatTimer = 0;
+    // EntityLivingBase.onDeath: Entity.onKillEntity of the attacker, a zombie's villager rule.
+    if (e.type === "villager" && source.attacker?.type === "zombie") this.zombieKilledVillager(source.attacker, e);
   }
   // The player's kill (main.js /kill, tests): a generic death with the player as attacker.
   kill(e) {
@@ -1001,7 +1009,7 @@ export class EntityWorld {
     e.death = (e.death || 0) + 1;
     if (e.death !== 20) return;
     const rand = entityRandom(e);
-    if (e.recentlyHit > 0 && e.growingAge >= 0) {
+    if (e.recentlyHit > 0 && (e.growingAge >= 0 || e.type === "zombie")) {
       const world = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
       this.events.push({ xp: experiencePoints(e, rand, world), position: { x: e.x, y: e.y, z: e.z } });
     }
@@ -1107,6 +1115,72 @@ export class EntityWorld {
     this.entities.push(baby);
     return baby;
   }
+  // EntityMob.attackEntityAsMob (yg.n) against another creature: the attackDamage attribute as a mob damage source (no
+  // difficulty scaling: that is the player's); a burning zombie with an empty hand may set the victim alight.
+  hitMob(e, target) {
+    if (!this.entities.includes(target) || target.health <= 0) return false;
+    const hit = this.attackEntityFrom(target, attackDamage(e, ENTITY_TYPES[e.type].damage), { from: { x: e.x, z: e.z }, attacker: e, name: "mob", player: false });
+    if (hit && e.type === "zombie") {
+      const ticks = zombieFireOnHit(entityRandom(e), this.difficulty, e.burn > 0 || e.fire > 0);
+      if (ticks) target.fire = Math.max(target.fire || 0, ticks);
+    }
+    return hit;
+  }
+  // EntityZombie.onKillEntity (yq.a(sv)): on Normal (half the time) and Hard the villager is replaced by a zombie
+  // villager: copyLocationAndAngles, EntityZombie.onSpawnWithEgg(null) (its rolls may add a child), isVillager, a child
+  // villager makes a child zombie, then world event 1016 (mob.zombie.infect).
+  zombieKilledVillager(zombie, villager) {
+    if (!killConverts(this.difficulty, entityRandom(zombie))) return;
+    const z = this.create("zombie", villager.x, villager.y, villager.z);
+    for (const k of ["yaw", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch"]) if (villager[k] !== undefined) z[k] = villager[k];
+    this.onSpawnWithEgg(z);
+    z.villager = true;
+    if (villager.growingAge < 0) z.growingAge = -1;
+    this.entities.push(syncInterpolation(z));
+    // The villager is removed at once (World.removeEntity), without a death animation or experience.
+    villager.death = 20;
+    villager.recentlyHit = 0;
+    this.events.push(auxSound(AUX_INFECT, { nextFloat: () => f(this.random()) }, z));
+  }
+  // EntityZombie.interact (yq.a(yz)) with a golden apple: returns whether the item was used. The stack shrinks outside
+  // Creative; the countdown is nextInt(2401) + 3600 on the zombie's Entity.rand.
+  cure(e, id, survival, damage = 0) {
+    if (!this.entities.includes(e) || !canCure(e, id, damage) || (!survival.creative && !survival.count(id))) return false;
+    if (!survival.creative) survival.take(id);
+    this.startZombieConversion(e, startConversionTicks(entityRandom(e)));
+    return true;
+  }
+  // yq.a(int): the timer, Weakness removed, Strength for the timer's length, entity state 16 (mob.zombie.remedy).
+  startZombieConversion(e, ticks) {
+    startConversion(e, ticks, addMobEffect);
+    // The client plays state 16 with its own Random: the entity's server Random is not touched.
+    this.events.push(remedySound({ nextFloat: () => f(this.random()) }, e));
+  }
+  // yq.h's conversion step: the timer drops by getConversionTimeBoost each tick; at 0 or below the villager returns.
+  tickConversion(e) {
+    const boost = conversionBoost(entityRandom(e), (x, y, z) => this.world.get(x, y, z), e.x, e.y, e.z);
+    e.conversionTime -= boost;
+    if (e.conversionTime > 0) return false;
+    this.cureZombie(e);
+    return true;
+  }
+  // yq.cd (convertToVillager): a new villager at the zombie's place, onSpawnWithEgg (follow-range bonus on its own
+  // Entity.rand, profession World.rand.nextInt(5)), the default-reputation flag, a child stays a child (-24000),
+  // Nausea for 200 ticks and world event 1017 (mob.zombie.unfect). The zombie is removed.
+  cureZombie(e) {
+    const v = this.create("villager", e.x, e.y, e.z);
+    for (const k of ["yaw", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch"]) if (e[k] !== undefined) v[k] = e[k];
+    v.followRange = attributeValue(16, [spawnBonus(entityRandom(v))], 0, 2048);
+    v.profession = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48))).nextInt(5);
+    v.defaultReputation = true;
+    if (e.growingAge < 0) v.growingAge = -24000;
+    addMobEffect(v, NAUSEA, CURE_NAUSEA_TICKS, 0);
+    this.entities.push(syncInterpolation(v));
+    e.health = 0;
+    e.death = 20;
+    e.recentlyHit = 0;
+    this.events.push(auxSound(AUX_CURE, { nextFloat: () => f(this.random()) }, v));
+  }
   // World.spawnEntityInWorld(EntityIronGolem) at a village's spawn cell or a pumpkin golem's position.
   spawnIronGolem(x, y, z, playerCreated = false) {
     const g = this.create("iron_golem", x, y, z);
@@ -1208,6 +1282,7 @@ export class EntityWorld {
       spawnBaby:(a,b)=>this.spawnBaby(a,b),
       eatGrass:(e)=>this.eatGrass(e),
       attackPlayer:(e,survival)=>this.hitPlayer(e,survival),
+      attackMob:(e,target)=>this.hitMob(e,target),
       difficulty:()=>this.difficulty,
       // EntitySkeleton.attackEntityWithRangedAttack: the arrow itself is made by bow.js
       // (entities.js cannot import it: projectiles.js already imports this file).
@@ -1351,8 +1426,10 @@ export class EntityWorld {
           continue;
         }
       }
+      // EntityZombie.onUpdate (yq.h): a converting zombie counts its timer down before EntityLivingBase.onUpdate.
+      if (e.conversionTime !== undefined && this.tickConversion(e)) continue;
       e.age++;
-      if(e.growingAge<0)e.growingAge++;else if(e.growingAge>0)e.growingAge--;
+      if(e.growingAge<0&&e.type!=='zombie')e.growingAge++;else if(e.growingAge>0)e.growingAge--;
       e.love=Math.max(0,e.love-1);
       // The inLove countdown's hearts (every 10 ticks) run on the server's copy only: the
       // client never learns inLove, so 1.7.10 singleplayer shows none.

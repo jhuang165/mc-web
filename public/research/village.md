@@ -26,8 +26,8 @@ Ported from VillageCollection (`wc`), Village (`vz`), VillageDoorInfo (`vy`), Vi
 
 - Entity-state packets 12/13/14 are drawn as particles from a visual Random (not Entity.rand), so particle positions are not native-reproducible.
 - MoveIndoors skips the native rain biome check and `hasNoSky`; MoveThroughVillage does not break doors.
-- Zombies do not target villagers and do not convert them; only the local player is an attacker in the village aggressor list.
+- Zombies now hunt villagers and convert them (see `zombie-villager.md`); only the local player is an attacker in the village aggressor list.
 - The default-reputation flag (`bz`) has no setter, so the +5 starting reputation is not given.
-- Java import does not read `villages.dat` or villager entities; villages restart from door scanning after an import.
+- Java import reads `data/villages.dat` (villages whose centre is inside the imported area, shifted like entities; others are dropped and counted) and the Villager, VillagerGolem and Zombie entities (`src/java-mobs.js`). Imported mobs lose AI timers and the home area. When mobs are imported the world's usual animal seeding is skipped.
 - Villages from world generation are not pre-registered: a generated village becomes a record once a villager has registered a position near its doors.
 - Parity is not complete; this covers the listed systems only.

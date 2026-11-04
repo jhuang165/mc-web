@@ -17,9 +17,9 @@ Obfuscated names: aen PotionHelper, rv Potion, rw PotionEffect, adp ItemPotion, 
 - Player effects (src/status-effects.js and hooks): speed/slowness, haste/mining fatigue, strength, weakness, instant health/damage, jump boost, regeneration, resistance, fire resistance, water breathing, health boost, absorption, hunger, poison, wither, saturation, night vision (id kept), blindness/nausea/invisibility (id kept). The inventory screen lists active effects (GuiInventory layout).
 
 ## Approximated or missing
-- Night vision, blindness, nausea and invisibility are stored and shown in the effect list but have no render effect; the potion bubble particle colour uses the real liquid colours.
-- The thrown potion sprite is not tinted; the held potion is not drawn in 3D; the splash break particles are not replayed.
-- The thrown-aim gaussian is unseeded. Potions in flight are not saved.
+- Night vision, blindness, nausea and invisibility now have render effects (0.41.0, see potion-fx.md for what is native-verified and what is approximated); the potion bubble particle colour uses the real liquid colours.
+- The thrown potion sprite is not tinted; the held potion is not drawn in 3D. The splash break (world event 2002) and saving potions in flight are in potion-fx.md.
+- The thrown-aim gaussian is unseeded.
 - Nether-only ingredients have no natural source: nether wart 386, blaze rod 387, ghast tear 389, magma cream 390 are Creative-only (blaze powder 388 from rods; glistering melon 392 and golden carrot 393 from gold nuggets 394).
 - No HUD effect icons (1.7.10 draws effects only in the inventory screen).
 - Full parity is not claimed.

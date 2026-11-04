@@ -284,6 +284,11 @@ export function updateVillagerAI(m) {
     else {
       const [cx, cy, cz] = m.village.center;
       setHomeArea(m.e, cx, cy, cz, Math.trunc(Math.fround(m.village.radius * Math.fround(0.6))));
+      // EntityVillager.updateAITick: the flag a cured villager carries (yv.cd) gives every known player +5 once.
+      if (m.e.defaultReputation) {
+        m.e.defaultReputation = false;
+        m.village.changeAllReputations(5);
+      }
     }
   }
   tickVillagerRestock(m);

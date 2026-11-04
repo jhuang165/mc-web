@@ -67,6 +67,7 @@ export function redstoneBounds(id, meta = 0) {
 // Native hardness (Block.setHardness) and blast resistance (the native field is resistance * 5 / 3;
 // explosion.js RESIST stores the blast value, 0.5 for the lever, plates and button).
 export const REDSTONE_HARDNESS = { [REDSTONE_WIRE]: 0, [LEVER]: 0.5, [STONE_PRESSURE_PLATE]: 0.5, [WOODEN_PRESSURE_PLATE]: 0.5, [STONE_BUTTON]: 0.5, [REPEATER]: 0, [TRIPWIRE_HOOK]: 0, [TRIPWIRE]: 0 };
+// Break sound families (checked against the native Block.SoundType table by block-sounds.test.js; block-sounds.js is the source).
 export const REDSTONE_SOUND = { [REDSTONE_WIRE]: "stone", [LEVER]: "wood", [STONE_PRESSURE_PLATE]: "stone", [WOODEN_PRESSURE_PLATE]: "wood", [STONE_BUTTON]: "stone", [REPEATER]: "wood", [TRIPWIRE_HOOK]: "stone", [TRIPWIRE]: "stone" };
 // What breaking leaves behind (Block.getItemDropped / quantityDropped); damage is always 0.
 export const redstoneDrops = (id, options) => (isRedstone2Block(id) ? redstoneDrops2(id, 0, options) : ITEM_OF_BLOCK[id] ? [{ id: ITEM_OF_BLOCK[id], count: 1, damage: 0 }] : []);

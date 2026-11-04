@@ -130,7 +130,7 @@ test('chests, furnaces and dropped items convert; other tile entities and entiti
     entity('Item', [x0 + 3.5, 71.125, z0 + 3.5], {Age: t(NBT.SHORT, 100), PickupDelay: t(NBT.SHORT, 10), Item: t(NBT.COMPOUND, stack(0, 264, 2))}),
     entity('Item', [x0 + 4.5, 71.125, z0 + 4.5], {Item: t(NBT.COMPOUND, stack(0, 321, 1))}),
     entity('Pig', [x0 + 8, 71, z0 + 8]),
-    entity('Zombie', [x0 + 9, 71, z0 + 9], {Riding: t(NBT.COMPOUND, compound({id: t(NBT.STRING, 'Chicken')}))}),
+    entity('Skeleton', [x0 + 9, 71, z0 + 9], {Riding: t(NBT.COMPOUND, compound({id: t(NBT.STRING, 'Chicken')}))}),
   ];
   const tileTicks = [compound({i: t(NBT.INT, 8), x: t(NBT.INT, 0), y: t(NBT.INT, 0), z: t(NBT.INT, 0), t: t(NBT.INT, 1), p: t(NBT.INT, 0)})];
   const files = await regions([{chunk, tileEntities, entities, tileTicks}]);
@@ -159,7 +159,7 @@ test('chests, furnaces and dropped items convert; other tile entities and entiti
   assert.deepEqual(report.tileEntities, {total: 5, converted: {Chest: 1, Furnace: 1},
     lost: [{id: 'Chest', count: 1}, {id: 'Chest (outside its chunk)', count: 1}, {id: 'Sign', count: 1}]});
   assert.deepEqual(report.items, {converted: 12, lost: [{id: '321:0', count: 2}, {id: 'slot 200', count: 1}], tagsStripped: 0, clamped: 1});
-  assert.deepEqual(report.entities, {total: 5, converted: {Item: 1}, lost: [{id: 'Chicken', count: 1}, {id: 'Item (unsupported stack)', count: 1}, {id: 'Pig', count: 1}, {id: 'Zombie', count: 1}]});
+  assert.deepEqual(report.entities, {total: 5, converted: {Item: 1}, lost: [{id: 'Chicken', count: 1}, {id: 'Item (unsupported stack)', count: 1}, {id: 'Pig', count: 1}, {id: 'Skeleton', count: 1}]});
   assert.equal(report.scheduledTicks, 1);
   assert.deepEqual(report.blocks.unsupported, [{id: 63, meta: 0, cells: 1, reason: 'unmapped'}]);
   // Furnace facing is not stored by the browser; chest facing travels in its record; meta 0 is inexact.
