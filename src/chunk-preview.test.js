@@ -16,9 +16,9 @@ test('a negative-coordinate chunk restores as a playable full-height terrain pat
   world.restore(JSON.parse(JSON.stringify(record.edits)));
   assert.equal(world.get(79,255,64),19);
   assert.equal(world.getMeta(79,255,64),14);
-  assert.equal(world.get(64,0,64),0);
+  assert.equal(world.get(64,0,64),139);
   assert.equal(world.get(70,10,70),0);
-  assert.equal(report.omittedBlocks,1);
+  assert.equal(report.omittedBlocks,0);
   assert.equal(record.mode,'creative');
   await assert.rejects(previewJavaChunk('r.0.1.mca',file,-1,32),/belongs/);
   await assert.rejects(previewJavaChunk('r.-1.1.mca',file,-2,32),/absent/);

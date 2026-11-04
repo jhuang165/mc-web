@@ -566,7 +566,7 @@ function save() {
   active.worldRandom = weather.saveSimulation();
   active.fluidTicks = fluids.save();
   active.fireTicks = fire.save();
-  if (redstoneRuntime) { active.redstone = redstoneRuntime.save(); active.pistons = redstoneRuntime.pistons.save(); }
+  if (redstoneRuntime) { active.redstone = redstoneRuntime.save(); active.pistons = redstoneRuntime.pistons.save(); active.commandBlocks = redstoneRuntime.commandBlocks.save(); }
   // Chunk.InhabitedTime (one value stands for every chunk; see difficulty.js).
   active.inhabited = inhabited.save(survival.time);
   // Items on the cursor or in a crafting grid return to the saved inventory, as closing the screen would.
@@ -675,7 +675,7 @@ function requestLock() {
     const result = scene.renderer.domElement.requestPointerLock?.();
     result?.catch(() => {
       lockFallback = true;
-      toast("Drag to look. Left click to mine. Right click to use.");
+      if (screen === "playing") toast("Drag to look. Left click to mine. Right click to use.");
     });
   } catch {
     lockFallback = true;
@@ -836,6 +836,7 @@ async function launch(record, prepared) {
     // support rule; every block the engine ported (torches, plates, buttons, dust...) drops through its own behaviour.
     redstoneRuntime?.dispose();
     redstoneRuntime = createRedstoneRuntime({ world, scene, game: {
+      commandHost: () => commandHost,
       sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }),
       drop: (x, y, z, d) => items.dropBlock([makeStack(d.id, d.count, d.damage || 0)], x, y, z),
       primeTnt: (x, y, z) => lightTnt(x, y, z, null),
@@ -1024,6 +1025,7 @@ const commandHost = createCommandHost({
   active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, survival: () => survival, experience: () => experience,
   position: () => ({ x: position.x, y: position.y, z: position.z }),
   seed: () => active.seed,
+  commandTile: (x, y, z) => redstoneRuntime?.commandBlocks.tile(x, y, z),
   stackName: (s) => stackName(s, ITEMS) || ITEMS[s.id]?.name || "",
   dropStack: (s) => items.dropPlayer(s, position, yaw, pitch, true, true),
   refreshInventory: () => { renderHotbar(); renderVitals(); saved = false; },
@@ -1257,6 +1259,25 @@ const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnac
   CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", dispenser: "dispenser-modal", brewing: "brewing-modal", hopper: "hopper-modal", creative: "creative-modal", anvil: "anvil-modal", enchanting: "enchanting-modal", merchant: "merchant-modal" };
 // Slots are addressed by list index: wrapped creative slots all keep slotNumber 0.
 const slotsHtml = (container) => `<div class="container-slots">${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""}${slot.x < -1000 ? " hidden" : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>`;
+// GuiCommandBlock: Creative + command permission required; text and tracking changes are applied on Done only.
+function openCommandBlock(x, y, z) {
+  if (!survival.creative || !commandHost.cheats) return;
+  const tile = redstoneRuntime.commandBlocks.tile(x, y, z);
+  screen = "inventory"; mining = null; mineHeld = false;
+  document.exitPointerLock?.();
+  modal("Set Console Command for Block", `<label>Console Command<input id="command-block-input" maxlength="32767" autocomplete="off" spellcheck="false"></label><p>@p - nearest player<br>@r - random player<br>@a - all players</p><div style="display:flex;gap:8px;align-items:end"><label style="flex:1;min-width:0">Previous Output<input id="command-block-output" readonly></label><button class="button" id="command-block-track" style="width:40px;margin-bottom:2px"></button></div><div class="menu-actions" style="display:flex;gap:8px;margin-top:24px"><button class="button" id="command-block-done" style="flex:1">Done</button><button class="button" id="command-block-cancel" style="flex:1">Cancel</button></div>`);
+  const input = $("#command-block-input"), done = $("#command-block-done"), track = $("#command-block-track");
+  input.value = tile.command;
+  let tracking = tile.trackOutput;
+  const output = () => { try { return JSON.parse(tile.lastOutput)?.text ?? ""; } catch { return tile.lastOutput ?? ""; } };
+  const refresh = () => { track.textContent = tracking ? "O" : "X"; track.setAttribute("aria-label", "Track output: " + (tracking ? "on" : "off")); $("#command-block-output").value = tracking ? output() : "-"; done.disabled = !input.value.trim(); };
+  track.onclick = () => { tracking = !tracking; refresh(); };
+  input.oninput = refresh;
+  done.onclick = () => { tile.command = input.value; tile.trackOutput = tracking; if (!tracking) tile.lastOutput = null; saved = false; resume(); };
+  $("#command-block-cancel").onclick = resume;
+  input.onkeydown = e => { if (e.key === "Enter" && !done.disabled) { e.preventDefault(); done.click(); } };
+  refresh(); input.focus();
+}
 function openContainer(container, kind, key = null, gui = new ContainerScreen(container)) {
   screen = "inventory";
   mining = null;
@@ -1409,6 +1430,9 @@ function paperdollFrame() {
       hurt: survival.hurtTime > 0,
       sneak: motion.sneaking,
       arrowCount: survival.arrowCount,
+      arrowEntityId: playerBody.entityId,
+      burning: survival.fire > 0,
+      fireViewYaw: 180,
       invisible: survival.effects.has(INVISIBILITY),
     },
     playerBody,
@@ -2044,6 +2068,7 @@ function edit(place = false) {
     useFurnace: key => { useFurnace(key); syncContainerState(); },
     useAnvil: key => { useAnvil(key); syncContainerState(); },
     useBed,
+    useCommandBlock: openCommandBlock,
     openMerchant: entity => { const opened = useMerchant(entity); if (opened) syncContainerState(); return opened; },
     useEnchantingTable: key => { useEnchantingTable(key); syncContainerState(); },
     openChest: (chest, key) => { openContainer(chest, "chest", key); syncContainerState(); },
@@ -2099,7 +2124,7 @@ function breakBlock(p, creative = false) {
   });
 }
 // Block.getItem for middle-click: farmland gives dirt, crops give seeds, water nothing.
-const pickItem = (block, meta = 0) => isDispenserPiston(block) ? (block === PISTON_HEAD ? itemForBlock(headBaseId(meta)) : itemForBlock(block)) : isRedstoneBlock(block) ? redstoneItemOf(block) : (block === 29 || block === 30 ? 2 : block === WOODEN_DOOR ? WOODEN_DOOR_ITEM : block === IRON_DOOR ? IRON_DOOR_ITEM : block === REEDS ? REEDS_ITEM : isCrop(block) ? cropItem(block) : !isLiquid(block) && ITEMS[block] ? blockItemId(block) : 0);
+const pickItem = (block, meta = 0) => block === 139 ? 1139 : isDispenserPiston(block) ? (block === PISTON_HEAD ? itemForBlock(headBaseId(meta)) : itemForBlock(block)) : isRedstoneBlock(block) ? redstoneItemOf(block) : (block === 29 || block === 30 ? 2 : block === WOODEN_DOOR ? WOODEN_DOOR_ITEM : block === IRON_DOOR ? IRON_DOOR_ITEM : block === REEDS ? REEDS_ITEM : isCrop(block) ? cropItem(block) : !isLiquid(block) && ITEMS[block] ? blockItemId(block) : 0);
 // EntityPlayer.dropOneItem: Q throws one item, Ctrl + Q the whole stack.
 function dropHeld(all) {
   const inv = survival.inventory, s = inv.held;
@@ -2700,6 +2725,9 @@ function animate(now) {
     sneak: motion.sneaking,
     riding: !!rider.vehicle,
     arrowCount: survival.arrowCount,
+    arrowEntityId: playerBody.entityId,
+    burning: survival.fire > 0,
+    fireViewYaw: 180 - yaw * 180 / Math.PI,
     invisible: survival.effects.has(INVISIBILITY),
   });
   if (screen === "inventory") paperdollFrame();

@@ -1,3 +1,4 @@
+import { readCommandBlock } from "./command-block.js";
 // WORLD-03g: convert an area of Java 1.7.10 region files into a new Blockworld export for the existing
 // Import screen. The export is a version-9 Java world record whose `edits` rebuild the area over the
 // generated terrain of `seed`; supported chest/furnace contents and dropped items travel in the player
@@ -8,6 +9,7 @@ import { isJavaLandscape } from './java-world.js';
 import { fromOriginal, isRegistered } from './block-registry.js';
 import { readRegion, decodeRegionChunk, regionAddress, regionSlot } from './region-file.js';
 import { chunkFromNbt } from './chunk-nbt.js';
+import { nbtGet } from './nbt-get.js';
 import { NBT } from './nbt.js';
 import { ITEMS, burnTime } from './survival.js';
 import { CHEST, CHEST_SLOTS } from './chest.js';
@@ -49,6 +51,61 @@ export function itemFromOriginal(id, damage = 0) {
 
 // Cached fromOriginal for every (id << 4 | meta) key; air with metadata 0 is always exact.
 const MAPPED = new Map();
+// ItemStack.stackTagCompound, as far as the browser stack carries it: ench, StoredEnchantments, RepairCost, display.Name,
+// display.color and Unbreakable. Returns the keys it could not keep ("display.Lore" for nested ones). Used by the Java
+// import and by /give's data tag.
+export function readItemTag(stack, nbt) {
+  const readEnchantments = (key) => {
+    const value = get(nbt, key, NBT.LIST);
+    // NBTTagCompound.getTagList accepts any element type when the list is empty.
+    if (!value || (value.items.length && value.elementType !== NBT.COMPOUND)) return undefined;
+    return value.items.slice(0, 64).map((e) => ({ id: get(e, 'id', NBT.SHORT, 0), lvl: get(e, 'lvl', NBT.SHORT, 0) }));
+  };
+  const enchantments = readEnchantments('ench'), stored = readEnchantments('StoredEnchantments');
+  if (enchantments) stack.enchantments = enchantments;
+  if (stored) { stack.stored = stored; stack.storedEnchantments = stored.map((e) => ({ ...e })); }
+  const repairCost = get(nbt, 'RepairCost', NBT.INT);
+  if (repairCost !== undefined) stack.repairCost = repairCost | 0;
+  const display = get(nbt, 'display', NBT.COMPOUND), name = get(display, 'Name', NBT.STRING);
+  if (name !== undefined) stack.displayName = name;
+  const color = get(display, 'color', NBT.INT);
+  if (Number.isInteger(color) && color >= 0 && color <= 0xFFFFFF) stack.color = color;
+  const unbreakable = get(nbt, 'Unbreakable', NBT.BYTE);
+  if (unbreakable !== undefined) stack.unbreakable = unbreakable !== 0;
+  const recognized = new Set(['ench', 'StoredEnchantments', 'RepairCost', 'display', 'Unbreakable']);
+  const ignored = [...nbt.keys()].filter((key) => !recognized.has(key));
+  if (display) ignored.push(...[...display.keys()].filter((key) => key !== 'Name' && key !== 'color').map((key) => 'display.' + key));
+  return ignored;
+}
+
+// Shared TileEntity container readers for Java import and command data tags.
+export function readContainerTile(id, tile, { convertItem = itemStackFromNbt, invalidSlot = () => {} } = {}) {
+  const spec = { Chest: ['chests', 27, true], Trap: ['dispensers', 9, true], Dropper: ['dispensers', 9, true], Hopper: ['hoppers', 5, true], Cauldron: ['brewing', 4, true], Furnace: ['furnaces', 3, false] }[id];
+  if (!spec) return null;
+  const [name, size, unsigned] = spec, items = Array(size).fill(null), ignored = [], kept = new Set(['id', 'x', 'y', 'z', 'Items']);
+  for (const entry of compounds(tile, 'Items')) {
+    let slot = get(entry, 'Slot', NBT.BYTE, 0);
+    if (unsigned) slot &= 255;
+    if (slot < 0 || slot >= size) { invalidSlot(slot); continue; }
+    const lost = [], stack = convertItem(entry, { ignored: lost });
+    ignored.push(...lost.map(k => `Items[${slot}].tag.${k}`));
+    if (stack) items[slot] = stack;
+  }
+  const record = { items };
+  if (id === 'Hopper') { record.cooldown = get(tile, 'TransferCooldown', NBT.INT, 0); record.name = get(tile, 'CustomName', NBT.STRING, '') || null; kept.add('TransferCooldown'); kept.add('CustomName'); }
+  if (id === 'Cauldron') { record.brewTime = get(tile, 'BrewTime', NBT.SHORT, 0); kept.add('BrewTime'); }
+  if (id === 'Furnace') { record.burn = get(tile, 'BurnTime', NBT.SHORT, 0); record.cook = get(tile, 'CookTime', NBT.SHORT, 0); record.burnTotal = burnTime(items[1]); kept.add('BurnTime'); kept.add('CookTime'); }
+  return { name, record, ignored: [...tile.keys()].filter(k => !kept.has(k)).concat(ignored) };
+}
+export function itemStackFromNbt(compound, { ignored = [] } = {}) {
+  const mapped = itemFromOriginal(get(compound, 'id', NBT.SHORT), get(compound, 'Damage', NBT.SHORT, 0)), count = get(compound, 'Count', NBT.BYTE, 0);
+  if (!mapped || count <= 0) return null;
+  const stack = { id: mapped.id, damage: mapped.damage, count };
+  const nbt = get(compound, 'tag', NBT.COMPOUND);
+  if (nbt) ignored.push(...readItemTag(stack, nbt));
+  return stack;
+}
+
 /** fromOriginal for a packed original state, memoized. */
 export function mapOriginalState(key) {
   let mapped = MAPPED.get(key);
@@ -76,11 +133,9 @@ export function parseRegionFilename(filename) {
   return { regionX, regionZ };
 }
 
-// NBT accessors that read like NBTTagCompound getters: a missing or mistyped tag is the default.
-const get = (map, key, type, fallback) => {
-  const tag = map instanceof Map ? map.get(key) : undefined;
-  return tag?.type === type ? tag.value : fallback;
-};
+// NBT accessors that read like NBTTagCompound getters (nbt-get.js): numeric tags convert across types, anything else
+// must match; a missing or unreadable tag is the default.
+const get = nbtGet;
 const compounds = (map, key) => {
   const list = get(map, key, NBT.LIST);
   return list?.elementType === NBT.COMPOUND ? list.items : [];
@@ -157,6 +212,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   };
   const unsupported = new Map(), approximations = new Map(), tileLost = new Map(), tileConverted = new Map();
   const itemLost = new Map(), entityLost = new Map(), entityConverted = new Map();
+  const commandBlocks = [];
   const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = [];
   let edits = 0;
   const write = (x, y, z, block, meta) => {
@@ -175,44 +231,12 @@ export async function importJavaRegionArea(regions, options = {}) {
     const limit = ITEMS[mapped.id].stack ?? 64;
     const stack = { id: mapped.id, count: Math.min(count, limit), damage: mapped.damage };
     const nbt = get(compound, 'tag', NBT.COMPOUND);
-    if (nbt) {
-      const readEnchantments = (key) => {
-        const value = get(nbt, key, NBT.LIST);
-        // NBTTagCompound.getTagList accepts any element type when the list is empty.
-        if (!value || (value.items.length && value.elementType !== NBT.COMPOUND)) return undefined;
-        return value.items.slice(0, 64).map((e) => ({ id: get(e, 'id', NBT.SHORT, 0), lvl: get(e, 'lvl', NBT.SHORT, 0) }));
-      };
-      const enchantments = readEnchantments('ench'), stored = readEnchantments('StoredEnchantments');
-      if (enchantments) stack.enchantments = enchantments;
-      if (stored) { stack.stored = stored; stack.storedEnchantments = stored.map((e) => ({ ...e })); }
-      const repairCost = get(nbt, 'RepairCost', NBT.INT);
-      if (repairCost !== undefined) stack.repairCost = repairCost | 0;
-      const display = get(nbt, 'display', NBT.COMPOUND), name = get(display, 'Name', NBT.STRING);
-      if (name !== undefined) stack.displayName = name;
-      const color = get(display, 'color', NBT.INT);
-      if (Number.isInteger(color) && color >= 0 && color <= 0xFFFFFF) stack.color = color;
-      const unbreakable = get(nbt, 'Unbreakable', NBT.BYTE);
-      if (unbreakable !== undefined) stack.unbreakable = unbreakable !== 0;
-      const recognized = new Set(['ench', 'StoredEnchantments', 'RepairCost', 'display', 'Unbreakable']);
-      if ([...nbt.keys()].some((key) => !recognized.has(key))) report.items.tagsStripped++;
-      else if (display && [...display.keys()].some((key) => key !== 'Name' && key !== 'color')) report.items.tagsStripped++;
-    }
+    if (nbt && readItemTag(stack, nbt).length) report.items.tagsStripped++;
     if (mapped.clamped || count > limit) report.items.clamped++;
     report.items.converted++;
     return stack;
   };
-  const slotItems = (tile, size, unsigned) => {
-    const items = Array(size).fill(null);
-    for (const entry of compounds(tile, 'Items')) {
-      let slot = get(entry, 'Slot', NBT.BYTE, 0);
-      if (unsigned) slot &= 255;
-      // The original readers skip out-of-range slots before loading the stack.
-      if (slot < 0 || slot >= size) { tally(itemLost, `slot ${slot}`); continue; }
-      const stack = convertItem(entry);
-      if (stack) items[slot] = stack;
-    }
-    return items;
-  };
+
 
   let inflated = 0;
   for (let i = 0; i < area.width; i++) for (let j = 0; j < area.depth; j++) {
@@ -284,29 +308,14 @@ export async function importJavaRegionArea(regions, options = {}) {
       const id = get(tile, 'id', NBT.STRING, '?'), x = get(tile, 'x', NBT.INT), y = get(tile, 'y', NBT.INT), z = get(tile, 'z', NBT.INT);
       const inside = [x, y, z].every(Number.isInteger) && x >> 4 === cx && z >> 4 === cz && y >= 0 && y < height;
       const lx = inside ? baseX + (x & 15) : 0, lz = inside ? baseZ + (z & 15) : 0, key = `${lx},${y},${lz}`;
-      if (inside && id === 'Chest' && chests[key]) {
-        chests[key].items = slotItems(tile, CHEST_SLOTS, true);
+      const block = world.get(lx, y, lz), expected = { Chest: CHEST, Trap: DISPENSER, Dropper: 132, Hopper: 133, Cauldron: 134, Furnace: FURNACE }[id];
+      if (inside && block === expected) {
+        const loaded = readContainerTile(id, tile, { convertItem, invalidSlot: slot => tally(itemLost, `slot ${slot}`) });
+        const stores = { chests, furnaces, dispensers, hoppers, brewing };
+        stores[loaded.name][key] = { ...stores[loaded.name][key], ...loaded.record };
         tally(tileConverted, id);
-      } else if (inside && ((id === 'Trap' && world.get(lx, y, lz) === DISPENSER) || (id === 'Dropper' && world.get(lx, y, lz) === 132))) {
-        // TileEntityDispenser.readFromNBT (also TileEntityDropper's 'Dropper' tile): nine slots, Slot read as an unsigned byte.
-        dispensers[key] = { items: slotItems(tile, DISPENSER_SLOTS, true) };
-        tally(tileConverted, id);
-      } else if (inside && id === 'Hopper' && world.get(lx, y, lz) === 133) {
-        // TileEntityHopper.readFromNBT: five slots, TransferCooldown (int), CustomName.
-        const cooldown = get(tile, 'TransferCooldown', NBT.INT, 0), name = get(tile, 'CustomName', NBT.STRING, '');
-        hoppers[key] = { items: slotItems(tile, 5, true), cooldown: Number.isInteger(cooldown) ? Math.max(0, Math.min(8, cooldown)) : 0, name: typeof name === 'string' && name ? name : null };
-        tally(tileConverted, id);
-      } else if (inside && id === 'Cauldron' && world.get(lx, y, lz) === 134) {
-        // TileEntityBrewingStand.readFromNBT: four slots and BrewTime (short); the running brew restarts from the ingredient.
-        const brewTime = get(tile, 'BrewTime', NBT.SHORT, 0);
-        brewing[key] = { items: slotItems(tile, 4, true), brewTime: Number.isInteger(brewTime) ? Math.max(0, Math.min(400, brewTime)) : 0 };
-        tally(tileConverted, id);
-      } else if (inside && id === 'Furnace' && world.get(lx, y, lz) === FURNACE) {
-        const items = slotItems(tile, 3, false);
-        // TileEntityFurnace.readFromNBT: currentItemBurnTime is recomputed from the fuel slot.
-        furnaces[key] = { items, burn: Math.max(0, Math.min(20000, get(tile, 'BurnTime', NBT.SHORT, 0))), burnTotal: Math.min(20000, burnTime(items[1])),
-          cook: Math.max(0, Math.min(199, get(tile, 'CookTime', NBT.SHORT, 0))) };
-        tally(tileConverted, id);
+      } else if (inside && id === 'Control' && block === 139) {
+        commandBlocks.push({ x: lx, y, z: lz, ...readCommandBlock(tile) }); tally(tileConverted, id);
       } else if (inside && id === 'Piston' && world.get(lx, y, lz) === PISTON_MOVING) {
         // TileEntityPiston.readFromNBT: blockId, blockData, facing, progress (lastProgress = progress), extending. The
         // restore (piston-live.js) lets the move finish on the first tick, as native does.
@@ -399,7 +408,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     position: { x: px + 0.5, y: py + 1.01, z: pz + 0.5, yaw: 0, pitch: 0 },
     // legacyPlayer() keeps these fields; without `slots` the Creative hotbar defaults apply.
     player: { chests, furnaces, dispensers, hoppers, brewing },
-    pistons,
+    pistons, commandBlocks,
     drops,
     ...(mobs.length ? { entities: mobs } : {}),
     ...(villages ? { villages } : {}),

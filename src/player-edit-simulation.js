@@ -231,6 +231,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       return act('use-door', { door: used });
     }
     // BlockBed.onBlockActivated: either half starts sleeping (bed.js; the browser supplies the player and the time of day).
+    if (activates && block === 139) { hook('useCommandBlock', x, y, z); return act('use-command-block'); }
     if (activates && block === BED) { hook('useBed', x, y, z); return act('use-bed'); }
     // Lever, stone button and repeater right-clicks (redstone-blocks.js): local state only, no power network.
     if (activates && (block === LEVER || block === STONE_BUTTON || block === REPEATER)) {

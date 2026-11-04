@@ -26,6 +26,7 @@ const RESIST = {
 for (let id = 31; id <= 38; id++) RESIST[id] = 0;
 // BlockDoor, BlockPane getExplosionResistance (doors-panes-reference.json facts): wooden door 3, iron door 5, iron bars 6, glass pane 0.3.
 RESIST[WOODEN_DOOR] = 3; RESIST[IRON_DOOR] = 5; RESIST[IRON_BARS] = 6; RESIST[GLASS_PANE] = 0.3;
+RESIST[139] = 3600000; // BlockCommandBlock: setResistance(6000000), aji.p registration
 RESIST[138] = 0.2; // BlockBed (bed-reference.json facts)
 // BlockStairs.getExplosionResistance: the model block's resistance / 5 (stairs-reference.json).
 for (const id of Object.keys(STAIRS)) RESIST[id] = stairExplosionResistance(Number(id));

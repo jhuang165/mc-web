@@ -572,59 +572,9 @@ export class EntityWorld {
     this.localDifficulty = null;
     if (Array.isArray(saved)) {
       for (const e of saved.slice(0, 256)) {
-        const t = ENTITY_TYPES[e.type];
-        if (
-          !t ||
-          ![e.x, e.y, e.z, e.health].every(Number.isFinite) ||
-          (world.streaming ? !world.inside(Math.floor(e.x),0,Math.floor(e.z)) : e.x < 0 || e.x >= SIZE || e.z < 0 || e.z >= SIZE) ||
-          e.y < -64 ||
-          e.y >= (world.height ?? HEIGHT) ||
-          e.health <= 0
-        )
-          continue;
-        const fresh = this.create(e.type, e.x, e.y, e.z);
-        this.entities.push(syncInterpolation({
-          ...fresh,
-          ...e,
-          id: /^mob-\d+$/.test(e.id) ? e.id : "mob-" + this.nextId++,
-          health: Math.min(t.health, e.health),
-          yaw: Number.isFinite(e.yaw) ? e.yaw : 0,
-          age: Number.isFinite(e.age) ? e.age : 0,
-          growingAge:Number.isInteger(e.growingAge)?Math.max(-24000,Math.min(6000,e.growingAge)):0,
-          love:Number.isInteger(e.love)?Math.max(0,Math.min(600,e.love)):0,
-          mateTicks:0,
-          // EntityVillager.readEntityFromNBT: Profession, Riches and Offers; the trade timers and the customer start over.
-          ...(e.type === "villager" ? villagerFields(e.profession, e.riches, e.offers) : {}),
-          // EntityIronGolem.readEntityFromNBT: PlayerCreated only; the timers and the home area start over.
-          ...(e.type === "iron_golem" ? ironGolemFields(e.playerCreated) : {}),
-          ...(e.type === "sheep" ? { color: Number.isInteger(e.color) && e.color >= 0 && e.color < 16 ? e.color : 0, sheared: e.sheared === true, eatTimer: 0 } : {}),
-          // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
-          ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
-          ...(isSpider(e.type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
-          // EntitySilverfish has no NBT of its own: the summon cooldown starts over.
-          ...(e.type === "silverfish" ? { summonCooldown: 0 } : {}),
-          // EntityWitch keeps its held potion (Equipment) but not the drinking state (datawatcher 21, the penalty modifier).
-          ...(e.type === "witch" ? { drinking: false, drinkTimer: 0, held: e.held && e.held.id === ITEM_POTION && potionEffects(e.held.damage).length ? { id: ITEM_POTION, damage: e.held.damage, count: 1 } : null } : {}),
-          // EntityCreeper.readEntityFromNBT: "powered" and "ignited" are saved, the swell
-          // state (datawatcher 16) and timeSinceIgnited start over.
-          ...(e.type === "creeper" ? { ...creeperFields(), powered: e.powered === true, ignited: e.ignited === true } : {}),
-          // NBT ActiveEffects and the Attributes the spawn rolls modified.
-          effects: readMobEffects(e.effects),
-          knockbackResistance: Number.isFinite(e.knockbackResistance) ? Math.min(1, Math.max(0, e.knockbackResistance)) : fresh.knockbackResistance,
-          ...(Number.isFinite(e.followRange) ? { followRange: Math.min(2048, Math.max(0, e.followRange)) } : { followRange: undefined }),
-          ...(e.type === "zombie" ? { reinforcement: Number.isFinite(e.reinforcement) ? reinforcementChance(e.reinforcement) : fresh.reinforcement, villager: false, conversionTime: undefined, ...readZombieVillager(e) } : {}),
-          // yv.cd's flag is not saved; a cured villager's +5 reputation is given on its first village refresh.
-          defaultReputation: undefined,
-          wander: 0,
-          hurt: 0,
-          recentlyHit: 0,
-          attack: 0,
-          flee: 0,
-          vx: 0,
-          vz: 0,
-          vy: 0,
-          ...this.physics(),
-        }));
+        const m = this.restore(e);
+        if (!m) continue;
+        this.entities.push(m);
         this.nextId++;
       }
       this.nextId = Math.max(
@@ -634,6 +584,65 @@ export class EntityWorld {
           .filter(Number.isFinite),
       );
     } else this.seedAnimals();
+  }
+  // A saved mob record (a browser save, java-mobs.js import or /summon's data tag) back to a live mob, or null when it
+  // is unusable. The caller adds it and advances nextId.
+  restore(e, { summoned = false } = {}) {
+    const world = this.world;
+    const t = ENTITY_TYPES[e.type];
+    if (
+      !t ||
+      ![e.x, e.y, e.z, e.health].every(Number.isFinite) ||
+      (world.streaming ? !world.inside(Math.floor(e.x),0,Math.floor(e.z)) : e.x < 0 || e.x >= SIZE || e.z < 0 || e.z >= SIZE) ||
+      e.y < -64 ||
+      e.y >= (world.height ?? HEIGHT) ||
+      (e.health <= 0 && !summoned)
+    )
+      return null;
+    const fresh = this.create(e.type, e.x, e.y, e.z);
+    this.nextId--; // restore callers advance once after accepting the mob
+    return syncInterpolation({
+      ...fresh,
+      ...e,
+      id: /^mob-\d+$/.test(e.id) ? e.id : fresh.id,
+      health: Math.max(0, Math.min(t.health, e.health)),
+      yaw: Number.isFinite(e.yaw) ? e.yaw : 0,
+      age: Number.isFinite(e.age) ? e.age : 0,
+      growingAge:Number.isInteger(e.growingAge)?(summoned?e.growingAge:Math.max(-24000,Math.min(6000,e.growingAge))):0,
+      love:Number.isInteger(e.love)?(summoned?e.love:Math.max(0,Math.min(600,e.love))):0,
+      mateTicks:0,
+      // EntityVillager.readEntityFromNBT: Profession, Riches and Offers; the trade timers and the customer start over.
+      ...(e.type === "villager" ? villagerFields(e.profession, e.riches, e.offers) : {}),
+      // EntityIronGolem.readEntityFromNBT: PlayerCreated only; the timers and the home area start over.
+      ...(e.type === "iron_golem" ? ironGolemFields(e.playerCreated) : {}),
+      ...(e.type === "sheep" ? { color: Number.isInteger(e.color) && e.color >= 0 && e.color < 16 ? e.color : 0, sheared: e.sheared === true, eatTimer: 0 } : {}),
+      // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
+      ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
+      ...(isSpider(e.type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
+      // EntitySilverfish has no NBT of its own: the summon cooldown starts over.
+      ...(e.type === "silverfish" ? { summonCooldown: 0 } : {}),
+      // EntityWitch keeps its held potion (Equipment) but not the drinking state (datawatcher 21, the penalty modifier).
+      ...(e.type === "witch" ? { drinking: false, drinkTimer: 0, held: e.held && e.held.id === ITEM_POTION && potionEffects(e.held.damage).length ? { id: ITEM_POTION, damage: e.held.damage, count: 1 } : null } : {}),
+      // EntityCreeper.readEntityFromNBT: "powered" and "ignited" are saved, the swell
+      // state (datawatcher 16) and timeSinceIgnited start over.
+      ...(e.type === "creeper" ? { ...creeperFields(), powered: e.powered === true, ignited: e.ignited === true } : {}),
+      // NBT ActiveEffects and the Attributes the spawn rolls modified.
+      effects: readMobEffects(e.effects),
+      knockbackResistance: Number.isFinite(e.knockbackResistance) ? Math.min(1, Math.max(0, e.knockbackResistance)) : fresh.knockbackResistance,
+      ...(Number.isFinite(e.followRange) ? { followRange: Math.min(2048, Math.max(0, e.followRange)) } : { followRange: undefined }),
+      ...(e.type === "zombie" ? { reinforcement: Number.isFinite(e.reinforcement) ? reinforcementChance(e.reinforcement) : fresh.reinforcement, villager: false, conversionTime: undefined, ...readZombieVillager(e) } : {}),
+      // yv.cd's flag is not saved; a cured villager's +5 reputation is given on its first village refresh.
+      defaultReputation: undefined,
+      wander: 0,
+      hurt: 0,
+      recentlyHit: 0,
+      attack: 0,
+      flee: 0,
+      vx: 0,
+      vz: 0,
+      vy: 0,
+      ...this.physics(),
+    });
   }
   create(type, x, y, z, random = this.random) {
     return syncInterpolation({

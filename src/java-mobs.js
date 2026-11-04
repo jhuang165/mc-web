@@ -3,14 +3,12 @@
 // constructor reads back (entities.js); fields it re-derives (AI timers, velocities, the village home) are not written.
 // The exporter is the mirror image in region-export.js; src/java-mobs.test.js round-trips them.
 import { NBT } from './nbt.js';
+import { nbtGet } from './nbt-get.js';
 
 export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie' });
 export const IMPORT_MOB_LIMIT = 256; // EntityWorld keeps at most this many saved mobs
 
-const tagValue = (map, key, type, fallback) => {
-  const tag = map instanceof Map ? map.get(key) : undefined;
-  return tag?.type === type ? tag.value : fallback;
-};
+const tagValue = nbtGet; // NBTTagCompound getters: numeric tags convert across types (nbt-get.js)
 const numbers = (map, key, type, n) => {
   const list = tagValue(map, key, NBT.LIST);
   return list?.elementType === type && list.items.length === n && list.items.every(Number.isFinite) ? list.items : null;
@@ -48,7 +46,8 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
         const buy = tagValue(r, 'buy', NBT.COMPOUND), sell = tagValue(r, 'sell', NBT.COMPOUND), buyB = tagValue(r, 'buyB', NBT.COMPOUND);
         const b = buy && convertItem(buy), s = sell && convertItem(sell), b2 = buyB ? convertItem(buyB) : null;
         if (!b || !s || (buyB && !b2)) return [];
-        return [{ buy: b, ...(b2 ? { buyB: b2 } : {}), sell: s, uses: tagValue(r, 'uses', NBT.INT, 0), maxUses: tagValue(r, 'maxUses', NBT.INT, 7) }];
+        const native = (stack, tag) => ({ ...stack, id: tagValue(tag, 'id', NBT.SHORT, 0), damage: Math.max(0, tagValue(tag, 'Damage', NBT.SHORT, 0)) });
+        return [{ buy: native(b, buy), ...(b2 ? { buyB: native(b2, buyB) } : {}), sell: native(s, sell), uses: tagValue(r, 'uses', NBT.INT, 0), maxUses: tagValue(r, 'maxUses', NBT.INT, 7) }];
       });
     }
   } else if (type === 'iron_golem') {
@@ -62,4 +61,37 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
     if (conversion > -1) record.conversionTime = conversion;
   }
   return record;
+}
+
+// EntityList.createEntityFromNBT for /summon. A supplied compound skips onSpawnWithEgg entirely.
+export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) {
+  const health = { pig: 10, cow: 10, sheep: 8, chicken: 4, zombie: 20, skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26 }[type];
+  if (health === undefined) return null;
+  const rotation = numbers(tag, 'Rotation', NBT.FLOAT, 2);
+  const record = { type, health: tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health)), yaw: rotation ? -rotation[0] * Math.PI / 180 : 0,
+    effects: readActiveEffects(tag), growingAge: ['pig','cow','sheep','chicken','villager'].includes(type) ? tagValue(tag, 'Age', NBT.INT, 0) : 0, love: ['pig','cow','sheep','chicken'].includes(type) ? tagValue(tag, 'InLove', NBT.INT, 0) : 0, knockbackResistance: 0 };
+  const kept = new Set(['id', 'Pos', 'Rotation', 'HealF', 'Health', 'ActiveEffects', 'Fire', 'Motion']);
+  if (['pig', 'cow', 'sheep', 'chicken', 'villager'].includes(type)) kept.add('Age');
+  if (['pig', 'cow', 'sheep', 'chicken'].includes(type)) kept.add('InLove');
+  if (type === 'sheep') { record.color = tagValue(tag, 'Color', NBT.BYTE, 0) & 15; record.sheared = !!tagValue(tag, 'Sheared', NBT.BYTE, 0); kept.add('Color'); kept.add('Sheared'); }
+  if (type === 'villager' || type === 'iron_golem' || type === 'zombie') {
+    const native = new Map(tag);
+    native.set('id', { type: NBT.STRING, value: Object.keys(JAVA_MOBS).find(k => JAVA_MOBS[k] === type) });
+    native.set('Pos', { type: NBT.LIST, value: { elementType: NBT.DOUBLE, items: [0, 0, 0] } });
+    Object.assign(record, javaMobFromNbt(native, { convertItem }));
+    record.health = tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health));
+    for (const k of type === 'villager' ? ['Profession', 'Riches', 'Offers'] : type === 'iron_golem' ? ['PlayerCreated'] : ['IsBaby', 'IsVillager', 'ConversionTime']) kept.add(k);
+  }
+  if (type === 'creeper') { record.powered = !!tagValue(tag, 'powered', NBT.BYTE, 0); record.ignited = !!tagValue(tag, 'ignited', NBT.BYTE, 0); kept.add('powered'); kept.add('ignited'); }
+  if (type === 'witch') {
+    const equipment = tagValue(tag, 'Equipment', NBT.LIST);
+    if (equipment?.elementType === NBT.COMPOUND && equipment.items[0]) record.held = convertItem(equipment.items[0]);
+    // Other equipment slots have no live implementation.
+    if (equipment?.items.slice(1).some(e => e.size)) kept.delete('Equipment'); else kept.add('Equipment');
+  }
+  record.health = Math.max(0, Math.min(health, record.health));
+  const ignored = [...tag.keys()].filter(k => !kept.has(k));
+  if (rotation?.[1]) ignored.push('Rotation[1] (pitch)');
+  if (type === 'witch' && record.held && record.held.id !== 385) ignored.push('Equipment[0]');
+  return { record, ignored };
 }

@@ -1,9 +1,16 @@
+import { readCommandBlock, writeCommandBlock } from "./command-block.js";
 // Connects the command engine (commands.js) to the running game. main.js passes accessors for its live state (`env`), so
 // everything here works on the real World, Survival, Weather and Experience objects and the tests can drive it without a browser.
 import { printChat } from "./chat-ui.js";
 import { CommandException, cheatsAllowed } from "./commands.js";
 import { ENCHANTMENT_NAMES } from "./command-data.js";
-import { itemFromOriginal } from "./region-import.js";
+import { readItemTag, readContainerTile, itemStackFromNbt, itemFromOriginal } from "./region-import.js";
+import { writeContainerTile } from "./region-export.js";
+import { summonedMobRecord } from "./java-mobs.js";
+import { nbtGet } from "./nbt-get.js";
+import { NBT } from "./nbt.js";
+import { SUMMONABLE } from "./commands.js";
+import { newChest, settleFacing } from "./chest.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
 import { makeStack } from "./inventory.js";
 import { canApply, canApplyTogether, addEnchantment, ENCHANTMENTS_BY_ID } from "./enchantments.js";
@@ -29,6 +36,9 @@ export function createCommandHost(env) {
     print: (text) => printChat(text),
     position: () => env.position(),
     seed: () => env.seed(),
+    playerPosition: () => env.position(),
+    playerLevel: () => env.experience?.()?.level ?? 0,
+    playerMode: () => survival().mode === "creative" ? 1 : survival().mode === "adventure" ? 2 : 0,
     inWorld: (x, y, z) => { const w = env.world(); return y >= 0 && y < 256 && w.inside(Math.floor(x), Math.floor(y), Math.floor(z)) && (!w.streaming || w.isLoaded(Math.floor(x), Math.floor(z))); },
     kill() { survival().damage(1000, "void"); env.changed(); },
     setGameMode(mode) { env.setMode(mode); },
@@ -36,15 +46,16 @@ export function createCommandHost(env) {
       env.active().defaultGameMode = mode; // singleplayer: only the mode a new joiner gets
     },
     setGameRule(name, value) { env.active().gameRules = { ...this.rules, [name]: String(value) }; env.changed(); },
-    give(original, count, damage) {
+    give(original, count, damage, tag) {
       const item = itemFromOriginal(original, damage);
       if (!item) throw unsupported("This item is not in this build");
       const stack = makeStack(item.id, count, item.damage);
+      const ignored = tag ? readItemTag(stack, tag) : [];
       const name = env.stackName(stack);
       survival().inventory.add(stack);
       if (stack.count > 0) env.dropStack(stack); // what does not fit lands at the player's feet
       env.refreshInventory();
-      return { name: "[" + name + "]" };
+      return { name: "[" + name + "]", ignored };
     },
     clear(original, damage) {
       const inv = survival().inventory;
@@ -119,28 +130,68 @@ export function createCommandHost(env) {
     },
     addLevels(n) { env.experience().addLevels(n); env.refreshInventory(); },
     addExperience(n) { env.experience().add(n); env.refreshInventory(); },
-    summon(type, x, y, z) {
+    summon(type, x, y, z, tag) {
       const mobs = env.mobs();
       if (!mobs) return false;
-      mobs.spawnNatural(type, x, y, z);
+      if (!tag) { mobs.spawnNatural(type, x, y, z); env.changed(); return true; }
+      const ignored = [];
+      const spawn = (type, nbt) => {
+        const parsed = summonedMobRecord(type, nbt, { convertItem: t => itemStackFromNbt(t, { ignored }) });
+        if (!parsed) return false;
+        const mob = mobs.restore({ ...parsed.record, x, y, z }, { summoned: true });
+        if (!mob) return false;
+        mobs.entities.push(mob); mobs.nextId++;
+        mob.fire = nbtGet(nbt, 'Fire', NBT.SHORT, 0);
+        const motion = nbtGet(nbt, 'Motion', NBT.LIST);
+        const velocity = motion?.elementType === NBT.DOUBLE ? motion.items : [];
+        for (const [i, key] of ['vx', 'vy', 'vz'].entries()) mob[key] = Number.isFinite(velocity[i]) && Math.abs(velocity[i]) <= 10 ? velocity[i] : 0;
+        ignored.push(...parsed.ignored.filter(k => k !== 'Riding'));
+        return true;
+      };
+      if (!spawn(type, tag)) return false;
+      for (let rider = nbtGet(tag, 'Riding', NBT.COMPOUND); rider; rider = nbtGet(rider, 'Riding', NBT.COMPOUND)) {
+        ignored.push('Riding (riders spawn unmounted)');
+        if (!spawn(SUMMONABLE[nbtGet(rider, 'id', NBT.STRING, '')], rider)) break;
+      }
       env.changed();
-      return true;
+      return { ignored };
     },
     // CommandSetBlock: replace / destroy / keep; destroy drops the old block like a break.
-    setBlock(x, y, z, original, meta, mode) {
+    setBlock(x, y, z, original, meta, mode, tag) {
+      this.ignoredTagKeys = [];
       const w = env.world(), cell = fromOriginal(original, meta);
       if (!cell) return "unsupported";
       const old = w.get(x, y, z);
       if (mode === "keep" && old !== 0) return false;
-      if (old === cell.id && w.getMeta(x, y, z) === cell.meta) return false;
       if (mode === "destroy" && old !== 0) env.destroyBlock(x, y, z);
+      if (w.get(x, y, z) === cell.id && w.getMeta(x, y, z) === cell.meta) return false;
       w.set(x, y, z, cell.id, true, cell.meta ?? 0);
+      const key = `${x},${y},${z}`, stores = survival();
+      for (const name of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing']) delete stores[name]?.[key];
+      const id = { 54: 'Chest', 61: 'Furnace', 62: 'Furnace', 23: 'Trap', 158: 'Dropper', 154: 'Hopper', 117: 'Cauldron' }[original];
+      if (original === 137 && env.commandTile) {
+        Object.assign(env.commandTile(x, y, z), readCommandBlock(tag ?? new Map()));
+        this.ignoredTagKeys = tag ? [...tag.keys()].filter(k => !['Command', 'SuccessCount', 'CustomName', 'TrackOutput', 'LastOutput', 'x', 'y', 'z', 'id'].includes(k)) : [];
+      } else if (id) {
+        const loaded = readContainerTile(id, tag ?? new Map());
+        stores[loaded.name] ??= {};
+        stores[loaded.name][key] = { ...(id === 'Chest' ? newChest() : {}), ...loaded.record };
+        if (id === 'Chest') settleFacing(w, stores.chests, x, y, z);
+        this.ignoredTagKeys = loaded.ignored;
+      } else if (tag) this.ignoredTagKeys = [...tag.keys()];
       env.updateBlock(x, y, z);
       env.changed();
       return true;
     },
+    tileAt(x, y, z) {
+      const id = this.blockAt(x, y, z).id, name = { 54: 'chests', 61: 'furnaces', 62: 'furnaces', 23: 'dispensers', 158: 'dispensers', 154: 'hoppers', 117: 'brewing' }[id];
+      if (id === 137 && env.commandTile) return writeCommandBlock(env.commandTile(x, y, z), x, y, z);
+      if (!name) return null;
+      const record = survival()[name]?.[`${x},${y},${z}`] ?? readContainerTile({ chests: 'Chest', furnaces: 'Furnace', dispensers: 'Trap', hoppers: 'Hopper', brewing: 'Cauldron' }[name], new Map()).record;
+      return writeContainerTile(name, record, x, y, z, { dropper: id === 158 });
+    },
     blockAt(x, y, z) {
-      const w = env.world(), b = w.get(x, y, z), o = toOriginal(b, w.getMeta(x, y, z));
+      const w = env.world(), b = w.get(x, y, z), key = `${x},${y},${z}`, o = toOriginal(b, w.getMeta(x, y, z), { facing: survival().chests?.[key]?.facing, lit: (survival().furnaces?.[key]?.burn ?? 0) > 0 });
       return { id: o?.[0] ?? 0, meta: o?.[1] ?? 0 };
     },
     playSound(name, x, y, z, volume, pitch) { env.playSound?.(name, x, y, z, volume, pitch); },

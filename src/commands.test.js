@@ -235,3 +235,12 @@ test("/publish shares to LAN as survival without cheats; the LAN screen's Allow 
   g.lan.close();
   assert.equal(g.lan.paused(true), true);
 });
+
+
+test("summon failures and tag errors are plain feedback; testfor finds the local player", () => {
+  const g = game({ allowCommands: true });
+  assert.deepEqual(g.run("/summon Pig ~ 300 ~ {bad"), [tr("commands.summon.outOfWorld")]);
+  assert.deepEqual(g.run("/summon Dragon"), [tr("commands.summon.failed")]);
+  assert.ok(!g.run("/give @p diamond 1 0 {bad")[0].startsWith("§c"));
+  assert.deepEqual(g.run("/testfor @p"), [tr("commands.testfor.success", "Player")]);
+});

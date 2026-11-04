@@ -12,10 +12,10 @@ Added in 0.42.0 by `src/inventory-player.js`. Parity is not claimed.
 - The orthographic camera and matrix chain mirror the GL calls above; the two item lights are the RenderHelper directions run through the same matrices (mirror included); there is no lightmap and no fog, as in the GUI.
 
 ## Approximated or missing
-- Fire on the entity (Render.doRenderShadowAndFire draws it in the GUI): the port has no entity fire renderer at all, so a burning player shows nothing.
+- Fire on the player now uses the alternating, narrowing Render.renderEntityOnFire quad stack and original animated textures (0.43.0). GUI billboard yaw is 180 independently of the mouse-driven body yaw. Geometry/constants are bytecode-derived; browser lighting/depth/animation timing is approximate.
 - Entity shadow from doRenderShadowAndFire: not drawn.
-- Stuck arrows are now implemented (see below); fire overlay, shadow, cape and enchant glint on armour are still missing.
-- Cape / deadmau5 ears: the port has no cape; armour enchant glint is not drawn on worn armour (the third-person view lacks it too).
+- Stuck arrows, player fire and worn-armour enchant glint draw in both inventory views and third person. GUI shadow and cape remain missing.
+- Cape / deadmau5 ears remain absent. Armour glint uses native tint, 1/3 texture scale, ±30 degree passes and age-based scrolling (0.02/0.08 per tick before the 1/3 scale); browser UV/depth composition is approximate.
 - Hurt tint brightness uses the real player's world light as in RendererLivingEntity; depth precision, texture filtering and the canvas clip to the GUI rectangle (native draws over the whole screen) are not replayed exactly.
 - Mouse X/Y use the last pointer position over the modal; before the first move it is the window centre.
 
@@ -25,4 +25,4 @@ Added in 0.42.0 by `src/inventory-player.js`. Parity is not claimed.
 - Evidence: `tools/verify-stuck-arrows.mjs` runs the real ModelBiped and ModelBase.getRandomModelBox through `tools/probes/StuckArrowProbe.java` (9 entity ids x 12 arrows) and javap-checks the counter rules; output `public/research/stuck-arrows-reference.json`, replayed by `src/stuck-arrows.test.js`.
 - Count: EntityLivingBase DataWatcher byte 9, not in NBT (not saved). EntityArrow increments it on a landed hit on a living entity (byte wrap); onUpdate decays it: timer = 20 * (30 - count), one arrow drops when it runs out. Port: `survival.arrowCount`/`arrowHitTimer`, `bow.js` damageTarget, reset on death.
 - Render: Random(entityId), random ModelBox, point inside the box, yaw/pitch from atan2, drawn unlit through the part pivot, using the flying-arrow model and texture.
-- Limits: the entity id is the server-assigned id and unknowable here, so id 0 is used (placement is consistent but not the same arrows as a real server). Only RenderPlayer calls the stuck-arrow layer natively, so mobs show none and the port does not add any. The cape and ears have no pivot in the port, so arrows in them attach at the model origin.
+- Limits: the player now receives a nonzero runtime id for each lifetime rather than hard-coding 0; it remains stable while moving and changes on load/respawn. The browser allocator is not the native server's global construction order, so layouts need not match a particular Java session. Only RenderPlayer calls the stuck-arrow layer natively, so mobs show none and the port does not add any. The cape and ears have no pivot in the port, so arrows in them attach at the model origin.

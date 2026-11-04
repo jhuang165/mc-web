@@ -1,9 +1,13 @@
+import { selectLocalPlayer } from "./command-selector.js";
 // The singleplayer command layer of Minecraft Java 1.7.10: CommandHandler.executeCommand, the permission rule of
 // EntityPlayerMP.canCommandSenderUseCommand, CommandBase's argument parsers and the vanilla commands the port can honour.
 // Names, aliases, permission levels, usage keys, the registries and the en_US strings are generated into command-data.js by
 // tools/verify-commands.mjs (public/research/commands-reference.json); public/research/commands.md lists which commands are
 // native-verified, approximated or unsupported. The game state is reached through the host object (see main.js), so the same
 // code runs against a real World / Survival in the tests.
+import { NBT } from "./nbt.js";
+import { parseJsonNbt, NBTException } from "./json-nbt.js";
+import { ORIGINAL_CONTAINERS } from "./block-registry.js";
 import { COMMAND_LIST, LANG, ITEM_REGISTRY, BLOCK_REGISTRY, ENTITY_NAMES, POTION_NAMES, ENCHANTMENT_NAMES, GAME_RULES } from "./command-data.js";
 
 // ---- java.lang.String.format subset used by the lang strings: %s %d %.Nf, with %n$ positions ----
@@ -117,13 +121,16 @@ const PLAYER_ARG = { gamemode: [1], give: [0], clear: [0], xp: [1], effect: [0],
 export function createCommandRunner(host) {
   const name = () => host.name || "Player";
   const say = (text) => host.print(text);
+  const allowed = command => host.canUse ? host.canUse(command) : canUse(command, host.cheats);
+  const playerName = () => host.playerName ?? name();
   // CommandBase.notifyAdmins: in singleplayer the sender gets the plain message (flag 1 suppresses it).
-  const feedback = (key, ...args) => say(tr(key, ...args));
+  const feedback = (key, ...args) => (host.feedback ?? say)(tr(key, ...args));
   const player = (s) => {
-    if (/^@[pare]$/.test(s) || s.toLowerCase() === name().toLowerCase()) return name();
+    const selected = selectLocalPlayer(s, host);
+    if (selected || s.toLowerCase() === playerName().toLowerCase()) return selected ?? playerName();
     throw playerNotFound();
   };
-  const targetArg = (a, i) => (a.length > i ? player(a[i]) : name());
+  const targetArg = (a, i) => { if (a.length > i) return player(a[i]); if (host.isCommandBlock) throw playerNotFound(); return playerName(); };
   const gameMode = (s) => {
     const l = s.toLowerCase();
     if (l === "survival" || l === "s") return "survival";
@@ -150,15 +157,30 @@ export function createCommandRunner(host) {
       say("§7" + tr("commands.generic.deprecatedId", blockById.get(Number(text))));
       return Number(text);
     }
-    throw numberInvalid("commands.give.notFound", text);
+    throw numberInvalid("commands.setblock.notFound", text);
   };
   const pos = () => host.position();
   const usage = (key) => { throw wrongUsage(key); };
+  const note = (keys) => { if (keys?.length) say("§7Not kept in this build: " + [...new Set(keys)].join(", ")); };
+  const dataTag = (a, index, command, throwing = false) => {
+    if (a.length <= index) return undefined;
+    try {
+      const tag = parseJsonNbt(a.slice(index).join(" "));
+      if (tag.type !== NBT.COMPOUND) throw new NBTException("Not a valid tag");
+      return tag.value;
+    } catch (e) {
+      if (!(e instanceof NBTException)) throw e;
+      const key = "commands." + command + ".tagError";
+      if (throwing) throw new CommandException(key, [e.message], "tag");
+      feedback(key, e.message);
+      return null;
+    }
+  };
 
   const handlers = {
     help(a) {
       // CommandHelp: seven usages per page, sorted by name; a name instead of a page shows that command's usage.
-      const list = REGISTERED.filter((c) => canUse(c, host.cheats)).sort((x, y) => (x.name < y.name ? -1 : x.name > y.name ? 1 : 0));
+      const list = REGISTERED.filter((c) => allowed(c)).sort((x, y) => (x.name < y.name ? -1 : x.name > y.name ? 1 : 0));
       const pages = Math.floor((list.length - 1) / 7);
       let page = 0;
       if (a.length > 0) {
@@ -175,11 +197,11 @@ export function createCommandRunner(host) {
     },
     me(a) {
       if (a.length < 1) usage("commands.me.usage");
-      say(tr("chat.type.emote", name(), a.join(" ")));
+      (host.broadcast ?? say)(tr("chat.type.emote", name(), a.join(" ")));
     },
     say(a) {
       if (a.length < 1) usage("commands.say.usage");
-      say(tr("chat.type.announcement", name(), a.join(" ")));
+      (host.broadcast ?? say)(tr("chat.type.announcement", name(), a.join(" ")));
     },
     tell(a) {
       if (a.length < 2) usage("commands.message.usage");
@@ -190,6 +212,7 @@ export function createCommandRunner(host) {
     seed() { feedback("commands.seed.success", String(host.seed())); },
     list() { say(tr("commands.players.list", 1, 8)); say(name()); },
     kill() {
+      if (host.isCommandBlock) throw playerNotFound();
       host.kill();
       feedback("commands.kill.success");
     },
@@ -223,10 +246,12 @@ export function createCommandRunner(host) {
       if (a.length < 2) usage("commands.give.usage");
       const target = player(a[0]), item = findItem(a[1]);
       const count = a.length >= 3 ? parseIntBounded(a[2], 1, 64) : 1, damage = a.length >= 4 ? parseInt32(a[3]) : 0;
-      if (a.length >= 5) throw new CommandException("commands.give.tagError", ["Data tags are not supported in this build"], "tag");
-      const given = host.give(item, count, damage);
+      const tag = dataTag(a, 4, "give");
+      if (tag === null) return;
+      const given = host.give(item, count, damage, tag);
       if (!given) throw new CommandException("commands.give.notFound", ["This item is not in this build"], "unsupported");
       feedback("commands.give.success", given.name, count, target);
+      note(given.ignored);
     },
     clear(a) {
       const target = targetArg(a, 0);
@@ -274,6 +299,7 @@ export function createCommandRunner(host) {
       let i = 0, who = name();
       if (a.length === 2 || a.length === 4) { who = player(a[0]); i = 1; }
       const here = pos();
+      if (host.isCommandBlock && i === 0) throw playerNotFound();
       if (a.length - i === 3) {
         const x = parseCoordinate(here.x, a[i]), y = parseCoordinate(here.y, a[i + 1], 0, 0), z = parseCoordinate(here.z, a[i + 2]);
         host.teleport(x, y, z);
@@ -367,13 +393,16 @@ export function createCommandRunner(host) {
     },
     summon(a) {
       if (a.length < 1) usage("commands.summon.usage");
-      const here = pos();
-      let x = here.x, y = here.y, z = here.z;
+      const p = pos(), here = { x: Math.floor(p.x) + 0.5, y: Math.floor(p.y + 0.5), z: Math.floor(p.z) + 0.5 };
+      let { x, y, z } = here;
       if (a.length >= 4) { x = parseCoordinate(here.x, a[1]); y = parseCoordinate(here.y, a[2], 0, 0); z = parseCoordinate(here.z, a[3]); }
-      if (a.length >= 5) throw new CommandException("commands.summon.tagError", ["Data tags are not supported in this build"], "tag");
-      if (!host.inWorld(x, y, z)) throw new CommandException("commands.summon.outOfWorld");
+      if (!host.inWorld(x, y, z)) return feedback("commands.summon.outOfWorld");
+      const tag = dataTag(a, 4, "summon");
+      if (tag === null) return;
       const type = entityByName.has(a[0]) ? SUMMONABLE[a[0]] : null;
-      if (!type || !host.summon(type, x, y, z)) throw new CommandException("commands.summon.failed");
+      const result = type && host.summon(type, x, y, z, tag);
+      if (!result) return feedback("commands.summon.failed");
+      note(result.ignored);
       feedback("commands.summon.success");
     },
     setblock(a) {
@@ -383,13 +412,13 @@ export function createCommandRunner(host) {
       const id = findBlock(a[3]);
       const meta = a.length >= 5 ? parseIntBounded(a[4], 0, 15) : 0;
       const mode = a.length >= 6 ? a[5] : "replace";
-      if (a.length >= 6 && !["replace", "destroy", "keep"].includes(mode)) usage("commands.setblock.usage");
-      if (a.length >= 7) throw new CommandException("commands.setblock.tagError", ["Data tags are not supported in this build"], "tag");
       if (!host.inWorld(x, y, z) || y < 0 || y > 255) throw new CommandException("commands.setblock.outOfWorld");
-      const out = host.setBlock(x, y, z, id, meta, mode);
+      const tag = ORIGINAL_CONTAINERS.includes(id) ? dataTag(a, 6, "setblock", true) : undefined;
+      const out = host.setBlock(x, y, z, id, meta, mode, tag);
       if (out === "unsupported") throw new CommandException("commands.generic.exception", ["This block is not in this build"], "unsupported");
       if (out !== true) throw new CommandException("commands.setblock.noChange");
       feedback("commands.setblock.success");
+      note(host.ignoredTagKeys);
     },
     testforblock(a) {
       if (a.length < 4) usage("commands.testforblock.usage");
@@ -398,12 +427,18 @@ export function createCommandRunner(host) {
       const id = findBlock(a[3]);
       const meta = a.length >= 5 ? parseIntBounded(a[4], -1, 15) : -1;
       if (!host.inWorld(x, y, z)) throw new CommandException("commands.testforblock.outOfWorld");
+      const tag = ORIGINAL_CONTAINERS.includes(id) ? dataTag(a, 5, "setblock", true) : undefined;
       const got = host.blockAt(x, y, z);
       if (got.id !== id) throw new CommandException("commands.testforblock.failed.tile", [x, y, z, blockById.get(got.id) ?? "minecraft:air", a[3]]);
       if (meta > -1 && got.meta !== meta) throw new CommandException("commands.testforblock.failed.data", [x, y, z, got.meta, meta]);
+      if (tag) {
+        const tile = host.tileAt(x, y, z);
+        if (!tile) throw new CommandException("commands.testforblock.failed.tileEntity", [x, y, z]);
+        if (!nbtMatches({ type: NBT.COMPOUND, value: tag }, { type: NBT.COMPOUND, value: tile })) throw new CommandException("commands.testforblock.failed.nbt", [x, y, z]);
+      }
       feedback("commands.testforblock.success", x, y, z);
     },
-    testfor() { throw new CommandException("commands.testfor.failed"); },
+    testfor(a) { if (!a.length) usage("commands.testfor.usage"); const target = player(a[0]); feedback("commands.testfor.success", target); },
     playsound(a) {
       if (a.length < 2) usage("commands.playsound.usage");
       const target = player(a[1]);
@@ -441,7 +476,7 @@ export function createCommandRunner(host) {
     const command = BY_NAME.get(word);
     try {
       if (!command) throw new CommandException("commands.generic.notFound");
-      if (!canUse(command, host.cheats)) throw new CommandException("commands.generic.permission");
+      if (!allowed(command)) throw new CommandException("commands.generic.permission");
       if (UNSUPPORTED.has(command.name)) throw new CommandException("commands.generic.exception", [`The /${command.name} command is not available in this build`], "unsupported");
       handlers[command.name](parts);
       return true;
@@ -454,9 +489,9 @@ export function createCommandRunner(host) {
   function complete(before) {
     if (!before.startsWith("/")) return matchLast(before.split(" "), [name()]);
     const line = before.slice(1), parts = line.split(" ");
-    if (parts.length === 1) return REGISTERED.filter((c) => canUse(c, host.cheats) && startsWithIgnoreCase(parts[0], c.name)).map((c) => "/" + c.name).sort();
+    if (parts.length === 1) return REGISTERED.filter((c) => allowed(c) && startsWithIgnoreCase(parts[0], c.name)).map((c) => "/" + c.name).sort();
     const command = BY_NAME.get(parts[0]);
-    if (!command || !canUse(command, host.cheats)) return [];
+    if (!command || !allowed(command)) return [];
     const args = parts.slice(1), index = args.length - 1;
     let options = [];
     const n = command.name;
@@ -471,7 +506,7 @@ export function createCommandRunner(host) {
     else if (n === "give" && index === 1) options = ITEM_REGISTRY.map(([k]) => k);
     else if (n === "setblock" && index === 3 || n === "testforblock" && index === 3) options = BLOCK_REGISTRY.map(([k]) => k);
     else if (n === "summon" && index === 0) options = Object.keys(SUMMONABLE);
-    else if (n === "help" && index === 0) options = REGISTERED.filter((c) => canUse(c, host.cheats)).map((c) => c.name);
+    else if (n === "help" && index === 0) options = REGISTERED.filter((c) => allowed(c)).map((c) => c.name);
     else if (n === "effect" && index === 1) options = ["clear"];
     return matchLast(args, options);
   }
@@ -480,3 +515,13 @@ export function createCommandRunner(host) {
 
 // Chat that is not a command: ServerConfigurationManager prints chat.type.text, "<Player> message".
 export const chatLine = (name, message) => tr("chat.type.text", name, message);
+
+// CommandTestForBlock.func_147181_a: compound subset, but lists and arrays require complete typed equality.
+export function nbtMatches(a, b, subset = true) {
+  if (a == null) return true;
+  if (b == null || a.type !== b.type) return false;
+  if (a.type === NBT.COMPOUND) return (subset || a.value.size === b.value.size) && [...a.value].every(([k, v]) => b.value.has(k) && nbtMatches(v, b.value.get(k), subset));
+  if (a.type === NBT.LIST) return a.value.elementType === b.value.elementType && a.value.items.length === b.value.items.length && a.value.items.every((v, i) => nbtMatches({ type: a.value.elementType, value: v }, { type: b.value.elementType, value: b.value.items[i] }, false));
+  if (a.type === NBT.BYTE_ARRAY || a.type === NBT.INT_ARRAY) return a.value.length === b.value.length && a.value.every((v, i) => v === b.value[i]);
+  return a.value === b.value; // native float/double equals uses fcmpl/dcmpl (-0 equals +0)
+}

@@ -22,6 +22,7 @@ const FIRE_REASONS = new Set(["burning", "lava", "fire"]); // DamageSource.isFir
 export const ITEMS = Object.fromEntries(
   BLOCKS.map((b, id) => [id, { ...b, id, block: id > 0, stack: 64 }]),
 );
+ITEMS[1139]={...ITEMS[139],id:1139,block:true};
 ITEMS[2].variants=['Dirt','Coarse dirt','Podzol'];
 ITEMS[6].variants=['Sand','Red sand'];
 ITEMS[56].variants=['Sandstone','Chiseled sandstone','Smooth sandstone'];
@@ -219,6 +220,7 @@ installPopulationItems(ITEMS);
 // Every item name and damage subtype is the 1.7.10 en_US display name (item-names.js); internal-only items get Title Case.
 applyNativeNames(ITEMS);
 export const MATERIALS = {
+  139: {hardness:Infinity,drop:0},
   1: { hardness: 0.6, drop: 2 },
   2: { hardness: 0.5 },
   3: { hardness: 1.5, kind: "pickaxe", tier: 0, drop: 12 },

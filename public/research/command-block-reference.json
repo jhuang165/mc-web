@@ -1,0 +1,19 @@
+{
+  "target": "Minecraft Java 1.7.10",
+  "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+  "evidence": "javap bytecode assertions; no integrated native server execution",
+  "classes": {
+    "akb": "f8ce390a83dbf41808cdb04782c73894a2ca57acbd9c118d4c15869144a94274",
+    "agp": "501e12ab73c7ddd79502dfda3e0f119bf88c6cc82024b7476a785853a8b78e4f",
+    "bl": "99091bc5db65e7ff4184f5c784f9a4086495af4e93cbfaf018e6aa170c5f02f4",
+    "bfh": "0313eb94afe8531b8c7e634726f8cb8b0a5c598e623d21d3f7672f938e3e6584"
+  },
+  "constants": {
+    "originalId": 137,
+    "internalId": 139,
+    "triggerBit": 1,
+    "tickRate": 1,
+    "permissionLevel": 2,
+    "maxCommandLength": 32767
+  }
+}

@@ -6,6 +6,7 @@ import { POPULATION_ITEMS } from './population-content.js';
 // Original item ID (or "id:damage" subtype) -> browser item. The same table as tools/inventory-replay.mjs
 // MC_IDS (the item catalogue's mapping); region-import.test.js keeps the two identical.
 export const ORIGINAL_ITEMS = Object.freeze({
+  137: 1139,
   1: 3, 2: 1, 3: 2, 4: 12, 54: 41, 5: 7, 6: SAPLING, 7: 11, 12: 6, 13: 25, 14: 18, 15: 16, 16: 15, 17: 4, 18: 5, 20: 9, 30: WEB, 65: LADDER,
   '31:1': 39, 35: 19, 49: 22, 41: 27, 42: 26, 45: 8, 47: 21, 50: 20, 56: 17, 57: 28, 58: 13, 61: 14, 78: SNOW_LAYER, 79: ICE, 80: 23, 82: 24, 172: 40,
   256: 110, 257: 102, 258: 106, 259: 126, 260: 200, 263: 301, 264: 303, 265: 302, 266: 304, 267: 114, 268: 112, 269: 108, 270: 100, 271: 104,

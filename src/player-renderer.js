@@ -1,3 +1,5 @@
+import { EntityFireRenderer } from "./entity-fire-renderer.js";
+import { stackHasEffect } from "./armor-enchantments.js";
 import * as THREE from "three";
 import { pixelTexture, itemTexture } from "./first-person.js";
 import { entityMaterial } from "./light-material.js";
@@ -17,6 +19,7 @@ export { LEATHER_COLOR } from "./leather-dye.js";
 // Third-person player: EntityRenderer.orientCamera (blt.h), RenderPlayer (bop)
 // and ModelBiped (bhm), as read from the 1.7.10 bytecode. See
 // public/research/third-person.md.
+let nextPlayerEntityId = 1; // runtime entity ids, unsaved like Entity.entityId
 const f = Math.fround, RAD = Math.PI / 180, DEG = 180 / Math.PI;
 const ARMOR_URL = "/media/1.7.10/models/armor/";
 export const STEVE_URL = "/media/1.7.10/entity/steve.png";
@@ -80,6 +83,7 @@ export class PlayerBody {
     this.reset({ x: 0, y: 0, z: 0 }, 0, 0);
   }
   reset(position, yaw, pitch) {
+    this.entityId = nextPlayerEntityId++;
     const j = javaYaw(yaw), p = javaPitch(pitch);
     Object.assign(this, {
       px: position.x, py: position.y, pz: position.z, x: position.x, y: position.y, z: position.z,
@@ -387,6 +391,7 @@ export class PlayerRenderer {
       this.pivots[name] = pivot;
       this.model.add(pivot);
     }
+    this.fire = new EntityFireRenderer(scene);
     this.armorKey = "";
     this.armorNodes = [];
     this.armorMaterials = [];
@@ -415,13 +420,15 @@ export class PlayerRenderer {
   }
   // Stacks are ordered helmet..boots. Color participates in the cache key for redyeing.
   syncArmor(stacks) {
-    const key = stacks.map(s => `${s?.id ?? 0}:${s?.color ?? LEATHER_COLOR}`).join(",");
+    const key = stacks.map(s => `${s?.id ?? 0}:${s?.color ?? LEATHER_COLOR}:${stackHasEffect(s, ITEMS[s?.id]) ? 1 : 0}`).join(",");
     if (key === this.armorKey) return;
     this.armorKey = key;
     for (const n of this.armorNodes) n.parent?.remove(n);
     for (const m of this.armorMaterials) this.forget(m);
     this.armorNodes = [];
     this.armorMaterials = [];
+    for (const m of this.armorGlints ?? []) m.dispose();
+    this.armorGlints = [];
     stacks.forEach((stack, pass) => {
       const layer = armorLayer(stack?.id ?? 0, pass, stack?.color);
       if (!layer) return;
@@ -433,6 +440,10 @@ export class PlayerRenderer {
           mesh.renderOrder = order;
           this.pivots[name].add(mesh);
           this.armorNodes.push(mesh);
+          if (stackHasEffect(stack, ITEMS[stack?.id]) && order === 0) {
+            const glint = armorGlintMesh(mesh.geometry, m.uniforms.map.value);
+            mesh.add(glint); this.armorGlints.push(glint.material);
+          }
         }
       };
       make(layer.url, layer.tint, 0);
@@ -517,13 +528,15 @@ export class PlayerRenderer {
   }
   // `body` is a PlayerBody; `swing` is the swing progress (0 at rest); `armor`
   // is inventory.armor (boots first); `held` the held item id.
-  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, hurt = false, sneak = false, riding = false, invisible = false, arrowCount = 0, arrowEntityId = 0 } = {}) {
+  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, hurt = false, sneak = false, riding = false, invisible = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180 } = {}) {
     this.root.visible = visible;
-    if (!visible) return;
+    if (!visible) { this.fire.root.visible = false; return; }
     const pose = mobPose(body, partial);
     this.root.position.set(pose.x, pose.y, pose.z);
     this.root.rotation.y = (180 - pose.bodyYaw) * RAD;
+    this.fire.update(pose, burning, fireViewYaw);
     this.syncArmor([3, 2, 1, 0].map((slot) => armor[slot]));
+    for (const m of this.armorGlints) m.uniforms.time.value = pose.age;
     this.syncHeld(held, heldDamage, heldColor, heldGlint);
     this.syncArrows(arrowCount, arrowEntityId);
     const parts = bipedPose({
@@ -548,4 +561,19 @@ export class PlayerRenderer {
       m.uniforms.overlay.value.set(hurt ? b : 0, 0, 0, hurt ? 0.4 : 0);
     }
   }
+}
+
+// RendererLivingEntity's armour effect: two SRC_COLOR/ONE passes, tint (0.38, 0.19, 0.608),
+// texture matrix scale 1/3, rotations 30/−30, age scrolling at 0.02 / 0.08 per tick before the texture scale.
+export function armorGlintMesh(geometry, map) {
+  const mesh = glintMesh(geometry, map), m = mesh.material;
+  m.fragmentShader = `uniform sampler2D item,glint;uniform float time;varying vec2 vUv;
+vec2 turn(vec2 p,float degrees){float a=radians(degrees),c=cos(a),s=sin(a);return vec2(c*p.x-s*p.y,s*p.x+c*p.y);}
+void main(){if(texture2D(item,vUv).a<=0.1)discard;
+vec3 a=texture2D(glint,turn((vUv+vec2(0.,time*.02))/3.,30.)).rgb;
+vec3 b=texture2D(glint,turn((vUv+vec2(0.,time*.08))/3.,-30.)).rgb;
+gl_FragColor=vec4(sqrt(a*a+b*b)*vec3(.38,.19,.608),1.);}`;
+  mesh.onBeforeRender=()=>{};
+  // UV placement/depth precision still use the browser renderer, so the effect is not pixel-exact.
+  return mesh;
 }

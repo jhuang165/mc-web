@@ -27,8 +27,8 @@
    "site": "ServerCommandManager.func_152372_a",
    "obf": "bl.a(Lac;Laa;ILjava/lang/String;[Ljava/lang/Object;)V",
    "reads": 1,
-   "port": "absent",
-   "where": "no command blocks"
+   "port": "wired",
+   "where": "src/command-block.js commandBlockSender feedback"
   },
   {
    "rule": "doDaylightCycle",

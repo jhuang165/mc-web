@@ -128,7 +128,7 @@ export class InventoryPlayerView {
     const pose = paperdollLook(layout, guiX, guiY);
     this.holder.matrix.copy(paperdollMatrix(layout, pose.tilt));
     this.holder.matrixWorldNeedsUpdate = true;
-    this.player.update(paperdollBody(pose, limb), 1, { ...state, visible: true });
+    this.player.update(paperdollBody(pose, limb), 1, { ...state, fireViewYaw: 180, visible: true });
     const lights = paperdollLights(layout);
     for (const m of this.player.materials) {
       if (m.uniforms.light0) {

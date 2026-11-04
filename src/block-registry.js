@@ -144,6 +144,7 @@ const MAP = {
   [COMPARATOR]: same(149), [COMPARATOR_POWERED]: same(150), [DAYLIGHT_SENSOR]: same(151),
   [PISTON_MOVING]: same(36), [GLOWSTONE]: fixed(89),
   // 0.40.0 reservations: dropper 158, hopper 154, brewing stand 117, powered/detector/activator rails 27/28/157 (metadata as the original's).
+  139: same(137),
   132: same(158), 133: same(154), 134: same(117), 135: same(27), 136: same(28), 137: same(157),
   // 0.42.0: BlockBed (26): metadata is the original's (facing 0-3, occupied bit 4, head bit 8).
   138: same(26),

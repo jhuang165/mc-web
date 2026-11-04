@@ -42,7 +42,7 @@ export const placementReplaceable = doorReplaceable;
 export function placeHeldBlock(state, request, hooks = {}) {
   const { world, survival, position, flowers, farming, yaw } = state;
   const { id: itemId, item, target } = request;
-  const id = dispenserPistonItemBlock(itemId) || redstoneItemBlock(itemId) || railItemBlock(itemId) || brewingItemBlock(itemId) || paneItemBlock(itemId) || stoneUtilityItemBlock(itemId) || itemId; // the glass pane item (1100) places block 100; stone utility items 1101-1106 their blocks 101-106
+  const id = (itemId === 1139 ? 139 : 0) || dispenserPistonItemBlock(itemId) || redstoneItemBlock(itemId) || railItemBlock(itemId) || brewingItemBlock(itemId) || paneItemBlock(itemId) || stoneUtilityItemBlock(itemId) || itemId; // the glass pane item (1100) places block 100; stone utility items 1101-1106 their blocks 101-106
   const {
     collides: intersects = collides,
     toast = () => {},

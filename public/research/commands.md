@@ -1,4 +1,4 @@
-# Chat, commands and cheats (0.42.0)
+# Chat, commands and cheats (0.43.0)
 
 Target: Minecraft Java 1.7.10. Nothing here claims full parity.
 
@@ -30,8 +30,7 @@ World creation has Allow Cheats (GuiCreateWorld semantics from bytecode: off by 
 survival off until the button has been pressed by hand). Stored as `allowCommands` in the world record. This build has no Hardcore mode,
 so the Hardcore-forces-off rule has nothing to apply to. With cheats off only help, me, tell/msg/w and seed work; every other command
 answers `commands.generic.permission` in red (EntityPlayerMP.canCommandSenderUseCommand). With cheats on the op level is 4.
-A save without the flag reads as WorldInfo does: cheats on for a creative world, off for survival. Open to LAN stays unsupported
-(a web page cannot open sockets), so it cannot grant cheats.
+A save without the flag reads as WorldInfo does: cheats on for a creative world, off for survival. Open to LAN applies the local game type/cheat/pause settings; browser socket hosting and Java multiplayer remain unsupported.
 
 ## Commands
 
@@ -39,20 +38,44 @@ Native-verified (names, aliases, permission, usage and feedback strings, argumen
 help (paged, 7 per page), gamemode, defaultgamemode (stored only), gamerule, give, clear, kill, time, toggledownfall, weather
 (CommandWeather timers and flags from javap), tp (with `~`; a bare number adds 0.5, y included), spawnpoint (used on respawn when no
 bed spawn), setworldspawn, difficulty, effect, enchant, xp (L suffix), summon, setblock, testforblock, say, me, tell/msg/w, seed,
-playsound, list, testfor (always fails: no other entities).
+playsound, list, testfor (the local player).
 
 Approximated:
-- /gamemode 2 (adventure) is refused: the port has only survival and creative.
+- Adventure mode uses the build's existing adventure restrictions; full adventure parity remains open.
 - /setworldspawn stores the point in the record but the world spawn search is unchanged.
-- /setblock destroy drops like a break with the held tool; block state beyond id and metadata is not set; data tags are refused.
-- /give and /summon take no data tags. /summon covers the entities the port has (pig, cow, sheep, chicken, zombie, spider, cave
+- /setblock destroy drops like a break with the held tool; supported tile data tags are applied.
+- /give and /summon accept supported data tags (below). /summon covers the entities the port has (pig, cow, sheep, chicken, zombie, spider, cave
   spider, skeleton, creeper, villager, iron golem, silverfish, witch).
 - /effect: instant health and harm apply directly; other effects use the port's Effects table.
-- /tp and the player-name arguments accept `@p`, `@a`, `@r`, `@e` and the player name only.
+- /tp and the player-name arguments accept `@p`, `@a`, `@r` and the local player name; radius/name/mode/level filters apply to that one player.
 
 Game rules are stored for every name. keepInventory, naturalRegeneration, doDaylightCycle, doTileDrops, doFireTick, doMobSpawning,
-mobGriefing and doMobLoot change behaviour at the native call sites (see [game rules](game-rules.md)); commandBlockOutput is stored
-and reported but has no command block to act on.
+mobGriefing and doMobLoot change behaviour at the native call sites (see [game rules](game-rules.md)); commandBlockOutput controls operator feedback from command blocks, independently of their Track Output flag.
 
-Unsupported (red message): achievement, debug, publish, scoreboard, spreadplayers, tellraw. Dedicated-server-only commands (op, ban,
+Unsupported (red message): achievement, debug, scoreboard, spreadplayers, tellraw. /publish changes local LAN settings and reports the browser networking limitation. Dedicated-server-only commands (op, ban,
 stop, ...) are not registered, as in the native singleplayer.
+
+## 0.43.0 data tags
+
+`src/json-nbt.js` ports the 1.7.10 JsonToNBT parser, with 119 original-class cases in
+[json-nbt-reference.json](json-nbt-reference.json) (zero differential mismatches).
+Tag text is the remaining arguments joined with spaces. Give/summon tag errors and summon out-of-world/creation
+failures are plain feedback; setblock/testforblock tag errors are thrown command errors. Only tile-entity block
+arguments cause the latter commands to parse tags. Unknown setblock modes replace; destroy happens before the
+same-block check. Testforblock compares compound subsets, with exact typed lists/arrays (`func_147181_a`).
+
+Give applies supported ItemStack enchantments, stored enchantments, repair cost, display name/colour and Unbreakable.
+Summon uses floor(x)+0.5, floor(y+0.5), floor(z)+0.5 as its relative base; a tag, including `{}`, skips
+onSpawnWithEgg. Supported mob fields include rotation yaw, health, active effects, age/love, sheep colour/shearing,
+zombie child/villager/cure state, villagers' professions/riches/offers, player-created golems, creeper power/ignition,
+and the witch's held potion. Fire and bounded Motion apply after restoration. Container tile readers/writers are
+shared with Java import/export (chests, furnace, dispenser/dropper, hopper, brewing stand); command blocks use Control tiles.
+
+Explicit deviations: the native parser's empty-list-element hang becomes an error; decimal-to-float conversion uses
+JavaScript Number followed by Math.fround, so an exceptionally close double-rounding tie can differ from Java Float.parseFloat.
+Unknown keys are discarded with a gray `Not kept in this build: …` line. Mob effects/equipment are limited to the
+build's live implementations; tagged summons do not gain spawn-egg equipment. Riding chains spawn supported entities
+at the same point unmounted, with a note. Rotation pitch and arbitrary attributes/equipment remain unsupported.
+This is partial command/NBT support, not full parity.
+
+See [command blocks](command-blocks.md) for the new editor, rising-edge execution, sender and commandBlockOutput rule.

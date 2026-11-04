@@ -44,7 +44,7 @@ const PORT = {
   "EntityLivingBase.onDeathUpdate": ["wired", "src/entities.js deathUpdate; main.js player death orbs"],
   "EntityLivingBase.onDeath": ["wired", "src/entities.js onDeath"],
   "EntityAIMate.spawnBaby": ["wired", "src/entities.js spawnBaby"],
-  "ServerCommandManager.func_152372_a": ["absent", "no command blocks"],
+  "ServerCommandManager.func_152372_a": ["wired", "src/command-block.js commandBlockSender feedback"],
   "Block.dropBlockAsItem_do": ["wired", "main.js items.dropBlock wrapper"],
   "EntityPlayer.getExperiencePoints": ["wired", "main.js death (keepInventory)"],
   "EntityPlayer.onDeath": ["wired", "main.js death (keepInventory)"],

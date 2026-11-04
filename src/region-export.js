@@ -1,3 +1,4 @@
+import { writeCommandBlock } from "./command-block.js";
 // Browser -> Java 1.7.10 Anvil snapshot. The ZIP also retains the exact browser save.
 import { World } from './world.js';
 import { lightOpacity } from './lighting.js';
@@ -16,7 +17,7 @@ import { populationBlockMapperReady } from './population-world.js';
 import { streamedWorldType } from './java-world.js';
 import { structureDataFiles } from './structure-data.js';
 import { villageDocument } from './village.js';
-const tag=(type,value)=>({type,value}), comp=value=>tag(NBT.COMPOUND,new Map(Object.entries(value))), list=(type,items)=>tag(NBT.LIST,{elementType:type,items});
+const tag=(type,value)=>({type,value}), comp=value=>tag(NBT.COMPOUND,new Map(Object.entries(value))), list=(type,items)=>tag(NBT.LIST,{elementType:items.length?type:NBT.END,items});
 const byte=v=>tag(NBT.BYTE,(v<<24)>>24), short=v=>tag(NBT.SHORT,v), int=v=>tag(NBT.INT,v), str=v=>tag(NBT.STRING,v), float=v=>tag(NBT.FLOAT,v), long=v=>tag(NBT.LONG,BigInt(Math.trunc(v)));
 const reverse=new Map();
 for(const [k,id] of Object.entries(ORIGINAL_ITEMS)) {const [o,damage]=k.split(':').map(Number);if(!reverse.has(id)||damage===undefined)reverse.set(id,{id:o,damage});}
@@ -45,6 +46,14 @@ function entity(e,name,ox,oz) {
  return {id:str(name),Pos:list(NBT.DOUBLE,[e.x+ox,e.posY??e.y,e.z+oz]),Motion:list(NBT.DOUBLE,e.motion??[e.vx??e.mx??0,e.vy??e.my??0,e.vz??e.mz??0]),
  Rotation:list(NBT.FLOAT,e.rotation??(name==='Player'?[(Math.PI-(e.yaw??0))*180/Math.PI,-(e.pitch??0)*180/Math.PI]:[e.rotationYaw??(-(e.yaw??0)*180/Math.PI+0),e.rotationPitch??0])),FallDistance:float(e.fallDistance??0),Fire:short(e.fire??-1),Air:short(e.air??300),OnGround:byte(e.onGround?1:0),Dimension:int(0),Invulnerable:byte(0),PortalCooldown:int(0)};
 }
+// Shared TileEntity.writeToNBT used by region export and /testforblock.
+export function writeContainerTile(name,e,x,y,z,{report={unmappedItems:0},dropper=false}={}) {
+ const n={id:str(name==='chests'?'Chest':name==='dispensers'?(dropper?'Dropper':'Trap'):name==='hoppers'?'Hopper':name==='brewing'?'Cauldron':'Furnace'),x:int(x),y:int(y),z:int(z),Items:inventory(e.items,report)};
+ if(name==='furnaces'){n.BurnTime=short(e.burn??0);n.CookTime=short(e.cook??0);}
+ if(name==='brewing')n.BrewTime=short(e.brewTime??0);
+ if(name==='hoppers'){n.TransferCooldown=int(e.cooldown??0);if(e.name)n.CustomName=str(e.name);}
+ return new Map(Object.entries(n));
+}
 function payload(state,ox,oz,report,world=null) {
  const entities=[],tiles=[],ticks=[];
  for(const wrapped of state.entities??[]) {const e=wrapped.value,name=NAMES[e.type];if(!name){report.unsupportedEntities++;continue;}
@@ -68,11 +77,10 @@ function payload(state,ox,oz,report,world=null) {
  for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta);entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET},'FallingSand',ox,oz),TileID:int(o[0]),Data:byte(o[1]),Time:byte(e.ticks&255),DropItem:byte(1)})));}
  for(const {value:e} of state.carts??[]) {const items=(e.items??[]).map(s=>stackNbt(s,s.slot,report,true)).filter(Boolean),n=entity(e,e.type===0?'MinecartRideable':'MinecartChest',ox,oz);if(e.type!==0)n.Items=list(NBT.COMPOUND,items);if(e.customName)n.CustomName=str(e.customName);entities.push(new Map(Object.entries(n)));}
  for(const name of ['projectiles','arrows'])report.unsupportedEntities+=(state[name]??[]).length;
- for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const [k,e] of Object.entries(state[name]??{})) {const [x,y,z]=k.split(',').map(Number),n={id:str(name==='chests'?'Chest':name==='dispensers'?(world?.get(x,y,z)===132?'Dropper':'Trap'):name==='hoppers'?'Hopper':name==='brewing'?'Cauldron':'Furnace'),x:int(x+ox),y:int(y),z:int(z+oz),Items:inventory(e.items,report)};
-  if(name==='furnaces'){n.BurnTime=short(e.burn??0);n.CookTime=short(e.cook??0);}
-  if(name==='brewing')n.BrewTime=short(e.brewTime??0);
-  if(name==='hoppers'){n.TransferCooldown=int(e.cooldown??0);if(e.name)n.CustomName=str(e.name);}tiles.push(new Map(Object.entries(n)));
+ for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const [k,e] of Object.entries(state[name]??{})) {
+  const [x,y,z]=k.split(',').map(Number);tiles.push(writeContainerTile(name,e,x+ox,y,z+oz,{report,dropper:world?.get(x,y,z)===132}));
  }
+ for(const {value:e} of state.commandBlocks??[])tiles.push(writeCommandBlock(e,e.x+ox,e.y,e.z+oz));
  for(const {value:e} of state.spawners??[]) {const n={id:str('MobSpawner'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz)};for(const [k,v] of Object.entries(e))if(!['x','y','z'].includes(k))n[k]=typeof v==='string'?str(v):short(v);tiles.push(new Map(Object.entries(n)));}
  // TileEntityPiston.writeToNBT: blockId, blockData, facing, progress, extending (original ids; renderHead is not saved by Java).
  for(const w of state.pistons??[]){const e=w.value??w;tiles.push(new Map(Object.entries({id:str('Piston'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),blockId:int(e.block),blockData:int(e.meta),facing:int(e.facing),progress:float(e.progress??0),extending:byte(e.extending?1:0)})));}

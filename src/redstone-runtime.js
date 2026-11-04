@@ -16,6 +16,7 @@
 //   game.maxStack(stack)
 //   game.subtracted() -> skylight subtracted     game.angle() -> celestial angle in [0, 1)
 //   game.skyLight(x, y, z)
+import { installCommandBlocks } from "./command-block.js";
 import { LiveRedstone } from "./redstone-live.js";
 import { installPistons } from "./piston-live.js";
 import { applyPlayerEdit } from "./player-edit-simulation.js";
@@ -99,6 +100,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     environment: () => ({ skylightSubtracted: game.subtracted?.() ?? 0, celestialAngle: Math.fround((game.angle?.() ?? 0) * Math.PI * 2), sky: 15 }),
     skyLight: (x, y, z) => game.skyLight?.(x, y, z) ?? 15,
   });
+  const commandBlocks = installCommandBlocks(redstone, { host: () => game.commandHost(), changed: () => game.markUnsaved?.() });
   redstone.registerBehaviour(154, hopperBehaviour); // BlockHopper: power disables it (metadata bit 8)
   installPoweredRails(redstone); // powered / detector / activator rails and the plain rail's redstone hooks
   // BlockDispenser (23) and BlockDropper (158): dispense.js over the game's entity and block hooks (game.dispense). Sounds are the
@@ -193,6 +195,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
   // Block.onBlockPlacedBy for the diodes and pistons (their metadata was already set from the placer by the placement code).
   function placedBy(x, y, z, state) {
     const id = redstone.getBlock(x, y, z), behaviour = redstone.behaviours[id];
+    if (id === 137) { commandBlocks.tile(x, y, z).customName = state.survival?.held?.displayName ?? '@'; return; }
     if (!behaviour?.onBlockPlacedBy) return;
     const mcYaw = Math.fround(180 - (state.yaw * 180) / Math.PI);
     behaviour.onBlockPlacedBy(redstone, x, y, z, id === 33 || id === 29 ? { x: state.position.x, y: state.position.y, z: state.position.z, yaw: mcYaw } : mcYaw);
@@ -210,6 +213,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
   return {
     redstone,
     pistons,
+    commandBlocks,
     tick,
     frame: (partial) => pistons.frame(partial),
     flush,
@@ -219,6 +223,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     containerClosed,
     save: () => redstone.save(),
     restore: (record) => {
+      commandBlocks.restore(record?.commandBlocks);
       // A Java import carries only Piston tile entities (record.pistons).
       if (record?.redstone) redstone.restore(record.redstone);
       else if (Array.isArray(record?.pistons)) pistons.restore(record.pistons);
