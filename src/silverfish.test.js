@@ -312,15 +312,15 @@ test("silverfish spawner scenarios replay the real MobSpawnerBaseLogic", () => {
 });
 
 // ---- the live EntityWorld: create, attack, hurt, die, save, reload, hide, wake, break ----
-import { EntityWorld, ENTITY_TYPES, mobPose } from "./entities.js";
+import { EntityWorld, ENTITY_TYPES, mobPose, setEntityRandom } from "./entities.js";
 import { Survival } from "./survival.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
 
-function stoneWorld() {
+function stoneWorld(floorBlock = 3) {
   const cells = new Map(), metas = new Map(), key = (x, y, z) => `${x},${y},${z}`;
   return {
     numericSeed: 1, cells, metas,
-    get: (x, y, z) => cells.get(key(x, y, z)) ?? (y < 0 ? 3 : 0),
+    get: (x, y, z) => cells.get(key(x, y, z)) ?? (y < 0 ? floorBlock : 0),
     getMeta: (x, y, z) => metas.get(key(x, y, z)) ?? 0,
     set(x, y, z, b, track = true, meta = 0) { cells.set(key(x, y, z), b); metas.set(key(x, y, z), meta); return true; },
     solid: (x, y, z) => y < 0, surface: () => 0, spawn: () => ({ x: 64.5, y: 0, z: 64.5 }),
@@ -358,9 +358,11 @@ test("live silverfish: hides in stone, wakes monster eggs when hurt, attacks the
 });
 
 test("live silverfish: a hurt fish wakes a nearby monster egg after the 20 tick summon cooldown", () => {
-  const world = stoneWorld(), w = new EntityWorld(world, [], () => 0.5), s = new Survival({ slots: [], time: 6000 });
+  // Keep random hiding in the stone floor from removing the fish before its wake scan.
+  const world = stoneWorld(fromOriginal(7).id), w = new EntityWorld(world, [], () => 0.5), s = new Survival({ slots: [], time: 6000 });
   world.set(103, 0, 101, 68, true, 0);
   const fish = w.spawnSilverfishAt(100, 0, 101);
+  setEntityRandom(fish, new JavaRandom(0));
   assert.equal(w.attackEntityFrom(fish, 1, { player: true, name: "player" }), true);
   assert.equal(fish.summonCooldown, 20);
   for (let i = 0; i < 19; i++) w.tick({ x: 64.5, y: 0, z: 64.5, alive: true }, s);
