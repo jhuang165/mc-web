@@ -204,11 +204,13 @@ export async function importJavaRegionArea(regions, options = {}) {
       if (repairCost !== undefined) stack.repairCost = repairCost | 0;
       const display = get(nbt, 'display', NBT.COMPOUND), name = get(display, 'Name', NBT.STRING);
       if (name !== undefined) stack.displayName = name;
+      const color = get(display, 'color', NBT.INT);
+      if (Number.isInteger(color) && color >= 0 && color <= 0xFFFFFF) stack.color = color;
       const unbreakable = get(nbt, 'Unbreakable', NBT.BYTE);
       if (unbreakable !== undefined) stack.unbreakable = unbreakable !== 0;
       const recognized = new Set(['ench', 'StoredEnchantments', 'RepairCost', 'display', 'Unbreakable']);
       if ([...nbt.keys()].some((key) => !recognized.has(key))) report.items.tagsStripped++;
-      else if (display && [...display.keys()].some((key) => key !== 'Name')) report.items.tagsStripped++;
+      else if (display && [...display.keys()].some((key) => key !== 'Name' && key !== 'color')) report.items.tagsStripped++;
     }
     if (mapped.clamped || count > limit) report.items.clamped++;
     report.items.converted++;

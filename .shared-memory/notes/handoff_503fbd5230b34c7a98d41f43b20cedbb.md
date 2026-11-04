@@ -1,0 +1,1 @@
+Final dye review clarified untinted overlays and held/dropped/cauldron limits; added actual material-repair color regression alongside rename. Anvil focused tests7/7, full isolated suite1521/1521 + build pass.

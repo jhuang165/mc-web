@@ -8,8 +8,8 @@ const playerInventory = () => new Survival({}, 'survival').inventory;
 const pick = (damage=0, extras={}) => makeStack(103,1,damage,undefined,extras); // diamond pickaxe -> native 278
 
 test('live/native stack adapters preserve supported anvil tags and book aliases',()=>{
- const stack=pick(12,{repairCost:7,displayName:'Deep miner',enchantments:[{id:32,lvl:3}],unbreakable:false});
- assert.deepEqual(liveStackToNative(stack),{id:278,count:1,damage:12,repairCost:7,displayName:'Deep miner',enchantments:[{id:32,lvl:3}],unbreakable:false});
+ const stack=pick(12,{repairCost:7,displayName:'Deep miner',enchantments:[{id:32,lvl:3}],unbreakable:false,color:0x1265af});
+ assert.deepEqual(liveStackToNative(stack),{id:278,count:1,damage:12,repairCost:7,displayName:'Deep miner',enchantments:[{id:32,lvl:3}],unbreakable:false,color:0x1265af});
  assert.deepEqual(nativeStackToLive(liveStackToNative(stack)),stack);
  const book=makeStack(365,1,0,[{id:16,lvl:2}]);
  assert.deepEqual(liveStackToNative(book).storedEnchantments,[{id:16,lvl:2}]);
@@ -27,6 +27,19 @@ test('rename updates a live result, charges levels, preserves metadata and calls
  assert.equal(result.displayName,'Miner');assert.deepEqual(result.enchantments,[{id:32,lvl:2}]);assert.equal(result.unbreakable,true);
  assert.deepEqual(paid,[12]);assert.deepEqual(used,[{stack:result,cost:12,creative:false}]);
  assert.equal(anvil.inputs.getStack(0),null);assert.equal(changed.length,2);
+});
+
+test('dyed leather survives native anvil rename and repair metadata updates',()=>{
+ const anvil=new AnvilContainer({inventory:playerInventory(),experienceLevel:()=>30,payExperienceLevels:()=>{}});
+ anvil.setInput(0,makeStack(400,1,0,undefined,{color:0x193f77,repairCost:4}));
+ anvil.setName('Blue cap');
+ assert.equal(anvil.output.id,400);assert.equal(anvil.output.color,0x193f77);assert.equal(anvil.output.displayName,'Blue cap');
+ const result=anvil.takeOutput();assert.equal(result.color,0x193f77);assert.equal(result.displayName,'Blue cap');assert.equal(result.repairCost,2);
+ const repair=new AnvilContainer({inventory:playerInventory(),experienceLevel:()=>30,payExperienceLevels:()=>{}});
+ repair.setInput(0,makeStack(400,1,20,undefined,{color:0x193f77}));
+ repair.setInput(1,makeStack(315,2));
+ assert.equal(repair.output.damage,0);assert.equal(repair.output.color,0x193f77);
+ assert.equal(repair.takeOutput().color,0x193f77);assert.equal(repair.inputs.getStack(1),null);
 });
 
 test('material repairs consume only the used material count and refresh output',()=>{

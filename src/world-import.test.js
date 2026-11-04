@@ -58,11 +58,11 @@ test("legacy imports leave absent runtime fields absent for subsystem migration"
 
 test('runtime cart import keeps native anvil tags while dropping malformed metadata',()=>{
  const result=importedRuntime({minecarts:{version:1,carts:[{x:0,y:1,z:0,type:1,items:[
-   {slot:0,id:276,count:1,damage:3,repairCost:8,displayName:'Old sword',unbreakable:true,enchantments:[{id:16,lvl:4}],storedEnchantments:[{id:16,lvl:1}],stored:[{id:16,lvl:1}]},
-   {slot:1,id:276,count:1,repairCost:'bad',displayName:8,enchantments:[{id:'bad',lvl:1}],unbreakable:0},
+   {slot:0,id:276,count:1,damage:3,repairCost:8,displayName:'Old sword',unbreakable:true,color:0x0a7b4d,enchantments:[{id:16,lvl:4}],storedEnchantments:[{id:16,lvl:1}],stored:[{id:16,lvl:1}]},
+   {slot:1,id:276,count:1,repairCost:'bad',displayName:8,enchantments:[{id:'bad',lvl:1}],unbreakable:0,color:0x1000000},
  ]}]}});
  assert.deepEqual(result.minecarts.carts[0].items,[
-   {slot:0,id:276,damage:3,count:1,stored:[{id:16,lvl:1}],enchantments:[{id:16,lvl:4}],storedEnchantments:[{id:16,lvl:1}],repairCost:8,displayName:'Old sword',unbreakable:true},
+   {slot:0,id:276,damage:3,count:1,stored:[{id:16,lvl:1}],enchantments:[{id:16,lvl:4}],storedEnchantments:[{id:16,lvl:1}],repairCost:8,displayName:'Old sword',unbreakable:true,color:0x0a7b4d},
    {slot:1,id:276,damage:0,count:1,enchantments:[]},
  ]);
 });

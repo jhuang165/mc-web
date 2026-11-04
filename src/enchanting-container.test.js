@@ -120,6 +120,17 @@ test('enchanting pays the native level cost, applies the roll and refuses a seco
   assert.equal(state.paid.length, 1);
 });
 
+test('dyed leather keeps display.color through native enchantment and live stack adapters',()=>{
+  const {container,state}=make({world:SHELVES,seed:9824});
+  container.setItem(makeStack(400,1,0,undefined,{color:0x1265af}));
+  assert.ok(container.levels.some((v)=>v>0));
+  assert.equal(container.enchant(2),true);
+  assert.equal(container.item.color,0x1265af);
+  assert.ok(container.item.enchantments?.length);
+  assert.equal(state.used[0].stack.color,0x1265af);
+  assert.equal(liveStackToNative(container.item).color,0x1265af);
+});
+
 test('too few levels refuse the click; Creative skips the check', () => {
   const poor = make({ world: SHELVES, level: 0 });
   poor.container.setItem(makeStack(103, 1, 0));

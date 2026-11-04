@@ -12,6 +12,7 @@ import { installPopulationItems, installPopulationMaterials, installPopulationRe
 
 import {CARROT,POTATO,BAKED_POTATO,POISONOUS_POTATO} from './crops.js';
 import {newDispenser,DISPENSER_SLOTS} from './dispenser-container.js';
+import { leatherDyeResult } from './leather-dye.js';
 // The lastDamage reason of DamageSource.outOfWorld (death-messages.js).
 export const VOID = "void";
 
@@ -452,6 +453,8 @@ export function craftingResult(cells, size) {
   const filled = cells.filter(Boolean), [a, b] = filled, max = a && ITEMS[a.id]?.durability;
   if (filled.length === 2 && a.id === b.id && a.count === 1 && b.count === 1 && max)
     return makeStack(a.id, 1, Math.max(0, max - (max - a.damage + max - b.damage + Math.floor((max * 5) / 100))));
+  const dyedArmor = leatherDyeResult(cells);
+  if (dyedArmor) return dyedArmor;
   const population=populationCraftingResult(cells,size);
   if(population)return makeStack(population.id,population.count,population.damage);
   const r = matchRecipe(cells.map((c) => c?.id || 0), size);

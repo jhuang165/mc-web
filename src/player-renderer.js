@@ -253,7 +253,7 @@ export const LEATHER_COLOR = 0xa06540;
 // RenderBiped.getArmorResource picks layer 2 only for leggings (pass 2); the
 // leggings model (h) is expanded by 0.5, the others (g) by 1.0. Leather is
 // tinted and always gets its `_overlay` drawn untinted on top.
-export function armorLayer(id, pass) {
+export function armorLayer(id, pass, color = LEATHER_COLOR) {
   const item = ITEMS[id];
   if (!item || item.armor === undefined || item.armor !== pass || !(id >= 400 && id < 400 + ARMOR_MATERIALS.length * 4)) return null;
   const material = ARMOR_MATERIALS[Math.floor((id - 400) / 4)][4], leather = material === "leather",
@@ -261,7 +261,7 @@ export function armorLayer(id, pass) {
   return {
     url: base + ".png",
     overlay: leather ? base + "_overlay.png" : null,
-    tint: leather ? [(LEATHER_COLOR >> 16) / 255, ((LEATHER_COLOR >> 8) & 255) / 255, (LEATHER_COLOR & 255) / 255] : null,
+    tint: leather ? [((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255] : null,
     expand: pass === 2 ? 0.5 : 1,
     parts: ARMOR_PASS_PARTS[pass],
   };
@@ -403,17 +403,17 @@ export class PlayerRenderer {
     this.materials = this.materials.filter((x) => x !== m);
     m.dispose();
   }
-  // `ids` are the stack ids for passes 0..3 (helmet..boots), 0 for none.
-  syncArmor(ids) {
-    const key = ids.join(",");
+  // Stacks are ordered helmet..boots. Color participates in the cache key for redyeing.
+  syncArmor(stacks) {
+    const key = stacks.map(s => `${s?.id ?? 0}:${s?.color ?? LEATHER_COLOR}`).join(",");
     if (key === this.armorKey) return;
     this.armorKey = key;
     for (const n of this.armorNodes) n.parent?.remove(n);
     for (const m of this.armorMaterials) this.forget(m);
     this.armorNodes = [];
     this.armorMaterials = [];
-    ids.forEach((id, pass) => {
-      const layer = armorLayer(id, pass);
+    stacks.forEach((stack, pass) => {
+      const layer = armorLayer(stack?.id ?? 0, pass, stack?.color);
       if (!layer) return;
       const make = (url, tint, order) => {
         const m = this.material({ map: pixelTexture(url), color: tint });
@@ -475,7 +475,7 @@ export class PlayerRenderer {
     const pose = mobPose(body, partial);
     this.root.position.set(pose.x, pose.y, pose.z);
     this.root.rotation.y = (180 - pose.bodyYaw) * RAD;
-    this.syncArmor([3, 2, 1, 0].map((slot) => armor[slot]?.id ?? 0));
+    this.syncArmor([3, 2, 1, 0].map((slot) => armor[slot]));
     this.syncHeld(held, heldDamage);
     const parts = bipedPose({
       limbSwing: pose.limbSwing, limbSwingAmount: pose.limbSwingAmount, age: pose.age,

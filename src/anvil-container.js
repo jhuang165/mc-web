@@ -24,6 +24,7 @@ export function liveStackToNative(stack) {
   if (Number.isFinite(stack.repairCost)) native.repairCost = stack.repairCost | 0;
   if (typeof stack.displayName === 'string') native.displayName = stack.displayName;
   if (typeof stack.unbreakable === 'boolean') native.unbreakable = stack.unbreakable;
+  if (Number.isInteger(stack.color) && stack.color >= 0 && stack.color <= 0xFFFFFF) native.color = stack.color;
   return native;
 }
 
@@ -38,6 +39,7 @@ export function nativeStackToLive(stack) {
   if (Number.isFinite(stack.repairCost)) metadata.repairCost = stack.repairCost | 0;
   if (typeof stack.displayName === 'string') metadata.displayName = stack.displayName;
   if (typeof stack.unbreakable === 'boolean') metadata.unbreakable = stack.unbreakable;
+  if (Number.isInteger(stack.color) && stack.color >= 0 && stack.color <= 0xFFFFFF) metadata.color = stack.color;
   const isBook = mapped.id === ENCHANTED_BOOK_ITEM;
   return makeStack(mapped.id, stack.count ?? 1, mapped.damage, isBook ? (stack.storedEnchantments ?? []) : undefined, metadata);
 }

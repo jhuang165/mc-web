@@ -25,11 +25,11 @@ test('left and right drags split the cursor like GuiContainer, with a preview',(
  gui.down(slot(13),1,{time:2000});gui.up(slot(13),1);assert.equal(inv.cursor,null);assert.equal(inv.main[13].count,1);
 });
 test('drag release and preview keep every supported ItemStack tag',()=>{
- const tags={repairCost:5,displayName:'Tagged blocks',enchantments:[{id:34,lvl:1}],storedEnchantments:[{id:16,lvl:2}],unbreakable:true},
+ const tags={repairCost:5,displayName:'Tagged blocks',enchantments:[{id:34,lvl:1}],storedEnchantments:[{id:16,lvl:2}],unbreakable:true,color:0x33aabb},
   {inv,gui,slot}=screen([...Array(9).fill(null),makeStack(4,64,0,undefined,tags)]);
  gui.down(slot(9),0,{time:0});gui.up(slot(9),0);gui.down(slot(10),0,{time:1000});gui.move(slot(10));gui.move(slot(11));
  const preview=gui.preview();assert.deepEqual(preview.slots.get(slot(10)).enchantments,tags.enchantments);assert.deepEqual(preview.cursor.storedEnchantments,tags.storedEnchantments);assert.equal(preview.cursor.unbreakable,true);
- gui.up(slot(11),0);for(const i of [10,11])assert.deepEqual({repairCost:inv.main[i].repairCost,displayName:inv.main[i].displayName,enchantments:inv.main[i].enchantments,storedEnchantments:inv.main[i].storedEnchantments,unbreakable:inv.main[i].unbreakable},tags);
+ gui.up(slot(11),0);for(const i of [10,11])assert.deepEqual({repairCost:inv.main[i].repairCost,displayName:inv.main[i].displayName,enchantments:inv.main[i].enchantments,storedEnchantments:inv.main[i].storedEnchantments,unbreakable:inv.main[i].unbreakable,color:inv.main[i].color},tags);
 });
 test('a quick second click collects matching stacks; a release on another button cancels a drag',()=>{
  const {inv,gui,slot}=screen([makeStack(4,30),...Array(8).fill(null),makeStack(4,10),makeStack(4,20)]);

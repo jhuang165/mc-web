@@ -1,7 +1,14 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {guiScale,stackCount} from './gui.js';
 import {tooltipLines} from './gui.js';
 import {anvilName,anvilCost} from './gui.js';
-import {pendingContainerStacks} from './gui.js';
+import {pendingContainerStacks,itemTint} from './gui.js';
+test('leather icon tint follows saved color while preserving the default and nonleather icons',()=>{
+ const leather={tint:'#a06540'};
+ assert.equal(itemTint(leather,{color:0x0012ab}),'#0012ab');
+ assert.equal(itemTint(leather,{color:0}),'#000000');
+ for(const color of [undefined,-1,0x1000000,NaN,1.5])assert.equal(itemTint(leather,{color}),'#a06540');
+ assert.equal(itemTint({},{color:0xff0000}),null);
+});
 test('save snapshots preserve anvil inputs and cursor tags without duplicating the calculated result',()=>{
  const input={id:102,count:1,damage:20,enchantments:[{id:34,lvl:2}],displayName:'Saved pick'};
  const view={kind:'anvil',container:{inv:{cursor:{id:302,count:2,damage:0}},inputs:{stacks:[input,null]},output:{...input,damage:0}}};

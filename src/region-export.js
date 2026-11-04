@@ -29,7 +29,10 @@ function stackNbt(s,slot,report,original=false) {
  const stored=s.storedEnchantments??(s.stored?.length?s.stored:undefined);
  if(Array.isArray(stored))tagEntries.StoredEnchantments=enchantList(stored);
  if(Number.isInteger(s.repairCost))tagEntries.RepairCost=int(s.repairCost);
- if(typeof s.displayName==='string')tagEntries.display=comp({Name:str(s.displayName)});
+ const display={};
+ if(typeof s.displayName==='string')display.Name=str(s.displayName);
+ if(Number.isInteger(s.color)&&s.color>=0&&s.color<=0xffffff)display.color=int(s.color);
+ if(Object.keys(display).length)tagEntries.display=comp(display);
  if(typeof s.unbreakable==='boolean')tagEntries.Unbreakable=byte(s.unbreakable?1:0);
  if(Object.keys(tagEntries).length)entry.tag=comp(tagEntries);
  return new Map(Object.entries(entry));

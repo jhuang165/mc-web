@@ -15,7 +15,7 @@ import "./menu-screens.css";
 import { Gui } from "./menu-ui.js";
 import { createMenus } from "./menus.js";
 import { folderName } from "./menu-screens.js";
-import {guiScale,stackCount,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks,withGlint} from "./gui.js";
+import {guiScale,stackCount,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks,withGlint,itemTint} from "./gui.js";
 import { stackHasEffect } from "./armor-enchantments.js";
 import {AnvilContainer,nativeStackToLive} from './anvil-container.js';
 import {EnchantingContainer} from './enchanting-container.js';
@@ -357,13 +357,13 @@ function sound(place, block = target ? world.get(...target.block) : 3) {
     { volume: place ? 0.8 : 1, pitch: 0.8 },
   );
 }
-function icon(id, damage = 0) {
+function icon(id, damage = 0, stack) {
   const item = ITEMS[id];
   if (!id || !item) return '<span class="empty-hand">·</span>';
   if(item.block)return `<img class="vanilla-item-icon vanilla-block-icon" src="${scene.textures.icon(id, damage)}" alt="" aria-hidden="true">`;
-  // Leather armor multiplies its base layer by the default 0xA06540 dye; the overlay stays untinted.
+  // Leather armor multiplies its base layer by display.color; the overlay stays untinted.
   if (item.tint)
-    return `<span class="vanilla-item-icon tinted-item" style="--tint:${item.tint};--base:url('/media/1.7.10/items/${item.texture}.png')" aria-hidden="true"><i></i><img src="/media/1.7.10/items/${item.overlay}.png" alt=""></span>`;
+    return `<span class="vanilla-item-icon tinted-item" style="--tint:${itemTint(item,stack)};--base:url('/media/1.7.10/items/${item.texture}.png')" aria-hidden="true"><i></i><img src="/media/1.7.10/items/${item.overlay}.png" alt=""></span>`;
   if (!item.block && itemTexture(id, damage))
     return `<img class="vanilla-item-icon" src="${itemTexture(id, damage)}" alt="" aria-hidden="true">`;
   if (!item.block)
@@ -374,7 +374,7 @@ const heldId = () => survival.held?.id || 0;
 // Item, stack count and durability overlays, as RenderItem draws them.
 function stackHtml(s, count = s?.count) {
   if (!s) return "";
-  return withGlint(icon(s.id, s.damage), s, ITEMS[s.id]) + (count === 0 ? '<b class="item-count empty">0</b>' : stackCount(count)) + durabilityBar(s.damage, ITEMS[s.id]?.durability);
+  return withGlint(icon(s.id, s.damage, s), s, ITEMS[s.id]) + (count === 0 ? '<b class="item-count empty">0</b>' : stackCount(count)) + durabilityBar(s.damage, ITEMS[s.id]?.durability);
 }
 function stackLabel(s) {
   if (!s) return "Empty";
@@ -1119,7 +1119,7 @@ function refreshContainer() {
   container.slots.forEach((slot, i) => {
     const shown = preview.slots.get(slot) ?? slot.stack,
       over = preview.capped.has(slot),
-      key = shown ? `${shown.id},${shown.count},${shown.damage},${over},${stackHasEffect(shown, ITEMS[shown.id])}` : "",
+      key = shown ? `${shown.id},${shown.count},${shown.damage},${shown.color},${over},${stackHasEffect(shown, ITEMS[shown.id])}` : "",
       b = document.querySelector(`[data-container-slot="${i}"]`);
     if (!b) return;
     b.classList.toggle("hovered", view.hovered === slot);

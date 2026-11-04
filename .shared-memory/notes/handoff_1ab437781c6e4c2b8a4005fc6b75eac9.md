@@ -1,0 +1,1 @@
+Native impact probe completed and verified as part of the ender pearl tranche. Probe calls unchanged `zm.a(azu)` for server/no-owner, client/hit and server/hit cases; exact impact particles and hit order captured in public/research/ender-pearl-reference.json. `node tools/verify-ender-pearl.mjs` passes. Connected EntityPlayerMP teleport branch remains bytecode-inspected only.

@@ -118,6 +118,7 @@ test('chests, furnaces and dropped items convert; other tile entities and entiti
       stack(6, 403, 1, 0, {tag: t(NBT.COMPOUND, compound({
         StoredEnchantments: list(NBT.COMPOUND, [compound({id:t(NBT.SHORT,16),lvl:t(NBT.SHORT,2)})]), RepairCost:t(NBT.INT,4),
       }))}),
+      stack(7, 298, 1, 0, {tag: t(NBT.COMPOUND, compound({display:t(NBT.COMPOUND,compound({color:t(NBT.INT,0x33aabb)}))}))}),
     ])}),
     tile('Furnace', x0 + 5, 70, z0 + 5, {Items: list(NBT.COMPOUND, [stack(0, 392, 5), stack(1, 263, 3), stack(2, 393, 2)]),
       BurnTime: t(NBT.SHORT, 900), CookTime: t(NBT.SHORT, 150)}),
@@ -145,6 +146,7 @@ test('chests, furnaces and dropped items convert; other tile entities and entiti
   assert.deepEqual(chest.items[26], {id: 303, count: 64, damage: 0});
   assert.deepEqual(chest.items[5], {id: 115, count: 1, damage: 12, enchantments:[{id:16,lvl:3}], repairCost:9, displayName:'Found sword', unbreakable:true});
   assert.deepEqual(chest.items[6], {id: 365, count: 1, damage: 0, stored:[{id:16,lvl:2}], storedEnchantments:[{id:16,lvl:2}], repairCost:4});
+  assert.deepEqual(chest.items[7], {id: 400, count: 1, damage: 0, color: 0x33aabb});
   assert.equal(player.chests['50,70,49'].facing, 4);
   assert.ok(player.chests['50,70,49'].items.every(s => s === null));
   assert.equal(player.chests['56,70,56'].facing, 3);
@@ -156,7 +158,7 @@ test('chests, furnaces and dropped items convert; other tile entities and entiti
   assert.equal(player.mode ?? record.mode, 'survival');
   assert.deepEqual(report.tileEntities, {total: 5, converted: {Chest: 1, Furnace: 1},
     lost: [{id: 'Chest', count: 1}, {id: 'Chest (outside its chunk)', count: 1}, {id: 'Sign', count: 1}]});
-  assert.deepEqual(report.items, {converted: 11, lost: [{id: '321:0', count: 2}, {id: 'slot 200', count: 1}], tagsStripped: 0, clamped: 1});
+  assert.deepEqual(report.items, {converted: 12, lost: [{id: '321:0', count: 2}, {id: 'slot 200', count: 1}], tagsStripped: 0, clamped: 1});
   assert.deepEqual(report.entities, {total: 5, converted: {Item: 1}, lost: [{id: 'Chicken', count: 1}, {id: 'Item (unsupported stack)', count: 1}, {id: 'Pig', count: 1}, {id: 'Zombie', count: 1}]});
   assert.equal(report.scheduledTicks, 1);
   assert.deepEqual(report.blocks.unsupported, [{id: 63, meta: 0, cells: 1, reason: 'unmapped'}]);

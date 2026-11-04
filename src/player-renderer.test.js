@@ -178,6 +178,14 @@ test("leather is tinted 0xA06540 and draws its overlay", () => {
   assert.ok(pants.overlay.endsWith("leather_layer_2_overlay.png"));
 });
 
+test("saved leather dye changes worn base tint and leaves the overlay and metal armor unchanged", () => {
+  const layer = armorLayer(400, 0, 0x1278ab);
+  assert.deepEqual(layer.tint.map(v => Math.round(v * 255)), [0x12, 0x78, 0xab]);
+  assert.equal(layer.overlay, armorLayer(400, 0).overlay);
+  assert.deepEqual(armorLayer(403, 3, 0).tint, [0, 0, 0]);
+  assert.equal(armorLayer(408, 0, 0x1278ab).tint, null);
+});
+
 test("armor must match its slot, and non-armor gives no layer", () => {
   assert.equal(armorLayer(0, 0), null);
   assert.equal(armorLayer(300, 1), null);
