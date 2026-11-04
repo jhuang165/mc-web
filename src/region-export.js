@@ -38,7 +38,7 @@ function stackNbt(s,slot,report,original=false) {
  return new Map(Object.entries(entry));
 }
 const inventory=(items,report)=>list(NBT.COMPOUND,(items??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];}));
-const NAMES={pig:'Pig',cow:'Cow',sheep:'Sheep',chicken:'Chicken',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish'};
+const NAMES={pig:'Pig',cow:'Cow',sheep:'Sheep',chicken:'Chicken',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish',witch:'Witch'};
 function entity(e,name,ox,oz) {
  return {id:str(name),Pos:list(NBT.DOUBLE,[e.x+ox,e.posY??e.y,e.z+oz]),Motion:list(NBT.DOUBLE,e.motion??[e.vx??e.mx??0,e.vy??e.my??0,e.vz??e.mz??0]),
  Rotation:list(NBT.FLOAT,e.rotation??(name==='Player'?[(Math.PI-(e.yaw??0))*180/Math.PI,-(e.pitch??0)*180/Math.PI]:[e.rotationYaw??(-(e.yaw??0)*180/Math.PI+0),e.rotationPitch??0])),FallDistance:float(e.fallDistance??0),Fire:short(e.fire??-1),Air:short(e.air??300),OnGround:byte(e.onGround?1:0),Dimension:int(0),Invulnerable:byte(0),PortalCooldown:int(0)};
@@ -48,8 +48,10 @@ function payload(state,ox,oz,report) {
  for(const wrapped of state.entities??[]) {const e=wrapped.value,name=NAMES[e.type];if(!name){report.unsupportedEntities++;continue;}
   const n=entity(e,name,ox,oz);Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
   if(e.type==='sheep'){n.Color=byte(e.color??0);n.Sheared=byte(e.sheared?1:0);}
-  // EntityVillager.writeEntityToNBT: Profession and Riches (no Offers: trading is not kept); EntityAgeable's Age is written above, InLove is EntityAnimal's.
-  if(e.type==='villager'){n.Profession=int(e.profession??0);n.Riches=int(e.riches??0);delete n.InLove;}
+  // EntityVillager.writeEntityToNBT: Profession, Riches and Offers.Recipes (MerchantRecipe: buy, optional buyB, sell, uses, maxUses, in original item ids); EntityAgeable's Age is written above, InLove is EntityAnimal's.
+  if(e.type==='villager'){n.Profession=int(e.profession??0);n.Riches=int(e.riches??0);delete n.InLove;
+   if(Array.isArray(e.offers)){const bare=x=>{if(!x)return null;const c={...x};for(const k of ['enchantments','storedEnchantments'])if(Array.isArray(c[k])&&!c[k].length)delete c[k];return stackNbt(c,undefined,report,true);};
+    n.Offers=comp({Recipes:list(NBT.COMPOUND,e.offers.map(r=>{const m=new Map([['buy',tag(NBT.COMPOUND,bare(r.buy))],['sell',tag(NBT.COMPOUND,bare(r.sell))],['uses',int(r.uses??0)],['maxUses',int(r.maxUses??7)]]);if(r.buyB)m.set('buyB',tag(NBT.COMPOUND,bare(r.buyB)));return m;}))});}}
   entities.push(new Map(Object.entries(n)));
  }
  for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),PickupDelay:short(e.delay??0),Health:short(5)})));}
@@ -62,6 +64,8 @@ function payload(state,ox,oz,report) {
   if(name==='furnaces'){n.BurnTime=short(e.burn??0);n.CookTime=short(e.cook??0);}tiles.push(new Map(Object.entries(n)));
  }
  for(const {value:e} of state.spawners??[]) {const n={id:str('MobSpawner'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz)};for(const [k,v] of Object.entries(e))if(!['x','y','z'].includes(k))n[k]=typeof v==='string'?str(v):short(v);tiles.push(new Map(Object.entries(n)));}
+ // TileEntityPiston.writeToNBT: blockId, blockData, facing, progress, extending (original ids; renderHead is not saved by Java).
+ for(const w of state.pistons??[]){const e=w.value??w;tiles.push(new Map(Object.entries({id:str('Piston'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),blockId:int(e.block),blockData:int(e.meta),facing:int(e.facing),progress:float(e.progress??0),extending:byte(e.extending?1:0)})));}
  for(const name of ['fluidTicks','fireTicks','fallingTicks'])for(const {value:e} of state[name]??[]) {const o=toOriginal(e.block,0,{flowing:name==='fluidTicks'});if(o)ticks.push(new Map(Object.entries({i:int(o[0]),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),t:int(Math.max(-2147483648,Math.min(2147483647,e.delay))),p:int(0)})));}
  return {entities,tileEntities:tiles,tileTicks:ticks};
 }

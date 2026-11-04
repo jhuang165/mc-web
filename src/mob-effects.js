@@ -5,7 +5,10 @@ import { potionColor, potionParticles } from "./fx.js";
 import { attributeValue } from "./difficulty.js";
 const f = Math.fround;
 export const SPEED = 1, STRENGTH = 5, REGENERATION = 10, INVISIBILITY = 14;
-const MOB_EFFECTS = new Set([SPEED, STRENGTH, REGENERATION, INVISIBILITY]);
+export const SLOWNESS = 2, INSTANT_HEALTH = 6, FIRE_RESISTANCE = 12, WATER_BREATHING = 13, WEAKNESS = 18, POISON = 19;
+// Speed, strength, regeneration and invisibility from the spider spawn roll, plus what an EntityWitch drinks (instant health, speed, fire
+// resistance, water breathing) or throws (slowness, weakness, poison; witch.js).
+const MOB_EFFECTS = new Set([SPEED, SLOWNESS, INSTANT_HEALTH, STRENGTH, REGENERATION, INVISIBILITY, FIRE_RESISTANCE, WATER_BREATHING, WEAKNESS, POISON]);
 
 // NBT "ActiveEffects": Id, Amplifier (byte), Duration (int). Unknown ids and spent effects
 // are dropped.
@@ -34,7 +37,8 @@ export const isInvisible = (e) => !!mobEffect(e, INVISIBILITY);
 // Potion.moveSpeed: movementSpeed x (1 + 0.2 x (amplifier + 1)), operation 2.
 export function speedModifiers(e) {
   const s = mobEffect(e, SPEED);
-  return s ? [[0.20000000298023224 * (s.amplifier + 1), 2]] : [];
+  const slow = mobEffect(e, SLOWNESS);
+  return [...(s ? [[0.20000000298023224 * (s.amplifier + 1), 2]] : []), ...(slow ? [[-0.15000000596046448 * (slow.amplifier + 1), 2]] : [])];
 }
 // Potion.damageBoost (PotionAttackDamage): attackDamage x (1 + 1.3 x (amplifier + 1)),
 // operation 2; EntityMob.attackEntityAsMob casts the value to float.
@@ -56,6 +60,12 @@ export function tickMobEffects(e, size, maxHealth, rand, fx) {
     if (effect.id === REGENERATION) {
       const k = 50 >> effect.amplifier;
       if ((k <= 0 || effect.duration % k === 0) && e.health > 0 && e.health < maxHealth) e.health = Math.min(maxHealth, f(e.health + 1));
+    }
+    // Potion.performEffect: instant health heals 4 << amplifier, poison hurts 1 every 25 >> amplifier ticks but never kills.
+    if (effect.id === INSTANT_HEALTH && e.health > 0) e.health = Math.min(maxHealth, f(e.health + (4 << effect.amplifier)));
+    if (effect.id === POISON && e.health > 1) {
+      const k = 25 >> effect.amplifier;
+      if (k <= 0 || effect.duration % k === 0) e.health = Math.max(1, f(e.health - 1));
     }
     effect.duration--;
   }

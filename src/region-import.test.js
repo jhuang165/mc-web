@@ -251,3 +251,17 @@ test('rejects malformed inputs before converting', async () => {
   // Slot (4,4) of r.1.0 is chunk (36,4); the payload says (4,4).
   await assert.rejects(importJavaRegionArea([{...file, filename: 'r.1.0.mca'}], {area: {chunkX: 36, chunkZ: 4, width: 1, depth: 1}}), /slot 132: expected chunk \(36, 4\)/);
 });
+
+test('a Piston tile entity in a moving-block cell imports as a restorable moving piston', async () => {
+  const chunk = new Chunk(-2, 3);
+  chunk.setBlockState(3, 70, 3, 36, 5); // piston_extension
+  const x0 = -32, z0 = 48;
+  const tileEntities = [
+    tile('Piston', x0 + 3, 70, z0 + 3, {blockId: t(NBT.INT, 1), blockData: t(NBT.INT, 0), facing: t(NBT.INT, 5), progress: t(NBT.FLOAT, 0.5), extending: t(NBT.BYTE, 1)}),
+    tile('Piston', x0 + 4, 70, z0 + 4, {blockId: t(NBT.INT, 1), blockData: t(NBT.INT, 0), facing: t(NBT.INT, 5), progress: t(NBT.FLOAT, 0.5), extending: t(NBT.BYTE, 1)}), // air cell
+  ];
+  const files = await regions([{chunk, tileEntities, entities: [], tileTicks: []}]);
+  const {record, report} = await importJavaRegionArea(files, {area: {chunkX: -2, chunkZ: 3, width: 1, depth: 1}, mode: 'survival'});
+  assert.deepEqual(record.pistons, [{x: 51, y: 70, z: 51, block: 1, meta: 0, facing: 5, progress: 0.5, extending: true}]);
+  assert.deepEqual(report.tileEntities.converted, {Piston: 1});
+});

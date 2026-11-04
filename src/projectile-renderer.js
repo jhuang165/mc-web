@@ -17,6 +17,7 @@ export function projectileItemId(kind) {
   if (kind === "snowball") return SNOWBALL;
   if (kind === "egg") return EGG;
   if (kind === "enderPearl") return ENDER_PEARL;
+  if (kind === "potion") return 385; // witch.js ITEM_POTION; drawn with the splash bottle icon (texture below)
   throw new TypeError(`Unsupported projectile render kind: ${kind}`);
 }
 // Entity.getBrightnessForRender samples floor(posY - yOffset + height * 0.66):
@@ -38,6 +39,8 @@ export class ProjectileRenderer {
   // RenderSnowball(item): an egg uses the egg icon, a snowball the snowball icon;
   // the "snowballpoof" particles (EntityBreakingFX with Items.snowball) always show the snowball.
   texture(kind) {
+    // RenderSnowball(Items.potionitem, 16384): the splash bottle icon (no potion colour overlay is drawn).
+    if (kind === "potion") return pixelTexture("/media/1.7.10/items/potion_bottle_splash.png");
     return pixelTexture(itemTexture(projectileItemId(kind)));
   }
   material(kind) {

@@ -104,6 +104,8 @@ export function itemTexture(id, damage = 0, use = 0) {
   if(id===99||id===1100)return "/media/1.7.10/blocks/"+(id===99?"iron_bars":"glass")+".png";
   // Lever and tripwire hook items are flat sprites of their block textures (ItemBlock icons of render types 12 and 29).
   if(id===1108||id===1113)return "/media/1.7.10/blocks/"+(id===1108?"lever":"trip_wire_source")+".png";
+  // The redstone torch item (block 1120 - 1000) is a flat sprite of its lit texture like torch 20.
+  if(id===1120)return "/media/1.7.10/blocks/redstone_torch_on.png";
   if(id===48)return "/media/1.7.10/blocks/sapling_oak.png";
   if(id===125)return "/media/1.7.10/items/shears.png";
   if(item?.texture)return "/media/1.7.10/items/"+item.texture+".png";

@@ -10,6 +10,7 @@ import { DISPENSER, STICKY_PISTON, PISTON, PISTON_HEAD, DISPENSER_ITEM, STICKY_P
 import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, ITEM_STONE_BRICKS, ITEM_CAULDRON, ITEM_FLOWER_POT, slabItem } from "./stone-utility.js";
 import { TNT, WOOL, RED_FLOWER, SAPLING, SNOW_LAYER, ICE, FIRE, CARROTS, POTATOES, WEB, LADDER, YELLOW_FLOWER, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE } from "./world.js";
 import { leafDrops } from "./trees.js";
+import { BLAST_RESISTANCE2, itemOfBlock2, ITEM_GLOWSTONE_DUST, GLOWSTONE } from "./redstone-blocks-2.js";
 
 const f = Math.fround;
 
@@ -31,6 +32,7 @@ for (const id of Object.keys(STAIRS)) RESIST[id] = stairExplosionResistance(Numb
 for (let id = 107; id <= 114; id++) RESIST[id] = id >= 108 && id <= 111 ? 0.5 : 0; // redstone components: native resistance 2.5 for lever, plates and button, else 0
 RESIST[STONE_BRICKS] = RESIST[DOUBLE_STONE_SLAB] = RESIST[STONE_SLAB] = 6; RESIST[82] = 6; RESIST[END_PORTAL_FRAME] = 3600000; RESIST[CAULDRON] = 2; RESIST[FLOWER_POT] = 0;
 // BlockDispenser (hardness 3.5), BlockPistonBase and BlockPistonExtension (hardness 0.5): dispenser-piston-reference.json.
+for (const [id, r] of Object.entries(BLAST_RESISTANCE2)) RESIST[id] = r; // redstone torches, lamps, block, button, plates, comparators, sensor, moving piston, glowstone (redstone-blocks-2-reference.json)
 RESIST[DISPENSER] = 3.5; RESIST[STICKY_PISTON] = RESIST[PISTON] = RESIST[PISTON_HEAD] = 0.5;
 export const explosionResistance = (id) => f(RESIST[id] ?? 0);
 
@@ -204,6 +206,10 @@ function itemDropped(id, meta, rand) {
     case STICKY_PISTON: return [STICKY_PISTON_ITEM, 0];
     case PISTON: return [PISTON_ITEM, 0];
     case PISTON_HEAD: return null;
+    // Redstone blocks 119-131: the block items sit at 1000 + id (the unlit torch drops the lit one, the lit lamp the unlit lamp, the comparators item 381); glowstone dust; the moving piston nothing.
+    case 119: case 120: case 121: case 122: case 123: case 124: case 125: case 126: case 127: case 128: case 129: return [itemOfBlock2(id), 0];
+    case GLOWSTONE: return [ITEM_GLOWSTONE_DUST, 0];
+    case 130: return null;
     default: return [id, 0];
   }
 }
@@ -214,6 +220,7 @@ function quantity(id, rand) {
   if (id === 21) return 3;
   if (id === 24 || id === 23) return 4;
   if (id === DOUBLE_STONE_SLAB) return 2; // BlockSlab.quantityDropped
+  if (id === GLOWSTONE) return Math.min(4, 2 + rand.nextInt(3) + rand.nextInt(1)); // BlockGlowstone.quantityDroppedWithBonus(0): quantityDropped 2 + nextInt(3), then the Fortune roll
   return 1;
 }
 // Block.dropBlockAsItemWithChance(world, x, y, z, meta, chance, 0) as each block of this

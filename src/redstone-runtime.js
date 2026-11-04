@@ -1,0 +1,179 @@
+// The browser game's redstone and piston runtime: builds LiveRedstone (src/redstone-live.js) over the running World
+// with every hook wired to the game's systems, installs the pistons (src/piston-live.js) and exposes the few calls
+// src/main.js makes. Everything the game owns arrives through the `game` object (getters, because main.js reassigns
+// its runtimes), so this module runs headlessly in tests.
+//
+//   createRedstoneRuntime({ world, scene, game }) -> { redstone, pistons, tick, frame, flush, use, applyEdit,
+//     fluidChanges, containerClosed, save, restore, dispose }
+//
+//   game.sound(name, x, y, z, volume, pitch)   positional sound
+//   game.drop(x, y, z, { id, count, damage })  block drop (Block.dropBlockAsItem)
+//   game.primeTnt(x, y, z)                     BlockTNT.func_150114_a (the block is removed by the engine)
+//   game.markUnsaved()
+//   game.player()  -> { position: {x, y, z}, width, height, alive } | null
+//   game.mobs()    -> EntityWorld | null         game.items() / arrows() / orbs() / primed() -> arrays
+//   game.chests() / furnaces() / dispensers()    keyed "x,y,z" stores (survival.js)
+//   game.maxStack(stack)
+//   game.subtracted() -> skylight subtracted     game.angle() -> celestial angle in [0, 1)
+//   game.skyLight(x, y, z)
+import { LiveRedstone } from "./redstone-live.js";
+import { installPistons } from "./piston-live.js";
+import { applyPlayerEdit } from "./player-edit-simulation.js";
+import { pushBox, ENTITY_TYPES } from "./entities.js";
+import { LEVER, STONE_BUTTON, REPEATER } from "./redstone-blocks.js";
+import { WOODEN_BUTTON, COMPARATOR, COMPARATOR_POWERED } from "./world.js";
+import { CHEST } from "./chest.js";
+
+// Blocks a right click operates through the redstone engine (lever, both buttons, repeater, both comparators).
+export const USE_BLOCKS = new Set([LEVER, STONE_BUTTON, WOODEN_BUTTON, REPEATER, COMPARATOR, COMPARATOR_POWERED]);
+const inside = (b, [x0, y0, z0, x1, y1, z1]) => b[3] > x0 && b[0] < x1 && b[4] > y0 && b[1] < y1 && b[5] > z0 && b[2] < z1;
+const ITEM_SIZE = 0.25, ITEM_HALF = 0.125, ARROW_HALF = 0.25, ARROW_SIZE = 0.5, TNT_HALF = 0.49, TNT_SIZE = 0.98;
+
+export function createRedstoneRuntime({ world, scene = null, game = {} }) {
+  const changes = [];
+  const flush = () => {
+    if (!changes.length) return;
+    const list = changes.splice(0);
+    scene?.updateBlocks?.(list);
+    game.markUnsaved?.();
+  };
+  const entitiesIn = (box, mode) => {
+    const out = [], p = game.player?.();
+    if (p && p.alive !== false && inside(pushBox(p.position, p.width ?? 0.6, p.height ?? 1.8), box)) out.push(p);
+    const mobs = game.mobs?.();
+    for (const e of mobs?.entities ?? []) {
+      if (!(e.health > 0) || !ENTITY_TYPES[e.type]) continue;
+      if (inside(pushBox(e, ...mobs.size(e)), box)) out.push(e);
+    }
+    if (mode !== "all") return out;
+    for (const e of game.items?.() ?? []) if (inside([e.x - ITEM_HALF, e.y, e.z - ITEM_HALF, e.x + ITEM_HALF, e.y + ITEM_SIZE, e.z + ITEM_HALF], box)) out.push(e);
+    for (const e of game.arrows?.() ?? []) if (!e.dead && inside([e.x - ARROW_HALF, e.y, e.z - ARROW_HALF, e.x + ARROW_HALF, e.y + ARROW_SIZE, e.z + ARROW_HALF], box)) out.push(e);
+    for (const e of game.orbs?.() ?? []) if (e.bb && inside(e.bb, box)) out.push(e);
+    for (const e of game.primed?.() ?? []) if (inside([e.x - TNT_HALF, e.y, e.z - TNT_HALF, e.x + TNT_HALF, e.y + TNT_SIZE, e.z + TNT_HALF], box)) out.push(e);
+    return out;
+  };
+  // TileEntity inventories as { count, max } slots; a double chest reads both halves (west or north first).
+  const slotsOf = (items) => (items ?? []).map((s) => (s && s.count > 0 ? { count: s.count, max: game.maxStack?.(s) ?? 64 } : null));
+  const containerSlots = (x, y, z, id) => {
+    const key = `${x},${y},${z}`;
+    if (id === 54) {
+      const chests = game.chests?.() ?? {}, self = chests[key]?.items ?? Array(27).fill(null);
+      for (const [dx, dz, first] of [[-1, 0, true], [1, 0, false], [0, -1, true], [0, 1, false]]) {
+        if (world.get(x + dx, y, z + dz) !== CHEST) continue;
+        const other = chests[`${x + dx},${y},${z + dz}`]?.items ?? Array(27).fill(null);
+        return slotsOf(first ? [...other, ...self] : [...self, ...other]);
+      }
+      return slotsOf(self);
+    }
+    if (id === 61 || id === 62) return slotsOf(game.furnaces?.()[key]?.items ?? [null, null, null]);
+    if (id === 23 || id === 158) return slotsOf(game.dispensers?.()[key]?.items ?? Array(9).fill(null));
+    return null;
+  };
+  const redstone = new LiveRedstone(world, {
+    changed: (x, y, z, old, now) => {
+      if (changes.length < 20000) changes.push([x, y, z, old ?? world.get(x, y, z), now ?? world.get(x, y, z)]);
+    },
+    sound: (name, x, y, z, volume, pitch) => game.sound?.(name, x, y, z, volume, pitch),
+    drop: (x, y, z, stack) => game.drop?.(x, y, z, stack),
+    primeTnt: (x, y, z) => game.primeTnt?.(x, y, z),
+    entitiesIn,
+    containerSlots,
+    environment: () => ({ skylightSubtracted: game.subtracted?.() ?? 0, celestialAngle: Math.fround((game.angle?.() ?? 0) * Math.PI * 2), sky: 15 }),
+    skyLight: (x, y, z) => game.skyLight?.(x, y, z) ?? 15,
+  });
+  const pistons = installPistons({
+    redstone,
+    scene,
+    world,
+    entities: {
+      player: {
+        get position() { return game.player?.()?.position ?? { x: 0, y: -1000, z: 0 }; },
+        width: 0.6,
+        height: 1.8,
+      },
+      mobs: () => game.mobs?.()?.entities ?? [],
+      extra: () => [
+        ...(game.items?.() ?? []).map((e) => ({ box: [e.x - ITEM_HALF, e.y, e.z - ITEM_HALF, e.x + ITEM_HALF, e.y + ITEM_SIZE, e.z + ITEM_HALF], move: (dx, dy, dz) => { e.x += dx; e.y += dy; e.z += dz; } })),
+        ...(game.primed?.() ?? []).map((e) => ({ box: [e.x - TNT_HALF, e.y, e.z - TNT_HALF, e.x + TNT_HALF, e.y + TNT_SIZE, e.z + TNT_HALF], move: (dx, dy, dz) => { e.x += dx; e.y += dy; e.z += dz; } })),
+      ],
+    },
+  });
+
+  // One 20 TPS game tick: scheduled block updates, block events and the tile-entity loop (pistons), then the pistons'
+  // entity pushes. main.js calls this right after the fluid and fire scheduled ticks (see public/research/redstone-live.md).
+  const tick = () => {
+    redstone.tick();
+    pistons.tick();
+    flush();
+  };
+  // A right click on a redstone block. True when the engine consumed the click.
+  const use = (x, y, z) => {
+    const used = redstone.use(x, y, z);
+    flush();
+    return used;
+  };
+  // Wraps applyPlayerEdit: levers, buttons, repeaters and comparators run through the engine; a placement that did not go
+  // through world.set (two-step placeHeldBlock) gets its onBlockAdded / neighbour tail and onBlockPlacedBy afterwards.
+  const applyEdit = (state, request, hooks) => {
+    const target = request.place && !request.aimedEntity && request.target?.block;
+    if (target && state.screen === "playing" && !(state.motion?.sneaking && state.heldTool) && USE_BLOCKS.has(world.get(...target))) {
+      hooks.unlock?.();
+      hooks.swing?.();
+      if (use(...target)) {
+        game.markUnsaved?.();
+        return { handled: true, branch: "use-redstone" };
+      }
+    }
+    redstone.touched = new Set();
+    let result;
+    try {
+      result = applyPlayerEdit(state, request, hooks);
+      const placement = result?.placement;
+      if (placement?.placed && placement.position) {
+        const [x, y, z] = placement.position, cells = placement.reason === "door" ? [[x, y, z], [x, y + 1, z]] : [[x, y, z]];
+        for (const c of cells) if (!redstone.touched.has(c.join(","))) redstone.placed(...c);
+        if (placement.reason === "block") placedBy(x, y, z, state);
+      }
+    } finally {
+      redstone.touched = null;
+    }
+    flush();
+    return result;
+  };
+  // Block.onBlockPlacedBy for the diodes and pistons (their metadata was already set from the placer by the placement code).
+  function placedBy(x, y, z, state) {
+    const id = redstone.getBlock(x, y, z), behaviour = redstone.behaviours[id];
+    if (!behaviour?.onBlockPlacedBy) return;
+    const mcYaw = Math.fround(180 - (state.yaw * 180) / Math.PI);
+    behaviour.onBlockPlacedBy(redstone, x, y, z, id === 33 || id === 29 ? { x: state.position.x, y: state.position.y, z: state.position.z, yaw: mcYaw } : mcYaw);
+  }
+  // [x, y, z, old, new] changes of the fluid and fire ticks: fluids write with world.put, so the redstone side learns here.
+  const fluidChanges = (list) => {
+    for (const [x, y, z, old, now] of list) if (old !== now) redstone.external(x, y, z, old);
+    flush();
+  };
+  // A container screen closed: comparators read the new contents.
+  const containerClosed = (keys) => {
+    for (const key of keys ?? []) redstone.containerChanged(...String(key).split(",").map(Number));
+    flush();
+  };
+  return {
+    redstone,
+    pistons,
+    tick,
+    frame: (partial) => pistons.frame(partial),
+    flush,
+    use,
+    applyEdit,
+    fluidChanges,
+    containerClosed,
+    save: () => redstone.save(),
+    restore: (record) => {
+      // A Java import carries only Piston tile entities (record.pistons).
+      if (record?.redstone) redstone.restore(record.redstone);
+      else if (Array.isArray(record?.pistons)) pistons.restore(record.pistons);
+      flush();
+    },
+    dispose: () => redstone.dispose(),
+  };
+}

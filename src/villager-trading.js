@@ -8,8 +8,9 @@ const clone = (v) => structuredClone(v);
 const sameItem = (a, b) => Boolean(a && b && a.id === b.id);
 const usable = (s) => s && Number.isSafeInteger(s.id) && s.id >= 0 && Number.isSafeInteger(s.count) && s.count > 0;
 
-// MerchantRecipeList.a(first, second, index): a positive index checks only that slot;
-// zero/negative scans in list order. Vanilla compares item identity and stack size, not damage.
+// MerchantRecipeList.a(first, second, index): an index inside the list (> 0) checks only that slot;
+// zero, negative or past-the-end scans in list order (checked in villager-trading-live-reference.json).
+// Vanilla compares item identity and stack size, not damage.
 export function findMatchingOffer(offers, first, second = null, preferredIndex = 0) {
   if (!Array.isArray(offers) || !usable(first) || (second !== null && !usable(second))) return null;
   const matches = (recipe) => {
@@ -17,7 +18,7 @@ export function findMatchingOffer(offers, first, second = null, preferredIndex =
     if (recipe.buyB) return usable(second) && sameItem(second, recipe.buyB) && second.count >= recipe.buyB.count;
     return second === null;
   };
-  if (preferredIndex > 0) return preferredIndex < offers.length && matches(offers[preferredIndex]) ? preferredIndex : -1;
+  if (preferredIndex > 0 && preferredIndex < offers.length) return matches(offers[preferredIndex]) ? preferredIndex : -1;
   return offers.findIndex(matches);
 }
 

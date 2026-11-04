@@ -6,10 +6,11 @@ import { ParticleSystem } from "./particles.js";
 import { EffectRenderer } from "./effect-renderer.js";
 import { Fx } from "./fx.js";
 import { ParticleRenderer } from "./particle-renderer.js";
-import { HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, ANVIL, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
+import { HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, ANVIL, PISTON_MOVING, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
 import { StreamingLight } from './streaming-light.js';
 import { STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, endFrameBoxes, cauldronBoxes, cauldronWaterHeight, CAULDRON_FLOOR, CAULDRON_WALL, potContents, POT_BOUNDS, potPlantOf } from './stone-utility.js';
 import { REDSTONE_WIRE, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, LEVER, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, isRedstoneBlock, redstoneBounds, wireArms, wireClimbs, wireTint } from './redstone-blocks.js';
+import { REDSTONE_TORCH, REDSTONE_TORCH_OFF, COMPARATOR, COMPARATOR_POWERED, DAYLIGHT_SENSOR, isRedstone2Block, isCube2, redstoneBounds2 } from './redstone-blocks-2.js';
 import { tileByName } from './block-textures.js';
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS, namedTile } from "./block-textures.js";
 import { pistonQuads, isPistonBase, PISTON_HEAD } from "./dispenser-piston.js";
@@ -240,7 +241,7 @@ export class VoxelScene {
       for (let z = cz; z < cz + 16; z++)
         for (let y = 0; y < (w.height ?? HEIGHT); y++) {
           const b = w.get(x, y, z);
-          if (!b || b === 41) continue;
+          if (!b || b === 41 || b === PISTON_MOVING) continue; // the moving block is drawn by updateMoving, never as a cube
           if (b === 20) this.torch(solid, x, y, z);
           else if (isCrop(b)) this.crops(solid, b, x, y, z);
           else if (b===COCOA||b===SANDSTONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z));
@@ -320,8 +321,8 @@ export class VoxelScene {
   // metadata 5 (the port's 0) stands upright. A 2x2-pixel top at 10/16 above the base, a 2x2
   // bottom from pixels 7-9 / 13-15, and four sides 1/16 from the centre, all in the cell's own
   // brightness with no face shading. Vertices follow the original order.
-  torch(m, x, y, z) {
-    const meta = this.world.getMeta(x, y, z), light = this.light.packed(x, y, z), t = blockTile(20, 0),
+  torch(m, x, y, z, tileId = 20) {
+    const meta = this.world.getMeta(x, y, z), light = this.light.packed(x, y, z), t = blockTile(tileId, 0),
       tx = (t % ATLAS_COLUMNS) * 16, ty = Math.floor(t / ATLAS_COLUMNS) * 16, W = ATLAS_COLUMNS * 16, H = ATLAS_ROWS * 16,
       uv = (u, v) => [(tx + u) / W, 1 - (ty + v) / H];
     const lean = Math.fround(0.4), wall = 0.5 - lean, rise = Math.fround(0.2);
@@ -490,6 +491,33 @@ export class VoxelScene {
     else if (b === REPEATER) this.repeater(m, x, y, z, meta, light);
     else if (b === TRIPWIRE_HOOK) this.hook(m, x, y, z, meta, light);
     else if (b === TRIPWIRE) this.tripwire(m, x, y, z, meta, light);
+    else if (isRedstone2Block(b)) this.redstone2(m, b, x, y, z, meta, light);
+  }
+  // Second redstone family (redstone-blocks-2.js), block side only: the torches reuse the torch model with their own
+  // texture, the lamps, redstone block and glowstone are full cubes, the button, plates and daylight sensor are
+  // boxes of redstoneBounds2 and the comparator is a repeater-like slab with torches. The comparator's torch layout
+  // is drawn from the class description (not replayed against the native renderer).
+  redstone2(m, b, x, y, z, meta, light) {
+    if (b === REDSTONE_TORCH || b === REDSTONE_TORCH_OFF) this.torch(m, x, y, z, b);
+    else if (isCube2(b)) this.cube(m, b, x, y, z);
+    else if (b === COMPARATOR || b === COMPARATOR_POWERED) this.comparator(m, b, x, y, z, meta, light);
+    else this.box(m, b, x, y, z, redstoneBounds2(b, meta), meta, b !== DAYLIGHT_SENSOR);
+  }
+  // BlockRedstoneComparator (render type 37): a 1/8 slab (top comparator_off/on, sides stone slab, bottom torch texture)
+  // with two rear torches and a front torch that is raised in subtract mode (metadata bit 2).
+  comparator(m, b, x, y, z, meta, light) {
+    this.box(m, b, x, y, z, [0, 0, 0, 1, 0.125, 1], meta, true);
+    const dir = meta & 3, subtract = (meta & 4) !== 0, lit = b === COMPARATOR_POWERED;
+    const rotate = (side, back) => [dir === 1 ? -back : dir === 3 ? back : dir === 0 ? side : -side, dir === 0 ? back : dir === 2 ? -back : dir === 1 ? side : -side];
+    const torches = [[0, -0.3125, subtract, subtract ? 0.625 : 0.3125], [-0.25, 0.25, lit, 0.5], [0.25, 0.25, lit, 0.5]];
+    const r = 0.0625;
+    for (const [side, back, on, height] of torches) {
+      const t = tileRect(tileByName(on ? "redstone_torch_on" : "redstone_torch_off")), U = (p) => t.u0 + ((t.u1 - t.u0) * p) / 16, V = (p) => t.v1 - ((t.v1 - t.v0) * p) / 16;
+      const [ox, oz] = rotate(side, back), cx = x + 0.5 + ox, cz = z + 0.5 + oz, y0 = y + 0.125, y1 = y0 + height;
+      const sides = [[[-r, -r], [r, -r]], [[r, -r], [r, r]], [[r, r], [-r, r]], [[-r, r], [-r, -r]]];
+      for (const [[ax, az], [bx, bz]] of sides) m.quad([[cx + ax, y0, cz + az], [cx + bx, y0, cz + bz], [cx + bx, y1, cz + bz], [cx + ax, y1, cz + az]], [[U(7), V(16)], [U(9), V(16)], [U(9), V(16 - height * 16)], [U(7), V(16 - height * 16)]], 1, light, true);
+      m.quad([[cx - r, y1, cz + r], [cx + r, y1, cz + r], [cx + r, y1, cz - r], [cx - r, y1, cz - r]], [[U(7), V(8)], [U(9), V(8)], [U(9), V(6)], [U(7), V(6)]], 1, light, true);
+    }
   }
   wire(m, x, y, z, light) {
     const { w, e, n, s } = wireArms(this.world, x, y, z), climb = wireClimbs(this.world, x, y, z), tint = wireTint(0);
@@ -651,6 +679,62 @@ export class VoxelScene {
   }
   setFalling(list) {
     this.fallingList = list;
+  }
+  // TileEntityRendererPiston (piston-live.js): moving blocks as [{ x, y, z, parts: [{ block, meta, quads|null, offset }] }].
+  // Parts with quads (piston bases and heads) draw those; any other stored block draws as a cube/box with every face
+  // (renderBlockAllFaces) through a one-cell world view. The mesh is moved by `offset`; rebuilt each frame.
+  setMovingBlocks(list) {
+    this.movingList = list;
+  }
+  // Geometry only depends on the stored block, its quads and the cell light, so it is cached per part until that changes;
+  // each frame only moves the mesh by the part's offset. Stale parts are removed and their geometry disposed.
+  updateMoving() {
+    const cache = (this.movingMeshes ??= new Map()), used = new Set();
+    if (this.movingList?.length && this.light) {
+      const real = this.world;
+      for (const e of this.movingList)
+        e.parts.forEach((part, i) => {
+          const key = `${e.x},${e.y},${e.z},${i}`, light = this.light.packed(e.x, e.y, e.z),
+            last = part.quads?.[part.quads.length - 1]?.verts?.[0]?.join(","),
+            sig = `${part.block},${part.meta},${part.quads ? `q${part.quads.length}:${last}` : "c"},${light}`;
+          used.add(key);
+          let entry = cache.get(key);
+          if (!entry || entry.sig !== sig) {
+            if (entry) { this.scene.remove(entry.mesh); entry.mesh.geometry.dispose(); cache.delete(key); }
+            const g = this.movingGeometry(e, part, light, real);
+            if (!g) return;
+            const mesh = new THREE.Mesh(g, this.material);
+            this.scene.add(mesh);
+            cache.set(key, (entry = { sig, mesh }));
+          }
+          entry.mesh.position.set(...part.offset);
+        });
+    }
+    for (const [key, entry] of cache)
+      if (!used.has(key)) { this.scene.remove(entry.mesh); entry.mesh.geometry.dispose(); cache.delete(key); }
+  }
+  movingGeometry(e, part, light, real) {
+    const m = new Mesher();
+    if (part.quads) {
+      for (const q of part.quads) {
+        const r = tileRect(namedTile(q.icon));
+        m.quad(q.verts.map((v) => [e.x + v[0], e.y + v[1], e.z + v[2]]), q.verts.map((v) => [r.u0 + (r.u1 - r.u0) * v[3], r.v1 - (r.v1 - r.v0) * v[4]]), q.shade, light, true);
+      }
+    } else {
+      const b = part.block, view = Object.create(real);
+      view.get = (x, y, z) => (x === e.x && y === e.y && z === e.z ? b : 0);
+      view.getMeta = (x, y, z) => (x === e.x && y === e.y && z === e.z ? part.meta : real.getMeta(x, y, z));
+      this.world = view;
+      try {
+        if (isStair(b)) this.stairs(m, b, e.x, e.y, e.z);
+        else if (b === STONE_SLAB) this.box(m, b, e.x, e.y, e.z, blockBounds(view, e.x, e.y, e.z), part.meta, true);
+        else if (b === FENCE) for (const box of fenceRenderBoxes(fenceMask(view, e.x, e.y, e.z))) this.box(m, b, e.x, e.y, e.z, box, 0, true);
+        else this.cube(m, b, e.x, e.y, e.z);
+      } finally {
+        this.world = real;
+      }
+    }
+    return m.geometry();
   }
   fallingAnvil(m,[x0,y0,z0,x1,y1,z1],meta,light){
     for(const [fi,f] of FACES.entries()){
@@ -824,6 +908,7 @@ export class VoxelScene {
     this.weatherRenderer.update(w, this.world, c, partial, time);
     this.drops.update(this.dropList, this.dropPartial, time * 20);
     this.updateFalling(this.dropPartial);
+    this.updateMoving();
     const particleView = this.particleView ?? { yaw: c.rotation.y, pitch: c.rotation.x };
     this.projectiles.update(this.projectileList.balls, this.effectRenderer.layers[2], c, this.dropPartial, particleView);
     this.arrows.update(this.arrowList, this.dropPartial);

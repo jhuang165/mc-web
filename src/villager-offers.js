@@ -40,18 +40,22 @@ const adjustedChance = (chance, oldOfferCount) => {
   const sum = f(chance + multiplier);
   return sum > f(0.9) ? f(f(0.9) - f(sum - f(0.9))) : sum;
 };
-function maybeBuyForEmerald(offers, itemId, random, chance) {
-  if (random.nextFloat() >= adjustedChance(chance, 0)) return;
+function buyForEmerald(offers, itemId, random, chance, old = 0) {
+  if (random.nextFloat() >= adjustedChance(chance, old)) return;
   offers.push(recipe(item(itemId, rangeExclusive(random, itemId, BUY_QUANTITY)), null, item(EMERALD)));
 }
-function maybeSellForEmerald(offers, itemId, random, chance) {
-  if (random.nextFloat() >= adjustedChance(chance, 0)) return;
+function sellForEmerald(offers, itemId, random, chance, old = 0) {
+  if (random.nextFloat() >= adjustedChance(chance, old)) return;
   const quantity = rangeExclusive(random, itemId, EMERALD_PRICE);
   if (quantity < 0) offers.push(recipe(item(EMERALD), null, item(itemId, -quantity)));
   else offers.push(recipe(item(EMERALD, quantity), null, item(itemId)));
 }
-function generateCandidates(profession, random) {
+// `old` is the size of the villager's existing offer list: EntityVillager.t(int) sets p(float)'s
+// bonus to sqrt(size) * 0.2 before it draws, so a restock rolls lower odds than the first call.
+function generateCandidates(profession, random, old = 0) {
   const out = [];
+  const maybeBuyForEmerald = (o, id, r, c) => buyForEmerald(o, id, r, c, old);
+  const maybeSellForEmerald = (o, id, r, c) => sellForEmerald(o, id, r, c, old);
   switch (profession) {
     case 0: // Farmer
       maybeBuyForEmerald(out, 296, random, 0.9);
@@ -66,7 +70,7 @@ function generateCandidates(profession, random) {
       maybeSellForEmerald(out, 259, random, 0.3);
       maybeSellForEmerald(out, 366, random, 0.3);
       maybeSellForEmerald(out, 262, random, 0.5);
-      if (random.nextFloat() < adjustedChance(0.5, 0))
+      if (random.nextFloat() < adjustedChance(0.5, old))
         out.push(recipe(item(13, 10), item(EMERALD), item(318, 4 + random.nextInt(2))));
       break;
     case 1: // Librarian
@@ -77,7 +81,7 @@ function generateCandidates(profession, random) {
       maybeSellForEmerald(out, 20, random, 0.2);
       maybeSellForEmerald(out, 345, random, 0.2);
       maybeSellForEmerald(out, 347, random, 0.2);
-      if (random.nextFloat() < adjustedChance(0.07, 0)) {
+      if (random.nextFloat() < adjustedChance(0.07, old)) {
         const enchantment = ENCHANTMENT_LIST[random.nextInt(ENCHANTMENT_LIST.length)];
         const level = enchantment.minLevel >= enchantment.maxLevel
           ? enchantment.minLevel
@@ -96,7 +100,7 @@ function generateCandidates(profession, random) {
       // Preserve EntityVillager's exact native array order (sword, sword, chestplate,
       // chestplate, axe, axe, pickaxe, pickaxe).
       for (const id of [267, 276, 307, 311, 258, 279, 257, 278]) {
-        if (random.nextFloat() >= adjustedChance(0.05, 0)) continue;
+        if (random.nextFloat() >= adjustedChance(0.05, old)) continue;
         const emeralds = 2 + random.nextInt(3);
         const gear = item(id);
         addRandomEnchantment(random, gear, 5 + random.nextInt(15));
@@ -128,7 +132,7 @@ function generateCandidates(profession, random) {
       maybeSellForEmerald(out, 320, random, 0.3);
       maybeSellForEmerald(out, 364, random, 0.3);
       break;
-    default: throw new RangeError("profession must be between 0 and 4");
+    default: break; // any other profession id has no table: only the gold-ingot fallback below
   }
   if (out.length === 0)
     maybeBuyForEmerald(out, 266, random, 1.0); // native empty-list fallback: gold ingots for an emerald
@@ -144,14 +148,17 @@ function shuffle(list, random) {
 
 // Ports the initial EntityVillager.t(maxNewOffers) call. The villager's own JavaRandom is
 // required; shuffleRandom defaults to the module's shared equivalent of Collections' static Random.
-export function generateVillagerOffers(profession, random, { maxNewOffers = 1, shuffleRandom = defaultShuffleRandom } = {}) {
-  if (!Number.isInteger(profession) || profession < 0 || profession > 4) throw new RangeError("profession must be between 0 and 4");
+// `existing` is the villager's current offer list (a restock): its size feeds the chance bonus and the
+// new offers are added to it with MerchantRecipeList.addToListWithCheck; the list is returned.
+// `anyProfession` lets a registry profession outside 0-4 reach native's empty-table gold fallback.
+export function generateVillagerOffers(profession, random, { maxNewOffers = 1, shuffleRandom = defaultShuffleRandom, existing = null, anyProfession = false } = {}) {
+  if (!Number.isInteger(profession) || profession < 0 || (profession > 4 && !anyProfession)) throw new RangeError("profession must be between 0 and 4");
   if (!random || typeof random.nextFloat !== "function" || typeof random.nextInt !== "function") throw new TypeError("random must implement JavaRandom nextFloat/nextInt");
   if (!shuffleRandom || typeof shuffleRandom.nextInt !== "function") throw new TypeError("shuffleRandom must implement JavaRandom nextInt");
   if (!Number.isSafeInteger(maxNewOffers) || maxNewOffers < 0) throw new RangeError("maxNewOffers must be a nonnegative integer");
-  const candidates = generateCandidates(profession, random);
+  const candidates = generateCandidates(profession, random, existing ? existing.length : 0);
   shuffle(candidates, shuffleRandom);
-  const offers = [];
+  const offers = existing ?? [];
   for (let i = 0; i < maxNewOffers && i < candidates.length; i++) addOrReplaceOffer(offers, candidates[i]);
   return offers;
 }

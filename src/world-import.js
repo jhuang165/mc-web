@@ -4,7 +4,7 @@
 const RUNTIME_FIELDS = [
   "position", "drops", "entities", "farms", "experience", "xpOrbs", "falling",
   "weather", "worldRandom", "projectiles", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "inhabited",
-  "spawners", "minecarts", "populatedColumns",
+  "spawners", "pistons", "minecarts", "populatedColumns",
 ];
 
 const int = Number.isInteger, finite = Number.isFinite;
@@ -19,6 +19,14 @@ const SANITIZE = {
   populatedColumns: (v) => v && typeof v === "object" && v.version === 1 && v.cells && typeof v.cells === "object"
     ? { version: 1, cells: Object.fromEntries(Object.entries(v.cells)
       .filter(([k, hex]) => /^-?\d+,-?\d+$/.test(k) && typeof hex === "string" && /^[0-9a-f]{1,16}$/.test(hex)).slice(0, 262144)) }
+    : undefined,
+  // Moving piston tiles (piston-live.js save()): validated field by field; bad entries are dropped.
+  pistons: (v) => Array.isArray(v)
+    ? v.filter((t) => t && typeof t === "object" && [t.x, t.y, t.z, t.block, t.meta, t.facing].every(int) && t.facing >= 0 && t.facing <= 5 && finite(t.progress)).slice(0, 4096).map((t) => ({
+      x: t.x, y: t.y, z: t.z, block: t.block, meta: t.meta, facing: t.facing, progress: Math.max(0, Math.min(1, t.progress)),
+      ...(finite(t.lastProgress) ? { lastProgress: Math.max(0, Math.min(1, t.lastProgress)) } : {}),
+      extending: t.extending === true, renderHead: t.renderHead === true,
+    }))
     : undefined,
   spawners: (v) => Array.isArray(v)
     ? v.filter((t) => t && typeof t === "object" && [t.x, t.y, t.z].every(int)).slice(0, 4096).map((t) => ({

@@ -169,7 +169,7 @@ RAY_BOUNDS[59] = [0, 0, 0, 1, 1/64, 1];
 // Chests, fences (connection bounds), rails (0.125 or 0.625 ascending) and torches (per-metadata box)
 // set their ray box from the cell, as setBlockBoundsBasedOnState / BlockTorch.collisionRayTrace do.
 export const rayBounds = (world, x, y, z, id) =>
-  [107,108,109,110,111,112,113,114,116,117,118,41,69,72,73,75,76,79,82,83,84,103,104,106,ANVIL,ENCHANTING_TABLE,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE].includes(id) ? blockBounds(world, x, y, z) : id === FENCE ? fenceBounds(fenceMask(world, x, y, z)) : id === RAIL ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id === TORCH ? torchBounds(world.getMeta?.(x, y, z) ?? 0) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
+  [107,108,109,110,111,112,113,114,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,41,69,72,73,75,76,79,82,83,84,103,104,106,ANVIL,ENCHANTING_TABLE,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE].includes(id) ? blockBounds(world, x, y, z) : id === FENCE ? fenceBounds(fenceMask(world, x, y, z)) : id === RAIL ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id === TORCH ? torchBounds(world.getMeta?.(x, y, z) ?? 0) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
 
 // World.rayTraceBlocks (ahb.a(Vec3, Vec3) = func_147447_a(false, false, false)):
 // walk the cells along the segment (at most 201 steps, each moving the start
@@ -422,6 +422,12 @@ export class Projectiles {
       }
       // EntitySnowball.onImpact (zj.a): attackEntityFrom(thrown damage 0),
       // eight snowballpoof at the ball's current position, then setDead.
+      // EntityPotion.onImpact (witch-potions.js applies it): the position, the entity struck and the owner go out as an event.
+      if (b.kind === "potion") {
+        this.events.push({ potion: { x: b.x, y: b.y, z: b.z, damage: b.damage, owner: b.owner, hit: hit?.ref ?? null } });
+        b.dead = true;
+        return;
+      }
       if (hit) onHit(hit.ref, b);
       if (b.kind === "egg") this.layEggs(b);
       for (let i = 0; i < PARTICLES; i++) this.poof(b.x, b.y, b.z);
@@ -447,7 +453,7 @@ export class Projectiles {
     b.mx *= drag;
     b.my *= drag;
     b.mz *= drag;
-    b.my -= f(0.03);
+    b.my -= f(b.kind === "potion" ? 0.05 : 0.03); // EntityPotion.getGravityVelocity
   }
   // new EntityBreakingFX(world, x, y, z, snowball) (bju) -> EntityFX (bkm).
   // Entity.rand draws the texture jitter, scale and lifetime (in that order);

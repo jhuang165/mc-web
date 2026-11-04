@@ -12,6 +12,7 @@ import { SILVERFISH_MODEL, silverfishPose } from "./silverfish.js";
 import { creeperFlash, creeperScale, creeperWhite, creeperPose, armorScroll } from "./creeper.js";
 import { isInvisible } from "./mob-effects.js";
 import { createVillagerRig, villagerLegAngle } from "./villager-renderer.js";
+import { createWitchRig, animateWitch } from "./witch-renderer.js";
 const RAD = Math.PI / 180;
 // RenderCreeper's powered pass (bni.a(xz, I, F), pass 1): creeper_armor.png with the texture
 // matrix translated by (scroll, scroll), colour 0.5, lighting off, blended GL_ONE, GL_ONE.
@@ -367,6 +368,7 @@ export class MobRenderer {
     if (e.type === "sheep") return this.createSheep();
     if (e.type === "zombie") return this.createZombie();
     if (e.type === "villager") return createVillagerRig(this, e);
+    if (e.type === "witch") return createWitchRig(this, e);
     return this.createQuadruped(e.type);
   }
   // `partial` is the fraction of the current tick elapsed (mobPose interpolates).
@@ -449,10 +451,11 @@ export class MobRenderer {
         sf.segments.forEach((s, i) => { r.silverfish.segments[i].position.x = s.x / 16; r.silverfish.segments[i].rotation.y = -s.yaw; });
         sf.layers.forEach((s, i) => { r.silverfish.layers[i].position.x = s.x / 16; r.silverfish.layers[i].rotation.y = -s.yaw; });
       }
+      if (r.nose) animateWitch(r, e, pose.age);
       r.limbs.forEach((l, i) => {
         if (spider) { l.rotation.set(0, -spider[i][0], -spider[i][1]); return; }
         if (creeper) { l.rotation.x = creeper[i + 1][0]; return; }
-        if (e.type === "villager") { l.rotation.x = villagerLegAngle(pose.limbSwing, pose.limbSwingAmount, i); return; }
+        if (e.type === "villager" || e.type === "witch") { l.rotation.x = villagerLegAngle(pose.limbSwing, pose.limbSwingAmount, i); return; }
         if ((e.type === "zombie" || e.type === "skeleton") && i < 2) {
           const side = i === 0 ? 1 : -1;
           l.rotation.set(-Math.PI / 2 + side * sway, side * 0.1, -side * spread);

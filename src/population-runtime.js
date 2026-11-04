@@ -52,6 +52,8 @@ function restoreAnimals(list,mobs,unsupported){
   for(const a of list??[]){
     // Village records are {type:'Villager',x,y,z,profession}; animals are {name,...,yaw,fleece} (yaw 0 for a villager, as spawned).
     if(a.type==='Villager'&&ENTITY_TYPES.villager){const e=mobs.create('villager',a.x,a.y,a.z);Object.assign(e,villagerFields(a.profession,0));mobs.entities.push(e);animals++;continue;}
+    // Swamp-hut records are {type:'Witch',x,y,z} (scattered-feature-generator.js); EntityWitch spawns with the defaults.
+    if(a.type==='Witch'&&ENTITY_TYPES.witch){mobs.entities.push(mobs.create('witch',a.x,a.y,a.z));animals++;continue;}
     const type=ANIMALS[a.name];if(!type||!ENTITY_TYPES[type]){unsupported.push(a.name??a.type);continue;}
     const e=mobs.create(type,a.x,a.y,a.z);e.yaw=Math.fround(a.yaw*Math.PI/180);
     if(type==='sheep')e.color=a.fleece;

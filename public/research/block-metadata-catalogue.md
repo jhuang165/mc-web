@@ -17,7 +17,7 @@ All **171 block registrations** x 16 raw 4-bit values = **2736 ID/metadata combi
 
 **Bytecode evidence** (javap): overrides of the block's own class chain and inner classes that call World/IBlockAccess/TileEntity getBlockMetadata, use a metadata argument, or call such a method; the RenderBlocks render method of each render type that reads world metadata other than straight into getIcon(side, meta). **Not analysed**: other blocks, items and entities reading this block's metadata, tile-entity code and renderers (tile-entity blocks never get aliases), persistence.
 
-Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item damage, not world metadata); **Item-placed** are metadata values produced by onBlockPlaced from any item damage 0–15; **Unexecuted readers** counts metadata readers not executed conclusively (class-chain overrides, the render method, a tile entity; see JSON `bytecode.unexecutedMetadataReaders`); **Browser mapping** counts values with an exact, approximate (fallback) or no mapping in `fromOriginal` today (1110 exact, 682 approximate, 944 none of 2736). Placement across all values: 315 reachable from Creative item damage, 270 only from other item damage, 2151 not produced by item placement (they may still arise from world generation, updates or commands).
+Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item damage, not world metadata); **Item-placed** are metadata values produced by onBlockPlaced from any item damage 0–15; **Unexecuted readers** counts metadata readers not executed conclusively (class-chain overrides, the render method, a tile entity; see JSON `bytecode.unexecutedMetadataReaders`); **Browser mapping** counts values with an exact, approximate (fallback) or no mapping in `fromOriginal` today (1236 exact, 764 approximate, 736 none of 2736). Placement across all values: 315 reachable from Creative item damage, 270 only from other item damage, 2151 not produced by item placement (they may still arise from world generation, updates or commands).
 
 | Java block ID | Registry name | Creative stacks | Item-placed | Semantic | Alias (→canonical) | Invalid | Unclassified | Unexecuted readers | Browser mapping |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -57,7 +57,7 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 33 | minecraft:piston | 33:0 | 7 | 0–6, 8–15 | — | — | 7 | 3 | exact all 16 |
 | 34 | minecraft:piston_head | — | — | 0–5, 8–13 | — | — | 6, 7, 14, 15 | 1 | exact all 16 |
 | 35 | minecraft:wool | 35:0, 35:1, 35:2, 35:3, 35:4, 35:5, 35:6, 35:7, 35:8, 35:9, 35:10, 35:11, 35:12, 35:13, 35:14, 35:15 | 0–15 | 0–15 | — | — | — | — | exact all 16 |
-| 36 | minecraft:piston_extension | — | — | 0 | — | — | 1–15 | 1 | none all 16 |
+| 36 | minecraft:piston_extension | — | — | 0 | — | — | 1–15 | 1 | exact all 16 |
 | 37 | minecraft:yellow_flower | 37:0 | 0–15 | 0–15 | — | — | — | — | exact 0; approximate 1–15 |
 | 38 | minecraft:red_flower | 38:0, 38:1, 38:2, 38:3, 38:4, 38:5, 38:6, 38:7, 38:8 | 0–15 | 0–15 | — | — | — | — | exact all 16 |
 | 39 | minecraft:brown_mushroom | 39:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
@@ -96,8 +96,8 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 72 | minecraft:wooden_pressure_plate | 72:0 | 0 | 0, 1 | 2–15→0 | — | — | — | exact all 16 |
 | 73 | minecraft:redstone_ore | 73:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 74 | minecraft:lit_redstone_ore | — | — | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
-| 75 | minecraft:unlit_redstone_torch | — | — | 0–6, 9–12 | — | — | 7, 8, 13–15 | 1 | none all 16 |
-| 76 | minecraft:redstone_torch | 76:0 | 0 | 0–6, 9–12 | — | — | 7, 8, 13–15 | 1 | none all 16 |
+| 75 | minecraft:unlit_redstone_torch | — | — | 0–6, 9–12 | — | — | 7, 8, 13–15 | 1 | exact 1–5; approximate 0, 6–15 |
+| 76 | minecraft:redstone_torch | 76:0 | 0 | 0–6, 9–12 | — | — | 7, 8, 13–15 | 1 | exact 1–5; approximate 0, 6–15 |
 | 77 | minecraft:stone_button | 77:0 | 1 | 0–6, 8–14 | 7→6; 15→14 | — | — | — | exact all 16 |
 | 78 | minecraft:snow_layer | 78:0 | 0–15 | 0–7 | — | — | 8–15 | — | exact all 16 |
 | 79 | minecraft:ice | 79:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
@@ -110,7 +110,7 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 86 | minecraft:pumpkin | 86:0 | 0 | 0–4 | 5–15→4 | — | — | — | exact all 16 |
 | 87 | minecraft:netherrack | 87:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
 | 88 | minecraft:soul_sand | 88:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
-| 89 | minecraft:glowstone | 89:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
+| 89 | minecraft:glowstone | 89:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 90 | minecraft:portal | — | 0 | 0–3 | 4, 8, 12→0; 5, 9, 13→1; 6, 10, 14→2; 7, 11, 15→3 | — | — | — | none all 16 |
 | 91 | minecraft:lit_pumpkin | 91:0 | 0 | 0–4 | 5–15→4 | — | — | — | none all 16 |
 | 92 | minecraft:cake | — | — | 0–15 | — | — | — | — | none all 16 |
@@ -144,8 +144,8 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 120 | minecraft:end_portal_frame | 120:0 | 0 | 0, 4 | — | — | 1–3, 5–15 | 1 | exact all 16 |
 | 121 | minecraft:end_stone | 121:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
 | 122 | minecraft:dragon_egg | — | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
-| 123 | minecraft:redstone_lamp | 123:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
-| 124 | minecraft:lit_redstone_lamp | — | — | 0 | 1–15→0 | — | — | — | none all 16 |
+| 123 | minecraft:redstone_lamp | 123:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
+| 124 | minecraft:lit_redstone_lamp | — | — | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 125 | minecraft:double_wooden_slab | — | 0–15 | 0–7 | 8→0; 9→1; 10→2; 11→3; 12→4; 13→5; 14→6; 15→7 | — | — | — | none all 16 |
 | 126 | minecraft:wooden_slab | 126:0, 126:1, 126:2, 126:3, 126:4, 126:5 | 0–15 | 0–15 | — | — | — | — | none all 16 |
 | 127 | minecraft:cocoa | — | 0–3 | 0–15 | — | — | — | 1 | exact all 16 |
@@ -164,16 +164,16 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 140 | minecraft:flower_pot | — | — | 0 | — | — | 1–15 | 1 | exact all 16 |
 | 141 | minecraft:carrots | — | 0 | 0–5, 7–9 | 6→5; 10–13→9 | — | 14, 15 | — | exact all 16 |
 | 142 | minecraft:potatoes | — | 0 | 0–5, 7–9 | 6→5; 10–13→9 | — | 14, 15 | — | exact all 16 |
-| 143 | minecraft:wooden_button | 143:0 | 1 | 0–6, 8–14 | 7→6; 15→14 | — | — | — | none all 16 |
+| 143 | minecraft:wooden_button | 143:0 | 1 | 0–6, 8–14 | 7→6; 15→14 | — | — | — | exact all 16 |
 | 144 | minecraft:skull | — | — | 0–15 | — | — | — | 2 | none all 16 |
 | 145 | minecraft:anvil | 145:0, 145:1, 145:2 | 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60 | 0, 1, 4, 5, 8, 9, 12, 13 | — | — | 2, 3, 6, 7, 10, 11, 14, 15 | 1 | exact all 16 |
 | 146 | minecraft:trapped_chest | 146:0 | 0 | 0 | — | — | 1–15 | 1 | none all 16 |
-| 147 | minecraft:light_weighted_pressure_plate | 147:0 | 0 | 0–15 | — | — | — | — | none all 16 |
-| 148 | minecraft:heavy_weighted_pressure_plate | 148:0 | 0 | 0–15 | — | — | — | — | none all 16 |
-| 149 | minecraft:unpowered_comparator | — | — | 0–3 | — | — | 4–15 | 13 | none all 16 |
-| 150 | minecraft:powered_comparator | — | — | — | — | — | 0–15 | 13 | none all 16 |
-| 151 | minecraft:daylight_detector | 151:0 | 0 | 0–15 | — | — | — | 1 | none all 16 |
-| 152 | minecraft:redstone_block | 152:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
+| 147 | minecraft:light_weighted_pressure_plate | 147:0 | 0 | 0–15 | — | — | — | — | exact all 16 |
+| 148 | minecraft:heavy_weighted_pressure_plate | 148:0 | 0 | 0–15 | — | — | — | — | exact all 16 |
+| 149 | minecraft:unpowered_comparator | — | — | 0–3 | — | — | 4–15 | 13 | exact all 16 |
+| 150 | minecraft:powered_comparator | — | — | — | — | — | 0–15 | 13 | exact all 16 |
+| 151 | minecraft:daylight_detector | 151:0 | 0 | 0–15 | — | — | — | 1 | exact all 16 |
+| 152 | minecraft:redstone_block | 152:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 153 | minecraft:quartz_ore | 153:0 | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
 | 154 | minecraft:hopper | 154:0 | 0, 2–5 | 0, 8 | — | — | 1–7, 9–15 | 2 | none all 16 |
 | 155 | minecraft:quartz_block | 155:0, 155:1, 155:2 | 0–15 | 0–15 | — | — | — | 1 | none all 16 |

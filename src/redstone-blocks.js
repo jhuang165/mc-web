@@ -7,6 +7,9 @@
 // Rules that need the world take it as an argument.
 import { normalCube, FENCE } from "./world.js";
 import { solidTop } from "./rails.js";
+// Internal ids 119-131 (torches, lamps, redstone block, wooden button, weighted plates, comparators, daylight sensor, piston moving block,
+// glowstone) live in redstone-blocks-2.js; the functions below delegate to it so every caller handles them as redstone blocks.
+import { isRedstone2Block, itemOfBlock2, blockOfItem2, redstoneBounds2, redstoneDrops2, redstonePlacedMeta2, redstoneSupported2 } from "./redstone-blocks-2.js";
 export const REDSTONE_WIRE = 107, LEVER = 108, STONE_PRESSURE_PLATE = 109, WOODEN_PRESSURE_PLATE = 110;
 export const STONE_BUTTON = 111, REPEATER = 112, TRIPWIRE_HOOK = 113, TRIPWIRE = 114;
 // Tools own internal item ids 100-127, so block items sit at block id + 1000; the dust, repeater and
@@ -15,13 +18,13 @@ export const ITEM_REDSTONE = 360, ITEM_STRING = 321, ITEM_REPEATER = 356;
 export const ITEM_LEVER = 1108, ITEM_STONE_PLATE = 1109, ITEM_WOODEN_PLATE = 1110, ITEM_STONE_BUTTON = 1111, ITEM_TRIPWIRE_HOOK = 1113;
 const ITEM_OF_BLOCK = { [REDSTONE_WIRE]: ITEM_REDSTONE, [LEVER]: ITEM_LEVER, [STONE_PRESSURE_PLATE]: ITEM_STONE_PLATE, [WOODEN_PRESSURE_PLATE]: ITEM_WOODEN_PLATE, [STONE_BUTTON]: ITEM_STONE_BUTTON, [REPEATER]: ITEM_REPEATER, [TRIPWIRE_HOOK]: ITEM_TRIPWIRE_HOOK, [TRIPWIRE]: ITEM_STRING };
 const BLOCK_OF_ITEM = Object.fromEntries(Object.entries(ITEM_OF_BLOCK).map(([b, i]) => [i, +b]));
-export const itemOfBlock = (b) => ITEM_OF_BLOCK[b] ?? 0;
-export const blockOfItem = (i) => BLOCK_OF_ITEM[i] ?? 0;
+export const itemOfBlock = (b) => ITEM_OF_BLOCK[b] ?? itemOfBlock2(b);
+export const blockOfItem = (i) => BLOCK_OF_ITEM[i] ?? blockOfItem2(i);
 // Original item id -> internal item id for the items this family adds or reuses (population-content.js).
 export const REDSTONE_ITEM_IDS = Object.freeze({ 69: ITEM_LEVER, 70: ITEM_STONE_PLATE, 72: ITEM_WOODEN_PLATE, 77: ITEM_STONE_BUTTON, 131: ITEM_TRIPWIRE_HOOK, 356: ITEM_REPEATER });
 export const REDSTONE_ITEM_NAMES = Object.freeze({ [ITEM_LEVER]: "Lever", [ITEM_STONE_PLATE]: "Stone pressure plate", [ITEM_WOODEN_PLATE]: "Wooden pressure plate", [ITEM_STONE_BUTTON]: "Stone button", [ITEM_TRIPWIRE_HOOK]: "Tripwire hook", [ITEM_REPEATER]: "Redstone repeater" });
 
-export const isRedstoneBlock = (b) => b >= REDSTONE_WIRE && b <= TRIPWIRE;
+export const isRedstoneBlock = (b) => (b >= REDSTONE_WIRE && b <= TRIPWIRE) || isRedstone2Block(b);
 // Only the repeater has a collision box (BlockRedstoneDiode: 0.125 tall).
 export const hasCollision = (b) => b === REPEATER;
 const f = Math.fround;
@@ -57,7 +60,7 @@ export function redstoneBounds(id, meta = 0) {
       default: return [0, F2, 0.3125, 0.375, F8, 0.6875];
     }
     case TRIPWIRE: return (meta & 2) === 0 ? [0, 0, 0, 1, 0.09375, 1] : (meta & 4) === 0 ? [0, 0, 0, 1, 0.5, 1] : [0, 0.0625, 0, 1, 0.15625, 1];
-    default: return null;
+    default: return isRedstone2Block(id) ? redstoneBounds2(id, meta) : null;
   }
 }
 
@@ -66,7 +69,7 @@ export function redstoneBounds(id, meta = 0) {
 export const REDSTONE_HARDNESS = { [REDSTONE_WIRE]: 0, [LEVER]: 0.5, [STONE_PRESSURE_PLATE]: 0.5, [WOODEN_PRESSURE_PLATE]: 0.5, [STONE_BUTTON]: 0.5, [REPEATER]: 0, [TRIPWIRE_HOOK]: 0, [TRIPWIRE]: 0 };
 export const REDSTONE_SOUND = { [REDSTONE_WIRE]: "stone", [LEVER]: "wood", [STONE_PRESSURE_PLATE]: "stone", [WOODEN_PRESSURE_PLATE]: "wood", [STONE_BUTTON]: "stone", [REPEATER]: "wood", [TRIPWIRE_HOOK]: "stone", [TRIPWIRE]: "stone" };
 // What breaking leaves behind (Block.getItemDropped / quantityDropped); damage is always 0.
-export const redstoneDrops = (id) => (ITEM_OF_BLOCK[id] ? [{ id: ITEM_OF_BLOCK[id], count: 1, damage: 0 }] : []);
+export const redstoneDrops = (id, options) => (isRedstone2Block(id) ? redstoneDrops2(id, 0, options) : ITEM_OF_BLOCK[id] ? [{ id: ITEM_OF_BLOCK[id], count: 1, damage: 0 }] : []);
 
 // ---- Placement ----------------------------------------------------------------------------
 // side: 0 down, 1 up, 2 north (z-), 3 south (z+), 4 west (x-), 5 east (x+) of the clicked block.
@@ -115,17 +118,18 @@ export function redstonePlacedMeta(world, id, x, y, z, side, yaw = 0) {
     }
     case STONE_PRESSURE_PLATE: case WOODEN_PRESSURE_PLATE:
       return below(world, x, y, z) || isFence(world.get(x, y - 1, z)) ? 0 : null;
-    case REDSTONE_WIRE: return below(world, x, y, z) ? 0 : null;
+    case REDSTONE_WIRE: return below(world, x, y, z) || world.get(x, y - 1, z) === 131 ? 0 : null; // BlockRedstoneWire also stands on glowstone
     case REPEATER: return below(world, x, y, z) ? repeaterMetaForYaw(yaw) : null;
     case TRIPWIRE: return below(world, x, y, z) ? 0 : 2; // string never fails; the suspended bit is 2
-    default: return null;
+    default: return isRedstone2Block(id) ? redstonePlacedMeta2(world, id, x, y, z, side, yaw, repeaterMetaForYaw) : null;
   }
 }
 
 // Neighbour-change support (onNeighborBlockChange / canPlaceBlockAt): false means the block drops.
 export function redstoneSupported(world, id, x, y, z, meta = world.getMeta(x, y, z)) {
   switch (id) {
-    case REDSTONE_WIRE: case REPEATER: return below(world, x, y, z);
+    case REDSTONE_WIRE: return below(world, x, y, z) || world.get(x, y - 1, z) === 131; // glowstone holds dust (BlockRedstoneWire.canPlaceBlockAt)
+    case REPEATER: return below(world, x, y, z);
     case STONE_PRESSURE_PLATE: case WOODEN_PRESSURE_PLATE: return below(world, x, y, z) || isFence(world.get(x, y - 1, z));
     case TRIPWIRE: return ((meta & 2) === 2) !== below(world, x, y, z);
     case LEVER: { const a = LEVER_ATTACH[meta & 7]; return a ? cube(world, x + a[0], y + a[1], z + a[2]) : false; }
@@ -135,7 +139,7 @@ export function redstoneSupported(world, id, x, y, z, meta = world.getMeta(x, y,
       return cube(world, x - 1, y, z) || cube(world, x + 1, y, z) || cube(world, x, y, z - 1) || cube(world, x, y, z + 1);
     }
     case TRIPWIRE_HOOK: { const a = HOOK_ATTACH[meta & 3]; return cube(world, x + a[0], y + a[1], z + a[2]); }
-    default: return true;
+    default: return isRedstone2Block(id) ? redstoneSupported2(world, id, x, y, z, meta) : true;
   }
 }
 

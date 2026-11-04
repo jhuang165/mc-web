@@ -5,6 +5,7 @@ import { STAIRS, stairRecipeResult } from './stairs.js';
 import { DISPENSER, STICKY_PISTON, PISTON, PISTON_HEAD, SLIMEBALL, DISPENSER_ITEM, STICKY_PISTON_ITEM, PISTON_ITEM, ORIGINAL_ITEMS as DISPENSER_PISTON_ITEMS } from './dispenser-piston.js';
 import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, ITEM_STONE_BRICKS, ITEM_STONE_SLAB, ITEM_END_PORTAL_FRAME, ITEM_CAULDRON, ITEM_FLOWER_POT, STONE_BRICK_NAMES, SLAB_NAMES, slabDrops } from './stone-utility.js';
 import { REDSTONE_WIRE, LEVER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, ITEM_LEVER, ITEM_STONE_PLATE, ITEM_WOODEN_PLATE, ITEM_STONE_BUTTON, ITEM_TRIPWIRE_HOOK, ITEM_REPEATER, ITEM_REDSTONE, ITEM_STRING, REDSTONE_ITEM_IDS, REDSTONE_ITEM_NAMES, redstoneDrops } from './redstone-blocks.js';
+import * as RS2 from './redstone-blocks-2.js';
 export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97:68,175:69,162:70,161:71,106:72,127:73,48:74,39:75,40:76,99:77,100:78,32:79,174:80,103:81,'44:1':82,'31:0':83,'31:2':84,24:56,110:57,159:58,111:59,145:ANVIL,116:ENCHANTING_TABLE,53:87,67:88,109:89,128:90,134:91,135:92,136:93,108:94,163:95,164:96,
   // Doors (items 324/330 are internal 470/471), iron bars and glass panes (the block items).
   324:470,330:471,101:IRON_BARS,102:1100,
@@ -14,6 +15,8 @@ export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97
   98:ITEM_STONE_BRICKS,44:ITEM_STONE_SLAB,120:ITEM_END_PORTAL_FRAME,380:ITEM_CAULDRON,390:ITEM_FLOWER_POT,
   // Redstone components (redstone-blocks-reference.json): lever 69, plates 70/72, button 77 and hook 131 are 1000 + block id; the repeater item 356 keeps its number; dust (331) and string (287) are the existing items 360 and 321.
   ...REDSTONE_ITEM_IDS,
+  // Second redstone family (redstone-blocks-2-reference.json): torch 76, lamp 123, redstone block 152, wooden button 143, weighted plates 147/148, daylight sensor 151, glowstone 89 (1000 + block id); comparator 404, quartz 406, glowstone dust 348.
+  ...RS2.REDSTONE2_ITEM_IDS,
   // Structure loot (strongholds): ender pearl 368, empty map 395 and compass 345 are internal 378-380 (inert items).
   368:378,395:379,345:380,388:367,360:368,357:369,282:370,281:371,322:372,2256:373,2257:374,421:375,418:376,419:377});
 export const TREE_NAMES=['Oak','Spruce','Birch','Jungle','Acacia','Dark oak'];
@@ -35,8 +38,11 @@ export function installPopulationItems(items){
     [470,'Wooden Door','door_wood',{stack:1}],[1100,'Glass pane',undefined,{block:true}],[471,'Iron Door','door_iron',{stack:1}],[372,'Golden apple','apple_golden',{food:4,saturation:1.2}],
     [ITEM_STONE_BRICKS,'Stone bricks',undefined,{block:true,variants:STONE_BRICK_NAMES}],[ITEM_STONE_SLAB,'Stone slab',undefined,{block:true,variants:SLAB_NAMES.slice(0,6)}],[ITEM_END_PORTAL_FRAME,'End portal frame',undefined,{block:true}],
     [ITEM_LEVER,REDSTONE_ITEM_NAMES[ITEM_LEVER],undefined,{block:true}],[ITEM_STONE_PLATE,REDSTONE_ITEM_NAMES[ITEM_STONE_PLATE],undefined,{block:true}],[ITEM_WOODEN_PLATE,REDSTONE_ITEM_NAMES[ITEM_WOODEN_PLATE],undefined,{block:true}],[ITEM_STONE_BUTTON,REDSTONE_ITEM_NAMES[ITEM_STONE_BUTTON],undefined,{block:true}],[ITEM_TRIPWIRE_HOOK,REDSTONE_ITEM_NAMES[ITEM_TRIPWIRE_HOOK],undefined,{block:true}],[ITEM_REPEATER,REDSTONE_ITEM_NAMES[ITEM_REPEATER],'repeater'],
+    ...Object.entries(RS2.REDSTONE2_ITEM_NAMES).map(([id,name])=>[+id,name,RS2.REDSTONE2_ITEM_TEXTURES[id],RS2.REDSTONE2_ITEM_TEXTURES[id]?undefined:{block:true}]),
     [ITEM_CAULDRON,'Cauldron','cauldron'],[ITEM_FLOWER_POT,'Flower pot','flower_pot'],
     [373,'Music disc 13','record_13',{stack:1}],[374,'Music disc cat','record_cat',{stack:1}],
+    // EntityWitch (witch.js): the glass bottle (original 374) and the potion item (original 373, a witch's held and dropped potion).
+    [384,'Glass Bottle','potion_bottle_empty'],[385,'Potion','potion_bottle_drinkable',{stack:1}],
     [378,'Ender Pearl','ender_pearl',{stack:16}],[379,'Empty Map','map_empty'],[380,'Compass','compass_static'],
     [375,'Name tag','name_tag'],[376,'Golden horse armor','gold_horse_armor',{stack:1}], [377,'Diamond horse armor','diamond_horse_armor',{stack:1}],
   ]) items[id]={id,name,texture,stack:64,color:'#8caa59',...extra};
@@ -59,6 +65,11 @@ export function installPopulationMaterials(m){
     // Redstone components (redstone-blocks-reference.json): hardness 0.5 for the lever, plates and button (the stone plate is rock: pickaxe), 0 for the rest.
     [REDSTONE_WIRE]:{hardness:0,drop:ITEM_REDSTONE},[LEVER]:{hardness:.5,drop:ITEM_LEVER},[STONE_PRESSURE_PLATE]:{hardness:.5,kind:'pickaxe',tier:0,drop:ITEM_STONE_PLATE},[WOODEN_PRESSURE_PLATE]:{hardness:.5,kind:'axe',drop:ITEM_WOODEN_PLATE},[STONE_BUTTON]:{hardness:.5,drop:ITEM_STONE_BUTTON},[REPEATER]:{hardness:0,drop:ITEM_REPEATER},[TRIPWIRE_HOOK]:{hardness:0,drop:ITEM_TRIPWIRE_HOOK},[TRIPWIRE]:{hardness:0,drop:ITEM_STRING},
   });
+  // Second redstone family (redstone-blocks-2-reference.json): native hardness; the redstone block and weighted plates need a pickaxe; lit/unlit twins drop the unlit item; the moving piston is unbreakable.
+  for(const [id,h] of Object.entries(RS2.HARDNESS2)){
+    const b=+id,drop=RS2.redstoneDrops2(b)[0]?.id??0;
+    m[b]=h<0?{hardness:Infinity,drop:0}:{hardness:h,...(RS2.NEEDS_PICKAXE2.includes(b)?{kind:'pickaxe',tier:0}:{}),...(b===RS2.GLOWSTONE?{}:{drop})};
+  }
   // BlockStairs takes its model block's hardness and material (stairs-reference.json): planks are wood (axe), the rest rock.
   for(const [id,s] of Object.entries(STAIRS))m[id]=s.kind==='pickaxe'?{hardness:s.hardness,kind:'pickaxe',tier:0}:{hardness:s.hardness,kind:'axe'};
 }
@@ -90,6 +101,18 @@ export function installPopulationRecipes({recipe,shapeless}){
   recipe('wooden-pressure-plate','Wooden pressure plate',['PP'],{P:7},ITEM_WOODEN_PLATE);
   recipe('stone-button','Stone button',['S'],{S:3},ITEM_STONE_BUTTON);
   recipe('tripwire-hook','Tripwire hook',['I','S','P'],{I:302,S:300,P:7},ITEM_TRIPWIRE_HOOK,2);
+  // CraftingManager (redstone-blocks-2-reference.json recipes 13, 21, 100, 164, 175, 237, 240, 241, 248, 262): redstone torch, lamp, block (and nine dust back), comparator, daylight sensor, repeater, glowstone, weighted plates, wooden button.
+  recipe('redstone-torch','Redstone torch',['R','S'],{R:360,S:300},RS2.ITEM_REDSTONE_TORCH);
+  recipe('redstone-lamp','Redstone lamp',[' R ','RGR',' R '],{R:360,G:RS2.ITEM_GLOWSTONE},RS2.ITEM_REDSTONE_LAMP);
+  recipe('redstone-block','Block of redstone',['RRR','RRR','RRR'],{R:360},RS2.ITEM_REDSTONE_BLOCK);
+  recipe('redstone-from-block','Redstone',['B'],{B:RS2.ITEM_REDSTONE_BLOCK},360,9);
+  recipe('comparator','Redstone comparator',[' T ','TQT','SSS'],{T:RS2.ITEM_REDSTONE_TORCH,Q:RS2.ITEM_QUARTZ,S:3},RS2.ITEM_COMPARATOR);
+  recipe('repeater','Redstone repeater',['TRT','SSS'],{T:RS2.ITEM_REDSTONE_TORCH,R:360,S:3},ITEM_REPEATER);
+  // Daylight sensor (C109: three glass, three quartz, three wooden slabs) has no recipe here: the build has no wooden slab block (original 126); it is Creative-only.
+  recipe('glowstone','Glowstone',['DD','DD'],{D:RS2.ITEM_GLOWSTONE_DUST},RS2.ITEM_GLOWSTONE);
+  recipe('light-weighted-plate','Light weighted pressure plate',['GG'],{G:304},RS2.ITEM_LIGHT_PLATE);
+  recipe('heavy-weighted-plate','Heavy weighted pressure plate',['II'],{I:302},RS2.ITEM_HEAVY_PLATE);
+  recipe('wooden-button','Wooden button',['P'],{P:7},RS2.ITEM_WOODEN_BUTTON);
   recipe('bowl','Bowls',['W W',' W '],{W:7},371,4);
   recipe('melon','Melon block',['MMM','MMM','MMM'],{M:368},81);
   shapeless(370,1,0,75,76,371);
@@ -101,6 +124,7 @@ export const populationXp=(id,r)=>id===63?2+Math.floor(r()*4):id===64||id===65?1
 export function populationDrops(id,meta,{random=Math.random,shears=false}={}){
   if(id===ANVIL)return[{id:ANVIL,count:1,damage:(meta&15)>>2}];
   if(id>=REDSTONE_WIRE&&id<=TRIPWIRE)return redstoneDrops(id);
+  if(RS2.isRedstone2Block(id))return RS2.redstoneDrops2(id,meta,{random});
   // BlockDoor.getItemDropped: the lower half drops its door item, the upper half nothing; BlockPane (glass) drops nothing.
   if(id===WOODEN_DOOR||id===IRON_DOOR)return meta&8?[]:[{id:id===WOODEN_DOOR?470:471,count:1}];
   if(id===63)return[{id:351,count:4+Math.floor(random()*5),damage:4}];

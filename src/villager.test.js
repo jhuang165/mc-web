@@ -263,15 +263,16 @@ test("professions and riches save, reload and sanitize; the rest of the record i
   assert.equal(readProfession(7), 7);
 });
 
-test("generation records {type:'Villager', profession} become live villagers; Witch records stay unsupported", () => {
+test("generation records {type:'Villager', profession} become live villagers; Witch records become live witches", () => {
   const ew = new EntityWorld(flat, []);
   const columns = [{ records: { chests: [], animals: [
     { type: "Villager", x: 70.5, y: 4, z: 60.5, profession: 3 }, { type: "Villager", x: 71.5, y: 4, z: 60.5, profession: 0 },
     { name: "Pig", x: 8, y: 4, z: 8, yaw: 0 }, { type: "Witch", x: 9, y: 4, z: 9, yaw: 0, pitch: 0 },
   ], spawners: [], minecartChests: [], pendingTicks: [] } }];
   const out = restorePopulationColumns(columns, { world: flat, survival: { chests: {} }, mobs: ew, spawners: { add() {} }, minecarts: { spawnChest() {} }, fluids: { schedule() {} } });
-  assert.equal(out.animals, 3);
-  assert.deepEqual(out.unsupported, ["Witch"]);
+  assert.equal(out.animals, 4);
+  assert.deepEqual(out.unsupported, []);
+  assert.deepEqual(ew.entities.filter((e) => e.type === "witch").map((e) => [e.x, e.y, e.z, e.health]), [[9, 4, 9, 26]]);
   const villagers = ew.entities.filter((e) => e.type === "villager");
   assert.deepEqual(villagers.map((e) => [e.profession, e.x, e.y, e.z, e.health]), [[3, 70.5, 4, 60.5, 20], [0, 71.5, 4, 60.5, 20]]);
 });

@@ -104,6 +104,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
 
   if (place && aimedEntity?.entity) {
     const e = aimedEntity.entity;
+    // EntityVillager.interact: an adult, living, idle villager opens the trading screen.
+    if (e.type === 'villager' && hook('openMerchant', e)) return act('trade-villager');
     if (state.mobs.shear(e, id, state.survival)) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return act('shear-entity');

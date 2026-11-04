@@ -57,8 +57,8 @@ test("creative lists place snow and ice where the original tabs do", () => {
   assert.equal(itemTab(ICE).label, "buildingBlocks");
   const blocks = CREATIVE_TABS[0].items;
   assert.deepEqual(blocks.slice(blocks.indexOf(ICE) - 1, blocks.indexOf(ICE) + 2), [64, ICE, 23]);
-  // Original id order: redstone ore (73, internal 64), the stone button (77, item 1111), then the snow layer (78).
-  assert.deepEqual(SEARCH_ORDER.slice(SEARCH_ORDER.indexOf(SNOW_LAYER) - 2, SEARCH_ORDER.indexOf(SNOW_LAYER) + 4), [64, 1111, SNOW_LAYER, ICE, 23, CACTUS]);
+  // Original id order: redstone ore (73, internal 64), the redstone torch (76, item 1120), the stone button (77, item 1111), then the snow layer (78).
+  assert.deepEqual(SEARCH_ORDER.slice(SEARCH_ORDER.indexOf(SNOW_LAYER) - 2, SEARCH_ORDER.indexOf(SNOW_LAYER) + 4), [1120, 1111, SNOW_LAYER, ICE, 23, CACTUS]);
 });
 
 test("a dropped item slides farther on ice (drag 0.98 * 0.98) than on stone (0.6 * 0.98)", () => {

@@ -10,6 +10,7 @@
 // public/research/chunk-reference.json.
 import { BLOCKS, WATER, LAVA, ANVIL, ENCHANTING_TABLE,
   OAK_STAIRS, COBBLESTONE_STAIRS, STONE_BRICK_STAIRS, SANDSTONE_STAIRS, SPRUCE_STAIRS, BIRCH_STAIRS, JUNGLE_STAIRS, BRICK_STAIRS, ACACIA_STAIRS, DARK_OAK_STAIRS, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE, STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, REDSTONE_WIRE, LEVER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, DISPENSER, STICKY_PISTON, PISTON, PISTON_HEAD,
+  REDSTONE_TORCH_OFF, REDSTONE_TORCH, REDSTONE_LAMP, REDSTONE_LAMP_LIT, REDSTONE_BLOCK, WOODEN_BUTTON, LIGHT_PLATE, HEAVY_PLATE, COMPARATOR, COMPARATOR_POWERED, DAYLIGHT_SENSOR, PISTON_MOVING, GLOWSTONE,
 } from "./world.js";
 
 // Block.blockRegistry: ids 0-175 except 165-169 (unused in 1.7.10). Everything else reads as air.
@@ -37,6 +38,12 @@ const fluid = (still) => ({
   also: [still - 1],
   to: (meta, state) => [state.flowing ? still - 1 : still, meta & 15],
   from: (meta, mc) => ({ meta, state: mc === still - 1 ? { flowing: true } : undefined, exact: true }),
+});
+// BlockRedstoneTorch (75 unlit / 76 lit) is a BlockTorch: metadata 1-4 on a wall, 5 standing (the port stores standing as 0, like torch 20).
+const redstoneTorch = (mc) => ({
+  mc,
+  to: (meta) => [mc, meta >= 1 && meta <= 4 ? meta : 5],
+  from: (meta) => (meta >= 1 && meta <= 4 ? { meta, exact: true } : { meta: 0, exact: meta === 5 }),
 });
 const facing = (state) => (state.facing >= 2 && state.facing <= 5 ? state.facing : 3);
 
@@ -129,6 +136,13 @@ const MAP = {
   [STICKY_PISTON]: same(29),
   [PISTON]: same(33),
   [PISTON_HEAD]: same(34),
+  // 0.39.0 redstone blocks (redstone-blocks-2.js): the lit and unlit states of torch, lamp and comparator are separate internal ids.
+  // Metadata is the original's (button facing and pressed bit, plate power, comparator facing/mode/powered bits, sensor power, piston moving facing).
+  [REDSTONE_TORCH_OFF]: redstoneTorch(75), [REDSTONE_TORCH]: redstoneTorch(76),
+  [REDSTONE_LAMP]: fixed(123), [REDSTONE_LAMP_LIT]: fixed(124), [REDSTONE_BLOCK]: fixed(152),
+  [WOODEN_BUTTON]: same(143), [LIGHT_PLATE]: same(147), [HEAVY_PLATE]: same(148),
+  [COMPARATOR]: same(149), [COMPARATOR_POWERED]: same(150), [DAYLIGHT_SENSOR]: same(151),
+  [PISTON_MOVING]: same(36), [GLOWSTONE]: fixed(89),
 };
 if (Object.keys(MAP).length !== BLOCKS.length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");
 

@@ -4234,12 +4234,6 @@
       "bytes": 8448
     },
     {
-      "member": "assets/minecraft/texts/splashes.txt",
-      "url": "/media/1.7.10/texts/splashes.txt",
-      "sha1": "565decfa9f9d7be80158afe1ebef0a35afaf6e73",
-      "bytes": 6221
-    },
-    {
       "member": "assets/minecraft/textures/gui/title/background/panorama_0.png",
       "url": "/media/1.7.10/gui/title/background/panorama_0.png",
       "sha1": "6a8978b52b6fbbaec998b13a4913e04f039b27f6",

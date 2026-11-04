@@ -822,6 +822,16 @@ export class Brain {
       this.tasks.add(6, new LookIdle(this));
       this.targets.add(1, new NearestAttackable(this));
       this.targets.add(2, new HurtByTarget(this, false));
+    } else if (e.type === "witch") {
+      // EntityWitch (yp): swim 1, the potion ArrowAttack 2 (speed 1.0, interval 60 both ways, range 10), wander 2 (1.0), watch the
+      // player 3 (8 blocks), look idle 3; targets hurt-by 1 (no call for help) and the nearest visible player 2.
+      this.tasks.add(1, new Swim(this));
+      this.tasks.add(2, new ArrowAttack(this, 1, 60, 60, 10));
+      this.tasks.add(2, new Wander(this, 1));
+      this.tasks.add(3, new WatchClosest(this, 8));
+      this.tasks.add(3, new LookIdle(this));
+      this.targets.add(1, new HurtByTarget(this, false));
+      this.targets.add(2, new NearestAttackable(this));
     } else if (e.type === "skeleton") {
       // EntitySkeleton (yl): swim 1, restrict sun 2, flee sun 3, the bow's arrow attack 4
       // (setCombatTask, with a bow in hand), wander 5, watch the player 6, look idle 6;
@@ -951,7 +961,7 @@ export class Brain {
   getBlockPathWeight(x, y, z) {
     const w = this.ai.world;
     if (this.e.type === "villager") return f(0); // EntityCreature.getBlockPathWeight
-    if (this.e.type === "zombie" || this.e.type === "skeleton" || this.e.type === "creeper") return f(f(0.5) - this.ai.brightness(x, y, z));
+    if (this.e.type === "zombie" || this.e.type === "skeleton" || this.e.type === "creeper" || this.e.type === "witch") return f(f(0.5) - this.ai.brightness(x, y, z));
     return w.get(x, y - 1, z) === GRASS ? f(10) : f(this.ai.brightness(x, y, z) - f(0.5));
   }
   // sw.bn(): the AI half of onLivingUpdate. Despawning and the idle age come first, then
@@ -977,7 +987,7 @@ export class Brain {
   despawnEntity() {
     const e = this.e, p = this.ai.player;
     if ((e.idle & 31) !== 31 || !p) return;
-    const d3 = this.distSq(p), can = e.type === "zombie" || e.type === "skeleton" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper";
+    const d3 = this.distSq(p), can = e.type === "zombie" || e.type === "skeleton" || e.type === "witch" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper";
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
     if (d3 < 1024) e.idle = 0;

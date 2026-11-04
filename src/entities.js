@@ -16,7 +16,8 @@ import { waterAcceleration, entityWaterBox, inLava, eyeInWater } from "./fluids.
 import { sheepColor, childColor } from "./sheep.js";
 import { sneakEdge, criticalDamage } from "./player-movement.js";
 import { MobAI } from "./ai.js";
-import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields, readProfession, readRiches } from "./villager.js";
+import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
+import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
 import { NORMAL, PEACEFUL, attributeValue, spiderSpawnRolls, zombieSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
@@ -170,16 +171,20 @@ export const ENTITY_TYPES = {
   villager: VILLAGER_TYPE,
   // EntitySilverfish (yk): 0.3 x 0.7, 8 health, speed 0.6, damage 1; legacy AI (silverfish.js), no drops.
   silverfish: { health: SILVERFISH.health, width: SILVERFISH.width, height: SILVERFISH.height, movement: f(SILVERFISH.speed), ai: { wander: 1 }, damage: SILVERFISH.damage, drop: 0 },
+  // EntityWitch (yp): 0.6 x 1.8, 26 health, speed 0.25; the potion attack (witch.js, witch-potions.js) replaces melee. Drops in combat.js.
+  witch: { health: WITCH.health, width: WITCH.width, height: WITCH.height, movement: WITCH.movement, ai: { wander: 1 }, damage: WITCH.attackDamage, drop: 0 },
 };
 // EntityMob subclasses: no panic counter, 5 experience, despawning, 0.5 - brightness path weights.
-export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper", "silverfish"]);
+export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper", "silverfish", "witch"]);
 // EntityMoveHelper.onUpdateMoveHelper (tv.c) hands EntityLiving.setAIMoveSpeed
 // (sw.i) `(float)(speed * movementSpeed)`; sw.i also sets moveForward to it. The
 // zombie's "Baby speed boost" (yq.br) is operation 1: base * (1 + 0.5); a Speed effect
 // (mob-effects.js) is operation 2.
 export function aiMoveSpeed(e, multiplier) {
   const boost = e.type === "zombie" && e.growingAge < 0 ? [[0.5, 1]] : [];
-  return f(multiplier * attributeValue(ENTITY_TYPES[e.type].movement, [...boost, ...speedModifiers(e)]));
+  // EntityWitch: the "Drinking speed penalty" modifier (-0.25, operation 0) while a potion is being drunk.
+  const drink = e.type === "witch" && e.drinking ? [[-0.25, 0]] : [];
+  return f(multiplier * attributeValue(ENTITY_TYPES[e.type].movement, [...drink, ...boost, ...speedModifiers(e)]));
 }
 // Wheat (ade.O) breeds and tempts cows and sheep; chickens take wheat seeds (309, any
 // ItemSeeds in the original) through EntityAITempt / isBreedingItem.
@@ -190,9 +195,9 @@ export { FEATHER, RAW_CHICKEN, COOKED_CHICKEN };
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
 // its hurt sound, and the sheep uses mob.sheep.say for say, hurt and death alike.
 // EntityCaveSpider inherits the spider's sounds.
-const hurtSound = (type) => (type = soundType(type), type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
+const hurtSound = (type) => (type = soundType(type), type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "witch" ? WITCH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
 // EntityChicken's death sound is its hurt sound as well.
-const deathSound = (type) => (type = soundType(type), type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
+const deathSound = (type) => (type = soundType(type), type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "witch" ? WITCH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
 // Entity.setPosition's box (half width and height in floats) and Entity.canBePushed:
 // living entities until setDead (deathTime 20, or removal).
 export const pushBox = (o, width, height) => {
@@ -579,14 +584,16 @@ export class EntityWorld {
           growingAge:Number.isInteger(e.growingAge)?Math.max(-24000,Math.min(6000,e.growingAge)):0,
           love:Number.isInteger(e.love)?Math.max(0,Math.min(600,e.love)):0,
           mateTicks:0,
-          // EntityVillager.readEntityFromNBT: Profession and Riches (Offers are trading, not kept).
-          ...(e.type === "villager" ? { profession: readProfession(e.profession), riches: readRiches(e.riches) } : {}),
+          // EntityVillager.readEntityFromNBT: Profession, Riches and Offers; the trade timers and the customer start over.
+          ...(e.type === "villager" ? villagerFields(e.profession, e.riches, e.offers) : {}),
           ...(e.type === "sheep" ? { color: Number.isInteger(e.color) && e.color >= 0 && e.color < 16 ? e.color : 0, sheared: e.sheared === true, eatTimer: 0 } : {}),
           // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
           ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
           ...(isSpider(e.type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
           // EntitySilverfish has no NBT of its own: the summon cooldown starts over.
           ...(e.type === "silverfish" ? { summonCooldown: 0 } : {}),
+          // EntityWitch keeps its held potion (Equipment) but not the drinking state (datawatcher 21, the penalty modifier).
+          ...(e.type === "witch" ? { drinking: false, drinkTimer: 0, held: e.held && e.held.id === ITEM_POTION && potionEffects(e.held.damage).length ? { id: ITEM_POTION, damage: e.held.damage, count: 1 } : null } : {}),
           // EntityCreeper.readEntityFromNBT: "powered" and "ignited" are saved, the swell
           // state (datawatcher 16) and timeSinceIgnited start over.
           ...(e.type === "creeper" ? { ...creeperFields(), powered: e.powered === true, ignited: e.ignited === true } : {}),
@@ -646,6 +653,7 @@ export class EntityWorld {
       ...(isSpider(type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
       ...(type === "creeper" ? creeperFields() : {}),
       ...(type === "silverfish" ? { summonCooldown: 0 } : {}),
+      ...(type === "witch" ? { drinking: false, drinkTimer: 0, held: null } : {}),
       ...(type === "chicken" ? { eggTimer: Math.floor(random() * 6000) + 6000, wingRotation: 0, destPos: 0, oFlapSpeed: 0, oFlap: 0, wingRotDelta: 1 } : {}),
       // EntityZombie.func_110161_a adds a 0 to 0.05 "Random spawn bonus" to knockbackResistance.
       knockbackResistance: type === "zombie" ? random() * 0.05000000074505806 : 0,
@@ -724,16 +732,18 @@ export class EntityWorld {
     if (ANIMALS.has(e.type)) { e.flee = 60; e.love = 0; e.mateTicks = 0; }
     if (e.health <= 0) return false;
     const rand = entityRandom(e), name = source.name ?? "generic";
+    // Potion.fireResistance: fire damage is refused.
+    if ((name === "onFire" || name === "inFire" || name === "lava") && e.effects?.some((x) => x.id === 12)) return false;
     e.limbSwingAmount = 1.5;
     let fresh = true;
     if (e.hurt > 0) {
       if (amount <= e.lastDamage) return false;
-      this.damageEntity(e, amount - e.lastDamage, name);
+      this.damageEntity(e, amount - e.lastDamage, name, source);
       e.lastDamage = amount;
       fresh = false;
     } else {
       e.lastDamage = amount;
-      this.damageEntity(e, amount, name);
+      this.damageEntity(e, amount, name, source);
       e.hurt = 10;
     }
     if (source.player) { e.revenge = (e.age || 0) + 1; e.recentlyHit = 100; }
@@ -752,8 +762,10 @@ export class EntityWorld {
     return true;
   }
   // EntityLivingBase.damageEntity: armour, then setHealth (a float, clamped at 0).
-  damageEntity(e, amount, name) {
+  damageEntity(e, amount, name, source = null) {
     amount = armorReduced(e.type, amount, name);
+    // EntityWitch.applyPotionDamageCalculations: its own damage is ignored, magic damage is cut to 15 %.
+    if (e.type === "witch") amount = witchDamage(amount, { isMagic: name === "magic" || name === "indirectMagic", byWitch: source?.attacker === e });
     if (amount !== 0) e.health = Math.max(0, f(e.health - amount));
   }
   // EntityZombie.attackEntityFrom (yq.a(ro, F)) once the hit counts, even a killing one. The
@@ -1004,10 +1016,24 @@ export class EntityWorld {
   suffocate(e, t) {
     if (e.health > 0 && insideOpaqueBlock(this.world, e.x, e.y, e.z, t.width, mobEyeHeight(t.height))) this.hazard(e, 1, "inWall");
   }
+  // EntityWitch.onLivingUpdate (yp.e), the server half before EntityLiving's: the drinking countdown and the rolls that start a drink
+  // (witch.js witchDrink), on Entity.rand, then the effects of a finished potion are added.
+  witchUpdate(e, t) {
+    const m = this.ai.brain(e), target = m.attackTarget, w = { drinking: !!e.drinking, timer: e.drinkTimer || 0, held: e.held ?? null };
+    const hasEffect = (id) => !!e.effects?.some((x) => x.id === id);
+    const r = witchDrink(w, {
+      rand: entityRandom(e), inWater: eyeInWater(this.world, e.x, e.y + f(f(t.height) * f(0.85)), e.z), burning: e.fire > 0, health: e.health, maxHealth: t.health,
+      target, targetDistSq: target ? m.distSq(target) : 0, hasEffect,
+    });
+    e.drinking = w.drinking;
+    e.drinkTimer = w.timer;
+    e.held = w.held;
+    if (r.finished) for (const [id, amplifier, duration] of potionEffects(r.finished.damage)) addMobEffect(e, id, duration, amplifier);
+  }
   // EntityLivingBase.onEntityUpdate's air (see `breathe` below): drowning deals 2 with no
   // attacker, so no knockback or revenge. The air is saved with the mob.
   breathe(e, t) {
-    if (breathe(this.world, e, t.height, entityRandom(e), this.fx)) this.hazard(e, 2, "drown");
+    if (breathe(this.world, e, t.height, entityRandom(e), this.fx) && !e.effects?.some((x) => x.id === 13)) this.hazard(e, 2, "drown");
   }
   // EntityLiving.onEntityUpdate (sw.C), after the air: rand.nextInt(1000) < livingSoundTime++
   // resets the time to -getTalkInterval (EntityAnimal 120, else 80) and plays the living sound
@@ -1017,7 +1043,7 @@ export class EntityWorld {
     const rand = entityRandom(e);
     if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper") return;
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
-    this.events.push({ sound: e.type === "villager" ? VILLAGER_SOUNDS.idle : "mob." + soundType(e.type) + ".say", volume: e.type === "cow" ? f(0.4) : 1, pitch, position: { x: e.x, y: e.y, z: e.z } });
+    this.events.push({ sound: e.type === "witch" ? WITCH_SOUNDS.idle : e.type === "villager" ? (e.customer ? VILLAGER_SOUNDS.haggle : VILLAGER_SOUNDS.idle) : "mob." + soundType(e.type) + ".say", volume: e.type === "cow" ? f(0.4) : 1, pitch, position: { x: e.x, y: e.y, z: e.z } });
   }
   // The fire and lava part of Entity.onEntityUpdate (sa.C): water puts the fire
   // out; a burning mob takes 1 (onFire) whenever the counter is a multiple of 20;
@@ -1115,7 +1141,7 @@ export class EntityWorld {
       difficulty:()=>this.difficulty,
       // EntitySkeleton.attackEntityWithRangedAttack: the arrow itself is made by bow.js
       // (entities.js cannot import it: projectiles.js already imports this file).
-      rangedAttack:(e,target,scale)=>this.shoot?.(e,target,scale),
+      rangedAttack:(e,target,scale)=>e.type==="witch"?this.potions?.throwAt(e,target):this.shoot?.(e,target,scale),
       isDaytime:()=>this.day,
       canSeeSky:(x,y,z)=>this.canSeeSky?this.canSeeSky(x,y,z):openSky(this.world,x,y,z),
       despawn:(e)=>{e.health=0;e.death=20;},
@@ -1128,6 +1154,8 @@ export class EntityWorld {
     // World.isDaytime (skylightSubtracted < 4); main.js hooks the real light level in.
     this.day = this.isDaytime ? this.isDaytime() : !night;
     this.ai.beginTick(player, survival, heldItem);
+    // Splash potions thrown by witches (witch-potions.js; main.js attaches it).
+    this.potions?.tick(player, survival);
     // SpawnerAnimals.findChunksForSpawning: no monsters on Peaceful.
     const hostile = this.difficulty !== PEACEFUL;
     if (
@@ -1180,6 +1208,21 @@ export class EntityWorld {
         const y = this.world.surface(x, z), t = ENTITY_TYPES.spider;
         if (this.world.get(x, y - 1, z) !== 1 || actorCollides(this.world, x + 0.5, y, z + 0.5, t.width, t.height)) continue;
         this.spawnNatural("spider", x + 0.5, y, z + 0.5);
+        break;
+      }
+    }
+    // Witches are in the default monster list (weight 5, groups of 1); this build rolls them on the same night ring at a low rate
+    // (witch.md: not the weighted SpawnerAnimals pass).
+    this.witchClock = (this.witchClock || 0) + 1;
+    if (night && hostile && !survival.creative && this.witchClock >= 600 && this.entities.filter((e) => e.type === "witch").length < 1) {
+      this.witchClock = 0;
+      for (let i = 0; i < 16; i++) {
+        const a = hash(i + 300, survival.time, this.world.numericSeed) * Math.PI * 2,
+          x = Math.floor(player.x + Math.sin(a) * 24), z = Math.floor(player.z + Math.cos(a) * 24);
+        if (this.world.streaming ? !this.world.isTicking(x,z) : x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
+        const y = this.world.surface(x, z), t = ENTITY_TYPES.witch;
+        if (this.world.get(x, y - 1, z) !== 1 || actorCollides(this.world, x + 0.5, y, z + 0.5, t.width, t.height)) continue;
+        this.spawnNatural("witch", x + 0.5, y, z + 0.5);
         break;
       }
     }
@@ -1282,6 +1325,7 @@ export class EntityWorld {
       }
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.
+      if (e.type === "witch") this.witchUpdate(e, t);
       this.walk(e, t, 0, () => isSpider(e.type) ? this.spiderThink(e) : e.type === "silverfish" ? this.silverfishThink(e) : this.ai.think(e));
       this.push(e, t);
       if (isSpider(e.type)) {

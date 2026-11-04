@@ -18,6 +18,7 @@ export function solidTop(world, x, y, z) {
   if (isStair(b)) return stairSolidTop(world.getMeta(x, y, z)); // upside-down stairs only
   if (b === 103) return (world.getMeta(x, y, z) & 8) !== 0; // a top stone slab (stone-utility.js STONE_SLAB)
   if (b === 104) return true; // the end portal frame counts as a solid top (fence-rail-reference.json)
+  if (b === 123) return true; // the block of redstone (internal 123): opaque and rendered as a normal block, though not a normal cube (redstone-blocks-2-reference.json "below")
   return normalCube(b) || (b === SNOW_LAYER && (world.getMeta(x, y, z) & 7) === 7);
 }
 // BlockRailBase.canPlaceBlockAt: a solid top surface below.

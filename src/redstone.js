@@ -76,6 +76,9 @@ export const LIGHT_PLATE = 147;
 export const HEAVY_PLATE = 148;
 export const REDSTONE_ITEM = 331;
 export const BEDROCK = 7;
+export const TNT = 46;
+export const WOODEN_DOOR = 64;
+export const IRON_DOOR = 71;
 export const STICKY_PISTON = 29;
 export const PISTON = 33;
 export const PISTON_HEAD = 34;
@@ -175,6 +178,9 @@ const F07 = Math.fround(0.7),
 export class RedstoneWorld {
   constructor({ seed = 0, log = false, sky = 15, skylightSubtracted = 0, celestialAngle = 0, noSky = false } = {}) {
     this.sections = new Map();
+    // Block behaviours by original id; registerBehaviour adds to this world only (the shared table is never modified).
+    this.behaviours = Object.create(BEHAVIOUR);
+    this.primed = []; // primeTnt positions (standalone world); the live game's hook replaces this
     this.rand = new JavaRandom(seed);
     this.time = 0; // WorldInfo total world time
     this.sky = sky;
@@ -204,6 +210,19 @@ export class RedstoneWorld {
   }
   record(entry) {
     if (this.log) this.log.push(entry);
+  }
+  // Adds or replaces the behaviour of an original block id for this world (BEHAVIOUR shape).
+  registerBehaviour(id, behaviour) {
+    this.behaviours[id] = behaviour;
+  }
+  // BlockTNT.onBlockDestroyedByPlayer(meta 1): an EntityTNTPrimed at the block centre. The live world forwards it to its hook.
+  primeTnt(x, y, z) {
+    this.record(`g,${x},${y},${z}`);
+    this.primed.push({ x, y, z });
+  }
+  // World.playAuxSFXAtEntity(null, id, x, y, z, 0): recorded; the live world plays door sounds from it.
+  playAuxSFX(id, x, y, z) {
+    this.record(`a,${id},${x},${y},${z}`);
   }
   section(x, y, z, create) {
     const key = `${x >> 4},${y >> 4},${z >> 4}`;
@@ -251,11 +270,11 @@ export class RedstoneWorld {
     const i = RedstoneWorld.index(x, y, z);
     s.ids[i] = id;
     if (isContainerId(old) && old !== id) this.tiles.delete(`${x},${y},${z}`);
-    BEHAVIOUR[old]?.breakBlock?.(this, x, y, z, old, oldMeta);
+    this.behaviours[old]?.breakBlock?.(this, x, y, z, old, oldMeta);
     if (s.ids[i] !== id) return false;
     s.meta[i] = meta;
     if (old === PISTON_MOVING) this.chunkTile(x, y, z);
-    BEHAVIOUR[id]?.onBlockAdded?.(this, x, y, z);
+    this.behaviours[id]?.onBlockAdded?.(this, x, y, z);
     if (id === PISTON_MOVING && !this.chunkTile(x, y, z)) this.setTileEntity(x, y, z, createNewTileEntity(id));
     if ((flags & 1) !== 0) {
       this.notifyBlocksOfNeighborChange(x, y, z, before);
@@ -308,12 +327,12 @@ export class RedstoneWorld {
       let nx = x + DIR_X[i],
         nz = z + DIR_Z[i];
       let id = this.getBlock(nx, y, nz);
-      if (isComparatorId(id)) BEHAVIOUR[id].onNeighborBlockChange(this, nx, y, nz, source);
+      if (isComparatorId(id)) this.behaviours[id].onNeighborBlockChange(this, nx, y, nz, source);
       else if (this.isNormalCube(id)) {
         nx += DIR_X[i];
         nz += DIR_Z[i];
         id = this.getBlock(nx, y, nz);
-        if (isComparatorId(id)) BEHAVIOUR[id].onNeighborBlockChange(this, nx, y, nz, source);
+        if (isComparatorId(id)) this.behaviours[id].onNeighborBlockChange(this, nx, y, nz, source);
       }
     }
   }
@@ -341,7 +360,7 @@ export class RedstoneWorld {
   }
   notifyBlockOfNeighborChange(x, y, z, source) {
     this.record(`n,${x},${y},${z},${source}`);
-    BEHAVIOUR[this.getBlock(x, y, z)]?.onNeighborBlockChange?.(this, x, y, z, source);
+    this.behaviours[this.getBlock(x, y, z)]?.onNeighborBlockChange?.(this, x, y, z, source);
   }
   // WorldServer.scheduleBlockUpdateWithPriority (scheduleBlockUpdate uses priority 0).
   scheduleBlockUpdate(x, y, z, id, delay, priority = 0) {
@@ -353,6 +372,22 @@ export class RedstoneWorld {
     }
     const key = `${x},${y},${z},${tickGroup(id)}`;
     if (this.pending.has(key)) return;
+    this.pending.set(key, entry);
+    let lo = 0,
+      hi = this.tree.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (compareEntries(this.tree[mid], entry) < 0) lo = mid + 1;
+      else hi = mid;
+    }
+    this.tree.splice(lo, 0, entry);
+  }
+  // Re-inserts a saved pending tick (live save/reload); the entry keeps its time, priority and serial.
+  restorePending(e) {
+    const key = `${e.x},${e.y},${e.z},${tickGroup(e.id)}`;
+    if (this.pending.has(key)) return;
+    const entry = { x: e.x, y: e.y, z: e.z, id: e.id, time: e.time, priority: e.priority, serial: e.serial };
+    this.serial = Math.max(this.serial, entry.serial + 1);
     this.pending.set(key, entry);
     let lo = 0,
       hi = this.tree.length;
@@ -387,7 +422,7 @@ export class RedstoneWorld {
         id = this.getBlock(e.x, e.y, e.z);
       if (id === AIR || !isEqualTo(id, e.id)) continue;
       this.record(`u,${e.x},${e.y},${e.z},${id}`);
-      BEHAVIOUR[id]?.updateTick?.(this, e.x, e.y, e.z);
+      this.behaviours[id]?.updateTick?.(this, e.x, e.y, e.z);
     }
   }
   pendingTicks() {
@@ -395,18 +430,18 @@ export class RedstoneWorld {
   }
   // Player right click: Block.onBlockActivated (lever, buttons, repeater, comparator).
   activate(x, y, z) {
-    return BEHAVIOUR[this.getBlock(x, y, z)]?.onBlockActivated?.(this, x, y, z) ?? false;
+    return this.behaviours[this.getBlock(x, y, z)]?.onBlockActivated?.(this, x, y, z) ?? false;
   }
   // ItemReed.onItemUse for a diode: setBlock(id, 0, 3) then Block.onBlockPlacedBy with a placer
   // looking along `yaw` degrees (EntityLivingBase.rotationYaw).
   placeBy(x, y, z, id, yaw) {
     if (!this.setBlock(x, y, z, id, 0, 3) || this.getBlock(x, y, z) !== id) return false;
-    BEHAVIOUR[id]?.onBlockPlacedBy?.(this, x, y, z, yaw);
+    this.behaviours[id]?.onBlockPlacedBy?.(this, x, y, z, yaw);
     return true;
   }
   // Entity touches the block (Block.onEntityCollidedWithBlock), for pressure plates.
   collide(x, y, z) {
-    BEHAVIOUR[this.getBlock(x, y, z)]?.onEntityCollidedWithBlock?.(this, x, y, z);
+    this.behaviours[this.getBlock(x, y, z)]?.onEntityCollidedWithBlock?.(this, x, y, z);
   }
   // World.getEntitiesWithinAABB over the scripted list. `mode` is the class asked for: "all"
   // (Entity), "living" (EntityLivingBase: mobs and players) or "player". The boxes intersect
@@ -441,10 +476,10 @@ export class RedstoneWorld {
     return OPAQUE[id] === 1 && RENDER_NORMAL[id] === 1;
   }
   weakPower(x, y, z, side) {
-    return BEHAVIOUR[this.getBlock(x, y, z)]?.weak?.(this, x, y, z, side) ?? 0;
+    return this.behaviours[this.getBlock(x, y, z)]?.weak?.(this, x, y, z, side) ?? 0;
   }
   strongPower(x, y, z, side) {
-    return BEHAVIOUR[this.getBlock(x, y, z)]?.strong?.(this, x, y, z, side) ?? 0;
+    return this.behaviours[this.getBlock(x, y, z)]?.strong?.(this, x, y, z, side) ?? 0;
   }
   // World.isBlockProvidingPowerTo.
   isBlockProvidingPowerTo(x, y, z, side) {
@@ -505,7 +540,7 @@ export class RedstoneWorld {
         const id = this.getBlock(d.x, d.y, d.z);
         if (id !== d.id) continue;
         this.record(`v,${d.x},${d.y},${d.z},${id},${d.event},${d.param}`);
-        const r = BEHAVIOUR[id]?.onBlockEventReceived?.(this, d.x, d.y, d.z, d.event, d.param) ?? false;
+        const r = this.behaviours[id]?.onBlockEventReceived?.(this, d.x, d.y, d.z, d.event, d.param) ?? false;
         this.record(`r,${r ? 1 : 0}`);
       }
       this.blockEvents[i].length = 0;
@@ -628,6 +663,7 @@ export class RedstoneWorld {
   // Block.dropBlockAsItem(world, x, y, z, meta, 0): one item, chance 1, three offset floats.
   dropBlockAsItem(x, y, z, id, meta) {
     if (this.rand.nextFloat() > 1) return;
+    if (isDoorId(id) && (meta & 8) !== 0) return; // BlockDoor.getItemDropped: the upper half drops nothing
     const item = DROP_ITEM[id] ?? id;
     if (!this.doTileDrops) return;
     const dx = Math.fround(this.rand.nextFloat() * F07) + DROP_OFFSET,
@@ -650,16 +686,21 @@ const DROP_ITEM = {
   [POWERED_REPEATER]: 356,
   [COMPARATOR]: 404,
   [POWERED_COMPARATOR]: 404,
+  [WOODEN_DOOR]: 324,
+  [IRON_DOOR]: 330,
 };
 // Direction.offsetX / offsetZ and directionToFacing (south, west, north, east).
 const DIR_X = [0, -1, 0, 1],
   DIR_Z = [1, 0, -1, 0],
   DIR_TO_FACING = [3, 4, 2, 5];
+function isDoorId(id) {
+  return id === WOODEN_DOOR || id === IRON_DOOR;
+}
 function isComparatorId(id) {
   return id === COMPARATOR || id === POWERED_COMPARATOR;
 }
 // Block.hasComparatorInputOverride among the supported ids.
-function hasComparatorOverride(id) {
+export function hasComparatorOverride(id) {
   return id === CAULDRON || id === END_PORTAL_FRAME || isContainerId(id);
 }
 // Block.getComparatorInputOverride: cauldron level (metadata), end portal frame eye (15 or 0).
@@ -1697,7 +1738,7 @@ const pistonHead = {
       bz = z - FACING_Z[dir],
       id = w.getBlock(bx, by, bz);
     if (!isPistonBase(id)) w.setBlockToAir(x, y, z);
-    else BEHAVIOUR[id].onNeighborBlockChange(w, bx, by, bz, source);
+    else w.behaviours[id].onNeighborBlockChange(w, bx, by, bz, source);
   },
 };
 // BlockPistonMoving.
@@ -1716,7 +1757,63 @@ const pistonMoving = {
 // Facing.opposite for the head's breakBlock (q.a): down/up, north/south, west/east.
 const ROTATE_FACING_OPPOSITE = [1, 0, 3, 2, 5, 4];
 
+// ---- BlockDoor (akn, 64 wooden / 71 iron): power from either half (REDSTONE-05, probed by RedstoneLiveProbe) ----
+// BlockDoor.func_150012_g: bits 0-2 from the lower half, bit 3 when this is the upper half, bit 4 from the upper half's hinge.
+function doorFlags(w, x, y, z) {
+  const meta = w.getBlockMetadata(x, y, z),
+    upper = (meta & 8) !== 0,
+    low = upper ? w.getBlockMetadata(x, y - 1, z) : meta,
+    high = upper ? meta : w.getBlockMetadata(x, y + 1, z);
+  return (low & 7) | (upper ? 8 : 0) | ((high & 1) !== 0 ? 16 : 0);
+}
+// BlockDoor.func_150014_a: open or close the door (lower half's bit 4, metadata flags 2) and play aux effect 1003.
+function doorSetOpen(w, x, y, z, open) {
+  const flags = doorFlags(w, x, y, z);
+  if (((flags & 4) !== 0) === open) return;
+  const next = (flags & 7) ^ 4;
+  w.setBlockMetadataWithNotify(x, (flags & 8) === 0 ? y : y - 1, z, next, 2);
+  w.playAuxSFX(1003, x, y, z);
+}
+function door(self) {
+  const onNeighborBlockChange = (w, x, y, z, source) => {
+    const meta = w.getBlockMetadata(x, y, z);
+    if ((meta & 8) === 0) {
+      let broke = false;
+      if (w.getBlock(x, y + 1, z) !== self) {
+        w.setBlockToAir(x, y, z);
+        broke = true;
+      }
+      if (!w.doesBlockHaveSolidTopSurface(x, y - 1, z)) {
+        w.setBlockToAir(x, y, z);
+        broke = true;
+        if (w.getBlock(x, y + 1, z) === self) w.setBlockToAir(x, y + 1, z);
+      }
+      if (broke) w.dropBlockAsItem(x, y, z, self, meta);
+      else {
+        const powered = w.isBlockIndirectlyGettingPowered(x, y, z) || w.isBlockIndirectlyGettingPowered(x, y + 1, z);
+        if ((powered || w.canProvidePower(source)) && source !== self) doorSetOpen(w, x, y, z, powered);
+      }
+    } else {
+      if (w.getBlock(x, y - 1, z) !== self) w.setBlockToAir(x, y, z);
+      if (source !== self) onNeighborBlockChange(w, x, y - 1, z, source);
+    }
+  };
+  return { onNeighborBlockChange };
+}
+// ---- BlockTNT (aob, 46): primes from power on placement and on neighbour changes ----
+const tnt = (() => {
+  const check = (w, x, y, z) => {
+    if (!w.isBlockIndirectlyGettingPowered(x, y, z)) return;
+    w.primeTnt(x, y, z); // onBlockDestroyedByPlayer(meta 1)
+    w.setBlockToAir(x, y, z);
+  };
+  return { onBlockAdded: check, onNeighborBlockChange: check };
+})();
+
 const BEHAVIOUR = {
+  [TNT]: tnt,
+  [WOODEN_DOOR]: door(WOODEN_DOOR),
+  [IRON_DOOR]: door(IRON_DOOR),
   [WIRE]: wire,
   [TORCH]: redstoneTorch(true),
   [UNLIT_TORCH]: redstoneTorch(false),
@@ -1747,10 +1844,10 @@ export const PORTED_BLOCKS = Object.keys(BEHAVIOUR).map(Number);
 // { origin:[x,y,z], size:[dx,dy,dz], ticks, seed, grid:"id[:meta],..." (x-major, then y, z),
 //   events:[[tick, "place"|"air"|"use", x, y, z, id?, meta?]] } with region-relative coordinates.
 // Events of tick t run before tick t's world tick (as player packets between server ticks).
-export function replayScenario(s) {
+export function replayScenario(s, make = (options) => new RedstoneWorld(options)) {
   const [ox, oy, oz] = s.origin,
     [dx, dy, dz] = s.size,
-    w = new RedstoneWorld({ seed: s.seed, log: true, sky: s.sky ?? 15, skylightSubtracted: s.skylightSubtracted ?? 0, celestialAngle: s.angle ?? 0, noSky: s.noSky ?? false }),
+    w = make({ seed: s.seed, log: true, sky: s.sky ?? 15, skylightSubtracted: s.skylightSubtracted ?? 0, celestialAngle: s.angle ?? 0, noSky: s.noSky ?? false }),
     cells = s.grid.split(",");
   for (let x = 0; x < dx; x++)
     for (let y = 0; y < dy; y++)
@@ -1802,7 +1899,7 @@ export function replayScenario(s) {
       else if (op === "placepiston") {
         // ItemBlock.placeBlockAt: setBlock(id, 0, 3), then onBlockPlacedBy for a placer standing at (px, py, pz).
         const [, px, py, pz, yaw] = args;
-        if (w.setBlock(x, y, z, id, 0, 3) && w.getBlock(x, y, z) === id) BEHAVIOUR[id]?.onBlockPlacedBy?.(w, x, y, z, { x: ox + px, y: oy + py, z: oz + pz, yaw });
+        if (w.setBlock(x, y, z, id, 0, 3) && w.getBlock(x, y, z) === id) w.behaviours[id]?.onBlockPlacedBy?.(w, x, y, z, { x: ox + px, y: oy + py, z: oz + pz, yaw });
       }
       else if (op === "cauldron") {
         // BlockCauldron.func_150024_a(setWaterLevel): clamp 0..3, metadata flags 2, then the comparator update.

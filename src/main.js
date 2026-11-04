@@ -19,6 +19,8 @@ import {guiScale,stackCount,durabilityBar,tooltipLines,anvilName,anvilCost,pendi
 import { stackHasEffect } from "./armor-enchantments.js";
 import {AnvilContainer,nativeStackToLive} from './anvil-container.js';
 import {EnchantingContainer} from './enchanting-container.js';
+import {MerchantContainer,merchantDecorationsHtml,offerItemAt} from './merchant-ui.js';
+import {villagerInteract,villagerClearCustomer,villagerOffers,villagerUseRecipe,villagerHover} from './villager.js';
 import {withinEnchantReach} from './enchanting-table.js';
 import {damagedAnvilMetadata,ANVIL_DAMAGE_CHANCE} from './anvil.js';
 import { migrateSettings, renderDistanceBlocks, SOUND_CATEGORIES, soundLevel } from "./settings.js";
@@ -87,6 +89,7 @@ import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
+import { WitchPotions } from "./witch-potions.js";
 import {impactPlayerPearl} from './pearl-player.js';
 import { Arrows, arrowTargets, bowStage, bowFov, easeFov, ARROW } from "./bow.js";
 import { canSeeSky } from "./weather.js";
@@ -124,6 +127,7 @@ import { watchSpawnerBlocks } from "./spawner-block.js";
 import { Rails } from "./rails.js";
 import { Torches } from "./torches.js";
 import { RedstoneBlocks, isRedstoneBlock, itemOfBlock as redstoneItemOf } from "./redstone-blocks.js";
+import { createRedstoneRuntime } from "./redstone-runtime.js";
 import { Doors, WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, blockItemId } from "./doors-panes.js";
 import { MinecartRenderer } from "./minecart-renderer.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
@@ -244,6 +248,8 @@ let sounds,
   eating = null;
 // Generated-structure entities (structure-simulation.js): mineshaft spawners and chest minecarts.
 let spawners = null, minecarts = null, minecartRenderer = null, aimedCart = null;
+// Live redstone and pistons (redstone-runtime.js), rebuilt for each world that loads.
+let redstoneRuntime = null;
 let rider = createPlayerRider();
 const animation = new PlayerAnimation();
 // GameSettings.thirdPersonView: 0 first person, 1 behind, 2 in front (F5).
@@ -498,6 +504,7 @@ function save() {
   active.worldRandom = weather.saveSimulation();
   active.fluidTicks = fluids.save();
   active.fireTicks = fire.save();
+  if (redstoneRuntime) { active.redstone = redstoneRuntime.save(); active.pistons = redstoneRuntime.pistons.save(); }
   // Chunk.InhabitedTime (one value stands for every chunk; see difficulty.js).
   active.inhabited = inhabited.save(survival.time);
   // Items on the cursor or in a crafting grid return to the saved inventory, as closing the screen would.
@@ -758,6 +765,34 @@ async function launch(record, prepared) {
     new Doors(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
     // Redstone components (inert, no power): unsupported ones drop; a pressed stone button releases 20 ticks later.
     world.redstoneBlocks = new RedstoneBlocks(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; }, sound: (name, volume, pitch, x, y, z) => sounds.play(name, { volume, pitch, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } }) }).watch();
+    // Live redstone power and pistons (redstone-runtime.js). The inert RedstoneBlocks above keep only the tripwire
+    // support rule; every block the engine ported (torches, plates, buttons, dust...) drops through its own behaviour.
+    redstoneRuntime?.dispose();
+    redstoneRuntime = createRedstoneRuntime({ world, scene, game: {
+      sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }),
+      drop: (x, y, z, d) => items.dropBlock([makeStack(d.id, d.count, d.damage || 0)], x, y, z),
+      primeTnt: (x, y, z) => lightTnt(x, y, z, null),
+      markUnsaved: () => { saved = false; },
+      player: () => ({ position, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }),
+      mobs: () => mobs,
+      items: () => items.items,
+      arrows: () => arrows.list,
+      orbs: () => xpOrbs.orbs,
+      primed: () => primed,
+      chests: () => survival.chests,
+      furnaces: () => survival.furnaces,
+      dispensers: () => survival.dispensers ?? {},
+      maxStack: (st) => survival.inventory.maxStack(st),
+      subtracted: () => scene.subtracted ?? 0,
+      angle: () => scene.angle ?? 0,
+      skyLight: (x, y, z) => (scene.light ? scene.light.skyAt(x, y, z) : 15),
+    } });
+    {
+      const rb = world.redstoneBlocks, supported = rb.neighbourChanged.bind(rb), live = redstoneRuntime.redstone;
+      rb.neighbourChanged = (x, y, z) => { if (!live.behaviours[live.getBlock(x, y, z)]) supported(x, y, z); };
+    }
+    world.redstoneApply = redstoneRuntime.applyEdit;
+    redstoneRuntime.restore(record);
     // Mineshaft spawners and chest minecarts: generation records on a world's first launch, the
     // saved live state afterwards. A broken spawner block removes its tile entity.
     ({ spawners, minecarts } = (() => {
@@ -781,6 +816,8 @@ async function launch(record, prepared) {
     mobs.canSeeSky = (x, y, z) => canSeeSky(world, x, y, z);
     mobs.isRaining = () => weather.isRaining();
     mobs.shoot = (e, target, scale) => arrows.skeletonShoot(e, target, scale, mobs.difficulty);
+    // EntityWitch splash potions (witch-potions.js); EntityWorld.tick advances them.
+    mobs.potions = new WitchPotions(mobs);
     // World.rand for EntityLiving.onSpawnWithEgg, and World.func_147462_b at a block.
     mobs.worldRandom = weather.random;
     mobs.localDifficulty = (x, y, z) => localDifficulty(mobs.difficulty, survival.time, inhabited.value, world.isLoaded(x,z) && y >= 0 && y < world.height);
@@ -968,8 +1005,8 @@ function renderCreativeBody() {
     slotsHtml(container);
   view.shown = [];
 }
-const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace", creative: "", anvil: "Repair & Name", enchanting: "Enchant" },
-  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", dispenser: "dispenser-modal", creative: "creative-modal", anvil: "anvil-modal", enchanting: "enchanting-modal" };
+const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace", creative: "", anvil: "Repair & Name", enchanting: "Enchant", merchant: "Villager" },
+  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", dispenser: "dispenser-modal", creative: "creative-modal", anvil: "anvil-modal", enchanting: "enchanting-modal", merchant: "merchant-modal" };
 // Slots are addressed by list index: wrapped creative slots all keep slotNumber 0.
 const slotsHtml = (container) => `<div class="container-slots">${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""}${slot.x < -1000 ? " hidden" : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>`;
 function openContainer(container, kind, key = null, gui = new ContainerScreen(container)) {
@@ -979,6 +1016,8 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   const decorations =
     kind === "enchanting"
       ? `${[0, 1, 2].map((i) => `<button class="enchant-option off" data-enchant-option="${i}" style="top:calc(${14 + 19 * i}*var(--u))" aria-label="Enchantment option ${i + 1}"><i class="enchant-icon"></i><b class="enchant-level"></b></button>`).join("")}<span class="enchant-shelves" id="enchant-shelves" aria-live="polite"></span>`
+      : kind === "merchant"
+      ? merchantDecorationsHtml()
       : kind === "anvil"
       ? '<i class="anvil-name-background" id="anvil-name-background"></i><input id="anvil-name" aria-label="Item name" maxlength="40" autocomplete="off" spellcheck="false" disabled><span id="anvil-cost" class="anvil-cost" aria-live="polite"></span><i class="anvil-error" id="anvil-error" hidden></i>'
       : kind === "furnace"
@@ -1017,6 +1056,13 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   overlay.onpointerdown = (e) => {
     if (!containerView || e.target.closest(".close-button")) return;
     if (e.target.closest('#anvil-name')) return;
+    const stepper = e.target.closest("[data-merchant-step]");
+    if (stepper) {
+      // GuiMerchant.actionPerformed: the arrow buttons select the previous or next offer (MC|TrSel).
+      e.preventDefault();
+      if (!stepper.disabled && container.step(+stepper.dataset.merchantStep)) sounds?.play("gui.button.press", { volume: 0.25, pitch: 1 });
+      return refreshContainer();
+    }
     const option = e.target.closest("[data-enchant-option]");
     if (option) {
       // GuiEnchantment.mouseClicked: any button on an option sends enchantItem.
@@ -1048,7 +1094,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   };
   overlay.onpointerup = (e) => {
     if (!containerView) return;
-    if (e.target.closest('#anvil-name') || e.target.closest("[data-enchant-option]")) return;
+    if (e.target.closest('#anvil-name') || e.target.closest("[data-enchant-option]") || e.target.closest("[data-merchant-step]")) return;
     const { slot, outside, x, y } = at(e), button = javaButton(e.button), t = creative && button === 0 ? gui.tabAt(x, y) : null;
     if (creative && button === 0) gui.release();
     if (t) switchTab(t);
@@ -1065,6 +1111,11 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   // Keyboard activation of a focused slot or tab acts as a left click.
   overlay.onclick = (e) => {
     if (!containerView || e.detail !== 0) return;
+    const stepper = e.target.closest("[data-merchant-step]");
+    if (stepper) {
+      if (!stepper.disabled && container.step(+stepper.dataset.merchantStep)) sounds?.play("gui.button.press", { volume: 0.25, pitch: 1 });
+      return refreshContainer();
+    }
     const option = e.target.closest("[data-enchant-option]");
     if (option) {
       if (container.enchant(+option.dataset.enchantOption)) saved = false;
@@ -1082,8 +1133,9 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
 }
 function closeContainer() {
   if (!containerView) return;
-  const { container } = containerView;
+  const { container, kind, key } = containerView;
   containerView = null;
+  if (kind === "chest") redstoneRuntime?.containerClosed(container.keys); else if (key) redstoneRuntime?.containerClosed([key]);
   const overlay = $("#modal");
   overlay.onpointerdown = overlay.onpointermove = overlay.onpointerup = overlay.onwheel = overlay.oncontextmenu = overlay.onclick = null;
   container.close();
@@ -1106,6 +1158,7 @@ function refreshContainer() {
     $('#anvil-cost').classList.toggle('unavailable',cost.unavailable);
     $('#anvil-error').hidden=!(left||container.inputs.getStack(1))||!!container.output;
   }
+  if (view.kind === "merchant") renderMerchantView(view);
   if (view.kind === "enchanting") {
     const levels = container.levels, shelves = `Bookshelves: ${container.bookshelves}`;
     for (const b of document.querySelectorAll("[data-enchant-option]")) {
@@ -1146,6 +1199,11 @@ function refreshContainer() {
   const tip = $("#slot-tooltip"),
     hovered = view.hovered?.stack;
   let lines = !container.inv.cursor && hovered ? tooltipLines(ITEMS[hovered.id], hovered, options.advancedTooltips) : [];
+  if (view.kind === "merchant" && !container.inv.cursor && !hovered) {
+    // GuiMerchant.drawScreen: the three offer items show their own tooltips.
+    const offered = offerItemAt(container.view(), view.gx, view.gy)?.live;
+    if (offered) lines = tooltipLines(ITEMS[offered.id], offered, options.advancedTooltips);
+  }
   if (view.kind === "creative") {
     // renderToolTip: the search tab names each item's own tab in bold blue.
     const own = hovered && gui.tab === SEARCH && itemTab(hovered.id);
@@ -1214,6 +1272,31 @@ function throwStacks(stacks) {
 }
 function useFurnace(key) {
   openContainer(survival.openFurnace(key, smelted), "furnace", key);
+}
+// EntityVillager.interact -> EntityPlayerMP.displayGUIMerchant: the villager takes the player as its customer
+// and the offers are generated on first access. Closing the screen releases the customer (MerchantContainer.close).
+function useMerchant(entity) {
+  const holdingEgg = false; // spawn eggs are not usable on mobs in this build
+  const brain = mobs?.ai?.brain(entity);
+  if (!brain || !villagerInteract(brain, holdingEgg, "Player")) return false;
+  const merchant = { offers: () => villagerOffers(brain), useRecipe: (r) => { villagerUseRecipe(brain, r); saved = false; handleEntityEvents(); }, hover: (has) => villagerHover(brain, has), close: () => villagerClearCustomer(entity) };
+  openContainer(new MerchantContainer(survival.inventory, merchant), "merchant");
+  villagerOffers(brain);
+  refreshContainer();
+  return true;
+}
+// GuiMerchant: the selected offer's three items, the spent-offer crosses and the two arrow buttons.
+function renderMerchantView(view) {
+  const info = view.container.view(), recipe = info.recipe;
+  for (const key of ["buy", "buyB", "sell"]) {
+    const el = document.querySelector(`[data-merchant-offer="${key}"]`), item = recipe?.[key];
+    if (!el) continue;
+    const shown = item ? (item.live ?? null) : null, html = item ? (shown ? stackHtml(shown, item.count) : '<span class="unknown-item" title="Not available in this build">?</span>') : "";
+    if (el.dataset.shown !== html) { el.dataset.shown = html; el.innerHTML = html; }
+  }
+  for (const cross of document.querySelectorAll("[data-merchant-cross]")) cross.hidden = !recipe?.disabled;
+  for (const step of document.querySelectorAll("[data-merchant-step]")) step.disabled = !(+step.dataset.merchantStep > 0 ? info.next : info.previous);
+  handleEntityEvents();
 }
 function useAnvil(key){
   const [x,y,z]=key.split(',').map(Number);
@@ -1465,7 +1548,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   applyVehicleState(vehicle);
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
   scene.setDrops(items.items);
-  scene.setProjectiles(projectiles.balls, projectiles.particles);
+  scene.setProjectiles(mobs?.potions?.balls?.length ? [...projectiles.balls, ...mobs.potions.balls] : projectiles.balls, projectiles.particles);
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();
@@ -1590,6 +1673,7 @@ function edit(place = false) {
     state.mineHeld = mineHeld;
   };
   dispatchPlayerAction(state, action, {
+    apply: world.redstoneApply,
     unlock: () => sounds.unlock(),
     swing: () => animation.swing(),
     resetEquipped: () => animation.resetEquipped(),
@@ -1613,6 +1697,7 @@ function edit(place = false) {
     openInventory: station => { inventory(station); syncContainerState(); },
     useFurnace: key => { useFurnace(key); syncContainerState(); },
     useAnvil: key => { useAnvil(key); syncContainerState(); },
+    openMerchant: entity => { const opened = useMerchant(entity); if (opened) syncContainerState(); return opened; },
     useEnchantingTable: key => { useEnchantingTable(key); syncContainerState(); },
     openChest: (chest, key) => { openContainer(chest, "chest", key); syncContainerState(); },
     openDispenser: (dispenser, key) => { openContainer(Object.assign(new DispenserContainer(survival.inventory, dispenser, () => { saved = false; }), { title: DISPENSER_TITLE }), "dispenser", key); syncContainerState(); },
@@ -1759,7 +1844,9 @@ function movementTick(controls) {
   tickSurvival(inWater, oldPosition, inLavaNow);
   tickBlockSystems({ farming, fluids, fire },
     { time: survival.time, daylight: scene.daylight, x: position.x, z: position.z },
-    { farming: applyFarmUpdates, fluids: changes => scene.updateBlocks(changes), fire: changes => scene.updateBlocks(changes) });
+    { farming: applyFarmUpdates, fluids: changes => { scene.updateBlocks(changes); redstoneRuntime?.fluidChanges(changes); }, fire: changes => scene.updateBlocks(changes) });
+  // Scheduled block updates, block events and the piston tile loop run after the fluid and fire ticks and before the mobs.
+  redstoneRuntime?.tick();
   scene.setFurnaces(survival.furnaces);
   tickChests();
   const living = { world, position, survival, inhabited, mobs, xpOrbs, experience, items,
@@ -2224,6 +2311,7 @@ function animate(now) {
   if (mobs) mobRenderer.update([...(world.streaming ? mobs.entities.filter(e=>world.isLoaded(e.x,e.z)) : mobs.entities), ...shown],dt,partial);
   minecartRenderer?.update(screen === "home" || !minecarts ? [] : minecarts.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);
   tntRenderer?.update(screen === "home" ? [] : primed, partial);
+  redstoneRuntime?.frame(screen === "home" ? 1 : partial);
   playerRenderer?.update(playerBody, partial, {
     visible: thirdPersonView > 0 && ["playing", "inventory", "paused"].includes(screen),
     swing: animate.pose ? (animate.pose.progress < 1 ? animate.pose.progress : 0) : 0,
@@ -2317,7 +2405,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
+    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
   scene.preview(0);
   // The title screen's splash texts (assets/minecraft/texts/splashes.txt).
   menuContext.splashes = await fetch("/media/1.7.10/texts/splashes.txt").then((r) => (r.ok ? r.text() : "")).catch(() => "");

@@ -7,14 +7,17 @@
 // so `buildVillagerTasks` receives them instead of importing them (no import cycle).
 import { WOODEN_DOOR } from "./world.js";
 import { setDoorOpen, doorSound } from "./doors-panes.js";
+import { generateVillagerOffers } from "./villager-offers.js";
+import { sameTrade, isOfferDisabled, increaseMaxUses, persistOffer, restoreOffer } from "./villager-trading.js";
 const f = Math.fround;
+const REGENERATION = 10;
 
 // EntityVillager constructor (yv): setSize(0.6F, 1.8F); applyEntityAttributes keeps EntityLiving's 20
 // health and the movementSpeed 0.5 base (yv.aD); followRange 16 is EntityLiving's default.
 export const VILLAGER = Object.freeze({ health: 20, width: f(0.6), height: f(1.8), movement: 0.5, followRange: 16, talkInterval: 80 });
 // ENTITY_TYPES entry: EntityAIWander speed 0.6 (the other speeds live in the task list below).
 export const VILLAGER_TYPE = { health: VILLAGER.health, width: VILLAGER.width, height: VILLAGER.height, movement: VILLAGER.movement, ai: { wander: 0.6 }, drop: 0 };
-export const VILLAGER_SOUNDS = Object.freeze({ idle: "mob.villager.idle", hit: "mob.villager.hit", death: "mob.villager.death" });
+export const VILLAGER_SOUNDS = Object.freeze({ idle: "mob.villager.idle", hit: "mob.villager.hit", death: "mob.villager.death", haggle: "mob.villager.haggle", yes: "mob.villager.yes", no: "mob.villager.no" });
 
 // EntityVillager.getTexture (RenderVillager.func_110775_a): profession 0 farmer, 1 librarian, 2 priest,
 // 3 smith, 4 butcher; any other id (a registry profession no mod here adds) draws villager.png.
@@ -26,17 +29,36 @@ export const villagerTexture = (profession) => (Number.isInteger(profession) && 
 // id, the number (drawn with villager.png). Not-a-number reads as 0 (the default of getInteger).
 export const readProfession = (v) => (Number.isInteger(v) && v >= 0 && v <= 0x7fffffff ? v : 0);
 export const readRiches = (v) => (Number.isInteger(v) && v >= 0 && v <= 0x7fffffff ? v : 0);
-// The fields a villager adds to an entity record (yv.b/a(NBT) save Profession and Riches; Offers
-// are trading and not kept).
-export const villagerFields = (profession = 0, riches = 0) => ({ profession: readProfession(profession), riches: readRiches(riches) });
+// The fields a villager adds to an entity record (yv.b/a(NBT) save Profession, Riches and the Offers
+// list). `offers` is null until getRecipes first runs (native bu == null); recipes keep original 1.7.10
+// item ids (villager-trading.js shape). timeUntilReset (bv), needsInitilization (bw) and lastBuyingPlayer
+// (by) are not saved by 1.7.10; `customer` (bt) is a transient flag for the one local player.
+export const villagerFields = (profession = 0, riches = 0, offers = null) => ({ profession: readProfession(profession), riches: readRiches(riches), offers: readOffers(offers), timeUntilReset: 0, needsInit: false, lastBuyer: null, customer: false });
+// MerchantRecipeList(NBTTagCompound) keeps every readable recipe; a bad one is skipped here instead of
+// failing the world. Anything that is not a list is "no Offers tag".
+export function readOffers(saved) {
+  if (!Array.isArray(saved)) return null;
+  const out = [];
+  for (const r of saved.slice(0, 256)) {
+    try {
+      out.push(restoreOffer(r));
+    } catch {
+      /* unreadable recipe: skipped */
+    }
+  }
+  return out;
+}
+export const writeOffers = (offers) => (Array.isArray(offers) ? offers.map(persistOffer) : null);
+// EntityVillager.isTrading (cc): a customer is set.
+export const isTrading = (e) => !!e.customer;
 
 // The native task list in order (priority, class, mutex bits), `live` meaning this build runs it. The
 // inert tasks all depend on a VillageCollection (doors, golems, mating, play) or a trading player.
 export const VILLAGER_TASKS = [
   { priority: 0, name: "EntityAISwimming", mutex: 4, live: true },
   { priority: 1, name: "EntityAIAvoidEntity", mutex: 1, live: true },
-  { priority: 1, name: "EntityAITradePlayer", mutex: 5, live: false },
-  { priority: 1, name: "EntityAILookAtTradePlayer", mutex: 2, live: false },
+  { priority: 1, name: "EntityAITradePlayer", mutex: 5, live: true },
+  { priority: 1, name: "EntityAILookAtTradePlayer", mutex: 2, live: true },
   { priority: 2, name: "EntityAIMoveIndoors", mutex: 1, live: "random draw only" },
   { priority: 3, name: "EntityAIRestrictOpenDoor", mutex: 0, live: false },
   { priority: 4, name: "EntityAIOpenDoor", mutex: 0, live: true },
@@ -164,6 +186,62 @@ function openDoorClass(Task) {
   };
 }
 
+// EntityAITradePlayer (vl), mutex 5: while the villager has a customer with a screen open (a customer flag
+// here), is alive, out of water, on the ground and within 4 blocks of the player, it stands still (the
+// path is cleared); once any of that fails the customer is released (the screen itself stays open).
+function tradePlayerClass(Task) {
+  return class TradePlayer extends Task {
+    constructor(m) {
+      super();
+      this.m = m;
+      this.mutex = 5;
+    }
+    shouldExecute() {
+      const m = this.m, e = m.e, p = m.ai.player;
+      if (!(e.health > 0) || e.inWater || !e.onGround || e.velocityChanged || !e.customer || !p) return false;
+      return m.distSq(p) <= 16;
+    }
+    startExecuting() {
+      this.m.navigator.clearPathEntity();
+    }
+    resetTask() {
+      villagerClearCustomer(this.m.e);
+    }
+  };
+}
+// EntityAILookAtTradePlayer (uo, an EntityAIWatchClosest2 of the customer, range 8): while trading it looks at
+// the player; nothing is drawn from Random.
+function lookAtTradePlayerClass(Task) {
+  return class LookAtTradePlayer extends Task {
+    constructor(m) {
+      super();
+      this.m = m;
+      this.mutex = 2;
+      this.target = null;
+      this.timer = 0;
+    }
+    shouldExecute() {
+      if (!isTrading(this.m.e)) return false;
+      this.target = this.m.ai.player ?? null;
+      return !!this.target;
+    }
+    continueExecuting() {
+      const m = this.m;
+      return isTrading(m.e) && !!this.target && m.distSq(this.target) <= f(8 * 8);
+    }
+    startExecuting() {
+      this.timer = 0;
+    }
+    resetTask() {
+      this.target = null;
+    }
+    updateTask() {
+      const m = this.m, t = this.target;
+      m.lookHelper.setLookPosition(t.x, t.y + t.eyeHeight, t.z, 10, m.verticalFaceSpeed);
+    }
+  };
+}
+
 // EntityAIMoveIndoors (ur), mutex 1: at night or in rain it draws nextInt(50) and then needs a village's
 // door (VillageCollection.findNearestVillage), which this build has none of, so it never starts. In
 // daylight and fair weather it returns before drawing.
@@ -203,12 +281,14 @@ function mateClass(Task) {
 // EntityVillager (yv) task list, in registration order. `K` is { Task, Swim, Wander, WatchClosest } from ai.js.
 // Tasks that cannot run without a village, a golem or a trader are left out (VILLAGER_TASKS marks them).
 export function buildVillagerTasks(m, K) {
-  const AvoidEntity = avoidEntityClass(K.Task), OpenDoor = openDoorClass(K.Task), MoveIndoors = moveIndoorsClass(K.Task), Mate = mateClass(K.Task);
+  const AvoidEntity = avoidEntityClass(K.Task), OpenDoor = openDoorClass(K.Task), MoveIndoors = moveIndoorsClass(K.Task), TradePlayer = tradePlayerClass(K.Task), LookAtTrade = lookAtTradePlayerClass(K.Task), Mate = mateClass(K.Task);
   const watch = (range, chance) => Object.assign(new K.WatchClosest(m, range), { chance: f(chance), mutex: 3 });
   m.navigator.setBreakDoors(true);
   m.navigator.setAvoidsWater(true);
   m.tasks.add(0, new K.Swim(m));
   m.tasks.add(1, new AvoidEntity(m, 8, 0.6, 0.6));
+  m.tasks.add(1, new TradePlayer(m));
+  m.tasks.add(1, new LookAtTrade(m));
   m.tasks.add(2, new MoveIndoors(m));
   m.tasks.add(4, new OpenDoor(m, true));
   m.tasks.add(6, new Mate(m));
@@ -223,4 +303,83 @@ export function buildVillagerTasks(m, K) {
 // village within 32 blocks; none exists here, so it detaches its home (a no-op). Only the draw is kept.
 export function updateVillagerAI(m) {
   if (--m.randomTickDivider <= 0) m.randomTickDivider = 70 + m.rand.nextInt(50);
+  tickVillagerRestock(m);
+}
+
+// --- Trading (EntityVillager yv: interact a(yz), getRecipes b(yz), useRecipe a(agn), a_(add), updateAITick bp) ---
+// `m` is the villager's Brain (ai.js): its entity record `m.e`, its Entity.rand `m.rand` and `m.ai.ew.events`.
+// Verified against the unchanged classes by tools/probes/VillagerTradeLiveProbe.java (villager-trading-live.md).
+
+// EntityLiving.playSound(name, getSoundVolume(), getSoundPitch()): volume 1, pitch (rand - rand) * 0.2 + 1
+// (1.5 for a child). The two nextFloat draws come from Entity.rand like every other villager sound.
+export function villagerSound(m, sound) {
+  const e = m.e, pitch = f(f(f(m.rand.nextFloat() - m.rand.nextFloat()) * f(0.2)) + ((e.growingAge ?? 0) < 0 ? f(1.5) : 1));
+  m.ai.ew.events.push({ sound, volume: 1, pitch, position: { x: e.x, y: e.y, z: e.z } });
+}
+// EntityVillager.t(count) (addDefaultEquipmentAndRecipies): the entity's own Random drives the recipe
+// rolls; offers are added to the existing list.
+export function addDefaultOffers(m, count = 1) {
+  m.e.offers = generateVillagerOffers(m.e.profession ?? 0, m.rand, { maxNewOffers: count, existing: m.e.offers ?? [], anyProfession: true, shuffleRandom: m.shuffleRandom });
+  return m.e.offers;
+}
+// EntityVillager.b(EntityPlayer) (getRecipes): offers are generated on first access.
+export function villagerOffers(m) {
+  if (!m.e.offers) addDefaultOffers(m, 1);
+  return m.e.offers;
+}
+// EntityVillager.a(EntityPlayer) (interact): an adult living villager that is not already trading, with
+// no spawn egg in hand, takes the player as its customer and the caller opens the merchant screen.
+// (Anything else falls to EntityCreature/EntityLiving.interact, which does nothing here.)
+export function villagerInteract(m, holdingSpawnEgg = false, playerName = "Player") {
+  const e = m.e;
+  if (holdingSpawnEgg || !(e.health > 0) || isTrading(e) || (e.growingAge ?? 0) < 0) return false;
+  e.customer = true;
+  e.customerName = playerName;
+  return true;
+}
+// EntityVillager.a_(EntityPlayer) with null: the screen closed or the trade AI gave up.
+export function villagerClearCustomer(e) {
+  e.customer = false;
+}
+// EntityVillager.a(MerchantRecipe) (useRecipe).
+export function villagerUseRecipe(m, recipe) {
+  const e = m.e, offers = e.offers;
+  recipe.uses++;
+  e.livingSoundTime = -VILLAGER.talkInterval;
+  villagerSound(m, VILLAGER_SOUNDS.yes);
+  if (sameTrade(recipe, offers[offers.length - 1])) {
+    e.timeUntilReset = 40;
+    e.needsInit = true;
+    e.lastBuyer = e.customer ? e.customerName ?? null : null;
+  }
+  if (recipe.buy.id === 388) e.riches = readRiches((e.riches ?? 0) + recipe.buy.count);
+}
+// EntityVillager.a_(ItemStack) (func_110297_a_), called whenever the merchant inventory recalculates:
+// at most once every 20 ticks of the living-sound counter, "yes" when a result shows and "no" otherwise.
+export function villagerHover(m, hasResult) {
+  const e = m.e, t = e.livingSoundTime ?? 0;
+  if (t > -VILLAGER.talkInterval + 20) {
+    e.livingSoundTime = -VILLAGER.talkInterval;
+    villagerSound(m, hasResult ? VILLAGER_SOUNDS.yes : VILLAGER_SOUNDS.no);
+  }
+}
+// The restock half of EntityVillager.updateAITick: while nobody is trading, timeUntilReset counts down;
+// at 0 a flagged villager raises the maximum uses of every spent recipe (when it has more than one
+// recipe) by rand(6) + rand(6) + 2, adds one more default offer, and either way gains Regeneration for
+// 200 ticks. Village reputation (villageObj.setReputationForPlayer) is not ported: no VillageCollection.
+export function tickVillagerRestock(m) {
+  const e = m.e;
+  if (isTrading(e) || !(e.timeUntilReset > 0)) return;
+  if (--e.timeUntilReset > 0) return;
+  if (e.needsInit) {
+    if (e.offers.length > 1)
+      for (const r of e.offers) if (isOfferDisabled(r)) increaseMaxUses(r, m.rand.nextInt(6) + m.rand.nextInt(6) + 2);
+    addDefaultOffers(m, 1);
+    e.needsInit = false;
+  }
+  // EntityLivingBase.addPotionEffect(regeneration, 200, 0): mob-effects.js addMobEffect's combine rule
+  // (mob-effects.js leads to entities.js, which imports this file, so the rule is repeated here).
+  const list = (e.effects ??= []), old = list.find((x) => x.id === REGENERATION);
+  if (!old) list.push({ id: REGENERATION, duration: 200, amplifier: 0 }), list.sort((a, b) => a.id - b.id);
+  else if (old.amplifier === 0 && 200 > old.duration) old.duration = 200;
 }

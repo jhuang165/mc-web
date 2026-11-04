@@ -4,6 +4,7 @@
 // Entity.applyEntityCollision. combat-reference.json holds the original's results.
 import { WOOL } from "./world.js";
 import { CARROT, POTATO } from "./crops.js";
+import { witchDrops, witchEquipmentDrop, witchExperience } from "./witch.js";
 const f = Math.fround;
 // Item ids of this build: porkchop, cooked porkchop, beef, steak, rotten flesh, leather,
 // arrow, bone, bow, string, spider eye, gunpowder, iron ingot. The chicken ids are entities.js's.
@@ -57,6 +58,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
       if (playerHit && (rand.nextInt(3) === 0 || rand.nextInt(1 + looting) > 0)) add(SPIDER_EYE);
       break;
     case "creeper": add(GUNPOWDER, generic()); break;
+    case "witch": for (const [id] of witchDrops(rand, looting)) add(id); break; // EntityWitch.dropFewItems (witch.js)
   }
   // EntityLiving.dropEquipment: a damageable item drops worn, maxDamage minus
   // nextInt(1 + nextInt(maxDamage - 25)), kept within [1, maxDamage - 25].
@@ -64,6 +66,8 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
     const k = Math.max(BOW_DURABILITY - 25, 1);
     add(BOW, 1, Math.min(k, Math.max(1, BOW_DURABILITY - rand.nextInt(rand.nextInt(k) + 1))));
   }
+  // EntityLiving.dropEquipment for a witch's held potion (0.085F).
+  if (e.type === "witch") { const held = witchEquipmentDrop(rand, e.held, playerHit, looting); if (held) add(held.id, 1, held.damage); }
   if (playerHit && rand.nextInt(200) - looting < 5 && e.type === "zombie") add([IRON, CARROT, POTATO][rand.nextInt(3)]);
   if (e.type === "creeper" && bySkeleton) rand.nextInt(12);
   return out;
@@ -73,6 +77,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
 export function experiencePoints(e, rand, worldRand) {
   if (e.type === "villager") return 0; // EntityLiving.experienceValue stays 0 (EntityVillager is no EntityMob or EntityAnimal)
   if (ANIMALS.has(e.type)) return 1 + worldRand.nextInt(3);
+  if (e.type === "witch") return witchExperience(rand, e.held); // 5 plus 1 + nextInt(3) for a held potion
   return 5 + (e.type === "skeleton" ? 1 + rand.nextInt(3) : 0);
 }
 // Entity.applyEntityCollision (sa.g(Lsa;)V) called on `self` for `other`: each is moved

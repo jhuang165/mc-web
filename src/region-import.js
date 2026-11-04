@@ -12,6 +12,7 @@ import { NBT } from './nbt.js';
 import { ITEMS, burnTime } from './survival.js';
 import { CHEST, CHEST_SLOTS } from './chest.js';
 import { DISPENSER } from './dispenser-piston.js';
+import { PISTON_MOVING } from './redstone-blocks-2.js';
 import { DISPENSER_SLOTS } from './dispenser-container.js';
 import { POPULATION_ITEMS } from './population-content.js';
 
@@ -172,7 +173,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   };
   const unsupported = new Map(), approximations = new Map(), tileLost = new Map(), tileConverted = new Map();
   const itemLost = new Map(), entityLost = new Map(), entityConverted = new Map();
-  const chests = {}, furnaces = {}, dispensers = {}, drops = [];
+  const chests = {}, furnaces = {}, dispensers = {}, pistons = [], drops = [];
   let edits = 0;
   const write = (x, y, z, block, meta) => {
     if (world.get(x, y, z) === block && world.getMeta(x, y, z) === meta) return;
@@ -312,6 +313,12 @@ export async function importJavaRegionArea(regions, options = {}) {
         furnaces[key] = { items, burn: Math.max(0, Math.min(20000, get(tile, 'BurnTime', NBT.SHORT, 0))), burnTotal: Math.min(20000, burnTime(items[1])),
           cook: Math.max(0, Math.min(199, get(tile, 'CookTime', NBT.SHORT, 0))) };
         tally(tileConverted, id);
+      } else if (inside && id === 'Piston' && world.get(lx, y, lz) === PISTON_MOVING) {
+        // TileEntityPiston.readFromNBT: blockId, blockData, facing, progress (lastProgress = progress), extending. The
+        // restore (piston-live.js) lets the move finish on the first tick, as native does.
+        pistons.push({ x: lx, y, z: lz, block: get(tile, 'blockId', NBT.INT, 0), meta: get(tile, 'blockData', NBT.INT, 0), facing: get(tile, 'facing', NBT.INT, 0),
+          progress: get(tile, 'progress', NBT.FLOAT, 0), extending: !!get(tile, 'extending', NBT.BYTE, 0) });
+        tally(tileConverted, id);
       } else tally(tileLost, inside ? id : `${id} (outside its chunk)`);
     }
 
@@ -372,6 +379,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     position: { x: px + 0.5, y: py + 1.01, z: pz + 0.5, yaw: 0, pitch: 0 },
     // legacyPlayer() keeps these fields; without `slots` the Creative hotbar defaults apply.
     player: { chests, furnaces, dispensers },
+    pistons,
     drops,
     ...(report.structures?.kept ? { structureData: parsedStructures.structureData } : {}),
   };

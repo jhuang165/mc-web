@@ -111,7 +111,7 @@ test("mob potion effects: attributes, colour, regeneration and swirls", () => {
     assert.equal(e.effects[0].duration, r.durationLeft);
     assert.deepEqual(readMobEffects(JSON.parse(JSON.stringify(e.effects))), e.effects);
   }
-  assert.deepEqual(readMobEffects([{ id: 19, duration: 5 }, { id: 1, duration: 0 }, { id: 5, duration: 9, amplifier: 300 }]), [{ id: 5, duration: 9, amplifier: 255 }]);
+  assert.deepEqual(readMobEffects([{ id: 99, duration: 5 }, { id: 1, duration: 0 }, { id: 5, duration: 9, amplifier: 300 }]), [{ id: 5, duration: 9, amplifier: 255 }]);
 });
 
 test("EntityZombie.attackEntityAsMob sets the target on fire by difficulty", () => {

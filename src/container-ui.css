@@ -157,3 +157,30 @@ body:has(.enchanting-modal) #toast{display:none}
 .enchant-glint{position:absolute;left:0;top:0;width:calc(16*var(--u));height:calc(16*var(--u));z-index:2;pointer-events:none;image-rendering:pixelated;-webkit-mask:var(--glint-mask) center/100% 100% no-repeat;mask:var(--glint-mask) center/100% 100% no-repeat;background:url('/media/1.7.10/misc/enchanted_item_glint.png') 0 0/calc(32*var(--u)) calc(32*var(--u)),url('/media/1.7.10/misc/enchanted_item_glint.png') 0 0/calc(32*var(--u)) calc(32*var(--u));background-blend-mode:screen;mix-blend-mode:screen;opacity:.65;animation:enchant-glint 6s linear infinite}
 #hotbar .enchant-glint{left:calc(2*var(--u));top:calc(2*var(--u))}
 @keyframes enchant-glint{to{background-position:calc(32*var(--u)) calc(16*var(--u)),calc(-32*var(--u)) calc(32*var(--u))}}
+/* GuiMerchant (bfv): textures/gui/container/villager.png, 176 x 166; title centred at y 6, "Inventory" at (8, 72). */
+.merchant-modal{position:relative;width:calc(176*var(--u));height:calc(166*var(--u));min-width:calc(176*var(--u));min-height:calc(166*var(--u));max-width:none;max-height:none;flex-shrink:0;padding:0;border:0;border-radius:0;box-shadow:none;overflow:visible;background:url('/media/1.7.10/gui/container/villager.png') 0 0/calc(256*var(--u)) calc(256*var(--u)) no-repeat;transform:none!important;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u));image-rendering:pixelated}
+.merchant-modal .modal-top,.merchant-modal:before,.merchant-modal:after{display:none}
+.merchant-modal .container-slots{z-index:2}
+.merchant-modal h2,.merchant-modal .merchant-bag-label{position:absolute;margin:0;padding:0;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-shadow:none;white-space:nowrap;pointer-events:none;z-index:1}
+.merchant-modal h2{top:calc(6*var(--u));left:0;right:0;text-align:center}
+.merchant-modal .merchant-bag-label{left:calc(8*var(--u));top:calc(72*var(--u))}
+.merchant-offer{position:absolute;width:calc(16*var(--u));height:calc(16*var(--u));pointer-events:none;z-index:2}
+.merchant-offer[data-merchant-offer=buy]{left:calc(36*var(--u));top:calc(24*var(--u))}
+.merchant-offer[data-merchant-offer=buyB]{left:calc(62*var(--u));top:calc(24*var(--u))}
+.merchant-offer[data-merchant-offer=sell]{left:calc(120*var(--u));top:calc(24*var(--u))}
+.merchant-offer .vanilla-item-icon{display:block;width:calc(16*var(--u));height:calc(16*var(--u));margin:0;padding:0;filter:none;image-rendering:pixelated}
+.merchant-offer .item-count{position:absolute;left:auto;right:calc(-1*var(--u));top:calc(9*var(--u));bottom:auto;margin:0;padding:0;height:calc(8*var(--u));white-space:nowrap;background:none;color:#fff;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-shadow:var(--u) var(--u) #3f3f3f}
+.merchant-offer .unknown-item{display:block;width:calc(16*var(--u));height:calc(16*var(--u));color:#a0a0a0;text-align:center;line-height:calc(16*var(--u))}
+.merchant-cross{position:absolute;width:calc(28*var(--u));height:calc(21*var(--u));background:url('/media/1.7.10/gui/container/villager.png') no-repeat;background-size:calc(256*var(--u)) calc(256*var(--u));background-position:calc(-212*var(--u)) 0;image-rendering:pixelated;pointer-events:none;z-index:1}
+.merchant-cross[hidden]{display:none}
+.merchant-cross[data-merchant-cross="0"]{left:calc(83*var(--u));top:calc(21*var(--u))}
+.merchant-cross[data-merchant-cross="1"]{left:calc(83*var(--u));top:calc(51*var(--u))}
+.merchant-step{position:absolute!important;width:calc(12*var(--u))!important;height:calc(19*var(--u))!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;transform:none!important;background:url('/media/1.7.10/gui/container/villager.png') no-repeat!important;background-size:calc(256*var(--u)) calc(256*var(--u))!important;image-rendering:pixelated;cursor:default;z-index:3;outline:0}
+.merchant-step.next{left:calc(147*var(--u));top:calc(23*var(--u));background-position:calc(-176*var(--u)) 0!important}
+.merchant-step.previous{left:calc(17*var(--u));top:calc(23*var(--u));background-position:calc(-176*var(--u)) calc(-19*var(--u))!important}
+.merchant-step.next:hover:not(:disabled){background-position:calc(-188*var(--u)) 0!important}
+.merchant-step.previous:hover:not(:disabled){background-position:calc(-188*var(--u)) calc(-19*var(--u))!important}
+.merchant-step.next:disabled{background-position:calc(-200*var(--u)) 0!important}
+.merchant-step.previous:disabled{background-position:calc(-200*var(--u)) calc(-19*var(--u))!important}
+.merchant-step:focus-visible{outline:var(--u) solid #fff}
+body:has(.merchant-modal) #toast{display:none}

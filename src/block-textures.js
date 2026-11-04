@@ -4,6 +4,7 @@ import {WOOL_COLORS,RED_FLOWER,RED_FLOWERS,YELLOW_FLOWER,SAPLING,WEB,LADDER,CARR
 import {FENCE_ITEM_BOXES} from './fences.js';
 import {anvilModelBoxes} from './anvil-block.js';
 import {REDSTONE_TILES} from './redstone-blocks.js';
+import {REDSTONE2_TILES,redstone2TileName} from './redstone-blocks-2.js';
 import {STAIRS,STAIR_ITEM_BOXES} from './stairs.js';
 import {STONE_BRICKS,DOUBLE_STONE_SLAB,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOWER_POT,SLAB_TEXTURES,stoneBrickTexture} from './stone-utility.js';
 import {isDispenserPiston,iconNameForFace,blockForItem,PISTON_HEAD,DISPENSER} from './dispenser-piston.js';
@@ -35,6 +36,7 @@ for(const t of ['dispenser_front_horizontal','dispenser_front_vertical','piston_
 for(const t of ['stonebrick_mossy','stonebrick_cracked','stonebrick_carved','stone_slab_top','stone_slab_side','endframe_top','endframe_side','endframe_eye','end_stone','cauldron_top','cauldron_inner','cauldron_side','cauldron_bottom','flower_pot','water_still','nether_brick','quartz_block_side','quartz_block_top','quartz_block_bottom','brick','cobblestone','planks_oak','sandstone_normal','sandstone_top','sandstone_bottom','dirt'])if(!TILES.includes(t))TILES.push(t);
 // Redstone components (redstone-blocks.js): dust, lever, repeater and tripwire textures and the planks/stone/torch/slab ones they reuse.
 for(const t of REDSTONE_TILES)if(!TILES.includes(t))TILES.push(t);
+for(const t of REDSTONE2_TILES)if(!TILES.includes(t))TILES.push(t); // second redstone family (redstone-blocks-2.js): torches, lamps, redstone block, plates, comparator, daylight sensor, glowstone
 if(!TILES.includes('stone_slab_top'))TILES.push('stone_slab_top');
 if(!TILES.includes('cobblestone'))TILES.push('cobblestone');
 export const ATLAS_ROWS=Math.ceil(TILES.length/ATLAS_COLUMNS);
@@ -46,6 +48,8 @@ export const namedTile=tile;
 export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===1101||id===1103||id===1104)id-=1000; // the stone bricks, slab and end portal frame items (1000 + block id) show their block's textures
  if(id>=1108&&id<=1113)id-=1000; // item ids of the lever, plates, button and hook
+ if(id>=1120&&id<=1131)id-=1000; // item ids of the second redstone family (redstone-blocks-2.js)
+ if(id>=119&&id<=131)return tile(redstone2TileName(id,face));
  if(id===107)return tile('redstone_dust_cross');
  if(id===108)return tile('lever');
  if(id===109||id===111)return tile('stone');
@@ -128,14 +132,14 @@ export function createBlockAtlas(){
  function tint(mapName){const facts=biomeFacts(biome),t=facts.temperature,rain=facts.rainfall*t;const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');x.drawImage(images.get('colormap/'+mapName),0,0);const color=x.getImageData(Math.floor((1-t)*255),Math.floor((1-rain)*255),1,1).data;return`rgb(${color[0]},${color[1]},${color[2]})`;}
  function tinted(source,color){const c=document.createElement('canvas');c.width=c.height=16;const x=c.getContext('2d');x.drawImage(source,0,0,16,16);x.globalCompositeOperation='multiply';x.fillStyle=color;x.fillRect(0,0,16,16);x.globalCompositeOperation='destination-in';x.drawImage(source,0,0,16,16);return c;}
  function redraw(){if(!images.size)return;icons.clear();ctx.clearRect(0,0,canvas.width,canvas.height);const grass=tint('grass'),leaves=tint('foliage');TILES.forEach((name,i)=>{const x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;if(CHEST_FACES[name]){for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])ctx.drawImage(images.get('entity/chest/normal'),u,v,w,h,x+dx,y+dy,w,h);return;}let source=images.get('blocks/'+name);if(['grass_top','tallgrass','reeds','fern','vine','double_plant_grass_bottom','double_plant_grass_top','double_plant_fern_bottom','double_plant_fern_top'].includes(name))source=tinted(source,grass);if(name.startsWith('leaves_'))source=tinted(source,name==='leaves_spruce'?'rgb(97,153,97)':name==='leaves_birch'?'rgb(128,167,85)':leaves);ctx.drawImage(source,0,0,16,16,x,y,16,16);if(name==='grass_side')ctx.drawImage(tinted(images.get('blocks/grass_side_overlay'),grass),x,y);});texture.needsUpdate=true;}
- function icon(id,damage=0){if(id===1100)id=GLASS_PANE;if(id>=1108&&id<=1113)id-=1000;if(id===1101)id=STONE_BRICKS;if(id===1103)id=STONE_SLAB;if(id===1104)id=END_PORTAL_FRAME;if(blockForItem(id)){/* RenderBlocks.renderBlockAsItem: the dispenser draws its front as metadata 3, a piston as metadata 1 */id=blockForItem(id);damage=id===DISPENSER?3:1;}const key=id+':'+damage;if(icons.has(key))return icons.get(key);const c=document.createElement('canvas');c.width=64;c.height=70;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
+ function icon(id,damage=0){if(id===1100)id=GLASS_PANE;if(id>=1108&&id<=1113)id-=1000;if(id>=1120&&id<=1131)id-=1000;if(id===1101)id=STONE_BRICKS;if(id===1103)id=STONE_SLAB;if(id===1104)id=END_PORTAL_FRAME;if(blockForItem(id)){/* RenderBlocks.renderBlockAsItem: the dispenser draws its front as metadata 3, a piston as metadata 1 */id=blockForItem(id);damage=id===DISPENSER?3:1;}const key=id+':'+damage;if(icons.has(key))return icons.get(key);const c=document.createElement('canvas');c.width=64;c.height=70;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
   if(id===ANVIL){anvilIcon(x,damage);const url=c.toDataURL();icons.set(key,url);return url;}
   function face(index,matrix,shade,drop=0){x.save();x.setTransform(...matrix);const sx=index%ATLAS_COLUMNS*16,sy=Math.floor(index/ATLAS_COLUMNS)*16;x.drawImage(canvas,sx,sy,16,16-drop,0,drop,16,16-drop);if(shade){x.globalCompositeOperation='source-atop';x.fillStyle=`rgba(0,0,0,${shade})`;x.fillRect(0,0,16,16);}x.restore();}
   // RenderBlocks.renderBlockAsItem for the fence (render type 11): two posts and two bars along z,
   // painted back to front in the inventory projection (z across, x into the picture).
   if(id===FENCE){fenceIcon(x);const url=c.toDataURL();icons.set(key,url);return url;}
   if(STAIRS[id]){stairIcon(x,id);const url=c.toDataURL();icons.set(key,url);return url;}
- if([69,72,75,76,79,83,84,108,113,IRON_BARS,GLASS_PANE].includes(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||isFlower(id)||isCrop(id)){const i=blockTile(id,2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:id===ENCHANTING_TABLE?4:id===82||id===STONE_SLAB?8:id===END_PORTAL_FRAME?3:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
+ if([69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE].includes(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||isFlower(id)||isCrop(id)){const i=blockTile(id,2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:id===129?10:id===ENCHANTING_TABLE?4:id===82||id===STONE_SLAB?8:id===END_PORTAL_FRAME?3:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
   const url=c.toDataURL();icons.set(key,url);return url;
  }
  function anvilIcon(ctx,damage){
