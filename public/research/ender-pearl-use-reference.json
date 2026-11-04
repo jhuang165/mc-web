@@ -1,0 +1,69 @@
+{
+  "target": "Minecraft Java 1.7.10",
+  "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+  "classes": {
+    "aco": {
+      "name": "ItemEnderPearl",
+      "sha256": "5940f9175916c1c38bcd1c81e615d9476465bf720e42dd9f6ccc8a61158973af"
+    },
+    "zm": {
+      "name": "EntityEnderPearl",
+      "sha256": "2df0ca75407053b8ddf5fdfc3a1272d782dc5138d71def4293c412820e44424e"
+    },
+    "zk": {
+      "name": "EntityThrowable",
+      "sha256": "b64c6d79cbc699212a29318f157153a4cb9c86ab51740cc31c480df2cd07918a"
+    }
+  },
+  "semantics": {
+    "nativeId": 368,
+    "internalId": 378,
+    "maxStack": 16,
+    "survival": "decrement stack, play random.bow at volume 0.5 and pitch 0.4/(rand*0.4+0.8), then spawn EntityEnderPearl only when !world.isRemote",
+    "creative": "return the same stack before decrement, sound, or projectile spawn"
+  },
+  "entityMethods": {
+    "declaredInEntityEnderPearl": [
+      "public zm(ahb);",
+      "public zm(ahb, sv);",
+      "public zm(ahb, double, double, double);",
+      "protected void a(azu);"
+    ],
+    "updateOverride": false,
+    "impact": "protected void a(azu) (obfuscated onImpact); flight is inherited from zk EntityThrowable"
+  },
+  "cases": [
+    {
+      "case": "survival-server",
+      "creative": false,
+      "remote": false,
+      "sameStack": true,
+      "maxStack": 16,
+      "count": 1,
+      "events": [
+        "sound|random.bow|0.5|0.3669771|count=1",
+        "spawn|enderPearl|count=1|xyz=1.8549900352954865,64.01999999582767,-3.067617379128933"
+      ]
+    },
+    {
+      "case": "survival-client",
+      "creative": false,
+      "remote": true,
+      "sameStack": true,
+      "maxStack": 16,
+      "count": 1,
+      "events": [
+        "sound|random.bow|0.5|0.3669771|count=1"
+      ]
+    },
+    {
+      "case": "creative-server",
+      "creative": true,
+      "remote": false,
+      "sameStack": true,
+      "maxStack": 16,
+      "count": 2,
+      "events": []
+    }
+  ]
+}

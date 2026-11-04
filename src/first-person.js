@@ -7,6 +7,7 @@ import { anvilModelBoxes } from './anvil-block.js';
 import { STAIRS, STAIR_ITEM_BOXES } from './stairs.js';
 import { blockTile,tileRect } from "./block-textures.js";
 import { entityMaterial, ITEM_LIGHTS } from "./light-material.js";
+import { leatherItemLayers } from "./leather-dye.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
 const BLOCK_FACES=[
@@ -168,16 +169,18 @@ export class FirstPerson {
     this.last = -1;
   }
   // `meta` is the wool colour (the stack's damage) of a held block.
-  select(id, meta = 0, use = 0, glint = false) {
-    const key = id + ":" + meta + ":" + use + ":" + (glint ? 1 : 0);
+  select(id, meta = 0, use = 0, glint = false, color = undefined) {
+    const leather = leatherItemLayers(id, color),
+      key = id + ":" + meta + ":" + use + ":" + (glint ? 1 : 0) + ":" + (leather?.color ?? 0);
     if (key === this.last) return;
     this.last = key;
     if (this.item) {
       this.pivot.remove(this.item);
-      this.item.geometry.dispose();
-      this.item.material.dispose();
-      for (const child of this.item.children) child.material.dispose();
-      this.materials = this.materials.filter((m) => m !== this.item.material);
+      this.item.geometry?.dispose();
+      const owned = new Set();
+      this.item.traverse((node) => { if (node.material) for (const material of Array.isArray(node.material) ? node.material : [node.material]) owned.add(material); });
+      for (const material of owned) material.dispose();
+      this.materials = this.materials.filter((material) => !owned.has(material));
       this.item = null;
     }
     const data = ITEMS[id];
@@ -193,11 +196,22 @@ export class FirstPerson {
         spriteGeometry(),
         this.material({
           map: pixelTexture(url),
+          ...(leather ? { color: leather.tint } : {}),
           transparent: true,
           alphaTest: 0.1,
           side: THREE.DoubleSide,
         }),
       );
+      if (leather) {
+        const overlay = new THREE.Mesh(mesh.geometry, this.material({
+          map: pixelTexture(leather.overlay),
+          transparent: true, alphaTest: 0.1, side: THREE.DoubleSide, depthWrite: false,
+          polygonOffset: true, polygonOffsetFactor: -1,
+        }));
+        overlay.renderOrder = 1;
+        mesh.add(overlay);
+        if (glint) overlay.add(glintMesh(mesh.geometry, pixelTexture(leather.overlay)));
+      }
 
     } else {
       const g = new THREE.BoxGeometry(1, 1, 1),
@@ -218,14 +232,17 @@ export class FirstPerson {
   }
   material(options) {
     const m = entityMaterial(this.lighting, { ...options, fog: false, lights: this.lights });
+    if (options.depthWrite !== undefined) m.depthWrite = options.depthWrite;
+    if (options.polygonOffset !== undefined) m.polygonOffset = options.polygonOffset;
+    if (options.polygonOffsetFactor !== undefined) m.polygonOffsetFactor = options.polygonOffsetFactor;
     this.materials.push(m);
     return m;
   }
   // `light` is the packed brightness at the player; `view` the world camera.
-  render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0, bow = null, glint = false } = {}) {
+  render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0, bow = null, glint = false, color = undefined } = {}) {
     if (!visible) return;
     // `bow` is { stage, draw } while the bow is drawn (bow.js bowStage and the draw term).
-    this.select(pose.item, pose.meta, bow ? bow.stage : 0, glint);
+    this.select(pose.item, pose.meta, bow ? bow.stage : 0, glint, color);
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
     this.pivot.matrix.copy(firstPersonMatrix(pose,{sprite:this.sprite,eatingTicks:eating,bowDraw:bow ? bow.draw : null}));

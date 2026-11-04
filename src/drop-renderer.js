@@ -11,6 +11,7 @@ import { ITEMS } from "./survival.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { blockTile, tileRect } from "./block-textures.js";
 import { JavaRandom } from "./lighting.js";
+import { leatherItemLayers } from "./leather-dye.js";
 
 const copies = (n) => (n > 40 ? 5 : n > 20 ? 4 : n > 5 ? 3 : n > 1 ? 2 : 1);
 
@@ -40,38 +41,60 @@ export class DropRenderer {
     return this.cubes.get(key);
   }
   build(stack, hover) {
-    const glint = stackHasEffect(stack, ITEMS[stack.id]), url = itemTexture(stack.id, stack.damage), group = new THREE.Group(), spin = new THREE.Group(), random = new JavaRandom(187),
+    const glint = stackHasEffect(stack, ITEMS[stack.id]), url = itemTexture(stack.id, stack.damage), leather = leatherItemLayers(stack.id, stack.color),
+      color = leather?.color ?? 0, group = new THREE.Group(), spin = new THREE.Group(), random = new JavaRandom(187),
       material = url
-        ? entityMaterial(this.view.lighting, { map: pixelTexture(url), alphaTest: 0.1, side: THREE.DoubleSide })
+        ? entityMaterial(this.view.lighting, { map: pixelTexture(url), alphaTest: 0.1, side: THREE.DoubleSide, ...(leather ? { color: leather.tint } : {}) })
         : entityMaterial(this.view.lighting, { map: this.view.textures.texture });
+    const overlayUrl = leather?.overlay,
+      overlayMaterial = overlayUrl ? entityMaterial(this.view.lighting, { map: pixelTexture(overlayUrl), alphaTest: 0.1, side: THREE.DoubleSide }) : null;
+    if (overlayMaterial) {
+      overlayMaterial.depthWrite = false;
+      overlayMaterial.polygonOffset = true;
+      overlayMaterial.polygonOffsetFactor = -1;
+    }
     for (let i = 0, n = copies(stack.count); i < n; i++) {
       let mesh;
       if (url) {
         mesh = new THREE.Mesh(this.sprite, material);
         mesh.scale.setScalar(0.5);
         mesh.position.set(-0.25, -0.125, (i - (n - 1) / 2) * 0.042);
+        if (glint) mesh.add(glintMesh(mesh.geometry, pixelTexture(url)));
+        if (overlayMaterial) {
+          const overlay = new THREE.Mesh(this.sprite, overlayMaterial);
+          overlay.scale.copy(mesh.scale); overlay.position.copy(mesh.position); overlay.renderOrder = 1;
+          if (glint) overlay.add(glintMesh(overlay.geometry, pixelTexture(overlayUrl)));
+          spin.add(mesh, overlay);
+          continue;
+        }
       } else {
         mesh = new THREE.Mesh(this.cube(stack.id, stack.damage || 0), material);
         // Extra copies scatter by (rand * 2 - 1) * 0.2 blocks on each axis.
         if (i) mesh.position.set((random.nextFloat() * 2 - 1) * 0.2, (random.nextFloat() * 2 - 1) * 0.2, (random.nextFloat() * 2 - 1) * 0.2);
       }
       // ItemStack.hasEffect: the dropped item's glint pass (first-person.js glintMesh, an approximated scroll).
-      if (glint) mesh.add(glintMesh(mesh.geometry, url ? pixelTexture(url) : this.view.textures.texture));
+      if (glint && !url) mesh.add(glintMesh(mesh.geometry, this.view.textures.texture));
       spin.add(mesh);
     }
     group.add(spin);
     this.scene.add(group);
-    return { group, spin, material, key: stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + (glint ? 1 : 0), hover };
+    return { group, spin, material, overlayMaterial, key: stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + (glint ? 1 : 0) + ":" + color, hover };
   }
   remove(pile) {
     this.scene.remove(pile.group);
-    pile.material.dispose();
+    const owned = new Set();
+    pile.group.traverse((node) => {
+      if (node.material) for (const material of Array.isArray(node.material) ? node.material : [node.material]) owned.add(material);
+    });
+    for (const material of owned) material.dispose();
   }
   // RenderItem.doRender: bob and spin from the entity's age and hover phase.
   place(pile, x, y, z, age) {
     pile.group.position.set(x, y + 0.125 + Math.sin(age / 10 + pile.hover) * 0.1 + 0.1, z);
     pile.spin.rotation.y = age / 20 + pile.hover;
-    pile.material.setLight(this.view.brightness(x, y + 0.17, z));
+    const brightness = this.view.brightness(x, y + 0.17, z);
+    pile.material.setLight(brightness);
+    pile.overlayMaterial?.setLight(brightness);
   }
   // EntityPickupFX: over three ticks the item moves to 0.5 below the player's
   // eye (1.12 above the feet), eased by t squared. `target` is live.
@@ -89,7 +112,8 @@ export class DropRenderer {
       if (!stack) continue;
       seen.add(e);
       let pile = this.piles.get(e);
-      const key = stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + (stackHasEffect(stack, ITEMS[stack.id]) ? 1 : 0);
+      const leather = leatherItemLayers(stack.id, stack.color),
+        key = stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + (stackHasEffect(stack, ITEMS[stack.id]) ? 1 : 0) + ":" + (leather?.color ?? 0);
       if (pile?.key !== key) {
         if (pile) this.remove(pile);
         pile = this.build(stack, e.hover);

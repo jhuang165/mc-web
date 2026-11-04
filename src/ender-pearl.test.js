@@ -37,6 +37,7 @@ test("ender pearl launch shares the native throwable heading and constructor off
   const random = { nextGaussian: (() => { const values = [0, 0, 0]; return () => values.shift() ?? 0; })() };
   const pearl = launchEnderPearl(random, { x: 2, y: 4, z: 6 }, 0, 0);
   assert.equal(pearl.kind, "enderPearl");
+  assert.equal(pearl.owner, "player");
   assert.equal(pearl.x, 2.1599999964237213);
   assert.equal(pearl.y, 5.5200000032782555);
   assert.equal(pearl.z, 6);
@@ -111,6 +112,7 @@ test("a sleeping connected server player remains eligible; hit damage is indepen
 });
 
 test("pearl save shape excludes thrower, in-air age and transient impact state", () => {
-  const pearl = { x: 1, y: 2, z: 3, mx: 4, my: 5, mz: 6, yaw: 7, pitch: 8, ticks: 99, owner: {}, dead: false };
-  assert.deepEqual(serializeEnderPearl(pearl), { x: 1, y: 2, z: 3, mx: 4, my: 5, mz: 6, yaw: 7, pitch: 8, kind: "enderPearl" });
+  const pearl = { x: 1, y: 2, z: 3, mx: 4, my: 5, mz: 6, yaw: 7, pitch: 8, ticks: 99, owner: "player", dead: false };
+  assert.deepEqual(serializeEnderPearl(pearl), { x: 1, y: 2, z: 3, mx: 4, my: 5, mz: 6, yaw: 7, pitch: 8, kind: "enderPearl", owner: "player" });
+  assert.throws(() => serializeEnderPearl({ ...pearl, owner: "missing" }), /local owner token/);
 });

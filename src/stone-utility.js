@@ -1,6 +1,6 @@
 // Stone-utility blocks: stone bricks (original 98), double stone slab (43), stone slab (44), end portal frame (120),
 // cauldron (118) and flower pot (140), ported from the unchanged 1.7.10 classes (public/research/stone-utility-reference.json,
-// tools/probes/StoneUtilityProbe.java). Pure rules with no imports, so world.js, lighting, the scene and the edit
+// tools/probes/StoneUtilityProbe.java). Pure rules with no runtime imports, so world.js, lighting, the scene and the edit
 // simulations can all share them.
 //
 // Internal block ids are world.js BLOCKS 101-106. The old sandstone slab (44:1) keeps internal id 82 and works as slab type 1.
@@ -104,14 +104,23 @@ export const CAULDRON_FLOOR = 0.3125, CAULDRON_WALL = 0.125;
 export const cauldronBoxes = () => [[0, 0, 0, 1, CAULDRON_FLOOR, 1], [0, 0, 0, CAULDRON_WALL, 1, 1], [0, 0, 0, 1, 1, CAULDRON_WALL], [1 - CAULDRON_WALL, 0, 0, 1, 1, 1], [0, 0, 1 - CAULDRON_WALL, 1, 1, 1]];
 // Height of the water surface for a level: (6 + 3 * level) / 16.
 export const cauldronWaterHeight = (level) => (6 + 3 * (level & 3)) / 16;
-// BlockCauldron.onBlockActivated for the items that exist here. No item: consumed with no effect. A water bucket always
-// consumes the click, fills the cauldron to 3 and (outside Creative, below level 3) leaves an empty bucket. Everything else
-// (empty/lava buckets, sticks, ...) returns false, so the item's own use proceeds. Glass bottles and armour washing do
-// not exist in this build.
+// BlockCauldron.onBlockActivated: no item consumes the click with no effect. A water bucket always
+// consumes the click, fills the cauldron to 3 and (outside Creative, below level 3) leaves an empty bucket. Leather
+// armor washing is handled by cauldronWash; empty/lava buckets, sticks and other items return false.
 export function cauldronUse(heldId, level, creative = false) {
   if (!heldId) return { handled: true, level, bucket: false };
   if (heldId === WATER_BUCKET_ITEM) return { handled: true, level: level < 3 ? 3 : level, bucket: !creative && level < 3 };
   return { handled: false, level, bucket: false };
+}
+// BlockCauldron.onBlockActivated: any leather armor is washed with one water level,
+// even if it has no explicit color tag. Creative also consumes the cauldron's water.
+export function cauldronWash(stack, level) {
+  if (!stack || stack.id < 400 || stack.id > 403 || !(level > 0)) return { handled: false, level, stack };
+  const washed = { ...stack };
+  for (const key of ['enchantments', 'storedEnchantments', 'stored'])
+    if (Array.isArray(washed[key])) washed[key] = washed[key].map((entry) => ({ ...entry }));
+  delete washed.color;
+  return { handled: true, level: level - 1, stack: washed };
 }
 // BlockCauldron.onEntityCollidedWithBlock: a burning entity whose box bottom is at most (6 + 3 * level) / 16 above the cell
 // is extinguished and uses one level.

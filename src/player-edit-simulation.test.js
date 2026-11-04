@@ -10,6 +10,8 @@ import { BOW } from './bow.js';
 import { makeStack } from './inventory.js';
 import { Projectiles } from './projectiles.js';
 import { applyPlayerEdit } from './player-edit-simulation.js';
+import { capturePlayerAction, dispatchPlayerAction } from './player-actions.js';
+import { CAULDRON } from './stone-utility.js';
 
 const POS = [42, 12, 42];
 const FLOWERS = { yellow: YELLOW_FLOWER, red: RED_FLOWER };
@@ -39,6 +41,37 @@ test('not-playing gate skips unlock, swing and all requested effects', () => {
   assert.deepEqual(result, { handled: false, branch: 'not-playing' });
   assert.deepEqual(calls, []);
   assert.equal(state.eating, null);
+});
+
+test('dyed and undyed leather wash exactly one cauldron level in Survival and Creative',()=>{
+  for(const mode of ['survival','creative'])for(let level=0;level<4;level++)for(const dyed of [false,true]){
+    const target={block:[...POS],adjacent:[POS[0]+1,POS[1],POS[2]]},f=fixture({mode,tool:400,target,block:CAULDRON,place:true}),calls=[];
+    f.state.world.set(...POS,CAULDRON,true,level);
+    f.state.survival.inventory.main[0]=makeStack(400,1,0,undefined,dyed?{color:0}:{});
+    const before=f.state.survival.held;
+    const result=applyPlayerEdit(f.state,f.request,{swing:()=>calls.push('swing'),updateBlock:(...args)=>calls.push(['update',...args]),renderHotbar:()=>calls.push('hotbar'),markUnsaved:()=>calls.push('dirty')});
+    if(level===0){
+      assert.equal(result.branch,'equip-armor');assert.equal(f.state.world.getMeta(...POS)&3,0);assert.equal(f.state.survival.held,null);
+    }else{
+      assert.equal(result.branch,'wash-leather',`${mode} level ${level} dyed ${dyed}`);
+      assert.equal(f.state.world.getMeta(...POS)&3,level-1);assert.equal(f.state.survival.held.count,1);assert.equal(f.state.survival.held.color,undefined);
+      assert.equal(calls.filter(c=>c==='hotbar').length,dyed?1:0);assert.equal(calls.filter(c=>c==='dirty').length,1);
+      if(dyed)assert.notEqual(f.state.survival.held,before);
+    }
+  }
+});
+
+test('captured dyed armor activation reaches the wet cauldron before armor equip',()=>{
+  const target={block:[...POS],adjacent:[POS[0]+1,POS[1],POS[2]]},f=fixture({mode:'survival',tool:400,target,block:CAULDRON,place:true}),calls=[];
+  f.state.world.set(...POS,CAULDRON,true,2);
+  f.state.survival.inventory.main[0]=makeStack(400,1,0,undefined,{color:0});
+  const action=capturePlayerAction({place:true,target,heldTool:400});
+  const result=dispatchPlayerAction(f.state,action,{swing:()=>calls.push('swing'),updateBlock:()=>calls.push('block'),renderHotbar:()=>calls.push('hotbar'),markUnsaved:()=>calls.push('dirty')});
+  assert.equal(result.branch,'wash-leather');
+  assert.equal(f.state.survival.held.color,undefined);
+  assert.equal(f.state.survival.inventory.armor[3],null);
+  assert.equal(f.state.world.getMeta(...POS)&3,1);
+  assert.deepEqual(calls,['swing','hotbar','block','dirty']);
 });
 
 test('snowball, bow and bucket paths retain their pre-swing precedence', () => {

@@ -13,6 +13,7 @@ import { JavaRandom, mhSin, mhCos } from "./lighting.js";
 import { liquidHeightPercent } from "./fluids.js";
 import { WATER, isLiquid } from "./world.js";
 import { materialSolid } from "./plants.js";
+import { makePortalParticle, stepPortalParticle, portalParticleScale, portalParticleLight } from './portal-particles.js';
 
 const f = Math.fround;
 const GROUND = f(0.7), DRAG = f(0.98);
@@ -26,7 +27,7 @@ const liquidOrSolid = (b) => isLiquid(b) || materialSolid(b);
 
 // EntityFX.getFXLayer for each kind here.
 const LAYER = { crit2: 3, iconcrack: 2 };
-const KINDS = new Set(["bubble", "suspended", "depthsuspend", "townaura", "crit", "magicCrit", "mobSpell", "mobSpellAmbient", "spell", "flame", "lava", "splash", "rain", "heart", "angryVillager", "happyVillager", "dripWater", "dripLava"]);
+const KINDS = new Set(["bubble", "suspended", "depthsuspend", "townaura", "crit", "magicCrit", "mobSpell", "mobSpellAmbient", "spell", "flame", "lava", "splash", "rain", "heart", "angryVillager", "happyVillager", "dripWater", "dripLava", "portal"]);
 
 export class Fx {
   // `explosions` (ExplosionParticles) builds explode, smoke and largesmoke; `world` is the
@@ -79,6 +80,7 @@ export class Fx {
     const r = this.random;
     let p;
     switch (name) {
+      case 'portal': return makePortalParticle(this, x, y, z, vx, vy, vz);
       case "bubble": {
         p = this.base("bubble", x, y, z, vx, vy, vz);
         p.tex = 32;
@@ -276,6 +278,7 @@ export class Fx {
   }
   // Each class's onUpdate.
   step(world, p) {
+    if (p.kind === 'portal') { stepPortalParticle(p); return; }
     if (p.kind === "crit2") {
       const rand = p.rand, t = p.target();
       for (let i = 0; i < 16; i++) {
@@ -381,7 +384,8 @@ export class Fx {
     if (p.kind === "crit2" || p.layer !== 0) return null;
     let scale = p.scale;
     const t = f(f(p.age + f(partial)) / p.max);
-    if (p.kind === "crit" || p.kind === "heart") scale = f(p.base * clamp01(f(t * 32)));
+    if (p.kind === 'portal') scale = p.scale = portalParticleScale(p, partial);
+    else if (p.kind === "crit" || p.kind === "heart") scale = f(p.base * clamp01(f(t * 32)));
     else if (p.kind === "flame") scale = f(p.base * f(1 - f(f(t * t) * f(0.5))));
     else if (p.kind === "lava") scale = f(p.base * f(1 - f(t * t)));
     const u = f((p.tex % 16) / 16), v = f(Math.trunc(p.tex / 16) / 16);
@@ -390,6 +394,7 @@ export class Fx {
   // getBrightnessForRender overrides: flame adds block light as it ages, lava is fully lit,
   // a lava drip is 257 (block light past full).
   brightness(p, partial, packed) {
+    if (p.kind === 'portal') return portalParticleLight(p, packed);
     if (p.kind === "flame") {
       const t = clamp01(f(f(p.age + f(partial)) / p.max));
       return Math.min(240, (packed & 255) + Math.trunc(f(f(t * 15) * 16))) | (((packed >> 16) & 255) << 16);

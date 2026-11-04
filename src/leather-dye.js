@@ -3,7 +3,19 @@
 import { DYE } from "./world.js";
 import { copyStack } from "./inventory.js";
 
+export const LEATHER_COLOR = 0xA06540;
 export const LEATHER_ARMOR = Object.freeze([400, 401, 402, 403]);
+const LEATHER_TEXTURES = Object.freeze(['leather_helmet', 'leather_chestplate', 'leather_leggings', 'leather_boots']);
+export function leatherColorComponents(color = LEATHER_COLOR) {
+  const value = Number.isInteger(color) && color >= 0 && color <= 0xFFFFFF ? color : LEATHER_COLOR;
+  return [(value >> 16 & 255) / 255, (value >> 8 & 255) / 255, (value & 255) / 255];
+}
+export function leatherItemLayers(id, color = undefined) {
+  if (!LEATHER_ARMOR.includes(id)) return null;
+  const texture = LEATHER_TEXTURES[id - 400], resolvedColor = Number.isInteger(color) && color >= 0 && color <= 0xFFFFFF ? color : LEATHER_COLOR,
+    base = `/media/1.7.10/items/${texture}.png`;
+  return { color: resolvedColor, tint: leatherColorComponents(resolvedColor), base, overlay: `/media/1.7.10/items/${texture}_overlay.png` };
+}
 const DYE_RGB = Object.freeze([
   [25, 25, 25], [153, 51, 51], [102, 127, 51], [102, 76, 51],
   [51, 76, 178], [127, 63, 178], [76, 127, 153], [153, 153, 153],

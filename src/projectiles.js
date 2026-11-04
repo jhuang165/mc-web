@@ -1,7 +1,8 @@
 import { entityActive } from './streaming-ticks.js';
 // EntitySnowball (zj) from the 1.7.10 JAR, with EntityThrowable (zk) and
-// ItemSnowball (aed); EntityEgg (zl) shares all of it and differs only in onImpact
-// (see `layEggs`) and its item icon. Snowballs are 0.25 x 0.25 boxes thrown from the eye at
+// ItemSnowball (aed); EntityEgg (zl) and EntityEnderPearl (zm) share its flight
+// rules but provide their own impact adapters and item icons. Thrown entities are
+// 0.25 x 0.25 boxes launched from the eye at
 // 1.5 blocks/tick with gaussian inaccuracy, drag 0.99 (0.8 in water), gravity
 // 0.03, a World.rayTraceBlocks (ahb.a) sweep each tick and an entity sweep
 // (expand 0.3) that skips the thrower for the first five ticks. A hit deals
@@ -317,14 +318,27 @@ export class Projectiles {
   // ItemSnowball.onItemRightClick (aed.a) spawns this; the stack and sound are
   // the caller's. lastTickPos starts at the spawn point.
   throwSnowball(feet, yaw, pitch, kind = "snowball") {
+    if (kind !== "snowball" && kind !== "egg") throw new TypeError(`Unsupported throwable kind: ${kind}`);
+    return this.spawnThrowable(feet, yaw, pitch, kind);
+  }
+  spawnThrowable(feet, yaw, pitch, kind) {
     const rand = this.rng(), h = launch(rand, feet, yaw, pitch),
-      ball = { ...h, kind, px: h.x, py: h.y, pz: h.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand, dead: false };
+      ball = { ...h, kind, px: h.x, py: h.y, pz: h.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand, random: rand, dead: false };
     this.balls.push(ball);
     return ball;
   }
   // ItemEgg.onItemRightClick (ack.a) spawns an EntityEgg (zl) the same way.
   throwEgg(feet, yaw, pitch) {
     return this.throwSnowball(feet, yaw, pitch, "egg");
+  }
+  // The native pearl shares EntityThrowable flight. `owner` is a small
+  // serializable runtime token; the live integration resolves it to the local
+  // player's actual identity/world at impact (never to a stale object ref).
+  throwEnderPearl(feet, yaw, pitch, owner = "player") {
+    if (owner !== "player") throw new TypeError("Ender pearl owner must be the local player token");
+    const pearl = this.spawnThrowable(feet, yaw, pitch, "enderPearl");
+    pearl.owner = owner;
+    return pearl;
   }
   // EntityEgg.onImpact (zl.a) after the 0-damage hit: with probability 1/8 a chick
   // hatches (rand.nextInt(8) == 0), four of them with 1/32 (rand.nextInt(32) == 0),
@@ -351,13 +365,15 @@ export class Projectiles {
     }
   }
   // EntityThrowable.onUpdate (zk.h) for every ball, then EffectRenderer's
-  // update of the particles. `onHit(ref, ball)` applies the 0-damage hit.
-  tick(world, targets = [], onHit = () => {}) {
-    for (const b of this.balls) if (!b.dead && entityActive(world,b)) this.step(world, b, targets, onHit);
+  // update of the particles. `onHit(ref, ball)` handles existing snowball/egg
+  // hits. Ender pearls require `onPearlImpact({pearl,world,hit,target,block})`;
+  // it runs synchronously and owns impact ordering and server-only death.
+  tick(world, targets = [], onHit = () => {}, onPearlImpact = null) {
+    for (const b of this.balls) if (!b.dead && entityActive(world,b)) this.step(world, b, targets, onHit, onPearlImpact);
     this.balls = this.balls.filter((b) => !b.dead);
     if (this.ownsEffects) this.effects.tick(world);
   }
-  step(world, b, targets, onHit) {
+  step(world, b, targets, onHit, onPearlImpact = null) {
     b.px = b.x;
     b.py = b.y;
     b.pz = b.z;
@@ -399,6 +415,11 @@ export class Projectiles {
       }
     }
     if (hit || block) {
+      if (b.kind === "enderPearl") {
+        if (typeof onPearlImpact !== "function") throw new Error("Ender pearl impact requires a synchronous adapter hook");
+        onPearlImpact({ pearl: b, world, hit: hit?.ref ?? null, target: hit, block });
+        return; // native client impacts remain alive until server synchronization
+      }
       // EntitySnowball.onImpact (zj.a): attackEntityFrom(thrown damage 0),
       // eight snowballpoof at the ball's current position, then setDead.
       if (hit) onHit(hit.ref, b);
@@ -505,20 +526,27 @@ export class Projectiles {
       p.mz *= 0.699999988079071;
     }
   }
-  // EntitySnowball.writeEntityToNBT keeps Pos, Motion and Rotation (plus the
-  // vestigial in-ground fields); ticksInAir is not saved, so loaded balls
-  // start at 0. Particles are not saved.
+  // Browser entity snapshots keep Pos, Motion and Rotation; ender pearls also
+  // retain kind and their local owner token. Entity RNG, in-air age, particles,
+  // and native in-ground/shake fields remain transient in browser saves.
   serialize() {
-    return this.balls.map((b) => ({ x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch, ...(b.kind === "egg" ? { kind: "egg" } : {}) }));
+    return this.balls.map((b) => {
+      if (b.kind === "enderPearl" && b.owner !== "player") throw new Error("Cannot save ender pearl without local owner token");
+      return { x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch,
+        ...(b.kind === "egg" ? { kind: "egg" } : b.kind === "enderPearl" ? { kind: "enderPearl", owner: b.owner } : {}) };
+    });
   }
   load(list) {
     this.clear();
     const ok = (v) => Number.isFinite(v);
-    for (const d of Array.isArray(list) ? list : [])
-      if (d && [d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok)) {
+    for (const d of Array.isArray(list) ? list : []) {
+      const kindKnown = d && (d.kind == null || d.kind === "snowball" || d.kind === "egg" || d.kind === "enderPearl");
+      if (d && kindKnown && [d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok) && (d.kind !== "enderPearl" || d.owner === "player")) {
         const yaw = ok(d.yaw) ? f(d.yaw) : 0, pitch = ok(d.pitch) ? f(d.pitch) : 0;
-        this.balls.push({ kind: d.kind === "egg" ? "egg" : "snowball", x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand: this.rng(), dead: false });
+        const kind = d.kind === "egg" ? "egg" : d.kind === "enderPearl" ? "enderPearl" : "snowball", rand = this.rng();
+        this.balls.push({ kind, ...(kind === "enderPearl" ? { owner: "player", random: rand } : {}), x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand, dead: false });
       }
+    }
   }
   clear() {
     this.balls = [];

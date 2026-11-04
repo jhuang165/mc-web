@@ -8,6 +8,9 @@ import { mobPose, wrapDegrees, nearAngle } from "./entities.js";
 import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
 import { rayTraceBlocks } from "./projectiles.js";
 import { PHYSICS } from "./world.js";
+import { LEATHER_ARMOR, LEATHER_COLOR, leatherColorComponents, leatherItemLayers } from "./leather-dye.js";
+import { glintMesh } from "./first-person.js";
+export { LEATHER_COLOR } from "./leather-dye.js";
 
 // Third-person player: EntityRenderer.orientCamera (blt.h), RenderPlayer (bop)
 // and ModelBiped (bhm), as read from the 1.7.10 bytecode. See
@@ -247,8 +250,6 @@ export function bipedPose({ limbSwing = 0, limbSwingAmount = 0, age = 0, headYaw
 // Parts each pass shows: head and hat on pass 0, body on 1 and 2, arms on 1,
 // legs on 2 and 3.
 export const ARMOR_PASS_PARTS = [["head", "hat"], ["body", "rightArm", "leftArm"], ["body", "rightLeg", "leftLeg"], ["rightLeg", "leftLeg"]];
-// ItemArmor.getColor of an undyed leather piece.
-export const LEATHER_COLOR = 0xa06540;
 // `pass` 0..3 is helmet, chestplate, leggings, boots (stack armor[3 - pass]).
 // RenderBiped.getArmorResource picks layer 2 only for leggings (pass 2); the
 // leggings model (h) is expanded by 0.5, the others (g) by 1.0. Leather is
@@ -261,7 +262,7 @@ export function armorLayer(id, pass, color = LEATHER_COLOR) {
   return {
     url: base + ".png",
     overlay: leather ? base + "_overlay.png" : null,
-    tint: leather ? [((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255] : null,
+    tint: leather ? leatherColorComponents(color) : null,
     expand: pass === 2 ? 0.5 : 1,
     parts: ARMOR_PASS_PARTS[pass],
   };
@@ -391,11 +392,15 @@ export class PlayerRenderer {
     this.heldKey = "0:0";
     this.held = null;
     this.heldMaterial = null;
+    this.heldOverlayMaterial = null;
     this.heldGeometry = null;
     scene.add(this.root);
   }
   material(options) {
     const m = entityMaterial(this.view.lighting, { ...options, side: THREE.DoubleSide });
+    if (options.depthWrite !== undefined) m.depthWrite = options.depthWrite;
+    if (options.polygonOffset !== undefined) m.polygonOffset = options.polygonOffset;
+    if (options.polygonOffsetFactor !== undefined) m.polygonOffsetFactor = options.polygonOffsetFactor;
     this.materials.push(m);
     return m;
   }
@@ -429,24 +434,35 @@ export class PlayerRenderer {
       if (layer.overlay) make(layer.overlay, null, 1);
     });
   }
-  syncHeld(id, damage = 0) {
-    const key = id + ":" + damage;
+  syncHeld(id, damage = 0, color = undefined, glint = false) {
+    const leather = leatherItemLayers(id, color),
+      key = id + ":" + damage + ":" + (leather?.color ?? 0) + ":" + (glint ? 1 : 0);
     if (key === this.heldKey) return;
     this.heldKey = key;
     this.heldId = id;
     if (this.held) {
       this.held.parent?.remove(this.held);
       this.heldGeometry?.dispose();
-      this.forget(this.heldMaterial);
-      this.held = this.heldMaterial = this.heldGeometry = null;
+      const owned = new Set();
+      this.held.traverse((node) => { if (node.material) for (const material of Array.isArray(node.material) ? node.material : [node.material]) owned.add(material); });
+      for (const material of owned) this.forget(material);
+      this.held = this.heldMaterial = this.heldOverlayMaterial = this.heldGeometry = null;
     }
     if (!id || !ITEMS[id]) return;
     const kind = heldKind(id, damage), url = itemTexture(id, damage);
     let mesh;
     if (url) {
       this.heldGeometry = spriteGeometry();
-      this.heldMaterial = this.material({ map: pixelTexture(url) });
+      this.heldMaterial = this.material({ map: pixelTexture(url), ...(leather ? { color: leather.tint } : {}) });
       mesh = new THREE.Mesh(this.heldGeometry, this.heldMaterial);
+      if (leather) {
+        const overlayMap = pixelTexture(leather.overlay);
+        this.heldOverlayMaterial = this.material({ map: overlayMap, transparent: true, alphaTest: 0.1, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
+        const overlay = new THREE.Mesh(this.heldGeometry, this.heldOverlayMaterial);
+        overlay.renderOrder = 1;
+        mesh.add(overlay);
+        if (glint) overlay.add(glintMesh(this.heldGeometry, overlayMap));
+      }
     } else {
       const g = (this.heldGeometry = new THREE.BoxGeometry(1, 1, 1)), uv = g.attributes.uv;
       for (let face = 0; face < 6; face++) {
@@ -460,6 +476,7 @@ export class PlayerRenderer {
       mesh = new THREE.Mesh(g, this.heldMaterial);
       mesh.rotation.y = Math.PI / 2;
     }
+    if (glint) mesh.add(glintMesh(mesh.geometry, url ? pixelTexture(url) : this.atlas));
     const group = new THREE.Group();
     group.matrixAutoUpdate = false;
     group.matrix.copy(heldItemMatrix(kind));
@@ -469,14 +486,14 @@ export class PlayerRenderer {
   }
   // `body` is a PlayerBody; `swing` is the swing progress (0 at rest); `armor`
   // is inventory.armor (boots first); `held` the held item id.
-  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, hurt = false, sneak = false, riding = false } = {}) {
+  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, hurt = false, sneak = false, riding = false } = {}) {
     this.root.visible = visible;
     if (!visible) return;
     const pose = mobPose(body, partial);
     this.root.position.set(pose.x, pose.y, pose.z);
     this.root.rotation.y = (180 - pose.bodyYaw) * RAD;
     this.syncArmor([3, 2, 1, 0].map((slot) => armor[slot]));
-    this.syncHeld(held, heldDamage);
+    this.syncHeld(held, heldDamage, heldColor, heldGlint);
     const parts = bipedPose({
       limbSwing: pose.limbSwing, limbSwingAmount: pose.limbSwingAmount, age: pose.age,
       headYaw: pose.headYaw, headPitch: pose.headPitch, swing, sneak, riding, heldRight: held ? 1 : 0,

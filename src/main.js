@@ -87,6 +87,7 @@ import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
+import {impactPlayerPearl} from './pearl-player.js';
 import { Arrows, arrowTargets, bowStage, bowFov, easeFov, ARROW } from "./bow.js";
 import { canSeeSky } from "./weather.js";
 import { Fluids, eyeInWater } from "./fluids.js";
@@ -1424,6 +1425,22 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     itemsCollected: () => { renderHotbar(); saved = false; },
     projectileTargets: () => mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height),
     projectileHit: e => e !== "player" && thrownHit(mobs, e, position),
+    projectilePearlImpact: ({pearl,hit}) => {
+      const state={world,position,previous,survival,rider,minecarts,fallDistance,landedFall};
+      impactPlayerPearl(state,pearl,hit,{
+        hit:(e,source)=>e!=="player"&&mobs?.attackEntityFrom(e,source.amount,{
+          name:'thrown',player:!!source.thrower,attacker:'projectile',
+          ...(source.thrower?{from:{x:position.x,z:position.z}}:{}),
+        }),
+        particle:p=>scene.fx.spawn('portal',p.x,p.y,p.z,p.mx,p.my,p.mz),
+        teleport:({from,to})=>{
+          // Count the physical movement preceding the teleport, not its displacement.
+          oldPosition.x+=to.x-from.x;oldPosition.y+=to.y-from.y;oldPosition.z+=to.z-from.z;
+        },
+        markUnsaved:()=>{saved=false;},
+      });
+      ({fallDistance,landedFall}=state);
+    },
     // EntityEgg.onImpact: hatched chicks join the mob list before mob events drain.
     projectileEvent: h => {
       if (h.sound) sounds.play(h.sound, { position: h.position, volume: h.volume, pitch: h.pitch });
@@ -2213,6 +2230,8 @@ function animate(now) {
     armor: survival?.inventory?.armor ?? [],
     held: heldId(),
     heldDamage: survival.held?.damage || 0,
+    heldColor: survival.held?.color,
+    heldGlint: stackHasEffect(survival.held, ITEMS[survival.held?.id]),
     hurt: survival.hurtTime > 0,
     sneak: motion.sneaking,
     riding: !!rider.vehicle,
@@ -2240,6 +2259,7 @@ function animate(now) {
       // The bow's icon follows the whole ticks of draw; its pull uses the ticks - 1 + partial.
       bow: eating?.bow ? { stage: bowStage(eating.ticks), draw: eating.ticks - 1 + partial } : null,
       glint: stackHasEffect(survival.held, ITEMS[survival.held?.id]),
+      color: survival.held?.color,
     });
 }
 // Entities that cast a shadow, as Java positions: an item's posY is 0.125

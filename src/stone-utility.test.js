@@ -12,13 +12,16 @@ import { itemFromOriginal } from './region-import.js';
 import {
   STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, SANDSTONE_SLAB,
   slabPlacedMeta, planSlabUse, endFrameFacing, endFrameComparator, cauldronUse, cauldronExtinguishes, cauldronRain,
+  cauldronWash,
   cauldronComparator, potContentsOfMeta, potInsertion, potPlantOf, potUse, stoneUtilityPick, setPotContents, potDrops,
   serializePots, restorePots, heldSlabType, slabDrops,
 } from './stone-utility.js';
 import { JavaRandom } from './java-random.js';
+import { makeStack } from './inventory.js';
 
 // stone-utility-reference.json: the unchanged 1.7.10 classes (tools/probes/StoneUtilityProbe.java, tools/verify-stone-utility.mjs).
 const ref = JSON.parse(readFileSync(new URL('../public/research/stone-utility-reference.json', import.meta.url)));
+const washRef = JSON.parse(readFileSync(new URL('../public/research/cauldron-wash-reference.json', import.meta.url)));
 const rows = (kind) => ref.rows.filter((r) => r.kind === kind);
 const cell = (id, meta = 0) => ({ get: () => id, getMeta: () => meta, solid: () => true, pots: undefined });
 // The item an original (id, damage) stack maps to in this build.
@@ -134,6 +137,26 @@ test('cauldron: bucket filling, burning entities and rain', () => {
     assert.equal(hit ? r.level - 1 : r.level, r.meta, JSON.stringify(r));
   }
   for (const r of rows('cauldronRain')) assert.equal(cauldronRain(r.level, new JavaRandom(r.seed).nextInt(20)), r.meta, JSON.stringify(r));
+});
+
+test('native cauldron washing replays every leather-piece/color/level/mode case',()=>{
+  assert.ok(washRef.rows.every((r)=>r.kind==='wash'||r.kind==='nonLeather'));
+  assert.equal(washRef.counts.wash,128);assert.equal(washRef.counts.nonLeather,8);
+  for(const r of washRef.rows){
+    const stack=r.kind==='wash'?makeStack(r.armor,1,0,undefined,r.prior===null?{}:{color:r.prior}):makeStack(103,1,0);
+    const result=cauldronWash(stack,r.level);
+    assert.equal(result.handled,r.handled,JSON.stringify(r));
+    assert.equal(result.level,r.newLevel,JSON.stringify(r));
+    if(r.kind==='wash'){
+      assert.equal(result.stack.count, r.count);
+      assert.equal(result.stack.color ?? null,r.color,JSON.stringify(r));
+      assert.equal(stack.color ?? null,r.prior, 'washing returns a changed copy, preserving original stack');
+    }
+  }
+  const input=makeStack(400,1,0,undefined,{color:0,displayName:'kept',enchantments:[{id:0,lvl:1}]});
+  const output=cauldronWash(input,1).stack;
+  assert.equal(output.color,undefined);assert.equal(output.displayName,'kept');assert.deepEqual(output.enchantments,input.enchantments);
+  assert.notEqual(output.enchantments,input.enchantments);
 });
 
 test('flower pot contents by metadata, insertion, drops and pick', () => {

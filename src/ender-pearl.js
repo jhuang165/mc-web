@@ -8,8 +8,9 @@ export const ENDER_PEARL = Object.freeze({ itemId: 378, speed: 1.5, inaccuracy: 
 // ItemEnderPearl (aco) uses the same EntityThrowable(world, player) constructor
 // as snowballs and eggs. `launch` ports that constructor's eye offset and
 // setThrowableHeading math and accepts the entity's java.util.Random adapter.
-export function launchEnderPearl(random, feet, yaw, pitch) {
-  return { ...launch(random, feet, yaw, pitch), kind: "enderPearl", random, ticks: 0, dead: false };
+export function launchEnderPearl(random, feet, yaw, pitch, owner = "player") {
+  if (owner !== "player") throw new TypeError("Ender pearl owner must be the local player token");
+  return { ...launch(random, feet, yaw, pitch), kind: "enderPearl", owner, random, rand: random, ticks: 0, dead: false };
 }
 
 // EntityEnderPearl.onImpact (zm.a), reconstructed from the unchanged class:
@@ -49,6 +50,7 @@ export function impactEnderPearl(pearl, { world, owner, hit = null }, hooks = {}
 // ticksInAir is omitted. Keeping the distinction explicit avoids presenting the
 // browser JSON projection as a complete native entity save.
 export function serializeEnderPearl(pearl) {
+  if (pearl.owner !== "player") throw new Error("Cannot save ender pearl without local owner token");
   return { x: pearl.x, y: pearl.y, z: pearl.z, mx: pearl.mx, my: pearl.my, mz: pearl.mz,
-    yaw: pearl.yaw ?? 0, pitch: pearl.pitch ?? 0, kind: "enderPearl" };
+    yaw: pearl.yaw ?? 0, pitch: pearl.pitch ?? 0, kind: "enderPearl", owner: pearl.owner };
 }

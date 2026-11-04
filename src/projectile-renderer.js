@@ -12,7 +12,13 @@ import { entityMaterial, worldMaterial } from "./light-material.js";
 import { itemTexture, pixelTexture } from "./first-person.js";
 import { particleBasis, particleLightCell, particleQuad, quantize } from "./particles.js";
 
-const SNOWBALL = 312, EGG = 316;
+const SNOWBALL = 312, EGG = 316, ENDER_PEARL = 378;
+export function projectileItemId(kind) {
+  if (kind === "snowball") return SNOWBALL;
+  if (kind === "egg") return EGG;
+  if (kind === "enderPearl") return ENDER_PEARL;
+  throw new TypeError(`Unsupported projectile render kind: ${kind}`);
+}
 // Entity.getBrightnessForRender samples floor(posY - yOffset + height * 0.66):
 // 0.165 above the ball's posY.
 const BALL_LIGHT = 0.25 * 0.66;
@@ -32,7 +38,7 @@ export class ProjectileRenderer {
   // RenderSnowball(item): an egg uses the egg icon, a snowball the snowball icon;
   // the "snowballpoof" particles (EntityBreakingFX with Items.snowball) always show the snowball.
   texture(kind) {
-    return pixelTexture(itemTexture(kind === "egg" ? EGG : SNOWBALL));
+    return pixelTexture(itemTexture(projectileItemId(kind)));
   }
   material(kind) {
     return entityMaterial(this.view.lighting, { map: this.texture(kind), alphaTest: 0.1 });

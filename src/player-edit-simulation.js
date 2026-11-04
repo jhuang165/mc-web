@@ -17,7 +17,7 @@ import { isDoor, activateDoor } from './doors-panes.js';
 import { ITEMS } from './survival.js';
 import { LEVER, STONE_BUTTON, REPEATER, redstoneActivate } from './redstone-blocks.js';
 import { copyStack, makeStack } from './inventory.js';
-import { CAULDRON, FLOWER_POT, BUCKET_ITEM, cauldronUse, potUse, setPotContents } from './stone-utility.js';
+import { CAULDRON, FLOWER_POT, BUCKET_ITEM, cauldronUse, cauldronWash, potUse, setPotContents } from './stone-utility.js';
 
 const STATIONS = new Set([13, 14, CHEST, DISPENSER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, LEVER, STONE_BUTTON, REPEATER]);
 // PlayerControllerMP's edit(place) dispatcher with browser effects supplied by the
@@ -36,10 +36,11 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   hook('unlock');
   const id = state.heldTool, item = ITEMS[id];
   const activates = !(state.motion.sneaking && id);
-  // The cauldron consumes the click for an empty hand or a water bucket, the flower pot when it is empty and the item is a plant it takes
-  // (BlockCauldron/BlockFlowerPot.onBlockActivated); every other item falls through to its own use.
+  // The cauldron consumes empty-hand, water-bucket and wet-leather activations; the empty flower pot
+  // takes a supported plant (BlockCauldron/BlockFlowerPot.onBlockActivated).
   const targetBlock = activates && !aimedEntity && target ? state.world.get(...target.block) : 0;
-  const usesStoneUtility = targetBlock === CAULDRON ? cauldronUse(id, 0, true).handled
+  const cauldronLevel = targetBlock === CAULDRON ? state.world.getMeta(...target.block) & 3 : 0;
+  const usesStoneUtility = targetBlock === CAULDRON ? cauldronUse(id, cauldronLevel, true).handled || cauldronWash(state.survival.held, cauldronLevel).handled
     : targetBlock === FLOWER_POT && !!potUse(state.world, ...target.block, id, state.survival.held?.damage || 0);
   const usesBlock = activates && !aimedEntity && target && (STATIONS.has(state.world.get(...target.block)) || usesStoneUtility);
 
@@ -117,7 +118,9 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     return act('interact-entity');
   }
 
-  if (place && item?.armor !== undefined) {
+  // Native ItemStack.useItemRightClick armor equip is reached only after the
+  // clicked block declines activation. A wet cauldron consumes leather first.
+  if (place && item?.armor !== undefined && !usesBlock) {
     const inv = state.survival.inventory, slot = 39 - item.armor;
     if (!inv.getStack(slot)) {
       inv.setStack(slot, copyStack(inv.held));
@@ -220,6 +223,23 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     // BlockCauldron.onBlockActivated: a water bucket fills it to level 3 and leaves an empty bucket (Survival, below level 3).
     if (activates && block === CAULDRON) {
       const level = state.world.getMeta(x, y, z) & 3, used = cauldronUse(id, level, state.survival.creative);
+      const wash = cauldronWash(state.survival.held, level);
+      if (wash.handled) {
+        const inv = state.survival.inventory;
+        let changed = false;
+        if (state.survival.held?.color !== undefined) {
+          inv.main[inv.current] = wash.stack;
+          hook('renderHotbar');
+          changed = true;
+        }
+        if (wash.level !== level) {
+          state.world.set(x, y, z, CAULDRON, true, wash.level);
+          hook('updateBlock', x, z, y);
+          changed = true;
+        }
+        if (changed) hook('markUnsaved');
+        return act('wash-leather', { level: wash.level });
+      }
       if (used.handled) {
         if (used.level !== level) {
           state.world.set(x, y, z, CAULDRON, true, used.level);

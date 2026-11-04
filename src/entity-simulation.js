@@ -55,6 +55,7 @@ export function tickEntitySimulation(state, hooks = {}) {
     itemsCollected = () => {},
     projectileTargets = () => [],
     projectileHit = () => {},
+    projectilePearlImpact,
     projectileEvent = () => {},
     handleEntityEvents = () => {},
     arrowOptions = () => ({}),
@@ -71,7 +72,7 @@ export function tickEntitySimulation(state, hooks = {}) {
     if (picked.length) itemsCollected(picked);
   }
 
-  projectiles.tick(world, projectileTargets(state), projectileHit);
+  projectiles.tick(world, projectileTargets(state), projectileHit, projectilePearlImpact);
   for (const event of projectiles.drain()) projectileEvent(event);
 
   if (mobs) handleEntityEvents();
