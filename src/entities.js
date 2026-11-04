@@ -1,4 +1,5 @@
 import { entityActive } from './streaming-ticks.js';
+import { gameRule } from "./game-rules.js";
 import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE, isSpider, soundType, caveSpiderPoisonTicks } from "./spider.js";
 import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, SPAWN_BRIGHTNESS } from "./mob-spawner.js";
 import { SILVERFISH, SILVERFISH_SOUNDS, silverfishActionState, legacyFields as silverfishFields, silverfishCanSpawnHere, hurtSummon, attackReady, closestVulnerablePlayer, pathWeight as silverfishPathWeight, eggSpawn } from "./silverfish.js";
@@ -992,7 +993,8 @@ export class EntityWorld {
   // counter starts on the next onEntityUpdate, or in this one for fire and drowning.
   onDeath(e, source = {}) {
     if (e.type === "villager") this.villagerDied(e, source);
-    if (e.growingAge >= 0 || e.type === "zombie") {
+    // ... and only while gamerule doMobLoot is true (dropFewItems, dropEquipment and the rare drop alike).
+    if ((e.growingAge >= 0 || e.type === "zombie") && gameRule("doMobLoot")) {
       const at = { x: e.x, y: e.y, z: e.z };
       for (const [drop, damage] of mobDrops(e, { playerHit: e.recentlyHit > 0, burning: e.fire > 0, bySkeleton: source.attacker === "skeleton", looting: source.player ? source.looting || 0 : 0 }, entityRandom(e)))
         this.events.push({ drop, count: 1, ...(damage ? { damage } : {}), position: at });
@@ -1017,7 +1019,7 @@ export class EntityWorld {
     e.death = (e.death || 0) + 1;
     if (e.death !== 20) return;
     const rand = entityRandom(e);
-    if (e.recentlyHit > 0 && (e.growingAge >= 0 || e.type === "zombie")) {
+    if (e.recentlyHit > 0 && (e.growingAge >= 0 || e.type === "zombie") && gameRule("doMobLoot")) {
       const world = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
       this.events.push({ xp: experiencePoints(e, rand, world), position: { x: e.x, y: e.y, z: e.z } });
     }
@@ -1117,7 +1119,8 @@ export class EntityWorld {
     // EntitySheep.createChild (wp.b(rx)): the lamb's colour is the parents' dye mix.
     if(a.type==='sheep')baby.color=childColor(a.color,b.color,this.random);
     this.entities.push(baby);a.growingAge=b.growingAge=6000;a.love=b.love=0;a.mateTicks=b.mateTicks=0;
-    this.events.push({xp:1+Math.floor(Math.random()*7),position:{x:a.x,y:a.y,z:a.z}});
+    // The breeding experience needs gamerule doMobLoot.
+    if(gameRule("doMobLoot"))this.events.push({xp:1+Math.floor(Math.random()*7),position:{x:a.x,y:a.y,z:a.z}});
     return true;
   }
   // EntityAIVillagerMate.giveBirth (up.g): EntityVillager.createChild is a new villager whose onSpawnWithEgg draws
@@ -1282,8 +1285,11 @@ export class EntityWorld {
     let at=null;
     if(w.get(x,y,z)===39)at=[x,y,z,39];else if(w.get(x,y-1,z)===1)at=[x,y-1,z,1];
     if(at){
-      w.set?.(at[0],at[1],at[2],at[3]===39?0:2);
-      this.events.push({eatGrass:{x:at[0],y:at[1],z:at[2],block:at[3]}});
+      // EntityAIEatGrass.updateTask: the block edit and event 2001 need gamerule mobGriefing; eatGrassBonus runs either way.
+      if(gameRule("mobGriefing")){
+        w.set?.(at[0],at[1],at[2],at[3]===39?0:2);
+        this.events.push({eatGrass:{x:at[0],y:at[1],z:at[2],block:at[3]}});
+      }
       e.sheared=false;
       if(e.growingAge<0)e.growingAge=Math.min(0,e.growingAge+1200);
     }
@@ -1318,8 +1324,8 @@ export class EntityWorld {
     this.villages.tick();
     // Splash potions thrown by witches (witch-potions.js; main.js attaches it).
     this.potions?.tick(player, survival);
-    // SpawnerAnimals.findChunksForSpawning: no monsters on Peaceful.
-    const hostile = this.difficulty !== PEACEFUL;
+    // WorldServer.tick runs SpawnerAnimals.findChunksForSpawning only while gamerule doMobSpawning is true; no monsters on Peaceful.
+    const hostile = this.difficulty !== PEACEFUL && gameRule("doMobSpawning");
     if (
       night && hostile &&
       !survival.creative &&
@@ -1430,12 +1436,13 @@ export class EntityWorld {
         continue;
       }
       // EntityCreeper.onUpdate (xz.h) runs its fuse before EntityLivingBase.onUpdate. The
-      // explosion (mobGriefing on) is main.js's; the creeper is gone without drops.
+      // explosion is main.js's; func_146077_cc passes gamerule mobGriefing as isSmoking (block
+      // damage). The creeper is gone without drops.
       if (e.type === "creeper") {
         const out = creeperTick(e);
         if (out.sound) this.events.push({ sound: out.sound.name, volume: out.sound.volume, pitch: out.sound.pitch, position: { x: e.x, y: e.y, z: e.z } });
         if (out.explode) {
-          this.events.push({ explode: { ...out.explode, source: e } });
+          this.events.push({ explode: { ...out.explode, source: e, smoking: gameRule("mobGriefing") } });
           e.health = 0;
           e.death = 20;
           continue;
@@ -1660,7 +1667,7 @@ export class EntityWorld {
     const world = this.world, rand = entityRandom(e), cell = (x, y, z) => { this.events.push({ blockEdit: [[x, y, z]] }); };
     const path = (make) => (m.navigator.spend() ? make(m.navigator.finder()) : null);
     const env = {
-      rand, remote: false, mobGriefing: true,
+      rand, remote: false, get mobGriefing() { return gameRule("mobGriefing"); },
       closestPlayer: (me, range) => (p?.alive && (range < 0 || m.distSq(p) < range * range) ? p : null),
       findPlayerToAttack: (me) => (p?.alive && closestVulnerablePlayer(me, [{ x: p.x, y: p.y, z: p.z, creative: !!s.creative, alive: true }], 8) ? p : null),
       isAlive: (x) => (x === p ? !!p.alive : true),

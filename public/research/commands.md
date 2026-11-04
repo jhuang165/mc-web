@@ -50,9 +50,9 @@ Approximated:
 - /effect: instant health and harm apply directly; other effects use the port's Effects table.
 - /tp and the player-name arguments accept `@p`, `@a`, `@r`, `@e` and the player name only.
 
-Game rules are stored for every name; these change behaviour: keepInventory (no inventory or experience drop, both kept on respawn),
-naturalRegeneration, doDaylightCycle, doTileDrops. doFireTick, doMobSpawning, mobGriefing, doMobLoot and commandBlockOutput are
-stored and reported but not wired.
+Game rules are stored for every name. keepInventory, naturalRegeneration, doDaylightCycle, doTileDrops, doFireTick, doMobSpawning,
+mobGriefing and doMobLoot change behaviour at the native call sites (see [game rules](game-rules.md)); commandBlockOutput is stored
+and reported but has no command block to act on.
 
 Unsupported (red message): achievement, debug, publish, scoreboard, spreadplayers, tellraw. Dedicated-server-only commands (op, ban,
 stop, ...) are not registered, as in the native singleplayer.

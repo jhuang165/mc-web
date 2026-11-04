@@ -13,6 +13,7 @@
 // scheduleBlockUpdate, raining() is isRaining, strike(x, y, z) is
 // canLightningStrikeAt, humid(x, y, z) is isBlockHighHumidity, and `rand`,
 // `difficulty` and `fireTick` (the doFireTick game rule) complete it.
+import { gameRule } from "./game-rules.js";
 import { FIRE, LAVA, HEIGHT, SIZE, TNT, isLiquid, normalCube } from "./world.js";
 import { pauseUnloadedTicks } from './streaming-ticks.js';
 import { Weather, canLightningStrikeAt, stopsPrecipitation } from "./weather.js";
@@ -354,7 +355,8 @@ export class Fire {
         return self.weather().random;
       },
       difficulty,
-      fireTick,
+      // gamerule doFireTick, read on every tick (game-rules.js); `fireTick: false` forces it off.
+      get fireTick() { return fireTick && gameRule("doFireTick"); },
       primeTnt: (x, y, z) => self.primeTnt?.(x, y, z),
     };
     this.primeTnt = primeTnt;

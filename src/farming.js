@@ -6,7 +6,8 @@ export class Farming {
  constructor(world,saved=[]){this.world=world;this.fields=new Map();this.updates=new Map();for(const [key,b]of world.edits)if(b===29||b===30)this.fields.set(key,b===30?7:0);if(Array.isArray(saved))for(const entry of saved){if(!Array.isArray(entry)||entry.length!==2)continue;const[key,m]=entry;if((this.fields.has(key)||(world.streaming&&typeof key==='string'&&(()=>{const p=key.split(',').map(Number);return p.length===3&&p.every(Number.isInteger)&&world.inside(...p)&&!world.isLoaded(p[0],p[2]);})()))&&Number.isInteger(m)&&m>=0&&m<=7)this.fields.set(key,m);}}
  change(x,y,z,b,meta=0){if(this.world.set(x,y,z,b,true,meta))this.updates.set(`${x},${y},${z}`,[x,y,z]);}
  observe(x,y,z){const b=this.world.get(x,y,z),key=[x,y,z].join(',');if(b===29||b===30){if(!this.fields.has(key))this.fields.set(key,b===30?7:0);}else this.fields.delete(key);}
- trample(x,y,z,distance,random=Math.random){if(![29,30].includes(this.world.get(x,y,z))||random()>=Math.fround(Math.fround(distance)-0.5))return false;this.change(x,y,z,2);this.fields.delete(`${x},${y},${z}`);return true;}
+ // BlockFarmland.onFallenUpon: the roll comes first; then an entity that is not a player needs gamerule mobGriefing (`grief`).
+ trample(x,y,z,distance,random=Math.random,grief=true){if(![29,30].includes(this.world.get(x,y,z))||random()>=Math.fround(Math.fround(distance)-0.5)||!grief)return false;this.change(x,y,z,2);this.fields.delete(`${x},${y},${z}`);return true;}
  till(x,y,z){if(![1,2].includes(this.world.get(x,y,z))||this.world.get(x,y+1,z)!==0)return false;this.change(x,y,z,29);this.fields.set(`${x},${y},${z}`,0);return true;}
  plant(x,y,z,item=309){const b=plantedBlock(item);if(!b||![29,30].includes(this.world.get(x,y,z))||this.world.get(x,y+1,z)!==0||y>=(this.world.height??HEIGHT)-2)return false;this.observe(x,y,z);this.change(x,y+1,z,b);return true;}
  setAge(x,y,z,b,age){this.change(x,y,z,cropKind(b)===31?31+age:b,cropKind(b)===31?0:age);}

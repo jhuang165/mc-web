@@ -86,6 +86,7 @@ import { deathMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
 import { ChatUi, printChat } from "./chat-ui.js";
 import { createCommandRunner, chatLine } from "./commands.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
+import { gameRule, setGameRuleSource } from "./game-rules.js";
 import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
@@ -315,6 +316,8 @@ let survival = new Survival({}, "creative"),
   f3Combo = false;
 // Dropped items as EntityItem physics objects (see item-entities.js).
 const items = new ItemEntities();
+// Every system reads the game rules of the world being played (game-rules.js); a /gamerule edit applies on the next read.
+setGameRuleSource((name) => ruleOn(active, name));
 // gamerule doTileDrops: block drops are skipped while it is false (commands.js / command-host.js).
 { const dropBlock = items.dropBlock; items.dropBlock = function (...a) { return active && !ruleOn(active, "doTileDrops") ? undefined : dropBlock.apply(this, a); }; }
 // Thrown snowballs and their particles (see projectiles.js).
@@ -1713,7 +1716,8 @@ function die() {
   const stacks = keep ? survival.inventory.takeAll() : [];
   // EntityPlayer.onDeath -> InventoryPlayer.dropAllItems scatters every stack.
   for (const s of stacks) items.dropPlayer(s, position, yaw, pitch, true, true);
-  const deathScore=experience.score;if(keep)xpOrbs.spawn(experience.death(),position);
+  // EntityLivingBase.onDeathUpdate (not overridden by EntityPlayer) leaves the orbs only while gamerule doMobLoot is true.
+  const deathScore=experience.score;if(keep){const dropped=experience.death();if(gameRule("doMobLoot"))xpOrbs.spawn(dropped,position);}
   renderHotbar();renderVitals();$("#block-label").classList.remove("visible");
   save();
   modal(
@@ -1891,7 +1895,7 @@ function releaseBowUse() {
 }
 function trampleFarmland(entity, distance) {
   const x = Math.floor(entity.x), y = Math.floor(entity.y - 0.2), z = Math.floor(entity.z);
-  if (farming.trample(x, y, z, distance)) {
+  if (farming.trample(x, y, z, distance, Math.random, entity === position || gameRule("mobGriefing"))) {
     applyFarmUpdates(farming.drain());
     saved = false;
   }
@@ -2055,9 +2059,9 @@ function lightTnt(x, y, z, placer) {
 // then doExplosionB(true). DamageSource.setExplosionSource names the attacker: the creeper
 // itself, or the TNT's placer. The block edits run through world.set like breakBlock:
 // containers spill, farmland and crops update, and the edits are saved.
-function explodeAt(x, y, z, size, { exploder = null, attacker = null } = {}) {
+function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true } = {}) {
   applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed,
-    survival, position, velocity, farming }, { x, y, z, size, exploder, attacker }, {
+    survival, position, velocity, farming }, { x, y, z, size, exploder, attacker, smoking }, {
     brokenTool: reportBrokenTool,
     burst: (...args) => scene.explosionParticles.burst(...args),
     sound: (name, options) => sounds.play(name, options),

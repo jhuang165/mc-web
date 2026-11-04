@@ -2,7 +2,7 @@
 // everything here works on the real World, Survival, Weather and Experience objects and the tests can drive it without a browser.
 import { printChat } from "./chat-ui.js";
 import { CommandException, cheatsAllowed } from "./commands.js";
-import { ENCHANTMENT_NAMES, GAME_RULES } from "./command-data.js";
+import { ENCHANTMENT_NAMES } from "./command-data.js";
 import { itemFromOriginal } from "./region-import.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
 import { makeStack } from "./inventory.js";
@@ -12,9 +12,8 @@ import { PLAYER_NAME } from "./death-messages.js";
 
 const unsupported = (text) => new CommandException("commands.generic.exception", [text], "unsupported");
 const enchantName = new Map(ENCHANTMENT_NAMES.map(([id, name]) => [id, name]));
-export const DEFAULT_RULES = Object.freeze(Object.fromEntries(GAME_RULES));
-// GameRules.getGameRuleBooleanValue: true only for a value that parses as "true".
-export const ruleOn = (record, name) => String(record?.gameRules?.[name] ?? DEFAULT_RULES[name]) === "true";
+import { DEFAULT_RULES, ruleOn } from "./game-rules.js";
+export { DEFAULT_RULES, ruleOn };
 
 export function createCommandHost(env) {
   const survival = () => env.survival();

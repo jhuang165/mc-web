@@ -29,7 +29,9 @@ export function applyExplosion(state, request, hooks = {}) {
     world, weather, random = weather?.random, mobs, items, xpOrbs, arrows,
     projectiles, falling, primed, survival, position, velocity, farming,
   } = state;
-  const { x, y, z, size, exploder = null, attacker = null } = request;
+  // `smoking` false (a creeper with gamerule mobGriefing off): WorldServer.newExplosion clears affectedBlockPositions
+  // after doExplosionA, so nothing breaks or drops and the client draws no per-block particles.
+  const { x, y, z, size, exploder = null, attacker = null, smoking = true } = request;
   const {
     opaque = opaqueCube,
     brokenTool = () => {},
@@ -41,7 +43,7 @@ export function applyExplosion(state, request, hooks = {}) {
     markDirty = () => {},
   } = hooks;
 
-  const explosion = explodeBlocks(world, x, y, z, size, random, { opaque });
+  const explosion = explodeBlocks(world, x, y, z, size, random, { opaque, smoking });
   const mobHits = [];
   // Explosion.doExplosionA sees every entity before any affected block is removed.
   const hitFrom = attacker === "player" ? position : attacker;
@@ -94,7 +96,7 @@ export function applyExplosion(state, request, hooks = {}) {
     }
   }
 
-  burst(x, y, z, size, explosion.list, { viewer: [position.x, position.y + PHYSICS.eye, position.z] });
+  burst(x, y, z, size, smoking ? explosion.list : [], { viewer: [position.x, position.y + PHYSICS.eye, position.z] });
   sound("random.explode", { volume: 4, pitch: explosion.pitch, position: { x, y, z } });
 
   const changes = [];

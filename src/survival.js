@@ -859,7 +859,7 @@ export class Survival {
       }
     } else this.air = 300;
     // EntityPlayer.onLivingUpdate: Peaceful heals 1 every 20 ticks (naturalRegeneration on).
-    if (peacefulRegen(this.difficulty, this.ticks) && this.health > 0 && this.health < this.maxHealth) this.health = Math.min(this.maxHealth, this.health + 1);
+    if (this.naturalRegeneration !== false && peacefulRegen(this.difficulty, this.ticks) && this.health > 0 && this.health < this.maxHealth) this.health = Math.min(this.maxHealth, this.health + 1);
     this.foodTick();
   }
   // FoodStats.onUpdate (zr.a(yz)): exhaustion over 4 takes saturation, or food except on
