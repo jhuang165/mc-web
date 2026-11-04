@@ -7,6 +7,7 @@ export { JavaRandom } from "./java-random.js";
 // supplies them. See public/research/lighting.md and weather.md.
 import { isStair } from "./stairs.js";
 import { SIZE, HEIGHT, FIRE, WEB, LADDER, CACTUS, REEDS, LILY_PAD, TNT, FENCE, RAIL, MOB_SPAWNER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, GLASS_PANE, DOUBLE_STONE_SLAB, END_PORTAL_FRAME, FLOWER_POT, isPlant, normalCube, opaqueCube } from "./world.js";
+import { lightOpacity3 } from "./blocks-0-40.js";
 import { biomeFacts } from "./biomes.js";
 import { lightEmission2, lightOpacity2, useNeighborBrightness2 } from "./redstone-blocks-2.js";
 
@@ -31,6 +32,7 @@ export const BRIGHTNESS = Array.from({ length: 16 }, (_, i) => {
 // (func_149685_I: 0.2 for normal cubes) and getCanBlockGrass (s: materials
 // that let grass through, used by smooth lighting to decide corner samples).
 export function lightOpacity(b) {
+  if (b >= 132 && b <= 137) return lightOpacity3(b); // dropper, hopper, brewing stand, powered/detector/activator rails (blocks-0-40.js)
   if (b >= 119 && b <= 131) return lightOpacity2(b); // redstone torches, lamps, block, button, plates, comparators, sensor, moving piston and glowstone (redstone-blocks-2.js)
   if (b===72||b===73) return 0;
   if (b >= END_PORTAL_FRAME && b <= FLOWER_POT) return 0; // end portal frame, cauldron and flower pot (stone-utility-reference.json); slabs keep 255
@@ -45,7 +47,7 @@ export function lightOpacity(b) {
 }
 // Lava: setLightLevel(1.0F), so (int)(15 * 1.0) = 15.
 // Fire: setLightLevel(1.0F), 15 as well.
-export const lightEmission = (b, lit = false) => (b >= 119 && b <= 131 ? lightEmission2(b) : b===65?9:b===75?1:b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : b === END_PORTAL_FRAME ? 1 : 0);
+export const lightEmission = (b, lit = false) => (b >= 119 && b <= 131 ? lightEmission2(b) : b===134?1:b===65?9:b===75?1:b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : b === END_PORTAL_FRAME ? 1 : 0);
 export const useNeighborBrightness = (b) => isStair(b) || useNeighborBrightness2(b) || b === 82 || (b >= DOUBLE_STONE_SLAB && b <= FLOWER_POT) || b === 20 || b === 9 || b === 41 || b === 29 || b === 30 || b === FENCE || b === RAIL || b === MOB_SPAWNER || isPlant(b);
 const AO_SOLID = f(0.2);
 // Block.getAmbientOcclusionLightValue uses isBlockNormalCube (blocksMovement and a

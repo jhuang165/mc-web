@@ -13,7 +13,7 @@ Native records: 3 wander traces, 2 avoid traces (static and chase zombie), 2 doo
 
 ## Not live (limits)
 - Trading (Trade, LookAtTrade, offers, riches use), no Offers written on export.
-- No VillageCollection: no door counting, iron golems, mating, reputation. MoveIndoors and VillagerMate only draw their random numbers and never start. RestrictOpenDoor, MoveTowardsRestriction, FollowGolem and Play are not implemented.
+- Village systems (door records, reputation, mating, golems, MoveIndoors/RestrictOpenDoor/FollowGolem/Play/MoveTowardsRestriction and the home area) now run from `src/village.js` and `src/village-ai.js`; see `village.md` and `iron-golem.md` for what is native-verified and what is approximated.
 - Zombies do not target or infect villagers.
 - Java-save import does not convert mobs; villagers there count as lost like other mobs.
 - Step sounds were not compared with the native trace.

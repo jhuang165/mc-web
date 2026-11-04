@@ -99,7 +99,7 @@ test('saved effects resume their remaining tick cadence, isolate snapshots and r
   for (let i = 0; i < 100; i++) { player.tick(); loaded.tick(); }
   assert.deepEqual(loaded.serialize(), player.serialize());
   assert.equal(saved.effects[0].duration, 88);
-  assert.deepEqual(new Effects([null, {}, { id: 1, duration: 100 }, { id: POISON, duration: NaN }, { id: HUNGER, duration: 0 }]).serialize(), []);
+  assert.deepEqual(new Effects([null, {}, { id: 99, duration: 100 }, { id: POISON, duration: NaN }, { id: HUNGER, duration: 0 }]).serialize(), []);
   assert.deepEqual(new Survival().effects.serialize(), []);
 });
 

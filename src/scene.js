@@ -247,8 +247,10 @@ export class VoxelScene {
           else if (b===COCOA||b===SANDSTONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z));
           else if (b===STONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z),w.getMeta(x,y,z));
           else if (b===END_PORTAL_FRAME) this.endFrame(solid,x,y,z);
+          else if (b===133) this.hopper(solid,x,y,z);
           else if (b===CAULDRON) this.cauldron(solid,x,y,z);
           else if (b===FLOWER_POT) this.flowerPot(solid,x,y,z);
+          else if (b===134) this.brewingStand(solid,x,y,z);
           else if (b===ANVIL) this.anvil(solid,x,y,z);
           else if (isPistonBase(b)||b===PISTON_HEAD) this.piston(solid,b,x,y,z);
           else if (isStair(b)) this.stairs(solid,b,x,y,z);
@@ -259,7 +261,7 @@ export class VoxelScene {
           else if (b === LADDER) this.ladder(solid, x, y, z);
           else if (b === FENCE) for (const box of fenceRenderBoxes(fenceMask(w, x, y, z))) this.box(solid, b, x, y, z, box);
           else if (isRedstoneBlock(b)) this.redstone(solid, b, x, y, z);
-          else if (b === RAIL) this.rail(solid, x, y, z);
+          else if (b === RAIL || (b >= 135 && b <= 137)) this.rail(solid, x, y, z, b);
           else if (b === CACTUS) this.cactus(solid, x, y, z);
           else if (b === 10) this.liquid(10, water, flow, x, y, z);
           else if (b === 42) this.liquid(42, lava, lavaFlow, x, y, z);
@@ -449,6 +451,36 @@ export class VoxelScene {
     if(level>0){const h=cauldronWaterHeight(level),wuv=rectUvs(tileRect(blockTile(CAULDRON,0,false,32)));
       m.quad([[x+W,y+h,z+W],[x+1-W,y+h,z+W],[x+1-W,y+h,z+1-W],[x+W,y+h,z+1-W]],wuv,1,own,true);}
   }
+  // RenderBlocks.renderBlockBrewingStand (render type 25): the centre post in brewing_stand, the three base slabs in brewing_stand_base
+  // (blockTile reads meta bit 16 as the base) and one vertical sprite plane toward each slab whose bottle bit (1/2/4) is set.
+  brewingStand(m,x,y,z) {
+    const meta=this.world.getMeta(x,y,z),own=this.light.packed(x,y,z);
+    this.box(m,134,x,y,z,[0.4375,0,0.4375,0.5625,0.875,0.5625],0,true);
+    for(const box of [[0.5625,0,0.3125,0.9375,0.125,0.6875],[0.125,0,0.0625,0.5,0.125,0.4375],[0.125,0,0.5625,0.5,0.125,0.9375]])this.box(m,134,x,y,z,box,16,true);
+    const uvs=rectUvs(tileRect(blockTile(134,0,false,0)));
+    [[0.75,0.5],[0.3125,0.25],[0.3125,0.75]].forEach(([cx,cz],i)=>{
+      if(!(meta&(1<<i)))return;
+      const dx=cx-0.5,dz=cz-0.5,len=Math.hypot(dx,dz),px=-dz/len*0.28,pz=dx/len*0.28;
+      m.quad([[x+0.5-px,y+0.01,z+0.5-pz],[x+0.5+px,y+0.01,z+0.5+pz],[x+0.5+px,y+0.875,z+0.5+pz],[x+0.5-px,y+0.875,z+0.5-pz]],uvs,1,own,true);
+    });
+  }
+  // RenderBlocks.renderBlockHopper (render type 38, bytecode func_147799_a): the bowl box (0, 5/8, 0)-(1, 1, 1) in the block's own icons
+  // (hopper_top on top, hopper_outside elsewhere), its four inner wall faces 1/8 in from the edge in hopper_outside and the floor at
+  // 5/8 in hopper_inside, the funnel (1/4, 1/4, 1/4)-(3/4, 5/8 - 0.002, 3/4) and the spout box for the facing, both in hopper_outside.
+  // blockTile reads meta bit 16 as hopper_outside on every face and bit 32 as hopper_inside.
+  hopper(m,x,y,z) {
+    const B=133,facing=this.world.getMeta(x,y,z)&7,own=this.light.packed(x,y,z),F=0.625,W=0.125;
+    this.box(m,B,x,y,z,[0,F,0,1,1,1],0,true);
+    const wall=rectUvs(tileRect(blockTile(B,0,false,16))),floor=rectUvs(tileRect(blockTile(B,0,false,32)));
+    for(const q of [
+      [[W,F,0],[W,F,1],[W,1,1],[W,1,0]], [[1-W,F,0],[1-W,F,1],[1-W,1,1],[1-W,1,0]],
+      [[0,F,W],[1,F,W],[1,1,W],[0,1,W]], [[0,F,1-W],[1,F,1-W],[1,1,1-W],[0,1,1-W]],
+    ])m.quad(q.map(p=>[x+p[0],y+p[1],z+p[2]]),wall,0.8,own,true);
+    m.quad([[x,y+F,z],[x+1,y+F,z],[x+1,y+F,z+1],[x,y+F,z+1]],floor,1,own,true);
+    this.box(m,B,x,y,z,[0.25,0.25,0.25,0.75,F-0.002,0.75],16,true);
+    const spout={0:[0.375,0,0.375,0.625,0.25,0.625],2:[0.375,0.25,0,0.625,0.5,0.25],3:[0.375,0.25,0.75,0.625,0.5,1],4:[0,0.25,0.375,0.25,0.5,0.625],5:[0.75,0.25,0.375,1,0.5,0.625]}[facing];
+    if(spout)this.box(m,B,x,y,z,spout,16,true);
+  }
   // BlockFlowerPot (render type 33): the 6/16 pot in the flower_pot texture and its plant as crossed quads sunk into the pot.
   flowerPot(m,x,y,z) {
     this.box(m,FLOWER_POT,x,y,z,[...POT_BOUNDS],0,true);
@@ -466,8 +498,9 @@ export class VoxelScene {
   // RenderBlocks.renderBlockMinecartTrack (blm.a(aje, III), render type 9): one quad 1/16 above
   // the cell floor, drawn from both sides, its corners rotated per metadata and the raised edge
   // of an ascending rail (2-5) lifted by one block; the cell's mixed brightness, colour 1.
-  rail(m, x, y, z) {
-    const meta = this.world.getMeta(x, y, z), r = tileRect(blockTile(RAIL, 0, false, meta)), light = this.light.packed(x, y, z);
+  // Powered, detector and activator rails (ids 135-137) draw the same quad from metadata & 7; bit 8 picks the powered texture.
+  rail(m, x, y, z, id = RAIL) {
+    const raw = this.world.getMeta(x, y, z), meta = id === RAIL ? raw : raw & 7, r = tileRect(blockTile(id, 0, false, raw)), light = this.light.packed(x, y, z);
     let ax = x + 1, bx = x + 1, cx = x, dx = x, az = z, bz = z + 1, cz = z + 1, dz = z;
     if (meta === 1 || meta === 2 || meta === 3 || meta === 7) [ax, dx, bx, cx, az, bz, cz, dz] = [x + 1, x + 1, x, x, z + 1, z + 1, z, z];
     else if (meta === 8) [ax, bx, cx, dx, az, dz, bz, cz] = [x, x, x + 1, x + 1, z + 1, z + 1, z, z];

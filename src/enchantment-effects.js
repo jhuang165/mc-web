@@ -172,6 +172,11 @@ export function miningEnchantments(held, armor = []) {
 // Survival.mining with the player's live enchantments (Efficiency of the held tool, Aqua Affinity of the
 // worn helmet). Without either it is exactly survival.mining, so stubbed or older callers behave as before.
 export function playerMiningState(survival, block, toolId, underwater = false, onGround = true) {
+  const state = enchantedMiningState(survival, block, toolId, underwater, onGround), haste = survival.effects?.digSpeedMultiplier?.() ?? 1;
+  // EntityPlayer.getBreakSpeed: Haste and Mining Fatigue scale the break speed (progress is linear in it).
+  return haste === 1 || !(state.progress > 0) ? state : { ...state, progress: Math.max(0, Math.fround(state.progress * haste)) };
+}
+function enchantedMiningState(survival, block, toolId, underwater, onGround) {
   const held = survival.held, tool = held && held.id === toolId ? held : null;
   const { efficiency, aquaAffinity } = miningEnchantments(tool, survival.inventory?.armor);
   if (!efficiency && !aquaAffinity) return survival.mining(block, toolId, underwater, onGround);

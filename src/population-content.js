@@ -2,10 +2,11 @@
 // Kept independent of survival/world module initialization so both can use the same catalogue.
 import { ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE } from './world.js';
 import { STAIRS, stairRecipeResult } from './stairs.js';
-import { DISPENSER, STICKY_PISTON, PISTON, PISTON_HEAD, SLIMEBALL, DISPENSER_ITEM, STICKY_PISTON_ITEM, PISTON_ITEM, ORIGINAL_ITEMS as DISPENSER_PISTON_ITEMS } from './dispenser-piston.js';
+import { DISPENSER, STICKY_PISTON, PISTON, PISTON_HEAD, SLIMEBALL, DISPENSER_ITEM, DROPPER, DROPPER_ITEM, STICKY_PISTON_ITEM, PISTON_ITEM, ORIGINAL_ITEMS as DISPENSER_PISTON_ITEMS } from './dispenser-piston.js';
 import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, ITEM_STONE_BRICKS, ITEM_STONE_SLAB, ITEM_END_PORTAL_FRAME, ITEM_CAULDRON, ITEM_FLOWER_POT, STONE_BRICK_NAMES, SLAB_NAMES, slabDrops } from './stone-utility.js';
 import { REDSTONE_WIRE, LEVER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, ITEM_LEVER, ITEM_STONE_PLATE, ITEM_WOODEN_PLATE, ITEM_STONE_BUTTON, ITEM_TRIPWIRE_HOOK, ITEM_REPEATER, ITEM_REDSTONE, ITEM_STRING, REDSTONE_ITEM_IDS, REDSTONE_ITEM_NAMES, redstoneDrops } from './redstone-blocks.js';
 import * as RS2 from './redstone-blocks-2.js';
+import { POTION_ITEM_ROWS } from './potion-items.js';
 export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97:68,175:69,162:70,161:71,106:72,127:73,48:74,39:75,40:76,99:77,100:78,32:79,174:80,103:81,'44:1':82,'31:0':83,'31:2':84,24:56,110:57,159:58,111:59,145:ANVIL,116:ENCHANTING_TABLE,53:87,67:88,109:89,128:90,134:91,135:92,136:93,108:94,163:95,164:96,
   // Doors (items 324/330 are internal 470/471), iron bars and glass panes (the block items).
   324:470,330:471,101:IRON_BARS,102:1100,
@@ -14,9 +15,13 @@ export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97
   // Stone utility blocks (stone-utility-reference.json): original stone bricks 98, slab 44 (damage = type; 44:1 above stays the sandstone slab), end frame 120, cauldron 380, flower pot 390. Tools own items 100-127, so the block items are 1000 + block id.
   98:ITEM_STONE_BRICKS,44:ITEM_STONE_SLAB,120:ITEM_END_PORTAL_FRAME,380:ITEM_CAULDRON,390:ITEM_FLOWER_POT,
   // Redstone components (redstone-blocks-reference.json): lever 69, plates 70/72, button 77 and hook 131 are 1000 + block id; the repeater item 356 keeps its number; dust (331) and string (287) are the existing items 360 and 321.
+  // Potions and brewing (potion-items.js): original 369 blaze rod, 370 ghast tear, 371 gold nugget, 372 nether wart, 373 potion (385), 374 glass bottle (384), 376 fermented spider eye, 377 blaze powder, 378 magma cream, 379 brewing stand item, 382 glistering melon, 396 golden carrot.
+  369:387,370:389,371:394,372:386,373:385,374:384,376:391,377:388,378:390,379:1134,154:1133,382:392,396:393,
   ...REDSTONE_ITEM_IDS,
   // Second redstone family (redstone-blocks-2-reference.json): torch 76, lamp 123, redstone block 152, wooden button 143, weighted plates 147/148, daylight sensor 151, glowstone 89 (1000 + block id); comparator 404, quartz 406, glowstone dust 348.
   ...RS2.REDSTONE2_ITEM_IDS,
+  // Powered rail 27, detector rail 28 and activator rail 157 are 1000 + internal block id 135-137 (powered-rails.js).
+  27:1135,28:1136,157:1137,
   // Structure loot (strongholds): ender pearl 368, empty map 395 and compass 345 are internal 378-380 (inert items).
   368:378,395:379,345:380,388:367,360:368,357:369,282:370,281:371,322:372,2256:373,2257:374,421:375,418:376,419:377});
 export const TREE_NAMES=['Oak','Spruce','Birch','Jungle','Acacia','Dark oak'];
@@ -28,7 +33,7 @@ export function installPopulationItems(items){
   items[WOODEN_DOOR].hidden=true;items[IRON_DOOR].hidden=true; // BlockDoor has no item of its own: the door items place it
   // Slimeball (original 341) and the items of the dispenser, sticky piston and piston; the head has none.
   items[SLIMEBALL]={id:SLIMEBALL,name:'Slimeball',texture:'slimeball',stack:64,color:'#7ebf6e'};
-  for(const [id,name,color] of [[DISPENSER_ITEM,'Dispenser','#6f6f6f'],[STICKY_PISTON_ITEM,'Sticky Piston','#7e9a5a'],[PISTON_ITEM,'Piston','#9c8d6b']])items[id]={id,name,stack:64,block:true,color};
+  for(const [id,name,color] of [[DISPENSER_ITEM,'Dispenser','#6f6f6f'],[DROPPER_ITEM,'Dropper','#6f6f6f'],[STICKY_PISTON_ITEM,'Sticky Piston','#7e9a5a'],[PISTON_ITEM,'Piston','#9c8d6b']])items[id]={id,name,stack:64,block:true,color};
   items[65].hidden=true;items[73].hidden=true;items[77].hidden=true;items[78].hidden=true;items[83].hidden=true;
   for(const [id,name,texture,extra] of [
     [367,'Emerald','emerald'],[368,'Melon','melon',{food:2,saturation:.3}],
@@ -38,11 +43,14 @@ export function installPopulationItems(items){
     [470,'Wooden Door','door_wood',{stack:1}],[1100,'Glass pane',undefined,{block:true}],[471,'Iron Door','door_iron',{stack:1}],[372,'Golden apple','apple_golden',{food:4,saturation:1.2}],
     [ITEM_STONE_BRICKS,'Stone bricks',undefined,{block:true,variants:STONE_BRICK_NAMES}],[ITEM_STONE_SLAB,'Stone slab',undefined,{block:true,variants:SLAB_NAMES.slice(0,6)}],[ITEM_END_PORTAL_FRAME,'End portal frame',undefined,{block:true}],
     [ITEM_LEVER,REDSTONE_ITEM_NAMES[ITEM_LEVER],undefined,{block:true}],[ITEM_STONE_PLATE,REDSTONE_ITEM_NAMES[ITEM_STONE_PLATE],undefined,{block:true}],[ITEM_WOODEN_PLATE,REDSTONE_ITEM_NAMES[ITEM_WOODEN_PLATE],undefined,{block:true}],[ITEM_STONE_BUTTON,REDSTONE_ITEM_NAMES[ITEM_STONE_BUTTON],undefined,{block:true}],[ITEM_TRIPWIRE_HOOK,REDSTONE_ITEM_NAMES[ITEM_TRIPWIRE_HOOK],undefined,{block:true}],[ITEM_REPEATER,REDSTONE_ITEM_NAMES[ITEM_REPEATER],'repeater'],
+    [1135,'Powered Rail',undefined,{block:true}],[1136,'Detector Rail',undefined,{block:true}],[1137,'Activator Rail',undefined,{block:true}],
     ...Object.entries(RS2.REDSTONE2_ITEM_NAMES).map(([id,name])=>[+id,name,RS2.REDSTONE2_ITEM_TEXTURES[id],RS2.REDSTONE2_ITEM_TEXTURES[id]?undefined:{block:true}]),
+    [1133,'Hopper','hopper'],
     [ITEM_CAULDRON,'Cauldron','cauldron'],[ITEM_FLOWER_POT,'Flower pot','flower_pot'],
     [373,'Music disc 13','record_13',{stack:1}],[374,'Music disc cat','record_cat',{stack:1}],
     // EntityWitch (witch.js): the glass bottle (original 374) and the potion item (original 373, a witch's held and dropped potion).
     [384,'Glass Bottle','potion_bottle_empty'],[385,'Potion','potion_bottle_drinkable',{stack:1}],
+    ...POTION_ITEM_ROWS,
     [378,'Ender Pearl','ender_pearl',{stack:16}],[379,'Empty Map','map_empty'],[380,'Compass','compass_static'],
     [375,'Name tag','name_tag'],[376,'Golden horse armor','gold_horse_armor',{stack:1}], [377,'Diamond horse armor','diamond_horse_armor',{stack:1}],
   ]) items[id]={id,name,texture,stack:64,color:'#8caa59',...extra};
@@ -54,13 +62,13 @@ export function installPopulationMaterials(m){
     [ANVIL]:{hardness:5,kind:'pickaxe',tier:0},
     // Stone utility blocks (stone-utility-reference.json): rock/iron need a pickaxe; the end frame is unbreakable; the pot breaks instantly.
     [STONE_BRICKS]:{hardness:1.5,kind:'pickaxe',tier:0},[DOUBLE_STONE_SLAB]:{hardness:2,kind:'pickaxe',tier:0},[STONE_SLAB]:{hardness:2,kind:'pickaxe',tier:0},
-    [END_PORTAL_FRAME]:{hardness:Infinity,drop:0},[CAULDRON]:{hardness:2,kind:'pickaxe',tier:0},[FLOWER_POT]:{hardness:0},
+    [END_PORTAL_FRAME]:{hardness:Infinity,drop:0},[CAULDRON]:{hardness:2,kind:'pickaxe',tier:0},[134]:{hardness:.5,kind:'pickaxe',tier:0},[133]:{hardness:3,kind:'pickaxe',tier:0},[FLOWER_POT]:{hardness:0},
     // BlockEnchantmentTable: Material.rock, hardness 5 (block-metadata-reference.json); drops itself.
     [ENCHANTING_TABLE]:{hardness:5,kind:'pickaxe',tier:0},
     // BlockDoor (wood: hardness 3, any tool; iron: hardness 5, needs a pickaxe), BlockPane (iron bars: hardness 5 and a pickaxe, drops itself; glass pane: 0.3, drops nothing).
     [WOODEN_DOOR]:{hardness:3,kind:'axe',drop:470},[IRON_DOOR]:{hardness:5,kind:'pickaxe',tier:0,drop:471},
     // BlockDispenser (rock, hardness 3.5, pickaxe), BlockPistonBase and BlockPistonExtension (hardness 0.5, no tool; the head drops nothing): dispenser-piston-reference.json.
-    [DISPENSER]:{hardness:3.5,kind:'pickaxe',tier:0,drop:DISPENSER_ITEM},[STICKY_PISTON]:{hardness:.5,drop:STICKY_PISTON_ITEM},[PISTON]:{hardness:.5,drop:PISTON_ITEM},[PISTON_HEAD]:{hardness:.5,drop:0},
+    [DISPENSER]:{hardness:3.5,kind:'pickaxe',tier:0,drop:DISPENSER_ITEM},[DROPPER]:{hardness:3.5,kind:'pickaxe',tier:0,drop:DROPPER_ITEM},[STICKY_PISTON]:{hardness:.5,drop:STICKY_PISTON_ITEM},[PISTON]:{hardness:.5,drop:PISTON_ITEM},[PISTON_HEAD]:{hardness:.5,drop:0},
     [IRON_BARS]:{hardness:5,kind:'pickaxe',tier:0},[GLASS_PANE]:{hardness:.3,drop:0},
     // Redstone components (redstone-blocks-reference.json): hardness 0.5 for the lever, plates and button (the stone plate is rock: pickaxe), 0 for the rest.
     [REDSTONE_WIRE]:{hardness:0,drop:ITEM_REDSTONE},[LEVER]:{hardness:.5,drop:ITEM_LEVER},[STONE_PRESSURE_PLATE]:{hardness:.5,kind:'pickaxe',tier:0,drop:ITEM_STONE_PLATE},[WOODEN_PRESSURE_PLATE]:{hardness:.5,kind:'axe',drop:ITEM_WOODEN_PLATE},[STONE_BUTTON]:{hardness:.5,drop:ITEM_STONE_BUTTON},[REPEATER]:{hardness:0,drop:ITEM_REPEATER},[TRIPWIRE_HOOK]:{hardness:0,drop:ITEM_TRIPWIRE_HOOK},[TRIPWIRE]:{hardness:0,drop:ITEM_STRING},
@@ -70,6 +78,8 @@ export function installPopulationMaterials(m){
     const b=+id,drop=RS2.redstoneDrops2(b)[0]?.id??0;
     m[b]=h<0?{hardness:Infinity,drop:0}:{hardness:h,...(RS2.NEEDS_PICKAXE2.includes(b)?{kind:'pickaxe',tier:0}:{}),...(b===RS2.GLOWSTONE?{}:{drop})};
   }
+  // BlockRailBase subclasses: hardness 0.7, Material.circuits (no tool needed), each drops its own item.
+  for(const b of [135,136,137])m[b]={hardness:.7,drop:1000+b};
   // BlockStairs takes its model block's hardness and material (stairs-reference.json): planks are wood (axe), the rest rock.
   for(const [id,s] of Object.entries(STAIRS))m[id]=s.kind==='pickaxe'?{hardness:s.hardness,kind:'pickaxe',tier:0}:{hardness:s.hardness,kind:'axe'};
 }
@@ -84,9 +94,22 @@ export function installPopulationRecipes({recipe,shapeless}){
   recipe('wooden-door','Wooden Door',['PP','PP','PP'],{P:7},470,1);
   recipe('iron-door','Iron Door',['II','II','II'],{I:302},471,1);
   recipe('glass-pane','Glass pane',['GGG','GGG'],{G:9},1100,16);
+  // CraftingManager (potion-items.js): glass bottle (3 glass in a V, 3 bottles), gold nugget both ways, blaze powder, magma cream, fermented spider eye, glistering melon, golden carrot, brewing stand.
+  recipe('glass-bottle','Glass Bottle',['G G',' G '],{G:9},384,3);
+  recipe('gold-ingot-from-nuggets','Gold ingot',['NNN','NNN','NNN'],{N:394},304);
+  shapeless(394,9,0,304);
+  shapeless(388,2,0,387);
+  shapeless(390,1,0,388,SLIMEBALL);
+  shapeless(391,1,0,326,75,329);
+  recipe('glistering-melon','Glistering Melon',['NNN','NMN','NNN'],{N:394,M:368},392);
+  recipe('golden-carrot','Golden Carrot',['NNN','NCN','NNN'],{N:394,C:322},393);
+  // CraftingManager: five iron ingots around a chest make a hopper (hopper-reference.json).
+  recipe('hopper','Hopper',['I I','ICI',' I '],{I:302,C:41},1133);
+  recipe('brewing-stand','Brewing Stand',[' B ','CCC'],{B:387,C:12},1134);
   recipe('iron-bars','Iron bars',['III','III'],{I:302},IRON_BARS,16);
   // CraftingManager: dispenser (C104) 7 cobblestone around a bow and redstone, piston (C106) 3 planks / 4 cobblestone / iron ingot / redstone, sticky piston (C242) slimeball over a piston.
   recipe('dispenser','Dispenser',['CCC','CBC','CRC'],{C:12,B:127,R:360},DISPENSER_ITEM);
+  recipe('dropper','Dropper',['CCC','C C','CRC'],{C:12,R:360},DROPPER_ITEM); // CraftingManager: 7 cobblestone around redstone (dispenser-piston.js DROPPER)
   recipe('piston','Piston',['PPP','CIC','CRC'],{P:7,C:12,I:302,R:360},PISTON_ITEM);
   recipe('sticky-piston','Sticky Piston',['S','P'],{S:SLIMEBALL,P:PISTON_ITEM},STICKY_PISTON_ITEM);
   recipe('golden-apple','Golden apple',['GGG','GAG','GGG'],{G:304,A:200},372);
@@ -113,6 +136,10 @@ export function installPopulationRecipes({recipe,shapeless}){
   recipe('light-weighted-plate','Light weighted pressure plate',['GG'],{G:304},RS2.ITEM_LIGHT_PLATE);
   recipe('heavy-weighted-plate','Heavy weighted pressure plate',['II'],{I:302},RS2.ITEM_HEAVY_PLATE);
   recipe('wooden-button','Wooden button',['P'],{P:7},RS2.ITEM_WOODEN_BUTTON);
+  // CraftingManager (powered-rails.md): 6 gold + stick + redstone -> 6 powered rails; 6 iron + stone plate + redstone -> 6 detector rails; 6 iron + 2 sticks + redstone torch -> 6 activator rails.
+  recipe('powered-rail','Powered rail',['G G','GSG','GRG'],{G:304,S:300,R:360},1135,6);
+  recipe('detector-rail','Detector rail',['I I','IPI','IRI'],{I:302,P:ITEM_STONE_PLATE,R:360},1136,6);
+  recipe('activator-rail','Activator rail',['ISI','ITI','ISI'],{I:302,S:300,T:RS2.ITEM_REDSTONE_TORCH},1137,6);
   recipe('bowl','Bowls',['W W',' W '],{W:7},371,4);
   recipe('melon','Melon block',['MMM','MMM','MMM'],{M:368},81);
   shapeless(370,1,0,75,76,371);
@@ -143,6 +170,8 @@ export function populationDrops(id,meta,{random=Math.random,shears=false}={}){
   if(id===DOUBLE_STONE_SLAB||id===STONE_SLAB)return slabDrops(id,meta);
   if(id===END_PORTAL_FRAME)return[];
   if(id===CAULDRON)return[{id:ITEM_CAULDRON,count:1}];
+  if(id===133)return[{id:1133,count:1}]; // BlockHopper drops the hopper item (the contents drop from the tile)
+  if(id===134)return[{id:1134,count:1}]; // BlockBrewingStand drops the brewing stand item (the potions drop from the tile)
   if(id===FLOWER_POT)return[{id:ITEM_FLOWER_POT,count:1}];
   if(id===83||id===84)return shears?[{id:39,count:1,damage:id===84?2:0}]:random()<1/8?[{id:309,count:1}]:[];
   if(id===69){if(meta&8)return[];const t=meta&7;if(t===2||t===3)return shears?[{id:39,count:2,damage:t===2?1:2}]:t===2&&random()<1/8?[{id:309,count:1}]:[];return[{id:69,count:1,damage:t}];}

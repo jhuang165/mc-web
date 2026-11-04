@@ -7,7 +7,7 @@ import {REDSTONE_TILES} from './redstone-blocks.js';
 import {REDSTONE2_TILES,redstone2TileName} from './redstone-blocks-2.js';
 import {STAIRS,STAIR_ITEM_BOXES} from './stairs.js';
 import {STONE_BRICKS,DOUBLE_STONE_SLAB,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOWER_POT,SLAB_TEXTURES,stoneBrickTexture} from './stone-utility.js';
-import {isDispenserPiston,iconNameForFace,blockForItem,PISTON_HEAD,DISPENSER} from './dispenser-piston.js';
+import {isDispenserPiston,iconNameForFace,blockForItem,PISTON_HEAD,DISPENSER,DROPPER} from './dispenser-piston.js';
 export const ATLAS_COLUMNS=16,TILE_SIZE=16;
 export const TILES=['grass_top','grass_side','dirt','stone','log_oak','log_oak_top','leaves_oak','sand','planks_oak','brick','glass','bedrock','cobblestone','crafting_table_top','crafting_table_side','crafting_table_front','furnace_side','furnace_top','furnace_front_off','furnace_front_on','coal_ore','iron_ore','diamond_ore','gold_ore','wool_colored_white','torch_on','bookshelf','obsidian','snow','clay','gravel','iron_block','gold_block','diamond_block','farmland_dry','farmland_wet',...Array.from({length:8},(_,i)=>'wheat_stage_'+i),'tallgrass','hardened_clay','chest_front','chest_side','chest_top',...WOOL_COLORS.slice(1).map(c=>'wool_colored_'+c.texture)];
 // Item and particle faces for the chest, cut from its entity texture (ModelChest UVs).
@@ -18,6 +18,9 @@ TILES.push('web','flower_dandelion',...RED_FLOWERS.map(f=>'flower_'+f.texture),'
 TILES.push('reeds','cactus_side','cactus_top','cactus_bottom');
 // Mineshaft blocks: BlockRail uses rail_normal_turned for the curves (metadata 6-9).
 TILES.push('rail_normal','rail_normal_turned','mob_spawner');
+// BlockRailPowered / BlockRailDetector icons: the plain texture, and *_powered while metadata bit 8 is set (internal ids 135-137).
+const STRAIGHT_RAIL_TILES=['rail_golden','rail_detector','rail_activator'];
+TILES.push(...STRAIGHT_RAIL_TILES.flatMap(n=>[n,n+'_powered']));
 TILES.push('anvil_base','anvil_top_damaged_0','anvil_top_damaged_1','anvil_top_damaged_2');
 // BlockEnchantmentTable.getIcon: bottom (side 0), top (side 1), otherwise the side texture.
 TILES.push('enchanting_table_top','enchanting_table_side','enchanting_table_bottom');
@@ -31,12 +34,14 @@ if(!TILES.includes('stonebrick'))TILES.push('stonebrick');
 // BlockDoor, BlockPane: the two halves of each door, the pane's end strip and the bars (blocks/ textures).
 for(const t of ['door_wood_lower','door_wood_upper','door_iron_lower','door_iron_upper','glass_pane_top','iron_bars'])if(!TILES.includes(t))TILES.push(t);
 // BlockDispenser fronts and the piston's five textures (BlockPistonBase / BlockPistonExtension icons); furnace_top and furnace_side are shared with the furnace.
-for(const t of ['dispenser_front_horizontal','dispenser_front_vertical','piston_top_normal','piston_top_sticky','piston_side','piston_bottom','piston_inner'])if(!TILES.includes(t))TILES.push(t);
+for(const t of ['dispenser_front_horizontal','dispenser_front_vertical','dropper_front_horizontal','dropper_front_vertical','piston_top_normal','piston_top_sticky','piston_side','piston_bottom','piston_inner'])if(!TILES.includes(t))TILES.push(t);
 // Stone bricks, slabs, end portal frame, cauldron, flower pot (stone-utility-reference.json): original blocks/ textures.
 for(const t of ['stonebrick_mossy','stonebrick_cracked','stonebrick_carved','stone_slab_top','stone_slab_side','endframe_top','endframe_side','endframe_eye','end_stone','cauldron_top','cauldron_inner','cauldron_side','cauldron_bottom','flower_pot','water_still','nether_brick','quartz_block_side','quartz_block_top','quartz_block_bottom','brick','cobblestone','planks_oak','sandstone_normal','sandstone_top','sandstone_bottom','dirt'])if(!TILES.includes(t))TILES.push(t);
 // Redstone components (redstone-blocks.js): dust, lever, repeater and tripwire textures and the planks/stone/torch/slab ones they reuse.
 for(const t of REDSTONE_TILES)if(!TILES.includes(t))TILES.push(t);
 for(const t of REDSTONE2_TILES)if(!TILES.includes(t))TILES.push(t); // second redstone family (redstone-blocks-2.js): torches, lamps, redstone block, plates, comparator, daylight sensor, glowstone
+for(const t of ['hopper_outside','hopper_inside','hopper_top'])if(!TILES.includes(t))TILES.push(t); // BlockHopper (hopper.js)
+for(const t of ['brewing_stand','brewing_stand_base'])if(!TILES.includes(t))TILES.push(t); // BlockBrewingStand (brewing.js)
 if(!TILES.includes('stone_slab_top'))TILES.push('stone_slab_top');
 if(!TILES.includes('cobblestone'))TILES.push('cobblestone');
 export const ATLAS_ROWS=Math.ceil(TILES.length/ATLAS_COLUMNS);
@@ -49,6 +54,8 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===1101||id===1103||id===1104)id-=1000; // the stone bricks, slab and end portal frame items (1000 + block id) show their block's textures
  if(id>=1108&&id<=1113)id-=1000; // item ids of the lever, plates, button and hook
  if(id>=1120&&id<=1131)id-=1000; // item ids of the second redstone family (redstone-blocks-2.js)
+ if(id>=1135&&id<=1137)id-=1000; // item ids of the powered, detector and activator rails
+ if(id>=135&&id<=137)return tile(STRAIGHT_RAIL_TILES[id-135]+(meta&8?'_powered':''));
  if(id>=119&&id<=131)return tile(redstone2TileName(id,face));
  if(id===107)return tile('redstone_dust_cross');
  if(id===108)return tile('lever');
@@ -57,7 +64,7 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===112)return tile(face===1?'repeater_off':face===0?'redstone_torch_off':'stone_slab_top');
  if(id===113)return tile('trip_wire_source');
  if(id===114)return tile('trip_wire');
- if(blockForItem(id)){id=blockForItem(id);meta=id===DISPENSER?3:1;} // item ids 1115-1117 draw as the native item meta
+ if(blockForItem(id)){id=blockForItem(id);meta=id===DISPENSER||id===DROPPER?3:1;} // item ids 1115-1117 draw as the native item meta
  if(STAIRS[id]){const m=STAIRS[id].model;return tile(m==='planks'?'planks_'+TREE_TEXTURES[STAIRS[id].modelDamage]:m==='sandstone'?(face===2?'sandstone_top':face===3?'sandstone_bottom':'sandstone_normal'):m);}
  // BlockDoor.getIcon: the lower or upper half's texture by metadata (bit 3); BlockPane: glass / iron_bars sides, glass_pane_top ends.
  if(id===WOODEN_DOOR||id===IRON_DOOR)return tile((id===WOODEN_DOOR?'door_wood_':'door_iron_')+(meta&8?'upper':'lower'));
@@ -90,6 +97,9 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===DOUBLE_STONE_SLAB||id===STONE_SLAB){const t=SLAB_TEXTURES[meta&7];return tile(id===DOUBLE_STONE_SLAB&&meta&8?t[1]:face===2?t[1]:face===3?t[2]:t[0]);}
  if(id===END_PORTAL_FRAME)return tile(meta&16?'endframe_eye':face===2?'endframe_top':face===3?'end_stone':'endframe_side');
  if(id===CAULDRON)return tile(meta&32?'water_still':meta&16?'cauldron_inner':face===2?'cauldron_top':face===3?'cauldron_bottom':'cauldron_side');
+ // BlockHopper.getIcon: the top rim on side 1, hopper_outside elsewhere; meta bit 16 is the renderer's inner wall (hopper_outside), bit 32 the bowl floor (hopper_inside).
+ if(id===133)return tile(meta&32?'hopper_inside':meta&16?'hopper_outside':face===2?'hopper_top':'hopper_outside');
+ if(id===134)return tile(meta&16?'brewing_stand_base':'brewing_stand');
  if(id===FLOWER_POT)return tile('flower_pot');
  if(id===84)return tile('fern');
  if(id===2&&meta===2)return tile(face===2?'dirt_podzol_top':face===3?'dirt':'dirt_podzol_side');
@@ -132,14 +142,14 @@ export function createBlockAtlas(){
  function tint(mapName){const facts=biomeFacts(biome),t=facts.temperature,rain=facts.rainfall*t;const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');x.drawImage(images.get('colormap/'+mapName),0,0);const color=x.getImageData(Math.floor((1-t)*255),Math.floor((1-rain)*255),1,1).data;return`rgb(${color[0]},${color[1]},${color[2]})`;}
  function tinted(source,color){const c=document.createElement('canvas');c.width=c.height=16;const x=c.getContext('2d');x.drawImage(source,0,0,16,16);x.globalCompositeOperation='multiply';x.fillStyle=color;x.fillRect(0,0,16,16);x.globalCompositeOperation='destination-in';x.drawImage(source,0,0,16,16);return c;}
  function redraw(){if(!images.size)return;icons.clear();ctx.clearRect(0,0,canvas.width,canvas.height);const grass=tint('grass'),leaves=tint('foliage');TILES.forEach((name,i)=>{const x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;if(CHEST_FACES[name]){for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])ctx.drawImage(images.get('entity/chest/normal'),u,v,w,h,x+dx,y+dy,w,h);return;}let source=images.get('blocks/'+name);if(['grass_top','tallgrass','reeds','fern','vine','double_plant_grass_bottom','double_plant_grass_top','double_plant_fern_bottom','double_plant_fern_top'].includes(name))source=tinted(source,grass);if(name.startsWith('leaves_'))source=tinted(source,name==='leaves_spruce'?'rgb(97,153,97)':name==='leaves_birch'?'rgb(128,167,85)':leaves);ctx.drawImage(source,0,0,16,16,x,y,16,16);if(name==='grass_side')ctx.drawImage(tinted(images.get('blocks/grass_side_overlay'),grass),x,y);});texture.needsUpdate=true;}
- function icon(id,damage=0){if(id===1100)id=GLASS_PANE;if(id>=1108&&id<=1113)id-=1000;if(id>=1120&&id<=1131)id-=1000;if(id===1101)id=STONE_BRICKS;if(id===1103)id=STONE_SLAB;if(id===1104)id=END_PORTAL_FRAME;if(blockForItem(id)){/* RenderBlocks.renderBlockAsItem: the dispenser draws its front as metadata 3, a piston as metadata 1 */id=blockForItem(id);damage=id===DISPENSER?3:1;}const key=id+':'+damage;if(icons.has(key))return icons.get(key);const c=document.createElement('canvas');c.width=64;c.height=70;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
+ function icon(id,damage=0){if(id===1100)id=GLASS_PANE;if(id>=1135&&id<=1137)id-=1000;if(id>=1108&&id<=1113)id-=1000;if(id>=1120&&id<=1131)id-=1000;if(id===1101)id=STONE_BRICKS;if(id===1103)id=STONE_SLAB;if(id===1104)id=END_PORTAL_FRAME;if(blockForItem(id)){/* RenderBlocks.renderBlockAsItem: the dispenser draws its front as metadata 3, a piston as metadata 1 */id=blockForItem(id);damage=id===DISPENSER||id===DROPPER?3:1;}const key=id+':'+damage;if(icons.has(key))return icons.get(key);const c=document.createElement('canvas');c.width=64;c.height=70;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
   if(id===ANVIL){anvilIcon(x,damage);const url=c.toDataURL();icons.set(key,url);return url;}
   function face(index,matrix,shade,drop=0){x.save();x.setTransform(...matrix);const sx=index%ATLAS_COLUMNS*16,sy=Math.floor(index/ATLAS_COLUMNS)*16;x.drawImage(canvas,sx,sy,16,16-drop,0,drop,16,16-drop);if(shade){x.globalCompositeOperation='source-atop';x.fillStyle=`rgba(0,0,0,${shade})`;x.fillRect(0,0,16,16);}x.restore();}
   // RenderBlocks.renderBlockAsItem for the fence (render type 11): two posts and two bars along z,
   // painted back to front in the inventory projection (z across, x into the picture).
   if(id===FENCE){fenceIcon(x);const url=c.toDataURL();icons.set(key,url);return url;}
   if(STAIRS[id]){stairIcon(x,id);const url=c.toDataURL();icons.set(key,url);return url;}
- if([69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE].includes(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||isFlower(id)||isCrop(id)){const i=blockTile(id,2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:id===129?10:id===ENCHANTING_TABLE?4:id===82||id===STONE_SLAB?8:id===END_PORTAL_FRAME?3:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
+ if([69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE].includes(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||(id>=135&&id<=137)||isFlower(id)||isCrop(id)){const i=blockTile(id,2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:id===129?10:id===ENCHANTING_TABLE?4:id===82||id===STONE_SLAB?8:id===END_PORTAL_FRAME?3:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
   const url=c.toDataURL();icons.set(key,url);return url;
  }
  function anvilIcon(ctx,damage){

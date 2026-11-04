@@ -20,7 +20,7 @@ test("edits survive save / restore, the y 0 floor included", () => {
   const b = new World("save");
   b.restore([...a.edits]);
   assert.deepEqual(a.snapshot(), b.snapshot());
-  assert.throws(() => b.restore([["1,2,3", 900]]));
+  assert.throws(() => b.restore([["1,2,3", 255]]));
 });
 test("ray selection finds a block and correct placement neighbor", () => {
   const a = new World("ray");

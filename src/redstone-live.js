@@ -23,7 +23,7 @@ import { hashSeed, WATER, LAVA } from "./world.js";
 const REPEATER = 112, FURNACE = 14;
 const PLATES = [70, 72, 147, 148], SENSOR = 151;
 const COMPARATORS = [149, 150];
-const SIZES = { 54: 27, 146: 27, 61: 3, 62: 3, 23: 9, 158: 9, 154: 5 };
+const SIZES = { 54: 27, 146: 27, 61: 3, 62: 3, 23: 9, 158: 9, 154: 5, 117: 4 };
 // Original drop item id -> internal item id (block items are 1000 + internal id from 100 up).
 const DROP_ITEMS = { 331: 360, 356: 356, 404: 381, 324: 470, 330: 471 };
 const dropItemId = (item) => {

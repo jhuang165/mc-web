@@ -8,7 +8,7 @@ const coords=k=>k.split(',').map(Number);
 // The same persisted representation as Survival.serialize, without copying player state.
 function inventories(player) {
   const columns=new Map();
-  for(const name of ['chests','furnaces','dispensers'])for(const [position,value] of Object.entries(player[name]??{})) {
+  for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const [position,value] of Object.entries(player[name]??{})) {
     const k=owner(position);if(!columns.has(k))columns.set(k,{});
     const saved=structuredClone(name==='chests'?{facing:value.facing,items:value.items}:value);
     (columns.get(k)[name]??={})[position]=saved;
@@ -48,7 +48,7 @@ export class ContainerResidency {
     for(const k of this.world.chunks.keys())if(!this.live.has(k)) {
       if(!this.cache.has(k))throw new Error('Saved containers are not ready');
       const restored=new Survival(this.cache.get(k));
-      Object.assign(this.survival.chests,restored.chests);Object.assign(this.survival.furnaces,restored.furnaces);Object.assign(this.survival.dispensers,restored.dispensers);
+      Object.assign(this.survival.chests,restored.chests);Object.assign(this.survival.furnaces,restored.furnaces);Object.assign(this.survival.dispensers,restored.dispensers);Object.assign(this.survival.hoppers,restored.hoppers);Object.assign(this.survival.brewing??={},restored.brewing??{});
       this.cache.delete(k);this.live.add(k);
     }
   }
@@ -82,7 +82,7 @@ export class ContainerResidency {
     if(!candidates.length)return [];
     const states=inventories(this.survival),evicted=[];
     for(const k of candidates)if(this.durable.get(k)===fingerprint(states.get(k))) {
-      for(const name of ['chests','furnaces','dispensers'])for(const position of Object.keys(this.survival[name]))if(owner(position)===k)delete this.survival[name][position];
+      for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const position of Object.keys(this.survival[name]))if(owner(position)===k)delete this.survival[name][position];
       this.live.delete(k);this.durable.delete(k);this.cache.delete(k);evicted.push(k);
     }
     return evicted;
@@ -92,7 +92,7 @@ export class ContainerResidency {
   pruneRecord(record) {
     if(this.disposed||!record?.containerScope)return;
     record.containerScope=record.containerScope.filter(c=>this.live.has(c.join(',')));
-    for(const name of ['chests','furnaces','dispensers'])for(const position of Object.keys(record.player?.[name]??{}))if(!this.live.has(owner(position)))delete record.player[name][position];
+    for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const position of Object.keys(record.player?.[name]??{}))if(!this.live.has(owner(position)))delete record.player[name][position];
   }
   scope(token) {return token.scope.map(coords);}
   dispose() {this.disposed=true;this.cache.clear();this.durable.clear();}

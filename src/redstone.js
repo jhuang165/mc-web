@@ -449,7 +449,7 @@ export class RedstoneWorld {
   getEntities(mode, [x0, y0, z0, x1, y1, z1]) {
     return this.entities.filter(
       (e) =>
-        (mode === "all" || (mode === "living" && e.kind !== "item") || (mode === "player" && e.kind === "player")) &&
+        (mode === "all" || (mode === "living" && e.kind !== "item" && e.kind !== "minecart") || (mode === "player" && e.kind === "player") || (mode === "minecart" && e.kind === "minecart") || (mode === "inventory" && e.kind === "minecart" && e.signal !== undefined)) &&
         e.box[3] > x0 &&
         e.box[0] < x1 &&
         e.box[4] > y0 &&
@@ -701,17 +701,18 @@ function isComparatorId(id) {
 }
 // Block.hasComparatorInputOverride among the supported ids.
 export function hasComparatorOverride(id) {
-  return id === CAULDRON || id === END_PORTAL_FRAME || isContainerId(id);
+  return id === 28 || id === CAULDRON || id === END_PORTAL_FRAME || isContainerId(id);
 }
 // Block.getComparatorInputOverride: cauldron level (metadata), end portal frame eye (15 or 0).
 function comparatorOverride(w, id, x, y, z) {
   const m = w.getBlockMetadata(x, y, z);
+  if (id === 28) return w.behaviours[28]?.comparator?.(w, x, y, z) ?? 0; // BlockRailDetector (powered-rails.js)
   if (id === CAULDRON) return m;
   if (id === END_PORTAL_FRAME) return (m & 4) !== 0 ? 15 : 0;
   return containerComparatorSignal(w, x, y, z, id);
 }
 function isContainerId(id) {
-  return id === CHEST || id === TRAPPED_CHEST || id === FURNACE || id === LIT_FURNACE || id === DISPENSER || id === DROPPER || id === HOPPER;
+  return id === CHEST || id === TRAPPED_CHEST || id === FURNACE || id === LIT_FURNACE || id === DISPENSER || id === DROPPER || id === HOPPER || id === 117; // 117: brewing stand (BlockBrewingStand.hasComparatorInputOverride)
 }
 export function itemStackLimit(item) {
   return ITEM_STACK_LIMITS.get(item) ?? 64;

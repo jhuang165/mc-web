@@ -31,6 +31,18 @@ export class WitchPotions {
     this.projectiles.balls.push(ball);
     return ball;
   }
+  // ItemPotion.onItemRightClick: EntityPotion(world, player, damage): launched like a thrown snowball from the eye, 0.5 velocity, 1.0
+  // inaccuracy, and the pitch offset -20 degrees of func_70183_g (so it flies higher than the view). `feet` is the player's position.
+  throwFromPlayer(feet, yaw, pitch, damage) {
+    const rng = this.projectiles.rng(), mcYaw = f(180 - (yaw * 180) / Math.PI), mcPitch = f((-pitch * 180) / Math.PI),
+      k = f(f(mcYaw / 180) * f(Math.PI)), p = f(f(mcPitch / 180) * f(Math.PI)), p2 = f(f(f(mcPitch + f(-20)) / 180) * f(Math.PI)),
+      s = Math.sin(k), c = Math.cos(k), power = f(0.4),
+      h = heading(rng, f(f(-s * Math.cos(p)) * power), f(-Math.sin(p2) * power), f(f(c * Math.cos(p)) * power), 0.5, 1),
+      at = { x: feet.x - f(c * f(0.16)), y: feet.y + f(1.62) - 0.10000000149011612, z: feet.z - f(s * f(0.16)) },
+      ball = { ...h, ...at, kind: "potion", damage, owner: "player", px: at.x, py: at.y, pz: at.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand: rng, random: rng, dead: false };
+    this.projectiles.balls.push(ball);
+    return ball;
+  }
   tick(player, survival) {
     const mobs = this.mobs, p = this.projectiles;
     if (!p.balls.length) return;
@@ -38,7 +50,7 @@ export class WitchPotions {
     for (const t of targets) if (t.ref.type === "witch") t.thrower = true; // the thrower is skipped for the first 5 ticks (every witch here)
     if (player && survival && survival.health > 0) {
       const hw = f(f(0.6) / 2);
-      targets.push({ ref: "player", box: [player.x - hw, player.y, player.z - hw, player.x + hw, player.y + f(1.8), player.z + hw] });
+      targets.push({ ref: "player", playerThrower: true, box: [player.x - hw, player.y, player.z - hw, player.x + hw, player.y + f(1.8), player.z + hw] });
     }
     p.tick(mobs.world, targets);
     for (const ev of p.drain()) if (ev.potion) this.impact(ev.potion, player, survival);
@@ -56,11 +68,12 @@ export class WitchPotions {
       if (r.ref === "player") {
         // EntityPlayer: magic damage ignores armour; slowness and weakness are not modelled for the player (witch.md).
         if (r.hurt > 0) survival.damage(r.hurt, "magic", false);
+        if (r.heal > 0) survival.heal?.(r.heal);
         for (const e of r.effects) survival.effects?.add({ id: e.id, duration: e.duration, amplifier: e.amplifier });
         continue;
       }
       const e = r.ref;
-      if (r.hurt > 0) mobs.attackEntityFrom(e, r.hurt, { name: "indirectMagic", from: owner && { x: owner.x, z: owner.z }, attacker: owner });
+      if (r.hurt > 0) mobs.attackEntityFrom(e, r.hurt, { name: "indirectMagic", from: owner?.x !== undefined ? { x: owner.x, z: owner.z } : undefined, attacker: owner?.x !== undefined ? owner : null });
       if (r.heal > 0) e.health = Math.min(ENTITY_TYPES[e.type].health, f(e.health + r.heal));
       for (const effect of r.effects) addMobEffect(e, effect.id, effect.duration, effect.amplifier);
     }

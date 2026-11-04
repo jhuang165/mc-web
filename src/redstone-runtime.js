@@ -12,7 +12,7 @@
 //   game.markUnsaved()
 //   game.player()  -> { position: {x, y, z}, width, height, alive } | null
 //   game.mobs()    -> EntityWorld | null         game.items() / arrows() / orbs() / primed() -> arrays
-//   game.chests() / furnaces() / dispensers()    keyed "x,y,z" stores (survival.js)
+//   game.chests() / furnaces() / dispensers() / hoppers()    keyed "x,y,z" stores (survival.js)
 //   game.maxStack(stack)
 //   game.subtracted() -> skylight subtracted     game.angle() -> celestial angle in [0, 1)
 //   game.skyLight(x, y, z)
@@ -23,6 +23,9 @@ import { pushBox, ENTITY_TYPES } from "./entities.js";
 import { LEVER, STONE_BUTTON, REPEATER } from "./redstone-blocks.js";
 import { WOODEN_BUTTON, COMPARATOR, COMPARATOR_POWERED } from "./world.js";
 import { CHEST } from "./chest.js";
+import { hopperBehaviour } from "./hopper.js";
+import { installPoweredRails } from "./powered-rails.js";
+import { installDispensers } from "./dispense.js";
 
 // Blocks a right click operates through the redstone engine (lever, both buttons, repeater, both comparators).
 export const USE_BLOCKS = new Set([LEVER, STONE_BUTTON, WOODEN_BUTTON, REPEATER, COMPARATOR, COMPARATOR_POWERED]);
@@ -37,7 +40,19 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     scene?.updateBlocks?.(list);
     game.markUnsaved?.();
   };
+  // Minecarts (game.minecarts() -> Minecarts): "minecart" asks for EntityMinecart, "inventory" for the carts that are IInventory
+  // (chest carts, as { cart, signal } with Container.calcRedstoneFromInventory); "all" (pressure plates) includes every cart.
+  const cartsIn = (box, mode) => {
+    const mc = game.minecarts?.(), out = [];
+    for (const c of mc?.carts ?? []) {
+      if (c.dead || !c.bb || !inside(c.bb, box)) continue;
+      if (mode !== "inventory") out.push(c);
+      else if (c.type === 1) out.push({ cart: c, signal: mc.comparator(c) });
+    }
+    return out;
+  };
   const entitiesIn = (box, mode) => {
+    if (mode === "minecart" || mode === "inventory") return cartsIn(box, mode);
     const out = [], p = game.player?.();
     if (p && p.alive !== false && inside(pushBox(p.position, p.width ?? 0.6, p.height ?? 1.8), box)) out.push(p);
     const mobs = game.mobs?.();
@@ -50,6 +65,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     for (const e of game.arrows?.() ?? []) if (!e.dead && inside([e.x - ARROW_HALF, e.y, e.z - ARROW_HALF, e.x + ARROW_HALF, e.y + ARROW_SIZE, e.z + ARROW_HALF], box)) out.push(e);
     for (const e of game.orbs?.() ?? []) if (e.bb && inside(e.bb, box)) out.push(e);
     for (const e of game.primed?.() ?? []) if (inside([e.x - TNT_HALF, e.y, e.z - TNT_HALF, e.x + TNT_HALF, e.y + TNT_SIZE, e.z + TNT_HALF], box)) out.push(e);
+    out.push(...cartsIn(box, "minecart"));
     return out;
   };
   // TileEntity inventories as { count, max } slots; a double chest reads both halves (west or north first).
@@ -67,6 +83,8 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     }
     if (id === 61 || id === 62) return slotsOf(game.furnaces?.()[key]?.items ?? [null, null, null]);
     if (id === 23 || id === 158) return slotsOf(game.dispensers?.()[key]?.items ?? Array(9).fill(null));
+    if (id === 154) return slotsOf(game.hoppers?.()[key]?.items ?? Array(5).fill(null));
+    if (id === 117) return slotsOf(game.brewing?.()[key]?.items ?? Array(4).fill(null)); // TileEntityBrewingStand: Container.calcRedstoneFromInventory over 4 slots
     return null;
   };
   const redstone = new LiveRedstone(world, {
@@ -80,6 +98,30 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     containerSlots,
     environment: () => ({ skylightSubtracted: game.subtracted?.() ?? 0, celestialAngle: Math.fround((game.angle?.() ?? 0) * Math.PI * 2), sky: 15 }),
     skyLight: (x, y, z) => game.skyLight?.(x, y, z) ?? 15,
+  });
+  redstone.registerBehaviour(154, hopperBehaviour); // BlockHopper: power disables it (metadata bit 8)
+  installPoweredRails(redstone); // powered / detector / activator rails and the plain rail's redstone hooks
+  // BlockDispenser (23) and BlockDropper (158): dispense.js over the game's entity and block hooks (game.dispense). Sounds are the
+  // aux effects 1000 / 1001 (click) and 1002 (bow); the smoke particles (2000) are not drawn.
+  const AUX_SOUNDS = { 1000: ["random.click", 1], 1001: ["random.click", 1.2], 1002: ["random.bow", 1.2] };
+  const hooks = () => game.dispense ?? {};
+  installDispensers(redstone, {
+    tile: (x, y, z) => (game.dispensers()[`${x},${y},${z}`] ??= { items: Array(9).fill(null) }),
+    aux: (id, x, y, z) => { const s = AUX_SOUNDS[id]; if (s) game.sound?.(s[0], x + 0.5, y + 0.5, z + 0.5, 1, s[1]); },
+    rng: () => hooks().rng?.(),
+    spawnItem: (...a) => hooks().spawnItem?.(...a),
+    arrow: (...a) => hooks().arrow?.(...a),
+    thrown: (...a) => hooks().thrown?.(...a),
+    cart: (...a) => hooks().cart?.(...a),
+    spawnTnt: (...a) => hooks().spawnTnt?.(...a),
+    setLiquid: (...a) => hooks().setLiquid?.(...a),
+    setAir: (...a) => hooks().setAir?.(...a),
+    setFire: (...a) => hooks().setFire?.(...a),
+    breakBlock: (...a) => hooks().breakBlock?.(...a),
+    boneMeal: (...a) => hooks().boneMeal?.(...a),
+    transfer: () => game.transfer?.(),
+    maxStack: (s) => game.maxStack?.(s) ?? 64,
+    changed: () => game.markUnsaved?.(),
   });
   const pistons = installPistons({
     redstone,
@@ -101,7 +143,15 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
 
   // One 20 TPS game tick: scheduled block updates, block events and the tile-entity loop (pistons), then the pistons'
   // entity pushes. main.js calls this right after the fluid and fire scheduled ticks (see public/research/redstone-live.md).
+  // A cart over a detector rail (Entity.func_145775_I -> BlockRailDetector.onEntityCollidedWithBlock), wired lazily because
+  // main.js reassigns its Minecarts when a world loads.
+  const cartTouch = (x, y, z) => {
+    redstone.collide(x, y, z);
+    flush();
+  };
   const tick = () => {
+    const mc = game.minecarts?.();
+    if (mc && mc.blockHook !== cartTouch) mc.blockHook = cartTouch;
     redstone.tick();
     pistons.tick();
     flush();

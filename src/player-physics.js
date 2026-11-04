@@ -71,7 +71,7 @@ export function movePlayer(state, controls, toast = () => {}) {
   const jumpAction = motion.jump(jumpKey, { inLiquid: inWater || inLavaNow, onGround: grounded });
   if (jumpAction === "swim") velocity.y += 0.03999999910593033;
   else if (jumpAction === "jump") {
-    velocity.y = JUMP_MOTION;
+    velocity.y = JUMP_MOTION + (survival.effects?.jumpBoost?.() ?? 0); // Jump Boost: +0.1 per level
     if (sprint) {
       const push = sprintJumpPush(yaw);
       velocity.x += push.x;
@@ -92,7 +92,7 @@ export function movePlayer(state, controls, toast = () => {}) {
     : flying
       ? FLY_SPEED
       : onGroundMove
-        ? groundAccel(sprint, friction)
+        ? groundAccel(sprint, friction, survival.effects?.moveSpeedMultiplier?.() ?? 1)
         : airAccel(sprint);
   velocity.x += (Math.cos(yaw) * dx - Math.sin(yaw) * dz) * accel;
   velocity.z += (-Math.sin(yaw) * dx - Math.cos(yaw) * dz) * accel;

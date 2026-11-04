@@ -75,6 +75,16 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
     items.spill(dispenser.items.filter(Boolean).map(copyStack), ...p);
     delete survival.dispensers[key];
   }
+  // BlockBrewingStand.breakBlock: the four slots spill like a chest's.
+  if (survival.brewing?.[key]) {
+    items.spill(survival.brewing[key].items.filter(Boolean).map(copyStack), ...p);
+    delete survival.brewing[key];
+  }
+  // BlockHopper.breakBlock: the five slots spill like a chest's.
+  if (survival.hoppers?.[key]) {
+    items.spill(survival.hoppers[key].items.filter(Boolean).map(copyStack), ...p);
+    delete survival.hoppers[key];
+  }
   // BlockPistonExtension.breakBlock/onBlockHarvested: the base behind the head is removed (and drops itself in Survival);
   // an extended base's head is left without a base and vanishes.
   if (block === PISTON_HEAD) {

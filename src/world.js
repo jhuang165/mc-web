@@ -7,6 +7,9 @@ import { ladderBounds } from "./ladders.js";
 import { CACTUS_COLLISION, REED_BOUNDS, decorateSand, decorateReeds } from "./plants.js";
 import { fenceMask, fenceBounds, fenceCollisionUnion, fenceCollisionBoxes } from "./fences.js";
 import { railBounds } from "./rails.js";
+import { NOT_OPAQUE_NEW, isRailBlock2 } from "./blocks-0-40.js";
+import { BREWING_BOXES, BREWING_SELECTION } from "./brewing.js";
+import { HOPPER_BOXES } from "./hopper-shape.js";
 import { torchBounds } from "./torches.js";
 import { isDoor, isPane, doorBounds, paneMask, paneBounds, paneCollisionBoxes, paneCollisionUnion } from "./doors-panes.js";
 import { isStair, stairBoxes, stairExcludedOctants, stairRayTrace, interceptBox } from "./stairs.js";
@@ -146,6 +149,13 @@ export const BLOCKS = [
   {name:'Daylight sensor',color:'#a88c5a'},
   {name:'Piston moving block',color:'#9c8d6b'},
   {name:'Glowstone',color:'#d9b66c'},
+  // 0.40.0 reservations (internal 132-137); behaviour in each owning module, original ids in block-registry.js.
+  {name:'Dropper',color:'#7a7a7a'},
+  {name:'Hopper',color:'#3c3c3c'},
+  {name:'Brewing stand',color:'#8a7a5a'},
+  {name:'Powered rail',color:'#c8a040'},
+  {name:'Detector rail',color:'#8a6a50'},
+  {name:'Activator rail',color:'#a05050'},
 ];
 export const LAPIS_ORE=63,REDSTONE_ORE=64,LIT_REDSTONE_ORE=65,EMERALD_ORE=66,PUMPKIN=67,MONSTER_EGG=68,DOUBLE_PLANT=69,
   LOG2=70,LEAVES2=71,VINE=72,COCOA=73,MOSSY_COBBLE=74,BROWN_MUSHROOM=75,RED_MUSHROOM=76,
@@ -250,7 +260,7 @@ export const ticksRandomly=b=>b===1||b===5||b===LEAVES2||b===LIT_REDSTONE_ORE||b
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,RAIL,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB,ANVIL,ENCHANTING_TABLE,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOWER_POT,OAK_STAIRS,COBBLESTONE_STAIRS,STONE_BRICK_STAIRS,SANDSTONE_STAIRS,SPRUCE_STAIRS,BIRCH_STAIRS,JUNGLE_STAIRS,BRICK_STAIRS,ACACIA_STAIRS,DARK_OAK_STAIRS,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,STICKY_PISTON,PISTON,PISTON_HEAD,107,108,109,110,111,112,113,114,119,120,124,125,126,127,128,129,130]); // 119-130: the redstone torches, button, plates, comparators, sensor and moving piston (redstone-blocks-2.js SEE_THROUGH2)
+const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,RAIL,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB,ANVIL,ENCHANTING_TABLE,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOWER_POT,OAK_STAIRS,COBBLESTONE_STAIRS,STONE_BRICK_STAIRS,SANDSTONE_STAIRS,SPRUCE_STAIRS,BIRCH_STAIRS,JUNGLE_STAIRS,BRICK_STAIRS,ACACIA_STAIRS,DARK_OAK_STAIRS,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,STICKY_PISTON,PISTON,PISTON_HEAD,107,108,109,110,111,112,113,114,119,120,124,125,126,127,128,129,130,...NOT_OPAQUE_NEW]); // 119-130: the redstone torches, button, plates, comparators, sensor and moving piston (redstone-blocks-2.js SEE_THROUGH2)
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 // Block.isNormalCube: Material.tnt is translucent (isOpaque false), so TNT is an opaque
 // cube that is not a normal cube (no torches/ladders/fire tops on it).
@@ -292,6 +302,8 @@ export function blockBounds(world,x,y,z){
   if(isDoor(b))return doorBounds(world,x,y,z);
   if(isPane(b))return paneBounds(paneMask(world,x,y,z));
   if(b===RAIL)return railBounds(world.getMeta(x,y,z));
+  if(b===134)return[...BREWING_SELECTION]; // brewing stand (brewing.js)
+  if(isRailBlock2(b))return railBounds(world.getMeta(x,y,z)&7); // powered/detector/activator rails: bit 3 is the powered flag (BlockRailBase.setBlockBoundsBasedOnState)
   if(b===TORCH)return torchBounds(world.getMeta(x,y,z));
   if(b!==41)return[0,0,0,1,blockHeight(b),1];
   const c=(dx,dz)=>world.get(x+dx,y,z+dz)===41;
@@ -317,11 +329,11 @@ export function collisionBounds(world,x,y,z){
 export function collisionBoxes(world,x,y,z){
   if(!world.solid(x,y,z))return[];
   const b=world.get(x,y,z);
-  return b===FENCE?fenceCollisionBoxes(fenceMask(world,x,y,z)):isPane(b)?paneCollisionBoxes(paneMask(world,x,y,z)):isStair(b)?stairBoxes(world,x,y,z):isStoneUtility(b)?stoneUtilityBoxes(b,world.getMeta(x,y,z)):isDispenserPiston(b)?dispenserPistonBoxes(b,world.getMeta(x,y,z)):[collisionBounds(world,x,y,z)];
+  return b===134?BREWING_BOXES.map(v=>[...v]):b===133?HOPPER_BOXES.map(v=>[...v]):b===FENCE?fenceCollisionBoxes(fenceMask(world,x,y,z)):isPane(b)?paneCollisionBoxes(paneMask(world,x,y,z)):isStair(b)?stairBoxes(world,x,y,z):isStoneUtility(b)?stoneUtilityBoxes(b,world.getMeta(x,y,z)):isDispenserPiston(b)?dispenserPistonBoxes(b,world.getMeta(x,y,z)):[collisionBounds(world,x,y,z)];
 }
 // One-box-per-block collision consumers (items, particles, carts, projectiles) take a stair's two or three boxes
 // and every other block's single collisionBounds box.
-export const collisionBoxList=(world,x,y,z)=>isDispenserPiston(world.get(x,y,z))?dispenserPistonBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStoneUtility(world.get(x,y,z))?stoneUtilityBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStair(world.get(x,y,z))?stairBoxes(world,x,y,z):isPane(world.get(x,y,z))?paneCollisionBoxes(paneMask(world,x,y,z)):[collisionBounds(world,x,y,z)];
+export const collisionBoxList=(world,x,y,z)=>world.get(x,y,z)===134?BREWING_BOXES.map(v=>[...v]):world.get(x,y,z)===133?HOPPER_BOXES.map(v=>[...v]):isDispenserPiston(world.get(x,y,z))?dispenserPistonBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStoneUtility(world.get(x,y,z))?stoneUtilityBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStair(world.get(x,y,z))?stairBoxes(world,x,y,z):isPane(world.get(x,y,z))?paneCollisionBoxes(paneMask(world,x,y,z)):[collisionBounds(world,x,y,z)];
 // Block.getSelectedBoundingBoxFromPool (the drawn outline), block-local. BlockCactus draws its
 // collision box inset; sugar cane its block bounds.
 export function selectionBounds(world,x,y,z){
@@ -336,7 +348,7 @@ export function solidBlock(b, meta = 0) {
   // A flat snow layer (meta 0) has no collision box, so it is not an obstacle.
   if (b === SNOW_LAYER) return (meta & 7) !== 0;
   // Rails have no collision box either (BlockRailBase.getCollisionBoundingBoxFromPool is null).
-  return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== FIRE && b !== WEB && b !== REEDS && b !== RAIL && b !== VINE && !(b >= 107 && b <= 114 && !redstoneHasCollision(b)) && !(b === 119 || b === 120 || b === 124 || b === 125 || b === 126 || b === 130) && !isPlant(b);
+  return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== FIRE && b !== WEB && b !== REEDS && b !== RAIL && !isRailBlock2(b) && b !== VINE && !(b >= 107 && b <= 114 && !redstoneHasCollision(b)) && !(b === 119 || b === 120 || b === 124 || b === 125 || b === 126 || b === 130) && !isPlant(b);
 }
 // One 16 x 16 chunk column of the live world (WORLD-02b): port block ids and 4-bit metadata, one byte
 // each, at (lx * 16 + lz) * HEIGHT + y, and the random-tick refcount of each 16-high section
@@ -829,7 +841,7 @@ export function raycast(world, origin, dir, reach = 6) {
       // drawn selection box is inset).
       // Fences, rails and torches are only hit inside their selection box (Block.collisionRayTrace
       // after setBlockBoundsBasedOnState).
-      if (hit === FENCE || hit === RAIL || hit === TORCH || isRedstoneBlock(hit) || isDoor(hit) || isPane(hit) || hasPartialBounds(hit) || hit === PISTON_HEAD || (isPistonBase(hit) && pistonExtended(world.getMeta(...p)))) {
+      if (hit === FENCE || hit === RAIL || isRailBlock2(hit) || hit === TORCH || isRedstoneBlock(hit) || isDoor(hit) || isPane(hit) || hasPartialBounds(hit) || hit === PISTON_HEAD || (isPistonBase(hit) && pistonExtended(world.getMeta(...p)))) {
         const [x0, y0, z0, x1, y1, z1] = blockBounds(world, ...p), lx = origin.x + dir.x * d - p[0], ly = origin.y + dir.y * d - p[1], lz = origin.z + dir.z * d - p[2];
         if (lx < x0 || lx > x1 || ly < y0 || ly > y1 || lz < z0 || lz > z1) {
           passed = p;

@@ -1,6 +1,6 @@
 import { CHEST } from './chest.js';
-import { DISPENSER } from './dispenser-piston.js';
-import { newDispenser } from './dispenser-container.js';
+import { DISPENSER, DROPPER } from './dispenser-piston.js';
+import { newDispenser, DROPPER_TITLE } from './dispenser-container.js';
 import { BOW, canDraw } from './bow.js';
 import { plantedBlock } from './crops.js';
 import { growGrass } from './flowers.js';
@@ -17,9 +17,12 @@ import { isDoor, activateDoor } from './doors-panes.js';
 import { ITEMS } from './survival.js';
 import { LEVER, STONE_BUTTON, REPEATER, redstoneActivate } from './redstone-blocks.js';
 import { copyStack, makeStack } from './inventory.js';
+import { HOPPER, newHopperTile } from './hopper.js';
+import { BREWING_STAND, newBrewingTile } from './brewing.js';
+import { ITEM_POTION, ITEM_GLASS_BOTTLE, usePotion, useGlassBottle, bottleFromCauldron } from './potion-use.js';
 import { CAULDRON, FLOWER_POT, BUCKET_ITEM, cauldronUse, cauldronWash, potUse, setPotContents } from './stone-utility.js';
 
-const STATIONS = new Set([13, 14, CHEST, DISPENSER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, LEVER, STONE_BUTTON, REPEATER]);
+const STATIONS = new Set([13, 14, BREWING_STAND, CHEST, DISPENSER, DROPPER, HOPPER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, LEVER, STONE_BUTTON, REPEATER]);
 // PlayerControllerMP's edit(place) dispatcher with browser effects supplied by the
 // caller. `state` holds the live mutable gameplay state, `request` snapshots the two
 // ray targets, the held bucket's own captured trace and the click button, and hooks run
@@ -40,7 +43,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   // takes a supported plant (BlockCauldron/BlockFlowerPot.onBlockActivated).
   const targetBlock = activates && !aimedEntity && target ? state.world.get(...target.block) : 0;
   const cauldronLevel = targetBlock === CAULDRON ? state.world.getMeta(...target.block) & 3 : 0;
-  const usesStoneUtility = targetBlock === CAULDRON ? cauldronUse(id, cauldronLevel, true).handled || cauldronWash(state.survival.held, cauldronLevel).handled
+  const usesStoneUtility = targetBlock === CAULDRON ? cauldronUse(id, cauldronLevel, true).handled || (id === ITEM_GLASS_BOTTLE && cauldronLevel > 0) || cauldronWash(state.survival.held, cauldronLevel).handled
     : targetBlock === FLOWER_POT && !!potUse(state.world, ...target.block, id, state.survival.held?.damage || 0);
   const usesBlock = activates && !aimedEntity && target && (STATIONS.has(state.world.get(...target.block)) || usesStoneUtility);
 
@@ -52,6 +55,14 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   if (place && id === BOW && !usesBlock) {
     if (!state.eating && canDraw(state.survival)) state.eating = { id: BOW, ticks: 0, bow: true };
     return act('begin-bow-use');
+  }
+  if (place && id === ITEM_POTION && !usesBlock) {
+    const used = usePotion(state, hooks);
+    return act('use-potion', { potion: used });
+  }
+  if (place && id === ITEM_GLASS_BOTTLE && !usesBlock) {
+    const used = useGlassBottle(state, bucket, hooks);
+    return act('use-glass-bottle', { bottle: used.branch });
   }
   if (place && isBucket(item) && !usesBlock) {
     // A stale or malformed bucket capture is consumed here; it never becomes a block click.
@@ -223,6 +234,20 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       return act('use-redstone', { used });
     }
     // BlockCauldron.onBlockActivated: a water bucket fills it to level 3 and leaves an empty bucket (Survival, below level 3).
+    if (activates && block === CAULDRON && id === ITEM_GLASS_BOTTLE && (state.world.getMeta(x, y, z) & 3) > 0) {
+      const level = bottleFromCauldron(state, state.world.getMeta(x, y, z) & 3);
+      state.world.set(x, y, z, CAULDRON, true, level);
+      hook('updateBlock', x, z, y);
+      hook('playSound', 'liquid.splash', { volume: 1, pitch: 1, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
+      hook('renderHotbar'); hook('markUnsaved');
+      return act('bottle-from-cauldron', { level });
+    }
+    if (activates && block === BREWING_STAND) {
+      // BlockBrewingStand.onBlockActivated: the four-slot GUI (a missing tile, e.g. an imported block, is created empty).
+      const key = target.block.join(','), tile = ((state.survival.brewing ??= {})[key] ??= newBrewingTile());
+      hook('openBrewing', tile, key, target.block);
+      return act('open-brewing');
+    }
     if (activates && block === CAULDRON) {
       const level = state.world.getMeta(x, y, z) & 3, used = cauldronUse(id, level, state.survival.creative);
       const wash = cauldronWash(state.survival.held, level);
@@ -272,11 +297,17 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       if (chest) hook('openChest', chest, target.block.join(','), target.block);
       return act('open-chest');
     }
-    if (activates && block === DISPENSER) {
+    if (activates && (block === DISPENSER || block === DROPPER)) {
       // BlockDispenser.onBlockActivated: the tile entity's nine-slot GUI (a missing tile, e.g. an imported block, is created empty).
       const key = target.block.join(','), dispenser = ((state.survival.dispensers ??= {})[key] ??= newDispenser());
-      hook('openDispenser', dispenser, key, target.block);
+      hook('openDispenser', dispenser, key, target.block, block === DROPPER ? DROPPER_TITLE : undefined);
       return act('open-dispenser');
+    }
+    if (activates && block === HOPPER) {
+      // BlockHopper.onBlockActivated: the five-slot Item Hopper GUI (a missing tile, e.g. an imported block, is created empty).
+      const key = target.block.join(','), hopper = ((state.survival.hoppers ??= {})[key] ??= newHopperTile());
+      hook('openHopper', hopper, key, target.block);
+      return act('open-hopper');
     }
     if (item?.kind === 'flint_and_steel') {
       const q = target.adjacent;

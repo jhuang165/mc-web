@@ -1,6 +1,8 @@
 import {storedEnchantmentLines} from './enchanted-books.js';
 import {copyStack} from './inventory.js';
 import {stackHasEffect} from './armor-enchantments.js';
+import {potionName,potionTooltip,getPotionEffects} from './potions.js';
+const POTION_CLASS={'#aaaaaa':'gray','#ff5555':'red','#aa00aa':'purple','#5555ff':'blue'};
 // A save snapshots unfinished input/cursor stacks, never a calculated output.
 export function pendingContainerStacks(view){
  const c=view?.container;if(!c)return[];
@@ -35,8 +37,9 @@ export function durabilityBar(damage,max){
 // F3+H advanced line "Durability: remaining / max" for damaged items.
 export function tooltipLines(item,stack,advanced=false){
  if(!item)return[];
- const named=typeof stack.displayName==='string';
- const lines=[{text:named?stack.displayName:item.variants?.[stack.damage]??item.name}],attack=item.attack;
+ const named=typeof stack.displayName==='string',potion=stack.id===385;
+ const lines=[{text:named?stack.displayName:potion?potionName(stack.damage|0):item.variants?.[stack.damage]??item.name}],attack=item.attack;
+ if(potion)for(const l of potionTooltip(stack.damage|0))lines.push({text:l.text,color:POTION_CLASS[l.color]??'gray'});
  if(named)lines[0].italic=true;
  // ItemEnchantedBook: EnumRarity.uncommon (yellow name) while it stores enchantments, and
  // addInformation lists them; renderToolTip draws every later line gray.
@@ -54,7 +57,8 @@ export function tooltipLines(item,stack,advanced=false){
 // overlay carrying the icon's silhouette as a mask (container-ui.css .enchant-glint); the original's texture-matrix
 // scroll of misc/enchanted_item_glint.png is approximated by a CSS animation, not replayed pixel for pixel.
 export function withGlint(iconHtml,stack,item){
- if(!stackHasEffect(stack,item))return iconHtml;
+ // ItemPotion.hasEffect: a potion with at least one effect glints.
+ if(!stackHasEffect(stack,item)&&!(stack?.id===385&&getPotionEffects(stack.damage|0)?.length))return iconHtml;
  const m=/src="([^"]+)"/.exec(iconHtml)||/--base:url\('([^']+)'\)/.exec(iconHtml);
  return iconHtml+(m?`<i class="enchant-glint" style="--glint-mask:url('${m[1]}')"></i>`:'');
 }

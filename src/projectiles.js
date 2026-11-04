@@ -169,7 +169,7 @@ RAY_BOUNDS[59] = [0, 0, 0, 1, 1/64, 1];
 // Chests, fences (connection bounds), rails (0.125 or 0.625 ascending) and torches (per-metadata box)
 // set their ray box from the cell, as setBlockBoundsBasedOnState / BlockTorch.collisionRayTrace do.
 export const rayBounds = (world, x, y, z, id) =>
-  [107,108,109,110,111,112,113,114,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,41,69,72,73,75,76,79,82,83,84,103,104,106,ANVIL,ENCHANTING_TABLE,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE].includes(id) ? blockBounds(world, x, y, z) : id === FENCE ? fenceBounds(fenceMask(world, x, y, z)) : id === RAIL ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id === TORCH ? torchBounds(world.getMeta?.(x, y, z) ?? 0) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
+  [107,108,109,110,111,112,113,114,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,41,69,72,73,75,76,79,82,83,84,103,104,106,ANVIL,ENCHANTING_TABLE,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE].includes(id) ? blockBounds(world, x, y, z) : id === FENCE ? fenceBounds(fenceMask(world, x, y, z)) : id === RAIL ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id >= 135 && id <= 137 ? railBounds((world.getMeta?.(x, y, z) ?? 0) & 7) : id === TORCH ? torchBounds(world.getMeta?.(x, y, z) ?? 0) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
 
 // World.rayTraceBlocks (ahb.a(Vec3, Vec3) = func_147447_a(false, false, false)):
 // walk the cells along the segment (at most 201 steps, each moving the start
@@ -405,7 +405,7 @@ export class Projectiles {
     for (const t of targets) {
       const e = t.box;
       if (!(e[3] > area[0] && e[0] < area[3] && e[4] > area[1] && e[1] < area[4] && e[5] > area[2] && e[2] < area[5])) continue;
-      if (t.thrower && b.ticks < 5) continue;
+      if ((t.thrower || (t.playerThrower && b.owner === "player")) && b.ticks < 5) continue;
       const r = intercept([e[0] - grow, e[1] - grow, e[2] - grow, e[3] + grow, e[4] + grow, e[5] + grow], start, end);
       if (!r) continue;
       const d1 = Math.sqrt(dist2(start, r.vec));

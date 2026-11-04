@@ -56,5 +56,5 @@ test("item ids stay off the tool range and map back to original items", () => {
   assert.deepEqual([dp.DISPENSER_ITEM, dp.STICKY_PISTON_ITEM, dp.PISTON_ITEM], [1115, 1116, 1117]);
   assert.equal(dp.blockForItem(1117), dp.PISTON);
   assert.equal(dp.itemForBlock(dp.PISTON_HEAD), 0);
-  assert.deepEqual(dp.ORIGINAL_ITEMS, { 341: 460, 23: 1115, 29: 1116, 33: 1117 });
+  assert.deepEqual(dp.ORIGINAL_ITEMS, { 341: 460, 23: 1115, 158: 1132, 29: 1116, 33: 1117 });
 });

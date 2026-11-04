@@ -58,6 +58,7 @@ import {
   ENCHANTING_TABLE,
   WOODEN_DOOR,
   IRON_DOOR,
+  PUMPKIN,
 } from "./world.js";
 import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
@@ -82,9 +83,10 @@ import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
 import { CHEST, settleFacing, chestPair, tickLid } from "./chest.js";
-import { DISPENSER, PISTON_HEAD, isDispenserPiston, itemForBlock, headBaseId } from "./dispenser-piston.js";
+import { DISPENSER, DROPPER, PISTON_HEAD, isDispenserPiston, itemForBlock, headBaseId } from "./dispenser-piston.js";
 import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
-import { Survival, ITEMS } from "./survival.js";
+import { HopperContainer, Hoppers, HOPPER } from "./hopper.js";
+import { Survival, ITEMS, burnTime } from "./survival.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
@@ -99,7 +101,12 @@ import { difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.
 import { isInvisible } from "./mob-effects.js";
 import { primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { TntRenderer } from "./tnt-renderer.js";
-import { finishDrinking } from "./buckets.js";
+import { finishDrinking as finishBucketDrinking } from "./buckets.js";
+import { finishDrinkingItem } from "./potion-use.js";
+import { potionColor as damageColor, POTION_TYPES, durationString } from "./potions.js";
+import { BREWING_STAND, brewingView, bubbleHeight } from "./brewing.js";
+import { BrewingContainer } from "./brewing-container.js";
+const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinking);
 import { captureBucketTarget } from "./buckets-simulation.js";
 import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, fovMultiplier } from "./player-movement.js";
@@ -250,6 +257,20 @@ let sounds,
 let spawners = null, minecarts = null, minecartRenderer = null, aimedCart = null;
 // Live redstone and pistons (redstone-runtime.js), rebuilt for each world that loads.
 let redstoneRuntime = null;
+// Hopper tick host: the shared inventory-transfer.js stores, EntityItem pickup and live comparator notifications.
+const hopperTiles = new Hoppers({
+  get world() { return world; },
+  chests: () => survival.chests,
+  furnaces: () => survival.furnaces,
+  dispensers: () => (survival.dispensers ??= {}),
+  hoppers: () => (survival.hoppers ??= {}),
+  brewing: () => (survival.brewing ??= {}),
+  maxStack: (s) => survival.inventory.maxStack(s),
+  burnTime,
+  items: () => items.items,
+  active: (x, z) => !world.streaming || world.isTicking(x, z),
+  changed: (keys) => { saved = false; redstoneRuntime?.containerClosed(keys); },
+});
 let rider = createPlayerRider();
 const animation = new PlayerAnimation();
 // GameSettings.thirdPersonView: 0 first person, 1 behind, 2 in front (F5).
@@ -367,6 +388,8 @@ function sound(place, block = target ? world.get(...target.block) : 3) {
 function icon(id, damage = 0, stack) {
   const item = ITEMS[id];
   if (!id || !item) return '<span class="empty-hand">·</span>';
+  // ItemPotion layers: potion_overlay tinted by the liquid colour under the untinted bottle (splash bottle for splash values).
+  if (id === 385) return `<span class="vanilla-item-icon tinted-item" style="--tint:#${(damageColor(damage | 0) & 0xffffff).toString(16).padStart(6, "0")};--base:url('/media/1.7.10/items/potion_overlay.png')" aria-hidden="true"><i></i><img src="/media/1.7.10/items/${(damage | 0) & 16384 ? "potion_bottle_splash" : "potion_bottle_drinkable"}.png" alt=""></span>`;
   if(item.block)return `<img class="vanilla-item-icon vanilla-block-icon" src="${scene.textures.icon(id, damage)}" alt="" aria-hidden="true">`;
   // Leather armor multiplies its base layer by display.color; the overlay stays untinted.
   if (item.tint)
@@ -519,6 +542,7 @@ function save() {
   delete active.hotbar;
   delete active.selected;
   active.entities = mobs?.serialize() || [];
+  active.villages = mobs?.villages.toJSON();
   active.farms=farming?.serialize()||[];
   active.pots=serializePots(world);
   active.experience=experience.serialize();active.xpOrbs=xpOrbs.serialize();
@@ -779,9 +803,31 @@ async function launch(record, prepared) {
       arrows: () => arrows.list,
       orbs: () => xpOrbs.orbs,
       primed: () => primed,
+      minecarts: () => minecarts,
       chests: () => survival.chests,
       furnaces: () => survival.furnaces,
-      dispensers: () => survival.dispensers ?? {},
+      dispensers: () => (survival.dispensers ??= {}),
+      hoppers: () => survival.hoppers ?? {},
+      brewing: () => survival.brewing ?? {},
+      transfer: () => hopperTiles.host,
+      // Dispenser / dropper effects (dispense.js host): entities and blocks the engine cannot create itself.
+      dispense: {
+        rng: () => arrows.rng(),
+        spawnItem: (stack, x, y, z, mx, my, mz) => { items.spawn(stack, x, y, z, { motion: [mx, my, mz] }); },
+        arrow: (e) => { arrows.list.push(arrows.make(e, e.rand, { shooter: null, pickup: 1 })); },
+        thrown: (kind, e) => {
+          const ball = { x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, yaw: e.yaw, pitch: e.pitch, kind, px: e.x, py: e.y, pz: e.z, prevYaw: e.yaw, prevPitch: e.pitch, ticks: 0, rand: e.rand, random: e.rand, dead: false };
+          if (kind === "potion") (mobs.potions?.projectiles ?? projectiles).balls.push({ ...ball, damage: e.damage, owner: null });
+          else projectiles.balls.push(ball);
+        },
+        cart: (type, x, y, z) => { if (type === 1) minecarts.spawnChest({ type: 1, x, y, z, items: [] }); else minecarts.spawnEmpty({ x, y, z }); },
+        spawnTnt: (x, y, z) => { primed.push(primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer: null })); saved = false; },
+        setLiquid: (x, y, z, id) => { const old = world.get(x, y, z); world.set(x, y, z, id === 10 ? LAVA : WATER, true, 0); redstoneRuntime.fluidChanges([[x, y, z, old, world.get(x, y, z)]]); },
+        setAir: (x, y, z) => { const old = world.get(x, y, z); world.set(x, y, z, 0, true, 0); redstoneRuntime.fluidChanges([[x, y, z, old, 0]]); },
+        setFire: (x, y, z) => { fire.ignite(x, y, z); },
+        breakBlock: (x, y, z) => { const b = world.get(x, y, z); if (b) fluids.wash(x, y, z, b); },
+        boneMeal: (x, y, z, original) => original === 6 && trees.boneMeal(x, y, z) !== null,
+      },
       maxStack: (st) => survival.inventory.maxStack(st),
       subtracted: () => scene.subtracted ?? 0,
       angle: () => scene.angle ?? 0,
@@ -831,7 +877,9 @@ async function launch(record, prepared) {
     containerResidency?.dispose();
     containerResidency=world.streaming?new ContainerResidency(world,record.id,survival,{scope:record.containerScope,onError:e=>{pause();toast('Could not load saved containers. Reopen the world to retry: '+e.message);}}):null;
     survival.furnaceActive = key => !world.streaming || world.isTicking(...[key.split(",")[0],key.split(",")[2]].map(Number));
+    survival.furnaceChanged = key => redstoneRuntime?.containerClosed([key]);
     restorePopulation(record,world,survival,mobs);
+    if (record.villages) mobs.villages.loadJSON(record.villages);
     materializeFresh();
     // A new EntityPlayerMP is spawn-protected for 60 ticks (damage is refused, Creative or not).
     survival.protection = 60;
@@ -1006,7 +1054,7 @@ function renderCreativeBody() {
   view.shown = [];
 }
 const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace", creative: "", anvil: "Repair & Name", enchanting: "Enchant", merchant: "Villager" },
-  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", dispenser: "dispenser-modal", creative: "creative-modal", anvil: "anvil-modal", enchanting: "enchanting-modal", merchant: "merchant-modal" };
+  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", dispenser: "dispenser-modal", brewing: "brewing-modal", hopper: "hopper-modal", creative: "creative-modal", anvil: "anvil-modal", enchanting: "enchanting-modal", merchant: "merchant-modal" };
 // Slots are addressed by list index: wrapped creative slots all keep slotNumber 0.
 const slotsHtml = (container) => `<div class="container-slots">${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""}${slot.x < -1000 ? " hidden" : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>`;
 function openContainer(container, kind, key = null, gui = new ContainerScreen(container)) {
@@ -1020,9 +1068,11 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
       ? merchantDecorationsHtml()
       : kind === "anvil"
       ? '<i class="anvil-name-background" id="anvil-name-background"></i><input id="anvil-name" aria-label="Item name" maxlength="40" autocomplete="off" spellcheck="false" disabled><span id="anvil-cost" class="anvil-cost" aria-live="polite"></span><i class="anvil-error" id="anvil-error" hidden></i>'
+      : kind === "brewing"
+      ? '<i class="brewing-bubbles" id="brewing-bubbles"></i><i class="brewing-arrow" id="brewing-arrow"></i><span class="chest-bag-label">Inventory</span>'
       : kind === "furnace"
       ? '<i class="furnace-flame" id="furnace-flame"></i><i class="furnace-arrow" id="furnace-arrow"></i>'
-      : kind === "chest" || kind === "dispenser"
+      : kind === "chest" || kind === "dispenser" || kind === "hopper"
         ? '<i class="chest-bottom" aria-hidden="true"></i><span class="chest-bag-label">Inventory</span>'
         : `<span class="native-bag-label">Inventory</span><span class="native-crafting-label">Crafting</span>${kind === "inventory" ? '<div class="native-player" aria-hidden="true"><i class="player-head"></i><i class="player-body"></i><i class="player-arm left"></i><i class="player-arm right"></i><i class="player-leg left"></i><i class="player-leg right"></i></div>' : ""}`;
   modal(
@@ -1030,6 +1080,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
     kind === "creative" ? '<div class="creative-body"></div>' : slotsHtml(container) + decorations,
     CONTAINER_CLASSES[kind] ? `${CONTAINER_CLASSES[kind]} container-screen` : "inventory-modal native-inventory container-screen" + (kind === "workbench" ? " native-workbench" : ""),
   );
+  if (kind === "inventory") $("#modal .container-screen")?.insertAdjacentHTML("beforeend", '<div class="effect-list" id="effect-list"></div>');
   if (kind === "chest") $("#modal .modal").style.setProperty("--rows", container.rows);
   $("#modal").insertAdjacentHTML("beforeend", '<div class="cursor-stack" id="cursor-stack" aria-hidden="true"></div><div class="slot-tooltip hidden" id="slot-tooltip" role="tooltip"></div>');
   document.activeElement?.blur();
@@ -1170,6 +1221,7 @@ function refreshContainer() {
     }
     if ($("#enchant-shelves").textContent !== shelves) $("#enchant-shelves").textContent = shelves;
   }
+  let contentChanged = false;
   container.slots.forEach((slot, i) => {
     const shown = preview.slots.get(slot) ?? slot.stack,
       over = preview.capped.has(slot),
@@ -1182,9 +1234,15 @@ function refreshContainer() {
     if (b.getAttribute("aria-label") !== label) b.setAttribute("aria-label", label);
     if (view.shown[i] === key) return;
     view.shown[i] = key;
+    contentChanged = true;
     b.innerHTML = stackHtml(shown);
     b.querySelector(".item-count")?.classList.toggle("full", over);
   });
+  // World.func_147453_f: an open chest, furnace, dispenser or hopper screen reports content changes to comparators live.
+  if (contentChanged && redstoneRuntime) {
+    if (view.kind === "chest" && container.keys) redstoneRuntime.containerClosed(container.keys);
+    else if (view.key && ["furnace", "dispenser", "hopper", "brewing"].includes(view.kind)) redstoneRuntime.containerClosed([view.key]);
+  }
   const bar = JSON.stringify(survival.inventory.main.slice(0, 9));
   if (view.hotbar !== bar) {
     view.hotbar = bar;
@@ -1230,6 +1288,23 @@ function refreshContainer() {
     tip.innerHTML = lines.map((l, i) => `<span class="${i ? l.color || "gray" : "title" + (l.color ? " " + l.color : "")}${l.italic ? " italic" : ""}">${esc(l.text) || "&nbsp;"}</span>`).join("");
     tip.style.left = view.x + "px";
     tip.style.top = view.y + "px";
+  }
+  if (view.kind === "inventory") {
+    // GuiInventory.func_146102_a: the active potion effects, listed left of the screen (icon, name with level, remaining time).
+    const list = $("#effect-list"), active = [...survival.effects.active.values()].sort((a, b) => a.id - b.id);
+    if (list) {
+      const html = active.map((e) => {
+        const t = POTION_TYPES[e.id], roman = ["", " II", " III", " IV", " V"][e.amplifier] ?? ` ${e.amplifier + 1}`;
+        return `<div class="effect-row"><i class="effect-icon" style="--ix:${(t.icon % 8) * 18};--iy:${198 + Math.floor(t.icon / 8) * 18}"></i><span class="effect-name">${esc(t.name + roman)}</span><span class="effect-time">${durationString(e.duration)}</span></div>`;
+      }).join("");
+      if (view.effectHtml !== html) { view.effectHtml = html; list.innerHTML = html; list.style.setProperty("--rows", active.length); }
+    }
+  }
+  if (view.kind === "brewing") {
+    // GuiBrewingStand.drawGuiContainerBackgroundLayer: the arrow grows over the brew, the bubbles follow the 7-step table.
+    const stand = view.container.stand;
+    $("#brewing-arrow").style.setProperty("--arrow", stand.progress());
+    $("#brewing-bubbles").style.setProperty("--bubble", bubbleHeight(stand.brewTime));
   }
   if (view.kind === "furnace") {
     const f = survival.furnace(view.key),
@@ -1369,7 +1444,9 @@ function tickChests() {
   }
   chestRenderer.sync(world, survival.chests);
   // Container.canInteractWith: the screen closes once its chest is gone.
-  if (containerView?.kind === "dispenser" && world.get(...containerView.key.split(",").map(Number)) !== DISPENSER) resume();
+  if (containerView?.kind === "hopper" && world.get(...containerView.key.split(",").map(Number)) !== HOPPER) resume();
+  if (containerView?.kind === "brewing" && world.get(...containerView.key.split(",").map(Number)) !== BREWING_STAND) resume();
+  if (containerView?.kind === "dispenser" && ![DISPENSER, DROPPER].includes(world.get(...containerView.key.split(",").map(Number)))) resume();
   if (containerView?.kind === "chest" && containerView.container.keys?.some((k) => world.get(...k.split(",").map(Number)) !== CHEST)) resume();
   if (containerView?.kind === "enchanting") {
     // ContainerEnchantment.canInteractWith: the table must still exist and be within 8 blocks.
@@ -1379,6 +1456,21 @@ function tickChests() {
   if(containerView?.kind==='anvil'){
     const [x,y,z]=containerView.key.split(',').map(Number);
     if(world.get(x,y,z)!==ANVIL||(position.x-x-.5)**2+(position.y-y-.5)**2+(position.z-z-.5)**2>64)resume();
+  }
+}
+// TileEntityBrewingStand.updateEntity for every loaded stand: the 400-tick brew, bottle bits as metadata (flag 2), comparator updates.
+function tickBrewingStands() {
+  for (const [key, data] of Object.entries(survival.brewing ?? {})) {
+    const [x, y, z] = key.split(",").map(Number);
+    if (world.get(x, y, z) !== BREWING_STAND) { if (!world.streaming || world.isTicking(x, z)) delete survival.brewing[key]; continue; }
+    if (world.streaming && !world.isTicking(x, z)) continue;
+    const view = brewingView(data), before = data.brewTime | 0, bits = view.tick();
+    if (bits !== null || world.getMeta(x, y, z) !== view.bottleBits()) {
+      world.set(x, y, z, BREWING_STAND, true, view.bottleBits());
+      scene.updateBlock(x, z, y);
+    }
+    if (bits !== null || (before > 0 && !(data.brewTime | 0))) { saved = false; redstoneRuntime?.containerClosed([key]); }
+    else if (!before && (data.brewTime | 0)) saved = false;
   }
 }
 function updateFurnace() {
@@ -1425,9 +1517,10 @@ function die() {
     try {
     const spawn=await spawnPosition();
     const time = survival.time;
-    survival = new Survival({ time, slots: [], furnaces: survival.furnaces, chests: survival.chests, dispensers: survival.dispensers }, survival.mode);
+    survival = new Survival({ time, slots: [], furnaces: survival.furnaces, chests: survival.chests, dispensers: survival.dispensers, hoppers: survival.hoppers, brewing: survival.brewing }, survival.mode);
     survival.protection = 60;
     survival.furnaceActive = key => !world.streaming || world.isTicking(...[key.split(",")[0],key.split(",")[2]].map(Number));
+    survival.furnaceChanged = key => redstoneRuntime?.containerClosed([key]);
     updateDifficulty();
     experience=new Experience();
     position.copy(new THREE.Vector3(...Object.values(spawn)));
@@ -1672,7 +1765,7 @@ function edit(place = false) {
     state.mining = mining;
     state.mineHeld = mineHeld;
   };
-  dispatchPlayerAction(state, action, {
+  const acted = dispatchPlayerAction(state, action, {
     apply: world.redstoneApply,
     unlock: () => sounds.unlock(),
     swing: () => animation.swing(),
@@ -1700,11 +1793,20 @@ function edit(place = false) {
     openMerchant: entity => { const opened = useMerchant(entity); if (opened) syncContainerState(); return opened; },
     useEnchantingTable: key => { useEnchantingTable(key); syncContainerState(); },
     openChest: (chest, key) => { openContainer(chest, "chest", key); syncContainerState(); },
-    openDispenser: (dispenser, key) => { openContainer(Object.assign(new DispenserContainer(survival.inventory, dispenser, () => { saved = false; }), { title: DISPENSER_TITLE }), "dispenser", key); syncContainerState(); },
+    openBrewing: (tile, key) => { openContainer(new BrewingContainer(survival.inventory, brewingView(tile), () => { saved = false; }), "brewing", key); syncContainerState(); },
+    openHopper: (hopper, key) => { openContainer(new HopperContainer(survival.inventory, hopper, () => { saved = false; }), "hopper", key); syncContainerState(); },
+    openDispenser: (dispenser, key, _block, title = DISPENSER_TITLE) => { openContainer(Object.assign(new DispenserContainer(survival.inventory, dispenser, () => { saved = false; }), { title }), "dispenser", key); syncContainerState(); },
     breakBlock,
     clientEyeInWater,
   });
   ({ eating, mining, mineCooldown } = state);
+  // BlockPumpkin.onBlockAdded: a pumpkin set on an iron T builds a player-created iron golem.
+  const put = acted?.placement;
+  if (put?.placed && put.block === PUMPKIN && put.position) {
+    const [px, py, pz] = Array.isArray(put.position) ? put.position : [put.position.x, put.position.y, put.position.z];
+    const cleared = mobs.tryBuildIronGolem(px, py, pz);
+    if (cleared) { for (const [x, y, z] of cleared) scene.updateBlock(x, z, y); saved = false; }
+  }
 }
 // BlockTNT.func_150114_a: an EntityTNTPrimed at the block centre (fuse 80) and
 // game.tnt.primed (volume 1, pitch 1). `placer` is "player" or null.
@@ -1846,6 +1948,9 @@ function movementTick(controls) {
     { time: survival.time, daylight: scene.daylight, x: position.x, z: position.z },
     { farming: applyFarmUpdates, fluids: changes => { scene.updateBlocks(changes); redstoneRuntime?.fluidChanges(changes); }, fire: changes => scene.updateBlocks(changes) });
   // Scheduled block updates, block events and the piston tile loop run after the fluid and fire ticks and before the mobs.
+  // TileEntityHopper.updateEntity for every loaded hopper (the tile-entity loop runs before the scheduled updates).
+  hopperTiles.tick();
+  tickBrewingStands();
   redstoneRuntime?.tick();
   scene.setFurnaces(survival.furnaces);
   tickChests();

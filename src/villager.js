@@ -6,6 +6,8 @@
 // The task classes need ai.js's Task, Swim, Wander and WatchClosest, and ai.js imports this file,
 // so `buildVillagerTasks` receives them instead of importing them (no import cycle).
 import { WOODEN_DOOR } from "./world.js";
+import { homeFilter, setHomeArea, detachHome } from "./home-area.js";
+import { villageTasks, nearestVillage, villagerParticles } from "./village-ai.js";
 import { setDoorOpen, doorSound } from "./doors-panes.js";
 import { generateVillagerOffers } from "./villager-offers.js";
 import { sameTrade, isOfferDisabled, increaseMaxUses, persistOffer, restoreOffer } from "./villager-trading.js";
@@ -33,7 +35,7 @@ export const readRiches = (v) => (Number.isInteger(v) && v >= 0 && v <= 0x7fffff
 // list). `offers` is null until getRecipes first runs (native bu == null); recipes keep original 1.7.10
 // item ids (villager-trading.js shape). timeUntilReset (bv), needsInitilization (bw) and lastBuyingPlayer
 // (by) are not saved by 1.7.10; `customer` (bt) is a transient flag for the one local player.
-export const villagerFields = (profession = 0, riches = 0, offers = null) => ({ profession: readProfession(profession), riches: readRiches(riches), offers: readOffers(offers), timeUntilReset: 0, needsInit: false, lastBuyer: null, customer: false });
+export const villagerFields = (profession = 0, riches = 0, offers = null) => ({ profession: readProfession(profession), riches: readRiches(riches), offers: readOffers(offers), timeUntilReset: 0, needsInit: false, lastBuyer: null, customer: false, home: null, homeRadius: -1, mating: false, playing: false });
 // MerchantRecipeList(NBTTagCompound) keeps every readable recipe; a bad one is skipped here instead of
 // failing the world. Anything that is not a list is "no Offers tag".
 export function readOffers(saved) {
@@ -59,13 +61,13 @@ export const VILLAGER_TASKS = [
   { priority: 1, name: "EntityAIAvoidEntity", mutex: 1, live: true },
   { priority: 1, name: "EntityAITradePlayer", mutex: 5, live: true },
   { priority: 1, name: "EntityAILookAtTradePlayer", mutex: 2, live: true },
-  { priority: 2, name: "EntityAIMoveIndoors", mutex: 1, live: "random draw only" },
-  { priority: 3, name: "EntityAIRestrictOpenDoor", mutex: 0, live: false },
+  { priority: 2, name: "EntityAIMoveIndoors", mutex: 1, live: true },
+  { priority: 3, name: "EntityAIRestrictOpenDoor", mutex: 0, live: true },
   { priority: 4, name: "EntityAIOpenDoor", mutex: 0, live: true },
-  { priority: 5, name: "EntityAIMoveTowardsRestriction", mutex: 1, live: false },
-  { priority: 6, name: "EntityAIVillagerMate", mutex: 3, live: "random draw only" },
-  { priority: 7, name: "EntityAIFollowGolem", mutex: 3, live: false },
-  { priority: 8, name: "EntityAIPlay", mutex: 1, live: false },
+  { priority: 5, name: "EntityAIMoveTowardsRestriction", mutex: 1, live: true },
+  { priority: 6, name: "EntityAIVillagerMate", mutex: 3, live: true },
+  { priority: 7, name: "EntityAIFollowGolem", mutex: 3, live: true },
+  { priority: 8, name: "EntityAIPlay", mutex: 1, live: true },
   { priority: 9, name: "EntityAIWatchClosest2", mutex: 3, live: true },
   { priority: 9, name: "EntityAIWatchClosest2", mutex: 3, live: true },
   { priority: 9, name: "EntityAIWander", mutex: 1, live: true },
@@ -76,12 +78,14 @@ export const VILLAGER_TASKS = [
 // vx.b -> vx.c with a direction): ten random offsets in the box, those pointing against the away
 // direction skipped after their three draws, the one with the best path weight kept. No home area.
 export function findRandomTargetAwayFrom(m, xz, yz, from) {
-  const r = m.rand, ax = m.x - from.x, az = m.z - from.z;
+  const r = m.rand, ax = m.x - from.x, az = m.z - from.z, keep = homeFilter(m.e, xz);
   let found = false, best = f(-99999), bx = 0, by = 0, bz = 0;
   for (let i = 0; i < 10; i++) {
     const dx = r.nextInt(2 * xz) - xz, dy = r.nextInt(2 * yz) - yz, dz = r.nextInt(2 * xz) - xz;
     if (dx * ax + dz * az < 0) continue;
-    const x = dx + Math.floor(m.x), y = dy + Math.floor(m.y), z = dz + Math.floor(m.z), w = m.getBlockPathWeight(x, y, z);
+    const x = dx + Math.floor(m.x), y = dy + Math.floor(m.y), z = dz + Math.floor(m.z);
+    if (keep && !keep(x, y, z)) continue;
+    const w = m.getBlockPathWeight(x, y, z);
     if (w > best) {
       best = w;
       bx = x;
@@ -242,46 +246,11 @@ function lookAtTradePlayerClass(Task) {
   };
 }
 
-// EntityAIMoveIndoors (ur), mutex 1: at night or in rain it draws nextInt(50) and then needs a village's
-// door (VillageCollection.findNearestVillage), which this build has none of, so it never starts. In
-// daylight and fair weather it returns before drawing.
-function moveIndoorsClass(Task) {
-  return class MoveIndoors extends Task {
-    constructor(m) {
-      super();
-      this.m = m;
-      this.mutex = 1;
-    }
-    shouldExecute() {
-      const m = this.m;
-      if (m.ai.isDaytime() && !m.ai.isRaining()) return false;
-      m.rand.nextInt(50);
-      return false;
-    }
-  };
-}
-// EntityAIVillagerMate (up), mutex 3: an adult (growing age 0) draws nextInt(500) and then needs a village
-// with a door and a willing villager; no village here, so it never starts.
-function mateClass(Task) {
-  return class VillagerMate extends Task {
-    constructor(m) {
-      super();
-      this.m = m;
-      this.mutex = 3;
-    }
-    shouldExecute() {
-      const m = this.m;
-      if ((m.e.growingAge || 0) !== 0) return false;
-      m.rand.nextInt(500);
-      return false;
-    }
-  };
-}
-
 // EntityVillager (yv) task list, in registration order. `K` is { Task, Swim, Wander, WatchClosest } from ai.js.
 // Tasks that cannot run without a village, a golem or a trader are left out (VILLAGER_TASKS marks them).
 export function buildVillagerTasks(m, K) {
-  const AvoidEntity = avoidEntityClass(K.Task), OpenDoor = openDoorClass(K.Task), MoveIndoors = moveIndoorsClass(K.Task), TradePlayer = tradePlayerClass(K.Task), LookAtTrade = lookAtTradePlayerClass(K.Task), Mate = mateClass(K.Task);
+  const AvoidEntity = avoidEntityClass(K.Task), OpenDoor = openDoorClass(K.Task), TradePlayer = tradePlayerClass(K.Task), LookAtTrade = lookAtTradePlayerClass(K.Task);
+  const { MoveIndoors, RestrictOpenDoor, MoveTowardsRestriction, VillagerMate, FollowGolem, Play } = villageTasks(K);
   const watch = (range, chance) => Object.assign(new K.WatchClosest(m, range), { chance: f(chance), mutex: 3 });
   m.navigator.setBreakDoors(true);
   m.navigator.setAvoidsWater(true);
@@ -290,8 +259,12 @@ export function buildVillagerTasks(m, K) {
   m.tasks.add(1, new TradePlayer(m));
   m.tasks.add(1, new LookAtTrade(m));
   m.tasks.add(2, new MoveIndoors(m));
+  m.tasks.add(3, new RestrictOpenDoor(m));
   m.tasks.add(4, new OpenDoor(m, true));
-  m.tasks.add(6, new Mate(m));
+  m.tasks.add(5, new MoveTowardsRestriction(m, 0.6));
+  m.tasks.add(6, new VillagerMate(m));
+  m.tasks.add(7, new FollowGolem(m));
+  m.tasks.add(8, new Play(m, 0.32));
   m.tasks.add(9, watch(3, 1));
   m.tasks.add(9, watch(5, 0.02));
   m.tasks.add(9, new K.Wander(m, m.ai.types.villager.ai.wander));
@@ -302,7 +275,17 @@ export function buildVillagerTasks(m, K) {
 // starts at 0, so on the first tick) it registers its position with the VillageCollection and looks for a
 // village within 32 blocks; none exists here, so it detaches its home (a no-op). Only the draw is kept.
 export function updateVillagerAI(m) {
-  if (--m.randomTickDivider <= 0) m.randomTickDivider = 70 + m.rand.nextInt(50);
+  if (--m.randomTickDivider <= 0) {
+    const ew = m.ai.ew, x = Math.floor(m.x), y = Math.floor(m.y), z = Math.floor(m.z);
+    ew.villages?.addVillagerPosition(x, y, z);
+    m.randomTickDivider = 70 + m.rand.nextInt(50);
+    m.village = nearestVillage(m, 32);
+    if (!m.village) detachHome(m.e);
+    else {
+      const [cx, cy, cz] = m.village.center;
+      setHomeArea(m.e, cx, cy, cz, Math.trunc(Math.fround(m.village.radius * Math.fround(0.6))));
+    }
+  }
   tickVillagerRestock(m);
 }
 
@@ -376,6 +359,11 @@ export function tickVillagerRestock(m) {
       for (const r of e.offers) if (isOfferDisabled(r)) increaseMaxUses(r, m.rand.nextInt(6) + m.rand.nextInt(6) + 2);
     addDefaultOffers(m, 1);
     e.needsInit = false;
+    // The buyer who triggered the restock earns +1 reputation and a happy-villager burst (state 14).
+    if (m.village && e.lastBuyer) {
+      villagerParticles(m, "happyVillager");
+      m.village.changeReputation(e.lastBuyer, 1);
+    }
   }
   // EntityLivingBase.addPotionEffect(regeneration, 200, 0): mob-effects.js addMobEffect's combine rule
   // (mob-effects.js leads to entities.js, which imports this file, so the rule is repeated here).

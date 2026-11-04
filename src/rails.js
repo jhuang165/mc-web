@@ -5,12 +5,24 @@
 // shapes and minecart movement are not part of this build.
 import { RAIL, SNOW_LAYER, normalCube } from "./world.js";
 import { isStair, stairSolidTop } from "./stairs.js";
+import { hasSolidTop2 } from "./blocks-0-40.js";
 
+// Internal ids of the straight rails (reservations in world.js BLOCKS / block-registry.js).
+export const POWERED_RAIL = 135, DETECTOR_RAIL = 136, ACTIVATOR_RAIL = 137;
+export const isStraightRail = (id) => id >= POWERED_RAIL && id <= ACTIVATOR_RAIL;
+// BlockRailBase.func_150051_a / func_150049_b_: the four rail blocks.
+export const isRailId = (id) => id === RAIL || isStraightRail(id);
+// The item a broken rail drops (block items are 1000 + the internal block id from 100 up).
+export const railItem = (id) => (id === RAIL ? RAIL : 1000 + id);
+// The shape bits of a rail's metadata (straight rails keep the power state in bit 8).
+// Block item (1135-1137) -> its straight rail block id, 0 otherwise.
+export const railItemBlock = (item) => (item >= 1135 && item <= 1137 ? item - 1000 : 0);
+export const railShape = (id, meta) => (isStraightRail(id) ? meta & 7 : meta);
 // Metadata: 0 north-south, 1 east-west, 2-5 ascending east/west/north/south, 6-9 curves
 // (6 south-east, 7 south-west, 8 north-west, 9 north-east).
 export const RAIL_ASCENDING = (meta) => meta >= 2 && meta <= 5;
 // BlockRailBase.setBlockBoundsBasedOnState: 0.625 high when ascending, else 0.125.
-export const railBounds = (meta) => [0, 0, 0, 1, RAIL_ASCENDING(meta) ? 0.625 : 0.125, 1];
+export const railBounds = (meta) => [0, 0, 0, 1, RAIL_ASCENDING(meta & 7) ? 0.625 : 0.125, 1];
 
 // World.doesBlockHaveSolidTopSurface for this build's blocks: a normal cube, or a full snow layer.
 export function solidTop(world, x, y, z) {
@@ -18,6 +30,7 @@ export function solidTop(world, x, y, z) {
   if (isStair(b)) return stairSolidTop(world.getMeta(x, y, z)); // upside-down stairs only
   if (b === 103) return (world.getMeta(x, y, z) & 8) !== 0; // a top stone slab (stone-utility.js STONE_SLAB)
   if (b === 104) return true; // the end portal frame counts as a solid top (fence-rail-reference.json)
+  if (hasSolidTop2(b)) return true; // the hopper (World.doesBlockHaveSolidTopSurface) and the dropper (blocks-0-40.js)
   if (b === 123) return true; // the block of redstone (internal 123): opaque and rendered as a normal block, though not a normal cube (redstone-blocks-2-reference.json "below")
   return normalCube(b) || (b === SNOW_LAYER && (world.getMeta(x, y, z) & 7) === 7);
 }
@@ -26,13 +39,13 @@ export const railCanPlace = (world, x, y, z) => solidTop(world, x, y - 1, z);
 // BlockRailBase.onNeighborBlockChange: no solid top below, or an ascending rail without one
 // under its raised end (the block beside it), breaks the rail with its drop.
 const RAISED = { 2: [1, 0], 3: [-1, 0], 4: [0, -1], 5: [0, 1] };
-export function railSupported(world, x, y, z, meta = world.getMeta(x, y, z)) {
+export function railSupported(world, x, y, z, meta = railShape(world.get(x, y, z), world.getMeta(x, y, z))) {
   if (!solidTop(world, x, y - 1, z)) return false;
   const r = RAISED[meta];
   return !r || solidTop(world, x + r[0], y, z + r[1]);
 }
-// BlockRailBase.func_150049_b_: only the plain rail exists here (27, 28 and 157 are not ported).
-export const isRailAt = (world, x, y, z) => world.get(x, y, z) === RAIL;
+// BlockRailBase.func_150049_b_ (isRailBlockAt): any of the four rail blocks.
+export const isRailAt = (world, x, y, z) => isRailId(world.get(x, y, z));
 
 // BlockRailBase$Rail.func_150648_a (setBasicRail): the cells a shape connects to.
 function basic(meta, x, y, z) {
@@ -52,14 +65,17 @@ function basic(meta, x, y, z) {
 }
 
 // BlockRailBase$Rail: the logic object for one rail cell. Plain rails are not "straight" rails
-// (field_150053_a false), so curves are allowed and the metadata is the whole shape.
+// (field_150053_a false), so curves are allowed and the metadata is the whole shape; powered, detector and
+// activator rails are straight: no curves, and the metadata's 8 bit (power) is kept when the shape changes.
+// `world.setRailMeta(x, y, z, meta)` (installed by powered-rails.js) is World.setBlockMetadataWithNotify(.., 3).
 export class RailLogic {
   constructor(world, x, y, z) {
     this.world = world;
     this.x = x;
     this.y = y;
     this.z = z;
-    this.connected = basic(world.getMeta(x, y, z), x, y, z);
+    this.straight = isStraightRail(world.get(x, y, z));
+    this.connected = basic(this.straight ? world.getMeta(x, y, z) & ~8 : world.getMeta(x, y, z), x, y, z);
   }
   // func_150654_a: the rail at a position, or one block above, or one below.
   railAt([x, y, z]) {
@@ -95,6 +111,11 @@ export class RailLogic {
     r.refresh();
     return r.canConnectTo(this);
   }
+  // func_150650_a: how many of the four sides have a rail in the same, upper or lower cell.
+  neighbourCount() {
+    const { world: w, x, y, z } = this, at = (a, b) => isRailAt(w, a, y, b) || isRailAt(w, a, y + 1, b) || isRailAt(w, a, y - 1, b);
+    return (at(x, z - 1) ? 1 : 0) + (at(x, z + 1) ? 1 : 0) + (at(x - 1, z) ? 1 : 0) + (at(x + 1, z) ? 1 : 0);
+  }
   ascend(shape) {
     const w = this.world, { x, y, z } = this;
     if (shape === 0) {
@@ -107,8 +128,12 @@ export class RailLogic {
     }
     return shape < 0 ? 0 : shape;
   }
+  // func_150648_a-style write: the straight rails keep their power bit.
   setMeta(meta) {
-    this.world.set(this.x, this.y, this.z, RAIL, true, meta);
+    const { world, x, y, z } = this;
+    if (this.straight) meta |= world.getMeta(x, y, z) & 8;
+    if (world.setRailMeta) world.setRailMeta(x, y, z, meta);
+    else world.set(x, y, z, world.get(x, y, z), true, meta);
   }
   // func_150645_c: take `r` as a connection and reshape from the connections now held.
   connectTo(r) {
@@ -119,10 +144,12 @@ export class RailLogic {
     let shape = -1;
     if (n || s) shape = 0;
     if (w || e) shape = 1;
-    if (s && e && !n && !w) shape = 6;
-    if (s && w && !n && !e) shape = 7;
-    if (n && w && !s && !e) shape = 8;
-    if (n && e && !s && !w) shape = 9;
+    if (!this.straight) {
+      if (s && e && !n && !w) shape = 6;
+      if (s && w && !n && !e) shape = 7;
+      if (n && w && !s && !e) shape = 8;
+      if (n && e && !s && !w) shape = 9;
+    }
     this.setMeta(this.ascend(shape));
   }
   // func_150655_a(powered, force): pick the shape from the neighbours that would connect, set
@@ -134,28 +161,32 @@ export class RailLogic {
     let shape = -1;
     if ((n || s) && !w && !e) shape = 0;
     if ((w || e) && !n && !s) shape = 1;
-    if (s && e && !n && !w) shape = 6;
-    if (s && w && !n && !e) shape = 7;
-    if (n && w && !s && !e) shape = 8;
-    if (n && e && !s && !w) shape = 9;
+    if (!this.straight) {
+      if (s && e && !n && !w) shape = 6;
+      if (s && w && !n && !e) shape = 7;
+      if (n && w && !s && !e) shape = 8;
+      if (n && e && !s && !w) shape = 9;
+    }
     if (shape === -1) {
       if (n || s) shape = 0;
       if (w || e) shape = 1;
-      if (powered) {
-        if (s && e) shape = 6;
-        if (w && s) shape = 7;
-        if (e && n) shape = 9;
-        if (n && w) shape = 8;
-      } else {
-        if (n && w) shape = 8;
-        if (e && n) shape = 9;
-        if (w && s) shape = 7;
-        if (s && e) shape = 6;
+      if (!this.straight) {
+        if (powered) {
+          if (s && e) shape = 6;
+          if (w && s) shape = 7;
+          if (e && n) shape = 9;
+          if (n && w) shape = 8;
+        } else {
+          if (n && w) shape = 8;
+          if (e && n) shape = 9;
+          if (w && s) shape = 7;
+          if (s && e) shape = 6;
+        }
       }
     }
     shape = this.ascend(shape);
     this.connected = basic(shape, x, y, z);
-    if (force || this.world.getMeta(x, y, z) !== shape) {
+    if (force || this.world.getMeta(x, y, z) !== (this.straight ? (this.world.getMeta(x, y, z) & 8) | shape : shape)) {
       this.setMeta(shape);
       for (const p of this.connected) {
         const r = this.railAt(p);
@@ -168,7 +199,7 @@ export class RailLogic {
 }
 
 // BlockRailBase.onBlockAdded (server side): new Rail(...).func_150655_a(isBlockIndirectlyGettingPowered,
-// true). Nothing here provides power, so `powered` is false.
+// true); `powered` is that world query (false without the live redstone engine).
 export function railAdded(world, x, y, z, powered = false) {
   if (!isRailAt(world, x, y, z)) return;
   new RailLogic(world, x, y, z).place(powered, true);
@@ -194,8 +225,9 @@ export class Rails {
   neighbourChanged(x, y, z) {
     const w = this.world;
     if (!isRailAt(w, x, y, z) || railSupported(w, x, y, z)) return;
-    this.drop([{ id: RAIL, count: 1, damage: 0 }], x, y, z);
+    const id = w.get(x, y, z);
+    this.drop([{ id: railItem(id), count: 1, damage: 0 }], x, y, z);
     w.set(x, y, z, 0);
-    this.apply([[x, y, z, RAIL, 0]]);
+    this.apply([[x, y, z, id, 0]]);
   }
 }

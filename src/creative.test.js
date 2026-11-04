@@ -7,7 +7,7 @@ import {CREATIVE_TABS,SEARCH,SURVIVAL_TAB,SEARCH_ORDER,CreativeScreen,TextField,
 const reference=JSON.parse(await readFile(new URL('../public/research/creative-reference.json',import.meta.url)));
 // Original [id, metadata] to game item; unimplemented items drop out.
 // Wool (35) keeps its colour as the stack's damage: a list entry is [19,colour], or 19 for white.
-const game=([id,meta])=>{const specific=MC_IDS[id+':'+meta];if(specific!==undefined)return specific;const internal=MC_IDS[id];if(internal===undefined||!ITEMS[internal]||[65,73,77,78,83].includes(internal))return undefined;return meta===0?internal:meta<(ITEMS[internal].variants?.length??1)?[internal,meta]:undefined;};
+const game=([id,meta])=>{if(id===373)return meta===0?385:[385,meta];const specific=MC_IDS[id+':'+meta];if(specific!==undefined)return specific;const internal=MC_IDS[id];if(internal===undefined||!ITEMS[internal]||[65,73,77,78,83].includes(internal))return undefined;return meta===0?internal:meta<(ITEMS[internal].variants?.length??1)?[internal,meta]:undefined;};
 const names=s=>[ITEMS[s.id].name];
 // An enchanted book entry is [365, 0, stored]; the reference lists the bare item (its tags are checked below).
 const plain=e=>Array.isArray(e)&&e.length>2?e[0]:e;

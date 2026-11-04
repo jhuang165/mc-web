@@ -163,11 +163,12 @@ export class PlayerMotion {
 // EntityPlayer.onLivingUpdate feeds the attribute value to setAIMoveSpeed as a float.
 export const MOVE_SPEED = 0.10000000149011612;
 export const SPRINT_BOOST = 0.30000001192092896;
-export const moveSpeed = (sprinting) => (sprinting ? MOVE_SPEED * (1 + SPRINT_BOOST) : MOVE_SPEED);
+// `potion` is the product of the Speed/Slowness operation-2 modifiers (status-effects.js moveSpeedMultiplier), 1 without them.
+export const moveSpeed = (sprinting, potion = 1) => (sprinting ? MOVE_SPEED * (1 + SPRINT_BOOST) * potion : MOVE_SPEED * potion);
 // EntityLivingBase.moveEntityWithHeading (sv.e(FF)V) on the ground: aiMoveSpeed times
 // 0.16277136F / friction³ with friction = slipperiness * 0.91F, all in floats.
-export function groundAccel(sprinting, friction) {
-  return f(f(moveSpeed(sprinting)) * f(f(0.16277136) / f(f(friction * friction) * friction)));
+export function groundAccel(sprinting, friction, potion = 1) {
+  return f(f(moveSpeed(sprinting, potion)) * f(f(0.16277136) / f(f(friction * friction) * friction)));
 }
 // EntityPlayer.onLivingUpdate: jumpMovementFactor = speedInAir (0.02F), plus speedInAir * 0.3
 // (a double) while sprinting. Water and lava use moveFlying(..., 0.02F) whatever the sprint.

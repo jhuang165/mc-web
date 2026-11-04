@@ -99,6 +99,25 @@ body:has(.chest-modal) #toast{display:none}
 .dispenser-modal h2{top:calc(6*var(--u));left:0;right:0;text-align:center}
 .dispenser-modal .chest-bag-label{left:calc(8*var(--u));top:calc(72*var(--u))}
 body:has(.dispenser-modal) #toast{display:none}
+/* GuiInventory potion effect list: 140 x 32 rows from inventory.png (0, 166) at guiLeft - 124, icons 18 x 18 from (18 * (n % 8), 198 + 18 * (n / 8)). */
+.effect-list{position:absolute;left:calc(-124*var(--u));top:0;width:calc(140*var(--u));pointer-events:none;z-index:3}
+.effect-row{position:relative;width:calc(140*var(--u));height:calc(32*var(--u));margin-bottom:calc(1*var(--u));background:url('/media/1.7.10/gui/container/inventory.png') no-repeat 0 calc(-166*var(--u));background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated;font-size:calc(8*var(--u));line-height:calc(8*var(--u))}
+.effect-icon{position:absolute;left:calc(6*var(--u));top:calc(7*var(--u));width:calc(18*var(--u));height:calc(18*var(--u));background:url('/media/1.7.10/gui/container/inventory.png') no-repeat calc(var(--ix)*-1*var(--u)) calc(var(--iy)*-1*var(--u));background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated}
+.effect-name,.effect-time{position:absolute;left:calc(28*var(--u));white-space:nowrap;text-shadow:var(--u) var(--u) #3f3f3f}
+.effect-name{top:calc(6*var(--u));color:#fff}.effect-time{top:calc(16*var(--u));color:#7f7f7f}
+/* GuiBrewingStand (bfg): 176 x 166 gui/container/brewing_stand.png; arrow 9 px wide at (97, 16) from (176, 0), bubbles 12 px wide at (63, 43 - h) from (185, 29 - h). */
+.brewing-modal{position:relative;width:calc(176*var(--u));height:calc(166*var(--u));min-width:calc(176*var(--u));min-height:0;max-width:none;max-height:none;flex-shrink:0;padding:0;border:0;border-radius:0;box-shadow:none;background:none;overflow:visible;transform:none!important;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u))}
+.brewing-modal:before{content:'';position:absolute;left:0;top:0;width:calc(176*var(--u));height:calc(166*var(--u));background:url('/media/1.7.10/gui/container/brewing_stand.png') no-repeat;background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated;pointer-events:none;z-index:0}
+.brewing-modal .chest-bottom{display:none}
+.brewing-modal .container-slots{z-index:2}
+.brewing-modal .modal-top{display:none}
+.brewing-modal h2,.brewing-modal .chest-bag-label{position:absolute;margin:0;padding:0;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-shadow:none;white-space:nowrap;pointer-events:none;z-index:1}
+.brewing-modal h2{top:calc(6*var(--u));left:0;right:0;text-align:center}
+.brewing-modal .chest-bag-label{left:calc(8*var(--u));top:calc(72*var(--u))}
+.brewing-bubbles,.brewing-arrow{position:absolute;background:url('/media/1.7.10/gui/container/brewing_stand.png') no-repeat;background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated;pointer-events:none;z-index:1}
+.brewing-arrow{left:calc(97*var(--u));top:calc(16*var(--u));width:calc(9*var(--u));height:calc(var(--arrow,0)*var(--u));background-position:calc(-176*var(--u)) 0}
+.brewing-bubbles{left:calc(63*var(--u));top:calc((43 - var(--bubble,0))*var(--u));width:calc(12*var(--u));height:calc(var(--bubble,0)*var(--u));background-position:calc(-185*var(--u)) calc((var(--bubble,0) - 29)*var(--u))}
+body:has(.brewing-modal) #toast{display:none}
 /* GuiContainerCreative (bfl): xSize 195, ySize 136. tabs.png holds the 28 x 32 tab art (u = 28*column; v 0/32 top, 64/96 bottom when selected)
    and the 12 x 15 scrollbar at u 232 (244 when nothing scrolls). Unselected tabs sit under the background, the selected one over it. */
 .creative-modal{position:relative;width:calc(195*var(--u));height:calc(136*var(--u));min-width:calc(195*var(--u));min-height:0;max-width:none;max-height:none;flex-shrink:0;margin:calc(32*var(--u)) 0;padding:0;border:0;border-radius:0;box-shadow:none;background:none;overflow:visible;transform:none!important;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u))}
@@ -125,6 +144,7 @@ body:has(.dispenser-modal) #toast{display:none}
 /* func_147046_a(x, y, scale) puts the feet at (x, y), scale/16 pixels per model pixel; the markup is 3 px per model pixel
    (32 tall, centred 12 across). Inventory (51, 75, 30) is set above; creative uses (43, 45, 20). */
 .creative-modal .native-player{left:calc(28*var(--u));top:calc(5*var(--u));transform:scale(calc(var(--gui-scale)*.41667));z-index:2}
+.slot-tooltip .red{color:#f55;text-shadow:var(--u) var(--u) #3f1515}.slot-tooltip .purple{color:#a0a;text-shadow:var(--u) var(--u) #2a002a}
 .slot-tooltip .bold{font-weight:bold}
 .slot-tooltip .italic{font-style:italic}.slot-tooltip .aqua{color:#5ff;text-shadow:var(--u) var(--u) #153f3f}
 body:has(.creative-modal) #toast{display:none}
@@ -184,3 +204,13 @@ body:has(.enchanting-modal) #toast{display:none}
 .merchant-step.previous:disabled{background-position:calc(-200*var(--u)) calc(-19*var(--u))!important}
 .merchant-step:focus-visible{outline:var(--u) solid #fff}
 body:has(.merchant-modal) #toast{display:none}
+/* GuiHopper (bfs): 176 x 133 gui/container/hopper.png, title left at (8, 6), "Inventory" at y 39 (ySize - 96 + 2). */
+.hopper-modal{position:relative;width:calc(176*var(--u));height:calc(133*var(--u));min-width:calc(176*var(--u));min-height:0;max-width:none;max-height:none;flex-shrink:0;padding:0;border:0;border-radius:0;box-shadow:none;background:none;overflow:visible;transform:none!important;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u))}
+.hopper-modal:before{content:'';position:absolute;left:0;top:0;width:calc(176*var(--u));height:calc(133*var(--u));background:url('/media/1.7.10/gui/container/hopper.png') no-repeat;background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated;pointer-events:none;z-index:0}
+.hopper-modal .chest-bottom{display:none}
+.hopper-modal .container-slots{z-index:2}
+.hopper-modal .modal-top{display:none}
+.hopper-modal h2,.hopper-modal .chest-bag-label{position:absolute;margin:0;padding:0;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-shadow:none;white-space:nowrap;pointer-events:none;z-index:1}
+.hopper-modal h2{top:calc(6*var(--u));left:calc(8*var(--u));text-align:left}
+.hopper-modal .chest-bag-label{left:calc(8*var(--u));top:calc(39*var(--u))}
+body:has(.hopper-modal) #toast{display:none}

@@ -15,6 +15,7 @@ import {newDispenser,DISPENSER_SLOTS} from './dispenser-container.js';
 import { leatherDyeResult } from './leather-dye.js';
 // The lastDamage reason of DamageSource.outOfWorld (death-messages.js).
 export const VOID = "void";
+const FIRE_REASONS = new Set(["burning", "lava", "fire"]); // DamageSource.isFireDamage (onFire, inFire, lava)
 
 export const ITEMS = Object.fromEntries(
   BLOCKS.map((b, id) => [id, { ...b, id, block: id > 0, stack: 64 }]),
@@ -543,7 +544,7 @@ export class Survival {
   constructor(data = {}, mode = "survival") {
     data = data && typeof data === "object" ? data : {};
     this.mode = mode === "survival" ? "survival" : "creative";
-    this.health = clamp(data.health, 0, 20, 20);
+    this.health = clamp(data.health, 0, 100, 20);
     this.food = Math.floor(clamp(data.food, 0, 20, 20));
     this.saturation = clamp(data.saturation, 0, this.food, 5);
     this.exhaustion = clamp(data.exhaustion, 0, 40, 0);
@@ -551,6 +552,8 @@ export class Survival {
     this.air = Math.floor(clamp(data.air, -20, 300, 300));
     this.time = Math.floor(clamp(data.time, 0, Number.MAX_SAFE_INTEGER, 0));
     this.effects = new Effects(data.effects);
+    this.health = Math.min(this.health, this.maxHealth); // Health Boost (generic.maxHealth) raises the cap
+    this.absorption = this.effects.has(22) ? clamp(data.absorption, 0, 1024, 0) : 0; // EntityLivingBase absorption amount (Absorption potion)
     this.inventory = new PlayerInventory(ITEMS, Array.isArray(data.slots) ? data.slots : legacySlots(data, this.creative), data.armor, data.inventoryRandom);
     this.inventory.creative = this.creative;
     this.inventory.current = Math.floor(clamp(data.current, 0, 8, 0));
@@ -579,6 +582,22 @@ export class Survival {
       const dispenser = newDispenser();
       if (Array.isArray(d.items)) d.items.slice(0, DISPENSER_SLOTS).forEach((s, i) => (dispenser.items[i] = this.inventory.read(s)));
       this.dispensers[key] = dispenser;
+    }
+    // TileEntityHopper: five slots, TransferCooldown and CustomName.
+    this.hoppers = {};
+    for (const [key, h] of Object.entries(data.hoppers || {})) {
+      if (!/^-?\d+,\d+,-?\d+$/.test(key) || !h || typeof h !== "object") continue;
+      const hopper = { items: Array(5).fill(null), cooldown: Number.isInteger(h.cooldown) && h.cooldown > 0 ? Math.min(h.cooldown, 8) : 0, name: typeof h.name === "string" && h.name ? h.name.slice(0, 64) : null };
+      if (Array.isArray(h.items)) h.items.slice(0, 5).forEach((s, i) => (hopper.items[i] = this.inventory.read(s)));
+      this.hoppers[key] = hopper;
+    }
+    // TileEntityBrewingStand: four slots (bottles 0-2, ingredient 3) and BrewTime.
+    this.brewing = {};
+    for (const [key, b] of Object.entries(data.brewing || {})) {
+      if (!/^-?\d+,\d+,-?\d+$/.test(key) || !b || typeof b !== "object") continue;
+      const tile = { items: [null, null, null, null], brewTime: Number.isInteger(b.brewTime) ? Math.max(0, Math.min(400, b.brewTime)) : 0 };
+      if (Array.isArray(b.items)) b.items.slice(0, 4).forEach((st, i) => (tile.items[i] = this.inventory.read(st)));
+      this.brewing[key] = tile;
     }
     this.hurtTicks = 0;
     // EntityLivingBase.lastDamage (the amount of the hit that opened the window) and the number of
@@ -687,10 +706,16 @@ export class Survival {
   // starts the window (`hurtCount` counts those fresh hits). Mob attacks are blockable; falls,
   // drowning, starvation, suffocation and the void bypass armor. player-damage-reference.json.
   // `source` is an optional DamageSource key (armor-enchantments.js damageSourceKey), else the reason names it.
+  // generic.maxHealth: 20 plus Health Boost's 4 per level (the attribute modifier of potions.js).
+  get maxHealth() { return 20 + (this.effects?.get(21) ? 4 * (this.effects.get(21).amplifier + 1) : 0); }
+  // EntityLivingBase.heal: the amount capped at the maximum health.
+  heal(n) { if (this.health > 0 && n > 0) this.health = Math.min(this.maxHealth, Math.fround(this.health + n)); }
   damage(n, reason = "an accident", blockable = false, source = undefined) {
     const outOfWorld = reason === VOID;
     if ((this.creative && !outOfWorld) || this.health <= 0 || n <= 0 || (this.protection > 0 && !outOfWorld))
       return false;
+    // EntityLivingBase.attackEntityFrom: Fire Resistance refuses fire damage (the burning counter still runs).
+    if (FIRE_REASONS.has(reason) && this.effects.has(12)) return false;
     n = Math.fround(n);
     let fresh = true;
     if (this.hurtTicks > 0) {
@@ -701,7 +726,11 @@ export class Survival {
     if (blockable) dealt = this.applyArmor(dealt);
     // EntityLivingBase.applyPotionDamageCalculations: the enchantment step comes after armour, also for the
     // sources that bypass armour (fall, drowning, magic ...), and is skipped only for starvation.
+    // EntityLivingBase.applyPotionDamageCalculations: Resistance takes 20% per level (all but the void), then enchantments, then Absorption.
+    const resistance = this.effects.get(11);
+    if (resistance && reason !== VOID) dealt = Math.fround(Math.fround(dealt * (25 - (resistance.amplifier + 1) * 5)) / 25);
     dealt = enchantedDamage(this.inventory.armor, damageSourceKey(source ?? reason), dealt);
+    if (this.absorption > 0 && dealt > 0) { const taken = Math.min(this.absorption, dealt); this.absorption = Math.fround(this.absorption - taken); dealt = Math.fround(dealt - taken); }
     const before = this.health;
     this.health = Math.max(0, Math.fround(this.health - dealt));
     this.hurtAmount = n;
@@ -801,7 +830,7 @@ export class Survival {
     if (inWall && this.health > 0) this.damage(1, "suffocation");
     this.effects.tick(this);
     if (this.creative) return;
-    if (underwater) {
+    if (underwater && !this.effects.has(13)) { // Water Breathing: EntityLivingBase.onEntityUpdate refills the air
       // EntityLivingBase.decreaseAirSupply: Respiration (best armour piece) may keep the air for a tick.
       this.air = decreaseAir(this.inventory.armor, this.air, this.inventory.random);
       if (this.air === -20) {
@@ -812,7 +841,7 @@ export class Survival {
       }
     } else this.air = 300;
     // EntityPlayer.onLivingUpdate: Peaceful heals 1 every 20 ticks (naturalRegeneration on).
-    if (peacefulRegen(this.difficulty, this.ticks) && this.health > 0 && this.health < 20) this.health = Math.min(20, this.health + 1);
+    if (peacefulRegen(this.difficulty, this.ticks) && this.health > 0 && this.health < this.maxHealth) this.health = Math.min(this.maxHealth, this.health + 1);
     this.foodTick();
   }
   // FoodStats.onUpdate (zr.a(yz)): exhaustion over 4 takes saturation, or food except on
@@ -824,9 +853,9 @@ export class Survival {
         this.saturation = Math.max(0, this.saturation - 1);
       else if (hungerDrops(this.difficulty)) this.food = Math.max(0, this.food - 1);
     }
-    if (this.food >= 18 && this.health < 20 && this.health > 0) {
+    if (this.food >= 18 && this.health < this.maxHealth && this.health > 0) {
       if (++this.timer >= 80) {
-        this.health = Math.min(20, this.health + 1);
+        this.health = Math.min(this.maxHealth, this.health + 1);
         this.exhaust(3);
         this.timer = 0;
       }
@@ -857,6 +886,8 @@ export class Survival {
         f.burn = f.burnTotal = burnTime(f.items[1]);
         // TileEntityFurnace.updateEntity: a used-up fuel stack becomes its container item.
         if (f.burn > 0 && f.items[1] && --f.items[1].count === 0) f.items[1] = CONTAINER_ITEMS[f.items[1].id] ? makeStack(CONTAINER_ITEMS[f.items[1].id]) : null;
+        // World.func_147453_f: the fuel slot changed (comparators beside the furnace re-read it).
+        if (f.burn > 0) this.furnaceChanged?.(key);
       }
       if (f.burn > 0 && this.canSmelt(f)) {
         if (++f.cook === 200) {
@@ -865,6 +896,7 @@ export class Survival {
           if (!f.items[2]) f.items[2] = result;
           else f.items[2].count += result.count;
           if (--f.items[0].count <= 0) f.items[0] = null;
+          this.furnaceChanged?.(key);
         }
       } else f.cook = 0;
     }
@@ -881,6 +913,7 @@ export class Survival {
       time,
       fire,
       effects: this.effects.serialize(),
+      absorption: this.absorption,
       slots: this.inventory.serialize(),
       armor: this.inventory.serializeArmor(),
       inventoryRandom: this.inventory.serializeRandom(),
@@ -888,6 +921,8 @@ export class Survival {
       furnaces: structuredClone(furnaces),
       chests: Object.fromEntries(Object.entries(chests).map(([key, c]) => [key, { facing: c.facing, items: c.items.map(copyStack) }])),
       dispensers: Object.fromEntries(Object.entries(dispensers).map(([key, d]) => [key, { items: d.items.map(copyStack) }])),
+      brewing: Object.fromEntries(Object.entries(this.brewing).map(([key, b]) => [key, { items: b.items.map(copyStack), brewTime: b.brewTime | 0 }])),
+      hoppers: Object.fromEntries(Object.entries(this.hoppers).map(([key, h]) => [key, { items: h.items.map(copyStack), cooldown: h.cooldown, name: h.name }])),
     };
   }
 }

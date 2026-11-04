@@ -11,6 +11,9 @@ import { BRIGHTNESS } from "./lighting.js";
 import { swellShould, swellState, creeperSafeTries } from "./creeper.js";
 import { maxSafePointTries } from "./difficulty.js";
 import { buildVillagerTasks, updateVillagerAI } from "./villager.js";
+import { villageTasks, nearestVillage } from "./village-ai.js";
+import { setHomeArea, detachHome } from "./home-area.js";
+import { homeFilter } from "./home-area.js";
 const f = Math.fround;
 const GRASS = 1, TALL_GRASS = 39;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -207,11 +210,12 @@ export class LookHelper {
 // Ten random offsets in a (2*xz) x (2*yz) x (2*xz) box (nextInt(2n) - n for x, y, z
 // in that order); the one with the greatest getBlockPathWeight wins.
 export function findRandomTarget(mob, xz, yz) {
-  const r = mob.rand;
+  const r = mob.rand, keep = homeFilter(mob.e, xz);
   let found = false, best = f(-99999), bx = 0, by = 0, bz = 0;
   for (let i = 0; i < 10; i++) {
     const dx = r.nextInt(2 * xz) - xz, dy = r.nextInt(2 * yz) - yz, dz = r.nextInt(2 * xz) - xz;
     const x = dx + Math.floor(mob.x), y = dy + Math.floor(mob.y), z = dz + Math.floor(mob.z);
+    if (keep && !keep(x, y, z)) continue;
     const w = mob.getBlockPathWeight(x, y, z);
     if (w > best) {
       best = w;
@@ -806,7 +810,39 @@ export class Brain {
       if (ai.deps.entityRandom) this.rand = ai.deps.entityRandom(e);
       this.randomTickDivider = 0;
       this.updateAITick = () => updateVillagerAI(this);
-      buildVillagerTasks(this, { Task, Swim, Wander, WatchClosest });
+      buildVillagerTasks(this, { Task, Swim, Wander, WatchClosest, TargetBase });
+    } else if (e.type === "iron_golem") {
+      // EntityIronGolem (wt): attack on collide 1 (1.0, long memory), move towards target 2 (0.9, 32), move through
+      // village 3 (0.6, nocturnal), move towards restriction 4 (1.0), look at villager 5, wander 6 (0.6), watch the
+      // player 7 (6 blocks, 0.02), look idle 8; targets defend village 1, hurt-by 2 (no call for help), nearest
+      // monster 3 (no sight check). Entity.rand drives it; the village refresh runs after the navigator.
+      if (ai.deps.entityRandom) this.rand = ai.deps.entityRandom(e);
+      this.randomTickDivider = 0;
+      const V = villageTasks({ Task, TargetBase });
+      this.updateAITick = () => {
+        if (--this.randomTickDivider > 0) return;
+        this.randomTickDivider = 70 + this.rand.nextInt(50);
+        this.village = nearestVillage(this, 32);
+        if (!this.village) return detachHome(e);
+        const [cx, cy, cz] = this.village.center;
+        setHomeArea(e, cx, cy, cz, Math.trunc(f(this.village.radius * f(0.6))));
+      };
+      this.beforeAI = () => {
+        if (e.attackTimer > 0) --e.attackTimer;
+        if (e.holdRose > 0) --e.holdRose;
+      };
+      this.navigator.setAvoidsWater(true);
+      this.tasks.add(1, new V.GolemAttack(this, 1.0));
+      this.tasks.add(2, new V.MoveTowardsTarget(this, 0.9, 32));
+      this.tasks.add(3, new V.MoveThroughVillage(this, 0.6, true));
+      this.tasks.add(4, new V.MoveTowardsRestriction(this, 1.0));
+      this.tasks.add(5, new V.LookAtVillager(this));
+      this.tasks.add(6, new Wander(this, A.wander));
+      this.tasks.add(7, Object.assign(new WatchClosest(this, 6), { chance: f(0.02) }));
+      this.tasks.add(8, new LookIdle(this));
+      this.targets.add(1, new V.DefendVillage(this));
+      this.targets.add(2, new V.GolemHurtBy(this));
+      this.targets.add(3, new V.NearestMonster(this));
     } else if (e.type === "spider" || e.type === "cave_spider" || e.type === "silverfish") {
       // EntitySpider (and EntityCaveSpider) use legacy EntityCreature AI; EntityWorld.spiderThink drives it. So does
       // EntitySilverfish (silverfishThink): no tasks.
@@ -960,7 +996,7 @@ export class Brain {
   // EntityMob (yg): 0.5 - brightness.
   getBlockPathWeight(x, y, z) {
     const w = this.ai.world;
-    if (this.e.type === "villager") return f(0); // EntityCreature.getBlockPathWeight
+    if (this.e.type === "villager" || this.e.type === "iron_golem") return f(0); // EntityCreature.getBlockPathWeight
     if (this.e.type === "zombie" || this.e.type === "skeleton" || this.e.type === "creeper" || this.e.type === "witch") return f(f(0.5) - this.ai.brightness(x, y, z));
     return w.get(x, y - 1, z) === GRASS ? f(10) : f(this.ai.brightness(x, y, z) - f(0.5));
   }
@@ -971,6 +1007,7 @@ export class Brain {
     e.idle = (e.idle || 0) + 1;
     this.despawnEntity();
     this.senseCache.clear();
+    this.beforeAI?.();
     this.targets.tickCount = this.tasks.tickCount = Math.trunc(e.age) - 1;
     this.targets.tick();
     this.tasks.tick();

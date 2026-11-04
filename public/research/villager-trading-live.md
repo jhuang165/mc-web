@@ -18,7 +18,7 @@ Two defects the probe found while porting: shift-click routing in ContainerMerch
 
 ## Open, approximated or not done
 
-- Village reputation (`villageObj.setReputationForPlayer` after a restock, and `giveReputationForPlayer`) is not ported: the build has no VillageCollection. Native village timer (`bq`) also draws `nextInt(50)` from the entity Random every 70 to 120 ticks; the probe pins that timer out of the way, so the live Random stream differs from native by those draws.
+- Village reputation: a restock with a remembered buyer gives the village +1 reputation for "Player" and a happy-villager burst (state 14), as `EntityVillager.updateAITick`; hitting or killing villagers lowers it (see `village.md`). The merchant screen does not apply the reputation price modifier because 1.7.10 has none.
 - Offers keep original item ids. Items with no browser counterpart in this build (original 350, 387, 347, 384, 89) are shown as "?" and can neither be paid with nor taken; the trade state still counts such an offer as having a result for the yes sound, as native does.
 - Java import does not read villagers at all (`region-import.js` imports dropped items only), so Offers are exported but not re-imported.
 - The browser view of spent offers and tooltips comes from `GuiMerchant` bytecode (layout read from `bfv`), not pixel comparison. The crosses are drawn at y 21 and 51 when the selected offer is spent.

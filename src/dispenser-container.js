@@ -7,6 +7,8 @@ export const DISPENSER_SLOTS = 9;
 export const newDispenser = () => ({ items: Array(DISPENSER_SLOTS).fill(null) });
 // Inventory name of an unnamed dispenser (TileEntityDispenser.getInventoryName).
 export const DISPENSER_TITLE = "Dispenser";
+// TileEntityDropper.getInventoryName: container.dropper (the same ContainerDispenser screen).
+export const DROPPER_TITLE = "Dropper";
 
 export class DispenserContainer extends Container {
   constructor(inv, dispenser, onChange) {

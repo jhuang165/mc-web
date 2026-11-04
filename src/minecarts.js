@@ -67,7 +67,7 @@ function itemTagsNbt(stack) {
 // Live rail kinds by internal block id. Other native rail kinds are supplied by probe adapters.
 // Kinds: "rail", "golden" (powered; meta bit 8), "detector" and "activator" (meta & 7 shapes).
 function defaultRails() {
-  return { [W.RAIL]: "rail" };
+  return { [W.RAIL]: "rail", 135: "golden", 136: "detector", 137: "activator" };
 }
 const intersects = (a, b) => b[3] > a[0] && b[0] < a[3] && b[4] > a[1] && b[1] < a[4] && b[5] > a[2] && b[2] < a[5];
 const grow = (b, x, y, z) => [x < 0 ? b[0] + x : b[0], y < 0 ? b[1] + y : b[1], z < 0 ? b[2] + z : b[2], x > 0 ? b[3] + x : b[3], y > 0 ? b[4] + y : b[4], z > 0 ? b[5] + z : b[5]];
@@ -283,6 +283,17 @@ export class Minecarts {
     if (ody !== dy) cart.vy = 0;
     if (odz !== dz) cart.vz = 0;
     blockCollisions(world, bb, cart, { hurt: (source, n) => this.attack(cart, n, { source }), wet: false });
+    this.touchDetectors(world, cart);
+  }
+  // Block.onEntityCollidedWithBlock for detector rails under the cart (BlockRailDetector): the redstone
+  // runtime installs `blockHook(x, y, z, cart)`; Entity.func_145775_I runs it after the move and after the rail step.
+  touchDetectors(world, cart) {
+    if (!this.blockHook) return;
+    const b = cart.bb;
+    for (let x = Math.floor(b[0] + 0.001); x <= Math.floor(b[3] - 0.001); x++)
+      for (let y = Math.floor(b[1] + 0.001); y <= Math.floor(b[4] - 0.001); y++)
+        for (let z = Math.floor(b[2] + 0.001); z <= Math.floor(b[5] - 0.001); z++)
+          if (this.rails[world.get(x, y, z)] === "detector") this.blockHook(x, y, z, cart);
   }
   // Entity.func_145775_I alone (EntityMinecart.onUpdate calls it again after the move):
   // cactus cells hurt, web cells set isInWeb.
@@ -295,6 +306,7 @@ export class Minecarts {
           if (id === CACTUS) this.attack(cart, 1, { source: "cactus" });
           else if (id === WEB) setInWeb(cart);
         }
+    this.touchDetectors(world, cart);
   }
   // func_94088_b: derailed motion.
   offRail(world, cart, others) {
@@ -330,6 +342,9 @@ export class Minecarts {
     const before = this.railPos(world, cart.x, cart.posY, cart.z);
     cart.posY = by;
     let boost = false, brake = false;
+    // onActivatorRailPass(x, y, z, powered): empty on EntityMinecart / EntityMinecartChest in 1.7.10 (only the TNT,
+    // hopper and command-block carts override it), so the hook has no default effect.
+    if (kind === "activator") this.activatorHook?.(bx, by, bz, (meta & 8) !== 0, cart);
     if (kind === "golden") { boost = (meta & 8) !== 0; brake = !boost; }
     if (kind !== "rail") meta &= 7;
     if (meta >= 2 && meta <= 5) cart.posY = by + 1;

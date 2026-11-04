@@ -7,6 +7,7 @@ import {POPULATION_CREATIVE} from './population-creative.js';
 import { DYE, RED_FLOWER, YELLOW_FLOWER, SNOW_LAYER, ICE, SAPLING, WEB, LADDER, CACTUS, TNT, FENCE, RAIL } from "./world.js";
 import { ENCHANTED_BOOK_ITEM, maxLevelBooks, allLevelBooks } from "./enchanted-books.js";
 import { REEDS_ITEM, PAPER, SUGAR } from "./plants.js";
+import { BREWING_TAB, POTION_SEARCH } from "./potion-items.js";
 import { Container, ContainerScreen, Slot, StackArray, copyStack, makeStack, OUTSIDE } from "./inventory.js";
 
 // A list entry is an item id, or [id, damage] for a metadata subtype: BlockColored
@@ -42,9 +43,10 @@ export const CREATIVE_TABS = [
   tab(11, "inventory", "Survival Inventory", { id: 41 }, [], { background: "inventory.png", scrollbar: false, title: false }),
 ];
 for(const t of CREATIVE_TABS)if(t.index!==5&&t.index!==11)t.items=[...POPULATION_CREATIVE[t.index],...(t.index===7?TOOL_BOOKS:t.index===8?COMBAT_BOOKS:[])];
+CREATIVE_TABS[9].items = BREWING_TAB;
 export const SEARCH = CREATIVE_TABS[5], SURVIVAL_TAB = CREATIVE_TABS[11];
 // updateCreativeSearch walks Item.itemRegistry: items with a creative tab, by ID.
-export const SEARCH_ORDER = [...POPULATION_CREATIVE[5],...SEARCH_BOOKS];
+export const SEARCH_ORDER = [...POPULATION_CREATIVE[5].flatMap((e)=>e===385?POTION_SEARCH:[e]),...SEARCH_BOOKS];
 // Item.getCreativeTab, for the search tab's tooltip line.
 export const itemTab = (id) => CREATIVE_TABS.find((t) => t.items.some((e) => entryId(e) === id)) ?? null;
 export const GUI_WIDTH = 195, GUI_HEIGHT = 136, SEARCH_MAX = 15;

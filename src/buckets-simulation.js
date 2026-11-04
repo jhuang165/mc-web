@@ -42,7 +42,8 @@ export function copyBucketTarget(value) {
  * frame ({ origin, dir } arrays) or null before the first frame. Non-tracing items give null.
  */
 export function captureBucketTarget(world, heldTool, eyeRay) {
-  const kind = tracedBucketKind(heldTool);
+  // The glass bottle (ItemGlassBottle, id 384) traces liquids exactly like an empty bucket.
+  const kind = tracedBucketKind(heldTool) ?? (heldTool === 384 ? "empty" : null);
   if (!kind) return null;
   const liquid = kind === "empty";
   if (!eyeRay) return { ray: null, liquid, hit: null };

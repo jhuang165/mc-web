@@ -5,7 +5,7 @@ import { SILVERFISH, SILVERFISH_SOUNDS, silverfishActionState, legacyFields as s
 import { POISON } from "./status-effects.js";
 import {CARROT,zombieRareDrop} from './crops.js';
 import { creeperFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from "./creeper.js";
-import { SIZE, HEIGHT, hash, slipperiness, collisionBoxes as cellCollisionBoxes, normalCube, WOOL, isLiquid, DYE } from "./world.js";
+import { SIZE, HEIGHT, hash, slipperiness, collisionBoxes as cellCollisionBoxes, normalCube, WOOL, isLiquid, DYE, BLOCKS, PUMPKIN } from "./world.js";
 import { isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
 import { ITEMS } from "./survival.js";
 import { weaponEnchantments, arthropodSlowness, javaLikeRandom } from "./enchantment-effects.js";
@@ -17,6 +17,8 @@ import { sheepColor, childColor } from "./sheep.js";
 import { sneakEdge, criticalDamage } from "./player-movement.js";
 import { MobAI } from "./ai.js";
 import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
+import { IRON_GOLEM_TYPE, IRON_GOLEM_SOUNDS, ironGolemFields, ironGolemShape } from "./iron-golem.js";
+import { createVillages, PLAYER_NAME } from "./village-host.js";
 import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
@@ -169,6 +171,8 @@ export const ENTITY_TYPES = {
   creeper: { health: 20, width: 0.6, height: 1.8, movement: 0.25, ai: { wander: 0.8, chase: 1 }, damage: 2, drop: 0 },
   // EntityVillager (yv): 0.6 x 1.8, 20 health, speed 0.5, no drops or experience (villager.js).
   villager: VILLAGER_TYPE,
+  // EntityIronGolem (wt): 1.4 x 2.9, 100 health, speed 0.25; the attack, drops and AI are iron-golem.js / village-ai.js.
+  iron_golem: IRON_GOLEM_TYPE,
   // EntitySilverfish (yk): 0.3 x 0.7, 8 health, speed 0.6, damage 1; legacy AI (silverfish.js), no drops.
   silverfish: { health: SILVERFISH.health, width: SILVERFISH.width, height: SILVERFISH.height, movement: f(SILVERFISH.speed), ai: { wander: 1 }, damage: SILVERFISH.damage, drop: 0 },
   // EntityWitch (yp): 0.6 x 1.8, 26 health, speed 0.25; the potion attack (witch.js, witch-potions.js) replaces melee. Drops in combat.js.
@@ -195,9 +199,9 @@ export { FEATHER, RAW_CHICKEN, COOKED_CHICKEN };
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
 // its hurt sound, and the sheep uses mob.sheep.say for say, hurt and death alike.
 // EntityCaveSpider inherits the spider's sounds.
-const hurtSound = (type) => (type = soundType(type), type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "witch" ? WITCH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
+const hurtSound = (type) => (type = soundType(type), type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "witch" ? WITCH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "iron_golem" ? IRON_GOLEM_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
 // EntityChicken's death sound is its hurt sound as well.
-const deathSound = (type) => (type = soundType(type), type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "witch" ? WITCH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
+const deathSound = (type) => (type = soundType(type), type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "witch" ? WITCH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "iron_golem" ? IRON_GOLEM_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
 // Entity.setPosition's box (half width and height in floats) and Entity.canBePushed:
 // living entities until setDead (deathTime 20, or removal).
 export const pushBox = (o, width, height) => {
@@ -542,8 +546,9 @@ export function entityHit(origin, dir, e, reach) {
 // 5 + tier (gold 5), axes 4, pickaxes 3 and shovels 2 + tier, only for an item actually held.
 export function heldAttackDamage(tool, survival) {
   const item = ITEMS[tool];
-  if (!(survival.creative || survival.count(tool) > 0) || !["sword", "axe", "pickaxe", "shovel"].includes(item?.kind)) return 1;
-  return item.kind === "sword" ? 5 + (item.name.startsWith("Golden") ? 0 : item.tier) : item.kind === "axe" ? 4 + item.tier : item.kind === "pickaxe" ? 3 + item.tier : 2 + item.tier;
+  if (!(survival.creative || survival.count(tool) > 0) || !["sword", "axe", "pickaxe", "shovel"].includes(item?.kind)) return survival.effects?.attackDamage ? survival.effects.attackDamage(1) : 1;
+  const base = item.kind === "sword" ? 5 + (item.name.startsWith("Golden") ? 0 : item.tier) : item.kind === "axe" ? 4 + item.tier : item.kind === "pickaxe" ? 3 + item.tier : 2 + item.tier;
+  return survival.effects?.attackDamage ? survival.effects.attackDamage(base) : base;
 }
 export class EntityWorld {
   constructor(world, saved, random = Math.random) {
@@ -586,6 +591,8 @@ export class EntityWorld {
           mateTicks:0,
           // EntityVillager.readEntityFromNBT: Profession, Riches and Offers; the trade timers and the customer start over.
           ...(e.type === "villager" ? villagerFields(e.profession, e.riches, e.offers) : {}),
+          // EntityIronGolem.readEntityFromNBT: PlayerCreated only; the timers and the home area start over.
+          ...(e.type === "iron_golem" ? ironGolemFields(e.playerCreated) : {}),
           ...(e.type === "sheep" ? { color: Number.isInteger(e.color) && e.color >= 0 && e.color < 16 ? e.color : 0, sheared: e.sheared === true, eatTimer: 0 } : {}),
           // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
           ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
@@ -648,6 +655,7 @@ export class EntityWorld {
       // byte 16 (`sheared`); and the grazing timer (EntityAIEatGrass, mirrored in wp.br).
       ...(type === "sheep" ? { color: sheepColor(random), sheared: false, eatTimer: 0 } : {}),
       ...(type === "villager" ? villagerFields() : {}),
+      ...(type === "iron_golem" ? ironGolemFields() : {}),
       // EntityChicken (wg): timeUntilNextEgg = rand.nextInt(6000) + 6000 (wg.bu; not saved in
       // 1.7.10), wingRotation/destPos and their previous values 0, wingRotDelta (bt) 1.0.
       ...(isSpider(type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
@@ -747,6 +755,7 @@ export class EntityWorld {
       e.hurt = 10;
     }
     if (source.player) { e.revenge = (e.age || 0) + 1; e.recentlyHit = 100; }
+    if (e.type === "villager") this.villagerHurtBy(e, source);
     if (fresh) {
       if (name !== "drown") rand.nextDouble();
       if (source.from) knockBack(e, source.from.x, source.from.z, () => rand.nextDouble(), Math.random);
@@ -968,6 +977,7 @@ export class EntityWorld {
   // mobDrops) on Entity.rand; the experience waits for deathTime 20 (deathUpdate). The death
   // counter starts on the next onEntityUpdate, or in this one for fire and drowning.
   onDeath(e, source = {}) {
+    if (e.type === "villager") this.villagerDied(e, source);
     if (e.growingAge >= 0) {
       const at = { x: e.x, y: e.y, z: e.z };
       for (const [drop, damage] of mobDrops(e, { playerHit: e.recentlyHit > 0, burning: e.fire > 0, bySkeleton: source.attacker === "skeleton", looting: source.player ? source.looting || 0 : 0 }, entityRandom(e)))
@@ -1041,7 +1051,7 @@ export class EntityWorld {
   // for a child). EntityCreeper has no living sound but still rolls and resets.
   talk(e) {
     const rand = entityRandom(e);
-    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper") return;
+    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem") return;
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
     this.events.push({ sound: e.type === "witch" ? WITCH_SOUNDS.idle : e.type === "villager" ? (e.customer ? VILLAGER_SOUNDS.haggle : VILLAGER_SOUNDS.idle) : "mob." + soundType(e.type) + ".say", volume: e.type === "cow" ? f(0.4) : 1, pitch, position: { x: e.x, y: e.y, z: e.z } });
   }
@@ -1086,6 +1096,66 @@ export class EntityWorld {
     this.entities.push(baby);a.growingAge=b.growingAge=6000;a.love=b.love=0;a.mateTicks=b.mateTicks=0;
     this.events.push({xp:1+Math.floor(Math.random()*7),position:{x:a.x,y:a.y,z:a.z}});
     return true;
+  }
+  // EntityAIVillagerMate.giveBirth (up.g): EntityVillager.createChild is a new villager whose onSpawnWithEgg draws
+  // World.rand.nextInt(5) for the profession; the child (growing age -24000) stands where the parent does.
+  spawnVillagerChild(parent) {
+    const baby = this.create("villager", parent.x, parent.y, parent.z);
+    baby.growingAge = -24000;
+    baby.profession = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48))).nextInt(5);
+    baby.rotationYaw = baby.rotationYawHead = parent.rotationYaw ?? 0;
+    this.entities.push(baby);
+    return baby;
+  }
+  // World.spawnEntityInWorld(EntityIronGolem) at a village's spawn cell or a pumpkin golem's position.
+  spawnIronGolem(x, y, z, playerCreated = false) {
+    const g = this.create("iron_golem", x, y, z);
+    g.playerCreated = playerCreated;
+    this.entities.push(g);
+    return g;
+  }
+  // BlockPumpkin.onBlockAdded (golem half): the iron T under a placed pumpkin becomes a player-created golem.
+  // Returns the cleared cells (the caller redraws them), or null when the shape is not there.
+  tryBuildIronGolem(x, y, z) {
+    const w = this.world, IRON = BLOCKS.findIndex((b) => b.name === "Iron block");
+    if (w.get(x, y, z) !== PUMPKIN) return null;
+    const shape = ironGolemShape((a, b, c) => w.get(a, b, c) === IRON, x, y, z);
+    if (!shape) return null;
+    for (const [a, b, c] of shape.cells) w.set(a, b, c, 0, true, 0);
+    this.spawnIronGolem(shape.at.x, shape.at.y, shape.at.z, true);
+    return shape.cells;
+  }
+  // EntityIronGolem.attackEntityAsMob against the player (7 + nextInt(15) as a mob hit): returns whether it hurt.
+  hitGolemPlayer(e, damage, survival) {
+    return survival.scaledDamage(damage, "an Iron Golem", { attacker: null });
+  }
+  villageBurst(name, e, size, rand) {
+    if (this.fx) burst(this.fx, name, 5, { x: e.x, y: e.y, z: e.z, width: size.width, height: size.height }, rand, 1);
+  }
+  // The village collection (World.villageCollectionObj), made on first use.
+  get villages() {
+    return (this.villageCollection ??= createVillages(this));
+  }
+  // EntityVillager.setRevengeTarget (yv.b(sv)) for a player hit: the village notes the aggressor, the player
+  // loses 1 reputation (3 for a child) and the villager shows angry particles.
+  villagerHurtBy(e, source) {
+    const village = this.ai.brain(e).village;
+    if (!village || !source.player) return;
+    village.addOrRenewAggressor(this.ai.player);
+    village.changeReputation(PLAYER_NAME, e.growingAge < 0 ? -3 : -1);
+    if (e.health > 0 && this.fx) burst(this.fx, "angryVillager", 5, { x: e.x, y: e.y, z: e.z, width: 0.6, height: 1.8 }, entityRandom(e), 1);
+  }
+  // EntityVillager.onDeath (yv.a(ro)): killed by a player -2 reputation; by a monster the village ends its mating
+  // season; with no known attacker, a player within 16 blocks ends it too.
+  villagerDied(e, source) {
+    const village = this.ai.brain(e).village;
+    if (!village) return;
+    if (source.player) village.changeReputation(PLAYER_NAME, -2);
+    else if (source.attacker && HOSTILE.has(source.attacker.type ?? source.attacker)) village.endMatingSeason();
+    else if (!source.attacker) {
+      const p = this.ai.player;
+      if (p?.alive && (p.x - e.x) ** 2 + (p.y - e.y) ** 2 + (p.z - e.z) ** 2 < 256) village.endMatingSeason();
+    }
   }
   // EntitySheep.interact (wp.a(yz)) with shears (ade.aZ) held: an unsheared adult
   // is sheared, drops 1 to 3 wool of its colour (entityDropItem(stack, 1.0F) with
@@ -1154,6 +1224,8 @@ export class EntityWorld {
     // World.isDaytime (skylightSubtracted < 4); main.js hooks the real light level in.
     this.day = this.isDaytime ? this.isDaytime() : !night;
     this.ai.beginTick(player, survival, heldItem);
+    // World.tick: villageCollectionObj.tick() before the entities.
+    this.villages.tick();
     // Splash potions thrown by witches (witch-potions.js; main.js attaches it).
     this.potions?.tick(player, survival);
     // SpawnerAnimals.findChunksForSpawning: no monsters on Peaceful.

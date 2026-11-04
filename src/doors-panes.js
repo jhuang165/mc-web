@@ -60,6 +60,7 @@ export function solidTopSurface(world, x, y, z) {
   if (normalCube(b)) return true;
   if (isStair(b)) return stairSolidTop(meta);
   if (b === STONE_SLAB) return (meta & 8) !== 0;
+  if (b === 133) return true; // BlockHopper (blocks-0-40.js)
   if (b === 104) return true; // END_PORTAL_FRAME (fence-rail-reference.json)
   return b === SNOW_LAYER && (meta & 7) === 7;
 }

@@ -12,6 +12,7 @@ import { SILVERFISH_MODEL, silverfishPose } from "./silverfish.js";
 import { creeperFlash, creeperScale, creeperWhite, creeperPose, armorScroll } from "./creeper.js";
 import { isInvisible } from "./mob-effects.js";
 import { createVillagerRig, villagerLegAngle } from "./villager-renderer.js";
+import { createIronGolemRig, animateIronGolem } from "./iron-golem-renderer.js";
 import { createWitchRig, animateWitch } from "./witch-renderer.js";
 const RAD = Math.PI / 180;
 // RenderCreeper's powered pass (bni.a(xz, I, F), pass 1): creeper_armor.png with the texture
@@ -369,6 +370,7 @@ export class MobRenderer {
     if (e.type === "zombie") return this.createZombie();
     if (e.type === "villager") return createVillagerRig(this, e);
     if (e.type === "witch") return createWitchRig(this, e);
+    if (e.type === "iron_golem") return createIronGolemRig(this);
     return this.createQuadruped(e.type);
   }
   // `partial` is the fraction of the current tick elapsed (mobPose interpolates).
@@ -452,6 +454,7 @@ export class MobRenderer {
         sf.layers.forEach((s, i) => { r.silverfish.layers[i].position.x = s.x / 16; r.silverfish.layers[i].rotation.y = -s.yaw; });
       }
       if (r.nose) animateWitch(r, e, pose.age);
+      if (r.golem) animateIronGolem(r, e, pose, partial);
       r.limbs.forEach((l, i) => {
         if (spider) { l.rotation.set(0, -spider[i][0], -spider[i][1]); return; }
         if (creeper) { l.rotation.x = creeper[i + 1][0]; return; }

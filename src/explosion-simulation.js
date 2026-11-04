@@ -112,9 +112,17 @@ export function applyExplosion(state, request, hooks = {}) {
       items.spill(chest.items.filter(Boolean).map(copyStack), block.x, block.y, block.z);
       delete survival.chests[key];
     }
+    if (survival.brewing?.[key]) {
+      items.spill(survival.brewing[key].items.filter(Boolean).map(copyStack), block.x, block.y, block.z);
+      delete survival.brewing[key];
+    }
     if (dispenser) {
       items.spill(dispenser.items.filter(Boolean).map(copyStack), block.x, block.y, block.z);
       delete survival.dispensers[key];
+    }
+    if (survival.hoppers?.[key]) {
+      items.spill(survival.hoppers[key].items.filter(Boolean).map(copyStack), block.x, block.y, block.z);
+      delete survival.hoppers[key];
     }
     // A destroyed piston head takes its base along (the base drops itself); a destroyed extended base removes its head.
     if (block.id === PISTON_HEAD) {

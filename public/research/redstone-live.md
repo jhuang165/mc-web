@@ -47,8 +47,8 @@ clocks) and `record.pistons = pistons.save()` (chunk-runtime splits that list pe
 
 ## Known limits (open)
 
-- Dispenser/dropper/hopper behaviour is not ported (power does nothing). Hoppers, droppers and trapped chests have no internal block.
-- Comparator reads chest, furnace and dispenser contents from the browser stores; a comparator updates when a container screen closes (not per slot click).
+- Dispenser/dropper behaviour is not ported here (power does nothing); the hopper is live (hopper.md). Trapped chests have no internal block.
+- Comparator reads chest, furnace, dispenser and hopper contents from the browser stores and re-reads them whenever a container changes: a slot click in an open screen, a hopper transfer, a furnace fuel/smelt result and a screen close call `containerChanged` (the `World.func_147453_f` path; see [hopper.md](hopper.md)). Dispenser/dropper firing is the dispenser track's to report.
   Furnace progress and chest-lid changes do not notify comparators.
 - Minecarts, thrown projectiles and tripwire do not trigger plates; arrows, items, orbs, primed TNT, mobs and the player do (strict AABB).
 - Sensor sky light uses the scene light volume; the daylight cycle follows `scene.angle`.

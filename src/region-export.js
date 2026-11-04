@@ -14,6 +14,7 @@ import { Experience } from './experience.js';
 import { splitRuntime } from './chunk-runtime.js';
 import { populationBlockMapperReady } from './population-world.js';
 import { structureDataFiles } from './structure-data.js';
+import { villageDocument } from './village.js';
 const tag=(type,value)=>({type,value}), comp=value=>tag(NBT.COMPOUND,new Map(Object.entries(value))), list=(type,items)=>tag(NBT.LIST,{elementType:type,items});
 const byte=v=>tag(NBT.BYTE,(v<<24)>>24), short=v=>tag(NBT.SHORT,v), int=v=>tag(NBT.INT,v), str=v=>tag(NBT.STRING,v), float=v=>tag(NBT.FLOAT,v), long=v=>tag(NBT.LONG,BigInt(Math.trunc(v)));
 const reverse=new Map();
@@ -38,12 +39,12 @@ function stackNbt(s,slot,report,original=false) {
  return new Map(Object.entries(entry));
 }
 const inventory=(items,report)=>list(NBT.COMPOUND,(items??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];}));
-const NAMES={pig:'Pig',cow:'Cow',sheep:'Sheep',chicken:'Chicken',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish',witch:'Witch'};
+const NAMES={pig:'Pig',cow:'Cow',sheep:'Sheep',chicken:'Chicken',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish',witch:'Witch',iron_golem:'VillagerGolem'};
 function entity(e,name,ox,oz) {
  return {id:str(name),Pos:list(NBT.DOUBLE,[e.x+ox,e.posY??e.y,e.z+oz]),Motion:list(NBT.DOUBLE,e.motion??[e.vx??e.mx??0,e.vy??e.my??0,e.vz??e.mz??0]),
  Rotation:list(NBT.FLOAT,e.rotation??(name==='Player'?[(Math.PI-(e.yaw??0))*180/Math.PI,-(e.pitch??0)*180/Math.PI]:[e.rotationYaw??(-(e.yaw??0)*180/Math.PI+0),e.rotationPitch??0])),FallDistance:float(e.fallDistance??0),Fire:short(e.fire??-1),Air:short(e.air??300),OnGround:byte(e.onGround?1:0),Dimension:int(0),Invulnerable:byte(0),PortalCooldown:int(0)};
 }
-function payload(state,ox,oz,report) {
+function payload(state,ox,oz,report,world=null) {
  const entities=[],tiles=[],ticks=[];
  for(const wrapped of state.entities??[]) {const e=wrapped.value,name=NAMES[e.type];if(!name){report.unsupportedEntities++;continue;}
   const n=entity(e,name,ox,oz);Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
@@ -52,6 +53,8 @@ function payload(state,ox,oz,report) {
   if(e.type==='villager'){n.Profession=int(e.profession??0);n.Riches=int(e.riches??0);delete n.InLove;
    if(Array.isArray(e.offers)){const bare=x=>{if(!x)return null;const c={...x};for(const k of ['enchantments','storedEnchantments'])if(Array.isArray(c[k])&&!c[k].length)delete c[k];return stackNbt(c,undefined,report,true);};
     n.Offers=comp({Recipes:list(NBT.COMPOUND,e.offers.map(r=>{const m=new Map([['buy',tag(NBT.COMPOUND,bare(r.buy))],['sell',tag(NBT.COMPOUND,bare(r.sell))],['uses',int(r.uses??0)],['maxUses',int(r.maxUses??7)]]);if(r.buyB)m.set('buyB',tag(NBT.COMPOUND,bare(r.buyB)));return m;}))});}}
+  // EntityIronGolem.writeEntityToNBT: PlayerCreated (EntityAgeable's fields do not apply to a golem).
+  if(e.type==='iron_golem'){n.PlayerCreated=byte(e.playerCreated?1:0);delete n.Age;delete n.InLove;}
   entities.push(new Map(Object.entries(n)));
  }
  for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),PickupDelay:short(e.delay??0),Health:short(5)})));}
@@ -60,8 +63,10 @@ function payload(state,ox,oz,report) {
  for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta);entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET},'FallingSand',ox,oz),TileID:int(o[0]),Data:byte(o[1]),Time:byte(e.ticks&255),DropItem:byte(1)})));}
  for(const {value:e} of state.carts??[]) {const items=(e.items??[]).map(s=>stackNbt(s,s.slot,report,true)).filter(Boolean),n=entity(e,e.type===0?'MinecartRideable':'MinecartChest',ox,oz);if(e.type!==0)n.Items=list(NBT.COMPOUND,items);if(e.customName)n.CustomName=str(e.customName);entities.push(new Map(Object.entries(n)));}
  for(const name of ['projectiles','arrows'])report.unsupportedEntities+=(state[name]??[]).length;
- for(const name of ['chests','furnaces','dispensers'])for(const [k,e] of Object.entries(state[name]??{})) {const [x,y,z]=k.split(',').map(Number),n={id:str(name==='chests'?'Chest':name==='dispensers'?'Trap':'Furnace'),x:int(x+ox),y:int(y),z:int(z+oz),Items:inventory(e.items,report)};
-  if(name==='furnaces'){n.BurnTime=short(e.burn??0);n.CookTime=short(e.cook??0);}tiles.push(new Map(Object.entries(n)));
+ for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const [k,e] of Object.entries(state[name]??{})) {const [x,y,z]=k.split(',').map(Number),n={id:str(name==='chests'?'Chest':name==='dispensers'?(world?.get(x,y,z)===132?'Dropper':'Trap'):name==='hoppers'?'Hopper':name==='brewing'?'Cauldron':'Furnace'),x:int(x+ox),y:int(y),z:int(z+oz),Items:inventory(e.items,report)};
+  if(name==='furnaces'){n.BurnTime=short(e.burn??0);n.CookTime=short(e.cook??0);}
+  if(name==='brewing')n.BrewTime=short(e.brewTime??0);
+  if(name==='hoppers'){n.TransferCooldown=int(e.cooldown??0);if(e.name)n.CustomName=str(e.name);}tiles.push(new Map(Object.entries(n)));
  }
  for(const {value:e} of state.spawners??[]) {const n={id:str('MobSpawner'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz)};for(const [k,v] of Object.entries(e))if(!['x','y','z'].includes(k))n[k]=typeof v==='string'?str(v):short(v);tiles.push(new Map(Object.entries(n)));}
  // TileEntityPiston.writeToNBT: blockId, blockData, facing, progress, extending (original ids; renderHead is not saved by Java).
@@ -106,7 +111,7 @@ export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChu
  const report={format:'Java 1.7.10 Anvil snapshot',columns:owned.size,unmappedItems:0,unsupportedEntities:0,notes:[
  'Unzip this directory under the Java 1.7.10 saves directory. blockworld.json is the complete browser backup.',
  'Provided columns are marked terrain-populated. Java generates outside them using the seed; border features can differ from browser population.',
- 'LightPopulated is false: Java must rebuild light. Village reputation, AI/RNG state, player status effects and cross-system tick order are not converted.',
+ 'LightPopulated is false: Java must rebuild light. Village records are written to data/villages.dat; AI/RNG state, player status effects and cross-system tick order are not converted.',
  'Thrown projectiles and arrows are counted as unsupported entities. Other entities use supported position/motion/health/basic age fields; advanced fields use native defaults.',
  'Browser legacy landscapes export their finite area; Java generates default terrain outside it.'
  ]}, regions=new Map();let count=0;
@@ -117,7 +122,7 @@ export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChu
    const o=toOriginal(id,m,{flowing:fluidCells.has(key+':'+id),moisture:farms.get(key),facing:record.player?.chests?.[key]?.facing,lit:(record.player?.furnaces?.[key]?.burn??0)>0});if(!o)throw new Error(`Unmapped block ${id}`);ids[(lx*16+lz)*256+y]=o[0];metadata[(lx*16+lz)*256+y]=o[1];if(lightOpacity(id)>0)heights[lx+lz*16]=y+1;}
   const chunk=Chunk.fromGeneration(ids,metadata,cx+ox/16,cz+oz/16);chunk.isTerrainPopulated=true;chunk.isLightPopulated=false;chunk.inhabitedTime=typeof record.inhabited==='number'?record.inhabited:0;
   for(let x=0;x<16;x++)for(let z=0;z<16;z++) {chunk.biomes[x+z*16]=w.biomeAt?.(cx*16+x,cz*16+z)?.id??1;chunk.heightMap[x+z*16]=heights[x+z*16];}
-  const document=chunkToNbt(chunk,{lastUpdate:BigInt(record.player?.time??0),...payload(runtime.get(k)??{},ox,oz,report)}),a=regionAddress(chunk.x,chunk.z),rk=`${a.regionX},${a.regionZ}`;
+  const document=chunkToNbt(chunk,{lastUpdate:BigInt(record.player?.time??0),...payload(runtime.get(k)??{},ox,oz,report,w)}),a=regionAddress(chunk.x,chunk.z),rk=`${a.regionX},${a.regionZ}`;
   if(!regions.has(rk))regions.set(rk,[]);regions.get(rk).push(await encodeRegionChunk(document,{x:a.x,z:a.z,timestamp:Math.floor((record.updated??0)/1000)}));
   onProgress(++count,owned.size);if(count%8===0)await new Promise(r=>setTimeout(r,0));
  }
@@ -126,6 +131,9 @@ export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChu
  // Structure starts: v14/v15 rerun the four range-8 searches over the exported native chunks; imported data/*.dat is merged (native precedence).
  {const {files:sd,report:sr}=await structureDataFiles({record,seed:w.javaSeed??record.seed,generationVersion:record.generationVersion??w.generationVersion,chunks:[...owned].map(k=>{const [x,z]=k.split(',').map(Number);return [x+ox/16,z+oz/16];})});
   for(const [n,b] of sd)files.set(n,b);if(sd.size)report.structureData=sr;else report.notes.push('Structure starts are not saved for this generation version; Java regenerates them from the seed.');}
+ // data/villages.dat (VillageCollection "villages"): live village records, shifted by the export origin like entity positions.
+ if(record.villages?.villages?.length){const sh=(v)=>({...v,c:[v.c[0]+ox,v.c[1],v.c[2]+oz],ac:[v.ac[0]+ox,v.ac[1],v.ac[2]+oz],doors:v.doors.map(d=>[d[0]+ox,d[1],d[2]+oz,d[3],d[4],d[5],...d.slice(6)])});
+  files.set('data/villages.dat',await encodeCompressedNbt(villageDocument({...record.villages,villages:record.villages.villages.map(sh)})));}
  const {chunked,runtimeChunked,editSequence,...backup}=record,encode=new TextEncoder();
  files.set('blockworld.json',encode.encode(JSON.stringify({...backup,format:'blockworld',version:1})));
  files.set('conversion-notes.json',encode.encode(JSON.stringify(report,null,2)));

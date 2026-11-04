@@ -4,14 +4,16 @@
 // No imports (world.js and the renderers read it); internal ids are the ones reserved in world.js BLOCKS.
 export const DISPENSER = 115, STICKY_PISTON = 116, PISTON = 117, PISTON_HEAD = 118;
 // Tools own item ids 100-127, so these blocks carry 1000 + block id as their item ids (the piston head has no item).
+// BlockDropper (original 158, internal 132; dispense.js) shares the dispenser's facing, orientation and icon rules.
+export const DROPPER = 132, DROPPER_ITEM = 1132;
 export const SLIMEBALL = 460, DISPENSER_ITEM = 1115, STICKY_PISTON_ITEM = 1116, PISTON_ITEM = 1117;
-export const BLOCK_FOR_ITEM = Object.freeze({ [DISPENSER_ITEM]: DISPENSER, [STICKY_PISTON_ITEM]: STICKY_PISTON, [PISTON_ITEM]: PISTON });
-export const ITEM_FOR_BLOCK = Object.freeze({ [DISPENSER]: DISPENSER_ITEM, [STICKY_PISTON]: STICKY_PISTON_ITEM, [PISTON]: PISTON_ITEM });
+export const BLOCK_FOR_ITEM = Object.freeze({ [DISPENSER_ITEM]: DISPENSER, [DROPPER_ITEM]: DROPPER, [STICKY_PISTON_ITEM]: STICKY_PISTON, [PISTON_ITEM]: PISTON });
+export const ITEM_FOR_BLOCK = Object.freeze({ [DISPENSER]: DISPENSER_ITEM, [DROPPER]: DROPPER_ITEM, [STICKY_PISTON]: STICKY_PISTON_ITEM, [PISTON]: PISTON_ITEM });
 // Original item ids -> internal item ids (POPULATION_ITEMS): slimeball 341, dispenser 23, sticky piston 29, piston 33.
-export const ORIGINAL_ITEMS = Object.freeze({ 341: SLIMEBALL, 23: DISPENSER_ITEM, 29: STICKY_PISTON_ITEM, 33: PISTON_ITEM });
+export const ORIGINAL_ITEMS = Object.freeze({ 341: SLIMEBALL, 23: DISPENSER_ITEM, 158: DROPPER_ITEM, 29: STICKY_PISTON_ITEM, 33: PISTON_ITEM });
 export const isPlaceableItem = (id) => id in BLOCK_FOR_ITEM;
 export const isPistonBase = (b) => b === PISTON || b === STICKY_PISTON;
-export const isDispenserPiston = (b) => b === DISPENSER || isPistonBase(b) || b === PISTON_HEAD;
+export const isDispenserPiston = (b) => b === DISPENSER || b === DROPPER || isPistonBase(b) || b === PISTON_HEAD;
 // The block an item places (the item itself when it is not one of this family's).
 export const blockForItem = (id) => BLOCK_FOR_ITEM[id] ?? 0;
 export const itemForBlock = (b) => ITEM_FOR_BLOCK[b] ?? 0;
@@ -61,10 +63,11 @@ export function unionBox(boxes) {
 // Block.getIcon(side, meta) by native side order (-y, +y, -z, +z, -x, +x).
 export function iconName(id, meta, side) {
   const f = meta & 7;
-  if (id === DISPENSER) {
+  if (id === DISPENSER || id === DROPPER) {
+    const name = id === DISPENSER ? "dispenser" : "dropper";
     if (f > 5) return side < 2 ? "furnace_top" : "furnace_side";
-    if (f < 2) return side === f ? "dispenser_front_vertical" : "furnace_top";
-    return side < 2 ? "furnace_top" : side === f ? "dispenser_front_horizontal" : "furnace_side";
+    if (f < 2) return side === f ? `${name}_front_vertical` : "furnace_top";
+    return side < 2 ? "furnace_top" : side === f ? `${name}_front_horizontal` : "furnace_side";
   }
   const top = id === STICKY_PISTON ? "piston_top_sticky" : "piston_top_normal";
   if (id === PISTON_HEAD) {

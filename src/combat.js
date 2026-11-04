@@ -2,7 +2,8 @@
 // EntityLivingBase.attackEntityFrom, onDeath and onDeathUpdate that entities.js calls, the
 // per-mob dropFewItems / dropEquipment / dropRareDrop rolls on Entity.rand, and
 // Entity.applyEntityCollision. combat-reference.json holds the original's results.
-import { WOOL } from "./world.js";
+import { WOOL, RED_FLOWER } from "./world.js";
+import { golemDrops } from "./iron-golem.js";
 import { CARROT, POTATO } from "./crops.js";
 import { witchDrops, witchEquipmentDrop, witchExperience } from "./witch.js";
 const f = Math.fround;
@@ -58,6 +59,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
       if (playerHit && (rand.nextInt(3) === 0 || rand.nextInt(1 + looting) > 0)) add(SPIDER_EYE);
       break;
     case "creeper": add(GUNPOWDER, generic()); break;
+    case "iron_golem": for (const [id, n, damage] of golemDrops(rand, RED_FLOWER)) add(id, n, damage); break; // EntityIronGolem.dropFewItems
     case "witch": for (const [id] of witchDrops(rand, looting)) add(id); break; // EntityWitch.dropFewItems (witch.js)
   }
   // EntityLiving.dropEquipment: a damageable item drops worn, maxDamage minus
@@ -75,7 +77,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
 // getExperiencePoints at deathTime 20: EntityAnimal 1 + World.rand.nextInt(3); EntityMob
 // 5, plus 1 + rand.nextInt(3) per equipment item whose drop chance is at most 1.
 export function experiencePoints(e, rand, worldRand) {
-  if (e.type === "villager") return 0; // EntityLiving.experienceValue stays 0 (EntityVillager is no EntityMob or EntityAnimal)
+  if (e.type === "villager" || e.type === "iron_golem") return 0; // EntityLiving.experienceValue stays 0 (EntityVillager is no EntityMob or EntityAnimal)
   if (ANIMALS.has(e.type)) return 1 + worldRand.nextInt(3);
   if (e.type === "witch") return witchExperience(rand, e.held); // 5 plus 1 + nextInt(3) for a held potion
   return 5 + (e.type === "skeleton" ? 1 + rand.nextInt(3) : 0);

@@ -55,6 +55,8 @@ export function itemFromOriginal(id, damage = 0) {
   if (damage < 0) damage = 0;
   const subtype = ORIGINAL_ITEMS[`${id}:${damage}`];
   if (subtype !== undefined) return { id: subtype, damage: 0, clamped: false };
+  // ItemPotion: the damage value is the whole potion (effects, strength, splash); the browser keeps it unchanged (potions.js).
+  if (id === 373) return damage < 65536 ? { id: 385, damage, clamped: false } : null;
   const base = ORIGINAL_ITEMS[id];
   if (base === undefined) return null;
   const item = ITEMS[base];
@@ -173,7 +175,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   };
   const unsupported = new Map(), approximations = new Map(), tileLost = new Map(), tileConverted = new Map();
   const itemLost = new Map(), entityLost = new Map(), entityConverted = new Map();
-  const chests = {}, furnaces = {}, dispensers = {}, pistons = [], drops = [];
+  const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [];
   let edits = 0;
   const write = (x, y, z, block, meta) => {
     if (world.get(x, y, z) === block && world.getMeta(x, y, z) === meta) return;
@@ -303,9 +305,19 @@ export async function importJavaRegionArea(regions, options = {}) {
       if (inside && id === 'Chest' && chests[key]) {
         chests[key].items = slotItems(tile, CHEST_SLOTS, true);
         tally(tileConverted, id);
-      } else if (inside && id === 'Trap' && world.get(lx, y, lz) === DISPENSER) {
-        // TileEntityDispenser.readFromNBT: nine slots, Slot read as an unsigned byte.
+      } else if (inside && ((id === 'Trap' && world.get(lx, y, lz) === DISPENSER) || (id === 'Dropper' && world.get(lx, y, lz) === 132))) {
+        // TileEntityDispenser.readFromNBT (also TileEntityDropper's 'Dropper' tile): nine slots, Slot read as an unsigned byte.
         dispensers[key] = { items: slotItems(tile, DISPENSER_SLOTS, true) };
+        tally(tileConverted, id);
+      } else if (inside && id === 'Hopper' && world.get(lx, y, lz) === 133) {
+        // TileEntityHopper.readFromNBT: five slots, TransferCooldown (int), CustomName.
+        const cooldown = get(tile, 'TransferCooldown', NBT.INT, 0), name = get(tile, 'CustomName', NBT.STRING, '');
+        hoppers[key] = { items: slotItems(tile, 5, true), cooldown: Number.isInteger(cooldown) ? Math.max(0, Math.min(8, cooldown)) : 0, name: typeof name === 'string' && name ? name : null };
+        tally(tileConverted, id);
+      } else if (inside && id === 'Cauldron' && world.get(lx, y, lz) === 134) {
+        // TileEntityBrewingStand.readFromNBT: four slots and BrewTime (short); the running brew restarts from the ingredient.
+        const brewTime = get(tile, 'BrewTime', NBT.SHORT, 0);
+        brewing[key] = { items: slotItems(tile, 4, true), brewTime: Number.isInteger(brewTime) ? Math.max(0, Math.min(400, brewTime)) : 0 };
         tally(tileConverted, id);
       } else if (inside && id === 'Furnace' && world.get(lx, y, lz) === FURNACE) {
         const items = slotItems(tile, 3, false);
@@ -378,7 +390,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     edits: [...world.edits],
     position: { x: px + 0.5, y: py + 1.01, z: pz + 0.5, yaw: 0, pitch: 0 },
     // legacyPlayer() keeps these fields; without `slots` the Creative hotbar defaults apply.
-    player: { chests, furnaces, dispensers },
+    player: { chests, furnaces, dispensers, hoppers, brewing },
     pistons,
     drops,
     ...(report.structures?.kept ? { structureData: parsedStructures.structureData } : {}),

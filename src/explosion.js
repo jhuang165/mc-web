@@ -33,7 +33,8 @@ for (let id = 107; id <= 114; id++) RESIST[id] = id >= 108 && id <= 111 ? 0.5 : 
 RESIST[STONE_BRICKS] = RESIST[DOUBLE_STONE_SLAB] = RESIST[STONE_SLAB] = 6; RESIST[82] = 6; RESIST[END_PORTAL_FRAME] = 3600000; RESIST[CAULDRON] = 2; RESIST[FLOWER_POT] = 0;
 // BlockDispenser (hardness 3.5), BlockPistonBase and BlockPistonExtension (hardness 0.5): dispenser-piston-reference.json.
 for (const [id, r] of Object.entries(BLAST_RESISTANCE2)) RESIST[id] = r; // redstone torches, lamps, block, button, plates, comparators, sensor, moving piston, glowstone (redstone-blocks-2-reference.json)
-RESIST[DISPENSER] = 3.5; RESIST[STICKY_PISTON] = RESIST[PISTON] = RESIST[PISTON_HEAD] = 0.5;
+RESIST[133] = 4.8; // BlockHopper: setResistance(8) (field 24) / 5 (hopper-reference.json)
+RESIST[DISPENSER] = RESIST[132] = 3.5; RESIST[STICKY_PISTON] = RESIST[PISTON] = RESIST[PISTON_HEAD] = 0.5;
 export const explosionResistance = (id) => f(RESIST[id] ?? 0);
 
 // java.util.HashSet<ChunkPosition> (a Java 8 HashMap): ChunkPosition.hashCode is
@@ -202,7 +203,9 @@ function itemDropped(id, meta, rand) {
     case CAULDRON: return [ITEM_CAULDRON, 0];
     case FLOWER_POT: return [ITEM_FLOWER_POT, 0];
     // The dispenser and both bases drop their own items; the head (getItemDropped null) nothing.
+    case 133: return [1133, 0]; // the hopper item (the contents spill from the tile)
     case DISPENSER: return [DISPENSER_ITEM, 0];
+    case 132: return [1132, 0]; // the dropper item (the contents spill from the tile)
     case STICKY_PISTON: return [STICKY_PISTON_ITEM, 0];
     case PISTON: return [PISTON_ITEM, 0];
     case PISTON_HEAD: return null;

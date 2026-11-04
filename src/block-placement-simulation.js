@@ -9,13 +9,15 @@ import { flowerCanStay } from "./flowers.js";
 import { saplingCanStay, placedLeavesMeta } from "./trees.js";
 import { canPlaceLadder, placedLadderMeta, clickedSide } from "./ladders.js";
 import { placedTorchMeta } from "./torches.js";
-import { railCanPlace, railAdded } from "./rails.js";
+import { railCanPlace, railAdded, railItemBlock, isRailId } from "./rails.js";
 import { anvilPlacementMeta } from './anvil-block.js';
 import { isStair, stairPlacementMeta } from './stairs.js';
 import { paneItemBlock, doorItemBlock, useDoorItem, doorRotationYaw, solidTopSurface } from './doors-panes.js';
 import { blockOfItem as stoneUtilityItemBlock, heldSlabType, planSlabUse, endFrameFacing, STONE_BRICKS, END_PORTAL_FRAME, FLOWER_POT } from './stone-utility.js';
-import { blockForItem as dispenserPistonItemBlock, isDispenserPiston, DISPENSER, pistonOrientation, minecraftYaw } from './dispenser-piston.js';
+import { blockForItem as dispenserPistonItemBlock, isDispenserPiston, DISPENSER, DROPPER, pistonOrientation, minecraftYaw } from './dispenser-piston.js';
 import { newDispenser } from './dispenser-container.js';
+import { brewingItemBlock } from './brewing.js';
+import { HOPPER, hopperPlacedMeta, newHopperTile } from './hopper.js';
 import { blockOfItem as redstoneItemBlock, isRedstoneBlock, redstonePlacedMeta } from './redstone-blocks.js';
 
 const BLOCK_MAX = new Set([STONE_BRICKS,4,5,7,48,69,70,71,82,WOOL, RED_FLOWER, 2, 6, 56, 58]);
@@ -33,7 +35,7 @@ const result = (placed, reason, block = null, position = null) => ({ placed, rea
 export function placeHeldBlock(state, request, hooks = {}) {
   const { world, survival, position, flowers, farming, yaw } = state;
   const { id: itemId, item, target } = request;
-  const id = dispenserPistonItemBlock(itemId) || redstoneItemBlock(itemId) || paneItemBlock(itemId) || stoneUtilityItemBlock(itemId) || itemId; // the glass pane item (1100) places block 100; stone utility items 1101-1106 their blocks 101-106
+  const id = dispenserPistonItemBlock(itemId) || redstoneItemBlock(itemId) || railItemBlock(itemId) || brewingItemBlock(itemId) || paneItemBlock(itemId) || stoneUtilityItemBlock(itemId) || itemId; // the glass pane item (1100) places block 100; stone utility items 1101-1106 their blocks 101-106
   const {
     collides: intersects = collides,
     toast = () => {},
@@ -140,7 +142,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
     markUnsaved();
     return result(true, plan.merge ? "slab-merge" : "slab", plan.id, cell);
   }
-  if ((!item?.block && !dispenserPistonItemBlock(itemId) && !redstoneItemBlock(itemId) && !stoneUtilityItemBlock(itemId)) || isLiquid(id)) {
+  if ((!item?.block && !dispenserPistonItemBlock(itemId) && !redstoneItemBlock(itemId) && !brewingItemBlock(itemId) && !stoneUtilityItemBlock(itemId)) || isLiquid(id)) {
     toast("Select a building block, food, or workstation.");
     return result(false, "not-a-building-block", id, p);
   }
@@ -154,7 +156,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if (id === SNOW_LAYER && !snowCanStay(world, ...p)) return result(false, "snow-support", id, p);
   if (id === LADDER && !canPlaceLadder(world, ...p)) return result(false, "ladder-support", id, p);
   if (id === CACTUS && !cactusCanPlace(world, ...p)) return result(false, "cactus-support", id, p);
-  if (id === RAIL && !railCanPlace(world, ...p)) return result(false, "rail-support", id, p);
+  if (isRailId(id) && !railCanPlace(world, ...p)) return result(false, "rail-support", id, p);
   // BlockFlowerPot.canPlaceBlockAt: the block below needs a solid top surface.
   if (id === FLOWER_POT && !solidTopSurface(world, p[0], p[1] - 1, p[2])) return result(false, "pot-support", id, p);
   // BlockTorch.canPlaceBlockAt, then onBlockPlaced/onBlockAdded pick the wall (1-4) or floor
@@ -177,6 +179,8 @@ export function placeHeldBlock(state, request, hooks = {}) {
           : isStair(id) ? stairPlacementMeta(yaw, p === here ? 1 : clickedSide(here, p), Math.fround(Math.fround(target.hit?.[1] ?? here[1] + 0.5) - here[1]))
           : isRedstoneBlock(id) ? rsMeta
           // BlockPistonBase/BlockDispenser.onBlockPlacedBy -> determineOrientation: from the player's position and yaw (six facings).
+          // BlockHopper.onBlockPlaced: the opposite of the clicked side (never up).
+          : id === HOPPER ? hopperPlacedMeta(p === here ? 1 : clickedSide(here, p))
           : isDispenserPiston(id) ? pistonOrientation(p[0], p[1], p[2], position.x, position.y, position.z, minecraftYaw(yaw))
           : 0;
   world.set(...p, id, false, meta);
@@ -187,10 +191,11 @@ export function placeHeldBlock(state, request, hooks = {}) {
   }
   world.set(...p, id, true, meta);
   if (id === CHEST) placeChest(world, survival.chests, ...p, yaw);
-  if (id === DISPENSER) (survival.dispensers ??= {})[p.join(',')] ??= newDispenser();
+  if (id === DISPENSER || id === DROPPER) (survival.dispensers ??= {})[p.join(',')] ??= newDispenser();
+  if (id === HOPPER) (survival.hoppers ??= {})[p.join(',')] ??= newHopperTile();
   if (id === ANVIL) scheduleFalling(...p);
   // BlockRailBase.onBlockAdded: the rail takes its shape and reshapes the rails it joins.
-  if (id === RAIL) railAdded(world, ...p);
+  if (isRailId(id)) railAdded(world, ...p);
   farming.observe(...p);
   if (!survival.creative) survival.take(itemId);
   updateBlock(p[0], p[2], p[1]);

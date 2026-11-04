@@ -5,7 +5,7 @@ export function blockSound(id) {
   if ([1, 5, 39, REEDS, TNT].includes(id)||isCrop(id)||isFlower(id)) return "grass";
   if ([2, 24, 25,29,30].includes(id)) return "gravel";
   if (id === 6) return "sand";
-  if ([4, 7, 13, 20, 21, LADDER, 108, 110, 112, 87, 91, 92, 93, 95, 96, 97, 119, 120, 124, 125, 126, 127, 128, 129].includes(id)) return "wood"; // 119-129: redstone torches, button, plates, comparators and sensor (redstone-blocks-2.js SOUND2) // 97: the wooden door // 87-96: stairs share the base block sound (wood ones here)
+  if ([4, 7, 13, 20, 21, 133, LADDER, 108, 110, 112, 87, 91, 92, 93, 95, 96, 97, 119, 120, 124, 125, 126, 127, 128, 129].includes(id)) return "wood"; // 119-129: redstone torches, button, plates, comparators and sensor (redstone-blocks-2.js SOUND2) // 97: the wooden door // 87-96: stairs share the base block sound (wood ones here)
   if (id === 19 || id === CACTUS) return "cloth";
   if (id === 23 || id === 46) return "snow";
   return "stone";
