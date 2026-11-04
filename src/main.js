@@ -84,9 +84,11 @@ import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox } from ".
 import { BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
 import { deathMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
 import { ChatUi, printChat } from "./chat-ui.js";
-import { createCommandRunner, chatLine } from "./commands.js";
+import { createCommandRunner, chatLine, tr } from "./commands.js";
+import { LanSession, LAN_NOTICE } from "./lan.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
 import { gameRule, setGameRuleSource } from "./game-rules.js";
+import { mayHitBlock } from "./adventure.js";
 import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
@@ -94,7 +96,7 @@ import { CHEST, settleFacing, chestPair, tickLid } from "./chest.js";
 import { DISPENSER, DROPPER, PISTON_HEAD, isDispenserPiston, itemForBlock, headBaseId } from "./dispenser-piston.js";
 import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
 import { HopperContainer, Hoppers, HOPPER } from "./hopper.js";
-import { Survival, ITEMS, burnTime } from "./survival.js";
+import { Survival, ITEMS, burnTime, gameModeOf } from "./survival.js";
 import { stackName } from "./item-names.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
@@ -332,6 +334,8 @@ $("#app").innerHTML = `
  <section id="hud" class="hidden" aria-label="Game heads-up display"><div class="game-top"><button class="game-brand" id="pause-button">${cube}<span>BLOCKWORLD<small id="world-label"></small></span><span class="pause-symbol">Ⅱ</span></button><div class="game-status"><span class="status-dot"></span><span id="save-label">Saved on this device</span><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div></div><div id="crosshair">＋</div><pre id="debug" class="hidden"></pre><div id="block-label"></div><div id="experience-hud" class="hidden"><div id="experience-level"></div><div class="experience-track"><div id="experience-fill"></div></div></div><div id="survival-hud" class="survival-hud hidden"></div><div id="mining-meter" class="mining-meter hidden" role="progressbar" aria-label="Mining progress" aria-valuemin="0" aria-valuemax="100"><i></i></div><div id="flight-label" class="flight-label"><span id="mode-label">CREATIVE</span> <span>·</span> <b id="movement-label">WALKING</b></div><div class="hotbar" id="hotbar"></div><div class="game-help">W A S D <span>move</span> <i>·</i> SPACE <span>jump</span> <i>·</i> LMB <span>break</span> <i>·</i> RMB <span>use / place</span> <i>·</i> E <span>inventory</span> <i>·</i> ESC <span>pause</span></div><div id="mobile-controls"><div class="dpad"><button data-key="KeyW">↑</button><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="touch-actions"><button id="touch-break">Break</button><button id="touch-place">Use</button><button id="touch-inventory">Bag</button><button id="touch-fly">Fly</button><button data-key="Space">Jump</button></div></div></section>
  <div class="modal-overlay hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div><div id="toast" role="status"></div><input id="file-input" type="file" accept=".json,application/json" hidden>
  <div id="loading"><span>Loading terrain</span></div>`;
+// Open to LAN for this tab (lan.js); it lasts until the world is left.
+const lan = new LanSession();
 // The 1.7.10 menu screens (menus.js) drawn over the game in #gui.
 const menuContext = {
   get options() { return options; },
@@ -350,6 +354,14 @@ const menuContext = {
   toggleFullscreen,
   inGame: () => screen !== "home",
   notice: toast,
+  lanOpen: () => lan.public,
+  // GuiShareToLan "Start LAN World": displayGuiScreen(null), shareToLAN, then commands.publish.started (or failed) in chat.
+  shareToLan: (mode, cheats) => {
+    resume();
+    const port = lan.share(mode, cheats);
+    printChat(port != null ? tr("commands.publish.started", port) : tr("commands.publish.failed"));
+    printChat("§7" + LAN_NOTICE);
+  },
   // Minecraft.displayGuiScreen(null): back to the game, or the title screen without a world.
   closeScreen: () => (screen === "home" ? gui.show(menus.mainMenu()) : resume()),
 };
@@ -729,6 +741,7 @@ function applyWeatherEdit(w, x, y, z, block, meta) {
 async function openWorld(record) {
   if(openingWorld)return;
   openingWorld=true;
+  lan.close();
   try {
     const prepared=new World(record.seed,record.biome,record.generationVersion??1,record.worldType);
     if (!record.chunked) prepared.restore(record.edits??[]);
@@ -1018,6 +1031,8 @@ const commandHost = createCommandHost({
   setTime: (t) => scene.setTime(t),
   teleport: (x, y, z) => { position.set(x, y, z); previous.copy(position); velocity.set(0, 0, 0); fallDistance = 0; saved = false; },
   setDifficulty: (d) => { options.difficulty = difficultySetting(d); updateDifficulty(); try { localStorage.setItem("blockworld.settings", JSON.stringify(options)); } catch {} },
+  lan: () => lan.open,
+  shareToLan: (mode, cheats) => lan.share(mode, cheats),
   setMode: (mode) => {
     survival.mode = mode;
     survival.inventory.creative = survival.creative;
@@ -1182,6 +1197,7 @@ function pause() {
 }
 function goHome() {
   save();
+  lan.close();
   hideBedScreen();
   screen = "home";
   closeModal();
@@ -2123,6 +2139,7 @@ function tickMining() {
     },
     breakBlock,
     hitParticles: (x, y, z, side) => scene.particles.hitBlock(world, x, y, z, side),
+    mayHit: (x, y, z) => mayHitBlock(survival, world.get(x, y, z), world.getMeta(x, y, z), heldId()),
   });
   mining = state.mining;
   mineCooldown = state.cooldown;
@@ -2297,7 +2314,7 @@ $("#file-input").onchange = async (e) => {
       ...importedRuntime(data),
       edits: [...check.edits],
       generationVersion: data.generationVersion ?? 1,
-      mode: data.mode === "survival" ? "survival" : "creative",
+      mode: gameModeOf(data.mode),
       player: new Survival(legacyPlayer(data), data.mode).serialize(),
     };
     worlds.unshift(record);
@@ -2538,12 +2555,11 @@ function animate(now) {
     frames = 0;
     fpsTime = elapsed;
   }
-  if (screen === "playing" || screen === "inventory") {
+  // Minecraft.isGamePaused: the game menu stops the world unless the LAN server is public (lan.js).
+  const running = () => screen === "playing" || screen === "inventory" || (screen === "paused" && !lan.paused(true));
+  if (running()) {
     accumulator += dt;
-    while (
-      accumulator >= PHYSICS.tick &&
-      (screen === "playing" || screen === "inventory")
-    ) {
+    while (accumulator >= PHYSICS.tick && running()) {
       updateParticleOptions();
       // --- Block particles (particles.js): Entity.onEntityUpdate's sprint particle uses the
       // pre-move position, last tick's motion and in-water flag, before movementTick moves the
@@ -2687,7 +2703,7 @@ function animate(now) {
     invisible: survival.effects.has(INVISIBILITY),
   });
   if (screen === "inventory") paperdollFrame();
-  chestRenderer?.update(screen === "playing" || screen === "inventory" ? accumulator / PHYSICS.tick : 1);
+  chestRenderer?.update(running() ? accumulator / PHYSICS.tick : 1);
   if(xpRenderer)xpRenderer.update(xpOrbs.orbs,partial);
   scene.dropPartial = partial;
   scene.particleView = { yaw, pitch, mirror: thirdPersonView === 2 };
@@ -2772,7 +2788,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, explodeAt, lightTnt };
+    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt };
   scene.preview(0);
   // The title screen's splash texts (assets/minecraft/texts/splashes.txt).
   menuContext.splashes = await fetch("/media/1.7.10/texts/splashes.txt").then((r) => (r.ok ? r.text() : "")).catch(() => "");

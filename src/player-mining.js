@@ -10,6 +10,8 @@ export function tickPlayerMining(state, {
   digSound = () => {},
   breakBlock = () => {},
   hitParticles = () => {},
+  // Minecraft.sendClickBlockToController: the hit particles (and swing) only when isCurrentToolAdventureModeExempt.
+  mayHit = () => true,
 } = {}) {
   if (state.playing) {
     if (state.cooldown > 0) {
@@ -18,7 +20,9 @@ export function tickPlayerMining(state, {
     } else if (state.aimedEntity) {
       state.mining = null;
     } else {
-      if (!state.mining && state.mineHeld && state.target) {
+      // A held click on a block the adventure player may not hit: clickBlock returns at once and
+      // sendClickBlockToController skips the swing, so the click is not re-dispatched.
+      if (!state.mining && state.mineHeld && state.target && mayHit(...state.target.block)) {
         // edit(false) can synchronously start mining, break an instant block, or set a
         // cooldown. A browser adapter may return freshly read closure values here.
         const updated = edit(false, state);
@@ -62,7 +66,7 @@ export function tickPlayerMining(state, {
   // This check is intentionally outside progress/cooldown handling: particles continue
   // during the hit delay, and read the live block after any progress/break callback.
   const { target } = state;
-  if (state.playing && state.mineHeld && target && !state.aimedEntity && getBlock(...target.block)) {
+  if (state.playing && state.mineHeld && target && !state.aimedEntity && getBlock(...target.block) && mayHit(...target.block)) {
     const [bx, by, bz] = target.block, [ax, ay, az] = target.adjacent ?? target.block;
     const side = ay < by ? 0 : ay > by ? 1 : az < bz ? 2 : az > bz ? 3 : ax < bx ? 4 : 5;
     hitParticles(bx, by, bz, side);

@@ -9,6 +9,7 @@ import { makeStack } from "./inventory.js";
 import { canApply, canApplyTogether, addEnchantment, ENCHANTMENTS_BY_ID } from "./enchantments.js";
 import { liveStackToNative } from "./anvil-container.js";
 import { PLAYER_NAME } from "./death-messages.js";
+import { LAN_NOTICE } from "./lan.js";
 
 const unsupported = (text) => new CommandException("commands.generic.exception", [text], "unsupported");
 const enchantName = new Map(ENCHANTMENT_NAMES.map(([id, name]) => [id, name]));
@@ -19,19 +20,19 @@ export function createCommandHost(env) {
   const survival = () => env.survival();
   return {
     name: PLAYER_NAME,
-    get cheats() { return cheatsAllowed(env.active()); },
+    // ServerConfigurationManager.func_152596_g (canSendCommands) for the singleplayer owner: the world's allowCommands, or
+    // commandsAllowedForAll, which shareToLAN sets from the LAN screen's Allow Cheats.
+    get cheats() { return cheatsAllowed(env.active()) || !!env.lan?.()?.cheats; },
+    shareToLan: (mode, cheats) => env.shareToLan(mode, cheats),
+    lanNotice: LAN_NOTICE,
     get rules() { const a = env.active(); return (a.gameRules ??= { ...DEFAULT_RULES }); },
     print: (text) => printChat(text),
     position: () => env.position(),
     seed: () => env.seed(),
     inWorld: (x, y, z) => { const w = env.world(); return y >= 0 && y < 256 && w.inside(Math.floor(x), Math.floor(y), Math.floor(z)) && (!w.streaming || w.isLoaded(Math.floor(x), Math.floor(z))); },
     kill() { survival().damage(1000, "void"); env.changed(); },
-    setGameMode(mode) {
-      if (mode === "adventure") throw unsupported("Adventure mode is not available in this build");
-      env.setMode(mode);
-    },
+    setGameMode(mode) { env.setMode(mode); },
     setDefaultGameMode(mode) {
-      if (mode === "adventure") throw unsupported("Adventure mode is not available in this build");
       env.active().defaultGameMode = mode; // singleplayer: only the mode a new joiner gets
     },
     setGameRule(name, value) { env.active().gameRules = { ...this.rules, [name]: String(value) }; env.changed(); },

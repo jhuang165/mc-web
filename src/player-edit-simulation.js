@@ -17,6 +17,7 @@ import {
 import { ITEM_BED, placeBed } from './bed.js';
 import { isDoor, activateDoor } from './doors-panes.js';
 import { ITEMS } from './survival.js';
+import { mayHitBlock } from './adventure.js';
 import { LEVER, STONE_BUTTON, REPEATER, redstoneActivate } from './redstone-blocks.js';
 import { copyStack, makeStack } from './inventory.js';
 import { HOPPER, newHopperTile } from './hopper.js';
@@ -362,6 +363,12 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     return act(result?.placed ? 'place-block' : `placement-${result?.reason || 'handled'}`, { placement: result });
   }
 
+  // PlayerControllerMP.clickBlock / ItemInWorldManager.onBlockClicked open with the adventure gate: without an exempt
+  // tool nothing happens (no fire punch-out, no onBlockClicked, no digging); the click's swing above stays.
+  if (!mayHitBlock(state.survival, block, state.world.getMeta?.(...target.block) ?? 0, id)) {
+    state.mining = null;
+    return act('adventure-not-exempt');
+  }
   // Left-clicking extinguishes adjacent fire before bedrock/Creative/mining checks.
   const burning = target.adjacent;
   if (burning && state.world.get(...burning) === FIRE && (state.survival.creative || !(state.mining && state.mining.block.every((v, i) => v === target.block[i])))) {

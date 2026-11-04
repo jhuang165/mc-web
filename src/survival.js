@@ -544,10 +544,14 @@ function legacyFurnace(f, read) {
   return ["input", "fuel", "output"].map((slot) => read({ id: f[slot], count: f[slot + "Count"] }));
 }
 
+// WorldSettings.GameType names the port keeps (survival 0, creative 1, adventure 2); anything else reads as creative, the
+// default of records saved before game modes were stored.
+export const GAME_MODE_IDS = Object.freeze({ survival: 0, creative: 1, adventure: 2 });
+export const gameModeOf = (mode) => (Object.hasOwn(GAME_MODE_IDS, mode) ? mode : "creative");
 export class Survival {
   constructor(data = {}, mode = "survival") {
     data = data && typeof data === "object" ? data : {};
-    this.mode = mode === "survival" ? "survival" : "creative";
+    this.mode = gameModeOf(mode);
     this.health = clamp(data.health, 0, 100, 20);
     this.food = Math.floor(clamp(data.food, 0, 20, 20));
     this.saturation = clamp(data.saturation, 0, this.food, 5);
@@ -638,6 +642,10 @@ export class Survival {
   }
   get creative() {
     return this.mode === "creative";
+  }
+  // GameType.ADVENTURE: survival in every respect but PlayerCapabilities.allowEdit (adventure.js).
+  get adventure() {
+    return this.mode === "adventure";
   }
   get held() {
     return this.inventory.held;

@@ -7,6 +7,7 @@ import {
 } from "./commands.js";
 import { COMMAND_LIST, LANG } from "./command-data.js";
 import { createCommandHost } from "./command-host.js";
+import { LanSession, LAN_NOTICE } from "./lan.js";
 import { chat } from "./chat-ui.js";
 import { World } from "./world.js";
 import { fromOriginal } from "./block-registry.js";
@@ -86,19 +87,20 @@ function game({ mode = "survival", allowCommands } = {}) {
   const active = { mode, ...(allowCommands === undefined ? {} : { allowCommands }), seed: "commands" };
   const pos = { x: 10.5, y: 40, z: 10.5 };
   const log = [];
-  const state = { time: null, mode: null, teleport: null, changed: 0 };
+  const state = { time: null, mode: null, teleport: null, changed: 0 }, lan = new LanSession();
   const env = {
     active: () => active, world: () => world, weather: () => weather, mobs: () => null, survival: () => survival, experience: () => experience,
     position: () => ({ ...pos }), seed: () => active.seed, stackName: (s) => "Item" + s.id, dropStack: (s) => log.push(["drop", s.id, s.count]),
     refreshInventory() {}, changed: () => state.changed++, setTime: (t) => (state.time = t),
     teleport: (x, y, z) => (state.teleport = [x, y, z]), setDifficulty: (d) => (state.difficulty = d),
     setMode: (m) => { survival.mode = m; survival.inventory.creative = survival.creative; state.mode = m; },
+    lan: () => lan.open, shareToLan: (m, c) => lan.share(m, c),
     updateBlock() {}, destroyBlock() {},
   };
   const host = createCommandHost(env);
   const runner = createCommandRunner(host);
   const out = () => chat.lines.map((l) => l.text).reverse();
-  return { world, survival, weather, experience, active, host, runner, state, run: (t) => { chat.clear(); runner.run(t); return out(); } };
+  return { world, survival, weather, experience, active, host, runner, state, lan, run: (t) => { chat.clear(); runner.run(t); return out(); } };
 }
 
 test("cheats off refuses permission-level commands in red and keeps help, me, tell and seed", () => {
@@ -179,8 +181,10 @@ test("gamemode, teleport with ~, spawnpoint, difficulty and kill act on the play
   assert.equal(g.survival.inventory.creative, false);
   g.run("/gamemode c");
   assert.equal(g.survival.mode, "creative");
-  assert.equal(g.run("/gamemode 2")[0].startsWith("§c"), true);
-  assert.equal(g.survival.mode, "creative");
+  assert.deepEqual(g.run("/gamemode 2"), ["Your game mode has been updated", "Set own game mode to Adventure Mode"]);
+  assert.equal(g.survival.mode, "adventure");
+  assert.equal(g.survival.inventory.creative, false);
+  g.run("/gamemode c");
   assert.match(g.run("/gamemode 9")[0], /^§c/);
   g.run("/tp ~ ~10 ~");
   assert.deepEqual(g.state.teleport, [10.5, 50, 10.5]);
@@ -217,5 +221,17 @@ test("plain chat echoes as <Player> message and a bad usage is red", () => {
   const g = game({ allowCommands: true });
   assert.equal(chatLine("Player", "hello"), "<Player> hello");
   assert.deepEqual(g.run("/give"), ["§cUsage: /give <player> <item> [amount] [data] [dataTag]"]);
-  assert.match(g.run("/publish")[0], /^§c/);
+});
+
+test("/publish shares to LAN as survival without cheats; the LAN screen's Allow Cheats lets a cheatless world use commands", () => {
+  const g = game({ mode: "survival", allowCommands: false });
+  assert.match(g.run("/gamemode 1")[0], /^§cYou do not have permission to use this command$/);
+  assert.equal(g.lan.share("creative", true), "25564");
+  assert.equal(g.host.cheats, true);
+  assert.deepEqual(g.run("/publish"), ["Local game hosted on port 25564", "§7" + LAN_NOTICE]);
+  assert.deepEqual(g.lan.open, { gameType: "survival", cheats: false, port: 25564 }, "shareToLAN overwrites both settings");
+  assert.equal(g.host.cheats, false);
+  assert.equal(g.lan.paused(true), false, "a public server never pauses");
+  g.lan.close();
+  assert.equal(g.lan.paused(true), true);
 });

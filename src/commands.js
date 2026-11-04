@@ -100,7 +100,7 @@ export const DIFFICULTIES = ["peaceful", "easy", "normal", "hard"];
 // Original entity names the port can create (EntityList names -> entities.js types).
 export const SUMMONABLE = { Pig: "pig", Cow: "cow", Sheep: "sheep", Chicken: "chicken", Zombie: "zombie", Spider: "spider", CaveSpider: "cave_spider", Skeleton: "skeleton", Creeper: "creeper", Villager: "villager", VillagerGolem: "iron_golem", Silverfish: "silverfish", Witch: "witch" };
 // Commands the registry lists that this build cannot honour; they report instead of pretending.
-export const UNSUPPORTED = new Set(["achievement", "debug", "publish", "scoreboard", "spreadplayers", "tellraw"]);
+export const UNSUPPORTED = new Set(["achievement", "debug", "scoreboard", "spreadplayers", "tellraw"]);
 
 const REGISTERED = COMMAND_LIST.filter((c) => c.group !== "dedicated"); // singleplayer: the always group plus /publish
 const BY_NAME = new Map();
@@ -251,6 +251,13 @@ export function createCommandRunner(host) {
       usage("commands.time.usage");
     },
     toggledownfall() { host.toggleDownfall(); feedback("commands.downfall.success"); },
+    // CommandPublish: MinecraftServer.shareToLAN(GameType.SURVIVAL, false), started with its port or failed.
+    publish() {
+      const port = host.shareToLan("survival", false);
+      if (port != null) feedback("commands.publish.started", port);
+      else feedback("commands.publish.failed");
+      if (port != null && host.lanNotice) say("§7" + host.lanNotice);
+    },
     weather(a) {
       if (a.length < 1 || a.length > 2) usage("commands.weather.usage");
       let ticks = (300 + Math.floor(Math.random() * 600)) * 20;

@@ -11,6 +11,9 @@ export const LANG = {
   "menu.game": "Game menu", "menu.singleplayer": "Singleplayer", "menu.multiplayer": "Multiplayer",
   "menu.online": "Minecraft Realms", "menu.options": "Options...", "menu.quit": "Quit Game",
   "menu.returnToMenu": "Save and Quit to Title", "menu.returnToGame": "Back to Game", "menu.shareToLan": "Open to LAN",
+  "lanServer.title": "LAN World", "lanServer.start": "Start LAN World", "lanServer.otherPlayers": "Settings for Other Players",
+  "selectWorld.gameMode.adventure": "Adventure", "selectWorld.gameMode.adventure.line1": "Same as survival mode, but blocks can't",
+  "selectWorld.gameMode.adventure.line2": "be added or removed",
   "selectWorld.title": "Select World", "selectWorld.world": "World", "selectWorld.select": "Play Selected World",
   "selectWorld.create": "Create New World", "selectWorld.recreate": "Re-Create", "selectWorld.delete": "Delete",
   "selectWorld.rename": "Rename", "selectWorld.deleteQuestion": "Are you sure you want to delete this world?",
@@ -28,7 +31,7 @@ export const LANG = {
   "selectWorld.mapFeatures.info": "Villages, dungeons etc", "selectWorld.mapType": "World Type:",
   "selectWorld.allowCommands": "Allow Cheats:", "selectWorld.allowCommands.info": "Commands like /gamemode, /xp",
   "selectWorld.bonusItems": "Bonus Chest:",
-  "gameMode.survival": "Survival Mode", "gameMode.creative": "Creative Mode",
+  "gameMode.survival": "Survival Mode", "gameMode.creative": "Creative Mode", "gameMode.adventure": "Adventure Mode",
   "generator.default": "Default", "generator.largeBiomes": "Large Biomes", "generator.amplified": "Amplified",
   "generator.amplified.info": "Notice: Just for fun, requires beefy computer",
   "options.off": "OFF", "options.on": "ON", "options.title": "Options", "options.controls": "Controls...",
@@ -210,6 +213,14 @@ export function ingameMenuLayout(w, h) {
     },
   };
 }
+// GuiShareToLan.initGui / drawScreen.
+export function shareToLanLayout(w, h) {
+  const c = half(w);
+  return {
+    title: [c, 50], otherPlayers: [c, 82],
+    buttons: { start: btn(c - 155, h - 28, 150), cancel: btn(c + 5, h - 28, 150), gameMode: btn(c - 155, 100, 150), allowCommands: btn(c + 5, 100, 150) },
+  };
+}
 export function optionsLayout(w, h) {
   const c = half(w), s = Math.trunc(h / 6);
   return {
@@ -342,7 +353,7 @@ export function saveDate(ms) {
 // GuiSelectWorld.List.drawSlot: name (or "World N"), "folder (date)" and the game mode line.
 export function worldLines(record, index) {
   const name = record.name || t("selectWorld.world") + " " + (index + 1);
-  return [name, `${record.folder || folderName(record.name || "World")} (${saveDate(record.updated || 0)})`, t(record.mode === "survival" ? "gameMode.survival" : "gameMode.creative")];
+  return [name, `${record.folder || folderName(record.name || "World")} (${saveDate(record.updated || 0)})`, t(record.mode === "survival" || record.mode === "adventure" ? "gameMode." + record.mode : "gameMode.creative")];
 }
 // The world types the World Type button cycles through: 1.7.10's creatable WorldTypes (DEFAULT,
 // LARGE_BIOMES, AMPLIFIED; FLAT is not generated here) followed by the browser's own landscapes.

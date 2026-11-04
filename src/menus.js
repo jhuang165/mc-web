@@ -1,11 +1,11 @@
 // The 1.7.10 menu screens as Gui screens (menu-ui.js): GuiMainMenu, GuiSelectWorld, GuiCreateWorld,
 // GuiYesNo (delete), GuiRenameWorld, GuiIngameMenu, GuiOptions, GuiVideoSettings, GuiControls,
-// GuiScreenOptionsSounds and GuiLanguage. Layouts and strings are in menu-screens.js. Buttons the
-// browser cannot act on (Multiplayer, Realms, Quit, LAN, ...) keep their places, drawn disabled
+// GuiScreenOptionsSounds, GuiLanguage and GuiShareToLan. Layouts and strings are in menu-screens.js. Buttons the
+// browser cannot act on (Multiplayer, Realms, Quit, ...) keep their places, drawn disabled
 // with a reason. main.js supplies `ctx` (options, worlds and the game actions).
 import {
   t, textWidth, COLOR, pickSplash, splashScale, LOGO, MINCERAFT_LOGO,
-  mainMenuLayout, selectWorldLayout, createWorldLayout, yesNoLayout, renameWorldLayout, ingameMenuLayout,
+  mainMenuLayout, selectWorldLayout, createWorldLayout, yesNoLayout, renameWorldLayout, ingameMenuLayout, shareToLanLayout,
   optionsLayout, VIDEO_OPTIONS, videoSettingsLayout, CONTROLS_OPTIONS, controlsLayout, KEY_ENTRY, soundsLayout, languageLayout,
   FLOAT_OPTIONS, denormalize, normalize, optionText, soundText, folderName, worldLines, WORLD_TYPES, worldTypeIndex,
   KEY_BINDINGS, REBINDABLE, keyListEntries, keyName,
@@ -17,7 +17,6 @@ export const UNAVAILABLE = {
   multiplayer: "Multiplayer needs a connection to a Minecraft server, which a web page cannot open.",
   online: "Minecraft Realms is an online Mojang service; this browser recreation has no account sign-in.",
   quit: "A web page cannot close its own tab. Close the tab to quit.",
-  shareToLan: "Open to LAN needs network sockets that a web page cannot open.",
   achievements: "Achievements are not implemented in this browser build yet.",
   stats: "Statistics are not recorded in this browser build yet.",
   superSecret: "Super Secret Settings needs the 1.7.10 post-processing shaders, which this renderer does not have.",
@@ -330,11 +329,36 @@ export function createMenus(gui, ctx) {
         g.button(b.returnToMenu, t("menu.returnToMenu"), (h) => { h.enable(false); ctx.goHome(); });
         g.button(b.returnToGame, t("menu.returnToGame"), () => ctx.resume());
         g.button(b.options, t("menu.options"), () => show(optionsScreen(ingameMenu)));
-        g.button(b.shareToLan, t("menu.shareToLan"), null, { reason: UNAVAILABLE.shareToLan });
+        // GuiIngameMenu: enabled while singleplayer and the integrated server is not public yet.
+        g.button(b.shareToLan, t("menu.shareToLan"), () => show(shareToLan(ingameMenu)), { enabled: !ctx.lanOpen() });
         g.button(b.achievements, t("gui.achievements"), null, { reason: UNAVAILABLE.achievements });
         g.button(b.stats, t("gui.stats"), null, { reason: UNAVAILABLE.stats });
         // Browser addition in the row vanilla leaves empty: download the world.
         g.button(b.export, "Export World", () => ctx.exportWorld());
+      },
+    };
+  }
+
+  // --- GuiShareToLan --- (lan.js: what starting a LAN world can do in a browser)
+  function shareToLan(parent) {
+    let mode = "survival", cheats = false;
+    return {
+      id: "share-to-lan",
+      escape: close,
+      init(g, w, h) {
+        const L = shareToLanLayout(w, h), b = L.buttons;
+        g.text(t("lanServer.title"), ...L.title, { center: true });
+        g.text(t("lanServer.otherPlayers"), ...L.otherPlayers, { center: true });
+        g.button(b.start, t("lanServer.start"), () => ctx.shareToLan(mode, cheats));
+        g.button(b.cancel, t("gui.cancel"), () => show(parent()));
+        // actionPerformed 104: survival -> creative -> adventure -> survival.
+        const modeLabel = () => t("selectWorld.gameMode") + " " + t("selectWorld.gameMode." + mode);
+        const cheatsLabel = () => t("selectWorld.allowCommands") + " " + t(cheats ? "options.on" : "options.off");
+        g.button(b.gameMode, modeLabel(), (button) => {
+          mode = mode === "survival" ? "creative" : mode === "creative" ? "adventure" : "survival";
+          button.set(modeLabel());
+        });
+        g.button(b.allowCommands, cheatsLabel(), (button) => { cheats = !cheats; button.set(cheatsLabel()); });
       },
     };
   }
