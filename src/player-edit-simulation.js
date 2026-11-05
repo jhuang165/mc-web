@@ -13,6 +13,7 @@ import { ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, ITEM_FIRE_CHARGE } from './spawn-eggs.
 import { useEggOnBlock, useEggOnWater, useFireCharge, throwExpBottle } from './spawn-egg-use.js';
 import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
 import { ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
+import { DRAGON_EGG } from './dragon-egg.js';
 import { useEyeOfEnder } from './eye-of-ender-live.js';
 import { BOAT_ITEM } from './boats.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
@@ -309,6 +310,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     if (activates && block === 139) { hook('useCommandBlock', x, y, z); return act('use-command-block'); }
     // BlockNote.onBlockActivated raises the note; BlockJukebox ejects, or ItemRecord.onItemUse inserts the held disc (jukebox.js).
     if (activates && (block === 177 || block === 178) && hook('useNoteJukebox', x, y, z, id)) return act('use-note-jukebox');
+    // BlockDragonEgg.onBlockActivated: the egg teleports (dragon-egg-live.js) and the click is consumed.
+    if (activates && block === DRAGON_EGG && hook('useDragonEgg', x, y, z) !== undefined) return act('use-dragon-egg');
     // BlockCake.onBlockActivated (stems-cake.js): eat a slice when hungry and not in Creative; the seventh bite removes the cake.
     if (activates && block === CAKE) {
       const eaten = cakeEat(state.survival, state.world, x, y, z);
@@ -499,6 +502,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     return act('creative-break');
   }
   if (state.mining && state.mining.tool === id && state.mining.block.every((v, i) => v === target.block[i])) return act('mining-already-started');
+  if (block === DRAGON_EGG) hook('useDragonEgg', ...target.block); // BlockDragonEgg.onBlockClicked: a punch teleports it too, then mining continues
   if (block === 177) hook('blockClicked', ...target.block); // BlockNote.onBlockClicked plays the note (Survival only: Creative breaks the block)
   const under = hook('clientEyeInWater');
   if (playerMiningState(state.survival, block, id, !!under, state.grounded).progress >= 1) {

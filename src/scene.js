@@ -1,4 +1,5 @@
 import { END_PORTAL } from "./eye-of-ender.js"; // drawn by end-portal-renderer.js
+import { DRAGON_EGG, eggBoxes } from "./dragon-egg.js";
 import { isChestShaped } from "./chest-blocks.js"; // chest, trapped chest and ender chest are drawn by chest-renderer.js
 import { PUMPKIN_STEM, MELON_STEM, CAKE, cakeBounds, stemDirection, stemTint, stemQuads } from './stems-cake.js';
 import * as THREE from "three";
@@ -257,6 +258,7 @@ export class VoxelScene {
           if (b === 20) this.torch(solid, x, y, z);
           else if (isCrop(b)) this.crops(solid, b, x, y, z);
           else if (b === PUMPKIN_STEM || b === MELON_STEM) this.stem(solid, b, x, y, z);
+          else if (b === DRAGON_EGG) eggBoxes().forEach((box) => this.box(solid, b, x, y, z, box, 0, true)); // RenderBlocks.renderBlockDragonEgg
           else if (b === CAKE) this.box(solid, b, x, y, z, cakeBounds(w.getMeta(x, y, z)), w.getMeta(x, y, z), true);
           else if (b===COCOA||b===SANDSTONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z));
           else if (b===STONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z),w.getMeta(x,y,z));

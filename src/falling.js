@@ -8,11 +8,12 @@ import { replaceable } from "./plants.js";
 import { saveTicks, readTicks } from "./scheduled-ticks.js";
 import { entityActive } from './streaming-ticks.js';
 import { JavaRandom } from './java-random.js';
+import { DRAGON_EGG, EGG_TICK_RATE } from './dragon-egg.js';
 import { anvilDropDamage, anvilImpact } from './anvil-block.js';
 
 const f = Math.fround;
 export const FLINT = 313;
-export const isFallingBlock = (b) => b === SAND || b === GRAVEL || b === ANVIL;
+export const isFallingBlock = (b) => b === SAND || b === GRAVEL || b === ANVIL || b === DRAGON_EGG; // BlockDragonEgg extends BlockFalling (end-reference.json eggFall)
 // BlockFalling.func_149831_e (canFallBelow): air, fire, or a water or lava material.
 export const canFallBelow = (b) => b === 0 || b === FIRE || b === WATER || b === LAVA;
 // BlockGravel.getItemDropped: flint when nextInt(10 - fortune * 3) is 0 (fortune capped at 3).
@@ -46,7 +47,7 @@ export class FallingBlocks {
   }
   // BlockFalling.onBlockAdded and onNeighborBlockChange both schedule an update in tickRate (2).
   schedule(x, y, z, b = this.world.get(x, y, z)) {
-    this.enqueue(x, y, z, b, FALL_DELAY);
+    this.enqueue(x, y, z, b, b === DRAGON_EGG ? EGG_TICK_RATE : FALL_DELAY); // egg tickRate 5, sand 2
   }
   enqueue(x, y, z, b, delay) {
     const k = key(x, y, z) + ":" + b;

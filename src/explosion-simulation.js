@@ -4,7 +4,7 @@
 import { explodeBlocks, explosionImpact, explodeTnt, primeTnt } from "./explosion.js";
 import { ENTITY_TYPES } from "./entities.js";
 import { makeStack, copyStack } from "./inventory.js";
-import { PHYSICS, opaqueCube } from "./world.js";
+import { PHYSICS, opaqueCube, FIRE } from "./world.js";
 import { entityBox } from "./weather.js";
 import { blastKnockback } from "./armor-enchantments.js";
 import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, itemForBlock } from "./dispenser-piston.js";
@@ -31,9 +31,10 @@ export function applyExplosion(state, request, hooks = {}) {
   } = state;
   // `smoking` false (a creeper with gamerule mobGriefing off): WorldServer.newExplosion clears affectedBlockPositions
   // after doExplosionA, so nothing breaks or drops and the client draws no per-block particles.
-  const { x, y, z, size, exploder = null, attacker = null, smoking = true } = request;
+  const { x, y, z, size, exploder = null, attacker = null, smoking = true, flaming = false } = request;
   const {
     opaque = opaqueCube,
+    ignite = null,
     brokenTool = () => {},
     burst = () => {},
     sound = () => {},
@@ -43,7 +44,7 @@ export function applyExplosion(state, request, hooks = {}) {
     markDirty = () => {},
   } = hooks;
 
-  const explosion = explodeBlocks(world, x, y, z, size, random, { opaque, smoking });
+  const explosion = explodeBlocks(world, x, y, z, size, random, { opaque, smoking, flaming: flaming && !!ignite });
   const mobHits = [];
   // Explosion.doExplosionA sees every entity before any affected block is removed.
   const hitFrom = attacker === "player" ? position : attacker;
@@ -139,6 +140,8 @@ export function applyExplosion(state, request, hooks = {}) {
       if (world.get(...head) === PISTON_HEAD && world.set(...head, 0)) changes.push([...head, PISTON_HEAD, 0]);
     }
   }
+  // Explosion.doExplosionB(flaming): the cells explodeBlocks chose get fire (flaming is the ender crystal and ghast fireballs).
+  for (const [fx, fy, fz] of explosion.fires) if (ignite(fx, fy, fz)) changes.push([fx, fy, fz, 0, FIRE]);
   for (const drop of explosion.drops)
     items.spawn(makeStack(drop.id, 1, drop.damage || 0), drop.x, drop.y, drop.z, { delay: 10 });
   for (const orb of explosion.xp) xpOrbs.spawn(orb.value, orb);
