@@ -438,6 +438,9 @@ export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks
   if (ody !== dy) e.vy = 0;
   if (odz !== dz) e.vz = 0;
   let landed = 0;
+  // EntityLivingBase.updateFallState (sv.a(DZ)V) first runs handleWaterMovement when the entity
+  // is not already in water, on the moved box: landing in water (even 1 deep) cancels the fall.
+  if ((hooks?.living || e.living) && !e.inWater && waterAcceleration(world, entityWaterBox(bb), false).wet) e.fallDistance = 0;
   if (e.onGround) {
     landed = e.fallDistance;
     e.fallDistance = 0;
@@ -1724,6 +1727,7 @@ export class EntityWorld {
     if (e.moveStrafing) e.moveStrafing = f(e.moveStrafing * f(0.98)); // EntitySlime strafes (moveStrafing x 0.98)
     // moveEntity's tail: cactus and fire (inFire) damage, webs, the fire counter and the rain fizz.
     const self = this, hooks = {
+      living: true,
       hurt: (source, points) => this.hazard(e, points, source),
       get wet() { return e.inWater || !!self.wet?.(e, t.height); },
       fizz: () => this.events.push({ sound: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(this.random() - this.random()) * 0.4)), position: { x: e.x, y: e.y, z: e.z } }),

@@ -50,7 +50,7 @@ function squidUpdate(m, e, t) {
   m.ai.brain(e).despawnEntity();
   if (e.health <= 0) return;
   // ws.e(FF): moveEntity(motion) with no gravity, friction or acceleration.
-  const hooks = { hurt: (source, points) => m.hazard(e, points, source), wet: false, fizz() {} };
+  const hooks = { living: true, hurt: (source, points) => m.hazard(e, points, source), wet: false, fizz() {} };
   const landed = moveEntity(m.world, e, t.width, t.height, e.vx, e.vy, e.vz, undefined, hooks);
   if (landed > 0) {
     m.onLand?.(e, landed);

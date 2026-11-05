@@ -83,7 +83,7 @@ export function ghastUpdate(m, e, t) {
     const look = lookVector(out.yaw, 0, mhSin, mhCos);
     m.fireballs.launch({ large: true, owner: e, x: e.x + look[0] * 4, y: e.y + f(t.height / 2) + 0.5, z: e.z + look[2] * 4, dx: out.fireball.dx, dy: out.fireball.dy, dz: out.fireball.dz, power: out.fireball.power });
   }
-  const hooks = { hurt: (source, points) => m.hazard(e, points, source), wet: false, fizz() {} };
+  const hooks = { living: true, hurt: (source, points) => m.hazard(e, points, source), wet: false, fizz() {} };
   moveEntity(world, e, t.width, t.height, e.vx, e.vy, e.vz, undefined, hooks);
   const friction = e.inWater ? 0.8 : e.onGround ? f(f(0.6) * f(0.91)) : f(0.91);
   e.vx *= friction; e.vy *= friction; e.vz *= friction;

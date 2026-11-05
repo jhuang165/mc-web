@@ -111,7 +111,7 @@ export function movePlayer(state, controls, toast = () => {}) {
   const [mx, my, mz] = webMove(motion, velocity, ['x', 'y', 'z']);
   const body = {
     x: position.x, y: position.y, z: position.z, vx: velocity.x, vy: velocity.y, vz: velocity.z,
-    onGround: grounded, sneaking: sneak, fallDistance: flying ? 0 : fallDistance,
+    onGround: grounded, sneaking: sneak, fallDistance: flying ? 0 : fallDistance, inWater, living: true,
     // onLivingUpdate's sneak raise; moveEntity applies the * 0.4 decay before its step test.
     ySize: sneak && motion.ySize < Math.fround(SNEAK_YSIZE) ? Math.fround(SNEAK_YSIZE) : motion.ySize,
   };
