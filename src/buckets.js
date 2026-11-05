@@ -135,6 +135,7 @@ export function placeContainedLiquid(world, x, y, z, liquid, destroy) {
   const old = world.get(x, y, z);
   // A ladder has a collision box but Material.circuits is not solid, so the liquid replaces it.
   if (old !== 0 && old !== LADDER && world.solid(x, y, z)) return false;
+  if (world.hasNoSky && liquid === WATER) { world.evaporated?.(x, y, z); return true; } // the Nether: fizz and smoke, the water is not placed (dimension-live.js)
   if (old !== 0 && !isLiquid(old)) destroy?.(x, y, z, old);
   world.set(x, y, z, liquid, true, 0);
   return true;
