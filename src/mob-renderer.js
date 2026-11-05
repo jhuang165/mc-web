@@ -15,6 +15,7 @@ import { createVillagerRig, villagerLegAngle } from "./villager-renderer.js";
 import { createIronGolemRig, animateIronGolem } from "./iron-golem-renderer.js";
 import { createWitchRig, animateWitch } from "./witch-renderer.js";
 import { createWolfRig, animateWolf } from "./wolf-renderer.js";
+import { createSquidRig, createBatRig } from "./squid-bat-renderer.js";
 const RAD = Math.PI / 180;
 // RenderCreeper's powered pass (bni.a(xz, I, F), pass 1): creeper_armor.png with the texture
 // matrix translated by (scroll, scroll), colour 0.5, lighting off, blended GL_ONE, GL_ONE.
@@ -378,6 +379,8 @@ export class MobRenderer {
     if (e.type === "witch") return createWitchRig(this, e);
     if (e.type === "wolf") return createWolfRig(this);
     if (e.type === "iron_golem") return createIronGolemRig(this);
+    if (e.type === "squid") return createSquidRig(this);
+    if (e.type === "bat") return createBatRig(this);
     return this.createQuadruped(e.type);
   }
   // `partial` is the fraction of the current tick elapsed (mobPose interpolates).
@@ -466,6 +469,7 @@ export class MobRenderer {
       if (r.nose) animateWitch(r, e, pose.age);
       if (r.golem) animateIronGolem(r, e, pose, partial);
       if (r.wolf) animateWolf(r, e, pose);
+      if (r.custom) r.custom(r, e, pose, partial);
       r.limbs.forEach((l, i) => {
         if (spider) { l.rotation.set(0, -spider[i][0], -spider[i][1]); return; }
         if (creeper) { l.rotation.x = creeper[i + 1][0]; return; }

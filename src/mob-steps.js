@@ -30,7 +30,7 @@ export const MOB_STEP_SOUNDS = {
   iron_golem: own("mob.irongolem.walk", 1),
 };
 // Entity.canTriggerWalking: only the silverfish turns it off among the mobs here.
-export const canTriggerWalking = (type) => type !== "silverfish";
+export const canTriggerWalking = (type) => type !== "silverfish" && type !== "squid" && type !== "bat"; // EntitySquid/EntityBat (squid-bat.js) override it to false
 
 // The sound of one step of `type` on the block `block` (internal id) with `above` in the cell over it, or null.
 export function mobStepSound(type, block, above = 0) {

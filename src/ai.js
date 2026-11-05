@@ -877,6 +877,8 @@ export class Brain {
       this.tasks.add(6, new LookIdle(this));
       this.targets.add(1, new NearestAttackable(this));
       this.targets.add(2, new HurtByTarget(this, false));
+    } else if (e.type === "squid" || e.type === "bat") {
+      // EntitySquid and EntityBat: no AI tasks (squid-bat-mobs.js drives them); the helpers and despawnEntity still run.
     } else if (e.type === "witch") {
       // EntityWitch (yp): swim 1, the potion ArrowAttack 2 (speed 1.0, interval 60 both ways, range 10), wander 2 (1.0), watch the
       // player 3 (8 blocks), look idle 3; targets hurt-by 1 (no call for help) and the nearest visible player 2.
@@ -1047,7 +1049,7 @@ export class Brain {
     const e = this.e, p = this.ai.player;
     if ((e.idle & 31) !== 31 || !p) return;
     // EntityWolf.canDespawn (v): only a wild wolf older than 2400 ticks.
-    const d3 = this.distSq(p), can = (e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || e.type === "zombie" || e.type === "skeleton" || e.type === "witch" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper";
+    const d3 = this.distSq(p), can = (e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || e.type === "zombie" || e.type === "skeleton" || e.type === "witch" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper" || e.type === "squid" || e.type === "bat";
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
     if (d3 < 1024) e.idle = 0;
