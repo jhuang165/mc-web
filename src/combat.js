@@ -15,7 +15,7 @@ const f = Math.fround;
 // arrow, bone, bow, string, spider eye, gunpowder, iron ingot. The chicken ids are entities.js's.
 const PORK = 202, COOKED_PORK = 203, BEEF = 204, STEAK = 205, FLESH = 206, LEATHER = 315, ARROW = 320, BONE = 311, BOW = 127, STRING = 321, SPIDER_EYE = 326, GUNPOWDER = 330, IRON = 302;
 export const FEATHER = 317, RAW_CHICKEN = 318, COOKED_CHICKEN = 319;
-export const ANIMALS = new Set(["pig", "cow", "sheep", "chicken", "wolf"]);
+export const ANIMALS = new Set(["pig", "cow", "sheep", "chicken", "wolf", "ocelot"]);
 // DamageSource.setDamageBypassesArmor: these skip applyArmorCalculations. Melee, arrows,
 // explosions, lava, cactus and inFire (fire blocks, lightning) are blocked by armour.
 const UNBLOCKABLE = new Set(["fall", "onFire", "drown", "inWall", "starve", "generic", "magic", "wither", "outOfWorld"]);
@@ -28,8 +28,8 @@ export function armorReduced(type, amount, source) {
   return f(f(amount * (25 - armor)) / 25);
 }
 // getSoundVolume (EntityCow 0.4) and getSoundPitch, on Entity.rand.
-// EntityCow and EntityWolf (bf) override getSoundVolume with 0.4F.
-export const soundVolume = (type) => (type === "cow" || type === "wolf" || type === "squid" ? f(0.4) : type === "bat" ? f(0.1) : 1);
+// EntityCow, EntityWolf and EntityOcelot (bf) override getSoundVolume with 0.4F.
+export const soundVolume = (type) => (type === "cow" || type === "wolf" || type === "squid" || type === "ocelot" ? f(0.4) : type === "bat" ? f(0.1) : 1);
 export const soundPitch = (rand, child) => f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (child ? f(1.5) : 1));
 // EntitySkeleton holds a bow (equipment drop chance 0.085F); no other mob here carries
 // equipment, so only its dropEquipment and getExperiencePoints draw for one.

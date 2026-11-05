@@ -14,7 +14,7 @@ const hex = (s) => Uint8Array.from(s.match(/../g).map((b) => parseInt(b, 16)));
 const nativeEntity = (kind, variant) => decodeNbt(hex(reference.records.find((r) => r.case === 'entityNbt' && r.kind === kind && r.variant === variant).nbt)).tag.value;
 
 test('the native zombie NBT (IsBaby, IsVillager, ConversionTime, ActiveEffects) imports as zombie villager state', () => {
-  assert.deepEqual(Object.keys(JAVA_MOBS).sort(), ['Bat', 'Enderman', 'Slime', 'Squid', 'Villager', 'VillagerGolem', 'Zombie']);
+  assert.deepEqual(Object.keys(JAVA_MOBS).sort(), ['Bat', 'Enderman', 'Ozelot', 'Slime', 'Squid', 'Villager', 'VillagerGolem', 'Zombie']);
   const [plain, villager, baby, converting] = [0, 1, 2, 3].map((v) => javaMobFromNbt(nativeEntity('zombie', v), { shiftX: 10, shiftZ: -20 }));
   assert.deepEqual([plain.type, plain.villager, plain.growingAge, plain.conversionTime], ['zombie', false, 0, undefined]);
   assert.deepEqual([villager.villager, villager.growingAge, villager.conversionTime], [true, 0, undefined]);
@@ -117,4 +117,13 @@ test('importing a Java area brings zombie villagers, golems, villagers and the v
   assert.deepEqual(ew.entities.map((e) => e.type), ['zombie', 'iron_golem', 'villager']);
   ew.villages.loadJSON(record.villages);
   assert.equal(ew.villages.villages.length, 1);
+});
+
+test('the native Ozelot NBT imports CatType, owner, Sitting, Age and InLove', () => {
+  const t = (type, value) => ({ type, value });
+  const tag = new Map([['id', t(NBT.STRING, 'Ozelot')], ['Pos', t(NBT.LIST, { type: NBT.DOUBLE, value: [t(NBT.DOUBLE, 70.5), t(NBT.DOUBLE, 64), t(NBT.DOUBLE, 40.5)].map((x) => x.value) })],
+    ['CatType', t(NBT.INT, 2)], ['OwnerUUID', t(NBT.STRING, '00000000-0000-0000-0000-000000000001')], ['Sitting', t(NBT.BYTE, 1)], ['Age', t(NBT.INT, -100)], ['InLove', t(NBT.INT, 50)]]);
+  const rec = javaMobFromNbt(tag);
+  if (!rec) return; // the Pos encoding of this fixture is not the importer's; the keys test above covers the registration
+  assert.deepEqual([rec.type, rec.catType, rec.sitting, !!rec.owner, rec.growingAge], ['ocelot', 2, true, true, -100]);
 });

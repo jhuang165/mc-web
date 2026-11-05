@@ -17,6 +17,7 @@ import { createWitchRig, animateWitch } from "./witch-renderer.js";
 import { createSlimeRig, animateSlime } from "./slime-renderer.js";
 import { mobScale } from "./slime.js";
 import { createWolfRig, animateWolf } from "./wolf-renderer.js";
+import { createOcelotRig } from "./ocelot-renderer.js";
 import { createEndermanRig, animateEnderman } from "./enderman-renderer.js";
 import { createSquidRig, createBatRig } from "./squid-bat-renderer.js";
 const RAD = Math.PI / 180;
@@ -382,6 +383,7 @@ export class MobRenderer {
     if (e.type === "witch") return createWitchRig(this, e);
     if (e.type === "slime") return createSlimeRig(this, e);
     if (e.type === "wolf") return createWolfRig(this);
+    if (e.type === "ocelot") return createOcelotRig(this);
     if (e.type === "enderman") return createEndermanRig(this);
     if (e.type === "iron_golem") return createIronGolemRig(this);
     if (e.type === "squid") return createSquidRig(this);

@@ -18,46 +18,10 @@ export function ownerRevenge(ai) {
 }
 const ownerLastTarget = (ai) => (ai.player.lastTarget && ai.player.lastTarget.health > 0 ? ai.player.lastTarget : null);
 
-// Installs the wolf's overrides on a Brain and fills its task lists.
-export function buildWolfTasks(m, K) {
-  const { Task, TargetBase, Swim, Wander, WatchClosest, LookIdle, AttackOnCollide, Mate } = K, e = m.e;
-  m.navigator.setAvoidsWater(true);
-  // tg.cb: the owner is the (single) player once tamed.
-  m.owner = () => (isTamed(e) ? m.ai.player : null);
-  // EntityWolf.getEyeHeight: height * 0.8; EntityWolf.getVerticalFaceSpeed (x): 20 while sitting, else 40.
-  Object.defineProperty(m, "eyeHeight", { get: () => f(m.height * f(0.8)), configurable: true });
-  Object.defineProperty(m, "verticalFaceSpeed", { get: () => (e.sitting ? 20 : 40), set() {}, configurable: true });
-  // EntityWolf.setAttackTarget (d(sv)): clearing the target ends the anger, a target makes a wild wolf angry.
-  let target = null;
-  Object.defineProperty(m, "attackTarget", {
-    get: () => target,
-    set(v) {
-      target = v;
-      if (!v) e.angry = false;
-      else if (!isTamed(e)) e.angry = true;
-    },
-    configurable: true,
-  });
-  // The hurt-by target: the player (Entity.revenge) or the mob that hit it (noteWolfHurt), for 100 ticks.
-  Object.defineProperty(m, "revengeTarget", {
-    get() {
-      if (!e.revenge) return null;
-      const by = revengeBy.get(e);
-      if (by === "player") return m.ai.player;
-      return by && by.health > 0 ? m.ai.brain(by) : null;
-    },
-    configurable: true,
-  });
-  // EntityAITarget.isSuitableTarget (vu.a) on top of TargetBase: an owned wolf never targets its owner or another
-  // creature with the same owner (the owner's wolves).
-  const suitable = (task, t, mustSee) => {
-    if (!TargetBase.prototype.isSuitableTarget.call(task, t, mustSee)) return false;
-    if (isTamed(e)) {
-      if (t === m.owner()) return false;
-      if (t.e && t.e.type === "wolf" && t.e.owner === e.owner) return false;
-    }
-    return true;
-  };
+// The tasks EntityTameable's two subclasses share, bound to a Brain `m`: EntityAISit (vh), EntityAILeapAtTarget (um, with its
+// lift) and EntityAIFollowOwner (ug, with its speed and distances). The ocelot (ocelot-ai.js) reuses them.
+export function tameableTasks(m, { Task }) {
+  const e = m.e;
   // EntityAISit (vh), mutex 5.
   class Sit extends Task {
     constructor() {
@@ -78,11 +42,12 @@ export function buildWolfTasks(m, K) {
       e.sitting = false;
     }
   }
-  // EntityAILeapAtTarget (um, 0.4F), mutex 5: a jump at a target 2 to 4 blocks away (one chance in five a tick).
+  // EntityAILeapAtTarget (um, 0.4F for the wolf, 0.3F for the ocelot), mutex 5: a jump at a target 2 to 4 blocks away (one chance in five a tick).
   class Leap extends Task {
-    constructor() {
+    constructor(lift = 0.4) {
       super();
       this.mutex = 5;
+      this.lift = f(lift);
     }
     shouldExecute() {
       const t = m.attackTarget;
@@ -100,7 +65,7 @@ export function buildWolfTasks(m, K) {
         e.vx += (dx / len) * 0.5 * 0.800000011920929 + e.vx * 0.20000000298023224;
         e.vz += (dz / len) * 0.5 * 0.800000011920929 + e.vz * 0.20000000298023224;
       }
-      e.vy = f(0.4);
+      e.vy = this.lift;
     }
   }
   // EntityAIFollowOwner (ug, 1.0, 10, 2), mutex 3.
@@ -157,6 +122,50 @@ export function buildWolfTasks(m, K) {
         }
     }
   }
+  return { Sit, Leap, FollowOwner };
+}
+
+// Installs the wolf's overrides on a Brain and fills its task lists.
+export function buildWolfTasks(m, K) {
+  const { Task, TargetBase, Swim, Wander, WatchClosest, LookIdle, AttackOnCollide, Mate } = K, e = m.e;
+  const { Sit, Leap, FollowOwner } = tameableTasks(m, K);
+  m.navigator.setAvoidsWater(true);
+  // tg.cb: the owner is the (single) player once tamed.
+  m.owner = () => (isTamed(e) ? m.ai.player : null);
+  // EntityWolf.getEyeHeight: height * 0.8; EntityWolf.getVerticalFaceSpeed (x): 20 while sitting, else 40.
+  Object.defineProperty(m, "eyeHeight", { get: () => f(m.height * f(0.8)), configurable: true });
+  Object.defineProperty(m, "verticalFaceSpeed", { get: () => (e.sitting ? 20 : 40), set() {}, configurable: true });
+  // EntityWolf.setAttackTarget (d(sv)): clearing the target ends the anger, a target makes a wild wolf angry.
+  let target = null;
+  Object.defineProperty(m, "attackTarget", {
+    get: () => target,
+    set(v) {
+      target = v;
+      if (!v) e.angry = false;
+      else if (!isTamed(e)) e.angry = true;
+    },
+    configurable: true,
+  });
+  // The hurt-by target: the player (Entity.revenge) or the mob that hit it (noteWolfHurt), for 100 ticks.
+  Object.defineProperty(m, "revengeTarget", {
+    get() {
+      if (!e.revenge) return null;
+      const by = revengeBy.get(e);
+      if (by === "player") return m.ai.player;
+      return by && by.health > 0 ? m.ai.brain(by) : null;
+    },
+    configurable: true,
+  });
+  // EntityAITarget.isSuitableTarget (vu.a) on top of TargetBase: an owned wolf never targets its owner or another
+  // creature with the same owner (the owner's wolves).
+  const suitable = (task, t, mustSee) => {
+    if (!TargetBase.prototype.isSuitableTarget.call(task, t, mustSee)) return false;
+    if (isTamed(e)) {
+      if (t === m.owner()) return false;
+      if (t.e && t.e.type === "wolf" && t.e.owner === e.owner) return false;
+    }
+    return true;
+  };
   // EntityAIBeg (ty, 8), mutex 2: a bone for a wild wolf, a favourite meat for a tamed one, held within 8 blocks.
   class Beg extends Task {
     constructor(range) {

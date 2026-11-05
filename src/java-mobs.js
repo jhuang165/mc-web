@@ -2,12 +2,13 @@
 // Villager (yv), VillagerGolem (wt) and Zombie (yq, with its zombie villager state). The record is what EntityWorld's
 // constructor reads back (entities.js); fields it re-derives (AI timers, velocities, the village home) are not written.
 // The exporter is the mirror image in region-export.js; src/java-mobs.test.js round-trips them.
+import { ocelotFieldsFrom } from './ocelot.js';
 import { NBT } from './nbt.js';
 import { endermanFieldsFrom } from './enderman.js';
 import { nbtGet } from './nbt-get.js';
 import { slimeSizeFromNbt } from './slime.js';
 
-export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat' });
+export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', Ozelot: 'ocelot' });
 export const IMPORT_MOB_LIMIT = 256; // EntityWorld keeps at most this many saved mobs
 
 const tagValue = nbtGet; // NBTTagCompound getters: numeric tags convert across types (nbt-get.js)
@@ -62,6 +63,12 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
     record.size = slimeSizeFromNbt(tagValue(entity, 'Size', NBT.INT, 0));
   } else if (type === 'bat') {
     record.batHanging = (tagValue(entity, 'BatFlags', NBT.BYTE, 0) & 1) !== 0; // EntityBat.readEntityFromNBT
+  } else if (type === 'ocelot') {
+    // EntityTameable/EntityOcelot.readEntityFromNBT: OwnerUUID (or Owner), Sitting, CatType (0 to 3), Age and InLove.
+    const owner = String(tagValue(entity, 'OwnerUUID', NBT.STRING, '') || tagValue(entity, 'Owner', NBT.STRING, '')).trim();
+    record.growingAge = tagValue(entity, 'Age', NBT.INT, 0);
+    record.love = tagValue(entity, 'InLove', NBT.INT, 0);
+    Object.assign(record, ocelotFieldsFrom({ owner: owner ? 'player' : '', sitting: !!owner && !!tagValue(entity, 'Sitting', NBT.BYTE, 0), catType: tagValue(entity, 'CatType', NBT.INT, 0) }));
   } else if (type === 'squid') {
     // EntitySquid has no NBT of its own.
   } else {
@@ -77,14 +84,14 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
 
 // EntityList.createEntityFromNBT for /summon. A supplied compound skips onSpawnWithEgg entirely.
 export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) {
-  const health = { pig: 10, cow: 10, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, enderman: 40, squid: 10, bat: 6 }[type];
+  const health = { pig: 10, cow: 10, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, enderman: 40, squid: 10, bat: 6, ocelot: 10 }[type];
   if (health === undefined) return null;
   const rotation = numbers(tag, 'Rotation', NBT.FLOAT, 2);
   const record = { type, health: tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health)), yaw: rotation ? -rotation[0] * Math.PI / 180 : 0,
-    effects: readActiveEffects(tag), growingAge: ['pig','cow','sheep','chicken','wolf','villager'].includes(type) ? tagValue(tag, 'Age', NBT.INT, 0) : 0, love: ['pig','cow','sheep','chicken','wolf'].includes(type) ? tagValue(tag, 'InLove', NBT.INT, 0) : 0, knockbackResistance: 0 };
+    effects: readActiveEffects(tag), growingAge: ['pig','cow','sheep','chicken','wolf','villager','ocelot'].includes(type) ? tagValue(tag, 'Age', NBT.INT, 0) : 0, love: ['pig','cow','sheep','chicken','wolf','ocelot'].includes(type) ? tagValue(tag, 'InLove', NBT.INT, 0) : 0, knockbackResistance: 0 };
   const kept = new Set(['id', 'Pos', 'Rotation', 'HealF', 'Health', 'ActiveEffects', 'Fire', 'Motion']);
-  if (['pig', 'cow', 'sheep', 'chicken', 'wolf', 'villager'].includes(type)) kept.add('Age');
-  if (['pig', 'cow', 'sheep', 'chicken', 'wolf'].includes(type)) kept.add('InLove');
+  if (['pig', 'cow', 'sheep', 'chicken', 'wolf', 'villager', 'ocelot'].includes(type)) kept.add('Age');
+  if (['pig', 'cow', 'sheep', 'chicken', 'wolf', 'ocelot'].includes(type)) kept.add('InLove');
   if (type === 'sheep') { record.color = tagValue(tag, 'Color', NBT.BYTE, 0) & 15; record.sheared = !!tagValue(tag, 'Sheared', NBT.BYTE, 0); kept.add('Color'); kept.add('Sheared'); }
   if (type === 'wolf') {
     // EntityTameable/EntityWolf.readEntityFromNBT: OwnerUUID (or the pre-UUID Owner name), Sitting, Angry, CollarColor.
@@ -95,6 +102,11 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
     record.angry = !!tagValue(tag, 'Angry', NBT.BYTE, 0);
     record.collar = tagValue(tag, 'CollarColor', NBT.BYTE, 14) & 15;
     for (const k of ['OwnerUUID', 'Owner', 'Sitting', 'Angry', 'CollarColor']) kept.add(k);
+  }
+  if (type === 'ocelot') {
+    const owner = String(tagValue(tag, 'OwnerUUID', NBT.STRING, '') || tagValue(tag, 'Owner', NBT.STRING, '')).trim();
+    Object.assign(record, ocelotFieldsFrom({ owner: owner ? 'player' : '', sitting: !!owner && !!tagValue(tag, 'Sitting', NBT.BYTE, 0), catType: tagValue(tag, 'CatType', NBT.INT, 0) }));
+    for (const k of ['OwnerUUID', 'Owner', 'Sitting', 'CatType']) kept.add(k);
   }
   if (type === 'villager' || type === 'iron_golem' || type === 'zombie') {
     const native = new Map(tag);
