@@ -361,7 +361,7 @@ function orbs(total, host) {
 }
 
 // Boss bar data (BossStatus.setBossStatus(dragon, true) in RenderDragon: name plus health fraction).
-// TODO(lead): boss-bar.js should call dragonBossStatus(e) for ender_dragon entities near the camera.
+// dragon-renderer.js feeds boss-bar.js with it from animateDragon.
 export function dragonBossStatus(e) {
   return { name: "Ender Dragon", fraction: Math.max(0, Math.min(1, e.health / DRAGON_MAX_HEALTH)) };
 }

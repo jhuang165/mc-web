@@ -150,6 +150,7 @@ import { spawnRunningParticles, freshRandom } from "./particles.js";
 import { enterWater, drownBubbles, burst, potionColor, potionParticles, itemCrumbs, boneMealSparkles } from "./fx.js";
 import { JavaRandom } from "./lighting.js";
 import { useDragonEgg } from "./dragon-egg-live.js";
+import { spawnDragonIfAbsent } from "./dragon-mobs.js";
 import { vitalsLayout, heartsHtml, foodHtml, REGENERATION, WITHER_EFFECT } from "./damage-hud.js";
 import { hurtCameraRoll } from "./damage-fx.js";
 import { displayTicks } from "./display-ticks.js";
@@ -1012,6 +1013,14 @@ async function launch(record, prepared) {
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
     mobs = new EntityWorld(world, world.generationVersion>=11&&!hasSavedPopulation(record)?[]:record.entities);
     mobs.fx = scene.fx;
+    if (pendingDragon) {
+      pendingDragon = false;
+      if (world.dimension === 1) {
+        // ChunkProviderEnd.populate: the spikes' crystals (dimension-world.js endCrystals), then the dragon at chunk (0, 0).
+        for (const c of world.endCrystals?.() ?? []) { const e = mobs.create("ender_crystal", c.x, c.y, c.z); e.yaw = (-c.yaw * Math.PI) / 180; mobs.entities.push(e); }
+        spawnDragonIfAbsent(world, mobs);
+      }
+    }
     mobs.onLand = (entity, distance) => trampleFarmland(entity, distance);
     // World.getLightBrightness for EntityAI.getBlockPathWeight: daylight-reduced sky or block light.
     mobs.lightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, scene.subtracted) : 15);
@@ -2002,6 +2011,9 @@ function tickWeather() {
 // EntityPlayerSP.timeInPortal: Nausea longer than 60 ticks winds the screen warp up (potion-fx.js).
 const portalTimer = new PortalTimer();
 const dims = new DimensionLive({ active: () => active, worlds: () => worlds, save: () => save(), openWorld: (r) => openWorld(r), player: () => ({ x: position.x, y: position.y, z: position.z, yaw }), sound: (n, o) => sounds.play(n, o) });
+// First entry to the End (dimension-live.js): ChunkProviderEnd's dragon, spawned once the new world's mobs exist (launch).
+let pendingDragon = false;
+dims.onDragonSpawn = () => { pendingDragon = true; };
 function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // Game rules the Survival object reads (gamerule naturalRegeneration / doDaylightCycle).
   survival.naturalRegeneration = ruleOn(active, "naturalRegeneration");
@@ -2171,6 +2183,7 @@ function applyFarmUpdates(updates){const chunks=new Set();for(const[x,y,z]of upd
 // Shared synchronous event routing, also used immediately after player attacks/interaction.
 function mobEventHooks() {
   return {
+    push: (v) => { velocity.x += v.x; velocity.y += v.y; velocity.z += v.z; },
     sound: (event, raw) => {
       sounds.play(event.sound, { position: event.position, volume: event.volume, pitch: event.pitch });
       // World event 2002 (EntityPotion.onImpact): the glass and spell particles at the impact block.

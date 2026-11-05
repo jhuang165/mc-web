@@ -7,7 +7,8 @@
 import * as THREE from "three";
 import { skinBox, pixelTexture } from "./first-person.js";
 import { entityMaterial } from "./light-material.js";
-import { movementOffsets } from "./dragon.js";
+import { movementOffsets, dragonBossStatus, DRAGON_MAX_HEALTH } from "./dragon.js";
+import { setBossStatus, startBossBar } from "./boss-bar.js";
 
 const RAD = Math.PI / 180;
 export const DRAGON_TEXTURES = Object.freeze({
@@ -116,6 +117,7 @@ export function dragonPose(offset, t) {
 }
 
 export function createDragonRig(renderer) {
+  startBossBar();
   const root = new THREE.Group(), lighting = renderer.view.lighting;
   const skin = entityMaterial(lighting, { map: pixelTexture(DRAGON_TEXTURES.skin) });
   const exploding = entityMaterial(lighting, { map: pixelTexture(DRAGON_TEXTURES.exploding), alphaTest: 0 });
@@ -161,6 +163,7 @@ export function createDragonRig(renderer) {
   beamPivot.add(beam);
   beamPivot.visible = false;
   root.add(beamPivot);
+  renderer.scene.add(root);
   return {
     root, neck: new THREE.Group(), limbs: [], materials: [skin, exploding], eyes, type: "ender_dragon", lift: 0, scale: 1,
     dragonRig: { passes, yawG, pitchG, shiftG, bobG, beam: { pivot: beamPivot, geometry: beamGeometry, material: beamMaterial, texture: beamTexture } },
@@ -189,6 +192,8 @@ function poseModel(p, pose) {
 export function animateDragon(r, e, pose, partial) {
   const s = e.dragon, st = r.dragonRig;
   if (!s) return;
+  // RenderDragon.doRender: BossStatus.setBossStatus(dragon, ...) every drawn frame (boss-bar.js keeps it 100 frames).
+  setBossStatus({ health: e.health, maxHealth: DRAGON_MAX_HEALTH }, dragonBossStatus(e).name, false);
   const t = s.prevAnim + (s.anim - s.prevAnim) * partial, p = dragonPose((n) => movementOffsets(e, n, partial), t);
   // rotateCorpse: rotatef(-f3, y), rotatef(pitch * 10, x), translatef(0, 0, 1); the 180 turn the other living rigs get from
   // RendererLivingEntity is part of this frame's convention, so the three rotations are conjugated by it.

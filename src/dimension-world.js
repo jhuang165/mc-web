@@ -139,6 +139,17 @@ export class DimensionWorld extends World {
     }
     return { blocks, metadata };
   }
+  // WorldGenSpikes' EntityEnderCrystal for every spike within `r` chunks of the origin. endChunk keeps only blocks (each
+  // column is repopulated with its neighbours), so the crystals are collected once here when the dragon first spawns.
+  endCrystals(r = 10) {
+    if (this.dimension !== END) return [];
+    const end = new EndWorld(0, new JavaRandom(1));
+    end.terrain = this.endTerrain;
+    try {
+      for (let cx = -r; cx <= r; cx++) for (let cz = -r; cz <= r; cz++) populateEndChunk(end, new JavaRandom(popSeed(this.javaSeed, cx, cz)), cx, cz);
+    } catch (e) { console.warn(`end crystals skipped: ${e.message}`); return []; }
+    return end.entities.filter((e) => e.type === "ender_crystal");
+  }
   // A dry spot to stand on for respawns that find no entry: the End platform, or the first safe netherrack floor near the origin.
   spawn() {
     if (this.dimension === END) return { x: 100.5, y: 49.01, z: 0.5 };

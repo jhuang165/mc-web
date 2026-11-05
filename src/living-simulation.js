@@ -18,6 +18,7 @@ export function drainMobEvents({ mobs, xpOrbs, items }, hooks = {}) {
     eatGrass = () => {},
     doorUpdate = () => {},
     blockEdit = () => {},
+    push = () => {},
   } = hooks;
   const events = mobs.drain();
   for (const e of mobs.drainClientSounds?.() ?? []) sound({ sound: e.sound, position: e.position, volume: e.volume ?? 0.6, pitch: e.pitch }, e);
@@ -39,6 +40,8 @@ export function drainMobEvents({ mobs, xpOrbs, items }, hooks = {}) {
     if (event.doorUpdate) doorUpdate(event.doorUpdate, event);
     // A silverfish hid in or woke a monster egg: its cells need redrawing (blockBreak: break sound and particles).
     if (event.blockEdit) blockEdit(event.blockEdit, event);
+    // EntityDragon.collideWithEntities: the wing sweep's addVelocity on the player (dragon-mobs.js).
+    if (event.dragonPush) push(event.dragonPush, event);
   }
   return events;
 }

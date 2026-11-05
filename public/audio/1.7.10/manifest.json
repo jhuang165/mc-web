@@ -2292,6 +2292,81 @@
       "url": "/audio/1.7.10/random/door_open.ogg",
       "sha1": "5bb5a04e776d69ca12b1d7bc369975f9bf62e741",
       "bytes": 7536
+    },
+    "mob/enderdragon/growl2": {
+      "url": "/audio/1.7.10/mob/enderdragon/growl2.ogg",
+      "sha1": "d859c9c5be04ffc41479b306814a933983eaa235",
+      "bytes": 27101
+    },
+    "mob/enderdragon/growl1": {
+      "url": "/audio/1.7.10/mob/enderdragon/growl1.ogg",
+      "sha1": "049a3049a5ac8631a6c5f367b7d824fc0d8de39b",
+      "bytes": 26384
+    },
+    "mob/enderdragon/growl3": {
+      "url": "/audio/1.7.10/mob/enderdragon/growl3.ogg",
+      "sha1": "ba35053358ede7c3bf33a4c344d66680f09008c9",
+      "bytes": 27102
+    },
+    "mob/enderdragon/hit1": {
+      "url": "/audio/1.7.10/mob/enderdragon/hit1.ogg",
+      "sha1": "aedeb53dd3315f964ff4d10d0003e4c5f41d1bb0",
+      "bytes": 11056
+    },
+    "mob/enderdragon/growl4": {
+      "url": "/audio/1.7.10/mob/enderdragon/growl4.ogg",
+      "sha1": "c84b0cf222e7dcbedde8eb9deb98835032f4d402",
+      "bytes": 25574
+    },
+    "mob/enderdragon/hit2": {
+      "url": "/audio/1.7.10/mob/enderdragon/hit2.ogg",
+      "sha1": "46e5db05b1e91ce33c9c4c63260227fa629230f4",
+      "bytes": 10880
+    },
+    "mob/enderdragon/hit3": {
+      "url": "/audio/1.7.10/mob/enderdragon/hit3.ogg",
+      "sha1": "e96237fdf5e5e1aca09496b9192243651525d0ac",
+      "bytes": 11158
+    },
+    "mob/enderdragon/hit4": {
+      "url": "/audio/1.7.10/mob/enderdragon/hit4.ogg",
+      "sha1": "d2c44730f6c93676d4e4316add92e424d0a71a33",
+      "bytes": 10812
+    },
+    "mob/enderdragon/wings1": {
+      "url": "/audio/1.7.10/mob/enderdragon/wings1.ogg",
+      "sha1": "5a368ed32b3357e31629451ace57eb30d90e8874",
+      "bytes": 10617
+    },
+    "mob/enderdragon/wings2": {
+      "url": "/audio/1.7.10/mob/enderdragon/wings2.ogg",
+      "sha1": "7d5b3b403a11b6dd4c3801c4f4c8bf7ce9a8c771",
+      "bytes": 10481
+    },
+    "mob/enderdragon/wings3": {
+      "url": "/audio/1.7.10/mob/enderdragon/wings3.ogg",
+      "sha1": "eb58ef697b2cbaed218edc758e00412302c75962",
+      "bytes": 10373
+    },
+    "mob/enderdragon/end": {
+      "url": "/audio/1.7.10/mob/enderdragon/end.ogg",
+      "sha1": "53cc1890ebea833d3964c7dd1c90676650e34404",
+      "bytes": 257102
+    },
+    "mob/enderdragon/wings5": {
+      "url": "/audio/1.7.10/mob/enderdragon/wings5.ogg",
+      "sha1": "fa6d89b586c5ca29efe85c8d373ff9ee19488d40",
+      "bytes": 11659
+    },
+    "mob/enderdragon/wings6": {
+      "url": "/audio/1.7.10/mob/enderdragon/wings6.ogg",
+      "sha1": "e7e8d393fc03a476227890e9ec9319dcc4b400ea",
+      "bytes": 11150
+    },
+    "mob/enderdragon/wings4": {
+      "url": "/audio/1.7.10/mob/enderdragon/wings4.ogg",
+      "sha1": "92488929c42221fb3f1dee397a32d2e4de615f3c",
+      "bytes": 11702
     }
   },
   "events": {
@@ -3806,6 +3881,41 @@
       "category": "player",
       "sounds": [
         "random/splash"
+      ]
+    },
+    "mob.enderdragon.end": {
+      "category": "hostile",
+      "sounds": [
+        "mob/enderdragon/end"
+      ]
+    },
+    "mob.enderdragon.growl": {
+      "category": "hostile",
+      "sounds": [
+        "mob/enderdragon/growl1",
+        "mob/enderdragon/growl2",
+        "mob/enderdragon/growl3",
+        "mob/enderdragon/growl4"
+      ]
+    },
+    "mob.enderdragon.hit": {
+      "category": "hostile",
+      "sounds": [
+        "mob/enderdragon/hit1",
+        "mob/enderdragon/hit2",
+        "mob/enderdragon/hit3",
+        "mob/enderdragon/hit4"
+      ]
+    },
+    "mob.enderdragon.wings": {
+      "category": "hostile",
+      "sounds": [
+        "mob/enderdragon/wings1",
+        "mob/enderdragon/wings2",
+        "mob/enderdragon/wings3",
+        "mob/enderdragon/wings4",
+        "mob/enderdragon/wings5",
+        "mob/enderdragon/wings6"
       ]
     }
   }

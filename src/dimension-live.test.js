@@ -105,3 +105,13 @@ test("End exit without a bed leaves the position to the world spawn", async () =
   const { p } = await arrival({ id: "w", seed: "5" }, 1, { x: 100, y: 49, z: 0 });
   assert.equal(p, null);
 });
+
+test('the End spikes yield one ender crystal on each bedrock cap', () => {
+  const w = new DimensionWorld("12345", 1), crystals = w.endCrystals();
+  assert.ok(crystals.length > 0);
+  for (const c of crystals) {
+    w.streamAround(c.x, c.z);
+    assert.equal(w.get(Math.floor(c.x), c.y - 1, Math.floor(c.z)), 11, `bedrock under the crystal at ${c.x},${c.y},${c.z}`);
+  }
+  assert.deepEqual(new DimensionWorld("12345", -1).endCrystals(), []);
+});

@@ -105,3 +105,9 @@ test("standalone mob event draining preserves per-event effect order", () => {
   });
   assert.deepEqual(calls, ["sound:a", "xp:1", "drop", "sound:b", "explode"]);
 });
+
+test('a dragon wing-sweep event reaches the push hook with its velocity', () => {
+  const pushes = [];
+  drainMobEvents({ mobs: { drain: () => [{ dragonPush: { x: 1, y: 0.2, z: -1 } }] }, xpOrbs: {}, items: {} }, { push: (v) => pushes.push(v) });
+  assert.deepEqual(pushes, [{ x: 1, y: 0.2, z: -1 }]);
+});
