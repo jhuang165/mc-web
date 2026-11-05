@@ -5,7 +5,7 @@ import { populateSnow } from "./snow.js";
 import { generateTreeAt } from "./trees.js";
 import { ladderBounds } from "./ladders.js";
 import { CACTUS_COLLISION, REED_BOUNDS, decorateSand, decorateReeds } from "./plants.js";
-import { fenceMask, fenceBounds, fenceCollisionUnion, fenceCollisionBoxes, isFence } from "./fences.js";
+import { fenceMask, fenceConnectsTo, fenceBounds, fenceCollisionUnion, fenceCollisionBoxes, isFence } from "./fences.js";
 import { installNetherBlocks, NETHER_FENCE, NETHER_BRICK_STAIRS, QUARTZ_STAIRS, SOUL_SAND, SOUL_SAND_COLLISION } from "./nether-blocks.js";
 import { railBounds } from "./rails.js";
 import { NOT_OPAQUE_NEW, isRailBlock2 } from "./blocks-0-40.js";
@@ -18,6 +18,7 @@ import { dispenserPistonBounds, dispenserPistonBoxes, unionBox, isDispenserPisto
 import { isRedstoneBlock, redstoneBounds, hasCollision as redstoneHasCollision } from "./redstone-blocks.js";
 import { installNoteJukeboxBlocks } from "./note-jukebox-content.js";
 import { signBounds } from "./sign-bounds.js";
+import { isShaped, shapedBounds, shapedBoxes, gateOpen, FENCE_GATE as SHAPED_GATE, WOOD_SLAB as SHAPED_WOOD_SLAB, DOUBLE_WOOD_SLAB as SHAPED_DOUBLE_WOOD_SLAB, TRAPDOOR as SHAPED_TRAPDOOR, COBBLE_WALL as SHAPED_COBBLE_WALL } from "./shaped-blocks.js";
 import { stoneUtilityBounds, stoneUtilityBoxes, hasPartialBounds, isStoneUtility } from "./stone-utility.js";
 export const SIZE = 128,
   HEIGHT = 64,
@@ -168,11 +169,18 @@ export const BLOCKS = [
 ];
 // Nether, End and quartz building blocks (internal 150-158, nether-blocks.js); ids 140-149 stay with other content tracks.
 installNetherBlocks(BLOCKS);
-installNoteJukeboxBlocks(BLOCKS); // internal 177 note block, 178 jukebox; 140-176 stay reserved for the other tracks
+installNoteJukeboxBlocks(BLOCKS); // internal 177 note block, 178 jukebox; unused ids up to 176 stay reserved placeholders
 // Signs (signs.js; original blocks 63 and 68): internal 175-176 overwrite the reserved placeholders.
 export const SIGN_POST=175,WALL_SIGN=176;
 BLOCKS[SIGN_POST]={name:'Sign',color:'#9c7f4e'};
 BLOCKS[WALL_SIGN]={name:'Wall sign',color:'#9c7f4e'};
+// Shaped blocks (shaped-blocks.js): wood slab 165, double wood slab 166, fence gate 167, trapdoor 168, cobblestone wall 169
+// overwrite the reserved placeholders; their items are 1165-1169.
+BLOCKS[165]={name:'Wood Slab',color:'#b49462'};
+BLOCKS[166]={name:'Double Wood Slab',color:'#b49462'};
+BLOCKS[167]={name:'Fence Gate',color:'#b49462'};
+BLOCKS[168]={name:'Trapdoor',color:'#8f6f3a'};
+BLOCKS[169]={name:'Cobblestone Wall',color:'#8d8d8d'};
 export const LAPIS_ORE=63,REDSTONE_ORE=64,LIT_REDSTONE_ORE=65,EMERALD_ORE=66,PUMPKIN=67,MONSTER_EGG=68,DOUBLE_PLANT=69,
   LOG2=70,LEAVES2=71,VINE=72,COCOA=73,MOSSY_COBBLE=74,BROWN_MUSHROOM=75,RED_MUSHROOM=76,
   BROWN_MUSHROOM_BLOCK=77,RED_MUSHROOM_BLOCK=78,DEAD_BUSH=79,PACKED_ICE=80,MELON=81,SANDSTONE_SLAB=82,DEAD_SHRUB=83,FERN=84;
@@ -280,7 +288,7 @@ export const ticksRandomly=b=>b===1||b===5||b===LEAVES2||b===LIT_REDSTONE_ORE||b
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([STAINED_GLASS,STAINED_GLASS_PANE,CARPET,0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,NETHER_FENCE,NETHER_BRICK_STAIRS,QUARTZ_STAIRS,RAIL,SIGN_POST,WALL_SIGN,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB,ANVIL,ENCHANTING_TABLE,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOWER_POT,OAK_STAIRS,COBBLESTONE_STAIRS,STONE_BRICK_STAIRS,SANDSTONE_STAIRS,SPRUCE_STAIRS,BIRCH_STAIRS,JUNGLE_STAIRS,BRICK_STAIRS,ACACIA_STAIRS,DARK_OAK_STAIRS,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,STICKY_PISTON,PISTON,PISTON_HEAD,107,108,109,110,111,112,113,114,119,120,124,125,126,127,128,129,130,...NOT_OPAQUE_NEW]); // 119-130: the redstone torches, button, plates, comparators, sensor and moving piston (redstone-blocks-2.js SEE_THROUGH2)
+const SEE_THROUGH=new Set([STAINED_GLASS,STAINED_GLASS_PANE,CARPET,0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,NETHER_FENCE,NETHER_BRICK_STAIRS,QUARTZ_STAIRS,RAIL,SIGN_POST,WALL_SIGN,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB,ANVIL,ENCHANTING_TABLE,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOWER_POT,OAK_STAIRS,COBBLESTONE_STAIRS,STONE_BRICK_STAIRS,SANDSTONE_STAIRS,SPRUCE_STAIRS,BIRCH_STAIRS,JUNGLE_STAIRS,BRICK_STAIRS,ACACIA_STAIRS,DARK_OAK_STAIRS,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,STICKY_PISTON,PISTON,PISTON_HEAD,107,108,109,110,111,112,113,114,119,120,124,125,126,127,128,129,130,SHAPED_WOOD_SLAB,SHAPED_GATE,SHAPED_TRAPDOOR,SHAPED_COBBLE_WALL,...NOT_OPAQUE_NEW]); // 119-130: the redstone torches, button, plates, comparators, sensor and moving piston (redstone-blocks-2.js SEE_THROUGH2)
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 // Block.isNormalCube: Material.tnt is translucent (isOpaque false), so TNT is an opaque
 // cube that is not a normal cube (no torches/ladders/fire tops on it).
@@ -295,6 +303,8 @@ export const normalCube=b=>(opaqueCube(b)&&b!==5&&b!==LEAVES2&&b!==TNT&&b!==123&
 // Block.slipperiness (field_149765_K): 0.6 for every block here but ice, 0.98 (BlockIce).
 export const slipperiness=b=>b===ICE||b===PACKED_ICE?Math.fround(0.98):Math.fround(0.6);
 export const snowSelectionHeight=meta=>((meta&7)+1)/8;
+// The solid-neighbour test of BlockWall.canConnectWallTo: the fence rule (fences.js) without the fence block itself.
+export const wallSolid=b=>b!==FENCE&&fenceConnectsTo(b);
 export function blockBounds(world,x,y,z){
   const b=world.get(x,y,z);
   // BlockAnvil.setBlockBoundsBasedOnState: metadata low bits 0/2 narrow X,
@@ -305,6 +315,7 @@ export function blockBounds(world,x,y,z){
   if(b===VINE){const m=world.getMeta(x,y,z),boxes=[];if(m&1)boxes.push([0,0,15/16,1,1,1]);if(m&2)boxes.push([0,0,0,1/16,1,1]);if(m&4)boxes.push([0,0,0,1,1,1/16]);if(m&8)boxes.push([15/16,0,0,1,1,1]);return boxes.length?[...Array(3)].map((_,i)=>Math.min(...boxes.map(b=>b[i]))).concat([...Array(3)].map((_,i)=>Math.max(...boxes.map(b=>b[i+3])))):[0,15/16,0,1,1,1];}
   if(b===SANDSTONE_SLAB)return[0,0,0,1,.5,1];
   if(b===CARPET)return[0,0,0,1,1/16,1]; // BlockCarpet.setBlockBoundsForCarpet (colored-blocks.js)
+  if(isShaped(b))return shapedBounds(world,x,y,z,wallSolid);
   // Stone slabs (half-high, top bit), the end portal frame (13/16), the cauldron (full selection) and the flower pot box.
   if(isStoneUtility(b))return stoneUtilityBounds(b,world.getMeta(x,y,z));
   // Redstone components (redstone-blocks.js): per-metadata boxes; only the repeater collides.
@@ -339,6 +350,8 @@ export function collisionBounds(world,x,y,z){
   // the union of its arms; collisionBoxes has the original separate boxes.
   if(b===SOUL_SAND)return SOUL_SAND_COLLISION; // BlockSoulSand: 0.125 lower collision box, full selection box
   if(isFence(b))return fenceCollisionUnion(fenceMask(world,x,y,z));
+  if(b===SHAPED_COBBLE_WALL)return shapedBoxes(world,x,y,z,wallSolid)[0];
+  if(b===SHAPED_GATE){const g=shapedBoxes(world,x,y,z,wallSolid);return g[0]||blockBounds(world,x,y,z);}
   // A cauldron's walls and an eyed end portal frame collide as several boxes; one-box callers take the cell's bounds.
   if(isDispenserPiston(b))return unionBox(dispenserPistonBoxes(b,world.getMeta(x,y,z)));
   if(isStoneUtility(b)){const boxes=stoneUtilityBoxes(b,world.getMeta(x,y,z));return[0,1,2].map(i=>Math.min(...boxes.map(v=>v[i]))).concat([3,4,5].map(i=>Math.max(...boxes.map(v=>v[i]))));}
@@ -352,11 +365,11 @@ export function collisionBounds(world,x,y,z){
 export function collisionBoxes(world,x,y,z){
   if(!world.solid(x,y,z))return[];
   const b=world.get(x,y,z);
-  return b===134?BREWING_BOXES.map(v=>[...v]):b===133?HOPPER_BOXES.map(v=>[...v]):isFence(b)?fenceCollisionBoxes(fenceMask(world,x,y,z)):isPane(b)?paneCollisionBoxes(paneMask(world,x,y,z)):isStair(b)?stairBoxes(world,x,y,z):isStoneUtility(b)?stoneUtilityBoxes(b,world.getMeta(x,y,z)):isDispenserPiston(b)?dispenserPistonBoxes(b,world.getMeta(x,y,z)):[collisionBounds(world,x,y,z)];
+  return b===134?BREWING_BOXES.map(v=>[...v]):b===133?HOPPER_BOXES.map(v=>[...v]):isShaped(b)?shapedBoxes(world,x,y,z,wallSolid):isFence(b)?fenceCollisionBoxes(fenceMask(world,x,y,z)):isPane(b)?paneCollisionBoxes(paneMask(world,x,y,z)):isStair(b)?stairBoxes(world,x,y,z):isStoneUtility(b)?stoneUtilityBoxes(b,world.getMeta(x,y,z)):isDispenserPiston(b)?dispenserPistonBoxes(b,world.getMeta(x,y,z)):[collisionBounds(world,x,y,z)];
 }
 // One-box-per-block collision consumers (items, particles, carts, projectiles) take a stair's two or three boxes
 // and every other block's single collisionBounds box.
-export const collisionBoxList=(world,x,y,z)=>world.get(x,y,z)===134?BREWING_BOXES.map(v=>[...v]):world.get(x,y,z)===133?HOPPER_BOXES.map(v=>[...v]):isDispenserPiston(world.get(x,y,z))?dispenserPistonBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStoneUtility(world.get(x,y,z))?stoneUtilityBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStair(world.get(x,y,z))?stairBoxes(world,x,y,z):isPane(world.get(x,y,z))?paneCollisionBoxes(paneMask(world,x,y,z)):[collisionBounds(world,x,y,z)];
+export const collisionBoxList=(world,x,y,z)=>isShaped(world.get(x,y,z))?shapedBoxes(world,x,y,z,wallSolid):world.get(x,y,z)===134?BREWING_BOXES.map(v=>[...v]):world.get(x,y,z)===133?HOPPER_BOXES.map(v=>[...v]):isDispenserPiston(world.get(x,y,z))?dispenserPistonBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStoneUtility(world.get(x,y,z))?stoneUtilityBoxes(world.get(x,y,z),world.getMeta(x,y,z)):isStair(world.get(x,y,z))?stairBoxes(world,x,y,z):isPane(world.get(x,y,z))?paneCollisionBoxes(paneMask(world,x,y,z)):[collisionBounds(world,x,y,z)];
 // Block.getSelectedBoundingBoxFromPool (the drawn outline), block-local. BlockCactus draws its
 // collision box inset; sugar cane its block bounds.
 export function selectionBounds(world,x,y,z){
@@ -370,6 +383,8 @@ export function selectionBounds(world,x,y,z){
 export function solidBlock(b, meta = 0) {
   // A flat snow layer (meta 0) has no collision box, so it is not an obstacle.
   if (b === SNOW_LAYER) return (meta & 7) !== 0;
+  // An open fence gate has no collision box (BlockFenceGate.getCollisionBoundingBoxFromPool).
+  if (b === SHAPED_GATE) return !gateOpen(meta);
   // Rails have no collision box either (BlockRailBase.getCollisionBoundingBoxFromPool is null).
   return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== CARPET && b !== FIRE && b !== WEB && b !== REEDS && b !== RAIL && !isRailBlock2(b) && b !== VINE && b !== SIGN_POST && b !== WALL_SIGN && !(b >= 107 && b <= 114 && !redstoneHasCollision(b)) && !(b === 119 || b === 120 || b === 124 || b === 125 || b === 126 || b === 130) && !isPlant(b);
 }
@@ -523,7 +538,7 @@ export class World {
   }
   solid(x, y, z) {
     const b = this.get(x, y, z);
-    return solidBlock(b, b === SNOW_LAYER ? this.getMeta(x, y, z) : 0);
+    return solidBlock(b, b === SNOW_LAYER || b === SHAPED_GATE ? this.getMeta(x, y, z) : 0);
   }
   // Section (16 high) random-tick refcounts, kept up to date by put() once built.
   sectionTickCount(cx, cz, s) {
@@ -866,7 +881,7 @@ export function raycast(world, origin, dir, reach = 6) {
       // drawn selection box is inset).
       // Fences, rails and torches are only hit inside their selection box (Block.collisionRayTrace
       // after setBlockBoundsBasedOnState).
-      if (isFence(hit) || hit === RAIL || isRailBlock2(hit) || hit === TORCH || isRedstoneBlock(hit) || isDoor(hit) || isPane(hit) || hasPartialBounds(hit) || hit === SIGN_POST || hit === WALL_SIGN || hit === PISTON_HEAD || (isPistonBase(hit) && pistonExtended(world.getMeta(...p)))) {
+      if (isFence(hit) || hit === RAIL || isRailBlock2(hit) || hit === TORCH || isRedstoneBlock(hit) || isDoor(hit) || isPane(hit) || hasPartialBounds(hit) || hit === SIGN_POST || hit === WALL_SIGN || isShaped(hit) || hit === PISTON_HEAD || (isPistonBase(hit) && pistonExtended(world.getMeta(...p)))) {
         const [x0, y0, z0, x1, y1, z1] = blockBounds(world, ...p), lx = origin.x + dir.x * d - p[0], ly = origin.y + dir.y * d - p[1], lz = origin.z + dir.z * d - p[2];
         if (lx < x0 || lx > x1 || ly < y0 || ly > y1 || lz < z0 || lz > z1) {
           passed = p;

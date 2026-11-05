@@ -18,7 +18,7 @@ export function digSpeed(block,tool){
  if(tool.kind==='axe'&&(isCrop(block)||block===SAPLING||block===REEDS||PLANTS_AND_VINES.includes(block)))return tool.speed;
  if(tool.kind==='sword')return block===WEB?15:block===5||isCrop(block)||block===39||block===SAPLING||block===REEDS||PLANTS_AND_VINES.includes(block)||GOURDS.includes(block)?1.5:1;
  const stairs=kind=>Object.keys(STAIRS).map(Number).filter(id=>STAIRS[id].kind===kind);
- const effective={shovel:[1,2,6,23,24,25,29,30,46,57,151],axe:[110,4,7,13,21,39,FENCE,WOODEN_DOOR,...stairs('axe'),...Array.from({length:8},(_,i)=>31+i)],pickaxe:[109,3,8,12,14,15,16,17,18,22,26,27,28,40,47,56,58,RAIL,133,135,136,137,144,145,146,MOB_SPAWNER,ANVIL,ENCHANTING_TABLE,DISPENSER,IRON_DOOR,IRON_BARS,STONE_BRICKS,DOUBLE_STONE_SLAB,STONE_SLAB,CAULDRON,150,152,153,154,156,157,...stairs('pickaxe')]}; // 150-157: netherrack, End stone, nether brick, its fence, quartz ore and block (Material.rock)
+ const effective={shovel:[1,2,6,23,24,25,29,30,46,57,151],axe:[110,4,7,13,21,39,FENCE,165,166,167,168,WOODEN_DOOR,...stairs('axe'),...Array.from({length:8},(_,i)=>31+i)],pickaxe:[169,109,3,8,12,14,15,16,17,18,22,26,27,28,40,47,56,58,RAIL,133,135,136,137,144,145,146,MOB_SPAWNER,ANVIL,ENCHANTING_TABLE,DISPENSER,IRON_DOOR,IRON_BARS,STONE_BRICKS,DOUBLE_STONE_SLAB,STONE_SLAB,CAULDRON,150,152,153,154,156,157,...stairs('pickaxe')]}; // 150-157: netherrack, End stone, nether brick, its fence, quartz ore and block (Material.rock)
  // Stairs take their model block's material: wood (axe) or rock (pickaxe). The fence is Material.wood (ItemAxe), the spawner Material.rock (ItemPickaxe) and the rail is
  // in ItemPickaxe's own block set (Material.circuits).
  return effective[tool.kind]?.includes(block)?tool.speed:1;

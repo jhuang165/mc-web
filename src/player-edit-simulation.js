@@ -18,7 +18,8 @@ import {
 } from './world.js';
 import { ITEM_BED, placeBed } from './bed.js';
 import { ITEM_SIGN, placeSign } from './signs.js';
-import { isDoor, activateDoor } from './doors-panes.js';
+import { isDoor, activateDoor, doorSound } from './doors-panes.js';
+import { FENCE_GATE, TRAPDOOR, gateUseMeta, trapOpen } from './shaped-blocks.js';
 import { ITEMS } from './survival.js';
 import { mayHitBlock } from './adventure.js';
 import { LEVER, STONE_BUTTON, REPEATER, redstoneActivate } from './redstone-blocks.js';
@@ -248,6 +249,16 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
         hook('markUnsaved');
       }
       return act('use-door', { door: used });
+    }
+    // BlockFenceGate / BlockTrapDoor.onBlockActivated (shaped-blocks.js): toggle the open bit (the gate also turns away from the player) and play aux effect 1003.
+    if (activates && (block === FENCE_GATE || block === TRAPDOOR)) {
+      const meta = state.world.getMeta(x, y, z), next = block === TRAPDOOR ? meta ^ 4 : gateUseMeta(meta, Math.fround(180 - (state.yaw * 180) / Math.PI));
+      state.world.set(x, y, z, block, true, next);
+      hook('updateBlock', x, z, y);
+      const s = doorSound(random);
+      hook('playSound', s.event, { volume: s.volume, pitch: s.pitch, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
+      hook('markUnsaved');
+      return act(block === TRAPDOOR ? 'use-trapdoor' : 'use-fence-gate', { open: block === TRAPDOOR ? trapOpen(next) : (next & 4) !== 0 });
     }
     // BlockBed.onBlockActivated: either half starts sleeping (bed.js; the browser supplies the player and the time of day).
     if (activates && block === 139) { hook('useCommandBlock', x, y, z); return act('use-command-block'); }

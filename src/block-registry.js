@@ -157,6 +157,8 @@ const MAP = {
   177: same(25), 178: same(84),
   // Signs (signs.js): BlockSign standing 63 (metadata 0-15 the rotation) and wall 68 (metadata 2-5 the facing).
   175: same(63), 176: same(68),
+  // Shaped blocks (shaped-blocks.js): wood slab 126, double wood slab 125, fence gate 107, trapdoor 96, cobblestone wall 139 (metadata is the original's).
+  165: same(126), 166: same(125), 167: same(107), 168: same(96), 169: same(139),
 };
 if (Object.keys(MAP).length !== BLOCKS.filter((b) => !b.reserved).length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");
 

@@ -28,6 +28,7 @@ export const railBounds = (meta) => [0, 0, 0, 1, RAIL_ASCENDING(meta & 7) ? 0.62
 export function solidTop(world, x, y, z) {
   const b = world.get(x, y, z);
   if (isStair(b)) return stairSolidTop(world.getMeta(x, y, z)); // upside-down stairs only
+  if (b === 165) return (world.getMeta(x, y, z) & 8) !== 0; // a top wood slab (shaped-blocks.js)
   if (b === 103) return (world.getMeta(x, y, z) & 8) !== 0; // a top stone slab (stone-utility.js STONE_SLAB)
   if (b === 104) return true; // the end portal frame counts as a solid top (fence-rail-reference.json)
   if (hasSolidTop2(b)) return true; // the hopper (World.doesBlockHaveSolidTopSurface) and the dropper (blocks-0-40.js)

@@ -4,6 +4,7 @@ import {WOOL_COLORS,RED_FLOWER,RED_FLOWERS,YELLOW_FLOWER,SAPLING,WEB,LADDER,CARR
 import {FENCE_ITEM_BOXES} from './fences.js';
 import {bedTexture} from './bed.js';
 import {anvilModelBoxes} from './anvil-block.js';
+import {SHAPED_TILES,woodSlabTexture,wallTexture} from './shaped-blocks.js';
 import {REDSTONE_TILES} from './redstone-blocks.js';
 import {REDSTONE2_TILES,redstone2TileName} from './redstone-blocks-2.js';
 import {STAIRS,STAIR_ITEM_BOXES} from './stairs.js';
@@ -54,6 +55,7 @@ if(!TILES.includes('stone_slab_top'))TILES.push('stone_slab_top');
 // Nether, End and quartz building blocks (nether-blocks.js); end_stone, nether_brick and quartz_block_side/top/bottom are already above.
 for(const t of ['netherrack','soul_sand','quartz_ore','quartz_block_chiseled','quartz_block_chiseled_top','quartz_block_lines','quartz_block_lines_top'])if(!TILES.includes(t))TILES.push(t);
 if(!TILES.includes('cobblestone'))TILES.push('cobblestone');
+for(const t of SHAPED_TILES)if(!TILES.includes(t))TILES.push(t); // trapdoor, cobblestone_mossy (shaped-blocks.js)
 export const ATLAS_ROWS=Math.ceil(TILES.length/ATLAS_COLUMNS);
 const tile=name=>TILES.indexOf(name);
 export const tileByName=tile;
@@ -67,6 +69,11 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===1177||id===1178)id-=1000; // note block and jukebox items
  if(id===177)return tile('noteblock');
  if(id===178)return tile(face===2?'jukebox_top':'jukebox_side');
+ if(id>=1165&&id<=1169)id-=1000; // shaped-blocks.js items
+ if(id===165||id===166)return tile(woodSlabTexture(meta));
+ if(id===167)return tile('planks_oak');
+ if(id===168)return tile('trapdoor');
+ if(id===169)return tile(wallTexture(meta));
  if(id===1101||id===1103||id===1104)id-=1000; // the stone bricks, slab and end portal frame items (1000 + block id) show their block's textures
  if(id>=1108&&id<=1113)id-=1000; // item ids of the lever, plates, button and hook
  if(id>=1120&&id<=1131)id-=1000; // item ids of the second redstone family (redstone-blocks-2.js)

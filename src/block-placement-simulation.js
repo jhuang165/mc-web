@@ -2,7 +2,7 @@
 // Survival own gameplay state; synchronous hooks keep UI/audio observers in
 // their original positions without requiring a browser or scene.
 import { QUARTZ_BLOCK, quartzPlacedMeta } from './nether-blocks.js';
-import { collides, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, ANVIL, TALL_GRASS, VINE, DEAD_BUSH, DEAD_SHRUB, FERN, isLiquid, isFlower } from "./world.js";
+import { collides, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, ANVIL, TALL_GRASS, VINE, DEAD_BUSH, DEAD_SHRUB, FERN, FIRE, isLiquid, isFlower, isPlant, normalCube } from "./world.js";
 import { stackedSnowMeta, snowCanStay } from "./snow.js";
 import { placeSound } from "./block-sounds.js";
 import { reedTarget, canPlaceReeds, cactusCanPlace, REEDS_ITEM } from "./plants.js";
@@ -15,6 +15,7 @@ import { railCanPlace, railAdded, railItemBlock, isRailId } from "./rails.js";
 import { anvilPlacementMeta } from './anvil-block.js';
 import { isStair, stairPlacementMeta } from './stairs.js';
 import { paneItemBlock, doorItemBlock, useDoorItem, doorRotationYaw, solidTopSurface, doorReplaceable } from './doors-panes.js';
+import { blockOfItem as shapedItemBlock, WOOD_SLAB, FENCE_GATE, TRAPDOOR, woodSlabType, planWoodSlabUse, gatePlacedMeta, trapPlacedMeta, trapSupports, TRAP_SUPPORT } from './shaped-blocks.js';
 import { blockOfItem as stoneUtilityItemBlock, heldSlabType, planSlabUse, endFrameFacing, STONE_BRICKS, END_PORTAL_FRAME, FLOWER_POT } from './stone-utility.js';
 import { blockForItem as dispenserPistonItemBlock, isDispenserPiston, DISPENSER, DROPPER, pistonOrientation, minecraftYaw } from './dispenser-piston.js';
 import { newDispenser } from './dispenser-container.js';
@@ -32,6 +33,8 @@ const CLICK_REPLACED = new Set([TALL_GRASS, VINE, DEAD_BUSH, DEAD_SHRUB, FERN]);
 // World.canPlaceEntityOnSide: the target cell's Material.isReplaceable (air, water, lava, fire, snow layer, Material.vine);
 // public/research/replaceable-reference.json holds the native flags for every original block.
 export const placementReplaceable = doorReplaceable;
+// Material.isSolid is false for air, liquids, plants, vines, fire, snow layers and circuits (torches, ladders, rails, redstone wire).
+const shapedNonSolid = (b) => b === 0 || isLiquid(b) || b === SNOW_LAYER || b === FIRE || b === TORCH || b === LADDER || b === VINE || isPlant(b) || isRailId(b) || (b >= 107 && b <= 108) || b === 113 || b === 114;
 
 /**
  * Place the selected held ItemBlock/snow/reed at the request's copied target.
@@ -45,7 +48,7 @@ export const placementReplaceable = doorReplaceable;
 export function placeHeldBlock(state, request, hooks = {}) {
   const { world, survival, position, flowers, farming, yaw } = state;
   const { id: itemId, item, target } = request;
-  const id = (itemId === 1139 ? 139 : itemId === 1177 || itemId === 1178 ? itemId - 1000 : 0) || coloredItemBlock(itemId) || dispenserPistonItemBlock(itemId) || redstoneItemBlock(itemId) || railItemBlock(itemId) || brewingItemBlock(itemId) || paneItemBlock(itemId) || stoneUtilityItemBlock(itemId) || itemId; // the glass pane item (1100) places block 100; stone utility items 1101-1106 their blocks 101-106
+  const id = (itemId === 1139 ? 139 : itemId === 1177 || itemId === 1178 ? itemId - 1000 : 0) || coloredItemBlock(itemId) || dispenserPistonItemBlock(itemId) || redstoneItemBlock(itemId) || railItemBlock(itemId) || brewingItemBlock(itemId) || paneItemBlock(itemId) || stoneUtilityItemBlock(itemId) || shapedItemBlock(itemId) || itemId; // the glass pane item (1100) places block 100; stone utility items 1101-1106 their blocks 101-106
   const {
     collides: intersects = collides,
     toast = () => {},
@@ -133,11 +136,11 @@ export function placeHeldBlock(state, request, hooks = {}) {
   }
   // ItemSlab.onItemUse (stone-utility.js planSlabUse): merge into a double slab on the open face or in the adjacent cell, else
   // place the half chosen by the side and the hit height. Item 82 is the sandstone slab (type 1); 1103's damage is the type.
-  const slabType = heldSlabType(itemId, survival.held?.damage || 0);
+  const slabType = id === WOOD_SLAB ? woodSlabType(survival.held?.damage || 0) : heldSlabType(itemId, survival.held?.damage || 0);
   if (slabType >= 0) {
     if (!survival.creative && !survival.count(itemId)) { toast("Gather this material first."); return result(false, "empty-stack", id, p); }
     const hitY = Math.fround(Math.fround(target.hit?.[1] ?? here[1] + 0.5) - here[1]);
-    const plan = planSlabUse(slabType, { id: block, meta: world.getMeta(...here) }, { id: world.get(...p), meta: world.getMeta(...p) }, side, hitY);
+    const plan = (id === WOOD_SLAB ? planWoodSlabUse : planSlabUse)(slabType, { id: block, meta: world.getMeta(...here) }, { id: world.get(...p), meta: world.getMeta(...p) }, side, hitY);
     const cell = plan.merge === "clicked" ? here : p, was = world.get(...cell), wasMeta = world.getMeta(...cell);
     if (!withinBounds(cell)) return result(false, "invalid-position", plan.id, cell);
     world.set(...cell, plan.id, false, plan.meta);
@@ -166,6 +169,14 @@ export function placeHeldBlock(state, request, hooks = {}) {
   // World.canPlaceEntityOnSide: an occupied, non-replaceable cell (a torch, rail or flower the ray passed through, say)
   // refuses the placement and keeps the item. Before this check the block was silently overwritten.
   if (!placementReplaceable(world.get(...p))) return result(false, "occupied", id, p);
+  // BlockFenceGate.canPlaceBlockAt: the block below has a solid Material. BlockTrapDoor.canPlaceBlockOnSide: a side face whose
+  // support (behind the placed cell) is a normal cube, glowstone, slab or stair (shaped-blocks.js).
+  if (id === FENCE_GATE && shapedNonSolid(world.get(p[0], p[1] - 1, p[2]))) return result(false, "gate-support", id, p);
+  const trapMeta = id === TRAPDOOR ? trapPlacedMeta(side, Math.fround(Math.fround(target.hit?.[1] ?? here[1] + 0.5) - here[1])) : 0;
+  if (id === TRAPDOOR) {
+    const [dx, dz] = trapMeta === null ? [0, 0] : TRAP_SUPPORT[trapMeta & 3];
+    if (trapMeta === null || !trapSupports(world.get(p[0] + dx, p[1], p[2] + dz), normalCube, isStair, (b) => b === 82 || b === 103 || b === WOOD_SLAB)) return result(false, "trapdoor-support", id, p);
+  }
   if (id === CHEST && !canPlaceChest(world, ...p)) return result(false, "chest-support", id, p);
   // BlockCarpet.canPlaceBlockAt: any non-air block below (colored-blocks.js).
   if (id === CARPET && !carpetCanStay(world, ...p)) return result(false, "carpet-support", id, p);
@@ -194,6 +205,9 @@ export function placeHeldBlock(state, request, hooks = {}) {
           // BlockEndPortalFrame.onBlockPlacedBy: facing from the yaw (Minecraft degrees = 180 - camera yaw).
           : id === END_PORTAL_FRAME ? endFrameFacing(Math.fround(180 - (yaw * 180) / Math.PI))
           // ItemBlock.onItemUse: onBlockPlaced(side, hit) sets the upside-down bit, onBlockPlacedBy the facing from the yaw.
+          : id === FENCE_GATE ? gatePlacedMeta(Math.fround(180 - (yaw * 180) / Math.PI))
+          : id === TRAPDOOR ? trapMeta
+          : id === 169 ? survival.held?.damage || 0
           : isStair(id) ? stairPlacementMeta(yaw, side, Math.fround(Math.fround(target.hit?.[1] ?? here[1] + 0.5) - here[1]))
           : isRedstoneBlock(id) ? rsMeta
           // BlockPistonBase/BlockDispenser.onBlockPlacedBy -> determineOrientation: from the player's position and yaw (six facings).

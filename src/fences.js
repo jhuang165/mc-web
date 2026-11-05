@@ -10,8 +10,8 @@ export const isFence = (b) => b === FENCE || b === NETHER_FENCE;
 // BlockFence.canConnectFenceTo (akz.e): another fence or a fence gate, else a block whose material
 // is opaque, that renders as a normal block, and is not Material.gourd. There is no fence gate
 // here. Gourds (pumpkin/melon) are explicitly excluded; fence.test.js replays the predicate.
-// `self` is the fence asking: BlockFence.canConnectFenceTo accepts only its own block (and gates), so the nether brick fence and the oak fence do not join.
-export const fenceConnectsTo = (b, self = FENCE) => b === self || (b!==67&&b!==81&&b!==148&&(normalCube(b)||b===104||b===123)); // 123: the block of redstone renders as a normal block (Material.iron is opaque) but is not a normalCube (it powers); 104: the end portal frame is opaque material that renders as a normal block (fence-rail-reference.json)
+// `self` is the fence asking: BlockFence.canConnectFenceTo accepts its own block and the fence gate (167), so the nether brick fence and the oak fence do not join.
+export const fenceConnectsTo = (b, self = FENCE) => b === self || b === 167 || (b!==67&&b!==81&&b!==148&&(normalCube(b)||b===104||b===123)); // 123: the block of redstone renders as a normal block (Material.iron is opaque) but is not a normalCube (it powers); 104: the end portal frame is opaque material that renders as a normal block (fence-rail-reference.json)
 
 // Neighbour mask: bit 0 z-1 (north), bit 1 z+1 (south), bit 2 x-1 (west), bit 3 x+1 (east).
 export function fenceMask(world, x, y, z) {

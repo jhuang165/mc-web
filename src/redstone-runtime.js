@@ -21,6 +21,8 @@ import { installCommandBlocks } from "./command-block.js";
 import { installNoteBlocks } from "./note-blocks.js";
 import { installJukeboxes, JUKEBOX_ID } from "./jukebox.js";
 import { isDisc } from "./note-jukebox-content.js";
+import { installShapedBlocks, trapdoorSupportOriginal } from "./shaped-blocks.js";
+import { blockProperties } from "./redstone.js";
 import { LiveRedstone } from "./redstone-live.js";
 import { installPistons } from "./piston-live.js";
 import { applyPlayerEdit } from "./player-edit-simulation.js";
@@ -105,6 +107,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     skyLight: (x, y, z) => game.skyLight?.(x, y, z) ?? 15,
   });
   const commandBlocks = installCommandBlocks(redstone, { host: () => game.commandHost(), changed: () => game.markUnsaved?.() });
+  installShapedBlocks(redstone, trapdoorSupportOriginal(blockProperties())); // fence gates (107) and trapdoors (96): redstone opening, trapdoor support loss
   const noteBlocks = installNoteBlocks(redstone, { particle: (...a) => game.music?.particle?.(...a), changed: () => game.markUnsaved?.() });
   const jukeboxes = installJukeboxes(redstone, { play: (...a) => game.music?.play?.(...a), spawn: (...a) => game.music?.spawn?.(...a), changed: () => game.markUnsaved?.() });
   // Note block and jukebox right and left clicks (note-blocks.js, jukebox.js): { handled, consumed } where consumed is a disc taken from the held stack.
