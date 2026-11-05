@@ -1,3 +1,4 @@
+import { BEACON } from "./beacon.js";
 import { END_PORTAL } from "./eye-of-ender.js"; // drawn by end-portal-renderer.js
 import { isChestShaped } from "./chest-blocks.js"; // chest, trapped chest and ender chest are drawn by chest-renderer.js
 import { PUMPKIN_STEM, MELON_STEM, CAKE, cakeBounds, stemDirection, stemTint, stemQuads } from './stems-cake.js';
@@ -261,6 +262,7 @@ export class VoxelScene {
           else if (b===COCOA||b===SANDSTONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z));
           else if (b===STONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z),w.getMeta(x,y,z));
           else if (b===END_PORTAL_FRAME) this.endFrame(solid,x,y,z);
+          else if (b===BEACON) this.beacon(solid,x,y,z);
           else if (b===133) this.hopper(solid,x,y,z);
           else if (b===CAULDRON) this.cauldron(solid,x,y,z);
           else if (b===FLOWER_POT) this.flowerPot(solid,x,y,z);
@@ -473,6 +475,12 @@ export class VoxelScene {
   // RenderBlocks render type 35: native four-piece metal silhouette, with the
   // metadata orientation and damaged top tile. BlockAnvil.shouldSideBeRendered
   // returns true, so all outward faces remain visible beside full cubes.
+  // RenderBlocks.renderBlockBeacon (render type 34): the glass shell, the obsidian base and the beacon core (the last two draw every face).
+  beacon(m,x,y,z) {
+    this.box(m,BEACON,x,y,z,[0,0,0,1,1,1],0);
+    this.box(m,BEACON,x,y,z,[.125,.00625,.125,.875,.1875,.875],1,true);
+    this.box(m,BEACON,x,y,z,[.1875,.1875,.1875,.8125,.875,.8125],2,true);
+  }
   // RenderBlocks.renderBlockEndPortalFrame (render type 26): the 13/16 base, then the eye's smaller box with every face
   // drawn in the endframe_eye texture (blockTile reads meta bit 16 as that override).
   endFrame(m,x,y,z) {

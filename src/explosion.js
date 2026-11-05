@@ -29,6 +29,7 @@ for (let id = 31; id <= 38; id++) RESIST[id] = 0;
 // BlockDoor, BlockPane getExplosionResistance (doors-panes-reference.json facts): wooden door 3, iron door 5, iron bars 6, glass pane 0.3.
 RESIST[WOODEN_DOOR] = 3; RESIST[IRON_DOOR] = 5; RESIST[IRON_BARS] = 6; RESIST[GLASS_PANE] = 0.3;
 RESIST[139] = 3600000; // BlockCommandBlock: setResistance(6000000), aji.p registration
+RESIST[173] = 3; // BlockBeacon setResistance(15) / 5 (beacon.js)
 RESIST[149] = 1200000; // BlockEndPortal setResistance(6000000) / 5 (eye-of-ender.js)
 for (const [id, r] of Object.entries(CHEST_RESISTANCE)) RESIST[id] = r; // chest-blocks.js (trapped chest, ender chest)
 for (const [id, r] of Object.entries(SHAPED_RESISTANCE)) RESIST[id] = r; // shaped-blocks.js (wood slabs, gate and trapdoor, cobblestone wall)

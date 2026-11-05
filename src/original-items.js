@@ -11,6 +11,7 @@ import { CHEST_ITEMS } from './chest-blocks.js';
 import { STEM_CAKE_ITEMS } from './stems-cake.js';
 import { SPAWN_EGG_ITEMS } from './spawn-eggs.js';
 import { EYE_ITEMS } from './eye-of-ender.js';
+import { BEACON_ITEMS } from './beacon.js';
 
 // Original item ID (or "id:damage" subtype) -> browser item. The same table as tools/inventory-replay.mjs
 // MC_IDS (the item catalogue's mapping); region-import.test.js keeps the two identical.
@@ -46,4 +47,5 @@ export const ORIGINAL_ITEMS = Object.freeze({
   ...STEM_CAKE_ITEMS, // cake 354 -> 1930
   ...SPAWN_EGG_ITEMS, // spawn egg 383, Bottle o' Enchanting 384, fire charge 385 -> 1950-1952
   ...EYE_ITEMS, // eye of ender 381 -> 1960
+  ...BEACON_ITEMS, // nether star 399 -> 2060
 });

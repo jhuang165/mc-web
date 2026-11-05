@@ -83,7 +83,7 @@ const MAP = {
   40: fixed(172),
   41: chest(54),
   // Trapped chest (146, chests track): the same storage and facing state as a chest; ender chest (130) keeps its facing in the metadata.
-  162: chest(146), 163: same(130), 149: fixed(119), // end portal (eye-of-ender.js)
+  162: chest(146), 163: same(130), 149: fixed(119), 173: fixed(138), // beacon (beacon.js);  end portal (eye-of-ender.js)
   [LAVA]: fluid(11),
   43: fixed(37), 44: same(38), 45: same(51), 46: same(78), 47: fixed(79), 48: same(6), 49: same(141), 50: same(142),
   51: fixed(30), 52: same(65), 53: same(81), 54: same(83), 55: fixed(46), 56: same(24), 57: fixed(110), 58: same(159), 59: fixed(111),

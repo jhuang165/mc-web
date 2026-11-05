@@ -16,6 +16,7 @@ import { fromOriginal, toOriginal } from "./block-registry.js";
 import { makeStack } from "./inventory.js";
 import { canApply, canApplyTogether, addEnchantment, ENCHANTMENTS_BY_ID } from "./enchantments.js";
 import { liveStackToNative } from "./anvil-container.js";
+import { beaconToNbt } from "./beacon.js";
 import { PLAYER_NAME } from "./death-messages.js";
 import { LAN_NOTICE } from "./lan.js";
 
@@ -170,7 +171,11 @@ export function createCommandHost(env) {
       const key = `${x},${y},${z}`, stores = survival();
       for (const name of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing']) delete stores[name]?.[key];
       const id = { 54: 'Chest', 146: 'Chest', 61: 'Furnace', 62: 'Furnace', 23: 'Trap', 158: 'Dropper', 154: 'Hopper', 117: 'Cauldron' }[original];
-      if (original === 137 && env.commandTile) {
+      if (original === 138 && env.beaconTile) { // TileEntityBeacon.readFromNBT: Primary, Secondary, Levels (beacon.js)
+        const t = env.beaconTile(x, y, z);
+        Object.assign(t, { primary: nbtGet(tag ?? new Map(), 'Primary', NBT.INT, 0), secondary: nbtGet(tag ?? new Map(), 'Secondary', NBT.INT, 0), levels: tag ? nbtGet(tag, 'Levels', NBT.INT, 0) : -1 });
+        this.ignoredTagKeys = tag ? [...tag.keys()].filter(k => !['Primary', 'Secondary', 'Levels', 'x', 'y', 'z', 'id'].includes(k)) : [];
+      } else if (original === 137 && env.commandTile) {
         Object.assign(env.commandTile(x, y, z), readCommandBlock(tag ?? new Map()));
         this.ignoredTagKeys = tag ? [...tag.keys()].filter(k => !['Command', 'SuccessCount', 'CustomName', 'TrackOutput', 'LastOutput', 'x', 'y', 'z', 'id'].includes(k)) : [];
       } else if (id) {
@@ -188,6 +193,7 @@ export function createCommandHost(env) {
     },
     tileAt(x, y, z) {
       const id = this.blockAt(x, y, z).id, name = { 54: 'chests', 146: 'chests', 61: 'furnaces', 62: 'furnaces', 23: 'dispensers', 158: 'dispensers', 154: 'hoppers', 117: 'brewing' }[id];
+      if (id === 138 && env.beaconTile) return new Map(Object.entries(beaconToNbt(env.beaconTile(x, y, z))).map(([k, v]) => [k, { type: typeof v === 'string' ? NBT.STRING : NBT.INT, value: v }]));
       if (id === 137 && env.commandTile) return writeCommandBlock(env.commandTile(x, y, z), x, y, z);
       if (!name) return null;
       const record = survival()[name]?.[`${x},${y},${z}`] ?? readContainerTile({ chests: 'Chest', furnaces: 'Furnace', dispensers: 'Trap', hoppers: 'Hopper', brewing: 'Cauldron' }[name], new Map()).record;

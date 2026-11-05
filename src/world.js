@@ -21,6 +21,7 @@ import { signBounds } from "./sign-bounds.js";
 import { isChestShaped, TRAPPED_CHEST, ENDER_CHEST } from "./chest-blocks.js";
 import { PUMPKIN_STEM, MELON_STEM, CAKE, stemBounds, cakeBounds } from "./stems-cake.js";
 import { END_PORTAL, END_PORTAL_BOUNDS } from "./eye-of-ender.js";
+import { BEACON } from "./beacon.js";
 import { isShaped, shapedBounds, shapedBoxes, gateOpen, FENCE_GATE as SHAPED_GATE, WOOD_SLAB as SHAPED_WOOD_SLAB, DOUBLE_WOOD_SLAB as SHAPED_DOUBLE_WOOD_SLAB, TRAPDOOR as SHAPED_TRAPDOOR, COBBLE_WALL as SHAPED_COBBLE_WALL } from "./shaped-blocks.js";
 import { stoneUtilityBounds, stoneUtilityBoxes, hasPartialBounds, isStoneUtility } from "./stone-utility.js";
 export const SIZE = 128,
@@ -191,6 +192,7 @@ BLOCKS[ENDER_CHEST]={name:'Ender Chest',color:'#16393b'};
 BLOCKS[PUMPKIN_STEM]={name:'Pumpkin stem',color:'#7a9a3a'};
 BLOCKS[MELON_STEM]={name:'Melon stem',color:'#7a9a3a'};
 BLOCKS[CAKE]={name:'Cake',color:'#e8d6c4'};
+BLOCKS[BEACON]={name:'Beacon',color:'#7fd6d0'}; // beacon.js: original block 138 overwrites reserved 173
 BLOCKS[END_PORTAL]={name:'End Portal',color:'#0b1a1a',hidden:true}; // eye-of-ender.js: original block 119 overwrites reserved 149
 export const LAPIS_ORE=63,REDSTONE_ORE=64,LIT_REDSTONE_ORE=65,EMERALD_ORE=66,PUMPKIN=67,MONSTER_EGG=68,DOUBLE_PLANT=69,
   LOG2=70,LEAVES2=71,VINE=72,COCOA=73,MOSSY_COBBLE=74,BROWN_MUSHROOM=75,RED_MUSHROOM=76,
@@ -301,6 +303,7 @@ export const ticksRandomly=b=>b===1||b===5||b===LEAVES2||b===LIT_REDSTONE_ORE||b
 // while its fancy-graphics flag is still unset in the Block constructor.
 const SEE_THROUGH=new Set([STAINED_GLASS,STAINED_GLASS_PANE,CARPET,0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,NETHER_FENCE,NETHER_BRICK_STAIRS,QUARTZ_STAIRS,RAIL,SIGN_POST,WALL_SIGN,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB,ANVIL,ENCHANTING_TABLE,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOWER_POT,OAK_STAIRS,COBBLESTONE_STAIRS,STONE_BRICK_STAIRS,SANDSTONE_STAIRS,SPRUCE_STAIRS,BIRCH_STAIRS,JUNGLE_STAIRS,BRICK_STAIRS,ACACIA_STAIRS,DARK_OAK_STAIRS,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,STICKY_PISTON,PISTON,PISTON_HEAD,107,108,109,110,111,112,113,114,119,120,124,125,126,127,128,129,130,SHAPED_WOOD_SLAB,SHAPED_GATE,SHAPED_TRAPDOOR,SHAPED_COBBLE_WALL,TRAPPED_CHEST,ENDER_CHEST,...NOT_OPAQUE_NEW]); // 119-130: the redstone torches, button, plates, comparators, sensor and moving piston (redstone-blocks-2.js SEE_THROUGH2)
 SEE_THROUGH.add(CAKE); // BlockCake: not an opaque cube
+SEE_THROUGH.add(BEACON); // BlockBeacon: not opaque, not a normal cube
 SEE_THROUGH.add(END_PORTAL); // BlockEndPortal: not opaque, not a normal cube
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 // Block.isNormalCube: Material.tnt is translucent (isOpaque false), so TNT is an opaque
