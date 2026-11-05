@@ -86,6 +86,7 @@ export function createWolfRig(renderer) {
   // The collar layer draws over identical geometry (GL_EQUAL depth in the original); pull it toward the camera.
   Object.assign(materials.collar, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   const skin = build(materials.wild), collar = build(materials.collar);
+  renderer.scene.add(root);
   return { root, neck: new THREE.Group(), limbs: [], materials: Object.values(materials), type: "wolf", lift: 1 / 128, wolf: { materials, skin, collar } };
 }
 
