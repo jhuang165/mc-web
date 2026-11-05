@@ -99,6 +99,7 @@ ITEMS[363]={id:363,name:"Saddle",texture:"saddle",stack:1,color:"#8a5a2b",glyph:
 ITEMS[364]={id:364,name:"Iron horse armor",texture:"iron_horse_armor",stack:1,color:"#c8c8c8",glyph:"▣"};
 // ItemMinecart (original 328/342); placement and riding are in vehicle-simulation.js.
 ITEMS[366]={id:366,name:"Minecart",texture:"minecart_normal",stack:1,minecartType:0,color:"#8a8a8a",glyph:"\u25ad"};
+ITEMS[495]={id:495,name:"Boat",texture:"boat",stack:1,boat:true,color:"#8b6a3a",glyph:"\u25ad"};
 ITEMS[450]={id:450,name:"Minecart with Chest",texture:"minecart_chest",stack:1,minecartType:1,color:"#a0742f",glyph:"\u25ad"};
 // ItemEnchantedBook: stack 1; `stored` on the stack is its StoredEnchantments list.
 ITEMS[ENCHANTED_BOOK_ITEM]={id:ENCHANTED_BOOK_ITEM,name:"Enchanted book",texture:"book_enchanted",stack:1,storesEnchantments:true,color:"#a04fbf",glyph:"▰"};
@@ -318,6 +319,7 @@ recipe("fence", "Fence", ["###", "###"], { "#": 300 }, FENCE, 2);
 recipe("rail", "Rail", ["X X", "X#X", "X X"], { X: 302, "#": 300 }, RAIL, 16);
 // CraftingManager: five iron ingots make a minecart; a chest above it makes a chest cart.
 recipe("minecart", "Minecart", ["X X", "XXX"], { X: 302 }, 366);
+recipe("boat", "Boat", ["X X", "XXX"], { X: 7 }, 495);
 recipe("chest-minecart", "Minecart with Chest", ["C", "M"], { C: 41, M: 366 }, 450);
 // CraftingManager: "X#X", "#X#", "X#X" with gunpowder (X) and sand (#) makes one TNT.
 recipe("tnt", "TNT", ["X#X", "#X#", "X#X"], { X: 330, "#": 6 }, TNT);

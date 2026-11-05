@@ -153,7 +153,7 @@ export class Minecarts {
   dismount(world, rider) {
     const cart = rider.vehicle;
     if (!cart) return false;
-    let x = cart.x, y = cart.bb[1] + CART_HEIGHT, z = cart.z;
+    let x = cart.x, y = cart.bb[1] + (cart.height ?? CART_HEIGHT), z = cart.z;
     const width = rider.width ?? f(0.6), height = rider.height ?? f(1.8), half = width / 2;
     const clear = (dx, dz) => {
       const box = [rider.x - half + dx, rider.y + 1, rider.z - half + dz, rider.x + half + dx, rider.y + 1 + height, rider.z + half + dz];

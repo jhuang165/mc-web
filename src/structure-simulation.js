@@ -181,3 +181,49 @@ export function useMinecart(state, { place, cart }, hooks = {}) {
   survival.exhaust?.(0.3);
   return { handled: true, branch: cart.dead ? "break-minecart" : "hit-minecart" };
 }
+
+// Boat left click: swing, EntityBoat.attackEntityFrom (breaks drop the boat, Creative breaks drop nothing),
+// then the sprint knockback of attackTargetEntityWithCurrentItem. Right click mounts and is dispatched earlier.
+export function useBoat(state, { place, boat }, hooks = {}) {
+  const { boats, survival } = state;
+  if (!boat || boat.dead || place) return { handled: false, branch: "missing-boat" };
+  hooks.swing?.();
+  const damage = hooks.damage ? hooks.damage() : 1;
+  boats.attack(boat, damage, { creative: survival.creative });
+  if (state.motion?.sprinting) {
+    const rad = f(f(f(180 - state.yaw * (180 / Math.PI)) * f(Math.PI)) / 180);
+    boat.vx += f(f(-mhSin(rad) * 1) * 0.5);
+    boat.vy += 0.1;
+    boat.vz += f(f(mhCos(rad) * 1) * 0.5);
+    state.velocity.x *= 0.6;
+    state.velocity.z *= 0.6;
+    state.motion.sprinting = false;
+  }
+  survival.exhaust?.(0.3);
+  return { handled: true, branch: boat.dead ? "break-boat" : "hit-boat" };
+}
+
+// Boats: the same blockers and pushes as tickMinecartSimulation; `hooks` carries clear/splash/particle.
+export function tickBoatSimulation(state, hooks = {}) {
+  const { world, boats, mobs, position, velocity, width, height, alive = true, rider = null } = state;
+  if (!boats?.carts.length) return [];
+  const living = (mobs?.entities ?? []).filter((e) => e.health > 0 || (e.death ?? 0) < 20);
+  const sized = (e) => { const [w, h] = mobs.size(e); return mobBox(e.x, e.y, e.z, w, h); };
+  const pBox = playerBox(position, width, height);
+  const player = rider ? Object.assign(rider, { x: position.x, y: position.y, z: position.z, dead: !alive, bb: pBox }) : { ...position, bb: pBox };
+  const blockers = [...(alive ? [player] : []), ...living.map((e) => ({ bb: sized(e) }))];
+  boats.tick(world, { entities: blockers, hooks });
+  if (alive) {
+    const [vx, vz] = boats.pushEntity(player, pBox);
+    velocity.x += vx;
+    velocity.z += vz;
+  }
+  for (const e of living) {
+    const [vx, vz] = boats.pushEntity(e, sized(e));
+    e.vx += vx;
+    e.vz += vz;
+  }
+  const drops = boats.drain();
+  for (const d of drops) hooks.drop?.(d);
+  return drops;
+}

@@ -152,9 +152,11 @@ import { RedstoneBlocks, isRedstoneBlock, itemOfBlock as redstoneItemOf } from "
 import { createRedstoneRuntime } from "./redstone-runtime.js";
 import { Doors, WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, blockItemId } from "./doors-panes.js";
 import { MinecartRenderer } from "./minecart-renderer.js";
+import { BoatRenderer } from "./boat-renderer.js";
+import { Boats, BOAT_ITEM } from "./boats.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
-import { restoreStructureEntities, saveStructureEntities, tickMinecartSimulation, tickSpawnerSimulation, tickSpawnersClient, spawnerBurst, pickMinecart } from "./structure-simulation.js";
+import { restoreStructureEntities, saveStructureEntities, tickMinecartSimulation, tickBoatSimulation, tickSpawnerSimulation, tickSpawnersClient, spawnerBurst, pickMinecart } from "./structure-simulation.js";
 // Generation version 10 (live mineshafts) maps original block ids while a World is built; the
 // entry module already holds the registry, so the mapper is set before any World exists.
 setOriginalBlockMapper(fromOriginal);
@@ -271,6 +273,8 @@ let sounds,
   eating = null;
 // Generated-structure entities (structure-simulation.js): mineshaft spawners and chest minecarts.
 let spawners = null, minecarts = null, minecartRenderer = null, aimedCart = null;
+// Boats (boats.js): their own system and renderer next to the minecarts.
+let boats = new Boats(), boatRenderer = null;
 // Live redstone and pistons (redstone-runtime.js), rebuilt for each world that loads.
 let redstoneRuntime = null;
 // Hopper tick host: the shared inventory-transfer.js stores, EntityItem pickup and live comparator notifications.
@@ -600,6 +604,8 @@ function save() {
   active.fallingTicks = falling?.save();
   // Live spawner and minecart state; regeneration never refills them (structure-simulation.js).
   if (spawners || minecarts) Object.assign(active, saveStructureEntities({ spawners, minecarts }));
+  // Boats and the mounted state: only written when a boat exists, so older saves stay byte-identical.
+  if (boats?.carts.length) active.boats = boats.toJSON(); else delete active.boats;
   active.updated = Date.now();
   const savingContainers=containerResidency, containerSave=savingContainers?.beginSave(active.player);
   if(containerSave)active.containerScope=savingContainers.scope(containerSave);
@@ -902,6 +908,8 @@ async function launch(record, prepared) {
       return restored;
     })());
     watchSpawnerBlocks(world, spawners);
+    boats = Boats.fromJSON(record.boats);
+    if (boatRenderer) { boatRenderer.clear(); boatRenderer.boats = boats; }
     aimedCart = null;
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
     mobs = new EntityWorld(world, world.generationVersion>=11&&!hasSavedPopulation(record)?[]:record.entities);
@@ -1918,6 +1926,16 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   if (tickMinecartSimulation({ world, minecarts, mobs, position, velocity, rider, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }, {
     drop: (d) => { if (d.stack) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); },
   }).length) saved = false;
+  // EntityBoat.onUpdate: buoyancy, rider input, breakage; its splash particles and cleared snow or lily pads.
+  if (tickBoatSimulation({ world, boats, mobs, position, velocity, rider, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }, {
+    drop: (d) => { if (d.stack) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); },
+    particle: ([kind, x, y, z, mx, my, mz]) => scene.fx.spawn(kind, x, y, z, mx, my, mz),
+    splash: (b, volume, pitch) => sounds.play("game.neutral.swim.splash", { volume, pitch, position: { x: b.x, y: b.posY, z: b.z } }),
+    clear: (x, y, z, block) => {
+      if (block === SNOW_LAYER) { if (world.set(x, y, z, 0)) scene.updateBlock(x, z, y); } else breakBlock([x, y, z]);
+      saved = false;
+    },
+  }).length) saved = false;
   const vehicle = vehicleState();
   finishVehicleTick(vehicle);
   applyVehicleState(vehicle);
@@ -2011,7 +2029,7 @@ function traceAction(action) {
 }
 // Browser adapters transfer live references and scalar movement state synchronously.
 function vehicleState() {
-  return { screen, world, minecarts, rider, position, previous, velocity, motion, survival, yaw, eating,
+  return { screen, world, minecarts, boats, rider, position, previous, velocity, motion, survival, yaw, eating,
     grounded, collidedH, flying, fallDistance, landedFall };
 }
 function applyVehicleState(state) {
@@ -2024,7 +2042,7 @@ function edit(place = false) {
   if (aimedCart && !aimedCart.cart.dead) {
     mining = null;
     const state = vehicleState();
-    const action = captureVehicleAction({ cartId: aimedCart.cart.id, place, sneak: captureMovementInput(keys).sneak, heldTool: heldId() });
+    const action = captureVehicleAction({ cartId: aimedCart.cart.id, boat: !!aimedCart.cart.boat, place, sneak: captureMovementInput(keys).sneak, heldTool: heldId() });
     traceAction(action);
     const done = dispatchVehicleAction(state, action, {
       swing: () => animation.swing(),
@@ -2037,6 +2055,16 @@ function edit(place = false) {
     if (done.handled) {
       renderVitals();
       saved = false;
+      return;
+    }
+  }
+  // ItemBoat.onItemRightClick: a water trace along the view ray (works on land too); the boat is taken
+  // from the stack except in Creative.
+  if (place && heldId() === BOAT_ITEM && eyeRay && !aimedEntity) {
+    const boat = boats.place(world, { eye: eyeRay.origin, dir: eyeRay.dir, yaw: Math.fround(180 - yaw * 180 / Math.PI) });
+    if (boat) {
+      if (!survival.creative) survival.take(BOAT_ITEM, 1);
+      animation.swing(); renderHotbar(); saved = false;
       return;
     }
   }
@@ -2226,7 +2254,7 @@ function movementTick(controls) {
   const hold = streamPrefetch && world.isTicking(position.x, position.z) && !streamPrefetch.ready(position.x, position.z);
   const change = !hold && world.streamAround(position.x,position.z);
   if (change) { scene.syncChunks(change); materializeFresh(); }
-  const state = { world, position, previous, velocity, motion, survival, yaw, eating, minecarts, rider,
+  const state = { world, position, previous, velocity, motion, survival, yaw, eating, minecarts, boats, rider,
     grounded, collidedH, flying, fallDistance, landedFall };
   const { inWater, inLavaNow, sneakOnGround, oldPosition } = moveRidingPlayer(state, controls,
     { trace: traceAction, markUnsaved: () => { saved = false; } }) ?? movePlayer(state, controls, toast);
@@ -2675,6 +2703,8 @@ function animate(now) {
     );
     // EntityRenderer.getMouseOver: the nearest entity box (a cart grown by its 0.1 border) wins.
     aimedCart = pickMinecart(minecarts, aim, dir, survival.creative ? 5 : 3, target?.distance ?? 6, rider.vehicle);
+    const aimedBoat = pickMinecart(boats, aim, dir, survival.creative ? 5 : 3, target?.distance ?? 6, rider.vehicle);
+    if (aimedBoat && (!aimedCart || aimedBoat.distance < aimedCart.distance)) aimedCart = aimedBoat;
     if (aimedCart && aimedEntity && aimedEntity.distance <= aimedCart.distance) aimedCart = null;
     if (aimedCart) aimedEntity = null;
     scene.outline.visible = !!target && !aimedEntity && !aimedCart;
@@ -2722,6 +2752,7 @@ function animate(now) {
   const shown = spawners?.size && screen !== "home" ? spawners.values().filter((sp) => (sp.x + 0.5 - position.x) ** 2 + (sp.y + 0.5 - position.y) ** 2 + (sp.z + 0.5 - position.z) ** 2 < 4096).map((sp) => spawnerDisplayEntity(sp, partial)).filter(Boolean) : [];
   if (mobs) mobRenderer.update([...(world.streaming ? mobs.entities.filter(e=>world.isLoaded(e.x,e.z)) : mobs.entities), ...shown],dt,partial);
   minecartRenderer?.update(screen === "home" || !minecarts ? [] : minecarts.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);
+  boatRenderer?.update(screen === "home" ? [] : boats.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);
   tntRenderer?.update(screen === "home" ? [] : primed, partial);
   redstoneRuntime?.frame(screen === "home" ? 1 : partial);
   playerRenderer?.update(playerBody, partial, {
@@ -2814,6 +2845,7 @@ async function boot(){try {
   chestRenderer = new ChestRenderer(scene.scene, scene);
   tntRenderer = new TntRenderer(scene.scene, scene);
   minecartRenderer = new MinecartRenderer(scene.scene, scene, null);
+  boatRenderer = new BoatRenderer(scene.scene, scene, boats);
   document.addEventListener("pointerdown", () => sounds.unlock(), {
     once: true,
   });
