@@ -18,6 +18,8 @@ import { ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
 import { DRAGON_EGG } from './dragon-egg.js';
 import { useEyeOfEnder } from './eye-of-ender-live.js';
 import { ITEM_EMPTY_MAP } from './maps.js';
+import { ITEM_FIREWORK_ROCKET } from './fireworks.js';
+import { useFirework } from './fireworks-live.js';
 import { BOAT_ITEM } from './boats.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
@@ -89,6 +91,11 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     hook('renderHotbar');
     hook('markUnsaved');
     return act('use-empty-map', { map: made.data.id });
+  }
+  // ItemFirework.onItemUse launches a rocket from the clicked block face (fireworks-live.js).
+  if (place && id === ITEM_FIREWORK_ROCKET && state.rockets && (state.survival.creative || state.survival.count(id))) {
+    const used = useFirework(state, { target, usesBlock }, hooks);
+    if (used) return act(used.branch);
   }
   if (place && id === BOW && !usesBlock) {
     if (!state.eating && canDraw(state.survival)) state.eating = { id: BOW, ticks: 0, bow: true };

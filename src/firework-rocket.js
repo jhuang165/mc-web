@@ -1,0 +1,43 @@
+// EntityFireworkRocket (zf, entity id 22 "FireworksRocketEntity"), Minecraft Java 1.7.10. Pure rules; the live list is
+// fireworks-live.js. Evidence: public/research/fireworks-reference.json (rocket records).
+import { moveParticleEntity } from './particles.js';
+const f = Math.fround, PI_F = f(Math.PI), SIZE = f(0.25);
+
+// zf(world, x, y, z, stack): flight = 1 + Fireworks.Flight; gaussian*0.001 sideways, 0.05 up,
+// lifetime 10 * flight + nextInt(6) + nextInt(7). Entity.rand draws: gaussian, gaussian, nextInt(6), nextInt(7).
+export function createRocket(x, y, z, stack, rand) {
+  const fl = Number.isFinite(stack?.fireworks?.flight) ? stack.fireworks.flight : 0;
+  const flight = 1 + fl;
+  const mx = rand.nextGaussian() * 0.001, mz = rand.nextGaussian() * 0.001;
+  const lifetime = 10 * flight + rand.nextInt(6) + rand.nextInt(7);
+  const h = SIZE / 2;
+  return { x, y, z, px: x, py: y, pz: z, mx, my: 0.05, mz, yaw: 0, pitch: 0, prevYaw: 0, prevPitch: 0, life: 0, lifetime, stack: stack ? { ...stack } : null,
+    box: [x - h, y, z - h, x + h, y + SIZE, z + h], yOffset: 0, width: SIZE, height: SIZE, onGround: false, inWeb: false, noClip: false, dead: false };
+}
+
+// zf.h. `remote` (client copy): the spark trail; otherwise (server copy): the death at life > lifetime.
+// Returns { launch, spark: [x,y,z,vx,vy,vz] | null, explode: { x, y, z, vx, vy, vz, fireworks } | null }.
+export function tickRocket(r, world, rand, { remote = false, server = true } = {}) {
+  const out = { launch: false, spark: null, explode: null };
+  r.px = r.x; r.py = r.y; r.pz = r.z;
+  r.prevPitch = r.pitch; r.prevYaw = r.yaw; // Entity.onEntityUpdate
+  r.mx *= 1.15; r.mz *= 1.15; r.my += 0.04;
+  moveParticleEntity(world, r, r.mx, r.my, r.mz);
+  const speed = f(Math.sqrt(r.mx * r.mx + r.mz * r.mz));
+  r.yaw = f(Math.atan2(r.mx, r.mz) * 180 / PI_F);
+  r.pitch = f(Math.atan2(r.my, speed) * 180 / PI_F);
+  while (f(r.pitch - r.prevPitch) < -180) r.prevPitch = f(r.prevPitch - 360);
+  while (f(r.pitch - r.prevPitch) >= 180) r.prevPitch = f(r.prevPitch + 360);
+  while (f(r.yaw - r.prevYaw) < -180) r.prevYaw = f(r.prevYaw - 360);
+  while (f(r.yaw - r.prevYaw) >= 180) r.prevYaw = f(r.prevYaw + 360);
+  r.pitch = f(r.prevPitch + f(f(r.pitch - r.prevPitch) * f(0.2)));
+  r.yaw = f(r.prevYaw + f(f(r.yaw - r.prevYaw) * f(0.2)));
+  if (r.life === 0) out.launch = true; // playSoundAtEntity("fireworks.launch", 3.0, 1.0)
+  r.life++;
+  if (remote) out.spark = [r.x, r.y - 0.3, r.z, rand.nextGaussian() * 0.05, -r.my * 0.5, rand.nextGaussian() * 0.05];
+  if (server && r.life > r.lifetime) {
+    out.explode = { x: r.x, y: r.y, z: r.z, vx: r.mx, vy: r.my, vz: r.mz, fireworks: r.stack?.fireworks ?? null };
+    r.dead = true;
+  }
+  return out;
+}

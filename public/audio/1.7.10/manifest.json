@@ -1927,6 +1927,356 @@
       "url": "/audio/1.7.10/tile/piston/out.ogg",
       "sha1": "cb017131516de9359cb81fb991f5b3694044f8db",
       "bytes": 6059
+    },
+    "fireworks/blast_far1": {
+      "url": "/audio/1.7.10/fireworks/blast_far1.ogg",
+      "sha1": "cd9062e9e81f7cd35164a99669e5db32891a5cb5",
+      "bytes": 14727
+    },
+    "fireworks/twinkle_far1": {
+      "url": "/audio/1.7.10/fireworks/twinkle_far1.ogg",
+      "sha1": "c8053e3b083b08840276de9a728202551302f416",
+      "bytes": 23987
+    },
+    "fireworks/blast1": {
+      "url": "/audio/1.7.10/fireworks/blast1.ogg",
+      "sha1": "d9d7511e8944da0c7ab4ed2d3e3d964f98dd6997",
+      "bytes": 11071
+    },
+    "fireworks/twinkle1": {
+      "url": "/audio/1.7.10/fireworks/twinkle1.ogg",
+      "sha1": "41b9c631e9c1c40800b3b02a0ac5855d6ad4846d",
+      "bytes": 14328
+    },
+    "mob/blaze/breathe1": {
+      "url": "/audio/1.7.10/mob/blaze/breathe1.ogg",
+      "sha1": "4e398c518ae706ad4d90afd6914f748faf18a7b5",
+      "bytes": 22308
+    },
+    "fireworks/launch1": {
+      "url": "/audio/1.7.10/fireworks/launch1.ogg",
+      "sha1": "b1715242916d56140486c612056ea4d6dd5a4404",
+      "bytes": 15598
+    },
+    "fireworks/largeBlast1": {
+      "url": "/audio/1.7.10/fireworks/largeBlast1.ogg",
+      "sha1": "ef59205829f09ac4855c614a0e7046db820df18b",
+      "bytes": 17306
+    },
+    "fireworks/largeBlast_far1": {
+      "url": "/audio/1.7.10/fireworks/largeBlast_far1.ogg",
+      "sha1": "bfb0e14bf130de4ecda75d8e793260e8bbaca35b",
+      "bytes": 21914
+    },
+    "mob/blaze/breathe4": {
+      "url": "/audio/1.7.10/mob/blaze/breathe4.ogg",
+      "sha1": "78d544a240d627005aaef6033fd646eafc66fe7a",
+      "bytes": 22054
+    },
+    "mob/blaze/breathe2": {
+      "url": "/audio/1.7.10/mob/blaze/breathe2.ogg",
+      "sha1": "c74368d2b978f570b4e7ce9645fd84b07f8f145c",
+      "bytes": 22547
+    },
+    "mob/blaze/breathe3": {
+      "url": "/audio/1.7.10/mob/blaze/breathe3.ogg",
+      "sha1": "24d643885f9b83d8f034f49e2c5e00e70d4f175a",
+      "bytes": 21883
+    },
+    "mob/blaze/hit1": {
+      "url": "/audio/1.7.10/mob/blaze/hit1.ogg",
+      "sha1": "cb1cf4b405d930ad27f09ea39d6a64f35fc13308",
+      "bytes": 7189
+    },
+    "mob/blaze/death": {
+      "url": "/audio/1.7.10/mob/blaze/death.ogg",
+      "sha1": "17491c8dd9511e9d848c92b4b7ae047aed164072",
+      "bytes": 30155
+    },
+    "mob/blaze/hit4": {
+      "url": "/audio/1.7.10/mob/blaze/hit4.ogg",
+      "sha1": "3f447f3e331b59ad014d9bd4a6536f98cf3a08c3",
+      "bytes": 7383
+    },
+    "mob/blaze/hit2": {
+      "url": "/audio/1.7.10/mob/blaze/hit2.ogg",
+      "sha1": "00b38fae5d28d99514a3e73a913af16359b12b7a",
+      "bytes": 7356
+    },
+    "mob/blaze/hit3": {
+      "url": "/audio/1.7.10/mob/blaze/hit3.ogg",
+      "sha1": "97e09d51c82b78ab82fb3a4dbbb8cd701b2d0aeb",
+      "bytes": 7229
+    },
+    "mob/ghast/charge": {
+      "url": "/audio/1.7.10/mob/ghast/charge.ogg",
+      "sha1": "6f1d403f47725af0f4c42a74cfec00ff59153160",
+      "bytes": 13415
+    },
+    "mob/ghast/death": {
+      "url": "/audio/1.7.10/mob/ghast/death.ogg",
+      "sha1": "725e5179c72444c6d885e39c27e6b31ed83d58bc",
+      "bytes": 26853
+    },
+    "mob/ghast/affectionate_scream": {
+      "url": "/audio/1.7.10/mob/ghast/affectionate_scream.ogg",
+      "sha1": "99cd73dda425ee03836c2274a0fcf331139773dc",
+      "bytes": 9367
+    },
+    "mob/ghast/fireball4": {
+      "url": "/audio/1.7.10/mob/ghast/fireball4.ogg",
+      "sha1": "eafa60d7ec34f86e8f07a001ddcdf5c4600bb174",
+      "bytes": 8535
+    },
+    "mob/ghast/moan2": {
+      "url": "/audio/1.7.10/mob/ghast/moan2.ogg",
+      "sha1": "02073c284f025653e55f9cde25a4a62723d395fa",
+      "bytes": 8909
+    },
+    "mob/ghast/moan1": {
+      "url": "/audio/1.7.10/mob/ghast/moan1.ogg",
+      "sha1": "882d092b05faef1cfa6af43d642b9e8843f22756",
+      "bytes": 7986
+    },
+    "mob/ghast/moan3": {
+      "url": "/audio/1.7.10/mob/ghast/moan3.ogg",
+      "sha1": "dcec2d45fbc25f74a399ec9f8001e0ecd2d5d85e",
+      "bytes": 8925
+    },
+    "mob/ghast/moan4": {
+      "url": "/audio/1.7.10/mob/ghast/moan4.ogg",
+      "sha1": "935f1a575322bd0ec53a919fd061321216889104",
+      "bytes": 9393
+    },
+    "mob/ghast/scream1": {
+      "url": "/audio/1.7.10/mob/ghast/scream1.ogg",
+      "sha1": "a0e62d86e5899405df4e796fe648e091d828691d",
+      "bytes": 10828
+    },
+    "mob/ghast/moan6": {
+      "url": "/audio/1.7.10/mob/ghast/moan6.ogg",
+      "sha1": "b3f91f243eceaa25cff7488ec2dac732e22cfec3",
+      "bytes": 18305
+    },
+    "mob/ghast/moan5": {
+      "url": "/audio/1.7.10/mob/ghast/moan5.ogg",
+      "sha1": "48fc6c25d0f1c1f0edd4eaca2b6f934d4117f440",
+      "bytes": 14107
+    },
+    "mob/ghast/moan7": {
+      "url": "/audio/1.7.10/mob/ghast/moan7.ogg",
+      "sha1": "cfb956ba9d26cbdacd16ef77d58764df783b2c7f",
+      "bytes": 9222
+    },
+    "mob/ghast/scream2": {
+      "url": "/audio/1.7.10/mob/ghast/scream2.ogg",
+      "sha1": "57008a7f564443d563968fd040fc13ab226fc8d1",
+      "bytes": 11455
+    },
+    "mob/ghast/scream5": {
+      "url": "/audio/1.7.10/mob/ghast/scream5.ogg",
+      "sha1": "77a7b79d4f2ada27640866ece1020b631f5bdc54",
+      "bytes": 11650
+    },
+    "mob/ghast/scream3": {
+      "url": "/audio/1.7.10/mob/ghast/scream3.ogg",
+      "sha1": "8f23820fa28830dd031188c20acb35af044aedb5",
+      "bytes": 9399
+    },
+    "mob/ghast/scream4": {
+      "url": "/audio/1.7.10/mob/ghast/scream4.ogg",
+      "sha1": "edbc9e9cb9dfeabef93207fc0bdee6ceee5df7bc",
+      "bytes": 12220
+    },
+    "mob/magmacube/big1": {
+      "url": "/audio/1.7.10/mob/magmacube/big1.ogg",
+      "sha1": "430c65ac81151d873a27d611a9dff6c562e38c4f",
+      "bytes": 10917
+    },
+    "mob/magmacube/big2": {
+      "url": "/audio/1.7.10/mob/magmacube/big2.ogg",
+      "sha1": "4c4bcc6905430286f32a862ce69665c51bd9938f",
+      "bytes": 7931
+    },
+    "mob/magmacube/big4": {
+      "url": "/audio/1.7.10/mob/magmacube/big4.ogg",
+      "sha1": "a63fd7965328425a0a8111640de19428d841933e",
+      "bytes": 9871
+    },
+    "mob/magmacube/jump1": {
+      "url": "/audio/1.7.10/mob/magmacube/jump1.ogg",
+      "sha1": "86a2a7206c769aaa9435aabba70be201cb3e3a6b",
+      "bytes": 12540
+    },
+    "mob/magmacube/big3": {
+      "url": "/audio/1.7.10/mob/magmacube/big3.ogg",
+      "sha1": "d5c4316d30feef5213077e3ee24a7f52c5bf6735",
+      "bytes": 9436
+    },
+    "mob/magmacube/jump2": {
+      "url": "/audio/1.7.10/mob/magmacube/jump2.ogg",
+      "sha1": "3285a993220dcea1fc37e98b9aa9219422c2c095",
+      "bytes": 12973
+    },
+    "mob/magmacube/jump3": {
+      "url": "/audio/1.7.10/mob/magmacube/jump3.ogg",
+      "sha1": "5a2449cc3d4a6ad36598847e501f956e5a3528bd",
+      "bytes": 12258
+    },
+    "mob/magmacube/small1": {
+      "url": "/audio/1.7.10/mob/magmacube/small1.ogg",
+      "sha1": "5c633c345fe4cb87c36ada2fe2b5da1b80601cf3",
+      "bytes": 6269
+    },
+    "mob/magmacube/jump4": {
+      "url": "/audio/1.7.10/mob/magmacube/jump4.ogg",
+      "sha1": "500e2543034b4c026fb175d48c47196c5d013fe8",
+      "bytes": 12902
+    },
+    "mob/magmacube/small4": {
+      "url": "/audio/1.7.10/mob/magmacube/small4.ogg",
+      "sha1": "a485082ed0820eeeb9df13f84f26b14744ceeb2a",
+      "bytes": 5387
+    },
+    "mob/magmacube/small2": {
+      "url": "/audio/1.7.10/mob/magmacube/small2.ogg",
+      "sha1": "18237686efcaa1bf9084173c99d11ce0d37d4fc5",
+      "bytes": 5518
+    },
+    "mob/magmacube/small5": {
+      "url": "/audio/1.7.10/mob/magmacube/small5.ogg",
+      "sha1": "560dd97e6da8badbc8ac00b28c45312e60a525f2",
+      "bytes": 4826
+    },
+    "mob/wither/hurt1": {
+      "url": "/audio/1.7.10/mob/wither/hurt1.ogg",
+      "sha1": "550da80d936e05a7bfda43ca5d8af5b3779320f1",
+      "bytes": 16650
+    },
+    "mob/wither/hurt2": {
+      "url": "/audio/1.7.10/mob/wither/hurt2.ogg",
+      "sha1": "8072827813f0bffb9847e636245edebb5ddab198",
+      "bytes": 16744
+    },
+    "mob/wither/hurt3": {
+      "url": "/audio/1.7.10/mob/wither/hurt3.ogg",
+      "sha1": "a4cf4ebe4c475cd6a4852d6b4228a4b64cf5cb00",
+      "bytes": 16731
+    },
+    "mob/wither/hurt4": {
+      "url": "/audio/1.7.10/mob/wither/hurt4.ogg",
+      "sha1": "72a006be3bd693aa23cc2f8e9c9d13ea6f829aa1",
+      "bytes": 16699
+    },
+    "mob/wither/death": {
+      "url": "/audio/1.7.10/mob/wither/death.ogg",
+      "sha1": "ae27c6817985a9acb0a0fdefab89ff5d82dbe009",
+      "bytes": 62674
+    },
+    "mob/wither/idle1": {
+      "url": "/audio/1.7.10/mob/wither/idle1.ogg",
+      "sha1": "22ed26394cb6f6b5eeb2ceb54fb50608798d19e8",
+      "bytes": 19699
+    },
+    "mob/wither/idle3": {
+      "url": "/audio/1.7.10/mob/wither/idle3.ogg",
+      "sha1": "79afbeabcdbb063cfa00d544dc00beac8543a581",
+      "bytes": 19307
+    },
+    "mob/wither/idle2": {
+      "url": "/audio/1.7.10/mob/wither/idle2.ogg",
+      "sha1": "6b2f86a35a3cd88320b55c029d77659915f83239",
+      "bytes": 19332
+    },
+    "mob/wither/idle4": {
+      "url": "/audio/1.7.10/mob/wither/idle4.ogg",
+      "sha1": "e3f90fb5afaf84475dd31dca6f65378a455d17f7",
+      "bytes": 19355
+    },
+    "mob/wither/shoot": {
+      "url": "/audio/1.7.10/mob/wither/shoot.ogg",
+      "sha1": "78ee5b46b6615191b7a16d259fcbda273762297e",
+      "bytes": 11481
+    },
+    "mob/zombiepig/zpig2": {
+      "url": "/audio/1.7.10/mob/zombiepig/zpig2.ogg",
+      "sha1": "2cbbcdfb97939c469cd4ccaaac74504497c56695",
+      "bytes": 10038
+    },
+    "mob/zombiepig/zpig3": {
+      "url": "/audio/1.7.10/mob/zombiepig/zpig3.ogg",
+      "sha1": "c9f7fa36ae48eca0a1f6ce024fde5d3472d30b4d",
+      "bytes": 5916
+    },
+    "mob/zombiepig/zpig4": {
+      "url": "/audio/1.7.10/mob/zombiepig/zpig4.ogg",
+      "sha1": "e1187646b6256b92a1384f26ef2a7e56efcbe00d",
+      "bytes": 7066
+    },
+    "mob/zombiepig/zpigangry1": {
+      "url": "/audio/1.7.10/mob/zombiepig/zpigangry1.ogg",
+      "sha1": "cadbc5c34979baab1a93f5cf68a50f9bd44ef5a8",
+      "bytes": 8946
+    },
+    "mob/zombiepig/zpigangry2": {
+      "url": "/audio/1.7.10/mob/zombiepig/zpigangry2.ogg",
+      "sha1": "0349ce87fe856ddf8fdd94a559bb29061b002b6c",
+      "bytes": 5789
+    },
+    "mob/zombiepig/zpigangry3": {
+      "url": "/audio/1.7.10/mob/zombiepig/zpigangry3.ogg",
+      "sha1": "e0c88ca054666aae58b89abdcf377eae525aa13e",
+      "bytes": 9061
+    },
+    "mob/wither/spawn": {
+      "url": "/audio/1.7.10/mob/wither/spawn.ogg",
+      "sha1": "d8caaead680c20a4f51361587aeddd57a3357a72",
+      "bytes": 151896
+    },
+    "mob/zombiepig/zpigangry4": {
+      "url": "/audio/1.7.10/mob/zombiepig/zpigangry4.ogg",
+      "sha1": "c76dea473821e2ae9a1f006a4eddfdd0703eecdf",
+      "bytes": 9925
+    },
+    "mob/zombiepig/zpigdeath": {
+      "url": "/audio/1.7.10/mob/zombiepig/zpigdeath.ogg",
+      "sha1": "40b8e244d03ae17483edd4571bd851e10a97050f",
+      "bytes": 10357
+    },
+    "mob/zombiepig/zpighurt2": {
+      "url": "/audio/1.7.10/mob/zombiepig/zpighurt2.ogg",
+      "sha1": "d1917b9be91d60a40dd0bf804580c1f494e9ae6d",
+      "bytes": 6245
+    },
+    "mob/zombiepig/zpighurt1": {
+      "url": "/audio/1.7.10/mob/zombiepig/zpighurt1.ogg",
+      "sha1": "a2cfbea288280419ec0c8fb75d8ee5395536ac02",
+      "bytes": 6935
+    },
+    "portal/portal": {
+      "url": "/audio/1.7.10/portal/portal.ogg",
+      "sha1": "9a20be18fed05330f745a54eb8aeba11aac5403b",
+      "bytes": 25153
+    },
+    "portal/trigger": {
+      "url": "/audio/1.7.10/portal/trigger.ogg",
+      "sha1": "301f32642b654addbd06a430768fead464fd24c4",
+      "bytes": 24992
+    },
+    "mob/magmacube/small3": {
+      "url": "/audio/1.7.10/mob/magmacube/small3.ogg",
+      "sha1": "65a1a69845133187d6b8689e6ce9707da10f21a6",
+      "bytes": 5314
+    },
+    "portal/travel": {
+      "url": "/audio/1.7.10/portal/travel.ogg",
+      "sha1": "43388701fac432a567fe9fec421521e6348ad780",
+      "bytes": 54283
+    },
+    "mob/zombiepig/zpig1": {
+      "url": "/audio/1.7.10/mob/zombiepig/zpig1.ogg",
+      "sha1": "ec4b0396dd2fc2da8fab91ddc35218d3426349b3",
+      "bytes": 8536
     }
   },
   "events": {
@@ -3198,6 +3548,231 @@
           "type": "event",
           "name": "music.game"
         }
+      ]
+    },
+    "fireworks.blast": {
+      "category": "ambient",
+      "sounds": [
+        "fireworks/blast1"
+      ]
+    },
+    "fireworks.blast_far": {
+      "category": "ambient",
+      "sounds": [
+        "fireworks/blast_far1"
+      ]
+    },
+    "fireworks.largeBlast": {
+      "category": "ambient",
+      "sounds": [
+        "fireworks/largeBlast1"
+      ]
+    },
+    "fireworks.largeBlast_far": {
+      "category": "ambient",
+      "sounds": [
+        "fireworks/largeBlast_far1"
+      ]
+    },
+    "fireworks.launch": {
+      "category": "ambient",
+      "sounds": [
+        "fireworks/launch1"
+      ]
+    },
+    "fireworks.twinkle": {
+      "category": "ambient",
+      "sounds": [
+        "fireworks/twinkle1"
+      ]
+    },
+    "fireworks.twinkle_far": {
+      "category": "ambient",
+      "sounds": [
+        "fireworks/twinkle_far1"
+      ]
+    },
+    "mob.blaze.breathe": {
+      "category": "hostile",
+      "sounds": [
+        "mob/blaze/breathe1",
+        "mob/blaze/breathe2",
+        "mob/blaze/breathe3",
+        "mob/blaze/breathe4"
+      ]
+    },
+    "mob.blaze.death": {
+      "category": "hostile",
+      "sounds": [
+        "mob/blaze/death"
+      ]
+    },
+    "mob.blaze.hit": {
+      "category": "hostile",
+      "sounds": [
+        "mob/blaze/hit1",
+        "mob/blaze/hit2",
+        "mob/blaze/hit3",
+        "mob/blaze/hit4"
+      ]
+    },
+    "mob.ghast.affectionate_scream": {
+      "category": "hostile",
+      "sounds": [
+        "mob/ghast/affectionate_scream"
+      ]
+    },
+    "mob.ghast.charge": {
+      "category": "hostile",
+      "sounds": [
+        "mob/ghast/charge"
+      ]
+    },
+    "mob.ghast.death": {
+      "category": "hostile",
+      "sounds": [
+        "mob/ghast/death"
+      ]
+    },
+    "mob.ghast.fireball": {
+      "category": "hostile",
+      "sounds": [
+        "mob/ghast/fireball4"
+      ]
+    },
+    "mob.ghast.moan": {
+      "category": "hostile",
+      "sounds": [
+        "mob/ghast/moan1",
+        "mob/ghast/moan2",
+        "mob/ghast/moan3",
+        "mob/ghast/moan4",
+        "mob/ghast/moan5",
+        "mob/ghast/moan6",
+        "mob/ghast/moan7"
+      ]
+    },
+    "mob.ghast.scream": {
+      "category": "hostile",
+      "sounds": [
+        "mob/ghast/scream1",
+        "mob/ghast/scream2",
+        "mob/ghast/scream3",
+        "mob/ghast/scream4",
+        "mob/ghast/scream5"
+      ]
+    },
+    "mob.magmacube.big": {
+      "category": "hostile",
+      "sounds": [
+        "mob/magmacube/big1",
+        "mob/magmacube/big2",
+        "mob/magmacube/big3",
+        "mob/magmacube/big4"
+      ]
+    },
+    "mob.magmacube.jump": {
+      "category": "hostile",
+      "sounds": [
+        "mob/magmacube/jump1",
+        "mob/magmacube/jump2",
+        "mob/magmacube/jump3",
+        "mob/magmacube/jump4"
+      ]
+    },
+    "mob.magmacube.small": {
+      "category": "hostile",
+      "sounds": [
+        "mob/magmacube/small1",
+        "mob/magmacube/small2",
+        "mob/magmacube/small3",
+        "mob/magmacube/small4",
+        "mob/magmacube/small5"
+      ]
+    },
+    "mob.wither.death": {
+      "category": "hostile",
+      "sounds": [
+        "mob/wither/death"
+      ]
+    },
+    "mob.wither.hurt": {
+      "category": "hostile",
+      "sounds": [
+        "mob/wither/hurt1",
+        "mob/wither/hurt2",
+        "mob/wither/hurt3",
+        "mob/wither/hurt4"
+      ]
+    },
+    "mob.wither.idle": {
+      "category": "hostile",
+      "sounds": [
+        "mob/wither/idle1",
+        "mob/wither/idle2",
+        "mob/wither/idle3",
+        "mob/wither/idle4"
+      ]
+    },
+    "mob.wither.shoot": {
+      "category": "hostile",
+      "sounds": [
+        "mob/wither/shoot"
+      ]
+    },
+    "mob.wither.spawn": {
+      "category": "hostile",
+      "sounds": [
+        "mob/wither/spawn"
+      ]
+    },
+    "mob.zombiepig.zpig": {
+      "category": "hostile",
+      "sounds": [
+        "mob/zombiepig/zpig1",
+        "mob/zombiepig/zpig2",
+        "mob/zombiepig/zpig3",
+        "mob/zombiepig/zpig4"
+      ]
+    },
+    "mob.zombiepig.zpigangry": {
+      "category": "hostile",
+      "sounds": [
+        "mob/zombiepig/zpigangry1",
+        "mob/zombiepig/zpigangry2",
+        "mob/zombiepig/zpigangry3",
+        "mob/zombiepig/zpigangry4"
+      ]
+    },
+    "mob.zombiepig.zpigdeath": {
+      "category": "hostile",
+      "sounds": [
+        "mob/zombiepig/zpigdeath"
+      ]
+    },
+    "mob.zombiepig.zpighurt": {
+      "category": "hostile",
+      "sounds": [
+        "mob/zombiepig/zpighurt1",
+        "mob/zombiepig/zpighurt2"
+      ]
+    },
+    "portal.portal": {
+      "category": "block",
+      "sounds": [
+        "portal/portal"
+      ]
+    },
+    "portal.travel": {
+      "category": "player",
+      "sounds": [
+        "portal/travel"
+      ]
+    },
+    "portal.trigger": {
+      "category": "block",
+      "sounds": [
+        "portal/trigger"
       ]
     }
   }

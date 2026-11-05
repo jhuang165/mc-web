@@ -6,6 +6,7 @@
 // scripts through the unchanged original classes.
 import { onMapCrafted } from "./maps.js";
 import { copyStored, normalizeStored } from "./enchanted-books.js";
+import { sameFireworkTag, readFireworkTags } from './fireworks.js';
 import { JavaRandom } from "./java-random.js";
 import { damageLiveItemStack } from "./item-durability.js";
 export const OUTSIDE = -999, STACK_LIMIT = 64, DOUBLE_CLICK_MS = 250;
@@ -27,7 +28,7 @@ const split = (s, n) => { s.count -= n; return copyStack({ ...s, count: n }); };
 const samePairs = (a, b) => Array.isArray(a) === Array.isArray(b) && (!Array.isArray(a) || (a.length === b.length && a.every((e, i) => e?.id === b[i]?.id && e?.lvl === b[i]?.lvl)));
 const storedTag = (s) => Array.isArray(s.storedEnchantments) ? s.storedEnchantments : s.stored?.length ? s.stored : undefined;
 const sameTag = (a, b) => a.repairCost === b.repairCost && a.displayName === b.displayName && a.unbreakable === b.unbreakable && a.color === b.color &&
-  samePairs(a.enchantments, b.enchantments) && samePairs(storedTag(a), storedTag(b));
+  samePairs(a.enchantments, b.enchantments) && samePairs(storedTag(a), storedTag(b)) && sameFireworkTag(a, b);
 // ItemStack.areItemStackTagsEqual: every supported NBT tag participates in merge identity.
 export const sameStackItem = (a, b) => !!a && !!b && a.id === b.id && (a.damage ?? 0) === (b.damage ?? 0) && sameTag(a, b);
 export const dragButton = (event, mode) => (event & 3) | ((mode & 3) << 2);
@@ -58,6 +59,7 @@ export class PlayerInventory {
     if (typeof s.displayName === "string") metadata.displayName = s.displayName;
     if (typeof s.unbreakable === "boolean") metadata.unbreakable = s.unbreakable;
     if (Number.isInteger(s.color) && s.color >= 0 && s.color <= 0xFFFFFF) metadata.color = s.color;
+    Object.assign(metadata, readFireworkTags(s));
     const storedList = item.storesEnchantments ? normalizeStored(s.storedEnchantments ?? s.stored) ?? [] : s.stored;
     return makeStack(s.id, Math.min(count, item.stack ?? STACK_LIMIT), Math.max(0, Math.min(item.durability || (item.variants?.length ?? 1) - 1, Math.floor(Number(s.damage) || 0))), storedList, metadata);
   }

@@ -14,6 +14,7 @@ import { installChestItems, CHEST_MATERIALS, chestDrops, ITEM_TRAPPED_CHEST } fr
 import { stemCakeDrops } from './stems-cake.js';
 import { installMapsClockItems, installMapsClockRecipes } from './maps-clock-live.js';
 import { installBeaconItems, BEACON_MATERIALS, ITEM_NETHER_STAR, BEACON } from './beacon.js';
+import { installFireworkItems } from './fireworks.js';
 import { installEyeItems, EYE_MATERIALS, ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
 import { ITEM_ENDER_CHEST } from './chest-blocks.js';
 export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97:68,175:69,162:70,161:71,106:72,127:73,48:74,39:75,40:76,99:77,100:78,32:79,174:80,103:81,'44:1':82,'31:0':83,'31:2':84,24:56,110:57,159:58,111:59,145:ANVIL,116:ENCHANTING_TABLE,53:87,67:88,109:89,128:90,134:91,135:92,136:93,108:94,163:95,164:96,
@@ -45,6 +46,7 @@ export function installPopulationItems(items){
   installChestItems(items);
   installEyeItems(items);installMapsClockItems(items);
   installBeaconItems(items); // nether star 2060
+  installFireworkItems(items);
   for(const [id,variants] of Object.entries(POPULATION_VARIANTS)) items[id].variants=variants;
   items[ANVIL].variants=['Anvil','Slightly Damaged Anvil','Very Damaged Anvil'];
   items[BED].hidden=true; // BlockBed has no item of its own: the bed item places it

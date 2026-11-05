@@ -112,6 +112,8 @@ import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { EyesOfEnder } from "./eye-of-ender-live.js";
 import { MapsClock } from "./maps-clock-live.js";
+import { FireworkRockets, dispenseFirework } from "./fireworks-live.js";
+import { FireworkParticles } from "./firework-particles.js";
 import { EndPortalRenderer } from "./end-portal-renderer.js";
 import { BEACON, Beacons, validPrimary, validSecondary } from "./beacon.js";
 import { tickBeacons } from "./beacon-live.js";
@@ -371,6 +373,8 @@ setGameRuleSource((name) => ruleOn(active, name));
 const projectiles = new Projectiles();
 const maps = new MapsClock(); // maps-clock-live.js: filled maps and the clock icon
 const eyes = new EyesOfEnder(); // eye-of-ender-live.js: flying eyes of ender
+const rockets = new FireworkRockets(); // fireworks-live.js: firework rockets in flight
+const fireworkFx = new FireworkParticles({ effects: scene.effectRenderer, playSound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }) });
 // The fishing rod's bobber (fishing-simulation.js).
 const fishing = new Fishing();
 // Arrows in flight or stuck in blocks (bow.js) and the eased field-of-view modifier the
@@ -620,6 +624,7 @@ function save() {
   active.projectiles = projectiles.serialize();
   active.eyes = eyes.serialize();
   active.maps = maps.serialize();
+  active.rockets = rockets.serialize();
   active.fishing = fishing.serialize();
   active.thrownPotions = mobs?.potions?.serialize() ?? [];
   active.arrows = arrows.serialize();
@@ -956,6 +961,7 @@ async function launch(record, prepared) {
         },
         fireball: ({ x, y, z, ax, ay, az }) => { mobs.fireballs.launch({ large: false, owner: null, x, y, z, exact: [ax, ay, az] }); }, // dispense.js FIRE_CHARGE
         cart: (type, x, y, z) => { if (type === 0) minecarts.spawnEmpty({ x, y, z }); else minecarts.spawnCart(type, { x, y, z, items: [] }); },
+        firework: (stack, x, y, z, fx, fz) => { dispenseFirework(rockets, x, y, z, fx, fz, stack); saved = false; },
         spawnTnt: (x, y, z) => { primed.push(primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer: null })); saved = false; },
         setLiquid: (x, y, z, id) => { const old = world.get(x, y, z); world.set(x, y, z, id === 10 ? LAVA : WATER, true, 0); redstoneRuntime.fluidChanges([[x, y, z, old, world.get(x, y, z)]]); },
         setAir: (x, y, z) => { const old = world.get(x, y, z); world.set(x, y, z, 0, true, 0); redstoneRuntime.fluidChanges([[x, y, z, old, 0]]); },
@@ -1077,6 +1083,7 @@ async function launch(record, prepared) {
     projectiles.load(record.projectiles);
     eyes.load(record.eyes);
     maps.load(record.maps);
+    rockets.load(record.rockets);
     fishing.load(record.fishing);
     primed = (Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz }));
     tntRenderer?.clear();
@@ -2019,6 +2026,8 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   });
   ({ fallDistance, landedFall } = movement);
   tickBeacons(beacons, { world, time: survival.time, players: [{ x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height }], apply: (_p, e) => survival.effects.add(e) });
+  fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
+  rockets.tick(world, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), explode: (...a) => fireworkFx.spawnStarter(...a) });
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
   maps.tick({ survival, position, yaw, world, time: survival.time });
   tickEntitySimulation({ world, items, primed, projectiles, arrows, mobs, survival, position,
@@ -2090,7 +2099,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
   scene.setFishing(fishing.active ? { hook: fishing.hook, first: !thirdPersonView, sneaking: !!motion.sneaking } : null);
   scene.setDrops(items.items);
-  scene.setProjectiles(eyes.balls.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length || mobs?._fireballs?.balls.length ? [...projectiles.balls, ...eyes.balls, ...(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? []), ...(mobs?._fireballs?.balls ?? [])] : projectiles.balls, projectiles.particles);
+  scene.setProjectiles(eyes.balls.length || rockets.balls.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length || mobs?._fireballs?.balls.length ? [...projectiles.balls, ...eyes.balls, ...rockets.balls, ...(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? []), ...(mobs?._fireballs?.balls ?? [])] : projectiles.balls, projectiles.particles);
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();
@@ -2232,7 +2241,7 @@ function edit(place = false) {
     }
   }
   const state = { screen, heldTool: heldId(), world, survival, position, velocity, motion, mobs, minecarts,
-    farming, trees, fire, fluids, items, projectiles, eyes, maps, grounded, fallDistance, wasInWater, yaw, pitch,
+    farming, trees, fire, fluids, items, projectiles, eyes, maps, rockets, grounded, fallDistance, wasInWater, yaw, pitch,
     eating, mining, mineCooldown, mineHeld, flowers: FLOWERS, boneRandom, itemRand, signs, difficulty: survival.difficulty };
   // A right click with a bucket also captures the bucket's own fluid-aware trace along the
   // last frame's eye ray (ItemBucket: 5 blocks, liquids only when empty).

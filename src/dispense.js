@@ -34,7 +34,7 @@ export const OPPOSITE = Object.freeze([1, 0, 3, 2, 5, 4]);
 // Internal item ids of this build.
 export const ITEM = Object.freeze({
   ARROW: 320, SNOWBALL: 312, EGG: 316, POTION: 385, MINECART: 366, CHEST_MINECART: 450, BUCKET: 340, WATER_BUCKET: 341,
-  LAVA_BUCKET: 342, FLINT_AND_STEEL: 126, DYE: 351, TNT: 55, FIRE_CHARGE: 1952,
+  LAVA_BUCKET: 342, FLINT_AND_STEEL: 126, DYE: 351, TNT: 55, FIRE_CHARGE: 1952, FIREWORK: 2071, // firework rocket (fireworks.js ITEM_FIREWORK_ROCKET, original 401)
 });
 export const SPLASH_BIT = 16384;
 const FLINT_MAX_DAMAGE = 64;
@@ -118,6 +118,7 @@ export class Dispensing {
       case ITEM.DYE: return DYE;
       case ITEM.TNT: return TNT;
       case ITEM.FIRE_CHARGE: return FIRE_CHARGE;
+      case ITEM.FIREWORK: return FIREWORK;
       default: return DEFAULT;
     }
   }
@@ -295,6 +296,16 @@ const DYE = {
   },
 };
 // The TNT behaviour: a primed TNT at the front cell centre.
+// BehaviorDispenseFirework (ky): host.firework(stack, x, y, z, frontX, frontZ) via fireworks-live.js dispenseFirework; aux 1002.
+const FIREWORK = {
+  sound: () => 1002,
+  stack(w, x, y, z, facing, stack) {
+    const [fx, , fz] = FACING[facing];
+    this.host.firework?.(one(stack), x, y, z, fx, fz);
+    stack.count--;
+    return stack;
+  },
+};
 const TNT = {
   sound: click,
   stack(w, x, y, z, facing, stack) {

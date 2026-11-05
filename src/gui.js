@@ -1,3 +1,4 @@
+import {fireworkLines} from './fireworks.js';
 import {storedEnchantmentLines} from './enchanted-books.js';
 import {copyStack} from './inventory.js';
 import {stackHasEffect} from './armor-enchantments.js';
@@ -42,6 +43,7 @@ export function tooltipLines(item,stack,advanced=false){
  const lines=[{text:stackName(stack,{[stack.id]:item})}],attack=item.attack;
  if(potion)for(const l of potionTooltip(stack.damage|0))lines.push({text:l.text,color:POTION_CLASS[l.color]??'gray'});
  if(named)lines[0].italic=true;
+ for(const text of fireworkLines(stack))lines.push({text,color:'gray'});
  // ItemEnchantedBook: EnumRarity.uncommon (yellow name) while it stores enchantments, and
  // addInformation lists them; renderToolTip draws every later line gray.
  const stored=item.storesEnchantments?(stack.storedEnchantments??stack.stored):undefined;

@@ -93,7 +93,7 @@ function system(actions, functions) {
     screen: "playing", eating: null, mining: null, mineCooldown: 0, mineHeld: false, saved: true, grounded: true,
     fallDistance: 0, wasInWater: false, yaw: 0, pitch: Math.PI / 2, target: null, aimedEntity: null, eyeRay: null, survival,
     // main.js edit() first checks for an aimed chest minecart (none in these replays).
-    aimedCart: null, eyes: null, maps: null, minecarts: null, boats: null, BOAT_ITEM: 495,
+    aimedCart: null, eyes: null, maps: null, rockets: null, minecarts: null, boats: null, BOAT_ITEM: 495,
     heldId: () => bindings.compiled.read().survival.held?.id || 0,
     world, position, velocity: { x: 0, y: 0, z: 0 }, motion: { sneaking: false, sprinting: false }, mobs,
     signs: null, farming: { observe() {}, drain: () => [] }, trees: {}, fire: {}, fluids, items, projectiles, arrows,
