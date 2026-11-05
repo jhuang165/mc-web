@@ -1,6 +1,6 @@
 // The live beacon tick (TileEntityBeacon.updateEntity) for the world's tiles: every 80 world ticks the pyramid check and
 // the effects for players in range. `players` carries the local player; remote worlds never apply effects.
-import { BEACON, tickBeacon } from './beacon.js';
+import { BEACON, tickBeacon } from './pyramid.js';
 import { canSeeSky } from './weather.js';
 
 export function tickBeacons(beacons, { world, time, players, apply }) {

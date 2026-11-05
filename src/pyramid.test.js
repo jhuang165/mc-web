@@ -5,13 +5,13 @@ import fs from 'node:fs';
 import {
   BEACON, ITEM_NETHER_STAR, BEACON_TIERS, PYRAMID_BLOCKS, PAYMENT_ITEMS, BEACON_ITEMS, pyramidLevel, validPrimary, validSecondary,
   beaconBox, beaconEffects, inBox, tickBeacon, createBeacon, applyBeaconPick, beaconToNbt, beaconFromNbt, Beacons, beamFade, installBeaconItems,
-} from './beacon.js';
-import { BeaconContainer } from './beacon-container.js';
+} from './pyramid.js';
+import { BeaconContainer } from './pyramid-container.js';
 import { PlayerInventory, makeStack } from './inventory.js';
 import { BLOCKS } from './world.js';
 import { ITEMS } from './survival.js';
 import { toOriginal, internalIdsFor } from './block-registry.js';
-import { beamQuads } from './beacon-renderer.js';
+import { beamQuads } from './pyramid-renderer.js';
 import { stackHasEffect } from './armor-enchantments.js';
 
 const ref = JSON.parse(fs.readFileSync(new URL('../public/research/beacon-reference.json', import.meta.url)));

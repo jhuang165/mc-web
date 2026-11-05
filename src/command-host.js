@@ -18,7 +18,7 @@ import { makeStack } from "./inventory.js";
 import { SKULLS } from "./skull.js";
 import { canApply, canApplyTogether, addEnchantment, ENCHANTMENTS_BY_ID } from "./enchantments.js";
 import { liveStackToNative } from "./anvil-container.js";
-import { beaconToNbt } from "./beacon.js";
+import { beaconToNbt } from "./pyramid.js";
 import { PLAYER_NAME } from "./death-messages.js";
 import { LAN_NOTICE } from "./lan.js";
 
@@ -175,7 +175,7 @@ export function createCommandHost(env) {
       for (const name of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing']) delete stores[name]?.[key];
       if (original === 144) SKULLS.create(x, y, z, Number(nbtGet(tag ?? new Map(), 'SkullType', NBT.BYTE, 0)) | 0, Number(nbtGet(tag ?? new Map(), 'Rot', NBT.BYTE, 0)), String(nbtGet(tag ?? new Map(), 'ExtraType', NBT.STRING, ''))); // TileEntitySkull (skull.js)
       const id = { 54: 'Chest', 146: 'Chest', 61: 'Furnace', 62: 'Furnace', 23: 'Trap', 158: 'Dropper', 154: 'Hopper', 117: 'Cauldron' }[original];
-      if (original === 138 && env.beaconTile) { // TileEntityBeacon.readFromNBT: Primary, Secondary, Levels (beacon.js)
+      if (original === 138 && env.beaconTile) { // TileEntityBeacon.readFromNBT: Primary, Secondary, Levels (pyramid.js)
         const t = env.beaconTile(x, y, z);
         Object.assign(t, { primary: nbtGet(tag ?? new Map(), 'Primary', NBT.INT, 0), secondary: nbtGet(tag ?? new Map(), 'Secondary', NBT.INT, 0), levels: tag ? nbtGet(tag, 'Levels', NBT.INT, 0) : -1 });
         this.ignoredTagKeys = tag ? [...tag.keys()].filter(k => !['Primary', 'Secondary', 'Levels', 'x', 'y', 'z', 'id'].includes(k)) : [];

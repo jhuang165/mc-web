@@ -1,7 +1,7 @@
 // ContainerBeacon (zx): one payment slot (zy) over the tile's inventory, then the 36 player slots.
-// Layout, validity and shift-click are replayed against public/research/beacon-reference.json by beacon.test.js.
+// Layout, validity and shift-click are replayed against public/research/beacon-reference.json by pyramid.test.js.
 import { Container, Slot, StackArray, copyStack } from './inventory.js';
-import { isPaymentItem, applyBeaconPick, BEACON_PAYMENT_POS, BEACON_PLAYER_POS } from './beacon.js';
+import { isPaymentItem, applyBeaconPick, BEACON_PAYMENT_POS, BEACON_PLAYER_POS } from './pyramid.js';
 
 class PaymentSlot extends Slot {
   get limit() { return 1; } // zy.a(): stack limit 1

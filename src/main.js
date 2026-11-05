@@ -115,11 +115,11 @@ import { MapsClock } from "./maps-clock-live.js";
 import { FireworkRockets, dispenseFirework } from "./fireworks-live.js";
 import { FireworkParticles } from "./firework-particles.js";
 import { EndPortalRenderer } from "./end-portal-renderer.js";
-import { BEACON, Beacons, validPrimary, validSecondary } from "./beacon.js";
-import { tickBeacons } from "./beacon-live.js";
-import { BeaconRenderer } from "./beacon-renderer.js";
-import { BeaconContainer } from "./beacon-container.js";
-import { beaconDecorationsHtml, beaconUiHtml } from "./beacon-gui.js";
+import { BEACON, Beacons, validPrimary, validSecondary } from "./pyramid.js";
+import { tickBeacons } from "./pyramid-live.js";
+import { BeaconRenderer } from "./pyramid-renderer.js";
+import { BeaconContainer } from "./pyramid-container.js";
+import { beaconDecorationsHtml, beaconUiHtml } from "./pyramid-gui.js";
 import { Fishing } from "./fishing-simulation.js";
 import { FISHING_ROD } from "./fishing-content.js";
 import { WitchPotions } from "./witch-potions.js";
@@ -315,7 +315,7 @@ let boats = new Boats(), boatRenderer = null;
 let hanging = new Hanging(), hangingRenderer = null, aimedHanging = null;
 // Signs (signs.js): the tile entities (text) of every sign block, drawn by sign-renderer.js.
 let signs = new Signs(), signRenderer = null, skullRenderer = null;
-// Beacons (beacon.js): the tile entities (levels, powers) of every beacon block, drawn by beacon-renderer.js.
+// Beacons (pyramid.js): the tile entities (levels, powers) of every beacon block, drawn by pyramid-renderer.js.
 let beacons = new Beacons(), beaconRenderer = null;
 // Live redstone and pistons (redstone-runtime.js), rebuilt for each world that loads.
 let redstoneRuntime = null;
@@ -1782,7 +1782,7 @@ function useAnvil(key){
   const field=$('#anvil-name');
   field.oninput=()=>{field.value=anvilName(field.value);container.setName(field.value);refreshContainer();};
 }
-// BlockBeacon.onBlockActivated: ContainerBeacon over the tile; picks are local until Confirm (MC|Beacon, beacon-gui.js).
+// BlockBeacon.onBlockActivated: ContainerBeacon over the tile; picks are local until Confirm (MC|Beacon, pyramid-gui.js).
 function useBeacon(key) {
   const [x, y, z] = key.split(",").map(Number), tile = beacons.ensure(x, y, z);
   openContainer(new BeaconContainer({ inventory: survival.inventory, tile, onConfirm: () => { saved = false; } }), "beacon", key);

@@ -13,7 +13,7 @@ import { useHeldBucket } from './buckets-simulation.js';
 import { ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, ITEM_FIRE_CHARGE } from './spawn-eggs.js';
 import { useEggOnBlock, useEggOnWater, useFireCharge, throwExpBottle } from './spawn-egg-use.js';
 import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
-import { BEACON } from './beacon.js';
+import { BEACON } from './pyramid.js';
 import { ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
 import { DRAGON_EGG } from './dragon-egg.js';
 import { useEyeOfEnder } from './eye-of-ender-live.js';

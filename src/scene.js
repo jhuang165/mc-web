@@ -1,4 +1,4 @@
-import { BEACON } from "./beacon.js";
+import { BEACON } from "./pyramid.js";
 import { END_PORTAL } from "./eye-of-ender.js"; // drawn by end-portal-renderer.js
 import { DRAGON_EGG, eggBoxes } from "./dragon-egg.js";
 import { isChestShaped } from "./chest-blocks.js"; // chest, trapped chest and ender chest are drawn by chest-renderer.js

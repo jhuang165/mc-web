@@ -4,7 +4,7 @@
 // (aoq.i, beamFade). Geometry is rebuilt per frame; evidence: bytecode (public/research/beacon.md), not browser-verified.
 import * as THREE from "three";
 import { pixelTexture } from "./first-person.js";
-import { BEACON, BEAM_HEIGHT, beamFade } from "./beacon.js";
+import { BEACON, BEAM_HEIGHT, beamFade } from "./pyramid.js";
 
 const ANGLES = [2.356194490192345, Math.PI / 4, 3.9269908169872414, 5.497787143782138];
 const ALPHA = 32 / 255;

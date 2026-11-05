@@ -5,7 +5,7 @@ Port of BlockBeacon (`ajg`), TileEntityBeacon (`aoq`), ContainerBeacon (`zx`, pa
 ## Evidence
 
 - `tools/probes/BeaconProbe.java` drives the unchanged obfuscated classes on a minimal World double (`BeaconProbe.W`) and a recording player; `tools/verify-beacon.mjs` compiles and runs it and writes `public/research/beacon-reference.json` (716 records: facts 1, levels 42, tick 12, effects 245, range 52, gate 4, setter 165, setterReset 1, nbt 2, slot 18, layout 1, shift 72, server 100, close 1).
-- `src/beacon.test.js` replays every record against the port.
+- `src/pyramid.test.js` replays every record against the port.
 - Bytecode-derived (not probed): the beam renderer, the beam fade `aoq.i`, the GUI geometry (`bez`), the render boxes of `blm.renderBlockBeacon`, and the `MC|Beacon` handler in `nh` (the probe replays its exact calls, not the network path).
 
 ## Behaviour

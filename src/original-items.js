@@ -14,7 +14,7 @@ import { SPAWN_EGG_ITEMS } from './spawn-eggs.js';
 import { EYE_ITEMS } from './eye-of-ender.js';
 import { CART_ORIGINAL_ITEMS } from './cart-variants.js';
 import { MAPS_CLOCK_ITEMS } from './maps.js';
-import { BEACON_ITEMS } from './beacon.js';
+import { BEACON_ITEMS } from './pyramid.js';
 import { FIREWORK_ITEMS } from './fireworks.js';
 
 // Original item ID (or "id:damage" subtype) -> browser item. The same table as tools/inventory-replay.mjs

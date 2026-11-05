@@ -4,7 +4,7 @@ Branch `batch6-beacon`. Details in `public/research/beacon.md`.
 
 ## Changed
 
-- New: `src/beacon.js` (rules, tile store, installers), `beacon-live.js` (80-tick tick), `beacon-renderer.js` (beam), `beacon-container.js` (ContainerBeacon), `beacon-gui.js` (GuiBeacon markup), `beacon.test.js`, probe `tools/probes/BeaconProbe.java`, `tools/verify-beacon.mjs`, `public/research/beacon-reference.json`.
+- New: `src/pyramid.js` (rules, tile store, installers), `pyramid-live.js` (80-tick tick), `pyramid-renderer.js` (beam), `pyramid-container.js` (ContainerBeacon), `pyramid-gui.js` (GuiBeacon markup), `pyramid.test.js`, probe `tools/probes/BeaconProbe.java`, `tools/verify-beacon.mjs`, `public/research/beacon-reference.json`.
 - Tests touched: `recipe-catalogue.test.js` (292 -> 293 recipes, 2628 -> 2630 checks), `region-import.test.js` (unsupported-block example 138 -> 115, since the beacon is mapped now).
 
 ## Merge hints (shared files, small hooks)

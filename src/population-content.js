@@ -13,7 +13,7 @@ import { coloredDrops, coloredCraftingResult } from './colored-blocks.js';
 import { installChestItems, CHEST_MATERIALS, chestDrops, ITEM_TRAPPED_CHEST } from './chest-blocks.js';
 import { stemCakeDrops } from './stems-cake.js';
 import { installMapsClockItems, installMapsClockRecipes } from './maps-clock-live.js';
-import { installBeaconItems, BEACON_MATERIALS, ITEM_NETHER_STAR, BEACON } from './beacon.js';
+import { installBeaconItems, BEACON_MATERIALS, ITEM_NETHER_STAR, BEACON } from './pyramid.js';
 import { installFireworkItems } from './fireworks.js';
 import { installEyeItems, EYE_MATERIALS, ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
 import { ITEM_ENDER_CHEST } from './chest-blocks.js';

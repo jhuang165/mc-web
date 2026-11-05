@@ -1,6 +1,7 @@
 // Beacon (BlockBeacon ajg, TileEntityBeacon aoq, ContainerBeacon zx) and the nether star (item 399), Minecraft Java 1.7.10.
-// Pure rules and the tile store; the live tick is beacon-live.js, the beam beacon-renderer.js, the screen beacon-container.js.
-// Evidence: public/research/beacon-reference.json (tools/probes/BeaconProbe.java, replayed by beacon.test.js) and
+// File names avoid "beacon": ad blockers refuse /beacon.js-style URLs as tracking beacons, which blanked the page.
+// Pure rules and the tile store; the live tick is pyramid-live.js, the beam pyramid-renderer.js, the screen pyramid-container.js.
+// Evidence: public/research/beacon-reference.json (tools/probes/BeaconProbe.java, replayed by pyramid.test.js) and
 // public/research/beacon.md. This module imports nothing so world.js can use its constants.
 const f = Math.fround;
 

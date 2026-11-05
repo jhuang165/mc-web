@@ -1,6 +1,6 @@
 // GuiBeacon (bez): buttons, labels and payment icons over the 230 x 219 beacon.png sheet. Geometry is bytecode-derived
 // (public/research/beacon.md): the screen's local primary/secondary picks are sent on Confirm (MC|Beacon).
-import { BEACON_TIERS, PAYMENT_ITEMS } from './beacon.js';
+import { BEACON_TIERS, PAYMENT_ITEMS } from './pyramid.js';
 import { POTION_TYPES } from './potions.js';
 
 export const BEACON_GUI = Object.freeze({ width: 230, height: 219 });

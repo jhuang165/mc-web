@@ -127,7 +127,7 @@ function payload(state,ox,oz,report,world=null) {
  for(const {value:e} of state.signs??[])tiles.push(new Map(Object.entries({id:str('Sign'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),Text1:str(e.text?.[0]??''),Text2:str(e.text?.[1]??''),Text3:str(e.text?.[2]??''),Text4:str(e.text?.[3]??'')})));
  // TileEntitySkull.writeToNBT: SkullType and Rot bytes, the ExtraType owner name (skull.js).
  for(const {value:e} of state.skulls??[])tiles.push(new Map(Object.entries({id:str('Skull'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),SkullType:byte(e.type??0),Rot:byte(e.rot??0),ExtraType:str(e.owner??'')})));
- for(const {value:e} of state.beacons??[])tiles.push(new Map(Object.entries({id:str('Beacon'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),Primary:int(e.primary|0),Secondary:int(e.secondary|0),Levels:int(e.levels|0)}))); // beacon.js
+ for(const {value:e} of state.beacons??[])tiles.push(new Map(Object.entries({id:str('Beacon'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),Primary:int(e.primary|0),Secondary:int(e.secondary|0),Levels:int(e.levels|0)}))); // pyramid.js
  for(const {value:e} of state.spawners??[]) {const n={id:str('MobSpawner'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz)};for(const [k,v] of Object.entries(e))if(!['x','y','z'].includes(k))n[k]=typeof v==='string'?str(v):short(v);tiles.push(new Map(Object.entries(n)));}
  // TileEntityPiston.writeToNBT: blockId, blockData, facing, progress, extending (original ids; renderHead is not saved by Java).
  for(const w of state.pistons??[]){const e=w.value??w;tiles.push(new Map(Object.entries({id:str('Piston'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),blockId:int(e.block),blockData:int(e.meta),facing:int(e.facing),progress:float(e.progress??0),extending:byte(e.extending?1:0)})));}

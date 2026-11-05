@@ -25,7 +25,7 @@ import { END_PORTAL, END_PORTAL_BOUNDS } from "./eye-of-ender.js";
 import { DRAGON_EGG, EGG_BOUNDS } from "./dragon-egg.js";
 import { PORTAL, portalBoundsAt } from "./nether-portal.js";
 import { NETHER_WART, WART_BOUNDS } from "./nether-wart.js";
-import { BEACON } from "./beacon.js";
+import { BEACON } from "./pyramid.js";
 import { isShaped, shapedBounds, shapedBoxes, gateOpen, FENCE_GATE as SHAPED_GATE, WOOD_SLAB as SHAPED_WOOD_SLAB, DOUBLE_WOOD_SLAB as SHAPED_DOUBLE_WOOD_SLAB, TRAPDOOR as SHAPED_TRAPDOOR, COBBLE_WALL as SHAPED_COBBLE_WALL } from "./shaped-blocks.js";
 import { stoneUtilityBounds, stoneUtilityBoxes, hasPartialBounds, isStoneUtility } from "./stone-utility.js";
 export const SIZE = 128,
@@ -197,7 +197,7 @@ BLOCKS[PUMPKIN_STEM]={name:'Pumpkin stem',color:'#7a9a3a'};
 BLOCKS[MELON_STEM]={name:'Melon stem',color:'#7a9a3a'};
 BLOCKS[CAKE]={name:'Cake',color:'#e8d6c4'};
 installSkullBlocks(BLOCKS); // skull.js: original block 144 (mob head) overwrites reserved 172; item 2050
-BLOCKS[BEACON]={name:'Beacon',color:'#7fd6d0'}; // beacon.js: original block 138 overwrites reserved 173
+BLOCKS[BEACON]={name:'Beacon',color:'#7fd6d0'}; // pyramid.js: original block 138 overwrites reserved 173
 BLOCKS[END_PORTAL]={name:'End Portal',color:'#0b1a1a',hidden:true}; // eye-of-ender.js: original block 119 overwrites reserved 149
 BLOCKS[DRAGON_EGG]={name:'Dragon Egg',color:'#0e0b16'}; // dragon-egg.js: original block 122 overwrites reserved 171
 // Nether portal (nether-portal.js, original block 90) and nether wart (nether-wart.js, original block 115) overwrite reserved 164 and 170.

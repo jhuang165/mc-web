@@ -342,7 +342,7 @@ export async function importJavaRegionArea(regions, options = {}) {
         // TileEntitySign.readFromNBT: Text1-Text4, each cut to 15 characters; the loaded tile is not editable (signs.js).
         signs.push({ x: lx, y, z: lz, text: [1, 2, 3, 4].map(i => String(get(tile, `Text${i}`, NBT.STRING, '')).slice(0, 15)) }); tally(tileConverted, id);
       } else if (inside && id === 'Beacon' && block === 173) {
-        beacons.push({ x: lx, y, z: lz, primary: get(tile, 'Primary', NBT.INT, 0), secondary: get(tile, 'Secondary', NBT.INT, 0), levels: get(tile, 'Levels', NBT.INT, 0) }); tally(tileConverted, id); // beacon.js
+        beacons.push({ x: lx, y, z: lz, primary: get(tile, 'Primary', NBT.INT, 0), secondary: get(tile, 'Secondary', NBT.INT, 0), levels: get(tile, 'Levels', NBT.INT, 0) }); tally(tileConverted, id); // pyramid.js
       } else if (inside && id === 'Piston' && world.get(lx, y, lz) === PISTON_MOVING) {
         // TileEntityPiston.readFromNBT: blockId, blockData, facing, progress (lastProgress = progress), extending. The
         // restore (piston-live.js) lets the move finish on the first tick, as native does.
