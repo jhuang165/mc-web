@@ -45,6 +45,10 @@ export function createLighting() {
 export const FOG_PARS = `uniform vec3 fogColor;uniform float fogNear,fogFar,fogDensity;varying float vFogDistance;
 vec3 applyFog(vec3 c){float f=fogDensity>0.?1.-exp(-fogDensity*vFogDistance):clamp((vFogDistance-fogNear)/(fogFar-fogNear),0.,1.);return mix(c,fogColor,f);}`;
 
+// `centroid` (GLSL ES 3.00, which three.js compiles these to): with MSAA a pixel on a face edge is
+// shaded at its centre even when that lies outside the triangle, and the extrapolated UV then
+// reads the neighbouring atlas tile, drawing a line along block edges at range.
+// Centroid sampling keeps the UV inside the covered part of the face, so it stays inside the tile.
 // Chunk geometry: attributes `shade` (face shade x AO) and `lightCoord`
 // (packed block and sky brightness, 0-240 each).
 // `vertexAlpha` makes `shade` a vec4 whose alpha multiplies the texel's before the
@@ -53,9 +57,9 @@ export function worldMaterial(lighting, { map, alphaTest = 0.1, transparent = fa
   const S = vertexAlpha ? "vec4" : "vec3";
   return new THREE.ShaderMaterial({
     uniforms: { ...lighting.uniforms, map: { value: map }, alphaTest: { value: alphaTest }, uvTransform: { value: uvTransform } },
-    vertexShader: `attribute ${S} shade;attribute vec2 lightCoord;uniform vec4 uvTransform;varying vec2 vUv;varying ${S} vShade;varying vec2 vLight;varying float vFogDistance;
+    vertexShader: `attribute ${S} shade;attribute vec2 lightCoord;uniform vec4 uvTransform;centroid varying vec2 vUv;varying ${S} vShade;varying vec2 vLight;varying float vFogDistance;
 void main(){vUv=uv*uvTransform.xy+uvTransform.zw;vShade=shade;vLight=(lightCoord+8.)/256.;vec4 mv=modelViewMatrix*vec4(position,1.);vFogDistance=length(mv.xyz);gl_Position=projectionMatrix*mv;}`,
-    fragmentShader: `uniform sampler2D map,lightmap;uniform float alphaTest;varying vec2 vUv;varying ${S} vShade;varying vec2 vLight;${FOG_PARS}
+    fragmentShader: `uniform sampler2D map,lightmap;uniform float alphaTest;centroid varying vec2 vUv;varying ${S} vShade;varying vec2 vLight;${FOG_PARS}
 void main(){vec4 t=texture2D(map,vUv)${vertexAlpha ? "*vec4(1.,1.,1.,vShade.a)" : ""};if(t.a<=alphaTest)discard;gl_FragColor=vec4(applyFog(t.rgb*vShade.rgb*texture2D(lightmap,vLight).rgb),t.a);}`,
     transparent,
     side,
@@ -80,9 +84,9 @@ export function entityMaterial(lighting, { map = null, color = null, alphaTest =
   const material = new THREE.ShaderMaterial({
     uniforms,
     defines: map ? { USE_TEXTURE: "" } : {},
-    vertexShader: `uniform vec3 light0,light1;varying vec2 vUv;varying float vDiffuse;varying float vFogDistance;
+    vertexShader: `uniform vec3 light0,light1;centroid varying vec2 vUv;varying float vDiffuse;varying float vFogDistance;
 void main(){vUv=uv;vec3 n=normalize(mat3(modelMatrix)*normal);vDiffuse=min(1.,.4+.6*(max(0.,dot(n,light0))+max(0.,dot(n,light1))));vec4 mv=modelViewMatrix*vec4(position,1.);vFogDistance=length(mv.xyz);gl_Position=projectionMatrix*mv;}`,
-    fragmentShader: `uniform sampler2D map,lightmap;uniform vec3 tint;uniform vec4 overlay;uniform vec2 lightCoord;uniform float alphaTest;varying vec2 vUv;varying float vDiffuse;${FOG_PARS}
+    fragmentShader: `uniform sampler2D map,lightmap;uniform vec3 tint;uniform vec4 overlay;uniform vec2 lightCoord;uniform float alphaTest;centroid varying vec2 vUv;varying float vDiffuse;${FOG_PARS}
 void main(){vec4 t=vec4(1.);
 #ifdef USE_TEXTURE
 t=texture2D(map,vUv);
