@@ -80,7 +80,7 @@ test('darkness allows contact damage with a 20-tick cooldown and original step e
   const ew=new EntityWorld(flat,[],()=>.5),e=ew.create('spider',64,0,56),s=new Survival({slots:[],food:0,time:14000}),p={x:64,y:0,z:64};
   ew.entities.push(e);ew.lightAt=()=>0;
   for(let i=0;i<60;i++)ew.tick(p,s);
-  assert.ok(ew.drain().some(event=>event.sound==='mob.spider.step'&&event.volume===.15));
+  assert.ok(ew.drain().some(event=>event.sound==='mob.spider.step'&&event.volume===Math.fround(.15)));
   assert.ok(s.health<20);assert.ok(e.attack>0&&e.attack<=20);
   s.hurtTicks=0;const health=s.health;e.attack=20;
   e.x=p.x;e.y=p.y;e.z=p.z+1;e.vx=e.vy=e.vz=0;

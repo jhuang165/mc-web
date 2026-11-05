@@ -29,6 +29,6 @@ Every block in 1.7.10 carries a `stepSound` (`Block.SoundType`: a name, a volume
 
 - Footsteps still pick their cell as `floor(y - 0.05)` rather than `floor(y - 0.2 - yOffset)` and have no fence/wall-below rule; the footstep volume is now the native `0.15 * v` (it was 0.22) and plays at the listener without attenuation.
 - The hit counter restarts when the aim leaves the block; the original keeps it while the same position and tool are held.
-- Mobs' own footsteps (`func_145780_a` for zombies and the horse) and fall sounds (`EntityLivingBase.fall`, `EntityHorse`) are not wired; falling-block anvil landings keep their fixed `random.anvil_land` sound.
+- Mobs' own footsteps are wired after 0.43.0 (unreleased) ([mob steps](mob-steps.md)); fall sounds (`EntityLivingBase.fall`, `EntityHorse`) are not; falling-block anvil landings keep their fixed `random.anvil_land` sound.
 - Sound variant choice (random file per event) and the distance-attenuation curve are the existing `audio.js` behaviour; the attenuation curve is assumed (paulscode is not in the JAR).
 - Not a parity claim: this covers the SoundType table and its call sites, not every sound event of the game.

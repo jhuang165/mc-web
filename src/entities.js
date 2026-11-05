@@ -7,7 +7,8 @@ import { POISON } from "./status-effects.js";
 import {CARROT,zombieRareDrop} from './crops.js';
 import { creeperFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from "./creeper.js";
 import { SIZE, HEIGHT, hash, slipperiness, collisionBoxes as cellCollisionBoxes, normalCube, WOOL, isLiquid, DYE, BLOCKS, PUMPKIN } from "./world.js";
-import { isOnLadder, ladderClamp, LADDER_CLIMB, countsVertical } from "./ladders.js";
+import { isOnLadder, ladderClamp, LADDER_CLIMB } from "./ladders.js";
+import { mobStepEvents } from "./mob-steps.js";
 import { ITEMS } from "./survival.js";
 import { weaponEnchantments, arthropodSlowness, javaLikeRandom } from "./enchantment-effects.js";
 import { insideOpaqueBlock, mobEyeHeight } from "./suffocation.js";
@@ -1510,15 +1511,6 @@ export class EntityWorld {
       this.push(e, t);
       if (isSpider(e.type)) {
         e.climbing = e.collidedH;
-        // Entity.moveEntity's distanceWalkedOnStepModified (0.6 per block);
-        // EntitySpider has its own original step event at volume 0.15.
-        const dx = e.x - e.px, dy = countsVertical(this.world, e.x, e.y, e.z) ? e.y - e.py : 0, dz = e.z - e.pz;
-        e.stepDistance = f((e.stepDistance || 0) + f(Math.sqrt(dx * dx + dy * dy + dz * dz) * 0.6));
-        const below = this.world.get(Math.floor(e.x), Math.floor(e.y - 0.2), Math.floor(e.z));
-        if (e.stepDistance > (e.nextStep || 1) && below) {
-          e.nextStep = Math.floor(e.stepDistance) + 1;
-          this.events.push({ sound: "mob.spider.step", volume: 0.15, pitch: 1, position: { x: e.x, y: e.y, z: e.z } });
-        }
       }
       if (e.type === "chicken") this.chickenUpdate(e);
       this.turnBody(e);
@@ -1588,7 +1580,11 @@ export class EntityWorld {
       get wet() { return e.inWater || !!self.wet?.(e, t.height); },
       fizz: () => this.events.push({ sound: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(this.random() - this.random()) * 0.4)), position: { x: e.x, y: e.y, z: e.z } }),
     };
+    const from = { x: e.x, y: e.y, z: e.z };
     const landed = moveEntityWithHeading(this.world, e, t.width, t.height, e.moveForward, hooks);
+    // moveEntity's step tail (mob-steps.js): every mob with canTriggerWalking plays its own step event.
+    const rand = entityRandom(e);
+    this.events.push(...mobStepEvents(this.world, e, from, { hostile: HOSTILE.has(e.type), random: () => rand.nextFloat() }));
     // The finite world's edge stops a mob like a wall.
     const edge = (axis, v) => {
       const c = Math.max((this.world[axis === "x" ? "minX" : "minZ"] ?? 0)+0.6, Math.min((this.world[axis === "x" ? "maxX" : "maxZ"] ?? SIZE)-0.6, e[axis]));
