@@ -16,6 +16,7 @@ import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
 import { ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
 import { DRAGON_EGG } from './dragon-egg.js';
 import { useEyeOfEnder } from './eye-of-ender-live.js';
+import { ITEM_EMPTY_MAP } from './maps.js';
 import { BOAT_ITEM } from './boats.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
@@ -79,6 +80,14 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   if (place && id === ITEM_EYE_OF_ENDER && state.eyes && (state.survival.creative || state.survival.count(id))) {
     const used = useEyeOfEnder(state, { target, usesBlock }, hooks);
     if (used) return act(used.branch);
+  }
+  // ItemEmptyMap.onItemRightClick: becomes a filled map centred on the player (maps-clock-live.js).
+  if (place && id === ITEM_EMPTY_MAP && !usesBlock && state.maps) {
+    const made = state.maps.useEmptyMap(state);
+    hook('swing');
+    hook('renderHotbar');
+    hook('markUnsaved');
+    return act('use-empty-map', { map: made.data.id });
   }
   if (place && id === BOW && !usesBlock) {
     if (!state.eating && canDraw(state.survival)) state.eating = { id: BOW, ticks: 0, bow: true };

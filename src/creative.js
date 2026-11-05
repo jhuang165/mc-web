@@ -1,5 +1,4 @@
 import {POPULATION_CREATIVE} from './population-creative.js';
-import { CART_CREATIVE } from './cart-variants.js';
 // Minecraft Java 1.7.10 creative inventory: CreativeTabs (abt),
 // GuiContainerCreative (bfl), its ContainerCreative (bfm) and CreativeSlot (bfn).
 // Tab lists keep the original order (CreativeTabs.displayAllReleventItems and the
@@ -46,10 +45,9 @@ export const CREATIVE_TABS = [
 for(const t of CREATIVE_TABS)if(t.index!==5&&t.index!==11)t.items=[...POPULATION_CREATIVE[t.index],...(t.index===7?TOOL_BOOKS:t.index===8?COMBAT_BOOKS:[])];
 CREATIVE_TABS[9].items = BREWING_TAB;
 // Furnace, TNT and hopper carts (ItemMinecart, tabTransport; the command block cart has no tab) follow the chest cart (cart-variants.js); in the search order 343 follows the chest cart and 407/408 sit by item id.
-CREATIVE_TABS[3].items = [...CREATIVE_TABS[3].items, ...CART_CREATIVE];
 export const SEARCH = CREATIVE_TABS[5], SURVIVAL_TAB = CREATIVE_TABS[11];
 // updateCreativeSearch walks Item.itemRegistry: items with a creative tab, by ID.
-export const SEARCH_ORDER = [...POPULATION_CREATIVE[5].flatMap((e)=>e===385?POTION_SEARCH:e===450?[e,CART_CREATIVE[0]]:e===382?[e,CART_CREATIVE[1],CART_CREATIVE[2]]:[e]),...SEARCH_BOOKS];
+export const SEARCH_ORDER = [...POPULATION_CREATIVE[5].flatMap((e)=>e===385?POTION_SEARCH:[e]),...SEARCH_BOOKS];
 // Item.getCreativeTab, for the search tab's tooltip line.
 export const itemTab = (id) => CREATIVE_TABS.find((t) => t.items.some((e) => entryId(e) === id)) ?? null;
 export const GUI_WIDTH = 195, GUI_HEIGHT = 136, SEARCH_MAX = 15;
