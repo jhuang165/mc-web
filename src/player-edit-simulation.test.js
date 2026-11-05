@@ -12,6 +12,7 @@ import { Projectiles } from './projectiles.js';
 import { applyPlayerEdit } from './player-edit-simulation.js';
 import { capturePlayerAction, dispatchPlayerAction } from './player-actions.js';
 import { CAULDRON } from './stone-utility.js';
+import { BOAT_ITEM } from './boats.js';
 
 const POS = [42, 12, 42];
 const FLOWERS = { yellow: YELLOW_FLOWER, red: RED_FLOWER };
@@ -287,4 +288,18 @@ test('enchanting table activation takes precedence over a held projectile and us
  const f=fixture({mode:'creative',tool:316,block:86,target,place:true}),calls=[];
  const result=applyPlayerEdit(f.state,f.request,{swing:()=>calls.push('swing'),useEnchantingTable:key=>calls.push(['enchanting',key])});
  assert.equal(result.branch,'open-enchanting-table');assert.deepEqual(calls,['swing',['enchanting',target.block.join(',')]]);
+});
+
+test('a held boat opens a targeted chest instead of placing; on other blocks onItemRightClick places it', () => {
+  const target = { block: [...POS], adjacent: [POS[0] + 1, POS[1], POS[2]] };
+  let f = fixture({ mode: 'creative', tool: BOAT_ITEM, block: CHEST, target, place: true }), calls = [];
+  f.state.survival.chests[target.block.join(',')] = { items: Array(27).fill(null), title: 'Chest' };
+  let result = applyPlayerEdit(f.state, f.request, { swing: () => calls.push('swing'), placeBoat: () => { calls.push('boat'); return true; },
+    openChest: (chest, key) => calls.push(['open', key, !!chest]) });
+  assert.equal(result.branch, 'open-chest');
+  assert.ok(!calls.includes('boat'));
+  f = fixture({ mode: 'creative', tool: BOAT_ITEM, block: 3, target, place: true }); calls = [];
+  result = applyPlayerEdit(f.state, f.request, { placeBoat: () => { calls.push('boat'); return true; } });
+  assert.equal(result.branch, 'place-boat');
+  assert.deepEqual(calls, ['boat']);
 });

@@ -2059,16 +2059,6 @@ function edit(place = false) {
       return;
     }
   }
-  // ItemBoat.onItemRightClick: a water trace along the view ray (works on land too); the boat is taken
-  // from the stack except in Creative.
-  if (place && heldId() === BOAT_ITEM && eyeRay && !aimedEntity) {
-    const boat = boats.place(world, { eye: eyeRay.origin, dir: eyeRay.dir, yaw: Math.fround(180 - yaw * 180 / Math.PI) });
-    if (boat) {
-      if (!survival.creative) survival.take(BOAT_ITEM, 1);
-      animation.swing(); renderHotbar(); saved = false;
-      return;
-    }
-  }
   const state = { screen, heldTool: heldId(), world, survival, position, velocity, motion, mobs, minecarts,
     farming, trees, fire, fluids, items, projectiles, grounded, fallDistance, wasInWater, yaw, pitch,
     eating, mining, mineCooldown, mineHeld, flowers: FLOWERS, boneRandom, itemRand };
@@ -2117,6 +2107,14 @@ function edit(place = false) {
     openDispenser: (dispenser, key, _block, title = DISPENSER_TITLE) => { openContainer(Object.assign(new DispenserContainer(survival.inventory, dispenser, () => { saved = false; }), { title }), "dispenser", key); syncContainerState(); },
     breakBlock,
     clientEyeInWater,
+    // ItemBoat.onItemRightClick: a water trace along the view ray (works on land too); the boat is taken
+    // from the stack except in Creative.
+    placeBoat: () => {
+      if (!eyeRay || !boats.place(world, { eye: eyeRay.origin, dir: eyeRay.dir, yaw: Math.fround(180 - yaw * 180 / Math.PI) })) return false;
+      if (!survival.creative) survival.take(BOAT_ITEM, 1);
+      animation.swing(); renderHotbar(); saved = false;
+      return true;
+    },
   });
   ({ eating, mining, mineCooldown } = state);
   // BlockPumpkin.onBlockAdded: a pumpkin set on an iron T builds a player-created iron golem.

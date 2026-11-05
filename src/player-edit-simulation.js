@@ -7,6 +7,7 @@ import { growGrass } from './flowers.js';
 import { isBucket } from './buckets.js';
 import { useHeldBucket } from './buckets-simulation.js';
 import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
+import { BOAT_ITEM } from './boats.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
 import { hoeSound } from './block-sounds.js';
@@ -51,6 +52,9 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     : targetBlock === FLOWER_POT && !!potUse(state.world, ...target.block, id, state.survival.held?.damage || 0);
   const usesBlock = activates && !aimedEntity && target && (STATIONS.has(state.world.get(...target.block)) || usesStoneUtility);
 
+  // ItemBoat has no onItemUse, so an activated block (chest, door, ...) wins; otherwise onItemRightClick
+  // places the boat along the view ray (hooks.placeBoat returns whether one was placed).
+  if (place && id === BOAT_ITEM && !usesBlock && !aimedEntity && hook('placeBoat')) return act('place-boat');
   // Snowball/egg, bow and buckets return before the vanilla hand swing.
   if (place && isThrowable(id) && (state.survival.creative || state.survival.count(id)) && !usesBlock) {
     const thrown = throwHeldItem(state, id, hooks);
