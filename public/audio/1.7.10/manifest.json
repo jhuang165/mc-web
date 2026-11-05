@@ -2277,6 +2277,21 @@
       "url": "/audio/1.7.10/mob/zombiepig/zpig1.ogg",
       "sha1": "ec4b0396dd2fc2da8fab91ddc35218d3426349b3",
       "bytes": 8536
+    },
+    "random/door_close": {
+      "url": "/audio/1.7.10/random/door_close.ogg",
+      "sha1": "9ea8a9e105321891bda18b9007b383b40aa7c076",
+      "bytes": 6510
+    },
+    "random/splash": {
+      "url": "/audio/1.7.10/random/splash.ogg",
+      "sha1": "22a491f266f5c3cdd6e669a9493daaf40c9c8575",
+      "bytes": 11333
+    },
+    "random/door_open": {
+      "url": "/audio/1.7.10/random/door_open.ogg",
+      "sha1": "5bb5a04e776d69ca12b1d7bc369975f9bf62e741",
+      "bytes": 7536
     }
   },
   "events": {
@@ -3773,6 +3788,24 @@
       "category": "block",
       "sounds": [
         "portal/trigger"
+      ]
+    },
+    "random.door_close": {
+      "category": "block",
+      "sounds": [
+        "random/door_close"
+      ]
+    },
+    "random.door_open": {
+      "category": "block",
+      "sounds": [
+        "random/door_open"
+      ]
+    },
+    "random.splash": {
+      "category": "player",
+      "sounds": [
+        "random/splash"
       ]
     }
   }
