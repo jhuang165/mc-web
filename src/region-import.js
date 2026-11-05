@@ -48,6 +48,8 @@ export function itemFromOriginal(id, damage = 0) {
   if (base === undefined) return null;
   const item = ITEMS[base];
   if (item.durability) return { id: base, damage: Math.min(damage, item.durability), clamped: damage > item.durability };
+  // ItemMonsterPlacer: the damage is the EntityList id (spawn-eggs.js); any value is a valid stack, unknown ones just spawn nothing.
+  if (id === 383) return damage < 32768 ? { id: base, damage, clamped: false } : null;
   if (VARIANT_DAMAGE.has(id)) return damage < (item.variants?.length ?? 1) ? { id: base, damage, clamped: false } : null;
   return damage === 0 ? { id: base, damage: 0, clamped: false } : null;
 }

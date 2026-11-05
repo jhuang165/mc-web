@@ -188,3 +188,10 @@ test("launch replays: throwFromPlayer reproduces the seeded EntityThrowable cons
     for (const [k, v] of [["mx", r.mx], ["my", r.my], ["mz", r.mz]]) assert.ok(Math.abs(ball[k] - v) < 1e-4, `${k} seed ${r.seed}: ${ball[k]} vs ${v}`);
   }
 });
+
+test("/give and region import keep a spawn egg's EntityList id as its damage", async () => {
+  const { itemFromOriginal } = await import("./region-import.js");
+  assert.deepEqual(itemFromOriginal(383, 100), { id: ITEM_SPAWN_EGG, damage: 100, clamped: false });
+  assert.deepEqual(itemFromOriginal(383, 0), { id: ITEM_SPAWN_EGG, damage: 0, clamped: false });
+  assert.equal(itemFromOriginal(383, 40000), null);
+});
