@@ -1,0 +1,1 @@
+Included in f76437b. Java entity import coverage includes SkeletonType variants, the Ender Dragon, and End crystals. The targeted Java mob and region tests passed.
