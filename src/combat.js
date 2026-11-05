@@ -7,6 +7,7 @@ import { pearlCount as endermanPearls, ENDER_PEARL_ITEM as ENDER_PEARL } from ".
 import { golemDrops } from "./iron-golem.js";
 import { CARROT, POTATO } from "./crops.js";
 import { slimeDrops, slimeExperience } from "./slime.js";
+import { blazeDrops, ghastDrops } from "./blaze-ghast.js";
 import { witchDrops, witchEquipmentDrop, witchExperience } from "./witch.js";
 import { squidDrops, squidExperience } from "./squid-bat.js";
 import { dropCount as horseDropCount } from "./horse.js";
@@ -30,7 +31,7 @@ export function armorReduced(type, amount, source) {
 }
 // getSoundVolume (EntityCow 0.4) and getSoundPitch, on Entity.rand.
 // EntityCow (and EntityMooshroom), EntityWolf and EntityOcelot (bf) override getSoundVolume with 0.4F; EntityHorse with 0.8F.
-export const soundVolume = (type) => (type === "horse" ? f(0.8) : type === "cow" || type === "mooshroom" || type === "wolf" || type === "squid" || type === "ocelot" ? f(0.4) : type === "bat" ? f(0.1) : 1);
+export const soundVolume = (type) => (type === "horse" ? f(0.8) : type === "cow" || type === "mooshroom" || type === "wolf" || type === "squid" || type === "ocelot" ? f(0.4) : type === "bat" ? f(0.1) : type === "ghast" ? f(10) : 1);
 export const soundPitch = (rand, child) => f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (child ? f(1.5) : 1));
 // EntitySkeleton holds a bow (equipment drop chance 0.085F); no other mob here carries
 // equipment, so only its dropEquipment and getExperiencePoints draw for one.
@@ -69,6 +70,8 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
     case "creeper": add(GUNPOWDER, generic()); break;
     case "iron_golem": for (const [id, n, damage] of golemDrops(rand, RED_FLOWER)) add(id, n, damage); break; // EntityIronGolem.dropFewItems
     case "slime": for (const id of slimeDrops(rand, e.size, looting)) add(id); break; // EntitySlime.dropFewItems (slime.js)
+    case "blaze": for (const id of blazeDrops(rand, looting, playerHit)) add(id); break; // EntityBlaze.dropFewItems (blaze-ghast.js)
+    case "ghast": for (const id of ghastDrops(rand, looting)) add(id); break; // EntityGhast.dropFewItems
     case "witch": for (const [id] of witchDrops(rand, looting)) add(id); break; // EntityWitch.dropFewItems (witch.js)
     case "snow_golem": { const n = rand.nextInt(16); if (n > 0) add(312, n); break; } // EntitySnowman.dropFewItems: nextInt(16) snowballs
     case "horse": add([LEATHER, LEATHER, LEATHER, FLESH, BONE][e.horse?.type ?? 0], horseDropCount(rand, looting)); break; // EntityHorse.u(): leather, rotten flesh or bone (horse.js)
@@ -93,6 +96,7 @@ export function experiencePoints(e, rand, worldRand) {
   if (e.type === "villager" || e.type === "iron_golem" || e.type === "snow_golem" || e.type === "bat") return 0; // EntityLiving.experienceValue stays 0 (EntityVillager is no EntityMob or EntityAnimal)
   if (ANIMALS.has(e.type)) return 1 + worldRand.nextInt(3);
   if (e.type === "slime") return slimeExperience(e.size); // experienceValue = size
+  if (e.type === "blaze") return 10; // EntityBlaze.experienceValue (a ghast keeps the default 5)
   if (e.type === "witch") return witchExperience(rand, e.held); // 5 plus 1 + nextInt(3) for a held potion
   return 5 + (e.type === "skeleton" ? 1 + rand.nextInt(3) : 0);
 }

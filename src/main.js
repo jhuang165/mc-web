@@ -931,6 +931,7 @@ async function launch(record, prepared) {
           if (kind === "potion") (mobs.potions?.projectiles ?? projectiles).balls.push({ ...ball, damage: e.damage, owner: null });
           else projectiles.balls.push(ball);
         },
+        fireball: ({ x, y, z, ax, ay, az }) => { mobs.fireballs.launch({ large: false, owner: null, x, y, z, exact: [ax, ay, az] }); }, // dispense.js FIRE_CHARGE
         cart: (type, x, y, z) => { if (type === 1) minecarts.spawnChest({ type: 1, x, y, z, items: [] }); else minecarts.spawnEmpty({ x, y, z }); },
         spawnTnt: (x, y, z) => { primed.push(primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer: null })); saved = false; },
         setLiquid: (x, y, z, id) => { const old = world.get(x, y, z); world.set(x, y, z, id === 10 ? LAVA : WATER, true, 0); redstoneRuntime.fluidChanges([[x, y, z, old, world.get(x, y, z)]]); },
@@ -983,6 +984,7 @@ async function launch(record, prepared) {
     mobs.shoot = (e, target, scale) => arrows.skeletonShoot(e, target, scale, mobs.difficulty);
     // EntityWitch splash potions (witch-potions.js); EntityWorld.tick advances them.
     mobs.potions = new WitchPotions(mobs);
+    mobs.ignite = (x, y, z) => fire.ignite(x, y, z); // fireballs.js: a small fireball lights the cell beside the block it hit
     mobs.potions.load(record.thrownPotions);
     // World.rand for EntityLiving.onSpawnWithEgg, and World.func_147462_b at a block.
     mobs.worldRandom = weather.random;
@@ -2019,7 +2021,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
   scene.setFishing(fishing.active ? { hook: fishing.hook, first: !thirdPersonView, sneaking: !!motion.sneaking } : null);
   scene.setDrops(items.items);
-  scene.setProjectiles(eyes.balls.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length ? [...projectiles.balls, ...eyes.balls, ...(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? [])] : projectiles.balls, projectiles.particles);
+  scene.setProjectiles(eyes.balls.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length || mobs?._fireballs?.balls.length ? [...projectiles.balls, ...eyes.balls, ...(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? []), ...(mobs?._fireballs?.balls ?? [])] : projectiles.balls, projectiles.particles);
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();
@@ -2251,9 +2253,10 @@ function lightTnt(x, y, z, placer) {
 // then doExplosionB(true). DamageSource.setExplosionSource names the attacker: the creeper
 // itself, or the TNT's placer. The block edits run through world.set like breakBlock:
 // containers spill, farmland and crops update, and the edits are saved.
-function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true } = {}) {
+function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false } = {}) {
   applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging,
-    survival, position, velocity, farming }, { x, y, z, size, exploder, attacker, smoking }, {
+    survival, position, velocity, farming }, { x, y, z, size, exploder, attacker, smoking, flaming }, {
+    ignite: (fx, fy, fz) => fire.ignite(fx, fy, fz),
     brokenTool: reportBrokenTool,
     burst: (...args) => scene.explosionParticles.burst(...args),
     sound: (name, options) => sounds.play(name, options),

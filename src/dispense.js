@@ -34,7 +34,7 @@ export const OPPOSITE = Object.freeze([1, 0, 3, 2, 5, 4]);
 // Internal item ids of this build.
 export const ITEM = Object.freeze({
   ARROW: 320, SNOWBALL: 312, EGG: 316, POTION: 385, MINECART: 366, CHEST_MINECART: 450, BUCKET: 340, WATER_BUCKET: 341,
-  LAVA_BUCKET: 342, FLINT_AND_STEEL: 126, DYE: 351, TNT: 55,
+  LAVA_BUCKET: 342, FLINT_AND_STEEL: 126, DYE: 351, TNT: 55, FIRE_CHARGE: 1952,
 });
 export const SPLASH_BIT = 16384;
 const FLINT_MAX_DAMAGE = 64;
@@ -117,6 +117,7 @@ export class Dispensing {
       case ITEM.FLINT_AND_STEEL: return FLINT;
       case ITEM.DYE: return DYE;
       case ITEM.TNT: return TNT;
+      case ITEM.FIRE_CHARGE: return FIRE_CHARGE;
       default: return DEFAULT;
     }
   }
@@ -189,6 +190,19 @@ const PROJECTILE = {
   snowball: throwable("snowball", PROJECTILE_VELOCITY, PROJECTILE_INACCURACY, 1002),
   // The splash potion's anonymous subclass: velocity * 1.25F, inaccuracy * 0.5F.
   potion: projectile((host, e, s) => host.thrown?.("potion", { ...e, damage: s.damage }, s), (r, x, y, z, v, i) => heading(r, x, y, z, v, i), f(PROJECTILE_VELOCITY * f(1.25)), f(PROJECTILE_INACCURACY * f(0.5)), 1002),
+};
+
+// BehaviorDispenseFireball (kz): a small fireball 0.3 beyond the dispenser face (centre + 0.7 facing + 0.3 facing), acceleration the facing plus
+// 0.05 * nextGaussian per axis (x, y, z), sound 1009, one charge used. Bytecode-derived (blaze-ghast.md).
+const FIRE_CHARGE = {
+  sound: () => 1009,
+  stack(w, x, y, z, facing, stack) {
+    const [fx, fy, fz] = FACING[facing], rand = this.entityRandom?.() ?? this.host.rng?.() ?? new JavaRandom(Math.floor(Math.random() * 2 ** 48));
+    const ax = rand.nextGaussian() * 0.05 + fx, ay = rand.nextGaussian() * 0.05 + fy, az = rand.nextGaussian() * 0.05 + fz;
+    this.host.fireball?.({ x: x + 0.5 + 0.7 * fx + fx * 0.3, y: y + 0.5 + 0.7 * fy + fy * 0.3, z: z + 0.5 + 0.7 * fz + fz * 0.3, ax, ay, az });
+    stack.count--;
+    return stack;
+  },
 };
 
 // BehaviorDispenseMinecart: a rail (or a rail one cell below an empty cell) in front takes the cart, anything else the default throw.

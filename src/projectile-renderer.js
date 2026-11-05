@@ -18,6 +18,7 @@ export function projectileItemId(kind) {
   if (kind === "egg") return EGG;
   if (kind === "enderPearl") return ENDER_PEARL;
   if (kind === "eyeOfEnder") return 1960; // RenderManager maps EntityEnderEye (zd) to RenderSnowball(Items.ender_eye)
+  if (kind === "fireball" || kind === "smallFireball") return 1952; // RenderFireball: the fire charge icon (fireballs.js)
   if (kind === "potion") return 385; // witch.js ITEM_POTION; drawn with the splash bottle icon (texture below)
   throw new TypeError(`Unsupported projectile render kind: ${kind}`);
 }
@@ -58,15 +59,15 @@ export class ProjectileRenderer {
       let m = this.balls.get(b);
       if (!m) {
         const material = this.material(b.kind), mesh = new THREE.Mesh(this.sprite, material);
-        mesh.scale.setScalar(0.5);
+        mesh.scale.setScalar(b.scale ?? 0.5); // RenderFireball scale 2 (large) / 0.5 (small)
         mesh.frustumCulled = false;
         this.scene.add(mesh);
         this.balls.set(b, (m = { mesh, material }));
       }
       const x = lerp(b.px, b.x), y = lerp(b.py, b.y), z = lerp(b.pz, b.z);
-      m.mesh.position.set(x, y + 0.125, z);
+      m.mesh.position.set(x, y + 0.25 * (b.scale ?? 0.5), z);
       m.mesh.quaternion.copy(camera.quaternion);
-      m.material.setLight(this.view.brightness(x, y + BALL_LIGHT, z));
+      m.material.setLight(b.fullbright ? 15728880 : this.view.brightness(x, y + BALL_LIGHT, z));
     }
     for (const [b, m] of this.balls)
       if (!seen.has(b)) {

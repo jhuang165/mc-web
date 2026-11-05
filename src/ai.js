@@ -5,6 +5,7 @@
 // ported and what is not. entities.js keeps the data, the physics and the events;
 // each mob gets a `Brain` here (kept in a WeakMap, never saved) that owns the
 // navigator, the helpers and the two task lists.
+import { buildBlazeGhastTasks } from "./blaze-ghast-mobs.js";
 import { PathNavigate } from "./pathfinding.js";
 import { raycast, HEIGHT } from "./world.js";
 import { BRIGHTNESS } from "./lighting.js";
@@ -888,6 +889,8 @@ export class Brain {
       this.tasks.add(2, new AttackOnCollide(this, A.chase, "player"));
       this.tasks.add(7, new Wander(this, A.wander));
       this.targets.add(1, new HurtByTarget(this, false));
+    } else if (e.type === "blaze" || e.type === "ghast") {
+      buildBlazeGhastTasks(this, { Wander, WatchClosest, LookIdle, NearestAttackable, HurtByTarget, AttackOnCollide }); // blaze-ghast-mobs.js
     } else if (e.type === "squid" || e.type === "bat") {
       // EntitySquid and EntityBat: no AI tasks (squid-bat-mobs.js drives them); the helpers and despawnEntity still run.
     } else if (e.type === "witch") {
@@ -1065,7 +1068,7 @@ export class Brain {
     const e = this.e, p = this.ai.player;
     if ((e.idle & 31) !== 31 || !p) return;
     // EntityWolf.canDespawn (v): only a wild wolf older than 2400 ticks.
-    const d3 = this.distSq(p), can = (e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || (e.type === "ocelot" && ocelotCanDespawn(e)) || e.type === "zombie" || e.type === "skeleton" || e.type === "witch" || e.type === "enderman" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper" || e.type === "squid" || e.type === "bat";
+    const d3 = this.distSq(p), can = (e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || (e.type === "ocelot" && ocelotCanDespawn(e)) || e.type === "zombie" || e.type === "skeleton" || e.type === "witch" || e.type === "enderman" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper" || e.type === "squid" || e.type === "bat" || e.type === "blaze" || e.type === "ghast";
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
     if (d3 < 1024) e.idle = 0;

@@ -15,7 +15,7 @@ export const SPAWNER_DEFAULTS = Object.freeze({ delay: 20, minSpawnDelay: 200, m
 
 // EntityList names (EntityId) for the port's ENTITY_TYPES keys. An EntityId outside this map
 // is EntityList.createEntityByName returning null: updateSpawner returns before any roll.
-export const SPAWNER_ENTITY_IDS = Object.freeze({ Enderman: "enderman", CaveSpider: "cave_spider", Spider: "spider", Zombie: "zombie", Skeleton: "skeleton", Creeper: "creeper", Pig: "pig", Cow: "cow", Sheep: "sheep", Chicken: "chicken", Wolf: "wolf", Ozelot: "ocelot", Silverfish: "silverfish", Witch: "witch", Slime: "slime" });
+export const SPAWNER_ENTITY_IDS = Object.freeze({ Enderman: "enderman", CaveSpider: "cave_spider", Spider: "spider", Zombie: "zombie", Skeleton: "skeleton", Creeper: "creeper", Pig: "pig", Cow: "cow", Sheep: "sheep", Chicken: "chicken", Wolf: "wolf", Ozelot: "ocelot", Silverfish: "silverfish", Witch: "witch", Slime: "slime", Blaze: "blaze", Ghast: "ghast" });
 export const spawnerType = (entityId) => (Object.hasOwn(SPAWNER_ENTITY_IDS, entityId) ? SPAWNER_ENTITY_IDS[entityId] : null);
 // getEntitiesWithinAABB(entity.getClass(), box) is Class.isAssignableFrom: EntityCaveSpider
 // extends EntitySpider, so a Spider spawner counts cave spiders and a CaveSpider spawner does not

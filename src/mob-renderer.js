@@ -21,6 +21,7 @@ import { createOcelotRig } from "./ocelot-renderer.js";
 import { createHorseRig } from "./horse-renderer.js";
 import { createEndermanRig, animateEnderman } from "./enderman-renderer.js";
 import { createSnowGolemRig, animateSnowGolem, addMooshroomMushrooms } from "./mooshroom-golem-renderer.js";
+import { createBlazeRig, createGhastRig } from "./blaze-ghast-renderer.js";
 import { createSquidRig, createBatRig } from "./squid-bat-renderer.js";
 const RAD = Math.PI / 180;
 // RenderCreeper's powered pass (bni.a(xz, I, F), pass 1): creeper_armor.png with the texture
@@ -394,6 +395,8 @@ export class MobRenderer {
     if (e.type === "snow_golem") return createSnowGolemRig(this);
     if (e.type === "squid") return createSquidRig(this);
     if (e.type === "bat") return createBatRig(this);
+    if (e.type === "blaze") return createBlazeRig(this);
+    if (e.type === "ghast") return createGhastRig(this);
     return this.createQuadruped(e.type);
   }
   // `partial` is the fraction of the current tick elapsed (mobPose interpolates).
@@ -514,7 +517,7 @@ export class MobRenderer {
         r.armor.uniforms.scroll.value = armorScroll(pose.age);
       }
       for (const m of r.materials) {
-        m.setLight(packed);
+        m.setLight(r.fullbright ?? packed);
         const o = m.uniforms.overlay.value;
         if (e.hurt > 0 || e.death) {
           if (white > 0) {

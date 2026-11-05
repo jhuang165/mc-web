@@ -27,6 +27,7 @@ import { SLIME, mobScale, slimeDamage, slimeTouches, slimeFields, slimeFieldsFro
 import { SQUID, BAT } from "./squid-bat.js";
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { HORSE_ENTITY, horseRideThink, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
+import { blazeUpdate, ghastUpdate, fireballMobTalk, installFireballMobs } from "./blaze-ghast-mobs.js";
 import { squidBatUpdate, squidBatTalk, squidBatSpawnPass, installSquidBat } from "./squid-bat-mobs.js";
 import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
 import { webMove } from './webs.js';
@@ -1165,6 +1166,7 @@ export class EntityWorld {
   // for a child). EntityCreeper has no living sound but still rolls and resets.
   talk(e) {
     if (e.type === "squid" || e.type === "bat") return squidBatTalk(this, e);
+    if (e.type === "blaze" || e.type === "ghast") return fireballMobTalk(this, e); // blaze-ghast-mobs.js
     if (e.type === "horse") return this.horseTalk(e, livingSoundRoll);
     const rand = entityRandom(e);
     if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem" || e.type === "snow_golem" || e.type === "slime") return;
@@ -1423,6 +1425,7 @@ export class EntityWorld {
     this.villages.tick();
     // Splash potions thrown by witches (witch-potions.js; main.js attaches it).
     this.potions?.tick(player, survival);
+    this._fireballs?.tick(); // blaze/ghast fireballs (fireballs.js)
     this._golemBalls?.tick(); // snow golem snowballs (mooshroom-golem-live.js)
     // WorldServer.tick runs SpawnerAnimals.findChunksForSpawning only while gamerule doMobSpawning is true; no monsters on Peaceful.
     const hostile = this.difficulty !== PEACEFUL && gameRule("doMobSpawning");
@@ -1590,6 +1593,7 @@ export class EntityWorld {
       tickMobEffects(e, t, base.health, entityRandom(e), this.fx);
       this.talk(e);
       if (e.type === "squid" || e.type === "bat") { squidBatUpdate(this, e, t); continue; } // squid-bat-mobs.js
+      if (e.type === "ghast") { ghastUpdate(this, e, t); continue; } if (e.type === "blaze") blazeUpdate(this, e, t); // blaze-ghast-mobs.js
       // EntityZombie and EntitySkeleton.onLivingUpdate (yq.e, yl.e), before the AI: in daylight
       // a mob (a zombie only when adult) at brightness > 0.5 with rand.nextFloat() * 30 <
       // (brightness - 0.4) * 2 under open sky is set on fire for 8 s; burn() takes the damage,
@@ -2032,3 +2036,4 @@ export class EntityWorld {
 installMooshroomGolem(EntityWorld); // mooshroom-golem-live.js: shears/bowl, golem construction, snow trail, snowballs
 installHorse(EntityWorld); // horse-live.js: interact, ride, tame, rear
 installSquidBat(EntityWorld); // squid-bat-mobs.js: bat wake-up, squid entityAge and silent hurt, bat sound pitch
+installFireballMobs(EntityWorld); // blaze-ghast-mobs.js: blaze and ghast types, fire immunity, fireball pick/punch

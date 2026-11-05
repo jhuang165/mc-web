@@ -31,7 +31,7 @@ export function drainMobEvents({ mobs, xpOrbs, items }, hooks = {}) {
     if (event.xp) xpOrbs.spawn(event.xp, event.position);
     if (event.explode) explode(
       event.explode.x, event.explode.y, event.explode.z, event.explode.size,
-      { exploder: event.explode.source, attacker: event.explode.source, smoking: event.explode.smoking ?? true }, event,
+      { exploder: event.explode.source, attacker: event.explode.source, smoking: event.explode.smoking ?? true, flaming: !!event.explode.flaming }, event,
     );
     if (event.drop) items.dropMob(event.drop, event.count, event.position, event.damage, event);
     if (event.eatGrass) eatGrass(event.eatGrass, event);

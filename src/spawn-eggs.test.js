@@ -110,8 +110,8 @@ test("useEggOnBlock spawns beside the face, spends outside Creative, names the m
   assert.equal(c.spawned.length, 1);
   const ghast = stubState({ damage: 56 });
   assert.equal(useEggOnBlock(ghast.state, { block: [5, 0, 5], adjacent: [5, 1, 5] }, {}), true);
-  assert.equal(ghast.spawned.length, 0);
-  assert.equal(ghast.stack.count, 3);
+  assert.equal(ghast.spawned[0].type, "ghast"); // batch 6: Ghast (56) is summonable
+  assert.equal(ghast.stack.count, 2);
 });
 
 test("fire charge: fire beside the face, sound, consumed even when blocked, kept in Creative", () => {
