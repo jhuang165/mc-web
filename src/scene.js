@@ -6,7 +6,7 @@ import { ParticleSystem } from "./particles.js";
 import { EffectRenderer } from "./effect-renderer.js";
 import { Fx } from "./fx.js";
 import { ParticleRenderer } from "./particle-renderer.js";
-import { HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, ANVIL, BED, PISTON_MOVING, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
+import { HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, ANVIL, BED, PISTON_MOVING, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube, STAINED_GLASS, CARPET } from "./world.js";
 import { StreamingLight } from './streaming-light.js';
 import { STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, endFrameBoxes, cauldronBoxes, cauldronWaterHeight, CAULDRON_FLOOR, CAULDRON_WALL, potContents, POT_BOUNDS, potPlantOf } from './stone-utility.js';
 import { REDSTONE_WIRE, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, LEVER, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, isRedstoneBlock, redstoneBounds, wireArms, wireClimbs, wireTint } from './redstone-blocks.js';
@@ -275,7 +275,8 @@ export class VoxelScene {
           else if (b === 10) this.liquid(10, water, flow, x, y, z);
           else if (b === 42) this.liquid(42, lava, lavaFlow, x, y, z);
           else if (b === FIRE) this.fireBlock(fire, x, y, z);
-          else this.cube(b === ICE ? ice : solid, b, x, y, z);
+          else if (b === CARPET) this.box(solid, b, x, y, z, blockBounds(w, x, y, z), w.getMeta(x, y, z));
+          else this.cube(b === ICE || b === STAINED_GLASS ? ice : solid, b, x, y, z);
         }
     const group = new THREE.Group(), add = (mesher, ...materials) => {
       const g = mesher.geometry();
@@ -316,6 +317,7 @@ export class VoxelScene {
       // BlockSnow.shouldSideBeRendered always draws the top.
       if (boundary && hides(nb) && !(b === SNOW_LAYER && fi === 2)) return;
       if ((b === 9 || b === ICE) && nb === b) return;
+      if (b === STAINED_GLASS && nb === b && w.getMeta(x + f.n[0], y + f.n[1], z + f.n[2]) === w.getMeta(x, y, z)) return;
       const corners = f.v.map((v) => [v[0], v[1] * h, v[2]]), r = tileRect(blockTile(b, fi, lit, w.getMeta(x, y, z), b === 1 && (w.get(x, y + 1, z) === SNOW_LAYER || w.get(x, y + 1, z) === 23))), uvs = rectUvs(r);
       // RenderBlocks.renderBlockQuartz: a pillar lying on x (meta 3) turns the top, bottom and z faces a quarter, one on z (meta 4) the x faces.
       if (b === QUARTZ_BLOCK) { const qm = w.getMeta(x, y, z); if ((qm === 3 && fi >= 2) || (qm === 4 && fi < 2)) uvs.push(uvs.shift()); }
@@ -420,7 +422,7 @@ export class VoxelScene {
   // arm (a half plane per one-sided connection, a full one through or with none), the side texture's matching
   // half, 2-pixel caps (u 7-9 of the top texture) where a lone arm ends, and top and bottom strips.
   pane(m,b,x,y,z) {
-    const w=this.world,mask=paneMask(w,x,y,z),side=tileRect(blockTile(b,0)),top=tileRect(blockTile(b,2)),light=this.light.packed(x,y,z),
+    const w=this.world,mask=paneMask(w,x,y,z),side=tileRect(blockTile(b,0,false,w.getMeta(x,y,z))),top=tileRect(blockTile(b,2,false,w.getMeta(x,y,z))),light=this.light.packed(x,y,z),
       lerp=(a,c,t)=>a+(c-a)*t,c0=0.4375,c1=0.5625,
       plane=(axis,from,to)=>{
         const sa=from,sb=to,v=axis==='x'?[[x+from,y+1,z+.5],[x+from,y,z+.5],[x+to,y,z+.5],[x+to,y+1,z+.5]]:[[x+.5,y+1,z+from],[x+.5,y,z+from],[x+.5,y,z+to],[x+.5,y+1,z+to]];

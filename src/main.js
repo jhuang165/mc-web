@@ -1,4 +1,5 @@
 import { StreamStorage } from './streaming-storage.js';
+import { isColoredBlock, carpetNeighbourChange, coloredPickDamage, COLORED_ITEM_OFFSET, CARPET } from './colored-blocks.js';
 import { ContainerResidency } from './container-residency.js';
 import { acquireWorldWriter } from './world-lock.js';
 import { readWorldShelf, writeWorldShelf, deleteStoredWorld, readChunkEdits, readRuntimeState } from './world-storage.js';
@@ -857,6 +858,8 @@ async function launch(record, prepared) {
     new Rails(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
     new Torches(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
     // BlockDoor.onNeighborBlockChange: a door without its other half or a solid top below pops off as one item.
+    // BlockCarpet.onNeighborBlockChange: a carpet whose support below is gone drops itself.
+    { const next = world.onChange; world.onChange = (x, y, z, old, now) => { next?.(x, y, z, old, now); for (const dy of [1, 0]) { const d = carpetNeighbourChange(world, x, y + dy, z); if (d) { dropBlock([d], x, y + dy, z); scene.updateBlocks([[x, y + dy, z, CARPET, 0]]); saved = false; } } }; }
     new Doors(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
     new Beds(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
     // Redstone components (inert, no power): unsupported ones drop; a pressed stone button releases 20 ticks later.
@@ -2206,7 +2209,7 @@ function breakBlock(p, creative = false) {
   });
 }
 // Block.getItem for middle-click: farmland gives dirt, crops give seeds, water nothing.
-const pickItem = (block, meta = 0) => block === 139 ? 1139 : isDispenserPiston(block) ? (block === PISTON_HEAD ? itemForBlock(headBaseId(meta)) : itemForBlock(block)) : isRedstoneBlock(block) ? redstoneItemOf(block) : (block === 29 || block === 30 ? 2 : block === WOODEN_DOOR ? WOODEN_DOOR_ITEM : block === IRON_DOOR ? IRON_DOOR_ITEM : block === REEDS ? REEDS_ITEM : isCrop(block) ? cropItem(block) : !isLiquid(block) && ITEMS[block] ? blockItemId(block) : 0);
+const pickItem = (block, meta = 0) => block === 139 ? 1139 : isColoredBlock(block) ? block + COLORED_ITEM_OFFSET : isDispenserPiston(block) ? (block === PISTON_HEAD ? itemForBlock(headBaseId(meta)) : itemForBlock(block)) : isRedstoneBlock(block) ? redstoneItemOf(block) : (block === 29 || block === 30 ? 2 : block === WOODEN_DOOR ? WOODEN_DOOR_ITEM : block === IRON_DOOR ? IRON_DOOR_ITEM : block === REEDS ? REEDS_ITEM : isCrop(block) ? cropItem(block) : !isLiquid(block) && ITEMS[block] ? blockItemId(block) : 0);
 // EntityPlayer.dropOneItem: Q throws one item, Ctrl + Q the whole stack.
 function dropHeld(all) {
   const inv = survival.inventory, s = inv.held;
@@ -2579,7 +2582,7 @@ function setupPointer() {
       const stonePick = target && stoneUtilityPick(world, ...target.block);
       const id = stonePick?.id ?? (target && pickItem(world.get(...target.block), world.getMeta(...target.block)));
       if (id) {
-        survival.inventory.pick(id, survival.creative, stonePick ? stonePick.damage : treePickDamage(id, world.getMeta(...target.block)) ?? (id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined));
+        survival.inventory.pick(id, survival.creative, stonePick ? stonePick.damage : isColoredBlock(world.get(...target.block)) ? coloredPickDamage(world.get(...target.block), world.getMeta(...target.block)) : treePickDamage(id, world.getMeta(...target.block)) ?? (id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined));
         mining = null;
         eating = null;
         renderHotbar();

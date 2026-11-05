@@ -23,6 +23,7 @@ import { HOPPER, hopperPlacedMeta, newHopperTile } from './hopper.js';
 import { blockOfItem as redstoneItemBlock, isRedstoneBlock, redstonePlacedMeta } from './redstone-blocks.js';
 
 import { logPlacedMeta } from './wood-types.js';
+import { coloredItemBlock, isColoredBlock, coloredPlacedMeta, pumpkinFacingMeta, CARPET, carpetCanStay } from './colored-blocks.js';
 const BLOCK_MAX = new Set([STONE_BRICKS,4,5,7,48,69,70,71,82,WOOL, RED_FLOWER, 2, 6, 56, 58]);
 const result = (placed, reason, block = null, position = null) => ({ placed, reason, block, position });
 // ItemBlock.onItemUse: clicking vines, tall grass (with its dead-shrub and fern variants) or a dead bush places into the
@@ -44,7 +45,7 @@ export const placementReplaceable = doorReplaceable;
 export function placeHeldBlock(state, request, hooks = {}) {
   const { world, survival, position, flowers, farming, yaw } = state;
   const { id: itemId, item, target } = request;
-  const id = (itemId === 1139 ? 139 : 0) || dispenserPistonItemBlock(itemId) || redstoneItemBlock(itemId) || railItemBlock(itemId) || brewingItemBlock(itemId) || paneItemBlock(itemId) || stoneUtilityItemBlock(itemId) || itemId; // the glass pane item (1100) places block 100; stone utility items 1101-1106 their blocks 101-106
+  const id = (itemId === 1139 ? 139 : 0) || coloredItemBlock(itemId) || dispenserPistonItemBlock(itemId) || redstoneItemBlock(itemId) || railItemBlock(itemId) || brewingItemBlock(itemId) || paneItemBlock(itemId) || stoneUtilityItemBlock(itemId) || itemId; // the glass pane item (1100) places block 100; stone utility items 1101-1106 their blocks 101-106
   const {
     collides: intersects = collides,
     toast = () => {},
@@ -166,6 +167,8 @@ export function placeHeldBlock(state, request, hooks = {}) {
   // refuses the placement and keeps the item. Before this check the block was silently overwritten.
   if (!placementReplaceable(world.get(...p))) return result(false, "occupied", id, p);
   if (id === CHEST && !canPlaceChest(world, ...p)) return result(false, "chest-support", id, p);
+  // BlockCarpet.canPlaceBlockAt: any non-air block below (colored-blocks.js).
+  if (id === CARPET && !carpetCanStay(world, ...p)) return result(false, "carpet-support", id, p);
   if (isFlower(id) && !flowerCanStay(world, flowers, ...p)) return result(false, "flower-support", id, p);
   if (id === SAPLING && !saplingCanStay(world, ...p)) return result(false, "sapling-support", id, p);
   if (id === SNOW_LAYER && !snowCanStay(world, ...p)) return result(false, "snow-support", id, p);
@@ -184,7 +187,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if (rsMeta === null) return result(false, "redstone-support", id, p);
 
   const old = world.get(...p), oldMeta = world.getMeta(...p);
-  const meta = id===5||id===71?placedLeavesMeta(survival.held?.damage||0):id===4||id===70?logPlacedMeta(survival.held?.damage||0,side):id===QUARTZ_BLOCK?quartzPlacedMeta(survival.held?.damage||0,side):BLOCK_MAX.has(id) ? survival.held?.damage || 0
+  const meta = isColoredBlock(id) ? coloredPlacedMeta(id, survival.held?.damage || 0, side, doorRotationYaw(yaw)) : id === 67 ? pumpkinFacingMeta(doorRotationYaw(yaw)) : id===5||id===71?placedLeavesMeta(survival.held?.damage||0):id===4||id===70?logPlacedMeta(survival.held?.damage||0,side):id===QUARTZ_BLOCK?quartzPlacedMeta(survival.held?.damage||0,side):BLOCK_MAX.has(id) ? survival.held?.damage || 0
     : id === LADDER ? placedLadderMeta(world, ...p, side)
         : id === TORCH ? torchMeta
           : id === ANVIL ? anvilPlacementMeta(yaw,survival.held?.damage||0)

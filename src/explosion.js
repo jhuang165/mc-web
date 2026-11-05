@@ -28,6 +28,8 @@ for (let id = 31; id <= 38; id++) RESIST[id] = 0;
 RESIST[WOODEN_DOOR] = 3; RESIST[IRON_DOOR] = 5; RESIST[IRON_BARS] = 6; RESIST[GLASS_PANE] = 0.3;
 RESIST[139] = 3600000; // BlockCommandBlock: setResistance(6000000), aji.p registration
 RESIST[138] = 0.2; // BlockBed (bed-reference.json facts)
+// Colored blocks (colored-blocks-reference.json explosionResistance): stained glass 0.3, pane 0.3, carpet 0.1, hay 0.5, coal 6, lapis 3, emerald 6, sponge 0.6, jack o'lantern 1.
+Object.assign(RESIST, { 140: 0.3, 141: 0.3, 142: 0.1, 143: 0.5, 144: 6, 145: 3, 146: 6, 147: 0.6, 148: 1 });
 // BlockStairs.getExplosionResistance: the model block's resistance / 5 (stairs-reference.json).
 for (const id of Object.keys(STAIRS)) RESIST[id] = stairExplosionResistance(Number(id));
 // Stone bricks, both slab blocks (resistance field 30 / 5), the end portal frame (setResistance(6000000) -> 3600000), the cauldron (2) and the pot (0): stone-utility-reference.json.

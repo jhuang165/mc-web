@@ -74,7 +74,7 @@ test("original states the port only approximates, and blocks it lacks", () => {
   assert.deepEqual(fromOriginal(3, 2), { id: 2, meta: 2, exact: true }); // podzol metadata retained
   assert.deepEqual(fromOriginal(59, 5), { id: 36, meta: 0, exact: true });
   assert.deepEqual(fromOriginal(59, 13), { id: 36, meta: 0, exact: false });
-  assert.equal(fromOriginal(19, 0), null); // sponge
+  assert.deepEqual(fromOriginal(19, 0), { id: 147, meta: 0, exact: true }); // sponge (colored-blocks.js, internal 147)
   assert.equal(fromOriginal(165, 0), null);
   assert.deepEqual(internalIdsFor(59), [31, 32, 33, 34, 35, 36, 37, 38]);
   assert.deepEqual(internalIdsFor(60), [29, 30]);

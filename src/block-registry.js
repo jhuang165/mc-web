@@ -111,6 +111,8 @@ const MAP = {
   [IRON_DOOR]: same(71),
   [IRON_BARS]: same(101),
   [GLASS_PANE]: same(102),
+  // Colored and storage blocks (colored-blocks.js): stained glass 95, pane 160, carpet 171, hay 170 (axis in meta), coal 173, lapis 22, emerald 133, sponge 19, jack o'lantern 91.
+  140: same(95), 141: same(160), 142: same(171), 143: same(170), 144: fixed(173), 145: fixed(22), 146: fixed(133), 147: fixed(19), 148: same(91),
   [STONE_BRICKS]: same(98),
   [DOUBLE_STONE_SLAB]: same(43),
   // BlockStoneSlab 44: every state but 44:1 (bottom sandstone slab, internal 82, which stays the home of old saves);

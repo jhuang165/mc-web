@@ -122,7 +122,7 @@ export class Beds {
 
 // Material.isOpaque (blocksMovement and not translucent) for the spawn search.
 // Material.glass, ice, leaves, web and cactus are translucent: leaves 5/71, glass 9, glass pane 100, packed ice 80.
-const TRANSLUCENT = new Set([5, 9, 71, 80, 100, ICE, WEB, CACTUS]);
+const TRANSLUCENT = new Set([5, 9, 71, 80, 100, ICE, WEB, CACTUS, 140, 141]); // 140/141: stained glass and its pane are Material.glass
 // The lily pad is Material.plants, which plants.js materialSolid does not list.
 export const materialOpaque = (b) => materialSolid(b) && !TRANSLUCENT.has(b) && b !== LILY_PAD;
 

@@ -3,6 +3,7 @@
 // tools/verify-doors-panes.mjs (public/research/doors-panes-reference.json). Metadata keeps the original
 // domain so villages and strongholds, which place raw metadata, stay valid: the lower half holds the facing
 // (bits 0-1) and the open bit (bit 2); the upper half has bit 3 set, bit 0 is the hinge and bit 1 the powered flag.
+import { coloredItemId, STAINED_GLASS, STAINED_GLASS_PANE } from "./colored-blocks.js";
 import { WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE, STONE_SLAB, SNOW_LAYER, VINE, DEAD_BUSH, DEAD_SHRUB, FERN, opaqueCube, normalCube } from "./world.js";
 import { replaceable } from "./plants.js";
 import { isStair, stairSolidTop } from "./stairs.js";
@@ -12,9 +13,9 @@ export const WOODEN_DOOR_ITEM = 470, IRON_DOOR_ITEM = 471;
 // Tools own internal item ids 100-127, so the glass pane (block 100) is item 1100 (saves and exports still use original item 102).
 export const GLASS_PANE_ITEM = 1100;
 export const paneItemBlock = (item) => (item === GLASS_PANE_ITEM ? GLASS_PANE : 0);
-export const blockItemId = (block) => (block === GLASS_PANE ? GLASS_PANE_ITEM : block);
+export const blockItemId = (block) => (block === GLASS_PANE ? GLASS_PANE_ITEM : coloredItemId(block) || block);
 export const isDoor = (b) => b === WOODEN_DOOR || b === IRON_DOOR;
-export const isPane = (b) => b === IRON_BARS || b === GLASS_PANE;
+export const isPane = (b) => b === IRON_BARS || b === GLASS_PANE || b === STAINED_GLASS_PANE;
 // ItemDoor places Material.wood -> wooden door, else the iron door; the item drops come back the same way.
 export const doorItemBlock = (item) => (item === WOODEN_DOOR_ITEM ? WOODEN_DOOR : item === IRON_DOOR_ITEM ? IRON_DOOR : 0);
 export const doorItem = (block) => (block === WOODEN_DOOR ? WOODEN_DOOR_ITEM : block === IRON_DOOR ? IRON_DOOR_ITEM : 0);
@@ -199,7 +200,7 @@ export class Doors {
 // ---- panes and bars ----
 // BlockPane.canPaneConnectTo (aoa.a): an opaque cube, glass, or another pane or bar. Stained glass is not in this
 // build, and panes do not connect to fences.
-export const paneConnectsTo = (b) => opaqueCube(b) || b === 9 || isPane(b);
+export const paneConnectsTo = (b) => opaqueCube(b) || b === 9 || b === STAINED_GLASS || isPane(b);
 // Bit 0 z-1 (north), bit 1 z+1 (south), bit 2 x-1 (west), bit 3 x+1 (east).
 export function paneMask(world, x, y, z) {
   const c = (dx, dz) => paneConnectsTo(world.get(x + dx, y, z + dz));

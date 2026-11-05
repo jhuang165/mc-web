@@ -33,6 +33,7 @@ export const BRIGHTNESS = Array.from({ length: 16 }, (_, i) => {
 // (func_149685_I: 0.2 for normal cubes) and getCanBlockGrass (s: materials
 // that let grass through, used by smooth lighting to decide corner samples).
 export function lightOpacity(b) {
+  if (b >= 140 && b <= 142) return 0; // stained glass, its pane and carpet (colored-blocks-reference.json: lightOpacity 0)
   if (b >= 132 && b <= 138) return lightOpacity3(b); // dropper, hopper, brewing stand, powered/detector/activator rails (blocks-0-40.js)
   if (b >= 119 && b <= 131) return lightOpacity2(b); // redstone torches, lamps, block, button, plates, comparators, sensor, moving piston and glowstone (redstone-blocks-2.js)
   if (b===72||b===73) return 0;
@@ -48,7 +49,7 @@ export function lightOpacity(b) {
 }
 // Lava: setLightLevel(1.0F), so (int)(15 * 1.0) = 15.
 // Fire: setLightLevel(1.0F), 15 as well.
-export const lightEmission = (b, lit = false) => (b >= 119 && b <= 131 ? lightEmission2(b) : b===134?1:b===65?9:b===75?1:b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : b === END_PORTAL_FRAME ? 1 : 0);
+export const lightEmission = (b, lit = false) => (b === 148 ? 15 : b >= 119 && b <= 131 ? lightEmission2(b) : b===134?1:b===65?9:b===75?1:b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : b === END_PORTAL_FRAME ? 1 : 0);
 export const useNeighborBrightness = (b) => isStair(b) || useNeighborBrightness2(b) || b === 82 || (b >= DOUBLE_STONE_SLAB && b <= FLOWER_POT) || b === 20 || b === 9 || b === 41 || b === 29 || b === 30 || b === FENCE || b === NETHER_FENCE || b === RAIL || b === MOB_SPAWNER || isPlant(b);
 const AO_SOLID = f(0.2);
 // Block.getAmbientOcclusionLightValue uses isBlockNormalCube (blocksMovement and a
