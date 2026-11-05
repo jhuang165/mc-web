@@ -162,6 +162,8 @@ const MAP = {
   175: same(63), 176: same(68),
   // Shaped blocks (shaped-blocks.js): wood slab 126, double wood slab 125, fence gate 107, trapdoor 96, cobblestone wall 139 (metadata is the original's).
   165: same(126), 166: same(125), 167: same(107), 168: same(96), 169: same(139),
+  // Stems and cake (stems-cake.js): pumpkin stem 104 / melon stem 105 (metadata 0-7 the age), cake 92 (metadata 0-6 the bites).
+  159: same(104), 160: same(105), 161: same(92),
 };
 if (Object.keys(MAP).length !== BLOCKS.filter((b) => !b.reserved).length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");
 

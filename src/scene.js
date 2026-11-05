@@ -1,3 +1,4 @@
+import { PUMPKIN_STEM, MELON_STEM, CAKE, cakeBounds, stemDirection, stemTint, stemQuads } from './stems-cake.js';
 import * as THREE from "three";
 import { WorldEffects } from "./effects.js";
 import { ExplosionParticles } from "./explosion-particles.js";
@@ -253,6 +254,8 @@ export class VoxelScene {
           if (!b || b === 41 || b === PISTON_MOVING || b === 175 || b === 176) continue; // signs are drawn by sign-renderer.js; the moving block is drawn by updateMoving, never as a cube
           if (b === 20) this.torch(solid, x, y, z);
           else if (isCrop(b)) this.crops(solid, b, x, y, z);
+          else if (b === PUMPKIN_STEM || b === MELON_STEM) this.stem(solid, b, x, y, z);
+          else if (b === CAKE) this.box(solid, b, x, y, z, cakeBounds(w.getMeta(x, y, z)), w.getMeta(x, y, z), true);
           else if (b===COCOA||b===SANDSTONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z));
           else if (b===STONE_SLAB) this.box(solid,b,x,y,z,blockBounds(w,x,y,z),w.getMeta(x,y,z));
           else if (b===END_PORTAL_FRAME) this.endFrame(solid,x,y,z);
@@ -695,6 +698,17 @@ export class VoxelScene {
       if(meta&bit)m.quad(v.map(p=>[x+p[0],y+p[1],z+p[2]]),uv,1,light,true);
   }
   // renderCrossedSquares, with the tall-grass position jitter from the block coordinates.
+  // RenderBlocks.renderBlockStem (stems-cake.js stemQuads): crossed planes tinted by age, plus the connected plane beside a fruit.
+  stem(m, b, x, y, z) {
+    const meta = this.world.getMeta(x, y, z), dir = stemDirection(this.world, x, y, z, b), light = this.light.packed(x, y, z), tint = stemTint(meta),
+      prefix = b === PUMPKIN_STEM ? "pumpkin_stem_" : "melon_stem_";
+    for (const q of stemQuads(meta, dir)) {
+      const r = tileRect(tileByName(prefix + (q.tile === "connected" ? "connected" : "disconnected")));
+      m.quad(q.verts.map((v) => [x + v[0], y + v[1], z + v[2]]), q.uvs.map(([u, v]) => [r.u0 + (r.u1 - r.u0) * u, r.v1 - (r.v1 - r.v0) * v]), 1, light, true);
+      const k = m.shade.length - 12;
+      for (let i = 0; i < 4; i++) { m.shade[k + i * 3] = tint[0]; m.shade[k + i * 3 + 1] = tint[1]; m.shade[k + i * 3 + 2] = tint[2]; }
+    }
+  }
   crossed(m, b, x, y, z) {
     const w = this.world;
     let px = x, py = y, pz = z;

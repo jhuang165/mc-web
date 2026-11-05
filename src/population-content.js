@@ -11,6 +11,7 @@ import { installShapedItems, installShapedMaterials, installShapedRecipes, shape
 import { POTION_ITEM_ROWS } from './potion-items.js';
 import { coloredDrops, coloredCraftingResult } from './colored-blocks.js';
 import { installChestItems, CHEST_MATERIALS, chestDrops, ITEM_TRAPPED_CHEST } from './chest-blocks.js';
+import { stemCakeDrops } from './stems-cake.js';
 export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97:68,175:69,162:70,161:71,106:72,127:73,48:74,39:75,40:76,99:77,100:78,32:79,174:80,103:81,'44:1':82,'31:0':83,'31:2':84,24:56,110:57,159:58,111:59,145:ANVIL,116:ENCHANTING_TABLE,53:87,67:88,109:89,128:90,134:91,135:92,136:93,108:94,163:95,164:96,
   // Doors (items 324/330 are internal 470/471), iron bars and glass panes (the block items).
   324:470,330:471,101:IRON_BARS,102:1100,
@@ -170,6 +171,7 @@ export function installPopulationRecipes({recipe,shapeless}){
 export const populationXp=(id,r)=>id===63?2+Math.floor(r()*4):id===64||id===65?1+Math.floor(r()*5):id===66?3+Math.floor(r()*5):id===156?quartzOreXp(r):0;
 // Native BlockOre, BlockRedstoneOre, BlockHugeMushroom, BlockMelon and BlockDoublePlant drops.
 export function populationDrops(id,meta,{random=Math.random,shears=false}={}){
+  if(id>=159&&id<=161)return stemCakeDrops(id,meta,random); // BlockStem seeds by age, BlockCake nothing (stems-cake.js)
   if(id===ANVIL)return[{id:ANVIL,count:1,damage:(meta&15)>>2}];
   {const colored=coloredDrops(id,meta);if(colored)return colored;}
   if(isShaped(id))return shapedDrops(id,meta);

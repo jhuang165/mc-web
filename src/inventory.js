@@ -205,14 +205,21 @@ class ArmorSlot extends Slot {
   valid(s) { return !!s && this.inventory.items[s.id]?.armor === this.type; }
 }
 class CraftingSlot extends Slot {
-  constructor(result, grid, x, y, onCraft) { super(result, 0, x, y); Object.assign(this, { grid, onCraft, amount: 0 }); }
+  constructor(result, grid, x, y, onCraft, items) { super(result, 0, x, y); Object.assign(this, { grid, onCraft, items, amount: 0 }); }
   valid() { return false; }
   decr(n) { if (this.has) this.amount += Math.min(n, this.stack.count); return super.decr(n); }
   crafted(s, n) { this.amount += n; this.finish(s); }
   finish(s) { this.onCraft?.(s, this.amount); this.amount = 0; }
+  // SlotCrafting.onPickupFromSlot: a used-up ingredient with a container item (the cake recipe's milk buckets) leaves it in its cell.
   onPickup(s) {
     this.finish(s);
-    for (let i = 0; i < this.grid.size; i++) if (this.grid.getStack(i)) this.grid.decr(i, 1);
+    for (let i = 0; i < this.grid.size; i++) {
+      const st = this.grid.getStack(i);
+      if (!st) continue;
+      const left = this.items?.[st.id]?.craftContainer;
+      this.grid.decr(i, 1);
+      if (left && !this.grid.getStack(i)) this.grid.setStack(i, makeStack(left));
+    }
   }
 }
 class FurnaceOutputSlot extends Slot {
@@ -430,7 +437,7 @@ class CraftingContainer extends Container {
 export class PlayerContainer extends CraftingContainer {
   constructor(inv, { craft, onCraft } = {}) {
     super(inv, 2, craft, onCraft);
-    this.addSlot(new CraftingSlot(this.result, this.grid, 144, 36, (s, n) => this.onCraft?.(s, n)));
+    this.addSlot(new CraftingSlot(this.result, this.grid, 144, 36, (s, n) => this.onCraft?.(s, n), inv.items));
     for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) this.addSlot(new Slot(this.grid, x + y * 2, 88 + x * 18, 26 + y * 18));
     for (let i = 0; i < 4; i++) this.addSlot(new ArmorSlot(inv, 39 - i, 8, 8 + i * 18, i));
     this.addPlayerSlots(8, 84);
@@ -457,7 +464,7 @@ export class PlayerContainer extends CraftingContainer {
 export class WorkbenchContainer extends CraftingContainer {
   constructor(inv, { craft, onCraft } = {}) {
     super(inv, 3, craft, onCraft);
-    this.addSlot(new CraftingSlot(this.result, this.grid, 124, 35, (s, n) => this.onCraft?.(s, n)));
+    this.addSlot(new CraftingSlot(this.result, this.grid, 124, 35, (s, n) => this.onCraft?.(s, n), inv.items));
     for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) this.addSlot(new Slot(this.grid, x + y * 3, 30 + x * 18, 17 + y * 18));
     this.addPlayerSlots(8, 84);
     this.updateResult();

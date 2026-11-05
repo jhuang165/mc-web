@@ -5,6 +5,7 @@ import {FENCE_ITEM_BOXES} from './fences.js';
 import {bedTexture} from './bed.js';
 import {anvilModelBoxes} from './anvil-block.js';
 import {SHAPED_TILES,woodSlabTexture,wallTexture} from './shaped-blocks.js';
+import {STEM_CAKE_TILES} from './stems-cake.js';
 import {REDSTONE_TILES} from './redstone-blocks.js';
 import {REDSTONE2_TILES,redstone2TileName} from './redstone-blocks-2.js';
 import {STAIRS,STAIR_ITEM_BOXES} from './stairs.js';
@@ -56,6 +57,7 @@ if(!TILES.includes('stone_slab_top'))TILES.push('stone_slab_top');
 for(const t of ['netherrack','soul_sand','quartz_ore','quartz_block_chiseled','quartz_block_chiseled_top','quartz_block_lines','quartz_block_lines_top'])if(!TILES.includes(t))TILES.push(t);
 if(!TILES.includes('cobblestone'))TILES.push('cobblestone');
 for(const t of SHAPED_TILES)if(!TILES.includes(t))TILES.push(t); // trapdoor, cobblestone_mossy (shaped-blocks.js)
+for(const t of STEM_CAKE_TILES)if(!TILES.includes(t))TILES.push(t); // stem and cake textures (stems-cake.js)
 export const ATLAS_ROWS=Math.ceil(TILES.length/ATLAS_COLUMNS);
 const tile=name=>TILES.indexOf(name);
 export const tileByName=tile;
@@ -64,6 +66,9 @@ export const namedTile=tile;
 // `snowy` is true when the block above is a snow layer or snow block: BlockGrass then shows grass_side_snowed on its sides.
 export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===1139)id=139;
+ if(id===159||id===160)return tile(id===159?'pumpkin_stem_disconnected':'melon_stem_disconnected');
+ if(id===161)return tile(face===2?'cake_top':face===3?'cake_bottom':face===1&&meta>0?'cake_inner':'cake_side'); // BlockCake.getIcon: inner on the west side of a cut cake
+
  if(id>=1140&&id<=1148)id-=1000;
  if(id>=140&&id<=148){const c=WOOL_COLORS[meta&15].texture;if(id===140)return tile('glass_'+c);if(id===141)return tile(face===2||face===3?'glass_pane_top_'+c:'glass_'+c);if(id===142)return tile('wool_colored_'+c);if(id===143){const a=meta&12;return tile(face===2&&a===0||face===3&&a===0||face<2&&a===4||face>3&&a===8?'hay_block_top':'hay_block_side');}if(id===144)return tile('coal_block');if(id===145)return tile('lapis_block');if(id===146)return tile('emerald_block');if(id===147)return tile('sponge');return tile(face===2||face===3?'pumpkin_top':face===[4,0,5,1][meta&3]?'pumpkin_face_on':'pumpkin_side');}
  if(id===1177||id===1178)id-=1000; // note block and jukebox items
