@@ -1987,7 +1987,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   survival.naturalRegeneration = ruleOn(active, "naturalRegeneration");
   survival.timeFrozen = !ruleOn(active, "doDaylightCycle");
   portalTimer.tick(survival.effects.get(NAUSEA)?.duration ?? 0);
-  tickPlayerEnvironment({ world, weather, position, survival, motion, flying }, { inWater, inLavaNow }, {
+  tickPlayerEnvironment({ world, weather, position, survival, motion, flying, sleeping: bedSleep.sleeping }, { inWater, inLavaNow }, {
     tickWeather,
     slow: (f) => { velocity.x *= f; velocity.z *= f; }, // BlockSoulSand.onEntityCollidedWithBlock
     afterSurvival: () => {
@@ -2460,7 +2460,7 @@ function movementTick(controls) {
   const change = !hold && world.streamAround(position.x,position.z);
   if (change) { scene.syncChunks(change); materializeFresh(); }
   const state = { world, position, previous, velocity, motion, survival, yaw, eating, minecarts, boats, horses: seatsFor(mobs, rider), rider,
-    grounded, collidedH, flying, fallDistance, landedFall };
+    grounded, collidedH, flying, fallDistance, landedFall, sleeping: bedSleep.sleeping };
   const { inWater, inLavaNow, sneakOnGround, oldPosition } = moveRidingPlayer(state, controls,
     { trace: traceAction, markUnsaved: () => { saved = false; } }) ?? movePlayer(state, controls, toast);
   ({ grounded, collidedH, flying, fallDistance, landedFall } = state);

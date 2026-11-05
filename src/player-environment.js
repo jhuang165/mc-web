@@ -8,12 +8,13 @@ import { blockCollisions, PLAYER_FIRE_RESISTANCE } from './block-collisions.js';
 // Entity.onEntityUpdate and the block-collision tail, in the live tick's order.
 // The hooks run synchronously: weather between the eye test and wetness test,
 // particles between the survival update and collision tail, and fizz at contact.
-export function tickPlayerEnvironment({ world, weather, position, survival, motion, flying },
+export function tickPlayerEnvironment({ world, weather, position, survival, motion, flying, sleeping = false },
   { inWater, inLavaNow }, { tickWeather, afterSurvival = () => {}, fizz = () => {}, slow = () => {} }) {
   const underwater = eyeInWater(world, position.x, position.y + Math.fround(PHYSICS.eye), position.z);
   tickWeather();
   const wet = isWet(weather, world, { x: position.x, y: position.y, z: position.z, inWater }, PHYSICS.height);
-  const inWall = insideOpaqueBlock(world, position.x, position.y, position.z, PHYSICS.width, PLAYER_EYE);
+  // EntityPlayer.isEntityInsideOpaqueBlock: never while sleeping (the lying body is beside the bed's walls).
+  const inWall = !sleeping && insideOpaqueBlock(world, position.x, position.y, position.z, PHYSICS.width, PLAYER_EYE);
   survival.tick({ underwater, inWater, inLava: inLavaNow, inWall, outOfWorld: position.y < -64 });
   afterSurvival();
   const tail = { fire: survival.fire || 0, inWeb: motion.inWeb, fallDistance: 0 }, fireBefore = tail.fire;

@@ -12,6 +12,12 @@ export function movePlayer(state, controls, toast = () => {}) {
   const { world, position, previous, velocity, motion, survival, yaw, eating } = state;
   let { grounded, collidedH, flying, fallDistance, landedFall } = state;
   Object.assign(previous, { x: position.x, y: position.y, z: position.z });
+  // EntityPlayer.sleepInBedAt shrinks the body to 0.2 x 0.2 on the mattress and isMovementBlocked holds it still,
+  // so the standing 0.6-wide box is never pushed out of, or collided against, the walls round the bed.
+  if (state.sleeping) {
+    Object.assign(velocity, { x: 0, y: 0, z: 0 });
+    return { inWater: false, inLavaNow: false, sneakOnGround: false, oldPosition: { x: position.x, y: position.y, z: position.z } };
+  }
   // MovementInputFromOptions + EntityPlayerSP.onLivingUpdate: sneak scales input by 0.3 and
   // sprinting needs forward input >= 0.8, so sneaking ends a sprint (player-movement.js).
   const sneak = controls.sneak;

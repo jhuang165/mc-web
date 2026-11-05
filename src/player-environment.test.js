@@ -110,3 +110,16 @@ test('creative landing still has effects but does not damage; the void bypasses 
   assert.equal(s.survival.health, 16);
   assert.equal(s.survival.lastDamage, 'void');
 });
+
+// EntityPlayer.isEntityInsideOpaqueBlock returns false while sleeping: a bed pushed against a wall never suffocates its sleeper.
+test('a sleeping player beside a wall takes no suffocation damage', () => {
+  for (const sleeping of [false, true]) {
+    const s = fixture();
+    s.world.put(65, 11, 64, 3);
+    Object.assign(s.position, { x: 64.9, y: 9.5625, z: 64.5 }); // the lying spot, 0.4 towards the head of a bed at (64, 9, 64)
+    s.sleeping = sleeping;
+    const result = tickPlayerEnvironment(s, { inWater: false, inLavaNow: false }, { tickWeather() {} });
+    assert.equal(result.inWall, !sleeping);
+    assert.equal(s.survival.health, sleeping ? 20 : 19);
+  }
+});

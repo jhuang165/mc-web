@@ -53,3 +53,17 @@ test('a long fall into 1-deep water lands with no fall distance', () => {
     assert.equal(landed > 3, expectDamage, `deep=${deep} landedFall=${landed}`);
   }
 });
+
+// EntityPlayer.sleepInBedAt: the lying body is 0.2 wide and movement is blocked, so the standing box is never pushed off the bed.
+test('a sleeping player stays on the bed beside a wall', () => {
+  const state = playerFixture('land');
+  for (const key of ['position', 'previous', 'velocity']) { const { x, y, z } = state[key]; state[key] = { x, y, z }; }
+  const { world } = state, { x: px, y: py, z: pz } = state.position, bx = Math.floor(px), by = Math.floor(py), bz = Math.floor(pz);
+  for (let y = by; y <= by + 2; y++) world.put(bx + 1, y, bz, 3, 0, false);
+  Object.assign(state.position, { x: bx + 0.9, y: by + 0.5625, z: bz + 0.5 });
+  Object.assign(state.velocity, { x: 0.1, y: -0.08, z: 0 });
+  state.sleeping = true;
+  for (let i = 0; i < 20; i++) movePlayer(state, { forward: 1, strafe: 0, sneak: false, sprint: false, jump: true });
+  assert.deepEqual(state.position, { x: bx + 0.9, y: by + 0.5625, z: bz + 0.5 });
+  assert.deepEqual(state.velocity, { x: 0, y: 0, z: 0 });
+});
