@@ -318,6 +318,8 @@ export async function importJavaRegionArea(regions, options = {}) {
         const stores = { chests, furnaces, dispensers, hoppers, brewing };
         stores[loaded.name][key] = { ...stores[loaded.name][key], ...loaded.record };
         tally(tileConverted, id);
+      } else if (inside && id === 'Airportal' && block === 149) {
+        tally(tileConverted, id); // TileEntityEndPortal has no saved fields
       } else if (inside && id === 'EnderChest' && block === ENDER_CHEST) {
         tally(tileConverted, id); // no saved data: the lid state is runtime, the inventory is the player's EnderItems
       } else if (inside && id === 'Control' && block === 139) {

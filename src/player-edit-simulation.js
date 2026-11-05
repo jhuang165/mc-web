@@ -12,6 +12,8 @@ import { useHeldBucket } from './buckets-simulation.js';
 import { ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, ITEM_FIRE_CHARGE } from './spawn-eggs.js';
 import { useEggOnBlock, useEggOnWater, useFireCharge, throwExpBottle } from './spawn-egg-use.js';
 import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
+import { ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
+import { useEyeOfEnder } from './eye-of-ender-live.js';
 import { BOAT_ITEM } from './boats.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
@@ -69,6 +71,11 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   }
   // ItemExpBottle (spawn-egg-use.js): thrown like a snowball; Creative keeps the stack.
   if (place && id === ITEM_EXP_BOTTLE && !usesBlock && (state.survival.creative || state.survival.count(id)) && throwExpBottle(state, hooks)) return act('throw-projectile', { projectile: 'expBottle' });
+  // ItemEnderEye: onItemUse on a frame, else onItemRightClick towards the nearest stronghold (eye-of-ender-live.js).
+  if (place && id === ITEM_EYE_OF_ENDER && state.eyes && (state.survival.creative || state.survival.count(id))) {
+    const used = useEyeOfEnder(state, { target, usesBlock }, hooks);
+    if (used) return act(used.branch);
+  }
   if (place && id === BOW && !usesBlock) {
     if (!state.eating && canDraw(state.survival)) state.eating = { id: BOW, ticks: 0, bow: true };
     return act('begin-bow-use');
