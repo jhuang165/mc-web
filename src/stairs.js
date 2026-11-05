@@ -7,7 +7,8 @@
 // This module imports nothing so world.js and the render/physics modules can all use it.
 
 export const STAIR_FIRST = 87, STAIR_LAST = 96;
-export const isStair = (id) => id >= STAIR_FIRST && id <= STAIR_LAST;
+// 155 and 158 are the nether brick and quartz stairs (original 114 and 156, nether-blocks.js).
+export const isStair = (id) => (id >= STAIR_FIRST && id <= STAIR_LAST) || id === 155 || id === 158;
 
 // Per-stair data copied from the constructor (model block material/hardness/resistance/sound),
 // see stairs-reference.json. model is the internal block id and damage whose textures each face
@@ -23,11 +24,13 @@ export const STAIRS = Object.freeze({
   93: { original: 136, name: 'Jungle wood stairs', model: 'planks', modelId: 7, modelDamage: 3, hardness: 2, resistance: 15, kind: 'axe', sound: 'wood' },
   94: { original: 108, name: 'Brick stairs', model: 'brick', modelId: 8, modelDamage: 0, hardness: 2, resistance: 30, kind: 'pickaxe', sound: 'stone' },
   95: { original: 163, name: 'Acacia wood stairs', model: 'planks', modelId: 7, modelDamage: 4, hardness: 2, resistance: 15, kind: 'axe', sound: 'wood' },
+  155: { original: 114, name: 'Nether Brick Stairs', model: 'nether_brick', modelId: 153, modelDamage: 0, hardness: 2, resistance: 30, kind: 'pickaxe', sound: 'stone' },
+  158: { original: 156, name: 'Quartz Stairs', model: 'quartz', modelId: 157, modelDamage: 0, hardness: 0.800000011920929, resistance: 4, kind: 'pickaxe', sound: 'stone' },
   96: { original: 164, name: 'Dark oak wood stairs', model: 'planks', modelId: 7, modelDamage: 5, hardness: 2, resistance: 15, kind: 'axe', sound: 'wood' },
 });
 // The six-block shaped recipes (CraftingManager: "#  ", "## ", "###", also mirrored; 4 stairs). The
 // ingredient is the model block; planks match their exact damage, the others any damage (4:*, 45:*, 98:*, 24:*).
-const STAIR_INGREDIENT = { 87: [7, 0], 88: [12, null], 89: [1101, null], 90: [56, null], 91: [7, 1], 92: [7, 2], 93: [7, 3], 94: [8, null], 95: [7, 4], 96: [7, 5] };
+const STAIR_INGREDIENT = { 87: [7, 0], 88: [12, null], 89: [1101, null], 90: [56, null], 91: [7, 1], 92: [7, 2], 93: [7, 3], 94: [8, null], 95: [7, 4], 96: [7, 5], 155: [153, null], 158: [157, null] };
 const STAIR_PATTERNS = [[0, 3, 4, 6, 7, 8], [2, 4, 5, 6, 7, 8]];
 export function stairRecipeResult(cells, size) {
   if (size !== 3 || cells.filter(Boolean).length !== 6) return null;

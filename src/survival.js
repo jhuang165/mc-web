@@ -15,13 +15,14 @@ import {CARROT,POTATO,BAKED_POTATO,POISONOUS_POTATO} from './crops.js';
 import {newDispenser,DISPENSER_SLOTS} from './dispenser-container.js';
 import { leatherDyeResult } from './leather-dye.js';
 import { stepStuckArrows } from "./stuck-arrows.js";
+import { installNetherItems, installNetherMaterials, installNetherRecipes, installNetherSmelting, netherCraftingResult } from './nether-blocks.js';
 import { applyNativeNames } from './item-names.js';
 // The lastDamage reason of DamageSource.outOfWorld (death-messages.js).
 export const VOID = "void";
 const FIRE_REASONS = new Set(["burning", "lava", "fire"]); // DamageSource.isFireDamage (onFire, inFire, lava)
 
 export const ITEMS = Object.fromEntries(
-  BLOCKS.map((b, id) => [id, { ...b, id, block: id > 0, stack: 64 }]),
+  BLOCKS.map((b, id) => [id, { ...b, id, block: id > 0, stack: 64 }]).filter(([, b]) => !b.reserved),
 );
 ITEMS[1139]={...ITEMS[139],id:1139,block:true};
 ITEMS[2].variants=['Dirt','Coarse dirt','Podzol'];
@@ -223,6 +224,7 @@ ARMOR_MATERIALS.forEach(([name, factor, defense, ingredient, texture], m) =>
 
 installPopulationItems(ITEMS);
 installFishingItems(ITEMS);
+installNetherItems(ITEMS);
 // Every item name and damage subtype is the 1.7.10 en_US display name (item-names.js); internal-only items get Title Case.
 applyNativeNames(ITEMS);
 export const MATERIALS = {
@@ -287,6 +289,7 @@ MATERIALS[FENCE]={hardness:2,kind:"axe"};
 MATERIALS[RAIL]={hardness:.7};
 MATERIALS[MOB_SPAWNER]={hardness:SPAWNER_HARDNESS,kind:"pickaxe",tier:0,drop:0,xp:spawnerXp};
 installPopulationMaterials(MATERIALS);
+installNetherMaterials(MATERIALS);
 export const RECIPES = [];
 function recipe(id, name, rows, keys, output, count = 1) {
   const width = Math.max(...rows.map((r) => r.length));
@@ -423,6 +426,7 @@ shapeless(SUGAR, 1, 0, REEDS_ITEM);
 shapeless(314, 1, 0, PAPER, PAPER, PAPER, 315);
 installPopulationRecipes({recipe,shapeless});
 installFishingRecipes({recipe});
+installNetherRecipes({recipe});
 export function matchShapeless(stacks) {
   const filled = stacks.filter(Boolean);
   for (const r of SHAPELESS) {
@@ -475,6 +479,8 @@ export function craftingResult(cells, size) {
   if (dyedArmor) return dyedArmor;
   const population=populationCraftingResult(cells,size);
   if(population)return makeStack(population.id,population.count,population.damage);
+  const nether=netherCraftingResult(cells,size);
+  if(nether)return makeStack(nether.id,nether.count,nether.damage);
   const r = matchRecipe(cells.map((c) => c?.id || 0), size);
   if (r) return makeStack(r.output, r.count);
   const sl = matchShapeless(cells);
@@ -500,6 +506,7 @@ export const SMELTING = {
   [CACTUS]: [DYE, 2],
 };
 installPopulationSmelting(SMELTING);
+installNetherSmelting(SMELTING);
 installFishingSmelting(SMELTING);
 export const FUELS = {
   70:300,77:300,78:300,

@@ -3,6 +3,7 @@
 import { SAPLING, WEB, LADDER, YELLOW_FLOWER, RED_FLOWER, DYE, SNOW_LAYER, ICE, CACTUS, TNT, FENCE, RAIL } from './world.js';
 import { POPULATION_ITEMS } from './population-content.js';
 import { FISHING_ITEMS } from './fishing-content.js';
+import { NETHER_ITEMS } from './nether-blocks.js';
 
 // Original item ID (or "id:damage" subtype) -> browser item. The same table as tools/inventory-replay.mjs
 // MC_IDS (the item catalogue's mapping); region-import.test.js keeps the two identical.
@@ -29,4 +30,5 @@ export const ORIGINAL_ITEMS = Object.freeze({
   321: 1700, 389: 1701,
   ...POPULATION_ITEMS,
   ...FISHING_ITEMS,
+  ...NETHER_ITEMS, // netherrack, soul sand, End stone, nether brick (block, fence, stairs and item), quartz ore, block of quartz, quartz stairs
 });

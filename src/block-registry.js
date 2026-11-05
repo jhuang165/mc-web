@@ -148,8 +148,11 @@ const MAP = {
   132: same(158), 133: same(154), 134: same(117), 135: same(27), 136: same(28), 137: same(157),
   // 0.42.0: BlockBed (26): metadata is the original's (facing 0-3, occupied bit 4, head bit 8).
   138: same(26),
+  // Nether, End and quartz building blocks (nether-blocks.js): netherrack 87, soul sand 88, End stone 121, nether brick 112 / fence 113 / stairs 114,
+  // quartz ore 153, block of quartz 155 (metadata 0 plain, 1 chiseled, 2-4 pillar axis) and quartz stairs 156.
+  150: fixed(87), 151: fixed(88), 152: fixed(121), 153: fixed(112), 154: fixed(113), 155: same(114), 156: fixed(153), 157: same(155), 158: same(156),
 };
-if (Object.keys(MAP).length !== BLOCKS.length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");
+if (Object.keys(MAP).length !== BLOCKS.filter((b) => !b.reserved).length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");
 
 // Original id -> internal ids that can represent it, in internal id order.
 const BY_ORIGINAL = new Map();

@@ -18,6 +18,7 @@ import { FIRE, LAVA, HEIGHT, SIZE, TNT, isLiquid, normalCube } from "./world.js"
 import { pauseUnloadedTicks } from './streaming-ticks.js';
 import { Weather, canLightningStrikeAt, stopsPrecipitation } from "./weather.js";
 import { saveTicks, readTicks } from "./scheduled-ticks.js";
+import { NETHERRACK } from "./nether-blocks.js";
 
 const f = Math.fround;
 
@@ -74,23 +75,24 @@ export function tryCatchFire(L, x, y, z, chance, age) {
   if (b === TNT) L.primeTnt?.(x, y, z);
 }
 
-// BlockFire.updateTick (alb.a(ahb, x, y, z, Random)). `flag` of the original (fire over
-// netherrack, or over bedrock in the End) is always false here.
+// BlockFire.updateTick (alb.a(ahb, x, y, z, Random)). `flag` of the original is fire over
+// netherrack (it burns forever: no rain, burn-out or age-15 removal); the End's bedrock case does not exist here.
 export function updateTick(L, x, y, z) {
   if (!L.fireTick) return;
+  const flag = L.get(x, y - 1, z) === NETHERRACK;
   if (!canPlace(L, x, y, z)) L.setAir(x, y, z); // no return: the rest still runs
-  if (L.raining() && (L.strike(x, y, z) || L.strike(x - 1, y, z) || L.strike(x + 1, y, z) || L.strike(x, y, z - 1) || L.strike(x, y, z + 1))) {
+  if (!flag && L.raining() && (L.strike(x, y, z) || L.strike(x - 1, y, z) || L.strike(x + 1, y, z) || L.strike(x, y, z - 1) || L.strike(x, y, z + 1))) {
     L.setAir(x, y, z);
     return;
   }
   const r = L.rand, age = L.meta(x, y, z);
   if (age < 15) L.setMeta(x, y, z, age + ((r.nextInt(3) / 2) | 0));
   L.schedule(x, y, z, 30 + r.nextInt(10));
-  if (!canNeighborBurn(L, x, y, z)) {
+  if (!flag && !canNeighborBurn(L, x, y, z)) {
     if (!solidTop(L.get(x, y - 1, z)) || age > 3) L.setAir(x, y, z);
     return;
   }
-  if (!canCatchFire(L, x, y - 1, z) && age === 15 && r.nextInt(4) === 0) {
+  if (!flag && !canCatchFire(L, x, y - 1, z) && age === 15 && r.nextInt(4) === 0) {
     L.setAir(x, y, z);
     return;
   }

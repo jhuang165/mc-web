@@ -119,8 +119,10 @@ test('ItemBlock placement of the other blocks and the end portal frame facing', 
   assert.equal(POPULATION_ITEMS[380], 1105); assert.equal(POPULATION_ITEMS[390], 1106); assert.equal(POPULATION_ITEMS['44:1'], 82);
   assert.deepEqual(item(98, 3), { id: 1101, damage: 3, clamped: false });
   assert.deepEqual(item(44, 5), { id: 1103, damage: 5, clamped: false });
-  assert.equal(item(44, 6), null);
-  assert.equal(ITEMS[1103].variants.length, 6);
+  assert.deepEqual(item(44, 6), { id: 1103, damage: 6, clamped: false }); // nether brick and quartz slabs are live (nether-blocks.js)
+  assert.deepEqual(item(44, 7), { id: 1103, damage: 7, clamped: false });
+  assert.equal(item(44, 8), null);
+  assert.equal(ITEMS[1103].variants.length, 8);
 });
 
 test('cauldron: bucket filling, burning entities and rain', () => {

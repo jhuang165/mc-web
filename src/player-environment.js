@@ -9,7 +9,7 @@ import { blockCollisions, PLAYER_FIRE_RESISTANCE } from './block-collisions.js';
 // The hooks run synchronously: weather between the eye test and wetness test,
 // particles between the survival update and collision tail, and fizz at contact.
 export function tickPlayerEnvironment({ world, weather, position, survival, motion, flying },
-  { inWater, inLavaNow }, { tickWeather, afterSurvival = () => {}, fizz = () => {} }) {
+  { inWater, inLavaNow }, { tickWeather, afterSurvival = () => {}, fizz = () => {}, slow = () => {} }) {
   const underwater = eyeInWater(world, position.x, position.y + Math.fround(PHYSICS.eye), position.z);
   tickWeather();
   const wet = isWet(weather, world, { x: position.x, y: position.y, z: position.z, inWater }, PHYSICS.height);
@@ -19,7 +19,7 @@ export function tickPlayerEnvironment({ world, weather, position, survival, moti
   const tail = { fire: survival.fire || 0, inWeb: motion.inWeb, fallDistance: 0 }, fireBefore = tail.fire;
   blockCollisions(world, entityBox(position, PHYSICS.width, PHYSICS.height), tail, {
     hurt: (source, n) => survival.health > 0 && survival.damage(n, source === 'cactus' ? 'a cactus' : 'fire', true),
-    wet, flying, resistance: PLAYER_FIRE_RESISTANCE, fizz,
+    wet, flying, resistance: PLAYER_FIRE_RESISTANCE, fizz, slow,
   });
   // blockCollisions catches fire with setFire(8): 160 ticks, which Fire Protection shortens (Entity.setFire).
   if (fireBefore < 0 && tail.fire === 160 && survival.setFire) { survival.fire = 0; survival.setFire(8); }

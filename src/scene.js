@@ -27,6 +27,7 @@ import { ShadowRenderer } from "./shadows.js";
 import { WeatherRenderer } from "./weather-renderer.js";
 import { fireVertices } from "./fire.js";
 import { fenceMask, fenceRenderBoxes } from "./fences.js";
+import { NETHER_FENCE, QUARTZ_BLOCK } from "./nether-blocks.js";
 import { anvilModelBoxes } from './anvil-block.js';
 import { isStair, stairBoxes } from './stairs.js';
 import { BED_DIR, bedTexture } from './bed.js';
@@ -267,7 +268,7 @@ export class VoxelScene {
           else if (b===VINE) this.vine(solid,x,y,z);
           else if (isPlant(b) || b === WEB || b === REEDS) this.crossed(solid, b, x, y, z);
           else if (b === LADDER) this.ladder(solid, x, y, z);
-          else if (b === FENCE) for (const box of fenceRenderBoxes(fenceMask(w, x, y, z))) this.box(solid, b, x, y, z, box);
+          else if (b === FENCE || b === NETHER_FENCE) for (const box of fenceRenderBoxes(fenceMask(w, x, y, z))) this.box(solid, b, x, y, z, box);
           else if (isRedstoneBlock(b)) this.redstone(solid, b, x, y, z);
           else if (b === RAIL || (b >= 135 && b <= 137)) this.rail(solid, x, y, z, b);
           else if (b === CACTUS) this.cactus(solid, x, y, z);
@@ -316,6 +317,8 @@ export class VoxelScene {
       if (boundary && hides(nb) && !(b === SNOW_LAYER && fi === 2)) return;
       if ((b === 9 || b === ICE) && nb === b) return;
       const corners = f.v.map((v) => [v[0], v[1] * h, v[2]]), r = tileRect(blockTile(b, fi, lit, w.getMeta(x, y, z), b === 1 && (w.get(x, y + 1, z) === SNOW_LAYER || w.get(x, y + 1, z) === 23))), uvs = rectUvs(r);
+      // RenderBlocks.renderBlockQuartz: a pillar lying on x (meta 3) turns the top, bottom and z faces a quarter, one on z (meta 4) the x faces.
+      if (b === QUARTZ_BLOCK) { const qm = w.getMeta(x, y, z); if ((qm === 3 && fi >= 2) || (qm === 4 && fi < 2)) uvs.push(uvs.shift()); }
       // Side faces of short blocks crop the texture from the top, as renderMaxY does.
       if (fi !== 2 && fi !== 3 && h < 1) uvs[2][1] = uvs[3][1] = r.v0 + (r.v1 - r.v0) * h;
       const verts = corners.map((v) => [x + v[0], y + v[1], z + v[2]]);
@@ -786,7 +789,7 @@ export class VoxelScene {
       try {
         if (isStair(b)) this.stairs(m, b, e.x, e.y, e.z);
         else if (b === STONE_SLAB) this.box(m, b, e.x, e.y, e.z, blockBounds(view, e.x, e.y, e.z), part.meta, true);
-        else if (b === FENCE) for (const box of fenceRenderBoxes(fenceMask(view, e.x, e.y, e.z))) this.box(m, b, e.x, e.y, e.z, box, 0, true);
+        else if (b === FENCE || b === NETHER_FENCE) for (const box of fenceRenderBoxes(fenceMask(view, e.x, e.y, e.z))) this.box(m, b, e.x, e.y, e.z, box, 0, true);
         else this.cube(m, b, e.x, e.y, e.z);
       } finally {
         this.world = real;

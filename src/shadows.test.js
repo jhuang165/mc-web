@@ -10,7 +10,9 @@ const near={x:0.5,y:1.62,z:0.5},f=Math.fround;
 const item=(x,y,z)=>({...SHADOWS.item,x,y:y+0.125,z,height:0.25});
 
 test('only blocks that render as normal blocks take a shadow',()=>{
- assert.equal(Object.keys(reference.blocks).length,BLOCKS.length-1);
+ // Ids 150-158 (nether-blocks.js) have their own shadow checks in nether-blocks.test.js; the reserved placeholders have none.
+ const covered=BLOCKS.map((b,i)=>i).filter(i=>i>0&&!BLOCKS[i].reserved&&!(i>=150&&i<=158));
+ assert.equal(Object.keys(reference.blocks).length,covered.length);
  for(const [id,b] of Object.entries(reference.blocks)){
   assert.equal(takesShadow(+id),!b.air&&b.normal,BLOCKS[id].name);
   if(b.normal)assert.deepEqual(b.bounds,[0,0,0,1,1,1],BLOCKS[id].name);

@@ -1856,6 +1856,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   portalTimer.tick(survival.effects.get(NAUSEA)?.duration ?? 0);
   tickPlayerEnvironment({ world, weather, position, survival, motion, flying }, { inWater, inLavaNow }, {
     tickWeather,
+    slow: (f) => { velocity.x *= f; velocity.z *= f; }, // BlockSoulSand.onEntityCollidedWithBlock
     afterSurvival: () => {
       // Drowning bubbles and potion particles run before the block-collision tail.
       const posY = position.y + Math.fround(PHYSICS.eye);

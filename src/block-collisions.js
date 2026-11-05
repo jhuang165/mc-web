@@ -2,6 +2,7 @@
 // doBlockCollisions [sa.I] and the burning-box test. Replayed against the unchanged
 // EntityPlayerSP in src/block-collisions.test.js (tools/probes/BlockCollideProbe.java).
 import { CACTUS, WEB } from "./world.js";
+import { SOUL_SAND, SOUL_SAND_SLOWDOWN } from "./nether-blocks.js";
 import { CAULDRON, cauldronExtinguishes } from "./stone-utility.js";
 import { boundingBoxBurning, contract } from "./fire.js";
 
@@ -33,7 +34,11 @@ export function blockCollisions(world, box, e, hooks) {
       for (let z = Math.floor(box[2] + 0.001); z <= z1; z++) {
         const b = world.get(x, y, z);
         if (b === CACTUS) hooks?.hurt?.("cactus", 1);
-        else if (b === WEB) {
+        else if (b === SOUL_SAND) {
+          // BlockSoulSand.onEntityCollidedWithBlock: motionX and motionZ * 0.4 per overlapped cell.
+          if (hooks?.slow) hooks.slow(SOUL_SAND_SLOWDOWN);
+          else for (const [a, c] of [["vx", "vz"], ["mx", "mz"]]) if (typeof e[a] === "number") { e[a] *= SOUL_SAND_SLOWDOWN; e[c] *= SOUL_SAND_SLOWDOWN; }
+        } else if (b === WEB) {
           hooks?.web?.();
           setInWeb(e, hooks?.flying);
         } else if (b === CAULDRON && hooks && e.fire > 0) {

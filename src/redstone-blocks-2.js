@@ -11,6 +11,7 @@
 // Rules that need the world take it as an argument. world.js, rails.js and torches.js are used only inside functions,
 // so the import cycle with world.js -> redstone-blocks.js -> this module is harmless.
 import { normalCube, FENCE } from "./world.js";
+import { NETHER_FENCE } from "./nether-blocks.js";
 import { solidTop } from "./rails.js";
 import { torchBounds, placedTorchMeta, torchSupported } from "./torches.js";
 
@@ -151,7 +152,7 @@ const cube = (w, x, y, z) => normalCube(w.get(x, y, z));
 // World.doesBlockHaveSolidTopSurface (rails.js solidTop also counts the block of redstone and the end portal frame).
 const solidBelow = (w, x, y, z) => solidTop(w, x, y - 1, z);
 // BlockPressurePlateWeighted keeps dust-style support (a fence also holds it); the comparator (BlockRedstoneDiode) does not.
-const plateBelow = (w, x, y, z) => solidBelow(w, x, y, z) || w.get(x, y - 1, z) === FENCE;
+const plateBelow = (w, x, y, z) => solidBelow(w, x, y, z) || w.get(x, y - 1, z) === FENCE || w.get(x, y - 1, z) === NETHER_FENCE;
 
 // Metadata and legality of placing `id` clicked on `side` at (x,y,z); null when it cannot be placed.
 // `yawToMeta` maps the camera yaw to the repeater/comparator facing (redstone-blocks.js repeaterMetaForYaw).
