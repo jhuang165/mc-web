@@ -8,6 +8,7 @@ import { STAIRS, STAIR_ITEM_BOXES } from './stairs.js';
 import { blockTile,tileRect } from "./block-textures.js";
 import { entityMaterial, ITEM_LIGHTS } from "./light-material.js";
 import { leatherItemLayers } from "./leather-dye.js";
+import { FISHING_ROD, rodState } from "./fishing-content.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
 const BLOCK_FACES=[
@@ -93,6 +94,7 @@ export function skinBox(w, h, d, u, v, tw, th, mirror = false) {
 // `use` is the bow's draw stage (bow.js bowStage: 0 standby, 1 to 3 bow_pulling_0 to 2).
 export function itemTexture(id, damage = 0, use = 0) {
   const item = ITEMS[id];
+  if (id === FISHING_ROD && use > 0) return "/media/1.7.10/items/fishing_rod_cast.png";
   if (id === 127 && use > 0) return "/media/1.7.10/items/bow_pulling_" + (Math.min(3, use) - 1) + ".png";
   // Flowers are flat sprites cut from the terrain atlas textures; dyes are one item per damage.
   if(id===YELLOW_FLOWER)return "/media/1.7.10/blocks/flower_dandelion.png";
@@ -173,7 +175,7 @@ export class FirstPerson {
   // `meta` is the wool colour (the stack's damage) of a held block.
   select(id, meta = 0, use = 0, glint = false, color = undefined) {
     const leather = leatherItemLayers(id, color),
-      key = id + ":" + meta + ":" + use + ":" + (glint ? 1 : 0) + ":" + (leather?.color ?? 0);
+      cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + meta + ":" + use + ":" + (glint ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + cast;
     if (key === this.last) return;
     this.last = key;
     if (this.item) {
@@ -189,7 +191,7 @@ export class FirstPerson {
     this.arm.visible = !id;
     if (!id || !data) return;
     let mesh;
-    const url = itemTexture(id, meta, use);
+    const url = itemTexture(id, meta, cast ? 1 : use);
     if(id===ANVIL||STAIRS[id]){
       mesh=new THREE.Mesh(STAIRS[id]?stairItemGeometry(id):anvilItemGeometry(meta),this.material({map:this.atlas,alphaTest:.1}));
       mesh.rotation.y=Math.PI/2;

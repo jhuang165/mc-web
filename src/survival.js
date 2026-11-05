@@ -8,6 +8,7 @@ import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
 import { Effects } from "./status-effects.js";
 import { damageSourceKey, enchantedDamage, setFireTicks, decreaseAir, thornsReaction } from "./armor-enchantments.js";
 import { NORMAL, scaleDamage, starvationHurts, hungerDrops, peacefulRegen } from "./difficulty.js";
+import { installFishingItems, installFishingRecipes, installFishingSmelting } from './fishing-content.js';
 import { installPopulationItems, installPopulationMaterials, installPopulationRecipes, populationCraftingResult, installPopulationSmelting } from './population-content.js';
 
 import {CARROT,POTATO,BAKED_POTATO,POISONOUS_POTATO} from './crops.js';
@@ -217,6 +218,7 @@ ARMOR_MATERIALS.forEach(([name, factor, defense, ingredient, texture], m) =>
 );
 
 installPopulationItems(ITEMS);
+installFishingItems(ITEMS);
 // Every item name and damage subtype is the 1.7.10 en_US display name (item-names.js); internal-only items get Title Case.
 applyNativeNames(ITEMS);
 export const MATERIALS = {
@@ -412,6 +414,7 @@ shapeless(126, 1, 0, 302, 313);
 shapeless(SUGAR, 1, 0, REEDS_ITEM);
 shapeless(314, 1, 0, PAPER, PAPER, PAPER, 315);
 installPopulationRecipes({recipe,shapeless});
+installFishingRecipes({recipe});
 export function matchShapeless(stacks) {
   const filled = stacks.filter(Boolean);
   for (const r of SHAPELESS) {
@@ -489,6 +492,7 @@ export const SMELTING = {
   [CACTUS]: [DYE, 2],
 };
 installPopulationSmelting(SMELTING);
+installFishingSmelting(SMELTING);
 export const FUELS = {
   70:300,77:300,78:300,
   4: 300,

@@ -2,6 +2,7 @@ import { EntityFireRenderer } from "./entity-fire-renderer.js";
 import { stackHasEffect } from "./armor-enchantments.js";
 import * as THREE from "three";
 import { pixelTexture, itemTexture } from "./first-person.js";
+import { FISHING_ROD, rodState } from "./fishing-content.js";
 import { entityMaterial } from "./light-material.js";
 import { ITEMS, ARMOR_MATERIALS } from "./survival.js";
 import { blockTile, tileRect } from "./block-textures.js";
@@ -278,7 +279,7 @@ export function armorLayer(id, pass, color = LEATHER_COLOR) {
 // Held item (RenderPlayer.renderSpecials, bop.a(blg, float))
 // ---------------------------------------------------------------------------
 
-const FULL3D_KINDS = new Set(["pickaxe", "axe", "shovel", "hoe", "sword"]);
+const FULL3D_KINDS = new Set(["pickaxe", "axe", "shovel", "hoe", "sword", "fishing_rod"]);
 // Item.isFull3D: tools, hoes and swords, plus the stick and bone (setFull3D).
 export const isFull3D = (id) => FULL3D_KINDS.has(ITEMS[id]?.kind) || id === 300 || id === 311;
 // "block" draws the cube, "tool" a full-3D sprite, "flat" any other sprite and "bow" the
@@ -452,7 +453,7 @@ export class PlayerRenderer {
   }
   syncHeld(id, damage = 0, color = undefined, glint = false) {
     const leather = leatherItemLayers(id, color),
-      key = id + ":" + damage + ":" + (leather?.color ?? 0) + ":" + (glint ? 1 : 0);
+      cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + damage + ":" + (leather?.color ?? 0) + ":" + (glint ? 1 : 0) + ":" + cast;
     if (key === this.heldKey) return;
     this.heldKey = key;
     this.heldId = id;
@@ -465,7 +466,7 @@ export class PlayerRenderer {
       this.held = this.heldMaterial = this.heldOverlayMaterial = this.heldGeometry = null;
     }
     if (!id || !ITEMS[id]) return;
-    const kind = heldKind(id, damage), url = itemTexture(id, damage);
+    const kind = heldKind(id, damage), url = itemTexture(id, damage, id === FISHING_ROD && rodState.cast ? 1 : 0);
     let mesh;
     if (url) {
       this.heldGeometry = spriteGeometry();

@@ -8,6 +8,7 @@ import { DYE, RED_FLOWER, YELLOW_FLOWER, SNOW_LAYER, ICE, SAPLING, WEB, LADDER, 
 import { ENCHANTED_BOOK_ITEM, maxLevelBooks, allLevelBooks } from "./enchanted-books.js";
 import { REEDS_ITEM, PAPER, SUGAR } from "./plants.js";
 import { BREWING_TAB, POTION_SEARCH } from "./potion-items.js";
+import { FISHING_CREATIVE } from "./fishing-content.js";
 import { Container, ContainerScreen, Slot, StackArray, copyStack, makeStack, OUTSIDE } from "./inventory.js";
 
 // A list entry is an item id, or [id, damage] for a metadata subtype: BlockColored
@@ -44,9 +45,14 @@ export const CREATIVE_TABS = [
 ];
 for(const t of CREATIVE_TABS)if(t.index!==5&&t.index!==11)t.items=[...POPULATION_CREATIVE[t.index],...(t.index===7?TOOL_BOOKS:t.index===8?COMBAT_BOOKS:[])];
 CREATIVE_TABS[9].items = BREWING_TAB;
+// Fishing (fishing-content.js): the rod follows the compass in Tools, the fish follow the golden apple in Foodstuffs.
+CREATIVE_TABS[7].items.splice(CREATIVE_TABS[7].items.indexOf(380) + 1, 0, ...FISHING_CREATIVE.tools);
+CREATIVE_TABS[6].items.splice(CREATIVE_TABS[6].items.indexOf(372) + 1, 0, ...FISHING_CREATIVE.food);
 export const SEARCH = CREATIVE_TABS[5], SURVIVAL_TAB = CREATIVE_TABS[11];
 // updateCreativeSearch walks Item.itemRegistry: items with a creative tab, by ID.
 export const SEARCH_ORDER = [...POPULATION_CREATIVE[5].flatMap((e)=>e===385?POTION_SEARCH:[e]),...SEARCH_BOOKS];
+SEARCH_ORDER.splice(SEARCH_ORDER.indexOf(380) + 1, 0, ...FISHING_CREATIVE.tools);
+SEARCH_ORDER.splice(SEARCH_ORDER.indexOf(351), 0, ...FISHING_CREATIVE.food);
 // Item.getCreativeTab, for the search tab's tooltip line.
 export const itemTab = (id) => CREATIVE_TABS.find((t) => t.items.some((e) => entryId(e) === id)) ?? null;
 export const GUI_WIDTH = 195, GUI_HEIGHT = 136, SEARCH_MAX = 15;

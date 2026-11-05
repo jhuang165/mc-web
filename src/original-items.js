@@ -2,6 +2,7 @@
 // survival.js can read the table without importing the region importer, which imports survival.js.
 import { SAPLING, WEB, LADDER, YELLOW_FLOWER, RED_FLOWER, DYE, SNOW_LAYER, ICE, CACTUS, TNT, FENCE, RAIL } from './world.js';
 import { POPULATION_ITEMS } from './population-content.js';
+import { FISHING_ITEMS } from './fishing-content.js';
 
 // Original item ID (or "id:damage" subtype) -> browser item. The same table as tools/inventory-replay.mjs
 // MC_IDS (the item catalogue's mapping); region-import.test.js keeps the two identical.
@@ -25,4 +26,5 @@ export const ORIGINAL_ITEMS = Object.freeze({
   // Empty and chest cart items (internal 342 is the lava bucket).
   328: 366, 342: 450,
   ...POPULATION_ITEMS,
+  ...FISHING_ITEMS,
 });

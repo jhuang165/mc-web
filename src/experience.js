@@ -4,6 +4,7 @@ import { moveEntity, entityPushOut } from './entities.js';
 import { LAVA, slipperiness } from './world.js';
 import { explosionImpact } from './explosion.js';
 import {mhSin} from "./lighting.js";
+import { FISHING_SMELT_EXPERIENCE } from "./fishing-content.js";
 export const levelCost = level => level >= 30 ? 62+(level-30)*7 : level >= 15 ? 17+(level-15)*3 : 17;
 export class Experience {
  constructor(data={}){data=data&&typeof data==='object'?data:{};this.total=Number.isFinite(data.total)?Math.max(0,Math.min(1000000,Math.floor(data.total))):0;this.score=Number.isFinite(data.score)?Math.max(0,Math.min(2147483647,Math.floor(data.score))):this.total;this.update();if(Number.isInteger(data.level)&&data.level>=0&&data.level<=1000000&&Number.isFinite(data.progress)&&data.progress>=0&&data.progress<1){this.level=data.level;this.progress=Math.fround(data.progress);this.points=Math.floor(this.progress*levelCost(this.level));this.levelState=true;}}
@@ -25,6 +26,7 @@ export const SMELT_EXPERIENCE={367:1,360:.7,"351:4":.2,324:.35,302:.7,304:1,303:
 // FurnaceRecipes.func_151398_b keys the experience by the output stack; cactus green (dye
 // damage 2) gives 0.2, so damaged outputs are looked up as "id:damage" first.
 SMELT_EXPERIENCE["351:2"]=.2;
+Object.assign(SMELT_EXPERIENCE,FISHING_SMELT_EXPERIENCE); // cooked cod and salmon: 0.35 each
 export const smeltExperience=s=>s?SMELT_EXPERIENCE[`${s.id}:${s.damage||0}`]??SMELT_EXPERIENCE[s.id]??0:0;
 // EntityXPOrb.getTextureByXP (sq.f): the 16x16 frame of experience_orb.png.
 export const orbIcon=v=>v>=2477?10:v>=1237?9:v>=617?8:v>=307?7:v>=149?6:v>=73?5:v>=37?4:v>=17?3:v>=7?2:v>=3?1:0;
