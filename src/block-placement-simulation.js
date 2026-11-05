@@ -7,7 +7,7 @@ import { stackedSnowMeta, snowCanStay } from "./snow.js";
 import { placeSound } from "./block-sounds.js";
 import { reedTarget, canPlaceReeds, cactusCanPlace, REEDS_ITEM } from "./plants.js";
 import { canPlaceChest, placeChest, placementFacing } from "./chest.js";
-import { isChestBlock, chestBlockOfItem, ENDER_CHEST } from "./chest-blocks.js";
+import { isChestBlock, chestBlockOfItem, ENDER_CHEST, newEnderTile } from "./chest-blocks.js";
 import { flowerCanStay } from "./flowers.js";
 import { saplingCanStay, placedLeavesMeta } from "./trees.js";
 import { canPlaceLadder, placedLadderMeta, clickedSide } from "./ladders.js";
@@ -225,6 +225,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
   }
   world.set(...p, id, true, meta);
   if (isChestBlock(id)) placeChest(world, survival.chests, ...p, yaw, id);
+  if (id === ENDER_CHEST) (survival.enderTiles ??= {})[p.join(',')] ??= newEnderTile(); // the lid state chest-renderer.js draws
   if (id === DISPENSER || id === DROPPER) (survival.dispensers ??= {})[p.join(',')] ??= newDispenser();
   if (id === HOPPER) (survival.hoppers ??= {})[p.join(',')] ??= newHopperTile();
   if (id === ANVIL) scheduleFalling(...p);

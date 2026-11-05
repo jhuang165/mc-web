@@ -105,6 +105,8 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
     for (const k of type === 'villager' ? ['Profession', 'Riches', 'Offers'] : type === 'iron_golem' ? ['PlayerCreated'] : ['IsBaby', 'IsVillager', 'ConversionTime']) kept.add(k);
   }
   if (type === 'slime') { record.size = slimeSizeFromNbt(tagValue(tag, 'Size', NBT.INT, 0)); kept.add('Size'); }
+  // EntityEnderman.readEntityFromNBT: carried / carriedData (shorts; the original block id and metadata).
+  if (type === 'enderman') { Object.assign(record, endermanFieldsFrom({ carried: tagValue(tag, 'carried', NBT.SHORT, 0), carriedData: tagValue(tag, 'carriedData', NBT.SHORT, 0) })); kept.add('carried'); kept.add('carriedData'); }
   if (type === 'bat') { record.batHanging = (tagValue(tag, 'BatFlags', NBT.BYTE, 0) & 1) !== 0; kept.add('BatFlags'); } // EntityBat.readEntityFromNBT; a supplied compound without BatFlags is not hanging
   if (type === 'creeper') { record.powered = !!tagValue(tag, 'powered', NBT.BYTE, 0); record.ignited = !!tagValue(tag, 'ignited', NBT.BYTE, 0); kept.add('powered'); kept.add('ignited'); }
   if (type === 'witch') {

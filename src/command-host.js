@@ -11,6 +11,7 @@ import { nbtGet } from "./nbt-get.js";
 import { NBT } from "./nbt.js";
 import { SUMMONABLE } from "./commands.js";
 import { newChest, settleFacing } from "./chest.js";
+import { newEnderTile } from "./chest-blocks.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
 import { makeStack } from "./inventory.js";
 import { canApply, canApplyTogether, addEnchantment, ENCHANTMENTS_BY_ID } from "./enchantments.js";
@@ -168,7 +169,7 @@ export function createCommandHost(env) {
       w.set(x, y, z, cell.id, true, cell.meta ?? 0);
       const key = `${x},${y},${z}`, stores = survival();
       for (const name of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing']) delete stores[name]?.[key];
-      const id = { 54: 'Chest', 61: 'Furnace', 62: 'Furnace', 23: 'Trap', 158: 'Dropper', 154: 'Hopper', 117: 'Cauldron' }[original];
+      const id = { 54: 'Chest', 146: 'Chest', 61: 'Furnace', 62: 'Furnace', 23: 'Trap', 158: 'Dropper', 154: 'Hopper', 117: 'Cauldron' }[original];
       if (original === 137 && env.commandTile) {
         Object.assign(env.commandTile(x, y, z), readCommandBlock(tag ?? new Map()));
         this.ignoredTagKeys = tag ? [...tag.keys()].filter(k => !['Command', 'SuccessCount', 'CustomName', 'TrackOutput', 'LastOutput', 'x', 'y', 'z', 'id'].includes(k)) : [];
@@ -179,12 +180,14 @@ export function createCommandHost(env) {
         if (id === 'Chest') settleFacing(w, stores.chests, x, y, z);
         this.ignoredTagKeys = loaded.ignored;
       } else if (tag) this.ignoredTagKeys = [...tag.keys()];
+      // TileEntityEnderChest holds no items (they live with the player); it only needs the lid state the renderer draws.
+      if (original === 130) (stores.enderTiles ??= {})[key] ??= newEnderTile(); else if (stores.enderTiles) delete stores.enderTiles[key];
       env.updateBlock(x, y, z);
       env.changed();
       return true;
     },
     tileAt(x, y, z) {
-      const id = this.blockAt(x, y, z).id, name = { 54: 'chests', 61: 'furnaces', 62: 'furnaces', 23: 'dispensers', 158: 'dispensers', 154: 'hoppers', 117: 'brewing' }[id];
+      const id = this.blockAt(x, y, z).id, name = { 54: 'chests', 146: 'chests', 61: 'furnaces', 62: 'furnaces', 23: 'dispensers', 158: 'dispensers', 154: 'hoppers', 117: 'brewing' }[id];
       if (id === 137 && env.commandTile) return writeCommandBlock(env.commandTile(x, y, z), x, y, z);
       if (!name) return null;
       const record = survival()[name]?.[`${x},${y},${z}`] ?? readContainerTile({ chests: 'Chest', furnaces: 'Furnace', dispensers: 'Trap', hoppers: 'Hopper', brewing: 'Cauldron' }[name], new Map()).record;
