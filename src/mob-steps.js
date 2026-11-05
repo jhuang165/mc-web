@@ -24,6 +24,7 @@ export const MOB_STEP_SOUNDS = {
   cave_spider: own("mob.spider.step", 0.15),
   pig: own("mob.pig.step", 0.15),
   cow: own("mob.cow.step", 0.15),
+  mooshroom: own("mob.cow.step", 0.15),
   sheep: own("mob.sheep.step", 0.15),
   chicken: own("mob.chicken.step", 0.15),
   wolf: own("mob.wolf.step", 0.15),

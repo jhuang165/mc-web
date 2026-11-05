@@ -70,7 +70,7 @@ export function useHeldBucket(state, { id, aimedEntity = null, bucket = null } =
     return { branch: "begin-drinking" };
   }
   let result = null;
-  if (aimedEntity?.entity.type === "cow" && aimedEntity.entity.health > 0 && milkCow(survival, { drop })) {
+  if ((aimedEntity?.entity.type === "cow" || aimedEntity?.entity.type === "mooshroom") && aimedEntity.entity.health > 0 && milkCow(survival, { drop })) {
     result = { branch: "milk-cow", cells: [] };
   } else {
     const kind = tracedBucketKind(id), captured = copyBucketTarget(bucket);

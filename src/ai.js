@@ -16,6 +16,7 @@ import { setHomeArea, detachHome } from "./home-area.js";
 import { homeFilter, isWithinHome } from "./home-area.js";
 import { zombieVillagerTargets } from "./zombie-villager.js";
 import { buildWolfTasks } from "./wolf-ai.js";
+import { buildSnowGolemTasks } from "./mooshroom-golem-live.js";
 import { isTamed as wolfTamed } from "./wolf.js";
 const f = Math.fround;
 const GRASS = 1, TALL_GRASS = 39;
@@ -909,6 +910,8 @@ export class Brain {
       this.tasks.add(6, new LookIdle(this));
       this.targets.add(1, new HurtByTarget(this, false));
       this.targets.add(2, new NearestAttackable(this));
+    } else if (e.type === "snow_golem") {
+      buildSnowGolemTasks(this, { Wander, WatchClosest, LookIdle, ArrowAttack, TargetBase }); // EntitySnowman (wr), mooshroom-golem-live.js
     } else if (e.type === "wolf") {
       // EntityWolf (wv): wolf-ai.js lists its tasks and targets and the Brain overrides.
       buildWolfTasks(this, { Task, TargetBase, Swim, Wander, WatchClosest, LookIdle, AttackOnCollide, Mate });
@@ -1027,7 +1030,7 @@ export class Brain {
   // EntityMob (yg): 0.5 - brightness.
   getBlockPathWeight(x, y, z) {
     const w = this.ai.world;
-    if (this.e.type === "villager" || this.e.type === "iron_golem") return f(0); // EntityCreature.getBlockPathWeight
+    if (this.e.type === "villager" || this.e.type === "iron_golem" || this.e.type === "snow_golem") return f(0); // EntityCreature.getBlockPathWeight
     if (this.e.type === "zombie" || this.e.type === "skeleton" || this.e.type === "creeper" || this.e.type === "witch" || this.e.type === "enderman") return f(f(0.5) - this.ai.brightness(x, y, z));
     return w.get(x, y - 1, z) === GRASS ? f(10) : f(this.ai.brightness(x, y, z) - f(0.5));
   }

@@ -77,14 +77,14 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
 
 // EntityList.createEntityFromNBT for /summon. A supplied compound skips onSpawnWithEgg entirely.
 export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) {
-  const health = { pig: 10, cow: 10, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, enderman: 40, squid: 10, bat: 6 }[type];
+  const health = { pig: 10, cow: 10, mooshroom: 10, snow_golem: 4, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, enderman: 40, squid: 10, bat: 6 }[type];
   if (health === undefined) return null;
   const rotation = numbers(tag, 'Rotation', NBT.FLOAT, 2);
   const record = { type, health: tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health)), yaw: rotation ? -rotation[0] * Math.PI / 180 : 0,
-    effects: readActiveEffects(tag), growingAge: ['pig','cow','sheep','chicken','wolf','villager'].includes(type) ? tagValue(tag, 'Age', NBT.INT, 0) : 0, love: ['pig','cow','sheep','chicken','wolf'].includes(type) ? tagValue(tag, 'InLove', NBT.INT, 0) : 0, knockbackResistance: 0 };
+    effects: readActiveEffects(tag), growingAge: ['pig','cow','mooshroom','sheep','chicken','wolf','villager'].includes(type) ? tagValue(tag, 'Age', NBT.INT, 0) : 0, love: ['pig','cow','mooshroom','sheep','chicken','wolf'].includes(type) ? tagValue(tag, 'InLove', NBT.INT, 0) : 0, knockbackResistance: 0 };
   const kept = new Set(['id', 'Pos', 'Rotation', 'HealF', 'Health', 'ActiveEffects', 'Fire', 'Motion']);
-  if (['pig', 'cow', 'sheep', 'chicken', 'wolf', 'villager'].includes(type)) kept.add('Age');
-  if (['pig', 'cow', 'sheep', 'chicken', 'wolf'].includes(type)) kept.add('InLove');
+  if (['pig', 'cow', 'mooshroom', 'sheep', 'chicken', 'wolf', 'villager'].includes(type)) kept.add('Age');
+  if (['pig', 'cow', 'mooshroom', 'sheep', 'chicken', 'wolf'].includes(type)) kept.add('InLove');
   if (type === 'sheep') { record.color = tagValue(tag, 'Color', NBT.BYTE, 0) & 15; record.sheared = !!tagValue(tag, 'Sheared', NBT.BYTE, 0); kept.add('Color'); kept.add('Sheared'); }
   if (type === 'wolf') {
     // EntityTameable/EntityWolf.readEntityFromNBT: OwnerUUID (or the pre-UUID Owner name), Sitting, Angry, CollarColor.

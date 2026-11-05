@@ -64,6 +64,7 @@ import {
   IRON_DOOR,
   BED,
   PUMPKIN,
+  JACK_O_LANTERN,
 } from "./world.js";
 import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
@@ -2004,7 +2005,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
   scene.setFishing(fishing.active ? { hook: fishing.hook, first: !thirdPersonView, sneaking: !!motion.sneaking } : null);
   scene.setDrops(items.items);
-  scene.setProjectiles(mobs?.potions?.balls?.length ? [...projectiles.balls, ...mobs.potions.balls] : projectiles.balls, projectiles.particles);
+  scene.setProjectiles(mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length ? [...projectiles.balls, ...(mobs.potions?.balls ?? []), ...(mobs._golemBalls?.balls ?? [])] : projectiles.balls, projectiles.particles);
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();
@@ -2216,9 +2217,9 @@ function edit(place = false) {
   ({ eating, mining, mineCooldown } = state);
   // BlockPumpkin.onBlockAdded: a pumpkin set on an iron T builds a player-created iron golem.
   const put = acted?.placement;
-  if (put?.placed && put.block === PUMPKIN && put.position) {
+  if (put?.placed && (put.block === PUMPKIN || put.block === JACK_O_LANTERN) && put.position) {
     const [px, py, pz] = Array.isArray(put.position) ? put.position : [put.position.x, put.position.y, put.position.z];
-    const cleared = mobs.tryBuildIronGolem(px, py, pz);
+    const cleared = mobs.tryBuildGolem(px, py, pz);
     if (cleared) { for (const [x, y, z] of cleared) scene.updateBlock(x, z, y); saved = false; }
   }
 }

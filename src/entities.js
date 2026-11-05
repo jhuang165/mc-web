@@ -25,6 +25,7 @@ import { IRON_GOLEM_TYPE, IRON_GOLEM_SOUNDS, ironGolemFields, ironGolemShape } f
 import { createVillages, PLAYER_NAME } from "./village-host.js";
 import { SLIME, mobScale, slimeDamage, slimeTouches, slimeFields, slimeFieldsFrom, slimeRestore, slimeWidth, slimeSoundName, slimeVolume, slimeSquishStart, slimeSquishEnd, slimeActionState, slimeChildren, slimeCanSpawnHere, isSlimeChunk, SLIMEBALL } from "./slime.js";
 import { SQUID, BAT } from "./squid-bat.js";
+import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { squidBatUpdate, squidBatTalk, squidBatSpawnPass, installSquidBat } from "./squid-bat-mobs.js";
 import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
 import { webMove } from './webs.js';
@@ -158,6 +159,9 @@ export function mobPose(e, partial) {
 export const ENTITY_TYPES = {
   pig: { health: 10, width: 0.9, height: 0.9, movement: 0.25, ai: { wander: 1, mate: 1, panic: 1.25, tempt: 1.2, follow: 1.1 }, drop: 202 },
   cow: { health: 10, width: 0.9, height: 1.3, movement: f(0.2), ai: { wander: 1, mate: 1, panic: 2, tempt: 1.25, follow: 1.25 }, drop: 204 },
+  // EntityMooshroom (wm) extends EntityCow; EntitySnowman (wr): 0.4 x 1.8, 4 health, speed 0.2 (snow-golem.js, mooshroom-golem-live.js).
+  mooshroom: { health: 10, width: 0.9, height: 1.3, movement: f(0.2), ai: { wander: 1, mate: 1, panic: 2, tempt: 1.25, follow: 1.25 }, drop: 204 },
+  snow_golem: { health: 4, width: f(0.4), height: f(1.8), movement: f(0.2), ai: { wander: 1 }, drop: 0 },
   sheep: { health: 8, width: 0.9, height: 1.3, movement: f(0.23), ai: { wander: 1, mate: 1, panic: 1.25, tempt: 1.1, follow: 1.1 }, drop: 0 },
   // EntityChicken (wg): 0.3 x 0.7, 4 health, speed 0.25; panic 1.4, mate 1.0, tempt
   // (wheat seeds, ade.N) 1.0, follow parent 1.1, wander 1.0. No `drop`: feathers and
@@ -224,15 +228,15 @@ export function aiMoveSpeed(e, multiplier) {
 // Wheat (ade.O) breeds and tempts cows and sheep; chickens take wheat seeds (309, any
 // ItemSeeds in the original) through EntityAITempt / isBreedingItem.
 // Pigs use only carrots (ade.bF), including the carrot held by EntityAITempt.
-const BREED_ITEM = { pig: CARROT, cow: 305, sheep: 305, chicken: 309 };
+const BREED_ITEM = { pig: CARROT, mooshroom: 305, cow: 305, sheep: 305, chicken: 309 };
 export const EGG = 316;
 export { FEATHER, RAW_CHICKEN, COOKED_CHICKEN };
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
 // its hurt sound, and the sheep uses mob.sheep.say for say, hurt and death alike.
 // EntityCaveSpider inherits the spider's sounds.
-const hurtSound = (type) => (type = soundType(type), type === "squid" ? null : type === "enderman" ? ENDERMAN_SOUNDS.hit : type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "witch" ? WITCH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "iron_golem" ? IRON_GOLEM_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
+const hurtSound = (type) => (type = soundType(type), type === "squid" || type === "snow_golem" ? null : type === "enderman" ? ENDERMAN_SOUNDS.hit : type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "witch" ? WITCH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "iron_golem" ? IRON_GOLEM_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
 // EntityChicken's death sound is its hurt sound as well.
-const deathSound = (type) => (type = soundType(type), type === "squid" ? null : type === "enderman" ? ENDERMAN_SOUNDS.death : type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "witch" ? WITCH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "iron_golem" ? IRON_GOLEM_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
+const deathSound = (type) => (type = soundType(type), type === "squid" || type === "snow_golem" ? null : type === "enderman" ? ENDERMAN_SOUNDS.death : type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "witch" ? WITCH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "iron_golem" ? IRON_GOLEM_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
 // Entity.setPosition's box (half width and height in floats) and Entity.canBePushed:
 // living entities until setDead (deathTime 20, or removal).
 export const pushBox = (o, width, height) => {
@@ -1141,7 +1145,7 @@ export class EntityWorld {
   talk(e) {
     if (e.type === "squid" || e.type === "bat") return squidBatTalk(this, e);
     const rand = entityRandom(e);
-    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem" || e.type === "slime") return;
+    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem" || e.type === "snow_golem" || e.type === "slime") return;
     // EntityWolf.getLivingSound (t) rolls before the sound's pitch.
     const wolfSound = e.type === "wolf" ? wolfSay(e, rand) : null;
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
@@ -1376,7 +1380,7 @@ export class EntityWorld {
       difficulty:()=>this.difficulty,
       // EntitySkeleton.attackEntityWithRangedAttack: the arrow itself is made by bow.js
       // (entities.js cannot import it: projectiles.js already imports this file).
-      rangedAttack:(e,target,scale)=>e.type==="witch"?this.potions?.throwAt(e,target):this.shoot?.(e,target,scale),
+      rangedAttack:(e,target,scale)=>e.type==="witch"?this.potions?.throwAt(e,target):e.type==="snow_golem"?this.golemBalls.shoot(e,target):this.shoot?.(e,target,scale),
       isDaytime:()=>this.day,
       canSeeSky:(x,y,z)=>this.canSeeSky?this.canSeeSky(x,y,z):openSky(this.world,x,y,z),
       despawn:(e)=>{e.health=0;e.death=20;},
@@ -1393,6 +1397,7 @@ export class EntityWorld {
     this.villages.tick();
     // Splash potions thrown by witches (witch-potions.js; main.js attaches it).
     this.potions?.tick(player, survival);
+    this._golemBalls?.tick(); // snow golem snowballs (mooshroom-golem-live.js)
     // WorldServer.tick runs SpawnerAnimals.findChunksForSpawning only while gamerule doMobSpawning is true; no monsters on Peaceful.
     const hostile = this.difficulty !== PEACEFUL && gameRule("doMobSpawning");
     squidBatSpawnPass(this, player, survival, gameRule("doMobSpawning")); // water and ambient creatures spawn on Peaceful too
@@ -1581,6 +1586,7 @@ export class EntityWorld {
       }
       if (e.type === "chicken") this.chickenUpdate(e);
       if (e.type === "wolf") this.wolfUpdate(e, t);
+      if (e.type === "snow_golem") this.snowGolemUpdate(e, e.inWater || !!this.wet?.(e, t.height));
       this.turnBody(e);
       this.swingLimbs(e);
     }
@@ -1663,7 +1669,7 @@ export class EntityWorld {
     edge("z", "vz");
     if (landed > 0) this.onLand?.(e, landed);
     // EntityChicken.fall (wg.b(F)) does nothing.
-    if (landed > 0 && e.type !== "chicken" && e.type !== "bat") this.fall(e, landed); // EntityBat.fall does nothing
+    if (landed > 0 && e.type !== "chicken" && e.type !== "bat" && e.type !== "snow_golem" && e.type !== "iron_golem") this.fall(e, landed); // EntityGolem.fall does nothing // EntityBat.fall does nothing
   }
   // EntitySlime.onUpdate (ym.h): the squish before and after EntityLivingBase.onUpdate (walk), the landing particles
   // ("slime" is EntityBreakingFX with a slimeball) and sounds, then onCollideWithPlayer. slime.js holds the rules.
@@ -1966,4 +1972,5 @@ export class EntityWorld {
     return events;
   }
 }
+installMooshroomGolem(EntityWorld); // mooshroom-golem-live.js: shears/bowl, golem construction, snow trail, snowballs
 installSquidBat(EntityWorld); // squid-bat-mobs.js: bat wake-up, squid entityAge and silent hurt, bat sound pitch
