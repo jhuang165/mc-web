@@ -2,6 +2,8 @@ import { END_PORTAL } from "./eye-of-ender.js"; // drawn by end-portal-renderer.
 import { DRAGON_EGG, eggBoxes } from "./dragon-egg.js";
 import { isChestShaped } from "./chest-blocks.js"; // chest, trapped chest and ender chest are drawn by chest-renderer.js
 import { PUMPKIN_STEM, MELON_STEM, CAKE, cakeBounds, stemDirection, stemTint, stemQuads } from './stems-cake.js';
+import { PORTAL, portalSideRendered } from "./nether-portal.js";
+import { NETHER_WART } from "./nether-wart.js";
 import * as THREE from "three";
 import { WorldEffects } from "./effects.js";
 import { ExplosionParticles } from "./explosion-particles.js";
@@ -155,6 +157,7 @@ export class VoxelScene {
     this.iceColor = worldMaterial(this.lighting, { map: this.textures.texture, alphaTest: 0, transparent: true });
     this.water = animated("/media/1.7.10/blocks/water_still.png", 32, 1);
     this.flow = animated("/media/1.7.10/blocks/water_flow.png", 32, 1);
+    this.portal = animated("/media/1.7.10/blocks/portal.png", 32, 1); // portal.png.mcmeta: one tick per frame
     // Lava is an opaque-pass block (BlockLiquid.getRenderBlockPass is 0 for lava):
     // no depth pre-pass and no blending, and its textures carry no alpha.
     const opaque = (url, frames, alphaTest = 0) => {
@@ -249,13 +252,15 @@ export class VoxelScene {
     const key = `${cx},${cz}`, old = this.chunks.get(key);
     if (old) this.disposeChunk(old);
     this.dirty.delete(key);
-    const w = this.world, solid = new Mesher(), water = new Mesher(), ice = new Mesher(), flow = new Mesher(), lava = new Mesher(), lavaFlow = new Mesher(), fire = [new Mesher(), new Mesher()];
+    const w = this.world, solid = new Mesher(), water = new Mesher(), ice = new Mesher(), flow = new Mesher(), lava = new Mesher(), lavaFlow = new Mesher(), fire = [new Mesher(), new Mesher()], portal = new Mesher();
     for (let x = cx; x < cx + 16; x++)
       for (let z = cz; z < cz + 16; z++)
         for (let y = 0; y < (w.height ?? HEIGHT); y++) {
           const b = w.get(x, y, z);
           if (!b || b === END_PORTAL || isChestShaped(b) || b === PISTON_MOVING || b === 175 || b === 176 || b === 172) continue; // signs are drawn by sign-renderer.js; the moving block is drawn by updateMoving, never as a cube
-          if (b === 20) this.torch(solid, x, y, z);
+          if (b === PORTAL) this.portalBlock(portal, x, y, z);
+          else if (b === NETHER_WART) this.crops(solid, b, x, y, z);
+          else if (b === 20) this.torch(solid, x, y, z);
           else if (isCrop(b)) this.crops(solid, b, x, y, z);
           else if (b === PUMPKIN_STEM || b === MELON_STEM) this.stem(solid, b, x, y, z);
           else if (b === DRAGON_EGG) eggBoxes().forEach((box) => this.box(solid, b, x, y, z, box, 0, true)); // RenderBlocks.renderBlockDragonEgg
@@ -300,6 +305,7 @@ export class VoxelScene {
     add(water, this.water.depth, this.water.color);
     add(ice, this.iceDepth, this.iceColor);
     add(flow, this.flow.depth, this.flow.color);
+    add(portal, this.portal.depth, this.portal.color);
     add(lava, this.lavaStill.material);
     add(lavaFlow, this.lavaFlow.material);
     add(fire[0], this.fireLayers[0].material);
@@ -848,6 +854,17 @@ export class VoxelScene {
     if (verts) m.quad(verts, uvs, 1, light);
   }
   // renderBlockCropsImpl: a # of four planes at 1/4 and 3/4, sunk 1/16.
+  // BlockPortal: bounds by axis, faces kept by shouldSideBeRendered (portalSideRendered),
+  // drawn from the whole animated portal.png strip.
+  portalBlock(m, x, y, z) {
+    const w = this.world, bb = blockBounds(w, x, y, z), light = this.light.packed(x, y, z), VANILLA_SIDE = [5, 4, 1, 0, 3, 2];
+    FACES.forEach((f, fi) => {
+      if (!portalSideRendered(w, x + f.n[0], y + f.n[1], z + f.n[2], VANILLA_SIDE[fi])) return;
+      const corners = f.v.map((v) => [x + (v[0] ? bb[3] : bb[0]), y + (v[1] ? bb[4] : bb[1]), z + (v[2] ? bb[5] : bb[2])]);
+      const uvs = f.v.map((v) => (fi < 2 ? [v[2], v[1]] : fi < 4 ? [v[0], v[2]] : [v[0], v[1]]));
+      m.quad(corners, uvs, f.shade, light, true);
+    });
+  }
   crops(m, b, x, y, z) {
     const uvs = rectUvs(tileRect(blockTile(b, 0, false, this.world.getMeta(x, y, z)))), light = this.light.packed(x, y, z), y0 = y - 1 / 16, y1 = y0 + 1;
     for (const o of [0.25, 0.75]) {
@@ -973,6 +990,7 @@ export class VoxelScene {
   render(time, dt = 1 / 60) {
     this.water.uv.w = 1 - ((Math.floor(time * 10) % 32) + 1) / 32;
     this.flow.uv.w = 1 - ((Math.floor(time * 20) % 32) + 1) / 32;
+    this.portal.uv.w = 1 - ((Math.floor(time * 20) % 32) + 1) / 32;
     // lava_still: frametime 2 over frames 0..19 and back down to 1 (38 steps);
     // lava_flow: frametime 3 over 16 frames.
     const step = Math.floor(time * 10) % 38;

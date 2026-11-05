@@ -1,3 +1,4 @@
+import { portalDisplayTick } from "./nether-portal.js";
 // WorldClient.doVoidFogParticles (bjf.C), Java 1.7.10: each client tick 1000 cells within
 // 15 blocks of the viewer (x + rand.nextInt(16) - rand.nextInt(16) on each axis, from the
 // client World.rand) get Block.randomDisplayTick with one fresh, unseeded Random. An air cell
@@ -50,7 +51,8 @@ export function randomDisplayTick(world, x, y, z, b, random, { fx, sound = () =>
     // BlockLeaves.randomDisplayTick: a drip under rain-exposed leaves with nothing solid below.
     if (canStrike(x, y + 1, z) && !solidTopSurface(world, x, y - 1, z) && random.nextInt(15) === 1)
       fx.spawn("dripWater", f(x + random.nextFloat()), y - 0.05, f(z + random.nextFloat()));
-  } else if (b === WATER || b === LAVA) liquid(world, x, y, z, b, random, fx, sound);
+  } else if (b === 164) portalDisplayTick(world, x, y, z, random, fx, sound); // Nether portal
+  else if (b === WATER || b === LAVA) liquid(world, x, y, z, b, random, fx, sound);
 }
 
 // BlockTorch.randomDisplayTick: smoke then flame 0.7 up, pushed 0.27 off a wall (meta 1-4)

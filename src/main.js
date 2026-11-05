@@ -85,6 +85,7 @@ import { InventoryPlayerView, PAPERDOLL_LAYOUTS } from "./inventory-player.js";
 import {Experience,ExperienceOrbs,smeltExperience} from "./experience.js";
 import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
+import { NetherLive } from './nether-portal-live.js'; // nether portal lighting/removal and nether wart
 import {Farming,cropDrops} from "./farming.js";
 import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox } from "./entities.js";
 import { BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
@@ -287,7 +288,7 @@ const bedSleep = new BedSleep(); // EntityPlayer's sleeping state and bed spawn 
 // EntityTNTPrimed entities (explosion.js primeTnt). Explosions draw ray lengths,
 // drops, chained fuses and sound pitch from the saved weather.random World.rand.
 let primed = [];
-let populationBlocks;
+let populationBlocks, netherLive;
 let sounds,
   firstPerson,
   mobs,
@@ -883,7 +884,7 @@ async function launch(record, prepared) {
     // sugar cane and cactus (plants.js), then snow and ice melting in Weather.tickChunk itself.
     populationBlocks=new PopulationBlocks(world,{random:weather.random,drop:(stacks,x,y,z)=>items.dropBlock(stacks.map(d=>makeStack(d.id,d.count,d.damage||0)),x,y,z),apply:changes=>{scene.updateBlocks(changes);saved=false;}}).watch();
     world.populationBlocks=populationBlocks;
-    weather.blockTick = (x, y, z, b) => populationBlocks.randomTick(x,y,z,b) || fire.randomTick(x, y, z, b) || trees.randomTick(x, y, z, b) || plants.randomTick(x, y, z, b);
+    weather.blockTick = (x, y, z, b) => populationBlocks.randomTick(x,y,z,b) || fire.randomTick(x, y, z, b) || trees.randomTick(x, y, z, b) || plants.randomTick(x, y, z, b) || netherLive.randomTick(x, y, z, b);
     scene.weather = weather;
     // EntityLightningBolt's fire, and the ticks of the fires saved with the world.
     weather.fire = fire.strikes;
@@ -900,6 +901,7 @@ async function launch(record, prepared) {
     { const next = world.onChange; world.onChange = (x, y, z, old, now) => { next?.(x, y, z, old, now); for (const dy of [1, 0]) { const d = carpetNeighbourChange(world, x, y + dy, z); if (d) { dropBlock([d], x, y + dy, z); scene.updateBlocks([[x, y + dy, z, CARPET, 0]]); saved = false; } } }; }
     new Doors(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
     new Beds(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
+    netherLive = new NetherLive(world, { random: weather.random, drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
     // Redstone components (inert, no power): unsupported ones drop; a pressed stone button releases 20 ticks later.
     world.redstoneBlocks = new RedstoneBlocks(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; }, sound: (name, volume, pitch, x, y, z) => sounds.play(name, { volume, pitch, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } }) }).watch();
     // Live redstone power and pistons (redstone-runtime.js). The inert RedstoneBlocks above keep only the tripwire
