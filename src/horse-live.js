@@ -7,6 +7,7 @@ import { JavaRandom } from "./java-random.js";
 import { originalOfLive } from "./item-names.js";
 import { burst } from "./fx.js";
 import * as H from "./horse.js";
+import { cleanItems, ensureItems, syncGear } from "./horse-gear.js";
 import { entityRandom } from "./entities.js";
 
 const f = Math.fround;
@@ -14,13 +15,14 @@ export const HORSE_ENTITY = {
   health: H.HORSE_BASE_HEALTH, width: H.HORSE_WIDTH, height: H.HORSE_HEIGHT, movement: H.HORSE_BASE_SPEED,
   ai: { wander: 0.7, panic: 1.2, mate: 1, follow: 1 }, damage: 0, drop: 0,
 };
-const KEEP = ["type", "variant", "temper", "tame", "saddled", "chested", "armor", "owner", "bred", "reproduced", "speed", "jump", "maxHealth"];
+const KEEP = ["items", "type", "variant", "temper", "tame", "saddled", "chested", "armor", "owner", "bred", "reproduced", "speed", "jump", "maxHealth"];
 const seedFrom = (random) => new JavaRandom(Math.floor(random() * 2 ** 31));
 
 // The view horse.js works on: record fields merged with the shared record's age, health and love.
 export const view = (e) => ({ ...H.blankHorse(), ...e.horse, age: e.growingAge ?? 0, health: e.health, inLove: (e.love ?? 0) > 0 });
 function apply(e, h) {
   for (const k of KEEP) e.horse[k] = h[k];
+  if (Array.isArray(e.horse.items)) ensureItems(e.horse); // a chest just attached grows the stack list
   e.growingAge = h.age;
   e.health = h.health;
   if (h.inLove && !(e.love > 0)) e.love = 600;
@@ -48,6 +50,8 @@ export function horseFieldsFrom(e, fresh) {
     owner: typeof s.owner === "string" ? s.owner : "", bred: s.bred === true, reproduced: s.reproduced === true,
     speed: num(s.speed, fresh.horse.speed, 0, 1), jump: num(s.jump, fresh.horse.jump, 0, 2), maxHealth: num(s.maxHealth, fresh.horse.maxHealth, 1, 1024),
   };
+  const items = cleanItems(s.items);
+  if (items) { horse.items = items; ensureItems(horse); syncGear(horse); } // horse-gear.js: the stacks are the truth, the flags follow
   return { horse, speedAttr: horse.speed };
 }
 
@@ -225,10 +229,12 @@ export function installHorse(EntityWorld) {
       take(1);
       this.events.push({ sound: "mob.chickenplop", volume: 1, pitch: f(1 + f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2))), position: { x: e.x, y: e.y, z: e.z } });
     } else if (out.action === "gui") {
-      // The saddle or armour is equipped from the held stack (the inventory screen itself is a documented gap).
-      if (id === H.SADDLE_ID && !e.horse.saddled) { e.horse.saddled = true; take(1); }
+      // The inventory screen opens (horse-gear-live.js); without a screen host the saddle or armour is equipped from the held stack.
+      if (ctx.open) ctx.open(e);
+      else if (id === H.SADDLE_ID && !e.horse.saddled) { e.horse.saddled = true; take(1); }
       else if (H.HORSE_ARMOR_IDS[id] && H.canWearArmor(e.horse.type) && !e.horse.armor) { e.horse.armor = H.HORSE_ARMOR_IDS[id]; take(1); }
     } else if (out.action === "mount") {
+      if (this.nameTagUse?.(e, survival)) return true; // wi.a: a name tag is tried before mounting
       if (ctx.horses?.player) ctx.horses.mount(e, ctx.horses.player);
     }
     void box;

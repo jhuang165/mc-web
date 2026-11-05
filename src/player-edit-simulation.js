@@ -147,8 +147,19 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     return act('ignite-creeper');
   }
 
+  // ItemLead.onItemUse / BlockFence.onBlockActivated: the player's leashed mobs tie to the fence (horse-gear-live.js).
+  if (place && activates && !aimedEntity && target && state.mobs?.leashFence?.(target.block, state.survival)) {
+    hook('renderHotbar'); hook('markUnsaved');
+    return act('leash-fence');
+  }
+
   if (place && aimedEntity?.entity) {
     const e = aimedEntity.entity;
+    // EntityLiving.interactFirst: a lead in hand ties the mob, the holder's click frees it (horse-gear-live.js).
+    if (state.mobs.leashInteract?.(e, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return act('leash-entity');
+    }
     // EntityVillager.interact: an adult, living, idle villager opens the trading screen.
     if (e.type === 'villager' && hook('openMerchant', e)) return act('trade-villager');
     // EntityZombie.interact: a golden apple on a weakened zombie villager starts the cure.
@@ -171,9 +182,14 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       return act('interact-mooshroom');
     }
     // EntityHorse.interact: feed, tame by riding, saddle, chest and mount (horse-live.js).
-    if (e.type === 'horse' && state.mobs.horseInteract(e, state.survival, { sneak: !!state.motion?.sneaking, horses: state.mobs.horseSeats })) {
+    if (e.type === 'horse' && state.mobs.horseInteract(e, state.survival, { sneak: !!state.motion?.sneaking, horses: state.mobs.horseSeats, open: (h) => hook('openHorse', h) })) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return act('interact-horse');
+    }
+    // ItemNameTag via ItemStack.interactWithEntity: names the mob once its own interact declined (horse-gear-live.js).
+    if (state.mobs.nameTagUse?.(e, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return act('name-entity');
     }
     if (state.mobs.shear(e, id, state.survival)) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');

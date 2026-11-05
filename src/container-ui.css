@@ -220,3 +220,21 @@ body:has(.hopper-modal) #toast{display:none}
 /* GuiInventory.func_147046_a: the live player is a WebGL canvas covering the GUI (inventory-player.js). */
 .paperdoll-canvas{position:absolute;left:0;top:0;width:calc(var(--w)*var(--u));height:calc(var(--h)*var(--u));pointer-events:none;image-rendering:pixelated}
 .creative-modal .paperdoll-canvas{z-index:1}
+
+/* GuiIngame.renderJumpBar: the 182 x 5 track from icons.png (0, 84) with the fill (0, 89) in place of the experience bar. */
+#jump-hud{position:fixed;left:50%;transform:translateX(-50%);width:calc(182*var(--u));height:calc(5*var(--u));bottom:calc(24*var(--u));image-rendering:pixelated;z-index:4}
+#jump-hud .experience-track{background:url('/media/1.7.10/gui/icons.png') 0 calc(-84*var(--u))/calc(256*var(--u)) calc(256*var(--u)) no-repeat}
+#jump-fill{height:100%;max-width:calc(183/182*100%);background:url('/media/1.7.10/gui/icons.png') 0 calc(-89*var(--u))/calc(256*var(--u)) calc(256*var(--u)) no-repeat}
+@media(pointer:coarse){#jump-hud{bottom:calc(70px + 24*var(--u))}}
+/* GuiScreenHorseInventory (bft): 176 x 166 horse.png, plain title at (8, 6), "Inventory" at (8, 72), chest slots at (79, 17), armour slot at (7, 35). */
+.horse-modal{position:relative;width:calc(176*var(--u));height:calc(166*var(--u));min-width:calc(176*var(--u));min-height:0;max-width:none;max-height:none;flex-shrink:0;padding:0;border:0;border-radius:0;box-shadow:none;background:none;overflow:visible;transform:none!important;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u))}
+.horse-modal:before,.horse-modal .horse-chest-bg,.horse-modal .horse-armor-bg{content:'';position:absolute;background:url('/media/1.7.10/gui/container/horse.png') no-repeat;background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated;pointer-events:none;z-index:0}
+.horse-modal:before{left:0;top:0;width:calc(176*var(--u));height:calc(166*var(--u))}
+.horse-modal .horse-chest-bg{left:calc(79*var(--u));top:calc(17*var(--u));width:calc(90*var(--u));height:calc(54*var(--u));background-position:0 calc(-166*var(--u))}
+.horse-modal .horse-armor-bg{left:calc(7*var(--u));top:calc(35*var(--u));width:calc(18*var(--u));height:calc(18*var(--u));background-position:0 calc(-220*var(--u))}
+.horse-modal .container-slots{z-index:2}
+.horse-modal .modal-top{display:none}
+.horse-modal h2,.horse-modal .chest-bag-label{position:absolute;left:calc(8*var(--u));margin:0;padding:0;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-align:left;text-shadow:none;white-space:nowrap;pointer-events:none;z-index:1}
+.horse-modal h2{top:calc(6*var(--u))}
+.horse-modal .chest-bag-label{top:calc(72*var(--u))}
+body:has(.horse-modal) #toast{display:none}

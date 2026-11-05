@@ -34,7 +34,7 @@ export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97
   // Structure loot (strongholds): ender pearl 368, empty map 395 and compass 345 are internal 378-380 (inert items).
   // Shaped blocks (shaped-blocks.js): wood slab 126, fence gate 107, trapdoor 96, cobblestone wall 139 (1000 + internal block id; double slab 125 has no item).
   126:1165,107:1167,96:1168,139:1169,
-  368:378,395:379,345:380,388:367,360:368,357:369,282:370,281:371,322:372,2256:373,2257:374,421:375,418:376,419:377});
+  368:378,395:379,345:380,388:367,360:368,357:369,282:370,281:371,322:372,2256:373,2257:374,421:375,418:376,419:377,420:2020});
 export const TREE_NAMES=['Oak','Spruce','Birch','Jungle','Acacia','Dark oak'];
 export const DOUBLE_NAMES=['Sunflower','Lilac','Double tallgrass','Large fern','Rose bush','Peony'];
 export const POPULATION_VARIANTS={7:TREE_NAMES.map(s=>s+' planks'),4:TREE_NAMES.slice(0,4).map(s=>s+' log'),5:TREE_NAMES.slice(0,4).map(s=>s+' leaves'),48:TREE_NAMES.map(s=>s+' sapling'),69:DOUBLE_NAMES,70:TREE_NAMES.slice(4).map(s=>s+' log'),71:TREE_NAMES.slice(4).map(s=>s+' leaves'),68:['Stone monster egg','Cobblestone monster egg','Stone brick monster egg']};
@@ -67,7 +67,7 @@ export function installPopulationItems(items){
     [384,'Glass Bottle','potion_bottle_empty'],[385,'Potion','potion_bottle_drinkable',{stack:1}],
     ...POTION_ITEM_ROWS,
     [378,'Ender Pearl','ender_pearl',{stack:16}],[379,'Empty Map','map_empty'],[380,'Compass','compass_static'],
-    [375,'Name tag','name_tag'],[376,'Golden horse armor','gold_horse_armor',{stack:1}], [377,'Diamond horse armor','diamond_horse_armor',{stack:1}],
+    [375,'Name tag','name_tag'],[2020,'Lead','lead'],[376,'Golden horse armor','gold_horse_armor',{stack:1}], [377,'Diamond horse armor','diamond_horse_armor',{stack:1}],
   ]) items[id]={id,name,texture,stack:64,color:'#8caa59',...extra};
 }
 export function installPopulationMaterials(m){
@@ -134,6 +134,8 @@ export function installPopulationRecipes({recipe,shapeless}){
   recipe('dropper','Dropper',['CCC','C C','CRC'],{C:12,R:360},DROPPER_ITEM); // CraftingManager: 7 cobblestone around redstone (dispenser-piston.js DROPPER)
   recipe('piston','Piston',['PPP','CIC','CRC'],{P:7,C:12,I:302,R:360},PISTON_ITEM);
   recipe('sticky-piston','Sticky Piston',['S','P'],{S:SLIMEBALL,P:PISTON_ITEM},STICKY_PISTON_ITEM);
+  // CraftingManager: four string around a slimeball make two leads (horse-gear-reference.json recipe row: 3 x 3, string at 0, 1, 3, 8).
+  recipe('lead','Lead',['SS ','SB ','  S'],{S:321,B:SLIMEBALL},2020,2);
   recipe('golden-apple','Golden apple',['GGG','GAG','GGG'],{G:304,A:200},372);
   recipe('sandstone','Sandstone',['SS','SS'],{S:6},56);
   // CraftingManager (stone-utility-reference.json): four stone make four bricks; seven iron a cauldron; three clay bricks a flower pot. Slabs are in populationCraftingResult.

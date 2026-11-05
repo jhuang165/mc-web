@@ -153,6 +153,9 @@ import { breakPlayerBlock } from "./block-break-simulation.js";
 import { shapedPick } from "./shaped-blocks.js";
 import { stoneUtilityPick, serializePots, restorePots } from "./stone-utility.js";
 import { horseSeatsFor as seatsFor } from "./horse-live.js";
+import { HorseContainer, canInteract as horseReach, canWearArmor as horseWearsArmor } from "./horse-gear.js";
+import { riddenHorse, jumpBar } from "./horse-gear-live.js";
+import { HorseGearRenderer } from "./horse-gear-renderer.js";
 import { capturePlayerAction, dispatchPlayerAction, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
 import { fromOriginal } from "./block-registry.js";
 import { setOriginalBlockMapper } from "./mineshaft-world.js";
@@ -290,6 +293,7 @@ let sounds,
   endPortalRenderer,
   tntRenderer,
   aimedEntity = null,
+  horseGearRenderer = null,
   eating = null;
 // Generated-structure entities (structure-simulation.js): mineshaft spawners and chest minecarts.
 let spawners = null, minecarts = null, minecartRenderer = null, aimedCart = null;
@@ -363,7 +367,7 @@ const bowFovState = { prev: 1, cur: 1 };
 $("#app").innerHTML = `
  <div id="viewport" aria-label="Interactive voxel world"></div><div id="vignette"></div>
  <div id="gui" class="hidden"></div>
- <section id="hud" class="hidden" aria-label="Game heads-up display"><div class="game-top"><button class="game-brand" id="pause-button">${cube}<span>BLOCKWORLD<small id="world-label"></small></span><span class="pause-symbol">Ⅱ</span></button><div class="game-status"><span class="status-dot"></span><span id="save-label">Saved on this device</span><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div></div><div id="crosshair">＋</div><pre id="debug" class="hidden"></pre><div id="block-label"></div><div id="experience-hud" class="hidden"><div id="experience-level"></div><div class="experience-track"><div id="experience-fill"></div></div></div><div id="survival-hud" class="survival-hud hidden"></div><div id="mining-meter" class="mining-meter hidden" role="progressbar" aria-label="Mining progress" aria-valuemin="0" aria-valuemax="100"><i></i></div><div id="flight-label" class="flight-label"><span id="mode-label">CREATIVE</span> <span>·</span> <b id="movement-label">WALKING</b></div><div class="hotbar" id="hotbar"></div><div class="game-help">W A S D <span>move</span> <i>·</i> SPACE <span>jump</span> <i>·</i> LMB <span>break</span> <i>·</i> RMB <span>use / place</span> <i>·</i> E <span>inventory</span> <i>·</i> ESC <span>pause</span></div><div id="mobile-controls"><div class="dpad"><button data-key="KeyW">↑</button><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="touch-actions"><button id="touch-break">Break</button><button id="touch-place">Use</button><button id="touch-inventory">Bag</button><button id="touch-fly">Fly</button><button data-key="Space">Jump</button></div></div></section>
+ <section id="hud" class="hidden" aria-label="Game heads-up display"><div class="game-top"><button class="game-brand" id="pause-button">${cube}<span>BLOCKWORLD<small id="world-label"></small></span><span class="pause-symbol">Ⅱ</span></button><div class="game-status"><span class="status-dot"></span><span id="save-label">Saved on this device</span><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div></div><div id="crosshair">＋</div><pre id="debug" class="hidden"></pre><div id="block-label"></div><div id="jump-hud" class="hidden"><div class="experience-track"><div id="jump-fill"></div></div></div><div id="experience-hud" class="hidden"><div id="experience-level"></div><div class="experience-track"><div id="experience-fill"></div></div></div><div id="survival-hud" class="survival-hud hidden"></div><div id="mining-meter" class="mining-meter hidden" role="progressbar" aria-label="Mining progress" aria-valuemin="0" aria-valuemax="100"><i></i></div><div id="flight-label" class="flight-label"><span id="mode-label">CREATIVE</span> <span>·</span> <b id="movement-label">WALKING</b></div><div class="hotbar" id="hotbar"></div><div class="game-help">W A S D <span>move</span> <i>·</i> SPACE <span>jump</span> <i>·</i> LMB <span>break</span> <i>·</i> RMB <span>use / place</span> <i>·</i> E <span>inventory</span> <i>·</i> ESC <span>pause</span></div><div id="mobile-controls"><div class="dpad"><button data-key="KeyW">↑</button><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="touch-actions"><button id="touch-break">Break</button><button id="touch-place">Use</button><button id="touch-inventory">Bag</button><button id="touch-fly">Fly</button><button data-key="Space">Jump</button></div></div></section>
  <div class="modal-overlay hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div><div id="toast" role="status"></div><input id="file-input" type="file" accept=".json,application/json" hidden>
  <div id="loading"><span>Loading terrain</span></div>`;
 // Open to LAN for this tab (lan.js); it lasts until the world is left.
@@ -1289,7 +1293,11 @@ function goHome() {
   $("#vignette").classList.remove("in-game");
   gui.show(menus.mainMenu());
 }
+function openHorse(e) { openContainer(new HorseContainer(survival.inventory, mobs.horseGear(e), () => { saved = false; }), "horse", String(e.id)); containerView.horseMob = e; syncContainerState(); }
 function inventory(station = false) {
+  // EntityPlayerSP.func_110322_i: the inventory key while riding a saddled horse opens the horse's screen.
+  const ridden = !station && riddenHorse(rider);
+  if (ridden) { openHorse(ridden); return; }
   if (survival.creative && !station) {
     openCreative();
     return;
@@ -1336,9 +1344,9 @@ function renderCreativeBody() {
   attachPaperdoll(selected === SURVIVAL_TAB ? "creative" : null);
 }
 const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace", creative: "", anvil: "Repair & Name", enchanting: "Enchant", merchant: "Villager" },
-  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", dispenser: "dispenser-modal", brewing: "brewing-modal", hopper: "hopper-modal", creative: "creative-modal", anvil: "anvil-modal", enchanting: "enchanting-modal", merchant: "merchant-modal" };
+  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", dispenser: "dispenser-modal", horse: "horse-modal", brewing: "brewing-modal", hopper: "hopper-modal", creative: "creative-modal", anvil: "anvil-modal", enchanting: "enchanting-modal", merchant: "merchant-modal" };
 // Slots are addressed by list index: wrapped creative slots all keep slotNumber 0.
-const slotsHtml = (container) => `<div class="container-slots">${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""}${slot.x < -1000 ? " hidden" : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>`;
+const slotsHtml = (container) => `<div class="container-slots">${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""}${slot.x < -1000 || slot.enabled === false ? " hidden" : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>`;
 // GuiCommandBlock: Creative + command permission required; text and tracking changes are applied on Done only.
 function openCommandBlock(x, y, z) {
   if (!survival.creative || !commandHost.cheats) return;
@@ -1373,6 +1381,8 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
       ? '<i class="brewing-bubbles" id="brewing-bubbles"></i><i class="brewing-arrow" id="brewing-arrow"></i><span class="chest-bag-label">Inventory</span>'
       : kind === "furnace"
       ? '<i class="furnace-flame" id="furnace-flame"></i><i class="furnace-arrow" id="furnace-arrow"></i>'
+      : kind === "horse"
+      ? `${container.horse.chested ? '<i class="horse-chest-bg"></i>' : ""}${horseWearsArmor(container.horse.type) ? '<i class="horse-armor-bg"></i>' : ""}<span class="chest-bag-label">Inventory</span>`
       : kind === "chest" || kind === "dispenser" || kind === "hopper"
         ? '<i class="chest-bottom" aria-hidden="true"></i><span class="chest-bag-label">Inventory</span>'
         : `<span class="native-bag-label">Inventory</span><span class="native-crafting-label">Crafting</span>`;
@@ -1654,7 +1664,8 @@ function refreshContainer() {
   }
 }
 function renderVitals() {
-  $('#experience-hud').classList.toggle('hidden',survival.creative);$('#experience-level').textContent=experience.level||'';$('#experience-fill').style.width=(experience.progress*100)+'%';$('#experience-hud').setAttribute('aria-label',`Experience level ${experience.level}, ${experience.points} of ${experience.level>=30?62+(experience.level-30)*7:experience.level>=15?17+(experience.level-15)*3:17} points`);
+  const jump=jumpBar(rider);$('#jump-hud').classList.toggle('hidden',!jump.visible);$('#jump-fill').style.width=jump.width/182*100+'%';
+  $('#experience-hud').classList.toggle('hidden',survival.creative||jump.visible);$('#experience-level').textContent=experience.level||'';$('#experience-fill').style.width=(experience.progress*100)+'%';$('#experience-hud').setAttribute('aria-label',`Experience level ${experience.level}, ${experience.points} of ${experience.level>=30?62+(experience.level-30)*7:experience.level>=15?17+(experience.level-15)*3:17} points`);
   $("#survival-hud").classList.toggle("hidden", survival.creative);
   if (survival.creative) return;
   // GuiIngame.renderPlayerStats (damage-hud.js): the hurt blink, low-health jiggle, regeneration wave, Absorption and hunger shake.
@@ -1787,6 +1798,7 @@ function tickChests() {
   // Container.canInteractWith: the screen closes once its chest is gone.
   if (containerView?.kind === "hopper" && world.get(...containerView.key.split(",").map(Number)) !== HOPPER) resume();
   if (containerView?.kind === "brewing" && world.get(...containerView.key.split(",").map(Number)) !== BREWING_STAND) resume();
+  if (containerView?.kind === "horse") { const m = containerView.horseMob; if (!m || !horseReach(m.health > 0 && mobs.entities.includes(m), Math.hypot(m.x - position.x, m.y - position.y, m.z - position.z))) resume(); }
   if (containerView?.kind === "dispenser" && ![DISPENSER, DROPPER].includes(world.get(...containerView.key.split(",").map(Number)))) resume();
   if (containerView?.kind === "chest" && containerView.container.keys?.some((k) => { const b = world.get(...k.split(",").map(Number)); return !isChestBlock(b) && b !== ENDER_CHEST; })) resume();
   if (containerView?.kind === "enchanting") {
@@ -2217,6 +2229,7 @@ function edit(place = false) {
     openChest: (chest, key) => { openContainer(chest, "chest", key); redstoneRuntime?.chestViewersChanged(chest.keys); syncContainerState(); },
     openBrewing: (tile, key) => { openContainer(new BrewingContainer(survival.inventory, brewingView(tile), () => { saved = false; }), "brewing", key); syncContainerState(); },
     openHopper: (hopper, key) => { openContainer(new HopperContainer(survival.inventory, hopper, () => { saved = false; }), "hopper", key); syncContainerState(); },
+    openHorse: (e) => openHorse(e),
     openDispenser: (dispenser, key, _block, title = DISPENSER_TITLE) => { openContainer(Object.assign(new DispenserContainer(survival.inventory, dispenser, () => { saved = false; }), { title }), "dispenser", key); syncContainerState(); },
     breakBlock,
     clientEyeInWater,
@@ -2868,6 +2881,7 @@ function animate(now) {
   const partial = Math.min(1, accumulator / PHYSICS.tick);
   // TileEntityMobSpawnerRenderer: the spinning display mob of each spawner within 64 blocks.
   const shown = spawners?.size && screen !== "home" ? spawners.values().filter((sp) => (sp.x + 0.5 - position.x) ** 2 + (sp.y + 0.5 - position.y) ** 2 + (sp.z + 0.5 - position.z) ** 2 < 4096).map((sp) => spawnerDisplayEntity(sp, partial)).filter(Boolean) : [];
+  if (mobs) horseGearRenderer?.update(screen === "home" ? [] : mobs.entities, { holder: { x: position.x, y: position.y, z: position.z }, camera: position, looked: aimedEntity, sneaking: !!motion.sneaking, knots: mobs.leashKnots() });
   if (mobs) mobRenderer.update([...(world.streaming ? mobs.entities.filter(e=>world.isLoaded(e.x,e.z)) : mobs.entities), ...shown],dt,partial);
   minecartRenderer?.update(screen === "home" || !minecarts ? [] : minecarts.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);
   boatRenderer?.update(screen === "home" ? [] : boats.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);
@@ -2963,6 +2977,7 @@ async function boot(){try {
   );
   firstPerson = new FirstPerson(scene.renderer, scene.textures.texture, scene.lighting);
   mobRenderer = new MobRenderer(scene.scene, scene);
+  horseGearRenderer = new HorseGearRenderer(scene.scene);
   playerRenderer = new PlayerRenderer(scene.scene, scene, scene.textures.texture);
   chestRenderer = new ChestRenderer(scene.scene, scene);
   endPortalRenderer = new EndPortalRenderer(scene.scene);
