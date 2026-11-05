@@ -6,7 +6,8 @@ import { collides, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS,
 import { stackedSnowMeta, snowCanStay } from "./snow.js";
 import { placeSound } from "./block-sounds.js";
 import { reedTarget, canPlaceReeds, cactusCanPlace, REEDS_ITEM } from "./plants.js";
-import { canPlaceChest, placeChest, CHEST } from "./chest.js";
+import { canPlaceChest, placeChest, placementFacing } from "./chest.js";
+import { isChestBlock, chestBlockOfItem, ENDER_CHEST } from "./chest-blocks.js";
 import { flowerCanStay } from "./flowers.js";
 import { saplingCanStay, placedLeavesMeta } from "./trees.js";
 import { canPlaceLadder, placedLadderMeta, clickedSide } from "./ladders.js";
@@ -48,7 +49,7 @@ const shapedNonSolid = (b) => b === 0 || isLiquid(b) || b === SNOW_LAYER || b ==
 export function placeHeldBlock(state, request, hooks = {}) {
   const { world, survival, position, flowers, farming, yaw } = state;
   const { id: itemId, item, target } = request;
-  const id = (itemId === 1139 ? 139 : itemId === 1177 || itemId === 1178 ? itemId - 1000 : 0) || coloredItemBlock(itemId) || dispenserPistonItemBlock(itemId) || redstoneItemBlock(itemId) || railItemBlock(itemId) || brewingItemBlock(itemId) || paneItemBlock(itemId) || stoneUtilityItemBlock(itemId) || shapedItemBlock(itemId) || itemId; // the glass pane item (1100) places block 100; stone utility items 1101-1106 their blocks 101-106
+  const id = (itemId === 1139 ? 139 : itemId === 1177 || itemId === 1178 ? itemId - 1000 : 0) || coloredItemBlock(itemId) || dispenserPistonItemBlock(itemId) || redstoneItemBlock(itemId) || railItemBlock(itemId) || brewingItemBlock(itemId) || paneItemBlock(itemId) || stoneUtilityItemBlock(itemId) || shapedItemBlock(itemId) || chestBlockOfItem(itemId) || itemId; // the glass pane item (1100) places block 100; stone utility items 1101-1106 their blocks 101-106
   const {
     collides: intersects = collides,
     toast = () => {},
@@ -177,7 +178,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
     const [dx, dz] = trapMeta === null ? [0, 0] : TRAP_SUPPORT[trapMeta & 3];
     if (trapMeta === null || !trapSupports(world.get(p[0] + dx, p[1], p[2] + dz), normalCube, isStair, (b) => b === 82 || b === 103 || b === WOOD_SLAB)) return result(false, "trapdoor-support", id, p);
   }
-  if (id === CHEST && !canPlaceChest(world, ...p)) return result(false, "chest-support", id, p);
+  if (isChestBlock(id) && !canPlaceChest(world, ...p, id)) return result(false, "chest-support", id, p); // pairs only with its own kind
   // BlockCarpet.canPlaceBlockAt: any non-air block below (colored-blocks.js).
   if (id === CARPET && !carpetCanStay(world, ...p)) return result(false, "carpet-support", id, p);
   if (isFlower(id) && !flowerCanStay(world, flowers, ...p)) return result(false, "flower-support", id, p);
@@ -208,6 +209,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
           : id === FENCE_GATE ? gatePlacedMeta(Math.fround(180 - (yaw * 180) / Math.PI))
           : id === TRAPDOOR ? trapMeta
           : id === 169 ? survival.held?.damage || 0
+          : id === ENDER_CHEST ? placementFacing(yaw) // BlockEnderChest.onBlockPlacedBy: facing metadata from the yaw
           : isStair(id) ? stairPlacementMeta(yaw, side, Math.fround(Math.fround(target.hit?.[1] ?? here[1] + 0.5) - here[1]))
           : isRedstoneBlock(id) ? rsMeta
           // BlockPistonBase/BlockDispenser.onBlockPlacedBy -> determineOrientation: from the player's position and yaw (six facings).
@@ -222,7 +224,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
     return result(false, "player-collision", id, p);
   }
   world.set(...p, id, true, meta);
-  if (id === CHEST) placeChest(world, survival.chests, ...p, yaw);
+  if (isChestBlock(id)) placeChest(world, survival.chests, ...p, yaw, id);
   if (id === DISPENSER || id === DROPPER) (survival.dispensers ??= {})[p.join(',')] ??= newDispenser();
   if (id === HOPPER) (survival.hoppers ??= {})[p.join(',')] ??= newHopperTile();
   if (id === ANVIL) scheduleFalling(...p);

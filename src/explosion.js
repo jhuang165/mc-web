@@ -11,6 +11,7 @@ import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON
 import { TNT, WOOL, RED_FLOWER, SAPLING, SNOW_LAYER, ICE, FIRE, CARROTS, POTATOES, WEB, LADDER, YELLOW_FLOWER, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE } from "./world.js";
 import { leafDrops } from "./trees.js";
 import { SHAPED_RESISTANCE } from "./shaped-blocks.js";
+import { CHEST_RESISTANCE } from "./chest-blocks.js";
 import { BLAST_RESISTANCE2, itemOfBlock2, ITEM_GLOWSTONE_DUST, GLOWSTONE } from "./redstone-blocks-2.js";
 
 const f = Math.fround;
@@ -28,6 +29,7 @@ for (let id = 31; id <= 38; id++) RESIST[id] = 0;
 // BlockDoor, BlockPane getExplosionResistance (doors-panes-reference.json facts): wooden door 3, iron door 5, iron bars 6, glass pane 0.3.
 RESIST[WOODEN_DOOR] = 3; RESIST[IRON_DOOR] = 5; RESIST[IRON_BARS] = 6; RESIST[GLASS_PANE] = 0.3;
 RESIST[139] = 3600000; // BlockCommandBlock: setResistance(6000000), aji.p registration
+for (const [id, r] of Object.entries(CHEST_RESISTANCE)) RESIST[id] = r; // chest-blocks.js (trapped chest, ender chest)
 for (const [id, r] of Object.entries(SHAPED_RESISTANCE)) RESIST[id] = r; // shaped-blocks.js (wood slabs, gate and trapdoor, cobblestone wall)
 RESIST[138] = 0.2; // BlockBed (bed-reference.json facts)
 // Colored blocks (colored-blocks-reference.json explosionResistance): stained glass 0.3, pane 0.3, carpet 0.1, hay 0.5, coal 6, lapis 3, emerald 6, sponge 0.6, jack o'lantern 1.

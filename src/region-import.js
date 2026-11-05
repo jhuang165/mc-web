@@ -15,6 +15,7 @@ import { nbtGet } from './nbt-get.js';
 import { NBT } from './nbt.js';
 import { ITEMS, burnTime } from './survival.js';
 import { CHEST, CHEST_SLOTS } from './chest.js';
+import { TRAPPED_CHEST, ENDER_CHEST, isChestBlock } from './chest-blocks.js';
 import { DISPENSER } from './dispenser-piston.js';
 import { PISTON_MOVING } from './redstone-blocks-2.js';
 import { DISPENSER_SLOTS } from './dispenser-container.js';
@@ -284,8 +285,8 @@ export async function importJavaRegionArea(regions, options = {}) {
           write(baseX + dx, y, baseZ + dz, 0, 0);
           continue;
         }
-        if (mapped.id === CHEST) facings.set(`${dx},${y},${dz}`, mapped.state.facing >= 2 && mapped.state.facing <= 5 ? mapped.state.facing : 3);
-        const carried = mapped.id === CHEST && mapped.exact;
+        if (isChestBlock(mapped.id)) facings.set(`${dx},${y},${dz}`, mapped.state.facing >= 2 && mapped.state.facing <= 5 ? mapped.state.facing : 3);
+        const carried = isChestBlock(mapped.id) && mapped.exact;
         if (key && (!mapped.exact || (mapped.state && !carried))) { report.blocks.approximated++; tally(approximations, key); }
         else if (key) report.blocks.exact++;
         write(baseX + dx, y, baseZ + dz, mapped.id, mapped.meta);
@@ -311,12 +312,14 @@ export async function importJavaRegionArea(regions, options = {}) {
       const id = get(tile, 'id', NBT.STRING, '?'), x = get(tile, 'x', NBT.INT), y = get(tile, 'y', NBT.INT), z = get(tile, 'z', NBT.INT);
       const inside = [x, y, z].every(Number.isInteger) && x >> 4 === cx && z >> 4 === cz && y >= 0 && y < height;
       const lx = inside ? baseX + (x & 15) : 0, lz = inside ? baseZ + (z & 15) : 0, key = `${lx},${y},${lz}`;
-      const block = world.get(lx, y, lz), expected = { Chest: CHEST, Trap: DISPENSER, Dropper: 132, Hopper: 133, Cauldron: 134, Furnace: FURNACE }[id];
+      const block = world.get(lx, y, lz), expected = { Chest: block === TRAPPED_CHEST ? TRAPPED_CHEST : CHEST, Trap: DISPENSER, Dropper: 132, Hopper: 133, Cauldron: 134, Furnace: FURNACE }[id];
       if (inside && block === expected) {
         const loaded = readContainerTile(id, tile, { convertItem, invalidSlot: slot => tally(itemLost, `slot ${slot}`) });
         const stores = { chests, furnaces, dispensers, hoppers, brewing };
         stores[loaded.name][key] = { ...stores[loaded.name][key], ...loaded.record };
         tally(tileConverted, id);
+      } else if (inside && id === 'EnderChest' && block === ENDER_CHEST) {
+        tally(tileConverted, id); // no saved data: the lid state is runtime, the inventory is the player's EnderItems
       } else if (inside && id === 'Control' && block === 139) {
         commandBlocks.push({ x: lx, y, z: lz, ...readCommandBlock(tile) }); tally(tileConverted, id);
       } else if (inside && id === 'Music' && block === 177) {

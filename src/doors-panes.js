@@ -6,6 +6,7 @@
 import { coloredItemId, STAINED_GLASS, STAINED_GLASS_PANE } from "./colored-blocks.js";
 import { WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE, STONE_SLAB, SNOW_LAYER, VINE, DEAD_BUSH, DEAD_SHRUB, FERN, opaqueCube, normalCube } from "./world.js";
 import { replaceable } from "./plants.js";
+import { chestItemOfBlock } from "./chest-blocks.js";
 import { isStair, stairSolidTop } from "./stairs.js";
 
 // Internal item ids of ItemDoor's two items (original 324 and 330; the legacy internal 324 and 330 are other items).
@@ -13,7 +14,7 @@ export const WOODEN_DOOR_ITEM = 470, IRON_DOOR_ITEM = 471;
 // Tools own internal item ids 100-127, so the glass pane (block 100) is item 1100 (saves and exports still use original item 102).
 export const GLASS_PANE_ITEM = 1100;
 export const paneItemBlock = (item) => (item === GLASS_PANE_ITEM ? GLASS_PANE : 0);
-export const blockItemId = (block) => (block === GLASS_PANE ? GLASS_PANE_ITEM : coloredItemId(block) || block);
+export const blockItemId = (block) => (block === GLASS_PANE ? GLASS_PANE_ITEM : coloredItemId(block) || chestItemOfBlock(block) || block);
 export const isDoor = (b) => b === WOODEN_DOOR || b === IRON_DOOR;
 export const isPane = (b) => b === IRON_BARS || b === GLASS_PANE || b === STAINED_GLASS_PANE;
 // ItemDoor places Material.wood -> wooden door, else the iron door; the item drops come back the same way.

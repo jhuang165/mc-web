@@ -96,6 +96,7 @@ import { SHADOWS } from "./shadows.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
 import { CHEST, settleFacing, chestPair, tickLid } from "./chest.js";
+import { isChestBlock, ENDER_CHEST, newEnderTile, enderDisplayParticles } from "./chest-blocks.js";
 import { DISPENSER, DROPPER, PISTON_HEAD, isDispenserPiston, itemForBlock, headBaseId } from "./dispenser-piston.js";
 import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
 import { HopperContainer, Hoppers, HOPPER } from "./hopper.js";
@@ -990,8 +991,11 @@ async function launch(record, prepared) {
     inhabited = new InhabitedTime(record.inhabited, survival.time);
     updateDifficulty();
     // Chest blocks saved without tile data get the facing onBlockAdded gives them.
-    for (const [key, b] of world.edits) if (b === CHEST && !survival.chests[key]) settleFacing(world, survival.chests, ...key.split(",").map(Number));
-    chestRenderer.sync(world, survival.chests);
+    for (const [key, b] of world.edits) {
+      if (isChestBlock(b) && !survival.chests[key]) settleFacing(world, survival.chests, ...key.split(",").map(Number));
+      if (b === ENDER_CHEST) survival.enderTiles[key] ??= newEnderTile(); // lid state for the renderer (not saved)
+    }
+    chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
     const p = record.position,
       valid =
         p &&
@@ -1508,6 +1512,7 @@ function closeContainer() {
   const overlay = $("#modal");
   overlay.onpointerdown = overlay.onpointermove = overlay.onpointerup = overlay.onwheel = overlay.oncontextmenu = overlay.onclick = null;
   container.close();
+  if (kind === "chest") redstoneRuntime?.chestViewersChanged(container.keys); // a trapped chest's power follows its viewers
   throwStacks(container.drops.splice(0));
   renderHotbar();
   saved = false;
@@ -1744,7 +1749,7 @@ function tickChests() {
   for (const [key, chest] of Object.entries(survival.chests)) {
     const [x, y, z] = key.split(",").map(Number);
     if (world.streaming && !world.isLoaded(x,z)) continue;
-    if (world.get(x, y, z) !== CHEST) {
+    if (!isChestBlock(world.get(x, y, z))) {
       delete survival.chests[key];
       continue;
     }
@@ -1753,12 +1758,21 @@ function tickChests() {
       sound = tickLid(chest, pair.primary);
     if (sound) sounds.play(sound, { volume: 0.5, pitch: Math.random() * 0.1 + 0.9, position: { x: x + (pair.east ? 1 : 0.5), y: y + 0.5, z: z + (pair.south ? 1 : 0.5) } });
   }
-  chestRenderer.sync(world, survival.chests);
+  // TileEntityEnderChest.updateEntity: the same lid step, the sound at the block centre.
+  for (const [key, tile] of Object.entries(survival.enderTiles)) {
+    const [x, y, z] = key.split(",").map(Number);
+    if (world.streaming && !world.isLoaded(x, z)) continue;
+    if (world.get(x, y, z) !== ENDER_CHEST) { delete survival.enderTiles[key]; continue; }
+    if (!tile.users && !tile.lid && !tile.prevLid) continue;
+    const sound = tickLid(tile, true);
+    if (sound) sounds.play(sound, { volume: 0.5, pitch: Math.random() * 0.1 + 0.9, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
+  }
+  chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
   // Container.canInteractWith: the screen closes once its chest is gone.
   if (containerView?.kind === "hopper" && world.get(...containerView.key.split(",").map(Number)) !== HOPPER) resume();
   if (containerView?.kind === "brewing" && world.get(...containerView.key.split(",").map(Number)) !== BREWING_STAND) resume();
   if (containerView?.kind === "dispenser" && ![DISPENSER, DROPPER].includes(world.get(...containerView.key.split(",").map(Number)))) resume();
-  if (containerView?.kind === "chest" && containerView.container.keys?.some((k) => world.get(...k.split(",").map(Number)) !== CHEST)) resume();
+  if (containerView?.kind === "chest" && containerView.container.keys?.some((k) => { const b = world.get(...k.split(",").map(Number)); return !isChestBlock(b) && b !== ENDER_CHEST; })) resume();
   if (containerView?.kind === "enchanting") {
     // ContainerEnchantment.canInteractWith: the table must still exist and be within 8 blocks.
     const [x, y, z] = containerView.key.split(",").map(Number);
@@ -2182,7 +2196,7 @@ function edit(place = false) {
     blockClicked: (x, y, z) => { if (!survival.creative) { redstoneRuntime?.music.click(x, y, z); saved = false; } },
     openMerchant: entity => { const opened = useMerchant(entity); if (opened) syncContainerState(); return opened; },
     useEnchantingTable: key => { useEnchantingTable(key); syncContainerState(); },
-    openChest: (chest, key) => { openContainer(chest, "chest", key); syncContainerState(); },
+    openChest: (chest, key) => { openContainer(chest, "chest", key); redstoneRuntime?.chestViewersChanged(chest.keys); syncContainerState(); },
     openBrewing: (tile, key) => { openContainer(new BrewingContainer(survival.inventory, brewingView(tile), () => { saved = false; }), "brewing", key); syncContainerState(); },
     openHopper: (hopper, key) => { openContainer(new HopperContainer(survival.inventory, hopper, () => { saved = false; }), "hopper", key); syncContainerState(); },
     openDispenser: (dispenser, key, _block, title = DISPENSER_TITLE) => { openContainer(Object.assign(new DispenserContainer(survival.inventory, dispenser, () => { saved = false; }), { title }), "dispenser", key); syncContainerState(); },
@@ -2226,7 +2240,7 @@ function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = 
     burst: (...args) => scene.explosionParticles.burst(...args),
     sound: (name, options) => sounds.play(name, options),
     updateBlocks: changes => scene.updateBlocks(changes),
-    syncChests: () => chestRenderer.sync(world, survival.chests),
+    syncChests: () => chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles),
     renderVitals,
     markDirty: () => { saved = false; },
   });
@@ -2298,7 +2312,7 @@ function materializeFresh() {
     if (handed.animals || handed.chests || handed.dispensers || handed.pots || handed.spawners || handed.carts || handed.ticks) saved = false;
   }
   // Chest models follow the resident columns (chests of columns that left the window are removed).
-  chestRenderer?.sync(world, survival.chests);
+  chestRenderer?.sync(world, survival.chests, undefined, survival.enderTiles);
 }
 // Streamed worlds build upcoming cells/columns in a worker (streaming-generator.js); without one,
 // generation stays synchronous.

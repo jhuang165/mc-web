@@ -2,7 +2,8 @@
 // Only the west/north chest of a pair draws, using the 30-pixel-wide model.
 import * as THREE from "three";
 import { skinBox, pixelTexture } from "./first-person.js";
-import { CHEST, chestPair, lidAngle, christmas } from "./chest.js";
+import { chestPair, lidAngle, christmas } from "./chest.js";
+import { isChestBlock, TRAPPED_CHEST, ENDER_CHEST } from "./chest-blocks.js";
 import { entityMaterial } from "./light-material.js";
 
 // The model's front faces +z (south, metadata 3); others turn about Y.
@@ -22,10 +23,12 @@ export class ChestRenderer {
   }
   // Boxes in pixels from the block corner: base 0..10 high, lid 9..14 hinged at
   // the back (y 9, z 1), knob 7..11 on the front face.
-  build(double, festive) {
+  // `kind` picks the texture: a trapped chest always uses trapped(.png / _double) (TileEntityChestRenderer checks the
+  // type before the Christmas date), the ender chest the single-model ender.png (TileEntityEnderChestRenderer).
+  build(double, festive, kind = 0) {
     const w = double ? 30 : 14,
       tw = double ? 128 : 64,
-      material = this.material((festive ? "christmas" : "normal") + (double ? "_double" : "")),
+      material = this.material(kind === ENDER_CHEST ? "ender" : (kind === TRAPPED_CHEST ? "trapped" : festive ? "christmas" : "normal") + (double ? "_double" : "")),
       root = new THREE.Group(),
       model = new THREE.Group(),
       lid = new THREE.Group(),
@@ -44,20 +47,37 @@ export class ChestRenderer {
     return { root, lid, material };
   }
   // Rebuilds models whose pairing, facing or texture changed.
-  sync(world, chests, date = new Date()) {
+  // `enders` maps "x,y,z" to the runtime ender chest tiles ({ users, lid, prevLid }; the facing is the cell's metadata).
+  sync(world, chests, date = new Date(), enders = {}) {
     const festive = christmas(date),
       seen = new Set();
-    for (const [key, chest] of Object.entries(chests)) {
+    for (const [key, tile] of Object.entries(enders)) {
       const [x, y, z] = key.split(",").map(Number);
-      if (world.get(x, y, z) !== CHEST) continue;
+      if (world.get(x, y, z) !== ENDER_CHEST) continue;
+      const mapKey = "e" + key, facing = world.getMeta(x, y, z);
+      seen.add(mapKey);
+      let entry = this.models.get(mapKey);
+      if (entry?.shape !== `e${facing}`) {
+        if (entry) this.remove(mapKey);
+        entry = { ...this.build(false, false, ENDER_CHEST), shape: `e${facing}`, chest: tile, cell: [x, y, z] };
+        entry.root.position.set(x + 0.5, y, z + 0.5);
+        entry.root.rotation.y = ROTATION[facing] ?? 0;
+        this.scene.add(entry.root);
+        this.models.set(mapKey, entry);
+      }
+      entry.chest = tile;
+    }
+    for (const [key, chest] of Object.entries(chests)) {
+      const [x, y, z] = key.split(",").map(Number), kind = world.get(x, y, z);
+      if (!isChestBlock(kind)) continue;
       const pair = chestPair(world, x, y, z);
       if (!pair.primary) continue;
       seen.add(key);
-      const shape = `${chest.facing},${pair.east ? "e" : pair.south ? "s" : "1"},${festive}`;
+      const shape = `${chest.facing},${pair.east ? "e" : pair.south ? "s" : "1"},${festive},${kind}`;
       let entry = this.models.get(key);
       if (entry?.shape !== shape) {
         if (entry) this.remove(key);
-        entry = { ...this.build(pair.double, festive), shape, chest, cell: [x, y, z] };
+        entry = { ...this.build(pair.double, festive, kind), shape, chest, cell: [x, y, z] };
         entry.root.position.set(x + (pair.east ? 1 : 0.5), y, z + (pair.south ? 1 : 0.5));
         entry.root.rotation.y = ROTATION[chest.facing] ?? 0;
         this.scene.add(entry.root);

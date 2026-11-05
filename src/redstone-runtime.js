@@ -30,6 +30,7 @@ import { pushBox, ENTITY_TYPES } from "./entities.js";
 import { LEVER, STONE_BUTTON, REPEATER } from "./redstone-blocks.js";
 import { WOODEN_BUTTON, COMPARATOR, COMPARATOR_POWERED } from "./world.js";
 import { CHEST } from "./chest.js";
+import { TRAPPED_CHEST, trappedPower, trappedStrongPower } from "./chest-blocks.js";
 import { hopperBehaviour } from "./hopper.js";
 import { installPoweredRails } from "./powered-rails.js";
 import { installDispensers } from "./dispense.js";
@@ -79,10 +80,10 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
   const slotsOf = (items) => (items ?? []).map((s) => (s && s.count > 0 ? { count: s.count, max: game.maxStack?.(s) ?? 64 } : null));
   const containerSlots = (x, y, z, id) => {
     const key = `${x},${y},${z}`;
-    if (id === 54) {
-      const chests = game.chests?.() ?? {}, self = chests[key]?.items ?? Array(27).fill(null);
+    if (id === 54 || id === 146) { // a trapped chest (146, internal 162) pairs only with its own kind
+      const kind = id === 146 ? TRAPPED_CHEST : CHEST, chests = game.chests?.() ?? {}, self = chests[key]?.items ?? Array(27).fill(null);
       for (const [dx, dz, first] of [[-1, 0, true], [1, 0, false], [0, -1, true], [0, 1, false]]) {
-        if (world.get(x + dx, y, z + dz) !== CHEST) continue;
+        if (world.get(x + dx, y, z + dz) !== kind) continue;
         const other = chests[`${x + dx},${y},${z + dz}`]?.items ?? Array(27).fill(null);
         return slotsOf(first ? [...other, ...self] : [...self, ...other]);
       }
@@ -128,6 +129,13 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     save: () => [...noteBlocks.save().map((e) => ({ kind: "note", ...e })), ...jukeboxes.save().map((e) => ({ kind: "jukebox", ...e }))],
     restore(records) { noteBlocks.restore(records?.filter((e) => e.kind === "note")); jukeboxes.restore(records?.filter((e) => e.kind === "jukebox")); },
   };
+  // BlockChest type 1 (trapped chest 146): canProvidePower; weak power is the viewer count (TileEntityChest.numPlayersUsing) clamped to
+  // 0..15 on every side, strong power only toward the block beneath (side 1). chests-reference.json "power" records.
+  const viewers = (x, y, z) => game.chests?.()[`${x},${y},${z}`]?.users ?? 0;
+  redstone.registerBehaviour(146, {
+    weak: (w, x, y, z) => trappedPower(viewers(x, y, z)),
+    strong: (w, x, y, z, side) => trappedStrongPower(viewers(x, y, z), side),
+  });
   redstone.registerBehaviour(154, hopperBehaviour); // BlockHopper: power disables it (metadata bit 8)
   installPoweredRails(redstone); // powered / detector / activator rails and the plain rail's redstone hooks
   // BlockDispenser (23) and BlockDropper (158): dispense.js over the game's entity and block hooks (game.dispense). Sounds are the
@@ -237,6 +245,17 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     for (const key of keys ?? []) redstone.containerChanged(...String(key).split(",").map(Number));
     flush();
   };
+  // TileEntityChest.func_145969_a / func_145976_d (a viewer opened or closed): notifyBlocksOfNeighborChange at the chest and at the block
+  // beneath it, with the chest as the source (the probe's openLog/closeLog), so a trapped chest's power reaches its neighbours.
+  const chestViewersChanged = (keys) => {
+    for (const key of keys ?? []) {
+      const [x, y, z] = String(key).split(",").map(Number), id = redstone.getBlock(x, y, z);
+      if (id !== 146 && id !== 54) continue;
+      redstone.notifyBlocksOfNeighborChange(x, y, z, id);
+      redstone.notifyBlocksOfNeighborChange(x, y - 1, z, id);
+    }
+    flush();
+  };
   return {
     redstone,
     pistons,
@@ -249,6 +268,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     applyEdit,
     fluidChanges,
     containerClosed,
+    chestViewersChanged,
     save: () => redstone.save(),
     restore: (record) => {
       commandBlocks.restore(record?.commandBlocks);

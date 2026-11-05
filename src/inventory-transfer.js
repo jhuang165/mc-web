@@ -48,7 +48,7 @@ export function furnaceAdapter(key, tile, burnTime) {
 // is closed to hoppers (BlockChest.func_149951_m); ocelots and minecart inventories are not modelled.
 export function containerAt(host, x, y, z) {
   const id = host.world.get(x, y, z), key = `${x},${y},${z}`;
-  if (id === BLOCK_CHEST) {
+  if (id === BLOCK_CHEST || id === 162) { // chest or trapped chest (chests pair only with their own kind)
     const chests = host.chests(), open = openChest(host.world, chests, x, y, z);
     if (!open) return null;
     const inv = open.inventory, parts = inv instanceof LargeChestInventory;
