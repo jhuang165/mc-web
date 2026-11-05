@@ -106,7 +106,7 @@ test('chests, furnaces and dropped items convert; other tile entities and entiti
   chunk.setBlockState(1, 70, 1, 54, 4); // chest facing west
   chunk.setBlockState(2, 70, 1, 54, 4);
   chunk.setBlockState(5, 70, 5, 61, 2); // furnace
-  chunk.setBlockState(6, 70, 6, 144, 0); // skull: no browser block
+  chunk.setBlockState(6, 70, 6, 144, 0); // skull (internal 172, skull.js)
   chunk.setBlockState(8, 70, 8, 54, 0); // chest with invalid facing and no tile entity
   const x0 = -32, z0 = 48;
   const tileEntities = [
@@ -142,7 +142,8 @@ test('chests, furnaces and dropped items convert; other tile entities and entiti
   const {world, player, items} = importLikeScreen(record);
   assert.equal(world.get(49, 70, 49), 41);
   assert.equal(world.get(53, 70, 53), 14);
-  assert.equal(world.get(54, 70, 54), 0);
+  assert.equal(world.get(54, 70, 54), 172); // skull (skull.js)
+  assert.deepEqual(record.skulls, [{x: 54, y: 70, z: 54, type: 0, rot: 0, owner: ''}]);
   const chest = player.chests['49,70,49'];
   assert.equal(chest.facing, 4);
   assert.deepEqual(chest.items.slice(0, 5), [{id: 3, count: 64, damage: 0}, {id: 102, count: 1, damage: 40}, {id: 19, count: 12, damage: 14}, null, {id: 115, count: 1, damage: 0, enchantments: []}]);
@@ -159,15 +160,15 @@ test('chests, furnaces and dropped items convert; other tile entities and entiti
   assert.deepEqual([items.items[0].x, items.items[0].z, items.items[0].age, items.items[0].delay], [51.5, 51.5, 100, 10]);
   assert.ok(Math.abs(items.items[0].y - 71) < 1e-9);
   assert.equal(player.mode ?? record.mode, 'survival');
-  assert.deepEqual(report.tileEntities, {total: 5, converted: {Chest: 1, Furnace: 1},
-    lost: [{id: 'Chest', count: 1}, {id: 'Chest (outside its chunk)', count: 1}, {id: 'Skull', count: 1}]});
+  assert.deepEqual(report.tileEntities, {total: 5, converted: {Chest: 1, Furnace: 1, Skull: 1},
+    lost: [{id: 'Chest', count: 1}, {id: 'Chest (outside its chunk)', count: 1}]});
   assert.deepEqual(report.items, {converted: 12, lost: [{id: '347:0', count: 2}, {id: 'slot 200', count: 1}], tagsStripped: 0, clamped: 1});
   assert.deepEqual(report.entities, {total: 5, converted: {Item: 1}, lost: [{id: 'Chicken', count: 1}, {id: 'Item (unsupported stack)', count: 1}, {id: 'Pig', count: 1}, {id: 'Skeleton', count: 1}]});
   assert.equal(report.scheduledTicks, 1);
-  assert.deepEqual(report.blocks.unsupported, [{id: 144, meta: 0, cells: 1, reason: 'unmapped'}]);
+  assert.deepEqual(report.blocks.unsupported, []);
   // Furnace facing is not stored by the browser; chest facing travels in its record; meta 0 is inexact.
   assert.deepEqual(report.blocks.approximations, [{id: 54, meta: 0, cells: 1, to: [41, 0], exact: false, state: ['facing']}, {id: 61, meta: 2, cells: 1, to: [14, 0], exact: true, state: ['facing']}]);
-  assert.equal(report.blocks.exact, 2);
+  assert.equal(report.blocks.exact, 3);
 });
 
 test('unsupported, unregistered and approximated block states are counted and replaced', async () => {

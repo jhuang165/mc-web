@@ -169,6 +169,8 @@ import { BoatRenderer } from "./boat-renderer.js";
 import { Boats, BOAT_ITEM } from "./boats.js";
 import { Hanging, pickHanging, hangingArrowTargets } from "./hanging.js";
 import { HangingRenderer } from "./hanging-renderer.js";
+import { SKULL, SKULLS, Skulls } from "./skull.js";
+import { SkullRenderer } from "./skull-renderer.js";
 import { Signs, isSign, signShouldPop, signDrops } from "./signs.js";
 import { SignRenderer } from "./sign-renderer.js";
 import { openSignEditor } from "./sign-editor.js";
@@ -298,7 +300,7 @@ let boats = new Boats(), boatRenderer = null;
 // Paintings and item frames (hanging.js): live entities, their renderer and the one under the crosshair.
 let hanging = new Hanging(), hangingRenderer = null, aimedHanging = null;
 // Signs (signs.js): the tile entities (text) of every sign block, drawn by sign-renderer.js.
-let signs = new Signs(), signRenderer = null;
+let signs = new Signs(), signRenderer = null, skullRenderer = null;
 // Live redstone and pistons (redstone-runtime.js), rebuilt for each world that loads.
 let redstoneRuntime = null;
 // Hopper tick host: the shared inventory-transfer.js stores, EntityItem pickup and live comparator notifications.
@@ -639,6 +641,7 @@ function save() {
   if (boats?.carts.length) active.boats = boats.toJSON(); else delete active.boats;
   active.hanging = hanging.toJSON();
   if (signs.tiles.size) active.signs = signs.toJSON(); else delete active.signs;
+  if (SKULLS.tiles.size) active.skulls = SKULLS.toJSON(); else delete active.skulls;
   active.updated = Date.now();
   const savingContainers=containerResidency, containerSave=savingContainers?.beginSave(active.player);
   if(containerSave)active.containerScope=savingContainers.scope(containerSave);
@@ -749,6 +752,7 @@ function watchFlowers() {
     next?.(x, y, z, old, now);
     // TileEntitySign goes with its block; BlockSign.onNeighborBlockChange drops a sign whose support is gone.
     if (isSign(old) && !isSign(now)) signs.remove(x, y, z);
+    if (old === SKULL && now !== SKULL) SKULLS.remove(x, y, z); // TileEntitySkull goes with its block
     for (const [dx, dy, dz] of [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]) {
       const fx = x + dx, fy = y + dy, fz = z + dz, b = world.get(fx, fy, fz);
       if (isSign(b) && signShouldPop(world, fx, fy, fz)) {
@@ -963,6 +967,7 @@ async function launch(record, prepared) {
     aimedCart = null;
     hanging = Hanging.fromJSON(record.hanging); aimedHanging = null; hangingRenderer?.clear();
     signs = Signs.fromJSON(record.signs); signRenderer?.clear();
+    SKULLS.tiles = Skulls.fromJSON(record.skulls).tiles; skullRenderer?.clear();
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
     mobs = new EntityWorld(world, world.generationVersion>=11&&!hasSavedPopulation(record)?[]:record.entities);
     mobs.fx = scene.fx;
@@ -2162,7 +2167,7 @@ function edit(place = false) {
   }
   const state = { screen, heldTool: heldId(), world, survival, position, velocity, motion, mobs, minecarts,
     farming, trees, fire, fluids, items, projectiles, eyes, grounded, fallDistance, wasInWater, yaw, pitch,
-    eating, mining, mineCooldown, mineHeld, flowers: FLOWERS, boneRandom, itemRand, signs };
+    eating, mining, mineCooldown, mineHeld, flowers: FLOWERS, boneRandom, itemRand, signs, difficulty: survival.difficulty };
   // A right click with a bucket also captures the bucket's own fluid-aware trace along the
   // last frame's eye ray (ItemBucket: 5 blocks, liquids only when empty).
   const bucket = place ? captureBucketTarget(world, state.heldTool, eyeRay) : null;
@@ -2873,6 +2878,7 @@ function animate(now) {
   boatRenderer?.update(screen === "home" ? [] : boats.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);
   hangingRenderer?.update(screen === "home" ? [] : hanging.entities.filter(e => !world.streaming || world.isLoaded(e.x, e.z)));
   signRenderer?.update(screen === "home" ? [] : [...signs.tiles.values()], world, position);
+  skullRenderer?.update(screen === "home" ? [] : [...SKULLS.tiles.values()], world, position);
   tntRenderer?.update(screen === "home" ? [] : primed, partial);
   redstoneRuntime?.frame(screen === "home" ? 1 : partial);
   recordHud.frame(partial);
@@ -2971,6 +2977,7 @@ async function boot(){try {
   boatRenderer = new BoatRenderer(scene.scene, scene, boats);
   hangingRenderer = new HangingRenderer(scene.scene, scene);
   signRenderer = new SignRenderer(scene.scene, scene);
+  skullRenderer = new SkullRenderer(scene.scene, scene);
   document.addEventListener("pointerdown", () => sounds.unlock(), {
     once: true,
   });

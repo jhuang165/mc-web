@@ -5,6 +5,7 @@
 import { WOOL, RED_FLOWER } from "./world.js";
 import { pearlCount as endermanPearls, ENDER_PEARL_ITEM as ENDER_PEARL } from "./enderman.js";
 import { golemDrops } from "./iron-golem.js";
+import { witherSkeletonDrops } from "./wither-skeleton.js";
 import { CARROT, POTATO } from "./crops.js";
 import { slimeDrops, slimeExperience } from "./slime.js";
 import { witchDrops, witchEquipmentDrop, witchExperience } from "./witch.js";
@@ -60,6 +61,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
     case "chicken": add(FEATHER, rand.nextInt(3) + rand.nextInt(1 + looting)); add(burning ? COOKED_CHICKEN : RAW_CHICKEN); break;
     case "zombie": add(FLESH, generic()); break;
     case "enderman": add(ENDER_PEARL, endermanPearls(rand, looting)); break; // EntityEnderman.dropFewItems: 0 to 1 + looting pearls; the carried block is not dropped
+    case "wither_skeleton": for (const [id] of witherSkeletonDrops(rand, { looting })) add(id); break; // EntitySkeleton type 1: coal and bones (wither-skeleton.js)
     case "skeleton": add(ARROW, rand.nextInt(3 + looting)); add(BONE, rand.nextInt(3 + looting)); break;
     case "spider":
     case "cave_spider": // EntityCaveSpider inherits EntitySpider.dropFewItems
@@ -82,7 +84,9 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
   }
   // EntityLiving.dropEquipment for a witch's held potion (0.085F).
   if (e.type === "witch") { const held = witchEquipmentDrop(rand, e.held, playerHit, looting); if (held) add(held.id, 1, held.damage); }
-  if (playerHit && rand.nextInt(200) - looting < 5 && e.type === "zombie") add([IRON, CARROT, POTATO][rand.nextInt(3)]);
+  const rare = playerHit && rand.nextInt(200) - looting < 5;
+  if (rare && e.type === "zombie") add([IRON, CARROT, POTATO][rand.nextInt(3)]);
+  if (rare && e.type === "wither_skeleton") add(2050, 1, 1); // EntitySkeleton.dropRareDrop: the wither skeleton skull
   if (e.type === "creeper" && bySkeleton) add(DISC_FIRST + rand.nextInt(12)); // EntityCreeper.onDeath: Item.getItemById(2256 + nextInt(12))
   return out;
 }
@@ -94,7 +98,7 @@ export function experiencePoints(e, rand, worldRand) {
   if (ANIMALS.has(e.type)) return 1 + worldRand.nextInt(3);
   if (e.type === "slime") return slimeExperience(e.size); // experienceValue = size
   if (e.type === "witch") return witchExperience(rand, e.held); // 5 plus 1 + nextInt(3) for a held potion
-  return 5 + (e.type === "skeleton" ? 1 + rand.nextInt(3) : 0);
+  return 5 + (e.type === "skeleton" || e.type === "wither_skeleton" ? 1 + rand.nextInt(3) : 0);
 }
 // Entity.applyEntityCollision (sa.g(Lsa;)V) called on `self` for `other`: each is moved
 // 0.05 apart along the larger axis distance's square root, nothing when they are within

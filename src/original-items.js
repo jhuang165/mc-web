@@ -7,6 +7,7 @@ import { FISHING_ITEMS } from './fishing-content.js';
 import { NETHER_ITEMS } from './nether-blocks.js';
 import { NOTE_JUKEBOX_ITEMS } from './note-jukebox-content.js';
 import { SIGN_ITEMS } from './signs.js';
+import { SKULL_ITEMS } from './skull.js';
 import { CHEST_ITEMS } from './chest-blocks.js';
 import { STEM_CAKE_ITEMS } from './stems-cake.js';
 import { SPAWN_EGG_ITEMS } from './spawn-eggs.js';
@@ -42,6 +43,7 @@ export const ORIGINAL_ITEMS = Object.freeze({
   // Note block 25, jukebox 84 and the music discs 2256-2267 (the discs replace the older inert 373/374 mapping).
   ...NOTE_JUKEBOX_ITEMS,
   ...SIGN_ITEMS,
+  ...SKULL_ITEMS,
   ...CHEST_ITEMS, // trapped chest 146 and ender chest 130 -> 1940, 1941
   ...STEM_CAKE_ITEMS, // cake 354 -> 1930
   ...SPAWN_EGG_ITEMS, // spawn egg 383, Bottle o' Enchanting 384, fire charge 385 -> 1950-1952

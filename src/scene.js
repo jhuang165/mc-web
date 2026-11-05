@@ -253,7 +253,7 @@ export class VoxelScene {
       for (let z = cz; z < cz + 16; z++)
         for (let y = 0; y < (w.height ?? HEIGHT); y++) {
           const b = w.get(x, y, z);
-          if (!b || b === END_PORTAL || isChestShaped(b) || b === PISTON_MOVING || b === 175 || b === 176) continue; // signs are drawn by sign-renderer.js; the moving block is drawn by updateMoving, never as a cube
+          if (!b || b === END_PORTAL || isChestShaped(b) || b === PISTON_MOVING || b === 175 || b === 176 || b === 172) continue; // signs are drawn by sign-renderer.js; the moving block is drawn by updateMoving, never as a cube
           if (b === 20) this.torch(solid, x, y, z);
           else if (isCrop(b)) this.crops(solid, b, x, y, z);
           else if (b === PUMPKIN_STEM || b === MELON_STEM) this.stem(solid, b, x, y, z);

@@ -44,7 +44,7 @@ function stackNbt(s,slot,report,original=false) {
  return new Map(Object.entries(entry));
 }
 const inventory=(items,report)=>list(NBT.COMPOUND,(items??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];}));
-const NAMES={enderman:'Enderman',pig:'Pig',cow:'Cow',mooshroom:'MushroomCow',snow_golem:'SnowMan',sheep:'Sheep',chicken:'Chicken',wolf:'Wolf',ocelot:'Ozelot',horse:'EntityHorse',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish',witch:'Witch',slime:'Slime',iron_golem:'VillagerGolem',squid:'Squid',bat:'Bat'};
+const NAMES={enderman:'Enderman',pig:'Pig',cow:'Cow',mooshroom:'MushroomCow',snow_golem:'SnowMan',sheep:'Sheep',chicken:'Chicken',wolf:'Wolf',ocelot:'Ozelot',horse:'EntityHorse',zombie:'Zombie',skeleton:'Skeleton',wither_skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish',witch:'Witch',slime:'Slime',iron_golem:'VillagerGolem',squid:'Squid',bat:'Bat'};
 function entity(e,name,ox,oz) {
  return {id:str(name),Pos:list(NBT.DOUBLE,[e.x+ox,e.posY??e.y,e.z+oz]),Motion:list(NBT.DOUBLE,e.motion??[e.vx??e.mx??0,e.vy??e.my??0,e.vz??e.mz??0]),
  Rotation:list(NBT.FLOAT,e.rotation??(name==='Player'?[(Math.PI-(e.yaw??0))*180/Math.PI,-(e.pitch??0)*180/Math.PI]:[e.rotationYaw??(-(e.yaw??0)*180/Math.PI+0),e.rotationPitch??0])),FallDistance:float(e.fallDistance??0),Fire:short(e.fire??-1),Air:short(e.air??300),OnGround:byte(e.onGround?1:0),Dimension:int(0),Invulnerable:byte(0),PortalCooldown:int(0)};
@@ -61,6 +61,7 @@ function payload(state,ox,oz,report,world=null) {
  const entities=[],tiles=[],ticks=[];
  for(const wrapped of state.entities??[]) {const e=wrapped.value,name=NAMES[e.type];if(!name){report.unsupportedEntities++;continue;}
   const n=entity(e,name,ox,oz);Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
+  if(e.type==='wither_skeleton')n.SkeletonType=byte(1); // EntitySkeleton.writeEntityToNBT
   if(e.type==='sheep'){n.Color=byte(e.color??0);n.Sheared=byte(e.sheared?1:0);}
   // EntityTameable and EntityWolf.writeEntityToNBT: Sitting, Angry, CollarColor and OwnerUUID (the single player's own id, or Owner left out for a wild wolf).
   if(e.type==='wolf'){n.Sitting=byte(e.sitting?1:0);n.Angry=byte(e.angry?1:0);n.CollarColor=byte(e.collar??14);n.OwnerUUID=str(e.owner?(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(e.owner)?e.owner:'00000000-0000-0000-0000-000000000000'):'');}
@@ -110,6 +111,8 @@ function payload(state,ox,oz,report,world=null) {
  for(const {value:e} of state.musicTiles??[])tiles.push(e.kind==='note'?writeNoteTile(e,e.x+ox,e.y,e.z+oz):writeJukeboxTile(e,e.x+ox,e.y,e.z+oz));
  // TileEntitySign.writeToNBT: Text1-Text4 (signs.js).
  for(const {value:e} of state.signs??[])tiles.push(new Map(Object.entries({id:str('Sign'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),Text1:str(e.text?.[0]??''),Text2:str(e.text?.[1]??''),Text3:str(e.text?.[2]??''),Text4:str(e.text?.[3]??'')})));
+ // TileEntitySkull.writeToNBT: SkullType and Rot bytes, the ExtraType owner name (skull.js).
+ for(const {value:e} of state.skulls??[])tiles.push(new Map(Object.entries({id:str('Skull'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),SkullType:byte(e.type??0),Rot:byte(e.rot??0),ExtraType:str(e.owner??'')})));
  for(const {value:e} of state.spawners??[]) {const n={id:str('MobSpawner'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz)};for(const [k,v] of Object.entries(e))if(!['x','y','z'].includes(k))n[k]=typeof v==='string'?str(v):short(v);tiles.push(new Map(Object.entries(n)));}
  // TileEntityPiston.writeToNBT: blockId, blockData, facing, progress, extending (original ids; renderHead is not saved by Java).
  for(const w of state.pistons??[]){const e=w.value??w;tiles.push(new Map(Object.entries({id:str('Piston'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),blockId:int(e.block),blockData:int(e.meta),facing:int(e.facing),progress:float(e.progress??0),extending:byte(e.extending?1:0)})));}

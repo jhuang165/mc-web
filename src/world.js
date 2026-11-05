@@ -1,3 +1,4 @@
+import { skullBounds, installSkullBlocks } from "./skull-bounds.js";
 import { generateJavaWorld, isJavaLandscape, JAVA_LANDSCAPES, streamedWorldType } from "./java-world.js";
 import { decorateFlowers } from "./flowers.js";
 import { generateLakes, generateSprings } from "./lakes.js";
@@ -191,6 +192,7 @@ BLOCKS[ENDER_CHEST]={name:'Ender Chest',color:'#16393b'};
 BLOCKS[PUMPKIN_STEM]={name:'Pumpkin stem',color:'#7a9a3a'};
 BLOCKS[MELON_STEM]={name:'Melon stem',color:'#7a9a3a'};
 BLOCKS[CAKE]={name:'Cake',color:'#e8d6c4'};
+installSkullBlocks(BLOCKS); // skull.js: original block 144 (mob head) overwrites reserved 172; item 2050
 BLOCKS[END_PORTAL]={name:'End Portal',color:'#0b1a1a',hidden:true}; // eye-of-ender.js: original block 119 overwrites reserved 149
 export const LAPIS_ORE=63,REDSTONE_ORE=64,LIT_REDSTONE_ORE=65,EMERALD_ORE=66,PUMPKIN=67,MONSTER_EGG=68,DOUBLE_PLANT=69,
   LOG2=70,LEAVES2=71,VINE=72,COCOA=73,MOSSY_COBBLE=74,BROWN_MUSHROOM=75,RED_MUSHROOM=76,
@@ -300,6 +302,7 @@ export const ticksRandomly=b=>b===1||b===5||b===LEAVES2||b===LIT_REDSTONE_ORE||b
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
 const SEE_THROUGH=new Set([STAINED_GLASS,STAINED_GLASS_PANE,CARPET,0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,NETHER_FENCE,NETHER_BRICK_STAIRS,QUARTZ_STAIRS,RAIL,SIGN_POST,WALL_SIGN,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB,ANVIL,ENCHANTING_TABLE,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOWER_POT,OAK_STAIRS,COBBLESTONE_STAIRS,STONE_BRICK_STAIRS,SANDSTONE_STAIRS,SPRUCE_STAIRS,BIRCH_STAIRS,JUNGLE_STAIRS,BRICK_STAIRS,ACACIA_STAIRS,DARK_OAK_STAIRS,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,STICKY_PISTON,PISTON,PISTON_HEAD,107,108,109,110,111,112,113,114,119,120,124,125,126,127,128,129,130,SHAPED_WOOD_SLAB,SHAPED_GATE,SHAPED_TRAPDOOR,SHAPED_COBBLE_WALL,TRAPPED_CHEST,ENDER_CHEST,...NOT_OPAQUE_NEW]); // 119-130: the redstone torches, button, plates, comparators, sensor and moving piston (redstone-blocks-2.js SEE_THROUGH2)
+SEE_THROUGH.add(172); // BlockSkull: not an opaque cube
 SEE_THROUGH.add(CAKE); // BlockCake: not an opaque cube
 SEE_THROUGH.add(END_PORTAL); // BlockEndPortal: not opaque, not a normal cube
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
@@ -353,6 +356,7 @@ export function blockBounds(world,x,y,z){
   if(b===134)return[...BREWING_SELECTION]; // brewing stand (brewing.js)
   if(isRailBlock2(b))return railBounds(world.getMeta(x,y,z)&7); // powered/detector/activator rails: bit 3 is the powered flag (BlockRailBase.setBlockBoundsBasedOnState)
   if(b===TORCH)return torchBounds(world.getMeta(x,y,z));
+  if(b===172)return skullBounds(world.getMeta(x,y,z)); // BlockSkull.setBlockBoundsBasedOnState
   if(b===SIGN_POST||b===WALL_SIGN)return signBounds(b,world.getMeta(x,y,z)); // BlockSign.setBlockBoundsBasedOnState
   if(b===ENDER_CHEST)return[1/16,0,1/16,15/16,.875,15/16]; // BlockEnderChest: 0.0625 inset, never joins a neighbour
   if(!isChestShaped(b))return[0,0,0,1,blockHeight(b),1];
@@ -898,7 +902,7 @@ export function raycast(world, origin, dir, reach = 6) {
       // drawn selection box is inset).
       // Fences, rails and torches are only hit inside their selection box (Block.collisionRayTrace
       // after setBlockBoundsBasedOnState).
-      if (isFence(hit) || hit === RAIL || isRailBlock2(hit) || hit === TORCH || isRedstoneBlock(hit) || isDoor(hit) || isPane(hit) || hasPartialBounds(hit) || hit === END_PORTAL || hit === SIGN_POST || hit === WALL_SIGN || isShaped(hit) || hit === PISTON_HEAD || (isPistonBase(hit) && pistonExtended(world.getMeta(...p)))) {
+      if (isFence(hit) || hit === RAIL || isRailBlock2(hit) || hit === TORCH || isRedstoneBlock(hit) || isDoor(hit) || isPane(hit) || hasPartialBounds(hit) || hit === END_PORTAL || hit === SIGN_POST || hit === WALL_SIGN || hit === 172 || isShaped(hit) || hit === PISTON_HEAD || (isPistonBase(hit) && pistonExtended(world.getMeta(...p)))) {
         const [x0, y0, z0, x1, y1, z1] = blockBounds(world, ...p), lx = origin.x + dir.x * d - p[0], ly = origin.y + dir.y * d - p[1], lz = origin.z + dir.z * d - p[2];
         if (lx < x0 || lx > x1 || ly < y0 || ly > y1 || lz < z0 || lz > z1) {
           passed = p;
