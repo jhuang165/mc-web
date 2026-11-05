@@ -33,7 +33,7 @@ API
 Exact replay: nether-reference.json holds 64 chunk records (8 seeds x 8 chunks) and 8 population records. Staged terrain/surface/caves hashes, counts, hellRNG nextLong, world call and write hashes, area hash and pending ticks all match the unchanged original classes (74/74 tests in src/nether.test.js). Regenerate with `MC_RESEARCH=... node tools/verify-nether.mjs`.
 
 Not exact
-- The Nether fortress (MapGenNetherBridge) is not ported. In the original it only writes during populate and consumes hellRNG only where a fortress intersects. hellRNG therefore diverges after any such chunk. The probe uses a no-fortress stub of atd.
+- The Nether fortress was a gap of the batch-6 generator; it is ported by the fortress track (see fortress.md). The nether-reference.json probe still uses a no-fortress stub of atd, and its origins are fortress-free.
 - canNeighborBurn and non-opaque solid-top checks are not ported.
 - The Size full scan beyond the frame check is handed to the `createPortal` hook.
 
@@ -44,5 +44,5 @@ Not exact
 - The `portal.portal` sound file is not in public/audio (the importer regex now includes `portal\/`, the importer was NOT run). The ambient call is silent until it is imported.
 - `portalDisplayTick` (particles and ambience) was written from the decompile and is not probe-verified.
 - Wart planting by item use and the Creative listing rely on existing paths (item 386 was already listed); wart placement was not exercised in a browser.
-- Nether fortress is not ported and hellRNG diverges in fortress chunks; canNeighborBurn and non-opaque solid-top checks are not ported in the generator.
+- canNeighborBurn and non-opaque solid-top checks are not ported in the generator.
 - Nothing here was checked in a browser (no dev server, no audio, per the rules).

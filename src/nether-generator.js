@@ -3,16 +3,16 @@
 // gen-world.js. Original numeric block IDs. Replayed natively in nether.test.js against nether-reference.json.
 //
 // Chunk arrays are the native 128-high layout: Uint16Array(32768), index (x * 16 + z) * 128 + y, air 0.
-// NOT ported: the nether fortress (MapGenNetherBridge). provideChunk never writes a fortress block (it only
-// records structure starts); populate writes fortress pieces and, only where a fortress intersects the
-// populated chunk, consumes hellRNG. Terrain, surface, caves and every populate step are exact for chunks
-// whose populate has no fortress; where one intersects, hellRNG (hence all later populate output) diverges.
+// The nether fortress (MapGenNetherBridge, fortress.js) is wired in: provideChunk records fortress starts after the
+// caves, populate calls generateStructuresInChunk first (it consumes hellRNG where a fortress intersects), then the
+// features above. Replayed in fortress.test.js against fortress-reference.json.
 import { JavaRandom, mhSin, mhCos } from "./lighting.js";
 import { NoiseGeneratorOctaves } from "./noise.js";
 import { GenWorld, GenChunk, materialOf, FIRE, FLOWING_LAVA, LAVA, GRAVEL, OBSIDIAN } from "./gen-world.js";
 import { WorldGenMinable, } from "./ore-generator.js";
 import { WorldGenFlowers } from "./decoration-features.js";
 import { randomLong } from "./mapgen.js";
+import { MapGenNetherBridge } from "./fortress.js";
 
 const f = Math.fround, PI = f(Math.PI), HALF_PI = f(Math.PI / 2);
 export const BEDROCK = 7, NETHERRACK = 87, SOUL_SAND = 88, GLOWSTONE = 89, QUARTZ_ORE = 153, BROWN_MUSHROOM = 39, RED_MUSHROOM = 40,
@@ -134,6 +134,7 @@ export class ChunkProviderHell {
     this.noise6 = new NoiseGeneratorOctaves(r, 10);
     this.noise7 = new NoiseGeneratorOctaves(r, 16);
     this.caves = new MapGenCavesHell(this.seed);
+    this.bridge = new MapGenNetherBridge(this.seed); // atd: fortress starts are found in provideChunk, pieces written in populate
     this.noiseField = null;
   }
   reseed(cx, cz) { this.hellRNG.setSeed(hellChunkSeed(cx, cz)); }
@@ -144,6 +145,7 @@ export class ChunkProviderHell {
     this.terrain(cx, cz, blocks);
     this.surface(cx, cz, blocks);
     this.caves.generate(cx, cz, blocks);
+    this.bridge.generate(cx, cz);
     return { blocks, x: cx, z: cz };
   }
   // initializeNoiseField: 5 x 17 x 5 density samples, indexed (x * 5 + z) * 17 + y.
@@ -245,6 +247,7 @@ export class ChunkProviderHell {
   // populate(): hellRNG continues from the last provideChunk (no reseed). `world` is a NetherGenWorld.
   populate(world, cx, cz) {
     const r = this.hellRNG, bx = cx * 16, bz = cz * 16;
+    this.bridge.generateStructuresInChunk(world, r, cx, cz);
     for (let i = 0; i < 8; i++)
       new WorldGenHellLava(FLOWING_LAVA, false).generate(world, r, bx + r.nextInt(16) + 8, r.nextInt(120) + 4, bz + r.nextInt(16) + 8);
     let n = r.nextInt(r.nextInt(10) + 1) + 1;
@@ -372,6 +375,7 @@ export class NetherGenWorld extends GenWorld {
     return this.addChunk(x, z, wide, new Uint8Array(65536));
   }
   blockAdded(id, x, y, z) {
+    if (id === 114) return; // BlockStairs.onBlockAdded: neighbour change and base-block hook, both no-ops for nether brick
     if (id !== FIRE) return super.blockAdded(id, x, y, z);
     // BlockFire.onBlockAdded: dimension > 0 skips the portal check; otherwise a lit frame turns it into a portal.
     if (this.dimension > 0 || !this.tryToCreatePortal(x, y, z)) {
