@@ -3,10 +3,11 @@
 // constructor reads back (entities.js); fields it re-derives (AI timers, velocities, the village home) are not written.
 // The exporter is the mirror image in region-export.js; src/java-mobs.test.js round-trips them.
 import { NBT } from './nbt.js';
+import { endermanFieldsFrom } from './enderman.js';
 import { nbtGet } from './nbt-get.js';
 import { slimeSizeFromNbt } from './slime.js';
 
-export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime' });
+export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman' });
 export const IMPORT_MOB_LIMIT = 256; // EntityWorld keeps at most this many saved mobs
 
 const tagValue = nbtGet; // NBTTagCompound getters: numeric tags convert across types (nbt-get.js)
@@ -51,6 +52,9 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
         return [{ buy: native(b, buy), ...(b2 ? { buyB: native(b2, buyB) } : {}), sell: native(s, sell), uses: tagValue(r, 'uses', NBT.INT, 0), maxUses: tagValue(r, 'maxUses', NBT.INT, 7) }];
       });
     }
+  } else if (type === 'enderman') {
+    // EntityEnderman.readEntityFromNBT: carried and carriedData (shorts; the original block id and its metadata).
+    Object.assign(record, endermanFieldsFrom({ carried: tagValue(entity, 'carried', NBT.SHORT, 0), carriedData: tagValue(entity, 'carriedData', NBT.SHORT, 0) }));
   } else if (type === 'iron_golem') {
     record.playerCreated = tagValue(entity, 'PlayerCreated', NBT.BYTE, 0) !== 0;
   } else if (type === 'slime') {
@@ -69,7 +73,7 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
 
 // EntityList.createEntityFromNBT for /summon. A supplied compound skips onSpawnWithEgg entirely.
 export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) {
-  const health = { pig: 10, cow: 10, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1 }[type];
+  const health = { pig: 10, cow: 10, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, enderman: 40 }[type];
   if (health === undefined) return null;
   const rotation = numbers(tag, 'Rotation', NBT.FLOAT, 2);
   const record = { type, health: tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health)), yaw: rotation ? -rotation[0] * Math.PI / 180 : 0,

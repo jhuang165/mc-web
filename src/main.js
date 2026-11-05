@@ -2374,6 +2374,7 @@ function movementTick(controls) {
   recordHud.tick();
   scene.setFurnaces(survival.furnaces);
   tickChests();
+  mobs.look = { yaw, pitch }; // the enderman stare rule reads the view
   const living = { world, position, survival, inhabited, mobs, xpOrbs, experience, items,
     playerTicks, width: PHYSICS.width, height: PHYSICS.height };
   playerTicks = tickLivingSimulation(living, {

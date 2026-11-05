@@ -1427,6 +1427,91 @@
       "url": "/audio/1.7.10/mob/slime/small5.ogg",
       "sha1": "35f0b3c9c462a6c21ec213fbda2437a0e6427883",
       "bytes": 4826
+    },
+    "mob/endermen/hit1": {
+      "url": "/audio/1.7.10/mob/endermen/hit1.ogg",
+      "sha1": "753a88c1d9b3b46210c18ff07974955463edd18b",
+      "bytes": 6883
+    },
+    "mob/endermen/idle2": {
+      "url": "/audio/1.7.10/mob/endermen/idle2.ogg",
+      "sha1": "9c7aaf49b3096a69a2d6ca62c1067400a2b70814",
+      "bytes": 8236
+    },
+    "mob/endermen/idle1": {
+      "url": "/audio/1.7.10/mob/endermen/idle1.ogg",
+      "sha1": "281b87984ddf8e94324bc86911a36c971cb3d831",
+      "bytes": 6793
+    },
+    "mob/endermen/hit2": {
+      "url": "/audio/1.7.10/mob/endermen/hit2.ogg",
+      "sha1": "cf60aefd0b742c3fa15e808c1a0c33aebd534cc5",
+      "bytes": 6491
+    },
+    "mob/endermen/hit4": {
+      "url": "/audio/1.7.10/mob/endermen/hit4.ogg",
+      "sha1": "6e0f9074e049a6c30402d70cc75a5da99042e00c",
+      "bytes": 5573
+    },
+    "mob/endermen/idle3": {
+      "url": "/audio/1.7.10/mob/endermen/idle3.ogg",
+      "sha1": "bc4c2e76d3b5a0e6f9d5837fe82ed26e808aa918",
+      "bytes": 10073
+    },
+    "mob/endermen/hit3": {
+      "url": "/audio/1.7.10/mob/endermen/hit3.ogg",
+      "sha1": "aaa8f1705c873ebc05da460657c8b83fa01ffd57",
+      "bytes": 6564
+    },
+    "mob/endermen/death": {
+      "url": "/audio/1.7.10/mob/endermen/death.ogg",
+      "sha1": "d04dd6d1f050353ef9e3ba9c45f407f831903c69",
+      "bytes": 16232
+    },
+    "mob/endermen/idle4": {
+      "url": "/audio/1.7.10/mob/endermen/idle4.ogg",
+      "sha1": "405e2f82caef7f79eb9e26886520711e446366ce",
+      "bytes": 11208
+    },
+    "mob/endermen/portal": {
+      "url": "/audio/1.7.10/mob/endermen/portal.ogg",
+      "sha1": "7b4b5323ef066caa1ae43cbe66fffd9dfce4ed32",
+      "bytes": 10010
+    },
+    "mob/endermen/portal2": {
+      "url": "/audio/1.7.10/mob/endermen/portal2.ogg",
+      "sha1": "35461b6a4253db40973549e82d91f267c686be85",
+      "bytes": 7442
+    },
+    "mob/endermen/idle5": {
+      "url": "/audio/1.7.10/mob/endermen/idle5.ogg",
+      "sha1": "e746ec4574aaa047be3076729753c2c75fd34630",
+      "bytes": 9108
+    },
+    "mob/endermen/scream1": {
+      "url": "/audio/1.7.10/mob/endermen/scream1.ogg",
+      "sha1": "c4b5265bbafbe058347058a257abe33a0afb5ab7",
+      "bytes": 11231
+    },
+    "mob/endermen/scream2": {
+      "url": "/audio/1.7.10/mob/endermen/scream2.ogg",
+      "sha1": "c8cd465468a0fd41a1d5cc24cb499862b5ade2cb",
+      "bytes": 11020
+    },
+    "mob/endermen/scream3": {
+      "url": "/audio/1.7.10/mob/endermen/scream3.ogg",
+      "sha1": "dbab0094299eacbce86ad427edcb34b8342861af",
+      "bytes": 9843
+    },
+    "mob/endermen/scream4": {
+      "url": "/audio/1.7.10/mob/endermen/scream4.ogg",
+      "sha1": "bcc73584d83225383aaa6affce905392c96afe86",
+      "bytes": 10411
+    },
+    "mob/endermen/stare": {
+      "url": "/audio/1.7.10/mob/endermen/stare.ogg",
+      "sha1": "5738d7f49ef30adcfc4f2ab13e0b1d74f09a1289",
+      "bytes": 127738
     }
   },
   "events": {
@@ -2408,6 +2493,53 @@
         "mob/slime/small3",
         "mob/slime/small4",
         "mob/slime/small5"
+      ]
+    },
+    "mob.endermen.death": {
+      "category": "hostile",
+      "sounds": [
+        "mob/endermen/death"
+      ]
+    },
+    "mob.endermen.hit": {
+      "category": "hostile",
+      "sounds": [
+        "mob/endermen/hit1",
+        "mob/endermen/hit2",
+        "mob/endermen/hit3",
+        "mob/endermen/hit4"
+      ]
+    },
+    "mob.endermen.idle": {
+      "category": "hostile",
+      "sounds": [
+        "mob/endermen/idle1",
+        "mob/endermen/idle2",
+        "mob/endermen/idle3",
+        "mob/endermen/idle4",
+        "mob/endermen/idle5"
+      ]
+    },
+    "mob.endermen.portal": {
+      "category": "hostile",
+      "sounds": [
+        "mob/endermen/portal",
+        "mob/endermen/portal2"
+      ]
+    },
+    "mob.endermen.scream": {
+      "category": "hostile",
+      "sounds": [
+        "mob/endermen/scream1",
+        "mob/endermen/scream2",
+        "mob/endermen/scream3",
+        "mob/endermen/scream4"
+      ]
+    },
+    "mob.endermen.stare": {
+      "category": "hostile",
+      "sounds": [
+        "mob/endermen/stare"
       ]
     }
   }

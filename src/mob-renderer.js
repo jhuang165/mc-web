@@ -17,6 +17,7 @@ import { createWitchRig, animateWitch } from "./witch-renderer.js";
 import { createSlimeRig, animateSlime } from "./slime-renderer.js";
 import { mobScale } from "./slime.js";
 import { createWolfRig, animateWolf } from "./wolf-renderer.js";
+import { createEndermanRig, animateEnderman } from "./enderman-renderer.js";
 const RAD = Math.PI / 180;
 // RenderCreeper's powered pass (bni.a(xz, I, F), pass 1): creeper_armor.png with the texture
 // matrix translated by (scroll, scroll), colour 0.5, lighting off, blended GL_ONE, GL_ONE.
@@ -380,6 +381,7 @@ export class MobRenderer {
     if (e.type === "witch") return createWitchRig(this, e);
     if (e.type === "slime") return createSlimeRig(this, e);
     if (e.type === "wolf") return createWolfRig(this);
+    if (e.type === "enderman") return createEndermanRig(this);
     if (e.type === "iron_golem") return createIronGolemRig(this);
     return this.createQuadruped(e.type);
   }
@@ -470,6 +472,7 @@ export class MobRenderer {
       if (r.squish) animateSlime(r, e, partial);
       if (r.golem) animateIronGolem(r, e, pose, partial);
       if (r.wolf) animateWolf(r, e, pose);
+      if (r.enderman) animateEnderman(r, e, pose, this);
       r.limbs.forEach((l, i) => {
         if (spider) { l.rotation.set(0, -spider[i][0], -spider[i][1]); return; }
         if (creeper) { l.rotation.x = creeper[i + 1][0]; return; }
