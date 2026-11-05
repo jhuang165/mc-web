@@ -17,6 +17,7 @@ import {
   DYE, FIRE, SAPLING, SNOW_LAYER, TNT, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, BED, isCrop,
 } from './world.js';
 import { ITEM_BED, placeBed } from './bed.js';
+import { ITEM_SIGN, placeSign } from './signs.js';
 import { isDoor, activateDoor } from './doors-panes.js';
 import { ITEMS } from './survival.js';
 import { mayHitBlock } from './adventure.js';
@@ -364,6 +365,13 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     if (id === ITEM_BED) {
       const placed = placeBed({ world: state.world, survival: state.survival, yaw: state.yaw, farming: state.farming }, { id, target }, {
         updateBlock: hooks.updateBlock, renderHotbar: hooks.renderHotbar, markUnsaved: hooks.markUnsaved, sound: hooks.sound,
+      });
+      return act(placed.placed ? 'place-block' : `placement-${placed.reason}`, { placement: placed });
+    }
+    // ItemSign.onItemUse (sign-reference.json): any face but the bottom of a solid block; the edit screen opens for the new tile.
+    if (id === ITEM_SIGN) {
+      const placed = placeSign({ world: state.world, survival: state.survival, yaw: state.yaw }, { id, target }, {
+        signs: state.signs, openEditor: hooks.openSignEditor, updateBlock: hooks.updateBlock, renderHotbar: hooks.renderHotbar, markUnsaved: hooks.markUnsaved, sound: hooks.sound,
       });
       return act(placed.placed ? 'place-block' : `placement-${placed.reason}`, { placement: placed });
     }

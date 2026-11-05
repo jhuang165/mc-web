@@ -215,6 +215,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   const unsupported = new Map(), approximations = new Map(), tileLost = new Map(), tileConverted = new Map();
   const itemLost = new Map(), entityLost = new Map(), entityConverted = new Map();
   const commandBlocks = [], musicTiles = [];
+  const signs = [];
   const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = [];
   let edits = 0;
   const write = (x, y, z, block, meta) => {
@@ -323,6 +324,9 @@ export async function importJavaRegionArea(regions, options = {}) {
       } else if (inside && id === 'RecordPlayer' && block === 178) {
         const { record } = readJukeboxTile(tile);
         if (record) musicTiles.push({ kind: 'jukebox', x: lx, y, z: lz, record }); tally(tileConverted, id);
+      } else if (inside && id === 'Sign' && (block === 175 || block === 176)) {
+        // TileEntitySign.readFromNBT: Text1-Text4, each cut to 15 characters; the loaded tile is not editable (signs.js).
+        signs.push({ x: lx, y, z: lz, text: [1, 2, 3, 4].map(i => String(get(tile, `Text${i}`, NBT.STRING, '')).slice(0, 15)) }); tally(tileConverted, id);
       } else if (inside && id === 'Piston' && world.get(lx, y, lz) === PISTON_MOVING) {
         // TileEntityPiston.readFromNBT: blockId, blockData, facing, progress (lastProgress = progress), extending. The
         // restore (piston-live.js) lets the move finish on the first tick, as native does.
@@ -415,7 +419,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     position: { x: px + 0.5, y: py + 1.01, z: pz + 0.5, yaw: 0, pitch: 0 },
     // legacyPlayer() keeps these fields; without `slots` the Creative hotbar defaults apply.
     player: { chests, furnaces, dispensers, hoppers, brewing },
-    pistons, commandBlocks, ...(musicTiles.length ? { musicTiles } : {}),
+    pistons, commandBlocks, ...(musicTiles.length ? { musicTiles } : {}), ...(signs.length ? { signs } : {}),
     drops,
     ...(mobs.length ? { entities: mobs } : {}),
     ...(villages ? { villages } : {}),

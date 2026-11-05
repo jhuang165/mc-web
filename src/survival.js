@@ -8,6 +8,7 @@ import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
 import { Effects } from "./status-effects.js";
 import { damageSourceKey, enchantedDamage, setFireTicks, decreaseAir, thornsReaction } from "./armor-enchantments.js";
 import { NORMAL, scaleDamage, starvationHurts, hungerDrops, peacefulRegen } from "./difficulty.js";
+import { installSignItems, installSignMaterials, installSignRecipes } from './signs.js';
 import { installFishingItems, installFishingRecipes, installFishingSmelting } from './fishing-content.js';
 import { installPopulationItems, installPopulationMaterials, installPopulationRecipes, populationCraftingResult, installPopulationSmelting } from './population-content.js';
 
@@ -25,6 +26,7 @@ const FIRE_REASONS = new Set(["burning", "lava", "fire"]); // DamageSource.isFir
 
 export const ITEMS = Object.fromEntries(
   BLOCKS.map((b, id) => [id, { ...b, id, block: id > 0, stack: 64 }]).filter(([, b]) => !b.reserved),
+  BLOCKS.map((b, id) => [id, { ...b, id, block: id > 0, stack: 64 }]).filter(Boolean), // .filter drops the holes between the block families
 );
 ITEMS[1139]={...ITEMS[139],id:1139,block:true};
 installColoredItems(ITEMS); // colored-blocks.js: items 1140-1148
@@ -229,6 +231,7 @@ installPopulationItems(ITEMS);
 installFishingItems(ITEMS);
 installNetherItems(ITEMS);
 installNoteJukeboxItems(ITEMS); // note block 1177, jukebox 1178, discs 530-541
+installSignItems(ITEMS);
 // Every item name and damage subtype is the 1.7.10 en_US display name (item-names.js); internal-only items get Title Case.
 applyNativeNames(ITEMS);
 export const MATERIALS = {
@@ -296,6 +299,7 @@ installPopulationMaterials(MATERIALS);
 installNetherMaterials(MATERIALS);
 installColoredMaterials(MATERIALS); // colored-blocks.js blocks 140-148
 installNoteJukeboxMaterials(MATERIALS);
+installSignMaterials(MATERIALS);
 export const RECIPES = [];
 function recipe(id, name, rows, keys, output, count = 1) {
   const width = Math.max(...rows.map((r) => r.length));
@@ -434,6 +438,7 @@ installPopulationRecipes({recipe,shapeless});
 installFishingRecipes({recipe});
 installNetherRecipes({recipe});
 installNoteJukeboxRecipes({recipe});
+installSignRecipes({recipe});
 export function matchShapeless(stacks) {
   const filled = stacks.filter(Boolean);
   for (const r of SHAPELESS) {

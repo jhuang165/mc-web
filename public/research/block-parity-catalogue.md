@@ -71,12 +71,12 @@ Every row requires placement/metadata, bounds/collision/rays, support and neighb
 | 60 | farmland | 29, 30 | Partial; audit required |
 | 61 | furnace | 14 | Partial; audit required |
 | 62 | lit_furnace | — | Unmapped; audit required |
-| 63 | standing_sign | — | Unmapped; audit required |
+| 63 | standing_sign | 175 | Partial; audit required |
 | 64 | wooden_door | 97 | Partial; audit required |
 | 65 | ladder | 52 | Partial; audit required |
 | 66 | rail | 61 | Partial; audit required |
 | 67 | stone_stairs | 88 | Partial; audit required |
-| 68 | wall_sign | — | Unmapped; audit required |
+| 68 | wall_sign | 176 | Partial; audit required |
 | 69 | lever | 108 | Partial; audit required |
 | 70 | stone_pressure_plate | 109 | Partial; audit required |
 | 71 | iron_door | 98 | Partial; audit required |
@@ -145,7 +145,7 @@ Every row requires placement/metadata, bounds/collision/rays, support and neighb
 | 134 | spruce_stairs | 91 | Partial; audit required |
 | 135 | birch_stairs | 92 | Partial; audit required |
 | 136 | jungle_stairs | 93 | Partial; audit required |
-| 137 | command_block | — | Unmapped; audit required |
+| 137 | command_block | 139 | Partial; audit required |
 | 138 | beacon | — | Unmapped; audit required |
 | 139 | cobblestone_wall | — | Unmapped; audit required |
 | 140 | flower_pot | 106 | Partial; audit required |

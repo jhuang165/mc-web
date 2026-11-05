@@ -40,7 +40,7 @@ export const SHADOWS = {
 // public/research/shadow-reference.json): glass, water, lava, torches, farmland,
 // wheat, tall grass, chests, fire (45), the snow layer (46), the sapling (48), fences and rails. Every block that does is a full cube
 // (ice does: it renders as a normal block).
-const NOT_NORMAL = new Set([STONE_SLAB,CAULDRON,FLOWER_POT,...Object.keys(STAIRS).map(Number),WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,140,141,142,107,108,109,110,111,112,113,114,116,117,118,69,72,73,75,76,79,82,83,84,ANVIL,ENCHANTING_TABLE,9, 10, 20, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41, 42, FIRE, 46, 48, WEB, LADDER, CACTUS, REEDS, LILY_PAD, FENCE, 154, RAIL, 119, 120, 124, 125, 126, 127, 128, 129, 130, 133, 134, 135, 136, 137, 138]);
+const NOT_NORMAL = new Set([175,176,STONE_SLAB,CAULDRON,FLOWER_POT,...Object.keys(STAIRS).map(Number),WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,140,141,142,107,108,109,110,111,112,113,114,116,117,118,69,72,73,75,76,79,82,83,84,ANVIL,ENCHANTING_TABLE,9, 10, 20, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 41, 42, FIRE, 46, 48, WEB, LADDER, CACTUS, REEDS, LILY_PAD, FENCE, 154, RAIL, 119, 120, 124, 125, 126, 127, 128, 129, 130, 133, 134, 135, 136, 137, 138]);
 export const takesShadow = (b) => b !== 0 && !NOT_NORMAL.has(b) && !isFlower(b) && !isCrop(b);
 
 // `e`: { x, y, z } interpolated Java position (posY, which for items and orbs
