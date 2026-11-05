@@ -37,7 +37,7 @@ export function vanillaBlock(id, meta = 0, lit = false) {
 const PLANKS = TILES.indexOf("planks_oak");
 export function particleTile(id, meta = 0, lit = false) {
   if (!id || id === WATER || id === LAVA || id === FIRE) return -1;
-  if (id === 41) return PLANKS;
+  if (id === 41 || id === 162) return PLANKS;
   return blockTile(id, 3, lit, meta);
 }
 

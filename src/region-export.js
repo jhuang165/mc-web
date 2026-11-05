@@ -1,3 +1,4 @@
+import { saveEnderSlots } from './chest-blocks.js';
 import { writeCommandBlock } from "./command-block.js";
 import { writeNoteTile } from "./note-blocks.js";
 import { writeJukeboxTile } from "./jukebox.js";
@@ -108,6 +109,8 @@ function levelNbt(record,w,report) {
  delete player.id;
  const items=(p.slots??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];});
  (p.armor??[]).forEach((s,i)=>{const n=stackNbt(s,100+i,report);if(n)items.push(n);});player.Inventory=list(NBT.COMPOUND,items);
+ // InventoryEnderChest.saveInventoryToNBT: EnderItems, slots 0-26 (chest-blocks.js).
+ player.EnderItems=list(NBT.COMPOUND,saveEnderSlots(p.enderItems).flatMap(({slot,stack})=>{const n=stackNbt(stack,slot,report);return n?[n]:[];}));
  const data={version:int(19133),initialized:byte(1),RandomSeed:tag(NBT.LONG,w.javaSeed??BigInt(w.numericSeed)),generatorName:str(record.biome==='javaStreamed'?streamedWorldType(record.worldType):record.biome==='javaLargeBiomes'?'largeBiomes':record.biome==='javaAmplified'?'amplified':'default'),generatorVersion:int(1),generatorOptions:str(''),MapFeatures:byte(1),LevelName:str(record.name??'Blockworld'),GameType:int(gameType),hardcore:byte(0),allowCommands:byte(creative?1:0),Time:long(p.time??0),DayTime:long(p.time??0),LastPlayed:long(record.updated??0),SizeOnDisk:long(0),SpawnX:int(Math.floor(pos.x+(w.originX??0))),SpawnY:int(Math.floor(pos.y)),SpawnZ:int(Math.floor(pos.z+(w.originZ??0))),Difficulty:byte(2),Player:comp(player)};
  for(const name of ['rainTime','thunderTime'])data[name]=int(record.weather?.[name]??0);
  for(const name of ['raining','thundering'])data[name]=byte(record.weather?.[name]?1:0);

@@ -28,7 +28,7 @@ const SILK = {
   1: SELF, 2: SELF, 3: META, 13: SELF, 16: SELF, 21: SELF, 56: SELF, 129: SELF,
   73: () => SELF(73), 74: () => SELF(73),
   18: (id, meta) => META(id, meta & 3), 161: (id, meta) => META(id, meta & 3),
-  20: SELF, 95: META, 102: SELF, 160: META, 79: SELF, 174: SELF, 80: SELF, 82: SELF, 103: SELF, 47: SELF,
+  20: SELF, 130: SELF, 95: META, 102: SELF, 160: META, 79: SELF, 174: SELF, 80: SELF, 82: SELF, 103: SELF, 47: SELF,
   153: SELF, 155: (id, meta) => META(id, meta === 3 || meta === 4 ? 2 : meta), // BlockOre / BlockQuartz.createStackedBlock
   110: SELF, 99: SELF, 100: SELF, 30: SELF, 120: SELF,
   101: SELF, // BlockPane.canSilkHarvest: iron bars (102, the glass pane, is above)
@@ -56,6 +56,7 @@ const ONE = () => 1;
 // xp (called after the drops, only when the drop differs from the block's own item).
 const RULES = {
   1: { item: () => 4 }, 2: { item: () => 3 }, 3: { item: () => 3 },
+  130: { item: () => 49, quantity: () => 8 }, // BlockEnderChest: obsidian, quantityDropped 8 (probe: chests-reference.json facts)
   13: { item: (meta, rand, fortune) => { if (fortune > 3) fortune = 3; return rand.nextInt(10 - fortune * 3) === 0 ? 318 : 13; } },
   16: { item: () => 263, quantity: oreQuantity(ONE), xp: (rand) => range(rand, 0, 2) },
   56: { item: () => 264, quantity: oreQuantity(ONE), xp: (rand) => range(rand, 3, 7) },

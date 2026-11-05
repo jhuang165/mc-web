@@ -10,6 +10,7 @@ import { quartzOreXp } from './nether-blocks.js';
 import { installShapedItems, installShapedMaterials, installShapedRecipes, shapedCraftingResult, shapedDrops, isShaped } from './shaped-blocks.js';
 import { POTION_ITEM_ROWS } from './potion-items.js';
 import { coloredDrops, coloredCraftingResult } from './colored-blocks.js';
+import { installChestItems, CHEST_MATERIALS, chestDrops, ITEM_TRAPPED_CHEST } from './chest-blocks.js';
 export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97:68,175:69,162:70,161:71,106:72,127:73,48:74,39:75,40:76,99:77,100:78,32:79,174:80,103:81,'44:1':82,'31:0':83,'31:2':84,24:56,110:57,159:58,111:59,145:ANVIL,116:ENCHANTING_TABLE,53:87,67:88,109:89,128:90,134:91,135:92,136:93,108:94,163:95,164:96,
   // Doors (items 324/330 are internal 470/471), iron bars and glass panes (the block items).
   324:470,330:471,101:IRON_BARS,102:1100,
@@ -36,6 +37,7 @@ export const DOUBLE_NAMES=['Sunflower','Lilac','Double tallgrass','Large fern','
 export const POPULATION_VARIANTS={7:TREE_NAMES.map(s=>s+' planks'),4:TREE_NAMES.slice(0,4).map(s=>s+' log'),5:TREE_NAMES.slice(0,4).map(s=>s+' leaves'),48:TREE_NAMES.map(s=>s+' sapling'),69:DOUBLE_NAMES,70:TREE_NAMES.slice(4).map(s=>s+' log'),71:TREE_NAMES.slice(4).map(s=>s+' leaves'),68:['Stone monster egg','Cobblestone monster egg','Stone brick monster egg']};
 export function installPopulationItems(items){
   installShapedItems(items);
+  installChestItems(items);
   for(const [id,variants] of Object.entries(POPULATION_VARIANTS)) items[id].variants=variants;
   items[ANVIL].variants=['Anvil','Slightly Damaged Anvil','Very Damaged Anvil'];
   items[BED].hidden=true; // BlockBed has no item of its own: the bed item places it
@@ -66,6 +68,7 @@ export function installPopulationItems(items){
 }
 export function installPopulationMaterials(m){
   installShapedMaterials(m);
+  for(const [id,v] of Object.entries(CHEST_MATERIALS))m[id]={...v};
   Object.assign(m,{
     63:{hardness:3,kind:'pickaxe',tier:1,drop:351},64:{hardness:3,kind:'pickaxe',tier:2,drop:360},65:{hardness:3,kind:'pickaxe',tier:2,drop:360},66:{hardness:3,kind:'pickaxe',tier:2,drop:367},
     67:{hardness:1,kind:'axe'},68:{hardness:.75,drop:0},69:{hardness:0,drop:0},70:{hardness:2,kind:'axe'},71:{hardness:.2,drop:0},72:{hardness:.2,drop:0},73:{hardness:.2,drop:351},74:{hardness:2,kind:'pickaxe',tier:0},75:{hardness:0},76:{hardness:0},77:{hardness:.2,drop:75},78:{hardness:.2,drop:76},79:{hardness:0,drop:0},80:{hardness:.5,drop:0},81:{hardness:1,kind:'axe',drop:368},82:{hardness:2,kind:'pickaxe',tier:0},83:{hardness:0,drop:0},84:{hardness:0,drop:0},
@@ -146,6 +149,8 @@ export function installPopulationRecipes({recipe,shapeless}){
   recipe('comparator','Redstone comparator',[' T ','TQT','SSS'],{T:RS2.ITEM_REDSTONE_TORCH,Q:RS2.ITEM_QUARTZ,S:3},RS2.ITEM_COMPARATOR);
   recipe('repeater','Redstone repeater',['TRT','SSS'],{T:RS2.ITEM_REDSTONE_TORCH,R:360,S:3},ITEM_REPEATER);
   installShapedRecipes({recipe,shapeless});
+  // CraftingManager: chest + tripwire hook -> trapped chest (shapeless). The ender chest recipe needs the eye of ender, which this build lacks (chests.md Gaps).
+  shapeless(ITEM_TRAPPED_CHEST,1,0,41,ITEM_TRIPWIRE_HOOK);
   // Daylight sensor (C109): three glass, three quartz, three wood slabs of any type.
   recipe('daylight-sensor','Daylight sensor',['GGG','QQQ','SSS'],{G:9,Q:RS2.ITEM_QUARTZ,S:1165},RS2.ITEM_DAYLIGHT_SENSOR);
   recipe('glowstone','Glowstone',['DD','DD'],{D:RS2.ITEM_GLOWSTONE_DUST},RS2.ITEM_GLOWSTONE);
@@ -168,6 +173,7 @@ export function populationDrops(id,meta,{random=Math.random,shears=false}={}){
   if(id===ANVIL)return[{id:ANVIL,count:1,damage:(meta&15)>>2}];
   {const colored=coloredDrops(id,meta);if(colored)return colored;}
   if(isShaped(id))return shapedDrops(id,meta);
+  {const chest=chestDrops(id);if(chest)return chest;}
   if(id>=REDSTONE_WIRE&&id<=TRIPWIRE)return redstoneDrops(id);
   if(RS2.isRedstone2Block(id))return RS2.redstoneDrops2(id,meta,{random});
   // BlockDoor.getItemDropped: the lower half drops its door item, the upper half nothing; BlockPane (glass) drops nothing.

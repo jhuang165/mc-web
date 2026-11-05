@@ -3,8 +3,10 @@ import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, 
 import { SPAWNER_HARDNESS, spawnerXp } from "./spawner-block.js";
 import { ENCHANTED_BOOK_ITEM } from "./enchanted-books.js";
 import { REEDS_ITEM, PAPER, SUGAR } from "./plants.js";
-import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,ChestContainer,makeStack,copyStack} from "./inventory.js";
+import {PlayerInventory,PlayerContainer,WorkbenchContainer,FurnaceContainer,ChestContainer,StackArray,makeStack,copyStack} from "./inventory.js";
+import {normalCube} from "./world.js";
 import {CHEST_SLOTS,FACING,newChest,openChest} from "./chest.js";
+import {ENDER_SLOTS,ENDER_CHEST,enderOpenable,newEnderTile} from "./chest-blocks.js";
 import { Effects } from "./status-effects.js";
 import { damageSourceKey, enchantedDamage, setFireTicks, decreaseAir, thornsReaction } from "./armor-enchantments.js";
 import { NORMAL, scaleDamage, starvationHurts, hungerDrops, peacefulRegen } from "./difficulty.js";
@@ -527,6 +529,7 @@ export const FUELS = {
   13: 300,
   21: 300,
   41: 300,
+  1940: 300, // trapped chest (BlockChest, wood)
   100: 200,
   104: 200,
   108: 200,
@@ -617,6 +620,10 @@ export class Survival {
       if (Array.isArray(c.items)) c.items.slice(0, CHEST_SLOTS).forEach((s, i) => (chest.items[i] = this.inventory.read(s)));
       this.chests[key] = chest;
     }
+    // InventoryEnderChest (EnderItems of the player record): one 27-slot inventory per player, shared by every ender chest.
+    this.enderItems = Array(ENDER_SLOTS).fill(null);
+    if (Array.isArray(data.enderItems)) data.enderItems.slice(0, ENDER_SLOTS).forEach((s, i) => (this.enderItems[i] = this.inventory.read(s)));
+    this.enderTiles = {}; // TileEntityEnderChest lid state (users, lid), runtime only
     // TileEntityDispenser contents (Trap tile entity, nine slots); dispensing itself is inert.
     this.dispensers = {};
     for (const [key, d] of Object.entries(data.dispensers || {})) {
@@ -850,6 +857,15 @@ export class Survival {
     const found = openChest(world, this.chests, x, y, z);
     return found && Object.assign(new ChestContainer(this.inventory, found.inventory), { title: found.title, keys: found.keys });
   }
+  // BlockEnderChest.onBlockActivated: nothing opens while a normal cube sits above it; otherwise the player's own
+  // InventoryEnderChest, with this tile counted as a user (the lid) until the screen closes.
+  openEnderChest(world, x, y, z) {
+    if (world.get(x, y, z) !== ENDER_CHEST || !enderOpenable(normalCube(world.get(x, y + 1, z)))) return null;
+    const key = `${x},${y},${z}`, tile = (this.enderTiles[key] ??= newEnderTile()), inv = new StackArray(this.enderItems);
+    inv.open = () => { tile.users = Math.max(0, tile.users) + 1; };
+    inv.closed = () => { tile.users--; };
+    return Object.assign(new ChestContainer(this.inventory, inv), { title: "Ender Chest", keys: [key] });
+  }
   mining(block, toolId, underwater = false, onGround = true) {
     return miningState(block,MATERIALS[block],this.count(toolId)?ITEMS[toolId]:null,{underwater,onGround});
   }
@@ -980,6 +996,7 @@ export class Survival {
       current: this.inventory.current,
       furnaces: structuredClone(furnaces),
       chests: Object.fromEntries(Object.entries(chests).map(([key, c]) => [key, { facing: c.facing, items: c.items.map(copyStack) }])),
+      enderItems: this.enderItems.map(copyStack),
       dispensers: Object.fromEntries(Object.entries(dispensers).map(([key, d]) => [key, { items: d.items.map(copyStack) }])),
       brewing: Object.fromEntries(Object.entries(this.brewing).map(([key, b]) => [key, { items: b.items.map(copyStack), brewTime: b.brewTime | 0 }])),
       hoppers: Object.fromEntries(Object.entries(this.hoppers).map(([key, h]) => [key, { items: h.items.map(copyStack), cooldown: h.cooldown, name: h.name }])),

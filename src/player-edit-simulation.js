@@ -1,4 +1,4 @@
-import { CHEST } from './chest.js';
+import { isChestBlock, ENDER_CHEST, TRAPPED_CHEST } from './chest-blocks.js';
 import { DISPENSER, DROPPER } from './dispenser-piston.js';
 import { newDispenser, DROPPER_TITLE } from './dispenser-container.js';
 import { BOW, canDraw } from './bow.js';
@@ -30,7 +30,7 @@ import { ITEM_POTION, ITEM_GLASS_BOTTLE, usePotion, useGlassBottle, bottleFromCa
 import { CAULDRON, FLOWER_POT, BUCKET_ITEM, cauldronUse, cauldronWash, potUse, setPotContents } from './stone-utility.js';
 
 const FARMLAND = 29; // farming.js till(): internal dry farmland (original 60, soundTypeGravel)
-const STATIONS = new Set([13, 14, BREWING_STAND, CHEST, DISPENSER, DROPPER, HOPPER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, BED, LEVER, STONE_BUTTON, REPEATER]);
+const STATIONS = new Set([13, 14, BREWING_STAND, 41, TRAPPED_CHEST, ENDER_CHEST, DISPENSER, DROPPER, HOPPER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, BED, LEVER, STONE_BUTTON, REPEATER]);
 // PlayerControllerMP's edit(place) dispatcher with browser effects supplied by the
 // caller. `state` holds the live mutable gameplay state, `request` snapshots the two
 // ray targets, the held bucket's own captured trace and the click button, and hooks run
@@ -338,7 +338,13 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       }
     }
     if (activates && block === ENCHANTING_TABLE) { hook('useEnchantingTable', target.block.join(',')); return act('open-enchanting-table'); }
-    if (activates && block === CHEST) {
+    if (activates && block === ENDER_CHEST) {
+      // BlockEnderChest.onBlockActivated: the player's own 27-slot ender inventory (refused under a normal cube).
+      const chest = state.survival.openEnderChest(state.world, ...target.block);
+      if (chest) hook('openChest', chest, target.block.join(','), target.block);
+      return act('open-ender-chest');
+    }
+    if (activates && isChestBlock(block)) {
       const chest = state.survival.openChest(state.world, ...target.block);
       if (chest) hook('openChest', chest, target.block.join(','), target.block);
       return act('open-chest');

@@ -45,6 +45,7 @@ const redstoneTorch = (mc) => ({
   to: (meta) => [mc, meta >= 1 && meta <= 4 ? meta : 5],
   from: (meta) => (meta >= 1 && meta <= 4 ? { meta, exact: true } : { meta: 0, exact: meta === 5 }),
 });
+const chest = (mc) => ({ mc, to: (meta, state) => [mc, facing(state)], from: (meta) => ({ meta: 0, state: { facing: meta }, exact: meta >= 2 && meta <= 5 }) });
 const facing = (state) => (state.facing >= 2 && state.facing <= 5 ? state.facing : 3);
 
 // Internal id -> mapping. Identity metadata ("same") where the port stores the original meaning.
@@ -80,7 +81,9 @@ const MAP = {
   // BlockTallGrass metadata 1 (grass); 0 dead shrub and 2 fern have no port block.
   39: fixed(31, 1),
   40: fixed(172),
-  41: { mc: 54, to: (meta, state) => [54, facing(state)], from: (meta) => ({ meta: 0, state: { facing: meta }, exact: meta >= 2 && meta <= 5 }) },
+  41: chest(54),
+  // Trapped chest (146, chests track): the same storage and facing state as a chest; ender chest (130) keeps its facing in the metadata.
+  162: chest(146), 163: same(130),
   [LAVA]: fluid(11),
   43: fixed(37), 44: same(38), 45: same(51), 46: same(78), 47: fixed(79), 48: same(6), 49: same(141), 50: same(142),
   51: fixed(30), 52: same(65), 53: same(81), 54: same(83), 55: fixed(46), 56: same(24), 57: fixed(110), 58: same(159), 59: fixed(111),
