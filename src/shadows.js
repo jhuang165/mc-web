@@ -18,6 +18,8 @@ export const SHADOWS = {
   orb: { size: f(0.15), opaque: f(0.75) },
   pig: { size: f(0.7), opaque: 1 },
   cow: { size: f(0.7), opaque: 1 },
+  mooshroom: { size: f(0.7), opaque: 1 },
+  snow_golem: { size: f(0.5), opaque: 1 },
   sheep: { size: f(0.7), opaque: 1 },
   // RenderChicken: super(new ModelChicken(), 0.3F).
   chicken: { size: f(0.3), opaque: 1 },

@@ -159,6 +159,10 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return act('interact-ocelot');
     }
+    if (state.mobs.mooshroomInteract?.(e, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return act('interact-mooshroom');
+    }
     if (state.mobs.shear(e, id, state.survival)) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return act('shear-entity');

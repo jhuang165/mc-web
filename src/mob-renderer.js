@@ -19,6 +19,7 @@ import { mobScale } from "./slime.js";
 import { createWolfRig, animateWolf } from "./wolf-renderer.js";
 import { createOcelotRig } from "./ocelot-renderer.js";
 import { createEndermanRig, animateEnderman } from "./enderman-renderer.js";
+import { createSnowGolemRig, animateSnowGolem, addMooshroomMushrooms } from "./mooshroom-golem-renderer.js";
 import { createSquidRig, createBatRig } from "./squid-bat-renderer.js";
 const RAD = Math.PI / 180;
 // RenderCreeper's powered pass (bni.a(xz, I, F), pass 1): creeper_armor.png with the texture
@@ -292,8 +293,8 @@ export class MobRenderer {
   // ModelProbe reads from the constructed models; (x, 24 - y, -z) / 16 as for the sheep.
   // The pig's snout and the cow's horns sit on the head, the udder on the body.
   createQuadruped(type) {
-    const cow = type === "cow", root = new THREE.Group(), limbs = [],
-      skin = entityMaterial(this.view.lighting, { map: pixelTexture(`/media/1.7.10/entity/${cow ? "cow/cow" : "pig/pig"}.png`) });
+    const cow = type === "cow" || type === "mooshroom", root = new THREE.Group(), limbs = [],
+      skin = entityMaterial(this.view.lighting, { map: pixelTexture(`/media/1.7.10/entity/${type === "mooshroom" ? "cow/mooshroom" : cow ? "cow/cow" : "pig/pig"}.png`) });
     const part = (parent, w, h, d, u, v, ox, oy, oz) => {
       const mesh = new THREE.Mesh(skinBox(w, h, d, u, v, 64, 32), skin);
       mesh.position.set((ox + w / 2) / 16, -(oy + h / 2) / 16, -(oz + d / 2) / 16);
@@ -331,7 +332,9 @@ export class MobRenderer {
     }
     this.scene.add(root);
     // childYOffset / childZOffset: pig 4 / 4, cow 8 / 6.
-    return { root, neck, limbs, materials: [skin], type, head, child: cow ? [8, 6] : [4, 4], lift: 1 / 128 };
+    const rig = { root, neck, limbs, materials: [skin], type, head, child: cow ? [8, 6] : [4, 4], lift: 1 / 128 };
+    if (type === "mooshroom") addMooshroomMushrooms(rig, this);
+    return rig;
   }
   // RenderZombie (bpf) with ModelZombie (bip, ModelBiped on the 64 x 64 zombie.png): head
   // (0, 0) and body (16, 16) on (0, 0, 0), 4 x 12 x 4 arms (40, 16) on (+-5, 2, 0) and legs
@@ -386,6 +389,7 @@ export class MobRenderer {
     if (e.type === "ocelot") return createOcelotRig(this);
     if (e.type === "enderman") return createEndermanRig(this);
     if (e.type === "iron_golem") return createIronGolemRig(this);
+    if (e.type === "snow_golem") return createSnowGolemRig(this);
     if (e.type === "squid") return createSquidRig(this);
     if (e.type === "bat") return createBatRig(this);
     return this.createQuadruped(e.type);
@@ -476,6 +480,7 @@ export class MobRenderer {
       if (r.nose) animateWitch(r, e, pose.age);
       if (r.squish) animateSlime(r, e, partial);
       if (r.golem) animateIronGolem(r, e, pose, partial);
+      if (r.snow) animateSnowGolem(r, pose);
       if (r.wolf) animateWolf(r, e, pose);
       if (r.enderman) animateEnderman(r, e, pose, this);
       if (r.custom) r.custom(r, e, pose, partial);

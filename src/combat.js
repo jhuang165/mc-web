@@ -15,7 +15,7 @@ const f = Math.fround;
 // arrow, bone, bow, string, spider eye, gunpowder, iron ingot. The chicken ids are entities.js's.
 const PORK = 202, COOKED_PORK = 203, BEEF = 204, STEAK = 205, FLESH = 206, LEATHER = 315, ARROW = 320, BONE = 311, BOW = 127, STRING = 321, SPIDER_EYE = 326, GUNPOWDER = 330, IRON = 302;
 export const FEATHER = 317, RAW_CHICKEN = 318, COOKED_CHICKEN = 319;
-export const ANIMALS = new Set(["pig", "cow", "sheep", "chicken", "wolf", "ocelot"]);
+export const ANIMALS = new Set(["pig", "cow", "sheep", "chicken", "wolf", "ocelot", "mooshroom"]);
 // DamageSource.setDamageBypassesArmor: these skip applyArmorCalculations. Melee, arrows,
 // explosions, lava, cactus and inFire (fire blocks, lightning) are blocked by armour.
 const UNBLOCKABLE = new Set(["fall", "onFire", "drown", "inWall", "starve", "generic", "magic", "wither", "outOfWorld"]);
@@ -28,8 +28,8 @@ export function armorReduced(type, amount, source) {
   return f(f(amount * (25 - armor)) / 25);
 }
 // getSoundVolume (EntityCow 0.4) and getSoundPitch, on Entity.rand.
-// EntityCow, EntityWolf and EntityOcelot (bf) override getSoundVolume with 0.4F.
-export const soundVolume = (type) => (type === "cow" || type === "wolf" || type === "squid" || type === "ocelot" ? f(0.4) : type === "bat" ? f(0.1) : 1);
+// EntityCow (and EntityMooshroom), EntityWolf and EntityOcelot (bf) override getSoundVolume with 0.4F.
+export const soundVolume = (type) => (type === "cow" || type === "mooshroom" || type === "wolf" || type === "squid" || type === "ocelot" ? f(0.4) : type === "bat" ? f(0.1) : 1);
 export const soundPitch = (rand, child) => f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (child ? f(1.5) : 1));
 // EntitySkeleton holds a bow (equipment drop chance 0.085F); no other mob here carries
 // equipment, so only its dropEquipment and getExperiencePoints draw for one.
@@ -49,6 +49,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
   const generic = () => rand.nextInt(3) + (looting > 0 ? rand.nextInt(looting + 1) : 0);
   switch (e.type) {
     case "pig": add(burning ? COOKED_PORK : PORK, rand.nextInt(3) + 1 + rand.nextInt(1 + looting)); break;
+    case "mooshroom": // EntityMooshroom drops like EntityCow
     case "cow": {
       add(LEATHER, rand.nextInt(3) + rand.nextInt(1 + looting));
       add(burning ? STEAK : BEEF, rand.nextInt(3) + 1 + rand.nextInt(1 + looting));
@@ -68,6 +69,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
     case "iron_golem": for (const [id, n, damage] of golemDrops(rand, RED_FLOWER)) add(id, n, damage); break; // EntityIronGolem.dropFewItems
     case "slime": for (const id of slimeDrops(rand, e.size, looting)) add(id); break; // EntitySlime.dropFewItems (slime.js)
     case "witch": for (const [id] of witchDrops(rand, looting)) add(id); break; // EntityWitch.dropFewItems (witch.js)
+    case "snow_golem": { const n = rand.nextInt(16); if (n > 0) add(312, n); break; } // EntitySnowman.dropFewItems: nextInt(16) snowballs
     case "squid": for (const s of squidDrops(rand, looting)) add(s.id, 1, s.damage); break; // EntitySquid.dropFewItems: ink sacs (squid-bat.js)
   }
   // EntityLiving.dropEquipment: a damageable item drops worn, maxDamage minus
@@ -86,7 +88,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
 // 5, plus 1 + rand.nextInt(3) per equipment item whose drop chance is at most 1.
 export function experiencePoints(e, rand, worldRand) {
   if (e.type === "squid") return squidExperience(worldRand); // EntityWaterMob.getExperiencePoints: 1 + world.rand.nextInt(3)
-  if (e.type === "villager" || e.type === "iron_golem" || e.type === "bat") return 0; // EntityLiving.experienceValue stays 0 (EntityVillager is no EntityMob or EntityAnimal)
+  if (e.type === "villager" || e.type === "iron_golem" || e.type === "snow_golem" || e.type === "bat") return 0; // EntityLiving.experienceValue stays 0 (EntityVillager is no EntityMob or EntityAnimal)
   if (ANIMALS.has(e.type)) return 1 + worldRand.nextInt(3);
   if (e.type === "slime") return slimeExperience(e.size); // experienceValue = size
   if (e.type === "witch") return witchExperience(rand, e.held); // 5 plus 1 + nextInt(3) for a held potion
