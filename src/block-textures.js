@@ -26,6 +26,7 @@ TILES.push('rail_normal','rail_normal_turned','mob_spawner');
 // BlockRailPowered / BlockRailDetector icons: the plain texture, and *_powered while metadata bit 8 is set (internal ids 135-137).
 const STRAIGHT_RAIL_TILES=['rail_golden','rail_detector','rail_activator'];
 TILES.push(...STRAIGHT_RAIL_TILES.flatMap(n=>[n,n+'_powered']));
+TILES.push('beacon');
 TILES.push('anvil_base','anvil_top_damaged_0','anvil_top_damaged_1','anvil_top_damaged_2');
 // BlockEnchantmentTable.getIcon: bottom (side 0), top (side 1), otherwise the side texture.
 TILES.push('enchanting_table_top','enchanting_table_side','enchanting_table_bottom');
@@ -110,6 +111,7 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===GLASS_PANE)return tile(face===2||face===3?'glass_pane_top':'glass');
  if(isDispenserPiston(id))return tile(iconNameForFace(id,meta,face));
  if(id===ENCHANTING_TABLE)return tile(face===2?'enchanting_table_top':face===3?'enchanting_table_bottom':'enchanting_table_side');
+ if(id===173)return tile(meta===1?'obsidian':meta===2?'beacon':'glass'); // RenderBlocks.renderBlockBeacon: meta selects the box part (0 glass shell, 1 obsidian base, 2 beacon core)
  if(id===ANVIL)return tile(face===2?'anvil_top_damaged_'+(((meta&15)>>2)%3):'anvil_base');
  if(id===7)return tile('planks_'+(TREE_TEXTURES[meta&7]??'oak'));
  if(isNetherBlock(id)&&!STAIRS[id]){ // nether-blocks.js: netherrack, soul sand, End stone, nether brick, its fence, quartz ore and block
@@ -186,6 +188,7 @@ export function createBlockAtlas(){
  function tinted(source,color){const c=document.createElement('canvas');c.width=c.height=16;const x=c.getContext('2d');x.drawImage(source,0,0,16,16);x.globalCompositeOperation='multiply';x.fillStyle=color;x.fillRect(0,0,16,16);x.globalCompositeOperation='destination-in';x.drawImage(source,0,0,16,16);return c;}
  function redraw(){if(!images.size)return;icons.clear();ctx.clearRect(0,0,canvas.width,canvas.height);const grass=tint('grass'),leaves=tint('foliage');TILES.forEach((name,i)=>{const x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;if(CHEST_FACES[name]){for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])ctx.drawImage(images.get('entity/chest/normal'),u,v,w,h,x+dx,y+dy,w,h);return;}let source=images.get('blocks/'+name);if(['grass_top','tallgrass','reeds','fern','vine','double_plant_grass_bottom','double_plant_grass_top','double_plant_fern_bottom','double_plant_fern_top'].includes(name))source=tinted(source,grass);if(name.startsWith('leaves_'))source=tinted(source,name==='leaves_spruce'?'rgb(97,153,97)':name==='leaves_birch'?'rgb(128,167,85)':leaves);ctx.drawImage(source,0,0,16,16,x,y,16,16);if(name==='grass_side')ctx.drawImage(tinted(images.get('blocks/grass_side_overlay'),grass),x,y);});texture.needsUpdate=true;}
  function icon(id,damage=0){if(id===1139)id=139;if(id===1940||id===1941)id-=1778;if(id>=1140&&id<=1148)id-=1000;if(id===1177||id===1178)id-=1000;if(id===1100)id=GLASS_PANE;if(id>=1135&&id<=1137)id-=1000;if(id>=1108&&id<=1113)id-=1000;if(id>=1120&&id<=1131)id-=1000;if(id===1101)id=STONE_BRICKS;if(id===1103)id=STONE_SLAB;if(id===1104)id=END_PORTAL_FRAME;if(blockForItem(id)){/* RenderBlocks.renderBlockAsItem: the dispenser draws its front as metadata 3, a piston as metadata 1 */id=blockForItem(id);damage=id===DISPENSER||id===DROPPER?3:1;}const key=id+':'+damage;if(icons.has(key))return icons.get(key);const c=document.createElement('canvas');c.width=64;c.height=70;const x=c.getContext('2d');x.imageSmoothingEnabled=false;
+  if(id===173){beaconIcon(x);const url=c.toDataURL();icons.set(key,url);return url;}
   if(id===ANVIL){anvilIcon(x,damage);const url=c.toDataURL();icons.set(key,url);return url;}
   function face(index,matrix,shade,drop=0){x.save();x.setTransform(...matrix);const sx=index%ATLAS_COLUMNS*16,sy=Math.floor(index/ATLAS_COLUMNS)*16;x.drawImage(canvas,sx,sy,16,16-drop,0,drop,16,16-drop);if(shade){x.globalCompositeOperation='source-atop';x.fillStyle=`rgba(0,0,0,${shade})`;x.fillRect(0,0,16,16);}x.restore();}
   // RenderBlocks.renderBlockAsItem for the fence (render type 11): two posts and two bars along z,
@@ -194,6 +197,18 @@ export function createBlockAtlas(){
   if(STAIRS[id]){stairIcon(x,id);const url=c.toDataURL();icons.set(key,url);return url;}
  if([171,69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE,141].includes(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||(id>=135&&id<=137)||isFlower(id)||isCrop(id)){const i=blockTile(id,id===141?0:2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:id===129?10:id===ENCHANTING_TABLE?4:id===82||id===STONE_SLAB?8:id===END_PORTAL_FRAME?3:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
   const url=c.toDataURL();icons.set(key,url);return url;
+ }
+ // RenderBlocks.renderBlockAsItem (type 34): the inner boxes first, then the glass shell over them.
+ function beaconIcon(ctx){
+  const p=(x,y,z)=>[32+28*(z-x),34+16*(x+z)-32*y];
+  for(const [m,[x0,y0,z0,x1,y1,z1]] of [[1,[.125,.00625,.125,.875,.1875,.875]],[2,[.1875,.1875,.1875,.8125,.875,.8125]],[0,[0,0,0,1,1,1]]]){
+   const paint=(face,points,shade=0)=>{const t=blockTile(173,face,false,m),sx=t%ATLAS_COLUMNS*16,sy=Math.floor(t/ATLAS_COLUMNS)*16,[a,b,c,d]=points;
+    ctx.save();ctx.setTransform((b[0]-a[0])/16,(b[1]-a[1])/16,(d[0]-a[0])/16,(d[1]-a[1])/16,a[0],a[1]);ctx.drawImage(canvas,sx,sy,16,16,0,0,16,16);
+    if(shade){ctx.globalCompositeOperation='source-atop';ctx.fillStyle=`rgba(0,0,0,${shade})`;ctx.fillRect(0,0,16,16);}ctx.restore();};
+   paint(0,[p(x1,y0,z0),p(x1,y0,z1),p(x1,y1,z1),p(x1,y1,z0)],.2);
+   paint(4,[p(x0,y0,z1),p(x1,y0,z1),p(x1,y1,z1),p(x0,y1,z1)],.08);
+   paint(2,[p(x0,y1,z0),p(x1,y1,z0),p(x1,y1,z1),p(x0,y1,z1)]);
+  }
  }
  function anvilIcon(ctx,damage){
   const meta=(damage&3)<<2;

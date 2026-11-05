@@ -25,6 +25,7 @@ import { END_PORTAL, END_PORTAL_BOUNDS } from "./eye-of-ender.js";
 import { DRAGON_EGG, EGG_BOUNDS } from "./dragon-egg.js";
 import { PORTAL, portalBoundsAt } from "./nether-portal.js";
 import { NETHER_WART, WART_BOUNDS } from "./nether-wart.js";
+import { BEACON } from "./beacon.js";
 import { isShaped, shapedBounds, shapedBoxes, gateOpen, FENCE_GATE as SHAPED_GATE, WOOD_SLAB as SHAPED_WOOD_SLAB, DOUBLE_WOOD_SLAB as SHAPED_DOUBLE_WOOD_SLAB, TRAPDOOR as SHAPED_TRAPDOOR, COBBLE_WALL as SHAPED_COBBLE_WALL } from "./shaped-blocks.js";
 import { stoneUtilityBounds, stoneUtilityBoxes, hasPartialBounds, isStoneUtility } from "./stone-utility.js";
 export const SIZE = 128,
@@ -196,6 +197,7 @@ BLOCKS[PUMPKIN_STEM]={name:'Pumpkin stem',color:'#7a9a3a'};
 BLOCKS[MELON_STEM]={name:'Melon stem',color:'#7a9a3a'};
 BLOCKS[CAKE]={name:'Cake',color:'#e8d6c4'};
 installSkullBlocks(BLOCKS); // skull.js: original block 144 (mob head) overwrites reserved 172; item 2050
+BLOCKS[BEACON]={name:'Beacon',color:'#7fd6d0'}; // beacon.js: original block 138 overwrites reserved 173
 BLOCKS[END_PORTAL]={name:'End Portal',color:'#0b1a1a',hidden:true}; // eye-of-ender.js: original block 119 overwrites reserved 149
 BLOCKS[DRAGON_EGG]={name:'Dragon Egg',color:'#0e0b16'}; // dragon-egg.js: original block 122 overwrites reserved 171
 // Nether portal (nether-portal.js, original block 90) and nether wart (nether-wart.js, original block 115) overwrite reserved 164 and 170.
@@ -311,6 +313,7 @@ export const ticksRandomly=b=>b===1||b===5||b===LEAVES2||b===LIT_REDSTONE_ORE||b
 const SEE_THROUGH=new Set([STAINED_GLASS,STAINED_GLASS_PANE,CARPET,0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,NETHER_FENCE,NETHER_BRICK_STAIRS,QUARTZ_STAIRS,RAIL,SIGN_POST,WALL_SIGN,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB,ANVIL,ENCHANTING_TABLE,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOWER_POT,OAK_STAIRS,COBBLESTONE_STAIRS,STONE_BRICK_STAIRS,SANDSTONE_STAIRS,SPRUCE_STAIRS,BIRCH_STAIRS,JUNGLE_STAIRS,BRICK_STAIRS,ACACIA_STAIRS,DARK_OAK_STAIRS,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,STICKY_PISTON,PISTON,PISTON_HEAD,107,108,109,110,111,112,113,114,119,120,124,125,126,127,128,129,130,SHAPED_WOOD_SLAB,SHAPED_GATE,SHAPED_TRAPDOOR,SHAPED_COBBLE_WALL,TRAPPED_CHEST,ENDER_CHEST,...NOT_OPAQUE_NEW]); // 119-130: the redstone torches, button, plates, comparators, sensor and moving piston (redstone-blocks-2.js SEE_THROUGH2)
 SEE_THROUGH.add(172); // BlockSkull: not an opaque cube
 SEE_THROUGH.add(CAKE); // BlockCake: not an opaque cube
+SEE_THROUGH.add(BEACON); // BlockBeacon: not opaque, not a normal cube
 SEE_THROUGH.add(END_PORTAL); // BlockEndPortal: not opaque, not a normal cube
 SEE_THROUGH.add(DRAGON_EGG); // BlockDragonEgg: isOpaqueCube false (renderType 27), but renderAsNormalBlock stays true
 SEE_THROUGH.add(PORTAL); // BlockPortal: Material.portal, not opaque

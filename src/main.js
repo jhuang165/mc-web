@@ -113,6 +113,11 @@ import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { EyesOfEnder } from "./eye-of-ender-live.js";
 import { MapsClock } from "./maps-clock-live.js";
 import { EndPortalRenderer } from "./end-portal-renderer.js";
+import { BEACON, Beacons, validPrimary, validSecondary } from "./beacon.js";
+import { tickBeacons } from "./beacon-live.js";
+import { BeaconRenderer } from "./beacon-renderer.js";
+import { BeaconContainer } from "./beacon-container.js";
+import { beaconDecorationsHtml, beaconUiHtml } from "./beacon-gui.js";
 import { Fishing } from "./fishing-simulation.js";
 import { FISHING_ROD } from "./fishing-content.js";
 import { WitchPotions } from "./witch-potions.js";
@@ -308,6 +313,8 @@ let boats = new Boats(), boatRenderer = null;
 let hanging = new Hanging(), hangingRenderer = null, aimedHanging = null;
 // Signs (signs.js): the tile entities (text) of every sign block, drawn by sign-renderer.js.
 let signs = new Signs(), signRenderer = null, skullRenderer = null;
+// Beacons (beacon.js): the tile entities (levels, powers) of every beacon block, drawn by beacon-renderer.js.
+let beacons = new Beacons(), beaconRenderer = null;
 // Live redstone and pistons (redstone-runtime.js), rebuilt for each world that loads.
 let redstoneRuntime = null;
 // Hopper tick host: the shared inventory-transfer.js stores, EntityItem pickup and live comparator notifications.
@@ -651,6 +658,7 @@ function save() {
   active.hanging = hanging.toJSON();
   if (signs.tiles.size) active.signs = signs.toJSON(); else delete active.signs;
   if (SKULLS.tiles.size) active.skulls = SKULLS.toJSON(); else delete active.skulls;
+  if (beacons.tiles.size) active.beacons = beacons.toJSON(); else delete active.beacons;
   active.updated = Date.now();
   const savingContainers=containerResidency, containerSave=savingContainers?.beginSave(active.player);
   if(containerSave)active.containerScope=savingContainers.scope(containerSave);
@@ -762,6 +770,7 @@ function watchFlowers() {
     // TileEntitySign goes with its block; BlockSign.onNeighborBlockChange drops a sign whose support is gone.
     if (isSign(old) && !isSign(now)) signs.remove(x, y, z);
     if (old === SKULL && now !== SKULL) SKULLS.remove(x, y, z); // TileEntitySkull goes with its block
+    if (old === BEACON || now === BEACON) beacons.sync(x, y, z, now); // TileEntityBeacon goes with its block
     for (const [dx, dy, dz] of [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]) {
       const fx = x + dx, fy = y + dy, fz = z + dz, b = world.get(fx, fy, fz);
       if (isSign(b) && signShouldPop(world, fx, fy, fz)) {
@@ -979,6 +988,8 @@ async function launch(record, prepared) {
     hanging = Hanging.fromJSON(record.hanging); aimedHanging = null; hangingRenderer?.clear();
     signs = Signs.fromJSON(record.signs); signRenderer?.clear();
     SKULLS.tiles = Skulls.fromJSON(record.skulls).tiles; skullRenderer?.clear();
+    beacons = new Beacons().fromJSON(record.beacons); beaconRenderer?.clear();
+    for (const [k, v] of world.edits) if ((v & 255) === BEACON) beacons.ensure(...k.split(",").map(Number));
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
     mobs = new EntityWorld(world, world.generationVersion>=11&&!hasSavedPopulation(record)?[]:record.entities);
     mobs.fx = scene.fx;
@@ -1123,6 +1134,7 @@ const commandHost = createCommandHost({
   active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, survival: () => survival, experience: () => experience,
   position: () => ({ x: position.x, y: position.y, z: position.z }),
   seed: () => active.seed,
+  beaconTile: (x, y, z) => beacons.ensure(x, y, z),
   commandTile: (x, y, z) => redstoneRuntime?.commandBlocks.tile(x, y, z),
   stackName: (s) => stackName(s, ITEMS) || ITEMS[s.id]?.name || "",
   dropStack: (s) => items.dropPlayer(s, position, yaw, pitch, true, true),
@@ -1357,8 +1369,8 @@ function renderCreativeBody() {
   view.shown = [];
   attachPaperdoll(selected === SURVIVAL_TAB ? "creative" : null);
 }
-const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace", creative: "", anvil: "Repair & Name", enchanting: "Enchant", merchant: "Villager" },
-  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", dispenser: "dispenser-modal", horse: "horse-modal", brewing: "brewing-modal", hopper: "hopper-modal", creative: "creative-modal", anvil: "anvil-modal", enchanting: "enchanting-modal", merchant: "merchant-modal" };
+const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace", creative: "", anvil: "Repair & Name", enchanting: "Enchant", merchant: "Villager", beacon: "Beacon" },
+  CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", dispenser: "dispenser-modal", horse: "horse-modal", brewing: "brewing-modal", hopper: "hopper-modal", creative: "creative-modal", anvil: "anvil-modal", enchanting: "enchanting-modal", merchant: "merchant-modal", beacon: "beacon-modal" };
 // Slots are addressed by list index: wrapped creative slots all keep slotNumber 0.
 const slotsHtml = (container) => `<div class="container-slots">${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""}${slot.x < -1000 || slot.enabled === false ? " hidden" : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>`;
 // GuiCommandBlock: Creative + command permission required; text and tracking changes are applied on Done only.
@@ -1387,6 +1399,8 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   const decorations =
     kind === "enchanting"
       ? `${[0, 1, 2].map((i) => `<button class="enchant-option off" data-enchant-option="${i}" style="top:calc(${14 + 19 * i}*var(--u))" aria-label="Enchantment option ${i + 1}"><i class="enchant-icon"></i><b class="enchant-level"></b></button>`).join("")}<span class="enchant-shelves" id="enchant-shelves" aria-live="polite"></span>`
+      : kind === "beacon"
+      ? beaconDecorationsHtml()
       : kind === "merchant"
       ? merchantDecorationsHtml()
       : kind === "anvil"
@@ -1418,7 +1432,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
     at = (e) => {
       const el = document.elementFromPoint(e.clientX, e.clientY),
         box = $("#modal .container-screen").getBoundingClientRect(),
-        u = box.width / (creative ? GUI_WIDTH : 176),
+        u = box.width / (creative ? GUI_WIDTH : kind === "beacon" ? 230 : 176),
         x = Math.floor((e.clientX - box.left) / u),
         y = Math.floor((e.clientY - box.top) / u);
       return { slot: container.slots[el?.closest("[data-container-slot]")?.dataset.containerSlot] ?? null, outside: creative ? x < 0 || y < 0 || e.clientX >= box.right || e.clientY >= box.bottom : !el?.closest(".container-screen"), x, y };
@@ -1433,6 +1447,8 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   overlay.onpointerdown = (e) => {
     if (!containerView || e.target.closest(".close-button")) return;
     if (e.target.closest('#anvil-name')) return;
+    const beaconButton = e.target.closest("[data-beacon]");
+    if (beaconButton) { e.preventDefault(); beaconClick(beaconButton); return; }
     const stepper = e.target.closest("[data-merchant-step]");
     if (stepper) {
       // GuiMerchant.actionPerformed: the arrow buttons select the previous or next offer (MC|TrSel).
@@ -1471,7 +1487,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   };
   overlay.onpointerup = (e) => {
     if (!containerView) return;
-    if (e.target.closest('#anvil-name') || e.target.closest("[data-enchant-option]") || e.target.closest("[data-merchant-step]")) return;
+    if (e.target.closest('#anvil-name') || e.target.closest("[data-enchant-option]") || e.target.closest("[data-merchant-step]") || e.target.closest("[data-beacon]")) return;
     const { slot, outside, x, y } = at(e), button = javaButton(e.button), t = creative && button === 0 ? gui.tabAt(x, y) : null;
     if (creative && button === 0) gui.release();
     if (t) switchTab(t);
@@ -1572,6 +1588,7 @@ function refreshContainer() {
     $('#anvil-cost').classList.toggle('unavailable',cost.unavailable);
     $('#anvil-error').hidden=!(left||container.inputs.getStack(1))||!!container.output;
   }
+  if (view.kind === "beacon") refreshBeacon(view);
   if (view.kind === "merchant") renderMerchantView(view);
   if (view.kind === "enchanting") {
     const levels = container.levels, shelves = `Bookshelves: ${container.bookshelves}`;
@@ -1757,6 +1774,27 @@ function useAnvil(key){
   const field=$('#anvil-name');
   field.oninput=()=>{field.value=anvilName(field.value);container.setName(field.value);refreshContainer();};
 }
+// BlockBeacon.onBlockActivated: ContainerBeacon over the tile; picks are local until Confirm (MC|Beacon, beacon-gui.js).
+function useBeacon(key) {
+  const [x, y, z] = key.split(",").map(Number), tile = beacons.ensure(x, y, z);
+  openContainer(new BeaconContainer({ inventory: survival.inventory, tile, onConfirm: () => { saved = false; } }), "beacon", key);
+  containerView.pick = { primary: tile.primary, secondary: tile.secondary };
+  refreshBeacon(containerView);
+}
+function refreshBeacon(view) {
+  const tile = view.container.tile, pick = view.pick ??= { primary: tile.primary, secondary: tile.secondary }, payment = !!view.container.payment;
+  const html = beaconUiHtml({ levels: tile.levels, ...pick, payment, icon: (id) => stackHtml({ id, count: 1, damage: 0 }, 0).replace(/<b class="item-count empty">0<\/b>/, "") }), ui = $("#beacon-ui");
+  if (ui && ui.dataset.shown !== html) { ui.dataset.shown = html; ui.innerHTML = html; }
+}
+function beaconClick(button) {
+  const view = containerView, tile = view.container.tile, pick = view.pick, kind = button.dataset.beacon;
+  if (kind === "cancel") return resume();
+  if (button.getAttribute("aria-disabled") === "true") return;
+  if (kind === "confirm") { if (view.container.payment && pick.primary > 0 && view.container.confirm(pick.primary, pick.secondary)) { sounds?.play("gui.button.press", { volume: 0.25, pitch: 1 }); resume(); } return; }
+  const id = +button.dataset.id;
+  if (+button.dataset.tier < 3) pick.primary = validPrimary(tile.levels, id) || pick.primary; else pick.secondary = validSecondary(tile.levels, id) || pick.secondary;
+  refreshBeacon(view);
+}
 // BlockEnchantmentTable.onBlockActivated: ContainerEnchantment with the saved player Random as its rand.
 function useEnchantingTable(key) {
   const [x, y, z] = key.split(",").map(Number);
@@ -1819,6 +1857,10 @@ function tickChests() {
     // ContainerEnchantment.canInteractWith: the table must still exist and be within 8 blocks.
     const [x, y, z] = containerView.key.split(",").map(Number);
     if (world.get(x, y, z) !== ENCHANTING_TABLE || !withinEnchantReach(position, x, y, z)) resume();
+  }
+  if (containerView?.kind === "beacon") { // ContainerBeacon.canInteractWith: the block must remain within 8 blocks
+    const [x, y, z] = containerView.key.split(",").map(Number);
+    if (world.get(x, y, z) !== BEACON || (position.x - x - .5) ** 2 + (position.y - y - .5) ** 2 + (position.z - z - .5) ** 2 > 64) resume();
   }
   if(containerView?.kind==='anvil'){
     const [x,y,z]=containerView.key.split(',').map(Number);
@@ -1976,6 +2018,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     landingDust: (x, y, z, count) => scene.particles.landingDust(world, x, y, z, count, [position.x, position.y + PHYSICS.eye, position.z]),
   });
   ({ fallDistance, landedFall } = movement);
+  tickBeacons(beacons, { world, time: survival.time, players: [{ x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height }], apply: (_p, e) => survival.effects.add(e) });
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
   maps.tick({ survival, position, yaw, world, time: survival.time });
   tickEntitySimulation({ world, items, primed, projectiles, arrows, mobs, survival, position,
@@ -2228,6 +2271,7 @@ function edit(place = false) {
     openInventory: station => { inventory(station); syncContainerState(); },
     useFurnace: key => { useFurnace(key); syncContainerState(); },
     useAnvil: key => { useAnvil(key); syncContainerState(); },
+    useBeacon: key => { useBeacon(key); syncContainerState(); },
     useBed,
     openSignEditor: (tile) => { screen = "inventory"; mining = null; mineHeld = false; openSignEditor({ show: (title, html) => modal(title, html), close: resume, markUnsaved: () => { saved = false; } }, signs, tile, world); syncContainerState(); },
     useCommandBlock: openCommandBlock,
@@ -2914,6 +2958,7 @@ function animate(now) {
   hangingRenderer?.update(screen === "home" ? [] : hanging.entities.filter(e => !world.streaming || world.isLoaded(e.x, e.z)));
   signRenderer?.update(screen === "home" ? [] : [...signs.tiles.values()], world, position);
   skullRenderer?.update(screen === "home" ? [] : [...SKULLS.tiles.values()], world, position);
+  beaconRenderer?.update(screen === "home" ? [] : [...beacons.tiles.values()], world, survival.time, partial);
   tntRenderer?.update(screen === "home" ? [] : primed, partial);
   redstoneRuntime?.frame(screen === "home" ? 1 : partial);
   recordHud.frame(partial);
@@ -3008,6 +3053,7 @@ async function boot(){try {
   playerRenderer = new PlayerRenderer(scene.scene, scene, scene.textures.texture);
   chestRenderer = new ChestRenderer(scene.scene, scene);
   endPortalRenderer = new EndPortalRenderer(scene.scene);
+  beaconRenderer = new BeaconRenderer(scene.scene);
   tntRenderer = new TntRenderer(scene.scene, scene);
   minecartRenderer = new MinecartRenderer(scene.scene, scene, null);
   boatRenderer = new BoatRenderer(scene.scene, scene, boats);

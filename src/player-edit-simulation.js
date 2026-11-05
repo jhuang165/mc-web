@@ -13,6 +13,7 @@ import { useHeldBucket } from './buckets-simulation.js';
 import { ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, ITEM_FIRE_CHARGE } from './spawn-eggs.js';
 import { useEggOnBlock, useEggOnWater, useFireCharge, throwExpBottle } from './spawn-egg-use.js';
 import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
+import { BEACON } from './beacon.js';
 import { ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
 import { DRAGON_EGG } from './dragon-egg.js';
 import { useEyeOfEnder } from './eye-of-ender-live.js';
@@ -41,7 +42,7 @@ import { ITEM_POTION, ITEM_GLASS_BOTTLE, usePotion, useGlassBottle, bottleFromCa
 import { CAULDRON, FLOWER_POT, BUCKET_ITEM, cauldronUse, cauldronWash, potUse, setPotContents } from './stone-utility.js';
 
 const FARMLAND = 29; // farming.js till(): internal dry farmland (original 60, soundTypeGravel)
-const STATIONS = new Set([13, 14, BREWING_STAND, 41, TRAPPED_CHEST, ENDER_CHEST, DISPENSER, DROPPER, HOPPER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, BED, LEVER, STONE_BUTTON, REPEATER]);
+const STATIONS = new Set([13, 14, BREWING_STAND, 41, TRAPPED_CHEST, ENDER_CHEST, DISPENSER, DROPPER, HOPPER, ANVIL, BEACON, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, BED, LEVER, STONE_BUTTON, REPEATER]);
 // PlayerControllerMP's edit(place) dispatcher with browser effects supplied by the
 // caller. `state` holds the live mutable gameplay state, `request` snapshots the two
 // ray targets, the held bucket's own captured trace and the click button, and hooks run
@@ -306,6 +307,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     }
     if (activates && block === 13) { hook('openInventory', true); return act('open-workbench'); }
     if (activates && block === 14) { hook('useFurnace', target.block.join(',')); return act('open-furnace'); }
+    if (activates && block === BEACON) { hook('useBeacon', target.block.join(',')); return act('open-beacon'); }
     if (activates && block === ANVIL) { hook('useAnvil', target.block.join(',')); return act('open-anvil'); }
     // BlockDoor.onBlockActivated: a wooden door swings (aux effect 1003); an iron door consumes the click and stays shut.
     if (activates && isDoor(block)) {

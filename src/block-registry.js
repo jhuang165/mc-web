@@ -87,6 +87,7 @@ const MAP = {
   162: chest(146), 163: same(130), 149: fixed(119), // end portal (eye-of-ender.js)
   171: fixed(122), // dragon egg (dragon-egg.js)
   164: same(90), 170: same(115), // nether portal (axis in meta, nether-portal.js) and nether wart (age in meta, nether-wart.js)
+  173: fixed(138), // beacon (beacon.js)
   [LAVA]: fluid(11),
   43: fixed(37), 44: same(38), 45: same(51), 46: same(78), 47: fixed(79), 48: same(6), 49: same(141), 50: same(142),
   51: fixed(30), 52: same(65), 53: same(81), 54: same(83), 55: fixed(46), 56: same(24), 57: fixed(110), 58: same(159), 59: fixed(111),
