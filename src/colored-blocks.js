@@ -28,8 +28,8 @@ export const CARPET_HEIGHT = 1 / 16;
 // (maxY 0), so entities do not stand on it but on the block below.
 export const carpetBounds = () => [0, 0, 0, 1, CARPET_HEIGHT, 1];
 
-// Block.func_149646_a for BlockStainedGlass (BlockBreakable): a face against the same block (any colour) is not drawn.
-export const stainedGlassFaceHidden = (self, neighbour) => neighbour === self;
+// Block.func_149646_a for BlockStainedGlass (BlockBreakable): a face against the same block with the same metadata is not drawn (the class compares both before the identity check).
+export const stainedGlassFaceHidden = (self, neighbour, selfMeta = 0, neighbourMeta = 0) => neighbour === self && selfMeta === neighbourMeta;
 
 // Metadata an item places with: ItemCloth/ItemColored damage for the three coloured blocks, BlockRotatedPillar
 // (func_149660_a) for the hay bale (damage & 3 plus an axis from the clicked side), and the player's facing for the jack

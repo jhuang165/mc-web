@@ -151,7 +151,7 @@ export function enchantedBreakDrops(block, meta, held, rand) {
   if (!r) return null;
   const drops = [];
   for (const d of r.drops) {
-    if (silkTaken) drops.push({ id: blockItemId(fromOriginal(d.id, d.damage).id), count: d.count });
+    if (silkTaken) { const sb = fromOriginal(d.id, d.damage).id; drops.push({ id: blockItemId(sb), count: d.count, ...(sb === 140 || sb === 141 ? { damage: d.damage } : {}) }); }
     else {
       const item = itemFromOriginal(d.id, d.damage);
       if (!item) continue;
