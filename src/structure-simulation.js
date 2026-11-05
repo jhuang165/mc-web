@@ -9,6 +9,7 @@
 // fields are the truth: a looted cart stays looted, a broken cart or spawner stays gone.
 import { MobSpawners, boxesIntersect, mobBox } from "./mob-spawner.js";
 import { Minecarts } from "./minecarts.js";
+import { furnaceUse } from "./cart-variants.js";
 import { MOB_SPAWNER } from "./world.js";
 import { mhSin, mhCos } from "./lighting.js";
 
@@ -71,7 +72,7 @@ export function tickMinecartSimulation(state, hooks = {}) {
   // Keep rider identity: its own cart excludes it from collision boxes and pushes.
   const player = rider ? Object.assign(rider, { x: position.x, y: position.y, z: position.z, dead: !alive, bb: pBox }) : { ...position, bb: pBox };
   const blockers = [...(alive ? [player] : []), ...living.map((e) => ({ bb: sized(e) }))];
-  minecarts.tick(world, { entities: blockers });
+  minecarts.tick(world, { entities: blockers, host: hooks.cartHost ?? null });
   if (alive) {
     const [vx, vz] = minecarts.pushEntity(player, pBox);
     velocity.x += vx;
@@ -160,8 +161,13 @@ export function useMinecart(state, { place, cart }, hooks = {}) {
   const { minecarts, survival } = state;
   if (!cart || cart.dead) return { handled: false, branch: "missing-cart" };
   if (place) {
+    // EntityMinecartFurnace.interactFirst: coal fuels the cart and the player's side sets the push.
+    if (cart.type === 2) {
+      const held = survival.held;
+      return { handled: true, branch: furnaceUse(cart, { held, creative: survival.creative, take: () => survival.take(held.id, 1), position: state.position }) };
+    }
     const container = minecarts.container(cart, survival.inventory);
-    if (container) hooks.openContainer?.(container);
+    if (container) hooks.openContainer?.(container, container.kind);
     return { handled: true, branch: "open-minecart" };
   }
   // Minecraft.clickMouse swings before attackEntity; a use (interactFirst succeeded) does not.

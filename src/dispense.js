@@ -111,7 +111,7 @@ export class Dispensing {
       case ITEM.SNOWBALL: return PROJECTILE.snowball;
       case ITEM.POTION: return (stack.damage ?? 0) & SPLASH_BIT ? PROJECTILE.potion : DEFAULT;
       case ITEM.MINECART: return CART;
-      case ITEM.CHEST_MINECART: return CART;
+      case ITEM.CHEST_MINECART: case 2090: case 2091: case 2092: case 2093: return CART;
       case ITEM.BUCKET: return EMPTY_BUCKET;
       case ITEM.WATER_BUCKET: case ITEM.LAVA_BUCKET: return FILLED_BUCKET;
       case ITEM.FLINT_AND_STEEL: return FLINT;
@@ -202,7 +202,7 @@ const CART = {
     if (RAILS.has(block)) d3 = ascending(block, w.getBlockMetadata(i, j, k)) ? 0.5 : 0;
     else if (block === 0 && RAILS.has(w.getBlock(i, j - 1, k))) d3 = ascending(w.getBlock(i, j - 1, k), w.getBlockMetadata(i, j - 1, k)) ? -0.4 : -1;
     else return this.dispense(w, x, y, z, facing, stack, DEFAULT);
-    this.host.cart?.(stack.id === ITEM.CHEST_MINECART ? 1 : 0, x + 0.5 + fx * 1.125, y + 0.5 + fy * 1.125 + d3, z + 0.5 + fz * 1.125, stack);
+    this.host.cart?.(stack.id === ITEM.CHEST_MINECART ? 1 : ({ 2090: 2, 2091: 3, 2092: 5, 2093: 6 })[stack.id] ?? 0, x + 0.5 + fx * 1.125, y + 0.5 + fy * 1.125 + d3, z + 0.5 + fz * 1.125, stack);
     stack.count--;
     return stack;
   },

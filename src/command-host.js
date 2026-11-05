@@ -10,6 +10,7 @@ import { summonedMobRecord } from "./java-mobs.js";
 import { nbtGet } from "./nbt-get.js";
 import { NBT } from "./nbt.js";
 import { SUMMONABLE } from "./commands.js";
+import { summonCart, cartTypeOfSummon } from "./cart-summon.js";
 import { newChest, settleFacing } from "./chest.js";
 import { newEnderTile } from "./chest-blocks.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
@@ -133,6 +134,7 @@ export function createCommandHost(env) {
     addLevels(n) { env.experience().addLevels(n); env.refreshInventory(); },
     addExperience(n) { env.experience().add(n); env.refreshInventory(); },
     summon(type, x, y, z, tag) {
+      if (cartTypeOfSummon(type) !== null) { const r = summonCart(env.minecarts?.(), cartTypeOfSummon(type), x, y, z, tag); if (r) env.changed(); return r; }
       const mobs = env.mobs();
       if (!mobs) return false;
       if (!tag) { mobs.spawnNatural(type, x, y, z); env.changed(); return true; }

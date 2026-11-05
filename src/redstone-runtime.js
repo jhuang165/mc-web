@@ -55,7 +55,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     for (const c of mc?.carts ?? []) {
       if (c.dead || !c.bb || !inside(c.bb, box)) continue;
       if (mode !== "inventory") out.push(c);
-      else if (c.type === 1) out.push({ cart: c, signal: mc.comparator(c) });
+      else if (c.type === 1 || c.type === 5) out.push({ cart: c, signal: mc.comparator(c) });
     }
     return out;
   };

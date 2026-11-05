@@ -1,3 +1,4 @@
+import { isSupportedType } from "./cart-variants.js";
 // Keep the runtime payload shared between local saves and imported exports.
 // Each subsystem validates its own payload on launch. Identity and the validated
 // world/player fields are built by the caller rather than copied from the file.
@@ -50,7 +51,10 @@ const SANITIZE = {
   minecarts: (v) => v && typeof v === "object" && Array.isArray(v.carts)
     ? { version: 1, carts: v.carts.filter((c) => c && typeof c === "object" && [c.x, c.y, c.z].every(finite)).slice(0, 1024).map((c) => ({
       x: c.x, y: c.y, z: c.z,
-      ...(c.type === 0 ? { type: 0, rider: c.rider === true } : c.type === 1 ? { type: 1 } : {}),
+      ...(c.type === 0 ? { type: 0, rider: c.rider === true } : isSupportedType(c.type) ? { type: c.type } : {}),
+      ...(c.type === 2 ? { fuel: int(c.fuel) && c.fuel >= 0 ? c.fuel : 0, ...(finite(c.pushX) ? { pushX: c.pushX } : {}), ...(finite(c.pushZ) ? { pushZ: c.pushZ } : {}) } : {}),
+      ...(c.type === 3 && int(c.fuse) ? { fuse: c.fuse } : {}),
+      ...(c.type === 5 && int(c.cooldown) ? { cooldown: c.cooldown } : {}),
       ...(Array.isArray(c.motion) && c.motion.length === 3 && c.motion.every(finite) ? { motion: [...c.motion] } : {}),
       ...(Array.isArray(c.rotation) && c.rotation.length === 2 && c.rotation.every(finite) ? { rotation: [...c.rotation] } : {}),
       ...(finite(c.fallDistance) ? { fallDistance: c.fallDistance } : {}),
@@ -58,7 +62,7 @@ const SANITIZE = {
       onGround: c.onGround === true,
       ...(typeof c.customName === "string" && c.customName ? { customName: c.customName.slice(0, 64) } : {}),
       items: (Array.isArray(c.items) ? c.items : [])
-        .filter((it) => int(it?.slot) && it.slot >= 0 && it.slot < 27 && int(it.id) && int(it.count) && it.count > 0 && (it.damage === undefined || int(it.damage)))
+        .filter((it) => int(it?.slot) && it.slot >= 0 && it.slot < (c.type === 5 ? 5 : 27) && int(it.id) && int(it.count) && it.count > 0 && (it.damage === undefined || int(it.damage)))
         .map((it) => ({ slot: it.slot, id: it.id, damage: it.damage ?? 0, count: Math.min(64, it.count),
           ...(Array.isArray(it.stored) ? { stored: stored(it.stored) } : {}),
           ...(Array.isArray(it.enchantments) ? { enchantments: stored(it.enchantments) } : {}),

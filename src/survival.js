@@ -13,6 +13,7 @@ import { NORMAL, scaleDamage, starvationHurts, hungerDrops, peacefulRegen } from
 import { installSkullItems, installSkullMaterials } from './skull.js';
 import { installSignItems, installSignMaterials, installSignRecipes } from './signs.js';
 import { installSpawnEggItems, installSpawnEggRecipes } from './spawn-eggs.js';
+import { installCartItems, ITEM_FURNACE_CART, ITEM_TNT_CART, ITEM_HOPPER_CART } from './cart-variants.js';
 import { installStemCakeItems, installStemCakeMaterials, installStemCakeRecipes } from './stems-cake.js';
 import { installFishingItems, installFishingRecipes, installFishingSmelting } from './fishing-content.js';
 import { installPopulationItems, installPopulationMaterials, installPopulationRecipes, populationCraftingResult, installPopulationSmelting } from './population-content.js';
@@ -239,6 +240,7 @@ installNoteJukeboxItems(ITEMS); // note block 1177, jukebox 1178, discs 530-541
 installSignItems(ITEMS);
 installSkullItems(ITEMS); // mob head item 2050 (skull.js)
 installStemCakeItems(ITEMS); // cake 1930; stems and cake have no block items
+installCartItems(ITEMS); // furnace, TNT, hopper and command block carts 2090-2093 (cart-variants.js)
 installSpawnEggItems(ITEMS); // spawn egg 1950, Bottle o' Enchanting 1951, fire charge 1952 (spawn-eggs.js)
 // Every item name and damage subtype is the 1.7.10 en_US display name (item-names.js); internal-only items get Title Case.
 applyNativeNames(ITEMS);
@@ -352,6 +354,10 @@ recipe("item-frame", "Item Frame", ["SSS", "SLS", "SSS"], { S: 300, L: 315 }, 17
 recipe("minecart", "Minecart", ["X X", "XXX"], { X: 302 }, 366);
 recipe("boat", "Boat", ["X X", "XXX"], { X: 7 }, 495);
 recipe("chest-minecart", "Minecart with Chest", ["C", "M"], { C: 41, M: 366 }, 450);
+// RecipesMinecart-style 1x2 recipes: furnace, TNT or hopper above a minecart (original 343, 407, 408).
+recipe("furnace-minecart", "Minecart with Furnace", ["F", "M"], { F: 14, M: 366 }, ITEM_FURNACE_CART);
+recipe("tnt-minecart", "Minecart with TNT", ["T", "M"], { T: TNT, M: 366 }, ITEM_TNT_CART);
+recipe("hopper-minecart", "Minecart with Hopper", ["H", "M"], { H: 1133, M: 366 }, ITEM_HOPPER_CART);
 // CraftingManager: "X#X", "#X#", "X#X" with gunpowder (X) and sand (#) makes one TNT.
 recipe("tnt", "TNT", ["X#X", "#X#", "X#X"], { X: 330, "#": 6 }, TNT);
 recipe("table", "Crafting table", ["PP", "PP"], { P: 7 }, 13);
