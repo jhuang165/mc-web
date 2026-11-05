@@ -44,7 +44,8 @@ import { ITEM_POTION, ITEM_GLASS_BOTTLE, usePotion, useGlassBottle, bottleFromCa
 import { CAULDRON, FLOWER_POT, BUCKET_ITEM, cauldronUse, cauldronWash, potUse, setPotContents } from './stone-utility.js';
 
 const FARMLAND = 29; // farming.js till(): internal dry farmland (original 60, soundTypeGravel)
-const STATIONS = new Set([13, 14, BREWING_STAND, 41, TRAPPED_CHEST, ENDER_CHEST, DISPENSER, DROPPER, HOPPER, ANVIL, BEACON, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, BED, LEVER, STONE_BUTTON, REPEATER]);
+const STATIONS = new Set([13, 14, BREWING_STAND, 41, TRAPPED_CHEST, ENDER_CHEST, DISPENSER, DROPPER, HOPPER, ANVIL, BEACON, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, BED, LEVER, STONE_BUTTON, REPEATER,
+  FENCE_GATE, TRAPDOOR, CAKE, 139, 177, DRAGON_EGG]);
 // PlayerControllerMP's edit(place) dispatcher with browser effects supplied by the
 // caller. `state` holds the live mutable gameplay state, `request` snapshots the two
 // ray targets, the held bucket's own captured trace and the click button, and hooks run
@@ -248,59 +249,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   const block = state.world.get(...target.block);
   if (place) {
     const [x, y, z] = target.block;
-    if (item?.kind === 'hoe') {
-      if (!state.survival.creative && !state.survival.count(id)) { hook('toast', 'Craft a hoe first.'); return act('hoe-no-item'); }
-      if (target.adjacent?.[1] !== y - 1 && state.farming.till(x, y, z)) {
-        state.survival.wear(id);
-        hook('applyFarmUpdates', state.farming.drain());
-        hook('renderHotbar');
-        // ItemHoe.func_150857_a: the tilled block's step sound at (volume + 1) / 2, frequency * 0.8, at the block.
-        const tilled = hoeSound(FARMLAND);
-        hook('playSound', tilled.name, { volume: tilled.volume, pitch: tilled.pitch, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
-        hook('markUnsaved');
-      }
-      return act('use-hoe');
-    }
-    // ItemSeeds(nether wart, soul sand).onItemUse: the top face of soul sand with air above (nether-wart.js).
-    if (id === ITEM_NETHER_WART && (state.survival.creative || state.survival.count(id)) && target.adjacent?.[1] === y + 1 && block === SOUL_SAND && state.world.get(x, y + 1, z) === 0 && y + 1 < (state.world.height ?? 128) - 1) {
-      state.world.set(x, y + 1, z, NETHER_WART, true, 0);
-      if (!state.survival.creative) state.survival.take(id);
-      hook('updateBlock', x, z, y + 1);
-      hook('renderHotbar');
-      hook('markUnsaved');
-      return act('plant-nether-wart');
-    }
-    if (plantedBlock(id)) {
-      if ((state.survival.creative || state.survival.count(id)) && target.adjacent?.[1] === y + 1 && state.farming.plant(x, y, z, id)) {
-        if (!state.survival.creative) state.survival.take(id);
-        hook('applyFarmUpdates', state.farming.drain());
-        hook('renderHotbar');
-        hook('markUnsaved');
-        return act('plant-crop');
-      }
-      if (id === 309) return act('plant-seeds-failed');
-    }
-    if (id === DYE && state.survival.held?.damage === 15) {
-      if (!state.survival.creative && !state.survival.count(id)) return act('bone-meal-no-item');
-      let used = false;
-      if (block === SAPLING) { state.trees.boneMeal(x, y, z); used = true; }
-      else if (block === 1) {
-        for (const q of growGrass(state.world, state.flowers, state.boneRandom, state.world.biome, x, y, z)) hook('updateBlock', q[0], q[2], q[1]);
-        used = true;
-      } else if (state.farming.fertilize(x, y, z)) {
-        hook('applyFarmUpdates', state.farming.drain());
-        used = true;
-      }
-      if (used) {
-        if (!state.survival.creative) state.survival.inventory.decr(state.survival.inventory.current, 1);
-        hook('renderHotbar');
-        // ItemDye (bone meal) plays no sound in 1.7.10: only level event 2005 (the sparkles below); verified in block-sounds-reference.json.
-        hook('markUnsaved');
-        const now = state.world.get(x, y, z);
-        hook('boneMealSparkles', now, x, y, z, now === SAPLING ? Math.fround(0.8) : isCrop(now) ? Math.fround(0.25) : 1, state.itemRand);
-      }
-      return act('use-bone-meal');
-    }
+    // PlayerControllerMP.onPlayerRightClick: unless sneaking with an item, Block.onBlockActivated runs first and
+    // the held item's onItemUse (hoe, seeds, bone meal, ...) only when the block declines.
     if (activates && block === TNT && item?.kind === 'flint_and_steel') {
       hook('lightTnt', x, y, z, 'player');
       state.world.set(x, y, z, 0);
@@ -448,6 +398,59 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       const key = target.block.join(','), hopper = ((state.survival.hoppers ??= {})[key] ??= newHopperTile());
       hook('openHopper', hopper, key, target.block);
       return act('open-hopper');
+    }
+    if (item?.kind === 'hoe') {
+      if (!state.survival.creative && !state.survival.count(id)) { hook('toast', 'Craft a hoe first.'); return act('hoe-no-item'); }
+      if (target.adjacent?.[1] !== y - 1 && state.farming.till(x, y, z)) {
+        state.survival.wear(id);
+        hook('applyFarmUpdates', state.farming.drain());
+        hook('renderHotbar');
+        // ItemHoe.func_150857_a: the tilled block's step sound at (volume + 1) / 2, frequency * 0.8, at the block.
+        const tilled = hoeSound(FARMLAND);
+        hook('playSound', tilled.name, { volume: tilled.volume, pitch: tilled.pitch, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
+        hook('markUnsaved');
+      }
+      return act('use-hoe');
+    }
+    // ItemSeeds(nether wart, soul sand).onItemUse: the top face of soul sand with air above (nether-wart.js).
+    if (id === ITEM_NETHER_WART && (state.survival.creative || state.survival.count(id)) && target.adjacent?.[1] === y + 1 && block === SOUL_SAND && state.world.get(x, y + 1, z) === 0 && y + 1 < (state.world.height ?? 128) - 1) {
+      state.world.set(x, y + 1, z, NETHER_WART, true, 0);
+      if (!state.survival.creative) state.survival.take(id);
+      hook('updateBlock', x, z, y + 1);
+      hook('renderHotbar');
+      hook('markUnsaved');
+      return act('plant-nether-wart');
+    }
+    if (plantedBlock(id)) {
+      if ((state.survival.creative || state.survival.count(id)) && target.adjacent?.[1] === y + 1 && state.farming.plant(x, y, z, id)) {
+        if (!state.survival.creative) state.survival.take(id);
+        hook('applyFarmUpdates', state.farming.drain());
+        hook('renderHotbar');
+        hook('markUnsaved');
+        return act('plant-crop');
+      }
+      if (id === 309) return act('plant-seeds-failed');
+    }
+    if (id === DYE && state.survival.held?.damage === 15) {
+      if (!state.survival.creative && !state.survival.count(id)) return act('bone-meal-no-item');
+      let used = false;
+      if (block === SAPLING) { state.trees.boneMeal(x, y, z); used = true; }
+      else if (block === 1) {
+        for (const q of growGrass(state.world, state.flowers, state.boneRandom, state.world.biome, x, y, z)) hook('updateBlock', q[0], q[2], q[1]);
+        used = true;
+      } else if (state.farming.fertilize(x, y, z)) {
+        hook('applyFarmUpdates', state.farming.drain());
+        used = true;
+      }
+      if (used) {
+        if (!state.survival.creative) state.survival.inventory.decr(state.survival.inventory.current, 1);
+        hook('renderHotbar');
+        // ItemDye (bone meal) plays no sound in 1.7.10: only level event 2005 (the sparkles below); verified in block-sounds-reference.json.
+        hook('markUnsaved');
+        const now = state.world.get(x, y, z);
+        hook('boneMealSparkles', now, x, y, z, now === SAPLING ? Math.fround(0.8) : isCrop(now) ? Math.fround(0.25) : 1, state.itemRand);
+      }
+      return act('use-bone-meal');
     }
     if (id === ITEM_SPAWN_EGG && useEggOnBlock(state, target, hooks)) return act('use-spawn-egg');
     if (id === ITEM_FIRE_CHARGE && useFireCharge(state, target, hooks)) return act('use-fire-charge');

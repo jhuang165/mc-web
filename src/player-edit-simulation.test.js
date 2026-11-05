@@ -303,3 +303,27 @@ test('a held boat opens a targeted chest instead of placing; on other blocks onI
   assert.equal(result.branch, 'place-boat');
   assert.deepEqual(calls, ['boat']);
 });
+
+test('doors, crafting tables and furnaces activate before hoe, seed and bone-meal use; sneaking uses the item', async () => {
+  const { DYE } = await import('./world.js');
+  const target = { block: [...POS], adjacent: [POS[0], POS[1] + 1, POS[2]] };
+  for (const [tool, damage] of [[120, 0], [309, 0], [DYE, 15]]) {
+    const bench = fixture({ tool, block: 13, target, place: true }), calls = [];
+    if (damage) bench.state.survival.inventory.main[0] = makeStack(tool, 1, damage);
+    assert.equal(applyPlayerEdit(bench.state, bench.request, { openInventory: (s) => calls.push(s) }).branch, 'open-workbench', `bench ${tool}`);
+    assert.deepEqual(calls, [true]);
+    const furnace = fixture({ tool, block: 14, target, place: true }), opened = [];
+    if (damage) furnace.state.survival.inventory.main[0] = makeStack(tool, 1, damage);
+    assert.equal(applyPlayerEdit(furnace.state, furnace.request, { useFurnace: (k) => opened.push(k) }).branch, 'open-furnace', `furnace ${tool}`);
+    assert.deepEqual(opened, [POS.join(',')]);
+    const door = fixture({ tool, block: 97, target, place: true });
+    if (damage) door.state.survival.inventory.main[0] = makeStack(tool, 1, damage);
+    door.state.world.set(POS[0], POS[1] + 1, POS[2], 97, false, 8);
+    assert.equal(applyPlayerEdit(door.state, door.request, {}).branch, 'use-door', `door ${tool}`);
+  }
+  // Sneaking with the hoe skips activation, so the crafting table is not opened.
+  const sneak = fixture({ tool: 120, block: 13, target, place: true }), calls = [];
+  sneak.state.motion.sneaking = true;
+  assert.equal(applyPlayerEdit(sneak.state, sneak.request, { openInventory: () => calls.push('open') }).branch, 'use-hoe');
+  assert.deepEqual(calls, []);
+});
