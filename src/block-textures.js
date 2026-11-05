@@ -56,6 +56,7 @@ if(!TILES.includes('stone_slab_top'))TILES.push('stone_slab_top');
 // Nether, End and quartz building blocks (nether-blocks.js); end_stone, nether_brick and quartz_block_side/top/bottom are already above.
 for(const t of ['netherrack','soul_sand','quartz_ore','quartz_block_chiseled','quartz_block_chiseled_top','quartz_block_lines','quartz_block_lines_top'])if(!TILES.includes(t))TILES.push(t);
 if(!TILES.includes('cobblestone'))TILES.push('cobblestone');
+if(!TILES.includes('dragon_egg'))TILES.push('dragon_egg'); // dragon-egg.js
 for(const t of SHAPED_TILES)if(!TILES.includes(t))TILES.push(t); // trapdoor, cobblestone_mossy (shaped-blocks.js)
 for(const t of STEM_CAKE_TILES)if(!TILES.includes(t))TILES.push(t); // stem and cake textures (stems-cake.js)
 export const ATLAS_ROWS=Math.ceil(TILES.length/ATLAS_COLUMNS);
@@ -132,6 +133,7 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===STONE_BRICKS)return tile(stoneBrickTexture(meta>3?0:meta&3));
  // BlockStoneSlab.getIcon: the double slab's bit 3 (43:8, 43:9) forces the top texture on every side; type 0 uses slab_side on the sides, the other types a per-face set.
  if(id===DOUBLE_STONE_SLAB||id===STONE_SLAB){const t=SLAB_TEXTURES[meta&7];return tile(id===DOUBLE_STONE_SLAB&&meta&8?t[1]:face===2?t[1]:face===3?t[2]:t[0]);}
+ if(id===171)return tile('dragon_egg'); // BlockDragonEgg: one icon on every face
  if(id===END_PORTAL_FRAME)return tile(meta&16?'endframe_eye':face===2?'endframe_top':face===3?'end_stone':'endframe_side');
  if(id===CAULDRON)return tile(meta&32?'water_still':meta&16?'cauldron_inner':face===2?'cauldron_top':face===3?'cauldron_bottom':'cauldron_side');
  // BlockHopper.getIcon: the top rim on side 1, hopper_outside elsewhere; meta bit 16 is the renderer's inner wall (hopper_outside), bit 32 the bowl floor (hopper_inside).
@@ -186,7 +188,7 @@ export function createBlockAtlas(){
   // painted back to front in the inventory projection (z across, x into the picture).
   if(id===FENCE||isNetherFence(id)){fenceIcon(x,id);const url=c.toDataURL();icons.set(key,url);return url;}
   if(STAIRS[id]){stairIcon(x,id);const url=c.toDataURL();icons.set(key,url);return url;}
- if([69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE,141].includes(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||(id>=135&&id<=137)||isFlower(id)||isCrop(id)){const i=blockTile(id,id===141?0:2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:id===129?10:id===ENCHANTING_TABLE?4:id===82||id===STONE_SLAB?8:id===END_PORTAL_FRAME?3:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
+ if([171,69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE,141].includes(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||(id>=135&&id<=137)||isFlower(id)||isCrop(id)){const i=blockTile(id,id===141?0:2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:id===129?10:id===ENCHANTING_TABLE?4:id===82||id===STONE_SLAB?8:id===END_PORTAL_FRAME?3:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
   const url=c.toDataURL();icons.set(key,url);return url;
  }
  function anvilIcon(ctx,damage){

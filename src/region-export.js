@@ -44,7 +44,7 @@ function stackNbt(s,slot,report,original=false) {
  return new Map(Object.entries(entry));
 }
 const inventory=(items,report)=>list(NBT.COMPOUND,(items??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];}));
-const NAMES={enderman:'Enderman',pig:'Pig',cow:'Cow',mooshroom:'MushroomCow',snow_golem:'SnowMan',sheep:'Sheep',chicken:'Chicken',wolf:'Wolf',ocelot:'Ozelot',horse:'EntityHorse',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish',witch:'Witch',slime:'Slime',iron_golem:'VillagerGolem',squid:'Squid',bat:'Bat'};
+const NAMES={enderman:'Enderman',pig:'Pig',cow:'Cow',mooshroom:'MushroomCow',snow_golem:'SnowMan',sheep:'Sheep',chicken:'Chicken',wolf:'Wolf',ocelot:'Ozelot',horse:'EntityHorse',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish',witch:'Witch',slime:'Slime',iron_golem:'VillagerGolem',squid:'Squid',bat:'Bat',ender_crystal:'EnderCrystal'};
 function entity(e,name,ox,oz) {
  return {id:str(name),Pos:list(NBT.DOUBLE,[e.x+ox,e.posY??e.y,e.z+oz]),Motion:list(NBT.DOUBLE,e.motion??[e.vx??e.mx??0,e.vy??e.my??0,e.vz??e.mz??0]),
  Rotation:list(NBT.FLOAT,e.rotation??(name==='Player'?[(Math.PI-(e.yaw??0))*180/Math.PI,-(e.pitch??0)*180/Math.PI]:[e.rotationYaw??(-(e.yaw??0)*180/Math.PI+0),e.rotationPitch??0])),FallDistance:float(e.fallDistance??0),Fire:short(e.fire??-1),Air:short(e.air??300),OnGround:byte(e.onGround?1:0),Dimension:int(0),Invulnerable:byte(0),PortalCooldown:int(0)};

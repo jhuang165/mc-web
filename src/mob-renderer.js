@@ -22,6 +22,7 @@ import { createHorseRig } from "./horse-renderer.js";
 import { createEndermanRig, animateEnderman } from "./enderman-renderer.js";
 import { createSnowGolemRig, animateSnowGolem, addMooshroomMushrooms } from "./mooshroom-golem-renderer.js";
 import { createSquidRig, createBatRig } from "./squid-bat-renderer.js";
+import { createCrystalRig } from "./ender-crystal-renderer.js";
 const RAD = Math.PI / 180;
 // RenderCreeper's powered pass (bni.a(xz, I, F), pass 1): creeper_armor.png with the texture
 // matrix translated by (scroll, scroll), colour 0.5, lighting off, blended GL_ONE, GL_ONE.
@@ -394,6 +395,7 @@ export class MobRenderer {
     if (e.type === "snow_golem") return createSnowGolemRig(this);
     if (e.type === "squid") return createSquidRig(this);
     if (e.type === "bat") return createBatRig(this);
+    if (e.type === "ender_crystal") return createCrystalRig(this);
     return this.createQuadruped(e.type);
   }
   // `partial` is the fraction of the current tick elapsed (mobPose interpolates).

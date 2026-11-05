@@ -136,6 +136,7 @@ import { PlayerMotion, fovMultiplier } from "./player-movement.js";
 import { spawnRunningParticles, freshRandom } from "./particles.js";
 import { enterWater, drownBubbles, burst, potionColor, potionParticles, itemCrumbs, boneMealSparkles } from "./fx.js";
 import { JavaRandom } from "./lighting.js";
+import { useDragonEgg } from "./dragon-egg-live.js";
 import { vitalsLayout, heartsHtml, foodHtml, REGENERATION, WITHER_EFFECT } from "./damage-hud.js";
 import { hurtCameraRoll } from "./damage-fx.js";
 import { displayTicks } from "./display-ticks.js";
@@ -2211,6 +2212,7 @@ function edit(place = false) {
       saved = false;
       return true;
     },
+    useDragonEgg: (x, y, z) => { useDragonEgg({ world, serverRandom: () => scene.explosionParticles.worldRandom, clientRandom: () => new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))), updateBlock: (i, j, k) => scene.updateBlock(i, k, j), spawnParticle: (...a) => scene.fx.spawn(...a) }, x, y, z); saved = false; return true; },
     blockClicked: (x, y, z) => { if (!survival.creative) { redstoneRuntime?.music.click(x, y, z); saved = false; } },
     openMerchant: entity => { const opened = useMerchant(entity); if (opened) syncContainerState(); return opened; },
     useEnchantingTable: key => { useEnchantingTable(key); syncContainerState(); },
@@ -2251,9 +2253,10 @@ function lightTnt(x, y, z, placer) {
 // then doExplosionB(true). DamageSource.setExplosionSource names the attacker: the creeper
 // itself, or the TNT's placer. The block edits run through world.set like breakBlock:
 // containers spill, farmland and crops update, and the edits are saved.
-function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true } = {}) {
+function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false } = {}) {
   applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging,
-    survival, position, velocity, farming }, { x, y, z, size, exploder, attacker, smoking }, {
+    survival, position, velocity, farming }, { x, y, z, size, exploder, attacker, smoking, flaming }, {
+    ignite: (fx, fy, fz) => fire.ignite(fx, fy, fz), // Explosion.isFlaming (ender crystal): fire on a third of the cells above an opaque block
     brokenTool: reportBrokenTool,
     burst: (...args) => scene.explosionParticles.burst(...args),
     sound: (name, options) => sounds.play(name, options),

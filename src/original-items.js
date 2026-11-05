@@ -46,4 +46,5 @@ export const ORIGINAL_ITEMS = Object.freeze({
   ...STEM_CAKE_ITEMS, // cake 354 -> 1930
   ...SPAWN_EGG_ITEMS, // spawn egg 383, Bottle o' Enchanting 384, fire charge 385 -> 1950-1952
   ...EYE_ITEMS, // eye of ender 381 -> 1960
+  122: 171, // dragon egg block item
 });

@@ -35,6 +35,7 @@ export const SHADOWS = {
   cave_spider: { size: f(0.7), opaque: 1 },
   // RenderSquid: super(model, 0.7F); RenderBat: super(new ModelBat(), 0.25F).
   squid: { size: f(0.7), opaque: 1 },
+  ender_crystal: { size: f(0.5), opaque: 1 },
   bat: { size: f(0.25), opaque: 1 },
   // RenderSilverfish: super(new ModelSilverfish(), 0.3F).
   silverfish: { size: f(0.3), opaque: 1 },

@@ -25,6 +25,7 @@ import { IRON_GOLEM_TYPE, IRON_GOLEM_SOUNDS, ironGolemFields, ironGolemShape } f
 import { createVillages, PLAYER_NAME } from "./village-host.js";
 import { SLIME, mobScale, slimeDamage, slimeTouches, slimeFields, slimeFieldsFrom, slimeRestore, slimeWidth, slimeSoundName, slimeVolume, slimeSquishStart, slimeSquishEnd, slimeActionState, slimeChildren, slimeCanSpawnHere, isSlimeChunk, SLIMEBALL } from "./slime.js";
 import { SQUID, BAT } from "./squid-bat.js";
+import { ENDER_CRYSTAL_TYPE, crystalUpdate, crystalAttack } from "./ender-crystal-mobs.js";
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { HORSE_ENTITY, horseRideThink, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
 import { squidBatUpdate, squidBatTalk, squidBatSpawnPass, installSquidBat } from "./squid-bat-mobs.js";
@@ -213,6 +214,8 @@ export const ENTITY_TYPES = {
   // EntitySlime (ym): 0.6 x 0.6 at size 1, scaled by `size` (mobScale); health and damage are size-based (slime.js), drops in combat.js.
   slime: { health: 1, width: 0.6, height: 0.6, movement: SLIME.speed, ai: {}, damage: 1, drop: 0 },
   // EntitySquid (ws) 0.95 x 0.95, 10 health; EntityBat (we) 0.5 x 0.9, 6 health. Legacy motion, no AI tasks (squid-bat.js, squid-bat-mobs.js).
+  // EntityEnderCrystal (wz) 2 x 2, 5 health: not a living mob (ender-crystal-mobs.js).
+  ender_crystal: ENDER_CRYSTAL_TYPE,
   squid: { health: SQUID.health, width: SQUID.width, height: SQUID.height, movement: 0.25, ai: {}, drop: 0 },
   bat: { health: BAT.health, width: BAT.width, height: BAT.height, movement: 0.10000000149011612, ai: {}, drop: 0 },
 };
@@ -250,7 +253,7 @@ export const pushBox = (o, width, height) => {
   const w = f(f(width) / 2), h = f(height);
   return [o.x - w, o.y, o.z - w, o.x + w, o.y + h, o.z + w];
 };
-const pushable = (o) => o.type !== "bat" && (o.health > 0 || (o.death ?? 0) < 20); // EntityBat.canBePushed is false
+const pushable = (o) => o.type !== "bat" && o.type !== "ender_crystal" && (o.health > 0 || (o.death ?? 0) < 20); // EntityBat.canBePushed is false
 // Chunk.canBlockSeeTheSky without a height map (weather.js `canSeeSky` is the real one
 // that main.js hooks in): no solid block at or above (x, y, z).
 const openSky = (world, x, y, z) => {
@@ -731,6 +734,7 @@ export class EntityWorld {
       ...(type === "enderman" ? endermanFields() : {}),
       ...(type === "witch" ? { drinking: false, drinkTimer: 0, held: null } : {}),
       ...(type === "slime" ? slimeFields(null, random) : {}),
+      ...(type === "ender_crystal" ? { innerRotation: Math.floor(random() * 100000) } : {}), // EntityEnderCrystal: innerRotation = rand.nextInt(100000)
       ...(type === "bat" ? { batHanging: true } : {}), // EntityBat's constructor: setIsBatHanging(true)
       ...(type === "chicken" ? { eggTimer: Math.floor(random() * 6000) + 6000, wingRotation: 0, destPos: 0, oFlapSpeed: 0, oFlap: 0, wingRotDelta: 1 } : {}),
       // EntityZombie.func_110161_a adds a 0 to 0.05 "Random spawn bonus" to knockbackResistance.
@@ -806,6 +810,7 @@ export class EntityWorld {
   // plays the hurt or death sound with getSoundPitch; a top-up hit is silent and pushes nothing.
   attackEntityFrom(e, amount, source = {}) {
     if (!this.entities.includes(e)) return false;
+    if (e.type === "ender_crystal") return crystalAttack(this, e); // any damage explodes it (ender-crystal-mobs.js)
     if (e.type === "silverfish") this.silverfishHurt(e, source);
     if (e.type === "enderman" && e.health > 0 && !endermanHurt(this, e, source, entityRandom(e)).proceed) return true;
     if (ANIMALS.has(e.type)) { e.flee = 60; e.love = 0; e.mateTicks = 0; }
@@ -1526,6 +1531,7 @@ export class EntityWorld {
       e.prevRotationPitch = e.rotationPitch;
       e.prevLimbSwingAmount = e.limbSwingAmount;
       const base=ENTITY_TYPES[e.type],scale=mobScale(e),t={...base,width:base.width*scale,height:base.height*scale};
+      if (e.type === "ender_crystal") { if (e.health > 0) crystalUpdate(this, e); continue; } // EntityEnderCrystal.onUpdate: fire in the End, nothing else
       // EntityMob.onUpdate (yg.h): on Peaceful the mob is setDead, with no death or drops.
       if (HOSTILE.has(e.type) && this.difficulty === PEACEFUL) {
         e.health = 0;
