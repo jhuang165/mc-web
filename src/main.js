@@ -931,7 +931,7 @@ async function launch(record, prepared) {
           if (kind === "potion") (mobs.potions?.projectiles ?? projectiles).balls.push({ ...ball, damage: e.damage, owner: null });
           else projectiles.balls.push(ball);
         },
-        cart: (type, x, y, z) => { if (type === 1) minecarts.spawnChest({ type: 1, x, y, z, items: [] }); else minecarts.spawnEmpty({ x, y, z }); },
+        cart: (type, x, y, z) => { if (type === 0) minecarts.spawnEmpty({ x, y, z }); else minecarts.spawnCart(type, { x, y, z, items: [] }); },
         spawnTnt: (x, y, z) => { primed.push(primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer: null })); saved = false; },
         setLiquid: (x, y, z, id) => { const old = world.get(x, y, z); world.set(x, y, z, id === 10 ? LAVA : WATER, true, 0); redstoneRuntime.fluidChanges([[x, y, z, old, world.get(x, y, z)]]); },
         setAir: (x, y, z) => { const old = world.get(x, y, z); world.set(x, y, z, 0, true, 0); redstoneRuntime.fluidChanges([[x, y, z, old, 0]]); },
@@ -1102,7 +1102,7 @@ async function launch(record, prepared) {
 // ---- Chat and commands (chat-ui.js GuiChat/GuiNewChat, commands.js ServerCommandManager, command-host.js game state) ----
 let chatOpen = false;
 const commandHost = createCommandHost({
-  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, survival: () => survival, experience: () => experience,
+  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, survival: () => survival, experience: () => experience,
   position: () => ({ x: position.x, y: position.y, z: position.z }),
   seed: () => active.seed,
   commandTile: (x, y, z) => redstoneRuntime?.commandBlocks.tile(x, y, z),
@@ -1785,7 +1785,7 @@ function tickChests() {
   }
   chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
   // Container.canInteractWith: the screen closes once its chest is gone.
-  if (containerView?.kind === "hopper" && world.get(...containerView.key.split(",").map(Number)) !== HOPPER) resume();
+  if (containerView?.kind === "hopper" && containerView.key && world.get(...containerView.key.split(",").map(Number)) !== HOPPER) resume();
   if (containerView?.kind === "brewing" && world.get(...containerView.key.split(",").map(Number)) !== BREWING_STAND) resume();
   if (containerView?.kind === "dispenser" && ![DISPENSER, DROPPER].includes(world.get(...containerView.key.split(",").map(Number)))) resume();
   if (containerView?.kind === "chest" && containerView.container.keys?.some((k) => { const b = world.get(...k.split(",").map(Number)); return !isChestBlock(b) && b !== ENDER_CHEST; })) resume();
@@ -1999,6 +1999,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // contents and the broken cart's items become item entities.
   if (tickMinecartSimulation({ world, minecarts, mobs, position, velocity, rider, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }, {
     drop: (d) => { if (d.stack) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); },
+    cartHost,
   }).length) saved = false;
   // EntityBoat.onUpdate: buoyancy, rider input, breakage; its splash particles and cleared snow or lily pads.
   if (tickBoatSimulation({ world, boats, mobs, position, velocity, rider, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }, {
@@ -2149,7 +2150,7 @@ function edit(place = false) {
     const done = dispatchVehicleAction(state, action, {
       swing: () => animation.swing(),
       damage: () => heldAttackDamage(heldId(), survival),
-      openContainer: (container) => openContainer(container, "chest"),
+      openContainer: (container, kind) => openContainer(container, kind ?? "chest"),
       toast,
       markUnsaved: () => { saved = false; },
     });
@@ -2251,6 +2252,14 @@ function lightTnt(x, y, z, placer) {
 // then doExplosionB(true). DamageSource.setExplosionSource names the attacker: the creeper
 // itself, or the TNT's placer. The block edits run through world.set like breakBlock:
 // containers spill, farmland and crops update, and the edits are saved.
+// Furnace, TNT and hopper carts (cart-variants.js): the explosion, smoke, primed sound and the hopper transfer host.
+const cartHost = {
+  explode: (cart, x, y, z, power) => { explodeAt(x, y, z, power, { exploder: null, smoking: true }); saved = false; },
+  particle: (name, x, y, z, mx, my, mz) => scene.fx?.spawn(name, x, y, z, mx, my, mz),
+  sound: (name, cart) => sounds.play(name, { position: { x: cart.x, y: cart.posY, z: cart.z } }),
+  get transfer() { return hopperTiles.host; },
+  changed: () => { saved = false; },
+};
 function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true } = {}) {
   applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging,
     survival, position, velocity, farming }, { x, y, z, size, exploder, attacker, smoking }, {

@@ -1,5 +1,6 @@
 import { saveEnderSlots } from './chest-blocks.js';
 import { writeCommandBlock } from "./command-block.js";
+import { CART_ENTITY_IDS, isContainerType, variantNBT } from './cart-variants.js';
 import { writeNoteTile } from "./note-blocks.js";
 import { writeJukeboxTile } from "./jukebox.js";
 // Browser -> Java 1.7.10 Anvil snapshot. The ZIP also retains the exact browser save.
@@ -93,7 +94,7 @@ function payload(state,ox,oz,report,world=null) {
  for(const {value:e} of state.tnt??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+TNT_Y_OFFSET},'PrimedTnt',ox,oz),Fuse:byte(e.fuse)})));
  for(const {value:e} of state.xpOrbs??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.25},'XPOrb',ox,oz),Health:short(e.health??5),Age:short(e.age??0),Value:short(e.value??1)})));
  for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta);entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET},'FallingSand',ox,oz),TileID:int(o[0]),Data:byte(o[1]),Time:byte(e.ticks&255),DropItem:byte(1)})));}
- for(const {value:e} of state.carts??[]) {const items=(e.items??[]).map(s=>stackNbt(s,s.slot,report,true)).filter(Boolean),n=entity(e,e.type===0?'MinecartRideable':'MinecartChest',ox,oz);if(e.type!==0)n.Items=list(NBT.COMPOUND,items);if(e.customName)n.CustomName=str(e.customName);entities.push(new Map(Object.entries(n)));}
+ for(const {value:e} of state.carts??[]) {const items=(e.items??[]).map(s=>stackNbt(s,s.slot,report,true)).filter(Boolean),n=entity(e,CART_ENTITY_IDS[e.type]??'MinecartChest',ox,oz);if(isContainerType(e.type))n.Items=list(NBT.COMPOUND,items);for(const [k,[t,v]] of Object.entries(variantNBT(e)))n[k]=tag(t,t===2?(v<<16)>>16:v);if(e.customName)n.CustomName=str(e.customName);entities.push(new Map(Object.entries(n)));}
  // EntityHanging.writeEntityToNBT: Direction (0 south, 1 west, 2 north, 3 east) and the legacy Dir byte (2, 1, 0, 3), the wall block
  // as TileX/Y/Z, then EntityPainting's Motive or EntityItemFrame's Item (original id), ItemRotation and ItemDropChance (src/hanging.js).
  for(const {value:e} of state.hanging??[]) {const base=entity({x:e.x,y:e.y,z:e.z,rotationYaw:e.yaw,rotationPitch:0},e.kind==='painting'?'Painting':'ItemFrame',ox,oz);

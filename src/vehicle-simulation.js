@@ -67,7 +67,7 @@ export function placeHeldMinecart(state, { target }, hooks = {}) {
   const [x,y,z] = target.block;
   if (!state.minecarts.railKind(state.world,x,y,z)) return { handled: true, branch: 'no-rail' };
   const record = {x:f(f(x)+f(.5)),y:f(f(y)+f(.5)),z:f(f(z)+f(.5)),customName:held.name};
-  const cart = type === 1 ? state.minecarts.spawnChest(record) : state.minecarts.spawnEmpty(record);
+  const cart = type === 0 ? state.minecarts.spawnEmpty(record) : state.minecarts.spawnCart(type, record);
   if (!state.survival.creative) state.survival.take(held.id,1);
   hooks.swing?.(); hooks.renderHotbar?.(); hooks.markUnsaved?.();
   return { handled: true, branch: 'place-minecart', cartId: cart.id };

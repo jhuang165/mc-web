@@ -11,6 +11,7 @@ import { entityMaterial } from "./light-material.js";
 import { ChestRenderer } from "./chest-renderer.js";
 import { christmas } from "./chest.js";
 import { CART_HEIGHT } from "./minecarts.js";
+import { CartBlockRenderer } from "./cart-block-renderer.js";
 
 const D = Math.PI / 180;
 // ModelMinecart.a[0..5]: texture offset, addBox (x, y, z, w, h, d), rotation point, rotateAngleX/Y.
@@ -47,10 +48,12 @@ export class MinecartRenderer {
   constructor(scene, view, minecarts) {
     Object.assign(this, { scene, view, minecarts, meshes: new Map() });
     this.chests = new ChestRenderer(scene, view);
+    this.blocks = new CartBlockRenderer(view);
     this.texture = pixelTexture("/media/1.7.10/entity/minecart.png");
     this.geometries = CART_PARTS.map(({ uv, box }) => skinBox(box[3], box[4], box[5], uv[0], uv[1], 64, 32));
   }
-  create(festive) {
+  create(festive, type = 1) {
+    if (type !== 0 && type !== 1) return this.createBlock(type, festive);
     const root = new THREE.Group(), material = entityMaterial(this.view.lighting, { map: this.texture });
     root.rotation.order = "YZX";
     const model = cartModel(material, this.geometries);
@@ -67,9 +70,21 @@ export class MinecartRenderer {
     this.scene.add(root);
     return { root, display, materials: [material, chest.material], festive };
   }
+  // Furnace, TNT, hopper and command block carts: the cart inside a group that swells with the TNT fuse (cart-block-renderer.js).
+  createBlock(type, festive) {
+    const root = new THREE.Group(), body = new THREE.Group(), material = entityMaterial(this.view.lighting, { map: this.texture });
+    root.rotation.order = "YZX";
+    const { display, materials, white } = this.blocks.build(type);
+    body.add(display, cartModel(material, this.geometries));
+    if (white) body.add(white);
+    root.add(body);
+    this.scene.add(root);
+    return { root, display, body, white, materials: [material, ...materials], festive };
+  }
   dispose(r) {
     this.scene.remove(r.root);
     for (const m of r.materials) m.dispose();
+    r.white?.material.dispose();
   }
   // `list` is Minecarts.list; `world` the live world for the rail lookup.
   update(list, partial = 1, world = null, date = new Date()) {
@@ -81,8 +96,13 @@ export class MinecartRenderer {
       }
     for (const cart of list) {
       let r = this.meshes.get(cart);
-      if (!r) this.meshes.set(cart, (r = this.create(festive)));
+      if (!r) this.meshes.set(cart, (r = this.create(festive, cart.type)));
       r.display.visible = cart.type !== 0;
+      if (r.body) {
+        const { scale, flash } = CartBlockRenderer.fuse(cart, partial);
+        r.body.scale.setScalar(scale);
+        if (r.white) { r.white.visible = flash > 0; r.white.material.opacity = flash; }
+      }
       const pose = this.minecarts.renderPose(world, cart, partial);
       r.root.position.set(pose.x, pose.y, pose.z);
       r.root.rotation.set(pose.roll * D, (180 - pose.yaw) * D, -pose.pitch * D, "YZX");

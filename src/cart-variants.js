@@ -1,0 +1,156 @@
+// Furnace, TNT, hopper and command block minecart rules of Minecraft Java 1.7.10 (EntityMinecartFurnace xq,
+// EntityMinecartTNT xv, EntityMinecartHopper xr, EntityMinecartCommandBlock xn) on top of the empty and chest carts
+// in minecarts.js. This file is dependency free (original-items.js reads its item table), so the transfer helpers of
+// the hopper cart live in cart-hopper.js. Native evidence: public/research/carts-reference.json
+// (tools/probes/CartsProbe.java, tools/verify-carts.mjs), replayed by src/carts.test.js. Notes and gaps:
+// public/research/minecart-variants.md.
+const f = Math.fround;
+
+// Original items 343, 407, 408, 422 (browser ids 343/407/408/422 are taken, so the carts use 2090-2093).
+export const ITEM_FURNACE_CART = 2090, ITEM_TNT_CART = 2091, ITEM_HOPPER_CART = 2092, ITEM_COMMAND_CART = 2093;
+export const CART_ORIGINAL_ITEMS = Object.freeze({ 343: ITEM_FURNACE_CART, 407: ITEM_TNT_CART, 408: ITEM_HOPPER_CART, 422: ITEM_COMMAND_CART });
+// Creative inventory entries after the chest cart (343, 407, 408; the command block cart 422 has no creative tab).
+export const CART_CREATIVE = Object.freeze([ITEM_FURNACE_CART, ITEM_TNT_CART, ITEM_HOPPER_CART]);
+// EntityMinecart.getMinecartType numbers (the item's `minecartType`), which `cart.type` keeps.
+export const TYPE = Object.freeze({ rideable: 0, chest: 1, furnace: 2, tnt: 3, spawner: 4, hopper: 5, command: 6 });
+// The EntityList ids, used by /summon and by the region export.
+export const CART_ENTITY_IDS = Object.freeze({ 0: "MinecartRideable", 1: "MinecartChest", 2: "MinecartFurnace", 3: "MinecartTNT", 5: "MinecartHopper", 6: "MinecartCommandBlock" });
+// Types a build keeps as carts (4, the spawner cart, is not modelled).
+export const SUPPORTED_TYPES = Object.freeze([0, 1, 2, 3, 5, 6]);
+export const isSupportedType = (t) => SUPPORTED_TYPES.includes(t);
+// Types with an inventory (EntityMinecartContainer): chest (27 slots) and hopper (5 slots).
+export const isContainerType = (t) => t === 1 || t === 5;
+export const slotCount = (t) => (t === 5 ? 5 : 27);
+// Original blocks dropped by killMinecart: chest, furnace, TNT, hopper.
+export const BLOCK_DROP = Object.freeze({ 1: 54, 2: 61, 3: 46, 5: 154 });
+// ItemCoal (original 263, any damage: coal and charcoal; browser 301 and 308).
+export const isFuelItem = (id) => id === 301 || id === 308;
+export const FUEL_TICKS = 3600, FUSE_TICKS = 80, HOPPER_COOLDOWN = 4;
+// getDisplayTile / getDisplayTileData / getDisplayTileOffset (RenderMinecart.func_147910_a uses offset / 16).
+// The furnace cart always shows lit_furnace (bytecode-derived: 1.7.10 never shows the unlit one).
+export const DISPLAY = Object.freeze({
+  2: { block: 62, data: 2, offset: 6 }, 3: { block: 46, data: 0, offset: 6 }, 5: { block: 154, data: 0, offset: 1 },
+  1: { block: 54, data: 0, offset: 8 }, 6: { block: 137, data: 0, offset: 6 },
+});
+
+export function installCartItems(items) {
+  const def = (id, name, texture, type, color) => { items[id] = { id, name, texture, stack: 1, minecartType: type, color, glyph: "▭" }; };
+  def(ITEM_FURNACE_CART, "Minecart with Furnace", "minecart_furnace", 2, "#6e6e6e");
+  def(ITEM_TNT_CART, "Minecart with TNT", "minecart_tnt", 3, "#b5352a");
+  def(ITEM_HOPPER_CART, "Minecart with Hopper", "minecart_hopper", 5, "#5a5a5a");
+  def(ITEM_COMMAND_CART, "Minecart with Command Block", "minecart_command_block", 6, "#a0742f");
+}
+
+// Per-type state added to a fresh cart (the native field defaults).
+export function initVariant(cart, record = {}) {
+  const t = cart.type;
+  if (t === 2) Object.assign(cart, { fuel: Math.max(0, record.fuel | 0), pushX: Number.isFinite(record.pushX) ? record.pushX : 0, pushZ: Number.isFinite(record.pushZ) ? record.pushZ : 0 }), cart.lit = cart.fuel > 0;
+  if (t === 3) cart.fuse = Number.isInteger(record.fuse) ? record.fuse : -1;
+  if (t === 5) Object.assign(cart, { enabled: true, cooldown: Number.isInteger(record.cooldown) ? record.cooldown : -1 });
+}
+
+// EntityMinecartFurnace.interactFirst: coal or charcoal adds 3600 ticks (one item unless Creative), then the push
+// direction points from the player to the cart. `held` is the stack, `take()` removes one. Returns the branch.
+export function furnaceUse(cart, { held, creative = false, take, position }) {
+  if (held && isFuelItem(held.id)) {
+    if (!creative) take?.();
+    cart.fuel += FUEL_TICKS;
+  }
+  cart.pushX = cart.x - position.x;
+  cart.pushZ = cart.z - position.z;
+  cart.lit = cart.fuel > 0;
+  return "fuel-furnace-minecart";
+}
+// EntityMinecartFurnace.func_145821_a after the superclass: the push is kept only while it follows the motion.
+export function furnaceRail(cart) {
+  const d = cart.pushX * cart.pushX + cart.pushZ * cart.pushZ;
+  if (d > 1.0e-4 && cart.vx * cart.vx + cart.vz * cart.vz > 0.001) {
+    const s = f(Math.sqrt(d));
+    cart.pushX /= s; cart.pushZ /= s;
+    if (cart.pushX * cart.vx + cart.pushZ * cart.vz < 0) { cart.pushX = 0; cart.pushZ = 0; }
+    else { cart.pushX = cart.vx; cart.pushZ = cart.vz; }
+  }
+}
+// EntityMinecartFurnace.applyDrag, before the superclass drag.
+export function furnaceDrag(cart) {
+  const d = cart.pushX * cart.pushX + cart.pushZ * cart.pushZ;
+  if (d > 1.0e-4) {
+    const s = f(Math.sqrt(d));
+    cart.pushX /= s; cart.pushZ /= s;
+    cart.vx *= f(0.8); cart.vy *= 0; cart.vz *= f(0.8);
+    cart.vx += cart.pushX * 0.05; cart.vz += cart.pushZ * 0.05;
+  } else { cart.vx *= f(0.98); cart.vy *= 0; cart.vz *= f(0.98); }
+}
+
+// TNT cart: explode(d) with d the squared horizontal speed.
+export function tntExplode(cart, d, host) {
+  const s = Math.min(Math.sqrt(d), 5);
+  const power = f(4 + cart.random.nextDouble() * 1.5 * s);
+  cart.dead = true;
+  host?.explode?.(cart, cart.x, cart.posY, cart.z, power);
+  return power;
+}
+export function tntIgnite(cart, host) {
+  cart.fuse = FUSE_TICKS;
+  host?.sound?.("game.tnt.primed", cart);
+}
+export function tntFall(cart, distance, host) {
+  if (distance >= 3) { const k = f(f(distance) / 10); tntExplode(cart, f(k * k), host); }
+}
+
+// onActivatorRailPass(x, y, z, powered).
+export function activatorPass(cart, powered, host) {
+  if (cart.type === 3 && powered && cart.fuse < 0) tntIgnite(cart, host);
+  if (cart.type === 5) cart.enabled = !powered;
+}
+
+// The type specific part of EntityMinecart.onUpdate (after the superclass). `hopperSuck(cart)` is cart-hopper.js.
+export function variantTick(cart, host, hopperSuck) {
+  if (cart.type === 2) {
+    if (cart.fuel > 0) cart.fuel--;
+    if (cart.fuel <= 0) { cart.pushX = 0; cart.pushZ = 0; }
+    cart.lit = cart.fuel > 0;
+    if (cart.lit && cart.random.nextInt(4) === 0) host?.particle?.("largesmoke", cart.x, cart.posY + 0.8, cart.z, 0, 0, 0);
+  } else if (cart.type === 3) {
+    if (cart.fuse > 0) { cart.fuse--; host?.particle?.("smoke", cart.x, cart.posY + 0.5, cart.z, 0, 0, 0); }
+    else if (cart.fuse === 0) tntExplode(cart, cart.vx * cart.vx + cart.vz * cart.vz, host);
+    if (cart.collidedH) {
+      const d = cart.vx * cart.vx + cart.vz * cart.vz;
+      if (d >= 0.009999999776482582) tntExplode(cart, d, host);
+    }
+  } else if (cart.type === 5 && !cart.dead && cart.enabled) {
+    cart.cooldown--;
+    if (cart.cooldown <= 0) {
+      cart.cooldown = 0;
+      if (hopperSuck?.(cart, host)) { cart.cooldown = HOPPER_COOLDOWN; host?.changed?.(cart); }
+    }
+  }
+}
+
+// The block drops and explosion of killMinecart after the superclass (`source` is the damage source name:
+// "explosion", "inFire", "onFire", "lava", "cactus", a player...). `drop(id)` is Minecarts.dropOriginal.
+export function killExtras(cart, source, drop, host) {
+  const t = cart.type, explosion = source === "explosion", fire = source === "inFire" || source === "onFire" || source === "lava";
+  if (t === 1 || t === 5) drop(BLOCK_DROP[t]);
+  else if (t === 2) { if (!explosion) drop(BLOCK_DROP[2]); }
+  else if (t === 3) {
+    const d = cart.vx * cart.vx + cart.vz * cart.vz;
+    if (!explosion) drop(BLOCK_DROP[3]);
+    if (fire || explosion || d >= 0.009999999776482582) tntExplode(cart, d, host);
+  }
+}
+
+// Save fields.
+export function variantJSON(c) {
+  if (c.type === 2) return { fuel: c.fuel, pushX: c.pushX, pushZ: c.pushZ };
+  if (c.type === 3) return { fuse: c.fuse };
+  if (c.type === 5) return { cooldown: c.cooldown };
+  return {};
+}
+// Entity.writeToNBT additions: [type, value] pairs (6 double, 2 short, 3 int).
+export function variantNBT(c) {
+  if (c.type === 2) return { PushX: [6, c.pushX], PushZ: [6, c.pushZ], Fuel: [2, c.fuel] };
+  if (c.type === 3) return { TNTFuse: [3, c.fuse] };
+  if (c.type === 5) return { TransferCooldown: [3, c.cooldown] };
+  return {};
+}

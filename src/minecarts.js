@@ -22,6 +22,8 @@ import { solidTop } from "./rails.js";
 import { StackArray, ChestContainer, copyStack } from "./inventory.js";
 import { ITEMS } from "./survival.js";
 import { itemFromOriginal, ORIGINAL_ITEMS } from "./region-import.js";
+import * as V from "./cart-variants.js";
+import { hopperSuck, hopperCartContainer } from "./cart-hopper.js";
 
 const f = Math.fround;
 export const CART_WIDTH = f(0.98), CART_HEIGHT = f(0.7), CART_SLOTS = 27;
@@ -121,11 +123,12 @@ export class Minecarts {
   // { x, y, z, items: [{ slot, id, damage, count, stored? }] } with original item ids.
   spawnChest(record, { seed } = {}) {
     const cart = {
-      id: this.nextId++, type: record.type === 0 ? 0 : 1, rider: null, x: 0, posY: 0, z: 0, y: 0, bb: null, vx: 0, vy: 0, vz: 0,
+      id: this.nextId++, type: V.isSupportedType(record.type) ? record.type : 1, rider: null, x: 0, posY: 0, z: 0, y: 0, bb: null, vx: 0, vy: 0, vz: 0,
       yaw: 0, pitch: 0, prevYaw: 0, prevPitch: 0, onGround: false, fallDistance: 0, inWeb: false, fire: 0,
       damage: 0, rolling: 0, rollingDir: 1, reverse: false, dead: false, customName: record.customName ?? null,
-      slots: Array(CART_SLOTS).fill(null), unmapped: Array(CART_SLOTS).fill(null),
+      slots: Array(V.slotCount(record.type)).fill(null), unmapped: Array(V.slotCount(record.type)).fill(null), collidedH: false,
     };
+    V.initVariant(cart, record);
     cart.random = seed === undefined ? this.makeRandom(cart) : new JavaRandom(seed);
     this.setPosition(cart, record.x, record.y, record.z);
     cart.px = cart.x; cart.py = cart.posY; cart.pz = cart.z;
@@ -133,6 +136,8 @@ export class Minecarts {
     this.carts.push(cart);
     return cart;
   }
+  // Furnace, TNT, hopper and command block carts (cart-variants.js): the same constructor path with the native type number.
+  spawnCart(type, record, options) { return this.spawnChest({ ...record, type: V.isSupportedType(type) ? type : 1 }, options); }
   spawnEmpty(record, options) { return this.spawnChest({ ...record, type: 0, items: [] }, options); }
   // EntityMinecart.getMountedYOffset, Entity.updateRiderPosition. Browser riders use feet,
   // so the rider's getYOffset cancels its own setPosition yOffset (1.62F on the client).
@@ -171,7 +176,7 @@ export class Minecarts {
   }
   // setInventorySlotContents with an original stack: counts above 64 are clipped.
   put(cart, slot, it) {
-    if (!(slot >= 0 && slot < CART_SLOTS) || !(it?.count > 0)) return;
+    if (!(slot >= 0 && slot < cart.slots.length) || !(it?.count > 0)) return;
     const count = Math.min(64, it.count), mapped = itemFromOriginal(it.id, it.damage ?? 0);
     if (mapped) {
       cart.slots[slot] = copyStack({ id: mapped.id, count, damage: mapped.damage,
@@ -276,8 +281,9 @@ export class Minecarts {
     cart.z = (bb[2] + bb[5]) / 2;
     cart.y = bb[1];
     cart.onGround = ody !== dy && ody < 0;
+    cart.collidedH = odx !== dx || odz !== dz;
     // updateFallState: the cart's fall() only passes it to a rider.
-    if (cart.onGround) { if (cart.fallDistance > 0) cart.rider?.fall?.(cart.fallDistance); cart.fallDistance = 0; }
+    if (cart.onGround) { if (cart.fallDistance > 0) { if (cart.type === 3) V.tntFall(cart, cart.fallDistance, this.host); cart.rider?.fall?.(cart.fallDistance); } cart.fallDistance = 0; }
     else if (dy < 0) cart.fallDistance = f(cart.fallDistance - dy);
     if (odx !== dx) cart.vx = 0;
     if (ody !== dy) cart.vy = 0;
@@ -320,19 +326,20 @@ export class Minecarts {
   // Container.calcRedstoneFromInventory over the 27 slots (unmapped items count too).
   comparator(cart) {
     let n = 0, sum = 0;
-    for (let i = 0; i < CART_SLOTS; i++) {
+    for (let i = 0; i < cart.slots.length; i++) {
       const s = cart.slots[i], u = cart.unmapped[i];
       if (s) sum = f(sum + f(s.count / Math.min(64, this.maxStack(s))));
       else if (u) sum = f(sum + f(u.count / Math.min(64, ORIGINAL_STACK[u.id] ?? 64)));
       else continue;
       n++;
     }
-    sum = f(sum / CART_SLOTS);
+    sum = f(sum / cart.slots.length);
     return Math.floor(f(sum * 14)) + (n > 0 ? 1 : 0);
   }
   // EntityMinecartContainer.applyDrag: 0.98 + 0.001 per missing comparator level.
   drag(cart) {
-    const k = cart.type === 0 ? (cart.rider ? f(0.997) : f(0.96)) : f(f(0.98) + f(f(15 - this.comparator(cart)) * f(0.001)));
+    if (cart.type === 2) V.furnaceDrag(cart);
+    const k = !V.isContainerType(cart.type) ? (cart.rider ? f(0.997) : f(0.96)) : f(f(0.98) + f(f(15 - this.comparator(cart)) * f(0.001)));
     cart.vx *= k; cart.vy *= 0; cart.vz *= k;
   }
   // func_145821_a: one tick on the rail block (bx, by, bz).
@@ -344,7 +351,7 @@ export class Minecarts {
     let boost = false, brake = false;
     // onActivatorRailPass(x, y, z, powered): empty on EntityMinecart / EntityMinecartChest in 1.7.10 (only the TNT,
     // hopper and command-block carts override it), so the hook has no default effect.
-    if (kind === "activator") this.activatorHook?.(bx, by, bz, (meta & 8) !== 0, cart);
+    if (kind === "activator") { V.activatorPass(cart, (meta & 8) !== 0, this.host); this.activatorHook?.(bx, by, bz, (meta & 8) !== 0, cart); }
     if (kind === "golden") { boost = (meta & 8) !== 0; brake = !boost; }
     if (kind !== "rail") meta &= 7;
     if (meta >= 2 && meta <= 5) cart.posY = by + 1;
@@ -423,7 +430,7 @@ export class Minecarts {
     let by = Math.floor(cart.posY);
     if (this.railKind(world, bx, by - 1, bz)) by--;
     const kind = this.railKind(world, bx, by, bz);
-    if (kind) this.onRail(world, cart, bx, by, bz, kind, world.getMeta?.(bx, by, bz) ?? 0, others);
+    if (kind) { this.onRail(world, cart, bx, by, bz, kind, world.getMeta?.(bx, by, bz) ?? 0, others); if (cart.type === 2) V.furnaceRail(cart); }
     else this.offRail(world, cart, others);
     // Stop at resident bounds. Streaming advances the window before rider movement;
     // finite worlds retain their existing viewport guard.
@@ -449,8 +456,11 @@ export class Minecarts {
     const near = [cart.bb[0] - f(0.2), cart.bb[1], cart.bb[2] - f(0.2), cart.bb[3] + f(0.2), cart.bb[4], cart.bb[5] + f(0.2)];
     for (const o of this.carts) if (o !== cart && !o.dead && intersects(o.bb, near)) this.collide(o, cart);
     if (cart.rider?.dead) { cart.rider.vehicle = null; cart.rider = null; }
+    V.variantTick(cart, this.host, hopperSuck);
   }
-  tick(world, { entities = [] } = {}) {
+  // `host` (optional): { explode(cart, x, y, z, power), particle(name, x, y, z, mx, my, mz), sound(name, cart), transfer, changed }.
+  tick(world, { entities = [], host = null } = {}) {
+    this.host = host;
     for (const cart of [...this.carts]) if (!cart.dead && entityActive(world,cart)) this.tickCart(world, cart, entities);
     this.carts = this.carts.filter((c) => !c.dead);
   }
@@ -501,13 +511,13 @@ export class Minecarts {
   // EntityMinecart.attackEntityFrom: flips the rolling direction, rolling 10, damage + 10 x amount;
   // above 40 (or any creative player hit) the cart breaks. `creative` is the attacker's
   // PlayerCapabilities.isCreativeMode. Returns true (the hit always registers).
-  attack(cart, amount, { creative = false } = {}) {
+  attack(cart, amount, { creative = false, source = null } = {}) {
     if (cart.dead) return true;
     cart.rollingDir = -cart.rollingDir;
     cart.rolling = 10;
     cart.damage = f(cart.damage + f(amount * 10));
     if (creative || cart.damage > BREAK) {
-      if (!creative || cart.customName) this.kill(cart);
+      if (!creative || cart.customName) this.kill(cart, source);
       else this.setDead(cart);
     }
     return true;
@@ -517,7 +527,7 @@ export class Minecarts {
   // cart's corner block, in pieces of 10-30 with gaussian motion x 0.05 (+0.2 up), no pickup delay.
   spill(cart) {
     const r = cart.random, spilled = [];
-    for (let i = 0; i < CART_SLOTS; i++) {
+    for (let i = 0; i < cart.slots.length; i++) {
       const s = cart.slots[i], u = cart.unmapped[i], src = s ?? u;
       if (!src) continue;
       spilled.push(i);
@@ -548,23 +558,23 @@ export class Minecarts {
   }
   // EntityMinecartChest.killMinecart: setDead (spill), the minecart item (with the custom name),
   // EntityMinecartContainer's second pass over the emptied slots (three floats each), the chest.
-  kill(cart) {
+  kill(cart, source = null) {
     if (cart.dead) return;
     const spilled = this.spill(cart);
     cart.dead = true;
     this.dropOriginal(cart, MINECART_ITEM, cart.customName);
     for (let n = 0; n < spilled.length * 3; n++) cart.random.nextFloat();
-    if (cart.type !== 0) this.dropOriginal(cart, CHEST_ITEM);
+    V.killExtras(cart, source, (id) => this.dropOriginal(cart, id), this.host);
   }
 
   // EntityMinecartContainer.interactFirst -> displayGUIChest: the cart's 27 slots as an IInventory
   // titled "Minecart" (container.minecart) or its custom name. Null once the cart is dead.
   interact(cart) {
-    if (cart.dead || cart.type === 0) return null;
+    if (cart.dead || !V.isContainerType(cart.type)) return null;
     // A stack placed over a slot still holding an unmapped original item moves that item to the
     // first free slot (it stays hidden; it is not a native case, since the native slot holds it).
     const inv = new StackArray(cart.slots, () => {
-      for (let i = 0; i < CART_SLOTS; i++)
+      for (let i = 0; i < cart.slots.length; i++)
         if (cart.slots[i] && cart.unmapped[i]) {
           const free = cart.slots.findIndex((s, j) => !s && !cart.unmapped[j]);
           if (free < 0) break;
@@ -579,6 +589,7 @@ export class Minecarts {
   // ChestContainer over interact(cart), as BlockChest's container is built in survival.openChest.
   container(cart, playerInventory) {
     const inv = this.interact(cart);
+    if (inv && cart.type === 5) return hopperCartContainer(cart, playerInventory, inv.onChange);
     return inv && Object.assign(new ChestContainer(playerInventory, inv), { title: inv.title, cart });
   }
   // EntityMinecartContainer.isUseableByPlayer: alive and within 8 blocks (squared distance to posY).
@@ -592,7 +603,7 @@ export class Minecarts {
   // [type, elementType, items]. Items carry original ids (mapped stacks through the inverse table).
   toNBT(cart) {
     const items = [];
-    for (let i = 0; i < CART_SLOTS; i++) {
+    for (let i = 0; i < cart.slots.length; i++) {
       const s = cart.slots[i], u = cart.unmapped[i];
       const o = s ? { ...originalOf(s), count: s.count, stored: s.stored } : u;
       if (!o?.id) continue;
@@ -604,11 +615,11 @@ export class Minecarts {
     const out = {
       Pos: [9, 6, [cart.x, cart.posY, cart.z]], Motion: [9, 6, [cart.vx, cart.vy, cart.vz]], Rotation: [9, 5, [cart.yaw, cart.pitch]],
       FallDistance: [5, cart.fallDistance], Fire: [2, cart.fire], Air: [2, 300], OnGround: [1, cart.onGround ? 1 : 0], Dimension: [3, 0],
-      Invulnerable: [1, 0], PortalCooldown: [3, 0], Items: [9, 10, items],
+      Invulnerable: [1, 0], PortalCooldown: [3, 0], Items: [9, items.length ? 10 : 0, items],
     };
     if (cart.customName) out.CustomName = [8, cart.customName];
-    if (cart.type === 0) delete out.Items;
-    return out;
+    if (!V.isContainerType(cart.type)) delete out.Items;
+    return Object.assign(out, V.variantNBT(cart));
   }
   // Browser save: the fields EntityMinecartChest writes (damage, rolling and the reverse flag are
   // DataWatcher/transient state that a native reload also resets), with original ids for
@@ -619,7 +630,7 @@ export class Minecarts {
       carts: this.carts.filter((c) => !c.dead).map((c) => ({
         type: c.type, rider: c.rider?.player === true || undefined,
         x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire, onGround: c.onGround,
-        customName: c.customName || undefined,
+        customName: c.customName || undefined, ...V.variantJSON(c),
         items: c.slots.flatMap((s, slot) => {
           const o = s ? originalOf(s) : null, u = c.unmapped[slot];
           if (s && o) return [{ slot, ...copyStack(s), id: o.id, damage: o.damage, count: s.count }];
@@ -637,7 +648,7 @@ export class Minecarts {
         (it.damage === undefined || Number.isInteger(it.damage)) && [it.stored, it.enchantments, it.storedEnchantments].every((list) => list === undefined || (Array.isArray(list) && list.every((e) => Number.isInteger(e?.id) && Number.isInteger(e?.lvl)))) &&
         (it.repairCost === undefined || Number.isInteger(it.repairCost)) && (it.displayName === undefined || typeof it.displayName === 'string') &&
         (it.unbreakable === undefined || typeof it.unbreakable === 'boolean'));
-      const cart = m.spawnChest({ type: c.type, x: c.x, y: c.y, z: c.z, items: c.type === 0 ? [] : items, customName: typeof c.customName === "string" && c.customName ? c.customName : null });
+      const cart = m.spawnCart(c.type, { x: c.x, y: c.y, z: c.z, items: V.isContainerType(c.type) ? items : [], fuel: c.fuel, pushX: c.pushX, pushZ: c.pushZ, fuse: c.fuse, cooldown: c.cooldown, customName: typeof c.customName === "string" && c.customName ? c.customName : null });
       cart.restorePlayer = c.type === 0 && c.rider === true;
       const v = Array.isArray(c.motion) && c.motion.length === 3 && ok(...c.motion) ? c.motion : [0, 0, 0];
       // Entity.readFromNBT: motion components above 10 in magnitude are dropped to 0.
