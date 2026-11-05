@@ -33,6 +33,7 @@ import { ENDER_CRYSTAL_TYPE, crystalUpdate, crystalAttack } from "./ender-crysta
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { installHorseGear, gearFieldsFrom } from "./horse-gear-live.js";
 import { HORSE_ENTITY, horseRideThink, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
+import { dragonUpdate, dragonHit, installDragonMobs } from "./dragon-mobs.js";
 import { blazeUpdate, ghastUpdate, fireballMobTalk, installFireballMobs } from "./blaze-ghast-mobs.js";
 import { witherUpdate, witherPost, witherTalk, witherRanged, installWither } from "./wither-boss-mobs.js";
 import { squidBatUpdate, squidBatTalk, squidBatSpawnPass, installSquidBat } from "./squid-bat-mobs.js";
@@ -267,7 +268,7 @@ export const pushBox = (o, width, height) => {
   const w = f(f(width) / 2), h = f(height);
   return [o.x - w, o.y, o.z - w, o.x + w, o.y + h, o.z + w];
 };
-const pushable = (o) => o.type !== "bat" && o.type !== "ender_crystal" && (o.health > 0 || (o.death ?? 0) < 20); // EntityBat.canBePushed is false
+const pushable = (o) => o.type !== "bat" && o.type !== "ender_crystal" && o.type !== "ender_dragon" && (o.health > 0 || (o.death ?? 0) < 20); // EntityBat.canBePushed is false
 // Chunk.canBlockSeeTheSky without a height map (weather.js `canSeeSky` is the real one
 // that main.js hooks in): no solid block at or above (x, y, z).
 const openSky = (world, x, y, z) => {
@@ -584,6 +585,7 @@ export function addVelocity(e, x, y, z) {
   e.vz += z;
 }
 export function entityHit(origin, dir, e, reach) {
+  if (e.type === "ender_dragon") return dragonHit(origin, dir, e, reach); // dragon-mobs.js: its seven parts are the targets
   const base = ENTITY_TYPES[e.type], scale=mobScale(e),t={width:base.width*scale,height:base.height*scale};
   let near = 0,
     far = reach;
@@ -1575,6 +1577,7 @@ export class EntityWorld {
       e.prevRotationPitch = e.rotationPitch;
       e.prevLimbSwingAmount = e.limbSwingAmount;
       const base=ENTITY_TYPES[e.type],scale=mobScale(e),t={...base,width:base.width*scale,height:base.height*scale};
+      if (e.type === "ender_dragon") { dragonUpdate(this, e, player, survival); continue; } // EntityDragon (dragon-mobs.js)
       if (e.type === "ender_crystal") { if (e.health > 0) crystalUpdate(this, e); continue; } // EntityEnderCrystal.onUpdate: fire in the End, nothing else
       // EntityMob.onUpdate (yg.h): on Peaceful the mob is setDead, with no death or drops.
       if (HOSTILE.has(e.type) && this.difficulty === PEACEFUL) {
@@ -2091,5 +2094,6 @@ installMooshroomGolem(EntityWorld); // mooshroom-golem-live.js: shears/bowl, gol
 installHorse(EntityWorld); // horse-live.js: interact, ride, tame, rear
 installHorseGear(EntityWorld); // horse-gear-live.js: leads, name tags, horse inventory drops
 installSquidBat(EntityWorld); // squid-bat-mobs.js: bat wake-up, squid entityAge and silent hurt, bat sound pitch
+installDragonMobs(EntityWorld); // dragon-mobs.js: the Ender Dragon type, part damage, save/restore
 installFireballMobs(EntityWorld); // blaze-ghast-mobs.js: blaze and ghast types, fire immunity, fireball pick/punch
 installWither(EntityWorld); // wither-boss-mobs.js: the Wither type, spawnWither, skulls
