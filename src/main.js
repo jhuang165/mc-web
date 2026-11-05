@@ -113,6 +113,7 @@ import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { EyesOfEnder } from "./eye-of-ender-live.js";
 import { MapsClock } from "./maps-clock-live.js";
+import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
 import { FireworkRockets, dispenseFirework } from "./fireworks-live.js";
 import { FireworkParticles } from "./firework-particles.js";
 import { EndPortalRenderer } from "./end-portal-renderer.js";
@@ -2031,7 +2032,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
   rockets.tick(world, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), explode: (...a) => fireworkFx.spawnStarter(...a) });
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
-  maps.tick({ survival, position, yaw, world, time: survival.time });
+  maps.tick({ survival, position, yaw: 180 - yaw / (Math.PI / 180), world, time: survival.time, frames: hanging.entities });
   tickEntitySimulation({ world, items, primed, projectiles, arrows, mobs, survival, position,
     width: PHYSICS.width, height: PHYSICS.height }, {
     maxStack: st => survival.inventory.maxStack(st),
@@ -3021,6 +3022,8 @@ function animate(now) {
       bow: eating?.bow ? { stage: bowStage(eating.ticks), draw: eating.ticks - 1 + partial } : null,
       glint: stackHasEffect(survival.held, ITEMS[survival.held?.id]),
       color: survival.held?.color,
+      map: survival.held?.id === ITEM_FILLED_MAP ? { data: mapStore.get(survival.held.damage | 0) } : null, // ItemRenderer's map branch
+      pitchDeg: -pitch / (Math.PI / 180),
     });
 }
 // Entities that cast a shadow, as Java positions: an item's posY is 0.125

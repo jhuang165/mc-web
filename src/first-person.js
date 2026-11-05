@@ -13,6 +13,8 @@ import { ITEM_SKULL, skullIconUrl } from "./skull.js";
 import { ITEM_SPAWN_EGG, spawnEggTexture } from "./spawn-eggs.js";
 import { ITEM_CLOCK } from "./clock.js";
 import { clockFrameUrl, clockFrame } from "./maps-clock-live.js";
+import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
+import { MapSurface, mapHandMatrices } from "./map-render.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
 const BLOCK_FACES=[
@@ -250,13 +252,31 @@ export class FirstPerson {
     return m;
   }
   // `light` is the packed brightness at the player; `view` the world camera.
-  render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0, bow = null, glint = false, color = undefined } = {}) {
+  // ItemRenderer's filled-map branch (map-render.js): both arms and the map on its background, in place of the held sprite.
+  mapPose(pose, pitchDeg, data) {
+    if (!this.mapSurface) {
+      this.mapSurface = new MapSurface((o) => this.material(o), { background: true });
+      this.mapRoot = new THREE.Group();
+      this.mapArms = [0, 1].map(() => { const holder = new THREE.Group(), arm = this.arm.clone(); arm.visible = true; holder.matrixAutoUpdate = false; holder.add(arm); this.mapRoot.add(holder); return holder; });
+      this.mapRoot.add(this.mapSurface.root);
+      this.pivot.add(this.mapRoot);
+    }
+    const m = mapHandMatrices(pose, pitchDeg);
+    this.mapArms.forEach((h, k) => h.matrix.copy(m.arms[k]));
+    this.mapSurface.root.matrix.copy(m.map);
+    this.mapSurface.update(data);
+    return m.base;
+  }
+  render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0, bow = null, glint = false, color = undefined, map = null, pitchDeg = 0 } = {}) {
     if (!visible) return;
     // `bow` is { stage, draw } while the bow is drawn (bow.js bowStage and the draw term).
     this.select(pose.item, pose.meta, bow ? bow.stage : 0, glint, color);
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
-    this.pivot.matrix.copy(firstPersonMatrix(pose,{sprite:this.sprite,eatingTicks:eating,bowDraw:bow ? bow.draw : null}));
+    const mapMode = !!map?.data && pose.item === ITEM_FILLED_MAP;
+    this.pivot.matrix.copy(mapMode ? this.mapPose(pose, pitchDeg, map.data) : firstPersonMatrix(pose,{sprite:this.sprite,eatingTicks:eating,bowDraw:bow ? bow.draw : null}));
+    if (this.mapRoot) this.mapRoot.visible = mapMode;
+    if (this.item) this.item.visible = !mapMode;
     // Keep the native pose visible when the browser panel is narrower than a game window.
     if(this.camera.aspect<1.3)this.pivot.matrix.premultiply(new THREE.Matrix4().makeTranslation((pose.item ? .56 : .64)*(this.camera.aspect/1.3-1),0,0));
     if (view) this.lights.forEach((l, i) => l.copy(ITEM_LIGHTS[i]).transformDirection(view.matrixWorldInverse));

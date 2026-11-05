@@ -58,3 +58,69 @@ test("saved heads reload into the helmet slot", () => {
   assert.equal(inv.armor[3]?.id, 2050);
   assert.equal(inv.armor[3].damage, 4);
 });
+
+// ---- first-person map and item-frame map (bytecode-derived) ----
+import * as THREE from "three";
+import { MAP_HAND, FRAME_MAP_SHIFT, FRAME_MAP_SCALE, mapHandMatrices, frameMapMatrix, MAP_COLOR_Z, ICON_Z } from "./map-render.js";
+
+const callsOf = (name, call) => rec(name)[0].calls.filter((c) => c.call === call);
+const nums = (c) => c.ops.filter((o) => o.startsWith("ldc ") || o.startsWith("int ")).map((o) => +o.split(" ")[1]);
+
+test("first-person map constants equal the ItemRenderer bytecode", () => {
+  const rot = callsOf("mapFirstPerson", "glRotatef"), tr = callsOf("mapFirstPerson", "glTranslatef"), sc = callsOf("mapFirstPerson", "glScalef");
+  assert.deepEqual(nums(rot[0]), [90]); assert.deepEqual(nums(rot[1]), [-85]);
+  assert.deepEqual(nums(tr[2]), [-0.0, -0.6, 1.1]); // each arm: translate(-0.0, -0.6, 1.1 * l)
+  assert.deepEqual([nums(rot[2])[0], nums(rot[3])[0], nums(rot[4])[0], nums(rot[5])[0]], [-45, -90, 59, -65]);
+  assert.deepEqual(MAP_HAND.armOffset, [0, -0.6, 1.1]); assert.equal(MAP_HAND.armX, -45); assert.deepEqual(MAP_HAND.armZ, [-90, 59]); assert.equal(MAP_HAND.armY, -65);
+  assert.deepEqual(nums(rot[6]), [20]); assert.deepEqual(nums(rot[7]), [20]); assert.deepEqual(nums(rot[8]), [80]);
+  assert.deepEqual(MAP_HAND.swingRot, [-20, -20, -80]);
+  assert.equal(nums(sc[1])[0], MAP_HAND.mapScale); assert.equal(nums(sc[2])[0], MAP_HAND.pixel);
+  assert.deepEqual([nums(rot[9])[0], nums(rot[10])[0]], MAP_HAND.mapTurn);
+  assert.deepEqual(nums(tr[3]), [-1, -1]);
+  assert.ok(tr[1].ops.includes("ldc 1.2") && tr[1].ops.includes("ldc 0.04") && tr[1].ops.includes("ldc -0.9"));
+  assert.equal(MAP_HAND.equipDrop, 1.2); assert.equal(MAP_HAND.lift, 0.04); assert.equal(MAP_HAND.forward, -0.9); assert.equal(MAP_HAND.scale, 0.8);
+  const quad = callsOf("mapFirstPerson", "Tessellator.addVertexWithUV");
+  assert.equal(quad.length, 4); assert.ok(quad[0].ops.includes("int 7") && quad[1].ops.filter((o) => o === "int 128").length === 2);
+});
+
+test("item frame map constants equal RenderItemFrame bytecode", () => {
+  const tr = callsOf("frameMap", "glTranslatef");
+  assert.deepEqual(tr.slice(4, 8).map(nums), [[-64, -87, -1.5], [-66.5, -84.5, -1.5], [-64, -82, -1.5], [-61.5, -84.5, -1.5]]);
+  assert.deepEqual(FRAME_MAP_SHIFT, [[-64, -87, -1.5], [-66.5, -84.5, -1.5], [-64, -82, -1.5], [-61.5, -84.5, -1.5]]);
+  assert.equal(nums(callsOf("frameMap", "glScalef")[0])[0], FRAME_MAP_SCALE);
+  assert.deepEqual(callsOf("frameMap", "glTranslatef").slice(-1)[0].ops, ["fconst_0", "fconst_0", "ldc -1.0"]);
+  // setItemRotation stores rotation % 4 (EntityItemFrame.c(int)): four 90 degree steps in 1.7.10.
+  assert.deepEqual(callsOf("frameMap", "glTranslatef").slice(1, 4).map((c) => c.ops.join()), ["ldc -0.16,ldc -0.16,fconst_0", "fconst_0,ldc -0.32,fconst_0", "ldc 0.16,ldc -0.16,fconst_0"]);
+});
+
+test("map icon geometry constants equal MapItemRenderer bytecode", () => {
+  assert.ok(callsOf("mapIcons", "Tessellator.addVertexWithUV")[0].ops.includes("ldc2 -0.009999999776482582"));
+  assert.equal(MAP_COLOR_Z, -0.01); assert.equal(ICON_Z, -0.02);
+  assert.deepEqual(nums(callsOf("mapIcons", "glScalef")[0]), [4, 4, 3]);
+  assert.deepEqual(nums(callsOf("mapIcons", "glTranslatef")[1]), [-0.125, 0.125]);
+});
+
+test("at rest the held map lies below the view, top edge away, left edge on the left, facing up", () => {
+  const m = mapHandMatrices({ bob: { x: 0, y: 0, rz: 0, rx: 0 }, progress: 0, equip: 1 }, 0), full = m.base.clone().multiply(m.map);
+  const at = (x, y) => new THREE.Vector3(x, y, 0).applyMatrix4(full), tl = at(0, 0), tr = at(128, 0), bl = at(0, 128);
+  assert.ok(tl.x < tr.x && tl.z < bl.z); // top-left is left of top-right; the top edge is farther (more negative z)
+  assert.ok(Math.abs(tr.x - tl.x - 0.76) < 1e-3); // 128 px * 0.015625 * 0.38
+  const n = new THREE.Vector3(0, 0, -1).transformDirection(full);
+  assert.ok(n.y > 0.9);
+  // Looking straight down turns it to face the camera: the face normal approaches +z.
+  const down = mapHandMatrices({ bob: { x: 0, y: 0, rz: 0, rx: 0 }, progress: 0, equip: 1 }, 90), nd = new THREE.Vector3(0, 0, -1).transformDirection(down.base.clone().multiply(down.map));
+  assert.ok(nd.z > 0.9, JSON.stringify(nd));
+  // the two arms hold opposite sides
+  const a0 = new THREE.Vector3().applyMatrix4(m.base.clone().multiply(m.arms[0])), a1 = new THREE.Vector3().applyMatrix4(m.base.clone().multiply(m.arms[1]));
+  assert.ok(a0.x < 0 && a1.x > 0);
+});
+
+test("a map in an item frame faces the wall's front and the four rotations differ", () => {
+  const seen = new Set();
+  for (let r = 0; r < 4; r++) {
+    const m = frameMapMatrix(r), n = new THREE.Vector3(0, 0, -1).transformDirection(m);
+    assert.ok(n.z > 0.99, "faces +z of the frame's item frame");
+    seen.add(new THREE.Vector3(0, 0, 0).applyMatrix4(m).toArray().join());
+  }
+  assert.equal(seen.size, 4);
+});
