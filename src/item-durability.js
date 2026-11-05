@@ -27,6 +27,7 @@ export function vanillaDamageItemId(stack, item) {
   if (item?.kind === "shears") return 359;
   if (item?.kind === "flint_and_steel") return 259;
   if (item?.kind === "bow") return 261;
+  if (item?.kind === "fishing_rod") return 346;
   return null;
 }
 

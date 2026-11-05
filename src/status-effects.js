@@ -1,12 +1,16 @@
 // 1.7.10 Potion (rv), PotionEffect (rw) and ItemFood (acx) on the local player. All 23 potion ids (potions.js) are held, ticked and saved;
 // the food-borne Hunger and Poison use the same ids. Attribute modifiers come from potions.js (evidence: potions-reference.json).
 import { POTION_TYPES, POTION as PT, modifierAmount } from "./potions.js";
+import { PUFFERFISH } from "./fishing-content.js";
 export const HUNGER = 17, POISON = 19;
 const FOOD_EFFECTS = {
   326: { id: POISON, duration: 100, chance: 1 },
   318: { id: HUNGER, duration: 600, chance: 0.3 },
   206: { id: HUNGER, duration: 600, chance: 0.8 },
   325: { id: POISON, duration: 100, chance: 0.6 },
+  // ItemFishFood.onFoodEaten (act.c) for a pufferfish: Poison IV 60 s, Hunger III 15 s, Nausea II 15 s, always
+  // (fishing-reference.json "effects"). Nausea (9) is held and ticked like the other 22 potions.
+  [PUFFERFISH]: [{ id: POISON, duration: 1200, amplifier: 3, chance: 1 }, { id: HUNGER, duration: 300, amplifier: 2, chance: 1 }, { id: 9, duration: 300, amplifier: 1, chance: 1 }],
 };
 
 export class Effects {
@@ -32,8 +36,8 @@ export class Effects {
     return true;
   }
   food(id, random = Math.random) {
-    const effect = FOOD_EFFECTS[id];
-    if (effect && Math.fround(random()) < Math.fround(effect.chance)) this.add(effect);
+    for (const effect of [].concat(FOOD_EFFECTS[id] ?? []))
+      if (Math.fround(random()) < Math.fround(effect.chance)) this.add(effect);
   }
   // PotionEffect.onUpdate for every effect (EntityLivingBase.updatePotionEffects): performEffect on the ticks Potion.isReady allows, then the
   // duration counts down and a finished effect is removed (Absorption takes its amount back, Health Boost caps the health).

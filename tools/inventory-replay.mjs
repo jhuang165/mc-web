@@ -1,6 +1,7 @@
 // Replays tools/probes/inventory-scenarios.txt against the JavaScript
 // inventory and produces the same JSON lines as InventoryProbe.java.
 import { POPULATION_ITEMS } from '../src/population-content.js';
+import { FISHING_ITEMS } from '../src/fishing-content.js';
 import {Survival,ITEMS,burnTime,smeltingResult} from '../src/survival.js';
 import {makeStack,copyStack,ChestContainer,LargeChestInventory} from '../src/inventory.js';
 import {newChest,chestInventory} from '../src/chest.js';
@@ -17,6 +18,7 @@ export const MC_IDS={137:1139,
  298:400,299:401,300:402,301:403,302:404,303:405,304:406,305:407,306:408,307:409,308:410,309:411,310:416,311:417,312:418,313:419,314:412,315:413,316:414,317:415,
  85:FENCE,66:RAIL,331:360,361:361,362:362,329:363,417:364,403:365,328:366,342:450,333:495,145:ANVIL,116:ENCHANTING_TABLE,
  ...POPULATION_ITEMS,
+ ...FISHING_ITEMS,
 };
 const GAME_IDS=Object.fromEntries(Object.entries(MC_IDS).map(([mc,id])=>[id,mc.split(':').map(Number)]));
 const toGame=(id,count,damage)=>{const subtype=MC_IDS[id+':'+damage],game=subtype??MC_IDS[id];if(!game)throw new Error('No game item for Minecraft ID '+id+':'+damage);return makeStack(game,count,subtype?0:damage);};

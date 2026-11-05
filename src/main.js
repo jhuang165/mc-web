@@ -104,6 +104,8 @@ import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
+import { Fishing } from "./fishing-simulation.js";
+import { FISHING_ROD } from "./fishing-content.js";
 import { WitchPotions } from "./witch-potions.js";
 import {impactPlayerPearl} from './pearl-player.js';
 import { Arrows, arrowTargets, bowStage, bowFov, easeFov, ARROW } from "./bow.js";
@@ -330,6 +332,8 @@ setGameRuleSource((name) => ruleOn(active, name));
 { const dropBlock = items.dropBlock; items.dropBlock = function (...a) { return active && !ruleOn(active, "doTileDrops") ? undefined : dropBlock.apply(this, a); }; }
 // Thrown snowballs and their particles (see projectiles.js).
 const projectiles = new Projectiles();
+// The fishing rod's bobber (fishing-simulation.js).
+const fishing = new Fishing();
 // Arrows in flight or stuck in blocks (bow.js) and the eased field-of-view modifier the
 // bow draw drives (EntityRenderer.fovModifierHand and its previous value).
 const arrows = new Arrows();
@@ -573,6 +577,7 @@ function save() {
   active.player = survival.serialize();
   active.drops = items.serialize();
   active.projectiles = projectiles.serialize();
+  active.fishing = fishing.serialize();
   active.thrownPotions = mobs?.potions?.serialize() ?? [];
   active.arrows = arrows.serialize();
   // EntityTNTPrimed.writeEntityToNBT keeps only the fuse (plus Entity's position and motion).
@@ -989,6 +994,7 @@ async function launch(record, prepared) {
       survival.time,
     );
     projectiles.load(record.projectiles);
+    fishing.load(record.fishing);
     primed = (Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz }));
     tntRenderer?.clear();
     arrows.load(record.arrows);
@@ -1922,6 +1928,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     arrowsCollected: () => { renderHotbar(); saved = false; },
     flushArrows,
   });
+  fishing.tick(fishingHost());
   // EntityMinecartChest.onUpdate and the player's and mobs' pushes against carts; spilled
   // contents and the broken cart's items become item entities.
   if (tickMinecartSimulation({ world, minecarts, mobs, position, velocity, rider, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }, {
@@ -1941,12 +1948,28 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   finishVehicleTick(vehicle);
   applyVehicleState(vehicle);
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
+  scene.setFishing(fishing.active ? { hook: fishing.hook, first: !thirdPersonView, sneaking: !!motion.sneaking } : null);
   scene.setDrops(items.items);
   scene.setProjectiles(mobs?.potions?.balls?.length ? [...projectiles.balls, ...mobs.potions.balls] : projectiles.balls, projectiles.particles);
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();
   if (survival.health <= 0) die();
+}
+// What the fishing hook needs from the running game (fishing-simulation.js).
+function fishingHost() {
+  return {
+    world, position, yaw, pitch, survival, mobs, itemRand, fx: scene.fx, worldRand: weather.random,
+    canLightningStrike: (x, y, z) => canLightningStrikeAt(weather, world, x, y, z),
+    canSeeSky: (x, y, z) => canSeeSky(world, x, y, z),
+    sound: (name, volume, pitch, hook) => sounds.play(name, { volume, pitch, ...(hook ? { position: { x: hook.x, y: hook.y, z: hook.z } } : {}) }),
+    targets: () => mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height),
+    hit: (e) => thrownHit(mobs, e, position),
+    pull: (e, [dx, dy, dz]) => { if (Number.isFinite(e.vx)) { e.vx += dx; e.vy += dy; e.vz += dz; } },
+    drop: (stack, x, y, z, motion) => items.spawn(stack, x, y, z, { motion }),
+    orb: (n) => xpOrbs.spawn(n, { x: position.x, y: position.y + 0.5, z: position.z + 0.5 }),
+    wear: (n) => { if (!survival.creative) survival.wear(FISHING_ROD, n); renderHotbar(); reportBrokenTool(); saved = false; },
+  };
 }
 // The sounds the arrows made (the bow's, the hits', the pickup's) and the arrows to draw.
 function flushArrows() {
@@ -2081,6 +2104,7 @@ function edit(place = false) {
     criticalHit: entity => { scene.fx.crit2(() => mobs.fxTarget(entity)); },
     enchantmentCriticalHit: entity => { scene.fx.crit2(() => mobs.fxTarget(entity), true); },
     handleEntityEvents,
+    useFishingRod: () => fishing.use(fishingHost()),
     renderHotbar,
     renderVitals,
     markUnsaved: () => { saved = false; },

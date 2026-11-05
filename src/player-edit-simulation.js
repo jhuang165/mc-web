@@ -2,6 +2,7 @@ import { CHEST } from './chest.js';
 import { DISPENSER, DROPPER } from './dispenser-piston.js';
 import { newDispenser, DROPPER_TITLE } from './dispenser-container.js';
 import { BOW, canDraw } from './bow.js';
+import { FISHING_ROD } from './fishing-content.js';
 import { plantedBlock } from './crops.js';
 import { growGrass } from './flowers.js';
 import { isBucket } from './buckets.js';
@@ -63,6 +64,14 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   if (place && id === BOW && !usesBlock) {
     if (!state.eating && canDraw(state.survival)) state.eating = { id: BOW, ticks: 0, bow: true };
     return act('begin-bow-use');
+  }
+  // ItemFishingRod.onItemRightClick: reels in or casts the bobber, then swings.
+  if (place && id === FISHING_ROD && !usesBlock) {
+    const used = hook('useFishingRod');
+    hook('swing');
+    hook('renderHotbar');
+    hook('markUnsaved');
+    return act('use-fishing-rod', { fishing: used ?? 'none' });
   }
   if (place && id === ITEM_POTION && !usesBlock) {
     const used = usePotion(state, hooks);
