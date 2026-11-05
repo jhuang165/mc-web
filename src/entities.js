@@ -6,6 +6,7 @@ import { ENDERMAN_HEALTH, ENDERMAN_WIDTH, ENDERMAN_HEIGHT, ENDERMAN_SPEED, ENDER
 import { endermanTick, endermanHurt, endermanSpawn, ENDERMAN_TRANSIENT } from "./enderman-live.js";
 import { SILVERFISH, SILVERFISH_SOUNDS, silverfishActionState, legacyFields as silverfishFields, silverfishCanSpawnHere, hurtSummon, attackReady, closestVulnerablePlayer, pathWeight as silverfishPathWeight, eggSpawn } from "./silverfish.js";
 import { POISON } from "./status-effects.js";
+import { WITHER_SKELETON_STATS, witherHitEffect } from "./wither-skeleton.js";
 import {CARROT,zombieRareDrop} from './crops.js';
 import { creeperFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from "./creeper.js";
 import { SIZE, HEIGHT, hash, slipperiness, collisionBoxes as cellCollisionBoxes, normalCube, WOOL, isLiquid, DYE, BLOCKS, PUMPKIN } from "./world.js";
@@ -200,6 +201,7 @@ export const ENTITY_TYPES = {
   // arrow and bone drops are rolled in `kill`, so there is no `drop`; the task
   // speeds (ArrowAttack 1.0, FleeSun 1.0, Wander 1.0) are in the AI's brain.
   skeleton: { health: 20, width: 0.6, height: 1.8, movement: 0.25, ai: { wander: 1 }, drop: 0 },
+  wither_skeleton: WITHER_SKELETON_STATS, // EntitySkeleton type 1 (wither-skeleton.js)
   // EntityCreeper (xz): 0.6 x 1.8, EntityMob's 20 health, speed 0.25; EntityAIAttackOnCollide
   // 1.0 and EntityAIWander 0.8. `damage` is EntityMob's attackDamage 2, which the swell
   // task (mutex 1, ahead of the attack) keeps from ever being dealt. Gunpowder comes from
@@ -234,7 +236,7 @@ const volumeOf = (e) => (isSlimeLike(e) ? slimeVolume(e.size) : soundVolume(e.ty
 // Fire-immune mobs (Entity.isImmuneToFire): the magma cube and the pigman.
 const fireproof = (e) => e.type === "magma_cube" || e.type === "pigman";
 // EntityMob subclasses: no panic counter, 5 experience, despawning, 0.5 - brightness path weights.
-export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper", "silverfish", "witch", "slime", "enderman", "magma_cube", "pigman"]);
+export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper", "silverfish", "witch", "slime", "enderman", "magma_cube", "pigman", "wither_skeleton"]);
 // EntityMoveHelper.onUpdateMoveHelper (tv.c) hands EntityLiving.setAIMoveSpeed
 // (sw.i) `(float)(speed * movementSpeed)`; sw.i also sets moveForward to it. The
 // zombie's "Baby speed boost" (yq.br) is operation 1: base * (1 + 0.5); a Speed effect
@@ -1048,6 +1050,7 @@ export class EntityWorld {
       if (ticks) survival.setFire(ticks / 20);
     }
     // EntityCaveSpider.attackEntityAsMob: addPotionEffect(new PotionEffect(poison, ticks, 0)).
+    if (hit && e.type === "wither_skeleton") survival.effects?.add(witherHitEffect()); // EntitySkeleton.attackEntityAsMob, type 1
     if (hit && e.type === "cave_spider") {
       const ticks = caveSpiderPoisonTicks(this.difficulty);
       if (ticks > 0) survival.effects?.add({ id: POISON, duration: ticks, amplifier: 0 });

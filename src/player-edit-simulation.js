@@ -25,6 +25,8 @@ import {
 } from './world.js';
 import { ITEM_BED, placeBed } from './bed.js';
 import { ITEM_SIGN, placeSign } from './signs.js';
+import { ITEM_SKULL, placeSkull } from './skull.js';
+import { SOUL_SAND } from './nether-blocks.js';
 import { isDoor, activateDoor, doorSound, doorReplaceable } from './doors-panes.js';
 import { FENCE_GATE, TRAPDOOR, gateUseMeta, trapOpen } from './shaped-blocks.js';
 import { ITEMS } from './survival.js';
@@ -453,6 +455,13 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       if (!state.survival.creative) state.survival.take(id);
       hooks.updateBlock?.(cell[0], cell[2], cell[1]); hooks.renderHotbar?.(); hooks.markUnsaved?.(); hooks.sound?.(true, CAKE);
       return act('place-block', { placement: { placed: true, reason: 'cake', block: CAKE, position: cell } });
+    }
+    // ItemSkull.onItemUse (skull.js): any face but the bottom of a solid block; the Wither builds when its T completes.
+    if (id === ITEM_SKULL) {
+      const placed = placeSkull({ world: state.world, survival: state.survival, yaw: state.yaw, yawDegrees: state.yawDegrees }, { id, damage: state.survival.held?.damage ?? 0, target }, {
+        skulls: state.skulls, difficulty: state.difficulty, soulSand: SOUL_SAND, spawnWither: hooks.spawnWither, updateBlock: hooks.updateBlock, renderHotbar: hooks.renderHotbar, markUnsaved: hooks.markUnsaved, sound: hooks.sound,
+      });
+      return act(placed.placed ? 'place-block' : `placement-${placed.reason}`, { placement: placed });
     }
     // ItemSign.onItemUse (sign-reference.json): any face but the bottom of a solid block; the edit screen opens for the new tile.
     if (id === ITEM_SIGN) {

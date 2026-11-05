@@ -145,10 +145,11 @@ export class MobRenderer {
   // (x, 24 - y, -z) / 16 like the sheep, and RendererLivingEntity's translate(0, -24 *
   // 0.0625 - 0.0078125) lifts it by 1/128. The arms and legs are 2 x 12 x 2, the left pair
   // mirrored.
-  createSkeleton() {
+  createSkeleton(wither = false) {
     const root = new THREE.Group(), frame = new THREE.Group(), limbs = [],
-      material = entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/entity/skeleton/skeleton.png") }),
+      material = entityMaterial(this.view.lighting, { map: pixelTexture(wither ? "/media/1.7.10/entity/skeleton/wither_skeleton.png" : "/media/1.7.10/entity/skeleton/skeleton.png") }),
       materials = [material];
+    if (wither) root.scale.setScalar(1.2); // RenderSkeleton.preRenderCallback, skeletonType 1
     frame.position.y = 1 / 128;
     root.add(frame);
     const part = (parent, w, h, d, u, v, ox, oy, oz, mirror = false) => {
@@ -186,7 +187,8 @@ export class MobRenderer {
     mc.add(held);
     limbs[0].add(mc);
     this.scene.add(root);
-    return { root, neck, limbs, materials, type: "skeleton", keep: [bow] };
+    bow.visible = !wither; // the wither skeleton holds a stone sword (not drawn: gap)
+    return { root, neck, limbs, materials, type: wither ? "wither_skeleton" : "skeleton", keep: [bow] };
   }
   // ModelSpider: head/body/rear at y=15, eight 16x2x2 legs. All boxes and
   // pivots use the original pixel coordinates; (x,24-y,-z)/16 maps to three.js.
@@ -394,7 +396,7 @@ export class MobRenderer {
     if (e.type === "creeper") return this.createCreeper();
     if (e.type === "spider" || e.type === "cave_spider") return this.createSpider(e.type === "cave_spider");
     if (e.type === "silverfish") return this.createSilverfish();
-    if (e.type === "skeleton") return this.createSkeleton();
+    if (e.type === "skeleton" || e.type === "wither_skeleton") return this.createSkeleton(e.type === "wither_skeleton");
     if (e.type === "chicken") return this.createChicken();
     if (e.type === "sheep") return this.createSheep();
     if (e.type === "zombie") return this.createZombie(e.villager === true);
@@ -508,7 +510,7 @@ export class MobRenderer {
         if (spider) { l.rotation.set(0, -spider[i][0], -spider[i][1]); return; }
         if (creeper) { l.rotation.x = creeper[i + 1][0]; return; }
         if (e.type === "villager" || e.type === "witch") { l.rotation.x = villagerLegAngle(pose.limbSwing, pose.limbSwingAmount, i); return; }
-        if ((e.type === "zombie" || e.type === "pigman" || e.type === "skeleton") && i < 2) {
+        if ((e.type === "zombie" || e.type === "pigman" || e.type === "skeleton" || e.type === "wither_skeleton") && i < 2) {
           const side = i === 0 ? 1 : -1;
           l.rotation.set(-Math.PI / 2 + side * sway, side * 0.1, -side * spread);
         } else l.rotation.x = angles[i];

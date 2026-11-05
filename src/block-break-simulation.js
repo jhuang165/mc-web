@@ -1,4 +1,5 @@
 import {populationDrops,populationXp} from './population-content.js';
+import { SKULL, SKULLS, skullDrops } from './skull.js';
 import { ICE, WATER, WOOL, RED_FLOWER, SNOW_LAYER, BED } from './world.js';
 import { bedHarvested } from './bed.js';
 import { snowballsFor, iceLeavesWater } from './snow.js';
@@ -17,6 +18,8 @@ import { QUARTZ_BLOCK, quartzDropDamage } from './nether-blocks.js';
 // The authoritative live player block-break path, with synchronous presentation
 // hooks. Random sources stay separate: Math.random drives gravel/crops/ore XP, while
 // the tree system's random stream drives leaf drops as it does in the browser.
+// BlockSkull.breakBlock: the item of the tile's SkullType (none in Creative, whose harvest sets metadata bit 8).
+const skullBreakDrops = (p, drops) => (drops ? skullDrops(SKULLS.tile(...p)?.type ?? 0) : []);
 export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, trees, heldTool }, coords, {
   creative = false,
   random = Math.random,
@@ -47,7 +50,7 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
   const leaves = (block === 5||block===71) && harvest && !creative && !shearing && !enchanted
     ? leafDrops(leafRandom, world.getMeta(...p),block).map((d) => ({ ...d, count: 1 }))
     : null;
-  const drops = enchanted?.drops ?? (harvest ? populationDrops(block,world.getMeta(...p),{random,shears:shearing}) : null) ?? leaves ?? crops ?? (drop ? [{ id: drop, count }] : []);
+  const drops = (block === SKULL ? skullBreakDrops(p, harvest && !creative) : null) ?? enchanted?.drops ?? (harvest ? populationDrops(block,world.getMeta(...p),{random,shears:shearing}) : null) ?? leaves ?? crops ?? (drop ? [{ id: drop, count }] : []);
   // BlockFlowerPot.breakBlock: the pot's plant drops alongside the pot (world.pots, read before the cell is cleared).
   const potPlant = block === FLOWER_POT ? potContents(world, ...p) : null;
   if (potPlant) drops.push({ id: potPlant.id, count: 1, damage: potPlant.damage });

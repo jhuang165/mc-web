@@ -9,6 +9,7 @@ import { blockTile,tileRect } from "./block-textures.js";
 import { entityMaterial, ITEM_LIGHTS } from "./light-material.js";
 import { leatherItemLayers } from "./leather-dye.js";
 import { FISHING_ROD, rodState } from "./fishing-content.js";
+import { ITEM_SKULL, skullIconUrl } from "./skull.js";
 import { ITEM_SPAWN_EGG, spawnEggTexture } from "./spawn-eggs.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
@@ -95,6 +96,7 @@ export function skinBox(w, h, d, u, v, tw, th, mirror = false) {
 // `use` is the bow's draw stage (bow.js bowStage: 0 standby, 1 to 3 bow_pulling_0 to 2).
 export function itemTexture(id, damage = 0, use = 0) {
   const item = ITEMS[id];
+  if (id === ITEM_SKULL) return skullIconUrl(damage); // skull.js: one flat sprite per head type
   if (id === ITEM_SPAWN_EGG) return spawnEggTexture(damage); // two tinted layers composed (spawn-eggs.js)
   if (id === FISHING_ROD && use > 0) return "/media/1.7.10/items/fishing_rod_cast.png";
   if (id === 127 && use > 0) return "/media/1.7.10/items/bow_pulling_" + (Math.min(3, use) - 1) + ".png";

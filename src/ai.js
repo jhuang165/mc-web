@@ -900,14 +900,15 @@ export class Brain {
       this.tasks.add(3, new LookIdle(this));
       this.targets.add(1, new HurtByTarget(this, false));
       this.targets.add(2, new NearestAttackable(this));
-    } else if (e.type === "skeleton") {
+    } else if (e.type === "skeleton" || e.type === "wither_skeleton") {
       // EntitySkeleton (yl): swim 1, restrict sun 2, flee sun 3, the bow's arrow attack 4
       // (setCombatTask, with a bow in hand), wander 5, watch the player 6, look idle 6;
       // targets hurt-by 1 (no call for help) and the nearest visible player 2.
       this.tasks.add(1, new Swim(this));
       this.tasks.add(2, new RestrictSun(this));
       this.tasks.add(3, new FleeSun(this, 1));
-      this.tasks.add(4, new ArrowAttack(this, 1, 20, 60, 15));
+      // EntitySkeleton.bZ: a stone sword (type 1) swaps the bow task for AttackOnCollide(player, 1.2, false).
+      this.tasks.add(4, e.type === "wither_skeleton" ? new AttackOnCollide(this, 1.2, "player", false) : new ArrowAttack(this, 1, 20, 60, 15));
       this.tasks.add(5, new Wander(this, A.wander));
       this.tasks.add(6, new WatchClosest(this, 8));
       this.tasks.add(6, new LookIdle(this));
@@ -1037,7 +1038,7 @@ export class Brain {
   getBlockPathWeight(x, y, z) {
     const w = this.ai.world;
     if (this.e.type === "villager" || this.e.type === "iron_golem" || this.e.type === "snow_golem") return f(0); // EntityCreature.getBlockPathWeight
-    if (this.e.type === "zombie" || this.e.type === "skeleton" || this.e.type === "creeper" || this.e.type === "witch" || this.e.type === "enderman") return f(f(0.5) - this.ai.brightness(x, y, z));
+    if (this.e.type === "zombie" || this.e.type === "skeleton" || this.e.type === "wither_skeleton" || this.e.type === "creeper" || this.e.type === "witch" || this.e.type === "enderman") return f(f(0.5) - this.ai.brightness(x, y, z));
     return w.get(x, y - 1, z) === GRASS ? f(10) : f(this.ai.brightness(x, y, z) - f(0.5));
   }
   // sw.bn(): the AI half of onLivingUpdate. Despawning and the idle age come first, then
@@ -1065,7 +1066,7 @@ export class Brain {
     const e = this.e, p = this.ai.player;
     if ((e.idle & 31) !== 31 || !p) return;
     // EntityWolf.canDespawn (v): only a wild wolf older than 2400 ticks.
-    const d3 = this.distSq(p), can = !e.persistent && ((e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || (e.type === "ocelot" && ocelotCanDespawn(e)) || e.type === "zombie" || e.type === "skeleton" || e.type === "witch" || e.type === "enderman" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper" || e.type === "squid" || e.type === "bat");
+    const d3 = this.distSq(p), can = !e.persistent && ((e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || (e.type === "ocelot" && ocelotCanDespawn(e)) || e.type === "zombie" || e.type === "skeleton" || e.type === "wither_skeleton" || e.type === "witch" || e.type === "enderman" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper" || e.type === "squid" || e.type === "bat");
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
     if (d3 < 1024) e.idle = 0;

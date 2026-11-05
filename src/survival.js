@@ -10,6 +10,7 @@ import {ENDER_SLOTS,ENDER_CHEST,enderOpenable,newEnderTile} from "./chest-blocks
 import { Effects } from "./status-effects.js";
 import { damageSourceKey, enchantedDamage, setFireTicks, decreaseAir, thornsReaction } from "./armor-enchantments.js";
 import { NORMAL, scaleDamage, starvationHurts, hungerDrops, peacefulRegen } from "./difficulty.js";
+import { installSkullItems, installSkullMaterials } from './skull.js';
 import { installSignItems, installSignMaterials, installSignRecipes } from './signs.js';
 import { installSpawnEggItems, installSpawnEggRecipes } from './spawn-eggs.js';
 import { installStemCakeItems, installStemCakeMaterials, installStemCakeRecipes } from './stems-cake.js';
@@ -236,6 +237,7 @@ installFishingItems(ITEMS);
 installNetherItems(ITEMS);
 installNoteJukeboxItems(ITEMS); // note block 1177, jukebox 1178, discs 530-541
 installSignItems(ITEMS);
+installSkullItems(ITEMS); // mob head item 2050 (skull.js)
 installStemCakeItems(ITEMS); // cake 1930; stems and cake have no block items
 installSpawnEggItems(ITEMS); // spawn egg 1950, Bottle o' Enchanting 1951, fire charge 1952 (spawn-eggs.js)
 // Every item name and damage subtype is the 1.7.10 en_US display name (item-names.js); internal-only items get Title Case.
@@ -306,6 +308,7 @@ installNetherMaterials(MATERIALS);
 installColoredMaterials(MATERIALS); // colored-blocks.js blocks 140-148
 installNoteJukeboxMaterials(MATERIALS);
 installSignMaterials(MATERIALS);
+installSkullMaterials(MATERIALS);
 installStemCakeMaterials(MATERIALS);
 export const RECIPES = [];
 function recipe(id, name, rows, keys, output, count = 1) {

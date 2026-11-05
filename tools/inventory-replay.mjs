@@ -5,6 +5,7 @@ import { FISHING_ITEMS } from '../src/fishing-content.js';
 import { NETHER_ITEMS } from '../src/nether-blocks.js';
 import { NOTE_JUKEBOX_ITEMS } from '../src/note-jukebox-content.js';
 import { SIGN_ITEMS } from '../src/signs.js';
+import { SKULL_ITEMS } from '../src/skull.js';
 import { CHEST_ITEMS } from '../src/chest-blocks.js';
 import { STEM_CAKE_ITEMS } from '../src/stems-cake.js';
 import { SPAWN_EGG_ITEMS } from '../src/spawn-eggs.js';
@@ -28,6 +29,7 @@ export const MC_IDS={122:171,381:1960,137:1139,95:1140,160:1141,171:1142,170:114
  ...NETHER_ITEMS,
  ...NOTE_JUKEBOX_ITEMS,
  ...SIGN_ITEMS,
+ ...SKULL_ITEMS,
  ...CHEST_ITEMS,
  ...STEM_CAKE_ITEMS,
  ...SPAWN_EGG_ITEMS,

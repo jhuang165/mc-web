@@ -14,6 +14,7 @@ import { newChest, settleFacing } from "./chest.js";
 import { newEnderTile } from "./chest-blocks.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
 import { makeStack } from "./inventory.js";
+import { SKULLS } from "./skull.js";
 import { canApply, canApplyTogether, addEnchantment, ENCHANTMENTS_BY_ID } from "./enchantments.js";
 import { liveStackToNative } from "./anvil-container.js";
 import { PLAYER_NAME } from "./death-messages.js";
@@ -169,6 +170,7 @@ export function createCommandHost(env) {
       w.set(x, y, z, cell.id, true, cell.meta ?? 0);
       const key = `${x},${y},${z}`, stores = survival();
       for (const name of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing']) delete stores[name]?.[key];
+      if (original === 144) SKULLS.create(x, y, z, Number(nbtGet(tag ?? new Map(), 'SkullType', NBT.BYTE, 0)) | 0, Number(nbtGet(tag ?? new Map(), 'Rot', NBT.BYTE, 0)), String(nbtGet(tag ?? new Map(), 'ExtraType', NBT.STRING, ''))); // TileEntitySkull (skull.js)
       const id = { 54: 'Chest', 146: 'Chest', 61: 'Furnace', 62: 'Furnace', 23: 'Trap', 158: 'Dropper', 154: 'Hopper', 117: 'Cauldron' }[original];
       if (original === 137 && env.commandTile) {
         Object.assign(env.commandTile(x, y, z), readCommandBlock(tag ?? new Map()));

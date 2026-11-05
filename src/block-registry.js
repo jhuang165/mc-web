@@ -81,6 +81,7 @@ const MAP = {
   // BlockTallGrass metadata 1 (grass); 0 dead shrub and 2 fern have no port block.
   39: fixed(31, 1),
   40: fixed(172),
+  172: same(144), // BlockSkull: facing 1 floor, 2-5 wall; SkullType and Rot travel in the Skull tile (skull.js)
   41: chest(54),
   // Trapped chest (146, chests track): the same storage and facing state as a chest; ender chest (130) keeps its facing in the metadata.
   162: chest(146), 163: same(130), 149: fixed(119), // end portal (eye-of-ender.js)
