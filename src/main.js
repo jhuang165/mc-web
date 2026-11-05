@@ -374,7 +374,8 @@ const projectiles = new Projectiles();
 const maps = new MapsClock(); // maps-clock-live.js: filled maps and the clock icon
 const eyes = new EyesOfEnder(); // eye-of-ender-live.js: flying eyes of ender
 const rockets = new FireworkRockets(); // fireworks-live.js: firework rockets in flight
-const fireworkFx = new FireworkParticles({ effects: scene.effectRenderer, playSound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }) });
+// The scene is created in start(), so particles look up its effect renderer when they spawn.
+const fireworkFx = new FireworkParticles({ effects: { add: (p) => scene.effectRenderer.add(p) }, playSound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }) });
 // The fishing rod's bobber (fishing-simulation.js).
 const fishing = new Fishing();
 // Arrows in flight or stuck in blocks (bow.js) and the eased field-of-view modifier the

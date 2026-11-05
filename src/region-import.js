@@ -35,7 +35,7 @@ const FURNACE = 14, CHUNK_INFLATE_LIMIT = 16 * 1024 * 1024, AREA_INFLATE_LIMIT =
 
 export { ORIGINAL_ITEMS };
 // Subtype families whose stack damage the browser stores as the same variant index.
-const VARIANT_DAMAGE = new Set([35, 38, 351, 3, 5, 6, 12, 17, 18, 24, 44, 98, 97, 145, 155, 159, 161, 162, 175, 95, 160, 171]);
+const VARIANT_DAMAGE = new Set([35, 38, 351, 3, 5, 6, 12, 17, 18, 24, 44, 98, 97, 145, 155, 159, 161, 162, 175, 95, 160, 171, 397]); // 397: ItemSkull, damage = SkullType 0-4 (skull.js)
 
 /** Browser stack fields for an original item ID/damage, or null when the build has no such item. */
 export function itemFromOriginal(id, damage = 0) {
@@ -52,6 +52,8 @@ export function itemFromOriginal(id, damage = 0) {
   if (item.durability) return { id: base, damage: Math.min(damage, item.durability), clamped: damage > item.durability };
   // ItemMonsterPlacer: the damage is the EntityList id (spawn-eggs.js); any value is a valid stack, unknown ones just spawn nothing.
   if (id === 383) return damage < 32768 ? { id: base, damage, clamped: false } : null;
+  // ItemMap: the damage is the map_N id (maps.js), so every value names a map.
+  if (id === 358) return damage < 32768 ? { id: base, damage, clamped: false } : null;
   if (VARIANT_DAMAGE.has(id)) return damage < (item.variants?.length ?? 1) ? { id: base, damage, clamped: false } : null;
   return damage === 0 ? { id: base, damage: 0, clamped: false } : null;
 }

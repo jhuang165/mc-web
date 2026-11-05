@@ -60,3 +60,10 @@ test('wither constants', () => {
   assert.equal(witherSkullEffectTicks(3), 800);
   assert.equal(witherSkullEffectTicks(1), 0);
 });
+
+test('/give and world import keep the skull type and the map id in the damage value', async () => {
+  const { itemFromOriginal } = await import('./region-import.js');
+  for (let type = 0; type < 5; type++) assert.deepEqual(itemFromOriginal(397, type), { id: ITEM_SKULL, damage: type, clamped: false });
+  assert.equal(itemFromOriginal(397, 5), null); // ItemSkull has five subtypes
+  assert.deepEqual(itemFromOriginal(358, 7), { id: 2081, damage: 7, clamped: false }); // ItemMap: damage names map_7
+});

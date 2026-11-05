@@ -62,10 +62,14 @@ export class MapsClock {
   tick({ survival, position, yaw, world, time, name = "Player" }) {
     const surface = true;
     tickClock(clockState, clockAngle(time, surface));
-    if (typeof document !== "undefined" && this.lastFrame !== clockState.frame) {
-      this.lastFrame = clockState.frame;
+    if (typeof document !== "undefined") {
       const url = clockFrameUrl();
-      for (const img of document.querySelectorAll("img.vanilla-item-icon")) if (urlSet.has(img.getAttribute("src")) && img.getAttribute("src") !== url) img.setAttribute("src", url);
+      if (this.lastFrame !== clockState.frame) {
+        this.lastFrame = clockState.frame;
+        for (const img of document.querySelectorAll("img.vanilla-item-icon")) if (urlSet.has(img.getAttribute("src")) && img.getAttribute("src") !== url) img.setAttribute("src", url);
+      }
+      // Freshly drawn slots point at the raw 16x1024 strip; swap in the current frame once it has loaded.
+      if (urlSet.has(url)) for (const img of document.querySelectorAll('img[src="/media/1.7.10/items/clock.png"]')) img.setAttribute("src", url);
     }
     mapStore.spawn = mapStore.spawn ?? { x: 0, z: 0 };
     const player = { name, x: position.x, z: position.z, yaw, dimension: 0 };
