@@ -7,6 +7,7 @@ import { pearlCount as endermanPearls, ENDER_PEARL_ITEM as ENDER_PEARL } from ".
 import { golemDrops } from "./iron-golem.js";
 import { CARROT, POTATO } from "./crops.js";
 import { slimeDrops, slimeExperience } from "./slime.js";
+import { magmaDrops, magmaArmor, pigmanDrops, pigmanRareDrop, pigmanSwordDrop, pigmanExperience, PIGMAN } from "./nether-melee.js";
 import { witchDrops, witchEquipmentDrop, witchExperience } from "./witch.js";
 import { squidDrops, squidExperience } from "./squid-bat.js";
 import { dropCount as horseDropCount } from "./horse.js";
@@ -23,8 +24,8 @@ const UNBLOCKABLE = new Set(["fall", "onFire", "drown", "inWall", "starve", "gen
 // EntityZombie.getTotalArmorValue: 2 natural points; the others wear nothing here.
 const ARMOR = { zombie: 2 };
 // EntityLivingBase.applyArmorCalculations: amount * (25 - armour) / 25 in floats.
-export function armorReduced(type, amount, source) {
-  const armor = ARMOR[type] || 0;
+export function armorReduced(type, amount, source, size = 1) {
+  const armor = type === "magma_cube" ? magmaArmor(size) : type === "pigman" ? PIGMAN.armor : ARMOR[type] || 0; // yf.aV = size * 3
   if (!armor || UNBLOCKABLE.has(source)) return amount;
   return f(f(amount * (25 - armor)) / 25);
 }
@@ -69,6 +70,8 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
     case "creeper": add(GUNPOWDER, generic()); break;
     case "iron_golem": for (const [id, n, damage] of golemDrops(rand, RED_FLOWER)) add(id, n, damage); break; // EntityIronGolem.dropFewItems
     case "slime": for (const id of slimeDrops(rand, e.size, looting)) add(id); break; // EntitySlime.dropFewItems (slime.js)
+    case "magma_cube": for (const id of magmaDrops(rand, e.size, looting)) add(id); break; // EntityMagmaCube.dropFewItems (nether-melee.js)
+    case "pigman": for (const id of pigmanDrops(rand, looting)) add(id); break; // EntityPigZombie.dropFewItems
     case "witch": for (const [id] of witchDrops(rand, looting)) add(id); break; // EntityWitch.dropFewItems (witch.js)
     case "snow_golem": { const n = rand.nextInt(16); if (n > 0) add(312, n); break; } // EntitySnowman.dropFewItems: nextInt(16) snowballs
     case "horse": add([LEATHER, LEATHER, LEATHER, FLESH, BONE][e.horse?.type ?? 0], horseDropCount(rand, looting)); break; // EntityHorse.u(): leather, rotten flesh or bone (horse.js)
@@ -82,7 +85,11 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
   }
   // EntityLiving.dropEquipment for a witch's held potion (0.085F).
   if (e.type === "witch") { const held = witchEquipmentDrop(rand, e.held, playerHit, looting); if (held) add(held.id, 1, held.damage); }
-  if (playerHit && rand.nextInt(200) - looting < 5 && e.type === "zombie") add([IRON, CARROT, POTATO][rand.nextInt(3)]);
+  if (e.type === "pigman") { const sword = pigmanSwordDrop(rand, e.held, playerHit, looting); if (sword) add(sword.id, 1, sword.damage); }
+  if (playerHit && rand.nextInt(200) - looting < 5) { // the one roll every mob draws; only the zombie and the pigman (a gold ingot, no draw) have a rare drop
+    if (e.type === "zombie") add([IRON, CARROT, POTATO][rand.nextInt(3)]);
+    else if (e.type === "pigman") add(pigmanRareDrop());
+  }
   if (e.type === "creeper" && bySkeleton) add(DISC_FIRST + rand.nextInt(12)); // EntityCreeper.onDeath: Item.getItemById(2256 + nextInt(12))
   return out;
 }
@@ -92,6 +99,8 @@ export function experiencePoints(e, rand, worldRand) {
   if (e.type === "squid") return squidExperience(worldRand); // EntityWaterMob.getExperiencePoints: 1 + world.rand.nextInt(3)
   if (e.type === "villager" || e.type === "iron_golem" || e.type === "snow_golem" || e.type === "bat") return 0; // EntityLiving.experienceValue stays 0 (EntityVillager is no EntityMob or EntityAnimal)
   if (ANIMALS.has(e.type)) return 1 + worldRand.nextInt(3);
+  if (e.type === "magma_cube") return slimeExperience(e.size); // experienceValue = size, like the slime
+  if (e.type === "pigman") return pigmanExperience(rand, e.held);
   if (e.type === "slime") return slimeExperience(e.size); // experienceValue = size
   if (e.type === "witch") return witchExperience(rand, e.held); // 5 plus 1 + nextInt(3) for a held potion
   return 5 + (e.type === "skeleton" ? 1 + rand.nextInt(3) : 0);

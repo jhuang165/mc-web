@@ -56,7 +56,7 @@ export function slimeChildren(rand, e) {
 }
 // onCollideWithPlayer (b_): size > 1, the player visible and within distance^2 < (0.6 * size)^2 takes `size` mob damage; mob.attack
 // (volume 1, pitch (r - r) * 0.2 + 1) plays with it. The 1.7.10 sound manifest has no mob.attack event, so it is silent.
-export const slimeTouches = (size, distSq, canSee) => size > 1 && canSee && distSq < f(f(0.6) * size) ** 2;
+export const slimeTouches = (size, distSq, canSee, canDamage = size > 1) => canDamage && canSee && distSq < f(f(0.6) * size) ** 2;
 
 // --- Spawning ---
 // Chunk.getRandomWithSeed: new Random(worldSeed + (long)(cx*cx*4987142) + (long)(cx*5947611) + (long)(cz*cz)*4392871L
@@ -105,9 +105,10 @@ export function slimeActionState(s, rand, target, sound) {
   if (target) faceEntity(s, target);
   if (s.onGround && s.jumpDelay-- <= 0) {
     s.jumpDelay = jumpDelay(rand);
+    if (s.type === "magma_cube") s.jumpDelay *= 4; // yf.bR: the slime's delay times 4
     if (target) s.jumpDelay = Math.trunc(s.jumpDelay / 3);
     s.jumping = true;
-    if (slimeMakesJumpSound(s.size)) sound(slimeSoundName(s.size), slimeVolume(s.size), f(f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1) * f(0.8)));
+    if (slimeMakesJumpSound(s.size)) sound(s.type === "magma_cube" ? magmaSoundName(s.size) : slimeSoundName(s.size), slimeVolume(s.size), f(f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1) * f(0.8)));
     s.moveStrafing = f(1 - f(rand.nextFloat() * 2));
     s.moveForward = s.size;
   } else {
@@ -123,11 +124,12 @@ export function slimeSquishEnd(s, rand, fx, sound) {
       const angle = f(f(rand.nextFloat() * f(Math.PI)) * 2), r = f(f(rand.nextFloat() * 0.5) + 0.5);
       fx(f(f(Math.sin(angle) * s.size) * 0.5 * r), f(f(Math.cos(angle) * s.size) * 0.5 * r));
     }
-    if (slimeMakesLandSound(s.size)) sound(slimeSoundName(s.size), slimeVolume(s.size), f(f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1) / f(0.8)));
+    if (s.type === "magma_cube" || slimeMakesLandSound(s.size)) sound(s.type === "magma_cube" ? magmaSoundName(s.size) : slimeSoundName(s.size), slimeVolume(s.size), f(f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1) / f(0.8)));
     s.squishAmount = -0.5;
   } else if (!s.onGround && s.wasOnGround) s.squishAmount = 1;
-  s.squishAmount = f(s.squishAmount * f(0.6));
+  s.squishAmount = f(s.squishAmount * f(s.type === "magma_cube" ? 0.9 : 0.6)); // yf.bS keeps 0.9
 }
+export const magmaSoundName = (size) => (size > 1 ? "mob.magmacube.big" : "mob.magmacube.small"); // yf.bV; hurt and death stay slimeSoundName
 export const slimeSquishFields = () => ({ squishAmount: 0, squishFactor: 0, prevSquishFactor: 0, moveStrafing: 0 });
 
 // --- Render (RenderSlime.preRenderCallback and ModelSlime, bytecode-derived and ModelProbe's dump) ---
@@ -148,8 +150,10 @@ export const SLIME_MODEL = Object.freeze({
   outer: [{ name: "shell", from: [-4, 16, -4], size: [8, 8, 8], uv: [0, 0] }],
 });
 
+// Magma cubes (nether-melee.js) are slimes with their own numbers; type "magma_cube" shares every slime code path.
+export const isSlimeLike = (e) => e?.type === "slime" || e?.type === "magma_cube";
 // Live-mob helpers (entities.js). The collision box scale: a slime is size times 0.6 x 0.6, an adult 1, a child 0.5.
-export const mobScale = (e) => (e.type === "slime" ? e.size : e.growingAge < 0 ? 0.5 : 1);
+export const mobScale = (e) => (isSlimeLike(e) ? e.size : e.growingAge < 0 ? 0.5 : 1);
 // The fields of one live slime. `size` null rolls the constructor's 1 << nextInt(3); the first jump delay is nextInt(20) + 10.
 // Health is size * size (setSlimeSize heals to full), restore() clamps a saved value afterwards.
 export function slimeFields(size, random) {

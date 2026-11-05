@@ -24,6 +24,9 @@ import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
 import { IRON_GOLEM_TYPE, IRON_GOLEM_SOUNDS, ironGolemFields, ironGolemShape } from "./iron-golem.js";
 import { createVillages, PLAYER_NAME } from "./village-host.js";
 import { SLIME, mobScale, slimeDamage, slimeTouches, slimeFields, slimeFieldsFrom, slimeRestore, slimeWidth, slimeSoundName, slimeVolume, slimeSquishStart, slimeSquishEnd, slimeActionState, slimeChildren, slimeCanSpawnHere, isSlimeChunk, SLIMEBALL } from "./slime.js";
+import { isSlimeLike } from "./slime.js";
+import { PIGMAN, MAGMA, isPigman, isMagma, magmaDamage, magmaJumpMotion, pigmanEquipment } from "./nether-melee.js";
+import { pigmanFields, pigmanFieldsFrom, pigmanHurt, pigmanTick, pigmanThink, pigStrike } from "./nether-melee-live.js";
 import { SQUID, BAT } from "./squid-bat.js";
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { HORSE_ENTITY, horseRideThink, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
@@ -212,22 +215,28 @@ export const ENTITY_TYPES = {
   witch: { health: WITCH.health, width: WITCH.width, height: WITCH.height, movement: WITCH.movement, ai: { wander: 1 }, damage: WITCH.attackDamage, drop: 0 },
   // EntitySlime (ym): 0.6 x 0.6 at size 1, scaled by `size` (mobScale); health and damage are size-based (slime.js), drops in combat.js.
   slime: { health: 1, width: 0.6, height: 0.6, movement: SLIME.speed, ai: {}, damage: 1, drop: 0 },
+  // EntityMagmaCube (yf): a slime with its own numbers (nether-melee.js); health, damage and armour follow the size.
+  magma_cube: { health: 1, width: 0.6, height: 0.6, movement: MAGMA.speed, ai: {}, damage: 3, drop: 0 },
+  // EntityPigZombie (yh): 0.6 x 1.8, 20 health, speed 0.5 (+0.45 while it has a target), attack 5, armour 2; legacy AI (nether-melee-live.js).
+  pigman: { health: PIGMAN.health, width: PIGMAN.width, height: PIGMAN.height, movement: PIGMAN.movement, ai: { wander: 1 }, damage: PIGMAN.attackDamage, drop: 0 },
   // EntitySquid (ws) 0.95 x 0.95, 10 health; EntityBat (we) 0.5 x 0.9, 6 health. Legacy motion, no AI tasks (squid-bat.js, squid-bat-mobs.js).
   squid: { health: SQUID.health, width: SQUID.width, height: SQUID.height, movement: 0.25, ai: {}, drop: 0 },
   bat: { health: BAT.health, width: BAT.width, height: BAT.height, movement: 0.10000000149011612, ai: {}, drop: 0 },
 };
 // The slime's own sound names and volume depend on its size.
-const hurtOf = (e) => (e.type === "slime" ? slimeSoundName(e.size) : hurtSound(e.type));
-const deathOf = (e) => (e.type === "slime" ? slimeSoundName(e.size) : deathSound(e.type));
-const volumeOf = (e) => (e.type === "slime" ? slimeVolume(e.size) : soundVolume(e.type));
+const hurtOf = (e) => (isSlimeLike(e) ? slimeSoundName(e.size) : isPigman(e) ? PIGMAN.sounds.hurt : hurtSound(e.type));
+const deathOf = (e) => (isSlimeLike(e) ? slimeSoundName(e.size) : isPigman(e) ? PIGMAN.sounds.death : deathSound(e.type));
+const volumeOf = (e) => (isSlimeLike(e) ? slimeVolume(e.size) : soundVolume(e.type));
+// Fire-immune mobs (Entity.isImmuneToFire): the magma cube and the pigman.
+const fireproof = (e) => e.type === "magma_cube" || e.type === "pigman";
 // EntityMob subclasses: no panic counter, 5 experience, despawning, 0.5 - brightness path weights.
-export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper", "silverfish", "witch", "slime", "enderman"]);
+export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper", "silverfish", "witch", "slime", "enderman", "magma_cube", "pigman"]);
 // EntityMoveHelper.onUpdateMoveHelper (tv.c) hands EntityLiving.setAIMoveSpeed
 // (sw.i) `(float)(speed * movementSpeed)`; sw.i also sets moveForward to it. The
 // zombie's "Baby speed boost" (yq.br) is operation 1: base * (1 + 0.5); a Speed effect
 // (mob-effects.js) is operation 2.
 export function aiMoveSpeed(e, multiplier) {
-  const boost = e.type === "zombie" && e.growingAge < 0 ? [[0.5, 1]] : e.type === "enderman" && e.speedBoost ? [[ENDERMAN_BOOST, 0]] : [];
+  const boost = e.type === "zombie" && e.growingAge < 0 ? [[0.5, 1]] : e.type === "enderman" && e.speedBoost ? [[ENDERMAN_BOOST, 0]] : e.type === "pigman" && e.pigTarget ? [[PIGMAN.boost, 0]] : [];
   // EntityWitch: the "Drinking speed penalty" modifier (-0.25, operation 0) while a potion is being drunk.
   const drink = e.type === "witch" && e.drinking ? [[-0.25, 0]] : [];
   return f(multiplier * attributeValue(e.horse?.speed ?? ENTITY_TYPES[e.type].movement, [...drink, ...boost, ...speedModifiers(e)]));
@@ -488,7 +497,7 @@ export function livingSoundRoll(e, rand, interval) {
 }
 // EntityLivingBase.jump (sv.bj): 0.42 upward (no jump boost, no sprint).
 export function jump(e) {
-  e.vy = 0.41999998688697815;
+  e.vy = e.type === "magma_cube" ? magmaJumpMotion(e.size) : 0.41999998688697815; // yf.bj: 0.42 + size * 0.1
 }
 // EntityLivingBase.moveEntityWithHeading (sv.e(FF)), without strafe. AI mobs
 // accelerate at 0.04 in water (legacy spiders 0.02); drag is 0.8. Lava uses
@@ -521,7 +530,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
     const slip = () => (e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.91)) : f(0.91));
     let friction = slip();
     const accel = f(f(0.16277136) / f(f(friction * friction) * friction));
-    moveFlying(e, e.moveStrafing || 0, forward, e.onGround ? f((isSpider(e.type) || e.type === "silverfish" ? f(0.1) : e.aiMoveSpeed) * accel) : e.jumpFactor ?? JUMP_MOVEMENT_FACTOR);
+    moveFlying(e, e.moveStrafing || 0, forward, e.onGround ? f((isSpider(e.type) || e.type === "silverfish" || e.type === "pigman" ? f(0.1) : e.aiMoveSpeed) * accel) : e.jumpFactor ?? JUMP_MOVEMENT_FACTOR);
     friction = slip();
     // isOnLadder: EntitySpider's override is its wall flag; others test the ladder cell (ladders.js).
     const climbable = () => (isSpider(e.type) ? e.climbing : isOnLadder(world, e.x, e.y, e.z));
@@ -644,7 +653,7 @@ export class EntityWorld {
       ...fresh,
       ...e,
       id: /^mob-\d+$/.test(e.id) ? e.id : fresh.id,
-      health: Math.max(0, Math.min(e.type === "wolf" && typeof e.owner === "string" && e.owner.trim() ? TAMED_MAX_HEALTH : e.type === "slime" ? slimeFieldsFrom(e).health : t.health, e.health)),
+      health: Math.max(0, Math.min(e.type === "wolf" && typeof e.owner === "string" && e.owner.trim() ? TAMED_MAX_HEALTH : isSlimeLike(e) ? slimeFieldsFrom(e).health : t.health, e.health)),
       yaw: Number.isFinite(e.yaw) ? e.yaw : 0,
       age: Number.isFinite(e.age) ? e.age : 0,
       growingAge:Number.isInteger(e.growingAge)?(summoned?e.growingAge:Math.max(-24000,Math.min(6000,e.growingAge))):0,
@@ -668,7 +677,8 @@ export class EntityWorld {
       // EntitySilverfish has no NBT of its own: the summon cooldown starts over.
       ...(e.type === "silverfish" ? { summonCooldown: 0 } : {}),
       // EntitySlime.readEntityFromNBT: Size (size - 1); health is clamped to size * size, the jump and squish start over.
-      ...(e.type === "slime" ? slimeRestore(e, fresh) : {}),
+      ...(isSlimeLike(e) ? slimeRestore(e, fresh) : {}),
+      ...(e.type === "pigman" ? pigmanFieldsFrom(e) : {}),
       ...(e.type === "enderman" ? endermanFieldsFrom(e) : {}),
       // EntityWitch keeps its held potion (Equipment) but not the drinking state (datawatcher 21, the penalty modifier).
       ...(e.type === "witch" ? { drinking: false, drinkTimer: 0, held: e.held && e.held.id === ITEM_POTION && potionEffects(e.held.damage).length ? { id: ITEM_POTION, damage: e.held.damage, count: 1 } : null } : {}),
@@ -730,7 +740,8 @@ export class EntityWorld {
       ...(type === "silverfish" ? { summonCooldown: 0 } : {}),
       ...(type === "enderman" ? endermanFields() : {}),
       ...(type === "witch" ? { drinking: false, drinkTimer: 0, held: null } : {}),
-      ...(type === "slime" ? slimeFields(null, random) : {}),
+      ...(type === "slime" || type === "magma_cube" ? slimeFields(null, random) : {}),
+      ...(type === "pigman" ? pigmanFields() : {}),
       ...(type === "bat" ? { batHanging: true } : {}), // EntityBat's constructor: setIsBatHanging(true)
       ...(type === "chicken" ? { eggTimer: Math.floor(random() * 6000) + 6000, wingRotation: 0, destPos: 0, oFlapSpeed: 0, oFlap: 0, wingRotDelta: 1 } : {}),
       // EntityZombie.func_110161_a adds a 0 to 0.05 "Random spawn bonus" to knockbackResistance.
@@ -810,6 +821,7 @@ export class EntityWorld {
     if (e.type === "enderman" && e.health > 0 && !endermanHurt(this, e, source, entityRandom(e)).proceed) return true;
     if (ANIMALS.has(e.type)) { e.flee = 60; e.love = 0; e.mateTicks = 0; }
     if (e.health <= 0) return false;
+    if (e.type === "pigman") pigmanHurt(this, e, source, entityRandom); // yh.a: a player's hit angers it and every pigman within 32 blocks
     // EntityWolf.attackEntityFrom: the Sit task's wish is cleared (EntityAISit.setSitting(false)) and damage from a
     // creature that is neither a player nor an arrow is (amount + 1) / 2.
     // EntityOcelot.attackEntityFrom: the Sit task's wish is cleared.
@@ -820,7 +832,7 @@ export class EntityWorld {
     }
     const rand = entityRandom(e), name = source.name ?? "generic";
     // Potion.fireResistance: fire damage is refused.
-    if ((name === "onFire" || name === "inFire" || name === "lava") && e.effects?.some((x) => x.id === 12)) return false;
+    if ((name === "onFire" || name === "inFire" || name === "lava") && (e.effects?.some((x) => x.id === 12) || fireproof(e))) return false;
     e.limbSwingAmount = 1.5;
     let fresh = true;
     if (e.hurt > 0) {
@@ -859,7 +871,7 @@ export class EntityWorld {
   }
   // EntityLivingBase.damageEntity: armour, then setHealth (a float, clamped at 0).
   damageEntity(e, amount, name, source = null) {
-    amount = armorReduced(e.type, amount, name);
+    amount = armorReduced(e.type, amount, name, e.size);
     // EntityWitch.applyPotionDamageCalculations: its own damage is ignored, magic damage is cut to 15 %.
     if (e.type === "witch") amount = witchDamage(amount, { isMagic: name === "magic" || name === "indirectMagic", byWitch: source?.attacker === e });
     if (amount !== 0) e.health = Math.max(0, f(e.health - amount));
@@ -920,15 +932,20 @@ export class EntityWorld {
       const r = spiderSpawnRolls(rand, world, this.difficulty, local);
       e.followRange = r.followRange;
       if (r.effect) addMobEffect(e, r.effect);
-    } else if (type === "zombie") {
+    } else if (type === "zombie" || type === "pigman") {
       const now = new Date(), r = zombieSpawnRolls(rand, world, this.difficulty, local, { month: now.getMonth() + 1, day: now.getDate() });
       // EntityZombie.GroupData: a child (isChild never ages out for a zombie) and a zombie villager.
-      if (r.child) e.growingAge = -1;
-      if (r.villager) e.villager = true;
+      // EntityPigZombie.onSpawnWithEgg (yh.a) runs EntityZombie's rolls, then bC (the golden sword only); the child and villager rolls are
+      // drawn and dropped (magma-pigman.md Gaps).
+      if (type === "pigman") e.held = pigmanEquipment();
+      else {
+        if (r.child) e.growingAge = -1;
+        if (r.villager) e.villager = true;
+      }
       if (!r.diverged) {
         e.knockbackResistance = r.knockback;
         e.followRange = r.followRange;
-        e.reinforcement = reinforcementChance(e.reinforcement + r.reinforcementBonus);
+        if (type === "zombie") e.reinforcement = reinforcementChance(e.reinforcement + r.reinforcementBonus);
       }
     } else if (type === "ocelot") {
       // EntityOcelot.onSpawnWithEgg: one chance in seven of two kittens (age -24000, CatType 0) at the same spot.
@@ -1016,7 +1033,7 @@ export class EntityWorld {
       hurt: (damage) => this.attackEntityFrom(e, damage, { from: wearer && { x: wearer.x, z: wearer.z }, player: true, name: "thorns" }),
       sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: e.x, y: e.y, z: e.z } }),
     };
-    const hit = survival.scaledDamage(attackDamage(e, e.type === "wolf" ? wolfAttack(e) : e.type === "slime" ? slimeDamage(e.size) : ENTITY_TYPES[e.type].damage), "a " + e.type, { attacker: thorns });
+    const hit = survival.scaledDamage(attackDamage(e, e.type === "wolf" ? wolfAttack(e) : e.type === "slime" ? slimeDamage(e.size) : e.type === "magma_cube" ? magmaDamage(e.size) : ENTITY_TYPES[e.type].damage), "a " + e.type, { attacker: thorns });
     // EntityLivingBase.setRevengeTarget on the player: its wolves defend it (EntityAIOwnerHurtByTarget).
     if (hit) this.ai.playerHurtBy(e);
     if (hit && e.type === "zombie") {
@@ -1082,7 +1099,7 @@ export class EntityWorld {
   onDeath(e, source = {}) {
     if (e.type === "villager") this.villagerDied(e, source);
     // ... and only while gamerule doMobLoot is true (dropFewItems, dropEquipment and the rare drop alike).
-    if ((e.growingAge >= 0 || e.type === "zombie") && gameRule("doMobLoot")) {
+    if ((e.growingAge >= 0 || e.type === "zombie" || e.type === "pigman") && gameRule("doMobLoot")) {
       const at = { x: e.x, y: e.y, z: e.z };
       for (const [drop, damage] of mobDrops(e, { playerHit: e.recentlyHit > 0, burning: e.fire > 0, bySkeleton: source.attacker === "skeleton", looting: source.player ? source.looting || 0 : 0 }, entityRandom(e)))
         this.events.push({ drop, count: 1, ...(damage ? { damage } : {}), position: at });
@@ -1107,11 +1124,11 @@ export class EntityWorld {
     e.death = (e.death || 0) + 1;
     if (e.death !== 20) return;
     const rand = entityRandom(e);
-    if (e.recentlyHit > 0 && (e.growingAge >= 0 || e.type === "zombie") && gameRule("doMobLoot")) {
+    if (e.recentlyHit > 0 && (e.growingAge >= 0 || e.type === "zombie" || e.type === "pigman") && gameRule("doMobLoot")) {
       const world = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
       this.events.push({ xp: experiencePoints(e, rand, world), position: { x: e.x, y: e.y, z: e.z } });
     }
-    if (e.type === "slime") this.splitSlime(e, rand);
+    if (isSlimeLike(e)) this.splitSlime(e, rand);
     if (this.fx) burst(this.fx, "explode", 20, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, rand);
   }
   // EntityLivingBase.fall (sv.b(F)): ceil(distance - 3) points of fall damage
@@ -1167,18 +1184,27 @@ export class EntityWorld {
     if (e.type === "squid" || e.type === "bat") return squidBatTalk(this, e);
     if (e.type === "horse") return this.horseTalk(e, livingSoundRoll);
     const rand = entityRandom(e);
-    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem" || e.type === "snow_golem" || e.type === "slime") return;
+    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem" || e.type === "snow_golem" || isSlimeLike(e)) return;
     // EntityWolf.getLivingSound (t) rolls before the sound's pitch.
     const wolfSound = e.type === "wolf" ? wolfSay(e, rand) : e.type === "ocelot" ? ocelotSay(e, rand) : null;
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
     if (e.type === "ocelot" && !wolfSound) return; // a wild ocelot's living sound is "" (it still rolled the pitch)
-    this.events.push({ sound: e.type === "enderman" ? endermanLiving(e) : e.type === "witch" ? WITCH_SOUNDS.idle : wolfSound ? wolfSound : e.type === "villager" ? (e.customer ? VILLAGER_SOUNDS.haggle : VILLAGER_SOUNDS.idle) : "mob." + soundType(e.type) + ".say", volume: soundVolume(e.type), pitch, position: { x: e.x, y: e.y, z: e.z } });
+    this.events.push({ sound: e.type === "pigman" ? PIGMAN.sounds.say : e.type === "enderman" ? endermanLiving(e) : e.type === "witch" ? WITCH_SOUNDS.idle : wolfSound ? wolfSound : e.type === "villager" ? (e.customer ? VILLAGER_SOUNDS.haggle : VILLAGER_SOUNDS.idle) : "mob." + soundType(e.type) + ".say", volume: soundVolume(e.type), pitch, position: { x: e.x, y: e.y, z: e.z } });
   }
   // The fire and lava part of Entity.onEntityUpdate (sa.C): water puts the fire
   // out; a burning mob takes 1 (onFire) whenever the counter is a multiple of 20;
   // lava (handleLavaMovement) deals 4 (lava), sets fire for 15 s (counter 300) and
   // halves the fall distance. EntityAIPanic keeps animals running while they burn.
   burn(e, t) {
+    // Entity.isImmuneToFire: the counter runs down by 4, no onFire damage, lava neither burns nor hurts (setOnFireFromLava does nothing).
+    // EntityMagmaCube.handleLavaMovement (yf.P) is false: it ignores lava altogether.
+    if (fireproof(e)) {
+      e.fire = Math.max(0, (e.fire || 0) - 4);
+      e.burn = 0;
+      e.inLava = e.type === "magma_cube" ? false : inLava(this.world, [e.x - t.width / 2, e.y, e.z - t.width / 2, e.x + t.width / 2, e.y + t.height, e.z + t.width / 2]);
+      if (e.inLava) e.fallDistance *= 0.5;
+      return;
+    }
     // handleWaterMovement: only water; rain puts a burning mob out in moveEntity's tail.
     if (e.inWater) e.fire = 0;
     if (e.fire > 0) {
@@ -1602,10 +1628,11 @@ export class EntityWorld {
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.
       if (e.type === "witch") this.witchUpdate(e, t);
-      if (e.type === "slime") this.slimeTick(e, t);
+      if (e.type === "pigman") pigmanTick(this, e, entityRandom(e));
+      if (isSlimeLike(e)) this.slimeTick(e, t);
       else {
         if (e.type === "enderman") endermanTick(this, e, entityRandom(e));
-        this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : isSpider(e.type) ? this.spiderThink(e) : e.type === "silverfish" ? this.silverfishThink(e) : this.ai.think(e));
+        this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : isSpider(e.type) ? this.spiderThink(e) : e.type === "pigman" ? pigmanThink(this, e) : e.type === "silverfish" ? this.silverfishThink(e) : this.ai.think(e));
       }
       this.push(e, t);
       if (isSpider(e.type)) {
@@ -1698,7 +1725,7 @@ export class EntityWorld {
     edge("z", "vz");
     if (landed > 0) this.onLand?.(e, landed);
     // EntityChicken.fall, EntityBat.fall, EntityOcelot.fall and EntityGolem.fall do nothing.
-    if (landed > 0 && e.type !== "chicken" && e.type !== "bat" && e.type !== "ocelot" && e.type !== "snow_golem" && e.type !== "iron_golem") this.fall(e, landed);
+    if (landed > 0 && e.type !== "chicken" && e.type !== "bat" && e.type !== "ocelot" && e.type !== "snow_golem" && e.type !== "iron_golem" && e.type !== "magma_cube") this.fall(e, landed); // EntityMagmaCube.fall does nothing
   }
   // EntitySlime.onUpdate (ym.h): the squish before and after EntityLivingBase.onUpdate (walk), the landing particles
   // ("slime" is EntityBreakingFX with a slimeball) and sounds, then onCollideWithPlayer. slime.js holds the rules.
@@ -1708,12 +1735,12 @@ export class EntityWorld {
     this.walk(e, t, 0, () => this.slimeThink(e));
     e.slimeForward = e.moveForward;
     e.slimeStrafe = e.moveStrafing || 0;
-    slimeSquishEnd(e, rand, (dx, dz) => this.fx?.spawn("iconcrack_" + SLIMEBALL, e.x + dx, e.y, e.z + dz, 0, 0, 0), (sound, volume, pitch) => this.events.push({ sound, volume, pitch, position: { x: e.x, y: e.y, z: e.z } }));
+    slimeSquishEnd(e, rand, (dx, dz) => this.fx?.spawn(isMagma(e) ? MAGMA.particle : "iconcrack_" + SLIMEBALL, e.x + dx, e.y, e.z + dz, 0, 0, 0), (sound, volume, pitch) => this.events.push({ sound, volume, pitch, position: { x: e.x, y: e.y, z: e.z } }));
     e.yaw = (-e.rotationYaw * Math.PI) / 180;
     // EntityPlayer.collideWithPlayer reaches mobs within the player's box grown 1 block sideways; b_ then needs size > 1,
     // line of sight and distance^2 < (0.6 * size)^2 (centre to centre), and hits for `size`.
     const p = this.ai.player, s = this.ai.survival;
-    if (p?.alive && !s.creative && e.health > 0 && slimeTouches(e.size, (p.x - e.x) ** 2 + (p.y - e.y) ** 2 + (p.z - e.z) ** 2, this.ai.brain(e).canSee(p))) this.hitPlayer(e, s);
+    if (p?.alive && !s.creative && e.health > 0 && slimeTouches(e.size, (p.x - e.x) ** 2 + (p.y - e.y) ** 2 + (p.z - e.z) ** 2, this.ai.brain(e).canSee(p), isMagma(e) || undefined)) this.hitPlayer(e, s);
   }
   // updateEntityActionState (ym.bq): despawnEntity, the closest vulnerable player within 16 as the facing target, the jump timer.
   slimeThink(e) {
@@ -1730,13 +1757,15 @@ export class EntityWorld {
   splitSlime(e, rand) {
     for (const k of slimeChildren(rand, e)) {
       if (this.entities.length >= 40) break;
-      const child = this.create("slime", k.x, k.y, k.z);
+      const child = this.create(e.type, k.x, k.y, k.z);
       Object.assign(child, slimeFields(k.size, this.random));
       for (const key of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) child[key] = k.yaw;
       child.yaw = (-k.yaw * Math.PI) / 180;
       this.entities.push(child);
     }
   }
+  // EntityPig.onStruckByLightning (wo.a(xh)): the pig is replaced by a zombie pigman (nether-melee-live.js).
+  pigStruck(pig) { return pigStrike(this, pig); }
   // EntitySlime.getCanSpawnHere (slime.js) at a slime's position: biome, flat world type, block light, the native chunk and the world
   // seed; `base` is EntityLiving.getCanSpawnHere (collision, liquid) for the caller's world.
   slimeCanSpawn(e, rand, worldTime, base) {

@@ -44,7 +44,7 @@ function stackNbt(s,slot,report,original=false) {
  return new Map(Object.entries(entry));
 }
 const inventory=(items,report)=>list(NBT.COMPOUND,(items??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];}));
-const NAMES={enderman:'Enderman',pig:'Pig',cow:'Cow',mooshroom:'MushroomCow',snow_golem:'SnowMan',sheep:'Sheep',chicken:'Chicken',wolf:'Wolf',ocelot:'Ozelot',horse:'EntityHorse',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish',witch:'Witch',slime:'Slime',iron_golem:'VillagerGolem',squid:'Squid',bat:'Bat'};
+const NAMES={enderman:'Enderman',pig:'Pig',cow:'Cow',mooshroom:'MushroomCow',snow_golem:'SnowMan',sheep:'Sheep',chicken:'Chicken',wolf:'Wolf',ocelot:'Ozelot',horse:'EntityHorse',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish',witch:'Witch',slime:'Slime',magma_cube:'LavaSlime',pigman:'PigZombie',iron_golem:'VillagerGolem',squid:'Squid',bat:'Bat'};
 function entity(e,name,ox,oz) {
  return {id:str(name),Pos:list(NBT.DOUBLE,[e.x+ox,e.posY??e.y,e.z+oz]),Motion:list(NBT.DOUBLE,e.motion??[e.vx??e.mx??0,e.vy??e.my??0,e.vz??e.mz??0]),
  Rotation:list(NBT.FLOAT,e.rotation??(name==='Player'?[(Math.PI-(e.yaw??0))*180/Math.PI,-(e.pitch??0)*180/Math.PI]:[e.rotationYaw??(-(e.yaw??0)*180/Math.PI+0),e.rotationPitch??0])),FallDistance:float(e.fallDistance??0),Fire:short(e.fire??-1),Air:short(e.air??300),OnGround:byte(e.onGround?1:0),Dimension:int(0),Invulnerable:byte(0),PortalCooldown:int(0)};
@@ -78,7 +78,9 @@ function payload(state,ox,oz,report,world=null) {
   // EntityZombie.writeEntityToNBT: IsBaby (only for a child), IsVillager (only for a zombie villager), ConversionTime (-1 when not curing) and CanBreakDoors. A zombie has no Age or InLove.
   if(e.type==='zombie'){delete n.Age;delete n.InLove;if((e.growingAge??0)<0)n.IsBaby=byte(1);if(e.villager)n.IsVillager=byte(1);n.ConversionTime=int(Number.isInteger(e.conversionTime)?e.conversionTime:-1);n.CanBreakDoors=byte(0);}
   // EntitySlime.writeEntityToNBT: Size (size - 1); a slime has no Age or InLove.
-  if(e.type==='slime'){n.Size=int((e.size??1)-1);delete n.Age;delete n.InLove;}
+  if(e.type==='slime'||e.type==='magma_cube'){n.Size=int((e.size??1)-1);delete n.Age;delete n.InLove;}
+  // EntityPigZombie.writeEntityToNBT: the short Anger (1.7.10 has no HurtBy tag), then EntityLiving's Equipment (slot 0 is the held sword) and DropChances (0.085 each); no Age or InLove.
+  if(e.type==='pigman'){delete n.Age;delete n.InLove;n.Anger=short(e.angerLevel??0);const sword=e.held?stackNbt(e.held,undefined,report):null;n.Equipment=list(NBT.COMPOUND,[0,1,2,3,4].map(i=>i===0&&sword?sword:new Map()));n.DropChances=list(NBT.FLOAT,[0,1,2,3,4].map(()=>Math.fround(0.085)));n.CanPickUpLoot=byte(0);n.CanBreakDoors=byte(0);n.IsBaby=byte(0);n.IsVillager=byte(0);n.ConversionTime=int(-1);}
   // EntityEnderman.writeEntityToNBT: carried and carriedData as shorts (original block id and metadata; Age and InLove do not apply).
   if(e.type==='enderman'){delete n.Age;delete n.InLove;n.carried=short(e.carried??0);n.carriedData=short(e.carriedData??0);}
   // EntityBat.writeEntityToNBT: BatFlags (bit 1 = hanging); neither a squid nor a bat is an EntityAgeable.

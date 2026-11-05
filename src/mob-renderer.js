@@ -15,6 +15,7 @@ import { createVillagerRig, villagerLegAngle } from "./villager-renderer.js";
 import { createIronGolemRig, animateIronGolem } from "./iron-golem-renderer.js";
 import { createWitchRig, animateWitch } from "./witch-renderer.js";
 import { createSlimeRig, animateSlime } from "./slime-renderer.js";
+import { createMagmaCubeRig } from "./magma-cube-renderer.js";
 import { mobScale } from "./slime.js";
 import { createWolfRig, animateWolf } from "./wolf-renderer.js";
 import { createOcelotRig } from "./ocelot-renderer.js";
@@ -343,9 +344,9 @@ export class MobRenderer {
   // ModelBiped.render but zombie.png leaves it fully transparent, so it is omitted.
   // A zombie villager (ModelZombieVillager, bil, on zombie_villager.png) has a taller head, a 10-pixel box at (0, 32), and
   // the villager's 2 x 4 x 2 nose at (24, 32) in front of it; the body and limbs are ModelBiped's.
-  createZombie(villager = false) {
+  createZombie(villager = false, pigman = false) {
     const root = new THREE.Group(), frame = new THREE.Group(), limbs = [],
-      skin = entityMaterial(this.view.lighting, { map: pixelTexture(villager ? "/media/1.7.10/entity/zombie/zombie_villager.png" : "/media/1.7.10/entity/zombie/zombie.png") });
+      skin = entityMaterial(this.view.lighting, { map: pixelTexture(villager ? "/media/1.7.10/entity/zombie/zombie_villager.png" : pigman ? "/media/1.7.10/entity/zombie_pigman.png" : "/media/1.7.10/entity/zombie/zombie.png") });
     root.add(frame);
     const part = (parent, w, h, d, u, v, ox, oy, oz, mirror = false) => {
       const mesh = new THREE.Mesh(skinBox(w, h, d, u, v, 64, 64, mirror), skin);
@@ -372,8 +373,21 @@ export class MobRenderer {
       if (arm) g.rotation.order = "ZYX";
       limbs.push(g);
     }
+    // RenderPigZombie (RenderBiped): the golden sword in the right hand (RenderBiped.renderEquippedItems' tool branch), like the skeleton's bow.
+    const materials = [skin], keep = [];
+    if (pigman) {
+      const mc = new THREE.Group(), sword = new THREE.Mesh(spriteGeometry(), entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/items/gold_sword.png"), side: THREE.DoubleSide })), held = new THREE.Group();
+      materials.push(sword.material);
+      mc.scale.set(1, -1, -1);
+      held.matrixAutoUpdate = false;
+      held.matrix.copy(heldItemMatrix("tool"));
+      held.add(sword);
+      mc.add(held);
+      limbs[0].add(mc);
+      keep.push(sword);
+    }
     this.scene.add(root);
-    return { root, neck, limbs, materials: [skin], type: "zombie", lift: 1 / 128, villager };
+    return { root, neck, limbs, materials, type: pigman ? "pigman" : "zombie", lift: 1 / 128, villager, ...(pigman ? { keep } : {}) };
   }
   create(e) {
     if (e.type === "creeper") return this.createCreeper();
@@ -386,6 +400,8 @@ export class MobRenderer {
     if (e.type === "villager") return createVillagerRig(this, e);
     if (e.type === "witch") return createWitchRig(this, e);
     if (e.type === "slime") return createSlimeRig(this, e);
+    if (e.type === "magma_cube") return createMagmaCubeRig(this);
+    if (e.type === "pigman") return this.createZombie(false, true);
     if (e.type === "wolf") return createWolfRig(this);
     if (e.type === "ocelot") return createOcelotRig(this);
     if (e.type === "horse") return createHorseRig(this, e);
@@ -490,7 +506,7 @@ export class MobRenderer {
         if (spider) { l.rotation.set(0, -spider[i][0], -spider[i][1]); return; }
         if (creeper) { l.rotation.x = creeper[i + 1][0]; return; }
         if (e.type === "villager" || e.type === "witch") { l.rotation.x = villagerLegAngle(pose.limbSwing, pose.limbSwingAmount, i); return; }
-        if ((e.type === "zombie" || e.type === "skeleton") && i < 2) {
+        if ((e.type === "zombie" || e.type === "pigman" || e.type === "skeleton") && i < 2) {
           const side = i === 0 ? 1 : -1;
           l.rotation.set(-Math.PI / 2 + side * sway, side * 0.1, -side * spread);
         } else l.rotation.x = angles[i];
@@ -500,7 +516,7 @@ export class MobRenderer {
       // dying; the burning tint stands in for the fire overlay, which is not drawn.
       const t = ENTITY_TYPES[e.type], h = (t?.height ?? 1.8) * mobScale(e),
         // A display mob takes the spawner block's lightmap (TileEntityRendererDispatcher).
-        packed = e.lightPos ? this.view.brightness(e.lightPos.x, e.lightPos.y, e.lightPos.z) : this.view.brightness(e.x, e.y + h * 0.66, e.z),
+        packed = e.type === "magma_cube" ? 15728880 : e.lightPos ? this.view.brightness(e.lightPos.x, e.lightPos.y, e.lightPos.z) : this.view.brightness(e.x, e.y + h * 0.66, e.z), // yf.c: always fully lit
         level = Math.max(((packed >> 20) & 15) - (this.view.subtracted ?? 0), (packed >> 4) & 15),
         b = BRIGHTNESS[Math.max(0, level)];
       // RenderCreeper: the swell scale (preRenderCallback), the powered shell, and the white
