@@ -47,6 +47,7 @@ export function initVariant(cart, record = {}) {
   if (t === 2) Object.assign(cart, { fuel: Math.max(0, record.fuel | 0), pushX: Number.isFinite(record.pushX) ? record.pushX : 0, pushZ: Number.isFinite(record.pushZ) ? record.pushZ : 0 }), cart.lit = cart.fuel > 0;
   if (t === 3) cart.fuse = Number.isInteger(record.fuse) ? record.fuse : -1;
   if (t === 5) Object.assign(cart, { enabled: true, cooldown: Number.isInteger(record.cooldown) ? record.cooldown : -1 });
+  if (t === 6) { const c = record.command ?? {}; cart.command = { command: typeof c.command === 'string' ? c.command : '', successCount: Number.isInteger(c.successCount) ? c.successCount : 0, customName: typeof c.customName === 'string' ? c.customName : '@', trackOutput: c.trackOutput !== false, lastOutput: typeof c.lastOutput === 'string' ? c.lastOutput : null }; cart.lastRun = 0; } // xn.<init>: b = 0
 }
 
 // EntityMinecartFurnace.interactFirst: coal or charcoal adds 3600 ticks (one item unless Creative), then the push
@@ -102,6 +103,8 @@ export function tntFall(cart, distance, host) {
 export function activatorPass(cart, powered, host) {
   if (cart.type === 3 && powered && cart.fuse < 0) tntIgnite(cart, host);
   if (cart.type === 5) cart.enabled = !powered;
+  // xn.a(x, y, z, powered): powered and ticksExisted - b >= 4 -> CommandBlockLogic.func_145755_a(world); b = ticksExisted.
+  if (cart.type === 6 && powered && (cart.age | 0) - cart.lastRun >= 4) { host?.runCommand?.(cart); cart.lastRun = cart.age | 0; }
 }
 
 // The type specific part of EntityMinecart.onUpdate (after the superclass). `hopperSuck(cart)` is cart-hopper.js.
@@ -145,6 +148,7 @@ export function variantJSON(c) {
   if (c.type === 2) return { fuel: c.fuel, pushX: c.pushX, pushZ: c.pushZ };
   if (c.type === 3) return { fuse: c.fuse };
   if (c.type === 5) return { cooldown: c.cooldown };
+  if (c.type === 6) return { command: { ...c.command } };
   return {};
 }
 // Entity.writeToNBT additions: [type, value] pairs (6 double, 2 short, 3 int).
@@ -152,5 +156,7 @@ export function variantNBT(c) {
   if (c.type === 2) return { PushX: [6, c.pushX], PushZ: [6, c.pushZ], Fuel: [2, c.fuel] };
   if (c.type === 3) return { TNTFuse: [3, c.fuse] };
   if (c.type === 5) return { TransferCooldown: [3, c.cooldown] };
+  // CommandBlockLogic.func_145758_a (agp.a(dh)): Command, SuccessCount, CustomName, TrackOutput, LastOutput.
+  if (c.type === 6) return { Command: [8, c.command.command], SuccessCount: [3, c.command.successCount], CustomName: [8, c.command.customName], TrackOutput: [1, c.command.trackOutput ? 1 : 0], ...(c.command.lastOutput != null ? { LastOutput: [8, c.command.lastOutput] } : {}) };
   return {};
 }

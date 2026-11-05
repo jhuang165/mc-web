@@ -93,6 +93,7 @@ import { BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nex
 import { deathMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
 import { ChatUi, printChat } from "./chat-ui.js";
 import { createCommandRunner, chatLine, tr } from "./commands.js";
+import { runCommandCart } from "./command-cart.js";
 import { LanSession, LAN_NOTICE } from "./lan.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
 import { gameRule, setGameRuleSource } from "./game-rules.js";
@@ -1141,7 +1142,7 @@ async function launch(record, prepared) {
 // ---- Chat and commands (chat-ui.js GuiChat/GuiNewChat, commands.js ServerCommandManager, command-host.js game state) ----
 let chatOpen = false;
 const commandHost = createCommandHost({
-  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, survival: () => survival, experience: () => experience,
+  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, rockets: () => rockets, survival: () => survival, experience: () => experience,
   position: () => ({ x: position.x, y: position.y, z: position.z }),
   seed: () => active.seed,
   beaconTile: (x, y, z) => beacons.ensure(x, y, z),
@@ -1384,9 +1385,9 @@ const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnac
 // Slots are addressed by list index: wrapped creative slots all keep slotNumber 0.
 const slotsHtml = (container) => `<div class="container-slots">${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""}${slot.x < -1000 || slot.enabled === false ? " hidden" : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>`;
 // GuiCommandBlock: Creative + command permission required; text and tracking changes are applied on Done only.
-function openCommandBlock(x, y, z) {
+function openCommandBlock(x, y, z, cartTile = null) {
   if (!survival.creative || !commandHost.cheats) return;
-  const tile = redstoneRuntime.commandBlocks.tile(x, y, z);
+  const tile = cartTile ?? redstoneRuntime.commandBlocks.tile(x, y, z);
   screen = "inventory"; mining = null; mineHeld = false;
   document.exitPointerLock?.();
   modal("Set Console Command for Block", `<label>Console Command<input id="command-block-input" maxlength="32767" autocomplete="off" spellcheck="false"></label><p>@p - nearest player<br>@r - random player<br>@a - all players</p><div style="display:flex;gap:8px;align-items:end"><label style="flex:1;min-width:0">Previous Output<input id="command-block-output" readonly></label><button class="button" id="command-block-track" style="width:40px;margin-bottom:2px"></button></div><div class="menu-actions" style="display:flex;gap:8px;margin-top:24px"><button class="button" id="command-block-done" style="flex:1">Done</button><button class="button" id="command-block-cancel" style="flex:1">Cancel</button></div>`);
@@ -2234,6 +2235,7 @@ function edit(place = false) {
       swing: () => animation.swing(),
       damage: () => heldAttackDamage(heldId(), survival),
       openContainer: (container, kind) => openContainer(container, kind ?? "chest"),
+      openCommandCart: (cart) => openCommandBlock(0, 0, 0, cart.command),
       toast,
       markUnsaved: () => { saved = false; },
     });
@@ -2345,6 +2347,7 @@ const cartHost = {
   sound: (name, cart) => sounds.play(name, { position: { x: cart.x, y: cart.posY, z: cart.z } }),
   get transfer() { return hopperTiles.host; },
   changed: () => { saved = false; },
+  runCommand: (cart) => runCommandCart(cart, { host: commandHost, changed: () => { saved = false; } }), // command-cart.js
 };
 function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false } = {}) {
   applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging,

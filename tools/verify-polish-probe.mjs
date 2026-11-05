@@ -1,0 +1,31 @@
+import {execFile} from 'node:child_process';import {promisify} from 'node:util';import {mkdir,readFile,writeFile,access,rm} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';import path from 'node:path';import os from 'node:os';import {createHash} from 'node:crypto';import assert from 'node:assert/strict';
+const exec=promisify(execFile),root=path.dirname(fileURLToPath(import.meta.url)),exists=p=>access(p).then(()=>true,()=>false);
+const researchDirs=[process.env.MC_RESEARCH,path.join(root,'research'),path.join(root,'../../tools/research')].filter(Boolean);
+let research;for(const dir of researchDirs)if(await exists(path.join(dir,'minecraft-1.7.10.jar'))){research=dir;break;}
+if(!research)throw new Error('Place minecraft-1.7.10.jar in tools/research or set MC_RESEARCH.');
+const jar=path.join(research,'minecraft-1.7.10.jar'),out=path.join(research,'polish-probe');
+assert.equal(createHash('sha1').update(await readFile(jar)).digest('hex'),'e80d9b3bf5085002218d4be59e668bac718abbc6');
+async function library(prefix){
+ for(const p of (process.env.MC_PROBE_LIBS||'').split(path.delimiter).filter(Boolean))if(path.basename(p).startsWith(prefix))return p;
+ for(const dir of [path.join(os.homedir(),'Library/Application Support/minecraft/libraries'),path.join(os.homedir(),'.minecraft/libraries'),path.join(os.homedir(),'.gradle/caches')]){
+  if(!await exists(dir))continue;const {stdout}=await exec('find',[dir,'-name',prefix+'*.jar','-not','-name','*sources*'],{maxBuffer:1<<24});const hit=stdout.split('\n').filter(Boolean).sort()[0];if(hit)return hit;
+ }
+ throw new Error(`Missing ${prefix}*.jar; list library JARs in MC_PROBE_LIBS.`);
+}
+const libs=await Promise.all(['guava-','log4j-api-','commons-lang3-','gson-','commons-io-','netty-','authlib-'].map(library));
+const classes=path.join(out,'classes');await rm(classes,{recursive:true,force:true});await mkdir(classes,{recursive:true});
+await exec('unzip',['-q','-o',jar,'*.class','assets/minecraft/lang/en_US.lang','-d',classes],{maxBuffer:1<<24});
+const probe=path.join(out,'probe');await mkdir(path.join(probe,'org/lwjgl/opengl'),{recursive:true});
+await writeFile(path.join(probe,'GameProfile.java'),'package com.mojang.authlib; public class GameProfile {}\n');
+await writeFile(path.join(probe,'org/lwjgl/opengl/DisplayMode.java'),'package org.lwjgl.opengl; public class DisplayMode { public DisplayMode(int w, int h) {} }\n');
+await writeFile(path.join(probe,'org/lwjgl/LWJGLException.java'),'package org.lwjgl; public class LWJGLException extends Exception {}\n');
+await writeFile(path.join(probe,'org/lwjgl/opengl/OpenGLException.java'),'package org.lwjgl.opengl; public class OpenGLException extends RuntimeException {}\n');
+const cp=[probe,classes,...libs].join(path.delimiter);
+await exec('javac',['-nowarn','-cp',cp,'-d',probe,path.join(probe,'GameProfile.java'),path.join(probe,'org/lwjgl/opengl/DisplayMode.java'),path.join(probe,'org/lwjgl/LWJGLException.java'),path.join(probe,'org/lwjgl/opengl/OpenGLException.java'),path.join(root,'probes/ParticleProbe.java'),path.join(root,'probes/FireworksProbe.java'),path.join(root,'probes/PolishProbe.java')]);
+const {stdout}=await exec('java',['--add-opens','java.base/java.util=ALL-UNNAMED','--add-opens','java.base/java.lang=ALL-UNNAMED','-cp',cp,'PolishProbe'],{maxBuffer:1<<28});
+const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse);
+const count=c=>records.filter(r=>r.case===c).length;
+assert.equal(count('fireworkNbt'),9);assert.equal(count('commandCartPass'),3);assert.equal(count('commandCartNbt'),2);
+await writeFile(path.join(root,'polish-probe-records.json'),JSON.stringify(records)+'\n');
+console.log(`${records.length} polish probe records; run tools/verify-polish.mjs next to merge them into public/research/polish-reference.json`);

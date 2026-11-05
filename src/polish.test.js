@@ -124,3 +124,128 @@ test("a map in an item frame faces the wall's front and the four rotations diffe
   }
   assert.equal(seen.size, 4);
 });
+
+// ---- item 4: /summon FireworksRocketEntity ----
+import { NBT } from "./nbt.js";
+import { summonFireworkRocket, FIREWORK_SUMMON } from "./firework-summon.js";
+import { SUMMONABLE } from "./commands.js";
+import { FireworkRockets } from "./fireworks-live.js";
+import { Minecarts } from "./minecarts.js";
+import { summonCart } from "./cart-summon.js";
+import * as V from "./cart-variants.js";
+import { runCommandCart, cartCommandPosition } from "./command-cart.js";
+
+const T = (type, value) => ({ type, value });
+const C = (obj) => new Map(Object.entries(obj));
+const doubles = (...v) => T(NBT.LIST, { elementType: NBT.DOUBLE, items: v });
+const rocketItem = (flight, explosions) => T(NBT.COMPOUND, C({ id: T(NBT.SHORT, 401), Count: T(NBT.BYTE, 1), Damage: T(NBT.SHORT, 0),
+  tag: T(NBT.COMPOUND, C({ Fireworks: T(NBT.COMPOUND, C({ Flight: T(NBT.BYTE, flight), Explosions: T(NBT.LIST, { elementType: NBT.COMPOUND, items: explosions }) })) })) }));
+
+test("/summon FireworksRocketEntity is registered", () => {
+  assert.equal(SUMMONABLE.FireworksRocketEntity, FIREWORK_SUMMON);
+});
+
+test("firework summon matches the original zf(World) + readFromNBT records", () => {
+  const records = rec("fireworkNbt"), by = (n) => records.find((r) => r.name === n);
+  assert.equal(records.length, 9);
+  const run = (tag) => { const rk = new FireworkRockets(); summonFireworkRocket(rk, 1, 2, 3, tag); return rk.rockets[0]; };
+  const bare = run(new Map()), b = by("bare");
+  assert.deepEqual([bare.life, bare.lifetime, bare.mx, bare.my, bare.mz], [b.life, b.lifetime, ...b.motion]);
+  assert.equal(bare.stack, null);
+  const life = run(C({ Life: T(NBT.INT, 5), LifeTime: T(NBT.INT, 17) })), l = by("life");
+  assert.deepEqual([life.life, life.lifetime], [l.life, l.lifetime]);
+  const neg = run(C({ Life: T(NBT.INT, -3), LifeTime: T(NBT.INT, -1) }));
+  assert.deepEqual([neg.life, neg.lifetime], [by("negative").life, by("negative").lifetime]);
+  const mo = run(C({ Motion: doubles(0.5, 0.25, -0.75) })), m = by("motion");
+  assert.deepEqual([mo.mx, mo.my, mo.mz], m.motion);
+  const clamp = run(C({ Motion: doubles(11, -12, 3) }));
+  assert.deepEqual([clamp.mx, clamp.my, clamp.mz], by("motion-clamp").motion); // components above 10 reset to 0
+});
+
+test("firework summon item: kept for any valid stack, dropped for an unknown id", () => {
+  const rk = new FireworkRockets();
+  const ex = C({ Type: T(NBT.BYTE, 1), Colors: T(NBT.INT_ARRAY, Int32Array.from([16711680])), FadeColors: T(NBT.INT_ARRAY, Int32Array.from([255])), Flicker: T(NBT.BYTE, 1), Trail: T(NBT.BYTE, 0) });
+  summonFireworkRocket(rk, 0, 0, 0, C({ LifeTime: T(NBT.INT, 30), FireworksItem: rocketItem(2, [ex]) }));
+  const r = rk.rockets[0], item = by("item");
+  function by(n) { return rec("fireworkNbt").find((x) => x.name === n); }
+  assert.equal(r.lifetime, item.lifetime);
+  assert.equal(r.stack.fireworks.flight, item.item.tag.Fireworks.Flight);
+  assert.equal(r.stack.fireworks.explosions.length, 1);
+  assert.deepEqual(r.stack.fireworks.explosions[0].colors, item.item.tag.Fireworks.Explosions[0].Colors);
+  const bogus = C({ FireworksItem: T(NBT.COMPOUND, C({ id: T(NBT.SHORT, 9999), Count: T(NBT.BYTE, 1), Damage: T(NBT.SHORT, 0) })) });
+  summonFireworkRocket(rk, 0, 0, 0, bogus);
+  assert.equal(rk.rockets[1].stack, null);
+  assert.equal(by("item-unknown-id").item, null);
+});
+
+test("a summoned bare rocket explodes on its first tick, a LifeTime one waits", () => {
+  const rk = new FireworkRockets(), exploded = [];
+  const world = { get: (x, y, z) => (y < 64 ? 3 : 0), getMeta: () => 0, solid: (x, y, z) => y < 64 };
+  summonFireworkRocket(rk, 0, 70, 0, new Map());
+  summonFireworkRocket(rk, 5, 70, 5, C({ LifeTime: T(NBT.INT, 3) }));
+  rk.tick(world, { explode: (...a) => exploded.push(a) });
+  assert.equal(exploded.length, 1); // life 1 > lifetime 0
+  assert.equal(rk.rockets.length, 1);
+  for (let t = 0; t < 2; t++) rk.tick(world, { explode: (...a) => exploded.push(a) });
+  assert.equal(exploded.length, 1); // life 3 is not > 3 yet
+  rk.tick(world, { explode: (...a) => exploded.push(a) });
+  assert.equal(exploded.length, 2);
+});
+
+// ---- item 5: command block minecart ----
+test("command cart activator delay matches xn.a(IIIZ) records", () => {
+  for (const rc of rec("commandCartPass")) {
+    const m = new Minecarts({}), cart = m.spawnCart(6, { x: 0.5, y: 64, z: 0.5, items: [] }), fired = [];
+    const host = { runCommand: (c) => fired.push(c.age) };
+    // first row: ticksExisted of the first call; the original field b starts at 0 as cart.lastRun does
+    cart.age = rc.rows[0][0];
+    for (const [age, , , did] of rc.rows) { cart.age = age; const before = fired.length; V.activatorPass(cart, rc.powered, host); assert.equal(fired.length - before, did, `${rc.name} age ${age}`); }
+  }
+});
+
+test("command cart is not retriggered by an unpowered rail and keeps b across ticks", () => {
+  const m = new Minecarts({}), cart = m.spawnCart(6, { x: 0, y: 64, z: 0, items: [] }), fired = [];
+  cart.age = 10; V.activatorPass(cart, false, { runCommand: () => fired.push(1) });
+  assert.equal(fired.length, 0);
+  V.activatorPass(cart, true, { runCommand: () => fired.push(1) });
+  cart.age = 13; V.activatorPass(cart, true, { runCommand: () => fired.push(1) });
+  cart.age = 14; V.activatorPass(cart, true, { runCommand: () => fired.push(1) });
+  assert.equal(fired.length, 2);
+});
+
+test("command cart NBT, summon tags and save/load", () => {
+  const m = new Minecarts({});
+  summonCart(m, 6, 1.5, 64, 2.5, C({ Command: T(NBT.STRING, "say hi"), SuccessCount: T(NBT.INT, 1), CustomName: T(NBT.STRING, "Rail"), TrackOutput: T(NBT.BYTE, 0) }));
+  const cart = m.carts[0], ref = rec("commandCartNbt").find((r) => r.name === "command");
+  assert.equal(cart.type, ref.type);
+  assert.deepEqual({ ...cart.command }, { command: "say hi", successCount: 1, customName: "Rail", trackOutput: false, lastOutput: null });
+  const nbt = V.variantNBT(cart);
+  assert.deepEqual([nbt.Command[1], nbt.SuccessCount[1], nbt.CustomName[1], nbt.TrackOutput[1]], [ref.out.Command, ref.out.SuccessCount, ref.out.CustomName, ref.out.TrackOutput]);
+  const bare = rec("commandCartNbt").find((r) => r.name === "bare");
+  const fresh = new Minecarts({}).spawnCart(6, { x: 0, y: 0, z: 0, items: [] });
+  assert.deepEqual([V.variantNBT(fresh).Command[1], V.variantNBT(fresh).CustomName[1], V.variantNBT(fresh).TrackOutput[1]], [bare.out.Command, bare.out.CustomName, bare.out.TrackOutput]);
+  const back = Minecarts.fromJSON(JSON.parse(JSON.stringify(m.toJSON())), {});
+  assert.deepEqual(back.carts[0].command, cart.command);
+  assert.equal(back.carts[0].type, 6);
+  // untrusted save data is sanitised
+  const hostile = Minecarts.fromJSON({ version: 1, carts: [{ type: 6, x: 0, y: 0, z: 0, command: { command: 5, successCount: "x", customName: {}, trackOutput: 0 } }] }, {});
+  assert.equal(hostile.carts[0].command.command, "");
+  assert.equal(hostile.carts[0].command.customName, "@");
+});
+
+test("command cart sender position and the right-click GUI hook", async () => {
+  assert.deepEqual(cartCommandPosition({ x: 2.7, posY: 64.2, z: -0.3 }), { x: 2, y: 64, z: -1 }); // floor(x), floor(y + 0.5), floor(z)
+  const { useMinecart } = await import("./structure-simulation.js");
+  const m = new Minecarts({}), cart = m.spawnCart(6, { x: 0, y: 0, z: 0, items: [] }), opened = [];
+  const out = useMinecart({ minecarts: m, survival: {} }, { place: true, cart }, { openCommandCart: (c) => opened.push(c) });
+  assert.equal(out.branch, "open-command-cart");
+  assert.equal(opened[0], cart);
+});
+
+test("running a command cart records SuccessCount and output", () => {
+  const m = new Minecarts({}), cart = m.spawnCart(6, { x: 0, y: 64, z: 0, items: [] });
+  cart.command.command = "";
+  const host = { rules: {}, cheats: true, print() {}, position: () => ({ x: 0, y: 0, z: 0 }), name: "P" };
+  assert.equal(runCommandCart(cart, { host }), 0);
+  assert.equal(cart.command.successCount, 0);
+});
