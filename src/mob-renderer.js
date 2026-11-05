@@ -24,6 +24,7 @@ import { createHorseRig } from "./horse-renderer.js";
 import { createEndermanRig, animateEnderman } from "./enderman-renderer.js";
 import { createSnowGolemRig, animateSnowGolem, addMooshroomMushrooms } from "./mooshroom-golem-renderer.js";
 import { createBlazeRig, createGhastRig } from "./blaze-ghast-renderer.js";
+import { createWitherRig } from "./wither-boss-renderer.js";
 import { createSquidRig, createBatRig } from "./squid-bat-renderer.js";
 import { createCrystalRig } from "./ender-crystal-renderer.js";
 const RAD = Math.PI / 180;
@@ -418,6 +419,7 @@ export class MobRenderer {
     if (e.type === "ender_crystal") return createCrystalRig(this);
     if (e.type === "blaze") return createBlazeRig(this);
     if (e.type === "ghast") return createGhastRig(this);
+    if (e.type === "wither") return createWitherRig(this); // wither-boss-renderer.js
     return this.createQuadruped(e.type);
   }
   // `partial` is the fraction of the current tick elapsed (mobPose interpolates).

@@ -34,6 +34,7 @@ import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { installHorseGear, gearFieldsFrom } from "./horse-gear-live.js";
 import { HORSE_ENTITY, horseRideThink, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
 import { blazeUpdate, ghastUpdate, fireballMobTalk, installFireballMobs } from "./blaze-ghast-mobs.js";
+import { witherUpdate, witherPost, witherTalk, witherRanged, installWither } from "./wither-boss-mobs.js";
 import { squidBatUpdate, squidBatTalk, squidBatSpawnPass, installSquidBat } from "./squid-bat-mobs.js";
 import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
 import { webMove } from './webs.js';
@@ -1195,6 +1196,7 @@ export class EntityWorld {
   talk(e) {
     if (e.type === "squid" || e.type === "bat") return squidBatTalk(this, e);
     if (e.type === "blaze" || e.type === "ghast") return fireballMobTalk(this, e); // blaze-ghast-mobs.js
+    if (e.type === "wither") return witherTalk(this, e); // wither-boss-mobs.js
     if (e.type === "horse") return this.horseTalk(e, livingSoundRoll);
     const rand = entityRandom(e);
     if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem" || e.type === "snow_golem" || isSlimeLike(e)) return;
@@ -1445,7 +1447,7 @@ export class EntityWorld {
       difficulty:()=>this.difficulty,
       // EntitySkeleton.attackEntityWithRangedAttack: the arrow itself is made by bow.js
       // (entities.js cannot import it: projectiles.js already imports this file).
-      rangedAttack:(e,target,scale)=>e.type==="witch"?this.potions?.throwAt(e,target):e.type==="snow_golem"?this.golemBalls.shoot(e,target):this.shoot?.(e,target,scale),
+      rangedAttack:(e,target,scale)=>e.type==="wither"?witherRanged(this,e,target):e.type==="witch"?this.potions?.throwAt(e,target):e.type==="snow_golem"?this.golemBalls.shoot(e,target):this.shoot?.(e,target,scale),
       isDaytime:()=>this.day,
       canSeeSky:(x,y,z)=>this.canSeeSky?this.canSeeSky(x,y,z):openSky(this.world,x,y,z),
       despawn:(e)=>{e.health=0;e.death=20;},
@@ -1463,6 +1465,7 @@ export class EntityWorld {
     // Splash potions thrown by witches (witch-potions.js; main.js attaches it).
     this.potions?.tick(player, survival);
     this._fireballs?.tick(); // blaze/ghast fireballs (fireballs.js)
+    this._skulls?.tick(); // wither skulls (wither-boss-mobs.js)
     this._golemBalls?.tick(); // snow golem snowballs (mooshroom-golem-live.js)
     // WorldServer.tick runs SpawnerAnimals.findChunksForSpawning only while gamerule doMobSpawning is true; no monsters on Peaceful.
     const hostile = this.difficulty !== PEACEFUL && gameRule("doMobSpawning");
@@ -1632,6 +1635,7 @@ export class EntityWorld {
       this.talk(e);
       if (e.type === "squid" || e.type === "bat") { squidBatUpdate(this, e, t); continue; } // squid-bat-mobs.js
       if (e.type === "ghast") { ghastUpdate(this, e, t); continue; } if (e.type === "blaze") blazeUpdate(this, e, t); // blaze-ghast-mobs.js
+      if (e.type === "wither") witherUpdate(this, e, t); // wither-boss-mobs.js
       // EntityZombie and EntitySkeleton.onLivingUpdate (yq.e, yl.e), before the AI: in daylight
       // a mob (a zombie only when adult) at brightness > 0.5 with rand.nextFloat() * 30 <
       // (brightness - 0.4) * 2 under open sky is set on fire for 8 s; burn() takes the damage,
@@ -1660,6 +1664,7 @@ export class EntityWorld {
       if (e.type === "snow_golem") this.snowGolemUpdate(e, e.inWater || !!this.wet?.(e, t.height));
       if (e.type === "horse") this.horseTick(e);
       if (e.leash) this.leashTick(e); // horse-gear-live.js: EntityLiving.updateLeashedState
+      if (e.type === "wither") witherPost(this, e, t); // wither-boss-mobs.js: the side heads turn
       this.turnBody(e);
       this.swingLimbs(e);
     }
@@ -2080,3 +2085,4 @@ installHorse(EntityWorld); // horse-live.js: interact, ride, tame, rear
 installHorseGear(EntityWorld); // horse-gear-live.js: leads, name tags, horse inventory drops
 installSquidBat(EntityWorld); // squid-bat-mobs.js: bat wake-up, squid entityAge and silent hurt, bat sound pitch
 installFireballMobs(EntityWorld); // blaze-ghast-mobs.js: blaze and ghast types, fire immunity, fireball pick/punch
+installWither(EntityWorld); // wither-boss-mobs.js: the Wither type, spawnWither, skulls

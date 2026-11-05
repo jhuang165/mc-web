@@ -9,7 +9,7 @@
 // the lightmap at getBrightnessForRender's cell, as GL lighting is off for particles.
 import * as THREE from "three";
 import { entityMaterial, worldMaterial } from "./light-material.js";
-import { itemTexture, pixelTexture } from "./first-person.js";
+import { itemTexture, pixelTexture, skinBox } from "./first-person.js";
 import { particleBasis, particleLightCell, particleQuad, quantize } from "./particles.js";
 
 const SNOWBALL = 312, EGG = 316, ENDER_PEARL = 378;
@@ -47,6 +47,17 @@ export class ProjectileRenderer {
     if (kind === "expBottle") return pixelTexture("/media/1.7.10/items/experience_bottle.png"); // RenderSnowball(Items.experience_bottle)
     return pixelTexture(itemTexture(projectileItemId(kind)));
   }
+  // RenderWitherSkull (bpd): ModelSkeletonHead on wither_invulnerable.png for a blue skull, else wither.png.
+  skullMaterial(b) {
+    return entityMaterial(this.view.lighting, { map: pixelTexture(b.blue ? "/media/1.7.10/entity/wither/wither_invulnerable.png" : "/media/1.7.10/entity/wither/wither.png") });
+  }
+  skullMesh(material) {
+    const group = new THREE.Group(), box = new THREE.Mesh(skinBox(8, 8, 8, 0, 0, 64, 32), material);
+    box.position.y = 4 / 16;
+    box.rotation.y = Math.PI; // skinBox's front is +z; the model's front is -z
+    group.add(box);
+    return group;
+  }
   material(kind) {
     return entityMaterial(this.view.lighting, { map: this.texture(kind), alphaTest: 0.1 });
   }
@@ -59,13 +70,20 @@ export class ProjectileRenderer {
       seen.add(b);
       let m = this.balls.get(b);
       if (!m) {
-        const material = this.material(b.kind), mesh = new THREE.Mesh(this.sprite, material);
-        mesh.scale.setScalar(b.scale ?? 0.5); // RenderFireball scale 2 (large) / 0.5 (small)
+        const skull = b.kind === "witherSkull", material = skull ? this.skullMaterial(b) : this.material(b.kind), mesh = skull ? this.skullMesh(material) : new THREE.Mesh(this.sprite, material);
+        if (!skull) mesh.scale.setScalar(b.scale ?? 0.5); // RenderFireball scale 2 (large) / 0.5 (small)
         mesh.frustumCulled = false;
         this.scene.add(mesh);
         this.balls.set(b, (m = { mesh, material }));
       }
       const x = lerp(b.px, b.x), y = lerp(b.py, b.y), z = lerp(b.pz, b.z);
+      if (b.kind === "witherSkull") {
+        // RenderWitherSkull: the 8 cube turned to its flight (yaw from the motion, pitch up or down); the exact angles are approximated.
+        m.mesh.position.set(x, y, z);
+        m.mesh.rotation.set(-Math.atan2(b.vy, Math.hypot(b.vx, b.vz)), Math.atan2(b.vx, b.vz), 0, "YXZ");
+        m.material.setLight(15728880);
+        continue;
+      }
       m.mesh.position.set(x, y + 0.25 * (b.scale ?? 0.5), z);
       m.mesh.quaternion.copy(camera.quaternion);
       m.material.setLight(b.fullbright ? 15728880 : this.view.brightness(x, y + BALL_LIGHT, z));

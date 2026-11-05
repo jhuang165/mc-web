@@ -1,7 +1,8 @@
 // Authoritative integrated-server explosion orchestration from main.js. This
 // module mutates world/entity state directly while leaving rendering, audio,
 // container presentation and UI notifications to synchronous hooks.
-import { explodeBlocks, explosionImpact, explodeTnt, primeTnt } from "./explosion.js";
+import { WITHER_PROOF_INTERNAL, skullResistance } from "./wither-boss.js";
+import { explodeBlocks, explosionResistance, explosionImpact, explodeTnt, primeTnt } from "./explosion.js";
 import { ENTITY_TYPES } from "./entities.js";
 import { makeStack, copyStack } from "./inventory.js";
 import { PHYSICS, opaqueCube, FIRE } from "./world.js";
@@ -24,6 +25,8 @@ import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, item
  *
  * Returns `{explosion, mobHits, tntProcessed, playerHit, changes, chainedTnt}`.
  */
+// EntityWitherSkull.func_145772_a on a blue skull: resistance capped at 0.8 except bedrock, end portal, its frame and command blocks.
+const blueSkullResistance = (id) => skullResistance(true, WITHER_PROOF_INTERNAL.includes(id), explosionResistance(id));
 export function applyExplosion(state, request, hooks = {}) {
   const {
     world, weather, random = weather?.random, mobs, items, xpOrbs, arrows,
@@ -31,7 +34,7 @@ export function applyExplosion(state, request, hooks = {}) {
   } = state;
   // `smoking` false (a creeper with gamerule mobGriefing off): WorldServer.newExplosion clears affectedBlockPositions
   // after doExplosionA, so nothing breaks or drops and the client draws no per-block particles.
-  const { x, y, z, size, exploder = null, attacker = null, smoking = true, flaming = false } = request;
+  const { x, y, z, size, exploder = null, attacker = null, smoking = true, flaming = false, blue = false } = request;
   const {
     opaque = opaqueCube,
     ignite = null,
@@ -44,7 +47,7 @@ export function applyExplosion(state, request, hooks = {}) {
     markDirty = () => {},
   } = hooks;
 
-  const explosion = explodeBlocks(world, x, y, z, size, random, { opaque, smoking, flaming: flaming && !!ignite });
+  const explosion = explodeBlocks(world, x, y, z, size, random, { opaque, smoking, flaming: flaming && !!ignite, resistance: blue ? blueSkullResistance : undefined }); // blue: a charged wither skull caps resistance (wither-boss.js)
   const mobHits = [];
   // Explosion.doExplosionA sees every entity before any affected block is removed.
   const hitFrom = attacker === "player" ? position : attacker;

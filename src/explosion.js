@@ -308,8 +308,8 @@ export const explodePitch = (rand) => f(f(1 + f(f(rand.nextFloat() - rand.nextFl
 // opaque cube, from the explosion's own Random. Returns
 // { list, pitch, broken: [{x, y, z, id, meta}], drops, xp, primed: [{x, y, z, fuse}], fires }.
 // The caller performs the block edits; `world.get/getMeta` are read only.
-export function explodeBlocks(world, x, y, z, size, rand, { smoking = true, flaming = false, own = new JavaRandom(Date.now()), opaque = () => false } = {}) {
-  const list = explosionBlocks(world, x, y, z, size, rand);
+export function explodeBlocks(world, x, y, z, size, rand, { smoking = true, flaming = false, own = new JavaRandom(Date.now()), opaque = () => false, resistance = explosionResistance } = {}) {
+  const list = explosionBlocks(world, x, y, z, size, rand, resistance);
   const pitch = explodePitch(rand), broken = [], drops = [], xp = [], primed = [], fires = [];
   const removed = new Set(), get = (bx, by, bz) => (removed.has(bx + "," + by + "," + bz) ? 0 : world.get(bx, by, bz));
   const chance = f(1 / size);

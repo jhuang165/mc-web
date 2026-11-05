@@ -9,7 +9,7 @@ import { endermanFieldsFrom } from './enderman.js';
 import { nbtGet } from './nbt-get.js';
 import { slimeSizeFromNbt } from './slime.js';
 
-export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', LavaSlime: 'magma_cube', PigZombie: 'pigman', Ozelot: 'ocelot', EntityHorse: 'horse', Blaze: 'blaze', Ghast: 'ghast' });
+export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', LavaSlime: 'magma_cube', PigZombie: 'pigman', Ozelot: 'ocelot', EntityHorse: 'horse', Blaze: 'blaze', Ghast: 'ghast', WitherBoss: 'wither' });
 export const IMPORT_MOB_LIMIT = 256; // EntityWorld keeps at most this many saved mobs
 
 const tagValue = nbtGet; // NBTTagCompound getters: numeric tags convert across types (nbt-get.js)
@@ -124,6 +124,8 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
     record.health = Math.min(record.health, record.horse.maxHealth);
   } else if (type === 'squid' || type === 'blaze') {
     // EntitySquid and EntityBlaze have no NBT of their own.
+  } else if (type === 'wither') {
+    record.invul = Math.max(0, tagValue(entity, 'Invul', NBT.INT, 0)); // EntityWither.readEntityFromNBT: Invul (func_82215_s)
   } else if (type === 'ghast') {
     record.explosionPower = tagValue(entity, 'ExplosionPower', NBT.INT, 1); // EntityGhast.readEntityFromNBT
   } else {
@@ -141,7 +143,7 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
 // EntityList.createEntityFromNBT for /summon. A supplied compound skips onSpawnWithEgg entirely.
 export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) {
   if (type === 'skeleton' && tagValue(tag, 'SkeletonType', NBT.BYTE, 0) === 1) type = 'wither_skeleton'; // EntitySkeleton.readEntityFromNBT (wither-skeleton.js)
-  const health = { horse: 53, pig: 10, cow: 10, mooshroom: 10, snow_golem: 4, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, wither_skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, magma_cube: 1, pigman: 20, enderman: 40, squid: 10, bat: 6, ocelot: 10, blaze: 20, ghast: 10 }[type];
+  const health = { horse: 53, pig: 10, cow: 10, mooshroom: 10, snow_golem: 4, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, wither_skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, magma_cube: 1, pigman: 20, enderman: 40, squid: 10, bat: 6, ocelot: 10, blaze: 20, ghast: 10, wither: 300 }[type];
   if (health === undefined) return null;
   const rotation = numbers(tag, 'Rotation', NBT.FLOAT, 2);
   const record = { type, health: tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health)), yaw: rotation ? -rotation[0] * Math.PI / 180 : 0,
@@ -186,6 +188,7 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
   // EntityEnderman.readEntityFromNBT: carried / carriedData (shorts; the original block id and metadata).
   if (type === 'enderman') { Object.assign(record, endermanFieldsFrom({ carried: tagValue(tag, 'carried', NBT.SHORT, 0), carriedData: tagValue(tag, 'carriedData', NBT.SHORT, 0) })); kept.add('carried'); kept.add('carriedData'); }
   if (type === 'ghast') { record.explosionPower = tagValue(tag, 'ExplosionPower', NBT.INT, 1); kept.add('ExplosionPower'); }
+  if (type === 'wither') { record.invul = Math.max(0, tagValue(tag, 'Invul', NBT.INT, 0)); kept.add('Invul'); } // a summoned Wither keeps its 220 tick spawn phase
   if (type === 'bat') { record.batHanging = (tagValue(tag, 'BatFlags', NBT.BYTE, 0) & 1) !== 0; kept.add('BatFlags'); } // EntityBat.readEntityFromNBT; a supplied compound without BatFlags is not hanging
   if (type === 'creeper') { record.powered = !!tagValue(tag, 'powered', NBT.BYTE, 0); record.ignited = !!tagValue(tag, 'ignited', NBT.BYTE, 0); kept.add('powered'); kept.add('ignited'); }
   if (type === 'witch') {

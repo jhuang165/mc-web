@@ -24,7 +24,7 @@ export const ANIMALS = new Set(["pig", "cow", "sheep", "chicken", "wolf", "ocelo
 // explosions, lava, cactus and inFire (fire blocks, lightning) are blocked by armour.
 const UNBLOCKABLE = new Set(["fall", "onFire", "drown", "inWall", "starve", "generic", "magic", "wither", "outOfWorld"]);
 // EntityZombie.getTotalArmorValue: 2 natural points; the others wear nothing here.
-const ARMOR = { zombie: 2 };
+const ARMOR = { zombie: 2, wither: 4 }; // EntityWither.getTotalArmorValue (xc.aV) 4
 // EntityLivingBase.applyArmorCalculations: amount * (25 - armour) / 25 in floats.
 export function armorReduced(type, amount, source, size = 1) {
   const armor = type === "magma_cube" ? magmaArmor(size) : type === "pigman" ? PIGMAN.armor : ARMOR[type] || 0; // yf.aV = size * 3
@@ -75,6 +75,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
     case "slime": for (const id of slimeDrops(rand, e.size, looting)) add(id); break; // EntitySlime.dropFewItems (slime.js)
     case "magma_cube": for (const id of magmaDrops(rand, e.size, looting)) add(id); break; // EntityMagmaCube.dropFewItems (nether-melee.js)
     case "pigman": for (const id of pigmanDrops(rand, looting)) add(id); break; // EntityPigZombie.dropFewItems
+    case "wither": add(2060); break; // EntityWither.dropFewItems: one nether star (ade.bN)
     case "blaze": for (const id of blazeDrops(rand, looting, playerHit)) add(id); break; // EntityBlaze.dropFewItems (blaze-ghast.js)
     case "ghast": for (const id of ghastDrops(rand, looting)) add(id); break; // EntityGhast.dropFewItems
     case "witch": for (const [id] of witchDrops(rand, looting)) add(id); break; // EntityWitch.dropFewItems (witch.js)
@@ -108,6 +109,7 @@ export function experiencePoints(e, rand, worldRand) {
   if (e.type === "magma_cube") return slimeExperience(e.size); // experienceValue = size, like the slime
   if (e.type === "pigman") return pigmanExperience(rand, e.held);
   if (e.type === "slime") return slimeExperience(e.size); // experienceValue = size
+  if (e.type === "wither") return 50; // EntityWither.experienceValue
   if (e.type === "blaze") return 10; // EntityBlaze.experienceValue (a ghast keeps the default 5)
   if (e.type === "witch") return witchExperience(rand, e.held); // 5 plus 1 + nextInt(3) for a held potion
   return 5 + (e.type === "skeleton" || e.type === "wither_skeleton" ? 1 + rand.nextInt(3) : 0);
