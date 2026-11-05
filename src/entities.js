@@ -25,6 +25,7 @@ import { IRON_GOLEM_TYPE, IRON_GOLEM_SOUNDS, ironGolemFields, ironGolemShape } f
 import { createVillages, PLAYER_NAME } from "./village-host.js";
 import { SLIME, mobScale, slimeDamage, slimeTouches, slimeFields, slimeFieldsFrom, slimeRestore, slimeWidth, slimeSoundName, slimeVolume, slimeSquishStart, slimeSquishEnd, slimeActionState, slimeChildren, slimeCanSpawnHere, isSlimeChunk, SLIMEBALL } from "./slime.js";
 import { SQUID, BAT } from "./squid-bat.js";
+import { HORSE_ENTITY, horseRideThink, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
 import { squidBatUpdate, squidBatTalk, squidBatSpawnPass, installSquidBat } from "./squid-bat-mobs.js";
 import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
 import { webMove } from './webs.js';
@@ -165,6 +166,7 @@ export const ENTITY_TYPES = {
   chicken: { health: 4, width: f(0.3), height: f(0.7), movement: 0.25, ai: { wander: 1, mate: 1, panic: 1.4, tempt: 1, follow: 1.1 }, drop: 0 },
   // EntityWolf (wv): 0.6 x 0.8, speed 0.3, 8 health (20 once tamed: wolf.js maxHealth), bite 2 wild / 4 tamed
   // (wolf.js attackStrength); tasks, targets and mutex bits in wolf-ai.js. No drops.
+  horse: HORSE_ENTITY, // EntityHorse (wi): horse-live.js
   wolf: { health: WILD_MAX_HEALTH, width: WOLF_WIDTH, height: WOLF_HEIGHT, movement: WOLF_SPEED, ai: { wander: 1, mate: 1 }, damage: 2, drop: 0 },
   zombie: {
     health: 20,
@@ -219,7 +221,7 @@ export function aiMoveSpeed(e, multiplier) {
   const boost = e.type === "zombie" && e.growingAge < 0 ? [[0.5, 1]] : e.type === "enderman" && e.speedBoost ? [[ENDERMAN_BOOST, 0]] : [];
   // EntityWitch: the "Drinking speed penalty" modifier (-0.25, operation 0) while a potion is being drunk.
   const drink = e.type === "witch" && e.drinking ? [[-0.25, 0]] : [];
-  return f(multiplier * attributeValue(ENTITY_TYPES[e.type].movement, [...drink, ...boost, ...speedModifiers(e)]));
+  return f(multiplier * attributeValue(e.horse?.speed ?? ENTITY_TYPES[e.type].movement, [...drink, ...boost, ...speedModifiers(e)]));
 }
 // Wheat (ade.O) breeds and tempts cows and sheep; chickens take wheat seeds (309, any
 // ItemSeeds in the original) through EntityAITempt / isBreedingItem.
@@ -490,7 +492,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
   if (e.inWater) {
     const y0 = e.y;
     moveFlying(e, e.moveStrafing || 0, forward, f(isSpider(e.type) || e.type === "silverfish" ? 0.02 : 0.04));
-    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : STEP_HEIGHT, hooks);
+    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, hooks);
     e.vx *= 0.800000011920929;
     e.vy *= 0.800000011920929;
     e.vz *= 0.800000011920929;
@@ -499,7 +501,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
   } else if (e.inLava) {
     const y0 = e.y;
     moveFlying(e, e.moveStrafing || 0, forward, f(0.02));
-    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : STEP_HEIGHT, hooks);
+    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, hooks);
     e.vx *= 0.5;
     e.vy *= 0.5;
     e.vz *= 0.5;
@@ -510,7 +512,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
     const slip = () => (e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.91)) : f(0.91));
     let friction = slip();
     const accel = f(f(0.16277136) / f(f(friction * friction) * friction));
-    moveFlying(e, e.moveStrafing || 0, forward, e.onGround ? f((isSpider(e.type) || e.type === "silverfish" ? f(0.1) : e.aiMoveSpeed) * accel) : JUMP_MOVEMENT_FACTOR);
+    moveFlying(e, e.moveStrafing || 0, forward, e.onGround ? f((isSpider(e.type) || e.type === "silverfish" ? f(0.1) : e.aiMoveSpeed) * accel) : e.jumpFactor ?? JUMP_MOVEMENT_FACTOR);
     friction = slip();
     // isOnLadder: EntitySpider's override is its wall flag; others test the ladder cell (ladders.js).
     const climbable = () => (isSpider(e.type) ? e.climbing : isOnLadder(world, e.x, e.y, e.z));
@@ -518,7 +520,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
       ladderClamp(e, e.player && e.sneaking, ["vx", "vy", "vz"]);
       e.fallDistance = 0;
     }
-    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : STEP_HEIGHT, hooks);
+    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, hooks);
     if (e.collidedH && climbable()) e.vy = LADDER_CLIMB;
     e.vy -= 0.08;
     e.vy *= 0.9800000190734863;
@@ -645,6 +647,7 @@ export class EntityWorld {
       ...(e.type === "iron_golem" ? ironGolemFields(e.playerCreated) : {}),
       // EntityTameable and EntityWolf NBT: owner, sitting, angry and the collar; the shake, begging and AI state start over.
       ...(e.type === "wolf" ? wolfFieldsFrom(e, fresh) : {}),
+      ...(e.type === "horse" ? horseFieldsFrom(e, fresh) : {}),
       ...(e.type === "sheep" ? { color: Number.isInteger(e.color) && e.color >= 0 && e.color < 16 ? e.color : 0, sheared: e.sheared === true, eatTimer: 0 } : {}),
       // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
       ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
@@ -707,6 +710,7 @@ export class EntityWorld {
       ...(type === "villager" ? villagerFields() : {}),
       ...(type === "iron_golem" ? ironGolemFields() : {}),
       ...(type === "wolf" ? wolfFields() : {}),
+      ...(type === "horse" ? horseFields(random) : {}),
       // EntityChicken (wg): timeUntilNextEgg = rand.nextInt(6000) + 6000 (wg.bu; not saved in
       // 1.7.10), wingRotation/destPos and their previous values 0, wingRotDelta (bt) 1.0.
       ...(isSpider(type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
@@ -1140,6 +1144,7 @@ export class EntityWorld {
   // for a child). EntityCreeper has no living sound but still rolls and resets.
   talk(e) {
     if (e.type === "squid" || e.type === "bat") return squidBatTalk(this, e);
+    if (e.type === "horse") return this.horseTalk(e, livingSoundRoll);
     const rand = entityRandom(e);
     if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem" || e.type === "slime") return;
     // EntityWolf.getLivingSound (t) rolls before the sound's pitch.
@@ -1187,6 +1192,7 @@ export class EntityWorld {
     if(a.type==='wolf')Object.assign(baby,puppyFields(a));
     // EntitySheep.createChild (wp.b(rx)): the lamb's colour is the parents' dye mix.
     if(a.type==='sheep')baby.color=childColor(a.color,b.color,this.random);
+    if(a.type==='horse')Object.assign(baby,horseChildFields(a,b,entityRandom(a)));
     this.entities.push(baby);a.growingAge=b.growingAge=6000;a.love=b.love=0;a.mateTicks=b.mateTicks=0;
     // The breeding experience needs gamerule doMobLoot.
     if(gameRule("doMobLoot"))this.events.push({xp:1+Math.floor(Math.random()*7),position:{x:a.x,y:a.y,z:a.z}});
@@ -1573,7 +1579,7 @@ export class EntityWorld {
       if (e.type === "slime") this.slimeTick(e, t);
       else {
         if (e.type === "enderman") endermanTick(this, e, entityRandom(e));
-        this.walk(e, t, 0, () => isSpider(e.type) ? this.spiderThink(e) : e.type === "silverfish" ? this.silverfishThink(e) : this.ai.think(e));
+        this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : isSpider(e.type) ? this.spiderThink(e) : e.type === "silverfish" ? this.silverfishThink(e) : this.ai.think(e));
       }
       this.push(e, t);
       if (isSpider(e.type)) {
@@ -1581,6 +1587,7 @@ export class EntityWorld {
       }
       if (e.type === "chicken") this.chickenUpdate(e);
       if (e.type === "wolf") this.wolfUpdate(e, t);
+      if (e.type === "horse") this.horseTick(e);
       this.turnBody(e);
       this.swingLimbs(e);
     }
@@ -1966,4 +1973,5 @@ export class EntityWorld {
     return events;
   }
 }
+installHorse(EntityWorld); // horse-live.js: interact, ride, tame, rear
 installSquidBat(EntityWorld); // squid-bat-mobs.js: bat wake-up, squid entityAge and silent hurt, bat sound pitch

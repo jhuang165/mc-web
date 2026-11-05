@@ -21,7 +21,7 @@ export function syncRider(state) {
   };
 }
 // The system that owns the ridden vehicle: boats and minecarts keep separate id spaces.
-export const vehicleSystem = (state, boat = state.rider?.vehicle?.boat) => (boat ? state.boats : state.minecarts);
+export const vehicleSystem = (state, boat = state.rider?.vehicle?.boat) => (state.rider?.vehicle?.horse && state.horses ? state.horses : boat ? state.boats : state.minecarts);
 export function captureVehicleAction({ cartId = null, boat = false, dismount = false, place = true, sneak = false, heldTool = 0 } = {}) {
   if ((cartId !== null && !Number.isSafeInteger(cartId)) || !Number.isSafeInteger(heldTool))
     throw new TypeError('Vehicle action requires integer cart and held item IDs');
@@ -110,6 +110,7 @@ export function moveRidingPlayer(state, controls, hooks = {}) {
     rider.moveForward=f(input.forward*f(.98));
     // EntityLivingBase moveStrafing is positive to the left; the browser strafe is positive to the right.
     rider.moveStrafing=f(-input.strafe*f(.98));
+    state.horses?.charge(rider, controls); // horse-live.js: jump key counter
     minecarts.updateRiderPosition(rider.vehicle);
     applySeat(state);
   }
