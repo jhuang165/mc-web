@@ -3,6 +3,7 @@
 // per-mob dropFewItems / dropEquipment / dropRareDrop rolls on Entity.rand, and
 // Entity.applyEntityCollision. combat-reference.json holds the original's results.
 import { WOOL, RED_FLOWER } from "./world.js";
+import { pearlCount as endermanPearls, ENDER_PEARL_ITEM as ENDER_PEARL } from "./enderman.js";
 import { golemDrops } from "./iron-golem.js";
 import { CARROT, POTATO } from "./crops.js";
 import { witchDrops, witchEquipmentDrop, witchExperience } from "./witch.js";
@@ -54,6 +55,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
     case "sheep": if (!e.sheared) add(WOOL, 1, e.color || 0); break;
     case "chicken": add(FEATHER, rand.nextInt(3) + rand.nextInt(1 + looting)); add(burning ? COOKED_CHICKEN : RAW_CHICKEN); break;
     case "zombie": add(FLESH, generic()); break;
+    case "enderman": add(ENDER_PEARL, endermanPearls(rand, looting)); break; // EntityEnderman.dropFewItems: 0 to 1 + looting pearls; the carried block is not dropped
     case "skeleton": add(ARROW, rand.nextInt(3 + looting)); add(BONE, rand.nextInt(3 + looting)); break;
     case "spider":
     case "cave_spider": // EntityCaveSpider inherits EntitySpider.dropFewItems

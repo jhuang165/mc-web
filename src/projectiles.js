@@ -286,7 +286,7 @@ export function thrownHit(mobs, e, from) {
     e.love = 0;
     e.mateTicks = 0;
   }
-  return mobs.damage(e, 0, from.x, from.z);
+  return mobs.damage(e, 0, from.x, from.z, true, null, { projectile: true });
 }
 
 export class Projectiles {

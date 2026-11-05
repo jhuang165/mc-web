@@ -2,6 +2,8 @@ import { entityActive } from './streaming-ticks.js';
 import { gameRule } from "./game-rules.js";
 import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE, isSpider, soundType, caveSpiderPoisonTicks } from "./spider.js";
 import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, SPAWN_BRIGHTNESS } from "./mob-spawner.js";
+import { ENDERMAN_HEALTH, ENDERMAN_WIDTH, ENDERMAN_HEIGHT, ENDERMAN_SPEED, ENDERMAN_ATTACK, SPEED_BOOST as ENDERMAN_BOOST, endermanFields, endermanFieldsFrom, SOUNDS as ENDERMAN_SOUNDS, livingSound as endermanLiving } from "./enderman.js";
+import { endermanTick, endermanHurt, endermanSpawn, ENDERMAN_TRANSIENT } from "./enderman-live.js";
 import { SILVERFISH, SILVERFISH_SOUNDS, silverfishActionState, legacyFields as silverfishFields, silverfishCanSpawnHere, hurtSummon, attackReady, closestVulnerablePlayer, pathWeight as silverfishPathWeight, eggSpawn } from "./silverfish.js";
 import { POISON } from "./status-effects.js";
 import {CARROT,zombieRareDrop} from './crops.js';
@@ -68,7 +70,7 @@ export const entityRandom = (e) => {
 };
 // Seeds Entity.rand (the combat replay in combat.test.js).
 export const setEntityRandom = (e, rand) => RANDOMS.set(e, rand);
-const TRANSIENT = ["inWeb", "onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "fire", "idle", "revenge", "recentlyHit"];
+const TRANSIENT = [...ENDERMAN_TRANSIENT, "inWeb", "onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "fire", "idle", "revenge", "recentlyHit"];
 const INTERPOLATED = [...TRANSIENT, "eggTimer", "wingRotation", "destPos", "oFlapSpeed", "oFlap", "wingRotDelta", "px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
 // Entity.rotationYaw is Java degrees (0 faces +z, increasing toward -x); e.yaw
 // is the radian bearing used by the movement code, which turns toward +x.
@@ -189,18 +191,20 @@ export const ENTITY_TYPES = {
   // EntityIronGolem (wt): 1.4 x 2.9, 100 health, speed 0.25; the attack, drops and AI are iron-golem.js / village-ai.js.
   iron_golem: IRON_GOLEM_TYPE,
   // EntitySilverfish (yk): 0.3 x 0.7, 8 health, speed 0.6, damage 1; legacy AI (silverfish.js), no drops.
+  // EntityEnderman (ya): 40 health, 0.6 x 2.9, speed 0.3, attack 7; enderman.js (stare, teleport, carry), no AI-task list in 1.7.10.
+  enderman: { health: ENDERMAN_HEALTH, width: ENDERMAN_WIDTH, height: ENDERMAN_HEIGHT, movement: f(ENDERMAN_SPEED), ai: { chase: 1, wander: 1 }, damage: ENDERMAN_ATTACK, drop: 0 },
   silverfish: { health: SILVERFISH.health, width: SILVERFISH.width, height: SILVERFISH.height, movement: f(SILVERFISH.speed), ai: { wander: 1 }, damage: SILVERFISH.damage, drop: 0 },
   // EntityWitch (yp): 0.6 x 1.8, 26 health, speed 0.25; the potion attack (witch.js, witch-potions.js) replaces melee. Drops in combat.js.
   witch: { health: WITCH.health, width: WITCH.width, height: WITCH.height, movement: WITCH.movement, ai: { wander: 1 }, damage: WITCH.attackDamage, drop: 0 },
 };
 // EntityMob subclasses: no panic counter, 5 experience, despawning, 0.5 - brightness path weights.
-export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper", "silverfish", "witch"]);
+export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper", "silverfish", "witch", "enderman"]);
 // EntityMoveHelper.onUpdateMoveHelper (tv.c) hands EntityLiving.setAIMoveSpeed
 // (sw.i) `(float)(speed * movementSpeed)`; sw.i also sets moveForward to it. The
 // zombie's "Baby speed boost" (yq.br) is operation 1: base * (1 + 0.5); a Speed effect
 // (mob-effects.js) is operation 2.
 export function aiMoveSpeed(e, multiplier) {
-  const boost = e.type === "zombie" && e.growingAge < 0 ? [[0.5, 1]] : [];
+  const boost = e.type === "zombie" && e.growingAge < 0 ? [[0.5, 1]] : e.type === "enderman" && e.speedBoost ? [[ENDERMAN_BOOST, 0]] : [];
   // EntityWitch: the "Drinking speed penalty" modifier (-0.25, operation 0) while a potion is being drunk.
   const drink = e.type === "witch" && e.drinking ? [[-0.25, 0]] : [];
   return f(multiplier * attributeValue(ENTITY_TYPES[e.type].movement, [...drink, ...boost, ...speedModifiers(e)]));
@@ -214,9 +218,9 @@ export { FEATHER, RAW_CHICKEN, COOKED_CHICKEN };
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
 // its hurt sound, and the sheep uses mob.sheep.say for say, hurt and death alike.
 // EntityCaveSpider inherits the spider's sounds.
-const hurtSound = (type) => (type = soundType(type), type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "witch" ? WITCH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "iron_golem" ? IRON_GOLEM_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
+const hurtSound = (type) => (type = soundType(type), type === "enderman" ? ENDERMAN_SOUNDS.hit : type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "witch" ? WITCH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "iron_golem" ? IRON_GOLEM_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
 // EntityChicken's death sound is its hurt sound as well.
-const deathSound = (type) => (type = soundType(type), type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "witch" ? WITCH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "iron_golem" ? IRON_GOLEM_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
+const deathSound = (type) => (type = soundType(type), type === "enderman" ? ENDERMAN_SOUNDS.death : type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "witch" ? WITCH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "iron_golem" ? IRON_GOLEM_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
 // Entity.setPosition's box (half width and height in floats) and Entity.canBePushed:
 // living entities until setDead (deathTime 20, or removal).
 export const pushBox = (o, width, height) => {
@@ -474,7 +478,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
   if (e.inWater) {
     const y0 = e.y;
     moveFlying(e, 0, forward, f(isSpider(e.type) || e.type === "silverfish" ? 0.02 : 0.04));
-    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, STEP_HEIGHT, hooks);
+    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : STEP_HEIGHT, hooks);
     e.vx *= 0.800000011920929;
     e.vy *= 0.800000011920929;
     e.vz *= 0.800000011920929;
@@ -483,7 +487,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
   } else if (e.inLava) {
     const y0 = e.y;
     moveFlying(e, 0, forward, f(0.02));
-    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, STEP_HEIGHT, hooks);
+    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : STEP_HEIGHT, hooks);
     e.vx *= 0.5;
     e.vy *= 0.5;
     e.vz *= 0.5;
@@ -502,7 +506,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
       ladderClamp(e, e.player && e.sneaking, ["vx", "vy", "vz"]);
       e.fallDistance = 0;
     }
-    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, STEP_HEIGHT, hooks);
+    landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : STEP_HEIGHT, hooks);
     if (e.collidedH && climbable()) e.vy = LADDER_CLIMB;
     e.vy -= 0.08;
     e.vy *= 0.9800000190734863;
@@ -635,6 +639,7 @@ export class EntityWorld {
       ...(isSpider(e.type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
       // EntitySilverfish has no NBT of its own: the summon cooldown starts over.
       ...(e.type === "silverfish" ? { summonCooldown: 0 } : {}),
+      ...(e.type === "enderman" ? endermanFieldsFrom(e) : {}),
       // EntityWitch keeps its held potion (Equipment) but not the drinking state (datawatcher 21, the penalty modifier).
       ...(e.type === "witch" ? { drinking: false, drinkTimer: 0, held: e.held && e.held.id === ITEM_POTION && potionEffects(e.held.damage).length ? { id: ITEM_POTION, damage: e.held.damage, count: 1 } : null } : {}),
       // EntityCreeper.readEntityFromNBT: "powered" and "ignited" are saved, the swell
@@ -691,6 +696,7 @@ export class EntityWorld {
       ...(isSpider(type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
       ...(type === "creeper" ? creeperFields() : {}),
       ...(type === "silverfish" ? { summonCooldown: 0 } : {}),
+      ...(type === "enderman" ? endermanFields() : {}),
       ...(type === "witch" ? { drinking: false, drinkTimer: 0, held: null } : {}),
       ...(type === "chicken" ? { eggTimer: Math.floor(random() * 6000) + 6000, wingRotation: 0, destPos: 0, oFlapSpeed: 0, oFlap: 0, wingRotDelta: 1 } : {}),
       // EntityZombie.func_110161_a adds a 0 to 0.05 "Random spawn bonus" to knockbackResistance.
@@ -767,6 +773,7 @@ export class EntityWorld {
   attackEntityFrom(e, amount, source = {}) {
     if (!this.entities.includes(e)) return false;
     if (e.type === "silverfish") this.silverfishHurt(e, source);
+    if (e.type === "enderman" && e.health > 0 && !endermanHurt(this, e, source, entityRandom(e)).proceed) return true;
     if (ANIMALS.has(e.type)) { e.flee = 60; e.love = 0; e.mateTicks = 0; }
     if (e.health <= 0) return false;
     // EntityWolf.attackEntityFrom: the Sit task's wish is cleared (EntityAISit.setSitting(false)) and damage from a
@@ -1115,7 +1122,7 @@ export class EntityWorld {
     // EntityWolf.getLivingSound (t) rolls before the sound's pitch.
     const wolfSound = e.type === "wolf" ? wolfSay(e, rand) : null;
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
-    this.events.push({ sound: e.type === "witch" ? WITCH_SOUNDS.idle : wolfSound ? wolfSound : e.type === "villager" ? (e.customer ? VILLAGER_SOUNDS.haggle : VILLAGER_SOUNDS.idle) : "mob." + soundType(e.type) + ".say", volume: soundVolume(e.type), pitch, position: { x: e.x, y: e.y, z: e.z } });
+    this.events.push({ sound: e.type === "enderman" ? endermanLiving(e) : e.type === "witch" ? WITCH_SOUNDS.idle : wolfSound ? wolfSound : e.type === "villager" ? (e.customer ? VILLAGER_SOUNDS.haggle : VILLAGER_SOUNDS.idle) : "mob." + soundType(e.type) + ".say", volume: soundVolume(e.type), pitch, position: { x: e.x, y: e.y, z: e.z } });
   }
   // The fire and lava part of Entity.onEntityUpdate (sa.C): water puts the fire
   // out; a burning mob takes 1 (onFire) whenever the counter is a multiple of 20;
@@ -1433,6 +1440,7 @@ export class EntityWorld {
         break;
       }
     }
+    endermanSpawn(this, player, survival, night && hostile, { actorCollides, SIZE, ENTITY_TYPES });
     // Creepers: the same night ring as the skeletons, with their own clock and cap.
     this.creeperClock = (this.creeperClock || 0) + 1;
     if (night && hostile && !survival.creative && this.creeperClock >= 250 && this.entities.filter((e) => e.type === "creeper").length < 3) {
@@ -1536,6 +1544,7 @@ export class EntityWorld {
       // EntityLiving.onLivingUpdate runs the AI (ai.js) between the motion snap and the
       // jump/move: tasks, navigator, move/look/jump helpers.
       if (e.type === "witch") this.witchUpdate(e, t);
+      if (e.type === "enderman") endermanTick(this, e, entityRandom(e));
       this.walk(e, t, 0, () => isSpider(e.type) ? this.spiderThink(e) : e.type === "silverfish" ? this.silverfishThink(e) : this.ai.think(e));
       this.push(e, t);
       if (isSpider(e.type)) {

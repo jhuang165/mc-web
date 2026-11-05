@@ -24,6 +24,8 @@ export const SHADOWS = {
   // RenderManager: new RenderWolf(new ModelWolf(), new ModelWolf(), 0.5F).
   wolf: { size: f(0.5), opaque: 1 },
   zombie: { size: f(0.5), opaque: 1 },
+  // RenderEnderman: super(new ModelEnderman(), 0.5F).
+  enderman: { size: f(0.5), opaque: 1 },
   spider: { size: 1, opaque: 1 },
   // RenderCaveSpider: shadowSize *= 0.7F on RenderSpider's 1.0.
   cave_spider: { size: f(0.7), opaque: 1 },

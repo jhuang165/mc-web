@@ -877,6 +877,13 @@ export class Brain {
       this.tasks.add(6, new LookIdle(this));
       this.targets.add(1, new NearestAttackable(this));
       this.targets.add(2, new HurtByTarget(this, false));
+    } else if (e.type === "enderman") {
+      // EntityEnderman (ya) is legacy AI in 1.7.10 (no task list): this build approximates it with swim, melee chase (the stare rule
+      // in enderman-live.js picks the target) and wander; see public/research/enderman.md.
+      this.tasks.add(0, new Swim(this));
+      this.tasks.add(2, new AttackOnCollide(this, A.chase, "player"));
+      this.tasks.add(7, new Wander(this, A.wander));
+      this.targets.add(1, new HurtByTarget(this, false));
     } else if (e.type === "witch") {
       // EntityWitch (yp): swim 1, the potion ArrowAttack 2 (speed 1.0, interval 60 both ways, range 10), wander 2 (1.0), watch the
       // player 3 (8 blocks), look idle 3; targets hurt-by 1 (no call for help) and the nearest visible player 2.
@@ -1019,7 +1026,7 @@ export class Brain {
   getBlockPathWeight(x, y, z) {
     const w = this.ai.world;
     if (this.e.type === "villager" || this.e.type === "iron_golem") return f(0); // EntityCreature.getBlockPathWeight
-    if (this.e.type === "zombie" || this.e.type === "skeleton" || this.e.type === "creeper" || this.e.type === "witch") return f(f(0.5) - this.ai.brightness(x, y, z));
+    if (this.e.type === "zombie" || this.e.type === "skeleton" || this.e.type === "creeper" || this.e.type === "witch" || this.e.type === "enderman") return f(f(0.5) - this.ai.brightness(x, y, z));
     return w.get(x, y - 1, z) === GRASS ? f(10) : f(this.ai.brightness(x, y, z) - f(0.5));
   }
   // sw.bn(): the AI half of onLivingUpdate. Despawning and the idle age come first, then
@@ -1047,7 +1054,7 @@ export class Brain {
     const e = this.e, p = this.ai.player;
     if ((e.idle & 31) !== 31 || !p) return;
     // EntityWolf.canDespawn (v): only a wild wolf older than 2400 ticks.
-    const d3 = this.distSq(p), can = (e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || e.type === "zombie" || e.type === "skeleton" || e.type === "witch" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper";
+    const d3 = this.distSq(p), can = (e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || e.type === "zombie" || e.type === "skeleton" || e.type === "witch" || e.type === "enderman" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper";
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
     if (d3 < 1024) e.idle = 0;
