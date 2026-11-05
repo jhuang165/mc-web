@@ -942,6 +942,7 @@ async function launch(record, prepared) {
           if (kind === "potion") (mobs.potions?.projectiles ?? projectiles).balls.push({ ...ball, damage: e.damage, owner: null });
           else projectiles.balls.push(ball);
         },
+        fireball: ({ x, y, z, ax, ay, az }) => { mobs.fireballs.launch({ large: false, owner: null, x, y, z, exact: [ax, ay, az] }); }, // dispense.js FIRE_CHARGE
         cart: (type, x, y, z) => { if (type === 0) minecarts.spawnEmpty({ x, y, z }); else minecarts.spawnCart(type, { x, y, z, items: [] }); },
         spawnTnt: (x, y, z) => { primed.push(primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer: null })); saved = false; },
         setLiquid: (x, y, z, id) => { const old = world.get(x, y, z); world.set(x, y, z, id === 10 ? LAVA : WATER, true, 0); redstoneRuntime.fluidChanges([[x, y, z, old, world.get(x, y, z)]]); },
@@ -995,6 +996,7 @@ async function launch(record, prepared) {
     mobs.shoot = (e, target, scale) => arrows.skeletonShoot(e, target, scale, mobs.difficulty);
     // EntityWitch splash potions (witch-potions.js); EntityWorld.tick advances them.
     mobs.potions = new WitchPotions(mobs);
+    mobs.ignite = (x, y, z) => fire.ignite(x, y, z); // fireballs.js: a small fireball lights the cell beside the block it hit
     mobs.potions.load(record.thrownPotions);
     // World.rand for EntityLiving.onSpawnWithEgg, and World.func_147462_b at a block.
     mobs.worldRandom = weather.random;
@@ -2040,7 +2042,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
   scene.setFishing(fishing.active ? { hook: fishing.hook, first: !thirdPersonView, sneaking: !!motion.sneaking } : null);
   scene.setDrops(items.items);
-  scene.setProjectiles(eyes.balls.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length ? [...projectiles.balls, ...eyes.balls, ...(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? [])] : projectiles.balls, projectiles.particles);
+  scene.setProjectiles(eyes.balls.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length || mobs?._fireballs?.balls.length ? [...projectiles.balls, ...eyes.balls, ...(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? []), ...(mobs?._fireballs?.balls ?? [])] : projectiles.balls, projectiles.particles);
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();

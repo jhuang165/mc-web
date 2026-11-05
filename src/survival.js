@@ -28,7 +28,7 @@ import { installColoredItems, installColoredMaterials, COLORED_FUELS } from './c
 import { installNoteJukeboxItems, installNoteJukeboxMaterials, installNoteJukeboxRecipes } from './note-jukebox-content.js';
 // The lastDamage reason of DamageSource.outOfWorld (death-messages.js).
 export const VOID = "void";
-const FIRE_REASONS = new Set(["burning", "lava", "fire"]); // DamageSource.isFireDamage (onFire, inFire, lava)
+const FIRE_REASONS = new Set(["burning", "lava", "fire", "fireball"]); // DamageSource.isFireDamage (onFire, inFire, lava)
 
 export const ITEMS = Object.fromEntries(
   BLOCKS.map((b, id) => [id, { ...b, id, block: id > 0, stack: 64 }]).filter(([, b]) => !b.reserved),

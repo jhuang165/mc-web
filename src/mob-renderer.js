@@ -22,6 +22,7 @@ import { createOcelotRig } from "./ocelot-renderer.js";
 import { createHorseRig } from "./horse-renderer.js";
 import { createEndermanRig, animateEnderman } from "./enderman-renderer.js";
 import { createSnowGolemRig, animateSnowGolem, addMooshroomMushrooms } from "./mooshroom-golem-renderer.js";
+import { createBlazeRig, createGhastRig } from "./blaze-ghast-renderer.js";
 import { createSquidRig, createBatRig } from "./squid-bat-renderer.js";
 import { createCrystalRig } from "./ender-crystal-renderer.js";
 const RAD = Math.PI / 180;
@@ -414,6 +415,8 @@ export class MobRenderer {
     if (e.type === "squid") return createSquidRig(this);
     if (e.type === "bat") return createBatRig(this);
     if (e.type === "ender_crystal") return createCrystalRig(this);
+    if (e.type === "blaze") return createBlazeRig(this);
+    if (e.type === "ghast") return createGhastRig(this);
     return this.createQuadruped(e.type);
   }
   // `partial` is the fraction of the current tick elapsed (mobPose interpolates).
@@ -534,7 +537,7 @@ export class MobRenderer {
         r.armor.uniforms.scroll.value = armorScroll(pose.age);
       }
       for (const m of r.materials) {
-        m.setLight(packed);
+        m.setLight(r.fullbright ?? packed);
         const o = m.uniforms.overlay.value;
         if (e.hurt > 0 || e.death) {
           if (white > 0) {

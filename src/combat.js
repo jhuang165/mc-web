@@ -9,6 +9,7 @@ import { witherSkeletonDrops } from "./wither-skeleton.js";
 import { CARROT, POTATO } from "./crops.js";
 import { slimeDrops, slimeExperience } from "./slime.js";
 import { magmaDrops, magmaArmor, pigmanDrops, pigmanRareDrop, pigmanSwordDrop, pigmanExperience, PIGMAN } from "./nether-melee.js";
+import { blazeDrops, ghastDrops } from "./blaze-ghast.js";
 import { witchDrops, witchEquipmentDrop, witchExperience } from "./witch.js";
 import { squidDrops, squidExperience } from "./squid-bat.js";
 import { dropCount as horseDropCount } from "./horse.js";
@@ -32,7 +33,7 @@ export function armorReduced(type, amount, source, size = 1) {
 }
 // getSoundVolume (EntityCow 0.4) and getSoundPitch, on Entity.rand.
 // EntityCow (and EntityMooshroom), EntityWolf and EntityOcelot (bf) override getSoundVolume with 0.4F; EntityHorse with 0.8F.
-export const soundVolume = (type) => (type === "horse" ? f(0.8) : type === "cow" || type === "mooshroom" || type === "wolf" || type === "squid" || type === "ocelot" ? f(0.4) : type === "bat" ? f(0.1) : 1);
+export const soundVolume = (type) => (type === "horse" ? f(0.8) : type === "cow" || type === "mooshroom" || type === "wolf" || type === "squid" || type === "ocelot" ? f(0.4) : type === "bat" ? f(0.1) : type === "ghast" ? f(10) : 1);
 export const soundPitch = (rand, child) => f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (child ? f(1.5) : 1));
 // EntitySkeleton holds a bow (equipment drop chance 0.085F); no other mob here carries
 // equipment, so only its dropEquipment and getExperiencePoints draw for one.
@@ -74,6 +75,8 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
     case "slime": for (const id of slimeDrops(rand, e.size, looting)) add(id); break; // EntitySlime.dropFewItems (slime.js)
     case "magma_cube": for (const id of magmaDrops(rand, e.size, looting)) add(id); break; // EntityMagmaCube.dropFewItems (nether-melee.js)
     case "pigman": for (const id of pigmanDrops(rand, looting)) add(id); break; // EntityPigZombie.dropFewItems
+    case "blaze": for (const id of blazeDrops(rand, looting, playerHit)) add(id); break; // EntityBlaze.dropFewItems (blaze-ghast.js)
+    case "ghast": for (const id of ghastDrops(rand, looting)) add(id); break; // EntityGhast.dropFewItems
     case "witch": for (const [id] of witchDrops(rand, looting)) add(id); break; // EntityWitch.dropFewItems (witch.js)
     case "snow_golem": { const n = rand.nextInt(16); if (n > 0) add(312, n); break; } // EntitySnowman.dropFewItems: nextInt(16) snowballs
     case "horse": add([LEATHER, LEATHER, LEATHER, FLESH, BONE][e.horse?.type ?? 0], horseDropCount(rand, looting)); break; // EntityHorse.u(): leather, rotten flesh or bone (horse.js)
@@ -105,6 +108,7 @@ export function experiencePoints(e, rand, worldRand) {
   if (e.type === "magma_cube") return slimeExperience(e.size); // experienceValue = size, like the slime
   if (e.type === "pigman") return pigmanExperience(rand, e.held);
   if (e.type === "slime") return slimeExperience(e.size); // experienceValue = size
+  if (e.type === "blaze") return 10; // EntityBlaze.experienceValue (a ghast keeps the default 5)
   if (e.type === "witch") return witchExperience(rand, e.held); // 5 plus 1 + nextInt(3) for a held potion
   return 5 + (e.type === "skeleton" || e.type === "wither_skeleton" ? 1 + rand.nextInt(3) : 0);
 }

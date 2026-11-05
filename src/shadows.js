@@ -17,6 +17,9 @@ export const SHADOWS = {
   item: { size: f(0.15), opaque: f(0.75) },
   orb: { size: f(0.15), opaque: f(0.75) },
   pig: { size: f(0.7), opaque: 1 },
+  // RenderBlaze and RenderGhast: shadowSize 0.5F.
+  blaze: { size: f(0.5), opaque: 1 },
+  ghast: { size: f(0.5), opaque: 1 },
   cow: { size: f(0.7), opaque: 1 },
   mooshroom: { size: f(0.7), opaque: 1 },
   snow_golem: { size: f(0.5), opaque: 1 },
