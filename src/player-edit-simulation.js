@@ -148,6 +148,11 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return act('interact-wolf');
     }
+    // EntityOcelot.interact: raw fish tame a tempted ocelot or breed a cat, the owner's other clicks sit it.
+    if (e.type === 'ocelot' && state.mobs.ocelotInteract(e, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return act('interact-ocelot');
+    }
     if (state.mobs.shear(e, id, state.survival)) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return act('shear-entity');

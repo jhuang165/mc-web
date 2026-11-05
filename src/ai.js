@@ -17,6 +17,8 @@ import { homeFilter, isWithinHome } from "./home-area.js";
 import { zombieVillagerTargets } from "./zombie-villager.js";
 import { buildWolfTasks } from "./wolf-ai.js";
 import { isTamed as wolfTamed } from "./wolf.js";
+import { buildOcelotTasks, makeAvoid } from "./ocelot-ai.js";
+import { canDespawn as ocelotCanDespawn } from "./ocelot.js";
 const f = Math.fround;
 const GRASS = 1, TALL_GRASS = 39;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -866,11 +868,12 @@ export class Brain {
       // EntitySpider (and EntityCaveSpider) use legacy EntityCreature AI; EntityWorld.spiderThink drives it. So does
       // EntitySilverfish (silverfishThink): no tasks.
     } else if (e.type === "creeper") {
-      // EntityCreeper (xz): swim 1, swell 2, (avoid ocelots 3: no ocelots), attack on
+      // EntityCreeper (xz): swim 1, swell 2, avoid ocelots 3 (6 blocks, 1.0 far, 1.2 near: ocelot-ai.js), attack on
       // collide 4 (1.0), wander 5 (0.8), watch the player 6, look idle 6; targets nearest
       // visible player 1, hurt-by 2 (no call for help).
       this.tasks.add(1, new Swim(this));
       this.tasks.add(2, new CreeperSwell(this));
+      this.tasks.add(3, makeAvoid(this, Task, "ocelot", 6, 1.0, 1.2));
       this.tasks.add(4, new AttackOnCollide(this, A.chase));
       this.tasks.add(5, new Wander(this, A.wander));
       this.tasks.add(6, new WatchClosest(this, 8));
@@ -912,6 +915,9 @@ export class Brain {
     } else if (e.type === "wolf") {
       // EntityWolf (wv): wolf-ai.js lists its tasks and targets and the Brain overrides.
       buildWolfTasks(this, { Task, TargetBase, Swim, Wander, WatchClosest, LookIdle, AttackOnCollide, Mate });
+    } else if (e.type === "ocelot") {
+      // EntityOcelot (wn): ocelot-ai.js lists its tasks and targets and the Brain overrides.
+      buildOcelotTasks(this, { Task, TargetBase, Swim, Wander, WatchClosest, LookIdle, AttackOnCollide, Mate, Tempt });
     } else {
       // EntityPig/Cow/Sheep/Chicken: swim 0, panic 1, mate 2, tempt 3, follow parent
       // 4 (pig 5), sheep eat grass 5, wander, watch the player (6 blocks), look idle.
@@ -1056,7 +1062,7 @@ export class Brain {
     const e = this.e, p = this.ai.player;
     if ((e.idle & 31) !== 31 || !p) return;
     // EntityWolf.canDespawn (v): only a wild wolf older than 2400 ticks.
-    const d3 = this.distSq(p), can = (e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || e.type === "zombie" || e.type === "skeleton" || e.type === "witch" || e.type === "enderman" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper" || e.type === "squid" || e.type === "bat";
+    const d3 = this.distSq(p), can = (e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || (e.type === "ocelot" && ocelotCanDespawn(e)) || e.type === "zombie" || e.type === "skeleton" || e.type === "witch" || e.type === "enderman" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper" || e.type === "squid" || e.type === "bat";
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
     if (d3 < 1024) e.idle = 0;

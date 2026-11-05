@@ -35,6 +35,8 @@ import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startCon
 import { landingEffects, JUMP_BOOST, statusPitchRandom } from "./damage-fx.js";
 import { WOLF_WIDTH, WOLF_HEIGHT, WOLF_SPEED, WILD_MAX_HEALTH, TAMED_MAX_HEALTH, WOLF_SOUNDS, wolfFields, wolfFieldsFrom, isTamed as wolfTamed, maxHealth as wolfMaxHealth, tailAngle, interestedAngle, shakeAngle, wetShade, wolfSay, hurtAmount as wolfHurtAmount, attackStrength as wolfAttack, puppyFields, interact as wolfClick, updateWolf } from "./wolf.js";
 import { noteWolfHurt } from "./wolf-ai.js";
+import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest } from "./ocelot.js";
+import { ocelotSpawnPass } from "./ocelot-spawn.js";
 import { armorReduced, soundVolume, soundPitch, mobDrops, experiencePoints, applyEntityCollision, boxesMeet, ANIMALS, FEATHER, RAW_CHICKEN, COOKED_CHICKEN } from "./combat.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -138,6 +140,7 @@ export function mobPose(e, partial) {
   return {
     ...(e.type === "chicken" ? { flap: chickenFlap(e, p) } : {}),
     ...(e.type === "wolf" ? wolfPose(e, p) : {}),
+    ...(e.type === "ocelot" ? { ocelot: { catType: e.catType, tamed: ocelotTamed(e), sitting: !!e.sitting, sneaking: !!e.sneaking, sprinting: !!e.sprinting } } : {}),
     ...(e.type === "sheep" ? { headDrop: sheepHeadDrop(e.eatTimer || 0, p), headTilt: sheepHeadPitch(e.eatTimer || 0, p, headPitch) } : {}),
     x: lerp(e.px, e.x), y: lerp(e.py, e.y), z: lerp(e.pz, e.z),
     bodyYaw: body, headYaw: f(head - body),
@@ -166,6 +169,8 @@ export const ENTITY_TYPES = {
   // EntityWolf (wv): 0.6 x 0.8, speed 0.3, 8 health (20 once tamed: wolf.js maxHealth), bite 2 wild / 4 tamed
   // (wolf.js attackStrength); tasks, targets and mutex bits in wolf-ai.js. No drops.
   wolf: { health: WILD_MAX_HEALTH, width: WOLF_WIDTH, height: WOLF_HEIGHT, movement: WOLF_SPEED, ai: { wander: 1, mate: 1 }, damage: 2, drop: 0 },
+  // EntityOcelot (wn): 0.6 x 0.8, speed 0.3, 10 health, bite 3 at chickens (ocelot-ai.js tasks); no drops (ocelot.js).
+  ocelot: { health: OCELOT_HEALTH, width: OCELOT_WIDTH, height: OCELOT_HEIGHT, movement: OCELOT_SPEED, ai: { wander: 0.8, mate: 0.8 }, damage: 3, drop: 0 },
   zombie: {
     health: 20,
     width: 0.6,
@@ -230,9 +235,9 @@ export { FEATHER, RAW_CHICKEN, COOKED_CHICKEN };
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
 // its hurt sound, and the sheep uses mob.sheep.say for say, hurt and death alike.
 // EntityCaveSpider inherits the spider's sounds.
-const hurtSound = (type) => (type = soundType(type), type === "squid" ? null : type === "enderman" ? ENDERMAN_SOUNDS.hit : type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "witch" ? WITCH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "iron_golem" ? IRON_GOLEM_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
+const hurtSound = (type) => (type = soundType(type), type === "squid" ? null : type === "ocelot" ? OCELOT_SOUNDS.hit : type === "enderman" ? ENDERMAN_SOUNDS.hit : type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "witch" ? WITCH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "iron_golem" ? IRON_GOLEM_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
 // EntityChicken's death sound is its hurt sound as well.
-const deathSound = (type) => (type = soundType(type), type === "squid" ? null : type === "enderman" ? ENDERMAN_SOUNDS.death : type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "witch" ? WITCH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "iron_golem" ? IRON_GOLEM_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
+const deathSound = (type) => (type = soundType(type), type === "squid" ? null : type === "ocelot" ? OCELOT_SOUNDS.hit : type === "enderman" ? ENDERMAN_SOUNDS.death : type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "witch" ? WITCH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "iron_golem" ? IRON_GOLEM_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
 // Entity.setPosition's box (half width and height in floats) and Entity.canBePushed:
 // living entities until setDead (deathTime 20, or removal).
 export const pushBox = (o, width, height) => {
@@ -645,6 +650,8 @@ export class EntityWorld {
       ...(e.type === "iron_golem" ? ironGolemFields(e.playerCreated) : {}),
       // EntityTameable and EntityWolf NBT: owner, sitting, angry and the collar; the shake, begging and AI state start over.
       ...(e.type === "wolf" ? wolfFieldsFrom(e, fresh) : {}),
+      // EntityTameable and EntityOcelot NBT: owner, sitting and CatType; the pose flags start over.
+      ...(e.type === "ocelot" ? ocelotFieldsFrom(e) : {}),
       ...(e.type === "sheep" ? { color: Number.isInteger(e.color) && e.color >= 0 && e.color < 16 ? e.color : 0, sheared: e.sheared === true, eatTimer: 0 } : {}),
       // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
       ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
@@ -707,6 +714,7 @@ export class EntityWorld {
       ...(type === "villager" ? villagerFields() : {}),
       ...(type === "iron_golem" ? ironGolemFields() : {}),
       ...(type === "wolf" ? wolfFields() : {}),
+      ...(type === "ocelot" ? ocelotFields() : {}),
       // EntityChicken (wg): timeUntilNextEgg = rand.nextInt(6000) + 6000 (wg.bu; not saved in
       // 1.7.10), wingRotation/destPos and their previous values 0, wingRotDelta (bt) 1.0.
       ...(isSpider(type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
@@ -796,6 +804,8 @@ export class EntityWorld {
     if (e.health <= 0) return false;
     // EntityWolf.attackEntityFrom: the Sit task's wish is cleared (EntityAISit.setSitting(false)) and damage from a
     // creature that is neither a player nor an arrow is (amount + 1) / 2.
+    // EntityOcelot.attackEntityFrom: the Sit task's wish is cleared.
+    if (e.type === "ocelot") e.sitWish = false;
     if (e.type === "wolf") {
       e.sitWish = false;
       amount = wolfHurtAmount(amount, { attacker: source.attacker || source.player, player: source.player, arrow: source.arrow });
@@ -911,6 +921,13 @@ export class EntityWorld {
         e.knockbackResistance = r.knockback;
         e.followRange = r.followRange;
         e.reinforcement = reinforcementChance(e.reinforcement + r.reinforcementBonus);
+      }
+    } else if (type === "ocelot") {
+      // EntityOcelot.onSpawnWithEgg: one chance in seven of two kittens (age -24000, CatType 0) at the same spot.
+      for (let i = kittenLitter(world); i > 0 && this.entities.length < 40; i--) {
+        const kit = this.create("ocelot", x, y, z);
+        kit.growingAge = -24000;
+        this.entities.push(kit);
       }
     }
     return e;
@@ -1143,8 +1160,9 @@ export class EntityWorld {
     const rand = entityRandom(e);
     if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem" || e.type === "slime") return;
     // EntityWolf.getLivingSound (t) rolls before the sound's pitch.
-    const wolfSound = e.type === "wolf" ? wolfSay(e, rand) : null;
+    const wolfSound = e.type === "wolf" ? wolfSay(e, rand) : e.type === "ocelot" ? ocelotSay(e, rand) : null;
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
+    if (e.type === "ocelot" && !wolfSound) return; // a wild ocelot's living sound is "" (it still rolled the pitch)
     this.events.push({ sound: e.type === "enderman" ? endermanLiving(e) : e.type === "witch" ? WITCH_SOUNDS.idle : wolfSound ? wolfSound : e.type === "villager" ? (e.customer ? VILLAGER_SOUNDS.haggle : VILLAGER_SOUNDS.idle) : "mob." + soundType(e.type) + ".say", volume: soundVolume(e.type), pitch, position: { x: e.x, y: e.y, z: e.z } });
   }
   // The fire and lava part of Entity.onEntityUpdate (sa.C): water puts the fire
@@ -1185,6 +1203,8 @@ export class EntityWorld {
     const baby=this.create(a.type,a.x,a.y,a.z);baby.growingAge=-24000;
     // EntityWolf.createChild (wv.b): the puppy of a tamed wolf is tamed to the same owner.
     if(a.type==='wolf')Object.assign(baby,puppyFields(a));
+    // EntityOcelot.createChild (wn.b): a tamed parent's kitten has its owner and CatType.
+    if(a.type==='ocelot')Object.assign(baby,kittenFields(a));
     // EntitySheep.createChild (wp.b(rx)): the lamb's colour is the parents' dye mix.
     if(a.type==='sheep')baby.color=childColor(a.color,b.color,this.random);
     this.entities.push(baby);a.growingAge=b.growingAge=6000;a.love=b.love=0;a.mateTicks=b.mateTicks=0;
@@ -1395,6 +1415,7 @@ export class EntityWorld {
     this.potions?.tick(player, survival);
     // WorldServer.tick runs SpawnerAnimals.findChunksForSpawning only while gamerule doMobSpawning is true; no monsters on Peaceful.
     const hostile = this.difficulty !== PEACEFUL && gameRule("doMobSpawning");
+    ocelotSpawnPass(this, player, survival, gameRule("doMobSpawning")); // SpawnerAnimals for the jungle's ocelots (ocelot-spawn.js)
     squidBatSpawnPass(this, player, survival, gameRule("doMobSpawning")); // water and ambient creatures spawn on Peaceful too
     if (
       night && hostile &&
@@ -1581,6 +1602,7 @@ export class EntityWorld {
       }
       if (e.type === "chicken") this.chickenUpdate(e);
       if (e.type === "wolf") this.wolfUpdate(e, t);
+      if (e.type === "ocelot") { const b = this.ai.brain(e); if (b.attackTarget && !b.attackTarget.alive) b.attackTarget = null; }
       this.turnBody(e);
       this.swingLimbs(e);
     }
@@ -1663,7 +1685,7 @@ export class EntityWorld {
     edge("z", "vz");
     if (landed > 0) this.onLand?.(e, landed);
     // EntityChicken.fall (wg.b(F)) does nothing.
-    if (landed > 0 && e.type !== "chicken" && e.type !== "bat") this.fall(e, landed); // EntityBat.fall does nothing
+    if (landed > 0 && e.type !== "chicken" && e.type !== "bat" && e.type !== "ocelot") this.fall(e, landed); // EntityBat.fall does nothing
   }
   // EntitySlime.onUpdate (ym.h): the squish before and after EntityLivingBase.onUpdate (walk), the landing particles
   // ("slime" is EntityBreakingFX with a slimeball) and sounds, then onCollideWithPlayer. slime.js holds the rules.
@@ -1914,6 +1936,34 @@ export class EntityWorld {
     }
     // The probe's recorded result is false for a sit toggle (the original returns true on a server); the click is used.
     return out.handled || !!out.sitToggle;
+  }
+  // EntityOcelot.interact (wn.a(yz)) for the player holding `survival.held` (ocelot.js interact): raw fish tame a tempted
+  // wild ocelot (1 in 3), breed a cat, and the owner's other clicks sit it. Returns whether the click was used.
+  ocelotInteract(e, survival) {
+    if (e.type !== "ocelot" || e.health <= 0 || !this.entities.includes(e)) return false;
+    const stack = survival.held, held = stack ? { id: stack.id, damage: stack.damage || 0, count: stack.count || 1 } : null;
+    const creative = !!survival.creative, rand = entityRandom(e), box = { x: e.x, y: e.y, z: e.z, width: ENTITY_TYPES.ocelot.width, height: ENTITY_TYPES.ocelot.height };
+    const brain = this.ai.brain(e), p = this.ai.player, worldRand = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
+    const out = ocelotClick(e, held, { isOwner: ocelotTamed(e), creative, tempting: !!brain.temptRunning?.(), distSq: brain.distSq(p), rand, worldRand });
+    const take = (n) => { if (n > 0 && !creative) survival.inventory.decr(survival.inventory.current, n); };
+    take(out.consume);
+    if (out.tamed || out.sitToggle) { brain.navigator.clearPathEntity(); brain.attackTarget = null; }
+    // EntityTameable.func_70908_e: 7 hearts after taming (status 7) or 7 smoke after a failed fish (status 6).
+    if (out.status && this.fx) burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5);
+    if (out.love) {
+      // EntityAnimal.interact: an adult not in love is put in love and the fish is used up; a kitten gets nothing.
+      if (e.growingAge === 0 && e.love <= 0) {
+        e.love = 600;
+        take(1);
+        if (this.fx) burst(this.fx, "heart", 7, box, rand, 0.5);
+      } else out.handled = false;
+    }
+    return out.handled || out.sitToggle;
+  }
+  // BlockChest.o: whether a sitting ocelot lies on the chest at (x, y, z) (chest.js openChest asks through World.ocelotOnChest).
+  ocelotSitsOn(x, y, z) {
+    const w = ENTITY_TYPES.ocelot.width / 2, h = ENTITY_TYPES.ocelot.height;
+    return sitsOnChest(this.entities.filter((e) => e.type === "ocelot" && e.health > 0).map((e) => ({ sitting: e.sitting, minX: e.x - w, maxX: e.x + w, minY: e.y, maxY: e.y + h, minZ: e.z - w, maxZ: e.z + w })), x, y, z);
   }
   // EntityBodyHelper.func_75664_a (tr.a), reached through EntityLiving.func_110146_f
   // (sw.f) for AI-enabled mobs; the yaw wraps of EntityLivingBase.onUpdate (sv.h) follow.

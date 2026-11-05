@@ -23,6 +23,8 @@ export const SHADOWS = {
   chicken: { size: f(0.3), opaque: 1 },
   // RenderManager: new RenderWolf(new ModelWolf(), new ModelWolf(), 0.5F).
   wolf: { size: f(0.5), opaque: 1 },
+  // RenderManager: new RenderOcelot(new ModelOcelot(), 0.4F).
+  ocelot: { size: f(0.4), opaque: 1 },
   zombie: { size: f(0.5), opaque: 1 },
   // RenderEnderman: super(new ModelEnderman(), 0.5F).
   enderman: { size: f(0.5), opaque: 1 },

@@ -84,11 +84,11 @@ export function chestInventory(chest) {
 }
 // func_149951_m: null when a normal cube sits on this chest or its partner;
 // otherwise the chest, or InventoryLargeChest(west|north first, east|south second).
-// Ocelots sitting on chests also block them in 1.7.10; this build has none.
+// A sitting ocelot on this chest or its partner blocks it too (BlockChest.o): World.ocelotOnChest, set by main.js.
 export function openChest(world, chests, x, y, z) {
   const kind = world.get(x, y, z);
-  if (!isChestBlock(kind) || normalCube(world.get(x, y + 1, z))) return null;
-  for (const [dx, , dz] of SIDES) if (world.get(x + dx, y, z + dz) === kind && normalCube(world.get(x + dx, y + 1, z + dz))) return null;
+  if (!isChestBlock(kind) || normalCube(world.get(x, y + 1, z)) || world.ocelotOnChest?.(x, y, z)) return null;
+  for (const [dx, , dz] of SIDES) if (world.get(x + dx, y, z + dz) === kind && (normalCube(world.get(x + dx, y + 1, z + dz)) || world.ocelotOnChest?.(x + dx, y, z + dz))) return null;
   const tile = (px, pz) => chests[chestKey(px, y, pz)] ??= newChest();
   let inventory = chestInventory(tile(x, z)), keys = [chestKey(x, y, z)];
   const pair = (dx, dz, first) => {

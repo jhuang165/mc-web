@@ -960,6 +960,10 @@ async function launch(record, prepared) {
     mobs.onLand = (entity, distance) => trampleFarmland(entity, distance);
     // World.getLightBrightness for EntityAI.getBlockPathWeight: daylight-reduced sky or block light.
     mobs.lightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, scene.subtracted) : 15);
+    // Ocelot hooks (ocelot-ai.js, chest.js): the player's look for Tempt, chest and furnace state for OcelotSit, sitting cats on chests.
+    mobs.playerLook = () => { const e = playerEye(); return { yaw: e.yaw, pitch: e.pitch }; };
+    mobs.ocelotBlocks = { chestUsers: (x, y, z) => survival.chests[`${x},${y},${z}`]?.users ?? 0, furnaceLit: (x, y, z) => (survival.furnaces[`${x},${y},${z}`]?.burn ?? 0) > 0 };
+    world.ocelotOnChest = (x, y, z) => mobs.ocelotSitsOn(x, y, z);
     // Entity.isWet: rain puts out burning mobs and stops zombies burning in the sun.
     mobs.wet = (e, height) => isWet(weather, world, e, height);
     // World.isDaytime (skylightSubtracted < 4) and Chunk.canBlockSeeTheSky for the skeleton's
