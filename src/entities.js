@@ -24,6 +24,8 @@ import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
 import { IRON_GOLEM_TYPE, IRON_GOLEM_SOUNDS, ironGolemFields, ironGolemShape } from "./iron-golem.js";
 import { createVillages, PLAYER_NAME } from "./village-host.js";
 import { SLIME, mobScale, slimeDamage, slimeTouches, slimeFields, slimeFieldsFrom, slimeRestore, slimeWidth, slimeSoundName, slimeVolume, slimeSquishStart, slimeSquishEnd, slimeActionState, slimeChildren, slimeCanSpawnHere, isSlimeChunk, SLIMEBALL } from "./slime.js";
+import { SQUID, BAT } from "./squid-bat.js";
+import { squidBatUpdate, squidBatTalk, squidBatSpawnPass, installSquidBat } from "./squid-bat-mobs.js";
 import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
@@ -199,6 +201,9 @@ export const ENTITY_TYPES = {
   witch: { health: WITCH.health, width: WITCH.width, height: WITCH.height, movement: WITCH.movement, ai: { wander: 1 }, damage: WITCH.attackDamage, drop: 0 },
   // EntitySlime (ym): 0.6 x 0.6 at size 1, scaled by `size` (mobScale); health and damage are size-based (slime.js), drops in combat.js.
   slime: { health: 1, width: 0.6, height: 0.6, movement: SLIME.speed, ai: {}, damage: 1, drop: 0 },
+  // EntitySquid (ws) 0.95 x 0.95, 10 health; EntityBat (we) 0.5 x 0.9, 6 health. Legacy motion, no AI tasks (squid-bat.js, squid-bat-mobs.js).
+  squid: { health: SQUID.health, width: SQUID.width, height: SQUID.height, movement: 0.25, ai: {}, drop: 0 },
+  bat: { health: BAT.health, width: BAT.width, height: BAT.height, movement: 0.10000000149011612, ai: {}, drop: 0 },
 };
 // The slime's own sound names and volume depend on its size.
 const hurtOf = (e) => (e.type === "slime" ? slimeSoundName(e.size) : hurtSound(e.type));
@@ -225,16 +230,16 @@ export { FEATHER, RAW_CHICKEN, COOKED_CHICKEN };
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
 // its hurt sound, and the sheep uses mob.sheep.say for say, hurt and death alike.
 // EntityCaveSpider inherits the spider's sounds.
-const hurtSound = (type) => (type = soundType(type), type === "enderman" ? ENDERMAN_SOUNDS.hit : type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "witch" ? WITCH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "iron_golem" ? IRON_GOLEM_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
+const hurtSound = (type) => (type = soundType(type), type === "squid" ? null : type === "enderman" ? ENDERMAN_SOUNDS.hit : type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "witch" ? WITCH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "iron_golem" ? IRON_GOLEM_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
 // EntityChicken's death sound is its hurt sound as well.
-const deathSound = (type) => (type = soundType(type), type === "enderman" ? ENDERMAN_SOUNDS.death : type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "witch" ? WITCH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "iron_golem" ? IRON_GOLEM_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
+const deathSound = (type) => (type = soundType(type), type === "squid" ? null : type === "enderman" ? ENDERMAN_SOUNDS.death : type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "witch" ? WITCH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "iron_golem" ? IRON_GOLEM_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
 // Entity.setPosition's box (half width and height in floats) and Entity.canBePushed:
 // living entities until setDead (deathTime 20, or removal).
 export const pushBox = (o, width, height) => {
   const w = f(f(width) / 2), h = f(height);
   return [o.x - w, o.y, o.z - w, o.x + w, o.y + h, o.z + w];
 };
-const pushable = (o) => o.health > 0 || (o.death ?? 0) < 20;
+const pushable = (o) => o.type !== "bat" && (o.health > 0 || (o.death ?? 0) < 20); // EntityBat.canBePushed is false
 // Chunk.canBlockSeeTheSky without a height map (weather.js `canSeeSky` is the real one
 // that main.js hooks in): no solid block at or above (x, y, z).
 const openSky = (world, x, y, z) => {
@@ -643,6 +648,8 @@ export class EntityWorld {
       ...(e.type === "sheep" ? { color: Number.isInteger(e.color) && e.color >= 0 && e.color < 16 ? e.color : 0, sheared: e.sheared === true, eatTimer: 0 } : {}),
       // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
       ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
+      // EntityBat.readEntityFromNBT: BatFlags bit 1 is the hanging state (datawatcher 16).
+      ...(e.type === "bat" ? { batHanging: e.batHanging === true } : {}),
       ...(isSpider(e.type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
       // EntitySilverfish has no NBT of its own: the summon cooldown starts over.
       ...(e.type === "silverfish" ? { summonCooldown: 0 } : {}),
@@ -708,6 +715,7 @@ export class EntityWorld {
       ...(type === "enderman" ? endermanFields() : {}),
       ...(type === "witch" ? { drinking: false, drinkTimer: 0, held: null } : {}),
       ...(type === "slime" ? slimeFields(null, random) : {}),
+      ...(type === "bat" ? { batHanging: true } : {}), // EntityBat's constructor: setIsBatHanging(true)
       ...(type === "chicken" ? { eggTimer: Math.floor(random() * 6000) + 6000, wingRotation: 0, destPos: 0, oFlapSpeed: 0, oFlap: 0, wingRotDelta: 1 } : {}),
       // EntityZombie.func_110161_a adds a 0 to 0.05 "Random spawn bonus" to knockbackResistance.
       knockbackResistance: type === "zombie" ? random() * 0.05000000074505806 : 0,
@@ -1131,6 +1139,7 @@ export class EntityWorld {
   // at getSoundVolume (EntityCow 0.4, else 1) and getSoundPitch ((rand - rand) * 0.2 + 1, 1.5
   // for a child). EntityCreeper has no living sound but still rolls and resets.
   talk(e) {
+    if (e.type === "squid" || e.type === "bat") return squidBatTalk(this, e);
     const rand = entityRandom(e);
     if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem" || e.type === "slime") return;
     // EntityWolf.getLivingSound (t) rolls before the sound's pitch.
@@ -1386,6 +1395,7 @@ export class EntityWorld {
     this.potions?.tick(player, survival);
     // WorldServer.tick runs SpawnerAnimals.findChunksForSpawning only while gamerule doMobSpawning is true; no monsters on Peaceful.
     const hostile = this.difficulty !== PEACEFUL && gameRule("doMobSpawning");
+    squidBatSpawnPass(this, player, survival, gameRule("doMobSpawning")); // water and ambient creatures spawn on Peaceful too
     if (
       night && hostile &&
       !survival.creative &&
@@ -1534,7 +1544,7 @@ export class EntityWorld {
       // attackEntityFrom(outOfWorld, 4): no armour, the hurt window applies.
       if (e.y < -64 && e.health > 0) this.hazard(e, 4, "outOfWorld");
       this.suffocate(e, t);
-      this.breathe(e, t);
+      if (e.type !== "squid") this.breathe(e, t); // EntityWaterMob.onEntityUpdate handles the squid's air
       // EntityLivingBase.onEntityUpdate after the fire and air: hurtTime and
       // hurtResistantTime run down, a mob at 0 health goes on to onDeathUpdate (a mob the
       // fire or water killed counts its first death tick now), then recentlyHit runs down.
@@ -1547,6 +1557,7 @@ export class EntityWorld {
       // EntityLivingBase.updatePotionEffects, the end of onEntityUpdate.
       tickMobEffects(e, t, base.health, entityRandom(e), this.fx);
       this.talk(e);
+      if (e.type === "squid" || e.type === "bat") { squidBatUpdate(this, e, t); continue; } // squid-bat-mobs.js
       // EntityZombie and EntitySkeleton.onLivingUpdate (yq.e, yl.e), before the AI: in daylight
       // a mob (a zombie only when adult) at brightness > 0.5 with rand.nextFloat() * 30 <
       // (brightness - 0.4) * 2 under open sky is set on fire for 8 s; burn() takes the damage,
@@ -1652,7 +1663,7 @@ export class EntityWorld {
     edge("z", "vz");
     if (landed > 0) this.onLand?.(e, landed);
     // EntityChicken.fall (wg.b(F)) does nothing.
-    if (landed > 0 && e.type !== "chicken") this.fall(e, landed);
+    if (landed > 0 && e.type !== "chicken" && e.type !== "bat") this.fall(e, landed); // EntityBat.fall does nothing
   }
   // EntitySlime.onUpdate (ym.h): the squish before and after EntityLivingBase.onUpdate (walk), the landing particles
   // ("slime" is EntityBreakingFX with a slimeball) and sounds, then onCollideWithPlayer. slime.js holds the rules.
@@ -1955,3 +1966,4 @@ export class EntityWorld {
     return events;
   }
 }
+installSquidBat(EntityWorld); // squid-bat-mobs.js: bat wake-up, squid entityAge and silent hurt, bat sound pitch

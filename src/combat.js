@@ -8,6 +8,7 @@ import { golemDrops } from "./iron-golem.js";
 import { CARROT, POTATO } from "./crops.js";
 import { slimeDrops, slimeExperience } from "./slime.js";
 import { witchDrops, witchEquipmentDrop, witchExperience } from "./witch.js";
+import { squidDrops, squidExperience } from "./squid-bat.js";
 import { DISC_FIRST } from "./note-jukebox-content.js";
 const f = Math.fround;
 // Item ids of this build: porkchop, cooked porkchop, beef, steak, rotten flesh, leather,
@@ -28,7 +29,7 @@ export function armorReduced(type, amount, source) {
 }
 // getSoundVolume (EntityCow 0.4) and getSoundPitch, on Entity.rand.
 // EntityCow and EntityWolf (bf) override getSoundVolume with 0.4F.
-export const soundVolume = (type) => (type === "cow" || type === "wolf" ? f(0.4) : 1);
+export const soundVolume = (type) => (type === "cow" || type === "wolf" || type === "squid" ? f(0.4) : type === "bat" ? f(0.1) : 1);
 export const soundPitch = (rand, child) => f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (child ? f(1.5) : 1));
 // EntitySkeleton holds a bow (equipment drop chance 0.085F); no other mob here carries
 // equipment, so only its dropEquipment and getExperiencePoints draw for one.
@@ -67,6 +68,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
     case "iron_golem": for (const [id, n, damage] of golemDrops(rand, RED_FLOWER)) add(id, n, damage); break; // EntityIronGolem.dropFewItems
     case "slime": for (const id of slimeDrops(rand, e.size, looting)) add(id); break; // EntitySlime.dropFewItems (slime.js)
     case "witch": for (const [id] of witchDrops(rand, looting)) add(id); break; // EntityWitch.dropFewItems (witch.js)
+    case "squid": for (const s of squidDrops(rand, looting)) add(s.id, 1, s.damage); break; // EntitySquid.dropFewItems: ink sacs (squid-bat.js)
   }
   // EntityLiving.dropEquipment: a damageable item drops worn, maxDamage minus
   // nextInt(1 + nextInt(maxDamage - 25)), kept within [1, maxDamage - 25].
@@ -83,7 +85,8 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
 // getExperiencePoints at deathTime 20: EntityAnimal 1 + World.rand.nextInt(3); EntityMob
 // 5, plus 1 + rand.nextInt(3) per equipment item whose drop chance is at most 1.
 export function experiencePoints(e, rand, worldRand) {
-  if (e.type === "villager" || e.type === "iron_golem") return 0; // EntityLiving.experienceValue stays 0 (EntityVillager is no EntityMob or EntityAnimal)
+  if (e.type === "squid") return squidExperience(worldRand); // EntityWaterMob.getExperiencePoints: 1 + world.rand.nextInt(3)
+  if (e.type === "villager" || e.type === "iron_golem" || e.type === "bat") return 0; // EntityLiving.experienceValue stays 0 (EntityVillager is no EntityMob or EntityAnimal)
   if (ANIMALS.has(e.type)) return 1 + worldRand.nextInt(3);
   if (e.type === "slime") return slimeExperience(e.size); // experienceValue = size
   if (e.type === "witch") return witchExperience(rand, e.held); // 5 plus 1 + nextInt(3) for a held potion

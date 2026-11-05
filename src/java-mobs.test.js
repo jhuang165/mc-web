@@ -14,7 +14,7 @@ const hex = (s) => Uint8Array.from(s.match(/../g).map((b) => parseInt(b, 16)));
 const nativeEntity = (kind, variant) => decodeNbt(hex(reference.records.find((r) => r.case === 'entityNbt' && r.kind === kind && r.variant === variant).nbt)).tag.value;
 
 test('the native zombie NBT (IsBaby, IsVillager, ConversionTime, ActiveEffects) imports as zombie villager state', () => {
-  assert.deepEqual(Object.keys(JAVA_MOBS).sort(), ['Enderman', 'Slime', 'Villager', 'VillagerGolem', 'Zombie']);
+  assert.deepEqual(Object.keys(JAVA_MOBS).sort(), ['Bat', 'Enderman', 'Slime', 'Squid', 'Villager', 'VillagerGolem', 'Zombie']);
   const [plain, villager, baby, converting] = [0, 1, 2, 3].map((v) => javaMobFromNbt(nativeEntity('zombie', v), { shiftX: 10, shiftZ: -20 }));
   assert.deepEqual([plain.type, plain.villager, plain.growingAge, plain.conversionTime], ['zombie', false, 0, undefined]);
   assert.deepEqual([villager.villager, villager.growingAge, villager.conversionTime], [true, 0, undefined]);

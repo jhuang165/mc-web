@@ -1512,6 +1512,61 @@
       "url": "/audio/1.7.10/mob/endermen/stare.ogg",
       "sha1": "5738d7f49ef30adcfc4f2ab13e0b1d74f09a1289",
       "bytes": 127738
+    },
+    "mob/bat/hurt2": {
+      "url": "/audio/1.7.10/mob/bat/hurt2.ogg",
+      "sha1": "573e565b7fda2c34fc972edd21a82fd2e09200f8",
+      "bytes": 5530
+    },
+    "mob/bat/idle2": {
+      "url": "/audio/1.7.10/mob/bat/idle2.ogg",
+      "sha1": "e9d023a54a6b514af496c8f253f5f3fa948fd4b6",
+      "bytes": 4767
+    },
+    "mob/bat/idle1": {
+      "url": "/audio/1.7.10/mob/bat/idle1.ogg",
+      "sha1": "c3c175d70372d8448c070d0716a8d88beec8b8b7",
+      "bytes": 5708
+    },
+    "mob/bat/hurt4": {
+      "url": "/audio/1.7.10/mob/bat/hurt4.ogg",
+      "sha1": "0ba4a7830ea8852bf7844872d7e2d2a408fb77e4",
+      "bytes": 5410
+    },
+    "mob/bat/hurt1": {
+      "url": "/audio/1.7.10/mob/bat/hurt1.ogg",
+      "sha1": "fddba78b2426f8056be081c98fe82e8411a0a5cf",
+      "bytes": 4878
+    },
+    "mob/bat/hurt3": {
+      "url": "/audio/1.7.10/mob/bat/hurt3.ogg",
+      "sha1": "1599551814c141acd0c4a3c4a0ff83f4c4e3026d",
+      "bytes": 5249
+    },
+    "mob/bat/death": {
+      "url": "/audio/1.7.10/mob/bat/death.ogg",
+      "sha1": "6df3b2c2b951863fc5200edf3ff3396b105ed897",
+      "bytes": 8726
+    },
+    "mob/bat/idle3": {
+      "url": "/audio/1.7.10/mob/bat/idle3.ogg",
+      "sha1": "e641dd3d6607db86b7574fe82781a34ad74f6c77",
+      "bytes": 4777
+    },
+    "mob/bat/idle4": {
+      "url": "/audio/1.7.10/mob/bat/idle4.ogg",
+      "sha1": "a323a968296882e15c743ccdc8cb8057557ae712",
+      "bytes": 5274
+    },
+    "mob/bat/loop": {
+      "url": "/audio/1.7.10/mob/bat/loop.ogg",
+      "sha1": "e260582909112ec3c255d1ec0375c7913df5f9f8",
+      "bytes": 16510
+    },
+    "mob/bat/takeoff": {
+      "url": "/audio/1.7.10/mob/bat/takeoff.ogg",
+      "sha1": "ee6079d3826ac2994f3f58e62370f3c8ff9328e9",
+      "bytes": 8821
     }
   },
   "events": {
@@ -2540,6 +2595,42 @@
       "category": "hostile",
       "sounds": [
         "mob/endermen/stare"
+      ]
+    },
+    "mob.bat.death": {
+      "category": "neutral",
+      "sounds": [
+        "mob/bat/death"
+      ]
+    },
+    "mob.bat.hurt": {
+      "category": "neutral",
+      "sounds": [
+        "mob/bat/hurt1",
+        "mob/bat/hurt2",
+        "mob/bat/hurt3",
+        "mob/bat/hurt4"
+      ]
+    },
+    "mob.bat.idle": {
+      "category": "neutral",
+      "sounds": [
+        "mob/bat/idle1",
+        "mob/bat/idle2",
+        "mob/bat/idle3",
+        "mob/bat/idle4"
+      ]
+    },
+    "mob.bat.loop": {
+      "category": "neutral",
+      "sounds": [
+        "mob/bat/loop"
+      ]
+    },
+    "mob.bat.takeoff": {
+      "category": "neutral",
+      "sounds": [
+        "mob/bat/takeoff"
       ]
     }
   }

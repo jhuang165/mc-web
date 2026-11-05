@@ -204,7 +204,7 @@ test("Peaceful removes monsters at once and spawns none", () => {
   w.difficulty = 0;
   const events = [];
   for (let i = 0; i < 400; i++) { w.tick({ x: 64, y: 1, z: 70 }, night); events.push(...w.drain()); }
-  assert.deepEqual(w.entities.map((e) => e.type), ["cow"]);
+  assert.deepEqual(w.entities.map((e) => e.type).filter((t) => t !== "bat" && t !== "squid"), ["cow"]); // ambient and water creatures spawn on Peaceful
   assert.ok(!events.some((e) => e.drop || e.xp), "no drops or experience");
 });
 
