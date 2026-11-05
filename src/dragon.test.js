@@ -73,7 +73,7 @@ function host(seed, extra = {}) {
   return { rand: new StrictRandom(seed), players: [], crystals: () => [], living: () => [], blockKind: noWorld, removeBlock: () => false, griefing: true, particle() {}, ...extra };
 }
 function dragon(x, y, z, yaw, seed, extra = {}) {
-  const e = { x, y, z, vx: 0, vy: 0, vz: 0, yaw, health: DRAGON_MAX_HEALTH, hurtTime: 0, ticksExisted: 0 };
+  const e = { x, y, z, vx: 0, vy: 0, vz: 0, rotationYaw: yaw, health: DRAGON_MAX_HEALTH, hurtTime: 0, ticksExisted: 0 };
   createDragonState(e);
   return { e, h: host(seed, extra) };
 }
@@ -105,12 +105,12 @@ test("flight replays the original tick: position, yaw, targets, motion, animatio
       dragonTick(e, h);
       const s = e.dragon;
       if (t < r.full) {
-        const got = [e.x, e.y, e.z, e.yaw, s.tx, s.ty, s.tz, e.vx, e.vy, e.vz, s.anim, s.slowed ? 1 : 0, s.ri];
+        const got = [e.x, e.y, e.z, e.rotationYaw, s.tx, s.ty, s.tz, e.vx, e.vy, e.vz, s.anim, s.slowed ? 1 : 0, s.ri];
         const want = r.trace[t];
         got.forEach((v, i) => assert.ok(Object.is(v, want[i]) || v === want[i], `${r.name} tick ${t} field ${i}: ${v} vs ${want[i]}`));
         if (t < 60) s.parts.forEach((p, i) => assert.deepEqual(p.box, r.parts[t][i], `${r.name} tick ${t} part ${i}`));
       } else {
-        for (const v of [e.x, e.y, e.z, e.yaw, s.tx, s.ty, s.tz, e.vx, e.vy, e.vz, s.anim, s.ryv]) d(v);
+        for (const v of [e.x, e.y, e.z, e.rotationYaw, s.tx, s.ty, s.tz, e.vx, e.vy, e.vz, s.anim, s.ryv]) d(v);
         md.update(Buffer.from([s.slowed ? 1 : 0, s.ri]));
         for (const p of s.parts) for (const v of p.box) d(v);
       }
@@ -139,7 +139,7 @@ test("attackEntityFromPart: damage scaling, hurt window, retarget and random dra
     const s = e.dragon;
     assert.equal(e.health, r.healthAfter, JSON.stringify([r.part, r.source, r.amount]));
     assert.equal(e.hurtTime, r.hurtTime);
-    assert.equal(e.yaw, r.yaw);
+    assert.equal(e.rotationYaw, r.yaw);
     assert.equal(e.y, r.posY);
     assert.deepEqual([s.tx, s.ty, s.tz], r.target);
     assert.equal(before.some((v, i) => v !== [s.tx, s.ty, s.tz][i]), r.targetChanged);
@@ -238,7 +238,7 @@ test("destroyBlocksInAABB removes everything but obsidian, end stone and bedrock
   r.trace.forEach(([st, count], t) => {
     dragonTick(e, h);
     const s = e.dragon;
-    const got = [e.x, e.y, e.z, e.yaw, s.tx, s.ty, s.tz, e.vx, e.vy, e.vz, s.anim, s.slowed ? 1 : 0, s.ri];
+    const got = [e.x, e.y, e.z, e.rotationYaw, s.tx, s.ty, s.tz, e.vx, e.vy, e.vz, s.anim, s.slowed ? 1 : 0, s.ri];
     got.forEach((v, i) => assert.ok(v === st[i], `tick ${t} field ${i}: ${v} vs ${st[i]}`));
     assert.equal(writes, count, `tick ${t} block writes`);
   });
@@ -261,7 +261,7 @@ test("death: 200 ticks rising and spinning, 12000 xp, world event 1018, then the
       if (!dead) { dead = deathTick(e, h) || dead; dragonTick(e, h); }
       const [, bb, x, y, z, yaw, , k, n, ev, np] = r.trace[t - 1];
       assert.equal(e.dragon.deathTicks, bb, `t=${t}`);
-      assert.deepEqual([e.x, e.y, e.z, e.yaw], [x, y, z, yaw], `t=${t}`);
+      assert.deepEqual([e.x, e.y, e.z, e.rotationYaw], [x, y, z, yaw], `t=${t}`);
       assert.equal(dead ? 1 : 0, k);
       assert.equal(orbs.length, n);
       assert.equal(events.length, ev);

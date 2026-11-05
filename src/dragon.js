@@ -13,6 +13,7 @@
 //   host.griefing                  gamerule mobGriefing
 //   host.particle(name, x, y, z)   largeexplode / hugeexplosion
 //   host.orb(amount), host.worldEvent(id, x, y, z), host.portal(x, z)   death effects
+//   (yaw is e.rotationYaw, Java degrees)
 //   host.hurt(e, amount, source)   livingHurt for the dragon (base attackEntityFrom: hurt window)
 import { mhSin, mhCos } from "./lighting.js";
 
@@ -147,7 +148,7 @@ export function livingHurt(e, amount, source, host) {
 export function attackFromPart(e, partIndex, source, dmg, host) {
   const s = e.dragon, rand = host.rand;
   if (partIndex !== HEAD) dmg = f(f(dmg / 4) + 1);
-  const a = rad(e.yaw), sn = mhSin(a), cs = mhCos(a);
+  const a = rad(e.rotationYaw), sn = mhSin(a), cs = mhCos(a);
   s.tx = e.x + f(sn * 5) + f(f(rand.nextFloat() - 0.5) * 2);
   s.ty = e.y + f(rand.nextFloat() * 3) + 1;
   s.tz = e.z - f(cs * 5) + f(f(rand.nextFloat() - 0.5) * 2);
@@ -224,7 +225,7 @@ function moveFlying(e, strafe, forward, friction) {
     g = f(friction / g);
     strafe = f(strafe * g);
     forward = f(forward * g);
-    const a = rad(e.yaw), sn = mhSin(a), cs = mhCos(a);
+    const a = rad(e.rotationYaw), sn = mhSin(a), cs = mhCos(a);
     e.vx += f(f(strafe * cs) - f(forward * sn));
     e.vz += f(f(forward * cs) + f(strafe * sn));
   }
@@ -244,11 +245,11 @@ export function dragonTick(e, host) {
   let g = f(f(0.2) / f(f(sqrtF(e.vx * e.vx + e.vz * e.vz) * 10) + 1));
   g = f(g * f(Math.pow(2, e.vy)));
   s.anim = f(s.anim + (s.slowed ? f(g * 0.5) : g));
-  e.yaw = wrapFloat(e.yaw);
+  e.rotationYaw = wrapFloat(e.rotationYaw);
   const ring = s.ring;
-  if (s.ri < 0) for (let i = 0; i < 64; i++) { ring[i * 3] = e.yaw; ring[i * 3 + 1] = e.y; }
+  if (s.ri < 0) for (let i = 0; i < 64; i++) { ring[i * 3] = e.rotationYaw; ring[i * 3 + 1] = e.y; }
   if (++s.ri === 64) s.ri = 0;
-  ring[s.ri * 3] = e.yaw;
+  ring[s.ri * 3] = e.rotationYaw;
   ring[s.ri * 3 + 1] = e.y;
   ring[s.ri * 3 + 2] = 0;
 
@@ -270,11 +271,11 @@ export function dragonTick(e, host) {
   const cap = f(0.6);
   d1 = clampD(d1, -cap, cap);
   e.vy += d1 * 0.10000000149011612;
-  e.yaw = wrapFloat(e.yaw);
+  e.rotationYaw = wrapFloat(e.rotationYaw);
   const d8 = 180 - Math.atan2(d0, d2) * 180 / 3.1415927410125732;
-  const d9 = clampD(wrapDouble(d8 - e.yaw), -50, 50);
+  const d9 = clampD(wrapDouble(d8 - e.rotationYaw), -50, 50);
   const toTarget = normalize(s.tx - e.x, s.ty - e.y, s.tz - e.z);
-  const ya = rad(e.yaw);
+  const ya = rad(e.rotationYaw);
   const facing = normalize(mhSin(ya), e.vy, -mhCos(ya));
   let f5 = f(f(facing[0] * toTarget[0] + facing[1] * toTarget[1] + facing[2] * toTarget[2] + 0.5) / f(1.5));
   if (f5 < 0) f5 = 0;
@@ -284,7 +285,7 @@ export function dragonTick(e, host) {
   let d10 = hs + 1;
   if (d10 > 40) d10 = 40;
   s.ryv = f(s.ryv + d9 * (0.699999988079071 / d10 / f6));
-  e.yaw = f(e.yaw + f(s.ryv * f(0.1)));
+  e.rotationYaw = f(e.rotationYaw + f(s.ryv * f(0.1)));
   const f7 = f(2 / (d10 + 1));
   moveFlying(e, 0, -1, f(f(0.06) * f(f(f5 * f7) + f(1 - f7))));
   if (s.slowed) moveNoClip(e, e.vx * 0.800000011920929, e.vy * 0.800000011920929, e.vz * 0.800000011920929);
@@ -306,7 +307,7 @@ export function updateParts(e, host) {
   const r5 = movementOffsets(e, 5, 1), r10 = movementOffsets(e, 10, 1);
   const f10 = f(f(f(f(r5[1] - r10[1]) * 10) / 180) * PI_F);
   const cp = mhCos(f10), sp = f(-mhSin(f10));
-  const yr = rad(e.yaw), sy = mhSin(yr), cy = mhCos(yr);
+  const yr = rad(e.rotationYaw), sy = mhSin(yr), cy = mhCos(yr);
   placePart(s, 1, e.x + f(sy * 0.5), e.y, e.z - f(cy * 0.5));
   placePart(s, 5, e.x + f(cy * 4.5), e.y + 2, e.z + f(sy * 4.5));
   placePart(s, 6, e.x - f(cy * 4.5), e.y + 2, e.z - f(sy * 4.5));
@@ -318,7 +319,7 @@ export function updateParts(e, host) {
     for (const v of host.living(expand(s.parts[HEAD].box, 1, 1, 1))) if (v.living) v.hurt(10);
   }
   const r0 = movementOffsets(e, 0, 1);
-  const hy = f(rad(e.yaw) - f(s.ryv * f(0.01))), hs = mhSin(hy), hc = mhCos(hy);
+  const hy = f(rad(e.rotationYaw) - f(s.ryv * f(0.01))), hs = mhSin(hy), hc = mhCos(hy);
   placePart(s, 0, e.x + f(f(hs * 5.5) * cp), e.y + (r0[1] - r5[1]) * 1 + f(sp * 5.5), e.z - f(f(hc * 5.5) * cp));
   for (let j = 0; j < 3; j++) {
     const t = movementOffsets(e, 12 + j * 2, 1);
@@ -342,7 +343,7 @@ export function deathTick(e, host) {
   if (s.deathTicks > 150 && s.deathTicks % 5 === 0) orbs(1000, host);
   if (s.deathTicks === 1) host.worldEvent(DRAGON_SOUNDS.deathEvent, Math.trunc(e.x), Math.trunc(e.y), Math.trunc(e.z));
   moveNoClip(e, 0, 0.10000000149011612, 0);
-  e.yaw = f(e.yaw + 20);
+  e.rotationYaw = f(e.rotationYaw + 20);
   if (s.deathTicks === 200) {
     orbs(2000, host);
     host.portal(Math.floor(e.x), Math.floor(e.z));

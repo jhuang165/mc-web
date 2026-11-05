@@ -39,6 +39,7 @@ export const SHADOWS = {
   // RenderSquid: super(model, 0.7F); RenderBat: super(new ModelBat(), 0.25F).
   squid: { size: f(0.7), opaque: 1 },
   ender_crystal: { size: f(0.5), opaque: 1 },
+  ender_dragon: { size: f(0.5), opaque: 1 }, // RenderDragon: super(new ModelDragon(0.0F), 0.5F)
   bat: { size: f(0.25), opaque: 1 },
   // RenderSilverfish: super(new ModelSilverfish(), 0.3F).
   silverfish: { size: f(0.3), opaque: 1 },
