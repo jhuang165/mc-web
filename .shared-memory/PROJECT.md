@@ -2,6 +2,25 @@
 
 Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.43.0. Full parity is unfinished.
 
+Post-0.43.0 batch 4 (2026-11-05, claude-lead, unreleased): five Sonnet tracks merged in main (merge head 9e65a1d, browser fixes 86608cf).
+- Chests: trapped chest (BLOCKS 162) and ender chest (163) in `chest-blocks.js`, `chest-renderer.js` picks the trapped/ender texture. Pairing goes by kind. `survival.enderTiles` holds the ender lid state, and items live in the player's EnderItems. ChestsProbe has 356 records.
+- Slime: `slime.js` and `slime-renderer.js`, with sizes, jumping, splitting, slime chunk and swamp spawn rules. SlimeProbe has 47 records.
+- Stems and cake: pumpkin/melon stems (159/160) and cake (161) in `stems-cake.js`. Stem-cake reference has 5,290 records.
+- Enderman: `enderman.js` and `enderman-live.js`, with stare aggro, teleporting, block pickup and placement, and `carried`/`carriedData` save and summon tags. The renderer is `enderman-renderer.js`. EndermanProbe has 3,798 records.
+- Squid and bat: `squid-bat.js`, `squid-bat-mobs.js` and `squid-bat-renderer.js`. SquidBatProbe has 3,747 records.
+- Tests: 2105 pass after the merges. The audio manifest has 313 files.
+- The browser check found three bugs, now fixed:
+  - The mesher drew trapped and ender chests as full cubes; scene.js now skips `isChestShaped`.
+  - setblock and placement did not create ender chest tiles.
+  - /summon Enderman ignored `carried`.
+- Gaps:
+  - No ender chest recipe (no eye of ender).
+  - EnderItems are written on export but not read back on import, and no EnderChest tile is exported.
+  - Magma cubes are missing, and the slime attack sound is silent.
+  - Enderman and squid/bat spawn passes are approximated.
+  - The big-stem model next to a fruit is approximated, and the melon Fortune cap is not implemented.
+  - There are no spawn eggs.
+
 Post-0.43.0 batch 3 (2026-11-04, claude-lead, unreleased): five block tracks merged in main.
 - BLOCKS ids:
   - colored 140-148 (items 1140-1148, `colored-blocks.js`)
