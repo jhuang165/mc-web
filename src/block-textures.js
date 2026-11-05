@@ -7,6 +7,7 @@ import {anvilModelBoxes} from './anvil-block.js';
 import {REDSTONE_TILES} from './redstone-blocks.js';
 import {REDSTONE2_TILES,redstone2TileName} from './redstone-blocks-2.js';
 import {STAIRS,STAIR_ITEM_BOXES} from './stairs.js';
+import {isNetherBlock,isNetherFence,quartzTexture} from './nether-blocks.js';
 import {STONE_BRICKS,DOUBLE_STONE_SLAB,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOWER_POT,SLAB_TEXTURES,stoneBrickTexture} from './stone-utility.js';
 import {isDispenserPiston,iconNameForFace,blockForItem,PISTON_HEAD,DISPENSER,DROPPER} from './dispenser-piston.js';
 export const ATLAS_COLUMNS=16,TILE_SIZE=16;
@@ -47,6 +48,8 @@ for(const t of REDSTONE2_TILES)if(!TILES.includes(t))TILES.push(t); // second re
 for(const t of ['hopper_outside','hopper_inside','hopper_top'])if(!TILES.includes(t))TILES.push(t); // BlockHopper (hopper.js)
 for(const t of ['brewing_stand','brewing_stand_base'])if(!TILES.includes(t))TILES.push(t); // BlockBrewingStand (brewing.js)
 if(!TILES.includes('stone_slab_top'))TILES.push('stone_slab_top');
+// Nether, End and quartz building blocks (nether-blocks.js); end_stone, nether_brick and quartz_block_side/top/bottom are already above.
+for(const t of ['netherrack','soul_sand','quartz_ore','quartz_block_chiseled','quartz_block_chiseled_top','quartz_block_lines','quartz_block_lines_top'])if(!TILES.includes(t))TILES.push(t);
 if(!TILES.includes('cobblestone'))TILES.push('cobblestone');
 export const ATLAS_ROWS=Math.ceil(TILES.length/ATLAS_COLUMNS);
 const tile=name=>TILES.indexOf(name);
@@ -70,7 +73,7 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===113)return tile('trip_wire_source');
  if(id===114)return tile('trip_wire');
  if(blockForItem(id)){id=blockForItem(id);meta=id===DISPENSER||id===DROPPER?3:1;} // item ids 1115-1117 draw as the native item meta
- if(STAIRS[id]){const m=STAIRS[id].model;return tile(m==='planks'?'planks_'+TREE_TEXTURES[STAIRS[id].modelDamage]:m==='sandstone'?(face===2?'sandstone_top':face===3?'sandstone_bottom':'sandstone_normal'):m);}
+ if(STAIRS[id]){const m=STAIRS[id].model;return tile(m==='planks'?'planks_'+TREE_TEXTURES[STAIRS[id].modelDamage]:m==='sandstone'?(face===2?'sandstone_top':face===3?'sandstone_bottom':'sandstone_normal'):m==='quartz'?(face===2?'quartz_block_top':face===3?'quartz_block_bottom':'quartz_block_side'):m);}
  // BlockDoor.getIcon: the lower or upper half's texture by metadata (bit 3); BlockPane: glass / iron_bars sides, glass_pane_top ends.
  if(id===WOODEN_DOOR||id===IRON_DOOR)return tile((id===WOODEN_DOOR?'door_wood_':'door_iron_')+(meta&8?'upper':'lower'));
  // BlockBed.getIcon; `face` is this renderer's face index (+x, -x, +y, -y, +z, -z), the icon wants Minecraft's side number.
@@ -82,6 +85,10 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===ENCHANTING_TABLE)return tile(face===2?'enchanting_table_top':face===3?'enchanting_table_bottom':'enchanting_table_side');
  if(id===ANVIL)return tile(face===2?'anvil_top_damaged_'+(((meta&15)>>2)%3):'anvil_base');
  if(id===7)return tile('planks_'+(TREE_TEXTURES[meta&7]??'oak'));
+ if(isNetherBlock(id)&&!STAIRS[id]){ // nether-blocks.js: netherrack, soul sand, End stone, nether brick, its fence, quartz ore and block
+  if(id===157)return tile(quartzTexture(meta,face));
+  return tile(id===156?'quartz_ore':id===151?'soul_sand':id===152?'end_stone':id===150?'netherrack':'nether_brick');
+ }
  if(id===63)return tile('lapis_ore');
  if(id===64||id===65)return tile('redstone_ore');
  if(id===66)return tile('emerald_ore');
@@ -155,7 +162,7 @@ export function createBlockAtlas(){
   function face(index,matrix,shade,drop=0){x.save();x.setTransform(...matrix);const sx=index%ATLAS_COLUMNS*16,sy=Math.floor(index/ATLAS_COLUMNS)*16;x.drawImage(canvas,sx,sy,16,16-drop,0,drop,16,16-drop);if(shade){x.globalCompositeOperation='source-atop';x.fillStyle=`rgba(0,0,0,${shade})`;x.fillRect(0,0,16,16);}x.restore();}
   // RenderBlocks.renderBlockAsItem for the fence (render type 11): two posts and two bars along z,
   // painted back to front in the inventory projection (z across, x into the picture).
-  if(id===FENCE){fenceIcon(x);const url=c.toDataURL();icons.set(key,url);return url;}
+  if(id===FENCE||isNetherFence(id)){fenceIcon(x,id);const url=c.toDataURL();icons.set(key,url);return url;}
   if(STAIRS[id]){stairIcon(x,id);const url=c.toDataURL();icons.set(key,url);return url;}
  if([69,72,75,76,79,83,84,108,113,119,120,IRON_BARS,GLASS_PANE].includes(id)||id===20||id===39||id===SAPLING||id===WEB||id===LADDER||id===REEDS||id===RAIL||(id>=135&&id<=137)||isFlower(id)||isCrop(id)){const i=blockTile(id,2,false,damage);x.drawImage(canvas,i%ATLAS_COLUMNS*16,Math.floor(i/ATLAS_COLUMNS)*16,16,16,3,5,58,58);}else{const drop=id===46?14:id===129?10:id===ENCHANTING_TABLE?4:id===82||id===STONE_SLAB?8:id===END_PORTAL_FRAME?3:0;/* ItemSnow draws the layer's 2/16 bounds, a flat slab */face(blockTile(id,0,false,damage),[1.75,1,0,2,4,18],.2,drop);face(blockTile(id,4,false,damage),[1.75,-1,0,2,32,34],.08,drop);face(blockTile(id,2,false,damage),[1.75,1,-1.75,1,32,2+drop*2],0);}
   const url=c.toDataURL();icons.set(key,url);return url;
@@ -186,7 +193,7 @@ export function createBlockAtlas(){
   }
  }
  // Item projection P(a,b,h) = (32 + 1.75(a-b), 2 + a + b + 2(16-h)) in pixels, a = 16z, b = 16x.
- function fenceIcon(x){const t=blockTile(FENCE,0),sx=t%ATLAS_COLUMNS*16,sy=Math.floor(t/ATLAS_COLUMNS)*16;
+ function fenceIcon(x,id=FENCE){const t=blockTile(id,0),sx=t%ATLAS_COLUMNS*16,sy=Math.floor(t/ATLAS_COLUMNS)*16;
   const shaded=(shade)=>{const s=document.createElement('canvas');s.width=s.height=16;const g=s.getContext('2d');g.drawImage(canvas,sx,sy,16,16,0,0,16,16);if(shade){g.globalCompositeOperation='source-atop';g.fillStyle=`rgba(0,0,0,${shade})`;g.fillRect(0,0,16,16);}return s;};
   const tiles=[shaded(.2),shaded(.08),shaded(0)],wrap=(u)=>((u%16)+16)%16;
   const quad=(src,matrix,u0,v0,u1,v1)=>{if(u1<=u0||v1<=v0)return;x.save();x.setTransform(...matrix);const su=wrap(u0),sv=wrap(v0);x.drawImage(src,su,sv,u1-u0,v1-v0,u0,v0,u1-u0,v1-v0);x.restore();};

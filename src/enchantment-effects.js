@@ -29,6 +29,7 @@ const SILK = {
   73: () => SELF(73), 74: () => SELF(73),
   18: (id, meta) => META(id, meta & 3), 161: (id, meta) => META(id, meta & 3),
   20: SELF, 95: META, 102: SELF, 160: META, 79: SELF, 174: SELF, 80: SELF, 82: SELF, 103: SELF, 47: SELF,
+  153: SELF, 155: (id, meta) => META(id, meta === 3 || meta === 4 ? 2 : meta), // BlockOre / BlockQuartz.createStackedBlock
   110: SELF, 99: SELF, 100: SELF, 30: SELF, 120: SELF,
   101: SELF, // BlockPane.canSilkHarvest: iron bars (102, the glass pane, is above)
   // BlockSilverfish.createStackedBlock: the block the egg imitates (stone, cobblestone, a stone brick variant).
@@ -70,6 +71,7 @@ const RULES = {
   99: { item: () => 39, quantity: (rand) => Math.max(0, rand.nextInt(10) - 7) },
   100: { item: () => 40, quantity: (rand) => Math.max(0, rand.nextInt(10) - 7) },
   30: { item: () => 287 },
+  153: { item: () => 406, quantity: oreQuantity(ONE), xp: (rand) => range(rand, 2, 5) }, // BlockOre: nether quartz ore
   31: { item: (meta, rand) => (rand.nextInt(8) === 0 ? 295 : null), quantity: (rand, fortune) => 1 + rand.nextInt(fortune * 2 + 1) },
 };
 RULES[74] = RULES[73];

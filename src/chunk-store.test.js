@@ -148,7 +148,7 @@ test("legacy 128 x 128 x 64 worlds migrate to chunks and back without moving or 
   const world = new World("chunk-migration", "meadow", 8), row = HEIGHT - 2;
   // Every internal block with every metadata value in one row above the terrain.
   const at = (id, meta) => { const n = (id - 1) * 16 + meta; return [n % SIZE, row, Math.floor(n / SIZE)]; };
-  for (let id = 1; id < BLOCKS.length; id++) for (let meta = 0; meta < 16; meta++) world.put(...at(id, meta), id, meta);
+  for (let id = 1; id < BLOCKS.length; id++) for (let meta = 0; meta < 16 && !BLOCKS[id].reserved; meta++) world.put(...at(id, meta), id, meta);
   // Side state the registry carries: a flowing water cell, moist farmland at 4, an east-facing chest.
   const side = new Map([[at(10, 3).join(), { flowing: true }], [at(30, 0).join(), { moisture: 4 }], [at(41, 0).join(), { facing: 5 }]]);
   const store = fromLegacyWorld(world, { stateAt: (x, y, z) => side.get([x, y, z].join()) });
@@ -175,6 +175,7 @@ test("legacy 128 x 128 x 64 worlds migrate to chunks and back without moving or 
     assert.ok(cells.meta[i] !== 0 && back.meta[i] === 0);
   }
   for (let id = 1; id < BLOCKS.length; id++) {
+    if (BLOCKS[id].reserved) continue;
     const i = ((p) => (p[0] * SIZE + p[2]) * HEIGHT + p[1])(at(id, 0));
     assert.deepEqual([back.data[i], back.meta[i]], [id, 0], `internal ${id} meta 0`);
   }

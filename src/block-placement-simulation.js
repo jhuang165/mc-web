@@ -1,6 +1,7 @@
 // Ordinary held-block placement from main.js edit(place = true). The world and
 // Survival own gameplay state; synchronous hooks keep UI/audio observers in
 // their original positions without requiring a browser or scene.
+import { QUARTZ_BLOCK, quartzPlacedMeta } from './nether-blocks.js';
 import { collides, WOOL, RED_FLOWER, SNOW_LAYER, SAPLING, REEDS, LADDER, CACTUS, TORCH, RAIL, ANVIL, TALL_GRASS, VINE, DEAD_BUSH, DEAD_SHRUB, FERN, isLiquid, isFlower } from "./world.js";
 import { stackedSnowMeta, snowCanStay } from "./snow.js";
 import { placeSound } from "./block-sounds.js";
@@ -183,7 +184,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if (rsMeta === null) return result(false, "redstone-support", id, p);
 
   const old = world.get(...p), oldMeta = world.getMeta(...p);
-  const meta = id===5||id===71?placedLeavesMeta(survival.held?.damage||0):id===4||id===70?logPlacedMeta(survival.held?.damage||0,side):BLOCK_MAX.has(id) ? survival.held?.damage || 0
+  const meta = id===5||id===71?placedLeavesMeta(survival.held?.damage||0):id===4||id===70?logPlacedMeta(survival.held?.damage||0,side):id===QUARTZ_BLOCK?quartzPlacedMeta(survival.held?.damage||0,side):BLOCK_MAX.has(id) ? survival.held?.damage || 0
     : id === LADDER ? placedLadderMeta(world, ...p, side)
         : id === TORCH ? torchMeta
           : id === ANVIL ? anvilPlacementMeta(yaw,survival.held?.damage||0)

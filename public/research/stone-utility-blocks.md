@@ -28,7 +28,7 @@ Internal ids 100-127 are tools, so these blocks use `1000 + blockId` as items: 1
 
 - Eye insertion and portal activation are not implemented.
 - Glass bottles and armour washing are not implemented (no bottle item).
-- Nether-brick and quartz slabs exist only through import or structures.
+- Slab types 6 (nether brick) and 7 (quartz) are craftable and listed in Creative; see nether-blocks.md.
 - Invalid brick metadata 4-15 is clamped to 0-3 for icons and drops; native keeps the raw value for drops.
 - The frame selection box is 13/16 high, but the native raw block field stays 1.0; the single collision box reports the union when an eye is set.
 - 103:1 exports as 44:0, and 44:9 is a sandstone top slab here.

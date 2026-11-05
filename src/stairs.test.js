@@ -56,6 +56,7 @@ test("registry: ten stair ids map to the original ids and keep the original meta
 
 test("native block records: material, hardness, resistance, opacity, render type, sounds and drops", () => {
   for (const [id, s] of Object.entries(STAIRS)) {
+    if (id >= 150) continue; // nether brick and quartz stairs: nether-blocks.test.js
     const r = byOriginal.get(s.original);
     assert.ok(r, `${id}`);
     assert.equal(r.renderType, 10);
@@ -232,8 +233,8 @@ test("items, Creative order and sounds", () => {
   for (let id = 87; id <= 96; id++) assert.ok(ITEMS[id], `item ${id}`);
   const order = CREATIVE_TABS[0].items.map(entryId).filter(isStair);
   // 1.7.10 Building Blocks order: oak, cobblestone, brick, stone brick, sandstone, spruce, birch, jungle, acacia, dark oak.
-  assert.deepEqual(order, [87, 88, 94, 89, 90, 91, 92, 93, 95, 96]);
-  assert.deepEqual(SEARCH_ORDER.map(entryId).filter(isStair).sort((a, b) => a - b), [87, 88, 89, 90, 91, 92, 93, 94, 95, 96]);
+  assert.deepEqual(order, [87, 88, 94, 89, 155, 90, 91, 92, 93, 158, 95, 96]); // nether brick stairs after stone brick, quartz stairs after jungle (nether-blocks.js)
+  assert.deepEqual(SEARCH_ORDER.map(entryId).filter(isStair).sort((a, b) => a - b), [87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 155, 158]);
   assert.equal(blockSound(87), "wood");
   assert.equal(blockSound(91), "wood");
   assert.equal(blockSound(96), "wood");

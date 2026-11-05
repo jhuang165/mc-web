@@ -6,6 +6,7 @@
 // repeater delay bits 2-3); nothing is powered by them.
 // Rules that need the world take it as an argument.
 import { normalCube, FENCE } from "./world.js";
+import { NETHER_FENCE } from "./nether-blocks.js";
 import { solidTop } from "./rails.js";
 // Internal ids 119-131 (torches, lamps, redstone block, wooden button, weighted plates, comparators, daylight sensor, piston moving block,
 // glowstone) live in redstone-blocks-2.js; the functions below delegate to it so every caller handles them as redstone blocks.
@@ -93,7 +94,7 @@ export const repeaterMetaForYaw = (yaw) => (yawQuadrant(yaw) + 2) & 3;
 const cube = (w, x, y, z) => normalCube(w.get(x, y, z));
 // The end portal frame (internal 104) also holds dust and plates (redstone-blocks-reference.json, "below" id 120).
 const below = (w, x, y, z) => solidTop(w, x, y - 1, z) || w.get(x, y - 1, z) === 104;
-const isFence = (b) => b === FENCE;
+const isFence = (b) => b === FENCE || b === NETHER_FENCE;
 
 // Metadata and legality of placing `id` clicked on `side` at (x,y,z); null when it cannot be placed.
 export function redstonePlacedMeta(world, id, x, y, z, side, yaw = 0) {

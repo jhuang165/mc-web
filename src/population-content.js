@@ -6,6 +6,7 @@ import { DISPENSER, STICKY_PISTON, PISTON, PISTON_HEAD, SLIMEBALL, DISPENSER_ITE
 import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, ITEM_STONE_BRICKS, ITEM_STONE_SLAB, ITEM_END_PORTAL_FRAME, ITEM_CAULDRON, ITEM_FLOWER_POT, STONE_BRICK_NAMES, SLAB_NAMES, slabDrops } from './stone-utility.js';
 import { REDSTONE_WIRE, LEVER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, ITEM_LEVER, ITEM_STONE_PLATE, ITEM_WOODEN_PLATE, ITEM_STONE_BUTTON, ITEM_TRIPWIRE_HOOK, ITEM_REPEATER, ITEM_REDSTONE, ITEM_STRING, REDSTONE_ITEM_IDS, REDSTONE_ITEM_NAMES, redstoneDrops } from './redstone-blocks.js';
 import * as RS2 from './redstone-blocks-2.js';
+import { quartzOreXp } from './nether-blocks.js';
 import { POTION_ITEM_ROWS } from './potion-items.js';
 export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97:68,175:69,162:70,161:71,106:72,127:73,48:74,39:75,40:76,99:77,100:78,32:79,174:80,103:81,'44:1':82,'31:0':83,'31:2':84,24:56,110:57,159:58,111:59,145:ANVIL,116:ENCHANTING_TABLE,53:87,67:88,109:89,128:90,134:91,135:92,136:93,108:94,163:95,164:96,
   // Doors (items 324/330 are internal 470/471), iron bars and glass panes (the block items).
@@ -44,7 +45,7 @@ export function installPopulationItems(items){
     [371,'Bowl','bowl'],
     // ItemDoor (items 324 and 330): stack limit 1, placed on the top face (doors-panes-reference.json).
     [470,'Wooden Door','door_wood',{stack:1}],[1100,'Glass pane',undefined,{block:true}],[471,'Iron Door','door_iron',{stack:1}],[472,'Bed','bed',{stack:1}],[372,'Golden apple','apple_golden',{food:4,saturation:1.2}],
-    [ITEM_STONE_BRICKS,'Stone bricks',undefined,{block:true,variants:STONE_BRICK_NAMES}],[ITEM_STONE_SLAB,'Stone slab',undefined,{block:true,variants:SLAB_NAMES.slice(0,6)}],[ITEM_END_PORTAL_FRAME,'End portal frame',undefined,{block:true}],
+    [ITEM_STONE_BRICKS,'Stone bricks',undefined,{block:true,variants:STONE_BRICK_NAMES}],[ITEM_STONE_SLAB,'Stone slab',undefined,{block:true,variants:SLAB_NAMES.slice(0,8)}],[ITEM_END_PORTAL_FRAME,'End portal frame',undefined,{block:true}],
     [ITEM_LEVER,REDSTONE_ITEM_NAMES[ITEM_LEVER],undefined,{block:true}],[ITEM_STONE_PLATE,REDSTONE_ITEM_NAMES[ITEM_STONE_PLATE],undefined,{block:true}],[ITEM_WOODEN_PLATE,REDSTONE_ITEM_NAMES[ITEM_WOODEN_PLATE],undefined,{block:true}],[ITEM_STONE_BUTTON,REDSTONE_ITEM_NAMES[ITEM_STONE_BUTTON],undefined,{block:true}],[ITEM_TRIPWIRE_HOOK,REDSTONE_ITEM_NAMES[ITEM_TRIPWIRE_HOOK],undefined,{block:true}],[ITEM_REPEATER,REDSTONE_ITEM_NAMES[ITEM_REPEATER],'repeater'],
     [1135,'Powered Rail',undefined,{block:true}],[1136,'Detector Rail',undefined,{block:true}],[1137,'Activator Rail',undefined,{block:true}],
     ...Object.entries(RS2.REDSTONE2_ITEM_NAMES).map(([id,name])=>[+id,name,RS2.REDSTONE2_ITEM_TEXTURES[id],RS2.REDSTONE2_ITEM_TEXTURES[id]?undefined:{block:true}]),
@@ -153,7 +154,7 @@ export function installPopulationRecipes({recipe,shapeless}){
   shapeless(361,4,0,67);shapeless(362,1,0,368);
   for(const [meta,dye] of [[0,11],[1,13],[4,1],[5,9]])shapeless(351,2,dye,[69,meta]);
 }
-export const populationXp=(id,r)=>id===63?2+Math.floor(r()*4):id===64||id===65?1+Math.floor(r()*5):id===66?3+Math.floor(r()*5):0;
+export const populationXp=(id,r)=>id===63?2+Math.floor(r()*4):id===64||id===65?1+Math.floor(r()*5):id===66?3+Math.floor(r()*5):id===156?quartzOreXp(r):0;
 // Native BlockOre, BlockRedstoneOre, BlockHugeMushroom, BlockMelon and BlockDoublePlant drops.
 export function populationDrops(id,meta,{random=Math.random,shears=false}={}){
   if(id===ANVIL)return[{id:ANVIL,count:1,damage:(meta&15)>>2}];

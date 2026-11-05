@@ -17,6 +17,7 @@ import { isStair, stairRayTrace } from "./stairs.js";
 import { blockBounds, collisionBoxList, snowSelectionHeight, FENCE, RAIL, TORCH, FIRE, CARROTS, REEDS, LADDER, POTATOES, RED_FLOWER, SAPLING, SNOW_LAYER, YELLOW_FLOWER, ANVIL, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE } from "./world.js";
 import { ladderBounds } from "./ladders.js";
 import { fenceBounds, fenceMask } from "./fences.js";
+import { NETHER_FENCE } from "./nether-blocks.js";
 import { railBounds } from "./rails.js";
 import { torchBounds } from "./torches.js";
 import { REED_BOUNDS } from "./plants.js";
@@ -169,7 +170,7 @@ RAY_BOUNDS[59] = [0, 0, 0, 1, 1/64, 1];
 // Chests, fences (connection bounds), rails (0.125 or 0.625 ascending) and torches (per-metadata box)
 // set their ray box from the cell, as setBlockBoundsBasedOnState / BlockTorch.collisionRayTrace do.
 export const rayBounds = (world, x, y, z, id) =>
-  [107,108,109,110,111,112,113,114,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,41,69,72,73,75,76,79,82,83,84,103,104,106,ANVIL,ENCHANTING_TABLE,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,138].includes(id) ? blockBounds(world, x, y, z) : id === FENCE ? fenceBounds(fenceMask(world, x, y, z)) : id === RAIL ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id >= 135 && id <= 137 ? railBounds((world.getMeta?.(x, y, z) ?? 0) & 7) : id === TORCH ? torchBounds(world.getMeta?.(x, y, z) ?? 0) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
+  [107,108,109,110,111,112,113,114,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,41,69,72,73,75,76,79,82,83,84,103,104,106,ANVIL,ENCHANTING_TABLE,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,138].includes(id) ? blockBounds(world, x, y, z) : (id === FENCE || id === NETHER_FENCE) ? fenceBounds(fenceMask(world, x, y, z)) : id === RAIL ? railBounds(world.getMeta?.(x, y, z) ?? 0) : id >= 135 && id <= 137 ? railBounds((world.getMeta?.(x, y, z) ?? 0) & 7) : id === TORCH ? torchBounds(world.getMeta?.(x, y, z) ?? 0) : id === LADDER ? ladderBounds(world.getMeta?.(x, y, z) ?? 0) : id === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(world.getMeta?.(x, y, z) ?? 0), 1] : RAY_BOUNDS[id] || [0, 0, 0, 1, 1, 1];
 
 // World.rayTraceBlocks (ahb.a(Vec3, Vec3) = func_147447_a(false, false, false)):
 // walk the cells along the segment (at most 201 steps, each moving the start

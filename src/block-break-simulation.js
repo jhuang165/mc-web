@@ -12,6 +12,7 @@ import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, head
 import { FLOWER_POT, potContents } from './stone-utility.js';
 import { enchantedBreakDrops, javaLikeRandom, playerMiningState } from './enchantment-effects.js';
 import { MONSTER_EGG, eggBreak } from './silverfish.js';
+import { QUARTZ_BLOCK, quartzDropDamage } from './nether-blocks.js';
 
 // The authoritative live player block-break path, with synchronous presentation
 // hooks. Random sources stay separate: Math.random drives gravel/crops/ore XP, while
@@ -107,7 +108,7 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
     items.dropBlock(drops.map((d) => makeStack(
       d.id,
       d.count,
-      d.damage ?? (d.id === block && (block === WOOL || block === RED_FLOWER || block === 6 || block === 56 || block === 58 || block === 4 || block === 48 || block===5 || block===71) ? ((block===4||block===5||block===71)?meta&3:block===48?meta&7:meta) : 0),
+      d.damage ?? (d.id === block && block === QUARTZ_BLOCK ? quartzDropDamage(meta) : d.id === block && (block === WOOL || block === RED_FLOWER || block === 6 || block === 56 || block === 58 || block === 4 || block === 48 || block===5 || block===71) ? ((block===4||block===5||block===71)?meta&3:block===48?meta&7:meta) : 0),
     )), ...p);
     if (enchanted) { if (enchanted.xp) xpOrbs.spawn(enchanted.xp, { x: p[0] + 0.5, y: p[1] + 0.5, z: p[2] + 0.5 }); }
     else if (drop) xpOrbs.spawn(populationXp(block,random)||oreExperience(block, random), { x: p[0] + 0.5, y: p[1] + 0.5, z: p[2] + 0.5 });
