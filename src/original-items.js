@@ -25,6 +25,8 @@ export const ORIGINAL_ITEMS = Object.freeze({
   85: FENCE, 66: RAIL, 331: 360, 361: 361, 362: 362, 329: 363, 417: 364, 403: 365,
   // Empty and chest cart items (internal 342 is the lava bucket).
   328: 366, 342: 450, 333: 495,
+  // Painting and item frame items (src/hanging.js).
+  321: 1700, 389: 1701,
   ...POPULATION_ITEMS,
   ...FISHING_ITEMS,
 });

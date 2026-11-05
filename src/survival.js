@@ -98,6 +98,9 @@ ITEMS[361]={id:361,name:"Pumpkin seeds",texture:"seeds_pumpkin",stack:64,color:"
 ITEMS[362]={id:362,name:"Melon seeds",texture:"seeds_melon",stack:64,color:"#3a2a17",glyph:"·"};
 ITEMS[363]={id:363,name:"Saddle",texture:"saddle",stack:1,color:"#8a5a2b",glyph:"▰"};
 ITEMS[364]={id:364,name:"Iron horse armor",texture:"iron_horse_armor",stack:1,color:"#c8c8c8",glyph:"▣"};
+// ItemHangingEntity (original 321 painting, 389 item frame); placement and rules are in hanging.js.
+ITEMS[1700]={id:1700,name:"Painting",texture:"painting",stack:64,color:"#a0742f",glyph:"\u25a3"};
+ITEMS[1701]={id:1701,name:"Item Frame",texture:"item_frame",stack:64,color:"#a0742f",glyph:"\u25a2"};
 // ItemMinecart (original 328/342); placement and riding are in vehicle-simulation.js.
 ITEMS[366]={id:366,name:"Minecart",texture:"minecart_normal",stack:1,minecartType:0,color:"#8a8a8a",glyph:"\u25ad"};
 ITEMS[495]={id:495,name:"Boat",texture:"boat",stack:1,boat:true,color:"#8b6a3a",glyph:"\u25ad"};
@@ -320,6 +323,9 @@ recipe("ladder", "Ladder", ["S S", "SSS", "S S"], { S: 300 }, LADDER, 3);
 recipe("fence", "Fence", ["###", "###"], { "#": 300 }, FENCE, 2);
 recipe("rail", "Rail", ["X X", "X#X", "X X"], { X: 302, "#": 300 }, RAIL, 16);
 // CraftingManager: five iron ingots make a minecart; a chest above it makes a chest cart.
+// RecipesCrafting: a painting is eight sticks around any wool, an item frame eight sticks around leather.
+recipe("painting", "Painting", ["SSS", "SWS", "SSS"], { S: 300, W: WOOL }, 1700);
+recipe("item-frame", "Item Frame", ["SSS", "SLS", "SSS"], { S: 300, L: 315 }, 1701);
 recipe("minecart", "Minecart", ["X X", "XXX"], { X: 302 }, 366);
 recipe("boat", "Boat", ["X X", "XXX"], { X: 7 }, 495);
 recipe("chest-minecart", "Minecart with Chest", ["C", "M"], { C: 41, M: 366 }, 450);

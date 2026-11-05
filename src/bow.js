@@ -415,6 +415,8 @@ export class Arrows {
         });
       return hit;
     }
+    // A painting or item frame: attackEntityFrom with the arrow source; its entity is the shooter.
+    if (ctx.hanging?.entities.includes(ref)) return ctx.hanging.attack(ref, a.shooter === "player" ? { player: true, creative: !!ctx.survival?.creative } : null);
     const mobs = ctx.mobs;
     if (!mobs?.entities?.includes(ref) || ref.health <= 0) return false;
     if (a.fire > 0) ref.fire = Math.max(ref.fire || 0, 100);
