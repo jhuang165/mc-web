@@ -26,6 +26,7 @@ import { createVillages, PLAYER_NAME } from "./village-host.js";
 import { SLIME, mobScale, slimeDamage, slimeTouches, slimeFields, slimeFieldsFrom, slimeRestore, slimeWidth, slimeSoundName, slimeVolume, slimeSquishStart, slimeSquishEnd, slimeActionState, slimeChildren, slimeCanSpawnHere, isSlimeChunk, SLIMEBALL } from "./slime.js";
 import { SQUID, BAT } from "./squid-bat.js";
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
+import { installHorseGear, gearFieldsFrom } from "./horse-gear-live.js";
 import { HORSE_ENTITY, horseRideThink, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
 import { squidBatUpdate, squidBatTalk, squidBatSpawnPass, installSquidBat } from "./squid-bat-mobs.js";
 import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
@@ -659,6 +660,7 @@ export class EntityWorld {
       // EntityTameable and EntityOcelot NBT: owner, sitting and CatType; the pose flags start over.
       ...(e.type === "ocelot" ? ocelotFieldsFrom(e) : {}),
       ...(e.type === "horse" ? horseFieldsFrom(e, fresh) : {}),
+      ...gearFieldsFrom(e), // horse-gear-live.js: leash, CustomName, PersistenceRequired
       ...(e.type === "sheep" ? { color: Number.isInteger(e.color) && e.color >= 0 && e.color < 16 ? e.color : 0, sheared: e.sheared === true, eatTimer: 0 } : {}),
       // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
       ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
@@ -1081,6 +1083,7 @@ export class EntityWorld {
   // counter starts on the next onEntityUpdate, or in this one for fire and drowning.
   onDeath(e, source = {}) {
     if (e.type === "villager") this.villagerDied(e, source);
+    this.gearDeath(e); // horse-gear-live.js: the horse inventory and the lead drop
     // ... and only while gamerule doMobLoot is true (dropFewItems, dropEquipment and the rare drop alike).
     if ((e.growingAge >= 0 || e.type === "zombie") && gameRule("doMobLoot")) {
       const at = { x: e.x, y: e.y, z: e.z };
@@ -1616,6 +1619,7 @@ export class EntityWorld {
       if (e.type === "ocelot") { const b = this.ai.brain(e); if (b.attackTarget && !b.attackTarget.alive) b.attackTarget = null; }
       if (e.type === "snow_golem") this.snowGolemUpdate(e, e.inWater || !!this.wet?.(e, t.height));
       if (e.type === "horse") this.horseTick(e);
+      if (e.leash) this.leashTick(e); // horse-gear-live.js: EntityLiving.updateLeashedState
       this.turnBody(e);
       this.swingLimbs(e);
     }
@@ -2031,4 +2035,5 @@ export class EntityWorld {
 }
 installMooshroomGolem(EntityWorld); // mooshroom-golem-live.js: shears/bowl, golem construction, snow trail, snowballs
 installHorse(EntityWorld); // horse-live.js: interact, ride, tame, rear
+installHorseGear(EntityWorld); // horse-gear-live.js: leads, name tags, horse inventory drops
 installSquidBat(EntityWorld); // squid-bat-mobs.js: bat wake-up, squid entityAge and silent hurt, bat sound pitch

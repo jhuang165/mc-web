@@ -61,6 +61,11 @@ function payload(state,ox,oz,report,world=null) {
  const entities=[],tiles=[],ticks=[];
  for(const wrapped of state.entities??[]) {const e=wrapped.value,name=NAMES[e.type];if(!name){report.unsupportedEntities++;continue;}
   const n=entity(e,name,ox,oz);Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
+  // EntityLiving.writeEntityToNBT: CustomName / CustomNameVisible (only when named), PersistenceRequired and Leashed with its Leash compound (a knot's X/Y/Z, or the holder's UUID).
+  if(e.customName){n.CustomName=str(e.customName);n.CustomNameVisible=byte(e.customNameVisible?1:0);}
+  n.PersistenceRequired=byte(e.persistent?1:0);n.Leashed=byte(e.leash?1:0);
+  if(e.leash?.knot)n.Leash=comp({X:int(e.leash.knot.x+ox),Y:int(e.leash.knot.y),Z:int(e.leash.knot.z+oz)});
+  else if(e.leash)n.Leash=comp({UUIDMost:long(0),UUIDLeast:long(0)});
   if(e.type==='sheep'){n.Color=byte(e.color??0);n.Sheared=byte(e.sheared?1:0);}
   // EntityTameable and EntityWolf.writeEntityToNBT: Sitting, Angry, CollarColor and OwnerUUID (the single player's own id, or Owner left out for a wild wolf).
   if(e.type==='wolf'){n.Sitting=byte(e.sitting?1:0);n.Angry=byte(e.angry?1:0);n.CollarColor=byte(e.collar??14);n.OwnerUUID=str(e.owner?(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(e.owner)?e.owner:'00000000-0000-0000-0000-000000000000'):'');}
@@ -70,7 +75,8 @@ function payload(state,ox,oz,report,world=null) {
   if(e.type==='horse'&&e.horse){const h=e.horse,att=(Name,Base)=>comp({Name:str(Name),Base:tag(NBT.DOUBLE,Base)}),it=id=>comp({id:short(id),Count:byte(1),Damage:short(0)});
    Object.assign(n,{Type:int(h.type),Variant:int(h.variant),Temper:int(h.temper),Tame:byte(h.tame?1:0),Bred:byte(h.bred?1:0),ChestedHorse:byte(h.chested?1:0),HasReproduced:byte(h.reproduced?1:0),EatingHaystack:byte(0),
     OwnerUUID:str(h.owner?'00000000-0000-0000-0000-000000000000':''),Attributes:list(NBT.COMPOUND,[att('generic.maxHealth',h.maxHealth),att('generic.movementSpeed',h.speed),att('horse.jumpStrength',h.jump)])});
-   if(h.saddled)n.SaddleItem=it(329);if(h.armor)n.ArmorItem=it(416+h.armor);}
+   if(h.saddled)n.SaddleItem=it(329);if(h.armor)n.ArmorItem=it(416+h.armor);
+   if(h.chested&&Array.isArray(h.items))n.Items=list(NBT.COMPOUND,h.items.map((st,i)=>i>=2?stackNbt(st,i,report):null).filter(Boolean));}
   // EntityVillager.writeEntityToNBT: Profession, Riches and Offers.Recipes (MerchantRecipe: buy, optional buyB, sell, uses, maxUses, in original item ids); EntityAgeable's Age is written above, InLove is EntityAnimal's.
   if(e.type==='villager'){n.Profession=int(e.profession??0);n.Riches=int(e.riches??0);delete n.InLove;
    if(Array.isArray(e.offers)){const bare=x=>{if(!x)return null;const c={...x};for(const k of ['enchantments','storedEnchantments'])if(Array.isArray(c[k])&&!c[k].length)delete c[k];return stackNbt(c,undefined,report,true);};

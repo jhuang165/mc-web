@@ -30,7 +30,7 @@ export function readActiveEffects(entity) {
 // EntityHorse.readEntityFromNBT (wi.a(dh), horse.js readNbt): Type, Variant, Temper, Tame, OwnerUUID, flags, SaddleItem / ArmorItem
 // (or the legacy Saddle byte) and the Attributes list's maxHealth, movementSpeed and horse.jumpStrength.
 export const HORSE_NBT_KEYS = ['EatingHaystack', 'ChestedHorse', 'HasReproduced', 'Bred', 'Type', 'Variant', 'Temper', 'Tame', 'OwnerUUID', 'Saddle', 'SaddleItem', 'ArmorItem', 'Items', 'Attributes', 'Age', 'InLove'];
-export function horseNbtFields(tag) {
+export function horseNbtFields(tag, convertItem = () => null) {
   const b = (k) => tagValue(tag, k, NBT.BYTE, 0) !== 0;
   const idOf = (k) => { const c = tagValue(tag, k, NBT.COMPOUND); return c ? { id: tagValue(c, 'id', NBT.SHORT, 0) } : undefined; };
   const h = readHorseNbt({ EatingHaystack: b('EatingHaystack'), ChestedHorse: b('ChestedHorse'), HasReproduced: b('HasReproduced'), Bred: b('Bred'),
@@ -44,9 +44,33 @@ export function horseNbtFields(tag) {
     if (name === 'generic.maxHealth') h.maxHealth = base; else if (name === 'generic.movementSpeed') h.speed = base; else if (name === 'horse.jumpStrength') h.jump = base;
   }
   const { age, health, inLove, eating, rearing, ...rest } = h;
+  // AnimalChest.loadChestFromNBT: Items stacks by Slot (2 to 16) for a chested horse; the saddle and armour stacks come from the flags.
+  if (rest.chested) {
+    const items = [];
+    const stacks = tagValue(tag, 'Items', NBT.LIST);
+    for (const c of stacks?.elementType === NBT.COMPOUND ? stacks.items : []) {
+      const slot = tagValue(c, 'Slot', NBT.BYTE, -1) & 255, stack = slot >= 2 && slot < 17 ? convertItem(c) : null;
+      if (stack) items[slot] = stack;
+    }
+    if (items.length) rest.items = Array.from({ length: 17 }, (_, i) => items[i] ?? null);
+  }
   return { horse: { ...rest, owner: rest.owner ? 'player' : '' }, growingAge: tagValue(tag, 'Age', NBT.INT, 0), love: tagValue(tag, 'InLove', NBT.INT, 0) };
 }
 
+// EntityLiving.readEntityFromNBT: CustomName, CustomNameVisible, PersistenceRequired and the Leashed / Leash compound (a knot's X/Y/Z,
+// else the holder's UUID, which is the single player here). `shift` moves a knot with the imported region.
+export const GEAR_NBT_KEYS = ['CustomName', 'CustomNameVisible', 'PersistenceRequired', 'Leashed', 'Leash'];
+export function gearNbtFields(tag, shiftX = 0, shiftZ = 0) {
+  const out = {}, name = String(tagValue(tag, 'CustomName', NBT.STRING, '')).slice(0, 64);
+  if (name) { out.customName = name; if (tagValue(tag, 'CustomNameVisible', NBT.BYTE, 0)) out.customNameVisible = true; }
+  if (tagValue(tag, 'PersistenceRequired', NBT.BYTE, 0)) out.persistent = true;
+  if (tagValue(tag, 'Leashed', NBT.BYTE, 0)) {
+    const l = tagValue(tag, 'Leash', NBT.COMPOUND);
+    if (l && tagValue(l, 'X', NBT.INT) !== undefined && tagValue(l, 'Y', NBT.INT) !== undefined && tagValue(l, 'Z', NBT.INT) !== undefined) out.leash = { knot: { x: tagValue(l, 'X', NBT.INT) + shiftX, y: tagValue(l, 'Y', NBT.INT), z: tagValue(l, 'Z', NBT.INT) + shiftZ } };
+    else if (l && tagValue(l, 'UUIDMost', NBT.LONG) !== undefined) out.leash = { holder: 'player' };
+  }
+  return out;
+}
 export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = () => null } = {}) {
   const type = JAVA_MOBS[tagValue(entity, 'id', NBT.STRING, '')];
   const pos = numbers(entity, 'Pos', NBT.DOUBLE, 3);
@@ -91,7 +115,7 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
     record.love = tagValue(entity, 'InLove', NBT.INT, 0);
     Object.assign(record, ocelotFieldsFrom({ owner: owner ? 'player' : '', sitting: !!owner && !!tagValue(entity, 'Sitting', NBT.BYTE, 0), catType: tagValue(entity, 'CatType', NBT.INT, 0) }));
   } else if (type === 'horse') {
-    Object.assign(record, horseNbtFields(entity));
+    Object.assign(record, horseNbtFields(entity, convertItem));
     record.health = Math.min(record.health, record.horse.maxHealth);
   } else if (type === 'squid') {
     // EntitySquid has no NBT of its own.
@@ -103,6 +127,7 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
     const conversion = tagValue(entity, 'ConversionTime', NBT.INT, -1);
     if (conversion > -1) record.conversionTime = conversion;
   }
+  Object.assign(record, gearNbtFields(entity, shiftX, shiftZ));
   return record;
 }
 
@@ -140,7 +165,7 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
     record.health = tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health));
     for (const k of type === 'villager' ? ['Profession', 'Riches', 'Offers'] : type === 'iron_golem' ? ['PlayerCreated'] : ['IsBaby', 'IsVillager', 'ConversionTime']) kept.add(k);
   }
-  if (type === 'horse') { Object.assign(record, horseNbtFields(tag)); for (const k of HORSE_NBT_KEYS) kept.add(k); }
+  if (type === 'horse') { Object.assign(record, horseNbtFields(tag, convertItem)); for (const k of HORSE_NBT_KEYS) kept.add(k); }
   if (type === 'slime') { record.size = slimeSizeFromNbt(tagValue(tag, 'Size', NBT.INT, 0)); kept.add('Size'); }
   // EntityEnderman.readEntityFromNBT: carried / carriedData (shorts; the original block id and metadata).
   if (type === 'enderman') { Object.assign(record, endermanFieldsFrom({ carried: tagValue(tag, 'carried', NBT.SHORT, 0), carriedData: tagValue(tag, 'carriedData', NBT.SHORT, 0) })); kept.add('carried'); kept.add('carriedData'); }
@@ -153,6 +178,8 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
     if (equipment?.items.slice(1).some(e => e.size)) kept.delete('Equipment'); else kept.add('Equipment');
   }
   record.health = Math.max(0, Math.min(type === 'wolf' && record.owner ? 20 : type === 'horse' ? record.horse.maxHealth : health, record.health));
+  Object.assign(record, gearNbtFields(tag));
+  for (const k of GEAR_NBT_KEYS) kept.add(k);
   const ignored = [...tag.keys()].filter(k => !kept.has(k));
   if (rotation?.[1]) ignored.push('Rotation[1] (pitch)');
   if (type === 'witch' && record.held && record.held.id !== 385) ignored.push('Equipment[0]');
