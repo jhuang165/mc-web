@@ -152,6 +152,9 @@ import { RedstoneBlocks, isRedstoneBlock, itemOfBlock as redstoneItemOf } from "
 import { createRedstoneRuntime } from "./redstone-runtime.js";
 import { Doors, WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, blockItemId } from "./doors-panes.js";
 import { MinecartRenderer } from "./minecart-renderer.js";
+import { Hanging, pickHanging, hangingArrowTargets } from "./hanging.js";
+import { HangingRenderer } from "./hanging-renderer.js";
+import { applyHangingEdit } from "./hanging-interaction.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
 import { restoreStructureEntities, saveStructureEntities, tickMinecartSimulation, tickSpawnerSimulation, tickSpawnersClient, spawnerBurst, pickMinecart } from "./structure-simulation.js";
@@ -271,6 +274,8 @@ let sounds,
   eating = null;
 // Generated-structure entities (structure-simulation.js): mineshaft spawners and chest minecarts.
 let spawners = null, minecarts = null, minecartRenderer = null, aimedCart = null;
+// Paintings and item frames (hanging.js): live entities, their renderer and the one under the crosshair.
+let hanging = new Hanging(), hangingRenderer = null, aimedHanging = null;
 // Live redstone and pistons (redstone-runtime.js), rebuilt for each world that loads.
 let redstoneRuntime = null;
 // Hopper tick host: the shared inventory-transfer.js stores, EntityItem pickup and live comparator notifications.
@@ -600,6 +605,7 @@ function save() {
   active.fallingTicks = falling?.save();
   // Live spawner and minecart state; regeneration never refills them (structure-simulation.js).
   if (spawners || minecarts) Object.assign(active, saveStructureEntities({ spawners, minecarts }));
+  active.hanging = hanging.toJSON();
   active.updated = Date.now();
   const savingContainers=containerResidency, containerSave=savingContainers?.beginSave(active.player);
   if(containerSave)active.containerScope=savingContainers.scope(containerSave);
@@ -903,6 +909,7 @@ async function launch(record, prepared) {
     })());
     watchSpawnerBlocks(world, spawners);
     aimedCart = null;
+    hanging = Hanging.fromJSON(record.hanging); aimedHanging = null; hangingRenderer?.clear();
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
     mobs = new EntityWorld(world, world.generationVersion>=11&&!hasSavedPopulation(record)?[]:record.entities);
     mobs.fx = scene.fx;
@@ -1905,8 +1912,8 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
       else if (mobs) for (let i = 0; i < h.chicks; i++) mobs.hatch(h.x, h.y, h.z, h.yaw);
     },
     handleEntityEvents,
-    arrowOptions: () => ({ targets: arrowTargets(mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), survival.creative),
-      mobs, survival, player: position, igniteTnt: (x, y, z, placer) => {
+    arrowOptions: () => ({ targets: [...arrowTargets(mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height), survival.creative), ...hangingArrowTargets(hanging)],
+      hanging, mobs, survival, player: position, igniteTnt: (x, y, z, placer) => {
         lightTnt(x, y, z, placer);
         if (world.set(x, y, z, 0)) scene.updateBlocks([[x, y, z, TNT, 0]]);
       } }),
@@ -1918,6 +1925,9 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   if (tickMinecartSimulation({ world, minecarts, mobs, position, velocity, rider, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }, {
     drop: (d) => { if (d.stack) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion }); },
   }).length) saved = false;
+  // EntityHanging.onUpdate: the surface check every 100 ticks; broken ones drop their items.
+  hanging.tick(world, { active: (e) => !world.streaming || world.isTicking(e.x, e.z) });
+  spawnHangingDrops();
   const vehicle = vehicleState();
   finishVehicleTick(vehicle);
   applyVehicleState(vehicle);
@@ -2017,9 +2027,18 @@ function vehicleState() {
 function applyVehicleState(state) {
   ({ grounded, collidedH, flying, fallDistance, landedFall } = state);
 }
+function spawnHangingDrops() {
+  for (const d of hanging.drain()) { items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay }); saved = false; }
+}
 function edit(place = false) {
   if (screen !== "playing") return;
   if(target?.block)world.populationBlocks?.touch(...target.block);
+  // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
+  if (applyHangingEdit({ hanging, world, survival, heldId: heldId(), place, target, aimed: aimedHanging }, {
+    swing: () => animation.swing(),
+    renderHotbar,
+    markUnsaved: () => { saved = false; },
+  })) { mining = null; saved = false; spawnHangingDrops(); return; }
   // A chest minecart under the crosshair (nearer than any block or mob): attack or open it.
   if (aimedCart && !aimedCart.cart.dead) {
     mining = null;
@@ -2112,7 +2131,7 @@ function lightTnt(x, y, z, placer) {
 // itself, or the TNT's placer. The block edits run through world.set like breakBlock:
 // containers spill, farmland and crops update, and the edits are saved.
 function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true } = {}) {
-  applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed,
+  applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging,
     survival, position, velocity, farming }, { x, y, z, size, exploder, attacker, smoking }, {
     brokenTool: reportBrokenTool,
     burst: (...args) => scene.explosionParticles.burst(...args),
@@ -2157,7 +2176,7 @@ function reportBrokenTool() {
 // EffectRenderer.addBlockHitEffects on the face being hit every tick the button is held on
 // a block, during the hit delay and in Creative too; a block broken this tick is air by then.
 function tickMining() {
-  const state = { playing: screen === "playing", mineHeld, target, aimedEntity: aimedEntity || aimedCart, mining,
+  const state = { playing: screen === "playing", mineHeld, target, aimedEntity: aimedEntity || aimedCart || aimedHanging, mining,
     cooldown: mineCooldown, survival, heldTool: heldId(), grounded };
   tickPlayerMining(state, {
     getBlock: (x, y, z) => world.get(x, y, z),
@@ -2677,7 +2696,11 @@ function animate(now) {
     aimedCart = pickMinecart(minecarts, aim, dir, survival.creative ? 5 : 3, target?.distance ?? 6, rider.vehicle);
     if (aimedCart && aimedEntity && aimedEntity.distance <= aimedCart.distance) aimedCart = null;
     if (aimedCart) aimedEntity = null;
-    scene.outline.visible = !!target && !aimedEntity && !aimedCart;
+    // EntityRenderer.getMouseOver: a painting or frame (box grown by 0.1) nearer than the block and any mob/cart.
+    aimedHanging = pickHanging(hanging, aim, dir, survival.creative ? 5 : 3, target?.distance ?? 6);
+    if (aimedHanging && ((aimedEntity && aimedEntity.distance <= aimedHanging.distance) || (aimedCart && aimedCart.distance <= aimedHanging.distance))) aimedHanging = null;
+    if (aimedHanging) { aimedEntity = null; aimedCart = null; }
+    scene.outline.visible = !!target && !aimedEntity && !aimedCart && !aimedHanging;
     if (target) {
       // setBlockBoundsBasedOnState: a snow layer's box is (meta + 1) / 8 high and a ladder's is its
       // plate; other blocks keep the full cube here. The outline is the box grown by 0.002.
@@ -2722,6 +2745,7 @@ function animate(now) {
   const shown = spawners?.size && screen !== "home" ? spawners.values().filter((sp) => (sp.x + 0.5 - position.x) ** 2 + (sp.y + 0.5 - position.y) ** 2 + (sp.z + 0.5 - position.z) ** 2 < 4096).map((sp) => spawnerDisplayEntity(sp, partial)).filter(Boolean) : [];
   if (mobs) mobRenderer.update([...(world.streaming ? mobs.entities.filter(e=>world.isLoaded(e.x,e.z)) : mobs.entities), ...shown],dt,partial);
   minecartRenderer?.update(screen === "home" || !minecarts ? [] : minecarts.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);
+  hangingRenderer?.update(screen === "home" ? [] : hanging.entities.filter(e => !world.streaming || world.isLoaded(e.x, e.z)));
   tntRenderer?.update(screen === "home" ? [] : primed, partial);
   redstoneRuntime?.frame(screen === "home" ? 1 : partial);
   playerRenderer?.update(playerBody, partial, {
@@ -2814,6 +2838,7 @@ async function boot(){try {
   chestRenderer = new ChestRenderer(scene.scene, scene);
   tntRenderer = new TntRenderer(scene.scene, scene);
   minecartRenderer = new MinecartRenderer(scene.scene, scene, null);
+  hangingRenderer = new HangingRenderer(scene.scene, scene);
   document.addEventListener("pointerdown", () => sounds.unlock(), {
     once: true,
   });
@@ -2827,7 +2852,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt };
+    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get hanging() { return hanging; }, get aimedHanging() { return aimedHanging; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt };
   scene.preview(0);
   // The title screen's splash texts (assets/minecraft/texts/splashes.txt).
   menuContext.splashes = await fetch("/media/1.7.10/texts/splashes.txt").then((r) => (r.ok ? r.text() : "")).catch(() => "");

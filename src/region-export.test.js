@@ -27,3 +27,16 @@ test('Anvil ZIP restores edited negative columns, native coordinates, containers
  const restored=new Survival(player,'survival');assert.deepEqual(restored.chests['-1,100,-1'].items[0],{id:19,count:4,damage:14,stored:[{id:16,lvl:2}],storedEnchantments:[{id:16,lvl:2}],repairCost:4,displayName:'Chest book'});
  await assert.rejects(exportJavaSave(r,{world:w,maxChunks:1}),/limited/);
 });
+test('paintings and item frames export as Java Painting and ItemFrame entities',async()=>{
+ const w=new World('17','javaStreamed',12);w.restore([['-1,100,-1',1]]);
+ const player=new Survival({},'survival').serialize();
+ const hanging=[{kind:'painting',dir:2,tx:-1,ty:100,tz:-1,x:-.5,y:100.5,z:-1.5625,art:'Pool'},{kind:'frame',dir:2,tx:-2,ty:100,tz:-1,x:-1.5,y:100.5,z:-1.5625,item:{id:1700,count:1,damage:0},rotation:3,dropChance:0.5}];
+ const r={id:'export',name:'Export',seed:'17',biome:'javaStreamed',generationVersion:12,mode:'survival',edits:[...w.edits],player,position:{x:-.5,y:102,z:-.5,yaw:0,pitch:0},hanging,minecarts:{version:1,carts:[]},updated:1700000000000};
+ const {files}=await exportJavaSave(r,{world:w});
+ const cx=-1+w.originX/16,cz=-1+w.originZ/16,a=regionAddress(cx,cz),entries=readRegion(files.get(`region/r.${a.regionX}.${a.regionZ}.mca`)),c=chunkFromNbt(await decodeRegionChunk(entries.get(regionSlot(a.x,a.z))));
+ const painting=c.entities.find(e=>e.get('id').value==='Painting'),frame=c.entities.find(e=>e.get('id').value==='ItemFrame');
+ assert.equal(painting.get('Motive').value,'Pool');assert.equal(painting.get('Direction').value,2);assert.equal(painting.get('Dir').value,0);
+ assert.equal(painting.get('TileX').value,w.originX-1);assert.equal(painting.get('TileY').value,100);assert.equal(painting.get('TileZ').value,w.originZ-1);
+ assert.equal(frame.get('ItemRotation').value,3);assert.equal(frame.get('ItemDropChance').value,Math.fround(0.5));
+ assert.equal(frame.get('Item').value.get('id').value,321);assert.equal(frame.get('TileX').value,w.originX-2);
+});

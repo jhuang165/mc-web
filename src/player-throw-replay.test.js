@@ -98,6 +98,7 @@ function system(actions, functions) {
     world, position, velocity: { x: 0, y: 0, z: 0 }, motion: { sneaking: false, sprinting: false }, mobs,
     farming: { observe() {}, drain: () => [] }, trees: {}, fire: {}, fluids, items, projectiles, arrows,
     FLOWERS: { yellow: YELLOW_FLOWER, red: RED_FLOWER }, boneRandom: new JavaRandom(1), itemRand: new JavaRandom(2),
+    applyHangingEdit: () => false, hanging: null, aimedHanging: null, spawnHangingDrops: () => {}, // paintings and frames: hanging.test.js
     editActionLog, ITEMS, BOW, ARROW, copyStack, useBucket, milkCow, MILK_BUCKET, DRINK_TICKS, releaseBow, captureBucketTarget,
     ...actions,
     sounds: { unlock: () => log.push("unlock"), play: (name, options) => log.push(["play", name, options]) },

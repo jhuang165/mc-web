@@ -71,6 +71,7 @@ export function applyExplosion(state, request, hooks = {}) {
   arrows.explode(world, x, y, z, size, exploder);
   projectiles.explode(world, x, y, z, size, exploder);
   falling?.explode(x, y, z, size, exploder);
+  state.hanging?.explode(x, y, z, size); // paintings and item frames break (hanging.js)
   const tntProcessed = [];
   for (const entity of primed) {
     if (entity === exploder) continue;
