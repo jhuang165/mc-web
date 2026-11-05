@@ -8,7 +8,7 @@ import {villagerFields} from './villager.js';
 import {DISPENSER} from './dispenser-piston.js';
 import {newDispenser} from './dispenser-container.js';
 import {FLOWER_POT,setPotContents,potPlantOf} from './stone-utility.js';
-const ANIMALS={Pig:'pig',Cow:'cow',Sheep:'sheep',Chicken:'chicken'};
+const ANIMALS={Pig:'pig',Cow:'cow',Sheep:'sheep',Chicken:'chicken',Wolf:'wolf'};
 // Dungeon chests whose block is still a chest; an existing tile (even an emptied one) is never overwritten.
 function restoreChests(list,world,survival){
   let chests=0;

@@ -14,6 +14,7 @@ import { isInvisible } from "./mob-effects.js";
 import { createVillagerRig, villagerLegAngle } from "./villager-renderer.js";
 import { createIronGolemRig, animateIronGolem } from "./iron-golem-renderer.js";
 import { createWitchRig, animateWitch } from "./witch-renderer.js";
+import { createWolfRig, animateWolf } from "./wolf-renderer.js";
 const RAD = Math.PI / 180;
 // RenderCreeper's powered pass (bni.a(xz, I, F), pass 1): creeper_armor.png with the texture
 // matrix translated by (scroll, scroll), colour 0.5, lighting off, blended GL_ONE, GL_ONE.
@@ -375,6 +376,7 @@ export class MobRenderer {
     if (e.type === "zombie") return this.createZombie(e.villager === true);
     if (e.type === "villager") return createVillagerRig(this, e);
     if (e.type === "witch") return createWitchRig(this, e);
+    if (e.type === "wolf") return createWolfRig(this);
     if (e.type === "iron_golem") return createIronGolemRig(this);
     return this.createQuadruped(e.type);
   }
@@ -463,6 +465,7 @@ export class MobRenderer {
       }
       if (r.nose) animateWitch(r, e, pose.age);
       if (r.golem) animateIronGolem(r, e, pose, partial);
+      if (r.wolf) animateWolf(r, e, pose);
       r.limbs.forEach((l, i) => {
         if (spider) { l.rotation.set(0, -spider[i][0], -spider[i][1]); return; }
         if (creeper) { l.rotation.x = creeper[i + 1][0]; return; }

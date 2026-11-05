@@ -21,6 +21,8 @@ export const SHADOWS = {
   sheep: { size: f(0.7), opaque: 1 },
   // RenderChicken: super(new ModelChicken(), 0.3F).
   chicken: { size: f(0.3), opaque: 1 },
+  // RenderManager: new RenderWolf(new ModelWolf(), new ModelWolf(), 0.5F).
+  wolf: { size: f(0.5), opaque: 1 },
   zombie: { size: f(0.5), opaque: 1 },
   spider: { size: 1, opaque: 1 },
   // RenderCaveSpider: shadowSize *= 0.7F on RenderSpider's 1.0.

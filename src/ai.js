@@ -15,6 +15,8 @@ import { villageTasks, nearestVillage } from "./village-ai.js";
 import { setHomeArea, detachHome } from "./home-area.js";
 import { homeFilter, isWithinHome } from "./home-area.js";
 import { zombieVillagerTargets } from "./zombie-villager.js";
+import { buildWolfTasks } from "./wolf-ai.js";
+import { isTamed as wolfTamed } from "./wolf.js";
 const f = Math.fround;
 const GRASS = 1, TALL_GRASS = 39;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -898,6 +900,9 @@ export class Brain {
       this.tasks.add(6, new LookIdle(this));
       this.targets.add(1, new HurtByTarget(this, false));
       this.targets.add(2, new NearestAttackable(this));
+    } else if (e.type === "wolf") {
+      // EntityWolf (wv): wolf-ai.js lists its tasks and targets and the Brain overrides.
+      buildWolfTasks(this, { Task, TargetBase, Swim, Wander, WatchClosest, LookIdle, AttackOnCollide, Mate });
     } else {
       // EntityPig/Cow/Sheep/Chicken: swim 0, panic 1, mate 2, tempt 3, follow parent
       // 4 (pig 5), sheep eat grass 5, wander, watch the player (6 blocks), look idle.
@@ -1041,7 +1046,8 @@ export class Brain {
   despawnEntity() {
     const e = this.e, p = this.ai.player;
     if ((e.idle & 31) !== 31 || !p) return;
-    const d3 = this.distSq(p), can = e.type === "zombie" || e.type === "skeleton" || e.type === "witch" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper";
+    // EntityWolf.canDespawn (v): only a wild wolf older than 2400 ticks.
+    const d3 = this.distSq(p), can = (e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || e.type === "zombie" || e.type === "skeleton" || e.type === "witch" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper";
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
     if (d3 < 1024) e.idle = 0;
@@ -1093,6 +1099,15 @@ export class MobAI {
     // Path searches allowed per tick over all mobs (the original has no limit).
     this.budget = { left: 0, denied: 0, perTick: 8 };
     this.survival = null;
+    // The world tick count, and what the owner's wolves read from the player: the last creature that hurt it
+    // (EntityLivingBase.getAITarget, with its timer) and the last one it hit (getLastAttacker).
+    this.clock = 0;
+  }
+  playerHurtBy(record) {
+    Object.assign(this.player, { hurtBy: record, hurtByTime: this.clock });
+  }
+  playerHit(record) {
+    Object.assign(this.player, { lastTarget: record, lastTargetTime: this.clock });
   }
   get world() {
     return this.ew.world;
@@ -1113,6 +1128,7 @@ export class MobAI {
   }
   beginTick(player, survival, held) {
     this.player.update(player, survival, held);
+    this.clock++;
     this.survival = survival;
     this.budget.left = this.budget.perTick;
   }

@@ -139,6 +139,11 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return act('cure-zombie-villager');
     }
+    // EntityWolf.interact: bones tame, meat heals or breeds, dyes recolour the collar, the owner's other clicks sit it.
+    if (e.type === 'wolf' && state.mobs.wolfInteract(e, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return act('interact-wolf');
+    }
     if (state.mobs.shear(e, id, state.survival)) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return act('shear-entity');
