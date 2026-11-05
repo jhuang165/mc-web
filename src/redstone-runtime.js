@@ -10,6 +10,7 @@
 //   game.drop(x, y, z, { id, count, damage })  block drop (Block.dropBlockAsItem)
 //   game.primeTnt(x, y, z)                     BlockTNT.func_150114_a (the block is removed by the engine)
 //   game.markUnsaved()
+//   game.music: particle(name, x, y, z, vx, vy, vz), play(discItem | null, x, y, z) (record start / stop), spawn(stack, x, y, z) (an ejected disc)
 //   game.player()  -> { position: {x, y, z}, width, height, alive } | null
 //   game.mobs()    -> EntityWorld | null         game.items() / arrows() / orbs() / primed() -> arrays
 //   game.chests() / furnaces() / dispensers() / hoppers()    keyed "x,y,z" stores (survival.js)
@@ -17,6 +18,9 @@
 //   game.subtracted() -> skylight subtracted     game.angle() -> celestial angle in [0, 1)
 //   game.skyLight(x, y, z)
 import { installCommandBlocks } from "./command-block.js";
+import { installNoteBlocks } from "./note-blocks.js";
+import { installJukeboxes, JUKEBOX_ID } from "./jukebox.js";
+import { isDisc } from "./note-jukebox-content.js";
 import { LiveRedstone } from "./redstone-live.js";
 import { installPistons } from "./piston-live.js";
 import { applyPlayerEdit } from "./player-edit-simulation.js";
@@ -101,6 +105,26 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     skyLight: (x, y, z) => game.skyLight?.(x, y, z) ?? 15,
   });
   const commandBlocks = installCommandBlocks(redstone, { host: () => game.commandHost(), changed: () => game.markUnsaved?.() });
+  const noteBlocks = installNoteBlocks(redstone, { particle: (...a) => game.music?.particle?.(...a), changed: () => game.markUnsaved?.() });
+  const jukeboxes = installJukeboxes(redstone, { play: (...a) => game.music?.play?.(...a), spawn: (...a) => game.music?.spawn?.(...a), changed: () => game.markUnsaved?.() });
+  // Note block and jukebox right and left clicks (note-blocks.js, jukebox.js): { handled, consumed } where consumed is a disc taken from the held stack.
+  const music = {
+    noteBlocks,
+    jukeboxes,
+    use(x, y, z, held = 0) {
+      const id = redstone.getBlock(x, y, z);
+      let result = { handled: false, consumed: false };
+      if (id === JUKEBOX_ID && redstone.getBlockMetadata(x, y, z) === 0) {
+        if (isDisc(held) && jukeboxes.insert(x, y, z, held)) result = { handled: true, consumed: true };
+      } else if (id === 25 || id === JUKEBOX_ID) result = { handled: redstone.use(x, y, z), consumed: false };
+      flush();
+      return result;
+    },
+    click(x, y, z) { if (redstone.getBlock(x, y, z) === 25) { noteBlocks.click(x, y, z); flush(); } },
+    // One record list: { kind: "note", x, y, z, note } and { kind: "jukebox", x, y, z, record }.
+    save: () => [...noteBlocks.save().map((e) => ({ kind: "note", ...e })), ...jukeboxes.save().map((e) => ({ kind: "jukebox", ...e }))],
+    restore(records) { noteBlocks.restore(records?.filter((e) => e.kind === "note")); jukeboxes.restore(records?.filter((e) => e.kind === "jukebox")); },
+  };
   redstone.registerBehaviour(154, hopperBehaviour); // BlockHopper: power disables it (metadata bit 8)
   installPoweredRails(redstone); // powered / detector / activator rails and the plain rail's redstone hooks
   // BlockDispenser (23) and BlockDropper (158): dispense.js over the game's entity and block hooks (game.dispense). Sounds are the
@@ -214,6 +238,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     redstone,
     pistons,
     commandBlocks,
+    music,
     tick,
     frame: (partial) => pistons.frame(partial),
     flush,
@@ -224,6 +249,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     save: () => redstone.save(),
     restore: (record) => {
       commandBlocks.restore(record?.commandBlocks);
+      music.restore(record?.musicTiles);
       // A Java import carries only Piston tile entities (record.pistons).
       if (record?.redstone) redstone.restore(record.redstone);
       else if (Array.isArray(record?.pistons)) pistons.restore(record.pistons);

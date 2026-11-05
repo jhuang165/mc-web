@@ -18,6 +18,7 @@ import { stepStuckArrows } from "./stuck-arrows.js";
 import { installNetherItems, installNetherMaterials, installNetherRecipes, installNetherSmelting, netherCraftingResult } from './nether-blocks.js';
 import { applyNativeNames } from './item-names.js';
 import { installColoredItems, installColoredMaterials, COLORED_FUELS } from './colored-blocks.js';
+import { installNoteJukeboxItems, installNoteJukeboxMaterials, installNoteJukeboxRecipes } from './note-jukebox-content.js';
 // The lastDamage reason of DamageSource.outOfWorld (death-messages.js).
 export const VOID = "void";
 const FIRE_REASONS = new Set(["burning", "lava", "fire"]); // DamageSource.isFireDamage (onFire, inFire, lava)
@@ -227,6 +228,7 @@ ARMOR_MATERIALS.forEach(([name, factor, defense, ingredient, texture], m) =>
 installPopulationItems(ITEMS);
 installFishingItems(ITEMS);
 installNetherItems(ITEMS);
+installNoteJukeboxItems(ITEMS); // note block 1177, jukebox 1178, discs 530-541
 // Every item name and damage subtype is the 1.7.10 en_US display name (item-names.js); internal-only items get Title Case.
 applyNativeNames(ITEMS);
 export const MATERIALS = {
@@ -293,6 +295,7 @@ MATERIALS[MOB_SPAWNER]={hardness:SPAWNER_HARDNESS,kind:"pickaxe",tier:0,drop:0,x
 installPopulationMaterials(MATERIALS);
 installNetherMaterials(MATERIALS);
 installColoredMaterials(MATERIALS); // colored-blocks.js blocks 140-148
+installNoteJukeboxMaterials(MATERIALS);
 export const RECIPES = [];
 function recipe(id, name, rows, keys, output, count = 1) {
   const width = Math.max(...rows.map((r) => r.length));
@@ -430,6 +433,7 @@ shapeless(314, 1, 0, PAPER, PAPER, PAPER, 315);
 installPopulationRecipes({recipe,shapeless});
 installFishingRecipes({recipe});
 installNetherRecipes({recipe});
+installNoteJukeboxRecipes({recipe});
 export function matchShapeless(stacks) {
   const filled = stacks.filter(Boolean);
   for (const r of SHAPELESS) {

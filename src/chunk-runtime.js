@@ -1,6 +1,6 @@
 // Durable runtime payloads are owned by the column containing their position.
 // The live systems still hold paused, visited entities in their existing collections.
-const ARRAYS = ['entities','drops','projectiles','arrows','tnt','farms','xpOrbs','falling','spawners','pistons','commandBlocks','boats','hanging'];
+const ARRAYS = ['entities','drops','projectiles','arrows','tnt','farms','xpOrbs','falling','spawners','pistons','commandBlocks','musicTiles','boats','hanging'];
 const TICKS = ['fluidTicks','fireTicks','fallingTicks'];
 const key = (x,z) => `${Math.floor(x/16)},${Math.floor(z/16)}`;
 export function splitRuntime(record) {
@@ -43,7 +43,7 @@ export function joinRuntime(metadata, columns) {
   }
   const ordered = name => (lists.get(name)??[]).sort((a,b)=>a.order-b.order).map(e=>e.value);
   // pistons (moving tiles) only appear when there are some, so records without pistons round-trip unchanged.
-  for (const name of ARRAYS) { const v=ordered(name); if (!['pistons','commandBlocks','boats','hanging'].includes(name)||v.length) record[name]=v; }
+  for (const name of ARRAYS) { const v=ordered(name); if (!['pistons','commandBlocks','musicTiles','boats','hanging'].includes(name)||v.length) record[name]=v; }
   for (const name of TICKS) if (record.tickClocks?.[name]) record[name]={...record.tickClocks[name],entries:ordered(name)};
   record.minecarts={version:1,...record.minecartHeader,carts:ordered('carts')};
   if (record.player) {record.player.chests??={};record.player.furnaces??={};}

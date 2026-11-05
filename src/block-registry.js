@@ -153,6 +153,8 @@ const MAP = {
   // Nether, End and quartz building blocks (nether-blocks.js): netherrack 87, soul sand 88, End stone 121, nether brick 112 / fence 113 / stairs 114,
   // quartz ore 153, block of quartz 155 (metadata 0 plain, 1 chiseled, 2-4 pillar axis) and quartz stairs 156.
   150: fixed(87), 151: fixed(88), 152: fixed(121), 153: fixed(112), 154: fixed(113), 155: same(114), 156: fixed(153), 157: same(155), 158: same(156),
+  // BlockNote (25) and BlockJukebox (84): metadata 0 and 0/1 (the disc flag); the note and the record live in tile entities (note-blocks.js, jukebox.js).
+  177: same(25), 178: same(84),
 };
 if (Object.keys(MAP).length !== BLOCKS.filter((b) => !b.reserved).length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");
 

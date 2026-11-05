@@ -3,6 +3,7 @@
 import { POPULATION_ITEMS } from '../src/population-content.js';
 import { FISHING_ITEMS } from '../src/fishing-content.js';
 import { NETHER_ITEMS } from '../src/nether-blocks.js';
+import { NOTE_JUKEBOX_ITEMS } from '../src/note-jukebox-content.js';
 import {Survival,ITEMS,burnTime,smeltingResult} from '../src/survival.js';
 import {makeStack,copyStack,ChestContainer,LargeChestInventory} from '../src/inventory.js';
 import {newChest,chestInventory} from '../src/chest.js';
@@ -21,6 +22,7 @@ export const MC_IDS={137:1139,95:1140,160:1141,171:1142,170:1143,173:1144,22:114
  ...POPULATION_ITEMS,
  ...FISHING_ITEMS,
  ...NETHER_ITEMS,
+ ...NOTE_JUKEBOX_ITEMS,
 };
 const GAME_IDS=Object.fromEntries(Object.entries(MC_IDS).map(([mc,id])=>[id,mc.split(':').map(Number)]));
 const toGame=(id,count,damage)=>{const subtype=MC_IDS[id+':'+damage],game=subtype??MC_IDS[id];if(!game)throw new Error('No game item for Minecraft ID '+id+':'+damage);return makeStack(game,count,subtype?0:damage);};

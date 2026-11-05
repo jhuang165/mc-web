@@ -154,6 +154,7 @@ import { Rails } from "./rails.js";
 import { Torches } from "./torches.js";
 import { RedstoneBlocks, isRedstoneBlock, itemOfBlock as redstoneItemOf } from "./redstone-blocks.js";
 import { createRedstoneRuntime } from "./redstone-runtime.js";
+import { createRecordHud } from "./jukebox.js";
 import { Doors, WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, blockItemId } from "./doors-panes.js";
 import { MinecartRenderer } from "./minecart-renderer.js";
 import { BoatRenderer } from "./boat-renderer.js";
@@ -453,6 +454,7 @@ function icon(id, damage = 0, stack) {
   return `<span class="block-icon b${id}" style="--block:${item.color};--top:${item.top || item.color}"><i></i></span>`;
 }
 const heldId = () => survival.held?.id || 0;
+const recordHud = createRecordHud(document.body);
 // Item, stack count and durability overlays, as RenderItem draws them.
 function stackHtml(s, count = s?.count) {
   if (!s) return "";
@@ -593,7 +595,7 @@ function save() {
   active.worldRandom = weather.saveSimulation();
   active.fluidTicks = fluids.save();
   active.fireTicks = fire.save();
-  if (redstoneRuntime) { active.redstone = redstoneRuntime.save(); active.pistons = redstoneRuntime.pistons.save(); active.commandBlocks = redstoneRuntime.commandBlocks.save(); }
+  if (redstoneRuntime) { active.redstone = redstoneRuntime.save(); active.pistons = redstoneRuntime.pistons.save(); active.commandBlocks = redstoneRuntime.commandBlocks.save(); active.musicTiles = redstoneRuntime.music.save(); }
   // Chunk.InhabitedTime (one value stands for every chunk; see difficulty.js).
   active.inhabited = inhabited.save(survival.time);
   // Items on the cursor or in a crafting grid return to the saved inventory, as closing the screen would.
@@ -869,6 +871,12 @@ async function launch(record, prepared) {
     redstoneRuntime?.dispose();
     redstoneRuntime = createRedstoneRuntime({ world, scene, game: {
       commandHost: () => commandHost,
+      music: {
+        particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz),
+        // RenderGlobal.playRecord: the HUD line for a disc; the record music is not shipped (public/research/note-jukebox.md).
+        play: (item) => { if (item) recordHud.show(item); },
+        spawn: (stack, x, y, z) => items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, y, z, { delay: 10 }),
+      },
       sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }),
       drop: (x, y, z, d) => items.dropBlock([makeStack(d.id, d.count, d.damage || 0)], x, y, z),
       primeTnt: (x, y, z) => lightTnt(x, y, z, null),
@@ -2146,6 +2154,15 @@ function edit(place = false) {
     useAnvil: key => { useAnvil(key); syncContainerState(); },
     useBed,
     useCommandBlock: openCommandBlock,
+    // ItemRecord.onItemUse / BlockJukebox / BlockNote.onBlockActivated; the disc leaves the stack outside Creative.
+    useNoteJukebox: (x, y, z, held) => {
+      const r = redstoneRuntime?.music.use(x, y, z, held);
+      if (!r?.handled) return false;
+      if (r.consumed && !survival.creative) { survival.take(held); renderHotbar(); }
+      saved = false;
+      return true;
+    },
+    blockClicked: (x, y, z) => { if (!survival.creative) { redstoneRuntime?.music.click(x, y, z); saved = false; } },
     openMerchant: entity => { const opened = useMerchant(entity); if (opened) syncContainerState(); return opened; },
     useEnchantingTable: key => { useEnchantingTable(key); syncContainerState(); },
     openChest: (chest, key) => { openContainer(chest, "chest", key); syncContainerState(); },
@@ -2209,7 +2226,7 @@ function breakBlock(p, creative = false) {
   });
 }
 // Block.getItem for middle-click: farmland gives dirt, crops give seeds, water nothing.
-const pickItem = (block, meta = 0) => block === 139 ? 1139 : isColoredBlock(block) ? block + COLORED_ITEM_OFFSET : isDispenserPiston(block) ? (block === PISTON_HEAD ? itemForBlock(headBaseId(meta)) : itemForBlock(block)) : isRedstoneBlock(block) ? redstoneItemOf(block) : (block === 29 || block === 30 ? 2 : block === WOODEN_DOOR ? WOODEN_DOOR_ITEM : block === IRON_DOOR ? IRON_DOOR_ITEM : block === REEDS ? REEDS_ITEM : isCrop(block) ? cropItem(block) : !isLiquid(block) && ITEMS[block] ? blockItemId(block) : 0);
+const pickItem = (block, meta = 0) => block === 139 ? 1139 : block === 177 || block === 178 ? block + 1000 : isColoredBlock(block) ? block + COLORED_ITEM_OFFSET : isDispenserPiston(block) ? (block === PISTON_HEAD ? itemForBlock(headBaseId(meta)) : itemForBlock(block)) : isRedstoneBlock(block) ? redstoneItemOf(block) : (block === 29 || block === 30 ? 2 : block === WOODEN_DOOR ? WOODEN_DOOR_ITEM : block === IRON_DOOR ? IRON_DOOR_ITEM : block === REEDS ? REEDS_ITEM : isCrop(block) ? cropItem(block) : !isLiquid(block) && ITEMS[block] ? blockItemId(block) : 0);
 // EntityPlayer.dropOneItem: Q throws one item, Ctrl + Q the whole stack.
 function dropHeld(all) {
   const inv = survival.inventory, s = inv.held;
@@ -2321,6 +2338,7 @@ function movementTick(controls) {
   hopperTiles.tick();
   tickBrewingStands();
   redstoneRuntime?.tick();
+  recordHud.tick();
   scene.setFurnaces(survival.furnaces);
   tickChests();
   const living = { world, position, survival, inhabited, mobs, xpOrbs, experience, items,
@@ -2806,6 +2824,7 @@ function animate(now) {
   hangingRenderer?.update(screen === "home" ? [] : hanging.entities.filter(e => !world.streaming || world.isLoaded(e.x, e.z)));
   tntRenderer?.update(screen === "home" ? [] : primed, partial);
   redstoneRuntime?.frame(screen === "home" ? 1 : partial);
+  recordHud.frame(partial);
   playerRenderer?.update(playerBody, partial, {
     visible: thirdPersonView > 0 && ["playing", "inventory", "paused"].includes(screen),
     swing: animate.pose ? (animate.pose.progress < 1 ? animate.pose.progress : 0) : 0,

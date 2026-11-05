@@ -5,6 +5,7 @@ import { POPULATION_ITEMS } from './population-content.js';
 import { COLORED_ORIGINAL_ITEMS } from './colored-blocks.js';
 import { FISHING_ITEMS } from './fishing-content.js';
 import { NETHER_ITEMS } from './nether-blocks.js';
+import { NOTE_JUKEBOX_ITEMS } from './note-jukebox-content.js';
 
 // Original item ID (or "id:damage" subtype) -> browser item. The same table as tools/inventory-replay.mjs
 // MC_IDS (the item catalogue's mapping); region-import.test.js keeps the two identical.
@@ -33,4 +34,6 @@ export const ORIGINAL_ITEMS = Object.freeze({
   ...COLORED_ORIGINAL_ITEMS, // 95, 160, 171, 170, 173, 22, 133, 19, 91 -> 1140-1148
   ...FISHING_ITEMS,
   ...NETHER_ITEMS, // netherrack, soul sand, End stone, nether brick (block, fence, stairs and item), quartz ore, block of quartz, quartz stairs
+  // Note block 25, jukebox 84 and the music discs 2256-2267 (the discs replace the older inert 373/374 mapping).
+  ...NOTE_JUKEBOX_ITEMS,
 });

@@ -6,6 +6,7 @@ import { WOOL, RED_FLOWER } from "./world.js";
 import { golemDrops } from "./iron-golem.js";
 import { CARROT, POTATO } from "./crops.js";
 import { witchDrops, witchEquipmentDrop, witchExperience } from "./witch.js";
+import { DISC_FIRST } from "./note-jukebox-content.js";
 const f = Math.fround;
 // Item ids of this build: porkchop, cooked porkchop, beef, steak, rotten flesh, leather,
 // arrow, bone, bow, string, spider eye, gunpowder, iron ingot. The chicken ids are entities.js's.
@@ -72,7 +73,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
   // EntityLiving.dropEquipment for a witch's held potion (0.085F).
   if (e.type === "witch") { const held = witchEquipmentDrop(rand, e.held, playerHit, looting); if (held) add(held.id, 1, held.damage); }
   if (playerHit && rand.nextInt(200) - looting < 5 && e.type === "zombie") add([IRON, CARROT, POTATO][rand.nextInt(3)]);
-  if (e.type === "creeper" && bySkeleton) rand.nextInt(12);
+  if (e.type === "creeper" && bySkeleton) add(DISC_FIRST + rand.nextInt(12)); // EntityCreeper.onDeath: Item.getItemById(2256 + nextInt(12))
   return out;
 }
 // getExperiencePoints at deathTime 20: EntityAnimal 1 + World.rand.nextInt(3); EntityMob

@@ -14,6 +14,7 @@ import { liquidHeightPercent } from "./fluids.js";
 import { WATER, isLiquid } from "./world.js";
 import { materialSolid } from "./plants.js";
 import { POTION_TYPES } from "./potions.js";
+import { noteColour } from "./note-blocks.js";
 import { makePortalParticle, stepPortalParticle, portalParticleScale, portalParticleLight } from './portal-particles.js';
 
 const f = Math.fround;
@@ -28,7 +29,7 @@ const liquidOrSolid = (b) => isLiquid(b) || materialSolid(b);
 
 // EntityFX.getFXLayer for each kind here.
 const LAYER = { crit2: 3, iconcrack: 2 };
-const KINDS = new Set(["bubble", "suspended", "depthsuspend", "townaura", "crit", "magicCrit", "mobSpell", "mobSpellAmbient", "spell", "instantSpell", "flame", "lava", "splash", "rain", "heart", "angryVillager", "happyVillager", "dripWater", "dripLava", "portal"]);
+const KINDS = new Set(["bubble", "suspended", "depthsuspend", "townaura", "crit", "magicCrit", "mobSpell", "mobSpellAmbient", "spell", "instantSpell", "flame", "lava", "splash", "rain", "heart", "angryVillager", "happyVillager", "dripWater", "dripLava", "portal", "note"]);
 
 export class Fx {
   // `explosions` (ExplosionParticles) builds explode, smoke and largesmoke; `world` is the
@@ -198,6 +199,18 @@ export class Fx {
         }
         return p;
       }
+      // EntityNoteFX (bkl): the heart's constructor with motion x0.01 + 0.2 up, scale x0.75 x2, 6 ticks, tex 64 and a colour from vx (note / 24).
+      case "note": {
+        p = this.base("note", x, y, z, 0, 0, 0);
+        p.mx = f(p.mx * f(0.01)); p.my = f(p.my * f(0.01)); p.mz = f(p.mz * f(0.01));
+        p.my += 0.2;
+        [p.r, p.g, p.b] = noteColour(vx);
+        p.scale = f(f(p.scale * f(0.75)) * 2);
+        p.base = p.scale;
+        p.max = 6;
+        p.tex = 64;
+        return p;
+      }
       case "heart":
       case "angryVillager": {
         const angry = name === "angryVillager";
@@ -363,11 +376,11 @@ export class Fx {
       this.drag(p, f(0.7));
       p.my -= f(0.02);
     } else {
-      if ((k === "heart" || k === "spell") && p.y === p.py) {
+      if ((k === "heart" || k === "spell" || k === "note") && p.y === p.py) {
         p.mx *= 1.1;
         p.mz *= 1.1;
       }
-      this.drag(p, k === "flame" || k === "spell" ? f(0.96) : k === "lava" ? f(0.999) : k === "heart" ? f(0.86) : DRAG);
+      this.drag(p, k === "flame" || k === "spell" ? f(0.96) : k === "lava" ? f(0.999) : k === "heart" ? f(0.86) : k === "note" ? f(0.66) : DRAG);
     }
     if (p.onGround) {
       p.mx *= GROUND;
@@ -387,7 +400,7 @@ export class Fx {
     let scale = p.scale;
     const t = f(f(p.age + f(partial)) / p.max);
     if (p.kind === 'portal') scale = p.scale = portalParticleScale(p, partial);
-    else if (p.kind === "crit" || p.kind === "heart") scale = f(p.base * clamp01(f(t * 32)));
+    else if (p.kind === "crit" || p.kind === "heart" || p.kind === "note") scale = f(p.base * clamp01(f(t * 32)));
     else if (p.kind === "flame") scale = f(p.base * f(1 - f(f(t * t) * f(0.5))));
     else if (p.kind === "lava") scale = f(p.base * f(1 - f(t * t)));
     const u = f((p.tex % 16) / 16), v = f(Math.trunc(p.tex / 16) / 16);
