@@ -14,6 +14,8 @@ import { useEggOnBlock, useEggOnWater, useFireCharge, throwExpBottle } from './s
 import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
 import { ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
 import { useEyeOfEnder } from './eye-of-ender-live.js';
+import { ITEM_FIREWORK_ROCKET } from './fireworks.js';
+import { useFirework } from './fireworks-live.js';
 import { BOAT_ITEM } from './boats.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
@@ -74,6 +76,11 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   // ItemEnderEye: onItemUse on a frame, else onItemRightClick towards the nearest stronghold (eye-of-ender-live.js).
   if (place && id === ITEM_EYE_OF_ENDER && state.eyes && (state.survival.creative || state.survival.count(id))) {
     const used = useEyeOfEnder(state, { target, usesBlock }, hooks);
+    if (used) return act(used.branch);
+  }
+  // ItemFirework.onItemUse launches a rocket from the clicked block face (fireworks-live.js).
+  if (place && id === ITEM_FIREWORK_ROCKET && state.rockets && (state.survival.creative || state.survival.count(id))) {
+    const used = useFirework(state, { target, usesBlock }, hooks);
     if (used) return act(used.branch);
   }
   if (place && id === BOW && !usesBlock) {

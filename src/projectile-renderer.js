@@ -17,6 +17,7 @@ export function projectileItemId(kind) {
   if (kind === "snowball") return SNOWBALL;
   if (kind === "egg") return EGG;
   if (kind === "enderPearl") return ENDER_PEARL;
+  if (kind === "firework") return 2071; // RenderSnowball(Items.fireworks)
   if (kind === "eyeOfEnder") return 1960; // RenderManager maps EntityEnderEye (zd) to RenderSnowball(Items.ender_eye)
   if (kind === "potion") return 385; // witch.js ITEM_POTION; drawn with the splash bottle icon (texture below)
   throw new TypeError(`Unsupported projectile render kind: ${kind}`);

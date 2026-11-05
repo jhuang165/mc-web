@@ -19,6 +19,7 @@ import { installPopulationItems, installPopulationMaterials, installPopulationRe
 import {CARROT,POTATO,BAKED_POTATO,POISONOUS_POTATO} from './crops.js';
 import {newDispenser,DISPENSER_SLOTS} from './dispenser-container.js';
 import { leatherDyeResult } from './leather-dye.js';
+import { fireworksResult } from './fireworks.js';
 import { stepStuckArrows } from "./stuck-arrows.js";
 import { installNetherItems, installNetherMaterials, installNetherRecipes, installNetherSmelting, netherCraftingResult } from './nether-blocks.js';
 import { applyNativeNames } from './item-names.js';
@@ -498,6 +499,8 @@ export function craftingResult(cells, size) {
     return makeStack(a.id, 1, Math.max(0, max - (max - a.damage + max - b.damage + Math.floor((max * 5) / 100))));
   const dyedArmor = leatherDyeResult(cells);
   if (dyedArmor) return dyedArmor;
+  const fireworks = fireworksResult(cells);
+  if (fireworks) return fireworks;
   const population=populationCraftingResult(cells,size);
   if(population)return makeStack(population.id,population.count,population.damage);
   const nether=netherCraftingResult(cells,size);
