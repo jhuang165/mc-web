@@ -20,6 +20,7 @@ import { folderName } from "./menu-screens.js";
 import { canGoEndless, endlessCopy } from "./endless-world.js";
 import {guiScale,stackCount,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks,withGlint,itemTint} from "./gui.js";
 import { stackHasEffect } from "./armor-enchantments.js";
+import { ITEM_SPAWN_EGG, spawnEggIconHtml } from "./spawn-eggs.js";
 import {AnvilContainer,nativeStackToLive} from './anvil-container.js';
 import {EnchantingContainer} from './enchanting-container.js';
 import {MerchantContainer,merchantDecorationsHtml,offerItemAt} from './merchant-ui.js';
@@ -451,6 +452,7 @@ function icon(id, damage = 0, stack) {
   if (!id || !item) return '<span class="empty-hand">·</span>';
   // ItemPotion layers: potion_overlay tinted by the liquid colour under the untinted bottle (splash bottle for splash values).
   if (id === 385) return `<span class="vanilla-item-icon tinted-item" style="--tint:#${(damageColor(damage | 0) & 0xffffff).toString(16).padStart(6, "0")};--base:url('/media/1.7.10/items/potion_overlay.png')" aria-hidden="true"><i></i><img src="/media/1.7.10/items/${(damage | 0) & 16384 ? "potion_bottle_splash" : "potion_bottle_drinkable"}.png" alt=""></span>`;
+  if (id === ITEM_SPAWN_EGG) return spawnEggIconHtml(damage); // spawn-eggs.js: primary and secondary colour layers
   if(item.block)return `<img class="vanilla-item-icon vanilla-block-icon" src="${scene.textures.icon(id, damage)}" alt="" aria-hidden="true">`;
   // Leather armor multiplies its base layer by display.color; the overlay stays untinted.
   if (item.tint)

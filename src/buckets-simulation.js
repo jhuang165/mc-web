@@ -43,7 +43,7 @@ export function copyBucketTarget(value) {
  */
 export function captureBucketTarget(world, heldTool, eyeRay) {
   // The glass bottle (ItemGlassBottle, id 384) traces liquids exactly like an empty bucket.
-  const kind = tracedBucketKind(heldTool) ?? (heldTool === 384 ? "empty" : null);
+  const kind = tracedBucketKind(heldTool) ?? (heldTool === 384 || heldTool === 1950 ? "empty" : null);
   if (!kind) return null;
   const liquid = kind === "empty";
   if (!eyeRay) return { ray: null, liquid, hit: null };

@@ -9,6 +9,8 @@ import { plantedBlock } from './crops.js';
 import { growGrass } from './flowers.js';
 import { isBucket } from './buckets.js';
 import { useHeldBucket } from './buckets-simulation.js';
+import { ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, ITEM_FIRE_CHARGE } from './spawn-eggs.js';
+import { useEggOnBlock, useEggOnWater, useFireCharge, throwExpBottle } from './spawn-egg-use.js';
 import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
 import { BOAT_ITEM } from './boats.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
@@ -65,6 +67,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     const thrown = throwHeldItem(state, id, hooks);
     return act('throw-projectile', { projectile: thrown.kind });
   }
+  // ItemExpBottle (spawn-egg-use.js): thrown like a snowball; Creative keeps the stack.
+  if (place && id === ITEM_EXP_BOTTLE && !usesBlock && (state.survival.creative || state.survival.count(id)) && throwExpBottle(state, hooks)) return act('throw-projectile', { projectile: 'expBottle' });
   if (place && id === BOW && !usesBlock) {
     if (!state.eating && canDraw(state.survival)) state.eating = { id: BOW, ticks: 0, bow: true };
     return act('begin-bow-use');
@@ -91,6 +95,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     return act('use-bucket', { bucket: used.branch, ...(used.skipped ? { skipped: true } : {}) });
   }
 
+  // ItemMonsterPlacer.onItemRightClick: an egg aimed at a water surface (spawn-egg-use.js); other clicks fall through to onItemUse.
+  if (place && id === ITEM_SPAWN_EGG && !usesBlock && !aimedEntity && useEggOnWater(state, bucket, hooks)) { hook('swing'); return act('use-spawn-egg-water'); }
   hook('swing');
   if (!place && aimedEntity?.entity) {
     state.mining = null;
@@ -373,6 +379,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       hook('openHopper', hopper, key, target.block);
       return act('open-hopper');
     }
+    if (id === ITEM_SPAWN_EGG && useEggOnBlock(state, target, hooks)) return act('use-spawn-egg');
+    if (id === ITEM_FIRE_CHARGE && useFireCharge(state, target, hooks)) return act('use-fire-charge');
     if (item?.kind === 'flint_and_steel') {
       const q = target.adjacent;
       if (!q || q[1] === 0 || q[1] >= (state.world.height === 256 ? 256 : state.world.height - 1) || !state.world.inside(...q)) return act('flint-invalid-position');

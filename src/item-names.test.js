@@ -108,8 +108,9 @@ test('no item or variant name has a lower-case word start (1.7.10 capitalisation
   for (const item of Object.values(ITEMS)) {
     if (!item.id) continue;
     for (const name of [item.name, ...(item.variants ?? [])]) {
+      if (item.id === 1950 && /^Spawn (entity\.|arrow$)/.test(name)) continue; // spawn egg damages with no egg: the raw 1.7.10 lang strings (spawn-eggs.md)
       const words = String(name).split(/\s+/);
-      words.forEach((w, i) => { if (/^[a-z]/.test(w) && !(i && small.has(w)) && w !== "o'Lantern") bad.push(`${item.id}: ${name}`); });
+      words.forEach((w, i) => { if (/^[a-z]/.test(w) && !(i && small.has(w)) && w !== "o'Lantern" && w !== "o'") bad.push(`${item.id}: ${name}`); });
     }
   }
   assert.deepEqual(bad, []);

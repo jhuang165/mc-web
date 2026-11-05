@@ -41,6 +41,7 @@ export class ProjectileRenderer {
   texture(kind) {
     // RenderSnowball(Items.potionitem, 16384): the splash bottle icon (no potion colour overlay is drawn).
     if (kind === "potion") return pixelTexture("/media/1.7.10/items/potion_bottle_splash.png");
+    if (kind === "expBottle") return pixelTexture("/media/1.7.10/items/experience_bottle.png"); // RenderSnowball(Items.experience_bottle)
     return pixelTexture(itemTexture(projectileItemId(kind)));
   }
   material(kind) {
