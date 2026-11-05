@@ -5,6 +5,7 @@
 // references behave like ItemStack. tools/verify-inventory.mjs replays the same
 // scripts through the unchanged original classes.
 import { onMapCrafted } from "./maps.js";
+import { armorTypeOf } from "./wearable-heads.js";
 import { copyStored, normalizeStored } from "./enchanted-books.js";
 import { sameFireworkTag, readFireworkTags } from './fireworks.js';
 import { JavaRandom } from "./java-random.js";
@@ -45,7 +46,7 @@ export class PlayerInventory {
     if (randomState) this.random.restore(randomState);
     if (Array.isArray(saved)) saved.slice(0, 36).forEach((s, i) => (this.main[i] = this.read(s)));
     // armor[0] boots ... armor[3] helmet, as InventoryPlayer.armorInventory.
-    if (Array.isArray(armor)) armor.slice(0, 4).forEach((s, i) => { const a = this.read(s); if (a && items[a.id]?.armor === 3 - i) this.armor[i] = a; });
+    if (Array.isArray(armor)) armor.slice(0, 4).forEach((s, i) => { const a = this.read(s); if (a && armorTypeOf(items, a.id) === 3 - i) this.armor[i] = a; });
   }
   read(s) {
     // Saves from before ItemDye (id 351) kept bone meal as internal item 310.
@@ -205,7 +206,7 @@ export class Slot {
 class ArmorSlot extends Slot {
   constructor(inventory, index, x, y, type) { super(inventory, index, x, y); this.type = type; }
   get limit() { return 1; }
-  valid(s) { return !!s && this.inventory.items[s.id]?.armor === this.type; }
+  valid(s) { return !!s && armorTypeOf(this.inventory.items, s.id) === this.type; }
 }
 class CraftingSlot extends Slot {
   constructor(result, grid, x, y, onCraft, items) { super(result, 0, x, y); Object.assign(this, { grid, onCraft, items, amount: 0 }); }
@@ -455,7 +456,7 @@ export class PlayerContainer extends CraftingContainer {
     return this.move(index, (s, slot, moved) => {
       if (index === 0) { if (!this.merge(s, 9, 45, true)) return false; slot.onSlotChange(s, moved); return true; }
       if (index >= 1 && index < 9) return this.merge(s, 9, 45, false);
-      const type = this.inv.items[moved.id]?.armor;
+      const type = armorTypeOf(this.inv.items, moved.id);
       if (type !== undefined && !this.slots[5 + type].has) return this.merge(s, 5 + type, 6 + type, false);
       if (index >= 9 && index < 36) return this.merge(s, 36, 45, false);
       if (index >= 36 && index < 45) return this.merge(s, 9, 36, false);

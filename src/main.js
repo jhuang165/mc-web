@@ -79,6 +79,7 @@ import { breakSound, placeSound, hitSound, footstepSound, placesSilently } from 
 import { Weather, isWet, canLightningStrikeAt } from "./weather.js";
 import { tickWeatherSimulation } from "./weather-simulation.js";
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
+import { showsPumpkinBlur } from "./wearable-heads.js";
 import { PlayerBody, PlayerRenderer, nextView, thirdPersonCamera, playerShadowCaster } from "./player-renderer.js";
 import { FirstPerson, itemTexture } from "./first-person.js";
 import { InventoryPlayerView, PAPERDOLL_LAYOUTS } from "./inventory-player.js";
@@ -383,7 +384,7 @@ const fishing = new Fishing();
 const arrows = new Arrows();
 const bowFovState = { prev: 1, cur: 1 };
 $("#app").innerHTML = `
- <div id="viewport" aria-label="Interactive voxel world"></div><div id="vignette"></div>
+ <div id="viewport" aria-label="Interactive voxel world"></div><div id="vignette"></div><div id="pumpkin-blur" hidden></div>
  <div id="gui" class="hidden"></div>
  <section id="hud" class="hidden" aria-label="Game heads-up display"><div class="game-top"><button class="game-brand" id="pause-button">${cube}<span>BLOCKWORLD<small id="world-label"></small></span><span class="pause-symbol">Ⅱ</span></button><div class="game-status"><span class="status-dot"></span><span id="save-label">Saved on this device</span><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div></div><div id="crosshair">＋</div><pre id="debug" class="hidden"></pre><div id="block-label"></div><div id="jump-hud" class="hidden"><div class="experience-track"><div id="jump-fill"></div></div></div><div id="experience-hud" class="hidden"><div id="experience-level"></div><div class="experience-track"><div id="experience-fill"></div></div></div><div id="survival-hud" class="survival-hud hidden"></div><div id="mining-meter" class="mining-meter hidden" role="progressbar" aria-label="Mining progress" aria-valuemin="0" aria-valuemax="100"><i></i></div><div id="flight-label" class="flight-label"><span id="mode-label">CREATIVE</span> <span>·</span> <b id="movement-label">WALKING</b></div><div class="hotbar" id="hotbar"></div><div class="game-help">W A S D <span>move</span> <i>·</i> SPACE <span>jump</span> <i>·</i> LMB <span>break</span> <i>·</i> RMB <span>use / place</span> <i>·</i> E <span>inventory</span> <i>·</i> ESC <span>pause</span></div><div id="mobile-controls"><div class="dpad"><button data-key="KeyW">↑</button><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="touch-actions"><button id="touch-break">Break</button><button id="touch-place">Use</button><button id="touch-inventory">Bag</button><button id="touch-fly">Fly</button><button data-key="Space">Jump</button></div></div></section>
  <div class="modal-overlay hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div><div id="toast" role="status"></div><input id="file-input" type="file" accept=".json,application/json" hidden>
@@ -2098,6 +2099,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   finishVehicleTick(vehicle);
   applyVehicleState(vehicle);
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
+  $("#pumpkin-blur").hidden = !showsPumpkinBlur(survival.inventory?.armor?.[3], thirdPersonView) || $("#hud").classList.contains("hidden"); // GuiIngame.renderPumpkinBlur
   scene.setFishing(fishing.active ? { hook: fishing.hook, first: !thirdPersonView, sneaking: !!motion.sneaking } : null);
   scene.setDrops(items.items);
   scene.setProjectiles(eyes.balls.length || rockets.balls.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length || mobs?._fireballs?.balls.length ? [...projectiles.balls, ...eyes.balls, ...rockets.balls, ...(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? []), ...(mobs?._fireballs?.balls ?? [])] : projectiles.balls, projectiles.particles);

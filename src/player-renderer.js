@@ -1,5 +1,7 @@
 import { EntityFireRenderer } from "./entity-fire-renderer.js";
 import { stackHasEffect } from "./armor-enchantments.js";
+import { headWearable, headItemMatrix } from "./wearable-heads.js";
+import { ITEM_SKULL as SKULL_ITEM, SKULL_TEXTURES, skullTextureHeight } from "./skull.js";
 import * as THREE from "three";
 import { pixelTexture, itemTexture } from "./first-person.js";
 import { FISHING_ROD, rodState } from "./fishing-content.js";
@@ -421,7 +423,7 @@ export class PlayerRenderer {
   }
   // Stacks are ordered helmet..boots. Color participates in the cache key for redyeing.
   syncArmor(stacks) {
-    const key = stacks.map(s => `${s?.id ?? 0}:${s?.color ?? LEATHER_COLOR}:${stackHasEffect(s, ITEMS[s?.id]) ? 1 : 0}`).join(",");
+    const key = stacks.map(s => `${s?.id ?? 0}:${s?.color ?? LEATHER_COLOR}:${stackHasEffect(s, ITEMS[s?.id]) ? 1 : 0}:${s?.id === SKULL_ITEM ? s.damage | 0 : 0}`).join(",");
     if (key === this.armorKey) return;
     this.armorKey = key;
     for (const n of this.armorNodes) n.parent?.remove(n);
@@ -430,6 +432,7 @@ export class PlayerRenderer {
     this.armorMaterials = [];
     for (const m of this.armorGlints ?? []) m.dispose();
     this.armorGlints = [];
+    if (stacks[0] && headWearable(stacks[0].id)) this.attachHeadItem(stacks[0]);
     stacks.forEach((stack, pass) => {
       const layer = armorLayer(stack?.id ?? 0, pass, stack?.color);
       if (!layer) return;
@@ -450,6 +453,32 @@ export class PlayerRenderer {
       make(layer.url, layer.tint, 0);
       if (layer.overlay) make(layer.overlay, null, 1);
     });
+  }
+  // RenderPlayer.renderSpecials head branch (wearable-heads.js): a pumpkin block cube or the skull model on the head part.
+  attachHeadItem(stack) {
+    const group = new THREE.Group();
+    group.matrixAutoUpdate = false;
+    group.matrix.copy(headItemMatrix(stack.id));
+    let mesh;
+    if (stack.id === SKULL_ITEM) {
+      const type = (stack.damage | 0) in SKULL_TEXTURES ? stack.damage | 0 : 0, m = this.material({ map: pixelTexture(SKULL_TEXTURES[type]) });
+      // ModelSkeletonHead: one 8 x 8 x 8 box at uv (0, 0), 64 x 32 (zombie 64 x 64), hanging from the head pivot.
+      mesh = new THREE.Mesh(modelBox(0, 0, -4, -8, -4, 8, 8, 8, 0, false, 64, skullTextureHeight(type)), m);
+      this.armorMaterials.push(m);
+    } else {
+      const g = new THREE.BoxGeometry(1, 1, 1), uv = g.attributes.uv;
+      for (let face = 0; face < 6; face++) {
+        const r = tileRect(blockTile(stack.id, face));
+        uv.setXY(face * 4, r.u0, r.v1); uv.setXY(face * 4 + 1, r.u1, r.v1); uv.setXY(face * 4 + 2, r.u0, r.v0); uv.setXY(face * 4 + 3, r.u1, r.v0);
+      }
+      const m = this.material({ map: this.atlas });
+      mesh = new THREE.Mesh(g, m);
+      mesh.rotation.y = Math.PI / 2; // as the held block cube
+      this.armorMaterials.push(m);
+    }
+    group.add(mesh);
+    this.pivots.head.add(group);
+    this.armorNodes.push(group);
   }
   syncHeld(id, damage = 0, color = undefined, glint = false) {
     const leather = leatherItemLayers(id, color),
