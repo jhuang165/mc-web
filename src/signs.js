@@ -5,6 +5,7 @@
 import { SIGN_POST, WALL_SIGN, BLOCKS } from './world.js';
 import { toOriginal } from './block-registry.js';
 import { doorReplaceable, doorRotationYaw } from './doors-panes.js';
+import { setCakeSolid } from './stems-cake.js';
 import { signBounds, SIGN_POST_BOUNDS, WALL_SIGN_BOUNDS } from './sign-bounds.js';
 
 export { SIGN_POST, WALL_SIGN, signBounds, SIGN_POST_BOUNDS, WALL_SIGN_BOUNDS };
@@ -32,6 +33,8 @@ export function signSolid(b) {
   }
   return !nonSolid.has(b);
 }
+
+setCakeSolid(signSolid); // BlockCake.canBlockStay uses the same Material.isSolid test
 
 // ItemSign.onItemUse: (float)(yaw + 180) * 16 / 360 in single precision, plus 0.5 as a double, floored, & 15.
 export const standingMeta = (yaw) => Math.floor(Math.fround(Math.fround(Math.fround(Math.fround(yaw) + 180) * 16) / 360) + 0.5) & 15;

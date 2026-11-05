@@ -1,8 +1,9 @@
 // BlockCrops/BlockCarrot/BlockPotato and EntityZombie's rare drops in Java 1.7.10.
 import { CARROTS, POTATOES } from './world.js';
+import { stemPlantedBy } from './stems-cake.js';
 export const CARROT=322,POTATO=323,BAKED_POTATO=324,POISONOUS_POTATO=325;
 export const cropItem=block=>block===CARROTS?CARROT:block===POTATOES?POTATO:309;
-export const plantedBlock=item=>item===309?31:item===CARROT?CARROTS:item===POTATO?POTATOES:0;
+export const plantedBlock=item=>item===309?31:item===CARROT?CARROTS:item===POTATO?POTATOES:stemPlantedBy(item);
 // Root crops share BlockCrops' base drop and three seed rolls. Here the seed and
 // produce are the same item, giving one to four roots at maturity (fortune 0).
 export function rootDrops(block,age,nextInt){

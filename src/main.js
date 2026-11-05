@@ -1,3 +1,4 @@
+import { isStemCake, popDrops } from './stems-cake.js';
 import { StreamStorage } from './streaming-storage.js';
 import { isColoredBlock, carpetNeighbourChange, coloredPickDamage, COLORED_ITEM_OFFSET, CARPET } from './colored-blocks.js';
 import { ContainerResidency } from './container-residency.js';
@@ -746,6 +747,7 @@ function watchFlowers() {
         scene.updateBlock(fx, fz, fy);
         continue;
       }
+      if (isStemCake(b)) { const pop = popDrops(world, fx, fy, fz); if (pop) { world.set(fx, fy, fz, 0); items.dropBlock(pop.map((d) => makeStack(d.id, d.count)), fx, fy, fz); scene.updateBlock(fx, fz, fy); } continue; }
       if (!isFlower(b) || flowerCanStay(world, FLOWERS, fx, fy, fz)) continue;
       const meta = world.getMeta(fx, fy, fz);
       world.set(fx, fy, fz, 0);

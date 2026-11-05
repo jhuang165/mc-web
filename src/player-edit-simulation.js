@@ -1,3 +1,4 @@
+import { CAKE, ITEM_CAKE, cakeEat, cakePlacement } from './stems-cake.js';
 import { CHEST } from './chest.js';
 import { DISPENSER, DROPPER } from './dispenser-piston.js';
 import { newDispenser, DROPPER_TITLE } from './dispenser-container.js';
@@ -18,7 +19,7 @@ import {
 } from './world.js';
 import { ITEM_BED, placeBed } from './bed.js';
 import { ITEM_SIGN, placeSign } from './signs.js';
-import { isDoor, activateDoor, doorSound } from './doors-panes.js';
+import { isDoor, activateDoor, doorSound, doorReplaceable } from './doors-panes.js';
 import { FENCE_GATE, TRAPDOOR, gateUseMeta, trapOpen } from './shaped-blocks.js';
 import { ITEMS } from './survival.js';
 import { mayHitBlock } from './adventure.js';
@@ -264,6 +265,16 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     if (activates && block === 139) { hook('useCommandBlock', x, y, z); return act('use-command-block'); }
     // BlockNote.onBlockActivated raises the note; BlockJukebox ejects, or ItemRecord.onItemUse inserts the held disc (jukebox.js).
     if (activates && (block === 177 || block === 178) && hook('useNoteJukebox', x, y, z, id)) return act('use-note-jukebox');
+    // BlockCake.onBlockActivated (stems-cake.js): eat a slice when hungry and not in Creative; the seventh bite removes the cake.
+    if (activates && block === CAKE) {
+      const eaten = cakeEat(state.survival, state.world, x, y, z);
+      if (eaten.ate) {
+        state.world.set(x, y, z, eaten.next === null ? 0 : CAKE, true, eaten.next ?? 0);
+        hook('updateBlock', x, z, y); hook('renderVitals'); hook('markUnsaved');
+        hook('playSound', 'random.eat', { volume: 0.5, pitch: 1, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } });
+      }
+      return act('use-cake', { eaten });
+    }
     if (activates && block === BED) { hook('useBed', x, y, z); return act('use-bed'); }
     // Lever, stone button and repeater right-clicks (redstone-blocks.js): local state only, no power network.
     if (activates && (block === LEVER || block === STONE_BUTTON || block === REPEATER)) {
@@ -378,6 +389,15 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
         updateBlock: hooks.updateBlock, renderHotbar: hooks.renderHotbar, markUnsaved: hooks.markUnsaved, sound: hooks.sound,
       });
       return act(placed.placed ? 'place-block' : `placement-${placed.reason}`, { placement: placed });
+    }
+    // ItemReed.onItemUse for the cake item (stems-cake.js).
+    if (id === ITEM_CAKE) {
+      const cell = cakePlacement(state.world, target, doorReplaceable);
+      if (!cell || (!state.survival.creative && !state.survival.count(id))) return act('placement-cake');
+      state.world.set(cell[0], cell[1], cell[2], CAKE, true, 0);
+      if (!state.survival.creative) state.survival.take(id);
+      hooks.updateBlock?.(cell[0], cell[2], cell[1]); hooks.renderHotbar?.(); hooks.markUnsaved?.(); hooks.sound?.(true, CAKE);
+      return act('place-block', { placement: { placed: true, reason: 'cake', block: CAKE, position: cell } });
     }
     // ItemSign.onItemUse (sign-reference.json): any face but the bottom of a solid block; the edit screen opens for the new tile.
     if (id === ITEM_SIGN) {

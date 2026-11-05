@@ -9,6 +9,7 @@ import { Effects } from "./status-effects.js";
 import { damageSourceKey, enchantedDamage, setFireTicks, decreaseAir, thornsReaction } from "./armor-enchantments.js";
 import { NORMAL, scaleDamage, starvationHurts, hungerDrops, peacefulRegen } from "./difficulty.js";
 import { installSignItems, installSignMaterials, installSignRecipes } from './signs.js';
+import { installStemCakeItems, installStemCakeMaterials, installStemCakeRecipes } from './stems-cake.js';
 import { installFishingItems, installFishingRecipes, installFishingSmelting } from './fishing-content.js';
 import { installPopulationItems, installPopulationMaterials, installPopulationRecipes, populationCraftingResult, installPopulationSmelting } from './population-content.js';
 
@@ -232,6 +233,7 @@ installFishingItems(ITEMS);
 installNetherItems(ITEMS);
 installNoteJukeboxItems(ITEMS); // note block 1177, jukebox 1178, discs 530-541
 installSignItems(ITEMS);
+installStemCakeItems(ITEMS); // cake 1930; stems and cake have no block items
 // Every item name and damage subtype is the 1.7.10 en_US display name (item-names.js); internal-only items get Title Case.
 applyNativeNames(ITEMS);
 export const MATERIALS = {
@@ -300,6 +302,7 @@ installNetherMaterials(MATERIALS);
 installColoredMaterials(MATERIALS); // colored-blocks.js blocks 140-148
 installNoteJukeboxMaterials(MATERIALS);
 installSignMaterials(MATERIALS);
+installStemCakeMaterials(MATERIALS);
 export const RECIPES = [];
 function recipe(id, name, rows, keys, output, count = 1) {
   const width = Math.max(...rows.map((r) => r.length));
@@ -439,6 +442,7 @@ installFishingRecipes({recipe});
 installNetherRecipes({recipe});
 installNoteJukeboxRecipes({recipe});
 installSignRecipes({recipe});
+installStemCakeRecipes({recipe});
 export function matchShapeless(stacks) {
   const filled = stacks.filter(Boolean);
   for (const r of SHAPELESS) {

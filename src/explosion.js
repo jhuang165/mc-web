@@ -30,6 +30,7 @@ RESIST[WOODEN_DOOR] = 3; RESIST[IRON_DOOR] = 5; RESIST[IRON_BARS] = 6; RESIST[GL
 RESIST[139] = 3600000; // BlockCommandBlock: setResistance(6000000), aji.p registration
 for (const [id, r] of Object.entries(SHAPED_RESISTANCE)) RESIST[id] = r; // shaped-blocks.js (wood slabs, gate and trapdoor, cobblestone wall)
 RESIST[138] = 0.2; // BlockBed (bed-reference.json facts)
+RESIST[159] = RESIST[160] = 0; RESIST[161] = 0.5; // BlockStem, BlockCake (hardness 0.5; stems-cake.js)
 // Colored blocks (colored-blocks-reference.json explosionResistance): stained glass 0.3, pane 0.3, carpet 0.1, hay 0.5, coal 6, lapis 3, emerald 6, sponge 0.6, jack o'lantern 1.
 Object.assign(RESIST, { 140: 0.3, 141: 0.3, 142: 0.1, 143: 0.5, 144: 6, 145: 3, 146: 6, 147: 0.6, 148: 1 });
 // BlockStairs.getExplosionResistance: the model block's resistance / 5 (stairs-reference.json).
