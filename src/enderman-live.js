@@ -11,10 +11,10 @@ export const ENDERMAN_TRANSIENT = ["stareCount", "chaseTimer", "speedBoost", "pr
 
 // The player as the stare rules see him: Java yaw (180 - view yaw), Java pitch (positive down), the head slot.
 function playerView(mobs, p) {
-  const look = mobs.look || { yaw: 0, pitch: 0 }, head = mobs.ai.survival?.inventory?.armor?.[0];
+  const look = mobs.look || { yaw: 0, pitch: 0 }, head = mobs.ai.survival?.inventory?.armor?.[3]; // armor[3] is the helmet slot
   return {
     x: p.x, y: p.y + 1.62, z: p.z, yaw: f(180 - look.yaw / RAD), pitch: f(-look.pitch / RAD),
-    helmet: head?.id === E.PUMPKIN ? E.PUMPKIN : 0,
+    helmet: head?.id === 67 ? E.PUMPKIN : 0, // internal id 67 is Blocks.pumpkin (original 86)
   };
 }
 

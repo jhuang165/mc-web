@@ -79,6 +79,7 @@ import { breakSound, placeSound, hitSound, footstepSound, placesSilently } from 
 import { Weather, isWet, canLightningStrikeAt } from "./weather.js";
 import { tickWeatherSimulation } from "./weather-simulation.js";
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
+import { showsPumpkinBlur } from "./wearable-heads.js";
 import { PlayerBody, PlayerRenderer, nextView, thirdPersonCamera, playerShadowCaster } from "./player-renderer.js";
 import { FirstPerson, itemTexture } from "./first-person.js";
 import { InventoryPlayerView, PAPERDOLL_LAYOUTS } from "./inventory-player.js";
@@ -92,6 +93,7 @@ import { BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nex
 import { deathMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
 import { ChatUi, printChat } from "./chat-ui.js";
 import { createCommandRunner, chatLine, tr } from "./commands.js";
+import { runCommandCart } from "./command-cart.js";
 import { LanSession, LAN_NOTICE } from "./lan.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
 import { gameRule, setGameRuleSource } from "./game-rules.js";
@@ -112,6 +114,7 @@ import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { EyesOfEnder } from "./eye-of-ender-live.js";
 import { MapsClock } from "./maps-clock-live.js";
+import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
 import { FireworkRockets, dispenseFirework } from "./fireworks-live.js";
 import { FireworkParticles } from "./firework-particles.js";
 import { EndPortalRenderer } from "./end-portal-renderer.js";
@@ -383,7 +386,7 @@ const fishing = new Fishing();
 const arrows = new Arrows();
 const bowFovState = { prev: 1, cur: 1 };
 $("#app").innerHTML = `
- <div id="viewport" aria-label="Interactive voxel world"></div><div id="vignette"></div>
+ <div id="viewport" aria-label="Interactive voxel world"></div><div id="vignette"></div><div id="pumpkin-blur" hidden></div>
  <div id="gui" class="hidden"></div>
  <section id="hud" class="hidden" aria-label="Game heads-up display"><div class="game-top"><button class="game-brand" id="pause-button">${cube}<span>BLOCKWORLD<small id="world-label"></small></span><span class="pause-symbol">Ⅱ</span></button><div class="game-status"><span class="status-dot"></span><span id="save-label">Saved on this device</span><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div></div><div id="crosshair">＋</div><pre id="debug" class="hidden"></pre><div id="block-label"></div><div id="jump-hud" class="hidden"><div class="experience-track"><div id="jump-fill"></div></div></div><div id="experience-hud" class="hidden"><div id="experience-level"></div><div class="experience-track"><div id="experience-fill"></div></div></div><div id="survival-hud" class="survival-hud hidden"></div><div id="mining-meter" class="mining-meter hidden" role="progressbar" aria-label="Mining progress" aria-valuemin="0" aria-valuemax="100"><i></i></div><div id="flight-label" class="flight-label"><span id="mode-label">CREATIVE</span> <span>·</span> <b id="movement-label">WALKING</b></div><div class="hotbar" id="hotbar"></div><div class="game-help">W A S D <span>move</span> <i>·</i> SPACE <span>jump</span> <i>·</i> LMB <span>break</span> <i>·</i> RMB <span>use / place</span> <i>·</i> E <span>inventory</span> <i>·</i> ESC <span>pause</span></div><div id="mobile-controls"><div class="dpad"><button data-key="KeyW">↑</button><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="touch-actions"><button id="touch-break">Break</button><button id="touch-place">Use</button><button id="touch-inventory">Bag</button><button id="touch-fly">Fly</button><button data-key="Space">Jump</button></div></div></section>
  <div class="modal-overlay hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div><div id="toast" role="status"></div><input id="file-input" type="file" accept=".json,application/json" hidden>
@@ -1139,7 +1142,7 @@ async function launch(record, prepared) {
 // ---- Chat and commands (chat-ui.js GuiChat/GuiNewChat, commands.js ServerCommandManager, command-host.js game state) ----
 let chatOpen = false;
 const commandHost = createCommandHost({
-  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, survival: () => survival, experience: () => experience,
+  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, rockets: () => rockets, survival: () => survival, experience: () => experience,
   position: () => ({ x: position.x, y: position.y, z: position.z }),
   seed: () => active.seed,
   beaconTile: (x, y, z) => beacons.ensure(x, y, z),
@@ -1382,9 +1385,9 @@ const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnac
 // Slots are addressed by list index: wrapped creative slots all keep slotNumber 0.
 const slotsHtml = (container) => `<div class="container-slots">${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""}${slot.x < -1000 || slot.enabled === false ? " hidden" : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>`;
 // GuiCommandBlock: Creative + command permission required; text and tracking changes are applied on Done only.
-function openCommandBlock(x, y, z) {
+function openCommandBlock(x, y, z, cartTile = null) {
   if (!survival.creative || !commandHost.cheats) return;
-  const tile = redstoneRuntime.commandBlocks.tile(x, y, z);
+  const tile = cartTile ?? redstoneRuntime.commandBlocks.tile(x, y, z);
   screen = "inventory"; mining = null; mineHeld = false;
   document.exitPointerLock?.();
   modal("Set Console Command for Block", `<label>Console Command<input id="command-block-input" maxlength="32767" autocomplete="off" spellcheck="false"></label><p>@p - nearest player<br>@r - random player<br>@a - all players</p><div style="display:flex;gap:8px;align-items:end"><label style="flex:1;min-width:0">Previous Output<input id="command-block-output" readonly></label><button class="button" id="command-block-track" style="width:40px;margin-bottom:2px"></button></div><div class="menu-actions" style="display:flex;gap:8px;margin-top:24px"><button class="button" id="command-block-done" style="flex:1">Done</button><button class="button" id="command-block-cancel" style="flex:1">Cancel</button></div>`);
@@ -2030,7 +2033,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
   rockets.tick(world, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), explode: (...a) => fireworkFx.spawnStarter(...a) });
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
-  maps.tick({ survival, position, yaw, world, time: survival.time });
+  maps.tick({ survival, position, yaw: 180 - yaw / (Math.PI / 180), world, time: survival.time, frames: hanging.entities });
   tickEntitySimulation({ world, items, primed, projectiles, arrows, mobs, survival, position,
     width: PHYSICS.width, height: PHYSICS.height }, {
     maxStack: st => survival.inventory.maxStack(st),
@@ -2098,6 +2101,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   finishVehicleTick(vehicle);
   applyVehicleState(vehicle);
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
+  $("#pumpkin-blur").hidden = !showsPumpkinBlur(survival.inventory?.armor?.[3], thirdPersonView) || $("#hud").classList.contains("hidden"); // GuiIngame.renderPumpkinBlur
   scene.setFishing(fishing.active ? { hook: fishing.hook, first: !thirdPersonView, sneaking: !!motion.sneaking } : null);
   scene.setDrops(items.items);
   scene.setProjectiles(eyes.balls.length || rockets.balls.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length || mobs?._fireballs?.balls.length ? [...projectiles.balls, ...eyes.balls, ...rockets.balls, ...(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? []), ...(mobs?._fireballs?.balls ?? [])] : projectiles.balls, projectiles.particles);
@@ -2231,6 +2235,7 @@ function edit(place = false) {
       swing: () => animation.swing(),
       damage: () => heldAttackDamage(heldId(), survival),
       openContainer: (container, kind) => openContainer(container, kind ?? "chest"),
+      openCommandCart: (cart) => openCommandBlock(0, 0, 0, cart.command),
       toast,
       markUnsaved: () => { saved = false; },
     });
@@ -2342,6 +2347,7 @@ const cartHost = {
   sound: (name, cart) => sounds.play(name, { position: { x: cart.x, y: cart.posY, z: cart.z } }),
   get transfer() { return hopperTiles.host; },
   changed: () => { saved = false; },
+  runCommand: (cart) => runCommandCart(cart, { host: commandHost, changed: () => { saved = false; } }), // command-cart.js
 };
 function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false } = {}) {
   applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging,
@@ -3019,6 +3025,8 @@ function animate(now) {
       bow: eating?.bow ? { stage: bowStage(eating.ticks), draw: eating.ticks - 1 + partial } : null,
       glint: stackHasEffect(survival.held, ITEMS[survival.held?.id]),
       color: survival.held?.color,
+      map: survival.held?.id === ITEM_FILLED_MAP ? { data: mapStore.get(survival.held.damage | 0) } : null, // ItemRenderer's map branch
+      pitchDeg: -pitch / (Math.PI / 180),
     });
 }
 // Entities that cast a shadow, as Java positions: an item's posY is 0.125

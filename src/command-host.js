@@ -11,6 +11,7 @@ import { nbtGet } from "./nbt-get.js";
 import { NBT } from "./nbt.js";
 import { SUMMONABLE } from "./commands.js";
 import { summonCart, cartTypeOfSummon } from "./cart-summon.js";
+import { summonFireworkRocket, FIREWORK_SUMMON } from "./firework-summon.js";
 import { newChest, settleFacing } from "./chest.js";
 import { newEnderTile } from "./chest-blocks.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
@@ -135,6 +136,7 @@ export function createCommandHost(env) {
     addLevels(n) { env.experience().addLevels(n); env.refreshInventory(); },
     addExperience(n) { env.experience().add(n); env.refreshInventory(); },
     summon(type, x, y, z, tag) {
+      if (type === FIREWORK_SUMMON) { const r = env.rockets?.() && summonFireworkRocket(env.rockets(), x, y, z, tag); if (r) env.changed(); return r; }
       if (cartTypeOfSummon(type) !== null) { const r = summonCart(env.minecarts?.(), cartTypeOfSummon(type), x, y, z, tag); if (r) env.changed(); return r; }
       const mobs = env.mobs();
       if (!mobs) return false;

@@ -166,6 +166,7 @@ export function useMinecart(state, { place, cart }, hooks = {}) {
       const held = survival.held;
       return { handled: true, branch: furnaceUse(cart, { held, creative: survival.creative, take: () => survival.take(held.id, 1), position: state.position }) };
     }
+    if (cart.type === 6) { hooks.openCommandCart?.(cart); return { handled: true, branch: "open-command-cart" }; } // xn.c(yz): client side displayGUIcommandBlock
     const container = minecarts.container(cart, survival.inventory);
     if (container) hooks.openContainer?.(container, container.kind);
     return { handled: true, branch: "open-minecart" };

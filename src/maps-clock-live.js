@@ -59,7 +59,7 @@ export class MapsClock {
     return { data, stored: left };
   }
   // ItemMap.onUpdate for every filled map in the inventory, updateMapData for the selected slot (20 Hz).
-  tick({ survival, position, yaw, world, time, name = "Player" }) {
+  tick({ survival, position, yaw, world, time, name = "Player", frames = null }) {
     const surface = true;
     tickClock(clockState, clockAngle(time, surface));
     if (typeof document !== "undefined") {
@@ -79,6 +79,17 @@ export class MapsClock {
       const data = mapStore.ensure(stack);
       updateVisiblePlayers(data, player, true, time);
       if (stack === held) updateMapData(data, worldContext(world, 0), player);
+    }
+    // EntityTrackerEntry: every 10 ticks a frame holding a map runs MapData.updateVisiblePlayers for the players tracking it; the
+    // stack is on an item frame, so the inventory test fails (the player's marker is dropped) and the "frame-<id>" marker is added.
+    if (frames && time % 10 === 0) {
+      for (const e of frames) {
+        if (e.kind !== "frame" || e.dead || e.item?.id !== ITEM_FILLED_MAP) continue;
+        const data = mapStore.get(e.item.damage | 0);
+        if (!data) continue;
+        updateVisiblePlayers(data, player, false, time);
+        updateVisiblePlayers(data, player, true, time, { id: e.id, x: e.tx, z: e.tz, direction: e.dir });
+      }
     }
   }
   serialize() { return mapStore.toJSON(); }

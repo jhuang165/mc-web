@@ -19,6 +19,13 @@ export function summonCart(minecarts, type, x, y, z, tag) {
     if (hasNumber(tag, "TransferCooldown")) record.cooldown = nbtGet(tag, "TransferCooldown", NBT.INT, -1);
     const name = nbtGet(tag, "CustomName", NBT.STRING, "");
     if (name) record.customName = name;
+    if (type === 6) { // CommandBlockLogic.func_145759_b (agp.b(dh)); the CustomName key is shared with the entity name
+      record.command = { command: nbtGet(tag, "Command", NBT.STRING, ""), successCount: nbtGet(tag, "SuccessCount", NBT.INT, 0) };
+      if (name) record.command.customName = name;
+      if (hasNumber(tag, "TrackOutput")) record.command.trackOutput = !!nbtGet(tag, "TrackOutput", NBT.BYTE, 1);
+      const last = nbtGet(tag, "LastOutput", NBT.STRING, null);
+      if (last != null) record.command.lastOutput = last;
+    }
     const items = nbtGet(tag, "Items", NBT.LIST);
     if (isContainerType(type)) {
       for (const it of items?.items ?? []) {

@@ -15,6 +15,8 @@ import { pixelTexture, itemTexture } from "./first-person.js";
 import { blockTile, tileRect } from "./block-textures.js";
 import { DropRenderer } from "./drop-renderer.js";
 import { ARTS, DIR_X, DIR_Z } from "./hanging.js";
+import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
+import { MapSurface, frameMapMatrix } from "./map-render.js";
 
 const D = Math.PI / 180;
 const PAINTING_ATLAS = "/media/1.7.10/painting/paintings_kristoffer_zetterstrand.png";
@@ -119,7 +121,8 @@ export class HangingRenderer {
   syncItem(r, e) {
     const key = itemKey(e.item);
     if (r.item?.key !== key || r.item?.rotation !== e.rotation) {
-      if (r.item) { r.item.holder.removeFromParent(); this.drops.remove(r.item.pile); r.item = null; }
+      if (r.item) { r.item.holder.removeFromParent(); r.item.surface?.dispose(); if (r.item.pile) this.drops.remove(r.item.pile); r.item = null; }
+      if (e.item?.id === ITEM_FILLED_MAP) { this.syncMap(r, e, key); return; }
       if (e.item) {
         const stack = { ...e.item, count: 1 }, pile = this.drops.build(stack, 0), sprite = !!itemTexture(stack.id, stack.damage);
         const holder = new THREE.Group(), turn = new THREE.Group(), shift = new THREE.Group();
@@ -144,6 +147,27 @@ export class HangingRenderer {
     }
   }
 
+  // RenderItemFrame.d, filled map: rotate 180 about y and z, scale 1/128, the per-rotation shift, then MapItemRenderer with only
+  // the frame markers (GL lighting is off for the item, so no diffuse shading). Bytecode-derived (map-render.js).
+  syncMap(r, e, key) {
+    const surface = new MapSurface((o) => {
+      const m = entityMaterial(this.view.lighting, o);
+      m.vertexShader = m.vertexShader.replace(/vDiffuse=min\([^;]*;/, "vDiffuse=1.;");
+      m.needsUpdate = true;
+      return m;
+    }, { frameOnly: true });
+    const holder = new THREE.Group(), turn = new THREE.Group(), shift = new THREE.Group();
+    holder.position.set(-0.453125 * DIR_X[e.dir], -0.18, -0.453125 * DIR_Z[e.dir]);
+    holder.rotation.y = (180 + e.yaw) * D;
+    turn.rotation.z = -90 * e.rotation * D;
+    const rot = e.rotation % 4;
+    shift.position.set(rot === 1 ? -0.16 : rot === 3 ? 0.16 : 0, rot === 1 || rot === 3 ? -0.16 : rot === 2 ? -0.32 : 0, 0);
+    surface.root.matrix.copy(frameMapMatrix(e.rotation));
+    shift.add(surface.root); turn.add(shift); holder.add(turn);
+    r.root.add(holder);
+    r.item = { key, rotation: e.rotation, surface, holder, pile: null, map: e.item.damage | 0 };
+  }
+
   // `list` is the live hanging entities; `world` unused (the lights come from `view`).
   update(list) {
     const seen = new Set();
@@ -165,7 +189,8 @@ export class HangingRenderer {
         this.syncItem(r, e);
         const packed = this.view.brightness(e.x, e.y, e.z);
         for (const m of r.materials) m.setLight(packed);
-        if (r.item) { r.item.pile.material.setLight(packed); r.item.pile.overlayMaterial?.setLight(packed); }
+        if (r.item?.surface) { r.item.surface.update(mapStore.get(r.item.map)); r.item.surface.setLight(packed); }
+        else if (r.item) { r.item.pile.material.setLight(packed); r.item.pile.overlayMaterial?.setLight(packed); }
       }
     }
     for (const [e, r] of this.records)
@@ -182,7 +207,7 @@ export class HangingRenderer {
     return this.view.brightness(i + 0.5, j + 0.5, k + 0.5);
   }
   dispose(r) {
-    if (r.item) { r.item.holder.removeFromParent(); this.drops.remove(r.item.pile); r.item = null; }
+    if (r.item) { r.item.holder.removeFromParent(); r.item.surface?.dispose(); if (r.item.pile) this.drops.remove(r.item.pile); r.item = null; }
     this.scene.remove(r.root);
     for (const g of r.geometries) g.dispose();
     for (const m of r.materials) m.dispose();
