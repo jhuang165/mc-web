@@ -6,6 +6,7 @@ import { newDispenser, DROPPER_TITLE } from './dispenser-container.js';
 import { BOW, canDraw } from './bow.js';
 import { FISHING_ROD } from './fishing-content.js';
 import { plantedBlock } from './crops.js';
+import { NETHER_WART, ITEM_NETHER_WART, SOUL_SAND } from './nether-wart.js';
 import { growGrass } from './flowers.js';
 import { isBucket } from './buckets.js';
 import { useHeldBucket } from './buckets-simulation.js';
@@ -223,6 +224,15 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
         hook('markUnsaved');
       }
       return act('use-hoe');
+    }
+    // ItemSeeds(nether wart, soul sand).onItemUse: the top face of soul sand with air above (nether-wart.js).
+    if (id === ITEM_NETHER_WART && (state.survival.creative || state.survival.count(id)) && target.adjacent?.[1] === y + 1 && block === SOUL_SAND && state.world.get(x, y + 1, z) === 0 && y + 1 < (state.world.height ?? 128) - 1) {
+      state.world.set(x, y + 1, z, NETHER_WART, true, 0);
+      if (!state.survival.creative) state.survival.take(id);
+      hook('updateBlock', x, z, y + 1);
+      hook('renderHotbar');
+      hook('markUnsaved');
+      return act('plant-nether-wart');
     }
     if (plantedBlock(id)) {
       if ((state.survival.creative || state.survival.count(id)) && target.adjacent?.[1] === y + 1 && state.farming.plant(x, y, z, id)) {

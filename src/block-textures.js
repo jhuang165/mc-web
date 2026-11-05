@@ -6,6 +6,7 @@ import {bedTexture} from './bed.js';
 import {anvilModelBoxes} from './anvil-block.js';
 import {SHAPED_TILES,woodSlabTexture,wallTexture} from './shaped-blocks.js';
 import {STEM_CAKE_TILES} from './stems-cake.js';
+import {WART_TILES,wartStage} from './nether-wart.js';
 import {REDSTONE_TILES} from './redstone-blocks.js';
 import {REDSTONE2_TILES,redstone2TileName} from './redstone-blocks-2.js';
 import {STAIRS,STAIR_ITEM_BOXES} from './stairs.js';
@@ -58,6 +59,7 @@ for(const t of ['netherrack','soul_sand','quartz_ore','quartz_block_chiseled','q
 if(!TILES.includes('cobblestone'))TILES.push('cobblestone');
 for(const t of SHAPED_TILES)if(!TILES.includes(t))TILES.push(t); // trapdoor, cobblestone_mossy (shaped-blocks.js)
 for(const t of STEM_CAKE_TILES)if(!TILES.includes(t))TILES.push(t); // stem and cake textures (stems-cake.js)
+for(const t of ['portal',...WART_TILES])if(!TILES.includes(t))TILES.push(t); // BlockPortal (animated in scene.js) and BlockNetherWart stages (nether-wart.js)
 export const ATLAS_ROWS=Math.ceil(TILES.length/ATLAS_COLUMNS);
 const tile=name=>TILES.indexOf(name);
 export const tileByName=tile;
@@ -66,6 +68,8 @@ export const namedTile=tile;
 // `snowy` is true when the block above is a snow layer or snow block: BlockGrass then shows grass_side_snowed on its sides.
 export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===1139)id=139;
+ if(id===164)return tile('portal');
+ if(id===170)return tile(WART_TILES[wartStage(meta)]); // BlockNetherWart.getIcon
  if(id===159||id===160)return tile(id===159?'pumpkin_stem_disconnected':'melon_stem_disconnected');
  if(id===161)return tile(face===2?'cake_top':face===3?'cake_bottom':face===1&&meta>0?'cake_inner':'cake_side'); // BlockCake.getIcon: inner on the west side of a cut cake
 

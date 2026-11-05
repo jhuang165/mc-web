@@ -11,7 +11,7 @@ const item=(x,y,z)=>({...SHADOWS.item,x,y:y+0.125,z,height:0.25});
 
 test('only blocks that render as normal blocks take a shadow',()=>{
  // Ids 150-158 (nether-blocks.js) have their own shadow checks in nether-blocks.test.js; the reserved placeholders have none.
- const covered=BLOCKS.map((b,i)=>i).filter(i=>i>0&&!BLOCKS[i].reserved&&!(i>=150&&i<=158)&&i!==177&&i!==178&&!(i>=165&&i<=169)&&i!==149&&i!==162&&i!==163&&!(i>=159&&i<=161)); // 159-161: stems and cake (stem-cake-reference.json); // 162/163: chests.test.js // 165-169: shaped-blocks.test.js // 177/178: note block and jukebox, added after the probe;
+ const covered=BLOCKS.map((b,i)=>i).filter(i=>i>0&&!BLOCKS[i].reserved&&!(i>=150&&i<=158)&&i!==177&&i!==178&&!(i>=165&&i<=169)&&i!==164&&i!==170&&i!==149&&i!==162&&i!==163&&!(i>=159&&i<=161)); // 159-161: stems and cake (stem-cake-reference.json); // 162/163: chests.test.js // 165-169: shaped-blocks.test.js // 177/178: note block and jukebox, added after the probe;
  assert.equal(Object.keys(reference.blocks).length,covered.length);
  for(const [id,b] of Object.entries(reference.blocks)){
   assert.equal(takesShadow(+id),!b.air&&b.normal,BLOCKS[id].name);
