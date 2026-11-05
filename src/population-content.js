@@ -12,6 +12,7 @@ import { POTION_ITEM_ROWS } from './potion-items.js';
 import { coloredDrops, coloredCraftingResult } from './colored-blocks.js';
 import { installChestItems, CHEST_MATERIALS, chestDrops, ITEM_TRAPPED_CHEST } from './chest-blocks.js';
 import { stemCakeDrops } from './stems-cake.js';
+import { installMapsClockItems, installMapsClockRecipes } from './maps-clock-live.js';
 import { installEyeItems, EYE_MATERIALS, ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
 import { ITEM_ENDER_CHEST } from './chest-blocks.js';
 export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97:68,175:69,162:70,161:71,106:72,127:73,48:74,39:75,40:76,99:77,100:78,32:79,174:80,103:81,'44:1':82,'31:0':83,'31:2':84,24:56,110:57,159:58,111:59,145:ANVIL,116:ENCHANTING_TABLE,53:87,67:88,109:89,128:90,134:91,135:92,136:93,108:94,163:95,164:96,
@@ -41,7 +42,7 @@ export const POPULATION_VARIANTS={7:TREE_NAMES.map(s=>s+' planks'),4:TREE_NAMES.
 export function installPopulationItems(items){
   installShapedItems(items);
   installChestItems(items);
-  installEyeItems(items);
+  installEyeItems(items);installMapsClockItems(items);
   for(const [id,variants] of Object.entries(POPULATION_VARIANTS)) items[id].variants=variants;
   items[ANVIL].variants=['Anvil','Slightly Damaged Anvil','Very Damaged Anvil'];
   items[BED].hidden=true; // BlockBed has no item of its own: the bed item places it
@@ -109,6 +110,7 @@ export function installPopulationRecipes({recipe,shapeless}){
   recipe('enchanting-table','Enchanting table',[' B ','DOD','OOO'],{B:314,D:303,O:22},ENCHANTING_TABLE);
   // Native recipes 102/103: iron ingots around redstone make a compass (345 -> 380); paper around a compass makes an empty map (395 -> 379).
   recipe('compass','Compass',[' I ','IRI',' I '],{I:302,R:360},380);
+  installMapsClockRecipes({recipe});
   recipe('empty-map','Empty Map',['PPP','PCP','PPP'],{P:328,C:380},379);
   // CraftingManager: ItemDoor.wood "##","##","##" planks; iron "##" x3 ingots; panes: 6 glass in two rows of three (16); bars: 6 iron ingots (16).
   recipe('wooden-door','Wooden Door',['PP','PP','PP'],{P:7},470,1);

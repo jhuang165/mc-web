@@ -62,7 +62,7 @@ test('item table matches the inventory replay mapping and keeps only supported s
   assert.deepEqual(itemFromOriginal(1, -3), {id: 3, damage: 0, clamped: false});
   assert.deepEqual(itemFromOriginal(5, 1), {id: 7, damage: 1, clamped: false}); // spruce planks (stairs recipes need them)
   assert.deepEqual(itemFromOriginal(323, 0), {id: 480, damage: 0, clamped: false}); // sign (signs.js)
-  assert.equal(itemFromOriginal(347, 0), null); // clock (not in this build); the painting 321 and item frame 389 map to 1700 and 1701
+  assert.equal(itemFromOriginal(400, 0), null); // pumpkin pie (not in this build; the clock 347 maps to 2080 in maps.js); the painting 321 and item frame 389 map to 1700 and 1701
   assert.deepEqual(itemFromOriginal(321, 0), {id: 1700, damage: 0, clamped: false}); // painting
   assert.deepEqual(itemFromOriginal(389, 0), {id: 1701, damage: 0, clamped: false}); // item frame
   assert.equal(itemFromOriginal(38, 9), null);
@@ -111,7 +111,7 @@ test('chests, furnaces and dropped items convert; other tile entities and entiti
   const x0 = -32, z0 = 48;
   const tileEntities = [
     tile('Chest', x0 + 1, 70, z0 + 1, {Items: list(NBT.COMPOUND, [
-      stack(0, 1, 64), stack(1, 257, 1, 40), stack(2, 35, 12, 14), stack(3, 347, 1), stack(26, 264, 99),
+      stack(0, 1, 64), stack(1, 257, 1, 40), stack(2, 35, 12, 14), stack(3, 400, 1), stack(26, 264, 99),
       stack(-56, 4, 3), // Slot & 255 = 200: outside the chest
       stack(4, 276, 1, 0, {tag: t(NBT.COMPOUND, compound({ench: list(NBT.END, [])}))}),
       stack(5, 276, 1, 12, {tag: t(NBT.COMPOUND, compound({
@@ -131,7 +131,7 @@ test('chests, furnaces and dropped items convert; other tile entities and entiti
   ];
   const entities = [
     entity('Item', [x0 + 3.5, 71.125, z0 + 3.5], {Age: t(NBT.SHORT, 100), PickupDelay: t(NBT.SHORT, 10), Item: t(NBT.COMPOUND, stack(0, 264, 2))}),
-    entity('Item', [x0 + 4.5, 71.125, z0 + 4.5], {Item: t(NBT.COMPOUND, stack(0, 347, 1))}),
+    entity('Item', [x0 + 4.5, 71.125, z0 + 4.5], {Item: t(NBT.COMPOUND, stack(0, 400, 1))}),
     entity('Pig', [x0 + 8, 71, z0 + 8]),
     entity('Skeleton', [x0 + 9, 71, z0 + 9], {Riding: t(NBT.COMPOUND, compound({id: t(NBT.STRING, 'Chicken')}))}),
   ];
@@ -161,7 +161,7 @@ test('chests, furnaces and dropped items convert; other tile entities and entiti
   assert.equal(player.mode ?? record.mode, 'survival');
   assert.deepEqual(report.tileEntities, {total: 5, converted: {Chest: 1, Furnace: 1},
     lost: [{id: 'Chest', count: 1}, {id: 'Chest (outside its chunk)', count: 1}, {id: 'Skull', count: 1}]});
-  assert.deepEqual(report.items, {converted: 12, lost: [{id: '347:0', count: 2}, {id: 'slot 200', count: 1}], tagsStripped: 0, clamped: 1});
+  assert.deepEqual(report.items, {converted: 12, lost: [{id: '400:0', count: 2}, {id: 'slot 200', count: 1}], tagsStripped: 0, clamped: 1});
   assert.deepEqual(report.entities, {total: 5, converted: {Item: 1}, lost: [{id: 'Chicken', count: 1}, {id: 'Item (unsupported stack)', count: 1}, {id: 'Pig', count: 1}, {id: 'Skeleton', count: 1}]});
   assert.equal(report.scheduledTicks, 1);
   assert.deepEqual(report.blocks.unsupported, [{id: 144, meta: 0, cells: 1, reason: 'unmapped'}]);

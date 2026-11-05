@@ -110,6 +110,7 @@ import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, 
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { EyesOfEnder } from "./eye-of-ender-live.js";
+import { MapsClock } from "./maps-clock-live.js";
 import { EndPortalRenderer } from "./end-portal-renderer.js";
 import { Fishing } from "./fishing-simulation.js";
 import { FISHING_ROD } from "./fishing-content.js";
@@ -353,6 +354,7 @@ setGameRuleSource((name) => ruleOn(active, name));
 { const dropBlock = items.dropBlock; items.dropBlock = function (...a) { return active && !ruleOn(active, "doTileDrops") ? undefined : dropBlock.apply(this, a); }; }
 // Thrown snowballs and their particles (see projectiles.js).
 const projectiles = new Projectiles();
+const maps = new MapsClock(); // maps-clock-live.js: filled maps and the clock icon
 const eyes = new EyesOfEnder(); // eye-of-ender-live.js: flying eyes of ender
 // The fishing rod's bobber (fishing-simulation.js).
 const fishing = new Fishing();
@@ -602,6 +604,7 @@ function save() {
   active.drops = items.serialize();
   active.projectiles = projectiles.serialize();
   active.eyes = eyes.serialize();
+  active.maps = maps.serialize();
   active.fishing = fishing.serialize();
   active.thrownPotions = mobs?.potions?.serialize() ?? [];
   active.arrows = arrows.serialize();
@@ -1048,6 +1051,7 @@ async function launch(record, prepared) {
     );
     projectiles.load(record.projectiles);
     eyes.load(record.eyes);
+    maps.load(record.maps);
     fishing.load(record.fishing);
     primed = (Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz }));
     tntRenderer?.clear();
@@ -1951,6 +1955,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   });
   ({ fallDistance, landedFall } = movement);
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
+  maps.tick({ survival, position, yaw, world, time: survival.time });
   tickEntitySimulation({ world, items, primed, projectiles, arrows, mobs, survival, position,
     width: PHYSICS.width, height: PHYSICS.height }, {
     maxStack: st => survival.inventory.maxStack(st),
@@ -2161,7 +2166,7 @@ function edit(place = false) {
     }
   }
   const state = { screen, heldTool: heldId(), world, survival, position, velocity, motion, mobs, minecarts,
-    farming, trees, fire, fluids, items, projectiles, eyes, grounded, fallDistance, wasInWater, yaw, pitch,
+    farming, trees, fire, fluids, items, projectiles, eyes, maps, grounded, fallDistance, wasInWater, yaw, pitch,
     eating, mining, mineCooldown, mineHeld, flowers: FLOWERS, boneRandom, itemRand, signs };
   // A right click with a bucket also captures the bucket's own fluid-aware trace along the
   // last frame's eye ray (ItemBucket: 5 blocks, liquids only when empty).

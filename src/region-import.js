@@ -23,6 +23,7 @@ import { ORIGINAL_ITEMS } from './original-items.js';
 import { JAVA_MOBS, IMPORT_MOB_LIMIT, javaMobFromNbt } from './java-mobs.js';
 import { decodeCompressedNbt } from './nbt-compression.js';
 import { villagesFromNbt } from './village.js';
+import { isMapFile, mapsFromFiles } from './maps-nbt.js';
 
 export const LIVE_CHUNKS = SIZE / 16;
 // World.restore and the Import screen's file-size check (main.js).
@@ -396,7 +397,10 @@ export async function importJavaRegionArea(regions, options = {}) {
   // data/*.dat (options.structureData: iterable of {filename, bytes}): kept unchanged in native coordinates, which
   // only match the browser world's native frame when the area is aligned; unknown start ids are counted, never fatal.
   const isVillagesFile = ({ filename }) => /(^|\/)villages\.dat$/.test(filename);
-  const parsedStructures = options.structureData ? await parseStructureDataFiles([...options.structureData].filter((f) => !isVillagesFile(f))) : null;
+  const parsedStructures = options.structureData ? await parseStructureDataFiles([...options.structureData].filter((f) => !isVillagesFile(f) && !isMapFile(f))) : null;
+  // data/map_N.dat + idcounts.dat (maps-nbt.js): shifted like the villages.
+  const mapsImport = options.structureData ? await mapsFromFiles([...options.structureData].filter(isMapFile)) : { maps: null };
+  if (mapsImport.maps) for (const m of mapsImport.maps.maps) { m.xCenter += shiftX; m.zCenter += shiftZ; }
   if (parsedStructures) report.structures = { ...parsedStructures.report, kept: aligned && Object.keys(parsedStructures.structureData).length > 0 };
   // data/villages.dat (VillageCollection "villages"): the villages whose centre is inside the area, shifted like entities.
   // Door rows keep their inside direction; reputations, golem counts and the tick counters come across unchanged.
@@ -430,6 +434,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     drops,
     ...(mobs.length ? { entities: mobs } : {}),
     ...(villages ? { villages } : {}),
+    ...(mapsImport.maps ? { maps: mapsImport.maps } : {}),
     ...(report.structures?.kept ? { structureData: parsedStructures.structureData } : {}),
   };
   report.bytes = new TextEncoder().encode(JSON.stringify(record)).length;

@@ -4,6 +4,7 @@
 // Stacks are mutable {id,count,damage} objects, so splits, merges and shared
 // references behave like ItemStack. tools/verify-inventory.mjs replays the same
 // scripts through the unchanged original classes.
+import { onMapCrafted } from "./maps.js";
 import { copyStored, normalizeStored } from "./enchanted-books.js";
 import { JavaRandom } from "./java-random.js";
 import { damageLiveItemStack } from "./item-durability.js";
@@ -209,7 +210,7 @@ class CraftingSlot extends Slot {
   valid() { return false; }
   decr(n) { if (this.has) this.amount += Math.min(n, this.stack.count); return super.decr(n); }
   crafted(s, n) { this.amount += n; this.finish(s); }
-  finish(s) { this.onCraft?.(s, this.amount); this.amount = 0; }
+  finish(s) { onMapCrafted(s); this.onCraft?.(s, this.amount); this.amount = 0; } // ItemMap.onCreated (map zoom-out takes its new id here)
   // SlotCrafting.onPickupFromSlot: a used-up ingredient with a container item (the cake recipe's milk buckets) leaves it in its cell.
   onPickup(s) {
     this.finish(s);

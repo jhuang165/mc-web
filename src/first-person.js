@@ -10,6 +10,8 @@ import { entityMaterial, ITEM_LIGHTS } from "./light-material.js";
 import { leatherItemLayers } from "./leather-dye.js";
 import { FISHING_ROD, rodState } from "./fishing-content.js";
 import { ITEM_SPAWN_EGG, spawnEggTexture } from "./spawn-eggs.js";
+import { ITEM_CLOCK } from "./clock.js";
+import { clockFrameUrl, clockFrame } from "./maps-clock-live.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
 const BLOCK_FACES=[
@@ -96,6 +98,7 @@ export function skinBox(w, h, d, u, v, tw, th, mirror = false) {
 export function itemTexture(id, damage = 0, use = 0) {
   const item = ITEMS[id];
   if (id === ITEM_SPAWN_EGG) return spawnEggTexture(damage); // two tinted layers composed (spawn-eggs.js)
+  if (id === ITEM_CLOCK) return clockFrameUrl(); // TextureClock frame (maps-clock-live.js)
   if (id === FISHING_ROD && use > 0) return "/media/1.7.10/items/fishing_rod_cast.png";
   if (id === 127 && use > 0) return "/media/1.7.10/items/bow_pulling_" + (Math.min(3, use) - 1) + ".png";
   // Flowers are flat sprites cut from the terrain atlas textures; dyes are one item per damage.
@@ -177,7 +180,7 @@ export class FirstPerson {
   // `meta` is the wool colour (the stack's damage) of a held block.
   select(id, meta = 0, use = 0, glint = false, color = undefined) {
     const leather = leatherItemLayers(id, color),
-      cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + meta + ":" + use + ":" + (glint ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + cast;
+      cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + meta + ":" + use + ":" + (glint ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + cast + ":" + (id === ITEM_CLOCK ? clockFrame() : 0);
     if (key === this.last) return;
     this.last = key;
     if (this.item) {
