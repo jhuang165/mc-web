@@ -19,5 +19,5 @@ Scope: stained glass (95), stained glass pane (160), carpet (171), hay bale (170
 
 - Pane connection keeps iron bars and glass panes in one group rather than the exact same-block rule.
 - Carpet collision is not probed separately; player break speed and `useNeighborBrightness` are not probed.
-- Block sounds, structure-framework opacity and visual checks in a live browser were not done.
+- Block sounds and structure-framework opacity were not checked. In a live browser all nine blocks render in a Creative world, and carpet and hay burn next to netherrack fire.
 - Item ids 1140-1148 are internal.

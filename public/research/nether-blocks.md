@@ -37,5 +37,5 @@ Block id equals item id for 150-158. The nether brick item (original 405) is int
 - Fire over netherrack follows the decompiled `BlockFire.updateTick` branches but was not probed natively; `fire.test.js` was not extended.
 - The Fortune II quartz histogram in the fixture is biased (a power-of-two `nextInt` bound over consecutive seeds); the test checks the support set instead of the counts.
 - The direction of the quarter-turn on the side pillar texture is not native-verified (the quartz lines are almost symmetric).
-- Ids 140-149 are hidden reserved placeholders in `BLOCKS` (another content track owns them); `block-registry.js` and several tests skip them. Remove the placeholders when those ids are filled.
+- Ids 140-148 are the colored blocks; 149 and the other unused ids up to 176 stay hidden reserved placeholders that `block-registry.js` and several tests skip.
 - Shadow, stairs and explosion-resistance fixtures predate these ids; their own coverage is `nether-blocks.test.js`.

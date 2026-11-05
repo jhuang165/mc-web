@@ -2,6 +2,18 @@
 
 Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.43.0. Full parity is unfinished.
 
+Post-0.43.0 batch 3 (2026-11-04, claude-lead, unreleased): five block tracks merged in main.
+- BLOCKS ids:
+  - colored 140-148 (items 1140-1148, `colored-blocks.js`)
+  - nether 150-158 (block id = item id, item 520 nether brick, `nether-blocks.js`)
+  - shaped 165-169 (items 1165-1169, `shaped-blocks.js`; they overwrite the placeholders in world.js after the installs)
+  - signs 175/176 (item 480, `signs.js` plus sign-*.js; tile store `signs` in chunk-runtime and region export/import)
+  - note block 177 and jukebox 178 (items 1177/1178, discs 530-541, `note-jukebox-content.js`, `note-blocks.js`, `jukebox.js`; the `musicTiles` runtime)
+- Placeholders: `installNetherBlocks` fills the unused ids below 150, and `installNoteJukeboxBlocks` pushes `reserved` up to 176. Tests skip `BLOCKS[id].reserved`. A new block must overwrite a reserved slot, never leave holes.
+- Recipe audit: 286 checked rows, 2,576 checks.
+- Browser check found one bug, the sign text material had no map (a white board). Fixed in sign-renderer.js.
+- Gaps: record audio, Nether/End dimensions, native sign font.
+
 Post-0.43.0 five-Sonnet batch (2026-11-04, claude-lead, unreleased): boats `boats.js`/`boat-renderer.js` (item495=original333, BoatProbe 62 records; ItemBoat yields to block activation via the `placeBoat` hook in player-edit-simulation.js); fishing `fishing*.js` (internal 700-706 = rod346, fish349:0-3, cooked350:0-1; FishingProbe 2400 loot rolls; no stats store); wolves `wolf.js`/`wolf-ai.js`/`wolf-renderer.js` (WolfProbe; 21 sounds; callHelp's owner filter matches vn+EntityTameable.c isOnSameTeam); paintings/item frames `hanging*.js` (internal 1700/1701 = original321/389; HangingProbe 274 records; rotation %4, 26 arts; `boats`/`hanging` chunk-runtime arrays); wood types `wood-types.js` (SaplingTypesProbe 1296 growth + 40 leaf rows, log axis placement, pick damage). Creative fishing entries come from regenerated population-creative.js only. Localhost-checked: wolf taming/sit/collar, boat place/ride/forward, fish catch, painting/frame place+rotate, jungle sapling place.
 
 0.43.0 continuation (2026-11-04, codex-lead): preserved claude-lead's intended JsonToNBT/getter/item-tag/mob-restore work above 877cee5 and completed command data tags for give/summon/setblock/testforblock. Shared container readers/writers serve import/export and commands; summon handles supported mob tags, skips egg initialization with any tag, restores Fire/Motion afterwards, and reports unmounted riders/ignored keys. Added command block original137/internal139/item1139 (texture, Creative+permission editor, metadata-bit0 rising edge, 1-tick delay, op2 sender, local @p/@a/@r, commandBlockOutput independent of TrackOutput, comparator SuccessCount, Control import/export and column runtime saves including unloaded records). Inventory/third-person player fire and worn-armour glint render; arrows use a stable nonzero per-lifetime runtime id. Native parser differential:119 cases; command block/fire/glint control flow bytecode-inspected. Browser localhost:5179?silent: named enchanted helmet equipped, command block gave diamond, testforblock SuccessCount:1, editor showed saved command/previous output, burning inventory player rendered; no console warnings/errors. Full parity remains unfinished: unsupported NBT/attributes/equipment/effects, Riding is unmounted, single-player/network/selector and GPU differences. Mobs never sleep natively. Missing hit sound still awaits tab age (before0.42?), Friendly/Hostile volume sliders, mob and browser answers. Final suite/build/commit/push results are in the release handoff.

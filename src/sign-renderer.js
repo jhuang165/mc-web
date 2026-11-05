@@ -39,7 +39,13 @@ export class SignRenderer {
   }
   create() {
     const root = new THREE.Group(), frame = new THREE.Group(), model = new THREE.Group(), materials = [];
-    const body = entityMaterial(this.view.lighting, { map: this.texture }), textMaterial = entityMaterial(this.view.lighting, { transparent: true, alphaTest: 0.01 });
+    const canvas = document.createElement("canvas");
+    canvas.width = TEXT_W * PX;
+    canvas.height = TEXT_H * PX;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.magFilter = texture.minFilter = THREE.NearestFilter;
+    // The map must be passed at creation: entityMaterial only compiles the texture lookup (USE_TEXTURE) when it has one.
+    const body = entityMaterial(this.view.lighting, { map: this.texture }), textMaterial = entityMaterial(this.view.lighting, { map: texture, transparent: true, alphaTest: 0.01 });
     textMaterial.depthWrite = false;
     materials.push(body, textMaterial);
     model.scale.setScalar(S);
@@ -47,12 +53,6 @@ export class SignRenderer {
     board.position.set(0, 8 / 16, 0); // y is flipped by scale(s, -s, -s): the box spans model y -14 to -2
     stick.position.set(0, -5 / 16, 0); // model y -2 to 12
     model.add(board, stick);
-    const canvas = document.createElement("canvas");
-    canvas.width = TEXT_W * PX;
-    canvas.height = TEXT_H * PX;
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.magFilter = texture.minFilter = THREE.NearestFilter;
-    textMaterial.uniforms.map.value = texture;
     const text = new THREE.Mesh(this.textGeometry, textMaterial);
     text.position.set(SIGN_RENDER.textTranslate[0], SIGN_RENDER.textTranslate[1] * S, SIGN_RENDER.textTranslate[2] * S);
     frame.add(model, text);
