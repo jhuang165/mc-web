@@ -429,6 +429,12 @@ export class Projectiles {
         b.dead = true;
         return;
       }
+      // EntityExpBottle.onImpact (spawn-eggs.js, applied by witch-potions.js): the break position goes out as an event; an entity hit does not matter.
+      if (b.kind === "expBottle") {
+        this.events.push({ expBottle: { x: b.x, y: b.y, z: b.z } });
+        b.dead = true;
+        return;
+      }
       if (hit) onHit(hit.ref, b);
       if (b.kind === "egg") this.layEggs(b);
       for (let i = 0; i < PARTICLES; i++) this.poof(b.x, b.y, b.z);
@@ -454,7 +460,7 @@ export class Projectiles {
     b.mx *= drag;
     b.my *= drag;
     b.mz *= drag;
-    b.my -= f(b.kind === "potion" ? 0.05 : 0.03); // EntityPotion.getGravityVelocity
+    b.my -= f(b.kind === "potion" ? 0.05 : b.kind === "expBottle" ? 0.07 : 0.03); // EntityPotion / EntityExpBottle.getGravityVelocity
   }
   // new EntityBreakingFX(world, x, y, z, snowball) (bju) -> EntityFX (bkm).
   // Entity.rand draws the texture jitter, scale and lifetime (in that order);

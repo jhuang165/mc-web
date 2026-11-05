@@ -11,6 +11,7 @@ import { Effects } from "./status-effects.js";
 import { damageSourceKey, enchantedDamage, setFireTicks, decreaseAir, thornsReaction } from "./armor-enchantments.js";
 import { NORMAL, scaleDamage, starvationHurts, hungerDrops, peacefulRegen } from "./difficulty.js";
 import { installSignItems, installSignMaterials, installSignRecipes } from './signs.js';
+import { installSpawnEggItems, installSpawnEggRecipes } from './spawn-eggs.js';
 import { installStemCakeItems, installStemCakeMaterials, installStemCakeRecipes } from './stems-cake.js';
 import { installFishingItems, installFishingRecipes, installFishingSmelting } from './fishing-content.js';
 import { installPopulationItems, installPopulationMaterials, installPopulationRecipes, populationCraftingResult, installPopulationSmelting } from './population-content.js';
@@ -236,6 +237,7 @@ installNetherItems(ITEMS);
 installNoteJukeboxItems(ITEMS); // note block 1177, jukebox 1178, discs 530-541
 installSignItems(ITEMS);
 installStemCakeItems(ITEMS); // cake 1930; stems and cake have no block items
+installSpawnEggItems(ITEMS); // spawn egg 1950, Bottle o' Enchanting 1951, fire charge 1952 (spawn-eggs.js)
 // Every item name and damage subtype is the 1.7.10 en_US display name (item-names.js); internal-only items get Title Case.
 applyNativeNames(ITEMS);
 export const MATERIALS = {
@@ -445,6 +447,7 @@ installNetherRecipes({recipe});
 installNoteJukeboxRecipes({recipe});
 installSignRecipes({recipe});
 installStemCakeRecipes({recipe});
+installSpawnEggRecipes({shapeless}); // fire charge (spawn-eggs.js)
 export function matchShapeless(stacks) {
   const filled = stacks.filter(Boolean);
   for (const r of SHAPELESS) {

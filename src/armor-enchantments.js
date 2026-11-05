@@ -149,6 +149,6 @@ export function hasEffectNative(id, damage = 0, hasEnchantList = false) {
 // the port has no golden apple, potion, experience bottle, written book or nether star items yet.
 export function stackHasEffect(stack, item) {
   if (!stack) return false;
-  if (item?.storesEnchantments) return true;
+  if (item?.storesEnchantments || item?.alwaysGlint) return true; // alwaysGlint: ItemExpBottle.hasEffect
   return Array.isArray(stack.enchantments);
 }

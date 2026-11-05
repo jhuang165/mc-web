@@ -5,6 +5,7 @@
 import { Projectiles, heading, mobTargets } from "./projectiles.js";
 import { entityRandom, ENTITY_TYPES } from "./entities.js";
 import { addMobEffect } from "./mob-effects.js";
+import { expBottleOrbs } from "./spawn-eggs.js";
 import { chooseThrownPotion, throwSpawn, splashImpact, WITCH } from "./witch.js";
 const f = Math.fround, UNDEAD = new Set(["zombie", "skeleton"]);
 
@@ -33,20 +34,21 @@ export class WitchPotions {
   }
   // ItemPotion.onItemRightClick: EntityPotion(world, player, damage): launched like a thrown snowball from the eye, 0.5 velocity, 1.0
   // inaccuracy, and the pitch offset -20 degrees of func_70183_g (so it flies higher than the view). `feet` is the player's position.
-  throwFromPlayer(feet, yaw, pitch, damage) {
+  // `kind` and `velocity` let ItemExpBottle's EntityExpBottle (velocity 0.7, spawn-eggs.js) use the same launch.
+  throwFromPlayer(feet, yaw, pitch, damage, kind = "potion", velocity = 0.5) {
     const rng = this.projectiles.rng(), mcYaw = f(180 - (yaw * 180) / Math.PI), mcPitch = f((-pitch * 180) / Math.PI),
       k = f(f(mcYaw / 180) * f(Math.PI)), p = f(f(mcPitch / 180) * f(Math.PI)), p2 = f(f(f(mcPitch + f(-20)) / 180) * f(Math.PI)),
       s = Math.sin(k), c = Math.cos(k), power = f(0.4),
-      h = heading(rng, f(f(-s * Math.cos(p)) * power), f(-Math.sin(p2) * power), f(f(c * Math.cos(p)) * power), 0.5, 1),
+      h = heading(rng, f(f(-s * Math.cos(p)) * power), f(-Math.sin(p2) * power), f(f(c * Math.cos(p)) * power), velocity, 1),
       at = { x: feet.x - f(c * f(0.16)), y: feet.y + f(1.62) - 0.10000000149011612, z: feet.z - f(s * f(0.16)) },
-      ball = { ...h, ...at, kind: "potion", damage, owner: "player", px: at.x, py: at.y, pz: at.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand: rng, random: rng, dead: false };
+      ball = { ...h, ...at, kind, damage, owner: "player", px: at.x, py: at.y, pz: at.z, prevYaw: h.yaw, prevPitch: h.pitch, ticks: 0, rand: rng, random: rng, dead: false };
     this.projectiles.balls.push(ball);
     return ball;
   }
   // Browser snapshot of the potions in flight (like Projectiles.serialize): Pos, Motion, Rotation, the potion damage value, the flight age and
   // whether the local player threw it (a thrown-by-witch potion loses its owner, as an EntityPotion whose thrower did not load).
   serialize() {
-    return this.projectiles.balls.filter((b) => !b.dead).map((b) => ({ x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch, damage: b.damage, ticks: b.ticks | 0, ...(b.owner === "player" ? { owner: "player" } : {}) }));
+    return this.projectiles.balls.filter((b) => !b.dead).map((b) => ({ x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch, damage: b.damage, ticks: b.ticks | 0, ...(b.kind === "expBottle" ? { kind: "expBottle" } : {}), ...(b.owner === "player" ? { owner: "player" } : {}) }));
   }
   load(list) {
     this.projectiles.balls.length = 0;
@@ -54,7 +56,7 @@ export class WitchPotions {
     for (const d of Array.isArray(list) ? list : []) {
       if (!d || ![d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok) || !Number.isInteger(d.damage) || d.damage < 0) continue;
       const yaw = ok(d.yaw) ? f(d.yaw) : 0, pitch = ok(d.pitch) ? f(d.pitch) : 0, rng = this.projectiles.rng();
-      this.projectiles.balls.push({ kind: "potion", damage: d.damage, owner: d.owner === "player" ? "player" : null, x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz,
+      this.projectiles.balls.push({ kind: d.kind === "expBottle" ? "expBottle" : "potion", damage: d.damage, owner: d.owner === "player" ? "player" : null, x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz,
         yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: Math.max(0, d.ticks | 0), rand: rng, random: rng, dead: false });
     }
   }
@@ -68,7 +70,15 @@ export class WitchPotions {
       targets.push({ ref: "player", playerThrower: true, box: [player.x - hw, player.y, player.z - hw, player.x + hw, player.y + f(1.8), player.z + hw] });
     }
     p.tick(mobs.world, targets);
-    for (const ev of p.drain()) if (ev.potion) this.impact(ev.potion, player, survival);
+    for (const ev of p.drain()) { if (ev.potion) this.impact(ev.potion, player, survival); else if (ev.expBottle) this.expImpact(ev.expBottle); }
+  }
+  // EntityExpBottle.onImpact: 3 + nextInt(5) + nextInt(5) experience in getXPSplit orbs at the bottle (drained as `xp` events), then world
+  // event 2002 with colour 0 at the rounded position (the break particles and game.potion.smash) like EntityPotion's.
+  expImpact({ x, y, z }) {
+    const rng = this.projectiles.rng(), events = this.mobs.events;
+    for (const n of expBottleOrbs(rng)) events.push({ xp: n, position: { x, y, z } });
+    const rx = Math.round(x), ry = Math.round(y), rz = Math.round(z);
+    events.push({ sound: "game.potion.smash", volume: 1, pitch: f(f(rng.nextFloat() * f(0.1)) + f(0.9)), position: { x: rx + 0.5, y: ry + 0.5, z: rz + 0.5 }, splashBreak: { x: rx, y: ry, z: rz, damage: 0 } });
   }
   // EntityPotion.onImpact: effects on everything around, the glass sound (world event 2002).
   impact({ x, y, z, damage, owner, hit }, player, survival) {
