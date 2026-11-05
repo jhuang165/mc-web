@@ -13,7 +13,7 @@ EntityList is not the complete feature roster: players, weather lightning, throw
 | 1 | Item | xk | no | no | Partial; [existing scope](items.md) | E |
 | 2 | XPOrb | sq | no | no | Partial; [existing scope](xp-orbs.md) | E |
 | 8 | LeashKnot | su | no | no | Unmapped; audit required | E |
-| 9 | Painting | tb | no | no | Unmapped; audit required | E |
+| 9 | Painting | tb | no | no | Partial; [existing scope](hanging-entities.md) | E |
 | 10 | Arrow | zc | no | no | Partial; [existing scope](bows.md) | E |
 | 11 | Snowball | zj | no | no | Partial; [existing scope](projectiles.md) | E |
 | 12 | Fireball | zg | no | no | Unmapped; audit required | E |
@@ -22,13 +22,13 @@ EntityList is not the complete feature roster: players, weather lightning, throw
 | 15 | EyeOfEnderSignal | zd | no | no | Unmapped; audit required | E |
 | 16 | ThrownPotion | zo | no | no | Unmapped; audit required | E |
 | 17 | ThrownExpBottle | zn | no | no | Unmapped; audit required | E |
-| 18 | ItemFrame | st | no | no | Unmapped; audit required | E |
+| 18 | ItemFrame | st | no | no | Partial; [existing scope](hanging-entities.md) | E |
 | 19 | WitherSkull | zp | no | no | Unmapped; audit required | E |
 | 20 | PrimedTnt | xw | no | no | Partial; [existing scope](creepers.md) | E |
 | 21 | FallingSand | xj | no | no | Partial; [existing scope](plants.md) | E |
 | 22 | FireworksRocketEntity | zf | no | no | Unmapped; audit required | E |
 | 40 | MinecartCommandBlock | xn | no | no | Unmapped; audit required | E |
-| 41 | Boat | xi | no | no | Unmapped; audit required | E |
+| 41 | Boat | xi | no | no | Partial; [existing scope](boats.md) | E |
 | 42 | MinecartRideable | xs | no | no | Unmapped; audit required | E |
 | 43 | MinecartChest | xm | no | no | Unmapped; audit required | E |
 | 44 | MinecartFurnace | xq | no | no | Unmapped; audit required | E |
@@ -59,7 +59,7 @@ EntityList is not the complete feature roster: players, weather lightning, throw
 | 92 | Cow | wh | no | yes | Partial; [existing scope](pathfinding.md) | E |
 | 93 | Chicken | wg | no | yes | Partial; [existing scope](chickens.md) | E |
 | 94 | Squid | ws | no | yes | Unmapped; audit required | E |
-| 95 | Wolf | wv | no | yes | Unmapped; audit required | E |
+| 95 | Wolf | wv | no | yes | Partial; [existing scope](wolves.md) | E |
 | 96 | MushroomCow | wm | no | yes | Unmapped; audit required | E |
 | 97 | SnowMan | wr | no | no | Unmapped; audit required | E |
 | 98 | Ozelot | wn | no | yes | Unmapped; audit required | E |

@@ -28,7 +28,7 @@ Target: Minecraft Java 1.7.10. Names are the obfuscated classes of the unchanged
 - The owner is "the player" (a non-empty string); a Java UUID or name is read as the player. There is no multiplayer owner lookup.
 - The build has no spawn eggs or Creative item for wolves; `/summon Wolf`, spawners and generated packs are the ways to get one. Animals do not spawn during play, so wolves appear only through world generation.
 - Pathfinding and target-search exactness is that of the existing AI framework, not a byte-for-byte replay of `PathFinder` or `EntityAITarget` timing.
-- Arrows and explosions are not recorded as owner-hurt or attacker events. HurtByTarget's call for help skips a tamed wolf when the target is its owner (the original has no such filter).
+- Arrows and explosions are not recorded as owner-hurt or attacker events. HurtByTarget's call for help skips a tamed wolf when the target is its owner, as the original does (`vn` checks `isOnSameTeam`, and `EntityTameable.c` is true for the owner).
 - Puppy growth from feeding is simplified to the `-age / 20 * 0.1` step. No leash, no horses.
 - Region import does not carry animals, so wolves in Java saves are not imported.
 - Wet rendering folds the original's extra brightness factor into the lightmap, and the collar layer uses a polygon offset instead of GL_EQUAL.

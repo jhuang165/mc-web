@@ -18,7 +18,7 @@ code path the probe does not reach).
 | `alt` / `aml` / `aod` | BlockLeaves / BlockOldLeaf / BlockLeavesBase | decay scan, breakBlock marks, drops |
 | `alx` / `amm` | BlockLog / BlockOldLog | breakBlock marks within 4 |
 | `asq` / `arc` / `arn` | WorldGenTrees / WorldGenAbstractTree / WorldGenerator | the oak generator |
-| `ard` | WorldGenBigTree | the 1-in-10 big oak (not ported, see gaps) |
+| `ard` | WorldGenBigTree | the 1-in-10 big oak (live in 256-high worlds through `tree-growth.js`; see [wood types](wood-types.md)) |
 | `acj` / `adg` | ItemDye / ItemLeaves | bone meal use, shears/leaf item |
 | `aji` / `ajn` / `ahb` / `mt` | Block / Blocks / World / WorldServer | drop loop, registry, setBlock flags, random ticks |
 | `apx` | Chunk | `func_150807_a` calls the old block's breakBlock when the id changes |
@@ -56,10 +56,11 @@ code path the probe does not reach).
 
 ## Gaps (not parity)
 
-- **WorldGenBigTree (`ard`) is not ported.** The original grows it on 1 of 10 sapling growths; here that draw is made and a
-  normal oak is generated instead (reported as `"big"` in the events). The probe stops at this draw.
+- In legacy 64-high finite worlds (generation version < 11) the 1-in-10 `WorldGenBigTree` (`ard`) draw is still made but a
+  normal oak is generated instead (reported as `"big"` in the events); 256-high and generation 11+ worlds grow every sapling type
+  through `growSapling` in `tree-growth.js`, replayed by `sapling-types-reference.json` ([wood types](wood-types.md)).
 - Weather/fluid/fire/tree updates share the restored world stream since 0.22.5, but initial seeding and full native tick order remain adapted. Native sequences match only for the stated Random/scenario, not for a Java world seed.
-- World height is 64 (the finite world), the original build height is 256; `maxY` in `trees.js` is 64 (tests use 256).
+- Legacy finite worlds are 64 high; Java and streamed worlds use the original 256 build height.
 - Meta writes on a cell that has become air after a drop are skipped.
 - Old saves keep their hand-made trees; their leaves have no bit 4 and will decay once marked, as with natural leaves.
 - Shears damage on leaves, silk touch and fortune on leaf drops, birch/spruce/jungle saplings and leaves are not modeled.

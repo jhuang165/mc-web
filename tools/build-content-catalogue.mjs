@@ -91,6 +91,7 @@ const entities = {
   PrimedTnt: 'creepers.md', FallingSand: 'plants.md', Creeper: 'creepers.md',
   Skeleton: 'bows.md', Spider: 'spiders.md', Zombie: 'pathfinding.md',
   Pig: 'crops.md', Sheep: 'sheep.md', Cow: 'pathfinding.md', Chicken: 'chickens.md',
+  Painting: 'hanging-entities.md', ItemFrame: 'hanging-entities.md', Boat: 'boats.md', Wolf: 'wolves.md',
 };
 for (const name of Object.keys(entities)) assert(native.entities.some(e => e.name === name));
 const entityRows = native.entities.map(e => `| ${e.id} | ${e.name} | ${e.class} | ${e.abstract ? 'yes' : 'no'} | ${e.spawnEgg ? 'yes' : 'no'} | ${e.abstract ? 'Abstract registration; base behavior audit' : entities[e.name] ? `Partial; [existing scope](${entities[e.name]})` : 'Unmapped; audit required'} | E |`);

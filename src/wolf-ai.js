@@ -233,8 +233,8 @@ export function buildWolfTasks(m, K) {
     }
   }
   // EntityAIHurtByTarget (vn, callsForHelp): the revenge target becomes the attack target and every other wolf
-  // within range without a target joins. A tamed wolf of that target's own side (its owner) is left out, which the
-  // original's pack call does not do (see wolves.md).
+  // within range without a target joins, unless isOnSameTeam(target) holds: EntityTameable.c (tg) is true when the
+  // target is the wolf's owner, so a tamed wolf never joins a call against its own owner.
   class WolfHurtBy extends TargetBase {
     constructor() {
       super(m, false);

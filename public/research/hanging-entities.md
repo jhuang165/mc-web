@@ -26,4 +26,4 @@ Code: `src/hanging.js` (rules), `src/hanging-interaction.js` (aim, place, hit, u
 - Frames holding maps draw as ordinary frames (maps out of scope).
 - Adventure-mode `canPlayerEdit` check is not applied.
 - Frame bar and back-panel UVs use the full tile rather than the native sub-cropped regions.
-- Rendering is built from bytecode facts but has not been checked in a browser.
+- Rendering is built from bytecode facts. A localhost check showed a placed painting (Wasteland), a frame with an item and a rotation update; no pixel comparison against the original was made.
