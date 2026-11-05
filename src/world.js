@@ -159,6 +159,9 @@ export const BLOCKS = [
   // 0.42.0: BlockBed (original id 26, bed.js).
   {name:'Bed',color:'#a8322e'},
   {name:'Command Block',color:'#b88863'},
+  // Colored and storage blocks (colored-blocks.js; original ids in block-registry.js). Items are 1140-1148.
+  {name:'Stained glass',color:'#9fb4c8',hidden:true},{name:'Stained glass pane',color:'#9fb4c8',hidden:true},{name:'Carpet',color:'#e9ecec',hidden:true},{name:'Hay Bale',color:'#b8962c',hidden:true},
+  {name:'Block of Coal',color:'#1b1b1b',hidden:true},{name:'Lapis Lazuli Block',color:'#1f3f9a',hidden:true},{name:'Block of Emerald',color:'#2bb74f',hidden:true},{name:'Sponge',color:'#c9c24a',hidden:true},{name:"Jack o'Lantern",color:'#d98a1b',hidden:true},
 ];
 export const LAPIS_ORE=63,REDSTONE_ORE=64,LIT_REDSTONE_ORE=65,EMERALD_ORE=66,PUMPKIN=67,MONSTER_EGG=68,DOUBLE_PLANT=69,
   LOG2=70,LEAVES2=71,VINE=72,COCOA=73,MOSSY_COBBLE=74,BROWN_MUSHROOM=75,RED_MUSHROOM=76,
@@ -178,6 +181,8 @@ export const REDSTONE_TORCH_OFF=119,REDSTONE_TORCH=120,REDSTONE_LAMP=121,REDSTON
 export const WATER=10,LAVA=42;
 export const BED=138;
 export const COMMAND_BLOCK=139;
+import { STAINED_GLASS, STAINED_GLASS_PANE, CARPET, HAY_BALE, COAL_BLOCK, LAPIS_BLOCK, EMERALD_BLOCK, SPONGE, JACK_O_LANTERN } from "./colored-blocks.js"; // ids 140-148 live there (no imports) to avoid a cycle
+export { STAINED_GLASS, STAINED_GLASS_PANE, CARPET, HAY_BALE, COAL_BLOCK, LAPIS_BLOCK, EMERALD_BLOCK, SPONGE, JACK_O_LANTERN };
 export const SNOW_LAYER=46,ICE=47,SAPLING=48;
 export const CARROTS=49,POTATOES=50,WEB=51,LADDER=52,TNT=55;
 // Sand (6, original 12) and gravel (25, original 13) are the BlockFalling blocks (falling.js).
@@ -265,7 +270,7 @@ export const ticksRandomly=b=>b===1||b===5||b===LEAVES2||b===LIT_REDSTONE_ORE||b
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
-const SEE_THROUGH=new Set([0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,RAIL,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB,ANVIL,ENCHANTING_TABLE,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOWER_POT,OAK_STAIRS,COBBLESTONE_STAIRS,STONE_BRICK_STAIRS,SANDSTONE_STAIRS,SPRUCE_STAIRS,BIRCH_STAIRS,JUNGLE_STAIRS,BRICK_STAIRS,ACACIA_STAIRS,DARK_OAK_STAIRS,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,STICKY_PISTON,PISTON,PISTON_HEAD,107,108,109,110,111,112,113,114,119,120,124,125,126,127,128,129,130,...NOT_OPAQUE_NEW]); // 119-130: the redstone torches, button, plates, comparators, sensor and moving piston (redstone-blocks-2.js SEE_THROUGH2)
+const SEE_THROUGH=new Set([STAINED_GLASS,STAINED_GLASS_PANE,CARPET,0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,RAIL,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB,ANVIL,ENCHANTING_TABLE,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOWER_POT,OAK_STAIRS,COBBLESTONE_STAIRS,STONE_BRICK_STAIRS,SANDSTONE_STAIRS,SPRUCE_STAIRS,BIRCH_STAIRS,JUNGLE_STAIRS,BRICK_STAIRS,ACACIA_STAIRS,DARK_OAK_STAIRS,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,STICKY_PISTON,PISTON,PISTON_HEAD,107,108,109,110,111,112,113,114,119,120,124,125,126,127,128,129,130,...NOT_OPAQUE_NEW]); // 119-130: the redstone torches, button, plates, comparators, sensor and moving piston (redstone-blocks-2.js SEE_THROUGH2)
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 // Block.isNormalCube: Material.tnt is translucent (isOpaque false), so TNT is an opaque
 // cube that is not a normal cube (no torches/ladders/fire tops on it).
@@ -289,6 +294,7 @@ export function blockBounds(world,x,y,z){
   if([79,83,84].includes(b))return[0.09999999403953552,0,0.09999999403953552,0.8999999761581421,0.800000011920929,0.8999999761581421];
   if(b===VINE){const m=world.getMeta(x,y,z),boxes=[];if(m&1)boxes.push([0,0,15/16,1,1,1]);if(m&2)boxes.push([0,0,0,1/16,1,1]);if(m&4)boxes.push([0,0,0,1,1,1/16]);if(m&8)boxes.push([15/16,0,0,1,1,1]);return boxes.length?[...Array(3)].map((_,i)=>Math.min(...boxes.map(b=>b[i]))).concat([...Array(3)].map((_,i)=>Math.max(...boxes.map(b=>b[i+3])))):[0,15/16,0,1,1,1];}
   if(b===SANDSTONE_SLAB)return[0,0,0,1,.5,1];
+  if(b===CARPET)return[0,0,0,1,1/16,1]; // BlockCarpet.setBlockBoundsForCarpet (colored-blocks.js)
   // Stone slabs (half-high, top bit), the end portal frame (13/16), the cauldron (full selection) and the flower pot box.
   if(isStoneUtility(b))return stoneUtilityBounds(b,world.getMeta(x,y,z));
   // Redstone components (redstone-blocks.js): per-metadata boxes; only the repeater collides.
@@ -353,7 +359,7 @@ export function solidBlock(b, meta = 0) {
   // A flat snow layer (meta 0) has no collision box, so it is not an obstacle.
   if (b === SNOW_LAYER) return (meta & 7) !== 0;
   // Rails have no collision box either (BlockRailBase.getCollisionBoundingBoxFromPool is null).
-  return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== FIRE && b !== WEB && b !== REEDS && b !== RAIL && !isRailBlock2(b) && b !== VINE && !(b >= 107 && b <= 114 && !redstoneHasCollision(b)) && !(b === 119 || b === 120 || b === 124 || b === 125 || b === 126 || b === 130) && !isPlant(b);
+  return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== CARPET && b !== FIRE && b !== WEB && b !== REEDS && b !== RAIL && !isRailBlock2(b) && b !== VINE && !(b >= 107 && b <= 114 && !redstoneHasCollision(b)) && !(b === 119 || b === 120 || b === 124 || b === 125 || b === 126 || b === 130) && !isPlant(b);
 }
 // One 16 x 16 chunk column of the live world (WORLD-02b): port block ids and 4-bit metadata, one byte
 // each, at (lx * 16 + lz) * HEIGHT + y, and the random-tick refcount of each 16-high section

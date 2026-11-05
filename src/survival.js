@@ -16,6 +16,7 @@ import {newDispenser,DISPENSER_SLOTS} from './dispenser-container.js';
 import { leatherDyeResult } from './leather-dye.js';
 import { stepStuckArrows } from "./stuck-arrows.js";
 import { applyNativeNames } from './item-names.js';
+import { installColoredItems, installColoredMaterials, COLORED_FUELS } from './colored-blocks.js';
 // The lastDamage reason of DamageSource.outOfWorld (death-messages.js).
 export const VOID = "void";
 const FIRE_REASONS = new Set(["burning", "lava", "fire"]); // DamageSource.isFireDamage (onFire, inFire, lava)
@@ -24,6 +25,7 @@ export const ITEMS = Object.fromEntries(
   BLOCKS.map((b, id) => [id, { ...b, id, block: id > 0, stack: 64 }]),
 );
 ITEMS[1139]={...ITEMS[139],id:1139,block:true};
+installColoredItems(ITEMS); // colored-blocks.js: items 1140-1148
 ITEMS[2].variants=['Dirt','Coarse dirt','Podzol'];
 ITEMS[6].variants=['Sand','Red sand'];
 ITEMS[56].variants=['Sandstone','Chiseled sandstone','Smooth sandstone'];
@@ -287,6 +289,7 @@ MATERIALS[FENCE]={hardness:2,kind:"axe"};
 MATERIALS[RAIL]={hardness:.7};
 MATERIALS[MOB_SPAWNER]={hardness:SPAWNER_HARDNESS,kind:"pickaxe",tier:0,drop:0,xp:spawnerXp};
 installPopulationMaterials(MATERIALS);
+installColoredMaterials(MATERIALS); // colored-blocks.js blocks 140-148
 export const RECIPES = [];
 function recipe(id, name, rows, keys, output, count = 1) {
   const width = Math.max(...rows.map((r) => r.length));
@@ -524,6 +527,7 @@ export const FUELS = {
 // TileEntityFurnace.getItemBurnTime: a lava bucket burns 20000 ticks and, like every
 // Item with a container item, leaves the empty bucket behind when it is used up.
 FUELS[342] = 20000;
+Object.assign(FUELS, COLORED_FUELS); // block of coal: 16000
 const CONTAINER_ITEMS = { 342: 340 };
 const clamp = (v, min, max, fallback) =>
   Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;

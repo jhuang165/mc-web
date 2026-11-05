@@ -30,7 +30,7 @@ const FURNACE = 14, CHUNK_INFLATE_LIMIT = 16 * 1024 * 1024, AREA_INFLATE_LIMIT =
 
 export { ORIGINAL_ITEMS };
 // Subtype families whose stack damage the browser stores as the same variant index.
-const VARIANT_DAMAGE = new Set([35, 38, 351, 3, 5, 6, 12, 17, 18, 24, 44, 98, 97, 145, 159, 161, 162, 175]);
+const VARIANT_DAMAGE = new Set([35, 38, 351, 3, 5, 6, 12, 17, 18, 24, 44, 98, 97, 145, 159, 161, 162, 175, 95, 160, 171]);
 
 /** Browser stack fields for an original item ID/damage, or null when the build has no such item. */
 export function itemFromOriginal(id, damage = 0) {

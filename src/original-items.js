@@ -2,6 +2,7 @@
 // survival.js can read the table without importing the region importer, which imports survival.js.
 import { SAPLING, WEB, LADDER, YELLOW_FLOWER, RED_FLOWER, DYE, SNOW_LAYER, ICE, CACTUS, TNT, FENCE, RAIL } from './world.js';
 import { POPULATION_ITEMS } from './population-content.js';
+import { COLORED_ORIGINAL_ITEMS } from './colored-blocks.js';
 import { FISHING_ITEMS } from './fishing-content.js';
 
 // Original item ID (or "id:damage" subtype) -> browser item. The same table as tools/inventory-replay.mjs
@@ -28,5 +29,6 @@ export const ORIGINAL_ITEMS = Object.freeze({
   // Painting and item frame items (src/hanging.js).
   321: 1700, 389: 1701,
   ...POPULATION_ITEMS,
+  ...COLORED_ORIGINAL_ITEMS, // 95, 160, 171, 170, 173, 22, 133, 19, 91 -> 1140-1148
   ...FISHING_ITEMS,
 });

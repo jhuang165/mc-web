@@ -171,8 +171,8 @@ test('chests, furnaces and dropped items convert; other tile entities and entiti
 
 test('unsupported, unregistered and approximated block states are counted and replaced', async () => {
   const chunk = new Chunk(0, 0);
-  chunk.setBlockState(0, 1, 0, 95, 3); // stained glass: registered, no browser family
-  chunk.setBlockState(1, 1, 0, 95, 3);
+  chunk.setBlockState(0, 1, 0, 130, 3); // ender chest: registered, no browser family (stained glass 95 is mapped by colored-blocks.js)
+  chunk.setBlockState(1, 1, 0, 130, 3);
   // Add nibble: unregistered high id 300 (setBlockState refuses it, so write the arrays).
   const storage = chunk.section(0); storage.lsb[(1 << 8) | 2] = 300 & 255; storage.createMsb().set(2, 1, 0, 300 >> 8);
   chunk.setBlockState(3, 1, 0, 50, 1); // wall torch facing east: exact (meta 1)
@@ -184,7 +184,7 @@ test('unsupported, unregistered and approximated block states are counted and re
   assert.equal(report.blocks.omitted, 3);
   assert.equal(report.blocks.exact, 2);
   assert.equal(report.blocks.approximated, 2);
-  assert.deepEqual(report.blocks.unsupported, [{id: 95, meta: 3, cells: 2, reason: 'unmapped'}, {id: 300, meta: 0, cells: 1, reason: 'unregistered'}]);
+  assert.deepEqual(report.blocks.unsupported, [{id: 130, meta: 3, cells: 2, reason: 'unmapped'}, {id: 300, meta: 0, cells: 1, reason: 'unregistered'}]);
   assert.deepEqual(report.blocks.approximations.map(a => [a.id, a.meta, a.exact, a.state]), [[8, 2, true, ['flowing']], [60, 3, true, ['moisture']]]);
   const {world} = importLikeScreen(record);
   assert.deepEqual([0, 1, 2, 3, 4, 5, 6].map(x => [world.get(x, 1, 112), world.getMeta(x, 1, 112)]), [[0, 0], [0, 0], [0, 0], [20, 1], [WATER, 2], [30, 0], [38, 0]]);

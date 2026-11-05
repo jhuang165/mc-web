@@ -7,6 +7,7 @@ import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON
 import { REDSTONE_WIRE, LEVER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, ITEM_LEVER, ITEM_STONE_PLATE, ITEM_WOODEN_PLATE, ITEM_STONE_BUTTON, ITEM_TRIPWIRE_HOOK, ITEM_REPEATER, ITEM_REDSTONE, ITEM_STRING, REDSTONE_ITEM_IDS, REDSTONE_ITEM_NAMES, redstoneDrops } from './redstone-blocks.js';
 import * as RS2 from './redstone-blocks-2.js';
 import { POTION_ITEM_ROWS } from './potion-items.js';
+import { coloredDrops, coloredCraftingResult } from './colored-blocks.js';
 export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97:68,175:69,162:70,161:71,106:72,127:73,48:74,39:75,40:76,99:77,100:78,32:79,174:80,103:81,'44:1':82,'31:0':83,'31:2':84,24:56,110:57,159:58,111:59,145:ANVIL,116:ENCHANTING_TABLE,53:87,67:88,109:89,128:90,134:91,135:92,136:93,108:94,163:95,164:96,
   // Doors (items 324/330 are internal 470/471), iron bars and glass panes (the block items).
   324:470,330:471,101:IRON_BARS,102:1100,
@@ -157,6 +158,7 @@ export const populationXp=(id,r)=>id===63?2+Math.floor(r()*4):id===64||id===65?1
 // Native BlockOre, BlockRedstoneOre, BlockHugeMushroom, BlockMelon and BlockDoublePlant drops.
 export function populationDrops(id,meta,{random=Math.random,shears=false}={}){
   if(id===ANVIL)return[{id:ANVIL,count:1,damage:(meta&15)>>2}];
+  {const colored=coloredDrops(id,meta);if(colored)return colored;}
   if(id>=REDSTONE_WIRE&&id<=TRIPWIRE)return redstoneDrops(id);
   if(RS2.isRedstone2Block(id))return RS2.redstoneDrops2(id,meta,{random});
   // BlockDoor.getItemDropped: the lower half drops its door item, the upper half nothing; BlockPane (glass) drops nothing.
@@ -190,6 +192,7 @@ export function populationDrops(id,meta,{random=Math.random,shears=false}={}){
 // Metadata-sensitive recipes are matched before the old ID-only shaped recipe catalogue.
 export function populationCraftingResult(cells,size){
   const filled=cells.filter(Boolean);
+  const colored=coloredCraftingResult(cells,size);if(colored)return colored; // colored-blocks.js recipes (stained glass, panes, carpet, storage blocks, jack o'lantern)
   const stairs=stairRecipeResult(cells,size);if(stairs)return stairs;
   if(filled.length===1&&[4,70].includes(filled[0].id))return{id:7,count:4,damage:(filled[0].damage&3)+(filled[0].id===70?4:0)};
   if(filled.length===9&&size===3&&cells[4]?.id===351&&cells.every((s,i)=>i===4||s?.id===40))return{id:58,count:8,damage:15-cells[4].damage};
