@@ -1,9 +1,28 @@
 // ModelDragon pose maths and box table (bytecode not available: written from the 1.7.10 source, see dragon-renderer.js).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dragonPose, DRAGON_MODEL, DRAGON_TEXTURES } from "./dragon-renderer.js";
+import { BufferAttribute, BufferGeometry } from "three";
+import { dragonPose, DRAGON_MODEL, DRAGON_TEXTURES, updateDeathRays } from "./dragon-renderer.js";
 
 const ring = (n) => [-n * 4, 100 - n * 0.1];
+
+test("death rays grow from one to sixty seeded fans and fade during the last forty ticks", () => {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new BufferAttribute(new Float32Array(60 * 9 * 3), 3));
+  geometry.setAttribute("color", new BufferAttribute(new Float32Array(60 * 9 * 4), 4));
+  const mesh = { geometry };
+  updateDeathRays(mesh, 0, 0);
+  assert.equal(mesh.visible, false);
+  updateDeathRays(mesh, 1, 0);
+  assert.equal(geometry.drawRange.count, 9);
+  assert.equal(geometry.attributes.color.getW(0), 1);
+  assert.equal(geometry.attributes.color.getW(1), 0);
+  updateDeathRays(mesh, 180, 0);
+  assert.ok(Math.abs(geometry.attributes.color.getW(0) - 127 / 255) < 1e-7);
+  updateDeathRays(mesh, 200, 0);
+  assert.equal(geometry.drawRange.count, 60 * 9);
+  assert.equal(geometry.attributes.color.getW(0), 0);
+});
 
 test("pose: five neck pieces, twelve tail pieces, a straight dragon has no head turn", () => {
   const straight = (n) => [10, 100];

@@ -70,6 +70,7 @@ export function tickLivingSimulation(state, hooks = {}) {
     eatGrass = () => {},
     doorUpdate = () => {},
     blockEdit = () => {},
+    push = () => {},
   } = hooks;
 
   inhabited.tick(survival.time);
@@ -87,6 +88,6 @@ export function tickLivingSimulation(state, hooks = {}) {
     }
   }
   for (const event of xpOrbs.sounds.splice(0)) orbSound(event);
-  drainMobEvents({ mobs, xpOrbs, items }, { sound, explode, eatGrass, doorUpdate, blockEdit });
+  drainMobEvents({ mobs, xpOrbs, items }, { sound, explode, eatGrass, doorUpdate, blockEdit, push });
   return state.playerTicks;
 }

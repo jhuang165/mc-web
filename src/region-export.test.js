@@ -40,3 +40,38 @@ test('paintings and item frames export as Java Painting and ItemFrame entities',
  assert.equal(frame.get('ItemRotation').value,3);assert.equal(frame.get('ItemDropChance').value,Math.fround(0.5));
  assert.equal(frame.get('Item').value.get('id').value,321);assert.equal(frame.get('TileX').value,w.originX-2);
 });
+
+test('Nether and End Anvil columns keep their coordinates, runtime tiles and level player dimension', async () => {
+ const w=new World('17','javaStreamed',12);w.restore([]);
+ const position={x:-0.5,y:110,z:-0.5};
+ const spawner={x:-1,y:103,z:-1,EntityId:'Blaze',Delay:62};
+ const record={id:'dimensions',name:'Dimensions',seed:'17',biome:'javaStreamed',generationVersion:12,mode:'survival',dimension:1,position,edits:[],
+  dimensions:{
+   [-1]:{edits:[['-1,103,-1',62],['-1,104,-1',132]],state:{spawners:[spawner]},
+    tiles:{dispensers:{'-1,104,-1':{items:[{id:3,count:2,damage:0}]}}}},
+   [1]:{edits:[['-1,108,-1',149]],state:{entities:[{type:'ender_crystal',x:-0.5,y:110,z:-0.5,health:5}]}},
+  }};
+ const {files,report}=await exportJavaSave(record,{world:w});
+ const level=(await decodeCompressedNbt(files.get('level.dat'))).tag.value.get('Data').value.get('Player').value;
+ assert.equal(level.get('Dimension').value,1);
+ assert.deepEqual(level.get('Pos').value.items,[-0.5,110,-0.5]);
+ assert.equal(report.columns,w.chunks.size+2);
+ const {importJavaRegionArea}=await import('./region-import.js');
+ for(const [d,prefix] of [[-1,'DIM-1'],[1,'DIM1']]) {
+  const filename='r.-1.-1.mca',bytes=files.get(`${prefix}/region/${filename}`);
+  const {record:imported}=await importJavaRegionArea([{filename,bytes}],{seed:'17',dimension:d,area:{chunkX:-1,chunkZ:-1,width:1,depth:1}});
+  assert.equal(imported.dimension,d);
+  const blob=imported.dimensions[d];
+  assert.deepEqual(blob.edits,record.dimensions[d].edits);
+  if(d===-1){
+   const native=chunkFromNbt(await decodeRegionChunk(readRegion(bytes).get(regionSlot(31,31))),{hasSky:false});
+   assert.ok(native.tileEntities.some(t=>t.get('id').value==='Dropper'));
+   assert.deepEqual(blob.state.spawners,[spawner]);
+   assert.equal(blob.tiles.dispensers['-1,104,-1'].items[0].count,2);
+  }
+  else {
+   assert.equal(blob.state.dragonSpawned,true);
+   assert.deepEqual(blob.state.entities.map(e=>[e.type,e.x,e.y,e.z]),[['ender_crystal',-0.5,110,-0.5]]);
+  }
+ }
+});

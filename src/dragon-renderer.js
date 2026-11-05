@@ -1,16 +1,65 @@
 // RenderDragon with ModelDragon (256 x 256 dragon.png), the exploding mask, the additive eyes pass and the crystal beam.
-// The client classes are not in the available JAR (it holds the server classes and assets only), so the box table, the
-// pose maths and the matrix order were written from the 1.7.10 ModelDragon / RenderDragon source as remembered. They are NOT
-// probed and NOT browser-verified; see public/research/dragon.md (Gaps). The ring offsets and animation clock it reads
-// (movementOffsets, anim) are the verified ones from dragon.js.
+// The box table and pose were reconstructed from ModelDragon. The death-ray
+// transforms come from the original client RenderDragon bytecode. The ring
+// offsets and animation clock are the probe-verified values from dragon.js.
 // mob-renderer.js calls createDragonRig and runs `custom` (animateDragon) each frame.
 import * as THREE from "three";
 import { skinBox, pixelTexture } from "./first-person.js";
 import { entityMaterial } from "./light-material.js";
 import { movementOffsets, dragonBossStatus, DRAGON_MAX_HEALTH } from "./dragon.js";
 import { setBossStatus, startBossBar } from "./boss-bar.js";
+import { JavaRandom } from "./java-random.js";
 
 const RAD = Math.PI / 180;
+
+// RenderDragon's 432-seeded, cumulatively rotated triangle fans. Three.js
+// interpolates each fan from an opaque white tip to a transparent magenta rim.
+function createDeathRays() {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(60 * 9 * 3), 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(60 * 9 * 4), 4));
+  const material = new THREE.MeshBasicMaterial({
+    vertexColors: true, transparent: true, depthWrite: false, fog: false,
+    side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+  });
+  const rays = new THREE.Mesh(geometry, material);
+  rays.frustumCulled = false;
+  rays.visible = false;
+  return rays;
+}
+
+export function updateDeathRays(rays, ticks, partial) {
+  rays.visible = ticks > 0;
+  if (!rays.visible) return;
+  const progress = Math.min(1, (ticks + partial) / 200), fade = Math.max(0, (progress - 0.8) / 0.2);
+  const count = Math.ceil((progress + progress * progress) * 30);
+  const random = new JavaRandom(432n);
+  const matrix = new THREE.Matrix4(), rotation = new THREE.Matrix4(), v = new THREE.Vector3();
+  const { position, color } = rays.geometry.attributes;
+  let i = 0;
+  for (let ray = 0; ray < count; ray++) {
+    matrix.multiply(rotation.makeRotationX(random.nextFloat() * 2 * Math.PI));
+    matrix.multiply(rotation.makeRotationY(random.nextFloat() * 2 * Math.PI));
+    matrix.multiply(rotation.makeRotationZ(random.nextFloat() * 2 * Math.PI));
+    matrix.multiply(rotation.makeRotationX(random.nextFloat() * 2 * Math.PI));
+    matrix.multiply(rotation.makeRotationY(random.nextFloat() * 2 * Math.PI));
+    matrix.multiply(rotation.makeRotationZ(random.nextFloat() * 2 * Math.PI + progress * Math.PI / 2));
+    const length = 5 + random.nextFloat() * 20 + fade * 10;
+    const width = 1 + random.nextFloat() * 2 + fade * 2;
+    const rim = [[-0.866 * width, -0.5 * width], [0.866 * width, -0.5 * width], [0, width]];
+    for (let j = 0; j < 3; j++) {
+      position.setXYZ(i, 0, 0, 0);
+      color.setXYZW(i++, 1, 1, 1, Math.trunc(255 * (1 - fade)) / 255);
+      for (const [x, z] of [rim[j], rim[(j + 1) % 3]]) {
+        v.set(x, length, z).applyMatrix4(matrix);
+        position.setXYZ(i, v.x, v.y, v.z);
+        color.setXYZW(i++, 1, 0, 1, 0);
+      }
+    }
+  }
+  rays.geometry.setDrawRange(0, i);
+  position.needsUpdate = color.needsUpdate = true;
+}
 export const DRAGON_TEXTURES = Object.freeze({
   skin: "/media/1.7.10/entity/enderdragon/dragon.png",
   exploding: "/media/1.7.10/entity/enderdragon/dragon_exploding.png",
@@ -163,10 +212,13 @@ export function createDragonRig(renderer) {
   beamPivot.add(beam);
   beamPivot.visible = false;
   root.add(beamPivot);
+  const deathRays = createDeathRays();
+  deathRays.position.set(0, 1, 2);
+  shiftG.add(deathRays);
   renderer.scene.add(root);
   return {
     root, neck: new THREE.Group(), limbs: [], materials: [skin, exploding], eyes, type: "ender_dragon", lift: 0, scale: 1,
-    dragonRig: { passes, yawG, pitchG, shiftG, bobG, beam: { pivot: beamPivot, geometry: beamGeometry, material: beamMaterial, texture: beamTexture } },
+    dragonRig: { passes, yawG, pitchG, shiftG, bobG, deathRays, beam: { pivot: beamPivot, geometry: beamGeometry, material: beamMaterial, texture: beamTexture } },
     custom: animateDragon,
   };
 }
@@ -206,6 +258,7 @@ export function animateDragon(r, e, pose, partial) {
   st.bobG.position.set(0, 2 - p.f7, 3);
   st.bobG.rotation.x = p.f7 * 2 * RAD;
   const dying = s.deathTicks > 0;
+  updateDeathRays(st.deathRays, s.deathTicks, partial);
   st.passes.forEach((m, i) => poseModel(m, p));
   // RenderDragon.renderModel: the exploding texture goes first with an alpha test of deathTicks / 200, then the normal skin only
   // where that pass drew (GL_EQUAL); the eyes always on top.
@@ -235,4 +288,6 @@ export function disposeDragonRig(r) {
   b.geometry.dispose();
   b.material.dispose();
   b.texture.dispose();
+  r.dragonRig.deathRays.geometry.dispose();
+  r.dragonRig.deathRays.material.dispose();
 }

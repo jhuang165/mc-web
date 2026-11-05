@@ -1,7 +1,7 @@
 {
   "target": "Minecraft Java 1.7.10",
   "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
-  "credit": "Original Minecraft texture assets © Mojang / Microsoft.",
+  "credit": "Original Minecraft assets © Mojang / Microsoft. End Poem by Julian Gough.",
   "assets": [
     {
       "member": "assets/minecraft/textures/blocks/anvil_base.png",
@@ -5726,6 +5726,18 @@
       "url": "/media/1.7.10/particle/particles.png",
       "sha1": "f31e1f862aa0d72785e561a5e19ebb65d82cdaf5",
       "bytes": 3613
+    },
+    {
+      "member": "assets/minecraft/texts/end.txt",
+      "url": "/media/1.7.10/texts/end.txt",
+      "sha1": "9eda5c940ce5d240278fc29bcc58d27a2520b8f5",
+      "bytes": 8913
+    },
+    {
+      "member": "assets/minecraft/texts/credits.txt",
+      "url": "/media/1.7.10/texts/credits.txt",
+      "sha1": "c9a3ac37ba916d6311846e9c08d936d4ad4a661c",
+      "bytes": 1450
     }
   ]
 }

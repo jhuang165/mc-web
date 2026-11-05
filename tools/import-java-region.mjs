@@ -6,6 +6,8 @@ import {importJavaRegionArea} from '../src/region-import.js';
 
 const USAGE = `Usage: node tools/import-java-region.mjs [options] --out new.blockworld.json r.X.Z.mca [r.X.Z.mca ...]
   --area chunkX,chunkZ[,width,depth]  source chunks (width/depth 1-8, default 8); default: the seed's generator area
+  --nether-area chunkX,chunkZ[,width,depth]  use paths under DIM-1/region
+  --end-area chunkX,chunkZ[,width,depth]     use paths under DIM1/region
   --seed SEED                          source world seed (level.dat RandomSeed); default 1710
   --landscape java|javaAmplified|javaLargeBiomes
   --destination chunkX,chunkZ          live chunk of the area's north-west corner (0-7)
@@ -43,12 +45,15 @@ const integers = (text, counts) => {
 try {
   const args = process.argv.slice(2), inputs = [], options = {};
   let out = null, reportPath = null;
+  const dimensionAreas = new Map();
   while (args.length) {
     const arg = args.shift();
     const value = () => { if (!args.length) throw new Error(USAGE); return args.shift(); };
-    if (arg === '--area') {
+    if (['--area', '--nether-area', '--end-area'].includes(arg)) {
       const [chunkX, chunkZ, width = 8, depth = 8] = integers(value(), [2, 4]);
-      options.area = {chunkX, chunkZ, width, depth};
+      const area = {chunkX, chunkZ, width, depth};
+      if (arg === '--area') options.area = area;
+      else dimensionAreas.set(arg === '--nether-area' ? -1 : 1, area);
     } else if (arg === '--destination') {
       const [chunkX, chunkZ] = integers(value(), [2]);
       options.destination = {chunkX, chunkZ};
@@ -64,15 +69,33 @@ try {
     else inputs.push(arg);
   }
   if (!out?.endsWith('.blockworld.json') || !inputs.length) throw new Error(USAGE);
-  if (!options.area && options.seed === undefined) throw new Error('Pass --area, or --seed to convert the generator area of that seed');
+  if (!options.area && !dimensionAreas.size && options.seed === undefined) throw new Error('Pass --area, or --seed to convert the generator area of that seed');
   for (const path of [out, reportPath].filter(Boolean)) {
     if (await stat(path).then(() => true, () => false)) throw new Error(`${path} already exists; choose a new output file`);
   }
-  const regions = [];
-  for (const path of inputs) regions.push({filename: basename(path), bytes: await readBounded(path)});
+  const regions = new Map([[0, []], [-1, []], [1, []]]);
+  for (const path of inputs) {
+    const match = path.split(/[\\/]/).find(p => p === 'DIM-1' || p === 'DIM1');
+    const dimension = match === 'DIM-1' ? -1 : match === 'DIM1' ? 1 : 0;
+    regions.get(dimension).push({ filename: basename(path), bytes: await readBounded(path) });
+  }
   let result;
-  try { result = await importJavaRegionArea(regions, options); }
-  catch (error) {
+  try {
+    for (const [dimension, files] of regions) {
+      if (!files.length) continue;
+      if (dimension && !dimensionAreas.has(dimension))
+        throw new Error(`Pass ${dimension === -1 ? '--nether-area' : '--end-area'} for dimension ${dimension}`);
+      const converted = await importJavaRegionArea(files, dimension ? {
+        seed: options.seed, name: options.name, mode: options.mode, missing: options.missing,
+        area: dimensionAreas.get(dimension), dimension,
+      } : options);
+      if (!result) result = converted;
+      else {
+        Object.assign(result.record.dimensions ??= {}, converted.record.dimensions);
+        (result.report.dimensions ??= {})[dimension] = converted.report;
+      }
+    }
+  } catch (error) {
     if (error.report) console.log(JSON.stringify(error.report, null, 2));
     throw error;
   }

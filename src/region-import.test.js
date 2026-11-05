@@ -163,7 +163,7 @@ test('chests, furnaces and dropped items convert; other tile entities and entiti
   assert.deepEqual(report.tileEntities, {total: 5, converted: {Chest: 1, Furnace: 1, Skull: 1},
     lost: [{id: 'Chest', count: 1}, {id: 'Chest (outside its chunk)', count: 1}]});
   assert.deepEqual(report.items, {converted: 12, lost: [{id: '400:0', count: 2}, {id: 'slot 200', count: 1}], tagsStripped: 0, clamped: 1});
-  assert.deepEqual(report.entities, {total: 5, converted: {Item: 1}, lost: [{id: 'Chicken', count: 1}, {id: 'Item (unsupported stack)', count: 1}, {id: 'Pig', count: 1}, {id: 'Skeleton', count: 1}]});
+  assert.deepEqual(report.entities, {total: 5, converted: {Item: 1, Skeleton: 1}, lost: [{id: 'Chicken', count: 1}, {id: 'Item (unsupported stack)', count: 1}, {id: 'Pig', count: 1}]});
   assert.equal(report.scheduledTicks, 1);
   assert.deepEqual(report.blocks.unsupported, []);
   // Furnace facing is not stored by the browser; chest facing travels in its record; meta 0 is inexact.

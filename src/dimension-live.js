@@ -125,6 +125,7 @@ export class DimensionLive {
       await h.save();
       const root = h.worlds().find((w) => w.id === rootIdOf(rec));
       if (!root) return false;
+      if (exit) await h.showCredits?.();
       const next = { ...root, transit: { from: dimensionOf(rec), x: p.x, y: p.y, z: p.z, yaw: p.yaw, dir: this.state.teleportDirection, exit, death } };
       if (target) next.dimension = target; else delete next.dimension;
       this.quiet = true;

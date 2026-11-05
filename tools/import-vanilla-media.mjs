@@ -24,5 +24,13 @@ await exec('unzip',['-o','-q',jar,'assets/minecraft/textures/*','-d',stage]);
 const mediaRoot=path.join(output,'media/1.7.10');await cp(path.join(stage,'assets/minecraft/textures'),mediaRoot,{recursive:true});
 const {stdout:listing}=await exec('unzip',['-Z1',jar,'assets/minecraft/textures/*']);
 const assets=[];for(const member of listing.trim().split('\n').filter(n=>n.endsWith('.png')||n.endsWith('.mcmeta'))){const relative=member.replace('assets/minecraft/textures/',''),bytes=await readFile(path.join(mediaRoot,relative));assets.push({member,url:'/media/1.7.10/'+relative,sha1:sha1(bytes),bytes:bytes.length});}
-await writeFile(path.join(mediaRoot,'provenance.json'),JSON.stringify({target:'Minecraft Java 1.7.10',clientSha1:sha1(await readFile(jar)),credit:'Original Minecraft texture assets © Mojang / Microsoft.',assets},null,2)+'\n');
+for(const name of ['end','credits']) {
+  const relative=`texts/${name}.txt`,member=`assets/minecraft/${relative}`;
+  await exec('unzip',['-o','-q',jar,member,'-d',stage]);
+  const bytes=await readFile(path.join(stage,member));
+  await mkdir(path.join(mediaRoot,'texts'),{recursive:true});
+  await writeFile(path.join(mediaRoot,relative),bytes);
+  assets.push({member,url:'/media/1.7.10/'+relative,sha1:sha1(bytes),bytes:bytes.length});
+}
+await writeFile(path.join(mediaRoot,'provenance.json'),JSON.stringify({target:'Minecraft Java 1.7.10',clientSha1:sha1(await readFile(jar)),credit:'Original Minecraft assets © Mojang / Microsoft. End Poem by Julian Gough.',assets},null,2)+'\n');
 console.log(`Imported and verified ${Object.keys(files).length} sound clips and ${assets.length} original textures.`);

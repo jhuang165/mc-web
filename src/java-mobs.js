@@ -9,7 +9,7 @@ import { endermanFieldsFrom } from './enderman.js';
 import { nbtGet } from './nbt-get.js';
 import { slimeSizeFromNbt } from './slime.js';
 
-export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', LavaSlime: 'magma_cube', PigZombie: 'pigman', Ozelot: 'ocelot', EntityHorse: 'horse', Blaze: 'blaze', Ghast: 'ghast', WitherBoss: 'wither' });
+export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', LavaSlime: 'magma_cube', PigZombie: 'pigman', Ozelot: 'ocelot', EntityHorse: 'horse', Blaze: 'blaze', Ghast: 'ghast', WitherBoss: 'wither', Skeleton: 'skeleton', EnderDragon: 'ender_dragon', EnderCrystal: 'ender_crystal' });
 export const IMPORT_MOB_LIMIT = 256; // EntityWorld keeps at most this many saved mobs
 
 const tagValue = nbtGet; // NBTTagCompound getters: numeric tags convert across types (nbt-get.js)
@@ -72,11 +72,12 @@ export function gearNbtFields(tag, shiftX = 0, shiftZ = 0) {
   return out;
 }
 export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = () => null } = {}) {
-  const type = JAVA_MOBS[tagValue(entity, 'id', NBT.STRING, '')];
+  const nativeType = JAVA_MOBS[tagValue(entity, 'id', NBT.STRING, '')];
+  const type = nativeType === 'skeleton' && tagValue(entity, 'SkeletonType', NBT.BYTE, 0) === 1 ? 'wither_skeleton' : nativeType;
   const pos = numbers(entity, 'Pos', NBT.DOUBLE, 3);
   if (!type || !pos) return null;
   const rotation = numbers(entity, 'Rotation', NBT.FLOAT, 2);
-  const healF = tagValue(entity, 'HealF', NBT.FLOAT), health = healF !== undefined ? healF : tagValue(entity, 'Health', NBT.SHORT, 20);
+  const healF = tagValue(entity, 'HealF', NBT.FLOAT), health = healF !== undefined ? healF : tagValue(entity, 'Health', NBT.SHORT, type === 'ender_crystal' ? 5 : 20);
   const record = {
     type, x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ, health,
     // Entity.rotationYaw is degrees counter-clockwise from +z toward -x; the browser yaw is the negated radian value.
@@ -128,7 +129,7 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
     record.invul = Math.max(0, tagValue(entity, 'Invul', NBT.INT, 0)); // EntityWither.readEntityFromNBT: Invul (func_82215_s)
   } else if (type === 'ghast') {
     record.explosionPower = tagValue(entity, 'ExplosionPower', NBT.INT, 1); // EntityGhast.readEntityFromNBT
-  } else {
+  } else if (type === 'zombie') {
     // EntityZombie.readEntityFromNBT: IsBaby, IsVillager and ConversionTime (read, and the countdown restarted, only when
     // above -1); a zombie child is growingAge < 0 here (a zombie never ages up).
     record.growingAge = tagValue(entity, 'IsBaby', NBT.BYTE, 0) !== 0 ? -1 : 0;

@@ -984,7 +984,7 @@ export class VoxelScene {
     this.daylight = (15 - this.subtracted) / 15;
     // EntityRenderer.updateLightmap: Night Vision brightness (partial 0 stands in for the first frame of the tick).
     this.nightVision = this.potionView?.nightVision > 0 ? nightVisionBrightness(this.potionView.nightVision, 0) : 0;
-    this.lighting.update(this.sun, this.flicker.tick(), this.gamma ?? 0, this.flash, this.nightVision);
+    this.lighting.update(this.sun, this.flicker.tick(), this.gamma ?? 0, this.flash, this.nightVision, this.dimension);
     const p = this.camera.position, chunks = this.distance / 16,
       level = this.light ? this.light.level(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z), this.subtracted) : 15,
       target = BRIGHTNESS[level] * (1 - chunks / 16) + chunks / 16;
@@ -992,7 +992,7 @@ export class VoxelScene {
   }
   setGamma(gamma) {
     this.gamma = gamma;
-    this.lighting.update(this.sun ?? sunBrightness(this.angle), this.flicker.x, gamma, this.flash, this.nightVision ?? 0);
+    this.lighting.update(this.sun ?? sunBrightness(this.angle), this.flicker.x, gamma, this.flash, this.nightVision ?? 0, this.dimension);
   }
   // Brightness for an entity or tile entity at a world position.
   brightness(x, y, z) {

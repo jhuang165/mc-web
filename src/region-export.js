@@ -6,6 +6,8 @@ import { writeNoteTile } from "./note-blocks.js";
 import { writeJukeboxTile } from "./jukebox.js";
 // Browser -> Java 1.7.10 Anvil snapshot. The ZIP also retains the exact browser save.
 import { World } from './world.js';
+import { DimensionWorld } from './dimension-world.js';
+import { dimensionOf, viewRecord } from './dimension-live.js';
 import { lightOpacity } from './lighting.js';
 import { Chunk } from './chunk-store.js';
 import { toOriginal } from './block-registry.js';
@@ -61,7 +63,7 @@ export function writeContainerTile(name,e,x,y,z,{report={unmappedItems:0},droppe
  if(name==='hoppers'){n.TransferCooldown=int(e.cooldown??0);if(e.name)n.CustomName=str(e.name);}
  return new Map(Object.entries(n));
 }
-function payload(state,ox,oz,report,world=null) {
+function payload(state,ox,oz,report,blockAt) {
  const entities=[],tiles=[],ticks=[];
  for(const wrapped of state.entities??[]) {const e=wrapped.value,name=NAMES[e.type];if(!name){report.unsupportedEntities++;continue;}
   const n=entity(e,name,ox,oz);Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
@@ -120,7 +122,7 @@ function payload(state,ox,oz,report,world=null) {
   entities.push(new Map(Object.entries(n)));}
  for(const name of ['projectiles','arrows'])report.unsupportedEntities+=(state[name]??[]).length;
  for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const [k,e] of Object.entries(state[name]??{})) {
-  const [x,y,z]=k.split(',').map(Number);tiles.push(writeContainerTile(name,e,x+ox,y,z+oz,{report,dropper:world?.get(x,y,z)===132}));
+  const [x,y,z]=k.split(',').map(Number);tiles.push(writeContainerTile(name,e,x+ox,y,z+oz,{report,dropper:blockAt(x,y,z)===158}));
  }
  for(const {value:e} of state.commandBlocks??[])tiles.push(writeCommandBlock(e,e.x+ox,e.y,e.z+oz));
  // TileEntityNote (Music) and TileEntityJukebox (RecordPlayer): the note byte, the Record int and the RecordItem stack.
@@ -140,13 +142,15 @@ function payload(state,ox,oz,report,world=null) {
 const endPortalTiles=(p,cells)=>{for(const [x,y,z] of cells)p.tileEntities.push(new Map(Object.entries({id:str('Airportal'),x:int(x),y:int(y),z:int(z)})));return p;};
 function levelNbt(record,w,report) {
  const p=record.player??{},pos=record.position??w.spawn(),xp=new Experience(record.experience),creative=record.mode!=='survival'&&record.mode!=='adventure',gameType=creative?1:record.mode==='adventure'?2:0;
- const player={...entity(pos,'Player',w.originX??0,w.originZ??0),Health:short(p.health??20),HealF:float(p.health??20),foodLevel:int(p.food??20),foodSaturationLevel:float(p.saturation??5),foodExhaustionLevel:float(p.exhaustion??0),foodTickTimer:int(p.timer??0),XpLevel:int(xp.level),XpP:float(xp.progress),XpTotal:int(xp.total),Score:int(xp.score),SelectedItemSlot:int(p.current??0),playerGameType:int(gameType),SleepTimer:short(0),Sleeping:byte(0),abilities:comp({invulnerable:byte(creative?1:0),flying:byte(0),mayfly:byte(creative?1:0),instabuild:byte(creative?1:0),mayBuild:byte(gameType===2?0:1),flySpeed:float(.05),walkSpeed:float(.1)})};
+ const dimension=dimensionOf(record),ox=w.originX??0,oz=w.originZ??0;
+ const spawn=dimension?w.spawn():pos;
+ const player={...entity(pos,'Player',dimension?0:ox,dimension?0:oz),Dimension:int(dimension),Health:short(p.health??20),HealF:float(p.health??20),foodLevel:int(p.food??20),foodSaturationLevel:float(p.saturation??5),foodExhaustionLevel:float(p.exhaustion??0),foodTickTimer:int(p.timer??0),XpLevel:int(xp.level),XpP:float(xp.progress),XpTotal:int(xp.total),Score:int(xp.score),SelectedItemSlot:int(p.current??0),playerGameType:int(gameType),SleepTimer:short(0),Sleeping:byte(0),abilities:comp({invulnerable:byte(creative?1:0),flying:byte(0),mayfly:byte(creative?1:0),instabuild:byte(creative?1:0),mayBuild:byte(gameType===2?0:1),flySpeed:float(.05),walkSpeed:float(.1)})};
  delete player.id;
  const items=(p.slots??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];});
  (p.armor??[]).forEach((s,i)=>{const n=stackNbt(s,100+i,report);if(n)items.push(n);});player.Inventory=list(NBT.COMPOUND,items);
  // InventoryEnderChest.saveInventoryToNBT: EnderItems, slots 0-26 (chest-blocks.js).
  player.EnderItems=list(NBT.COMPOUND,saveEnderSlots(p.enderItems).flatMap(({slot,stack})=>{const n=stackNbt(stack,slot,report);return n?[n]:[];}));
- const data={version:int(19133),initialized:byte(1),RandomSeed:tag(NBT.LONG,w.javaSeed??BigInt(w.numericSeed)),generatorName:str(record.biome==='javaStreamed'?streamedWorldType(record.worldType):record.biome==='javaLargeBiomes'?'largeBiomes':record.biome==='javaAmplified'?'amplified':'default'),generatorVersion:int(1),generatorOptions:str(''),MapFeatures:byte(1),LevelName:str(record.name??'Blockworld'),GameType:int(gameType),hardcore:byte(0),allowCommands:byte(creative?1:0),Time:long(p.time??0),DayTime:long(p.time??0),LastPlayed:long(record.updated??0),SizeOnDisk:long(0),SpawnX:int(Math.floor(pos.x+(w.originX??0))),SpawnY:int(Math.floor(pos.y)),SpawnZ:int(Math.floor(pos.z+(w.originZ??0))),Difficulty:byte(2),Player:comp(player)};
+ const data={version:int(19133),initialized:byte(1),RandomSeed:tag(NBT.LONG,w.javaSeed??BigInt(w.numericSeed)),generatorName:str(record.biome==='javaStreamed'?streamedWorldType(record.worldType):record.biome==='javaLargeBiomes'?'largeBiomes':record.biome==='javaAmplified'?'amplified':'default'),generatorVersion:int(1),generatorOptions:str(''),MapFeatures:byte(1),LevelName:str(record.name??'Blockworld'),GameType:int(gameType),hardcore:byte(0),allowCommands:byte(creative?1:0),Time:long(p.time??0),DayTime:long(p.time??0),LastPlayed:long(record.updated??0),SizeOnDisk:long(0),SpawnX:int(Math.floor(spawn.x+ox)),SpawnY:int(Math.floor(spawn.y)),SpawnZ:int(Math.floor(spawn.z+oz)),Difficulty:byte(2),Player:comp(player)};
  for(const name of ['rainTime','thunderTime'])data[name]=int(record.weather?.[name]??0);
  for(const name of ['raining','thundering'])data[name]=byte(record.weather?.[name]?1:0);
  return {name:'',tag:comp({Data:comp(data)})};
@@ -165,22 +169,19 @@ export function zipFiles(files) {
  v.setUint32(0,0x06054b50,true);v.setUint16(8,directory.length,true);v.setUint16(10,directory.length,true);v.setUint32(12,size,true);v.setUint32(16,offset,true);
  const out=new Uint8Array(offset+size+22);let i=0;for(const b of [...parts,...directory,end]){out.set(b,i);i+=b.length;}return out;
 }
-export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChunks=4096}={}) {
- await populationBlockMapperReady;
- const w=world??new World(record.seed,record.biome,record.generationVersion??1,record.worldType);
- if(!world)w.restore(record.edits??[]);
- const ox=w.originX??0,oz=w.originZ??0,owned=new Set([...w.chunks.keys(),...w.chunkEdits.keys()]);
+function regionSource(record, w) {
+ const owned=new Set([...w.chunks.keys(),...w.chunkEdits.keys()]);
  const {columns}=splitRuntime(record),runtime=new Map(columns.map(c=>[`${c.x},${c.z}`,c.state]));
  for(const k of runtime.keys())owned.add(k);
- for(const [k,hex] of Object.entries(record.populatedColumns?.cells??{})) {const [x,z]=k.split(',').map(Number),mask=BigInt('0x'+hex);for(let i=0;i<64;i++)if(mask&(1n<<BigInt(i)))owned.add(`${x*8+(i>>3)},${z*8+(i&7)}`);}
- if(owned.size>maxChunks)throw new Error(`Java export is limited to ${maxChunks} columns per download (${owned.size} requested)`);
- const report={format:'Java 1.7.10 Anvil snapshot',columns:owned.size,unmappedItems:0,unsupportedEntities:0,notes:[
- 'Unzip this directory under the Java 1.7.10 saves directory. blockworld.json is the complete browser backup.',
- 'Provided columns are marked terrain-populated. Java generates outside them using the seed; border features can differ from browser population.',
- 'LightPopulated is false: Java must rebuild light. Village records are written to data/villages.dat; AI/RNG state, player status effects and cross-system tick order are not converted.',
- 'Thrown projectiles and arrows are counted as unsupported entities. Other entities use supported position/motion/health/basic age fields; advanced fields use native defaults.',
- 'Browser legacy landscapes export their finite area; Java generates default terrain outside it.'
- ]}, regions=new Map();let count=0;
+ for(const [k,hex] of Object.entries(record.populatedColumns?.cells??{})) {
+  const [x,z]=k.split(',').map(Number),mask=BigInt('0x'+hex);
+  for(let i=0;i<64;i++)if(mask&(1n<<BigInt(i)))owned.add(`${x*8+(i>>3)},${z*8+(i&7)}`);
+ }
+ return {record,w,owned,runtime};
+}
+
+async function exportRegions({record,w,owned,runtime}, files, report, prefix, progress) {
+ const ox=w.originX??0,oz=w.originZ??0,regions=new Map();
  const farms=new Map(record.farms??[]),fluidCells=new Set((record.fluidTicks?.entries??[]).map(e=>`${e.x},${e.y},${e.z}:${e.block}`));
  for(const k of [...owned].sort((a,b)=>{const [x,z]=a.split(',').map(Number),[u,v]=b.split(',').map(Number);return x-u||z-v;})) {
   const [cx,cz]=k.split(',').map(Number),source=w.chunks.get(k),generated=source?null:w.generateTerrainChunk(cx,cz),blocks=source?.blocks??generated.blocks,meta=source?.meta??generated.metadata,ids=new Int16Array(65536),metadata=new Uint8Array(65536),heights=new Int32Array(256),portals=[];
@@ -188,11 +189,44 @@ export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChu
    const o=toOriginal(id,m,{flowing:fluidCells.has(key+':'+id),moisture:farms.get(key),facing:record.player?.chests?.[key]?.facing,lit:(record.player?.furnaces?.[key]?.burn??0)>0});if(!o)throw new Error(`Unmapped block ${id}`);ids[(lx*16+lz)*256+y]=o[0];metadata[(lx*16+lz)*256+y]=o[1];if(id===149)portals.push([x+ox,y,z+oz]);if(lightOpacity(id)>0)heights[lx+lz*16]=y+1;}
   const chunk=Chunk.fromGeneration(ids,metadata,cx+ox/16,cz+oz/16);chunk.isTerrainPopulated=true;chunk.isLightPopulated=false;chunk.inhabitedTime=typeof record.inhabited==='number'?record.inhabited:0;
   for(let x=0;x<16;x++)for(let z=0;z<16;z++) {chunk.biomes[x+z*16]=w.biomeAt?.(cx*16+x,cz*16+z)?.id??1;chunk.heightMap[x+z*16]=heights[x+z*16];}
-  const document=chunkToNbt(chunk,{lastUpdate:BigInt(record.player?.time??0),...endPortalTiles(payload(runtime.get(k)??{},ox,oz,report,w),portals)}),a=regionAddress(chunk.x,chunk.z),rk=`${a.regionX},${a.regionZ}`;
+  const blockAt=(x,y,z)=>chunk.getBlock(x&15,y,z&15);
+  const document=chunkToNbt(chunk,{lastUpdate:BigInt(record.player?.time??0),...endPortalTiles(payload(runtime.get(k)??{},ox,oz,report,blockAt),portals)}),a=regionAddress(chunk.x,chunk.z),rk=`${a.regionX},${a.regionZ}`;
   if(!regions.has(rk))regions.set(rk,[]);regions.get(rk).push(await encodeRegionChunk(document,{x:a.x,z:a.z,timestamp:Math.floor((record.updated??0)/1000)}));
-  onProgress(++count,owned.size);if(count%8===0)await new Promise(r=>setTimeout(r,0));
+  await progress();
  }
- const files=new Map();for(const [k,entries] of regions){const [x,z]=k.split(',');files.set(`region/r.${x}.${z}.mca`,writeRegion(entries));}
+ for(const [k,entries] of regions){const [x,z]=k.split(',');files.set(`${prefix}region/r.${x}.${z}.mca`,writeRegion(entries));}
+}
+
+export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChunks=4096}={}) {
+ await populationBlockMapperReady;
+ const w=world??new World(record.seed,record.biome,record.generationVersion??1,record.worldType);
+ if(!world)w.restore(record.edits??[]);
+ const surface=regionSource(record,w),sources=[['',surface]],ox=w.originX??0,oz=w.originZ??0;
+ for(const [dimension,prefix] of [[-1,'DIM-1/'],[1,'DIM1/']]) {
+  const blob=record.dimensions?.[dimension];
+  if(!blob && dimensionOf(record)!==dimension)continue;
+  const view=viewRecord(record,dimension),dimensionWorld=new DimensionWorld(record.seed,dimension);
+  dimensionWorld.restore(blob?.edits??[]);
+  const source=regionSource(view,dimensionWorld);
+  if(dimensionOf(record)===dimension && record.position) {
+   const {x,z}=record.position;
+   if(Number.isFinite(x)&&Number.isFinite(z))source.owned.add(`${Math.floor(x/16)},${Math.floor(z/16)}`);
+  }
+  sources.push([prefix,source]);
+ }
+ const columns=sources.reduce((sum,[,source])=>sum+source.owned.size,0);
+ if(columns>maxChunks)throw new Error(`Java export is limited to ${maxChunks} columns per download (${columns} requested)`);
+ const report={format:'Java 1.7.10 Anvil snapshot',columns,unmappedItems:0,unsupportedEntities:0,notes:[
+  'Unzip this directory under the Java 1.7.10 saves directory. blockworld.json is the browser backup.',
+  'Provided columns are marked terrain-populated. Java generates outside them using the seed; border features can differ from browser population.',
+  'LightPopulated is false: Java must rebuild light. AI/RNG state, player status effects, cross-system tick order and dragon death progress are not converted.',
+  'Thrown projectiles and arrows are counted as unsupported entities. Other entities use supported fields; advanced fields use native defaults.',
+  'Browser legacy landscapes export their finite area; Java generates default terrain outside it.'
+ ]},files=new Map();
+ let count=0;
+ const progress=async()=>{onProgress(++count,columns);if(count%8===0)await new Promise(r=>setTimeout(r,0));};
+ for(const [prefix,source] of sources)await exportRegions(source,files,report,prefix,progress);
+ const {owned}=surface;
  files.set('level.dat',await encodeCompressedNbt(levelNbt(record,w,report)));
  // Structure starts: v14/v15 rerun the four range-8 searches over the exported native chunks; imported data/*.dat is merged (native precedence).
  {const {files:sd,report:sr}=await structureDataFiles({record,seed:w.javaSeed??record.seed,generationVersion:record.generationVersion??w.generationVersion,chunks:[...owned].map(k=>{const [x,z]=k.split(',').map(Number);return [x+ox/16,z+oz/16];})});

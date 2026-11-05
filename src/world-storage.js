@@ -136,7 +136,7 @@ export async function writeWorldShelf(records, storage, key, chunks = []) {
   // Serialize the shelf with its database writes as well as the transactions.
   // Otherwise a pending save can republish an older shelf after a deletion.
   return serializeWrite(async()=>{
-    if (snapshots.length || database) {
+    if (snapshots.length || columns.length || database) {
       const db = await openWorldStorage();
       await new Promise((resolve,reject)=>{
         const tx = db.transaction([STORE,CHUNKS,RUNTIME,CONTAINERS],'readwrite'), store = tx.objectStore(STORE), chunkStore = tx.objectStore(CHUNKS);

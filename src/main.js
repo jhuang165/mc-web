@@ -3,7 +3,7 @@ import { StreamStorage } from './streaming-storage.js';
 import { isColoredBlock, carpetNeighbourChange, coloredPickDamage, COLORED_ITEM_OFFSET, CARPET } from './colored-blocks.js';
 import { ContainerResidency } from './container-residency.js';
 import { acquireWorldWriter } from './world-lock.js';
-import { readWorldShelf, writeWorldShelf, deleteStoredWorld, readChunkEdits, readRuntimeState } from './world-storage.js';
+import { readWorldShelf, writeWorldShelf, deleteStoredWorld, readChunkEdits, readRuntimeState, chunkRecords } from './world-storage.js';
 import {PopulationBlocks} from './population-blocks.js';
 import {hasSavedStructures as hasSavedPopulation} from './structure-simulation.js';
 import {restorePopulation,restorePopulationColumns} from './population-runtime.js';
@@ -133,7 +133,9 @@ import { Fluids, eyeInWater } from "./fluids.js";
 import { Fire } from "./fire.js";
 import { difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.js";
 import { isInvisible } from "./mob-effects.js";
-import { DimensionLive, storedRecord, dimensionOf, viewId, bedExplosion } from './dimension-live.js'; // Nether/End travel (dimensions track)
+import { DimensionWorld } from './dimension-world.js';
+import { showEndCredits } from './end-credits.js';
+import { DimensionLive, storedRecord, dimensionOf, rootIdOf, viewId, bedExplosion } from './dimension-live.js'; // Nether/End travel (dimensions track)
 import { PortalTimer, splashBreak, NIGHT_VISION, BLINDNESS, NAUSEA, INVISIBILITY } from "./potion-fx.js";
 import { primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { TntRenderer } from "./tnt-renderer.js";
@@ -695,25 +697,32 @@ function save() {
   lastSave = elapsed;
   return completion;
 }
-async function exportWorld(record = active) {
-  const exportingWorld=record===active?world:null;
-  if (exportingWorld) await save();
-  try {record = structuredClone(await readRuntimeState(record));}
-  catch(e) {toast('Could not read this world: '+e.message);return;}
-  // Exports stay self-contained: a chunked world's edits are read back into the file.
-  let edits = record.edits;
-  if (record.chunked) {
-    try { edits = await readChunkEdits(record.id);
-      if(exportingWorld?.streaming)edits=[...new Map([...edits,...exportingWorld.edits])];
-    }
-    catch (e) { toast("Could not read this world: " + e.message); return; }
+async function exportSnapshot(record) {
+  const id = rootIdOf(record), running = rootIdOf(active) === id;
+  if (running) await save();
+  const root = worlds.find(w => w.id === id) ?? record;
+  const snapshot = structuredClone(await readRuntimeState(root));
+  const allEdits = async (id) => {
+    const durable = await readChunkEdits(id);
+    return running && active.id === id ? [...new Map([...durable, ...world.edits])] : durable;
+  };
+  if (snapshot.chunked) snapshot.edits = await allEdits(id);
+  for (const d of [-1, 1]) {
+    const blob = snapshot.dimensions?.[d];
+    if (blob) blob.edits = await allEdits(viewId(id, d));
   }
+  return snapshot;
+}
+
+async function exportWorld(record = active) {
+  try { record = await exportSnapshot(record); }
+  catch (e) { toast('Could not read this world: ' + e.message); return; }
   const { chunked, runtimeChunked, editSequence, ...rest } = record;
   const url = URL.createObjectURL(
     new Blob(
       [
         JSON.stringify(
-          { ...rest, edits, format: "blockworld", version: 1 },
+          { ...rest, format: "blockworld", version: 1 },
           null,
           2,
         ),
@@ -741,10 +750,7 @@ function chooseExport(record=active) {
     exportBusy=true;
     const buttons=$('#modal').querySelectorAll('button');for(const b of buttons)b.disabled=true;
     try {
-      const exportingWorld=record===active?world:null;
-      if(exportingWorld)await save();
-      const snapshot=structuredClone(await readRuntimeState(record));
-      if(snapshot.chunked) {snapshot.edits=await readChunkEdits(snapshot.id);if(exportingWorld?.streaming)snapshot.edits=[...new Map([...snapshot.edits,...exportingWorld.edits])];}
+      const snapshot = await exportSnapshot(record);
       const {exportJavaSave}=await import('./region-export.js');
       const result=await exportJavaSave(snapshot,{onProgress:(n,total)=>{$('#export-java').textContent=`Exporting ${n} / ${total} columns…`;}});
       const url=URL.createObjectURL(new Blob([result.zip],{type:'application/zip'})),a=document.createElement('a');a.href=url;a.download=record.name.replace(/[^a-z0-9]/gi,'-').toLowerCase()+'.java-1.7.10.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -1011,7 +1017,7 @@ async function launch(record, prepared) {
     beacons = new Beacons().fromJSON(record.beacons); beaconRenderer?.clear();
     for (const [k, v] of world.edits) if ((v & 255) === BEACON) beacons.ensure(...k.split(",").map(Number));
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
-    mobs = new EntityWorld(world, world.generationVersion>=11&&!hasSavedPopulation(record)?[]:record.entities);
+    mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities);
     mobs.fx = scene.fx;
     if (pendingDragon) {
       pendingDragon = false;
@@ -1024,6 +1030,7 @@ async function launch(record, prepared) {
     mobs.onLand = (entity, distance) => trampleFarmland(entity, distance);
     // World.getLightBrightness for EntityAI.getBlockPathWeight: daylight-reduced sky or block light.
     mobs.lightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, scene.subtracted) : 15);
+    mobs.dimensionBlockLight = (x, y, z) => scene.light?.blockAt(x, y, z) ?? 0;
     // Ocelot hooks (ocelot-ai.js, chest.js): the player's look for Tempt, chest and furnace state for OcelotSit, sitting cats on chests.
     mobs.playerLook = () => { const e = playerEye(); return { yaw: e.yaw, pitch: e.pitch }; };
     mobs.ocelotBlocks = { chestUsers: (x, y, z) => survival.chests[`${x},${y},${z}`]?.users ?? 0, furnaceLit: (x, y, z) => (survival.furnaces[`${x},${y},${z}`]?.burn ?? 0) > 0 };
@@ -1032,7 +1039,7 @@ async function launch(record, prepared) {
     mobs.wet = (e, height) => isWet(weather, world, e, height);
     // World.isDaytime (skylightSubtracted < 4) and Chunk.canBlockSeeTheSky for the skeleton's
     // sunburn and its sun tasks; EntitySkeleton's arrows come from bow.js.
-    mobs.isDaytime = () => (scene.subtracted ?? 0) < 4;
+    mobs.isDaytime = () => !world.dimension && (scene.subtracted ?? 0) < 4;
     mobs.canSeeSky = (x, y, z) => canSeeSky(world, x, y, z);
     mobs.isRaining = () => weather.isRaining();
     mobs.shoot = (e, target, scale) => arrows.skeletonShoot(e, target, scale, mobs.difficulty);
@@ -2010,7 +2017,18 @@ function tickWeather() {
 }
 // EntityPlayerSP.timeInPortal: Nausea longer than 60 ticks winds the screen warp up (potion-fx.js).
 const portalTimer = new PortalTimer();
-const dims = new DimensionLive({ active: () => active, worlds: () => worlds, save: () => save(), openWorld: (r) => openWorld(r), player: () => ({ x: position.x, y: position.y, z: position.z, yaw }), sound: (n, o) => sounds.play(n, o) });
+const dims = new DimensionLive({
+  active: () => active, worlds: () => worlds, save: () => save(), openWorld,
+  player: () => ({ x: position.x, y: position.y, z: position.z, yaw }),
+  sound: (n, o) => sounds.play(n, o),
+  showCredits: async () => {
+    screen = "credits";
+    keys.clear();
+    if (document.pointerLockElement) document.exitPointerLock();
+    await showEndCredits();
+    screen = "playing";
+  },
+});
 // First entry to the End (dimension-live.js): ChunkProviderEnd's dragon, spawned once the new world's mobs exist (launch).
 let pendingDragon = false;
 dims.onDragonSpawn = () => { pendingDragon = true; };
@@ -2628,8 +2646,19 @@ $("#file-input").onchange = async (e) => {
       mode: gameModeOf(data.mode),
       player: new Survival(legacyPlayer(data), data.mode).serialize(),
     };
+    const columns = [];
+    if ([-1, 1].includes(data.dimension)) record.dimension = data.dimension;
+    for (const d of [-1, 1]) {
+      const blob = data.dimensions?.[d];
+      if (!blob || typeof blob !== 'object') continue;
+      const check = new DimensionWorld(record.seed, d);
+      check.restore(blob.edits ?? []);
+      const { edits, ...state } = blob;
+      (record.dimensions ??= {})[d] = state;
+      columns.push(...chunkRecords(viewId(record.id, d), check.edits));
+    }
     worlds.unshift(record);
-    if (!await persist()) throw new Error('World imported in memory. Export a copy because device storage is unavailable.');
+    if (!await persist(columns)) throw new Error('World imported in memory. Export a copy because device storage is unavailable.');
     if (gui.screen?.id === "select-world") gui.build();
     toast("World imported.");
   } catch (err) {
@@ -2639,6 +2668,7 @@ $("#file-input").onchange = async (e) => {
 };
 
 window.addEventListener("keydown", (e) => {
+  if (screen === "credits") return;
   if(exportBusy){e.preventDefault();return;}
   // An open menu screen takes every key (GuiScreen.handleKeyboardInput).
   if (gui.open) {

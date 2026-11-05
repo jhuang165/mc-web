@@ -22,8 +22,8 @@ exercised through `NetherArea` in tests. This is not full parity; see Gaps.
 
 ## Gaps
 
-- No runtime behaviour: nothing spawns fortress mobs in game, the wither skeleton roll (skeleton type 1 from the Nether spawn rule) is not wired, and the Nether is not reachable from the game.
+- The live dimension regenerates fortress pieces and passes their loot chests and Blaze spawner tiles into the runtime once per column. Natural spawn attempts use the fortress list in eligible cells and choose wither skeletons four times out of five when the list rolls Skeleton. The browser uses a smaller spawn window and a sampled pack pass.
 - No `MapGenStructureData` persistence (start list is regenerated from the seed), no NBT save/load of pieces, no `/locate`-style lookup (`nearestFortressStart` exists but is untested).
 - Placement was only probed on 16 seeds and two windows; the 1.7.10 `Start` save path is not exercised.
 - Light, entity and block-update side effects beyond those in `NetherGenWorld` (e.g. the lava flow after the Entrance tick) are exact only where the probe world double exercises them.
-- Nothing was checked in a browser.
+- Seed 1 was exercised in Survival on the browser build, including a live Blaze spawner and rod pickup.

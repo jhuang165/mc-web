@@ -201,7 +201,7 @@ export class TorchFlicker {
 // block level across. `gamma` is the Brightness option (0 Moody, 1 Bright).
 // `flash` is World.lastLightningBolt > 0: the sky level then ignores the sun and
 // rain dimming (the sky term is the bare brightness table).
-export function lightmap(sun, flicker, gamma = 0, out = new Uint8Array(1024), flash = false, nightVision = 0) {
+export function lightmap(sun, flicker, gamma = 0, out = new Uint8Array(1024), flash = false, nightVision = 0, dimension = 0) {
   const f4 = f(f(sun * f(0.95)) + f(0.05)),
     skyScale = f(f(sun * f(0.65)) + f(0.35)),
     blockScale = f(f(flicker * f(0.1)) + 1.5),
@@ -212,11 +212,15 @@ export function lightmap(sun, flicker, gamma = 0, out = new Uint8Array(1024), fl
   for (let i = 0; i < 256; i++) {
     const skyB = flash ? BRIGHTNESS[i >> 4] : f(BRIGHTNESS[i >> 4] * f4),
       blockB = f(BRIGHTNESS[i & 15] * blockScale);
-    let rgb = [
-      f(f(skyB * skyScale) + blockB),
-      f(f(skyB * skyScale) + f(blockB * f(f(f(f(blockB * f(0.6)) + f(0.4)) * f(0.6)) + f(0.4)))),
-      f(skyB + f(blockB * f(f(f(blockB * blockB) * f(0.6)) + f(0.4)))),
-    ].map((c) => f(f(c * f(0.96)) + f(0.03)));
+    const block = [
+      blockB,
+      f(blockB * f(f(f(f(blockB * f(0.6)) + f(0.4)) * f(0.6)) + f(0.4))),
+      f(blockB * f(f(f(blockB * blockB) * f(0.6)) + f(0.4))),
+    ];
+    // EntityRenderer.updateLightmap replaces the sky blend in dimension 1.
+    let rgb = dimension === 1
+      ? block.map((c, k) => f(f([0.22, 0.28, 0.25][k]) + f(c * f(0.75))))
+      : block.map((c, k) => f(f(f((k === 2 ? skyB : f(skyB * skyScale)) + c) * f(0.96)) + f(0.03)));
     // EntityRenderer.updateLightmap: Night Vision scales every channel towards 1 / max(r, g, b) by getNightVisionBrightness.
     if (nightVision > 0) {
       const m = f(Math.min(f(1 / rgb[0]), f(1 / rgb[1]), f(1 / rgb[2])));

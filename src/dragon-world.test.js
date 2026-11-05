@@ -85,3 +85,14 @@ test("save and restore keep the dragon", () => {
   for (let i = 0; i < 5; i++) w2.tick(p, s);
   assert.equal(w2.entities.length, 1);
 });
+
+test("a dying dragon resumes the death timer and builds its exit after a reload", () => {
+  const mobs = make(), d = spawnDragonIfAbsent(world, mobs), p = player(), s = surv();
+  d.health = 0;
+  for (let i = 0; i < 175; i++) mobs.tick(p, s);
+  const reloaded = new EntityWorld(world, mobs.serialize());
+  assert.equal(reloaded.entities[0].dragonSave.deathTicks, 175);
+  for (let i = 0; i < 25; i++) reloaded.tick(p, s);
+  assert.equal(reloaded.entities.some(e => e.type === "ender_dragon"), false);
+  assert.ok([...cells.values()].includes(149));
+});

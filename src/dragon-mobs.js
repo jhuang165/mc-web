@@ -79,7 +79,7 @@ export function dragonHost(mobs, e, ctx = {}) {
       return b === 0 ? 0 : b === OBSIDIAN || b === END_STONE || b === BEDROCK ? 1 : 2;
     },
     removeBlock(x, y, z) {
-      if (!world.set(x, y, z, 0, false, 0)) return false;
+      if (!world.set(x, y, z, 0, true, 0)) return false;
       edits.push([x, y, z]);
       return true;
     },
@@ -91,7 +91,8 @@ export function dragonHost(mobs, e, ctx = {}) {
       createExitPortal({
         setBlock(bx, by, bz, id) {
           const m = id === 0 ? { id: 0, meta: 0 } : fromOriginal(id, 0);
-          if (m && world.set(bx, by, bz, m.id, false, m.meta)) edits.push([bx, by, bz]);
+          if (m && (world.get(bx, by, bz) !== m.id || world.getMeta(bx, by, bz) !== m.meta) &&
+              world.set(bx, by, bz, m.id, true, m.meta)) edits.push([bx, by, bz]);
         },
       }, x, z);
     },

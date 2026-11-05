@@ -11,6 +11,10 @@ import { World } from "./world.js";
 import { javaSeed } from "./java-world.js";
 import { JavaRandom } from "./java-random.js";
 import { fromOriginal } from "./block-registry.js";
+import { fortressMonsterSpawnList, MapGenNetherBridge } from "./fortress.js";
+import { NETHER_BRICK } from "./nether-blocks.js";
+import { structureTileRecords } from "./population-world.js";
+import { StreamingPopulation } from "./streaming-population.js";
 import { ChunkProviderHell, NetherGenWorld, hellChunkSeed } from "./nether-generator.js";
 import { EndTerrain, EndWorld, populateEndChunk, END_BIOME_ID, END_HEIGHT } from "./end-generator.js";
 import { providerOf, NETHER, END } from "./dimensions.js";
@@ -34,6 +38,19 @@ const offsets = [[0, 0], [-1, 0], [0, -1], [-1, -1]];
 // Stable per-chunk population seed (an approximation of the original's carried-over Random state).
 const popSeed = (seed, cx, cz) => BigInt.asIntN(64, seed ^ (BigInt(cx) * 341873128712n + BigInt(cz) * 132897987541n));
 
+class FortressPopulation extends StreamingPopulation {
+  constructor(seed) {
+    super({ seed, originX: 0, originZ: 0 });
+    this.records = new Map();
+  }
+  cell() { return this; }
+  claim(columns) {
+    const result = super.claim(columns);
+    for (const [x, z] of columns) this.records.delete(`${x},${z}`);
+    return result;
+  }
+}
+
 export class DimensionWorld extends World {
   static pending = 0;
   constructor(seed, dimension) {
@@ -55,6 +72,7 @@ export class DimensionWorld extends World {
     this.terrainCache = new Map();
     this.provider = dimension === NETHER ? new ChunkProviderHell(this.javaSeed) : null;
     this.populator = dimension === NETHER ? new ChunkProviderHell(this.javaSeed) : null;
+    this.population = dimension === NETHER ? new FortressPopulation(this.javaSeed) : null;
     this.endTerrain = dimension === END ? new EndTerrain(this.javaSeed) : null;
     this.biomeAt = () => (dimension === NETHER ? NETHER_BIOME : END_BIOME);
     this.temperatureAt = () => (dimension === NETHER ? 2 : 0.5);
@@ -66,6 +84,10 @@ export class DimensionWorld extends World {
   }
   // The Nether has 128 usable layers (WorldProvider.getActualHeight); the End 128 of terrain with a build limit of 256.
   get actualHeight() { return providerOf(this.dimension).hasNoSky ? 128 : 256; }
+  fortressSpawns(x, y, z) {
+    return fortressMonsterSpawnList(this.provider.bridge,
+      (bx, by, bz) => this.get(bx, by, bz) === NETHER_BRICK ? 112 : 0, x, y, z);
+  }
   // streamAround's contract: { blocks, metadata } in this world's own ids, index (lx * 16 + lz) * height + y.
   generateTerrainChunk(cx, cz) {
     const key = `${cx},${cz}`, hit = this.pregenerated.get(key);
@@ -84,6 +106,10 @@ export class DimensionWorld extends World {
   }
   netherChunk(cx, cz) {
     const gen = new NetherGenWorld({ rand: new JavaRandom(popSeed(this.javaSeed, cx, cz)), halo: { generateChunk: (x, z) => this.hellTerrain(x, z) } });
+    // Each reconstruction owns fresh structure pieces: their one-time loot/spawner
+    // flags must not carry over from another generated column.
+    this.populator.bridge = new MapGenNetherBridge(this.javaSeed);
+    this.populator.bridge.generate(cx, cz);
     let source = null;
     for (const [dx, dz] of offsets) {
       const px = cx + dx, pz = cz + dz;
@@ -101,6 +127,14 @@ export class DimensionWorld extends World {
         if (!id) continue;
         const m = internal(id, source.getMeta(lx, y, lz), 150), i = (lx * 16 + lz) * 256 + y;
         blocks[i] = m.id; metadata[i] = m.meta;
+      }
+      if (!this.population.isMaterialized(cx, cz)) {
+        const inside = (x, z) => x >> 4 === cx && z >> 4 === cz;
+        const { chests } = structureTileRecords(gen, inside);
+        const spawners = [...source.tiles.values()].filter(t => t.kind === "spawner")
+          .map(t => ({ x: t.x, y: t.y, z: t.z, entityId: t.name }));
+        if (chests.length || spawners.length)
+          this.population.records.set(`${cx},${cz}`, { chests, spawners, minecartChests: [], pendingTicks: [] });
       }
     } else {
       const t = this.hellTerrain(cx, cz).blocks;

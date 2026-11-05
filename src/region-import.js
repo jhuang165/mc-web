@@ -6,7 +6,9 @@ import { readJukeboxTile } from "./jukebox.js";
 // generated terrain of `seed`; supported chest/furnace contents and dropped items travel in the player
 // and runtime fields the importer already reads. Everything else is counted in the loss report.
 import { parseStructureDataFiles } from './structure-data.js';
-import { World, SIZE, SAPLING, WEB, LADDER, YELLOW_FLOWER, RED_FLOWER, DYE, SNOW_LAYER, ICE, CACTUS, TNT, FENCE, RAIL } from './world.js';
+import { World, SIZE, MOB_SPAWNER, SAPLING, WEB, LADDER, YELLOW_FLOWER, RED_FLOWER, DYE, SNOW_LAYER, ICE, CACTUS, TNT, FENCE, RAIL } from './world.js';
+import { DimensionWorld } from './dimension-world.js';
+import { DIM_KEYS, TILE_KEYS } from './dimension-live.js';
 import { isJavaLandscape } from './java-world.js';
 import { fromOriginal, isRegistered } from './block-registry.js';
 import { readRegion, decodeRegionChunk, regionAddress, regionSlot } from './region-file.js';
@@ -161,6 +163,7 @@ function validateArea(area) {
   const { chunkX, chunkZ, width = LIVE_CHUNKS, depth = LIVE_CHUNKS } = area;
   for (const v of [chunkX, chunkZ]) if (!Number.isSafeInteger(v) || v < -1875000 || v >= 1875000) throw new RangeError('Area chunk coordinates exceed the 1.7.10 world border');
   for (const v of [width, depth]) if (!Number.isInteger(v) || v < 1 || v > LIVE_CHUNKS) throw new RangeError(`Area width and depth must be 1-${LIVE_CHUNKS} chunks (the browser world is ${SIZE}x${SIZE} blocks)`);
+  if (chunkX + width > 1875000 || chunkZ + depth > 1875000) throw new RangeError('Area chunk coordinates exceed the 1.7.10 world border');
   return { chunkX, chunkZ, width, depth };
 }
 
@@ -174,10 +177,12 @@ function validateArea(area) {
  *   destination  {chunkX, chunkZ} live chunk of the area's north-west corner; defaults to the generator's own
  *                position when the area lies inside the base world's 8x8 chunks, else centred
  *   missing      'generated' keeps base terrain for absent chunks, 'air' clears them to void
- *   mode, name, hasSky
+ *   mode, name, hasSky, dimension (0, -1 or 1; nonzero regions keep native coordinates)
  */
 export async function importJavaRegionArea(regions, options = {}) {
-  const { seed = '1710', landscape = 'java', missing = 'generated', mode = 'creative', hasSky = true } = options;
+  const { seed = '1710', landscape = 'java', missing = 'generated', mode = 'creative', dimension = 0, hasSky = dimension !== -1 } = options;
+  if (![0, -1, 1].includes(dimension)) throw new Error('Unsupported dimension');
+  if (dimension && options.destination) throw new Error('Dimension regions keep their native coordinates');
   if (!isJavaLandscape(landscape)) throw new Error(`Unknown Java landscape ${landscape}`);
   if (missing !== 'generated' && missing !== 'air') throw new Error("missing must be 'generated' or 'air'");
   if (mode !== 'creative' && mode !== 'survival') throw new Error("mode must be 'creative' or 'survival'");
@@ -193,15 +198,17 @@ export async function importJavaRegionArea(regions, options = {}) {
   }
 
   if (options.area) validateArea(options.area);
-  const world = new World(seedText, landscape, 9), height = world.height;
-  const origin = { chunkX: world.originX >> 4, chunkZ: world.originZ >> 4 };
+  const world = dimension ? new DimensionWorld(seedText, dimension) : new World(seedText, landscape, 9);
+  const height = world.height, origin = { chunkX: world.originX >> 4, chunkZ: world.originZ >> 4 };
   const area = validateArea(options.area ?? { ...origin, width: LIVE_CHUNKS, depth: LIVE_CHUNKS });
   const offset = { chunkX: area.chunkX - origin.chunkX, chunkZ: area.chunkZ - origin.chunkZ };
-  const aligned = offset.chunkX >= 0 && offset.chunkZ >= 0 && offset.chunkX + area.width <= LIVE_CHUNKS && offset.chunkZ + area.depth <= LIVE_CHUNKS;
-  const destination = options.destination ?? (aligned ? offset
+  const aligned = !!dimension || (offset.chunkX >= 0 && offset.chunkZ >= 0 && offset.chunkX + area.width <= LIVE_CHUNKS && offset.chunkZ + area.depth <= LIVE_CHUNKS);
+  const destination = dimension ? { chunkX: area.chunkX, chunkZ: area.chunkZ } : options.destination ?? (aligned ? offset
     : { chunkX: (LIVE_CHUNKS - area.width) >> 1, chunkZ: (LIVE_CHUNKS - area.depth) >> 1 });
-  for (const [v, size] of [[destination.chunkX, area.width], [destination.chunkZ, area.depth]])
-    if (!Number.isInteger(v) || v < 0 || v + size > LIVE_CHUNKS) throw new RangeError('Destination must keep the area inside the browser world');
+  if (!dimension) {
+    for (const [v, size] of [[destination.chunkX, area.width], [destination.chunkZ, area.depth]])
+      if (!Number.isInteger(v) || v < 0 || v + size > LIVE_CHUNKS) throw new RangeError('Destination must keep the area inside the browser world');
+  } else world.streamAround((area.chunkX + 4) * 16, (area.chunkZ + 4) * 16);
   const shiftX = (destination.chunkX - area.chunkX) * 16, shiftZ = (destination.chunkZ - area.chunkZ) * 16;
 
   const report = {
@@ -222,7 +229,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   const unsupported = new Map(), approximations = new Map(), tileLost = new Map(), tileConverted = new Map();
   const itemLost = new Map(), entityLost = new Map(), entityConverted = new Map();
   const commandBlocks = [], musicTiles = [];
-  const signs = [], skulls = [], beacons = [];
+  const signs = [], skulls = [], beacons = [], spawners = [], importedColumns = {};
   const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = [];
   let edits = 0;
   const write = (x, y, z, block, meta) => {
@@ -277,6 +284,10 @@ export async function importJavaRegionArea(regions, options = {}) {
     }
     const { chunk, entities, tileEntities, tileTicks } = decoded;
     report.chunks.converted++;
+    if (dimension) {
+      const k = `${cx >> 3},${cz >> 3}`, bit = 1n << BigInt((cx & 7) * 8 + (cz & 7));
+      importedColumns[k] = ((importedColumns[k] ?? 0n) | bit);
+    }
 
     // Blocks: full height, through the block registry. Chest facing is carried in its chest record.
     const facings = new Map();
@@ -308,7 +319,7 @@ export async function importJavaRegionArea(regions, options = {}) {
       const source = chunk.biomes[dx + dz * 16] & 255;
       if (source === 255) { report.biomes.unset++; continue; }
       report.biomes.compared++;
-      if (world.biomeIds[(baseX + dx) * SIZE + baseZ + dz] === source) report.biomes.matching++;
+      if ((dimension ? world.biomeAt().id : world.biomeIds[(baseX + dx) * SIZE + baseZ + dz]) === source) report.biomes.matching++;
       else report.biomes.differing++;
     }
 
@@ -323,6 +334,14 @@ export async function importJavaRegionArea(regions, options = {}) {
         const loaded = readContainerTile(id, tile, { convertItem, invalidSlot: slot => tally(itemLost, `slot ${slot}`) });
         const stores = { chests, furnaces, dispensers, hoppers, brewing };
         stores[loaded.name][key] = { ...stores[loaded.name][key], ...loaded.record };
+        tally(tileConverted, id);
+      } else if (inside && id === 'MobSpawner' && block === MOB_SPAWNER) {
+        const values = ['Delay', 'MinSpawnDelay', 'MaxSpawnDelay', 'SpawnCount', 'MaxNearbyEntities', 'RequiredPlayerRange', 'SpawnRange'];
+        const params = values.flatMap(k => {
+          const value = get(tile, k, NBT.SHORT);
+          return value === undefined ? [] : [[k, value]];
+        });
+        spawners.push({ x: lx, y, z: lz, EntityId: get(tile, 'EntityId', NBT.STRING, 'Pig'), ...Object.fromEntries(params) });
         tally(tileConverted, id);
       } else if (inside && id === 'Airportal' && block === 149) {
         tally(tileConverted, id); // TileEntityEndPortal has no saved fields
@@ -430,8 +449,12 @@ export async function importJavaRegionArea(regions, options = {}) {
   // Start above the centre of the area, on its highest solid block.
   const px = destination.chunkX * 16 + area.width * 8, pz = destination.chunkZ * 16 + area.depth * 8;
   let py = height - 1;
-  while (py > 0 && !world.solid(px, py, pz)) py--;
-  const record = {
+  if (dimension === -1) {
+    // Prefer a sheltered floor in the imported area to the Nether's bedrock roof.
+    py = 123;
+    while (py > 1 && (!world.solid(px, py, pz) || world.get(px, py + 1, pz) || world.get(px, py + 2, pz))) py--;
+  } else while (py > 0 && !world.solid(px, py, pz)) py--;
+  let record = {
     format: 'blockworld', version: 1, generationVersion: 9, seed: seedText, biome: landscape, mode,
     name: String(options.name ?? `Java ${area.chunkX},${area.chunkZ} ${area.width}x${area.depth}`).slice(0, 40),
     edits: [...world.edits],
@@ -440,11 +463,24 @@ export async function importJavaRegionArea(regions, options = {}) {
     player: { chests, furnaces, dispensers, hoppers, brewing },
     pistons, commandBlocks, ...(musicTiles.length ? { musicTiles } : {}), ...(signs.length ? { signs } : {}), ...(skulls.length ? { skulls } : {}), ...(beacons.length ? { beacons } : {}),
     drops,
+    ...(spawners.length ? { spawners } : {}),
     ...(mobs.length ? { entities: mobs } : {}),
     ...(villages ? { villages } : {}),
     ...(mapsImport.maps ? { maps: mapsImport.maps } : {}),
     ...(report.structures?.kept ? { structureData: parsedStructures.structureData } : {}),
   };
+  if (dimension) {
+    const state = Object.fromEntries(DIM_KEYS.filter(k => Object.hasOwn(record, k)).map(k => [k, record[k]]));
+    const tiles = Object.fromEntries(TILE_KEYS.filter(k => Object.hasOwn(record.player, k)).map(k => [k, record.player[k]]));
+    state.populatedColumns = { version: 1, cells: Object.fromEntries(Object.entries(importedColumns).map(([k, v]) => [k, v.toString(16)])) };
+    if (dimension === 1) state.dragonSpawned = true;
+    record = {
+      format: record.format, version: record.version, seed: seedText, name: record.name, mode,
+      biome: 'javaStreamed', generationVersion: 15, dimension, position: record.position, edits: [],
+      dimensions: { [dimension]: { state, tiles, edits: record.edits } },
+    };
+    report.source.dimension = dimension;
+  }
   report.bytes = new TextEncoder().encode(JSON.stringify(record)).length;
   if (report.bytes > IMPORT_BYTE_LIMIT) {
     const error = new RangeError(`The export is ${report.bytes} bytes; the Import screen accepts at most ${IMPORT_BYTE_LIMIT}.`);

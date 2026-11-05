@@ -2,6 +2,8 @@
 
 Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.43.0. Full parity is unfinished.
 
+Endgame follow-up (2026-11-05, Codex): enabled natural Nether and End spawning and connected the fortress list, loot chests and Blaze spawners to the live chunks. The End uses the client lightmap blend, original credits text and seeded dragon death rays. Browser saves preserve the death timer and the exit portal. Browser JSON and Java Anvil snapshots carry separate dimension data, and the region converter can import selected native areas under DIM-1 and DIM1. The staged Survival browser run used both portal types, crafted an eye from mob loot, defeated both bosses and collected a Nether Star. The run used scripted positioning/combat and supplied some items. A fresh, unaided run and full native save parity are open. See `public/research/dimensions.md`.
+
 Post-batch-6 batch 7 (2026-11-05, claude-lead): five tracks merged (fortress 474d39e, polish d0e2a7e/3e47a0f/f624794, wither boss c90d1f9, dimensions 6e37594, dragon 05a7989).
 - Dimensions: Nether and End portals travel between streamed `DimensionWorld`s (dimension -1 / 1), with saves keyed `${worldId}~${dimension}`, per-dimension sky/fog/rules and the Teleporter (`dimensions.md`).
 - Nether fortress: MapGenNetherBridge with every piece and its loot. `fortressMonsterSpawnList` is exported but natural spawning does not call it yet (`fortress.md`).

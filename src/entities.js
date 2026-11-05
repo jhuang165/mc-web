@@ -1,4 +1,5 @@
 import { entityActive } from './streaming-ticks.js';
+import { spawnDimensionMonsters } from "./dimension-spawning.js";
 import { gameRule } from "./game-rules.js";
 import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE, isSpider, soundType, caveSpiderPoisonTicks } from "./spider.js";
 import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, SPAWN_BRIGHTNESS } from "./mob-spawner.js";
@@ -644,7 +645,7 @@ export class EntityWorld {
           .map((e) => Number(String(e.id).replace("mob-", "")) + 1)
           .filter(Number.isFinite),
       );
-    } else this.seedAnimals();
+    } else if (!world.dimension) this.seedAnimals();
   }
   // A saved mob record (a browser save, java-mobs.js import or /summon's data tag) back to a live mob, or null when it
   // is unusable. The caller adds it and advances nextId.
@@ -657,7 +658,7 @@ export class EntityWorld {
       (world.streaming ? !world.inside(Math.floor(e.x),0,Math.floor(e.z)) : e.x < 0 || e.x >= SIZE || e.z < 0 || e.z >= SIZE) ||
       e.y < -64 ||
       e.y >= (world.height ?? HEIGHT) ||
-      (e.health <= 0 && !summoned)
+      (e.health <= 0 && !summoned && !(e.type === "ender_dragon" && e.dragonSave?.deathTicks >= 0 && e.dragonSave.deathTicks < 200))
     )
       return null;
     const fresh = this.create(e.type, e.x, e.y, e.z);
@@ -1003,7 +1004,7 @@ export class EntityWorld {
     return {
       countNearby: (type, box) => this.entities.reduce((n, o) => n + (countsAs(type, o.type) && boxesIntersect(box, sized(o)) ? 1 : 0), 0),
       createMob: (type, x, y, z, yaw) => {
-        if (!ENTITY_TYPES[type] || this.entities.length >= 40) return null;
+        if (!ENTITY_TYPES[type] || this.entities.length >= (env.limit ?? 40)) return null;
         const e = this.create(type, x, y, z);
         // setLocationAndAngles(x, y, z, yaw, 0).
         for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) e[k] = yaw;
@@ -1013,6 +1014,12 @@ export class EntityWorld {
       canSpawnHere: (e) => {
         const t = ENTITY_TYPES[e.type], box = { x: e.x, y: e.y, z: e.z, width: t.width * mobScale(e), height: t.height * mobScale(e) };
         const sb = mobBox(e.x, e.y, e.z, box.width, box.height);
+        // Pig zombies and magma cubes use only the space checks. Ghasts also
+        // roll 1 in 20; blazes override EntityMob.isValidLightLevel.
+        if (["pigman", "magma_cube", "ghast", "blaze"].includes(e.type)) {
+          if (e.type === "ghast" && entityRandom(e).nextInt(20) !== 0) return false;
+          return this.difficulty !== PEACEFUL && !blocked(sb) && !collisionBoxes(this.world, sb).length && !liquid(sb);
+        }
         if (e.type === "silverfish") {
           // EntitySilverfish.getCanSpawnHere: no light rolls (isValidLightLevel is true), stone-friendly path weight, no player within 5.
           const p = this.ai?.player;
@@ -1459,7 +1466,6 @@ export class EntityWorld {
     });
   }
   tick(player, survival, heldItem=0) {
-    // The Overworld spawn rules below do not apply in the Nether/End (dimensions.md Gaps: no dimension spawn lists yet).
     const night = !this.world.dimension &&
       survival.time % 24000 > 13000 && survival.time % 24000 < 23000;
     this.spawnClock++;
@@ -1475,6 +1481,16 @@ export class EntityWorld {
     this._golemBalls?.tick(); // snow golem snowballs (mooshroom-golem-live.js)
     // WorldServer.tick runs SpawnerAnimals.findChunksForSpawning only while gamerule doMobSpawning is true; no monsters on Peaceful.
     const hostile = this.difficulty !== PEACEFUL && gameRule("doMobSpawning");
+    if (this.world.dimension) {
+      // A natural monster can leave the working set before its normal
+      // despawn tick. Apply the distance check to those actors as well.
+      this.entities = this.entities.filter(e => !e.naturalDimensionSpawn || e.persistent ||
+        (player.x - e.x) ** 2 + (player.y - e.y) ** 2 + (player.z - e.z) ** 2 <= 128 ** 2);
+      if (hostile && survival.health > 0) {
+        const rand = (this.worldRandom ??= new JavaRandom(Math.floor(this.random() * 2 ** 48)));
+        spawnDimensionMonsters(this, player, rand, this.spawnerHooks({ limit: 256, lightValue: this.dimensionBlockLight }), HOSTILE);
+      }
+    }
     if (!this.world.dimension) {
     ocelotSpawnPass(this, player, survival, gameRule("doMobSpawning")); // SpawnerAnimals for the jungle's ocelots (ocelot-spawn.js)
     squidBatSpawnPass(this, player, survival, gameRule("doMobSpawning")); // water and ambient creatures spawn on Peaceful too
@@ -2072,7 +2088,7 @@ export class EntityWorld {
     e.limbSwing = f(e.limbSwing + e.limbSwingAmount);
   }
   serialize() {
-    return this.entities.filter((e) => e.health > 0).map((e) => {
+    return this.entities.filter((e) => e.health > 0 || e.type === "ender_dragon" && !e.dragonGone).map((e) => {
       const saved = { ...e };
       for (const key of INTERPOLATED) delete saved[key];
       return saved;

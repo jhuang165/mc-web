@@ -2131,3 +2131,47 @@ select:focus {
 }
 /* Original 1.7.10 HUD texture regions, drawn at 2× scale. */
 #hotbar{width:364px;height:44px;padding:2px;gap:0;border:0;border-radius:0;background:transparent url('/media/1.7.10/gui/widgets.png') 0 0 / 512px 512px no-repeat;backdrop-filter:none;image-rendering:pixelated;overflow:visible}#hotbar .slot{width:40px;height:40px;flex-shrink:0;border:0;border-radius:0;background:none;box-shadow:none}#hotbar .slot:hover{background:none}#hotbar .slot.selected:before{content:'';position:absolute;left:-4px;top:-2px;width:48px;height:44px;background:url('/media/1.7.10/gui/widgets.png') 0 -44px / 512px 512px no-repeat;image-rendering:pixelated;pointer-events:none}#hotbar .slot>img{position:relative;z-index:1}#hotbar .slot small{display:none}#hotbar .stack-count{bottom:2px;right:3px;font-size:14px;z-index:2;color:white;text-shadow:2px 2px #333}#hotbar .durability-bar{bottom:2px;left:5px;right:5px;z-index:2}.survival-hud{width:364px;max-width:96vw;bottom:101px}.vital-row{gap:4px}.hearts,.hunger{gap:0}.hearts>span,.hunger>span{display:block;flex:0 0 18px;width:18px;height:18px;font-size:0!important;color:transparent!important;text-shadow:none;background-image:url('/media/1.7.10/gui/icons.png');background-size:512px 512px;background-repeat:no-repeat;image-rendering:pixelated}.hearts>.full{background-position:-104px 0}.hearts>.half{background-position:-122px 0}.hearts>.empty{background-position:-32px 0}.hunger>.full{background-position:-104px -54px}.hunger>.half{background-position:-122px -54px}.hunger>.empty{background-position:-32px -54px}#crosshair{font-size:0;color:transparent;width:32px;height:32px;background:url('/media/1.7.10/gui/icons.png') 0 0 / 512px 512px no-repeat;image-rendering:pixelated;mix-blend-mode:difference;text-shadow:none}.air>span{display:inline-block;width:18px;height:18px;background:url('/media/1.7.10/gui/icons.png') -32px -36px / 512px 512px no-repeat;image-rendering:pixelated}.survival .flight-label{bottom:137px}.survival #block-label{bottom:161px}@media(max-width:720px){.survival-hud{bottom:146px}.survival .flight-label{bottom:174px}.survival #block-label{bottom:195px}#hotbar .slot .vanilla-item-icon{width:30px;height:30px}}@media(pointer:coarse){.survival-hud{bottom:162px}.survival .flight-label{bottom:190px}.survival #block-label{bottom:212px}}
+
+.end-credits {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+  background: linear-gradient(#000b, #000b), url("/media/1.7.10/gui/options_background.png") repeat;
+  background-size: auto, 64px 64px;
+  image-rendering: pixelated;
+}
+.end-credits-roll {
+  position: absolute;
+  top: calc(100% + 16px);
+  left: 50%;
+  width: min(548px, calc(100% - 40px));
+  margin-left: max(-274px, calc(-50% + 20px));
+  color: #fff;
+  font: 16px/24px Minecraft, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-shadow: 2px 2px #191919;
+}
+.end-credits-roll > div { min-height: 24px; }
+.end-credits-logo {
+  display: flex;
+  width: min(100%, 620px);
+  margin: 0 auto 64px;
+}
+.end-credits-logo span {
+  width: 50%;
+  aspect-ratio: 155 / 44;
+  background: url("/media/1.7.10/gui/title/minecraft.png") 0 0 / 165.1613% auto no-repeat;
+}
+.end-credits-logo span + span { background-position: 0 21.2264%; }
+.end-credits-center { text-align: center; }
+.end-credits-skip {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  padding: 8px 12px;
+  color: #fff;
+  background: #3c3c3c;
+  border: 2px solid #aaa;
+}
