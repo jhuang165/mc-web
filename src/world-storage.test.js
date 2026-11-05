@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World } from './world.js';
 import { StreamStorage } from './streaming-storage.js';
+import { endlessCopy } from './endless-world.js';
 import { chunkRecords, editsFromChunks, writeWorldShelf, readWorldShelf, readChunkEdits, deleteStoredWorld, readRuntimeState, readContainerColumns } from './world-storage.js';
 
 // A small in-memory IndexedDB: object stores with key paths and one index, readwrite transactions
@@ -294,4 +295,29 @@ test('damaged container ownership fails cold-window and complete-backup reads be
  await assert.rejects(readRuntimeState(record),/damaged/);
  assert.equal(record.player,undefined);
  await deleteStoredWorld(record.id);
+});
+
+test('an endless copy of a finite save splits into columns and reloads with its edits and runtime state',async()=>{
+  const storage=shelf(), finite={id:'fin',name:'old',seed:'17',biome:'java',generationVersion:14,mode:'survival',
+    edits:[['20,70,20',1],['130,70,-5',4],['21,70,20',0]],
+    entities:[{id:'mob-1',type:'zombie',x:20.5,y:70,z:20.5},{id:'mob-2',type:'sheep',x:100,y:64,z:90}],
+    spawners:[{x:33,y:12,z:41,EntityId:'Zombie'}], drops:[{stack:{id:20,count:2,damage:0},x:5,y:64,z:5}], farms:[['3,64,4',7]],
+    player:{health:20,chests:{'20,64,21':{facing:2,items:[{id:322,count:3,damage:0}]}}},
+    fluidTicks:{version:1,time:50,entries:[]}, fireTicks:{version:1,time:50,entries:[]}, fallingTicks:{version:1,time:50,entries:[]}, minecarts:{version:1,carts:[]}};
+  const original=structuredClone(finite), copy=endlessCopy(finite,{id:'end',name:'old (Endless)',folder:'old (Endless)'});
+  await writeWorldShelf([finite,copy],storage,'k');
+  assert.deepEqual(finite,original,'the finite record stays whole on the localStorage shelf');
+  assert.equal(copy.chunked,true); assert.equal(copy.edits,undefined);
+  assert.equal(idb.db.count('chunks',r=>r.world==='fin'),0,'the original has no database rows');
+  assert.deepEqual(await readChunkEdits('end'),original.edits);
+  const shelfRows=JSON.parse(storage.getItem('k'));
+  assert.deepEqual(shelfRows[0],original,'the original keeps its full record');
+  assert.deepEqual([shelfRows[1].biome,shelfRows[1].storage,shelfRows[1].worldType],['javaStreamed','indexeddb','default']);
+  const [stored]=await readWorldShelf([shelfRows[1]]);
+  assert.deepEqual(stored.populatedColumns,{version:1,cells:{'0,0':'ffffffffffffffff'}});
+  const loaded=await readRuntimeState(stored,{containerColumns:[[1,1],[0,0]]});
+  assert.deepEqual(loaded.entities.map(e=>[e.type,e.x]).sort(),[['sheep',100],['zombie',20.5]]);
+  assert.deepEqual(loaded.spawners,original.spawners); assert.deepEqual(loaded.drops,original.drops); assert.deepEqual(loaded.farms,original.farms);
+  assert.deepEqual(loaded.player.chests,original.player.chests);
+  await deleteStoredWorld('end');
 });

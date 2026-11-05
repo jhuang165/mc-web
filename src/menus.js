@@ -10,6 +10,7 @@ import {
   FLOAT_OPTIONS, denormalize, normalize, optionText, soundText, folderName, worldLines, WORLD_TYPES, worldTypeIndex,
   KEY_BINDINGS, REBINDABLE, keyListEntries, keyName,
 } from "./menu-screens.js";
+import { canGoEndless } from "./endless-world.js";
 
 const SOUND_KEYS = ["master", "music", "record", "weather", "block", "hostile", "neutral", "player", "ambient"];
 // Why each unavailable vanilla button is disabled here.
@@ -136,6 +137,7 @@ export function createMenus(gui, ctx) {
           click(i, double) {
             selected = i;
             for (const k of ["select", "rename", "delete", "recreate", "export"]) buttons[k].enable(true);
+            buttons.endless.enable(canGoEndless(records[i]));
             if (double) { g.sound(); play(); }
           },
         });
@@ -164,8 +166,23 @@ export function createMenus(gui, ctx) {
           // Browser additions: .blockworld.json import and export.
           import: g.button(b.import, "Import", () => ctx.importWorld()),
           export: g.button(b.export, "Export", () => { const r = record(); if (r) ctx.exportWorld(r); }),
+          // Browser addition: an endless copy of a finite Java world; the original stays as it is.
+          endless: g.button(b.endless, "Endless", () => {
+            const r = record();
+            if (!canGoEndless(r)) return;
+            show(yesNo({
+              line1: "Make an endless copy of this world?",
+              line2: "'" + worldLines(r, selected)[0] + "' stays as it is.",
+              yes: "Make Copy",
+              no: t("gui.cancel"),
+              async done(ok) {
+                if (ok) await ctx.makeEndless(r);
+                show(screen);
+              },
+            }));
+          }),
         };
-        for (const k of ["select", "rename", "delete", "recreate", "export"]) buttons[k].enable(false);
+        for (const k of ["select", "rename", "delete", "recreate", "export", "endless"]) buttons[k].enable(false);
       },
       close() { scroll = list?.scroll ?? 0; },
     };

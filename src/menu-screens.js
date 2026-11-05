@@ -171,6 +171,8 @@ export function selectWorldLayout(w, h) {
       delete: btn(c - 76, h - 28, 72), recreate: btn(c + 4, h - 28, 72), cancel: btn(c + 82, h - 28, 72),
       // Browser additions in the empty header band: import a .blockworld.json, export the selection.
       import: btn(c - 154, 6, 72), export: btn(c + 82, 6, 72),
+      // Endless copy of a finite Java world, in the gap between Import and the title (endless-world.js).
+      endless: btn(c - 80, 6, 44),
     },
   };
 }

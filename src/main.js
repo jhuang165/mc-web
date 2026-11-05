@@ -15,6 +15,7 @@ import "./menu-screens.css";
 import { Gui } from "./menu-ui.js";
 import { createMenus } from "./menus.js";
 import { folderName } from "./menu-screens.js";
+import { canGoEndless, endlessCopy } from "./endless-world.js";
 import {guiScale,stackCount,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks,withGlint,itemTint} from "./gui.js";
 import { stackHasEffect } from "./armor-enchantments.js";
 import {AnvilContainer,nativeStackToLive} from './anvil-container.js';
@@ -349,6 +350,7 @@ const menuContext = {
   importWorld: () => $("#file-input").click(),
   deleteWorld,
   renameWorld,
+  makeEndless,
   resume,
   goHome,
   toggleFullscreen,
@@ -536,6 +538,15 @@ async function deleteWorld(record) {
     try { await deleteStoredWorld(record.id); }
     catch { toast('World removed from the shelf; its stored data could not be cleared.'); }
   }
+}
+// Browser addition (endless-world.js): a streamed copy of a finite Java world, listed beside the original.
+async function makeEndless(record) {
+  if (!canGoEndless(record)) return;
+  const name = `${record.name || "World"} (Endless)`.slice(0, 40), before = worlds;
+  const copy = endlessCopy(record, { id: crypto.randomUUID(), name, folder: folderName(name, (s) => worlds.some((w) => w.folder === s)) });
+  worlds = [copy, ...worlds];
+  if (!await persist()) { worlds = before; return; }
+  toast("Endless copy created.");
 }
 // GuiRenameWorld: the display name changes; the save folder keeps its name.
 async function renameWorld(record, name) {
