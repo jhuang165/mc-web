@@ -5,6 +5,7 @@
 import { WOOL, RED_FLOWER } from "./world.js";
 import { golemDrops } from "./iron-golem.js";
 import { CARROT, POTATO } from "./crops.js";
+import { slimeDrops, slimeExperience } from "./slime.js";
 import { witchDrops, witchEquipmentDrop, witchExperience } from "./witch.js";
 import { DISC_FIRST } from "./note-jukebox-content.js";
 const f = Math.fround;
@@ -62,6 +63,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
       break;
     case "creeper": add(GUNPOWDER, generic()); break;
     case "iron_golem": for (const [id, n, damage] of golemDrops(rand, RED_FLOWER)) add(id, n, damage); break; // EntityIronGolem.dropFewItems
+    case "slime": for (const id of slimeDrops(rand, e.size, looting)) add(id); break; // EntitySlime.dropFewItems (slime.js)
     case "witch": for (const [id] of witchDrops(rand, looting)) add(id); break; // EntityWitch.dropFewItems (witch.js)
   }
   // EntityLiving.dropEquipment: a damageable item drops worn, maxDamage minus
@@ -81,6 +83,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
 export function experiencePoints(e, rand, worldRand) {
   if (e.type === "villager" || e.type === "iron_golem") return 0; // EntityLiving.experienceValue stays 0 (EntityVillager is no EntityMob or EntityAnimal)
   if (ANIMALS.has(e.type)) return 1 + worldRand.nextInt(3);
+  if (e.type === "slime") return slimeExperience(e.size); // experienceValue = size
   if (e.type === "witch") return witchExperience(rand, e.held); // 5 plus 1 + nextInt(3) for a held potion
   return 5 + (e.type === "skeleton" ? 1 + rand.nextInt(3) : 0);
 }
