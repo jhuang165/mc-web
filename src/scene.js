@@ -1010,10 +1010,12 @@ export class VoxelScene {
     this.fireLayers[1].uv.w = 1 - (fireStep + 1) / 32;
     for (let budget = 2; budget > 0 && this.dirty.size; budget--) this.buildChunk(...this.dirty.values().next().value.split(",").map(Number));
     let c = this.camera, look = c.getWorldDirection(new THREE.Vector3()), u = this.lighting.uniforms, angle = this.angle,
-      eye = this.world?.get(Math.floor(c.position.x), Math.floor(c.position.y), Math.floor(c.position.z)),
-      underwater = eye === 10 && c.position.y - Math.floor(c.position.y) < 8 / 9,
-      // ActiveRenderInfo.getBlockAtEntityViewpoint: lava fog while the eye is in lava.
-      lava = !!this.world && viewpointBlock(this.world, c.position.x, c.position.y, c.position.z) === 42,
+      // ActiveRenderInfo.getBlockAtEntityViewpoint: water or lava fog while the eye is in it. A source
+      // cell counts up to its top and the test then reads the cell above, so swimming through a
+      // column of water never drops the fog at cell boundaries (an 8/9 cut-off flashed the sky there).
+      eye = this.world ? viewpointBlock(this.world, c.position.x, c.position.y, c.position.z) : 0,
+      underwater = eye === 10,
+      lava = eye === 42,
       // The frame-eased rain, thunder and lightning terms (World.getRainStrength(partial) ...).
       w = this.weather, partial = this.dropPartial, rain = w ? w.rainStrength(partial) : 0, thunder = w ? w.weightedThunder(partial) : 0, lightning = w ? w.lastLightning : 0,
       fog = fogColor({ angle, temperature: this.temperature ?? biomeTemperature("meadow"), look: [look.x, look.y, look.z], chunks: this.distance / 16, brightness: this.fogBrightness, underwater, lava, rain, thunder, lightning, partial });
