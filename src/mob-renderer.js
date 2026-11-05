@@ -26,6 +26,7 @@ import { createSnowGolemRig, animateSnowGolem, addMooshroomMushrooms } from "./m
 import { createBlazeRig, createGhastRig } from "./blaze-ghast-renderer.js";
 import { createSquidRig, createBatRig } from "./squid-bat-renderer.js";
 import { createCrystalRig } from "./ender-crystal-renderer.js";
+import { createDragonRig, disposeDragonRig } from "./dragon-renderer.js";
 const RAD = Math.PI / 180;
 // RenderCreeper's powered pass (bni.a(xz, I, F), pass 1): creeper_armor.png with the texture
 // matrix translated by (scroll, scroll), colour 0.5, lighting off, blended GL_ONE, GL_ONE.
@@ -416,6 +417,7 @@ export class MobRenderer {
     if (e.type === "squid") return createSquidRig(this);
     if (e.type === "bat") return createBatRig(this);
     if (e.type === "ender_crystal") return createCrystalRig(this);
+    if (e.type === "ender_dragon") return createDragonRig(this);
     if (e.type === "blaze") return createBlazeRig(this);
     if (e.type === "ghast") return createGhastRig(this);
     return this.createQuadruped(e.type);
@@ -432,6 +434,7 @@ export class MobRenderer {
         });
         for (const m of rig.materials) m.dispose();
         rig.eyes?.dispose();
+        if (rig.dragonRig) disposeDragonRig(rig);
         rig.armor?.dispose();
         rig.fire?.dispose();
         this.rigs.delete(id);
