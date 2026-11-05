@@ -261,7 +261,7 @@ export class Trees {
   // The sapling cell is cleared with flag 4 first and put back
   // with its stage bit cleared (meta & 7) when the tree does not fit.
   growTree(x, y, z, { notify = true } = {}) {
-    if(this.world.generationVersion>=11||(this.world.getMeta(x,y,z)&7)!==0)return growSapling(this,x,y,z,{notify});
+    if(this.world.generationVersion>=11||this.world.height>=256||(this.world.getMeta(x,y,z)&7)!==0)return growSapling(this,x,y,z,{notify});
     const meta = this.world.getMeta(x, y, z) & 7, big = this.random.nextInt(10) === 0;
     this.world.put(x, y, z, 0, 0, true);
     const world = this.world;
