@@ -90,6 +90,8 @@ function payload(state,ox,oz,report,world=null) {
   const [x,y,z]=k.split(',').map(Number);tiles.push(writeContainerTile(name,e,x+ox,y,z+oz,{report,dropper:world?.get(x,y,z)===132}));
  }
  for(const {value:e} of state.commandBlocks??[])tiles.push(writeCommandBlock(e,e.x+ox,e.y,e.z+oz));
+ // TileEntitySign.writeToNBT: Text1-Text4 (signs.js).
+ for(const {value:e} of state.signs??[])tiles.push(new Map(Object.entries({id:str('Sign'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),Text1:str(e.text?.[0]??''),Text2:str(e.text?.[1]??''),Text3:str(e.text?.[2]??''),Text4:str(e.text?.[3]??'')})));
  for(const {value:e} of state.spawners??[]) {const n={id:str('MobSpawner'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz)};for(const [k,v] of Object.entries(e))if(!['x','y','z'].includes(k))n[k]=typeof v==='string'?str(v):short(v);tiles.push(new Map(Object.entries(n)));}
  // TileEntityPiston.writeToNBT: blockId, blockData, facing, progress, extending (original ids; renderHead is not saved by Java).
  for(const w of state.pistons??[]){const e=w.value??w;tiles.push(new Map(Object.entries({id:str('Piston'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),blockId:int(e.block),blockData:int(e.meta),facing:int(e.facing),progress:float(e.progress??0),extending:byte(e.extending?1:0)})));}

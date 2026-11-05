@@ -20,6 +20,7 @@ test("registered ids, random-tick and container flags equal Block.registerBlocks
 test("every internal block maps to a registered original id matching the shadow probe mapping", () => {
   const shadows = load("shadow-reference.json").blocks;
   for (let id = 0; id < BLOCKS.length; id++) {
+    if (!BLOCKS[id]) continue; // holes between the block families (signs reserve 175-176)
     const [mc, meta] = toOriginal(id, 0);
     assert.ok(isRegistered(mc), `${BLOCKS[id].name} -> ${mc}`);
     assert.ok(meta >= 0 && meta <= 15);
@@ -31,6 +32,7 @@ test("every internal block maps to a registered original id matching the shadow 
 test("every internal cell state survives toOriginal -> fromOriginal", () => {
   for (let id = 0; id < BLOCKS.length; id++)
     for (let meta = 0; meta < 16; meta++) {
+      if (!BLOCKS[id]) continue;
       const [mc, mm] = toOriginal(id, meta);
       const back = fromOriginal(mc, mm);
       assert.equal(back.id, id, `${id}:${meta}`);

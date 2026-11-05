@@ -39,6 +39,7 @@ export function lightOpacity(b) {
   if (b >= 116 && b <= 118) return 0; // piston base, sticky piston and head: isOpaqueCube false
   if (b >= 107 && b <= 114) return 0; // redstone components (redstone-blocks-reference.json): dust, lever, plates, button, repeater, hook, tripwire
   if (b >= WOODEN_DOOR && b <= GLASS_PANE) return 0; // doors, iron bars and glass panes are not opaque cubes
+  if (b === 175 || b === 176) return 0; // BlockSign: not opaque, light opacity 0 (sign-reference.json facts)
   if (b === 0 || b === 9 || b === 20 || b === 41 || b === 42 || b === FIRE || b === LADDER || b === CACTUS || b === REEDS || b === LILY_PAD || b === FENCE || b === RAIL || b === MOB_SPAWNER || b === ANVIL || b === ENCHANTING_TABLE || isPlant(b)) return 0;
   if (b === 5 || b===71 || b === WEB) return 1;
   if (b === 10 || b === 47) return 3; // water; ice (setLightOpacity(3))

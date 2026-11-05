@@ -2,6 +2,7 @@
 // inventory and produces the same JSON lines as InventoryProbe.java.
 import { POPULATION_ITEMS } from '../src/population-content.js';
 import { FISHING_ITEMS } from '../src/fishing-content.js';
+import { SIGN_ITEMS } from '../src/signs.js';
 import {Survival,ITEMS,burnTime,smeltingResult} from '../src/survival.js';
 import {makeStack,copyStack,ChestContainer,LargeChestInventory} from '../src/inventory.js';
 import {newChest,chestInventory} from '../src/chest.js';
@@ -19,6 +20,7 @@ export const MC_IDS={137:1139,
  85:FENCE,66:RAIL,331:360,361:361,362:362,329:363,417:364,403:365,321:1700,389:1701,328:366,342:450,333:495,145:ANVIL,116:ENCHANTING_TABLE,
  ...POPULATION_ITEMS,
  ...FISHING_ITEMS,
+ ...SIGN_ITEMS,
 };
 const GAME_IDS=Object.fromEntries(Object.entries(MC_IDS).map(([mc,id])=>[id,mc.split(':').map(Number)]));
 const toGame=(id,count,damage)=>{const subtype=MC_IDS[id+':'+damage],game=subtype??MC_IDS[id];if(!game)throw new Error('No game item for Minecraft ID '+id+':'+damage);return makeStack(game,count,subtype?0:damage);};

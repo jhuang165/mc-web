@@ -37,7 +37,7 @@ test("every original block maps to the SoundType its stepSound field holds", () 
 });
 
 test("every internal block resolves to its original block's native SoundType and formulas", () => {
-  assert.equal(internalIds.length, BLOCKS.length, "every internal block id maps to an original block");
+  assert.equal(internalIds.length, BLOCKS.filter(Boolean).length, "every internal block id maps to an original block");
   for (const id of internalIds) {
     const [mc] = toOriginal(id, 0), native = byOriginal.get(mc);
     assert.ok(native, `internal ${id} -> original ${mc} is not registered`);

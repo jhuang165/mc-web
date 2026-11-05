@@ -10,7 +10,7 @@ const near={x:0.5,y:1.62,z:0.5},f=Math.fround;
 const item=(x,y,z)=>({...SHADOWS.item,x,y:y+0.125,z,height:0.25});
 
 test('only blocks that render as normal blocks take a shadow',()=>{
- assert.equal(Object.keys(reference.blocks).length,BLOCKS.length-1);
+ assert.equal(Object.keys(reference.blocks).length,BLOCKS.filter(Boolean).length-1);
  for(const [id,b] of Object.entries(reference.blocks)){
   assert.equal(takesShadow(+id),!b.air&&b.normal,BLOCKS[id].name);
   if(b.normal)assert.deepEqual(b.bounds,[0,0,0,1,1,1],BLOCKS[id].name);

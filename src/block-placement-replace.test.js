@@ -27,6 +27,7 @@ test("port replaceability matches Material.isReplaceable of the original block f
   const native = new Set(reference.replaceable);
   let checked = 0;
   for (let id = 0; id < BLOCKS.length; id++) {
+    if (!BLOCKS[id]) continue;
     const mc = toOriginal(id, 0);
     if (!mc) continue;
     assert.equal(placementReplaceable(id), native.has(mc[0]), `internal ${id} (${BLOCKS[id]?.name}) -> original ${mc[0]}`);

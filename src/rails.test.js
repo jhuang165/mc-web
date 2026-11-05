@@ -77,6 +77,7 @@ test("solid-top, rail and torch support agree with the original for every port b
   const byOriginal = new Map(records("block").map((r) => [r.id, r]));
   for (let id = 1; id < BLOCKS.length; id++)
     for (let meta = 0; meta < 16; meta++) {
+      if (!BLOCKS[id]) continue;
       const [mc, mm] = toOriginal(id, meta), back = fromOriginal(mc, mm);
       if (back.id !== id || back.meta !== meta || !back.exact) continue;
       const r = byOriginal.get(mc), bit = (mask) => !!(mask & (1 << mm)), name = `${BLOCKS[id].name} ${mc}:${mm}`;

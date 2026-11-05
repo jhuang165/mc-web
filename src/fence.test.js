@@ -48,6 +48,7 @@ test("fence block facts match BlockFence", () => {
 
 test("canConnectFenceTo agrees with the original for every port block", () => {
   for (let id = 1; id < BLOCKS.length; id++) {
+    if (!BLOCKS[id]) continue;
     const [mc, meta] = toOriginal(id, 0);
     const r = byOriginal.get(mc);
     assert.ok(r, `${BLOCKS[id].name} -> ${mc}`);
