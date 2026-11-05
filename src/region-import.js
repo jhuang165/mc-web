@@ -1,4 +1,6 @@
 import { readCommandBlock } from "./command-block.js";
+import { readNoteTile } from "./note-blocks.js";
+import { readJukeboxTile } from "./jukebox.js";
 // WORLD-03g: convert an area of Java 1.7.10 region files into a new Blockworld export for the existing
 // Import screen. The export is a version-9 Java world record whose `edits` rebuild the area over the
 // generated terrain of `seed`; supported chest/furnace contents and dropped items travel in the player
@@ -212,7 +214,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   };
   const unsupported = new Map(), approximations = new Map(), tileLost = new Map(), tileConverted = new Map();
   const itemLost = new Map(), entityLost = new Map(), entityConverted = new Map();
-  const commandBlocks = [];
+  const commandBlocks = [], musicTiles = [];
   const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = [];
   let edits = 0;
   const write = (x, y, z, block, meta) => {
@@ -316,6 +318,11 @@ export async function importJavaRegionArea(regions, options = {}) {
         tally(tileConverted, id);
       } else if (inside && id === 'Control' && block === 139) {
         commandBlocks.push({ x: lx, y, z: lz, ...readCommandBlock(tile) }); tally(tileConverted, id);
+      } else if (inside && id === 'Music' && block === 177) {
+        musicTiles.push({ kind: 'note', x: lx, y, z: lz, note: readNoteTile(tile).note }); tally(tileConverted, id);
+      } else if (inside && id === 'RecordPlayer' && block === 178) {
+        const { record } = readJukeboxTile(tile);
+        if (record) musicTiles.push({ kind: 'jukebox', x: lx, y, z: lz, record }); tally(tileConverted, id);
       } else if (inside && id === 'Piston' && world.get(lx, y, lz) === PISTON_MOVING) {
         // TileEntityPiston.readFromNBT: blockId, blockData, facing, progress (lastProgress = progress), extending. The
         // restore (piston-live.js) lets the move finish on the first tick, as native does.
@@ -408,7 +415,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     position: { x: px + 0.5, y: py + 1.01, z: pz + 0.5, yaw: 0, pitch: 0 },
     // legacyPlayer() keeps these fields; without `slots` the Creative hotbar defaults apply.
     player: { chests, furnaces, dispensers, hoppers, brewing },
-    pistons, commandBlocks,
+    pistons, commandBlocks, ...(musicTiles.length ? { musicTiles } : {}),
     drops,
     ...(mobs.length ? { entities: mobs } : {}),
     ...(villages ? { villages } : {}),

@@ -90,7 +90,7 @@ test('anvil and book names stay as the stack carries them', () => {
 // Items the build has that 1.7.10 does not register as items: kept in Title Case, listed in public/research/item-names.md.
 // Wheat stages 31-38, sugar cane 54, lit redstone ore 65 (no ItemBlock), door blocks 97/98 (the items are 470/471), powered comparator 128,
 // moving piston 130, the brewing stand block 134 (item 1134) and the bed block 138 (item 355 maps once the bed item exists).
-const INTERNAL_ONLY = [31, 32, 33, 34, 35, 36, 37, 38, 54, 65, 97, 98, 128, 130, 134, 138];
+const INTERNAL_ONLY = [31, 32, 33, 34, 35, 36, 37, 38, 54, 65, 97, 98, 128, 130, 134, 138, 373, 374]; // 373 and 374: the hidden legacy discs (note-jukebox-content.js)
 test('browser-only items keep their own name in 1.7.10 Title Case', () => {
   const clone = structuredClone(ITEMS);
   const fallback = applyNativeNames(clone).filter((id) => !INTERNAL_ONLY.includes(id));

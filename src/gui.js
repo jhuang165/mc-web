@@ -49,6 +49,8 @@ export function tooltipLines(item,stack,advanced=false){
  if(stored?.length)lines[0].color='yellow';
  for(const text of storedEnchantmentLines(stored))lines.push({text,color:'gray'});
  for(const text of storedEnchantmentLines(stack.enchantments))lines.push({text,color:'gray'});
+ // ItemRecord: EnumRarity.rare (aqua name) and addInformation's item.record.<name>.desc line in gray.
+ if(item.record){lines[0].color??='aqua';lines.push({text:item.description,color:'gray'});}
  if(attack)lines.push({text:''},{text:`+${attack} Attack Damage`,color:'blue'});
  if(stack.unbreakable)lines.push({text:'Unbreakable',color:'blue'});
  if(advanced&&item.durability&&stack.damage>0)lines.push({text:`Durability: ${item.durability-stack.damage} / ${item.durability}`});

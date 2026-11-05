@@ -15,6 +15,7 @@ import { isDoor, isPane, doorBounds, paneMask, paneBounds, paneCollisionBoxes, p
 import { isStair, stairBoxes, stairExcludedOctants, stairRayTrace, interceptBox } from "./stairs.js";
 import { dispenserPistonBounds, dispenserPistonBoxes, unionBox, isDispenserPiston, isPistonBase, pistonExtended } from "./dispenser-piston.js";
 import { isRedstoneBlock, redstoneBounds, hasCollision as redstoneHasCollision } from "./redstone-blocks.js";
+import { installNoteJukeboxBlocks } from "./note-jukebox-content.js";
 import { stoneUtilityBounds, stoneUtilityBoxes, hasPartialBounds, isStoneUtility } from "./stone-utility.js";
 export const SIZE = 128,
   HEIGHT = 64,
@@ -160,6 +161,7 @@ export const BLOCKS = [
   {name:'Bed',color:'#a8322e'},
   {name:'Command Block',color:'#b88863'},
 ];
+installNoteJukeboxBlocks(BLOCKS); // internal 177 note block, 178 jukebox; 140-176 stay reserved for the other tracks
 export const LAPIS_ORE=63,REDSTONE_ORE=64,LIT_REDSTONE_ORE=65,EMERALD_ORE=66,PUMPKIN=67,MONSTER_EGG=68,DOUBLE_PLANT=69,
   LOG2=70,LEAVES2=71,VINE=72,COCOA=73,MOSSY_COBBLE=74,BROWN_MUSHROOM=75,RED_MUSHROOM=76,
   BROWN_MUSHROOM_BLOCK=77,RED_MUSHROOM_BLOCK=78,DEAD_BUSH=79,PACKED_ICE=80,MELON=81,SANDSTONE_SLAB=82,DEAD_SHRUB=83,FERN=84;

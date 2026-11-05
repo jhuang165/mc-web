@@ -701,13 +701,14 @@ function isComparatorId(id) {
 }
 // Block.hasComparatorInputOverride among the supported ids.
 export function hasComparatorOverride(id) {
-  return id === 137 || id === 28 || id === CAULDRON || id === END_PORTAL_FRAME || isContainerId(id);
+  return id === 137 || id === 84 || id === 28 || id === CAULDRON || id === END_PORTAL_FRAME || isContainerId(id);
 }
 // Block.getComparatorInputOverride: cauldron level (metadata), end portal frame eye (15 or 0).
 function comparatorOverride(w, id, x, y, z) {
   const m = w.getBlockMetadata(x, y, z);
   if (id === 137) return w.behaviours[137]?.comparator?.(w, x, y, z) ?? 0;
   if (id === 28) return w.behaviours[28]?.comparator?.(w, x, y, z) ?? 0; // BlockRailDetector (powered-rails.js)
+  if (id === 84) return w.behaviours[84]?.comparator?.(w, x, y, z) ?? 0; // BlockJukebox: disc index + 1 (jukebox.js)
   if (id === CAULDRON) return m;
   if (id === END_PORTAL_FRAME) return (m & 4) !== 0 ? 15 : 0;
   return containerComparatorSignal(w, x, y, z, id);

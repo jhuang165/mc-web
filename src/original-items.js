@@ -3,6 +3,7 @@
 import { SAPLING, WEB, LADDER, YELLOW_FLOWER, RED_FLOWER, DYE, SNOW_LAYER, ICE, CACTUS, TNT, FENCE, RAIL } from './world.js';
 import { POPULATION_ITEMS } from './population-content.js';
 import { FISHING_ITEMS } from './fishing-content.js';
+import { NOTE_JUKEBOX_ITEMS } from './note-jukebox-content.js';
 
 // Original item ID (or "id:damage" subtype) -> browser item. The same table as tools/inventory-replay.mjs
 // MC_IDS (the item catalogue's mapping); region-import.test.js keeps the two identical.
@@ -29,4 +30,6 @@ export const ORIGINAL_ITEMS = Object.freeze({
   321: 1700, 389: 1701,
   ...POPULATION_ITEMS,
   ...FISHING_ITEMS,
+  // Note block 25, jukebox 84 and the music discs 2256-2267 (the discs replace the older inert 373/374 mapping).
+  ...NOTE_JUKEBOX_ITEMS,
 });

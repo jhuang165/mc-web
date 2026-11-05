@@ -14,8 +14,8 @@ const f = Math.fround;
 const reference = JSON.parse(readFileSync(new URL("../public/research/combat-reference.json", import.meta.url)));
 const records = (c) => reference.records.filter((r) => r.case === c);
 const flat = { numericSeed: 1, solid: (x, y) => y < 0, get: (x, y) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 64.5, y: 0, z: 64.5 }) };
-// Original item ids to this build's; records (2256-2267) do not exist here.
-const ITEM = { 319: 202, 320: 203, 363: 204, 364: 205, 334: 315, 288: FEATHER, 365: RAW_CHICKEN, 366: COOKED_CHICKEN, 367: 206, 262: 320, 352: 311, 261: 127, 287: STRING, 375: SPIDER_EYE, 289: GUNPOWDER, 35: WOOL, 265: 302, 391: CARROT, 392: POTATO };
+// Original item ids to this build's; the records (2256-2267) are 530-541.
+const ITEM = { 319: 202, 320: 203, 363: 204, 364: 205, 334: 315, 288: FEATHER, 365: RAW_CHICKEN, 366: COOKED_CHICKEN, 367: 206, 262: 320, 352: 311, 261: 127, 287: STRING, 375: SPIDER_EYE, 289: GUNPOWDER, 35: WOOL, 265: 302, 391: CARROT, 392: POTATO, ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [2256 + i, 530 + i])) };
 const size = (type, child) => {
   const t = ENTITY_TYPES[type], s = child ? 0.5 : 1;
   return { width: t.width * s, height: t.height * s };
@@ -119,7 +119,7 @@ test("attackEntityFrom, the drops and the death experience match the original st
       const sounds = events.filter((x) => x.sound).map((x) => [x.sound, x.volume, x.pitch]);
       assert.deepEqual(sounds, s.sounds.map((x) => x.split("|")).map(([n, v, p]) => [n, f(+v), f(+p)]), step);
       const drops = events.filter((x) => x.drop).map((x) => [x.drop, x.count, x.damage || 0]);
-      assert.deepEqual(drops, s.drops.filter((d) => d[0] < 2256).map(([id, n, d]) => [ITEM[id], n, d]), step);
+      assert.deepEqual(drops, s.drops.map(([id, n, d]) => [ITEM[id], n, d]), step);
       seen.sounds += sounds.length;
       seen.drops += drops.length;
       seen.topUps += s.hit && !sounds.length;

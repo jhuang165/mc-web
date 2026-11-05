@@ -148,8 +148,10 @@ const MAP = {
   132: same(158), 133: same(154), 134: same(117), 135: same(27), 136: same(28), 137: same(157),
   // 0.42.0: BlockBed (26): metadata is the original's (facing 0-3, occupied bit 4, head bit 8).
   138: same(26),
+  // BlockNote (25) and BlockJukebox (84): metadata 0 and 0/1 (the disc flag); the note and the record live in tile entities (note-blocks.js, jukebox.js).
+  177: same(25), 178: same(84),
 };
-if (Object.keys(MAP).length !== BLOCKS.length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");
+if (Object.keys(MAP).length !== BLOCKS.filter((b) => !b.reserved).length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");
 
 // Original id -> internal ids that can represent it, in internal id order.
 const BY_ORIGINAL = new Map();

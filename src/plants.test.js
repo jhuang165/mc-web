@@ -206,8 +206,8 @@ test("smelting cactus green and the paper, sugar and book recipes", () => {
 
 test("creative tabs and search keep the original registration order", () => {
   const decorations = CREATIVE_TABS[1].items, misc = CREATIVE_TABS[4].items, materials = CREATIVE_TABS[10].items;
-  // The oak fence (85) follows the cactus (81) in block-id order.
-  assert.deepEqual(decorations.slice(decorations.indexOf(SNOW_LAYER), decorations.indexOf(SNOW_LAYER) + 3), [SNOW_LAYER, CACTUS, FENCE]);
+  // The jukebox (84) and then the oak fence (85) follow the cactus (81) in block-id order.
+  assert.deepEqual(decorations.slice(decorations.indexOf(SNOW_LAYER), decorations.indexOf(SNOW_LAYER) + 4), [SNOW_LAYER, CACTUS, 1178, FENCE]);
   assert.deepEqual(misc.slice(misc.indexOf(343), misc.indexOf(343) + 3), [343, PAPER, 314]);
   assert.deepEqual(materials.slice(materials.indexOf(307), materials.indexOf(307) + 3), [307, REEDS_ITEM, 316]);
   // Pumpkin (361) and melon seeds (362) follow sugar (353), as in creative-reference.json.

@@ -250,6 +250,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     }
     // BlockBed.onBlockActivated: either half starts sleeping (bed.js; the browser supplies the player and the time of day).
     if (activates && block === 139) { hook('useCommandBlock', x, y, z); return act('use-command-block'); }
+    // BlockNote.onBlockActivated raises the note; BlockJukebox ejects, or ItemRecord.onItemUse inserts the held disc (jukebox.js).
+    if (activates && (block === 177 || block === 178) && hook('useNoteJukebox', x, y, z, id)) return act('use-note-jukebox');
     if (activates && block === BED) { hook('useBed', x, y, z); return act('use-bed'); }
     // Lever, stone button and repeater right-clicks (redstone-blocks.js): local state only, no power network.
     if (activates && (block === LEVER || block === STONE_BUTTON || block === REPEATER)) {
@@ -406,6 +408,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     return act('creative-break');
   }
   if (state.mining && state.mining.tool === id && state.mining.block.every((v, i) => v === target.block[i])) return act('mining-already-started');
+  if (block === 177) hook('blockClicked', ...target.block); // BlockNote.onBlockClicked plays the note (Survival only: Creative breaks the block)
   const under = hook('clientEyeInWater');
   if (playerMiningState(state.survival, block, id, !!under, state.grounded).progress >= 1) {
     hook('breakBlock', target.block);
