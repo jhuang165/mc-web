@@ -14,6 +14,8 @@ import { isInvisible } from "./mob-effects.js";
 import { createVillagerRig, villagerLegAngle } from "./villager-renderer.js";
 import { createIronGolemRig, animateIronGolem } from "./iron-golem-renderer.js";
 import { createWitchRig, animateWitch } from "./witch-renderer.js";
+import { createSlimeRig, animateSlime } from "./slime-renderer.js";
+import { mobScale } from "./slime.js";
 import { createWolfRig, animateWolf } from "./wolf-renderer.js";
 const RAD = Math.PI / 180;
 // RenderCreeper's powered pass (bni.a(xz, I, F), pass 1): creeper_armor.png with the texture
@@ -376,6 +378,7 @@ export class MobRenderer {
     if (e.type === "zombie") return this.createZombie(e.villager === true);
     if (e.type === "villager") return createVillagerRig(this, e);
     if (e.type === "witch") return createWitchRig(this, e);
+    if (e.type === "slime") return createSlimeRig(this, e);
     if (e.type === "wolf") return createWolfRig(this);
     if (e.type === "iron_golem") return createIronGolemRig(this);
     return this.createQuadruped(e.type);
@@ -464,6 +467,7 @@ export class MobRenderer {
         sf.layers.forEach((s, i) => { r.silverfish.layers[i].position.x = s.x / 16; r.silverfish.layers[i].rotation.y = -s.yaw; });
       }
       if (r.nose) animateWitch(r, e, pose.age);
+      if (r.squish) animateSlime(r, e, partial);
       if (r.golem) animateIronGolem(r, e, pose, partial);
       if (r.wolf) animateWolf(r, e, pose);
       r.limbs.forEach((l, i) => {
@@ -478,7 +482,7 @@ export class MobRenderer {
       // Entity.getBrightnessForRender samples 0.66 of the way up the body.
       // RendererLivingEntity overlays (brightness, 0, 0, 0.4) while hurt or
       // dying; the burning tint stands in for the fire overlay, which is not drawn.
-      const t = ENTITY_TYPES[e.type], h = (t?.height ?? 1.8) * (e.growingAge < 0 ? 0.5 : 1),
+      const t = ENTITY_TYPES[e.type], h = (t?.height ?? 1.8) * mobScale(e),
         // A display mob takes the spawner block's lightmap (TileEntityRendererDispatcher).
         packed = e.lightPos ? this.view.brightness(e.lightPos.x, e.lightPos.y, e.lightPos.z) : this.view.brightness(e.x, e.y + h * 0.66, e.z),
         level = Math.max(((packed >> 20) & 15) - (this.view.subtracted ?? 0), (packed >> 4) & 15),
