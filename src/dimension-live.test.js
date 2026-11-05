@@ -4,6 +4,9 @@ import { viewRecord, storedRecord, rulesOf, DIM_KEYS, TILE_KEYS, gameYaw, mcYaw 
 import { DimensionWorld, TerrainPeek } from "./dimension-world.js";
 import { Teleporter, GAME_IDS } from "./dimensions.js";
 import { JavaRandom } from "./java-random.js";
+import { EntityWorld } from "./entities.js";
+import { Survival } from "./survival.js";
+import { spawnDragonIfAbsent } from "./dragon-mobs.js";
 
 const root = () => ({ id: "w1", seed: "42", biome: "javaStreamed", chunked: true, name: "W", position: { x: 1, y: 70, z: 2, yaw: 0, pitch: 0 }, edits: [], entities: [{ type: "pig" }], fluidTicks: [1], player: { health: 20, chests: { "1,2,3": { items: [] } }, slots: [] }, bed: { spawn: [0, 64, 0] } });
 
@@ -114,4 +117,27 @@ test('the End spikes yield one ender crystal on each bedrock cap', () => {
     assert.equal(w.get(Math.floor(c.x), c.y - 1, Math.floor(c.z)), 11, `bedrock under the crystal at ${c.x},${c.y},${c.z}`);
   }
   assert.deepEqual(new DimensionWorld("12345", -1).endCrystals(), []);
+});
+
+test("the End crystals and the flying dragon survive save(), the shelf record and a reload", () => {
+  const w = new DimensionWorld("12345", 1);
+  w.streamAround(0, 0);
+  const mobs = new EntityWorld(w, []);
+  for (const c of w.endCrystals()) mobs.entities.push(mobs.create("ender_crystal", c.x, c.y, c.z));
+  spawnDragonIfAbsent(w, mobs);
+  const survival = new Survival();
+  survival.mode = "creative";
+  for (let i = 0; i < 200; i++) mobs.tick({ x: 30, y: 70, z: 30 }, survival, null);
+  const dragon = mobs.entities.find((e) => e.type === "ender_dragon");
+  assert.notDeepEqual([dragon.x, dragon.z], [0, 0], "the dragon has left its spawn point");
+  // main.js save(): active.entities = mobs.serialize(), then storedRecord puts the view on the shelf and viewRecord reads it back.
+  const view = viewRecord({ id: "w", seed: "12345" }, 1);
+  view.entities = JSON.parse(JSON.stringify(mobs.serialize()));
+  const back = viewRecord(JSON.parse(JSON.stringify(storedRecord(view, { id: "w", seed: "12345" }))), 1);
+  const w2 = new DimensionWorld("12345", 1);
+  w2.streamAround(0, 0);
+  const restored = new EntityWorld(w2, back.entities);
+  assert.equal(restored.entities.filter((e) => e.type === "ender_crystal").length, w.endCrystals().length);
+  const d2 = restored.entities.find((e) => e.type === "ender_dragon");
+  assert.deepEqual([d2.x, d2.y, d2.z, d2.health], [dragon.x, dragon.y, dragon.z, dragon.health]);
 });

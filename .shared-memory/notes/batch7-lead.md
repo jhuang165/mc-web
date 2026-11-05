@@ -17,7 +17,7 @@ Branches merged into batch7-merge in this order: fortress (42f2f0f), polish (a94
 ## Checks
 - npm test: 3064 pass. npm run build: ok.
 - Browser on :5181 ?silent, fresh creative world, `__mc.travel(1)`: the dragon spawns at 0,128,0, flies, picks a healer crystal and renders with its wings. There are 14 or 15 crystals on the spikes, the Ender Dragon boss bar shows, and the console has no errors.
-- After a save and reload, only 6 crystals came back, and the dragon was back at 0,128,0. This needs a look: entity saves may keep only the loaded window, and the dragon position may not persist.
+- Crystal and dragon saves were rechecked and work: the 3:01 check world reopened in the End with all 14 of its generated crystals and the dragon where it was left. The earlier "6 crystals" world was a pre-merge track world sharing the :5181 browser storage. `dimension-live.test.js` covers the save round trip.
 
 ## Gaps / follow-ups
 - No natural Nether or End mob spawning. `FORTRESS_SPAWN_LIST` / `fortressMonsterSpawnList` are not wired.
