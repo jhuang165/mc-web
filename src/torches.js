@@ -28,7 +28,7 @@ const GLASS = 9;
 export function torchCanStandOn(world, x, y, z) {
   if (solidTop(world, x, y, z)) return true;
   const b = world.get(x, y, z);
-  return b === FENCE || b === GLASS;
+  return b === FENCE || b === GLASS || b === 169; // 169: the cobblestone wall (shaped-blocks.js)
 }
 const cube = (world, x, y, z) => normalCube(world.get(x, y, z));
 // BlockTorch.canPlaceBlockAt: a normal cube on any horizontal side, or something to stand on.

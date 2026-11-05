@@ -143,6 +143,7 @@ import { tickLivingSimulation, drainMobEvents } from "./living-simulation.js";
 import { tickPlayerMining } from "./player-mining.js";
 import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
+import { shapedPick } from "./shaped-blocks.js";
 import { stoneUtilityPick, serializePots, restorePots } from "./stone-utility.js";
 import { capturePlayerAction, dispatchPlayerAction, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
 import { fromOriginal } from "./block-registry.js";
@@ -2575,7 +2576,7 @@ function setupPointer() {
       return;
     }
     if (e.button === 1) {
-      const stonePick = target && stoneUtilityPick(world, ...target.block);
+      const stonePick = target && (stoneUtilityPick(world, ...target.block) ?? shapedPick(world.get(...target.block), world.getMeta(...target.block)));
       const id = stonePick?.id ?? (target && pickItem(world.get(...target.block), world.getMeta(...target.block)));
       if (id) {
         survival.inventory.pick(id, survival.creative, stonePick ? stonePick.damage : treePickDamage(id, world.getMeta(...target.block)) ?? (id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined));

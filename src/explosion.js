@@ -10,6 +10,7 @@ import { DISPENSER, STICKY_PISTON, PISTON, PISTON_HEAD, DISPENSER_ITEM, STICKY_P
 import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, ITEM_STONE_BRICKS, ITEM_CAULDRON, ITEM_FLOWER_POT, slabItem } from "./stone-utility.js";
 import { TNT, WOOL, RED_FLOWER, SAPLING, SNOW_LAYER, ICE, FIRE, CARROTS, POTATOES, WEB, LADDER, YELLOW_FLOWER, ENCHANTING_TABLE, WOODEN_DOOR, IRON_DOOR, IRON_BARS, GLASS_PANE } from "./world.js";
 import { leafDrops } from "./trees.js";
+import { SHAPED_RESISTANCE } from "./shaped-blocks.js";
 import { BLAST_RESISTANCE2, itemOfBlock2, ITEM_GLOWSTONE_DUST, GLOWSTONE } from "./redstone-blocks-2.js";
 
 const f = Math.fround;
@@ -27,6 +28,7 @@ for (let id = 31; id <= 38; id++) RESIST[id] = 0;
 // BlockDoor, BlockPane getExplosionResistance (doors-panes-reference.json facts): wooden door 3, iron door 5, iron bars 6, glass pane 0.3.
 RESIST[WOODEN_DOOR] = 3; RESIST[IRON_DOOR] = 5; RESIST[IRON_BARS] = 6; RESIST[GLASS_PANE] = 0.3;
 RESIST[139] = 3600000; // BlockCommandBlock: setResistance(6000000), aji.p registration
+for (const [id, r] of Object.entries(SHAPED_RESISTANCE)) RESIST[id] = r; // shaped-blocks.js (wood slabs, gate and trapdoor, cobblestone wall)
 RESIST[138] = 0.2; // BlockBed (bed-reference.json facts)
 // BlockStairs.getExplosionResistance: the model block's resistance / 5 (stairs-reference.json).
 for (const id of Object.keys(STAIRS)) RESIST[id] = stairExplosionResistance(Number(id));
@@ -214,6 +216,10 @@ function itemDropped(id, meta, rand) {
     // Redstone blocks 119-131: the block items sit at 1000 + id (the unlit torch drops the lit one, the lit lamp the unlit lamp, the comparators item 381); glowstone dust; the moving piston nothing.
     case 119: case 120: case 121: case 122: case 123: case 124: case 125: case 126: case 127: case 128: case 129: return [itemOfBlock2(id), 0];
     case GLOWSTONE: return [ITEM_GLOWSTONE_DUST, 0];
+    // Shaped blocks (shaped-blocks.js): slabs by wood type (the double slab twice), gate and trapdoor themselves, the wall by damage.
+    case 165: case 166: return [1165, meta & 7];
+    case 167: case 168: return [1000 + id, 0];
+    case 169: return [1169, meta & 15];
     case 130: return null;
     default: return [id, 0];
   }
@@ -224,7 +230,7 @@ function quantity(id, rand) {
   if (id === 9 || id === ICE || id === FIRE || id === SNOW_LAYER || id === 10 || id === 42) return 0;
   if (id === 21) return 3;
   if (id === 24 || id === 23) return 4;
-  if (id === DOUBLE_STONE_SLAB) return 2; // BlockSlab.quantityDropped
+  if (id === DOUBLE_STONE_SLAB || id === 166) return 2; // BlockSlab.quantityDropped
   if (id === GLOWSTONE) return Math.min(4, 2 + rand.nextInt(3) + rand.nextInt(1)); // BlockGlowstone.quantityDroppedWithBonus(0): quantityDropped 2 + nextInt(3), then the Fortune roll
   return 1;
 }

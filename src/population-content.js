@@ -6,6 +6,7 @@ import { DISPENSER, STICKY_PISTON, PISTON, PISTON_HEAD, SLIMEBALL, DISPENSER_ITE
 import { STONE_BRICKS, DOUBLE_STONE_SLAB, STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, ITEM_STONE_BRICKS, ITEM_STONE_SLAB, ITEM_END_PORTAL_FRAME, ITEM_CAULDRON, ITEM_FLOWER_POT, STONE_BRICK_NAMES, SLAB_NAMES, slabDrops } from './stone-utility.js';
 import { REDSTONE_WIRE, LEVER, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, ITEM_LEVER, ITEM_STONE_PLATE, ITEM_WOODEN_PLATE, ITEM_STONE_BUTTON, ITEM_TRIPWIRE_HOOK, ITEM_REPEATER, ITEM_REDSTONE, ITEM_STRING, REDSTONE_ITEM_IDS, REDSTONE_ITEM_NAMES, redstoneDrops } from './redstone-blocks.js';
 import * as RS2 from './redstone-blocks-2.js';
+import { installShapedItems, installShapedMaterials, installShapedRecipes, shapedCraftingResult, shapedDrops, isShaped } from './shaped-blocks.js';
 import { POTION_ITEM_ROWS } from './potion-items.js';
 export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97:68,175:69,162:70,161:71,106:72,127:73,48:74,39:75,40:76,99:77,100:78,32:79,174:80,103:81,'44:1':82,'31:0':83,'31:2':84,24:56,110:57,159:58,111:59,145:ANVIL,116:ENCHANTING_TABLE,53:87,67:88,109:89,128:90,134:91,135:92,136:93,108:94,163:95,164:96,
   // Doors (items 324/330 are internal 470/471), iron bars and glass panes (the block items).
@@ -25,11 +26,14 @@ export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97
   // Powered rail 27, detector rail 28 and activator rail 157 are 1000 + internal block id 135-137 (powered-rails.js).
   27:1135,28:1136,157:1137,
   // Structure loot (strongholds): ender pearl 368, empty map 395 and compass 345 are internal 378-380 (inert items).
+  // Shaped blocks (shaped-blocks.js): wood slab 126, fence gate 107, trapdoor 96, cobblestone wall 139 (1000 + internal block id; double slab 125 has no item).
+  126:1165,107:1167,96:1168,139:1169,
   368:378,395:379,345:380,388:367,360:368,357:369,282:370,281:371,322:372,2256:373,2257:374,421:375,418:376,419:377});
 export const TREE_NAMES=['Oak','Spruce','Birch','Jungle','Acacia','Dark oak'];
 export const DOUBLE_NAMES=['Sunflower','Lilac','Double tallgrass','Large fern','Rose bush','Peony'];
 export const POPULATION_VARIANTS={7:TREE_NAMES.map(s=>s+' planks'),4:TREE_NAMES.slice(0,4).map(s=>s+' log'),5:TREE_NAMES.slice(0,4).map(s=>s+' leaves'),48:TREE_NAMES.map(s=>s+' sapling'),69:DOUBLE_NAMES,70:TREE_NAMES.slice(4).map(s=>s+' log'),71:TREE_NAMES.slice(4).map(s=>s+' leaves'),68:['Stone monster egg','Cobblestone monster egg','Stone brick monster egg']};
 export function installPopulationItems(items){
+  installShapedItems(items);
   for(const [id,variants] of Object.entries(POPULATION_VARIANTS)) items[id].variants=variants;
   items[ANVIL].variants=['Anvil','Slightly Damaged Anvil','Very Damaged Anvil'];
   items[BED].hidden=true; // BlockBed has no item of its own: the bed item places it
@@ -59,6 +63,7 @@ export function installPopulationItems(items){
   ]) items[id]={id,name,texture,stack:64,color:'#8caa59',...extra};
 }
 export function installPopulationMaterials(m){
+  installShapedMaterials(m);
   Object.assign(m,{
     63:{hardness:3,kind:'pickaxe',tier:1,drop:351},64:{hardness:3,kind:'pickaxe',tier:2,drop:360},65:{hardness:3,kind:'pickaxe',tier:2,drop:360},66:{hardness:3,kind:'pickaxe',tier:2,drop:367},
     67:{hardness:1,kind:'axe'},68:{hardness:.75,drop:0},69:{hardness:0,drop:0},70:{hardness:2,kind:'axe'},71:{hardness:.2,drop:0},72:{hardness:.2,drop:0},73:{hardness:.2,drop:351},74:{hardness:2,kind:'pickaxe',tier:0},75:{hardness:0},76:{hardness:0},77:{hardness:.2,drop:75},78:{hardness:.2,drop:76},79:{hardness:0,drop:0},80:{hardness:.5,drop:0},81:{hardness:1,kind:'axe',drop:368},82:{hardness:2,kind:'pickaxe',tier:0},83:{hardness:0,drop:0},84:{hardness:0,drop:0},
@@ -138,7 +143,9 @@ export function installPopulationRecipes({recipe,shapeless}){
   recipe('redstone-from-block','Redstone',['B'],{B:RS2.ITEM_REDSTONE_BLOCK},360,9);
   recipe('comparator','Redstone comparator',[' T ','TQT','SSS'],{T:RS2.ITEM_REDSTONE_TORCH,Q:RS2.ITEM_QUARTZ,S:3},RS2.ITEM_COMPARATOR);
   recipe('repeater','Redstone repeater',['TRT','SSS'],{T:RS2.ITEM_REDSTONE_TORCH,R:360,S:3},ITEM_REPEATER);
-  // Daylight sensor (C109: three glass, three quartz, three wooden slabs) has no recipe here: the build has no wooden slab block (original 126); it is Creative-only.
+  installShapedRecipes({recipe,shapeless});
+  // Daylight sensor (C109): three glass, three quartz, three wood slabs of any type.
+  recipe('daylight-sensor','Daylight sensor',['GGG','QQQ','SSS'],{G:9,Q:RS2.ITEM_QUARTZ,S:1165},RS2.ITEM_DAYLIGHT_SENSOR);
   recipe('glowstone','Glowstone',['DD','DD'],{D:RS2.ITEM_GLOWSTONE_DUST},RS2.ITEM_GLOWSTONE);
   recipe('light-weighted-plate','Light weighted pressure plate',['GG'],{G:304},RS2.ITEM_LIGHT_PLATE);
   recipe('heavy-weighted-plate','Heavy weighted pressure plate',['II'],{I:302},RS2.ITEM_HEAVY_PLATE);
@@ -157,6 +164,7 @@ export const populationXp=(id,r)=>id===63?2+Math.floor(r()*4):id===64||id===65?1
 // Native BlockOre, BlockRedstoneOre, BlockHugeMushroom, BlockMelon and BlockDoublePlant drops.
 export function populationDrops(id,meta,{random=Math.random,shears=false}={}){
   if(id===ANVIL)return[{id:ANVIL,count:1,damage:(meta&15)>>2}];
+  if(isShaped(id))return shapedDrops(id,meta);
   if(id>=REDSTONE_WIRE&&id<=TRIPWIRE)return redstoneDrops(id);
   if(RS2.isRedstone2Block(id))return RS2.redstoneDrops2(id,meta,{random});
   // BlockDoor.getItemDropped: the lower half drops its door item, the upper half nothing; BlockPane (glass) drops nothing.
@@ -191,6 +199,7 @@ export function populationDrops(id,meta,{random=Math.random,shears=false}={}){
 export function populationCraftingResult(cells,size){
   const filled=cells.filter(Boolean);
   const stairs=stairRecipeResult(cells,size);if(stairs)return stairs;
+  const shaped=shapedCraftingResult(cells,size);if(shaped)return shaped;
   if(filled.length===1&&[4,70].includes(filled[0].id))return{id:7,count:4,damage:(filled[0].damage&3)+(filled[0].id===70?4:0)};
   if(filled.length===9&&size===3&&cells[4]?.id===351&&cells.every((s,i)=>i===4||s?.id===40))return{id:58,count:8,damage:15-cells[4].damage};
   if(filled.length===4&&filled.every(s=>s.id===56))for(let y=0;y<size-1;y++)for(let x=0;x<size-1;x++)if([cells[y*size+x],cells[y*size+x+1],cells[(y+1)*size+x],cells[(y+1)*size+x+1]].every(s=>s?.id===56))return{id:56,count:4,damage:2};

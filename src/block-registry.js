@@ -148,8 +148,11 @@ const MAP = {
   132: same(158), 133: same(154), 134: same(117), 135: same(27), 136: same(28), 137: same(157),
   // 0.42.0: BlockBed (26): metadata is the original's (facing 0-3, occupied bit 4, head bit 8).
   138: same(26),
+  // Shaped blocks (shaped-blocks.js): wood slab 126, double wood slab 125, fence gate 107, trapdoor 96, cobblestone wall 139 (metadata is the original's).
+  165: same(126), 166: same(125), 167: same(107), 168: same(96), 169: same(139),
 };
-if (Object.keys(MAP).length !== BLOCKS.length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");
+// Internal 140-164 are placeholders (world.js) held for the parallel block tracks; they map to nothing.
+if (Object.keys(MAP).length !== BLOCKS.filter((b) => !b.reserved).length) throw new Error("block-registry.js: every BLOCKS entry needs a mapping");
 
 // Original id -> internal ids that can represent it, in internal id order.
 const BY_ORIGINAL = new Map();

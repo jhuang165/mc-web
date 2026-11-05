@@ -6,7 +6,8 @@ import { ParticleSystem } from "./particles.js";
 import { EffectRenderer } from "./effect-renderer.js";
 import { Fx } from "./fx.js";
 import { ParticleRenderer } from "./particle-renderer.js";
-import { HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, ANVIL, BED, PISTON_MOVING, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
+import { woodSlabBounds, gateRenderBoxes, trapBounds, wallMask, wallRenderBoxes } from './shaped-blocks.js';
+import { HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, ANVIL, BED, PISTON_MOVING, wallSolid, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube } from "./world.js";
 import { StreamingLight } from './streaming-light.js';
 import { STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, endFrameBoxes, cauldronBoxes, cauldronWaterHeight, CAULDRON_FLOOR, CAULDRON_WALL, potContents, POT_BOUNDS, potPlantOf } from './stone-utility.js';
 import { REDSTONE_WIRE, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, LEVER, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, isRedstoneBlock, redstoneBounds, wireArms, wireClimbs, wireTint } from './redstone-blocks.js';
@@ -268,6 +269,7 @@ export class VoxelScene {
           else if (isPlant(b) || b === WEB || b === REEDS) this.crossed(solid, b, x, y, z);
           else if (b === LADDER) this.ladder(solid, x, y, z);
           else if (b === FENCE) for (const box of fenceRenderBoxes(fenceMask(w, x, y, z))) this.box(solid, b, x, y, z, box);
+          else if (b >= 165 && b !== 166 && b <= 169) this.shaped(solid, b, x, y, z);
           else if (isRedstoneBlock(b)) this.redstone(solid, b, x, y, z);
           else if (b === RAIL || (b >= 135 && b <= 137)) this.rail(solid, x, y, z, b);
           else if (b === CACTUS) this.cactus(solid, x, y, z);
@@ -352,6 +354,14 @@ export class VoxelScene {
       [[x1, py + 1, cz - r, 0, 0], [x1 + dx, py, cz - r + dz, 0, 16], [x0 + dx, py, cz - r + dz, 16, 16], [x0, py + 1, cz - r, 16, 0]],
     ];
     for (const q of quads) m.quad(q.map((p) => [p[0], p[1], p[2]]), q.map((p) => uv(p[3], p[4])), 1, light);
+  }
+  // Wood slab, fence gate, trapdoor and cobblestone wall models (shaped-blocks.js).
+  shaped(m, b, x, y, z, all = false) {
+    const w = this.world, meta = w.getMeta(x, y, z);
+    if (b === 165) this.box(m, b, x, y, z, woodSlabBounds(b, meta), meta, all);
+    else if (b === 167) for (const box of gateRenderBoxes(meta)) this.box(m, b, x, y, z, box, meta, true);
+    else if (b === 168) this.box(m, b, x, y, z, trapBounds(meta), meta, true);
+    else if (b === 169) for (const box of wallRenderBoxes(wallMask(w, x, y, z, wallSolid), w.get(x, y + 1, z) === 0)) this.box(m, b, x, y, z, box, meta, true);
   }
   // RenderBlocks.renderStandardBlock over setRenderBounds (used by renderBlockFence): each face of
   // the box with the ambient-occlusion path. Texture coordinates follow renderFace*: u = x on the
@@ -787,6 +797,7 @@ export class VoxelScene {
         if (isStair(b)) this.stairs(m, b, e.x, e.y, e.z);
         else if (b === STONE_SLAB) this.box(m, b, e.x, e.y, e.z, blockBounds(view, e.x, e.y, e.z), part.meta, true);
         else if (b === FENCE) for (const box of fenceRenderBoxes(fenceMask(view, e.x, e.y, e.z))) this.box(m, b, e.x, e.y, e.z, box, 0, true);
+        else if (b >= 165 && b !== 166 && b <= 169) this.shaped(m, b, e.x, e.y, e.z, true);
         else this.cube(m, b, e.x, e.y, e.z);
       } finally {
         this.world = real;

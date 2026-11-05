@@ -17,7 +17,7 @@ All **171 block registrations** x 16 raw 4-bit values = **2736 ID/metadata combi
 
 **Bytecode evidence** (javap): overrides of the block's own class chain and inner classes that call World/IBlockAccess/TileEntity getBlockMetadata, use a metadata argument, or call such a method; the RenderBlocks render method of each render type that reads world metadata other than straight into getIcon(side, meta). **Not analysed**: other blocks, items and entities reading this block's metadata, tile-entity code and renderers (tile-entity blocks never get aliases), persistence.
 
-Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item damage, not world metadata); **Item-placed** are metadata values produced by onBlockPlaced from any item damage 0–15; **Unexecuted readers** counts metadata readers not executed conclusively (class-chain overrides, the render method, a tile entity; see JSON `bytecode.unexecutedMetadataReaders`); **Browser mapping** counts values with an exact, approximate (fallback) or no mapping in `fromOriginal` today (1364 exact, 764 approximate, 608 none of 2736). Placement across all values: 315 reachable from Creative item damage, 270 only from other item damage, 2151 not produced by item placement (they may still arise from world generation, updates or commands).
+Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item damage, not world metadata); **Item-placed** are metadata values produced by onBlockPlaced from any item damage 0–15; **Unexecuted readers** counts metadata readers not executed conclusively (class-chain overrides, the render method, a tile entity; see JSON `bytecode.unexecutedMetadataReaders`); **Browser mapping** counts values with an exact, approximate (fallback) or no mapping in `fromOriginal` today (1444 exact, 764 approximate, 528 none of 2736). Placement across all values: 315 reachable from Creative item damage, 270 only from other item damage, 2151 not produced by item placement (they may still arise from world generation, updates or commands).
 
 | Java block ID | Registry name | Creative stacks | Item-placed | Semantic | Alias (→canonical) | Invalid | Unclassified | Unexecuted readers | Browser mapping |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -117,7 +117,7 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 93 | minecraft:unpowered_repeater | — | — | 0–15 | — | — | — | 1 | exact all 16 |
 | 94 | minecraft:powered_repeater | — | — | 0–15 | — | — | — | 1 | exact all 16 |
 | 95 | minecraft:stained_glass | 95:0, 95:1, 95:2, 95:3, 95:4, 95:5, 95:6, 95:7, 95:8, 95:9, 95:10, 95:11, 95:12, 95:13, 95:14, 95:15 | 0–15 | 0–15 | — | — | — | — | none all 16 |
-| 96 | minecraft:trapdoor | 96:0 | 0–3, 8–11 | 0–15 | — | — | — | — | none all 16 |
+| 96 | minecraft:trapdoor | 96:0 | 0–3, 8–11 | 0–15 | — | — | — | — | exact all 16 |
 | 97 | minecraft:monster_egg | 97:0, 97:1, 97:2, 97:3, 97:4, 97:5 | 0–15 | 0–15 | — | — | — | — | exact all 16 |
 | 98 | minecraft:stonebrick | 98:0, 98:1, 98:2, 98:3 | 0–15 | 0–15 | — | — | — | — | exact all 16 |
 | 99 | minecraft:brown_mushroom_block | — | 0 | 0–10, 14, 15 | 11–13→0 | — | — | — | exact all 16 |
@@ -128,7 +128,7 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 104 | minecraft:pumpkin_stem | — | — | 0–15 | — | — | — | — | none all 16 |
 | 105 | minecraft:melon_stem | — | — | 0–15 | — | — | — | — | none all 16 |
 | 106 | minecraft:vine | 106:0 | 0–15 | 0–4, 8 | — | — | 5–7, 9–15 | 1 | exact all 16 |
-| 107 | minecraft:fence_gate | 107:0 | 0 | 0, 1, 4, 5, 8, 10, 12, 14 | — | — | 2, 3, 6, 7, 9, 11, 13, 15 | 1 | none all 16 |
+| 107 | minecraft:fence_gate | 107:0 | 0 | 0, 1, 4, 5, 8, 10, 12, 14 | — | — | 2, 3, 6, 7, 9, 11, 13, 15 | 1 | exact all 16 |
 | 108 | minecraft:brick_stairs | 108:0 | 0, 4 | 0–13 | 14→6; 15→7 | — | — | — | exact all 16 |
 | 109 | minecraft:stone_brick_stairs | 109:0 | 0, 4 | 0–13 | 14→6; 15→7 | — | — | — | exact all 16 |
 | 110 | minecraft:mycelium | 110:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
@@ -146,8 +146,8 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 122 | minecraft:dragon_egg | — | 0 | 0 | 1–15→0 | — | — | — | none all 16 |
 | 123 | minecraft:redstone_lamp | 123:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
 | 124 | minecraft:lit_redstone_lamp | — | — | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
-| 125 | minecraft:double_wooden_slab | — | 0–15 | 0–7 | 8→0; 9→1; 10→2; 11→3; 12→4; 13→5; 14→6; 15→7 | — | — | — | none all 16 |
-| 126 | minecraft:wooden_slab | 126:0, 126:1, 126:2, 126:3, 126:4, 126:5 | 0–15 | 0–15 | — | — | — | — | none all 16 |
+| 125 | minecraft:double_wooden_slab | — | 0–15 | 0–7 | 8→0; 9→1; 10→2; 11→3; 12→4; 13→5; 14→6; 15→7 | — | — | — | exact all 16 |
+| 126 | minecraft:wooden_slab | 126:0, 126:1, 126:2, 126:3, 126:4, 126:5 | 0–15 | 0–15 | — | — | — | — | exact all 16 |
 | 127 | minecraft:cocoa | — | 0–3 | 0–15 | — | — | — | 1 | exact all 16 |
 | 128 | minecraft:sandstone_stairs | 128:0 | 0, 4 | 0–13 | 14→6; 15→7 | — | — | — | exact all 16 |
 | 129 | minecraft:emerald_ore | 129:0 | 0 | 0 | 1–15→0 | — | — | — | exact 0; approximate 1–15 |
@@ -160,7 +160,7 @@ Columns: **Creative stacks** are `item:damage` from native getSubBlocks (item da
 | 136 | minecraft:jungle_stairs | 136:0 | 0, 4 | 0–13 | 14→6; 15→7 | — | — | — | exact all 16 |
 | 137 | minecraft:command_block | — | 0 | 0, 1 | — | — | 2–15 | 1 | exact all 16 |
 | 138 | minecraft:beacon | 138:0 | 0 | 0 | — | — | 1–15 | 1 | none all 16 |
-| 139 | minecraft:cobblestone_wall | 139:0, 139:1 | 0–15 | 0–15 | — | — | — | — | none all 16 |
+| 139 | minecraft:cobblestone_wall | 139:0, 139:1 | 0–15 | 0–15 | — | — | — | — | exact all 16 |
 | 140 | minecraft:flower_pot | — | — | 0 | — | — | 1–15 | 1 | exact all 16 |
 | 141 | minecraft:carrots | — | 0 | 0–5, 7–9 | 6→5; 10–13→9 | — | 14, 15 | — | exact all 16 |
 | 142 | minecraft:potatoes | — | 0 | 0–5, 7–9 | 6→5; 10–13→9 | — | 14, 15 | — | exact all 16 |

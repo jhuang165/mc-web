@@ -17,6 +17,8 @@
 //   game.subtracted() -> skylight subtracted     game.angle() -> celestial angle in [0, 1)
 //   game.skyLight(x, y, z)
 import { installCommandBlocks } from "./command-block.js";
+import { installShapedBlocks, trapdoorSupportOriginal } from "./shaped-blocks.js";
+import { blockProperties } from "./redstone.js";
 import { LiveRedstone } from "./redstone-live.js";
 import { installPistons } from "./piston-live.js";
 import { applyPlayerEdit } from "./player-edit-simulation.js";
@@ -101,6 +103,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     skyLight: (x, y, z) => game.skyLight?.(x, y, z) ?? 15,
   });
   const commandBlocks = installCommandBlocks(redstone, { host: () => game.commandHost(), changed: () => game.markUnsaved?.() });
+  installShapedBlocks(redstone, trapdoorSupportOriginal(blockProperties())); // fence gates (107) and trapdoors (96): redstone opening, trapdoor support loss
   redstone.registerBehaviour(154, hopperBehaviour); // BlockHopper: power disables it (metadata bit 8)
   installPoweredRails(redstone); // powered / detector / activator rails and the plain rail's redstone hooks
   // BlockDispenser (23) and BlockDropper (158): dispense.js over the game's entity and block hooks (game.dispense). Sounds are the
