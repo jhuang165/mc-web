@@ -8,9 +8,10 @@ export function tickWeatherSimulation({ world, weather, mobs, survival }, player
   weather.tick(world, player);
   for (const bolt of weather.struck) {
     const box = strikeBox(bolt);
-    for (const e of mobs?.entities || []) {
+    for (const e of [...(mobs?.entities || [])]) {
       const type = ENTITY_TYPES[e.type];
       if (!type || e.health <= 0 || !overlaps(entityBox(e, type.width, type.height), box)) continue;
+      if (e.type === 'pig' && mobs.pigStruck) { mobs.pigStruck(e); continue; } // EntityPig.onStruckByLightning: a zombie pigman, no damage
       const hit = struckByLightning(e.fire || 0);
       mobs.hazard(e, hit.damage, 'inFire');
       e.fire = hit.fire;

@@ -9,7 +9,7 @@ import { endermanFieldsFrom } from './enderman.js';
 import { nbtGet } from './nbt-get.js';
 import { slimeSizeFromNbt } from './slime.js';
 
-export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', Ozelot: 'ocelot', EntityHorse: 'horse' });
+export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', LavaSlime: 'magma_cube', PigZombie: 'pigman', Ozelot: 'ocelot', EntityHorse: 'horse' });
 export const IMPORT_MOB_LIMIT = 256; // EntityWorld keeps at most this many saved mobs
 
 const tagValue = nbtGet; // NBTTagCompound getters: numeric tags convert across types (nbt-get.js)
@@ -79,9 +79,14 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
     Object.assign(record, endermanFieldsFrom({ carried: tagValue(entity, 'carried', NBT.SHORT, 0), carriedData: tagValue(entity, 'carriedData', NBT.SHORT, 0) }));
   } else if (type === 'iron_golem') {
     record.playerCreated = tagValue(entity, 'PlayerCreated', NBT.BYTE, 0) !== 0;
-  } else if (type === 'slime') {
-    // EntitySlime.readEntityFromNBT: Size (size - 1; setSlimeSize heals to full).
+  } else if (type === 'slime' || type === 'magma_cube') {
+    // EntitySlime (and EntityMagmaCube).readEntityFromNBT: Size (size - 1; setSlimeSize heals to full).
     record.size = slimeSizeFromNbt(tagValue(entity, 'Size', NBT.INT, 0));
+  } else if (type === 'pigman') {
+    // EntityPigZombie.writeEntityToNBT / readEntityFromNBT: only the short Anger (1.7.10 has no HurtBy tag); the sword is Equipment[0].
+    record.angerLevel = tagValue(entity, 'Anger', NBT.SHORT, 0);
+    const equipment = tagValue(entity, 'Equipment', NBT.LIST);
+    if (equipment?.elementType === NBT.COMPOUND && equipment.items[0]) record.held = convertItem(equipment.items[0]) ?? null;
   } else if (type === 'bat') {
     record.batHanging = (tagValue(entity, 'BatFlags', NBT.BYTE, 0) & 1) !== 0; // EntityBat.readEntityFromNBT
   } else if (type === 'ocelot') {
@@ -108,7 +113,7 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
 
 // EntityList.createEntityFromNBT for /summon. A supplied compound skips onSpawnWithEgg entirely.
 export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) {
-  const health = { horse: 53, pig: 10, cow: 10, mooshroom: 10, snow_golem: 4, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, enderman: 40, squid: 10, bat: 6, ocelot: 10 }[type];
+  const health = { horse: 53, pig: 10, cow: 10, mooshroom: 10, snow_golem: 4, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, magma_cube: 1, pigman: 20, enderman: 40, squid: 10, bat: 6, ocelot: 10 }[type];
   if (health === undefined) return null;
   const rotation = numbers(tag, 'Rotation', NBT.FLOAT, 2);
   const record = { type, health: tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health)), yaw: rotation ? -rotation[0] * Math.PI / 180 : 0,
@@ -141,7 +146,14 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
     for (const k of type === 'villager' ? ['Profession', 'Riches', 'Offers'] : type === 'iron_golem' ? ['PlayerCreated'] : ['IsBaby', 'IsVillager', 'ConversionTime']) kept.add(k);
   }
   if (type === 'horse') { Object.assign(record, horseNbtFields(tag)); for (const k of HORSE_NBT_KEYS) kept.add(k); }
-  if (type === 'slime') { record.size = slimeSizeFromNbt(tagValue(tag, 'Size', NBT.INT, 0)); kept.add('Size'); }
+  if (type === 'pigman') {
+    record.angerLevel = tagValue(tag, 'Anger', NBT.SHORT, 0);
+    const equipment = tagValue(tag, 'Equipment', NBT.LIST);
+    if (equipment?.elementType === NBT.COMPOUND && equipment.items[0]) record.held = convertItem(equipment.items[0]) ?? null;
+    kept.add('Anger');
+    if (equipment?.items.slice(1).some(e => e.size)) kept.delete('Equipment'); else kept.add('Equipment'); // other slots have no live implementation
+  }
+  if (type === 'slime' || type === 'magma_cube') { record.size = slimeSizeFromNbt(tagValue(tag, 'Size', NBT.INT, 0)); kept.add('Size'); }
   // EntityEnderman.readEntityFromNBT: carried / carriedData (shorts; the original block id and metadata).
   if (type === 'enderman') { Object.assign(record, endermanFieldsFrom({ carried: tagValue(tag, 'carried', NBT.SHORT, 0), carriedData: tagValue(tag, 'carriedData', NBT.SHORT, 0) })); kept.add('carried'); kept.add('carriedData'); }
   if (type === 'bat') { record.batHanging = (tagValue(tag, 'BatFlags', NBT.BYTE, 0) & 1) !== 0; kept.add('BatFlags'); } // EntityBat.readEntityFromNBT; a supplied compound without BatFlags is not hanging
