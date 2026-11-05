@@ -2,6 +2,13 @@
 
 Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.43.0. Full parity is unfinished.
 
+Post-0.43.0 batch 5 (2026-11-05, claude-lead, unreleased): five Sonnet tracks merged in main (merge head f6be3b3, egg /give fix 5b9280a, cat/horse sounds 9837d13).
+- Spawn eggs: item 383 (internal 1950) with all 24 EntityList eggs, resolving mobs through `SUMMONABLE`. Bottle o' Enchanting 384 (1951) and fire charge 385 (1952) are in `spawn-eggs.js` and `spawn-egg-use.js`. SpawnEggProbe.
+- Ocelot: `ocelot.js`, `ocelot-ai.js`, `ocelot-renderer.js` and `ocelot-spawn.js` cover taming with fish, the four cat types, sitting (including on chests), creepers avoiding it and a jungle spawn pass. The shared Sit, Leap and FollowOwner tasks moved out of `wolf-ai.js`. OcelotProbe.
+- Mooshroom and snow golem: `mooshroom.js`, `snow-golem.js`, `mooshroom-golem-live.js` and `mooshroom-golem-renderer.js` cover stew and milk, shearing, pumpkin construction, the snow trail, heat damage and snowballs. Golems and the iron golem take no fall damage. Reference has 141 records.
+- Eye of ender: item 381 (1960) in `eye-of-ender.js` and `eye-of-ender-live.js` flies toward the nearest stronghold and fills frames. A full 12-frame ring fills the 3×3 with the end portal block (BLOCKS 149, original 119), drawn by the approximate `end-portal-renderer.js`. Adds the ender chest recipe. Reference has 297 records. There is no End dimension.
+- Horse: `horse.js`, `horse-live.js` and `horse-renderer.js` cover EntityHorse (id 100, /summon EntityHorse) with five types, variants and markings, taming by riding, saddle, armour layers, jumping, breeding, drops and NBT. HorseProbe covers spawn, feed, interact, tame, jump, child, mate, drops, sound and NBT. There is no horse GUI, lead or jump-bar HUD.
+
 Post-0.43.0 batch 4 (2026-11-05, claude-lead, unreleased): five Sonnet tracks merged in main (merge head 9e65a1d, browser fixes 86608cf).
 - Chests: trapped chest (BLOCKS 162) and ender chest (163) in `chest-blocks.js`, `chest-renderer.js` picks the trapped/ender texture. Pairing goes by kind. `survival.enderTiles` holds the ender lid state, and items live in the player's EnderItems. ChestsProbe has 356 records.
 - Slime: `slime.js` and `slime-renderer.js`, with sizes, jumping, splitting, slime chunk and swamp spawn rules. SlimeProbe has 47 records.
