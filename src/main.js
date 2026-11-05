@@ -107,6 +107,8 @@ import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
+import { EyesOfEnder } from "./eye-of-ender-live.js";
+import { EndPortalRenderer } from "./end-portal-renderer.js";
 import { Fishing } from "./fishing-simulation.js";
 import { FISHING_ROD } from "./fishing-content.js";
 import { WitchPotions } from "./witch-potions.js";
@@ -282,6 +284,7 @@ let sounds,
   mobs,
   mobRenderer,
   chestRenderer,
+  endPortalRenderer,
   tntRenderer,
   aimedEntity = null,
   eating = null;
@@ -347,6 +350,7 @@ setGameRuleSource((name) => ruleOn(active, name));
 { const dropBlock = items.dropBlock; items.dropBlock = function (...a) { return active && !ruleOn(active, "doTileDrops") ? undefined : dropBlock.apply(this, a); }; }
 // Thrown snowballs and their particles (see projectiles.js).
 const projectiles = new Projectiles();
+const eyes = new EyesOfEnder(); // eye-of-ender-live.js: flying eyes of ender
 // The fishing rod's bobber (fishing-simulation.js).
 const fishing = new Fishing();
 // Arrows in flight or stuck in blocks (bow.js) and the eased field-of-view modifier the
@@ -593,6 +597,7 @@ function save() {
   active.player = survival.serialize();
   active.drops = items.serialize();
   active.projectiles = projectiles.serialize();
+  active.eyes = eyes.serialize();
   active.fishing = fishing.serialize();
   active.thrownPotions = mobs?.potions?.serialize() ?? [];
   active.arrows = arrows.serialize();
@@ -1034,6 +1039,7 @@ async function launch(record, prepared) {
       survival.time,
     );
     projectiles.load(record.projectiles);
+    eyes.load(record.eyes);
     fishing.load(record.fishing);
     primed = (Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz }));
     tntRenderer?.clear();
@@ -1936,6 +1942,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     landingDust: (x, y, z, count) => scene.particles.landingDust(world, x, y, z, count, [position.x, position.y + PHYSICS.eye, position.z]),
   });
   ({ fallDistance, landedFall } = movement);
+  eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
   tickEntitySimulation({ world, items, primed, projectiles, arrows, mobs, survival, position,
     width: PHYSICS.width, height: PHYSICS.height }, {
     maxStack: st => survival.inventory.maxStack(st),
@@ -2004,7 +2011,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   if (containerView?.container.cart && !minecarts.usable(containerView.container.cart, position)) resume();
   scene.setFishing(fishing.active ? { hook: fishing.hook, first: !thirdPersonView, sneaking: !!motion.sneaking } : null);
   scene.setDrops(items.items);
-  scene.setProjectiles(mobs?.potions?.balls?.length ? [...projectiles.balls, ...mobs.potions.balls] : projectiles.balls, projectiles.particles);
+  scene.setProjectiles([...projectiles.balls, ...eyes.balls, ...(mobs?.potions?.balls ?? [])], projectiles.particles);
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();
@@ -2146,7 +2153,7 @@ function edit(place = false) {
     }
   }
   const state = { screen, heldTool: heldId(), world, survival, position, velocity, motion, mobs, minecarts,
-    farming, trees, fire, fluids, items, projectiles, grounded, fallDistance, wasInWater, yaw, pitch,
+    farming, trees, fire, fluids, items, projectiles, eyes, grounded, fallDistance, wasInWater, yaw, pitch,
     eating, mining, mineCooldown, mineHeld, flowers: FLOWERS, boneRandom, itemRand, signs };
   // A right click with a bucket also captures the bucket's own fluid-aware trace along the
   // last frame's eye ray (ItemBucket: 5 blocks, liquids only when empty).
@@ -2172,6 +2179,7 @@ function edit(place = false) {
     renderVitals,
     markUnsaved: () => { saved = false; },
     playSound: (name, options) => sounds.play(name, options),
+    particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz),
     scheduleFalling:(x,y,z)=>falling.schedule(x,y,z,ANVIL),
     sound,
     reportBrokenTool,
@@ -2879,6 +2887,7 @@ function animate(now) {
   });
   if (screen === "inventory") paperdollFrame();
   chestRenderer?.update(running() ? accumulator / PHYSICS.tick : 1);
+  endPortalRenderer?.update(world, position, performance.now() / 1000);
   if(xpRenderer)xpRenderer.update(xpOrbs.orbs,partial);
   scene.dropPartial = partial;
   scene.particleView = { yaw, pitch, mirror: thirdPersonView === 2 };
@@ -2948,6 +2957,7 @@ async function boot(){try {
   mobRenderer = new MobRenderer(scene.scene, scene);
   playerRenderer = new PlayerRenderer(scene.scene, scene, scene.textures.texture);
   chestRenderer = new ChestRenderer(scene.scene, scene);
+  endPortalRenderer = new EndPortalRenderer(scene.scene);
   tntRenderer = new TntRenderer(scene.scene, scene);
   minecartRenderer = new MinecartRenderer(scene.scene, scene, null);
   boatRenderer = new BoatRenderer(scene.scene, scene, boats);

@@ -109,6 +109,8 @@ function payload(state,ox,oz,report,world=null) {
  for(const name of ['fluidTicks','fireTicks','fallingTicks'])for(const {value:e} of state[name]??[]) {const o=toOriginal(e.block,0,{flowing:name==='fluidTicks'});if(o)ticks.push(new Map(Object.entries({i:int(o[0]),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),t:int(Math.max(-2147483648,Math.min(2147483647,e.delay))),p:int(0)})));}
  return {entities,tileEntities:tiles,tileTicks:ticks};
 }
+// TileEntityEndPortal (id Airportal) has no fields besides x, y, z.
+const endPortalTiles=(p,cells)=>{for(const [x,y,z] of cells)p.tileEntities.push(new Map(Object.entries({id:str('Airportal'),x:int(x),y:int(y),z:int(z)})));return p;};
 function levelNbt(record,w,report) {
  const p=record.player??{},pos=record.position??w.spawn(),xp=new Experience(record.experience),creative=record.mode!=='survival'&&record.mode!=='adventure',gameType=creative?1:record.mode==='adventure'?2:0;
  const player={...entity(pos,'Player',w.originX??0,w.originZ??0),Health:short(p.health??20),HealF:float(p.health??20),foodLevel:int(p.food??20),foodSaturationLevel:float(p.saturation??5),foodExhaustionLevel:float(p.exhaustion??0),foodTickTimer:int(p.timer??0),XpLevel:int(xp.level),XpP:float(xp.progress),XpTotal:int(xp.total),Score:int(xp.score),SelectedItemSlot:int(p.current??0),playerGameType:int(gameType),SleepTimer:short(0),Sleeping:byte(0),abilities:comp({invulnerable:byte(creative?1:0),flying:byte(0),mayfly:byte(creative?1:0),instabuild:byte(creative?1:0),mayBuild:byte(gameType===2?0:1),flySpeed:float(.05),walkSpeed:float(.1)})};
@@ -154,12 +156,12 @@ export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChu
  ]}, regions=new Map();let count=0;
  const farms=new Map(record.farms??[]),fluidCells=new Set((record.fluidTicks?.entries??[]).map(e=>`${e.x},${e.y},${e.z}:${e.block}`));
  for(const k of [...owned].sort((a,b)=>{const [x,z]=a.split(',').map(Number),[u,v]=b.split(',').map(Number);return x-u||z-v;})) {
-  const [cx,cz]=k.split(',').map(Number),source=w.chunks.get(k),generated=source?null:w.generateTerrainChunk(cx,cz),blocks=source?.blocks??generated.blocks,meta=source?.meta??generated.metadata,ids=new Int16Array(65536),metadata=new Uint8Array(65536),heights=new Int32Array(256);
+  const [cx,cz]=k.split(',').map(Number),source=w.chunks.get(k),generated=source?null:w.generateTerrainChunk(cx,cz),blocks=source?.blocks??generated.blocks,meta=source?.meta??generated.metadata,ids=new Int16Array(65536),metadata=new Uint8Array(65536),heights=new Int32Array(256),portals=[];
   for(let lx=0;lx<16;lx++)for(let lz=0;lz<16;lz++)for(let y=0;y<w.height;y++) {const i=(lx*16+lz)*w.height+y,v=w.chunkEdits.get(k)?.get((lx*16+lz)*256+y),id=v===undefined?blocks[i]:v%4096&255,m=v===undefined?meta[i]:(v%4096)>>8,x=cx*16+lx,z=cz*16+lz,key=`${x},${y},${z}`;
-   const o=toOriginal(id,m,{flowing:fluidCells.has(key+':'+id),moisture:farms.get(key),facing:record.player?.chests?.[key]?.facing,lit:(record.player?.furnaces?.[key]?.burn??0)>0});if(!o)throw new Error(`Unmapped block ${id}`);ids[(lx*16+lz)*256+y]=o[0];metadata[(lx*16+lz)*256+y]=o[1];if(lightOpacity(id)>0)heights[lx+lz*16]=y+1;}
+   const o=toOriginal(id,m,{flowing:fluidCells.has(key+':'+id),moisture:farms.get(key),facing:record.player?.chests?.[key]?.facing,lit:(record.player?.furnaces?.[key]?.burn??0)>0});if(!o)throw new Error(`Unmapped block ${id}`);ids[(lx*16+lz)*256+y]=o[0];metadata[(lx*16+lz)*256+y]=o[1];if(id===149)portals.push([x+ox,y,z+oz]);if(lightOpacity(id)>0)heights[lx+lz*16]=y+1;}
   const chunk=Chunk.fromGeneration(ids,metadata,cx+ox/16,cz+oz/16);chunk.isTerrainPopulated=true;chunk.isLightPopulated=false;chunk.inhabitedTime=typeof record.inhabited==='number'?record.inhabited:0;
   for(let x=0;x<16;x++)for(let z=0;z<16;z++) {chunk.biomes[x+z*16]=w.biomeAt?.(cx*16+x,cz*16+z)?.id??1;chunk.heightMap[x+z*16]=heights[x+z*16];}
-  const document=chunkToNbt(chunk,{lastUpdate:BigInt(record.player?.time??0),...payload(runtime.get(k)??{},ox,oz,report,w)}),a=regionAddress(chunk.x,chunk.z),rk=`${a.regionX},${a.regionZ}`;
+  const document=chunkToNbt(chunk,{lastUpdate:BigInt(record.player?.time??0),...endPortalTiles(payload(runtime.get(k)??{},ox,oz,report,w),portals)}),a=regionAddress(chunk.x,chunk.z),rk=`${a.regionX},${a.regionZ}`;
   if(!regions.has(rk))regions.set(rk,[]);regions.get(rk).push(await encodeRegionChunk(document,{x:a.x,z:a.z,timestamp:Math.floor((record.updated??0)/1000)}));
   onProgress(++count,owned.size);if(count%8===0)await new Promise(r=>setTimeout(r,0));
  }

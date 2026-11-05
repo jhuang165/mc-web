@@ -20,6 +20,7 @@ import { installNoteJukeboxBlocks } from "./note-jukebox-content.js";
 import { signBounds } from "./sign-bounds.js";
 import { isChestShaped, TRAPPED_CHEST, ENDER_CHEST } from "./chest-blocks.js";
 import { PUMPKIN_STEM, MELON_STEM, CAKE, stemBounds, cakeBounds } from "./stems-cake.js";
+import { END_PORTAL, END_PORTAL_BOUNDS } from "./eye-of-ender.js";
 import { isShaped, shapedBounds, shapedBoxes, gateOpen, FENCE_GATE as SHAPED_GATE, WOOD_SLAB as SHAPED_WOOD_SLAB, DOUBLE_WOOD_SLAB as SHAPED_DOUBLE_WOOD_SLAB, TRAPDOOR as SHAPED_TRAPDOOR, COBBLE_WALL as SHAPED_COBBLE_WALL } from "./shaped-blocks.js";
 import { stoneUtilityBounds, stoneUtilityBoxes, hasPartialBounds, isStoneUtility } from "./stone-utility.js";
 export const SIZE = 128,
@@ -190,6 +191,7 @@ BLOCKS[ENDER_CHEST]={name:'Ender Chest',color:'#16393b'};
 BLOCKS[PUMPKIN_STEM]={name:'Pumpkin stem',color:'#7a9a3a'};
 BLOCKS[MELON_STEM]={name:'Melon stem',color:'#7a9a3a'};
 BLOCKS[CAKE]={name:'Cake',color:'#e8d6c4'};
+BLOCKS[END_PORTAL]={name:'End Portal',color:'#0b1a1a',hidden:true}; // eye-of-ender.js: original block 119 overwrites reserved 149
 export const LAPIS_ORE=63,REDSTONE_ORE=64,LIT_REDSTONE_ORE=65,EMERALD_ORE=66,PUMPKIN=67,MONSTER_EGG=68,DOUBLE_PLANT=69,
   LOG2=70,LEAVES2=71,VINE=72,COCOA=73,MOSSY_COBBLE=74,BROWN_MUSHROOM=75,RED_MUSHROOM=76,
   BROWN_MUSHROOM_BLOCK=77,RED_MUSHROOM_BLOCK=78,DEAD_BUSH=79,PACKED_ICE=80,MELON=81,SANDSTONE_SLAB=82,DEAD_SHRUB=83,FERN=84;
@@ -299,6 +301,7 @@ export const ticksRandomly=b=>b===1||b===5||b===LEAVES2||b===LIT_REDSTONE_ORE||b
 // while its fancy-graphics flag is still unset in the Block constructor.
 const SEE_THROUGH=new Set([STAINED_GLASS,STAINED_GLASS_PANE,CARPET,0,9,10,20,29,30,41,42,SNOW_LAYER,ICE,FIRE,WEB,LADDER,CACTUS,REEDS,LILY_PAD,FENCE,NETHER_FENCE,NETHER_BRICK_STAIRS,QUARTZ_STAIRS,RAIL,SIGN_POST,WALL_SIGN,MOB_SPAWNER,VINE,COCOA,SANDSTONE_SLAB,ANVIL,ENCHANTING_TABLE,STONE_SLAB,END_PORTAL_FRAME,CAULDRON,FLOWER_POT,OAK_STAIRS,COBBLESTONE_STAIRS,STONE_BRICK_STAIRS,SANDSTONE_STAIRS,SPRUCE_STAIRS,BIRCH_STAIRS,JUNGLE_STAIRS,BRICK_STAIRS,ACACIA_STAIRS,DARK_OAK_STAIRS,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,STICKY_PISTON,PISTON,PISTON_HEAD,107,108,109,110,111,112,113,114,119,120,124,125,126,127,128,129,130,SHAPED_WOOD_SLAB,SHAPED_GATE,SHAPED_TRAPDOOR,SHAPED_COBBLE_WALL,TRAPPED_CHEST,ENDER_CHEST,...NOT_OPAQUE_NEW]); // 119-130: the redstone torches, button, plates, comparators, sensor and moving piston (redstone-blocks-2.js SEE_THROUGH2)
 SEE_THROUGH.add(CAKE); // BlockCake: not an opaque cube
+SEE_THROUGH.add(END_PORTAL); // BlockEndPortal: not opaque, not a normal cube
 export const opaqueCube=b=>!SEE_THROUGH.has(b)&&!isPlant(b);
 // Block.isNormalCube: Material.tnt is translucent (isOpaque false), so TNT is an opaque
 // cube that is not a normal cube (no torches/ladders/fire tops on it).
@@ -322,6 +325,7 @@ export function blockBounds(world,x,y,z){
   if(b===ANVIL)return (world.getMeta(x,y,z)&1)?[0,0,1/8,1,1,7/8]:[1/8,0,0,7/8,1,1];
   if(b===75||b===76)return[.3,0,.3,.7,.4,.7];
   if(b===PUMPKIN_STEM||b===MELON_STEM)return stemBounds(world.getMeta(x,y,z)); // BlockStem.setBlockBoundsBasedOnState
+  if(b===END_PORTAL)return END_PORTAL_BOUNDS; // BlockEndPortal.setBlockBoundsBasedOnState: 1/16 high
   if(b===CAKE)return cakeBounds(world.getMeta(x,y,z)); // BlockCake: shrinks 2/16 per bite from the west
   if([79,83,84].includes(b))return[0.09999999403953552,0,0.09999999403953552,0.8999999761581421,0.800000011920929,0.8999999761581421];
   if(b===VINE){const m=world.getMeta(x,y,z),boxes=[];if(m&1)boxes.push([0,0,15/16,1,1,1]);if(m&2)boxes.push([0,0,0,1/16,1,1]);if(m&4)boxes.push([0,0,0,1,1,1/16]);if(m&8)boxes.push([15/16,0,0,1,1,1]);return boxes.length?[...Array(3)].map((_,i)=>Math.min(...boxes.map(b=>b[i]))).concat([...Array(3)].map((_,i)=>Math.max(...boxes.map(b=>b[i+3])))):[0,15/16,0,1,1,1];}
@@ -399,7 +403,7 @@ export function solidBlock(b, meta = 0) {
   // An open fence gate has no collision box (BlockFenceGate.getCollisionBoundingBoxFromPool).
   if (b === SHAPED_GATE) return !gateOpen(meta);
   // Rails have no collision box either (BlockRailBase.getCollisionBoundingBoxFromPool is null).
-  return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== CARPET && b !== FIRE && b !== WEB && b !== REEDS && b !== RAIL && !isRailBlock2(b) && b !== VINE && b !== SIGN_POST && b !== WALL_SIGN && !(b >= 107 && b <= 114 && !redstoneHasCollision(b)) && !(b === 119 || b === 120 || b === 124 || b === 125 || b === 126 || b === 130) && !isPlant(b);
+  return b !== 0 && b !== 10 && b !== 42 && b !== 20 && b !== CARPET && b !== END_PORTAL && b !== FIRE && b !== WEB && b !== REEDS && b !== RAIL && !isRailBlock2(b) && b !== VINE && b !== SIGN_POST && b !== WALL_SIGN && !(b >= 107 && b <= 114 && !redstoneHasCollision(b)) && !(b === 119 || b === 120 || b === 124 || b === 125 || b === 126 || b === 130) && !isPlant(b);
 }
 // One 16 x 16 chunk column of the live world (WORLD-02b): port block ids and 4-bit metadata, one byte
 // each, at (lx * 16 + lz) * HEIGHT + y, and the random-tick refcount of each 16-high section
@@ -894,7 +898,7 @@ export function raycast(world, origin, dir, reach = 6) {
       // drawn selection box is inset).
       // Fences, rails and torches are only hit inside their selection box (Block.collisionRayTrace
       // after setBlockBoundsBasedOnState).
-      if (isFence(hit) || hit === RAIL || isRailBlock2(hit) || hit === TORCH || isRedstoneBlock(hit) || isDoor(hit) || isPane(hit) || hasPartialBounds(hit) || hit === SIGN_POST || hit === WALL_SIGN || isShaped(hit) || hit === PISTON_HEAD || (isPistonBase(hit) && pistonExtended(world.getMeta(...p)))) {
+      if (isFence(hit) || hit === RAIL || isRailBlock2(hit) || hit === TORCH || isRedstoneBlock(hit) || isDoor(hit) || isPane(hit) || hasPartialBounds(hit) || hit === END_PORTAL || hit === SIGN_POST || hit === WALL_SIGN || isShaped(hit) || hit === PISTON_HEAD || (isPistonBase(hit) && pistonExtended(world.getMeta(...p)))) {
         const [x0, y0, z0, x1, y1, z1] = blockBounds(world, ...p), lx = origin.x + dir.x * d - p[0], ly = origin.y + dir.y * d - p[1], lz = origin.z + dir.z * d - p[2];
         if (lx < x0 || lx > x1 || ly < y0 || ly > y1 || lz < z0 || lz > z1) {
           passed = p;

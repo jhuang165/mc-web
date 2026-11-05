@@ -41,7 +41,7 @@ export function lightOpacity(b) {
   if (b >= 116 && b <= 118) return 0; // piston base, sticky piston and head: isOpaqueCube false
   if (b >= 107 && b <= 114) return 0; // redstone components (redstone-blocks-reference.json): dust, lever, plates, button, repeater, hook, tripwire
   if (b >= WOODEN_DOOR && b <= GLASS_PANE) return 0; // doors, iron bars and glass panes are not opaque cubes
-  if (b === 161) return 0; // BlockCake: not an opaque cube (stems-cake.js); stems are isPlant
+  if (b === 161 || b === 149) return 0; // cake; end portal (BlockEndPortal: not opaque) // BlockCake: not an opaque cube (stems-cake.js); stems are isPlant
   if (b === 175 || b === 176) return 0; // BlockSign: not opaque, light opacity 0 (sign-reference.json facts)
   if (b === 0 || b === 9 || b === 20 || b === 41 || b === 162 || b === 163 || b === 42 || b === FIRE || b === LADDER || b === CACTUS || b === REEDS || b === LILY_PAD || b === FENCE || b === NETHER_FENCE || b === RAIL || b === MOB_SPAWNER || b === ANVIL || b === ENCHANTING_TABLE || isPlant(b)) return 0;
   if (b === 5 || b===71 || b === WEB) return 1;
@@ -52,7 +52,7 @@ export function lightOpacity(b) {
 }
 // Lava: setLightLevel(1.0F), so (int)(15 * 1.0) = 15.
 // Fire: setLightLevel(1.0F), 15 as well.
-export const lightEmission = (b, lit = false) => (b === 148 ? 15 : b >= 119 && b <= 131 ? lightEmission2(b) : b===134?1:b===163?7:b===65?9:b===75?1:b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : b === END_PORTAL_FRAME ? 1 : 0);
+export const lightEmission = (b, lit = false) => (b === 148 || b === 149 ? 15 : b >= 119 && b <= 131 ? lightEmission2(b) : b===134?1:b===163?7:b===65?9:b===75?1:b === 42 || b === FIRE ? 15 : b === 20 ? 14 : b === 14 && lit ? 13 : b === END_PORTAL_FRAME ? 1 : 0);
 export const useNeighborBrightness = (b) => (b >= 165 && b <= 169) || isStair(b) || useNeighborBrightness2(b) || b === 82 || (b >= DOUBLE_STONE_SLAB && b <= FLOWER_POT) || b === 20 || b === 9 || b === 41 || b === 162 || b === 163 || b === 29 || b === 30 || b === FENCE || b === NETHER_FENCE || b === RAIL || b === MOB_SPAWNER || isPlant(b);
 const AO_SOLID = f(0.2);
 // Block.getAmbientOcclusionLightValue uses isBlockNormalCube (blocksMovement and a

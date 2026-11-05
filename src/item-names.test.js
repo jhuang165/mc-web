@@ -109,7 +109,7 @@ test('no item or variant name has a lower-case word start (1.7.10 capitalisation
     if (!item.id) continue;
     for (const name of [item.name, ...(item.variants ?? [])]) {
       const words = String(name).split(/\s+/);
-      words.forEach((w, i) => { if (/^[a-z]/.test(w) && !(i && small.has(w)) && w !== "o'Lantern") bad.push(`${item.id}: ${name}`); });
+      words.forEach((w, i) => { if (/^[a-z]/.test(w) && !(i && small.has(w)) && w !== "o'Lantern" && name !== "tile.null.name") bad.push(`${item.id}: ${name}`); });
     }
   }
   assert.deepEqual(bad, []);

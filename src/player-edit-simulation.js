@@ -10,6 +10,8 @@ import { growGrass } from './flowers.js';
 import { isBucket } from './buckets.js';
 import { useHeldBucket } from './buckets-simulation.js';
 import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
+import { ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
+import { useEyeOfEnder } from './eye-of-ender-live.js';
 import { BOAT_ITEM } from './boats.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
 import { placeHeldBlock } from './block-placement-simulation.js';
@@ -64,6 +66,11 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   if (place && isThrowable(id) && (state.survival.creative || state.survival.count(id)) && !usesBlock) {
     const thrown = throwHeldItem(state, id, hooks);
     return act('throw-projectile', { projectile: thrown.kind });
+  }
+  // ItemEnderEye: onItemUse on a frame, else onItemRightClick towards the nearest stronghold (eye-of-ender-live.js).
+  if (place && id === ITEM_EYE_OF_ENDER && state.eyes && (state.survival.creative || state.survival.count(id))) {
+    const used = useEyeOfEnder(state, { target, usesBlock }, hooks);
+    if (used) return act(used.branch);
   }
   if (place && id === BOW && !usesBlock) {
     if (!state.eating && canDraw(state.survival)) state.eating = { id: BOW, ticks: 0, bow: true };
