@@ -2104,7 +2104,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   $("#pumpkin-blur").hidden = !showsPumpkinBlur(survival.inventory?.armor?.[3], thirdPersonView) || $("#hud").classList.contains("hidden"); // GuiIngame.renderPumpkinBlur
   scene.setFishing(fishing.active ? { hook: fishing.hook, first: !thirdPersonView, sneaking: !!motion.sneaking } : null);
   scene.setDrops(items.items);
-  scene.setProjectiles(eyes.balls.length || rockets.balls.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length || mobs?._fireballs?.balls.length ? [...projectiles.balls, ...eyes.balls, ...rockets.balls, ...(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? []), ...(mobs?._fireballs?.balls ?? [])] : projectiles.balls, projectiles.particles);
+  scene.setProjectiles(eyes.balls.length || rockets.balls.length || mobs?.potions?.balls?.length || mobs?._golemBalls?.balls.length || mobs?._fireballs?.balls.length || mobs?._skulls?.balls.length ? [...projectiles.balls, ...eyes.balls, ...rockets.balls, ...(mobs?.potions?.balls ?? []), ...(mobs?._golemBalls?.balls ?? []), ...(mobs?._fireballs?.balls ?? []), ...(mobs?._skulls?.balls ?? [])] : projectiles.balls, projectiles.particles);
   scene.setTime(survival.time);
   renderVitals();
   updateFurnace();
@@ -2271,6 +2271,7 @@ function edit(place = false) {
     useFishingRod: () => fishing.use(fishingHost()),
     renderHotbar,
     renderVitals,
+    spawnWither: (x, y, z, yaw) => mobs.spawnWither(x, y, z, yaw), // wither-boss-mobs.js
     markUnsaved: () => { saved = false; },
     playSound: (name, options) => sounds.play(name, options),
     particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz),
@@ -2349,9 +2350,9 @@ const cartHost = {
   changed: () => { saved = false; },
   runCommand: (cart) => runCommandCart(cart, { host: commandHost, changed: () => { saved = false; } }), // command-cart.js
 };
-function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false } = {}) {
+function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false, blue = false } = {}) {
   applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging,
-    survival, position, velocity, farming }, { x, y, z, size, exploder, attacker, smoking, flaming }, {
+    survival, position, velocity, farming }, { x, y, z, size, exploder, attacker, smoking, flaming, blue }, {
     ignite: (fx, fy, fz) => fire.ignite(fx, fy, fz), // Explosion.isFlaming (ender crystal): fire on a third of the cells above an opaque block
     brokenTool: reportBrokenTool,
     burst: (...args) => scene.explosionParticles.burst(...args),

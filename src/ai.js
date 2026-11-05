@@ -6,6 +6,7 @@
 // each mob gets a `Brain` here (kept in a WeakMap, never saved) that owns the
 // navigator, the helpers and the two task lists.
 import { buildBlazeGhastTasks } from "./blaze-ghast-mobs.js";
+import { buildWitherTasks } from "./wither-boss-mobs.js";
 import { PathNavigate } from "./pathfinding.js";
 import { raycast, HEIGHT } from "./world.js";
 import { BRIGHTNESS } from "./lighting.js";
@@ -805,7 +806,7 @@ export class Brain {
     this.verticalFaceSpeed = 40;
     this.isPlayer = false;
     const type = ai.types[e.type];
-    this.navigator = new PathNavigate(this, ai.world, { followRange: Number.isFinite(e.followRange) ? e.followRange : e.type === "zombie" ? 40 : 16, budget: ai.budget });
+    this.navigator = new PathNavigate(this, ai.world, { followRange: Number.isFinite(e.followRange) ? e.followRange : e.type === "zombie" || e.type === "wither" ? 40 : 16, budget: ai.budget });
     this.moveHelper = new MoveHelper(this);
     this.lookHelper = new LookHelper(this);
     this.jumpHelper = new JumpHelper(this);
@@ -891,6 +892,8 @@ export class Brain {
       this.targets.add(1, new HurtByTarget(this, false));
     } else if (e.type === "blaze" || e.type === "ghast") {
       buildBlazeGhastTasks(this, { Wander, WatchClosest, LookIdle, NearestAttackable, HurtByTarget, AttackOnCollide }); // blaze-ghast-mobs.js
+    } else if (e.type === "wither") {
+      buildWitherTasks(this, { Swim, ArrowAttack, Wander, WatchClosest, LookIdle, TargetBase, HurtByTarget }); // wither-boss-mobs.js
     } else if (e.type === "squid" || e.type === "bat") {
       // EntitySquid and EntityBat: no AI tasks (squid-bat-mobs.js drives them); the helpers and despawnEntity still run.
     } else if (e.type === "witch") {

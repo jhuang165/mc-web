@@ -103,7 +103,7 @@ export const GAME_MODES = ["survival", "creative", "adventure"];
 export const DIFFICULTIES = ["peaceful", "easy", "normal", "hard"];
 
 // Original entity names the port can create (EntityList names -> entities.js types).
-export const SUMMONABLE = { Enderman: "enderman", Pig: "pig", Cow: "cow", MushroomCow: "mooshroom", SnowMan: "snow_golem", Sheep: "sheep", Chicken: "chicken", Wolf: "wolf", Ozelot: "ocelot", EntityHorse: "horse", Zombie: "zombie", Spider: "spider", CaveSpider: "cave_spider", Skeleton: "skeleton", Creeper: "creeper", Villager: "villager", VillagerGolem: "iron_golem", Silverfish: "silverfish", Witch: "witch", Slime: "slime", LavaSlime: "magma_cube", PigZombie: "pigman", Squid: "squid", Bat: "bat", EnderCrystal: "ender_crystal", ...CART_SUMMON, Blaze: "blaze", Ghast: "ghast", FireworksRocketEntity: "firework_rocket" };
+export const SUMMONABLE = { Enderman: "enderman", Pig: "pig", Cow: "cow", MushroomCow: "mooshroom", SnowMan: "snow_golem", Sheep: "sheep", Chicken: "chicken", Wolf: "wolf", Ozelot: "ocelot", EntityHorse: "horse", Zombie: "zombie", Spider: "spider", CaveSpider: "cave_spider", Skeleton: "skeleton", Creeper: "creeper", Villager: "villager", VillagerGolem: "iron_golem", Silverfish: "silverfish", Witch: "witch", Slime: "slime", LavaSlime: "magma_cube", PigZombie: "pigman", Squid: "squid", Bat: "bat", EnderCrystal: "ender_crystal", ...CART_SUMMON, Blaze: "blaze", Ghast: "ghast", FireworksRocketEntity: "firework_rocket", WitherBoss: "wither" };
 // Commands the registry lists that this build cannot honour; they report instead of pretending.
 export const UNSUPPORTED = new Set(["achievement", "debug", "scoreboard", "spreadplayers", "tellraw"]);
 
