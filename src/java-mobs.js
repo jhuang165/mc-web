@@ -65,15 +65,25 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
 
 // EntityList.createEntityFromNBT for /summon. A supplied compound skips onSpawnWithEgg entirely.
 export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) {
-  const health = { pig: 10, cow: 10, sheep: 8, chicken: 4, zombie: 20, skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26 }[type];
+  const health = { pig: 10, cow: 10, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26 }[type];
   if (health === undefined) return null;
   const rotation = numbers(tag, 'Rotation', NBT.FLOAT, 2);
   const record = { type, health: tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health)), yaw: rotation ? -rotation[0] * Math.PI / 180 : 0,
-    effects: readActiveEffects(tag), growingAge: ['pig','cow','sheep','chicken','villager'].includes(type) ? tagValue(tag, 'Age', NBT.INT, 0) : 0, love: ['pig','cow','sheep','chicken'].includes(type) ? tagValue(tag, 'InLove', NBT.INT, 0) : 0, knockbackResistance: 0 };
+    effects: readActiveEffects(tag), growingAge: ['pig','cow','sheep','chicken','wolf','villager'].includes(type) ? tagValue(tag, 'Age', NBT.INT, 0) : 0, love: ['pig','cow','sheep','chicken','wolf'].includes(type) ? tagValue(tag, 'InLove', NBT.INT, 0) : 0, knockbackResistance: 0 };
   const kept = new Set(['id', 'Pos', 'Rotation', 'HealF', 'Health', 'ActiveEffects', 'Fire', 'Motion']);
-  if (['pig', 'cow', 'sheep', 'chicken', 'villager'].includes(type)) kept.add('Age');
-  if (['pig', 'cow', 'sheep', 'chicken'].includes(type)) kept.add('InLove');
+  if (['pig', 'cow', 'sheep', 'chicken', 'wolf', 'villager'].includes(type)) kept.add('Age');
+  if (['pig', 'cow', 'sheep', 'chicken', 'wolf'].includes(type)) kept.add('InLove');
   if (type === 'sheep') { record.color = tagValue(tag, 'Color', NBT.BYTE, 0) & 15; record.sheared = !!tagValue(tag, 'Sheared', NBT.BYTE, 0); kept.add('Color'); kept.add('Sheared'); }
+  if (type === 'wolf') {
+    // EntityTameable/EntityWolf.readEntityFromNBT: OwnerUUID (or the pre-UUID Owner name), Sitting, Angry, CollarColor.
+    // The single player here is the only possible owner, so any non-blank owner means "the player" (wolf.js).
+    const owner = String(tagValue(tag, 'OwnerUUID', NBT.STRING, '') || tagValue(tag, 'Owner', NBT.STRING, '')).trim();
+    record.owner = owner ? 'player' : '';
+    record.sitting = record.sitWish = !!owner && !!tagValue(tag, 'Sitting', NBT.BYTE, 0);
+    record.angry = !!tagValue(tag, 'Angry', NBT.BYTE, 0);
+    record.collar = tagValue(tag, 'CollarColor', NBT.BYTE, 14) & 15;
+    for (const k of ['OwnerUUID', 'Owner', 'Sitting', 'Angry', 'CollarColor']) kept.add(k);
+  }
   if (type === 'villager' || type === 'iron_golem' || type === 'zombie') {
     const native = new Map(tag);
     native.set('id', { type: NBT.STRING, value: Object.keys(JAVA_MOBS).find(k => JAVA_MOBS[k] === type) });
@@ -89,7 +99,7 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
     // Other equipment slots have no live implementation.
     if (equipment?.items.slice(1).some(e => e.size)) kept.delete('Equipment'); else kept.add('Equipment');
   }
-  record.health = Math.max(0, Math.min(health, record.health));
+  record.health = Math.max(0, Math.min(type === 'wolf' && record.owner ? 20 : health, record.health));
   const ignored = [...tag.keys()].filter(k => !kept.has(k));
   if (rotation?.[1]) ignored.push('Rotation[1] (pitch)');
   if (type === 'witch' && record.held && record.held.id !== 385) ignored.push('Equipment[0]');

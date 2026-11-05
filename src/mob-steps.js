@@ -26,6 +26,7 @@ export const MOB_STEP_SOUNDS = {
   cow: own("mob.cow.step", 0.15),
   sheep: own("mob.sheep.step", 0.15),
   chicken: own("mob.chicken.step", 0.15),
+  wolf: own("mob.wolf.step", 0.15),
   iron_golem: own("mob.irongolem.walk", 1),
 };
 // Entity.canTriggerWalking: only the silverfish turns it off among the mobs here.

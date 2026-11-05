@@ -41,7 +41,7 @@ function stackNbt(s,slot,report,original=false) {
  return new Map(Object.entries(entry));
 }
 const inventory=(items,report)=>list(NBT.COMPOUND,(items??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];}));
-const NAMES={pig:'Pig',cow:'Cow',sheep:'Sheep',chicken:'Chicken',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish',witch:'Witch',iron_golem:'VillagerGolem'};
+const NAMES={pig:'Pig',cow:'Cow',sheep:'Sheep',chicken:'Chicken',wolf:'Wolf',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish',witch:'Witch',iron_golem:'VillagerGolem'};
 function entity(e,name,ox,oz) {
  return {id:str(name),Pos:list(NBT.DOUBLE,[e.x+ox,e.posY??e.y,e.z+oz]),Motion:list(NBT.DOUBLE,e.motion??[e.vx??e.mx??0,e.vy??e.my??0,e.vz??e.mz??0]),
  Rotation:list(NBT.FLOAT,e.rotation??(name==='Player'?[(Math.PI-(e.yaw??0))*180/Math.PI,-(e.pitch??0)*180/Math.PI]:[e.rotationYaw??(-(e.yaw??0)*180/Math.PI+0),e.rotationPitch??0])),FallDistance:float(e.fallDistance??0),Fire:short(e.fire??-1),Air:short(e.air??300),OnGround:byte(e.onGround?1:0),Dimension:int(0),Invulnerable:byte(0),PortalCooldown:int(0)};
@@ -59,6 +59,8 @@ function payload(state,ox,oz,report,world=null) {
  for(const wrapped of state.entities??[]) {const e=wrapped.value,name=NAMES[e.type];if(!name){report.unsupportedEntities++;continue;}
   const n=entity(e,name,ox,oz);Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
   if(e.type==='sheep'){n.Color=byte(e.color??0);n.Sheared=byte(e.sheared?1:0);}
+  // EntityTameable and EntityWolf.writeEntityToNBT: Sitting, Angry, CollarColor and OwnerUUID (the single player's own id, or Owner left out for a wild wolf).
+  if(e.type==='wolf'){n.Sitting=byte(e.sitting?1:0);n.Angry=byte(e.angry?1:0);n.CollarColor=byte(e.collar??14);n.OwnerUUID=str(e.owner?(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(e.owner)?e.owner:'00000000-0000-0000-0000-000000000000'):'');}
   // EntityVillager.writeEntityToNBT: Profession, Riches and Offers.Recipes (MerchantRecipe: buy, optional buyB, sell, uses, maxUses, in original item ids); EntityAgeable's Age is written above, InLove is EntityAnimal's.
   if(e.type==='villager'){n.Profession=int(e.profession??0);n.Riches=int(e.riches??0);delete n.InLove;
    if(Array.isArray(e.offers)){const bare=x=>{if(!x)return null;const c={...x};for(const k of ['enchantments','storedEnchantments'])if(Array.isArray(c[k])&&!c[k].length)delete c[k];return stackNbt(c,undefined,report,true);};

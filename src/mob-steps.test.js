@@ -22,7 +22,7 @@ test('each mob class plays its own step event at the native volume', () => {
   const expected = {
     zombie: ['mob.zombie.step', 0.15], skeleton: ['mob.skeleton.step', 0.15], spider: ['mob.spider.step', 0.15],
     cave_spider: ['mob.spider.step', 0.15], pig: ['mob.pig.step', 0.15], cow: ['mob.cow.step', 0.15],
-    sheep: ['mob.sheep.step', 0.15], chicken: ['mob.chicken.step', 0.15], iron_golem: ['mob.irongolem.walk', 1],
+    sheep: ['mob.sheep.step', 0.15], chicken: ['mob.chicken.step', 0.15], iron_golem: ['mob.irongolem.walk', 1], wolf: ['mob.wolf.step', 0.15],
   };
   assert.deepEqual(Object.keys(MOB_STEP_SOUNDS).sort(), Object.keys(expected).sort());
   for (const [type, [name, volume]] of Object.entries(expected)) {

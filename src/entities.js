@@ -28,6 +28,8 @@ import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieS
 import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage } from "./mob-effects.js";
 import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startConversionTicks, conversionBoost, canCure, startConversion, remedySound, auxSound, readZombieVillager } from "./zombie-villager.js";
 import { landingEffects, JUMP_BOOST, statusPitchRandom } from "./damage-fx.js";
+import { WOLF_WIDTH, WOLF_HEIGHT, WOLF_SPEED, WILD_MAX_HEALTH, TAMED_MAX_HEALTH, WOLF_SOUNDS, wolfFields, wolfFieldsFrom, isTamed as wolfTamed, maxHealth as wolfMaxHealth, tailAngle, interestedAngle, shakeAngle, wetShade, wolfSay, hurtAmount as wolfHurtAmount, attackStrength as wolfAttack, puppyFields, interact as wolfClick, updateWolf } from "./wolf.js";
+import { noteWolfHurt } from "./wolf-ai.js";
 import { armorReduced, soundVolume, soundPitch, mobDrops, experiencePoints, applyEntityCollision, boxesMeet, ANIMALS, FEATHER, RAW_CHICKEN, COOKED_CHICKEN } from "./combat.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -112,6 +114,11 @@ export function chickenFlap(e, partial) {
   const p = f(partial), a = f(e.oFlap + f(f(e.wingRotation - e.oFlap) * p)), b = f(e.oFlapSpeed + f(f(e.destPos - e.oFlapSpeed) * p));
   return f(f(mhSin(a) + 1) * b);
 }
+// EntityWolf's render inputs: ch() tail, getInterestedAngle, getShakeAngle at the head/mane/body/tail offsets and the
+// wet shading (RenderWolf and ModelWolf.setLivingAnimations, wolf-renderer.js).
+function wolfPose(e, p) {
+  return { wolf: { tail: tailAngle(e), interested: interestedAngle(e, p), shakeHead: shakeAngle(e, p, 0), shakeMane: shakeAngle(e, p, -0.08), shakeBody: shakeAngle(e, p, -0.16), shakeTail: shakeAngle(e, p, -0.2), shade: wetShade(e, p), wet: !!e.wet, tamed: wolfTamed(e), angry: !!e.angry, sitting: !!e.sitting, collar: e.collar } };
+}
 export function mobPose(e, partial) {
   const p = f(partial), lerp = (a, b) => a + (b - a) * p,
     body = interpolateRotation(e.prevRenderYawOffset, e.renderYawOffset, p),
@@ -125,6 +132,7 @@ export function mobPose(e, partial) {
   const headPitch = f(e.prevRotationPitch + f(f(e.rotationPitch - e.prevRotationPitch) * p));
   return {
     ...(e.type === "chicken" ? { flap: chickenFlap(e, p) } : {}),
+    ...(e.type === "wolf" ? wolfPose(e, p) : {}),
     ...(e.type === "sheep" ? { headDrop: sheepHeadDrop(e.eatTimer || 0, p), headTilt: sheepHeadPitch(e.eatTimer || 0, p, headPitch) } : {}),
     x: lerp(e.px, e.x), y: lerp(e.py, e.y), z: lerp(e.pz, e.z),
     bodyYaw: body, headYaw: f(head - body),
@@ -150,6 +158,9 @@ export const ENTITY_TYPES = {
   // (wheat seeds, ade.N) 1.0, follow parent 1.1, wander 1.0. No `drop`: feathers and
   // chicken come from its own dropFewItems (wg.b(ZI)).
   chicken: { health: 4, width: f(0.3), height: f(0.7), movement: 0.25, ai: { wander: 1, mate: 1, panic: 1.4, tempt: 1, follow: 1.1 }, drop: 0 },
+  // EntityWolf (wv): 0.6 x 0.8, speed 0.3, 8 health (20 once tamed: wolf.js maxHealth), bite 2 wild / 4 tamed
+  // (wolf.js attackStrength); tasks, targets and mutex bits in wolf-ai.js. No drops.
+  wolf: { health: WILD_MAX_HEALTH, width: WOLF_WIDTH, height: WOLF_HEIGHT, movement: WOLF_SPEED, ai: { wander: 1, mate: 1 }, damage: 2, drop: 0 },
   zombie: {
     health: 20,
     width: 0.6,
@@ -606,7 +617,7 @@ export class EntityWorld {
       ...fresh,
       ...e,
       id: /^mob-\d+$/.test(e.id) ? e.id : fresh.id,
-      health: Math.max(0, Math.min(t.health, e.health)),
+      health: Math.max(0, Math.min(e.type === "wolf" && typeof e.owner === "string" && e.owner.trim() ? TAMED_MAX_HEALTH : t.health, e.health)),
       yaw: Number.isFinite(e.yaw) ? e.yaw : 0,
       age: Number.isFinite(e.age) ? e.age : 0,
       growingAge:Number.isInteger(e.growingAge)?(summoned?e.growingAge:Math.max(-24000,Math.min(6000,e.growingAge))):0,
@@ -616,6 +627,8 @@ export class EntityWorld {
       ...(e.type === "villager" ? villagerFields(e.profession, e.riches, e.offers) : {}),
       // EntityIronGolem.readEntityFromNBT: PlayerCreated only; the timers and the home area start over.
       ...(e.type === "iron_golem" ? ironGolemFields(e.playerCreated) : {}),
+      // EntityTameable and EntityWolf NBT: owner, sitting, angry and the collar; the shake, begging and AI state start over.
+      ...(e.type === "wolf" ? wolfFieldsFrom(e, fresh) : {}),
       ...(e.type === "sheep" ? { color: Number.isInteger(e.color) && e.color >= 0 && e.color < 16 ? e.color : 0, sheared: e.sheared === true, eatTimer: 0 } : {}),
       // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
       ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
@@ -672,6 +685,7 @@ export class EntityWorld {
       ...(type === "sheep" ? { color: sheepColor(random), sheared: false, eatTimer: 0 } : {}),
       ...(type === "villager" ? villagerFields() : {}),
       ...(type === "iron_golem" ? ironGolemFields() : {}),
+      ...(type === "wolf" ? wolfFields() : {}),
       // EntityChicken (wg): timeUntilNextEgg = rand.nextInt(6000) + 6000 (wg.bu; not saved in
       // 1.7.10), wingRotation/destPos and their previous values 0, wingRotDelta (bt) 1.0.
       ...(isSpider(type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
@@ -755,6 +769,12 @@ export class EntityWorld {
     if (e.type === "silverfish") this.silverfishHurt(e, source);
     if (ANIMALS.has(e.type)) { e.flee = 60; e.love = 0; e.mateTicks = 0; }
     if (e.health <= 0) return false;
+    // EntityWolf.attackEntityFrom: the Sit task's wish is cleared (EntityAISit.setSitting(false)) and damage from a
+    // creature that is neither a player nor an arrow is (amount + 1) / 2.
+    if (e.type === "wolf") {
+      e.sitWish = false;
+      amount = wolfHurtAmount(amount, { attacker: source.attacker || source.player, player: source.player, arrow: source.arrow });
+    }
     const rand = entityRandom(e), name = source.name ?? "generic";
     // Potion.fireResistance: fire damage is refused.
     if ((name === "onFire" || name === "inFire" || name === "lava") && e.effects?.some((x) => x.id === 12)) return false;
@@ -770,7 +790,9 @@ export class EntityWorld {
       this.damageEntity(e, amount, name, source);
       e.hurt = 10;
     }
-    if (source.player) { e.revenge = (e.age || 0) + 1; e.recentlyHit = 100; }
+    if (source.player) { e.revenge = (e.age || 0) + 1; e.recentlyHit = 100; if (e.type === "wolf") noteWolfHurt(e, "player"); }
+    // A wolf also takes revenge on a creature that hit it (EntityAIHurtByTarget reads getAITarget).
+    else if (e.type === "wolf" && source.attacker && source.attacker !== e) { e.revenge = (e.age || 0) + 1; noteWolfHurt(e, source.attacker); }
     if (e.type === "villager") this.villagerHurtBy(e, source);
     if (fresh) {
       if (name !== "drown") rand.nextDouble();
@@ -941,7 +963,9 @@ export class EntityWorld {
       hurt: (damage) => this.attackEntityFrom(e, damage, { from: wearer && { x: wearer.x, z: wearer.z }, player: true, name: "thorns" }),
       sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: e.x, y: e.y, z: e.z } }),
     };
-    const hit = survival.scaledDamage(attackDamage(e, ENTITY_TYPES[e.type].damage), "a " + e.type, { attacker: thorns });
+    const hit = survival.scaledDamage(attackDamage(e, e.type === "wolf" ? wolfAttack(e) : ENTITY_TYPES[e.type].damage), "a " + e.type, { attacker: thorns });
+    // EntityLivingBase.setRevengeTarget on the player: its wolves defend it (EntityAIOwnerHurtByTarget).
+    if (hit) this.ai.playerHurtBy(e);
     if (hit && e.type === "zombie") {
       const ticks = zombieFireOnHit(entityRandom(e), this.difficulty, e.burn > 0 || e.fire > 0);
       if (ticks) survival.setFire(ticks / 20);
@@ -979,6 +1003,7 @@ export class EntityWorld {
     if (ignite) e.fire = Math.max(e.fire || 0, 20);
     const landed = !(e.hurt > 0 && damage <= e.lastDamage) && this.damage(e, damage, player.x, player.z, true, null, { looting: weapon.looting });
     if (landed) {
+      this.ai.playerHit(e); // EntityLivingBase.setLastAttacker: the owner's wolves join in (EntityAIOwnerHurtTarget)
       // Entity.addVelocity(-sin(yaw) * n * 0.5F, 0.1, cos(yaw) * n * 0.5F) with the sine table and Java
       // floats; player.yaw is this build's radian view yaw (Java yaw = 180 - yaw degrees).
       if (knockback > 0 && Number.isFinite(player.yaw)) {
@@ -1087,8 +1112,10 @@ export class EntityWorld {
   talk(e) {
     const rand = entityRandom(e);
     if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem") return;
+    // EntityWolf.getLivingSound (t) rolls before the sound's pitch.
+    const wolfSound = e.type === "wolf" ? wolfSay(e, rand) : null;
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
-    this.events.push({ sound: e.type === "witch" ? WITCH_SOUNDS.idle : e.type === "villager" ? (e.customer ? VILLAGER_SOUNDS.haggle : VILLAGER_SOUNDS.idle) : "mob." + soundType(e.type) + ".say", volume: e.type === "cow" ? f(0.4) : 1, pitch, position: { x: e.x, y: e.y, z: e.z } });
+    this.events.push({ sound: e.type === "witch" ? WITCH_SOUNDS.idle : wolfSound ? wolfSound : e.type === "villager" ? (e.customer ? VILLAGER_SOUNDS.haggle : VILLAGER_SOUNDS.idle) : "mob." + soundType(e.type) + ".say", volume: soundVolume(e.type), pitch, position: { x: e.x, y: e.y, z: e.z } });
   }
   // The fire and lava part of Entity.onEntityUpdate (sa.C): water puts the fire
   // out; a burning mob takes 1 (onFire) whenever the counter is a multiple of 20;
@@ -1126,6 +1153,8 @@ export class EntityWorld {
   spawnBaby(a,b){
     if(this.entities.length>=40)return false;
     const baby=this.create(a.type,a.x,a.y,a.z);baby.growingAge=-24000;
+    // EntityWolf.createChild (wv.b): the puppy of a tamed wolf is tamed to the same owner.
+    if(a.type==='wolf')Object.assign(baby,puppyFields(a));
     // EntitySheep.createChild (wp.b(rx)): the lamb's colour is the parents' dye mix.
     if(a.type==='sheep')baby.color=childColor(a.color,b.color,this.random);
     this.entities.push(baby);a.growingAge=b.growingAge=6000;a.love=b.love=0;a.mateTicks=b.mateTicks=0;
@@ -1147,7 +1176,7 @@ export class EntityWorld {
   // difficulty scaling: that is the player's); a burning zombie with an empty hand may set the victim alight.
   hitMob(e, target) {
     if (!this.entities.includes(target) || target.health <= 0) return false;
-    const hit = this.attackEntityFrom(target, attackDamage(e, ENTITY_TYPES[e.type].damage), { from: { x: e.x, z: e.z }, attacker: e, name: "mob", player: false });
+    const hit = this.attackEntityFrom(target, attackDamage(e, e.type === "wolf" ? wolfAttack(e) : ENTITY_TYPES[e.type].damage), { from: { x: e.x, z: e.z }, attacker: e, name: "mob", player: false });
     if (hit && e.type === "zombie") {
       const ticks = zombieFireOnHit(entityRandom(e), this.difficulty, e.burn > 0 || e.fire > 0);
       if (ticks) target.fire = Math.max(target.fire || 0, ticks);
@@ -1513,6 +1542,7 @@ export class EntityWorld {
         e.climbing = e.collidedH;
       }
       if (e.type === "chicken") this.chickenUpdate(e);
+      if (e.type === "wolf") this.wolfUpdate(e, t);
       this.turnBody(e);
       this.swingLimbs(e);
     }
@@ -1733,6 +1763,46 @@ export class EntityWorld {
       this.events.push({ drop: EGG, count: 1, position: { x: e.x, y: e.y, z: e.z } });
       e.eggTimer = Math.floor(r() * 6000) + 6000;
     }
+  }
+  // EntityWolf.onUpdate and onLivingUpdate's wet shake (wolf.js updateWolf), then its effects: the shake sound
+  // (0.4 volume, pitch (r - r) * 0.2 + 1) and the splash particles of the shaking fur.
+  wolfUpdate(e, t) {
+    const rand = entityRandom(e), brain = this.ai.brain(e);
+    // The AI half of the wolf's tick: a target that died is dropped.
+    if (brain.attackTarget && !brain.attackTarget.alive) brain.attackTarget = null;
+    const out = updateWolf(e, { inWater: !!e.inWater, onGround: !!e.onGround, hasPath: !brain.navigator.noPath(), rand });
+    if (out.shakeSound) this.events.push({ sound: WOLF_SOUNDS.shake, volume: WOLF_SOUNDS.volume, pitch: f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + 1), position: { x: e.x, y: e.y, z: e.z } });
+    for (let i = 0; i < out.splashes; i++) {
+      const dx = f(f(f(f(rand.nextFloat() * 2) - 1) * t.width) * f(0.5)), dz = f(f(f(f(rand.nextFloat() * 2) - 1) * t.width) * f(0.5));
+      this.fx?.spawn("splash", e.x + dx, e.y + out.splashHeight, e.z + dz, e.vx, e.vy, e.vz);
+    }
+  }
+  // EntityWolf.interact (wv.a(yz)) for the player holding `survival.held` (wolf.js interact): bones tame, meat heals or
+  // breeds, dye recolours the collar, anything else lets the owner toggle sitting. Returns whether the click was used.
+  wolfInteract(e, survival) {
+    if (e.type !== "wolf" || e.health <= 0 || !this.entities.includes(e)) return false;
+    const stack = survival.held, held = stack ? { id: stack.id, damage: stack.damage || 0, count: stack.count || 1 } : null;
+    const creative = !!survival.creative, rand = entityRandom(e), box = { x: e.x, y: e.y, z: e.z, width: ENTITY_TYPES.wolf.width, height: ENTITY_TYPES.wolf.height };
+    const out = wolfClick(e, held, wolfTamed(e), creative, rand), brain = this.ai.brain(e);
+    const take = (n) => { if (n > 0 && !creative) survival.inventory.decr(survival.inventory.current, n); };
+    take(out.consume);
+    if (out.tamed || out.sitToggle) { brain.navigator.clearPathEntity(); brain.attackTarget = null; }
+    // EntityTameable.func_70908_e: 7 hearts after taming (status 7) or 7 smoke after a failed bone (status 6).
+    if (out.status && this.fx) burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5);
+    if (out.love) {
+      // EntityAnimal.interact: an adult not in love is put in love and the meat is used up; a puppy grows by a tenth
+      // of its remaining time instead.
+      if (e.growingAge === 0 && e.love <= 0) {
+        e.love = 600;
+        take(1);
+        if (this.fx) burst(this.fx, "heart", 7, box, rand, 0.5);
+      } else if (e.growingAge < 0) {
+        take(1);
+        e.growingAge = Math.min(0, e.growingAge + Math.trunc(f(f(-e.growingAge / 20) * f(0.1))) * 20);
+      } else out.handled = false;
+    }
+    // The probe's recorded result is false for a sit toggle (the original returns true on a server); the click is used.
+    return out.handled || !!out.sitToggle;
   }
   // EntityBodyHelper.func_75664_a (tr.a), reached through EntityLiving.func_110146_f
   // (sw.f) for AI-enabled mobs; the yaw wraps of EntityLivingBase.onUpdate (sv.h) follow.
