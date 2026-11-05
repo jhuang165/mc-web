@@ -160,10 +160,10 @@ export function cloudColor(angle, rain = 0, thunder = 0) {
 }
 // EntityRenderer.updateFogColor. `look` is the view vector, `chunks` the render
 // distance in chunks and `brightness` the smoothed fogColor2/fogColor1 value.
-export function fogColor({ angle, temperature, look, chunks, brightness = 1, underwater = false, lava = false, rain = 0, thunder = 0, lightning = 0, partial = 0 }) {
+export function fogColor({ angle, temperature, look, chunks, brightness = 1, underwater = false, lava = false, rain = 0, thunder = 0, lightning = 0, partial = 0, provider = null }) {
   const d = f(1 - f(Math.pow(f(0.25 + f(f(0.75 * chunks) / 16)), 0.25))),
     sky = skyColor(temperature, angle, rain, thunder, lightning, partial);
-  let fog = providerFogColor(angle);
+  let fog = provider ?? providerFogColor(angle); // `provider`: the Nether/End getFogColor (dimension-render.js)
   if (chunks >= 4) {
     const dir = mhSin(f(f(angle * PI_F) * 2)) > 0 ? -1 : 1;
     let s = f(Math.max(0, look[0] * dir));
@@ -264,12 +264,13 @@ export class LightVolume {
     this.relight(0, SIZE - 1, 0, SIZE - 1);
   }
   column(x, z) {
+    if (this.world.hasNoSky) { this.heights[x * SIZE + z] = this.height; return; } // the Nether: no cell sees the sky
     let y = this.height - 1;
     while (y >= 0 && lightOpacity(this.world.get(x, y, z)) === 0) y--;
     this.heights[x * SIZE + z] = y + 1;
   }
   skyAt(x, y, z) {
-    if (y >= this.height || x < 0 || z < 0 || x >= SIZE || z >= SIZE) return 15;
+    if (y >= this.height || x < 0 || z < 0 || x >= SIZE || z >= SIZE) return this.world.hasNoSky ? 0 : 15;
     return this.sky[(x * SIZE + z) * this.height + Math.max(0, y)];
   }
   blockAt(x, y, z) {
@@ -360,7 +361,7 @@ export class LightVolume {
         }
       }
       // Light flowing in from cells outside the box (or outside the world).
-      const outside = channel === "sky" ? 15 : 0;
+      const outside = channel === "sky" && !w.hasNoSky ? 15 : 0;
       const side = (nx, nz, y) =>
         nx >= x0 && nx <= x1 && nz >= z0 && nz <= z1 ? 0 : nx < 0 || nz < 0 || nx >= SIZE || nz >= SIZE ? outside : arr[(nx * SIZE + nz) * H + y];
       for (let x = x0; x <= x1; x++)

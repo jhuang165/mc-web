@@ -1457,7 +1457,8 @@ export class EntityWorld {
     });
   }
   tick(player, survival, heldItem=0) {
-    const night =
+    // The Overworld spawn rules below do not apply in the Nether/End (dimensions.md Gaps: no dimension spawn lists yet).
+    const night = !this.world.dimension &&
       survival.time % 24000 > 13000 && survival.time % 24000 < 23000;
     this.spawnClock++;
     // World.isDaytime (skylightSubtracted < 4); main.js hooks the real light level in.
@@ -1472,8 +1473,10 @@ export class EntityWorld {
     this._golemBalls?.tick(); // snow golem snowballs (mooshroom-golem-live.js)
     // WorldServer.tick runs SpawnerAnimals.findChunksForSpawning only while gamerule doMobSpawning is true; no monsters on Peaceful.
     const hostile = this.difficulty !== PEACEFUL && gameRule("doMobSpawning");
+    if (!this.world.dimension) {
     ocelotSpawnPass(this, player, survival, gameRule("doMobSpawning")); // SpawnerAnimals for the jungle's ocelots (ocelot-spawn.js)
     squidBatSpawnPass(this, player, survival, gameRule("doMobSpawning")); // water and ambient creatures spawn on Peaceful too
+    }
     if (
       night && hostile &&
       !survival.creative &&

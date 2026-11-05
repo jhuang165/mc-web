@@ -4,6 +4,7 @@
 // and stars on the celestial sphere with additive blending and no fog.
 import * as THREE from "three";
 import { starQuads, mhSin } from "./lighting.js";
+import { buildEndSky } from "./dimension-render.js";
 
 const additive = { transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide };
 
@@ -80,6 +81,14 @@ gl_FragColor=vec4(c,1.);}`,
     this.sun.renderOrder = this.moon.renderOrder = this.stars.renderOrder = 2;
     this.fan.renderOrder = 1;
   }
+  // Hell draws no sky; the End draws end_sky.png instead of the sky plane, sun, moon and stars (dimension-render.js).
+  setDimension(d) {
+    if (d === 1 && !this.endSky) { this.endSky = buildEndSky(texture("/media/1.7.10/environment/end_sky.png")); this.scene.add(this.endSky); }
+    this.dimension = d;
+    if (this.endSky) this.endSky.visible = d === 1;
+    this.dome.visible = d === 0;
+    this.celestial.visible = d === 0;
+  }
   // `state`: celestial angle, sky/fog colours (0-1), sunrise RGBA or null,
   // star brightness, moon phase, camera height above the horizon, far plane.
   // `rain` is getRainStrength: renderSky fades the sun, moon and stars by 1 - rain.
@@ -91,7 +100,7 @@ gl_FragColor=vec4(c,1.);}`,
     else u.voidColor.value.set(sky[0] * 0.2 + 0.04, sky[1] * 0.2 + 0.04, sky[2] * 0.6 + 0.1);
     u.fogEnd.value = far;
     u.aboveHorizon.value = Math.max(0, aboveHorizon);
-    this.fan.visible = !!sunrise;
+    this.fan.visible = !!sunrise && !this.dimension;
     if (sunrise) {
       // glRotatef(90, 1,0,0); glRotatef(sin(angle) < 0 ? 180 : 0, 0,0,1); glRotatef(90, 0,0,1).
       const m = new THREE.Matrix4().makeRotationX(Math.PI / 2)

@@ -60,7 +60,7 @@ export class MapsClock {
   }
   // ItemMap.onUpdate for every filled map in the inventory, updateMapData for the selected slot (20 Hz).
   tick({ survival, position, yaw, world, time, name = "Player", frames = null }) {
-    const surface = true;
+    const surface = (world?.dimension ?? 0) === 0; // TextureClock: !worldProvider.isSurfaceWorld spins (dimensions track)
     tickClock(clockState, clockAngle(time, surface));
     if (typeof document !== "undefined") {
       const url = clockFrameUrl();

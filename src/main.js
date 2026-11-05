@@ -133,6 +133,7 @@ import { Fluids, eyeInWater } from "./fluids.js";
 import { Fire } from "./fire.js";
 import { difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.js";
 import { isInvisible } from "./mob-effects.js";
+import { DimensionLive, storedRecord, dimensionOf, viewId, bedExplosion } from './dimension-live.js'; // Nether/End travel (dimensions track)
 import { PortalTimer, splashBreak, NIGHT_VISION, BLINDNESS, NAUSEA, INVISIBILITY } from "./potion-fx.js";
 import { primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { TntRenderer } from "./tnt-renderer.js";
@@ -592,6 +593,7 @@ async function deleteWorld(record) {
   const before = worlds;
   worlds = worlds.filter((w) => w.id !== record.id);
   if (!await persist()) { worlds = before; return; }
+  for (const d of [-1, 1]) if (record.dimensions?.[d] || record.dimension) try { await deleteStoredWorld(viewId(record.id, d)); } catch {} // dimension columns
   if (record.biome === 'javaStreamed') {
     try { await deleteStoredWorld(record.id); }
     catch { toast('World removed from the shelf; its stored data could not be cleared.'); }
@@ -671,9 +673,11 @@ function save() {
   active.updated = Date.now();
   const savingContainers=containerResidency, containerSave=savingContainers?.beginSave(active.player);
   if(containerSave)active.containerScope=savingContainers.scope(containerSave);
-  const i = worlds.findIndex((w) => w.id === active.id);
-  if (i < 0) worlds.unshift(active);
-  else worlds[i] = active;
+  // In the Nether/End `active` is a view record; the shelf keeps the root with `dimensions[d]` (dimension-live.js).
+  const shelved = active.rootId ? storedRecord(active, worlds.find((w) => w.id === active.rootId) ?? active) : active;
+  const i = worlds.findIndex((w) => w.id === shelved.id);
+  if (i < 0) worlds.unshift(shelved);
+  else worlds[i] = shelved;
   const savingId = active.id, savingWorld = world, savingStorage = streamStorage;
   $("#save-label").textContent = "Saving…";
   const completion = persist(columns).then(ok => {
@@ -833,15 +837,18 @@ async function openWorld(record) {
   openingWorld=true;
   lan.close();
   try {
-    const prepared=new World(record.seed,record.biome,record.generationVersion??1,record.worldType);
+    if (record.dimension && !record.rootId) record = dims.openRecord(record, await readRuntimeState(record)); // saved in the Nether/End: open that dimension
+    const prepared=dims.createWorld(record);
     if (!record.chunked) prepared.restore(record.edits??[]);
     prepared.restoreClaimedColumns(record.populatedColumns);
+    await dims.arrive(prepared, record); // portal travel: the Teleporter's arrival position
     const p=record.position;
     if(prepared.streaming&&p&&[p.x,p.z].every(Number.isFinite))prepared.streamAround(p.x,p.z);
     record=await readRuntimeState(record,prepared.streaming?{containerColumns:[...prepared.chunks.values()].map(c=>[c.x,c.z])}:{});
     const storage=prepared.streaming?new StreamStorage(prepared,record.id,{onError:e=>{pause();toast('Could not load saved columns. Reopen the world to retry: '+e.message);}}):null;
     prepared.nextEditOrder=Math.max(prepared.nextEditOrder,record.editSequence??(record.chunked?2000000:0));
     if(storage)await storage.ensure([...prepared.chunks.values()].map(c=>[c.x,c.z]));
+    dims.applyWrites(prepared, record, { verifyBed: (w, s) => { const cell = verifyRespawn(w, s, false); return cell ? bedRespawnPosition(cell) : null; } }); // portal frame / End platform
     streamStorage?.dispose();streamStorage=storage;
     await launch(record,prepared);
   } catch(e) {toast('Could not open this world: '+e.message);}
@@ -859,6 +866,8 @@ async function launch(record, prepared) {
     scene.setWorld(world);
     // Block light for canBlockFreeze/canSnowAt/melting is the scene's light volume.
     world.blockLight = (x, y, z) => scene.light.blockAt(x, y, z);
+    // ItemBucket in the Nether: water makes fizz and 8 smoke puffs instead of a block.
+    world.evaporated = (x, y, z) => { sounds.play('random.fizz', { volume: 0.5, pitch: 2.6 + (Math.random() - Math.random()) * 0.8, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } }); for (let i = 0; i < 8; i++) scene.fx.spawn('largesmoke', x + Math.random(), y + 0.2, z + Math.random(), 0, 0, 0); };
     // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
     fluids = new Fluids(world, { random: weather.random, fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === WEB ? [{ id: 321, count: 1 }] : b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : b === SAPLING ? [{ id: b, count: 1, damage: world.getMeta(x, y, z) & 7 }] : cropDrops(b,Math.random,world.getMeta(x,y,z)); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
     fluids.load(record.fluidTicks);
@@ -1033,7 +1042,7 @@ async function launch(record, prepared) {
     wasInWater = false;
     survival = new Survival(legacyPlayer(record), record.mode || "creative");
     containerResidency?.dispose();
-    containerResidency=world.streaming?new ContainerResidency(world,record.id,survival,{scope:record.containerScope,onError:e=>{pause();toast('Could not load saved containers. Reopen the world to retry: '+e.message);}}):null;
+    containerResidency=world.streaming&&!world.isDimension?new ContainerResidency(world,record.id,survival,{scope:record.containerScope,onError:e=>{pause();toast('Could not load saved containers. Reopen the world to retry: '+e.message);}}):null;
     survival.furnaceActive = key => !world.streaming || world.isTicking(...[key.split(",")[0],key.split(",")[2]].map(Number));
     survival.furnaceChanged = key => redstoneRuntime?.containerClosed([key]);
     restorePopulation(record,world,survival,mobs);
@@ -1128,7 +1137,7 @@ async function launch(record, prepared) {
     if (survival.health <= 0) die();
     else {
       requestLock();
-      toast(
+      if (!dims.quiet) toast(
         survival.creative
           ? "Creative mode · Double-tap Space to fly."
           : "Survival mode · Punch a tree, then press E to craft.",
@@ -1255,6 +1264,8 @@ function enterSleep() {
 // BlockBed.onBlockActivated for a click on either half; the server-side checks are in bed.js.
 function useBed(x, y, z) {
   if (survival.health <= 0 || bedSleep.sleeping) return;
+  const boom = bedExplosion(world, x, y, z); // Nether/End: the bed explodes (dimension-live.js)
+  if (boom) { for (const [bx, by, bz] of boom.cells) scene.updateBlock(bx, bz, by); if (boom.cells.length) explodeAt(boom.x, boom.y, boom.z, boom.size, { smoking: true, flaming: true }); return; }
   const ctx = {
     player: { x: position.x, y: position.y, z: position.z, alive: true },
     daytime: (scene.subtracted ?? 0) < 4,
@@ -1938,6 +1949,10 @@ function die() {
   const deathButtons=[$('#respawn'),$('#death-home')];for(const button of deathButtons)button.disabled=true;setTimeout(()=>{if(screen==='dead')for(const button of deathButtons)button.disabled=false;},1000);
   $("#respawn").onclick = async () => {
     for(const button of deathButtons)button.disabled=true;
+    if (dimensionOf(active)) { // died in the Nether/End: back to the Overworld, then the usual respawn below
+      if (await dims.leaveByDeath()) setTimeout(() => $("#respawn")?.onclick?.(), 0); else for(const button of deathButtons)button.disabled=false;
+      return;
+    }
     try {
     let spawn=await spawnPosition();
     // EntityPlayer.verifyRespawnCoordinates: a bed spawn point must still be a bed with a free cell beside it.
@@ -1974,6 +1989,7 @@ function die() {
 // One weather tick: timers, lightning (flash, damage, sound) and the client's rain
 // splashes and rain sound (see weather.js).
 function tickWeather() {
+  if (world.dimension) return; // the Nether and the End have no weather (their own world has no rain state)
   tickWeatherSimulation({ world, weather, mobs, survival }, position, PHYSICS.width, PHYSICS.height);
   weather.rainParticles(world, { x: position.x, y: position.y + PHYSICS.eye, z: position.z }, (kind, x, y, z) => scene.fx.addDirect(kind, x, y, z));
   for (const e of weather.drain()) {
@@ -1985,11 +2001,15 @@ function tickWeather() {
 }
 // EntityPlayerSP.timeInPortal: Nausea longer than 60 ticks winds the screen warp up (potion-fx.js).
 const portalTimer = new PortalTimer();
+const dims = new DimensionLive({ active: () => active, worlds: () => worlds, save: () => save(), openWorld: (r) => openWorld(r), player: () => ({ x: position.x, y: position.y, z: position.z, yaw }), sound: (n, o) => sounds.play(n, o) });
 function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // Game rules the Survival object reads (gamerule naturalRegeneration / doDaylightCycle).
   survival.naturalRegeneration = ruleOn(active, "naturalRegeneration");
   survival.timeFrozen = !ruleOn(active, "doDaylightCycle");
-  portalTimer.tick(survival.effects.get(NAUSEA)?.duration ?? 0);
+  // Nether/End portals (BlockPortal / BlockEndPortal collision, Entity.onEntityUpdate) and the overlay + sounds.
+  const inPortalNow = dims.tick(world, oldPosition, position, { creative: survival.creative, riding: !!rider.vehicle, alive: survival.health > 0 });
+  portalTimer.tick(survival.effects.get(NAUSEA)?.duration ?? 0, inPortalNow);
+  dims.portalFrame(portalTimer, inPortalNow);
   tickPlayerEnvironment({ world, weather, position, survival, motion, flying, sleeping: bedSleep.sleeping }, { inWater, inLavaNow }, {
     tickWeather,
     slow: (f) => { velocity.x *= f; velocity.z *= f; }, // BlockSoulSand.onEntityCollidedWithBlock
@@ -2438,7 +2458,7 @@ let streamPrefetch = null, streamStorage = null, containerResidency = null;
 function startPrefetch() {
   streamPrefetch?.dispose();
   streamPrefetch = null;
-  if (!world.streaming || typeof Worker !== "function") return;
+  if (!world.streaming || world.noPrefetch || typeof Worker !== "function") return; // the worker only knows Overworld terrain
   try {
     streamPrefetch = new StreamPrefetch(world, new Worker(new URL("./streaming-worker.js", import.meta.url), { type: "module" }));
   } catch (e) {
@@ -3092,7 +3112,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get boats() { return boats; }, get hanging() { return hanging; }, get aimedHanging() { return aimedHanging; }, fishing, get target() { return target; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt };
+    window.__mc = { scene, dims, travel: (d) => dims.travel(d), get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get boats() { return boats; }, get hanging() { return hanging; }, get aimedHanging() { return aimedHanging; }, fishing, get target() { return target; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt };
   scene.preview(0);
   // The title screen's splash texts (assets/minecraft/texts/splashes.txt).
   menuContext.splashes = await fetch("/media/1.7.10/texts/splashes.txt").then((r) => (r.ok ? r.text() : "")).catch(() => "");

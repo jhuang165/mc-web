@@ -24,6 +24,7 @@ import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS, named
 import { pistonQuads, isPistonBase, PISTON_HEAD } from "./dispenser-piston.js";
 import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
+import { applyDimensionRender, fixedAngle, providerFog } from "./dimension-render.js";
 import { nightVisionBrightness, blindnessFog, adjustFogColor, warpMatrix } from "./potion-fx.js";
 import { Sky, Clouds } from "./sky.js";
 import { liquidHeight, flowAngle, viewpointBlock } from "./fluids.js";
@@ -211,6 +212,7 @@ export class VoxelScene {
     this.temperature = world.temperatureAt?.(64, world.seaLevel, 64) ?? biomeTemperature(world.biome);
     this.clouds.height = world.height === 256 ? 128 : CLOUD_HEIGHT;
     this.litFurnaces = new Set();
+    applyDimensionRender(this, world); // Nether/End: brightness table, sky mode, clouds (dimension-render.js)
     this.resetLight();
     for (const v of this.chunks.values()) this.disposeChunk(v);
     this.chunks.clear();
@@ -972,8 +974,9 @@ export class VoxelScene {
   // from the light level at the camera (EntityRenderer.updateRenderer).
   setTime(ticks) {
     this.ticks = ticks;
-    this.angle = celestialAngle(ticks);
-    const w = this.weather, rain = w ? w.rainStrength(1) : 0, thunder = w ? w.weightedThunder(1) : 0;
+    this.angle = (this.dimension ? fixedAngle(this.dimension) : null) ?? celestialAngle(ticks); // Hell 0.5, End 0: WorldProvider.calculateCelestialAngle
+    const w = this.dimension ? null : this.weather, // no weather in the Nether/End
+      rain = w ? w.rainStrength(1) : 0, thunder = w ? w.weightedThunder(1) : 0;
     this.subtracted = skylightSubtracted(this.angle, rain, thunder);
     this.sun = sunBrightness(this.angle, rain, thunder);
     this.flash = !!w && w.lastLightning > 0;
@@ -1017,8 +1020,8 @@ export class VoxelScene {
       underwater = eye === 10,
       lava = eye === 42,
       // The frame-eased rain, thunder and lightning terms (World.getRainStrength(partial) ...).
-      w = this.weather, partial = this.dropPartial, rain = w ? w.rainStrength(partial) : 0, thunder = w ? w.weightedThunder(partial) : 0, lightning = w ? w.lastLightning : 0,
-      fog = fogColor({ angle, temperature: this.temperature ?? biomeTemperature("meadow"), look: [look.x, look.y, look.z], chunks: this.distance / 16, brightness: this.fogBrightness, underwater, lava, rain, thunder, lightning, partial });
+      w = this.dimension ? null : this.weather, partial = this.dropPartial, rain = w ? w.rainStrength(partial) : 0, thunder = w ? w.weightedThunder(partial) : 0, lightning = w ? w.lastLightning : 0,
+      fog = fogColor({ angle, temperature: this.temperature ?? biomeTemperature("meadow"), look: [look.x, look.y, look.z], chunks: this.distance / 16, brightness: this.fogBrightness, underwater, lava, rain, thunder, lightning, partial, provider: this.dimension ? providerFog(this.dimension, angle) : null });
     // potion-fx.js: the void/Blindness/Night Vision terms of updateFogColor, and Blindness' own setupFog branch (it wins over water and lava).
     const pv = this.potionView, blind = pv?.blindness > 0;
     if (pv && (blind || pv.nightVision > 0 || pv.feetY !== undefined)) fog = adjustFogColor(fog, { feetY: pv.feetY ?? c.position.y - 1.62, blindness: pv.blindness, nightVision: pv.nightVision > 0 ? nightVisionBrightness(pv.nightVision, this.dropPartial) : 0 });
