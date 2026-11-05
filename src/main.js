@@ -24,6 +24,7 @@ import {MerchantContainer,merchantDecorationsHtml,offerItemAt} from './merchant-
 import {villagerInteract,villagerClearCustomer,villagerOffers,villagerUseRecipe,villagerHover} from './villager.js';
 import {withinEnchantReach} from './enchanting-table.js';
 import {damagedAnvilMetadata,ANVIL_DAMAGE_CHANCE} from './anvil.js';
+import {treePickDamage} from './wood-types.js';
 import { migrateSettings, renderDistanceBlocks, SOUND_CATEGORIES, soundLevel } from "./settings.js";
 import { MouseLook, setAngles } from "./mouse-look.js";
 import * as THREE from "three";
@@ -2508,7 +2509,7 @@ function setupPointer() {
       const stonePick = target && stoneUtilityPick(world, ...target.block);
       const id = stonePick?.id ?? (target && pickItem(world.get(...target.block), world.getMeta(...target.block)));
       if (id) {
-        survival.inventory.pick(id, survival.creative, stonePick ? stonePick.damage : id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined);
+        survival.inventory.pick(id, survival.creative, stonePick ? stonePick.damage : treePickDamage(id, world.getMeta(...target.block)) ?? (id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined));
         mining = null;
         eating = null;
         renderHotbar();
@@ -2634,7 +2635,7 @@ function animate(now) {
       freezeWalk: walkFrozen,
     });
     // The held wool's colour (stack damage) rides along with the displayed item.
-    pose.meta = pose.item === WOOL || pose.item === RED_FLOWER || pose.item === DYE || [2,6,56,58].includes(pose.item) ? survival.held?.damage || 0 : 0;
+    pose.meta = pose.item === WOOL || pose.item === RED_FLOWER || pose.item === DYE || [2,6,56,58,4,5,7,48,70,71].includes(pose.item) ? survival.held?.damage || 0 : 0;
     const b = pose.bob;
     scene.camera.position.x += b.x * Math.cos(yaw);
     scene.camera.position.z -= b.x * Math.sin(yaw);

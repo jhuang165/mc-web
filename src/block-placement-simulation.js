@@ -21,6 +21,7 @@ import { brewingItemBlock } from './brewing.js';
 import { HOPPER, hopperPlacedMeta, newHopperTile } from './hopper.js';
 import { blockOfItem as redstoneItemBlock, isRedstoneBlock, redstonePlacedMeta } from './redstone-blocks.js';
 
+import { logPlacedMeta } from './wood-types.js';
 const BLOCK_MAX = new Set([STONE_BRICKS,4,5,7,48,69,70,71,82,WOOL, RED_FLOWER, 2, 6, 56, 58]);
 const result = (placed, reason, block = null, position = null) => ({ placed, reason, block, position });
 // ItemBlock.onItemUse: clicking vines, tall grass (with its dead-shrub and fern variants) or a dead bush places into the
@@ -182,7 +183,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if (rsMeta === null) return result(false, "redstone-support", id, p);
 
   const old = world.get(...p), oldMeta = world.getMeta(...p);
-  const meta = id===5||id===71?placedLeavesMeta(survival.held?.damage||0):BLOCK_MAX.has(id) ? survival.held?.damage || 0
+  const meta = id===5||id===71?placedLeavesMeta(survival.held?.damage||0):id===4||id===70?logPlacedMeta(survival.held?.damage||0,side):BLOCK_MAX.has(id) ? survival.held?.damage || 0
     : id === LADDER ? placedLadderMeta(world, ...p, side)
         : id === TORCH ? torchMeta
           : id === ANVIL ? anvilPlacementMeta(yaw,survival.held?.damage||0)
