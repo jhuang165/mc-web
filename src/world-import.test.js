@@ -8,6 +8,16 @@ import { Weather } from "./weather.js";
 import { Projectiles } from "./projectiles.js";
 import { Arrows } from "./bow.js";
 
+test("browser backups preserve the player's portal timer and the world spawn", () => {
+  assert.deepEqual(importedRuntime({ portalState: { c: 57, t: 9 }, worldSpawn: [-31, 68, 100] }), {
+    portalState: { c: 57, t: 9 }, worldSpawn: [-31, 68, 100],
+  });
+  assert.deepEqual(importedRuntime({ portalState: { c: 200, t: "9" }, worldSpawn: [0, null, 2] }), {
+    portalState: { c: 0, t: 0 },
+  });
+  assert.deepEqual(importedRuntime({}), {});
+});
+
 test("an exported world retains weather, projectiles, TNT and scheduled work on import", () => {
   const w = new World("import");
   w.set(30, 50, 30, WATER);

@@ -31,6 +31,10 @@ Target: Minecraft Java 1.7.10. Not full parity. Evidence is the probe `tools/pro
 
 Browser backups include each dimension's edits and runtime in `dimensions[d]`. The Java ZIP places Anvil region files under `region/`, `DIM-1/region/` and `DIM1/region/`; `level.dat` records the player's current dimension and position. The ZIP still includes a browser backup.
 
+The portal timer belongs to the player across dimension changes. Browser saves and backups preserve both the partial entry counter and the cooldown. Reopening a legacy save starts both at zero. Java 1.7.10 `Entity` (`sa`) writes only the cooldown as the integer `PortalCooldown`, which the Anvil export includes in `level.dat`.
+
+The compass uses the 32 original frames in the hotbar, inventory, Creative Search tab and 3D item renderers. It points toward the Overworld spawn, including a spawn changed with `/setworldspawn`, and spins in the Nether and End. The browser saves the spawn independently of the player's position, and the Anvil export writes it in native coordinates. An 80-tick trace of the unchanged `TextureCompass` (`bqm.a(ahb,DDDZZ)`) checks a moving and turning player. The Nether and End random-angle branch follows the original bytecode.
+
 The existing region converter accepts paths under the native dimension directories. For example, to convert two selected 1 × 1 chunk areas at native chunk coordinates (-1, -1):
 
 ```sh
@@ -45,7 +49,7 @@ Import the resulting JSON through Select World. The converter keeps native coord
 
 - The spawn pass samples two packs per tick within the browser’s six-by-six ticking window, with a local cap of ten monsters. It uses block light for Endermen and samples End surfaces. Native chunk eligibility, height sampling, portal pigmen and exact spawn RNG order remain open.
 - Followers (wolves, riders, leashed animals) do not follow through portals; non-player entities do not use portals.
-- A saved portal counter and cooldown are not persisted; maps are one store (no per-dimension map data); the compass item is inert in this build.
+- Maps are one store (no per-dimension map data). The compass in an item frame shares the player-relative sprite. Java 1.7.10 computes an item frame's compass relative to the frame position and facing.
 - The bed explosion (power 5, flaming) is recalled from the 1.7.10 class and not probed; `portal.travel` timing and volume are approximations.
 - Weather keeps its Overworld state while the player is away (no simulation in the other dimensions; the Overworld does not advance either).
 - Finite (non-streamed) Overworld worlds: 8x coordinates outside the world fall back to the world spawn.

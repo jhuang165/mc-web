@@ -13,7 +13,7 @@ import { JavaRandom } from "./java-random.js";
 import { materialSolid } from "./plants.js";
 import { BED, BED_DIR, isBedHead } from "./bed.js";
 import { readChunkEdits } from "./world-storage.js";
-import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf } from "./dimensions.js";
+import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf, portalCooldown, readPlayerPortalState } from "./dimensions.js";
 
 // Per-dimension runtime state: everything main.js's save() writes that is keyed by block coordinates or holds entities.
 export const DIM_KEYS = ["drops", "projectiles", "eyes", "rockets", "fishing", "thrownPotions", "arrows", "tnt", "fluidTicks", "fireTicks", "redstone", "pistons", "commandBlocks", "musicTiles", "entities", "villages", "farms", "pots", "xpOrbs", "falling", "fallingTicks", "spawners", "minecarts", "boats", "hanging", "signs", "skulls", "beacons", "populatedColumns", "containerScope", "editSequence", "dragonSpawned"];
@@ -84,10 +84,14 @@ export class DimensionLive {
   createWorld(record) { return record.rootId ? new DimensionWorld(record.seed, record.dimension) : new World(record.seed, record.biome, record.generationVersion ?? 1, record.worldType); }
   // Called after the world exists and before the saved position is read. Sets record.position for a travel arrival.
   async arrive(prepared, record) {
-    const t = record.transit; delete record.transit; this.writes = [];
+    const t = record.transit; delete record.transit; this.writes = []; this.exit = false;
     if (!t) return;
     const to = dimensionOf(record), from = t.from;
-    this.state.timeUntilPortal = 10; // EntityPlayer.getPortalCooldown: standing in the new portal does not bounce back
+    if (t.death || from === END) delete record.portalState; // A new player is created on respawn.
+    else if ((from === NETHER || to === NETHER) && !record.portalState?.t) {
+      // Scripted travel has no preceding portal tick. Guard its arrival too.
+      record.portalState = { c: 0, t: portalCooldown(true) };
+    }
     if (t.death) { record.position = null; return; } // the respawn handler picks the bed / world spawn
     if (from === END) { // leaving the End: the bed or world spawn (EntityPlayerMP.travelToDimension(1) -> respawnPlayer)
       const bed = record.bed?.spawn;
@@ -104,6 +108,10 @@ export class DimensionLive {
     new Teleporter(world, { isSolid: solidId, random: new JavaRandom(world.seed) }).placeInPortal(e, tt.x, tt.y, tt.z, tt.yaw);
     this.writes = world.writes;
     record.position = { x: e.x, y: e.y, z: e.z, yaw: gameYaw(e.yaw), pitch: 0 };
+  }
+  restorePlayer(record) {
+    this.state.restore(readPlayerPortalState(record.portalState));
+    this.setOverlay(0);
   }
   // After the resident columns (and their saved edits) are loaded: the portal frames/platform the Teleporter placed.
   applyWrites(prepared, record, { verifyBed } = {}) {

@@ -46,15 +46,21 @@ test('Nether and End Anvil columns keep their coordinates, runtime tiles and lev
  const position={x:-0.5,y:110,z:-0.5};
  const spawner={x:-1,y:103,z:-1,EntityId:'Blaze',Delay:62};
  const record={id:'dimensions',name:'Dimensions',seed:'17',biome:'javaStreamed',generationVersion:12,mode:'survival',dimension:1,position,edits:[],
+  portalState:{c:73,t:9},worldSpawn:[35,68,70],
   dimensions:{
    [-1]:{edits:[['-1,103,-1',62],['-1,104,-1',132]],state:{spawners:[spawner]},
     tiles:{dispensers:{'-1,104,-1':{items:[{id:3,count:2,damage:0}]}}}},
    [1]:{edits:[['-1,108,-1',149]],state:{entities:[{type:'ender_crystal',x:-0.5,y:110,z:-0.5,health:5}]}},
   }};
  const {files,report}=await exportJavaSave(record,{world:w});
- const level=(await decodeCompressedNbt(files.get('level.dat'))).tag.value.get('Data').value.get('Player').value;
+ const data=(await decodeCompressedNbt(files.get('level.dat'))).tag.value.get('Data').value;
+ const level=data.get('Player').value;
  assert.equal(level.get('Dimension').value,1);
  assert.deepEqual(level.get('Pos').value.items,[-0.5,110,-0.5]);
+ assert.deepEqual(level.get('PortalCooldown'),{type:3,value:9});
+ assert.deepEqual(['SpawnX','SpawnY','SpawnZ'].map(key=>data.get(key).value),[35+w.originX,68,70+w.originZ]);
+ const backup=JSON.parse(new TextDecoder().decode(files.get('blockworld.json')));
+ assert.deepEqual(backup.portalState,{c:73,t:9});
  assert.equal(report.columns,w.chunks.size+2);
  const {importJavaRegionArea}=await import('./region-import.js');
  for(const [d,prefix] of [[-1,'DIM-1'],[1,'DIM1']]) {

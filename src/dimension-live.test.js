@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { viewRecord, storedRecord, rulesOf, DIM_KEYS, TILE_KEYS, gameYaw, mcYaw } from "./dimension-live.js";
+import { DimensionLive, viewRecord, storedRecord, rulesOf, DIM_KEYS, TILE_KEYS, gameYaw, mcYaw } from "./dimension-live.js";
 import { DimensionWorld, TerrainPeek } from "./dimension-world.js";
 import { Teleporter, GAME_IDS } from "./dimensions.js";
 import { JavaRandom } from "./java-random.js";
@@ -33,6 +33,32 @@ test("rule flags per dimension", () => {
   assert.deepEqual([o.waterEvaporates, o.bedExplodes, o.compassSpins], [false, false, false]);
 });
 test("yaw conversion", () => { assert.ok(Math.abs(mcYaw(gameYaw(90)) - 90) < 1e-9); assert.ok(Math.abs(gameYaw(0) - Math.PI) < 1e-9); });
+test("portal progress belongs to the saved player, across dimensions and world switches", () => {
+  const live = new DimensionLive({});
+  const record = root();
+  const pos = { x: 1.5, y: 70, z: 2.5 };
+  const portal = { dimension: -1, get: () => GAME_IDS.portal };
+  for (let i = 0; i < 79; i++) live.tick(portal, pos, pos);
+  const view = viewRecord(record, -1);
+  view.portalState = live.state.save();
+  const saved = JSON.parse(JSON.stringify(storedRecord(view, record)));
+  assert.deepEqual(saved.portalState, { c: 79, t: 0 });
+  assert.equal(saved.dimensions[-1].state.portalState, undefined);
+
+  live.restorePlayer({ id: "different-world" });
+  assert.deepEqual(live.state.save(), { c: 0, t: 0 });
+  live.restorePlayer(viewRecord(saved, -1));
+  live.tick(portal, pos, pos);
+  assert.deepEqual(live.state.save(), { c: 80, t: 0 });
+  live.travel = (target) => assert.equal(target, 0);
+  live.tick(portal, pos, pos);
+  assert.deepEqual(live.state.save(), { c: 80, t: 9 });
+
+  live.restorePlayer({ portalState: live.state.save() });
+  live.travel = () => assert.fail("an arrival still inside the portal cannot immediately bounce back");
+  live.tick(portal, pos, pos, { creative: true });
+  assert.deepEqual(live.state.save(), { c: 76, t: 9 });
+});
 test("DIM_KEYS and TILE_KEYS do not overlap", () => { assert.deepEqual(DIM_KEYS.filter((k) => TILE_KEYS.includes(k)), []); });
 
 test("DimensionWorld streams a Nether window with bedrock, netherrack and no sky", () => {
@@ -69,7 +95,6 @@ test("TerrainPeek reads the same cells as the streamed window (Overworld terrain
 });
 
 const arrival = async (record, from, at) => {
-  const { DimensionLive } = await import("./dimension-live.js");
   const live = new DimensionLive({ sound() {} });
   live.readEdits = async () => [];
   const spawned = []; live.onDragonSpawn = (p) => spawned.push(p);

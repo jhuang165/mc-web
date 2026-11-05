@@ -8,6 +8,7 @@ import { writeJukeboxTile } from "./jukebox.js";
 import { World } from './world.js';
 import { DimensionWorld } from './dimension-world.js';
 import { dimensionOf, viewRecord } from './dimension-live.js';
+import { readPlayerPortalState } from './dimensions.js';
 import { lightOpacity } from './lighting.js';
 import { Chunk } from './chunk-store.js';
 import { toOriginal } from './block-registry.js';
@@ -143,14 +144,15 @@ const endPortalTiles=(p,cells)=>{for(const [x,y,z] of cells)p.tileEntities.push(
 function levelNbt(record,w,report) {
  const p=record.player??{},pos=record.position??w.spawn(),xp=new Experience(record.experience),creative=record.mode!=='survival'&&record.mode!=='adventure',gameType=creative?1:record.mode==='adventure'?2:0;
  const dimension=dimensionOf(record),ox=w.originX??0,oz=w.originZ??0;
- const spawn=dimension?w.spawn():pos;
+ const spawn=record.worldSpawn??Object.values(w.spawn()).map(Math.floor);
  const player={...entity(pos,'Player',dimension?0:ox,dimension?0:oz),Dimension:int(dimension),Health:short(p.health??20),HealF:float(p.health??20),foodLevel:int(p.food??20),foodSaturationLevel:float(p.saturation??5),foodExhaustionLevel:float(p.exhaustion??0),foodTickTimer:int(p.timer??0),XpLevel:int(xp.level),XpP:float(xp.progress),XpTotal:int(xp.total),Score:int(xp.score),SelectedItemSlot:int(p.current??0),playerGameType:int(gameType),SleepTimer:short(0),Sleeping:byte(0),abilities:comp({invulnerable:byte(creative?1:0),flying:byte(0),mayfly:byte(creative?1:0),instabuild:byte(creative?1:0),mayBuild:byte(gameType===2?0:1),flySpeed:float(.05),walkSpeed:float(.1)})};
  delete player.id;
+ player.PortalCooldown=int(readPlayerPortalState(record.portalState).t);
  const items=(p.slots??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];});
  (p.armor??[]).forEach((s,i)=>{const n=stackNbt(s,100+i,report);if(n)items.push(n);});player.Inventory=list(NBT.COMPOUND,items);
  // InventoryEnderChest.saveInventoryToNBT: EnderItems, slots 0-26 (chest-blocks.js).
  player.EnderItems=list(NBT.COMPOUND,saveEnderSlots(p.enderItems).flatMap(({slot,stack})=>{const n=stackNbt(stack,slot,report);return n?[n]:[];}));
- const data={version:int(19133),initialized:byte(1),RandomSeed:tag(NBT.LONG,w.javaSeed??BigInt(w.numericSeed)),generatorName:str(record.biome==='javaStreamed'?streamedWorldType(record.worldType):record.biome==='javaLargeBiomes'?'largeBiomes':record.biome==='javaAmplified'?'amplified':'default'),generatorVersion:int(1),generatorOptions:str(''),MapFeatures:byte(1),LevelName:str(record.name??'Blockworld'),GameType:int(gameType),hardcore:byte(0),allowCommands:byte(creative?1:0),Time:long(p.time??0),DayTime:long(p.time??0),LastPlayed:long(record.updated??0),SizeOnDisk:long(0),SpawnX:int(Math.floor(spawn.x+ox)),SpawnY:int(Math.floor(spawn.y)),SpawnZ:int(Math.floor(spawn.z+oz)),Difficulty:byte(2),Player:comp(player)};
+ const data={version:int(19133),initialized:byte(1),RandomSeed:tag(NBT.LONG,w.javaSeed??BigInt(w.numericSeed)),generatorName:str(record.biome==='javaStreamed'?streamedWorldType(record.worldType):record.biome==='javaLargeBiomes'?'largeBiomes':record.biome==='javaAmplified'?'amplified':'default'),generatorVersion:int(1),generatorOptions:str(''),MapFeatures:byte(1),LevelName:str(record.name??'Blockworld'),GameType:int(gameType),hardcore:byte(0),allowCommands:byte(creative?1:0),Time:long(p.time??0),DayTime:long(p.time??0),LastPlayed:long(record.updated??0),SizeOnDisk:long(0),SpawnX:int(spawn[0]+ox),SpawnY:int(spawn[1]),SpawnZ:int(spawn[2]+oz),Difficulty:byte(2),Player:comp(player)};
  for(const name of ['rainTime','thunderTime'])data[name]=int(record.weather?.[name]??0);
  for(const name of ['raining','thundering'])data[name]=byte(record.weather?.[name]?1:0);
  return {name:'',tag:comp({Data:comp(data)})};

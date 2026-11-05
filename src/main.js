@@ -81,7 +81,8 @@ import { tickWeatherSimulation } from "./weather-simulation.js";
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
 import { showsPumpkinBlur } from "./wearable-heads.js";
 import { PlayerBody, PlayerRenderer, nextView, thirdPersonCamera, playerShadowCaster } from "./player-renderer.js";
-import { FirstPerson, itemTexture } from "./first-person.js";
+import { FirstPerson, itemTexture, setCompassTextureFrame } from "./first-person.js";
+import { ITEM_COMPASS, COMPASS_FRAMES, COMPASS_STRIP, compassAngle, createCompass, tickCompass } from "./compass.js";
 import { InventoryPlayerView, PAPERDOLL_LAYOUTS } from "./inventory-player.js";
 import {Experience,ExperienceOrbs,smeltExperience} from "./experience.js";
 import {ExperienceRenderer} from "./experience-renderer.js";
@@ -135,7 +136,7 @@ import { difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.
 import { isInvisible } from "./mob-effects.js";
 import { DimensionWorld } from './dimension-world.js';
 import { showEndCredits } from './end-credits.js';
-import { DimensionLive, storedRecord, dimensionOf, rootIdOf, viewId, bedExplosion } from './dimension-live.js'; // Nether/End travel (dimensions track)
+import { DimensionLive, storedRecord, dimensionOf, rootIdOf, viewId, bedExplosion, mcYaw } from './dimension-live.js'; // Nether/End travel (dimensions track)
 import { PortalTimer, splashBreak, NIGHT_VISION, BLINDNESS, NAUSEA, INVISIBILITY } from "./potion-fx.js";
 import { primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { TntRenderer } from "./tnt-renderer.js";
@@ -379,6 +380,7 @@ setGameRuleSource((name) => ruleOn(active, name));
 // Thrown snowballs and their particles (see projectiles.js).
 const projectiles = new Projectiles();
 const maps = new MapsClock(); // maps-clock-live.js: filled maps and the clock icon
+const compass = createCompass();
 const eyes = new EyesOfEnder(); // eye-of-ender-live.js: flying eyes of ender
 const rockets = new FireworkRockets(); // fireworks-live.js: firework rockets in flight
 // The scene is created in start(), so particles look up its effect renderer when they spawn.
@@ -482,12 +484,14 @@ function sound(place, block = target ? world.get(...target.block) : 3) {
   const s = place ? placeSound(block) : breakSound(block), cell = place ? target?.adjacent ?? target?.block : target?.block;
   sounds?.play(s.name, { volume: s.volume, pitch: s.pitch, position: cell && { x: cell[0] + 0.5, y: cell[1] + 0.5, z: cell[2] + 0.5 } });
 }
+const compassIcon = () => `<span class="vanilla-item-icon creative-strip" style="--strip:url('${COMPASS_STRIP}');--frames:${COMPASS_FRAMES}" aria-hidden="true"></span>`;
 function icon(id, damage = 0, stack) {
   const item = ITEMS[id];
   if (!id || !item) return '<span class="empty-hand">·</span>';
   // ItemPotion layers: potion_overlay tinted by the liquid colour under the untinted bottle (splash bottle for splash values).
   if (id === 385) return `<span class="vanilla-item-icon tinted-item" style="--tint:#${(damageColor(damage | 0) & 0xffffff).toString(16).padStart(6, "0")};--base:url('/media/1.7.10/items/potion_overlay.png')" aria-hidden="true"><i></i><img src="/media/1.7.10/items/${(damage | 0) & 16384 ? "potion_bottle_splash" : "potion_bottle_drinkable"}.png" alt=""></span>`;
   if (id === ITEM_SPAWN_EGG) return spawnEggIconHtml(damage); // spawn-eggs.js: primary and secondary colour layers
+  if (id === ITEM_COMPASS) return compassIcon();
   if(item.block)return `<img class="vanilla-item-icon vanilla-block-icon" src="${scene.textures.icon(id, damage)}" alt="" aria-hidden="true">`;
   // Leather armor multiplies its base layer by display.color; the overlay stays untinted.
   if (item.tint)
@@ -628,6 +632,7 @@ function save() {
   if (world.streaming) active.editSequence = world.nextEditOrder;
   if (world.population) active.populatedColumns = world.saveClaimedColumns();
   active.position = { x: position.x, y: position.y, z: position.z, yaw, pitch };
+  active.portalState = dims.state.save();
   active.player = survival.serialize();
   active.drops = items.serialize();
   active.projectiles = projectiles.serialize();
@@ -847,6 +852,10 @@ async function openWorld(record) {
     if (record.dimension && !record.rootId) record = dims.openRecord(record, await readRuntimeState(record)); // saved in the Nether/End: open that dimension
     const prepared=dims.createWorld(record);
     if (!record.chunked) prepared.restore(record.edits??[]);
+    if (!prepared.dimension && !record.worldSpawn) {
+      const { x, y, z } = prepared.spawn();
+      record.worldSpawn = [Math.floor(x), Math.floor(y), Math.floor(z)];
+    }
     prepared.restoreClaimedColumns(record.populatedColumns);
     await dims.arrive(prepared, record); // portal travel: the Teleporter's arrival position
     const p=record.position;
@@ -865,6 +874,8 @@ async function launch(record, prepared) {
   try {
     active = record;
     world = prepared;
+    portalTimer.reset();
+    dims.restorePlayer(record);
     startPrefetch();
     // Restore World.rand before constructing the block runtimes that share it.
     weather = new Weather().restore(record.weather).restoreSimulation(record.worldRandom);
@@ -1380,8 +1391,7 @@ function tabIcon(t) {
   const i = t.icon;
   if (i.id) return icon(i.id);
   if (i.potion) return `<span class="vanilla-item-icon tinted-item" style="--tint:#${i.potion.toString(16).padStart(6, "0")};--base:url('/media/1.7.10/items/potion_overlay.png')"><i></i><img src="/media/1.7.10/items/potion_bottle_drinkable.png" alt=""></span>`;
-  // Animated strips (the compass) show their first frame.
-  if (i.frames) return `<span class="vanilla-item-icon creative-strip" style="--strip:url('/media/1.7.10/${i.texture}.png');--frames:${i.frames}"></span>`;
+  if (i.frames) return compassIcon(); // the Search Items tab uses the same animated compass as the item
   return `<img class="vanilla-item-icon" src="/media/1.7.10/${i.texture}.png" alt="">`;
 }
 // drawGuiContainerBackgroundLayer: unselected tabs, the tab background, search
@@ -1982,6 +1992,8 @@ function die() {
     const time = survival.time;
     const kept = ruleOn(active, "keepInventory") && { slots: survival.inventory.serialize(), armor: survival.inventory.serializeArmor() };
     survival = new Survival({ time, slots: [], ...kept, furnaces: survival.furnaces, chests: survival.chests, dispensers: survival.dispensers, hoppers: survival.hoppers, brewing: survival.brewing }, survival.mode);
+    portalTimer.reset();
+    dims.restorePlayer({});
     survival.protection = 60;
     survival.furnaceActive = key => !world.streaming || world.isTicking(...[key.split(",")[0],key.split(",")[2]].map(Number));
     survival.furnaceChanged = key => redstoneRuntime?.containerClosed([key]);
@@ -2083,7 +2095,14 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
   rockets.tick(world, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), explode: (...a) => fireworkFx.spawnStarter(...a) });
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
-  maps.tick({ survival, position, yaw: 180 - yaw / (Math.PI / 180), world, time: survival.time, frames: hanging.entities });
+  const facing = mcYaw(yaw);
+  maps.tick({ survival, position, yaw: facing, world, time: survival.time, frames: hanging.entities });
+  const previousCompassFrame = compass.frame;
+  const frame = tickCompass(compass, compassAngle(position, Math.fround(facing), active.worldSpawn, !world.dimension));
+  if (frame !== previousCompassFrame) {
+    setCompassTextureFrame(frame);
+    document.documentElement.style.setProperty("--compass-position", `${frame * 100 / (COMPASS_FRAMES - 1)}%`);
+  }
   tickEntitySimulation({ world, items, primed, projectiles, arrows, mobs, survival, position,
     width: PHYSICS.width, height: PHYSICS.height }, {
     maxStack: st => survival.inventory.maxStack(st),

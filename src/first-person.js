@@ -13,6 +13,7 @@ import { ITEM_SKULL, skullIconUrl } from "./skull.js";
 import { ITEM_SPAWN_EGG, spawnEggTexture } from "./spawn-eggs.js";
 import { ITEM_CLOCK } from "./clock.js";
 import { clockFrameUrl, clockFrame } from "./maps-clock-live.js";
+import { ITEM_COMPASS, COMPASS_STATIC, COMPASS_STRIP } from "./compass.js";
 import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
 import { MapSurface, mapHandMatrices } from "./map-render.js";
 const loader = new THREE.TextureLoader(),
@@ -63,7 +64,31 @@ gl_FragColor=vec4((a+b)*vec3(.5,.25,.8),1.);}`,
   mesh.onBeforeRender = () => { material.uniforms.time.value = performance.now() / 1000; };
   return mesh;
 }
+let compassFrame = 0, compassCanvas, compassImage, compassTexture;
+function drawCompassFrame() {
+  const ctx = compassCanvas.getContext("2d");
+  ctx.clearRect(0, 0, 16, 16);
+  ctx.drawImage(compassImage, 0, compassFrame * 16, 16, 16, 0, 0, 16, 16);
+  compassTexture.needsUpdate = true;
+}
+export function setCompassTextureFrame(frame) {
+  if (frame === compassFrame) return;
+  compassFrame = frame;
+  if (compassImage?.naturalWidth) drawCompassFrame();
+}
 export function pixelTexture(url) {
+  if (url === COMPASS_STATIC) {
+    if (!compassTexture) {
+      compassCanvas = document.createElement("canvas");
+      compassCanvas.width = compassCanvas.height = 16;
+      compassTexture = new THREE.CanvasTexture(compassCanvas);
+      compassTexture.magFilter = compassTexture.minFilter = THREE.NearestFilter;
+      compassImage = new Image();
+      compassImage.onload = drawCompassFrame;
+      compassImage.src = COMPASS_STRIP;
+    }
+    return compassTexture;
+  }
   if (!cache.has(url)) {
     const t = loader.load(url);
     t.magFilter = t.minFilter = THREE.NearestFilter;
@@ -103,6 +128,7 @@ export function itemTexture(id, damage = 0, use = 0) {
   if (id === ITEM_SKULL) return skullIconUrl(damage); // skull.js: one flat sprite per head type
   if (id === ITEM_SPAWN_EGG) return spawnEggTexture(damage); // two tinted layers composed (spawn-eggs.js)
   if (id === ITEM_CLOCK) return clockFrameUrl(); // TextureClock frame (maps-clock-live.js)
+  if (id === ITEM_COMPASS) return COMPASS_STATIC; // pixelTexture shares a mutable sprite across 3D renderers
   if (id === FISHING_ROD && use > 0) return "/media/1.7.10/items/fishing_rod_cast.png";
   if (id === 127 && use > 0) return "/media/1.7.10/items/bow_pulling_" + (Math.min(3, use) - 1) + ".png";
   // Flowers are flat sprites cut from the terrain atlas textures; dyes are one item per damage.

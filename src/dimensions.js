@@ -49,6 +49,12 @@ export const movementDirection = (dx, dz) => (Math.abs(dx) > Math.abs(dz) ? (dx 
 // Direction.offsetX / offsetZ / rotateOpposite / rotateRight / rotateLeft.
 export const DIR = Object.freeze({ offsetX: [0, -1, 0, 1], offsetZ: [1, 0, -1, 0], rotateOpposite: [2, 3, 0, 1], rotateRight: [1, 2, 3, 0], rotateLeft: [3, 0, 1, 2] });
 
+export function readPlayerPortalState(data) {
+  const c = Number.isInteger(data?.c) && data.c >= 0 && data.c <= maxInPortalTime(true, false) ? data.c : 0;
+  const t = Number.isInteger(data?.t) && data.t >= 0 && data.t <= portalCooldown(true) ? data.t : 0;
+  return { c, t };
+}
+
 export class PortalState {
   constructor() { this.inPortal = false; this.portalCounter = 0; this.timeUntilPortal = 0; this.teleportDirection = 0; }
   // Entity.setInPortal (sa.ah). prev/x/z: prevPosX/Z and posX/Z.
@@ -77,7 +83,13 @@ export class PortalState {
     return travel;
   }
   save() { return { c: this.portalCounter, t: this.timeUntilPortal }; }
-  restore(d) { this.portalCounter = d?.c | 0; this.timeUntilPortal = d?.t | 0; this.inPortal = false; return this; }
+  restore(data) {
+    this.portalCounter = data?.c | 0;
+    this.timeUntilPortal = data?.t | 0;
+    this.inPortal = false;
+    this.teleportDirection = 0;
+    return this;
+  }
 }
 
 // ---- transferEntityToWorld ----

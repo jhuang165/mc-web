@@ -1,4 +1,5 @@
 import { isSupportedType } from "./cart-variants.js";
+import { readPlayerPortalState } from "./dimensions.js";
 // Keep the runtime payload shared between local saves and imported exports.
 // Each subsystem validates its own payload on launch. Identity and the validated
 // world/player fields are built by the caller rather than copied from the file.
@@ -6,6 +7,7 @@ const RUNTIME_FIELDS = [
   "position", "drops", "entities", "farms", "experience", "xpOrbs", "falling",
   "weather", "worldRandom", "projectiles", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "inhabited",
   "spawners", "pistons", "boats", "minecarts", "populatedColumns",
+  "portalState", "worldSpawn",
 ];
 
 const int = Number.isInteger, finite = Number.isFinite;
@@ -15,6 +17,8 @@ const SPAWNER_NUMBERS = ["Delay", "MinSpawnDelay", "MaxSpawnDelay", "SpawnCount"
 // not the expected shape is dropped, and an export without these fields gets the generation's
 // spawners and full carts on its first launch, as an older save does.
 const SANITIZE = {
+  portalState: readPlayerPortalState,
+  worldSpawn: (v) => Array.isArray(v) && v.length === 3 && v.every(int) ? [...v] : undefined,
   // Streamed population (streaming-population.js): per-cell bitmask of columns whose generated
   // chests/animals/spawners were already handed to the live world. Bad entries just hand over again.
   populatedColumns: (v) => v && typeof v === "object" && v.version === 1 && v.cells && typeof v.cells === "object"
