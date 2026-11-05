@@ -18,6 +18,7 @@ import { createSlimeRig, animateSlime } from "./slime-renderer.js";
 import { mobScale } from "./slime.js";
 import { createWolfRig, animateWolf } from "./wolf-renderer.js";
 import { createOcelotRig } from "./ocelot-renderer.js";
+import { createHorseRig } from "./horse-renderer.js";
 import { createEndermanRig, animateEnderman } from "./enderman-renderer.js";
 import { createSnowGolemRig, animateSnowGolem, addMooshroomMushrooms } from "./mooshroom-golem-renderer.js";
 import { createSquidRig, createBatRig } from "./squid-bat-renderer.js";
@@ -387,6 +388,7 @@ export class MobRenderer {
     if (e.type === "slime") return createSlimeRig(this, e);
     if (e.type === "wolf") return createWolfRig(this);
     if (e.type === "ocelot") return createOcelotRig(this);
+    if (e.type === "horse") return createHorseRig(this, e);
     if (e.type === "enderman") return createEndermanRig(this);
     if (e.type === "iron_golem") return createIronGolemRig(this);
     if (e.type === "snow_golem") return createSnowGolemRig(this);

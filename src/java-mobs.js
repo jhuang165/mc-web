@@ -1,3 +1,4 @@
+import { readNbt as readHorseNbt } from './horse.js';
 // Java entity NBT -> saved browser mob records, for the entities whose live behaviour this build ports from 1.7.10:
 // Villager (yv), VillagerGolem (wt) and Zombie (yq, with its zombie villager state). The record is what EntityWorld's
 // constructor reads back (entities.js); fields it re-derives (AI timers, velocities, the village home) are not written.
@@ -8,7 +9,7 @@ import { endermanFieldsFrom } from './enderman.js';
 import { nbtGet } from './nbt-get.js';
 import { slimeSizeFromNbt } from './slime.js';
 
-export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', Ozelot: 'ocelot' });
+export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', Ozelot: 'ocelot', EntityHorse: 'horse' });
 export const IMPORT_MOB_LIMIT = 256; // EntityWorld keeps at most this many saved mobs
 
 const tagValue = nbtGet; // NBTTagCompound getters: numeric tags convert across types (nbt-get.js)
@@ -26,6 +27,26 @@ export function readActiveEffects(entity) {
 
 // `convertItem(compound)` is region-import's item converter (null for an unknown stack). Returns null when the id is not
 // one of JAVA_MOBS or the position is unusable; the caller counts it as lost.
+// EntityHorse.readEntityFromNBT (wi.a(dh), horse.js readNbt): Type, Variant, Temper, Tame, OwnerUUID, flags, SaddleItem / ArmorItem
+// (or the legacy Saddle byte) and the Attributes list's maxHealth, movementSpeed and horse.jumpStrength.
+export const HORSE_NBT_KEYS = ['EatingHaystack', 'ChestedHorse', 'HasReproduced', 'Bred', 'Type', 'Variant', 'Temper', 'Tame', 'OwnerUUID', 'Saddle', 'SaddleItem', 'ArmorItem', 'Items', 'Attributes', 'Age', 'InLove'];
+export function horseNbtFields(tag) {
+  const b = (k) => tagValue(tag, k, NBT.BYTE, 0) !== 0;
+  const idOf = (k) => { const c = tagValue(tag, k, NBT.COMPOUND); return c ? { id: tagValue(c, 'id', NBT.SHORT, 0) } : undefined; };
+  const h = readHorseNbt({ EatingHaystack: b('EatingHaystack'), ChestedHorse: b('ChestedHorse'), HasReproduced: b('HasReproduced'), Bred: b('Bred'),
+    Type: tagValue(tag, 'Type', NBT.INT, 0), Variant: tagValue(tag, 'Variant', NBT.INT, 0), Temper: tagValue(tag, 'Temper', NBT.INT, 0), Tame: b('Tame'),
+    OwnerUUID: String(tagValue(tag, 'OwnerUUID', NBT.STRING, '')).trim(), Saddle: b('Saddle'), SaddleItem: idOf('SaddleItem'), ArmorItem: idOf('ArmorItem') });
+  if (h.type < 0 || h.type > 4) h.type = 0;
+  const list = tagValue(tag, 'Attributes', NBT.LIST);
+  for (const a of list?.elementType === NBT.COMPOUND ? list.items : []) {
+    const name = tagValue(a, 'Name', NBT.STRING, ''), base = tagValue(a, 'Base', NBT.DOUBLE);
+    if (base === undefined) continue;
+    if (name === 'generic.maxHealth') h.maxHealth = base; else if (name === 'generic.movementSpeed') h.speed = base; else if (name === 'horse.jumpStrength') h.jump = base;
+  }
+  const { age, health, inLove, eating, rearing, ...rest } = h;
+  return { horse: { ...rest, owner: rest.owner ? 'player' : '' }, growingAge: tagValue(tag, 'Age', NBT.INT, 0), love: tagValue(tag, 'InLove', NBT.INT, 0) };
+}
+
 export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = () => null } = {}) {
   const type = JAVA_MOBS[tagValue(entity, 'id', NBT.STRING, '')];
   const pos = numbers(entity, 'Pos', NBT.DOUBLE, 3);
@@ -69,6 +90,9 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
     record.growingAge = tagValue(entity, 'Age', NBT.INT, 0);
     record.love = tagValue(entity, 'InLove', NBT.INT, 0);
     Object.assign(record, ocelotFieldsFrom({ owner: owner ? 'player' : '', sitting: !!owner && !!tagValue(entity, 'Sitting', NBT.BYTE, 0), catType: tagValue(entity, 'CatType', NBT.INT, 0) }));
+  } else if (type === 'horse') {
+    Object.assign(record, horseNbtFields(entity));
+    record.health = Math.min(record.health, record.horse.maxHealth);
   } else if (type === 'squid') {
     // EntitySquid has no NBT of its own.
   } else {
@@ -84,7 +108,7 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
 
 // EntityList.createEntityFromNBT for /summon. A supplied compound skips onSpawnWithEgg entirely.
 export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) {
-  const health = { pig: 10, cow: 10, mooshroom: 10, snow_golem: 4, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, enderman: 40, squid: 10, bat: 6, ocelot: 10 }[type];
+  const health = { horse: 53, pig: 10, cow: 10, mooshroom: 10, snow_golem: 4, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, enderman: 40, squid: 10, bat: 6, ocelot: 10 }[type];
   if (health === undefined) return null;
   const rotation = numbers(tag, 'Rotation', NBT.FLOAT, 2);
   const record = { type, health: tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health)), yaw: rotation ? -rotation[0] * Math.PI / 180 : 0,
@@ -116,6 +140,7 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
     record.health = tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health));
     for (const k of type === 'villager' ? ['Profession', 'Riches', 'Offers'] : type === 'iron_golem' ? ['PlayerCreated'] : ['IsBaby', 'IsVillager', 'ConversionTime']) kept.add(k);
   }
+  if (type === 'horse') { Object.assign(record, horseNbtFields(tag)); for (const k of HORSE_NBT_KEYS) kept.add(k); }
   if (type === 'slime') { record.size = slimeSizeFromNbt(tagValue(tag, 'Size', NBT.INT, 0)); kept.add('Size'); }
   // EntityEnderman.readEntityFromNBT: carried / carriedData (shorts; the original block id and metadata).
   if (type === 'enderman') { Object.assign(record, endermanFieldsFrom({ carried: tagValue(tag, 'carried', NBT.SHORT, 0), carriedData: tagValue(tag, 'carriedData', NBT.SHORT, 0) })); kept.add('carried'); kept.add('carriedData'); }
@@ -127,7 +152,7 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
     // Other equipment slots have no live implementation.
     if (equipment?.items.slice(1).some(e => e.size)) kept.delete('Equipment'); else kept.add('Equipment');
   }
-  record.health = Math.max(0, Math.min(type === 'wolf' && record.owner ? 20 : health, record.health));
+  record.health = Math.max(0, Math.min(type === 'wolf' && record.owner ? 20 : type === 'horse' ? record.horse.maxHealth : health, record.health));
   const ignored = [...tag.keys()].filter(k => !kept.has(k));
   if (rotation?.[1]) ignored.push('Rotation[1] (pitch)');
   if (type === 'witch' && record.held && record.held.id !== 385) ignored.push('Equipment[0]');

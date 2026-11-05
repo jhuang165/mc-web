@@ -9,13 +9,14 @@ import { CARROT, POTATO } from "./crops.js";
 import { slimeDrops, slimeExperience } from "./slime.js";
 import { witchDrops, witchEquipmentDrop, witchExperience } from "./witch.js";
 import { squidDrops, squidExperience } from "./squid-bat.js";
+import { dropCount as horseDropCount } from "./horse.js";
 import { DISC_FIRST } from "./note-jukebox-content.js";
 const f = Math.fround;
 // Item ids of this build: porkchop, cooked porkchop, beef, steak, rotten flesh, leather,
 // arrow, bone, bow, string, spider eye, gunpowder, iron ingot. The chicken ids are entities.js's.
 const PORK = 202, COOKED_PORK = 203, BEEF = 204, STEAK = 205, FLESH = 206, LEATHER = 315, ARROW = 320, BONE = 311, BOW = 127, STRING = 321, SPIDER_EYE = 326, GUNPOWDER = 330, IRON = 302;
 export const FEATHER = 317, RAW_CHICKEN = 318, COOKED_CHICKEN = 319;
-export const ANIMALS = new Set(["pig", "cow", "sheep", "chicken", "wolf", "ocelot", "mooshroom"]);
+export const ANIMALS = new Set(["pig", "cow", "sheep", "chicken", "wolf", "ocelot", "mooshroom", "horse"]);
 // DamageSource.setDamageBypassesArmor: these skip applyArmorCalculations. Melee, arrows,
 // explosions, lava, cactus and inFire (fire blocks, lightning) are blocked by armour.
 const UNBLOCKABLE = new Set(["fall", "onFire", "drown", "inWall", "starve", "generic", "magic", "wither", "outOfWorld"]);
@@ -28,8 +29,8 @@ export function armorReduced(type, amount, source) {
   return f(f(amount * (25 - armor)) / 25);
 }
 // getSoundVolume (EntityCow 0.4) and getSoundPitch, on Entity.rand.
-// EntityCow (and EntityMooshroom), EntityWolf and EntityOcelot (bf) override getSoundVolume with 0.4F.
-export const soundVolume = (type) => (type === "cow" || type === "mooshroom" || type === "wolf" || type === "squid" || type === "ocelot" ? f(0.4) : type === "bat" ? f(0.1) : 1);
+// EntityCow (and EntityMooshroom), EntityWolf and EntityOcelot (bf) override getSoundVolume with 0.4F; EntityHorse with 0.8F.
+export const soundVolume = (type) => (type === "horse" ? f(0.8) : type === "cow" || type === "mooshroom" || type === "wolf" || type === "squid" || type === "ocelot" ? f(0.4) : type === "bat" ? f(0.1) : 1);
 export const soundPitch = (rand, child) => f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (child ? f(1.5) : 1));
 // EntitySkeleton holds a bow (equipment drop chance 0.085F); no other mob here carries
 // equipment, so only its dropEquipment and getExperiencePoints draw for one.
@@ -70,6 +71,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
     case "slime": for (const id of slimeDrops(rand, e.size, looting)) add(id); break; // EntitySlime.dropFewItems (slime.js)
     case "witch": for (const [id] of witchDrops(rand, looting)) add(id); break; // EntityWitch.dropFewItems (witch.js)
     case "snow_golem": { const n = rand.nextInt(16); if (n > 0) add(312, n); break; } // EntitySnowman.dropFewItems: nextInt(16) snowballs
+    case "horse": add([LEATHER, LEATHER, LEATHER, FLESH, BONE][e.horse?.type ?? 0], horseDropCount(rand, looting)); break; // EntityHorse.u(): leather, rotten flesh or bone (horse.js)
     case "squid": for (const s of squidDrops(rand, looting)) add(s.id, 1, s.damage); break; // EntitySquid.dropFewItems: ink sacs (squid-bat.js)
   }
   // EntityLiving.dropEquipment: a damageable item drops worn, maxDamage minus

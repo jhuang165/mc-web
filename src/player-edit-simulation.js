@@ -170,6 +170,11 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return act('interact-mooshroom');
     }
+    // EntityHorse.interact: feed, tame by riding, saddle, chest and mount (horse-live.js).
+    if (e.type === 'horse' && state.mobs.horseInteract(e, state.survival, { sneak: !!state.motion?.sneaking, horses: state.mobs.horseSeats })) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return act('interact-horse');
+    }
     if (state.mobs.shear(e, id, state.survival)) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return act('shear-entity');

@@ -152,6 +152,7 @@ import { applyExplosion } from "./explosion-simulation.js";
 import { breakPlayerBlock } from "./block-break-simulation.js";
 import { shapedPick } from "./shaped-blocks.js";
 import { stoneUtilityPick, serializePots, restorePots } from "./stone-utility.js";
+import { horseSeatsFor as seatsFor } from "./horse-live.js";
 import { capturePlayerAction, dispatchPlayerAction, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
 import { fromOriginal } from "./block-registry.js";
 import { setOriginalBlockMapper } from "./mineshaft-world.js";
@@ -2121,7 +2122,7 @@ function traceAction(action) {
 }
 // Browser adapters transfer live references and scalar movement state synchronously.
 function vehicleState() {
-  return { screen, world, minecarts, boats, rider, position, previous, velocity, motion, survival, yaw, eating,
+  return { screen, world, minecarts, boats, horses: seatsFor(mobs, rider), rider, position, previous, velocity, motion, survival, yaw, eating,
     grounded, collidedH, flying, fallDistance, landedFall };
 }
 function applyVehicleState(state) {
@@ -2365,7 +2366,7 @@ function movementTick(controls) {
   const hold = streamPrefetch && world.isTicking(position.x, position.z) && !streamPrefetch.ready(position.x, position.z);
   const change = !hold && world.streamAround(position.x,position.z);
   if (change) { scene.syncChunks(change); materializeFresh(); }
-  const state = { world, position, previous, velocity, motion, survival, yaw, eating, minecarts, boats, rider,
+  const state = { world, position, previous, velocity, motion, survival, yaw, eating, minecarts, boats, horses: seatsFor(mobs, rider), rider,
     grounded, collidedH, flying, fallDistance, landedFall };
   const { inWater, inLavaNow, sneakOnGround, oldPosition } = moveRidingPlayer(state, controls,
     { trace: traceAction, markUnsaved: () => { saved = false; } }) ?? movePlayer(state, controls, toast);
