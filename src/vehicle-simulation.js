@@ -4,11 +4,11 @@ import { PHYSICS, SIZE } from './world.js';
 import { ITEMS } from './survival.js';
 import { entityWaterBox, waterAcceleration, inLava } from './fluids.js';
 import { moveInput } from './player-movement.js';
-import { useMinecart } from './structure-simulation.js';
+import { useMinecart, useBoat } from './structure-simulation.js';
 const f = Math.fround;
 export const EMPTY_CART_ITEM = 366, CHEST_CART_ITEM = 450;
 export function createPlayerRider() {
-  return { player: true, x: 0, y: 0, z: 0, yaw: 0, moveForward: 0, fallDistance: 0, vehicle: null,
+  return { player: true, x: 0, y: 0, z: 0, yaw: 0, moveForward: 0, moveStrafing: 0, fallDistance: 0, vehicle: null,
     width: f(PHYSICS.width), height: f(PHYSICS.height), dead: false };
 }
 export function syncRider(state) {
@@ -20,17 +20,19 @@ export function syncRider(state) {
     if (!survival.creative && survival.health > 0 && distance > 3) survival.damage(Math.ceil(f(distance - 3)), 'a fall');
   };
 }
-export function captureVehicleAction({ cartId = null, dismount = false, place = true, sneak = false, heldTool = 0 } = {}) {
+// The system that owns the ridden vehicle: boats and minecarts keep separate id spaces.
+export const vehicleSystem = (state, boat = state.rider?.vehicle?.boat) => (boat ? state.boats : state.minecarts);
+export function captureVehicleAction({ cartId = null, boat = false, dismount = false, place = true, sneak = false, heldTool = 0 } = {}) {
   if ((cartId !== null && !Number.isSafeInteger(cartId)) || !Number.isSafeInteger(heldTool))
     throw new TypeError('Vehicle action requires integer cart and held item IDs');
-  return { version: 1, type: 'player-vehicle', cartId, dismount: !!dismount, place: !!place, sneak: !!sneak, heldTool };
+  return { version: 1, type: 'player-vehicle', cartId, boat: !!boat, dismount: !!dismount, place: !!place, sneak: !!sneak, heldTool };
 }
 export function dispatchVehicleAction(state, action, hooks = {}) {
   const skip = branch => ({ handled: true, skipped: true, branch });
   if (action?.version !== 1 || action.type !== 'player-vehicle' || typeof action.place !== 'boolean' || typeof action.sneak !== 'boolean' || typeof action.dismount !== 'boolean' || !Number.isSafeInteger(action.heldTool)) return skip('invalid-vehicle-action');
   if (state.screen !== undefined && state.screen !== 'playing') return skip('not-playing');
   if (state.survival.health <= 0) return skip('dead-player');
-  const { minecarts, rider } = state;
+  const { rider } = state, minecarts = vehicleSystem(state, action.dismount ? undefined : action.boat);
   if (action.dismount) {
     if (!rider.vehicle) return skip('not-riding');
     minecarts.dismount(state.world, rider);
@@ -40,15 +42,16 @@ export function dispatchVehicleAction(state, action, hooks = {}) {
   }
   if (action.heldTool !== (state.survival.held?.id ?? 0)) return skip('held-item-mismatch');
   if (!Number.isSafeInteger(action.cartId)) return skip('missing-cart');
+  if (!minecarts) return skip('missing-cart');
   const cart = minecarts.carts.find(c => c.id === action.cartId && !c.dead);
   if (!cart) return skip('missing-cart');
-  if (action.place && cart.type === 0) {
+  if (action.place && (cart.boat || cart.type === 0)) {
     syncRider(state);
     const mounted = minecarts.mount(cart, rider, { sneaking: action.sneak });
     if (mounted) { applySeat(state); hooks.markUnsaved?.(); hooks.toast?.('Press Shift to dismount.'); }
-    return { handled: true, branch: mounted ? 'mount-minecart' : 'occupied-or-sneaking-minecart' };
+    return { handled: true, branch: mounted ? (cart.boat ? 'mount-boat' : 'mount-minecart') : 'occupied-or-sneaking-minecart' };
   }
-  const result = useMinecart(state, { place: action.place, cart }, hooks);
+  const result = action.boat ? useBoat(state, { place: action.place, boat: cart }, hooks) : useMinecart(state, { place: action.place, cart }, hooks);
   if (rider.vehicle?.dead) { minecarts.dismount(state.world, rider); releaseRider(state); }
   hooks.markUnsaved?.();
   return result;
@@ -86,15 +89,16 @@ export function releaseRider(state) {
   state.motion.sneaking=false;
 }
 export function restorePlayerVehicle(state) {
-  for(const c of state.minecarts.carts) if(c.restorePlayer) {
+  for(const sys of [state.minecarts,state.boats]) if(sys) for(const c of sys.carts) if(c.restorePlayer) {
     c.restorePlayer=false;
-    if(!state.rider.vehicle && state.survival.health>0 && c.type===0){syncRider(state);state.minecarts.mount(c,state.rider);applySeat(state);}
+    if(!state.rider.vehicle && state.survival.health>0 && (c.boat || c.type===0)){syncRider(state);sys.mount(c,state.rider);applySeat(state);}
   }
 }
 // Returns null when ordinary movement should run. Dismount is itself captured and dispatched.
 export function moveRidingPlayer(state, controls, hooks = {}) {
-  const {rider,minecarts}=state;
+  const {rider}=state;
   if (!rider.vehicle) return null;
+  const minecarts=vehicleSystem(state);
   syncRider(state);
   Object.assign(state.previous,state.position);
   if (controls.sneak || rider.dead || rider.vehicle.dead) {
@@ -104,6 +108,8 @@ export function moveRidingPlayer(state, controls, hooks = {}) {
   } else {
     const input=moveInput({...controls,usingItem:!!state.eating});
     rider.moveForward=f(input.forward*f(.98));
+    // EntityLivingBase moveStrafing is positive to the left; the browser strafe is positive to the right.
+    rider.moveStrafing=f(-input.strafe*f(.98));
     minecarts.updateRiderPosition(rider.vehicle);
     applySeat(state);
   }
@@ -112,11 +118,11 @@ export function moveRidingPlayer(state, controls, hooks = {}) {
   return {inWater:waterAcceleration(state.world,entityWaterBox(bb),false).wet,inLavaNow:inLava(state.world,bb),sneakOnGround:true,oldPosition:{x:p.x,y:p.y,z:p.z}};
 }
 export function finishVehicleTick(state) {
-  const {rider,minecarts}=state;
+  const {rider}=state, minecarts=vehicleSystem(state);
   if(!rider.vehicle)return;
   if(rider.vehicle.dead || state.survival.health<=0){minecarts.dismount(state.world,rider);releaseRider(state);}
   else {minecarts.updateRiderPosition(rider.vehicle);applySeat(state);}
 }
 export function detachPlayerVehicle(state) {
-  if(state.rider.vehicle){state.minecarts.dismount(state.world,state.rider);releaseRider(state);}
+  if(state.rider.vehicle){vehicleSystem(state).dismount(state.world,state.rider);releaseRider(state);}
 }

@@ -4,7 +4,7 @@
 const RUNTIME_FIELDS = [
   "position", "drops", "entities", "farms", "experience", "xpOrbs", "falling",
   "weather", "worldRandom", "projectiles", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "inhabited",
-  "spawners", "pistons", "minecarts", "populatedColumns",
+  "spawners", "pistons", "boats", "minecarts", "populatedColumns",
 ];
 
 const int = Number.isInteger, finite = Number.isFinite;
@@ -26,6 +26,18 @@ const SANITIZE = {
       x: t.x, y: t.y, z: t.z, block: t.block, meta: t.meta, facing: t.facing, progress: Math.max(0, Math.min(1, t.progress)),
       ...(finite(t.lastProgress) ? { lastProgress: Math.max(0, Math.min(1, t.lastProgress)) } : {}),
       extending: t.extending === true, renderHead: t.renderHead === true,
+    }))
+    : undefined,
+  // Boats (boats.js toJSON): position, motion, rotation, fall distance, fire, ground flag and the mounted player.
+  boats: (v) => Array.isArray(v)
+    ? v.filter((c) => c && typeof c === "object" && [c.x, c.y, c.z].every(finite)).slice(0, 1024).map((c) => ({
+      x: c.x, y: c.y, z: c.z,
+      ...(Array.isArray(c.motion) && c.motion.length === 3 && c.motion.every(finite) ? { motion: [...c.motion] } : {}),
+      ...(Array.isArray(c.rotation) && c.rotation.length === 2 && c.rotation.every(finite) ? { rotation: [...c.rotation] } : {}),
+      ...(finite(c.fallDistance) ? { fallDistance: c.fallDistance } : {}),
+      ...(int(c.fire) ? { fire: c.fire } : {}),
+      onGround: c.onGround === true,
+      ...(c.rider === true ? { rider: true } : {}),
     }))
     : undefined,
   spawners: (v) => Array.isArray(v)
