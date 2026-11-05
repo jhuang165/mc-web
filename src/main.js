@@ -2962,7 +2962,7 @@ function animate(now) {
   // TileEntityMobSpawnerRenderer: the spinning display mob of each spawner within 64 blocks.
   const shown = spawners?.size && screen !== "home" ? spawners.values().filter((sp) => (sp.x + 0.5 - position.x) ** 2 + (sp.y + 0.5 - position.y) ** 2 + (sp.z + 0.5 - position.z) ** 2 < 4096).map((sp) => spawnerDisplayEntity(sp, partial)).filter(Boolean) : [];
   if (mobs) horseGearRenderer?.update(screen === "home" ? [] : mobs.entities, { holder: { x: position.x, y: position.y, z: position.z }, camera: position, looked: aimedEntity, sneaking: !!motion.sneaking, knots: mobs.leashKnots() });
-  if (mobs) mobRenderer.update([...(world.streaming ? mobs.entities.filter(e=>world.isLoaded(e.x,e.z)) : mobs.entities), ...shown],dt,partial);
+  if (mobs) mobRenderer.update([...(world.streaming ? mobs.entities.filter(e=>world.isLoaded(e.x,e.z)) : mobs.entities), ...shown],dt,partial,180 - yaw * 180 / Math.PI);
   minecartRenderer?.update(screen === "home" || !minecarts ? [] : minecarts.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);
   boatRenderer?.update(screen === "home" ? [] : boats.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);
   hangingRenderer?.update(screen === "home" ? [] : hanging.entities.filter(e => !world.streaming || world.isLoaded(e.x, e.z)));

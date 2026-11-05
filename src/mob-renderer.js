@@ -1,3 +1,4 @@
+import { EntityFireRenderer } from "./entity-fire-renderer.js";
 import * as THREE from "three";
 import { skinBox, pixelTexture } from "./first-person.js";
 import { limbAngles } from "./animation.js";
@@ -420,7 +421,8 @@ export class MobRenderer {
     return this.createQuadruped(e.type);
   }
   // `partial` is the fraction of the current tick elapsed (mobPose interpolates).
-  update(entities,dt=0,partial=1) {
+  // `fireViewYaw` is RenderManager.playerViewY in degrees, which turns every mob's fire layers.
+  update(entities,dt=0,partial=1,fireViewYaw=180) {
     const active = new Set(entities.map((e) => e.id));
     for (const [id, rig] of this.rigs)
       if (!active.has(id)) {
@@ -431,6 +433,7 @@ export class MobRenderer {
         for (const m of rig.materials) m.dispose();
         rig.eyes?.dispose();
         rig.armor?.dispose();
+        rig.fire?.dispose();
         this.rigs.delete(id);
       }
     for (const e of entities) {
@@ -519,8 +522,7 @@ export class MobRenderer {
         } else l.rotation.x = angles[i];
       });
       // Entity.getBrightnessForRender samples 0.66 of the way up the body.
-      // RendererLivingEntity overlays (brightness, 0, 0, 0.4) while hurt or
-      // dying; the burning tint stands in for the fire overlay, which is not drawn.
+      // RendererLivingEntity overlays (brightness, 0, 0, 0.4) while hurt or dying.
       const t = ENTITY_TYPES[e.type], h = (t?.height ?? 1.8) * mobScale(e),
         // A display mob takes the spawner block's lightmap (TileEntityRendererDispatcher).
         packed = e.type === "magma_cube" ? 15728880 : e.lightPos ? this.view.brightness(e.lightPos.x, e.lightPos.y, e.lightPos.z) : this.view.brightness(e.x, e.y + h * 0.66, e.z), // yf.c: always fully lit
@@ -545,9 +547,17 @@ export class MobRenderer {
             o.set((red * b + white) / a, white / a, white / a, a);
           } else o.set(b, 0, 0, 0.4);
         } else if (white > 0) o.set(1, 1, 1, white);
-        else if (e.burn) o.set(b, b * 0.5, 0, 0.2);
         else o.set(0, 0, 0, 0);
       }
+      // Render.doRenderShadowAndFire: canRenderOnFire (isBurning; fire-immune mobs keep e.burn at 0) draws
+      // renderEntityOnFire at the entity's feet, sized by its own width and height, even when invisible.
+      const burning = e.burn > 0 && !e.displayMatrix;
+      if (burning) {
+        // mobScale carries the slime size and a child's half-size box (EntityAgeable.setScale, EntityZombie.setChildSize).
+        const w = (t?.width ?? 0.6) * mobScale(e), key = w + "x" + h;
+        if (r.fireKey !== key) { r.fire?.dispose(); r.fire = new EntityFireRenderer(this.scene, w, h, 0); r.fireKey = key; }
+      }
+      r.fire?.update(pose, burning, fireViewYaw);
     }
   }
   clear() {

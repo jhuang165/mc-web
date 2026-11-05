@@ -44,4 +44,10 @@ export class EntityFireRenderer {
       m.uniforms.frames.value=frames; m.uniforms.frame.value=Math.floor(ticks)%frames;
     }
   }
+  // The fire textures come from pixelTexture's shared cache, so only the layer geometry and materials go.
+  dispose() {
+    this.root.removeFromParent();
+    this.root.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+    for (const m of this.materials) m.dispose();
+  }
 }

@@ -151,3 +151,21 @@ test("the third-person player's ModelBiped table matches ModelBiped(0)", async (
     assert.equal(!!ours.mirror, p.mirror, name);
   }
 });
+
+// Render.doRenderShadowAndFire: a burning mob gets renderEntityOnFire layers sized by its box (a child's is half),
+// facing playerViewY; the old orange tint is gone, and the layers leave with the mob.
+test("burning mobs draw the fire layers instead of a tint", () => {
+  const view = renderer(), zombie = { ...entity("zombie"), burn: 1 }, cow = { ...entity("cow"), id: 99, growingAge: -100, burn: 1 };
+  view.update([zombie, cow], 0, 1, 90);
+  const z = view.rigs.get(zombie.id), c = view.rigs.get(cow.id);
+  assert.equal(z.fire.root.visible, true);
+  assert.equal(z.fireKey, "0.6x1.8");
+  assert.ok(Math.abs(z.fire.root.rotation.y + Math.PI / 2) < 1e-9);
+  assert.ok(c.fire.root.children.length > 0);
+  assert.equal(c.fireKey, "0.45x0.65");
+  for (const m of z.materials) assert.deepEqual(m.uniforms.overlay.value.toArray(), [0, 0, 0, 0]);
+  zombie.burn = 0;
+  view.update([zombie], 0, 1);
+  assert.equal(z.fire.root.visible, false);
+  assert.equal(c.fire.root.parent, null);
+});
