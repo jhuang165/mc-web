@@ -2,6 +2,15 @@
 
 Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.43.0. Full parity is unfinished.
 
+Post-0.43.0 batch 6 (2026-11-05, claude-lead, unreleased): ten Sonnet tracks merged in main (last merge 2ab74eb, browser fixes 4d502e0).
+- Nether mobs: magma cube, zombie pigman and wither skeleton melee (`magma-pigman.md`); blaze and ghast with small/large fireballs (`blaze-ghast.md`).
+- Generation: Nether and End terrain generators (`nether.md`, `end.md`). They are not reachable yet: portals do nothing and `world.isEnd` is never set.
+- Items and blocks: horse armour, saddle gear and leash (`horse-gear.md`); wither skull, skull block 144 / item 397 (damage = SkullType 0-4) and nether star (`wither.md`); beacon block 138 (`beacon.md`); firework rocket and star with particles (`fireworks.md`); filled map 358 (damage = map id) and the clock with live frames (`maps-clock.md`); TNT, furnace, hopper and command block minecarts (`minecart-variants.md`).
+- Sounds: the audio manifest has 455 clips. Merge it additively and keep old entries in order.
+- Tests: 2924 pass after the merges.
+- The browser check found four bugs, now fixed: the page went blank because firework particles read `scene.effectRenderer` before start(); the dispenser used original id 401 instead of 2071; the clock hotbar icon showed the 16x1024 strip; /give 397 and 358 dropped the damage.
+- Gaps: dimension travel, Nether fortress, wither boss entity (`spawnWither` not supplied), ender dragon, wearable heads, first-person and item-frame maps, `/summon` for fireworks, command block cart behaviour, leash path-following, live pigman portal spawning.
+
 Post-0.43.0 batch 5 (2026-11-05, claude-lead, unreleased): five Sonnet tracks merged in main (merge head f6be3b3, egg /give fix 5b9280a, cat/horse sounds 9837d13).
 - Spawn eggs: item 383 (internal 1950) with all 24 EntityList eggs, resolving mobs through `SUMMONABLE`. Bottle o' Enchanting 384 (1951) and fire charge 385 (1952) are in `spawn-eggs.js` and `spawn-egg-use.js`. SpawnEggProbe.
 - Ocelot: `ocelot.js`, `ocelot-ai.js`, `ocelot-renderer.js` and `ocelot-spawn.js` cover taming with fish, the four cat types, sitting (including on chests), creepers avoiding it and a jungle spawn pass. The shared Sit, Leap and FollowOwner tasks moved out of `wolf-ai.js`. OcelotProbe.
