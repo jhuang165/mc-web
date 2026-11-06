@@ -27,6 +27,7 @@ import { structureDataFiles } from './structure-data.js';
 import { villageDocument } from './village.js';
 import { mapDataFiles } from './maps-nbt.js';
 import { javaProjectileToNbt } from './java-projectiles.js';
+import { GEAR_TYPES, gearFieldsFrom } from './mob-equipment-live.js';
 const tag=(type,value)=>({type,value}), comp=value=>tag(NBT.COMPOUND,new Map(Object.entries(value))), list=(type,items)=>tag(NBT.LIST,{elementType:items.length?type:NBT.END,items});
 const byte=v=>tag(NBT.BYTE,(v<<24)>>24), short=v=>tag(NBT.SHORT,v), int=v=>tag(NBT.INT,v), str=v=>tag(NBT.STRING,v), float=v=>tag(NBT.FLOAT,v), long=v=>tag(NBT.LONG,BigInt(Math.trunc(v)));
 const reverse=new Map();
@@ -74,6 +75,13 @@ function payload(state,ox,oz,report,blockAt) {
   n.PersistenceRequired=byte(e.persistent?1:0);n.Leashed=byte(e.leash?1:0);
   if(e.leash?.knot)n.Leash=comp({X:int(e.leash.knot.x+ox),Y:int(e.leash.knot.y),Z:int(e.leash.knot.z+oz)});
   else if(e.leash)n.Leash=comp({UUIDMost:long(0),UUIDLeast:long(0)});
+  // EntityLiving.writeEntityToNBT: CanPickUpLoot, Equipment (five compounds: held, boots, leggings, chestplate, helmet; an empty slot is an empty compound) and
+  // DropChances (five floats) for every mob, then Entity.writeToNBT's PortalCooldown (the live Entity.timeUntilPortal). mob-gear-nbt-reference.json.
+  {const g=GEAR_TYPES.has(e.type)?gearFieldsFrom(e):null,witchHeld=e.type==='witch'&&e.held?stackNbt(e.held,undefined,report):null;
+   n.CanPickUpLoot=byte(g?.canPickUpLoot?1:0);
+   n.Equipment=list(NBT.COMPOUND,[0,1,2,3,4].map(i=>(g?stackNbt(g.equipment[i],undefined,report,true):i===0?witchHeld:null)??new Map()));
+   n.DropChances=list(NBT.FLOAT,[0,1,2,3,4].map(i=>Math.fround(g?.dropChances?.[i]??0.085)));
+   n.PortalCooldown=int(Number.isInteger(e.portalCooldown)&&e.portalCooldown>0?e.portalCooldown:0);}
   if(e.type==='skeleton'||e.type==='wither_skeleton'){n.SkeletonType=byte(e.type==='wither_skeleton'?1:0);delete n.Age;delete n.InLove;} // EntitySkeleton.writeEntityToNBT always writes SkeletonType
   // EntityCreeper.writeEntityToNBT: powered (only when charged), Fuse, ExplosionRadius and ignited (mob-nbt-reference.json: 30 and 3 by default).
   if(e.type==='creeper'){delete n.Age;delete n.InLove;if(e.powered)n.powered=byte(1);n.Fuse=short(Number.isInteger(e.maxFuse)?e.maxFuse:30);n.ExplosionRadius=byte(Number.isInteger(e.explosionRadius)?e.explosionRadius:3);n.ignited=byte(e.ignited?1:0);}
@@ -101,7 +109,7 @@ function payload(state,ox,oz,report,blockAt) {
   // EntitySlime.writeEntityToNBT: Size (size - 1); a slime has no Age or InLove.
   if(e.type==='slime'||e.type==='magma_cube'){n.Size=int((e.size??1)-1);delete n.Age;delete n.InLove;}
   // EntityPigZombie.writeEntityToNBT: the short Anger (1.7.10 has no HurtBy tag), then EntityLiving's Equipment (slot 0 is the held sword) and DropChances (0.085 each); no Age or InLove.
-  if(e.type==='pigman'){delete n.Age;delete n.InLove;n.Anger=short(e.angerLevel??0);const sword=e.held?stackNbt(e.held,undefined,report):null;n.Equipment=list(NBT.COMPOUND,[0,1,2,3,4].map(i=>i===0&&sword?sword:new Map()));n.DropChances=list(NBT.FLOAT,[0,1,2,3,4].map(()=>Math.fround(0.085)));n.CanPickUpLoot=byte(0);n.CanBreakDoors=byte(0);n.IsBaby=byte(0);n.IsVillager=byte(0);n.ConversionTime=int(-1);}
+  if(e.type==='pigman'){delete n.Age;delete n.InLove;n.Anger=short(e.angerLevel??0);n.CanBreakDoors=byte(0);n.IsBaby=byte(0);n.IsVillager=byte(0);n.ConversionTime=int(-1);}
   // EntityEnderman.writeEntityToNBT: carried and carriedData as shorts (original block id and metadata; Age and InLove do not apply).
   if(e.type==='enderman'){delete n.Age;delete n.InLove;n.carried=short(e.carried??0);n.carriedData=short(e.carriedData??0);}
   // EntityBat.writeEntityToNBT: BatFlags (bit 1 = hanging); neither a squid nor a bat is an EntityAgeable.

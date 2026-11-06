@@ -396,6 +396,9 @@ export async function importJavaRegionArea(regions, options = {}) {
         else tally(entityLost, !inArea ? `${id} (outside area)` : made?.lost ? `${id} (${made.lost})` : `${id} (over projectile limit)`);
         continue;
       }
+      // EntityLeashKnot (id LeashKnot) refuses to save in 1.7.10 (su.d returns false; mob-gear-nbt-reference.json), so a native chunk never holds
+      // one: a knot is rebuilt from its mobs' Leash X/Y/Z (leashRestore). A foreign save's knot entity is counted, not lost.
+      if (id === 'LeashKnot') { report.entities.leashKnots = (report.entities.leashKnots ?? 0) + 1; continue; }
       if (id !== 'Item' || !pos || !pos.every(Number.isFinite)) { tally(entityLost, id); continue; }
       const x = pos[0] + shiftX, z = pos[2] + shiftZ;
       const insideArea = x >= destination.chunkX * 16 && x < (destination.chunkX + area.width) * 16 && z >= destination.chunkZ * 16 && z < (destination.chunkZ + area.depth) * 16;

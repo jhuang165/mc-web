@@ -9,6 +9,8 @@ import { NBT } from './nbt.js';
 import { endermanFieldsFrom } from './enderman.js';
 import { nbtGet } from './nbt-get.js';
 import { slimeSizeFromNbt } from './slime.js';
+import { GEAR_TYPES, defaultGear } from './mob-equipment-live.js';
+import { DEFAULT_DROP_CHANCE } from './mob-equipment.js';
 
 export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', LavaSlime: 'magma_cube', PigZombie: 'pigman', Ozelot: 'ocelot', EntityHorse: 'horse', Blaze: 'blaze', Ghast: 'ghast', WitherBoss: 'wither', Skeleton: 'skeleton', EnderDragon: 'ender_dragon', EnderCrystal: 'ender_crystal' });
 // The mobs whose chunk NBT goes through the /summon reader (summonedMobRecord; EntityList.createEntityFromNBT is the same call for
@@ -76,6 +78,32 @@ export function gearNbtFields(tag, shiftX = 0, shiftZ = 0) {
   }
   return out;
 }
+// EntityLiving.readEntityFromNBT (sw.a, mob-gear-nbt-reference.json): CanPickUpLoot (always read, absent = false), Equipment (a list of
+// any element type replaces all five slots, a compound that is missing or empty is an empty slot: held, boots, leggings, chestplate,
+// helmet) and DropChances (a float list; each entry replaces a chance, the rest stay 0.085). The mob types the browser equips
+// (zombie, zombie villager, pigman, skeleton, wither skeleton) take the native stacks `equipment` / `dropChances` / `canPickUpLoot`
+// (mob-equipment.js); a tag with none of the three keys leaves the type's default gear. `convertItem` validates and tallies each stack.
+export const MOB_GEAR_NBT_KEYS = ['Equipment', 'DropChances', 'CanPickUpLoot'];
+export function mobGearNbtFields(tag, type, convertItem = () => null) {
+  if (!GEAR_TYPES.has(type) || !MOB_GEAR_NBT_KEYS.some((k) => tag.has(k))) return {};
+  const gear = defaultGear(type);
+  const equipment = tagValue(tag, 'Equipment', NBT.LIST);
+  if (equipment) {
+    gear.equipment = [0, 1, 2, 3, 4].map((i) => {
+      const c = equipment.elementType === NBT.COMPOUND ? equipment.items[i] : undefined, id = c && tagValue(c, 'id', NBT.SHORT);
+      const live = id ? convertItem(c) : null;
+      if (!live) return null;
+      return { id, count: Math.max(1, Math.min(64, tagValue(c, 'Count', NBT.BYTE, 1))), damage: Math.max(0, tagValue(c, 'Damage', NBT.SHORT, 0)), ...(live.enchantments?.length ? { enchantments: live.enchantments.map((e) => ({ id: e.id, lvl: e.lvl })) } : {}) };
+    });
+  }
+  const chances = tagValue(tag, 'DropChances', NBT.LIST);
+  if (chances?.elementType === NBT.FLOAT) chances.items.slice(0, 5).forEach((v, i) => { gear.dropChances[i] = Math.fround(v); });
+  gear.dropChances = gear.dropChances.map((v) => v ?? DEFAULT_DROP_CHANCE);
+  gear.canPickUpLoot = tagValue(tag, 'CanPickUpLoot', NBT.BYTE, 0) !== 0;
+  return gear;
+}
+// Entity.readFromNBT: PortalCooldown (an int, not clamped by 1.7.10; entities.js keeps 1 to 300).
+export const portalCooldownFields = (tag) => { const t = tagValue(tag, 'PortalCooldown', NBT.INT, 0); return t > 0 ? { portalCooldown: t } : {}; };
 // EntityLivingBase.readEntityFromNBT reads Attributes before HealF, so setHealth clamps to the saved generic.maxHealth.
 function savedMaxHealth(entity) {
   const list = tagValue(entity, 'Attributes', NBT.LIST);
@@ -89,7 +117,7 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
     if (!parsed) return null;
     const max = savedMaxHealth(entity), record = { ...parsed.record, x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ, fire: Math.max(-1, tagValue(entity, 'Fire', NBT.SHORT, -1)) };
     if (Number.isFinite(max) && max > 0) record.health = Math.min(tagValue(entity, 'HealF', NBT.FLOAT, tagValue(entity, 'Health', NBT.SHORT, max)), max);
-    return Object.assign(record, gearNbtFields(entity, shiftX, shiftZ));
+    return Object.assign(record, gearNbtFields(entity, shiftX, shiftZ), portalCooldownFields(entity));
   }
   const nativeType = JAVA_MOBS[tagValue(entity, 'id', NBT.STRING, '')];
   const type = nativeType === 'skeleton' && tagValue(entity, 'SkeletonType', NBT.BYTE, 0) === 1 ? 'wither_skeleton' : nativeType;
@@ -156,7 +184,7 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
     const conversion = tagValue(entity, 'ConversionTime', NBT.INT, -1);
     if (conversion > -1) record.conversionTime = conversion;
   }
-  Object.assign(record, gearNbtFields(entity, shiftX, shiftZ));
+  Object.assign(record, gearNbtFields(entity, shiftX, shiftZ), mobGearNbtFields(entity, type, convertItem), portalCooldownFields(entity));
   return record;
 }
 
@@ -203,7 +231,6 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
     const equipment = tagValue(tag, 'Equipment', NBT.LIST);
     if (equipment?.elementType === NBT.COMPOUND && equipment.items[0]) record.held = convertItem(equipment.items[0]) ?? null;
     kept.add('Anger');
-    if (equipment?.items.slice(1).some(e => e.size)) kept.delete('Equipment'); else kept.add('Equipment'); // other slots have no live implementation
   }
   if (type === 'slime' || type === 'magma_cube') { record.size = slimeSizeFromNbt(tagValue(tag, 'Size', NBT.INT, 0)); kept.add('Size'); }
   // EntityEnderman.readEntityFromNBT: carried / carriedData (shorts; the original block id and metadata).
@@ -223,6 +250,10 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
     // Other equipment slots have no live implementation.
     if (equipment?.items.slice(1).some(e => e.size)) kept.delete('Equipment'); else kept.add('Equipment');
   }
+  // Equipment / DropChances / CanPickUpLoot for the equipped mob types (the other types' slots have no live implementation: the witch's
+  // potion is slot 0 above, any other stack is reported ignored) and Entity's PortalCooldown.
+  if (GEAR_TYPES.has(type)) { Object.assign(record, mobGearNbtFields(tag, type, convertItem)); for (const k of MOB_GEAR_NBT_KEYS) kept.add(k); }
+  Object.assign(record, portalCooldownFields(tag)); kept.add('PortalCooldown');
   record.health = Math.max(0, Math.min(type === 'wolf' && record.owner ? 20 : type === 'horse' ? record.horse.maxHealth : health, record.health));
   Object.assign(record, gearNbtFields(tag));
   for (const k of GEAR_NBT_KEYS) kept.add(k);

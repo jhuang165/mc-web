@@ -37,7 +37,7 @@ Zombies, zombie pigmen, skeletons and wither skeletons spawn with 1.7.10's equip
 
 ## Gaps
 
-- **Java save interchange.** `region-export.js`, `region-import.js` and `java-mobs.js` do not yet write or read `Equipment`, `DropChances` or `CanPickUpLoot`; a mob exported to Anvil and imported again loses its gear and gets the constructor gear. These files belong to other work and were left alone.
+- **Java save interchange.** Closed in `mob-gear-nbt.md`: `region-export.js`, `region-import.js` and `java-mobs.js` write and read `Equipment`, `DropChances`, `CanPickUpLoot` and `PersistenceRequired` for the zombie, zombie villager, pigman, skeleton and wither skeleton (MobGearNbtProbe).
 - **Knockback from a mob's weapon on the player.** The port knocks no player back from mob melee yet, so only Sharpness and Fire Aspect (and all of it against other mobs) apply to the player. Knockback applies when a mob hits a mob.
 - **Mob-versus-mob Sharpness types.** `hitMob` uses the undefined creature type, so Smite and Bane do not add against undead or arthropods.
 - **Wither skeleton type roll.** `dimension-spawning.js` picks wither or ordinary skeleton on its own random before the entity exists. `skeletonSpawnRolls` takes that type and still draws and drops the original's `nextInt(5)` in the Nether, so the entity stream matches but the chosen type does not come from it.

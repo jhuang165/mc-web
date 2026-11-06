@@ -26,7 +26,7 @@ The port: `leashStep` (pure rules), `leashTick` (sets the home with `setHomeArea
 
 - A mob with a player holder writes `Leash: {UUIDMost, UUIDLeast}`; one held by a knot writes `Leash: {X, Y, Z}` of the knot's block. The knot itself writes nothing.
 - On the first leashed tick after a load (`sw.bP`): a player holder is matched by UUID within a box grown by 10 blocks, otherwise the lead drops (`playerFar`, `playerWrongUuid`, `noLeashTag`); a knot holder is found at X/Y/Z or created, even with no fence (it then dies within 101 ticks and the lead drops: `knotNoFence`). The port does this in `leashRestore`.
-- `serialize()` already keeps `leash` through `gearFieldsFrom`. Interchange gap: `region-export.js` / `region-import.js` were not touched here, so the vanilla `Leash` compound is not checked end to end through them.
+- `serialize()` already keeps `leash` through `gearFieldsFrom`. Region interchange now writes and reads the `Leash` compound (see `mob-gear-nbt.md`); the knot is never written as an entity because `su.d` refuses to save.
 
 ## Gaps
 
