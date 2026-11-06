@@ -165,7 +165,8 @@ export class DimensionLive {
       if (!list?.length) continue;
       let gone = null;
       for (const e of list) {
-        if (kind === "mob" && (e.rider || e.vehicle)) { this.portals.step(e, kind, { ...at, riding: true }); continue; }
+        // BlockPortal and BlockEndPortal collide only with an entity that has no rider and no vehicle (mob jockeys too).
+        if (kind === "mob" && (e.rider || e.vehicle || e.ridingEntity || e.riddenBy)) { this.portals.step(e, kind, { ...at, riding: true }); continue; }
         if (!entityActive(world, e)) continue;
         const r = this.portals.step(e, kind, at);
         if (!r) continue;

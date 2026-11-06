@@ -1259,7 +1259,9 @@ export class EntityWorld {
   // (no jump boost), through attackEntityFrom without an attacker, so no knockback.
   fall(e, distance) {
     // Entity.fall: the rider falls with its mount (EntityPig calls super.fall; EntityHorse has its own fall).
-    if (e.type === "pig") e.rider?.fall?.(distance);
+    // The player's fall plays through the mount's event queue (EntityLivingBase.fall's sounds); a mob rider (the skeleton on a spider) falls as a mob.
+    if (e.type === "pig") e.rider?.fall?.(distance, { sound: (s) => this.events.push({ sound: s.name, volume: s.volume, pitch: s.pitch, position: { x: e.x, y: e.y, z: e.z } }) });
+    if (e.riddenBy && e.riddenBy !== e && this.entities.includes(e.riddenBy)) this.fall(e.riddenBy, distance);
     // Jump Boost (Potion.jump, id 8) takes amplifier + 1 off the distance; the fall sound plays first, then the damage
     // and the landing block's step sound (EntityLivingBase.fall; EntityMob says "hostile", the rest "neutral").
     const jump = e.effects?.find?.((x) => x.id === JUMP_BOOST), cell = [Math.floor(e.x), Math.floor(e.y - 0.20000000298023224), Math.floor(e.z)],
@@ -1301,6 +1303,9 @@ export class EntityWorld {
   // attacker, so no knockback or revenge. The air is saved with the mob.
   breathe(e, t) {
     if (breathe(this.world, e, t.height, entityRandom(e), this.fx) && !e.effects?.some((x) => x.id === 13)) this.hazard(e, 2, "drown");
+    // The same block ends with `if (isRiding() && ridingEntity instanceof EntityLivingBase) mountEntity(null)` (sv.C offset 278): a rider whose
+    // head is in water steps off a living mount (every mob mount here is one), onto the mount's top.
+    if (e.ridingEntity && e.health > 0 && eyeInWater(this.world, e.x, e.y + f(f(t.height) * f(0.85)), e.z)) mountEntity(e, null, (m) => this.size(m)[1]);
   }
   // EntityLiving.onEntityUpdate (sw.C), after the air: rand.nextInt(1000) < livingSoundTime++
   // resets the time to -getTalkInterval (EntityAnimal 120, else 80) and plays the living sound

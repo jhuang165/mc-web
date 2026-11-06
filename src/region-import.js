@@ -231,7 +231,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   const itemLost = new Map(), entityLost = new Map(), entityConverted = new Map();
   const commandBlocks = [], musicTiles = [];
   const signs = [], skulls = [], beacons = [], spawners = [], importedColumns = {};
-  const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = [];
+  const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = []; let chainCount = 0;
   const projectileLists = { projectiles: [], thrownPotions: [], arrows: [], fireballs: [], eyes: [], rockets: [] };
   let edits = 0;
   const write = (x, y, z, block, meta) => {
@@ -373,19 +373,33 @@ export async function importJavaRegionArea(regions, options = {}) {
       } else tally(tileLost, inside ? id : `${id} (outside its chunk)`);
     }
 
-    // Entities: dropped items (EntityItem, Pos/Motion/Age/PickupDelay/Item) and the mobs java-mobs.js reads. Riders count as lost.
+    // Entities: dropped items (EntityItem, Pos/Motion/Age/PickupDelay/Item) and the mobs java-mobs.js reads (a rider and its mount become a linked pair).
     for (const entity of entities) {
       report.entities.total++;
       const id = get(entity, 'id', NBT.STRING, '?'), pos = doubles(entity, 'Pos'), motion = doubles(entity, 'Motion');
-      for (const rider of [get(entity, 'Riding', NBT.COMPOUND)].filter(Boolean)) { report.entities.total++; tally(entityLost, get(rider, 'id', NBT.STRING, '?')); }
-      // JAVA_MOBS and JAVA_SUMMON_MOBS become live mobs (java-mobs.js).
-      if (importedMobType(id) && pos?.every(Number.isFinite)) {
-        const mx = pos[0] + shiftX, mz = pos[2] + shiftZ;
-        const inArea = mx >= destination.chunkX * 16 && mx < (destination.chunkX + area.width) * 16 && mz >= destination.chunkZ * 16 && mz < (destination.chunkZ + area.depth) * 16;
-        const mob = inArea && mobs.length < IMPORT_MOB_LIMIT ? javaMobFromNbt(entity, { shiftX, shiftZ, convertItem }) : null;
-        if (mob) { mobs.push(mob); tally(entityConverted, id); } else tally(entityLost, !inArea ? `${id} (outside area)` : `${id} (over mob limit)`);
+      // An entity with a "Riding" compound is the rider, and the compound is its mount (Entity.writeToNBT; AnvilChunkLoader.loadEntities creates each
+      // mount of the chain, adds it and calls rider.mountEntity(mount)). Mobs of the chain become linked records (`riding` is the mount's id, which
+      // linkRiders turns back into the pair); a mount that is not an importable mob is counted as lost and its rider stays unmounted.
+      const chain = [entity];
+      for (let rider = get(entity, 'Riding', NBT.COMPOUND); rider && chain.length < 16; rider = get(rider, 'Riding', NBT.COMPOUND)) { chain.push(rider); report.entities.total++; }
+      const inAreaAt = (p) => { const mx = p[0] + shiftX, mz = p[2] + shiftZ; return mx >= destination.chunkX * 16 && mx < (destination.chunkX + area.width) * 16 && mz >= destination.chunkZ * 16 && mz < (destination.chunkZ + area.depth) * 16; };
+      const importMob = (member, mid) => {
+        const mpos = doubles(member, 'Pos'), mtype = get(member, 'id', NBT.STRING, '?');
+        if (!importedMobType(mtype) || !mpos?.every(Number.isFinite)) { if (mid) tally(entityLost, mtype); return null; }
+        const inArea = inAreaAt(mpos), mob = inArea && mobs.length < IMPORT_MOB_LIMIT ? javaMobFromNbt(member, { shiftX, shiftZ, convertItem }) : null;
+        if (mob) { if (mid) mob.id = mid; mobs.push(mob); tally(entityConverted, mtype); } else tally(entityLost, !inArea ? `${mtype} (outside area)` : `${mtype} (over mob limit)`);
+        return mob;
+      };
+      if (chain.length > 1 && importedMobType(id) && pos?.every(Number.isFinite)) {
+        const stamp = ++chainCount * 100;
+        const made = chain.map((member, k) => importMob(member, `mob-${1000000 + stamp + k}`));
+        made.forEach((mob, k) => { if (mob && made[k + 1]) mob.riding = made[k + 1].id; });
         continue;
       }
+      for (const lost of chain.slice(1)) tally(entityLost, get(lost, 'id', NBT.STRING, '?'));
+      // JAVA_MOBS and JAVA_SUMMON_MOBS become live mobs (java-mobs.js).
+      if (importMob(entity)) continue;
+      if (importedMobType(id) && pos?.every(Number.isFinite)) continue;
       // Snowball, ThrownEnderpearl, ThrownPotion, ThrownExpBottle, Arrow, Fireball, SmallFireball, WitherSkull, EyeOfEnderSignal and FireworksRocketEntity
       // become the browser's saved in-flight projectiles (java-projectiles.js).
       if (JAVA_PROJECTILES[id] && pos?.every(Number.isFinite)) {

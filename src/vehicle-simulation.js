@@ -4,6 +4,7 @@ import { PHYSICS, SIZE } from './world.js';
 import { ITEMS } from './survival.js';
 import { entityWaterBox, waterAcceleration, inLava } from './fluids.js';
 import { moveInput } from './player-movement.js';
+import { landingEffects, JUMP_BOOST } from './damage-fx.js';
 import { useMinecart, useBoat } from './structure-simulation.js';
 const f = Math.fround;
 export const EMPTY_CART_ITEM = 366, CHEST_CART_ITEM = 450;
@@ -16,8 +17,14 @@ export function syncRider(state) {
   Object.assign(rider, position);
   rider.yaw = f(180 - state.yaw * 180 / Math.PI);
   rider.dead = survival.health <= 0;
-  rider.fall = distance => {
-    if (!survival.creative && survival.health > 0 && distance > 3) survival.damage(Math.ceil(f(distance - 3)), 'a fall');
+  // EntityLivingBase.fall for the player a mount passes its fall to (Entity.fall): ceil(distance - 3 - Jump Boost level), the fall sound
+  // when the caller supplies a sound hook, the landing block's step sound, then the damage (damage-fx.js landingEffects).
+  rider.fall = (distance, { sound = null, world = state.world } = {}) => {
+    if (survival.creative || !(survival.health > 0) || !(distance > 0)) return;
+    const jump = survival.effects?.get?.(JUMP_BOOST), by = Math.floor(state.position.y - 0.20000000298023224),
+      out = landingEffects(distance, { kind: 'player', amplifier: jump ? jump.amplifier : -1, blockUnder: world?.get?.(Math.floor(state.position.x), by, Math.floor(state.position.z)) ?? 0 });
+    if (sound) for (const s of out.sounds) sound(s);
+    if (out.points > 0) survival.damage(out.points, 'a fall');
   };
 }
 // The system that owns the ridden vehicle: boats and minecarts keep separate id spaces.

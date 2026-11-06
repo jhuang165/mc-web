@@ -222,3 +222,20 @@ test("the Teleporter is shared per target dimension so a second mob reuses the f
   assert.ok(frames > 0 && frames <= 6, `only one portal was built (${frames} portal cells)`);
   void JavaRandom;
 });
+
+test("a spider jockey in an End portal or a Nether portal stays put: neither mob travels and no link dangles", async () => {
+  for (const [world, key] of [[{ dimension: 0, get: (x, y, z) => (x === 64 && z === 64 && y >= 4 && y <= 7 ? GAME_IDS.endPortal : 0) }, 1], [portalWorld(0), -1]]) {
+    const root = makeRoot(), { live } = makeLive(root);
+    const mobs = new EntityWorld(air, [
+      { id: "mob-1", type: "spider", x: 64.5, y: 5, z: 64.5, health: 16 },
+      { id: "mob-2", type: "skeleton", x: 64.5, y: 5.2, z: 64.5, health: 20, riding: "mob-1" },
+    ], () => 0.5);
+    for (let i = 0; i < 4; i++) live.tickEntities(world, { mobs });
+    await live.settle();
+    assert.equal(mobs.entities.length, 2);
+    assert.equal(root.portalArrivals?.[key], undefined);
+    const [spider, skeleton] = mobs.entities;
+    assert.equal(skeleton.ridingEntity, spider);
+    assert.equal(spider.riddenBy, skeleton);
+  }
+});

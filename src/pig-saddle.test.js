@@ -231,3 +231,25 @@ test("GuiIngame mount hearts: (int)(max + 0.5) / 2 hearts in rows of 10, full un
   assert.equal(mountHeartLayout({ health: 100, maxHealth: 100 }).length, 30); // capped at 30
   assert.equal(mountHeartLayout({ health: 5, maxHealth: 15.4 }).length, 7); // (int)(15.9) / 2
 });
+
+test("live: the rider's fall takes Jump Boost off, plays the fall and step sounds, and damages (EntityLivingBase.fall)", async () => {
+  const { syncRider } = await import("./vehicle-simulation.js");
+  const { JUMP_BOOST } = await import("./damage-fx.js");
+  const hurt = [], mk = (effects = new Map()) => ({ health: 20, creative: false, effects, damage: (n, why) => hurt.push([n, why]) });
+  const run = (survival, distance) => {
+    const w = pigWorld({ saddled: true }), pig = w.entities[0], r = rider();
+    syncRider({ rider: r, position: { x: 0.5, y: 1, z: 0.5 }, yaw: 0, survival, world: { get: () => 1 } });
+    w.horseSeats.mount(pig, r);
+    w.events.length = 0;
+    w.fall(pig, distance);
+    return w.events.map((e) => e.sound);
+  };
+  const sounds = run(mk(), 8);
+  assert.deepEqual(hurt.shift(), [5, "a fall"]);
+  assert.equal(sounds[0], "game.player.hurt.fall.big");
+  assert.ok(sounds.length >= 2, "the landing block's step sound follows");
+  run(mk(new Map([[JUMP_BOOST, { amplifier: 1 }]])), 8); // ceil(8 - 3 - 2)
+  assert.deepEqual(hurt.shift(), [3, "a fall"]);
+  assert.deepEqual(run(mk(), 3), []);
+  assert.equal(hurt.length, 0, "3 blocks hurt nobody");
+});

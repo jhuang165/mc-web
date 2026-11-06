@@ -25,7 +25,7 @@ Evidence: `tools/probes/PigSaddleProbe.java` runs the unchanged original classes
 
 ## Gaps
 
-- The flyPig achievement (a fall over 5 blocks while riding) is not tracked; there are no achievements.
-- Rider fall damage uses the existing cart rider hook (`ceil(distance - 3)`), without the player's Jump Boost or the fall sounds.
+- flyPig: `EntityPig.fall` (`wo.b(F)`, bytecode-read) calls `super.fall`, then triggers `AchievementList.flyPig` when `f > 5.0F` and the rider is an `EntityPlayer`; this is `pigFall` in `achievements-live.js` through `mobs.onLand`.
+- Rider fall (`Entity.fall` then `EntityLivingBase.fall`, `sv.b(F)`, bytecode-read): `ceil(f - 3 - (Jump Boost amplifier + 1))`, the fall sound first (`game.player.hurt.fall.big` above 4 points, else small), then the damage, then the landing block's step sound at 0.5 volume and 0.75 pitch. A pig's rider now does this (`vehicle-simulation.js` `syncRider`, sounds through the pig's event queue). Carts and boats pass no sound hook, so their riders still fall silently.
 - Lightning turns a saddled pig into a pigman through the existing `pigStrike` (nether-melee-live.js); the pig is removed without drops, as setDead does, and the rider is dismounted because the vehicle is gone. Not probed for the saddle case.
 - The saddle layer and the mount hearts were checked in the browser once; they are not pixel compared with the original client.

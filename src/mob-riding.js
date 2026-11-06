@@ -61,7 +61,7 @@ export function mountEntity(rider, mount, heightOf) {
   return true;
 }
 
-// Entity.updateRidden's start: a mount that is dead frees the rider where it sits (sa.ab clears ridingEntity and returns).
+// World.updateEntities (ahb.h) and Entity.updateRidden's start: a mount that is dead frees the rider where it sits (sa.ab clears ridingEntity and returns).
 // The mount of this world's list is dead once it left the list; riders also forget a mount that no longer carries them.
 export function releaseDead(entities) {
   for (const e of entities) {
@@ -70,7 +70,12 @@ export function releaseDead(entities) {
       hide(e, "ridingEntity", null);
       if (m.riddenBy === e) hide(m, "riddenBy", null);
     }
-    if (e.riddenBy && e.riddenBy.ridingEntity !== e) hide(e, "riddenBy", null);
+    // World.updateEntityWithOptionalForce (ahb.a, after the mount's update): a rider that is dead, or no longer carried, is let go on both sides.
+    const r = e.riddenBy;
+    if (r && (r.ridingEntity !== e || !entities.includes(r) || (r.health <= 0 && r.death >= 20))) {
+      if (r.ridingEntity === e) hide(r, "ridingEntity", null);
+      hide(e, "riddenBy", null);
+    }
   }
 }
 
