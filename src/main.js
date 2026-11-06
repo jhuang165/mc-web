@@ -200,6 +200,10 @@ import { Torches } from "./torches.js";
 import { RedstoneBlocks, isRedstoneBlock, itemOfBlock as redstoneItemOf } from "./redstone-blocks.js";
 import { createRedstoneRuntime } from "./redstone-runtime.js";
 import { createRecordHud } from "./jukebox.js";
+import { discName } from "./note-jukebox-content.js";
+import { MusicTicker, ambientMusicType, recordSound } from "./music.js";
+import { MoodSound, moodLight } from "./cave-ambience.js";
+import { status as bossStatus } from "./boss-bar.js";
 import { Doors, WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, blockItemId } from "./doors-panes.js";
 import { MinecartRenderer } from "./minecart-renderer.js";
 import { BoatRenderer } from "./boat-renderer.js";
@@ -917,6 +921,7 @@ function applyWeatherEdit(w, x, y, z, block, meta) {
 async function openWorld(record) {
   if(openingWorld)return;
   openingWorld=true;
+  sounds?.stopStreams(); // Minecraft.loadWorld: SoundHandler.stopSounds (music and records), also between dimensions
   lan.close();
   try {
     if (record.dimension && !record.rootId) record = dims.openRecord(record, await readRuntimeState(record)); // saved in the Nether/End: open that dimension
@@ -952,6 +957,9 @@ async function launch(record, prepared) {
     startPrefetch();
     // Restore World.rand before constructing the block runtimes that share it.
     weather = new Weather().restore(record.weather).restoreSimulation(record.worldRandom);
+    // The cave mood sound (cave-ambience.js) on this world's World.rand and updateLCG.
+    weather.mood = new MoodSound(weather);
+    weather.mood.player = () => position;
     hideBedScreen();
     bedSleep.restore(record.bed); // the spawn point; a saved sleeping state is resumed after the player is placed
     scene.setWorld(world);
@@ -1032,8 +1040,12 @@ async function launch(record, prepared) {
       commandHost: () => commandHost,
       music: {
         particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz),
-        // RenderGlobal.playRecord: the HUD line for a disc; the record music is not shipped (public/research/note-jukebox.md).
-        play: (item) => { if (item) recordHud.show(item); },
+        // RenderGlobal.playRecord: stop the record at the jukebox; a disc sets the HUD line and plays "records.<name>" there
+        // (music.js recordSound; silent unless npm run music:fetch installed the streams, public/research/music.md).
+        play: (item, x, y, z) => {
+          if (item) recordHud.show(item);
+          sounds.playRecord(item ? recordSound(discName(item), x, y, z) : null, x, y, z);
+        },
         spawn: (stack, x, y, z) => items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, y, z, { delay: 10 }),
       },
       sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }),
@@ -1457,6 +1469,7 @@ function goHome() {
   statsLive.leaveGame(); // ServerConfigurationManager.playerLoggedOut
   save();
   lan.close();
+  sounds.stopStreams(); // Minecraft.loadWorld(null): SoundHandler.stopSounds
   hideBedScreen();
   screen = "home";
   closeModal();
@@ -2149,8 +2162,21 @@ function die() {
 }
 // One weather tick: timers, lightning (flash, damage, sound) and the client's rain
 // splashes and rain sound (see weather.js).
+const sceneLight = { skyAt: (x, y, z) => scene.light?.skyAt(x, y, z) ?? 15, blockAt: (x, y, z) => scene.light?.blockAt(x, y, z) ?? 0 };
 function tickWeather() {
-  if (world.dimension) return; // the Nether and the End have no weather (their own world has no rain state)
+  if (weather.mood) weather.mood.light ??= moodLight(world, sceneLight);
+  if (world.dimension) {
+    // The Nether and the End have no weather (their own world has no rain state), but the cave mood sound still rolls
+    // in WorldServer's chunk loop there (no sky: saved sky light is 0 everywhere).
+    const mood = weather.mood;
+    if (!mood) return;
+    mood.tick();
+    for (const [cx, cz] of Weather.activeChunks(position.x, position.z, 10, world)) {
+      const e = mood.chunk(world, cx, cz);
+      if (e) sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } });
+    }
+    return;
+  }
   tickWeatherSimulation({ world, weather, mobs, survival }, position, PHYSICS.width, PHYSICS.height);
   weather.rainParticles(world, { x: position.x, y: position.y + PHYSICS.eye, z: position.z }, (kind, x, y, z) => scene.fx.addDirect(kind, x, y, z));
   for (const e of weather.drain()) {
@@ -3126,6 +3152,28 @@ document.addEventListener("keydown", (e) => {
     first.focus();
   }
 });
+// Minecraft.runTick: MusicTicker.update (music.js) once per 50 ms client tick on every screen, including the title screen,
+// except while the game is paused (the single-player game menu, and the credits, GuiWinGame also pausing). Opening the
+// game menu pauses the playing streams (SoundHandler.pauseSounds) and closing it resumes them.
+let musicTicker = null, musicTime = 0, streamsPaused = false;
+function tickMusic(dt) {
+  if (!sounds) return;
+  const menu = screen === "paused" && lan.paused(true);
+  if (menu !== streamsPaused) {
+    streamsPaused = menu;
+    if (menu) sounds.pauseStreams();
+    else sounds.resumeStreams();
+  }
+  if (menu || (screen === "credits" && lan.paused(true))) return;
+  musicTicker ??= new MusicTicker({ play: (event) => sounds.playStream(event), stop: (h) => sounds.stop(h), isPlaying: (h) => sounds.isPlaying(h) });
+  for (musicTime += dt; musicTime >= PHYSICS.tick; musicTime -= PHYSICS.tick) {
+    musicTicker.update(ambientMusicType({
+      credits: screen === "credits", inWorld: screen !== "home", dimension: world?.dimension ?? 0,
+      bossName: bossStatus.name, bossFrames: bossStatus.length, creative: !!survival?.creative,
+    }));
+    sounds.updateStreams();
+  }
+}
 function animate(now) {
   requestAnimationFrame(animate);
   const dt = Math.min((now - lastFrame) / 1000, 0.15);
@@ -3140,6 +3188,7 @@ function animate(now) {
   }
   // Minecraft.isGamePaused: the game menu stops the world unless the LAN server is public (lan.js).
   const running = () => screen === "playing" || screen === "inventory" || (screen === "paused" && !lan.paused(true));
+  tickMusic(dt);
   if (running()) {
     accumulator += dt;
     while (accumulator >= PHYSICS.tick && running()) {

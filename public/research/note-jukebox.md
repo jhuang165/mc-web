@@ -26,7 +26,7 @@ Internal blocks 177 (note block) and 178 (jukebox) map to original 25 and 84; th
 
 ## Gaps
 
-- **Record music is silent.** The twelve `records.*` streams are not imported (size and provenance), so a playing disc shows the HUD line and the jukebox state but makes no sound. The original's `playAuxSFX 1005` event is replaced by a direct callback.
+- **Record music needs a local install.** The twelve `records.*` streams are not in Git (size and provenance). `npm run music:fetch` installs them, and a disc then plays at the jukebox (volume 4, LINEAR, 64 blocks) until it is ejected or the jukebox breaks ([music.md](music.md)). Without them, a playing disc shows only the HUD line and the jukebox state. The original's `playAuxSFX 1005` event is replaced by a direct callback.
 - The note particle's motion (heart-like, 6 ticks, scale x 1.5) is built from the decompiled constructor, not probed frame by frame.
 - Old inert discs (items 373 and 374) are kept hidden and accepted by the jukebox as records 2256 and 2257.
 - The original keeps any item in a jukebox read from a legacy `Record` int; this build keeps only the twelve discs.

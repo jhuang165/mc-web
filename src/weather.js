@@ -141,6 +141,7 @@ export class Weather {
     this.clientTicks = 0; // EntityRenderer.rendererUpdateCount
     this.rainSoundCounter = 0;
     this.particleSetting = 0;
+    this.mood = null; // cave-ambience.js MoodSound sharing this.random and this.lcg
   }
   // WorldInfo's NBT fields (RainTime, raining, ThunderTime, thundering).
   save() {
@@ -222,6 +223,9 @@ export class Weather {
   // lay a snow layer there while it is raining), then three random block ticks (updateLCG
   // picks x, z, y) in every 16-high section that has a randomly ticking block.
   tickChunk(world, cx, cz) {
+    // The cave mood sound (cave-ambience.js) comes first in WorldServer's chunk loop; main.js installs it.
+    const mood = this.mood?.chunk(world, cx, cz);
+    if (mood) this.events.push(mood);
     this.rollLightningChunk(world, cx, cz);
     const bx = cx * 16, bz = cz * 16, light = lightOf(world);
     if (this.random.nextInt(16) === 0) {
@@ -272,7 +276,10 @@ export class Weather {
     if (this.lastLightning > 0) this.lastLightning--; // Minecraft.runTick
     this.struck.length = 0;
     this.updateWeather();
-    if (world) this.tickChunks(world, Weather.activeChunks(player?.x ?? SIZE / 2, player?.z ?? SIZE / 2, 10, world));
+    if (world) {
+      this.mood?.tick(); // World.setActivePlayerChunksAndCheckLight: the mood countdown, before the chunk loop
+      this.tickChunks(world, Weather.activeChunks(player?.x ?? SIZE / 2, player?.z ?? SIZE / 2, 10, world));
+    }
     for (const bolt of this.bolts) {
       if (bolt.tick(this.events)) {
         this.lastLightning = 2;

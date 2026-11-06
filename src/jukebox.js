@@ -1,7 +1,8 @@
 // BlockJukebox (alq, original 84) with TileEntityJukebox (alr), ItemRecord (adr) and the GuiIngame record line, Java 1.7.10, as a
 // LiveRedstone behaviour of original id 84. Native values are replayed from public/research/note-jukebox-reference.json by
-// src/note-jukebox.test.js. The record music itself is not shipped (public/research/note-jukebox.md): playback is silent, the
-// block state, the HUD line, the comparator and the ejection are the original's.
+// src/note-jukebox.test.js. The block state, the HUD line, the comparator and the ejection are the original's; the record
+// itself plays through main.js (audio.js playRecord, music.js recordSound) once npm run music:fetch has installed the
+// streams, which the repository does not ship (public/research/music.md).
 import { NBT } from './nbt.js';
 import { nbtGet } from './nbt-get.js';
 import { isDisc, canonicalDisc, discIndex, discOriginal, DISC_ORIGINAL_FIRST, DISC_FIRST, DISC_COUNT, nowPlaying } from './note-jukebox-content.js';
@@ -45,7 +46,7 @@ export function ejectOffsets(rand) {
   return [d0, d1, d2];
 }
 
-// hooks: play(discItem | null, x, y, z) (RenderGlobal.playRecord: sets the HUD line for a disc; silent audio),
+// hooks: play(discItem | null, x, y, z) (RenderGlobal.playRecord: stops the record at x, y, z, then plays a disc and sets its HUD line),
 // spawn(stack, x, y, z) with the 10-tick pickup delay, changed().
 export function installJukeboxes(redstone, { play = () => {}, spawn = () => {}, changed = () => {} } = {}) {
   const tiles = new Map(), key = (x, y, z) => `${x},${y},${z}`;
