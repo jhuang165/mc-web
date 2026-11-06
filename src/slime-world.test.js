@@ -45,7 +45,7 @@ test("a slime waits for its jump delay, then jumps toward a player in range and 
   assert.ok(peak > 1, "jumped " + peak);
   assert.ok(jumped >= 2);
   assert.ok(e.z > 64.5, "moved toward the player at +z");
-  assert.ok(puffs.length >= 16 && puffs.every((n) => n === "iconcrack_341"), "size * 8 particles per landing");
+  assert.ok(puffs.length >= 16 && puffs.every((n) => n === "slime"), "size * 8 particles per landing");
   assert.ok(w.events.some((x) => x.sound === "mob.slime.big"));
 });
 

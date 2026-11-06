@@ -2102,6 +2102,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     fx: scene.fx,
     canStrike: (x, y, z) => canLightningStrikeAt(weather, world, x, y, z),
     lit: (x, y, z) => scene.litFurnaces.has(`${x},${y},${z}`),
+    repeaterLit: (x, y, z) => redstoneRuntime?.redstone?.lit?.has(`${x},${y},${z}`) === true,
     sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }),
   });
   // MobSpawnerBaseLogic.updateSpawner on the client: smoke and flame, the display mob's spin.
