@@ -24,10 +24,9 @@ Internal block 86 is the append-only live mapping for original block/item 116 (`
 
 ## Limits
 
-- **No book model or glyph particles.** The 3D book (`TileEntityEnchantmentTable`, `RenderEnchantmentTable`) and the flying glyph particles are absent. The block renders as a static box from the three original textures.
-- **No galactic name text.** `nameSeed` is kept and exposed, but the standard galactic font text next to each option is not drawn; the buttons show the level icon and the level number only. The `EnchantmentNameParts` word list is not ported.
+- **Book and names (batch 10).** The table book, the GUI book and the `EnchantmentNameParts` option names are live; see [enchanting book](enchanting-book.md). The glyph shapes and the book texture are original, not the vanilla art.
 - **No enchantment hover text.** 1.7.10 has none; the native screen shows no preview either.
-- The table has no tile entity, so there is no custom name and no book animation state to save.
+- The book tile state is runtime only (not saved), and the table has no custom name.
 - Enchantment effects on tools, weapons and armor follow whichever other work has landed; this change only creates the enchantments. The glint is not part of this change.
 - `tools/verify-shadows.mjs` writes the anvil bounds as the full cube. The checked-in `shadow-reference.json` keeps the existing 0.125 anvil entry by hand next to the new table entry.
 - The screen layout (title position, button states and colours) follows the `GuiEnchantment` bytecode and the sheet; it has not been compared pixel by pixel in a browser.

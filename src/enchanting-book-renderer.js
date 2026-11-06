@@ -138,6 +138,15 @@ export class EnchantingBookRenderer {
 // --- the GUI panel -----------------------------------------------------------------------------------------------
 
 /** The GuiEnchantment book on its own transparent WebGL canvas, laid over the 320 x 240 region centred on the screen. */
+// GuiEnchantment.drawGuiContainerBackgroundLayer's projection: glTranslatef(shift) before gluPerspective, so the shift lands in
+// clip space (projection = T(shift) * P). The perspective is copied first: makeTranslation overwrites projectionMatrix in place.
+export function guiBookCamera() {
+  const v = GUI_BOOK_VIEW, camera = new THREE.PerspectiveCamera(v.fov, v.aspect, v.near, v.far);
+  const perspective = camera.projectionMatrix.clone();
+  camera.projectionMatrix.makeTranslation(v.shift[0], v.shift[1], 0).multiply(perspective);
+  camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+  return camera;
+}
 export class EnchantingGuiBookView {
   constructor(canvas) {
     this.canvas = canvas;
@@ -146,10 +155,7 @@ export class EnchantingGuiBookView {
     this.renderer.setSize(canvas.width, canvas.height, false);
     this.renderer.setClearColor(0, 0);
     const v = GUI_BOOK_VIEW;
-    this.camera = new THREE.PerspectiveCamera(v.fov, v.aspect, v.near, v.far);
-    // glTranslatef(shift) before gluPerspective: the shift lands in clip space.
-    this.camera.projectionMatrix.makeTranslation(v.shift[0], v.shift[1], 0).multiply(new THREE.Matrix4().copy(this.camera.projectionMatrix));
-    this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
+    this.camera = guiBookCamera();
     this.scene = new THREE.Scene();
     this.texture = bookTexture();
     // The item lights are set while the modelview is the identity, so they live in eye space, the space of this scene.
