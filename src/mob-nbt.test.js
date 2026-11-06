@@ -98,7 +98,7 @@ test('export then import keeps the passive and hostile mobs and their saved stat
     { type: 'cow', health: 10, growingAge: 0, love: 200 },
     { type: 'mooshroom', health: 9, growingAge: 0 },
     { type: 'sheep', health: 8, growingAge: 0, color: 11, sheared: true },
-    { type: 'chicken', health: 4, growingAge: -50 },
+    { type: 'chicken', health: 4, growingAge: -50, chickenJockey: true },
     { type: 'wolf', health: 15, growingAge: 0, owner: 'player', sitting: true, collar: 5 },
     { type: 'wolf', health: 8, growingAge: 0, angry: true },
     { type: 'spider', health: 16 }, { type: 'cave_spider', health: 12 },
@@ -115,7 +115,7 @@ test('export then import keeps the passive and hostile mobs and their saved stat
   for (const [i, m] of mobs.entries()) {
     const b = back[i];
     assert.ok(Math.abs(b.x - m.x) < 1e-9 && b.z === m.z, `${m.type} position`);
-    for (const k of ['health', 'growingAge', 'love', 'saddled', 'color', 'sheared', 'sitting', 'angry', 'collar', 'powered']) if (k in m) assert.equal(b[k], m[k], `${m.type} ${k}`);
+    for (const k of ['health', 'growingAge', 'love', 'saddled', 'color', 'sheared', 'sitting', 'angry', 'collar', 'powered', 'chickenJockey']) if (k in m) assert.equal(b[k], m[k], `${m.type} ${k}`);
     if (m.owner) assert.equal(b.owner, 'player');
   }
 });

@@ -85,7 +85,7 @@ function payload(state,ox,oz,report,blockAt) {
   if(e.type==='skeleton'||e.type==='wither_skeleton'){n.SkeletonType=byte(e.type==='wither_skeleton'?1:0);delete n.Age;delete n.InLove;} // EntitySkeleton.writeEntityToNBT always writes SkeletonType
   // EntityCreeper.writeEntityToNBT: powered (only when charged), Fuse, ExplosionRadius and ignited (mob-nbt-reference.json: 30 and 3 by default).
   if(e.type==='creeper'){delete n.Age;delete n.InLove;if(e.powered)n.powered=byte(1);n.Fuse=short(Number.isInteger(e.maxFuse)?e.maxFuse:30);n.ExplosionRadius=byte(Number.isInteger(e.explosionRadius)?e.explosionRadius:3);n.ignited=byte(e.ignited?1:0);}
-  if(e.type==='chicken')n.IsChickenJockey=byte(0); // EntityChicken.writeEntityToNBT; this build has no chicken jockeys
+  if(e.type==='chicken')n.IsChickenJockey=byte(e.chickenJockey?1:0); // EntityChicken.writeEntityToNBT (mob-riding.js)
   // EntityMob / EntityGolem subclasses with no NBT of their own are not EntityAgeable (mob-nbt-reference.json).
   if(['spider','cave_spider','witch','silverfish','snow_golem'].includes(e.type)){delete n.Age;delete n.InLove;}
   if(e.type==='pig')n.Saddle=byte(e.saddled?1:0); // EntityPig.writeEntityToNBT
