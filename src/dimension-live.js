@@ -14,12 +14,15 @@ import { materialSolid } from "./plants.js";
 import { BED, BED_DIR, isBedHead } from "./bed.js";
 import { readChunkEdits } from "./world-storage.js";
 import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf, portalCooldown, readPlayerPortalState } from "./dimensions.js";
+import { EntityPortals, placeAfterTravel, POS_Y, mobYawToMc, mcToMobYaw } from "./entity-portal.js";
+import { entityActive } from "./streaming-ticks.js";
+import { LEAD_ITEM } from "./horse-gear.js";
 
 // Per-dimension runtime state: everything main.js's save() writes that is keyed by block coordinates or holds entities.
 export const DIM_KEYS = ["drops", "projectiles", "eyes", "rockets", "fishing", "thrownPotions", "arrows", "tnt", "fluidTicks", "fireTicks", "redstone", "pistons", "commandBlocks", "musicTiles", "entities", "villages", "farms", "pots", "xpOrbs", "falling", "fallingTicks", "spawners", "minecarts", "boats", "hanging", "signs", "skulls", "beacons", "populatedColumns", "containerScope", "editSequence", "dragonSpawned"];
 // Tile entities that survival.serialize() keeps in the player record, by block coordinate.
 export const TILE_KEYS = ["furnaces", "chests", "dispensers", "brewing", "hoppers"];
-const VIEW_ONLY = new Set(["id", "rootId", "chunked", "biome", "edits", "runtimeChunked", "dimensions", "dimension", "transit"]);
+const VIEW_ONLY = new Set(["id", "rootId", "chunked", "biome", "edits", "runtimeChunked", "dimensions", "dimension", "transit", "portalArrivals", "pendingArrivals"]);
 const pick = (o, keys) => { const r = {}; for (const k of keys) if (o && o[k] !== undefined) r[k] = o[k]; return r; };
 
 export const dimensionOf = (record) => record?.dimension ?? OVERWORLD;
@@ -35,6 +38,7 @@ export function viewRecord(root, d) {
   v.player = { ...(root.player ?? {}) };
   for (const k of TILE_KEYS) v.player[k] = structuredClone(blob.tiles?.[k] ?? {});
   if (root.transit) v.transit = root.transit; // an arrival in flight (consumed by DimensionLive.arrive)
+  if (root.portalArrivals?.[d]) v.pendingArrivals = root.portalArrivals[d]; // entities that travelled here while it was unloaded (applyWrites)
   return Object.assign(v, { id: viewId(root.id, d), rootId: root.id, chunked: true, biome: "javaStreamed", edits: [], dimension: d });
 }
 // The root record that goes on the shelf for a running view (see the header).
@@ -43,6 +47,7 @@ export function storedRecord(view, root) {
   for (const k of Object.keys(view)) if (!VIEW_ONLY.has(k) && !DIM_KEYS.includes(k)) out[k] = view[k];
   out.player = { ...(view.player ?? {}) };
   for (const k of TILE_KEYS) { if (root.player?.[k] !== undefined) out.player[k] = root.player[k]; else delete out.player[k]; }
+  if (root.portalArrivals?.[d]) { const rest = { ...root.portalArrivals }; delete rest[d]; if (Object.keys(rest).length) out.portalArrivals = rest; else delete out.portalArrivals; } // delivered by applyWrites
   out.dimension = d;
   out.dimensions = { ...(root.dimensions ?? {}), [d]: { state: structuredClone(pick(view, DIM_KEYS)), tiles: structuredClone(pick(view.player, TILE_KEYS)) } };
   return out;
@@ -68,6 +73,13 @@ class LivePeek {
   set(x, y, z, id, meta = 0, flags = 3) { this.writes.push([x, y, z, id, meta, flags]); }
   notify() {}
 }
+// LivePeek whose own writes are readable (a later traveller's Teleporter sees the portal an earlier one built).
+class FinitePeek extends LivePeek {
+  constructor(world) { super(world); this.over = new Map(); }
+  get(x, y, z) { const v = this.over.get(`${x},${y},${z}`); return v !== undefined ? v & 255 : super.get(x, y, z); }
+  set(x, y, z, id, meta = 0, flags = 3) { this.over.set(`${x},${y},${z}`, id | (meta << 8)); super.set(x, y, z, id, meta, flags); }
+  preset(x, y, z, id, meta = 0) { this.over.set(`${x},${y},${z}`, id | (meta << 8)); }
+}
 // Entity yaw in the game (radians, three.js, 0 looks toward -z) <-> Minecraft degrees (0 looks toward +z).
 export const gameYaw = (mcDegrees) => Math.PI - (mcDegrees * Math.PI) / 180;
 export const mcYaw = (yaw) => ((Math.PI - yaw) * 180) / Math.PI;
@@ -76,6 +88,7 @@ export class DimensionLive {
   // host: { active(), world(), worlds(), save(), openWorld(record), sound(name, opts) }
   constructor(host) {
     this.host = host; this.state = new PortalState(); this.busy = false; this.overlayAmount = 0; this.writes = [];
+    this.portals = new EntityPortals(); this.peeks = new Map(); this.queue = Promise.resolve(); this.flights = 0;
     this.readEdits = readChunkEdits; this.onDragonSpawn = () => {}; this.quiet = false; this.overlay = null; this.trigger = false;
   }
   // main.js openWorld hooks ------------------------------------------------------------
@@ -84,7 +97,7 @@ export class DimensionLive {
   createWorld(record) { return record.rootId ? new DimensionWorld(record.seed, record.dimension) : new World(record.seed, record.biome, record.generationVersion ?? 1, record.worldType); }
   // Called after the world exists and before the saved position is read. Sets record.position for a travel arrival.
   async arrive(prepared, record) {
-    const t = record.transit; delete record.transit; this.writes = []; this.exit = false;
+    const t = record.transit; delete record.transit; this.writes = []; this.exit = false; this.peeks.clear();
     if (!t) return;
     const to = dimensionOf(record), from = t.from;
     if (t.death || from === END) delete record.portalState; // A new player is created on respawn.
@@ -101,6 +114,8 @@ export class DimensionLive {
     }
     const tt = transferTarget(from, to, t.x, t.y, t.z, mcYaw(t.yaw ?? 0));
     const edits = to === OVERWORLD && !record.chunked ? null : new Map(await this.readEdits(record.id));
+    const inbox = record.rootId ? record.pendingArrivals : record.portalArrivals?.[0];
+    if (edits) for (const [x, y, z, id, meta] of inbox?.writes ?? []) edits.set(`${x},${y},${z}`, id | (meta << 8)); // portals built for travelling mobs
     const world = prepared.streaming ? new TerrainPeek(prepared, edits ?? new Map()) : new LivePeek(prepared);
     world.dimension = to; world.actualHeight = providerOf(to).hasNoSky ? 128 : 256;
     world.seed = javaSeed(record.seed);
@@ -115,6 +130,7 @@ export class DimensionLive {
   }
   // After the resident columns (and their saved edits) are loaded: the portal frames/platform the Teleporter placed.
   applyWrites(prepared, record, { verifyBed } = {}) {
+    this.deliverArrivals(prepared, record);
     for (const [x, y, z, id, meta] of this.writes) prepared.set(x, y, z, id, true, meta);
     this.writes = [];
     if (this.exit) { // bed spawn of the Overworld: still a bed with a free cell beside it, else the world spawn
@@ -124,12 +140,113 @@ export class DimensionLive {
     }
     if (record.dimension === END && !record.dragonSpawned) { record.dragonSpawned = true; this.onDragonSpawn({ x: 0, y: 128, z: 0 }); } // first entry: the dragon spawn hook
   }
+  // Entities that travelled here while this dimension was unloaded join its saved lists (Entity.travelToDimension spawned them in it).
+  deliverArrivals(prepared, record) {
+    const inbox = record.rootId ? record.pendingArrivals : record.portalArrivals?.[0];
+    delete record.pendingArrivals;
+    if (!record.rootId && record.portalArrivals) { const rest = { ...record.portalArrivals }; delete rest[0]; if (Object.keys(rest).length) record.portalArrivals = rest; else delete record.portalArrivals; }
+    if (!inbox) return;
+    for (const k of ["entities", "drops", "xpOrbs"]) if (inbox[k]?.length) record[k] = [...(record[k] ?? []), ...inbox[k]];
+    for (const [x, y, z, id, meta] of inbox.writes ?? []) prepared.set(x, y, z, id, true, meta);
+  }
+  // Entity portals --------------------------------------------------------------------
+  rootRecord() { const a = this.host.active(); return a?.rootId ? this.host.worlds().find((w) => w.id === a.rootId) : a; }
+  // Resolves when the entities in flight have reached their dimension's inbox (before save() writes the shelf).
+  settle() { return this.queue; }
+  // Per physics tick, after the mobs/items/orbs moved (Entity.onEntityUpdate + doBlockCollisions of each). Travellers leave the
+  // live lists at once; their arrival (Teleporter in the target dimension) resolves asynchronously into the target's inbox.
+  tickEntities(world, { mobs, items, xpOrbs } = {}) {
+    if (this.busy || !world || this.host.active()?.transit) return;
+    const dim = world.dimension ?? OVERWORLD, getId = (x, y, z) => world.get(x, y, z), at = { dim, getId };
+    const root = this.rootRecord();
+    if (!root) return;
+    const lists = [["mob", mobs?.entities], ["item", items?.items], ["orb", xpOrbs?.orbs]];
+    for (const [kind, list] of lists) {
+      if (!list?.length) continue;
+      let gone = null;
+      for (const e of list) {
+        if (kind === "mob" && (e.rider || e.vehicle)) { this.portals.step(e, kind, { ...at, riding: true }); continue; }
+        if (!entityActive(world, e)) continue;
+        const r = this.portals.step(e, kind, at);
+        if (!r) continue;
+        (gone ??= new Set()).add(e);
+        this.depart(root, dim, kind, e, r, kind === "mob" ? mobs : kind === "item" ? items : xpOrbs);
+      }
+      if (gone) { const keep = list.filter((e) => !gone.has(e)); list.length = 0; list.push(...keep); }
+    }
+  }
+  depart(root, from, kind, e, r, owner) {
+    const cooldown = this.portals.cooldownAfter(e, r);
+    const rec = structuredClone(owner.serializeOne(e));
+    rec.portalCooldown = cooldown || undefined;
+    const mc = kind === "mob"
+      ? { x: e.x, y: e.y, z: e.z, vx: e.vx ?? 0, vy: e.vy ?? 0, vz: e.vz ?? 0, yaw: mobYawToMc(e.yaw ?? 0), pitch: 0 }
+      : { x: e.x, y: e.y + POS_Y[kind], z: e.z, vx: e.vx ?? e.mx ?? 0, vy: e.vy ?? e.my ?? 0, vz: e.vz ?? e.mz ?? 0, yaw: 0, pitch: 0 };
+    mc.teleportDirection = r.direction;
+    const leashed = kind === "mob" && e.leash?.holder === "player";
+    const rootId = root.id;
+    this.flights++;
+    this.queue = this.queue.then(() => this.deliver(rootId, from, kind, rec, mc, r.arg, leashed)).catch(() => {}).then(() => { this.flights--; });
+  }
+  // Teleporter state per target dimension, kept while the player stays in the loaded one.
+  async peekFor(root, to) {
+    const key = `${root.id}:${to}`;
+    let peek = this.peeks.get(key);
+    if (peek) return peek;
+    const writes = root.portalArrivals?.[to]?.writes ?? [];
+    if (to !== OVERWORLD) {
+      const edits = new Map(await this.readEdits(viewId(root.id, to)));
+      for (const [x, y, z, id, meta] of writes) edits.set(`${x},${y},${z}`, id | (meta << 8));
+      peek = new TerrainPeek(new DimensionWorld(root.seed, to), edits);
+    } else {
+      const w = new World(root.seed, root.biome, root.generationVersion ?? 1, root.worldType);
+      if (w.streaming) {
+        const edits = new Map(root.chunked ? await this.readEdits(root.id) : []);
+        for (const [x, y, z, id, meta] of writes) edits.set(`${x},${y},${z}`, id | (meta << 8));
+        peek = new TerrainPeek(w, edits);
+      } else {
+        w.restore(root.edits ?? []);
+        peek = new FinitePeek(w);
+        for (const [x, y, z, id, meta] of writes) peek.preset(x, y, z, id, meta);
+      }
+    }
+    peek.dimension = to; peek.actualHeight = providerOf(to).hasNoSky ? 128 : 256; peek.seed = javaSeed(root.seed);
+    peek.teleporter = new Teleporter(peek, { isSolid: solidId, random: new JavaRandom(peek.seed) });
+    this.peeks.set(key, peek);
+    return peek;
+  }
+  async deliver(rootId, from, kind, rec, mc, arg, leashed) {
+    const root = this.rootRecord();
+    if (!root || root.id !== rootId) return;
+    const to = from === END && arg === END ? OVERWORLD : arg, peek = await this.peekFor(root, to), before = peek.writes.length;
+    const spawn = root.worldSpawn ? { x: root.worldSpawn[0], z: root.worldSpawn[2] } : { x: 0, z: 0 };
+    const heightAt = (x, z) => { for (let y = peek.actualHeight - 1; y > 0; y--) if (solidId(peek.get(x, y, z))) return y + 1; return 0; };
+    const { e } = placeAfterTravel({ from, arg, entity: mc, teleporter: peek.teleporter, spawn, heightAt });
+    const inbox = ((root.portalArrivals ??= {})[to] ??= { entities: [], drops: [], xpOrbs: [], writes: [] });
+    for (const w of peek.writes.slice(before)) inbox.writes.push(w);
+    const y = e.y - POS_Y[kind];
+    if (kind === "mob") {
+      delete rec.id;
+      Object.assign(rec, { x: e.x, y, z: e.z, yaw: mcToMobYaw(e.yaw), portalMotion: { vx: e.vx, vy: e.vy, vz: e.vz } });
+      if (leashed) { delete rec.leash; inbox.drops.push({ stack: { id: LEAD_ITEM, count: 1, damage: 0 }, x: e.x, y, z: e.z, mx: 0, my: 0, mz: 0, age: 0, delay: 10, hover: 0 }); } // the holder is not in the new world
+      inbox.entities.push(rec);
+    } else if (kind === "item") {
+      Object.assign(rec, { x: e.x, y, z: e.z, mx: e.vx, my: e.vy, mz: e.vz });
+      inbox.drops.push(rec);
+    } else {
+      Object.assign(rec, { x: e.x, y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, onGround: false });
+      inbox.xpOrbs.push(rec);
+    }
+    this.host.dirty?.();
+  }
   // Travel ---------------------------------------------------------------------------
   async travel(target, { exit = false, death = false } = {}) {
     if (this.busy) return false;
     this.busy = true;
     try {
       const h = this.host, rec = h.active(), p = h.player();
+      await this.settle();
+      this.peeks.clear();
       await h.save();
       const root = h.worlds().find((w) => w.id === rootIdOf(rec));
       if (!root) return false;

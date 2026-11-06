@@ -60,7 +60,7 @@ export class ExperienceOrbs {
   this.orbs=Array.isArray(saved)?saved.slice(0,512).filter(o=>o&&[o.x,o.y,o.z,o.value].every(Number.isFinite)&&o.value>0&&o.value<=2477).map(o=>{
    // Saves before 0.21.4 stored the remaining lifetime (`life`) instead of xpOrbAge.
    const age=Number.isFinite(o.age)?o.age:Number.isFinite(o.life)?LIFETIME-o.life:0,n=k=>Number.isFinite(o[k])?o[k]:0;
-   return seed({x:o.x,y:o.y,z:o.z,value:o.value,age:Math.max(0,Math.trunc(age)),health:Number.isFinite(o.health)?o.health&255:5,fire:Math.trunc(n('fire')),vx:n('vx'),vy:n('vy'),vz:n('vz'),onGround:!!o.onGround});
+   return seed({x:o.x,y:o.y,z:o.z,value:o.value,age:Math.max(0,Math.trunc(age)),health:Number.isFinite(o.health)?o.health&255:5,fire:Math.trunc(n('fire')),vx:n('vx'),vy:n('vy'),vz:n('vz'),onGround:!!o.onGround,...(Number.isInteger(o.portalCooldown)&&o.portalCooldown>0?{portalCooldown:Math.min(300,o.portalCooldown)}:{})});
   }).filter(o=>o.age<LIFETIME&&o.health>0):[];
  }
  // `p` is the spawn point (posY): EntityXPOrb.getXPSplit pieces, one orb each.
@@ -153,4 +153,5 @@ export class ExperienceOrbs {
   this.orbs=this.orbs.filter(o=>!o.dead);
  }
  serialize(){return this.orbs.map(strip);}
+ serializeOne(o){return strip(o);}
 }

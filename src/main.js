@@ -2053,7 +2053,7 @@ function tickWeather() {
 // EntityPlayerSP.timeInPortal: Nausea longer than 60 ticks winds the screen warp up (potion-fx.js).
 const portalTimer = new PortalTimer();
 const dims = new DimensionLive({
-  active: () => active, worlds: () => worlds, save: () => save(), openWorld,
+  active: () => active, worlds: () => worlds, save: () => save(), openWorld, dirty: () => { saved = false; },
   player: () => ({ x: position.x, y: position.y, z: position.z, yaw }),
   sound: (n, o) => sounds.play(n, o),
   showCredits: async () => {
@@ -2595,6 +2595,7 @@ function movementTick(controls) {
     orbSound: s => sounds.play(s.name, { volume: s.volume, pitch: s.pitch,
       position: s.name === "random.orb" ? undefined : { x: s.x, y: s.y, z: s.z } }),
   });
+  dims.tickEntities(world, { mobs, items, xpOrbs }); // mobs, items and orbs in portals (entity-portal.js)
   // EntityAIControlledByPlayer wore the carrot on a stick (pig-saddle-live.js); reportBrokenTool runs at the tick's end.
   if (mobs?.stickWorn) { mobs.stickWorn = false; renderHotbar(); saved = false; }
   // MobSpawnerBaseLogic.updateSpawner on the server (tile entities tick after the entities).
