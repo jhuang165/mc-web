@@ -13,3 +13,4 @@ tools/__pycache__/
 .env
 .env.*
 !.env.example
+public/audio/1.7.10-streams/

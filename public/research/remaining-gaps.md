@@ -30,8 +30,8 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 13. Super Secret Settings shaders, Anaglyph and the framerate limit. Missing.
 
 ### Audio
-14. Music and music discs/jukebox record audio. Missing; 473 sound files, none are music or records.
-15. Cave ambience (ambient sound category rows). Missing.
+14. Music and music discs/jukebox record audio. Partial: MusicTicker with the seven MusicTypes (probe-replayed delays), the Music slider, pause/stop rules and positional records (volume 4, 64 blocks) are in ([music.md](music.md)). The 41 streams are not in Git; `npm run music:fetch` installs them locally, and without them music and records are silent. The paulscode falloff and channel limits are approximated.
+15. Cave ambience (`ambient.cave.cave`). Done for the World mood sound, probe-replayed ([music.md](music.md)); 13 clips shipped. Approximate: World.C's light-check Random draws are not modelled.
 
 ## Priority 2: entities and AI
 - Spawner minecart (MinecartSpawner): implemented, see `spawner-cart.md`; gaps are Java region import of carts and SpawnData Riding chains.

@@ -2367,6 +2367,71 @@
       "url": "/audio/1.7.10/mob/enderdragon/wings4.ogg",
       "sha1": "92488929c42221fb3f1dee397a32d2e4de615f3c",
       "bytes": 11702
+    },
+    "ambient/cave/cave1": {
+      "url": "/audio/1.7.10/ambient/cave/cave1.ogg",
+      "sha1": "29d4dccf3353334c7aa2a49cb6fed3780a51a1ba",
+      "bytes": 33948
+    },
+    "ambient/cave/cave10": {
+      "url": "/audio/1.7.10/ambient/cave/cave10.ogg",
+      "sha1": "79a5b53bf22cca182ddff2a670942c49867663ec",
+      "bytes": 22725
+    },
+    "ambient/cave/cave11": {
+      "url": "/audio/1.7.10/ambient/cave/cave11.ogg",
+      "sha1": "e367d1dfa1ce07374e0aeaecbfb1526142a0dcc1",
+      "bytes": 36963
+    },
+    "ambient/cave/cave12": {
+      "url": "/audio/1.7.10/ambient/cave/cave12.ogg",
+      "sha1": "a720e85e35be0dc3186d01cc599121b87e7ee9f7",
+      "bytes": 21193
+    },
+    "ambient/cave/cave13": {
+      "url": "/audio/1.7.10/ambient/cave/cave13.ogg",
+      "sha1": "63bbe3921abd75b9f6cd1e20330360d164da169b",
+      "bytes": 29512
+    },
+    "ambient/cave/cave2": {
+      "url": "/audio/1.7.10/ambient/cave/cave2.ogg",
+      "sha1": "5680749048457f5772ec95a73d856ad792fa1717",
+      "bytes": 48741
+    },
+    "ambient/cave/cave3": {
+      "url": "/audio/1.7.10/ambient/cave/cave3.ogg",
+      "sha1": "d4b06ccb8e331ece734f51d84a0a5fbc7164d8be",
+      "bytes": 50958
+    },
+    "ambient/cave/cave4": {
+      "url": "/audio/1.7.10/ambient/cave/cave4.ogg",
+      "sha1": "48540d7788ce3d9e780cb448ce5676c53dbcfd23",
+      "bytes": 49499
+    },
+    "ambient/cave/cave5": {
+      "url": "/audio/1.7.10/ambient/cave/cave5.ogg",
+      "sha1": "18a992d93128bb2e2861930cff3140c6940c0127",
+      "bytes": 67196
+    },
+    "ambient/cave/cave6": {
+      "url": "/audio/1.7.10/ambient/cave/cave6.ogg",
+      "sha1": "cf23204a9cca2ac7f9674168cc063cfb4dbe001f",
+      "bytes": 42176
+    },
+    "ambient/cave/cave7": {
+      "url": "/audio/1.7.10/ambient/cave/cave7.ogg",
+      "sha1": "c8dd60f7e7087da52a431c1dbc0f397317b374fb",
+      "bytes": 45278
+    },
+    "ambient/cave/cave8": {
+      "url": "/audio/1.7.10/ambient/cave/cave8.ogg",
+      "sha1": "9024de3f1dd4bc1e8f445c7c5b812f25c7e31bf6",
+      "bytes": 49295
+    },
+    "ambient/cave/cave9": {
+      "url": "/audio/1.7.10/ambient/cave/cave9.ogg",
+      "sha1": "b463fa47816fe9a5dfe508093150e647403e4db6",
+      "bytes": 27096
     }
   },
   "events": {
@@ -3916,6 +3981,24 @@
         "mob/enderdragon/wings4",
         "mob/enderdragon/wings5",
         "mob/enderdragon/wings6"
+      ]
+    },
+    "ambient.cave.cave": {
+      "category": "ambient",
+      "sounds": [
+        "ambient/cave/cave1",
+        "ambient/cave/cave10",
+        "ambient/cave/cave11",
+        "ambient/cave/cave12",
+        "ambient/cave/cave13",
+        "ambient/cave/cave2",
+        "ambient/cave/cave3",
+        "ambient/cave/cave4",
+        "ambient/cave/cave5",
+        "ambient/cave/cave6",
+        "ambient/cave/cave7",
+        "ambient/cave/cave8",
+        "ambient/cave/cave9"
       ]
     }
   }

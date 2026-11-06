@@ -11,7 +11,8 @@
     "test:bridge": "python3 -m unittest discover -s tools -p 'test_memory_bridge.py'",
     "push:github": "node tools/push-github.mjs",
     "agent:codex": "node tools/start-codex.mjs",
-    "agent:claude": "claude"
+    "agent:claude": "claude",
+    "music:fetch": "node tools/fetch-music-streams.mjs"
   },
   "dependencies": {
     "three": "^0.180.0"
