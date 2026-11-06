@@ -66,7 +66,7 @@ ${profileRows.join('\n')}
 
 const screenEvidence = {
   GuiControls: ['Partial; Invert Mouse/Sensitivity and key list, only the cinematic camera key rebinds', 'parity.md'],
-  GuiCreateWorld: ['Partial; Default/Large Biomes/Amplified Java worlds, cheats and seed; no Superflat or Bonus Chest', 'generation.md'],
+  GuiCreateWorld: ['Partial; Default/Superflat/Large Biomes/Amplified Java worlds, Customize for Superflat, Bonus Chest, cheats and seed', 'superflat.md'],
   GuiGameOver: ['Partial; death screen', 'parity.md'],
   GuiIngameMenu: ['Partial; pause menu with Open to LAN', 'parity.md'],
   GuiMainMenu: ['Partial; title/menu with panorama and splash', 'parity.md'],
@@ -100,9 +100,9 @@ const screenEvidence = {
   GuiScreenHorseInventory: ['Partial; horse saddle/armor/chest screen', 'horse-inventory.md'],
   GuiStats: ['Partial; General/Blocks/Items/Mobs tabs and sorting; some use/kill triggers approximate', 'stats.md'],
   ScreenChatOptions: ['Partial; nine native options, Show Cape disabled, persisted and applied to the chat', 'chat-options.md'],
-  GuiScreenBook: ['Missing; no book and quill or written book', 'parity.md'],
-  GuiCreateFlatWorld: ['Missing; no Superflat world type', 'generation.md'],
-  GuiFlatPresets: ['Missing; no Superflat world type', 'generation.md'],
+  GuiScreenBook: ['Partial; page editing, page turns and signing for Book and Quill and Written Book (book-ui.js); layout bytecode-read, not probed', 'books.md'],
+  GuiCreateFlatWorld: ['Partial; layer list, Remove Layer, Presets, Done/Cancel; Add/Edit Layer hidden as in 1.7.10 (flat-gui.js)', 'superflat.md'],
+  GuiFlatPresets: ['Partial; the 8 native presets and the shareable string box (flat-gui.js); positions bytecode-read', 'superflat.md'],
   GuiConfirmOpenLink: ['Partial; Yes / Copy to Clipboard / No for http(s) links from chat click events', 'chat-options.md'],
   GuiScreenResourcePacks: ['Missing; only the bundled 1.7.10 textures', 'settings-parity-catalogue.md'],
   GuiSnooper: ['Out of scope; no usage telemetry (drawn disabled)', 'settings-parity-catalogue.md'],
@@ -139,14 +139,15 @@ const SUPPORT_PARTIAL = new Set(['Gui', 'GuiIngame', 'GuiButton', 'GuiTextField'
   'GuiOptions$1', 'GuiOptionsRowList', 'GuiOptionsRowList$Row', 'GuiScreenOptionsSounds$Button', 'GuiSelectWorld$List', 'GuiSlot', 'GuiYesNoCallback', 'ScaledResolution',
   'ChatLine', 'GuiNewChat', 'MapItemRenderer', 'MapItemRenderer$1', 'MapItemRenderer$Instance', 'GuiAchievement', 'GuiMerchant$MerchantButton', 'GuiBeacon$Button',
   'GuiBeacon$CancelButton', 'GuiBeacon$ConfirmButton', 'GuiBeacon$PowerButton', 'GuiContainerCreative$ContainerCreative', 'GuiContainerCreative$CreativeSlot', 'CreativeCrafting']);
-const SUPPORT_EVIDENCE = new Set(['GuiCreateFlatWorld$Details', 'GuiFlatPresets$LayerItem', 'GuiFlatPresets$ListSlot']); // no counterpart: Superflat is missing
+const SUPPORT_EVIDENCE = new Set(['GuiCreateFlatWorld$Details', 'GuiFlatPresets$LayerItem', 'GuiFlatPresets$ListSlot']); // folded into flat-gui.js
 const SUPPORT_MISSING = new Set(['GuiPlayerInfo', 'GuiResourcePackAvailable', 'GuiResourcePackList', 'GuiResourcePackSelected', 'GuiScreenBook$NextPageButton', 'GuiSnooper$List']);
 const SUPPORT_PROGRESS = new Set(['GuiStats$Stats', 'GuiStats$StatsBlock', 'GuiStats$StatsBlock$1', 'GuiStats$StatsGeneral', 'GuiStats$StatsItem', 'GuiStats$StatsItem$1', 'GuiStats$StatsMobsList', 'IProgressMeter']);
 const supportStatus = name => {
+  if (name === 'GuiScreenBook$NextPageButton') return 'Partial; the page arrows of the book screen (book-ui.js), no hover texture, see [books](books.md)';
   if (name === 'GuiPlayerInfo') return 'Partial; the Tab player list shows the local player (player-list.js), see [chat options](chat-options.md)';
-  if (SUPPORT_EVIDENCE.has(name)) return 'Missing; no Superflat world type, so no counterpart';
+  if (SUPPORT_EVIDENCE.has(name)) return 'Partial; folded into the Superflat screens (flat-gui.js), see [superflat](superflat.md)';
   if (SUPPORT_PROGRESS.has(name)) return 'Partial; statistics screen ([stats](stats.md))';
-  if (SUPPORT_MISSING.has(name)) return 'Missing; no counterpart (player list, resource packs, books, snooper)';
+  if (SUPPORT_MISSING.has(name)) return 'Missing; no counterpart (resource packs, snooper)';
   if (SUPPORT_PARTIAL.has(name)) return 'Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md)';
   if (/Realms|ServerList|ServerSelection|Stream|Ingest/.test(name)) return 'Out of scope; multiplayer, Realms or Twitch';
   assert.fail(`no GUI support status for ${name}`);

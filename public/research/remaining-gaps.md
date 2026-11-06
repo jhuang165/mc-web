@@ -2,6 +2,10 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 12
+
+Book and Quill/Written Book (`books.md`), Pumpkin Pie, Enchanted Golden Apple and monster eggs 97:3-5 (`food-items.md`), Chat Settings, the Tab list and F2 (`chat-options.md`), Superflat and the bonus chest (`superflat.md`), and the spawner minecart with wider `/summon` coverage and `Riding` mounts (`spawner-cart.md`). The rows below say what is still partial.
+
 ## Done in batch 11
 
 Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic settings (`render-settings.md`), void fog (`void-fog.md`), the Giant (`giant.md`) and rider save/portal/fall work (`mob-riding.md`) were merged after this list was written; their remaining limits are in those docs.
@@ -9,20 +13,20 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 ## Priority 1: visible, commonly hit
 
 ### Items and blocks
-1. Book and Quill, Written Book and the book screen (items 386, 387; GuiScreenBook). Missing.
+1. Book and Quill, Written Book and the book screen (items 386, 387; GuiScreenBook). Partial: items, recipe, cloning, tags, NBT and the edit/sign screen are in ([books.md](books.md)); the screen is bytecode-read, not probed; glyphs above code 126 use width 6 and the author is always "Player".
 2. Pumpkin Pie (item 400). Done; see [food-items.md](food-items.md).
 3. Enchanted Golden Apple (322:1). Done; see [food-items.md](food-items.md). 1.7.10 has no Overpowered achievement.
 4. Mossy, cracked and chiseled monster eggs (97:3, 97:4, 97:5). Done; see [food-items.md](food-items.md).
 5. Filled map and fireworks items are technical-only rows: see `item-parity-catalogue.md`.
 
 ### GUI and settings
-6. Chat Settings screen (ScreenChatOptions): Partial (branch b12-guis). All nine options persist and apply, Show Cape is disabled; vanilla links need a ClickEvent producer (see `chat-options.md`).
+6. Chat Settings screen (ScreenChatOptions): Partial. All nine options persist and apply, Show Cape is disabled; vanilla links need a ClickEvent producer (see `chat-options.md`).
 7. Player list (Tab). Partial: native layout, shown only while Open to LAN (native hides it for a lone host); no other players or scoreboard.
 8. F2 screenshot. Partial: canvas-only PNG download with the native name and chat message; no HUD in the image, no F1 toggle.
 9. Resource Packs screen and pack loading. Missing.
 10. Key rebinding: only smoothCamera is rebindable; key.chat and key.command are Partial. No `options.txt` persistence. See `settings-parity-catalogue.md`.
-11. Superflat world type and its customization screens. Missing.
-12. Bonus chest (WorldGeneratorBonusChest). Missing.
+11. Superflat world type and its customization screens. Partial: generator, presets, Customize/Presets screens and level.dat export are in ([superflat.md](superflat.md)); Add/Edit Layer are hidden as in 1.7.10; flat populate is bytecode-read, not replayed; no level.dat import.
+12. Bonus chest (WorldGeneratorBonusChest). Partial: contents and placement replayed against the jar ([superflat.md](superflat.md)); the port seeds its Random from the world seed where 1.7.10 uses an unseeded one.
 13. Super Secret Settings shaders, Anaglyph and the framerate limit. Missing.
 
 ### Audio

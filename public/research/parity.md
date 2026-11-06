@@ -1,5 +1,7 @@
 # Minecraft Java 1.7.10 feature coverage
 
+A batch-12 set (unreleased) adds [Chat Settings](chat-options.md) with the Tab list and F2 screenshots, Pumpkin Pie, the Enchanted Golden Apple and the remaining monster eggs ([food items](food-items.md)), [Book and Quill and Written Book](books.md) with the book screen, the [Superflat](superflat.md) world type with its screens and the bonus chest, and the [spawner minecart](spawner-cart.md) with wider `/summon` coverage and `Riding` mounts.
+
 A batch-11 set of five tracks (unreleased) makes the Video Settings Graphics, Smooth Lighting, Clouds, Mipmap Levels and Anisotropic Filtering options work ([render settings](render-settings.md)), adds [statistics](stats.md) with the Statistics screen and `stats/<uuid>.json` in the Java export, saves rider chains in Java regions and keeps jockeys out of portals ([mob riding](mob-riding.md)), adds [void fog](void-fog.md) and the summon-only [Giant](giant.md), and refreshes every parity catalogue with a checked [remaining-gaps](remaining-gaps.md) list.
 
 After 0.43.0 (unreleased): every mob now plays its [footsteps](mob-steps.md) from the `Entity.moveEntity` step distance (own events for zombie, skeleton, spiders, pig, cow, sheep, chicken and iron golem; the block SoundType for creeper, villager and witch; swim sounds in water; silverfish silent). Select World gains an Endless button that copies a finite Java world into a streamed one with the same seed, edits and entities ([streaming](streaming.md)), and the XP level digits draw in front of the XP bar.

@@ -51,11 +51,11 @@ const esc = s => String(s).replaceAll('|', '&#124;').replaceAll('\n', ' ');
 // Items with no Creative entry in this build's search list, or whose native variant has no browser item (verified in
 // src/survival.js ITEMS and src/world.js block ids; updated for batch 11). Anything not listed keeps the generic status.
 const ITEM_MISSING = {
-  '386:0': 'Missing; book and quill (no GuiScreenBook, no item)',
+  '386:0': 'Partial; book and quill (internal 2110): recipe, editing and NBT probe-verified, screen bytecode-read (books.md)',
 };
 const ITEM_TECHNICAL = {
   358: 'Partial; [filled map item](maps-clock.md), unlisted natively',
-  387: 'Missing; written book (no item, no GuiScreenBook)',
+  387: 'Partial; written book (internal 2111): signing, cloning, tooltip and glint probe-verified, screen bytecode-read (books.md)',
   401: 'Partial; [fireworks rocket](fireworks.md), unlisted natively (configured stacks only)',
   422: 'Partial; [command block minecart](polish.md), unlisted natively',
 };

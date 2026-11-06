@@ -19,13 +19,13 @@ The Partial rows are reviewed conceptual browser counterparts, with current evid
 | client/gui/GuiCommandBlock | bfh | bdw | no | Partial; command editor with Track Output; [current evidence](command-blocks.md) | U |
 | client/gui/GuiConfirmOpenLink | bcu | bcw | no | Partial; Yes / Copy to Clipboard / No for http(s) links from chat click events; [current evidence](chat-options.md) | U |
 | client/gui/GuiControls | bew | bdw | no | Partial; Invert Mouse/Sensitivity and key list, only the cinematic camera key rebinds; [current evidence](parity.md) | U |
-| client/gui/GuiCreateFlatWorld | bcz | bdw | no | Missing; no Superflat world type; [current evidence](generation.md) | U |
-| client/gui/GuiCreateWorld | bdb | bdw | no | Partial; Default/Large Biomes/Amplified Java worlds, cheats and seed; no Superflat or Bonus Chest; [current evidence](generation.md) | U |
+| client/gui/GuiCreateFlatWorld | bcz | bdw | no | Partial; layer list, Remove Layer, Presets, Done/Cancel; Add/Edit Layer hidden as in 1.7.10 (flat-gui.js); [current evidence](superflat.md) | U |
+| client/gui/GuiCreateWorld | bdb | bdw | no | Partial; Default/Superflat/Large Biomes/Amplified Java worlds, Customize for Superflat, Bonus Chest, cheats and seed; [current evidence](superflat.md) | U |
 | client/gui/GuiDisconnected | bdf | bdw | no | Out of scope; multiplayer; [current evidence](parity.md) | U |
 | client/gui/GuiDownloadTerrain | bdu | bdw | no | Out of scope; multiplayer; [current evidence](parity.md) | U |
 | client/gui/GuiEnchantment | bfq | bex | no | Partial; enchanting table with book and galactic glyphs; [current evidence](enchanting-table.md) | U, I |
 | client/gui/GuiErrorScreen | bdh | bdw | no | Missing; browser errors use the notice/modal path; [current evidence](parity.md) | U |
-| client/gui/GuiFlatPresets | bdq | bdw | no | Missing; no Superflat world type; [current evidence](generation.md) | U |
+| client/gui/GuiFlatPresets | bdq | bdw | no | Partial; the 8 native presets and the shareable string box (flat-gui.js); positions bytecode-read; [current evidence](superflat.md) | U |
 | client/gui/GuiGameOver | bdc | bdw | no | Partial; death screen; [current evidence](parity.md) | U |
 | client/gui/GuiHopper | bfs | bex | no | Partial; hopper container; [current evidence](hopper.md) | U, I |
 | client/gui/GuiIngameMenu | bdp | bdw | no | Partial; pause menu with Open to LAN; [current evidence](parity.md) | U |
@@ -39,7 +39,7 @@ The Partial rows are reviewed conceptual browser counterparts, with current evid
 | client/gui/GuiRepair | bey | bex | no | Partial; anvil repair/rename; [current evidence](anvil-container.md) | U, I |
 | client/gui/GuiScreen | bdw | bbw | no | Partial; shared menu GUI framework (menu-ui.js); [current evidence](settings-parity-catalogue.md) | U |
 | client/gui/GuiScreenAddServer | bdg | bdw | no | Out of scope; multiplayer; [current evidence](parity.md) | U |
-| client/gui/GuiScreenBook | bfe | bdw | no | Missing; no book and quill or written book; [current evidence](parity.md) | U |
+| client/gui/GuiScreenBook | bfe | bdw | no | Partial; page editing, page turns and signing for Book and Quill and Written Book (book-ui.js); layout bytecode-read, not probed; [current evidence](books.md) | U |
 | client/gui/GuiScreenDemo | bdd | bdw | no | Out of scope; demo mode; [current evidence](parity.md) | U |
 | client/gui/GuiScreenOptionsSounds | bec | bdw | no | Partial; master plus eight category sliders; [current evidence](settings-parity-catalogue.md) | U |
 | client/gui/GuiScreenRealmsProxy | bcq | bdw | no | Out of scope; Mojang Realms service; [current evidence](parity.md) | U |
@@ -84,9 +84,9 @@ The Partial rows are reviewed conceptual browser counterparts, with current evid
 | client/gui/GuiButton | bcb | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/GuiButtonLanguage | bcf | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/GuiButtonRealmsProxy | bcp | class | Out of scope; multiplayer, Realms or Twitch | U |
-| client/gui/GuiCreateFlatWorld$Details | bda | class | Missing; no Superflat world type, so no counterpart | U |
-| client/gui/GuiFlatPresets$LayerItem | bdr | class | Missing; no Superflat world type, so no counterpart | U |
-| client/gui/GuiFlatPresets$ListSlot | bds | class | Missing; no Superflat world type, so no counterpart | U |
+| client/gui/GuiCreateFlatWorld$Details | bda | class | Partial; folded into the Superflat screens (flat-gui.js), see [superflat](superflat.md) | U |
+| client/gui/GuiFlatPresets$LayerItem | bdr | class | Partial; folded into the Superflat screens (flat-gui.js), see [superflat](superflat.md) | U |
+| client/gui/GuiFlatPresets$ListSlot | bds | class | Partial; folded into the Superflat screens (flat-gui.js), see [superflat](superflat.md) | U |
 | client/gui/GuiIngame | bbv | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/GuiKeyBindingList | bes | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/GuiKeyBindingList$1 | bet | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
@@ -104,15 +104,15 @@ The Partial rows are reviewed conceptual browser counterparts, with current evid
 | client/gui/GuiOptionsRowList | bck | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/GuiOptionsRowList$Row | bcl | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/GuiPlayerInfo | bjl | class | Partial; the Tab player list shows the local player (player-list.js), see [chat options](chat-options.md) | U |
-| client/gui/GuiResourcePackAvailable | bgj | class | Missing; no counterpart (player list, resource packs, books, snooper) | U |
-| client/gui/GuiResourcePackList | bgk | abstract class | Missing; no counterpart (player list, resource packs, books, snooper) | U |
-| client/gui/GuiResourcePackSelected | bgl | class | Missing; no counterpart (player list, resource packs, books, snooper) | U |
-| client/gui/GuiScreenBook$NextPageButton | bff | class | Missing; no counterpart (player list, resource packs, books, snooper) | U |
+| client/gui/GuiResourcePackAvailable | bgj | class | Missing; no counterpart (resource packs, snooper) | U |
+| client/gui/GuiResourcePackList | bgk | abstract class | Missing; no counterpart (resource packs, snooper) | U |
+| client/gui/GuiResourcePackSelected | bgl | class | Missing; no counterpart (resource packs, snooper) | U |
+| client/gui/GuiScreenBook$NextPageButton | bff | class | Partial; the page arrows of the book screen (book-ui.js), no hover texture, see [books](books.md) | U |
 | client/gui/GuiScreenOptionsSounds$Button | bed | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/GuiSelectWorld$List | bdy | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/GuiSlot | bcm | abstract class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/GuiSlotRealmsProxy | bcr | class | Out of scope; multiplayer, Realms or Twitch | U |
-| client/gui/GuiSnooper$List | beb | class | Missing; no counterpart (player list, resource packs, books, snooper) | U |
+| client/gui/GuiSnooper$List | beb | class | Missing; no counterpart (resource packs, snooper) | U |
 | client/gui/GuiStreamIndicator | bco | class | Out of scope; multiplayer, Realms or Twitch | U |
 | client/gui/GuiTextField | bcd | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/GuiYesNoCallback | bcv | interface | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
