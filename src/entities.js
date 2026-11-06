@@ -5,7 +5,7 @@ import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE, isSpi
 import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, SPAWN_BRIGHTNESS } from "./mob-spawner.js";
 import { ENDERMAN_HEALTH, ENDERMAN_WIDTH, ENDERMAN_HEIGHT, ENDERMAN_SPEED, ENDERMAN_ATTACK, SPEED_BOOST as ENDERMAN_BOOST, endermanFields, endermanFieldsFrom, SOUNDS as ENDERMAN_SOUNDS, livingSound as endermanLiving } from "./enderman.js";
 import { endermanTick, endermanHurt, endermanSpawn, ENDERMAN_TRANSIENT } from "./enderman-live.js";
-import { SILVERFISH, SILVERFISH_SOUNDS, silverfishActionState, legacyFields as silverfishFields, silverfishCanSpawnHere, hurtSummon, attackReady, closestVulnerablePlayer, pathWeight as silverfishPathWeight, eggSpawn } from "./silverfish.js";
+import { SILVERFISH, SILVERFISH_SOUNDS, silverfishActionState, legacyFields as silverfishFields, silverfishCanSpawnHere, hurtSummon, attackReady, pathWeight as silverfishPathWeight, eggSpawn } from "./silverfish.js";
 import { POISON } from "./status-effects.js";
 import { WITHER_SKELETON_STATS, witherHitEffect } from "./wither-skeleton.js";
 import {CARROT,zombieRareDrop} from './crops.js';
