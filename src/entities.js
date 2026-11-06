@@ -12,7 +12,7 @@ import {CARROT,zombieRareDrop} from './crops.js';
 import { creeperFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from "./creeper.js";
 import { SIZE, HEIGHT, hash, slipperiness, collisionBoxes as cellCollisionBoxes, normalCube, WOOL, isLiquid, DYE, BLOCKS, PUMPKIN } from "./world.js";
 import { isOnLadder, ladderClamp, LADDER_CLIMB } from "./ladders.js";
-import { mobStepEvents } from "./mob-steps.js";
+import { mobStepEvents, isEntityMob } from "./mob-steps.js";
 import { ITEMS } from "./survival.js";
 import { weaponEnchantments, arthropodSlowness, javaLikeRandom } from "./enchantment-effects.js";
 import { insideOpaqueBlock, mobEyeHeight } from "./suffocation.js";
@@ -1167,7 +1167,7 @@ export class EntityWorld {
     // Jump Boost (Potion.jump, id 8) takes amplifier + 1 off the distance; the fall sound plays first, then the damage
     // and the landing block's step sound (EntityLivingBase.fall; EntityMob says "hostile", the rest "neutral").
     const jump = e.effects?.find?.((x) => x.id === JUMP_BOOST), cell = [Math.floor(e.x), Math.floor(e.y - 0.20000000298023224), Math.floor(e.z)],
-      { points, sounds } = landingEffects(distance, { kind: HOSTILE.has(e.type) ? "hostile" : "neutral", amplifier: jump ? jump.amplifier : -1, blockUnder: this.world.get(...cell) });
+      { points, sounds } = landingEffects(distance, { kind: isEntityMob(e.type) ? "hostile" : "neutral", amplifier: jump ? jump.amplifier : -1, blockUnder: this.world.get(...cell) });
     if (points > 0) {
       this.events.push({ sound: sounds[0].name, volume: 1, pitch: 1, position: e });
       this.hazard(e, points, "fall");
@@ -1775,7 +1775,7 @@ export class EntityWorld {
     const landed = moveEntityWithHeading(this.world, e, t.width, t.height, forward, hooks);
     // moveEntity's step tail (mob-steps.js): every mob with canTriggerWalking plays its own step event.
     const rand = entityRandom(e);
-    this.events.push(...mobStepEvents(this.world, e, from, { hostile: HOSTILE.has(e.type), random: () => rand.nextFloat() }));
+    this.events.push(...mobStepEvents(this.world, e, from, { hostile: isEntityMob(e.type), random: () => rand.nextFloat() }));
     // The finite world's edge stops a mob like a wall.
     const edge = (axis, v) => {
       const c = Math.max((this.world[axis === "x" ? "minX" : "minZ"] ?? 0)+0.6, Math.min((this.world[axis === "x" ? "maxX" : "maxZ"] ?? SIZE)-0.6, e[axis]));
