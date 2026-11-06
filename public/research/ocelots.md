@@ -13,11 +13,11 @@ Evidence: `public/research/ocelot-reference.json`, written by `tools/verify-ocel
 - Sounds: a wild ocelot is silent; a tamed cat purrs in love, otherwise purreow one time in four, else meow.
 - Model: ModelOcelot parts a to h in the four poses (sneak, stand, sprint, sit), checked against the 13 probe rows; the four CatType textures; 0.8 scale when tamed; kitten head scale 1.5.
 - Persistence: save records, region export (Ozelot NBT with CatType, Sitting, OwnerUUID, Age, InLove), region import, `/summon Ozelot`, mob spawner entity id.
-- Natural spawning: an approximate jungle-biome pass (`src/ocelot-spawn.js`) using the probe's `getCanSpawnHere` rule.
+- Natural spawning: BiomeGenJungle puts the ocelot (weight 2, groups of 1) in its monster list, so it is drawn in the every-tick monster pass of the SpawnerAnimals port (`src/spawner-animals.js`, [natural spawning](natural-spawning.md)) and counts against the creature cap; the probed `getCanSpawnHere` rule rolls World.rand nextInt(3) first.
 
 ## Gaps
 
-- No worldgen or chunk-time ocelot population. The live spawn pass is approximate: jungle biomes only, random points, a 2% chance per tick, cap of 10 ocelots.
+- No worldgen or chunk-time ocelot population (the jungle creature list has none, as in 1.7.10). No seeded replay spawned an ocelot, so the list draw is probed but an ocelot's own spawn has only the OcelotProbe rule behind it.
 - Avoid and pathing behaviour is derived from bytecode; probing reached the pathfinding NPE of the world double. The `ocelotNearPlayer` avoid rows are unexplained and not asserted.
 - The scared check in Tempt needs the player's look (`EntityWorld.playerLook`, set in `main.js`); without it only movement counts.
 - Kitten growth by feeding fish is not modelled. The original returns false for a kitten with fish.

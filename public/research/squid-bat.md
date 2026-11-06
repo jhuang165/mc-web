@@ -12,11 +12,11 @@ EntitySquid (EntityList id 94, class `ws`) and EntityBat (id 65, class `we`). No
 ## Evidence
 
 - Probed: `tools/probes/SquidBatProbe.java` (run by `tools/verify-squid-bat.mjs`) drives the unchanged obfuscated classes; output is `public/research/squid-bat-reference.json`. `src/squid-bat.test.js` replays attributes, seeded squid swim updates, bat flight and hanging decisions, drops, talk intervals, spawn predicates and BatFlags NBT against it.
-- Bytecode-derived (not probed): spawn cap (15 * 289 / 256) and 4 per chunk, 24-block distance rule, `canCreatureTypeSpawnAtLocation` for water and air, the squid's flow push (applied twice per tick), model box layouts and poses, renderer transforms, the engine-side wiring in `src/squid-bat-mobs.js`.
+- Probed in `spawn-lists-reference.json` since batch 13 ([natural spawning](natural-spawning.md)): the spawn caps, 4 per chunk, the 24-block distance rule and `canCreatureTypeSpawnAtLocation` for water and air. Bytecode-derived (not probed): the squid's flow push (applied twice per tick), model box layouts and poses, renderer transforms, the engine-side wiring in `src/squid-bat-mobs.js`.
 
 ## Gaps
 
-- The spawn pass is reduced: 6 random points per tick near the player, biome spawn lists and group sizes not read, squid overlap not checked, world-spawn distance approximated.
+- Natural spawning is the SpawnerAnimals port ([natural spawning](natural-spawning.md)) with the biome water and ambient lists; its seeded replays include squid, but no replay reached a bat (the probe terrain is above y 63).
 - The probe's bat `h()` tail is a hand-applied Euler step, not the real method.
 - Squid flow push untested against the original.
 - Models and renderer were not run or visually checked; no browser check was made.

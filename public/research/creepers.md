@@ -192,7 +192,7 @@ The creeper, explosion and fuse sounds were imported with `tools/import-vanilla-
   - `HashSet` bins never treeify, which the probe showed does not happen at these sizes;
   - a mob standing exactly at the attacker's x/z gets a random knockback heading;
   - the sound range is the browser's 20-block falloff, not 64 blocks.
-- Creeper spawning uses the simplified night ring, not `SpawnerAnimals`.
+- Creepers spawn through the SpawnerAnimals port from the biome monster lists ([natural spawning](natural-spawning.md)); its approximations apply.
 - Native save behavior (intentional): `EntityTNTPrimed.writeEntityToNBT` does not save the placer, so TNT reloaded mid-fuse explodes without an attacker. This is not a missing parity feature.
 
 

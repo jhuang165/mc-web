@@ -18,12 +18,12 @@ Target: Minecraft Java 1.7.10. This is not full parity; see Gaps.
 
 - `tools/probes/SlimeProbe.java` runs the original classes; `tools/verify-slime.mjs` writes `public/research/slime-reference.json` (47 records: facts 1, jumpDelay 1, split 4, splitAlive 1, drops 4, xp 1, chunkRandom 1, spawn 1, spawnFacts 1, spawnChunk 8, attack 1, think 22, model 1).
 - `src/slime.test.js` replays every record (11 tests); `src/slime-world.test.js` covers live integration (8 tests).
-- Bytecode-derived, not probed: the live spawn clock wiring, renderer layout.
+- Bytecode-derived, not probed: the renderer layout.
 
 ## Gaps
 
 - Magma cubes are not implemented.
-- Live spawn clock is an adaptation (every 300 ticks, at most 4 slimes, ring 16-32 blocks), not SpawnerAnimals' weighted pass. The 40-mob cap applies to splitting.
+- Slimes spawn through the SpawnerAnimals port from the biome monster lists ([natural spawning](natural-spawning.md)), with the slime chunk and swamp `getCanSpawnHere` above; no seeded replay reached a slime spawn. The 40-mob cap applies to splitting.
 - `mob.attack` has no sound event in the manifest, so it is silent.
 - The original may play the landing sound twice in single-player; the port plays it once.
 - Legacy worlds have no biome or Java seed, so the swamp and slime chunk rules do not apply there.

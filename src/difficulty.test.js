@@ -10,6 +10,7 @@ import { addMobEffect, tickMobEffects, speedModifiers, attackDamage, isInvisible
 import { potionColor } from "./fx.js";
 import { Survival } from "./survival.js";
 import { EntityWorld, aiMoveSpeed } from "./entities.js";
+import { creatureTypeOf } from "./spawn-lists.js";
 
 // DifficultyProbe on the unchanged 1.7.10 classes; see tools/verify-difficulty.mjs.
 const reference = JSON.parse(readFileSync(new URL("../public/research/difficulty-reference.json", import.meta.url)));
@@ -200,9 +201,13 @@ const night = { health: 20, creative: false, time: 18000, damage() {}, scaledDam
 test("Peaceful removes monsters at once and spawns none", () => {
   const w = world([{ type: "zombie", x: 64, y: 1, z: 64 }, { type: "cow", x: 70, y: 1, z: 64, health: 10 }]);
   w.difficulty = 0;
+  w.naturalSpawning = true;
   const events = [];
   for (let i = 0; i < 400; i++) { w.tick({ x: 64, y: 1, z: 70 }, night); events.push(...w.drain()); }
-  assert.deepEqual(w.entities.map((e) => e.type).filter((t) => t !== "bat" && t !== "squid"), ["cow"]); // ambient and water creatures spawn on Peaceful
+  // SpawnerAnimals runs with spawnHostileMobs false: creatures (and water and ambient mobs) still spawn on Peaceful.
+  assert.deepEqual(w.entities.filter((e) => creatureTypeOf(e.type) === "monster"), []);
+  assert.ok(w.entities.some((e) => e.type === "cow" && e.id === "mob-2"));
+  assert.ok(w.entities.some((e) => e.id !== "mob-2" && creatureTypeOf(e.type) === "creature"), "animals spawn on Peaceful");
   assert.ok(!events.some((e) => e.drop || e.xp), "no drops or experience");
 });
 

@@ -1,23 +1,29 @@
 import { entityActive } from './streaming-ticks.js';
-import { spawnDimensionMonsters } from "./dimension-spawning.js";
+import { dimensionSpawnList } from "./dimension-spawning.js";
+import { findChunksForSpawning, eligibleChunkOrder } from "./spawner-animals.js";
+import { spawnList, ENTITY_TYPE_OF, maxSpawnedInChunk, creatureTypeOf, WITCH_HUT_MONSTERS } from "./spawn-lists.js";
+import { solidTopSurface } from "./doors-panes.js";
+import { fleeceColor } from "./population-tail.js";
+import { MapGenScatteredFeature } from "./scattered-feature-generator.js";
+import { canDespawn } from "./ai.js";
 import { gameRule } from "./game-rules.js";
 import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE, isSpider, soundType, caveSpiderPoisonTicks } from "./spider.js";
 import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, SPAWN_BRIGHTNESS } from "./mob-spawner.js";
 import { ENDERMAN_HEALTH, ENDERMAN_WIDTH, ENDERMAN_HEIGHT, ENDERMAN_SPEED, ENDERMAN_ATTACK, SPEED_BOOST as ENDERMAN_BOOST, endermanFields, endermanFieldsFrom, SOUNDS as ENDERMAN_SOUNDS, livingSound as endermanLiving } from "./enderman.js";
-import { endermanTick, endermanHurt, endermanSpawn, ENDERMAN_TRANSIENT } from "./enderman-live.js";
+import { endermanTick, endermanHurt, ENDERMAN_TRANSIENT } from "./enderman-live.js";
 import { GIANT, GIANT_SOUNDS, giantPathWeight, giantAttackReady } from "./giant.js";
 import { creatureActionState, SILVERFISH, SILVERFISH_SOUNDS, silverfishActionState, legacyFields as silverfishFields, silverfishCanSpawnHere, hurtSummon, attackReady, pathWeight as silverfishPathWeight, eggSpawn } from "./silverfish.js";
 import { POISON } from "./status-effects.js";
 import { WITHER_SKELETON_STATS, witherHitEffect } from "./wither-skeleton.js";
 import {CARROT,zombieRareDrop} from './crops.js';
 import { creeperFields, creeperSavedFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from "./creeper.js";
-import { SIZE, HEIGHT, hash, slipperiness, collisionBoxes as cellCollisionBoxes, normalCube, WOOL, isLiquid, DYE, BLOCKS, PUMPKIN } from "./world.js";
+import { SIZE, HEIGHT, hash, slipperiness, collisionBoxes as cellCollisionBoxes, normalCube, WOOL, isLiquid, DYE, BLOCKS, PUMPKIN, WATER, LEAVES2 } from "./world.js";
 import { isOnLadder, ladderClamp, LADDER_CLIMB } from "./ladders.js";
 import { mobStepEvents, isEntityMob } from "./mob-steps.js";
 import { ITEMS } from "./survival.js";
 import { weaponEnchantments, arthropodSlowness, javaLikeRandom } from "./enchantment-effects.js";
 import { insideOpaqueBlock, mobEyeHeight } from "./suffocation.js";
-import { mhSin, mhCos, JavaRandom } from "./lighting.js";
+import { mhSin, mhCos, JavaRandom, skylightSubtracted, celestialAngle } from "./lighting.js";
 import { mobKnockbackKick, golemLift } from "./player-knockback.js";
 import { enterWater, burst, drownBubbles } from "./fx.js";
 import { waterAcceleration, entityWaterBox, inLava, eyeInWater } from "./fluids.js";
@@ -27,11 +33,11 @@ import { MobAI } from "./ai.js";
 import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
 import { IRON_GOLEM_TYPE, IRON_GOLEM_SOUNDS, ironGolemFields, ironGolemShape } from "./iron-golem.js";
 import { createVillages, PLAYER_NAME } from "./village-host.js";
-import { SLIME, mobScale, slimeDamage, slimeTouches, slimeFields, slimeFieldsFrom, slimeRestore, slimeWidth, slimeSoundName, slimeVolume, slimeSquishStart, slimeSquishEnd, slimeActionState, slimeChildren, slimeCanSpawnHere, isSlimeChunk, SLIMEBALL } from "./slime.js";
+import { SLIME, mobScale, slimeDamage, slimeTouches, slimeFields, slimeFieldsFrom, slimeRestore, slimeWidth, slimeSoundName, slimeVolume, slimeSquishStart, slimeSquishEnd, slimeActionState, slimeChildren, slimeCanSpawnHere, SLIMEBALL } from "./slime.js";
 import { isSlimeLike } from "./slime.js";
 import { PIGMAN, MAGMA, isPigman, isMagma, magmaDamage, magmaJumpMotion, pigmanEquipment } from "./nether-melee.js";
 import { pigmanFields, pigmanFieldsFrom, pigmanHurt, pigmanTick, pigmanThink, pigStrike } from "./nether-melee-live.js";
-import { SQUID, BAT } from "./squid-bat.js";
+import { SQUID, BAT, squidCanSpawn, batCanSpawn } from "./squid-bat.js";
 import { ENDER_CRYSTAL_TYPE, crystalUpdate, crystalAttack } from "./ender-crystal-mobs.js";
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { installHorseGear, gearFieldsFrom } from "./horse-gear-live.js";
@@ -40,7 +46,7 @@ import { HORSE_ENTITY, horseRideThink, horseFields, horseFieldsFrom, horseChildF
 import { dragonUpdate, dragonHit, installDragonMobs } from "./dragon-mobs.js";
 import { blazeUpdate, ghastUpdate, fireballMobTalk, installFireballMobs } from "./blaze-ghast-mobs.js";
 import { witherUpdate, witherPost, witherTalk, witherRanged, installWither } from "./wither-boss-mobs.js";
-import { squidBatUpdate, squidBatTalk, squidBatSpawnPass, installSquidBat } from "./squid-bat-mobs.js";
+import { squidBatUpdate, squidBatTalk, installSquidBat } from "./squid-bat-mobs.js";
 import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
@@ -52,9 +58,8 @@ import { landingEffects, JUMP_BOOST, statusPitchRandom } from "./damage-fx.js";
 import { WOLF_WIDTH, WOLF_HEIGHT, WOLF_SPEED, WILD_MAX_HEALTH, TAMED_MAX_HEALTH, WOLF_SOUNDS, wolfFields, wolfFieldsFrom, isTamed as wolfTamed, maxHealth as wolfMaxHealth, tailAngle, interestedAngle, shakeAngle, wetShade, wolfSay, hurtAmount as wolfHurtAmount, attackStrength as wolfAttack, puppyFields, interact as wolfClick, updateWolf } from "./wolf.js";
 import { noteWolfHurt } from "./wolf-ai.js";
 import { summonedMobRecord } from "./java-mobs.js";
-import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest } from "./ocelot.js";
-import { ocelotSpawnPass } from "./ocelot-spawn.js";
-import { NETHER } from "./dimensions.js";
+import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest, canSpawnHere as ocelotCanSpawnHere } from "./ocelot.js";
+import { NETHER, providerOf, lightBrightnessTable } from "./dimensions.js";
 import { cloneStack, attackBonus, meleeEffects } from "./mob-equipment.js";
 import { GEAR_TYPES, defaultGear, gearFieldsFrom as mobGearFieldsFrom, toLiveStack, pickUpLoot } from "./mob-equipment-live.js";
 import { enchantedDamage } from "./armor-enchantments.js";
@@ -636,13 +641,15 @@ export class EntityWorld {
     this.clientSounds = [];
     this.entities = [];
     this.nextId = 1;
-    this.spawnClock = 0;
     // EnumDifficulty id (difficulty.js); main.js sets it from the settings. `worldRandom` is
     // World.rand and `localDifficulty(x, y, z)` World.func_147462_b, both hooked in by main.js.
     this.difficulty = NORMAL;
     this.worldRandom = null;
     this.fishStates = new WeakMap(); // silverfish.js legacy AI state, never saved
     this.localDifficulty = null;
+    // WorldServer.tick's SpawnerAnimals pass (naturalSpawn). main.js turns it on for the played world; headless worlds in tests
+    // and tools leave it off unless they exercise spawning.
+    this.naturalSpawning = false;
     if (Array.isArray(saved)) {
       for (const e of saved.slice(0, 256)) {
         const m = this.restore(e);
@@ -982,21 +989,27 @@ export class EntityWorld {
     e.dropChances = r.dropChances.slice();
     e.canPickUpLoot = !!r.loot;
   }
-  // EntityLiving.onSpawnWithEgg(null) and its overrides. EntityCaveSpider's (xy.a(sy)) returns
-  // its argument without calling super: no follow-range roll, no jockey, no effect.
-  onSpawnWithEgg(e, { free = false } = {}) {
+  // EntityLiving.onSpawnWithEgg(data) and its overrides. EntityCaveSpider's (xy.a(sy)) returns
+  // its argument without calling super: no follow-range roll, no jockey, no effect. `opts.group` is the
+  // IEntityLivingData SpawnerAnimals threads through one group (null for a spawn egg or a single spawn);
+  // the spider's and zombie's GroupData are rolled only when it is null and are left in opts.group.
+  onSpawnWithEgg(e, opts = {}) {
+    const free = !!opts.free;
     const type = e.type, x = e.x, y = e.y, z = e.z, rand = entityRandom(e);
     const world = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
     const local = this.localDifficulty ? this.localDifficulty(Math.floor(x), Math.floor(y), Math.floor(z)) : 0;
     if (type === "spider") {
-      const r = spiderSpawnRolls(rand, world, this.difficulty, local);
+      const r = spiderSpawnRolls(rand, world, this.difficulty, local, opts.group?.spider);
+      opts.group = { spider: r.group };
       e.followRange = r.followRange;
       // EntitySpider.onSpawnWithEgg (yn.a): one spawn in a hundred seats a skeleton on the spider (its own onSpawnWithEgg first,
       // then spawnEntityInWorld and mountEntity), before the Hard potion effect.
       if (r.jockey) this.spawnSpiderJockey(e);
       if (r.effect) addMobEffect(e, r.effect);
     } else if (type === "zombie" || type === "pigman") {
-      const now = this.currentDate?.() ?? new Date(), r = zombieSpawnRolls(rand, world, this.difficulty, local, { month: now.getMonth() + 1, day: now.getDate() }, type === "pigman");
+      // EntityPigZombie.onSpawnWithEgg returns its argument, so a pigman group rolls GroupData for every member.
+      const now = this.currentDate?.() ?? new Date(), r = zombieSpawnRolls(rand, world, this.difficulty, local, { month: now.getMonth() + 1, day: now.getDate() }, type === "pigman", type === "zombie" ? opts.group?.zombie : null);
+      if (type === "zombie") opts.group = { zombie: r.group };
       // EntityZombie.GroupData: a child (isChild never ages out for a zombie) and a zombie villager. EntityPigZombie.onSpawnWithEgg
       // (yh.a) runs EntityZombie's rolls with bC giving only the golden sword; the child and villager rolls are drawn and dropped.
       if (type === "zombie") {
@@ -1022,10 +1035,14 @@ export class EntityWorld {
       if (free && r.wither) { e.type = "wither_skeleton"; e.health = ENTITY_TYPES.wither_skeleton.health; }
       this.applyGear(e, r);
       e.followRange = r.followRange;
+    } else if (type === "sheep") {
+      // EntitySheep.onSpawnWithEgg (wp.a(sy)): setFleeceColor(getRandomFleeceColor(worldObj.rand)).
+      e.color = fleeceColor(world);
     } else if (type === "ocelot") {
       // EntityOcelot.onSpawnWithEgg: one chance in seven of two kittens (age -24000, CatType 0) at the same spot.
       for (let i = kittenLitter(world); i > 0 && this.entities.length < 40; i--) {
         const kit = this.create("ocelot", x, y, z);
+        setLocationAndAngles(kit, x, y, z, e.rotationYaw ?? 0, 0);
         kit.growingAge = -24000;
         this.entities.push(kit);
       }
@@ -1074,6 +1091,8 @@ export class EntityWorld {
   // supplies the light: skyLight(x, y, z) (the saved sky value), lightValue(x, y, z)
   // (World.getBlockLightValue), thundering() and thunderLightValue(x, y, z) (skylightSubtracted
   // 10); `extraCollision(box)` adds boats/minecarts (preventEntitySpawning and their boxes).
+  // fullLight(x, y, z) is World.getFullBlockLightValue (EntityAnimal), brightness the provider's
+  // lightBrightnessTable (EntityCreature.getBlockPathWeight) and date() World.getCurrentDate (bats).
   // A spawn beyond the 40 mobs a save keeps is refused after its rolls (createMob null).
   spawnerHooks(env = {}) {
     const height = this.world.height ?? HEIGHT;
@@ -1109,12 +1128,27 @@ export class EntityWorld {
       },
       canSpawnHere: (e) => {
         const t = ENTITY_TYPES[e.type], box = { x: e.x, y: e.y, z: e.z, width: t.width * mobScale(e), height: t.height * mobScale(e) };
-        const sb = mobBox(e.x, e.y, e.z, box.width, box.height);
+        const sb = mobBox(e.x, e.y, e.z, box.width, box.height), brightness = env.brightness ?? SPAWN_BRIGHTNESS;
+        const living = () => !blocked(sb) && !collisionBoxes(this.world, sb).length && !liquid(sb); // EntityLiving.getCanSpawnHere
+        const fx = Math.floor(e.x), fy = Math.floor(e.y), fz = Math.floor(e.z);
         // Pig zombies and magma cubes use only the space checks. Ghasts also
-        // roll 1 in 20; blazes override EntityMob.isValidLightLevel.
+        // roll 1 in 20; blazes override EntityMob.isValidLightLevel, keeping EntityCreature's 0.5 - brightness path weight.
         if (["pigman", "magma_cube", "ghast", "blaze"].includes(e.type)) {
           if (e.type === "ghast" && entityRandom(e).nextInt(20) !== 0) return false;
-          return this.difficulty !== PEACEFUL && !blocked(sb) && !collisionBoxes(this.world, sb).length && !liquid(sb);
+          if (this.difficulty === PEACEFUL || !living()) return false;
+          return e.type !== "blaze" || f(f(0.5) - brightness[lightEnv.lightValue(fx, fy, fz)]) >= 0;
+        }
+        // EntityOcelot.getCanSpawnHere (ocelot.js): World.rand.nextInt(3) first, then the space checks, y >= 63 and grass or leaves below.
+        if (e.type === "ocelot") {
+          const below = this.world.get(fx, fy - 1, fz);
+          return ocelotCanSpawnHere({ rand: (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48))), collides: blocked(sb) || collisionBoxes(this.world, sb).length > 0, liquid: liquid(sb), y: fy, below: below === 1 || below === 5 || below === LEAVES2 });
+        }
+        // EntitySquid: 45 < posY < 63 and EntityWaterMob's entity-only check.
+        if (e.type === "squid") return squidCanSpawn(e.y, !blocked(sb));
+        // EntityBat: below y 63, the light roll (4, or 7 around Halloween after a coin flip), then EntityLiving's checks.
+        if (e.type === "bat") {
+          const now = env.date?.() ?? this.currentDate?.() ?? new Date();
+          return batCanSpawn({ boxMinY: e.y, light: lightEnv.lightValue(fx, fy, fz), date: { month: now.getMonth() + 1, day: now.getDate() }, rand: entityRandom(e), superOk: living() });
         }
         if (e.type === "silverfish") {
           // EntitySilverfish.getCanSpawnHere: no light rolls (isValidLightLevel is true), stone-friendly path weight, no player within 5.
@@ -1129,10 +1163,10 @@ export class EntityWorld {
         // A Slime spawner (SPAWNER_ENTITY_IDS) uses the slime's own swamp and slime chunk rules (no light rule of EntityMob).
         if (e.type === "slime") return this.slimeCanSpawn(e, entityRandom(e), env.time ?? 0, () => !blocked(sb) && !collisionBoxes(this.world, sb).length && !liquid(sb));
         if (HOSTILE.has(e.type))
-          return monsterCanSpawnHere(box, { difficulty: this.difficulty, thundering: !!env.thundering?.(), ...lightEnv, entityCollision: blocked, blockCollision: (b) => collisionBoxes(this.world, b).length > 0, liquid }, entityRandom(e));
-        // EntityAnimal.getCanSpawnHere: grass below and full light above 8, then EntityLiving's checks.
+          return monsterCanSpawnHere(box, { difficulty: this.difficulty, thundering: !!env.thundering?.(), ...lightEnv, brightness, entityCollision: blocked, blockCollision: (b) => collisionBoxes(this.world, b).length > 0, liquid }, entityRandom(e));
+        // EntityAnimal.getCanSpawnHere: grass (internal id 1) below and full light above 8, then EntityLiving's checks.
         const x = Math.floor(e.x), y = Math.floor(e.y), z = Math.floor(e.z), b = mobBox(e.x, e.y, e.z, t.width, t.height);
-        return this.world.get(x, y - 1, z) === 2 && (env.fullLight ?? lightEnv.lightValue)(x, y, z) > 8 && !blocked(b) && !collisionBoxes(this.world, b).length && !liquid(b);
+        return this.world.get(x, y - 1, z) === 1 && (env.fullLight ?? lightEnv.lightValue)(x, y, z) > 8 && !blocked(b) && !collisionBoxes(this.world, b).length && !liquid(b);
       },
       initMob: (e) => this.onSpawnWithEgg(e),
       // SpawnData (spawner-data.js): the Properties read over the written entity like /summon's data tag, so its Pos moves it.
@@ -1597,7 +1631,6 @@ export class EntityWorld {
   tick(player, survival, heldItem=0) {
     const night = !this.world.dimension &&
       survival.time % 24000 > 13000 && survival.time % 24000 < 23000;
-    this.spawnClock++;
     // World.isDaytime (skylightSubtracted < 4); main.js hooks the real light level in.
     this.day = this.isDaytime ? this.isDaytime() : !night;
     this.ai.beginTick(player, survival, heldItem);
@@ -1610,106 +1643,11 @@ export class EntityWorld {
     this._fireballs?.tick(); // blaze/ghast fireballs (fireballs.js)
     this._skulls?.tick(); // wither skulls (wither-boss-mobs.js)
     this._golemBalls?.tick(); // snow golem snowballs (mooshroom-golem-live.js)
-    // WorldServer.tick runs SpawnerAnimals.findChunksForSpawning only while gamerule doMobSpawning is true; no monsters on Peaceful.
-    const hostile = this.difficulty !== PEACEFUL && gameRule("doMobSpawning");
-    if (this.world.dimension) {
-      // A natural monster can leave the working set before its normal
-      // despawn tick. Apply the distance check to those actors as well.
-      this.entities = this.entities.filter(e => !e.naturalDimensionSpawn || e.persistent ||
-        (player.x - e.x) ** 2 + (player.y - e.y) ** 2 + (player.z - e.z) ** 2 <= 128 ** 2);
-      if (hostile && survival.health > 0) {
-        const rand = (this.worldRandom ??= new JavaRandom(Math.floor(this.random() * 2 ** 48)));
-        spawnDimensionMonsters(this, player, rand, this.spawnerHooks({ limit: 256, lightValue: this.dimensionBlockLight }), HOSTILE);
-      }
-    }
-    if (!this.world.dimension) {
-    ocelotSpawnPass(this, player, survival, gameRule("doMobSpawning")); // SpawnerAnimals for the jungle's ocelots (ocelot-spawn.js)
-    squidBatSpawnPass(this, player, survival, gameRule("doMobSpawning")); // water and ambient creatures spawn on Peaceful too
-    }
-    if (
-      night && hostile &&
-      !survival.creative &&
-      this.spawnClock >= 200 &&
-      this.entities.filter((e) => e.type === "zombie").length < 5
-    ) {
-      this.spawnClock = 0;
-      for (let i = 0; i < 16; i++) {
-        const a = hash(i, survival.time, this.world.numericSeed) * Math.PI * 2,
-          x = Math.floor(player.x + Math.sin(a) * 24),
-          z = Math.floor(player.z + Math.cos(a) * 24);
-        if (this.world.streaming ? !this.world.isTicking(x,z) : x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
-        const y = this.world.surface(x, z);
-        if (this.world.get(x, y - 1, z) !== 1) continue;
-        this.spawnNatural("zombie", x + 0.5, y, z + 0.5);
-        break;
-      }
-    }
-    // Skeletons come out at night with the zombies, on their own timer and cap (the
-    // original rolls both from one spawn pass over lit-dark cells within 24 to 128
-    // blocks; this build keeps its simpler ring around the player).
-    this.skeletonClock = (this.skeletonClock || 0) + 1;
-    if (
-      night && hostile &&
-      !survival.creative &&
-      this.skeletonClock >= 240 &&
-      this.entities.filter((e) => e.type === "skeleton").length < 3
-    ) {
-      this.skeletonClock = 0;
-      for (let i = 0; i < 16; i++) {
-        const a = hash(i + 100, survival.time, this.world.numericSeed) * Math.PI * 2,
-          x = Math.floor(player.x + Math.sin(a) * 24),
-          z = Math.floor(player.z + Math.cos(a) * 24);
-        if (this.world.streaming ? !this.world.isTicking(x,z) : x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
-        const y = this.world.surface(x, z);
-        if (this.world.get(x, y - 1, z) !== 1) continue;
-        this.spawnNatural("skeleton", x + 0.5, y, z + 0.5);
-        break;
-      }
-    }
-    this.spiderClock = (this.spiderClock || 0) + 1;
-    if (night && hostile && !survival.creative && this.spiderClock >= 260 && this.entities.filter(e => e.type === "spider").length < 3) {
-      this.spiderClock = 0;
-      for (let i = 0; i < 16; i++) {
-        const a = hash(i + 200, survival.time, this.world.numericSeed) * Math.PI * 2,
-          x = Math.floor(player.x + Math.sin(a) * 24), z = Math.floor(player.z + Math.cos(a) * 24);
-        if (this.world.streaming ? !this.world.isTicking(x,z) : x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
-        const y = this.world.surface(x, z), t = ENTITY_TYPES.spider;
-        if (this.world.get(x, y - 1, z) !== 1 || actorCollides(this.world, x + 0.5, y, z + 0.5, t.width, t.height)) continue;
-        this.spawnNatural("spider", x + 0.5, y, z + 0.5);
-        break;
-      }
-    }
-    // Witches are in the default monster list (weight 5, groups of 1); this build rolls them on the same night ring at a low rate
-    // (witch.md: not the weighted SpawnerAnimals pass).
-    this.witchClock = (this.witchClock || 0) + 1;
-    if (night && hostile && !survival.creative && this.witchClock >= 600 && this.entities.filter((e) => e.type === "witch").length < 1) {
-      this.witchClock = 0;
-      for (let i = 0; i < 16; i++) {
-        const a = hash(i + 300, survival.time, this.world.numericSeed) * Math.PI * 2,
-          x = Math.floor(player.x + Math.sin(a) * 24), z = Math.floor(player.z + Math.cos(a) * 24);
-        if (this.world.streaming ? !this.world.isTicking(x,z) : x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
-        const y = this.world.surface(x, z), t = ENTITY_TYPES.witch;
-        if (this.world.get(x, y - 1, z) !== 1 || actorCollides(this.world, x + 0.5, y, z + 0.5, t.width, t.height)) continue;
-        this.spawnNatural("witch", x + 0.5, y, z + 0.5);
-        break;
-      }
-    }
-    endermanSpawn(this, player, survival, night && hostile, { actorCollides, SIZE, ENTITY_TYPES });
-    // Creepers: the same night ring as the skeletons, with their own clock and cap.
-    this.creeperClock = (this.creeperClock || 0) + 1;
-    if (night && hostile && !survival.creative && this.creeperClock >= 250 && this.entities.filter((e) => e.type === "creeper").length < 3) {
-      this.creeperClock = 0;
-      for (let i = 0; i < 16; i++) {
-        const a = hash(i + 300, survival.time, this.world.numericSeed) * Math.PI * 2,
-          x = Math.floor(player.x + Math.sin(a) * 24), z = Math.floor(player.z + Math.cos(a) * 24);
-        if (this.world.streaming ? !this.world.isTicking(x,z) : x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
-        const y = this.world.surface(x, z), t = ENTITY_TYPES.creeper;
-        if (this.world.get(x, y - 1, z) !== 1 || actorCollides(this.world, x + 0.5, y, z + 0.5, t.width, t.height)) continue;
-        this.spawnNatural("creeper", x + 0.5, y, z + 0.5);
-        break;
-      }
-    }
-    this.slimeSpawn(player, survival, hostile);
+    // WorldServer.tick: SpawnerAnimals.findChunksForSpawning (spawner-animals.js) while gamerule doMobSpawning is true, before the
+    // entities update. worldTicks stands in for WorldInfo.getWorldTotalTime (animals every 400 ticks).
+    this.worldTicks = (this.worldTicks ?? -1) + 1;
+    if (this.worldTicks % 20 === 0) this.sweepFrozen(player);
+    if (this.naturalSpawning && gameRule("doMobSpawning")) this.naturalSpawn(player, survival);
     // A mob spawned during the loop (a baby) joins the next tick's updates, as World.spawnEntityInWorld queues it.
     releaseDead(this.entities);
     const riders = [];
@@ -1965,31 +1903,120 @@ export class EntityWorld {
       blockLight: () => (this.lightAt ? this.lightAt(x, y, z) : 15), chunkX: (x + (world.originX || 0)) >> 4, chunkZ: (z + (world.originZ || 0)) >> 4, worldSeed: world.javaSeed, base,
     });
   }
-  // Slimes: this build rolls EntitySlime.getCanSpawnHere (slime.js: the swamp rule and the slime chunk rule below y 40) for a spot
-  // 16 to 32 blocks from the player every 300 ticks with at most 4 slimes alive; the original runs it in SpawnerAnimals'
-  // weighted pass (slime.md Gaps). Legacy worlds have no biomes or Java seed: no swamp, no slime chunks.
-  slimeSpawn(player, survival, hostile) {
-    this.slimeClock = (this.slimeClock || 0) + 1;
-    if (!hostile || survival.creative || this.slimeClock < 300 || this.entities.filter((e) => e.type === "slime").length >= SLIME.maxSpawnedInChunk) return;
-    this.slimeClock = 0;
-    const world = this.world, seed = world.javaSeed, height = world.height ?? HEIGHT, rand = new JavaRandom(Math.floor(Math.random() * 2 ** 48));
-    for (let i = 0; i < 16; i++) {
-      const a = hash(i + 400, survival.time, world.numericSeed) * Math.PI * 2, d = 16 + hash(i + 500, survival.time, world.numericSeed) * 16,
-        x = Math.floor(player.x + Math.sin(a) * d), z = Math.floor(player.z + Math.cos(a) * d);
-      if (world.streaming ? !world.isTicking(x, z) : x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
-      // The surface cell, or (in a slime chunk, half the time) the lowest air above a floor in the cave band below y 40.
-      let y = world.surface(x, z);
-      const cx = (x + (world.originX || 0)) >> 4, cz = (z + (world.originZ || 0)) >> 4;
-      if (seed !== undefined && isSlimeChunk(seed, cx, cz) && rand.nextInt(2) === 0) {
-        for (let yy = Math.min(39, y - 1); yy > 5; yy--) if (!world.solid(x, yy, z) && !world.solid(x, yy + 1, z) && world.solid(x, yy - 1, z)) { y = yy; break; }
-      }
-      const e = this.create("slime", x + 0.5, y, z + 0.5), t = ENTITY_TYPES.slime, w = mobScale(e) * t.width, h = mobScale(e) * t.height;
-      const ok = this.slimeCanSpawn(e, rand, survival.time, () => y >= 0 && y < height && world.solid(x, y - 1, z) && !isLiquid(world.get(x, y, z)) && !actorCollides(world, x + 0.5, y, z + 0.5, w, h));
-      if (!ok) { this.nextId--; continue; }
-      this.onSpawnWithEgg(e);
-      this.entities.push(e);
-      break;
+  // SpawnerAnimals.findChunksForSpawning(world, spawnHostileMobs, spawnPeacefulMobs, totalTime % 400 == 0) for the one player
+  // (spawner-animals.js, natural-spawning.md). The integrated server spawns hostile mobs unless the difficulty is Peaceful and
+  // peaceful ones always; creative players count like any other. Lists come from the chunk provider: the biome (World.getBiomeGenForCoords
+  // reads the stored biomeID), the witch hut in a swamp, the Nether's fortress list or the End's. Chunks the browser does not simulate
+  // (outside the ticking window) are skipped without draws and left out of the cap. Hooks main.js sets: lightAt (getBlockLightValue),
+  // skyLightAt (the saved sky value), thunderLightAt (skylightSubtracted 10), fullLightAt (subtracted 0), isThundering, spawnPoint.
+  // The context, hooks and chunk order are built once and reused, so a tick allocates nothing unless a mob is created.
+  naturalSpawn(player, survival, animals = (this.worldTicks ?? 0) % 400 === 0) {
+    const world = this.world, s = (this._spawner ??= this.spawnerState());
+    const ox = Math.floor((world.originX || 0) / 16), oz = Math.floor((world.originZ || 0) / 16);
+    const pcx = Math.floor(player.x / 16), pcz = Math.floor(player.z / 16);
+    if (s.pcx !== pcx || s.pcz !== pcz || s.ox !== ox || s.oz !== oz) {
+      Object.assign(s, { pcx, pcz, ox, oz });
+      s.ctx.order = eligibleChunkOrder(pcx + ox, pcz + oz).map(([dx, dz, edge]) => [pcx + dx, pcz + dz, edge]);
     }
+    const { ctx, tops } = s, order = ctx.order;
+    let capChunks = 0;
+    for (let i = 0; i < order.length; i++) if ((tops[i] = this.spawnChunkTop(order[i][0], order[i][1])) >= 0) capChunks++;
+    if (!capChunks) return 0;
+    s.env.time = survival.time ?? 0;
+    s.sub = skylightSubtracted(celestialAngle(s.env.time));
+    s.player = player;
+    ctx.capChunks = capChunks;
+    ctx.rand = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
+    ctx.spawn = this.spawnPoint ? this.spawnPoint() : null;
+    if (!this.spawnPoint && !world.dimension && world.spawn) {
+      const p = (this.cachedSpawnPoint ??= world.spawn());
+      ctx.spawn = { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
+    }
+    return findChunksForSpawning(ctx, this.difficulty !== PEACEFUL, true, animals);
+  }
+  // The reusable SpawnerAnimals context for this EntityWorld (its world and dimension are fixed).
+  spawnerState() {
+    const world = this.world, dim = world.dimension ?? 0, s = { pcx: NaN, pcz: NaN, ox: 0, oz: 0, tops: new Int16Array(289), sub: 0, player: null };
+    const sky = (x, y, z) => (openSky(world, x, y, z) ? 15 : 0), blockLight = (x, y, z) => (this.dimensionBlockLight ? this.dimensionBlockLight(x, y, z) : 0);
+    s.env = dim ? { skyLight: () => 0, lightValue: blockLight, thunderLightValue: blockLight, fullLight: blockLight } : {
+      skyLight: (x, y, z) => (this.skyLightAt ? this.skyLightAt(x, y, z) : sky(x, y, z)),
+      lightValue: (x, y, z) => (this.lightAt ? this.lightAt(x, y, z) : Math.max(0, sky(x, y, z) - s.sub)),
+      thunderLightValue: (x, y, z) => (this.thunderLightAt ? this.thunderLightAt(x, y, z) : Math.max(0, sky(x, y, z) - 10)),
+      fullLight: (x, y, z) => (this.fullLightAt ? this.fullLightAt(x, y, z) : sky(x, y, z)),
+    };
+    Object.assign(s.env, { thundering: () => !!this.isThundering?.(), time: 0, limit: 256, brightness: dim ? lightBrightnessTable(providerOf(dim).ambient) : SPAWN_BRIGHTNESS });
+    const hooks = this.spawnerHooks(s.env);
+    // Test doubles without metadata read meta 0.
+    const metaWorld = world.getMeta ? world : { get: (a, b, c) => world.get(a, b, c), getMeta: () => 0 };
+    s.ctx = {
+      rand: null, order: [], capChunks: 0, spawn: null,
+      count: (name) => {
+        let n = 0;
+        for (const e of this.entities) if (!e.persistent && creatureTypeOf(e.type) === name && entityActive(world, e)) n++;
+        return n;
+      },
+      chunkTop: (_cx, _cz, i) => (s.tops[i] >= 0 ? s.tops[i] : null),
+      block: (x, y, z) => world.get(x, y, z), normalCube, liquid: isLiquid, bedrock: 11, // internal id of Blocks.bedrock
+      solidTop: (x, y, z) => solidTopSurface(metaWorld, x, y, z),
+      isMaterial: (type, id) => (type.material === "water" ? id === WATER : id === 0), // Material.water / Material.air
+      playerWithin: (x, y, z) => { const p = s.player; return (p.x - x) ** 2 + (p.y - y) ** 2 + (p.z - z) ** 2 < 576; },
+      possibleCreatures: (type, x, y, z) => {
+        if (dim) return type.name === "monster" ? dimensionSpawnList(world, x, y, z) : spawnList(dim === NETHER ? 8 : 9, type.name);
+        const slot = world.biomeAt ? world.biomeAt(x, z)?.id ?? 1 : 1;
+        if (type.name === "monster" && (slot === 6 || slot === 134) && this.swampHutAt(x, y, z)) return WITCH_HUT_MONSTERS;
+        return spawnList(slot, type.name);
+      },
+      create: (name, x, y, z, yaw) => (ENTITY_TYPE_OF[name] ? hooks.createMob(ENTITY_TYPE_OF[name], x, y, z, yaw) : null),
+      canSpawnHere: (e) => hooks.canSpawnHere(e),
+      add: (e) => this.entities.push(e),
+      // A natural skeleton rolls EntitySkeleton's Nether wither roll itself (free).
+      onSpawn: (e, data, name) => { const opts = { group: data, free: name === "Skeleton" }; this.onSpawnWithEgg(e, opts); return opts.group ?? null; },
+      maxInChunk: maxSpawnedInChunk,
+    };
+    return s;
+  }
+  // Chunk.getTopFilledSegment for a chunk SpawnerAnimals may use, or -1 when the browser does not simulate it (outside the
+  // ticking window or the finite world). The highest section holding a block, from the live blocks (native keeps a storage that
+  // was emptied until the chunk reloads); cached per chunk for 400 ticks.
+  spawnChunkTop(cx, cz) {
+    const world = this.world, x0 = cx * 16, z0 = cz * 16;
+    if (world.isTicking && !(world.isTicking(x0, z0) && world.isTicking(x0 + 15, z0 + 15))) return -1;
+    if (!world.streaming && world.inside && !(world.inside(x0, 0, z0) && world.inside(x0 + 15, 0, z0 + 15))) return -1;
+    if (!world.chunkAt) {
+      if (world.chunkTop) return world.chunkTop(cx, cz) ?? -1;
+      return Math.max(0, (world.surface?.(x0 + 8, z0 + 8) ?? 0) - 1) & ~15;
+    }
+    const chunk = world.chunkAt(cx, cz);
+    if (!chunk) return -1;
+    const tick = this.worldTicks ?? 0, hit = (this.chunkTops ??= new WeakMap()).get(chunk);
+    if (hit && tick - hit.tick < 400 && tick >= hit.tick) return hit.top;
+    // A column's 16 cells of a section are four aligned 32-bit words (height is a multiple of 16).
+    const h = chunk.height, b = chunk.blocks, words = new Uint32Array(b.buffer, b.byteOffset, b.length >> 2), stride = h >> 2;
+    let top = 0;
+    scan: for (let sec = (h >> 4) - 1; sec > 0; sec--) for (let w = sec * 4; w < words.length; w += stride) {
+      if (words[w] | words[w + 1] | words[w + 2] | words[w + 3]) { top = sec * 16; break scan; }
+    }
+    if (hit) { hit.top = top; hit.tick = tick; } else this.chunkTops.set(chunk, { top, tick });
+    return top;
+  }
+  // ChunkProviderGenerate.getPossibleCreatures' MapGenScatteredFeature.func_143030_a: is (x, y, z) inside a swamp hut? The
+  // generator is this world's own, its starts built around each queried chunk once (streamed Java worlds with structures only).
+  swampHutAt(x, y, z) {
+    const world = this.world, cache = world.population?.structureCache;
+    if (!cache?.manager || world.worldType === "flat" || world.flat) return false;
+    const huts = (this.huts ??= { gen: new MapGenScatteredFeature(cache.seed, cache.manager), done: new Set() });
+    const nx = x + (world.originX || 0), nz = z + (world.originZ || 0), cx = nx >> 4, cz = nz >> 4, key = `${cx},${cz}`;
+    if (!huts.done.has(key)) { huts.gen.generate(cx, cz); huts.done.add(key); }
+    return huts.gen.isSwampHut(nx, y, nz);
+  }
+  // Entities outside the ticking window never update, so EntityLiving.despawnEntity never removes them. Natively the chunks out
+  // to the view distance keep updating, so a mob that may despawn and is beyond its 128-block range would be gone on its next
+  // update; such a frozen mob is dropped here. Mobs in the ticking window despawn through their own update.
+  sweepFrozen(player) {
+    const world = this.world;
+    if (!world.streaming) return;
+    this.entities = this.entities.filter((e) => entityActive(world, e) || !canDespawn(e) || e.ridingEntity || e.riddenByEntity ||
+      (player.x - e.x) ** 2 + (player.y - e.y) ** 2 + (player.z - e.z) ** 2 <= 128 ** 2);
   }
   // Spider keeps EntityCreature's legacy aggression/leap rules. Navigation reuses
   // the existing bounded PathFinder; its refresh/wander timing remains adapted.

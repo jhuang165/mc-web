@@ -35,7 +35,7 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 
 ## Priority 2: entities and AI
 - Spawner minecart (MinecartSpawner): implemented, see `spawner-cart.md`; gaps are Java region import of carts and SpawnData Riding chains.
-- Natural spawning: SpawnerAnimals runs as an adapted pass only; per-biome spawn lists are not applied (all 61 biome rows are Partial).
+- Natural spawning: Partial. Batch 13 ports SpawnerAnimals.findChunksForSpawning with every biome's spawn lists, caps, HashMap chunk order, group data, the 400-tick animal cadence, Peaceful/doMobSpawning and the Nether/fortress/End lists (`natural-spawning.md`; 3 seeded native replays match). Open: the cap counts only the ticking window (36 chunks in streamed worlds, not 289), the cadence uses a session counter rather than the saved total world time, no dimension spawn point, the witch hut lookup only in swamp slots, and no replay reached bats, slimes, ocelots, horses or the Nether/End flow.
 - Boats: not standable; see `boats.md`.
 - Fireballs and thrown potions: fireballs are not saved; thrown potions are missing from region export.
 - Wither: effect on mobs and wither skull behaviour listed in `entity-parity-catalogue.md` as Partial.
@@ -47,7 +47,7 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 - Not available (reported as such): /achievement, /debug, /scoreboard, /spreadplayers, /tellraw.
 - Selectors (@p/@a/@r) operate over the single local player only (`src/command-selector.js`).
 - /summon covers 52 of the 57 EntityList registrations.
-- doMobSpawning and mobGriefing gamerules are Partial.
+- mobGriefing is Partial; doMobSpawning gates the SpawnerAnimals port, but live portal pigmen are not called yet.
 
 ## Priority 4: world generation, structures, dimensions
 - Nether Fortress: pieces are not in the structure NBT (`UNSUPPORTED_PIECE_IDS`); catalogued Partial.

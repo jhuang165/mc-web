@@ -144,7 +144,8 @@ export const SPAWN_BRIGHTNESS = Array.from({ length: 16 }, (_, i) => {
 // rand.nextInt(8)); EntityLiving: no living entity in the box, no colliding block (or
 // boat/minecart) box and no liquid; EntityCreature: 0.5 - brightness >= 0.
 // env: difficulty, skyLight(x, y, z) (saved EnumSkyBlock.Sky), lightValue(x, y, z) (World.getBlockLightValue),
-// thundering, thunderLightValue(x, y, z), entityCollision(box), blockCollision(box), liquid(box).
+// thundering, thunderLightValue(x, y, z), entityCollision(box), blockCollision(box), liquid(box), and optionally
+// brightness (the provider's lightBrightnessTable; the Overworld's by default).
 // rand is the mob's Entity.rand.
 export function monsterCanSpawnHere(mob, env, rand) {
   if (env.difficulty === 0) return false;
@@ -154,7 +155,7 @@ export function monsterCanSpawnHere(mob, env, rand) {
   if (light > rand.nextInt(8)) return false;
   const box = mobBox(mob.x, mob.y, mob.z, mob.width, mob.height);
   if (env.entityCollision(box) || env.blockCollision(box) || env.liquid(box)) return false;
-  return f(f(0.5) - SPAWN_BRIGHTNESS[env.lightValue(x, y, z)]) >= 0;
+  return f(f(0.5) - (env.brightness ?? SPAWN_BRIGHTNESS)[env.lightValue(x, y, z)]) >= 0;
 }
 
 // TileEntityMobSpawnerRenderer.func_147517_a (bmp.a(agq, DDDF)) as a column-major 4x4 (three.js

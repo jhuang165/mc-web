@@ -3,7 +3,7 @@
 // public/research/squid-bat.md lists what is probed and what is only bytecode-derived. entities.js, ai.js, combat.js and
 // squid-bat-renderer.js call into this module. Floats are fround-ed where the original keeps floats.
 import { mhSin, mhCos } from "./lighting.js";
-import { DYE, isLiquid, normalCube, WATER } from "./world.js";
+import { DYE } from "./world.js";
 import { waterAcceleration } from "./fluids.js";
 
 const f = Math.fround;
@@ -209,24 +209,6 @@ export const batHangingFromFlags = (flags) => (Number(flags) & 1) !== 0;
 export function batHurt(e) {
   if (e.batHanging) e.batHanging = false;
 }
-
-// ---------------------------------------------------------------------------------------------------------------------------------
-// SpawnerAnimals for the two creature types this module adds (SpawnerAnimals.findChunksForSpawning, bytecode-derived: not probed).
-// ---------------------------------------------------------------------------------------------------------------------------------
-export const SPAWN_CAP = 15; // EnumCreatureType.waterCreature and .ambient: maxNumberOfCreature 15
-export const ELIGIBLE_CHUNKS = 289; // a single player: 17 x 17 chunks
-export const spawnCapAllows = (count, chunks = ELIGIBLE_CHUNKS) => count <= Math.floor((SPAWN_CAP * chunks) / 256);
-export const MAX_SPAWNED_IN_CHUNK = 4; // EntityLiving.getMaxSpawnedInChunk
-// SpawnerAnimals.canCreatureTypeSpawnAtLocation: water creatures need liquid at and below the cell and no normal cube above; air creatures
-// need a solid top surface under the cell (not bedrock), the cell neither a normal cube nor liquid, and no normal cube above.
-export function canSpawnAtLocation(kind, w, x, y, z) {
-  if (y < 1) return false;
-  if (kind === "water") return isLiquid(w.get(x, y, z)) && isLiquid(w.get(x, y - 1, z)) && !normalCube(w.get(x, y + 1, z));
-  if (!w.solid(x, y - 1, z)) return false;
-  const below = w.get(x, y - 1, z);
-  return below !== 7 && !normalCube(w.get(x, y, z)) && !isLiquid(w.get(x, y, z)) && !normalCube(w.get(x, y + 1, z));
-}
-export { WATER };
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Legacy (non-AI) body turn: the tail of EntityLivingBase.onUpdate (sv.h) plus sv.f(FF). The squid is not AI-enabled, so it uses

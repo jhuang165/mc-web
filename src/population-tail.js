@@ -8,24 +8,14 @@
 // is unseeded in 1.7.10. Original numeric IDs. Replayed natively in population-tail.test.js.
 import { javaTemperature } from "./java-world.js";
 import { materialOf } from "./gen-world.js";
+import { BIOME_SLOTS, spawnList } from "./spawn-lists.js";
 
 const f = Math.fround;
 const WATER = 9, FLOWING_WATER = 8, BEDROCK = 7, SNOW_LAYER = 78, ICE = 79, PACKED_ICE = 174;
 
-// BiomeGenBase.spawnableCreatureList entries [entity, weight, min group, max group].
-const FARM = [["Sheep", 12, 4, 4], ["Pig", 10, 4, 4], ["Chicken", 10, 4, 4], ["Cow", 8, 4, 4]];
-const LISTS = [
-  [[0, 2, 7, 10, 11, 12, 13, 16, 17, 24, 25, 26, 37, 38, 39, 130, 140, 165, 166, 167], []],
-  [[1, 129], [...FARM, ["EntityHorse", 5, 2, 6]]],
-  [[3, 6, 20, 27, 28, 29, 34, 131, 132, 134, 155, 156, 157, 162], FARM],
-  [[4, 18], [...FARM, ["Wolf", 5, 4, 4]]],
-  [[5, 19, 30, 31, 32, 33, 133, 158, 160, 161], [...FARM, ["Wolf", 8, 4, 4]]],
-  [[14, 15], [["MushroomCow", 8, 4, 8]]],
-  // BiomeGenJungle adds a second chicken entry.
-  [[21, 22, 23, 149, 151], [...FARM, ["Chicken", 10, 4, 4]]],
-  [[35, 36, 163, 164], [...FARM, ["EntityHorse", 1, 2, 6]]],
-];
-export const CREATURES = new Map(LISTS.flatMap(([slots, list]) => slots.map((slot) => [slot, list])));
+// BiomeGenBase.spawnableCreatureList entries [entity, weight, min group, max group] (spawn-lists.js) for every slot
+// ChunkProviderGenerate populates (Hell and Sky are never decorated by it).
+export const CREATURES = new Map(BIOME_SLOTS.filter((slot) => slot !== 8 && slot !== 9).map((slot) => [slot, spawnList(slot, "creature")]));
 // BiomeGenBase.getSpawningChance.
 export const SPAWN_CHANCE = f(0.1);
 

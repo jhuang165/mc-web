@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { EntityWorld, setEntityRandom, entityHit, actorCollides, ENTITY_TYPES, interpolateRotation, wrapDegrees, nearAngle, mobPose, moveEntityWithHeading, moveEntity, moveFlying, jump, knockBack, addVelocity, aiMoveSpeed } from "./entities.js";
 import { Survival } from "./survival.js";
+import { creatureTypeOf } from "./spawn-lists.js";
+import { JavaRandom } from "./java-random.js";
 const flat = {
   numericSeed: 123,
+  getMeta: () => 0,
   solid: (x, y, z) => y < 0,
   get: (x, y, z) => (y < 0 ? 1 : 0),
   surface: () => 0,
@@ -63,16 +66,23 @@ test("legacy sword damage wears the tool, suppresses duplicate hits, and emits o
   for (let i = 0; i < 20; i++) a.tick(player, p);
   assert.equal(a.entities.length, 0);
 });
-test("night spawns hostile mobs while daylight does not", () => {
+test("night spawns hostile mobs through SpawnerAnimals while daylight spawns only animals", () => {
+  const monster = (e) => creatureTypeOf(e.type) === "monster";
   const a = new EntityWorld(flat, []),
     p = new Survival({ time: 14000 }),
     player = { x: 64, y: 0, z: 64 };
-  for (let i = 0; i < 200; i++) a.tick(player, p);
-  assert.equal(a.entities.filter((e) => e.type === "zombie").length, 1);
+  a.naturalSpawning = true;
+  a.worldRandom = new JavaRandom(1);
+  for (let i = 0; i < 20; i++) a.tick(player, p);
+  assert.ok(a.entities.some(monster), "monsters at night");
   const b = new EntityWorld(flat, []);
+  b.naturalSpawning = true;
+  b.worldRandom = new JavaRandom(1);
   p.time = 6000;
   for (let i = 0; i < 400; i++) b.tick(player, p);
-  assert.equal(b.entities.length, 0);
+  assert.equal(b.entities.filter(monster).length, 0);
+  // Tick 0 is a multiple of 400: the creature pass ran once.
+  assert.ok(b.entities.some((e) => creatureTypeOf(e.type) === "creature"), "animals in daylight");
 });
 test("nearby zombies damage survival players but not creative players", () => {
   const a = new EntityWorld(flat, [

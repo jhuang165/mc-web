@@ -1170,6 +1170,14 @@ async function launch(record, prepared) {
     // World.rand for EntityLiving.onSpawnWithEgg, and World.func_147462_b at a block.
     mobs.worldRandom = weather.random;
     mobs.localDifficulty = (x, y, z) => localDifficulty(mobs.difficulty, survival.time, inhabited.value, world.isLoaded(x,z) && y >= 0 && y < world.height);
+    // SpawnerAnimals (natural-spawning.md): the saved sky light, World.getBlockLightValue with skylightSubtracted 10 while
+    // thundering and 0 (getFullBlockLightValue, animals), the weather and WorldInfo's spawn point (overworld only here).
+    mobs.skyLightAt = (x, y, z) => (scene.light ? scene.light.skyAt(x, y, z) : 15);
+    mobs.thunderLightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, 10) : 15);
+    mobs.fullLightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, 0) : 15);
+    mobs.isThundering = () => weather.isThundering();
+    mobs.spawnPoint = () => { const s = !world.dimension && active?.worldSpawn; return s ? { x: s[0], y: s[1], z: s[2] } : null; };
+    mobs.naturalSpawning = true;
     arrows.wet = (a) => isWet(weather, world, { x: a.x, y: a.y, z: a.z, inWater: a.water }, 0.5);
     mobRenderer.clear();
     animation.reset();
