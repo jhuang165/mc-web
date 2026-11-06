@@ -73,7 +73,12 @@ function payload(state,ox,oz,report,blockAt) {
   n.PersistenceRequired=byte(e.persistent?1:0);n.Leashed=byte(e.leash?1:0);
   if(e.leash?.knot)n.Leash=comp({X:int(e.leash.knot.x+ox),Y:int(e.leash.knot.y),Z:int(e.leash.knot.z+oz)});
   else if(e.leash)n.Leash=comp({UUIDMost:long(0),UUIDLeast:long(0)});
-  if(e.type==='wither_skeleton')n.SkeletonType=byte(1); // EntitySkeleton.writeEntityToNBT
+  if(e.type==='skeleton'||e.type==='wither_skeleton'){n.SkeletonType=byte(e.type==='wither_skeleton'?1:0);delete n.Age;delete n.InLove;} // EntitySkeleton.writeEntityToNBT always writes SkeletonType
+  // EntityCreeper.writeEntityToNBT: powered (only when charged), Fuse, ExplosionRadius and ignited (mob-nbt-reference.json: 30 and 3 by default).
+  if(e.type==='creeper'){delete n.Age;delete n.InLove;if(e.powered)n.powered=byte(1);n.Fuse=short(30);n.ExplosionRadius=byte(3);n.ignited=byte(e.ignited?1:0);}
+  if(e.type==='chicken')n.IsChickenJockey=byte(0); // EntityChicken.writeEntityToNBT; this build has no chicken jockeys
+  // EntityMob / EntityGolem subclasses with no NBT of their own are not EntityAgeable (mob-nbt-reference.json).
+  if(['spider','cave_spider','witch','silverfish','snow_golem'].includes(e.type)){delete n.Age;delete n.InLove;}
   if(e.type==='pig')n.Saddle=byte(e.saddled?1:0); // EntityPig.writeEntityToNBT
   if(e.type==='sheep'){n.Color=byte(e.color??0);n.Sheared=byte(e.sheared?1:0);}
   // EntityTameable and EntityWolf.writeEntityToNBT: Sitting, Angry, CollarColor and OwnerUUID (the single player's own id, or Owner left out for a wild wolf).

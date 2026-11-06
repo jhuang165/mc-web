@@ -26,7 +26,13 @@ The browser has no Java save loader. An imported version-9 Java world is its see
 - **Blocks** use `fromOriginal`. Unsupported states become air; the report lists them by `id:meta` as `unmapped` (registered) or `unregistered` (unknown, including Add-nibble high IDs). Approximations list the browser target and any runtime state the export cannot hold: fluid `flowing`, farmland `moisture`, furnace `facing`/`lit`. Chest facing is not counted as an approximation because each chest cell gets a chest record with its facing.
 - **Chests** (`Chest` tile entities on a chest cell) carry 27 slots (`Slot & 255`, like TileEntityChest). **Furnaces** carry three slots (signed Slot), `BurnTime` and `CookTime`. The fuel's burn time is recomputed, matching TileEntityFurnace.readFromNBT. These records go in `player.chests`/`player.furnaces`, which `legacyPlayer` and `Survival` already load. Omitting `player.slots` keeps the default Creative hotbar.
 - **Items** map through the same original-ID table as the item catalogue (`tools/inventory-replay.mjs` `MC_IDS`, checked equal in the tests). Durability is kept (clamped to the maximum). Wool, flower and dye damage are kept as variants. Other non-zero damage values are unsupported. Item NBT tags (enchantments, names) are stripped and counted. Counts above the browser stack limit are clamped. Non-positive counts and unmapped items are lost by `id:damage`.
-- **Entities**: only dropped items (`Item`) convert, to saved drops. Pos, Motion, Age (≤5,999) and PickupDelay (≤40, the browser cap) are kept, up to the 512-drop load limit. All other entities, mounts (`Riding`) and drops outside the area are counted by ID. Mobs need entity factories that do not exist yet.
+- **Entities**: dropped items (`Item`) convert to saved drops. Pos, Motion, Age (≤5,999) and PickupDelay (≤40, the browser cap) are kept, up to the 512-drop load limit.
+- **Mobs** convert to saved EntityWorld mobs (`java-mobs.js` `importedMobType`, up to 256):
+  - `JAVA_MOBS` ids use their own readers: Villager, VillagerGolem, Zombie, Slime, LavaSlime, Enderman, Squid, Bat, PigZombie, Ozelot, EntityHorse, Blaze, Ghast, WitherBoss, Skeleton, EnderDragon and EnderCrystal.
+  - `JAVA_SUMMON_MOBS` ids use the `/summon` reader: Pig, Cow, MushroomCow, Sheep, Chicken, Wolf, Spider, CaveSpider, Creeper, Witch, Silverfish and SnowMan. EntityList.createEntityFromNBT is the same call for chunks and `/summon`.
+  - Their layouts and read-back come from [mob-nbt-reference.json](mob-nbt-reference.json) (MobNbtProbe, 22 records). HealF is clamped to the saved `generic.maxHealth`, because EntityLivingBase reads Attributes first. A tamed wolf whose Attributes still say 8 therefore loads with 8 health. The sheep fleece is `Color & 15`. Fire is kept, and so are CustomName and PersistenceRequired.
+  - Creeper Fuse/ExplosionRadius and the chicken-jockey flag have no browser state and are dropped.
+- Other entities, mounts (`Riding`) and entities outside the area are counted as lost by ID.
 - **Other tile entities** (signs, spawners, chests without a chest cell, entries outside their chunk) and **scheduled ticks** (`TileTicks`) are counted as lost.
 
 The default mode is Creative. The start position is above the area's centre column.
@@ -36,14 +42,15 @@ The default mode is Creative. The start position is above the area's centre colu
 `src/region-import.test.js` writes regions with the JS NBT/region writers, then re-imports every export through the Import screen's acceptance path: the envelope checks, `World.restore`, `importedRuntime`, `Survival` and `ItemEntities.load`. Cases:
 
 - a 2×2 area across four negative/positive regions, with a missing region and an unused region;
-- chest, furnace and item-entity conversion, plus lost signs, mobs, riders, bad slots, tags and an off-chunk tile;
+- chest, furnace and item-entity conversion, plus mob conversion and lost signs, riders, bad slots, tags and an off-chunk tile;
 - unmapped, unregistered high-ID and approximated states;
 - a full 8×8 generator area rebuilt from its own seed in exactly two edits, with all 16,384 biome bytes matching; the same chunks under a misaligned base exceed the budget;
 - three original AnvilChunkLoader payloads from [chunk-nbt-reference.json](chunk-nbt-reference.json), whose cell inventory equals [region inspection](region-inspection.md);
 - malformed names, duplicates, oversized areas and slot/payload coordinate mismatches.
+- `src/mob-nbt.test.js`: each of the 22 native mob compounds imports with the native getters' values, restores live, survives a whole region import, and survives export→import (13 browser mobs, including a charged creeper and an owned wolf).
 
 No real Java save with tile entities is checked in. Chest/furnace NBT layouts were read from the pinned JAR's `aow`/`apg` readFromNBT.
 
 ## Open
 
-The browser still lacks streaming beyond 128×128, a compact cell payload (the 100,000-edit limit dominates), biome and light import, mob/tile-entity factories, item NBT, pending ticks, level.dat/player data, and Java write-back.
+The browser still lacks streaming beyond 128×128, a compact cell payload (the 100,000-edit limit dominates), biome and light import, tile-entity factories beyond chests/furnaces, mob riders and the remaining entity ids, item NBT, pending ticks, level.dat/player data, and Java write-back.

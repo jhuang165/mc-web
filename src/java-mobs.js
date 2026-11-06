@@ -1,6 +1,7 @@
 import { readNbt as readHorseNbt } from './horse.js';
 // Java entity NBT -> saved browser mob records, for the entities whose live behaviour this build ports from 1.7.10:
-// Villager (yv), VillagerGolem (wt) and Zombie (yq, with its zombie villager state). The record is what EntityWorld's
+// JAVA_MOBS have their own readers here (Villager yv, VillagerGolem wt, Zombie yq with its zombie villager state, ...);
+// JAVA_SUMMON_MOBS reuse summonedMobRecord. The record is what EntityWorld's
 // constructor reads back (entities.js); fields it re-derives (AI timers, velocities, the village home) are not written.
 // The exporter is the mirror image in region-export.js; src/java-mobs.test.js round-trips them.
 import { ocelotFieldsFrom } from './ocelot.js';
@@ -10,6 +11,10 @@ import { nbtGet } from './nbt-get.js';
 import { slimeSizeFromNbt } from './slime.js';
 
 export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', LavaSlime: 'magma_cube', PigZombie: 'pigman', Ozelot: 'ocelot', EntityHorse: 'horse', Blaze: 'blaze', Ghast: 'ghast', WitherBoss: 'wither', Skeleton: 'skeleton', EnderDragon: 'ender_dragon', EnderCrystal: 'ender_crystal' });
+// The mobs whose chunk NBT goes through the /summon reader (summonedMobRecord; EntityList.createEntityFromNBT is the same call for
+// both): their layouts are public/research/mob-nbt-reference.json (MobNbtProbe), checked by src/mob-nbt.test.js.
+export const JAVA_SUMMON_MOBS = Object.freeze({ Pig: 'pig', Cow: 'cow', MushroomCow: 'mooshroom', Sheep: 'sheep', Chicken: 'chicken', Wolf: 'wolf', Spider: 'spider', CaveSpider: 'cave_spider', Creeper: 'creeper', Witch: 'witch', Silverfish: 'silverfish', SnowMan: 'snow_golem' });
+export const importedMobType = (id) => JAVA_MOBS[id] ?? JAVA_SUMMON_MOBS[id];
 export const IMPORT_MOB_LIMIT = 256; // EntityWorld keeps at most this many saved mobs
 
 const tagValue = nbtGet; // NBTTagCompound getters: numeric tags convert across types (nbt-get.js)
@@ -71,7 +76,21 @@ export function gearNbtFields(tag, shiftX = 0, shiftZ = 0) {
   }
   return out;
 }
+// EntityLivingBase.readEntityFromNBT reads Attributes before HealF, so setHealth clamps to the saved generic.maxHealth.
+function savedMaxHealth(entity) {
+  const list = tagValue(entity, 'Attributes', NBT.LIST);
+  for (const a of list?.elementType === NBT.COMPOUND ? list.items : []) if (tagValue(a, 'Name', NBT.STRING, '') === 'generic.maxHealth') return tagValue(a, 'Base', NBT.DOUBLE);
+  return undefined;
+}
 export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = () => null } = {}) {
+  const summonType = JAVA_SUMMON_MOBS[tagValue(entity, 'id', NBT.STRING, '')];
+  if (summonType) {
+    const pos = numbers(entity, 'Pos', NBT.DOUBLE, 3), parsed = pos && summonedMobRecord(summonType, entity, { convertItem });
+    if (!parsed) return null;
+    const max = savedMaxHealth(entity), record = { ...parsed.record, x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ, fire: Math.max(-1, tagValue(entity, 'Fire', NBT.SHORT, -1)) };
+    if (Number.isFinite(max) && max > 0) record.health = Math.min(tagValue(entity, 'HealF', NBT.FLOAT, tagValue(entity, 'Health', NBT.SHORT, max)), max);
+    return Object.assign(record, gearNbtFields(entity, shiftX, shiftZ));
+  }
   const nativeType = JAVA_MOBS[tagValue(entity, 'id', NBT.STRING, '')];
   const type = nativeType === 'skeleton' && tagValue(entity, 'SkeletonType', NBT.BYTE, 0) === 1 ? 'wither_skeleton' : nativeType;
   const pos = numbers(entity, 'Pos', NBT.DOUBLE, 3);

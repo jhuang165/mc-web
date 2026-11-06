@@ -100,9 +100,10 @@ test('importing a Java area brings zombie villagers, golems, villagers and the v
   const villages = await encodeCompressedNbt(villageDocument({ tick: 321, villages: [village(x0 + 8, z0 + 8), village(900, 900)] }));
   const { record, report } = await importJavaRegionArea(files, { area: { chunkX: -2, chunkZ: 3, width: 1, depth: 1 }, structureData: [{ filename: 'data/villages.dat', bytes: villages }] });
   // The area moves by +80 blocks in x (chunk -2 to chunk 3).
-  assert.deepEqual(report.entities.converted, { Villager: 1, VillagerGolem: 1, Zombie: 1 });
-  assert.deepEqual(report.entities.lost.map((e) => e.id).sort(), ['Creeper', 'Zombie (outside area)']);
-  assert.deepEqual(record.entities.map((e) => e.type), ['zombie', 'iron_golem', 'villager']);
+  // The creeper goes through the summon reader (JAVA_SUMMON_MOBS, mob-nbt.test.js).
+  assert.deepEqual(report.entities.converted, { Creeper: 1, Villager: 1, VillagerGolem: 1, Zombie: 1 });
+  assert.deepEqual(report.entities.lost.map((e) => e.id).sort(), ['Zombie (outside area)']);
+  assert.deepEqual(record.entities.map((e) => e.type), ['zombie', 'iron_golem', 'villager', 'creeper']);
   const [zombie, golem, villager] = record.entities;
   assert.deepEqual([zombie.x, zombie.y, zombie.z, zombie.villager, zombie.conversionTime, zombie.growingAge, zombie.health], [52, 71, 52, true, 500, -1, 14]);
   assert.deepEqual([golem.playerCreated, villager.profession, villager.riches], [true, 2, 9]);
@@ -114,7 +115,7 @@ test('importing a Java area brings zombie villagers, golems, villagers and the v
   // The record is what the browser loads: the zombie villager keeps its countdown, the village is a live collection.
   const w = { get: () => 0, getMeta: () => 0, solid: () => false, surface: () => 0, spawn: () => ({ x: 64.5, y: 0, z: 64.5 }), numericSeed: 1 };
   const ew = new EntityWorld(w, JSON.parse(JSON.stringify(record.entities)).map((e) => ({ ...e, x: 64.5, y: 10, z: 64.5 })), () => 0.5);
-  assert.deepEqual(ew.entities.map((e) => e.type), ['zombie', 'iron_golem', 'villager']);
+  assert.deepEqual(ew.entities.map((e) => e.type), ['zombie', 'iron_golem', 'villager', 'creeper']);
   ew.villages.loadJSON(record.villages);
   assert.equal(ew.villages.villages.length, 1);
 });

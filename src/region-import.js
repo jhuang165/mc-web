@@ -23,7 +23,7 @@ import { DISPENSER } from './dispenser-piston.js';
 import { PISTON_MOVING } from './redstone-blocks-2.js';
 import { DISPENSER_SLOTS } from './dispenser-container.js';
 import { ORIGINAL_ITEMS } from './original-items.js';
-import { JAVA_MOBS, IMPORT_MOB_LIMIT, javaMobFromNbt } from './java-mobs.js';
+import { importedMobType, IMPORT_MOB_LIMIT, javaMobFromNbt } from './java-mobs.js';
 import { decodeCompressedNbt } from './nbt-compression.js';
 import { villagesFromNbt } from './village.js';
 import { isMapFile, mapsFromFiles } from './maps-nbt.js';
@@ -371,13 +371,13 @@ export async function importJavaRegionArea(regions, options = {}) {
       } else tally(tileLost, inside ? id : `${id} (outside its chunk)`);
     }
 
-    // Entities: dropped items (EntityItem, Pos/Motion/Age/PickupDelay/Item) and the three mobs above. Riders count as lost.
+    // Entities: dropped items (EntityItem, Pos/Motion/Age/PickupDelay/Item) and the mobs java-mobs.js reads. Riders count as lost.
     for (const entity of entities) {
       report.entities.total++;
       const id = get(entity, 'id', NBT.STRING, '?'), pos = doubles(entity, 'Pos'), motion = doubles(entity, 'Motion');
       for (const rider of [get(entity, 'Riding', NBT.COMPOUND)].filter(Boolean)) { report.entities.total++; tally(entityLost, get(rider, 'id', NBT.STRING, '?')); }
-      // Villager, VillagerGolem and Zombie (IsBaby / IsVillager / ConversionTime) become live mobs (java-mobs.js).
-      if (JAVA_MOBS[id] && pos?.every(Number.isFinite)) {
+      // JAVA_MOBS and JAVA_SUMMON_MOBS become live mobs (java-mobs.js).
+      if (importedMobType(id) && pos?.every(Number.isFinite)) {
         const mx = pos[0] + shiftX, mz = pos[2] + shiftZ;
         const inArea = mx >= destination.chunkX * 16 && mx < (destination.chunkX + area.width) * 16 && mz >= destination.chunkZ * 16 && mz < (destination.chunkZ + area.depth) * 16;
         const mob = inArea && mobs.length < IMPORT_MOB_LIMIT ? javaMobFromNbt(entity, { shiftX, shiftZ, convertItem }) : null;
