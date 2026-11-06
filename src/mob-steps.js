@@ -11,6 +11,7 @@
 //   Pig / Cow / Sheep / Chicken mob.<name>.step    0.15  1.0
 //   Iron golem                 mob.irongolem.walk  1.0   1.0
 //   Silverfish                 canTriggerWalking() is false: silent
+//   Horse                      mob.horse.soft / wood / gallop (horseStep)
 //   Creeper, villager, witch   no override: Entity.func_145780_a, the block's SoundType (block-sounds.js)
 import { footstepSound } from "./block-sounds.js";
 import { countsVertical } from "./ladders.js";
@@ -19,7 +20,9 @@ const f = Math.fround;
 const own = (name, volume) => ({ name, volume: f(volume), pitch: 1 });
 export const MOB_STEP_SOUNDS = {
   zombie: own("mob.zombie.step", 0.15),
+  pigman: own("mob.zombie.step", 0.15), // EntityPigZombie extends EntityZombie
   skeleton: own("mob.skeleton.step", 0.15),
+  wither_skeleton: own("mob.skeleton.step", 0.15), // EntitySkeleton type 1
   spider: own("mob.spider.step", 0.15),
   cave_spider: own("mob.spider.step", 0.15),
   pig: own("mob.pig.step", 0.15),
@@ -30,11 +33,36 @@ export const MOB_STEP_SOUNDS = {
   wolf: own("mob.wolf.step", 0.15),
   iron_golem: own("mob.irongolem.walk", 1),
 };
+// EntityMob subclasses (sa.H swim sound "game.hostile.swim", EntityLivingBase.func_146067_o "game.hostile.hurt.fall.*").
+// Slime, magma cube, ghast, golems and animals are not EntityMobs, whatever their sound category.
+const ENTITY_MOBS = new Set(["zombie", "pigman", "skeleton", "wither_skeleton", "spider", "cave_spider", "creeper", "enderman", "silverfish", "witch", "blaze", "wither"]);
+export const isEntityMob = (type) => ENTITY_MOBS.has(type);
 // Entity.canTriggerWalking: only the silverfish turns it off among the mobs here.
 export const canTriggerWalking = (type) => type !== "silverfish" && type !== "squid" && type !== "bat" && type !== "ender_crystal"; // EntitySquid/EntityBat (squid-bat.js) override it to false
 
-// The sound of one step of `type` on the block `block` (internal id) with `above` in the cell over it, or null.
-export function mobStepSound(type, block, above = 0) {
+// EntityHorse.func_145780_a: the block's SoundType (the snow type under a snow layer, nothing over liquids) picks the clip.
+// A ridden horse, zombie horse or skeleton horse (types 0, 3, 4; not donkey or mule) counts its steps in `gallopSteps`
+// (field_110285_bP, not saved): steps 1-5 play mob.horse.wood, then every third step (6, 9, ...) mob.horse.gallop and the
+// others stay silent. Otherwise a wood block gives mob.horse.wood and everything else mob.horse.soft. Volume and pitch are
+// the SoundType's (volume x 0.15, frequency).
+function horseStep(e, block, above) {
+  // EntityHorse checks the stepped block's own material for liquid (Entity's version tests the snow layer instead).
+  if (!footstepSound(block, 0)) return null;
+  const s = footstepSound(block, above);
+  const clip = (name) => ({ name, volume: s.volume, pitch: s.pitch });
+  const type = e.horse?.type ?? 0;
+  if (e.rider && type !== 1 && type !== 2) {
+    e.gallopSteps = (e.gallopSteps || 0) + 1;
+    if (e.gallopSteps > 5 && e.gallopSteps % 3 === 0) return clip("mob.horse.gallop");
+    return e.gallopSteps <= 5 ? clip("mob.horse.wood") : null;
+  }
+  return clip(s.name === "step.wood" ? "mob.horse.wood" : "mob.horse.soft");
+}
+
+// The sound of one step of `type` on the block `block` (internal id) with `above` in the cell over it, or null. `e` is
+// the entity (the horse needs its type, rider and step counter).
+export function mobStepSound(type, block, above = 0, e = {}) {
+  if (type === "horse") return horseStep(e, block, above);
   return MOB_STEP_SOUNDS[type] ?? footstepSound(block, above);
 }
 
@@ -49,12 +77,14 @@ export function mobStepEvents(world, e, from, { hostile = false, random } = {}) 
   const x = Math.floor(e.x), y = Math.floor(e.y - 0.2), z = Math.floor(e.z), block = world.get(x, y, z);
   if (!(e.stepDistance > (e.nextStep ?? 1)) || !block) return [];
   e.nextStep = Math.floor(e.stepDistance) + 1;
-  const position = { x: e.x, y: e.y, z: e.z };
+  const position = { x: e.x, y: e.y, z: e.z }, events = [];
+  // Entity.moveEntity plays the swim sound when isInWater() and then func_145780_a regardless (the step is silent over liquids).
   if (e.inWater) {
     const volume = Math.min(1, f(Math.sqrt(f(f(f(e.vx * e.vx) * 0.2) + f(e.vy * e.vy) + f(f(e.vz * e.vz) * 0.2))) * f(0.35)));
     const pitch = f(1 + f(f(random() - random()) * 0.4));
-    return [{ sound: hostile ? "game.hostile.swim" : "game.neutral.swim", volume, pitch, position }];
+    events.push({ sound: hostile ? "game.hostile.swim" : "game.neutral.swim", volume, pitch, position });
   }
-  const s = mobStepSound(e.type, block, world.get(x, y + 1, z));
-  return s ? [{ sound: s.name, volume: s.volume, pitch: s.pitch, position }] : [];
+  const s = mobStepSound(e.type, block, world.get(x, y + 1, z), e);
+  if (s) events.push({ sound: s.name, volume: s.volume, pitch: s.pitch, position });
+  return events;
 }
