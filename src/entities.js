@@ -1795,7 +1795,7 @@ export class EntityWorld {
     this.walk(e, t, 0, () => this.slimeThink(e));
     e.slimeForward = e.moveForward;
     e.slimeStrafe = e.moveStrafing || 0;
-    slimeSquishEnd(e, rand, (dx, dz) => this.fx?.spawn(isMagma(e) ? MAGMA.particle : "iconcrack_" + SLIMEBALL, e.x + dx, e.y, e.z + dz, 0, 0, 0), (sound, volume, pitch) => this.events.push({ sound, volume, pitch, position: { x: e.x, y: e.y, z: e.z } }));
+    slimeSquishEnd(e, rand, (dx, dz) => this.fx?.spawn(isMagma(e) ? MAGMA.particle : "slime", e.x + dx, e.y, e.z + dz, 0, 0, 0), (sound, volume, pitch) => this.events.push({ sound, volume, pitch, position: { x: e.x, y: e.y, z: e.z } }));
     e.yaw = (-e.rotationYaw * Math.PI) / 180;
     // EntityPlayer.collideWithPlayer reaches mobs within the player's box grown 1 block sideways; b_ then needs size > 1,
     // line of sight and distance^2 < (0.6 * size)^2 (centre to centre), and hits for `size`.

@@ -15,6 +15,7 @@ import { WATER, isLiquid } from "./world.js";
 import { materialSolid } from "./plants.js";
 import { POTION_TYPES } from "./potions.js";
 import { noteColour } from "./note-blocks.js";
+import { makeReddustParticle, reddustTexture, makeEnchantParticle, stepEnchantParticle } from './extra-particles.js';
 import { makePortalParticle, stepPortalParticle, portalParticleScale, portalParticleLight } from './portal-particles.js';
 
 const f = Math.fround;
@@ -29,7 +30,7 @@ const liquidOrSolid = (b) => isLiquid(b) || materialSolid(b);
 
 // EntityFX.getFXLayer for each kind here.
 const LAYER = { crit2: 3, iconcrack: 2 };
-const KINDS = new Set(["bubble", "suspended", "depthsuspend", "townaura", "crit", "magicCrit", "mobSpell", "mobSpellAmbient", "spell", "instantSpell", "flame", "lava", "splash", "rain", "heart", "angryVillager", "happyVillager", "dripWater", "dripLava", "portal", "note"]);
+const KINDS = new Set(["bubble", "suspended", "depthsuspend", "townaura", "crit", "magicCrit", "mobSpell", "mobSpellAmbient", "spell", "instantSpell", "flame", "lava", "splash", "rain", "heart", "angryVillager", "happyVillager", "dripWater", "dripLava", "portal", "note", "reddust", "enchantmenttable", "slime"]);
 
 export class Fx {
   // `explosions` (ExplosionParticles) builds explode, smoke and largesmoke; `world` is the
@@ -83,6 +84,10 @@ export class Fx {
     let p;
     switch (name) {
       case 'portal': return makePortalParticle(this, x, y, z, vx, vy, vz);
+      case 'reddust': return makeReddustParticle(this, x, y, z, vx, vy, vz);
+      case 'enchantmenttable': return makeEnchantParticle(this, x, y, z, vx, vy, vz);
+      // RenderGlobal "slime": EntityBreakingFX(world, x, y, z, Items.slime_ball), the 5-argument constructor (no 0.1 motion scale).
+      case 'slime': return this.iconcrack(x, y, z, 0, 0, 0, 341, 0, false);
       case "bubble": {
         p = this.base("bubble", x, y, z, vx, vy, vz);
         p.tex = 32;
@@ -271,15 +276,17 @@ export class Fx {
   }
   // new EntityBreakingFX(world, x, y, z, vx, vy, vz, item, meta): the item icon, snow-block
   // gravity (1), half scale, motion * 0.1 plus the velocity.
-  iconcrack(x, y, z, vx, vy, vz, item, meta = 0) {
+  iconcrack(x, y, z, vx, vy, vz, item, meta = 0, scaled = true) {
     const p = this.base("iconcrack", x, y, z, 0, 0, 0);
     p.item = item;
     p.meta = meta;
     p.gravity = 1;
     p.scale = f(p.scale / 2);
-    p.mx = p.mx * f(0.1) + vx;
-    p.my = p.my * f(0.1) + vy;
-    p.mz = p.mz * f(0.1) + vz;
+    if (scaled) {
+      p.mx = p.mx * 0.10000000149011612 + vx;
+      p.my = p.my * 0.10000000149011612 + vy;
+      p.mz = p.mz * 0.10000000149011612 + vz;
+    }
     return p;
   }
   // EntityPlayerSP.onCriticalHit: new EntityCrit2FX(world, target), added directly.
@@ -294,6 +301,7 @@ export class Fx {
   // Each class's onUpdate.
   step(world, p) {
     if (p.kind === 'portal') { stepPortalParticle(p); return; }
+    if (p.kind === 'enchant') { stepEnchantParticle(p); return; }
     if (p.kind === "crit2") {
       const rand = p.rand, t = p.target();
       for (let i = 0; i < 16; i++) {
@@ -369,6 +377,7 @@ export class Fx {
       if (p.rand.nextFloat() > f(p.age / p.max)) this.spawn("smoke", p.x, p.y, p.z, p.mx, p.my, p.mz);
       p.my -= 0.03;
     } else if (k === "iconcrack") p.my -= 0.04 * p.gravity;
+    else if (k === "reddust") p.tex = reddustTexture(p);
     moveParticleEntity(world, p, p.mx, p.my, p.mz);
     if (k === "crit") {
       p.g = f(p.g * 0.96);
@@ -376,11 +385,11 @@ export class Fx {
       this.drag(p, f(0.7));
       p.my -= f(0.02);
     } else {
-      if ((k === "heart" || k === "spell" || k === "note") && p.y === p.py) {
+      if ((k === "heart" || k === "spell" || k === "note" || k === "reddust") && p.y === p.py) {
         p.mx *= 1.1;
         p.mz *= 1.1;
       }
-      this.drag(p, k === "flame" || k === "spell" ? f(0.96) : k === "lava" ? f(0.999) : k === "heart" ? f(0.86) : k === "note" ? f(0.66) : DRAG);
+      this.drag(p, k === "flame" || k === "spell" || k === "reddust" ? f(0.96) : k === "lava" ? f(0.999) : k === "heart" ? f(0.86) : k === "note" ? f(0.66) : DRAG);
     }
     if (p.onGround) {
       p.mx *= GROUND;
@@ -400,7 +409,7 @@ export class Fx {
     let scale = p.scale;
     const t = f(f(p.age + f(partial)) / p.max);
     if (p.kind === 'portal') scale = p.scale = portalParticleScale(p, partial);
-    else if (p.kind === "crit" || p.kind === "heart" || p.kind === "note") scale = f(p.base * clamp01(f(t * 32)));
+    else if (p.kind === "crit" || p.kind === "heart" || p.kind === "note" || p.kind === "reddust") scale = f(p.base * clamp01(f(t * 32)));
     else if (p.kind === "flame") scale = f(p.base * f(1 - f(f(t * t) * f(0.5))));
     else if (p.kind === "lava") scale = f(p.base * f(1 - f(t * t)));
     const u = f((p.tex % 16) / 16), v = f(Math.trunc(p.tex / 16) / 16);
@@ -409,7 +418,7 @@ export class Fx {
   // getBrightnessForRender overrides: flame adds block light as it ages, lava is fully lit,
   // a lava drip is 257 (block light past full).
   brightness(p, partial, packed) {
-    if (p.kind === 'portal') return portalParticleLight(p, packed);
+    if (p.kind === 'portal' || p.kind === 'enchant') return portalParticleLight(p, packed);
     if (p.kind === "flame") {
       const t = clamp01(f(f(p.age + f(partial)) / p.max));
       return Math.min(240, (packed & 255) + Math.trunc(f(f(t * 15) * 16))) | (((packed >> 16) & 255) << 16);

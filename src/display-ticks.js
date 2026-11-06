@@ -12,9 +12,12 @@ import { WATER, LAVA, FIRE, SNOW_LAYER, normalCube } from "./world.js";
 import { canCatchFire } from "./fire.js";
 import { blocksMovement } from "./plants.js";
 import { isStair, stairSolidTop } from "./stairs.js";
+import { wireDisplay, redstoneTorchDisplay, oreSparkle, repeaterDisplay, enchantTableDisplay } from "./redstone-particles.js";
 
 const f = Math.fround;
 const TORCH = 20, FURNACE = 14, LEAVES = 5;
+// This build's ids: lit redstone torch, wire, lit ore, repeater, enchanting table, bookshelf.
+const RS_TORCH = 120, RS_WIRE = 107, RS_ORE_LIT = 65, REPEATER = 112, ENCHANT_TABLE = 86, BOOKSHELF = 21;
 
 // World.doesBlockHaveSolidTopSurface: an opaque full cube, or a full snow layer (meta 7).
 export function solidTopSurface(world, x, y, z) {
@@ -28,7 +31,7 @@ export function solidTopSurface(world, x, y, z) {
 
 // `rand` is the client World.rand, shared with RenderGlobal's filter; `lit(x, y, z)` says
 // whether a furnace is burning; `canStrike(x, y, z)` is World.canLightningStrikeAt for the leaves.
-export function displayTicks(world, cx, cy, cz, { rand, fx, sound = () => {}, lit = () => false, canStrike = () => false, voidFog = true, random = new JavaRandom(Math.floor(Math.random() * 2 ** 48)) }) {
+export function displayTicks(world, cx, cy, cz, { rand, fx, repeaterLit = () => false, sound = () => {}, lit = () => false, canStrike = () => false, voidFog = true, random = new JavaRandom(Math.floor(Math.random() * 2 ** 48)) }) {
   for (let i = 0; i < 1000; i++) {
     const x = cx + rand.nextInt(16) - rand.nextInt(16), y = cy + rand.nextInt(16) - rand.nextInt(16), z = cz + rand.nextInt(16) - rand.nextInt(16);
     const b = world.get(x, y, z);
@@ -38,11 +41,11 @@ export function displayTicks(world, cx, cy, cz, { rand, fx, sound = () => {}, li
       fx.spawn("depthsuspend", f(x + rand.nextFloat()), f(y + rand.nextFloat()), f(z + rand.nextFloat()));
       continue;
     }
-    randomDisplayTick(world, x, y, z, b, random, { fx, sound, lit, canStrike });
+    randomDisplayTick(world, x, y, z, b, random, { fx, sound, lit, canStrike, repeaterLit, worldRand: rand });
   }
 }
 
-export function randomDisplayTick(world, x, y, z, b, random, { fx, sound = () => {}, lit = () => false, canStrike = () => false }) {
+export function randomDisplayTick(world, x, y, z, b, random, { fx, sound = () => {}, lit = () => false, canStrike = () => false, repeaterLit = () => false, worldRand = random }) {
   if (b === TORCH) torch(world, x, y, z, fx);
   else if (b === FURNACE) {
     if (lit(x, y, z)) furnace(x, y, z, random, fx);
@@ -53,6 +56,12 @@ export function randomDisplayTick(world, x, y, z, b, random, { fx, sound = () =>
       fx.spawn("dripWater", f(x + random.nextFloat()), y - 0.05, f(z + random.nextFloat()));
   } else if (b === 164) portalDisplayTick(world, x, y, z, random, fx, sound); // Nether portal
   else if (b === WATER || b === LAVA) liquid(world, x, y, z, b, random, fx, sound);
+  else if (b === RS_TORCH) redstoneTorchDisplay(world, x, y, z, random, fx);
+  else if (b === RS_WIRE) wireDisplay(world, x, y, z, random, fx);
+  else if (b === RS_ORE_LIT) oreSparkle(world, x, y, z, worldRand, fx);
+  else if (b === REPEATER) {
+    if (repeaterLit(x, y, z)) repeaterDisplay(world, x, y, z, random, fx);
+  } else if (b === ENCHANT_TABLE) enchantTableDisplay(world, x, y, z, random, fx, (i, j, k) => world.get(i, j, k) === BOOKSHELF, (i, j, k) => world.get(i, j, k) === 0);
 }
 
 // BlockTorch.randomDisplayTick: smoke then flame 0.7 up, pushed 0.27 off a wall (meta 1-4)
