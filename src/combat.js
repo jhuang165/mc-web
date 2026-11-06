@@ -14,6 +14,7 @@ import { witchDrops, witchEquipmentDrop, witchExperience } from "./witch.js";
 import { squidDrops, squidExperience } from "./squid-bat.js";
 import { dropCount as horseDropCount } from "./horse.js";
 import { DISC_FIRST } from "./note-jukebox-content.js";
+import { totalArmor, dropEquipment, equipmentExperience } from "./mob-equipment.js";
 const f = Math.fround;
 // Item ids of this build: porkchop, cooked porkchop, beef, steak, rotten flesh, leather,
 // arrow, bone, bow, string, spider eye, gunpowder, iron ingot. The chicken ids are entities.js's.
@@ -23,11 +24,13 @@ export const ANIMALS = new Set(["pig", "cow", "sheep", "chicken", "wolf", "ocelo
 // DamageSource.setDamageBypassesArmor: these skip applyArmorCalculations. Melee, arrows,
 // explosions, lava, cactus and inFire (fire blocks, lightning) are blocked by armour.
 const UNBLOCKABLE = new Set(["fall", "onFire", "drown", "inWall", "starve", "generic", "magic", "wither", "outOfWorld"]);
-// EntityZombie.getTotalArmorValue: 2 natural points; the others wear nothing here.
+// EntityZombie.getTotalArmorValue: 2 natural points (a pigman is a zombie) plus the worn armour, at most 20;
+// a skeleton has only what it wears (mob-equipment.js).
 const ARMOR = { zombie: 2, wither: 4 }; // EntityWither.getTotalArmorValue (xc.aV) 4
-// EntityLivingBase.applyArmorCalculations: amount * (25 - armour) / 25 in floats.
-export function armorReduced(type, amount, source, size = 1) {
-  const armor = type === "magma_cube" ? magmaArmor(size) : type === "pigman" ? PIGMAN.armor : ARMOR[type] || 0; // yf.aV = size * 3
+// EntityLivingBase.applyArmorCalculations: amount * (25 - armour) / 25 in floats. `equipment` is the mob's five native stacks.
+export function armorReduced(type, amount, source, size = 1, equipment = null) {
+  let armor = type === "magma_cube" ? magmaArmor(size) : type === "pigman" ? PIGMAN.armor : ARMOR[type] || 0; // yf.aV = size * 3
+  if (equipment) armor = type === "zombie" || type === "pigman" ? Math.min(20, armor + totalArmor(equipment)) : armor + totalArmor(equipment);
   if (!armor || UNBLOCKABLE.has(source)) return amount;
   return f(f(amount * (25 - armor)) / 25);
 }
@@ -48,8 +51,8 @@ const BOW_DROP = f(0.085), BOW_DURABILITY = 384;
 // arrows and bones, the equipment drop's nextFloat - looting * 0.01F and the rare drop's
 // nextInt(200) - looting. EntityLiving.dropFewItems draws its bonus only when looting > 0; the
 // animals' drop formulas always draw nextInt(1 + looting).
-export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, looting = 0 }, rand) {
-  const out = [], add = (id, n = 1, damage = 0) => { for (let i = 0; i < n; i++) out.push([id, damage]); };
+export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, looting = 0, toLive = null }, rand) {
+  const out = [], add = (id, n = 1, damage = 0, enchantments) => { for (let i = 0; i < n; i++) out.push(enchantments ? [id, damage, enchantments] : [id, damage]); };
   const generic = () => rand.nextInt(3) + (looting > 0 ? rand.nextInt(looting + 1) : 0);
   switch (e.type) {
     case "pig": add(burning ? COOKED_PORK : PORK, rand.nextInt(3) + 1 + rand.nextInt(1 + looting)); if (e.saddled) add(SADDLE); break; // wo.b: the saddle after the pork
@@ -85,13 +88,17 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
   }
   // EntityLiving.dropEquipment: a damageable item drops worn, maxDamage minus
   // nextInt(1 + nextInt(maxDamage - 25)), kept within [1, maxDamage - 25].
-  if (e.type === "skeleton" && playerHit && f(rand.nextFloat() - f(looting * f(0.01))) < BOW_DROP) {
+  // EntityLiving.dropEquipment of a mob wearing gear (mob-equipment.js): the bow, a golden sword, armour, a picked-up item.
+  // The native stacks are converted by `toLive` (entities.js passes mob-equipment-live.js's).
+  if (e.equipment) for (const stack of dropEquipment(e, rand, { playerHit, looting })) { const live = toLive?.(stack); if (live) add(live.id, 1, live.damage, live.enchantments); }
+  // A mob record without gear (combat-reference.json's bare entities) keeps the skeleton's bow and the pigman's sword.
+  else if (e.type === "skeleton" && playerHit && f(rand.nextFloat() - f(looting * f(0.01))) < BOW_DROP) {
     const k = Math.max(BOW_DURABILITY - 25, 1);
     add(BOW, 1, Math.min(k, Math.max(1, BOW_DURABILITY - rand.nextInt(rand.nextInt(k) + 1))));
   }
   // EntityLiving.dropEquipment for a witch's held potion (0.085F).
   if (e.type === "witch") { const held = witchEquipmentDrop(rand, e.held, playerHit, looting); if (held) add(held.id, 1, held.damage); }
-  if (e.type === "pigman") { const sword = pigmanSwordDrop(rand, e.held, playerHit, looting); if (sword) add(sword.id, 1, sword.damage); }
+  if (e.type === "pigman" && !e.equipment) { const sword = pigmanSwordDrop(rand, e.held, playerHit, looting); if (sword) add(sword.id, 1, sword.damage); }
   if (playerHit && rand.nextInt(200) - looting < 5) { // the one roll every mob draws; only the zombie and the pigman (a gold ingot, no draw) have a rare drop
     if (e.type === "zombie") add([IRON, CARROT, POTATO][rand.nextInt(3)]);
     else if (e.type === "pigman") add(pigmanRareDrop());
@@ -107,6 +114,7 @@ export function experiencePoints(e, rand, worldRand) {
   if (e.type === "villager" || e.type === "iron_golem" || e.type === "snow_golem" || e.type === "bat") return 0; // EntityLiving.experienceValue stays 0 (EntityVillager is no EntityMob or EntityAnimal)
   if (ANIMALS.has(e.type)) return 1 + worldRand.nextInt(3);
   if (e.type === "magma_cube") return slimeExperience(e.size); // experienceValue = size, like the slime
+  if (e.equipment && (e.type === "pigman" || e.type === "zombie" || e.type === "skeleton" || e.type === "wither_skeleton")) return 5 + equipmentExperience(e, rand); // getExperiencePoints: 5 plus 1 + nextInt(3) per item at chance <= 1
   if (e.type === "pigman") return pigmanExperience(rand, e.held);
   if (e.type === "slime") return slimeExperience(e.size); // experienceValue = size
   if (e.type === "wither") return 50; // EntityWither.experienceValue

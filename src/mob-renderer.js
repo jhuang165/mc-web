@@ -7,6 +7,7 @@ import { ENTITY_TYPES, mobPose } from "./entities.js";
 import { FLEECE_COLORS } from "./sheep.js";
 import { BRIGHTNESS, mhSin, mhCos } from "./lighting.js";
 import { heldItemMatrix } from "./player-renderer.js";
+import { syncMobEquipment } from "./mob-equipment-renderer.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { spiderLegs } from "./spider.js";
 import { SILVERFISH_MODEL, silverfishPose } from "./silverfish.js";
@@ -531,6 +532,7 @@ export class MobRenderer {
       if (r.wolf) animateWolf(r, e, pose);
       if (r.enderman) animateEnderman(r, e, pose, this);
       if (r.custom) r.custom(r, e, pose, partial);
+      syncMobEquipment(this, r, e); // worn armour and the held item (mob-equipment-renderer.js)
       r.limbs.forEach((l, i) => {
         if (spider) { l.rotation.set(0, -spider[i][0], -spider[i][1]); return; }
         if (creeper) { l.rotation.x = creeper[i + 1][0]; return; }

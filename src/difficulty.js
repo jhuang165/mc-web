@@ -2,6 +2,7 @@
 // classes by tools/probes/DifficultyProbe.java (public/research/difficulty-reference.json).
 // GameSettings.difficulty (bbj.au) is a client option, default Normal, which the integrated
 // server copies to every World.difficultySetting.
+import { addRandomArmor, enchantEquipment, halloweenHead, DEFAULT_DROP_CHANCE, GOLDEN_SWORD, IRON_SWORD, IRON_SHOVEL, BOW, STONE_SWORD } from "./mob-equipment.js";
 const f = Math.fround;
 export const PEACEFUL = 0, EASY = 1, NORMAL = 2, HARD = 3;
 export const DIFFICULTY_NAMES = ["Peaceful", "Easy", "Normal", "Hard"];
@@ -104,11 +105,12 @@ export function spiderSpawnRolls(rand, worldRand, d, local) {
 // `rand` is Entity.rand, `worldRand` World.rand, `local` World.func_147462_b at the zombie and
 // `date` World.getCurrentDate's month (1-12) and day. EntityLiving.addRandomArmor (sw.bC) and
 // EntityZombie.addRandomArmor (yq.bC) pick armour tiers and the iron sword or shovel, and
-// enchantEquipment (sw.bD) rolls per item; this build gives mobs no equipment, so the slots
-// are reported and `diverged` marks an enchantment roll that passed (EnchantmentHelper's own
-// draws are not reproduced, so later values of `rand` differ from the original).
-export function zombieSpawnRolls(rand, worldRand, d, local, date = { month: 6, day: 1 }) {
-  const out = { diverged: false, equipment: [] };
+// enchantEquipment (sw.bD) rolls per item with EnchantmentHelper's own draws on `rand`
+// (mob-equipment.js), then the Halloween pumpkin. A zombie pigman (EntityPigZombie.a calls this,
+// its bC only puts a golden sword in the hand with no roll) passes `pigman`.
+// `stacks` are the five native stacks and `dropChances` the five floats; `equipment` lists the occupied slots.
+export function zombieSpawnRolls(rand, worldRand, d, local, date = { month: 6, day: 1 }, pigman = false) {
+  const out = {};
   const follow = [spawnBonus(rand)];
   out.loot = rand.nextFloat() < f(f(0.55) * local);
   // EntityZombie.GroupData (ys): child, then villager.
@@ -120,29 +122,21 @@ export function zombieSpawnRolls(rand, worldRand, d, local, date = { month: 6, d
     if (!out.nearbyChicken) out.newChicken = worldRand.nextFloat() < 0.05;
   }
   out.doors = rand.nextFloat() < f(local * f(0.1));
-  // sw.bC: a helmet always, then boots-ward until a roll of the stop chance.
-  const slots = [null, null, null, null, null];
-  if (rand.nextFloat() < f(f(0.15) * local)) {
-    let tier = rand.nextInt(2);
-    const stop = d === HARD ? f(0.1) : f(0.25);
-    for (let k = 0; k < 3; k++) if (rand.nextFloat() < f(0.095)) tier++;
-    for (let i = 3; i >= 0; i--) {
-      if (i < 3 && rand.nextFloat() < stop) break;
-      slots[i + 1] = { tier };
-    }
+  const slots = [null, null, null, null, null], chances = Array(5).fill(DEFAULT_DROP_CHANCE);
+  if (pigman) slots[0] = { id: GOLDEN_SWORD, count: 1, damage: 0 };
+  else {
+    // sw.bC: a helmet always, then boots-ward until a roll of the stop chance.
+    addRandomArmor(rand, d === HARD, local, slots);
+    // yq.bC: an iron sword (1 in 3) or iron shovel, 5% on Hard, else 1%.
+    if (rand.nextFloat() < (d === HARD ? f(0.05) : f(0.01))) slots[0] = { id: rand.nextInt(3) === 0 ? IRON_SWORD : IRON_SHOVEL, count: 1, damage: 0 };
   }
-  // yq.bC: an iron sword (1 in 3) or iron shovel, 5% on Hard, else 1%.
-  if (rand.nextFloat() < (d === HARD ? f(0.05) : f(0.01))) slots[0] = { weapon: rand.nextInt(3) === 0 ? "iron_sword" : "iron_shovel" };
   // sw.bD: the held item at 0.25 x local, each armour piece at 0.5 x local.
-  if (slots[0] && rand.nextFloat() < f(f(0.25) * local)) out.diverged = true;
-  for (let i = 0; i < 4 && !out.diverged; i++) if (slots[i + 1] && rand.nextFloat() < f(f(0.5) * local)) out.diverged = true;
-  out.equipment = slots.flatMap((s, i) => (s ? [i] : []));
-  if (out.diverged) return out;
+  enchantEquipment(rand, local, slots);
   // Halloween: no helmet, 31 October, a quarter of zombies wear a pumpkin (a tenth of those lit).
-  if (!slots[4] && date.month === 10 && date.day === 31 && rand.nextFloat() < f(0.25)) {
-    out.pumpkin = rand.nextFloat() < f(0.1) ? "lit_pumpkin" : "pumpkin";
-    out.equipment.push(4);
-  }
+  halloweenHead(rand, slots, chances, date);
+  out.stacks = slots;
+  out.dropChances = chances;
+  out.equipment = slots.flatMap((s, i) => (s ? [i] : []));
   // "Random spawn bonus" on knockbackResistance (operation 0) and "Random zombie-spawn bonus"
   // on followRange (operation 2, only above 1).
   out.knockback = rand.nextDouble() * 0.05000000074505806;
@@ -160,6 +154,26 @@ export function zombieSpawnRolls(rand, worldRand, d, local, date = { month: 6, d
   }
   return out;
 }
+// EntitySkeleton.onSpawnWithEgg (yl.a(sy)) in the original draw order, all on Entity.rand: EntityMob's
+// "Random spawn bonus" gaussian, in the Nether (`hell`) nextInt(5) > 0 for a wither skeleton (stone sword,
+// no armour or enchant rolls), otherwise addRandomArmor, the bow and enchantEquipment, then the pickup roll
+// at 0.55 x local and the Halloween pumpkin. Returns the stacks, drop chances, `wither`, `loot`, `followRange`.
+export function skeletonSpawnRolls(rand, d, local, date = { month: 6, day: 1 }, hell = false, forced = null) {
+  const follow = [spawnBonus(rand)];
+  const slots = [null, null, null, null, null], chances = Array(5).fill(DEFAULT_DROP_CHANCE);
+  // `forced` is a type the spawner already chose (dimension-spawning.js): the Nether roll is still drawn, its result dropped.
+  const roll = hell && rand.nextInt(5) > 0, wither = forced === null ? roll : forced;
+  if (wither) slots[0] = { id: STONE_SWORD, count: 1, damage: 0 };
+  else {
+    addRandomArmor(rand, d === HARD, local, slots);
+    slots[0] = { id: BOW, count: 1, damage: 0 };
+    enchantEquipment(rand, local, slots);
+  }
+  const loot = rand.nextFloat() < f(f(0.55) * local);
+  halloweenHead(rand, slots, chances, date);
+  return { stacks: slots, dropChances: chances, wither, loot, followRange: attributeValue(16, follow, 0, 2048) };
+}
+
 // EntityZombie.applyEntityAttributes: zombie.spawnReinforcements (yq.bp, range 0 to 1) has the
 // base rand.nextDouble() * 0.1F.
 export const reinforcementBase = (random) => random() * 0.10000000149011612;

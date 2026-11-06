@@ -42,7 +42,7 @@ import { squidBatUpdate, squidBatTalk, squidBatSpawnPass, installSquidBat } from
 import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
-import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
+import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, skeletonSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
 import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage } from "./mob-effects.js";
 import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startConversionTicks, conversionBoost, canCure, startConversion, remedySound, auxSound, readZombieVillager } from "./zombie-villager.js";
 import { landingEffects, JUMP_BOOST, statusPitchRandom } from "./damage-fx.js";
@@ -50,6 +50,10 @@ import { WOLF_WIDTH, WOLF_HEIGHT, WOLF_SPEED, WILD_MAX_HEALTH, TAMED_MAX_HEALTH,
 import { noteWolfHurt } from "./wolf-ai.js";
 import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest } from "./ocelot.js";
 import { ocelotSpawnPass } from "./ocelot-spawn.js";
+import { NETHER } from "./dimensions.js";
+import { cloneStack, attackBonus, meleeEffects } from "./mob-equipment.js";
+import { GEAR_TYPES, defaultGear, gearFieldsFrom as mobGearFieldsFrom, toLiveStack, pickUpLoot } from "./mob-equipment-live.js";
+import { enchantedDamage } from "./armor-enchantments.js";
 import { armorReduced, soundVolume, soundPitch, mobDrops, experiencePoints, applyEntityCollision, boxesMeet, ANIMALS, FEATHER, RAW_CHICKEN, COOKED_CHICKEN } from "./combat.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -697,6 +701,7 @@ export class EntityWorld {
       // EntitySlime.readEntityFromNBT: Size (size - 1); health is clamped to size * size, the jump and squish start over.
       ...(isSlimeLike(e) ? slimeRestore(e, fresh) : {}),
       ...(e.type === "pigman" ? pigmanFieldsFrom(e) : {}),
+      ...(GEAR_TYPES.has(e.type) ? mobGearFieldsFrom(e) : {}),
       ...(e.type === "enderman" ? endermanFieldsFrom(e) : {}),
       // EntityWitch keeps its held potion (Equipment) but not the drinking state (datawatcher 21, the penalty modifier).
       ...(e.type === "witch" ? { drinking: false, drinkTimer: 0, held: e.held && e.held.id === ITEM_POTION && potionEffects(e.held.damage).length ? { id: ITEM_POTION, damage: e.held.damage, count: 1 } : null } : {}),
@@ -760,6 +765,7 @@ export class EntityWorld {
       ...(type === "witch" ? { drinking: false, drinkTimer: 0, held: null } : {}),
       ...(type === "slime" || type === "magma_cube" ? slimeFields(null, random) : {}),
       ...(type === "pigman" ? pigmanFields() : {}),
+      ...(GEAR_TYPES.has(type) ? defaultGear(type) : {}), // Equipment, DropChances, CanPickUpLoot (mob-equipment.md)
       ...(type === "ender_crystal" ? { innerRotation: Math.floor(random() * 100000) } : {}), // EntityEnderCrystal: innerRotation = rand.nextInt(100000)
       ...(type === "bat" ? { batHanging: true } : {}), // EntityBat's constructor: setIsBatHanging(true)
       ...(type === "chicken" ? { eggTimer: Math.floor(random() * 6000) + 6000, wingRotation: 0, destPos: 0, oFlapSpeed: 0, oFlap: 0, wingRotDelta: 1 } : {}),
@@ -891,7 +897,9 @@ export class EntityWorld {
   }
   // EntityLivingBase.damageEntity: armour, then setHealth (a float, clamped at 0).
   damageEntity(e, amount, name, source = null) {
-    amount = armorReduced(e.type, amount, name, e.size);
+    amount = armorReduced(e.type, amount, name, e.size, e.equipment);
+    // EnchantmentHelper.getEnchantmentModifierDamage over the worn stacks (the generic protection code of the player's armour).
+    if (e.equipment) amount = enchantedDamage(e.equipment, name, amount);
     // EntityWitch.applyPotionDamageCalculations: its own damage is ignored, magic damage is cut to 15 %.
     if (e.type === "witch") amount = witchDamage(amount, { isMagic: name === "magic" || name === "indirectMagic", byWitch: source?.attacker === e });
     if (amount !== 0) e.health = Math.max(0, f(e.health - amount));
@@ -934,13 +942,33 @@ export class EntityWorld {
   }
   // A mob from SpawnerAnimals (or a reinforcement), with EntityLiving.onSpawnWithEgg's rolls
   // (difficulty.js): the spider's Hard potion effect; the zombie's knockback, follow range and
-  // leader bonus. Rolls this build has no use for (equipment, children, villagers, jockeys,
-  // loot pickup, door breaking, the leader's health) are drawn and dropped.
+  // leader bonus, and the equipment of zombies, pigmen and skeletons (mob-equipment.md). Rolls this build has no use for (jockeys,
+  // door breaking, the leader's health) are drawn and dropped.
   spawnNatural(type, x, y, z) {
     const e = this.create(type, x, y, z);
     this.onSpawnWithEgg(e);
     this.entities.push(e);
     return e;
+  }
+  // EntityLiving.onLivingUpdate's pickup loop (gamerule mobGriefing) for each live equipment mob with canPickUpLoot:
+  // `lootItems` is the world's ItemEntities (living-simulation.js sets it). A replaced stack leaves as a drop event.
+  lootPickup() {
+    const items = this.lootItems;
+    if (!items?.items?.length || !gameRule("mobGriefing")) return;
+    for (const e of this.entities) {
+      if (!e.canPickUpLoot || !(e.health > 0) || !GEAR_TYPES.has(e.type)) continue;
+      const [w, h] = this.size(e), box = [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2];
+      for (const stack of pickUpLoot(e, items.items, box, (item) => items.box(item), entityRandom(e))) {
+        const live = toLiveStack(stack);
+        if (live) this.events.push({ drop: live.id, count: 1, ...(live.damage ? { damage: live.damage } : {}), ...(live.enchantments ? { enchantments: live.enchantments } : {}), position: { x: e.x, y: e.y, z: e.z } });
+      }
+    }
+  }
+  // The rolled equipment, drop chances and pickup flag of a spawn (mob-equipment.js); the stacks are native.
+  applyGear(e, r) {
+    e.equipment = r.stacks.map((s) => (s ? cloneStack(s) : null));
+    e.dropChances = r.dropChances.slice();
+    e.canPickUpLoot = !!r.loot;
   }
   // EntityLiving.onSpawnWithEgg(null) and its overrides. EntityCaveSpider's (xy.a(sy)) returns
   // its argument without calling super: no follow-range roll, no jockey, no effect.
@@ -953,20 +981,22 @@ export class EntityWorld {
       e.followRange = r.followRange;
       if (r.effect) addMobEffect(e, r.effect);
     } else if (type === "zombie" || type === "pigman") {
-      const now = new Date(), r = zombieSpawnRolls(rand, world, this.difficulty, local, { month: now.getMonth() + 1, day: now.getDate() });
-      // EntityZombie.GroupData: a child (isChild never ages out for a zombie) and a zombie villager.
-      // EntityPigZombie.onSpawnWithEgg (yh.a) runs EntityZombie's rolls, then bC (the golden sword only); the child and villager rolls are
-      // drawn and dropped (magma-pigman.md Gaps).
-      if (type === "pigman") e.held = pigmanEquipment();
-      else {
+      const now = this.currentDate?.() ?? new Date(), r = zombieSpawnRolls(rand, world, this.difficulty, local, { month: now.getMonth() + 1, day: now.getDate() }, type === "pigman");
+      // EntityZombie.GroupData: a child (isChild never ages out for a zombie) and a zombie villager. EntityPigZombie.onSpawnWithEgg
+      // (yh.a) runs EntityZombie's rolls with bC giving only the golden sword; the child and villager rolls are drawn and dropped.
+      if (type === "zombie") {
         if (r.child) e.growingAge = -1;
         if (r.villager) e.villager = true;
       }
-      if (!r.diverged) {
-        e.knockbackResistance = r.knockback;
-        e.followRange = r.followRange;
-        if (type === "zombie") e.reinforcement = reinforcementChance(e.reinforcement + r.reinforcementBonus);
-      }
+      this.applyGear(e, r);
+      e.knockbackResistance = r.knockback;
+      e.followRange = r.followRange;
+      if (type === "zombie") e.reinforcement = reinforcementChance(e.reinforcement + r.reinforcementBonus);
+    } else if (type === "skeleton" || type === "wither_skeleton") {
+      // EntitySkeleton.onSpawnWithEgg: armour, bow and enchantments (or the wither's stone sword), the pickup roll and the Halloween head.
+      const now = this.currentDate?.() ?? new Date(), r = skeletonSpawnRolls(rand, this.difficulty, local, { month: now.getMonth() + 1, day: now.getDate() }, this.world.dimension === NETHER, type === "wither_skeleton");
+      this.applyGear(e, r);
+      e.followRange = r.followRange;
     } else if (type === "ocelot") {
       // EntityOcelot.onSpawnWithEgg: one chance in seven of two kittens (age -24000, CatType 0) at the same spot.
       for (let i = kittenLitter(world); i > 0 && this.entities.length < 40; i--) {
@@ -1059,7 +1089,10 @@ export class EntityWorld {
       hurt: (damage) => this.attackEntityFrom(e, damage, { from: wearer && { x: wearer.x, z: wearer.z }, player: true, name: "thorns" }),
       sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: e.x, y: e.y, z: e.z } }),
     };
-    const hit = survival.scaledDamage(attackDamage(e, e.type === "wolf" ? wolfAttack(e) : e.type === "slime" ? slimeDamage(e.size) : e.type === "magma_cube" ? magmaDamage(e.size) : ENTITY_TYPES[e.type].damage), "a " + e.type, { attacker: thorns });
+    // EntityMob.attackEntityAsMob: the attribute (the held weapon's modifier included) plus Sharpness (getEnchantmentModifierLiving), Fire Aspect after.
+    const melee = e.equipment ? meleeEffects(e.equipment[0]) : null;
+    const hit = survival.scaledDamage(f(attackDamage(e, (e.type === "wolf" ? wolfAttack(e) : e.type === "slime" ? slimeDamage(e.size) : e.type === "magma_cube" ? magmaDamage(e.size) : ENTITY_TYPES[e.type].damage) + (e.equipment ? attackBonus(e.equipment) : 0)) + (melee ? melee.damage : 0)), "a " + e.type, { attacker: thorns });
+    if (hit && melee?.fire > 0) survival.setFire(melee.fire);
     // EntityLivingBase.setRevengeTarget on the player: its wolves defend it (EntityAIOwnerHurtByTarget).
     if (hit) this.ai.playerHurtBy(e);
     if (hit && e.type === "zombie") {
@@ -1129,8 +1162,8 @@ export class EntityWorld {
     // ... and only while gamerule doMobLoot is true (dropFewItems, dropEquipment and the rare drop alike).
     if ((e.growingAge >= 0 || e.type === "zombie" || e.type === "pigman") && gameRule("doMobLoot")) {
       const at = { x: e.x, y: e.y, z: e.z };
-      for (const [drop, damage] of mobDrops(e, { playerHit: e.recentlyHit > 0, burning: e.fire > 0, bySkeleton: source.attacker === "skeleton", looting: source.player ? source.looting || 0 : 0 }, entityRandom(e)))
-        this.events.push({ drop, count: 1, ...(damage ? { damage } : {}), position: at });
+      for (const [drop, damage, enchantments] of mobDrops(e, { playerHit: e.recentlyHit > 0, burning: e.fire > 0, bySkeleton: source.attacker === "skeleton", looting: source.player ? source.looting || 0 : 0, toLive: toLiveStack }, entityRandom(e)))
+        this.events.push({ drop, count: 1, ...(damage ? { damage } : {}), ...(enchantments ? { enchantments } : {}), position: at });
     }
     e.death = 0;
     if (e.eatTimer) e.eatTimer = 0;
@@ -1294,7 +1327,16 @@ export class EntityWorld {
   // difficulty scaling: that is the player's); a burning zombie with an empty hand may set the victim alight.
   hitMob(e, target) {
     if (!this.entities.includes(target) || target.health <= 0) return false;
-    const hit = this.attackEntityFrom(target, attackDamage(e, e.type === "wolf" ? wolfAttack(e) : ENTITY_TYPES[e.type].damage), { from: { x: e.x, z: e.z }, attacker: e, name: "mob", player: false });
+    const melee = e.equipment ? meleeEffects(e.equipment[0]) : null;
+    const hit = this.attackEntityFrom(target, f(attackDamage(e, (e.type === "wolf" ? wolfAttack(e) : ENTITY_TYPES[e.type].damage) + (e.equipment ? attackBonus(e.equipment) : 0)) + (melee ? melee.damage : 0)), { from: { x: e.x, z: e.z }, attacker: e, name: "mob", player: false });
+    if (hit && melee) {
+      // Knockback (EntityLivingBase.getKnockbackModifier): Entity.addVelocity along the mob's facing; Fire Aspect: setFire(level * 4).
+      if (melee.knockback > 0) {
+        const dx = target.x - e.x, dz = target.z - e.z, d = Math.hypot(dx, dz) || 1;
+        addVelocity(target, f(f((dx / d) * melee.knockback) * 0.5), 0.1, f(f((dz / d) * melee.knockback) * 0.5));
+      }
+      if (melee.fire > 0) target.fire = Math.max(target.fire || 0, melee.fire * 20);
+    }
     if (hit && e.type === "zombie") {
       const ticks = zombieFireOnHit(entityRandom(e), this.difficulty, e.burn > 0 || e.fire > 0);
       if (ticks) target.fire = Math.max(target.fire || 0, ticks);
@@ -1479,6 +1521,7 @@ export class EntityWorld {
     // World.isDaytime (skylightSubtracted < 4); main.js hooks the real light level in.
     this.day = this.isDaytime ? this.isDaytime() : !night;
     this.ai.beginTick(player, survival, heldItem);
+    this.lootPickup();
     // World.tick: villageCollectionObj.tick() before the entities.
     this.villages.tick();
     // Splash potions thrown by witches (witch-potions.js; main.js attaches it).
