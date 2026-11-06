@@ -39,7 +39,7 @@ export function pigmanThink(ew, e) {
   if (!p?.alive || s.creative || !angry) {
     if (e.pigTarget) m.navigator.clearPathEntity();
     e.pigTarget = false;
-  } else if (!e.pigTarget && distance < 16 && m.canSee(p)) e.pigTarget = true; // yh.bR: super.bR once angry
+  } else if (!e.pigTarget && ew.ai.closestVulnerablePlayer(e, 16) && m.canSee(p)) e.pigTarget = true; // yh.bR: super.bR once angry
   if (e.pigTarget) {
     m.attackTarget = p;
     if (e.attackTime <= 0 && distance < 2 && p.y + (p.height ?? 1.8) > e.y && p.y < e.y + PIGMAN.height && m.canSee(p)) {

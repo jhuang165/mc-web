@@ -22,6 +22,7 @@ import { buildSnowGolemTasks } from "./mooshroom-golem-live.js";
 import { isTamed as wolfTamed } from "./wolf.js";
 import { buildOcelotTasks, makeAvoid } from "./ocelot-ai.js";
 import { canDespawn as ocelotCanDespawn } from "./ocelot.js";
+import { INVISIBILITY } from "./mob-effects.js";
 import { CARROT_ON_A_STICK, controlState, controlShouldExecute, controlStart, controlReset, controlTick } from "./pig-saddle.js";
 const f = Math.fround;
 const GRASS = 1, TALL_GRASS = 39;
@@ -789,6 +790,9 @@ class TargetBase extends Task {
     this.m.attackTarget = null;
   }
 }
+// 1.7.10 detail (bytecode of vo, vp and vu, probes/DetectionProbe.java): this task's selector (vu.a(sv, false)) has no sneaking or
+// invisibility scaling, only the follow range box (range x 4 x range), disableDamage, the home area and, when asked, sight. The scaling
+// of those two states lives in World.getClosestVulnerablePlayer (MobAI.closestVulnerablePlayer) used by the legacy mobs.
 class NearestAttackable extends TargetBase {
   constructor(m) {
     super(m, true);
@@ -1147,6 +1151,11 @@ class PlayerView {
     this.creative = false;
     this.held = 0;
     this.has = true;
+    // What World.getClosestVulnerablePlayer reads: isSneaking (set by the host, see living-simulation.js), isInvisible and the worn
+    // armour (EntityPlayer.getArmorVisibility).
+    this.sneaking = false;
+    this.invisible = false;
+    this.armorPieces = 0;
   }
   update(player, survival, held) {
     this.x = player.x;
@@ -1156,6 +1165,12 @@ class PlayerView {
     this.creative = !!survival.creative;
     this.held = held;
     this.survival = survival;
+    this.invisible = !!survival.effects?.has?.(INVISIBILITY);
+    this.armorPieces = (survival.inventory?.armor ?? []).filter(Boolean).length;
+  }
+  // EntityPlayer.getArmorVisibility (yz.bE): worn pieces over the four armour slots, as a float.
+  get armorVisibility() {
+    return f(this.armorPieces / 4);
   }
   holds(item) {
     return this.held === item && (this.creative || (this.survival?.count ? this.survival.count(item) > 0 : true));
@@ -1217,6 +1232,20 @@ export class MobAI {
   closestPlayer(mob, range) {
     const p = this.player;
     return mob.distSq(p) < range * range ? p : null;
+  }
+  // World.getClosestVulnerablePlayerToEntity (ahb.b(sa, D) -> b(DDDD)) for the one player: not in creative (disableDamage) and alive, and
+  // within `range` of the mob's feet, where the range is multiplied by 0.8 (double) when sneaking and by (float)(0.7f * max(0.1f,
+  // armour visibility)) when invisible (verified against the bytecode: detection-reference.json). Legacy findPlayerToAttack users:
+  // EntityMob (16, with a sight test), EntitySpider (16, brightness below 0.5), EntitySilverfish (8), EntityEnderman (64), EntitySlime
+  // (16), EntityGhast (100). The task-based EntityAINearestAttackableTarget does NOT scale (see NearestAttackable).
+  closestVulnerablePlayer(mob, range) {
+    const p = this.player;
+    if (!p?.alive || p.creative) return null;
+    let r = range;
+    if (p.sneaking) r = r * 0.800000011920929;
+    if (p.invisible) r = r * f(f(0.7) * Math.max(f(0.1), p.armorVisibility));
+    const dx = mob.x - p.x, dy = mob.y - p.y, dz = mob.z - p.z; // `mob` is an entity or its brain
+    return range < 0 || dx * dx + dy * dy + dz * dz < r * r ? p : null;
   }
   // Whether the box of `a` grown by (rx, ry, rz) intersects the box of `b`.
   overlaps(a, b, rx, ry, rz, base = 0) {

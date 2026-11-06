@@ -70,7 +70,7 @@ export function endermanTick(mobs, e, rng) {
   const w = environment(mobs, e);
   // findPlayerToAttack runs inside the task-less legacy flow while there is no target.
   const view = p?.alive && !p.creative ? playerView(mobs, p) : null;
-  if (!m.attackTarget && view && (p.x - e.x) ** 2 + (p.y - e.y) ** 2 + (p.z - e.z) ** 2 < 64 * 64) {
+  if (!m.attackTarget && view && ai.closestVulnerablePlayer(e, 64)) {
     if (E.findPlayerToAttack(e, view, w)) m.attackTarget = p;
   }
   const t = m.attackTarget;

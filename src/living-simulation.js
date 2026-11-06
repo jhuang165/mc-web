@@ -74,6 +74,7 @@ export function tickLivingSimulation(state, hooks = {}) {
   } = hooks;
 
   inhabited.tick(survival.time);
+  if (mobs.ai?.player) mobs.ai.player.sneaking = !!state.sneaking; // World.getClosestVulnerablePlayer shrinks the range of a sneaking player
   mobs.tick(position, survival, heldItem());
   state.playerTicks++;
   xpOrbs.tick(world, position);
