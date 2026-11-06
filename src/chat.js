@@ -4,6 +4,7 @@
 // (320), focused height 20 + 160 * chatHeightFocused (180 = 20 lines), unfocused 20 + 160 * 0.44366196 (90 = 10 lines), opacity
 // 0.9 * chatOpacity + 0.1. Tab completion follows GuiChat.func_146404_p_ (cycle through the candidates, list them in chat).
 import { splitLines, textWidth } from "./menu-screens.js";
+import { isComponent, wrapComponent, partAt, TranslationError } from "./chat-component.js";
 
 export const CHAT = Object.freeze({
   maxLines: 100, maxSent: 100, lineHeight: 9, fadeTicks: 200, inputMaxLength: 100,
@@ -89,17 +90,32 @@ export class ChatLog {
   // GuiNewChat.func_146237_a: wrapped to floor(width / scale), the newest line first; a non-refresh print while scrolled
   // scrolls one line so the view stays put and flags new messages. `id` replaces the earlier lines of the same id.
   // `links` are { text, click: { action, value } } entries: where `text` appears the span is clickable (a ClickEvent).
+  // `text` may also be a chat component (chat-component.js), wrapped per part as the native chat does with every message.
   print(text, tick = 0, id = 0, links = []) {
+    if (isComponent(text)) {
+      // GuiNewChat cannot draw a translation whose pattern fails (ChatComponentTranslationFormatException ends the native
+      // client); the port drops that message instead.
+      try { text.formatted(); } catch (e) { if (e instanceof TranslationError) { console.warn("Chat component not drawn: " + e.message); return []; } throw e; }
+    } else text = String(text);
     if (id) this.history = this.history.filter((l) => l.id !== id);
-    this.history.unshift({ text: String(text), created: tick, id, links });
+    this.history.unshift({ text, created: tick, id, links });
     while (this.history.length > CHAT.maxLines) this.history.pop();
-    const parts = this.layout(String(text), tick, id, links, false);
+    const parts = this.layout(text, tick, id, links, false);
     for (const fn of this.listeners) fn();
     return parts;
   }
   // GuiNewChat.func_146237_a: the colour codes go when chatColours is off (func_146235_b), then the wrapped lines are added.
   layout(text, tick, id, links, refresh) {
     if (id) this.lines = this.lines.filter((l) => l.id !== id);
+    if (isComponent(text)) {
+      const lines = wrapComponent(text, Math.floor(f(this.width / f(this.settings.chatScale))), this.settings.chatColors !== false);
+      for (const line of lines) {
+        if (!refresh && this.scrollPos > 0) { this.newSinceScroll = true; this.scroll(1); }
+        this.lines.unshift({ text: line.text, parts: line.parts, created: tick, id, links: [] });
+      }
+      while (this.lines.length > CHAT.maxLines) this.lines.pop();
+      return lines.map((l) => l.text);
+    }
     if (this.settings.chatColors === false) text = stripFormatting(text);
     const wrapped = splitLines(text, Math.floor(this.width / this.settings.chatScale));
     let carry = "";
@@ -119,13 +135,22 @@ export class ChatLog {
   }
   // GuiNewChat.func_146236_a for the point (x, gy) in GUI pixels from the line area's bottom left: the ClickEvent under it.
   clickAt(x, gy) {
+    const line = this.lineAt(gy);
+    if (!line) return null;
+    if (line.parts) { const p = partAt(line, x, this.settings.chatColors !== false); return p?.style.click ? { ...p.style.click, text: p.text } : null; }
+    for (const l of line.links || []) if (x >= textWidth(line.text.slice(0, l.start)) && x < textWidth(line.text.slice(0, l.end))) return l.click;
+    return null;
+  }
+  // The HoverEvent of the component piece at (x, gy), which GuiChat.drawScreen shows as a tooltip.
+  hoverAt(x, gy) {
+    const line = this.lineAt(gy);
+    return line?.parts ? partAt(line, x, this.settings.chatColors !== false)?.style.hover ?? null : null;
+  }
+  lineAt(gy) {
     if (gy < 0) return null;
     const row = Math.floor(gy / CHAT.lineHeight);
     if (row >= this.visibleLines(true)) return null;
-    const line = this.lines[row + this.scrollPos];
-    if (!line) return null;
-    for (const l of line.links || []) if (x >= textWidth(line.text.slice(0, l.start)) && x < textWidth(line.text.slice(0, l.end))) return l.click;
-    return null;
+    return this.lines[row + this.scrollPos] ?? null;
   }
   // GuiNewChat.func_146229_b: clamp to [0, size - visible]; reaching the bottom clears the new-message flag.
   scroll(n, open = true) {

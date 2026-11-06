@@ -4,6 +4,7 @@
 // draws its field at (4, height - 12) over a 50 % black rectangle from (2, height - 14) to (width - 2, height - 2).
 import { ChatLog, SentHistory, TabCompletion, CHAT, allowedText, chatDelivered, linkUrlAllowed } from "./chat.js";
 import { textHtml } from "./menu-ui.js";
+import { hoverLines } from "./chat-component.js";
 
 // One chat for the whole page: death, bed and command messages and plain chat all print here (showChatLine uses it too).
 export const chat = new ChatLog();
@@ -11,6 +12,7 @@ export const chat = new ChatLog();
 export const chatTick = () => Math.floor(performance.now() / 50);
 // `system` is S02PacketChat's flag: command feedback and server notices are system messages, player chat is not; chat
 // visibility drops them as nh.a(ft) does (Hidden drops all, Commands Only keeps the system ones).
+// `text` may be a chat component (chat-component.js), as /tellraw and the achievement broadcast send.
 export const printChat = (text, id = 0, system = true, links = []) => (chatDelivered(chat.settings.chatVisibility, system) ? chat.print(text, chatTick(), id, links) : []);
 
 const STYLE = `
@@ -58,12 +60,30 @@ export class ChatUi {
     });
     this.box.addEventListener("wheel", () => {});
     // GuiChat.mouseClicked: a left click on a component with a ClickEvent (chatLinks on); Shift inserts its text instead.
+    const at = (e) => {
+      const u = parseFloat(doc.defaultView.getComputedStyle(this.box).fontSize) / 8, s = this.log.settings.chatScale || 1;
+      return u > 0 ? [(e.clientX - 2 * u) / (u * s) - 2, (doc.defaultView.innerHeight - 28 * u - e.clientY) / (u * s)] : null;
+    };
     doc.addEventListener("pointerdown", (e) => {
       if (!this.isOpen || e.button !== 0 || this.log.settings.chatLinks === false || this.log.settings.chatVisibility === 2) return;
-      const u = parseFloat(doc.defaultView.getComputedStyle(this.box).fontSize) / 8, s = this.log.settings.chatScale || 1;
-      if (!(u > 0)) return;
-      const click = this.log.clickAt((e.clientX - 2 * u) / (u * s) - 2, (doc.defaultView.innerHeight - 28 * u - e.clientY) / (u * s));
+      const p = at(e);
+      const click = p && this.log.clickAt(p[0], p[1]);
       if (click) this.click(click, e.shiftKey);
+    });
+    // GuiChat.drawScreen: the HoverEvent of the component under the mouse as a tooltip (show_text, show_achievement, show_item).
+    this.tip = doc.createElement("div");
+    this.tip.className = "slot-tooltip hidden";
+    this.tip.id = "chat-tooltip";
+    this.tip.setAttribute("role", "tooltip");
+    doc.body.append(this.tip);
+    doc.addEventListener("pointermove", (e) => {
+      const p = this.isOpen && this.log.settings.chatVisibility !== 2 ? at(e) : null;
+      const lines = p ? hoverLines(this.log.hoverAt(p[0], p[1]), this.hooks.hoverInfo ?? {}) : null;
+      if (!lines?.length) { this.tip.classList.add("hidden"); return; }
+      this.tip.innerHTML = lines.map((l, i) => `<span${i === 0 ? ' class="title"' : ""}>${textHtml(l) || "&nbsp;"}</span>`).join("");
+      this.tip.style.left = e.clientX + "px";
+      this.tip.style.top = e.clientY + "px";
+      this.tip.classList.remove("hidden");
     });
     doc.addEventListener("wheel", (e) => {
       if (!this.isOpen) return;
@@ -79,7 +99,7 @@ export class ChatUi {
   }
   // GuiChat.func_146407_a: OPEN_URL (http/https only, behind GuiConfirmOpenLink when chatLinksPrompt), SUGGEST_COMMAND, RUN_COMMAND.
   click(click, shift = false) {
-    if (shift) { this.input.setRangeText(click.text ?? "", this.input.selectionStart ?? this.input.value.length, this.input.selectionEnd ?? this.input.value.length, "end"); return; }
+    if (shift) { this.input.setRangeText(allowedText(click.text ?? ""), this.input.selectionStart ?? this.input.value.length, this.input.selectionEnd ?? this.input.value.length, "end"); return; }
     if (click.action === "open_url") {
       if (!linkUrlAllowed(click.value)) { console.warn("Unsupported protocol: " + click.value); return; }
       if (this.log.settings.chatLinksPrompt !== false) this.hooks.confirmLink?.(click.value);
@@ -107,6 +127,7 @@ export class ChatUi {
     this.inputBox.classList.remove("open");
     this.box.classList.remove("open");
     this.log.resetScroll();
+    this.tip.classList.add("hidden");
     this.render();
   }
   key(e) {
@@ -147,7 +168,8 @@ export class ChatUi {
     this.inputBox.style.visibility = visible ? "" : "hidden";
     const rows = visible ? this.log.draw(chatTick(), this.isOpen) : [];
     const scale = this.log.settings.chatScale;
-    const sig = rows.map((r) => r.row + ":" + r.alpha + ":" + r.text).join("|") + "@" + this.log.scrollPos + this.isOpen + scale + ":" + this.log.width;
+    // Obfuscated (§k) text changes its glyphs on every frame, so such rows are redrawn each time.
+    const sig = rows.map((r) => r.row + ":" + r.alpha + ":" + r.text).join("|") + "@" + this.log.scrollPos + this.isOpen + scale + ":" + this.log.width + (rows.some((r) => /§k/i.test(r.text)) ? Math.random() : "");
     if (sig === this.sig) return;
     this.sig = sig;
     this.box.style.transform = scale === 1 ? "" : `scale(${scale})`;
@@ -162,5 +184,5 @@ export class ChatUi {
     if (bar) html += `<div class="chat-bar" style="bottom:calc(${bar.offset}*var(--u));height:calc(${bar.height}*var(--u));background:${bar.newMessages ? "#cc3333" : "#3333aa"};opacity:${(bar.alpha / 255).toFixed(3)}"></div>`;
     this.box.innerHTML = html;
   }
-  destroy() { clearInterval(this.timer); this.box.remove(); this.inputBox.remove(); }
+  destroy() { clearInterval(this.timer); this.box.remove(); this.inputBox.remove(); this.tip.remove(); }
 }

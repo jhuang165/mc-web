@@ -2,7 +2,7 @@
 // drawn from gui/widgets.png and gui/options_background.png at the GUI scale (--u is one scaled
 // unit in CSS pixels). Positions come from menu-screens.js. Buttons act on mouse press, as
 // GuiScreen.mouseClicked does, and play gui.button.press.
-import { textWidth, trimToWidth, splitLines, shadowColor, FORMAT_COLORS, knobOffset, sliderValue, slotMetrics, slotAt, scaledSize } from "./menu-screens.js";
+import { textWidth, trimToWidth, splitLines, shadowColor, FORMAT_COLORS, charWidth, knobOffset, sliderValue, slotMetrics, slotAt, scaledSize } from "./menu-screens.js";
 import { Panorama } from "./menu-panorama.js";
 
 const hex = (c) => "#" + (c & 0xffffff).toString(16).padStart(6, "0");
@@ -10,19 +10,33 @@ const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", 
 const px = (n) => `calc(${n}*var(--u))`;
 const at = (x, y, w, h) => `left:${px(x)};top:${px(y)}` + (w != null ? `;width:${px(w)}` : "") + (h != null ? `;height:${px(h)}` : "");
 // FontRenderer colour runs: a section sign and code switch the colour (r resets). `color` null
-// draws the base runs in the widget's own --c / --cs (a button's state colour).
+// draws the base runs in the widget's own --c / --cs (a button's state colour). §l bold (the glyph drawn again one pixel
+// right, one pixel wider), §o italic, §n underline, §m strikethrough and §k obfuscated (each glyph replaced by a random one of
+// the same width) as FontRenderer.renderStringAtPos; a colour code or §r clears them.
+const SAME_WIDTH = new Map();
+for (let c = 33; c < 127; c++) { const ch = String.fromCharCode(c), w = charWidth(ch); if (!SAME_WIDTH.has(w)) SAME_WIDTH.set(w, []); SAME_WIDTH.get(w).push(ch); }
+const obfuscate = (s) => s.replace(/[^ ]/g, (ch) => { const set = SAME_WIDTH.get(charWidth(ch)); return set ? set[Math.floor(Math.random() * set.length)] : ch; });
 export function textHtml(s, color = 0xffffff) {
-  let out = "", run = "", cur = color, under = false;
-  const style = (c) => (c == null ? "color:var(--c);--sh:var(--cs)" : `color:${hex(c)};--sh:${hex(shadowColor(c))}`) + (under ? ";text-decoration:underline" : "");
-  const flush = () => { if (run) out += `<span style="${style(cur)}">${escapeHtml(run)}</span>`; run = ""; };
+  let out = "", run = "", cur = color, under = false, bold = false, italic = false, strike = false, random = false;
+  const style = (c) => {
+    let css = c == null ? "color:var(--c);--sh:var(--cs)" : `color:${hex(c)};--sh:${hex(shadowColor(c))}`;
+    const deco = [under && "underline", strike && "line-through"].filter(Boolean).join(" ");
+    if (deco) css += ";text-decoration:" + deco;
+    if (italic) css += ";font-style:italic";
+    if (bold) css += ";letter-spacing:var(--u);text-shadow:var(--u) 0 0 currentColor,var(--u) var(--u) 0 var(--sh),calc(2*var(--u)) var(--u) 0 var(--sh)";
+    return css;
+  };
+  const flush = () => { if (run) out += `<span style="${style(cur)}">${escapeHtml(random ? obfuscate(run) : run)}</span>`; run = ""; };
   for (let i = 0; i < s.length; i++) {
     if (s[i] === "§" && i + 1 < s.length) {
       flush();
       const code = s[++i].toLowerCase(), k = "0123456789abcdef".indexOf(code);
-      // A colour code or reset clears the styles (FontRenderer.renderStringAtPos); §n underlines.
-      if (k >= 0) { cur = FORMAT_COLORS[k]; under = false; }
-      else if (code === "r") { cur = color; under = false; }
+      if (k >= 0 || code === "r") { cur = k >= 0 ? FORMAT_COLORS[k] : color; under = bold = italic = strike = random = false; }
       else if (code === "n") under = true;
+      else if (code === "l") bold = true;
+      else if (code === "o") italic = true;
+      else if (code === "m") strike = true;
+      else if (code === "k") random = true;
       continue;
     }
     run += s[i];
