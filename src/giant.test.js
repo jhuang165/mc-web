@@ -3,7 +3,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { GIANT, GIANT_SOUNDS, giantPathWeight, giantAttackReady } from "./giant.js";
-import { EntityWorld, ENTITY_TYPES, HOSTILE } from "./entities.js";
+import { EntityWorld, ENTITY_TYPES, HOSTILE, setEntityRandom } from "./entities.js";
+import { JavaRandom } from "./java-random.js";
 import { Survival } from "./survival.js";
 import { SUMMONABLE } from "./commands.js";
 import { JAVA_MOBS, javaMobFromNbt, importedMobType } from "./java-mobs.js";
@@ -80,12 +81,23 @@ test("a live giant has the 6x box, saves and reloads, and drops nothing", () => 
   assert.equal(e.health, 70);
   assert.ok(w.drain().some((ev) => ev.sound === "game.hostile.hurt"));
 });
-test("a giant hunts the player down: it closes from 8 blocks to within 3 and the hit is the 50-damage EntityMob strike", () => {
+test("a giant hunts the player down: it walks from 8 blocks to the collision gap, and inside 2.0 the hit is the 50-damage EntityMob strike", () => {
+  // Entity.rand is seeded: EntityCreature's nextInt(100) path drop zeroes moveForward and, once every waypoint is within
+  // width x 2 (7.2) of the giant, nothing sets it again, so some seeds stall short of the player.
   const w = new EntityWorld(flatWorld(), [], () => 0.5), s = new Survival({ slots: [], time: 6000 }, "survival"), p = { x: 64.5, y: 0, z: 64.5, alive: true };
   const e = w.create("giant", 72.5, 0, 64.5);
+  setEntityRandom(e, new JavaRandom(1));
   w.entities.push(e);
   for (let i = 0; i < 150; i++) w.tick(p, s);
-  assert.ok(Math.hypot(e.x - p.x, e.z - p.z) < 3, `giant at ${e.x}`);
+  // The 0.2-expanded collision push holds a stationary player's centre about 2.3 away, outside the 2.0 reach.
+  assert.ok(Math.hypot(e.x - p.x, e.z - p.z) < 2.5, `giant at ${e.x}`);
+  assert.equal(s.health, 20);
+  const near = w.create("giant", 66.4, 0, 64.5);
+  setEntityRandom(near, new JavaRandom(1));
+  w.entities = [near];
+  w.tick(p, s); // findPlayerToAttack
+  w.tick(p, s); // attackEntity at 1.9
+  assert.equal(s.health, 0);
   assert.equal(giantAttackReady({ y: 0, attackTime: 0 }, 0, 1.8, 1.9), true);
   assert.equal(ENTITY_TYPES.giant.damage, 50);
 });

@@ -2105,6 +2105,9 @@ export class EntityWorld {
     st.x = e.x; st.y = e.y; st.z = e.z; st.width = t.width; st.inWater = e.inWater; st.inLava = e.inLava;
     st.collidedH = e.collidedH; st.rotationYaw = e.rotationYaw; st.rotationPitch = e.rotationPitch || 0;
     st.speed = GIANT.movement; st.jumping = false;
+    // EntityLivingBase.moveForward is one field: the previous tick's x 0.98 decay (walk) carries over when the
+    // legacy action state leaves it unset (no waypoint beyond width x 2).
+    st.moveForward = f(f(st.moveForward || 0) * f(0.98));
     if (st.attackTime > 0) st.attackTime--;
     if (this.ai.brightness(Math.floor(e.x), Math.floor(e.y + f(t.height * 0.66)), Math.floor(e.z)) > 0.5) st.entityAge += 2;
     m.senseCache.clear();
