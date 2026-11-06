@@ -13,3 +13,19 @@ test("terrain and entity UVs use centroid interpolation", () => {
     assert.match(m.fragmentShader, /centroid varying vec2 vUv;/);
   }
 });
+
+// three.js always creates an alpha: true context, so an opaque-pass fragment's alpha reaches the page.
+// Mipmapped leaves have 96-254 alphas that pass the 0.1 alpha test; writing them let the page show through
+// the canopy as silvery speckles. 1.7.10 renders into an opaque window: a texel that passes is opaque.
+test("cutout materials write opaque alpha; only blended ones keep the texel alpha", () => {
+  const lighting = { uniforms: { lightmap: { value: null }, fogColor: { value: new THREE.Vector3() }, fogNear: { value: 0 }, fogFar: { value: 1 }, fogDensity: { value: 0 } } };
+  for (const make of [worldMaterial, entityMaterial]) {
+    const cutout = make(lighting, { map: new THREE.Texture() }), blended = make(lighting, { map: new THREE.Texture(), transparent: true });
+    assert.match(cutout.fragmentShader, /if\(t\.a<=alphaTest\)discard;/);
+    assert.match(cutout.fragmentShader, /gl_FragColor=vec4\(applyFog\([^;]*\),1\.\);/);
+    assert.doesNotMatch(cutout.fragmentShader, /,t\.a\);/);
+    assert.match(blended.fragmentShader, /,t\.a\);/);
+    assert.equal(blended.transparent, true);
+  }
+  assert.match(worldMaterial(lighting, { vertexAlpha: true }).fragmentShader, /vShade\.a\)[^]*,1\.\);/);
+});

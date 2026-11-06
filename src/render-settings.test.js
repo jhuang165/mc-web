@@ -6,7 +6,7 @@ import { migrateSettings } from "./settings.js";
 import { optionText, denormalize } from "./menu-screens.js";
 import {
   RENDER_DEFAULTS, normalizeRender, setRender, render, roundUpToPowerOfTwo, leavesOpaque, rainRadius, rainParticleStrength,
-  shouldRenderClouds, shadowsEnabled, flatItemSprites, leafTextureName, translucentPasses, usePartialAo, mipLevel, mipChain, atlasMips,
+  shouldRenderClouds, shadowsEnabled, flatItemSprites, leafTextureName, translucentPasses, usePartialAo, mipLevel, mipChain, atlasMips, hasTransparentTexel,
 } from "./render-settings.js";
 
 test("defaults are the GameSettings defaults and invalid values are normalised", () => {
@@ -80,6 +80,31 @@ test("mipmap levels average in gamma 2.2 and transparent texels are skipped", ()
   const clear = new Uint8ClampedArray([...px(255, 255, 255, 20), ...px(0, 0, 0, 0), ...px(0, 0, 0, 0), ...px(0, 0, 0, 0)]);
   assert.equal(mipLevel(clear, 2, 2, true).data[3], 0, "alpha below 96 becomes 0");
   assert.equal(mipChain(new Uint8ClampedArray(16 * 16 * 4).fill(255), 16, 16, 4).length, 5);
+});
+
+// TextureUtil.generateMipmapData only checks the first 1 + levels texels for a zero alpha (data.length is the
+// per-level array). The 16x16 leaf textures: oak/spruce/birch/acacia/dark oak hit a hole in texels 0-4,
+// jungle does not, so jungle leaves average alpha in gamma space and keep low alphas.
+test("the mip transparency flag looks only at the first levels + 1 texels, as 1.7.10 does", () => {
+  const tile = (holes) => {
+    const d = new Uint8ClampedArray(16 * 16 * 4);
+    for (let i = 0; i < 256; i++) d.set(holes.includes(i) ? [0, 0, 0, 0] : [60, 120, 40, 255], i * 4);
+    return d;
+  };
+  const jungleLike = tile([5, 6, 7, 20, 21, 22, 23]), oakLike = tile([1, 20, 21, 22, 23]);
+  assert.equal(hasTransparentTexel(jungleLike, 4), false);
+  assert.equal(hasTransparentTexel(jungleLike, 6), true, "a sixth level would reach texel 5");
+  assert.equal(hasTransparentTexel(oakLike, 4), true);
+  assert.equal(hasTransparentTexel(oakLike, 0), false, "level 0 only looks at texel 0");
+  // Level 1 texel (2, 0) averages level-0 texels 4, 5, 20 and 21. Jungle-like: three holes, one opaque texel,
+  // alpha averaged too (enc(0.25) = 135, kept above the 0.1 test). Oak-like: two holes skipped, alpha enc(0.5) = 186.
+  const enc = (v) => Math.trunc(Math.pow(Math.fround(v), 1 / 2.2) * 255), lin = (v) => Math.fround(Math.pow(v / 255, 2.2));
+  const jungle1 = mipChain(jungleLike, 16, 16, 4)[1], oak1 = mipChain(oakLike, 16, 16, 4)[1], at = 2 * 4;
+  assert.equal(jungle1.data[at + 3], enc(1 / 4));
+  assert.equal(jungle1.data[at + 3], 135);
+  assert.equal(jungle1.data[at], enc(lin(60) / 4), "jungle: the black of the holes darkens the colour");
+  assert.equal(oak1.data[at + 3], 186);
+  assert.equal(oak1.data[at], enc((2 * lin(60)) / 4));
 });
 
 test("atlas mip chains do not bleed between 16-pixel tiles", () => {

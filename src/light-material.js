@@ -51,6 +51,11 @@ vec3 applyFog(vec3 c){float f=fogDensity>0.?1.-exp(-fogDensity*vFogDistance):cla
 // Centroid sampling keeps the UV inside the covered part of the face, so it stays inside the tile.
 // Chunk geometry: attributes `shade` (face shade x AO) and `lightCoord`
 // (packed block and sky brightness, 0-240 each).
+// three.js always creates its context with alpha: true (its `alpha: false` only sets the clear alpha), so
+// whatever alpha a fragment writes reaches the page compositor. 1.7.10 draws into an opaque window: a cutout
+// texel that passes glAlphaFunc(GL_GREATER, 0.1) is fully opaque. Non-blended materials therefore write 1;
+// otherwise the 96-254 alphas of mipmapped leaves and plants let the page show through as pale speckles.
+// Only blended (`transparent`) materials keep the texel alpha, and three.js keeps destination alpha at 1 there.
 // `vertexAlpha` makes `shade` a vec4 whose alpha multiplies the texel's before the
 // alpha test (EntityFX colour alpha under glAlphaFunc).
 export function worldMaterial(lighting, { map, alphaTest = 0.1, transparent = false, uvTransform = new THREE.Vector4(1, 1, 0, 0), side = THREE.FrontSide, vertexAlpha = false } = {}) {
@@ -60,7 +65,7 @@ export function worldMaterial(lighting, { map, alphaTest = 0.1, transparent = fa
     vertexShader: `attribute ${S} shade;attribute vec2 lightCoord;uniform vec4 uvTransform;centroid varying vec2 vUv;varying ${S} vShade;varying vec2 vLight;varying float vFogDistance;
 void main(){vUv=uv*uvTransform.xy+uvTransform.zw;vShade=shade;vLight=(lightCoord+8.)/256.;vec4 mv=modelViewMatrix*vec4(position,1.);vFogDistance=length(mv.xyz);gl_Position=projectionMatrix*mv;}`,
     fragmentShader: `uniform sampler2D map,lightmap;uniform float alphaTest;centroid varying vec2 vUv;varying ${S} vShade;varying vec2 vLight;${FOG_PARS}
-void main(){vec4 t=texture2D(map,vUv)${vertexAlpha ? "*vec4(1.,1.,1.,vShade.a)" : ""};if(t.a<=alphaTest)discard;gl_FragColor=vec4(applyFog(t.rgb*vShade.rgb*texture2D(lightmap,vLight).rgb),t.a);}`,
+void main(){vec4 t=texture2D(map,vUv)${vertexAlpha ? "*vec4(1.,1.,1.,vShade.a)" : ""};if(t.a<=alphaTest)discard;gl_FragColor=vec4(applyFog(t.rgb*vShade.rgb*texture2D(lightmap,vLight).rgb),${transparent ? "t.a" : "1."});}`,
     transparent,
     side,
   });
@@ -91,7 +96,7 @@ void main(){vec4 t=vec4(1.);
 #ifdef USE_TEXTURE
 t=texture2D(map,vUv);
 #endif
-if(t.a<=alphaTest)discard;vec3 c=t.rgb*tint*vDiffuse*texture2D(lightmap,(lightCoord+8.)/256.).rgb;c=mix(c,overlay.rgb,overlay.a);gl_FragColor=vec4(applyFog(c),t.a);}`,
+if(t.a<=alphaTest)discard;vec3 c=t.rgb*tint*vDiffuse*texture2D(lightmap,(lightCoord+8.)/256.).rgb;c=mix(c,overlay.rgb,overlay.a);gl_FragColor=vec4(applyFog(c),${transparent ? "t.a" : "1."});}`,
     transparent,
     side,
   });

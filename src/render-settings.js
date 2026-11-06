@@ -82,13 +82,18 @@ export function mipLevel(src, w, h, hasTransparent) {
     }
   return { data: out, width: nw, height: nh };
 }
-export const hasTransparentTexel = (data) => {
-  for (let i = 3; i < data.length; i += 4) if (data[i] === 0) return true;
+// TextureUtil.generateMipmapData (bqi.a(II[[I)) sets its transparency flag from `data[0][k] >> 24 == 0` for
+// k < data.length, and data is the sprite's per-level array of 1 + mipmapLevels entries: only the first
+// levels + 1 texels of the top row are looked at. leaves_jungle and grass_side_overlay start with opaque
+// texels, so natively they take the plain gamma average (alpha included, no 96 cutoff) despite their holes.
+export const hasTransparentTexel = (data, levels = Infinity) => {
+  const n = Math.min(data.length >> 2, levels + 1);
+  for (let i = 0; i < n; i++) if (data[i * 4 + 3] === 0) return true;
   return false;
 };
 // The mip chain 0..levels of an RGBA image, levels clamped to what the size allows.
 export function mipChain(data, w, h, levels) {
-  const out = [{ data, width: w, height: h }], flag = hasTransparentTexel(data);
+  const out = [{ data, width: w, height: h }], flag = hasTransparentTexel(data, levels);
   for (let i = 1; i <= levels; i++) {
     const prev = out[i - 1];
     if (prev.width < 2 && prev.height < 2) break;

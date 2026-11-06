@@ -57,9 +57,7 @@ export function animateSnowGolem(rig, pose) {
 // two crossed quads each.
 export function addMooshroomMushrooms(rig, renderer) {
   const map = pixelTexture("/media/1.7.10/blocks/mushroom_red.png"),
-    mat = entityMaterial(renderer.view.lighting, { map });
-  mat.side = THREE.DoubleSide;
-  mat.transparent = true;
+    mat = entityMaterial(renderer.view.lighting, { map, transparent: true, side: THREE.DoubleSide });
   const cross = (parent, x, y, z, s) => {
     for (const a of [Math.PI / 4, -Math.PI / 4]) {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(s, s), mat);
