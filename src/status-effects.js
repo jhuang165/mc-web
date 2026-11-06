@@ -70,7 +70,7 @@ export class Effects {
   moveSpeedMultiplier() {
     let m = 1;
     for (const id of [PT.SPEED, PT.SLOWNESS]) { const e = this.active.get(id); if (e) m *= 1 + modifierAmount(POTION_TYPES[id], e.amplifier); }
-    return m;
+    return Math.max(0, m); // RangedAttribute(movementSpeed) clamps the attribute value at 0 (probe: Slowness 8 and up)
   }
   // EntityLivingBase.jump: Jump Boost adds 0.1 per level to the upward motion.
   jumpBoost() { const e = this.active.get(PT.JUMP_BOOST); return e ? Math.fround((e.amplifier + 1) * Math.fround(0.1)) : 0; }
@@ -88,7 +88,7 @@ export class Effects {
     const w = this.active.get(PT.WEAKNESS), st = this.active.get(PT.STRENGTH);
     if (w) d += modifierAmount(POTION_TYPES[PT.WEAKNESS], w.amplifier);
     if (st) d *= 1 + modifierAmount(POTION_TYPES[PT.STRENGTH], st.amplifier);
-    return d;
+    return Math.max(0, d); // RangedAttribute(attackDamage) has minimum 0 (probe: Weakness II or more on an empty hand is 0, not negative)
   }
   clear() { this.active.clear(); }
   serialize() { return Array.from(this.active.values(), (effect) => ({ ...effect })); }

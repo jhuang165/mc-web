@@ -26,6 +26,7 @@ import { fireworksResult } from './fireworks.js';
 import { stepStuckArrows } from "./stuck-arrows.js";
 import { installNetherItems, installNetherMaterials, installNetherRecipes, installNetherSmelting, netherCraftingResult } from './nether-blocks.js';
 import { applyNativeNames } from './item-names.js';
+import { queueKnockBack } from './player-knockback.js';
 import { installColoredItems, installColoredMaterials, COLORED_FUELS } from './colored-blocks.js';
 import { installNoteJukeboxItems, installNoteJukeboxMaterials, installNoteJukeboxRecipes } from './note-jukebox-content.js';
 // The lastDamage reason of DamageSource.outOfWorld (death-messages.js).
@@ -745,7 +746,7 @@ export class Survival {
   // attacking mob, which a successful hit exposes to the Thorns reaction (EntityMob.attackEntityAsMob).
   scaledDamage(n, reason, options = {}) {
     const amount = scaleDamage(this.difficulty, n);
-    const hit = amount > 0 && this.damage(amount, reason, true, options.source);
+    const hit = amount > 0 && this.damage(amount, reason, true, options.source, options.from);
     if (hit && options.attacker) this.thorns(options.attacker);
     return hit;
   }
@@ -796,7 +797,9 @@ export class Survival {
   get maxHealth() { return 20 + (this.effects?.get(21) ? 4 * (this.effects.get(21).amplifier + 1) : 0); }
   // EntityLivingBase.heal: the amount capped at the maximum health.
   heal(n) { if (this.health > 0 && n > 0) this.health = Math.min(this.maxHealth, Math.fround(this.health + n)); }
-  damage(n, reason = "an accident", blockable = false, source = undefined) {
+  // `from` ({ x, z }) is the DamageSource entity (getEntity: a mob, the shooter of an arrow or fireball, the thrower of a potion). A fresh
+  // hit with one runs EntityLivingBase.knockBack, queued for the movement tick (player-knockback.js drainKnockback).
+  damage(n, reason = "an accident", blockable = false, source = undefined, from = undefined) {
     const outOfWorld = reason === VOID;
     if ((this.creative && !outOfWorld) || this.health <= 0 || n <= 0 || (this.protection > 0 && !outOfWorld))
       return false;
@@ -825,6 +828,7 @@ export class Survival {
       this.hurtTicks = 10;
       this.hurtCount++;
       this.hurtSounds.push("game.player.hurt");
+      if (from && Number.isFinite(from.x) && Number.isFinite(from.z)) queueKnockBack(this, from);
     }
     if (fresh || this.health < before) this.hurtTime = 10;
     if (this.health < before) { this.clientResist = 20; this.syncedHealth = this.health; }

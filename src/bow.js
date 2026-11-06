@@ -15,6 +15,7 @@ import { enterWater } from "./fx.js";
 import { GaussianRandom, intercept, rayTraceBlocks } from "./projectiles.js";
 import { addStuckArrow } from "./stuck-arrows.js";
 import { bowEffects } from "./mob-equipment.js";
+import { arrowPunch } from "./player-knockback.js";
 import { applyBowEnchantments, bowEnchantments } from "./armor-enchantments.js";
 
 const f = Math.fround;
@@ -320,6 +321,7 @@ export class Arrows {
           const h = sqrtF(a.mx * a.mx + a.mz * a.mz);
           if (a.knockback > 0 && h > 0 && hit.entity.ref !== "player")
             this.push(ctx.mobs, hit.entity.ref, (a.mx * a.knockback * 0.6000000238418579) / h, 0.1, (a.mz * a.knockback * 0.6000000238418579) / h);
+          else if (hit.entity.ref === "player" && ctx.survival) arrowPunch(ctx.survival, a, sqrtF);
           this.sound(a, "random.bowhit", 1, f(f(1.2) / f(f(a.rand.nextFloat() * f(0.2)) + f(0.9))));
           a.dead = true;
         } else {
@@ -410,7 +412,8 @@ export class Arrows {
       if (!survival) return false;
       // zc.h: a burning arrow does setFire(5) on its target before attackEntityFrom (Fire Protection shortens it).
       if (a.fire > 0) survival.setFire?.(5);
-      const hit = !!survival.damage(dmg, "an arrow", true);
+      // The source entity is the shooter (the arrow itself when none): EntityLivingBase.knockBack runs from its position.
+      const hit = !!survival.damage(dmg, "an arrow", true, undefined, shooter === "player" ? undefined : shooter && typeof shooter === "object" ? shooter : a);
       // zc.h: a landed hit on a living entity does setArrowCountInEntity(count + 1).
       if (hit && survival.health > 0) survival.arrowCount = addStuckArrow(survival.arrowCount);
       // A hit by an arrow a mob shot runs the wearer's Thorns on the shooter (EnchantmentHelper.func_151384_a).

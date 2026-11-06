@@ -82,7 +82,7 @@ export class Fireballs {
       const t = hit.entity;
       if (t?.player) {
         const s = mobs.ai?.survival;
-        return !!s && s.damage(n, "fireball", true, "fireball");
+        return !!s && s.damage(n, "fireball", true, "fireball", owner && owner !== "player" ? owner : undefined); // the source entity is the shooter
       }
       return mobs.damage(t, n, from?.x ?? b.x, from?.z ?? b.z, byPlayer, null, { name: "fireball", fireball: true, player: byPlayer });
     };

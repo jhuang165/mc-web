@@ -1,6 +1,7 @@
 // Authoritative integrated-server explosion orchestration from main.js. This
 // module mutates world/entity state directly while leaving rendering, audio,
 // container presentation and UI notifications to synchronous hooks.
+import { drainKnockback } from "./player-knockback.js";
 import { WITHER_PROOF_INTERNAL, skullResistance } from "./wither-boss.js";
 import { explodeBlocks, explosionResistance, explosionImpact, explodeTnt, primeTnt } from "./explosion.js";
 import { ENTITY_TYPES } from "./entities.js";
@@ -93,8 +94,11 @@ export function applyExplosion(state, request, hooks = {}) {
     if (playerHit) {
       if (!survival.creative && survival.scaledDamage(
         playerHit.damage,
-        attacker && attacker !== "player" ? "a " + attacker.type : "an explosion", { source: "explosion" },
+        attacker && attacker !== "player" ? "a " + attacker.type : "an explosion", { source: "explosion", from: attacker && attacker !== "player" ? attacker : undefined },
       )) brokenTool();
+      // The source entity (Explosion.getExplosivePlacedBy: a creeper or other living exploder) knocks back first (attackEntityFrom), then the
+      // explosion velocity is added on top (doExplosionA), so the queue is applied before it.
+      drainKnockback(survival, velocity, position);
       // Explosion.doExplosionA: knockback is impact less floor(impact * Blast Protection level * 0.15F).
       const kick = blastKnockback(survival.inventory?.armor ?? [], playerHit.impact), scale = playerHit.impact && kick !== playerHit.impact ? kick / playerHit.impact : 1;
       velocity.x += playerHit.push[0] * scale; velocity.y += playerHit.push[1] * scale; velocity.z += playerHit.push[2] * scale;

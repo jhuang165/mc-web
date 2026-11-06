@@ -182,7 +182,7 @@ export class WitherSkulls extends Fireballs {
       const player = !!t.player, survival = mobs.ai?.survival;
       let landed = false;
       if (owner) {
-        landed = player ? !!survival?.scaledDamage(WITHER.skullDamage, "a wither", { source: "mob" }) : mobs.damage(t, WITHER.skullDamage, owner.x, owner.z, false, owner, { name: "mob", attacker: owner });
+        landed = player ? !!survival?.scaledDamage(WITHER.skullDamage, "a wither", { source: "mob", from: owner }) : mobs.damage(t, WITHER.skullDamage, owner.x, owner.z, false, owner, { name: "mob", attacker: owner });
         if (landed && (player ? survival.health <= 0 : t.health <= 0) && owner.health > 0) owner.health = Math.min(WITHER.maxHealth, f(owner.health + WITHER.skullHeal));
       } else if (!player) mobs.damage(t, 5, b.x, b.z, false, null, { name: "magic" });
       const ticks = witherSkullEffectTicks(mobs.difficulty ?? 2);
