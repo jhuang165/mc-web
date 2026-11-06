@@ -22,7 +22,7 @@ Code: `src/hanging.js` (rules), `src/hanging-interaction.js` (aim, place, hit, u
 
 ## Remaining differences
 
-- Region import of Painting/ItemFrame entities is not implemented (counted as lost).
+- Region import of Painting/ItemFrame entities (Direction or legacy Dir, TileX/Y/Z, Motive, Item/ItemRotation/ItemDropChance) is in since batch 13 ([level-dat](level-dat.md)); the 11 native `nbt-read` records here (Direction, legacy Dir 0-3, unknown and missing Motive, framed item with ItemRotation 6 and drop chance, empty Item) read to the same direction, wall block, art, item and rotation, and the live entity stands at the native position (`src/level-dat.test.js`).
 - Frames holding maps draw as ordinary frames (maps out of scope).
 - Adventure-mode `canPlayerEdit` check is not applied.
 - Frame bar and back-panel UVs use the full tile rather than the native sub-cropped regions.
