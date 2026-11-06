@@ -8,8 +8,15 @@ import { originalOfLive } from "./item-names.js";
 import { HORSE_ARMOR_IDS, SADDLE_ID, canWearArmor, canCarryChest } from "./horse.js";
 
 export const SADDLE_SLOT = 0, ARMOR_SLOT = 1, CHEST_FIRST = 2, BASE_SIZE = 2, CHEST_SIZE = 17;
-// AnimalChest("HorseChest", n): not a custom name, and en_US.lang has no entry, so the screen shows the key itself.
-export const HORSE_TITLE = "HorseChest";
+// EntityHorse.func_110226_cD (wi.cN) builds AnimalChest("HorseChest", n) and then renames it to getCommandSenderName (zt.a(String)
+// sets the custom-name flag, so GuiScreenHorseInventory shows it untranslated). cN runs in the constructor (type 0 and no
+// custom name yet, so "Horse"), when a chest is added (interact) and in readEntityFromNBT only for a chested horse. The title
+// is therefore "Horse" for a horse without a chest whatever its type or name, and the horse's name for a chested donkey or mule.
+const HORSE_NAMES = ["Horse", "Donkey", "Mule", "Zombie Horse", "Skeleton Horse"]; // en_US.lang entity.<type>.name
+export function horseChestTitle(h, customName = "") {
+  if (!h?.chested) return HORSE_NAMES[0];
+  return customName || (HORSE_NAMES[h.type] ?? HORSE_NAMES[0]);
+}
 // Item ids: the lead is the one new item (original 420); the name tag is the existing original 421.
 export const LEAD_ORIGINAL = 420, LEAD_ITEM = 2020, NAME_TAG_ORIGINAL = 421, NAME_TAG_ITEM = 375, CHEST_ORIGINAL = 54;
 export const liveOf = (original) => ORIGINAL_ITEMS[original] ?? original;
@@ -89,10 +96,10 @@ class ArmourSlot extends HorseSlot { valid(s) { return !!s && slotValid(this.hor
 
 // ContainerHorseInventory. `h` is the horse record (e.horse); every change refreshes its saddled/armor flags.
 export class HorseContainer extends Container {
-  constructor(inv, h, onChange) {
+  constructor(inv, h, onChange, customName = "") {
     super(inv);
     this.horse = h;
-    this.title = HORSE_TITLE;
+    this.title = horseChestTitle(h, customName);
     this.tile = new StackArray(ensureItems(h), () => { syncGear(h); onChange?.(); });
     this.addSlot(new HorseSlot(this.tile, SADDLE_SLOT, 8, 18, h));
     this.addSlot(new ArmourSlot(this.tile, ARMOR_SLOT, 8, 36, h));

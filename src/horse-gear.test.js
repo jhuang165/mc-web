@@ -209,3 +209,22 @@ test("a dying chested horse drops its saddle, stacks and the chest", () => {
   w.gearDeath(e);
   assert.deepEqual(w.events.filter((x) => x.drop).map((x) => [x.drop, x.count]), [[G.liveOf(329), 1], [G.liveOf(280), 5], [G.liveOf(54), 1]]);
 });
+
+test("the horse screen title is the AnimalChest name EntityHorse.cN gave it", () => {
+  // cN (func_110226_cD) renames the chest to getCommandSenderName; only the constructor (type 0, no name) builds it for an unchested horse.
+  const inv = new PlayerInventory();
+  assert.equal(new G.HorseContainer(inv, { type: 0 }, null).title, "Horse");
+  assert.equal(new G.HorseContainer(inv, { type: 1, chested: false }, null, "Ned").title, "Horse");
+  assert.equal(new G.HorseContainer(inv, { type: 4 }, null).title, "Horse");
+  assert.equal(new G.HorseContainer(inv, { type: 1, chested: true }, null).title, "Donkey");
+  assert.equal(new G.HorseContainer(inv, { type: 2, chested: true }, null).title, "Mule");
+  assert.equal(new G.HorseContainer(inv, { type: 2, chested: true }, null, "Ned").title, "Ned");
+});
+
+test("main.js opens the horse screen without the edit-local syncContainerState", async () => {
+  // syncContainerState is scoped to edit(); the top-level openHorse (also used by the inventory key while riding) must not call it.
+  const main = await readFile(new URL("./main.js", import.meta.url), "utf8");
+  const open = main.split("\n").find((l) => l.startsWith("function openHorse("));
+  assert.ok(open && !open.includes("syncContainerState"));
+  assert.match(main, /openHorse: \(e\) => \{ openHorse\(e\); syncContainerState\(\); \}/);
+});

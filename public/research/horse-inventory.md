@@ -15,3 +15,7 @@ bft.func_146976_a ends with `GuiInventory.func_147046_a(guiLeft + 51, guiTop + 6
 ## Gaps
 
 - No new probe was written: HorseGearProbe already records the container evidence. The preview is a static rest pose (no limb swing, rear, eat or tail animation, no baby head offset) and has not been viewed in a browser; lighting uses the inventory-player item lights. Not full parity.
+
+## Title
+
+EntityHorse.func_110226_cD (`wi.cN`) builds `AnimalChest("HorseChest", n)` and renames it with `zt.a(getCommandSenderName())`, which also sets the custom-name flag, so the screen shows the name untranslated. `cN` runs in the constructor (type 0, no custom name yet: "Horse"), when a chest is added, and in readEntityFromNBT only for a chested horse. The browser therefore titles an unchested horse "Horse" whatever its type or name, and a chested donkey or mule by its custom name or type name (`horseChestTitle`, escaped in the modal). Renaming a chested horse takes effect immediately here, while native keeps the old title until the next load.

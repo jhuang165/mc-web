@@ -124,6 +124,11 @@ test("boost replays: the scan region, 0.3 per block, the cap of 14, bars count a
 });
 
 test("convert replays: profession from World.rand, child stays a child, Nausea 200, flag, aux 1017", () => {
+  // Entity.rand is seeded from Math.random (entityRandom); a fixed stream keeps the 4-sigma bonus check deterministic.
+  const random = Math.random;
+  let s = 1;
+  Math.random = () => ((s = (s * 48271) % 2147483647) / 2147483647);
+  try {
   for (const [seed, child, profession, age, followRange, nausea, flag, spawned, dead, aux] of rec("convert")[0].rows) {
     const w = plain(), ew = new EntityWorld(w, null, () => 0.5);
     ew.worldRandom = new JavaRandom(seed);
@@ -144,6 +149,7 @@ test("convert replays: profession from World.rand, child stays a child, Nausea 2
     assert.equal(aux.length, 1);
     assert.ok(ew.events.some((e) => e.sound === "mob.zombie.unfect" && e.volume === 2));
   }
+  } finally { Math.random = random; }
 });
 
 test("villages.dat written by the native VillageCollection reads, re-writes and matches", () => {

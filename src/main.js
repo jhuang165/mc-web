@@ -1369,7 +1369,7 @@ function goHome() {
   $("#vignette").classList.remove("in-game");
   gui.show(menus.mainMenu());
 }
-function openHorse(e) { openContainer(new HorseContainer(survival.inventory, mobs.horseGear(e), () => { saved = false; }), "horse", String(e.id)); containerView.horseMob = e; syncContainerState(); }
+function openHorse(e) { openContainer(new HorseContainer(survival.inventory, mobs.horseGear(e), () => { saved = false; }, e.customName), "horse", String(e.id)); containerView.horseMob = e; }
 function inventory(station = false) {
   // EntityPlayerSP.func_110322_i: the inventory key while riding a saddled horse opens the horse's screen.
   const ridden = !station && riddenHorse(rider);
@@ -1464,7 +1464,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
         ? '<i class="chest-bottom" aria-hidden="true"></i><span class="chest-bag-label">Inventory</span>'
         : `<span class="native-bag-label">Inventory</span><span class="native-crafting-label">Crafting</span>`;
   modal(
-    container.title ?? CONTAINER_TITLES[kind],
+    kind === "horse" ? esc(container.title) : container.title ?? CONTAINER_TITLES[kind], // a horse title can be a player-chosen name
     kind === "creative" ? '<div class="creative-body"></div>' : slotsHtml(container) + decorations,
     CONTAINER_CLASSES[kind] ? `${CONTAINER_CLASSES[kind]} container-screen` : "inventory-modal native-inventory container-screen" + (kind === "workbench" ? " native-workbench" : ""),
   );
@@ -2400,7 +2400,7 @@ function edit(place = false) {
     openChest: (chest, key) => { openContainer(chest, "chest", key); redstoneRuntime?.chestViewersChanged(chest.keys); syncContainerState(); },
     openBrewing: (tile, key) => { openContainer(new BrewingContainer(survival.inventory, brewingView(tile), () => { saved = false; }), "brewing", key); syncContainerState(); },
     openHopper: (hopper, key) => { openContainer(new HopperContainer(survival.inventory, hopper, () => { saved = false; }), "hopper", key); syncContainerState(); },
-    openHorse: (e) => openHorse(e),
+    openHorse: (e) => { openHorse(e); syncContainerState(); },
     openDispenser: (dispenser, key, _block, title = DISPENSER_TITLE) => { openContainer(Object.assign(new DispenserContainer(survival.inventory, dispenser, () => { saved = false; }), { title }), "dispenser", key); syncContainerState(); },
     breakBlock,
     clientEyeInWater,
