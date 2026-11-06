@@ -29,7 +29,7 @@ import {villagerInteract,villagerClearCustomer,villagerOffers,villagerUseRecipe,
 import {withinEnchantReach} from './enchanting-table.js';
 import {damagedAnvilMetadata,ANVIL_DAMAGE_CHANCE} from './anvil.js';
 import {treePickDamage} from './wood-types.js';
-import { migrateSettings, renderDistanceBlocks, SOUND_CATEGORIES, soundLevel } from "./settings.js";
+import { migrateSettings, renderDistanceBlocks, SOUND_CATEGORIES, soundLevel, CHAT_SETTING_DEFAULTS } from "./settings.js";
 import { MouseLook, setAngles } from "./mouse-look.js";
 import * as THREE from "three";
 import {
@@ -94,7 +94,10 @@ import {Farming,cropDrops} from "./farming.js";
 import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox } from "./entities.js";
 import { BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
 import { deathMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
-import { ChatUi, printChat } from "./chat-ui.js";
+import { ChatUi, printChat, chat } from "./chat-ui.js";
+import { chatCanOpen } from "./chat.js";
+import { PlayerListUi, playerListVisible } from "./player-list.js";
+import { takeScreenshot, downloadBlob } from "./screenshot.js";
 import { Achievements, BY_ID as BY_ACHIEVEMENT, CHAT_ACHIEVEMENT } from "./achievements.js";
 import { AchievementToast } from "./achievements-ui.js";
 import { Stats } from "./stats.js";
@@ -259,6 +262,8 @@ let options = {
   clouds: true,
   mipmapLevels: 4,
   anisotropic: 1,
+  // Chat Settings (ScreenChatOptions): visibility, colours, links, opacity, scale, width and heights at the GameSettings defaults.
+  ...CHAT_SETTING_DEFAULTS,
 };
 try {
   options = {
@@ -266,6 +271,7 @@ try {
     ...migrateSettings(JSON.parse(localStorage.getItem("blockworld.settings") || "{}")),
   };
 } catch {}
+chat.applySettings(options);
 options.particles = particleSetting(options.particles);
 // GuiScreenOptionsSounds has no mute switch: Master Volume is the only off control.
 options.sound = true;
@@ -466,6 +472,7 @@ const menuContext = {
   inGame: () => screen !== "home",
   notice: toast,
   lanOpen: () => lan.public,
+  copyText: (text) => { try { navigator.clipboard?.writeText(text); } catch {} },
   // GuiShareToLan "Start LAN World": displayGuiScreen(null), shareToLAN, then commands.publish.started (or failed) in chat.
   shareToLan: (mode, cheats) => {
     resume();
@@ -627,6 +634,7 @@ function saveOptions() {
   scene.setDistance(renderDistanceBlocks(options.distance));
   scene.setGamma(Number(options.gamma) || 0);
   scene.setRenderSettings(options);
+  chat.applySettings(options);
   sounds.updateVolumes();
   updateParticleOptions();
   updateDifficulty();
@@ -1274,7 +1282,18 @@ const commandHost = createCommandHost({
 const commands = createCommandRunner(commandHost);
 const chatUi = new ChatUi(document, {
   // ServerConfigurationManager prints "<Player> message"; a leading "/" runs the command.
-  submit: (text) => { if (text.startsWith("/")) commands.run(text); else printChat(chatLine(PLAYER_NAME, text)); },
+  submit: (text) => { if (text.startsWith("/")) commands.run(text); else printChat(chatLine(PLAYER_NAME, text), 0, false); },
+  // GuiChat.func_146407_a: with chatLinksPrompt a GuiConfirmOpenLink asks first; Yes opens a new tab, and every choice returns to the chat.
+  confirmLink: (url) => {
+    const typed = chatUi.input.value;
+    gui.show(menus.confirmOpenLink(url, (yes) => {
+      if (yes) window.open(url, "_blank", "noopener");
+      gui.hide();
+      chatUi.input.value = typed;
+      chatUi.input.focus();
+    }));
+  },
+  openLink: (url) => window.open(url, "_blank", "noopener"),
   complete: (before) => commands.complete(before),
   close: () => closeChat(),
   stay: () => bedSleep.sleeping,
@@ -1282,7 +1301,7 @@ const chatUi = new ChatUi(document, {
 });
 // GuiChat: no pause, but the pointer is released and the movement keys stop (the same state the sleep screen uses).
 function openChat(prefill = "") {
-  if (chatOpen || screen !== "playing" || gui.open || survival.health <= 0) return;
+  if (chatOpen || screen !== "playing" || gui.open || survival.health <= 0 || !chatCanOpen(options.chatVisibility)) return;
   chatOpen = true;
   screen = "inventory";
   mining = null; mineHeld = false; eating = null;
@@ -2830,8 +2849,26 @@ $("#file-input").onchange = async (e) => {
   e.target.value = "";
 };
 
+// key.screenshot (F2): ScreenShotHelper.saveScreenshot after the frame is drawn, then a chat message; works on every screen.
+const playerList = new PlayerListUi(document);
+const shotNames = new Set();
+function screenshot() {
+  takeScreenshot({
+    capture: (cb) => scene.requestCapture(cb),
+    save: (blob, name) => { shotNames.add(name); downloadBlob(blob, name); },
+    taken: (name) => shotNames.has(name),
+    print: ({ text, links }) => chat.print(text, Math.floor(performance.now() / 50), 0, links),
+  });
+}
+// key.playerlist (Tab) held: GuiIngame draws the list unless a lone integrated player is on the server (player-list.js).
+const showPlayerList = () => {
+  if (!playerListVisible({ integrated: true, players: 1, lanShared: lan.public })) return;
+  playerList.show([{ name: PLAYER_NAME, ping: 0 }], Math.floor(window.innerWidth / ((parseFloat(getComputedStyle(chatUi.box).fontSize) / 8) || 1)));
+};
 window.addEventListener("keydown", (e) => {
   if (screen === "credits") return;
+  if (!e.repeat && e.code === (options.keys?.["key.screenshot"] ?? "F2")) { e.preventDefault(); screenshot(); return; }
+  if (e.code === (options.keys?.["key.playerlist"] ?? "Tab") && screen === "playing" && !gui.open) showPlayerList();
   if(exportBusy){e.preventDefault();return;}
   // An open menu screen takes every key (GuiScreen.handleKeyboardInput).
   if (gui.open) {
@@ -2914,6 +2951,7 @@ window.addEventListener("keydown", (e) => {
   keys.add(e.code);
 });
 window.addEventListener("keyup", (e) => {
+  if (e.code === (options.keys?.["key.playerlist"] ?? "Tab")) playerList.hide();
   if (e.code === "F3" && keys.has("F3") && !f3Combo && screen === "playing") {
     debug = !debug;
     $("#debug").classList.toggle("hidden", !debug);

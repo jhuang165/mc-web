@@ -62,6 +62,15 @@ export function optionLabel(key, v) {
   return String(v);
 }
 
+// GameSettings chat fields (bbj.m chatVisibility, n chatColours, o chatLinks, p chatLinksPrompt, q chatOpacity, C chatScale, D chatWidth,
+// E chatHeightFocused, F chatHeightUnfocused) with their constructor defaults; showCape is the SHOW_CAPE boolean (default true).
+export const CHAT_SETTING_DEFAULTS = Object.freeze({
+  chatVisibility: 0, chatColors: true, chatLinks: true, chatLinksPrompt: true, chatOpacity: 1, chatScale: 1, chatWidth: 1,
+  chatHeightFocused: 1, chatHeightUnfocused: 0.44366196, showCape: true,
+});
+export const CHAT_FLOAT_KEYS = ["chatOpacity", "chatScale", "chatWidth", "chatHeightFocused", "chatHeightUnfocused"];
+export const CHAT_BOOL_KEYS = ["chatColors", "chatLinks", "chatLinksPrompt", "showCape"];
+
 function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
 const num = (v) => typeof v === "number" && Number.isFinite(v);
 const plain = (v) => v && typeof v === "object" && !Array.isArray(v);
@@ -106,5 +115,9 @@ export function migrateSettings(saved) {
     const n = normalizeRender(s);
     for (const k of ["ao", "mipmapLevels", "anisotropic"]) if (s[k] !== undefined) num(s[k]) ? (s[k] = n[k]) : delete s[k];
   }
+  // Chat Settings (chat.js, menus.js): EnumChatVisibility ordinal 0..2, booleans, and 0..1 sliders.
+  if (s.chatVisibility !== undefined) num(s.chatVisibility) ? (s.chatVisibility = clamp(Math.trunc(s.chatVisibility), 0, 2)) : delete s.chatVisibility;
+  for (const k of CHAT_BOOL_KEYS) if (s[k] !== undefined && typeof s[k] !== "boolean") delete s[k];
+  for (const k of CHAT_FLOAT_KEYS) if (s[k] !== undefined) num(s[k]) ? (s[k] = clamp(s[k], 0, 1)) : delete s[k];
   return s;
 }

@@ -12,15 +12,17 @@ const at = (x, y, w, h) => `left:${px(x)};top:${px(y)}` + (w != null ? `;width:$
 // FontRenderer colour runs: a section sign and code switch the colour (r resets). `color` null
 // draws the base runs in the widget's own --c / --cs (a button's state colour).
 export function textHtml(s, color = 0xffffff) {
-  let out = "", run = "", cur = color;
-  const style = (c) => (c == null ? "color:var(--c);--sh:var(--cs)" : `color:${hex(c)};--sh:${hex(shadowColor(c))}`);
+  let out = "", run = "", cur = color, under = false;
+  const style = (c) => (c == null ? "color:var(--c);--sh:var(--cs)" : `color:${hex(c)};--sh:${hex(shadowColor(c))}`) + (under ? ";text-decoration:underline" : "");
   const flush = () => { if (run) out += `<span style="${style(cur)}">${escapeHtml(run)}</span>`; run = ""; };
   for (let i = 0; i < s.length; i++) {
     if (s[i] === "§" && i + 1 < s.length) {
       flush();
       const code = s[++i].toLowerCase(), k = "0123456789abcdef".indexOf(code);
-      if (k >= 0) cur = FORMAT_COLORS[k];
-      else if (code === "r") cur = color;
+      // A colour code or reset clears the styles (FontRenderer.renderStringAtPos); §n underlines.
+      if (k >= 0) { cur = FORMAT_COLORS[k]; under = false; }
+      else if (code === "r") { cur = color; under = false; }
+      else if (code === "n") under = true;
       continue;
     }
     run += s[i];

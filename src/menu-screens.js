@@ -50,6 +50,15 @@ export const LANG = {
   "options.guiScale.small": "Small", "options.guiScale.normal": "Normal", "options.guiScale.large": "Large",
   "options.renderClouds": "Clouds", "options.particles": "Particles", "options.particles.all": "All",
   "options.particles.decreased": "Decreased", "options.particles.minimal": "Minimal",
+  "options.chat.title": "Chat Settings...", "options.chat.visibility": "Chat", "options.chat.visibility.full": "Shown",
+  "options.chat.visibility.system": "Commands Only", "options.chat.visibility.hidden": "Hidden", "options.chat.color": "Colors",
+  "options.chat.opacity": "Opacity", "options.chat.links": "Web Links", "options.chat.links.prompt": "Prompt on Links",
+  "options.chat.scale": "Scale", "options.chat.width": "Width", "options.chat.height.focused": "Focused Height",
+  "options.chat.height.unfocused": "Unfocused Height", "options.showCape": "Show Cape", "gui.yes": "Yes", "gui.no": "No",
+  "chat.cannotSend": "Cannot send chat message", "chat.link.confirm": "Are you sure you want to open the following website?",
+  "chat.link.warning": "Never open links from people that you don't trust!", "chat.copy": "Copy to Clipboard",
+  "chat.link.confirmTrusted": "Do you want to open this link or copy it to your clipboard?", "chat.link.open": "Open in browser",
+  "screenshot.success": "Saved screenshot as %s", "screenshot.failure": "Couldn't save screenshot: %s",
   "options.multiplayer.title": "Multiplayer Settings...", "options.snooper.view": "Snooper Settings...",
   "options.resourcepack": "Resource Packs...", "options.fullscreen": "Fullscreen", "options.vsync": "Use VSync",
   "options.touchscreen": "Touchscreen Mode", "options.mipmapLevels": "Mipmap Levels",
@@ -236,6 +245,24 @@ export function optionsLayout(w, h) {
     },
   };
 }
+// ScreenChatOptions.initGui (bcs.b): the nine options of field_146399_a in two columns at w/2 - 155 + (i % 2) * 160 and
+// h/6 + 24 * (i >> 1), the "Multiplayer Settings..." title above the SHOW_CAPE row (a second one-entry array placed after the first
+// array's rows rounded up to an even count), and Done at h/6 + 168.
+export const CHAT_OPTIONS = ["CHAT_VISIBILITY", "CHAT_COLOR", "CHAT_LINKS", "CHAT_OPACITY", "CHAT_LINKS_PROMPT", "CHAT_SCALE", "CHAT_HEIGHT_FOCUSED", "CHAT_HEIGHT_UNFOCUSED", "CHAT_WIDTH"];
+export function chatOptionsLayout(w, h) {
+  const c = half(w), s = Math.trunc(h / 6);
+  return {
+    title: [c, 20], subtitle: [c, s + 120 + 7],
+    options: CHAT_OPTIONS.map((o, i) => [o, btn(c - 155 + (i % 2) * 160, s + 24 * (i >> 1), 150)]),
+    cape: btn(c - 155, s + 24 * 6, 150), buttons: { done: btn(c - 100, s + 168) },
+  };
+}
+// GuiConfirmOpenLink (bcu) over GuiYesNo: title at y 70, the URL at 90, the warning at 110 (0xFFCC4C), three 100 x 20 buttons at
+// w/3 - 83 + 0 / 105 / 210 on h/6 + 96 (Yes, Copy to Clipboard, No).
+export function confirmLinkLayout(w, h) {
+  const x = Math.trunc(w / 3) - 83, y = Math.trunc(h / 6) + 96;
+  return { title: [Math.trunc(w / 2), 70], url: [Math.trunc(w / 2), 90], warning: [Math.trunc(w / 2), 110], buttons: { yes: btn(x, y, 100), copy: btn(x + 105, y, 100), no: btn(x + 210, y, 100) } };
+}
 // GuiVideoSettings.field_146502_i without ADVANCED_OPENGL, which initGui removes when the GL has no
 // occlusion queries (OpenGlHelper.field_153197_d), as for this renderer.
 export const VIDEO_OPTIONS = ["GRAPHICS", "RENDER_DISTANCE", "AMBIENT_OCCLUSION", "FRAMERATE_LIMIT", "ANAGLYPH", "VIEW_BOBBING", "GUI_SCALE", "GAMMA", "RENDER_CLOUDS", "PARTICLES", "USE_FULLSCREEN", "ENABLE_VSYNC", "MIPMAP_LEVELS", "ANISOTROPIC_FILTERING"];
@@ -280,6 +307,7 @@ export function languageLayout(w, h) {
 export const FLOAT_OPTIONS = {
   SENSITIVITY: [0, 1, 0], FOV: [30, 110, 1], GAMMA: [0, 1, 0], RENDER_DISTANCE: [2, 16, 1],
   FRAMERATE_LIMIT: [10, 260, 10], MIPMAP_LEVELS: [0, 4, 1], ANISOTROPIC_FILTERING: [1, 16, 0], VOLUME: [0, 1, 0],
+  CHAT_OPACITY: [0, 1, 0], CHAT_SCALE: [0, 1, 0], CHAT_WIDTH: [0, 1, 0], CHAT_HEIGHT_FOCUSED: [0, 1, 0], CHAT_HEIGHT_UNFOCUSED: [0, 1, 0],
 };
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // GameSettings.Options.snapToStep / snapToStepClamp / normalizeValue / denormalizeValue.
@@ -307,7 +335,11 @@ const OPTION_NAMES = {
   PARTICLES: "options.particles", USE_FULLSCREEN: "options.fullscreen", ENABLE_VSYNC: "options.vsync",
   TOUCHSCREEN: "options.touchscreen", MIPMAP_LEVELS: "options.mipmapLevels", ANISOTROPIC_FILTERING: "options.anisotropicFiltering",
   FORCE_UNICODE_FONT: "options.forceUnicodeFont",
+  CHAT_VISIBILITY: "options.chat.visibility", CHAT_COLOR: "options.chat.color", CHAT_LINKS: "options.chat.links", CHAT_OPACITY: "options.chat.opacity",
+  CHAT_LINKS_PROMPT: "options.chat.links.prompt", CHAT_SCALE: "options.chat.scale", CHAT_HEIGHT_FOCUSED: "options.chat.height.focused",
+  CHAT_HEIGHT_UNFOCUSED: "options.chat.height.unfocused", CHAT_WIDTH: "options.chat.width", SHOW_CAPE: "options.showCape",
 };
+const CHAT_VISIBILITY_KEYS = ["options.chat.visibility.full", "options.chat.visibility.system", "options.chat.visibility.hidden"];
 const DIFFICULTIES = ["options.difficulty.peaceful", "options.difficulty.easy", "options.difficulty.normal", "options.difficulty.hard"];
 const GUI_SCALES = ["options.guiScale.auto", "options.guiScale.small", "options.guiScale.normal", "options.guiScale.large"];
 const PARTICLES = ["options.particles.all", "options.particles.decreased", "options.particles.minimal"];
@@ -328,6 +360,13 @@ export function optionText(o, v) {
     case "PARTICLES": return s + t(PARTICLES[v] ?? PARTICLES[0]);
     case "AMBIENT_OCCLUSION": return s + t(AO[v] ?? AO[0]);
     case "GRAPHICS": return s + t(v ? "options.graphics.fancy" : "options.graphics.fast");
+    // GameSettings.getKeyBinding: opacity (int)(f * 90 + 10) + "%", the scale 0 -> OFF else (int)(f * 100) + "%", and the width and
+    // heights through GuiNewChat.func_146233_a / func_146243_b + "px".
+    case "CHAT_VISIBILITY": return s + t(CHAT_VISIBILITY_KEYS[v] ?? CHAT_VISIBILITY_KEYS[0]);
+    case "CHAT_OPACITY": return s + Math.trunc(f(f(f(v) * 90) + 10)) + "%";
+    case "CHAT_SCALE": return s + (v === 0 ? t("options.off") : Math.trunc(f(f(v) * 100)) + "%");
+    case "CHAT_WIDTH": return s + Math.floor(f(f(f(v) * 280) + 40)) + "px";
+    case "CHAT_HEIGHT_FOCUSED": case "CHAT_HEIGHT_UNFOCUSED": return s + Math.floor(f(f(f(v) * 160) + 20)) + "px";
   }
   return s + onOff(v);
 }

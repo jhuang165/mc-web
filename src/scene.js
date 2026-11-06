@@ -1079,9 +1079,13 @@ export class VoxelScene {
     if (savedProj) { proj.multiply(this.warpM4.fromArray(warpMatrix(pv.rendererTicks ?? this.ticks, this.dropPartial, pv.warp, pv.nausea))); c.projectionMatrixInverse.copy(proj).invert(); }
     this.sky.render(this.renderer, c, new THREE.Color(...fog));
     this.renderer.render(this.scene, c);
+    // F2 (screenshot.js): the canvas is read in the same task as the draw, so no preserveDrawingBuffer is needed.
+    if (this.captureRequest) { const cb = this.captureRequest; this.captureRequest = null; this.renderer.domElement.toBlob(cb, "image/png"); }
     if (savedProj) { proj.copy(savedProj); c.projectionMatrixInverse.copy(proj).invert(); }
     this.worldTriangles = this.renderer.info.render.triangles;
   }
+  // The next rendered frame as a PNG blob (cb(null) on failure).
+  requestCapture(cb) { this.captureRequest = cb; }
   // Entity shadows for this frame; `viewer` is the player's eye position.
   setShadows(casters, viewer) {
     const w = this.world, light = this.light;

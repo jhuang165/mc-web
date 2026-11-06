@@ -2,14 +2,16 @@
 // GuiIngame translates to (0, height - 48) and the chat adds (2, 20): the newest line's bottom edge sits 28 GUI pixels above
 // the window's bottom; each line is 9 pixels high with a black rectangle of alpha / 2 and white text with a shadow. GuiChat
 // draws its field at (4, height - 12) over a 50 % black rectangle from (2, height - 14) to (width - 2, height - 2).
-import { ChatLog, SentHistory, TabCompletion, CHAT, allowedText } from "./chat.js";
+import { ChatLog, SentHistory, TabCompletion, CHAT, allowedText, chatDelivered, linkUrlAllowed } from "./chat.js";
 import { textHtml } from "./menu-ui.js";
 
 // One chat for the whole page: death, bed and command messages and plain chat all print here (showChatLine uses it too).
 export const chat = new ChatLog();
 // Wall-clock ticks (50 ms) stand in for GuiIngame.getUpdateCounter.
 export const chatTick = () => Math.floor(performance.now() / 50);
-export const printChat = (text, id = 0) => chat.print(text, chatTick(), id);
+// `system` is S02PacketChat's flag: command feedback and server notices are system messages, player chat is not; chat
+// visibility drops them as nh.a(ft) does (Hidden drops all, Commands Only keeps the system ones).
+export const printChat = (text, id = 0, system = true, links = []) => (chatDelivered(chat.settings.chatVisibility, system) ? chat.print(text, chatTick(), id, links) : []);
 
 const STYLE = `
 #chat-log{position:fixed;left:calc(2*var(--u));bottom:calc(28*var(--u));z-index:9;pointer-events:none;transform-origin:0 100%;font-size:calc(8*var(--u))}
@@ -55,6 +57,14 @@ export class ChatUi {
       this.tab.reset();
     });
     this.box.addEventListener("wheel", () => {});
+    // GuiChat.mouseClicked: a left click on a component with a ClickEvent (chatLinks on); Shift inserts its text instead.
+    doc.addEventListener("pointerdown", (e) => {
+      if (!this.isOpen || e.button !== 0 || this.log.settings.chatLinks === false || this.log.settings.chatVisibility === 2) return;
+      const u = parseFloat(doc.defaultView.getComputedStyle(this.box).fontSize) / 8, s = this.log.settings.chatScale || 1;
+      if (!(u > 0)) return;
+      const click = this.log.clickAt((e.clientX - 2 * u) / (u * s) - 2, (doc.defaultView.innerHeight - 28 * u - e.clientY) / (u * s));
+      if (click) this.click(click, e.shiftKey);
+    });
     doc.addEventListener("wheel", (e) => {
       if (!this.isOpen) return;
       e.preventDefault();
@@ -66,6 +76,16 @@ export class ChatUi {
     log.listeners.add(() => this.render());
     this.timer = setInterval(() => this.render(), 50);
     this.render();
+  }
+  // GuiChat.func_146407_a: OPEN_URL (http/https only, behind GuiConfirmOpenLink when chatLinksPrompt), SUGGEST_COMMAND, RUN_COMMAND.
+  click(click, shift = false) {
+    if (shift) { this.input.setRangeText(click.text ?? "", this.input.selectionStart ?? this.input.value.length, this.input.selectionEnd ?? this.input.value.length, "end"); return; }
+    if (click.action === "open_url") {
+      if (!linkUrlAllowed(click.value)) { console.warn("Unsupported protocol: " + click.value); return; }
+      if (this.log.settings.chatLinksPrompt !== false) this.hooks.confirmLink?.(click.value);
+      else this.hooks.openLink?.(click.value);
+    } else if (click.action === "suggest_command") this.input.value = allowedText(click.value);
+    else if (click.action === "run_command") this.hooks.submit(click.value);
   }
   open(prefill = "") {
     this.isOpen = true;
@@ -122,11 +142,12 @@ export class ChatUi {
     }
   }
   render() {
-    const visible = this.hooks.visible?.() !== false;
+    // GuiNewChat.drawChat returns at once when chatVisibility is HIDDEN.
+    const visible = this.hooks.visible?.() !== false && this.log.settings.chatVisibility !== 2;
     this.inputBox.style.visibility = visible ? "" : "hidden";
     const rows = visible ? this.log.draw(chatTick(), this.isOpen) : [];
     const scale = this.log.settings.chatScale;
-    const sig = rows.map((r) => r.row + ":" + r.alpha + ":" + r.text).join("|") + "@" + this.log.scrollPos + this.isOpen + scale;
+    const sig = rows.map((r) => r.row + ":" + r.alpha + ":" + r.text).join("|") + "@" + this.log.scrollPos + this.isOpen + scale + ":" + this.log.width;
     if (sig === this.sig) return;
     this.sig = sig;
     this.box.style.transform = scale === 1 ? "" : `scale(${scale})`;

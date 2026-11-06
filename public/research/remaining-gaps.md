@@ -16,9 +16,9 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 5. Filled map and fireworks items are technical-only rows: see `item-parity-catalogue.md`.
 
 ### GUI and settings
-6. Chat Settings screen (ScreenChatOptions): chat visibility, chat colours and web links. Missing. Opacity, scale and width are Partial.
-7. Player list (Tab). Missing.
-8. F2 screenshot. Missing.
+6. Chat Settings screen (ScreenChatOptions): Partial (branch b12-guis). All nine options persist and apply, Show Cape is disabled; vanilla links need a ClickEvent producer (see `chat-options.md`).
+7. Player list (Tab). Partial: native layout, shown only while Open to LAN (native hides it for a lone host); no other players or scoreboard.
+8. F2 screenshot. Partial: canvas-only PNG download with the native name and chat message; no HUD in the image, no F1 toggle.
 9. Resource Packs screen and pack loading. Missing.
 10. Key rebinding: only smoothCamera is rebindable; key.chat and key.command are Partial. No `options.txt` persistence. See `settings-parity-catalogue.md`.
 11. Superflat world type and its customization screens. Missing.
@@ -58,7 +58,7 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 - Only one language; one local player.
 
 ## Stale strings outside this track's scope
-- `src/menus.js` `UNAVAILABLE.multiplayerSettings` says "no chat", which is no longer true.
+- `src/menus.js` `UNAVAILABLE.multiplayerSettings` is gone: the button opens Chat Settings.
 - `src/armor-enchantments.js` comment about no golden apple.
 
 ## Out of scope

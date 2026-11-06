@@ -8,8 +8,9 @@ import {
   mainMenuLayout, selectWorldLayout, createWorldLayout, yesNoLayout, renameWorldLayout, ingameMenuLayout, shareToLanLayout,
   optionsLayout, VIDEO_OPTIONS, videoSettingsLayout, CONTROLS_OPTIONS, controlsLayout, KEY_ENTRY, soundsLayout, languageLayout,
   FLOAT_OPTIONS, denormalize, normalize, optionText, soundText, folderName, worldLines, WORLD_TYPES, worldTypeIndex,
-  KEY_BINDINGS, REBINDABLE, keyListEntries, keyName, javaHash,
+  KEY_BINDINGS, REBINDABLE, keyListEntries, keyName, javaHash, chatOptionsLayout, confirmLinkLayout,
 } from "./menu-screens.js";
+import { CHAT_SETTING_DEFAULTS } from "./settings.js";
 import { canGoEndless } from "./endless-world.js";
 import { achievementsScreen } from "./achievements-ui.js";
 import { statsScreen } from "./stats-screen.js";
@@ -23,7 +24,7 @@ export const UNAVAILABLE = {
   quit: "A web page cannot close its own tab. Close the tab to quit.",
   superSecret: "Super Secret Settings needs the 1.7.10 post-processing shaders, which this renderer does not have.",
   stream: "Twitch broadcasting was a desktop-only feature; a web page cannot stream.",
-  multiplayerSettings: "There is no chat or multiplayer in this browser build.",
+  showCape: "There are no accounts or capes in this browser build, so the Show Cape button is drawn disabled.",
   resourcepack: "Only the bundled 1.7.10 textures are available; resource packs cannot be loaded yet.",
   snooper: "This build sends no usage data, so there is nothing to configure.",
   forceUnicode: "Only the default font and the English (US) strings are bundled.",
@@ -36,7 +37,9 @@ export const UNAVAILABLE = {
 // The renderer's fixed state, shown by the disabled video buttons.
 const FIXED = { FRAMERATE_LIMIT: 260, ANAGLYPH: false, ENABLE_VSYNC: true, TOUCHSCREEN: false, FORCE_UNICODE_FONT: false };
 // GameSettings fields of the options the port implements.
-const FIELDS = { FOV: "fov", SENSITIVITY: "sensitivity", GAMMA: "gamma", RENDER_DISTANCE: "distance", VIEW_BOBBING: "bobbing", GUI_SCALE: "guiScale", PARTICLES: "particles", DIFFICULTY: "difficulty", INVERT_MOUSE: "invertMouse", GRAPHICS: "graphics", AMBIENT_OCCLUSION: "ao", RENDER_CLOUDS: "clouds", MIPMAP_LEVELS: "mipmapLevels", ANISOTROPIC_FILTERING: "anisotropic" };
+const FIELDS = { FOV: "fov", SENSITIVITY: "sensitivity", GAMMA: "gamma", RENDER_DISTANCE: "distance", VIEW_BOBBING: "bobbing", GUI_SCALE: "guiScale", PARTICLES: "particles", DIFFICULTY: "difficulty", INVERT_MOUSE: "invertMouse", GRAPHICS: "graphics", AMBIENT_OCCLUSION: "ao", RENDER_CLOUDS: "clouds", MIPMAP_LEVELS: "mipmapLevels", ANISOTROPIC_FILTERING: "anisotropic",
+  CHAT_VISIBILITY: "chatVisibility", CHAT_COLOR: "chatColors", CHAT_LINKS: "chatLinks", CHAT_OPACITY: "chatOpacity", CHAT_LINKS_PROMPT: "chatLinksPrompt",
+  CHAT_SCALE: "chatScale", CHAT_HEIGHT_FOCUSED: "chatHeightFocused", CHAT_HEIGHT_UNFOCUSED: "chatHeightUnfocused", CHAT_WIDTH: "chatWidth", SHOW_CAPE: "showCape" };
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 // SaveFormatComparator: the most recently played first, then by folder name.
 export const sortWorlds = (worlds) => [...worlds].sort((a, b) => (b.updated || 0) - (a.updated || 0) || cmp(a.folder || folderName(a.name || "World"), b.folder || folderName(b.name || "World")));
@@ -45,11 +48,11 @@ export function createMenus(gui, ctx) {
   const show = (s) => gui.show(s);
   const close = () => ctx.closeScreen();
   const keyOf = (description) => ctx.options.keys?.[description] ?? KEY_BINDINGS.find((k) => k.description === description).code;
-  const value = (o) => (o === "USE_FULLSCREEN" ? !!document.fullscreenElement : o in FIELDS ? ctx.options[FIELDS[o]] : FIXED[o]);
+  const value = (o) => (o === "USE_FULLSCREEN" ? !!document.fullscreenElement : o in FIELDS ? ctx.options[FIELDS[o]] ?? CHAT_SETTING_DEFAULTS[FIELDS[o]] : FIXED[o]);
   // GuiOptionSlider / GuiOptionButton for a GameSettings.Options entry.
   function optionWidget(g, o, r, parent) {
     const fixed = !(o in FIELDS) && o !== "USE_FULLSCREEN";
-    const reason = o === "TOUCHSCREEN" ? UNAVAILABLE.touchscreen : fixed ? UNAVAILABLE.fixedVideo : "";
+    const reason = o === "SHOW_CAPE" ? UNAVAILABLE.showCape : o === "TOUCHSCREEN" ? UNAVAILABLE.touchscreen : fixed ? UNAVAILABLE.fixedVideo : "";
     if (o in FLOAT_OPTIONS) {
       return g.slider(r, {
         parent, reason,
@@ -70,8 +73,9 @@ export function createMenus(gui, ctx) {
       else if (o === "PARTICLES") opts.particles = (opts.particles + 1) % 3;
       else if (o === "DIFFICULTY") opts.difficulty = (opts.difficulty + 1) & 3;
       else if (o === "AMBIENT_OCCLUSION") opts.ao = ((opts.ao ?? 2) + 1) % 3; // (ambientOcclusion + 1) % 3
+      else if (o === "CHAT_VISIBILITY") opts.chatVisibility = (value(o) + 1) % 3; // EnumChatVisibility.getEnumChatVisibility((id + 1) % 3)
       else if (o === "USE_FULLSCREEN") await ctx.toggleFullscreen();
-      else opts[FIELDS[o]] = !opts[FIELDS[o]];
+      else opts[FIELDS[o]] = !value(o);
       if (o !== "USE_FULLSCREEN") ctx.saveOptions();
       h.set(optionText(o, value(o)));
       // GuiVideoSettings.mouseClicked: a new GUI scale re-runs setWorldAndResolution.
@@ -402,13 +406,49 @@ export function createMenus(gui, ctx) {
         g.button(b.video, t("options.video"), () => show(videoScreen(screen)));
         g.button(b.controls, t("options.controls"), () => show(controlsScreen(screen)));
         g.button(b.language, t("options.language"), () => show(languageScreen(() => screen)));
-        g.button(b.multiplayer, t("options.multiplayer.title"), null, { reason: UNAVAILABLE.multiplayerSettings });
+        // GuiOptions.actionPerformed 101: the "Multiplayer Settings..." button opens ScreenChatOptions.
+        g.button(b.multiplayer, t("options.multiplayer.title"), () => show(chatOptionsScreen(screen)));
         g.button(b.resourcepack, t("options.resourcepack"), null, { reason: UNAVAILABLE.resourcepack });
         g.button(b.snooper, t("options.snooper.view"), null, { reason: UNAVAILABLE.snooper });
         g.button(b.done, t("gui.done"), () => { ctx.saveOptions(); show(parent()); });
       },
     };
     return screen;
+  }
+
+  // --- ScreenChatOptions ---
+  function chatOptionsScreen(parent) {
+    return {
+      id: "chat-options",
+      escape: close,
+      init(g, w, h) {
+        const L = chatOptionsLayout(w, h);
+        g.text(t("options.chat.title"), ...L.title, { center: true });
+        g.text(t("options.multiplayer.title"), ...L.subtitle, { center: true });
+        for (const [o, r] of L.options) optionWidget(g, o, r);
+        // SHOW_CAPE is a GuiOptionButton; there are no skins or capes here, so it is drawn disabled (value ON, the default).
+        optionWidget(g, "SHOW_CAPE", L.cape);
+        g.button(L.buttons.done, t("gui.done"), () => { ctx.saveOptions(); show(parent); });
+      },
+    };
+  }
+
+  // --- GuiConfirmOpenLink ---
+  // `done(yes)` runs after the screen closes: Yes opens the link, Copy to Clipboard copies it (then both return to the chat).
+  function confirmOpenLink(url, done) {
+    return {
+      id: "confirm-link",
+      escape: () => done(false),
+      init(g, w, h) {
+        const L = confirmLinkLayout(w, h), b = L.buttons;
+        g.text(t("chat.link.confirm"), ...L.title, { center: true });
+        g.text(url, ...L.url, { center: true });
+        g.text(t("chat.link.warning"), ...L.warning, { center: true, color: 0xffcc4c });
+        g.button(b.yes, t("gui.yes"), () => done(true));
+        g.button(b.copy, t("chat.copy"), () => { ctx.copyText?.(url); done(false); });
+        g.button(b.no, t("gui.no"), () => done(false));
+      },
+    };
   }
 
   // --- GuiVideoSettings ---
@@ -557,5 +597,5 @@ export function createMenus(gui, ctx) {
     };
   }
 
-  return { mainMenu, selectWorld, ingameMenu, optionsScreen, createWorld };
+  return { mainMenu, selectWorld, ingameMenu, optionsScreen, createWorld, chatOptionsScreen, confirmOpenLink };
 }

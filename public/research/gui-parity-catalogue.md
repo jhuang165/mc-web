@@ -17,7 +17,7 @@ The Partial rows are reviewed conceptual browser counterparts, with current evid
 | --- | --- | --- | --- | --- | --- |
 | client/gui/GuiChat | bct | bdw | no | Partial; native constants, history, Tab completion, cheats gating; [current evidence](commands.md) | U |
 | client/gui/GuiCommandBlock | bfh | bdw | no | Partial; command editor with Track Output; [current evidence](command-blocks.md) | U |
-| client/gui/GuiConfirmOpenLink | bcu | bcw | no | Missing; chat has no clickable links; [current evidence](commands.md) | U |
+| client/gui/GuiConfirmOpenLink | bcu | bcw | no | Partial; Yes / Copy to Clipboard / No for http(s) links from chat click events; [current evidence](chat-options.md) | U |
 | client/gui/GuiControls | bew | bdw | no | Partial; Invert Mouse/Sensitivity and key list, only the cinematic camera key rebinds; [current evidence](parity.md) | U |
 | client/gui/GuiCreateFlatWorld | bcz | bdw | no | Missing; no Superflat world type; [current evidence](generation.md) | U |
 | client/gui/GuiCreateWorld | bdb | bdw | no | Partial; Default/Large Biomes/Amplified Java worlds, cheats and seed; no Superflat or Bonus Chest; [current evidence](generation.md) | U |
@@ -53,7 +53,7 @@ The Partial rows are reviewed conceptual browser counterparts, with current evid
 | client/gui/GuiVideoSettings | bef | bdw | no | Partial; Graphics, Smooth Lighting, Mipmap, Max Framerate, Clouds, VSync drawn disabled (render settings in progress, batch 11); [current evidence](settings-parity-catalogue.md) | U |
 | client/gui/GuiWinGame | beg | bdw | no | Partial; End credits text and dragon-death return; [current evidence](dimensions.md) | U |
 | client/gui/GuiYesNo | bcw | bdw | no | Partial; delete confirmation; [current evidence](parity.md) | U |
-| client/gui/ScreenChatOptions | bcs | bdw | no | Missing; chat exists but there is no chat options screen (chat settings stay at native defaults); [current evidence](settings-parity-catalogue.md) | U |
+| client/gui/ScreenChatOptions | bcs | bdw | no | Partial; nine native options, Show Cape disabled, persisted and applied to the chat; [current evidence](chat-options.md) | U |
 | client/gui/achievement/GuiAchievements | bei | bdw | no | Partial; achievements screen and toasts; [current evidence](achievements.md) | U |
 | client/gui/achievement/GuiStats | bej | bdw | no | Partial; General/Blocks/Items/Mobs tabs and sorting; some use/kill triggers approximate; [current evidence](stats.md) | U |
 | client/gui/inventory/GuiBeacon | bez | bex | no | Partial; beacon power selection; [current evidence](beacon.md) | U, I |
@@ -103,7 +103,7 @@ The Partial rows are reviewed conceptual browser counterparts, with current evid
 | client/gui/GuiOptions$1 | bdn | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/GuiOptionsRowList | bck | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/GuiOptionsRowList$Row | bcl | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
-| client/gui/GuiPlayerInfo | bjl | class | Missing; no counterpart (player list, resource packs, books, snooper) | U |
+| client/gui/GuiPlayerInfo | bjl | class | Partial; the Tab player list shows the local player (player-list.js), see [chat options](chat-options.md) | U |
 | client/gui/GuiResourcePackAvailable | bgj | class | Missing; no counterpart (player list, resource packs, books, snooper) | U |
 | client/gui/GuiResourcePackList | bgk | abstract class | Missing; no counterpart (player list, resource packs, books, snooper) | U |
 | client/gui/GuiResourcePackSelected | bgl | class | Missing; no counterpart (player list, resource packs, books, snooper) | U |
