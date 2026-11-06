@@ -123,5 +123,37 @@ export class Fireballs {
     b.ticks = 0;
     return true;
   }
-  serialize() { return []; }
+  // The browser save (main.js `active.fireballs`): the flight state of every live ball. The shooter is a mob id, "player" or absent. A ball
+  // saved without its acceleration (an imported Java fireball: EntityFireball does not save it) keeps flying on its motion and slows.
+  serialize(dimension = 0) {
+    return this.list.filter((b) => !b.dead).map((b) => ({
+      kind: b.kind, x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, ax: b.ax, ay: b.ay, az: b.az, ticks: b.ticks, dimension,
+      ...(b.large ? { power: b.power } : {}), ...(b.blue ? { blue: true } : {}),
+      ...(b.owner === "player" ? { owner: "player" } : b.owner?.id ? { owner: b.owner.id } : {}),
+    }));
+  }
+  accepts(kind) { return kind === "fireball" || kind === "smallFireball"; }
+  // The ball launch() would make, without its aim draw on the world's random.
+  build(r) {
+    const large = r.kind === "fireball";
+    return {
+      id: "fb-" + this.next++, type: "fireball", kind: r.kind, large, owner: null, health: 1,
+      x: r.x, y: r.y, z: r.z, px: r.x, py: r.y, pz: r.z, vx: r.vx, vy: r.vy, vz: r.vz, ax: r.ax, ay: r.ay, az: r.az,
+      power: large && Number.isInteger(r.power) ? r.power : FIREBALL.defaultPower, ticks: 0, dead: false,
+      scale: large ? 2 : 0.5, fullbright: true, width: large ? FIREBALL.largeSize : FIREBALL.smallSize,
+    };
+  }
+  // Restores the records of `dimension`; bad records are skipped. Call after the world's mobs exist (owners are looked up by id).
+  load(list, dimension = 0) {
+    this.list = [];
+    const ok = Number.isFinite;
+    for (const r of (Array.isArray(list) ? list : []).slice(0, 128)) {
+      if (!r || !this.accepts(r.kind) || (r.dimension ?? 0) !== dimension || ![r.x, r.y, r.z, r.vx, r.vy, r.vz].every(ok)) continue;
+      const ball = this.build({ ...r, ax: ok(r.ax) ? r.ax : 0, ay: ok(r.ay) ? r.ay : 0, az: ok(r.az) ? r.az : 0 });
+      if (ok(r.ticks)) ball.ticks = Math.max(0, r.ticks | 0);
+      if (r.blue === true) ball.blue = true;
+      ball.owner = r.owner === "player" ? "player" : typeof r.owner === "string" ? this.mobs.entities.find((e) => e.id === r.owner) ?? null : null;
+      this.list.push(ball);
+    }
+  }
 }

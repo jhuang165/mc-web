@@ -544,9 +544,10 @@ export class Projectiles {
   // and native in-ground/shake fields remain transient in browser saves.
   serialize() {
     return this.balls.map((b) => {
-      if (b.kind === "enderPearl" && b.owner !== "player") throw new Error("Cannot save ender pearl without local owner token");
+      // A pearl without a thrower (a Java save's ownerless EntityEnderPearl) is saved without an owner and just dies on impact.
+      if (b.kind === "enderPearl" && b.owner != null && b.owner !== "player") throw new Error("Cannot save ender pearl without local owner token");
       return { x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch,
-        ...(b.kind === "egg" ? { kind: "egg" } : b.kind === "enderPearl" ? { kind: "enderPearl", owner: b.owner } : {}) };
+        ...(b.kind === "egg" ? { kind: "egg" } : b.kind === "enderPearl" ? { kind: "enderPearl", ...(b.owner === "player" ? { owner: b.owner } : {}) } : {}) };
     });
   }
   load(list) {
@@ -554,10 +555,10 @@ export class Projectiles {
     const ok = (v) => Number.isFinite(v);
     for (const d of Array.isArray(list) ? list : []) {
       const kindKnown = d && (d.kind == null || d.kind === "snowball" || d.kind === "egg" || d.kind === "enderPearl");
-      if (d && kindKnown && [d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok) && (d.kind !== "enderPearl" || d.owner === "player")) {
+      if (d && kindKnown && [d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok) && (d.kind !== "enderPearl" || d.owner === "player" || d.owner === undefined)) {
         const yaw = ok(d.yaw) ? f(d.yaw) : 0, pitch = ok(d.pitch) ? f(d.pitch) : 0;
         const kind = d.kind === "egg" ? "egg" : d.kind === "enderPearl" ? "enderPearl" : "snowball", rand = this.rng();
-        this.balls.push({ kind, ...(kind === "enderPearl" ? { owner: "player", random: rand } : {}), x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand, dead: false });
+        this.balls.push({ kind, ...(kind === "enderPearl" ? { ...(d.owner === "player" ? { owner: "player" } : {}), random: rand } : {}), x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand, dead: false });
       }
     }
   }

@@ -642,6 +642,7 @@ function save() {
   active.rockets = rockets.serialize();
   active.fishing = fishing.serialize();
   active.thrownPotions = mobs?.potions?.serialize() ?? [];
+  active.fireballs = [...(mobs?._fireballs?.serialize(world.dimension ?? 0) ?? []), ...(mobs?._skulls?.serialize(world.dimension ?? 0) ?? [])]; // fireballs.js; tagged with the dimension they fly in
   active.arrows = arrows.serialize();
   // EntityTNTPrimed.writeEntityToNBT keeps only the fuse (plus Entity's position and motion).
   active.tnt = primed.map((e) => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse }));
@@ -1059,6 +1060,7 @@ async function launch(record, prepared) {
     mobs.potions = new WitchPotions(mobs);
     mobs.ignite = (x, y, z) => fire.ignite(x, y, z); // fireballs.js: a small fireball lights the cell beside the block it hit
     mobs.potions.load(record.thrownPotions);
+    if (Array.isArray(record.fireballs) && record.fireballs.length) { mobs.fireballs.load(record.fireballs, world.dimension ?? 0); mobs.skulls.load(record.fireballs, world.dimension ?? 0); } // blaze/ghast fireballs and wither skulls in flight
     // World.rand for EntityLiving.onSpawnWithEgg, and World.func_147462_b at a block.
     mobs.worldRandom = weather.random;
     mobs.localDifficulty = (x, y, z) => localDifficulty(mobs.difficulty, survival.time, inhabited.value, world.isLoaded(x,z) && y >= 0 && y < world.height);

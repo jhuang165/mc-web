@@ -232,7 +232,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   const commandBlocks = [], musicTiles = [];
   const signs = [], skulls = [], beacons = [], spawners = [], importedColumns = {};
   const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = [];
-  const projectileLists = { projectiles: [], thrownPotions: [], arrows: [] };
+  const projectileLists = { projectiles: [], thrownPotions: [], arrows: [], fireballs: [], eyes: [], rockets: [] };
   let edits = 0;
   const write = (x, y, z, block, meta) => {
     if (world.get(x, y, z) === block && world.getMeta(x, y, z) === meta) return;
@@ -386,11 +386,12 @@ export async function importJavaRegionArea(regions, options = {}) {
         if (mob) { mobs.push(mob); tally(entityConverted, id); } else tally(entityLost, !inArea ? `${id} (outside area)` : `${id} (over mob limit)`);
         continue;
       }
-      // Snowball, ThrownEnderpearl, ThrownPotion, ThrownExpBottle and Arrow become the browser's saved in-flight projectiles (java-projectiles.js).
+      // Snowball, ThrownEnderpearl, ThrownPotion, ThrownExpBottle, Arrow, Fireball, SmallFireball, WitherSkull, EyeOfEnderSignal and FireworksRocketEntity
+      // become the browser's saved in-flight projectiles (java-projectiles.js).
       if (JAVA_PROJECTILES[id] && pos?.every(Number.isFinite)) {
         const px = pos[0] + shiftX, pz = pos[2] + shiftZ, list = projectileLists[JAVA_PROJECTILES[id]];
         const inArea = px >= destination.chunkX * 16 && px < (destination.chunkX + area.width) * 16 && pz >= destination.chunkZ * 16 && pz < (destination.chunkZ + area.depth) * 16;
-        const made = inArea && list.length < IMPORT_PROJECTILE_LIMIT[JAVA_PROJECTILES[id]] ? javaProjectileFromNbt(entity, { shiftX, shiftZ }) : null;
+        const made = inArea && list.length < IMPORT_PROJECTILE_LIMIT[JAVA_PROJECTILES[id]] ? javaProjectileFromNbt(entity, { shiftX, shiftZ, convertItem, dimension }) : null;
         if (made?.record) { list.push(made.record); tally(entityConverted, id); }
         else tally(entityLost, !inArea ? `${id} (outside area)` : made?.lost ? `${id} (${made.lost})` : `${id} (over projectile limit)`);
         continue;
@@ -476,7 +477,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     drops,
     ...(spawners.length ? { spawners } : {}),
     ...(mobs.length ? { entities: mobs } : {}),
-    ...Object.fromEntries(Object.entries(projectileLists).filter(([, list]) => list.length)),
+    ...Object.fromEntries(Object.entries(projectileLists).filter(([, list]) => list.length).map(([name, list]) => [name, name === 'eyes' ? { eyes: list } : name === 'rockets' ? { rockets: list } : list])),
     ...(villages ? { villages } : {}),
     ...(mapsImport.maps ? { maps: mapsImport.maps } : {}),
     ...(report.structures?.kept ? { structureData: parsedStructures.structureData } : {}),
@@ -489,6 +490,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     record = {
       format: record.format, version: record.version, seed: seedText, name: record.name, mode,
       biome: 'javaStreamed', generationVersion: 15, dimension, position: record.position, edits: [],
+      ...(record.fireballs ? { fireballs: record.fireballs } : {}), // tagged with `dimension`; main.js restores the ones of the world it opens
       dimensions: { [dimension]: { state, tiles, edits: record.edits } },
     };
     report.source.dimension = dimension;
