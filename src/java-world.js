@@ -10,7 +10,8 @@ import { BIOMES_TO_SPAWN_IN } from "./biome-layers.js";
 import { stringHash } from "./java-long.js";
 import { NoiseGeneratorPerlin } from "./noise.js";
 import { generateLiveMineshafts } from "./mineshaft-world.js";
-import { generateLivePopulation } from './population-world.js';
+import { generateLivePopulation, populationBlockMapper } from './population-world.js';
+import { FlatChunkProvider, parseFlatInfo } from './flat-world.js';
 import { StreamingPopulation } from './streaming-population.js';
 export const JAVA_TERRAIN_BLOCKS = Object.freeze({
   0: 0,
@@ -41,7 +42,7 @@ export const JAVA_LANDSCAPES = Object.freeze({
   javaStreamed: "default",
 });
 // WorldType of a streamed world: the 1.7.10 DEFAULT, LARGE_BIOMES or AMPLIFIED generator (anything else is DEFAULT).
-export const STREAMED_WORLD_TYPES = Object.freeze(['default', 'largeBiomes', 'amplified']);
+export const STREAMED_WORLD_TYPES = Object.freeze(['default', 'largeBiomes', 'amplified', 'flat']);
 export const streamedWorldType = (type) => STREAMED_WORLD_TYPES.includes(type) ? type : 'default';
 export const isJavaLandscape = (biome) => Object.hasOwn(JAVA_LANDSCAPES, biome);
 export function javaSeed(value) {
@@ -57,10 +58,43 @@ export function javaTemperature(b, x, y, z) {
   const n = f(f(temperatureNoise.value(x / 8, z / 8)) * 4);
   return f(b.temperature - f(f(f(f(n + f(y)) - 64) * f(0.05)) / 30));
 }
+// The generator of a streamed world: ChunkProviderFlat for WorldType.FLAT (its generatorOptions string), else ChunkProviderGenerate.
+const newGenerator = (seed, worldType, generatorOptions) => worldType === 'flat'
+  ? new FlatChunkProvider(parseFlatInfo(generatorOptions))
+  : new ChunkProviderGenerate(seed, streamedWorldType(worldType), new BiomeTerrainState());
+// Superflat: no caves, ravines or noise; every column is the preset's layers. Generation 15 only (its population runs
+// ChunkProviderFlat's structure list and populate, flat-structures.js).
+function flatSource({ seed, generationVersion, originX, originZ, gen }) {
+  if (generationVersion < 15) throw new Error('Superflat worlds need streamed generation version 15');
+  let live = null;
+  const liveColumn = () => {
+    const mapBlock = populationBlockMapper();
+    if (!mapBlock) throw new Error('original block mapper not ready');
+    const blocks = new Uint8Array(256), metadata = new Uint8Array(256);
+    for (let y = 0; y < 256; y++) {
+      if (!gen.column[y] && !gen.columnMeta[y]) continue;
+      const m = mapBlock(gen.column[y], gen.columnMeta[y]);
+      if (!m?.exact || m.id > 255) throw new Error(`Unmapped Superflat block ${gen.column[y]}:${gen.columnMeta[y]}`);
+      blocks[y] = m.id; metadata[y] = m.meta;
+    }
+    return { blocks, metadata };
+  };
+  const terrain = () => {
+    const col = (live ??= liveColumn()), blocks = new Uint8Array(65536), metadata = new Uint8Array(65536);
+    for (let c = 0; c < 256; c++) { blocks.set(col.blocks, c * 256); metadata.set(col.metadata, c * 256); }
+    return { blocks, metadata };
+  };
+  const population = new StreamingPopulation({
+    seed, originX, originZ, terrainOnly: terrain, terrain: (x, z) => gen.provideChunk(x, z), biomeAt: (x, z) => gen.manager.biomeAt(x, z),
+    manager: gen.manager, flat: gen.info,
+  });
+  return { gen, population, column: (cx, cz) => population.column(cx, cz) };
+}
 // The streamed generator chain at local chunk coordinates (native chunk = local + origin / 16).
 // Generation 12 is terrain, caves and ravines with live block ids; 13 populates per cell
 // (streaming-population.js). `column(cx, cz)` returns { blocks, metadata } in WorldChunk order.
-export function streamedSource({ seed, generationVersion, originX, originZ, worldType = 'default', gen = new ChunkProviderGenerate(seed, streamedWorldType(worldType), new BiomeTerrainState()) }) {
+export function streamedSource({ seed, generationVersion, originX, originZ, worldType = 'default', generatorOptions = '', gen = newGenerator(seed, worldType, generatorOptions) }) {
+  if (gen instanceof FlatChunkProvider) return flatSource({ seed, generationVersion, originX, originZ, gen });
   const manager = gen.manager, topAt = (x, z) => gen.biomeState.topBlock(manager.biomeAt(x, z)),
     caves = new MapGenCaves(seed, manager, topAt),
     ravines = new MapGenRavine(seed, manager, topAt);
@@ -88,7 +122,9 @@ export function streamedSource({ seed, generationVersion, originX, originZ, worl
 export function generateJavaWorld(world) {
   const seed = javaSeed(world.seed),
     state = new BiomeTerrainState(),
-    gen = new ChunkProviderGenerate(seed, world.streaming ? world.worldType : JAVA_LANDSCAPES[world.biome], state),
+    gen = world.streaming && world.worldType === 'flat'
+      ? new FlatChunkProvider(parseFlatInfo(world.generatorOptions))
+      : new ChunkProviderGenerate(seed, world.streaming ? world.worldType : JAVA_LANDSCAPES[world.biome], state),
     manager = gen.manager;
   const spawn = manager.findBiomePosition(
     0,
@@ -117,7 +153,7 @@ export function generateJavaWorld(world) {
   // Streamed worlds regenerate columns from the seed. Columns the worker (streaming-generator.js)
   // built ahead of the player wait in `pregenerated` and are used once; it runs the same chain.
   if (world.streaming) {
-    const source = streamedSource({ seed, gen, worldType: world.worldType, originX: world.originX, originZ: world.originZ, generationVersion: world.generationVersion });
+    const source = streamedSource({ seed, gen, worldType: world.worldType, generatorOptions: world.generatorOptions, originX: world.originX, originZ: world.originZ, generationVersion: world.generationVersion });
     if (source.population) world.population = source.population;
     world.pregenerated = new Map();
     world.generateTerrainChunk = (cx, cz) => {

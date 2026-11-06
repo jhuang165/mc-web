@@ -9,7 +9,7 @@ import {PopulationBlocks} from './population-blocks.js';
 import {hasSavedStructures as hasSavedPopulation} from './structure-simulation.js';
 import {restorePopulation,restorePopulationColumns} from './population-runtime.js';
 import {setPopulationBlockMapper} from './population-world.js';
-import {isJavaLandscape, streamedWorldType} from "./java-world.js";
+import {isJavaLandscape, streamedWorldType, javaSeed} from "./java-world.js";
 import { particleSetting } from "./particle-settings.js";
 import "./style.css";
 import "./minecraft-ui.css";
@@ -184,7 +184,10 @@ import { HorseContainer, canInteract as horseReach, canWearArmor as horseWearsAr
 import { riddenHorse, jumpBar } from "./horse-gear-live.js";
 import { HorseGearRenderer } from "./horse-gear-renderer.js";
 import { capturePlayerAction, dispatchPlayerAction as dispatchPlayerActionRaw, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
-import { fromOriginal } from "./block-registry.js";
+import { fromOriginal, toOriginal } from "./block-registry.js";
+import { normalizeFlatOptions } from "./flat-world.js";
+import { createBonusChest } from "./bonus-chest.js";
+import { ORIGINAL_ITEMS } from "./original-items.js";
 import { setOriginalBlockMapper } from "./mineshaft-world.js";
 import { spawnerDisplayEntity } from "./mob-spawner.js";
 import { watchSpawnerBlocks } from "./spawner-block.js";
@@ -513,6 +516,10 @@ function makeRecord(p) {
     // Default, Large Biomes and Amplified worlds are streamed (endless) with the matching WorldType generator.
     generationVersion: p.biome === "javaStreamed" ? 15 : isJavaLandscape(p.biome) ? 14 : 8,
     ...(p.biome === "javaStreamed" ? { worldType: streamedWorldType(p.worldType) } : {}),
+    // Superflat: the FlatGeneratorInfo string (WorldInfo.generatorOptions), normalised as ass.toString writes it.
+    ...(p.biome === "javaStreamed" && p.worldType === "flat" ? { generatorOptions: normalizeFlatOptions(p.generatorOptions) } : {}),
+    // GuiCreateWorld "Bonus Chest": WorldInfo.isBonusChestEnabled; the chest is placed once (bonusChestPlaced).
+    ...(p.bonusChest === true ? { bonusChest: true } : {}),
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -1142,6 +1149,7 @@ async function launch(record, prepared) {
     restorePopulation(record,world,survival,mobs);
     if (record.villages) mobs.villages.loadJSON(record.villages);
     materializeFresh();
+    placeBonusChest(record);
     // A new EntityPlayerMP is spawn-protected for 60 ticks (damage is refused, Creative or not).
     survival.protection = 60;
     inhabited = new InhabitedTime(record.inhabited, survival.time);
@@ -2629,6 +2637,34 @@ function tickMining() {
 }
 // Streamed population (version 13): chests, animals, spawners, carts and liquid ticks of columns that
 // just became resident for the first time. Resident columns already claimed are never handed over again.
+// WorldServer.createBonusChest at world creation: once, around the spawn, with the world's own Random (seeded from the world seed).
+function placeBonusChest(record) {
+  if (!record.bonusChest || record.bonusChestPlaced || world.dimension || !record.worldSpawn) return;
+  record.bonusChestPlaced = true;
+  const solid = (x, y, z) => world.solid(x, y, z), orig = (x, y, z) => toOriginal(world.get(x, y, z), world.getMeta(x, y, z))?.[0] ?? 0;
+  const changes = [], access = {
+    id: orig,
+    blocksMovement: (x, y, z) => solid(x, y, z),
+    solidTop: (x, y, z) => solid(x, y, z) && orig(x, y, z) !== 54,
+    put(x, y, z, id, meta) {
+      const cell = fromOriginal(id, id === 50 ? 5 : meta);
+      if (!cell) return;
+      const old = world.get(x, y, z);
+      world.set(x, y, z, cell.id, true, cell.meta);
+      changes.push([x, y, z, old, cell.id]);
+      if (id === 54) settleFacing(world, survival.chests, x, y, z);
+    },
+    fill(x, y, z, slot, s) {
+      const live = ORIGINAL_ITEMS[`${s.id}:${s.damage}`] ?? ORIGINAL_ITEMS[s.id];
+      const chest = survival.chests[`${x},${y},${z}`];
+      if (live && chest) chest.items[slot] = makeStack(live, s.count, s.damage);
+    },
+  };
+  const [sx, , sz] = record.worldSpawn;
+  createBonusChest(access, new JavaRandom(BigInt(javaSeed(record.seed)) ^ 0x5bcn), sx, sz);
+  if (changes.length) scene.updateBlocks(changes);
+  saved = false;
+}
 function materializeFresh() {
   containerResidency?.admit();
   const columns = world.claimFreshColumns();
@@ -2799,7 +2835,7 @@ $("#file-input").onchange = async (e) => {
       (!["meadow", "alpine", "island", "snowy"].includes(data.biome) && !isJavaLandscape(data.biome))
     )
       throw new Error("Choose a Blockworld export file");
-    const check = new World(data.seed, data.biome, data.generationVersion ?? 1, data.worldType);
+    const check = new World(data.seed, data.biome, data.generationVersion ?? 1, data.worldType, data.generatorOptions);
     check.restore(data.edits);
     const record = {
       ...makeRecord(data),

@@ -10,25 +10,27 @@ await populationBlockMapperReady;
 const silence = (w) => { w.blockLight = () => 0; return w; };
 const FINITE = { default: 'java', largeBiomes: 'javaLargeBiomes', amplified: 'javaAmplified' };
 
-test('Default, Large Biomes and Amplified are the endless world types; finite biomes stay loadable', () => {
-  assert.deepEqual(WORLD_TYPES.slice(0, 3).map((w) => [w.name, w.biome, w.worldType]),
-    [['Default', 'javaStreamed', 'default'], ['Large Biomes', 'javaStreamed', 'largeBiomes'], ['Amplified', 'javaStreamed', 'amplified']]);
+test('Default, Superflat, Large Biomes and Amplified are the endless world types; finite biomes stay loadable', () => {
+  assert.deepEqual(WORLD_TYPES.slice(0, 4).map((w) => [w.name, w.biome, w.worldType]),
+    [['Default', 'javaStreamed', 'default'], ['Superflat', 'javaStreamed', 'flat'], ['Large Biomes', 'javaStreamed', 'largeBiomes'], ['Amplified', 'javaStreamed', 'amplified']]);
   assert.ok(!WORLD_TYPES.some((w) => /128 x 128/.test(w.notice)), 'no finite-area notice');
   assert.ok(!WORLD_TYPES.some((w) => w.name === 'Streamed'));
-  assert.deepEqual(WORLD_TYPES.slice(3).map((w) => w.biome), ['meadow', 'alpine', 'island', 'snowy']);
+  assert.deepEqual(WORLD_TYPES.slice(4).map((w) => w.biome), ['meadow', 'alpine', 'island', 'snowy']);
   // Re-Create of a saved world picks the matching entry, finite or endless.
   assert.equal(worldTypeIndex({ biome: 'java' }), 0);
-  assert.equal(worldTypeIndex({ biome: 'javaLargeBiomes' }), 1);
-  assert.equal(worldTypeIndex({ biome: 'javaAmplified' }), 2);
+  assert.equal(worldTypeIndex({ biome: 'javaLargeBiomes' }), 2);
+  assert.equal(worldTypeIndex({ biome: 'javaAmplified' }), 3);
   assert.equal(worldTypeIndex({ biome: 'javaStreamed' }), 0);
-  assert.equal(worldTypeIndex({ biome: 'javaStreamed', worldType: 'amplified' }), 2);
-  assert.equal(worldTypeIndex({ biome: 'snowy' }), 6);
-  for (const t of WORLD_TYPES.slice(0, 3)) {
+  assert.equal(worldTypeIndex({ biome: 'javaStreamed', worldType: 'amplified' }), 3);
+  assert.equal(worldTypeIndex({ biome: 'snowy' }), 7);
+  assert.equal(worldTypeIndex({ biome: 'javaStreamed', worldType: 'flat' }), 1);
+  for (const t of WORLD_TYPES.slice(0, 4)) {
     const w = silence(new World('17', t.biome, 15, t.worldType));
     assert.equal(w.streaming, true);
     assert.equal(w.worldType, t.worldType);
   }
-  assert.equal(streamedWorldType('flat'), 'default');
+  assert.equal(streamedWorldType('flat'), 'flat');
+  assert.equal(streamedWorldType('bogus'), 'default');
   // Saved finite worlds are untouched.
   const old = new World('17', 'java', 14);
   assert.equal(old.streaming, false);

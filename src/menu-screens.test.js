@@ -72,8 +72,8 @@ test('world screens follow GuiSelectWorld, GuiCreateWorld, GuiYesNo and GuiRenam
   assert.deepEqual(worldLines({ name: '', mode: 'survival', updated: new Date(2026, 0, 9, 13, 30).getTime() }, 2), ['World 3', 'World (1/9/26 1:30 PM)', 'Survival Mode']);
   assert.equal(worldLines({ name: 'A', mode: 'adventure' }, 0)[2], 'Adventure Mode');
   assert.equal(worldLines({ name: 'C', mode: 'creative' }, 0)[2], 'Creative Mode');
-  assert.deepEqual(WORLD_TYPES.slice(0, 3).map((w) => w.name), ['Default', 'Large Biomes', 'Amplified']);
-  assert(WORLD_TYPES.slice(0, 3).every((w) => w.biome === 'javaStreamed'));
+  assert.deepEqual(WORLD_TYPES.slice(0, 4).map((w) => w.name), ['Default', 'Superflat', 'Large Biomes', 'Amplified']);
+  assert(WORLD_TYPES.slice(0, 4).every((w) => w.biome === 'javaStreamed'));
 });
 
 test('GuiIngameMenu, GuiOptions and its sub-screens', () => {

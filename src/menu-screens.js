@@ -32,7 +32,7 @@ export const LANG = {
   "selectWorld.allowCommands": "Allow Cheats:", "selectWorld.allowCommands.info": "Commands like /gamemode, /xp",
   "selectWorld.bonusItems": "Bonus Chest:",
   "gameMode.survival": "Survival Mode", "gameMode.creative": "Creative Mode", "gameMode.adventure": "Adventure Mode",
-  "generator.default": "Default", "generator.largeBiomes": "Large Biomes", "generator.amplified": "Amplified",
+  "generator.default": "Default", "generator.flat": "Superflat", "generator.largeBiomes": "Large Biomes", "generator.amplified": "Amplified",
   "generator.amplified.info": "Notice: Just for fun, requires beefy computer",
   "options.off": "OFF", "options.on": "ON", "options.title": "Options", "options.controls": "Controls...",
   "options.video": "Video Settings...", "options.language": "Language...", "options.stream": "Broadcast Settings...",
@@ -358,12 +358,13 @@ export function worldLines(record, index) {
   return [name, `${record.folder || folderName(record.name || "World")} (${saveDate(record.updated || 0)})`, t(record.mode === "survival" || record.mode === "adventure" ? "gameMode." + record.mode : "gameMode.creative")];
 }
 // The world types the World Type button cycles through: 1.7.10's creatable WorldTypes (DEFAULT,
-// LARGE_BIOMES, AMPLIFIED; FLAT is not generated here) followed by the browser's own landscapes.
-// The three Java types create endless worlds (biome javaStreamed, `worldType` picking the generator);
+// FLAT, LARGE_BIOMES, AMPLIFIED, in WorldType.worldTypes order) followed by the browser's own landscapes.
+// The four Java types create endless worlds (biome javaStreamed, `worldType` picking the generator);
 // the finite 128 x 128 biomes java / javaLargeBiomes / javaAmplified only remain for saved worlds.
 // `notice` is drawn under the button as AMPLIFIED's info notice is (only AMPLIFIED has one).
 export const WORLD_TYPES = [
   { biome: "javaStreamed", worldType: "default", name: t("generator.default"), notice: "" },
+  { biome: "javaStreamed", worldType: "flat", name: t("generator.flat"), notice: "" },
   { biome: "javaStreamed", worldType: "largeBiomes", name: t("generator.largeBiomes"), notice: "" },
   { biome: "javaStreamed", worldType: "amplified", name: t("generator.amplified"), notice: t("generator.amplified.info") },
   { biome: "meadow", name: "Meadow", notice: "Browser landscape: rolling hills and a river" },

@@ -15,6 +15,8 @@ import { MapGenScatteredFeature } from './scattered-feature-generator.js';
 import { strongholdPositions } from './structure-placement.js';
 import { structureWorldClass } from './structure-world-blocks.js';
 import { potContentsOfMeta } from './stone-utility.js';
+import { FlatStructureCache, flatStructurePopulation } from './flat-structures.js';
+import { FlatChunkManager } from './flat-world.js';
 
 const key = (x,z) => `${x},${z}`;
 // Original ids whose add/break callbacks the structure fixtures replay as no-ops (stairs, fences' neighbours,
@@ -41,9 +43,12 @@ export class PopulationArea {
   //
   // `structures` (generation versions 14/15) runs the full native four-feature chain (mineshaft, village,
   // stronghold, scatteredFeature) instead of mineshafts only; it needs `manager` (or a StructureCache).
-  constructor({seed, chunkX, chunkZ, size=8, margin=0, terrain, biomeAt, worldRandSeed=0n, structures=false, manager=null, structureCache=null}) {
-    this.seed=BigInt(seed); this.chunkX=chunkX; this.chunkZ=chunkZ; this.size=size; this.margin=margin;
-    const full=structures, Base=full?structureWorldClass(mineshaftGenWorldClass()):mineshaftGenWorldClass();
+  //
+  // `flat` (a FlatGeneratorInfo, flat-world.js) runs ChunkProviderFlat's structure list and populate instead
+  // (flat-structures.js): the enabled features only, no animals, no snow, decoration only when the preset has it.
+  constructor({seed, chunkX, chunkZ, size=8, margin=0, terrain, biomeAt, worldRandSeed=0n, structures=false, manager=null, structureCache=null, flat=null}) {
+    this.seed=BigInt(seed); this.chunkX=chunkX; this.chunkZ=chunkZ; this.size=size; this.margin=margin; this.flat=flat;
+    const full=structures||!!flat, Base=full?structureWorldClass(mineshaftGenWorldClass()):mineshaftGenWorldClass();
     this.world=new (class extends Base {
       // Halo terrain is available, but never populated or searched for new structure starts.
       chunkExists() { return true; }
@@ -67,8 +72,10 @@ export class PopulationArea {
       w.getTopSolidOrLiquid=(x,z)=>w.getTopSolidOrLiquidBlock(x,z);
       w.getAverageGroundLevel=()=>64;
       w.notifyBlocksOfNeighborChange=(x,y,z,source)=>w.notifyNeighbors(x,y,z,source);
-      const cache=structureCache??new StructureCache(this.seed,manager);
-      this.structures=new StructurePopulation({worldSeed:this.seed,manager:cache.manager,world:w,generators:cache.generators()});
+      const cache=structureCache??(flat?new FlatStructureCache(this.seed,manager??new FlatChunkManager(flat.biome),flat):new StructureCache(this.seed,manager));
+      this.structures=flat
+        ?new (flatStructurePopulation(StructurePopulation))({worldSeed:this.seed,manager:cache.manager,world:w,generators:cache.generators(),info:flat})
+        :new StructurePopulation({worldSeed:this.seed,manager:cache.manager,world:w,generators:cache.generators()});
       this.mineshafts=this.structures.generators.mineshaft;
     } else this.mineshafts=new MapGenMineshaft(this.seed);
     this.decoration=new BiomeDecoration(); this.order=[];
@@ -86,7 +93,8 @@ export class PopulationArea {
         :populateBeforeDecoration(w,r,seed,x,z,{structures:(random,a,b)=>{
           this.mineshafts.generateStructuresInChunk(w,random,a,b); return false;
         }});
-      populateTail(w,r,this.decoration,x,z,result.biome.slot);
+      if(this.flat) { if(this.flat.has('decoration')) this.decoration.decorate(w,r,result.biome.slot,x*16,z*16); }
+      else populateTail(w,r,this.decoration,x,z,result.biome.slot);
       hooks.afterPopulate?.(x,z,r,result);
     }
     return this;
