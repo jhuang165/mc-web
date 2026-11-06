@@ -1481,6 +1481,7 @@ export class EntityWorld {
     this.ai.beginTick(player, survival, heldItem);
     // World.tick: villageCollectionObj.tick() before the entities.
     this.villages.tick();
+    this.knotTick(); // horse-gear-live.js: EntityLeashKnot.onUpdate (fence check every 101st tick)
     // Splash potions thrown by witches (witch-potions.js; main.js attaches it).
     this.potions?.tick(player, survival);
     this._fireballs?.tick(); // blaze/ghast fireballs (fireballs.js)
