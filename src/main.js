@@ -194,6 +194,8 @@ import { Hanging, pickHanging, hangingArrowTargets } from "./hanging.js";
 import { HangingRenderer } from "./hanging-renderer.js";
 import { SKULL, SKULLS, Skulls } from "./skull.js";
 import { SkullRenderer } from "./skull-renderer.js";
+import { EnchantingBooks, EnchantingScreenExtras } from "./enchanting-book-live.js";
+import { EnchantingBookRenderer, EnchantingGuiBookView } from "./enchanting-book-renderer.js";
 import { Signs, isSign, signShouldPop, signDrops } from "./signs.js";
 import { SignRenderer } from "./sign-renderer.js";
 import { openSignEditor } from "./sign-editor.js";
@@ -325,6 +327,9 @@ let boats = new Boats(), boatRenderer = null;
 let hanging = new Hanging(), hangingRenderer = null, aimedHanging = null;
 // Signs (signs.js): the tile entities (text) of every sign block, drawn by sign-renderer.js.
 let signs = new Signs(), signRenderer = null, skullRenderer = null;
+// TileEntityEnchantmentTable books (enchanting-book-live.js), their renderer, and the open screen's book and galactic names.
+const enchantBooks = new EnchantingBooks(ENCHANTING_TABLE);
+let enchantBookRenderer = null, enchantExtras = null;
 // Beacons (pyramid.js): the tile entities (levels, powers) of every beacon block, drawn by pyramid-renderer.js.
 let beacons = new Beacons(), beaconRenderer = null;
 // Live redstone and pistons (redstone-runtime.js), rebuilt for each world that loads.
@@ -799,6 +804,7 @@ function watchFlowers() {
     if (isSign(old) && !isSign(now)) signs.remove(x, y, z);
     if (old === SKULL && now !== SKULL) SKULLS.remove(x, y, z); // TileEntitySkull goes with its block
     if (old === BEACON || now === BEACON) beacons.sync(x, y, z, now); // TileEntityBeacon goes with its block
+    if (old === ENCHANTING_TABLE || now === ENCHANTING_TABLE) enchantBooks.changed(x, y, z, now); // TileEntityEnchantmentTable goes with its block
     for (const [dx, dy, dz] of [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]) {
       const fx = x + dx, fy = y + dy, fz = z + dz, b = world.get(fx, fy, fz);
       if (isSign(b) && signShouldPop(world, fx, fy, fz)) {
@@ -1451,7 +1457,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   mineHeld = false;
   const decorations =
     kind === "enchanting"
-      ? `${[0, 1, 2].map((i) => `<button class="enchant-option off" data-enchant-option="${i}" style="top:calc(${14 + 19 * i}*var(--u))" aria-label="Enchantment option ${i + 1}"><i class="enchant-icon"></i><b class="enchant-level"></b></button>`).join("")}<span class="enchant-shelves" id="enchant-shelves" aria-live="polite"></span>`
+      ? `${[0, 1, 2].map((i) => `<button class="enchant-option off" data-enchant-option="${i}" style="top:calc(${14 + 19 * i}*var(--u))" aria-label="Enchantment option ${i + 1}"><i class="enchant-icon"></i><i class="enchant-name"></i><b class="enchant-level"></b></button>`).join("")}<span class="enchant-shelves" id="enchant-shelves" aria-live="polite"></span>`
       : kind === "beacon"
       ? beaconDecorationsHtml()
       : kind === "merchant"
@@ -1479,6 +1485,8 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   $("#modal").insertAdjacentHTML("beforeend", '<div class="cursor-stack" id="cursor-stack" aria-hidden="true"></div><div class="slot-tooltip hidden" id="slot-tooltip" role="tooltip"></div>');
   document.activeElement?.blur();
   containerView = { container, gui, kind, key, hovered: null, x: innerWidth / 2, y: innerHeight / 2, gx: -1, gy: -1, shown: [] };
+  enchantExtras?.dispose();
+  enchantExtras = kind === "enchanting" ? new EnchantingScreenExtras(document.querySelector("#modal .enchanting-modal"), (canvas) => new EnchantingGuiBookView(canvas)) : null;
   const creative = kind === "creative",
     overlay = $("#modal"),
     javaButton = (b) => (b === 2 ? 1 : b === 1 ? 2 : b),
@@ -1630,6 +1638,8 @@ function horsePreviewFrame() {
 function closeContainer() {
   paperdoll?.detach();
   horsePreview?.detach();
+  enchantExtras?.dispose();
+  enchantExtras = null;
   if (!containerView) return;
   const { container, kind, key } = containerView;
   containerView = null;
@@ -1669,6 +1679,7 @@ function refreshContainer() {
       b.setAttribute("aria-label", levels[i] ? `Enchantment option ${i + 1}: level ${levels[i]}${state === "poor" ? " (not enough experience levels)" : ""}` : `Enchantment option ${i + 1}: unavailable`);
     }
     if ($("#enchant-shelves").textContent !== shelves) $("#enchant-shelves").textContent = shelves;
+    enchantExtras?.names(container);
   }
   let contentChanged = false;
   container.slots.forEach((slot, i) => {
@@ -2593,6 +2604,8 @@ function movementTick(controls) {
   recordHud.tick();
   scene.setFurnaces(survival.furnaces);
   tickChests();
+  enchantBooks.tick(world, [{ x: position.x, y: position.y, z: position.z }]); // TileEntityEnchantmentTable.updateEntity
+  if (containerView?.kind === "enchanting") enchantExtras?.tick(containerView.container); // GuiEnchantment.updateScreen
   mobs.look = { yaw, pitch }; // the enderman stare rule reads the view
   const living = { world, position, survival, inhabited, mobs, xpOrbs, experience, items,
     playerTicks, width: PHYSICS.width, height: PHYSICS.height };
@@ -3094,6 +3107,8 @@ function animate(now) {
   hangingRenderer?.update(screen === "home" ? [] : hanging.entities.filter(e => !world.streaming || world.isLoaded(e.x, e.z)));
   signRenderer?.update(screen === "home" ? [] : [...signs.tiles.values()], world, position);
   skullRenderer?.update(screen === "home" ? [] : [...SKULLS.tiles.values()], world, position);
+  enchantBookRenderer?.update(screen === "home" ? [] : [...enchantBooks.tiles.values()], world, position, partial);
+  enchantExtras?.frame(partial);
   beaconRenderer?.update(screen === "home" ? [] : [...beacons.tiles.values()], world, survival.time, partial);
   tntRenderer?.update(screen === "home" ? [] : primed, partial);
   redstoneRuntime?.frame(screen === "home" ? 1 : partial);
@@ -3198,6 +3213,7 @@ async function boot(){try {
   hangingRenderer = new HangingRenderer(scene.scene, scene);
   signRenderer = new SignRenderer(scene.scene, scene);
   skullRenderer = new SkullRenderer(scene.scene, scene);
+  enchantBookRenderer = new EnchantingBookRenderer(scene.scene, scene);
   document.addEventListener("pointerdown", () => sounds.unlock(), {
     once: true,
   });
