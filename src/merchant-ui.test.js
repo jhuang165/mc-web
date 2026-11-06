@@ -22,7 +22,7 @@ test("emerald and common trade goods map to browser items and back", () => {
     assert.ok(stack, `original ${id} has a browser item`);
     assert.equal(liveStackToNative(stack).id, id);
   }
-  assert.equal(offerStackToLive(original(400)), null, "an item the build lacks has no browser stack");
+  assert.equal(offerStackToLive(original(4000)), null, "an item the build lacks has no browser stack");
 });
 
 test("slot layout matches ContainerMerchant", () => {
@@ -86,7 +86,7 @@ test("closing releases the customer and drops both payment stacks", () => {
 });
 
 test("the view lists the selected offer, step availability and spent state", () => {
-  const offers = [recipe(original(296, 18), null, original(388, 1)), recipe(original(388, 3), original(265, 2), original(400, 1), 7, 7)];
+  const offers = [recipe(original(296, 18), null, original(388, 1)), recipe(original(388, 3), original(265, 2), original(4000, 1), 7, 7)];
   const { c } = setup(offers);
   let v = c.view();
   assert.deepEqual([v.index, v.count, v.previous, v.next, v.recipe.disabled], [0, 2, false, true, false]);

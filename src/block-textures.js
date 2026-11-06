@@ -123,7 +123,7 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===64||id===65)return tile('redstone_ore');
  if(id===66)return tile('emerald_ore');
  if(id===67)return tile(face===2||face===3?'pumpkin_top':face===[4,0,5,1][meta&3]?'pumpkin_face_off':'pumpkin_side');
- if(id===68)return tile(meta===1?'cobblestone':'stone');
+ if(id===68)return tile(['stone','cobblestone','stonebrick','stonebrick_mossy','stonebrick_cracked','stonebrick_carved'][meta]??'stone'); // BlockSilverfish.getIcon: metadata 0-5, anything else is stone
  if(id===69)return tile('double_plant_'+['sunflower','syringa','grass','fern','rose','paeonia'][meta&7]+'_'+(meta&8?'top':'bottom'));
  if(id===4||id===70){const type=TREE_TEXTURES[(id===70?4:0)+(meta&3)]??'oak',axis=meta&12;return tile('log_'+type+((axis===0&&(face===2||face===3)||axis===4&&(face===0||face===1)||axis===8&&(face===4||face===5))?'_top':''));}
  if(id===5||id===71)return tile('leaves_'+(TREE_TEXTURES[(id===71?4:0)+(meta&3)]??'oak'));

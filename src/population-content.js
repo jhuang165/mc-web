@@ -40,7 +40,7 @@ export const POPULATION_ITEMS = Object.freeze({21:63,73:64,74:65,129:66,86:67,97
   368:378,395:379,345:380,388:367,360:368,357:369,282:370,281:371,322:372,2256:373,2257:374,421:375,418:376,419:377,420:2020});
 export const TREE_NAMES=['Oak','Spruce','Birch','Jungle','Acacia','Dark oak'];
 export const DOUBLE_NAMES=['Sunflower','Lilac','Double tallgrass','Large fern','Rose bush','Peony'];
-export const POPULATION_VARIANTS={7:TREE_NAMES.map(s=>s+' planks'),4:TREE_NAMES.slice(0,4).map(s=>s+' log'),5:TREE_NAMES.slice(0,4).map(s=>s+' leaves'),48:TREE_NAMES.map(s=>s+' sapling'),69:DOUBLE_NAMES,70:TREE_NAMES.slice(4).map(s=>s+' log'),71:TREE_NAMES.slice(4).map(s=>s+' leaves'),68:['Stone monster egg','Cobblestone monster egg','Stone brick monster egg']};
+export const POPULATION_VARIANTS={7:TREE_NAMES.map(s=>s+' planks'),4:TREE_NAMES.slice(0,4).map(s=>s+' log'),5:TREE_NAMES.slice(0,4).map(s=>s+' leaves'),48:TREE_NAMES.map(s=>s+' sapling'),69:DOUBLE_NAMES,70:TREE_NAMES.slice(4).map(s=>s+' log'),71:TREE_NAMES.slice(4).map(s=>s+' leaves'),68:['Stone monster egg','Cobblestone monster egg','Stone brick monster egg','Mossy stone brick monster egg','Cracked stone brick monster egg','Chiseled stone brick monster egg']};
 export function installPopulationItems(items){
   installShapedItems(items);
   installChestItems(items);

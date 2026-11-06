@@ -1,0 +1,543 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "acx": {
+   "name": "ItemFood",
+   "sha256": "61f49fbd3439c48205a231664a66579d24359a8fefd9b45d8a750b31ca2f4434"
+  },
+  "acy": {
+   "name": "ItemAppleGold",
+   "sha256": "cfa68e70da8a320ead821d2636a6d44585f5a22dc9fecb4054e5e10381344a6b"
+  },
+  "amb": {
+   "name": "BlockSilverfish",
+   "sha256": "42c67e1f969a17a33fa717f461c83d305023cb5ced04b0b522efd318b7df526f"
+  },
+  "adl": {
+   "name": "ItemMultiTexture",
+   "sha256": "f209dae665a4526f48cf2c99a6d255f111a140c81d32c4e68be471bf62c72a6e"
+  },
+  "auw": {
+   "name": "StructureStrongholdPieces$Stones",
+   "sha256": "8d4d7ce1ce6c5ba9fb47696e9f93bf8e13ab7947eba6ad01c3d5e3dc6389e513"
+  }
+ },
+ "method": "Unchanged original classes after Block/Item registration. ItemFood fields and ItemStack facts are read directly; ItemFood/ItemAppleGold.onFoodEaten run against a WorldServer and EntityPlayer allocated without constructors (the player subclass only records addPotionEffect), the potion roll 1000 times; FoodStats.addStats starts from food 0; recipes go through CraftingManager.findMatchingRecipe; BlockSilverfish metadata 0-6 is read through getSubBlocks, ItemStack names, getIcon with a recording icon register, damageDropped, quantityDropped, createStackedBlock and func_150195_a/func_150196_a/func_150197_b. StructureStrongholdPieces.Stones.selectBlocks was read from bytecode (strongholdStones below), not run.",
+ "strongholdStones": {
+  "thresholds": [
+   [
+    0.2,
+    "stonebrick",
+    2
+   ],
+   [
+    0.5,
+    "stonebrick",
+    1
+   ],
+   [
+    0.55,
+    "monster_egg",
+    2
+   ]
+  ],
+  "otherwise": [
+   "stonebrick",
+   0
+  ],
+  "note": "only monster egg metadata 2 is generated; 97:3-5 appear only through silverfish hiding, Creative and commands"
+ },
+ "items": [
+  {
+   "kind": "item",
+   "name": "pumpkin_pie",
+   "id": 400,
+   "damage": 0,
+   "class": "acx",
+   "heal": 8,
+   "saturationModifier": 0.3,
+   "wolfsFavoriteMeat": false,
+   "useDuration": 32,
+   "action": "eat",
+   "alwaysEdible": false,
+   "potionId": 0,
+   "potionDuration": 0,
+   "potionAmplifier": 0,
+   "potionProbability": 0,
+   "maxStackSize": 64,
+   "unlocalizedName": "item.pumpkinPie",
+   "displayName": "Pumpkin Pie",
+   "rarity": "Common",
+   "rarityFormat": "$f",
+   "glint": false,
+   "creativeTab": "food",
+   "onFoodEatenFirstRoll": [],
+   "onFoodEatenChanceHits1000": 0,
+   "foodLevelAfterAddStatsFrom0": 8,
+   "saturationAfterAddStatsFrom0": 4.8,
+   "itemStackLimit": 64
+  },
+  {
+   "kind": "item",
+   "name": "golden_apple",
+   "id": 322,
+   "damage": 0,
+   "class": "acy",
+   "heal": 4,
+   "saturationModifier": 1.2,
+   "wolfsFavoriteMeat": false,
+   "useDuration": 32,
+   "action": "eat",
+   "alwaysEdible": true,
+   "potionId": 10,
+   "potionDuration": 5,
+   "potionAmplifier": 1,
+   "potionProbability": 1,
+   "maxStackSize": 64,
+   "unlocalizedName": "item.appleGold",
+   "displayName": "Golden Apple",
+   "rarity": "Rare",
+   "rarityFormat": "$b",
+   "glint": false,
+   "creativeTab": "food",
+   "onFoodEatenFirstRoll": [
+    {
+     "id": 22,
+     "duration": 2400,
+     "amplifier": 0
+    },
+    {
+     "id": 10,
+     "duration": 100,
+     "amplifier": 1
+    }
+   ],
+   "onFoodEatenChanceHits1000": 1000,
+   "foodLevelAfterAddStatsFrom0": 4,
+   "saturationAfterAddStatsFrom0": 4,
+   "itemStackLimit": 64
+  },
+  {
+   "kind": "item",
+   "name": "enchanted_golden_apple",
+   "id": 322,
+   "damage": 1,
+   "class": "acy",
+   "heal": 4,
+   "saturationModifier": 1.2,
+   "wolfsFavoriteMeat": false,
+   "useDuration": 32,
+   "action": "eat",
+   "alwaysEdible": true,
+   "potionId": 10,
+   "potionDuration": 5,
+   "potionAmplifier": 1,
+   "potionProbability": 1,
+   "maxStackSize": 64,
+   "unlocalizedName": "item.appleGold",
+   "displayName": "Golden Apple",
+   "rarity": "Epic",
+   "rarityFormat": "$d",
+   "glint": true,
+   "creativeTab": "food",
+   "onFoodEatenFirstRoll": [
+    {
+     "id": 22,
+     "duration": 2400,
+     "amplifier": 0
+    },
+    {
+     "id": 10,
+     "duration": 600,
+     "amplifier": 4
+    },
+    {
+     "id": 11,
+     "duration": 6000,
+     "amplifier": 0
+    },
+    {
+     "id": 12,
+     "duration": 6000,
+     "amplifier": 0
+    }
+   ],
+   "onFoodEatenChanceHits1000": 1000,
+   "foodLevelAfterAddStatsFrom0": 4,
+   "saturationAfterAddStatsFrom0": 4,
+   "itemStackLimit": 64
+  }
+ ],
+ "subItems": {
+  "kind": "subItems",
+  "item": 322,
+  "stacks": [
+   {
+    "id": 322,
+    "count": 1,
+    "damage": 0
+   },
+   {
+    "id": 322,
+    "count": 1,
+    "damage": 1
+   }
+  ]
+ },
+ "crafting": [
+  {
+   "kind": "craft",
+   "name": "pumpkin pie: pumpkin, sugar, egg",
+   "size": 3,
+   "result": {
+    "id": 400,
+    "count": 1,
+    "damage": 0
+   }
+  },
+  {
+   "kind": "craft",
+   "name": "pumpkin pie: egg, pumpkin, sugar (order)",
+   "size": 2,
+   "result": {
+    "id": 400,
+    "count": 1,
+    "damage": 0
+   }
+  },
+  {
+   "kind": "craft",
+   "name": "pumpkin pie: pumpkin, sugar only",
+   "size": 2,
+   "result": null
+  },
+  {
+   "kind": "craft",
+   "name": "8 gold blocks around an apple",
+   "size": 3,
+   "result": {
+    "id": 322,
+    "count": 1,
+    "damage": 1
+   }
+  },
+  {
+   "kind": "craft",
+   "name": "8 gold ingots around an apple",
+   "size": 3,
+   "result": {
+    "id": 322,
+    "count": 1,
+    "damage": 0
+   }
+  },
+  {
+   "kind": "craft",
+   "name": "8 gold nuggets around an apple",
+   "size": 3,
+   "result": null
+  }
+ ],
+ "recipeCount": 3,
+ "blockInfo": {
+  "kind": "blockInfo",
+  "class": "amb",
+  "itemClass": "adl",
+  "creativeTab": "decorations",
+  "hardness": 0.75,
+  "resistance": 3.75,
+  "unlocalizedBlockNames": [
+   "stone",
+   "cobble",
+   "brick",
+   "mossybrick",
+   "crackedbrick",
+   "chiseledbrick"
+  ],
+  "subBlocks": [
+   {
+    "id": 97,
+    "count": 1,
+    "damage": 0
+   },
+   {
+    "id": 97,
+    "count": 1,
+    "damage": 1
+   },
+   {
+    "id": 97,
+    "count": 1,
+    "damage": 2
+   },
+   {
+    "id": 97,
+    "count": 1,
+    "damage": 3
+   },
+   {
+    "id": 97,
+    "count": 1,
+    "damage": 4
+   },
+   {
+    "id": 97,
+    "count": 1,
+    "damage": 5
+   }
+  ]
+ },
+ "blocks": [
+  {
+   "kind": "block",
+   "meta": 0,
+   "unlocalizedName": "tile.monsterStoneEgg.stone",
+   "displayName": "Stone Monster Egg",
+   "icons": [
+    "stone",
+    "stone",
+    "stone",
+    "stone",
+    "stone",
+    "stone"
+   ],
+   "damageDropped": 0,
+   "itemDropped": 97,
+   "quantityDropped": 0,
+   "stackedBlock": {
+    "id": 1,
+    "count": 1,
+    "damage": 0
+   },
+   "func_150197_b": {
+    "block": 1,
+    "meta": 0
+   }
+  },
+  {
+   "kind": "block",
+   "meta": 1,
+   "unlocalizedName": "tile.monsterStoneEgg.cobble",
+   "displayName": "Cobblestone Monster Egg",
+   "icons": [
+    "cobblestone",
+    "cobblestone",
+    "cobblestone",
+    "cobblestone",
+    "cobblestone",
+    "cobblestone"
+   ],
+   "damageDropped": 0,
+   "itemDropped": 97,
+   "quantityDropped": 0,
+   "stackedBlock": {
+    "id": 4,
+    "count": 1,
+    "damage": 0
+   },
+   "func_150197_b": {
+    "block": 4,
+    "meta": 0
+   }
+  },
+  {
+   "kind": "block",
+   "meta": 2,
+   "unlocalizedName": "tile.monsterStoneEgg.brick",
+   "displayName": "Stone Brick Monster Egg",
+   "icons": [
+    "stonebrick",
+    "stonebrick",
+    "stonebrick",
+    "stonebrick",
+    "stonebrick",
+    "stonebrick"
+   ],
+   "damageDropped": 0,
+   "itemDropped": 97,
+   "quantityDropped": 0,
+   "stackedBlock": {
+    "id": 98,
+    "count": 1,
+    "damage": 0
+   },
+   "func_150197_b": {
+    "block": 98,
+    "meta": 0
+   }
+  },
+  {
+   "kind": "block",
+   "meta": 3,
+   "unlocalizedName": "tile.monsterStoneEgg.mossybrick",
+   "displayName": "Mossy Stone Brick Monster Egg",
+   "icons": [
+    "stonebrick_mossy",
+    "stonebrick_mossy",
+    "stonebrick_mossy",
+    "stonebrick_mossy",
+    "stonebrick_mossy",
+    "stonebrick_mossy"
+   ],
+   "damageDropped": 0,
+   "itemDropped": 97,
+   "quantityDropped": 0,
+   "stackedBlock": {
+    "id": 98,
+    "count": 1,
+    "damage": 1
+   },
+   "func_150197_b": {
+    "block": 98,
+    "meta": 1
+   }
+  },
+  {
+   "kind": "block",
+   "meta": 4,
+   "unlocalizedName": "tile.monsterStoneEgg.crackedbrick",
+   "displayName": "Cracked Stone Brick Monster Egg",
+   "icons": [
+    "stonebrick_cracked",
+    "stonebrick_cracked",
+    "stonebrick_cracked",
+    "stonebrick_cracked",
+    "stonebrick_cracked",
+    "stonebrick_cracked"
+   ],
+   "damageDropped": 0,
+   "itemDropped": 97,
+   "quantityDropped": 0,
+   "stackedBlock": {
+    "id": 98,
+    "count": 1,
+    "damage": 2
+   },
+   "func_150197_b": {
+    "block": 98,
+    "meta": 2
+   }
+  },
+  {
+   "kind": "block",
+   "meta": 5,
+   "unlocalizedName": "tile.monsterStoneEgg.chiseledbrick",
+   "displayName": "Chiseled Stone Brick Monster Egg",
+   "icons": [
+    "stonebrick_carved",
+    "stonebrick_carved",
+    "stonebrick_carved",
+    "stonebrick_carved",
+    "stonebrick_carved",
+    "stonebrick_carved"
+   ],
+   "damageDropped": 0,
+   "itemDropped": 97,
+   "quantityDropped": 0,
+   "stackedBlock": {
+    "id": 98,
+    "count": 1,
+    "damage": 3
+   },
+   "func_150197_b": {
+    "block": 98,
+    "meta": 3
+   }
+  },
+  {
+   "kind": "block",
+   "meta": 6,
+   "unlocalizedName": "tile.monsterStoneEgg.stone",
+   "displayName": "Stone Monster Egg",
+   "icons": [
+    "stone",
+    "stone",
+    "stone",
+    "stone",
+    "stone",
+    "stone"
+   ],
+   "damageDropped": 0,
+   "itemDropped": 97,
+   "quantityDropped": 0,
+   "stackedBlock": {
+    "id": 1,
+    "count": 1,
+    "damage": 0
+   },
+   "func_150197_b": {
+    "block": 1,
+    "meta": 0
+   }
+  }
+ ],
+ "containment": [
+  {
+   "block": 1,
+   "meta": 0,
+   "canContainSilverfish": true,
+   "eggMeta": 0
+  },
+  {
+   "block": 4,
+   "meta": 0,
+   "canContainSilverfish": true,
+   "eggMeta": 1
+  },
+  {
+   "block": 98,
+   "meta": 0,
+   "canContainSilverfish": true,
+   "eggMeta": 2
+  },
+  {
+   "block": 98,
+   "meta": 1,
+   "canContainSilverfish": true,
+   "eggMeta": 3
+  },
+  {
+   "block": 98,
+   "meta": 2,
+   "canContainSilverfish": true,
+   "eggMeta": 4
+  },
+  {
+   "block": 98,
+   "meta": 3,
+   "canContainSilverfish": true,
+   "eggMeta": 5
+  },
+  {
+   "block": 98,
+   "meta": 4,
+   "canContainSilverfish": true,
+   "eggMeta": 0
+  },
+  {
+   "block": 1,
+   "meta": 1,
+   "canContainSilverfish": true,
+   "eggMeta": 0
+  },
+  {
+   "block": 4,
+   "meta": 1,
+   "canContainSilverfish": true,
+   "eggMeta": 0
+  },
+  {
+   "block": 3,
+   "meta": 0,
+   "canContainSilverfish": false,
+   "eggMeta": 0
+  },
+  {
+   "block": 5,
+   "meta": 0,
+   "canContainSilverfish": false,
+   "eggMeta": 0
+  }
+ ]
+}

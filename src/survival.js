@@ -26,6 +26,7 @@ import { fireworksResult } from './fireworks.js';
 import { stepStuckArrows } from "./stuck-arrows.js";
 import { installNetherItems, installNetherMaterials, installNetherRecipes, installNetherSmelting, netherCraftingResult } from './nether-blocks.js';
 import { applyNativeNames } from './item-names.js';
+import { installFoodItems, installFoodRecipes, foodCraftingResult } from './food-items.js';
 import { queueKnockBack } from './player-knockback.js';
 import { installColoredItems, installColoredMaterials, COLORED_FUELS } from './colored-blocks.js';
 import { installNoteJukeboxItems, installNoteJukeboxMaterials, installNoteJukeboxRecipes } from './note-jukebox-content.js';
@@ -237,6 +238,7 @@ ARMOR_MATERIALS.forEach(([name, factor, defense, ingredient, texture], m) =>
 );
 
 installPopulationItems(ITEMS);
+installFoodItems(ITEMS); // pumpkin pie, enchanted golden apple (food-items.js)
 installFishingItems(ITEMS);
 installNetherItems(ITEMS);
 installNoteJukeboxItems(ITEMS); // note block 1177, jukebox 1178, discs 530-541
@@ -456,6 +458,7 @@ shapeless(126, 1, 0, 302, 313);
 shapeless(SUGAR, 1, 0, REEDS_ITEM);
 shapeless(314, 1, 0, PAPER, PAPER, PAPER, 315);
 installPopulationRecipes({recipe,shapeless});
+installFoodRecipes({shapeless});
 installFishingRecipes({recipe});
 // RecipesTools: fishing rod over a carrot -> carrot on a stick.
 recipe('carrot-on-a-stick', 'Carrot on a Stick', ['# ', ' X'], { '#': 700, X: 322 }, 2100);
@@ -517,6 +520,7 @@ export function craftingResult(cells, size) {
   const maps=mapsCraftingResult(cells,size);if(maps)return maps; // RecipesMapCloning / RecipesMapExtending
   const fireworks = fireworksResult(cells);
   if (fireworks) return fireworks;
+  const food=foodCraftingResult(cells,size);if(food)return makeStack(food.id,food.count,food.damage);
   const population=populationCraftingResult(cells,size);
   if(population)return makeStack(population.id,population.count,population.damage);
   const nether=netherCraftingResult(cells,size);
@@ -625,6 +629,7 @@ export class Survival {
     this.effects = new Effects(data.effects);
     this.health = Math.min(this.health, this.maxHealth); // Health Boost (generic.maxHealth) raises the cap
     this.absorption = this.effects.has(22) ? clamp(data.absorption, 0, 1024, 0) : 0; // EntityLivingBase absorption amount (Absorption potion)
+    this.effects.player = this; // Effects.add/remove adjust the Absorption amount (Potion.applyAttributesModifiersToEntity); linked after the saved amount is read
     this.inventory = new PlayerInventory(ITEMS, Array.isArray(data.slots) ? data.slots : legacySlots(data, this.creative), data.armor, data.inventoryRandom);
     this.inventory.creative = this.creative;
     this.inventory.current = Math.floor(clamp(data.current, 0, 8, 0));
@@ -856,13 +861,15 @@ export class Survival {
   }
   eat(id, random = Math.random) {
     const item = ITEMS[id];
-    if (!item?.food || this.food >= 20 || !this.take(id)) return false;
+    if (!item?.food || (this.food >= 20 && !item.alwaysEdible) || !this.count(id)) return false;
+    const inv = this.inventory, eaten = inv.held?.id === id ? inv.held : inv.main[inv.find(id)], damage = eaten?.damage | 0; // ItemAppleGold.onFoodEaten reads the stack's damage
+    if (!this.take(id)) return false;
     this.food = Math.min(20, this.food + item.food);
     this.saturation = Math.min(
       this.food,
       this.saturation + item.food * item.saturation * 2,
     );
-    this.effects.food(id, random);
+    this.effects.food(id, random, damage);
     if(item.container)this.inventory.add(makeStack(item.container));
     return true;
   }
