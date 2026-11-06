@@ -14,7 +14,7 @@ Evidence: `tools/probes/HorseGearProbe.java` runs the unchanged original classes
 
 ## Leads (item 420, internal id 2020)
 
-Recipe 4 string, 1 slimeball gives 2 (checked by `recipe-catalogue.test.js` against the original CraftingManager). Right-click ties a leashable mob (monsters, bats, the dragon refuse); the lead is used up even in Creative; a click by the holder frees it and drops the lead outside Creative. Beyond 6 blocks the mob is pulled by delta times |delta| times 0.4 per unit-vector axis, beyond 10 the lead breaks and drops (both on the same tick). Fence click moves the player's leashed mobs within 7 blocks to a knot. NBT: `Leashed`, `Leash` (X/Y/Z of the knot, or UUIDMost/UUIDLeast for the player).
+Recipe 4 string, 1 slimeball gives 2 (checked by `recipe-catalogue.test.js` against the original CraftingManager). Right-click ties a leashable mob (monsters, bats, the dragon refuse); the lead is used up even in Creative; a click by the holder frees it and drops the lead outside Creative. Beyond 4 blocks it paths to the holder at speed 1 and beyond 6 blocks the mob is pulled by delta times |delta| times 0.4 per unit-vector axis, beyond 10 the lead breaks and drops (both on the same tick). Fence click moves the player's leashed mobs within 7 blocks to a knot. NBT: `Leashed`, `Leash` (X/Y/Z of the knot, or UUIDMost/UUIDLeast for the player).
 
 ## Name tags (item 421, internal 375)
 
@@ -26,9 +26,9 @@ GuiIngame.renderJumpBar replaces the experience bar whenever `EntityPlayerSP.isR
 
 ## Gaps
 
-- Leash path-following between 4 and 6 blocks (td.bL pathing toward the holder) is not ported; only the pull and break rules are.
+- Leash path-following, the home area and the knot lifecycle are ported and probe-verified; see [leash.md](leash.md) for its own gaps.
 - The leash catenary, knot box and name plate geometry are the recalled vanilla algorithm and are not bytecode verified or pixel compared.
-- Knots are derived from mobs tied to them, not persistent entities; an empty knot never lingers. Knot clicks go through the fence block.
+- Knots are runtime entities (`world.knotList`) that linger when empty and die up to 100 ticks after their fence, as in 1.7.10; the browser does not ray-test the knot box, so a click on that fence goes to the knot.
 - Fence clicks are intercepted when a lead is held, the player has leashed mobs in range, or a knot exists there; vanilla BlockFence also blocks placing against fences, so this differs slightly.
 - Stack tags (enchantments, names) on gear stacks are kept in the list. The screen draws a horse preview (`horse-preview.js`, `horse-inventory.md`); it has not been viewed in a browser.
 - The ridden horse's health hearts in place of hunger are drawn since the [pig saddle](pig-saddle.md) track.

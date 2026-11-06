@@ -20,8 +20,8 @@ import java.util.Random;
 public class HorseGearProbe {
   public static class GW extends HorseProbe.World {
     static List<sa> entities = new ArrayList<>();
-    static int fx = Integer.MIN_VALUE, fy, fz;
-    public aji a(int x, int y, int z) { return x == fx && y == fy && z == fz ? aji.e(85) : super.a(x, y, z); }
+    static int fx = Integer.MIN_VALUE, fy, fz, fid = 85;
+    public aji a(int x, int y, int z) { return x == fx && y == fy && z == fz ? aji.e(fid) : super.a(x, y, z); }
     public boolean d(sa e) { if (!(e instanceof xk)) entities.add(e); return super.d(e); }
     public List a(Class c, azt box) {
       List<sa> out = new ArrayList<>();
@@ -327,7 +327,8 @@ public class HorseGearProbe {
     out("{\"case\":\"itemIds\",\"lead\":" + adb.b(ade.ca) + ",\"nameTag\":" + adb.b(ade.cb) + ",\"saddle\":" + adb.b(ade.av) + ",\"maxStack\":{\"lead\":" + ade.ca.m() + ",\"nameTag\":" + ade.cb.m() + ",\"saddle\":" + ade.av.m() + ",\"ironArmor\":" + ade.bX.m() + "}}");
   }
 
-  public static void main(String[] args) throws Exception {
+  // The shared world double: entity list, fence block and empty chunk provider (LeashProbe.java reuses it).
+  static GW setup() throws Exception {
     aji.p();
     adb.l();
     u = MobMoveProbe.unsafe();
@@ -348,6 +349,11 @@ public class HorseGearProbe {
     }));
     HorseProbe.W = world;
     HorseProbe.player = HorseProbe.makePlayer(false);
+    return world;
+  }
+
+  public static void main(String[] args) throws Exception {
+    setup();
     container();
     slotValid();
     transfer();

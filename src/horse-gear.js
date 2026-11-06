@@ -125,14 +125,29 @@ export class HorseContainer extends Container {
 }
 
 // ---- leads (EntityLiving.c, sw.b/a, td.bL; ItemLead.adf; EntityLeashKnot su) ----
-export const LEASH_BREAK = 10, LEASH_PULL = 6, KNOT_REACH = 7;
-// td.bL: beyond 10 blocks the lead breaks (and drops); beyond 6 the mob is pulled by delta * |delta| * 0.4 of the unit
-// vector on each axis. Both apply on the same tick (probe leash rows).
-export function leashStep(dx, dy, dz) {
-  const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  if (d <= 0) return { unleash: false, pull: null, distance: 0 };
-  const pull = d > LEASH_PULL ? [dx / d * Math.abs(dx / d) * 0.4, dy / d * Math.abs(dy / d) * 0.4, dz / d * Math.abs(dz / d) * 0.4] : null;
-  return { unleash: d > LEASH_BREAK, pull, distance: d };
+export const LEASH_BREAK = 10, LEASH_PULL = 6, LEASH_PATH = 4, KNOT_REACH = 7;
+export const LEASH_HOME_RADIUS = 5, LEASH_PATH_SPEED = 1, LEASH_TASK_PRIORITY = 2, KNOT_CHECK_PERIOD = 100;
+const f32 = Math.fround;
+// Entity.getDistanceToEntity (sa.e): each axis is narrowed to a float, squared and summed in float, then MathHelper.sqrt_float.
+export const leashDistance = (dx, dy, dz) => { const x = f32(dx), y = f32(dy), z = f32(dz); return f32(Math.sqrt(f32(f32(f32(x * x) + f32(y * y)) + f32(z * z)))); };
+// td.bL with a holder in the same world (public/research/leash-reference.json `path`): the home area is set around the holder's cell
+// (radius 5) on every tick. A sitting EntityTameable (tg.ca) only breaks beyond 10 blocks and does nothing else. Otherwise the first
+// leashed tick adds EntityAIMoveTowardsRestriction (priority 2, speed 1) and turns avoid-water off, the horse stops grazing beyond 6,
+// a path to the holder (speed 1) starts beyond 4 blocks, the velocity pull (delta / distance * |delta / distance| * 0.4 per axis)
+// applies beyond 6 and the lead breaks beyond 10; the last two can happen on the same tick. Distances are floats, compared as such.
+export function leashStep(dx, dy, dz, { sitting = false } = {}) {
+  const d = leashDistance(dx, dy, dz);
+  const unleash = d > LEASH_BREAK;
+  if (sitting) return { unleash, pull: null, path: false, home: true, task: false, stopEating: false, distance: d };
+  const ux = dx / d, uy = dy / d, uz = dz / d;
+  const pull = d > LEASH_PULL ? [ux * Math.abs(ux) * 0.4, uy * Math.abs(uy) * 0.4, uz * Math.abs(uz) * 0.4] : null;
+  return { unleash, pull, path: d > LEASH_PATH, home: true, task: true, stopEating: d > LEASH_PULL, distance: d };
+}
+// EntityHanging.onUpdate (ss.h), run by su for every knot: a counter climbs each tick and on the call after it reads 100 it resets;
+// a knot whose block is no longer a fence (onValidSurface, render type 11) then dies without dropping anything. So a knot outlives a
+// broken fence by up to 100 ticks and is checked every 101st tick (probe knotLife: death at tick 101, 202 ...).
+export function knotAge(age, valid) {
+  return age === KNOT_CHECK_PERIOD ? { age: 0, kill: !valid } : { age: age + 1, kill: false };
 }
 // sw.c(yz): a leashed mob held by this player is freed (the lead drops outside Creative); otherwise a lead in hand ties it (the lead is used up even in Creative, probe heldAfter).
 // Monsters (IMob), bats and the dragon refuse the lead.
@@ -143,10 +158,16 @@ export function leashUse({ leashed, holderIsPlayer, heldLead, creative, type }) 
   if (heldLead && !leashed && leashable(type)) return { used: true, action: "tie", consume: true };
   return { used: false, action: "none" };
 }
-// ItemLead.func_150909_a over a fence: every leashed mob within 7 blocks of the player moves to the knot; the knot exists
-// only once one is found. Returns the chosen mobs (any held lead is untouched).
-export function knotAttach(mobs, player) {
-  return mobs.filter((m) => m.leash?.holder === "player" && Math.abs(m.x - player.x) <= KNOT_REACH && Math.abs(m.y - player.y) <= KNOT_REACH && Math.abs(m.z - player.z) <= KNOT_REACH);
+// ItemLead.func_150909_a over a fence (box around the block's integer corner) and su.c on a knot (box around the knot, block + 0.5):
+// every mob held by the player whose bounding box meets the 7-block box moves to the knot. `centre` is the box centre; a mob may
+// carry `halfWidth` / `height` (the probe's point test is halfWidth 0, height 0). The knot exists only once a mob is found.
+export function knotAttach(mobs, centre) {
+  return mobs.filter((m) => {
+    if (m.leash?.holder !== "player") return false;
+    const hw = m.halfWidth ?? 0, h = m.height ?? 0;
+    return m.x + hw >= centre.x - KNOT_REACH && m.x - hw <= centre.x + KNOT_REACH && m.y + h >= centre.y - KNOT_REACH && m.y <= centre.y + KNOT_REACH
+      && m.z + hw >= centre.z - KNOT_REACH && m.z - hw <= centre.z + KNOT_REACH;
+  });
 }
 // su.c(yz) on a knot: with a lead in hand the player's mobs join it; with none to attach the knot dies, and in Creative every
 // mob it held is freed without a drop (otherwise they stay tied to a dead holder and lose the lead on the next tick).
