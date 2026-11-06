@@ -16,6 +16,7 @@ import { CART_ORIGINAL_ITEMS } from './cart-variants.js';
 import { MAPS_CLOCK_ITEMS } from './maps.js';
 import { BEACON_ITEMS } from './pyramid.js';
 import { FIREWORK_ITEMS } from './fireworks.js';
+import { BOOK_ITEMS } from './books.js';
 
 // Original item ID (or "id:damage" subtype) -> browser item. The same table as tools/inventory-replay.mjs
 // MC_IDS (the item catalogue's mapping); region-import.test.js keeps the two identical.
@@ -58,4 +59,5 @@ export const ORIGINAL_ITEMS = Object.freeze({
   ...BEACON_ITEMS, // nether star 399 -> 2060
   398: 2100, // carrot on a stick (pig-saddle.js)
   ...FIREWORK_ITEMS, // firework rocket 401 -> 2071, firework star 402 -> 2070
+  ...BOOK_ITEMS, // Book and Quill 386 -> 2110, Written Book 387 -> 2111 (books.js)
 });

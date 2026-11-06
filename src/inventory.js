@@ -8,6 +8,7 @@ import { onMapCrafted } from "./maps.js";
 import { armorTypeOf } from "./wearable-heads.js";
 import { copyStored, normalizeStored } from "./enchanted-books.js";
 import { sameFireworkTag, readFireworkTags } from './fireworks.js';
+import { sameBookTag, readBookTags } from './books.js';
 import { JavaRandom } from "./java-random.js";
 import { damageLiveItemStack } from "./item-durability.js";
 export const OUTSIDE = -999, STACK_LIMIT = 64, DOUBLE_CLICK_MS = 250;
@@ -22,6 +23,7 @@ export const makeStack = (id, count = 1, damage = 0, stored, metadata = {}) => {
   const stack = { ...metadata, id, count, damage };
   if (stored !== undefined) stack.stored = copyStored(stored);
   for (const key of TAG_LISTS) if (Array.isArray(stack[key])) stack[key] = clonePairs(stack[key]);
+  if (Array.isArray(stack.pages)) stack.pages = [...stack.pages]; // book pages (books.js)
   return stack;
 };
 export const copyStack = (s) => (s ? makeStack(s.id, s.count, s.damage, s.stored, s) : null);
@@ -29,7 +31,7 @@ const split = (s, n) => { s.count -= n; return copyStack({ ...s, count: n }); };
 const samePairs = (a, b) => Array.isArray(a) === Array.isArray(b) && (!Array.isArray(a) || (a.length === b.length && a.every((e, i) => e?.id === b[i]?.id && e?.lvl === b[i]?.lvl)));
 const storedTag = (s) => Array.isArray(s.storedEnchantments) ? s.storedEnchantments : s.stored?.length ? s.stored : undefined;
 const sameTag = (a, b) => a.repairCost === b.repairCost && a.displayName === b.displayName && a.unbreakable === b.unbreakable && a.color === b.color &&
-  samePairs(a.enchantments, b.enchantments) && samePairs(storedTag(a), storedTag(b)) && sameFireworkTag(a, b);
+  samePairs(a.enchantments, b.enchantments) && samePairs(storedTag(a), storedTag(b)) && sameFireworkTag(a, b) && sameBookTag(a, b);
 // ItemStack.areItemStackTagsEqual: every supported NBT tag participates in merge identity.
 export const sameStackItem = (a, b) => !!a && !!b && a.id === b.id && (a.damage ?? 0) === (b.damage ?? 0) && sameTag(a, b);
 export const dragButton = (event, mode) => (event & 3) | ((mode & 3) << 2);
@@ -60,7 +62,7 @@ export class PlayerInventory {
     if (typeof s.displayName === "string") metadata.displayName = s.displayName;
     if (typeof s.unbreakable === "boolean") metadata.unbreakable = s.unbreakable;
     if (Number.isInteger(s.color) && s.color >= 0 && s.color <= 0xFFFFFF) metadata.color = s.color;
-    Object.assign(metadata, readFireworkTags(s));
+    Object.assign(metadata, readFireworkTags(s), readBookTags(s));
     const storedList = item.storesEnchantments ? normalizeStored(s.storedEnchantments ?? s.stored) ?? [] : s.stored;
     return makeStack(s.id, Math.min(count, item.stack ?? STACK_LIMIT), Math.max(0, Math.min(item.durability || (item.variants?.length ?? 1) - 1, Math.floor(Number(s.damage) || 0))), storedList, metadata);
   }

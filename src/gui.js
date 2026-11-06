@@ -4,6 +4,7 @@ import {copyStack} from './inventory.js';
 import {stackHasEffect} from './armor-enchantments.js';
 import {potionName,potionTooltip,getPotionEffects} from './potions.js';
 import {stackName} from './item-names.js';
+import {bookInfoLines} from './books.js';
 const POTION_CLASS={'#aaaaaa':'gray','#ff5555':'red','#aa00aa':'purple','#5555ff':'blue'};
 // A save snapshots unfinished input/cursor stacks, never a calculated output.
 export function pendingContainerStacks(view){
@@ -44,6 +45,8 @@ export function tooltipLines(item,stack,advanced=false){
  if(potion)for(const l of potionTooltip(stack.damage|0))lines.push({text:l.text,color:POTION_CLASS[l.color]??'gray'});
  if(named)lines[0].italic=true;
  for(const text of fireworkLines(stack))lines.push({text,color:'gray'});
+ // ItemEditableBook.addInformation: the gray "by <author>" line (the name is the title, see item-names.js).
+ for(const text of bookInfoLines(stack))lines.push({text:text.slice(2),color:'gray'});
  // ItemEnchantedBook: EnumRarity.uncommon (yellow name) while it stores enchantments, and
  // addInformation lists them; renderToolTip draws every later line gray.
  const stored=item.storesEnchantments?(stack.storedEnchantments??stack.stored):undefined;

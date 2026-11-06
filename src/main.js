@@ -206,6 +206,8 @@ import { EnchantingBookRenderer, EnchantingGuiBookView } from "./enchanting-book
 import { Signs, isSign, signShouldPop, signDrops } from "./signs.js";
 import { SignRenderer } from "./sign-renderer.js";
 import { openSignEditor } from "./sign-editor.js";
+import { openBookUi } from "./book-ui.js";
+import { ITEM_WRITABLE_BOOK, applyBookEdit, applyBookSign } from "./books.js";
 import { applyHangingEdit } from "./hanging-interaction.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
@@ -2488,6 +2490,8 @@ function edit(place = false) {
     useBeacon: key => { useBeacon(key); syncContainerState(); },
     useBed,
     openSignEditor: (tile) => { screen = "inventory"; mining = null; mineHeld = false; openSignEditor({ show: (title, html) => modal(title, html), close: resume, markUnsaved: () => { saved = false; } }, signs, tile, world); syncContainerState(); },
+    // GuiScreenBook (book-ui.js); MC|BEdit / MC|BSign are applied to the selected stack as NetHandlerPlayServer does.
+    openBook: (held) => { if (!held) return; screen = "inventory"; mining = null; mineHeld = false; openBookUi({ show: (title, html) => modal(title, html), close: () => { resume(); renderHotbar(); }, markUnsaved: () => { saved = false; } }, { stack: held, editable: held.id === ITEM_WRITABLE_BOOK, playerName: "Player", send: (channel, packet) => { (channel === "MC|BSign" ? applyBookSign : applyBookEdit)(survival.held, packet, "Player"); renderHotbar(); } }); syncContainerState(); },
     useCommandBlock: openCommandBlock,
     // ItemRecord.onItemUse / BlockJukebox / BlockNote.onBlockActivated; the disc leaves the stack outside Creative.
     useNoteJukebox: (x, y, z, held) => {
