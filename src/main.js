@@ -251,6 +251,12 @@ let options = {
   difficulty:2,
   // GameSettings.gammaSetting: 0 Moody (the 1.7.10 default) to 1 Bright.
   gamma: 0,
+  // Video settings (render-settings.js): Fancy graphics, Smooth Lighting Maximum, Clouds on, Mipmap Levels 4, Anisotropic Off.
+  graphics: true,
+  ao: 2,
+  clouds: true,
+  mipmapLevels: 4,
+  anisotropic: 1,
 };
 try {
   options = {
@@ -608,6 +614,7 @@ function saveOptions() {
   scene.camera.updateProjectionMatrix();
   scene.setDistance(renderDistanceBlocks(options.distance));
   scene.setGamma(Number(options.gamma) || 0);
+  scene.setRenderSettings(options);
   sounds.updateVolumes();
   updateParticleOptions();
   updateDifficulty();
@@ -3285,6 +3292,7 @@ async function boot(){try {
   scene.camera.updateProjectionMatrix();
   scene.setDistance(renderDistanceBlocks(options.distance));
   scene.setGamma(Number(options.gamma) || 0);
+  scene.setRenderSettings(options);
   updateParticleOptions();
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.

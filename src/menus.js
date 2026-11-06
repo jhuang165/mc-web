@@ -34,9 +34,9 @@ export const UNAVAILABLE = {
   fixedKey: "This key is fixed in the browser build; only Toggle Cinematic Camera can be rebound.",
 };
 // The renderer's fixed state, shown by the disabled video buttons.
-const FIXED = { GRAPHICS: 1, AMBIENT_OCCLUSION: 2, FRAMERATE_LIMIT: 260, ANAGLYPH: false, RENDER_CLOUDS: true, ENABLE_VSYNC: true, MIPMAP_LEVELS: 0, ANISOTROPIC_FILTERING: 1, TOUCHSCREEN: false, FORCE_UNICODE_FONT: false };
+const FIXED = { FRAMERATE_LIMIT: 260, ANAGLYPH: false, ENABLE_VSYNC: true, TOUCHSCREEN: false, FORCE_UNICODE_FONT: false };
 // GameSettings fields of the options the port implements.
-const FIELDS = { FOV: "fov", SENSITIVITY: "sensitivity", GAMMA: "gamma", RENDER_DISTANCE: "distance", VIEW_BOBBING: "bobbing", GUI_SCALE: "guiScale", PARTICLES: "particles", DIFFICULTY: "difficulty", INVERT_MOUSE: "invertMouse" };
+const FIELDS = { FOV: "fov", SENSITIVITY: "sensitivity", GAMMA: "gamma", RENDER_DISTANCE: "distance", VIEW_BOBBING: "bobbing", GUI_SCALE: "guiScale", PARTICLES: "particles", DIFFICULTY: "difficulty", INVERT_MOUSE: "invertMouse", GRAPHICS: "graphics", AMBIENT_OCCLUSION: "ao", RENDER_CLOUDS: "clouds", MIPMAP_LEVELS: "mipmapLevels", ANISOTROPIC_FILTERING: "anisotropic" };
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 // SaveFormatComparator: the most recently played first, then by folder name.
 export const sortWorlds = (worlds) => [...worlds].sort((a, b) => (b.updated || 0) - (a.updated || 0) || cmp(a.folder || folderName(a.name || "World"), b.folder || folderName(b.name || "World")));
@@ -69,6 +69,7 @@ export function createMenus(gui, ctx) {
       if (o === "GUI_SCALE") opts.guiScale = (opts.guiScale + 1) & 3;
       else if (o === "PARTICLES") opts.particles = (opts.particles + 1) % 3;
       else if (o === "DIFFICULTY") opts.difficulty = (opts.difficulty + 1) & 3;
+      else if (o === "AMBIENT_OCCLUSION") opts.ao = ((opts.ao ?? 2) + 1) % 3; // (ambientOcclusion + 1) % 3
       else if (o === "USE_FULLSCREEN") await ctx.toggleFullscreen();
       else opts[FIELDS[o]] = !opts[FIELDS[o]];
       if (o !== "USE_FULLSCREEN") ctx.saveOptions();

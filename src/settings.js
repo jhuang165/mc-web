@@ -1,6 +1,7 @@
 // GameSettings values of 1.7.10 for the options the browser has (settings-parity-catalogue.md,
 // settings-reference.json). Saved device settings carry `settingsVersion`; earlier saves used the
 // browser's own scales and are converted once by migrateSettings.
+import { normalizeRender } from "./render-settings.js";
 const f = Math.fround;
 export const SETTINGS_VERSION = 3;
 // GameSettings.Options float ranges (FOV and RENDER_DISTANCE step 1).
@@ -98,6 +99,12 @@ export function migrateSettings(saved) {
     if (plain(s.soundLevels))
       for (const [k] of SOUND_CATEGORIES) if (num(s.soundLevels[k])) levels[k] = clamp(s.soundLevels[k], 0, 1);
     s.soundLevels = levels;
+  }
+  // Video settings (render-settings.js): invalid values are dropped, out-of-range numbers are clamped.
+  for (const k of ["graphics", "clouds"]) if (s[k] !== undefined && typeof s[k] !== "boolean") delete s[k];
+  if (s.ao !== undefined || s.mipmapLevels !== undefined || s.anisotropic !== undefined) {
+    const n = normalizeRender(s);
+    for (const k of ["ao", "mipmapLevels", "anisotropic"]) if (s[k] !== undefined) num(s[k]) ? (s[k] = n[k]) : delete s[k];
   }
   return s;
 }

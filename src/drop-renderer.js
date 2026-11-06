@@ -12,6 +12,7 @@ import { spriteGeometry } from "./sprite-geometry.js";
 import { blockTile, tileRect } from "./block-textures.js";
 import { JavaRandom } from "./lighting.js";
 import { leatherItemLayers } from "./leather-dye.js";
+import { flatItemSprites } from "./render-settings.js";
 
 const copies = (n) => (n > 40 ? 5 : n > 20 ? 4 : n > 5 ? 3 : n > 1 ? 2 : 1);
 
@@ -21,6 +22,8 @@ export class DropRenderer {
     this.view = view;
     this.piles = new Map();
     this.sprite = spriteGeometry();
+    // Fast graphics: RenderItem draws a sprite item as flat quads (u0..u1 x v0..v1) turned to the player's yaw.
+    this.flatSprite = new THREE.PlaneGeometry(1, 1).translate(0.5, 0.5, 0);
     this.cubes = new Map();
     this.flying = [];
   }
@@ -53,12 +56,15 @@ export class DropRenderer {
       overlayMaterial.polygonOffset = true;
       overlayMaterial.polygonOffsetFactor = -1;
     }
+    const flat = flatItemSprites();
     for (let i = 0, n = copies(stack.count); i < n; i++) {
       let mesh;
       if (url) {
-        mesh = new THREE.Mesh(this.sprite, material);
+        mesh = new THREE.Mesh(flat ? this.flatSprite : this.sprite, material);
         mesh.scale.setScalar(0.5);
         mesh.position.set(-0.25, -0.125, (i - (n - 1) / 2) * 0.042);
+        // Copies after the first shift by (rand * 2 - 1) * 0.3 on each axis (about 0.15 once scaled; approximated).
+        if (flat) mesh.position.set(-0.25, -0.125, 0).add(i ? new THREE.Vector3((random.nextFloat() * 2 - 1) * 0.15, (random.nextFloat() * 2 - 1) * 0.15, (random.nextFloat() * 2 - 1) * 0.15) : new THREE.Vector3());
         if (glint) mesh.add(glintMesh(mesh.geometry, pixelTexture(url)));
         if (overlayMaterial) {
           const overlay = new THREE.Mesh(this.sprite, overlayMaterial);
@@ -78,7 +84,7 @@ export class DropRenderer {
     }
     group.add(spin);
     this.scene.add(group);
-    return { group, spin, material, overlayMaterial, key: stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + (glint ? 1 : 0) + ":" + color, hover };
+    return { group, spin, material, overlayMaterial, flat: !!url && flat, key: stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + (glint ? 1 : 0) + ":" + color + ":" + (flat ? "f" : "d"), hover };
   }
   remove(pile) {
     this.scene.remove(pile.group);
@@ -91,7 +97,11 @@ export class DropRenderer {
   // RenderItem.doRender: bob and spin from the entity's age and hover phase.
   place(pile, x, y, z, age) {
     pile.group.position.set(x, y + 0.125 + Math.sin(age / 10 + pile.hover) * 0.1 + 0.1, z);
-    pile.spin.rotation.y = age / 20 + pile.hover;
+    if (pile.flat) {
+      // glRotatef(180 - playerViewY): the quad stays parallel to the view plane.
+      const d = this.view.camera.getWorldDirection(new THREE.Vector3());
+      pile.spin.rotation.y = Math.atan2(-d.x, -d.z);
+    } else pile.spin.rotation.y = age / 20 + pile.hover;
     const brightness = this.view.brightness(x, y + 0.17, z);
     pile.material.setLight(brightness);
     pile.overlayMaterial?.setLight(brightness);
@@ -113,7 +123,7 @@ export class DropRenderer {
       seen.add(e);
       let pile = this.piles.get(e);
       const leather = leatherItemLayers(stack.id, stack.color),
-        key = stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + (stackHasEffect(stack, ITEMS[stack.id]) ? 1 : 0) + ":" + (leather?.color ?? 0);
+        key = stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + (stackHasEffect(stack, ITEMS[stack.id]) ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + (flatItemSprites() ? "f" : "d");
       if (pile?.key !== key) {
         if (pile) this.remove(pile);
         pile = this.build(stack, e.hover);
