@@ -69,7 +69,7 @@ export function mobStepSound(type, block, above = 0, e = {}) {
 // Advances `e.stepDistance` / `e.nextStep` for a move from `from` ({x, y, z}) to the entity's position and returns the
 // sound events it makes (zero or one). `hostile` picks game.hostile.swim over game.neutral.swim; `random` is the entity's
 // Random (drawn twice, only for the swim sound). `e.inWater` is the entity's own flag.
-export function mobStepEvents(world, e, from, { hostile = false, random } = {}) {
+export function mobStepEvents(world, e, from, { hostile = false, random, onWalk } = {}) {
   if (!canTriggerWalking(e.type) || e.riding) return [];
   const dx = e.x - from.x, dz = e.z - from.z;
   const dy = countsVertical(world, e.x, e.y, e.z) ? e.y - from.y : 0;
@@ -86,5 +86,6 @@ export function mobStepEvents(world, e, from, { hostile = false, random } = {}) 
   }
   const s = mobStepSound(e.type, block, world.get(x, y + 1, z), e);
   if (s) events.push({ sound: s.name, volume: s.volume, pitch: s.pitch, position });
+  onWalk?.(x, y, z); // Block.onEntityWalking right after the step sound (BlockRedstoneOre lights up)
   return events;
 }

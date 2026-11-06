@@ -1775,7 +1775,7 @@ export class EntityWorld {
     const landed = moveEntityWithHeading(this.world, e, t.width, t.height, forward, hooks);
     // moveEntity's step tail (mob-steps.js): every mob with canTriggerWalking plays its own step event.
     const rand = entityRandom(e);
-    this.events.push(...mobStepEvents(this.world, e, from, { hostile: isEntityMob(e.type), random: () => rand.nextFloat() }));
+    this.events.push(...mobStepEvents(this.world, e, from, { hostile: isEntityMob(e.type), random: () => rand.nextFloat(), onWalk: (x, y, z) => this.onEntityWalking?.(x, y, z, e) }));
     // The finite world's edge stops a mob like a wall.
     const edge = (axis, v) => {
       const c = Math.max((this.world[axis === "x" ? "minX" : "minZ"] ?? 0)+0.6, Math.min((this.world[axis === "x" ? "maxX" : "maxZ"] ?? SIZE)-0.6, e[axis]));

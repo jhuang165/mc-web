@@ -3,6 +3,7 @@ import {normalCube} from './world.js';
 import {populationDrops} from './population-content.js';
 import {solidTopSurface} from './doors-panes.js';
 import {FLOWER_POT,potContents} from './stone-utility.js';
+import {touchRedstoneOre,randomTickRedstoneOre} from './redstone-ore.js';
 const sides=[[0,1],[-1,0],[0,-1],[1,0]];
 export function populationPlantCanStay(w,x,y,z,id=w.get(x,y,z)){
   const below=w.get(x,y-1,z),meta=w.getMeta(x,y,z);
@@ -17,9 +18,10 @@ export function populationPlantCanStay(w,x,y,z,id=w.get(x,y,z)){
 }
 export class PopulationBlocks{
   constructor(world,{drop=()=>{},apply=()=>{},random}={}){this.world=world;this.drop=drop;this.apply=apply;this.random=random;this.busy=false;}
-  touch(x,y,z){if(this.world.get(x,y,z)!==64)return false;this.world.set(x,y,z,65);this.apply([[x,y,z,64,65]]);return true;}
+  // BlockRedstoneOre.func_150185_e / updateTick (redstone-ore.js); `opts` = {rand, spawn} for the reddust sparkle.
+  touch(x,y,z,opts={}){return touchRedstoneOre(this.world,x,y,z,{...opts,changed:this.apply});}
   randomTick(x,y,z,id){
-    if(id===65){this.world.set(x,y,z,64);this.apply([[x,y,z,65,64]]);return true;}
+    if(id===65)return randomTickRedstoneOre(this.world,x,y,z,{changed:this.apply});
     if(id===73&&this.random?.nextInt(5)===0){const m=this.world.getMeta(x,y,z);if((m>>2)<2){this.world.set(x,y,z,73,true,m+4);this.apply([[x,y,z,73,73]]);}return true;}
     return false;
   }

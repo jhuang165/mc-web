@@ -17,6 +17,7 @@ import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
 import { BEACON } from './pyramid.js';
 import { ITEM_EYE_OF_ENDER } from './eye-of-ender.js';
 import { DRAGON_EGG } from './dragon-egg.js';
+import { REDSTONE_ORE, LIT_REDSTONE_ORE } from './world.js';
 import { useEyeOfEnder } from './eye-of-ender-live.js';
 import { ITEM_EMPTY_MAP } from './maps.js';
 import { ITEM_FIREWORK_ROCKET } from './fireworks.js';
@@ -270,6 +271,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     const [x, y, z] = target.block;
     // PlayerControllerMP.onPlayerRightClick: unless sneaking with an item, Block.onBlockActivated runs first and
     // the held item's onItemUse (hoe, seeds, bone meal, ...) only when the block declines.
+    // BlockRedstoneOre.onBlockActivated sparkles and lights the ore, then returns false: the held item's use goes on below.
+    if (activates && (block === REDSTONE_ORE || block === LIT_REDSTONE_ORE)) hook('touchRedstoneOre', x, y, z);
     if (activates && block === TNT && item?.kind === 'flint_and_steel') {
       hook('lightTnt', x, y, z, 'player');
       state.world.set(x, y, z, 0);
@@ -563,6 +566,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   if (state.mining && state.mining.tool === id && state.mining.block.every((v, i) => v === target.block[i])) return act('mining-already-started');
   if (block === DRAGON_EGG) hook('useDragonEgg', ...target.block); // BlockDragonEgg.onBlockClicked: a punch teleports it too, then mining continues
   if (block === 177) hook('blockClicked', ...target.block); // BlockNote.onBlockClicked plays the note (Survival only: Creative breaks the block)
+  if (block === REDSTONE_ORE || block === LIT_REDSTONE_ORE) hook('touchRedstoneOre', ...target.block); // BlockRedstoneOre.onBlockClicked (Survival only: Creative breaks the block)
   const under = hook('clientEyeInWater');
   if (playerMiningState(state.survival, block, id, !!under, state.grounded).progress >= 1) {
     hook('breakBlock', target.block);

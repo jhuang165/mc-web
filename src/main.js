@@ -1040,6 +1040,7 @@ async function launch(record, prepared) {
       }
     }
     mobs.onLand = (entity, distance) => trampleFarmland(entity, distance);
+    mobs.onEntityWalking = (x, y, z) => touchRedstoneOre(x, y, z); // Entity.moveEntity's step tail: Block.onEntityWalking
     // World.getLightBrightness for EntityAI.getBlockPathWeight: daylight-reduced sky or block light.
     mobs.lightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, scene.subtracted) : 15);
     mobs.dimensionBlockLight = (x, y, z) => scene.light?.blockAt(x, y, z) ?? 0;
@@ -2233,6 +2234,10 @@ function releaseBowUse() {
   dispatchReleaseAction(state, action, { flushArrows, renderHotbar, markUnsaved: () => { saved = false; } });
   eating = state.eating;
 }
+// BlockRedstoneOre.func_150185_e (redstone-ore.js): onBlockClicked, onEntityWalking and onBlockActivated sparkle and light the ore.
+function touchRedstoneOre(x, y, z) {
+  if (world.populationBlocks?.touch(x, y, z, { rand: scene.explosionParticles.worldRandom, spawn: (...a) => scene.fx.spawn(...a) })) saved = false;
+}
 function trampleFarmland(entity, distance) {
   const x = Math.floor(entity.x), y = Math.floor(entity.y - 0.2), z = Math.floor(entity.z);
   if (farming.trample(x, y, z, distance, Math.random, entity === position || gameRule("mobGriefing"))) {
@@ -2312,7 +2317,6 @@ function spawnHangingDrops() {
 }
 function edit(place = false) {
   if (screen !== "playing") return;
-  if(target?.block)world.populationBlocks?.touch(...target.block);
   // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
   if (applyHangingEdit({ hanging, world, survival, heldId: heldId(), place, target, aimed: aimedHanging }, {
     swing: () => animation.swing(),
@@ -2394,6 +2398,7 @@ function edit(place = false) {
       return true;
     },
     useDragonEgg: (x, y, z) => { useDragonEgg({ world, serverRandom: () => scene.explosionParticles.worldRandom, clientRandom: () => new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))), updateBlock: (i, j, k) => scene.updateBlock(i, k, j), spawnParticle: (...a) => scene.fx.spawn(...a) }, x, y, z); saved = false; return true; },
+    touchRedstoneOre,
     blockClicked: (x, y, z) => { if (!survival.creative) { redstoneRuntime?.music.click(x, y, z); saved = false; } },
     openMerchant: entity => { const opened = useMerchant(entity); if (opened) syncContainerState(); return opened; },
     useEnchantingTable: key => { useEnchantingTable(key); syncContainerState(); },
@@ -2634,6 +2639,8 @@ function movementTick(controls) {
       const s = footstepSound(b, onLadderStep ? 0 : world.get(sx, sy + 1, sz));
       if (s) sounds.play(s.name, { volume: s.volume, pitch: s.pitch });
     }
+    // Entity.moveEntity: Block.onEntityWalking runs with the step sound, on the cell 0.2 below the feet (redstone ore lights up).
+    touchRedstoneOre(Math.floor(position.x), Math.floor(position.y - 0.2), Math.floor(position.z));
   }
   playHurtSounds();
   eating = tickPlayerItemUse(eating, heldId(), survival, {
@@ -2953,7 +2960,6 @@ function animate(now) {
       if (motion.sprinting) spawnRunningParticles(scene.particles, world, { x: position.x, y: position.y, z: position.z, mx: velocity.x, mz: velocity.z, sprinting: true, inWater: wasInWater, ySize: motion.ySize }, playerRandom, [position.x, position.y + PHYSICS.eye, position.z]);
       movementTick(captureMovementInput(bedSleep.sleeping ? new Set() : keys)); // a sleeping player ignores the keys
       tickBed();
-      populationBlocks?.touch(Math.floor(position.x),Math.floor(position.y-.01),Math.floor(position.z));
       scene.effectRenderer.tick(world);
       // The model stands at posY - yOffset, and posY is lowered by ySize (the sneak drop).
       const lowered = (p, drop) => ({ x: p.x, y: p.y - drop, z: p.z });
