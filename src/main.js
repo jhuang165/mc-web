@@ -94,6 +94,10 @@ import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox } from ".
 import { BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
 import { deathMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
 import { ChatUi, printChat } from "./chat-ui.js";
+import { Achievements, BY_ID as BY_ACHIEVEMENT, CHAT_ACHIEVEMENT } from "./achievements.js";
+import { AchievementToast } from "./achievements-ui.js";
+import { watchMobs, craftedAchievement, smeltedAchievement, pickedAchievement, pigFall } from "./achievements-live.js";
+import { keyName as inventoryKeyName } from "./menu-screens.js";
 import { createCommandRunner, chatLine, tr } from "./commands.js";
 import { runCommandCart } from "./command-cart.js";
 import { LanSession, LAN_NOTICE } from "./lan.js";
@@ -398,12 +402,29 @@ $("#app").innerHTML = `
  <section id="hud" class="hidden" aria-label="Game heads-up display"><div class="game-top"><button class="game-brand" id="pause-button">${cube}<span>BLOCKWORLD<small id="world-label"></small></span><span class="pause-symbol">Ⅱ</span></button><div class="game-status"><span class="status-dot"></span><span id="save-label">Saved on this device</span><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div></div><div id="crosshair">＋</div><pre id="debug" class="hidden"></pre><div id="block-label"></div><div id="jump-hud" class="hidden"><div class="experience-track"><div id="jump-fill"></div></div></div><div id="experience-hud" class="hidden"><div id="experience-level"></div><div class="experience-track"><div id="experience-fill"></div></div></div><div id="survival-hud" class="survival-hud hidden"></div><div id="mining-meter" class="mining-meter hidden" role="progressbar" aria-label="Mining progress" aria-valuemin="0" aria-valuemax="100"><i></i></div><div id="flight-label" class="flight-label"><span id="mode-label">CREATIVE</span> <span>·</span> <b id="movement-label">WALKING</b></div><div class="hotbar" id="hotbar"></div><div class="game-help">W A S D <span>move</span> <i>·</i> SPACE <span>jump</span> <i>·</i> LMB <span>break</span> <i>·</i> RMB <span>use / place</span> <i>·</i> E <span>inventory</span> <i>·</i> ESC <span>pause</span></div><div id="mobile-controls"><div class="dpad"><button data-key="KeyW">↑</button><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="touch-actions"><button id="touch-break">Break</button><button id="touch-place">Use</button><button id="touch-inventory">Bag</button><button id="touch-fly">Fly</button><button data-key="Space">Jump</button></div></div></section>
  <div class="modal-overlay hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div><div id="toast" role="status"></div><input id="file-input" type="file" accept=".json,application/json" hidden>
  <div id="loading"><span>Loading terrain</span></div>`;
+// 1.7.10 achievements (achievements.js): unlocks show the toast and the chat line; they are saved with the world.
+const achievementToast = new AchievementToast({
+  scale: () => guiScale(innerWidth, innerHeight, Number(options.guiScale) || 0),
+  icon: (id, damage) => icon(id, damage),
+  keyName: () => inventoryKeyName(options.keys?.["key.inventory"] ?? "KeyE"),
+  playing: () => screen !== "home",
+});
+let achievementsFor = null, achievementTicks = 0;
+const achievements = new Achievements({
+  onUnlock: (a) => {
+    achievementToast.show(a);
+    printChat(CHAT_ACHIEVEMENT.replace("%s", PLAYER_NAME).replace("%s", `${a.special ? "§5" : "§a"}[${a.name}]§r`));
+    saved = false;
+  },
+});
 // Open to LAN for this tab (lan.js); it lasts until the world is left.
 const lan = new LanSession();
 // The 1.7.10 menu screens (menus.js) drawn over the game in #gui.
 const menuContext = {
   get options() { return options; },
   get worlds() { return worlds; },
+  get achievements() { return achievements; },
+  icon: (id, damage) => icon(id, damage),
   splashes: "",
   saveOptions,
   soundLevel: (k) => soundLevel(options.soundLevels, k),
@@ -635,6 +656,7 @@ function save() {
   active.position = { x: position.x, y: position.y, z: position.z, yaw, pitch };
   active.portalState = dims.state.save();
   active.player = survival.serialize();
+  active.achievements = achievements.save();
   active.drops = items.serialize();
   active.projectiles = projectiles.serialize();
   active.eyes = eyes.serialize();
@@ -859,6 +881,7 @@ async function openWorld(record) {
       record.worldSpawn = [Math.floor(x), Math.floor(y), Math.floor(z)];
     }
     prepared.restoreClaimedColumns(record.populatedColumns);
+    const transit = record.transit;
     await dims.arrive(prepared, record); // portal travel: the Teleporter's arrival position
     const p=record.position;
     if(prepared.streaming&&p&&[p.x,p.z].every(Number.isFinite))prepared.streamAround(p.x,p.z);
@@ -869,6 +892,8 @@ async function openWorld(record) {
     dims.applyWrites(prepared, record, { verifyBed: (w, s) => { const cell = verifyRespawn(w, s, false); return cell ? bedRespawnPosition(cell) : null; } }); // portal frame / End platform
     streamStorage?.dispose();streamStorage=storage;
     await launch(record,prepared);
+    // PlayerList.transferPlayerToDimension: leaving the End, Overworld -> End, or any other portal trip (not a respawn).
+    if (transit && !transit.death) achievements.trigger(transit.exit ? "theEnd2" : transit.from === 0 && prepared.dimension === 1 ? "theEnd" : "portal");
   } catch(e) {toast('Could not open this world: '+e.message);}
   finally{openingWorld=false;}
 }
@@ -1040,7 +1065,11 @@ async function launch(record, prepared) {
         spawnDragonIfAbsent(world, mobs);
       }
     }
-    mobs.onLand = (entity, distance) => trampleFarmland(entity, distance);
+    mobs.onLand = (entity, distance) => {
+      trampleFarmland(entity, distance);
+      if (entity.type === "pig" && pigFall(distance, rider.vehicle?.entity === entity)) achievements.trigger("flyPig");
+    };
+    watchMobs(mobs, { achievements, player: () => position });
     mobs.onEntityWalking = (x, y, z) => touchRedstoneOre(x, y, z); // Entity.moveEntity's step tail: Block.onEntityWalking
     // World.getLightBrightness for EntityAI.getBlockPathWeight: daylight-reduced sky or block light.
     mobs.lightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, scene.subtracted) : 15);
@@ -1072,6 +1101,10 @@ async function launch(record, prepared) {
     stepDistance = 0;
     wasInWater = false;
     survival = new Survival(legacyPlayer(record), record.mode || "creative");
+    // Achievements belong to the world (a portal trip keeps them in memory); the hint waits for "Taking Inventory".
+    if (achievementsFor !== (record.rootId ?? record.id)) { achievements.load(record.achievements); achievementsFor = record.rootId ?? record.id; }
+    achievementToast.clear();
+    if (!achievements.has("openInventory")) achievementToast.hint(BY_ACHIEVEMENT.openInventory);
     containerResidency?.dispose();
     containerResidency=world.streaming&&!world.isDimension?new ContainerResidency(world,record.id,survival,{scope:record.containerScope,onError:e=>{pause();toast('Could not load saved containers. Reopen the world to retry: '+e.message);}}):null;
     survival.furnaceActive = key => !world.streaming || world.isTicking(...[key.split(",")[0],key.split(",")[2]].map(Number));
@@ -1381,7 +1414,10 @@ function inventory(station = false) {
     openCreative();
     return;
   }
-  openContainer(station ? survival.openWorkbench() : survival.openInventory(), station ? "workbench" : "inventory");
+  if (!station) achievements.trigger("openInventory");
+  const container = station ? survival.openWorkbench() : survival.openInventory();
+  container.onCraft = (stack) => { const id = craftedAchievement(stack?.id); if (id) achievements.trigger(id); };
+  openContainer(container, station ? "workbench" : "inventory");
 }
 // GuiContainerCreative: tabs, the scrolling 9 x 5 item grid, search and the survival inventory tab.
 function openCreative() {
@@ -1885,6 +1921,8 @@ function useEnchantingTable(key) {
 }
 // SlotFurnace.onCrafting: fractional experience rounds up by chance.
 function smelted(stack, amount) {
+  const smeltedId = smeltedAchievement(stack?.id);
+  if (smeltedId) achievements.trigger(smeltedId);
   if (survival.creative) return;
   const f = smeltExperience(stack);
   let n = amount;
@@ -2070,6 +2108,17 @@ const dims = new DimensionLive({
 // First entry to the End (dimension-live.js): ChunkProviderEnd's dragon, spawned once the new world's mobs exist (launch).
 let pendingDragon = false;
 dims.onDragonSpawn = () => { pendingDragon = true; };
+// Per-tick achievement observers: the biome set (every 20 ticks), minecart distance and a beacon reaching level 4.
+function watchAchievements() {
+  if (achievementTicks++ % 20 === 0) achievements.visit(world.biomeAt?.(Math.floor(position.x), Math.floor(position.z))?.name, 0);
+  const cart = rider.vehicle;
+  if (cart && !cart.boat && !cart.horse) achievements.rideMinecart(position.x, position.y, position.z); else achievements.stopRiding();
+  for (const [key, tile] of beacons.tiles) {
+    const [bx, by, bz] = key.split(",").map(Number);
+    const near = position.x >= bx - 10 && position.x <= bx + 11 && position.y >= by - 5 && position.y <= by + 6 && position.z >= bz - 10 && position.z <= bz + 11;
+    achievements.beacon(key, tile.levels | 0, near);
+  }
+}
 function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // Game rules the Survival object reads (gamerule naturalRegeneration / doDaylightCycle).
   survival.naturalRegeneration = ruleOn(active, "naturalRegeneration");
@@ -2119,6 +2168,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   });
   ({ fallDistance, landedFall } = movement);
   tickBeacons(beacons, { world, time: survival.time, players: [{ x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height }], apply: (_p, e) => survival.effects.add(e) });
+  watchAchievements();
   fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
   rockets.tick(world, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), explode: (...a) => fireworkFx.spawnStarter(...a) });
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
@@ -2136,6 +2186,8 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     smoke: (x, y, z) => scene.explosionParticles.spawn("smoke", x, y, z),
     explodeTnt: explodeAt,
     itemPicked: ({ item }) => {
+      const pickedId = pickedAchievement(item.stack?.id);
+      if (pickedId) achievements.trigger(pickedId);
       sounds.play("random.pop", { volume: 0.2, pitch: ((Math.random() - Math.random()) * 0.7 + 1) * 2 });
       scene.drops.pickup(item, position);
       if (item.death && !items.items.some((e) => e.death)) toast("Recovered your dropped items.");
@@ -2371,7 +2423,7 @@ function edit(place = false) {
     useFishingRod: () => fishing.use(fishingHost()),
     renderHotbar,
     renderVitals,
-    spawnWither: (x, y, z, yaw) => mobs.spawnWither(x, y, z, yaw), // wither-boss-mobs.js
+    spawnWither: (x, y, z, yaw) => { achievements.trigger("spawnWither"); return mobs.spawnWither(x, y, z, yaw); }, // wither-boss-mobs.js
     markUnsaved: () => { saved = false; },
     playSound: (name, options) => sounds.play(name, options),
     particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz),
@@ -2405,7 +2457,13 @@ function edit(place = false) {
     openMerchant: entity => { const opened = useMerchant(entity); if (opened) syncContainerState(); return opened; },
     useEnchantingTable: key => { useEnchantingTable(key); syncContainerState(); },
     openChest: (chest, key) => { openContainer(chest, "chest", key); redstoneRuntime?.chestViewersChanged(chest.keys); syncContainerState(); },
-    openBrewing: (tile, key) => { openContainer(new BrewingContainer(survival.inventory, brewingView(tile), () => { saved = false; }), "brewing", key); syncContainerState(); },
+    openBrewing: (tile, key) => {
+      const brewing = new BrewingContainer(survival.inventory, brewingView(tile), () => { saved = false; });
+      // SlotBrewingStack.onPickupFromSlot: taking a potion from a bottle slot.
+      for (const slot of brewing.slots.slice(0, 3)) { const taken = slot.onPickup?.bind(slot); slot.onPickup = (s) => { if (s?.id === 385) achievements.trigger("potion"); return taken?.(s); }; }
+      openContainer(brewing, "brewing", key);
+      syncContainerState();
+    },
     openHopper: (hopper, key) => { openContainer(new HopperContainer(survival.inventory, hopper, () => { saved = false; }), "hopper", key); syncContainerState(); },
     openHorse: (e) => { openHorse(e); syncContainerState(); },
     openDispenser: (dispenser, key, _block, title = DISPENSER_TITLE) => { openContainer(Object.assign(new DispenserContainer(survival.inventory, dispenser, () => { saved = false; }), { title }), "dispenser", key); syncContainerState(); },
