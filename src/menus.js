@@ -12,6 +12,7 @@ import {
 } from "./menu-screens.js";
 import { canGoEndless } from "./endless-world.js";
 import { achievementsScreen } from "./achievements-ui.js";
+import { statsScreen } from "./stats-screen.js";
 import { PLAYER_NAME } from "./death-messages.js";
 
 const SOUND_KEYS = ["master", "music", "record", "weather", "block", "hostile", "neutral", "player", "ambient"];
@@ -20,7 +21,6 @@ export const UNAVAILABLE = {
   multiplayer: "Multiplayer needs a connection to a Minecraft server, which a web page cannot open.",
   online: "Minecraft Realms is an online Mojang service; this browser recreation has no account sign-in.",
   quit: "A web page cannot close its own tab. Close the tab to quit.",
-  stats: "Statistics are not recorded in this browser build yet.",
   superSecret: "Super Secret Settings needs the 1.7.10 post-processing shaders, which this renderer does not have.",
   stream: "Twitch broadcasting was a desktop-only feature; a web page cannot stream.",
   multiplayerSettings: "There is no chat or multiplayer in this browser build.",
@@ -354,7 +354,7 @@ export function createMenus(gui, ctx) {
           achievements: ctx.achievements, icon: ctx.icon, hash: javaHash(PLAYER_NAME), back: ingameMenu, close, show,
           keyName: () => keyName(keyOf("key.inventory")), inventoryKey: () => keyOf("key.inventory"),
         })));
-        g.button(b.stats, t("gui.stats"), null, { reason: UNAVAILABLE.stats });
+        g.button(b.stats, t("gui.stats"), () => show(statsScreen({ stats: ctx.stats, icon: ctx.icon, back: ingameMenu, show })));
         // Browser addition in the row vanilla leaves empty: download the world.
         g.button(b.export, "Export World", () => ctx.exportWorld());
       },

@@ -84,6 +84,7 @@ export function movePlayer(state, controls, toast = () => {}) {
       velocity.z += push.z;
     }
     survival.exhaust(jumpExhaustion(sprint));
+    survival.onJump?.(); // EntityPlayer.jump: the jump stat
     // jump() leaves onGround alone: this tick still moves with ground friction.
   }
   // EntityLivingBase.moveEntityWithHeading: water and lava use moveFlying(0.02F); on land the

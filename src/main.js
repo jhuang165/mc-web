@@ -97,6 +97,8 @@ import { deathMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
 import { ChatUi, printChat } from "./chat-ui.js";
 import { Achievements, BY_ID as BY_ACHIEVEMENT, CHAT_ACHIEVEMENT } from "./achievements.js";
 import { AchievementToast } from "./achievements-ui.js";
+import { Stats } from "./stats.js";
+import { StatsLive, watchMobStats, watchDrops, addFallStat } from "./stats-live.js";
 import { watchMobs, craftedAchievement, smeltedAchievement, pickedAchievement, pigFall } from "./achievements-live.js";
 import { keyName as inventoryKeyName } from "./menu-screens.js";
 import { createCommandRunner, chatLine, tr } from "./commands.js";
@@ -181,7 +183,7 @@ import { horseSeatsFor as seatsFor } from "./horse-live.js";
 import { HorseContainer, canInteract as horseReach, canWearArmor as horseWearsArmor } from "./horse-gear.js";
 import { riddenHorse, jumpBar } from "./horse-gear-live.js";
 import { HorseGearRenderer } from "./horse-gear-renderer.js";
-import { capturePlayerAction, dispatchPlayerAction, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
+import { capturePlayerAction, dispatchPlayerAction as dispatchPlayerActionRaw, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
 import { fromOriginal } from "./block-registry.js";
 import { setOriginalBlockMapper } from "./mineshaft-world.js";
 import { spawnerDisplayEntity } from "./mob-spawner.js";
@@ -422,6 +424,15 @@ const achievementToast = new AchievementToast({
   keyName: () => inventoryKeyName(options.keys?.["key.inventory"] ?? "KeyE"),
   playing: () => screen !== "home",
 });
+// Statistics (stats.js): the per-world counters behind the Statistics screen and stats/<uuid>.json; awards in stats-live.js.
+const stats = new Stats(), statsLive = new StatsLive(stats);
+watchDrops(items, statsLive);
+// player-actions.js dispatch plus the use stat of a placed or applied item (ItemStack.tryPlaceItemIntoWorld).
+function dispatchPlayerAction(state, action, hooks) {
+  const acted = dispatchPlayerActionRaw(state, action, hooks);
+  statsLive.placed(acted, action.heldTool);
+  return acted;
+}
 let achievementsFor = null, achievementTicks = 0;
 const achievements = new Achievements({
   onUnlock: (a) => {
@@ -437,6 +448,7 @@ const menuContext = {
   get options() { return options; },
   get worlds() { return worlds; },
   get achievements() { return achievements; },
+  get stats() { return stats; },
   icon: (id, damage) => icon(id, damage),
   splashes: "",
   saveOptions,
@@ -671,6 +683,7 @@ function save() {
   active.portalState = dims.state.save();
   active.player = survival.serialize();
   active.achievements = achievements.save();
+  active.stats = stats.save();
   active.drops = items.serialize();
   active.projectiles = projectiles.serialize();
   active.eyes = eyes.serialize();
@@ -1085,6 +1098,7 @@ async function launch(record, prepared) {
       if (entity.type === "pig" && pigFall(distance, rider.vehicle?.entity === entity)) achievements.trigger("flyPig");
     };
     watchMobs(mobs, { achievements, player: () => position });
+    watchMobStats(mobs, { live: statsLive });
     mobs.onEntityWalking = (x, y, z) => touchRedstoneOre(x, y, z); // Entity.moveEntity's step tail: Block.onEntityWalking
     // World.getLightBrightness for EntityAI.getBlockPathWeight: daylight-reduced sky or block light.
     mobs.lightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, scene.subtracted) : 15);
@@ -1116,8 +1130,9 @@ async function launch(record, prepared) {
     stepDistance = 0;
     wasInWater = false;
     survival = new Survival(legacyPlayer(record), record.mode || "creative");
+    statsLive.bind(survival);
     // Achievements belong to the world (a portal trip keeps them in memory); the hint waits for "Taking Inventory".
-    if (achievementsFor !== (record.rootId ?? record.id)) { achievements.load(record.achievements); achievementsFor = record.rootId ?? record.id; }
+    if (achievementsFor !== (record.rootId ?? record.id)) { achievements.load(record.achievements); stats.load(record.stats); statsLive.attacker = null; achievementsFor = record.rootId ?? record.id; }
     achievementToast.clear();
     if (!achievements.has("openInventory")) achievementToast.hint(BY_ACHIEVEMENT.openInventory);
     containerResidency?.dispose();
@@ -1409,6 +1424,7 @@ function pause() {
   gui.show(menus.ingameMenu());
 }
 function goHome() {
+  statsLive.leaveGame(); // ServerConfigurationManager.playerLoggedOut
   save();
   lan.close();
   hideBedScreen();
@@ -1431,7 +1447,7 @@ function inventory(station = false) {
   }
   if (!station) achievements.trigger("openInventory");
   const container = station ? survival.openWorkbench() : survival.openInventory();
-  container.onCraft = (stack) => { const id = craftedAchievement(stack?.id); if (id) achievements.trigger(id); };
+  container.onCraft = (stack, n) => { const id = craftedAchievement(stack?.id); if (id) achievements.trigger(id); statsLive.crafted(stack, n); };
   openContainer(container, station ? "workbench" : "inventory");
 }
 // GuiContainerCreative: tabs, the scrolling 9 x 5 item grid, search and the survival inventory tab.
@@ -1943,6 +1959,7 @@ function useEnchantingTable(key) {
 function smelted(stack, amount) {
   const smeltedId = smeltedAchievement(stack?.id);
   if (smeltedId) achievements.trigger(smeltedId);
+  statsLive.crafted(stack, amount); // SlotFurnace.onCrafting
   if (survival.creative) return;
   const f = smeltExperience(stack);
   let n = amount;
@@ -2030,6 +2047,7 @@ function die() {
   detachPlayerVehicle(vehicle);
   applyVehicleState(vehicle);
   playHurtSounds();
+  statsLive.death();
   // EntityPlayerMP.onDeath broadcasts the death message to chat at the moment of death.
   const message = survival.died && deathMessage(survival.lastDamage);
   survival.died = false;
@@ -2076,6 +2094,7 @@ function die() {
     const time = survival.time;
     const kept = ruleOn(active, "keepInventory") && { slots: survival.inventory.serialize(), armor: survival.inventory.serializeArmor() };
     survival = new Survival({ time, slots: [], ...kept, furnaces: survival.furnaces, chests: survival.chests, dispensers: survival.dispensers, hoppers: survival.hoppers, brewing: survival.brewing }, survival.mode);
+    statsLive.bind(survival);
     portalTimer.reset();
     dims.restorePlayer({});
     survival.protection = 60;
@@ -2181,6 +2200,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // MobSpawnerBaseLogic.updateSpawner on the client: smoke and flame, the display mob's spin.
   tickSpawnersClient({ spawners, random: scene.explosionParticles.worldRandom, eye: { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z } },
     { particle: (name, x, y, z) => scene.fx.spawn(name, x, y, z) });
+  if (grounded) addFallStat(stats, landedFall, survival.creative); // EntityPlayer.fall
   const movement = { world, position, survival, motion, grounded, fallDistance, landedFall };
   finishPlayerMovement(movement, { inWater, inLavaNow, oldPosition }, {
     trample: trampleFarmland,
@@ -2190,6 +2210,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   ({ fallDistance, landedFall } = movement);
   tickBeacons(beacons, { world, time: survival.time, players: [{ x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height }], apply: (_p, e) => survival.effects.add(e) });
   watchAchievements();
+  statsLive.tick({ oldPosition, position, vehicle: rider.vehicle, eyeInWater: clientEyeInWater(), inWater, onLadder: !flying && countsVertical(world, position.x, position.y, position.z), grounded });
   fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
   rockets.tick(world, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), explode: (...a) => fireworkFx.spawnStarter(...a) });
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
@@ -2247,6 +2268,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     flushArrows,
   });
   fishing.tick(fishingHost());
+  statsLive.fishing(fishing);
   // EntityMinecartChest.onUpdate and the player's and mobs' pushes against carts; spilled
   // contents and the broken cart's items become item entities.
   if (tickMinecartSimulation({ world, minecarts, mobs, position, velocity, rider, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }, {
@@ -2444,7 +2466,7 @@ function edit(place = false) {
     criticalHit: entity => { scene.fx.crit2(() => mobs.fxTarget(entity)); },
     enchantmentCriticalHit: entity => { scene.fx.crit2(() => mobs.fxTarget(entity), true); },
     handleEntityEvents,
-    useFishingRod: () => fishing.use(fishingHost()),
+    useFishingRod: () => { const r = fishing.use(fishingHost()); statsLive.fishing(fishing); return r; },
     renderHotbar,
     renderVitals,
     spawnWither: (x, y, z, yaw) => { achievements.trigger("spawnWither"); return mobs.spawnWither(x, y, z, yaw); }, // wither-boss-mobs.js
@@ -2555,6 +2577,7 @@ function breakBlock(p, creative = false) {
     destroyParticles: (...args) => scene.particles.destroyBlock(...args),
     markUnsaved: () => { saved = false; },
     releaseSilverfish: (x, y, z) => mobs.spawnSilverfishAt?.(x, y, z),
+    harvested: (info) => statsLive.harvested(info),
   });
 }
 // Block.getItem for middle-click: farmland gives dirt, crops give seeds, water nothing.
@@ -2570,6 +2593,7 @@ function dropHeld(all) {
 // EntityLivingBase.renderBrokenItemStack plays the break sound and throws 5 crumbs of it.
 function reportBrokenTool() {
   if (!survival.broken) return;
+  statsLive.broken(survival.broken);
   sounds.play("random.break", { volume: 0.8, pitch: 0.8 + Math.random() * 0.4 });
   itemCrumbs(scene.fx, 5, "iconcrack_" + survival.broken, playerEye(), playerRandom);
   toast("Your " + (ITEMS[survival.broken]?.name || "tool").toLowerCase() + " broke.");

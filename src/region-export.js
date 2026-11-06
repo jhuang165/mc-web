@@ -27,6 +27,7 @@ import { structureDataFiles } from './structure-data.js';
 import { villageDocument } from './village.js';
 import { mapDataFiles } from './maps-nbt.js';
 import { javaProjectileToNbt } from './java-projectiles.js';
+import { statsExportFile } from './stats.js';
 import { GEAR_TYPES, gearFieldsFrom } from './mob-equipment-live.js';
 const tag=(type,value)=>({type,value}), comp=value=>tag(NBT.COMPOUND,new Map(Object.entries(value))), list=(type,items)=>tag(NBT.LIST,{elementType:items.length?type:NBT.END,items});
 const byte=v=>tag(NBT.BYTE,(v<<24)>>24), short=v=>tag(NBT.SHORT,v), int=v=>tag(NBT.INT,v), str=v=>tag(NBT.STRING,v), float=v=>tag(NBT.FLOAT,v), long=v=>tag(NBT.LONG,BigInt(Math.trunc(v)));
@@ -265,6 +266,8 @@ export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChu
  if(record.villages?.villages?.length){const sh=(v)=>({...v,c:[v.c[0]+ox,v.c[1],v.c[2]+oz],ac:[v.ac[0]+ox,v.ac[1],v.ac[2]+oz],doors:v.doors.map(d=>[d[0]+ox,d[1],d[2]+oz,d[3],d[4],d[5],...d.slice(6)])});
   files.set('data/villages.dat',await encodeCompressedNbt(villageDocument({...record.villages,villages:record.villages.villages.map(sh)})));}
  for(const [n,b] of await mapDataFiles(record.maps,ox,oz))files.set(n,b); // data/map_N.dat + idcounts.dat (maps-nbt.js)
+ // stats/<uuid>.json (StatisticsFile): the world's statistics and achievements under the offline-mode UUID of the player "Player".
+ {const [n,b]=statsExportFile(record);files.set(n,b);report.notes.push(`${n}: statistics and achievements (offline-mode UUID of "Player").`);}
  const {chunked,runtimeChunked,editSequence,...backup}=record,encode=new TextEncoder();
  files.set('blockworld.json',encode.encode(JSON.stringify({...backup,format:'blockworld',version:1})));
  files.set('conversion-notes.json',encode.encode(JSON.stringify(report,null,2)));

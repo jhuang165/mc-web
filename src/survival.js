@@ -803,6 +803,7 @@ export class Survival {
     const outOfWorld = reason === VOID;
     if ((this.creative && !outOfWorld) || this.health <= 0 || n <= 0 || (this.protection > 0 && !outOfWorld))
       return false;
+    this.onDamageTaken?.(Math.fround(n)); // EntityPlayer.attackEntityFrom: the damageTaken stat runs before the invulnerability frames
     // EntityLivingBase.attackEntityFrom: Fire Resistance refuses fire damage (the burning counter still runs).
     if (FIRE_REASONS.has(reason) && this.effects.has(12)) return false;
     n = Math.fround(n);
