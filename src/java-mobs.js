@@ -12,7 +12,7 @@ import { slimeSizeFromNbt } from './slime.js';
 import { GEAR_TYPES, defaultGear } from './mob-equipment-live.js';
 import { DEFAULT_DROP_CHANCE } from './mob-equipment.js';
 
-export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', LavaSlime: 'magma_cube', PigZombie: 'pigman', Ozelot: 'ocelot', EntityHorse: 'horse', Blaze: 'blaze', Ghast: 'ghast', WitherBoss: 'wither', Skeleton: 'skeleton', EnderDragon: 'ender_dragon', EnderCrystal: 'ender_crystal' });
+export const JAVA_MOBS = Object.freeze({ Villager: 'villager', VillagerGolem: 'iron_golem', Zombie: 'zombie', Slime: 'slime', Enderman: 'enderman', Squid: 'squid', Bat: 'bat', LavaSlime: 'magma_cube', PigZombie: 'pigman', Ozelot: 'ocelot', EntityHorse: 'horse', Blaze: 'blaze', Ghast: 'ghast', WitherBoss: 'wither', Skeleton: 'skeleton', EnderDragon: 'ender_dragon', EnderCrystal: 'ender_crystal', Giant: 'giant' });
 // The mobs whose chunk NBT goes through the /summon reader (summonedMobRecord; EntityList.createEntityFromNBT is the same call for
 // both): their layouts are public/research/mob-nbt-reference.json (MobNbtProbe), checked by src/mob-nbt.test.js.
 export const JAVA_SUMMON_MOBS = Object.freeze({ Pig: 'pig', Cow: 'cow', MushroomCow: 'mooshroom', Sheep: 'sheep', Chicken: 'chicken', Wolf: 'wolf', Spider: 'spider', CaveSpider: 'cave_spider', Creeper: 'creeper', Witch: 'witch', Silverfish: 'silverfish', SnowMan: 'snow_golem' });
@@ -124,7 +124,7 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
   const pos = numbers(entity, 'Pos', NBT.DOUBLE, 3);
   if (!type || !pos) return null;
   const rotation = numbers(entity, 'Rotation', NBT.FLOAT, 2);
-  const healF = tagValue(entity, 'HealF', NBT.FLOAT), health = healF !== undefined ? healF : tagValue(entity, 'Health', NBT.SHORT, type === 'ender_crystal' ? 5 : 20);
+  const healF = tagValue(entity, 'HealF', NBT.FLOAT), health = healF !== undefined ? healF : tagValue(entity, 'Health', NBT.SHORT, type === 'ender_crystal' ? 5 : type === 'giant' ? 100 : 20);
   const record = {
     type, x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ, health,
     // Entity.rotationYaw is degrees counter-clockwise from +z toward -x; the browser yaw is the negated radian value.
@@ -191,7 +191,7 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
 // EntityList.createEntityFromNBT for /summon. A supplied compound skips onSpawnWithEgg entirely.
 export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) {
   if (type === 'skeleton' && tagValue(tag, 'SkeletonType', NBT.BYTE, 0) === 1) type = 'wither_skeleton'; // EntitySkeleton.readEntityFromNBT (wither-skeleton.js)
-  const health = { horse: 53, pig: 10, cow: 10, mooshroom: 10, snow_golem: 4, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, wither_skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, magma_cube: 1, pigman: 20, enderman: 40, squid: 10, bat: 6, ocelot: 10, blaze: 20, ghast: 10, wither: 300 }[type];
+  const health = { horse: 53, pig: 10, cow: 10, mooshroom: 10, snow_golem: 4, sheep: 8, chicken: 4, wolf: 8, zombie: 20, skeleton: 20, wither_skeleton: 20, spider: 16, cave_spider: 12, creeper: 20, villager: 20, iron_golem: 100, silverfish: 8, witch: 26, slime: 1, magma_cube: 1, pigman: 20, enderman: 40, squid: 10, bat: 6, ocelot: 10, blaze: 20, ghast: 10, wither: 300, giant: 100 }[type];
   if (health === undefined) return null;
   const rotation = numbers(tag, 'Rotation', NBT.FLOAT, 2);
   const record = { type, health: tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health)), yaw: rotation ? -rotation[0] * Math.PI / 180 : 0,

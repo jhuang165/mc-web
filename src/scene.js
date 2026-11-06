@@ -26,6 +26,7 @@ import { createLighting, worldMaterial } from "./light-material.js";
 import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
 import { applyDimensionRender, fixedAngle, providerFog } from "./dimension-render.js";
 import { nightVisionBrightness, blindnessFog, adjustFogColor, warpMatrix } from "./potion-fx.js";
+import { hasVoidParticles, voidFogYFactor, voidFogFar } from "./void-fog.js";
 import { Sky, Clouds } from "./sky.js";
 import { liquidHeight, flowAngle, viewpointBlock } from "./fluids.js";
 import { DropRenderer } from "./drop-renderer.js";
@@ -1024,13 +1025,19 @@ export class VoxelScene {
       fog = fogColor({ angle, temperature: this.temperature ?? biomeTemperature("meadow"), look: [look.x, look.y, look.z], chunks: this.distance / 16, brightness: this.fogBrightness, underwater, lava, rain, thunder, lightning, partial, provider: this.dimension ? providerFog(this.dimension, angle) : null });
     // potion-fx.js: the void/Blindness/Night Vision terms of updateFogColor, and Blindness' own setupFog branch (it wins over water and lava).
     const pv = this.potionView, blind = pv?.blindness > 0;
-    if (pv && (blind || pv.nightVision > 0 || pv.feetY !== undefined)) fog = adjustFogColor(fog, { feetY: pv.feetY ?? c.position.y - 1.62, blindness: pv.blindness, nightVision: pv.nightVision > 0 ? nightVisionBrightness(pv.nightVision, this.dropPartial) : 0 });
+    if (pv && (blind || pv.nightVision > 0 || pv.feetY !== undefined || pv.eyeY !== undefined)) fog = adjustFogColor(fog, { feetY: pv.eyeY ?? pv.feetY ?? c.position.y, voidFactor: voidFogYFactor(this.world?.worldType), blindness: pv.blindness, nightVision: pv.nightVision > 0 ? nightVisionBrightness(pv.nightVision, this.dropPartial) : 0 });
     u.fogColor.value.set(...fog);
     // setupFog: linear from 3/4 of the far plane; exponential 0.1 in water, 2.0 in lava.
     u.fogDensity.value = blind ? 0 : lava ? 2 : underwater ? 0.1 : 0;
     const bf = blind ? blindnessFog(pv.blindness, this.distance) : null;
     u.fogNear.value = bf ? bf.start : this.distance * 0.75;
     u.fogFar.value = bf ? bf.end : this.distance;
+    // setupFog void term (full-height worlds only: the 64-block legacy terrain would fog every cave).
+    if (!bf && !underwater && !lava && pv?.eyeY !== undefined && this.world?.height === 256 && this.light) {
+      const y = pv.eyeY, sky = this.light.packed(Math.floor(c.position.x), Math.floor(y - 1.62 + 1.8 * 0.66), Math.floor(c.position.z)) >> 20 & 15,
+        far = voidFogFar({ far: this.distance, skyLight: sky, y, creative: !!pv.creative, hasVoid: hasVoidParticles({ worldType: this.world.worldType, dimension: this.dimension ?? 0 }) });
+      if (far < this.distance) { u.fogFar.value = far; u.fogNear.value = far * 0.75; }
+    }
     const sky = underwater || lava || blind ? fog : skyColor(this.temperature ?? 0.8, angle, rain, thunder, lightning, partial);
     this.sky.update({ angle, sky, fog, sunrise: underwater || lava || blind ? null : sunriseColors(angle), stars: blind ? 0 : starBrightness(angle), moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater: underwater || lava || blind, rain });
     this.clouds.update(c, time * 20, cloudColor(angle, rain, thunder));

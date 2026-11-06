@@ -423,6 +423,7 @@ export class MobRenderer {
     if (e.type === "slime") return createSlimeRig(this, e);
     if (e.type === "magma_cube") return createMagmaCubeRig(this);
     if (e.type === "pigman") return this.createZombie(false, true);
+    if (e.type === "giant") return Object.assign(this.createZombie(), { scale: 6, lift: 6 / 128 }); // RenderGiantZombie: ModelZombie, glScalef(6) ahead of the 1/128 lift
     if (e.type === "wolf") return createWolfRig(this);
     if (e.type === "ocelot") return createOcelotRig(this);
     if (e.type === "horse") return createHorseRig(this, e);
@@ -537,7 +538,7 @@ export class MobRenderer {
         if (spider) { l.rotation.set(0, -spider[i][0], -spider[i][1]); return; }
         if (creeper) { l.rotation.x = creeper[i + 1][0]; return; }
         if (e.type === "villager" || e.type === "witch") { l.rotation.x = villagerLegAngle(pose.limbSwing, pose.limbSwingAmount, i); return; }
-        if ((e.type === "zombie" || e.type === "pigman" || e.type === "skeleton" || e.type === "wither_skeleton") && i < 2) {
+        if ((e.type === "zombie" || e.type === "giant" || e.type === "pigman" || e.type === "skeleton" || e.type === "wither_skeleton") && i < 2) {
           const side = i === 0 ? 1 : -1;
           l.rotation.set(-Math.PI / 2 + side * sway, side * 0.1, -side * spread);
         } else if (e.ridingEntity && i >= 2 && (e.type === "zombie" || e.type === "pigman" || e.type === "skeleton" || e.type === "wither_skeleton")) {

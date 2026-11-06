@@ -44,6 +44,8 @@ export const SHADOWS = {
   // RenderSilverfish: super(new ModelSilverfish(), 0.3F).
   silverfish: { size: f(0.3), opaque: 1 },
   skeleton: { size: f(0.5), opaque: 1 },
+  // RenderGiantZombie(model, 0.5F, 6.0F): RenderLiving shadowSize 0.5 * 6.
+  giant: { size: f(f(0.5) * f(6)), opaque: 1 },
   // RenderCreeper: super(new ModelCreeper(), 0.5F); RenderTNTPrimed: shadowSize = 0.5F.
   creeper: { size: f(0.5), opaque: 1 },
   tnt: { size: f(0.5), opaque: 1 },
