@@ -150,6 +150,7 @@ const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinki
 import { captureBucketTarget } from "./buckets-simulation.js";
 import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, fovMultiplier } from "./player-movement.js";
+import { drainKnockback } from "./player-knockback.js";
 import { spawnRunningParticles, freshRandom } from "./particles.js";
 import { enterWater, drownBubbles, burst, potionColor, potionParticles, itemCrumbs, boneMealSparkles } from "./fx.js";
 import { JavaRandom } from "./lighting.js";
@@ -2252,6 +2253,7 @@ function applyFarmUpdates(updates){const chunks=new Set();for(const[x,y,z]of upd
 function mobEventHooks() {
   return {
     push: (v) => { velocity.x += v.x; velocity.y += v.y; velocity.z += v.z; },
+    knock: (s) => drainKnockback(s, velocity, position),
     sound: (event, raw) => {
       sounds.play(event.sound, { position: event.position, volume: event.volume, pitch: event.pitch });
       // World event 2002 (EntityPotion.onImpact): the glass and spell particles at the impact block.
@@ -2656,7 +2658,7 @@ function movementTick(controls) {
   }).use;
   if (survival.health <= 0) die();
   // EntityRenderer.updateFovModifierHand: once a tick, toward getFOVMultiplier (flight, sprint, bow).
-  easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, bow: eating?.bow ? bowFov(eating.ticks) : 1 }));
+  easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: survival.effects?.moveSpeedMultiplier?.() ?? 1, bow: eating?.bow ? bowFov(eating.ticks) : 1 }));
   tickMining();
   reportBrokenTool();
 }

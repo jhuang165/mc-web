@@ -17,6 +17,7 @@ import { ITEMS } from "./survival.js";
 import { weaponEnchantments, arthropodSlowness, javaLikeRandom } from "./enchantment-effects.js";
 import { insideOpaqueBlock, mobEyeHeight } from "./suffocation.js";
 import { mhSin, mhCos, JavaRandom } from "./lighting.js";
+import { mobKnockbackKick, golemLift } from "./player-knockback.js";
 import { enterWater, burst, drownBubbles } from "./fx.js";
 import { waterAcceleration, entityWaterBox, inLava, eyeInWater } from "./fluids.js";
 import { sheepColor, childColor } from "./sheep.js";
@@ -1094,7 +1095,9 @@ export class EntityWorld {
     };
     // EntityMob.attackEntityAsMob: the attribute (the held weapon's modifier included) plus Sharpness (getEnchantmentModifierLiving), Fire Aspect after.
     const melee = e.equipment ? meleeEffects(e.equipment[0]) : null;
-    const hit = survival.scaledDamage(f(attackDamage(e, (e.type === "wolf" ? wolfAttack(e) : e.type === "slime" ? slimeDamage(e.size) : e.type === "magma_cube" ? magmaDamage(e.size) : ENTITY_TYPES[e.type].damage) + (e.equipment ? attackBonus(e.equipment) : 0)) + (melee ? melee.damage : 0)), "a " + e.type, { attacker: thorns });
+    const hit = survival.scaledDamage(f(attackDamage(e, (e.type === "wolf" ? wolfAttack(e) : e.type === "slime" ? slimeDamage(e.size) : e.type === "magma_cube" ? magmaDamage(e.size) : ENTITY_TYPES[e.type].damage) + (e.equipment ? attackBonus(e.equipment) : 0)) + (melee ? melee.damage : 0)), "a " + e.type, { attacker: thorns, from: e });
+    // EntityMob.attackEntityAsMob: Knockback on the held item pushes the player along the mob's facing and slows the mob (player-knockback.js).
+    if (hit && melee?.knockback > 0) mobKnockbackKick(survival, e, melee.knockback);
     if (hit && melee?.fire > 0) survival.setFire(melee.fire);
     // EntityLivingBase.setRevengeTarget on the player: its wolves defend it (EntityAIOwnerHurtByTarget).
     if (hit) this.ai.playerHurtBy(e);
@@ -1130,6 +1133,8 @@ export class EntityWorld {
       held = owned && survival.held?.id === tool ? survival.held : null,
       weapon = weaponEnchantments(held, e.type);
     let damage = heldAttackDamage(tool, survival);
+    // EntityPlayer.attackTargetEntityWithCurrentItem: `if (f > 0 || f1 > 0)`. Weakness II on an empty hand (1 - 1.0) or worse does nothing at all.
+    if (!(damage > 0 || weapon.damage > 0)) return false;
     if (critical) damage = criticalDamage(damage);
     damage = f(damage + weapon.damage);
     const knockback = extraKnockback + weapon.knockback, ignite = weapon.fireAspect > 0 && !(e.fire > 0);
@@ -1421,7 +1426,9 @@ export class EntityWorld {
   }
   // EntityIronGolem.attackEntityAsMob against the player (7 + nextInt(15) as a mob hit): returns whether it hurt.
   hitGolemPlayer(e, damage, survival) {
-    return survival.scaledDamage(damage, "an Iron Golem", { attacker: null });
+    const hit = survival.scaledDamage(damage, "an Iron Golem", { attacker: null, from: e });
+    if (hit) golemLift(survival); // EntityIronGolem.attackEntityAsMob: target.motionY += 0.4
+    return hit;
   }
   villageBurst(name, e, size, rand) {
     if (this.fx) burst(this.fx, name, 5, { x: e.x, y: e.y, z: e.z, width: size.width, height: size.height }, rand, 1);

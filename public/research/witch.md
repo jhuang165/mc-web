@@ -22,7 +22,7 @@ Item ids of this build: 384 glass bottle, 385 potion.
 
 ## Approximated or missing
 - Player motion is treated as 0 when the witch leads its throw.
-- The player takes splash harm and poison; slowness and weakness are not applied to the player.
+- The player takes splash harm and poison; slowness and weakness now feed player speed, FOV and melee damage through status-effects.js (see player-knockback.md); witch potions on the player are otherwise unchanged.
 - No potion break particles; the glass sound `game.potion.smash` is emitted but the asset index has no witch sounds (`mob.witch.*`), so the witch is silent.
 - Potions cannot be obtained or brewed; there is no glass bottle recipe. The held/thrown sprite has no potion tint, and the held potion is not drawn in 3D.
 - Only the eight potion values the witch uses are implemented, not PotionHelper.

@@ -19,6 +19,7 @@ export function drainMobEvents({ mobs, xpOrbs, items }, hooks = {}) {
     doorUpdate = () => {},
     blockEdit = () => {},
     push = () => {},
+    knock = () => {},
   } = hooks;
   const events = mobs.drain();
   for (const e of mobs.drainClientSounds?.() ?? []) sound({ sound: e.sound, position: e.position, volume: e.volume ?? 0.6, pitch: e.pitch }, e);
@@ -71,6 +72,7 @@ export function tickLivingSimulation(state, hooks = {}) {
     doorUpdate = () => {},
     blockEdit = () => {},
     push = () => {},
+    knock = () => {},
   } = hooks;
 
   inhabited.tick(survival.time);
@@ -91,5 +93,7 @@ export function tickLivingSimulation(state, hooks = {}) {
   }
   for (const event of xpOrbs.sounds.splice(0)) orbSound(event);
   drainMobEvents({ mobs, xpOrbs, items }, { sound, explode, eatGrass, doorUpdate, blockEdit, push });
+  // Player knockback queued by this tick's hits (survival.damage with a source entity; arrows and fireballs tick earlier or later).
+  knock(survival);
   return state.playerTicks;
 }

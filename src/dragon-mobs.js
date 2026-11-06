@@ -69,7 +69,7 @@ export function dragonHost(mobs, e, ctx = {}) {
           living: true, x: p.x, z: p.z,
           // main.js does not consume `dragonPush` yet (see dragon.md): the player's velocity impulse.
           push: (x, y, z) => mobs.events.push({ dragonPush: { x, y, z } }),
-          hurt: (d) => survival.scaledDamage(d, "the Ender Dragon", { source: "mob" }),
+          hurt: (d) => survival.scaledDamage(d, "the Ender Dragon", { source: "mob", from: e }),
         });
       }
       return out;

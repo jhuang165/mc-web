@@ -91,8 +91,8 @@ export class WitchPotions {
     if (player && survival && survival.health > 0) victims.push({ x: player.x, y: player.y, z: player.z, width: 0.6, height: 1.8, undead: false, ref: "player", direct: hit === "player" });
     for (const r of splashImpact(damage, { x, y, z }, victims, owner)) {
       if (r.ref === "player") {
-        // EntityPlayer: magic damage ignores armour; slowness and weakness are not modelled for the player (witch.md).
-        if (r.hurt > 0) survival.damage(r.hurt, "magic", false);
+        // EntityPlayer: magic damage ignores armour; slowness/weakness/speed/strength live in status-effects.js and feed movement, FOV and melee damage (player-knockback.md).
+        if (r.hurt > 0) survival.damage(r.hurt, "magic", false, undefined, owner?.x !== undefined ? owner : undefined); // the thrower is the source entity
         if (r.heal > 0) survival.heal?.(r.heal);
         for (const e of r.effects) survival.effects?.add({ id: e.id, duration: e.duration, amplifier: e.amplifier });
         continue;

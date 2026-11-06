@@ -201,10 +201,10 @@ export function flyVertical(motionY, { jump = false, sneak = false } = {}) {
 // EntityPlayerSP.getFOVMultiplier (blk.t()F): 1, times 1.1F while flying, times
 // (movementSpeed / walkSpeed + 1) / 2 in doubles, so sprinting widens the view by 1.15;
 // then the bow draw term (bow.js bowFov). EntityRenderer.updateFovModifierHand eases toward it.
-export function fovMultiplier({ flying = false, sprinting = false, bow = 1 } = {}) {
+export function fovMultiplier({ flying = false, sprinting = false, bow = 1, potion = 1 } = {}) {
   let m = 1;
   if (flying) m = f(m * f(1.1));
-  m = f(m * ((moveSpeed(sprinting) / WALK_SPEED + 1) / 2));
+  m = f(m * ((moveSpeed(sprinting, potion) / WALK_SPEED + 1) / 2)); // EntityPlayerSP.getFOVMultiplier reads the full attribute value, Speed and Slowness included
   return bow === 1 ? m : f(m * bow);
 }
 
