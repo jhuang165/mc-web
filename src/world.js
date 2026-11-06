@@ -1,5 +1,6 @@
 import { skullBounds, installSkullBlocks } from "./skull-bounds.js";
 import { generateJavaWorld, isJavaLandscape, JAVA_LANDSCAPES, streamedWorldType } from "./java-world.js";
+import { normalizeFlatOptions } from "./flat-world.js";
 import { decorateFlowers } from "./flowers.js";
 import { generateLakes, generateSprings } from "./lakes.js";
 import { populateSnow } from "./snow.js";
@@ -452,14 +453,17 @@ export class World {
   // Streamed worlds: version 12 is terrain, caves and ravines only; 13 adds per-cell Java population
   // (streaming-population.js); 15 adds villages, strongholds and temples. Finite Java worlds: 11 mineshafts, 14 all
   // structures. Saved worlds keep their generator.
-  constructor(seed = "Overworld", biome = "meadow", generationVersion = biome === 'javaStreamed' ? 13 : isJavaLandscape(biome) ? 11 : 8, worldType = 'default') {
+  constructor(seed = "Overworld", biome = "meadow", generationVersion = biome === 'javaStreamed' ? 13 : isJavaLandscape(biome) ? 11 : 8, worldType = 'default', generatorOptions = '') {
     if (biome === 'javaStreamed' && ![12, 13, 15].includes(generationVersion)) throw new Error('Unsupported streamed world generation version');
+    if (biome === 'javaStreamed' && worldType === 'flat' && generationVersion !== 15) throw new Error('Superflat worlds need streamed generation version 15');
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
     this.streaming = biome === 'javaStreamed';
     // WorldType of the generator (java-world.js streamedWorldType); finite Java landscapes derive it from the biome.
     this.worldType = this.streaming ? streamedWorldType(worldType) : (JAVA_LANDSCAPES[biome] ?? 'default');
+    // WorldInfo.generatorOptions: Superflat's FlatGeneratorInfo string (flat-world.js), normalised as ass.toString writes it.
+    this.generatorOptions = this.worldType === 'flat' ? normalizeFlatOptions(generatorOptions) : '';
     this.minX = this.minZ = 0;
     this.maxX = this.maxZ = SIZE;
     this.height = generationVersion >= 9 && isJavaLandscape(biome) ? 256 : HEIGHT;
