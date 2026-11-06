@@ -33,6 +33,7 @@ import { SQUID, BAT } from "./squid-bat.js";
 import { ENDER_CRYSTAL_TYPE, crystalUpdate, crystalAttack } from "./ender-crystal-mobs.js";
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { installHorseGear, gearFieldsFrom } from "./horse-gear-live.js";
+import { installPigSaddle } from "./pig-saddle-live.js";
 import { HORSE_ENTITY, horseRideThink, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
 import { dragonUpdate, dragonHit, installDragonMobs } from "./dragon-mobs.js";
 import { blazeUpdate, ghastUpdate, fireballMobTalk, installFireballMobs } from "./blaze-ghast-mobs.js";
@@ -684,6 +685,8 @@ export class EntityWorld {
       ...(e.type === "horse" ? horseFieldsFrom(e, fresh) : {}),
       ...gearFieldsFrom(e), // horse-gear-live.js: leash, CustomName, PersistenceRequired
       ...(e.type === "sheep" ? { color: Number.isInteger(e.color) && e.color >= 0 && e.color < 16 ? e.color : 0, sheared: e.sheared === true, eatTimer: 0 } : {}),
+      // EntityPig.readEntityFromNBT: Saddle (pig-saddle.js); the steering task starts over.
+      ...(e.type === "pig" ? { saddled: e.saddled === true } : {}),
       // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
       ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
       // EntityBat.readEntityFromNBT: BatFlags bit 1 is the hanging state (datawatcher 16).
@@ -1159,6 +1162,8 @@ export class EntityWorld {
   // EntityLivingBase.fall (sv.b(F)): ceil(distance - 3) points of fall damage
   // (no jump boost), through attackEntityFrom without an attacker, so no knockback.
   fall(e, distance) {
+    // Entity.fall: the rider falls with its mount (EntityPig calls super.fall; EntityHorse has its own fall).
+    if (e.type === "pig") e.rider?.fall?.(distance);
     // Jump Boost (Potion.jump, id 8) takes amplifier + 1 off the distance; the fall sound plays first, then the damage
     // and the landing block's step sound (EntityLivingBase.fall; EntityMob says "hostile", the rest "neutral").
     const jump = e.effects?.find?.((x) => x.id === JUMP_BOOST), cell = [Math.floor(e.x), Math.floor(e.y - 0.20000000298023224), Math.floor(e.z)],
@@ -1453,6 +1458,8 @@ export class EntityWorld {
       ENTITY_TYPES,BREED_ITEM,aiMoveSpeed,entityRandom,isRaining:()=>this.isRaining?.(),
       mobSize:(e)=>{const base=ENTITY_TYPES[e.type],scale=mobScale(e);return{width:base.width*scale,height:base.height*scale};},
       spawnBaby:(a,b)=>this.spawnBaby(a,b),
+      moveWithHeading:(e,forward)=>{const base=ENTITY_TYPES[e.type],scale=mobScale(e);this.moveWith(e,{...base,width:base.width*scale,height:base.height*scale},forward);},
+      wearHeld:(amount)=>this.wearStick?.(this.ai.survival,amount),
       eatGrass:(e)=>this.eatGrass(e),
       attackPlayer:(e,survival)=>this.hitPlayer(e,survival),
       attackMob:(e,target)=>this.hitMob(e,target),
@@ -1752,6 +1759,11 @@ export class EntityWorld {
     } else e.jumpTicks = 0;
     e.moveForward = f(e.moveForward * f(0.98));
     if (e.moveStrafing) e.moveStrafing = f(e.moveStrafing * f(0.98)); // EntitySlime strafes (moveStrafing x 0.98)
+    this.moveWith(e, t, e.moveForward);
+  }
+  // EntityLivingBase.moveEntityWithHeading(strafe, forward) with this engine's tails; walk() runs it once a tick and
+  // EntityAIControlledByPlayer (ai.js, pig-saddle.js) once more from inside the AI.
+  moveWith(e, t, forward) {
     // moveEntity's tail: cactus and fire (inFire) damage, webs, the fire counter and the rain fizz.
     const self = this, hooks = {
       living: true,
@@ -1760,7 +1772,7 @@ export class EntityWorld {
       fizz: () => this.events.push({ sound: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(this.random() - this.random()) * 0.4)), position: { x: e.x, y: e.y, z: e.z } }),
     };
     const from = { x: e.x, y: e.y, z: e.z };
-    const landed = moveEntityWithHeading(this.world, e, t.width, t.height, e.moveForward, hooks);
+    const landed = moveEntityWithHeading(this.world, e, t.width, t.height, forward, hooks);
     // moveEntity's step tail (mob-steps.js): every mob with canTriggerWalking plays its own step event.
     const rand = entityRandom(e);
     this.events.push(...mobStepEvents(this.world, e, from, { hostile: HOSTILE.has(e.type), random: () => rand.nextFloat() }));
@@ -2109,6 +2121,7 @@ export class EntityWorld {
 installMooshroomGolem(EntityWorld); // mooshroom-golem-live.js: shears/bowl, golem construction, snow trail, snowballs
 installHorse(EntityWorld); // horse-live.js: interact, ride, tame, rear
 installHorseGear(EntityWorld); // horse-gear-live.js: leads, name tags, horse inventory drops
+installPigSaddle(EntityWorld); // pig-saddle-live.js: saddles, the pig mount, carrot on a stick
 installSquidBat(EntityWorld); // squid-bat-mobs.js: bat wake-up, squid entityAge and silent hurt, bat sound pitch
 installDragonMobs(EntityWorld); // dragon-mobs.js: the Ender Dragon type, part damage, save/restore
 installFireballMobs(EntityWorld); // blaze-ghast-mobs.js: blaze and ghast types, fire immunity, fireball pick/punch

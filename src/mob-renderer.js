@@ -304,10 +304,23 @@ export class MobRenderer {
   createQuadruped(type) {
     const cow = type === "cow" || type === "mooshroom", root = new THREE.Group(), limbs = [],
       skin = entityMaterial(this.view.lighting, { map: pixelTexture(`/media/1.7.10/entity/${type === "mooshroom" ? "cow/mooshroom" : cow ? "cow/cow" : "pig/pig"}.png`) });
-    const part = (parent, w, h, d, u, v, ox, oy, oz) => {
-      const mesh = new THREE.Mesh(skinBox(w, h, d, u, v, 64, 32), skin);
+    // RenderPig's pass 0 draws ModelPig(0.5F), every box inflated by 0.5, with pig_saddle.png on a saddled pig.
+    const saddle = type === "pig" ? entityMaterial(this.view.lighting, { map: pixelTexture("/media/1.7.10/entity/pig/pig_saddle.png") }) : null, saddleParts = [];
+    const box = (material, parent, w, h, d, u, v, ox, oy, oz, grow = 0) => {
+      const g = skinBox(w, h, d, u, v, 64, 32);
+      if (grow) g.scale((w + 2 * grow) / w, (h + 2 * grow) / h, (d + 2 * grow) / d);
+      const mesh = new THREE.Mesh(g, material);
       mesh.position.set((ox + w / 2) / 16, -(oy + h / 2) / 16, -(oz + d / 2) / 16);
       parent.add(mesh);
+      return mesh;
+    };
+    const part = (parent, ...a) => {
+      box(skin, parent, ...a);
+      if (saddle) {
+        const m = box(saddle, parent, ...a, 0.5);
+        m.visible = false;
+        saddleParts.push(m);
+      }
     };
     const pivot = (x, y, z) => {
       const g = new THREE.Group();
@@ -341,7 +354,7 @@ export class MobRenderer {
     }
     this.scene.add(root);
     // childYOffset / childZOffset: pig 4 / 4, cow 8 / 6.
-    const rig = { root, neck, limbs, materials: [skin], type, head, child: cow ? [8, 6] : [4, 4], lift: 1 / 128 };
+    const rig = { root, neck, limbs, materials: saddle ? [skin, saddle] : [skin], type, head, child: cow ? [8, 6] : [4, 4], lift: 1 / 128, ...(saddle ? { saddleParts } : {}) };
     if (type === "mooshroom") addMooshroomMushrooms(rig, this);
     return rig;
   }
@@ -479,6 +492,7 @@ export class MobRenderer {
         for (const m of r.fur) m.visible = !e.sheared;
         r.wool.uniforms.tint.value.set(...FLEECE_COLORS[e.color ?? 0]);
       }
+      if (r.saddleParts) for (const m of r.saddleParts) m.visible = !!e.saddled;
       if (r.child) {
         // ModelQuadruped.render: a child's head is drawn full size, moved down childYOffset
         // and back childZOffset pixels; the body and legs shrink by half about the feet.

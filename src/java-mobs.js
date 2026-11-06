@@ -153,6 +153,7 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
   if (type === 'wither_skeleton') kept.add('SkeletonType');
   if (['pig', 'cow', 'mooshroom', 'sheep', 'chicken', 'wolf', 'villager', 'ocelot'].includes(type)) kept.add('Age');
   if (['pig', 'cow', 'mooshroom', 'sheep', 'chicken', 'wolf', 'ocelot'].includes(type)) kept.add('InLove');
+  if (type === 'pig') { record.saddled = !!tagValue(tag, 'Saddle', NBT.BYTE, 0); kept.add('Saddle'); } // EntityPig.readEntityFromNBT
   if (type === 'sheep') { record.color = tagValue(tag, 'Color', NBT.BYTE, 0) & 15; record.sheared = !!tagValue(tag, 'Sheared', NBT.BYTE, 0); kept.add('Color'); kept.add('Sheared'); }
   if (type === 'wolf') {
     // EntityTameable/EntityWolf.readEntityFromNBT: OwnerUUID (or the pre-UUID Owner name), Sitting, Angry, CollarColor.

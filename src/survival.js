@@ -242,6 +242,8 @@ installNoteJukeboxItems(ITEMS); // note block 1177, jukebox 1178, discs 530-541
 installSignItems(ITEMS);
 installSkullItems(ITEMS); // mob head item 2050 (skull.js)
 installStemCakeItems(ITEMS); // cake 1930; stems and cake have no block items
+// ItemCarrotOnAStick (abp, original 398): stack 1, 25 durability, held full 3D (pig-saddle.js).
+ITEMS[2100]={id:2100,name:"Carrot on a Stick",texture:"carrot_on_a_stick",stack:1,durability:25,color:"#d98a2b",glyph:"/"};
 installCartItems(ITEMS); // furnace, TNT, hopper and command block carts 2090-2093 (cart-variants.js)
 installSpawnEggItems(ITEMS); // spawn egg 1950, Bottle o' Enchanting 1951, fire charge 1952 (spawn-eggs.js)
 // Every item name and damage subtype is the 1.7.10 en_US display name (item-names.js); internal-only items get Title Case.
@@ -454,6 +456,8 @@ shapeless(SUGAR, 1, 0, REEDS_ITEM);
 shapeless(314, 1, 0, PAPER, PAPER, PAPER, 315);
 installPopulationRecipes({recipe,shapeless});
 installFishingRecipes({recipe});
+// RecipesTools: fishing rod over a carrot -> carrot on a stick.
+recipe('carrot-on-a-stick', 'Carrot on a Stick', ['# ', ' X'], { '#': 700, X: 322 }, 2100);
 installNetherRecipes({recipe});
 installNoteJukeboxRecipes({recipe});
 installSignRecipes({recipe});

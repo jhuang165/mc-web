@@ -17,7 +17,7 @@ import { DISC_FIRST } from "./note-jukebox-content.js";
 const f = Math.fround;
 // Item ids of this build: porkchop, cooked porkchop, beef, steak, rotten flesh, leather,
 // arrow, bone, bow, string, spider eye, gunpowder, iron ingot. The chicken ids are entities.js's.
-const PORK = 202, COOKED_PORK = 203, BEEF = 204, STEAK = 205, FLESH = 206, LEATHER = 315, ARROW = 320, BONE = 311, BOW = 127, STRING = 321, SPIDER_EYE = 326, GUNPOWDER = 330, IRON = 302;
+const SADDLE = 363, PORK = 202, COOKED_PORK = 203, BEEF = 204, STEAK = 205, FLESH = 206, LEATHER = 315, ARROW = 320, BONE = 311, BOW = 127, STRING = 321, SPIDER_EYE = 326, GUNPOWDER = 330, IRON = 302;
 export const FEATHER = 317, RAW_CHICKEN = 318, COOKED_CHICKEN = 319;
 export const ANIMALS = new Set(["pig", "cow", "sheep", "chicken", "wolf", "ocelot", "mooshroom", "horse"]);
 // DamageSource.setDamageBypassesArmor: these skip applyArmorCalculations. Melee, arrows,
@@ -52,7 +52,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
   const out = [], add = (id, n = 1, damage = 0) => { for (let i = 0; i < n; i++) out.push([id, damage]); };
   const generic = () => rand.nextInt(3) + (looting > 0 ? rand.nextInt(looting + 1) : 0);
   switch (e.type) {
-    case "pig": add(burning ? COOKED_PORK : PORK, rand.nextInt(3) + 1 + rand.nextInt(1 + looting)); break;
+    case "pig": add(burning ? COOKED_PORK : PORK, rand.nextInt(3) + 1 + rand.nextInt(1 + looting)); if (e.saddled) add(SADDLE); break; // wo.b: the saddle after the pork
     case "mooshroom": // EntityMooshroom drops like EntityCow
     case "cow": {
       add(LEATHER, rand.nextInt(3) + rand.nextInt(1 + looting));

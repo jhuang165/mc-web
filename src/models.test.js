@@ -73,7 +73,8 @@ for (const [type, models] of Object.entries(RIGS)) {
     const rig = restRig(type),
       actual = [];
     rig.root.traverse((o) => {
-      if (!o.isMesh || o.geometry.type !== "BoxGeometry" || o.material === rig.eyes) return;
+      // RenderPig's saddle pass (ModelPig(0.5F)) is a second layer, not part of the base model.
+      if (!o.isMesh || o.geometry.type !== "BoxGeometry" || o.material === rig.eyes || rig.saddleParts?.includes(o)) return;
       const uv = o.geometry.attributes.uv;
       let u = Infinity, v = -Infinity;
       for (let i = 0; i < uv.count; i++) { u = Math.min(u, uv.getX(i)); v = Math.max(v, uv.getY(i)); }
@@ -92,6 +93,21 @@ for (const [type, models] of Object.entries(RIGS)) {
   });
 }
 
+test("the pig saddle pass is ModelPig(0.5F) and shows only on a saddled pig", () => {
+  const rig = restRig("pig"), base = [];
+  rig.root.traverse((o) => { if (o.isMesh && o.geometry.type === "BoxGeometry" && !rig.saddleParts.includes(o)) base.push(o); });
+  assert.equal(rig.saddleParts.length, base.length);
+  for (const m of rig.saddleParts) {
+    assert.equal(m.visible, false);
+    const b = new THREE.Box3().setFromObject(m), twin = base.find((o) => o.parent === m.parent && o.position.equals(m.position));
+    assert.ok(twin, "every saddle box shadows a model box");
+    const t = new THREE.Box3().setFromObject(twin);
+    assert.ok(Math.abs(t.min.x - b.min.x - 0.5 / 16) < 1e-6 && Math.abs(b.max.y - t.max.y - 0.5 / 16) < 1e-6, "grown by 0.5 pixel units");
+  }
+  const view = renderer(), e = { ...entity("pig"), saddled: true };
+  view.update([e], 0, 1);
+  assert.ok(view.rigs.get(e.id).saddleParts.every((m) => m.visible));
+});
 test("cow and pig child heads use childYOffset / childZOffset", () => {
   assert.deepEqual([model.pig.parts["bhw.g"], model.pig.parts["bhw.h"]], [4, 4]);
   assert.deepEqual([model.cow.parts["bhw.g"], model.cow.parts["bhw.h"]], [8, 6]);

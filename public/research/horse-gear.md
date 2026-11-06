@@ -22,7 +22,7 @@ Rename at the anvil, right-click a mob: any mob that is not a player, only if th
 
 ## Jump bar
 
-GuiIngame.renderJumpBar replaces the experience bar while riding a saddled tame horse: icons.png (0, 84) track and (0, 89) fill, fill width (int)(power * 183) of 182 pixels, driven by the existing `jumpPower`.
+GuiIngame.renderJumpBar replaces the experience bar whenever `EntityPlayerSP.isRidingHorse` holds (`blk`: the ridden entity is an EntityHorse; no tame or saddle test, corrected with the [pig saddle](pig-saddle.md) track): icons.png (0, 84) track and (0, 89) fill, fill width (int)(power * 183) of 182 pixels, driven by the existing `jumpPower`.
 
 ## Gaps
 
@@ -31,6 +31,6 @@ GuiIngame.renderJumpBar replaces the experience bar while riding a saddled tame 
 - Knots are derived from mobs tied to them, not persistent entities; an empty knot never lingers. Knot clicks go through the fence block.
 - Fence clicks are intercepted when a lead is held, the player has leashed mobs in range, or a knot exists there; vanilla BlockFence also blocks placing against fences, so this differs slightly.
 - Stack tags (enchantments, names) on gear stacks are kept in the list but the screen does not show the horse preview model.
-- The ridden horse's health hearts in place of hunger are not drawn.
+- The ridden horse's health hearts in place of hunger are drawn since the [pig saddle](pig-saddle.md) track.
 - The leash holder position uses the player's feet; the leash UUID is not a real entity UUID (single player).
 - Nothing was run in a browser; the screen, jump bar and renderer are verified only by unit tests and the build.

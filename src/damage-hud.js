@@ -74,3 +74,25 @@ export const heartsHtml = (hearts) =>
   hearts.map((h) => `<span style="left:${px(h.x)};bottom:${px(h.up)};${background(h.layers)}"></span>`).join("");
 export const foodHtml = (food) =>
   food.map((h) => `<span style="${h.up ? `transform:translateY(${px(-h.up)});` : ""}${background(h.layers)}"></span>`).join("");
+
+// GuiIngame.renderPlayerStats "mountHealth": riding an EntityLivingBase replaces the food row with its hearts.
+// ceil(health) points over (int)(maxHealth + 0.5F) / 2 hearts (at most 30), rows of 10 right to left at x =
+// right - i * 8 - 9 going up 10 pixels a row; container (52, 9), full (88, 9) or half (97, 9). No blink, no jiggle.
+// `x` is measured from the row's right edge to the heart's right edge.
+export function mountHeartLayout({ health, maxHealth }) {
+  const hp = Math.ceil(health), icons = [];
+  let left = Math.min(30, Math.trunc(Math.trunc(Math.fround(Math.fround(maxHealth) + Math.fround(0.5))) / 2));
+  for (let base = 0, row = 0; left > 0; base += 20, row++) {
+    const n = Math.min(left, 10);
+    left -= n;
+    for (let i = 0; i < n; i++) {
+      const layers = [[52, 9]];
+      if (i * 2 + 1 + base < hp) layers.push([88, 9]);
+      if (i * 2 + 1 + base === hp) layers.push([97, 9]);
+      icons.push({ x: i * 8, up: row * 10, layers });
+    }
+  }
+  return icons;
+}
+export const mountHeartsHtml = (hearts) =>
+  hearts.map((h) => `<span style="right:${px(h.x)};bottom:${px(h.up)};${background(h.layers)}"></span>`).join("");

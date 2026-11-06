@@ -216,7 +216,9 @@ body:has(.merchant-modal) #toast{display:none}
 body:has(.hopper-modal) #toast{display:none}
 /* GuiIngame hearts: each heart sits at its own x and row (absorption and Health Boost add rows), offset by the jiggle. */
 .hearts{position:relative;height:calc(9*var(--u))}.hearts>span{position:absolute;margin:0}
-#survival-hud .armor-row{bottom:calc((10 + var(--lift,0))*var(--u))}
+#survival-hud .armor-row,#survival-hud .air{bottom:calc((10 + var(--lift,0))*var(--u))}
+/* GuiIngame mountHealth: in the food row's place, hearts at right - i*8 - 9 in rows of 10 going up 10 pixels. */
+.mount-hearts{position:relative;width:calc(81*var(--u));height:calc(9*var(--u))}.mount-hearts>span{position:absolute;width:calc(9*var(--u));height:calc(9*var(--u));background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated}
 /* GuiInventory.func_147046_a: the live player is a WebGL canvas covering the GUI (inventory-player.js). */
 .paperdoll-canvas{position:absolute;left:0;top:0;width:calc(var(--w)*var(--u));height:calc(var(--h)*var(--u));pointer-events:none;image-rendering:pixelated}
 .creative-modal .paperdoll-canvas{z-index:1}

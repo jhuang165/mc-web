@@ -15,9 +15,15 @@ export function riddenHorse(rider) {
   const v = rider?.vehicle;
   return v?.horse && v.entity?.horse?.tame && v.entity.horse.saddled && v.entity.health > 0 ? v.entity : null;
 }
-// GuiIngame.renderJumpBar replaces the experience bar: the filled width is (int)(power * 183) of the 182 pixel track.
+// EntityPlayerSP.isRidingHorse (blk): the ridden entity is an EntityHorse, tame, saddled or not.
+export function ridingHorse(rider) {
+  const v = rider?.vehicle;
+  return v?.horse && v.entity && (v.entity.type ?? "horse") === "horse" ? v.entity : null;
+}
+// GuiIngame.renderJumpBar replaces the experience bar whenever isRidingHorse: the filled width is (int)(power * 183)
+// of the 182 pixel track.
 export function jumpBar(rider) {
-  const e = riddenHorse(rider);
+  const e = ridingHorse(rider);
   if (!e) return { visible: false, width: 0 };
   return { visible: true, width: Math.max(0, Math.min(183, Math.trunc(Math.fround(rider.jumpPower || 0) * 183))) };
 }

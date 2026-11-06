@@ -56,5 +56,6 @@ export const ORIGINAL_ITEMS = Object.freeze({
   122: 171, // dragon egg block item
   ...MAPS_CLOCK_ITEMS, // clock 347 -> 2080, filled map 358 -> 2081
   ...BEACON_ITEMS, // nether star 399 -> 2060
+  398: 2100, // carrot on a stick (pig-saddle.js)
   ...FIREWORK_ITEMS, // firework rocket 401 -> 2071, firework star 402 -> 2070
 });

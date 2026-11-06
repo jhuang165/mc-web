@@ -282,8 +282,8 @@ export function armorLayer(id, pass, color = LEATHER_COLOR) {
 // ---------------------------------------------------------------------------
 
 const FULL3D_KINDS = new Set(["pickaxe", "axe", "shovel", "hoe", "sword", "fishing_rod"]);
-// Item.isFull3D: tools, hoes and swords, plus the stick and bone (setFull3D).
-export const isFull3D = (id) => FULL3D_KINDS.has(ITEMS[id]?.kind) || id === 300 || id === 311;
+// Item.isFull3D: tools, hoes and swords, plus the stick, bone and carrot on a stick (setFull3D / abp.f).
+export const isFull3D = (id) => FULL3D_KINDS.has(ITEMS[id]?.kind) || id === 300 || id === 311 || id === 2100;
 // "block" draws the cube, "tool" a full-3D sprite, "flat" any other sprite and "bow" the
 // bow's own transform (RenderPlayer and RenderBiped test `item.id == Items.bow.itemID`).
 export const heldKind = (id, damage = 0) => (id === 127 ? "bow" : itemTexture(id, damage) ? (isFull3D(id) ? "tool" : "flat") : "block");

@@ -74,6 +74,7 @@ function payload(state,ox,oz,report,blockAt) {
   if(e.leash?.knot)n.Leash=comp({X:int(e.leash.knot.x+ox),Y:int(e.leash.knot.y),Z:int(e.leash.knot.z+oz)});
   else if(e.leash)n.Leash=comp({UUIDMost:long(0),UUIDLeast:long(0)});
   if(e.type==='wither_skeleton')n.SkeletonType=byte(1); // EntitySkeleton.writeEntityToNBT
+  if(e.type==='pig')n.Saddle=byte(e.saddled?1:0); // EntityPig.writeEntityToNBT
   if(e.type==='sheep'){n.Color=byte(e.color??0);n.Sheared=byte(e.sheared?1:0);}
   // EntityTameable and EntityWolf.writeEntityToNBT: Sitting, Angry, CollarColor and OwnerUUID (the single player's own id, or Owner left out for a wild wolf).
   if(e.type==='wolf'){n.Sitting=byte(e.sitting?1:0);n.Angry=byte(e.angry?1:0);n.CollarColor=byte(e.collar??14);n.OwnerUUID=str(e.owner?(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(e.owner)?e.owner:'00000000-0000-0000-0000-000000000000'):'');}

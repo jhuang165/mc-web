@@ -136,7 +136,7 @@ test("nameplate rule: CustomNameVisible or looked at, within 64 (32 sneaking), n
   assert.ok(!G.nameplateShown({ name: "", looked: true, distance: 1 }));
 });
 
-test("jump bar width is (int)(power * 183) while riding a saddled tame horse", () => {
+test("jump bar width is (int)(power * 183) while riding any horse (EntityPlayerSP.isRidingHorse)", () => {
   const e = { health: 5, horse: { tame: true, saddled: true } };
   const rider = (p) => ({ vehicle: { horse: true, entity: e }, jumpPower: p });
   assert.deepEqual(jumpBar(rider(0.5)), { visible: true, width: 91 });
@@ -144,6 +144,10 @@ test("jump bar width is (int)(power * 183) while riding a saddled tame horse", (
   assert.equal(jumpBar({ vehicle: null }).visible, false);
   e.horse.saddled = false;
   assert.equal(riddenHorse(rider(1)), null);
+  // The bar does not ask for a saddle or a tame horse; a ridden pig (the same seat system) has none.
+  e.horse.tame = false;
+  assert.deepEqual(jumpBar(rider(0.5)), { visible: true, width: 91 });
+  assert.equal(jumpBar({ vehicle: { horse: true, entity: { type: "pig", health: 10 } }, jumpPower: 1 }).visible, false);
 });
 
 test("saved gear fields are sanitised", () => {

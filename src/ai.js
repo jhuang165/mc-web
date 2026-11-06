@@ -22,6 +22,7 @@ import { buildSnowGolemTasks } from "./mooshroom-golem-live.js";
 import { isTamed as wolfTamed } from "./wolf.js";
 import { buildOcelotTasks, makeAvoid } from "./ocelot-ai.js";
 import { canDespawn as ocelotCanDespawn } from "./ocelot.js";
+import { CARROT_ON_A_STICK, controlState, controlShouldExecute, controlStart, controlReset, controlTick } from "./pig-saddle.js";
 const f = Math.fround;
 const GRASS = 1, TALL_GRASS = 39;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -357,6 +358,43 @@ class Tempt extends Task {
     m.lookHelper.setLookPositionWithEntity(this.player, 30, m.verticalFaceSpeed);
     if (m.distSq(this.player) < 6.25) m.navigator.clearPathEntity();
     else m.navigator.tryMoveToEntityLiving(this.player, this.speed);
+  }
+}
+// EntityAIControlledByPlayer (ub), mutex 7: a player riding a living pig steers it while holding a carrot on a stick
+// (or a boost runs); updateTask moves the pig itself, steps up blocks and wears the stick (pig-saddle.js).
+class ControlledByPlayer extends Task {
+  constructor(m) {
+    super();
+    this.m = m;
+    this.mutex = 7;
+    this.t = controlState();
+  }
+  shouldExecute() {
+    const e = this.m.e;
+    return controlShouldExecute({ alive: e.health > 0, playerRider: !!e.rider?.player, boosted: this.t.boosted, heldId: this.m.ai.player.held });
+  }
+  startExecuting() {
+    controlStart(this.t);
+  }
+  resetTask() {
+    controlReset(this.t);
+  }
+  updateTask() {
+    const m = this.m, e = m.e, rider = e.rider, deps = m.ai.deps;
+    // The pig record carries x, y, z, onGround, inLava, aiMoveSpeed and rotationYaw; the size is the scaled one.
+    const pig = { x: e.x, y: e.y, z: e.z, onGround: e.onGround, inLava: e.inLava, aiMoveSpeed: e.aiMoveSpeed, rotationYaw: e.rotationYaw, width: f(m.width), height: f(m.height) };
+    let turned = false;
+    controlTick(this.t, pig, {
+      riderYaw: f(rider.yaw), riderHeight: f(rider.height ?? 1.8), creative: !!m.ai.survival?.creative, world: m.ai.world, rand: deps.entityRandom(e),
+      jump: () => m.jumpHelper.setJumping(),
+      wear: () => deps.wearHeld?.(1),
+      move: (forward) => {
+        e.rotationYaw = pig.rotationYaw; // ub turns the pig before it moves
+        turned = true;
+        deps.moveWithHeading?.(e, forward);
+      },
+    });
+    if (!turned) e.rotationYaw = pig.rotationYaw;
   }
 }
 // EntityAIFollowParent (uh), mutex 0: a child (age < 0) follows the nearest adult
@@ -929,9 +967,24 @@ export class Brain {
       // EntityOcelot (wn): ocelot-ai.js lists its tasks and targets and the Brain overrides.
       buildOcelotTasks(this, { Task, TargetBase, Swim, Wander, WatchClosest, LookIdle, AttackOnCollide, Mate, Tempt });
     } else {
-      // EntityPig/Cow/Sheep/Chicken: swim 0, panic 1, mate 2, tempt 3, follow parent
-      // 4 (pig 5), sheep eat grass 5, wander, watch the player (6 blocks), look idle.
+      // EntityCow/Sheep/Chicken: swim 0, panic 1, mate 2, tempt 3, follow parent 4, sheep eat grass 5, wander, watch the
+      // player (6 blocks), look idle. EntityPig (wo): swim 0, panic 1, controlled by player 2, mate 3, tempt 4 (carrot on a
+      // stick) and 4 (carrot), follow parent 5, wander 6, watch 7, look idle 8 (pig-saddle.js).
       this.navigator.setAvoidsWater(true);
+      if (e.type === "pig") {
+        this.control = new ControlledByPlayer(this);
+        this.tasks.add(0, new Swim(this));
+        this.tasks.add(1, new Panic(this, A.panic));
+        this.tasks.add(2, this.control);
+        this.tasks.add(3, new Mate(this, A.mate));
+        this.tasks.add(4, new Tempt(this, A.tempt, CARROT_ON_A_STICK));
+        if (wheat) this.tasks.add(4, new Tempt(this, A.tempt, wheat));
+        this.tasks.add(5, new FollowParent(this, A.follow));
+        this.tasks.add(6, new Wander(this, A.wander));
+        this.tasks.add(7, new WatchClosest(this, 6));
+        this.tasks.add(8, new LookIdle(this));
+        return;
+      }
       let p = 0;
       this.tasks.add(p++, new Swim(this));
       this.tasks.add(p++, new Panic(this, A.panic));

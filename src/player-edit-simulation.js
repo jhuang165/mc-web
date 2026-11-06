@@ -5,6 +5,7 @@ import { DISPENSER, DROPPER } from './dispenser-piston.js';
 import { newDispenser, DROPPER_TITLE } from './dispenser-container.js';
 import { BOW, canDraw } from './bow.js';
 import { FISHING_ROD } from './fishing-content.js';
+import { CARROT_ON_A_STICK, SADDLE } from './pig-saddle.js';
 import { plantedBlock } from './crops.js';
 import { NETHER_WART, ITEM_NETHER_WART } from './nether-wart.js';
 import { growGrass } from './flowers.js';
@@ -98,6 +99,13 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     const used = useFirework(state, { target, usesBlock }, hooks);
     if (used) return act(used.branch);
   }
+  // ItemCarrotOnAStick.onItemRightClick (no onItemUse): boosts the pig the player rides and steers (pig-saddle-live.js).
+  if (place && id === CARROT_ON_A_STICK && !usesBlock && !aimedEntity && state.mobs?.stickUse?.(state.survival, state.rider)) {
+    hook('renderHotbar');
+    hook('reportBrokenTool');
+    hook('markUnsaved');
+    return act('use-carrot-on-a-stick');
+  }
   if (place && id === BOW && !usesBlock) {
     if (!state.eating && canDraw(state.survival)) state.eating = { id: BOW, ticks: 0, bow: true };
     return act('begin-bow-use');
@@ -141,6 +149,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       info,
     );
     if (hit) {
+      // ItemStack.hitEntity once the attack landed: ItemSaddle saddles an adult pig, using the saddle up even in Creative.
+      if (id === SADDLE) state.mobs.saddleHit?.(aimedEntity.entity, state.survival);
       if (critical) hook('criticalHit', aimedEntity.entity);
       if (info.enchantCritical) hook('enchantmentCriticalHit', aimedEntity.entity);
       // The push counts the Knockback enchantment as well as sprinting (EntityPlayer.attackTargetEntityWithCurrentItem).
@@ -182,6 +192,11 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return act('leash-entity');
     }
+    // ItemSaddle.itemInteractionForEntity (EntityPlayer.interactWith, before the mob's own interact): true for any pig.
+    if (state.mobs.saddleUse?.(e, state.survival)) {
+      hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+      return act('saddle-pig');
+    }
     // EntityVillager.interact: an adult, living, idle villager opens the trading screen.
     if (e.type === 'villager' && hook('openMerchant', e)) return act('trade-villager');
     // EntityZombie.interact: a golden apple on a weakened zombie villager starts the cure.
@@ -219,6 +234,10 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     }
     if (state.mobs.feed(e, id, state.survival)) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
+    } else if (e.type === 'pig' && state.rider && state.mobs.horseSeats && state.mobs.pigMount?.(e, Object.assign(state.mobs.horseSeats, { player: state.rider }))) {
+      // EntityPig.interact after EntityAnimal.interact declined: a saddled pig seats the player (pig-saddle-live.js).
+      hook('markUnsaved');
+      return act('mount-pig');
     } else if (state.mobs.dye(e, state.survival.held, state.survival)) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
     } else if (!state.survival.creative && item?.food) {

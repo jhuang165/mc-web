@@ -154,7 +154,7 @@ import { enterWater, drownBubbles, burst, potionColor, potionParticles, itemCrum
 import { JavaRandom } from "./lighting.js";
 import { useDragonEgg } from "./dragon-egg-live.js";
 import { spawnDragonIfAbsent } from "./dragon-mobs.js";
-import { vitalsLayout, heartsHtml, foodHtml, REGENERATION, WITHER_EFFECT } from "./damage-hud.js";
+import { vitalsLayout, heartsHtml, foodHtml, mountHeartLayout, mountHeartsHtml, REGENERATION, WITHER_EFFECT } from "./damage-hud.js";
 import { hurtCameraRoll } from "./damage-fx.js";
 import { displayTicks } from "./display-ticks.js";
 import { importedRuntime } from "./world-import.js";
@@ -1756,9 +1756,15 @@ function renderVitals() {
     armorRow = armor > 0 ? `<div class="armor-row" style="--lift:${vitals.lift}" aria-label="Armor ${armor} of 20">${Array.from({ length: 10 }, (_, i) => `<span class="${i * 2 + 1 < armor ? "full" : i * 2 + 1 === armor ? "half" : "empty"}"></span>`).join("")}</div>` : "",
     bubbles = Math.max(0, Math.ceil(((survival.air - 2) * 10) / 300)),
     popping = Math.max(0, Math.ceil((survival.air * 10) / 300) - bubbles),
-    air = survival.air < 300 ? `<div class="air" aria-label="Air ${Math.max(0, survival.air)} of 300">${"<span></span>".repeat(bubbles)}${'<span class="pop"></span>'.repeat(popping)}</div>` : "";
+    air = survival.air < 300 ? `<div class="air" style="--lift:${vitals.lift}" aria-label="Air ${Math.max(0, survival.air)} of 300">${"<span></span>".repeat(bubbles)}${'<span class="pop"></span>'.repeat(popping)}</div>` : "";
+  // GuiIngame: the food row is drawn only on foot; a living mount (pig, horse) shows its own hearts there, a cart or boat nothing.
+  const mount = rider.vehicle ? rider.vehicle.entity ?? null : undefined,
+    mountMax = mount ? (mount.type === "horse" ? mount.horse?.maxHealth : ENTITY_TYPES[mount.type]?.health) ?? 20 : 0,
+    foodRow = mount === undefined
+      ? `<div class="hunger${survival.effects.has(HUNGER) ? ' afflicted' : ''}" aria-label="Hunger ${survival.food} of 20${survival.effects.has(HUNGER) ? ', Hunger effect' : ''}">${food}</div>`
+      : mount ? `<div class="mount-hearts" aria-label="Mount health ${Math.ceil(mount.health)} of ${mountMax}">${mountHeartsHtml(mountHeartLayout({ health: mount.health, maxHealth: mountMax }))}</div>` : '<div class="mount-hearts"></div>';
   $("#survival-hud").innerHTML =
-    `<div class="vital-row"><div class="hearts${survival.effects.has(POISON) ? ' poisoned' : ''}" aria-label="Health ${Math.ceil(survival.health)} of 20${survival.effects.has(POISON) ? ', Poison' : ''}">${hearts}</div><div class="hunger${survival.effects.has(HUNGER) ? ' afflicted' : ''}" aria-label="Hunger ${survival.food} of 20${survival.effects.has(HUNGER) ? ', Hunger effect' : ''}">${food}</div></div>${armorRow}${air}`;
+    `<div class="vital-row"><div class="hearts${survival.effects.has(POISON) ? ' poisoned' : ''}" aria-label="Health ${Math.ceil(survival.health)} of 20${survival.effects.has(POISON) ? ', Poison' : ''}">${hearts}</div>${foodRow}</div>${armorRow}${air}`;
 }
 // EntityPlayer.dropOneItem / closing a screen with held items: thrown along
 // the view with a 40-tick pickup delay.
@@ -2318,7 +2324,7 @@ function edit(place = false) {
   }
   const state = { screen, heldTool: heldId(), world, survival, position, velocity, motion, mobs, minecarts,
     farming, trees, fire, fluids, items, projectiles, eyes, maps, rockets, grounded, fallDistance, wasInWater, yaw, pitch,
-    eating, mining, mineCooldown, mineHeld, flowers: FLOWERS, boneRandom, itemRand, signs, difficulty: survival.difficulty };
+    eating, mining, mineCooldown, mineHeld, flowers: FLOWERS, boneRandom, itemRand, signs, difficulty: survival.difficulty, rider };
   // A right click with a bucket also captures the bucket's own fluid-aware trace along the
   // last frame's eye ray (ItemBucket: 5 blocks, liquids only when empty).
   const bucket = place ? captureBucketTarget(world, state.heldTool, eyeRay) : null;
@@ -2571,6 +2577,8 @@ function movementTick(controls) {
     orbSound: s => sounds.play(s.name, { volume: s.volume, pitch: s.pitch,
       position: s.name === "random.orb" ? undefined : { x: s.x, y: s.y, z: s.z } }),
   });
+  // EntityAIControlledByPlayer wore the carrot on a stick (pig-saddle-live.js); reportBrokenTool runs at the tick's end.
+  if (mobs?.stickWorn) { mobs.stickWorn = false; renderHotbar(); saved = false; }
   // MobSpawnerBaseLogic.updateSpawner on the server (tile entities tick after the entities).
   if (mobs && spawners?.size) {
     const level = (x, y, z, sub) => (scene.light ? scene.light.level(x, y, z, sub) : 15);

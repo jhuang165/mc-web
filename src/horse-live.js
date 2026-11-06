@@ -9,6 +9,7 @@ import { burst } from "./fx.js";
 import * as H from "./horse.js";
 import { cleanItems, ensureItems, syncGear } from "./horse-gear.js";
 import { entityRandom } from "./entities.js";
+import { PIG_MOUNTED_OFFSET } from "./pig-saddle.js";
 
 const f = Math.fround;
 export const HORSE_ENTITY = {
@@ -88,12 +89,14 @@ export function horseSeats(mobs) {
       const e = v.entity, rider = e?.rider;
       if (!rider) return;
       const lift = e.rearAmount ? f(0.15 * e.rearAmount) : 0;
-      Object.assign(rider, { x: e.x, y: e.y + H.mountedOffset(view(e)) - 0.5 + lift, z: e.z });
+      // EntityPig keeps Entity.getMountedYOffset (height * 0.75, pig-saddle.js).
+      const offset = e.type === "pig" ? PIG_MOUNTED_OFFSET : H.mountedOffset(view(e));
+      Object.assign(rider, { x: e.x, y: e.y + offset - 0.5 + lift, z: e.z });
     },
     // EntityPlayerSP's jump key counter: charged while Space is held, sent as (int)(power * 100) on release.
     charge(rider, controls) {
       const v = rider.vehicle;
-      if (!v?.horse) return;
+      if (!v?.horse || v.entity?.type !== "horse") return;
       const jump = !!controls.jump;
       if (jump) {
         if (rider.jumpCounter < 0) {
