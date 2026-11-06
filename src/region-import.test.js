@@ -101,7 +101,7 @@ test('a multi-chunk area across negative regions keeps chunk-relative placement 
   assert.equal(importLikeScreen(kept.record).world.get(70, 1, 70), base.get(70, 1, 70));
 });
 
-test('chests, furnaces, dropped items and mobs convert; other tile entities and riders are counted as loss', async () => {
+test('chests, furnaces, dropped items and mobs convert; other tile entities and a rider whose mount has no position counts the mount as loss', async () => {
   const chunk = new Chunk(-2, 3);
   chunk.setBlockState(1, 70, 1, 54, 4); // chest facing west
   chunk.setBlockState(2, 70, 1, 54, 4);

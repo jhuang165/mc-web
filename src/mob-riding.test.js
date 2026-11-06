@@ -234,3 +234,42 @@ test("a zombie rider hands its path to the chicken at speed 1.5", () => {
   assert.equal(cn.speed, 1.5);
   assert.equal(cn.getPath(), path);
 });
+
+// sv.C (EntityLivingBase.onEntityUpdate) ends its water block with `isRiding() && ridingEntity instanceof EntityLivingBase -> mountEntity(null)`;
+// ahb.a / ahb.h let go of a dead rider or mount; sa.fall (Entity.fall) hands the mount's fall to its rider.
+test("a rider with its head in water steps off its mount, as sv.C does", async () => {
+  const { WATER } = await import("./world.js");
+  const sea = { ...flat, get: (x, y, z) => (y < 1 ? 1 : y < 6 ? WATER : 0) };
+  const w = new EntityWorld(sea, [{ id: "mob-1", type: "spider", x: 64.5, y: 2, z: 64.5, health: 16 }, { id: "mob-2", type: "skeleton", x: 64.5, y: 2.2, z: 64.5, health: 20, riding: "mob-1" }]);
+  const [spider, skeleton] = w.entities;
+  assert.equal(skeleton.ridingEntity, spider);
+  w.breathe(skeleton, ENTITY_TYPES.skeleton);
+  assert.equal(skeleton.ridingEntity, null);
+  assert.equal(spider.riddenBy, null);
+  assert.equal(skeleton.y, spider.y + f(w.size(spider)[1]), "stands on top of the mount");
+  const dry = world([{ type: "spider", x: 64.5, y: 1, z: 64.5, health: 16 }, { type: "skeleton", x: 64.5, y: 1.2, z: 64.5, riding: "mob-1" }]);
+  dry.breathe(dry.entities[1], ENTITY_TYPES.skeleton);
+  assert.equal(dry.entities[1].ridingEntity, dry.entities[0]);
+});
+
+test("a dead rider and a mount that left the list are let go on both sides", () => {
+  const w = world([{ type: "spider", x: 64.5, y: 1, z: 64.5, health: 16 }, { type: "skeleton", x: 64.5, y: 1.2, z: 64.5, riding: "mob-1" }]);
+  const [spider, skeleton] = w.entities;
+  skeleton.health = 0; skeleton.death = 20;
+  releaseDead(w.entities);
+  assert.equal(spider.riddenBy, null);
+  assert.equal(skeleton.ridingEntity, null);
+  const j = world([{ type: "chicken", x: 64.5, y: 1, z: 64.5, health: 4, chickenJockey: true }, { type: "zombie", x: 64.5, y: 1.2, z: 64.5, growingAge: -24000, riding: "mob-1" }]);
+  j.entities.pop();
+  releaseDead(j.entities);
+  assert.equal(j.entities[0].riddenBy, null);
+  assert.equal(chickenJockeyDespawns(j.entities[0]), true, "a jockey chicken nobody rides despawns again");
+});
+
+test("a mount's fall reaches its mob rider (Entity.fall), which falls as a mob", () => {
+  const w = world([{ type: "spider", x: 64.5, y: 1, z: 64.5, health: 16 }, { type: "skeleton", x: 64.5, y: 1.2, z: 64.5, health: 20, riding: "mob-1" }]);
+  const [spider, skeleton] = w.entities;
+  w.fall(spider, 6);
+  assert.equal(spider.health, 16 - 3);
+  assert.equal(skeleton.health, 20 - 3);
+});

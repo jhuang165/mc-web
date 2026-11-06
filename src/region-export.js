@@ -67,7 +67,7 @@ export function writeContainerTile(name,e,x,y,z,{report={unmappedItems:0},droppe
  return new Map(Object.entries(n));
 }
 function payload(state,ox,oz,report,blockAt) {
- const entities=[],tiles=[],ticks=[];
+ const entities=[],tiles=[],ticks=[],built=[];
  for(const wrapped of state.entities??[]) {const e=wrapped.value,name=NAMES[e.type];if(!name){report.unsupportedEntities++;continue;}
   const n=entity(e,name,ox,oz);Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
   // EntityLiving.writeEntityToNBT: CustomName / CustomNameVisible (only when named), PersistenceRequired and Leashed with its Leash compound (a knot's X/Y/Z, or the holder's UUID).
@@ -122,8 +122,14 @@ function payload(state,ox,oz,report,blockAt) {
   if(e.type==='iron_golem'){n.PlayerCreated=byte(e.playerCreated?1:0);delete n.Age;delete n.InLove;}
   // EntityLivingBase.writeEntityToNBT: ActiveEffects (Id, Amplifier, Duration, Ambient) for the effects this build models on mobs.
   if(e.effects?.length&&['zombie','villager','iron_golem'].includes(e.type))n.ActiveEffects=list(NBT.COMPOUND,e.effects.map(x=>new Map([['Id',byte(x.id)],['Amplifier',byte(x.amplifier??0)],['Duration',int(x.duration)],['Ambient',byte(0)]])));
-  entities.push(new Map(Object.entries(n)));
+  built.push({e,n});
  }
+ // Entity.writeToNBT nests the mount as "Riding" inside its rider (Entity.writeMountToNBT writes it whatever rides it); Entity.writeToNBTOptional skips a
+ // mob that has a rider, so a chunk lists only the top rider of each chain (mob-riding.md). A rider whose mount did not export stays unmounted.
+ {const byId=new Map(built.filter(b=>typeof b.e.id==='string').map(b=>[b.e.id,b])),mountOf=b=>typeof b.e.riding==='string'&&b.e.riding!==b.e.id?byId.get(b.e.riding):undefined,ridden=new Set();
+  const nest=(b,seen)=>{const m=mountOf(b);if(m&&!seen.has(m)){seen.add(m);ridden.add(m);b.n.Riding=tag(NBT.COMPOUND,nest(m,seen));}return new Map(Object.entries(b.n));};
+  const roots=built.map(b=>[b,nest(b,new Set([b]))]);
+  for(const [b,m] of roots)if(!ridden.has(b))entities.push(m);}
  for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),PickupDelay:short(e.delay??0),Health:short(5)})));}
  for(const {value:e} of state.tnt??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+TNT_Y_OFFSET},'PrimedTnt',ox,oz),Fuse:byte(e.fuse)})));
  for(const {value:e} of state.xpOrbs??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.25},'XPOrb',ox,oz),Health:short(e.health??5),Age:short(e.age??0),Value:short(e.value??1)})));
