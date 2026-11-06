@@ -95,10 +95,16 @@ import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox } from ".
 import { BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
 import { deathMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
 import { ChatUi, printChat, chat } from "./chat-ui.js";
+import { translation } from "./chat-component.js";
+import { lookupStat, statComponent, statHover, profilerTick } from "./commands-extra.js";
+import { Profiler } from "./profiler.js";
+import { parseJsonNbt } from "./json-nbt.js";
+import { itemStackFromNbt } from "./region-import.js";
+import { NBT } from "./nbt.js";
 import { chatCanOpen } from "./chat.js";
 import { PlayerListUi, playerListVisible } from "./player-list.js";
 import { takeScreenshot, downloadBlob } from "./screenshot.js";
-import { Achievements, BY_ID as BY_ACHIEVEMENT, CHAT_ACHIEVEMENT } from "./achievements.js";
+import { Achievements, BY_ID as BY_ACHIEVEMENT } from "./achievements.js";
 import { AchievementToast } from "./achievements-ui.js";
 import { Stats } from "./stats.js";
 import { StatsLive, watchMobStats, watchDrops, addFallStat } from "./stats-live.js";
@@ -449,7 +455,8 @@ let achievementsFor = null, achievementTicks = 0;
 const achievements = new Achievements({
   onUnlock: (a) => {
     achievementToast.show(a);
-    printChat(CHAT_ACHIEVEMENT.replace("%s", PLAYER_NAME).replace("%s", `${a.special ? "§5" : "§a"}[${a.name}]§r`));
+    // StatisticsFile.func_150873_a: chat.type.achievement with StatBase.func_150955_j, whose hover shows the achievement.
+    printChat(translation("chat.type.achievement", PLAYER_NAME, statComponent(lookupStat("achievement." + a.id))));
     saved = false;
   },
 });
@@ -1263,6 +1270,17 @@ async function launch(record, prepared) {
 }
 // ---- Chat and commands (chat-ui.js GuiChat/GuiNewChat, commands.js ServerCommandManager, command-host.js game state) ----
 let chatOpen = false;
+// /debug's Profiler (profiler.js) over the tick loop below, and the tick counter (MinecraftServer.getTickCounter) it reports.
+const profiler = new Profiler();
+let tickCounter = 0;
+// The tooltip of a show_item hover: JsonToNBT, ItemStack.loadItemStackFromNBT, then the inventory tooltip's lines and colours.
+const TIP_CODES = { aqua: "b", blue: "9", gray: "7", pink: "d", purple: "5", red: "c", yellow: "e", white: "f", bold: "l", italic: "o" };
+const itemHoverLines = (snbt) => {
+  let stack = null;
+  try { const tag = parseJsonNbt(snbt); stack = tag?.type === NBT.COMPOUND ? itemStackFromNbt(tag.value) : null; } catch { stack = null; }
+  if (!stack || !ITEMS[stack.id]) return null;
+  return tooltipLines(ITEMS[stack.id], stack, options.advancedTooltips).map((l, i) => (l.color ?? (i ? "gray" : "white")).split(" ").map((c) => (TIP_CODES[c] ? "§" + TIP_CODES[c] : "")).join("") + (l.italic ? "§o" : "") + l.text);
+};
 const commandHost = createCommandHost({
   active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, rockets: () => rockets, entityHosts: () => ({ items, xpOrbs, primed, falling, boats, projectiles, arrows, eyes, mobs, dimension: world.dimension ?? 0 }), survival: () => survival, experience: () => experience,
   position: () => ({ x: position.x, y: position.y, z: position.z }),
@@ -1289,6 +1307,12 @@ const commandHost = createCommandHost({
   },
   updateBlock: (x, y, z) => scene.updateBlock(x, z, y),
   destroyBlock: (x, y, z) => breakBlock([x, y, z], false),
+  achievements: () => achievements,
+  stats: () => stats,
+  profiler,
+  tickCounter: () => tickCounter,
+  // CommandDebug writes debug/profile-results-*.txt; the browser offers the file as a download.
+  saveFile: (name, text) => downloadBlob(new Blob([text], { type: "text/plain" }), name),
 });
 const commands = createCommandRunner(commandHost);
 const chatUi = new ChatUi(document, {
@@ -1306,6 +1330,8 @@ const chatUi = new ChatUi(document, {
   },
   openLink: (url) => window.open(url, "_blank", "noopener"),
   complete: (before) => commands.complete(before),
+  // GuiScreen.func_146283_a: show_achievement and show_item hovers.
+  hoverInfo: { stat: (id) => statHover(id, { itemName: (n) => commandHost.statItemName(n) }), item: itemHoverLines },
   close: () => closeChat(),
   stay: () => bedSleep.sleeping,
   visible: () => !!active && screen !== "home",
@@ -3143,19 +3169,29 @@ function animate(now) {
   if (running()) {
     accumulator += dt;
     while (accumulator >= PHYSICS.tick && running()) {
+      profilerTick(profiler); // MinecraftServer.tick: /debug start takes effect here
+      tickCounter++;
+      profiler.start("root");
+      profiler.start("particles");
       updateParticleOptions();
       // --- Block particles (particles.js): Entity.onEntityUpdate's sprint particle uses the
       // pre-move position, last tick's motion and in-water flag, before movementTick moves the
       // player; EffectRenderer.updateEffects then runs after this tick's spawns. ---
       if (motion.sprinting) spawnRunningParticles(scene.particles, world, { x: position.x, y: position.y, z: position.z, mx: velocity.x, mz: velocity.z, sprinting: true, inWater: wasInWater, ySize: motion.ySize }, playerRandom, [position.x, position.y + PHYSICS.eye, position.z]);
+      profiler.endStart("tick");
       movementTick(captureMovementInput(bedSleep.sleeping ? new Set() : keys)); // a sleeping player ignores the keys
+      profiler.endStart("bed");
       tickBed();
+      profiler.endStart("effects");
       scene.effectRenderer.tick(world);
+      profiler.endStart("player");
       // The model stands at posY - yOffset, and posY is lowered by ySize (the sneak drop).
       const lowered = (p, drop) => ({ x: p.x, y: p.y - drop, z: p.z });
       playerBody.tick({ position: lowered(position, motion.ySize), previous: lowered(previous, motion.prevYSize), yaw, pitch, swinging: animation.swingTime < SWING_SECONDS, riding: !!rider.vehicle });
       // EntityRenderer.updateRenderer: the cinematic camera filters advance once per tick.
       mouseLook.tick(options.sensitivity, smoothCamera);
+      profiler.end();
+      profiler.end();
       accumulator -= PHYSICS.tick;
     }
     const t = accumulator / PHYSICS.tick;

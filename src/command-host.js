@@ -97,6 +97,34 @@ export function createCommandHost(env) {
       env.changed();
     },
     teleport(x, y, z) { env.teleport(x, y, z); },
+    // /tellraw output goes to the player even when a command block runs it (EntityPlayerMP.addChatComponentMessage).
+    printPlayer: (component) => printChat(component),
+    get achievements() { return env.achievements?.(); },
+    get stats() { return env.stats?.(); },
+    profiler: env.profiler,
+    tickCounter: () => env.tickCounter?.() ?? 0,
+    saveFile: (name, text) => env.saveFile?.(name, text),
+    // ItemStack.getDisplayName of an original item id (the [name] inside an item statistic's name).
+    statItemName(n) {
+      const item = itemFromOriginal(n, 0);
+      return item ? env.stackName(makeStack(item.id, 1, item.damage)) : null;
+    },
+    // CommandSpreadPlayers.Position.func_111092_a: the first non-air block below y 256, plus one; 257 over an empty column. A
+    // streamed column outside the resident window is read from its generated terrain and the saved edits.
+    topY(x, z) {
+      const w = env.world(), xi = Math.floor(x), zi = Math.floor(z);
+      if (!w.inside(xi, 0, zi)) return 257;
+      let col = w.columnBlocks?.(xi, zi) ?? null;
+      if (!col && w.streaming && w.generateTerrainChunk) {
+        const cx = xi >> 4, cz = zi >> 4, h = w.height, start = ((xi & 15) * 16 + (zi & 15)) * h;
+        const c = w.peekChunk?.(cx, cz) ?? w.generateTerrainChunk(cx, cz);
+        col = Uint8Array.from(c.blocks.subarray(start, start + h));
+        for (const [cell, stored] of w.chunkEdits?.get(`${cx},${cz}`) ?? []) if (cell >= start && cell < start + h) col[cell - start] = (stored % 4096) & 255;
+      }
+      if (!col) return 257;
+      for (let y = Math.min(255, col.length - 1); y > 0; y--) if (col[y]) return y + 1;
+      return 257;
+    },
     setSpawnpoint(x, y, z) { env.active().playerSpawn = [x, y, z]; env.changed(); },
     setWorldSpawn(x, y, z) { env.active().worldSpawn = [x, y, z]; env.changed(); },
     setDifficulty(d) { env.setDifficulty(d); },
