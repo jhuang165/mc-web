@@ -166,3 +166,8 @@ test("the End crystals and the flying dragon survive save(), the shelf record an
   const d2 = restored.entities.find((e) => e.type === "ender_dragon");
   assert.deepEqual([d2.x, d2.y, d2.z, d2.health], [dragon.x, dragon.y, dragon.z, dragon.health]);
 });
+
+test("in-flight fireballs and wither skulls are kept per dimension", () => {
+  // main.js saves only the open dimension's balls into `active.fireballs`; the key must be dimension-scoped so the other dimension's survive.
+  assert.ok(DIM_KEYS.includes("fireballs"));
+});
