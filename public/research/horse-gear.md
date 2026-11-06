@@ -30,7 +30,7 @@ GuiIngame.renderJumpBar replaces the experience bar whenever `EntityPlayerSP.isR
 - The leash catenary, knot box and name plate geometry are the recalled vanilla algorithm and are not bytecode verified or pixel compared.
 - Knots are derived from mobs tied to them, not persistent entities; an empty knot never lingers. Knot clicks go through the fence block.
 - Fence clicks are intercepted when a lead is held, the player has leashed mobs in range, or a knot exists there; vanilla BlockFence also blocks placing against fences, so this differs slightly.
-- Stack tags (enchantments, names) on gear stacks are kept in the list but the screen does not show the horse preview model.
+- Stack tags (enchantments, names) on gear stacks are kept in the list. The screen draws a horse preview (`horse-preview.js`, `horse-inventory.md`); it has not been viewed in a browser.
 - The ridden horse's health hearts in place of hunger are drawn since the [pig saddle](pig-saddle.md) track.
 - The leash holder position uses the player's feet; the leash UUID is not a real entity UUID (single player).
 - Nothing was run in a browser; the screen, jump bar and renderer are verified only by unit tests and the build.

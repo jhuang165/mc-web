@@ -84,6 +84,7 @@ import { PlayerBody, PlayerRenderer, nextView, thirdPersonCamera, playerShadowCa
 import { FirstPerson, itemTexture, setCompassTextureFrame } from "./first-person.js";
 import { ITEM_COMPASS, COMPASS_FRAMES, COMPASS_STRIP, compassAngle, createCompass, tickCompass } from "./compass.js";
 import { InventoryPlayerView, PAPERDOLL_LAYOUTS } from "./inventory-player.js";
+import { HorsePreviewView, HORSE_PREVIEW_LAYOUT } from "./horse-preview.js";
 import {Experience,ExperienceOrbs,smeltExperience} from "./experience.js";
 import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
@@ -1469,6 +1470,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   );
   if (kind === "inventory") $("#modal .container-screen")?.insertAdjacentHTML("beforeend", '<div class="effect-list" id="effect-list"></div>');
   attachPaperdoll(kind === "inventory" ? "inventory" : null);
+  attachHorsePreview(kind === "horse" ? container.horse : null);
   if (kind === "chest") $("#modal .modal").style.setProperty("--rows", container.rows);
   $("#modal").insertAdjacentHTML("beforeend", '<div class="cursor-stack" id="cursor-stack" aria-hidden="true"></div><div class="slot-tooltip hidden" id="slot-tooltip" role="tooltip"></div>');
   document.activeElement?.blur();
@@ -1607,8 +1609,23 @@ function paperdollFrame() {
     position,
   );
 }
+// GuiScreenHorseInventory draws the horse through func_147046_a (horse-preview.js).
+let horsePreview = null;
+function attachHorsePreview(horse) {
+  const slots = $("#modal .container-screen .container-slots");
+  if (!horse || !slots || !scene) return horsePreview?.detach();
+  horsePreview ??= new HorsePreviewView(scene);
+  horsePreview.attach(slots.parentNode, slots, horse);
+}
+function horsePreviewFrame() {
+  const box = $("#modal .container-screen")?.getBoundingClientRect();
+  if (!horsePreview?.mounted || !box || !containerView) return;
+  const unit = box.width / HORSE_PREVIEW_LAYOUT.width;
+  horsePreview.frame(Math.floor((containerView.x - box.left) / unit), Math.floor((containerView.y - box.top) / unit), unit);
+}
 function closeContainer() {
   paperdoll?.detach();
+  horsePreview?.detach();
   if (!containerView) return;
   const { container, kind, key } = containerView;
   containerView = null;
@@ -3086,7 +3103,7 @@ function animate(now) {
     fireViewYaw: 180 - yaw * 180 / Math.PI,
     invisible: survival.effects.has(INVISIBILITY),
   });
-  if (screen === "inventory") paperdollFrame();
+  if (screen === "inventory") { paperdollFrame(); horsePreviewFrame(); }
   chestRenderer?.update(running() ? accumulator / PHYSICS.tick : 1);
   endPortalRenderer?.update(world, position, performance.now() / 1000);
   if(xpRenderer)xpRenderer.update(xpOrbs.orbs,partial);
