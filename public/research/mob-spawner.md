@@ -150,3 +150,4 @@ The render constants are checked from the `bnf` and `bmp` bytecode, because the 
 - The display mob's random head yaw is not reproduced. In the original it is `Math.random() * 2π` degrees.
 - The thunder light branch is covered only by a unit test, not by a native scenario.
 - Boats and minecarts block a spawn only through the `extraCollision` hook.
+- SpawnData and SpawnPotentials (weighted entries, Properties overlay incl. Pos applied after the canSpawn check) are read, written and round-tripped through Anvil; see [spawner cart](spawner-cart.md). SpawnData `Riding` chains are not ported.

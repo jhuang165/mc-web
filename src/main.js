@@ -187,6 +187,7 @@ import { capturePlayerAction, dispatchPlayerAction as dispatchPlayerActionRaw, c
 import { fromOriginal } from "./block-registry.js";
 import { setOriginalBlockMapper } from "./mineshaft-world.js";
 import { spawnerDisplayEntity } from "./mob-spawner.js";
+import { cartSpawnerDisplayEntity } from "./cart-spawner-display.js";
 import { watchSpawnerBlocks } from "./spawner-block.js";
 import { Rails } from "./rails.js";
 import { Torches } from "./torches.js";
@@ -1245,7 +1246,7 @@ async function launch(record, prepared) {
 // ---- Chat and commands (chat-ui.js GuiChat/GuiNewChat, commands.js ServerCommandManager, command-host.js game state) ----
 let chatOpen = false;
 const commandHost = createCommandHost({
-  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, rockets: () => rockets, survival: () => survival, experience: () => experience,
+  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, rockets: () => rockets, entityHosts: () => ({ items, xpOrbs, primed, falling, boats, projectiles, arrows, eyes, mobs, dimension: world.dimension ?? 0 }), survival: () => survival, experience: () => experience,
   position: () => ({ x: position.x, y: position.y, z: position.z }),
   seed: () => active.seed,
   beaconTile: (x, y, z) => beacons.ensure(x, y, z),
@@ -2198,7 +2199,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }),
   });
   // MobSpawnerBaseLogic.updateSpawner on the client: smoke and flame, the display mob's spin.
-  tickSpawnersClient({ spawners, random: scene.explosionParticles.worldRandom, eye: { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z } },
+  tickSpawnersClient({ spawners, minecarts, random: scene.explosionParticles.worldRandom, eye: { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z } },
     { particle: (name, x, y, z) => scene.fx.spawn(name, x, y, z) });
   if (grounded) addFallStat(stats, landedFall, survival.creative); // EntityPlayer.fall
   const movement = { world, position, survival, motion, grounded, fallDistance, landedFall };
@@ -2714,9 +2715,9 @@ function movementTick(controls) {
   // EntityAIControlledByPlayer wore the carrot on a stick (pig-saddle-live.js); reportBrokenTool runs at the tick's end.
   if (mobs?.stickWorn) { mobs.stickWorn = false; renderHotbar(); saved = false; }
   // MobSpawnerBaseLogic.updateSpawner on the server (tile entities tick after the entities).
-  if (mobs && spawners?.size) {
+  if (mobs && (spawners?.size || minecarts?.carts.some((c) => c.type === 4))) {
     const level = (x, y, z, sub) => (scene.light ? scene.light.level(x, y, z, sub) : 15);
-    const spawned = tickSpawnerSimulation({ spawners, mobs, minecarts, random: weather.random,
+    const spawned = tickSpawnerSimulation({ spawners, mobs, minecarts, random: weather.random, isLoaded: world.streaming ? (x, z) => world.isLoaded(x, z) : null,
       feet: survival.health > 0 ? { x: position.x, y: position.y, z: position.z } : null }, {
       skyLight: (x, y, z) => (scene.light ? scene.light.skyAt(x, y, z) : 15),
       lightValue: (x, y, z) => level(x, y, z, scene.subtracted ?? 0),
@@ -3193,6 +3194,7 @@ function animate(now) {
   const partial = Math.min(1, accumulator / PHYSICS.tick);
   // TileEntityMobSpawnerRenderer: the spinning display mob of each spawner within 64 blocks.
   const shown = spawners?.size && screen !== "home" ? spawners.values().filter((sp) => (sp.x + 0.5 - position.x) ** 2 + (sp.y + 0.5 - position.y) ** 2 + (sp.z + 0.5 - position.z) ** 2 < 4096).map((sp) => spawnerDisplayEntity(sp, partial)).filter(Boolean) : [];
+  if (minecarts && screen !== "home") for (const c of minecarts.carts) if (c.type === 4 && !c.dead && (c.x - position.x) ** 2 + (c.posY - position.y) ** 2 + (c.z - position.z) ** 2 < 4096) { const d = cartSpawnerDisplayEntity(minecarts, world, c, partial); if (d) shown.push(d); }
   if (mobs) horseGearRenderer?.update(screen === "home" ? [] : mobs.entities, { holder: { x: position.x, y: position.y, z: position.z }, camera: position, looked: aimedEntity, sneaking: !!motion.sneaking, knots: mobs.leashKnots() });
   if (mobs) mobRenderer.update([...(world.streaming ? mobs.entities.filter(e=>world.isLoaded(e.x,e.z)) : mobs.entities), ...shown],dt,partial,180 - yaw * 180 / Math.PI);
   minecartRenderer?.update(screen === "home" || !minecarts ? [] : minecarts.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);

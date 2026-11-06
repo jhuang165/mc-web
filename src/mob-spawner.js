@@ -7,6 +7,7 @@
 // weather.random (main.js); pass it as ctx.random. getCanSpawnHere draws from the new mob's
 // Entity.rand (entities.js entityRandom). The client branch draws from WorldClient.rand,
 // which here is scene.explosionParticles.worldRandom; pass it as ctx.random to tickClient.
+import { readEntry, readSpawnData, pickWeighted, entryToJson, entryFromJson } from "./spawner-data.js";
 const f = Math.fround;
 
 // TileEntityMobSpawner's logic before NBT: spawnDelay 20, minSpawnDelay 200, maxSpawnDelay 800,
@@ -54,11 +55,15 @@ export function isActivated(s, players) {
   return false;
 }
 
-// agq.j (resetTimer): a delay in [min, max), then addBlockEvent(mob_spawner, 1, 0), which sets
-// the client's delay to minSpawnDelay (agq.b(1)). SpawnPotentials (and its weighted roll) is
-// not supported: no generator in this port writes one.
+// agq.e: the entity id the logic spawns, the SpawnData entry's Type when one is set, else EntityId.
+export const entityIdOf = (s) => s.spawnData?.type ?? s.entityId;
+
+// agq.j (resetTimer): a delay in [min, max), then, with SpawnPotentials, a weighted roll that makes one entry
+// the SpawnData (WeightedRandom.getRandomItem), then addBlockEvent(mob_spawner, 1, 0), which sets
+// the client's delay to minSpawnDelay (agq.b(1)).
 export function resetTimer(s, ctx) {
   s.delay = s.maxSpawnDelay <= s.minSpawnDelay ? s.minSpawnDelay : s.minSpawnDelay + ctx.random.nextInt(s.maxSpawnDelay - s.minSpawnDelay);
+  if (s.potentials?.length) s.spawnData = pickWeighted(ctx.random, s.potentials) ?? s.spawnData; // an all-zero weight total throws in the original; the port keeps the entry
   if (ctx.blockEvent) ctx.blockEvent(s, 1, 0);
   else receiveClientEvent(s, 1);
 }
@@ -84,23 +89,25 @@ export function updateSpawner(s, ctx) {
     s.delay--;
     return out;
   }
-  const type = spawnerType(s.entityId);
   let spawned = false;
   for (let i = 0; i < s.spawnCount; i++) {
+    const type = spawnerType(entityIdOf(s));
     if (!type) return out;
     if (ctx.countNearby(type, spawnerBox(s)) >= s.maxNearbyEntities) {
       resetTimer(s, ctx);
       return out;
     }
     // Neither x nor z is centred on the block: the original adds the roll to the corner.
-    const x = s.x + (r.nextDouble() - r.nextDouble()) * s.spawnRange;
-    const y = s.y + r.nextInt(3) - 1;
-    const z = s.z + (r.nextDouble() - r.nextDouble()) * s.spawnRange;
+    let x = s.x + (r.nextDouble() - r.nextDouble()) * s.spawnRange;
+    let y = s.y + r.nextInt(3) - 1;
+    let z = s.z + (r.nextDouble() - r.nextDouble()) * s.spawnRange;
     const yaw = f(r.nextFloat() * 360);
     // A port-side refusal (null) spends the rolls and spawns nothing.
     const mob = ctx.createMob(type, x, y, z, yaw);
     if (mob && ctx.canSpawnHere(mob)) {
-      ctx.initMob?.(mob);
+      // agq.a(sa) with SpawnData: onSpawnWithEgg is skipped and the Properties are read back over the written entity
+      // (its Pos replaces the rolled position, after the getCanSpawnHere check at the rolled one).
+      if (s.spawnData) { if (s.spawnData.props.size) ctx.applyProperties?.(mob, s.spawnData.props); } else ctx.initMob?.(mob);
       ctx.addMob?.(mob);
       ctx.spawnParticles?.(s.x, s.y, s.z);
       ctx.explosionParticles?.(mob);
@@ -168,7 +175,7 @@ export function spawnerMobMatrix(s, partial = 1) {
 // The cached display entity (agq.h, created by EntityList with no spawn rolls), for MobRenderer:
 // at the origin, never ticked, yaw/pitch/limb swing 0, lit by the spawner block.
 export function spawnerDisplayEntity(s, partial = 1) {
-  const type = spawnerType(s.entityId);
+  const type = spawnerType(entityIdOf(s));
   if (!type) return null;
   const zero = { x: 0, y: 0, z: 0, px: 0, py: 0, pz: 0, rotationYaw: 0, prevRotationYaw: 0, renderYawOffset: 0, prevRenderYawOffset: 0, rotationYawHead: 0, prevRotationYawHead: 0, rotationPitch: 0, prevRotationPitch: 0, limbSwing: 0, limbSwingAmount: 0, prevLimbSwingAmount: 0 };
   return { id: `spawner-${s.x},${s.y},${s.z}`, type, health: 1, age: 0, hurt: 0, death: 0, growingAge: 0, effects: [], ...zero, displayMatrix: spawnerMobMatrix(s, partial), lightPos: { x: s.x, y: s.y, z: s.z } };
@@ -176,14 +183,20 @@ export function spawnerDisplayEntity(s, partial = 1) {
 
 const short = (v) => (v << 16) >> 16;
 const num = (v) => typeof v === "number" && Number.isFinite(v);
-function makeSpawner(x, y, z) {
-  return { x, y, z, entityId: "Pig", ...SPAWNER_DEFAULTS, client: { delay: SPAWNER_DEFAULTS.delay, rotation: 0, prevRotation: 0 } };
+export function makeSpawner(x, y, z) {
+  return { x, y, z, entityId: "Pig", ...SPAWNER_DEFAULTS, spawnData: null, potentials: [], client: { delay: SPAWNER_DEFAULTS.delay, rotation: 0, prevRotation: 0 } };
 }
 // MobSpawnerBaseLogic.readFromNBT (agq.a(dh)): EntityId and Delay always; Min/MaxSpawnDelay and
 // SpawnCount only with MinSpawnDelay; MaxNearbyEntities and RequiredPlayerRange together;
 // SpawnRange on its own. Values are NBT shorts.
-function readNBT(s, t) {
+// SpawnPotentials then SpawnData come as the JSON entries of spawner-data.js (or Map entries).
+export function readNBT(s, t) {
   if (typeof t.EntityId === "string") s.entityId = t.EntityId;
+  if (Array.isArray(t.SpawnPotentials)) s.potentials = t.SpawnPotentials.map((e) => (e instanceof Map ? readEntry(e) : entryFromJson(e))).filter(Boolean);
+  else s.potentials = [];
+  if (t.SpawnData instanceof Map) s.spawnData = readSpawnData(t.SpawnData, s.entityId);
+  else if (t.SpawnData && typeof t.SpawnData === "object") s.spawnData = entryFromJson({ ...t.SpawnData, type: s.entityId });
+  else s.spawnData = null;
   if (num(t.Delay)) s.delay = short(t.Delay);
   if (num(t.MinSpawnDelay)) {
     s.minSpawnDelay = short(t.MinSpawnDelay);
@@ -242,7 +255,7 @@ export class MobSpawners {
   }
   // writeToNBT names; the client rotation is not saved (the original rebuilds it at 0).
   toJSON() {
-    return this.values().map((s) => ({ x: s.x, y: s.y, z: s.z, EntityId: s.entityId, Delay: s.delay, MinSpawnDelay: s.minSpawnDelay, MaxSpawnDelay: s.maxSpawnDelay, SpawnCount: s.spawnCount, MaxNearbyEntities: s.maxNearbyEntities, RequiredPlayerRange: s.requiredPlayerRange, SpawnRange: s.spawnRange }));
+    return this.values().map((s) => ({ x: s.x, y: s.y, z: s.z, ...spawnerJSON(s) }));
   }
   static fromJSON(json) {
     const out = new MobSpawners();
@@ -255,4 +268,12 @@ export class MobSpawners {
       }
     return out;
   }
+}
+
+// writeToNBT names; a SpawnData entry (or SpawnPotentials) is JSON through spawner-data.js.
+export function spawnerJSON(s) {
+  const out = { EntityId: s.entityId, Delay: s.delay, MinSpawnDelay: s.minSpawnDelay, MaxSpawnDelay: s.maxSpawnDelay, SpawnCount: s.spawnCount, MaxNearbyEntities: s.maxNearbyEntities, RequiredPlayerRange: s.requiredPlayerRange, SpawnRange: s.spawnRange };
+  if (s.spawnData) out.SpawnData = entryToJson(s.spawnData);
+  if (s.potentials?.length) out.SpawnPotentials = s.potentials.map(entryToJson);
+  return out;
 }

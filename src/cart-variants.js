@@ -4,6 +4,8 @@
 // the hopper cart live in cart-hopper.js. Native evidence: public/research/carts-reference.json
 // (tools/probes/CartsProbe.java, tools/verify-carts.mjs), replayed by src/carts.test.js. Notes and gaps:
 // public/research/minecart-variants.md.
+import { makeSpawner, readNBT as readSpawnerNBT, spawnerJSON } from "./mob-spawner.js";
+import { spawnerPairs } from "./spawner-data.js";
 const f = Math.fround;
 
 // Original items 343, 407, 408, 422 (browser ids 343/407/408/422 are taken, so the carts use 2090-2093).
@@ -14,9 +16,9 @@ export const CART_CREATIVE = Object.freeze([ITEM_FURNACE_CART, ITEM_TNT_CART, IT
 // EntityMinecart.getMinecartType numbers (the item's `minecartType`), which `cart.type` keeps.
 export const TYPE = Object.freeze({ rideable: 0, chest: 1, furnace: 2, tnt: 3, spawner: 4, hopper: 5, command: 6 });
 // The EntityList ids, used by /summon and by the region export.
-export const CART_ENTITY_IDS = Object.freeze({ 0: "MinecartRideable", 1: "MinecartChest", 2: "MinecartFurnace", 3: "MinecartTNT", 5: "MinecartHopper", 6: "MinecartCommandBlock" });
-// Types a build keeps as carts (4, the spawner cart, is not modelled).
-export const SUPPORTED_TYPES = Object.freeze([0, 1, 2, 3, 5, 6]);
+export const CART_ENTITY_IDS = Object.freeze({ 0: "MinecartRideable", 1: "MinecartChest", 2: "MinecartFurnace", 3: "MinecartTNT", 4: "MinecartSpawner", 5: "MinecartHopper", 6: "MinecartCommandBlock" });
+// Types a build keeps as carts (4 is the spawner cart: no item, /summon and world data only).
+export const SUPPORTED_TYPES = Object.freeze([0, 1, 2, 3, 4, 5, 6]);
 export const isSupportedType = (t) => SUPPORTED_TYPES.includes(t);
 // Types with an inventory (EntityMinecartContainer): chest (27 slots) and hopper (5 slots).
 export const isContainerType = (t) => t === 1 || t === 5;
@@ -30,7 +32,7 @@ export const FUEL_TICKS = 3600, FUSE_TICKS = 80, HOPPER_COOLDOWN = 4;
 // The furnace cart always shows lit_furnace (bytecode-derived: 1.7.10 never shows the unlit one).
 export const DISPLAY = Object.freeze({
   2: { block: 62, data: 2, offset: 6 }, 3: { block: 46, data: 0, offset: 6 }, 5: { block: 154, data: 0, offset: 1 },
-  1: { block: 54, data: 0, offset: 8 }, 6: { block: 137, data: 0, offset: 6 },
+  1: { block: 54, data: 0, offset: 8 }, 4: { block: 52, data: 0, offset: 6 }, 6: { block: 137, data: 0, offset: 6 },
 });
 
 export function installCartItems(items) {
@@ -46,6 +48,8 @@ export function initVariant(cart, record = {}) {
   const t = cart.type;
   if (t === 2) Object.assign(cart, { fuel: Math.max(0, record.fuel | 0), pushX: Number.isFinite(record.pushX) ? record.pushX : 0, pushZ: Number.isFinite(record.pushZ) ? record.pushZ : 0 }), cart.lit = cart.fuel > 0;
   if (t === 3) cart.fuse = Number.isInteger(record.fuse) ? record.fuse : -1;
+  // EntityMinecartMobSpawner (xt): its MobSpawnerBaseLogic (xu) with the defaults of agq; the position follows the cart (cart-spawner in structure-simulation.js).
+  if (t === 4) { cart.spawner = makeSpawner(0, 0, 0); readSpawnerNBT(cart.spawner, record.spawner ?? {}); }
   if (t === 5) Object.assign(cart, { enabled: true, cooldown: Number.isInteger(record.cooldown) ? record.cooldown : -1 });
   if (t === 6) { const c = record.command ?? {}; cart.command = { command: typeof c.command === 'string' ? c.command : '', successCount: Number.isInteger(c.successCount) ? c.successCount : 0, customName: typeof c.customName === 'string' ? c.customName : '@', trackOutput: c.trackOutput !== false, lastOutput: typeof c.lastOutput === 'string' ? c.lastOutput : null }; cart.lastRun = 0; } // xn.<init>: b = 0
 }
@@ -149,6 +153,7 @@ export function variantJSON(c) {
   if (c.type === 3) return { fuse: c.fuse };
   if (c.type === 5) return { cooldown: c.cooldown };
   if (c.type === 6) return { command: { ...c.command } };
+  if (c.type === 4) return { spawner: spawnerJSON(c.spawner) };
   return {};
 }
 // Entity.writeToNBT additions: [type, value] pairs (6 double, 2 short, 3 int).
@@ -156,6 +161,14 @@ export function variantNBT(c) {
   if (c.type === 2) return { PushX: [6, c.pushX], PushZ: [6, c.pushZ], Fuel: [2, c.fuel] };
   if (c.type === 3) return { TNTFuse: [3, c.fuse] };
   if (c.type === 5) return { TransferCooldown: [3, c.cooldown] };
+  // EntityMinecartMobSpawner.writeEntityToNBT: MobSpawnerBaseLogic.b(dh).
+  // A saved cart carries the spawnerJSON form (EntityId, Delay, ...); a live one the logic state.
+  if (c.type === 4) {
+    if (c.spawner?.entityId !== undefined) return spawnerPairs(c.spawner);
+    const s = makeSpawner(0, 0, 0);
+    readSpawnerNBT(s, c.spawner ?? {});
+    return spawnerPairs(s);
+  }
   // CommandBlockLogic.func_145758_a (agp.a(dh)): Command, SuccessCount, CustomName, TrackOutput, LastOutput.
   if (c.type === 6) return { Command: [8, c.command.command], SuccessCount: [3, c.command.successCount], CustomName: [8, c.command.customName], TrackOutput: [1, c.command.trackOutput ? 1 : 0], ...(c.command.lastOutput != null ? { LastOutput: [8, c.command.lastOutput] } : {}) };
   return {};

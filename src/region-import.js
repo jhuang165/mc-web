@@ -1,4 +1,5 @@
 import { readCommandBlock } from "./command-block.js";
+import { makeSpawner, readNBT as readSpawnerNBT, spawnerJSON } from './mob-spawner.js';
 import { readNoteTile } from "./note-blocks.js";
 import { readJukeboxTile } from "./jukebox.js";
 // WORLD-03g: convert an area of Java 1.7.10 region files into a new Blockworld export for the existing
@@ -343,7 +344,17 @@ export async function importJavaRegionArea(regions, options = {}) {
           const value = get(tile, k, NBT.SHORT);
           return value === undefined ? [] : [[k, value]];
         });
-        spawners.push({ x: lx, y, z: lz, EntityId: get(tile, 'EntityId', NBT.STRING, 'Pig'), ...Object.fromEntries(params) });
+        const spawner = { x: lx, y, z: lz, EntityId: get(tile, 'EntityId', NBT.STRING, 'Pig'), ...Object.fromEntries(params) };
+        // SpawnData and SpawnPotentials (MobSpawnerBaseLogic.readFromNBT) are kept as the save's JSON entries (spawner-data.js).
+        const data = get(tile, 'SpawnData', NBT.COMPOUND), potentials = get(tile, 'SpawnPotentials', NBT.LIST);
+        if (data || potentials?.elementType === NBT.COMPOUND) {
+          const kept = makeSpawner(0, 0, 0);
+          readSpawnerNBT(kept, { EntityId: spawner.EntityId, SpawnData: data, SpawnPotentials: potentials?.elementType === NBT.COMPOUND ? potentials.items : undefined });
+          const json = spawnerJSON(kept);
+          if (json.SpawnData) spawner.SpawnData = json.SpawnData;
+          if (json.SpawnPotentials) spawner.SpawnPotentials = json.SpawnPotentials;
+        }
+        spawners.push(spawner);
         tally(tileConverted, id);
       } else if (inside && id === 'Airportal' && block === 149) {
         tally(tileConverted, id); // TileEntityEndPortal has no saved fields
