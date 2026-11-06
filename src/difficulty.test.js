@@ -134,8 +134,6 @@ test("EntityZombie.onSpawnWithEgg rolls in the original order", () => {
     assert.deepEqual([out.loot, out.child, out.villager], [r.loot, r.child, r.villager], at);
     assert.equal(world.nextInt(), r.worldNext, `world stream ${at}`);
     assert.deepEqual(out.equipment, r.equipment, at);
-    if (r.enchanted) assert.equal(out.diverged, true, at);
-    if (out.diverged) continue;
     assert.equal(out.doors, r.doors, at);
     assert.equal(out.knockback, r.knockback, at);
     assert.equal(out.followRange, r.followRange, at);
@@ -146,7 +144,7 @@ test("EntityZombie.onSpawnWithEgg rolls in the original order", () => {
     leaders += out.leader;
     children += out.child;
   }
-  assert.ok(checked > 2300 && leaders > 20 && children > 100, `${checked} ${leaders} ${children}`);
+  assert.ok(checked === 2400 && leaders > 20 && children > 100, `${checked} ${leaders} ${children}`);
 });
 
 test("Hard zombie reinforcements search 50 spots", () => {

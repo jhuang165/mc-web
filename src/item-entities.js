@@ -58,7 +58,7 @@ export class ItemEntities {
     for (let n = 0; n < count; n++) {
       const r = this.random, kick = shear?.kick,
         motion = kick ? [f(f(r() * 0.2 - 0.1) + kick[0]), f(0.2 + kick[1]), f(f(r() * 0.2 - 0.1) + kick[2])] : null;
-      this.spawn({ id, count: 1, damage: damage || 0 }, at.x, at.y + (shear?.offsetY || 0), at.z, { delay: 10, motion });
+      this.spawn({ id, count: 1, damage: damage || 0, ...(shear?.enchantments ? { enchantments: shear.enchantments.map((e) => ({ id: e.id, lvl: e.lvl })) } : {}) }, at.x, at.y + (shear?.offsetY || 0), at.z, { delay: 10, motion });
     }
   }
   // BlockFurnace/BlockChest.breakBlock: each stack leaves from a random point

@@ -38,7 +38,7 @@ Options has a Difficulty setting: Peaceful, Easy, Normal (the default) or Hard. 
   - The swirls take the effect's liquid colour and are rarer while invisible ([particles](particles.md)).
   - Speed multiplies the move speed by 1.2 and Strength the attack damage by 2.3. Regeneration heals 1 every 50 ticks.
   - An invisible spider draws no model, shadow or hurt tint, only its eyes, as RendererLivingEntity and RenderSpider do.
-- **Zombie spawns.** `onSpawnWithEgg` sets the knockback resistance, follow range (with the "Random zombie-spawn bonus" above 1) and the leader's reinforcement bonus. The navigator and target search use that follow range.
+- **Zombie spawns.** `onSpawnWithEgg` sets the knockback resistance, follow range (with the "Random zombie-spawn bonus" above 1) and the leader's reinforcement bonus. The navigator and target search use that follow range. The same call rolls the gear of zombies, pigmen and skeletons, and the 0.55 × local-difficulty pickup flag ([mob equipment](mob-equipment.md)); the zombie replay now runs every enchantment roll and ends on the original's random stream (no `diverged` cut).
 - **Zombie reinforcements (Hard).** A zombie that takes a counted hit while its target is the player may spawn another zombie, with chance equal to its `spawnReinforcements` attribute (0 to 0.1 at birth, +0.5 to 0.75 for a leader).
   - Up to 50 tries, 7 to 40 blocks out on each axis.
   - A spot needs a solid top below, block light below 10, no entity, no block boxes and no liquid.
@@ -53,16 +53,13 @@ Options has a Difficulty setting: Peaceful, Easy, Normal (the default) or Hard. 
 
 Each of these rolls is drawn, so the random streams stay in step, but its result is dropped:
 
-- mob equipment and its enchantments (rolling an enchantment ends the zombie replay, as `diverged`);
-- loot pickup;
 - child and villager zombies, and chicken and spider jockeys;
 - door breaking (zombies here do not break doors);
-- the leader's extra max health;
-- Halloween pumpkins.
+- the leader's extra max health.
 
 Other gaps:
 
-- Skeleton and creeper spawn rolls (follow-range bonus, skeleton equipment) are not run.
+- Creeper spawn rolls (the follow-range bonus) are not run.
 - Reinforcements only answer hits whose target is the player.
 - Hurt sounds and knockback draw on the zombie's own Random since 0.22.12 ([combat](combat.md)), but live entity update order still differs from the original's, so live games do not reproduce its exact reinforcement spots. The replay does.
 - Hard-only content that this build lacks is missing: cave spider poison, wither effects, villager conversion, and the Hardcore lock.

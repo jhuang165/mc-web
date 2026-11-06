@@ -14,6 +14,7 @@ import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
 import { enterWater } from "./fx.js";
 import { GaussianRandom, intercept, rayTraceBlocks } from "./projectiles.js";
 import { addStuckArrow } from "./stuck-arrows.js";
+import { bowEffects } from "./mob-equipment.js";
 import { applyBowEnchantments, bowEnchantments } from "./armor-enchantments.js";
 
 const f = Math.fround;
@@ -197,6 +198,11 @@ export class Arrows {
     if (!h) return null;
     const arrow = this.make(h, rand, { shooter: mob, pickup: 0 });
     arrow.damage = skeletonDamage(mr, scale, difficulty);
+    // EntitySkeleton.attackEntityWithRangedAttack: Power, Punch and Flame of the bow in its hand (wither skeletons burn their arrows).
+    const fx = bowEffects(mob.equipment?.[0], mob.type === "wither_skeleton");
+    arrow.damage += fx.damage;
+    arrow.knockback = fx.knockback;
+    if (fx.fire) arrow.fire = fx.fire;
     const pitch = f(f(1) / f(f(mr.nextFloat() * f(0.4)) + f(0.8)));
     this.events.push({ sound: "random.bow", volume: 1, pitch, position: { x: mob.x, y: mob.y, z: mob.z } });
     this.list.push(arrow);
