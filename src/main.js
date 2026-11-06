@@ -2640,8 +2640,6 @@ function tickMining() {
   mining = state.mining;
   mineCooldown = state.cooldown;
 }
-// Streamed population (version 13): chests, animals, spawners, carts and liquid ticks of columns that
-// just became resident for the first time. Resident columns already claimed are never handed over again.
 // WorldServer.createBonusChest at world creation: once, around the spawn, with the world's own Random (seeded from the world seed).
 function placeBonusChest(record) {
   if (!record.bonusChest || record.bonusChestPlaced || world.dimension || !record.worldSpawn) return;
@@ -2670,6 +2668,8 @@ function placeBonusChest(record) {
   if (changes.length) scene.updateBlocks(changes);
   saved = false;
 }
+// Streamed population (version 13): chests, animals, spawners, carts and liquid ticks of columns that
+// just became resident for the first time. Resident columns already claimed are never handed over again.
 function materializeFresh() {
   containerResidency?.admit();
   const columns = world.claimFreshColumns();
