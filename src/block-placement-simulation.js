@@ -26,7 +26,7 @@ import { blockOfItem as redstoneItemBlock, isRedstoneBlock, redstonePlacedMeta }
 
 import { logPlacedMeta } from './wood-types.js';
 import { coloredItemBlock, isColoredBlock, coloredPlacedMeta, pumpkinFacingMeta, CARPET, carpetCanStay } from './colored-blocks.js';
-const BLOCK_MAX = new Set([STONE_BRICKS,4,5,7,48,69,70,71,82,WOOL, RED_FLOWER, 2, 6, 56, 58]);
+const BLOCK_MAX = new Set([STONE_BRICKS,68,4,5,7,48,69,70,71,82,WOOL, RED_FLOWER, 2, 6, 56, 58]);
 const result = (placed, reason, block = null, position = null) => ({ placed, reason, block, position });
 // ItemBlock.onItemUse: clicking vines, tall grass (with its dead-shrub and fern variants) or a dead bush places into the
 // clicked cell itself instead of the neighbour on the clicked face.

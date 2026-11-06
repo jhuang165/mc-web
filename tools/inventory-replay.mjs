@@ -9,6 +9,7 @@ import { SKULL_ITEMS } from '../src/skull.js';
 import { CHEST_ITEMS } from '../src/chest-blocks.js';
 import { STEM_CAKE_ITEMS } from '../src/stems-cake.js';
 import { SPAWN_EGG_ITEMS } from '../src/spawn-eggs.js';
+import { FOOD_ITEMS } from '../src/food-items.js';
 import {Survival,ITEMS,burnTime,smeltingResult} from '../src/survival.js';
 import {CART_ORIGINAL_ITEMS} from '../src/cart-variants.js';
 import {makeStack,copyStack,ChestContainer,LargeChestInventory} from '../src/inventory.js';
@@ -35,6 +36,7 @@ export const MC_IDS={398:2100,122:171,138:173,399:2060,401:2071,402:2070,381:196
  ...STEM_CAKE_ITEMS,
  ...SPAWN_EGG_ITEMS,
  ...CART_ORIGINAL_ITEMS,
+ ...FOOD_ITEMS,
 };
 const GAME_IDS=Object.fromEntries(Object.entries(MC_IDS).map(([mc,id])=>[id,mc.split(':').map(Number)]));
 const toGame=(id,count,damage)=>{const subtype=MC_IDS[id+':'+damage],game=subtype??MC_IDS[id];if(!game)throw new Error('No game item for Minecraft ID '+id+':'+damage);return makeStack(game,count,subtype?0:damage);};

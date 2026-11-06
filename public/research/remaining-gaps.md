@@ -10,9 +10,9 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 
 ### Items and blocks
 1. Book and Quill, Written Book and the book screen (items 386, 387; GuiScreenBook). Missing.
-2. Pumpkin Pie (item 400). Missing; no recipe or food entry.
-3. Enchanted Golden Apple (322:1). Missing; `src/armor-enchantments.js` carries a stale "no golden apple" comment.
-4. Mossy, cracked and chiseled monster eggs (97:3, 97:4, 97:5). Missing.
+2. Pumpkin Pie (item 400). Done; see [food-items.md](food-items.md).
+3. Enchanted Golden Apple (322:1). Done; see [food-items.md](food-items.md). 1.7.10 has no Overpowered achievement.
+4. Mossy, cracked and chiseled monster eggs (97:3, 97:4, 97:5). Done; see [food-items.md](food-items.md).
 5. Filled map and fireworks items are technical-only rows: see `item-parity-catalogue.md`.
 
 ### GUI and settings
@@ -59,7 +59,7 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 
 ## Stale strings outside this track's scope
 - `src/menus.js` `UNAVAILABLE.multiplayerSettings` says "no chat", which is no longer true.
-- `src/armor-enchantments.js` comment about no golden apple.
+- (fixed) the `src/armor-enchantments.js` golden apple comment.
 
 ## Out of scope
 - Multiplayer networking, Realms, server list and direct connect screens.

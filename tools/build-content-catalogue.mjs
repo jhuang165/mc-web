@@ -51,12 +51,7 @@ const esc = s => String(s).replaceAll('|', '&#124;').replaceAll('\n', ' ');
 // Items with no Creative entry in this build's search list, or whose native variant has no browser item (verified in
 // src/survival.js ITEMS and src/world.js block ids; updated for batch 11). Anything not listed keeps the generic status.
 const ITEM_MISSING = {
-  '97:3': 'Missing; mossy monster egg (the browser block has three variants only: stone, cobblestone, stone brick)',
-  '97:4': 'Missing; cracked monster egg (see 97:3)',
-  '97:5': 'Missing; chiseled monster egg (see 97:3)',
-  '322:1': 'Missing; enchanted golden apple (only the plain golden apple, item 372, exists)',
   '386:0': 'Missing; book and quill (no GuiScreenBook, no item)',
-  '400:0': 'Missing; pumpkin pie (no item, no recipe)',
 };
 const ITEM_TECHNICAL = {
   358: 'Partial; [filled map item](maps-clock.md), unlisted natively',

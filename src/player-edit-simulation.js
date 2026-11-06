@@ -577,6 +577,6 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
 }
 
 function beginEating(state, id, hook) {
-  if (state.survival.food >= 20) { hook('toast', 'You are not hungry.'); return; }
+  if (state.survival.food >= 20 && !ITEMS[id]?.alwaysEdible) { hook('toast', 'You are not hungry.'); return; } // alwaysEdible: golden apple
   if (state.survival.count(id) && !state.eating) state.eating = { id, ticks: 32 };
 }

@@ -146,7 +146,7 @@ body:has(.brewing-modal) #toast{display:none}
 .creative-modal .native-player{left:calc(28*var(--u));top:calc(5*var(--u));transform:scale(calc(var(--gui-scale)*.41667));z-index:2}
 .slot-tooltip .red{color:#f55;text-shadow:var(--u) var(--u) #3f1515}.slot-tooltip .purple{color:#a0a;text-shadow:var(--u) var(--u) #2a002a}
 .slot-tooltip .bold{font-weight:bold}
-.slot-tooltip .italic{font-style:italic}.slot-tooltip .aqua{color:#5ff;text-shadow:var(--u) var(--u) #153f3f}
+.slot-tooltip .italic{font-style:italic}.slot-tooltip .aqua{color:#5ff;text-shadow:var(--u) var(--u) #153f3f}.slot-tooltip .pink{color:#f5f;text-shadow:var(--u) var(--u) #3f153f}
 body:has(.creative-modal) #toast{display:none}
 /* GuiRepair: original 176 x 166 sheet and the native 40-character name field. */
 .anvil-modal{position:relative;width:calc(176*var(--u));height:calc(166*var(--u));min-width:calc(176*var(--u));min-height:calc(166*var(--u));max-width:none;max-height:none;flex-shrink:0;padding:0;border:0;border-radius:0;box-shadow:none;overflow:visible;background:url('/media/1.7.10/gui/container/anvil.png') 0 0/calc(256*var(--u)) calc(256*var(--u)) no-repeat;transform:none!important;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u));image-rendering:pixelated}

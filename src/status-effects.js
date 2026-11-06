@@ -2,6 +2,7 @@
 // the food-borne Hunger and Poison use the same ids. Attribute modifiers come from potions.js (evidence: potions-reference.json).
 import { POTION_TYPES, POTION as PT, modifierAmount } from "./potions.js";
 import { PUFFERFISH } from "./fishing-content.js";
+import { GOLDEN_APPLE, goldenAppleEffects } from "./food-items.js";
 export const HUNGER = 17, POISON = 19;
 const FOOD_EFFECTS = {
   326: { id: POISON, duration: 100, chance: 1 },
@@ -10,6 +11,7 @@ const FOOD_EFFECTS = {
   325: { id: POISON, duration: 100, chance: 0.6 },
   // ItemFishFood.onFoodEaten (act.c) for a pufferfish: Poison IV 60 s, Hunger III 15 s, Nausea II 15 s, always
   // (fishing-reference.json "effects"). Nausea (9) is held and ticked like the other 22 potions.
+  [GOLDEN_APPLE]: goldenAppleEffects, // (damage) => the effect list of ItemAppleGold.onFoodEaten (food-items.js)
   [PUFFERFISH]: [{ id: POISON, duration: 1200, amplifier: 3, chance: 1 }, { id: HUNGER, duration: 300, amplifier: 2, chance: 1 }, { id: 9, duration: 300, amplifier: 1, chance: 1 }],
 };
 
@@ -35,9 +37,10 @@ export class Effects {
     } else if (next.amplifier === old.amplifier && next.duration > old.duration) old.duration = next.duration;
     return true;
   }
-  food(id, random = Math.random) {
-    for (const effect of [].concat(FOOD_EFFECTS[id] ?? []))
-      if (Math.fround(random()) < Math.fround(effect.chance)) this.add(effect);
+  food(id, random = Math.random, damage = 0) {
+    const table = FOOD_EFFECTS[id];
+    for (const effect of [].concat(typeof table === "function" ? table(damage) : table ?? []))
+      if (effect.chance === undefined || Math.fround(random()) < Math.fround(effect.chance)) this.add(effect);
   }
   // PotionEffect.onUpdate for every effect (EntityLivingBase.updatePotionEffects): performEffect on the ticks Potion.isReady allows, then the
   // duration counts down and a finished effect is removed (Absorption takes its amount back, Health Boost caps the health).

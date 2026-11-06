@@ -146,9 +146,11 @@ export function hasEffectNative(id, damage = 0, hasEnchantList = false) {
 }
 // The port's stacks: `enchantments` is the "ench" list (inventory.js keeps an empty list distinct from none, as the
 // original's tag does, and the original glints for it too), the enchanted book is port item 365 (`storesEnchantments`);
-// the port has no golden apple, potion, experience bottle, written book or nether star items yet.
+// the golden apple (322, `glintDamage` 1: the enchanted golden apple), potion, experience bottle and nether star items are
+// handled through item flags; the port has no written book yet.
 export function stackHasEffect(stack, item) {
   if (!stack) return false;
   if (item?.storesEnchantments || item?.alwaysGlint) return true; // alwaysGlint: ItemExpBottle.hasEffect
+  if (item?.glintDamage !== undefined && (stack.damage | 0) >= item.glintDamage) return true; // ItemAppleGold.hasEffect: damage > 0
   return Array.isArray(stack.enchantments);
 }

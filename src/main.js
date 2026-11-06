@@ -2392,7 +2392,7 @@ function eatEffects(id, n) {
   sounds.play("random.eat", { volume: 0.5 + 0.5 * playerRandom.nextInt(2), pitch: (playerRandom.nextFloat() - playerRandom.nextFloat()) * 0.2 + 1 });
 }
 function beginEating(id) {
-  if (survival.food >= 20) {
+  if (survival.food >= 20 && !ITEMS[id]?.alwaysEdible) { // ItemFood.onItemRightClick: canEat(alwaysEdible) - the golden apple is always edible
     toast("You are not hungry.");
     return;
   }
