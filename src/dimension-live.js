@@ -94,7 +94,7 @@ export class DimensionLive {
   // main.js openWorld hooks ------------------------------------------------------------
   // A record saved while the player was in a dimension opens as that dimension's view.
   openRecord(record, joined) { return record.dimension && !record.rootId ? viewRecord(joined, record.dimension) : record; }
-  createWorld(record) { return record.rootId ? new DimensionWorld(record.seed, record.dimension) : new World(record.seed, record.biome, record.generationVersion ?? 1, record.worldType); }
+  createWorld(record) { return record.rootId ? new DimensionWorld(record.seed, record.dimension) : new World(record.seed, record.biome, record.generationVersion ?? 1, record.worldType, record.generatorOptions); }
   // Called after the world exists and before the saved position is read. Sets record.position for a travel arrival.
   async arrive(prepared, record) {
     const t = record.transit; delete record.transit; this.writes = []; this.exit = false; this.peeks.clear();
@@ -200,7 +200,7 @@ export class DimensionLive {
       for (const [x, y, z, id, meta] of writes) edits.set(`${x},${y},${z}`, id | (meta << 8));
       peek = new TerrainPeek(new DimensionWorld(root.seed, to), edits);
     } else {
-      const w = new World(root.seed, root.biome, root.generationVersion ?? 1, root.worldType);
+      const w = new World(root.seed, root.biome, root.generationVersion ?? 1, root.worldType, root.generatorOptions);
       if (w.streaming) {
         const edits = new Map(root.chunked ? await this.readEdits(root.id) : []);
         for (const [x, y, z, id, meta] of writes) edits.set(`${x},${y},${z}`, id | (meta << 8));

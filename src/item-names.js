@@ -6,6 +6,7 @@ import { ITEM_NAMES } from './item-names-data.js';
 import { ORIGINAL_ITEMS } from './original-items.js';
 import { toOriginal } from './block-registry.js';
 import { potionName } from './potions.js';
+import { ITEM_WRITTEN_BOOK, bookDisplayName } from './books.js';
 
 // Browser potion item (original 373): the stack damage is the whole potion (ItemPotion.getItemStackDisplayName).
 const POTION_ITEM = 385;
@@ -56,6 +57,7 @@ export function stackName(stack, ITEMS) {
   if (typeof stack.displayName === 'string') return stack.displayName;
   const item = ITEMS[stack.id];
   if (stack.id === POTION_ITEM) return potionName(stack.damage | 0);
+  if (stack.id === ITEM_WRITTEN_BOOK) return bookDisplayName(stack); // ItemEditableBook.getItemStackDisplayName: the title
   return item?.variants?.[stack.damage | 0] ?? item?.name ?? '';
 }
 

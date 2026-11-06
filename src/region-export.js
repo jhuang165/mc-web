@@ -1,6 +1,9 @@
 import { writeFireworkTags } from './fireworks-nbt.js';
+import { writeBookTags } from './books-nbt.js';
 import { saveEnderSlots } from './chest-blocks.js';
 import { writeCommandBlock } from "./command-block.js";
+import { makeSpawner, readNBT as readSpawnerNBT } from './mob-spawner.js';
+import { spawnerPairs } from './spawner-data.js';
 import { CART_ENTITY_IDS, isContainerType, variantNBT } from './cart-variants.js';
 import { writeNoteTile } from "./note-blocks.js";
 import { writeJukeboxTile } from "./jukebox.js";
@@ -29,6 +32,8 @@ import { mapDataFiles } from './maps-nbt.js';
 import { javaProjectileToNbt } from './java-projectiles.js';
 import { statsExportFile } from './stats.js';
 import { GEAR_TYPES, gearFieldsFrom } from './mob-equipment-live.js';
+// A [type, value] pair of cart-variants.js variantNBT (compound [10, {key: pair}], list [9, elementType, items]) as a tag.
+const pairTag=p=>p[0]===NBT.COMPOUND?comp(Object.fromEntries(Object.entries(p[1]).map(([k,v])=>[k,pairTag(v)]))):p[0]===NBT.LIST?tag(NBT.LIST,{elementType:p[2].length?p[1]:NBT.END,items:p[1]===NBT.COMPOUND?p[2].map(i=>new Map(Object.entries(i).map(([k,v])=>[k,pairTag(v)]))):p[2]}):tag(p[0],p[0]===NBT.SHORT?(p[1]<<16)>>16:p[1]);
 const tag=(type,value)=>({type,value}), comp=value=>tag(NBT.COMPOUND,new Map(Object.entries(value))), list=(type,items)=>tag(NBT.LIST,{elementType:items.length?type:NBT.END,items});
 const byte=v=>tag(NBT.BYTE,(v<<24)>>24), short=v=>tag(NBT.SHORT,v), int=v=>tag(NBT.INT,v), str=v=>tag(NBT.STRING,v), float=v=>tag(NBT.FLOAT,v), long=v=>tag(NBT.LONG,BigInt(Math.trunc(v)));
 const reverse=new Map();
@@ -48,7 +53,7 @@ function stackNbt(s,slot,report,original=false) {
  if(typeof s.displayName==='string')display.Name=str(s.displayName);
  if(Number.isInteger(s.color)&&s.color>=0&&s.color<=0xffffff)display.color=int(s.color);
  if(Object.keys(display).length)tagEntries.display=comp(display);
- writeFireworkTags(s,tagEntries);
+ writeFireworkTags(s,tagEntries);writeBookTags(s,tagEntries);
  if(typeof s.unbreakable==='boolean')tagEntries.Unbreakable=byte(s.unbreakable?1:0);
  if(Object.keys(tagEntries).length)entry.tag=comp(tagEntries);
  return new Map(Object.entries(entry));
@@ -135,7 +140,7 @@ function payload(state,ox,oz,report,blockAt) {
  for(const {value:e} of state.tnt??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+TNT_Y_OFFSET},'PrimedTnt',ox,oz),Fuse:byte(e.fuse)})));
  for(const {value:e} of state.xpOrbs??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.25},'XPOrb',ox,oz),Health:short(e.health??5),Age:short(e.age??0),Value:short(e.value??1)})));
  for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta);entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET},'FallingSand',ox,oz),TileID:int(o[0]),Data:byte(o[1]),Time:byte(e.ticks&255),DropItem:byte(1)})));}
- for(const {value:e} of state.carts??[]) {const items=(e.items??[]).map(s=>stackNbt(s,s.slot,report,true)).filter(Boolean),n=entity(e,CART_ENTITY_IDS[e.type]??'MinecartChest',ox,oz);if(isContainerType(e.type))n.Items=list(NBT.COMPOUND,items);for(const [k,[t,v]] of Object.entries(variantNBT(e)))n[k]=tag(t,t===2?(v<<16)>>16:v);if(e.customName)n.CustomName=str(e.customName);entities.push(new Map(Object.entries(n)));}
+ for(const {value:e} of state.carts??[]) {const items=(e.items??[]).map(s=>stackNbt(s,s.slot,report,true)).filter(Boolean),n=entity(e,CART_ENTITY_IDS[e.type]??'MinecartChest',ox,oz);if(isContainerType(e.type))n.Items=list(NBT.COMPOUND,items);for(const [k,p] of Object.entries(variantNBT(e)))n[k]=pairTag(p);if(e.customName)n.CustomName=str(e.customName);entities.push(new Map(Object.entries(n)));}
  // EntityHanging.writeEntityToNBT: Direction (0 south, 1 west, 2 north, 3 east) and the legacy Dir byte (2, 1, 0, 3), the wall block
  // as TileX/Y/Z, then EntityPainting's Motive or EntityItemFrame's Item (original id), ItemRotation and ItemDropChance (src/hanging.js).
  for(const {value:e} of state.hanging??[]) {const base=entity({x:e.x,y:e.y,z:e.z,rotationYaw:e.yaw,rotationPitch:0},e.kind==='painting'?'Painting':'ItemFrame',ox,oz);
@@ -158,7 +163,7 @@ function payload(state,ox,oz,report,blockAt) {
  // TileEntitySkull.writeToNBT: SkullType and Rot bytes, the ExtraType owner name (skull.js).
  for(const {value:e} of state.skulls??[])tiles.push(new Map(Object.entries({id:str('Skull'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),SkullType:byte(e.type??0),Rot:byte(e.rot??0),ExtraType:str(e.owner??'')})));
  for(const {value:e} of state.beacons??[])tiles.push(new Map(Object.entries({id:str('Beacon'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),Primary:int(e.primary|0),Secondary:int(e.secondary|0),Levels:int(e.levels|0)}))); // pyramid.js
- for(const {value:e} of state.spawners??[]) {const n={id:str('MobSpawner'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz)};for(const [k,v] of Object.entries(e))if(!['x','y','z'].includes(k))n[k]=typeof v==='string'?str(v):short(v);tiles.push(new Map(Object.entries(n)));}
+ for(const {value:e} of state.spawners??[]) {const n={id:str('MobSpawner'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz)};for(const [k,v] of Object.entries(e))if(!['x','y','z','SpawnData','SpawnPotentials'].includes(k))n[k]=typeof v==='string'?str(v):short(v);if(e.SpawnData||e.SpawnPotentials){const s=makeSpawner(0,0,0);readSpawnerNBT(s,e);const w=spawnerPairs(s);for(const k of ['SpawnData','SpawnPotentials'])if(w[k])n[k]=pairTag(w[k]);}tiles.push(new Map(Object.entries(n)));}
  // TileEntityPiston.writeToNBT: blockId, blockData, facing, progress, extending (original ids; renderHead is not saved by Java).
  for(const w of state.pistons??[]){const e=w.value??w;tiles.push(new Map(Object.entries({id:str('Piston'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),blockId:int(e.block),blockData:int(e.meta),facing:int(e.facing),progress:float(e.progress??0),extending:byte(e.extending?1:0)})));}
  for(const name of ['fluidTicks','fireTicks','fallingTicks'])for(const {value:e} of state[name]??[]) {const o=toOriginal(e.block,0,{flowing:name==='fluidTicks'});if(o)ticks.push(new Map(Object.entries({i:int(o[0]),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),t:int(Math.max(-2147483648,Math.min(2147483647,e.delay))),p:int(0)})));}
@@ -177,7 +182,7 @@ function levelNbt(record,w,report) {
  (p.armor??[]).forEach((s,i)=>{const n=stackNbt(s,100+i,report);if(n)items.push(n);});player.Inventory=list(NBT.COMPOUND,items);
  // InventoryEnderChest.saveInventoryToNBT: EnderItems, slots 0-26 (chest-blocks.js).
  player.EnderItems=list(NBT.COMPOUND,saveEnderSlots(p.enderItems).flatMap(({slot,stack})=>{const n=stackNbt(stack,slot,report);return n?[n]:[];}));
- const data={version:int(19133),initialized:byte(1),RandomSeed:tag(NBT.LONG,w.javaSeed??BigInt(w.numericSeed)),generatorName:str(record.biome==='javaStreamed'?streamedWorldType(record.worldType):record.biome==='javaLargeBiomes'?'largeBiomes':record.biome==='javaAmplified'?'amplified':'default'),generatorVersion:int(1),generatorOptions:str(''),MapFeatures:byte(1),LevelName:str(record.name??'Blockworld'),GameType:int(gameType),hardcore:byte(0),allowCommands:byte(creative?1:0),Time:long(p.time??0),DayTime:long(p.time??0),LastPlayed:long(record.updated??0),SizeOnDisk:long(0),SpawnX:int(spawn[0]+ox),SpawnY:int(spawn[1]),SpawnZ:int(spawn[2]+oz),Difficulty:byte(2),Player:comp(player)};
+ const data={version:int(19133),initialized:byte(1),RandomSeed:tag(NBT.LONG,w.javaSeed??BigInt(w.numericSeed)),generatorName:str(record.biome==='javaStreamed'?streamedWorldType(record.worldType):record.biome==='javaLargeBiomes'?'largeBiomes':record.biome==='javaAmplified'?'amplified':'default'),generatorVersion:int(1),generatorOptions:str(w.generatorOptions??''),MapFeatures:byte(1),LevelName:str(record.name??'Blockworld'),GameType:int(gameType),hardcore:byte(0),allowCommands:byte(creative?1:0),Time:long(p.time??0),DayTime:long(p.time??0),LastPlayed:long(record.updated??0),SizeOnDisk:long(0),SpawnX:int(spawn[0]+ox),SpawnY:int(spawn[1]),SpawnZ:int(spawn[2]+oz),Difficulty:byte(2),Player:comp(player)};
  for(const name of ['rainTime','thunderTime'])data[name]=int(record.weather?.[name]??0);
  for(const name of ['raining','thundering'])data[name]=byte(record.weather?.[name]?1:0);
  return {name:'',tag:comp({Data:comp(data)})};
@@ -230,7 +235,7 @@ async function exportRegions({record,w,owned,runtime}, files, report, prefix, pr
 
 export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChunks=4096}={}) {
  await populationBlockMapperReady;
- const w=world??new World(record.seed,record.biome,record.generationVersion??1,record.worldType);
+ const w=world??new World(record.seed,record.biome,record.generationVersion??1,record.worldType,record.generatorOptions);
  if(!world)w.restore(record.edits??[]);
  const surface=regionSource(record,w),sources=[['',surface]],ox=w.originX??0,oz=w.originZ??0;
  for(const [dimension,prefix] of [[-1,'DIM-1/'],[1,'DIM1/']]) {

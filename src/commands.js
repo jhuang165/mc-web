@@ -6,6 +6,7 @@ import { selectLocalPlayer } from "./command-selector.js";
 // native-verified, approximated or unsupported. The game state is reached through the host object (see main.js), so the same
 // code runs against a real World / Survival in the tests.
 import { CART_SUMMON } from "./cart-summon.js";
+import { ENTITY_SUMMON } from "./entity-summon.js";
 import { NBT } from "./nbt.js";
 import { parseJsonNbt, NBTException } from "./json-nbt.js";
 import { ORIGINAL_CONTAINERS } from "./block-registry.js";
@@ -103,7 +104,7 @@ export const GAME_MODES = ["survival", "creative", "adventure"];
 export const DIFFICULTIES = ["peaceful", "easy", "normal", "hard"];
 
 // Original entity names the port can create (EntityList names -> entities.js types).
-export const SUMMONABLE = { Enderman: "enderman", Pig: "pig", Cow: "cow", MushroomCow: "mooshroom", SnowMan: "snow_golem", Sheep: "sheep", Chicken: "chicken", Wolf: "wolf", Ozelot: "ocelot", EntityHorse: "horse", Zombie: "zombie", Spider: "spider", CaveSpider: "cave_spider", Skeleton: "skeleton", Creeper: "creeper", Villager: "villager", VillagerGolem: "iron_golem", Silverfish: "silverfish", Witch: "witch", Slime: "slime", LavaSlime: "magma_cube", PigZombie: "pigman", Squid: "squid", Bat: "bat", EnderCrystal: "ender_crystal", ...CART_SUMMON, Blaze: "blaze", Ghast: "ghast", FireworksRocketEntity: "firework_rocket", WitherBoss: "wither", EnderDragon: "ender_dragon", Giant: "giant" };
+export const SUMMONABLE = { Enderman: "enderman", Pig: "pig", Cow: "cow", MushroomCow: "mooshroom", SnowMan: "snow_golem", Sheep: "sheep", Chicken: "chicken", Wolf: "wolf", Ozelot: "ocelot", EntityHorse: "horse", Zombie: "zombie", Spider: "spider", CaveSpider: "cave_spider", Skeleton: "skeleton", Creeper: "creeper", Villager: "villager", VillagerGolem: "iron_golem", Silverfish: "silverfish", Witch: "witch", Slime: "slime", LavaSlime: "magma_cube", PigZombie: "pigman", Squid: "squid", Bat: "bat", EnderCrystal: "ender_crystal", ...CART_SUMMON, ...ENTITY_SUMMON, Blaze: "blaze", Ghast: "ghast", FireworksRocketEntity: "firework_rocket", WitherBoss: "wither", EnderDragon: "ender_dragon", Giant: "giant" };
 // Commands the registry lists that this build cannot honour; they report instead of pretending.
 export const UNSUPPORTED = new Set(["achievement", "debug", "scoreboard", "spreadplayers", "tellraw"]);
 

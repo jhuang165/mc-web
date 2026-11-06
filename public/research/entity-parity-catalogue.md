@@ -36,7 +36,7 @@ EntityList is not the complete feature roster: players, weather lightning, throw
 | 44 | MinecartFurnace | xq | no | no | Partial; [minecart-variants](minecart-variants.md) | E |
 | 45 | MinecartTNT | xv | no | no | Partial; [minecart-variants](minecart-variants.md) | E |
 | 46 | MinecartHopper | xr | no | no | Partial; [minecart-variants](minecart-variants.md) | E |
-| 47 | MinecartSpawner | xt | no | no | Missing; [minecart-variants](minecart-variants.md); spawner cart (type 4) is not modelled (src/cart-variants.js) | E |
+| 47 | MinecartSpawner | xt | no | no | Partial; [spawner-cart](spawner-cart.md); NBT, spawn timing and drops probe-verified; mob display approximate; no Java region import of carts | E |
 | 48 | Mob | sw | yes | no | Abstract registration; base behavior audit | E |
 | 49 | Monster | yg | yes | no | Abstract registration; base behavior audit | E |
 | 50 | Creeper | xz | no | yes | Implemented; [creepers](creepers.md) | E |

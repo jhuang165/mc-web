@@ -15,6 +15,8 @@ import { canGoEndless } from "./endless-world.js";
 import { achievementsScreen } from "./achievements-ui.js";
 import { statsScreen } from "./stats-screen.js";
 import { PLAYER_NAME } from "./death-messages.js";
+import { flatWorldScreen } from "./flat-gui.js";
+import { DEFAULT_FLAT_STRING } from "./flat-world.js";
 
 const SOUND_KEYS = ["master", "music", "record", "weather", "block", "hostile", "neutral", "player", "ambient"];
 // Why each unavailable vanilla button is disabled here.
@@ -31,7 +33,6 @@ export const UNAVAILABLE = {
   touchscreen: "Touch input in this browser build uses its own on-screen controls.",
   fixedVideo: "This renderer has no switch for this setting; the button shows what it always does.",
   mapFeatures: "Structure generation is fixed by the world type in this browser build.",
-  bonusItems: "Bonus chests are not generated in this browser build.",
   fixedKey: "This key is fixed in the browser build; only Toggle Cinematic Camera can be rebound.",
 };
 // The renderer's fixed state, shown by the disabled video buttons.
@@ -209,6 +210,9 @@ export function createMenus(gui, ctx) {
       // survival off) until the button has been pressed by hand.
       allowCommands: false,
       manualCommands: false,
+      // GuiCreateWorld.field_146334_a (the generator string of a Superflat world) and field_146338_v (Bonus Chest).
+      options: from?.generatorOptions ?? DEFAULT_FLAT_STRING,
+      bonus: from?.bonusChest === true,
     };
     let name, seed, create;
     const folder = () => folderName(state.name, (s) => ctx.worlds.some((w) => (w.folder || folderName(w.name || "World")) === s));
@@ -223,11 +227,13 @@ export function createMenus(gui, ctx) {
         worldType: types[state.type].worldType,
         mode: state.mode,
         allowCommands: state.allowCommands,
+        generatorOptions: state.options,
+        bonusChest: state.bonus,
       }));
       // launch closes the screen; a world that failed to open leaves it usable.
       state.created = false;
     };
-    return {
+    const screen = {
       id: "create-world",
       // keyTyped never calls GuiScreen.keyTyped, so Escape does nothing here; Enter creates.
       escape() {},
@@ -260,6 +266,7 @@ export function createMenus(gui, ctx) {
           line2.set(t(`selectWorld.gameMode.${state.mode}.line2`));
           mapFeatures.set(t("selectWorld.mapFeatures") + " " + t(types[state.type].biome.startsWith("java") ? "options.on" : "options.off"));
           mapType.set(t("selectWorld.mapType") + " " + types[state.type].name);
+          bonusItems.set(t("selectWorld.bonusItems") + " " + t(state.bonus ? "options.on" : "options.off"));
           allowCommands.set(t("selectWorld.allowCommands") + " " + t(state.allowCommands ? "options.on" : "options.off"));
           notice?.remove();
           notice = state.more && types[state.type].notice ? g.splitText(types[state.type].notice, ...L.notice, COLOR.label) : null;
@@ -268,7 +275,7 @@ export function createMenus(gui, ctx) {
           // func_146316_a: which buttons and text the page shows.
           gameMode.show(!state.more);
           for (const k of [mapFeatures, bonusItems, mapType, allowCommands]) k.show(state.more);
-          customize.show(false);
+          customize.show(state.more && types[state.type].worldType === "flat");
           moreOptions.set(state.more ? t("gui.done") : t("selectWorld.moreWorldOptions"));
           name.show(!state.more);
           seed.show(state.more);
@@ -287,15 +294,20 @@ export function createMenus(gui, ctx) {
         });
         const moreOptions = g.button(b.moreOptions, "", () => { state.more = !state.more; page(); });
         const mapFeatures = g.button(b.mapFeatures, "", null, { reason: UNAVAILABLE.mapFeatures });
-        const bonusItems = g.button(b.bonusItems, t("selectWorld.bonusItems") + " " + t("options.off"), null, { reason: UNAVAILABLE.bonusItems });
-        const mapType = g.button(b.mapType, "", () => { state.type = (state.type + 1) % types.length; update(); });
+        const bonusItems = g.button(b.bonusItems, t("selectWorld.bonusItems") + " " + t("options.off"), () => { state.bonus = !state.bonus; update(); });
+        // actionPerformed id 5: the next type clears field_146334_a (the Superflat string) and re-runs func_146316_a, so Customize follows.
+        const mapType = g.button(b.mapType, "", () => { state.type = (state.type + 1) % types.length; state.options = DEFAULT_FLAT_STRING; page(); });
         const allowCommands = g.button(b.allowCommands, t("selectWorld.allowCommands") + " " + t("options.off"), () => { state.manualCommands = true; state.allowCommands = !state.allowCommands; update(); });
-        const customize = g.button(b.customize, t("selectWorld.customizeType"), null);
+        const customize = g.button(b.customize, t("selectWorld.customizeType"), () => {
+          // GuiCreateFlatWorld: Done stores info.toString() and returns to this screen; Cancel and Escape change nothing.
+          show(flatWorldScreen({ show, icon: ctx.icon, options: state.options, done: (s) => { state.options = s; show(screen); }, cancel: () => show(screen) }));
+        });
         name = g.field(L.field, { value: state.name, label: t("selectWorld.enterName"), input: (v) => { state.name = v; update(); } });
         seed = g.field(L.field, { value: state.seed, label: t("selectWorld.enterSeed"), input: (v) => { state.seed = v; } });
         page();
       },
     };
+    return screen;
   }
 
   // --- GuiYesNo ---

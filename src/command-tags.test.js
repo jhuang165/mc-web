@@ -45,7 +45,9 @@ test('summon uses the rounded sender base; tags skip egg rolls, restore fields, 
   assert.equal(new Set(g.mobs.entities.map(e => e.id)).size, 3);
   assert.equal(g.mobs.nextId, 4);
   const riders = g.run('/summon Pig ~ ~ ~ {Riding:{id:Sheep,Color:4}}');
-  assert.equal(g.mobs.entities.length, 5); assert.match(riders.lines[0], /riders spawn unmounted/);
+  assert.equal(g.mobs.entities.length, 5); assert.doesNotMatch(riders.lines.join('\n'), /Riding|unmounted/);
+  const [pig, sheep] = g.mobs.entities.slice(3); // CommandSummon: the entity first, then its Riding compound, which it mounts
+  assert.deepEqual([pig.type, sheep.type, pig.ridingEntity === sheep, sheep.riddenBy === pig, sheep.color], ['pig', 'sheep', true, true, 4]);
   for (const command of ['/summon Pig ~ 300 ~ {bad', '/summon Dragon', '/summon Pig ~ ~ ~ {bad']) {
     const out = g.run(command); assert.equal(out.ok, true); assert.ok(!out.lines[0].startsWith('§c'));
   }

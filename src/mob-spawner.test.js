@@ -154,7 +154,7 @@ test("spawner box, class counting and brightness table", () => {
 test("spawner records save and reload with readFromNBT's field groups", () => {
   const a = new MobSpawners();
   const s = a.add({ x: 3, y: 12, z: -40, entityId: "CaveSpider" });
-  assert.deepEqual({ ...s, client: undefined }, { x: 3, y: 12, z: -40, entityId: "CaveSpider", ...SPAWNER_DEFAULTS, client: undefined });
+  assert.deepEqual({ ...s, client: undefined }, { x: 3, y: 12, z: -40, entityId: "CaveSpider", ...SPAWNER_DEFAULTS, spawnData: null, potentials: [], client: undefined });
   s.delay = 345;
   a.add({ x: 1, y: 2, z: 3, name: "Spider" });
   const json = JSON.parse(JSON.stringify(a.toJSON()));

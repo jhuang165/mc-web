@@ -23,6 +23,7 @@ import {newDispenser,DISPENSER_SLOTS} from './dispenser-container.js';
 import { leatherDyeResult } from './leather-dye.js';
 import { mapsCraftingResult } from './maps-clock-live.js';
 import { fireworksResult } from './fireworks.js';
+import { installBookItems, bookCloneResult, ITEM_WRITABLE_BOOK } from './books.js';
 import { stepStuckArrows } from "./stuck-arrows.js";
 import { installNetherItems, installNetherMaterials, installNetherRecipes, installNetherSmelting, netherCraftingResult } from './nether-blocks.js';
 import { applyNativeNames } from './item-names.js';
@@ -247,6 +248,7 @@ installSkullItems(ITEMS); // mob head item 2050 (skull.js)
 installStemCakeItems(ITEMS); // cake 1930; stems and cake have no block items
 // ItemCarrotOnAStick (abp, original 398): stack 1, 25 durability, held full 3D (pig-saddle.js).
 ITEMS[2100]={id:2100,name:"Carrot on a Stick",texture:"carrot_on_a_stick",stack:1,durability:25,color:"#d98a2b",glyph:"/"};
+installBookItems(ITEMS); // Book and Quill 2110, Written Book 2111 (books.js)
 installCartItems(ITEMS); // furnace, TNT, hopper and command block carts 2090-2093 (cart-variants.js)
 installSpawnEggItems(ITEMS); // spawn egg 1950, Bottle o' Enchanting 1951, fire charge 1952 (spawn-eggs.js)
 // Every item name and damage subtype is the 1.7.10 en_US display name (item-names.js); internal-only items get Title Case.
@@ -457,6 +459,8 @@ shapeless(126, 1, 0, 302, 313);
 // CraftingManager: sugar from one sugar cane; a book from three paper and leather (shapeless).
 shapeless(SUGAR, 1, 0, REEDS_ITEM);
 shapeless(314, 1, 0, PAPER, PAPER, PAPER, 315);
+// ShapelessRecipes: a book, an ink sac (dye damage 0) and a feather make a Book and Quill.
+shapeless(ITEM_WRITABLE_BOOK, 1, 0, 314, [DYE, 0], 317);
 installPopulationRecipes({recipe,shapeless});
 installFoodRecipes({shapeless});
 installFishingRecipes({recipe});
@@ -518,6 +522,8 @@ export function craftingResult(cells, size) {
   const dyedArmor = leatherDyeResult(cells);
   if (dyedArmor) return dyedArmor;
   const maps=mapsCraftingResult(cells,size);if(maps)return maps; // RecipesMapCloning / RecipesMapExtending
+  const clonedBook = bookCloneResult(cells); // RecipeBookCloning: a written book plus writable books
+  if (clonedBook) return makeStack(clonedBook.id, clonedBook.count, 0, undefined, clonedBook);
   const fireworks = fireworksResult(cells);
   if (fireworks) return fireworks;
   const food=foodCraftingResult(cells,size);if(food)return makeStack(food.id,food.count,food.damage);

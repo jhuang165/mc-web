@@ -9,7 +9,7 @@ import {PopulationBlocks} from './population-blocks.js';
 import {hasSavedStructures as hasSavedPopulation} from './structure-simulation.js';
 import {restorePopulation,restorePopulationColumns} from './population-runtime.js';
 import {setPopulationBlockMapper} from './population-world.js';
-import {isJavaLandscape, streamedWorldType} from "./java-world.js";
+import {isJavaLandscape, streamedWorldType, javaSeed} from "./java-world.js";
 import { particleSetting } from "./particle-settings.js";
 import "./style.css";
 import "./minecraft-ui.css";
@@ -187,9 +187,13 @@ import { HorseContainer, canInteract as horseReach, canWearArmor as horseWearsAr
 import { riddenHorse, jumpBar } from "./horse-gear-live.js";
 import { HorseGearRenderer } from "./horse-gear-renderer.js";
 import { capturePlayerAction, dispatchPlayerAction as dispatchPlayerActionRaw, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
-import { fromOriginal } from "./block-registry.js";
+import { fromOriginal, toOriginal } from "./block-registry.js";
+import { normalizeFlatOptions } from "./flat-world.js";
+import { createBonusChest } from "./bonus-chest.js";
+import { ORIGINAL_ITEMS } from "./original-items.js";
 import { setOriginalBlockMapper } from "./mineshaft-world.js";
 import { spawnerDisplayEntity } from "./mob-spawner.js";
+import { cartSpawnerDisplayEntity } from "./cart-spawner-display.js";
 import { watchSpawnerBlocks } from "./spawner-block.js";
 import { Rails } from "./rails.js";
 import { Torches } from "./torches.js";
@@ -209,6 +213,8 @@ import { EnchantingBookRenderer, EnchantingGuiBookView } from "./enchanting-book
 import { Signs, isSign, signShouldPop, signDrops } from "./signs.js";
 import { SignRenderer } from "./sign-renderer.js";
 import { openSignEditor } from "./sign-editor.js";
+import { openBookUi } from "./book-ui.js";
+import { ITEM_WRITABLE_BOOK, applyBookEdit, applyBookSign } from "./books.js";
 import { applyHangingEdit } from "./hanging-interaction.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
@@ -520,6 +526,10 @@ function makeRecord(p) {
     // Default, Large Biomes and Amplified worlds are streamed (endless) with the matching WorldType generator.
     generationVersion: p.biome === "javaStreamed" ? 15 : isJavaLandscape(p.biome) ? 14 : 8,
     ...(p.biome === "javaStreamed" ? { worldType: streamedWorldType(p.worldType) } : {}),
+    // Superflat: the FlatGeneratorInfo string (WorldInfo.generatorOptions), normalised as ass.toString writes it.
+    ...(p.biome === "javaStreamed" && p.worldType === "flat" ? { generatorOptions: normalizeFlatOptions(p.generatorOptions) } : {}),
+    // GuiCreateWorld "Bonus Chest": WorldInfo.isBonusChestEnabled; the chest is placed once (bonusChestPlaced).
+    ...(p.bonusChest === true ? { bonusChest: true } : {}),
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -1150,6 +1160,7 @@ async function launch(record, prepared) {
     restorePopulation(record,world,survival,mobs);
     if (record.villages) mobs.villages.loadJSON(record.villages);
     materializeFresh();
+    placeBonusChest(record);
     // A new EntityPlayerMP is spawn-protected for 60 ticks (damage is refused, Creative or not).
     survival.protection = 60;
     inhabited = new InhabitedTime(record.inhabited, survival.time);
@@ -1253,7 +1264,7 @@ async function launch(record, prepared) {
 // ---- Chat and commands (chat-ui.js GuiChat/GuiNewChat, commands.js ServerCommandManager, command-host.js game state) ----
 let chatOpen = false;
 const commandHost = createCommandHost({
-  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, rockets: () => rockets, survival: () => survival, experience: () => experience,
+  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, rockets: () => rockets, entityHosts: () => ({ items, xpOrbs, primed, falling, boats, projectiles, arrows, eyes, mobs, dimension: world.dimension ?? 0 }), survival: () => survival, experience: () => experience,
   position: () => ({ x: position.x, y: position.y, z: position.z }),
   seed: () => active.seed,
   beaconTile: (x, y, z) => beacons.ensure(x, y, z),
@@ -2217,7 +2228,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }),
   });
   // MobSpawnerBaseLogic.updateSpawner on the client: smoke and flame, the display mob's spin.
-  tickSpawnersClient({ spawners, random: scene.explosionParticles.worldRandom, eye: { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z } },
+  tickSpawnersClient({ spawners, minecarts, random: scene.explosionParticles.worldRandom, eye: { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z } },
     { particle: (name, x, y, z) => scene.fx.spawn(name, x, y, z) });
   if (grounded) addFallStat(stats, landedFall, survival.creative); // EntityPlayer.fall
   const movement = { world, position, survival, motion, grounded, fallDistance, landedFall };
@@ -2507,6 +2518,8 @@ function edit(place = false) {
     useBeacon: key => { useBeacon(key); syncContainerState(); },
     useBed,
     openSignEditor: (tile) => { screen = "inventory"; mining = null; mineHeld = false; openSignEditor({ show: (title, html) => modal(title, html), close: resume, markUnsaved: () => { saved = false; } }, signs, tile, world); syncContainerState(); },
+    // GuiScreenBook (book-ui.js); MC|BEdit / MC|BSign are applied to the selected stack as NetHandlerPlayServer does.
+    openBook: (held) => { if (!held) return; screen = "inventory"; mining = null; mineHeld = false; openBookUi({ show: (title, html) => modal(title, html, "book-modal"), close: () => { resume(); renderHotbar(); }, markUnsaved: () => { saved = false; } }, { stack: held, editable: held.id === ITEM_WRITABLE_BOOK, playerName: "Player", send: (channel, packet) => { (channel === "MC|BSign" ? applyBookSign : applyBookEdit)(survival.held, packet, "Player"); renderHotbar(); } }); syncContainerState(); },
     useCommandBlock: openCommandBlock,
     // ItemRecord.onItemUse / BlockJukebox / BlockNote.onBlockActivated; the disc leaves the stack outside Creative.
     useNoteJukebox: (x, y, z, held) => {
@@ -2646,6 +2659,34 @@ function tickMining() {
   mining = state.mining;
   mineCooldown = state.cooldown;
 }
+// WorldServer.createBonusChest at world creation: once, around the spawn, with the world's own Random (seeded from the world seed).
+function placeBonusChest(record) {
+  if (!record.bonusChest || record.bonusChestPlaced || world.dimension || !record.worldSpawn) return;
+  record.bonusChestPlaced = true;
+  const solid = (x, y, z) => world.solid(x, y, z), orig = (x, y, z) => toOriginal(world.get(x, y, z), world.getMeta(x, y, z))?.[0] ?? 0;
+  const changes = [], access = {
+    id: orig,
+    blocksMovement: (x, y, z) => solid(x, y, z),
+    solidTop: (x, y, z) => solid(x, y, z) && orig(x, y, z) !== 54,
+    put(x, y, z, id, meta) {
+      const cell = fromOriginal(id, id === 50 ? 5 : meta);
+      if (!cell) return;
+      const old = world.get(x, y, z);
+      world.set(x, y, z, cell.id, true, cell.meta);
+      changes.push([x, y, z, old, cell.id]);
+      if (id === 54) settleFacing(world, survival.chests, x, y, z);
+    },
+    fill(x, y, z, slot, s) {
+      const live = ORIGINAL_ITEMS[`${s.id}:${s.damage}`] ?? ORIGINAL_ITEMS[s.id];
+      const chest = survival.chests[`${x},${y},${z}`];
+      if (live && chest) chest.items[slot] = makeStack(live, s.count, s.damage);
+    },
+  };
+  const [sx, , sz] = record.worldSpawn;
+  createBonusChest(access, new JavaRandom(BigInt(javaSeed(record.seed)) ^ 0x5bcn), sx, sz);
+  if (changes.length) scene.updateBlocks(changes);
+  saved = false;
+}
 // Streamed population (version 13): chests, animals, spawners, carts and liquid ticks of columns that
 // just became resident for the first time. Resident columns already claimed are never handed over again.
 function materializeFresh() {
@@ -2733,9 +2774,9 @@ function movementTick(controls) {
   // EntityAIControlledByPlayer wore the carrot on a stick (pig-saddle-live.js); reportBrokenTool runs at the tick's end.
   if (mobs?.stickWorn) { mobs.stickWorn = false; renderHotbar(); saved = false; }
   // MobSpawnerBaseLogic.updateSpawner on the server (tile entities tick after the entities).
-  if (mobs && spawners?.size) {
+  if (mobs && (spawners?.size || minecarts?.carts.some((c) => c.type === 4))) {
     const level = (x, y, z, sub) => (scene.light ? scene.light.level(x, y, z, sub) : 15);
-    const spawned = tickSpawnerSimulation({ spawners, mobs, minecarts, random: weather.random,
+    const spawned = tickSpawnerSimulation({ spawners, mobs, minecarts, random: weather.random, isLoaded: world.streaming ? (x, z) => world.isLoaded(x, z) : null,
       feet: survival.health > 0 ? { x: position.x, y: position.y, z: position.z } : null }, {
       skyLight: (x, y, z) => (scene.light ? scene.light.skyAt(x, y, z) : 15),
       lightValue: (x, y, z) => level(x, y, z, scene.subtracted ?? 0),
@@ -2818,7 +2859,7 @@ $("#file-input").onchange = async (e) => {
       (!["meadow", "alpine", "island", "snowy"].includes(data.biome) && !isJavaLandscape(data.biome))
     )
       throw new Error("Choose a Blockworld export file");
-    const check = new World(data.seed, data.biome, data.generationVersion ?? 1, data.worldType);
+    const check = new World(data.seed, data.biome, data.generationVersion ?? 1, data.worldType, data.generatorOptions);
     check.restore(data.edits);
     const record = {
       ...makeRecord(data),
@@ -3231,6 +3272,7 @@ function animate(now) {
   const partial = Math.min(1, accumulator / PHYSICS.tick);
   // TileEntityMobSpawnerRenderer: the spinning display mob of each spawner within 64 blocks.
   const shown = spawners?.size && screen !== "home" ? spawners.values().filter((sp) => (sp.x + 0.5 - position.x) ** 2 + (sp.y + 0.5 - position.y) ** 2 + (sp.z + 0.5 - position.z) ** 2 < 4096).map((sp) => spawnerDisplayEntity(sp, partial)).filter(Boolean) : [];
+  if (minecarts && screen !== "home") for (const c of minecarts.carts) if (c.type === 4 && !c.dead && (c.x - position.x) ** 2 + (c.posY - position.y) ** 2 + (c.z - position.z) ** 2 < 4096) { const d = cartSpawnerDisplayEntity(minecarts, world, c, partial); if (d) shown.push(d); }
   if (mobs) horseGearRenderer?.update(screen === "home" ? [] : mobs.entities, { holder: { x: position.x, y: position.y, z: position.z }, camera: position, looked: aimedEntity, sneaking: !!motion.sneaking, knots: mobs.leashKnots() });
   if (mobs) mobRenderer.update([...(world.streaming ? mobs.entities.filter(e=>world.isLoaded(e.x,e.z)) : mobs.entities), ...shown],dt,partial,180 - yaw * 180 / Math.PI);
   minecartRenderer?.update(screen === "home" || !minecarts ? [] : minecarts.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);

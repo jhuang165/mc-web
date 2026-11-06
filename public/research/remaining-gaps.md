@@ -30,19 +30,19 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 15. Cave ambience (ambient sound category rows). Missing.
 
 ## Priority 2: entities and AI
-- Spawner minecart (MinecartSpawner). Missing.
+- Spawner minecart (MinecartSpawner): implemented, see `spawner-cart.md`; gaps are Java region import of carts and SpawnData Riding chains.
 - Natural spawning: SpawnerAnimals runs as an adapted pass only; per-biome spawn lists are not applied (all 61 biome rows are Partial).
 - Boats: not standable; see `boats.md`.
 - Fireballs and thrown potions: fireballs are not saved; thrown potions are missing from region export.
 - Wither: effect on mobs and wither skull behaviour listed in `entity-parity-catalogue.md` as Partial.
 - Ender Dragon: model is bytecode-derived; remaining gaps in `dragon.md`.
 - Villager: Partial; see the entity catalogue gap text.
-- Riders: region chains are saved since batch 11; `/summon` with a `Riding` tag still spawns unmounted.
+- Riders: region chains are saved since batch 11; `/summon` with a `Riding` tag now mounts mob on mob; mobs on carts/boats are unsupported.
 
 ## Priority 3: commands
 - Not available (reported as such): /achievement, /debug, /scoreboard, /spreadplayers, /tellraw.
 - Selectors (@p/@a/@r) operate over the single local player only (`src/command-selector.js`).
-- /summon covers 36 of the 57 EntityList registrations.
+- /summon covers 52 of the 57 EntityList registrations.
 - doMobSpawning and mobGriefing gamerules are Partial.
 
 ## Priority 4: world generation, structures, dimensions

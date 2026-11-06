@@ -17,6 +17,7 @@ import { MAPS_CLOCK_ITEMS } from './maps.js';
 import { BEACON_ITEMS } from './pyramid.js';
 import { FIREWORK_ITEMS } from './fireworks.js';
 import { FOOD_ITEMS } from './food-items.js';
+import { BOOK_ITEMS } from './books.js';
 
 // Original item ID (or "id:damage" subtype) -> browser item. The same table as tools/inventory-replay.mjs
 // MC_IDS (the item catalogue's mapping); region-import.test.js keeps the two identical.
@@ -58,6 +59,7 @@ export const ORIGINAL_ITEMS = Object.freeze({
   ...MAPS_CLOCK_ITEMS, // clock 347 -> 2080, filled map 358 -> 2081
   ...BEACON_ITEMS, // nether star 399 -> 2060
   398: 2100, // carrot on a stick (pig-saddle.js)
-  ...FIREWORK_ITEMS,
-  ...FOOD_ITEMS, // pumpkin pie 400 -> 2130 (food-items.js) // firework rocket 401 -> 2071, firework star 402 -> 2070
+  ...FIREWORK_ITEMS, // firework rocket 401 -> 2071, firework star 402 -> 2070
+  ...FOOD_ITEMS, // pumpkin pie 400 -> 2130 (food-items.js)
+  ...BOOK_ITEMS, // Book and Quill 386 -> 2110, Written Book 387 -> 2111 (books.js)
 });

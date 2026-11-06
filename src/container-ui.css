@@ -260,3 +260,6 @@ body:has(.horse-modal) #toast{display:none}
 .beacon-pay{position:absolute;width:calc(16*var(--u));height:calc(16*var(--u));pointer-events:none}
 .beacon-pay .vanilla-item-icon,.beacon-pay img{display:block;width:calc(16*var(--u));height:calc(16*var(--u))}
 body:has(.beacon-modal) #toast{display:none}
+/* GuiScreenBook (book-ui.js): the 320-unit screen is drawn at the GUI scale, so the modal box is only a transparent host. */
+.book-modal{width:auto;min-width:0;max-width:none;max-height:none;padding:0;border:0;border-radius:0;background:none;box-shadow:none;overflow:visible;transform:none!important}
+.book-modal .modal-top,.book-modal:before,.book-modal:after,.book-modal h2{display:none}

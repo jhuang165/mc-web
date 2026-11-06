@@ -19,6 +19,7 @@
 // column. A column hands its records to the live runtime once, the first time it is resident; the
 // world remembers claimed columns (a bitmask per cell, saved with the record) so looted chests and
 // killed animals are never refilled.
+import { FlatStructureCache } from './flat-structures.js';
 import { PopulationArea, StructureCache, populationBlockMapper, structureTileRecords, structureSummaries } from './population-world.js';
 
 export const CELL = 8;
@@ -48,14 +49,15 @@ export class StreamingPopulation {
   // `manager` (the WorldChunkManager) switches on the full four-feature structure chain of generation
   // version 15; without it the cell runs mineshafts only (version 13). The stronghold ring (a biome
   // search) is computed once per population object, i.e. once per world or worker, never per cell.
-  constructor({ seed, originX, originZ, terrain, biomeAt, terrainOnly, mapBlock = null, cells = 6, terrainChunks = 192, manager = null }) {
+  constructor({ seed, originX, originZ, terrain, biomeAt, terrainOnly, mapBlock = null, cells = 6, terrainChunks = 192, manager = null, flat = null }) {
+    this.flat = flat;
     this.seed = BigInt(seed);
     this.originChunkX = originX >> 4; this.originChunkZ = originZ >> 4;
     this.terrain = terrain; this.biomeAt = biomeAt; this.terrainOnly = terrainOnly; this.mapBlock = mapBlock;
     this.originals = new Lru(terrainChunks); this.cells = new Lru(cells);
     this.materialized = new Map();
     this.generated = 0;
-    this.structureCache = manager ? new StructureCache(seed, manager) : null;
+    this.structureCache = manager ? (flat ? new FlatStructureCache(seed, manager, flat) : new StructureCache(seed, manager)) : null;
   }
   original(x, z) {
     const k = key(x, z);
@@ -91,7 +93,7 @@ export class StreamingPopulation {
     const pass = new PopulationArea({
       seed: this.seed, chunkX: baseX, chunkZ: baseZ, size: CELL, margin: 1,
       terrain: (x, z) => this.original(x, z), biomeAt: this.biomeAt,
-      structures: !!this.structureCache, manager: this.structureCache?.manager, structureCache: this.structureCache,
+      structures: !!this.structureCache, manager: this.structureCache?.manager, structureCache: this.structureCache, flat: this.flat,
     }).run();
     const w = pass.world;
     // (original id, metadata) -> live id << 4 | live metadata, resolved once per state.

@@ -7,7 +7,7 @@
 // full loot every time. The records therefore become live state only once, when a world record has
 // no saved structure state yet (its first launch); afterwards the saved `spawners` / `minecarts`
 // fields are the truth: a looted cart stays looted, a broken cart or spawner stays gone.
-import { MobSpawners, boxesIntersect, mobBox } from "./mob-spawner.js";
+import { MobSpawners, boxesIntersect, mobBox, updateSpawner, updateSpawnerClient } from "./mob-spawner.js";
 import { Minecarts } from "./minecarts.js";
 import { furnaceUse } from "./cart-variants.js";
 import { MOB_SPAWNER } from "./world.js";
@@ -97,20 +97,39 @@ export function tickMinecartSimulation(state, hooks = {}) {
  */
 export function tickSpawnerSimulation(state, env = {}, hooks = {}) {
   const { spawners, mobs, minecarts, random, feet } = state;
-  if (!spawners?.size || !mobs) return [];
+  const cartSpawners = liveCartSpawners(minecarts, state.isLoaded);
+  if ((!spawners?.size && !cartSpawners.length) || !mobs) return [];
   const extraCollision = (box) => !!minecarts?.carts.some((c) => !c.dead && boxesIntersect(box, c.bb));
-  return spawners.tick({
+  const ctx = {
     ...mobs.spawnerHooks({ ...env, extraCollision }),
     random,
     players: feet ? [feet] : [],
     spawnParticles: hooks.spawnParticles,
-  });
+  };
+  const out = spawners?.size ? spawners.tick(ctx) : [];
+  // EntityMinecartMobSpawner.onUpdate: the cart moves, then the logic runs at the block the cart is in.
+  for (const s of cartSpawners) out.push(...updateSpawner(s, ctx));
+  return out;
+}
+
+// The spawner cart's logic (xu) at floor(posX), floor(posY), floor(posZ) of the cart (xu.b, xu.c, xu.d), for every live type 4 cart.
+export function liveCartSpawners(minecarts, isLoaded = null) {
+  const out = [];
+  for (const c of minecarts?.carts ?? []) {
+    if (c.type !== 4 || c.dead || !c.spawner || (isLoaded && !isLoaded(c.x, c.z))) continue;
+    c.spawner.x = Math.floor(c.x); c.spawner.y = Math.floor(c.posY); c.spawner.z = Math.floor(c.z);
+    out.push(c.spawner);
+  }
+  return out;
 }
 
 // The client branch (smoke and flame, the display mob's spin), with `eye` the client player's posY.
-export function tickSpawnersClient({ spawners, random, eye }, hooks = {}) {
-  if (!spawners?.size) return;
-  spawners.tickClient({ random, players: eye ? [eye] : [], particle: hooks.particle });
+export function tickSpawnersClient({ spawners, minecarts, random, eye }, hooks = {}) {
+  const carts = liveCartSpawners(minecarts);
+  if (!spawners?.size && !carts.length) return;
+  const ctx = { random, players: eye ? [eye] : [], particle: hooks.particle };
+  spawners?.tickClient(ctx);
+  for (const s of carts) updateSpawnerClient(s, ctx);
 }
 
 // RenderGlobal.playAuxSFX 2004 (a spawner spawned a mob): 20 smoke and flame pairs within a
