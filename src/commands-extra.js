@@ -1,7 +1,7 @@
 // /tellraw, /achievement, /spreadplayers and /debug of Minecraft Java 1.7.10 (CommandMessageRaw ba, CommandAchievement ae,
 // CommandSpreadPlayers br with its Position bs, CommandDebug ak), merged into commands.js' handler table. The evidence is
 // public/research/commands-b13-reference.json (tools/probes/CommandsProbe.java, tools/verify-commands-b13.mjs) and the notes are
-// public/research/commands-extra.md. Feedback goes out as chat components (ChatComponentTranslation), so the client-side
+// public/research/commands-b13.md. Feedback goes out as chat components (ChatComponentTranslation), so the client-side
 // StringTranslate rule applies: %d and %.2f in the en_US pattern print the argument with %s.
 import { parseChatJson, text, translation, Style, translateKey } from "./chat-component.js";
 import { ACHIEVEMENTS, BY_ID as ACHIEVEMENT_BY_ID } from "./achievements.js";

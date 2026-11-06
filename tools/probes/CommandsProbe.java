@@ -16,7 +16,7 @@ import java.util.*;
 //  * achievement: StatList.func_151177_a (pp.a(String)) lookups and each achievement's func_150955_j (ph.j) component.
 //  * spread: CommandSpreadPlayers.func_110670_a / func_110668_a (br) with a seeded java.util.Random on an allocated world.
 //  * profiler: Profiler.getProfilingData (qi.b) on a filled profilingMap.
-//  * scoreboard: Scoreboard (bac) objectives, scores, teams and ScoreboardSaveData (bad) NBT.
+//  * scoreboard: see ScoreboardProbe.java (tools/verify-scoreboard.mjs, scoreboard-reference.json).
 public class CommandsProbe {
   static String q(String s) {
     if (s == null) return "null";

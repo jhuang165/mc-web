@@ -52,7 +52,7 @@ Approximated:
 Game rules are stored for every name. keepInventory, naturalRegeneration, doDaylightCycle, doTileDrops, doFireTick, doMobSpawning,
 mobGriefing and doMobLoot change behaviour at the native call sites (see [game rules](game-rules.md)); commandBlockOutput controls operator feedback from command blocks, independently of their Track Output flag.
 
-Unsupported (red message): achievement, debug, scoreboard, spreadplayers, tellraw. /publish changes local LAN settings and reports the browser networking limitation. Dedicated-server-only commands (op, ban,
+Batch 13 added achievement, debug, scoreboard, spreadplayers and tellraw ([commands-b13.md](commands-b13.md)); no registered command is unsupported now. /publish changes local LAN settings and reports the browser networking limitation. Dedicated-server-only commands (op, ban,
 stop, ...) are not registered, as in the native singleplayer.
 
 ## 0.43.0 data tags
