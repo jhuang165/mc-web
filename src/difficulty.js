@@ -87,21 +87,26 @@ export function attributeValue(base, modifiers = [], min = -Infinity, max = Infi
 // operation 1 modifier on followRange. Returns the modifier list entry.
 export const spawnBonus = (rand) => [rand.nextGaussian() * 0.05, 1];
 
-// EntitySpider.onSpawnWithEgg (yn.a(sy)) without group data: EntityLiving's bonus (entity
+// EntitySpider.onSpawnWithEgg (yn.a(sy)): EntityLiving's bonus (entity
 // rand), the jockey roll World.rand.nextInt(100) == 0 (a skeleton rider; its own spawn rolls
 // use its own Random), then on Hard with World.rand.nextFloat() < 0.1 x local difficulty
 // GroupData.func_111104_a picks World.rand.nextInt(5): 0-1 speed, 2 strength,
-// 3 regeneration, 4 invisibility, added as PotionEffect(id, Integer.MAX_VALUE).
+// 3 regeneration, 4 invisibility, added as PotionEffect(id, Integer.MAX_VALUE). The GroupData
+// (yo) is rolled only when `group` is null; SpawnerAnimals hands the returned `group` to the
+// next spider of the same group, which takes its effect without drawing.
 export const SPIDER_EFFECTS = [1, 1, 5, 10, 14];
-export function spiderSpawnRolls(rand, worldRand, d, local) {
+export function spiderSpawnRolls(rand, worldRand, d, local, group = null) {
   const followRange = attributeValue(16, [spawnBonus(rand)], 0, 2048);
   const jockey = worldRand.nextInt(100) === 0;
-  let effect = 0;
-  if (d === HARD && worldRand.nextFloat() < f(f(0.1) * local)) effect = SPIDER_EFFECTS[worldRand.nextInt(5)];
-  return { followRange, jockey, effect };
+  if (!group) {
+    group = { effect: 0 };
+    if (d === HARD && worldRand.nextFloat() < f(f(0.1) * local)) group.effect = SPIDER_EFFECTS[worldRand.nextInt(5)];
+  }
+  return { followRange, jockey, effect: group.effect, group };
 }
 
-// EntityZombie.onSpawnWithEgg (yq.a(sy)) with no group data, in the original draw order.
+// EntityZombie.onSpawnWithEgg (yq.a(sy)) in the original draw order; GroupData (ys: child, villager)
+// is rolled only when `group` is null and comes back as `out.group` for the next zombie of a group.
 // `rand` is Entity.rand, `worldRand` World.rand, `local` World.func_147462_b at the zombie and
 // `date` World.getCurrentDate's month (1-12) and day. EntityLiving.addRandomArmor (sw.bC) and
 // EntityZombie.addRandomArmor (yq.bC) pick armour tiers and the iron sword or shovel, and
@@ -109,13 +114,14 @@ export function spiderSpawnRolls(rand, worldRand, d, local) {
 // (mob-equipment.js), then the Halloween pumpkin. A zombie pigman (EntityPigZombie.a calls this,
 // its bC only puts a golden sword in the hand with no roll) passes `pigman`.
 // `stacks` are the five native stacks and `dropChances` the five floats; `equipment` lists the occupied slots.
-export function zombieSpawnRolls(rand, worldRand, d, local, date = { month: 6, day: 1 }, pigman = false) {
+export function zombieSpawnRolls(rand, worldRand, d, local, date = { month: 6, day: 1 }, pigman = false, group = null) {
   const out = {};
   const follow = [spawnBonus(rand)];
   out.loot = rand.nextFloat() < f(f(0.55) * local);
   // EntityZombie.GroupData (ys): child, then villager.
-  out.child = worldRand.nextFloat() < f(0.05);
-  out.villager = worldRand.nextFloat() < f(0.05);
+  out.group = group ?? { child: worldRand.nextFloat() < f(0.05), villager: worldRand.nextFloat() < f(0.05) };
+  out.child = out.group.child;
+  out.villager = out.group.villager;
   // A child rides the first chicken in range (5, 3, 5) or, failing the second roll, a new one.
   if (out.child) {
     out.nearbyChicken = worldRand.nextFloat() < 0.05;
@@ -161,7 +167,7 @@ export function zombieSpawnRolls(rand, worldRand, d, local, date = { month: 6, d
 export function skeletonSpawnRolls(rand, d, local, date = { month: 6, day: 1 }, hell = false, forced = null) {
   const follow = [spawnBonus(rand)];
   const slots = [null, null, null, null, null], chances = Array(5).fill(DEFAULT_DROP_CHANCE);
-  // `forced` is a type the spawner already chose (dimension-spawning.js): the Nether roll is still drawn, its result dropped.
+  // `forced` is a type a mob spawner already chose: the Nether roll is still drawn, its result dropped.
   const roll = hell && rand.nextInt(5) > 0, wither = forced === null ? roll : forced;
   if (wither) slots[0] = { id: STONE_SWORD, count: 1, damage: 0 };
   else {

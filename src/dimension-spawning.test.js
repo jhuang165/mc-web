@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DimensionWorld } from "./dimension-world.js";
-import { dimensionSpawnList, dimensionSpawnType, spawnDimensionMonsters } from "./dimension-spawning.js";
-import { EntityWorld, HOSTILE } from "./entities.js";
+import { dimensionSpawnList } from "./dimension-spawning.js";
+import { EntityWorld } from "./entities.js";
 import { JavaRandom } from "./java-random.js";
 import { lightmap } from "./lighting.js";
 
@@ -20,20 +20,22 @@ test("fortress columns generate their native spawn list, loot and Blaze spawner 
   assert.deepEqual(w.population.claim(columns), []);
   assert.deepEqual(dimensionSpawnList(w, sx, sy, sz).map(row => row[0]), ["Blaze", "PigZombie", "Skeleton", "LavaSlime"]);
   assert.deepEqual(dimensionSpawnList(w, 0, 64, 0).map(row => row[0]), ["Ghast", "PigZombie", "LavaSlime"]);
-  assert.equal(dimensionSpawnType("Skeleton", { nextInt: () => 0 }), "skeleton");
-  assert.equal(dimensionSpawnType("Skeleton", { nextInt: () => 4 }), "wither_skeleton");
 });
 
-test("End packs spawn clear of the player and stop at the ticking window's cap", () => {
+test("End endermen come from SpawnerAnimals clear of the player and stop at the ticking window's cap", () => {
   const world = {
     dimension: 1, actualHeight: 256, surface: () => 61,
     isTicking: (x, z) => x >= -48 && x < 48 && z >= -48 && z < 48,
     get: (_x, y) => y === 60 ? 152 : 0, getMeta: () => 0, solid: (_x, y) => y === 60,
   };
-  const mobs = new EntityWorld(world, [], () => 0.2), random = new JavaRandom(13);
-  const hooks = mobs.spawnerHooks(), player = { x: 0, y: 61, z: 0 };
-  for (let i = 0; i < 50; i++) spawnDimensionMonsters(mobs, player, random, hooks, HOSTILE);
-  assert.equal(mobs.entities.length, 10);
+  const mobs = new EntityWorld(world, [], () => 0.2), player = { x: 0, y: 61, z: 0 };
+  mobs.worldRandom = new JavaRandom(13);
+  // 36 ticking chunks: the monster cap is 70 * 36 / 256 = 9, checked before each tick's pass.
+  for (let i = 0; i < 400; i++) mobs.naturalSpawn(player, { time: 18000 }, false);
+  assert.ok(mobs.entities.length >= 10 && mobs.entities.length <= 9 + 4 * 36, String(mobs.entities.length));
+  const before = mobs.entities.length;
+  mobs.naturalSpawn(player, { time: 18000 }, false);
+  assert.equal(mobs.entities.length, before);
   for (const e of mobs.entities) {
     assert.equal(e.type, "enderman");
     assert.equal(e.y, 61);

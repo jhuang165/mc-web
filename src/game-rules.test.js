@@ -81,6 +81,8 @@ test("doMobSpawning off: the night spawn pass makes no monsters", () => {
   for (const spawning of [true, false]) {
     if (!spawning) off("doMobSpawning"); else setGameRuleSource(null);
     const w = new EntityWorld({ ...flat, streaming: false }, []), s = new Survival();
+    w.naturalSpawning = true;
+    w.worldRandom = new JavaRandom(7);
     s.time = 18000;
     w.isDaytime = () => false;
     const player = { x: 64, y: 0, z: 64, alive: true };

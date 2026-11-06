@@ -1,11 +1,11 @@
-// EntitySquid and EntityBat inside EntityWorld (entities.js): the per-tick update, the living sound, the hurt wrapper and the natural spawn
-// pass. The pure rules are in squid-bat.js (replayed against public/research/squid-bat-reference.json); this file only wires them to the
-// engine's mob record, motion and event queue. entities.js calls squidBatUpdate, squidBatTalk, squidBatSpawnPass and installSquidBat.
-import { moveEntity, entityRandom, livingSoundRoll, actorCollides } from "./entities.js";
-import { normalCube, isLiquid } from "./world.js";
+// EntitySquid and EntityBat inside EntityWorld (entities.js): the per-tick update, the living sound and the hurt wrapper; natural spawning is
+// SpawnerAnimals (spawner-animals.js). The pure rules are in squid-bat.js (replayed against public/research/squid-bat-reference.json); this file only wires them to the
+// engine's mob record, motion and event queue. entities.js calls squidBatUpdate, squidBatTalk and installSquidBat.
+import { moveEntity, entityRandom, livingSoundRoll } from "./entities.js";
+import { normalCube } from "./world.js";
 import {
   SQUID, BAT, BAT_SOUNDS, BAT_TAKEOFF_VOLUME, squidStateOf, batStateOf, squidActionState, squidLivingUpdate, squidAir, squidWet, legacyBodyTurn,
-  batAIStep, batUpdate, batLivingSound, batSoundPitch, batHurt, batCanSpawn, squidCanSpawn, canSpawnAtLocation, spawnCapAllows, MAX_SPAWNED_IN_CHUNK,
+  batAIStep, batUpdate, batLivingSound, batSoundPitch, batHurt,
 } from "./squid-bat.js";
 const f = Math.fround;
 export const isSquidOrBat = (e) => e.type === "squid" || e.type === "bat";
@@ -108,38 +108,3 @@ export function installSquidBat(EntityWorld) {
   wrap("kill", () => {});
 }
 
-// A reduced SpawnerAnimals.findChunksForSpawning for the water-creature (squid) and ambient (bat) types, bytecode-derived and not probed:
-// the cap (spawnCapAllows), the per-chunk limit of 4, the canCreatureTypeSpawnAtLocation test, 24 blocks from the player and the world
-// spawn, then each mob's getCanSpawnHere (squid 45 < y < 63; bat y < 63 with the light and Halloween rules). Where the original
-// walks 289 chunks every tick with a random point each, this runs a few random points a tick around the player; the biome lists
-// (weight 10, squid groups of 4, bat groups of 8) are not read from the biome. `date` is injectable for tests.
-export const SPAWN_POINTS_PER_TICK = 6;
-export function squidBatSpawnPass(m, player, survival, allowed, date = null) {
-  if (!allowed) return 0;
-  const world = m.world, rand = m.random, kind = survival.time % 2 ? "water" : "air", type = kind === "water" ? "squid" : "bat";
-  if (!spawnCapAllows(m.entities.filter((e) => e.type === type).length)) return 0;
-  const now = date ?? (() => { const d = new Date(); return { month: d.getMonth() + 1, day: d.getDate() }; })(), spawn = world.spawn?.() ?? { x: 0, y: 64, z: 0 };
-  let spawned = 0;
-  for (let n = 0; n < SPAWN_POINTS_PER_TICK; n++) {
-    let x = Math.floor(player.x + (rand() * 2 - 1) * 112), z = Math.floor(player.z + (rand() * 2 - 1) * 112), y = kind === "water" ? 46 + Math.floor(rand() * 17) : Math.floor(rand() * 63);
-    if (world.streaming ? !world.isTicking(x, z) : x < 2 || z < 2 || x > (world.maxX ?? 1e9) - 2 || z > (world.maxZ ?? 1e9) - 2) continue;
-    if (normalCube(world.get(x, y, z))) continue;
-    let inChunk = 0;
-    for (let tries = 0; tries < 4 && inChunk < MAX_SPAWNED_IN_CHUNK; tries++) {
-      x += Math.floor(rand() * 6) - Math.floor(rand() * 6);
-      z += Math.floor(rand() * 6) - Math.floor(rand() * 6);
-      if (world.streaming ? !world.isTicking(x, z) : false) continue;
-      if (!canSpawnAtLocation(kind, world, x, y, z)) continue;
-      const px = x + 0.5 - player.x, py = y - player.y, pz = z + 0.5 - player.z, sx = x + 0.5 - spawn.x, sz = z + 0.5 - spawn.z;
-      if (px * px + py * py + pz * pz < 576 || sx * sx + (y - (spawn.y ?? y)) ** 2 + sz * sz < 576) continue;
-      if (kind === "water" ? !squidCanSpawn(y) : !batCanSpawn({
-        boxMinY: y, light: m.lightAt ? m.lightAt(x, y, z) : 0, date: now, rand: { nextBoolean: () => rand() < 0.5, nextInt: (n) => Math.floor(rand() * n) },
-        superOk: !actorCollides(world, x + 0.5, y, z + 0.5, BAT.width, BAT.height) && !isLiquid(world.get(x, y, z)),
-      })) continue;
-      m.spawnNatural(type, x + 0.5, y, z + 0.5);
-      inChunk++;
-      spawned++;
-    }
-  }
-  return spawned;
-}

@@ -2,7 +2,7 @@
 // EntityWorld, and runs one enderman tick, the hurt hook and the night spawn. entities.js and ai.js only call into here.
 import { gameRule } from "./game-rules.js";
 import { toOriginal, fromOriginal } from "./block-registry.js";
-import { collisionBoxes as cellBoxes, normalCube, raycast, isLiquid, hash, HEIGHT } from "./world.js";
+import { collisionBoxes as cellBoxes, normalCube, raycast, isLiquid, HEIGHT } from "./world.js";
 import * as E from "./enderman.js";
 
 const f = Math.fround, RAD = Math.PI / 180;
@@ -95,18 +95,3 @@ export function endermanHurt(mobs, e, source, rng) {
   return r;
 }
 
-// Overworld night ring spawn like the zombie and skeleton clocks (not the weighted SpawnerAnimals pass).
-export function endermanSpawn(mobs, player, survival, allowed, { actorCollides, SIZE, ENTITY_TYPES }) {
-  mobs.endermanClock = (mobs.endermanClock || 0) + 1;
-  if (!allowed || survival.creative || mobs.endermanClock < 700 || mobs.entities.filter((e) => e.type === "enderman").length >= 2) return;
-  mobs.endermanClock = 0;
-  for (let i = 0; i < 16; i++) {
-    const a = hash(i + 400, survival.time, mobs.world.numericSeed) * Math.PI * 2,
-      x = Math.floor(player.x + Math.sin(a) * 24), z = Math.floor(player.z + Math.cos(a) * 24);
-    if (mobs.world.streaming ? !mobs.world.isTicking(x, z) : x < 2 || z < 2 || x > SIZE - 2 || z > SIZE - 2) continue;
-    const y = mobs.world.surface(x, z), t = ENTITY_TYPES.enderman;
-    if (mobs.world.get(x, y - 1, z) !== 1 || actorCollides(mobs.world, x + 0.5, y, z + 0.5, t.width, t.height)) continue;
-    mobs.spawnNatural("enderman", x + 0.5, y, z + 0.5);
-    break;
-  }
-}

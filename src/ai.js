@@ -1160,12 +1160,18 @@ export class Brain {
   despawnEntity() {
     const e = this.e, p = this.ai.player;
     if ((e.idle & 31) !== 31 || !p) return;
-    // EntityWolf.canDespawn (v): only a wild wolf older than 2400 ticks.
-    const d3 = this.distSq(p), can = !e.persistent && ((e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || (e.type === "ocelot" && ocelotCanDespawn(e)) || e.type === "zombie" || e.type === "pigman" || e.type === "skeleton" || e.type === "wither_skeleton" || e.type === "witch" || e.type === "enderman" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper" || e.type === "squid" || e.type === "bat" || e.type === "blaze" || e.type === "ghast" || chickenJockeyDespawns(e));
+    const d3 = this.distSq(p), can = canDespawn(e);
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
     if (d3 < 1024) e.idle = 0;
   }
+}
+// !persistenceRequired && canDespawn() (sw.v and its overrides): EntityAnimal, EntityGolem and EntityVillager keep their mobs;
+// EntityWolf only a wild wolf older than 2400 ticks, EntityOcelot an untamed one, EntityChicken a jockey; every other living
+// mob takes EntityLiving's true (slimes, magma cubes and silverfish included).
+const DESPAWNS = new Set(["zombie", "pigman", "skeleton", "wither_skeleton", "witch", "enderman", "spider", "cave_spider", "creeper", "squid", "bat", "blaze", "ghast", "slime", "magma_cube", "silverfish", "giant"]);
+export function canDespawn(e) {
+  return !e.persistent && ((e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || (e.type === "ocelot" && ocelotCanDespawn(e)) || DESPAWNS.has(e.type) || chickenJockeyDespawns(e));
 }
 
 // --- The player as a target and an observer ---

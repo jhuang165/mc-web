@@ -56,7 +56,9 @@ test('spider aggression uses light, provocation and creative immunity; does not 
 });
 test('night spawns and save reload preserve spider health and clear transient aggression', () => {
   const ew=new EntityWorld(flat,[]),s=new Survival({slots:[],time:14000}),p={x:64,y:0,z:64};
-  for(let i=0;i<260;i++)ew.tick(p,s);
+  ew.naturalSpawning=true;ew.worldRandom=random(3);
+  // Other mobs are cleared so the monster cap never fills before a spider group is drawn.
+  for(let i=0;i<200&&!ew.entities.some(e=>e.type==='spider');i++){ew.tick(p,s);ew.entities=ew.entities.filter(e=>e.type==='spider');}
   const e=ew.entities.find(e=>e.type==='spider');assert.ok(e);e.health=9;e.spiderTarget=true;e.climbing=true;
   const loaded=new EntityWorld(flat,ew.serialize()).entities.find(e=>e.type==='spider');
   assert.equal(loaded.health,9);assert.equal(loaded.spiderTarget,false);assert.equal(loaded.climbing,false);

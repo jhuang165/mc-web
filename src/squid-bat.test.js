@@ -207,7 +207,3 @@ test("a hit wakes a hanging bat, and BatFlags is bit 1", () => {
   assert.equal(S.batHangingFromFlags(no.writtenFlags), no.readHanging);
 });
 
-test("the water-creature and ambient caps allow 16 at a time for one player", () => {
-  assert.equal(S.spawnCapAllows(16), true);
-  assert.equal(S.spawnCapAllows(17), false);
-});
