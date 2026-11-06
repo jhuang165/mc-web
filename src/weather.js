@@ -8,6 +8,7 @@
 // public/research/weather-reference.json by weather.test.js.
 import { JavaRandom, biomeTemperature, lightOpacity } from "./lighting.js";
 import { rainParticleAttempts } from "./particle-settings.js";
+import { rainParticleStrength } from "./render-settings.js";
 import { SIZE, HEIGHT, FIRE, LAVA, SNOW_LAYER, ICE, isPlant, ticksRandomly } from "./world.js";
 import { biomeFacts } from "./biomes.js";
 import { canBlockFreeze, canSnowAt, lightOf, meltResult } from "./snow.js";
@@ -290,7 +291,7 @@ export class Weather {
   // EffectRenderer with `add(kind, x, y, z)`, and the rain loop sound. The viewer
   // is {x, y, z}.
   rainParticles(world, viewer, add = () => {}) {
-    const strength = this.rainStrength(1);
+    const strength = rainParticleStrength(this.rainStrength(1)); // halved without fancy graphics (blt.l)
     if (strength === 0 || !rainsHere(world)) return;
     const random = new JavaRandom(BigInt(this.clientTicks) * 312987231n),
       i = Math.floor(viewer.x), j = Math.floor(viewer.y), k = Math.floor(viewer.z),

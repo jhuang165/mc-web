@@ -23,10 +23,11 @@ import { tileByName } from './block-textures.js';
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS, namedTile } from "./block-textures.js";
 import { pistonQuads, isPistonBase, PISTON_HEAD } from "./dispenser-piston.js";
 import { createLighting, worldMaterial } from "./light-material.js";
-import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
+import { LightVolume, lightOpacity, lightEmission, mhSin, mhCos, smoothFace, flatFace, celestialAngle, sunBrightness, skylightSubtracted, starBrightness, skyColor, biomeTemperature, sunriseColors, cloudColor, fogColor, TorchFlicker, BRIGHTNESS } from "./lighting.js";
 import { applyDimensionRender, fixedAngle, providerFog } from "./dimension-render.js";
 import { nightVisionBrightness, blindnessFog, adjustFogColor, warpMatrix } from "./potion-fx.js";
 import { Sky, Clouds } from "./sky.js";
+import { render, setRender, usePartialAo, leavesOpaque, shouldRenderClouds, shadowsEnabled } from "./render-settings.js";
 import { liquidHeight, flowAngle, viewpointBlock } from "./fluids.js";
 import { DropRenderer } from "./drop-renderer.js";
 import { ProjectileRenderer } from "./projectile-renderer.js";
@@ -53,8 +54,17 @@ const FACES = [
   { n: [0, 0, 1], v: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], shade: 0.8 },
   { n: [0, 0, -1], v: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], shade: 0.8 },
 ];
-// Fancy graphics: leaves are not opaque at render time, so faces next to them draw.
-const hides = (b) => opaqueCube(b) && b !== 5;
+// Fancy graphics: leaves are not opaque at render time, so faces next to them draw; Fast makes both leaf
+// blocks opaque (BlockLeaves.setGraphicsLevel), so faces between and against leaves are culled.
+const hides = (b) => opaqueCube(b) && ((b !== 5 && b !== 71) || leavesOpaque());
+// Smooth Lighting: Off lights each face flat from one cell (renderStandardBlockWithColorMultiplier), Minimum
+// uses the full-cube ambient occlusion path for every block, Maximum switches to the interpolating partial
+// path for blocks whose bounds are not the whole cell.
+function shadeFace(L, x, y, z, fi, corners, boundary, partial = false) {
+  if (render.ao === 0) return flatFace(L, x, y, z, fi, corners, boundary);
+  return smoothFace(L, x, y, z, fi, corners, boundary, usePartialAo(render.ao, !partial));
+}
+const partialBox = (lo, hi) => lo.some((v) => v > 0) || hi.some((v) => v < 1);
 // Vanilla's world is 256 tall with clouds at 128 (65 above sea level 63);
 // this compressed world keeps the 65-block gap above its own sea level.
 const CLOUD_HEIGHT = SEA + 65;
@@ -305,11 +315,13 @@ export class VoxelScene {
         group.add(mesh);
       });
     };
+    // Fancy graphics draws a translucent layer as a depth-only pass then colour; Fast as one blended pass.
+    const pass = (o) => (render.fancy ? [o.depth, o.color] : [o.color]);
     add(solid, this.material);
-    add(water, this.water.depth, this.water.color);
-    add(ice, this.iceDepth, this.iceColor);
-    add(flow, this.flow.depth, this.flow.color);
-    add(portal, this.portal.depth, this.portal.color);
+    add(water, ...pass(this.water));
+    add(ice, ...pass({ depth: this.iceDepth, color: this.iceColor }));
+    add(flow, ...pass(this.flow));
+    add(portal, ...pass(this.portal));
     add(lava, this.lavaStill.material);
     add(lavaFlow, this.lavaFlow.material);
     add(fire[0], this.fireLayers[0].material);
@@ -345,7 +357,7 @@ export class VoxelScene {
       const verts = corners.map((v) => [x + v[0], y + v[1], z + v[2]]);
       if (lit) m.quad(verts, uvs, f.shade, L.packed(x + f.n[0], y + f.n[1], z + f.n[2]));
       else {
-        const s = smoothFace(L, x, y, z, fi, corners, boundary);
+        const s = shadeFace(L, x, y, z, fi, corners, boundary, h < 1);
         m.quad(verts, uvs, s.ao.map((a) => a * f.shade), s.packed);
       }
     });
@@ -402,7 +414,7 @@ export class VoxelScene {
           const [s, t] = st(p);
           return [r.u0 + (r.u1 - r.u0) * s, r.v1 - (r.v1 - r.v0) * t];
         }),
-        s = smoothFace(L, x, y, z, fi, corners, boundary);
+        s = shadeFace(L, x, y, z, fi, corners, boundary, partialBox(lo, hi));
       m.quad(corners.map((p) => [x + p[0], y + p[1], z + p[2]]), uvs, s.ao.map((a) => a * f.shade), s.packed);
     });
   }
@@ -424,7 +436,7 @@ export class VoxelScene {
         corners=f.v.map(v=>[v[0]?x1:x0,v[1]?y1:y0,v[2]?z1:z0]),
         st=(p)=>[[1-p[2],1-p[1]],[p[2],1-p[1]],[p[0],p[2]],[p[0],p[2]],[p[0],1-p[1]],[1-p[0],1-p[1]]][fi],
         uvs=corners.map(p=>{const [s0,t]=st(p),s=flip?1-s0:s0;return[r.u0+(r.u1-r.u0)*s,r.v1-(r.v1-r.v0)*t];}),
-        sm=smoothFace(L,x,y,z,fi,corners,boundary);
+        sm=shadeFace(L,x,y,z,fi,corners,boundary,partialBox(lo,hi));
       m.quad(corners.map(p=>[x+p[0],y+p[1],z+p[2]]),uvs,sm.ao.map(a=>a*f.shade),sm.packed);
     });
   }
@@ -441,7 +453,7 @@ export class VoxelScene {
         across=(p)=>dz===1?p[0]:dz===-1?1-p[0]:dx===1?1-p[2]:p[2],
         st=(p)=>kind==='end'?[across(p),1-p[1]]:kind==='side'?[along(p),1-p[1]]:[along(p),across(p)],
         uvs=corners.map(p=>{const [s,t]=st(p);return[r.u0+(r.u1-r.u0)*s,r.v1-(r.v1-r.v0)*t];}),
-        sm=smoothFace(L,x,y,z,fi,corners,boundary);
+        sm=shadeFace(L,x,y,z,fi,corners,boundary,true);
       m.quad(corners.map(p=>[x+p[0],y+p[1],z+p[2]]),uvs,sm.ao.map(a=>a*f.shade),sm.packed);
     });
   }
@@ -990,6 +1002,15 @@ export class VoxelScene {
       target = BRIGHTNESS[level] * (1 - chunks / 16) + chunks / 16;
     this.fogBrightness += (target - this.fogBrightness) * 0.1;
   }
+  // Video settings (render-settings.js). Fancy graphics and Smooth Lighting remesh every chunk
+  // (RenderGlobal.loadRenderers); Fast swaps in the opaque leaf textures; mipmaps and anisotropy go to the atlas.
+  setRenderSettings(options) {
+    const before = { ...render };
+    setRender(options);
+    if (before.fancy !== render.fancy || this.textures.leavesOpaque !== !render.fancy) this.textures.setOpaqueLeaves(!render.fancy);
+    this.textures.setFiltering(render.mipmapLevels, render.anisotropic, this.renderer.capabilities.getMaxAnisotropy?.() ?? 1);
+    if (before.fancy !== render.fancy || before.ao !== render.ao) for (const k of this.chunks.keys()) this.dirty.add(k);
+  }
   setGamma(gamma) {
     this.gamma = gamma;
     this.lighting.update(this.sun ?? sunBrightness(this.angle), this.flicker.x, gamma, this.flash, this.nightVision ?? 0, this.dimension);
@@ -1033,6 +1054,8 @@ export class VoxelScene {
     u.fogFar.value = bf ? bf.end : this.distance;
     const sky = underwater || lava || blind ? fog : skyColor(this.temperature ?? 0.8, angle, rain, thunder, lightning, partial);
     this.sky.update({ angle, sky, fog, sunrise: underwater || lava || blind ? null : sunriseColors(angle), stars: blind ? 0 : starBrightness(angle), moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater: underwater || lava || blind, rain });
+    this.clouds.setFancy(render.fancy);
+    this.clouds.setEnabled(!this.dimension && shouldRenderClouds(this.distance / 16));
     this.clouds.update(c, time * 20, cloudColor(angle, rain, thunder));
     this.weatherRenderer.update(w, this.world, c, partial, time);
     this.drops.update(this.dropList, this.dropPartial, time * 20);
@@ -1055,6 +1078,7 @@ export class VoxelScene {
   // Entity shadows for this frame; `viewer` is the player's eye position.
   setShadows(casters, viewer) {
     const w = this.world, light = this.light;
+    if (!shadowsEnabled()) casters = [];
     this.shadows.update(casters, viewer, w && light && { get: (x, y, z) => w.get(x, y, z), light: (x, y, z) => light.level(x, y, z, this.subtracted) });
   }
   // `partial` is how far the frame is into the next physics tick.

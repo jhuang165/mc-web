@@ -183,7 +183,21 @@ void main(){float f=fogDensity>0.?1.-exp(-fogDensity*vFogDistance):clamp((vFogDi
     const s = this.size;
     return this.filled[(((pz % s) + s) % s) * s + (((px % s) + s) % s)];
   }
+  // The Graphics option: renderClouds (Fast) draws a flat layer of 8-block texels, 32 texels either side
+  // (a 32-block grid over 256 blocks each way), uniform colour at 0.8 alpha and no depth pass;
+  // renderCloudsFancy draws the 12 x 4 x 12 block volumes.
+  setFancy(fancy) {
+    if (this.fancy === fancy) return;
+    this.fancy = fancy;
+    this.key = "";
+  }
+  setEnabled(on) {
+    this.enabled = on;
+    this.mesh.visible = on;
+    this.depth.visible = on && this.fancy !== false;
+  }
   build(px0, pz0) {
+    if (this.fancy === false) return this.buildFast(px0, pz0);
     const p = [], shade = [], idx = [], r = this.radius * 2 + 1, h = 4;
     const face = (verts, s) => {
       const v = p.length / 3;
@@ -209,10 +223,40 @@ void main(){float f=fogDensity>0.?1.-exp(-fogDensity*vFogDistance):clamp((vFogDi
     this.mesh.geometry.dispose();
     this.mesh.geometry = this.depth.geometry = g;
   }
+  buildFast(px0, pz0) {
+    const p = [], shade = [], idx = [], r = 64, S = 8;
+    for (let i = 0; i < r; i++)
+      for (let k = 0; k < r; k++) {
+        if (!this.cell(px0 + i, pz0 + k)) continue;
+        const v = p.length / 3, x0 = i * S, x1 = x0 + S, z0 = k * S, z1 = z0 + S;
+        p.push(x0, 0, z1, x1, 0, z1, x1, 0, z0, x0, 0, z0);
+        shade.push(1, 1, 1, 1);
+        idx.push(v, v + 1, v + 2, v, v + 2, v + 3);
+      }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
+    g.setAttribute("shade", new THREE.Float32BufferAttribute(shade, 1));
+    g.setIndex(idx);
+    this.mesh.geometry.dispose();
+    this.mesh.geometry = this.depth.geometry = g;
+  }
   // `ticks` counts client ticks (plus the partial tick); colour is 0-1 RGB.
   update(camera, ticks, color) {
     this.material.uniforms.color.value.set(...color);
     if (!this.filled) return;
+    if (this.fancy === false) {
+      // d2 = x + drift; the texel at k blocks from the camera is (k + d2) / 8.
+      const drift = ticks * 0.03, cx = Math.floor((camera.position.x + drift) / 8) - 32, cz = Math.floor(camera.position.z / 8) - 32, key = "f" + cx + "," + cz;
+      if (key !== this.key) {
+        this.key = key;
+        this.build(cx, cz);
+      }
+      this.mesh.position.set(cx * 8 - drift, this.height + 0.33, cz * 8);
+      this.depth.position.copy(this.mesh.position);
+      this.depth.visible = false;
+      return;
+    }
+    this.depth.visible = this.enabled !== false;
     const drift = ticks * 0.03,
       cx = Math.floor((camera.position.x + drift) / 12) - this.radius,
       cz = Math.floor(camera.position.z / 12 + 0.33) - this.radius,

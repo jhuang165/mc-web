@@ -423,7 +423,8 @@ export class LightVolume {
 // front of it; the corner-occlusion checks look one layer further out, as the
 // 1.7.10 code does. Returns per-vertex AO factors and packed brightness.
 const AXIS = [0, 0, 1, 1, 2, 2], SIGN = [1, -1, 1, -1, 1, -1], TANGENTS = [[1, 2], [1, 2], [0, 2], [0, 2], [0, 1], [0, 1]];
-export function smoothFace(light, x, y, z, face, corners, boundary = true) {
+export function smoothFace(light, x, y, z, face, corners, boundary = true, partial = false) {
+  if (partial) return partialFace(light, x, y, z, face, corners, boundary);
   const w = light.world, axis = AXIS[face], sign = SIGN[face], [u, v] = TANGENTS[face],
     n = [0, 0, 0];
   n[axis] = sign;
@@ -454,6 +455,43 @@ export function smoothFace(light, x, y, z, face, corners, boundary = true) {
     packed.push(aoBrightness(p1, p2, pc, centre));
   }
   return { ao, packed };
+}
+
+// renderStandardBlockWithAmbientOcclusionPartial: the four cell-corner values of the face (what the full path
+// gives a vertex at that corner) are interpolated bilinearly at each vertex's position in the face plane
+// (doubles, truncated to float); brightness goes through mixAoBrightness: per 8-bit field a double weighted
+// sum, truncated and masked to 255.
+export function partialFace(light, x, y, z, face, corners, boundary = true) {
+  const [u, v] = TANGENTS[face], cell = (cu, cv) => {
+    const c = [0, 0, 0];
+    c[AXIS[face]] = SIGN[face] > 0 ? 1 : 0;
+    c[u] = cu;
+    c[v] = cv;
+    return smoothFace(light, x, y, z, face, [c], boundary, false);
+  };
+  const grid = [[cell(0, 0), cell(0, 1)], [cell(1, 0), cell(1, 1)]], ao = [], packed = [];
+  for (const p of corners) {
+    const a = p[u], b = p[v], w = [[(1 - a) * (1 - b), (1 - a) * b], [a * (1 - b), a * b]];
+    let sum = 0, hi = 0, lo = 0;
+    for (let i = 0; i < 2; i++)
+      for (let j = 0; j < 2; j++) {
+        sum += grid[i][j].ao[0] * w[i][j];
+        hi += ((grid[i][j].packed[0] >> 16) & 255) * w[i][j];
+        lo += (grid[i][j].packed[0] & 255) * w[i][j];
+      }
+    ao.push(f(sum));
+    packed.push(((Math.trunc(hi) & 255) << 16) | (Math.trunc(lo) & 255));
+  }
+  return { ao, packed };
+}
+
+// renderStandardBlockWithColorMultiplier (smooth lighting off): one brightness per face, the neighbour cell's
+// (the block's own cell when the face is inside the cell), and no corner occlusion.
+export function flatFace(light, x, y, z, face, corners, boundary = true) {
+  const n = [0, 0, 0];
+  n[AXIS[face]] = SIGN[face];
+  const p = boundary ? light.packed(x + n[0], y + n[1], z + n[2]) : light.packed(x, y, z);
+  return { ao: corners.map(() => 1), packed: corners.map(() => p) };
 }
 
 // RenderGlobal.renderStars: quads on a radius-100 sphere, four vertices each.

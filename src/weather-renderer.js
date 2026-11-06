@@ -12,6 +12,7 @@ import { precipitationHeight } from "./weather.js";
 const f = Math.fround;
 const RADIUS = 10; // fancy graphics
 const SPAN = 2 * RADIUS + 1;
+import { rainRadius } from "./render-settings.js";
 
 // EntityRenderer's constructor tables: unit vectors perpendicular to the
 // direction from the viewer, so every rain quad faces the viewer. The centre
@@ -194,6 +195,7 @@ export class WeatherRenderer {
     if (strength > 0 && (facts.canSpawnLightning || facts.enableSnow)) {
       const px = camera.position.x, py = camera.position.y, pz = camera.position.z,
         i = Math.floor(px), j = Math.floor(py), k = Math.floor(pz), count = weather.clientTicks;
+      const RADIUS = rainRadius();
       for (let z = k - RADIUS; z <= k + RADIUS; z++)
         for (let x = i - RADIUS; x <= i + RADIUS; x++) {
           const idx = (z - k + 16) * 32 + (x - i + 16), top = precipitationHeight(world, x, z);
