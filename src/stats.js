@@ -103,26 +103,31 @@ export class Stats {
   }
 }
 
-// StatisticsFile.func_150880_a: one flat JSON object with the stat ints and the achievement ints (1 once unlocked).
-export function statsFileJson(stats, unlockedAchievements = []) {
+// StatisticsFile.func_150880_a: one flat JSON object with the stat ints and the achievement ints (1 once unlocked). A stat with
+// progress (only exploreAllBiomes: its JsonSerializableSet of visited biome names) is written as {"value": n, "progress": [...]},
+// locked or not, whenever a biome has been visited.
+export function statsFileJson(stats, unlockedAchievements = [], biomes = []) {
   const out = {};
   for (const [id, v] of stats.values) if (v > 0) out[id] = v;
   for (const id of unlockedAchievements) out[`achievement.${id}`] = 1;
+  if (biomes.length) out["achievement.exploreAllBiomes"] = { value: unlockedAchievements.includes("exploreAllBiomes") ? 1 : 0, progress: [...biomes] };
   return JSON.stringify(out);
 }
-// StatisticsFile.func_150881_a: unknown keys are ignored; { value } objects are accepted as well as plain ints.
+// StatisticsFile.func_150881_a: unknown keys are ignored; { value } objects are accepted as well as plain ints, and the
+// exploreAllBiomes progress array becomes `biomes`.
 export function parseStatsFile(text) {
-  const stats = new Stats(), achievements = [];
+  const stats = new Stats(), achievements = [], biomes = [];
   let json;
-  try { json = JSON.parse(text); } catch { return { stats, achievements }; }
-  if (!json || typeof json !== "object") return { stats, achievements };
+  try { json = JSON.parse(text); } catch { return { stats, achievements, biomes }; }
+  if (!json || typeof json !== "object" || Array.isArray(json)) return { stats, achievements, biomes };
   const flat = {};
   for (const [id, v] of Object.entries(json)) {
     const n = typeof v === "object" && v ? v.value : v;
     if (id.startsWith("achievement.")) { if (n > 0) achievements.push(id.slice("achievement.".length)); } else flat[id] = n;
+    if (id === "achievement.exploreAllBiomes" && Array.isArray(v?.progress)) for (const b of v.progress) if (typeof b === "string" && !biomes.includes(b)) biomes.push(b);
   }
   stats.load(flat);
-  return { stats, achievements };
+  return { stats, achievements, biomes };
 }
 
 // UUID.nameUUIDFromBytes("OfflinePlayer:<name>"): the player UUID of an offline-mode server (stats/<uuid>.json).
@@ -186,5 +191,6 @@ export function sortRows(rows, sort, valueOf) {
 // PLAYER_NAME), so the file uses that name's offline-mode UUID, which the integrated server of a Java client uses for it.
 export function statsExportFile(record, name = "Player") {
   const unlocked = record?.achievements?.unlocked ?? [];
-  return [`stats/${offlineUuid(name)}.json`, new TextEncoder().encode(statsFileJson(new Stats(record?.stats), unlocked))];
+  const biomes = Array.isArray(record?.achievements?.biomes) ? record.achievements.biomes.filter((b) => typeof b === "string") : [];
+  return [`stats/${offlineUuid(name)}.json`, new TextEncoder().encode(statsFileJson(new Stats(record?.stats), unlocked, biomes))];
 }

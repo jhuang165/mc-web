@@ -31,6 +31,7 @@ import { villageDocument } from './village.js';
 import { mapDataFiles } from './maps-nbt.js';
 import { javaProjectileToNbt } from './java-projectiles.js';
 import { statsExportFile } from './stats.js';
+import { DEFAULT_RULES } from './game-rules.js';
 import { GEAR_TYPES, gearFieldsFrom } from './mob-equipment-live.js';
 // A [type, value] pair of cart-variants.js variantNBT (compound [10, {key: pair}], list [9, elementType, items]) as a tag.
 const pairTag=p=>p[0]===NBT.COMPOUND?comp(Object.fromEntries(Object.entries(p[1]).map(([k,v])=>[k,pairTag(v)]))):p[0]===NBT.LIST?tag(NBT.LIST,{elementType:p[2].length?p[1]:NBT.END,items:p[1]===NBT.COMPOUND?p[2].map(i=>new Map(Object.entries(i).map(([k,v])=>[k,pairTag(v)]))):p[2]}):tag(p[0],p[0]===NBT.SHORT?(p[1]<<16)>>16:p[1]);
@@ -171,18 +172,32 @@ function payload(state,ox,oz,report,blockAt) {
 }
 // TileEntityEndPortal (id Airportal) has no fields besides x, y, z.
 const endPortalTiles=(p,cells)=>{for(const [x,y,z] of cells)p.tileEntities.push(new Map(Object.entries({id:str('Airportal'),x:int(x),y:int(y),z:int(z)})));return p;};
-function levelNbt(record,w,report) {
+// level.dat (SaveHandler.saveWorldInfoWithPlayer): WorldInfo.cloneNBTCompound(player) as Data. Key order is free (NBTTagCompound is a
+// HashMap); level-dat-reference.json holds what the unchanged WorldInfo and EntityPlayer write (level-dat.md).
+export function levelNbt(record,w,report={unmappedItems:0}) {
  const p=record.player??{},pos=record.position??w.spawn(),xp=new Experience(record.experience),creative=record.mode!=='survival'&&record.mode!=='adventure',gameType=creative?1:record.mode==='adventure'?2:0;
  const dimension=dimensionOf(record),ox=w.originX??0,oz=w.originZ??0;
  const spawn=record.worldSpawn??Object.values(w.spawn()).map(Math.floor);
- const player={...entity(pos,'Player',dimension?0:ox,dimension?0:oz),Dimension:int(dimension),Health:short(p.health??20),HealF:float(p.health??20),foodLevel:int(p.food??20),foodSaturationLevel:float(p.saturation??5),foodExhaustionLevel:float(p.exhaustion??0),foodTickTimer:int(p.timer??0),XpLevel:int(xp.level),XpP:float(xp.progress),XpTotal:int(xp.total),Score:int(xp.score),SelectedItemSlot:int(p.current??0),playerGameType:int(gameType),SleepTimer:short(0),Sleeping:byte(0),abilities:comp({invulnerable:byte(creative?1:0),flying:byte(0),mayfly:byte(creative?1:0),instabuild:byte(creative?1:0),mayBuild:byte(gameType===2?0:1),flySpeed:float(.05),walkSpeed:float(.1)})};
+ const health=Number.isFinite(p.health)?p.health:20;
+ // EntityLivingBase.writeEntityToNBT: HealF and the legacy Health short (ceil); EntityPlayerMP adds playerGameType.
+ const player={...entity({...pos,air:Number.isInteger(p.air)?p.air:300,fire:Number.isInteger(p.fire)?p.fire:0},'Player',dimension?0:ox,dimension?0:oz),Dimension:int(dimension),Health:short(Math.ceil(health)),HealF:float(health),AbsorptionAmount:float(Number.isFinite(p.absorption)?p.absorption:0),foodLevel:int(p.food??20),foodSaturationLevel:float(p.saturation??5),foodExhaustionLevel:float(p.exhaustion??0),foodTickTimer:int(p.timer??0),XpLevel:int(xp.level),XpP:float(xp.progress),XpTotal:int(xp.total),Score:int(xp.score),SelectedItemSlot:int(p.current??0),playerGameType:int(gameType),SleepTimer:short(0),Sleeping:byte(0),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Attributes:list(NBT.COMPOUND,[['generic.maxHealth',20],['generic.knockbackResistance',0],['generic.movementSpeed',Math.fround(.1)],['generic.attackDamage',1]].map(([n,b])=>new Map([['Name',str(n)],['Base',tag(NBT.DOUBLE,b)]]))),abilities:comp({invulnerable:byte(creative?1:0),flying:byte(0),mayfly:byte(creative?1:0),instabuild:byte(creative?1:0),mayBuild:byte(gameType===2?0:1),flySpeed:float(.05),walkSpeed:float(.1)})};
  delete player.id;
  player.PortalCooldown=int(readPlayerPortalState(record.portalState).t);
+ // EntityLivingBase: ActiveEffects (PotionEffect.writeCustomPotionEffectToNBT; the browser has no ambient effects).
+ const effects=(Array.isArray(p.effects)?p.effects:[]).filter(e=>Number.isInteger(e?.id)&&Number.isInteger(e.duration));
+ if(effects.length)player.ActiveEffects=list(NBT.COMPOUND,effects.map(e=>new Map([['Id',byte(e.id)],['Amplifier',byte(e.amplifier|0)],['Duration',int(e.duration)],['Ambient',byte(0)]])));
+ // EntityPlayer: the bed spawn (SpawnX/Y/Z with SpawnForced) only when one is set (bed.js; the browser has no forced spawn).
+ const bed=record.bed?.spawn;
+ if(Array.isArray(bed)&&bed.length===3&&bed.every(Number.isInteger))Object.assign(player,{SpawnX:int(bed[0]+ox),SpawnY:int(bed[1]),SpawnZ:int(bed[2]+oz),SpawnForced:byte(0)});
  const items=(p.slots??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];});
  (p.armor??[]).forEach((s,i)=>{const n=stackNbt(s,100+i,report);if(n)items.push(n);});player.Inventory=list(NBT.COMPOUND,items);
  // InventoryEnderChest.saveInventoryToNBT: EnderItems, slots 0-26 (chest-blocks.js).
  player.EnderItems=list(NBT.COMPOUND,saveEnderSlots(p.enderItems).flatMap(({slot,stack})=>{const n=stackNbt(stack,slot,report);return n?[n]:[];}));
- const data={version:int(19133),initialized:byte(1),RandomSeed:tag(NBT.LONG,w.javaSeed??BigInt(w.numericSeed)),generatorName:str(record.biome==='javaStreamed'?streamedWorldType(record.worldType):record.biome==='javaLargeBiomes'?'largeBiomes':record.biome==='javaAmplified'?'amplified':'default'),generatorVersion:int(1),generatorOptions:str(w.generatorOptions??''),MapFeatures:byte(1),LevelName:str(record.name??'Blockworld'),GameType:int(gameType),hardcore:byte(0),allowCommands:byte(creative?1:0),Time:long(p.time??0),DayTime:long(p.time??0),LastPlayed:long(record.updated??0),SizeOnDisk:long(0),SpawnX:int(spawn[0]+ox),SpawnY:int(spawn[1]),SpawnZ:int(spawn[2]+oz),Difficulty:byte(2),Player:comp(player)};
+ // WorldType names; WorldInfo writes the type's generator version (DEFAULT 1, every other type 0). 1.7.10 has no Difficulty key.
+ const generatorName=record.biome==='javaStreamed'?streamedWorldType(record.worldType):record.biome==='javaLargeBiomes'?'largeBiomes':record.biome==='javaAmplified'?'amplified':'default';
+ const rules={...DEFAULT_RULES};
+ for(const [k,v] of Object.entries(record.gameRules&&typeof record.gameRules==='object'?record.gameRules:{}))if(typeof v==='string')rules[k]=v;
+ const data={version:int(19133),initialized:byte(1),RandomSeed:tag(NBT.LONG,w.javaSeed??BigInt(w.numericSeed)),generatorName:str(generatorName),generatorVersion:int(generatorName==='default'?1:0),generatorOptions:str(w.generatorOptions??''),MapFeatures:byte(record.mapFeatures===false?0:1),LevelName:str(record.name??'Blockworld'),GameType:int(gameType),hardcore:byte(record.hardcore===true?1:0),allowCommands:byte((typeof record.allowCommands==='boolean'?record.allowCommands:creative)?1:0),Time:long(Number.isSafeInteger(record.totalTime)&&record.totalTime>=0?record.totalTime:p.time??0),DayTime:long(p.time??0),LastPlayed:long(record.updated??0),SizeOnDisk:long(0),SpawnX:int(spawn[0]+ox),SpawnY:int(spawn[1]),SpawnZ:int(spawn[2]+oz),GameRules:comp(Object.fromEntries(Object.entries(rules).map(([k,v])=>[k,str(v)]))),Player:comp(player)};
  for(const name of ['rainTime','thunderTime'])data[name]=int(record.weather?.[name]??0);
  for(const name of ['raining','thundering'])data[name]=byte(record.weather?.[name]?1:0);
  return {name:'',tag:comp({Data:comp(data)})};

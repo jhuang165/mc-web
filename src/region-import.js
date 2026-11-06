@@ -14,7 +14,7 @@ import { isJavaLandscape } from './java-world.js';
 import { fromOriginal, isRegistered } from './block-registry.js';
 import { readRegion, decodeRegionChunk, regionAddress, regionSlot } from './region-file.js';
 import { chunkFromNbt } from './chunk-nbt.js';
-import { nbtGet } from './nbt-get.js';
+import { nbtGet, hasNumber } from './nbt-get.js';
 import { readFireworkNbt } from './fireworks-nbt.js';
 import { readBookNbt } from './books-nbt.js';
 import { NBT } from './nbt.js';
@@ -30,6 +30,11 @@ import { JAVA_PROJECTILES, IMPORT_PROJECTILE_LIMIT, javaProjectileFromNbt } from
 import { decodeCompressedNbt } from './nbt-compression.js';
 import { villagesFromNbt } from './village.js';
 import { isMapFile, mapsFromFiles } from './maps-nbt.js';
+import { javaPlayerFromNbt, levelGenerator, statsRecordFromJson } from './level-dat.js';
+import { populationBlockMapperReady } from './population-world.js';
+import { CART_ENTITY_IDS, isContainerType, slotCount } from './cart-variants.js';
+import { spawnerRecord } from './cart-summon.js';
+import { ARTS, Hanging } from './hanging.js';
 
 export const LIVE_CHUNKS = SIZE / 16;
 // World.restore and the Import screen's file-size check (main.js).
@@ -161,6 +166,89 @@ const doubles = (map, key) => {
 const tally = (map, key, n = 1) => map.set(key, (map.get(key) ?? 0) + n);
 const sortedCounts = (map, name = 'id') => [...map].sort(([a], [b]) => String(a).localeCompare(String(b), 'en', { numeric: true })).map(([key, count]) => ({ [name]: key, count }));
 
+// EntityHanging.readEntityFromNBT (1.7.10): Direction (0 south, 1 west, 2 north, 3 east) when present, else Dir mapped 0->2,
+// 1->1, 2->0, 3->3; TileX/Y/Z is the wall block. EntityPainting: Motive (an unknown name is Kebab, as hanging.js loads it).
+// EntityItemFrame: Item, ItemRotation and ItemDropChance (1 when absent). The record is hanging.js toJSON's shape.
+export function hangingFromNbt(tag, id, { shiftX = 0, shiftZ = 0, convertItem = (c) => itemStackFromNbt(c) } = {}) {
+  const tile = ['TileX', 'TileY', 'TileZ'].map((k) => get(tag, k, NBT.INT));
+  if (!tile.every(Number.isInteger)) return null;
+  const dir = hasNumber(tag, 'Direction') ? get(tag, 'Direction', NBT.BYTE, 0) : [2, 1, 0, 3][get(tag, 'Dir', NBT.BYTE, 0)] ?? 0;
+  const record = { kind: id === 'Painting' ? 'painting' : 'frame', dir: ((dir % 4) + 4) % 4, tx: tile[0] + shiftX, ty: tile[1], tz: tile[2] + shiftZ };
+  if (id === 'Painting') {
+    const motive = get(tag, 'Motive', NBT.STRING, '');
+    record.art = ARTS.some((a) => a[0] === motive) ? motive : ARTS[0][0];
+  } else {
+    const item = get(tag, 'Item', NBT.COMPOUND), stack = item ? convertItem(item) : null;
+    if (stack) { record.item = stack; record.rotation = get(tag, 'ItemRotation', NBT.BYTE, 0) & 3; }
+    else record.rotation = 0;
+    if (hasNumber(tag, 'ItemDropChance')) { const c = get(tag, 'ItemDropChance', NBT.FLOAT, 1); if (c !== 1) record.dropChance = c; }
+  }
+  return record;
+}
+// EntityMinecart.readEntityFromNBT and its subclasses (cart-summon.js summonCart reads the same keys) -> a minecarts.js toJSON
+// cart: Pos[1] is posY, Rotation stays in native degrees, Items keep their original ids (minecarts.js maps them on load).
+export function cartFromNbt(tag, type, { shiftX = 0, shiftZ = 0, lost = () => {} } = {}) {
+  const pos = get(tag, 'Pos', NBT.LIST).items, motion = get(tag, 'Motion', NBT.LIST), rotation = get(tag, 'Rotation', NBT.LIST);
+  const cart = { type, x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ,
+    motion: motion?.elementType === NBT.DOUBLE && motion.items.length === 3 && motion.items.every(Number.isFinite) ? [...motion.items] : [0, 0, 0],
+    rotation: rotation?.elementType === NBT.FLOAT && rotation.items.length === 2 && rotation.items.every(Number.isFinite) ? [...rotation.items] : [0, 0],
+    fallDistance: get(tag, 'FallDistance', NBT.FLOAT, 0), fire: get(tag, 'Fire', NBT.SHORT, 0), onGround: get(tag, 'OnGround', NBT.BYTE, 0) !== 0, items: [] };
+  const name = get(tag, 'CustomName', NBT.STRING, '');
+  if (name) cart.customName = name;
+  if (type === 2) { cart.fuel = Math.max(0, get(tag, 'Fuel', NBT.SHORT, 0)); cart.pushX = get(tag, 'PushX', NBT.DOUBLE, 0); cart.pushZ = get(tag, 'PushZ', NBT.DOUBLE, 0); }
+  if (type === 3) cart.fuse = hasNumber(tag, 'TNTFuse') ? get(tag, 'TNTFuse', NBT.INT, -1) : -1;
+  if (type === 5) cart.cooldown = hasNumber(tag, 'TransferCooldown') ? get(tag, 'TransferCooldown', NBT.INT, -1) : -1;
+  if (type === 4) { const s = makeSpawner(0, 0, 0); readSpawnerNBT(s, spawnerRecord(tag)); cart.spawner = spawnerJSON(s); }
+  if (type === 6) {
+    cart.command = { command: get(tag, 'Command', NBT.STRING, ''), successCount: get(tag, 'SuccessCount', NBT.INT, 0) };
+    if (name) cart.command.customName = name;
+    if (hasNumber(tag, 'TrackOutput')) cart.command.trackOutput = get(tag, 'TrackOutput', NBT.BYTE, 1) !== 0;
+    const last = get(tag, 'LastOutput', NBT.STRING);
+    if (typeof last === 'string') cart.command.lastOutput = last;
+  }
+  if (isContainerType(type)) for (const entry of compounds(tag, 'Items')) {
+    const slot = get(entry, 'Slot', NBT.BYTE, 0) & 255, id = get(entry, 'id', NBT.SHORT), count = get(entry, 'Count', NBT.BYTE, 0);
+    if (slot >= slotCount(type) || !Number.isInteger(id) || count <= 0) { lost(`cart slot ${slot}`); continue; }
+    const item = { slot, id, damage: get(entry, 'Damage', NBT.SHORT, 0), count };
+    const nbt = get(entry, 'tag', NBT.COMPOUND);
+    if (nbt) readItemTag(item, nbt);
+    cart.items.push(item);
+  }
+  return cart;
+}
+
+// The level.dat half of a level import: the streamed generator, WorldInfo's flags and the player (level-dat.md).
+function levelRecord(record, { level, levelGen, javaPlayer: first, world, generationVersion, mode, report, importedColumns, stats, name }) {
+  const ox = world.originX, oz = world.originZ;
+  const worldSpawn = [level.spawn[0] - ox, level.spawn[1], level.spawn[2] - oz];
+  const out = {
+    ...record, biome: 'javaStreamed', generationVersion, worldType: level.worldType,
+    ...(level.worldType === 'flat' ? { generatorOptions: levelGen.generatorOptions } : {}),
+    seed: level.seed, mode, allowCommands: level.allowCommands, gameRules: { ...level.gameRules },
+    name: String(name ?? (level.levelName || record.name)).slice(0, 40),
+    worldSpawn, totalTime: level.time,
+    ...(level.mapFeatures ? {} : { mapFeatures: false }), ...(level.hardcore ? { hardcore: true } : {}),
+    weather: { rainTime: level.rainTime, thunderTime: level.thunderTime, raining: level.raining, thundering: level.thundering },
+    populatedColumns: { version: 1, cells: Object.fromEntries(Object.entries(importedColumns).map(([k, v]) => [k, v.toString(16)])) },
+  };
+  report.level = { worldType: level.worldType, generatorOptions: levelGen.generatorOptions, mode, allowCommands: level.allowCommands, worldSpawn,
+    ignoredKeys: level.ignored, notCarried: [...(level.hardcore ? ['hardcore (played as Survival; kept for export)'] : []), ...levelGen.approximate] };
+  if (first) {
+    const p = report.level.player = { dimension: first.dimension, lost: first.lost };
+    out.player = { ...first.player, ...record.player, time: level.dayTime };
+    out.experience = first.experience;
+    if (first.bedSpawn) out.bed = { spawn: [first.bedSpawn[0] - ox, first.bedSpawn[1], first.bedSpawn[2] - oz] };
+    if (first.dimension === 0 && first.position) out.position = { ...first.position, x: first.position.x - ox, z: first.position.z - oz };
+    else { out.position = { x: worldSpawn[0] + 0.5, y: worldSpawn[1], z: worldSpawn[2] + 0.5, yaw: 0, pitch: 0 }; p.placed = 'world spawn (the player was saved in another dimension)'; }
+  } else out.player = { ...record.player, time: level.dayTime };
+  if (typeof stats === 'string') {
+    const parsed = statsRecordFromJson(stats);
+    out.stats = parsed.stats; out.achievements = parsed.achievements;
+    report.level.stats = { stats: Object.keys(parsed.stats).length, achievements: parsed.achievements.unlocked.length, biomes: parsed.achievements.biomes.length };
+  }
+  return out;
+}
+
 function validateArea(area) {
   if (!area || typeof area !== 'object') throw new TypeError('Area must be {chunkX, chunkZ, width, depth}');
   const { chunkX, chunkZ, width = LIVE_CHUNKS, depth = LIVE_CHUNKS } = area;
@@ -181,14 +269,27 @@ function validateArea(area) {
  *                position when the area lies inside the base world's 8x8 chunks, else centred
  *   missing      'generated' keeps base terrain for absent chunks, 'air' clears them to void
  *   mode, name, hasSky, dimension (0, -1 or 1; nonzero regions keep native coordinates)
+ *   level        readLevelData(level.dat Data) (level-dat.js): the world continues as a streamed world with the save's seed,
+ *                WorldType and generator options, in the generator's native frame (local = native - origin); the
+ *                area defaults to the 8x8 chunks around the player; mode, cheats, game rules, spawn, time, weather and
+ *                the player (Data.Player, or options.player) come from the save, and options.stats (stats/<uuid>.json
+ *                text) fills the statistics and achievements. options.generationVersion (13 or 15) overrides the default.
  */
 export async function importJavaRegionArea(regions, options = {}) {
-  const { seed = '1710', landscape = 'java', missing = 'generated', mode = 'creative', dimension = 0, hasSky = dimension !== -1 } = options;
+  const level = options.level ?? null, levelGen = level ? levelGenerator(level) : null;
+  const playerTag = level ? options.player ?? level.player : null;
+  // A first read (native frame, no items) chooses the game mode and the area; the player is converted again below.
+  const javaPlayer = playerTag ? javaPlayerFromNbt(playerTag, { convertItem: () => null }) : null;
+  // EntityPlayerMP.playerGameType wins over WorldInfo.GameType (-1 is NOT_SET).
+  const levelMode = level ? ['survival', 'creative', 'adventure'][javaPlayer?.playerGameType >= 0 ? javaPlayer.playerGameType : level.gameType] ?? 'survival' : null;
+  const { seed = level ? level.seed : '1710', landscape = 'java', missing = 'generated', mode = levelMode ?? 'creative', dimension = 0, hasSky = dimension !== -1 } = options;
+  if (level && (dimension || options.destination || options.landscape)) throw new Error('A level.dat import keeps the overworld in its native frame');
+  if (level && options.generationVersion !== undefined && ![13, 15].includes(options.generationVersion)) throw new Error('generationVersion must be 13 or 15');
   if (![0, -1, 1].includes(dimension)) throw new Error('Unsupported dimension');
   if (dimension && options.destination) throw new Error('Dimension regions keep their native coordinates');
   if (!isJavaLandscape(landscape)) throw new Error(`Unknown Java landscape ${landscape}`);
   if (missing !== 'generated' && missing !== 'air') throw new Error("missing must be 'generated' or 'air'");
-  if (mode !== 'creative' && mode !== 'survival') throw new Error("mode must be 'creative' or 'survival'");
+  if (mode !== 'creative' && mode !== 'survival' && !(level && mode === 'adventure')) throw new Error("mode must be 'creative' or 'survival'");
   const seedText = String(seed);
   if (!seedText || seedText.length > 80) throw new Error('Seed must be 1-80 characters (the Import screen keeps 80)');
 
@@ -201,14 +302,23 @@ export async function importJavaRegionArea(regions, options = {}) {
   }
 
   if (options.area) validateArea(options.area);
-  const world = dimension ? new DimensionWorld(seedText, dimension) : new World(seedText, landscape, 9);
+  const generationVersion = level ? options.generationVersion ?? levelGen.generationVersion : 9;
+  if (level && level.worldType === 'flat' && generationVersion !== 15) throw new Error('Superflat worlds need streamed generation version 15');
+  if (level) await populationBlockMapperReady;
+  const world = dimension ? new DimensionWorld(seedText, dimension)
+    : level ? new World(seedText, 'javaStreamed', generationVersion, level.worldType, levelGen.generatorOptions) : new World(seedText, landscape, 9);
   const height = world.height, origin = { chunkX: world.originX >> 4, chunkZ: world.originZ >> 4 };
-  const area = validateArea(options.area ?? { ...origin, width: LIVE_CHUNKS, depth: LIVE_CHUNKS });
+  // A level import defaults to the 8x8 chunks around the player (Pos), else around the world spawn.
+  const centre = javaPlayer?.position && javaPlayer.dimension === 0 ? [javaPlayer.position.x, javaPlayer.position.z] : level ? [level.spawn[0], level.spawn[2]] : null;
+  const area = validateArea(options.area ?? (centre ? { chunkX: Math.floor(centre[0] / 16) - 4, chunkZ: Math.floor(centre[1] / 16) - 4, width: LIVE_CHUNKS, depth: LIVE_CHUNKS }
+    : { ...origin, width: LIVE_CHUNKS, depth: LIVE_CHUNKS }));
   const offset = { chunkX: area.chunkX - origin.chunkX, chunkZ: area.chunkZ - origin.chunkZ };
-  const aligned = !!dimension || (offset.chunkX >= 0 && offset.chunkZ >= 0 && offset.chunkX + area.width <= LIVE_CHUNKS && offset.chunkZ + area.depth <= LIVE_CHUNKS);
-  const destination = dimension ? { chunkX: area.chunkX, chunkZ: area.chunkZ } : options.destination ?? (aligned ? offset
+  const aligned = !!dimension || !!level || (offset.chunkX >= 0 && offset.chunkZ >= 0 && offset.chunkX + area.width <= LIVE_CHUNKS && offset.chunkZ + area.depth <= LIVE_CHUNKS);
+  const destination = dimension ? { chunkX: area.chunkX, chunkZ: area.chunkZ } : level ? offset : options.destination ?? (aligned ? offset
     : { chunkX: (LIVE_CHUNKS - area.width) >> 1, chunkZ: (LIVE_CHUNKS - area.depth) >> 1 });
-  if (!dimension) {
+  // A streamed world's resident window is the 8x8 columns from the area's north-west corner.
+  if (level) world.streamAround(destination.chunkX * 16 + 64, destination.chunkZ * 16 + 64);
+  else if (!dimension) {
     for (const [v, size] of [[destination.chunkX, area.width], [destination.chunkZ, area.depth]])
       if (!Number.isInteger(v) || v < 0 || v + size > LIVE_CHUNKS) throw new RangeError('Destination must keep the area inside the browser world');
   } else world.streamAround((area.chunkX + 4) * 16, (area.chunkZ + 4) * 16);
@@ -217,7 +327,8 @@ export async function importJavaRegionArea(regions, options = {}) {
   const report = {
     source: { area, regions: [], unusedRegions: [] },
     destination: { ...destination, blockX: destination.chunkX * 16, blockZ: destination.chunkZ * 16 },
-    base: { seed: seedText, landscape, generationVersion: 9, generatorOrigin: origin, aligned },
+    base: level ? { seed: seedText, biome: 'javaStreamed', worldType: level.worldType, generationVersion, generatorOrigin: origin, aligned, approximate: levelGen.approximate }
+      : { seed: seedText, landscape, generationVersion: 9, generatorOrigin: origin, aligned },
     chunks: { converted: 0, missing: [], fill: missing },
     inflatedBytes: 0,
     edits: 0, editLimit: IMPORT_EDIT_LIMIT, bytes: 0, byteLimit: IMPORT_BYTE_LIMIT,
@@ -235,6 +346,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   const signs = [], skulls = [], beacons = [], spawners = [], importedColumns = {};
   const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = []; let chainCount = 0;
   const projectileLists = { projectiles: [], thrownPotions: [], arrows: [], fireballs: [], eyes: [], rockets: [] };
+  const hanging = [], carts = [];
   let edits = 0;
   const write = (x, y, z, block, meta) => {
     if (world.get(x, y, z) === block && world.getMeta(x, y, z) === meta) return;
@@ -242,7 +354,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     if (++edits <= IMPORT_EDIT_LIMIT) world.set(x, y, z, block, true, meta);
   };
 
-  const convertItem = (compound) => {
+  function convertItem(compound) {
     const id = get(compound, 'id', NBT.SHORT), count = get(compound, 'Count', NBT.BYTE, 0), damage = get(compound, 'Damage', NBT.SHORT, 0);
     const mapped = id === undefined ? null : itemFromOriginal(id, damage);
     if (!mapped || count <= 0) {
@@ -256,7 +368,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     if (mapped.clamped || count > limit) report.items.clamped++;
     report.items.converted++;
     return stack;
-  };
+  }
 
 
   let inflated = 0;
@@ -288,8 +400,10 @@ export async function importJavaRegionArea(regions, options = {}) {
     }
     const { chunk, entities, tileEntities, tileTicks } = decoded;
     report.chunks.converted++;
-    if (dimension) {
-      const k = `${cx >> 3},${cz >> 3}`, bit = 1n << BigInt((cx & 7) * 8 + (cz & 7));
+    if (dimension || level) {
+      // Streamed population cells (streaming-population.js) are keyed by local chunk: the imported column is never re-populated.
+      const lx = destination.chunkX + i, lz = destination.chunkZ + j;
+      const k = `${lx >> 3},${lz >> 3}`, bit = 1n << BigInt((lx & 7) * 8 + (lz & 7));
       importedColumns[k] = ((importedColumns[k] ?? 0n) | bit);
     }
 
@@ -323,7 +437,7 @@ export async function importJavaRegionArea(regions, options = {}) {
       const source = chunk.biomes[dx + dz * 16] & 255;
       if (source === 255) { report.biomes.unset++; continue; }
       report.biomes.compared++;
-      if ((dimension ? world.biomeAt().id : world.biomeIds[(baseX + dx) * SIZE + baseZ + dz]) === source) report.biomes.matching++;
+      if ((dimension ? world.biomeAt().id : level ? world.biomeAt(baseX + dx, baseZ + dz).id : world.biomeIds[(baseX + dx) * SIZE + baseZ + dz]) === source) report.biomes.matching++;
       else report.biomes.differing++;
     }
 
@@ -424,6 +538,23 @@ export async function importJavaRegionArea(regions, options = {}) {
       }
       // EntityLeashKnot (id LeashKnot) refuses to save in 1.7.10 (su.d returns false; mob-gear-nbt-reference.json), so a native chunk never holds
       // one: a knot is rebuilt from its mobs' Leash X/Y/Z (leashRestore). A foreign save's knot entity is counted, not lost.
+      // EntityPainting / EntityItemFrame (EntityHanging.readEntityFromNBT): Direction, else the legacy Dir byte; the wall block
+      // TileX/Y/Z; Motive, or Item, ItemRotation and ItemDropChance. hanging.js rebuilds the box and checks nothing else.
+      if (id === 'Painting' || id === 'ItemFrame') {
+        const made = hangingFromNbt(entity, id, { shiftX, shiftZ, convertItem });
+        const inArea = made && inAreaAt([made.tx - shiftX + 0.5, 0, made.tz - shiftZ + 0.5]);
+        if (made && inArea && made.ty >= 0 && made.ty < height && hanging.length < 4096) { hanging.push(made); tally(entityConverted, id); }
+        else tally(entityLost, !made ? `${id} (no wall block)` : !inArea ? `${id} (outside area)` : `${id} (over limit)`);
+        continue;
+      }
+      // EntityMinecart subclasses (EntityList ids MinecartRideable ... MinecartCommandBlock) become minecarts.js records.
+      const cartType = Object.values(CART_ENTITY_IDS).indexOf(id);
+      if (cartType >= 0 && pos?.every(Number.isFinite)) {
+        if (!inAreaAt(pos) || carts.length >= 1024) { tally(entityLost, !inAreaAt(pos) ? `${id} (outside area)` : `${id} (over limit)`); continue; }
+        carts.push(cartFromNbt(entity, cartType, { shiftX, shiftZ, lost: (k) => tally(itemLost, k) }));
+        tally(entityConverted, id);
+        continue;
+      }
       if (id === 'LeashKnot') { report.entities.leashKnots = (report.entities.leashKnots ?? 0) + 1; continue; }
       if (id !== 'Item' || !pos || !pos.every(Number.isFinite)) { tally(entityLost, id); continue; }
       const x = pos[0] + shiftX, z = pos[2] + shiftZ;
@@ -510,7 +641,13 @@ export async function importJavaRegionArea(regions, options = {}) {
     ...(villages ? { villages } : {}),
     ...(mapsImport.maps ? { maps: mapsImport.maps } : {}),
     ...(report.structures?.kept ? { structureData: parsedStructures.structureData } : {}),
+    // hanging.js fills in the entity position (EntityHanging.setDirection) that the column runtime is keyed by.
+    ...(hanging.length ? { hanging: JSON.parse(JSON.stringify(Hanging.fromJSON(hanging).toJSON())) } : {}),
+    ...(carts.length ? { minecarts: { version: 1, carts } } : {}),
   };
+  // The player converted with the area's item tallies, in the native frame (levelRecord shifts it).
+  const playerFull = playerTag ? javaPlayerFromNbt(playerTag, { convertItem }) : null;
+  if (level) record = levelRecord(record, { level, levelGen, javaPlayer: playerFull, world, generationVersion, mode, report, importedColumns, stats: options.stats, name: options.name });
   if (dimension) {
     const state = Object.fromEntries(DIM_KEYS.filter(k => Object.hasOwn(record, k)).map(k => [k, record[k]]));
     const tiles = Object.fromEntries(TILE_KEYS.filter(k => Object.hasOwn(record.player, k)).map(k => [k, record.player[k]]));

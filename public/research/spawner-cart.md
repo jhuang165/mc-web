@@ -13,7 +13,7 @@ Evidence: `tools/probes/SpawnerCartProbe.java` run by `tools/verify-spawner-cart
 
 ## Approximate or gaps
 - The spinning mob matrix and model are visual, not compared with native screenshots.
-- Java region import has no cart import for any cart type, so spawner carts are export-only. Block spawner SpawnData/SpawnPotentials import and export work.
+- Java region import carries every cart type since batch 13, the spawner cart through the block spawner reader ([level-dat](level-dat.md)); checked by an export→import round trip. Block spawner SpawnData/SpawnPotentials import and export work.
 - SpawnData `Riding` chains inside spawners are handled natively but not ported.
 - A zero total potential weight throws natively; the port keeps the existing SpawnData.
 - Mobs cannot ride carts or boats, so such a Riding pair spawns separately. Painting, ItemFrame and LeashKnot are not summonable.

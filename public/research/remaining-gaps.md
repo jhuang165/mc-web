@@ -56,9 +56,7 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 - Block behaviour audit: 39 blocks that were previously unmapped are mapped but their behaviour is audited only via the metadata catalogue.
 
 ## Priority 5: saves and interchange
-- Hanging-entity import and thrown-potion region import/export.
-- level.dat and playerdata import.
-- Statistics and achievement export (depends on the statistics batch).
+- Batch 13 (`level-dat.md`): level.dat (WorldInfo, WorldType and generator options, game rules), the player (Data.Player, playerdata/players fallbacks) and stats/<uuid>.json import; painting, item frame and all minecart types in region import; thrown potions were already in. Still open: a whole-save import (one 8x8 area per import; the rest regenerates), MapFeatures off (approximated), hardcore play, flying/SpawnForced/Sleeping on import, the player's UUID, and an in-browser save-folder picker (the importer is the Node CLI plus the existing Import screen).
 - Only one language; one local player.
 
 ## Stale strings outside this track's scope

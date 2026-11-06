@@ -1,10 +1,19 @@
 // WORLD-03g: convert an area of Java 1.7.10 region files into a new Blockworld export.
-import {open, stat} from 'node:fs/promises';
-import {basename} from 'node:path';
+import {open, readdir, stat} from 'node:fs/promises';
+import {basename, join} from 'node:path';
 import {REGION_LIMIT} from '../src/region-inspection.js';
 import {importJavaRegionArea} from '../src/region-import.js';
+import {javaPlayerFromNbt, readLevelDat, readPlayerDat} from '../src/level-dat.js';
 
 const USAGE = `Usage: node tools/import-java-region.mjs [options] --out new.blockworld.json r.X.Z.mca [r.X.Z.mca ...]
+       node tools/import-java-region.mjs --save SAVE_DIR [--area ...] [--player-file F] [--stats F] --out new.blockworld.json
+  --save DIR                           a 1.7.10 save folder: level.dat, the overworld regions covering the area, the
+                                       player (Data.Player, else the only playerdata/<uuid>.dat or players/<name>.dat)
+                                       and stats/<uuid>.json; the world continues with the save's seed and WorldType
+  --level level.dat                    read the generator, flags and player from this level.dat (with region paths)
+  --player-file PLAYER.dat             a playerdata/<uuid>.dat or players/<name>.dat instead of Data.Player
+  --stats stats.json                   a stats/<uuid>.json for the statistics and achievements
+  --generation 13|15                   streamed generation version for a level import (default 15; 13 with MapFeatures off)
   --area chunkX,chunkZ[,width,depth]  source chunks (width/depth 1-8, default 8); default: the seed's generator area
   --nether-area chunkX,chunkZ[,width,depth]  use paths under DIM-1/region
   --end-area chunkX,chunkZ[,width,depth]     use paths under DIM1/region
@@ -32,6 +41,30 @@ async function readBounded(path) {
     return bytes;
   } finally { await source.close(); }
 }
+const exists = (path) => stat(path).then(() => true, () => false);
+const list = (dir) => readdir(dir).catch(() => []);
+async function readSmall(path, limit = 16 << 20) {
+  const info = await stat(path);
+  if (!info.isFile() || info.size > limit) throw new Error(`${path}: expected a file up to ${limit >> 20} MiB`);
+  return readBounded(path);
+}
+// SaveHandler.readPlayerData: playerdata/<uuid>.dat since 1.7.6, players/<name>.dat before. A folder with several players
+// needs --player-file; the stats file follows the chosen uuid (stats/<uuid>.json).
+async function savePlayer(dir) {
+  for (const sub of ['playerdata', 'players']) {
+    const files = (await list(join(dir, sub))).filter((f) => f.endsWith('.dat'));
+    if (files.length > 1) throw new Error(`${join(dir, sub)} has ${files.length} players; choose one with --player-file`);
+    if (files.length) return join(dir, sub, files[0]);
+  }
+  return null;
+}
+async function saveStats(dir, playerPath) {
+  const files = (await list(join(dir, 'stats'))).filter((f) => f.endsWith('.json'));
+  const uuid = playerPath && basename(playerPath, '.dat');
+  if (uuid && files.includes(`${uuid}.json`)) return join(dir, 'stats', `${uuid}.json`);
+  return files.length === 1 ? join(dir, 'stats', files[0]) : null;
+}
+
 async function writeNew(path, text) {
   const file = await open(path, 'wx');
   try { await file.writeFile(text); } finally { await file.close(); }
@@ -44,7 +77,7 @@ const integers = (text, counts) => {
 
 try {
   const args = process.argv.slice(2), inputs = [], options = {};
-  let out = null, reportPath = null;
+  let out = null, reportPath = null, saveDir = null, levelPath = null, playerPath = null, statsPath = null;
   const dimensionAreas = new Map();
   while (args.length) {
     const arg = args.shift();
@@ -63,15 +96,42 @@ try {
     else if (arg === '--name') options.name = value();
     else if (arg === '--survival') options.mode = 'survival';
     else if (arg === '--no-sky') options.hasSky = false;
+    else if (arg === '--save') saveDir = value();
+    else if (arg === '--level') levelPath = value();
+    else if (arg === '--player-file') playerPath = value();
+    else if (arg === '--stats') statsPath = value();
+    else if (arg === '--generation') { options.generationVersion = Number(value()); if (![13, 15].includes(options.generationVersion)) throw new Error(USAGE); }
     else if (arg === '--out') out = value();
     else if (arg === '--report') reportPath = value();
     else if (arg.startsWith('--')) throw new Error(USAGE);
     else inputs.push(arg);
   }
+  if (saveDir && levelPath) throw new Error('Pass --save or --level, not both');
+  if (saveDir) levelPath = join(saveDir, 'level.dat');
+  if (levelPath) {
+    if (dimensionAreas.size || options.destination || options.landscape) throw new Error('A level import keeps the overworld in its native frame (no --destination, --landscape or other dimensions)');
+    options.level = await readLevelDat(await readSmall(levelPath));
+    if (!playerPath && !options.level.player && saveDir) playerPath = await savePlayer(saveDir);
+    if (playerPath) options.player = await readPlayerDat(await readSmall(playerPath));
+    if (!statsPath && saveDir) statsPath = await saveStats(saveDir, playerPath);
+    if (statsPath) options.stats = new TextDecoder().decode(await readSmall(statsPath));
+    if (saveDir && !inputs.length) {
+      // The regions covering the area: the given --area, else the 8x8 chunks around the player (else the spawn).
+      const tag = options.player ?? options.level.player, p = tag ? javaPlayerFromNbt(tag, { convertItem: () => null }) : null;
+      const centre = p?.position && p.dimension === 0 ? [p.position.x, p.position.z] : [options.level.spawn[0], options.level.spawn[2]];
+      const area = options.area ?? { chunkX: Math.floor(centre[0] / 16) - 4, chunkZ: Math.floor(centre[1] / 16) - 4, width: 8, depth: 8 };
+      for (let rx = area.chunkX >> 5; rx <= (area.chunkX + area.width - 1) >> 5; rx++)
+        for (let rz = area.chunkZ >> 5; rz <= (area.chunkZ + area.depth - 1) >> 5; rz++) {
+          const path = join(saveDir, 'region', `r.${rx}.${rz}.mca`);
+          if (await exists(path)) inputs.push(path);
+        }
+      if (!inputs.length) throw new Error(`${join(saveDir, 'region')} has no region file covering the area`);
+    }
+  } else if (statsPath || playerPath || options.generationVersion) throw new Error('--player-file, --stats and --generation need --save or --level');
   if (!out?.endsWith('.blockworld.json') || !inputs.length) throw new Error(USAGE);
-  if (!options.area && !dimensionAreas.size && options.seed === undefined) throw new Error('Pass --area, or --seed to convert the generator area of that seed');
+  if (!options.level && !options.area && !dimensionAreas.size && options.seed === undefined) throw new Error('Pass --area, or --seed to convert the generator area of that seed');
   for (const path of [out, reportPath].filter(Boolean)) {
-    if (await stat(path).then(() => true, () => false)) throw new Error(`${path} already exists; choose a new output file`);
+    if (await exists(path)) throw new Error(`${path} already exists; choose a new output file`);
   }
   const regions = new Map([[0, []], [-1, []], [1, []]]);
   for (const path of inputs) {

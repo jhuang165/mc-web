@@ -9,6 +9,8 @@ node tools/import-java-region.mjs --seed -4172144997902289642 --out spawn.blockw
 node tools/import-java-region.mjs --area -3,30,4,4 --out base.blockworld.json world/region/r.-1.0.mca
 ```
 
+A whole save (`--save World`, or `--level level.dat`) imports level.dat, the player and stats/<uuid>.json and continues the world with its own seed, WorldType and generator options: see [level-dat](level-dat.md).
+
 Options: `--landscape java|javaAmplified|javaLargeBiomes` (match level.dat `generatorName`), `--destination cx,cz`, `--missing generated|air`, `--survival`, `--name`, `--no-sky`, and `--report report.json`. Inputs open read-only, are capped at 64 MiB each, and must have canonical `r.<x>.<z>.mca` names. Outputs must be new files. The JSON report goes to stdout. A rejected conversion still prints its report when one exists.
 
 ## How the export is built
@@ -33,6 +35,7 @@ The browser has no Java save loader. An imported version-9 Java world is its see
   - Their layouts and read-back come from [mob-nbt-reference.json](mob-nbt-reference.json) (MobNbtProbe, 22 records). HealF is clamped to the saved `generic.maxHealth`, because EntityLivingBase reads Attributes first. A tamed wolf whose Attributes still say 8 therefore loads with 8 health. The sheep fleece is `Color & 15`. Fire is kept, and so are CustomName and PersistenceRequired.
   - Creeper `Fuse` (short) and `ExplosionRadius` (byte) are kept as the mob's `maxFuse` and `explosionRadius`, which the live creeper uses for its fuse, flash, fall and explosion size (powered doubles the radius). The chicken-jockey flag has no browser state and is dropped.
 - **In-flight projectiles** (`java-projectiles.js`) convert to the browser's saved projectile lists: `Snowball` and `ThrownEnderpearl` (`projectiles`), `ThrownPotion` and `ThrownExpBottle` (`thrownPotions`) and `Arrow` (`arrows`), with Pos, Motion and Rotation, a potion's `Potion` stack (or the legacy `potionValue`), and an arrow's tile, `inTile`/`inData`, `shake`, `inGround`, `pickup`, `damage`, `life` and `Fire`. A named `ownerName` becomes the local player. An ender pearl with no owner, a potion that is not item 373, projectiles outside the area or past the list limit, and fireballs (the browser saves none) are counted as lost, with the reason in the id. Layouts: [projectile-nbt.md](projectile-nbt.md).
+- **Paintings and item frames** become `hanging` records and **minecarts of every type** become `minecarts` records (since batch 13; [level-dat](level-dat.md)).
 - Other entities, mounts (`Riding`) and entities outside the area are counted as lost by ID.
 - **Other tile entities** (signs, spawners, chests without a chest cell, entries outside their chunk) and **scheduled ticks** (`TileTicks`) are counted as lost.
 
@@ -55,4 +58,4 @@ No real Java save with tile entities is checked in. Chest/furnace NBT layouts we
 
 ## Open
 
-The browser still lacks streaming beyond 128×128, a compact cell payload (the 100,000-edit limit dominates), biome and light import, tile-entity factories beyond chests/furnaces, mob riders and the remaining entity ids, item NBT, pending ticks, level.dat/player data, and Java write-back.
+The browser still lacks streaming beyond 128×128, a compact cell payload (the 100,000-edit limit dominates), biome and light import, tile-entity factories beyond chests/furnaces, mob riders and the remaining entity ids, item NBT, pending ticks, and Java write-back. level.dat/player/stats import is in [level-dat](level-dat.md) (one area per import).

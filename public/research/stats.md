@@ -11,7 +11,7 @@ Evidence: `tools/probes/StatsProbe.java` + `tools/verify-stats.mjs` (run with `M
 - GuiStats layout, tab buttons, column offsets, header icon tiles of `stats_icons.png`, and the click-to-sort cycle (`beq.h`).
 
 ## Export
-`exportJavaSave` adds `stats/<uuid>.json` (statistics plus unlocked achievements). The browser has one local player named "Player", so the UUID is `UUID.nameUUIDFromBytes("OfflinePlayer:Player")` = `a01e3843-e521-3998-958a-f459800e4d11` (verified against Java by the probe; `md5` in stats.js reproduces it). There is no in-browser Java save importer; stats ride in `blockworld.json` (`record.stats`). `parseStatsFile` reads a vanilla file for a future importer.
+`exportJavaSave` adds `stats/<uuid>.json` (statistics plus unlocked achievements). The browser has one local player named "Player", so the UUID is `UUID.nameUUIDFromBytes("OfflinePlayer:Player")` = `a01e3843-e521-3998-958a-f459800e4d11` (verified against Java by the probe; `md5` in stats.js reproduces it). Stats ride in `blockworld.json` (`record.stats`, `record.achievements`). Since batch 13 the Java save import (`tools/import-java-region.mjs --save`, [level-dat](level-dat.md)) reads `stats/<uuid>.json` with `parseStatsFile`; `achievement.exploreAllBiomes` keeps its `progress` list of visited biomes both ways.
 
 ## Approximations (not bytecode-exact)
 - Movement stats use per-tick position deltas instead of the packet deltas of `processPlayer`; moves over 10 blocks in a tick (teleports) are skipped.
