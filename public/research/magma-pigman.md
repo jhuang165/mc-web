@@ -17,7 +17,7 @@ Evidence: `tools/probes/MagmaPigmanProbe.java` drives the unchanged original cla
 - Lightning on a pig (baby too) removes it and creates an adult pigman with the sword, no damage. `portalPigmanSpawn` ports BlockPortal.updateTick's roll (nextInt(2000) < difficulty); the lead wires it up.
 
 ## Gaps
-- No Nether dimension, so no natural, spawner or portal spawning in play; no despawn entry added for either mob.
+- Natural spawning in the Nether goes through the SpawnerAnimals port with BiomeGenHell's and the fortress lists ([natural spawning](natural-spawning.md)); live portal pigmen are not called yet.
 - Pigman think loop, path refresh and idle wander timing are adapted from the legacy spider flow, not probed tick-for-tick; non-player targets are not modelled; no group reinforcement (reinforcements 0 in the original).
 - Baby pigmen roll as in the original but render and behave as adults.
 - Water acceleration of the pigman and magma lava particles/landing particle behaviour are adapted, not probed.

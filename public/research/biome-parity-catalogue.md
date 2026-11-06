@@ -8,64 +8,64 @@ Gate **G** depends on WORLD-01/WORLD-02, original RNG/Java generation and releva
 
 | Registry slot | Declared biomeID | Native name | Native class | Status / evidence | Gate |
 | --- | --- | --- | --- | --- | --- |
-| 0 | 0 | Ocean | aio | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 1 | 1 | Plains | aip | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 2 | 2 | Desert | aic | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 3 | 3 | Extreme Hills | aid | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 4 | 4 | Forest | aif | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 5 | 5 | Taiga | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 6 | 6 | Swampland | aiv | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 7 | 7 | River | air | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 8 | 8 | Hell | aii | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 9 | 9 | Sky | aix | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 10 | 10 | FrozenOcean | aio | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 11 | 11 | FrozenRiver | air | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 12 | 12 | Ice Plains | aij | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); legacy [snowy preset](snow.md) also reuses its facts; per-biome spawn lists, tint and weather audit | G |
-| 13 | 13 | Ice Mountains | aij | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 14 | 14 | MushroomIsland | aim | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 15 | 15 | MushroomIslandShore | aim | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 16 | 16 | Beach | aht | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 17 | 17 | DesertHills | aic | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 18 | 18 | ForestHills | aif | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 19 | 19 | TaigaHills | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 20 | 20 | Extreme Hills Edge | aid | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 21 | 21 | Jungle | aik | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 22 | 22 | JungleHills | aik | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 23 | 23 | JungleEdge | aik | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 24 | 24 | Deep Ocean | aio | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 25 | 25 | Stone Beach | aiu | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 26 | 26 | Cold Beach | aht | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 27 | 27 | Birch Forest | aif | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 28 | 28 | Birch Forest Hills | aif | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 29 | 29 | Roofed Forest | aif | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 30 | 30 | Cold Taiga | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 31 | 31 | Cold Taiga Hills | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 32 | 32 | Mega Taiga | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 33 | 33 | Mega Taiga Hills | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 34 | 34 | Extreme Hills+ | aid | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 35 | 35 | Savanna | ais | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 36 | 36 | Savanna Plateau | ais | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 37 | 37 | Mesa | ail | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 38 | 38 | Mesa Plateau F | ail | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 39 | 39 | Mesa Plateau | ail | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 129 | 129 | Sunflower Plains | aip | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 130 | 130 | Desert M | ain | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 131 | 131 | Extreme Hills M | aid | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 132 | 132 | Flower Forest | aif | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 133 | 133 | Taiga M | ain | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 134 | 134 | Swampland M | ain | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 140 | 140 | Ice Plains Spikes | aij | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 149 | 149 | Jungle M | ain | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 151 | 151 | JungleEdge M | ain | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 155 | 155 | Birch Forest M | aig | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 156 | 156 | Birch Forest Hills M | aig | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 157 | 157 | Roofed Forest M | aih | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 158 | 158 | Cold Taiga M | ain | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 160 | 160 | Mega Spruce Taiga | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 161 | 160 | Mega Spruce Taiga | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 162 | 162 | Extreme Hills+ M | aid | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 163 | 163 | Savanna M | ait | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 164 | 164 | Savanna Plateau M | ait | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 165 | 165 | Mesa (Bryce) | ail | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 166 | 166 | Mesa Plateau F M | ail | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
-| 167 | 167 | Mesa Plateau M | ail | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); per-biome spawn lists, tint and weather audit | G |
+| 0 | 0 | Ocean | aio | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 1 | 1 | Plains | aip | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 2 | 2 | Desert | aic | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 3 | 3 | Extreme Hills | aid | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 4 | 4 | Forest | aif | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 5 | 5 | Taiga | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 6 | 6 | Swampland | aiv | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 7 | 7 | River | air | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 8 | 8 | Hell | aii | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 9 | 9 | Sky | aix | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 10 | 10 | FrozenOcean | aio | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 11 | 11 | FrozenRiver | air | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 12 | 12 | Ice Plains | aij | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); legacy [snowy preset](snow.md) also reuses its facts; [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 13 | 13 | Ice Mountains | aij | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 14 | 14 | MushroomIsland | aim | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 15 | 15 | MushroomIslandShore | aim | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 16 | 16 | Beach | aht | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 17 | 17 | DesertHills | aic | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 18 | 18 | ForestHills | aif | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 19 | 19 | TaigaHills | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 20 | 20 | Extreme Hills Edge | aid | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 21 | 21 | Jungle | aik | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 22 | 22 | JungleHills | aik | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 23 | 23 | JungleEdge | aik | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 24 | 24 | Deep Ocean | aio | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 25 | 25 | Stone Beach | aiu | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 26 | 26 | Cold Beach | aht | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 27 | 27 | Birch Forest | aif | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 28 | 28 | Birch Forest Hills | aif | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 29 | 29 | Roofed Forest | aif | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 30 | 30 | Cold Taiga | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 31 | 31 | Cold Taiga Hills | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 32 | 32 | Mega Taiga | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 33 | 33 | Mega Taiga Hills | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 34 | 34 | Extreme Hills+ | aid | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 35 | 35 | Savanna | ais | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 36 | 36 | Savanna Plateau | ais | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 37 | 37 | Mesa | ail | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 38 | 38 | Mesa Plateau F | ail | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 39 | 39 | Mesa Plateau | ail | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 129 | 129 | Sunflower Plains | aip | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 130 | 130 | Desert M | ain | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 131 | 131 | Extreme Hills M | aid | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 132 | 132 | Flower Forest | aif | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 133 | 133 | Taiga M | ain | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 134 | 134 | Swampland M | ain | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 140 | 140 | Ice Plains Spikes | aij | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 149 | 149 | Jungle M | ain | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 151 | 151 | JungleEdge M | ain | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 155 | 155 | Birch Forest M | aig | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 156 | 156 | Birch Forest Hills M | aig | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 157 | 157 | Roofed Forest M | aih | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 158 | 158 | Cold Taiga M | ain | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 160 | 160 | Mega Spruce Taiga | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 161 | 160 | Mega Spruce Taiga | aiw | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 162 | 162 | Extreme Hills+ M | aid | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 163 | 163 | Savanna M | ait | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 164 | 164 | Savanna Plateau M | ait | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 165 | 165 | Mesa (Bryce) | ail | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 166 | 166 | Mesa Plateau F M | ail | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |
+| 167 | 167 | Mesa Plateau M | ail | Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); [spawn lists](natural-spawning.md) probe-checked; tint and weather audit | G |

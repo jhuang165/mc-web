@@ -17,7 +17,7 @@ Original classes: Blaze `xx`, Ghast `yd` (extends `sr`/EntityFlying), EntityFire
 
 ## Gaps
 
-- No Nether, so no natural spawning; no achievements.
+- Natural spawning: ghasts from BiomeGenHell's list and blazes from the fortress list through the SpawnerAnimals port ([natural spawning](natural-spawning.md)); the Nether flow is not covered by a seeded replay. No achievements.
 - Fireballs are not saved and there is no /summon Fireball; fireball-versus-fireball collisions are not implemented.
 - The blaze's legacy pathing is approximated by a chase task plus the exact hover and attack rules; ghast ground friction is approximated (0.546).
 - Models, renderers, crackle and smoke, level-event sounds and the small-fireball block case were not run against the original.
