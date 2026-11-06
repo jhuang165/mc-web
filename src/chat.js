@@ -28,31 +28,104 @@ export function formatFrom(s) {
   return fmt;
 }
 
+// EnumChatFormatting.getTextWithoutFormattingCodes: Pattern "(?i)\u00a7[0-9A-FK-OR]" removed from the text.
+export const stripFormatting = (s) => String(s).replace(/§[0-9a-fk-or]/gi, "");
+// EnumChatVisibility (zb): ordinal, name and the options.chat.visibility.* key (en_US: Shown, Commands Only, Hidden).
+export const CHAT_VISIBILITY = Object.freeze([
+  { name: "FULL", key: "options.chat.visibility.full" }, { name: "SYSTEM", key: "options.chat.visibility.system" }, { name: "HIDDEN", key: "options.chat.visibility.hidden" },
+]);
+// NetHandlerPlayServer.sendPacket (nh.a(ft)) drops an S02PacketChat when the player's visibility is HIDDEN, and under SYSTEM
+// drops it unless gj.d() (the "system" flag: command feedback, death/achievement broadcasts and server notices) is set; player
+// chat is sent with the flag false. Everything the server prints to this client goes through here, including the
+// chat.cannotSend reply, which is itself a gj and so is dropped under HIDDEN.
+export const chatDelivered = (visibility, system) => visibility === 0 || (visibility === 1 && !!system);
+// Minecraft.runTick: key.chat / key.command only open GuiChat when chatVisibility != HIDDEN.
+export const chatCanOpen = (visibility) => visibility !== 2;
+// GuiChat.mouseClicked links: ClickEvent actions with a URL are limited to the Set GuiChat.field_152175_f (http, https).
+export function linkUrlAllowed(url) {
+  const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(String(url));
+  return !!m && (m[1].toLowerCase() === "http" || m[1].toLowerCase() === "https");
+}
+// ScreenShotHelper.func_148259_a: the next free name for `date` under yyyy-MM-dd_HH.mm.ss, "_N.png" from N = 1 when taken.
+export function screenshotName(date, taken = () => false) {
+  const p = (n, w = 2) => String(n).padStart(w, "0");
+  const base = `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}_${p(date.getHours())}.${p(date.getMinutes())}.${p(date.getSeconds())}`;
+  for (let i = 1; ; i++) {
+    const name = base + (i === 1 ? "" : "_" + i) + ".png";
+    if (!taken(name)) return name;
+  }
+}
+
+// The spans of `links` inside one wrapped line, as raw character ranges (colour codes counted).
+function linkSpans(part, links) {
+  const out = [];
+  for (const { text, click } of links || []) {
+    if (!text) continue;
+    const start = part.indexOf(text);
+    if (start >= 0) out.push({ start, end: start + text.length, click: { ...click, text } });
+  }
+  return out;
+}
+
 export class ChatLog {
   constructor(settings = {}) {
-    this.settings = { ...CHAT.defaults, ...settings };
-    this.lines = []; // newest first: { text, created, id }
+    this.settings = { ...CHAT.defaults, chatColors: true, chatLinks: true, chatLinksPrompt: true, chatVisibility: 0, ...settings };
+    this.history = []; // GuiNewChat.chatLines, newest first: { text, created, id, links }
+    this.lines = []; // newest first: { text, created, id, links }
     this.sent = []; // GuiNewChat.sentMessages, oldest first
     this.scrollPos = 0;
     this.newSinceScroll = false;
     this.listeners = new Set();
   }
+  // GameSettings chat options -> this model; the lines are rewrapped (GuiNewChat.func_146245_b) when width, scale or colours changed.
+  applySettings(opts = {}) {
+    const keys = ["chatVisibility", "chatColors", "chatLinks", "chatLinksPrompt", "chatOpacity", "chatScale", "chatWidth", "chatHeightFocused", "chatHeightUnfocused"];
+    const before = keys.map((k) => this.settings[k]).join();
+    for (const k of keys) if (opts[k] !== undefined) this.settings[k] = opts[k];
+    if (keys.map((k) => this.settings[k]).join() !== before) { this.refresh(); this.scroll(0); }
+  }
   get width() { return chatWidth(this.settings.chatWidth); }
   visibleLines(open) { return Math.floor(chatHeight(open ? this.settings.chatHeightFocused : this.settings.chatHeightUnfocused) / CHAT.lineHeight); }
   // GuiNewChat.func_146237_a: wrapped to floor(width / scale), the newest line first; a non-refresh print while scrolled
   // scrolls one line so the view stays put and flags new messages. `id` replaces the earlier lines of the same id.
-  print(text, tick = 0, id = 0) {
+  // `links` are { text, click: { action, value } } entries: where `text` appears the span is clickable (a ClickEvent).
+  print(text, tick = 0, id = 0, links = []) {
+    if (id) this.history = this.history.filter((l) => l.id !== id);
+    this.history.unshift({ text: String(text), created: tick, id, links });
+    while (this.history.length > CHAT.maxLines) this.history.pop();
+    const parts = this.layout(String(text), tick, id, links, false);
+    for (const fn of this.listeners) fn();
+    return parts;
+  }
+  // GuiNewChat.func_146237_a: the colour codes go when chatColours is off (func_146235_b), then the wrapped lines are added.
+  layout(text, tick, id, links, refresh) {
     if (id) this.lines = this.lines.filter((l) => l.id !== id);
-    const wrapped = splitLines(String(text), Math.floor(this.width / this.settings.chatScale));
+    if (this.settings.chatColors === false) text = stripFormatting(text);
+    const wrapped = splitLines(text, Math.floor(this.width / this.settings.chatScale));
     let carry = "";
     const parts = wrapped.map((line) => { const out = carry + line; carry = formatFrom(out); return out; });
     for (const part of parts) {
-      if (this.scrollPos > 0) { this.newSinceScroll = true; this.scroll(1); }
-      this.lines.unshift({ text: part, created: tick, id });
+      if (!refresh && this.scrollPos > 0) { this.newSinceScroll = true; this.scroll(1); }
+      this.lines.unshift({ text: part, created: tick, id, links: linkSpans(part, links) });
     }
     while (this.lines.length > CHAT.maxLines) this.lines.pop();
-    for (const fn of this.listeners) fn();
     return parts;
+  }
+  // GuiNewChat.func_146245_b (refreshChat): rebuild every drawn line from the stored messages after width, scale or colours change.
+  refresh() {
+    this.lines = [];
+    for (let i = this.history.length - 1; i >= 0; i--) { const h = this.history[i]; this.layout(h.text, h.created, h.id, h.links, true); }
+    for (const fn of this.listeners) fn();
+  }
+  // GuiNewChat.func_146236_a for the point (x, gy) in GUI pixels from the line area's bottom left: the ClickEvent under it.
+  clickAt(x, gy) {
+    if (gy < 0) return null;
+    const row = Math.floor(gy / CHAT.lineHeight);
+    if (row >= this.visibleLines(true)) return null;
+    const line = this.lines[row + this.scrollPos];
+    if (!line) return null;
+    for (const l of line.links || []) if (x >= textWidth(line.text.slice(0, l.start)) && x < textWidth(line.text.slice(0, l.end))) return l.click;
+    return null;
   }
   // GuiNewChat.func_146229_b: clamp to [0, size - visible]; reaching the bottom clears the new-message flag.
   scroll(n, open = true) {
@@ -60,7 +133,7 @@ export class ChatLog {
     if (this.scrollPos <= 0) { this.scrollPos = 0; this.newSinceScroll = false; }
   }
   resetScroll() { this.scrollPos = 0; this.newSinceScroll = false; }
-  clear() { this.lines = []; this.resetScroll(); for (const fn of this.listeners) fn(); }
+  clear() { this.lines = []; this.history = []; this.resetScroll(); for (const fn of this.listeners) fn(); }
   // GuiNewChat.addToSentMessages: the same message twice in a row is kept once; the list holds 100.
   addSent(text) {
     if (!this.sent.length || this.sent[this.sent.length - 1] !== text) this.sent.push(text);

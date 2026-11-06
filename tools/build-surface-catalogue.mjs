@@ -99,11 +99,11 @@ const screenEvidence = {
   GuiEditSign: ['Partial; sign editor', 'signs.md'],
   GuiScreenHorseInventory: ['Partial; horse saddle/armor/chest screen', 'horse-inventory.md'],
   GuiStats: ['Partial; General/Blocks/Items/Mobs tabs and sorting; some use/kill triggers approximate', 'stats.md'],
-  ScreenChatOptions: ['Missing; chat exists but there is no chat options screen (chat settings stay at native defaults)', 'settings-parity-catalogue.md'],
+  ScreenChatOptions: ['Partial; nine native options, Show Cape disabled, persisted and applied to the chat', 'chat-options.md'],
   GuiScreenBook: ['Missing; no book and quill or written book', 'parity.md'],
   GuiCreateFlatWorld: ['Missing; no Superflat world type', 'generation.md'],
   GuiFlatPresets: ['Missing; no Superflat world type', 'generation.md'],
-  GuiConfirmOpenLink: ['Missing; chat has no clickable links', 'commands.md'],
+  GuiConfirmOpenLink: ['Partial; Yes / Copy to Clipboard / No for http(s) links from chat click events', 'chat-options.md'],
   GuiScreenResourcePacks: ['Missing; only the bundled 1.7.10 textures', 'settings-parity-catalogue.md'],
   GuiSnooper: ['Out of scope; no usage telemetry (drawn disabled)', 'settings-parity-catalogue.md'],
   GuiMultiplayer: ['Out of scope; multiplayer', 'parity.md'], GuiScreenAddServer: ['Out of scope; multiplayer', 'parity.md'],
@@ -143,6 +143,7 @@ const SUPPORT_EVIDENCE = new Set(['GuiCreateFlatWorld$Details', 'GuiFlatPresets$
 const SUPPORT_MISSING = new Set(['GuiPlayerInfo', 'GuiResourcePackAvailable', 'GuiResourcePackList', 'GuiResourcePackSelected', 'GuiScreenBook$NextPageButton', 'GuiSnooper$List']);
 const SUPPORT_PROGRESS = new Set(['GuiStats$Stats', 'GuiStats$StatsBlock', 'GuiStats$StatsBlock$1', 'GuiStats$StatsGeneral', 'GuiStats$StatsItem', 'GuiStats$StatsItem$1', 'GuiStats$StatsMobsList', 'IProgressMeter']);
 const supportStatus = name => {
+  if (name === 'GuiPlayerInfo') return 'Partial; the Tab player list shows the local player (player-list.js), see [chat options](chat-options.md)';
   if (SUPPORT_EVIDENCE.has(name)) return 'Missing; no Superflat world type, so no counterpart';
   if (SUPPORT_PROGRESS.has(name)) return 'Partial; statistics screen ([stats](stats.md))';
   if (SUPPORT_MISSING.has(name)) return 'Missing; no counterpart (player list, resource packs, books, snooper)';
