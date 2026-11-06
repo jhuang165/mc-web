@@ -2175,3 +2175,5 @@ select:focus {
   background: #3c3c3c;
   border: 2px solid #aaa;
 }
+/* F1 (GameSettings.hideGUI): no GuiIngame layer (HUD, chat, player list, boss bar, vignette, pumpkin blur) while no screen is open. */
+body.hide-gui #hud > :not(#mobile-controls), body.hide-gui #vignette, body.hide-gui #pumpkin-blur, body.hide-gui #chat-log, body.hide-gui #player-list, body.hide-gui #boss-bar { visibility: hidden !important; }

@@ -1,6 +1,7 @@
 // GuiAchievement (the "Achievement get!" toast) and GuiAchievements (the draggable, zoomable tree), ported from the
 // 1.7.10 beh / bei classes (see public/research/achievements.md). The pure parts (toast slide, background tile, scroll
 // physics, tooltip text) are exported for src/achievements.test.js; the DOM and canvas drawing is below them.
+import { lwjglCode } from "./keybindings.js";
 import { ACHIEVEMENTS, BY_ID, BOUNDS, STRINGS } from "./achievements.js";
 import { JavaRandom } from "./java-random.js";
 import { ORIGINAL_ITEMS } from "./original-items.js";
@@ -323,7 +324,8 @@ export function achievementsScreen({ achievements, icon, keyName, hash, back, cl
     id: "achievements",
     escape: close,
     key(e) {
-      if (e.code !== inventoryKey()) return false;
+      // GuiAchievements.keyTyped: the key.inventory code closes the screen.
+      if (lwjglCode(e) !== inventoryKey()) return false;
       close();
       return true;
     },

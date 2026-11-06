@@ -5,7 +5,7 @@ import { DIFFICULTY_NAMES, NORMAL, difficultySetting } from './difficulty.js';
 import { particleSetting } from './particle-settings.js';
 import { guiScale } from './gui.js';
 import { GUI_SCALE_NAMES } from './settings.js';
-import { FLOAT_OPTIONS, LANG, CONTROLS_OPTIONS, KEY_BINDINGS, REBINDABLE, optionText, soundsLayout } from './menu-screens.js';
+import { FLOAT_OPTIONS, LANG, CONTROLS_OPTIONS, KEY_BINDINGS, optionText, soundsLayout } from './menu-screens.js';
 
 const read = name => readFile(new URL(name, import.meta.url), 'utf8');
 const ref = JSON.parse(await read('../public/research/settings-reference.json'));
@@ -112,8 +112,7 @@ test('invert mouse, cinematic camera, pitch clamp and sound categories are no lo
   assert.equal(optionText('INVERT_MOUSE', false), `${ref.lang['options.invertMouse']}: ${ref.lang['options.off']}`);
   assert.equal(LANG['key.smoothCamera'], ref.lang['key.smoothCamera']);
   // Toggle Cinematic Camera is a rebindable key on the Controls screen, unbound by default.
-  assert(REBINDABLE.has('key.smoothCamera'));
-  assert.equal(KEY_BINDINGS.find(k => k.description === 'key.smoothCamera').code, '');
+  assert.equal(KEY_BINDINGS.find(k => k.description === 'key.smoothCamera').lwjgl, 0);
   assert.deepEqual(FLOAT_OPTIONS.VOLUME.slice(0, 2), [0, 1]);
   assert.deepEqual(Object.keys(soundsLayout(400, 300).sliders), ref.soundCategories.map(c => c.key));
   // key.smoothCamera is unbound in 1.7.10 and runTick has no F8 check; the port binds no key either.

@@ -22,12 +22,12 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 ### GUI and settings
 6. Chat Settings screen (ScreenChatOptions): Partial. All nine options persist and apply, Show Cape is disabled; vanilla links need a ClickEvent producer (see `chat-options.md`).
 7. Player list (Tab). Partial: native layout, shown only while Open to LAN (native hides it for a lone host); no other players or scoreboard.
-8. F2 screenshot. Partial: canvas-only PNG download with the native name and chat message; no HUD in the image, no F1 toggle.
+8. F2 screenshot. Partial: canvas-only PNG download with the native name and chat message; no HUD in the image. F1 hides the GUI ([controls.md](controls.md)).
 9. Resource Packs screen and pack loading. Missing.
-10. Key rebinding: only smoothCamera is rebindable; key.chat and key.command are Partial. No `options.txt` persistence. See `settings-parity-catalogue.md`.
+10. Key rebinding and options.txt. Partial: every KeyBinding can be rebound on the Controls screen, including mouse buttons, with conflict highlighting and Reset/Reset Keys. A native-format options.txt mirror is kept in localStorage. There is no options.txt import/export UI, the mapping from browser keys to LWJGL codes assumes a US layout, and browser-reserved shortcuts cannot all be captured ([controls.md](controls.md)).
 11. Superflat world type and its customization screens. Partial: generator, presets, Customize/Presets screens and level.dat export are in ([superflat.md](superflat.md)); Add/Edit Layer are hidden as in 1.7.10; flat populate is bytecode-read, not replayed; no level.dat import.
 12. Bonus chest (WorldGeneratorBonusChest). Partial: contents and placement replayed against the jar ([superflat.md](superflat.md)); the port seeds its Random from the world seed where 1.7.10 uses an unseeded one.
-13. Super Secret Settings shaders, Anaglyph and the framerate limit. Missing.
+13. Super Secret Settings shaders (F4) and 3D Anaglyph: Missing. Max Framerate and Use VSync: Partial, because frames cannot exceed the display refresh rate ([controls.md](controls.md)).
 
 ### Audio
 14. Music and music discs/jukebox record audio. Missing; 473 sound files, none are music or records.
