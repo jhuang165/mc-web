@@ -2263,6 +2263,8 @@ function mobEventHooks() {
     // A silverfish hid in or released a monster egg (EntitySilverfish.updateEntityActionState).
     blockEdit: (cells, event) => {
       for (const [x, y, z] of cells) scene.updateBlock(x, z, y);
+      // EntityAIBreakDoor's World.destroyBlockInWorldPartially: the crack overlay of the zombie at the door.
+      if (event.crack) scene.effects.mobCrack(event.crack.id, [event.crack.x, event.crack.y, event.crack.z], event.crack.stage);
       const b = event.blockBreak;
       if (b) {
         const s = breakSound(b.block);

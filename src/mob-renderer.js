@@ -540,6 +540,9 @@ export class MobRenderer {
         if ((e.type === "zombie" || e.type === "pigman" || e.type === "skeleton" || e.type === "wither_skeleton") && i < 2) {
           const side = i === 0 ? 1 : -1;
           l.rotation.set(-Math.PI / 2 + side * sway, side * 0.1, -side * spread);
+        } else if (e.ridingEntity && i >= 2 && (e.type === "zombie" || e.type === "pigman" || e.type === "skeleton" || e.type === "wither_skeleton")) {
+          // ModelBiped.setRotationAngles with isRiding: both legs up and out (-2 pi / 5, Y +-pi / 10; Y flips sign in this frame).
+          l.rotation.set(-Math.PI * 2 / 5, i === 2 ? -Math.PI / 10 : Math.PI / 10, 0);
         } else l.rotation.x = angles[i];
       });
       // Entity.getBrightnessForRender samples 0.66 of the way up the body.

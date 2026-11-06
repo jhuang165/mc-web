@@ -39,7 +39,7 @@ Target: Minecraft Java 1.7.10. Names are the obfuscated classes of the unchanged
 
 ## Missing
 
-- Chicken jockeys (`bv` / `bZ`), the jockey's 10 XP, and the zombie-baby riding that creates them.
+- Chicken jockeys, their 10 XP and the baby-zombie riding are now implemented: see [mob-riding](mob-riding.md) (region export still writes `IsChickenJockey` 0).
 - `mob.chicken.step` is imported but unplayed: no mob has step sounds wired.
 - Only wheat seeds exist, so pumpkin and melon seeds do not tempt or breed chickens (any `ItemSeeds` does in 1.7.10).
 - Chicks drop nothing here, following the existing adult-only convention; 1.7.10's `dropFewItems` has no age check.

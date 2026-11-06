@@ -19,7 +19,7 @@ Ported from EntityZombie (`yq`), EntityVillager (`yv`) and the tasks AttackOnCol
 
 - Weakness does not reduce zombie damage here.
 - No bed block exists in this build, so only iron bars boost the cure (beds are replayed with a stand-in id).
-- The BreakDoor task is not run.
+- The BreakDoor task is run for zombies with `canBreakDoors` or a leader: see [mob-riding](mob-riding.md). Villager zombies share the task list.
 - Profession is not tracked or rendered on zombie villagers (1.7.10 has a single texture).
 - The follow-range spawn bonus and the spawn-with-egg child/jockey rolls use unseeded Randoms natively, so only bounds are verified.
 - The conversion timer runs only while the mob is loaded.

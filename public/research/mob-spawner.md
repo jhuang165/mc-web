@@ -87,7 +87,7 @@ Animals use `EntityAnimal`'s rule: grass below, full light above 8, then the sam
 - **Size and stats:** 0.7 × 0.5 and 12 health. Speed 0.8, damage 2 and follow range 16 are inherited.
 - **Inherited behaviour:** the legacy AI (`spiderThink`), climbing, web immunity, the `mob.spider.*` sounds, string and spider eye drops, and 5 XP. The melee height test uses the cave spider's own height of 0.5.
 - **Poison:** `attackEntityAsMob` applies Poison with amplifier 0 after a successful hit. It lasts 140 ticks on Normal and 300 ticks on Hard. Easy and Peaceful apply nothing.
-- **Spawn rolls:** `onSpawnWithEgg` returns its argument without calling super. There is no follow-range roll, no jockey roll and no effect.
+- **Spawn rolls:** `onSpawnWithEgg` returns its argument without calling super. There is no follow-range roll, no jockey roll and no effect (that is the original's `EntityLiving` base; subclasses add their own, see [mob-riding](mob-riding.md)).
 - **Spawning:** spawners only. Natural spawning never produces a cave spider.
 - **Rendering:** `cave_spider.png` with a 0.7 model scale. The shadow is `1.0 * 0.7`, and the eye pass is the spider's.
 
@@ -146,7 +146,7 @@ The render constants are checked from the `bnf` and `bmp` bytecode, because the 
 - A spawner can only spawn entity types the port has: `CaveSpider`, `Spider`, `Zombie`, `Skeleton`, `Creeper`, `Pig`, `Cow`, `Sheep` and `Chicken`.
 - `createMob` refuses a mob beyond the 40-mob save cap. The attempt's rolls are still spent, but nothing spawns.
 - If no `ctx.blockEvent` is supplied, the client delay reset is applied in the same tick. The original sends it with about one tick of latency.
-- Spider jockeys are rolled but not spawned (this is already true of natural spawning).
+- Spider and chicken jockeys now spawn through `onSpawnWithEgg`, natural and spawner alike; see [mob-riding](mob-riding.md).
 - The display mob's random head yaw is not reproduced. In the original it is `Math.random() * 2π` degrees.
 - The thunder light branch is covered only by a unit test, not by a native scenario.
 - Boats and minecarts block a spawn only through the `extraCollision` hook.

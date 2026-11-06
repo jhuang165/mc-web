@@ -110,6 +110,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
 // getExperiencePoints at deathTime 20: EntityAnimal 1 + World.rand.nextInt(3); EntityMob
 // 5, plus 1 + rand.nextInt(3) per equipment item whose drop chance is at most 1.
 export function experiencePoints(e, rand, worldRand) {
+  if (e.type === "chicken" && e.chickenJockey) return 10; // EntityChicken.getExperiencePoints (wg.e): a jockey, with no draw
   if (e.type === "squid") return squidExperience(worldRand); // EntityWaterMob.getExperiencePoints: 1 + world.rand.nextInt(3)
   if (e.type === "villager" || e.type === "iron_golem" || e.type === "snow_golem" || e.type === "bat") return 0; // EntityLiving.experienceValue stays 0 (EntityVillager is no EntityMob or EntityAnimal)
   if (ANIMALS.has(e.type)) return 1 + worldRand.nextInt(3);

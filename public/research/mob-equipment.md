@@ -43,4 +43,4 @@ Zombies, zombie pigmen, skeletons and wither skeletons spawn with 1.7.10's equip
 - **Wither skeleton type roll.** `dimension-spawning.js` picks wither or ordinary skeleton on its own random before the entity exists. `skeletonSpawnRolls` takes that type and still draws and drops the original's `nextInt(5)` in the Nether, so the entity stream matches but the chosen type does not come from it.
 - **Rendering.** The enchantment glint and leather dye are not drawn on mobs. Zombie villagers wear no armour in the model. A mob's helmet is not drawn when the browser has no block atlas. A zombie's armour does not follow the villager rig's taller head.
 - **Held item damage.** Mob weapons and armour never wear out from use; only the drop roll damages them.
-- **Other rolls** remain as in [difficulty](difficulty.md): jockeys, door breaking and the leader's extra health.
+- **Other rolls** remain as in [difficulty](difficulty.md): the jockeys, door breaking and the leader's extra health are now live: see [mob-riding](mob-riding.md).
