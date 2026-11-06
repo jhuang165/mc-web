@@ -21,7 +21,7 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 
 ### GUI and settings
 6. Chat Settings screen (ScreenChatOptions): Partial. All nine options persist and apply, Show Cape is disabled; vanilla links need a ClickEvent producer (see `chat-options.md`).
-7. Player list (Tab). Partial: native layout, shown only while Open to LAN (native hides it for a lone host); no other players or scoreboard.
+7. Player list (Tab). Partial: native layout. It is shown while Open to LAN (native hides it for a lone host) or, as natively, when a list-slot scoreboard objective exists. With that objective it draws the score column and team-formatted name ([commands-b13.md](commands-b13.md)). There are no other players.
 8. F2 screenshot. Partial: canvas-only PNG download with the native name and chat message; no HUD in the image. F1 hides the GUI ([controls.md](controls.md)).
 9. Resource Packs screen and pack loading. Missing.
 10. Key rebinding and options.txt. Partial: every KeyBinding can be rebound on the Controls screen, including mouse buttons, with conflict highlighting and Reset/Reset Keys. A native-format options.txt mirror is kept in localStorage. There is no options.txt import/export UI, the mapping from browser keys to LWJGL codes assumes a US layout, and browser-reserved shortcuts cannot all be captured ([controls.md](controls.md)).
@@ -44,7 +44,11 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 - Riders: region chains are saved since batch 11; `/summon` with a `Riding` tag now mounts mob on mob; mobs on carts/boats are unsupported.
 
 ## Priority 3: commands
-- Not available (reported as such): /achievement, /debug, /scoreboard, /spreadplayers, /tellraw.
+- Batch 13 implemented /tellraw (chat components with click/hover), /achievement, /spreadplayers, /debug and /scoreboard. See [commands-b13.md](commands-b13.md). No registered command reports itself unavailable now. What is still Partial:
+  - The scoreboard criteria completion order (30 of 803 positions).
+  - Stat criteria granularity: they follow the port's stat call sites.
+  - belowName, friendlyfire and seeFriendlyInvisibles are stored only, because there is no other player.
+  - /debug sections are browser tick phases.
 - Selectors (@p/@a/@r) operate over the single local player only (`src/command-selector.js`).
 - /summon covers 52 of the 57 EntityList registrations.
 - mobGriefing is Partial; doMobSpawning gates the SpawnerAnimals port, but live portal pigmen are not called yet.

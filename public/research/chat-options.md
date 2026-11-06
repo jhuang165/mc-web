@@ -18,7 +18,7 @@ Show Cape is drawn disabled: there are no accounts, skins or capes in this build
 
 ## Tab player list
 
-`GuiIngame.renderGameOverlay` draws it while `key.playerlist` (Tab) is held, unless `mc.isIntegratedServerRunning() && playerInfoList.size() <= 1 && no scoreboard objective`. So native single player, with only the local player, never shows it, and the browser can never have a second player. Decision: the list is shown while the world is Open to LAN (a documented deviation so the overlay is reachable and testable; native would still hide it for a lone host). Layout is exact: slots = max players (8 for `IntegratedPlayerList`), columns grow while rows exceed 20, column width `min(150, 300 / columns)`, block centred at y = 10, backdrop `0x80000000` from `(x0-1, 9)`, a `0x20FFFFFF` cell per slot, the name in white with shadow, and the ping sprite from `textures/gui/icons.png` at `(0, 176 + 8*row)` (10 x 8) drawn at `x + colWidth - 12`; row by latency: `<0` 5, `<150` 0, `<300` 1, `<600` 2, `<1000` 3, else 4. The local player has ping 0. No scoreboard column and no teams.
+`GuiIngame.renderGameOverlay` draws it while `key.playerlist` (Tab) is held, unless `mc.isIntegratedServerRunning() && playerInfoList.size() <= 1 && no scoreboard objective`. So native single player, with only the local player, never shows it, and the browser can never have a second player. Decision: the list is shown while the world is Open to LAN (a documented deviation so the overlay is reachable and testable; native would still hide it for a lone host). Layout is exact: slots = max players (8 for `IntegratedPlayerList`), columns grow while rows exceed 20, column width `min(150, 300 / columns)`, block centred at y = 10, backdrop `0x80000000` from `(x0-1, 9)`, a `0x20FFFFFF` cell per slot, the name in white with shadow, and the ping sprite from `textures/gui/icons.png` at `(0, 176 + 8*row)` (10 x 8) drawn at `x + colWidth - 12`; row by latency: `<0` 5, `<150` 0, `<300` 1, `<600` 2, `<1000` 3, else 4. The local player has ping 0. Since batch 13, a list-slot scoreboard objective shows the list even for a lone player, as natively. It adds the `§e` score column, and names carry the team prefix and suffix ([commands-b13.md](commands-b13.md)).
 
 ## F2 screenshot
 
@@ -27,6 +27,6 @@ Show Cape is drawn disabled: there are no accounts, skins or capes in this build
 ## Open
 
 - Real clickable producers beyond the screenshot name (no server sends click events here).
-- Player list scoreboard objective column, teams, and other players.
+- Other players in the player list (the scoreboard column and teams were added in batch 13).
 - Screenshots include the HUD and chat.
 - F1 hide-HUD, `options.txt` persistence of these settings.

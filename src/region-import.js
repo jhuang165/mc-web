@@ -35,6 +35,7 @@ import { populationBlockMapperReady } from './population-world.js';
 import { CART_ENTITY_IDS, isContainerType, slotCount } from './cart-variants.js';
 import { spawnerRecord } from './cart-summon.js';
 import { ARTS, Hanging } from './hanging.js';
+import { scoreboardJSONFromNbt } from './scoreboard.js';
 
 export const LIVE_CHUNKS = SIZE / 16;
 // World.restore and the Import screen's file-size check (main.js).
@@ -596,7 +597,8 @@ export async function importJavaRegionArea(regions, options = {}) {
   // data/*.dat (options.structureData: iterable of {filename, bytes}): kept unchanged in native coordinates, which
   // only match the browser world's native frame when the area is aligned; unknown start ids are counted, never fatal.
   const isVillagesFile = ({ filename }) => /(^|\/)villages\.dat$/.test(filename);
-  const parsedStructures = options.structureData ? await parseStructureDataFiles([...options.structureData].filter((f) => !isVillagesFile(f) && !isMapFile(f))) : null;
+  const isScoreboardFile = ({ filename }) => /(^|\/)scoreboard\.dat$/.test(filename);
+  const parsedStructures = options.structureData ? await parseStructureDataFiles([...options.structureData].filter((f) => !isVillagesFile(f) && !isMapFile(f) && !isScoreboardFile(f))) : null;
   // data/map_N.dat + idcounts.dat (maps-nbt.js): shifted like the villages.
   const mapsImport = options.structureData ? await mapsFromFiles([...options.structureData].filter(isMapFile)) : { maps: null };
   if (mapsImport.maps) for (const m of mapsImport.maps.maps) { m.xCenter += shiftX; m.zCenter += shiftZ; }
@@ -617,6 +619,15 @@ export async function importJavaRegionArea(regions, options = {}) {
       report.villages.kept = kept.length; report.villages.outside = json.villages.length - kept.length;
       if (kept.length) villages = { tick: json.tick, villages: kept.map((v) => ({ ...v, c: [v.c[0] + shiftX, v.c[1], v.c[2] + shiftZ], ac: [v.ac[0] + shiftX, v.ac[1], v.ac[2] + shiftZ], doors: v.doors.map((d) => [d[0] + shiftX, d[1], d[2] + shiftZ, ...d.slice(3)]) })) };
     } catch (error) { report.villages.error = String(error?.message ?? error); }
+  }
+  // data/scoreboard.dat (ScoreboardSaveData): world-wide, so it comes across whole (names and scores need no shifting).
+  let scoreboard = null;
+  const scoreboardFile = options.structureData ? [...options.structureData].find(isScoreboardFile) : null;
+  if (scoreboardFile) {
+    try {
+      scoreboard = scoreboardJSONFromNbt((await decodeCompressedNbt(scoreboardFile.bytes)).tag);
+      report.scoreboard = { objectives: scoreboard.objectives.length, scores: scoreboard.scores.length, teams: scoreboard.teams.length };
+    } catch (error) { report.scoreboard = { error: String(error?.message ?? error) }; }
   }
   // Start above the centre of the area, on its highest solid block.
   const px = destination.chunkX * 16 + area.width * 8, pz = destination.chunkZ * 16 + area.depth * 8;
@@ -644,6 +655,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     // hanging.js fills in the entity position (EntityHanging.setDirection) that the column runtime is keyed by.
     ...(hanging.length ? { hanging: JSON.parse(JSON.stringify(Hanging.fromJSON(hanging).toJSON())) } : {}),
     ...(carts.length ? { minecarts: { version: 1, carts } } : {}),
+    ...(scoreboard ? { scoreboard } : {}),
   };
   // The player converted with the area's item tallies, in the native frame (levelRecord shifts it).
   const playerFull = playerTag ? javaPlayerFromNbt(playerTag, { convertItem }) : null;
@@ -657,6 +669,7 @@ export async function importJavaRegionArea(regions, options = {}) {
       format: record.format, version: record.version, seed: seedText, name: record.name, mode,
       biome: 'javaStreamed', generationVersion: 15, dimension, position: record.position, edits: [],
       ...(record.fireballs ? { fireballs: record.fireballs } : {}), // tagged with `dimension`; main.js restores the ones of the world it opens
+      ...(record.scoreboard ? { scoreboard: record.scoreboard } : {}), // world-wide, like the stats
       dimensions: { [dimension]: { state, tiles, edits: record.edits } },
     };
     report.source.dimension = dimension;

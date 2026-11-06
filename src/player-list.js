@@ -1,6 +1,7 @@
 // The tab player list of 1.7.10: GuiIngame.renderGameOverlay (bbv) draws it while key.playerlist (Tab) is held. Layout,
 // colours and the ping icon follow the javap output of bbv.a(float, boolean, int, int) (see public/research/chat-options.md).
 import { textHtml } from "./menu-ui.js";
+import { fontWidth } from "./chat-component.js";
 
 // IntegratedPlayerList (the integrated server's ServerConfigurationManager) sets maxPlayers = 8; the join packet carries it to
 // NetHandlerPlayClient.field_147304_c (bjb.c), which is the number of slots the overlay lays out.
@@ -33,6 +34,16 @@ export function pingRow(ping) {
   return ping < 0 ? 5 : ping < 150 ? 0 : ping < 300 ? 1 : ping < 600 ? 2 : ping < 1000 ? 3 : 4;
 }
 
+// With a "list" display-slot objective each name (ScorePlayerTeam.formatPlayerName) is followed by "§e" + score, right-aligned at
+// cellX + colWidth - 12 - 5 and drawn only when that leaves more than 5 pixels after the name (name width + 5). 1.7.10 shows a
+// health objective as this number too (hearts came later).
+export function scoreCell(cellX, colWidth, name, score, width = fontWidth) {
+  const after = cellX + width(name) + 5, right = cellX + colWidth - 12 - 5;
+  if (right - after <= 5) return null;
+  const text = "§e" + score;
+  return { text, x: right - width(text) };
+}
+
 const STYLE = `
 #player-list{position:fixed;left:0;top:0;width:100%;height:100%;z-index:9;pointer-events:none;display:none;font-size:calc(8*var(--u))}
 #player-list.on{display:block}
@@ -55,7 +66,7 @@ export class PlayerListUi {
     doc.head.append(style);
     doc.body.append(this.box);
   }
-  // players: [{ name, ping }]; screenWidth is the window width in GUI pixels.
+  // players: [{ name, ping, score? }] (score: the list objective's value, omitted without one); screenWidth in GUI pixels.
   show(players, screenWidth, slots = INTEGRATED_MAX_PLAYERS) {
     const L = playerListLayout(slots, screenWidth);
     const px = (n) => `calc(${n}*var(--u))`;
@@ -65,6 +76,8 @@ export class PlayerListUi {
       const p = players[i];
       if (!p) return;
       html += `<div class="pl-name" style="left:${px(c.x)};top:${px(c.y)};width:${px(L.colWidth - 13)}">${textHtml(p.name)}</div>`;
+      const sc = p.score != null ? scoreCell(c.x, L.colWidth, p.name, p.score) : null;
+      if (sc) html += `<div class="pl-name" style="left:${px(sc.x)};top:${px(c.y)}">${textHtml(sc.text)}</div>`;
       html += `<div class="pl-ping" style="left:${px(c.x + L.colWidth - 12)};top:${px(c.y)};background-position:0 ${px(-(176 + 8 * pingRow(p.ping)))}"></div>`;
     });
     this.box.innerHTML = html;

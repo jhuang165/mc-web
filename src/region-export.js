@@ -32,6 +32,7 @@ import { mapDataFiles } from './maps-nbt.js';
 import { javaProjectileToNbt } from './java-projectiles.js';
 import { statsExportFile } from './stats.js';
 import { DEFAULT_RULES } from './game-rules.js';
+import { Scoreboard, scoreboardFromJSON, scoreboardDocument } from './scoreboard.js';
 import { GEAR_TYPES, gearFieldsFrom } from './mob-equipment-live.js';
 // A [type, value] pair of cart-variants.js variantNBT (compound [10, {key: pair}], list [9, elementType, items]) as a tag.
 const pairTag=p=>p[0]===NBT.COMPOUND?comp(Object.fromEntries(Object.entries(p[1]).map(([k,v])=>[k,pairTag(v)]))):p[0]===NBT.LIST?tag(NBT.LIST,{elementType:p[2].length?p[1]:NBT.END,items:p[1]===NBT.COMPOUND?p[2].map(i=>new Map(Object.entries(i).map(([k,v])=>[k,pairTag(v)]))):p[2]}):tag(p[0],p[0]===NBT.SHORT?(p[1]<<16)>>16:p[1]);
@@ -288,6 +289,8 @@ export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChu
  for(const [n,b] of await mapDataFiles(record.maps,ox,oz))files.set(n,b); // data/map_N.dat + idcounts.dat (maps-nbt.js)
  // stats/<uuid>.json (StatisticsFile): the world's statistics and achievements under the offline-mode UUID of the player "Player".
  {const [n,b]=statsExportFile(record);files.set(n,b);report.notes.push(`${n}: statistics and achievements (offline-mode UUID of "Player").`);}
+ // data/scoreboard.dat (MapStorage "scoreboard", ScoreboardSaveData): objectives, scores, teams and display slots.
+ if(record.scoreboard){files.set('data/scoreboard.dat',await encodeCompressedNbt(scoreboardDocument(scoreboardFromJSON(new Scoreboard(),record.scoreboard))));report.notes.push('data/scoreboard.dat: the world scoreboard (objectives, scores, teams, display slots).');}
  const {chunked,runtimeChunked,editSequence,...backup}=record,encode=new TextEncoder();
  files.set('blockworld.json',encode.encode(JSON.stringify({...backup,format:'blockworld',version:1})));
  files.set('conversion-notes.json',encode.encode(JSON.stringify(report,null,2)));

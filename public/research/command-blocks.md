@@ -19,6 +19,6 @@ input; Control NBT and browser runtime snapshots retain command, custom name, co
 `commandBlockOutput` suppresses operator feedback; it does not suppress tracked timestamped output. Track Output suppresses that
 stored output independently. Say/me broadcast to local chat. The integrated-server command-block enable option is treated as enabled.
 
-Remaining adaptations: one local player, no teams/scoreboard or Java network server, styled HTML editor rather than pixel-exact
+Remaining adaptations: one local player (batch 13 added teams/scoreboard and `@p[team=,score_…]` selectors, [commands-b13.md](commands-b13.md)), no Java network server, styled HTML editor rather than pixel-exact
 GuiCommandBlock, plain-text output represented as chat JSON, one success per command in the single-player adapter. Unsupported
 commands still fail. Complete native server/command/selector parity is not claimed.

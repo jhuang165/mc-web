@@ -95,12 +95,20 @@ import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox } from ".
 import { BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
 import { deathMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
 import { ChatUi, printChat, chat } from "./chat-ui.js";
+import { translation, fontWidth } from "./chat-component.js";
+import { lookupStat, statComponent, statHover, profilerTick } from "./commands-extra.js";
+import { Profiler } from "./profiler.js";
+import { parseJsonNbt } from "./json-nbt.js";
+import { itemStackFromNbt } from "./region-import.js";
+import { NBT } from "./nbt.js";
 import { chatCanOpen } from "./chat.js";
 import { PlayerListUi, playerListVisible } from "./player-list.js";
 import { takeScreenshot, downloadBlob } from "./screenshot.js";
-import { Achievements, BY_ID as BY_ACHIEVEMENT, CHAT_ACHIEVEMENT } from "./achievements.js";
+import { Achievements, BY_ID as BY_ACHIEVEMENT } from "./achievements.js";
 import { AchievementToast } from "./achievements-ui.js";
 import { Stats } from "./stats.js";
+import { Scoreboard, scoreboardToJSON, scoreboardFromJSON } from "./scoreboard.js";
+import { ScoreboardLive, SidebarUi } from "./scoreboard-live.js";
 import { StatsLive, watchMobStats, watchDrops, addFallStat } from "./stats-live.js";
 import { watchMobs, craftedAchievement, smeltedAchievement, pickedAchievement, pigFall } from "./achievements-live.js";
 import { keyName as inventoryKeyName } from "./menu-screens.js";
@@ -467,10 +475,15 @@ let achievementsFor = null, achievementTicks = 0;
 const achievements = new Achievements({
   onUnlock: (a) => {
     achievementToast.show(a);
-    printChat(CHAT_ACHIEVEMENT.replace("%s", PLAYER_NAME).replace("%s", `${a.special ? "§5" : "§a"}[${a.name}]§r`));
+    // StatisticsFile.func_150873_a: chat.type.achievement with StatBase.func_150955_j, whose hover shows the achievement.
+    printChat(translation("chat.type.achievement", scoreboard.formatName(PLAYER_NAME), statComponent(lookupStat("achievement." + a.id))));
     saved = false;
   },
 });
+// The world scoreboard (scoreboard.js, data/scoreboard.dat), its criteria hooks and the sidebar (scoreboard-live.js).
+const scoreboard = new Scoreboard(), scoreboardLive = new ScoreboardLive({ scoreboard, stats, achievements, name: () => PLAYER_NAME }), sidebar = new SidebarUi(document);
+scoreboard.onChange = () => { saved = false; };
+
 // Open to LAN for this tab (lan.js); it lasts until the world is left.
 const lan = new LanSession();
 // The 1.7.10 menu screens (menus.js) drawn over the game in #gui.
@@ -723,6 +736,7 @@ function save() {
   active.player = survival.serialize();
   active.achievements = achievements.save();
   active.stats = stats.save();
+  active.scoreboard = scoreboardToJSON(scoreboard);
   active.drops = items.serialize();
   active.projectiles = projectiles.serialize();
   active.eyes = eyes.serialize();
@@ -1187,7 +1201,7 @@ async function launch(record, prepared) {
     survival = new Survival(legacyPlayer(record), record.mode || "creative");
     statsLive.bind(survival);
     // Achievements belong to the world (a portal trip keeps them in memory); the hint waits for "Taking Inventory".
-    if (achievementsFor !== (record.rootId ?? record.id)) { achievements.load(record.achievements); stats.load(record.stats); statsLive.attacker = null; achievementsFor = record.rootId ?? record.id; }
+    if (achievementsFor !== (record.rootId ?? record.id)) { achievements.load(record.achievements); stats.load(record.stats); scoreboardFromJSON(scoreboard, record.scoreboard); scoreboardLive.respawn(); statsLive.attacker = null; achievementsFor = record.rootId ?? record.id; }
     achievementToast.clear();
     if (!achievements.has("openInventory")) achievementToast.hint(BY_ACHIEVEMENT.openInventory);
     containerResidency?.dispose();
@@ -1300,10 +1314,22 @@ async function launch(record, prepared) {
 }
 // ---- Chat and commands (chat-ui.js GuiChat/GuiNewChat, commands.js ServerCommandManager, command-host.js game state) ----
 let chatOpen = false;
+// /debug's Profiler (profiler.js) over the tick loop below, and the tick counter (MinecraftServer.getTickCounter) it reports.
+const profiler = new Profiler();
+let tickCounter = 0;
+// The tooltip of a show_item hover: JsonToNBT, ItemStack.loadItemStackFromNBT, then the inventory tooltip's lines and colours.
+const TIP_CODES = { aqua: "b", blue: "9", gray: "7", pink: "d", purple: "5", red: "c", yellow: "e", white: "f", bold: "l", italic: "o" };
+const itemHoverLines = (snbt) => {
+  let stack = null;
+  try { const tag = parseJsonNbt(snbt); stack = tag?.type === NBT.COMPOUND ? itemStackFromNbt(tag.value) : null; } catch { stack = null; }
+  if (!stack || !ITEMS[stack.id]) return null;
+  return tooltipLines(ITEMS[stack.id], stack, options.advancedTooltips).map((l, i) => (l.color ?? (i ? "gray" : "white")).split(" ").map((c) => (TIP_CODES[c] ? "§" + TIP_CODES[c] : "")).join("") + (l.italic ? "§o" : "") + l.text);
+};
 const commandHost = createCommandHost({
   active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, rockets: () => rockets, entityHosts: () => ({ items, xpOrbs, primed, falling, boats, projectiles, arrows, eyes, mobs, dimension: world.dimension ?? 0 }), survival: () => survival, experience: () => experience,
   position: () => ({ x: position.x, y: position.y, z: position.z }),
   seed: () => active.seed,
+  scoreboard: () => scoreboard,
   beaconTile: (x, y, z) => beacons.ensure(x, y, z),
   commandTile: (x, y, z) => redstoneRuntime?.commandBlocks.tile(x, y, z),
   stackName: (s) => stackName(s, ITEMS) || ITEMS[s.id]?.name || "",
@@ -1326,11 +1352,17 @@ const commandHost = createCommandHost({
   },
   updateBlock: (x, y, z) => scene.updateBlock(x, z, y),
   destroyBlock: (x, y, z) => breakBlock([x, y, z], false),
+  achievements: () => achievements,
+  stats: () => stats,
+  profiler,
+  tickCounter: () => tickCounter,
+  // CommandDebug writes debug/profile-results-*.txt; the browser offers the file as a download.
+  saveFile: (name, text) => downloadBlob(new Blob([text], { type: "text/plain" }), name),
 });
 const commands = createCommandRunner(commandHost);
 const chatUi = new ChatUi(document, {
   // ServerConfigurationManager prints "<Player> message"; a leading "/" runs the command.
-  submit: (text) => { if (text.startsWith("/")) commands.run(text); else printChat(chatLine(PLAYER_NAME, text), 0, false); },
+  submit: (text) => { if (text.startsWith("/")) commands.run(text); else printChat(chatLine(scoreboard.formatName(PLAYER_NAME), text), 0, false); },
   // GuiChat.func_146407_a: with chatLinksPrompt a GuiConfirmOpenLink asks first; Yes opens a new tab, and every choice returns to the chat.
   confirmLink: (url) => {
     const typed = chatUi.input.value;
@@ -1343,6 +1375,8 @@ const chatUi = new ChatUi(document, {
   },
   openLink: (url) => window.open(url, "_blank", "noopener"),
   complete: (before) => commands.complete(before),
+  // GuiScreen.func_146283_a: show_achievement and show_item hovers.
+  hoverInfo: { stat: (id) => statHover(id, { itemName: (n) => commandHost.statItemName(n) }), item: itemHoverLines },
   close: () => closeChat(),
   stay: () => bedSleep.sleeping,
   visible: () => !!active && screen !== "home",
@@ -2117,7 +2151,7 @@ function die() {
   playHurtSounds();
   statsLive.death();
   // EntityPlayerMP.onDeath broadcasts the death message to chat at the moment of death.
-  const message = survival.died && deathMessage(survival.lastDamage);
+  const message = survival.died && deathMessage(survival.lastDamage, scoreboard.formatName(PLAYER_NAME)); // EntityPlayer.func_145748_c_: the team-formatted name
   survival.died = false;
   if (message) showChatLine(document, message);
   closeContainer();
@@ -2161,6 +2195,7 @@ function die() {
     } else if (active.playerSpawn) spawn = { x: active.playerSpawn[0] + 0.5, y: active.playerSpawn[1], z: active.playerSpawn[2] + 0.5 }; // /spawnpoint
     const time = survival.time;
     const kept = ruleOn(active, "keepInventory") && { slots: survival.inventory.serialize(), armor: survival.inventory.serializeArmor() };
+    scoreboardLive.respawn(); // the new EntityPlayerMP re-sends its health criteria
     survival = new Survival({ time, slots: [], ...kept, furnaces: survival.furnaces, chests: survival.chests, dispensers: survival.dispensers, hoppers: survival.hoppers, brewing: survival.brewing }, survival.mode);
     statsLive.bind(survival);
     portalTimer.reset();
@@ -2291,6 +2326,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   ({ fallDistance, landedFall } = movement);
   tickBeacons(beacons, { world, time: survival.time, players: [{ x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height }], apply: (_p, e) => survival.effects.add(e) });
   watchAchievements();
+  scoreboardLive.tick(survival.health, survival.absorption || 0); // EntityPlayerMP.onUpdate: health criteria
   statsLive.tick({ oldPosition, position, vehicle: rider.vehicle, eyeInWater: clientEyeInWater(), inWater, onLadder: !flying && countsVertical(world, position.x, position.y, position.z), grounded });
   fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
   rockets.tick(world, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), explode: (...a) => fireworkFx.spawnStarter(...a) });
@@ -2952,10 +2988,16 @@ function screenshot() {
     print: ({ text, links }) => chat.print(text, Math.floor(performance.now() / 50), 0, links),
   });
 }
+// GuiIngame.renderGameOverlay: the scoreboard sidebar (display slot 1) at the right edge, in scaled GUI pixels (scoreboard-live.js).
+function sidebarFrame() {
+  const scale = guiScale(innerWidth, innerHeight, Number(options.guiScale) || 0);
+  sidebar.update(scoreboard, screen !== "home" && screen !== "credits" && !$("#hud").classList.contains("hidden"), Math.ceil(innerWidth / scale), Math.ceil(innerHeight / scale), fontWidth);
+}
 // key.playerlist (Tab) held: GuiIngame draws the list unless a lone integrated player is on the server (player-list.js).
 const showPlayerList = () => {
-  if (!playerListVisible({ integrated: true, players: 1, lanShared: lan.public })) return;
-  playerList.show([{ name: PLAYER_NAME, ping: 0 }], Math.floor(window.innerWidth / ((parseFloat(getComputedStyle(chatUi.box).fontSize) / 8) || 1)));
+  const listObjective = scoreboard.slot(0); // display slot "list": shows the overlay even for a lone player, with a score column
+  if (!playerListVisible({ integrated: true, players: 1, hasObjective: !!listObjective, lanShared: lan.public })) return;
+  playerList.show([{ name: scoreboard.formatName(PLAYER_NAME), ping: 0, score: listObjective ? scoreboard.peek(PLAYER_NAME, listObjective)?.value ?? 0 : undefined }], Math.floor(window.innerWidth / ((parseFloat(getComputedStyle(chatUi.box).fontSize) / 8) || 1)));
 };
 // Minecraft.dispatchKeypresses, after the screen's keyTyped and in every screen: a press that is not a
 // repeat (nor within 20 ms of GuiControls taking a key) of key.screenshot or key.fullscreen. The stream
@@ -3226,6 +3268,7 @@ function animate(now) {
   if (!frameLimiter.ready(now, limitFramerate({ world: screen !== "home", screen: gui.open, maxFps: options.maxFps ?? 120 }))) return;
   // F1 (GameSettings.hideGUI): GuiIngame is drawn only while a screen is open.
   document.body.classList.toggle("hide-gui", hideGUI && screen === "playing" && !gui.open);
+  sidebarFrame();
   const dt = Math.min((now - lastFrame) / 1000, 0.15);
   lastFrame = now;
   if (document.hidden) return;
@@ -3242,19 +3285,29 @@ function animate(now) {
   if (running()) {
     accumulator += dt;
     while (accumulator >= PHYSICS.tick && running()) {
+      profilerTick(profiler); // MinecraftServer.tick: /debug start takes effect here
+      tickCounter++;
+      profiler.start("root");
+      profiler.start("particles");
       updateParticleOptions();
       // --- Block particles (particles.js): Entity.onEntityUpdate's sprint particle uses the
       // pre-move position, last tick's motion and in-water flag, before movementTick moves the
       // player; EffectRenderer.updateEffects then runs after this tick's spawns. ---
       if (motion.sprinting) spawnRunningParticles(scene.particles, world, { x: position.x, y: position.y, z: position.z, mx: velocity.x, mz: velocity.z, sprinting: true, inWater: wasInWater, ySize: motion.ySize }, playerRandom, [position.x, position.y + PHYSICS.eye, position.z]);
+      profiler.endStart("tick");
       movementTick(captureMovementInput(bedSleep.sleeping ? () => false : (d) => binds.isDown(d))); // a sleeping player ignores the keys
+      profiler.endStart("bed");
       tickBed();
+      profiler.endStart("effects");
       scene.effectRenderer.tick(world);
+      profiler.endStart("player");
       // The model stands at posY - yOffset, and posY is lowered by ySize (the sneak drop).
       const lowered = (p, drop) => ({ x: p.x, y: p.y - drop, z: p.z });
       playerBody.tick({ position: lowered(position, motion.ySize), previous: lowered(previous, motion.prevYSize), yaw, pitch, swinging: animation.swingTime < SWING_SECONDS, riding: !!rider.vehicle });
       // EntityRenderer.updateRenderer: the cinematic camera filters advance once per tick.
       mouseLook.tick(options.sensitivity, smoothCamera);
+      profiler.end();
+      profiler.end();
       accumulator -= PHYSICS.tick;
     }
     const t = accumulator / PHYSICS.tick;
