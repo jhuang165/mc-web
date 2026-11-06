@@ -10,7 +10,7 @@ const text = (s, x, y, color = 0) => `<div class="mc-text flat" style="left:${u(
 const lines = (s, x, y, w, color = 0) => listFormatted(s, w).map((l, i) => text(l, x, y + 9 * i, color)).join('');
 const centred = (s, x, w, y, color = 0) => text(s, x + Math.trunc((w - stringWidth(s)) / 2), y, color);
 const arrow = (id, x, y, forward) => `<button class="book-arrow" data-id="${id}" style="position:absolute;${at(x, y, 23, 13)};padding:0;border:0;background:url('/media/1.7.10/gui/book.png') 0 ${u(-(192 + (forward ? 0 : 13)))}/${u(256)} ${u(256)};image-rendering:pixelated;--hover:${u(-23)}"></button>`;
-const button = (id, label, x, y, w, enabled = true) => `<button class="mc-button${enabled ? '' : ' disabled'}" data-id="${id}" style="${at(x, y, w, 20)};--hw:${Math.trunc(w / 2)}"><span class="mc-text" style="position:absolute;left:0;width:100%;text-align:center;top:${u(6)};color:var(--c);text-shadow:${u(1)} ${u(1)} 0 var(--cs)">${label}</span></button>`;
+const button = (id, label, x, y, w, enabled = true) => `<button class="mc-button${enabled ? '' : ' disabled'}" data-id="${id}" style="${at(x, y, w, 20)};--hw:${Math.trunc(w / 2)}"><span class="mc-text mc-label" style="position:absolute;left:0;width:100%;text-align:center;top:${u(6)};color:var(--c);text-shadow:${u(1)} ${u(1)} 0 var(--cs)">${label}</span></button>`;
 
 // `host`: { show(title, html), close(), markUnsaved() }; `options`: { stack, editable, playerName, send(channel, packet) }.
 export function openBookUi(host, { stack, editable, playerName = 'Player', send }) {

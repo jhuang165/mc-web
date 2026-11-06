@@ -291,7 +291,8 @@ export function createMenus(gui, ctx) {
         const moreOptions = g.button(b.moreOptions, "", () => { state.more = !state.more; page(); });
         const mapFeatures = g.button(b.mapFeatures, "", null, { reason: UNAVAILABLE.mapFeatures });
         const bonusItems = g.button(b.bonusItems, t("selectWorld.bonusItems") + " " + t("options.off"), () => { state.bonus = !state.bonus; update(); });
-        const mapType = g.button(b.mapType, "", () => { state.type = (state.type + 1) % types.length; update(); });
+        // actionPerformed id 5: the next type clears field_146334_a (the Superflat string) and re-runs func_146316_a, so Customize follows.
+        const mapType = g.button(b.mapType, "", () => { state.type = (state.type + 1) % types.length; state.options = DEFAULT_FLAT_STRING; page(); });
         const allowCommands = g.button(b.allowCommands, t("selectWorld.allowCommands") + " " + t("options.off"), () => { state.manualCommands = true; state.allowCommands = !state.allowCommands; update(); });
         const customize = g.button(b.customize, t("selectWorld.customizeType"), () => {
           // GuiCreateFlatWorld: Done stores info.toString() and returns to this screen; Cancel and Escape change nothing.
