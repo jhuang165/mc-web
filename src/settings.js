@@ -119,5 +119,10 @@ export function migrateSettings(saved) {
   if (s.chatVisibility !== undefined) num(s.chatVisibility) ? (s.chatVisibility = clamp(Math.trunc(s.chatVisibility), 0, 2)) : delete s.chatVisibility;
   for (const k of CHAT_BOOL_KEYS) if (s[k] !== undefined && typeof s[k] !== "boolean") delete s[k];
   for (const k of CHAT_FLOAT_KEYS) if (s[k] !== undefined) num(s[k]) ? (s[k] = clamp(s[k], 0, 1)) : delete s[k];
+  // Max Framerate 10..260 in steps of 10 (260 Unlimited); Use VSync, pauseOnLostFocus, advancedItemTooltips.
+  if (s.maxFps !== undefined) num(s.maxFps) ? (s.maxFps = clamp(Math.round(s.maxFps / 10) * 10, 10, 260)) : delete s.maxFps;
+  for (const k of ["vsync", "pauseOnLostFocus", "advancedTooltips"]) if (s[k] !== undefined && typeof s[k] !== "boolean") delete s[k];
+  // Key bindings: description -> LWJGL code (keybindings.js storedKeyCodes validates each entry).
+  for (const k of ["keyBindings", "keys", "optionsTxtExtra"]) if (s[k] !== undefined && !plain(s[k])) delete s[k];
   return s;
 }

@@ -104,6 +104,9 @@ import { Stats } from "./stats.js";
 import { StatsLive, watchMobStats, watchDrops, addFallStat } from "./stats-live.js";
 import { watchMobs, craftedAchievement, smeltedAchievement, pickedAchievement, pigFall } from "./achievements-live.js";
 import { keyName as inventoryKeyName } from "./menu-screens.js";
+import { BINDINGS, KeyBindings, HeldKeys, HOTBAR, lwjglCode, mouseCode, storedKeyCodes } from "./keybindings.js";
+import { writeOptionsTxt, applyOptionsTxt } from "./options-txt.js";
+import { FrameLimiter, limitFramerate } from "./frame-limit.js";
 import { createCommandRunner, chatLine, tr } from "./commands.js";
 import { runCommandCart } from "./command-cart.js";
 import { LanSession, LAN_NOTICE } from "./lan.js";
@@ -272,15 +275,27 @@ let options = {
   clouds: true,
   mipmapLevels: 4,
   anisotropic: 1,
+  // Max Framerate 120 and Use VSync on (frame-limit.js); pauseOnLostFocus (F3+P) and advancedItemTooltips (F3+H).
+  maxFps: 120,
+  vsync: true,
+  pauseOnLostFocus: true,
+  advancedTooltips: false,
   // Chat Settings (ScreenChatOptions): visibility, colours, links, opacity, scale, width and heights at the GameSettings defaults.
   ...CHAT_SETTING_DEFAULTS,
 };
 try {
-  options = {
-    ...options,
-    ...migrateSettings(JSON.parse(localStorage.getItem("blockworld.settings") || "{}")),
-  };
+  // options.txt (options-txt.js) is mirrored on the device; it is read when no browser save exists.
+  const json = localStorage.getItem("blockworld.settings"), txt = localStorage.getItem("blockworld.options.txt");
+  const saved = json ? JSON.parse(json) : txt ? applyOptionsTxt({ settingsVersion: 3 }, txt).options : {};
+  options = { ...options, ...migrateSettings(saved) };
 } catch {}
+// GameSettings.keyBindings (keybindings.js): LWJGL codes, mouse buttons as -100 + button.
+const binds = new KeyBindings(storedKeyCodes(options));
+options.keyBindings = binds.saved();
+delete options.keys;
+// Minecraft.runGameLoop's Display.sync (frame-limit.js) and GameSettings.hideGUI (F1, not saved).
+const frameLimiter = new FrameLimiter();
+let hideGUI = false;
 chat.applySettings(options);
 options.particles = particleSetting(options.particles);
 // GuiScreenOptionsSounds has no mute switch: Master Volume is the only off control.
@@ -315,7 +330,7 @@ let screen = "home",
   velocity = new THREE.Vector3(),
   position = new THREE.Vector3(),
   previous = new THREE.Vector3(),
-  keys = new Set(),
+  keys = new HeldKeys(binds), // KeyboardEvent codes held; clear() is KeyBinding.unPressAllKeys
   target = null,
   elapsed = 0,
   accumulator = 0,
@@ -405,8 +420,7 @@ let survival = new Survival({}, "creative"),
   mineCooldown = 0,
   fallDistance = 0,
   landedFall = 0,
-  containerView = null,
-  f3Combo = false;
+  containerView = null;
 // Dropped items as EntityItem physics objects (see item-entities.js).
 const items = new ItemEntities();
 // Every system reads the game rules of the world being played (game-rules.js); a /gamerule edit applies on the next read.
@@ -437,7 +451,7 @@ $("#app").innerHTML = `
 const achievementToast = new AchievementToast({
   scale: () => guiScale(innerWidth, innerHeight, Number(options.guiScale) || 0),
   icon: (id, damage) => icon(id, damage),
-  keyName: () => inventoryKeyName(options.keys?.["key.inventory"] ?? "KeyE"),
+  keyName: () => inventoryKeyName(binds.code("key.inventory")),
   playing: () => screen !== "home",
 });
 // Statistics (stats.js): the per-world counters behind the Statistics screen and stats/<uuid>.json; awards in stats-live.js.
@@ -462,6 +476,7 @@ const lan = new LanSession();
 // The 1.7.10 menu screens (menus.js) drawn over the game in #gui.
 const menuContext = {
   get options() { return options; },
+  bindings: binds,
   get worlds() { return worlds; },
   get achievements() { return achievements; },
   get stats() { return stats; },
@@ -653,8 +668,10 @@ function saveOptions() {
   updateParticleOptions();
   updateDifficulty();
   updateGuiScale();
+  options.keyBindings = binds.saved();
   try {
     localStorage.setItem("blockworld.settings", JSON.stringify(options));
+    localStorage.setItem("blockworld.options.txt", writeOptionsTxt(options));
   } catch {}
 }
 async function toggleFullscreen() {
@@ -2483,7 +2500,7 @@ function edit(place = false) {
   if (aimedCart && !aimedCart.cart.dead) {
     mining = null;
     const state = vehicleState();
-    const action = captureVehicleAction({ cartId: aimedCart.cart.id, boat: !!aimedCart.cart.boat, place, sneak: captureMovementInput(keys).sneak, heldTool: heldId() });
+    const action = captureVehicleAction({ cartId: aimedCart.cart.id, boat: !!aimedCart.cart.boat, place, sneak: binds.isDown("key.sneak"), heldTool: heldId() });
     traceAction(action);
     const done = dispatchVehicleAction(state, action, {
       swing: () => animation.swing(),
@@ -2932,18 +2949,58 @@ const showPlayerList = () => {
   if (!playerListVisible({ integrated: true, players: 1, lanShared: lan.public })) return;
   playerList.show([{ name: PLAYER_NAME, ping: 0 }], Math.floor(window.innerWidth / ((parseFloat(getComputedStyle(chatUi.box).fontSize) / 8) || 1)));
 };
+// Minecraft.dispatchKeypresses, after the screen's keyTyped and in every screen: a press that is not a
+// repeat (nor within 20 ms of GuiControls taking a key) of key.screenshot or key.fullscreen. The stream
+// keys have no Twitch stream to start here and do nothing.
+function dispatchKeypress(e, code) {
+  if (e.repeat || code === 0 || (gui.open && gui.screen?.id === "controls" && gui.screen.time > performance.now() - 20)) return;
+  if (code === binds.code("key.screenshot")) { e.preventDefault(); screenshot(); }
+  else if (code === binds.code("key.fullscreen")) { e.preventDefault(); toggleFullscreen(); }
+}
+// GuiContainer / GuiInventory: Block-pick of the targeted block (Minecraft.middleClickMouse).
+function pickBlock() {
+  const stonePick = target && (stoneUtilityPick(world, ...target.block) ?? shapedPick(world.get(...target.block), world.getMeta(...target.block)));
+  const id = stonePick?.id ?? (target && pickItem(world.get(...target.block), world.getMeta(...target.block)));
+  if (id) {
+    survival.inventory.pick(id, survival.creative, stonePick ? stonePick.damage : isColoredBlock(world.get(...target.block)) ? coloredPickDamage(world.get(...target.block), world.getMeta(...target.block)) : treePickDamage(id, world.getMeta(...target.block)) ?? (id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined));
+    mining = null;
+    eating = null;
+    renderHotbar();
+    showHeldName();
+  }
+}
+// Minecraft.runTick with no screen: the actions of a KeyBinding press (isPressed), whichever key or
+// mouse button it is bound to.
+function bindingPressed(d, ctrl) {
+  if (d === "key.togglePerspective") thirdPersonView = nextView(thirdPersonView);
+  else if (d === "key.smoothCamera") smoothCamera = !smoothCamera;
+  else if (d === "key.inventory") inventory();
+  else if (d === "key.drop") dropHeld(ctrl);
+  else if (d === "key.chat") openChat("");
+  else if (d === "key.command") openChat("/");
+  else if (d === "key.attack") { mineHeld = true; edit(false); }
+  else if (d === "key.use") edit(true);
+  else if (d === "key.pickItem") pickBlock();
+  else if (d === "key.playerlist") showPlayerList();
+  else if (HOTBAR.includes(d)) selectSlot(HOTBAR.indexOf(d));
+}
+// A binding released: key.playerlist hides the list, key.attack stops mining and key.use stops using.
+function bindingReleased(d) {
+  if (d === "key.playerlist") playerList.hide();
+  else if (d === "key.attack") { mineHeld = false; if (mining && !mining.auto) mining = null; }
+  else if (d === "key.use") releaseBowUse();
+}
 window.addEventListener("keydown", (e) => {
   if (screen === "credits") return;
-  if (!e.repeat && e.code === (options.keys?.["key.screenshot"] ?? "F2")) { e.preventDefault(); screenshot(); return; }
-  if (e.code === (options.keys?.["key.playerlist"] ?? "Tab") && screen === "playing" && !gui.open) showPlayerList();
-  if(exportBusy){e.preventDefault();return;}
-  // An open menu screen takes every key (GuiScreen.handleKeyboardInput).
+  const code = lwjglCode(e);
+  if (exportBusy) { dispatchKeypress(e, code); e.preventDefault(); return; }
+  // An open menu screen takes every key (GuiScreen.handleKeyboardInput), then dispatchKeypresses.
   if (gui.open) {
     gui.key(e);
+    dispatchKeypress(e, code);
     return;
   }
-  // KeyBinding key.smoothCamera (unbound by default; Options > Controls can bind it).
-  if (screen === "playing" && options.keys?.["key.smoothCamera"] && e.code === options.keys["key.smoothCamera"] && !e.repeat) smoothCamera = !smoothCamera;
+  dispatchKeypress(e, code);
   if (e.code === "Escape") {
     e.preventDefault();
     if (screen === "dead") return;
@@ -2956,84 +3013,70 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (e.target.matches("input,select,textarea")) return;
-  // GuiContainerCreative.keyTyped: T opens search; the search field takes keys before E and Q.
+  // GuiContainer.keyTyped compares key codes directly: key.inventory closes, the hotbar keys and
+  // key.drop act on the hovered slot. GuiContainerCreative opens search with key.chat first.
+  const hotbar = HOTBAR.findIndex((d) => binds.code(d) === code), drop = code !== 0 && code === binds.code("key.drop");
   if (screen === "inventory" && containerView?.kind === "creative") {
     const gui = containerView.gui, before = gui.tab;
-    if (gui.typed({ code: e.code, key: e.key, ctrl: e.ctrlKey || e.metaKey }, containerView.hovered)) {
+    if (gui.typed({ code: e.code, key: e.key, ctrl: e.ctrlKey || e.metaKey, chat: code !== 0 && code === binds.code("key.chat"), hotbar }, containerView.hovered)) {
       e.preventDefault();
       if (gui.tab !== before) renderCreativeBody();
       refreshContainer();
       return;
     }
   }
-  if (screen === "inventory" && e.code === "KeyE") {
+  if (screen === "inventory" && code !== 0 && code === binds.code("key.inventory")) {
     e.preventDefault();
     resume();
     return;
   }
-  // GuiContainer.keyTyped: hotbar keys and Q act on the hovered slot.
   if (screen === "inventory" && containerView) {
-    const digit = /^Digit([1-9])$/.exec(e.code);
-    if (digit) containerView.gui.hotbarKey(containerView.hovered, +digit[1] - 1);
-    if (e.code === "KeyQ") containerView.gui.dropKey(containerView.hovered, e.ctrlKey);
-    if (digit || e.code === "KeyQ") {
+    if (hotbar >= 0) containerView.gui.hotbarKey(containerView.hovered, hotbar);
+    if (drop) containerView.gui.dropKey(containerView.hovered, e.ctrlKey);
+    if (hotbar >= 0 || drop) {
       e.preventDefault();
       refreshContainer();
     }
     return;
   }
   if (screen !== "playing") return;
-  // Ctrl is the 1.7.10 sprint key, so Ctrl with a movement key must not reach the browser
-  // (Ctrl+W still closes the tab in some browsers; double-tapping W sprints as well).
-  if (["Space", "Tab", "KeyW", "KeyA", "KeyS", "KeyD", "F3", "F5"].includes(e.code) || (e.ctrlKey && !e.metaKey && /^Key[A-Z]$|^Space$/.test(e.code)))
+  // Bound keys and F1/F3/F4 must not reach the browser (F5 reloads, Ctrl+W can close the tab).
+  if (binds.binding(code) || code === 59 || code === 61 || code === 62 || (e.ctrlKey && !e.metaKey && /^Key[A-Z]$|^Space$/.test(e.code)))
     e.preventDefault();
-  if (e.code === "F5" && !e.repeat) thirdPersonView = nextView(thirdPersonView);
-  if (e.code === "KeyE" && !e.repeat) {
-    inventory();
-    return;
+  if (!e.repeat) {
+    // Raw LWJGL codes, not KeyBindings: F1 hideGUI; F3 toggles the debug screen on its press, so an
+    // F3 + key combination also toggles it. F3+S/T reload resources (not ported), F3+F only saves the
+    // options in 1.7.10, F3+A reloads the chunk renderers, F3+H advanced tooltips and F3+P
+    // pauseOnLostFocus (both saved). F3+B hitboxes and F3+C (held crash) are not ported.
+    const f3 = keys.has("F3");
+    if (f3 && code === 33) saveOptions();
+    if (f3 && code === 30) for (const k of scene.chunks.keys()) scene.dirty.add(k);
+    if (f3 && code === 35) { options.advancedTooltips = !options.advancedTooltips; saveOptions(); }
+    if (f3 && code === 25) { options.pauseOnLostFocus = options.pauseOnLostFocus === false; saveOptions(); }
+    if (code === 59) hideGUI = !hideGUI;
+    if (code === 61) { debug = !debug; $("#debug").classList.toggle("hidden", !debug); }
+    // KeyBinding.setKeyBindState + onTick through the hash, then the binding's action.
+    const d = binds.set(code, true);
+    if (d) bindingPressed(d, e.ctrlKey);
+    if (screen !== "playing") return;
   }
-  // KeyBinding key.chat (T) opens the chat; key.command (/) opens it with "/" typed.
-  if (!e.repeat && (e.code === (options.keys?.["key.chat"] ?? "KeyT") || e.code === (options.keys?.["key.command"] ?? "Slash"))) {
-    e.preventDefault();
-    openChat(e.code === (options.keys?.["key.command"] ?? "Slash") ? "/" : "");
-    return;
-  }
-  if (e.code === "F3" && !e.repeat) f3Combo = false;
-  // F3 + H toggles advanced tooltips (durability) instead of the debug screen.
-  if (e.code === "KeyH" && keys.has("F3") && !e.repeat) {
-    f3Combo = true;
-    options.advancedTooltips = !options.advancedTooltips;
-    try {
-      localStorage.setItem("blockworld.settings", JSON.stringify(options));
-    } catch {}
-    toast("Advanced tooltips: " + (options.advancedTooltips ? "shown" : "hidden"));
-  }
-  if (e.code === "KeyQ" && !e.repeat) dropHeld(e.ctrlKey);
-  if (
-    e.code.startsWith("Digit") &&
-    +e.code.slice(5) >= 1 &&
-    +e.code.slice(5) <= 9
-  )
-    selectSlot(+e.code.slice(5) - 1);
   keys.add(e.code);
 });
 window.addEventListener("keyup", (e) => {
-  if (e.code === (options.keys?.["key.playerlist"] ?? "Tab")) playerList.hide();
-  if (e.code === "F3" && keys.has("F3") && !f3Combo && screen === "playing") {
-    debug = !debug;
-    $("#debug").classList.toggle("hidden", !debug);
-  }
+  bindingReleased(binds.set(lwjglCode(e), false));
   keys.delete(e.code);
 });
+// EntityRenderer.updateCameraAndRender: with pauseOnLostFocus (F3+P) the game menu opens once the
+// window has been inactive for 500 ms.
 window.addEventListener("blur", () => {
   keys.clear();
-  if (screen === "playing") pause();
+  if (screen === "playing" && options.pauseOnLostFocus !== false) setTimeout(() => { if (screen === "playing" && !document.hasFocus()) pause(); }, 500);
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden && screen === "playing") pause();
+  if (document.hidden && screen === "playing" && options.pauseOnLostFocus !== false) pause();
 });
 document.addEventListener("pointerlockchange", () => {
-  if (!document.pointerLockElement && screen === "playing" && !lockFallback)
+  if (!document.pointerLockElement && screen === "playing" && !lockFallback && (document.hasFocus() || options.pauseOnLostFocus !== false))
     pause();
 });
 window.addEventListener("beforeunload", () => {
@@ -3050,12 +3093,15 @@ window.addEventListener(
   { passive: false },
 );
 document.querySelectorAll("[data-key]").forEach((b) => {
+  // A touch button holds the binding whose default is its key.
+  const d = BINDINGS.find((k) => k.defaultKey === lwjglCode(b.dataset.key))?.description;
   b.onpointerdown = (e) => {
     e.preventDefault();
     keys.add(b.dataset.key);
+    binds.touch.add(d);
     b.setPointerCapture(e.pointerId);
   };
-  b.onpointerup = b.onpointercancel = () => keys.delete(b.dataset.key);
+  b.onpointerup = b.onpointercancel = () => { keys.delete(b.dataset.key); binds.touch.delete(d); };
 });
 $("#touch-break").onclick = () => edit(false);
 $("#touch-place").onclick = () => edit(true);
@@ -3072,26 +3118,18 @@ function setupPointer() {
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   canvas.addEventListener("pointerdown", (e) => {
     if (screen !== "playing") return;
-    if (options.keys?.["key.smoothCamera"] === "Mouse" + e.button) smoothCamera = !smoothCamera;
-    if (e.button === 2) {
+    // Mouse buttons reach their KeyBinding through the hash as -100 + button (Mouse.getEventButton).
+    const d = binds.set(mouseCode(e.button), true);
+    if (d === "key.use") {
       edit(true);
       return;
     }
-    if (e.button === 1) {
-      const stonePick = target && (stoneUtilityPick(world, ...target.block) ?? shapedPick(world.get(...target.block), world.getMeta(...target.block)));
-      const id = stonePick?.id ?? (target && pickItem(world.get(...target.block), world.getMeta(...target.block)));
-      if (id) {
-        survival.inventory.pick(id, survival.creative, stonePick ? stonePick.damage : isColoredBlock(world.get(...target.block)) ? coloredPickDamage(world.get(...target.block), world.getMeta(...target.block)) : treePickDamage(id, world.getMeta(...target.block)) ?? (id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined));
-        mining = null;
-        eating = null;
-        renderHotbar();
-        showHeldName();
-      }
+    if (d === "key.pickItem") {
+      pickBlock();
       return;
     }
     if (document.pointerLockElement === canvas) {
-      mineHeld = true;
-      edit(false);
+      if (d) bindingPressed(d, e.ctrlKey);
       return;
     }
     if (!lockFallback && e.pointerType !== "touch") {
@@ -3105,7 +3143,7 @@ function setupPointer() {
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener("pointerup", (e) => {
-    if (e.button === 2) releaseBowUse();
+    bindingReleased(binds.set(mouseCode(e.button), false));
     if (dragging && dragDistance < 5 && e.pointerType !== "touch") edit(false);
     dragging = false;
     mineHeld = false;
@@ -3176,6 +3214,10 @@ function tickMusic(dt) {
 }
 function animate(now) {
   requestAnimationFrame(animate);
+  // Max Framerate: Display.sync(getLimitFramerate()) below Unlimited (frame-limit.js).
+  if (!frameLimiter.ready(now, limitFramerate({ world: screen !== "home", screen: gui.open, maxFps: options.maxFps ?? 120 }))) return;
+  // F1 (GameSettings.hideGUI): GuiIngame is drawn only while a screen is open.
+  document.body.classList.toggle("hide-gui", hideGUI && screen === "playing" && !gui.open);
   const dt = Math.min((now - lastFrame) / 1000, 0.15);
   lastFrame = now;
   if (document.hidden) return;
@@ -3197,7 +3239,7 @@ function animate(now) {
       // pre-move position, last tick's motion and in-water flag, before movementTick moves the
       // player; EffectRenderer.updateEffects then runs after this tick's spawns. ---
       if (motion.sprinting) spawnRunningParticles(scene.particles, world, { x: position.x, y: position.y, z: position.z, mx: velocity.x, mz: velocity.z, sprinting: true, inWater: wasInWater, ySize: motion.ySize }, playerRandom, [position.x, position.y + PHYSICS.eye, position.z]);
-      movementTick(captureMovementInput(bedSleep.sleeping ? new Set() : keys)); // a sleeping player ignores the keys
+      movementTick(captureMovementInput(bedSleep.sleeping ? () => false : (d) => binds.isDown(d))); // a sleeping player ignores the keys
       tickBed();
       scene.effectRenderer.tick(world);
       // The model stands at posY - yOffset, and posY is lowered by ySize (the sneak drop).
@@ -3278,7 +3320,7 @@ function animate(now) {
     aimedHanging = pickHanging(hanging, aim, dir, survival.creative ? 5 : 3, target?.distance ?? 6);
     if (aimedHanging && ((aimedEntity && aimedEntity.distance <= aimedHanging.distance) || (aimedCart && aimedCart.distance <= aimedHanging.distance))) aimedHanging = null;
     if (aimedHanging) { aimedEntity = null; aimedCart = null; }
-    scene.outline.visible = !!target && !aimedEntity && !aimedCart && !aimedHanging;
+    scene.outline.visible = !hideGUI && !!target && !aimedEntity && !aimedCart && !aimedHanging; // drawSelectionBox skips while hideGUI
     if (target) {
       // setBlockBoundsBasedOnState: a snow layer's box is (meta + 1) / 8 high and a ladder's is its
       // plate; other blocks keep the full cube here. The outline is the box grown by 0.002.
@@ -3373,7 +3415,7 @@ function animate(now) {
   if (firstPerson && animate.pose)
     firstPerson.render(animate.pose, {
       // EntityRenderer.renderHand: first person only, and never while the player is sleeping.
-      visible: thirdPersonView === 0 && !bedSleep.sleeping && ["playing", "inventory", "paused"].includes(screen),
+      visible: thirdPersonView === 0 && !bedSleep.sleeping && !hideGUI && ["playing", "inventory", "paused"].includes(screen),
       light: scene.brightness(scene.camera.position.x, scene.camera.position.y, scene.camera.position.z),
       view: scene.camera,
       time: elapsed,

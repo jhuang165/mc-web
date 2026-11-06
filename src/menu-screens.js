@@ -3,6 +3,7 @@
 // GuiVideoSettings, GuiControls, GuiScreenOptionsSounds, GuiLanguage), read from the 1.7.10 client
 // with javap and the MCP mappings. Every coordinate is in scaled GUI units (ScaledResolution);
 // menu-ui.js draws them. No DOM here, so node tests can check the numbers.
+import { BINDINGS, keyDisplayString } from "./keybindings.js";
 const f = Math.fround;
 
 // The en_US.lang strings the screens use (assets/minecraft/lang/en_US.lang in the 1.7.10 JAR).
@@ -417,25 +418,9 @@ export function worldTypeIndex(record) {
   return Math.max(0, WORLD_TYPES.findIndex((w) => w.biome === wanted[0] && (w.worldType ?? wanted[1]) === wanted[1]));
 }
 
-// --- Key bindings (GameSettings.keyBindings): description, category, LWJGL default and the
-// KeyboardEvent.code (or mouse button) the browser game reads for it. ---
-export const KEY_BINDINGS = [
-  ["key.attack", "key.categories.gameplay", -100, "Mouse0"], ["key.use", "key.categories.gameplay", -99, "Mouse2"],
-  ["key.forward", "key.categories.movement", 17, "KeyW"], ["key.left", "key.categories.movement", 30, "KeyA"],
-  ["key.back", "key.categories.movement", 31, "KeyS"], ["key.right", "key.categories.movement", 32, "KeyD"],
-  ["key.jump", "key.categories.movement", 57, "Space"], ["key.sneak", "key.categories.movement", 42, "ShiftLeft"],
-  ["key.drop", "key.categories.gameplay", 16, "KeyQ"], ["key.inventory", "key.categories.inventory", 18, "KeyE"],
-  ["key.chat", "key.categories.multiplayer", 20, "KeyT"], ["key.playerlist", "key.categories.multiplayer", 15, "Tab"],
-  ["key.pickItem", "key.categories.gameplay", -98, "Mouse1"], ["key.command", "key.categories.multiplayer", 53, "Slash"],
-  ["key.screenshot", "key.categories.misc", 60, "F2"], ["key.togglePerspective", "key.categories.misc", 63, "F5"],
-  ["key.smoothCamera", "key.categories.misc", 0, ""], ["key.sprint", "key.categories.gameplay", 29, "ControlLeft"],
-  ["key.streamStartStop", "key.categories.stream", 64, "F6"], ["key.streamPauseUnpause", "key.categories.stream", 65, "F7"],
-  ["key.streamCommercial", "key.categories.stream", 0, ""], ["key.streamToggleMic", "key.categories.stream", 0, ""],
-  ["key.fullscreen", "key.categories.misc", 87, "F11"],
-  ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ["key.hotbar." + n, "key.categories.inventory", n + 1, "Digit" + n]),
-].map(([description, category, lwjgl, code]) => ({ description, category, lwjgl, code }));
-// Keys the player may rebind here; the rest are read as fixed codes by the game loop.
-export const REBINDABLE = new Set(["key.smoothCamera"]);
+// --- Key bindings (GameSettings.keyBindings, keybindings.js): description, category and the LWJGL
+// default code; every one is rebindable on the Controls screen. ---
+export const KEY_BINDINGS = BINDINGS.map(({ description, category, defaultKey }) => ({ description, category, lwjgl: defaultKey }));
 // KeyBinding.compareTo: localized category, then localized description (String.compareTo).
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 export function keyListEntries() {
@@ -448,28 +433,9 @@ export function keyListEntries() {
   }
   return out;
 }
-// LWJGL Keyboard.getKeyName for a KeyboardEvent.code; GameSettings.getKeyDisplayString shows mouse
-// buttons as "Button N" and an unbound key as NONE.
-const NAMED = {
-  Space: "SPACE", ShiftLeft: "LSHIFT", ShiftRight: "RSHIFT", ControlLeft: "LCONTROL", ControlRight: "RCONTROL",
-  AltLeft: "LMENU", AltRight: "RMENU", MetaLeft: "LMETA", MetaRight: "RMETA", Tab: "TAB", Enter: "RETURN",
-  Backspace: "BACK", Slash: "SLASH", Backslash: "BACKSLASH", Backquote: "GRAVE", Minus: "MINUS", Equal: "EQUALS",
-  BracketLeft: "LBRACKET", BracketRight: "RBRACKET", Semicolon: "SEMICOLON", Quote: "APOSTROPHE", Comma: "COMMA",
-  Period: "PERIOD", CapsLock: "CAPITAL", ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT", ArrowRight: "RIGHT",
-  Insert: "INSERT", Delete: "DELETE", Home: "HOME", End: "END", PageUp: "PRIOR", PageDown: "NEXT", Pause: "PAUSE",
-  ScrollLock: "SCROLL", NumLock: "NUMLOCK", ContextMenu: "APPS", NumpadAdd: "ADD", NumpadSubtract: "SUBTRACT",
-  NumpadMultiply: "MULTIPLY", NumpadDivide: "DIVIDE", NumpadDecimal: "DECIMAL", NumpadEnter: "NUMPADENTER", NumpadEqual: "NUMPADEQUALS",
-};
-export function keyName(code) {
-  if (!code) return "NONE";
-  const mouse = /^Mouse(\d)$/.exec(code);
-  if (mouse) return t("key.mouseButton", [1, 3, 2, 4, 5][+mouse[1]] ?? +mouse[1] + 1);
-  if (NAMED[code]) return NAMED[code];
-  let m;
-  if ((m = /^Key([A-Z])$/.exec(code)) || (m = /^Digit(\d)$/.exec(code)) || (m = /^(F\d+)$/.exec(code))) return m[1];
-  if ((m = /^Numpad(\d)$/.exec(code))) return "NUMPAD" + m[1];
-  return code.toUpperCase();
-}
+// GameSettings.getKeyDisplayString for an LWJGL code: "Button N" for a mouse code, else
+// Keyboard.getKeyName (NONE for 0; null for an unnamed code).
+export const keyName = (code) => keyDisplayString(code, (n) => t("key.mouseButton", n));
 
 // --- GuiSlot geometry. ---
 // getContentHeight, func_148135_f (the scroll limit) and the scroll bar thumb.

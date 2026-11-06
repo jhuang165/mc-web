@@ -38,9 +38,9 @@ const S = {
   SATURATION: ['Missing', 'Unused by 1.7.10 screens; no browser counterpart.'],
   RENDER_DISTANCE: ['Partial', 'Since 0.23.2: chunk slider 2-16 step 1, default 12 (the 64-bit JVM default), "N chunks" label; fog far plane renderDistanceChunks*16 (settings.js renderDistanceBlocks). Chunk loading/culling by distance is open because worlds are finite columns.'],
   VIEW_BOBBING: ['Partial', 'Toggle default on matches native; bobbing application not audited here.'],
-  ANAGLYPH: ['Missing', 'No 3D anaglyph rendering.'],
+  ANAGLYPH: ['Missing', 'No 3D anaglyph rendering; the Video Settings button is drawn disabled with a reason and options.txt keeps anaglyph3d (default false or an imported value).'],
   ADVANCED_OPENGL: ['Missing', 'No occlusion-culling toggle (WebGL renderer).'],
-  FRAMERATE_LIMIT: ['Missing', 'Browser requestAnimationFrame pacing; no 10-260 limiter or "Unlimited".'],
+  FRAMERATE_LIMIT: ['Partial', 'Max Framerate slider 10-260 step 10 (260 "Unlimited"), default 120, saved as maxFps. The frame loop skips animation frames as Display.sync spaces them (max(next + 1000/fps, now)), 30 fps on the title screen as getLimitFramerate; frames cannot exceed the display refresh (frame-limit.js; controls.md).'],
   FBO_ENABLE: ['Missing', 'Not applicable to WebGL; no browser counterpart.'],
   DIFFICULTY: ['Implemented', 'Select Peaceful/Easy/Normal/Hard, default Normal (main.js, difficulty.js; difficulty.test.js, particle/difficulty references). Hardcore lock and server-side difficulty open.'],
   GRAPHICS: ['Implemented', 'Fast/Fancy button (menus.js), saved as options.graphics; Fast: opaque *_opaque leaves with leaf-to-leaf faces culled, flat 8-block clouds, rain/snow radius 5, flat sprite items, one blended translucent pass, no entity shadows (render-settings.js; render-settings.md). Fast clouds, vignette and sprite items are approximated, not byte-compared.'],
@@ -54,8 +54,8 @@ const S = {
   CHAT_OPACITY: ['Partial', 'Slider in Chat Settings, saved; 0.9 * opacity + 0.1 line alpha as GuiNewChat; label (int)(f * 90 + 10)% is bytecode-read.'],
   CHAT_LINKS_PROMPT: ['Partial', 'Prompt on Links toggle saved; on, an http/https click opens GuiConfirmOpenLink (Yes opens a new tab, Copy to Clipboard, No); off opens at once.'],
   SNOOPER_ENABLED: ['Missing', 'Mojang snooper telemetry; no counterpart and likely out of scope (needs acceptance decision).'],
-  USE_FULLSCREEN: ['Partial', 'HUD fullscreen button uses the Fullscreen API (main.js); not an options.txt-style persisted option and no F11 binding.'],
-  ENABLE_VSYNC: ['Missing', 'Not applicable to the browser; no counterpart.'],
+  USE_FULLSCREEN: ['Partial', 'The Video Settings button, the HUD button and key.fullscreen (F11, dispatchKeypresses) use the Fullscreen API (main.js); the options.txt mirror writes fullscreen:false (a browser cannot start in fullscreen).'],
+  ENABLE_VSYNC: ['Partial', 'Use VSync toggles and saves enableVsync; requestAnimationFrame is always synchronized to the display, so turning it off cannot unlock frames above the refresh rate (controls.md).'],
   SHOW_CAPE: ['Partial', 'Button drawn disabled in Chat Settings (ON, the default); there are no skins or capes.'],
   TOUCHSCREEN: ['Missing', 'Mobile on-screen controls exist but are not the native touchscreen option.'],
   CHAT_SCALE: ['Partial', 'Slider, saved; wrap width floor(width / scale) and the drawn scale follow GuiNewChat; label OFF at 0 else (int)(f * 100)%.'],
@@ -80,20 +80,22 @@ assert.deepEqual(Object.keys(S).sort(), options.map(o => o.name).sort());
 
 const KEY_NAMES = { 0: 'NONE', 2: '1', 3: '2', 4: '3', 5: '4', 6: '5', 7: '6', 8: '7', 9: '8', 10: '9', 15: 'TAB', 16: 'Q', 17: 'W', 18: 'E', 20: 'T', 29: 'LCONTROL', 30: 'A', 31: 'S', 32: 'D', 42: 'LSHIFT', 53: 'SLASH', 57: 'SPACE', 60: 'F2', 63: 'F5', 64: 'F6', 65: 'F7', 87: 'F11', '-100': 'Mouse button 0 (left)', '-99': 'Mouse button 1 (right)', '-98': 'Mouse button 2 (middle)' };
 const keyName = code => { assert(KEY_NAMES[code] !== undefined, `unnamed LWJGL code ${code}`); return `${KEY_NAMES[code]} (${code})`; };
+// Every binding is rebindable on the Controls screen (keybindings.js, menus.js; controls.md); the rows say what the action does.
+const R = 'Rebindable (LWJGL code; KeyBinding hash, later registration wins a shared code).';
 const KEY_STATUS = {
-  'key.attack': ['Partial', 'Left click mines/attacks; fixed, not rebindable.'],
-  'key.use': ['Partial', 'Right click places/uses; fixed, not rebindable.'],
-  'key.forward': ['Partial', 'KeyW fixed (main.js).'], 'key.left': ['Partial', 'KeyA fixed.'], 'key.back': ['Partial', 'KeyS fixed.'], 'key.right': ['Partial', 'KeyD fixed.'],
-  'key.jump': ['Partial', 'Space fixed.'], 'key.sneak': ['Partial', 'ShiftLeft/ShiftRight fixed.'],
-  'key.drop': ['Partial', 'KeyQ fixed (Ctrl+Q whole stack).'], 'key.inventory': ['Partial', 'KeyE fixed.'],
-  'key.chat': ['Partial', 'KeyT opens the chat window (main.js, chat-ui.js); fixed, not rebindable.'], 'key.playerlist': ['Partial', 'Tab held draws the GuiIngame player list (player-list.js, layout bytecode-read) only while Open to LAN is on: native 1.7.10 hides it for a lone integrated player, so showing it is a documented deviation; no other players or ping.'],
-  'key.pickItem': ['Partial', 'Middle click pick block (main.js); fixed.'], 'key.command': ['Partial', 'Slash opens chat pre-filled with "/" (main.js); fixed, not rebindable.'],
-  'key.screenshot': ['Partial', 'F2 downloads the 3D canvas as yyyy-MM-dd_HH.mm.ss.png and prints screenshot.success/failure; the DOM HUD is not captured and the file is a download, not a screenshots folder entry.'], 'key.togglePerspective': ['Partial', 'F5 cycles first/behind/front; fixed.'],
-  'key.smoothCamera': ['Partial', 'Unbound by default natively, and Minecraft.runTick toggles smoothCamera only through this binding (no F8 check in 1.7.10). Options > Controls rebinds it to a key or mouse button (saved on the device in options.keys; menus.js); smoothCamera is session-only (not in options.txt). MouseFilter.smooth, the 0.05 x curve tick filter and the partial-tick spread are ported (mouse-look.js; mouse-look.test.js). Not rebindable.'], 'key.sprint': ['Partial', 'ControlLeft/ControlRight fixed.'],
-  'key.streamStartStop': ['Missing', 'Twitch streaming.'], 'key.streamPauseUnpause': ['Missing', 'Twitch streaming.'], 'key.streamCommercial': ['Missing', 'Twitch streaming.'], 'key.streamToggleMic': ['Missing', 'Twitch streaming.'],
-  'key.fullscreen': ['Missing', 'HUD button exists; F11 key unbound.'],
+  'key.attack': ['Partial', `${R} Mines/attacks while held; a keyboard binding works too.`],
+  'key.use': ['Partial', `${R} Places/uses; releasing it stops using an item (bow).`],
+  'key.forward': ['Partial', `${R} MovementInputFromOptions reads it held (player-input.js).`], 'key.left': ['Partial', `${R} Held strafe.`], 'key.back': ['Partial', `${R} Held.`], 'key.right': ['Partial', `${R} Held strafe.`],
+  'key.jump': ['Partial', `${R} Held.`], 'key.sneak': ['Partial', `${R} Held; RSHIFT no longer sneaks by default, as natively.`],
+  'key.drop': ['Partial', `${R} Drops one (Ctrl: the stack; the browser reads the Ctrl modifier, not LWJGL isCtrlKeyDown/Command on macOS); GuiContainer compares its code for the hovered slot.`], 'key.inventory': ['Partial', `${R} Opens the inventory; GuiContainer and GuiAchievements close on its code.`],
+  'key.chat': ['Partial', `${R} Opens the chat window (chat-ui.js); GuiContainerCreative opens search with it.`], 'key.playerlist': ['Partial', `${R} Held draws the GuiIngame player list (player-list.js) only while Open to LAN is on: native 1.7.10 hides it for a lone integrated player, so showing it is a documented deviation; no other players or ping.`],
+  'key.pickItem': ['Partial', `${R} Pick block (main.js); no GuiContainer clone through a keyboard binding.`], 'key.command': ['Partial', `${R} Opens chat pre-filled with "/".`],
+  'key.screenshot': ['Partial', `${R} dispatchKeypresses in every screen: downloads the 3D canvas as yyyy-MM-dd_HH.mm.ss.png and prints screenshot.success/failure; the DOM HUD is not captured and the file is a download.`], 'key.togglePerspective': ['Partial', `${R} Cycles first/behind/front.`],
+  'key.smoothCamera': ['Partial', `${R} Unbound by default natively, and Minecraft.runTick toggles smoothCamera only through this binding (no F8 check in 1.7.10); smoothCamera is session-only (not in options.txt). MouseFilter.smooth, the 0.05 x curve tick filter and the partial-tick spread are ported (mouse-look.js; mouse-look.test.js).`], 'key.sprint': ['Partial', `${R} Held (with the double-tap forward rule).`],
+  'key.streamStartStop': ['Missing', `${R} No Twitch stream; the press does nothing.`], 'key.streamPauseUnpause': ['Missing', `${R} No Twitch stream.`], 'key.streamCommercial': ['Missing', `${R} No Twitch stream.`], 'key.streamToggleMic': ['Missing', `${R} No Twitch stream.`],
+  'key.fullscreen': ['Partial', `${R} dispatchKeypresses toggles the Fullscreen API (also the HUD button).`],
 };
-for (let i = 1; i <= 9; i++) KEY_STATUS[`key.hotbar.${i}`] = ['Partial', `Digit${i} fixed; scroll also selects slots.`];
+for (let i = 1; i <= 9; i++) KEY_STATUS[`key.hotbar.${i}`] = ['Partial', `${R} Selects slot ${i}; GuiContainer swaps the hovered slot with it; scroll also selects slots.`];
 assert.deepEqual(Object.keys(KEY_STATUS).sort(), keyBindings.map(k => k.description).sort());
 
 // Every category has a 0-1 slider (default 1, "<soundCategory label>: OFF/N%") saved in soundLevels; audio.js applies
@@ -196,7 +198,7 @@ Difficulty and chat visibility come from the EnumDifficulty and EnumChatVisibili
 | --- | --- | --- | --- | --- |
 ${fileRows.join('\n')}
 
-Notable differences: loadOptions reads mouseSensitivity before invertYMouse and overrideHeight before overrideWidth. Not backed by an Options constant (saved GameSettings fields): resourcePacks, lastServer, lang, hideServerAddress, advancedItemTooltips, pauseOnLostFocus, overrideWidth, overrideHeight, heldItemTooltips, showInventoryAchievementHint, streamPreferredServer. Defaults for those are in the reference JSON (hideServerAddress false, advancedItemTooltips false, pauseOnLostFocus true, heldItemTooltips true, showInventoryAchievementHint true, lang en_US, overrideWidth/Height 0). Browser: pauseOnLostFocus is an unconditional window blur pause (Partial); advancedItemTooltips toggles with F3+H (Partial); the rest are Missing or not applicable. The port stores its own \`blockworld.settings\` localStorage JSON, not options.txt.
+Notable differences: loadOptions reads mouseSensitivity before invertYMouse and overrideHeight before overrideWidth. Not backed by an Options constant (saved GameSettings fields): resourcePacks, lastServer, lang, hideServerAddress, advancedItemTooltips, pauseOnLostFocus, overrideWidth, overrideHeight, heldItemTooltips, showInventoryAchievementHint, streamPreferredServer. Defaults for those are in the reference JSON (hideServerAddress false, advancedItemTooltips false, pauseOnLostFocus true, heldItemTooltips true, showInventoryAchievementHint true, lang en_US, overrideWidth/Height 0). Browser: pauseOnLostFocus toggles with F3+P and gates the 500 ms lost-focus pause (Partial: a lost pointer lock still pauses); advancedItemTooltips toggles with F3+H (Partial); the rest are Missing or not applicable. The port keeps its \`blockworld.settings\` localStorage JSON and mirrors a native-format options.txt (every line in saveOptions order, key_* as LWJGL codes, Float.toString values) in \`blockworld.options.txt\`, read with the loadOptions rules when no JSON save exists (options-txt.js; controls.md).
 
 ## Sound categories
 
@@ -212,7 +214,7 @@ Index is the position in GameSettings.keyBindings (saved as \`key_<description>:
 | --- | --- | --- | --- | --- | --- |
 ${keyRows.join('\n')}
 
-The browser rebinds only Toggle Cinematic Camera (stored per device in options.keys, with Reset Keys), has no key conflict highlighting, no options.txt key persistence and otherwise uses fixed KeyboardEvent codes; every other Partial row is a fixed equivalent, not rebindable parity. Native F3 debug and F3+H are not KeyBindings; browser F3 behavior is outside this table.
+Every binding is rebindable on the Controls screen (click, then press a key or click a mouse button; Escape unbinds), with red conflict labels, per-row Reset and Reset Keys. Codes are LWJGL 2 numbers mapped from KeyboardEvent.code (keybindings.js), stored as options.keyBindings and in the options.txt mirror as key_<description>:<code>. Rows stay Partial because the actions themselves are approximations and browser-reserved shortcuts cannot all be captured. Native F1/F3 and the F3 combinations are raw LWJGL codes, not KeyBindings (controls.md).
 
 ## Option screens
 

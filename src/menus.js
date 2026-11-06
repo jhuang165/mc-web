@@ -8,8 +8,9 @@ import {
   mainMenuLayout, selectWorldLayout, createWorldLayout, yesNoLayout, renameWorldLayout, ingameMenuLayout, shareToLanLayout,
   optionsLayout, VIDEO_OPTIONS, videoSettingsLayout, CONTROLS_OPTIONS, controlsLayout, KEY_ENTRY, soundsLayout, languageLayout,
   FLOAT_OPTIONS, denormalize, normalize, optionText, soundText, folderName, worldLines, WORLD_TYPES, worldTypeIndex,
-  KEY_BINDINGS, REBINDABLE, keyListEntries, keyName, javaHash, chatOptionsLayout, confirmLinkLayout,
+  KEY_BINDINGS, keyListEntries, keyName, javaHash, chatOptionsLayout, confirmLinkLayout,
 } from "./menu-screens.js";
+import { lwjglCode, mouseCode } from "./keybindings.js";
 import { CHAT_SETTING_DEFAULTS } from "./settings.js";
 import { canGoEndless } from "./endless-world.js";
 import { achievementsScreen } from "./achievements-ui.js";
@@ -33,14 +34,16 @@ export const UNAVAILABLE = {
   touchscreen: "Touch input in this browser build uses its own on-screen controls.",
   fixedVideo: "This renderer has no switch for this setting; the button shows what it always does.",
   mapFeatures: "Structure generation is fixed by the world type in this browser build.",
-  fixedKey: "This key is fixed in the browser build; only Toggle Cinematic Camera can be rebound.",
+  anaglyph: "3D Anaglyph needs the red/cyan two-pass renderer, which this build does not have.",
 };
 // The renderer's fixed state, shown by the disabled video buttons.
-const FIXED = { FRAMERATE_LIMIT: 260, ANAGLYPH: false, ENABLE_VSYNC: true, TOUCHSCREEN: false, FORCE_UNICODE_FONT: false };
+const FIXED = { ANAGLYPH: false, TOUCHSCREEN: false, FORCE_UNICODE_FONT: false };
 // GameSettings fields of the options the port implements.
 const FIELDS = { FOV: "fov", SENSITIVITY: "sensitivity", GAMMA: "gamma", RENDER_DISTANCE: "distance", VIEW_BOBBING: "bobbing", GUI_SCALE: "guiScale", PARTICLES: "particles", DIFFICULTY: "difficulty", INVERT_MOUSE: "invertMouse", GRAPHICS: "graphics", AMBIENT_OCCLUSION: "ao", RENDER_CLOUDS: "clouds", MIPMAP_LEVELS: "mipmapLevels", ANISOTROPIC_FILTERING: "anisotropic",
   CHAT_VISIBILITY: "chatVisibility", CHAT_COLOR: "chatColors", CHAT_LINKS: "chatLinks", CHAT_OPACITY: "chatOpacity", CHAT_LINKS_PROMPT: "chatLinksPrompt",
-  CHAT_SCALE: "chatScale", CHAT_HEIGHT_FOCUSED: "chatHeightFocused", CHAT_HEIGHT_UNFOCUSED: "chatHeightUnfocused", CHAT_WIDTH: "chatWidth", SHOW_CAPE: "showCape" };
+  CHAT_SCALE: "chatScale", CHAT_HEIGHT_FOCUSED: "chatHeightFocused", CHAT_HEIGHT_UNFOCUSED: "chatHeightUnfocused", CHAT_WIDTH: "chatWidth", SHOW_CAPE: "showCape",
+  // GameSettings.limitFramerate (frame-limit.js) and enableVsync (saved; requestAnimationFrame is always vsynced).
+  FRAMERATE_LIMIT: "maxFps", ENABLE_VSYNC: "vsync" };
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 // SaveFormatComparator: the most recently played first, then by folder name.
 export const sortWorlds = (worlds) => [...worlds].sort((a, b) => (b.updated || 0) - (a.updated || 0) || cmp(a.folder || folderName(a.name || "World"), b.folder || folderName(b.name || "World")));
@@ -48,12 +51,12 @@ export const sortWorlds = (worlds) => [...worlds].sort((a, b) => (b.updated || 0
 export function createMenus(gui, ctx) {
   const show = (s) => gui.show(s);
   const close = () => ctx.closeScreen();
-  const keyOf = (description) => ctx.options.keys?.[description] ?? KEY_BINDINGS.find((k) => k.description === description).code;
+  const keyOf = (description) => ctx.bindings.code(description);
   const value = (o) => (o === "USE_FULLSCREEN" ? !!document.fullscreenElement : o in FIELDS ? ctx.options[FIELDS[o]] ?? CHAT_SETTING_DEFAULTS[FIELDS[o]] : FIXED[o]);
   // GuiOptionSlider / GuiOptionButton for a GameSettings.Options entry.
   function optionWidget(g, o, r, parent) {
     const fixed = !(o in FIELDS) && o !== "USE_FULLSCREEN";
-    const reason = o === "SHOW_CAPE" ? UNAVAILABLE.showCape : o === "TOUCHSCREEN" ? UNAVAILABLE.touchscreen : fixed ? UNAVAILABLE.fixedVideo : "";
+    const reason = o === "SHOW_CAPE" ? UNAVAILABLE.showCape : o === "TOUCHSCREEN" ? UNAVAILABLE.touchscreen : o === "ANAGLYPH" ? UNAVAILABLE.anaglyph : fixed ? UNAVAILABLE.fixedVideo : "";
     if (o in FLOAT_OPTIONS) {
       return g.slider(r, {
         parent, reason,
@@ -489,12 +492,15 @@ export function createMenus(gui, ctx) {
   }
 
   // --- GuiControls ---
+  // Every KeyBinding of GameSettings.keyBindings; ctx.bindings is the game's KeyBindings (keybindings.js).
   function controlsScreen(parent) {
     let scroll = 0, list, editing = null, screenRef;
+    const binds = ctx.bindings;
     const entries = keyListEntries();
     const maxLabel = Math.max(...KEY_BINDINGS.map((k) => textWidth(t(k.description))));
+    // setOptionKeyBinding (saves options.txt) and resetKeyBindingArrayAndHash.
     const setKey = (description, code) => {
-      ctx.options.keys = { ...ctx.options.keys, [description]: code };
+      binds.setKeyCode(description, code);
       ctx.saveOptions();
     };
     const capture = (e) => {
@@ -502,18 +508,23 @@ export function createMenus(gui, ctx) {
       if (!editing) return;
       e.preventDefault();
       e.stopPropagation();
-      setKey(editing, "Mouse" + e.button);
+      setKey(editing, mouseCode(e.button));
       editing = null;
       gui.build();
     };
     screenRef = {
       id: "controls",
+      // GuiControls.time: when keyTyped last took a key (dispatchKeypresses ignores it for 20 ms).
+      time: -Infinity,
       escape: close,
       key(e) {
         if (!editing) return false;
-        // keyTyped while a key is being set: Escape unbinds it (NONE), any other key binds.
-        setKey(editing, e.code === "Escape" ? "" : e.code);
+        // keyTyped while a key is being set: Escape (1) unbinds it (NONE), any other key binds its code.
+        e.preventDefault();
+        const code = lwjglCode(e);
+        setKey(editing, code === 1 ? 0 : code);
         editing = null;
+        screenRef.time = performance.now();
         gui.build();
         return true;
       },
@@ -531,28 +542,26 @@ export function createMenus(gui, ctx) {
               g.text(name, Math.trunc(w / 2) - Math.trunc(textWidth(name) / 2), y + KEY_ENTRY.categoryY, { shadow: false, parent });
               return;
             }
-            const k = e.key, code = keyOf(k.description), name = t(k.description);
+            const k = e.key, code = binds.code(k.description), name = t(k.description);
             g.text(name, x + KEY_ENTRY.label - maxLabel, y + KEY_ENTRY.labelY, { shadow: false, parent });
-            // KeyEntry: the key button shows "> ??? <" while it is being set, red when another key shares it.
-            const conflict = code && KEY_BINDINGS.some((o) => o !== k && keyOf(o.description) === code);
+            // KeyEntry: the key button shows "> NAME <" while it is being set, red when another key shares it.
             let label = keyName(code);
-            if (editing === k.description) label = "§f> §e" + label + "§f <";
-            else if (conflict) label = "§c" + label;
+            if (editing === k.description) label = "\u00a7f> \u00a7e" + label + "\u00a7f <";
+            else if (binds.conflict(k.description)) label = "\u00a7c" + label;
             const [kx, kw, kh] = KEY_ENTRY.key, [rx, rw, rh] = KEY_ENTRY.reset;
-            const rebindable = REBINDABLE.has(k.description);
-            g.button({ x: x + kx, y, w: kw, h: kh }, label, () => {
-              if (!rebindable) { ctx.notice(UNAVAILABLE.fixedKey); return; }
+            g.button({ x: x + kx, y, w: kw, h: kh }, label ?? "", () => {
               editing = k.description;
               gui.build();
             }, { parent });
-            g.button({ x: x + rx, y, w: rw, h: rh }, t("controls.reset"), () => { setKey(k.description, k.code); gui.build(); }, { parent, enabled: code !== k.code });
+            g.button({ x: x + rx, y, w: rw, h: rh }, t("controls.reset"), () => { setKey(k.description, k.lwjgl); gui.build(); }, { parent, enabled: code !== k.lwjgl });
           },
         });
         g.text(t("controls.title"), ...L.title, { center: true });
         CONTROLS_OPTIONS.forEach((o, i) => optionWidget(g, o, L.options[i]));
         g.button(L.buttons.done, t("gui.done"), () => show(parent));
-        // Reset Keys is enabled while any key differs from its default.
-        g.button(L.buttons.resetAll, t("controls.resetAll"), () => { ctx.options.keys = {}; ctx.saveOptions(); gui.build(); }, { enabled: KEY_BINDINGS.some((k) => keyOf(k.description) !== k.code) });
+        // Reset Keys (enabled while any key differs from its default) resets every binding and the
+        // hash without saving options.txt, as GuiControls does.
+        g.button(L.buttons.resetAll, t("controls.resetAll"), () => { binds.resetAll(); gui.build(); }, { enabled: binds.changed() });
       },
       close() { scroll = list?.scroll ?? 0; gui.layer.removeEventListener("pointerdown", capture, true); },
     };

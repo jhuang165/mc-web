@@ -120,7 +120,8 @@ test('key bindings match the 1.7.10 list and GuiKeyBindingList order', () => {
   const entries = keyListEntries();
   assert.deepEqual(entries.filter((e) => e.category).map((e) => t(e.category)), ['Gameplay', 'Inventory', 'Miscellaneous', 'Movement', 'Multiplayer', 'Streaming']);
   assert.equal(entries[1].key.description, 'key.attack');
-  assert.deepEqual(['Mouse0', 'Mouse2', 'Mouse1', 'KeyW', 'ShiftLeft', 'Digit1', 'F11', ''].map(keyName), ['Button 1', 'Button 2', 'Button 3', 'W', 'LSHIFT', '1', 'F11', 'NONE']);
+  // GameSettings.getKeyDisplayString of LWJGL codes (mouse buttons -100 + button).
+  assert.deepEqual([-100, -99, -98, 17, 42, 2, 87, 0].map(keyName), ['Button 1', 'Button 2', 'Button 3', 'W', 'LSHIFT', '1', 'F11', 'NONE']);
 });
 
 test('GuiSlot metrics and picking', () => {

@@ -213,12 +213,14 @@ export class CreativeScreen extends ContainerScreen {
   // keyTyped: returns true when the creative screen used the key.
   typed(event, hovered) {
     if (this.tab !== SEARCH) {
-      if (event.code === "KeyT") { this.setTab(SEARCH); return true; }
+      // GameSettings.isKeyDown(keyBindChat); `chat` is set by the game from the key bindings.
+      if (event.chat ?? event.code === "KeyT") { this.setTab(SEARCH); return true; }
       return false;
     }
     if (this.clearSearch) { this.clearSearch = false; this.field.set(""); }
-    const digit = /^Digit([1-9])$/.exec(event.code ?? "");
-    if (digit && this.hotbarKey(hovered, +digit[1] - 1)) return true;
+    // checkHotbarKeys: `hotbar` is the index of the hotbar binding the key has (-1 none).
+    const digit = /^Digit([1-9])$/.exec(event.code ?? ""), slot = event.hotbar ?? (digit ? +digit[1] - 1 : -1);
+    if (slot >= 0 && this.hotbarKey(hovered, slot)) return true;
     if (this.field.key(event)) { this.search(); return true; }
     return false;
   }
