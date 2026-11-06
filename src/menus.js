@@ -8,9 +8,11 @@ import {
   mainMenuLayout, selectWorldLayout, createWorldLayout, yesNoLayout, renameWorldLayout, ingameMenuLayout, shareToLanLayout,
   optionsLayout, VIDEO_OPTIONS, videoSettingsLayout, CONTROLS_OPTIONS, controlsLayout, KEY_ENTRY, soundsLayout, languageLayout,
   FLOAT_OPTIONS, denormalize, normalize, optionText, soundText, folderName, worldLines, WORLD_TYPES, worldTypeIndex,
-  KEY_BINDINGS, REBINDABLE, keyListEntries, keyName,
+  KEY_BINDINGS, REBINDABLE, keyListEntries, keyName, javaHash,
 } from "./menu-screens.js";
 import { canGoEndless } from "./endless-world.js";
+import { achievementsScreen } from "./achievements-ui.js";
+import { PLAYER_NAME } from "./death-messages.js";
 
 const SOUND_KEYS = ["master", "music", "record", "weather", "block", "hostile", "neutral", "player", "ambient"];
 // Why each unavailable vanilla button is disabled here.
@@ -18,7 +20,6 @@ export const UNAVAILABLE = {
   multiplayer: "Multiplayer needs a connection to a Minecraft server, which a web page cannot open.",
   online: "Minecraft Realms is an online Mojang service; this browser recreation has no account sign-in.",
   quit: "A web page cannot close its own tab. Close the tab to quit.",
-  achievements: "Achievements are not implemented in this browser build yet.",
   stats: "Statistics are not recorded in this browser build yet.",
   superSecret: "Super Secret Settings needs the 1.7.10 post-processing shaders, which this renderer does not have.",
   stream: "Twitch broadcasting was a desktop-only feature; a web page cannot stream.",
@@ -348,7 +349,10 @@ export function createMenus(gui, ctx) {
         g.button(b.options, t("menu.options"), () => show(optionsScreen(ingameMenu)));
         // GuiIngameMenu: enabled while singleplayer and the integrated server is not public yet.
         g.button(b.shareToLan, t("menu.shareToLan"), () => show(shareToLan(ingameMenu)), { enabled: !ctx.lanOpen() });
-        g.button(b.achievements, t("gui.achievements"), null, { reason: UNAVAILABLE.achievements });
+        g.button(b.achievements, t("gui.achievements"), () => show(achievementsScreen({
+          achievements: ctx.achievements, icon: ctx.icon, hash: javaHash(PLAYER_NAME), back: ingameMenu, close, show,
+          keyName: () => keyName(keyOf("key.inventory")), inventoryKey: () => keyOf("key.inventory"),
+        })));
         g.button(b.stats, t("gui.stats"), null, { reason: UNAVAILABLE.stats });
         // Browser addition in the row vanilla leaves empty: download the world.
         g.button(b.export, "Export World", () => ctx.exportWorld());

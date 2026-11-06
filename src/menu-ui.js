@@ -51,6 +51,7 @@ export class Gui {
       e.preventDefault();
       // GuiSlot reads Mouse.getEventDWheel anywhere on the screen: half a slot per notch.
       if (this.list && e.deltaY) this.list.wheel(e.deltaY > 0 ? 1 : -1);
+      else if (this.screen?.wheel && e.deltaY) this.screen.wheel(e.deltaY > 0 ? 1 : -1);
     }, { passive: false });
     addEventListener("pointermove", (e) => this.drag?.move(this.mouse(e)));
     const up = (e) => { const d = this.drag; this.drag = null; d?.up?.(this.mouse(e)); };
