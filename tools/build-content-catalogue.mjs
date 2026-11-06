@@ -145,7 +145,7 @@ const E = {
   MinecartFurnace: ['Partial', 'minecart-variants.md', ''],
   MinecartTNT: ['Partial', 'minecart-variants.md', ''],
   MinecartHopper: ['Partial', 'minecart-variants.md', ''],
-  MinecartSpawner: ['Missing', 'minecart-variants.md', 'spawner cart (type 4) is not modelled (src/cart-variants.js)'],
+  MinecartSpawner: ['Partial', 'spawner-cart.md', 'NBT, spawn timing and drops probe-verified; mob display approximate; no Java region import of carts'],
   Creeper: ['Implemented', 'creepers.md', ''],
   Skeleton: ['Partial', 'bows.md', 'wither skeleton variant: magma-pigman.md/fortress.md'],
   Spider: ['Partial', 'spiders.md', 'spawn timing adapted; see doc'],

@@ -23,7 +23,7 @@ Cart items place on rails, dispense from dispensers, appear in the creative tran
 ## Gaps
 
 - Command block cart: the item is defined, but there is no entity behaviour, no GUI and no command execution.
-- Spawner cart (type 4) is not supported.
+- Spawner cart (type 4) is supported; see [spawner cart](spawner-cart.md).
 - The wall-collision explosion of the TNT cart never fires on rails in the original either (motion is zeroed first), so it is not covered by any recorded case.
 - The hopper cart block inside the model is approximated from boxes; furnace, TNT and command block use the block textures at the original offset and scale. Not compared with native screenshots.
 - Native keeps a size-0 stack in a spilled slot (NBT Count 0); the port empties the slot.

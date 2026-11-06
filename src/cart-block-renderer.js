@@ -14,6 +14,7 @@ const tex = (name) => pixelTexture(`/media/1.7.10/blocks/${name}.png`);
 const FACES = {
   2: () => { const s = tex("furnace_side"), t = tex("furnace_top"); return [s, s, t, t, s, tex("furnace_front_on")]; },
   3: () => { const s = tex("tnt_side"); return [s, s, tex("tnt_top"), tex("tnt_bottom"), s, s]; },
+  4: () => Array(6).fill(tex("mob_spawner")), // the cage texture is alpha tested (entityMaterial discards below 0.1)
   6: () => Array(6).fill(tex("command_block")),
 };
 

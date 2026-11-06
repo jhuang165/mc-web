@@ -12,6 +12,8 @@ import { NBT } from "./nbt.js";
 import { SUMMONABLE } from "./commands.js";
 import { summonCart, cartTypeOfSummon } from "./cart-summon.js";
 import { summonFireworkRocket, FIREWORK_SUMMON } from "./firework-summon.js";
+import { summonEntity, entityIdOfSummon } from "./entity-summon.js";
+import { mountEntity } from "./mob-riding.js";
 import { newChest, settleFacing } from "./chest.js";
 import { newEnderTile } from "./chest-blocks.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
@@ -135,30 +137,45 @@ export function createCommandHost(env) {
     },
     addLevels(n) { env.experience().addLevels(n); env.refreshInventory(); },
     addExperience(n) { env.experience().add(n); env.refreshInventory(); },
+    // CommandSummon (bu.b): the entity from the tag (EntityList.createEntityFromNBT) at x, y, z, then each Riding compound is created at
+    // the same point, spawned and ridden (current.mountEntity(mount)) until one cannot be created. Mounts are kept between mobs
+    // (mob-riding.js); a vehicle, projectile or item on either end is spawned but not linked, and the command says so.
     summon(type, x, y, z, tag) {
-      if (type === FIREWORK_SUMMON) { const r = env.rockets?.() && summonFireworkRocket(env.rockets(), x, y, z, tag); if (r) env.changed(); return r; }
-      if (cartTypeOfSummon(type) !== null) { const r = summonCart(env.minecarts?.(), cartTypeOfSummon(type), x, y, z, tag); if (r) env.changed(); return r; }
+      const ignored = [], convertItem = t => itemStackFromNbt(t, { ignored });
       const mobs = env.mobs();
-      if (!mobs) return false;
-      if (!tag) { mobs.spawnNatural(type, x, y, z); env.changed(); return true; }
-      const ignored = [];
-      const spawn = (type, nbt) => {
-        const parsed = summonedMobRecord(type, nbt, { convertItem: t => itemStackFromNbt(t, { ignored }) });
-        if (!parsed) return false;
+      const spawnOne = (type, nbt) => {
+        if (type === FIREWORK_SUMMON) { const r = env.rockets?.() && summonFireworkRocket(env.rockets(), x, y, z, nbt); if (r) ignored.push(...r.ignored); return r ? { other: true } : null; }
+        if (cartTypeOfSummon(type) !== null) { const r = summonCart(env.minecarts?.(), cartTypeOfSummon(type), x, y, z, nbt); if (r) ignored.push(...r.ignored); return r ? { other: true } : null; }
+        const id = entityIdOfSummon(type);
+        if (id) {
+          const hosts = env.entityHosts?.();
+          if (!hosts) return null;
+          const r = summonEntity(hosts, id, x, y, z, nbt, { convertItem });
+          ignored.push(...r.ignored);
+          return { other: true };
+        }
+        if (!mobs) return null;
+        if (!nbt) { mobs.spawnNatural(type, x, y, z); return { other: true }; }
+        const parsed = summonedMobRecord(type, nbt, { convertItem });
+        if (!parsed) return null;
         const mob = mobs.restore({ ...parsed.record, x, y, z }, { summoned: true });
-        if (!mob) return false;
+        if (!mob) return null;
         mobs.entities.push(mob); mobs.nextId++;
         mob.fire = nbtGet(nbt, 'Fire', NBT.SHORT, 0);
         const motion = nbtGet(nbt, 'Motion', NBT.LIST);
         const velocity = motion?.elementType === NBT.DOUBLE ? motion.items : [];
         for (const [i, key] of ['vx', 'vy', 'vz'].entries()) mob[key] = Number.isFinite(velocity[i]) && Math.abs(velocity[i]) <= 10 ? velocity[i] : 0;
         ignored.push(...parsed.ignored.filter(k => k !== 'Riding'));
-        return true;
+        return { mob };
       };
-      if (!spawn(type, tag)) return false;
-      for (let rider = nbtGet(tag, 'Riding', NBT.COMPOUND); rider; rider = nbtGet(rider, 'Riding', NBT.COMPOUND)) {
-        ignored.push('Riding (riders spawn unmounted)');
-        if (!spawn(SUMMONABLE[nbtGet(rider, 'id', NBT.STRING, '')], rider)) break;
+      let current = spawnOne(type, tag);
+      if (!current) return false;
+      for (let nbt = tag; nbt && current && nbtGet(nbt, 'Riding', NBT.COMPOUND); ) {
+        const ridingTag = nbtGet(nbt, 'Riding', NBT.COMPOUND), mount = spawnOne(SUMMONABLE[nbtGet(ridingTag, 'id', NBT.STRING, '')], ridingTag);
+        if (!mount) break; // createEntityFromNBT returned null: the loop ends (bu.b: current = null)
+        if (current.mob && mount.mob) mountEntity(current.mob, mount.mob, m => mobs.size(m)[1]);
+        else ignored.push('Riding (only mob on mob riding is kept; the mount spawned separately)');
+        current = mount; nbt = ridingTag;
       }
       env.changed();
       return { ignored };

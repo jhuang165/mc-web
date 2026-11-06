@@ -649,7 +649,7 @@ export class Minecarts {
         (it.damage === undefined || Number.isInteger(it.damage)) && [it.stored, it.enchantments, it.storedEnchantments].every((list) => list === undefined || (Array.isArray(list) && list.every((e) => Number.isInteger(e?.id) && Number.isInteger(e?.lvl)))) &&
         (it.repairCost === undefined || Number.isInteger(it.repairCost)) && (it.displayName === undefined || typeof it.displayName === 'string') &&
         (it.unbreakable === undefined || typeof it.unbreakable === 'boolean'));
-      const cart = m.spawnCart(c.type, { x: c.x, y: c.y, z: c.z, items: V.isContainerType(c.type) ? items : [], fuel: c.fuel, pushX: c.pushX, pushZ: c.pushZ, fuse: c.fuse, cooldown: c.cooldown, command: c.command, customName: typeof c.customName === "string" && c.customName ? c.customName : null });
+      const cart = m.spawnCart(c.type, { x: c.x, y: c.y, z: c.z, items: V.isContainerType(c.type) ? items : [], fuel: c.fuel, spawner: c.spawner, pushX: c.pushX, pushZ: c.pushZ, fuse: c.fuse, cooldown: c.cooldown, command: c.command, customName: typeof c.customName === "string" && c.customName ? c.customName : null });
       cart.restorePlayer = c.type === 0 && c.rider === true;
       const v = Array.isArray(c.motion) && c.motion.length === 3 && ok(...c.motion) ? c.motion : [0, 0, 0];
       // Entity.readFromNBT: motion components above 10 in magnitude are dropped to 0.

@@ -1,11 +1,11 @@
 // /summon MinecartRideable | MinecartChest | MinecartFurnace | MinecartTNT | MinecartHopper | MinecartCommandBlock with a data tag
-// (Fuel, PushX, PushZ, TNTFuse, TransferCooldown, Items with original ids, CustomName, Motion). The spawner cart is not modelled.
+// (Fuel, PushX, PushZ, TNTFuse, TransferCooldown, Items with original ids, CustomName, Motion). MinecartSpawner reads the MobSpawnerBaseLogic keys (spawner-cart.md).
 import { nbtGet, hasNumber } from "./nbt-get.js";
 import { NBT } from "./nbt.js";
 import { isContainerType, slotCount } from "./cart-variants.js";
 
 // SUMMONABLE values for the carts; command-host.js routes them here.
-export const CART_SUMMON = Object.freeze({ MinecartRideable: "cart:0", MinecartChest: "cart:1", MinecartFurnace: "cart:2", MinecartTNT: "cart:3", MinecartHopper: "cart:5", MinecartCommandBlock: "cart:6" });
+export const CART_SUMMON = Object.freeze({ MinecartRideable: "cart:0", MinecartChest: "cart:1", MinecartFurnace: "cart:2", MinecartTNT: "cart:3", MinecartSpawner: "cart:4", MinecartHopper: "cart:5", MinecartCommandBlock: "cart:6" });
 export const cartTypeOfSummon = (type) => (typeof type === "string" && type.startsWith("cart:") ? Number(type.slice(5)) : null);
 
 export function summonCart(minecarts, type, x, y, z, tag) {
@@ -26,6 +26,7 @@ export function summonCart(minecarts, type, x, y, z, tag) {
       const last = nbtGet(tag, "LastOutput", NBT.STRING, null);
       if (last != null) record.command.lastOutput = last;
     }
+    if (type === 4) record.spawner = spawnerRecord(tag);
     const items = nbtGet(tag, "Items", NBT.LIST);
     if (isContainerType(type)) {
       for (const it of items?.items ?? []) {
@@ -38,4 +39,18 @@ export function summonCart(minecarts, type, x, y, z, tag) {
   const motion = tag instanceof Map ? nbtGet(tag, "Motion", NBT.LIST) : null;
   if (motion?.elementType === NBT.DOUBLE) [cart.vx, cart.vy, cart.vz] = [0, 1, 2].map((i) => (Number.isFinite(motion.items[i]) && Math.abs(motion.items[i]) <= 10 ? motion.items[i] : 0));
   return { ignored };
+}
+
+// MobSpawnerBaseLogic.readFromNBT (agq.a(dh)) over a command tag: EntityId, Delay, MinSpawnDelay (with MaxSpawnDelay and SpawnCount),
+// MaxNearbyEntities (with RequiredPlayerRange), SpawnRange, then SpawnPotentials and SpawnData as compounds.
+// A command tag reaches readEntityFromNBT, which reads EntityId and Delay unconditionally: absent they are "" and 0.
+export function spawnerRecord(tag) {
+  const r = { EntityId: "", Delay: 0 }, num = ["Delay", "MinSpawnDelay", "MaxSpawnDelay", "SpawnCount", "MaxNearbyEntities", "RequiredPlayerRange", "SpawnRange"];
+  if (tag.get("EntityId")?.type === NBT.STRING) r.EntityId = tag.get("EntityId").value;
+  for (const k of num) if (hasNumber(tag, k)) r[k] = nbtGet(tag, k, NBT.SHORT, 0);
+  const list = nbtGet(tag, "SpawnPotentials", NBT.LIST);
+  if (list?.elementType === NBT.COMPOUND && list.items.length) r.SpawnPotentials = list.items;
+  const data = nbtGet(tag, "SpawnData", NBT.COMPOUND);
+  if (data) r.SpawnData = data;
+  return r;
 }

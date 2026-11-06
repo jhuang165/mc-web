@@ -74,8 +74,9 @@ shared with Java import/export (chests, furnace, dispenser/dropper, hopper, brew
 Explicit deviations: the native parser's empty-list-element hang becomes an error; decimal-to-float conversion uses
 JavaScript Number followed by Math.fround, so an exceptionally close double-rounding tie can differ from Java Float.parseFloat.
 Unknown keys are discarded with a gray `Not kept in this build: …` line. Mob effects/equipment are limited to the
-build's live implementations; tagged summons do not gain spawn-egg equipment. Riding chains spawn supported entities
-at the same point unmounted, with a note. Rotation pitch and arbitrary attributes/equipment remain unsupported.
+build's live implementations; tagged summons do not gain spawn-egg equipment. `/summon` covers 52 of the 57 EntityList registrations (missing: Mob, Monster, Painting, ItemFrame, LeashKnot; the first two
+are abstract and fail natively). A `Riding` compound mounts through the mob-riding API as `CommandSummon` does (a null mount
+ends the chain); a mob on a non-mob pair spawns separately with a note. See [spawner cart](spawner-cart.md). Rotation pitch and arbitrary attributes/equipment remain unsupported.
 This is partial command/NBT support, not full parity.
 
 See [command blocks](command-blocks.md) for the new editor, rising-edge execution, sender and commandBlockOutput rule.

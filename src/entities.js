@@ -51,6 +51,7 @@ import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startCon
 import { landingEffects, JUMP_BOOST, statusPitchRandom } from "./damage-fx.js";
 import { WOLF_WIDTH, WOLF_HEIGHT, WOLF_SPEED, WILD_MAX_HEALTH, TAMED_MAX_HEALTH, WOLF_SOUNDS, wolfFields, wolfFieldsFrom, isTamed as wolfTamed, maxHealth as wolfMaxHealth, tailAngle, interestedAngle, shakeAngle, wetShade, wolfSay, hurtAmount as wolfHurtAmount, attackStrength as wolfAttack, puppyFields, interact as wolfClick, updateWolf } from "./wolf.js";
 import { noteWolfHurt } from "./wolf-ai.js";
+import { summonedMobRecord } from "./java-mobs.js";
 import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest } from "./ocelot.js";
 import { ocelotSpawnPass } from "./ocelot-spawn.js";
 import { NETHER } from "./dimensions.js";
@@ -1134,6 +1135,12 @@ export class EntityWorld {
         return this.world.get(x, y - 1, z) === 2 && (env.fullLight ?? lightEnv.lightValue)(x, y, z) > 8 && !blocked(b) && !collisionBoxes(this.world, b).length && !liquid(b);
       },
       initMob: (e) => this.onSpawnWithEgg(e),
+      // SpawnData (spawner-data.js): the Properties read over the written entity like /summon's data tag, so its Pos moves it.
+      applyProperties: (e, props) => {
+        const parsed = summonedMobRecord(e.type, props), pos = props.get("Pos")?.value?.items;
+        const r = parsed && this.restore({ ...parsed.record, x: pos?.[0] ?? e.x, y: pos?.[1] ?? e.y, z: pos?.[2] ?? e.z }, { summoned: true });
+        if (r) Object.assign(e, r, { id: e.id }, props.has("Rotation") ? {} : { yaw: e.yaw });
+      },
       addMob: (e) => this.entities.push(e),
       // EntityLiving.spawnExplosionParticle (entity status 20 on the client): 20 explode puffs.
       explosionParticles: (e) => {
