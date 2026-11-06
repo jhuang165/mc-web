@@ -21,6 +21,6 @@ The probe runs the unchanged EntityRenderer (blt), RenderGlobal (bma) and World 
 ## Approximated or missing
 - The warp uses the scene tick as `rendererUpdateCount`, and Night Vision uses partial 0 for the per-tick lightmap; renderer pixels are not byte-exact.
 - The sky pass is hidden while blind rather than drawn through fog.
-- `detectionRangeScale` is exported but not wired into mob AI (`src/ai.js` and `src/entities.js` belong to another track); 1.7.10 does have the scaling in `getClosestVulnerablePlayer`, but mobs here use their own target search.
+- `detectionRangeScale` is wired through `MobAI.closestVulnerablePlayer` (`src/ai.js`) into the legacy `findPlayerToAttack` mobs; the task-based `EntityAINearestAttackableTarget` has no such scaling in 1.7.10. See `detection.md`.
 - Potions in flight are not exported to region files; a witch-thrown potion loses its owner when loaded.
 - The splash particles' motion after `multiplyVelocity` is not compared to native (colours and spawn arguments are).

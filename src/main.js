@@ -2109,7 +2109,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     setCompassTextureFrame(frame);
     document.documentElement.style.setProperty("--compass-position", `${frame * 100 / (COMPASS_FRAMES - 1)}%`);
   }
-  tickEntitySimulation({ world, items, primed, projectiles, arrows, mobs, survival, position,
+  tickEntitySimulation({ world, items, primed, projectiles, arrows, mobs, survival, position, sneaking: !!motion.sneaking,
     width: PHYSICS.width, height: PHYSICS.height }, {
     maxStack: st => survival.inventory.maxStack(st),
     smoke: (x, y, z) => scene.explosionParticles.spawn("smoke", x, y, z),

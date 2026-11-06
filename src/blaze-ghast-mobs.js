@@ -72,7 +72,7 @@ export function ghastUpdate(m, e, t) {
         for (let i = 1; i < d; i++) if (actorCollides(world, e.x + dx * i, e.y + dy * i, e.z + dz * i, t.width, t.height)) return false;
         return true;
       },
-      findPlayer: () => (live() && view().distSq < GHAST.targetRange * GHAST.targetRange ? p : null),
+      findPlayer: () => m.ai.closestVulnerablePlayer(e, GHAST.targetRange),
       target: () => (live() ? view() : null),
       canSee: () => brain.canSee(p),
       event: (id) => levelEvent(m, e, id === GHAST.warnEvent ? GHAST.chargeSound : GHAST.fireSound, GHAST.eventVolume),

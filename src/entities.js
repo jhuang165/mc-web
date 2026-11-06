@@ -1806,7 +1806,7 @@ export class EntityWorld {
   slimeThink(e) {
     const p = this.ai.player, s = this.ai.survival;
     this.ai.brain(e).despawnEntity();
-    const target = p?.alive && !s.creative && (p.x - e.x) ** 2 + (p.y - e.y) ** 2 + (p.z - e.z) ** 2 < 256 ? { x: p.x, eyeY: p.y + 1.62, z: p.z } : null;
+    const target = this.ai.closestVulnerablePlayer(e, 16) ? { x: p.x, eyeY: p.y + 1.62, z: p.z } : null;
     e.moveForward = e.slimeForward;
     e.moveStrafing = e.slimeStrafe;
     e.aiMoveSpeed = SLIME.speed; // the fixed 0.1 land movement factor
@@ -1876,7 +1876,7 @@ export class EntityWorld {
     } else if (e.revenge && e.revenge !== e.spiderRevenge) {
       e.spiderRevenge = e.revenge;
       e.spiderTarget = true;
-    } else if (!e.spiderTarget && distance < 16 && spiderFindsPlayer(light)) e.spiderTarget = true;
+    } else if (!e.spiderTarget && this.ai.closestVulnerablePlayer(e, 16) && spiderFindsPlayer(light)) e.spiderTarget = true;
     if (e.spiderTarget) {
       m.attackTarget = p;
       if (m.canSee(p)) {
@@ -1939,7 +1939,7 @@ export class EntityWorld {
     const env = {
       rand, remote: false, get mobGriefing() { return gameRule("mobGriefing"); },
       closestPlayer: (me, range) => (p?.alive && (range < 0 || m.distSq(p) < range * range) ? p : null),
-      findPlayerToAttack: (me) => (p?.alive && closestVulnerablePlayer(me, [{ x: p.x, y: p.y, z: p.z, creative: !!s.creative, alive: true }], 8) ? p : null),
+      findPlayerToAttack: (me) => this.ai.closestVulnerablePlayer(me, 8),
       isAlive: (x) => (x === p ? !!p.alive : true),
       isCreative: () => !!s.creative,
       eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : 1.62),
