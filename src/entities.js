@@ -5,7 +5,8 @@ import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE, isSpi
 import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, SPAWN_BRIGHTNESS } from "./mob-spawner.js";
 import { ENDERMAN_HEALTH, ENDERMAN_WIDTH, ENDERMAN_HEIGHT, ENDERMAN_SPEED, ENDERMAN_ATTACK, SPEED_BOOST as ENDERMAN_BOOST, endermanFields, endermanFieldsFrom, SOUNDS as ENDERMAN_SOUNDS, livingSound as endermanLiving } from "./enderman.js";
 import { endermanTick, endermanHurt, endermanSpawn, ENDERMAN_TRANSIENT } from "./enderman-live.js";
-import { SILVERFISH, SILVERFISH_SOUNDS, silverfishActionState, legacyFields as silverfishFields, silverfishCanSpawnHere, hurtSummon, attackReady, pathWeight as silverfishPathWeight, eggSpawn } from "./silverfish.js";
+import { GIANT, GIANT_SOUNDS, giantPathWeight, giantAttackReady } from "./giant.js";
+import { creatureActionState, SILVERFISH, SILVERFISH_SOUNDS, silverfishActionState, legacyFields as silverfishFields, silverfishCanSpawnHere, hurtSummon, attackReady, pathWeight as silverfishPathWeight, eggSpawn } from "./silverfish.js";
 import { POISON } from "./status-effects.js";
 import { WITHER_SKELETON_STATS, witherHitEffect } from "./wither-skeleton.js";
 import {CARROT,zombieRareDrop} from './crops.js';
@@ -226,6 +227,8 @@ export const ENTITY_TYPES = {
   // EntityEnderman (ya): 40 health, 0.6 x 2.9, speed 0.3, attack 7; enderman.js (stare, teleport, carry), no AI-task list in 1.7.10.
   enderman: { health: ENDERMAN_HEALTH, width: ENDERMAN_WIDTH, height: ENDERMAN_HEIGHT, movement: f(ENDERMAN_SPEED), ai: { chase: 1, wander: 1 }, damage: ENDERMAN_ATTACK, drop: 0 },
   silverfish: { health: SILVERFISH.health, width: SILVERFISH.width, height: SILVERFISH.height, movement: f(SILVERFISH.speed), ai: { wander: 1 }, damage: SILVERFISH.damage, drop: 0 },
+  // EntityGiantZombie (ye): an EntityMob 6x the zombie's box, 100 health, speed 0.5, attack 50; legacy AI (giant.js), no drops.
+  giant: { health: GIANT.health, width: GIANT.width, height: GIANT.height, movement: GIANT.movement, ai: {}, damage: GIANT.attackDamage, drop: 0 },
   // EntityWitch (yp): 0.6 x 1.8, 26 health, speed 0.25; the potion attack (witch.js, witch-potions.js) replaces melee. Drops in combat.js.
   witch: { health: WITCH.health, width: WITCH.width, height: WITCH.height, movement: WITCH.movement, ai: { wander: 1 }, damage: WITCH.attackDamage, drop: 0 },
   // EntitySlime (ym): 0.6 x 0.6 at size 1, scaled by `size` (mobScale); health and damage are size-based (slime.js), drops in combat.js.
@@ -247,7 +250,7 @@ const volumeOf = (e) => (isSlimeLike(e) ? slimeVolume(e.size) : soundVolume(e.ty
 // Fire-immune mobs (Entity.isImmuneToFire): the magma cube and the pigman.
 const fireproof = (e) => e.type === "magma_cube" || e.type === "pigman";
 // EntityMob subclasses: no panic counter, 5 experience, despawning, 0.5 - brightness path weights.
-export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper", "silverfish", "witch", "slime", "enderman", "magma_cube", "pigman", "wither_skeleton"]);
+export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper", "silverfish", "witch", "slime", "enderman", "magma_cube", "pigman", "wither_skeleton", "giant"]);
 // EntityMoveHelper.onUpdateMoveHelper (tv.c) hands EntityLiving.setAIMoveSpeed
 // (sw.i) `(float)(speed * movementSpeed)`; sw.i also sets moveForward to it. The
 // zombie's "Baby speed boost" (yq.br) is operation 1: base * (1 + 0.5); a Speed effect
@@ -267,9 +270,9 @@ export { FEATHER, RAW_CHICKEN, COOKED_CHICKEN };
 // getHurtSound / getDeathSound: the pig says its hurt sound, the cow's death sound is
 // its hurt sound, and the sheep uses mob.sheep.say for say, hurt and death alike.
 // EntityCaveSpider inherits the spider's sounds.
-const hurtSound = (type) => (type = soundType(type), type === "squid" || type === "snow_golem" ? null : type === "ocelot" ? OCELOT_SOUNDS.hit : type === "enderman" ? ENDERMAN_SOUNDS.hit : type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "witch" ? WITCH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "iron_golem" ? IRON_GOLEM_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
+const hurtSound = (type) => (type = soundType(type), type === "giant" ? GIANT_SOUNDS.hurt : type === "squid" || type === "snow_golem" ? null : type === "ocelot" ? OCELOT_SOUNDS.hit : type === "enderman" ? ENDERMAN_SOUNDS.hit : type === "silverfish" ? SILVERFISH_SOUNDS.hurt : type === "witch" ? WITCH_SOUNDS.hurt : type === "villager" ? VILLAGER_SOUNDS.hit : type === "iron_golem" ? IRON_GOLEM_SOUNDS.hit : type === "pig" ? "mob.pig.say" : (type === "sheep" || type === "spider" || type === "creeper") ? "mob." + type + ".say" : "mob." + type + ".hurt");
 // EntityChicken's death sound is its hurt sound as well.
-const deathSound = (type) => (type = soundType(type), type === "squid" || type === "snow_golem" ? null : type === "ocelot" ? OCELOT_SOUNDS.hit : type === "enderman" ? ENDERMAN_SOUNDS.death : type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "witch" ? WITCH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "iron_golem" ? IRON_GOLEM_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
+const deathSound = (type) => (type = soundType(type), type === "giant" ? GIANT_SOUNDS.death : type === "squid" || type === "snow_golem" ? null : type === "ocelot" ? OCELOT_SOUNDS.hit : type === "enderman" ? ENDERMAN_SOUNDS.death : type === "silverfish" ? SILVERFISH_SOUNDS.death : type === "witch" ? WITCH_SOUNDS.death : type === "villager" ? VILLAGER_SOUNDS.death : type === "iron_golem" ? IRON_GOLEM_SOUNDS.death : type === "sheep" ? "mob.sheep.say" : "mob." + type + (type === "cow" || type === "chicken" ? ".hurt" : ".death"));
 // Entity.setPosition's box (half width and height in floats) and Entity.canBePushed:
 // living entities until setDead (deathTime 20, or removal).
 export const pushBox = (o, width, height) => {
@@ -529,7 +532,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
   let landed;
   if (e.inWater) {
     const y0 = e.y;
-    moveFlying(e, e.moveStrafing || 0, forward, f(isSpider(e.type) || e.type === "silverfish" ? 0.02 : 0.04));
+    moveFlying(e, e.moveStrafing || 0, forward, f(isSpider(e.type) || e.type === "silverfish" || e.type === "giant" ? 0.02 : 0.04));
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, hooks);
     e.vx *= 0.800000011920929;
     e.vy *= 0.800000011920929;
@@ -550,7 +553,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
     const slip = () => (e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.91)) : f(0.91));
     let friction = slip();
     const accel = f(f(0.16277136) / f(f(friction * friction) * friction));
-    moveFlying(e, e.moveStrafing || 0, forward, e.onGround ? f((isSpider(e.type) || e.type === "silverfish" || e.type === "pigman" ? f(0.1) : e.aiMoveSpeed) * accel) : e.jumpFactor ?? JUMP_MOVEMENT_FACTOR);
+    moveFlying(e, e.moveStrafing || 0, forward, e.onGround ? f((isSpider(e.type) || e.type === "silverfish" || e.type === "pigman" || e.type === "giant" ? f(0.1) : e.aiMoveSpeed) * accel) : e.jumpFactor ?? JUMP_MOVEMENT_FACTOR);
     friction = slip();
     // isOnLadder: EntitySpider's override is its wall flag; others test the ladder cell (ladders.js).
     const climbable = () => (isSpider(e.type) ? e.climbing : isOnLadder(world, e.x, e.y, e.z));
@@ -1312,7 +1315,7 @@ export class EntityWorld {
     if (e.type === "wither") return witherTalk(this, e); // wither-boss-mobs.js
     if (e.type === "horse") return this.horseTalk(e, livingSoundRoll);
     const rand = entityRandom(e);
-    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem" || e.type === "snow_golem" || isSlimeLike(e)) return;
+    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem" || e.type === "snow_golem" || e.type === "giant" || isSlimeLike(e)) return; // EntityGiantZombie has no living sound (the roll still runs)
     // EntityWolf.getLivingSound (t) rolls before the sound's pitch.
     const wolfSound = e.type === "wolf" ? wolfSay(e, rand) : e.type === "ocelot" ? ocelotSay(e, rand) : null;
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
@@ -1797,7 +1800,7 @@ export class EntityWorld {
       else if (isSlimeLike(e)) this.slimeTick(e, t);
       else {
         if (e.type === "enderman") endermanTick(this, e, entityRandom(e));
-        this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : isSpider(e.type) ? this.spiderThink(e) : e.type === "pigman" ? pigmanThink(this, e) : e.type === "silverfish" ? this.silverfishThink(e) : this.ai.think(e));
+        this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : isSpider(e.type) ? this.spiderThink(e) : e.type === "pigman" ? pigmanThink(this, e) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : this.ai.think(e));
       }
       this.push(e, t);
       if (isSpider(e.type)) {
@@ -2087,6 +2090,43 @@ export class EntityWorld {
     silverfishActionState(st, env);
     e.rotationYaw = st.rotationYaw; e.rotationPitch = st.rotationPitch;
     e.moveForward = st.moveForward; e.jumping = st.jumping; e.summonCooldown = st.summonCooldown;
+    e.yaw = (-e.rotationYaw * Math.PI) / 180;
+  }
+  // EntityGiantZombie (ye) through EntityCreature's legacy action state (td.bq, creatureActionState): EntityMob.findPlayerToAttack
+  // (the closest vulnerable player within 16 that it can see), EntityMob.attackEntity (< 2.0 blocks, 20 tick cooldown), no wander
+  // bias beyond getBlockPathWeight = brightness - 0.5. EntityMob.onLivingUpdate adds 2 to entityAge in light above 0.5.
+  giantThink(e) {
+    const m = this.ai.brain(e), p = this.ai.player, s = this.ai.survival, st = this.silverfishState(e), t = ENTITY_TYPES.giant;
+    st.x = e.x; st.y = e.y; st.z = e.z; st.width = t.width; st.inWater = e.inWater; st.inLava = e.inLava;
+    st.collidedH = e.collidedH; st.rotationYaw = e.rotationYaw; st.rotationPitch = e.rotationPitch || 0;
+    st.speed = GIANT.movement; st.jumping = false;
+    if (st.attackTime > 0) st.attackTime--;
+    if (this.ai.brightness(Math.floor(e.x), Math.floor(e.y + f(t.height * 0.66)), Math.floor(e.z)) > 0.5) st.entityAge += 2;
+    m.senseCache.clear();
+    const world = this.world, rand = entityRandom(e), path = (make) => (m.navigator.spend() ? make(m.navigator.finder()) : null);
+    const env = {
+      rand, remote: false,
+      closestPlayer: (me, range) => (p?.alive && (range < 0 || m.distSq(p) < range * range) ? p : null),
+      findPlayerToAttack: (me) => { const c = this.ai.closestVulnerablePlayer(me, GIANT.range); return c && m.canSee(c) ? c : null; },
+      isAlive: (x) => (x === p ? !!p.alive : true),
+      isCreative: () => !!s.creative,
+      eyeHeight: (x) => (x === st ? f(f(t.height) * f(0.85)) : 1.62),
+      boxMidY: (x) => x.y,
+      canSee: (me, target) => m.canSee(target),
+      attackEntity: (me, target, d) => {
+        if (giantAttackReady({ y: e.y, attackTime: me.attackTime }, target.y, target.y + 1.8, d)) {
+          me.attackTime = 20;
+          this.hitPlayer(e, s);
+        }
+      },
+      pathToEntity: (me, target, range) => path((fn) => fn.createEntityPathToEntity(m, target, range)),
+      pathToBlock: (me, x, y, z, range) => path((fn) => fn.createEntityPathToBlock(m, x, y, z, range)),
+      pathWeight: (me, x, y, z) => giantPathWeight(this.ai.brightness(x, y, z)),
+      setDead: () => this.ai.despawn(e),
+    };
+    creatureActionState(st, env);
+    e.rotationYaw = st.rotationYaw; e.rotationPitch = st.rotationPitch;
+    e.moveForward = st.moveForward; e.jumping = st.jumping;
     e.yaw = (-e.rotationYaw * Math.PI) / 180;
   }
   // The chicken half of EntityChicken.onLivingUpdate (wg.e()), run after the shared

@@ -60,7 +60,7 @@ Sources: `javap -c -p -constants` on the 1.7.10 client JAR, read through the 1.7
 
 ## Known differences
 
-- **Void fog** (`EntityRenderer.setupFog` with `WorldProvider.getWorldHasVoidParticles`) is skipped. Its distance `100 × (sky/16 + (y + 4)/32)²` assumes the 256-block world; with this build's compressed 64-block terrain it would fog most caves.
+- **Void fog** is implemented for the colour term and, in 256-high worlds only, the `setupFog` distance term; see `void-fog.md`.
 - **Cloud height**: sea level + 65, since this world is shorter than vanilla's 128-block cloud layer.
 - **Burning** uses an orange overlay as a stand-in; the fire texture overlay on entities is not drawn.
 - **Missing effects**: no weather (rain/snow colour darkening, rain fog), fog distance follows the block-based View distance option rather than chunk render distance, no anisotropic or mipmap options, no Fast graphics mode, no entity shadows.

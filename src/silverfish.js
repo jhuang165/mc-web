@@ -158,7 +158,7 @@ function wanderPath(e, env) {
   if (found) e.path = env.pathToBlock(e, bx, by, bz, 10);
 }
 // EntityCreature.updateEntityActionState (td.bq) for a mob that is never "movement ceased" and never flees.
-function creatureActionState(e, env) {
+export function creatureActionState(e, env) {
   const r = env.rand;
   if (!e.target) {
     e.target = env.findPlayerToAttack(e);
@@ -188,7 +188,7 @@ function creatureActionState(e, env) {
     const dx = vec.x - e.x, dz = vec.z - e.z, dy = vec.y - i;
     const want = f(f((Math.atan2(dz, dx) * 180) / DEG) - 90);
     let step = wrap(f(want - e.rotationYaw));
-    e.moveForward = f(SILVERFISH.speed);
+    e.moveForward = f(e.speed ?? SILVERFISH.speed); // td.be: the movementSpeed attribute (a giant passes its own)
     if (step > 30) step = 30;
     if (step < -30) step = -30;
     e.rotationYaw = f(e.rotationYaw + step);

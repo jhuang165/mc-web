@@ -35,7 +35,7 @@ export const MOB_STEP_SOUNDS = {
 };
 // EntityMob subclasses (sa.H swim sound "game.hostile.swim", EntityLivingBase.func_146067_o "game.hostile.hurt.fall.*").
 // Slime, magma cube, ghast, golems and animals are not EntityMobs, whatever their sound category.
-const ENTITY_MOBS = new Set(["zombie", "pigman", "skeleton", "wither_skeleton", "spider", "cave_spider", "creeper", "enderman", "silverfish", "witch", "blaze", "wither"]);
+const ENTITY_MOBS = new Set(["zombie", "pigman", "skeleton", "wither_skeleton", "spider", "cave_spider", "creeper", "enderman", "silverfish", "witch", "blaze", "wither", "giant"]);
 export const isEntityMob = (type) => ENTITY_MOBS.has(type);
 // Entity.canTriggerWalking: only the silverfish turns it off among the mobs here.
 export const canTriggerWalking = (type) => type !== "silverfish" && type !== "squid" && type !== "bat" && type !== "ender_crystal"; // EntitySquid/EntityBat (squid-bat.js) override it to false

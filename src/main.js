@@ -1,4 +1,5 @@
 import { isStemCake, popDrops } from './stems-cake.js';
+import { hasVoidParticles } from "./void-fog.js";
 import { StreamStorage } from './streaming-storage.js';
 import { isColoredBlock, carpetNeighbourChange, coloredPickDamage, COLORED_ITEM_OFFSET, CARPET } from './colored-blocks.js';
 import { ContainerResidency } from './container-residency.js';
@@ -2164,6 +2165,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   displayTicks(world, Math.floor(position.x), Math.floor(position.y + PHYSICS.eye), Math.floor(position.z), {
     rand: scene.explosionParticles.worldRandom,
     fx: scene.fx,
+    voidFog: hasVoidParticles({ worldType: world.worldType, dimension: world.dimension || 0 }),
     canStrike: (x, y, z) => canLightningStrikeAt(weather, world, x, y, z),
     lit: (x, y, z) => scene.litFurnaces.has(`${x},${y},${z}`),
     repeaterLit: (x, y, z) => redstoneRuntime?.redstone?.lit?.has(`${x},${y},${z}`) === true,
@@ -3198,7 +3200,7 @@ function animate(now) {
   scene.particleView = { yaw, pitch, mirror: thirdPersonView === 2 };
   // EntityRenderer's potion terms (potion-fx.js): Night Vision / Blindness durations, the Nausea warp amount and the player's feet height.
   const potionEffects = screen === "home" ? null : survival?.effects;
-  scene.potionView = potionEffects ? { nightVision: potionEffects.get(NIGHT_VISION)?.duration ?? 0, blindness: potionEffects.get(BLINDNESS)?.duration ?? 0, nausea: potionEffects.has(NAUSEA), warp: portalTimer.amount(partial), feetY: position.y } : null;
+  scene.potionView = potionEffects ? { nightVision: potionEffects.get(NIGHT_VISION)?.duration ?? 0, blindness: potionEffects.get(BLINDNESS)?.duration ?? 0, nausea: potionEffects.has(NAUSEA), warp: portalTimer.amount(partial), feetY: position.y, eyeY: position.y + PHYSICS.eye, creative: survival.mode === "creative" } : null;
   scene.setShadows(screen === "home" ? [] : shadowCasters(scene.dropPartial), { x: position.x, y: position.y + PHYSICS.eye, z: position.z });
   // EntityRenderer.getFOVModifier multiplies the field of view by the eased modifier.
   const fov = options.fov * (bowFovState.prev + (bowFovState.cur - bowFovState.prev) * partial);

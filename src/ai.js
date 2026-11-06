@@ -924,9 +924,9 @@ export class Brain {
       this.targets.add(1, new V.DefendVillage(this));
       this.targets.add(2, new V.GolemHurtBy(this));
       this.targets.add(3, new V.NearestMonster(this));
-    } else if (e.type === "spider" || e.type === "cave_spider" || e.type === "silverfish") {
+    } else if (e.type === "spider" || e.type === "cave_spider" || e.type === "silverfish" || e.type === "giant") {
       // EntitySpider (and EntityCaveSpider) use legacy EntityCreature AI; EntityWorld.spiderThink drives it. So does
-      // EntitySilverfish (silverfishThink): no tasks.
+      // EntitySilverfish (silverfishThink) and EntityGiantZombie (giantThink): no tasks.
     } else if (e.type === "creeper") {
       // EntityCreeper (xz): swim 1, swell 2, avoid ocelots 3 (6 blocks, 1.0 far, 1.2 near: ocelot-ai.js), attack on
       // collide 4 (1.0), wander 5 (0.8), watch the player 6, look idle 6; targets nearest
