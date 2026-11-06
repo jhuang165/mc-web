@@ -13,7 +13,14 @@ export const GUNPOWDER = 330;
 // The creeper's fields: creeperState is datawatcher 16 (byte, -1 idle, 1 swelling),
 // `fuseTime` is timeSinceIgnited (bq), `lastActive` lastActiveTime (bp), `powered`
 // datawatcher 17 and `ignited` datawatcher 18. timeSinceIgnited is not saved.
-export const creeperFields = () => ({ creeperState: -1, fuseTime: 0, lastActive: 0, powered: false, ignited: false });
+// `maxFuse` is fuseTime (br, NBT "Fuse", a short) and `explosionRadius` bs (NBT "ExplosionRadius", a byte); both are saved.
+export const creeperFields = () => ({ creeperState: -1, fuseTime: 0, lastActive: 0, powered: false, ignited: false, maxFuse: CREEPER_FUSE, explosionRadius: CREEPER_RADIUS });
+// EntityCreeper.readEntityFromNBT (xz.a(dh)): Fuse is read with getShort and ExplosionRadius with getByte, only when the tag is numeric.
+export const creeperSavedFields = (e) => ({
+  maxFuse: Number.isInteger(e.maxFuse) ? (e.maxFuse << 16) >> 16 : CREEPER_FUSE,
+  explosionRadius: Number.isInteger(e.explosionRadius) ? (e.explosionRadius << 24) >> 24 : CREEPER_RADIUS,
+});
+const maxFuse = (e) => e.maxFuse ?? CREEPER_FUSE;
 
 // The head of EntityCreeper.onUpdate (xz.h), run before EntityLivingBase.onUpdate while
 // the creeper is alive: an ignited creeper swells; the first swelling tick plays
@@ -29,22 +36,23 @@ export function creeperTick(e) {
   if (state > 0 && e.fuseTime === 0) out.sound = { name: "creeper.primed", volume: 1, pitch: 0.5 };
   e.fuseTime += state;
   if (e.fuseTime < 0) e.fuseTime = 0;
-  if (e.fuseTime >= CREEPER_FUSE) {
-    e.fuseTime = CREEPER_FUSE;
-    out.explode = { x: e.x, y: e.y, z: e.z, size: f(CREEPER_RADIUS * (e.powered ? 2 : 1)) };
+  if (e.fuseTime >= maxFuse(e)) {
+    e.fuseTime = maxFuse(e);
+    // xz.ce: explosionRadius * 2 (an int product) when powered, else explosionRadius, converted to float.
+    out.explode = { x: e.x, y: e.y, z: e.z, size: f((e.explosionRadius ?? CREEPER_RADIUS) * (e.powered ? 2 : 1)) };
   }
   return out;
 }
 
 // EntityCreeper.getCreeperFlashIntensity (xz.a(F)):
 // (lastActiveTime + (timeSinceIgnited - lastActiveTime) * partial) / (fuseTime - 2).
-export const creeperFlash = (e, partial) => f(f(e.lastActive + f((e.fuseTime - e.lastActive) * partial)) / (CREEPER_FUSE - 2));
+export const creeperFlash = (e, partial) => f(f(e.lastActive + f((e.fuseTime - e.lastActive) * partial)) / (maxFuse(e) - 2));
 
 // EntityCreeper.fall (xz.b(F)): after the usual fall damage, the fall pushes the fuse on
 // by distance * 1.5, at most to fuseTime - 5.
 export function creeperFall(e, distance) {
   e.fuseTime = Math.trunc(f(e.fuseTime + f(distance * f(1.5))));
-  if (e.fuseTime > CREEPER_FUSE - 5) e.fuseTime = CREEPER_FUSE - 5;
+  if (e.fuseTime > maxFuse(e) - 5) e.fuseTime = maxFuse(e) - 5;
 }
 
 // EntityAICreeperSwell (vi, mutex 1). shouldExecute: already swelling, or an attack target

@@ -5,7 +5,7 @@ import { readPlayerPortalState } from "./dimensions.js";
 // world/player fields are built by the caller rather than copied from the file.
 const RUNTIME_FIELDS = [
   "position", "drops", "entities", "farms", "experience", "xpOrbs", "falling",
-  "weather", "worldRandom", "projectiles", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "inhabited",
+  "weather", "worldRandom", "projectiles", "thrownPotions", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "inhabited",
   "spawners", "pistons", "boats", "minecarts", "populatedColumns",
   "portalState", "worldSpawn",
 ];

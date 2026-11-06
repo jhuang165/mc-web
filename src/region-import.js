@@ -24,6 +24,7 @@ import { PISTON_MOVING } from './redstone-blocks-2.js';
 import { DISPENSER_SLOTS } from './dispenser-container.js';
 import { ORIGINAL_ITEMS } from './original-items.js';
 import { importedMobType, IMPORT_MOB_LIMIT, javaMobFromNbt } from './java-mobs.js';
+import { JAVA_PROJECTILES, IMPORT_PROJECTILE_LIMIT, javaProjectileFromNbt } from './java-projectiles.js';
 import { decodeCompressedNbt } from './nbt-compression.js';
 import { villagesFromNbt } from './village.js';
 import { isMapFile, mapsFromFiles } from './maps-nbt.js';
@@ -231,6 +232,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   const commandBlocks = [], musicTiles = [];
   const signs = [], skulls = [], beacons = [], spawners = [], importedColumns = {};
   const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = [];
+  const projectileLists = { projectiles: [], thrownPotions: [], arrows: [] };
   let edits = 0;
   const write = (x, y, z, block, meta) => {
     if (world.get(x, y, z) === block && world.getMeta(x, y, z) === meta) return;
@@ -384,6 +386,15 @@ export async function importJavaRegionArea(regions, options = {}) {
         if (mob) { mobs.push(mob); tally(entityConverted, id); } else tally(entityLost, !inArea ? `${id} (outside area)` : `${id} (over mob limit)`);
         continue;
       }
+      // Snowball, ThrownEnderpearl, ThrownPotion, ThrownExpBottle and Arrow become the browser's saved in-flight projectiles (java-projectiles.js).
+      if (JAVA_PROJECTILES[id] && pos?.every(Number.isFinite)) {
+        const px = pos[0] + shiftX, pz = pos[2] + shiftZ, list = projectileLists[JAVA_PROJECTILES[id]];
+        const inArea = px >= destination.chunkX * 16 && px < (destination.chunkX + area.width) * 16 && pz >= destination.chunkZ * 16 && pz < (destination.chunkZ + area.depth) * 16;
+        const made = inArea && list.length < IMPORT_PROJECTILE_LIMIT[JAVA_PROJECTILES[id]] ? javaProjectileFromNbt(entity, { shiftX, shiftZ }) : null;
+        if (made?.record) { list.push(made.record); tally(entityConverted, id); }
+        else tally(entityLost, !inArea ? `${id} (outside area)` : made?.lost ? `${id} (${made.lost})` : `${id} (over projectile limit)`);
+        continue;
+      }
       if (id !== 'Item' || !pos || !pos.every(Number.isFinite)) { tally(entityLost, id); continue; }
       const x = pos[0] + shiftX, z = pos[2] + shiftZ;
       const insideArea = x >= destination.chunkX * 16 && x < (destination.chunkX + area.width) * 16 && z >= destination.chunkZ * 16 && z < (destination.chunkZ + area.depth) * 16;
@@ -465,6 +476,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     drops,
     ...(spawners.length ? { spawners } : {}),
     ...(mobs.length ? { entities: mobs } : {}),
+    ...Object.fromEntries(Object.entries(projectileLists).filter(([, list]) => list.length)),
     ...(villages ? { villages } : {}),
     ...(mapsImport.maps ? { maps: mapsImport.maps } : {}),
     ...(report.structures?.kept ? { structureData: parsedStructures.structureData } : {}),

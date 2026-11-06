@@ -211,7 +211,12 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
   if (type === 'ghast') { record.explosionPower = tagValue(tag, 'ExplosionPower', NBT.INT, 1); kept.add('ExplosionPower'); }
   if (type === 'wither') { record.invul = Math.max(0, tagValue(tag, 'Invul', NBT.INT, 0)); kept.add('Invul'); } // a summoned Wither keeps its 220 tick spawn phase
   if (type === 'bat') { record.batHanging = (tagValue(tag, 'BatFlags', NBT.BYTE, 0) & 1) !== 0; kept.add('BatFlags'); } // EntityBat.readEntityFromNBT; a supplied compound without BatFlags is not hanging
-  if (type === 'creeper') { record.powered = !!tagValue(tag, 'powered', NBT.BYTE, 0); record.ignited = !!tagValue(tag, 'ignited', NBT.BYTE, 0); kept.add('powered'); kept.add('ignited'); }
+  if (type === 'creeper') { record.powered = !!tagValue(tag, 'powered', NBT.BYTE, 0); record.ignited = !!tagValue(tag, 'ignited', NBT.BYTE, 0); kept.add('powered'); kept.add('ignited');
+    // EntityCreeper.readEntityFromNBT: Fuse (short) and ExplosionRadius (byte) replace the defaults only when numeric (nbtGet keeps the tag's own type).
+    const fuse = tagValue(tag, 'Fuse', NBT.SHORT), radius = tagValue(tag, 'ExplosionRadius', NBT.BYTE);
+    if (fuse !== undefined) record.maxFuse = fuse;
+    if (radius !== undefined) record.explosionRadius = radius;
+    kept.add('Fuse'); kept.add('ExplosionRadius'); }
   if (type === 'witch') {
     const equipment = tagValue(tag, 'Equipment', NBT.LIST);
     if (equipment?.elementType === NBT.COMPOUND && equipment.items[0]) record.held = convertItem(equipment.items[0]);

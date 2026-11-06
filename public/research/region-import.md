@@ -31,7 +31,8 @@ The browser has no Java save loader. An imported version-9 Java world is its see
   - `JAVA_MOBS` ids use their own readers: Villager, VillagerGolem, Zombie, Slime, LavaSlime, Enderman, Squid, Bat, PigZombie, Ozelot, EntityHorse, Blaze, Ghast, WitherBoss, Skeleton, EnderDragon and EnderCrystal.
   - `JAVA_SUMMON_MOBS` ids use the `/summon` reader: Pig, Cow, MushroomCow, Sheep, Chicken, Wolf, Spider, CaveSpider, Creeper, Witch, Silverfish and SnowMan. EntityList.createEntityFromNBT is the same call for chunks and `/summon`.
   - Their layouts and read-back come from [mob-nbt-reference.json](mob-nbt-reference.json) (MobNbtProbe, 22 records). HealF is clamped to the saved `generic.maxHealth`, because EntityLivingBase reads Attributes first. A tamed wolf whose Attributes still say 8 therefore loads with 8 health. The sheep fleece is `Color & 15`. Fire is kept, and so are CustomName and PersistenceRequired.
-  - Creeper Fuse/ExplosionRadius and the chicken-jockey flag have no browser state and are dropped.
+  - Creeper `Fuse` (short) and `ExplosionRadius` (byte) are kept as the mob's `maxFuse` and `explosionRadius`, which the live creeper uses for its fuse, flash, fall and explosion size (powered doubles the radius). The chicken-jockey flag has no browser state and is dropped.
+- **In-flight projectiles** (`java-projectiles.js`) convert to the browser's saved projectile lists: `Snowball` and `ThrownEnderpearl` (`projectiles`), `ThrownPotion` and `ThrownExpBottle` (`thrownPotions`) and `Arrow` (`arrows`), with Pos, Motion and Rotation, a potion's `Potion` stack (or the legacy `potionValue`), and an arrow's tile, `inTile`/`inData`, `shake`, `inGround`, `pickup`, `damage`, `life` and `Fire`. A named `ownerName` becomes the local player. An ender pearl with no owner, a potion that is not item 373, projectiles outside the area or past the list limit, and fireballs (the browser saves none) are counted as lost, with the reason in the id. Layouts: [projectile-nbt.md](projectile-nbt.md).
 - Other entities, mounts (`Riding`) and entities outside the area are counted as lost by ID.
 - **Other tile entities** (signs, spawners, chests without a chest cell, entries outside their chunk) and **scheduled ticks** (`TileTicks`) are counted as lost.
 
@@ -47,6 +48,7 @@ The default mode is Creative. The start position is above the area's centre colu
 - a full 8×8 generator area rebuilt from its own seed in exactly two edits, with all 16,384 biome bytes matching; the same chunks under a misaligned base exceed the budget;
 - three original AnvilChunkLoader payloads from [chunk-nbt-reference.json](chunk-nbt-reference.json), whose cell inventory equals [region inspection](region-inspection.md);
 - malformed names, duplicates, oversized areas and slot/payload coordinate mismatches.
+- `src/projectile-nbt.test.js`: the native projectile and creeper Fuse/ExplosionRadius records import, restore live, survive a whole region import (report counts them as converted) and survive export→import.
 - `src/mob-nbt.test.js`: each of the 22 native mob compounds imports with the native getters' values, restores live, survives a whole region import, and survives export→import (13 browser mobs, including a charged creeper and an owned wolf).
 
 No real Java save with tile entities is checked in. Chest/furnace NBT layouts were read from the pinned JAR's `aow`/`apg` readFromNBT.

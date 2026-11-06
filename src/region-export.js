@@ -26,6 +26,7 @@ import { streamedWorldType } from './java-world.js';
 import { structureDataFiles } from './structure-data.js';
 import { villageDocument } from './village.js';
 import { mapDataFiles } from './maps-nbt.js';
+import { javaProjectileToNbt } from './java-projectiles.js';
 const tag=(type,value)=>({type,value}), comp=value=>tag(NBT.COMPOUND,new Map(Object.entries(value))), list=(type,items)=>tag(NBT.LIST,{elementType:items.length?type:NBT.END,items});
 const byte=v=>tag(NBT.BYTE,(v<<24)>>24), short=v=>tag(NBT.SHORT,v), int=v=>tag(NBT.INT,v), str=v=>tag(NBT.STRING,v), float=v=>tag(NBT.FLOAT,v), long=v=>tag(NBT.LONG,BigInt(Math.trunc(v)));
 const reverse=new Map();
@@ -75,7 +76,7 @@ function payload(state,ox,oz,report,blockAt) {
   else if(e.leash)n.Leash=comp({UUIDMost:long(0),UUIDLeast:long(0)});
   if(e.type==='skeleton'||e.type==='wither_skeleton'){n.SkeletonType=byte(e.type==='wither_skeleton'?1:0);delete n.Age;delete n.InLove;} // EntitySkeleton.writeEntityToNBT always writes SkeletonType
   // EntityCreeper.writeEntityToNBT: powered (only when charged), Fuse, ExplosionRadius and ignited (mob-nbt-reference.json: 30 and 3 by default).
-  if(e.type==='creeper'){delete n.Age;delete n.InLove;if(e.powered)n.powered=byte(1);n.Fuse=short(30);n.ExplosionRadius=byte(3);n.ignited=byte(e.ignited?1:0);}
+  if(e.type==='creeper'){delete n.Age;delete n.InLove;if(e.powered)n.powered=byte(1);n.Fuse=short(Number.isInteger(e.maxFuse)?e.maxFuse:30);n.ExplosionRadius=byte(Number.isInteger(e.explosionRadius)?e.explosionRadius:3);n.ignited=byte(e.ignited?1:0);}
   if(e.type==='chicken')n.IsChickenJockey=byte(0); // EntityChicken.writeEntityToNBT; this build has no chicken jockeys
   // EntityMob / EntityGolem subclasses with no NBT of their own are not EntityAgeable (mob-nbt-reference.json).
   if(['spider','cave_spider','witch','silverfish','snow_golem'].includes(e.type)){delete n.Age;delete n.InLove;}
@@ -127,7 +128,10 @@ function payload(state,ox,oz,report,blockAt) {
   if(e.kind==='painting')n.Motive=str(e.art);
   else{const item=e.item?stackNbt(e.item,undefined,report):null;if(item)n.Item=tag(NBT.COMPOUND,item);n.ItemRotation=byte(e.rotation??0);n.ItemDropChance=float(e.dropChance??1);}
   entities.push(new Map(Object.entries(n)));}
- for(const name of ['projectiles','arrows'])report.unsupportedEntities+=(state[name]??[]).length;
+ // In-flight projectiles (java-projectiles.js, projectile-nbt-reference.json): snowballs, ender pearls, potions, bottles o' enchanting and arrows.
+ // An egg has no EntityList id and a pearl without an owner cannot be held, so they stay unsupported.
+ for(const name of ['projectiles','thrownPotions','arrows'])for(const {value:e} of state[name]??[]) {const p=javaProjectileToNbt(name,e,{ox,oz});if(!p){report.unsupportedEntities++;continue;}
+  entities.push(new Map(Object.entries({...entity({x:e.x,y:e.y,z:e.z,mx:e.mx,my:e.my,mz:e.mz,rotation:[e.yaw??0,e.pitch??0],fire:name==='arrows'&&e.fire>0?e.fire:0},p.id,ox,oz),...p.fields})));}
  for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const [k,e] of Object.entries(state[name]??{})) {
   const [x,y,z]=k.split(',').map(Number);tiles.push(writeContainerTile(name,e,x+ox,y,z+oz,{report,dropper:blockAt(x,y,z)===158}));
  }
@@ -180,6 +184,8 @@ export function zipFiles(files) {
 function regionSource(record, w) {
  const owned=new Set([...w.chunks.keys(),...w.chunkEdits.keys()]);
  const {columns}=splitRuntime(record),runtime=new Map(columns.map(c=>[`${c.x},${c.z}`,c.state]));
+ // thrownPotions (WitchPotions.serialize) is a record-level list, not a chunk-runtime array: bucket it by column like the others.
+ for(const [i,e] of (record.thrownPotions??[]).entries()){if(![e?.x,e?.z].every(Number.isFinite))continue;const k=`${Math.floor(e.x/16)},${Math.floor(e.z/16)}`;if(!runtime.has(k))runtime.set(k,{});(runtime.get(k).thrownPotions??=[]).push({order:i,value:e});}
  for(const k of runtime.keys())owned.add(k);
  for(const [k,hex] of Object.entries(record.populatedColumns?.cells??{})) {
   const [x,z]=k.split(',').map(Number),mask=BigInt('0x'+hex);
@@ -228,7 +234,7 @@ export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChu
   'Unzip this directory under the Java 1.7.10 saves directory. blockworld.json is the browser backup.',
   'Provided columns are marked terrain-populated. Java generates outside them using the seed; border features can differ from browser population.',
   'LightPopulated is false: Java must rebuild light. AI/RNG state, player status effects, cross-system tick order and dragon death progress are not converted.',
-  'Thrown projectiles and arrows are counted as unsupported entities. Other entities use supported fields; advanced fields use native defaults.',
+  'Snowballs, ender pearls with an owner, thrown potions, bottles o\' enchanting and arrows are written as native projectile entities. Eggs (no EntityList id) and unowned pearls are counted as unsupported; fishing bobbers, eyes of ender and firework rockets are not exported. Other entities use supported fields; advanced fields use native defaults.',
   'Browser legacy landscapes export their finite area; Java generates default terrain outside it.'
  ]},files=new Map();
  let count=0;

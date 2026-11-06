@@ -9,7 +9,7 @@ import { SILVERFISH, SILVERFISH_SOUNDS, silverfishActionState, legacyFields as s
 import { POISON } from "./status-effects.js";
 import { WITHER_SKELETON_STATS, witherHitEffect } from "./wither-skeleton.js";
 import {CARROT,zombieRareDrop} from './crops.js';
-import { creeperFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from "./creeper.js";
+import { creeperFields, creeperSavedFields, creeperTick, creeperFall, creeperDrops, GUNPOWDER } from "./creeper.js";
 import { SIZE, HEIGHT, hash, slipperiness, collisionBoxes as cellCollisionBoxes, normalCube, WOOL, isLiquid, DYE, BLOCKS, PUMPKIN } from "./world.js";
 import { isOnLadder, ladderClamp, LADDER_CLIMB } from "./ladders.js";
 import { mobStepEvents, isEntityMob } from "./mob-steps.js";
@@ -702,7 +702,7 @@ export class EntityWorld {
       ...(e.type === "witch" ? { drinking: false, drinkTimer: 0, held: e.held && e.held.id === ITEM_POTION && potionEffects(e.held.damage).length ? { id: ITEM_POTION, damage: e.held.damage, count: 1 } : null } : {}),
       // EntityCreeper.readEntityFromNBT: "powered" and "ignited" are saved, the swell
       // state (datawatcher 16) and timeSinceIgnited start over.
-      ...(e.type === "creeper" ? { ...creeperFields(), powered: e.powered === true, ignited: e.ignited === true } : {}),
+      ...(e.type === "creeper" ? { ...creeperFields(), ...creeperSavedFields(e), powered: e.powered === true, ignited: e.ignited === true } : {}),
       // NBT ActiveEffects and the Attributes the spawn rolls modified.
       effects: readMobEffects(e.effects),
       knockbackResistance: Number.isFinite(e.knockbackResistance) ? Math.min(1, Math.max(0, e.knockbackResistance)) : fresh.knockbackResistance,
