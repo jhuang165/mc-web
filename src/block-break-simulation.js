@@ -31,6 +31,7 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
   destroyParticles = () => {},
   markUnsaved = () => {},
   releaseSilverfish = () => {}, // (x, y, z): a monster egg let a silverfish out
+  harvested = () => {}, // ({ block, meta, tool, harvest }): a Survival break, before the tool wears (statistics)
 } = {}) {
   const p = coords, block = world.get(...p), key = p.join(','), m = MATERIALS[block] || {}, tool = heldTool;
   if (!block || (block === 11 && !creative)) return false;
@@ -118,6 +119,7 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
     // BlockMobSpawner.dropBlockAsItemWithChance: experience without an item, when harvested.
     else if (harvest && m.xp) xpOrbs.spawn(m.xp(random), { x: p[0] + 0.5, y: p[1] + 0.5, z: p[2] + 0.5 });
     survival.exhaust(0.025);
+    harvested({ block, meta, tool, harvest });
     survival.wearBlock(block, tool);
   }
   updateBlock(p[0], p[2], p[1]);
