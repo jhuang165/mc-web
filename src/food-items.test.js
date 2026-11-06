@@ -166,3 +166,8 @@ test('strongholds emit monster egg metadata 2 only, so 97:3-5 are never generate
   assert.deepEqual([...seen], [2]);
   assert.deepEqual(ref.strongholdStones.thresholds.map((t) => t[0]), [0.2, 0.5, 0.55]);
 });
+test('/give and Java imports read original 322:1 as the enchanted golden apple (region-import.js itemFromOriginal)', async () => {
+  const { itemFromOriginal } = await import('./region-import.js');
+  assert.deepEqual(itemFromOriginal(322, 1), { id: 372, damage: 1, clamped: false });
+  assert.deepEqual(itemFromOriginal(322, 0), { id: 372, damage: 0, clamped: false });
+});
