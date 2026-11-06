@@ -43,6 +43,7 @@ import { squidBatUpdate, squidBatTalk, squidBatSpawnPass, installSquidBat } from
 import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
+import { mountEntity, releaseDead, ridingOrder, beginRidden, endRidden, ridingId, linkRiders, setLocationAndAngles, freeChickenNear, maxHealthOf } from "./mob-riding.js";
 import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, skeletonSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
 import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage } from "./mob-effects.js";
 import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startConversionTicks, conversionBoost, canCure, startConversion, remedySound, auxSound, readZombieVillager } from "./zombie-villager.js";
@@ -645,6 +646,7 @@ export class EntityWorld {
         this.entities.push(m);
         this.nextId++;
       }
+      linkRiders(this.entities, (m) => this.size(m)[1]); // mob-riding.js: `riding` ids back to mounts
       this.nextId = Math.max(
         this.nextId,
         ...this.entities
@@ -673,7 +675,7 @@ export class EntityWorld {
       ...fresh,
       ...e,
       id: /^mob-\d+$/.test(e.id) ? e.id : fresh.id,
-      health: Math.max(0, Math.min(e.type === "wolf" && typeof e.owner === "string" && e.owner.trim() ? TAMED_MAX_HEALTH : isSlimeLike(e) ? slimeFieldsFrom(e).health : t.health, e.health)),
+      health: Math.max(0, Math.min(e.type === "wolf" && typeof e.owner === "string" && e.owner.trim() ? TAMED_MAX_HEALTH : isSlimeLike(e) ? slimeFieldsFrom(e).health : maxHealthOf(e, t.health), e.health)),
       yaw: Number.isFinite(e.yaw) ? e.yaw : 0,
       age: Number.isFinite(e.age) ? e.age : 0,
       growingAge:Number.isInteger(e.growingAge)?(summoned?e.growingAge:Math.max(-24000,Math.min(6000,e.growingAge))):0,
@@ -693,7 +695,9 @@ export class EntityWorld {
       // EntityPig.readEntityFromNBT: Saddle (pig-saddle.js); the steering task starts over.
       ...(e.type === "pig" ? { saddled: e.saddled === true } : {}),
       // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
-      ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer } : {}),
+      ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer, chickenJockey: e.chickenJockey === true } : {}), // IsChickenJockey (mob-riding.md)
+      riding: typeof e.riding === "string" && /^mob-\d+$/.test(e.riding) ? e.riding : undefined, // the mount's id, linked by linkRiders
+      ...(e.type === "zombie" ? { canBreakDoors: e.canBreakDoors === true, maxHealth: Number.isFinite(e.maxHealth) && e.maxHealth > t.health ? Math.min(e.maxHealth, 2048) : undefined } : { canBreakDoors: undefined, maxHealth: undefined }),
       // EntityBat.readEntityFromNBT: BatFlags bit 1 is the hanging state (datawatcher 16).
       ...(e.type === "bat" ? { batHanging: e.batHanging === true } : {}),
       ...(isSpider(e.type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
@@ -976,13 +980,16 @@ export class EntityWorld {
   }
   // EntityLiving.onSpawnWithEgg(null) and its overrides. EntityCaveSpider's (xy.a(sy)) returns
   // its argument without calling super: no follow-range roll, no jockey, no effect.
-  onSpawnWithEgg(e) {
+  onSpawnWithEgg(e, { free = false } = {}) {
     const type = e.type, x = e.x, y = e.y, z = e.z, rand = entityRandom(e);
     const world = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
     const local = this.localDifficulty ? this.localDifficulty(Math.floor(x), Math.floor(y), Math.floor(z)) : 0;
     if (type === "spider") {
       const r = spiderSpawnRolls(rand, world, this.difficulty, local);
       e.followRange = r.followRange;
+      // EntitySpider.onSpawnWithEgg (yn.a): one spawn in a hundred seats a skeleton on the spider (its own onSpawnWithEgg first,
+      // then spawnEntityInWorld and mountEntity), before the Hard potion effect.
+      if (r.jockey) this.spawnSpiderJockey(e);
       if (r.effect) addMobEffect(e, r.effect);
     } else if (type === "zombie" || type === "pigman") {
       const now = this.currentDate?.() ?? new Date(), r = zombieSpawnRolls(rand, world, this.difficulty, local, { month: now.getMonth() + 1, day: now.getDate() }, type === "pigman");
@@ -995,10 +1002,20 @@ export class EntityWorld {
       this.applyGear(e, r);
       e.knockbackResistance = r.knockback;
       e.followRange = r.followRange;
-      if (type === "zombie") e.reinforcement = reinforcementChance(e.reinforcement + r.reinforcementBonus);
+      if (type === "zombie") {
+        e.reinforcement = reinforcementChance(e.reinforcement + r.reinforcementBonus);
+        // EntityZombie.a(sy): the child's chicken (5 %: the first free chicken in a 5 x 3 x 5 box, and nothing else when
+        // there is none; else 5 %: a new chicken jockey), then setBreakDoorsAItask(roll < local * 0.1) and the leader's
+        // max-health bonus (the health itself stays), which also breaks doors (mob-riding.md).
+        if (r.child) this.chickenJockeyRolls(e, r);
+        e.canBreakDoors = !!(r.doors || r.leader);
+        if (r.leader && r.maxHealth > ENTITY_TYPES.zombie.health) e.maxHealth = r.maxHealth;
+      }
     } else if (type === "skeleton" || type === "wither_skeleton") {
       // EntitySkeleton.onSpawnWithEgg: armour, bow and enchantments (or the wither's stone sword), the pickup roll and the Halloween head.
-      const now = this.currentDate?.() ?? new Date(), r = skeletonSpawnRolls(rand, this.difficulty, local, { month: now.getMonth() + 1, day: now.getDate() }, this.world.dimension === NETHER, type === "wither_skeleton");
+      // A skeleton seated on a spider (free) takes the Nether roll for its type; a spawner's has chosen it already.
+      const now = this.currentDate?.() ?? new Date(), r = skeletonSpawnRolls(rand, this.difficulty, local, { month: now.getMonth() + 1, day: now.getDate() }, this.world.dimension === NETHER, free ? null : type === "wither_skeleton");
+      if (free && r.wither) { e.type = "wither_skeleton"; e.health = ENTITY_TYPES.wither_skeleton.health; }
       this.applyGear(e, r);
       e.followRange = r.followRange;
     } else if (type === "ocelot") {
@@ -1010,6 +1027,44 @@ export class EntityWorld {
       }
     }
     return e;
+  }
+  // The AI half of a rider's onLivingUpdate (Entity.updateRidden runs onUpdate, then the mount's updateRiderPosition): the tasks, navigator
+  // and helpers run, the rider's own movement does not (its motion is zeroed each tick and the seat overrides the position). A zombie
+  // on a chicken with a target hands its path to the chicken at speed 1.5 first (EntityZombie.onLivingUpdate, yq.e).
+  ridden(e) {
+    const m = e.ridingEntity;
+    if (e.jumpTicks > 0) e.jumpTicks--;
+    e.moveForward = 0;
+    if (e.type === "zombie" && m?.type === "chicken" && this.ai.brain(e).attackTarget) this.ai.brain(m).navigator.setPath(this.ai.brain(e).navigator.getPath(), 1.5);
+    this.ai.think(e);
+    e.jumping = false;
+    e.moveForward = 0;
+    e.vx = e.vy = e.vz = 0;
+  }
+  // EntitySpider.onSpawnWithEgg's rider: a skeleton at the spider's place and yaw (pitch 0), its own rolls, then mounted.
+  spawnSpiderJockey(spider) {
+    const sk = this.create("skeleton", spider.x, spider.y, spider.z);
+    setLocationAndAngles(sk, spider.x, spider.y, spider.z, spider.rotationYaw ?? 0, 0);
+    this.onSpawnWithEgg(sk, { free: true });
+    this.entities.push(sk);
+    mountEntity(sk, spider, (m) => this.size(m)[1]);
+    return sk;
+  }
+  // EntityZombie.onSpawnWithEgg for a child: `r` holds the rolls already drawn (zombieSpawnRolls). A chicken found is made a
+  // jockey and mounted; a new one is created at the zombie's place and yaw, rolled, flagged, spawned and mounted.
+  chickenJockeyRolls(zombie, r) {
+    const heightOf = (m) => this.size(m)[1];
+    if (r.nearbyChicken) {
+      const c = freeChickenNear(zombie, this.entities, (o) => this.size(o));
+      if (c) { c.chickenJockey = true; mountEntity(zombie, c, heightOf); }
+    } else if (r.newChicken) {
+      const c = this.create("chicken", zombie.x, zombie.y, zombie.z);
+      setLocationAndAngles(c, zombie.x, zombie.y, zombie.z, zombie.rotationYaw ?? 0, 0);
+      this.onSpawnWithEgg(c);
+      c.chickenJockey = true;
+      this.entities.push(c);
+      mountEntity(zombie, c, heightOf);
+    }
   }
   // The mob-spawner.js context hooks for this world (MobSpawnerBaseLogic.updateSpawner). `env`
   // supplies the light: skyLight(x, y, z) (the saved sky value), lightValue(x, y, z)
@@ -1641,8 +1696,11 @@ export class EntityWorld {
     }
     this.slimeSpawn(player, survival, hostile);
     // A mob spawned during the loop (a baby) joins the next tick's updates, as World.spawnEntityInWorld queues it.
-    for (const e of this.entities.slice()) {
+    releaseDead(this.entities);
+    const riders = [];
+    for (const e of ridingOrder(this.entities.slice())) {
       if (!entityActive(this.world,e)) continue;
+      if (e.ridingEntity) { riders.push(e); beginRidden(e); }
       // World.updateEntityWithOptionalForce and EntityLivingBase.onEntityUpdate
       // keep last tick's state for RenderManager and RendererLivingEntity.
       e.px = e.x;
@@ -1717,7 +1775,7 @@ export class EntityWorld {
       }
       if (e.recentlyHit > 0) e.recentlyHit--;
       // EntityLivingBase.updatePotionEffects, the end of onEntityUpdate.
-      tickMobEffects(e, t, base.health, entityRandom(e), this.fx);
+      tickMobEffects(e, t, maxHealthOf(e, base.health), entityRandom(e), this.fx);
       this.talk(e);
       if (e.type === "squid" || e.type === "bat") { squidBatUpdate(this, e, t); continue; } // squid-bat-mobs.js
       if (e.type === "ghast") { ghastUpdate(this, e, t); continue; } if (e.type === "blaze") blazeUpdate(this, e, t); // blaze-ghast-mobs.js
@@ -1735,7 +1793,8 @@ export class EntityWorld {
       // jump/move: tasks, navigator, move/look/jump helpers.
       if (e.type === "witch") this.witchUpdate(e, t);
       if (e.type === "pigman") pigmanTick(this, e, entityRandom(e));
-      if (isSlimeLike(e)) this.slimeTick(e, t);
+      if (e.ridingEntity) this.ridden(e); // mob-riding.js: the AI runs, the mount carries the rider
+      else if (isSlimeLike(e)) this.slimeTick(e, t);
       else {
         if (e.type === "enderman") endermanTick(this, e, entityRandom(e));
         this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : isSpider(e.type) ? this.spiderThink(e) : e.type === "pigman" ? pigmanThink(this, e) : e.type === "silverfish" ? this.silverfishThink(e) : this.ai.think(e));
@@ -1754,6 +1813,8 @@ export class EntityWorld {
       this.turnBody(e);
       this.swingLimbs(e);
     }
+    // Entity.updateRidden's tail for each rider: updateRiderPosition, then the rider turns with its mount.
+    for (const e of riders) if (e.ridingEntity) endRidden(e, (m) => this.size(m)[1]);
     // EntityPlayerMP.onLivingUpdate's collideWithNearbyEntities, in the network tick after the
     // world's entities: each mob beside the player is pushed away once more (the server's copy
     // of the player is pushed too, which the client never sees).
@@ -1785,7 +1846,7 @@ export class EntityWorld {
   push(e, t) {
     const box = pushBox(e, t.width, t.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
     for (const o of this.entities)
-      if (o !== e && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) applyEntityCollision(o, e);
+      if (o !== e && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) applyEntityCollision(o, e); // Entity.applyEntityCollision: not a mount and its rider
     const p = this.ai.player;
     if (p?.alive && boxesMeet(near, pushBox(p, p.width, p.height))) applyEntityCollision(p, e, false, true);
   }
@@ -2046,7 +2107,7 @@ export class EntityWorld {
     e.wingRotDelta = f(e.wingRotDelta * 0.9);
     if (!e.onGround && e.vy < 0) e.vy *= 0.6;
     e.wingRotation = f(e.wingRotation + f(e.wingRotDelta * 2));
-    if (e.growingAge >= 0 && --e.eggTimer <= 0) {
+    if (e.growingAge >= 0 && !e.chickenJockey && --e.eggTimer <= 0) {
       const r = this.random, pitch = f(f(f(r() - r()) * f(0.2)) + 1);
       this.events.push({ sound: "mob.chicken.plop", volume: 1, pitch, position: { x: e.x, y: e.y, z: e.z } });
       this.events.push({ drop: EGG, count: 1, position: { x: e.x, y: e.y, z: e.z } });
@@ -2160,6 +2221,9 @@ export class EntityWorld {
   serializeOne(e) {
     const saved = { ...e };
     for (const key of INTERPOLATED) delete saved[key];
+    const riding = ridingId(e);
+    if (riding) saved.riding = riding;
+    else delete saved.riding;
     return saved;
   }
   // The sounds each client plays for status 2 and 3 (EntityLivingBase.handleHealthUpdate), apart from the server's.

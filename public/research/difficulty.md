@@ -53,9 +53,7 @@ Options has a Difficulty setting: Peaceful, Easy, Normal (the default) or Hard. 
 
 Each of these rolls is drawn, so the random streams stay in step, but its result is dropped:
 
-- child and villager zombies, and chicken and spider jockeys;
-- door breaking (zombies here do not break doors);
-- the leader's extra max health.
+- villager zombies (child zombies, chicken and spider jockeys, door breaking and the leader's max health now live: see [mob-riding](mob-riding.md), whose gaps apply).
 
 Other gaps:
 

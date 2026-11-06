@@ -133,7 +133,7 @@ The scheduled-tick persistence tests are port regression tests, not execution of
 - the spider and zombie spawn rolls, potion attributes and swirls;
 - zombie fire on hit and reinforcements.
 
-The Hard spider effects are now the source of mob potion effects. An invisible spider draws only its eyes. Rolls with no content yet (equipment, child zombies, jockeys, door breaking) are listed in [difficulty](difficulty.md).
+The Hard spider effects are now the source of mob potion effects. An invisible spider draws only its eyes. Jockeys, door breaking and the leader's max health are live ([mob-riding](mob-riding.md)); remaining no-content rolls are listed in [difficulty](difficulty.md).
 
 0.22.12 continues PLAYER-01. `src/combat.js` and `EntityWorld.attackEntityFrom` port the mob side of `attackEntityFrom`, `onDeath` and `onDeathUpdate`: hurt resistance with top-up hits, zombie armour, sound volume and pitch, every drop roll (cooked meat when burning, the skeleton's worn bow, the zombie's rare drop), experience at death tick 20 and the death burst, all on the mob's own Random. Pushing follows `collideWithNearbyEntities`/`applyEntityCollision`, including the player. CombatProbe records 1,113 cases from the unchanged classes, all replayed exactly. Browser check: drops, experience and pushing worked in a scratch world with audio stubbed and no console errors. Gaps are in [combat](combat.md).
 

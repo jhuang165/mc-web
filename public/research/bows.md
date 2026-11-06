@@ -52,7 +52,7 @@ Pieces marked "bytecode only" were read from the disassembly and are checked in 
 - No critical-hit particles, no water bubbles from arrows, no arrow-in-body display and no pickup fly-to animation (`onItemPickup`).
 - No third-person drawing pose (`aimedBow` arm raise) or use-stage icon in third person.
 - No Power, Punch or Flame enchantments (the bow cannot be enchanted here); arrows deal no knockback to the player; Knockback from `knockback > 0` is ported for mobs but unreachable.
-- No skeleton armour or helmet, no wither skeletons, no spider jockeys, no skeleton step sounds, no skeleton-vs-mob targeting.
+- No skeleton armour or helmet, no wither skeletons, spider jockeys are in [mob-riding](mob-riding.md), no skeleton step sounds, no skeleton-vs-mob targeting.
 - Skeletons spawn on a simplified clock and ring, already holding a bow; the zombie's sunburn remains the earlier approximation while the skeleton's follows `yl.e`.
 - Difficulty is fixed at Normal (2); hit and damage paths, `ItemBow`, `EntitySkeleton` and the AI timers are not run against the original class, only derived from its bytecode.
 

@@ -8,6 +8,8 @@
 import { buildBlazeGhastTasks } from "./blaze-ghast-mobs.js";
 import { buildWitherTasks } from "./wither-boss-mobs.js";
 import { PathNavigate } from "./pathfinding.js";
+import { chickenJockeyDespawns } from "./mob-riding.js";
+import { breakDoorClass } from "./zombie-door.js";
 import { raycast, HEIGHT } from "./world.js";
 import { BRIGHTNESS } from "./lighting.js";
 import { swellShould, swellState, creeperSafeTries } from "./creeper.js";
@@ -91,6 +93,17 @@ export class TaskList {
   }
   add(priority, action) {
     this.entries.push({ priority, action });
+  }
+  // EntityAITasks.removeTask: a running task is reset, then dropped.
+  remove(action) {
+    const entry = this.entries.find((x) => x.action === action);
+    if (!entry) return;
+    const at = this.running.indexOf(entry);
+    if (at >= 0) {
+      entry.action.resetTask();
+      this.running.splice(at, 1);
+    }
+    this.entries.splice(this.entries.indexOf(entry), 1);
   }
   canUse(entry) {
     for (const other of this.entries) {
@@ -856,7 +869,7 @@ export class Brain {
     this.targets = new TaskList();
     const A = type.ai, wheat = ai.breedItems[e.type];
     if (e.type === "zombie") {
-      // EntityZombie (yq): swim 0, (break door 1: not run), attack players 2, attack villagers 4 (long memory),
+      // EntityZombie (yq): swim 0, break door 1 (added by setBreakDoorsAItask, see below), attack players 2, attack villagers 4 (long memory),
       // move towards restriction 5, move through village 6, wander 7, watch 8, look idle 8; targets hurt-by 1,
       // nearest player 2 and nearest villager 2 (zombie-villager.md).
       this.tasks.add(0, new Swim(this));
@@ -870,6 +883,8 @@ export class Brain {
       this.targets.add(1, new HurtByTarget(this));
       this.targets.add(2, new NearestAttackable(this));
       this.targets.add(2, new (zombieVillage().NearestVillager)(this));
+      // EntityZombie's constructor: getNavigator().setBreakDoors(true); the break-door task itself follows e.canBreakDoors.
+      this.navigator.setBreakDoors(true);
     } else if (e.type === "villager") {
       // EntityVillager (yv): its task list is villager.js; it draws on Entity.rand (the entity's own
       // java.util.Random, shared with the living-sound roll) and runs updateAITick after the navigator.
@@ -1006,6 +1021,10 @@ export class Brain {
     if (this.e.type === "creeper") return creeperSafeTries(!!this.attackTarget, this.e.health);
     return maxSafePointTries(!!this.attackTarget, this.e.health, this.ai.types[this.e.type].health, this.ai.deps.difficulty ? this.ai.deps.difficulty() : 2);
   }
+  // vv.l: a zombie riding a chicken may navigate off the ground.
+  get isRidingChicken() {
+    return this.e.type === "zombie" && this.e.ridingEntity?.type === "chicken";
+  }
   get x() {
     return this.e.x;
   }
@@ -1106,8 +1125,21 @@ export class Brain {
   }
   // sw.bn(): the AI half of onLivingUpdate. Despawning and the idle age come first, then
   // the target tasks, the tasks, the navigator, and the three helpers in order.
+  // EntityZombie.setBreakDoorsAItask (yq.a(Z)): the task joins at priority 1 (appended to the list) or leaves it.
+  syncBreakDoors() {
+    const want = !!this.e.canBreakDoors;
+    if (want === !!this.breakDoor) return;
+    if (want) {
+      this.breakDoor = new (breakDoorClass(Task))(this);
+      this.tasks.add(1, this.breakDoor);
+    } else {
+      this.tasks.remove(this.breakDoor);
+      this.breakDoor = null;
+    }
+  }
   updateAITasks() {
     const e = this.e;
+    if (e.type === "zombie") this.syncBreakDoors();
     e.idle = (e.idle || 0) + 1;
     this.despawnEntity();
     this.senseCache.clear();
@@ -1129,7 +1161,7 @@ export class Brain {
     const e = this.e, p = this.ai.player;
     if ((e.idle & 31) !== 31 || !p) return;
     // EntityWolf.canDespawn (v): only a wild wolf older than 2400 ticks.
-    const d3 = this.distSq(p), can = !e.persistent && ((e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || (e.type === "ocelot" && ocelotCanDespawn(e)) || e.type === "zombie" || e.type === "pigman" || e.type === "skeleton" || e.type === "wither_skeleton" || e.type === "witch" || e.type === "enderman" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper" || e.type === "squid" || e.type === "bat" || e.type === "blaze" || e.type === "ghast");
+    const d3 = this.distSq(p), can = !e.persistent && ((e.type === "wolf" && !wolfTamed(e) && e.age > 2400) || (e.type === "ocelot" && ocelotCanDespawn(e)) || e.type === "zombie" || e.type === "pigman" || e.type === "skeleton" || e.type === "wither_skeleton" || e.type === "witch" || e.type === "enderman" || e.type === "spider" || e.type === "cave_spider" || e.type === "creeper" || e.type === "squid" || e.type === "bat" || e.type === "blaze" || e.type === "ghast" || chickenJockeyDespawns(e));
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
     if (d3 < 1024) e.idle = 0;
