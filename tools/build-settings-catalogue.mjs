@@ -43,26 +43,26 @@ const S = {
   FRAMERATE_LIMIT: ['Missing', 'Browser requestAnimationFrame pacing; no 10-260 limiter or "Unlimited".'],
   FBO_ENABLE: ['Missing', 'Not applicable to WebGL; no browser counterpart.'],
   DIFFICULTY: ['Implemented', 'Select Peaceful/Easy/Normal/Hard, default Normal (main.js, difficulty.js; difficulty.test.js, particle/difficulty references). Hardcore lock and server-side difficulty open.'],
-  GRAPHICS: ['Missing', 'No Fast/Fancy toggle; one render quality.'],
-  AMBIENT_OCCLUSION: ['Missing', 'Smooth lighting always on (scene.js smoothFace); no Off/Minimum/Maximum selector.'],
+  GRAPHICS: ['Missing', 'No Fast/Fancy toggle; one render quality. In progress (batch 11 render settings, render-settings.md).'],
+  AMBIENT_OCCLUSION: ['Missing', 'Smooth lighting always on (scene.js smoothFace); no Off/Minimum/Maximum selector. In progress (batch 11 render settings, render-settings.md).'],
   GUI_SCALE: ['Implemented', 'Since 0.23.2: Auto/Small/Normal/Large only (settings.js GUI_SCALE_NAMES, values masked with & 3, saved "Larger" migrates to Large); gui.js guiScale() uses the native 320x240 loop. A select replaces the cycling button.'],
   RENDER_CLOUDS: ['Missing', 'Fancy clouds always rendered (sky.js); no toggle.'],
   PARTICLES: ['Implemented', 'All/Decreased/Minimal select, default All, native filtering and rain attempts (particle-settings.js; particle-settings.test.js).'],
-  CHAT_VISIBILITY: ['Missing', 'No chat.'],
-  CHAT_COLOR: ['Missing', 'No chat.'],
-  CHAT_LINKS: ['Missing', 'No chat.'],
-  CHAT_OPACITY: ['Missing', 'No chat.'],
-  CHAT_LINKS_PROMPT: ['Missing', 'No chat.'],
+  CHAT_VISIBILITY: ['Missing', 'Chat exists (chat.js, chat-ui.js) but is always shown; no Shown/Commands Only/Hidden mode and no option control.'],
+  CHAT_COLOR: ['Missing', 'Chat exists but formatting codes always render; no Colors toggle.'],
+  CHAT_LINKS: ['Missing', 'Chat exists but has no clickable links.'],
+  CHAT_OPACITY: ['Partial', 'chat.js applies the native default (0.9 * opacity + 0.1 background alpha); no slider and not persisted.'],
+  CHAT_LINKS_PROMPT: ['Missing', 'Chat exists but has no clickable links, so no prompt.'],
   SNOOPER_ENABLED: ['Missing', 'Mojang snooper telemetry; no counterpart and likely out of scope (needs acceptance decision).'],
   USE_FULLSCREEN: ['Partial', 'HUD fullscreen button uses the Fullscreen API (main.js); not an options.txt-style persisted option and no F11 binding.'],
   ENABLE_VSYNC: ['Missing', 'Not applicable to the browser; no counterpart.'],
   SHOW_CAPE: ['Missing', 'No cape rendering or toggle.'],
   TOUCHSCREEN: ['Missing', 'Mobile on-screen controls exist but are not the native touchscreen option.'],
-  CHAT_SCALE: ['Missing', 'No chat.'],
-  CHAT_WIDTH: ['Missing', 'No chat.'],
-  CHAT_HEIGHT_FOCUSED: ['Missing', 'No chat.'],
-  CHAT_HEIGHT_UNFOCUSED: ['Missing', 'No chat.'],
-  MIPMAP_LEVELS: ['Missing', 'Textures upload with generateMipmaps=false (scene.js); no level setting.'],
+  CHAT_SCALE: ['Partial', 'chat.js applies the native default scale 1; no slider and not persisted.'],
+  CHAT_WIDTH: ['Partial', 'chat.js uses the native default width (320 plus 4); no slider and not persisted.'],
+  CHAT_HEIGHT_FOCUSED: ['Partial', 'chat.js uses the native default (20 lines focused); no slider and not persisted.'],
+  CHAT_HEIGHT_UNFOCUSED: ['Partial', 'chat.js uses the native default (10 lines unfocused); no slider and not persisted.'],
+  MIPMAP_LEVELS: ['Missing', 'Textures upload with generateMipmaps=false (scene.js); no level setting. In progress (batch 11 render settings, render-settings.md).'],
   ANISOTROPIC_FILTERING: ['Missing', 'No anisotropic filtering setting.'],
   FORCE_UNICODE_FONT: ['Missing', 'No Unicode font page switch.'],
   STREAM_BYTES_PER_PIXEL: ['Missing', 'Twitch streaming service; acceptance decision needed.'],
@@ -86,8 +86,8 @@ const KEY_STATUS = {
   'key.forward': ['Partial', 'KeyW fixed (main.js).'], 'key.left': ['Partial', 'KeyA fixed.'], 'key.back': ['Partial', 'KeyS fixed.'], 'key.right': ['Partial', 'KeyD fixed.'],
   'key.jump': ['Partial', 'Space fixed.'], 'key.sneak': ['Partial', 'ShiftLeft/ShiftRight fixed.'],
   'key.drop': ['Partial', 'KeyQ fixed (Ctrl+Q whole stack).'], 'key.inventory': ['Partial', 'KeyE fixed.'],
-  'key.chat': ['Missing', 'No chat; T unbound.'], 'key.playerlist': ['Missing', 'No player list; Tab only default-prevented.'],
-  'key.pickItem': ['Partial', 'Middle click pick block (main.js); fixed.'], 'key.command': ['Missing', 'No command/chat entry; "/" unbound.'],
+  'key.chat': ['Partial', 'KeyT opens the chat window (main.js, chat-ui.js); fixed, not rebindable.'], 'key.playerlist': ['Missing', 'No player list (GuiPlayerInfo); Tab only default-prevented.'],
+  'key.pickItem': ['Partial', 'Middle click pick block (main.js); fixed.'], 'key.command': ['Partial', 'Slash opens chat pre-filled with "/" (main.js); fixed, not rebindable.'],
   'key.screenshot': ['Missing', 'No F2 screenshot.'], 'key.togglePerspective': ['Partial', 'F5 cycles first/behind/front; fixed.'],
   'key.smoothCamera': ['Partial', 'Unbound by default natively, and Minecraft.runTick toggles smoothCamera only through this binding (no F8 check in 1.7.10). Options > Controls rebinds it to a key or mouse button (saved on the device in options.keys; menus.js); smoothCamera is session-only (not in options.txt). MouseFilter.smooth, the 0.05 x curve tick filter and the partial-tick spread are ported (mouse-look.js; mouse-look.test.js). Not rebindable.'], 'key.sprint': ['Partial', 'ControlLeft/ControlRight fixed.'],
   'key.streamStartStop': ['Missing', 'Twitch streaming.'], 'key.streamPauseUnpause': ['Missing', 'Twitch streaming.'], 'key.streamCommercial': ['Missing', 'Twitch streaming.'], 'key.streamToggleMic': ['Missing', 'Twitch streaming.'],
@@ -102,8 +102,8 @@ const ROUTED = 'Slider default 1 with the en_US label and OFF/percent value; aud
 const SOUND_STATUS = {
   MASTER: ['Implemented', 'Master Volume slider default 1 with OFF/percent label. As in SoundManager: getSoundCategoryVolume(MASTER) is 1, the level is the master gain over every sound, and playSound skips all sounds at 0 (audio.js; settings.test.js). A non-native Sounds on/off switch remains.'],
   MUSIC: ['Partial', 'Slider and gain path exist, but the port has no MusicTicker, so no music category sound plays.'],
-  RECORDS: ['Partial', 'Slider and gain path exist; no jukebox or note blocks play record sounds.'],
-  AMBIENT: ['Partial', 'Slider and gain path exist; no ambient category sounds (cave ambience) are played.'],
+  RECORDS: ['Partial', 'Slider and gain path exist; the jukebox block and 12 discs exist (note-jukebox.md) but no record audio files are shipped, so no record plays.'],
+  AMBIENT: ['Partial', 'Slider and gain path exist; only weather ambience is shipped (public/audio/1.7.10/ambient), no cave ambience.'],
 };
 const soundStatus = c => SOUND_STATUS[c] ?? ['Implemented', ROUTED];
 
@@ -150,7 +150,7 @@ const layoutRows = screenLayouts.map(s => `| ${s.mappedClass.replace(/^net\/mine
 const SCREEN_STATUS = {
   GuiOptions: 'Partial: the 1.7.10 layout and buttons (menus.js, menu-screens.js); FOV, difficulty (in a world), Music & Sounds, Video Settings, Controls and Language work; Super Secret Settings, Broadcast, Multiplayer, Resource Packs and Snooper are drawn disabled and explain why.',
   GuiVideoSettings: 'Partial: the GuiOptionsRowList of two-column options (without Advanced OpenGL); render distance, view bobbing, GUI scale, brightness, particles and fullscreen work; Graphics, Smooth Lighting, Max Framerate, 3D Anaglyph, Clouds, VSync, Mipmap Levels and Anisotropic Filtering show the renderer\'s fixed state, disabled.',
-  ScreenChatOptions: 'Missing (no chat).',
+  ScreenChatOptions: 'Missing: chat exists (chat.js) but there is no chat options screen; the Multiplayer/chat button in GuiOptions is drawn disabled and the chat settings stay at native defaults.',
   GuiScreenOptionsSounds: 'Partial: its own screen with the full-width Master Volume row and the eight category sliders in two columns, en_US "<category>: <value>" labels, gui.button.press on release (menus.js).',
   GuiControls: 'Partial: Invert Mouse, Sensitivity and a disabled Touchscreen Mode button above the sorted GuiKeyBindingList with Reset and Reset Keys (menus.js); only key.smoothCamera can be rebound, the other keys are fixed by the browser game loop.',
   GuiLanguage: 'Partial: the screen with a one-entry list (English (US), the only bundled lang file), the accuracy warning and a disabled Force Unicode Font button.', GuiSnooper: 'Missing.', GuiScreenResourcePacks: 'Missing (fixed original assets).',
@@ -212,7 +212,7 @@ Index is the position in GameSettings.keyBindings (saved as \`key_<description>:
 | --- | --- | --- | --- | --- | --- |
 ${keyRows.join('\n')}
 
-The browser has no rebinding system, no key conflict highlighting, no options.txt key persistence and uses fixed KeyboardEvent codes; every Partial row is a fixed equivalent, not rebindable parity. Native F3 debug and F3+H are not KeyBindings; browser F3 behavior is outside this table.
+The browser rebinds only Toggle Cinematic Camera (stored per device in options.keys, with Reset Keys), has no key conflict highlighting, no options.txt key persistence and otherwise uses fixed KeyboardEvent codes; every other Partial row is a fixed equivalent, not rebindable parity. Native F3 debug and F3+H are not KeyBindings; browser F3 behavior is outside this table.
 
 ## Option screens
 
