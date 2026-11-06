@@ -98,7 +98,7 @@ const screenEvidence = {
   GuiMerchant: ['Partial; villager trading screen', 'villager-trading-live.md'],
   GuiEditSign: ['Partial; sign editor', 'signs.md'],
   GuiScreenHorseInventory: ['Partial; horse saddle/armor/chest screen', 'horse-inventory.md'],
-  GuiStats: ['In progress (batch 11); statistics screen', 'parity.md'],
+  GuiStats: ['Partial; General/Blocks/Items/Mobs tabs and sorting; some use/kill triggers approximate', 'stats.md'],
   ScreenChatOptions: ['Missing; chat exists but there is no chat options screen (chat settings stay at native defaults)', 'settings-parity-catalogue.md'],
   GuiScreenBook: ['Missing; no book and quill or written book', 'parity.md'],
   GuiCreateFlatWorld: ['Missing; no Superflat world type', 'generation.md'],
@@ -144,7 +144,7 @@ const SUPPORT_MISSING = new Set(['GuiPlayerInfo', 'GuiResourcePackAvailable', 'G
 const SUPPORT_PROGRESS = new Set(['GuiStats$Stats', 'GuiStats$StatsBlock', 'GuiStats$StatsBlock$1', 'GuiStats$StatsGeneral', 'GuiStats$StatsItem', 'GuiStats$StatsItem$1', 'GuiStats$StatsMobsList', 'IProgressMeter']);
 const supportStatus = name => {
   if (SUPPORT_EVIDENCE.has(name)) return 'Missing; no Superflat world type, so no counterpart';
-  if (SUPPORT_PROGRESS.has(name)) return 'In progress (batch 11); statistics screen';
+  if (SUPPORT_PROGRESS.has(name)) return 'Partial; statistics screen ([stats](stats.md))';
   if (SUPPORT_MISSING.has(name)) return 'Missing; no counterpart (player list, resource packs, books, snooper)';
   if (SUPPORT_PARTIAL.has(name)) return 'Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md)';
   if (/Realms|ServerList|ServerSelection|Stream|Ingest/.test(name)) return 'Out of scope; multiplayer, Realms or Twitch';

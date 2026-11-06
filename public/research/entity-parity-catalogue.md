@@ -42,7 +42,7 @@ EntityList is not the complete feature roster: players, weather lightning, throw
 | 50 | Creeper | xz | no | yes | Implemented; [creepers](creepers.md) | E |
 | 51 | Skeleton | yl | no | yes | Partial; [bows](bows.md); wither skeleton variant: magma-pigman.md/fortress.md | E |
 | 52 | Spider | yn | no | yes | Partial; [spiders](spiders.md); spawn timing adapted; see doc | E |
-| 53 | Giant | ye | no | no | In progress (batch 11); research doc pending (giant.md) | E |
+| 53 | Giant | ye | no | no | Partial; [giant](giant.md); summon/region only as native; pathing reach unverified | E |
 | 54 | Zombie | yq | no | yes | Partial; [pathfinding](pathfinding.md); baby/villager/jockey variants in mob-riding.md and zombie-villager.md | E |
 | 55 | Slime | ym | no | yes | Partial; [slime](slime.md); spawn clock is an adaptation (slime chunks) | E |
 | 56 | Ghast | yd | no | yes | Implemented; [blaze-ghast](blaze-ghast.md) | E |

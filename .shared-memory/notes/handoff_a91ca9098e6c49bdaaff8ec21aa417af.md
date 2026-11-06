@@ -1,0 +1,1 @@
+b11-riding: region Riding NBT export/import, water/death dismounts, portal guard for jockeys, rider fall (Jump Boost, sounds, mob riders). 3320 tests pass, build ok. Open: rider own movement/fall accumulation, player-ridden mounts in regions.

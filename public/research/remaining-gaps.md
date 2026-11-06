@@ -2,15 +2,9 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
-## In progress (batch 11)
+## Done in batch 11
 
-Being worked on by other tracks; the catalogues mark these "In progress (batch 11)".
-
-- Statistics screen (GuiStats) and stat counters.
-- Graphics (Fast/Fancy), Ambient Occlusion and Mipmap Levels settings.
-- Void fog (`void-fog.md`).
-- Giant (`giant.md`, research doc pending).
-- Mob riding completion (`mob-riding.md`).
+Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic settings (`render-settings.md`), void fog (`void-fog.md`), the Giant (`giant.md`) and rider save/portal/fall work (`mob-riding.md`) were merged after this list was written; their remaining limits are in those docs.
 
 ## Priority 1: visible, commonly hit
 
@@ -29,7 +23,7 @@ Being worked on by other tracks; the catalogues mark these "In progress (batch 1
 10. Key rebinding: only smoothCamera is rebindable; key.chat and key.command are Partial. No `options.txt` persistence. See `settings-parity-catalogue.md`.
 11. Superflat world type and its customization screens. Missing.
 12. Bonus chest (WorldGeneratorBonusChest). Missing.
-13. Super Secret Settings shaders, Anaglyph, framerate limit, clouds and anisotropic settings. Missing.
+13. Super Secret Settings shaders, Anaglyph and the framerate limit. Missing.
 
 ### Audio
 14. Music and music discs/jukebox record audio. Missing; 473 sound files, none are music or records.
@@ -43,7 +37,7 @@ Being worked on by other tracks; the catalogues mark these "In progress (batch 1
 - Wither: effect on mobs and wither skull behaviour listed in `entity-parity-catalogue.md` as Partial.
 - Ender Dragon: model is bytecode-derived; remaining gaps in `dragon.md`.
 - Villager: Partial; see the entity catalogue gap text.
-- Riders are not saved.
+- Riders: region chains are saved since batch 11; `/summon` with a `Riding` tag still spawns unmounted.
 
 ## Priority 3: commands
 - Not available (reported as such): /achievement, /debug, /scoreboard, /spreadplayers, /tellraw.

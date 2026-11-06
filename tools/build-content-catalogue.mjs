@@ -149,7 +149,7 @@ const E = {
   Creeper: ['Implemented', 'creepers.md', ''],
   Skeleton: ['Partial', 'bows.md', 'wither skeleton variant: magma-pigman.md/fortress.md'],
   Spider: ['Partial', 'spiders.md', 'spawn timing adapted; see doc'],
-  Giant: ['In progress (batch 11)', 'giant.md', ''],
+  Giant: ['Partial', 'giant.md', 'summon/region only as native; pathing reach unverified'],
   Zombie: ['Partial', 'pathfinding.md', 'baby/villager/jockey variants in mob-riding.md and zombie-villager.md'],
   Slime: ['Partial', 'slime.md', 'spawn clock is an adaptation (slime chunks)'],
   Ghast: ['Implemented', 'blaze-ghast.md', ''],

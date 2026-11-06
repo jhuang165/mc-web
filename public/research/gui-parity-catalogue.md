@@ -55,7 +55,7 @@ The Partial rows are reviewed conceptual browser counterparts, with current evid
 | client/gui/GuiYesNo | bcw | bdw | no | Partial; delete confirmation; [current evidence](parity.md) | U |
 | client/gui/ScreenChatOptions | bcs | bdw | no | Missing; chat exists but there is no chat options screen (chat settings stay at native defaults); [current evidence](settings-parity-catalogue.md) | U |
 | client/gui/achievement/GuiAchievements | bei | bdw | no | Partial; achievements screen and toasts; [current evidence](achievements.md) | U |
-| client/gui/achievement/GuiStats | bej | bdw | no | In progress (batch 11); statistics screen; [current evidence](parity.md) | U |
+| client/gui/achievement/GuiStats | bej | bdw | no | Partial; General/Blocks/Items/Mobs tabs and sorting; some use/kill triggers approximate; [current evidence](stats.md) | U |
 | client/gui/inventory/GuiBeacon | bez | bex | no | Partial; beacon power selection; [current evidence](beacon.md) | U, I |
 | client/gui/inventory/GuiBrewingStand | bfg | bex | no | Partial; brewing stand container; [current evidence](brewing.md) | U, I |
 | client/gui/inventory/GuiChest | bfi | bex | no | Partial; single/large/trapped/ender chest; [current evidence](chests.md) | U, I |
@@ -116,7 +116,7 @@ The Partial rows are reviewed conceptual browser counterparts, with current evid
 | client/gui/GuiStreamIndicator | bco | class | Out of scope; multiplayer, Realms or Twitch | U |
 | client/gui/GuiTextField | bcd | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/GuiYesNoCallback | bcv | interface | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
-| client/gui/IProgressMeter | ber | interface | In progress (batch 11); statistics screen | U |
+| client/gui/IProgressMeter | ber | interface | Partial; statistics screen ([stats](stats.md)) | U |
 | client/gui/MapItemRenderer | bbx | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/MapItemRenderer$1 | bby | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/MapItemRenderer$Instance | bbz | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
@@ -127,13 +127,13 @@ The Partial rows are reviewed conceptual browser counterparts, with current evid
 | client/gui/ServerListEntryNormal$1 | bgd | class | Out of scope; multiplayer, Realms or Twitch | U |
 | client/gui/ServerSelectionList | bge | class | Out of scope; multiplayer, Realms or Twitch | U |
 | client/gui/achievement/GuiAchievement | beh | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
-| client/gui/achievement/GuiStats$Stats | beq | abstract class | In progress (batch 11); statistics screen | U |
-| client/gui/achievement/GuiStats$StatsBlock | bek | class | In progress (batch 11); statistics screen | U |
-| client/gui/achievement/GuiStats$StatsBlock$1 | bel | class | In progress (batch 11); statistics screen | U |
-| client/gui/achievement/GuiStats$StatsGeneral | bem | class | In progress (batch 11); statistics screen | U |
-| client/gui/achievement/GuiStats$StatsItem | ben | class | In progress (batch 11); statistics screen | U |
-| client/gui/achievement/GuiStats$StatsItem$1 | beo | class | In progress (batch 11); statistics screen | U |
-| client/gui/achievement/GuiStats$StatsMobsList | bep | class | In progress (batch 11); statistics screen | U |
+| client/gui/achievement/GuiStats$Stats | beq | abstract class | Partial; statistics screen ([stats](stats.md)) | U |
+| client/gui/achievement/GuiStats$StatsBlock | bek | class | Partial; statistics screen ([stats](stats.md)) | U |
+| client/gui/achievement/GuiStats$StatsBlock$1 | bel | class | Partial; statistics screen ([stats](stats.md)) | U |
+| client/gui/achievement/GuiStats$StatsGeneral | bem | class | Partial; statistics screen ([stats](stats.md)) | U |
+| client/gui/achievement/GuiStats$StatsItem | ben | class | Partial; statistics screen ([stats](stats.md)) | U |
+| client/gui/achievement/GuiStats$StatsItem$1 | beo | class | Partial; statistics screen ([stats](stats.md)) | U |
+| client/gui/achievement/GuiStats$StatsMobsList | bep | class | Partial; statistics screen ([stats](stats.md)) | U |
 | client/gui/inventory/CreativeCrafting | bfk | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/inventory/GuiBeacon$Button | bfd | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
 | client/gui/inventory/GuiBeacon$CancelButton | bfa | class | Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md) | U |
