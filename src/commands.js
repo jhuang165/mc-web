@@ -11,6 +11,7 @@ import { NBT } from "./nbt.js";
 import { parseJsonNbt, NBTException } from "./json-nbt.js";
 import { ORIGINAL_CONTAINERS } from "./block-registry.js";
 import { createExtraCommands } from "./commands-extra.js";
+import { createScoreboardCommands } from "./commands-scoreboard.js";
 import { JavaRandom } from "./java-random.js";
 import { COMMAND_LIST, LANG, ITEM_REGISTRY, BLOCK_REGISTRY, ENTITY_NAMES, POTION_NAMES, ENCHANTMENT_NAMES, GAME_RULES } from "./command-data.js";
 
@@ -123,7 +124,7 @@ export const DIFFICULTIES = ["peaceful", "easy", "normal", "hard"];
 // Original entity names the port can create (EntityList names -> entities.js types).
 export const SUMMONABLE = { Enderman: "enderman", Pig: "pig", Cow: "cow", MushroomCow: "mooshroom", SnowMan: "snow_golem", Sheep: "sheep", Chicken: "chicken", Wolf: "wolf", Ozelot: "ocelot", EntityHorse: "horse", Zombie: "zombie", Spider: "spider", CaveSpider: "cave_spider", Skeleton: "skeleton", Creeper: "creeper", Villager: "villager", VillagerGolem: "iron_golem", Silverfish: "silverfish", Witch: "witch", Slime: "slime", LavaSlime: "magma_cube", PigZombie: "pigman", Squid: "squid", Bat: "bat", EnderCrystal: "ender_crystal", ...CART_SUMMON, ...ENTITY_SUMMON, Blaze: "blaze", Ghast: "ghast", FireworksRocketEntity: "firework_rocket", WitherBoss: "wither", EnderDragon: "ender_dragon", Giant: "giant" };
 // Commands the registry lists that this build cannot honour; they report instead of pretending.
-export const UNSUPPORTED = new Set(["scoreboard"]);
+export const UNSUPPORTED = new Set(); // every registered 1.7.10 command has a handler since batch 13 (/scoreboard last)
 
 const REGISTERED = COMMAND_LIST.filter((c) => c.group !== "dedicated"); // singleplayer: the always group plus /publish
 const BY_NAME = new Map();
@@ -480,6 +481,11 @@ export function createCommandRunner(host) {
     parseDoubleMin: (s, min) => parseDoubleBounded(s, min, Number.MAX_VALUE),
   });
   Object.assign(handlers, extra.handlers);
+  // /scoreboard (commands-scoreboard.js) on host.scoreboard.
+  const scoreboardCommands = createScoreboardCommands({
+    host, usage, CommandException, parseInt32, parseIntMin, tr, selectPlayer: (s) => selectLocalPlayer(s, host),
+  });
+  Object.assign(handlers, scoreboardCommands.handlers);
 
   // CommandHandler.func_71556_a: the failure texts are red; unknown name, permission, usage, then the exception text.
   function fail(e) {
@@ -534,6 +540,7 @@ export function createCommandRunner(host) {
     else if (n === "help" && index === 0) options = REGISTERED.filter((c) => allowed(c)).map((c) => c.name);
     else if (n === "effect" && index === 1) options = ["clear"];
     else if (extra.handlers[n]) options = extra.complete(n, index, args, [name()]);
+    else if (n === "scoreboard") options = scoreboardCommands.complete(n, index, args, [name()]);
     return matchLast(args, options);
   }
   return { run, complete, handlers };

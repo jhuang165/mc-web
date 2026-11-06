@@ -101,6 +101,9 @@ export function createCommandHost(env) {
     printPlayer: (component) => printChat(component),
     get achievements() { return env.achievements?.(); },
     get stats() { return env.stats?.(); },
+    // The world scoreboard (scoreboard.js): /scoreboard, @p[team=,score_...] selectors and /spreadplayers respectTeams.
+    get scoreboard() { return env.scoreboard?.(); },
+    teamOf: (name) => env.scoreboard?.()?.teamOf(name) ?? null,
     profiler: env.profiler,
     tickCounter: () => env.tickCounter?.() ?? 0,
     saveFile: (name, text) => env.saveFile?.(name, text),

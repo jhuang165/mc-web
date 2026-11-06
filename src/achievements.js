@@ -177,6 +177,7 @@ export class Achievements {
   // EntityPlayer.triggerAchievement: a locked-parent achievement is ignored; returns whether this one was newly unlocked.
   trigger(id) {
     if (!BY_ID[id]) throw new RangeError(`Unknown achievement ${id}`);
+    this.onTrigger?.(id); // EntityPlayer.triggerAchievement -> addStat: the criteria counts every call, locked or already unlocked
     if (!this.canUnlock(id) || this.has(id)) return false;
     this.unlocked.add(id);
     this.onUnlock(BY_ID[id]);

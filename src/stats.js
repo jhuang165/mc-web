@@ -75,6 +75,7 @@ export class Stats {
   increment(id, n = 1) {
     if (!KNOWN.has(id) || !(n > 0) || !Number.isFinite(n)) return;
     this.values.set(id, Math.min(MAX_STAT, (this.values.get(id) ?? 0) + Math.trunc(n)));
+    this.onIncrement?.(id); // EntityPlayerMP.addStat: +1 on the stat's scoreboard criteria per call (scoreboard-live.js)
   }
   get(id) { return this.values.get(id) ?? 0; }
   has(id) { return this.values.has(id); }
