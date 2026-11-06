@@ -41,8 +41,9 @@ export const JAVA_LANDSCAPES = Object.freeze({
   javaLargeBiomes: "largeBiomes",
   javaStreamed: "default",
 });
-// WorldType of a streamed world: the 1.7.10 DEFAULT, LARGE_BIOMES or AMPLIFIED generator (anything else is DEFAULT).
-export const STREAMED_WORLD_TYPES = Object.freeze(['default', 'largeBiomes', 'amplified', 'flat']);
+// WorldType of a streamed world: the 1.7.10 DEFAULT, FLAT, LARGE_BIOMES, AMPLIFIED or DEFAULT_1_1 generator (anything else is DEFAULT).
+// DEFAULT_1_1 only comes from an imported level.dat (level-dat.js): ChunkProviderGenerate treats it as DEFAULT, its biome layers differ.
+export const STREAMED_WORLD_TYPES = Object.freeze(['default', 'largeBiomes', 'amplified', 'flat', 'default_1_1']);
 export const streamedWorldType = (type) => STREAMED_WORLD_TYPES.includes(type) ? type : 'default';
 export const isJavaLandscape = (biome) => Object.hasOwn(JAVA_LANDSCAPES, biome);
 export function javaSeed(value) {

@@ -76,3 +76,25 @@ test('runtime cart import keeps native anvil tags while dropping malformed metad
    {slot:1,id:276,damage:0,count:1,enchantments:[]},
  ]);
 });
+
+test("backups keep the level.dat fields, hanging entities, tiles and every cart type", () => {
+  const out = importedRuntime({
+    gameRules: { keepInventory: "true", custom: "x", bad: 3 },
+    bed: { spawn: [1, 64, -2], sleeping: true }, stats: { "stat.jump": 4, "stat.walkOneCm": -1, "stat.x": 1.5 },
+    achievements: { unlocked: ["openInventory", 5], biomes: ["Forest"] }, mapFeatures: false, hardcore: "yes", totalTime: 1234,
+    hanging: [{ kind: "painting", dir: 2, tx: 3, ty: 70, tz: 4, x: 3.5, y: 71, z: 4.06, art: "Kebab" }, { kind: "frame", tx: 1 }],
+    signs: [{ x: 1, y: 2, z: 3, lines: ["a", "", "", ""] }, { x: "1", y: 2, z: 3 }],
+    minecarts: { version: 1, carts: [
+      { type: 4, x: 1, y: 70, z: 1, spawner: { EntityId: "Zombie", Delay: 3 }, items: [] },
+      { type: 6, x: 2, y: 70, z: 1, command: { command: "/say hi", successCount: "2", trackOutput: false, lastOutput: 7 }, items: [] },
+    ] },
+  });
+  assert.deepEqual(out.gameRules, { keepInventory: "true", custom: "x" });
+  assert.deepEqual(out.bed, { spawn: [1, 64, -2] });
+  assert.deepEqual(out.stats, { "stat.jump": 4 });
+  assert.deepEqual(out.achievements, { unlocked: ["openInventory"], biomes: ["Forest"] });
+  assert.equal(out.mapFeatures, false); assert.equal("hardcore" in out, false); assert.equal(out.totalTime, 1234);
+  assert.equal(out.hanging.length, 1); assert.equal(out.signs.length, 1);
+  assert.deepEqual(out.minecarts.carts[0].spawner, { EntityId: "Zombie", Delay: 3 });
+  assert.deepEqual(out.minecarts.carts[1].command, { command: "/say hi", successCount: 0, trackOutput: false });
+});
