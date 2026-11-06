@@ -48,7 +48,7 @@ Import the resulting JSON through Select World. The converter keeps native coord
 ## Gaps
 
 - The spawn pass samples two packs per tick within the browser’s six-by-six ticking window, with a local cap of ten monsters. It uses block light for Endermen and samples End surfaces. Native chunk eligibility, height sampling, portal pigmen and exact spawn RNG order remain open.
-- Followers (wolves, riders, leashed animals) do not follow through portals; non-player entities do not use portals.
+- Followers (wolves, riders, leashed animals) do not follow through portals, as in 1.7.10. Mobs, dropped items and experience orbs use portals themselves (see entity-portal.md); boats, minecarts, projectiles, riders, the dragon and end crystals do not.
 - Maps are one store (no per-dimension map data). The compass in an item frame shares the player-relative sprite. Java 1.7.10 computes an item frame's compass relative to the frame position and facing.
 - The bed explosion (power 5, flaming) is recalled from the 1.7.10 class and not probed; `portal.travel` timing and volume are approximations.
 - Weather keeps its Overworld state while the player is away (no simulation in the other dimensions; the Overworld does not advance either).

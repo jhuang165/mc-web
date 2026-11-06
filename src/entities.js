@@ -718,6 +718,9 @@ export class EntityWorld {
       vx: 0,
       vz: 0,
       vy: 0,
+      // A mob that travelled through a portal arrives with the Teleporter's motion (entity-portal.js); PortalCooldown is saved.
+      ...(e.portalMotion ? { vx: e.portalMotion.vx || 0, vy: e.portalMotion.vy || 0, vz: e.portalMotion.vz || 0, portalMotion: undefined } : {}),
+      portalCooldown: Number.isInteger(e.portalCooldown) && e.portalCooldown > 0 ? Math.min(300, e.portalCooldown) : undefined,
       ...this.physics(),
     });
   }
@@ -2101,11 +2104,13 @@ export class EntityWorld {
     e.limbSwing = f(e.limbSwing + e.limbSwingAmount);
   }
   serialize() {
-    return this.entities.filter((e) => e.health > 0 || e.type === "ender_dragon" && !e.dragonGone).map((e) => {
-      const saved = { ...e };
-      for (const key of INTERPOLATED) delete saved[key];
-      return saved;
-    });
+    return this.entities.filter((e) => e.health > 0 || e.type === "ender_dragon" && !e.dragonGone).map((e) => this.serializeOne(e));
+  }
+  // One saved record (also the record a mob travelling through a portal takes along, dimension-live.js).
+  serializeOne(e) {
+    const saved = { ...e };
+    for (const key of INTERPOLATED) delete saved[key];
+    return saved;
   }
   // The sounds each client plays for status 2 and 3 (EntityLivingBase.handleHealthUpdate), apart from the server's.
   drainClientSounds() {
