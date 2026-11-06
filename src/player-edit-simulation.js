@@ -21,6 +21,7 @@ import { REDSTONE_ORE, LIT_REDSTONE_ORE } from './world.js';
 import { useEyeOfEnder } from './eye-of-ender-live.js';
 import { ITEM_EMPTY_MAP } from './maps.js';
 import { ITEM_FIREWORK_ROCKET } from './fireworks.js';
+import { isBook } from './books.js';
 import { useFirework } from './fireworks-live.js';
 import { BOAT_ITEM } from './boats.js';
 import { ATTACK_SLOWDOWN, isCritical } from './player-movement.js';
@@ -99,6 +100,11 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   if (place && id === ITEM_FIREWORK_ROCKET && state.rockets && (state.survival.creative || state.survival.count(id))) {
     const used = useFirework(state, { target, usesBlock }, hooks);
     if (used) return act(used.branch);
+  }
+  // ItemWritableBook / ItemEditableBook.onItemRightClick: displayGUIBook opens GuiScreenBook (book-ui.js); no onItemUse.
+  if (place && isBook(id) && !usesBlock) {
+    hook('openBook', state.survival.held);
+    return act('open-book');
   }
   // ItemCarrotOnAStick.onItemRightClick (no onItemUse): boosts the pig the player rides and steers (pig-saddle-live.js).
   if (place && id === CARROT_ON_A_STICK && !usesBlock && !aimedEntity && state.mobs?.stickUse?.(state.survival, state.rider)) {

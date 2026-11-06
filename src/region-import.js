@@ -15,6 +15,7 @@ import { readRegion, decodeRegionChunk, regionAddress, regionSlot } from './regi
 import { chunkFromNbt } from './chunk-nbt.js';
 import { nbtGet } from './nbt-get.js';
 import { readFireworkNbt } from './fireworks-nbt.js';
+import { readBookNbt } from './books-nbt.js';
 import { NBT } from './nbt.js';
 import { ITEMS, burnTime } from './survival.js';
 import { CHEST, CHEST_SLOTS } from './chest.js';
@@ -84,7 +85,7 @@ export function readItemTag(stack, nbt) {
   if (Number.isInteger(color) && color >= 0 && color <= 0xFFFFFF) stack.color = color;
   const unbreakable = get(nbt, 'Unbreakable', NBT.BYTE);
   if (unbreakable !== undefined) stack.unbreakable = unbreakable !== 0;
-  const recognized = new Set(['ench', 'StoredEnchantments', 'RepairCost', 'display', 'Unbreakable', ...readFireworkNbt(stack, nbt)]);
+  const recognized = new Set(['ench', 'StoredEnchantments', 'RepairCost', 'display', 'Unbreakable', ...readFireworkNbt(stack, nbt), ...readBookNbt(stack, nbt)]);
   const ignored = [...nbt.keys()].filter((key) => !recognized.has(key));
   if (display) ignored.push(...[...display.keys()].filter((key) => key !== 'Name' && key !== 'color').map((key) => 'display.' + key));
   return ignored;
