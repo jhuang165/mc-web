@@ -10,6 +10,8 @@ import { ENTITY_SUMMON } from "./entity-summon.js";
 import { NBT } from "./nbt.js";
 import { parseJsonNbt, NBTException } from "./json-nbt.js";
 import { ORIGINAL_CONTAINERS } from "./block-registry.js";
+import { createExtraCommands } from "./commands-extra.js";
+import { JavaRandom } from "./java-random.js";
 import { COMMAND_LIST, LANG, ITEM_REGISTRY, BLOCK_REGISTRY, ENTITY_NAMES, POTION_NAMES, ENCHANTMENT_NAMES, GAME_RULES } from "./command-data.js";
 
 // ---- java.lang.String.format subset used by the lang strings: %s %d %.Nf, with %n$ positions ----
@@ -27,10 +29,23 @@ export function format(pattern, args = []) {
   });
 }
 // StringTranslate.translateKeyFormat: a bad format shows "Format error: " + the pattern; an unknown key shows itself.
+// The client's StringTranslate loads every pattern with %d and %.Nf rewritten to %s (numericVariablePattern) and draws the
+// command texts (ChatComponentTranslation) through it, so a number given to a float conversion prints as Double.toString
+// ("10.5,64.0,3.5", not "10.50,64.00,3.50") and a preformatted string fits any conversion.
 export function tr(key, ...args) {
   const pattern = LANG[key];
   if (pattern === undefined) return key;
-  try { return format(pattern, args); } catch { return "Format error: " + pattern; }
+  try { return clientFormat(pattern, args); } catch { return "Format error: " + pattern; }
+}
+function clientFormat(pattern, args) {
+  let next = 0;
+  return pattern.replace(/%(?:(\d+)\$)?(?:\.(\d+))?([sdf%])/g, (m, pos, prec, kind) => {
+    if (kind === "%") return "%";
+    const v = args[pos ? Number(pos) - 1 : next++];
+    if (v === undefined) throw new FormatError("missing argument");
+    if (typeof v !== "number") return String(v);
+    return kind === "f" ? javaDouble(v) : kind === "d" ? String(Math.trunc(v)) : String(v);
+  });
 }
 
 export class CommandException extends Error {
@@ -75,8 +90,10 @@ export function javaDouble(d) {
   return (m.includes(".") ? m : m + ".0") + "E" + Number(e);
 }
 // CommandBase.func_110665_a: "~" is relative to the sender, an absolute number without a decimal point is the block centre (+ 0.5).
+// A NaN base (spreadplayers' centre) rejects "~" as "'NaN' is not a valid number".
 export function parseCoordinate(base, s, min = -30000000, max = 30000000) {
   const relative = s.startsWith("~");
+  if (relative && Number.isNaN(base)) throw numberInvalid("commands.generic.num.invalid", "NaN");
   let d = relative ? base : 0;
   if (!relative || s.length > 1) {
     const hasPoint = s.includes(".");
@@ -106,7 +123,7 @@ export const DIFFICULTIES = ["peaceful", "easy", "normal", "hard"];
 // Original entity names the port can create (EntityList names -> entities.js types).
 export const SUMMONABLE = { Enderman: "enderman", Pig: "pig", Cow: "cow", MushroomCow: "mooshroom", SnowMan: "snow_golem", Sheep: "sheep", Chicken: "chicken", Wolf: "wolf", Ozelot: "ocelot", EntityHorse: "horse", Zombie: "zombie", Spider: "spider", CaveSpider: "cave_spider", Skeleton: "skeleton", Creeper: "creeper", Villager: "villager", VillagerGolem: "iron_golem", Silverfish: "silverfish", Witch: "witch", Slime: "slime", LavaSlime: "magma_cube", PigZombie: "pigman", Squid: "squid", Bat: "bat", EnderCrystal: "ender_crystal", ...CART_SUMMON, ...ENTITY_SUMMON, Blaze: "blaze", Ghast: "ghast", FireworksRocketEntity: "firework_rocket", WitherBoss: "wither", EnderDragon: "ender_dragon", Giant: "giant" };
 // Commands the registry lists that this build cannot honour; they report instead of pretending.
-export const UNSUPPORTED = new Set(["achievement", "debug", "scoreboard", "spreadplayers", "tellraw"]);
+export const UNSUPPORTED = new Set(["scoreboard"]);
 
 const REGISTERED = COMMAND_LIST.filter((c) => c.group !== "dedicated"); // singleplayer: the always group plus /publish
 const BY_NAME = new Map();
@@ -453,10 +470,16 @@ export function createCommandRunner(host) {
   };
   const parseDoubleBounded = (s, min, max) => {
     const d = parseDouble(s);
-    if (d < min) throw numberInvalid("commands.generic.double.tooSmall", javaDouble(d), min);
-    if (d > max) throw numberInvalid("commands.generic.double.tooBig", javaDouble(d), max);
+    if (d < min) throw numberInvalid("commands.generic.double.tooSmall", javaDouble(d), javaDouble(min));
+    if (d > max) throw numberInvalid("commands.generic.double.tooBig", javaDouble(d), javaDouble(max));
     return d;
   };
+  // /tellraw, /achievement, /spreadplayers and /debug (commands-extra.js).
+  const extra = createExtraCommands({
+    host, player, targetArg, usage, CommandException, parseCoordinate, parseBoolean, JavaRandom,
+    parseDoubleMin: (s, min) => parseDoubleBounded(s, min, Number.MAX_VALUE),
+  });
+  Object.assign(handlers, extra.handlers);
 
   // CommandHandler.func_71556_a: the failure texts are red; unknown name, permission, usage, then the exception text.
   function fail(e) {
@@ -510,6 +533,7 @@ export function createCommandRunner(host) {
     else if (n === "summon" && index === 0) options = Object.keys(SUMMONABLE);
     else if (n === "help" && index === 0) options = REGISTERED.filter((c) => allowed(c)).map((c) => c.name);
     else if (n === "effect" && index === 1) options = ["clear"];
+    else if (extra.handlers[n]) options = extra.complete(n, index, args, [name()]);
     return matchLast(args, options);
   }
   return { run, complete, handlers };
