@@ -14,6 +14,11 @@ import { EntityWorld } from './entities.js';
 import { Projectiles } from './projectiles.js';
 import { WitchPotions } from './witch-potions.js';
 import { Arrows } from './bow.js';
+import { EyesOfEnder } from './eye-of-ender-live.js';
+import { FireworkRockets } from './fireworks-live.js';
+import { ITEM_FIREWORK_ROCKET } from './fireworks.js';
+import { Fireballs } from './fireballs.js';
+import { WitherSkulls } from './wither-boss-mobs.js';
 import { Chunk } from './chunk-store.js';
 import { chunkToNbt, chunkFromNbt } from './chunk-nbt.js';
 import { encodeRegionChunk, writeRegion, readRegion, decodeRegionChunk, regionSlot, regionAddress } from './region-file.js';
@@ -25,23 +30,28 @@ const bytes = (hex) => Uint8Array.from(hex.match(/../g).map((b) => parseInt(b, 1
 const tagOf = (hex) => decodeNbt(bytes(hex)).tag.value;
 const get = (map, key) => map.get(key)?.value;
 const NATIVE = projectiles.projectiles.filter((p) => p.loaded && JAVA_PROJECTILES[p.id]);
+// The first five kinds go through the generic read-back test; fireballs, eyes and rockets have their own tests below.
+const CLASSIC = NATIVE.filter((p) => ['projectiles', 'thrownPotions', 'arrows'].includes(JAVA_PROJECTILES[p.id]));
+const ofKind = (kind, i = 0) => projectiles.projectiles.filter((p) => p.kind === kind)[i];
 const flat = { get: () => 0, getMeta: () => 0, solid: () => false, surface: () => 0, spawn: () => ({ x: 0, y: 0, z: 0 }), numericSeed: 1 };
 
-test('the probe saw every converted class, and the egg and fireballs are outside the conversion', () => {
-  assert.equal(projectiles.projectiles.length, 21);
+test('the probe saw every converted class, and the egg is outside the conversion', () => {
+  assert.equal(projectiles.projectiles.length, 31);
   assert.deepEqual([...new Set(NATIVE.map((p) => p.id))].sort(), Object.keys(JAVA_PROJECTILES).sort());
   const egg = projectiles.projectiles.find((p) => p.kind === 'egg');
   assert.deepEqual([egg.id, egg.saved], [null, false], 'EntityEgg has no EntityList id: writeToNBTOptional refuses it');
-  assert.deepEqual(projectiles.projectiles.filter((p) => /fireball|skull/.test(p.kind)).map((p) => p.id), ['Fireball', 'Fireball', 'SmallFireball', 'WitherSkull']);
-  assert.equal(javaProjectileFromNbt(tagOf(projectiles.projectiles.find((p) => p.kind === 'fireball').nbt)).lost, 'unusable');
+  assert.deepEqual(projectiles.projectiles.filter((p) => /fireball|skull/.test(p.kind)).map((p) => p.id), ['Fireball', 'Fireball', 'Fireball', 'Fireball', 'SmallFireball', 'WitherSkull', 'WitherSkull']);
+  assert.deepEqual(projectiles.projectiles.filter((p) => /eye|rocket/.test(p.kind)).map((p) => p.id), Array(2).fill('EyeOfEnderSignal').concat(Array(5).fill('FireworksRocketEntity')));
+  // EntityFishHook (xe) is not an EntityList class; the digest list records it next to the registered ones.
+  assert.ok(projectiles.classes.xe && projectiles.classes.zl);
 });
 
-for (const [i, p] of NATIVE.entries()) {
+for (const [i, p] of CLASSIC.entries()) {
   test(`native ${p.kind} (${p.id}) NBT #${i} imports with the native read-back`, () => {
     const tag = tagOf(p.nbt), made = javaProjectileFromNbt(tag, { shiftX: 10, shiftZ: -20 });
     const owned = get(tag, 'ownerName') !== undefined && get(tag, 'ownerName') !== '';
-    if (p.id === 'ThrownEnderpearl' && !owned) { assert.equal(made.lost, 'no owner'); return; }
     assert.ok(made.record, JSON.stringify(made));
+    if (p.id === 'ThrownEnderpearl') assert.equal(made.record.owner, owned ? 'player' : undefined, 'an unowned pearl loads without an owner');
     assert.equal(made.list, JAVA_PROJECTILES[p.id]);
     const r = made.record;
     assert.deepEqual([r.x, r.y, r.z, r.mx, r.my, r.mz, r.yaw, r.pitch], [p.x + 10, p.y, p.z - 20, p.mx, p.my, p.mz, p.yaw, p.pitch]);
@@ -89,12 +99,14 @@ test('an arrow without pickup uses the legacy "player" boolean, and without dama
 const BROWSER = {
   Snowball: ['projectiles', {}], ThrownEnderpearl: ['projectiles', { kind: 'enderPearl', owner: 'player' }], ThrownPotion: ['thrownPotions', {}],
   ThrownExpBottle: ['thrownPotions', { kind: 'expBottle', damage: 0 }], Arrow: ['arrows', {}],
+  Fireball: ['fireballs', { kind: 'fireball', vx: 0.1, vy: 0, vz: 0.2, power: 1 }], SmallFireball: ['fireballs', { kind: 'smallFireball', vx: 0.1, vy: 0, vz: 0.2 }],
+  WitherSkull: ['fireballs', { kind: 'witherSkull', vx: 0.1, vy: 0, vz: 0.2 }], EyeOfEnderSignal: ['eyes', {}], FireworksRocketEntity: ['rockets', { life: 3, lifetime: 20, stack: { id: ITEM_FIREWORK_ROCKET, count: 1, damage: 0 } }],
 };
 test('exported projectile compounds have the native key set', () => {
   for (const [id, [list, extra]] of Object.entries(BROWSER)) {
-    const native = tagOf(NATIVE.find((p) => p.id === id && !get(tagOf(p.in), 'ownerName') && !get(tagOf(p.in), 'inGround')).nbt);
+    const native = tagOf(NATIVE.find((p) => p.id === id && !get(tagOf(p.in), 'ownerName') && !get(tagOf(p.in), 'inGround') && (id !== 'FireworksRocketEntity' || get(tagOf(p.in), 'FireworksItem'))).nbt);
     const record = { x: 1, y: 2, z: 3, mx: 0, my: 0, mz: 0, yaw: 0, pitch: 0, damage: 16388, inGround: false, xTile: -1, yTile: -1, zTile: -1, ...extra };
-    const out = javaProjectileToNbt(list, record);
+    const out = javaProjectileToNbt(list, record, { itemNbt: () => new Map([['id', { type: NBT.SHORT, value: 401 }], ['Count', { type: NBT.BYTE, value: 1 }], ['Damage', { type: NBT.SHORT, value: 0 }]]) });
     assert.equal(out.id, id);
     const keys = new Set(Object.keys(out.fields));
     // Entity's own keys are added by the region exporter; every other native key has to come from here.
@@ -104,9 +116,11 @@ test('exported projectile compounds have the native key set', () => {
   }
 });
 
-test('an egg and an unowned pearl are not exported', () => {
+test('an egg is not exported; an unowned pearl is, with an empty ownerName', () => {
   assert.equal(javaProjectileToNbt('projectiles', { kind: 'egg' }), null);
-  assert.equal(javaProjectileToNbt('projectiles', { kind: 'enderPearl', owner: null }), null);
+  const out = javaProjectileToNbt('projectiles', { kind: 'enderPearl', owner: null, x: 0, y: 0, z: 0, mx: 0, my: 0, mz: 0, yaw: 0, pitch: 0 });
+  assert.equal(out.id, 'ThrownEnderpearl');
+  assert.equal(out.fields.ownerName.value, '');
 });
 
 async function exportThenRead(record) {
@@ -151,26 +165,151 @@ test('a region with native projectiles imports them as saved projectiles, not as
   const chunk = new Chunk(0, 0);
   const place = (m, i) => {
     const tag = new Map(tagOf(m.nbt));
-    tag.set('Pos', { type: NBT.LIST, value: { elementType: NBT.DOUBLE, items: [1.5 + (i % 4) * 3, 70, 1.5 + Math.floor(i / 4) * 2.5] } });
+    tag.set('Pos', { type: NBT.LIST, value: { elementType: NBT.DOUBLE, items: [0.5 + (i % 8) * 1.9, 70, 0.5 + Math.floor(i / 8) * 3.5] } });
     return tag;
   };
   const entities = projectiles.projectiles.filter((p) => p.nbt).map(place);
   const { x, z } = regionAddress(0, 0);
   const files = [{ filename: 'r.0.0.mca', bytes: writeRegion([await encodeRegionChunk(chunkToNbt(chunk, { entities, tileEntities: [] }), { x, z })]) }];
   const { record, report } = await importJavaRegionArea(files, { area: { chunkX: 0, chunkZ: 0, width: 1, depth: 1 }, mode: 'survival' });
-  // Lost: the probe's one unowned pearl and the four fireball-family entities (the browser saves no fireballs).
-  const lost = Object.fromEntries(report.entities.lost.map((l) => [l.id ?? l.name ?? l[0], l.count ?? l[1]]));
+  // Everything converts except the probe's dead fireball (no "direction" list: setDead on load).
   const converted = Object.values(report.entities.converted).reduce((a, b) => a + b, 0);
-  assert.equal(converted, 15, JSON.stringify(report.entities));
-  assert.ok(!Object.keys(lost).some((k) => /^(Snowball|ThrownPotion|ThrownExpBottle|Arrow)/.test(k)), JSON.stringify(report.entities.lost));
-  assert.ok(lost['ThrownEnderpearl (no owner)'] === 1);
-  assert.equal(report.entities.converted.Arrow, 5);
+  assert.equal(converted, 29, JSON.stringify(report.entities));
+  assert.equal(JSON.stringify(report.entities.lost).match(/\d+/g)?.map(Number).reduce((a, b) => a + b, 0), 1, JSON.stringify(report.entities.lost));
+  assert.deepEqual(report.entities.converted, { Snowball: 3, ThrownEnderpearl: 2, ThrownPotion: 4, ThrownExpBottle: 2, Arrow: 5, Fireball: 3, SmallFireball: 1, WitherSkull: 2, EyeOfEnderSignal: 2, FireworksRocketEntity: 5 }, JSON.stringify(report.entities));
   const runtime = importedRuntime(JSON.parse(JSON.stringify(record)));
-  assert.equal(runtime.projectiles.length, 4);
+  assert.equal(runtime.projectiles.length, 5);
+  assert.equal(runtime.projectiles.filter((r) => r.kind === 'enderPearl' && r.owner === undefined).length, 1, 'the unowned pearl is kept');
   assert.equal(runtime.thrownPotions.length, 6);
   assert.equal(runtime.arrows.length, 5);
+  assert.equal(runtime.fireballs.length, 6);
+  assert.equal(runtime.eyes.eyes.length, 2);
+  assert.equal(runtime.rockets.rockets.length, 5);
   new Projectiles().load(runtime.projectiles);
   new Arrows().load(runtime.arrows);
+  const rockets = new FireworkRockets();
+  rockets.load(runtime.rockets);
+  assert.equal(rockets.rockets.length, 5);
+  const eyes = new EyesOfEnder();
+  eyes.load(runtime.eyes);
+  assert.equal(eyes.eyes.length, 2);
+  const mobs = { entities: [], random: () => 0.5 };
+  const balls = new Fireballs(mobs), skulls = new WitherSkulls(mobs);
+  balls.load(runtime.fireballs);
+  skulls.load(runtime.fireballs);
+  assert.deepEqual([balls.list.length, skulls.list.length], [4, 2]);
+});
+
+const BALLS = projectiles.projectiles.filter((p) => /fireball|skull/.test(p.kind) && p.kind !== 'witherskull-dangerous');
+test('native fireballs import with the native read-back: direction is the motion, acceleration and shooter are not saved', () => {
+  for (const p of BALLS.filter((b) => !b.dead)) {
+    const made = javaProjectileFromNbt(tagOf(p.nbt), { shiftX: 10, shiftZ: -20, dimension: -1 });
+    assert.equal(made.list, 'fireballs');
+    const r = made.record;
+    assert.deepEqual([r.x, r.y, r.z, r.vx, r.vy, r.vz, r.ax, r.ay, r.az, r.dimension], [p.x + 10, p.y, p.z - 20, p.mx, p.my, p.mz, p.fields.b, p.fields.c, p.fields.d, -1]);
+    assert.equal(r.owner, undefined);
+    assert.equal(r.power, p.id === 'Fireball' ? p.fields.e : undefined, 'ExplosionPower only on the large fireball');
+  }
+  const dead = BALLS.find((b) => b.dead);
+  assert.deepEqual(javaProjectileFromNbt(tagOf(dead.nbt)), { lost: 'unusable' }, 'no direction list: setDead on load');
+  const powered = BALLS.find((b) => b.fields['ze.e'] === 9);
+  assert.equal(javaProjectileFromNbt(tagOf(powered.nbt)).record.power, 3);
+  const skull = projectiles.projectiles.find((p) => p.kind === 'witherskull-dangerous');
+  assert.deepEqual([skull.srcFields.dangerous, skull.fields.dangerous], [true, false], 'the dangerous flag is a data-watcher value and is not saved');
+});
+
+test('imported fireballs keep their saved motion with zero acceleration; the browser save keeps owners and flight state', () => {
+  const made = javaProjectileFromNbt(tagOf(BALLS[0].nbt));
+  const mobs = { entities: [{ id: 'mob-7', health: 10, death: 0 }], random: () => 0.5 };
+  const balls = new Fireballs(mobs);
+  balls.load([{ ...made.record }, { ...made.record, dimension: 1 }, { kind: 'witherSkull', x: 1, y: 2, z: 3, vx: 0, vy: 0, vz: 0 }, { kind: 'smallFireball', x: NaN, y: 0, z: 0, vx: 0, vy: 0, vz: 0 }]);
+  assert.equal(balls.list.length, 1, 'wrong kind, other dimension and NaN records are skipped');
+  const ball = balls.list[0];
+  assert.deepEqual([ball.large, ball.power, ball.owner, ball.ax, ball.vz], [true, 1, null, 0, made.record.vz]);
+  ball.owner = mobs.entities[0];
+  ball.ticks = 12;
+  ball.ax = 0.01;
+  const saved = JSON.parse(JSON.stringify(balls.serialize(0)));
+  assert.deepEqual([saved[0].owner, saved[0].ticks, saved[0].dimension, saved[0].ax], ['mob-7', 12, 0, 0.01]);
+  const again = new Fireballs(mobs);
+  again.load(saved, 0);
+  assert.equal(again.list[0].owner, mobs.entities[0]);
+  assert.deepEqual([again.list[0].ticks, again.list[0].ax], [12, 0.01]);
+  again.load(saved, 1);
+  assert.equal(again.list.length, 0);
+  const skulls = new WitherSkulls(mobs);
+  skulls.load([{ kind: 'witherSkull', x: 1, y: 2, z: 3, vx: 0.1, vy: 0, vz: 0, blue: true, owner: 'player' }, { kind: 'fireball', x: 1, y: 2, z: 3, vx: 0, vy: 0, vz: 0 }]);
+  assert.equal(skulls.list.length, 1);
+  assert.equal(skulls.list[0].owner, 'player');
+});
+
+test('native eyes of ender import with the native defaults: no target, no age, shatter flag off', () => {
+  const eyes = projectiles.projectiles.filter((p) => p.kind === 'eye');
+  assert.equal(eyes[0].srcFields.e, true, 'the source eye had a target and the drop flag');
+  for (const p of eyes) {
+    assert.deepEqual(p.fields, { a: 0, b: 0, c: 0, d: 0, e: false }, 'target, age and the drop flag are not saved');
+    const made = javaProjectileFromNbt(tagOf(p.nbt), { shiftX: 10, shiftZ: -20 });
+    assert.equal(made.list, 'eyes');
+    const r = made.record;
+    assert.deepEqual([r.x, r.y, r.z, r.vx, r.vy, r.vz, r.tx, r.ty, r.tz, r.age, r.drops], [p.x + 10, p.y, p.z - 20, p.mx, p.my, p.mz, 10, 0, -20, 0, false]);
+  }
+  const live = new EyesOfEnder();
+  live.load({ eyes: [javaProjectileFromNbt(tagOf(eyes[1].nbt)).record] });
+  assert.equal(live.eyes.length, 1);
+});
+
+test('native firework rockets import Life, LifeTime and the FireworksItem', () => {
+  const rockets = projectiles.projectiles.filter((p) => p.kind === 'rocket');
+  assert.equal(rockets.length, 5);
+  for (const p of rockets) {
+    const tag = tagOf(p.nbt);
+    assert.equal(get(tag, 'Life'), p.fields.a);
+    assert.equal(get(tag, 'LifeTime'), p.fields.b);
+    assert.equal(tag.get('Life').type, NBT.INT);
+    const made = javaProjectileFromNbt(tag, { shiftX: 10, shiftZ: -20, convertItem: () => ({ id: ITEM_FIREWORK_ROCKET, count: 1, damage: 0 }) });
+    assert.equal(made.list, 'rockets');
+    const r = made.record;
+    assert.deepEqual([r.x, r.y, r.z, r.mx, r.my, r.mz, r.life, r.lifetime], [p.x + 10, p.y, p.z - 20, p.mx, p.my, p.mz, p.fields.a, p.fields.b]);
+    assert.equal(r.stack !== undefined, tag.has('FireworksItem'), 'the stack follows FireworksItem');
+  }
+});
+
+test('an unowned native pearl loads without an owner and saves again', () => {
+  const pearl = projectiles.projectiles.filter((p) => p.kind === 'enderpearl')[0];
+  const made = javaProjectileFromNbt(tagOf(pearl.nbt));
+  assert.equal(made.record.owner, undefined);
+  const live = new Projectiles();
+  live.load([JSON.parse(JSON.stringify(made.record))]);
+  assert.equal(live.balls.length, 1);
+  assert.equal(live.serialize().length, 1);
+});
+
+test('eggs and fishing bobbers are not EntityList classes and are not exported', () => {
+  assert.ok(projectiles.classes.zl && projectiles.classes.xe);
+  assert.equal(javaProjectileToNbt('projectiles', { kind: 'egg' }), null);
+});
+
+test('export then import keeps fireballs, skulls, eyes and rockets', async () => {
+  const at = (i) => ({ x: -2 - i, y: 102.5, z: -2.5, mx: 0.1, my: -0.2, mz: 0.3, yaw: 10 * i, pitch: 5 });
+  const record = {
+    fireballs: [
+      { kind: 'fireball', x: -2, y: 102.5, z: -2.5, vx: 0.1, vy: -0.2, vz: 0.3, ax: 0, ay: 0, az: 0, power: 3, dimension: 0 },
+      { kind: 'smallFireball', x: -4, y: 102.5, z: -2.5, vx: 0.2, vy: 0, vz: 0.1, ax: 0, ay: 0, az: 0, dimension: 0 },
+      { kind: 'witherSkull', x: -6, y: 102.5, z: -2.5, vx: 0.3, vy: 0, vz: 0.1, ax: 0, ay: 0, az: 0, dimension: 0 },
+    ],
+    eyes: { eyes: [{ ...at(3), vx: 0.1, vy: -0.2, vz: 0.3, tx: 0, ty: 0, tz: 0, age: 0, drops: false }] },
+    rockets: { rockets: [{ ...at(4), life: 5, lifetime: 30, stack: { id: ITEM_FIREWORK_ROCKET, count: 1, damage: 0 } }] },
+  };
+  const { w, chunk, report } = await exportThenRead(record);
+  assert.equal(report.unsupportedEntities ?? 0, 0);
+  const ids = chunk.entities.map((e) => get(e, 'id')).sort();
+  assert.deepEqual(ids, ['EyeOfEnderSignal', 'Fireball', 'FireworksRocketEntity', 'SmallFireball', 'WitherSkull']);
+  const back = Object.fromEntries(chunk.entities.map((e) => [get(e, 'id'), javaProjectileFromNbt(e, { shiftX: -w.originX, shiftZ: -w.originZ, convertItem: () => ({ id: ITEM_FIREWORK_ROCKET, count: 1, damage: 0 }) }).record]));
+  assert.equal(back.Fireball.power, 3);
+  assert.ok(Math.abs(back.Fireball.vx - 0.1) < 1e-9 && Math.abs(back.Fireball.vz - 0.3) < 1e-9);
+  assert.ok(Math.abs(back.WitherSkull.vx - 0.3) < 1e-9);
+  assert.deepEqual([back.FireworksRocketEntity.life, back.FireworksRocketEntity.lifetime], [5, 30]);
+  assert.ok(back.EyeOfEnderSignal);
 });
 
 // Creepers.

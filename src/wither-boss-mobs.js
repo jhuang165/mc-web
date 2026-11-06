@@ -151,6 +151,11 @@ export class WitherSkulls extends Fireballs {
     this.list.push(b);
     return b;
   }
+  accepts(kind) { return kind === "witherSkull"; }
+  // EntityWitherSkull's dangerous flag is a data-watcher value that the native NBT does not save; `blue` is restored from the browser save only.
+  build(r) {
+    return { id: "ws-" + this.next++, type: "witherSkull", kind: "witherSkull", blue: false, large: false, owner: null, health: 1, x: r.x, y: r.y, z: r.z, px: r.x, py: r.y, pz: r.z, vx: r.vx, vy: r.vy, vz: r.vz, ax: r.ax, ay: r.ay, az: r.az, ticks: 0, dead: false, scale: 1, fullbright: true, width: SKULL.size };
+  }
   tick() {
     const mobs = this.mobs;
     for (const b of this.list) {

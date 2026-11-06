@@ -128,9 +128,9 @@ function payload(state,ox,oz,report,blockAt) {
   if(e.kind==='painting')n.Motive=str(e.art);
   else{const item=e.item?stackNbt(e.item,undefined,report):null;if(item)n.Item=tag(NBT.COMPOUND,item);n.ItemRotation=byte(e.rotation??0);n.ItemDropChance=float(e.dropChance??1);}
   entities.push(new Map(Object.entries(n)));}
- // In-flight projectiles (java-projectiles.js, projectile-nbt-reference.json): snowballs, ender pearls, potions, bottles o' enchanting and arrows.
- // An egg has no EntityList id and a pearl without an owner cannot be held, so they stay unsupported.
- for(const name of ['projectiles','thrownPotions','arrows'])for(const {value:e} of state[name]??[]) {const p=javaProjectileToNbt(name,e,{ox,oz});if(!p){report.unsupportedEntities++;continue;}
+ // In-flight projectiles (java-projectiles.js, projectile-nbt-reference.json): snowballs, ender pearls, potions, bottles o' enchanting, arrows,
+ // fireballs, wither skulls, eyes of ender and firework rockets. An egg has no EntityList id (and the bobber class is not registered), so they stay unsupported.
+ for(const name of ['projectiles','thrownPotions','arrows','fireballs','eyes','rockets'])for(const {value:e} of state[name]??[]) {const p=javaProjectileToNbt(name,e,{ox,oz,itemNbt:stack=>stackNbt(stack,undefined,report)});if(!p){report.unsupportedEntities++;continue;}
   entities.push(new Map(Object.entries({...entity({x:e.x,y:e.y,z:e.z,mx:e.mx,my:e.my,mz:e.mz,rotation:[e.yaw??0,e.pitch??0],fire:name==='arrows'&&e.fire>0?e.fire:0},p.id,ox,oz),...p.fields})));}
  for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const [k,e] of Object.entries(state[name]??{})) {
   const [x,y,z]=k.split(',').map(Number);tiles.push(writeContainerTile(name,e,x+ox,y,z+oz,{report,dropper:blockAt(x,y,z)===158}));
@@ -185,7 +185,9 @@ function regionSource(record, w) {
  const owned=new Set([...w.chunks.keys(),...w.chunkEdits.keys()]);
  const {columns}=splitRuntime(record),runtime=new Map(columns.map(c=>[`${c.x},${c.z}`,c.state]));
  // thrownPotions (WitchPotions.serialize) is a record-level list, not a chunk-runtime array: bucket it by column like the others.
- for(const [i,e] of (record.thrownPotions??[]).entries()){if(![e?.x,e?.z].every(Number.isFinite))continue;const k=`${Math.floor(e.x/16)},${Math.floor(e.z/16)}`;if(!runtime.has(k))runtime.set(k,{});(runtime.get(k).thrownPotions??=[]).push({order:i,value:e});}
+ // eyes (EyesOfEnder.serialize().eyes), rockets (FireworkRockets.serialize().rockets) and fireballs (blaze/ghast fireballs and wither skulls of the overworld) are record-level too.
+ const recordLists=[['thrownPotions',record.thrownPotions],['eyes',record.eyes?.eyes],['rockets',record.rockets?.rockets],['fireballs',Array.isArray(record.fireballs)?record.fireballs.filter(e=>(e?.dimension??0)===0):[]]];
+ for(const [name,items] of recordLists)for(const [i,e] of (Array.isArray(items)?items:[]).entries()){if(![e?.x,e?.z].every(Number.isFinite))continue;const k=`${Math.floor(e.x/16)},${Math.floor(e.z/16)}`;if(!runtime.has(k))runtime.set(k,{});(runtime.get(k)[name]??=[]).push({order:i,value:e});}
  for(const k of runtime.keys())owned.add(k);
  for(const [k,hex] of Object.entries(record.populatedColumns?.cells??{})) {
   const [x,z]=k.split(',').map(Number),mask=BigInt('0x'+hex);
@@ -234,7 +236,7 @@ export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChu
   'Unzip this directory under the Java 1.7.10 saves directory. blockworld.json is the browser backup.',
   'Provided columns are marked terrain-populated. Java generates outside them using the seed; border features can differ from browser population.',
   'LightPopulated is false: Java must rebuild light. AI/RNG state, player status effects, cross-system tick order and dragon death progress are not converted.',
-  'Snowballs, ender pearls with an owner, thrown potions, bottles o\' enchanting and arrows are written as native projectile entities. Eggs (no EntityList id) and unowned pearls are counted as unsupported; fishing bobbers, eyes of ender and firework rockets are not exported. Other entities use supported fields; advanced fields use native defaults.',
+  'Snowballs, ender pearls, thrown potions, bottles o\' enchanting, arrows, fireballs, wither skulls, eyes of ender and firework rockets are written as native projectile entities (the native classes do not save a fireball\'s acceleration or shooter, an eye\'s target or a skull\'s dangerous flag). Eggs and fishing bobbers have no EntityList id and are counted as unsupported. Other entities use supported fields; advanced fields use native defaults.',
   'Browser legacy landscapes export their finite area; Java generates default terrain outside it.'
  ]},files=new Map();
  let count=0;
