@@ -169,6 +169,11 @@ body:has(.anvil-modal) #toast{display:none}
 .enchant-option.off .enchant-icon{opacity:1}
 .enchant-level{position:absolute;right:calc(2*var(--u));top:calc(7*var(--u));font-weight:normal;color:#80ff20;text-shadow:var(--u) var(--u) #203f08;white-space:nowrap;pointer-events:none}
 .enchant-option.poor .enchant-level{color:#407f10;text-shadow:var(--u) var(--u) #101f04}
+/* GuiEnchantment: the galactic option names (drawn as a mask, tinted 6839882 / hover 16777088 / disabled 3420965) and the ModelBook
+   viewport (320 x 240 centred on the 176 x 166 sheet, drawn before the slots). */
+.enchant-name{--name-mask:linear-gradient(transparent,transparent);position:absolute;left:calc(2*var(--u));top:calc(2*var(--u));width:calc(104*var(--u));height:calc(9*var(--u));background:#685e4a;-webkit-mask:var(--name-mask) 0 0/100% 100% no-repeat;mask:var(--name-mask) 0 0/100% 100% no-repeat;image-rendering:pixelated;pointer-events:none}
+.enchant-option.poor .enchant-name{background:#342f25}.enchant-option.on:hover .enchant-name,.enchant-option.on:focus-visible .enchant-name{background:#ffff80}.enchant-option.off .enchant-name{display:none}
+.enchant-book-canvas{position:absolute;left:calc(-72*var(--u));top:calc(-37*var(--u));width:calc(320*var(--u));height:calc(240*var(--u));pointer-events:none}
 .enchant-shelves{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 body:has(.enchanting-modal) #toast{display:none}
 
