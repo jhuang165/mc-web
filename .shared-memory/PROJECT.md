@@ -1,6 +1,18 @@
 # Shared project state
 
-Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.45.0. Full parity is unfinished.
+Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.46.0. Full parity is unfinished.
+
+Batch 16 (2026-11-07, claude-b16-lead, eight Sonnet tracks merged into main):
+- Translations (`languages.md`): item and block names (probed item keys, `item-keys-data.js`), container titles, potion/enchantment tooltips, bed messages and the Now playing line follow the selected language through `translate(key, fallback)`. Still English: firework, horse, beacon and trade labels, creative tabs; text is drawn in the HTML/TTF font.
+- Resource packs, round 3 (`resource-packs.md`): item atlas `.mcmeta` animation (`item-animation.js`), F2 screenshots with the HUD (`screenshot-compose.js`), options.txt Import/Export on the Controls screen. Block atlas mcmeta and dropped items do not animate.
+- Bosses, round 2 (`dragon.md`, `wither-boss.md`): DragonModelProbe and DragonSweepProbe; arrows, fireballs and explosions use the native `reachesDragon`/`sweepArea` gates; the hurt alpha is bytecode-read. Wither target order and head particles are not replayed.
+- Structure NBT (`structure-nbt.md`): all 15 fortress pieces plus the start in the structure NBT, `data/Fortress.dat` read/write (probed, byte-equal), witch hut created/populated state probed, imported fortresses restored on arrival (`fortress-restore.js`), whole-save `bases` in the JSON export (`whole-save-json.js`). Fortress starts export in the created state; jungle temple populated flags are not replayed.
+- Spawner data (`spawner-riding.js`): SpawnData `Riding` chains (probed), the player's mount written as `Riding` in level.dat, pigman child flag and chicken jockey (80000-spawn probe), `/setblock mob_spawner`. The player mount path is bytecode-read; summoned carts lack the yOffset.
+- Commands (`commands.md`): `/summon` Painting, ItemFrame and LeashKnot; scoreboard criteria order replayed (craftItem order stays approximate, identity-hash dependent); PlayerSelector ported (201 probed records); all 11 mobGriefing sites tested.
+- Block audit (`block-behaviour-audit.md`): 38 previously unmapped blocks probed (899 records); fixed explosion resistances, portal/wart/egg materials, wart drops, skull opacity, pumpkin support, double wood slab silk touch. The powered repeater emits no light (native 9); neighbour/box/tick columns are not replayed.
+- Biome decoration (`biome-decoration-audit.md`): native `populate` probed on 69 regions / 56 slots and replayed (call order, writes, next Random); mutated biomes compare by their base class; lily pads draw two faces. Lead gate: the mutated-biome rule is streamed generation 16 (new streamed worlds, level.dat imports with MapFeatures); finite worlds (14) and older saves keep the earlier biome map via `legacyMutated` (`java-world.js` `biomeLayerOptions`, `biome-generation-gate.test.js`). Slots 10, 20, 151 unaudited.
+- Lead fixes: merged the conflicting doc and `main.js` entity host edits; level.dat round-trip tests now expect generation 16.
+- Verification: 3797 tests and the build pass on merged main. Muted browser run on :5181: a new seed 671 world saved at generation 16 and rendered jungle with no console warnings; the translated inventory "Crafting" title and the Controls Import/Export buttons show.
 
 Batch 15 (2026-11-06, claude-b15-lead, eight Sonnet tracks merged into main):
 - Entity interchange (`region-import.md`, `boats.md`): region export writes `Boat` and nests ridden boats and carts as `Riding` mounts; region import reads them back. RidingNbtProbe (4 chains) and VillagerNbtProbe (3 villagers with real MerchantRecipe objects) are replayed in `riding-nbt.test.js`. Fireball, thrown potion and villager Offers interchange was already in and is now documented.

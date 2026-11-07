@@ -2,6 +2,10 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 16
+
+Translated item, block and container names (`languages.md`), item atlas animation, F2 HUD screenshots and options.txt import/export (`resource-packs.md`), native dragon hit gates (`dragon.md`), fortress structure NBT and `Fortress.dat`, witch hut NBT state, whole-save bases in JSON export (`structure-nbt.md`), spawner `Riding` chains and the pigman chicken jockey, `/summon` hanging entities, the PlayerSelector port, a 38-block native audit with fixes (`block-behaviour-audit.md`), and the per-biome decoration replay with the native mutated-biome rule as streamed generation 16 (`biome-decoration-audit.md`).
+
 ## Done in batch 15
 
 Boat and vehicle `Riding` chains in region export/import (`region-import.md`), whole Java save import into stored columns (`region-import.md`), dragon part hit boxes and the wither effect on mobs (`dragon.md`, `wither-boss.md`), in-place resource pack refresh, `.png.mcmeta` animation, pack sounds, HD chests and colormaps (`resource-packs.md`), per-position biome tint and per-column precipitation (`biome-colors.md`), villager trade items and iron golem details (`villager-trading-live.md`), languages and the unicode font (`languages.md`), and live tripwire temple traps (`scattered-features.md`). Each doc lists what is still open.
