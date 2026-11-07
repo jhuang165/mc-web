@@ -35,6 +35,12 @@ export function horseFields(random, group = null) {
   const { age, health, ...rest } = horse;
   return { horse: pick(rest), health, growingAge: age, speedAttr: horse.speed };
 }
+// EntityHorse.onSpawnWithEgg on the entity's own Random (wi.a(sy)): `group` is the {type, variant} a herd passes on (EntityHorse.GroupData).
+export function horseSpawn(rand, group = null) {
+  const { horse, group: next } = H.spawnHorse(rand, group);
+  const { age, health, ...rest } = horse;
+  return { fields: { horse: pick(rest), health, growingAge: age, speedAttr: horse.speed }, group: next };
+}
 const pick = (h) => Object.fromEntries(KEEP.map((k) => [k, h[k]]));
 
 // restore(): a saved record keeps its horse state after a sanity pass.

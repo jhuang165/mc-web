@@ -43,7 +43,7 @@ import { ENDER_CRYSTAL_TYPE, crystalUpdate, crystalAttack } from "./ender-crysta
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { installHorseGear, gearFieldsFrom } from "./horse-gear-live.js";
 import { installPigSaddle } from "./pig-saddle-live.js";
-import { HORSE_ENTITY, horseRideThink, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
+import { HORSE_ENTITY, horseRideThink, horseSpawn, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
 import { dragonUpdate, dragonHit, installDragonMobs } from "./dragon-mobs.js";
 import { blazeUpdate, ghastUpdate, fireballMobTalk, installFireballMobs } from "./blaze-ghast-mobs.js";
 import { witherUpdate, witherPost, witherTalk, witherRanged, installWither } from "./wither-boss-mobs.js";
@@ -1049,6 +1049,12 @@ export class EntityWorld {
     } else if (type === "sheep") {
       // EntitySheep.onSpawnWithEgg (wp.a(sy)): setFleeceColor(getRandomFleeceColor(worldObj.rand)).
       e.color = fleeceColor(world);
+    } else if (type === "horse") {
+      // EntityHorse.onSpawnWithEgg (wi.a(sy)) on Entity.rand: the follow-range gaussian, a herd's type and variant (GroupData, passed on
+      // to the next horse of the group) or the 1-in-10 donkey and the colour and marking, the foal roll, then health, speed and jump.
+      const r = horseSpawn(rand, opts.group?.horse ?? null);
+      opts.group = { horse: r.group };
+      Object.assign(e, r.fields);
     } else if (type === "ocelot") {
       // EntityOcelot.onSpawnWithEgg: one chance in seven of two kittens (age -24000, CatType 0) at the same spot.
       for (let i = kittenLitter(world); i > 0 && this.entities.length < 40; i--) {
@@ -1118,7 +1124,8 @@ export class EntityWorld {
       const p = this.ai?.player;
       if (p?.alive && boxesIntersect(box, mobBox(p.x, p.y, p.z, 0.6, 1.8))) return true;
       // World.checkNoEntityCollision: not yet setDead (a dying mob still counts).
-      for (const o of this.entities) if (pushable(o) && boxesIntersect(box, sized(o))) return true;
+      // preventEntitySpawning is set by EntityLivingBase (bats included, though they are not pushable); probed natively.
+      for (const o of this.entities) if ((o.type === "bat" || pushable(o)) && boxesIntersect(box, sized(o))) return true;
       return !!env.extraCollision?.(box);
     };
     const liquid = (box) => {
@@ -2033,7 +2040,19 @@ export class EntityWorld {
         if (type.name === "monster" && this.swampHutAt(x, y, z)) return WITCH_HUT_MONSTERS;
         return spawnList(slot, type.name);
       },
-      create: (name, x, y, z, yaw) => (ENTITY_TYPE_OF[name] ? hooks.createMob(ENTITY_TYPE_OF[name], x, y, z, yaw) : null),
+      create: (name, x, y, z, yaw) => {
+        const e = ENTITY_TYPE_OF[name] ? hooks.createMob(ENTITY_TYPE_OF[name], x, y, z, yaw) : null;
+        if (!e) return e;
+        // Entity.rand is a fresh unseeded Random (`entitySeed(World.rand)` lets tests seed it from the World.rand state as
+        // tools/probes/SpawnReplay2Probe.java does). EntitySlime's constructor draws the size and the jump delay from it first.
+        const r = new JavaRandom(this.entitySeed ? this.entitySeed(s.ctx.rand) : Math.floor(Math.random() * 2 ** 48));
+        setEntityRandom(e, r);
+        if (e.type === "slime" || e.type === "magma_cube") {
+          const size = 1 << r.nextInt(3);
+          Object.assign(e, slimeFields(size, () => 0), { jumpDelay: r.nextInt(20) + 10 });
+        }
+        return e;
+      },
       canSpawnHere: (e) => hooks.canSpawnHere(e),
       add: (e) => this.entities.push(e),
       // A natural skeleton rolls EntitySkeleton's Nether wither roll itself (free).
@@ -2047,7 +2066,10 @@ export class EntityWorld {
   // was emptied until the chunk reloads); cached per chunk for 400 ticks.
   spawnChunkTop(cx, cz) {
     const world = this.world, x0 = cx * 16, z0 = cz * 16;
-    if (world.isTicking && !(world.isTicking(x0, z0) && world.isTicking(x0 + 15, z0 + 15))) return -1;
+    // Natively every one of the 225 non-edge chunks is eligible (provideChunk loads or generates it). Here every chunk whose column is
+    // resident counts, ticking or not; a streamed world holds only 8 x 8 columns, so the chunks beyond are skipped (natural-spawning.md).
+    // Finite doubles that report a ticking window but no columns keep that window.
+    if (!world.chunkAt && world.isTicking && !(world.isTicking(x0, z0) && world.isTicking(x0 + 15, z0 + 15))) return -1;
     if (!world.streaming && world.inside && !(world.inside(x0, 0, z0) && world.inside(x0 + 15, 0, z0 + 15))) return -1;
     if (!world.chunkAt) {
       if (world.chunkTop) return world.chunkTop(cx, cz) ?? -1;
@@ -2097,8 +2119,19 @@ export class EntityWorld {
   sweepFrozen(player) {
     const world = this.world;
     if (!world.streaming) return;
-    this.entities = this.entities.filter((e) => entityActive(world, e) || !canDespawn(e) || e.ridingEntity || e.riddenByEntity ||
-      (player.x - e.x) ** 2 + (player.y - e.y) ** 2 + (player.z - e.z) ** 2 <= 128 ** 2);
+    // A despawnable mob frozen outside the ticking window stands in for a native mob that keeps updating: EntityLiving.despawnEntity
+    // runs every tick there (entityAge + 1; beyond 128 blocks at once; beyond 32 with a 1 in 800 roll once entityAge passes 600;
+    // within 32 the age resets). This runs every 20 ticks, so the roll is made once with the chance of 20 ticks, and the age is
+    // kept in `idle` as for the ticking mobs. Without it the spawner's outer chunks would fill the cap with mobs that never leave.
+    const hit = 1 - (799 / 800) ** 20;
+    this.entities = this.entities.filter((e) => {
+      if (entityActive(world, e) || !canDespawn(e) || e.ridingEntity || e.riddenByEntity) return true;
+      const d = (player.x - e.x) ** 2 + (player.y - e.y) ** 2 + (player.z - e.z) ** 2;
+      if (d > 128 ** 2) return false;
+      if (d < 32 ** 2) { e.idle = 0; return true; }
+      e.idle = (e.idle || 0) + 20;
+      return !(e.idle > 600 && entityRandom(e).nextDouble() < hit);
+    });
   }
   // Spider keeps EntityCreature's legacy aggression/leap rules. Navigation reuses
   // the existing bounded PathFinder; its refresh/wander timing remains adapted.

@@ -75,7 +75,19 @@ Dimensions use the same flow.
   - the blaze path weight;
   - the ghast's 1-in-20 roll;
   - the zombie pigman and magma cube space checks.
-- Horses: foals roll on the unseeded entity Random, so the probe has no horse biome. The horse group data path is bytecode-derived.
+- Horses: since batch 18 the horse biome (plains and savanna slots) is replayed with the entity Random seeded; see Round 2 replays below.
+
+## Round 2 replays (batch 18)
+
+`tools/verify-spawn-replay2.mjs` runs `tools/probes/SpawnReplay2Probe.java` twice on the unchanged jar (outputs must match) and writes `public/research/spawn-replay2-reference.json`; `src/spawner-replay2.test.js` replays it through `EntityWorld.naturalSpawn` and compares every spawn (name, position, yaw, extras, horse stats within 1e-6, skeleton type and gear), the return value and the World.rand state per tick.
+
+- Seeding Entity.rand: slimes, magma cubes, skeletons, ghasts and horses draw from the entity's own `Random` (`sa.Z`), which is unseeded natively. The probe seeds it inside `setLocationAndAngles` (after the yaw draw, before `getCanSpawnHere` and `onSpawnWithEgg`) with the World.rand state; the port does the same through `entitySeed` (tests) or a random seed (live) when the spawner creates the mob. The slime repeats its constructor draws first: size `1 << nextInt(3)`, then jump delay `nextInt(20) + 10`. A skeleton riding a spider keeps the unseeded Random, so its gear is not recorded.
+- Replays (8): slime-swamp-full, -new and -lit (swamp slime chunk rule, moon phase from a real WorldInfo day time, light roll, size roll), ocelot-jungle and ocelot-only (jungle list, `canSpawn` grass and height rule, kittens), horse-plains (plains and savanna group data, foal, variant, speed, jump and health rolls), nether-fortress (pigmen, ghast, blazes, wither skeletons and magma cubes through the fortress list) and end-endermen. All pass.
+- Horse group data: `onSpawnWithEgg` has a `horse` branch calling `horseSpawn` (`src/horse-live.js`), which threads the group data from one spawn to the next.
+- Frozen mobs: `sweepFrozen` emulates native `despawnEntity` for despawnable mobs outside the ticking window: beyond 128 blocks they go at once, otherwise the idle counter grows by 20 per sweep and past 600 they are removed with probability `1 - (799/800)^20`.
+- Fixed by the replays: bats did not block spawn boxes.
+- Total world time: `totalTime` is per save and advances only while the world is played. Natively the Overworld ticks while the player is in other dimensions, and the Nether and End read the Overworld's value through `DerivedWorldInfo`; this build keeps one counter that advances in whichever dimension is played, so the 400-tick animal cadence is the same. Nothing else differs that a single-player save can observe.
+- Not probed: the probe uses a stand-in fortress box (a fortress chunk and y 30..60) rather than real `MapGenNetherBridge`; the Nether replay has only one ghast; light rolls are at light 0 except in the lit slime replay; riding-skeleton gear; the kitten limit of 40 versus none natively.
 
 ## Portal pigmen
 
@@ -83,13 +95,13 @@ Dimensions use the same flow.
 
 ## Approximations
 
-- **Eligible chunks (closed in batch 14):** the cap uses 289 (`ELIGIBLE_CHUNKS`) in every world, as `eligibleChunksForSpawning.size()` is natively, so the monster cap is 70 × 289 / 256 = 79. Points are still drawn only in chunks this build simulates (the 6×6 ticking window in a streamed world, the in-bounds chunks of a finite one); the other chunks of the 17×17 window are skipped without draws. Natively all 225 non-edge chunks are visited, so the density of mobs per visited chunk is higher here than natively, and mobs cluster nearer the player.
+- **Eligible chunks (round 2, batch 18):** the cap uses 289 (`ELIGIBLE_CHUNKS`), and points are now drawn in every resident chunk of the 15×15 non-edge set, ticking or not (`spawnChunkTop` uses `world.chunkAt` when the world has one; the ticking window only applies to worlds without it). Natively `getChunkFromChunkCoords` loads or generates a chunk that is not loaded, with no `chunkExists` check. This build cannot generate 225 chunks per tick, so a chunk that is not resident is skipped without draws; that is the closest faithful choice, and it is the one remaining divergence: the streamed window is 8×8 columns, far smaller than 17×17, so a streamed world draws in fewer chunks than native and mobs sit nearer the player. Finite worlds and the replay doubles cover the whole set.
 - **Counting (closed in batch 14):** `countEntities` counts every non-persistent mob in `EntityWorld.entities`, including mobs frozen outside the ticking window, as `World.countEntities` walks the whole loaded entity list. `sweepFrozen` drops despawnable mobs that are frozen and more than 128 blocks away, standing in for their native despawn, so only frozen mobs inside 128 blocks count.
 - **Animal cadence (closed in batch 14):** the saved total world time drives the 400-tick phase (see Per-tick flow). Worlds saved before batch 14 have no `totalTime` and start from the player's time. The total time advances only while the world is played; natively the Overworld also ticks while the player is in another dimension, and the Nether and End read the Overworld's value through DerivedWorldInfo.
 - **Chunk height:** `getTopFilledSegment` comes from the chunk's live blocks: a scan of the streamed chunk arrays, `world.chunkTop`, or the surface height for doubles. The result is cached for 400 ticks per chunk, so a newly built tower changes the draw range only on the next rescan.
 - **Witch hut lookup (closed in batch 14):** `MapGenScatteredFeature.func_143030_a` (`atx.a(int,int,int)`) reads only the structure start whose bounding box covers the point and tests that its first piece is a swamp hut. It never looks at the biome, so the lookup now runs for every monster list query whatever the block's biome slot. Flat worlds and worlds without structures have no hut lookup.
 - **Spawn point in dimensions (closed in batch 14, with a correction):** the Nether and End do not have a spawn point of their own. `WorldServerMulti` (`mm`) sets its WorldInfo to `new DerivedWorldInfo(overworld info)`, and `World.getSpawnPoint` reads that info, so the 24-block exclusion uses the Overworld's spawn point in every dimension. `spawnPointOf(record)` in `dimension-spawning.js` returns it from the shared `record.worldSpawn`. (`WorldProvider.getSpawnPoint`, which the End overrides for the player respawn, is not what the spawner calls.)
-- **Spawn collision:** `checkNoEntityCollision` here skips bats, end crystals and the dragon (this build's `pushable`). Natively `preventEntitySpawning` is true for them.
+- **Spawn collision (bats fixed in batch 18):** a bat now blocks a spawn box, as natively (`preventEntitySpawning` is set by EntityLivingBase; found when the seeded replay spawned a second bat on top of the first). End crystals and the dragon are still skipped by `pushable`.
 - **Entity limit:** spawning stops at 256 entities in the EntityWorld. The kittens `EntityOcelot.onSpawnWithEgg` adds (natural or egg spawns) still stop at the older 40-entity limit.
 - **Old worlds:** a world without biome data reads Plains (slot 1).
 - **Persistence:** mobs this build marks persistent (for example bred animals) are left out of the count, as `persistenceRequired` mobs are natively; which mobs carry the flag follows each mob's own port.
@@ -129,6 +141,7 @@ The first tick costs about 6 ms, because it scans the heights of 36 chunks with 
 - Peaceful in a live world;
 - streamed-world eligibility (points only in ticking chunks, 289 counted for the cap, height scan);
 - the Nether fortress and BiomeGenHell lists, plus the End and Peaceful in dimensions;
+- the round 2 replays (`src/spawner-replay2.test.js`) and resident-chunk eligibility and frozen-mob despawn tests;
 - the timing bench.
 
 `src/dimension-spawning.test.js`, `src/entities.test.js`, `src/difficulty.test.js` and `src/spider.test.js` drive the live pass.
