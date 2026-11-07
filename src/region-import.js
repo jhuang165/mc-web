@@ -317,7 +317,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   const levelMode = level ? ['survival', 'creative', 'adventure'][javaPlayer?.playerGameType >= 0 ? javaPlayer.playerGameType : level.gameType] ?? 'survival' : null;
   const { seed = level ? level.seed : '1710', landscape = 'java', missing = 'generated', mode = levelMode ?? 'creative', dimension = 0, hasSky = dimension !== -1 } = options;
   if (level && (dimension || options.destination || options.landscape)) throw new Error('A level.dat import keeps the overworld in its native frame');
-  if (level && options.generationVersion !== undefined && ![13, 15, 16].includes(options.generationVersion)) throw new Error('generationVersion must be 13, 15 or 16');
+  if (level && options.generationVersion !== undefined && ![13, 15, 16, 17].includes(options.generationVersion)) throw new Error('generationVersion must be 13, 15, 16 or 17');
   if (![0, -1, 1].includes(dimension)) throw new Error('Unsupported dimension');
   if (dimension && options.destination) throw new Error('Dimension regions keep their native coordinates');
   if (!isJavaLandscape(landscape)) throw new Error(`Unknown Java landscape ${landscape}`);

@@ -6,7 +6,9 @@
 //   solidTop(x, y, z)      World.doesBlockHaveSolidTopSurface
 //   put(x, y, z, id)       setBlock(x, y, z, block, 0, 2)
 //   fill(x, y, z, slot, stack)  one inventory write of the chest at x, y, z
-// Differences from native: the world Random is seeded from the world seed (native uses an unseeded Random).
+// Randomness: World.rand is `new Random()` in 1.7.10 (no seed), so a native bonus chest differs every time a world is created.
+// The game seeds its Random from fresh entropy (unseededBonusRandom); the replay tests inject a fixed JavaRandom into
+// createBonusChest instead. Contents, positions and torches are a pure function of that Random, as verified natively.
 const AIR = 0, LEAVES = 18, LEAVES2 = 161, CHEST = 54, TORCH = 50;
 
 // WorldServer.U: ChestGenHooks bonusChest contents, [original id, damage, min, max, weight].
@@ -69,3 +71,6 @@ export function createBonusChest(w, random, spawnX, spawnZ, sink = null) {
   }
   return false;
 }
+
+// A World.rand equivalent: Java's `new Random()` takes a seed from entropy; `entropy()` returns a number in [0, 1) (injectable).
+export const unseededBonusRandom = (JavaRandomClass, entropy = Math.random) => new JavaRandomClass(BigInt(Math.floor(entropy() * 2 ** 48)));

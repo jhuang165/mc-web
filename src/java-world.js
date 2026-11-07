@@ -63,6 +63,8 @@ export function javaTemperature(b, x, y, z) {
 // Generation 16 compares mutated biomes by their base biome's class, as natively; older worlds keep the earlier biome map.
 export const NATIVE_BIOME_CLASS_GENERATION = 16;
 // No version (tools, tests) is the native rule.
+// Generation 17: MapFeatures off, population without any structure generator (and the native biome rule of 16).
+export const NO_MAP_FEATURES_GENERATION = 17;
 export const biomeLayerOptions = (generationVersion) => ({ legacyMutated: generationVersion !== undefined && generationVersion < NATIVE_BIOME_CLASS_GENERATION });
 const newGenerator = (seed, worldType, generatorOptions, generationVersion) => worldType === 'flat'
   ? new FlatChunkProvider(parseFlatInfo(generatorOptions))
@@ -91,7 +93,7 @@ function flatSource({ seed, generationVersion, originX, originZ, gen }) {
   };
   const population = new StreamingPopulation({
     seed, originX, originZ, terrainOnly: terrain, terrain: (x, z) => gen.provideChunk(x, z), biomeAt: (x, z) => gen.manager.biomeAt(x, z),
-    manager: gen.manager, flat: gen.info,
+    manager: gen.manager, flat: gen.info, mapFeatures: generationVersion < NO_MAP_FEATURES_GENERATION,
   });
   return { gen, population, column: (cx, cz) => population.column(cx, cz) };
 }
@@ -120,7 +122,7 @@ export function streamedSource({ seed, generationVersion, originX, originZ, worl
   if (generationVersion < 13) return { gen, population: null, column: terrain };
   const population = new StreamingPopulation({
     seed, originX, originZ, terrainOnly: terrain, terrain: original, biomeAt: (x, z) => manager.biomeAt(x, z),
-    manager: generationVersion >= 15 ? manager : null,
+    manager: generationVersion >= 15 ? manager : null, mapFeatures: generationVersion < NO_MAP_FEATURES_GENERATION,
   });
   return { gen, population, column: (cx, cz) => population.column(cx, cz) };
 }

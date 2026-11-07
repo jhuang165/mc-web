@@ -42,9 +42,16 @@ The user's own saves (read-only) are 1.8+ (Border*, DataVersion), so no real 1.7
 - **Minecarts of every type** (EntityList MinecartRideable … MinecartCommandBlock): Pos, Motion, Rotation, FallDistance, Fire, OnGround, CustomName; furnace Fuel/PushX/PushZ; TNT TNTFuse; hopper TransferCooldown; spawner cart through the mob-spawner reader; command cart Command, SuccessCount, TrackOutput, LastOutput; container Items with their tags. Checked by the export→import round trip only, not against native-written carts.
 - Thrown potions already imported (see [projectile NBT](projectile-nbt.md)).
 
+## MapFeatures off (generation 17, batch 18)
+
+`MapFeatures` false imports generate as streamed generation 17 for every WorldType: the generation 16 chain (native mutated-biome rule, terrain,
+caves, ravines, population, lakes, dungeons, decoration) without any structure generator, as `ChunkProviderGenerate` and `ChunkProviderFlat` construct
+none when `mapFeatures` is false. The Superflat population is replayed natively for this case (`superflat.md`). `levelGenerator` no longer
+reports an approximation for it. Worlds saved at 13, 15 and 16 keep their output; only new imports with MapFeatures off use 17.
+`options.generationVersion` accepts 13, 15, 16 or 17.
+
 ## Approximations (not exact)
 
-- MapFeatures off has no exact browser generator: overworld types use generation 13 (population and mineshafts, no villages, strongholds or temples); Superflat stays at 15 and its options decide the structures. Both are reported.
 - One clock: the browser's day clock is `DayTime`; `Time` is kept as `totalTime` for export only.
 - Hardcore is carried and played as hardcore (hardcore.md). `initialized`, LastPlayed, SizeOnDisk and newer-version keys are reported as ignored.
 - Not carried (reported in `report.level.player.lost`): non-default fly/walk speeds, effect `Ambient`, large Motion, Count 0 stacks (native keeps them; item losses are in `report.items`), Attributes beyond the base values, and any key the reader does not know.

@@ -47,17 +47,18 @@ export class StreamingPopulation {
   // live column, used only if a cell cannot be generated.
   //
   // `manager` (the WorldChunkManager) switches on the full four-feature structure chain of generation
-  // version 15; without it the cell runs mineshafts only (version 13). The stronghold ring (a biome
+  // version 15; without it the cell runs mineshafts only (version 13). `mapFeatures: false` (generation 17) runs no structure
+  // generator at all. The stronghold ring (a biome
   // search) is computed once per population object, i.e. once per world or worker, never per cell.
-  constructor({ seed, originX, originZ, terrain, biomeAt, terrainOnly, mapBlock = null, cells = 6, terrainChunks = 192, manager = null, flat = null }) {
-    this.flat = flat;
+  constructor({ seed, originX, originZ, terrain, biomeAt, terrainOnly, mapBlock = null, cells = 6, terrainChunks = 192, manager = null, flat = null, mapFeatures = true }) {
+    this.flat = flat; this.mapFeatures = mapFeatures;
     this.seed = BigInt(seed);
     this.originChunkX = originX >> 4; this.originChunkZ = originZ >> 4;
     this.terrain = terrain; this.biomeAt = biomeAt; this.terrainOnly = terrainOnly; this.mapBlock = mapBlock;
     this.originals = new Lru(terrainChunks); this.cells = new Lru(cells);
     this.materialized = new Map();
     this.generated = 0;
-    this.structureCache = manager ? (flat ? new FlatStructureCache(seed, manager, flat) : new StructureCache(seed, manager)) : null;
+    this.structureCache = manager ? (flat ? new FlatStructureCache(seed, manager, flat, mapFeatures) : mapFeatures ? new StructureCache(seed, manager) : null) : null;
   }
   original(x, z) {
     const k = key(x, z);
@@ -93,7 +94,7 @@ export class StreamingPopulation {
     const pass = new PopulationArea({
       seed: this.seed, chunkX: baseX, chunkZ: baseZ, size: CELL, margin: 1,
       terrain: (x, z) => this.original(x, z), biomeAt: this.biomeAt,
-      structures: !!this.structureCache, manager: this.structureCache?.manager, structureCache: this.structureCache, flat: this.flat,
+      structures: !!this.structureCache, manager: this.structureCache?.manager, structureCache: this.structureCache, flat: this.flat, mapFeatures: this.mapFeatures,
     }).run();
     const w = pass.world;
     // (original id, metadata) -> live id << 4 | live metadata, resolved once per state.

@@ -21,11 +21,12 @@ const intAtLeast = (value, fallback, min) => { const n = javaParseInt(value) ?? 
 const doubleOr = (value, fallback) => (typeof value === 'string' && /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?[fFdD]?$/.test(value) ? Number.parseFloat(value) : fallback);
 
 export class FlatStructureCache {
-  constructor(seed, manager, info) { this.seed = BigInt.asIntN(64, BigInt(seed)); this.manager = manager; this.info = info; this.strongholds = null; }
+  constructor(seed, manager, info, mapFeatures = true) { this.seed = BigInt.asIntN(64, BigInt(seed)); this.manager = manager; this.info = info; this.mapFeatures = mapFeatures; this.strongholds = null; }
   strongholdPositions() {
     if (!this.strongholds) {
       const o = this.info.options('stronghold');
-      this.strongholds = this.info.has('stronghold')
+      // Map features off (generation 17) builds no generator natively; the inert objects here are never searched or populated.
+      this.strongholds = this.mapFeatures && this.info.has('stronghold')
         ? strongholdPositions(this.seed, this.manager, {
           distance: Math.max(1, doubleOr(o.distance, 32)), count: intAtLeast(o.count, 3, 1), spread: intAtLeast(o.spread, 3, 1),
         })
@@ -48,10 +49,10 @@ export class FlatStructureCache {
 const made = new Map();
 export const flatStructurePopulation = (Base) => { if (!made.has(Base)) made.set(Base, makeFlat(Base)); return made.get(Base); };
 const makeFlat = (Base) => class FlatStructurePopulation extends Base {
-  constructor({ worldSeed, manager, world, generators, info }) {
+  constructor({ worldSeed, manager, world, generators, info, mapFeatures = true }) {
     super({ worldSeed, manager, world, generators });
     this.info = info;
-    this.active = FLAT_STRUCTURE_ORDER.filter(([, feature]) => info.has(feature)).map(([key]) => key);
+    this.active = mapFeatures ? FLAT_STRUCTURE_ORDER.filter(([, feature]) => info.has(feature)).map(([key]) => key) : [];
   }
   // ChunkProviderFlat.provideChunk: each enabled generator's recursive search, in list order.
   searchChunk(chunkX, chunkZ) {
