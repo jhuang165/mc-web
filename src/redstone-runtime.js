@@ -25,6 +25,8 @@ import { installShapedBlocks, trapdoorSupportOriginal } from "./shaped-blocks.js
 import { blockProperties } from "./redstone.js";
 import { LiveRedstone } from "./redstone-live.js";
 import { installPistons } from "./piston-live.js";
+import { pistonPushExtras } from "./piston-push.js";
+import { setMovingBoxes } from "./entities.js";
 import { applyPlayerEdit } from "./player-edit-simulation.js";
 import { pushBox, ENTITY_TYPES } from "./entities.js";
 import { LEVER, STONE_BUTTON, REPEATER } from "./redstone-blocks.js";
@@ -184,12 +186,12 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
         height: 1.8,
       },
       mobs: () => game.mobs?.()?.entities ?? [],
-      extra: () => [
-        ...(game.items?.() ?? []).map((e) => ({ box: [e.x - ITEM_HALF, e.y, e.z - ITEM_HALF, e.x + ITEM_HALF, e.y + ITEM_SIZE, e.z + ITEM_HALF], move: (dx, dy, dz) => { e.x += dx; e.y += dy; e.z += dz; } })),
-        ...(game.primed?.() ?? []).map((e) => ({ box: [e.x - TNT_HALF, e.y, e.z - TNT_HALF, e.x + TNT_HALF, e.y + TNT_SIZE, e.z + TNT_HALF], move: (dx, dy, dz) => { e.x += dx; e.y += dy; e.z += dz; } })),
-      ],
+      extra: () => pistonPushExtras(world, game),
     },
   });
+
+  // BlockPistonMoving's collision box joins World.getCollidingBoundingBoxes (entities.js collisionBoxes): entities stand on and bump into moving blocks.
+  setMovingBoxes((box) => pistons.collisionBoxes(box));
 
   // One 20 TPS game tick: scheduled block updates, block events and the tile-entity loop (pistons), then the pistons'
   // entity pushes. main.js calls this right after the fluid and fire scheduled ticks (see public/research/redstone-live.md).
@@ -300,6 +302,6 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
       else if (Array.isArray(record?.pistons)) pistons.restore(record.pistons);
       flush();
     },
-    dispose: () => redstone.dispose(),
+    dispose: () => { setMovingBoxes(null); redstone.dispose(); },
   };
 }

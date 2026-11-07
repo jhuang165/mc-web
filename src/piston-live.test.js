@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { fromOriginal } from "./block-registry.js";
+import { pistonPushExtras, bodyMove } from "./piston-push.js";
+import { moveEntity, setMovingBoxes } from "./entities.js";
 import { RedstoneWorld } from "./redstone.js";
 import { installPistons, tileOffset, tileProgress, movingParts, shortenHead, pistonTileFields, ORIGINAL_MOVING, ORIGINAL_HEAD } from "./piston-live.js";
 import { pistonQuads, PISTON_HEAD, PISTON, STICKY_PISTON } from "./dispenser-piston.js";
@@ -9,7 +12,7 @@ import { pistonQuads, PISTON_HEAD, PISTON, STICKY_PISTON } from "./dispenser-pis
 const ref = JSON.parse(readFileSync(new URL("../public/research/piston-live-reference.json", import.meta.url)));
 const [ox, oy, oz] = ref.origin, [sx, sy, sz] = ref.size;
 const INTERNAL = { 1: 1, 29: STICKY_PISTON, 33: PISTON, 34: PISTON_HEAD };
-const blocks = { toInternal: (id, meta) => (id === 0 ? null : { id: INTERNAL[id] ?? id, meta }) };
+const blocks = { toInternal: (id, meta) => (id === 0 ? null : { id: INTERNAL[id] ?? fromOriginal(id, meta)?.id ?? id, meta: fromOriginal(id, meta)?.meta ?? meta }) };
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`);
 
 function build(s) {
@@ -52,6 +55,13 @@ for (const s of ref.scenarios)
           assert.equal(tileProgress(tile, pt), Math.fround(prog));
           assert.deepEqual(tileOffset(tile, pt).map((v) => v + 0), off.map((v) => Math.fround(v) + 0));
         });
+      });
+      // World.getCollidingBoundingBoxes over each moving cell: BlockPistonMoving's own box (partial 0 progress).
+      const cellBoxes = w.pistonTiles().map((t) => p.collisionBoxes([t.x + 0.001, t.y + 0.001, t.z + 0.001, t.x + 0.999, t.y + 0.999, t.z + 0.999]).map((b) => [b[0] - ox, b[1] - oy, b[2] - oz, b[3] - ox, b[4] - oy, b[5] - oz]));
+      assert.equal(cellBoxes.length, s.collide[tick - 1].length);
+      cellBoxes.forEach((list, k) => {
+        assert.equal(list.length, s.collide[tick - 1][k].length, `collision box count tick ${tick}`);
+        list.forEach((b, i) => b.forEach((v, j) => close(v, s.collide[tick - 1][k][i][j], `collision box tick ${tick}`)));
       });
       p.pushBoxes().forEach((b, k) => {
         const nb = s.pushBoxes[tick - 1][k];
@@ -182,4 +192,63 @@ test("Java round trip: moving pistons export as Piston tile entities, import bac
   // (A finished head with no base beside it breaks on its neighbour update, as BlockPistonExtension does.)
   for (const e of saved) if (e.block !== ORIGINAL_HEAD) assert.equal(fresh.getBlock(e.x, e.y, e.z), e.block);
   assert.ok(saved.some((e) => e.block !== ORIGINAL_HEAD));
+});
+
+test("reference covers all six facings, odd collision shapes and the moving-block collision query", () => {
+  const names = ref.scenarios.map((s) => s.name);
+  for (const n of ["south-facing", "standing-on-moving-block", "odd-block-slab-top", "odd-block-fence", "odd-block-carpet", "trapdoor-facing-0", "trapdoor-facing-4"]) assert.ok(names.includes(n), n);
+  const facings = new Set(ref.scenarios.flatMap((s) => s.te.flat().map((r) => r[5])));
+  assert.deepEqual([...facings].sort(), [0, 1, 2, 3, 4, 5]);
+  assert.ok(ref.scenarios.reduce((n, s) => n + s.collide.flat(2).length, 0) >= 100);
+});
+
+test("no sticky entity pull: retracting a sticky piston moves only the stored block, never an entity on it (1.7.10 has no slime)", () => {
+  const s = ref.scenarios.find((x) => x.name === "sticky-extend-retract"), w = build(s), ents = [], moves = [], p = installPistons({ redstone: w, blocks, entities: { extra: () => ents } });
+  for (let tick = 1; tick <= s.ticks; tick++) step(w, p, s, tick, ents, moves);
+  // The native moves of this scenario are all pushes along +x by the delta of the extension (+0.0625 steps) or the final 0.25;
+  // none is negative, so no entity was ever dragged back on the retract.
+  for (const m of s.moves) assert.ok(m[2] >= 0 && m[3] === 0 && m[4] === 0, JSON.stringify(m));
+  assert.ok(moves.every((m) => m[2] >= 0));
+});
+
+test("piston-push: every pushable entity system moves with moveEntity along the delta and stops at walls", () => {
+  const world = { get: (x, y, z) => (y === 0 || (x === 3 && y === 1 && z === 1) ? 1 : 0), getMeta: () => 0, solid: (x, y, z) => y === 0 || (x === 3 && y === 1 && z === 1) };
+  const orb = { x: 1.5, y: 1, z: 1.5, posY: 1.25, bb: [1.25, 1, 1.25, 1.75, 1.5, 1.75], vx: 0, vy: 0, vz: 0 };
+  const cart = { x: 1.5, y: 1, z: 3.5, posY: 1.35, bb: [1.01, 1, 3.01, 1.99, 1.7, 3.99] };
+  const game = {
+    items: () => [{ x: 1.5, y: 1, z: 2.5 }],
+    primed: () => [{ x: 1.5, y: 1, z: 4.5 }],
+    falling: () => [{ x: 1.5, y: 1, z: 5.5 }],
+    orbs: () => [orb],
+    minecarts: () => ({ carts: [cart] }),
+    boats: () => [],
+  };
+  const extras = pistonPushExtras(world, game);
+  assert.equal(extras.length, 5);
+  for (const e of extras) e.move(0.25, 0, 0);
+  const orbX = (orb.bb[0] + orb.bb[3]) / 2;
+  assert.ok(Math.abs(orbX - 1.75) < 1e-9 && Math.abs(orb.x - 1.75) < 1e-9 && Math.abs(orb.posY - 1.25) < 1e-9);
+  assert.ok(Math.abs(cart.x - 1.75) < 1e-9 && Math.abs(cart.bb[3] - 2.24) < 1e-9, JSON.stringify(cart));
+  const item = { x: 2.8, y: 1, z: 1.5 };
+  bodyMove(world, item, 0.25, 0.25, 0.5, 0, 0);
+  assert.ok(item.x + 0.125 <= 3 + 1e-9, "the wall at x = 3 stops the item"); // item half width 0.125 against the cell at x 3
+});
+
+test("moving-block collision: an entity standing on a block being lifted is carried by the box, and the box blocks sideways motion", () => {
+  const s = ref.scenarios.find((x) => x.name === "vertical-up"), w = build(s), ents = [], moves = [], p = installPistons({ redstone: w, blocks, entities: { extra: () => ents } });
+  const world = { get: () => 0, getMeta: () => 0, solid: () => false, isSolid: () => false };
+  setMovingBoxes((b) => p.collisionBoxes(b));
+  try {
+    for (let tick = 1; tick <= 2; tick++) step(w, p, s, tick, ents, moves);
+    const t = w.pistonTiles()[0];
+    const boxes = p.collisionBoxes([t.x, t.y, t.z, t.x + 1, t.y + 1, t.z + 1]);
+    assert.equal(boxes.length, 1);
+    const body = { x: t.x + 0.5, y: boxes[0][4], z: t.z + 0.5, vx: 0, vy: -0.5, vz: 0, onGround: false };
+    // Falling onto the moving block's top face stops at its top (the block gives a floor).
+    moveEntity(world, body, 0.6, 1.8, 0, -0.5, 0);
+    assert.ok(body.y >= boxes[0][4] - 1e-9, `stopped on the moving block: ${body.y} vs ${boxes[0][4]}`);
+    assert.equal(body.onGround, true);
+  } finally {
+    setMovingBoxes(null);
+  }
 });

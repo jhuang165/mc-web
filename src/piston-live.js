@@ -100,6 +100,10 @@ export function shortenHead(quads, facing) {
   });
 }
 
+// Stored blocks whose native pool box differs from their render bounds when read through the moving cell (probed natively with
+// PistonLiveProbe: odd-block-* and trapdoor-facing-* scenarios): carpet comes out zero high ([0,0,0,1,0,1], native stale bounds), fences, nether fences and farmland as the full cube
+// (BlockFence / BlockFarmland keep their constructor bounds), soul sand 7/8 high, a cobblestone wall its post 1.5 high. Every other stored block uses blockBounds with the moving cell's metadata.
+const POOL_OVERRIDES = { 171: [0, 0, 0, 1, 0, 1], 85: [0, 0, 0, 1, 1, 1], 113: [0, 0, 0, 1, 1, 1], 60: [0, 0, 0, 1, 1, 1], 88: [0, 0, 0, 1, 0.875, 1], 139: [0.25, 0, 0.25, 0.75, 1.5, 0.75] };
 const isBase = (id) => id === ORIGINAL_PISTON || id === ORIGINAL_STICKY;
 // TileEntityRendererPiston.renderTileEntityAt as drawing parts: [{ block, meta, quads?, offset }] in the cell's own frame.
 // Skips an air block or a finished move (progress >= 1). `internal(original, meta)` maps to the live ids.
@@ -134,9 +138,14 @@ export function installPistons({ redstone, scene = null, world = null, entities 
     // Native: Blocks.piston_head keeps whatever bounds it was last given (a fresh game: the full cube, recorded by
     // PistonLiveProbe); BlockPistonExtension has no getCollisionBoundingBoxFromPool of its own.
     if (tile.block === ORIGINAL_HEAD) return [0, 0, 0, 1, 1, 1];
+    if (POOL_OVERRIDES[tile.block]) return POOL_OVERRIDES[tile.block].slice();
+    // Fence gate: the 1.5 high collision slab (closed on z for even metadata, x for odd), not the 1.0 render box.
+    if (tile.block === 107) return stored.meta & 1 ? [0.375, 0, 0, 0.625, 1.5, 1] : [0, 0, 0.375, 1, 1.5, 0.625];
+    // Native: the stored block's box methods run with the world at this cell, which holds the MOVING block. A top slab (stone or
+    // wood) still comes out as the bottom box (probed: odd-block-slab-top, wooden-slab); other blocks follow their own metadata.
     const view = {
       get: (x, y, z) => (x === tile.x && y === tile.y && z === tile.z ? stored.id : world?.get ? world.get(x, y, z) : 0),
-      getMeta: (x, y, z) => (x === tile.x && y === tile.y && z === tile.z ? stored.meta : world?.getMeta ? world.getMeta(x, y, z) : 0),
+      getMeta: (x, y, z) => (x === tile.x && y === tile.y && z === tile.z ? (tile.block === 44 || tile.block === 126 ? stored.meta & 7 : stored.meta) : world?.getMeta ? world.getMeta(x, y, z) : 0),
     };
     try {
       const b = blockBounds(view, tile.x, tile.y, tile.z);
@@ -247,6 +256,17 @@ export function installPistons({ redstone, scene = null, world = null, entities 
     // Current push box of every tile (BlockPistonMoving.func_149964_a at the tile's progress), null when it has none.
     pushBoxes: () => redstone.pistonTiles().map((t) => pushBoxOf(t, boundsOf(t), pushArgument(t, t.progress))),
     moves: moved,
+    // BlockPistonMoving.getCollisionBoundingBoxFromPool for every moving tile whose box meets `box`: the stored block's box
+    // shifted by func_149964_a at partial 0 (tile.lastProgress; extending uses 1 - p, retracting p itself).
+    collisionBoxes(box) {
+      const out = [];
+      for (const t of redstone.pistonTiles()) {
+        if (t.x + 1 <= box[0] || t.x >= box[3] || t.y + 1 <= box[1] || t.y >= box[4] || t.z + 1 <= box[2] || t.z >= box[5]) continue;
+        const b = movingCollisionBox(t, boundsOf(t), tileProgress(t, 0));
+        if (b && b[3] > box[0] && b[0] < box[3] && b[4] > box[1] && b[1] < box[4] && b[5] > box[2] && b[2] < box[5]) out.push(b);
+      }
+      return out;
+    },
     // Moving tiles in a JSON-able list: world position, stored ORIGINAL block and metadata, facing, progress, extending
     // (the TileEntityPiston NBT) plus renderHead and lastProgress, which the Java NBT does not carry.
     save() {
