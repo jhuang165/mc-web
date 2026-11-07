@@ -26,13 +26,14 @@ async function library(prefix) {
   throw new Error(`Missing ${prefix}*.jar; list library JARs in MC_PROBE_LIBS.`);
 }
 const libs = await Promise.all(["guava-", "log4j-api-", "commons-lang3-", "authlib-", "netty-", "commons-io-"].map(library));
-const out = path.join(research, "structure-area-probe"), classes = path.join(out, "classes"), probe = path.join(out, "probe");
+const out = path.join(research, process.env.STRUCTURE_REFERENCE ? "biome-audit-structures-probe" : "structure-area-probe"), classes = path.join(out, "classes"), probe = path.join(out, "probe");
 await rm(classes, { recursive: true, force: true }); await mkdir(classes, { recursive: true });
 await exec("unzip", ["-q", "-o", jar, "*.class", "-d", classes], { maxBuffer: 1 << 24 }); await mkdir(probe, { recursive: true });
 const cp = [probe, classes, jar, ...libs].join(path.delimiter);
 const probes = ["TerrainProbe","DecorationFeatureProbe","SpringProbe","BiomeDecoratorProbe","MineshaftProbe","MineshaftWorldProbe","DungeonProbe","BiomeOverrideProbe","PopulationTailProbe","PopulationWorldProbe","StructurePopulationWorldProbe","StructureAreaProbe"];
 await exec("javac", ["-nowarn","-cp",cp,"-d",probe,...probes.map((n)=>path.join(root,`probes/${n}.java`))]);
-const AREAS = ["village120:120:8:12:6", "village110:110:-15:12:6", "desertVillage126:126:-12:4:6", "strongholdLibraryPortal9:9:-10:-66:4", "strongholdLibraryPortal11:11:-2:-45:6",
+// STRUCTURE_AREAS_FILE (a JSON list of label:seed:chunkX:chunkZ:size) and STRUCTURE_REFERENCE (an output file name under public/research) run the biome-decoration audit areas (tools/probes/biome-audit-structure-areas.json) instead.
+const AREAS = process.env.STRUCTURE_AREAS_FILE ? JSON.parse(await readFile(process.env.STRUCTURE_AREAS_FILE, "utf8")) : ["village120:120:8:12:6", "village110:110:-15:12:6", "desertVillage126:126:-12:4:6", "strongholdLibraryPortal9:9:-10:-66:4", "strongholdLibraryPortal11:11:-2:-45:6",
   "desertTemple120:120:8:18:4", "desertTemple17:17:9:-55:4", "jungleTemple671:671:0:13:4", "swampHut579:579:6:10:4"];
 const { stdout, stderr } = await exec("java", ["-Xmx3g","-cp",cp,"StructureAreaProbe",...AREAS], { maxBuffer: 1 << 29 });
 await writeFile(path.join(out,"raw.jsonl"),stdout); await writeFile(path.join(out,"trace.txt"),stderr);
@@ -49,5 +50,5 @@ const reference={target:"Minecraft Java 1.7.10",clientSha1,srgSha256:createHash(
  method:"Unchanged ChunkProviderGenerate provides every chunk of an area (terrain, caves, ravines, all four start searches), then populates each in x-outer/z-inner order. All four MapGenStructure implementations run in provider order for search and population. Native World/Chunk block callbacks and population tails run; ordered calls/writes, structure maps, tiles, entities, pending ticks, drops, provider Random and World.rand are captured. World light services remain the explicit full/block-zero, sky-15 fixture used by PopulationWorldProbe.",
  records};
 const text=JSON.stringify(reference,null,2)+"\n";assert.ok(text.length<40_000_000);
-await writeFile(path.join(root,"../public/research/structure-area-reference.json"),text);
+await writeFile(path.join(root,"../public/research", process.env.STRUCTURE_REFERENCE || "structure-area-reference.json"),text);
 console.log("Native structure areas:",records.length,"areas,",records.reduce((n,r)=>n+r.steps.length,0),"populated chunks,",records.reduce((n,r)=>n+r.steps.reduce((m,x)=>m+x.writeCount,0),0),"writes");

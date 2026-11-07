@@ -20,6 +20,7 @@ import { STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, endFrameBoxes, caul
 import { REDSTONE_WIRE, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, LEVER, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, isRedstoneBlock, redstoneBounds, wireArms, wireClimbs, wireTint } from './redstone-blocks.js';
 import { REDSTONE_TORCH, REDSTONE_TORCH_OFF, COMPARATOR, COMPARATOR_POWERED, DAYLIGHT_SENSOR, isRedstone2Block, isCube2, redstoneBounds2 } from './redstone-blocks-2.js';
 import { tileByName } from './block-textures.js';
+import { lilyPadCornerUv } from "./lily-pad.js";
 import { BiomeColorField, PINE, BIRCH, LILY_PAD_COLOR } from "./biome-colors.js";
 import { biomeFacts } from "./biomes.js";
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS, namedTile } from "./block-textures.js";
@@ -389,6 +390,8 @@ export class VoxelScene {
       if (b === STAINED_GLASS && nb === b && w.getMeta(x + f.n[0], y + f.n[1], z + f.n[2]) === w.getMeta(x, y, z)) return;
       const snowed = b === 1 && (w.get(x, y + 1, z) === SNOW_LAYER || w.get(x, y + 1, z) === 23);
       const corners = f.v.map((v) => [v[0], v[1] * h, v[2]]), r = tileRect(blockTile(b, fi, lit, w.getMeta(x, y, z), snowed)), uvs = rectUvs(r);
+      // RenderBlocks.renderBlockLilyPad: the top and underside quads take a hashed one-of-four rotation of the texture (lily-pad.js; native minV is this atlas's v1).
+      if (b === LILY_PAD) f.v.forEach((v, i) => { const [u, t] = lilyPadCornerUv(x, y, z, v[0], v[2]); uvs[i] = [u ? r.u1 : r.u0, t ? r.v0 : r.v1]; });
       // RenderBlocks.renderBlockQuartz: a pillar lying on x (meta 3) turns the top, bottom and z faces a quarter, one on z (meta 4) the x faces.
       if (b === QUARTZ_BLOCK) { const qm = w.getMeta(x, y, z); if ((qm === 3 && fi >= 2) || (qm === 4 && fi < 2)) uvs.push(uvs.shift()); }
       // Side faces of short blocks crop the texture from the top, as renderMaxY does.
