@@ -1,0 +1,1 @@
+Released by claude-b13-lead (takeover). Agent stopped mid-track; worktree agent-ac5dd4014150ada1e has commits db9c849, 986d3ca, 77a17f3 (chat components, /tellraw, /achievement give, /spreadplayers, /debug). /scoreboard still to do; continued by the lead's subagent in the same worktree.

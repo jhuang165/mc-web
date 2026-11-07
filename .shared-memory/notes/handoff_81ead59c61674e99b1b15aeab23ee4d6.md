@@ -1,0 +1,8 @@
+Batch 13 level.dat/player/stats import, branch worktree-agent-a6f1fd934bb69d233, commits 953a29b (code) and ca2fa2f (docs), not merged or pushed.
+- New: src/level-dat.js reads WorldInfo and EntityPlayer, checked against 38 LevelDatProbe records in public/research/level-dat-reference.json. importJavaRegionArea({level, player, stats}) continues the save as a streamed world with the same seed, WorldType (incl. default_1_1) and Superflat options in the native frame.
+- Region import now carries Painting/ItemFrame (checked against the 11 native nbt-read records in hanging-reference) and every minecart type (round trip only). stats/<uuid>.json goes to record.stats/achievements with exploreAllBiomes progress.
+- levelNbt now writes the native key set (no Difficulty, per-type generatorVersion, GameRules, MapFeatures, hardcore, HealF/Health, effects, bed spawn, Attributes). world-import keeps the new fields. CLI gains --save/--level/--player-file/--stats/--generation.
+- Tests: npm test 3451/3451 pass; npm run build passes.
+- Approximate: MapFeatures off (gen 13, or flat options), single DayTime clock (Time kept as totalTime), hardcore not enforced, flying/SpawnForced/Sleeping/Ambient/fly speeds not carried, Nether/End player placed at the spawn, UUID not written, one 8x8 area.
+- Not done: an in-browser save-folder picker; native-written cart records. No 1.7.10 save is available locally (the user's saves are 1.8+); a 1.12 save imported via --save as a smoke check.
+- Merge hazards: region-import.js, region-export.js, world-import.js, stats.js, java-world.js, and docs parity.md/remaining-gaps.md Priority 5. main.js was not touched.
