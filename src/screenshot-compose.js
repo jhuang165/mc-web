@@ -1,7 +1,7 @@
 // F2 with the GUI: native ScreenShotHelper reads the whole framebuffer, so the HUD, chat and any open screen are in the PNG. Here the
 // world is a WebGL canvas and the GUI is DOM, so the DOM is rasterised through an SVG foreignObject (the page's matching CSS rules,
 // every image and the Minecraft font inlined as data urls, so the canvas stays untainted) and drawn over the canvas frame.
-// Limits (browser-only): a WebGL canvas inside the DOM (the title panorama) comes out transparent, :hover and focus rings follow the
+// Limits (browser-only): the title panorama WebGL canvas is read with toDataURL, which needs preserveDrawingBuffer (set in menu-panorama.js, batch 17; not browser-verified), :hover and focus rings follow the
 // live state, and the capture is taken a few milliseconds after the frame.
 const URL_IN_CSS = /url\(\s*(["']?)(?!data:|#|blob:)([^"')]+)\1\s*\)/g;
 

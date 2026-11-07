@@ -31,7 +31,7 @@ const FACES = [null, [90, 0, 1, 0], [180, 0, 1, 0], [-90, 0, 1, 0], [90, 1, 0, 0
 export class Panorama {
   constructor(canvas, base = "/media/1.7.10/gui/title/background/panorama_") {
     this.canvas = canvas;
-    const gl = (this.gl = canvas.getContext("webgl", { alpha: false, antialias: false, depth: false, premultipliedAlpha: false }));
+    const gl = (this.gl = canvas.getContext("webgl", { alpha: false, antialias: false, depth: false, premultipliedAlpha: false, preserveDrawingBuffer: true }));
     if (!gl) return;
     const shader = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
     const prog = (this.prog = gl.createProgram());

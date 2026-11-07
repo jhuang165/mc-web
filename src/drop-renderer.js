@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import { entityMaterial } from "./light-material.js";
 import { itemTexture, pixelTexture, glintMesh, stairItemGeometry } from "./first-person.js";
+import { itemFrameTag } from "./item-animation.js";
 import { STAIRS } from "./stairs.js";
 import { stackHasEffect } from "./armor-enchantments.js";
 import { ITEMS } from "./survival.js";
@@ -84,7 +85,7 @@ export class DropRenderer {
     }
     group.add(spin);
     this.scene.add(group);
-    return { group, spin, material, overlayMaterial, flat: !!url && flat, key: stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + (glint ? 1 : 0) + ":" + color + ":" + (flat ? "f" : "d"), hover };
+    return { group, spin, material, overlayMaterial, flat: !!url && flat, key: stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + itemFrameTag(url) + ":" + (glint ? 1 : 0) + ":" + color + ":" + (flat ? "f" : "d"), hover };
   }
   remove(pile) {
     this.scene.remove(pile.group);
@@ -123,7 +124,7 @@ export class DropRenderer {
       seen.add(e);
       let pile = this.piles.get(e);
       const leather = leatherItemLayers(stack.id, stack.color),
-        key = stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + (stackHasEffect(stack, ITEMS[stack.id]) ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + (flatItemSprites() ? "f" : "d");
+        key = stack.id + ":" + (stack.damage || 0) + ":" + copies(stack.count) + ":" + itemFrameTag(itemTexture(stack.id, stack.damage)) + ":" + (stackHasEffect(stack, ITEMS[stack.id]) ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + (flatItemSprites() ? "f" : "d");
       if (pile?.key !== key) {
         if (pile) this.remove(pile);
         pile = this.build(stack, e.hover);

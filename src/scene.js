@@ -1085,6 +1085,7 @@ export class VoxelScene {
   render(time, dt = 1 / 60) {
     // Strip animations come from the .png.mcmeta files (texture-animation.js): vanilla's reproduce the old hard-coded phases exactly.
     const tick = Math.floor(time * TICKS_PER_SECOND);
+    this.textures.animate?.(tick); // block atlas tiles animated by a pack's .png.mcmeta (block-textures.js)
     for (const strip of this.strips) if (strip.anim) strip.uv.w = stripOffset(strip.anim.frameAtTick(tick), strip.frames);
     for (let budget = 2; budget > 0 && this.dirty.size; budget--) this.buildChunk(...this.dirty.values().next().value.split(",").map(Number));
     // World.getSkyColor reads the temperature at the viewer's own block, so it follows the player across biomes.
