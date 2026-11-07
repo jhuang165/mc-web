@@ -90,6 +90,8 @@ test("boats and falling blocks trip a string; thrown potions and bottles only ho
     assert.ok(on === 2 && off === 31, `${n}: native line powered at tick 2, released only after the entity leaves at 30`);
   }
   assert.equal(frames("bat-ignored").some((x) => x.length), false);
+  // Batch 19: an idle potion or bottle in the cell, no collide call, never powers an idle line natively (42 scenarios replayed by tools/verify-tripwire.mjs).
+  for (const n of ["potion-idle", "exp-bottle-idle"]) assert.equal(frames(n).some((x) => x.length), false, n);
   for (const c of ["xi", "xj"]) assert.equal(reference.collisionCallers[c].moveEntity, true, `${c} reaches func_145775_I through moveEntity`);
   assert.equal(reference.tripwireEntities.ignoresPlates.boat || reference.tripwireEntities.ignoresPlates.fallingBlock, false);
   const lit = (g) => [g.meta(49, 62, 55), g.meta(53, 62, 55)];

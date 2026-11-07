@@ -869,6 +869,8 @@ export class Brain {
     this.targets = new TaskList();
     const A = type.ai, wheat = ai.breedItems[e.type];
     if (e.type === "zombie") {
+      // Every EntityAI* of a zombie draws on Entity.rand (getRNG), the same stream as its living-sound roll (zombie-door-walk-reference.json).
+      if (ai.deps.entityRandom) this.rand = ai.deps.entityRandom(e);
       // EntityZombie (yq): swim 0, break door 1 (added by setBreakDoorsAItask, see below), attack players 2, attack villagers 4 (long memory),
       // move towards restriction 5, move through village 6, wander 7, watch 8, look idle 8; targets hurt-by 1,
       // nearest player 2 and nearest villager 2 (zombie-villager.md).

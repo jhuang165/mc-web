@@ -157,6 +157,7 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
   } else if (type === 'pigman') {
     // EntityPigZombie.writeEntityToNBT / readEntityFromNBT: only the short Anger (1.7.10 has no HurtBy tag); the sword is Equipment[0].
     record.angerLevel = tagValue(entity, 'Anger', NBT.SHORT, 0);
+    record.canBreakDoors = tagValue(entity, 'CanBreakDoors', NBT.BYTE, 0) !== 0; // yq.a(dh) reads it for a pigman too; its AI is off, so only saved
     const equipment = tagValue(entity, 'Equipment', NBT.LIST);
     if (equipment?.elementType === NBT.COMPOUND && equipment.items[0]) record.held = convertItem(equipment.items[0]) ?? null;
   } else if (type === 'bat') {
@@ -231,9 +232,11 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
   if (type === 'horse') { Object.assign(record, horseNbtFields(tag, convertItem)); for (const k of HORSE_NBT_KEYS) kept.add(k); }
   if (type === 'pigman') {
     record.angerLevel = tagValue(tag, 'Anger', NBT.SHORT, 0);
+    record.canBreakDoors = tagValue(tag, 'CanBreakDoors', NBT.BYTE, 0) !== 0;
     const equipment = tagValue(tag, 'Equipment', NBT.LIST);
     if (equipment?.elementType === NBT.COMPOUND && equipment.items[0]) record.held = convertItem(equipment.items[0]) ?? null;
     kept.add('Anger');
+    kept.add('CanBreakDoors');
   }
   if (type === 'slime' || type === 'magma_cube') { record.size = slimeSizeFromNbt(tagValue(tag, 'Size', NBT.INT, 0)); kept.add('Size'); }
   // EntityEnderman.readEntityFromNBT: carried / carriedData (shorts; the original block id and metadata).

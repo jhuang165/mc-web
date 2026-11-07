@@ -720,7 +720,7 @@ export class EntityWorld {
       ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer, chickenJockey: e.chickenJockey === true } : {}), // IsChickenJockey (mob-riding.md)
       playerRides: (e.type === "horse" || e.type === "pig") && e.playerRides === true ? true : undefined, // consumed by restorePlayerVehicle
       riding: typeof e.riding === "string" && /^(mob|boat|cart)-\d+$/.test(e.riding) ? e.riding : undefined, // the mount's id, linked by linkRiders
-      ...(e.type === "zombie" ? { canBreakDoors: e.canBreakDoors === true, maxHealth: Number.isFinite(e.maxHealth) && e.maxHealth > t.health ? Math.min(e.maxHealth, 2048) : undefined } : { canBreakDoors: undefined, maxHealth: undefined }),
+      ...(e.type === "zombie" ? { canBreakDoors: e.canBreakDoors === true, maxHealth: Number.isFinite(e.maxHealth) && e.maxHealth > t.health ? Math.min(e.maxHealth, 2048) : undefined } : { canBreakDoors: e.type === "pigman" ? e.canBreakDoors === true : undefined, maxHealth: undefined }), // a pigman only saves the flag: EntityPigZombie.isAIEnabled is false, so the task never runs (mob-riding.md)
       // EntityBat.readEntityFromNBT: BatFlags bit 1 is the hanging state (datawatcher 16).
       ...(e.type === "bat" ? { batHanging: e.batHanging === true } : {}),
       ...(isSpider(e.type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
@@ -1032,6 +1032,7 @@ export class EntityWorld {
       e.knockbackResistance = r.knockback;
       e.followRange = r.followRange;
       if (r.child) this.chickenJockeyRolls(e, r);
+      if (type === "pigman") e.canBreakDoors = !!(r.doors || r.leader); // yh.a(sy) runs yq.a(sy): the same roll, stored but never run
       if (type === "zombie") {
         e.reinforcement = reinforcementChance(e.reinforcement + r.reinforcementBonus);
         // EntityZombie.a(sy): the child's chicken (5 %: the first free chicken in a 5 x 3 x 5 box, and nothing else when

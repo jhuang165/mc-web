@@ -19,6 +19,8 @@ public class VillageLiveProbe {
     static boolean day = true, rain = false;
     static List<String> events = new ArrayList<>();
     public boolean i(int x, int y, int z) { for (int[] r : roofs) if (x >= r[0] && x <= r[2] && z >= r[1] && z <= r[3]) return false; return true; }
+    // setBlockToAir (batch 19 door walk): the door cell goes, and BlockDoor.onNeighborBlockChange takes the other half with it.
+    public boolean f(int x, int y, int z) { VillagerProbe.World.cells.remove(VillagerProbe.key(x, y, z)); VillagerProbe.World.cells.remove(VillagerProbe.key(x, y + 1, z)); VillagerProbe.World.cells.remove(VillagerProbe.key(x, y - 1, z)); return true; }
     public boolean w() { return day; }
     public boolean Q() { return rain; }
     public void a(sa e, byte b) { events.add(e.getClass().getSimpleName() + "|" + b); }
