@@ -257,7 +257,7 @@ test("doMobSpawning false stops the pass; Peaceful still spawns animals but no m
   assert.ok(mobs.entities.some((e) => creatureTypeOf(e.type) === "monster"));
 });
 
-test("streamed worlds: points are drawn only in ticking chunks, the cap counts the native 289 eligible chunks and every loaded mob", () => {
+test("streamed worlds: points are drawn in every resident chunk (ticking or not), the cap counts the native 289 eligible chunks and every loaded mob", () => {
   const h = 256, chunks = new Map();
   const chunkAt = (cx, cz) => {
     if (cx < 0 || cz < 0 || cx >= 8 || cz >= 8) return null;
@@ -269,19 +269,22 @@ test("streamed worlds: points are drawn only in ticking chunks, the cap counts t
   const mobs = liveMobs(world);
   mobs.lightAt = () => 0; mobs.skyLightAt = () => 0;
   assert.equal(mobs.spawnChunkTop(3, 3), 64);
-  assert.equal(mobs.spawnChunkTop(0, 3), -1);
-  assert.equal(mobs.spawnChunkTop(8, 3), -1);
+  assert.equal(mobs.spawnChunkTop(0, 3), 64, "resident but not ticking: still eligible");
+  assert.equal(mobs.spawnChunkTop(8, 3), -1, "not resident: skipped without draws");
   const player = { x: 64.5, y: 65, z: 64.5 };
   let caps = 0;
   const seen = new Set();
   const real = mobs.naturalSpawn.bind(mobs);
   for (let i = 0; i < 120; i++) { real(player, { time: 18000 }, true); caps = mobs._spawner.ctx.capChunks; }
   assert.equal(caps, 289);
-  // Points are drawn only in ticking chunks; a group's jitter (four +-5 steps) may carry it up to 20 blocks into a resident one.
+  // Points are drawn in the 8 x 8 resident chunks; a group's jitter (four +-5 steps) may carry it up to 20 blocks out of them.
+  let outer = 0;
   for (const e of mobs.entities) {
     seen.add(creatureTypeOf(e.type));
-    assert.ok(e.x > 16 - 21 && e.x < 112 + 21 && e.z > 16 - 21 && e.z < 112 + 21, `${e.type} at ${e.x},${e.z}`);
+    assert.ok(e.x > -21 && e.x < 128 + 21 && e.z > -21 && e.z < 128 + 21, `${e.type} at ${e.x},${e.z}`);
+    if (e.x < 16 || e.x >= 112 || e.z < 16 || e.z >= 112) outer++;
   }
+  assert.ok(outer > 0, "the resident ring outside the ticking window is used");
   assert.ok(seen.has("monster") && seen.has("creature"));
   // The monster cap is 70 * 289 / 256 = 79: a full pass stops once more than 79 count.
   const monsters = mobs.entities.filter((e) => creatureTypeOf(e.type) === "monster" && !e.persistent).length;
@@ -421,4 +424,16 @@ test("a portal pigman is a pig zombie with the golden sword roll, a random yaw a
   assert.ok(mobs.entities.includes(e));
   assert.equal(e.rotationYaw, e.rotationYawHead);
   assert.ok(Math.abs(e.rotationYaw - (Math.fround(want * 360) > 180 ? Math.fround(want * 360) - 360 : Math.fround(want * 360))) < 1e-4);
+});
+
+test("a despawnable mob frozen outside the ticking window leaves like a native mob that keeps updating", () => {
+  const h = 256, block = new Uint8Array(256 * h);
+  const world = { ...daylightFlat(), streaming: true, originX: 0, originZ: 0, chunkAt: () => ({ height: h, blocks: block }), isTicking: (x, z) => x >= 16 && x < 112 && z >= 16 && z < 112, inside: () => true };
+  const mobs = liveMobs(world);
+  const player = { x: 64.5, y: 65, z: 64.5 };
+  const add = (x, z) => { const e = mobs.create("zombie", x, 65, z); mobs.entities.push(e); return e; };
+  const far = add(64 + 200, 64), ring = add(120, 64);
+  for (let i = 0; i < 400; i++) mobs.sweepFrozen(player);
+  assert.ok(!mobs.entities.includes(far), "beyond 128 blocks it goes at once");
+  assert.ok(!mobs.entities.includes(ring), "beyond 32 blocks, idle past 600 ticks: the 1 in 800 roll lands within 8000 ticks");
 });
