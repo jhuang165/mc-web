@@ -143,6 +143,13 @@ export function livingHurt(e, amount, source, host) {
   return true;
 }
 
+// EntityDragon.onLivingUpdate's client branch: f = MathHelper.cos(anim * pi * 2), f1 = the same for the previous tick; when f1 <= -0.3 and
+// f >= -0.3 the wing flap plays at volume 5 and pitch 0.8 + rand.nextFloat() * 0.3 (the client entity's own Random). Returns the pitch or null.
+export function wingFlapPitch(prevAnim, anim, rand) {
+  const a = mhCos(f(f(anim * PI_F) * 2)), b = mhCos(f(f(prevAnim * PI_F) * 2));
+  return b <= f(-0.3) && a >= f(-0.3) ? f(f(0.8) + f(rand.nextFloat() * f(0.3))) : null;
+}
+
 // EntityDragon.attackEntityFromPart (xa.a(wy, ro, float)). `source` = { player, explosion }. Always true;
 // only a player or an explosion actually hurts, the other parts take dmg / 4 + 1.
 export function attackFromPart(e, partIndex, source, dmg, host) {

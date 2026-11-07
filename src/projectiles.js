@@ -22,6 +22,8 @@ import { railBounds } from "./rails.js";
 import { torchBounds } from "./torches.js";
 import { REED_BOUNDS } from "./plants.js";
 import { ENTITY_TYPES } from "./entities.js";
+import { dragonPartTargets, aimPart } from "./dragon-parts.js";
+export { aimPart };
 
 const f = Math.fround;
 const PI_F = f(Math.PI), PI_D = 3.1415927410125732;
@@ -262,9 +264,11 @@ export function inWater(world, x, y, z) {
 // Entity.canBeCollidedWith is true until the entity is dead, so dying mobs
 // still count.
 export function mobTargets(entities, player, width = 0.6, height = 1.8) {
-  const out = entities.map((e) => {
+  const out = entities.flatMap((e) => {
+    // The ender dragon is not collidable; its parts are (each EntityDragonPart box), and `part` tells aimPart which one was struck.
+    if (e.type === "ender_dragon") return dragonPartTargets(e).map(({ target, part, box }) => ({ ref: target, part, box }));
     const t = ENTITY_TYPES[e.type], s = e.growingAge < 0 ? 0.5 : 1, w = f(t.width * s), h = f(t.height * s), hw = f(w / 2);
-    return { ref: e, box: [e.x - hw, e.y, e.z - hw, e.x + hw, e.y + h, e.z + hw] };
+    return [{ ref: e, box: [e.x - hw, e.y, e.z - hw, e.x + hw, e.y + h, e.z + hw] }];
   });
   if (player) {
     const hw = f(f(width) / 2);
@@ -418,6 +422,7 @@ export class Projectiles {
     if (hit || block) {
       if (b.kind === "enderPearl") {
         if (typeof onPearlImpact !== "function") throw new Error("Ender pearl impact requires a synchronous adapter hook");
+        aimPart(hit);
         onPearlImpact({ pearl: b, world, hit: hit?.ref ?? null, target: hit, block });
         return; // native client impacts remain alive until server synchronization
       }
@@ -435,7 +440,7 @@ export class Projectiles {
         b.dead = true;
         return;
       }
-      if (hit) onHit(hit.ref, b);
+      if (hit) { aimPart(hit); onHit(hit.ref, b); }
       if (b.kind === "egg") this.layEggs(b);
       for (let i = 0; i < PARTICLES; i++) this.poof(b.x, b.y, b.z);
       b.dead = true;

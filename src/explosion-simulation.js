@@ -8,6 +8,7 @@ import { ENTITY_TYPES } from "./entities.js";
 import { makeStack, copyStack } from "./inventory.js";
 import { PHYSICS, opaqueCube, FIRE } from "./world.js";
 import { entityBox } from "./weather.js";
+import { isDragon } from "./dragon-parts.js";
 import { blastKnockback } from "./armor-enchantments.js";
 import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, itemForBlock } from "./dispenser-piston.js";
 
@@ -56,6 +57,17 @@ export function applyExplosion(state, request, hooks = {}) {
     if (entity === exploder) continue;
     const type = ENTITY_TYPES[entity.type];
     if (!type) continue;
+    // World.newExplosion's getEntitiesWithinAABBExcludingEntity lists the EntityDragonPart boxes: each part inside the blast takes its own
+    // distance/exposure damage (Entity.getEyeHeight is 0 for a part) and attackEntityFromPart then divides it for the non-head parts.
+    if (entity.type === "ender_dragon") {
+      for (const [part, p] of (isDragon(entity) ? entity.dragon.parts : []).entries()) {
+        const hit = explosionImpact(world, x, y, z, size, p.x, p.y, p.z, p.y, p.box);
+        if (!hit) continue;
+        mobs.attackEntityFrom(entity, hit.damage, { name: "explosion", part, from: hitFrom ? { x: hitFrom.x, z: hitFrom.z } : undefined, player: attacker === "player", attacker: attacker && attacker !== "player" ? attacker : undefined });
+        mobHits.push({ entity, part, ...hit });
+      }
+      continue;
+    }
     const scale = entity.growingAge < 0 ? 0.5 : 1;
     const width = type.width * scale, height = type.height * scale;
     const hit = explosionImpact(

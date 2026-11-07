@@ -6,6 +6,7 @@ import java.util.*;
 //   flight       onLivingUpdate (xa.e) ticks with the entity Random seeded: target selection, yaw/speed integration, ring buffer, part boxes
 //   ring         getMovementOffsets (xa.b(int, float)) samples
 //   damage       attackEntityFromPart for every part, source and amount
+//   explosionParts agw.a() (Explosion.doExplosionA) with the dragon's seven parts listed by getEntitiesWithinAABB (Chunk lists getParts): per-part distance damage
 //   crystal      bP: nearest crystal within 32, +1 health per 10 ticks, destroyed crystal = 10 damage to the head
 //   collide      collideWithEntities / attackEntitiesInList victims (wing push, head 10 damage)
 //   destroy      destroyBlocksInAABB over a block grid (obsidian, end stone, bedrock, glass, stone), with mobGriefing true and false
@@ -26,10 +27,15 @@ public class DragonProbe {
 
   public static class DW extends EndProbe.W {
     List<sa> ents = new ArrayList<>();
+    boolean withParts = false;
     List<String> parts = new ArrayList<>(), orbs = new ArrayList<>(), events = new ArrayList<>();
     public List b(sa ex, azt box) {
       List<sa> out = new ArrayList<>();
-      for (sa e : ents) if (e != ex && e.C.d > box.a && e.C.a < box.d && e.C.e > box.b && e.C.b < box.e && e.C.f > box.c && e.C.c < box.f) out.add(e);
+      for (sa e : ents) {
+        if (e != ex && e.C.d > box.a && e.C.a < box.d && e.C.e > box.b && e.C.b < box.e && e.C.f > box.c && e.C.c < box.f) out.add(e);
+        // Chunk.getEntitiesWithinAABBForEntity also lists entity.getParts() that meet the box (and are not the asking entity)
+        if (withParts && e.at() != null) for (sa part : e.at()) if (part != ex && part.C.d > box.a && part.C.a < box.d && part.C.e > box.b && part.C.b < box.e && part.C.f > box.c && part.C.c < box.f) out.add(part);
+      }
       return out;
     }
     public List a(Class c, azt box) {
@@ -187,6 +193,25 @@ public class DragonProbe {
     System.out.println("{\"case\":\"hurtWindow\",\"seq\":[" + seq + "]}");
   }
 
+  static void explosionParts() throws Exception {
+    for (int part = 0; part < 7; part++) for (float size : new float[] {4f, 6f}) for (double lift : new double[] {0.0, 2.5}) {
+      DW w = world();
+      w.withParts = true;
+      xa d = dragon(w, 10, 100, -6, 135f, 177 + part);
+      for (int t = 0; t < 3; t++) d.e();
+      w.ents.add(d);
+      azt b = d.bp[part].C;
+      double cx = (b.a + b.d) / 2 + 1.5, cy = b.b + lift, cz = (b.c + b.f) / 2;
+      float before = d.aS();
+      double tx = d.h, ty = d.i, tz = d.bm;
+      agw boom = new agw(w, null, cx, cy, cz, size);
+      boom.a();
+      System.out.println("{\"case\":\"explosionParts\",\"part\":" + part + ",\"size\":" + num(size) + ",\"lift\":" + num(lift) + ",\"center\":[" + num(cx) + "," + num(cy) + "," + num(cz) + "],\"boxes\":" + boxes(d)
+        + ",\"healthBefore\":" + num(before) + ",\"healthAfter\":" + num(d.aS()) + ",\"hurtTime\":" + d.ax + ",\"target\":[" + num(d.h) + "," + num(d.i) + "," + num(d.bm) + "],\"targetChanged\":" + (tx != d.h || ty != d.i || tz != d.bm)
+        + ",\"rand\":" + q("" + ((Random) fd(sa.class, "Z").get(d)).nextLong()) + "}");
+    }
+  }
+
   static void crystal() throws Exception {
     // heal: one crystal at distance, ticks 0..299; crystals outside 32 are ignored; a destroyed crystal strikes the head for 10
     for (int variant = 0; variant < 4; variant++) {
@@ -325,6 +350,7 @@ public class DragonProbe {
     flight("player-far", 8L, 200f, new double[][] {{-40, 64, 35}, {10, 70, 90}}, 150, 1500, true);
     ring();
     damage();
+    explosionParts();
     crystal();
     collide();
     destroy();

@@ -1733,7 +1733,7 @@ export class EntityWorld {
       }
       if (e.recentlyHit > 0) e.recentlyHit--;
       // EntityLivingBase.updatePotionEffects, the end of onEntityUpdate.
-      tickMobEffects(e, t, maxHealthOf(e, base.health), entityRandom(e), this.fx);
+      tickMobEffects(e, t, maxHealthOf(e, base.health), entityRandom(e), this.fx, (m, n) => this.attackEntityFrom(m, n, { name: "wither" })); // Potion.wither: DamageSource.wither (bypasses armour)
       this.talk(e);
       if (e.type === "squid" || e.type === "bat") { squidBatUpdate(this, e, t); continue; } // squid-bat-mobs.js
       if (e.type === "ghast") { ghastUpdate(this, e, t); continue; } if (e.type === "blaze") blazeUpdate(this, e, t); // blaze-ghast-mobs.js

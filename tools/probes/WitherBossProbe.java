@@ -11,6 +11,8 @@ import java.util.Random;
 //   launch      xc.a(I,sv) / a(I,DDDZ): skull spawn position, motion, blue flag, aux events
 //   skullFlight zp.h() per tick for the black and the blue skull (motion factor 0.95 / 0.73)
 //   skullImpact zp.a(azu) on an entity per difficulty: damage, effect, explosion record
+//   skullMob    zp.a(azu) on a cow and a zombie per difficulty: 8 damage, the wither effect (duration, amplifier), the shooter heal on a kill
+//   witherDot   sv.C() (onEntityUpdate -> updatePotionEffects) over 130 ticks with the Wither effect on a cow and a zombie: health per tick
 //   skullBlast  zp.a(agw,ahb,III,aji): block resistance with and without the blue flag
 //   skullProps  size, collidable, hurt
 //   hurt        xc.a(ro,F) rejections: drown, while invulnerable, armoured arrow
@@ -174,6 +176,44 @@ public class WitherBossProbe {
           + ",\"ownerHealed\":" + num(owner.aS() - oh) + ",\"explosions\":" + World.booms + ",\"dead\":" + f.K + ",\"error\":" + err + "}");
       }
     }
+    // A wither skull on a cow and a zombie (MobMoveProbe.spawn bodies) per difficulty: damage, effect, heal on a kill (one-hit victim too).
+    for (String kind : new String[] { "cow", "zombie" })
+      for (rd diff : new rd[] { rd.a, rd.b, rd.c, rd.d })
+        for (float health : new float[] { 10.0f, 6.0f }) {
+          MobMoveProbe.set(w, "r", diff);
+          World.booms.clear();
+          sv victim = kind.equals("cow") ? new wh(w) : new yq(w);
+          setPos(victim, 70.5, 30, 70.5);
+          MobMoveProbe.set(victim, "Z", new Random(3));
+          victim.g(health);
+          xc shooter = wither(w, 5, 64.5, 40, 64.5);
+          MobMoveProbe.method(sv.class, "g", float.class).invoke(shooter, 100.0F);
+          zp f = new zp(w, (sv) shooter, 0.0, -1.0, 0.0);
+          setPos(f, 70.5, 30.5, 70.5);
+          float h0 = victim.aS(), oh = shooter.aS();
+          inv(zp.class, f, "a", new Class<?>[] { azu.class }, new azu(victim));
+          rw eff = victim.b(rv.a[20]);
+          out("{\"case\":\"skullMob\",\"kind\":\"" + kind + "\",\"difficulty\":" + diff.ordinal() + ",\"health0\":" + num(h0) + ",\"damage\":" + num(h0 - victim.aS())
+            + ",\"ownerHealed\":" + num(shooter.aS() - oh) + ",\"effect\":" + (eff == null ? "null" : "{\"duration\":" + eff.b() + ",\"amplifier\":" + eff.c() + "}") + ",\"dead\":" + f.K + "}");
+        }
+    // The wither effect over time on a mob: updatePotionEffects runs inside onEntityUpdate; hurtResistantTime counts down there too.
+    for (String kind : new String[] { "cow", "zombie" })
+      for (int amp : new int[] { 0, 1, 2, 5 }) {
+        MobMoveProbe.set(w, "r", rd.c);
+        World.booms.clear();
+        sv victim = kind.equals("cow") ? new wh(w) : new yq(w);
+          setPos(victim, 70.5, 30, 70.5);
+          MobMoveProbe.set(victim, "Z", new Random(3));
+        victim.g(kind.equals("cow") ? 10.0f : 20.0f);
+        victim.c(new rw(20, 130, amp));
+        StringBuilder hp = new StringBuilder();
+        for (int t = 0; t < 130; t++) {
+          MobMoveProbe.method(sa.class, "C").invoke(victim);
+          hp.append(t == 0 ? "" : ",").append(num(victim.aS()));
+          if (victim.aS() <= 0) break;
+        }
+        out("{\"case\":\"witherDot\",\"kind\":\"" + kind + "\",\"amplifier\":" + amp + ",\"health0\":" + num(kind.equals("cow") ? 10.0f : 20.0f) + ",\"ticks\":[" + hp + "]}");
+      }
     MobMoveProbe.set(w, "r", rd.c);
     World.booms.clear();
     {

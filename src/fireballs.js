@@ -5,6 +5,7 @@
 import { JavaRandom } from "./java-random.js";
 import { intercept, rayTraceBlocks } from "./projectiles.js";
 import { pushBox } from "./entities.js";
+import { dragonPartTargets, aimPart } from "./dragon-parts.js";
 import { FIREBALL, fireballAcceleration, fireballStep, deflect, faceCell } from "./blaze-ghast.js";
 import { gameRule } from "./game-rules.js";
 
@@ -53,7 +54,7 @@ export class Fireballs {
       const start = [b.x, b.y, b.z], end = [b.x + b.vx, b.y + b.vy, b.z + b.vz];
       let hit = rayTraceBlocks(mobs.world, start, end), stop = hit ? hit.vec : end;
       const entity = this.sweep(b, start, stop);
-      if (entity) hit = { entity: entity.target };
+      if (entity) { hit = { entity: entity.target }; aimPart(entity); }
       if (hit) { this.impact(b, hit); continue; }
       const water = mobs.world.get(Math.floor(b.x), Math.floor(b.y), Math.floor(b.z));
       fireballStep(b, water >= 8 && water <= 9);
@@ -63,7 +64,11 @@ export class Fireballs {
   // ze.h's entity pass: every collidable entity box grown by 0.3 against the swept segment, the shooter skipped for 25 ticks; nearest wins.
   sweep(b, a, z) {
     const mobs = this.mobs, boxes = [];
-    for (const e of mobs.entities) if (e.health > 0 && !(e === b.owner && b.ticks < FIREBALL.ownerGrace)) boxes.push({ target: e, box: pushBox(e, ...mobs.size(e)) });
+    for (const e of mobs.entities) {
+      if (!(e.health > 0) || (e === b.owner && b.ticks < FIREBALL.ownerGrace)) continue;
+      if (e.type === "ender_dragon") boxes.push(...dragonPartTargets(e)); // the parts are the collidable entities, not the 16 x 8 box
+      else boxes.push({ target: e, box: pushBox(e, ...mobs.size(e)) });
+    }
     const p = mobs.ai?.player;
     if (p?.alive && !(b.owner === "player" && b.ticks < FIREBALL.ownerGrace)) boxes.push({ target: { player: true }, box: pushBox(p, p.width, p.height) });
     let best = null, bd = Infinity;
