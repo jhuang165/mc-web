@@ -12,7 +12,8 @@ import { gameRule } from "./game-rules.js";
 import { addMobEffect } from "./mob-effects.js";
 import { explosionDrops } from "./explosion.js";
 import { POTION } from "./potions.js";
-import { WITHER, SKULL, WITHER_EYE, WITHER_PROOF_INTERNAL, chase, trackHead, headPosition, invulStep, startHealth, armored, witherSkullEffectTicks } from "./wither-boss.js";
+import { headPass } from "./wither-targeting.js";
+import { WITHER, SKULL, WITHER_EYE, WITHER_PROOF_INTERNAL, chase, trackHead, headPosition, headParticleSpecs, invulStep, startHealth, armored, witherSkullEffectTicks } from "./wither-boss.js";
 const f = Math.fround;
 export const NETHER_STAR = 2060;
 const UNDEAD_TYPES = new Set(["zombie", "skeleton", "wither_skeleton", "pigman", "wither", "zombie_pigman"]);
@@ -70,13 +71,7 @@ function headParticles(m, e) {
   if (!m.fx) return;
   let r = visual.get(e);
   if (!r) visual.set(e, (r = { z: new JavaRandom(Math.floor(Math.random() * 2 ** 48)), w: new JavaRandom(Math.floor(Math.random() * 2 ** 48)) }));
-  const g = (rand) => rand.nextGaussian() * f(0.3), arm = armored(e.health);
-  for (let i = 0; i < 3; i++) {
-    const h = headPosition(e, i);
-    m.fx.spawn("smoke", h.x + g(r.z), h.y + g(r.z), h.z + g(r.z), 0, 0, 0);
-    if (arm && r.w.nextInt(4) === 0) m.fx.spawn("mobSpell", h.x + g(r.z), h.y + g(r.z), h.z + g(r.z), f(0.7), f(0.7), 0.5);
-  }
-  if ((e.invul ?? 0) > 0) for (let i = 0; i < 3; i++) m.fx.spawn("mobSpell", e.x + r.z.nextGaussian(), e.y + f(r.z.nextFloat() * f(3.3)), e.z + r.z.nextGaussian(), f(0.7), f(0.7), f(0.9));
+  for (const [name, x, y, z, vx, vy, vz] of headParticleSpecs(e, r.z, r.w)) m.fx.spawn(name, x, y, z, vx, vy, vz);
 }
 // xc.e after EntityMob's: the side heads turn to their targets.
 export function witherPost(m, e) {
@@ -96,7 +91,6 @@ export function launchToEntity(m, e, head, t) {
 }
 export const witherRanged = (m, e, target) => launchToEntity(m, e, 0, target);
 
-const range = (rand, min, max) => (min >= max ? min : rand.nextDouble() * (max - min) + min);
 // xc.bn (the AI half of onLivingUpdate), run as Brain.updateAITick: the spawn invulnerability, else the side heads' shots, the head 0
 // target, the block-breaking counter and the 1 HP regeneration.
 export function witherAITick(brain) {
@@ -111,45 +105,21 @@ export function witherAITick(brain) {
     if (step.heal) e.health = Math.min(WITHER.maxHealth, f(e.health + step.heal));
     return;
   }
-  const difficulty = m.difficulty ?? 2, pool = () => {
-    const out = [];
-    const near = [];
-    for (const o of m.entities) if (o !== e && o.health > 0 && !witherIsUndead(o) && brain.ai.overlaps(brain, m.ai.brain(o), 20, 8, 20)) near.push(o);
-    const p = m.ai.player;
-    if (p?.alive && brain.ai.overlaps(brain, p, 20, 8, 20)) near.push(p);
-    for (const o of nativeOrder(near)) out.push(o === p ? p : m.ai.brain(o));
-    return out;
-  };
-  for (let i = 1; i < 3; i++) {
-    if (ticks < s.bt[i - 1]) continue;
-    s.bt[i - 1] = ticks + 10 + rand.nextInt(10);
-    if (difficulty === 2 || difficulty === 3) {
-      if (s.bu[i - 1]++ > 15) {
-        const x = range(rand, e.x - 10, e.x + 10), y = range(rand, e.y - 5, e.y + 5), z = range(rand, e.z - 10, e.z + 10);
-        launchToCoords(m, e, i + 1, x, y, z, true);
-        s.bu[i - 1] = 0;
-      }
-    }
-    const target = s.heads[i];
-    if (target) {
-      if (target.alive && brain.distSq(target) <= 900 && brain.canSee(target)) {
-        launchToEntity(m, e, i + 1, target);
-        s.bt[i - 1] = ticks + 40 + rand.nextInt(20);
-        s.bu[i - 1] = 0;
-      } else s.heads[i] = null;
-    } else {
-      const list = pool();
-      for (let tries = 0; tries < 10 && list.length; tries++) {
-        const c = list[rand.nextInt(list.length)];
-        if (c !== brain && c.alive && brain.canSee(c)) {
-          if (c.isPlayer && c.creative) break; // the disableDamage player ends the search without a target
-          s.heads[i] = c;
-          break;
-        }
-        list.splice(list.indexOf(c), 1);
-      }
-    }
-  }
+  const p = m.ai.player, h = (o) => (o === p ? p : m.ai.brain(o));
+  headPass(s, rand, ticks, {
+    pos: e, difficulty: m.difficulty ?? 2,
+    // World.getEntitiesWithinAABB(EntityLivingBase, box.expand(20, 8, 20), xd): living, not undead, the player included, in chunk/slice order
+    pool: () => {
+      const near = [];
+      for (const o of m.entities) if (o !== e && o.health > 0 && !witherIsUndead(o) && brain.ai.overlaps(brain, m.ai.brain(o), 20, 8, 20)) near.push(o);
+      if (p?.alive && brain.ai.overlaps(brain, p, 20, 8, 20)) near.push(p);
+      return nativeOrder(near).map(h);
+    },
+    alive: (c) => c.alive, near: (c) => brain.distSq(c) <= 900, sees: (c) => brain.canSee(c), isPlayer: (c) => !!c.isPlayer, creative: (c) => !!c.creative,
+    self: (c) => c === brain,
+    launchCoords: (head, x, y, z) => launchToCoords(m, e, head, x, y, z, true),
+    launchEntity: (head, c) => launchToEntity(m, e, head, c),
+  });
   const main = brain.attackTarget;
   s.heads[0] = main?.alive ? main : null;
   if (s.bv > 0 && --s.bv === 0 && gameRule("mobGriefing")) breakBlocks(m, e, rand);
