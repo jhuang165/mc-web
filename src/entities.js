@@ -31,6 +31,7 @@ import { sheepColor, childColor } from "./sheep.js";
 import { sneakEdge, criticalDamage } from "./player-movement.js";
 import { MobAI } from "./ai.js";
 import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
+import { visualRandom } from "./village-ai.js";
 import { IRON_GOLEM_TYPE, IRON_GOLEM_SOUNDS, ironGolemFields, ironGolemShape, golemCollideRetargets, golemTail } from "./iron-golem.js";
 import { createVillages, PLAYER_NAME } from "./village-host.js";
 import { SLIME, mobScale, slimeDamage, slimeTouches, slimeFields, slimeFieldsFrom, slimeRestore, slimeWidth, slimeSoundName, slimeVolume, slimeSquishStart, slimeSquishEnd, slimeActionState, slimeChildren, slimeCanSpawnHere, SLIMEBALL } from "./slime.js";
@@ -1596,11 +1597,12 @@ export class EntityWorld {
   // EntityVillager.setRevengeTarget (yv.b(sv)) for a player hit: the village notes the aggressor, the player
   // loses 1 reputation (3 for a child) and the villager shows angry particles.
   villagerHurtBy(e, source) {
-    const village = this.ai.brain(e).village;
+    const brain = this.ai.brain(e), village = brain.village;
     if (!village || !source.player) return;
     village.addOrRenewAggressor(this.ai.player);
     village.changeReputation(PLAYER_NAME, e.growingAge < 0 ? -3 : -1);
-    if (e.health > 0 && this.fx) burst(this.fx, "angryVillager", 5, { x: e.x, y: e.y, z: e.z, width: 0.6, height: 1.8 }, entityRandom(e), 1);
+    // status 13 is drawn by the client entity's Random (village-ai.js visualRandom), at the entity's real size
+    if (e.health > 0) this.villageBurst("angryVillager", e, { width: brain.width, height: brain.height }, visualRandom(e));
   }
   // EntityVillager.onDeath (yv.a(ro)): killed by a player -2 reputation; by a monster the village ends its mating
   // season; with no known attacker, a player within 16 blocks ends it too.

@@ -24,10 +24,10 @@ Ported from VillageCollection (`wc`), Village (`vz`), VillageDoorInfo (`vy`), Vi
 
 ## Approximations and open items
 
-- Entity-state packets 12/13/14 are drawn as particles from a visual Random (not Entity.rand), so particle positions are not native-reproducible.
-- MoveIndoors skips the native rain biome check and `hasNoSky`; MoveThroughVillage does not break doors.
+- Entity-state packets 12/13/14 (hearts, angry, happy villager) are drawn by the client copy of the entity in the original, so the draws come from a per-entity visual Random (`visualRandom` in `village-ai.js`), never the server Entity.rand. The draw order and positions (3 nextGaussian * 0.02, then 3 nextFloat per particle, five particles, baby size 0.3 x 0.9) are replayed in `villager-polish.test.js` (72 native cases); the seed itself is free, as the client entity's is.
+- MoveIndoors now has the native clear-daytime rule: it returns early only when day, not raining and `BiomeGenBase.canSpawnLightningBolt` (deserts and snowy biomes do not return by day), or when the dimension has no sky (1,920 native rows). MoveThroughVillage does not break doors.
 - Zombies now hunt villagers and convert them (see `zombie-villager.md`); only the local player is an attacker in the village aggressor list.
-- The default-reputation flag (`bz`) has no setter, so the +5 starting reputation is not given.
+- The default-reputation flag (`bz`, set by a cured zombie villager, `cd()`) gives every player the village already knows +5 once, on the first `updateAITick` that finds a village within 32; with no village the flag stays set, and players the village has no entry for get nothing (48 native cases, `villager-polish-reference.json`).
 - Java import reads `data/villages.dat` (villages whose centre is inside the imported area, shifted like entities; others are dropped and counted) and the Villager, VillagerGolem and Zombie entities (`src/java-mobs.js`). Imported mobs lose AI timers and the home area. When mobs are imported the world's usual animal seeding is skipped.
 - Villages from world generation are not pre-registered: a generated village becomes a record once a villager has registered a position near its doors.
 - Parity is not complete; this covers the listed systems only.

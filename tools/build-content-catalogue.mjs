@@ -167,9 +167,9 @@ const E = {
   MushroomCow: ['Partial', 'mooshroom-golem.md', 'cannot spawn on mycelium at runtime'],
   SnowMan: ['Implemented', 'mooshroom-golem.md', ''],
   Ozelot: ['Implemented', 'ocelots.md', ''],
-  VillagerGolem: ['Partial', 'iron-golem.md', 'step sounds, collide retargeting, rose model and walking dust are ported; NearestAttackable path check is a distance test'],
+  VillagerGolem: ['Partial', 'iron-golem.md', 'step sounds, collide retargeting, rose model and walking dust are ported; the monster target nearbyOnly path check (end within 1.5, cached 10 + nextInt(5) ticks on the task) is probed and ported (villager-polish-reference.json)'],
   EntityHorse: ['Implemented', 'horses.md', 'renderer not visually verified'],
-  Villager: ['Partial', 'villager-trading-live.md', 'every trade-table item maps to a browser item (no "?"); village systems in village.md; villager NBT import belongs to the interchange track'],
+  Villager: ['Partial', 'villager-trading-live.md', 'every trade-table item maps to a browser item (no "?"); village systems in village.md; status 12/13/14 particles (visual Random draws), the +5 default-reputation flag and the MoveIndoors biome/hasNoSky gate are probed and ported; villager NBT import belongs to the interchange track'],
   EnderCrystal: ['Implemented', 'dragon.md', 'spike crystals placed by DimensionWorld.endCrystals()'],
 };
 for (const name of Object.keys(E)) assert(native.entities.some(e => e.name === name), name);

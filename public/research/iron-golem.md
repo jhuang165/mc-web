@@ -22,6 +22,6 @@ Code: `src/iron-golem.js` (constants, drops, animation, pumpkin shape), `src/vil
 
 - The +0.4 fling (`golemLift`) applies to targets including the player.
 - Step sounds (`mob.irongolem.walk|1.0|1.0`), the 1-in-20 collide retargeting on IMob types, the attack/rose timers, walking dust and the rose model are ported and replayed from probe records in `village-live-reference.json` (rose geometry is bytecode-read, not probed).
-- NearestAttackable's "nearby only" path check is a plain distance test.
+- NearestAttackable (monsters) is built with nearbyOnly, so EntityAITarget runs `canEasilyReach` for each candidate: a real PathFinder search to the monster whose end point must lie within 1.5 blocks horizontally of it (so a monster on a pillar counts, one behind a long wall or in a sealed room does not). The answer is cached on the task for 10 + `nextInt(5)` ticks whichever monster asked. Ported in `NearestMonster` (`village-ai.js`) and replayed against 128 native tasks over eight terrains in `villager-polish.test.js` (path end, per-tick result, cache state, draws). The path search shares the navigator's per-tick budget, so a denied search is read as unreachable.
 - NearestMonster uses the full probe-verified IMob set; creepers are excluded by `golemCanAttack` as natively.
 - Parity is not complete.
