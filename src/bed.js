@@ -141,6 +141,15 @@ export function bedSpawnSpot(world, x, y, z, n = 0) {
   }
   return null;
 }
+// A level.dat player saved Sleeping: 1.7.10 wakes it at once on load (wakeUpPlayer(true, true, false)). `head` is the bed cell
+// the player lay on; the occupied bit is cleared and the player stands on the first free cell beside it. Returns the feet
+// position, or null when no bed is there (the player stays where the save put it).
+export function wakeSavedSleeper(world, [x, y, z]) {
+  if (world.get(x, y, z) !== BED) return null;
+  world.put(x, y, z, BED, world.getMeta(x, y, z) & ~4);
+  const spot = bedSpawnSpot(world, x, y, z, 0) || [x, y + 1, z];
+  return { x: spot[0] + 0.5, y: Math.fround(spot[1] + 0.1), z: spot[2] + 0.5 };
+}
 // EntityPlayer.verifyRespawnCoordinates: a bed gives its spawn search cell; anything else only a forced spawn with
 // two non-solid cells.
 export function verifyRespawn(world, [x, y, z], forced = false) {

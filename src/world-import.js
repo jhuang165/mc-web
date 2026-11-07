@@ -13,6 +13,8 @@ const RUNTIME_FIELDS = [
   // The Java world's level.dat and stats/<uuid>.json (level-dat.js): game rules, the bed spawn, statistics and achievements,
   // and the WorldInfo flags the browser keeps for export only (MapFeatures, hardcore, the total world time).
   "gameRules", "bed", "stats", "achievements", "mapFeatures", "hardcore", "totalTime",
+  // Player abilities.flying (Creative only), a forced spawn (/spawnpoint) and a bed to free after a saved Sleeping player wakes.
+  "flying", "playerSpawn", "wakeFromBed",
 ];
 
 const int = Number.isInteger, finite = Number.isFinite;
@@ -53,6 +55,9 @@ const SANITIZE = {
     : undefined,
   mapFeatures: (v) => (typeof v === "boolean" ? v : undefined),
   hardcore: (v) => (typeof v === "boolean" ? v : undefined),
+  flying: (v) => (v === true ? true : undefined),
+  playerSpawn: (v) => (triple(v) ? [...v] : undefined),
+  wakeFromBed: (v) => (triple(v) ? [...v] : undefined),
   totalTime: (v) => (Number.isSafeInteger(v) && v >= 0 ? v : undefined),
   portalState: readPlayerPortalState,
   worldSpawn: (v) => Array.isArray(v) && v.length === 3 && v.every(int) ? [...v] : undefined,

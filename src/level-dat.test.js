@@ -129,13 +129,15 @@ test('javaPlayerFromNbt reads what EntityPlayer.readEntityFromNBT keeps', () => 
     assert.ok(Math.abs(yaw - ((c.yaw % 360) + 360) % 360) < 1e-9, name);
     assert.ok(Math.abs((-p.position.pitch * 180) / Math.PI - c.pitch) < 1e-9, name);
   }
-  // The browser player has no zero-count stacks, flight or forced spawns; javaPlayerFromNbt reports them.
+  // The browser player has no zero-count stacks; javaPlayerFromNbt reports them.
   const odd = javaPlayerFromNbt(fromHex(ref.players.find((c) => c.name === 'inventory-odd-slots').input));
   assert.equal(odd.player.slots[3], null);
   assert.ok(odd.lost.includes('Inventory slot 36') && odd.lost.includes('Inventory slot 255'));
   const flying = javaPlayerFromNbt(fromHex(ref.players.find((c) => c.name === 'creative-flying').input));
   assert.equal(flying.playerGameType, 1);
-  assert.ok(flying.lost.some((l) => l.startsWith('abilities.flying')) && flying.lost.includes('SpawnForced'));
+  // abilities.flying and SpawnForced are carried now (import applies them), no longer reported as lost.
+  assert.equal(flying.flying, true);
+  assert.ok(!flying.lost.some((l) => l.startsWith('abilities.flying')) && !flying.lost.includes('SpawnForced'));
 });
 
 test('the converted player loads into Survival and Experience', () => {

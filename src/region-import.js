@@ -233,12 +233,20 @@ function levelRecord(record, { level, levelGen, javaPlayer: first, world, genera
     populatedColumns: { version: 1, cells: Object.fromEntries(Object.entries(importedColumns).map(([k, v]) => [k, v.toString(16)])) },
   };
   report.level = { worldType: level.worldType, generatorOptions: levelGen.generatorOptions, mode, allowCommands: level.allowCommands, worldSpawn,
-    ignoredKeys: level.ignored, notCarried: [...(level.hardcore ? ['hardcore (played as Survival; kept for export)'] : []), ...levelGen.approximate] };
+    ignoredKeys: level.ignored, notCarried: [...levelGen.approximate] };
   if (first) {
     const p = report.level.player = { dimension: first.dimension, lost: first.lost };
     out.player = { ...first.player, ...record.player, time: level.dayTime };
     out.experience = first.experience;
-    if (first.bedSpawn) out.bed = { spawn: [first.bedSpawn[0] - ox, first.bedSpawn[1], first.bedSpawn[2] - oz] };
+    // SpawnForced is a /spawnpoint (record.playerSpawn: no bed needed); otherwise the spawn is a bed that is checked on respawn.
+    if (first.bedSpawn) {
+      const spawn = [first.bedSpawn[0] - ox, first.bedSpawn[1], first.bedSpawn[2] - oz];
+      if (first.spawnForced) out.playerSpawn = spawn; else out.bed = { spawn };
+    }
+    // abilities.flying only means something in Creative (a Survival player's capabilities are reset by the game mode).
+    if (first.flying && mode === 'creative') out.flying = true;
+    // Sleeping: the native load wakes the player at once (level-dat.js); the launch frees the bed and stands the player beside it.
+    if (first.sleepingAt) out.wakeFromBed = [first.sleepingAt[0] - ox, first.sleepingAt[1], first.sleepingAt[2] - oz];
     if (first.dimension === 0 && first.position) out.position = { ...first.position, x: first.position.x - ox, z: first.position.z - oz };
     else { out.position = { x: worldSpawn[0] + 0.5, y: worldSpawn[1], z: worldSpawn[2] + 0.5, yaw: 0, pitch: 0 }; p.placed = 'world spawn (the player was saved in another dimension)'; }
   } else out.player = { ...record.player, time: level.dayTime };

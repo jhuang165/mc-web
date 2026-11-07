@@ -28,6 +28,11 @@ export const LANG = {
   "selectWorld.gameMode.survival.line2": "levels, health and hunger", "selectWorld.gameMode.creative": "Creative",
   "selectWorld.gameMode.creative.line1": "Unlimited resources, free flying and",
   "selectWorld.gameMode.creative.line2": "destroy blocks instantly", "selectWorld.gameMode.hardcore": "Hardcore",
+  "selectWorld.gameMode.hardcore.line1": "Same as survival mode, locked at hardest", "selectWorld.gameMode.hardcore.line2": "difficulty, and one life only",
+  "gameMode.hardcore": "Hardcore Mode!", "options.difficulty.hardcore": "Hardcore",
+  "deathScreen.title": "You died!", "deathScreen.title.hardcore": "Game over!", "deathScreen.hardcoreInfo": "You cannot respawn in hardcore mode!",
+  "deathScreen.score": "Score", "deathScreen.respawn": "Respawn", "deathScreen.titleScreen": "Title screen",
+  "deathScreen.deleteWorld": "Delete world", "deathScreen.quit.confirm": "Are you sure you want to quit?",
   "selectWorld.moreWorldOptions": "More World Options...", "selectWorld.mapFeatures": "Generate Structures:",
   "selectWorld.mapFeatures.info": "Villages, dungeons etc", "selectWorld.mapType": "World Type:",
   "selectWorld.allowCommands": "Allow Cheats:", "selectWorld.allowCommands.info": "Commands like /gamemode, /xp",
@@ -397,7 +402,7 @@ export function saveDate(ms) {
 // GuiSelectWorld.List.drawSlot: name (or "World N"), "folder (date)" and the game mode line.
 export function worldLines(record, index) {
   const name = record.name || t("selectWorld.world") + " " + (index + 1);
-  return [name, `${record.folder || folderName(record.name || "World")} (${saveDate(record.updated || 0)})`, t(record.mode === "survival" || record.mode === "adventure" ? "gameMode." + record.mode : "gameMode.creative")];
+  return [name, `${record.folder || folderName(record.name || "World")} (${saveDate(record.updated || 0)})`, t(record.hardcore === true ? "gameMode.hardcore" : record.mode === "survival" || record.mode === "adventure" ? "gameMode." + record.mode : "gameMode.creative")]; // a hardcore world shows gameMode.hardcore (menus.js draws it dark red)
 }
 // The world types the World Type button cycles through: 1.7.10's creatable WorldTypes (DEFAULT,
 // FLAT, LARGE_BIOMES, AMPLIFIED, in WorldType.worldTypes order) followed by the browser's own landscapes.

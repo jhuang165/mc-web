@@ -17,8 +17,10 @@ import "./container-ui.css";
 import "./menu-screens.css";
 import { Gui } from "./menu-ui.js";
 import { createMenus } from "./menus.js";
-import { folderName, LANG } from "./menu-screens.js";
+import { folderName, LANG, t as langT } from "./menu-screens.js";
 import { initResourcePacks } from "./resource-packs.js";
+import { worldDifficulty, gameOverView, deleteWorldStorage, HARDCORE_KICK, GAME_OVER_ENABLE_TICKS } from "./hardcore.js";
+import { importSaveFolder, entriesFromFileList, entriesFromDirectoryHandle } from "./save-folder-import.js";
 import { canGoEndless, endlessCopy } from "./endless-world.js";
 import {guiScale,stackCount,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks,withGlint,itemTint} from "./gui.js";
 import { stackHasEffect } from "./armor-enchantments.js";
@@ -94,7 +96,7 @@ import {plantedBlock,cropItem} from './crops.js';
 import { NetherLive } from './nether-portal-live.js'; // nether portal lighting/removal and nether wart
 import {Farming,cropDrops} from "./farming.js";
 import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox } from "./entities.js";
-import { BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
+import { wakeSavedSleeper, BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
 import { deathMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
 import { ChatUi, printChat, chat } from "./chat-ui.js";
 import { translation, fontWidth } from "./chat-component.js";
@@ -314,7 +316,8 @@ options.sound = true;
 options.difficulty = difficultySetting(options.difficulty);
 // The difficulty in every system that reads World.difficultySetting.
 function updateDifficulty() {
-  const d = difficultySetting(options.difficulty);
+  // MinecraftServer.func_147139_a: a hardcore world runs on Hard whatever GameSettings.difficulty says (hardcore.js).
+  const d = worldDifficulty(active, options.difficulty);
   if (survival) survival.difficulty = d;
   if (mobs) mobs.difficulty = d;
   if (fire) fire.L.difficulty = d;
@@ -456,7 +459,7 @@ $("#app").innerHTML = `
  <div id="viewport" aria-label="Interactive voxel world"></div><div id="vignette"></div><div id="pumpkin-blur" hidden></div>
  <div id="gui" class="hidden"></div>
  <section id="hud" class="hidden" aria-label="Game heads-up display"><div class="game-top"><button class="game-brand" id="pause-button">${cube}<span>BLOCKWORLD<small id="world-label"></small></span><span class="pause-symbol">Ⅱ</span></button><div class="game-status"><span class="status-dot"></span><span id="save-label">Saved on this device</span><button id="fullscreen" aria-label="Toggle fullscreen">⛶</button></div></div><div id="crosshair">＋</div><pre id="debug" class="hidden"></pre><div id="block-label"></div><div id="jump-hud" class="hidden"><div class="experience-track"><div id="jump-fill"></div></div></div><div id="experience-hud" class="hidden"><div id="experience-level"></div><div class="experience-track"><div id="experience-fill"></div></div></div><div id="survival-hud" class="survival-hud hidden"></div><div id="mining-meter" class="mining-meter hidden" role="progressbar" aria-label="Mining progress" aria-valuemin="0" aria-valuemax="100"><i></i></div><div id="flight-label" class="flight-label"><span id="mode-label">CREATIVE</span> <span>·</span> <b id="movement-label">WALKING</b></div><div class="hotbar" id="hotbar"></div><div class="game-help">W A S D <span>move</span> <i>·</i> SPACE <span>jump</span> <i>·</i> LMB <span>break</span> <i>·</i> RMB <span>use / place</span> <i>·</i> E <span>inventory</span> <i>·</i> ESC <span>pause</span></div><div id="mobile-controls"><div class="dpad"><button data-key="KeyW">↑</button><button data-key="KeyA">←</button><button data-key="KeyS">↓</button><button data-key="KeyD">→</button></div><div class="touch-actions"><button id="touch-break">Break</button><button id="touch-place">Use</button><button id="touch-inventory">Bag</button><button id="touch-fly">Fly</button><button data-key="Space">Jump</button></div></div></section>
- <div class="modal-overlay hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div><div id="toast" role="status"></div><input id="file-input" type="file" accept=".json,application/json" hidden>
+ <div class="modal-overlay hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></div><div id="toast" role="status"></div><input id="file-input" type="file" accept=".json,application/json" hidden><input id="folder-input" type="file" webkitdirectory multiple hidden>
  <div id="loading"><span>Loading terrain</span></div>`;
 // 1.7.10 achievements (achievements.js): unlocks show the toast and the chat line; they are saved with the world.
 const achievementToast = new AchievementToast({
@@ -504,6 +507,8 @@ const menuContext = {
   launch: openWorld,
   exportWorld: chooseExport,
   importWorld: () => $("#file-input").click(),
+  importFolder: chooseSaveFolder,
+  activeWorld: () => active,
   deleteWorld,
   renameWorld,
   makeEndless,
@@ -555,6 +560,8 @@ function makeRecord(p) {
     seed: String(p.seed).slice(0, 80),
     biome: p.biome || "meadow",
     mode: p.mode === "survival" ? "survival" : "creative",
+    // WorldInfo.hardcore (GuiCreateWorld's Hardcore mode: Survival, locked on Hard, one life; hardcore.js).
+    ...(p.hardcore === true ? { hardcore: true } : {}),
     // WorldInfo.allowCommands (GuiCreateWorld "Allow Cheats"). Records saved before 0.42.0 have no flag and read as
     // WorldInfo(NBTTagCompound) does: cheats on for a creative world, off for survival (commands.js cheatsAllowed).
     ...(typeof p.allowCommands === "boolean" ? { allowCommands: p.allowCommands } : {}),
@@ -705,11 +712,9 @@ async function deleteWorld(record) {
   const before = worlds;
   worlds = worlds.filter((w) => w.id !== record.id);
   if (!await persist()) { worlds = before; return; }
-  for (const d of [-1, 1]) if (record.dimensions?.[d] || record.dimension) try { await deleteStoredWorld(viewId(record.id, d)); } catch {} // dimension columns
-  if (record.biome === 'javaStreamed') {
-    try { await deleteStoredWorld(record.id); }
-    catch { toast('World removed from the shelf; its stored data could not be cleared.'); }
-  }
+  // Every storage id the world occupies: its own columns/runtime/containers and the `${id}~-1` / `${id}~1` dimension views.
+  const failed = await deleteWorldStorage(record, deleteStoredWorld);
+  if (failed.length) toast('World removed from the shelf; its stored data could not be cleared.');
 }
 // Browser addition (endless-world.js): a streamed copy of a finite Java world, listed beside the original.
 async function makeEndless(record) {
@@ -755,6 +760,7 @@ function save() {
   active.tnt = primed.map((e) => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse }));
   active.weather = weather.save();
   active.bed = bedSleep.save();
+  active.flying = flying && survival.creative ? true : undefined;
   active.worldRandom = weather.saveSimulation();
   active.fluidTicks = fluids.save();
   active.fireTicks = fire.save();
@@ -1277,7 +1283,7 @@ async function launch(record, prepared) {
     arrows.load(record.arrows);
     scene.setArrows(arrows.list);
     velocity.set(0, 0, 0);
-    flying = false;
+    flying = record.flying === true && survival.creative; // level.dat abilities.flying (import)
     grounded = false;
     motion.reset();
     collidedH = false;
@@ -1308,6 +1314,11 @@ async function launch(record, prepared) {
     scene.setTime(survival.time);
     scene.camera.position.copy(position);scene.camera.position.y+=PHYSICS.eye;scene.camera.rotation.set(pitch,yaw,0,"YXZ");
     restoreSleep(record.bed);
+    if (record.wakeFromBed) { // imported level.dat player saved Sleeping: woken at once, standing beside the bed (bed.js)
+      const feet = wakeSavedSleeper(world, record.wakeFromBed);
+      if (feet) { position.set(feet.x, feet.y, feet.z); previous.copy(position); playerBody.reset(position, yaw, pitch); }
+      delete record.wakeFromBed;
+    }
     if (survival.health <= 0) die();
     else {
       requestLock();
@@ -1534,9 +1545,10 @@ function pause() {
   // GuiIngameMenu (menus.js).
   gui.show(menus.ingameMenu());
 }
-function goHome() {
+function goHome() { leaveToTitle(true); }
+function leaveToTitle(keep) {
   statsLive.leaveGame(); // ServerConfigurationManager.playerLoggedOut
-  save();
+  if (keep) save();
   lan.close();
   sounds.stopStreams(); // Minecraft.loadWorld(null): SoundHandler.stopSounds
   hideBedScreen();
@@ -1952,7 +1964,7 @@ function renderVitals() {
   $("#survival-hud").classList.toggle("hidden", survival.creative);
   if (survival.creative) return;
   // GuiIngame.renderPlayerStats (damage-hud.js): the hurt blink, low-health jiggle, regeneration wave, Absorption and hunger shake.
-  const vitals = vitalsLayout({ health: survival.health, maxHealth: survival.maxHealth, absorption: survival.absorption || 0, hurtResistantTime: survival.clientResist, updateCounter: survival.ticks, poison: survival.effects.has(POISON), wither: survival.effects.has(WITHER_EFFECT), regeneration: survival.effects.has(REGENERATION), food: survival.food, saturation: survival.saturation, hunger: survival.effects.has(HUNGER) }),
+  const vitals = vitalsLayout({ health: survival.health, maxHealth: survival.maxHealth, absorption: survival.absorption || 0, hurtResistantTime: survival.clientResist, updateCounter: survival.ticks, poison: survival.effects.has(POISON), wither: survival.effects.has(WITHER_EFFECT), regeneration: survival.effects.has(REGENERATION), food: survival.food, saturation: survival.saturation, hunger: survival.effects.has(HUNGER), hardcore: active?.hardcore === true }),
     hearts = heartsHtml(vitals.hearts),
     food = foodHtml(vitals.food),
     // GuiIngame: armor points above the hearts; air bubbles above hunger, with one popping.
@@ -2180,6 +2192,39 @@ function die() {
   const deathScore=experience.score;if(keep){const dropped=experience.death();if(gameRule("doMobLoot"))xpOrbs.spawn(dropped,position);}
   renderHotbar();renderVitals();$("#block-label").classList.remove("visible");
   save();
+  const hardcore = active?.hardcore === true;
+  if (hardcore) { // GuiGameOver (hardcore.js): "Game over!", the hardcore info line and a single "Delete world" button
+    const view = gameOverView(true);
+    modal(
+      langT(view.titleKey),
+      `<p class="death-score">${langT("deathScreen.score")}: <span>${deathScore}</span></p><p class="death-score" style="top:calc(25% + 92px)">${langT(view.infoKey)}</p><div class="menu-actions"><button class="button secondary full" id="death-delete">${langT(view.buttons[0].key)}</button></div>`,
+      'death-modal',
+    );
+    $("#modal .close-button").hidden = true;
+    const button = $("#death-delete");
+    button.disabled = true;
+    setTimeout(() => { if (screen === 'dead') button.disabled = false; }, GAME_OVER_ENABLE_TICKS * 50);
+    button.onclick = () => {
+      // GuiYesNo("Are you sure you want to quit?", "", "Title screen", "Respawn"): Title screen only leaves, Respawn makes the
+      // server kick the player and delete the world (NetHandlerPlayServer.processClientStatus).
+      modal(
+        langT("deathScreen.quit.confirm"),
+        `<div class="menu-actions"><button class="button secondary full" id="death-quit-title">${langT("deathScreen.titleScreen")}</button><button class="button secondary full" id="death-quit-delete">${langT("deathScreen.respawn")}</button></div>`,
+        'death-modal',
+      );
+      $("#modal .close-button").hidden = true;
+      $("#death-quit-title").onclick = () => leaveToTitle(true);
+      $("#death-quit-delete").onclick = async () => {
+        const record = active;
+        $("#death-quit-delete").disabled = true;
+        $("#death-quit-title").disabled = true;
+        leaveToTitle(false);
+        await deleteWorld(record);
+        toast(HARDCORE_KICK);
+      };
+    };
+    return;
+  }
   modal(
     "You died!",
     `<p class="death-score">Score: <span>${deathScore}</span></p><div class="menu-actions"><button class="button primary full" id="respawn">Respawn</button><button class="button secondary full" id="death-home">Title screen</button></div>`,
@@ -2942,48 +2987,75 @@ function bindActions() {
 }
 $("#pause-button").onclick = pause;
 $("#fullscreen").onclick = toggleFullscreen;
+// Shared by the Blockworld .json import and the Java save-folder import (which builds the same export object).
+async function importBlockworldData(data) {
+  if (
+    data.format !== "blockworld" ||
+    data.version !== 1 ||
+    typeof data.name !== "string" ||
+    typeof data.seed !== "string" ||
+    (!["meadow", "alpine", "island", "snowy"].includes(data.biome) && !isJavaLandscape(data.biome))
+  )
+    throw new Error("Choose a Blockworld export file");
+  const check = new World(data.seed, data.biome, data.generationVersion ?? 1, data.worldType, data.generatorOptions);
+  check.restore(data.edits);
+  const record = {
+    ...makeRecord(data),
+    ...importedRuntime(data),
+    edits: [...check.edits],
+    generationVersion: data.generationVersion ?? 1,
+    mode: gameModeOf(data.mode),
+    player: new Survival(legacyPlayer(data), data.mode).serialize(),
+  };
+  const columns = [];
+  if ([-1, 1].includes(data.dimension)) record.dimension = data.dimension;
+  for (const d of [-1, 1]) {
+    const blob = data.dimensions?.[d];
+    if (!blob || typeof blob !== 'object') continue;
+    const check = new DimensionWorld(record.seed, d);
+    check.restore(blob.edits ?? []);
+    const { edits, ...state } = blob;
+    (record.dimensions ??= {})[d] = state;
+    columns.push(...chunkRecords(viewId(record.id, d), check.edits));
+  }
+  worlds.unshift(record);
+  if (!await persist(columns)) throw new Error('World imported in memory. Export a copy because device storage is unavailable.');
+  if (gui.screen?.id === "select-world") gui.build();
+}
 $("#file-input").onchange = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   try {
     if (file.size > 128 * 1024 * 1024) throw new Error("File is too large");
-    const data = JSON.parse(await file.text());
-    if (
-      data.format !== "blockworld" ||
-      data.version !== 1 ||
-      typeof data.name !== "string" ||
-      typeof data.seed !== "string" ||
-      (!["meadow", "alpine", "island", "snowy"].includes(data.biome) && !isJavaLandscape(data.biome))
-    )
-      throw new Error("Choose a Blockworld export file");
-    const check = new World(data.seed, data.biome, data.generationVersion ?? 1, data.worldType, data.generatorOptions);
-    check.restore(data.edits);
-    const record = {
-      ...makeRecord(data),
-      ...importedRuntime(data),
-      edits: [...check.edits],
-      generationVersion: data.generationVersion ?? 1,
-      mode: gameModeOf(data.mode),
-      player: new Survival(legacyPlayer(data), data.mode).serialize(),
-    };
-    const columns = [];
-    if ([-1, 1].includes(data.dimension)) record.dimension = data.dimension;
-    for (const d of [-1, 1]) {
-      const blob = data.dimensions?.[d];
-      if (!blob || typeof blob !== 'object') continue;
-      const check = new DimensionWorld(record.seed, d);
-      check.restore(blob.edits ?? []);
-      const { edits, ...state } = blob;
-      (record.dimensions ??= {})[d] = state;
-      columns.push(...chunkRecords(viewId(record.id, d), check.edits));
-    }
-    worlds.unshift(record);
-    if (!await persist(columns)) throw new Error('World imported in memory. Export a copy because device storage is unavailable.');
-    if (gui.screen?.id === "select-world") gui.build();
+    await importBlockworldData(JSON.parse(await file.text()));
     toast("World imported.");
   } catch (err) {
     toast(err.message);
   }
+  e.target.value = "";
+};
+// Java save folder (import-screen.js): showDirectoryPicker where present, else <input webkitdirectory>.
+async function importPickedSave(entries) {
+  try {
+    const { record, report } = await importSaveFolder(entries);
+    await importBlockworldData(record);
+    const s = report.save;
+    toast(`Java save imported: ${s?.area?.width}x${s?.area?.depth} chunks around the ${s?.area?.around}. ${(s?.notImported ?? []).join('; ')}`.trim());
+  } catch (err) {
+    toast(err.message);
+  }
+}
+async function chooseSaveFolder() {
+  if (window.showDirectoryPicker) {
+    try { await importPickedSave(await entriesFromDirectoryHandle(await window.showDirectoryPicker())); }
+    catch (err) { if (err?.name !== "AbortError") toast(err.message); }
+    return;
+  }
+  $("#folder-input").click();
+}
+$("#folder-input").onchange = async (e) => {
+  const list = e.target.files;
+  if (list?.length) await importPickedSave(entriesFromFileList(list));
   e.target.value = "";
 };
 
