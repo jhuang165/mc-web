@@ -26,7 +26,7 @@ import { Experience } from './experience.js';
 import { splitRuntime } from './chunk-runtime.js';
 import { populationBlockMapperReady } from './population-world.js';
 import { streamedWorldType } from './java-world.js';
-import { structureDataFiles } from './structure-data.js';
+import { structureDataFiles, fortressDataFile } from './structure-data.js';
 import { villageDocument } from './village.js';
 import { mapDataFiles } from './maps-nbt.js';
 import { decodeBaseColumn } from './whole-save-columns.js';
@@ -293,6 +293,9 @@ export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChu
  // Structure starts: v14/v15 rerun the four range-8 searches over the exported native chunks; imported data/*.dat is merged (native precedence).
  {const {files:sd,report:sr}=await structureDataFiles({record,seed:w.javaSeed??record.seed,generationVersion:record.generationVersion??w.generationVersion,chunks:[...owned].map(k=>{const [x,z]=k.split(',').map(Number);return [x+ox/16,z+oz/16];})});
   for(const [n,b] of sd)files.set(n,b);if(sd.size)report.structureData=sr;else report.notes.push('Structure starts are not saved for this generation version; Java regenerates them from the seed.');}
+ // data/Fortress.dat: the fortress search over the exported Nether columns (structure-data.js fortressDataFile).
+ {const nether=sources.find(([prefix])=>prefix==='DIM-1/'),fort=await fortressDataFile({record,seed:w.javaSeed??record.seed,generationVersion:record.generationVersion??w.generationVersion,chunks:nether?[...nether[1].owned].map(k=>k.split(',').map(Number)):[]});
+  if(fort){files.set(fort.name,fort.bytes);report.structureData={...(report.structureData??{generated:0,imported:0,kept:0,files:[]}),fortress:fort.report};}}
  // data/villages.dat (VillageCollection "villages"): live village records, shifted by the export origin like entity positions.
  if(record.villages?.villages?.length){const sh=(v)=>({...v,c:[v.c[0]+ox,v.c[1],v.c[2]+oz],ac:[v.ac[0]+ox,v.ac[1],v.ac[2]+oz],doors:v.doors.map(d=>[d[0]+ox,d[1],d[2]+oz,d[3],d[4],d[5],...d.slice(6)])});
   files.set('data/villages.dat',await encodeCompressedNbt(villageDocument({...record.villages,villages:record.villages.villages.map(sh)})));}

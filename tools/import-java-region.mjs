@@ -3,6 +3,7 @@ import {open, readdir, stat} from 'node:fs/promises';
 import {basename, join} from 'node:path';
 import {REGION_LIMIT} from '../src/region-inspection.js';
 import {importJavaRegionArea} from '../src/region-import.js';
+import {wholeSaveRecord} from '../src/whole-save-cli.js';
 import {javaPlayerFromNbt, readLevelDat, readPlayerDat} from '../src/level-dat.js';
 
 const USAGE = `Usage: node tools/import-java-region.mjs [options] --out new.blockworld.json r.X.Z.mca [r.X.Z.mca ...]
@@ -10,6 +11,10 @@ const USAGE = `Usage: node tools/import-java-region.mjs [options] --out new.bloc
   --save DIR                           a 1.7.10 save folder: level.dat, the overworld regions covering the area, the
                                        player (Data.Player, else the only playerdata/<uuid>.dat or players/<name>.dat)
                                        and stats/<uuid>.json; the world continues with the save's seed and WorldType
+  --whole-save                         with --save: convert the whole save (every region file of the overworld, Nether and End)
+                                       and embed the stored full columns under "bases" in the .blockworld.json (the browser
+                                       importer writes them back); columns beyond ~96 MiB of JSON are left out and counted in
+                                       wholeSave.basesOmitted (they regenerate from the seed). No --area options apply.
   --level level.dat                    read the generator, flags and player from this level.dat (with region paths)
   --player-file PLAYER.dat             a playerdata/<uuid>.dat or players/<name>.dat instead of Data.Player
   --stats stats.json                   a stats/<uuid>.json for the statistics and achievements
@@ -65,6 +70,19 @@ async function saveStats(dir, playerPath) {
   return files.length === 1 ? join(dir, 'stats', files[0]) : null;
 }
 
+// --whole-save: the save folder as importWholeSave entries ({path, size, modified, read}); only level.dat and the region files.
+async function saveEntries(dir) {
+  const prefix = basename(dir) || 'save', entries = [];
+  const add = async (rel) => {
+    const path = join(dir, rel), info = await stat(path).catch(() => null);
+    if (!info?.isFile()) return;
+    entries.push({ path: `${prefix}/${rel.split('\\').join('/')}`, size: info.size, modified: info.mtimeMs, read: () => readBounded(path) });
+  };
+  await add('level.dat');
+  for (const sub of ['region', 'DIM-1/region', 'DIM1/region'])
+    for (const f of (await list(join(dir, sub))).filter((n) => n.endsWith('.mca'))) await add(`${sub}/${f}`);
+  return entries;
+}
 async function writeNew(path, text) {
   const file = await open(path, 'wx');
   try { await file.writeFile(text); } finally { await file.close(); }
@@ -77,7 +95,7 @@ const integers = (text, counts) => {
 
 try {
   const args = process.argv.slice(2), inputs = [], options = {};
-  let out = null, reportPath = null, saveDir = null, levelPath = null, playerPath = null, statsPath = null;
+  let wholeSave = false, out = null, reportPath = null, saveDir = null, levelPath = null, playerPath = null, statsPath = null;
   const dimensionAreas = new Map();
   while (args.length) {
     const arg = args.shift();
@@ -96,6 +114,7 @@ try {
     else if (arg === '--name') options.name = value();
     else if (arg === '--survival') options.mode = 'survival';
     else if (arg === '--no-sky') options.hasSky = false;
+    else if (arg === '--whole-save') wholeSave = true;
     else if (arg === '--save') saveDir = value();
     else if (arg === '--level') levelPath = value();
     else if (arg === '--player-file') playerPath = value();
@@ -105,6 +124,16 @@ try {
     else if (arg === '--report') reportPath = value();
     else if (arg.startsWith('--')) throw new Error(USAGE);
     else inputs.push(arg);
+  }
+  if (wholeSave) {
+    if (!saveDir || levelPath || inputs.length || dimensionAreas.size || options.area || options.destination) throw new Error('--whole-save takes only --save DIR (plus --name, --report, --out)');
+    if (!out?.endsWith('.blockworld.json')) throw new Error(USAGE);
+    for (const path of [out, reportPath].filter(Boolean)) if (await exists(path)) throw new Error(`${path} already exists; choose a new output file`);
+    const result = await wholeSaveRecord(await saveEntries(saveDir), {name: options.name});
+    await writeNew(out, JSON.stringify(result.record));
+    if (reportPath) await writeNew(reportPath, JSON.stringify(result.report, null, 2));
+    console.log(JSON.stringify(result.report, null, 2));
+    process.exit(0);
   }
   if (saveDir && levelPath) throw new Error('Pass --save or --level, not both');
   if (saveDir) levelPath = join(saveDir, 'level.dat');

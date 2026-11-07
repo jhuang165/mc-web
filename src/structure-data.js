@@ -5,9 +5,10 @@
 // uses (StructurePopulation: same seed, ChunkProviderGenerate manager of the world's landscape).
 // Import keeps data/*.dat from a Java save as raw start compounds. Re-export merges them with native
 // precedence: an imported start for the same "[x,z]" key wins, imported-only starts (including ids this port
-// does not know, e.g. Fortress) are kept unchanged, and regenerated starts for other keys are appended.
+// does not know, e.g. a later-version id) are kept unchanged, and regenerated starts for other keys are appended.
 import { StructurePopulation } from "./structure-population.js";
-import { STRUCTURE_DATA_NAMES, featuresToNbt, compoundTag } from "./structure-nbt.js";
+import { STRUCTURE_DATA_NAMES, FORTRESS_DATA_NAME, featuresToNbt, compoundTag } from "./structure-nbt.js";
+import { MapGenNetherBridge } from "./fortress.js";
 import { ChunkProviderGenerate, BiomeTerrainState } from "./terrain-generator.js";
 import { JAVA_LANDSCAPES, javaSeed, streamedWorldType } from "./java-world.js";
 import { JavaRandom } from "./java-random.js";
@@ -70,10 +71,31 @@ export async function structureDataFiles({ record, seed, chunks, generationVersi
   return { files, report };
 }
 
+// data/Fortress.dat (MapGenNetherBridge "Fortress"). The Nether provider searches every chunk it provides, so export reruns the
+// range-8 fortress search over the exported Nether chunks (native coordinates, no origin shift: the Nether is not offset).
+// MapStorage is shared by the three dimensions in 1.7.10 (WorldServerMulti reuses the overworld's), so the file sits in the
+// root data/ directory. Starts are written in their created state (pieces keep the flags a fresh generation has); imported
+// starts for the same key win, imported-only ones are kept unchanged. Returns the gzip bytes or null.
+export async function fortressDataFile({ record, seed, chunks, generationVersion }) {
+  const imported = record?.structureData?.[FORTRESS_DATA_NAME], entries = new Map(), report = { generated: 0, imported: 0, starts: 0 };
+  if (imported) {
+    const document = await decodeCompressedNbt(Uint8Array.from(atob(imported), (c) => c.charCodeAt(0)));
+    for (const [key, tag] of featureTags(document)) { entries.set(key, tag); report.imported++; }
+  }
+  if (hasStructureData(generationVersion) && chunks.length) {
+    const bridge = new MapGenNetherBridge(javaSeed(seed));
+    for (const [cx, cz] of [...chunks].sort((a, b) => a[0] - b[0] || a[1] - b[1])) bridge.generate(cx, cz);
+    for (const [key, tag] of featuresToNbt(bridge.structureMap.entries.map((e) => e.value)).value) if (!entries.has(key)) { entries.set(key, tag); report.generated++; }
+  }
+  if (!imported && !report.generated) return null;
+  report.starts = entries.size;
+  return { name: `data/${FORTRESS_DATA_NAME}.dat`, bytes: await encodeCompressedNbt(dataDocument([...entries])), report };
+}
+
 // Import side: parse data/*.dat. Keeps the gzip bytes (base64) and counts starts and ids; never throws on unknown ids.
 export async function parseStructureDataFiles(inputs) {
   const structureData = {}, report = { files: [], starts: 0, unknownIds: {}, invalid: [] };
-  const known = new Set(["Mineshaft", "Village", "Stronghold", "Temple"]);
+  const known = new Set(["Mineshaft", "Village", "Stronghold", "Temple", "Fortress"]);
   for (const { filename, bytes } of inputs) {
     const m = /^(?:.*\/)?([A-Za-z]+)\.dat$/.exec(filename);
     if (!m) continue;

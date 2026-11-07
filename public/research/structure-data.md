@@ -8,7 +8,7 @@
 - `report.structureData` gives generated/imported counts and files.
 
 ## Import (`region-import.js`)
-`importJavaRegionArea(regions, {structureData: [{filename, bytes}]})` parses each `*.dat` with `structure-nbt.js` tag readers, counts starts and ids (`report.structures.unknownIds`, e.g. `Fortress`), lists corrupt files in `invalid` and never throws on them. The gzip bytes are kept in `record.structureData` (`{Name: base64}`) only when the imported area is aligned with the generator frame (otherwise coordinates would not match the browser world; `kept:false`).
+`importJavaRegionArea(regions, {structureData: [{filename, bytes}]})` parses each `*.dat` with `structure-nbt.js` tag readers, counts starts and ids (`report.structures.unknownIds`, e.g. a later-version id), lists corrupt files in `invalid` and never throws on them. The gzip bytes are kept in `record.structureData` (`{Name: base64}`) only when the imported area is aligned with the generator frame (otherwise coordinates would not match the browser world; `kept:false`).
 
 Decision: merge, native precedence. On export, imported start compounds are kept as raw tags (unknown ids and pieces survive unchanged), regenerated starts are added only for keys the file lacks; versions 8-13 re-export the imported files unchanged. Merge order is imported first, then new starts, in `HashMap` key order.
 

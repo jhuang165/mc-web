@@ -13,6 +13,7 @@ import { JavaRandom } from "./java-random.js";
 import { materialSolid } from "./plants.js";
 import { BED, BED_DIR, isBedHead } from "./bed.js";
 import { readChunkEdits } from "./world-storage.js";
+import { restoreImportedFortress } from "./fortress-restore.js";
 import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf, portalCooldown, readPlayerPortalState } from "./dimensions.js";
 import { EntityPortals, placeAfterTravel, POS_Y, mobYawToMc, mcToMobYaw } from "./entity-portal.js";
 import { entityActive } from "./streaming-ticks.js";
@@ -97,6 +98,7 @@ export class DimensionLive {
   createWorld(record) { return record.rootId ? new DimensionWorld(record.seed, record.dimension) : new World(record.seed, record.biome, record.generationVersion ?? 1, record.worldType, record.generatorOptions); }
   // Called after the world exists and before the saved position is read. Sets record.position for a travel arrival.
   async arrive(prepared, record) {
+    await restoreImportedFortress(prepared, record); // imported data/Fortress.dat starts (Nether views only)
     const t = record.transit; delete record.transit; this.writes = []; this.exit = false; this.peeks.clear();
     if (!t) return;
     const to = dimensionOf(record), from = t.from;
