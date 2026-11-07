@@ -235,7 +235,8 @@ import { discName } from "./note-jukebox-content.js";
 import { MusicTicker, ambientMusicType, recordSound } from "./music.js";
 import { MoodSound, moodLight } from "./cave-ambience.js";
 import { status as bossStatus } from "./boss-bar.js";
-import { countHtml, zeroCountHtml, tooltipHtml, drawLabels, xpLevelHtml, bitmapHtml } from "./bitmap-text.js";
+import { countHtml, zeroCountHtml, tooltipHtml, drawLabels, drawLabel, xpLevelHtml, bitmapHtml } from "./bitmap-text.js";
+import { labelsHtml, shellHtml, placeShell, drawBeaconLabels } from "./container-screens.js";
 import { entityDisplayName } from "./entity-names.js";
 import { Doors, WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, blockItemId, solidTopSurface } from "./doors-panes.js";
 import { spawnPointOf } from "./dimension-spawning.js"; // SpawnerAnimals' spawn point: the Overworld's in every dimension
@@ -713,24 +714,24 @@ function showHeldName() {
     1300,
   );
 }
+let shellDispose = null;
 function closeModal() {
   closeContainer();
+  shellDispose?.(); shellDispose = null;
+  $("#modal").classList.remove("gui-shell");
   $("#modal").classList.add("hidden");
   $("#modal").innerHTML = "";
 }
-function modal(title, body, extra = "") {
+// A GuiContainer host (the former page dialog, without its title bar and close button) (container-screens.js places the panel).
+function containerShell(kind, body, extra, opts, mode = kind) {
   eating = null;
   keys.clear();
   if (screen === "playing") screen = "paused";
   if (document.pointerLockElement) document.exitPointerLock();
-  $("#modal").innerHTML =
-    `<div class="modal ${extra}"><div class="modal-top"><button class="close-button" aria-label="Close dialog">×</button></div><h2 id="modal-title">${title}</h2>${body}</div>`;
+  shellDispose?.();
+  $("#modal").innerHTML = shellHtml(extra, (opts.noLabels ? "" : labelsHtml(kind, opts)) + body);
   $("#modal").classList.remove("hidden");
-  $("#modal .close-button").onclick = () => {
-    if (screen === "inventory") resume();
-    else if (screen === "paused") pause();
-    else if (screen !== "dead") closeModal();
-  };
+  shellDispose = placeShell($("#modal"), mode, opts);
   $("#modal").querySelector("button,input")?.focus();
 }
 // Port-only build notes (no 1.7.10 screen, no trigger element in index.html today): glyph text on a Gui screen.
@@ -1715,7 +1716,7 @@ function renderCreativeBody() {
       const a = tabArea(t, t === selected);
       return `<button class="creative-tab${t === selected ? " selected" : ""}" data-creative-tab="${t.index}" aria-label="${esc(t.name)}" aria-pressed="${t === selected}" style="left:calc(${a.x}*var(--u));top:calc(${a.y}*var(--u));background-position:calc(${-a.u}*var(--u)) calc(${-a.v}*var(--u))!important"><span style="left:calc(${a.iconX - a.x}*var(--u));top:calc(${a.iconY - a.y}*var(--u))">${tabIcon(t)}</span></button>`;
     };
-  $("#modal-title").textContent = selected.name;
+  drawLabel($("#modal-title"), selected.name);
   $("#modal-title").hidden = !selected.title;
   $("#modal .creative-body").innerHTML =
     CREATIVE_TABS.filter((t) => t !== selected).map(tabHtml).join("") +
@@ -1758,18 +1759,21 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
       : kind === "anvil"
       ? '<i class="anvil-name-background" id="anvil-name-background"></i><input id="anvil-name" aria-label="Item name" maxlength="40" autocomplete="off" spellcheck="false" disabled><span id="anvil-cost" class="anvil-cost" aria-live="polite"></span><i class="anvil-error" id="anvil-error" hidden></i>'
       : kind === "brewing"
-      ? '<i class="brewing-bubbles" id="brewing-bubbles"></i><i class="brewing-arrow" id="brewing-arrow"></i><span class="chest-bag-label">' + containerTitle('Inventory') + '</span>'
+      ? '<i class="brewing-bubbles" id="brewing-bubbles"></i><i class="brewing-arrow" id="brewing-arrow"></i>'
       : kind === "furnace"
       ? '<i class="furnace-flame" id="furnace-flame"></i><i class="furnace-arrow" id="furnace-arrow"></i>'
       : kind === "horse"
-      ? `${container.horse.chested ? '<i class="horse-chest-bg"></i>' : ""}${horseWearsArmor(container.horse.type) ? '<i class="horse-armor-bg"></i>' : ""}<span class="chest-bag-label">${containerTitle("Inventory")}</span>`
+      ? `${container.horse.chested ? '<i class="horse-chest-bg"></i>' : ""}${horseWearsArmor(container.horse.type) ? '<i class="horse-armor-bg"></i>' : ""}`
       : kind === "chest" || kind === "dispenser" || kind === "hopper"
-        ? '<i class="chest-bottom" aria-hidden="true"></i><span class="chest-bag-label">' + containerTitle('Inventory') + '</span>'
-        : `<span class="native-bag-label">${containerTitle("Inventory")}</span><span class="native-crafting-label">${containerTitle("Crafting")}</span>`;
-  modal(
-    kind === "horse" ? esc(container.title) : containerTitle(container.title ?? CONTAINER_TITLES[kind]), // a horse title can be a player-chosen name
+        ? '<i class="chest-bottom" aria-hidden="true"></i>'
+        : "";
+  // GuiContainer shell (container-screens.js): drawDefaultBackground gradient, panel at guiLeft / guiTop, glyph labels, no title bar or close button.
+  const shellTitle = kind === "inventory" || kind === "workbench" ? containerTitle("Crafting") : kind === "creative" ? "" : containerTitle(container.title ?? CONTAINER_TITLES[kind]);
+  containerShell(
+    kind,
     kind === "creative" ? '<div class="creative-body"></div>' : slotsHtml(container) + decorations,
     CONTAINER_CLASSES[kind] ? `${CONTAINER_CLASSES[kind]} container-screen` : "inventory-modal native-inventory container-screen" + (kind === "workbench" ? " native-workbench" : ""),
+    { title: shellTitle, inventory: containerTitle("Inventory"), rows: container.rows },
   );
   if (kind === "inventory") $("#modal .container-screen")?.insertAdjacentHTML("beforeend", '<div class="effect-list" id="effect-list"></div>');
   attachPaperdoll(kind === "inventory" ? "inventory" : null);
@@ -1777,6 +1781,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   if (kind === "chest") $("#modal .modal").style.setProperty("--rows", container.rows);
   $("#modal").insertAdjacentHTML("beforeend", '<div class="cursor-stack" id="cursor-stack" aria-hidden="true"></div><div class="slot-tooltip hidden" id="slot-tooltip" role="tooltip"></div>');
   drawLabels($("#modal")); // titles and the "Inventory" label in FontRenderer glyphs, 0x404040 without a shadow
+  if (kind === "beacon") drawBeaconLabels($("#modal"));
   document.activeElement?.blur();
   containerView = { container, gui, kind, key, hovered: null, x: innerWidth / 2, y: innerHeight / 2, gx: -1, gy: -1, shown: [] };
   enchantExtras?.dispose();
@@ -2749,7 +2754,7 @@ function edit(place = false) {
     useBed,
     openSignEditor: (tile) => { screen = "inventory"; mining = null; mineHeld = false; openSignEditor(signEditHost(gui, { close: resume, markUnsaved: () => { saved = false; } }), signs, tile, world); syncContainerState(); },
     // GuiScreenBook (book-ui.js); MC|BEdit / MC|BSign are applied to the selected stack as NetHandlerPlayServer does.
-    openBook: (held) => { if (!held) return; screen = "inventory"; mining = null; mineHeld = false; openBookUi({ show: (title, html) => modal(title, html, "book-modal"), close: () => { resume(); renderHotbar(); }, markUnsaved: () => { saved = false; } }, { stack: held, editable: held.id === ITEM_WRITABLE_BOOK, playerName: PLAYER_NAME, send: (channel, packet) => { (channel === "MC|BSign" ? applyBookSign : applyBookEdit)(survival.held, packet, PLAYER_NAME); renderHotbar(); } }); syncContainerState(); },
+    openBook: (held) => { if (!held) return; screen = "inventory"; mining = null; mineHeld = false; openBookUi({ show: (title, html) => containerShell("book", html, "book-modal", { noLabels: true }, "screen"), close: () => { resume(); renderHotbar(); }, markUnsaved: () => { saved = false; } }, { stack: held, editable: held.id === ITEM_WRITABLE_BOOK, playerName: PLAYER_NAME, send: (channel, packet) => { (channel === "MC|BSign" ? applyBookSign : applyBookEdit)(survival.held, packet, PLAYER_NAME); renderHotbar(); } }); syncContainerState(); },
     useCommandBlock: openCommandBlock,
     // ItemRecord.onItemUse / BlockJukebox / BlockNote.onBlockActivated; the disc leaves the stack outside Creative.
     useNoteJukebox: (x, y, z, held) => {

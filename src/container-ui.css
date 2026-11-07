@@ -14,7 +14,7 @@
 .native-inventory .native-crafting-label{left:calc(86*var(--u));top:calc(16*var(--u))}.native-workbench .native-crafting-label{left:calc(28*var(--u));top:calc(6*var(--u))}.native-inventory .native-bag-label{display:none}.native-workbench .native-bag-label{display:block;left:calc(8*var(--u));top:calc(72*var(--u))}
 .native-inventory .native-crafting-label,.native-workbench .native-bag-label,.furnace-modal h2{font-size:calc(8*var(--u));line-height:calc(8*var(--u));margin:0;padding:0;text-shadow:none}
 .native-inventory:after,.furnace-modal:after{display:none}.native-player{left:calc(28.5*var(--u));top:calc(15*var(--u));transform:scale(calc(var(--gui-scale)*.625));transform-origin:top left}
-.furnace-modal h2{top:calc(6*var(--u));left:0;right:0}.furnace-modal:before{left:calc(8*var(--u));top:calc(72*var(--u));font-size:calc(8*var(--u));line-height:calc(8*var(--u))}
+.furnace-modal h2{top:calc(6*var(--u));left:0;right:0}
 .furnace-modal .furnace-slots>div:first-child{left:calc(56*var(--u));top:calc(17*var(--u))}.furnace-modal .furnace-slots>div:last-child{left:calc(116*var(--u));top:calc(35*var(--u))}.furnace-modal .furnace-fuel{left:calc(56*var(--u));top:calc(53*var(--u))}
 .furnace-modal .furnace-slot{position:relative;display:block;width:calc(16*var(--u));height:calc(16*var(--u));min-height:0;line-height:0;margin:0!important;padding:0!important;overflow:visible}
 .furnace-modal #furnace-fire{left:calc(56*var(--u));top:calc(36*var(--u));width:calc(14*var(--u));height:calc(14*var(--u));background-size:calc(256*var(--u)) calc(256*var(--u));background-position:calc(-176*var(--u)) 0}.furnace-modal #furnace-progress{left:calc(79*var(--u));top:calc(35*var(--u));width:calc(24*var(--u));height:calc(17*var(--u))}.furnace-modal #furnace-progress::-webkit-progress-value{background-position:calc(-176*var(--u)) calc(-14*var(--u));background-size:calc(256*var(--u)) calc(256*var(--u))}
@@ -274,3 +274,9 @@ body:has(.beacon-modal) #toast{display:none}
 #experience-level{text-shadow:none!important}.xp-copy{white-space:pre}
 #debug{font-size:calc(8*var(--u));line-height:calc(9*var(--u));white-space:pre;padding:calc(3*var(--u));border-radius:0;top:calc(10*var(--u));left:calc(2*var(--u))}
 #debug .mc-text{height:calc(9*var(--u));line-height:calc(8*var(--u))}
+/* Batch 22: native GuiContainer shell (container-screens.js). drawDefaultBackground gradient 0xC0101010 -> 0xD0101010 over the whole display, the panel
+   absolutely placed at guiLeft / guiTop (set inline), glyph labels in 0x404040 with no shadow, no title bar or close button. */
+#modal.gui-shell{display:block;padding:0;overflow:hidden;backdrop-filter:none;background:linear-gradient(rgba(16,16,16,.7529),rgba(16,16,16,.8157))}
+#modal.gui-shell>.gui-shell-panel{position:absolute;margin:0!important;transform:none!important;max-height:none}
+.gui-shell-panel .gui-label{position:absolute;margin:0;padding:0;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-shadow:none;white-space:nowrap;pointer-events:none;z-index:2}
+.gui-shell-panel .gui-label[hidden]{display:none}

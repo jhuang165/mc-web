@@ -72,7 +72,7 @@ export function drawLabel(el, text, color = 0x404040) {
   el.classList.add("mc-text", "flat");
   el.innerHTML = bitmapHtml(text, color);
 }
-export function drawLabels(root, selector = ".native-bag-label,.native-crafting-label,.chest-bag-label,.merchant-bag-label,#modal-title") {
+export function drawLabels(root, selector = ".gui-label,.native-bag-label,.native-crafting-label,.chest-bag-label,.merchant-bag-label,#modal-title") {
   for (const el of root.querySelectorAll(selector)) drawLabel(el, el.dataset.bitmap ?? el.textContent);
 }
 

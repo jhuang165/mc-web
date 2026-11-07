@@ -1,0 +1,51 @@
+{
+  "evidence": "bytecode-read = javap -c -p -constants on the unchanged 1.7.10 jar (class names are the obfuscated ones from joined-1.7.10.srg); nothing was executed. headless-measured = DOM geometry in headless Chrome at 854x480 (GUI scale 2). assumed = not from the jar.",
+  "guiContainer": {
+    "class": "GuiContainer (bex)",
+    "defaultXSize": 176,
+    "defaultYSize": 166,
+    "guiLeft": "(width - xSize) / 2 (int division of the ScaledResolution size ceil(display / scale)), bytecode-read bex.b()",
+    "guiTop": "(height - ySize) / 2, bytecode-read bex.b()",
+    "background": "drawDefaultBackground (GuiScreen bdw.c_): with a world drawGradientRect(0,0,width,height,-1072689136,-804253680) = 0xC0101010 -> 0xD0101010, bytecode-read",
+    "titleColor": 4210752,
+    "titleColorHex": "0x404040",
+    "titleDraw": "FontRenderer.drawString(text, x, y, 0x404040), no shadow, in the translated foreground layer, bytecode-read",
+    "keyTyped": "Escape (1) or key.inventory calls closeScreen; then hotbar keys and key.drop act on the hovered slot; bytecode-read bex.a(char,int)",
+    "slotHighlight": "0x80FFFFFF over 16x16 (-2130706433), bytecode-read"
+  },
+  "screens": {
+    "inventory": { "class": "GuiInventory (bfu)", "xSize": 176, "ySize": 166, "labels": [{ "key": "container.crafting", "x": 86, "y": 16 }], "inventoryLabel": null },
+    "workbench": { "class": "GuiCrafting (bfj)", "xSize": 176, "ySize": 166, "labels": [{ "key": "container.crafting", "x": 28, "y": 6 }], "inventoryLabel": { "x": 8, "y": "ySize - 96 + 2 = 72" } },
+    "chest": { "class": "GuiChest (bfi)", "xSize": 176, "ySize": "222 - 108 + rows * 18", "labels": [{ "key": "inventory name", "x": 8, "y": 6 }], "inventoryLabel": { "x": 8, "y": "ySize - 96 + 2" }, "note": "ender chest and trapped chest use the same class with 3 rows; large chest 6 rows (ySize 222)" },
+    "furnace": { "class": "GuiFurnace (bfr)", "xSize": 176, "ySize": 166, "labels": [{ "key": "inventory name", "x": "xSize / 2 - getStringWidth / 2", "y": 6 }], "inventoryLabel": { "x": 8, "y": 72 } },
+    "dispenser": { "class": "GuiDispenser (bfy)", "xSize": 176, "ySize": 166, "labels": [{ "key": "inventory name", "x": "xSize / 2 - getStringWidth / 2", "y": 6 }], "inventoryLabel": { "x": 8, "y": 72 }, "note": "dropper uses the same class" },
+    "hopper": { "class": "GuiHopper (bfs)", "xSize": 176, "ySize": 133, "labels": [{ "key": "inventory name", "x": 8, "y": 6 }], "inventoryLabel": { "x": 8, "y": 39 } },
+    "brewing": { "class": "GuiBrewingStand (bfg)", "xSize": 176, "ySize": 166, "labels": [{ "key": "inventory name", "x": "xSize / 2 - getStringWidth / 2", "y": 6 }], "inventoryLabel": { "x": 8, "y": 72 } },
+    "enchanting": { "class": "GuiEnchantment (bfq)", "xSize": 176, "ySize": 166, "labels": [{ "key": "container.enchant", "x": 12, "y": 5 }], "inventoryLabel": { "x": 8, "y": 72 } },
+    "anvil": { "class": "GuiRepair (bey)", "xSize": 176, "ySize": 166, "labels": [{ "key": "container.repair", "x": 60, "y": 6 }], "inventoryLabel": null, "note": "the cost line (container.repair.cost, 0x80FF20 or 0xFF6060 with a drop shadow) is drawn by the existing DOM host" },
+    "beacon": { "class": "GuiBeacon (bez)", "xSize": 230, "ySize": 219, "labels": [{ "key": "tile.beacon.primary", "centerX": 62, "y": 10, "color": "0xE0E0E0", "centered": true }, { "key": "tile.beacon.secondary", "centerX": 169, "y": 10, "color": "0xE0E0E0", "centered": true }], "inventoryLabel": null, "note": "drawCenteredString (with shadow)" },
+    "merchant": { "class": "GuiMerchant (bfv)", "xSize": 176, "ySize": 166, "labels": [{ "key": "villager name", "x": "xSize / 2 - getStringWidth / 2", "y": 6 }], "inventoryLabel": { "x": 8, "y": 72 } },
+    "horse": { "class": "GuiScreenHorseInventory (bft)", "xSize": 176, "ySize": 166, "labels": [{ "key": "horse name", "x": 8, "y": 6 }], "inventoryLabel": { "x": 8, "y": 72 } },
+    "creative": { "class": "GuiContainerCreative (bfl)", "xSize": 195, "ySize": 136, "labels": [{ "key": "selected tab name (while the tab draws its title)", "x": 8, "y": 6 }], "inventoryLabel": null }
+  },
+  "book": {
+    "class": "GuiScreenBook (bfe)",
+    "note": "A plain GuiScreen, not a container: drawDefaultBackground, page texture 192 x 192 at (width - 192) / 2, y 2. The port's book-ui.js lays it out on a fixed 320 unit width (assumed); the shell puts that 320 unit box at x trunc((scaledWidth - 320) / 2), y 0."
+  },
+  "headlessMeasured": {
+    "display": "854x480, GUI scale 2, scaled 427 x 240",
+    "inventory": { "guiLeft": 125, "guiTop": 37, "labels": [["Crafting", 86, 16]] },
+    "chest3": { "guiLeft": 125, "guiTop": 36, "ySize": 168, "labels": [["Chest", 8, 6], ["Inventory", 8, 74]] },
+    "furnace": { "guiLeft": 125, "guiTop": 37, "labels": [["Furnace", 67, 6], ["Inventory", 8, 72]] },
+    "dispenser": { "guiLeft": 125, "guiTop": 37, "labels": [["Dispenser", 63, 6], ["Inventory", 8, 72]] },
+    "hopper": { "guiLeft": 125, "guiTop": 53, "ySize": 133, "labels": [["Item Hopper", 8, 6], ["Inventory", 8, 39]] },
+    "brewing": { "guiLeft": 125, "guiTop": 37, "labels": [["Brewing Stand", 53, 6], ["Inventory", 8, 72]] },
+    "enchanting": { "guiLeft": 125, "guiTop": 37, "labels": [["Enchant", 12, 5], ["Inventory", 8, 72]] },
+    "anvil": { "guiLeft": 125, "guiTop": 37, "labels": [["Repair & Name", 60, 6]] },
+    "beacon": { "guiLeft": 98, "guiTop": 10, "xSize": 230, "ySize": 219 },
+    "workbench": { "guiLeft": 125, "guiTop": 37, "labels": [["Crafting", 28, 6], ["Inventory", 8, 72]] },
+    "creative": { "guiLeft": 116, "guiTop": 52, "labels": [["Building Blocks", 8, 6]] },
+    "book": { "x": 53, "y": 0 }
+  },
+  "notNativeVerified": ["horse and merchant live screens were not opened in a world", "the sheet textures, slot positions and widgets inside each panel are unchanged from earlier batches", "GuiScreenBook width fixed at 320 units"]
+}
