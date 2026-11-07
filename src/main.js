@@ -4,7 +4,7 @@ import { StreamStorage } from './streaming-storage.js';
 import { isColoredBlock, carpetNeighbourChange, coloredPickDamage, COLORED_ITEM_OFFSET, CARPET } from './colored-blocks.js';
 import { ContainerResidency } from './container-residency.js';
 import { acquireWorldWriter } from './world-lock.js';
-import { readWorldShelf, writeWorldShelf, deleteStoredWorld, readChunkEdits, readRuntimeState, chunkRecords } from './world-storage.js';
+import { readWorldShelf, writeWorldShelf, deleteStoredWorld, readChunkEdits, readRuntimeState, chunkRecords, writeBaseColumns, readBaseColumns } from './world-storage.js';
 import {PopulationBlocks} from './population-blocks.js';
 import {hasSavedStructures as hasSavedPopulation} from './structure-simulation.js';
 import {restorePopulation,restorePopulationColumns} from './population-runtime.js';
@@ -20,7 +20,8 @@ import { createMenus } from "./menus.js";
 import { folderName, LANG, t as langT } from "./menu-screens.js";
 import { initResourcePacks } from "./resource-packs.js";
 import { worldDifficulty, gameOverView, deleteWorldStorage, HARDCORE_KICK, GAME_OVER_ENABLE_TICKS } from "./hardcore.js";
-import { importSaveFolder, entriesFromFileList, entriesFromDirectoryHandle } from "./save-folder-import.js";
+import { importSaveFolder, entriesFromFileList, entriesFromDirectoryHandle, indexSave } from "./save-folder-import.js";
+import { importWholeSave, regionFiles } from "./whole-save-import.js";
 import { canGoEndless, endlessCopy } from "./endless-world.js";
 import {guiScale,stackCount,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks,withGlint,itemTint} from "./gui.js";
 import { stackHasEffect } from "./armor-enchantments.js";
@@ -884,7 +885,7 @@ function chooseExport(record=active) {
     try {
       const snapshot = await exportSnapshot(record);
       const {exportJavaSave}=await import('./region-export.js');
-      const result=await exportJavaSave(snapshot,{onProgress:(n,total)=>{$('#export-java').textContent=`Exporting ${n} / ${total} columns…`;}});
+      const result=await exportJavaSave(snapshot,{readBases:readBaseColumns,maxChunks:snapshot.wholeSave?16384:4096,onProgress:(n,total)=>{$('#export-java').textContent=`Exporting ${n} / ${total} columns…`;}});
       const url=URL.createObjectURL(new Blob([result.zip],{type:'application/zip'})),a=document.createElement('a');a.href=url;a.download=record.name.replace(/[^a-z0-9]/gi,'-').toLowerCase()+'.java-1.7.10.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
       back();toast(`Java save exported (${result.report.columns} columns). Unzip it into the Java saves folder; conversion notes are included.`);
     }catch(e){toast('Could not export Java save: '+e.message);for(const b of buttons)b.disabled=false;$('#export-java').textContent='Java 1.7.10 save (.zip)';}
@@ -3005,7 +3006,7 @@ function bindActions() {
 $("#pause-button").onclick = pause;
 $("#fullscreen").onclick = toggleFullscreen;
 // Shared by the Blockworld .json import and the Java save-folder import (which builds the same export object).
-async function importBlockworldData(data) {
+async function importBlockworldData(data, { id } = {}) {
   if (
     data.format !== "blockworld" ||
     data.version !== 1 ||
@@ -3018,6 +3019,8 @@ async function importBlockworldData(data) {
   check.restore(data.edits);
   const record = {
     ...makeRecord(data),
+    ...(id ? { id } : {}),
+    ...(data.wholeSave ? { wholeSave: data.wholeSave } : {}),
     ...importedRuntime(data),
     edits: [...check.edits],
     generationVersion: data.generationVersion ?? 1,
@@ -3052,8 +3055,30 @@ $("#file-input").onchange = async (e) => {
   e.target.value = "";
 };
 // Java save folder (import-screen.js): showDirectoryPicker where present, else <input webkitdirectory>.
+let importAbort = null;
 async function importPickedSave(entries) {
+  if (importAbort) return;
   try {
+    // A save with Anvil region files is imported whole (whole-save-import.js): every chunk becomes a stored column. Others use the area importer.
+    if (regionFiles(indexSave(entries).files).length) {
+      const worldId = crypto.randomUUID(), abort = importAbort = new AbortController();
+      const status = (text) => { menuContext.importStatus = text; if (gui.screen?.id === "import-world") gui.build(); };
+      menuContext.importCancel = () => abort.abort();
+      let last = 0;
+      try {
+        const { record, report } = await importWholeSave(entries, { worldId, writeBases: writeBaseColumns, signal: abort.signal, onProgress: (p) => {
+          const now = performance.now(); if (now - last < 250) return; last = now;
+          status(p.phase === 'chunks' ? `Importing chunks: ${p.chunks} (region file ${p.fileIndex + 1} / ${p.fileCount})` : 'Reading level.dat...');
+        } });
+        await importBlockworldData(record, { id: worldId });
+        const s = report.save, c = report.chunks;
+        toast(`Java save imported whole: ${c.converted} chunks (${c.overworld} Overworld, ${c.nether} Nether, ${c.end} End)${c.skipped ? `, ${c.skipped} skipped` : ''}. ${(s?.notImported ?? []).join('; ')}`.trim());
+      } catch (err) {
+        for (const id of [worldId, `${worldId}~-1`, `${worldId}~1`]) await deleteStoredWorld(id).catch(() => {});
+        throw err.name === 'AbortError' ? new Error('Import cancelled') : err;
+      } finally { importAbort = null; menuContext.importStatus = ''; menuContext.importCancel = null; if (gui.screen?.id === "import-world") gui.build(); }
+      return;
+    }
     const { record, report } = await importSaveFolder(entries);
     await importBlockworldData(record);
     const s = report.save;

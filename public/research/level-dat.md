@@ -1,6 +1,6 @@
 # level.dat, player data and stats import (1.7.10)
 
-`src/level-dat.js` reads a 1.7.10 `level.dat`, the singleplayer player and `stats/<uuid>.json`, and `importJavaRegionArea(regions, { level, player, stats })` (`src/region-import.js`) turns them, with the region area around the player, into a Blockworld export that continues as the source world: same seed, same WorldType and generator options, streamed (endless) in the generator's native frame. It is still a one-way conversion of one 8×8 chunk area, not save migration.
+`src/level-dat.js` reads a 1.7.10 `level.dat`, the singleplayer player and `stats/<uuid>.json`, and `importJavaRegionArea(regions, { level, player, stats })` (`src/region-import.js`) turns them, with the region area around the player, into a Blockworld export that continues as the source world: same seed, same WorldType and generator options, streamed (endless) in the generator's native frame. The CLI is still a one-way conversion of one 8×8 chunk area. The browser Import screen (batch 15, `whole-save-import.js`) imports the whole save: every chunk of `region/`, `DIM-1/region` and `DIM1/region` becomes a stored full column, see [region-import](region-import.md#whole-save-import-batch-15).
 
 ```sh
 # The 8x8 chunks around the player (else the world spawn), with level.dat, the player and stats/<uuid>.json:

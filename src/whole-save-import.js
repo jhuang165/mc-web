@@ -65,14 +65,25 @@ const tally = (map, key, n = 1) => map.set(key, (map.get(key) ?? 0) + n);
 const LIST_SKIP = new Set(["populatedColumns", "containerScope", "editSequence", "dragonSpawned"]);
 const CELL_BIT = (x, z) => 1n << BigInt((x & 7) * 8 + (z & 7));
 // Merge one converter record's runtime state into an accumulator {state, tiles, cells: Map cell key -> BigInt mask}.
+// Vehicle ids (boats, carts) made for ridden chains start at 1000000 in every converter call: remap them to a save-wide counter
+// and rewrite the "boat-<id>" / "cart-<id>" riding links of the mobs that sit in them.
+const RIDDEN_VEHICLE = 1000000;
+function vehicleIdMap(acc, state) {
+  const map = new Map();
+  const take = (kind, list) => { for (const v of list ?? []) if (Number.isInteger(v?.id) && v.id >= RIDDEN_VEHICLE) map.set(`${kind}-${v.id}`, acc.nextVehicle ??= RIDDEN_VEHICLE), acc.nextVehicle++; };
+  take("boat", state?.boats); take("cart", state?.minecarts?.carts);
+  return map;
+}
 function mergeRuntime(acc, state, tiles, seq) {
+  const vehicles = vehicleIdMap(acc, state);
+  const vehicleOf = (v, kind) => { if (Number.isInteger(v?.id) && vehicles.has(`${kind}-${v.id}`)) v.id = Number(vehicles.get(`${kind}-${v.id}`)); };
   for (const [name, value] of Object.entries(state ?? {})) {
     if (name === "populatedColumns") {
       for (const [k, hex] of Object.entries(value.cells)) acc.cells.set(k, (acc.cells.get(k) ?? 0n) | BigInt(`0x${hex}`));
     } else if (LIST_SKIP.has(name)) continue;
     else if (name === "minecarts") {
       const m = (acc.state.minecarts ??= { version: 1, carts: [] });
-      for (const c of value.carts ?? []) m.carts.push(c);
+      for (const c of value.carts ?? []) { vehicleOf(c, "cart"); m.carts.push(c); }
     } else if (name === "eyes" || name === "rockets") {
       const m = (acc.state[name] ??= { [name]: [] });
       for (const e of value[name] ?? []) m[name].push(e);
@@ -82,6 +93,8 @@ function mergeRuntime(acc, state, tiles, seq) {
         // Rider pairs are linked by opaque ids that restart in every converter call: keep them unique across the save.
         if (name === "entities" && typeof e?.id === "string" && /^mob-/.test(e.id)) e.id = `${e.id}.${seq}`;
         if (name === "entities" && typeof e?.riding === "string" && /^mob-/.test(e.riding)) e.riding = `${e.riding}.${seq}`;
+        else if (name === "entities" && typeof e?.riding === "string" && vehicles.has(e.riding)) e.riding = `${e.riding.split("-")[0]}-${vehicles.get(e.riding)}`;
+        if (name === "boats") vehicleOf(e, "boat");
         list.push(e);
       }
     }

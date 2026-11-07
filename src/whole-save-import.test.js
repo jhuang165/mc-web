@@ -222,3 +222,20 @@ test('deleting the world removes its stored columns too', async () => {
   assert.deepEqual(await listBaseColumns(ID), []);
   assert.deepEqual(await readBaseColumns(`${ID}~1`, [[2, 3]]), [null]);
 });
+
+test('ridden boats in two chunks keep unique vehicle ids and intact riding links across the whole save', async () => {
+  const boated = (cx, cz) => {
+    const made = chunkOf(cx, cz), px = cx * 16 + 8.5, pz = cz * 16 + 8.5;
+    const boat = compound({ id: t(NBT.STRING, 'Boat'), Pos: list(NBT.DOUBLE, [px, 71, pz]), Motion: list(NBT.DOUBLE, [0, 0, 0]), Rotation: list(NBT.FLOAT, [0, 0]) });
+    made.entities = [compound({ id: t(NBT.STRING, 'Pig'), Pos: list(NBT.DOUBLE, [px, 71, pz]), Motion: list(NBT.DOUBLE, [0, 0, 0]), Riding: t(NBT.COMPOUND, boat) })];
+    return made;
+  };
+  const files = [file('Boats/level.dat', await levelDatBytes()),
+    file('Boats/region/r.0.0.mca', await regionBytes([boated(0, 0)])), file('Boats/region/r.1.0.mca', await regionBytes([boated(32, 0)]))];
+  const { record } = await importWholeSave(files, { worldId: 'boats-test', name: 'Boats', writeBases: writeBaseColumns });
+  const pigs = record.entities.filter((e) => e.type === 'pig'), boats = record.boats ?? [];
+  assert.equal(pigs.length, 2); assert.equal(boats.length, 2);
+  assert.equal(new Set(boats.map((b) => b.id)).size, 2);
+  assert.equal(new Set(pigs.map((p) => p.riding)).size, 2);
+  for (const pig of pigs) assert.ok(boats.some((b) => `boat-${b.id}` === pig.riding), `${pig.riding} names a boat`);
+});
