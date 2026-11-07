@@ -913,7 +913,10 @@ label > span {
   color: #959e87;
   margin-left: 7px;
 }
-input:not([type="range"], [type="checkbox"]),
+input[hidden] {
+  display: none;
+}
+input:not([type="range"], [type="checkbox"], [hidden]),
 select {
   display: block;
   width: 100%;

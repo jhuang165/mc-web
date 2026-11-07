@@ -2,6 +2,10 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 14
+
+The Resource Packs screen and pack loading (`resource-packs.md`), Super Secret Settings shaders and 3D Anaglyph (`post-shaders.md`), standable boats, mob passengers on boats and carts, the boat shadow (`boats.md`), hardcore mode and the in-browser Java save-folder import (`hardcore.md`), and the natural spawning cap, cadence, spawn point, witch hut lookup and portal pigmen fixes (`natural-spawning.md`). The rows below say what is still partial.
+
 ## Done in batch 13
 
 Music, records and cave ambience (`music.md`), level.dat, player and stats import with paintings, item frames and minecarts in region import (`level-dat.md`), key rebinding, options.txt, F1/F3 and Max Framerate (`controls.md`), natural spawning through one SpawnerAnimals port with the 1.7.10 biome spawn lists (`natural-spawning.md`), /tellraw chat components, /achievement, /spreadplayers, /debug and /scoreboard (`commands-b13.md`), and the glazed-leaf fix: cutout materials write opaque alpha and the mip transparency flag checks only the first `levels + 1` texels (`render-settings.md`). The rows below say what is still partial.
