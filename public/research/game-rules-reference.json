@@ -227,8 +227,8 @@
    "site": "EntityAIBreakDoor.shouldExecute",
    "obf": "tz.a()Z",
    "reads": 1,
-   "port": "absent",
-   "where": "the zombie break-door task is not run"
+   "port": "wired",
+   "where": "src/zombie-door.js shouldExecute"
   },
   {
    "rule": "mobGriefing",
@@ -251,32 +251,32 @@
    "site": "EntityDragon.destroyBlocksInAABB",
    "obf": "xa.a(Lazt;)Z",
    "reads": 1,
-   "port": "absent",
-   "where": "no ender dragon"
+   "port": "wired",
+   "where": "src/dragon.js destroyBlocks (host.griefing from src/dragon-mobs.js)"
   },
   {
    "rule": "mobGriefing",
    "site": "EntityEnderman.onLivingUpdate",
    "obf": "ya.e()V",
    "reads": 1,
-   "port": "absent",
-   "where": "no enderman AI"
+   "port": "wired",
+   "where": "src/enderman.js (the carry step; env.mobGriefing from src/enderman-live.js)"
   },
   {
    "rule": "mobGriefing",
    "site": "EntityLargeFireball.onImpact",
    "obf": "zg.a(Lazu;)V",
    "reads": 1,
-   "port": "absent",
-   "where": "no ghast fireballs"
+   "port": "wired",
+   "where": "src/fireballs.js large fireball impact (explosion isSmoking; flaming stays true)"
   },
   {
    "rule": "mobGriefing",
    "site": "EntityLiving.onLivingUpdate",
    "obf": "sw.e()V",
    "reads": 1,
-   "port": "absent",
-   "where": "mobs never pick up items in this build"
+   "port": "wired",
+   "where": "src/entities.js lootPickup (skips the whole loop while the rule is off)"
   },
   {
    "rule": "mobGriefing",
@@ -291,16 +291,16 @@
    "site": "EntityWitherSkull.onImpact",
    "obf": "zp.a(Lazu;)V",
    "reads": 1,
-   "port": "absent",
-   "where": "no wither skulls"
+   "port": "wired",
+   "where": "src/wither-boss-mobs.js skull impact (explosion isSmoking)"
   },
   {
    "rule": "mobGriefing",
    "site": "EntityWither.updateAITasks",
    "obf": "xc.bn()V",
    "reads": 2,
-   "port": "absent",
-   "where": "no wither"
+   "port": "wired",
+   "where": "src/wither-boss-mobs.js witherAITick (spawn explosion isSmoking and the block sweep)"
   },
   {
    "rule": "mobGriefing",
