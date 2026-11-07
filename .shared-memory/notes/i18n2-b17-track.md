@@ -6,7 +6,7 @@ Evidence: `tools/probes/KeyTraceProbe.java` (key-echoing StatCollector over the 
 
 No src/main.js or src/gui.js edits (creative tab `name` is now a translating getter). Edited: fireworks.js, creative.js, horse-gear.js, pyramid-gui.js, merchant-ui.js, dragon.js, wither-boss-renderer.js, languages.md.
 
-Tests: see final report (npm test + npm run build).
+Tests: npm test 3805 pass, 0 fail; npm run build ok.
 
 Remaining: F3 entity names, custom-named bosses on the boss bar, attacker death messages, invented aria-labels; Bidi/Arabic still out of scope.
 
