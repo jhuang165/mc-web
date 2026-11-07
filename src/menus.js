@@ -29,7 +29,6 @@ export const UNAVAILABLE = {
   multiplayer: "Multiplayer needs a connection to a Minecraft server, which a web page cannot open.",
   online: "Minecraft Realms is an online Mojang service; this browser recreation has no account sign-in.",
   quit: "A web page cannot close its own tab. Close the tab to quit.",
-  superSecret: "Super Secret Settings needs the 1.7.10 post-processing shaders, which this renderer does not have.",
   stream: "Twitch broadcasting was a desktop-only feature; a web page cannot stream.",
   showCape: "There are no accounts or capes in this browser build, so the Show Cape button is drawn disabled.",
   snooper: "This build sends no usage data, so there is nothing to configure.",
@@ -37,16 +36,15 @@ export const UNAVAILABLE = {
   touchscreen: "Touch input in this browser build uses its own on-screen controls.",
   fixedVideo: "This renderer has no switch for this setting; the button shows what it always does.",
   mapFeatures: "Structure generation is fixed by the world type in this browser build.",
-  anaglyph: "3D Anaglyph needs the red/cyan two-pass renderer, which this build does not have.",
 };
 // The renderer's fixed state, shown by the disabled video buttons.
-const FIXED = { ANAGLYPH: false, TOUCHSCREEN: false, FORCE_UNICODE_FONT: false };
+const FIXED = { TOUCHSCREEN: false, FORCE_UNICODE_FONT: false };
 // GameSettings fields of the options the port implements.
 const FIELDS = { FOV: "fov", SENSITIVITY: "sensitivity", GAMMA: "gamma", RENDER_DISTANCE: "distance", VIEW_BOBBING: "bobbing", GUI_SCALE: "guiScale", PARTICLES: "particles", DIFFICULTY: "difficulty", INVERT_MOUSE: "invertMouse", GRAPHICS: "graphics", AMBIENT_OCCLUSION: "ao", RENDER_CLOUDS: "clouds", MIPMAP_LEVELS: "mipmapLevels", ANISOTROPIC_FILTERING: "anisotropic",
   CHAT_VISIBILITY: "chatVisibility", CHAT_COLOR: "chatColors", CHAT_LINKS: "chatLinks", CHAT_OPACITY: "chatOpacity", CHAT_LINKS_PROMPT: "chatLinksPrompt",
   CHAT_SCALE: "chatScale", CHAT_HEIGHT_FOCUSED: "chatHeightFocused", CHAT_HEIGHT_UNFOCUSED: "chatHeightUnfocused", CHAT_WIDTH: "chatWidth", SHOW_CAPE: "showCape",
   // GameSettings.limitFramerate (frame-limit.js) and enableVsync (saved; requestAnimationFrame is always vsynced).
-  FRAMERATE_LIMIT: "maxFps", ENABLE_VSYNC: "vsync" };
+  FRAMERATE_LIMIT: "maxFps", ENABLE_VSYNC: "vsync", ANAGLYPH: "anaglyph" };
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 // SaveFormatComparator: the most recently played first, then by folder name.
 export const sortWorlds = (worlds) => [...worlds].sort((a, b) => (b.updated || 0) - (a.updated || 0) || cmp(a.folder || folderName(a.name || "World"), b.folder || folderName(b.name || "World")));
@@ -59,7 +57,7 @@ export function createMenus(gui, ctx) {
   // GuiOptionSlider / GuiOptionButton for a GameSettings.Options entry.
   function optionWidget(g, o, r, parent) {
     const fixed = !(o in FIELDS) && o !== "USE_FULLSCREEN";
-    const reason = o === "SHOW_CAPE" ? UNAVAILABLE.showCape : o === "TOUCHSCREEN" ? UNAVAILABLE.touchscreen : o === "ANAGLYPH" ? UNAVAILABLE.anaglyph : fixed ? UNAVAILABLE.fixedVideo : "";
+    const reason = o === "SHOW_CAPE" ? UNAVAILABLE.showCape : o === "TOUCHSCREEN" ? UNAVAILABLE.touchscreen : fixed ? UNAVAILABLE.fixedVideo : "";
     if (o in FLOAT_OPTIONS) {
       return g.slider(r, {
         parent, reason,
@@ -420,7 +418,8 @@ export function createMenus(gui, ctx) {
           if (difficultyLocked(ctx.activeWorld?.())) g.button(b.difficulty, t("options.difficulty") + ": " + t("options.difficulty.hardcore"), null, { reason: UNAVAILABLE.hardcoreDifficulty });
           else optionWidget(g, "DIFFICULTY", b.difficulty);
         }
-        g.button(b.superSecret, "Super Secret Settings...", null, { reason: UNAVAILABLE.superSecret });
+        // GuiOptions.actionPerformed 8 (blt.c): the next post shader, and a random sound instead of the normal click.
+        g.button(b.superSecret, "Super Secret Settings...", () => ctx.superSecret(), { silent: true });
         g.button(b.sounds, t("options.sounds"), () => show(soundsScreen(screen)));
         g.button(b.stream, t("options.stream"), null, { reason: UNAVAILABLE.stream });
         g.button(b.video, t("options.video"), () => show(videoScreen(screen)));

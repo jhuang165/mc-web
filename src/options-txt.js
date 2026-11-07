@@ -102,6 +102,7 @@ const FIELDS = {
   chatWidth: float("chatWidth", 1),
   mipmapLevels: int("mipmapLevels", 4),
   anisotropicFiltering: int("anisotropic", 1),
+  anaglyph3d: flag("anaglyph", false),
 };
 // Lines the browser stores but does not use (an imported options.txt keeps them on export).
 export const UNUSED_LINES = OPTION_LINES.map(([k]) => k).filter((k) => !(k in FIELDS));

@@ -28,6 +28,7 @@ import { applyDimensionRender, fixedAngle, providerFog } from "./dimension-rende
 import { nightVisionBrightness, blindnessFog, adjustFogColor, warpMatrix } from "./potion-fx.js";
 import { hasVoidParticles, voidFogYFactor, voidFogFar } from "./void-fog.js";
 import { Sky, Clouds } from "./sky.js";
+import { PostProcessor } from "./post-shaders.js"; // Super Secret Settings shaders and 3D Anaglyph
 import { render, setRender, usePartialAo, leavesOpaque, shouldRenderClouds, shadowsEnabled } from "./render-settings.js";
 import { liquidHeight, flowAngle, viewpointBlock } from "./fluids.js";
 import { DropRenderer } from "./drop-renderer.js";
@@ -116,6 +117,7 @@ export class VoxelScene {
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.renderer.autoClear = false;
     container.appendChild(this.renderer.domElement);
+    this.post = new PostProcessor(this.renderer, { anaglyph: () => this.anaglyph });
     this.scene = new THREE.Scene();
     this.lighting = createLighting();
     this.flicker = new TorchFlicker();
@@ -1077,13 +1079,18 @@ export class VoxelScene {
     // EntityRenderer.setupCameraTransform: the Nausea / portal warp, a matrix applied to eye space ahead of the projection.
     const proj = c.projectionMatrix, savedProj = pv?.warp > 0 ? proj.clone() : null;
     if (savedProj) { proj.multiply(this.warpM4.fromArray(warpMatrix(pv.rendererTicks ?? this.ticks, this.dropPartial, pv.warp, pv.nausea))); c.projectionMatrixInverse.copy(proj).invert(); }
+    this.post.begin(this.dropPartial); // post-shaders.js: draws into its targets while a shader or anaglyph is active
     this.sky.render(this.renderer, c, new THREE.Color(...fog));
     this.renderer.render(this.scene, c);
     // F2 (screenshot.js): the canvas is read in the same task as the draw, so no preserveDrawingBuffer is needed.
-    if (this.captureRequest) { const cb = this.captureRequest; this.captureRequest = null; this.renderer.domElement.toBlob(cb, "image/png"); }
+    // With post-processing the frame is finished by endFrame(), after the hand.
+    if (!this.post.active) this.#capture();
     if (savedProj) { proj.copy(savedProj); c.projectionMatrixInverse.copy(proj).invert(); }
     this.worldTriangles = this.renderer.info.render.triangles;
   }
+  #capture() { if (this.captureRequest) { const cb = this.captureRequest; this.captureRequest = null; this.renderer.domElement.toBlob(cb, "image/png"); } }
+  // Called by the render loop after the first-person hand: runs the post chain / anaglyph merge and presents the frame.
+  endFrame() { if (this.post.end()) this.#capture(); }
   // The next rendered frame as a PNG blob (cb(null) on failure).
   requestCapture(cb) { this.captureRequest = cb; }
   // Entity shadows for this frame; `viewer` is the player's eye position.

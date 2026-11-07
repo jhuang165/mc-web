@@ -5738,6 +5738,486 @@
       "url": "/media/1.7.10/texts/credits.txt",
       "sha1": "c9a3ac37ba916d6311846e9c08d936d4ad4a661c",
       "bytes": 1450
+    },
+    {
+      "member": "assets/minecraft/shaders/post/antialias.json",
+      "url": "/media/1.7.10/shaders/post/antialias.json",
+      "sha1": "65c99c7b3f5d9f7ab6b6ea05e98f918c9e0cd9a8",
+      "bytes": 332
+    },
+    {
+      "member": "assets/minecraft/shaders/post/art.json",
+      "url": "/media/1.7.10/shaders/post/art.json",
+      "sha1": "b4c79a4d9d81b4c05f5f8a190dd3699af4001d68",
+      "bytes": 1586
+    },
+    {
+      "member": "assets/minecraft/shaders/post/bits.json",
+      "url": "/media/1.7.10/shaders/post/bits.json",
+      "sha1": "325a8dce5477380436ed47122a077aaad5b9941a",
+      "bytes": 327
+    },
+    {
+      "member": "assets/minecraft/shaders/post/blobs.json",
+      "url": "/media/1.7.10/shaders/post/blobs.json",
+      "sha1": "03de774abde568274ffa73469a8163b201c5fba1",
+      "bytes": 328
+    },
+    {
+      "member": "assets/minecraft/shaders/post/blobs2.json",
+      "url": "/media/1.7.10/shaders/post/blobs2.json",
+      "sha1": "dd57c34e6f0cc93b94c1513ee13876cd6244b2c8",
+      "bytes": 329
+    },
+    {
+      "member": "assets/minecraft/shaders/post/blur.json",
+      "url": "/media/1.7.10/shaders/post/blur.json",
+      "sha1": "fb71dbbeb0412fa99cdf7436620183529cca19d6",
+      "bytes": 893
+    },
+    {
+      "member": "assets/minecraft/shaders/post/bumpy.json",
+      "url": "/media/1.7.10/shaders/post/bumpy.json",
+      "sha1": "f1a58db74a970f6397d91343e6efb3c68f35965c",
+      "bytes": 328
+    },
+    {
+      "member": "assets/minecraft/shaders/post/color_convolve.json",
+      "url": "/media/1.7.10/shaders/post/color_convolve.json",
+      "sha1": "8ea76d8772f2dc442cc4113d812434b6410f609e",
+      "bytes": 441
+    },
+    {
+      "member": "assets/minecraft/shaders/post/deconverge.json",
+      "url": "/media/1.7.10/shaders/post/deconverge.json",
+      "sha1": "3a270bcf8e51168de6b62dabea58a115c5d535f1",
+      "bytes": 333
+    },
+    {
+      "member": "assets/minecraft/shaders/post/desaturate.json",
+      "url": "/media/1.7.10/shaders/post/desaturate.json",
+      "sha1": "898ffd81334ac491376ae7e8fa310fa145a23f37",
+      "bytes": 500
+    },
+    {
+      "member": "assets/minecraft/shaders/post/flip.json",
+      "url": "/media/1.7.10/shaders/post/flip.json",
+      "sha1": "31a5a038cf1f5082a92f5d13313e7939164e5a3d",
+      "bytes": 327
+    },
+    {
+      "member": "assets/minecraft/shaders/post/fxaa.json",
+      "url": "/media/1.7.10/shaders/post/fxaa.json",
+      "sha1": "479bdeb8840c95fdbb87fee97ef88ac24e147428",
+      "bytes": 327
+    },
+    {
+      "member": "assets/minecraft/shaders/post/green.json",
+      "url": "/media/1.7.10/shaders/post/green.json",
+      "sha1": "af1cd08834911a6f8ed21e130e623262f6f5cdee",
+      "bytes": 1041
+    },
+    {
+      "member": "assets/minecraft/shaders/post/invert.json",
+      "url": "/media/1.7.10/shaders/post/invert.json",
+      "sha1": "046b34bf627ebbf7609b94a0fdc3dc3b24c7c8b9",
+      "bytes": 495
+    },
+    {
+      "member": "assets/minecraft/shaders/post/notch.json",
+      "url": "/media/1.7.10/shaders/post/notch.json",
+      "sha1": "1bcac53761333c0222a210cc1175c8efa5d03afa",
+      "bytes": 600
+    },
+    {
+      "member": "assets/minecraft/shaders/post/ntsc.json",
+      "url": "/media/1.7.10/shaders/post/ntsc.json",
+      "sha1": "551170b3923ecb6df587102033e0c208a63b89ca",
+      "bytes": 2366
+    },
+    {
+      "member": "assets/minecraft/shaders/post/outline.json",
+      "url": "/media/1.7.10/shaders/post/outline.json",
+      "sha1": "0e464c050a9bf59aa117262e67aac62986797940",
+      "bytes": 330
+    },
+    {
+      "member": "assets/minecraft/shaders/post/pencil.json",
+      "url": "/media/1.7.10/shaders/post/pencil.json",
+      "sha1": "074aed952ca818c09ecd65e7afe4abc61ff70016",
+      "bytes": 335
+    },
+    {
+      "member": "assets/minecraft/shaders/post/phosphor.json",
+      "url": "/media/1.7.10/shaders/post/phosphor.json",
+      "sha1": "df3d62b13ee1de8a4140c0ba21601972af3090e2",
+      "bytes": 813
+    },
+    {
+      "member": "assets/minecraft/shaders/post/scan_pincushion.json",
+      "url": "/media/1.7.10/shaders/post/scan_pincushion.json",
+      "sha1": "1296eb865b81f5dd6db8c784d02ac10575c46272",
+      "bytes": 338
+    },
+    {
+      "member": "assets/minecraft/shaders/post/sobel.json",
+      "url": "/media/1.7.10/shaders/post/sobel.json",
+      "sha1": "9b07878d79c7840c62d3dbcbc503da7339a4cd44",
+      "bytes": 328
+    },
+    {
+      "member": "assets/minecraft/shaders/post/wobble.json",
+      "url": "/media/1.7.10/shaders/post/wobble.json",
+      "sha1": "12b7c84eb7d1be474745f45f1d73b92086fc63bc",
+      "bytes": 329
+    },
+    {
+      "member": "assets/minecraft/shaders/program/antialias.fsh",
+      "url": "/media/1.7.10/shaders/program/antialias.fsh",
+      "sha1": "017591967a8e124abe10bec333a4b95962919b24",
+      "bytes": 1326
+    },
+    {
+      "member": "assets/minecraft/shaders/program/antialias.json",
+      "url": "/media/1.7.10/shaders/program/antialias.json",
+      "sha1": "6e7202f7b282e285219958be615714cf4b47fe3d",
+      "bytes": 631
+    },
+    {
+      "member": "assets/minecraft/shaders/program/bits.fsh",
+      "url": "/media/1.7.10/shaders/program/bits.fsh",
+      "sha1": "dbb780fd63cc9ea8651221d5ef4af29e040e06cb",
+      "bytes": 716
+    },
+    {
+      "member": "assets/minecraft/shaders/program/bits.json",
+      "url": "/media/1.7.10/shaders/program/bits.json",
+      "sha1": "8140aaf8dcbc24c2f690854150de926d631e2e0e",
+      "bytes": 929
+    },
+    {
+      "member": "assets/minecraft/shaders/program/blit.fsh",
+      "url": "/media/1.7.10/shaders/program/blit.fsh",
+      "sha1": "b81fb9fc0ae887a3213f17a20e4be3e6637f7764",
+      "bytes": 153
+    },
+    {
+      "member": "assets/minecraft/shaders/program/blit.json",
+      "url": "/media/1.7.10/shaders/program/blit.json",
+      "sha1": "29f9dcd763e4d537ae56ec615dc061076069d1eb",
+      "bytes": 535
+    },
+    {
+      "member": "assets/minecraft/shaders/program/blit.vsh",
+      "url": "/media/1.7.10/shaders/program/blit.vsh",
+      "sha1": "10fc125389e633a6f0fd6654cb5d5255aceeed55",
+      "bytes": 316
+    },
+    {
+      "member": "assets/minecraft/shaders/program/blobs.fsh",
+      "url": "/media/1.7.10/shaders/program/blobs.fsh",
+      "sha1": "a320480677e4c6c5b0121e5daf80a62d0cfa4d0f",
+      "bytes": 1652
+    },
+    {
+      "member": "assets/minecraft/shaders/program/blobs.json",
+      "url": "/media/1.7.10/shaders/program/blobs.json",
+      "sha1": "9cd6fafb05b913f63b9a0ffaf82abf9ad09df502",
+      "bytes": 627
+    },
+    {
+      "member": "assets/minecraft/shaders/program/blobs.vsh",
+      "url": "/media/1.7.10/shaders/program/blobs.vsh",
+      "sha1": "8ca98667bfba6199a9a76b53c61a018ee58ae014",
+      "bytes": 333
+    },
+    {
+      "member": "assets/minecraft/shaders/program/blobs2.fsh",
+      "url": "/media/1.7.10/shaders/program/blobs2.fsh",
+      "sha1": "a9578d35dbf4a3bd5c25798eead20ccb81884456",
+      "bytes": 1078
+    },
+    {
+      "member": "assets/minecraft/shaders/program/blobs2.json",
+      "url": "/media/1.7.10/shaders/program/blobs2.json",
+      "sha1": "d94989e0a5e01820f2295f6456454c32a91fbe79",
+      "bytes": 623
+    },
+    {
+      "member": "assets/minecraft/shaders/program/bloom.json",
+      "url": "/media/1.7.10/shaders/program/bloom.json",
+      "sha1": "b8c409720c8fa7258ba6f3358eecb82e6e283d3f",
+      "bytes": 670
+    },
+    {
+      "member": "assets/minecraft/shaders/program/blur.fsh",
+      "url": "/media/1.7.10/shaders/program/blur.fsh",
+      "sha1": "c9ec769c218b20a42f9e165d473ddc383cd6c70e",
+      "bytes": 653
+    },
+    {
+      "member": "assets/minecraft/shaders/program/blur.json",
+      "url": "/media/1.7.10/shaders/program/blur.json",
+      "sha1": "909af942e95ad6ddec391d3e54187a268bc1b8a7",
+      "bytes": 815
+    },
+    {
+      "member": "assets/minecraft/shaders/program/bumpy.fsh",
+      "url": "/media/1.7.10/shaders/program/bumpy.fsh",
+      "sha1": "97839c28d48373a892146ef30e59debff38ced84",
+      "bytes": 963
+    },
+    {
+      "member": "assets/minecraft/shaders/program/bumpy.json",
+      "url": "/media/1.7.10/shaders/program/bumpy.json",
+      "sha1": "0456305800d531998119702a7b6c221301f76135",
+      "bytes": 627
+    },
+    {
+      "member": "assets/minecraft/shaders/program/bumpy.vsh",
+      "url": "/media/1.7.10/shaders/program/bumpy.vsh",
+      "sha1": "8ca98667bfba6199a9a76b53c61a018ee58ae014",
+      "bytes": 333
+    },
+    {
+      "member": "assets/minecraft/shaders/program/color_convolve.fsh",
+      "url": "/media/1.7.10/shaders/program/color_convolve.fsh",
+      "sha1": "e86ded3ecb91e921b57a67105d5802674e757531",
+      "bytes": 1044
+    },
+    {
+      "member": "assets/minecraft/shaders/program/color_convolve.json",
+      "url": "/media/1.7.10/shaders/program/color_convolve.json",
+      "sha1": "d92663c7e68bc3b87624d485bc97cf0584802c97",
+      "bytes": 1327
+    },
+    {
+      "member": "assets/minecraft/shaders/program/deconverge.fsh",
+      "url": "/media/1.7.10/shaders/program/deconverge.fsh",
+      "sha1": "db0ed63d1d2571cf01d41b3aef2b529969d6ed2f",
+      "bytes": 981
+    },
+    {
+      "member": "assets/minecraft/shaders/program/deconverge.json",
+      "url": "/media/1.7.10/shaders/program/deconverge.json",
+      "sha1": "41e559c9dae7d1ec5f87c0c0f22a50ae21211fe1",
+      "bytes": 1077
+    },
+    {
+      "member": "assets/minecraft/shaders/program/downscale.fsh",
+      "url": "/media/1.7.10/shaders/program/downscale.fsh",
+      "sha1": "5dd99cabd2021f9ea4d461ea7cd4e843e0e05856",
+      "bytes": 530
+    },
+    {
+      "member": "assets/minecraft/shaders/program/downscale.json",
+      "url": "/media/1.7.10/shaders/program/downscale.json",
+      "sha1": "aca7e4ddda6c322515e046d2c69838e17d6511db",
+      "bytes": 638
+    },
+    {
+      "member": "assets/minecraft/shaders/program/downscale.vsh",
+      "url": "/media/1.7.10/shaders/program/downscale.vsh",
+      "sha1": "ebad41506c91c7538359e492dbab74bfe58fbe92",
+      "bytes": 392
+    },
+    {
+      "member": "assets/minecraft/shaders/program/flip.json",
+      "url": "/media/1.7.10/shaders/program/flip.json",
+      "sha1": "8faea60d9dbf293f60e3bfe1b80845314d07660f",
+      "bytes": 721
+    },
+    {
+      "member": "assets/minecraft/shaders/program/flip.vsh",
+      "url": "/media/1.7.10/shaders/program/flip.vsh",
+      "sha1": "ce92604e175a627ce7cc901eb7aaffcf31b5f460",
+      "bytes": 548
+    },
+    {
+      "member": "assets/minecraft/shaders/program/fxaa.fsh",
+      "url": "/media/1.7.10/shaders/program/fxaa.fsh",
+      "sha1": "d98850375e34e4e8b775b09381b9fd520a027d4e",
+      "bytes": 2847
+    },
+    {
+      "member": "assets/minecraft/shaders/program/fxaa.json",
+      "url": "/media/1.7.10/shaders/program/fxaa.json",
+      "sha1": "110f38ce5cf3ef5c73ce01136ca05c5a358daf09",
+      "bytes": 817
+    },
+    {
+      "member": "assets/minecraft/shaders/program/fxaa.vsh",
+      "url": "/media/1.7.10/shaders/program/fxaa.vsh",
+      "sha1": "40be4120e06d59eabd7de7818450af208cc4126c",
+      "bytes": 475
+    },
+    {
+      "member": "assets/minecraft/shaders/program/invert.fsh",
+      "url": "/media/1.7.10/shaders/program/invert.fsh",
+      "sha1": "b06673c262b2af42c76cbb09e8f26959d235df35",
+      "bytes": 358
+    },
+    {
+      "member": "assets/minecraft/shaders/program/invert.json",
+      "url": "/media/1.7.10/shaders/program/invert.json",
+      "sha1": "a0b191dd3e5e4d7ff2e282c73cd51b3ab481ab50",
+      "bytes": 730
+    },
+    {
+      "member": "assets/minecraft/shaders/program/invert.vsh",
+      "url": "/media/1.7.10/shaders/program/invert.vsh",
+      "sha1": "5b5867d242bb9cee56df17e5214447804a5076a2",
+      "bytes": 474
+    },
+    {
+      "member": "assets/minecraft/shaders/program/notch.fsh",
+      "url": "/media/1.7.10/shaders/program/notch.fsh",
+      "sha1": "0a13f79112f00cf1eb6f503d1d2992cdfde5eaf5",
+      "bytes": 734
+    },
+    {
+      "member": "assets/minecraft/shaders/program/notch.json",
+      "url": "/media/1.7.10/shaders/program/notch.json",
+      "sha1": "4e18d9e0ada73bd3d87420198fe9d10420d590d5",
+      "bytes": 671
+    },
+    {
+      "member": "assets/minecraft/shaders/program/ntsc_decode.fsh",
+      "url": "/media/1.7.10/shaders/program/ntsc_decode.fsh",
+      "sha1": "e00c10237cf59af3f4aa066261021b9ad5696ac4",
+      "bytes": 4942
+    },
+    {
+      "member": "assets/minecraft/shaders/program/ntsc_decode.json",
+      "url": "/media/1.7.10/shaders/program/ntsc_decode.json",
+      "sha1": "9a4768fc2fbedade8057d0fcb6b993c657c6061f",
+      "bytes": 672
+    },
+    {
+      "member": "assets/minecraft/shaders/program/ntsc_encode.fsh",
+      "url": "/media/1.7.10/shaders/program/ntsc_encode.fsh",
+      "sha1": "197c4ebbb9c179753b70d21b11f3e545835087d7",
+      "bytes": 1855
+    },
+    {
+      "member": "assets/minecraft/shaders/program/ntsc_encode.json",
+      "url": "/media/1.7.10/shaders/program/ntsc_encode.json",
+      "sha1": "0215c009d7d941e118d9f8c0c98ffdc43ae568fe",
+      "bytes": 636
+    },
+    {
+      "member": "assets/minecraft/shaders/program/outline.fsh",
+      "url": "/media/1.7.10/shaders/program/outline.fsh",
+      "sha1": "9899e59810b946a99d0014410e4bae1bca9af74f",
+      "bytes": 814
+    },
+    {
+      "member": "assets/minecraft/shaders/program/outline.json",
+      "url": "/media/1.7.10/shaders/program/outline.json",
+      "sha1": "c205a97787095d2f8439ace0db576fae79f14790",
+      "bytes": 632
+    },
+    {
+      "member": "assets/minecraft/shaders/program/outline_combine.fsh",
+      "url": "/media/1.7.10/shaders/program/outline_combine.fsh",
+      "sha1": "9d677cd470c11e3e34291c9ebcc9cff6bd6cc295",
+      "bytes": 390
+    },
+    {
+      "member": "assets/minecraft/shaders/program/outline_combine.json",
+      "url": "/media/1.7.10/shaders/program/outline_combine.json",
+      "sha1": "6de27ca4bf8595c2ac6ad93d3ef5d9cee8bff4d1",
+      "bytes": 679
+    },
+    {
+      "member": "assets/minecraft/shaders/program/outline_soft.fsh",
+      "url": "/media/1.7.10/shaders/program/outline_soft.fsh",
+      "sha1": "c753000cecb56ab5d601e5bc6b501b738af03140",
+      "bytes": 1966
+    },
+    {
+      "member": "assets/minecraft/shaders/program/outline_soft.json",
+      "url": "/media/1.7.10/shaders/program/outline_soft.json",
+      "sha1": "e65352ded17dcd4b39a1402a661f67011edaac62",
+      "bytes": 809
+    },
+    {
+      "member": "assets/minecraft/shaders/program/outline_watercolor.fsh",
+      "url": "/media/1.7.10/shaders/program/outline_watercolor.fsh",
+      "sha1": "c8f3646f2875740d1362aa69fc70be9a15947804",
+      "bytes": 2174
+    },
+    {
+      "member": "assets/minecraft/shaders/program/outline_watercolor.json",
+      "url": "/media/1.7.10/shaders/program/outline_watercolor.json",
+      "sha1": "11af48c4377ba8557513c09bcac01b3e47b8d665",
+      "bytes": 728
+    },
+    {
+      "member": "assets/minecraft/shaders/program/overlay.fsh",
+      "url": "/media/1.7.10/shaders/program/overlay.fsh",
+      "sha1": "e83a9ad9dc4c5e1c5ff6209b453d33ce792101ba",
+      "bytes": 863
+    },
+    {
+      "member": "assets/minecraft/shaders/program/overlay.json",
+      "url": "/media/1.7.10/shaders/program/overlay.json",
+      "sha1": "df94ff5f21d1306d8bec01d4f4a4c71f8ba9008e",
+      "bytes": 1059
+    },
+    {
+      "member": "assets/minecraft/shaders/program/phosphor.fsh",
+      "url": "/media/1.7.10/shaders/program/phosphor.fsh",
+      "sha1": "5643fd6e219ced907f32834d9bcd3d973c906a09",
+      "bytes": 464
+    },
+    {
+      "member": "assets/minecraft/shaders/program/phosphor.json",
+      "url": "/media/1.7.10/shaders/program/phosphor.json",
+      "sha1": "27a5fd2c0942b2136aab25ff70a6584154371786",
+      "bytes": 759
+    },
+    {
+      "member": "assets/minecraft/shaders/program/scan_pincushion.fsh",
+      "url": "/media/1.7.10/shaders/program/scan_pincushion.fsh",
+      "sha1": "aef35dec28825bbe6c737119a7e2ead86b96bbaa",
+      "bytes": 2238
+    },
+    {
+      "member": "assets/minecraft/shaders/program/scan_pincushion.json",
+      "url": "/media/1.7.10/shaders/program/scan_pincushion.json",
+      "sha1": "832720d184a6085afab42700e7416215b56530e8",
+      "bytes": 640
+    },
+    {
+      "member": "assets/minecraft/shaders/program/sobel.fsh",
+      "url": "/media/1.7.10/shaders/program/sobel.fsh",
+      "sha1": "d366cd694eb79fec9df14b6d0fe6c00a6aa3a96e",
+      "bytes": 767
+    },
+    {
+      "member": "assets/minecraft/shaders/program/sobel.json",
+      "url": "/media/1.7.10/shaders/program/sobel.json",
+      "sha1": "0e960f829f0bb05f3ef0e1e9b087c7f55bbf595d",
+      "bytes": 621
+    },
+    {
+      "member": "assets/minecraft/shaders/program/sobel.vsh",
+      "url": "/media/1.7.10/shaders/program/sobel.vsh",
+      "sha1": "3b3d4029f3e35f0638aab3f20246d7324945459a",
+      "bytes": 398
+    },
+    {
+      "member": "assets/minecraft/shaders/program/wobble.fsh",
+      "url": "/media/1.7.10/shaders/program/wobble.fsh",
+      "sha1": "7e34bfaa97eefb6a52248073cd32881da78998a5",
+      "bytes": 1506
+    },
+    {
+      "member": "assets/minecraft/shaders/program/wobble.json",
+      "url": "/media/1.7.10/shaders/program/wobble.json",
+      "sha1": "ef4bf8d4ddf048a299b73f9b44bcd3d10df62143",
+      "bytes": 925
     }
   ]
 }

@@ -80,6 +80,7 @@ import { flowerCanStay, JRandom } from "./flowers.js";
 import { Trees } from "./trees.js";
 import { VoxelScene } from "./scene.js";
 import { SoundBank } from "./audio.js";
+import { randomSuperSecretEvent, SUPER_SECRET_SOUND } from "./post-shaders.js";
 import { breakSound, placeSound, hitSound, footstepSound, placesSilently } from "./block-sounds.js";
 import { Weather, isWet, canLightningStrikeAt } from "./weather.js";
 import { tickWeatherSimulation } from "./weather-simulation.js";
@@ -515,6 +516,12 @@ const menuContext = {
   resume,
   goHome,
   toggleFullscreen,
+  // GuiOptions "Super Secret Settings...": EntityRenderer.activateNextShader plus a random animals/blocks/mobs/players/weather sound.
+  superSecret: () => {
+    scene?.post.activateNextShader();
+    const event = randomSuperSecretEvent(sounds?.manifest?.events ?? {});
+    if (event) sounds.play(event, SUPER_SECRET_SOUND);
+  },
   inGame: () => screen !== "home",
   notice: toast,
   lanOpen: () => lan.public,
@@ -3188,6 +3195,7 @@ window.addEventListener("keydown", (e) => {
     if (f3 && code === 35) { options.advancedTooltips = !options.advancedTooltips; saveOptions(); }
     if (f3 && code === 25) { options.pauseOnLostFocus = options.pauseOnLostFocus === false; saveOptions(); }
     if (code === 59) hideGUI = !hideGUI;
+    if (code === 62) scene.post.deactivateShader(); // F4: EntityRenderer.deactivateShader (the shader is not saved)
     if (code === 61) { debug = !debug; $("#debug").classList.toggle("hidden", !debug); }
     // KeyBinding.setKeyBindState + onTick through the hash, then the binding's action.
     const d = binds.set(code, true);
@@ -3572,6 +3580,7 @@ function animate(now) {
       map: survival.held?.id === ITEM_FILLED_MAP ? { data: mapStore.get(survival.held.damage | 0) } : null, // ItemRenderer's map branch
       pitchDeg: -pitch / (Math.PI / 180),
     });
+  if (screen !== "home") scene.endFrame(); // post shaders / anaglyph merge, after the hand
 }
 // Entities that cast a shadow, as Java positions: an item's posY is 0.125
 // above its box (yOffset); items, orbs and mobs are interpolated like their
@@ -3599,6 +3608,7 @@ async function boot(){try {
   try {const shelf=JSON.parse(localStorage.getItem(storageKey)||'[]');worlds=Array.isArray(shelf)?shelf:[];}catch{worlds=[];}
   worlds = await readWorldShelf(worlds);
   scene = new VoxelScene($("#viewport"));
+  scene.post.anaglyph = () => !!options.anaglyph; // GameSettings.anaglyph (options.txt anaglyph3d)
   scene.weather = weather;
   projectiles.useEffects(scene.effectRenderer);
   projectiles.spawner = scene.fx;
