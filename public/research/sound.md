@@ -76,6 +76,46 @@ against an OpenAL device.
 ## Approximate or open
 - The pan constants are an assumption; the Web Audio panner stands in for OpenAL Soft's mixer.
 - The listener yaw/pitch are the port's per-frame look, not previous-tick-to-tick rotations.
-- Positions are the port's doubles, cast to float only in the gain; the S29 filter is not wired into call sites.
-- Minecart moving sounds are not started (no clips). Stream start timing and `World` Random draws between mood draws remain open.
+- Positions are the port's doubles, cast to float only in the gain.
+- Stream start timing (see Round 4) and `World` Random draws between mood draws remain open.
+- The S29 filter drops a world sound beyond range of the feet; the port applies it by event name (`sound-origin.js`), not per call site.
 - Sounds.json random choice uses `Math.random` (the original's unseeded Random).
+
+## Round 4 (batch 20): minecart clips, S29 range, category volumes
+Code: `cart-sounds.js`, `sound-origin.js`, `audio.js` (`playMoving`, `updateVolumes`), `tools/import-vanilla-media.mjs`; tests
+`src/audio4.test.js` (7 tests). Nothing new was run natively; this round is bytecode-read plus the manifest/asset-index diff.
+
+Imported: `minecart.base` (`minecart/base.ogg`, category neutral) and `minecart.inside` (`minecart/inside.ogg`, category player), the
+only two sound events the 1.7.10 port triggers (`bsm`, `bsn`) that the manifest lacked. The diff of the 1.7.10 `sounds.json` (229
+events) against the manifest also lists `random.wood_click` (no class of the JAR references the string, so not imported) and the
+streamed `records.*` / `music.*` events (the untracked stream set, `npm run music:fetch`). The importer got the `minecart/` prefix
+and the `ambient/cave` clips that earlier batches had added by hand, and a `MC_ASSET_OBJECTS` option to read the objects of a local
+launcher `assets/objects` folder instead of downloading. The two entries were added to the committed manifest in place (a full
+importer run reproduces the same entries but in a different key order); the clips are original Mojang assets under the manifest's credit.
+
+Minecart sounds, bytecode-read: `WorldClient.spawnEntityInWorld` (`bjf.d`) plays `new MovingSoundMinecart` when the entity was added and
+is an `EntityMinecart`; `EntityClientPlayerMP.mountEntity` (`bjk.a`) plays `MovingSoundMinecartRiding` for a mounted `EntityMinecart`.
+`CartSounds` mirrors both once per client tick (a cart seen for the first time; `rider.vehicle` turning into a cart; boats and horses
+are not carts). `SoundBank.playMoving` loops the clip (paulscode toLoop) through `SoundBookkeeping`, so the tick update sets volume
+and position (cart source: LINEAR, distance 16 as started, mono clip panned; riding: attenuation NONE). The sound starts at the
+constructor volume 1 for the first tick, as natively, and a world change (`stopStreams`) restarts them.
+
+S29 and doubled sounds (bytecode-read): `RenderGlobal` (`bma`) implements `IWorldAccess.playSound` and `playSoundToNearExcept` as empty
+methods, and `World.playSoundAtEntity` / `playSoundEffect` only iterate the world's accessors. On the client world they are silent;
+on the server `WorldManager` (`mp`) sends S29, `playSound` to everyone within 16 blocks (16 * volume above 1, as `broadcastRange`)
+of the feet, `playSoundToNearExcept` skipping its player, who plays its own `EntityPlayer.playSound` locally
+(`EntityPlayerSP.playSound` -> `World.playSound` at the feet). So a player action is heard once either way, and the port, which has one
+`play` call per action (step, swim, splash, dig, break, place, eat, burp, bow, pop, orb, fall), cannot double them; no site mirrored
+a server copy. The one observable effect of the filter is the band where a sound is within 16 blocks of the eye but not the feet:
+natively dropped. `play` now applies `receivesBroadcast` (feet from the listener) to positioned sounds except the client-made ones
+(`gui.`, `music.`, `records.`, `minecart.`, `fireworks.`, client thunder and cave mood). Not re-verified per call site: whether each
+call site's event is server- or client-made; the list is by event name.
+
+Category volumes (bytecode): `getNormalizedVolume` is `(float) clamp(sound.volume * entry.volume * categoryVolume, 0, 1)` in
+doubles (already matched), MASTER or no category gives 1. `setSoundCategoryVolume(category, v)`: MASTER only sets the master gain;
+another category visits only the sounds registered under that category and stops one whose normalized volume is <= 0. The port
+visited every playing sound on any slider move; `updateVolumes` now stops only sounds of the categories whose level moved.
+
+Stream start delay: the JAR configures no paulscode streaming (its `SoundSystemConfig` calls are `addLibrary` and `setCodec` only) and
+the paulscode jar is not among the local libraries, so there is no concrete buffer count or size to model. Not modelled: streams
+start at once.

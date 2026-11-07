@@ -2432,6 +2432,16 @@
       "url": "/audio/1.7.10/ambient/cave/cave9.ogg",
       "sha1": "b463fa47816fe9a5dfe508093150e647403e4db6",
       "bytes": 27096
+    },
+    "minecart/base": {
+      "url": "/audio/1.7.10/minecart/base.ogg",
+      "sha1": "28f9973fcd8366ac9837dbe190b129a8fce15857",
+      "bytes": 15354
+    },
+    "minecart/inside": {
+      "url": "/audio/1.7.10/minecart/inside.ogg",
+      "sha1": "6a83b514027c328b74f8428448dc6589d4b16388",
+      "bytes": 57426
     }
   },
   "events": {
@@ -3999,6 +4009,18 @@
         "ambient/cave/cave7",
         "ambient/cave/cave8",
         "ambient/cave/cave9"
+      ]
+    },
+    "minecart.base": {
+      "category": "neutral",
+      "sounds": [
+        "minecart/base"
+      ]
+    },
+    "minecart.inside": {
+      "category": "player",
+      "sounds": [
+        "minecart/inside"
       ]
     }
   }

@@ -1,8 +1,8 @@
 // MovingSoundMinecart (bsm.a) and MovingSoundMinecartRiding (bsn.a), the two ITickableSound classes of 1.7.10, replayed against
 // audio3-reference.json (tools/probes/AudioProbe3.java, the unchanged classes on Unsafe-allocated carts). Both loop
 // (repeat true, delay 0) and are tickable: SoundManager.update calls update() each tick and then hands the sound's volume to
-// the sound system. The port ships no `minecart.base` / `minecart.inside` clips (the audio manifest has no minecart event), so
-// nothing starts these yet; the formulas and the tickable bookkeeping (sound-bookkeeping.js) are ready for when the clips exist.
+// the sound system. The clips are in the manifest since batch 20, and cart-sounds.js starts these
+// classes the way WorldClient.spawnEntityInWorld and EntityClientPlayerMP.mountEntity do (SoundBank.playMoving loops the source).
 const f = Math.fround;
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 const speedOf = (cart) => f(Math.sqrt(cart.mx * cart.mx + cart.mz * cart.mz));
