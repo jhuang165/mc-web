@@ -4,6 +4,7 @@ import {copyStack} from './inventory.js';
 import {stackHasEffect} from './armor-enchantments.js';
 import {potionName,potionTooltip,getPotionEffects} from './potions.js';
 import {stackName} from './item-names.js';
+import {translate} from './lang.js';
 import {bookInfoLines} from './books.js';
 const POTION_CLASS={'#aaaaaa':'gray','#ff5555':'red','#aa00aa':'purple','#5555ff':'blue'};
 // A save snapshots unfinished input/cursor stacks, never a calculated output.
@@ -57,8 +58,8 @@ export function tooltipLines(item,stack,advanced=false){
  for(const text of storedEnchantmentLines(stack.enchantments))lines.push({text,color:'gray'});
  // ItemRecord: EnumRarity.rare (aqua name) and addInformation's item.record.<name>.desc line in gray.
  if(item.record){lines[0].color??='aqua';lines.push({text:item.description,color:'gray'});}
- if(attack)lines.push({text:''},{text:`+${attack} Attack Damage`,color:'blue'});
- if(stack.unbreakable)lines.push({text:'Unbreakable',color:'blue'});
+ if(attack)lines.push({text:''},{text:`+${attack} ${translate('attribute.name.generic.attackDamage','Attack Damage')}`,color:'blue'});
+ if(stack.unbreakable)lines.push({text:translate('item.unbreakable','Unbreakable'),color:'blue'});
  if(advanced&&item.durability&&stack.damage>0)lines.push({text:`Durability: ${item.durability-stack.damage} / ${item.durability}`});
  return lines;
 }

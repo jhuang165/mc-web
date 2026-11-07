@@ -138,6 +138,7 @@ import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
 import { HopperContainer, Hoppers, HOPPER } from "./hopper.js";
 import { Survival, ITEMS, burnTime, gameModeOf } from "./survival.js";
 import { stackName } from "./item-names.js";
+import { containerTitle } from "./container-names.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
@@ -1682,16 +1683,16 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
       : kind === "anvil"
       ? '<i class="anvil-name-background" id="anvil-name-background"></i><input id="anvil-name" aria-label="Item name" maxlength="40" autocomplete="off" spellcheck="false" disabled><span id="anvil-cost" class="anvil-cost" aria-live="polite"></span><i class="anvil-error" id="anvil-error" hidden></i>'
       : kind === "brewing"
-      ? '<i class="brewing-bubbles" id="brewing-bubbles"></i><i class="brewing-arrow" id="brewing-arrow"></i><span class="chest-bag-label">Inventory</span>'
+      ? '<i class="brewing-bubbles" id="brewing-bubbles"></i><i class="brewing-arrow" id="brewing-arrow"></i><span class="chest-bag-label">' + containerTitle('Inventory') + '</span>'
       : kind === "furnace"
       ? '<i class="furnace-flame" id="furnace-flame"></i><i class="furnace-arrow" id="furnace-arrow"></i>'
       : kind === "horse"
-      ? `${container.horse.chested ? '<i class="horse-chest-bg"></i>' : ""}${horseWearsArmor(container.horse.type) ? '<i class="horse-armor-bg"></i>' : ""}<span class="chest-bag-label">Inventory</span>`
+      ? `${container.horse.chested ? '<i class="horse-chest-bg"></i>' : ""}${horseWearsArmor(container.horse.type) ? '<i class="horse-armor-bg"></i>' : ""}<span class="chest-bag-label">${containerTitle("Inventory")}</span>`
       : kind === "chest" || kind === "dispenser" || kind === "hopper"
-        ? '<i class="chest-bottom" aria-hidden="true"></i><span class="chest-bag-label">Inventory</span>'
-        : `<span class="native-bag-label">Inventory</span><span class="native-crafting-label">Crafting</span>`;
+        ? '<i class="chest-bottom" aria-hidden="true"></i><span class="chest-bag-label">' + containerTitle('Inventory') + '</span>'
+        : `<span class="native-bag-label">${containerTitle("Inventory")}</span><span class="native-crafting-label">${containerTitle("Crafting")}</span>`;
   modal(
-    kind === "horse" ? esc(container.title) : container.title ?? CONTAINER_TITLES[kind], // a horse title can be a player-chosen name
+    kind === "horse" ? esc(container.title) : containerTitle(container.title ?? CONTAINER_TITLES[kind]), // a horse title can be a player-chosen name
     kind === "creative" ? '<div class="creative-body"></div>' : slotsHtml(container) + decorations,
     CONTAINER_CLASSES[kind] ? `${CONTAINER_CLASSES[kind]} container-screen` : "inventory-modal native-inventory container-screen" + (kind === "workbench" ? " native-workbench" : ""),
   );

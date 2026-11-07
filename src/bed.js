@@ -2,6 +2,7 @@
 // unchanged 1.7.10 classes ajh, abg, yz (EntityPlayer) and mt (WorldServer). Native evidence:
 // public/research/bed-reference.json (tools/verify-beds.mjs + tools/probes/BedProbe.java), replayed by bed.test.js.
 // Metadata is the original: bits 0-1 the facing (the head lies at +z, -x, -z, +x), bit 2 occupied, bit 3 the head half.
+import { translate } from './lang.js';
 import { BED, WATER, LAVA, ICE, WEB, CACTUS, LILY_PAD } from './world.js';
 import { solidTopSurface, doorRotationYaw } from './doors-panes.js';
 import { materialSolid } from './plants.js';
@@ -11,12 +12,13 @@ export const ITEM_BED = 472;
 // BlockDirectional.field_149981_a: the foot-to-head step of each facing.
 export const BED_DIR = Object.freeze([[0, 1], [-1, 0], [0, -1], [1, 0]]);
 // The lang strings of the original jar (bed-reference.json "names").
+// Getters read the selected language (lang.js translate); the English literals stay the en_US fallback.
 export const BED_TEXT = Object.freeze({
-  noSleep: 'You can only sleep at night',
-  occupied: 'This bed is occupied',
-  notSafe: 'You may not rest now, there are monsters nearby',
-  notValid: 'Your home bed was missing or obstructed',
-  leave: 'Leave Bed',
+  get noSleep() { return translate('tile.bed.noSleep', 'You can only sleep at night'); },
+  get occupied() { return translate('tile.bed.occupied', 'This bed is occupied'); },
+  get notSafe() { return translate('tile.bed.notSafe', 'You may not rest now, there are monsters nearby'); },
+  get notValid() { return translate('tile.bed.notValid', 'Your home bed was missing or obstructed'); },
+  get leave() { return translate('multiplayer.stopSleeping', 'Leave Bed'); },
 });
 
 export const isBed = (b) => b === BED;

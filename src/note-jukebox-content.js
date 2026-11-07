@@ -1,3 +1,4 @@
+import { translate } from './lang.js';
 // Note block (original 25), jukebox (original 84) and the twelve music discs (original 2256-2267), Java 1.7.10.
 // Ids are fixed by the track allocation: internal blocks 177-178 (items 1177-1178 = 1000 + block id) and disc items 530-541.
 // The module imports nothing so world.js, survival.js and the tools can all read it. Values: public/research/note-jukebox-reference.json,
@@ -24,7 +25,8 @@ export const discIndex = (item) => canonicalDisc(item) - DISC_FIRST;
 export const discName = (item) => DISC_NAMES[discIndex(item)];
 // ItemRecord.addInformation: item.record.<name>.desc is "C418 - <name>" in en_US.lang; the HUD line is record.nowPlaying with it.
 export const discDescription = (item) => `C418 - ${discName(item)}`;
-export const nowPlaying = (item) => `Now playing: ${discDescription(item)}`;
+// record.nowPlaying is "Now playing: %s"; item.record.<name>.desc comes from the selected language when it has one.
+export const nowPlaying = (item) => translate('record.nowPlaying', 'Now playing: %s').replace('%s', translate(`item.record.${discName(item)}.desc`, discDescription(item)));
 
 // World.BLOCKS grows to index 178: internal ids 140-176 belong to the other tracks of this release, so any that are not defined by
 // the time this runs stay reserved placeholders (never listed, mapped or placeable) and 177-178 are the two blocks.
