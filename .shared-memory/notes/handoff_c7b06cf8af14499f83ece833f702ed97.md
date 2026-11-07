@@ -1,0 +1,1 @@
+Native F3 overlay + Shift+F3 pie, commit 0a0b360 on batch21-debugscreen. npm test 4169/4169, build ok. Gaps: approximated counts, F3+B/S/T/C not ported. See .shared-memory/notes/debugscreen-b21-track.md
