@@ -3,6 +3,7 @@
 // rotateAndBlurSkybox copies that to a linear-filtered texture and redraws it transposed with a
 // three-tap blur (seven times; the texture the screen samples holds the sixth result), and
 // renderSkybox stretches the texture over the screen with transposed coordinates. Plain WebGL 1.
+import { mediaGeneration, versioned } from "./media-version.js";
 const SIZE = 256;
 const VS = `attribute vec3 p;attribute vec2 uv;uniform mat4 m;varying vec2 v;void main(){v=uv;gl_Position=m*vec4(p,1.);}`;
 const FS = `precision mediump float;uniform sampler2D tex;uniform float a;varying vec2 v;void main(){gl_FragColor=vec4(texture2D(tex,v).rgb,a);}`;
@@ -53,7 +54,17 @@ export class Panorama {
     });
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.faces = [];
-    this.ready = Promise.all([0, 1, 2, 3, 4, 5].map((i) => new Promise((resolve) => {
+    this.base = base;
+    this.ready = this.loadFaces(mediaGeneration());
+  }
+  // Resource pack refresh: re-read the six faces (versioned urls) and swap them in; the old textures are freed once replaced.
+  reload(gen) {
+    if (!this.gl) return Promise.resolve();
+    return (this.ready = this.loadFaces(gen));
+  }
+  loadFaces(gen) {
+    const gl = this.gl, old = this.faces, faces = [];
+    return Promise.all([0, 1, 2, 3, 4, 5].map((i) => new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
         const tex = gl.createTexture();
@@ -62,12 +73,15 @@ export class Panorama {
         // SimpleTexture: nearest, repeat (the faces are 256 x 256).
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        this.faces[i] = tex;
+        faces[i] = tex;
         resolve();
       };
       img.onerror = resolve;
-      img.src = base + i + ".png";
-    }))).then(() => (this.loaded = this.faces.filter(Boolean).length === 6));
+      img.src = versioned(this.base + i + ".png", gen);
+    }))).then(() => {
+      if (faces.filter(Boolean).length === 6 || !old.length) { this.faces = faces; for (const t of old) if (t) gl.deleteTexture(t); }
+      return (this.loaded = this.faces.filter(Boolean).length === 6);
+    });
   }
   quad(verts, matrix, alpha) {
     const gl = this.gl;

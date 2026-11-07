@@ -53,7 +53,7 @@ Target: Minecraft Java 1.7.10. Evidence: `ControlsProbe` (`tools/probes/Controls
   - unknown keys are ignored
   - `key_` lines take integer codes
 - The test checks that the default file is byte-identical to the probe's `saveOptions` output, and that a native input file re-saves to the probe's text.
-- There is no UI to import or export the file. The mirror is the interchange point.
+- Browser-only helper (not native): small Import and Export buttons in the top-right corner of the Controls screen. Export downloads the mirror text as `options.txt`; Import runs the `loadOptions` rules over the current settings (bad lines are skipped and counted), applies them live (FOV, sound levels, key bindings, chat settings) and keeps the current resource pack selection. Browser check: an imported file with `fov:0.5`, `key_key.jump:30` and a bad line set FOV 90, rebound jump and reported one skipped line.
 - Older saves that stored `options.keys` as `KeyboardEvent.code` strings are migrated to LWJGL codes once.
 
 ## F-keys (Minecraft.runTick, no screen open)
@@ -73,7 +73,7 @@ Target: Minecraft Java 1.7.10. Evidence: `ControlsProbe` (`tools/probes/Controls
 | F5 | `key.togglePerspective` | The binding (rebindable). |
 | F8 | No such check in 1.7.10. Cinematic camera is only `key.smoothCamera`, unbound by default | Nothing bound. The test asserts that `main.js` has no F8 or code 66 path. |
 
-F2 (`key.screenshot`) and F11 (`key.fullscreen`) are bindings handled by `dispatchKeypresses`.
+F2 (`key.screenshot`) saves the canvas frame with the DOM GUI drawn over it (`src/screenshot-compose.js`: matching page CSS, images and the Minecraft font inlined into an SVG foreignObject; native ScreenShotHelper reads the whole framebuffer). Limits: WebGL canvases inside the DOM (the title panorama) come out transparent. F2 and F11 (`key.fullscreen`) are bindings handled by `dispatchKeypresses`.
 
 ## Max Framerate and VSync
 

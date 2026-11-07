@@ -93,7 +93,7 @@ export function unicodeGlyph(c, state = font) {
   const page = c >> 8, col = c % 16, row = (c & 255) >> 4;
   return { page, x: col * 16 + start, y: row * 16, w: end - start - 0.02, advance: (end - start) / 2 + 1, visible: start < 16 && end > start };
 }
-export const glyphPageUrl = (page) => `/media/1.7.10/font/unicode_page_${page.toString(16).padStart(2, "0")}.png`;
+export const glyphPageUrl = (page) => versioned(`/media/1.7.10/font/unicode_page_${page.toString(16).padStart(2, "0")}.png`);
 
 /** The CSS inline-block for one unicode-page glyph (see menu-screens.css .ug); bold draws it twice, one unit apart. */
 export function glyphHtml(c, bold = false) {
@@ -108,6 +108,7 @@ export function glyphHtml(c, bold = false) {
   return `<span class="ug" style="width:${unit(adv)}">${inner}</span>`;
 }
 
+import { versioned } from "./media-version.js";
 // ---- Browser loading: ascii.png (possibly a resource pack's) and glyph_sizes.bin ----
 export async function loadFontResources(fetchImpl = fetch) {
   const [sizes, widths] = await Promise.allSettled([loadGlyphSizes(fetchImpl), loadAsciiWidths()]);
@@ -116,14 +117,14 @@ export async function loadFontResources(fetchImpl = fetch) {
   changed();
 }
 async function loadGlyphSizes(fetchImpl) {
-  const r = await fetchImpl("/media/1.7.10/font/glyph_sizes.bin");
+  const r = await fetchImpl(versioned("/media/1.7.10/font/glyph_sizes.bin"));
   if (!r.ok) return null;
   const buf = await r.arrayBuffer();
   return buf.byteLength >= 65536 ? new Int8Array(buf, 0, 65536) : null;
 }
 async function loadAsciiWidths() {
   const img = new Image();
-  img.src = "/media/1.7.10/font/ascii.png";
+  img.src = versioned("/media/1.7.10/font/ascii.png");
   await img.decode();
   const canvas = document.createElement("canvas");
   canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;

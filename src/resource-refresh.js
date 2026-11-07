@@ -15,8 +15,18 @@ const hooks = new Set();
 const originalLoad = THREE.TextureLoader.prototype.load;
 THREE.TextureLoader.prototype.load = function (url, ...rest) {
   const texture = originalLoad.call(this, url, ...rest);
-  if (typeof url === "string" && url.includes(MEDIA)) textures.add({ ref: new WeakRef(texture), url: unversioned(url) });
+  if (typeof url === "string" && url.includes(MEDIA)) { urlOf.set(texture, unversioned(url)); textures.add({ ref: new WeakRef(texture), url: unversioned(url) }); }
   return texture;
+};
+
+// Texture.clone() shares the source image (end sky/portal layers, beacon beam, experience orbs): a clone of a registered texture is
+// registered under the same url so the refresh reaches it too.
+const urlOf = new WeakMap();
+const originalClone = THREE.Texture.prototype.clone;
+THREE.Texture.prototype.clone = function (...args) {
+  const copy = originalClone.apply(this, args), url = urlOf.get(this);
+  if (url) { urlOf.set(copy, url); textures.add({ ref: new WeakRef(copy), url }); }
+  return copy;
 };
 
 export function onResourcesRefreshed(fn) { hooks.add(fn); return () => hooks.delete(fn); }
@@ -93,3 +103,6 @@ export function refreshResources({ label = "Reloading resources..." } = {}) {
 }
 
 export const registeredTextureCount = () => { let n = 0; for (const e of textures) if (e.ref.deref()) n++; return n; };
+// Unversioned urls of the live registered textures (diagnostics and tests).
+export const registeredTextureUrls = () => { const out = new Set(); for (const e of textures) if (e.ref.deref()) out.add(e.url); return [...out].sort(); };
+export const registeredTextureImage = (url) => { for (const e of textures) { const t = e.ref.deref(); if (t && e.url === url) return t.image; } return null; };

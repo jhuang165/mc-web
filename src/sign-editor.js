@@ -5,6 +5,7 @@
 // Up / Down / Enter move the edited line (& 3), Backspace deletes, typed characters are filtered and cut at 15.
 import { SignEditModel, SIGN_TEXT, SIGN_POST, MAX_LINE } from './signs.js';
 import { signLayout } from './sign-layout.js';
+import { versioned } from './media-version.js';
 
 const SIGN_TEXTURE = '/media/1.7.10/entity/sign.png';
 const G = 4; // canvas pixels per GUI pixel
@@ -36,7 +37,7 @@ export function drawSignGui(ctx, model, { standing, blink, image }) {
 export function openSignEditor(host, signs, tile, world) {
   const standing = world?.get?.(tile.x, tile.y, tile.z) === SIGN_POST, L = signLayout();
   const model = new SignEditModel(tile.text), image = new Image();
-  image.src = SIGN_TEXTURE;
+  image.src = versioned(SIGN_TEXTURE);
   host.show(
     SIGN_TEXT.edit,
     `<div style="display:flex;flex-direction:column;align-items:center;gap:calc(8*var(--u))"><canvas id="sign-edit-canvas" width="${L.boardGui * G}" height="${(L.boardGui / 2 + (standing ? (14 * L.boardGui) / 24 : 0)) * G}" style="width:calc(${L.boardGui}*var(--u));image-rendering:pixelated"></canvas><button class="button" id="sign-edit-done" style="width:calc(200*var(--u));height:calc(20*var(--u))">${SIGN_TEXT.done}</button></div>`,
