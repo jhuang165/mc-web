@@ -11,25 +11,27 @@ const reference = JSON.parse(readFileSync(new URL("../public/research/combat-tra
 const records = reference.records.filter((r) => r.case === "combat");
 
 const PLAIN = { inFire: "fire", onFire: "burning", lava: "lava", inWall: "suffocation", drown: "drowning", starve: "starvation", cactus: "a cactus",
-  fall: "a fall", outOfWorld: VOID, generic: "an accident", magic: "magic", wither: "wither", anvil: "anvil" };
+  fall: "a fall", outOfWorld: VOID, generic: "an accident", magic: "magic", wither: "wither", anvil: "anvil", fallingBlock: "fallingBlock" };
 const ATTACKERS = {
   zombie: { type: "zombie" }, zombieBob: { type: "zombie", customName: "Bob" }, zombieSword: { type: "zombie", equipment: [{ id: 267, displayName: "Sting" }] },
   skeleton: { type: "skeleton" }, skeletonBow: { type: "skeleton", equipment: [{ id: 261, displayName: "Bow of Doom" }] },
   ghast: { type: "ghast" }, creeper: { type: "creeper" }, witch: { type: "witch" },
-  alex: { type: "player", isPlayer: true, customName: "Alex" }, alexSword: { type: "player", isPlayer: true, customName: "Alex" }, // the probe second player holds nothing getHeldItem sees (its stack is in a slot that call ignores), so no ".item" text was recorded
+  alex: { type: "player", isPlayer: true, customName: "Alex" }, alexSword: { type: "player", isPlayer: true, customName: "Alex", equipment: [{ id: 276, displayName: "Sting" }] }, // the probe holds it in InventoryPlayer.getCurrentItem
+  wolf: { type: "wolf" }, wolfBob: { type: "wolf", customName: "Bob" }, wolfTamed: { type: "wolf", tamed: true }, wolfTamedBob: { type: "wolf", tamed: true, customName: "Bob" },
 };
-// Sources this build cannot produce (thorns/thrown damage to the player, falling blocks) are not replayed.
-const replayable = (r) => r.ops.every((op) => { const spec = op.split(" ")[2]; return !/fallingBlock|^thorns|^thrown|^indirectMagic:null/.test(spec ?? ""); });
+const replayable = () => true;
 
 function hitArgs(spec) {
   if (spec in PLAIN) return [PLAIN[spec], false, undefined, undefined, undefined];
   const [kind, who] = spec.split(":"), from = ATTACKERS[who];
   switch (kind) {
-    case "mob": case "player": return ["a " + who, true, "mob", from, undefined];
+    case "mob": case "player": return ["a " + who, true, kind, from, undefined];
+    case "thorns": return ["thorns", true, "thorns", from, undefined];
+    case "thrown": return ["thrown", true, "thrown", from, undefined];
     case "arrow": return ["an arrow", true, undefined, who === "self" || who === "null" ? undefined : from, who === "self" ? { self: true } : undefined];
     case "fireball": return ["fireball", true, "fireball", from, undefined];
     case "explosion": return ["an explosion", true, "explosion", from, undefined];
-    case "indirectMagic": return ["magic", false, undefined, from, undefined];
+    case "indirectMagic": return ["magic", false, "indirectMagic", from, undefined];
   }
   throw new Error(spec);
 }
@@ -69,7 +71,7 @@ test("the port reproduces every native scenario of the CombatTracker matrix", ()
     if (r.message) assert.equal(got.at(-1).preview, r.message.text, r.name + " death message");
     replayed++;
   }
-  assert.ok(replayed >= 300, `replayed ${replayed}`);
+  assert.ok(replayed >= 400, `replayed ${replayed}`);
 });
 
 test("English fallbacks are the en_US values", () => {

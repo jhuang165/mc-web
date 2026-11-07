@@ -24,7 +24,7 @@ const f = Math.fround;
 /** DamageSource type ("death.attack.<type>") of a Survival.damage reason when no entity is involved. */
 const PLAIN = {
   burning: "onFire", lava: "lava", fire: "inFire", lightning: "inFire", "a fall": "fall", drowning: "drown", starvation: "starve",
-  suffocation: "inWall", void: "outOfWorld", anvil: "anvil", "a cactus": "cactus", poison: "magic", wither: "wither", magic: "magic",
+  suffocation: "inWall", void: "outOfWorld", anvil: "anvil", fallingBlock: "fallingBlock", "a cactus": "cactus", poison: "magic", wither: "wither", magic: "magic",
   "an accident": "generic",
 };
 const PROJECTILE_REASONS = new Set(["an arrow", "an explosion", "fireball", "magic"]);
@@ -39,6 +39,8 @@ function entity(raw, { self = false, projectile = null } = {}) {
   return { raw, living: true, tracked: true, player: !!raw?.isPlayer, name: () => entityDisplayName(raw), held: () => (typeof named === "string" && named ? named : null) };
 }
 const ARROW = ["entity.Arrow.name", "arrow"], FIREBALL = ["entity.SmallFireball.name", "Small Fireball"];
+// EntityPotion has no "entity.ThrownPotion.name" key in en_US, so an ownerless thrown or indirectMagic source prints the raw key (probed).
+const POTION = ["entity.ThrownPotion.name", "entity.ThrownPotion.name"];
 
 /** DamageSource of a Survival.damage call. Returns { type, kind, entity }:
  *  kind "plain" (ro), "entity" (rp: EntityDamageSource, text takes the entity as %2$s, and the ".item" key when it holds a renamed item)
@@ -59,10 +61,23 @@ export function damageSource(reason, source, from, via) {
     const e = own ?? (from?.type ? entity(from) : entity(null, { projectile: ARROW }));
     return { type: "arrow", kind: "indirect", entity: e };
   }
+  // DamageSource.causeThornsDamage(wearer): an EntityDamageSource "thorns" whose entity is the wearer that was hit (the victim is the attacker).
+  // Its text has no ".item" key, so a renamed held item adds nothing (probed).
+  if (source === "thorns") return { type: "thorns", kind: "entity", entity: own ?? entity(from) };
+  // causeThrownDamage / causeIndirectMagicDamage with an ownerless projectile name the potion's raw lang key (probed).
+  if (source === "thrown") return { type: "thrown", kind: "indirect", entity: own ?? (from?.type ? entity(from) : entity(null, { projectile: POTION })) };
+  if (source === "indirectMagic") return { type: "indirectMagic", kind: "indirect", entity: own ?? (from?.type ? entity(from) : entity(null, { projectile: POTION })) };
   if (reason === "magic" && (own || from?.type)) return { type: "indirectMagic", kind: "indirect", entity: own ?? entity(from) };
-  if (source === "mob" || (from?.type && !PLAIN[reason] && !PROJECTILE_REASONS.has(reason)) || (own && !PLAIN[reason]))
-    return { type: own || from?.isPlayer ? "player" : "mob", kind: "entity", entity: own ?? entity(from ?? { type: articleless(reason) }) };
+  if (source === "mob" || source === "player" || (from?.type && !PLAIN[reason] && !PROJECTILE_REASONS.has(reason)) || (own && !PLAIN[reason]))
+    return { type: own || source === "player" || (source !== "mob" && from?.isPlayer) ? "player" : "mob", kind: "entity", entity: own ?? entity(from ?? { type: articleless(reason) }) };
   return { type: PLAIN[reason] ?? "generic", kind: "plain", entity: null };
+}
+
+/** The fall description for a position: ladder (65) or vines (72) in the cell at the feet, else water when `inWater`, else null
+ *  (CombatTracker.func_94545_a over the cell at floor(x), floor(minY), floor(z)). */
+export function sampleFallSite(world, x, y, z, inWater = false) {
+  const cell = world?.get?.(Math.floor(x), Math.floor(y), Math.floor(z));
+  return cell === 65 ? "ladder" : cell === 72 ? "vines" : inWater ? "water" : null;
 }
 
 /** Entity.fallDistance / the block under the feet: the CombatTracker.func_94545_a fall description of the cell at floor(x), floor(minY), floor(z). */

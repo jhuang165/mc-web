@@ -10,6 +10,7 @@ import { entityActive } from './streaming-ticks.js';
 import { JavaRandom } from './java-random.js';
 import { DRAGON_EGG, EGG_TICK_RATE } from './dragon-egg.js';
 import { anvilDropDamage, anvilImpact } from './anvil-block.js';
+import { fallingBlockDamage, fallingBlockSource } from './falling-damage.js';
 
 const f = Math.fround;
 export const FLINT = 313;
@@ -157,10 +158,14 @@ export class FallingBlocks {
         const impact=anvilImpact(e.meta,landedDistance,e.rand);
         e.meta=impact.meta;
         e.brokenOnImpact=impact.broken;
-        if(impact.damage>0){
+      }
+      // EntityFallingBlock.fall: hurtEntities (an anvil, or a summoned HurtEntities block) damages the entities in the box (falling-damage.js).
+      if(e.hurtEntities??e.block===ANVIL){
+        const hit=fallingBlockDamage(landedDistance,e.fallHurtAmount,e.fallHurtMax);
+        if(hit.damage>0){
           const half=FALLING_SIZE/2,
             box=[e.x-half,e.y,e.z-half,e.x+half,e.y+FALLING_SIZE,e.z+half];
-          this.hurt(box,impact.damage,'anvil',e);
+          this.hurt(box,hit.damage,fallingBlockSource(e.block===ANVIL),e);
         }
       }
       // canPlaceEntityOnSide(block, i, j, k, true, 1): a replaceable cell; nothing to fall into below.
@@ -179,12 +184,14 @@ export class FallingBlocks {
     this.drop({ id: e.block, count: 1, damage: e.block === SAND ? e.meta : e.block === ANVIL ? anvilDropDamage(e.meta) : 0 }, e.x, posY, e.z);
   }
   serialize() {
-    return this.entities.map(({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance }) => ({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance }));
+    return this.entities.map(({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance, hurtEntities, fallHurtAmount, fallHurtMax }) => ({ block, meta, x, y, z, vx, vy, vz, ticks, onGround, fallDistance,
+      ...(hurtEntities === undefined ? {} : { hurtEntities, fallHurtAmount, fallHurtMax }) }));
   }
   restoreEntity(s) {
     if (!s || !isFallingBlock(s.block) || ![s.x, s.y, s.z, s.vx, s.vy, s.vz, s.ticks].every(Number.isFinite)) return;
     const e = spawnFalling(s.block, Number.isInteger(s.meta) ? s.meta & 15 : 0, 0, 0, 0, this.entityRandom());
     Object.assign(e, { x: s.x, y: s.y, z: s.z, px: s.x, py: s.y, pz: s.z, vx: s.vx, vy: s.vy, vz: s.vz, ticks: Math.max(1, Math.floor(s.ticks)), onGround: !!s.onGround, fallDistance: Number.isFinite(s.fallDistance)&&s.fallDistance>0?s.fallDistance:0 });
+    if (typeof s.hurtEntities === "boolean") Object.assign(e, { hurtEntities: s.hurtEntities, fallHurtAmount: Number.isFinite(s.fallHurtAmount) ? s.fallHurtAmount : 2, fallHurtMax: Number.isInteger(s.fallHurtMax) ? s.fallHurtMax : 40 });
     this.entities.push(e);
   }
 }

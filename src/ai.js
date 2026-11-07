@@ -1260,6 +1260,9 @@ export class MobAI {
     this.player.update(player, survival, held);
     this.clock++;
     this.survival = survival;
+    // EntityLivingBase.attackEntityFrom sets the revenge target for every living source entity (arrows' shooters, fireballs, thorns), which the
+    // owner's wolves read (EntityAIOwnerHurtByTarget); Survival.damage reports it through this hook.
+    if (survival) survival.onRevenge = (record) => this.playerHurtBy(record);
     this.budget.left = this.budget.perTick;
   }
   think(e) {

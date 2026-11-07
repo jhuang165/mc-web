@@ -6,6 +6,7 @@ import { entityWaterBox, waterAcceleration, inLava } from './fluids.js';
 import { moveInput } from './player-movement.js';
 import { landingEffects, JUMP_BOOST } from './damage-fx.js';
 import { useMinecart, useBoat } from './structure-simulation.js';
+import { sampleFallSite } from './combat-tracker.js';
 const f = Math.fround;
 export const EMPTY_CART_ITEM = 366, CHEST_CART_ITEM = 450;
 export function createPlayerRider() {
@@ -24,7 +25,13 @@ export function syncRider(state) {
     const jump = survival.effects?.get?.(JUMP_BOOST), by = Math.floor(state.position.y - 0.20000000298023224),
       out = landingEffects(distance, { kind: 'player', amplifier: jump ? jump.amplifier : -1, blockUnder: world?.get?.(Math.floor(state.position.x), by, Math.floor(state.position.z)) ?? 0 });
     if (sound) for (const s of out.sounds) sound(s);
-    if (out.points > 0) survival.damage(out.points, 'a fall');
+    if (out.points > 0) {
+      // CombatTracker entry of the rider's fall: the cell at its feet and the rider's OWN Entity.fallDistance (a mount's fall does not touch it, so
+      // a rider that never fell reads 0 and the text is "hit the ground too hard"; probed rider-fall-own-*).
+      survival.combatSite = sampleFallSite(world, state.position.x, state.position.y, state.position.z, !!state.wasInWater);
+      survival.combatFall = state.fallDistance ?? 0;
+      survival.damage(out.points, 'a fall');
+    }
   };
 }
 // The system that owns the ridden vehicle: boats and minecarts keep separate id spaces.

@@ -789,7 +789,8 @@ export class Survival {
   // its special hit before hurt-resistance filtering; wearing one also reduces the
   // incoming amount by 25% before normal armour calculations. EntityPlayerMP
   // spawn protection and Creative immunity reject the whole hit before helmet wear.
-  anvilDamage(amount) {
+  // `kind` is the DamageSource, "anvil" or "fallingBlock": EntityLivingBase.attackEntityFrom gives both the helmet rule (probed).
+  anvilDamage(amount, kind = "anvil") {
     if (this.creative || this.health <= 0 || this.protection > 0 || !(amount > 0)) return false;
     amount = Math.fround(amount);
     const helmet = this.inventory.getStack(39);
@@ -800,7 +801,7 @@ export class Survival {
       if (helmetWear > 0 && this.inventory.damage(39, helmetWear)) this.broken = helmet.id;
       amount = Math.fround(amount * Math.fround(0.75));
     }
-    return this.damage(amount, "anvil", true);
+    return this.damage(amount, kind, true);
   }
   // EntityPlayerMP.attackEntityFrom and EntityLivingBase.attackEntityFrom. Spawn protection
   // (60 ticks after joining or respawning, `protection`) refuses everything but the void
@@ -848,6 +849,7 @@ export class Survival {
     const hit = damageSource(reason, source, from, via);
     if (dealt !== 0) this.combat.record(hit, before, dealt, this.ticks, { alive: this.health > 0, site: this.combatSite, fall: this.combatFall });
     this.combat.noteAttacker(hit, this.ticks);
+    if (hit.entity?.living && hit.entity.raw) this.onRevenge?.(hit.entity.raw); // the owner's wolves (ai.js beginTick)
     this.combatSite = null; this.combatFall = 0; // sampled per fall, not carried to the next hit
     if (fresh) {
       this.hurtTicks = 10;

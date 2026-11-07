@@ -66,6 +66,7 @@ import { NETHER, providerOf, lightBrightnessTable } from "./dimensions.js";
 import { cloneStack, attackBonus, meleeEffects } from "./mob-equipment.js";
 import { GEAR_TYPES, defaultGear, gearFieldsFrom as mobGearFieldsFrom, toLiveStack, pickUpLoot } from "./mob-equipment-live.js";
 import { enchantedDamage } from "./armor-enchantments.js";
+import { mobThornsOnPlayerHit, NO_THORNS_ATTACKER } from "./thorns-live.js";
 import { armorReduced, soundVolume, soundPitch, mobDrops, experiencePoints, applyEntityCollision, boxesMeet, ANIMALS, FEATHER, RAW_CHICKEN, COOKED_CHICKEN } from "./combat.js";
 const f = Math.fround;
 // MathHelper.wrapAngleTo180_float (qh.g).
@@ -1248,7 +1249,7 @@ export class EntityWorld {
     };
     // EntityMob.attackEntityAsMob: the attribute (the held weapon's modifier included) plus Sharpness (getEnchantmentModifierLiving), Fire Aspect after.
     const melee = e.equipment ? meleeEffects(e.equipment[0]) : null;
-    const hit = survival.scaledDamage(f(attackDamage(e, (e.type === "wolf" ? wolfAttack(e) : e.type === "slime" ? slimeDamage(e.size) : e.type === "magma_cube" ? magmaDamage(e.size) : ENTITY_TYPES[e.type].damage) + (e.equipment ? attackBonus(e.equipment) : 0)) + (melee ? melee.damage : 0)), "a " + e.type, { attacker: thorns, from: e });
+    const hit = survival.scaledDamage(f(attackDamage(e, (e.type === "wolf" ? wolfAttack(e) : e.type === "slime" ? slimeDamage(e.size) : e.type === "magma_cube" ? magmaDamage(e.size) : ENTITY_TYPES[e.type].damage) + (e.equipment ? attackBonus(e.equipment) : 0)) + (melee ? melee.damage : 0)), "a " + e.type, { attacker: NO_THORNS_ATTACKER.has(e.type) ? undefined : thorns, from: e });
     // EntityMob.attackEntityAsMob: Knockback on the held item pushes the player along the mob's facing and slows the mob (player-knockback.js).
     if (hit && melee?.knockback > 0) mobKnockbackKick(survival, e, melee.knockback);
     if (hit && melee?.fire > 0) survival.setFire(melee.fire);
@@ -1295,6 +1296,11 @@ export class EntityWorld {
     const landed = !(e.hurt > 0 && damage <= e.lastDamage) && this.damage(e, damage, player.x, player.z, true, null, { looting: weapon.looting });
     if (landed) {
       this.ai.playerHit(e); // EntityLivingBase.setLastAttacker: the owner's wolves join in (EntityAIOwnerHurtTarget)
+      // EnchantmentHelper.func_151384_a(target, player): a mob wearing Thorns hurts the player back (thorns-live.js, DamageSource.causeThornsDamage).
+      mobThornsOnPlayerHit(e, entityRandom(e), {
+        hurt: (n) => survival.damage(n, "thorns", true, "thorns", e),
+        sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: player.x, y: player.y ?? e.y, z: player.z } }),
+      });
       // Entity.addVelocity(-sin(yaw) * n * 0.5F, 0.1, cos(yaw) * n * 0.5F) with the sine table and Java
       // floats; player.yaw is this build's radian view yaw (Java yaw = 180 - yaw degrees).
       if (knockback > 0 && Number.isFinite(player.yaw)) {
