@@ -17,7 +17,8 @@ import "./container-ui.css";
 import "./menu-screens.css";
 import { Gui } from "./menu-ui.js";
 import { createMenus } from "./menus.js";
-import { folderName } from "./menu-screens.js";
+import { folderName, LANG } from "./menu-screens.js";
+import { initResourcePacks } from "./resource-packs.js";
 import { canGoEndless, endlessCopy } from "./endless-world.js";
 import {guiScale,stackCount,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks,withGlint,itemTint} from "./gui.js";
 import { stackHasEffect } from "./armor-enchantments.js";
@@ -529,6 +530,8 @@ const gui = new Gui($("#gui"), {
   inGame: () => screen !== "home",
 });
 const menus = createMenus(gui, menuContext);
+// Selected resource packs (resource-packs.js): their lang entries replace the menu strings; textures and sounds are served by the worker.
+initResourcePacks(options, LANG).then(() => gui.screen && gui.build());
 addEventListener("resize", () => gui.build());
 
 // `columns`: the active streamed world's edited column records (world-storage.js).

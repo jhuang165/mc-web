@@ -18,6 +18,7 @@ import { statsScreen } from "./stats-screen.js";
 import { PLAYER_NAME } from "./death-messages.js";
 import { flatWorldScreen } from "./flat-gui.js";
 import { DEFAULT_FLAT_STRING } from "./flat-world.js";
+import { resourcePacksScreen } from "./resource-packs-ui.js";
 
 const SOUND_KEYS = ["master", "music", "record", "weather", "block", "hostile", "neutral", "player", "ambient"];
 // Why each unavailable vanilla button is disabled here.
@@ -28,7 +29,6 @@ export const UNAVAILABLE = {
   superSecret: "Super Secret Settings needs the 1.7.10 post-processing shaders, which this renderer does not have.",
   stream: "Twitch broadcasting was a desktop-only feature; a web page cannot stream.",
   showCape: "There are no accounts or capes in this browser build, so the Show Cape button is drawn disabled.",
-  resourcepack: "Only the bundled 1.7.10 textures are available; resource packs cannot be loaded yet.",
   snooper: "This build sends no usage data, so there is nothing to configure.",
   forceUnicode: "Only the default font and the English (US) strings are bundled.",
   touchscreen: "Touch input in this browser build uses its own on-screen controls.",
@@ -423,7 +423,7 @@ export function createMenus(gui, ctx) {
         g.button(b.language, t("options.language"), () => show(languageScreen(() => screen)));
         // GuiOptions.actionPerformed 101: the "Multiplayer Settings..." button opens ScreenChatOptions.
         g.button(b.multiplayer, t("options.multiplayer.title"), () => show(chatOptionsScreen(screen)));
-        g.button(b.resourcepack, t("options.resourcepack"), null, { reason: UNAVAILABLE.resourcepack });
+        g.button(b.resourcepack, t("options.resourcepack"), () => show(resourcePacksScreen(ctx, () => screen, show)));
         g.button(b.snooper, t("options.snooper.view"), null, { reason: UNAVAILABLE.snooper });
         g.button(b.done, t("gui.done"), () => { ctx.saveOptions(); show(parent()); });
       },
