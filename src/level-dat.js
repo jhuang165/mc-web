@@ -179,13 +179,17 @@ export function javaPlayerFromNbt(tag, { convertItem = (c) => itemStackFromNbt(c
     if (hasNumber(abilitiesTag, 'flySpeed')) { abilities.flySpeed = get(abilitiesTag, 'flySpeed', NBT.FLOAT, 0); abilities.walkSpeed = get(abilitiesTag, 'walkSpeed', NBT.FLOAT, 0); }
     if (hasNumber(abilitiesTag, 'mayBuild')) abilities.mayBuild = get(abilitiesTag, 'mayBuild', NBT.BYTE, 0) !== 0;
   }
-  if (abilities?.flying) lost.push('abilities.flying (the browser starts on foot)');
   if (abilities.flySpeed !== f32(0.05) || abilities.walkSpeed !== f32(0.1)) lost.push('abilities.flySpeed/walkSpeed');
   // EntityPlayer: the bed spawn needs all three of SpawnX/Y/Z; SpawnForced (from /spawnpoint) is not kept.
   const bedSpawn = ['SpawnX', 'SpawnY', 'SpawnZ'].every((k) => hasNumber(tag, k))
     ? [get(tag, 'SpawnX', NBT.INT, 0) + shiftX, get(tag, 'SpawnY', NBT.INT, 0), get(tag, 'SpawnZ', NBT.INT, 0) + shiftZ] : null;
-  if (bedSpawn && get(tag, 'SpawnForced', NBT.BYTE, 0)) lost.push('SpawnForced');
-  if (get(tag, 'Sleeping', NBT.BYTE, 0)) lost.push('Sleeping (the player wakes)');
+  // SpawnForced (a /spawnpoint) is kept as the browser's /spawnpoint (record.playerSpawn) by region-import.js.
+  const spawnForced = Boolean(bedSpawn) && get(tag, 'SpawnForced', NBT.BYTE, 0) !== 0;
+  // EntityPlayer.readEntityFromNBT (bytecode-read): Sleeping sets playerLocation to the floored Pos and calls
+  // wakeUpPlayer(true, true, false) at once, so the player never resumes sleeping; the bed there is freed and the player
+  // stands beside it. `sleepingAt` is that cell (local coordinates) for the launch to apply once the world is loaded.
+  const sleeping = get(tag, 'Sleeping', NBT.BYTE, 0) !== 0;
+  const sleepingAt = sleeping && position ? [Math.floor(position.x), Math.floor(position.y), Math.floor(position.z)] : null;
   const selected = get(tag, 'SelectedItemSlot', NBT.INT, 0);
   if (selected < 0 || selected > 8) lost.push(`SelectedItemSlot ${selected} (clamped to the hotbar)`);
   const motion = list(tag, 'Motion', NBT.DOUBLE);
@@ -209,6 +213,7 @@ export function javaPlayerFromNbt(tag, { convertItem = (c) => itemStackFromNbt(c
     dimension: get(tag, 'Dimension', NBT.INT, 0),
     portalCooldown: get(tag, 'PortalCooldown', NBT.INT, 0),
     abilities,
+    flying: abilities.flying, spawnForced, sleeping, sleepingAt,
     // EntityPlayerMP.readEntityFromNBT: playerGameType (-1 when absent, then the world's GameType applies).
     playerGameType,
     bedSpawn,

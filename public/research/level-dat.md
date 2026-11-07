@@ -46,8 +46,11 @@ The user's own saves (read-only) are 1.8+ (Border*, DataVersion), so no real 1.7
 
 - MapFeatures off has no exact browser generator: overworld types use generation 13 (population and mineshafts, no villages, strongholds or temples); Superflat stays at 15 and its options decide the structures. Both are reported.
 - One clock: the browser's day clock is `DayTime`; `Time` is kept as `totalTime` for export only.
-- Hardcore is kept for export but played as Survival. `initialized`, LastPlayed, SizeOnDisk and newer-version keys are reported as ignored.
-- Not carried (reported in `report.level.player.lost`): `abilities.flying` (the player starts on foot), non-default fly/walk speeds, `SpawnForced`, `Sleeping`, effect `Ambient`, large Motion, Count 0 stacks (native keeps them; item losses are in `report.items`), Attributes beyond the base values, and any key the reader does not know.
+- Hardcore is carried and played as hardcore (hardcore.md). `initialized`, LastPlayed, SizeOnDisk and newer-version keys are reported as ignored.
+- Not carried (reported in `report.level.player.lost`): non-default fly/walk speeds, effect `Ambient`, large Motion, Count 0 stacks (native keeps them; item losses are in `report.items`), Attributes beyond the base values, and any key the reader does not know.
 - A player in the Nether or End is placed at the world spawn, and the area is the spawn's.
 - The UUID is not written; the export's stats file uses the offline UUID of "Player".
 - Only one 8×8 chunk area is imported; the rest of the save regenerates from the seed and is not the player's edits.
+
+- Applied since batch 14 (hardcore track): `abilities.flying` (a Creative player starts flying), `SpawnForced` (becomes the browser's /spawnpoint, `record.playerSpawn`, and is exported back as a forced spawn), `Sleeping` (native `readEntityFromNBT` wakes the player at once, bytecode-read, not probed: the launch frees the bed and stands the player beside it, `record.wakeFromBed`) and the hardcore flag. A Survival player's flying flag is dropped (the game mode resets capabilities).
+- In-browser save-folder import (Import screen, `save-folder-import.js`): level.dat, the player (Data.Player, else the newest playerdata/*.dat or players/*.dat), stats and the region files covering ONE 8x8 chunk area around the player (else the world spawn). Not imported: all other regions (they regenerate from the seed) and DIM-1/DIM1 regions. A whole-save import is not done: the streamed world stores chunk edits as a diff against its generator, so arbitrary chunk writes would need that diff for every chunk.

@@ -18,10 +18,13 @@ import { statsScreen } from "./stats-screen.js";
 import { PLAYER_NAME } from "./death-messages.js";
 import { flatWorldScreen } from "./flat-gui.js";
 import { DEFAULT_FLAT_STRING } from "./flat-world.js";
+import { cycleCreateMode, createdWorldFlags, createModeOf, cheatsButtonEnabled, cheatsShownOn, bonusShownOn, HARDCORE_COLOR, isHardcoreRecord, difficultyLocked } from "./hardcore.js";
+import { importScreen } from "./import-screen.js";
 
 const SOUND_KEYS = ["master", "music", "record", "weather", "block", "hostile", "neutral", "player", "ambient"];
 // Why each unavailable vanilla button is disabled here.
 export const UNAVAILABLE = {
+  hardcoreDifficulty: "A hardcore world is locked to Hard difficulty.",
   multiplayer: "Multiplayer needs a connection to a Minecraft server, which a web page cannot open.",
   online: "Minecraft Realms is an online Mojang service; this browser recreation has no account sign-in.",
   quit: "A web page cannot close its own tab. Close the tab to quit.",
@@ -142,7 +145,7 @@ export function createMenus(gui, ctx) {
             const [name, folder, mode] = worldLines(records[i], i);
             g.text(name, x + 2, y + 1, { parent });
             g.text(folder, x + 2, y + 12, { color: COLOR.gray, parent });
-            g.text(mode, x + 2, y + 12 + 10, { color: COLOR.gray, parent });
+            g.text(mode, x + 2, y + 12 + 10, { color: isHardcoreRecord(records[i]) ? HARDCORE_COLOR : COLOR.gray, parent });
           },
           click(i, double) {
             selected = i;
@@ -174,7 +177,7 @@ export function createMenus(gui, ctx) {
           recreate: g.button(b.recreate, t("selectWorld.recreate"), () => show(createWorld(screen, record()))),
           cancel: g.button(b.cancel, t("gui.cancel"), () => show(mainMenu())),
           // Browser additions: .blockworld.json import and export.
-          import: g.button(b.import, "Import", () => ctx.importWorld()),
+          import: g.button(b.import, "Import", () => show(importScreen({ ctx, parent: screen, show }))),
           export: g.button(b.export, "Export", () => { const r = record(); if (r) ctx.exportWorld(r); }),
           // Browser addition: an endless copy of a finite Java world; the original stays as it is.
           endless: g.button(b.endless, "Endless", () => {
@@ -206,13 +209,14 @@ export function createMenus(gui, ctx) {
       name: from ? t("selectWorld.newWorld.copyOf", from.name) : t("selectWorld.newWorld"),
       seed: from ? String(from.seed ?? "") : "",
       type: Math.max(0, from ? worldTypeIndex(from) : 0),
-      mode: from?.mode === "creative" ? "creative" : "survival",
+      mode: from ? createModeOf(from) : "survival",
       more: false,
       created: false,
       // GuiCreateWorld.field_146340_t / field_146339_u: Allow Cheats is off by default; changing the game mode sets it (creative on,
       // survival off) until the button has been pressed by hand.
       allowCommands: false,
       manualCommands: false,
+      hardcore: from?.hardcore === true, // GuiCreateWorld.field_146337_w
       // GuiCreateWorld.field_146334_a (the generator string of a Superflat world) and field_146338_v (Bonus Chest).
       options: from?.generatorOptions ?? DEFAULT_FLAT_STRING,
       bonus: from?.bonusChest === true,
@@ -228,10 +232,9 @@ export function createMenus(gui, ctx) {
         seed: state.seed.trim() || String(Math.floor(Math.random() * 2147483647)),
         biome: types[state.type].biome,
         worldType: types[state.type].worldType,
-        mode: state.mode,
-        allowCommands: state.allowCommands,
         generatorOptions: state.options,
-        bonusChest: state.bonus,
+        // GuiCreateWorld: Hardcore is Survival plus the WorldInfo flag, and drops Allow Cheats and the Bonus Chest.
+        ...createdWorldFlags(state),
       }));
       // launch closes the screen; a world that failed to open leaves it usable.
       state.created = false;
@@ -269,8 +272,10 @@ export function createMenus(gui, ctx) {
           line2.set(t(`selectWorld.gameMode.${state.mode}.line2`));
           mapFeatures.set(t("selectWorld.mapFeatures") + " " + t(types[state.type].biome.startsWith("java") ? "options.on" : "options.off"));
           mapType.set(t("selectWorld.mapType") + " " + types[state.type].name);
-          bonusItems.set(t("selectWorld.bonusItems") + " " + t(state.bonus ? "options.on" : "options.off"));
-          allowCommands.set(t("selectWorld.allowCommands") + " " + t(state.allowCommands ? "options.on" : "options.off"));
+          bonusItems.set(t("selectWorld.bonusItems") + " " + t(bonusShownOn(state) ? "options.on" : "options.off"));
+          allowCommands.set(t("selectWorld.allowCommands") + " " + t(cheatsShownOn(state) ? "options.on" : "options.off"));
+          allowCommands.enable(cheatsButtonEnabled(state));
+          bonusItems.enable(cheatsButtonEnabled(state));
           notice?.remove();
           notice = state.more && types[state.type].notice ? g.splitText(types[state.type].notice, ...L.notice, COLOR.label) : null;
         };
@@ -289,12 +294,8 @@ export function createMenus(gui, ctx) {
         };
         create = g.button(b.create, t("selectWorld.create"), submit);
         g.button(b.cancel, t("gui.cancel"), () => show(parent));
-        // Survival -> Creative -> Survival; Hardcore is skipped (no hardcore worlds in this build).
-        const gameMode = g.button(b.gameMode, "", () => {
-          state.mode = state.mode === "survival" ? "creative" : "survival";
-          if (!state.manualCommands) state.allowCommands = state.mode === "creative";
-          update();
-        });
+        // actionPerformed id 2: Survival -> Hardcore -> Creative -> Survival (hardcore.js).
+        const gameMode = g.button(b.gameMode, "", () => { cycleCreateMode(state); update(); });
         const moreOptions = g.button(b.moreOptions, "", () => { state.more = !state.more; page(); });
         const mapFeatures = g.button(b.mapFeatures, "", null, { reason: UNAVAILABLE.mapFeatures });
         const bonusItems = g.button(b.bonusItems, t("selectWorld.bonusItems") + " " + t("options.off"), () => { state.bonus = !state.bonus; update(); });
@@ -414,7 +415,11 @@ export function createMenus(gui, ctx) {
         g.text(t("options.title"), ...L.title, { center: true });
         optionWidget(g, "FOV", b.fov);
         // The difficulty button exists only with a world loaded.
-        if (ctx.inGame()) optionWidget(g, "DIFFICULTY", b.difficulty);
+        // GuiOptions.initGui: a hardcore world locks the button and shows "Difficulty: Hardcore".
+        if (ctx.inGame()) {
+          if (difficultyLocked(ctx.activeWorld?.())) g.button(b.difficulty, t("options.difficulty") + ": " + t("options.difficulty.hardcore"), null, { reason: UNAVAILABLE.hardcoreDifficulty });
+          else optionWidget(g, "DIFFICULTY", b.difficulty);
+        }
         g.button(b.superSecret, "Super Secret Settings...", null, { reason: UNAVAILABLE.superSecret });
         g.button(b.sounds, t("options.sounds"), () => show(soundsScreen(screen)));
         g.button(b.stream, t("options.stream"), null, { reason: UNAVAILABLE.stream });
