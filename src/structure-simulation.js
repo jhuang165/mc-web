@@ -8,7 +8,8 @@
 // no saved structure state yet (its first launch); afterwards the saved `spawners` / `minecarts`
 // fields are the truth: a looted cart stays looted, a broken cart or spawner stays gone.
 import { MobSpawners, boxesIntersect, mobBox, updateSpawner, updateSpawnerClient } from "./mob-spawner.js";
-import { Minecarts } from "./minecarts.js";
+import { Minecarts, Y_OFFSET as CART_Y_OFFSET } from "./minecarts.js";
+import { CART_SUMMON, cartTypeOfSummon, summonCart } from "./cart-summon.js";
 import { syncVehiclePassengers } from "./vehicle-riders.js";
 import { furnaceUse } from "./cart-variants.js";
 import { MOB_SPAWNER } from "./world.js";
@@ -98,12 +99,12 @@ export function tickMinecartSimulation(state, hooks = {}) {
  * Returns the mobs spawned this tick.
  */
 export function tickSpawnerSimulation(state, env = {}, hooks = {}) {
-  const { spawners, mobs, minecarts, random, feet } = state;
+  const { spawners, mobs, minecarts, boats, random, feet } = state;
   const cartSpawners = liveCartSpawners(minecarts, state.isLoaded);
   if ((!spawners?.size && !cartSpawners.length) || !mobs) return [];
   const extraCollision = (box) => !!minecarts?.carts.some((c) => !c.dead && boxesIntersect(box, c.bb));
   const ctx = {
-    ...mobs.spawnerHooks({ ...env, extraCollision }),
+    ...mobs.spawnerHooks({ ...env, extraCollision, spawnVehicle: (id, tag, rider) => spawnerVehicle({ minecarts, boats }, id, tag, rider) }),
     random,
     players: feet ? [feet] : [],
     spawnParticles: hooks.spawnParticles,
@@ -112,6 +113,17 @@ export function tickSpawnerSimulation(state, env = {}, hooks = {}) {
   // EntityMinecartMobSpawner.onUpdate: the cart moves, then the logic runs at the block the cart is in.
   for (const s of cartSpawners) out.push(...updateSpawner(s, ctx));
   return out;
+}
+
+// A SpawnData Riding mount that is a minecart or boat (agq.a(sa)): created at the rider with setLocationAndAngles, so posY is the rider's y plus the
+// vehicle's yOffset (0.35 and 0.3, probed in spawn-data-reference.json). Null for any other id or when this world has no such list.
+export function spawnerVehicle({ minecarts, boats }, id, tag, rider) {
+  const cart = cartTypeOfSummon(CART_SUMMON[id]);
+  if (cart !== null) return minecarts ? summonCart(minecarts, cart, rider.x, rider.y + CART_Y_OFFSET, rider.z, tag)?.cart ?? null : null;
+  if (id !== "Boat" || !boats) return null;
+  const boat = boats.spawnBoat({ x: rider.x, y: rider.y, z: rider.z, yaw: rider.rotationYaw ?? 0 });
+  boat.pitch = boat.prevPitch = Math.fround(rider.rotationPitch ?? 0);
+  return boat;
 }
 
 // The spawner cart's logic (xu) at floor(posX), floor(posY), floor(posZ) of the cart (xu.b, xu.c, xu.d), for every live type 4 cart.

@@ -8,6 +8,7 @@
 // Entity.rand (entities.js entityRandom). The client branch draws from WorldClient.rand,
 // which here is scene.explosionParticles.worldRandom; pass it as ctx.random to tickClient.
 import { readEntry, readSpawnData, pickWeighted, entryToJson, entryFromJson } from "./spawner-data.js";
+import { spawnRidingChain } from "./spawner-riding.js";
 const f = Math.fround;
 
 // TileEntityMobSpawner's logic before NBT: spawnDelay 20, minSpawnDelay 200, maxSpawnDelay 800,
@@ -78,7 +79,7 @@ export function receiveClientEvent(s, id) {
 // countNearby(type, box), createMob(type, x, y, z, yawDegrees) -> a mob not yet in the world,
 // canSpawnHere(mob), and optional initMob(mob) (onSpawnWithEgg(null)), addMob(mob)
 // (spawnEntityInWorld), spawnParticles(x, y, z) (playAuxSFX 2004 at the spawner),
-// explosionParticles(mob) (spawnExplosionParticle, entity status 20) and blockEvent(s, 1, 0).
+// explosionParticles(mob) (spawnExplosionParticle, entity status 20), blockEvent(s, 1, 0) and spawnMount(id, tag, rider) (a SpawnData Riding mount, spawner-riding.js).
 // Returns the mobs spawned this tick.
 export function updateSpawner(s, ctx) {
   const out = [];
@@ -109,9 +110,15 @@ export function updateSpawner(s, ctx) {
       // (its Pos replaces the rolled position, after the getCanSpawnHere check at the rolled one).
       if (s.spawnData) { if (s.spawnData.props.size) ctx.applyProperties?.(mob, s.spawnData.props); } else ctx.initMob?.(mob);
       ctx.addMob?.(mob);
+      out.push(mob);
+      // The Riding loop of agq.a(sa) (spawner-riding.js): mounts spawn after the rider. A NullPointerException natively (an unmakeable id before a
+      // makeable one) leaves the rider spawned and skips the effects and the timer reset; the port stops this tick the same way.
+      if (s.spawnData && ctx.spawnMount && spawnRidingChain(mob, s.spawnData.props, ctx).crashed) {
+        out.crashed = true;
+        return out;
+      }
       ctx.spawnParticles?.(s.x, s.y, s.z);
       ctx.explosionParticles?.(mob);
-      out.push(mob);
       spawned = true;
     }
   }

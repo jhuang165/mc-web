@@ -135,8 +135,11 @@ function payload(state,ox,oz,report,blockAt) {
  }
  // EntityBoat.writeEntityToNBT writes nothing beyond Entity's fields. Boats and carts are mounts: a mob's `riding` ("boat-<id>", "cart-<id>") nests them
  // as its Riding compound below, and writeToNBTOptional skips a vehicle that has a rider (riddenByEntity), so a ridden vehicle is no chunk entity of its own.
- for(const {value:e} of state.boats??[])built.push({e:{...e,id:Number.isInteger(e.id)?`boat-${e.id}`:undefined},n:entity(e,'Boat',ox,oz)});
- for(const {value:e} of state.carts??[]) {const items=(e.items??[]).map(s=>stackNbt(s,s.slot,report,true)).filter(Boolean),n=entity(e,CART_ENTITY_IDS[e.type]??'MinecartChest',ox,oz);if(isContainerType(e.type))n.Items=list(NBT.COMPOUND,items);for(const [k,p] of Object.entries(variantNBT(e)))n[k]=pairTag(p);if(e.customName)n.CustomName=str(e.customName);built.push({e:{...e,id:Number.isInteger(e.id)?`cart-${e.id}`:undefined},n});}
+ // The vehicle the player rides (boats.js / minecarts.js `rider: true`) is the player's Riding compound in level.dat, not a chunk entity
+ // (Entity.writeToNBT writes the mount; writeToNBTOptional skips a ridden vehicle): levelNbt reads it from report.playerMount.
+ const playerSeat=(e,n)=>e.rider===true&&!report.playerMount?(report.playerMount=new Map(Object.entries(n)),true):false;
+ for(const {value:e} of state.boats??[]){const n=entity(e,'Boat',ox,oz);if(!playerSeat(e,n))built.push({e:{...e,id:Number.isInteger(e.id)?`boat-${e.id}`:undefined},n});}
+ for(const {value:e} of state.carts??[]) {const items=(e.items??[]).map(s=>stackNbt(s,s.slot,report,true)).filter(Boolean),n=entity(e,CART_ENTITY_IDS[e.type]??'MinecartChest',ox,oz);if(isContainerType(e.type))n.Items=list(NBT.COMPOUND,items);for(const [k,p] of Object.entries(variantNBT(e)))n[k]=pairTag(p);if(e.customName)n.CustomName=str(e.customName);if(!playerSeat(e,n))built.push({e:{...e,id:Number.isInteger(e.id)?`cart-${e.id}`:undefined},n});}
  // Entity.writeToNBT nests the mount as "Riding" inside its rider (Entity.writeMountToNBT writes it whatever rides it); Entity.writeToNBTOptional skips a
  // mob that has a rider, so a chunk lists only the top rider of each chain (mob-riding.md). A rider whose mount did not export stays unmounted.
  {const byId=new Map(built.filter(b=>typeof b.e.id==='string').map(b=>[b.e.id,b])),mountOf=b=>typeof b.e.riding==='string'&&b.e.riding!==b.e.id?byId.get(b.e.riding):undefined,ridden=new Set();
@@ -187,6 +190,8 @@ export function levelNbt(record,w,report={unmappedItems:0}) {
  // EntityLivingBase.writeEntityToNBT: HealF and the legacy Health short (ceil); EntityPlayerMP adds playerGameType.
  const player={...entity({...pos,air:Number.isInteger(p.air)?p.air:300,fire:Number.isInteger(p.fire)?p.fire:0},'Player',dimension?0:ox,dimension?0:oz),Dimension:int(dimension),Health:short(Math.ceil(health)),HealF:float(health),AbsorptionAmount:float(Number.isFinite(p.absorption)?p.absorption:0),foodLevel:int(p.food??20),foodSaturationLevel:float(p.saturation??5),foodExhaustionLevel:float(p.exhaustion??0),foodTickTimer:int(p.timer??0),XpLevel:int(xp.level),XpP:float(xp.progress),XpTotal:int(xp.total),Score:int(xp.score),SelectedItemSlot:int(p.current??0),playerGameType:int(gameType),SleepTimer:short(0),Sleeping:byte(0),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Attributes:list(NBT.COMPOUND,[['generic.maxHealth',20],['generic.knockbackResistance',0],['generic.movementSpeed',Math.fround(.1)],['generic.attackDamage',1]].map(([n,b])=>new Map([['Name',str(n)],['Base',tag(NBT.DOUBLE,b)]]))),abilities:comp({invulnerable:byte(creative?1:0),flying:byte(record.flying===true&&creative?1:0),mayfly:byte(creative?1:0),instabuild:byte(creative?1:0),mayBuild:byte(gameType===2?0:1),flySpeed:float(.05),walkSpeed:float(.1)})};
  delete player.id;
+ // EntityPlayerMP's saved mount: Entity.writeToNBT nests it as Riding (ServerConfigurationManager.initializeConnectionToPlayer creates and mounts it on load).
+ if(report.playerMount)player.Riding=tag(NBT.COMPOUND,report.playerMount);
  player.PortalCooldown=int(readPlayerPortalState(record.portalState).t);
  // EntityLivingBase: ActiveEffects (PotionEffect.writeCustomPotionEffectToNBT; the browser has no ambient effects).
  const effects=(Array.isArray(p.effects)?p.effects:[]).filter(e=>Number.isInteger(e?.id)&&Number.isInteger(e.duration));

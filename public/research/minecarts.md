@@ -18,7 +18,7 @@ Mount, cart attack/use and sneak-dismount requests are captured as JSON-safe `pl
 
 ### Save/export/import
 
-Each cart now carries `type` (0 empty, 1 chest); omitted types from 0.24.0 saves still mean chest carts. A cart carrying the local player writes `rider: true`. Local reload and export/import restore the player **mounted on that saved empty cart**, recompute seat position, and clear transient player velocity/fall distance. At most the first valid rider marker mounts; chest markers are ignored and dead players remain dismounted. Malformed motion/rotation values are rejected. Broken carts remain absent. This is a browser extension, not native player `Riding` NBT or Java world-file compatibility.
+Each cart now carries `type` (0 empty, 1 chest); omitted types from 0.24.0 saves still mean chest carts. A cart carrying the local player writes `rider: true`. Local reload and export/import restore the player **mounted on that saved empty cart**, recompute seat position, and clear transient player velocity/fall distance. At most the first valid rider marker mounts; chest markers are ignored and dead players remain dismounted. Malformed motion/rotation values are rejected. Broken carts remain absent. The browser save keeps `rider: true`; a Java export writes the cart as the player's `Riding` compound in level.dat (not a chunk entity) and import turns a `Riding` MinecartRideable back into a `rider: true` cart (batch 16, `src/player-mount.test.js`; native read order bytecode-read in `ServerConfigurationManager`, not probed). Other cart types in `Riding` are listed as lost.
 
 ### Native evidence
 

@@ -10,7 +10,7 @@ import { summonedMobRecord } from "./java-mobs.js";
 import { nbtGet } from "./nbt-get.js";
 import { NBT } from "./nbt.js";
 import { SUMMONABLE } from "./commands.js";
-import { summonCart, cartTypeOfSummon } from "./cart-summon.js";
+import { summonCart, cartTypeOfSummon, spawnerRecord } from "./cart-summon.js";
 import { summonFireworkRocket, FIREWORK_SUMMON } from "./firework-summon.js";
 import { summonEntity, entityIdOfSummon } from "./entity-summon.js";
 import { mountEntity } from "./mob-riding.js";
@@ -234,6 +234,11 @@ export function createCommandHost(env) {
       } else if (original === 137 && env.commandTile) {
         Object.assign(env.commandTile(x, y, z), readCommandBlock(tag ?? new Map()));
         this.ignoredTagKeys = tag ? [...tag.keys()].filter(k => !['Command', 'SuccessCount', 'CustomName', 'TrackOutput', 'LastOutput', 'x', 'y', 'z', 'id'].includes(k)) : [];
+      } else if (original === 52 && env.spawners?.()) {
+        // TileEntityMobSpawner.readFromNBT (MobSpawnerBaseLogic.readFromNBT, the same reader as the spawner minecart): EntityId, Delay, the delay and range
+        // keys, SpawnPotentials and SpawnData with its Riding chain. No tag leaves the constructor defaults (Pig, 20).
+        env.spawners().add({ ...(tag ? spawnerRecord(tag) : {}), x, y, z });
+        this.ignoredTagKeys = tag ? [...tag.keys()].filter(k => !['EntityId', 'Delay', 'MinSpawnDelay', 'MaxSpawnDelay', 'SpawnCount', 'MaxNearbyEntities', 'RequiredPlayerRange', 'SpawnRange', 'SpawnPotentials', 'SpawnData', 'x', 'y', 'z', 'id'].includes(k)) : [];
       } else if (id) {
         const loaded = readContainerTile(id, tag ?? new Map());
         stores[loaded.name] ??= {};

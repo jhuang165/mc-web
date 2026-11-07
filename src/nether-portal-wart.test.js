@@ -112,7 +112,7 @@ for (const r of of("pigman")) test(`pigman difficulty ${r.difficulty} column ${J
     if (p) { ticks.push(t); spawned.push(p); }
   }
   assert.deepEqual(ticks, r.spawnTicks);
-  // The reference lists every entity created; one spawn also made a second entity ("wg") that the pure position function does not model.
+  // The reference lists every entity created; one spawn also made a second entity ("wg", a chicken) that the pure position function does not model: it is the baby pigman's chicken jockey, which EntityWorld.onSpawnWithEgg rolls (pigman-jockey.test.js, pigman-jockey-reference.json).
   assert.equal(spawned.length, r.spawnTicks.length);
   for (const p of spawned) { near(p[0], 0.5); near(p[1], r.spawned[0][1]); near(p[2], 0.5); }
   assert.equal(nextLong(rnd), r.nextLong);
