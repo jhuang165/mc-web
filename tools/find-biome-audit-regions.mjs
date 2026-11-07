@@ -2,7 +2,7 @@
 // tools/probes/PopulateChainProbe.java's audit mode (tools/verify-biome-audit.mjs). populate reads
 // the biome at (chunk * 16 + 16, chunk * 16 + 16), so that is the point checked. Pure JS layers.
 // Usage: node tools/find-biome-audit-regions.mjs [perSlot=1] [--write]
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { WorldChunkManager } from "../src/biome-layers.js";
 
@@ -44,5 +44,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (loose.size) regions = [...regions, ...findRegions(1, {}, loose).filter((r) => loose.has(r[3]))];
   const have = new Set(regions.map((r) => r[3]));
   console.log("regions", regions.length, "missing slots", SLOTS.filter((s) => !have.has(s)).join(","));
-  if (process.argv.includes("--write")) writeFileSync(new URL("./probes/biome-audit-regions.json", import.meta.url), JSON.stringify(regions) + "\n");
+  // Rows with a fifth field are forced single-biome regions (slots 10, 20, 151; regions picked by native scan for desert wells and
+  // jungle melons, tools/verify-biome-audit.mjs with AUDIT_SCAN=1); they are not found here, so --write keeps them.
+  const file = new URL("./probes/biome-audit-regions.json", import.meta.url);
+  if (process.argv.includes("--write")) writeFileSync(file, JSON.stringify([...regions, ...JSON.parse(readFileSync(file, "utf8")).filter((r) => r.length > 4)]) + "\n");
 }

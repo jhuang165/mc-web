@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import { JavaRandom } from "./java-random.js";
 import { randomLong, MapGenCaves, MapGenRavine } from "./mapgen.js";
 import { ChunkProviderGenerate, BiomeTerrainState } from "./terrain-generator.js";
+import { ForcedBiomeManager } from "./forced-biome-manager.js";
 import { GenWorld } from "./gen-world.js";
 import { BiomeDecoration } from "./biome-decorator.js";
 import { populateChunk } from "./populate-chunk.js";
@@ -23,6 +24,7 @@ const bits = (v) => { const b = Buffer.alloc(4); b.writeFloatLE(v); return b.rea
 // The probe's 6x6 region, x outer and z inner, with the combined input hash it prints.
 function regionTerrain(region) {
   const seed = BigInt(region.seed), terrain = new ChunkProviderGenerate(seed, "default", new BiomeTerrainState());
+  if (region.forced) terrain.manager = new ForcedBiomeManager(region.slot); // WorldChunkManagerHell
   const topAt = (x, z) => terrain.biomeState.topBlock(terrain.manager.biomeAt(x, z));
   const caves = new MapGenCaves(seed, terrain.manager, topAt), ravines = new MapGenRavine(seed, terrain.manager, topAt);
   const digest = createHash("sha1"), chunks = [];
@@ -42,6 +44,7 @@ const B = { sand: 12, gravel: 13, clay: 82, cactus: 81, reeds: 83, deadBush: 32,
   brownMushroom: 39, redMushroom: 40, brownBig: 99, redBig: 100, pumpkin: 86, melon: 103, vine: 106, lily: 111, emerald: 129,
   silverfish: 97, mossy: 48, ice: 79, packedIce: 174, doublePlant: 175, log: 17, log2: 162, leaves: 18, leaves2: 161, snow: 78,
   sandstone: 24, coal: 16, iron: 15, gold: 14, redstone: 73, lapis: 21, diamond: 56, dirt: 3, mycelium: 110 };
+const wells = new Set(), melonSlots = new Set(); // slots whose native chunk-level populate placed a desert well / melons
 const wrote = new Map(); // slot -> Map("id:meta" -> count) of block writes during that slot's populates
 
 test("biome audit: native populate on one region per biome slot, replayed exactly", () => {
@@ -50,7 +53,7 @@ test("biome audit: native populate on one region per biome slot, replayed exactl
   for (const region of ref.regions) {
     const { chunks, biomeAt } = regionTerrain(region), seed = BigInt(region.seed);
     const rec = ref.records.find((r) => r.region === region.index), label = `region ${region.index} (slot ${region.slot})`;
-    assert.deepEqual([Number(region.seed), ...region.origin, region.slot], wanted[region.index], `${label} spec`);
+    assert.deepEqual([Number(region.seed), ...region.origin, region.slot, ...(region.forced ? [1] : [])], wanted[region.index], `${label} spec`);
     const world = new GenWorld({
       rand: new JavaRandom(BigInt(rec.worldRand)), biomeAt,
       light: (x, y, z) => mod(x * 5 + y * 11 + z * 3 + rec.lightBase, 16),
@@ -61,11 +64,13 @@ test("biome audit: native populate on one region per biome slot, replayed exactl
     const r = recordedWorld(world), entities = [];
     world.onEntity = (e) => entities.push(e);
     const write = world.onWrite;
-    let current = -1;
+    let current = -1, wellSlabs = 0, melons = 0;
     const slots = [];
     world.onWrite = (...a) => {
       write(...a);
       if (a[3] < 0) return;
+      if (a[3] === 44 && a[4] === 1) wellSlabs++;
+      if (a[3] === 103) melons++;
       const m = wrote.get(current) ?? wrote.set(current, new Map()).get(current), k = `${a[3]}:${a[4]}`;
       m.set(k, (m.get(k) || 0) + 1);
     };
@@ -93,6 +98,10 @@ test("biome audit: native populate on one region per biome slot, replayed exactl
     assert.equal(r.writes.digest("hex"), rec.writeSha1, `${label} write order`);
     assert.equal(world.pending.length, rec.pendingCount, `${label} pending`);
     assert.equal(sha1(world.pending.map((p) => JSON.stringify(p)).join(",")), rec.pendingSha1, `${label} pending order`);
+    assert.equal(wellSlabs, rec.wellSlabs, `${label} desert well slabs`); // native count of stone_slab:1 writes (WorldGenDesertWells only)
+    assert.equal(melons, rec.melons, `${label} melon blocks`);
+    if (wellSlabs) wells.add(region.slot);
+    if (melons) melonSlots.add(region.slot);
     assertEffects(r, rec, label);
     assert.equal(stateSha1(world), rec.stateSha1, `${label} state`);
     assert.equal(randomLong(world.rand).toString(), rec.worldNextLong, `${label} world random`);
@@ -101,11 +110,11 @@ test("biome audit: native populate on one region per biome slot, replayed exactl
 
 const ids = (slot) => new Set([...(wrote.get(slot) ?? [])].map(([k]) => Number(k.split(":")[0])));
 const has = (slot, name) => ids(slot).has(B[name]);
-// Signature features that fired in the native-exact records of each biome (blocks only its decorate or tree/plant generators place).
+// Signature features that fired in the native-exact records of each biome (blocks only its decorate or tree/plant generators place). Slots 10, 20 and 151 come from forced single-biome regions.
 const SIGNATURES = {
-  0: ["sand"], 1: ["tallGrass", "doublePlant", "poppy"], 2: ["cactus", "deadBush"], 3: ["emerald", "silverfish"], 4: ["log", "leaves"],
+  0: ["sand"], 10: ["clay", "ice"], 20: ["emerald", "silverfish", "log"], 151: ["log", "vine"], 1: ["tallGrass", "doublePlant", "poppy"], 2: ["cactus", "deadBush"], 3: ["emerald", "silverfish"], 4: ["log", "leaves"],
   5: ["log", "doublePlant"], 6: ["lily", "vine", "clay", "reeds"], 14: ["brownBig", "redBig"], 15: ["brownBig", "redBig"],
-  17: ["cactus", "deadBush"], 21: ["log", "vine"], 22: ["log", "vine"], 23: ["melon", "vine"], 29: ["log2", "leaves2", "redBig", "doublePlant"],
+  17: ["cactus", "deadBush"], 21: ["log", "vine", "melon"], 22: ["log", "vine", "melon"], 23: ["melon", "vine"], 29: ["log2", "leaves2", "redBig", "doublePlant"],
   30: ["log", "doublePlant"], 31: ["doublePlant"], 32: ["doublePlant", "deadBush"], 33: ["doublePlant"], 34: ["emerald", "silverfish"],
   35: ["log2", "leaves2", "doublePlant"], 36: ["log2", "leaves2"], 38: ["log", "deadBush"], 129: ["doublePlant"], 130: ["cactus", "deadBush", "reeds"],
   131: ["emerald", "silverfish"], 132: ["log", "poppy", "doublePlant"], 134: ["vine", "lily", "clay"], 140: ["packedIce"], 149: ["log", "vine"],
@@ -118,5 +127,15 @@ test("biome audit: per-biome signature features fired in native-exact populates"
   const slots = [...wrote.keys()].filter((s) => s >= 0);
   const expected = new Set(wanted.map((w) => w[3]));
   for (const s of expected) assert.ok(wrote.has(s), `slot ${s} populated`);
-  assert.ok(expected.size >= 55, `${expected.size} slots`);
+  assert.ok(expected.size >= 59, `${expected.size} slots`);
+});
+
+test("biome audit: desert wells and jungle melons fire in native chunk-level populates", () => {
+  assert.ok([...wells].every((s) => [2, 17, 130].includes(s)), `well slots ${[...wells]}`);
+  assert.ok(wells.size >= 1, "a native populate places a desert well");
+  for (const slot of [21, 22, 23]) assert.ok(melonSlots.has(slot), `melon slot ${slot}`);
+});
+test("biome audit: forced single-biome regions cover the slots with no natural region", () => {
+  const forced = ref.regions.filter((r) => r.forced).map((r) => r.slot);
+  for (const slot of [10, 20, 151]) assert.ok(forced.includes(slot), `forced slot ${slot}`);
 });

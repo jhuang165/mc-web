@@ -31,7 +31,7 @@ if (!research)
     "Place minecraft-1.7.10.jar in tools/research or set MC_RESEARCH.",
   );
 const jar = path.join(research, "minecraft-1.7.10.jar"),
-  out = path.join(research, "biome-audit-probe");
+  out = path.join(research, process.env.AUDIT_OUT || "biome-audit-probe");
 assert.equal(
   createHash("sha1")
     .update(await readFile(jar))
@@ -89,8 +89,12 @@ await exec("javac", [
   path.join(root, "probes/DungeonProbe.java"),
   path.join(root, "probes/PopulateChainProbe.java"),
 ]);
-const regionFile = path.join(root, "probes/biome-audit-regions.json"), wanted = JSON.parse(readFileSync(regionFile, "utf8"));
+const regionFile = process.env.AUDIT_REGIONS || path.join(root, "probes/biome-audit-regions.json"), wanted = JSON.parse(readFileSync(regionFile, "utf8"));
 const { stdout, stderr } = await exec("java", ["-Xss16m", "-Daudit=" + regionFile, ...(process.env.AUDIT_DEBUG ? ["-Daudit.debug=1"] : []), ...(process.env.AUDIT_DUMP ? ["-Daudit.dump=" + process.env.AUDIT_DUMP] : []), "-cp", cp, "PopulateChainProbe", ...process.argv.slice(2)], { maxBuffer: 1 << 28 });
+if (process.env.AUDIT_SCAN) { // candidate scan: one line per record with its rare-feature write counts, nothing written
+  for (const l of stdout.split("\n")) if (l.startsWith('{"kind":"record"')) { const r = JSON.parse(l); console.log(r.region, "wells", r.wellSlabs, "melons", r.melons); }
+  process.exit(0);
+}
 if (process.argv[2]) { process.stdout.write(stdout); process.stderr.write(stderr); process.exit(0); }
 if (process.env.PROBE_DUMP) await writeFile(process.env.PROBE_DUMP, stdout);
 // SpawnerAnimals and the dungeon spawner lookup print failures; a missing library must not pass as a skipped spawn.
@@ -120,7 +124,7 @@ const reference = {
   srgSha256: createHash("sha256").update(srgText).digest("hex"), classes: classesUsed,
   symbols: srgText.split("\n").filter(l => /^MD: aqz\/a \(Lapu;II\)V|^MD: apx\/(e \(III\)Laor;|a \(IIII\)Z|a \(IIILaji;I\)Z) |^MD: ahb\/(f \(IIILaji;\)V|o \(III\)Laor;|p \(III\)V) |^MD: ajx\/(e|b) \(Lahb;III\)V|^MD: aor\/(e|u) \(\)V/.test(l)),
   jvm: String(version).match(/java\.version = (\S+)/)?.[1] || "unknown",
-  method: "Audit mode of the populate chain, one region per natural biome slot, four populates each. An unchanged ChunkProviderGenerate.populate (aqz.a(provider, x, z)) built with map features off, so no structures: the biome at (x+16, z+16) read before the population reseed, the water lake (not desert or desert hills, nextInt(4)), the lava lake (nextInt(8), y = nextInt(nextInt(248)+8), nextInt(10) at y >= 63), eight WorldGenDungeons attempts, BiomeGenBase.decorate, SpawnerAnimals.performWorldGenSpawning and the freeze/snow loop. The world is population-tail-reference.json's Chunk-backed World double (real World/Chunk code, real Block callbacks, emulated scheduling, no light engine) with a synthetic saved block light (floorMod(7x+3y+13z+lightBase, 14), call kind 6) and saved sky light (floorMod(3x+5y+7z+lightBase, 16), call kind 7). Each of 69 regions is a 6x6-chunk area of native terrain, MapGenCaves and MapGenRavine found by tools/find-biome-audit-regions.mjs (one per naturally occurring biome slot, extras for mutated and variant slots). The inner 2x2 chunks are populated in shuffled order on a fresh world and one provider; afterwards every tile entity is removed (chests emptied slot by slot, spawners overwritten with stone at flag 2) and the empty listing recorded. Records give each step's biome ID, animal count and the provider Random's next long, every spawned animal, the chest (27 slots of [item, count, damage, stored enchantments]) and mob spawner (entity name) tile entities left in the chunk maps, and hash the ordered calls, writes, pending ticks and final chunk storage with drops, sounds, aux and the world Random. Not a WorldServer: no structures, light engine, entity ticking, tile-entity ticking or later block ticks.",
+  method: "Audit mode of the populate chain, one region per natural biome slot, four populates each. An unchanged ChunkProviderGenerate.populate (aqz.a(provider, x, z)) built with map features off, so no structures: the biome at (x+16, z+16) read before the population reseed, the water lake (not desert or desert hills, nextInt(4)), the lava lake (nextInt(8), y = nextInt(nextInt(248)+8), nextInt(10) at y >= 63), eight WorldGenDungeons attempts, BiomeGenBase.decorate, SpawnerAnimals.performWorldGenSpawning and the freeze/snow loop. The world is population-tail-reference.json's Chunk-backed World double (real World/Chunk code, real Block callbacks, emulated scheduling, no light engine) with a synthetic saved block light (floorMod(7x+3y+13z+lightBase, 14), call kind 6) and saved sky light (floorMod(3x+5y+7z+lightBase, 16), call kind 7). Each of 79 regions is a 6x6-chunk area of native terrain, MapGenCaves and MapGenRavine: 69 found by tools/find-biome-audit-regions.mjs (one per naturally occurring biome slot, extras for mutated and variant slots) and 10 forced single-biome regions (WorldChunkManagerHell, aie: slots 10, 20, 151 and regions picked by a native scan for desert wells and jungle melons). Each region draws its world Random and light base from its own stream; records also count stone_slab:1 writes (desert wells) and melon blocks. The inner 2x2 chunks are populated in shuffled order on a fresh world and one provider; afterwards every tile entity is removed (chests emptied slot by slot, spawners overwritten with stone at flag 2) and the empty listing recorded. Records give each step's biome ID, animal count and the provider Random's next long, every spawned animal, the chest (27 slots of [item, count, damage, stored enchantments]) and mob spawner (entity name) tile entities left in the chunk maps, and hash the ordered calls, writes, pending ticks and final chunk storage with drops, sounds, aux and the world Random. Not a WorldServer: no structures, light engine, entity ticking, tile-entity ticking or later block ticks.",
   config, regions, records,
 };
 await writeFile(path.join(root,"../public/research/biome-audit-reference.json"), JSON.stringify(reference)+"\n");
