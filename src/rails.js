@@ -22,7 +22,7 @@ export const railShape = (id, meta) => (isStraightRail(id) ? meta & 7 : meta);
 // (6 south-east, 7 south-west, 8 north-west, 9 north-east).
 export const RAIL_ASCENDING = (meta) => meta >= 2 && meta <= 5;
 // BlockRailBase.setBlockBoundsBasedOnState: 0.625 high when ascending, else 0.125.
-export const railBounds = (meta) => [0, 0, 0, 1, RAIL_ASCENDING(meta & 7) ? 0.625 : 0.125, 1];
+export const railBounds = (meta) => [0, 0, 0, 1, RAIL_ASCENDING(meta) ? 0.625 : 0.125, 1];
 
 // World.doesBlockHaveSolidTopSurface for this build's blocks: a normal cube, or a full snow layer.
 export function solidTop(world, x, y, z) {

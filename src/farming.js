@@ -4,6 +4,19 @@ import {isStem,stemTick,stemCanFertilize,stemFertilized} from './stems-cake.js';
 import {JavaRandom} from './java-random.js';
 export const RANDOM_TICK_CHANCE=3/4096;
 export function cropDrops(block,random=Math.random,meta=0){if(block===CARROTS||block===POTATOES)return rootDrops(block,cropAge(block,meta),n=>Math.floor(random()*n));if(block===39)return random()<1/8?[{id:309,count:1}]:[];if(!isCrop(block))return null;if(block<38)return[{id:309,count:1}];let seeds=0;for(let i=0;i<3;i++)if(Math.floor(random()*15)<=7)seeds++;return[{id:305,count:1},...(seeds?[{id:309,count:seeds}]:[])];}
+// BlockCrops.canBlockStay (farmland below) and BlockFarmland.onNeighborBlockChange (a solid block above turns it to dirt): both run on EVERY
+// neighbour update of the cell (block-sweep-reference.json nb column), not only when the cell below or above changes. Applies the changes
+// around (x, y, z) and returns them as {x, y, z, old, now, drops}.
+const NEIGHBOURS=[[0,0,0],[0,1,0],[0,-1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]];
+export function farmNeighbourChange(world,x,y,z,random=Math.random){
+ const out=[];
+ for(const[dx,dy,dz]of NEIGHBOURS){
+  const cx=x+dx,cy=y+dy,cz=z+dz,b=world.get(cx,cy,cz);
+  if(isCrop(b)&&![29,30].includes(world.get(cx,cy-1,cz))){const drops=cropDrops(b,random,world.getMeta(cx,cy,cz));world.set(cx,cy,cz,0);out.push({x:cx,y:cy,z:cz,old:b,now:0,drops});}
+  else if((b===29||b===30)&&world.solid(cx,cy+1,cz)&&world.get(cx,cy+1,cz)!==46){world.set(cx,cy,cz,2);out.push({x:cx,y:cy,z:cz,old:b,now:2,drops:[]});}
+ }
+ return out;
+}
 export class Farming {
  constructor(world,saved=[]){this.world=world;this.fields=new Map();this.updates=new Map();for(const [key,b]of world.edits)if(b===29||b===30)this.fields.set(key,b===30?7:0);if(Array.isArray(saved))for(const entry of saved){if(!Array.isArray(entry)||entry.length!==2)continue;const[key,m]=entry;if((this.fields.has(key)||(world.streaming&&typeof key==='string'&&(()=>{const p=key.split(',').map(Number);return p.length===3&&p.every(Number.isInteger)&&world.inside(...p)&&!world.isLoaded(p[0],p[2]);})()))&&Number.isInteger(m)&&m>=0&&m<=7)this.fields.set(key,m);}}
  change(x,y,z,b,meta=0){if(this.world.set(x,y,z,b,true,meta))this.updates.set(`${x},${y},${z}`,[x,y,z]);}
