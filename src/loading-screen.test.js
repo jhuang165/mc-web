@@ -1,0 +1,122 @@
+// Loading screens (loading-screen.js, bytecode-read from the unchanged 1.7.10 client) and the off-thread spawn walk (spawn-presolve.js).
+// Reference strings: assets/minecraft/lang/en_US.lang in the jar (menu.loadingLevel, menu.generatingTerrain, multiplayer.downloadingTerrain).
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { LoadingState, SpawnAreaLog, loadingLayout, errorLayout, downloadLayout, workingLayout, workingLine, startLoading, setStage, STAGES, BAR, LOADING_THROTTLE_MS } from './loading-screen.js';
+import { t, LANG } from './menu-screens.js';
+import { presolveSpawn, spawnRequest } from './spawn-presolve.js';
+import { solveNativeSpawn, nativeWorldSpawn, presolvedSpawns } from './java-world.js';
+import { ChunkProviderGenerate, BiomeTerrainState } from './terrain-generator.js';
+import { biomeLayerOptions } from './java-world.js';
+import { World } from './world.js';
+import { populationBlockMapperReady } from './population-world.js';
+await populationBlockMapperReady;
+
+const reference = JSON.parse(readFileSync(new URL('../public/research/spawn-reference.json', import.meta.url), 'utf8'));
+
+test('layouts follow LoadingScreenRenderer, GuiErrorScreen, GuiDownloadTerrain and GuiScreenWorking', () => {
+  // 427 x 240 GUI: title h/2 - 4 - 16, message h/2 - 4 + 8, bar 100 x 2 at (w/2 - 50, h/2 + 16).
+  assert.deepEqual(loadingLayout(427, 240), { cx: 213, titleY: 100, messageY: 124, bar: { x: 163, y: 136, w: 100, h: 2 } });
+  assert.deepEqual(loadingLayout(320, 241), { cx: 160, titleY: 100, messageY: 124, bar: { x: 110, y: 136, w: 100, h: 2 } });
+  assert.deepEqual([BAR.track, BAR.fill, BAR.width, BAR.height], [0x808080, 0x80ff80, 100, 2]);
+  assert.deepEqual(errorLayout(320, 240), { cx: 160, titleY: 90, messageY: 110, button: { x: 60, y: 140, w: 200, h: 20 } });
+  assert.equal(errorLayout(320, 240, 5).button.y, 160);
+  assert.deepEqual(downloadLayout(427, 240), { cx: 213, y: 70 });
+  assert.deepEqual(workingLayout(427), { cx: 213, titleY: 70, lineY: 90 });
+  assert.equal(workingLine('Converting world', 7), 'Converting world 7%');
+});
+
+test('the English strings are the en_US.lang values of the jar', () => {
+  assert.equal(t('menu.loadingLevel'), 'Loading world');
+  assert.equal(t('menu.generatingTerrain'), 'Building terrain');
+  assert.equal(t('multiplayer.downloadingTerrain'), 'Downloading terrain');
+  assert.equal(LANG['gui.cancel'], 'Cancel');
+});
+
+test('LoadingState: the native message sequence and the 100 ms progress throttle', () => {
+  const s = startLoading();
+  assert.deepEqual([s.title, s.message, s.progress], ['Loading world', 'Loading world', -1]);
+  setStage(s, STAGES.terrain);
+  assert.deepEqual([s.title, s.message, s.progress], ['Loading world', 'Building terrain', -1]);
+  assert.equal(s.setLoadingProgress(10, 1000), true);
+  assert.equal(s.setLoadingProgress(20, 1000 + LOADING_THROTTLE_MS - 1), false);
+  assert.equal(s.progress, 10);
+  assert.equal(s.setLoadingProgress(30, 1000 + LOADING_THROTTLE_MS), true);
+  assert.equal(s.progress, 30);
+  s.resetProgressAndWorkingMessage('x');
+  assert.equal(s.progress, -1);
+});
+
+test('SpawnAreaLog prints "Preparing spawn area: N%" at most once a second with i * 100 / total truncated', () => {
+  const lines = [], log = new SpawnAreaLog(625, (l) => lines.push(l));
+  assert.equal(log.report(0, 5000), 'Preparing spawn area: 0%');
+  assert.equal(log.report(300, 5500), null);
+  assert.equal(log.report(300, 6000), null);
+  assert.equal(log.report(313, 6001), 'Preparing spawn area: 50%');
+  assert.equal(log.report(625, 6100, true), 'Preparing spawn area: 100%');
+  assert.deepEqual(lines, ['Preparing spawn area: 0%', 'Preparing spawn area: 50%', 'Preparing spawn area: 100%']);
+});
+
+test('spawnRequest only covers native-spawn streamed overworld records and normalises like the World constructor', () => {
+  assert.equal(spawnRequest({ biome: 'javaStreamed', seed: '1', generationVersion: 17 }), null);
+  assert.equal(spawnRequest({ biome: 'java', seed: '1', generationVersion: 18 }), null);
+  assert.equal(spawnRequest({ biome: 'javaStreamed', seed: '1', generationVersion: 18, dimension: 1 }), null);
+  assert.deepEqual(spawnRequest({ biome: 'javaStreamed', seed: 12, generationVersion: 19, worldType: 'bogus', generatorOptions: 'x' }), { seed: '12', generationVersion: 19, worldType: 'default', generatorOptions: '' });
+  const flat = spawnRequest({ biome: 'javaStreamed', seed: 'a', generationVersion: 18, worldType: 'flat', generatorOptions: '' });
+  assert.equal(flat.worldType, 'flat');
+  assert.equal(flat.generatorOptions, new World('a', 'javaStreamed', 18, 'flat', '').generatorOptions);
+});
+
+test('solveNativeSpawn equals nativeWorldSpawn (the probed function) on default, large biomes, amplified and Superflat records', () => {
+  const picks = [...new Set(['default', 'largeBiomes', 'amplified', 'flat'])].flatMap((k) => reference.records.filter((r) => r.kind === k).slice(0, 3));
+  assert.ok(picks.length >= 10);
+  for (const r of picks) {
+    const seed = BigInt(r.seed);
+    const out = solveNativeSpawn({ seed: r.seed, generationVersion: 18, worldType: r.kind, generatorOptions: r.kind === 'flat' ? r.preset : '' });
+    assert.deepEqual([out.x, out.y, out.z], r.spawn, `${r.kind} ${r.seed}`);
+    void seed;
+  }
+});
+
+test('a presolved spawn gives the World constructor the same spawn and origin as walking on the page thread', async () => {
+  for (const seed of ['4', 'loading b20', '99999']) {
+    presolvedSpawns.clear();
+    const walked = new World(seed, 'javaStreamed', 18, 'default', '');
+    const record = { biome: 'javaStreamed', seed, generationVersion: 18, worldType: 'default' };
+    // A worker double that answers through the same function a real worker runs.
+    const createWorker = () => {
+      const w = { terminate() { this.ended = true; }, postMessage(data) { queueMicrotask(() => w.onmessage({ data: { id: data.id, spawn: solveNativeSpawn(data) } })); } };
+      return w;
+    };
+    const solved = await presolveSpawn(record, { createWorker });
+    assert.ok(solved);
+    assert.equal(presolvedSpawns.size, 1);
+    const fast = new World(seed, 'javaStreamed', 18, 'default', '');
+    assert.equal(presolvedSpawns.size, 0, 'the entry is consumed');
+    assert.deepEqual(fast.nativeSpawn, walked.nativeSpawn, seed);
+    assert.deepEqual([fast.originX, fast.originZ], [walked.originX, walked.originZ], seed);
+  }
+});
+
+test('presolveSpawn falls back (null, nothing parked) when the worker throws, errors or fails to start', async () => {
+  presolvedSpawns.clear();
+  const record = { biome: 'javaStreamed', seed: '5', generationVersion: 18, worldType: 'default' };
+  const warn = console.warn; console.warn = () => {};
+  try {
+    assert.equal(await presolveSpawn(record, { createWorker: () => { throw new Error('no Worker'); } }), null);
+    const failing = () => ({ terminate() {}, postMessage(d) { queueMicrotask(() => this.onmessage({ data: { id: d.id, error: 'boom' } })); } });
+    assert.equal(await presolveSpawn(record, { createWorker: failing }), null);
+    const dying = () => ({ terminate() {}, postMessage() { queueMicrotask(() => this.onerror({ message: 'crash' })); } });
+    assert.equal(await presolveSpawn(record, { createWorker: dying }), null);
+    assert.equal(await presolveSpawn({ ...record, generationVersion: 16 }), null);
+  } finally { console.warn = warn; }
+  assert.equal(presolvedSpawns.size, 0);
+});
+
+test('nativeWorldSpawn keeps matching a fresh provider (guards the shared biome state)', () => {
+  const r = reference.records.find((x) => x.kind === 'default');
+  const seed = BigInt(r.seed), state = new BiomeTerrainState(), gen = new ChunkProviderGenerate(seed, 'default', state, biomeLayerOptions(18));
+  const out = nativeWorldSpawn(gen, seed, state, 'default');
+  assert.deepEqual([out.x, out.y, out.z], r.spawn);
+});
