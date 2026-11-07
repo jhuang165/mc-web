@@ -24,7 +24,7 @@ await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','VillagerPr
 const {stdout}=await exec('java',['-cp',cp,'VillageLiveProbe'],{maxBuffer:1<<29});
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l.startsWith('{"case":"model"')?l.replace(/^\{"case":"model","parts":/,'{"case":"model","model":')+'}':l));
 const count=c=>records.filter(r=>r.case===c).length;
-const expect={scenario:4,golemSpawn:3,reputation:1,matingSeason:1,doorMath:1,golemFacts:1,golemFlags:1,golemAttack:1,golemDrops:1,model:1,mating:5,gates:1};
+const expect={scenario:4,golemSpawn:3,reputation:1,matingSeason:1,doorMath:1,golemFacts:1,golemFlags:1,golemAttack:1,golemDrops:1,imob:1,golemCollide:1,golemStep:1,golemTimers:1,model:1,mating:5,gates:1};
 for(const [c,n] of Object.entries(expect))assert.equal(count(c),n,`records of ${c}`);
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const names={wc:'VillageCollection',vz:'Village',vy:'VillageDoorInfo',wa:'VillageAggressor',wt:'EntityIronGolem',up:'EntityAIVillagerMate',ur:'EntityAIMoveIndoors',ve:'EntityAIRestrictOpenDoor',vj:'EntityAIFollowGolem',va:'EntityAIPlay',ux:'EntityAILookAtVillager',vm:'EntityAIDefendVillage',bij:'ModelIronGolem',yv:'EntityVillager'};

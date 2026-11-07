@@ -19,8 +19,8 @@ Two defects the probe found while porting: shift-click routing in ContainerMerch
 ## Open, approximated or not done
 
 - Village reputation: a restock with a remembered buyer gives the village +1 reputation for "Player" and a happy-villager burst (state 14), as `EntityVillager.updateAITick`; hitting or killing villagers lowers it (see `village.md`). The merchant screen does not apply the reputation price modifier because 1.7.10 has none.
-- Offers keep original item ids. Items with no browser counterpart in this build (original 350, 387, 347, 384, 89) are shown as "?" and can neither be paid with nor taken; the trade state still counts such an offer as having a result for the yes sound, as native does.
-- Java import does not read villagers at all (`region-import.js` imports dropped items only), so Offers are exported but not re-imported.
+- Offers keep original item ids. Every item in the trade tables now maps to a browser item (the former "?" items 350 cooked fish, 387 written book, 347 clock, 384 bottle o' enchanting and 89 glowstone are resolved); `src/villager-trade-items.test.js` guards completeness.
+- Villager NBT import (Offers on whole-save import) belongs to the interchange track, not this one.
 - The browser view of spent offers and tooltips comes from `GuiMerchant` bytecode (layout read from `bfv`), not pixel comparison. The crosses are drawn at y 21 and 51 when the selected offer is spent.
-- Only the local player can trade; the customer is a flag, not an entity reference. Holding a spawn egg is not detected (spawn eggs are not usable on mobs here). Villager sounds follow the entity event queue, so the yes and no sounds play when the screen refreshes.
+- Only the local player can trade; the customer is a flag, not an entity reference. A held spawn egg on a villager (or any ageable mob) spawns a baby, as `EntityAgeable.interact`. Villager sounds follow the entity event queue, so the yes and no sounds play when the screen refreshes.
 - The villager's profession is not changed by trading and professions above 4 get only the gold-ingot fallback offer, as native.

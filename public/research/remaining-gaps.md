@@ -48,7 +48,7 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 - Fireballs and thrown potions: fireballs are not saved; thrown potions are missing from region export.
 - Wither: effect on mobs and wither skull behaviour listed in `entity-parity-catalogue.md` as Partial.
 - Ender Dragon: model is bytecode-derived; remaining gaps in `dragon.md`.
-- Villager: Partial; see the entity catalogue gap text.
+- Villager: Partial; trade items all map, golem sounds/retargeting/rose ported; remaining: villager NBT import (interchange track), visual-Random particles, +5 default reputation setter, distance-test path check.
 - Riders: region chains are saved since batch 11; `/summon` with a `Riding` tag now mounts mob on mob; mobs on carts and boats are kept by pickup (carts), `/summon` and browser saves (batch 14); region export/import of those chains and chunk-streamed saves are open (`boats.md`, `minecarts.md`).
 
 ## Priority 3: commands

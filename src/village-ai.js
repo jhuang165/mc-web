@@ -7,12 +7,12 @@
 // run). `K` is { Task, Swim, Wander, WatchClosest, LookIdle, HurtByTarget, TargetBase } from ai.js, passed in
 // because ai.js imports villager.js and this file is reached from there.
 import { findRandomTargetTowards, findRandomTargetDirected, isWithinHome, isWithinHomeHere } from "./home-area.js";
-import { golemAttackDamage, golemCanAttack, IRON_GOLEM_SOUNDS } from "./iron-golem.js";
+import { golemAttackDamage, golemCanAttack, IMOB_TYPES, IRON_GOLEM_SOUNDS } from "./iron-golem.js";
 const f = Math.fround;
 const floor = Math.floor;
 
 // IMob (EntityMob and slimes, ghasts...): the hostile kinds this build has.
-const MONSTERS = new Set(["zombie", "skeleton", "spider", "cave_spider", "silverfish", "witch", "creeper", "slime"]);
+const MONSTERS = IMOB_TYPES; // EntityAINearestAttackableTarget with IMob.mobSelector; canAttackClass then drops creepers
 const villagesOf = (m) => m.ai.ew.villages;
 // WorldServer.villageCollectionObj.findNearestVillage at the mob's block.
 export const nearestVillage = (m, extra) => villagesOf(m)?.findNearestVillage(floor(m.x), floor(m.y), floor(m.z), extra) ?? null;

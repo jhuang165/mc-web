@@ -11,7 +11,8 @@ import { NETHER_WART, ITEM_NETHER_WART } from './nether-wart.js';
 import { growGrass } from './flowers.js';
 import { isBucket } from './buckets.js';
 import { useHeldBucket } from './buckets-simulation.js';
-import { ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, ITEM_FIRE_CHARGE } from './spawn-eggs.js';
+import { ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, ITEM_FIRE_CHARGE, eggOf } from './spawn-eggs.js';
+import { isAgeable } from './entities.js';
 import { useEggOnBlock, useEggOnWater, useFireCharge, throwExpBottle } from './spawn-egg-use.js';
 import { isThrowable, throwHeldItem } from './player-throw-simulation.js';
 import { BEACON } from './pyramid.js';
@@ -203,6 +204,12 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     if (state.mobs.saddleUse?.(e, state.survival)) {
       hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved');
       return act('saddle-pig');
+    }
+    // EntityAgeable.interact: a spawn egg in hand never reaches the mob's own interact (no trade, no feeding); an egg of the
+    // mob's class spawns a baby of it.
+    if (id === ITEM_SPAWN_EGG && isAgeable(e.type)) {
+      if (state.mobs.spawnEggBaby?.(e, state.survival, eggOf(state.survival.held?.damage))) { hook('handleEntityEvents'); hook('renderHotbar'); hook('markUnsaved'); }
+      return act('spawn-egg-ageable');
     }
     // EntityVillager.interact: an adult, living, idle villager opens the trading screen.
     if (e.type === 'villager' && hook('openMerchant', e)) return act('trade-villager');

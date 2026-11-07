@@ -14,14 +14,14 @@ Code: `src/iron-golem.js` (constants, drops, animation, pumpkin shape), `src/vil
 
 - Village golem: spawned by the village collection by its native rule; refreshes its village and home every 70 + nextInt(50) ticks. It hits hostile mobs in range with the native damage, fling and sounds; it defends villagers against attackers and the player at reputation -15 or below.
 - Player-created golem: a pumpkin placed on top of two iron blocks with an iron block on both sides of the middle one (x or z) clears the five blocks and spawns a golem with `playerCreated` (no jack-o'-lantern exists in this build; the native check accepts it too). The 120 snowball particles of the original are not drawn.
-- Rose: LookAtVillager holds the arm out for 400 ticks; child villagers walk up and take it (FollowGolem). The rose model is not drawn in the hand.
+- Rose: LookAtVillager holds the arm out for 400 ticks; child villagers walk up and take it (FollowGolem).
 - Saved in the browser record (`playerCreated`); Java export writes id `VillagerGolem` with `PlayerCreated`. Java import reads `VillagerGolem` (PlayerCreated, health, effects) in an imported area.
 - Renderer: ModelIronGolem on the original `iron_golem.png`, with RenderIronGolem's walking roll. Sounds `mob.irongolem.*` come from the 1.7.10 asset index (imported by `tools/import-vanilla-media.mjs`).
 
 ## Approximations and open items
 
-- Player hits by the golem use the existing armour/damage path without the +0.4 upward fling on the player.
-- Step sounds (`mob.irongolem.walk`) are not played; the collide-with-entity 1-in-20 retargeting is not ported.
+- The +0.4 fling (`golemLift`) applies to targets including the player.
+- Step sounds (`mob.irongolem.walk|1.0|1.0`), the 1-in-20 collide retargeting on IMob types, the attack/rose timers, walking dust and the rose model are ported and replayed from probe records in `village-live-reference.json` (rose geometry is bytecode-read, not probed).
 - NearestAttackable's "nearby only" path check is a plain distance test.
-- Only the hostile mobs this build has count as monsters (zombie, skeleton, spider, cave spider, silverfish, witch); creepers are excluded as natively.
+- NearestMonster uses the full probe-verified IMob set; creepers are excluded by `golemCanAttack` as natively.
 - Parity is not complete.
