@@ -15,5 +15,5 @@ Gate **R** depends on SIM-01, commands/world settings and each affected subsyste
 | doMobSpawning | true | Partial; [game rules](game-rules.md), gates the SpawnerAnimals port ([natural spawning](natural-spawning.md)) and the live Overworld portal pigman | R |
 | doTileDrops | true | Implemented; [game rules](game-rules.md), block drops | R |
 | keepInventory | false | Implemented; [game rules](game-rules.md), death handling | R |
-| mobGriefing | true | Partial; [game rules](game-rules.md), creeper, farmland, eat grass, silverfish; absent-feature call sites (e.g. every wither/dragon site) not individually replayed | R |
+| mobGriefing | true | Wired at all 11 native read sites (javap scan); [game rules](game-rules.md). Silverfish, dragon and door gates are probe-replayed; the loot, enderman, wither, skull and fireball gates are bytecode-read and unit-tested. Partial: not every site's surrounding behaviour is probed | R |
 | naturalRegeneration | true | Implemented; [game rules](game-rules.md), including the Peaceful heal check | R |

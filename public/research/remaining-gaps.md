@@ -57,13 +57,13 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 
 ## Priority 3: commands
 - Batch 13 implemented /tellraw (chat components with click/hover), /achievement, /spreadplayers, /debug and /scoreboard. See [commands-b13.md](commands-b13.md). No registered command reports itself unavailable now. What is still Partial:
-  - The scoreboard criteria completion order (30 of 803 positions).
+  - The scoreboard criteria completion order: batch 16 replays all 803 positions from the jar's own StatList order through a Java HashMap model (probe-recorded `statOrder`). The shipped default matches 700+ positions; the craftItem run is identity-hash dependent and differs per JVM run, so it stays approximate.
   - Stat criteria granularity: they follow the port's stat call sites.
   - belowName, friendlyfire and seeFriendlyInvisibles are stored only, because there is no other player.
   - /debug sections are browser tick phases.
-- Selectors (@p/@a/@r) operate over the single local player only (`src/command-selector.js`).
-- /summon covers 52 of the 57 EntityList registrations.
-- mobGriefing is Partial; doMobSpawning gates the SpawnerAnimals port and, since batch 14, the live Overworld portal pigman (`BlockPortal.updateTick`, probe-replayed roll; the port's `onSpawnWithEgg` drops the chicken-jockey roll, so the probe's second entity on one spawn is not modelled).
+- Selectors (@p/@a/@r) operate over the single local player only (`src/command-selector.js`). Batch 16 ported PlayerSelector faithfully: the token regex, the positional-then-key=value parser, the score map, the defaults and parseIntWithDefault are probe-replayed (`selector-reference.json`, 201 records); the findPlayers filter loop (case-insensitive name/team with `!`, float radius over block coordinates with int-overflowing squares, r<=0 unlimited, m, lm/l, score_*, @r count) is bytecode-read, not probed, because it needs a live server. @e does not exist in 1.7.10 and @f never selects. Not modelled: the score-argument HashMap iteration order (only matters for the score-creation side effect), dimension matching.
+- /summon covers 55 of the 57 EntityList registrations (Mob and Monster are abstract and fail natively); Painting, ItemFrame and LeashKnot were added in batch 16. Open: summoned hanging directions outside 0 to 3 are refused, summoned knots are not clickable.
+- mobGriefing: all 11 native read sites are wired and tested (batch 16; the site scan is `game-rules-reference.json`), Partial only for the unprobed behaviour around each site; doMobSpawning gates the SpawnerAnimals port and, since batch 14, the live Overworld portal pigman (`BlockPortal.updateTick`, probe-replayed roll; the port's `onSpawnWithEgg` drops the chicken-jockey roll, so the probe's second entity on one spawn is not modelled).
 
 ## Priority 4: world generation, structures, dimensions
 - Nether Fortress: pieces are not in the structure NBT (`UNSUPPORTED_PIECE_IDS`); catalogued Partial.
