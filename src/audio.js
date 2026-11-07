@@ -19,7 +19,7 @@ export class SoundBank {
     this.status = "Loading original effects…";
     // paulscode's channels: 28 normal (effects) and 4 streaming (music, records); a fifth source takes over the next in rotation.
     this.normal = new ChannelPool(NORMAL_CHANNELS);
-    this.streaming = new ChannelPool(STREAMING_CHANNELS);
+    this.streamChannels = new ChannelPool(STREAMING_CHANNELS); // not `streaming`: that flag says whether the streams are installed
     this.delayed = []; // SoundManager.delayedSounds: { due, event, options }
     this.ticks = 0; // SoundManager.playTime
     this.streams = new Set(); // playing stream handles: music and records (HTMLAudioElement through the graph)
@@ -227,7 +227,7 @@ export class SoundBank {
     const entryVolume = clip?.volume ?? 1;
     if (!file || !(file.stream || clip.stream) || !this.options().sound || this.master() <= 0
       || normalizedVolume(handle.volume, entryVolume, this.options().soundLevels, clip.category) === 0) return this.stop(handle);
-    const { prev, prevPlaying } = this.streaming.acquire(handle);
+    const { prev, prevPlaying } = this.streamChannels.acquire(handle);
     if (prev && prevPlaying) this.evict(prev);
     const audio = new Audio(file.url);
     audio.preload = "auto";
@@ -294,7 +294,7 @@ export class SoundBank {
     }
     this.delayed.length = 0;
     this.normal.clear();
-    this.streaming.clear();
+    this.streamChannels.clear();
     this.records.clear();
   }
   // RenderGlobal.playRecord: stop the record at that jukebox, then (given a record sound from music.js recordSound)
