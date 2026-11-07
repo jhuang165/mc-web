@@ -1,16 +1,19 @@
 // Nether portal and nether wart in a running world (see nether-portal.js / nether-wart.js for the evidence-backed rules): a fire block
 // placed anywhere lights a complete obsidian frame (BlockFire.onBlockAdded -> BlockPortal.func_150000_e), a portal block whose frame
 // is gone removes itself (onNeighborBlockChange, depth first through World.setBlock's re-entrant notification), a wart without soul
-// sand drops its seeds, and the wart grows on random ticks. Standing in a portal does nothing yet and portals do not spawn pigmen
-// here (portalSpawnPosition is exported as a pure function for the lead's dimension work). Wraps world.onChange like Beds/Doors.
-import { PORTAL, FIRE, tryLightPortal, portalIntact } from "./nether-portal.js";
+// sand drops its seeds, and the wart grows on random ticks. A random tick of a portal block rolls BlockPortal.updateTick's pigman
+// (Overworld only, gamerule doMobSpawning, nextInt(2000) < difficulty id); standing in a portal is the dimension code's. Wraps world.onChange like Beds/Doors.
+import { PORTAL, FIRE, tryLightPortal, portalIntact, portalSpawnPosition } from "./nether-portal.js";
 import { NETHER_WART, ITEM_NETHER_WART, wartCanStay, wartTick, wartDropCount } from "./nether-wart.js";
 
 const NEIGHBOURS = [[-1, 0, 0], [1, 0, 0], [0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1]];
 
 export class NetherLive {
-  constructor(world, { random, drop = () => {}, apply = () => {} } = {}) {
+  // pigman(position) spawns the pig zombie (EntityWorld.spawnPortalPigman); difficulty() is the difficulty id, mobSpawning() the doMobSpawning
+  // rule; solidTop(x, y, z) is World.doesBlockHaveSolidTopSurface and normalCube(id) Block.isNormalCube.
+  constructor(world, { random, drop = () => {}, apply = () => {}, pigman = null, difficulty = () => 2, mobSpawning = () => true, solidTop, normalCube } = {}) {
     this.world = world; this.random = random; this.drop = drop; this.apply = apply; this.silent = 0;
+    this.pigman = pigman; this.difficulty = difficulty; this.mobSpawning = mobSpawning; this.solidTop = solidTop; this.normalCube = normalCube;
   }
   watch() {
     const next = this.world.onChange;
@@ -51,6 +54,11 @@ export class NetherLive {
       else if (r.meta !== before) this.apply([[x, y, z, NETHER_WART, NETHER_WART]]);
       return true;
     }
-    return b === PORTAL;
+    if (b === PORTAL) {
+      const w = this.world, at = portalSpawnPosition(w, x, y, z, this.random, { difficulty: this.difficulty(), mobSpawning: this.mobSpawning(), surfaceWorld: !w.dimension, solidTop: this.solidTop, normalCube: this.normalCube });
+      if (at) this.pigman?.(at);
+      return true;
+    }
+    return false;
   }
 }

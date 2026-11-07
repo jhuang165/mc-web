@@ -12,7 +12,7 @@ Gate **R** depends on SIM-01, commands/world settings and each affected subsyste
 | doDaylightCycle | true | Implemented; [game rules](game-rules.md), time advance gate | R |
 | doFireTick | true | Implemented; [game rules](game-rules.md), fire.js tick gate; lightning places no fire | R |
 | doMobLoot | true | Implemented; [game rules](game-rules.md), drops, death orbs and breeding experience | R |
-| doMobSpawning | true | Partial; [game rules](game-rules.md), gates the SpawnerAnimals port ([natural spawning](natural-spawning.md)); live portal pigmen not called yet | R |
+| doMobSpawning | true | Partial; [game rules](game-rules.md), gates the SpawnerAnimals port ([natural spawning](natural-spawning.md)) and the live Overworld portal pigman | R |
 | doTileDrops | true | Implemented; [game rules](game-rules.md), block drops | R |
 | keepInventory | false | Implemented; [game rules](game-rules.md), death handling | R |
 | mobGriefing | true | Partial; [game rules](game-rules.md), creeper, farmland, eat grass, silverfish; absent-feature call sites (e.g. every wither/dragon site) not individually replayed | R |

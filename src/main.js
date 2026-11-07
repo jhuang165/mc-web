@@ -67,6 +67,7 @@ import {
   BED,
   PUMPKIN,
   JACK_O_LANTERN,
+  normalCube as isNormalCube,
 } from "./world.js";
 import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
@@ -215,7 +216,8 @@ import { discName } from "./note-jukebox-content.js";
 import { MusicTicker, ambientMusicType, recordSound } from "./music.js";
 import { MoodSound, moodLight } from "./cave-ambience.js";
 import { status as bossStatus } from "./boss-bar.js";
-import { Doors, WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, blockItemId } from "./doors-panes.js";
+import { Doors, WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, blockItemId, solidTopSurface } from "./doors-panes.js";
+import { spawnPointOf } from "./dimension-spawning.js"; // SpawnerAnimals' spawn point: the Overworld's in every dimension
 import { MinecartRenderer } from "./minecart-renderer.js";
 import { BoatRenderer } from "./boat-renderer.js";
 import { Boats, BOAT_ITEM } from "./boats.js";
@@ -768,6 +770,7 @@ function save() {
   delete active.hotbar;
   delete active.selected;
   active.entities = mobs?.serialize() || [];
+  if (mobs?.saveTotalTime() !== undefined) active.totalTime = mobs.saveTotalTime();
   active.villages = mobs?.villages.toJSON();
   active.farms=farming?.serialize()||[];
   active.pots=serializePots(world);
@@ -1061,7 +1064,10 @@ async function launch(record, prepared) {
     { const next = world.onChange; world.onChange = (x, y, z, old, now) => { next?.(x, y, z, old, now); for (const dy of [1, 0]) { const d = carpetNeighbourChange(world, x, y + dy, z); if (d) { dropBlock([d], x, y + dy, z); scene.updateBlocks([[x, y + dy, z, CARPET, 0]]); saved = false; } } }; }
     new Doors(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
     new Beds(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
-    netherLive = new NetherLive(world, { random: weather.random, drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; } }).watch();
+    netherLive = new NetherLive(world, { random: weather.random, drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; },
+      // BlockPortal.updateTick's pig zombie (Overworld portals, doMobSpawning, nextInt(2000) < difficulty id).
+      pigman: (at) => { mobs?.spawnPortalPigman(at, weather.random); saved = false; }, difficulty: () => mobs?.difficulty ?? 0, mobSpawning: () => gameRule("doMobSpawning"),
+      solidTop: (x, y, z) => solidTopSurface(world, x, y, z), normalCube: isNormalCube }).watch();
     // Redstone components (inert, no power): unsupported ones drop; a pressed stone button releases 20 ticks later.
     world.redstoneBlocks = new RedstoneBlocks(world, { drop: dropBlock, apply: (changes) => { scene.updateBlocks(changes); saved = false; }, sound: (name, volume, pitch, x, y, z) => sounds.play(name, { volume, pitch, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } }) }).watch();
     // Live redstone power and pistons (redstone-runtime.js). The inert RedstoneBlocks above keep only the tripwire
@@ -1190,7 +1196,8 @@ async function launch(record, prepared) {
     mobs.thunderLightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, 10) : 15);
     mobs.fullLightAt = (x, y, z) => (scene.light ? scene.light.level(x, y, z, 0) : 15);
     mobs.isThundering = () => weather.isThundering();
-    mobs.spawnPoint = () => { const s = !world.dimension && active?.worldSpawn; return s ? { x: s[0], y: s[1], z: s[2] } : null; };
+    mobs.spawnPoint = () => spawnPointOf(active);
+    mobs.loadTotalTime(record.totalTime ?? record.player?.time); // WorldInfo.getWorldTotalTime drives the 400-tick animal cadence
     mobs.naturalSpawning = true;
     arrows.wet = (a) => isWet(weather, world, { x: a.x, y: a.y, z: a.z, inWater: a.water }, 0.5);
     mobRenderer.clear();

@@ -24,7 +24,11 @@ public class SpawnListProbe {
   static long seedOf(Random r) throws Exception { return ((java.util.concurrent.atomic.AtomicLong) u.getObject(r, u.objectFieldOffset(seedField))).get(); }
 
   static final int[] BIOMES = {4, 27, 21, 5, 2, 14, 3, 12}; // no horses: EntityHorse.onSpawnWithEgg rolls foals (smaller boxes) on the unseeded entity Random
-  static int biomeId(int cx, int cz) { return BIOMES[Math.floorMod(cx * 7 + cz * 3, 8)]; }
+  // Second replay terrain: jungle, jungle edge and swamp-M slots (ocelots; plain swamp (6) would roll slimes, whose size comes from the unseeded entity Random, so the slime rules have SlimeProbe) and caves at y 30..35 under every other chunk (bats, the monsters' dark spawns).
+  static final int[] WET_BIOMES = {134, 21, 134, 23, 134, 21, 134, 23};
+  static int[] biomes = BIOMES;
+  static boolean caves = false;
+  static int biomeId(int cx, int cz) { return biomes[Math.floorMod(cx * 7 + cz * 3, 8)]; }
   static int surface(int x, int z) { return 64 + (((x >> 3) + (z >> 3)) & 3); } // first air block
   static boolean pond(int x, int z) {
     int cx = x >> 4, cz = z >> 4, lx = x & 15, lz = z & 15;
@@ -34,6 +38,7 @@ public class SpawnListProbe {
     if (y < 0 || y > 255) return 0;
     int s = surface(x, z);
     if (pond(x, z)) return y < 50 ? 1 : y < 62 ? 9 : 0;
+    if (caves && y >= 30 && y < 36 && (((x >> 4) + (z >> 4)) & 1) == 0) return 0;
     return y < s - 1 ? 1 : y == s - 1 ? 2 : 0;
   }
 
@@ -225,13 +230,16 @@ public class SpawnListProbe {
       {"near", 1L, 8.5, 70.0, 8.5, 0, 64, 0, 120, 40},
       {"far", 42L, 300.5, 70.0, -199.5, 0, 64, 0, 160, 50},
       {"negative", 7L, -1000.5, 72.0, 517.5, -1000, 66, 520, 80, 1},
+      {"wet-caves", 3L, 8.5, 70.0, 8.5, 0, 64, 0, 240, 40, true},
     };
     for (Object[] sc : scenarios) {
+      boolean wet = sc.length > 10;
+      biomes = wet ? WET_BIOMES : BIOMES; caves = wet;
       S w = world((Long) sc[1], (Integer) sc[5], (Integer) sc[6], (Integer) sc[7]);
       w.h.add(player(w, (Double) sc[2], (Double) sc[3], (Double) sc[4]));
       aho spawner = new aho();
       int ticks = (Integer) sc[8], every = (Integer) sc[9];
-      StringBuilder o = new StringBuilder("{\"case\":\"replay\",\"name\":" + q((String) sc[0]) + ",\"seed\":" + sc[1] + ",\"player\":[" + sc[2] + "," + sc[3] + "," + sc[4] + "],\"spawn\":[" + sc[5] + "," + sc[6] + "," + sc[7] + "],\"ticks\":" + ticks + ",\"animalsEvery\":" + every + ",\"steps\":[");
+      StringBuilder o = new StringBuilder("{\"case\":\"replay\",\"name\":" + q((String) sc[0]) + ",\"seed\":" + sc[1] + ",\"player\":[" + sc[2] + "," + sc[3] + "," + sc[4] + "],\"spawn\":[" + sc[5] + "," + sc[6] + "," + sc[7] + "],\"biomes\":" + Arrays.toString(biomes) + ",\"caves\":" + caves + ",\"ticks\":" + ticks + ",\"animalsEvery\":" + every + ",\"steps\":[");
       for (int tick = 0; tick < ticks; tick++) {
         w.spawned.clear();
         int total = spawner.a(w, true, true, tick % every == 0);

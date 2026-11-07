@@ -39,7 +39,7 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 
 ## Priority 2: entities and AI
 - Spawner minecart (MinecartSpawner): implemented, see `spawner-cart.md`; gaps are Java region import of carts and SpawnData Riding chains.
-- Natural spawning: Partial. Batch 13 ports SpawnerAnimals.findChunksForSpawning with every biome's spawn lists, caps, HashMap chunk order, group data, the 400-tick animal cadence, Peaceful/doMobSpawning and the Nether/fortress/End lists (`natural-spawning.md`; 3 seeded native replays match). Open: the cap counts only the ticking window (36 chunks in streamed worlds, not 289), the cadence uses a session counter rather than the saved total world time, no dimension spawn point, the witch hut lookup only in swamp slots, and no replay reached bats, slimes, ocelots, horses or the Nether/End flow.
+- Natural spawning: Partial. Batch 13 ports SpawnerAnimals.findChunksForSpawning with every biome's spawn lists, caps, HashMap chunk order, group data, the 400-tick animal cadence, Peaceful/doMobSpawning and the Nether/fortress/End lists (`natural-spawning.md`; 3 seeded native replays match). Batch 14 closes four of the open items: the cap now uses the native 289 eligible chunks and counts every loaded mob, the 400-tick cadence runs from the saved total world time, the Nether and End use the Overworld spawn point (natively DerivedWorldInfo, so not a spawn point of their own), and the witch hut lookup ignores the biome slot. A fourth seeded replay ("wet-caves", 240 ticks, 19 bats) matches the jar. Still open: spawn points are drawn only in chunks the browser simulates (the ticking window, not all 225 non-edge chunks), so mobs cluster nearer the player; slimes, ocelots, horses and the Nether/End flow have no seeded `findChunksForSpawning` replay (slime size and horse foals roll on the unseeded entity Random); the total world time advances only while that world is played.
 - Boats: not standable; see `boats.md`.
 - Fireballs and thrown potions: fireballs are not saved; thrown potions are missing from region export.
 - Wither: effect on mobs and wither skull behaviour listed in `entity-parity-catalogue.md` as Partial.
@@ -55,7 +55,7 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
   - /debug sections are browser tick phases.
 - Selectors (@p/@a/@r) operate over the single local player only (`src/command-selector.js`).
 - /summon covers 52 of the 57 EntityList registrations.
-- mobGriefing is Partial; doMobSpawning gates the SpawnerAnimals port, but live portal pigmen are not called yet.
+- mobGriefing is Partial; doMobSpawning gates the SpawnerAnimals port and, since batch 14, the live Overworld portal pigman (`BlockPortal.updateTick`, probe-replayed roll; the port's `onSpawnWithEgg` drops the chicken-jockey roll, so the probe's second entity on one spawn is not modelled).
 
 ## Priority 4: world generation, structures, dimensions
 - Nether Fortress: pieces are not in the structure NBT (`UNSUPPORTED_PIECE_IDS`); catalogued Partial.
