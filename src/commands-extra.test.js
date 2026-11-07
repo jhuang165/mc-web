@@ -32,10 +32,13 @@ test("StatList.func_151177_a finds the native ids and allStats keeps its order",
     assert.equal(!!s, r.found, r.id);
     if (s) assert.equal(!!s.achievement, r.achievement, r.id);
   }
-  // The same 782 ids; StatList's registration order (recipe order for craftItem) is not reproduced.
+  // The same 782 ids. Everything but the craftItem run is in StatList's registration order; that run follows a HashSet of Items keyed by
+  // identity hash, so another JVM run orders it differently (the port keeps the order of one probed run).
   const all = records("allStats")[0].ids;
   assert.equal(allStatIds().length, all.length);
   assert.deepEqual([...allStatIds()].sort(), [...all].sort());
+  const noCraft = (l) => l.filter((id) => !id.startsWith("stat.craftItem."));
+  assert.deepEqual(noCraft(allStatIds()), noCraft(all));
   assert.deepEqual(allStatIds().slice(0, 23), all.slice(0, 23));
   assert.deepEqual(allStatIds().slice(-33), all.slice(-33));
 });

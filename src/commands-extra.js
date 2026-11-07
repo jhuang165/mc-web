@@ -16,14 +16,11 @@ export function lookupStat(id) {
   if (id.startsWith(ACHIEVEMENT_PREFIX) && Object.hasOwn(ACHIEVEMENT_BY_ID, id.slice(ACHIEVEMENT_PREFIX.length))) return { id, achievement: ACHIEVEMENT_BY_ID[id.slice(ACHIEVEMENT_PREFIX.length)] };
   return isStat(id) ? { id, achievement: null } : null;
 }
-// StatList.allStats ids: the general stats first and the achievements last as natively; the per-item and entity stats between
-// them are grouped by kind, not in StatList's registration order.
-export const allStatIds = () => [
-  ...GENERAL.map((g) => g.id),
-  ...new Set(["mine", "use", "break", "craft"].flatMap((k) => Object.values(STAT_DATA[k])).filter(Boolean)),
-  ...EGGS.flatMap((e) => [e.kills, e.killedBy]),
-  ...ACHIEVEMENTS.map((a) => ACHIEVEMENT_PREFIX + a.id),
-];
+// StatList.allStats ids in registration order (STAT_DATA.order, read from the unchanged StatList): the general stats, the achievements,
+// the block stats (mineBlock), the item stats with the egg kill stats among them, breakItem, then craftItem. The craftItem run follows a
+// HashSet of Items (identity hash codes), so a native JVM run can order it differently; this is the order of one probed run.
+export const allStatIds = () => STAT_DATA.order.slice();
+
 // StatBase.statName: the translation the StatList constructor gave the stat. Item stats wrap ItemStack.func_151000_E, a "[name]"
 // text; the port names the item through `itemName` and gives it the common rarity colour (white).
 function statName(id, itemName) {

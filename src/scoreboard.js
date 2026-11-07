@@ -18,10 +18,23 @@ export const READ_ONLY_CRITERIA = Object.freeze(new Set(["health"]));
 // StatList.replaceAllSimilarBlocks swaps these block stats for their base block's after the StatBase (and so its criteria) was
 // constructed: the criteria stay registered, but nothing increments them (stat.mineBlock.2 counts as stat.mineBlock.3 and so on).
 export const REPLACED_STAT_CRITERIA = Object.freeze([2, 40, 43, 60, 62, 91, 125].flatMap((id) => [`stat.mineBlock.${id}`, `stat.useItem.${id}`]).concat(["stat.useItem.9", "stat.useItem.11"]));
+// The criteria registration order: IScoreObjectiveCriteria.<clinit> puts the four dummies and health first, then every StatBase
+// constructor (ObjectiveStat) registers its stat id in construction order, which is StatList.allStats order except that the 16 stats
+// StatList.replaceAllSimilarBlocks later dropped from allStats were constructed in their id slot of the mineBlock/useItem runs.
+export function criteriaInsertionOrder(statOrder = allStatIds()) {
+  const out = statOrder.slice(), slot = /^stat\.(mineBlock|useItem)\.(\d+)$/;
+  for (const id of REPLACED_STAT_CRITERIA) {
+    const [, kind, n] = slot.exec(id);
+    const at = out.findIndex((x) => { const q = slot.exec(x); return q && q[1] === kind && Number(q[2]) > Number(n); });
+    out.splice(at, 0, id);
+  }
+  return [...BASE_CRITERIA, ...out];
+}
+// bah.a (a HashMap<String, criteria>): the keys in HashMap iteration order (table size and bin order follow from the insertion order).
+export function criteriaOrder(statOrder) { return [...new JavaHashMap(criteriaInsertionOrder(statOrder).map((k) => [k, true])).keys()]; }
 let criteriaMap = null;
-// bah.a (a HashMap<String, criteria>): built lazily in registration order, base criteria first, then StatList order.
 export function criteriaNames() {
-  if (!criteriaMap) criteriaMap = new JavaHashMap([...BASE_CRITERIA, ...allStatIds(), ...REPLACED_STAT_CRITERIA].map((k) => [k, true]));
+  if (!criteriaMap) criteriaMap = new JavaHashMap(criteriaInsertionOrder().map((k) => [k, true]));
   return [...criteriaMap.keys()];
 }
 export const isCriteria = (name) => (criteriaNames(), criteriaMap.has(name));
