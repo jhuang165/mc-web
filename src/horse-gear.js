@@ -3,6 +3,7 @@
 // ItemNameTag (adm) and the GuiScreenHorseInventory (bft) layout. Pure rules and the Container class: the engine wiring is
 // horse-gear-live.js. Replayed against public/research/horse-gear-reference.json (tools/probes/HorseGearProbe.java).
 import { Container, Slot, StackArray, copyStack } from "./inventory.js";
+import { translate } from "./lang.js";
 import { ORIGINAL_ITEMS } from "./original-items.js";
 import { originalOfLive } from "./item-names.js";
 import { HORSE_ARMOR_IDS, SADDLE_ID, canWearArmor, canCarryChest } from "./horse.js";
@@ -13,9 +14,13 @@ export const SADDLE_SLOT = 0, ARMOR_SLOT = 1, CHEST_FIRST = 2, BASE_SIZE = 2, CH
 // custom name yet, so "Horse"), when a chest is added (interact) and in readEntityFromNBT only for a chested horse. The title
 // is therefore "Horse" for a horse without a chest whatever its type or name, and the horse's name for a chested donkey or mule.
 const HORSE_NAMES = ["Horse", "Donkey", "Mule", "Zombie Horse", "Skeleton Horse"]; // en_US.lang entity.<type>.name
+// EntityHorse.getCommandSenderName (wi.b_): a custom name, else StatCollector entity.horse/donkey/mule/zombiehorse/skeletonhorse.name by type 0..4
+// (bytecode-read, lang-keys-reference.json). The title is translated when the AnimalChest is built, as natively.
+const HORSE_KEYS = ["entity.horse.name", "entity.donkey.name", "entity.mule.name", "entity.zombiehorse.name", "entity.skeletonhorse.name"];
+const horseTypeName = (type) => { const i = HORSE_NAMES[type] ? type : 0; return translate(HORSE_KEYS[i], HORSE_NAMES[i]); };
 export function horseChestTitle(h, customName = "") {
-  if (!h?.chested) return HORSE_NAMES[0];
-  return customName || (HORSE_NAMES[h.type] ?? HORSE_NAMES[0]);
+  if (!h?.chested) return horseTypeName(0);
+  return customName || horseTypeName(h.type);
 }
 // Item ids: the lead is the one new item (original 420); the name tag is the existing original 421.
 export const LEAD_ORIGINAL = 420, LEAD_ITEM = 2020, NAME_TAG_ORIGINAL = 421, NAME_TAG_ITEM = 375, CHEST_ORIGINAL = 54;
