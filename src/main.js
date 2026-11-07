@@ -252,6 +252,7 @@ import { ITEM_WRITABLE_BOOK, applyBookEdit, applyBookSign } from "./books.js";
 import { applyHangingEdit } from "./hanging-interaction.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
+import { createRing } from "./headless-columns.js";
 import { startLoading, setStage, STAGES, loadingScreen, errorScreen, nextPaint, SpawnAreaLog } from "./loading-screen.js";
 import { presolveSpawn } from "./spawn-presolve.js";
 import "./lang-hooks.js";
@@ -1299,7 +1300,7 @@ async function launch(record, prepared) {
     if (Array.isArray(record.fireballs) && record.fireballs.length) { mobs.fireballs.load(record.fireballs, world.dimension ?? 0); mobs.skulls.load(record.fireballs, world.dimension ?? 0); } // blaze/ghast fireballs and wither skulls in flight
     // World.rand for EntityLiving.onSpawnWithEgg, and World.func_147462_b at a block.
     mobs.worldRandom = weather.random;
-    mobs.localDifficulty = (x, y, z) => localDifficulty(mobs.difficulty, survival.time, inhabited.value, world.isLoaded(x,z) && y >= 0 && y < world.height);
+    mobs.localDifficulty = (x, y, z) => localDifficulty(mobs.difficulty, survival.time, inhabited.value, (world.isLoaded(x,z) || !!mobs.ring?.holds(x,z)) && y >= 0 && y < world.height);
     // SpawnerAnimals (natural-spawning.md): the saved sky light, World.getBlockLightValue with skylightSubtracted 10 while
     // thundering and 0 (getFullBlockLightValue, animals), the weather and WorldInfo's spawn point (overworld only here).
     mobs.skyLightAt = (x, y, z) => (scene.light ? scene.light.skyAt(x, y, z) : 15);
@@ -1309,6 +1310,10 @@ async function launch(record, prepared) {
     mobs.spawnPoint = () => spawnPointOf(active);
     mobs.loadTotalTime(record.totalTime ?? record.player?.time); // WorldInfo.getWorldTotalTime drives the 400-tick animal cadence
     mobs.naturalSpawning = true;
+    // Headless terrain columns for the spawner's chunks beyond the resident window (headless-columns.js, natural-spawning.md).
+    mobs.ring = createRing(world, { worker: !!streamPrefetch && !streamPrefetch.failed });
+    if (streamPrefetch) streamPrefetch.ring = mobs.ring;
+    mobs.lightSubtracted = () => scene.subtracted;
     arrows.wet = (a) => isWet(weather, world, { x: a.x, y: a.y, z: a.z, inWater: a.water }, 0.5);
     mobRenderer.clear();
     animation.reset();

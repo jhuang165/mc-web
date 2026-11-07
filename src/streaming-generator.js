@@ -10,6 +10,7 @@
 import { streamedSource } from './java-world.js';
 import { populationBlockMapperReady } from './population-world.js';
 import { CELL } from './streaming-population.js';
+import { compactColumn } from './headless-columns.js';
 
 // Chunks of lead beyond the resident square on every side.
 export const PREFETCH_MARGIN = 2;
@@ -26,6 +27,15 @@ export async function createStreamWorker({ seed, generationVersion, originX, ori
       const cell = source.population.export(request.x, request.z), transfer = [];
       for (const c of cell.columns.values()) transfer.push(c.blocks.buffer, c.metadata.buffer);
       return { message: { type: 'cell', x: request.x, z: request.z, cell }, transfer };
+    }
+    if (request.type === 'ring') {
+      // Headless spawning columns (headless-columns.js): compacted here, so only about 25 KB a column crosses over.
+      const columns = [], transfer = [], add = (cx, cz, blocks, metadata) => {
+        const col = compactColumn(blocks, metadata); columns.push([cx, cz, col]); transfer.push(col.blocks.buffer, col.meta.buffer);
+      };
+      if (request.cell) for (const [k, c] of source.population.export(request.x, request.z).columns) { const [cx, cz] = k.split(',').map(Number); add(cx, cz, c.blocks, c.metadata); }
+      else { const c = source.column(request.x, request.z); add(request.x, request.z, c.blocks, c.metadata); }
+      return { message: { type: 'ring', x: request.x, z: request.z, cell: !!request.cell, columns }, transfer };
     }
     const c = source.column(request.x, request.z), blocks = Uint8Array.from(c.blocks), metadata = Uint8Array.from(c.metadata);
     return { message: { type: 'column', x: request.x, z: request.z, column: { blocks, metadata } }, transfer: [blocks.buffer, metadata.buffer] };
@@ -83,9 +93,23 @@ export class StreamPrefetch {
       this.pending.add(k);
       this.port.postMessage({ type: this.cells ? 'cell' : 'column', x: u[0], z: u[1] });
     }
+    // Idle worker: headless columns for the spawner's chunks beyond the resident square (lowest priority).
+    if (this.ring && this.pending.size < this.inFlight) {
+      for (const u of this.ring.units()) {
+        const k = `r${key(...u)}`;
+        if (this.pending.has(k)) continue;
+        this.pending.add(k);
+        this.port.postMessage({ type: 'ring', cell: this.cells, x: u[0], z: u[1] });
+        break;
+      }
+    }
   }
   receive(data) {
     if (data?.type === 'error') { this.fail(data.message); return; }
+    if (data?.type === 'ring') {
+      if (this.pending.delete(`r${key(data.x, data.z)}`)) { this.received++; this.ring?.receive(data.columns); }
+      return;
+    }
     const k = key(data.x, data.z);
     if (!this.pending.delete(k)) return;
     this.received++;
