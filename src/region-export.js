@@ -114,7 +114,7 @@ function payload(state,ox,oz,report,blockAt) {
    if(Array.isArray(e.offers)){const bare=x=>{if(!x)return null;const c={...x};for(const k of ['enchantments','storedEnchantments'])if(Array.isArray(c[k])&&!c[k].length)delete c[k];return stackNbt(c,undefined,report,true);};
     n.Offers=comp({Recipes:list(NBT.COMPOUND,e.offers.map(r=>{const m=new Map([['buy',tag(NBT.COMPOUND,bare(r.buy))],['sell',tag(NBT.COMPOUND,bare(r.sell))],['uses',int(r.uses??0)],['maxUses',int(r.maxUses??7)]]);if(r.buyB)m.set('buyB',tag(NBT.COMPOUND,bare(r.buyB)));return m;}))});}}
   // EntityZombie.writeEntityToNBT: IsBaby (only for a child), IsVillager (only for a zombie villager), ConversionTime (-1 when not curing) and CanBreakDoors. A zombie has no Age or InLove.
-  if(e.type==='zombie'){delete n.Age;delete n.InLove;if((e.growingAge??0)<0)n.IsBaby=byte(1);if(e.villager)n.IsVillager=byte(1);n.ConversionTime=int(Number.isInteger(e.conversionTime)?e.conversionTime:-1);n.CanBreakDoors=byte(0);}
+  if(e.type==='zombie'){delete n.Age;delete n.InLove;if((e.growingAge??0)<0)n.IsBaby=byte(1);if(e.villager)n.IsVillager=byte(1);n.ConversionTime=int(Number.isInteger(e.conversionTime)?e.conversionTime:-1);n.CanBreakDoors=byte(e.canBreakDoors?1:0);}
   // EntitySlime.writeEntityToNBT: Size (size - 1); a slime has no Age or InLove.
   if(e.type==='slime'||e.type==='magma_cube'){n.Size=int((e.size??1)-1);delete n.Age;delete n.InLove;}
   // EntityPigZombie.writeEntityToNBT: the short Anger (1.7.10 has no HurtBy tag), then EntityLiving's Equipment (slot 0 is the held sword) and DropChances (0.085 each); no Age or InLove.

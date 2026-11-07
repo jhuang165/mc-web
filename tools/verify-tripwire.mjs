@@ -187,6 +187,9 @@ for (const [name, kind, note] of [
   ["egg-trips", 5, "an EntityEgg colliding with the string"],
   ["pearl-trips", 6, "an EntityEnderPearl colliding with the string"],
   ["potion-trips", 7, "an EntityPotion colliding with the string"],
+  ["boat-trips", 9, "an EntityBoat (1.5 x 0.6 box) over the string trips it (it reaches Entity.func_145775_I through moveEntity)"],
+  ["falling-block-trips", 10, "an EntityFallingBlock (0.98 box) over the string trips it (moveEntity reaches func_145775_I)"],
+  ["exp-bottle-trips", 11, "an EntityExpBottle colliding with the string"],
   ["bat-ignored", 8, "an EntityBat answers true to doesEntityNotTriggerPressurePlate: the string never trips"],
 ]) {
   const c = xLine({}, 0, 7, 2, { attachedBits: 4, stringMeta: 4 });
@@ -197,6 +200,12 @@ for (const [name, kind, note] of [
   const c = xLine({}, 0, 7, 2, { attachedBits: 4, stringMeta: 4 });
   const ev = [[3, "entity2", 3, 1, 2, 1], [3, "collide", 3, 1, 2], [5, "entity2", 3, 1, 2, 4], [8, "unentity2", 3, 1, 2, 1], [20, "unentity2", 3, 1, 2, 4], [24, "entity2", 3, 1, 2, 8], [28, "entity2", 3, 1, 2, 3], [40, "unentity2", 3, 1, 2, 3], [44, "unentity2", 3, 1, 2, 8]];
   SCENARIOS.push(scenario("projectiles-keep-line-powered", { size: [8, 3, 5], ticks: 60, cells: c, events: ev, note: "a mob trips the line; a snowball joins (no collide call, as thrown entities never run Entity.func_145775_I) and the mob leaves: the scheduled re-sense keeps the line powered until the snowball goes; a bat then does not hold it, an arrow does" }));
+}
+// Sense-only classes (no Entity.func_145775_I call from thrown potions and bottles) hold a powered line: a mob trips it, the class joins, the mob leaves.
+for (const [name, kind, note] of [["potion-sustains", 7, "an EntityPotion in the box"], ["exp-bottle-sustains", 11, "an EntityExpBottle in the box"], ["boat-sustains", 9, "an EntityBoat in the box"], ["falling-block-sustains", 10, "an EntityFallingBlock in the box"]]) {
+  const c = xLine({}, 0, 7, 2, { attachedBits: 4, stringMeta: 4 });
+  const ev = [[3, "entity2", 3, 1, 2, 1], [3, "collide", 3, 1, 2], [5, "entity2", 3, 1, 2, kind], [8, "unentity2", 3, 1, 2, 1], [30, "unentity2", 3, 1, 2, kind]];
+  SCENARIOS.push(scenario(name + "-hold-line", { size: [8, 3, 5], ticks: 60, cells: c, events: ev, note: note + " keeps a mob-tripped line powered (getEntitiesWithinAABB takes every entity) until it leaves" }));
 }
 
 // ---- Native run ----
@@ -292,7 +301,7 @@ const reference = {
   clientSha1,
   classes: Object.fromEntries(await Promise.all(Object.entries(names).map(async ([c, n]) => [c, { name: n, sha256: await digest(c) }]))),
   method:
-    "Same harness as redstone-reference.json (RedstoneProbe: real World/Chunk, copied WorldServer pending ticks, recorded sounds/drops, scripted entity list with strict AABB intersection). Native BlockTripWireHook and BlockTripWire run unchanged. Events: place (setBlock flags 3), place2 (flags 2), placehook (setBlock flags 3 then Block.onPostBlockPlaced(meta), as ItemBlock.placeBlockAt), air, entity (0 item, 1 mob, 2 player: 0.25 box on the cell floor), unentity, collide (onEntityCollidedWithBlock, null entity), notify. Batch 17 events: entity2 (kinds 0 item, 1 mob, 2 player, 3 arrow, 4 snowball, 5 egg, 6 ender pearl, 7 thrown potion, 8 bat: real class instances), unentity2 (by kind), harvest (Block.onBlockHarvested with a TripwireHolder player: 0 empty hand, 1 shears, 2 stick), randomtick (Block.updateTick with the world Random). Not probed: selection bounds, Entity.func_145775_I call sites (bytecode-read; javap-checked below). Per tick: changed region cells, call log (E event, s setBlock, m setBlockMetadataWithNotify, n notify, t schedule, u updateTick, p sound, e drop, T tick), sounds, drops, pending ticks, world Random nextInt.",
+    "Same harness as redstone-reference.json (RedstoneProbe: real World/Chunk, copied WorldServer pending ticks, recorded sounds/drops, scripted entity list with strict AABB intersection). Native BlockTripWireHook and BlockTripWire run unchanged. Events: place (setBlock flags 3), place2 (flags 2), placehook (setBlock flags 3 then Block.onPostBlockPlaced(meta), as ItemBlock.placeBlockAt), air, entity (0 item, 1 mob, 2 player: 0.25 box on the cell floor), unentity, collide (onEntityCollidedWithBlock, null entity), notify. Batch 17 events: entity2 (kinds 0 item, 1 mob, 2 player, 3 arrow, 4 snowball, 5 egg, 6 ender pearl, 7 thrown potion, 8 bat, 9 boat, 10 falling block, 11 thrown experience bottle: real class instances), unentity2 (by kind), harvest (Block.onBlockHarvested with a TripwireHolder player: 0 empty hand, 1 shears, 2 stick), randomtick (Block.updateTick with the world Random). Not probed: selection bounds, Entity.func_145775_I call sites (bytecode-read; javap-checked below). Per tick: changed region cells, call log (E event, s setBlock, m setBlockMetadataWithNotify, n notify, t schedule, u updateTick, p sound, e drop, T tick), sounds, drops, pending ticks, world Random nextInt.",
   tripwireEntities: blocks.tripwireEntities,
   collisionCallers,
   scenarios: results,

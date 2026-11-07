@@ -447,8 +447,10 @@ export class PathNavigate {
   tryMoveToXYZ(x, y, z, speed) {
     return this.setPath(this.getPathToXYZ(floor(x), Math.trunc(y), floor(z)), speed);
   }
-  getPathToEntityLiving(target) {
-    if (!this.canNavigate() || !this.spend()) return null;
+  // `unbudgeted`: the search is exempt from the port's per-tick budget (the original has none), for callers whose answer is a
+  // verdict rather than movement (the golem's nearbyOnly canEasilyReach, where a denied search would read as unreachable).
+  getPathToEntityLiving(target, unbudgeted = false) {
+    if (!this.canNavigate() || (!unbudgeted && !this.spend())) return null;
     this.searches++;
     return this.finder().createEntityPathToEntity(this.entity, target, this.getPathSearchRange());
   }

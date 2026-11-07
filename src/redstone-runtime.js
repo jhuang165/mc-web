@@ -38,6 +38,7 @@ import { installDispensers } from "./dispense.js";
 // Blocks a right click operates through the redstone engine (lever, both buttons, repeater, both comparators).
 export const USE_BLOCKS = new Set([LEVER, STONE_BUTTON, WOODEN_BUTTON, REPEATER, COMPARATOR, COMPARATOR_POWERED]);
 const inside = (b, [x0, y0, z0, x1, y1, z1]) => b[3] > x0 && b[0] < x1 && b[4] > y0 && b[1] < y1 && b[5] > z0 && b[2] < z1;
+const FALLING_HALF = 0.49, FALLING_SIZE = 0.98;
 const ITEM_SIZE = 0.25, ITEM_HALF = 0.125, ARROW_HALF = 0.25, ARROW_SIZE = 0.5, TNT_HALF = 0.49, TNT_SIZE = 0.98;
 
 export function createRedstoneRuntime({ world, scene = null, game = {} }) {
@@ -82,6 +83,10 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     for (const e of game.orbs?.() ?? []) if (e.bb && inside(e.bb, box)) out.push(e);
     for (const e of game.primed?.() ?? []) if (inside([e.x - TNT_HALF, e.y, e.z - TNT_HALF, e.x + TNT_HALF, e.y + TNT_SIZE, e.z + TNT_HALF], box)) out.push(e);
     out.push(...cartsIn(box, "minecart"));
+    // EntityBoat and EntityFallingBlock (getEntitiesWithinAABB takes every entity; both reach func_145775_I through moveEntity,
+    // so they also count in "collider" mode). Probed: tripwire-reference.json boat-trips / falling-block-trips.
+    for (const b of game.boats?.() ?? []) if (!b.dead && b.bb && inside(b.bb, box)) out.push(b);
+    for (const e of game.falling?.() ?? []) if (!e.dead && inside([e.x - FALLING_HALF, e.y, e.z - FALLING_HALF, e.x + FALLING_HALF, e.y + FALLING_SIZE, e.z + FALLING_HALF], box)) out.push(e);
     return out;
   };
   // TileEntity inventories as { count, max } slots; a double chest reads both halves (west or north first).

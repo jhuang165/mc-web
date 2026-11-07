@@ -1176,7 +1176,8 @@ async function launch(record, prepared) {
       mobs: () => mobs,
       items: () => items.items,
       arrows: () => arrows.list,
-      thrown: () => projectiles.balls,
+      thrown: () => [...projectiles.balls, ...(mobs.potions?.projectiles?.balls ?? [])], // string sensing: witch and dispensed potions fly in mobs.potions
+      boats: () => boats.carts, falling: () => falling.entities,
       orbs: () => xpOrbs.orbs,
       primed: () => primed,
       minecarts: () => minecarts,

@@ -183,6 +183,7 @@ export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = (
     record.villager = tagValue(entity, 'IsVillager', NBT.BYTE, 0) !== 0;
     const conversion = tagValue(entity, 'ConversionTime', NBT.INT, -1);
     if (conversion > -1) record.conversionTime = conversion;
+    record.canBreakDoors = tagValue(entity, 'CanBreakDoors', NBT.BYTE, 0) !== 0; // setBreakDoorsAItask(getBoolean): the break-door task
   }
   Object.assign(record, gearNbtFields(entity, shiftX, shiftZ), mobGearNbtFields(entity, type, convertItem), portalCooldownFields(entity));
   return record;
@@ -225,7 +226,7 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
     native.set('Pos', { type: NBT.LIST, value: { elementType: NBT.DOUBLE, items: [0, 0, 0] } });
     Object.assign(record, javaMobFromNbt(native, { convertItem }));
     record.health = tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health));
-    for (const k of type === 'villager' ? ['Profession', 'Riches', 'Offers'] : type === 'iron_golem' ? ['PlayerCreated'] : ['IsBaby', 'IsVillager', 'ConversionTime']) kept.add(k);
+    for (const k of type === 'villager' ? ['Profession', 'Riches', 'Offers'] : type === 'iron_golem' ? ['PlayerCreated'] : ['IsBaby', 'IsVillager', 'ConversionTime', 'CanBreakDoors']) kept.add(k);
   }
   if (type === 'horse') { Object.assign(record, horseNbtFields(tag, convertItem)); for (const k of HORSE_NBT_KEYS) kept.add(k); }
   if (type === 'pigman') {
