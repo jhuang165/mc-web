@@ -18,6 +18,7 @@ import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
 import { MapSurface, mapHandMatrices } from "./map-render.js";
 import { onResourcesRefreshed } from "./resource-refresh.js";
 import { versioned } from "./media-version.js";
+import { animatedItemUrl, itemFrameTag, onItemFramesReady } from "./item-animation.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
 const BLOCK_FACES=[
@@ -82,6 +83,7 @@ export function setCompassTextureFrame(frame) {
   compassFrame = frame;
   if (compassImage?.naturalWidth) drawCompassFrame();
 }
+onItemFramesReady((urls) => { for (const u of urls) pixelTexture(u); }); // decode every frame up front: no blank frame on the first switch
 export function pixelTexture(url) {
   if (url === COMPASS_STATIC) {
     if (!compassTexture) {
@@ -129,7 +131,12 @@ export function skinBox(w, h, d, u, v, tw, th, mirror = false) {
   return g;
 }
 // `use` is the bow's draw stage (bow.js bowStage: 0 standby, 1 to 3 bow_pulling_0 to 2).
+// The versioned url (a pack change re-requests it) or, for a pack-animated item strip, the current frame (item-animation.js).
 export function itemTexture(id, damage = 0, use = 0) {
+  const url = itemTextureRaw(id, damage, use);
+  return typeof url === "string" && url.startsWith("/media/") ? animatedItemUrl(versioned(url)) : url;
+}
+function itemTextureRaw(id, damage = 0, use = 0) {
   const item = ITEMS[id];
   if (id === ITEM_SKULL) return skullIconUrl(damage); // skull.js: one flat sprite per head type
   if (id === ITEM_SPAWN_EGG) return spawnEggTexture(damage); // two tinted layers composed (spawn-eggs.js)
@@ -216,7 +223,7 @@ export class FirstPerson {
   // `meta` is the wool colour (the stack's damage) of a held block.
   select(id, meta = 0, use = 0, glint = false, color = undefined) {
     const leather = leatherItemLayers(id, color),
-      cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + meta + ":" + use + ":" + (glint ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + cast + ":" + (id === ITEM_CLOCK ? clockFrame() : 0);
+      cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + meta + ":" + use + ":" + (glint ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + cast + ":" + (id === ITEM_CLOCK ? clockFrame() : 0) + ":" + (id ? itemFrameTag(itemTexture(id, meta, cast ? 1 : use)) : 0);
     if (key === this.last) return;
     this.last = key;
     if (this.item) {

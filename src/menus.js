@@ -567,6 +567,11 @@ export function createMenus(gui, ctx) {
         // Reset Keys (enabled while any key differs from its default) resets every binding and the
         // hash without saving options.txt, as GuiControls does.
         g.button(L.buttons.resetAll, t("controls.resetAll"), () => { binds.resetAll(); gui.build(); }, { enabled: binds.changed() });
+        // Not native: browser-only options.txt import/export helpers in the free top-right corner (main.js).
+        if (ctx.importOptionsTxt) {
+          g.button({ x: w - 112, y: 2, w: 52, h: 14 }, "Import", () => ctx.importOptionsTxt());
+          g.button({ x: w - 56, y: 2, w: 52, h: 14 }, "Export", () => ctx.exportOptionsTxt());
+        }
       },
       close() { scroll = list?.scroll ?? 0; gui.layer.removeEventListener("pointerdown", capture, true); },
     };

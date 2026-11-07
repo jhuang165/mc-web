@@ -4,6 +4,7 @@
 // GuiScreen.mouseClicked does, and play gui.button.press.
 import { textWidth, trimToWidth, splitLines, shadowColor, FORMAT_COLORS, charWidth, knobOffset, sliderValue, slotMetrics, slotAt, scaledSize } from "./menu-screens.js";
 import { Panorama } from "./menu-panorama.js";
+import { onResourcesRefreshed } from "./resource-refresh.js";
 import { font, usesAscii, glyphHtml } from "./font-renderer.js";
 
 const hex = (c) => "#" + (c & 0xffffff).toString(16).padStart(6, "0");
@@ -133,7 +134,7 @@ export class Gui {
     this.root.dataset.screen = this.screen.id ?? "";
     this.root.classList.remove("hidden");
     if (kind === "panorama") {
-      this.panorama ??= new Panorama(this.canvas);
+      if (!this.panorama) { this.panorama = new Panorama(this.canvas); onResourcesRefreshed((gen) => this.panorama.reload(gen)); }
       const dpr = Math.min(2, devicePixelRatio || 1);
       this.canvas.width = Math.round(w * this.u * dpr);
       this.canvas.height = Math.round(h * this.u * dpr);

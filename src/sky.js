@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import { starQuads, mhSin } from "./lighting.js";
 import { buildEndSky } from "./dimension-render.js";
+import { mediaGeneration, versioned } from "./media-version.js";
 
 const additive = { transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide };
 
@@ -163,6 +164,10 @@ void main(){float f=fogDensity>0.?1.-exp(-fogDensity*vFogDistance):clamp((vFogDi
     this.mesh.renderOrder = 2;
     this.mesh.frustumCulled = this.depth.frustumCulled = false;
     this.key = "";
+    this.loadImage();
+  }
+  // clouds.png (possibly a pack's): the opaque-texel grid the volumes are built from. `gen` is the media generation (refresh).
+  loadImage(gen = mediaGeneration()) {
     const image = new Image();
     image.onload = () => {
       const c = document.createElement("canvas");
@@ -177,8 +182,9 @@ void main(){float f=fogDensity>0.?1.-exp(-fogDensity*vFogDistance):clamp((vFogDi
       for (let i = 0; i < this.filled.length; i++) this.filled[i] = data[i * 4 + 3] > 25 ? 1 : 0;
       this.key = "";
     };
-    image.src = "/media/1.7.10/environment/clouds.png";
+    image.src = versioned("/media/1.7.10/environment/clouds.png", gen);
   }
+  reload(gen) { this.loadImage(gen); }
   cell(px, pz) {
     const s = this.size;
     return this.filled[(((pz % s) + s) % s) * s + (((px % s) + s) % s)];

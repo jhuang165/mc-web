@@ -5,6 +5,7 @@ import { toOriginal } from "./block-registry.js";
 import { blockLightOpacity } from "./map-colors.js";
 import { onResourcesRefreshed } from "./resource-refresh.js";
 import { versioned } from "./media-version.js";
+import { tickItemAnimations } from "./item-animation.js";
 
 export function installMapsClockItems(items) {
   items[ITEM_CLOCK] = { id: ITEM_CLOCK, name: "Clock", texture: "clock", stack: 64, color: "#d6a937" };
@@ -66,6 +67,7 @@ export class MapsClock {
   tick({ survival, position, yaw, world, time, name = "Player", frames = null }) {
     const surface = (world?.dimension ?? 0) === 0; // TextureClock: !worldProvider.isSurfaceWorld spins (dimensions track)
     tickClock(clockState, clockAngle(time, surface));
+    tickItemAnimations(); // pack-animated item sprites (item-animation.js)
     if (typeof document !== "undefined") {
       const url = clockFrameUrl();
       if (this.lastFrame !== clockState.frame) {

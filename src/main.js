@@ -111,6 +111,7 @@ import { NBT } from "./nbt.js";
 import { chatCanOpen } from "./chat.js";
 import { PlayerListUi, playerListVisible } from "./player-list.js";
 import { takeScreenshot, downloadBlob } from "./screenshot.js";
+import { composeWithDom } from "./screenshot-compose.js";
 import { Achievements, BY_ID as BY_ACHIEVEMENT } from "./achievements.js";
 import { AchievementToast } from "./achievements-ui.js";
 import { Stats } from "./stats.js";
@@ -513,6 +514,8 @@ const menuContext = {
   icon: (id, damage) => icon(id, damage),
   splashes: "",
   saveOptions,
+  exportOptionsTxt,
+  importOptionsTxt,
   soundLevel: (k) => soundLevel(options.soundLevels, k),
   makeRecord,
   launch: openWorld,
@@ -570,6 +573,7 @@ onFontChange(() => gui.screen && gui.build());
 onResourcesRefreshed(async () => { await initResourcePacks(options, LANG); await selectLanguage(options.language || "en_US"); await loadFontResources(); gui.screen && gui.build(); });
 onResourcesRefreshed(() => scene?.textures.reload());
 onResourcesRefreshed(() => scene?.reloadStrips());
+onResourcesRefreshed((gen) => scene?.clouds?.reload(gen)); // clouds.png grid (an Image outside the TextureLoader registry)
 onResourcesRefreshed(() => sounds?.refreshPacks?.());
 addEventListener("resize", () => gui.build());
 
@@ -730,6 +734,33 @@ function saveOptions() {
     localStorage.setItem("blockworld.settings", JSON.stringify(options));
     localStorage.setItem("blockworld.options.txt", writeOptionsTxt(options));
   } catch {}
+}
+// Controls screen "Export"/"Import": a browser-only helper (not part of 1.7.10, whose options.txt lives in the game folder). Export
+// downloads the native-format file the mirror already holds; import runs GameSettings.loadOptions over the current settings
+// (options-txt.js). The resource pack selection is kept as it is: changing it would need a pack refresh.
+function exportOptionsTxt() {
+  options.keyBindings = binds.saved();
+  downloadBlob(new Blob([writeOptionsTxt(options)], { type: "text/plain" }), "options.txt");
+  toast("options.txt exported (browser-only helper).");
+}
+function importOptionsTxt() {
+  const input = document.createElement("input");
+  input.type = "file"; input.accept = ".txt,text/plain";
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const { options: next, skipped } = applyOptionsTxt(options, await file.text());
+      next.resourcePacks = options.resourcePacks;
+      const keys = new KeyBindings(next.keyBindings);
+      Object.assign(options, next);
+      binds.codes = keys.codes; binds.resetHash(); binds.releaseAll();
+      saveOptions();
+      gui.screen && gui.build();
+      toast(`options.txt imported (browser-only helper)${skipped.length ? `, ${skipped.length} line(s) skipped` : ""}.`);
+    } catch (err) { toast("options.txt import failed: " + (err.message ?? err)); }
+  };
+  input.click();
 }
 async function toggleFullscreen() {
   try {
@@ -3127,7 +3158,8 @@ const playerList = new PlayerListUi(document);
 const shotNames = new Set();
 function screenshot() {
   takeScreenshot({
-    capture: (cb) => scene.requestCapture(cb),
+    // The canvas frame, then the DOM GUI drawn over it (screenshot-compose.js); the plain frame if that fails.
+    capture: (cb) => scene.requestCapture((blob) => (blob ? composeWithDom(blob, { skip: (el) => el === scene.renderer.domElement }).then(cb, () => cb(blob)) : cb(blob))),
     save: (blob, name) => { shotNames.add(name); downloadBlob(blob, name); },
     taken: (name) => shotNames.has(name),
     print: ({ text, links }) => chat.print(text, Math.floor(performance.now() / 50), 0, links),
