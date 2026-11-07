@@ -57,16 +57,19 @@ public class SpawnReplay2Probe {
   static boolean slimeOnly = false, litSurface = false, ocelotOnly = false;
   static final int NETHERRACK = 87, NETHER_BRICK = 112, END_STONE = 121;
   static int netherFloor(int x, int z) { return 32 + (((x >> 3) + (z >> 3)) & 3); }
+  // Round 3 hooks (SpawnReplay3Probe): a different Nether floor height and nether-brick footprint (null keeps the stand-in terrain).
+  static java.util.function.IntBinaryOperator floorOverride = null;
+  static java.util.function.BiPredicate<Integer, Integer> brickOverride = null;
   static boolean fortressChunk(int x, int z) { return Math.floorMod((x >> 4) + 2 * (z >> 4), 3) == 0; }
   // The probe's stand-in for MapGenNetherBridge's box test (ChunkProviderHell.getPossibleCreatures): a fortress chunk, y 30..60.
   static boolean inFortress(int x, int y, int z) { return fortressChunk(x, z) && y >= 30 && y <= 60; }
   static int blockId(int x, int y, int z) {
     if (y < 0 || y > 255) return 0;
     if (mode.equals("nether")) {
-      int s = netherFloor(x, z);
+      int s = floorOverride != null ? floorOverride.applyAsInt(x, z) : netherFloor(x, z);
       if (y >= 120 && y < 128) return NETHERRACK;
       if (y < s - 1) return NETHERRACK;
-      if (y == s - 1) return fortressChunk(x, z) ? NETHER_BRICK : NETHERRACK;
+      if (y == s - 1) return (brickOverride != null ? brickOverride.test(x, z) : fortressChunk(x, z)) ? NETHER_BRICK : NETHERRACK;
       return 0;
     }
     if (mode.equals("end")) {

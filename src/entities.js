@@ -8,7 +8,7 @@ import { MapGenScatteredFeature } from "./scattered-feature-generator.js";
 import { canDespawn } from "./ai.js";
 import { gameRule } from "./game-rules.js";
 import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE, isSpider, soundType, caveSpiderPoisonTicks } from "./spider.js";
-import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, SPAWN_BRIGHTNESS, spawnerType } from "./mob-spawner.js";
+import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, anchoredShrunkBox, SPAWN_BRIGHTNESS, spawnerType } from "./mob-spawner.js";
 import { ENDERMAN_HEALTH, ENDERMAN_WIDTH, ENDERMAN_HEIGHT, ENDERMAN_SPEED, ENDERMAN_ATTACK, SPEED_BOOST as ENDERMAN_BOOST, endermanFields, endermanFieldsFrom, SOUNDS as ENDERMAN_SOUNDS, livingSound as endermanLiving } from "./enderman.js";
 import { endermanTick, endermanHurt, ENDERMAN_TRANSIENT } from "./enderman-live.js";
 import { GIANT, GIANT_SOUNDS, giantPathWeight, giantAttackReady } from "./giant.js";
@@ -1026,6 +1026,7 @@ export class EntityWorld {
       // (yh.a) runs EntityZombie's rolls with bC giving only the golden sword, then setVillager(false): a pigman can be a child (and so a
       // chicken jockey), never a villager (tools/probes/PigmanJockeyProbe.java, pigman-jockey-reference.json).
       if (r.child) e.growingAge = -1;
+      if (r.child) { const t = ENTITY_TYPES[type], k = mobScale(e); e.spawnBox = anchoredShrunkBox(e, t.width, t.height, t.width * k, t.height * k); e.spawnBoxTick = this.worldTicks; }
       if (type === "zombie" && r.villager) e.villager = true;
       this.applyGear(e, r);
       e.knockbackResistance = r.knockback;
@@ -1055,9 +1056,10 @@ export class EntityWorld {
       const r = horseSpawn(rand, opts.group?.horse ?? null);
       opts.group = { horse: r.group };
       Object.assign(e, r.fields);
+      if (e.growingAge < 0) { const t = ENTITY_TYPES.horse, k = mobScale(e); e.spawnBox = anchoredShrunkBox(e, t.width, t.height, t.width * k, t.height * k); e.spawnBoxTick = this.worldTicks; }
     } else if (type === "ocelot") {
       // EntityOcelot.onSpawnWithEgg: one chance in seven of two kittens (age -24000, CatType 0) at the same spot.
-      for (let i = kittenLitter(world); i > 0 && this.entities.length < 40; i--) {
+      for (let i = kittenLitter(world); i > 0 && this.entities.length < (opts.limit ?? 40); i--) {
         const kit = this.create("ocelot", x, y, z);
         setLocationAndAngles(kit, x, y, z, e.rotationYaw ?? 0, 0);
         kit.growingAge = -24000;
@@ -1113,7 +1115,9 @@ export class EntityWorld {
   // A spawn beyond the 40 mobs a save keeps is refused after its rolls (createMob null).
   spawnerHooks(env = {}) {
     const height = this.world.height ?? HEIGHT;
-    const sized = (o) => { const s = this.size(o); return mobBox(o.x, o.y, o.z, s[0], s[1]); };
+    // A foal rolled by onSpawnWithEgg shrinks its box with Entity.setSize after placement, which keeps the box's minimum corner (not recentred
+    // until the entity's first move), so it stays anchored for the rest of that tick (anchoredShrunkBox, probed by spawn-replay3).
+    const sized = (o) => { if (o.spawnBox && o.spawnBoxTick === this.worldTicks) return o.spawnBox; const s = this.size(o); return mobBox(o.x, o.y, o.z, s[0], s[1]); };
     const light = (fn, fallback) => fn ?? ((x, y, z) => (this.lightAt ? this.lightAt(x, y, z) : fallback));
     const lightEnv = {
       skyLight: env.skyLight ?? (() => 0),
@@ -2056,7 +2060,8 @@ export class EntityWorld {
       canSpawnHere: (e) => hooks.canSpawnHere(e),
       add: (e) => this.entities.push(e),
       // A natural skeleton rolls EntitySkeleton's Nether wither roll itself (free).
-      onSpawn: (e, data, name) => { const opts = { group: data, free: name === "Skeleton" }; this.onSpawnWithEgg(e, opts); return opts.group ?? null; },
+      // An ocelot's kittens have no entity cap natively (limit Infinity; a spawn egg keeps the 40).
+      onSpawn: (e, data, name) => { const opts = { group: data, free: name === "Skeleton", limit: Infinity }; this.onSpawnWithEgg(e, opts); return opts.group ?? null; },
       maxInChunk: maxSpawnedInChunk,
     };
     return s;
