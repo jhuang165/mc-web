@@ -84,6 +84,37 @@ export function installHorseGear(EntityWorld) {
     const list = knotsOf(this), i = list.indexOf(k);
     if (i >= 0) list.splice(i, 1);
   };
+  // A /summon LeashKnot has no fence to click: its 0.5 x 0.5 box (probed, summon-reference.json: 10.25 to 10.75 around the command position, the
+  // entity's own Entity.setPosition box) is what the view ray meets. The picker result carries a stable stand-in `{ id: "mob-<n>", knotRef, health: 1 }`
+  // so the captured player action (player-actions.js) can name it; leashInteract and attack route it to the knot (EntityLeashKnot.interactFirst /
+  // attackEntityFrom). Placed knots keep their fence-click path.
+  const KNOT_ID_BASE = 900000000;
+  proto.knotEntity = function (id) {
+    const n = /^mob-(\d+)$/.exec(id ?? "")?.[1];
+    const k = n && knotsOf(this).find((c) => c.summoned && !c.dead && KNOT_ID_BASE + c.id === Number(n));
+    return k ? (k.stand ??= { id: `mob-${KNOT_ID_BASE + k.id}`, type: "leash_knot", knotRef: k, health: 1, x: k.px, y: k.py, z: k.pz }) : null;
+  };
+  const pick = proto.pick;
+  proto.pick = function (origin, dir, reach, wall = reach) {
+    let best = pick.call(this, origin, dir, reach, wall);
+    for (const k of knotsOf(this)) {
+      if (!k.summoned || k.dead) continue;
+      const box = [[origin.x, dir.x, k.px - 0.25, k.px + 0.25], [origin.y, dir.y, k.py, k.py + 0.5], [origin.z, dir.z, k.pz - 0.25, k.pz + 0.25]];
+      let near = 0, far = Math.min(reach, wall);
+      for (const [o, d, min, max] of box) {
+        if (Math.abs(d) < 1e-8) { if (o < min || o > max) { far = -1; break; } continue; }
+        const a = (min - o) / d, b = (max - o) / d;
+        near = Math.max(near, Math.min(a, b)); far = Math.min(far, Math.max(a, b));
+      }
+      if (far >= near && near <= Math.min(reach, wall) && (!best || near < best.distance)) best = { entity: this.knotEntity(`mob-${KNOT_ID_BASE + k.id}`), distance: near };
+    }
+    return best;
+  };
+  const attack = proto.attack;
+  proto.attack = function (e, ...rest) {
+    if (e?.knotRef) { this.knotAttack(e.knotRef); return false; } // any hit kills a knot, with no knockback or damage events
+    return attack.call(this, e, ...rest);
+  };
   // EntityHanging.onUpdate for every knot, once a tick.
   proto.knotTick = function () {
     const list = this.knotList;
@@ -186,6 +217,7 @@ export function installHorseGear(EntityWorld) {
   };
   // EntityLiving.interactFirst (sw.c): the holder frees a leashed mob, a lead in hand ties a free one.
   proto.leashInteract = function (e, survival) {
+    if (e?.knotRef) return !e.knotRef.dead && this.knotInteract(e.knotRef, survival); // a summoned knot picked by view ray
     if (!alive(this, e)) return false;
     const creative = !!survival.creative;
     const out = G.leashUse({ leashed: !!e.leash, holderIsPlayer: e.leash?.holder === "player", heldLead: G.originalId(survival.held) === G.LEAD_ORIGINAL, creative, type: e.type });

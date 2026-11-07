@@ -79,3 +79,9 @@ ends the chain); a mob on a non-mob pair spawns separately with a note. See [spa
 This is partial command/NBT support, not full parity.
 
 See [command blocks](command-blocks.md) for the new editor, rising-edge execution, sender and commandBlockOutput rule.
+
+## Batch 17: /summon changes
+
+- Hanging entities accept any byte `Direction` (4, 5, 127, -1 all spawn; native `setDirection` only sets yaw = dir * 90, `onValidSurface` has no table lookup). The port keeps the byte, guards its renderer lookups, and NBT export writes `Direction` only (no `Dir`) outside 0..3. A value like `128b` overflows to a string, so the `Dir` fallback applies. Probed in `summon-reference.json` (`tools/probes/SummonProbe.java`, real CommandSummon).
+- Summoned leash knots are pickable, interactable and attackable like placed knots (stand-in entity `mob-9xxxxxxxx` in horse-gear-live.js `knotEntity`). A summoned knot's tile stays (0,0,0), so several share one tile for `knotAt`.
+- Absolute coordinates without a decimal point get +0.5 (as native), which the summon reference records.

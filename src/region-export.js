@@ -104,7 +104,7 @@ function payload(state,ox,oz,report,blockAt) {
   // EntityTameable and EntityOcelot.writeEntityToNBT: Sitting, OwnerUUID and CatType.
   if(e.type==='ocelot'){n.Sitting=byte(e.sitting?1:0);n.CatType=int(e.catType??0);n.OwnerUUID=str(e.owner?(/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(e.owner)?e.owner:'00000000-0000-0000-0000-000000000000'):'');}
   // EntityHorse.writeEntityToNBT (horse.js writeNbt): Type, Variant, Temper, Tame, flags, Saddle/Armor items and the attribute list.
-  if(e.type==='horse'&&e.horse){const h=e.horse,att=(Name,Base)=>comp({Name:str(Name),Base:tag(NBT.DOUBLE,Base)}),it=id=>comp({id:short(id),Count:byte(1),Damage:short(0)});
+  if(e.type==='horse'&&e.horse){const h=e.horse,att=(Name,Base)=>new Map([['Name',str(Name)],['Base',tag(NBT.DOUBLE,Base)]]),it=id=>comp({id:short(id),Count:byte(1),Damage:short(0)});
    Object.assign(n,{Type:int(h.type),Variant:int(h.variant),Temper:int(h.temper),Tame:byte(h.tame?1:0),Bred:byte(h.bred?1:0),ChestedHorse:byte(h.chested?1:0),HasReproduced:byte(h.reproduced?1:0),EatingHaystack:byte(0),
     OwnerUUID:str(h.owner?'00000000-0000-0000-0000-000000000000':''),Attributes:list(NBT.COMPOUND,[att('generic.maxHealth',h.maxHealth),att('generic.movementSpeed',h.speed),att('horse.jumpStrength',h.jump)])});
    if(h.saddled)n.SaddleItem=it(329);if(h.armor)n.ArmorItem=it(416+h.armor);
@@ -131,7 +131,8 @@ function payload(state,ox,oz,report,blockAt) {
   if(e.type==='iron_golem'){n.PlayerCreated=byte(e.playerCreated?1:0);delete n.Age;delete n.InLove;}
   // EntityLivingBase.writeEntityToNBT: ActiveEffects (Id, Amplifier, Duration, Ambient) for the effects this build models on mobs.
   if(e.effects?.length&&['zombie','villager','iron_golem'].includes(e.type))n.ActiveEffects=list(NBT.COMPOUND,e.effects.map(x=>new Map([['Id',byte(x.id)],['Amplifier',byte(x.amplifier??0)],['Duration',int(x.duration)],['Ambient',byte(0)]])));
-  built.push({e,n});
+  // The horse or pig the player rides (entities.js serializeOne `playerRides`) is the player's Riding compound, not a chunk entity (player-riding-reference.json).
+  if(e.playerRides===true&&!report.playerMount)report.playerMount=new Map(Object.entries(n));else built.push({e,n});
  }
  // EntityBoat.writeEntityToNBT writes nothing beyond Entity's fields. Boats and carts are mounts: a mob's `riding` ("boat-<id>", "cart-<id>") nests them
  // as its Riding compound below, and writeToNBTOptional skips a vehicle that has a rider (riddenByEntity), so a ridden vehicle is no chunk entity of its own.
@@ -153,7 +154,7 @@ function payload(state,ox,oz,report,blockAt) {
  // EntityHanging.writeEntityToNBT: Direction (0 south, 1 west, 2 north, 3 east) and the legacy Dir byte (2, 1, 0, 3), the wall block
  // as TileX/Y/Z, then EntityPainting's Motive or EntityItemFrame's Item (original id), ItemRotation and ItemDropChance (src/hanging.js).
  for(const {value:e} of state.hanging??[]) {const base=entity({x:e.x,y:e.y,z:e.z,rotationYaw:e.yaw,rotationPitch:0},e.kind==='painting'?'Painting':'ItemFrame',ox,oz);
-  const n={...base,Direction:byte(e.dir),Dir:byte([2,1,0,3][e.dir]),TileX:int(e.tx+ox),TileY:int(e.ty),TileZ:int(e.tz+oz)};
+  const n={...base,Direction:byte(e.dir),...([2,1,0,3][e.dir]===undefined?{}:{Dir:byte([2,1,0,3][e.dir])}),TileX:int(e.tx+ox),TileY:int(e.ty),TileZ:int(e.tz+oz)};
   if(e.kind==='painting')n.Motive=str(e.art);
   else{const item=e.item?stackNbt(e.item,undefined,report):null;if(item)n.Item=tag(NBT.COMPOUND,item);n.ItemRotation=byte(e.rotation??0);n.ItemDropChance=float(e.dropChance??1);}
   entities.push(new Map(Object.entries(n)));}

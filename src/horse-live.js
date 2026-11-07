@@ -67,6 +67,7 @@ export function horseChildFields(a, b, rand) {
 export function horseSeats(mobs) {
   const seats = {
     carts: [],
+    mobs,
     mount(e, rider) {
       if (!e || e.rider || rider.vehicle || e.health <= 0 || (e.growingAge ?? 0) < 0) return false;
       const vehicle = { horse: true, entity: e, get dead() { return e.health <= 0 || !mobs.entities.includes(e); } };

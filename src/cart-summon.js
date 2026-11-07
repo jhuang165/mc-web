@@ -3,14 +3,17 @@
 import { nbtGet, hasNumber } from "./nbt-get.js";
 import { NBT } from "./nbt.js";
 import { isContainerType, slotCount } from "./cart-variants.js";
+import { Y_OFFSET } from "./minecarts.js";
 
 // SUMMONABLE values for the carts; command-host.js routes them here.
 export const CART_SUMMON = Object.freeze({ MinecartRideable: "cart:0", MinecartChest: "cart:1", MinecartFurnace: "cart:2", MinecartTNT: "cart:3", MinecartSpawner: "cart:4", MinecartHopper: "cart:5", MinecartCommandBlock: "cart:6" });
 export const cartTypeOfSummon = (type) => (typeof type === "string" && type.startsWith("cart:") ? Number(type.slice(5)) : null);
 
+// `y` is the location CommandSummon (and MobSpawnerBaseLogic) pass to Entity.setLocationAndAngles, which stores posY = y + yOffset: a cart's box then
+// starts at y, not 0.35 below it (summon-reference.json, tools/probes/SummonProbe.java: a cart at y 64.5 has posY 64.85 and its box from 64.5).
 export function summonCart(minecarts, type, x, y, z, tag) {
   if (!minecarts) return false;
-  const record = { x, y, z, items: [] }, ignored = [];
+  const record = { x, y: y + Y_OFFSET, z, items: [] }, ignored = [];
   if (tag instanceof Map) {
     if (hasNumber(tag, "Fuel")) record.fuel = nbtGet(tag, "Fuel", NBT.SHORT, 0);
     if (hasNumber(tag, "PushX")) record.pushX = nbtGet(tag, "PushX", NBT.DOUBLE, 0);

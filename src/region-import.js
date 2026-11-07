@@ -174,7 +174,7 @@ export function hangingFromNbt(tag, id, { shiftX = 0, shiftZ = 0, convertItem = 
   const tile = ['TileX', 'TileY', 'TileZ'].map((k) => get(tag, k, NBT.INT));
   if (!tile.every(Number.isInteger)) return null;
   const dir = hasNumber(tag, 'Direction') ? get(tag, 'Direction', NBT.BYTE, 0) : [2, 1, 0, 3][get(tag, 'Dir', NBT.BYTE, 0)] ?? 0;
-  const record = { kind: id === 'Painting' ? 'painting' : 'frame', dir: ((dir % 4) + 4) % 4, tx: tile[0] + shiftX, ty: tile[1], tz: tile[2] + shiftZ };
+  const record = { kind: id === 'Painting' ? 'painting' : 'frame', dir, tx: tile[0] + shiftX, ty: tile[1], tz: tile[2] + shiftZ };
   if (id === 'Painting') {
     const motive = get(tag, 'Motive', NBT.STRING, '');
     record.art = ARTS.some((a) => a[0] === motive) ? motive : ARTS[0][0];
@@ -228,7 +228,7 @@ export function boatFromNbt(tag, { shiftX = 0, shiftZ = 0 } = {}) {
 }
 
 // The level.dat half of a level import: the streamed generator, WorldInfo's flags and the player (level-dat.md).
-function levelRecord(record, { level, levelGen, javaPlayer: first, world, generationVersion, mode, report, importedColumns, stats, name }) {
+function levelRecord(record, { level, levelGen, javaPlayer: first, world, generationVersion, mode, report, importedColumns, stats, name, convertItem }) {
   const ox = world.originX, oz = world.originZ;
   const worldSpawn = [level.spawn[0] - ox, level.spawn[1], level.spawn[2] - oz];
   const out = {
@@ -265,7 +265,13 @@ function levelRecord(record, { level, levelGen, javaPlayer: first, world, genera
       if (!mpos?.every(Number.isFinite)) p.lost.push(`Riding ${mid} (no position)`);
       else if (mid === 'Boat') out.boats = [...(record.boats ?? []), { ...boatFromNbt(first.riding, { shiftX: -ox, shiftZ: -oz }), rider: true }];
       else if (mid === CART_ENTITY_IDS[0]) out.minecarts = { version: 1, carts: [...(record.minecarts?.carts ?? []), { ...cartFromNbt(first.riding, 0, { shiftX: -ox, shiftZ: -oz }), rider: true }] };
-      else p.lost.push(`Riding ${mid} (only a boat or a rideable minecart is kept)`);
+      else if (mid === 'Pig' || mid === 'EntityHorse') {
+        // A saddled pig or a horse: a live mob record flagged `playerRides`, which restorePlayerVehicle seats the player on (ServerConfigurationManager
+        // creates the Riding entity with EntityList.createEntityFromNBT and mounts the player; player-riding-reference.json).
+        const mob = javaMobFromNbt(first.riding, { shiftX: -ox, shiftZ: -oz, convertItem });
+        if (mob) out.entities = [...(record.entities ?? []), { ...mob, playerRides: true }]; else p.lost.push(`Riding ${mid} (not importable)`);
+      }
+      else p.lost.push(`Riding ${mid} (only a boat, a rideable minecart, a pig or a horse is kept)`);
     }
   } else out.player = { ...record.player, time: level.dayTime };
   if (typeof stats === 'string') {
@@ -714,7 +720,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   };
   // The player converted with the area's item tallies, in the native frame (levelRecord shifts it).
   const playerFull = playerTag ? javaPlayerFromNbt(playerTag, { convertItem }) : null;
-  if (level) record = levelRecord(record, { level, levelGen, javaPlayer: playerFull, world, generationVersion, mode, report, importedColumns, stats: options.stats, name: options.name });
+  if (level) record = levelRecord(record, { level, levelGen, javaPlayer: playerFull, world, generationVersion, mode, report, importedColumns, stats: options.stats, name: options.name, convertItem });
   if (dimension) {
     const state = Object.fromEntries(DIM_KEYS.filter(k => Object.hasOwn(record, k)).map(k => [k, record[k]]));
     const tiles = Object.fromEntries(TILE_KEYS.filter(k => Object.hasOwn(record.player, k)).map(k => [k, record.player[k]]));

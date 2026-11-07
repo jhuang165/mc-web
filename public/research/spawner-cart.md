@@ -19,3 +19,8 @@ Evidence: `tools/probes/SpawnerCartProbe.java` run by `tools/verify-spawner-cart
 - Painting, ItemFrame and LeashKnot are not summonable. The Zombie `onSpawnWithEgg` path of SpawnPotentials was probed only with `Delay -1` (the probe double has no chunk for it); that part is bytecode-read, not replayed.
 - A spawner mount only spawns when the world has room under the 40-mob cap `EntityWorld.spawnerMount` keeps; a refused mount ends the chain like a null `createEntityFromNBT`.
 - The cart as extra collision for spawn checks is a port-side behaviour.
+
+## Batch 17: summoned and spawner carts, onSpawnWithEgg
+
+- `/summon` cart and `spawnerVehicle` carts now get the native 0.35 `yOffset`: `Entity.setLocationAndAngles` sets posY = y + yOffset (`summon-reference.json`: cart posY 64.85 for command y 64.5 with a box from 64.5). The boat summon path no longer subtracts its offset (boat posY = y + 0.3).
+- `onSpawnWithEgg` runs only when the logic has no SpawnData (`MobSpawnerBaseLogic.a(sa)`); with SpawnData or a potential entry (even empty Properties) it is skipped. Four scenarios (`egg-*`) in `spawn-data-reference.json` record the World.rand call counts and states of a Spider spawner each way, replayed by `src/spawn-data.test.js`.

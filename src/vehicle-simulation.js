@@ -100,6 +100,11 @@ export function restorePlayerVehicle(state) {
     c.restorePlayer=false;
     if(!state.rider.vehicle && state.survival.health>0 && (c.boat || c.type===0)){syncRider(state);sys.mount(c,state.rider);applySeat(state);}
   }
+  // A saved or imported horse or pig that carried the player (entities.js `playerRides`, the Riding compound of level.dat).
+  for(const e of state.horses?.mobs?.entities ?? []) if(e.playerRides) {
+    delete e.playerRides;
+    if(!state.rider.vehicle && state.survival.health>0){syncRider(state);state.horses.mount(e,state.rider);applySeat(state);}
+  }
 }
 // Returns null when ordinary movement should run. Dismount is itself captured and dispatched.
 export function moveRidingPlayer(state, controls, hooks = {}) {
