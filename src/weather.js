@@ -46,6 +46,14 @@ export function canSeeSky(world, x, y, z) {
 // struck and never snow; the snowy preset (Ice Plains, 0.0, enableSnow) snows instead
 // (EntityRenderer.renderRainSnow picks by temperature >= 0.15) and takes no lightning.
 export const rainsHere = (world, x=64, y=64, z=64) => (world.temperatureAt?.(x,y,z) ?? biomeTemperature(world.biome)) >= f(0.15);
+// Per-column precipitation (EntityRenderer.renderRainSnow / addRainParticles): nothing unless the biome can
+// spawn lightning (rainfall > 0 and not snowy) or enables snow; otherwise snow below 0.15 at (x, y, z), else rain.
+export function precipitationKind(world, x, y, z) {
+  const b = world.biomeAt?.(x, z), facts = b ? null : biomeFacts(world.biome),
+    canSpawn = b ? b.rainfall > 0 && !b.snowy : facts.canSpawnLightning, snow = b ? b.snowy : facts.enableSnow;
+  if (!canSpawn && !snow) return null;
+  return (world.temperatureAt?.(x, y, z) ?? biomeTemperature(world.biome)) < f(0.15) ? "snow" : "rain";
+}
 // World.canLightningStrikeAt (ahb.y), with the biome facts as arguments so the
 // probe table can replay it for every biome.
 export function strikeRule({ raining, sees, precipitation, y, temperature, canSpawn = true, enableSnow = false }) {
@@ -299,7 +307,7 @@ export class Weather {
   // is {x, y, z}.
   rainParticles(world, viewer, add = () => {}) {
     const strength = rainParticleStrength(this.rainStrength(1)); // halved without fancy graphics (blt.l)
-    if (strength === 0 || !rainsHere(world)) return;
+    if (strength === 0) return;
     const random = new JavaRandom(BigInt(this.clientTicks) * 312987231n),
       i = Math.floor(viewer.x), j = Math.floor(viewer.y), k = Math.floor(viewer.z),
       count = rainParticleAttempts(strength, this.particleSetting);
@@ -310,6 +318,7 @@ export class Weather {
         top = precipitationHeight(world, x, z),
         block = top > 0 ? world.get(x, top - 1, z) : 0;
       if (top > j + 10 || top < j - 10) continue;
+      if (precipitationKind(world, x, top, z) !== "rain") continue; // blt.l: biome.canSpawnLightningBolt and temperature(x, top, z) >= 0.15
       const fx = random.nextFloat(), fz = random.nextFloat();
       // (float)x + f2, (float)top + 0.1F - getBlockBoundsMinY (0 for the blocks here).
       const px = f(x + fx), py = f(top + f(0.1)), pz = f(z + fz);

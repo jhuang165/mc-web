@@ -5,9 +5,8 @@
 // public/research/weather.md for what is verified and what is simplified.
 import * as THREE from "three";
 import { FOG_PARS } from "./light-material.js";
-import { JavaRandom, biomeTemperature } from "./lighting.js";
-import { biomeFacts } from "./biomes.js";
-import { precipitationHeight } from "./weather.js";
+import { JavaRandom } from "./lighting.js";
+import { precipitationHeight, precipitationKind } from "./weather.js";
 
 const f = Math.fround;
 const RADIUS = 10; // fancy graphics
@@ -188,11 +187,10 @@ export class WeatherRenderer {
   // 0.15, in a biome that precipitates) drifts slowly with a gaussian sway and
   // a brightness pulled toward full light (snow branch from bytecode only).
   columns(weather, world, camera, partial) {
-    const strength = weather.rainStrength(partial), facts = biomeFacts(world.biome),
-      snowing = biomeTemperature(world.biome) < f(0.15), q = snowing ? this.snow : this.rain;
+    const strength = weather.rainStrength(partial);
     this.rain.begin();
     this.snow.begin();
-    if (strength > 0 && (facts.canSpawnLightning || facts.enableSnow)) {
+    if (strength > 0) {
       const px = camera.position.x, py = camera.position.y, pz = camera.position.z,
         i = Math.floor(px), j = Math.floor(py), k = Math.floor(pz), count = weather.clientTicks;
       const RADIUS = rainRadius();
@@ -203,6 +201,10 @@ export class WeatherRenderer {
           if (low < top) low = top;
           if (high < top) high = top;
           if (low === high) continue;
+          // The biome and temperature at (x, low, z) pick rain, snow or nothing for this column.
+          const kind = precipitationKind(world, x, low, z);
+          if (!kind) continue;
+          const snowing = kind === "snow", q = snowing ? this.snow : this.rain;
           // random.setSeed(x*x*3121 + x*45238971 ^ z*z*418711 + z*13761) in 32-bit int maths.
           const sx = (Math.imul(Math.imul(x, x), 3121) + Math.imul(x, 45238971)) | 0,
             sz = (Math.imul(Math.imul(z, z), 418711) + Math.imul(z, 13761)) | 0,
