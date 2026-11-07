@@ -17,8 +17,8 @@ const FLAT = [
   ["Overworld", "meadow", 3, "abc19b640a9e662a"], ["Overworld", "meadow", 4, "2a10ec6940acb23f"],
   ["Overworld", "meadow", 5, "9fe45df5eb7607f8"], ["Overworld", "meadow", 6, "9fe45df5eb7607f8"],
   ["Overworld", "meadow", 7, "c5b75f4ace8cfe38"], ["Overworld", "meadow", 8, "e92d63e262ea8ab7"],
-  ["chunks", "meadow", 8, "15bc943b11966fb5"], ["chunks", "alpine", 8, "56c26d55095d6c49"],
-  ["chunks", "island", 8, "a5f731ad9c88e409"], ["chunks", "snowy", 8, "d971e94f41baa804"],
+  ["chunks", "meadow", 8, "d2501b0113a444c2"], ["chunks", "alpine", 8, "56c26d55095d6c49"],
+  ["chunks", "island", 8, "1d7820a22aa54ea5"], ["chunks", "snowy", 8, "d971e94f41baa804"],
   ["frost", "snowy", 6, "227d62bd932d582a"], ["peaks", "alpine", 8, "905b554037644e10"],
 ];
 

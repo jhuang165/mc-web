@@ -115,6 +115,19 @@ export const flowerGround = (b) => b === 1 || b === 2 || b === 29 || b === 30;
 export function flowerCanStay(world, ids, x, y, z) {
   return flowerGround(world.get(x, y - 1, z));
 }
+// The earlier light-gated rule, kept only for the legacy (generation 4-8) flower decoration below so existing saves regenerate the
+// same terrain: column sky light >= 8 after opacity, or a torch within six blocks.
+function legacyFlowerCanStay(world, ids, x, y, z) {
+  if (!flowerGround(world.get(x, y - 1, z))) return false;
+  let light = 15;
+  for (let yy = y + 1; yy < 64 && light > 0; yy++) light -= opacity(world.get(x, yy, z), ids);
+  if (light >= 8) return true;
+  for (let dx = -6; dx <= 6; dx++)
+    for (let dy = -6 + Math.abs(dx); dy <= 6 - Math.abs(dx); dy++)
+      for (let dz = -(6 - Math.abs(dx) - Math.abs(dy)); dz <= 6 - Math.abs(dx) - Math.abs(dy); dz++)
+        if (world.get(x + dx, y + dy, z + dz) === 20) return true;
+  return false;
+}
 // Chunk heightMap value: one above the highest light-blocking block.
 export function heightValue(world, ids, x, z) {
   for (let y = 63; y > 0; y--) if (opacity(world.get(x, y, z), ids) > 0) return y + 1;
@@ -126,7 +139,7 @@ function generateFlowers(world, ids, random, kind, meta, x, y, z) {
   const id = ids[kind];
   for (let i = 0; i < 64; i++) {
     const px = x + random.nextInt(8) - random.nextInt(8), py = y + random.nextInt(4) - random.nextInt(4), pz = z + random.nextInt(8) - random.nextInt(8);
-    if (py < 255 && world.get(px, py, pz) === 0 && world.inside(px, py, pz) && flowerCanStay(world, ids, px, py, pz)) world.set(px, py, pz, id, false, meta);
+    if (py < 255 && world.get(px, py, pz) === 0 && world.inside(px, py, pz) && legacyFlowerCanStay(world, ids, px, py, pz)) world.set(px, py, pz, id, false, meta);
   }
 }
 // ChunkProviderGenerate.populate's seed: both multipliers are odd longs drawn
