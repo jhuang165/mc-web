@@ -1,12 +1,12 @@
 // Worker for spawn-presolve.js: runs WorldServer.createSpawnPosition (java-world.js solveNativeSpawn) off the page thread, then (when asked) builds the
 // resident window's population cell (solveResidentCell) and hands its buffers over.
-import { solveNativeSpawn, solveResidentCell } from './java-world.js';
+import { solveNativeSpawn, solveLegacySpawn, nativeSpawnGeneration, solveResidentCell } from './java-world.js';
 import { populationBlockMapperReady } from './population-world.js';
 
 self.onmessage = async ({ data }) => {
   try {
     await populationBlockMapperReady;
-    const spawn = solveNativeSpawn(data);
+    const spawn = nativeSpawnGeneration(data.generationVersion) ? solveNativeSpawn(data) : solveLegacySpawn(data);
     self.postMessage({ id: data.id, spawn });
     if (!data.terrain) return;
     const resident = solveResidentCell(data, spawn), transfer = [];

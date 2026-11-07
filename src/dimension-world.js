@@ -7,6 +7,7 @@
 // regenerates columns at will, so every column is rebuilt statelessly: terrain of the chunk, then the populate step of the four
 // chunks that can write into it (itself and its -x/-z neighbours), each on a Random seeded from that chunk, on a throw-away
 // generation world; only the target chunk's cells are kept. Writes that reach beyond the neighbours' 16-block reach are lost.
+import { drain } from "./steps.js";
 import { World } from "./world.js";
 import { javaSeed } from "./java-world.js";
 import { JavaRandom } from "./java-random.js";
@@ -175,12 +176,16 @@ export class DimensionWorld extends World {
   }
   // WorldGenSpikes' EntityEnderCrystal for every spike within `r` chunks of the origin. endChunk keeps only blocks (each
   // column is repopulated with its neighbours), so the crystals are collected once here when the dragon first spawns.
-  endCrystals(r = 10) {
+  endCrystals(r = 10) { return drain(this.endCrystalSteps(r)); }
+  // The same walk as a generator that yields after each chunk row, so a loading screen can run it in slices (it returns the crystals).
+  *endCrystalSteps(r = 10) {
     if (this.dimension !== END) return [];
     const end = new EndWorld(0, new JavaRandom(1));
     end.terrain = this.endTerrain;
     try {
-      for (let cx = -r; cx <= r; cx++) for (let cz = -r; cz <= r; cz++) populateEndChunk(end, new JavaRandom(popSeed(this.javaSeed, cx, cz)), cx, cz);
+      for (let cx = -r; cx <= r; cx++) {
+        for (let cz = -r; cz <= r; cz++) { populateEndChunk(end, new JavaRandom(popSeed(this.javaSeed, cx, cz)), cx, cz); yield; }
+      }
     } catch (e) { console.warn(`end crystals skipped: ${e.message}`); return []; }
     return end.entities.filter((e) => e.type === "ender_crystal");
   }
@@ -224,4 +229,17 @@ export class TerrainPeek {
     this.writes.push([x, y, z, id, meta, flags]);
   }
   notify() {}
+  // The columns in the box whose saved or written cells include block `id`, sorted by x then z (the Teleporter's search order).
+  // Terrain never contains a portal block (neither the Nether/End generators nor the Overworld population place one), so every
+  // portal this peek can see is one of its edits and the 257 x 257 column scan can skip the rest.
+  portalColumns(id, x0, x1, z0, z1) {
+    const seen = new Set(), out = [];
+    for (const [key, value] of this.edits) {
+      if ((value & 255) !== id) continue;
+      const [x, , z] = key.split(',').map(Number), k = `${x},${z}`;
+      if (x < x0 || x > x1 || z < z0 || z > z1 || seen.has(k)) continue;
+      seen.add(k); out.push([x, z]);
+    }
+    return out.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  }
 }

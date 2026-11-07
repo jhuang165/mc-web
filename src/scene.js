@@ -244,7 +244,7 @@ export class VoxelScene {
     this.repeaterLit = () => false; // main.js: LiveRedstone.lit lookup for the powered repeater's light 9
     this.repeaterEmit = new Map(); // repeater cell -> lit state the light volume last used
     applyDimensionRender(this, world); // Nether/End: brightness table, sky mode, clouds (dimension-render.js)
-    this.resetLight();
+    this.resetLight({ defer });
     for (const v of this.chunks.values()) this.disposeChunk(v);
     this.chunks.clear();
     this.dirty.clear();
@@ -276,12 +276,24 @@ export class VoxelScene {
     if (b === LILY_PAD) return LILY_PAD_COLOR;
     return null;
   }
-  resetLight() {
+  // `defer`: the volume is created empty and `lightSteps()` (a generator, one flood step per resume) builds it; main.js openWorld drives
+  // it in frame-sized slices behind the loading screen. The result equals the synchronous build.
+  resetLight({ defer = false } = {}) {
     const Light = this.world.streaming ? StreamingLight : LightVolume;
     this.light = new Light(this.world, (x,y,z,b) => {
       if (b === 112) { const lit = this.repeaterLit(x, y, z); this.repeaterEmit.set(`${x},${y},${z}`, lit); return lightEmission(b, lit); } // powered repeater: light 9
       return lightEmission(b,b===14 && this.litFurnaces.has(`${x},${y},${z}`));
-    });
+    }, { defer });
+    this.lightPending = defer ? this.light.buildSteps() : null;
+  }
+  // Runs the deferred light build for up to `budgetMs`; returns true while steps remain.
+  buildLight(budgetMs = 8) {
+    const end = performance.now() + budgetMs;
+    while (this.lightPending) {
+      if (this.lightPending.next().done) this.lightPending = null;
+      else if (performance.now() >= end) break;
+    }
+    return !!this.lightPending;
   }
   // After World.streamAround({ added, removed }): the light volume follows the square
   // (StreamingLight.shift), and only new columns, columns beside an added or removed one (their

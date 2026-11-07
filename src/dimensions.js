@@ -4,6 +4,7 @@
 // Evidence: tools/probes/DimensionProbe.java -> public/research/dimensions-reference.json, replayed by src/dimensions.test.js.
 // Block ids are a parameter (`ids`): the probe uses the original ones, the game the internal ones below.
 import { JavaRandom } from "./java-random.js";
+import { drain } from "./steps.js";
 
 export const OVERWORLD = 0, NETHER = -1, END = 1;
 // Internal ids of original blocks 0, 49 (obsidian), 90 (nether portal), 119 (end portal), 7 (bedrock).
@@ -121,10 +122,13 @@ export class Teleporter {
   isAir(x, y, z) { return this.world.get(x, y, z) === this.ids.air; }
   setLocation(e, x, y, z, yaw, pitch) { e.x = x; e.y = y; e.z = z; e.yaw = yaw; e.pitch = pitch; }
   // Teleporter.placeInPortal (ahp.a(sa, DDDF)).
-  placeInPortal(e, _x, _y, _z, _yaw) {
+  placeInPortal(e, _x, _y, _z, _yaw) { drain(this.placeInPortalSteps(e, _x, _y, _z, _yaw)); }
+  // The same as a generator that yields between columns of the 257 x 257 search and the 33 x 33 portal-site scan, so a caller
+  // (dimension-live.js arrive) can spread it over frames behind the loading screen; drained at once it is the plain call.
+  *placeInPortalSteps(e, _x, _y, _z, _yaw) {
     const w = this.world, ids = this.ids;
     if (w.dimension !== END) {
-      if (!this.placeInExistingPortal(e, _x, _y, _z, _yaw)) { this.makePortal(e); this.placeInExistingPortal(e, _x, _y, _z, _yaw); }
+      if (!(yield* this.placeInExistingPortalSteps(e, _x, _y, _z, _yaw))) { yield* this.makePortalSteps(e); yield* this.placeInExistingPortalSteps(e, _x, _y, _z, _yaw); }
       return;
     }
     // Dimension 1: a 5x5 obsidian platform under three layers of air, entity at (floor x, floor y - 1, floor z).
@@ -137,7 +141,8 @@ export class Teleporter {
     e.vx = e.vy = e.vz = 0;
   }
   // Teleporter.placeInExistingPortal (ahp.b): a 128-block search of portal blocks (cached per column), then the safe-side logic.
-  placeInExistingPortal(e, _x, _y, _z, yaw) {
+  placeInExistingPortal(e, _x, _y, _z, yaw) { return drain(this.placeInExistingPortalSteps(e, _x, _y, _z, yaw)); }
+  *placeInExistingPortalSteps(e, _x, _y, _z, yaw) {
     const w = this.world, ids = this.ids, R = 128;
     let best = -1, i = 0, j = 0, k = 0;
     const l = Math.floor(e.x), i1 = Math.floor(e.z), key = `${l},${i1}`;
@@ -146,18 +151,20 @@ export class Teleporter {
     const hit = this.cache.get(key);
     if (hit) { best = 0; i = hit.x; j = hit.y; k = hit.z; hit.time = w.time; fresh = false; }
     else {
-      for (let l1 = l - R; l1 <= l + R; l1++) {
-        const d4 = l1 + 0.5 - e.x;
-        for (let i2 = i1 - R; i2 <= i1 + R; i2++) {
-          const d5 = i2 + 0.5 - e.z;
-          for (let j2 = w.actualHeight - 1; j2 >= 0; j2--) {
-            if (w.get(l1, j2, i2) !== ids.portal) continue;
-            while (w.get(l1, j2 - 1, i2) === ids.portal) j2--;
-            const d6 = j2 + 0.5 - e.y, d7 = d4 * d4 + d6 * d6 + d5 * d5;
-            if (best < 0 || d7 < best) { best = d7; i = l1; j = j2; k = i2; }
-          }
+      const visit = (l1, i2) => {
+        const d4 = l1 + 0.5 - e.x, d5 = i2 + 0.5 - e.z;
+        for (let j2 = w.actualHeight - 1; j2 >= 0; j2--) {
+          if (w.get(l1, j2, i2) !== ids.portal) continue;
+          while (w.get(l1, j2 - 1, i2) === ids.portal) j2--;
+          const d6 = j2 + 0.5 - e.y, d7 = d4 * d4 + d6 * d6 + d5 * d5;
+          if (best < 0 || d7 < best) { best = d7; i = l1; j = j2; k = i2; }
         }
-      }
+      };
+      // A world that knows its portal blocks all come from its own edits (terrain never contains one) lists the columns that can
+      // hold one, in the search's own order (x, then z): the scan skips the empty columns and finds the same portal.
+      const only = w.portalColumns?.(ids.portal, l - R, l + R, i1 - R, i1 + R);
+      if (only) for (const [l1, i2] of only) { visit(l1, i2); yield; }
+      else for (let l1 = l - R; l1 <= l + R; l1++) for (let i2 = i1 - R; i2 <= i1 + R; i2++) { visit(l1, i2); yield; }
     }
     if (best < 0) return false;
     if (fresh) { this.cache.set(key, { x: i, y: j, z: k, time: w.time }); this.keys.push(key); }
@@ -197,7 +204,8 @@ export class Teleporter {
   }
   // Teleporter.makePortal (ahp.a(sa)Z): looks for a 4x5x3 clear spot with a solid floor within 16 blocks, else a 4x5x1 spot, else
   // forces a platform and portal at the entity's height (clamped to 70..actualHeight - 10). Writes obsidian and portal blocks.
-  makePortal(e) {
+  makePortal(e) { return drain(this.makePortalSteps(e)); }
+  *makePortalSteps(e) {
     const w = this.world, ids = this.ids, R = 16, rnd = this.random;
     let best = -1;
     const i = Math.floor(e.x), j = Math.floor(e.y), k = Math.floor(e.z);
@@ -208,6 +216,7 @@ export class Teleporter {
     for (let i2 = i - R; i2 <= i + R; i2++) {
       const d1 = i2 + 0.5 - e.x;
       for (let k2 = k - R; k2 <= k + R; k2++) {
+        yield;
         const d2 = k2 + 0.5 - e.z;
         for (let j2 = H - 1; j2 >= 0; j2--) {
           if (!this.isAir(i2, j2, k2)) continue;
@@ -231,6 +240,7 @@ export class Teleporter {
       for (let i2 = i - R; i2 <= i + R; i2++) {
         const d1 = i2 + 0.5 - e.x;
         for (let k2 = k - R; k2 <= k + R; k2++) {
+          yield;
           const d2 = k2 + 0.5 - e.z;
           for (let j2 = H - 1; j2 >= 0; j2--) {
             if (!this.isAir(i2, j2, k2)) continue;

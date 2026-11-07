@@ -186,6 +186,13 @@ export function solveNativeSpawn({ seed, generationVersion, worldType, generator
   const { x, y, z, foundBiome, steps } = nativeWorldSpawn(gen, s, gen.biomeState ?? new BiomeTerrainState(), worldType);
   return { x, y, z, foundBiome, steps };
 }
+// Generations 13 to 17 take the origin from findBiomePosition (no native spawn walk). The worker solves that origin and the resident cell for it with the
+// same call the constructor makes below, so a parked result changes only when the work runs. {x, z} are the position's block coordinates (0, 0 when none).
+export function solveLegacySpawn({ seed, generationVersion, worldType, generatorOptions }) {
+  const s = javaSeed(seed), gen = newGenerator(s, worldType, generatorOptions, generationVersion);
+  const found = gen.manager.findBiomePosition(0, 0, 256, BIOMES_TO_SPAWN_IN, new JavaRandom(s));
+  return { x: found ? found[0] : 0, z: found ? found[2] : 0, legacy: true };
+}
 export function generateJavaWorld(world) {
   const seed = javaSeed(world.seed),
     state = new BiomeTerrainState(),
@@ -200,13 +207,16 @@ export function generateJavaWorld(world) {
     presolvedSpawns.delete(key);
     world.nativeSpawn = [native.x, native.y, native.z];
     spawn = [native.x, 0, native.z];
-  } else spawn = manager.findBiomePosition(
+  } else {
+    presolvedSpawns.delete(key);
+    spawn = manager.findBiomePosition(
     0,
     0,
     256,
     BIOMES_TO_SPAWN_IN,
     new JavaRandom(seed),
   );
+  }
   world.originX = ((spawn ? spawn[0] >> 4 : 0) - 4) * 16;
   world.originZ = ((spawn ? spawn[2] >> 4 : 0) - 4) * 16;
   world.javaSeed = seed;

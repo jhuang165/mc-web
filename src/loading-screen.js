@@ -146,3 +146,5 @@ export function workingScreen(state) {
 
 // Lets the browser paint the screen that was just shown before synchronous work blocks the thread.
 export const nextPaint = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+// One animation frame: the pause between slices of work that the screen needs no paint of its own for.
+export const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));

@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { LoadingState, SpawnAreaLog, loadingLayout, errorLayout, downloadLayout, workingLayout, workingLine, startLoading, setStage, STAGES, BAR, LOADING_THROTTLE_MS } from './loading-screen.js';
 import { t, LANG } from './menu-screens.js';
 import { presolveSpawn, presolveWorld, spawnRequest } from './spawn-presolve.js';
-import { solveNativeSpawn, solveResidentCell, nativeWorldSpawn, presolvedSpawns, presolvedCells } from './java-world.js';
+import { solveNativeSpawn, solveLegacySpawn, nativeSpawnGeneration, spawnKey, solveResidentCell, nativeWorldSpawn, presolvedSpawns, presolvedCells } from './java-world.js';
 import { ChunkProviderGenerate, BiomeTerrainState } from './terrain-generator.js';
 import { biomeLayerOptions } from './java-world.js';
 import { World } from './world.js';
@@ -58,8 +58,11 @@ test('SpawnAreaLog prints "Preparing spawn area: N%" at most once a second with 
   assert.deepEqual(lines, ['Preparing spawn area: 0%', 'Preparing spawn area: 50%', 'Preparing spawn area: 100%']);
 });
 
-test('spawnRequest only covers native-spawn streamed overworld records and normalises like the World constructor', () => {
-  assert.equal(spawnRequest({ biome: 'javaStreamed', seed: '1', generationVersion: 17 }), null);
+test('spawnRequest only covers streamed overworld records that populate (generation 13 up) and normalises like the World constructor', () => {
+  assert.equal(spawnRequest({ biome: 'javaStreamed', seed: '1', generationVersion: 12 }), null);
+  assert.equal(spawnRequest({ biome: 'javaStreamed', seed: '1' }), null);
+  assert.equal(spawnRequest({ biome: 'javaStreamed', seed: '1', generationVersion: 14, worldType: 'flat' }), null, 'Superflat starts at 15');
+  assert.equal(spawnRequest({ biome: 'javaStreamed', seed: '1', generationVersion: 17 }).generationVersion, 17);
   assert.equal(spawnRequest({ biome: 'java', seed: '1', generationVersion: 18 }), null);
   assert.equal(spawnRequest({ biome: 'javaStreamed', seed: '1', generationVersion: 18, dimension: 1 }), null);
   assert.deepEqual(spawnRequest({ biome: 'javaStreamed', seed: 12, generationVersion: 19, worldType: 'bogus', generatorOptions: 'x' }), { seed: '12', generationVersion: 19, worldType: 'default', generatorOptions: '' });
@@ -104,7 +107,7 @@ const workerDouble = (calls = []) => () => {
   const w = { terminate() { this.ended = true; }, postMessage(data) {
     calls.push(data.terrain);
     queueMicrotask(() => {
-      const spawn = solveNativeSpawn(data);
+      const spawn = nativeSpawnGeneration(data.generationVersion) ? solveNativeSpawn(data) : solveLegacySpawn(data);
       w.onmessage({ data: { id: data.id, spawn } });
       if (data.terrain) queueMicrotask(() => w.onmessage({ data: { id: data.id, resident: solveResidentCell(data, spawn) } }));
     });
@@ -187,4 +190,34 @@ test('nativeWorldSpawn keeps matching a fresh provider (guards the shared biome 
   const seed = BigInt(r.seed), state = new BiomeTerrainState(), gen = new ChunkProviderGenerate(seed, 'default', state, biomeLayerOptions(18));
   const out = nativeWorldSpawn(gen, seed, state, 'default');
   assert.deepEqual([out.x, out.y, out.z], r.spawn);
+});
+
+test('generation 13 to 17 saves: the worker presolve (findBiomePosition origin plus resident cell) gives the constructor identical columns, origin and records', async () => {
+  for (const [seed, gv, type, options] of [['loading b22', 13, 'default', ''], ['loading b22', 17, 'default', ''], ['12', 16, 'amplified', ''], ['7', 15, 'flat', '2;7,2x3,2;1;village']]) {
+    presolvedSpawns.clear(); presolvedCells.clear();
+    const walked = new World(seed, 'javaStreamed', gv, type, options);
+    assert.equal(walked.nativeSpawn ?? null, null, 'legacy origin, no native spawn');
+    const record = { biome: 'javaStreamed', seed, generationVersion: gv, worldType: type, generatorOptions: options };
+    const calls = [], start = presolveWorld(record, { createWorker: workerDouble(calls) });
+    const spawn = await start.spawn;
+    assert.equal(spawn.legacy, true);
+    assert.equal(await start.terrain, true);
+    assert.deepEqual(calls, [true]);
+    const fast = new World(seed, 'javaStreamed', gv, type, options);
+    assert.equal(presolvedCells.size, 0, 'the cell is consumed');
+    assert.equal(presolvedSpawns.size, 0, 'the legacy origin is not left parked');
+    assert.equal(fast.population.generated, 0, 'the window cell was adopted, not generated here');
+    assert.deepEqual([fast.originX, fast.originZ], [walked.originX, walked.originZ], `${seed} ${gv}`);
+    assert.deepEqual([fast.originX, fast.originZ], [((spawn.x >> 4) - 4) * 16, ((spawn.z >> 4) - 4) * 16]);
+    assert.deepEqual(snapshotOf(fast), snapshotOf(walked), `${seed} ${gv}`);
+    const records = (w) => JSON.stringify([...w.population.cell(0, 0).records.entries()]);
+    assert.equal(records(fast), records(walked));
+    assert.equal(JSON.stringify(fast.claimFreshColumns()), JSON.stringify(walked.claimFreshColumns()));
+  }
+  // a cell for another origin is dropped for a legacy save too
+  presolvedCells.clear();
+  const walked = new World('loading b22', 'javaStreamed', 16, 'default', '');
+  presolvedCells.set(spawnKey('loading b22', 16, 'default', ''), solveResidentCell({ seed: 'loading b22', generationVersion: 16, worldType: 'default', generatorOptions: '' }, { x: 5000, z: 5000 }));
+  assert.deepEqual(snapshotOf(new World('loading b22', 'javaStreamed', 16, 'default', '')), snapshotOf(walked));
+  assert.equal(presolvedCells.size, 0);
 });

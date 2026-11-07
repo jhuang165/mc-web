@@ -1,5 +1,7 @@
 import { NETHER_FENCE } from "./nether-blocks.js";
 import { JavaRandom } from "./java-random.js";
+import { drain } from "./steps.js";
+export { drain };
 export { JavaRandom } from "./java-random.js";
 // Minecraft Java 1.7.10 light rules, decoded with javap from WorldProvider
 // (aqo), World (ahb), BiomeGenBase (ahu), EntityRenderer (blt), RenderBlocks
@@ -258,15 +260,21 @@ function lightTables() {
 // lightEmission by position (a lit furnace) and is only asked about blocks that
 // can emit. A world with columnBlocks(x, z) (World) is read a column at a time.
 export class LightVolume {
-  constructor(world, emission = (x, y, z, b) => lightEmission(b)) {
+  // `defer`: the columns and the first flood are not run here; `buildSteps()` runs them in slices (scene.js, main.js openWorld).
+  constructor(world, emission = (x, y, z, b) => lightEmission(b), { defer = false } = {}) {
     this.world = world;
     this.height = world.height ?? HEIGHT;
     this.emission = emission;
     this.sky = new Uint8Array(SIZE * SIZE * this.height);
     this.block = new Uint8Array(SIZE * SIZE * this.height);
     this.heights = new (this.height > 255 ? Uint16Array : Uint8Array)(SIZE * SIZE);
-    for (let x = 0; x < SIZE; x++) for (let z = 0; z < SIZE; z++) this.column(x, z);
-    this.relight(0, SIZE - 1, 0, SIZE - 1);
+    if (!defer) drain(this.buildSteps());
+  }
+  // The constructor's work as a generator that yields between independent pieces (about every 4096 cells or queue entries): the same
+  // statements in the same order, so the arrays are identical however the steps are spread over frames.
+  *buildSteps() {
+    for (let x = 0; x < SIZE; x++) { for (let z = 0; z < SIZE; z++) this.column(x, z); yield; }
+    return yield* this.relightSteps(0, SIZE - 1, 0, SIZE - 1);
   }
   column(x, z) {
     if (this.world.hasNoSky) { this.heights[x * SIZE + z] = this.height; return; } // the Nether: no cell sees the sky
@@ -307,7 +315,10 @@ export class LightVolume {
     this.column(x, z);
     return this.relight(Math.max(0, x - 15), Math.min(SIZE - 1, x + 15), Math.max(0, z - 15), Math.min(SIZE - 1, z + 15));
   }
-  relight(x0, x1, z0, z1) {
+  relight(x0, x1, z0, z1) { return drain(this.relightSteps(x0, x1, z0, z1)); }
+  // relight as a generator: yields between columns and every STEP queue entries and returns the changed box. Driving it to the end
+  // (`drain`) is exactly the old whole-box call.
+  *relightSteps(x0, x1, z0, z1) {
     const w = this.world, H = this.height, XS = SIZE * H, n = (x1 - x0 + 1) * (z1 - z0 + 1) * H,
       oldSky = new Uint8Array(n), oldBlock = new Uint8Array(n), cost = new Uint8Array(n), emit = new Uint8Array(n),
       local = (i) => {
@@ -317,7 +328,8 @@ export class LightVolume {
     if (!OPACITY) lightTables();
     const air = w.columnBlocks && new Uint8Array(H), emitters = [];
     let k = 0;
-    for (let x = x0; x <= x1; x++)
+    for (let x = x0; x <= x1; x++) {
+      yield;
       for (let z = z0; z <= z1; z++, k += H) {
         const base = (x * SIZE + z) * H, col = air && (w.columnBlocks(x, z) ?? air);
         oldSky.set(this.sky.subarray(base, base + H), k);
@@ -330,6 +342,7 @@ export class LightVolume {
           cost[k + y] = op >= 15 && e > 0 ? 1 : Math.max(1, Math.min(15, op));
         }
       }
+    }
     for (const channel of ["sky", "block"]) {
       const arr = this[channel], buckets = Array.from({ length: 16 }, () => []);
       const raise = (i, v) => {
@@ -340,7 +353,8 @@ export class LightVolume {
       };
       const sky = channel === "sky";
       if (sky)
-        for (let x = x0; x <= x1; x++)
+        for (let x = x0; x <= x1; x++) {
+          yield;
           for (let z = z0; z <= z1; z++) {
             const height = this.heights[x * SIZE + z], base = (x * SIZE + z) * H;
             // An open-sky cell (15) at or above every in-box horizontal neighbour's height is surrounded
@@ -356,10 +370,12 @@ export class LightVolume {
             arr.fill(15, base + height, base + H);
             for (let y = height; y < Math.min(seedTop, H); y++) buckets[15].push(base + y);
           }
+        }
       else {
         k = 0;
         for (let x = x0; x <= x1; x++)
           for (let z = z0; z <= z1; z++, k += H) arr.set(emit.subarray(k, k + H), (x * SIZE + z) * H);
+        yield;
         for (const kk of emitters) {
           const y = kk % H, t = (kk - y) / H, nz = z1 - z0 + 1, lz = t % nz, lx = (t - lz) / nz;
           buckets[emit[kk]].push(((lx + x0) * SIZE + lz + z0) * H + y);
@@ -369,7 +385,8 @@ export class LightVolume {
       const outside = channel === "sky" && !w.hasNoSky ? 15 : 0;
       const side = (nx, nz, y) =>
         nx >= x0 && nx <= x1 && nz >= z0 && nz <= z1 ? 0 : nx < 0 || nz < 0 || nx >= SIZE || nz >= SIZE ? outside : arr[(nx * SIZE + nz) * H + y];
-      for (let x = x0; x <= x1; x++)
+      for (let x = x0; x <= x1; x++) {
+        yield;
         for (let z = z0; z <= z1; z++) {
           const edge = x === x0 || x === x1 || z === z0 || z === z1, base = (x * SIZE + z) * H, kb = ((x - x0) * (z1 - z0 + 1) + (z - z0)) * H;
           for (let y = edge ? 0 : H - 1; y < H; y++) {
@@ -379,9 +396,11 @@ export class LightVolume {
             raise(base + y, best - c);
           }
         }
+      }
       for (let level = 15; level > 1; level--) {
         const list = buckets[level];
         for (let q = 0; q < list.length; q++) {
+          if ((q & 4095) === 4095) yield;
           const i = list[q];
           if (arr[i] !== level) continue;
           const y = i % H, t = (i - y) / H, z = t % SIZE, x = (t - z) / SIZE,
@@ -400,7 +419,8 @@ export class LightVolume {
     }
     let box = null;
     k = 0;
-    for (let x = x0; x <= x1; x++)
+    for (let x = x0; x <= x1; x++) {
+      yield;
       for (let z = z0; z <= z1; z++)
         for (let y = 0; y < H; y++, k++) {
           const i = (x * SIZE + z) * H + y;
@@ -414,6 +434,7 @@ export class LightVolume {
             box.y1 = Math.max(box.y1, y);
           }
         }
+    }
     return box;
   }
 }

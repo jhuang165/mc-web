@@ -2,13 +2,16 @@
 // dedicated worker before the constructor runs and parks the result in java-world.js `presolvedSpawns`; generateJavaWorld takes it
 // instead of walking. Same function, same inputs, so the result is identical. Without Worker support, or when the worker fails, nothing
 // is parked and the constructor walks on the page thread as before.
-import { presolvedSpawns, presolvedCells, spawnKey, nativeSpawnGeneration, streamedWorldType } from './java-world.js';
+import { presolvedSpawns, presolvedCells, spawnKey, streamedWorldType } from './java-world.js';
+// Generations 13 to 17 (findBiomePosition origin, solveLegacySpawn) and 18 up (native spawn) both populate; 12 and earlier have no cell to presolve.
+const LEGACY_POPULATION_GENERATION = 13;
 import { normalizeFlatOptions } from './flat-world.js';
 
 // The World constructor's normalisation of a record's generator inputs, or null when the record does not use the native spawn.
 export function spawnRequest(record) {
-  if (record?.biome !== 'javaStreamed' || record.dimension || !nativeSpawnGeneration(record.generationVersion ?? 0)) return null;
+  if (record?.biome !== 'javaStreamed' || record.dimension || (record.generationVersion ?? 0) < LEGACY_POPULATION_GENERATION) return null;
   const worldType = streamedWorldType(record.worldType ?? 'default'), seed = String(record.seed);
+  if (worldType === 'flat' && record.generationVersion < 15) return null; // the constructor throws for these; leave that to it
   return { seed, generationVersion: record.generationVersion, worldType, generatorOptions: worldType === 'flat' ? normalizeFlatOptions(record.generatorOptions ?? '') : '' };
 }
 
