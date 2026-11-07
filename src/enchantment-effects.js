@@ -31,6 +31,7 @@ const SILK = {
   20: SELF, 130: SELF, 95: META, 102: SELF, 160: META, 79: SELF, 174: SELF, 80: SELF, 82: SELF, 103: SELF, 47: SELF,
   153: SELF, 155: (id, meta) => META(id, meta === 3 || meta === 4 ? 2 : meta), // BlockOre / BlockQuartz.createStackedBlock
   110: SELF, 99: SELF, 100: SELF, 30: SELF, 120: SELF,
+  125: (id, meta) => META(126, meta & 7), // BlockWoodSlab double: createStackedBlock is one wood slab (block-audit-reference.json silk row; normal break drops two)
   101: SELF, // BlockPane.canSilkHarvest: iron bars (102, the glass pane, is above)
   // BlockSilverfish.createStackedBlock: the block the egg imitates (stone, cobblestone, a stone brick variant).
   97: (id, meta) => (meta === 1 ? META(4, 0) : meta >= 2 && meta <= 5 ? META(98, meta - 2) : META(1, 0)),

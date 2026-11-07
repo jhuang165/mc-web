@@ -321,6 +321,8 @@ installNoteJukeboxMaterials(MATERIALS);
 installSignMaterials(MATERIALS);
 installSkullMaterials(MATERIALS);
 installStemCakeMaterials(MATERIALS);
+// b16 block audit (block-audit-reference.json facts): nether portal hardness -1, nether wart hardness 0 (drops via block-break-simulation), dragon egg hardness 3.
+MATERIALS[164] = { hardness: Infinity, drop: 0 }; MATERIALS[170] = { hardness: 0, drop: 386 }; MATERIALS[171] = { hardness: 3 };
 export const RECIPES = [];
 function recipe(id, name, rows, keys, output, count = 1) {
   const width = Math.max(...rows.map((r) => r.length));
