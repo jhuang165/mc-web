@@ -29,6 +29,7 @@ export class GenLayer {
     this.bh = H; this.bl = L;
     this.ch = 0; this.cl = 0; // worldGenSeed
     this.dh = 0; this.dl = 0; // chunkSeed
+    this.legacyMutated = false; // generation < 16: see biomeClassOf
   }
   // initWorldGenSeed (axn.a(long)): parents first, then three LCG steps over the base seed.
   initWorldGenSeed(seed) {
@@ -85,12 +86,16 @@ export class GenLayer {
   }
 }
 
+// BiomeGenBase.getBiomeClass. Generation 16 (b16 decoration audit) uses the native rule, where BiomeGenMutated takes its base
+// biome's class (Jungle M is a Jungle). Older generations keep the port's earlier rule, every mutated biome sharing one
+// "Mutated" class, so worlds saved before it keep their biome map.
+const biomeClassOf = (b, legacy) => (legacy ? b.cls : b.biomeClass);
 // GenLayer.compareBiomesById (static axn.a(int, int)).
-export function compareBiomesById(a, b) {
+export function compareBiomesById(a, b, legacy = false) {
   if (a === b) return true;
   if (a === B.mesaPlateau_F || a === B.mesaPlateau) return b === B.mesaPlateau_F || b === B.mesaPlateau;
   const x = getBiome(a), y = getBiome(b);
-  return x !== null && y !== null && x.isEqualTo(y);
+  return x !== null && y !== null && (legacy ? x === y || x.cls === y.cls : x.isEqualTo(y));
 }
 // GenLayer.isBiomeOceanic (static axn.b(int)).
 export const isOceanic = (id) => id === B.ocean || id === B.deepOcean || id === B.frozenOcean;
@@ -295,8 +300,8 @@ export class BiomeLayer extends GenLayer {
 }
 
 // GenLayerBiomeEdge.canBiomesBeNeighbors (axe): same biome class, or temperature categories that may touch.
-function canBeNeighbors(a, b) {
-  if (compareBiomesById(a, b)) return true;
+function canBeNeighbors(a, b, legacy) {
+  if (compareBiomesById(a, b, legacy)) return true;
   const x = getBiome(a), y = getBiome(b);
   if (x === null || y === null) return false;
   return x.category === y.category || x.category === TEMP_MEDIUM || y.category === TEMP_MEDIUM;
@@ -306,12 +311,13 @@ function canBeNeighbors(a, b) {
 export class BiomeEdgeLayer extends CrossLayer {
   cell(v, up, right, left, down, x, z) {
     this.initChunkSeed(x, z);
-    if (compareBiomesById(v, B.extremeHills))
-      return canBeNeighbors(up, B.extremeHills) && canBeNeighbors(right, B.extremeHills) && canBeNeighbors(left, B.extremeHills)
-        && canBeNeighbors(down, B.extremeHills) ? v : B.extremeHillsEdge;
+    const lg = this.legacyMutated;
+    if (compareBiomesById(v, B.extremeHills, lg))
+      return canBeNeighbors(up, B.extremeHills, lg) && canBeNeighbors(right, B.extremeHills, lg) && canBeNeighbors(left, B.extremeHills, lg)
+        && canBeNeighbors(down, B.extremeHills, lg) ? v : B.extremeHillsEdge;
     if (v === B.mesaPlateau_F || v === B.mesaPlateau || v === B.megaTaiga) {
       const base = v === B.megaTaiga ? B.taiga : B.mesa;
-      if (compareBiomesById(up, v) && compareBiomesById(right, v) && compareBiomesById(left, v) && compareBiomesById(down, v)) return v;
+      if (compareBiomesById(up, v, lg) && compareBiomesById(right, v, lg) && compareBiomesById(left, v, lg) && compareBiomesById(down, v, lg)) return v;
       return base;
     }
     if (v === B.desert)
@@ -359,13 +365,13 @@ export class HillsLayer extends GenLayer {
           else if (b === B.ocean) hill = B.deepOcean;
           else if (b === B.extremeHills) hill = B.extremeHillsPlus;
           else if (b === B.savanna) hill = B.savannaPlateau;
-          else if (compareBiomesById(b, B.mesaPlateau_F)) hill = B.mesa;
+          else if (compareBiomesById(b, B.mesaPlateau_F, this.legacyMutated)) hill = B.mesa;
           else if (b === B.deepOcean && this.nextInt(3) === 0) hill = this.nextInt(2) === 0 ? B.plains : B.forest;
           if (flag && hill !== b) hill = getBiome(hill + 128) !== null ? hill + 128 : b;
           if (hill === b) res = b;
           else {
             const up = p[i + 1 + j * pw], right = p[i + 2 + (j + 1) * pw], left = p[i + (j + 1) * pw], down = p[i + 1 + (j + 2) * pw];
-            const n = compareBiomesById(up, b) + compareBiomesById(right, b) + compareBiomesById(left, b) + compareBiomesById(down, b);
+            const lg = this.legacyMutated, n = compareBiomesById(up, b, lg) + compareBiomesById(right, b, lg) + compareBiomesById(left, b, lg) + compareBiomesById(down, b, lg);
             res = n >= 3 ? hill : b;
           }
         }
@@ -419,27 +425,28 @@ export class RareBiomeLayer extends CrossLayer {
 }
 
 // GenLayerShore (axw).
-const jungleCompatible = (id) => {
+const jungleCompatible = (id, legacy) => {
   const b = getBiome(id);
-  if (b !== null && b.cls === "Jungle") return true;
+  if (b !== null && biomeClassOf(b, legacy) === "Jungle") return true;
   return id === B.jungleEdge || id === B.jungle || id === B.jungleHills || id === B.forest || id === B.taiga || isOceanic(id);
 };
-const isMesa = (id) => getBiome(id)?.cls === "Mesa";
+const isMesa = (id, legacy) => { const b = getBiome(id); return b != null && biomeClassOf(b, legacy) === "Mesa"; };
 export class ShoreLayer extends CrossLayer {
   cell(v, up, right, left, down, x, z) {
     this.initChunkSeed(x, z);
     const biome = getBiome(v);
     const any = (f) => f(up) || f(right) || f(left) || f(down);
     if (v === B.mushroomIsland) return any((n) => n === B.ocean) ? B.mushroomIslandShore : v;
-    if (biome !== null && biome.cls === "Jungle") {
-      if (!(jungleCompatible(up) && jungleCompatible(right) && jungleCompatible(left) && jungleCompatible(down))) return B.jungleEdge;
+    const lg = this.legacyMutated;
+    if (biome !== null && biomeClassOf(biome, lg) === "Jungle") {
+      if (!(jungleCompatible(up, lg) && jungleCompatible(right, lg) && jungleCompatible(left, lg) && jungleCompatible(down, lg))) return B.jungleEdge;
       return any(isOceanic) ? B.beach : v;
     }
     if (v === B.extremeHills || v === B.extremeHillsPlus || v === B.extremeHillsEdge) return this.stoneBeach(v, up, right, left, down, B.stoneBeach);
     if (biome !== null && biome.snowy) return this.stoneBeach(v, up, right, left, down, B.coldBeach);
     if (v === B.mesa || v === B.mesaPlateau_F) {
       if (any(isOceanic)) return v;
-      return !(isMesa(up) && isMesa(right) && isMesa(left) && isMesa(down)) ? B.desert : v;
+      return !(isMesa(up, lg) && isMesa(right, lg) && isMesa(left, lg) && isMesa(down, lg)) ? B.desert : v;
     }
     if (v !== B.ocean && v !== B.deepOcean && v !== B.river && v !== B.swampland) return any(isOceanic) ? B.beach : v;
     return v;
@@ -526,7 +533,7 @@ export class VoronoiZoomLayer extends GenLayer {
 }
 
 // GenLayer.initializeAllBiomeGenerators (axn.a(long, WorldType)): [riverMix, voronoi, riverMix], all seeded.
-export function initializeAllBiomeGenerators(seed, type = "default") {
+export function initializeAllBiomeGenerators(seed, type = "default", { legacyMutated = false } = {}) {
   seed = toLong(seed);
   let layer = new IslandLayer(1n);
   layer = new FuzzyZoomLayer(2000n, layer);
@@ -570,15 +577,23 @@ export function initializeAllBiomeGenerators(seed, type = "default") {
   const voronoi = new VoronoiZoomLayer(10n, mix);
   mix.initWorldGenSeed(seed);
   voronoi.initWorldGenSeed(seed);
+  if (legacyMutated) markLegacy(voronoi);
   return [mix, voronoi, mix];
 }
 
 // WorldChunkManager (aib): genBiomes is the river mix (one cell per 4 x 4 blocks), biomeIndexLayer the voronoi zoom
 // (one cell per block). BiomeCache keeps whole 16 x 16 chunks of voronoi output.
 export const BIOMES_TO_SPAWN_IN = [B.forest, B.plains, B.taiga, B.taigaHills, B.forestHills, B.jungle, B.jungleHills];
+// Every layer of a chain (parents, the hills river and the river mix's two inputs) takes the pre-generation-16 biome class rule.
+function markLegacy(layer, seen = new Set()) {
+  if (!(layer instanceof GenLayer) || seen.has(layer)) return;
+  seen.add(layer);
+  layer.legacyMutated = true;
+  for (const v of Object.values(layer)) markLegacy(v, seen);
+}
 export class WorldChunkManager {
-  constructor(seed, type = "default") {
-    [this.genBiomes, this.biomeIndexLayer] = initializeAllBiomeGenerators(seed, type);
+  constructor(seed, type = "default", options = {}) {
+    [this.genBiomes, this.biomeIndexLayer] = initializeAllBiomeGenerators(seed, type, options);
     this.cache = new Map();
   }
   // BiomeCache.getBiomeCacheBlock (no expiry here; the client drops blocks unused for 30 s, which never changes a value).

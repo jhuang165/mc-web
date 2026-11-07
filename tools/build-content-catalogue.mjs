@@ -204,7 +204,13 @@ assert.equal(new Set(native.biomes.map(b => b.id)).size, native.biomes.length);
 // surface cases over all slots and the decorator ports (generation.md, population-live.md). That proves generation, not
 // per-biome gameplay, so the status stays Partial with the audit scope named.
 // The four spawn lists of every slot match spawn-lists-reference.json and drive the SpawnerAnimals port (natural-spawning.md).
-const biomeStatus = b => `Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); ${b.id === 12 ? 'legacy [snowy preset](snow.md) also reuses its facts; ' : ''}[spawn lists](natural-spawning.md) probe-checked; [tint and weather](biome-colors.md) probe-checked (decoration audit remains)`;
+// Slots with a native populate replay in biome-audit-reference.json (one 6x6-chunk region per naturally occurring slot).
+const auditSlots = new Set((await read('biome-audit-reference.json')).regions.map(r => r.slot));
+const decorationNote = b => auditSlots.has(b.id)
+  ? 'decoration probe-verified ([native populate per biome](biome-decoration-audit.md))'
+  : b.id === 8 || b.id === 9 ? 'Nether and End decorators are separate ([dimensions](dimensions.md))'
+  : 'decoration probe-verified only in cycled-slot records, no natural audit region ([audit](biome-decoration-audit.md))';
+const biomeStatus = b => `Partial; slot in src/java-biomes.js, used by [layers, terrain surfaces and decoration](generation.md); ${b.id === 12 ? 'legacy [snowy preset](snow.md) also reuses its facts; ' : ''}[spawn lists](natural-spawning.md) probe-checked; [tint and weather](biome-colors.md) probe-checked; ${decorationNote(b)}`;
 const biomeRows = native.biomes.map(b => `| ${b.id} | ${b.declaredId} | ${esc(b.name)} | ${b.class} | ${biomeStatus(b)} | G |`);
 await write('biome-parity-catalogue.md', `# Original biome registry parity catalogue
 

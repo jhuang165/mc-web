@@ -101,14 +101,14 @@ export async function readPlayerDat(bytes) {
 }
 
 // The browser generator for a level: streamed (endless) with the same seed and WorldType, so chunks beyond the import
-// generate as the source world would. Generation 15 has population and structures; MapFeatures off has no exact
-// equivalent (13 keeps population and mineshafts, without villages, strongholds and temples) and Superflat needs 15.
+// generate as the source world would. Generation 16 has population, structures and the native mutated-biome rule; MapFeatures off has no exact
+// equivalent (13 keeps population and mineshafts, without villages, strongholds and temples, and the earlier biome rule).
 export function levelGenerator(level) {
   const flat = level.worldType === 'flat';
   return {
     seed: level.seed, biome: 'javaStreamed', worldType: level.worldType,
     generatorOptions: flat ? level.generatorOptions : '',
-    generationVersion: flat || level.mapFeatures ? 15 : 13,
+    generationVersion: flat || level.mapFeatures ? 16 : 13,
     approximate: level.mapFeatures ? [] : [flat ? 'MapFeatures off: the Superflat options still decide its structures' : 'MapFeatures off: generation 13 still makes mineshafts'],
   };
 }

@@ -60,10 +60,14 @@ export function javaTemperature(b, x, y, z) {
   return f(b.temperature - f(f(f(f(n + f(y)) - 64) * f(0.05)) / 30));
 }
 // The generator of a streamed world: ChunkProviderFlat for WorldType.FLAT (its generatorOptions string), else ChunkProviderGenerate.
-const newGenerator = (seed, worldType, generatorOptions) => worldType === 'flat'
+// Generation 16 compares mutated biomes by their base biome's class, as natively; older worlds keep the earlier biome map.
+export const NATIVE_BIOME_CLASS_GENERATION = 16;
+// No version (tools, tests) is the native rule.
+export const biomeLayerOptions = (generationVersion) => ({ legacyMutated: generationVersion !== undefined && generationVersion < NATIVE_BIOME_CLASS_GENERATION });
+const newGenerator = (seed, worldType, generatorOptions, generationVersion) => worldType === 'flat'
   ? new FlatChunkProvider(parseFlatInfo(generatorOptions))
-  : new ChunkProviderGenerate(seed, streamedWorldType(worldType), new BiomeTerrainState());
-// Superflat: no caves, ravines or noise; every column is the preset's layers. Generation 15 only (its population runs
+  : new ChunkProviderGenerate(seed, streamedWorldType(worldType), new BiomeTerrainState(), biomeLayerOptions(generationVersion));
+// Superflat: no caves, ravines or noise; every column is the preset's layers. Generation 15 or later (its population runs
 // ChunkProviderFlat's structure list and populate, flat-structures.js).
 function flatSource({ seed, generationVersion, originX, originZ, gen }) {
   if (generationVersion < 15) throw new Error('Superflat worlds need streamed generation version 15');
@@ -94,7 +98,7 @@ function flatSource({ seed, generationVersion, originX, originZ, gen }) {
 // The streamed generator chain at local chunk coordinates (native chunk = local + origin / 16).
 // Generation 12 is terrain, caves and ravines with live block ids; 13 populates per cell
 // (streaming-population.js). `column(cx, cz)` returns { blocks, metadata } in WorldChunk order.
-export function streamedSource({ seed, generationVersion, originX, originZ, worldType = 'default', generatorOptions = '', gen = newGenerator(seed, worldType, generatorOptions) }) {
+export function streamedSource({ seed, generationVersion, originX, originZ, worldType = 'default', generatorOptions = '', gen = newGenerator(seed, worldType, generatorOptions, generationVersion) }) {
   if (gen instanceof FlatChunkProvider) return flatSource({ seed, generationVersion, originX, originZ, gen });
   const manager = gen.manager, topAt = (x, z) => gen.biomeState.topBlock(manager.biomeAt(x, z)),
     caves = new MapGenCaves(seed, manager, topAt),
@@ -125,7 +129,7 @@ export function generateJavaWorld(world) {
     state = new BiomeTerrainState(),
     gen = world.streaming && world.worldType === 'flat'
       ? new FlatChunkProvider(parseFlatInfo(world.generatorOptions))
-      : new ChunkProviderGenerate(seed, world.streaming ? world.worldType : JAVA_LANDSCAPES[world.biome], state),
+      : new ChunkProviderGenerate(seed, world.streaming ? world.worldType : JAVA_LANDSCAPES[world.biome], state, biomeLayerOptions(world.generationVersion)),
     manager = gen.manager;
   const spawn = manager.findBiomePosition(
     0,

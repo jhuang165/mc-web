@@ -377,6 +377,7 @@ export class VoxelScene {
     const w = this.world, L = this.light, h = b === SNOW_LAYER ? snowSelectionHeight(w.getMeta(x, y, z)) : blockHeight(b), lit = b === 14 && this.litFurnaces.has(`${x},${y},${z}`);
     FACES.forEach((f, fi) => {
       const boundary = fi !== 2 || h >= 1, nb = w.get(x + f.n[0], y + f.n[1], z + f.n[2]);
+      if (b === LILY_PAD && fi !== 2 && fi !== 3) return; // RenderBlocks.renderBlockLilyPad (blm.o) adds two flat quads, top and underside, and no sides.
       // BlockSnow.shouldSideBeRendered always draws the top.
       if (boundary && hides(nb) && !(b === SNOW_LAYER && fi === 2)) return;
       if ((b === 9 || b === ICE) && nb === b) return;

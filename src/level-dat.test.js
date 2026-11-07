@@ -85,10 +85,10 @@ test('readLevelData keeps what WorldInfo(NBTTagCompound) keeps', () => {
 
 test('levelGenerator continues each world type with its generator', () => {
   const kinds = Object.fromEntries(ref.settings.map((s) => [s.name, levelGenerator(readLevelData(fromHex(s.written)))]));
-  assert.deepEqual(kinds['default-survival'], { seed: '17', biome: 'javaStreamed', worldType: 'default', generatorOptions: '', generationVersion: 15, approximate: [] });
+  assert.deepEqual(kinds['default-survival'], { seed: '17', biome: 'javaStreamed', worldType: 'default', generatorOptions: '', generationVersion: 16, approximate: [] });
   assert.equal(kinds['flat-creative-commands'].worldType, 'flat');
   assert.equal(kinds['flat-creative-commands'].generatorOptions, '2;7,2x3,2;1;village');
-  assert.equal(kinds['flat-creative-commands'].generationVersion, 15);
+  assert.equal(kinds['flat-creative-commands'].generationVersion, 16);
   assert.equal(kinds['largeBiomes-hardcore'].worldType, 'largeBiomes');
   assert.equal(kinds['amplified-adventure-nofeatures'].generationVersion, 13);
   assert.equal(kinds['amplified-adventure-nofeatures'].seed, '-9223372036854775808');
@@ -225,7 +225,7 @@ test('a browser world exported to Java and imported with its level.dat continues
     { type: 6, x: x0 + 3.5, y: ground + 1.0625, z: z0 + 1.5, motion: [0, 0, 0], rotation: [0, 0], fallDistance: 0, fire: 0, onGround: true, command: { command: '/say hi', successCount: 2, customName: '@', trackOutput: true, lastOutput: null }, items: [] },
   ] };
   const record = {
-    id: 'round', name: 'Round trip', seed: '8675309', biome: 'javaStreamed', generationVersion: 15, worldType: 'default', mode: 'survival',
+    id: 'round', name: 'Round trip', seed: '8675309', biome: 'javaStreamed', generationVersion: 16, worldType: 'default', mode: 'survival',
     allowCommands: true, gameRules: { ...DEFAULT_RULES, keepInventory: 'true', doDaylightCycle: 'false' },
     edits: [...w.edits], player, position: { x: x0 + 0.5, y: ground + 2, z: z0 + 0.5, yaw: 0.5, pitch: -0.25 },
     experience: { total: 50, score: 50, level: 5, progress: 0.5 }, bed: { spawn: [x0 + 5, ground, z0] }, worldSpawn: [x0, ground + 1, z0],
@@ -241,7 +241,7 @@ test('a browser world exported to Java and imported with its level.dat continues
   const statsName = [...files.keys()].find((n) => n.startsWith('stats/'));
   const { record: back, report } = await importJavaRegionArea(regions, { level, stats: new TextDecoder().decode(files.get(statsName)) });
   // Same seed and generator: the area differs from the regenerated world only by the player's edits.
-  assert.equal(back.seed, '8675309'); assert.equal(back.biome, 'javaStreamed'); assert.equal(back.worldType, 'default'); assert.equal(back.generationVersion, 15);
+  assert.equal(back.seed, '8675309'); assert.equal(back.biome, 'javaStreamed'); assert.equal(back.worldType, 'default'); assert.equal(back.generationVersion, 16);
   assert.deepEqual(report.base.generatorOrigin, { chunkX: w.originX >> 4, chunkZ: w.originZ >> 4 });
   assert.deepEqual(new Map(back.edits), new Map(record.edits));
   assert.equal(report.chunks.converted, 64);

@@ -29,8 +29,8 @@ Rendering design: chunk meshes use a grayscale terrain atlas and per-vertex tint
 
 ## Gaps
 
-- Lily pad is tinted on every cube face of its quad set, not only the top (not verified).
+- Lily pad now emits only the top and underside quads (as `RenderBlocks.renderBlockLilyPad` does); its position-hash UV rotation is not ported.
 - Double-plant item colour is unverified.
 - Fast-graphics overlay gating and rain splash/sound per column are read from bytecode, not probed.
 - Fog colour still uses the existing `fogColor` path with the viewer's temperature; the End draws its own sky.
-- Biome decoration parity is not touched by this track.
+- Biome decoration parity is covered separately in [biome-decoration-audit.md](biome-decoration-audit.md).

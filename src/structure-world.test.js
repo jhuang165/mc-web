@@ -74,7 +74,7 @@ test('finite v14: jungle temple dispensers hand off nine slots and are restored 
 });
 
 test('finite v14: further jungle temples generate (redstone hooks skipped, nothing powered)', () => {
-  for (const seed of ['671', '854']) {
+  for (const seed of ['267', '854']) {
     const g = finite(seed).generatedStructures;
     assert.equal(g.temples[0].kind, 'jungle', seed);
     assert.equal(g.dispensers.length, 2, seed);

@@ -67,11 +67,12 @@ export class BiomeTerrainState {
 }
 const sharedBiomeState = new BiomeTerrainState();
 export class ChunkProviderGenerate {
-  constructor(seed, type = "default", biomeState = sharedBiomeState) {
+  // options.legacyMutated: the biome class rule of generations before 16 (biome-layers.js biomeClassOf).
+  constructor(seed, type = "default", biomeState = sharedBiomeState, options = {}) {
     this.seed = BigInt.asIntN(64, BigInt(seed));
     this.type = type;
     this.biomeState = biomeState;
-    this.manager = new WorldChunkManager(this.seed, type);
+    this.manager = new WorldChunkManager(this.seed, type, options);
     this.random = new JavaRandom(this.seed);
     const r = this.random;
     this.lower = new NoiseGeneratorOctaves(r, 16);

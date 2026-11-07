@@ -311,7 +311,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   const levelMode = level ? ['survival', 'creative', 'adventure'][javaPlayer?.playerGameType >= 0 ? javaPlayer.playerGameType : level.gameType] ?? 'survival' : null;
   const { seed = level ? level.seed : '1710', landscape = 'java', missing = 'generated', mode = levelMode ?? 'creative', dimension = 0, hasSky = dimension !== -1 } = options;
   if (level && (dimension || options.destination || options.landscape)) throw new Error('A level.dat import keeps the overworld in its native frame');
-  if (level && options.generationVersion !== undefined && ![13, 15].includes(options.generationVersion)) throw new Error('generationVersion must be 13 or 15');
+  if (level && options.generationVersion !== undefined && ![13, 15, 16].includes(options.generationVersion)) throw new Error('generationVersion must be 13, 15 or 16');
   if (![0, -1, 1].includes(dimension)) throw new Error('Unsupported dimension');
   if (dimension && options.destination) throw new Error('Dimension regions keep their native coordinates');
   if (!isJavaLandscape(landscape)) throw new Error(`Unknown Java landscape ${landscape}`);
@@ -330,7 +330,7 @@ export async function importJavaRegionArea(regions, options = {}) {
 
   if (options.area) validateArea(options.area);
   const generationVersion = level ? options.generationVersion ?? levelGen.generationVersion : 9;
-  if (level && level.worldType === 'flat' && generationVersion !== 15) throw new Error('Superflat worlds need streamed generation version 15');
+  if (level && level.worldType === 'flat' && generationVersion < 15) throw new Error('Superflat worlds need streamed generation version 15');
   if (level) await populationBlockMapperReady;
   // options.sink (whole-save-import.js ColumnSink): a stand-in for the generated world that records the converted cells
   // (absolute block | meta << 8 over air) instead of generating terrain, so a whole save can stream chunk by chunk.

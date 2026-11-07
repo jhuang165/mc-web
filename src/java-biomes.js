@@ -77,6 +77,7 @@ export class JavaBiome {
     this.id = id;
     this.name = name;
     this.cls = cls;
+    this.biomeClass = cls; // BiomeGenBase.getBiomeClass; mutated biomes take their base biome's below
     this.temperature = Math.fround(temperature);
     this.rainfall = Math.fround(rainfall);
     this.rootHeight = Math.fround(rootHeight);
@@ -89,14 +90,17 @@ export class JavaBiome {
     // BiomeGenBase.getIntRainfall: (int)(rainfall * 65536).
     this.rainfallInt = Math.trunc(Math.fround(this.rainfall * 65536));
   }
-  // BiomeGenBase.isEqualTo: the same object or the same class.
+  // BiomeGenBase.isEqualTo (ahu.a): the same object or the same getBiomeClass (ahu.l). BiomeGenMutated (ain) overrides
+  // both to ask its base biome, so Jungle M is a Jungle and Desert M is not equal to Taiga M.
   isEqualTo(other) {
-    return this === other || this.cls === other.cls;
+    return this === other || this.biomeClass === other.biomeClass;
   }
 }
 
 export const BIOME_LIST = new Array(256).fill(null);
 for (const row of ROWS) BIOME_LIST[row[0]] = new JavaBiome(row);
+// BiomeGenMutated.getBiomeClass returns baseBiome.getBiomeClass; every mutated slot is its base slot + 128.
+for (const b of BIOME_LIST) if (b && (b.cls === "Mutated" || b.cls === "Savanna$Mutated")) b.biomeClass = BIOME_LIST[b.slot - 128].biomeClass;
 
 // BiomeGenBase.getBiome (ahu.d(int)): out-of-range ids fall back to ocean (the client logs a warning); empty slots
 // are null.

@@ -452,11 +452,12 @@ const cellIndex = (x, y, z, height) => ((x & 15) * 16 + (z & 15)) * height + y;
 const columnKey = (cx, cz) => `${cx},${cz}`;
 export class World {
   // Streamed worlds: version 12 is terrain, caves and ravines only; 13 adds per-cell Java population
-  // (streaming-population.js); 15 adds villages, strongholds and temples. Finite Java worlds: 11 mineshafts, 14 all
+  // (streaming-population.js); 15 adds villages, strongholds and temples; 16 compares mutated biomes by their base class
+  // in the biome layers (biome-layers.js biomeClassOf; 15 and older keep the earlier map). Finite Java worlds: 11 mineshafts, 14 all
   // structures. Saved worlds keep their generator.
   constructor(seed = "Overworld", biome = "meadow", generationVersion = biome === 'javaStreamed' ? 13 : isJavaLandscape(biome) ? 11 : 8, worldType = 'default', generatorOptions = '') {
-    if (biome === 'javaStreamed' && ![12, 13, 15].includes(generationVersion)) throw new Error('Unsupported streamed world generation version');
-    if (biome === 'javaStreamed' && worldType === 'flat' && generationVersion !== 15) throw new Error('Superflat worlds need streamed generation version 15');
+    if (biome === 'javaStreamed' && ![12, 13, 15, 16].includes(generationVersion)) throw new Error('Unsupported streamed world generation version');
+    if (biome === 'javaStreamed' && worldType === 'flat' && generationVersion < 15) throw new Error('Superflat worlds need streamed generation version 15');
     this.seed = String(seed);
     this.biome = biome;
     this.generationVersion = generationVersion;
