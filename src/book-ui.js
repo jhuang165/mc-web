@@ -1,14 +1,13 @@
 // GuiScreenBook drawn in the browser: the 192 x 192 textures/gui/book.png page, the native font wrap (books.js listFormatted),
 // the next / previous page arrows (bff, 23 x 13 at u 0 / 23, v 192 forward / 205 back), Done, Sign, Sign and Close and Cancel.
 // The state machine is books.js BookScreen; this file only places the pixels and routes keys. One GUI unit is var(--u).
-import { BookScreen, BOOK_GUI as G, LANG, listFormatted, stringWidth, pageIndicator, byAuthor } from './books.js';
+import { BookScreen, BOOK_GUI as G, LANG, listFormatted, bookDrawList } from './books.js';
 import { textHtml } from './menu-ui.js';
 
 const u = (n) => `calc(${n}*var(--u))`;
 const at = (x, y, w, h) => `left:${u(x)};top:${u(y)};width:${u(w)};height:${u(h)}`;
 const text = (s, x, y, color = 0) => `<div class="mc-text flat" style="left:${u(x)};top:${u(y)}">${textHtml(s, color)}</div>`;
 const lines = (s, x, y, w, color = 0) => listFormatted(s, w).map((l, i) => text(l, x, y + 9 * i, color)).join('');
-const centred = (s, x, w, y, color = 0) => text(s, x + Math.trunc((w - stringWidth(s)) / 2), y, color);
 const arrow = (id, x, y, forward) => `<button class="book-arrow" data-id="${id}" style="position:absolute;${at(x, y, 23, 13)};padding:0;border:0;background:url('/media/1.7.10/gui/book.png') 0 ${u(-(192 + (forward ? 0 : 13)))}/${u(256)} ${u(256)};image-rendering:pixelated;--hover:${u(-23)}"></button>`;
 const button = (id, label, x, y, w, enabled = true) => `<button class="mc-button${enabled ? '' : ' disabled'}" data-id="${id}" style="${at(x, y, w, 20)};--hw:${Math.trunc(w / 2)}"><span class="mc-text mc-label" style="position:absolute;left:0;width:100%;text-align:center;top:${u(6)};color:var(--c);text-shadow:${u(1)} ${u(1)} 0 var(--cs)">${label}</span></button>`;
 
@@ -23,14 +22,8 @@ export function openBookUi(host, { stack, editable, playerName = 'Player', send 
     if (!el) { stop(); return; }
     const b = screen.buttons(), w = G.width;
     let h = `<div class="book-page" style="position:absolute;${at(x, G.top, w, G.height)};background:url('/media/1.7.10/gui/book.png') 0 0/${u(256)} ${u(256)};image-rendering:pixelated"></div>`;
-    if (screen.signing) {
-      h += centred(LANG['book.editTitle'], x + G.textX, G.textWidth, G.titleLabelY) + centred(screen.titleText(), x + G.textX, G.textWidth, G.titleY);
-      h += centred(byAuthor(playerName), x + G.textX, G.textWidth, G.authorY, 0x555555);
-      h += lines(LANG['book.finalizeWarning'], x + G.textX, G.warningY, G.textWidth);
-    } else {
-      const indicator = pageIndicator(screen.page + 1, screen.total);
-      h += text(indicator, x - stringWidth(indicator) + w - G.indicatorRight, G.top + G.indicatorY) + lines(screen.pageText(), x + G.textX, G.textY, G.textWidth);
-    }
+    // The same draw list the probe checks (books.js bookDrawList); the "by <name>" line carries its own DARK_GRAY code.
+    for (const [kind, s, tx, ty, ww] of bookDrawList(screen, playerName, width)) h += kind === 'split' ? lines(s, tx, ty, ww) : text(s, tx, ty);
     if (b.next.visible) h += arrow(1, x + G.nextX, G.top + G.pageButtonY, true);
     if (b.prev.visible) h += arrow(2, x + G.prevX, G.top + G.pageButtonY, false);
     const cx = width / 2;
@@ -51,7 +44,9 @@ export function openBookUi(host, { stack, editable, playerName = 'Player', send 
     window.removeEventListener('paste', onPaste, true);
     host.close();
   };
-  const onPaste = (e) => { if (!root()) return; e.preventDefault(); screen.paste((e.clipboardData?.getData('text') ?? '').replace(/[\u0000-\u001f\u007f§]/g, '')); draw(); };
+  // GuiScreenBook pastes GuiScreen.getClipboardString() unfiltered (section signs and control characters included); AWT hands over
+  // line breaks as "\n".
+  const onPaste = (e) => { if (!root()) return; e.preventDefault(); screen.paste((e.clipboardData?.getData('text') ?? '').replace(/\r\n?/g, '\n')); draw(); };
   const onKey = (e) => {
     if (!root()) { stop(); return; }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
