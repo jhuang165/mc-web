@@ -213,7 +213,7 @@ import { HorseGearRenderer } from "./horse-gear-renderer.js";
 import { capturePlayerAction, dispatchPlayerAction as dispatchPlayerActionRaw, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
 import { normalizeFlatOptions } from "./flat-world.js";
-import { createBonusChest, unseededBonusRandom } from "./bonus-chest.js";
+import { bonusChestDue, placeBonusChest } from "./bonus-world.js";
 import { ORIGINAL_ITEMS } from "./original-items.js";
 import { setOriginalBlockMapper } from "./mineshaft-world.js";
 import { spawnerDisplayEntity } from "./mob-spawner.js";
@@ -252,8 +252,8 @@ import { ITEM_WRITABLE_BOOK, applyBookEdit, applyBookSign } from "./books.js";
 import { applyHangingEdit } from "./hanging-interaction.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
-import { startLoading, setStage, STAGES, loadingScreen, errorScreen, nextPaint, SpawnAreaLog } from "./loading-screen.js";
-import { presolveSpawn } from "./spawn-presolve.js";
+import { startLoading, setStage, STAGES, loadingScreen, downloadTerrainScreen, errorScreen, nextPaint, SpawnAreaLog } from "./loading-screen.js";
+import { presolveWorld } from "./spawn-presolve.js";
 import "./lang-hooks.js";
 import { loadLanguageManifest, selectLanguage, setForceUnicodeFont } from "./lang.js";
 import { loadFontResources, onFontChange, font } from "./font-renderer.js";
@@ -1042,6 +1042,7 @@ function applyWeatherEdit(w, x, y, z, block, meta) {
   saved = false;
 }
 // Hydrate only the resident window before constructing block runtimes and lighting.
+let pendingBonusChests = null; // chest tiles of a bonus chest placed during creation, consumed by launch
 async function openWorld(record) {
   if(openingWorld)return;
   openingWorld=true;
@@ -1052,9 +1053,10 @@ async function openWorld(record) {
   if (loading) { gui.show(loadingScreen(loading)); await nextPaint(); }
   try {
     if (record.dimension && !record.rootId) record = dims.openRecord(record, await readRuntimeState(record)); // saved in the Nether/End: open that dimension
-    if (loading) await presolveSpawn(record); // the native spawn walk in a worker, so this screen stays live (spawn-presolve.js)
+    const presolved = loading ? presolveWorld(record) : null; // the native spawn walk, then the resident window's cell, in a worker so this screen stays live (spawn-presolve.js)
+    if (presolved) await presolved.spawn;
     // WorldServer.initialize runs createSpawnPosition under "Loading world"; the chunk load that follows is "Building terrain" (the World constructor populates the resident window).
-    if (loading) { setStage(loading, STAGES.terrain); spawnLog.report(0, performance.now()); await nextPaint(); }
+    if (loading) { setStage(loading, STAGES.terrain); spawnLog.report(0, performance.now()); await nextPaint(); await presolved.terrain; }
     const prepared=dims.createWorld(record);
     if (!record.chunked) prepared.restore(record.edits??[]);
     if (!prepared.dimension && !record.worldSpawn) {
@@ -1070,20 +1072,25 @@ async function openWorld(record) {
     const storage=prepared.streaming?new StreamStorage(prepared,record.id,{onError:e=>{pause();toast('Could not load saved columns. Reopen the world to retry: '+e.message);}}):null;
     prepared.nextEditOrder=Math.max(prepared.nextEditOrder,record.editSequence??(record.chunked?2000000:0));
     if(storage)await storage.ensure([...prepared.chunks.values()].map(c=>[c.x,c.z]));
+    // WorldServer.initialize: the bonus chest belongs to world creation, after the spawn and before any runtime exists (bonus-world.js).
+    if (bonusChestDue(record, prepared)) pendingBonusChests = placeBonusChest(prepared, record).chests;
     dims.applyWrites(prepared, record, { verifyBed: (w, s) => { const cell = verifyRespawn(w, s, false); return cell ? bedRespawnPosition(cell) : null; } }); // portal frame / End platform
     streamStorage?.dispose();streamStorage=storage;
     if (loading) spawnLog.report(prepared.chunks?.size ?? 0, performance.now(), true);
-    await launch(record,prepared);
+    // NetHandlerPlayClient.handleJoinGame shows GuiDownloadTerrain until the first position packet: here, while the columns are meshed and the player is placed.
+    if (loading) { gui.show(downloadTerrainScreen()); await nextPaint(); }
+    await launch(record,prepared,{slice:!!loading});
     // PlayerList.transferPlayerToDimension: leaving the End, Overworld -> End, or any other portal trip (not a respawn).
     if (transit && !transit.death) achievements.trigger(transit.exit ? "theEnd2" : transit.from === 0 && prepared.dimension === 1 ? "theEnd" : "portal");
   } catch(e) {
+    if (pendingBonusChests) { pendingBonusChests = null; record.bonusChestPlaced = false; } // placed on a world that never launched: owed again
     // GuiErrorScreen replaces the toast when the load started from the title screen.
     if (loading) gui.show(errorScreen({ title: "Could not open this world", message: String(e?.message ?? e), cancel: () => gui.show(menus.mainMenu()) }));
     else toast('Could not open this world: '+e.message);
   }
   finally{openingWorld=false;}
 }
-async function launch(record, prepared) {
+async function launch(record, prepared, { slice = false } = {}) {
   try {
     active = record;
     world = prepared;
@@ -1097,7 +1104,7 @@ async function launch(record, prepared) {
     weather.mood.player = () => ({ x: position.x, y: position.y + PHYSICS.eye, z: position.z }); // the server player's posY is the eye
     hideBedScreen();
     bedSleep.restore(record.bed); // the spawn point; a saved sleeping state is resumed after the player is placed
-    scene.setWorld(world);
+    scene.setWorld(world, { defer: slice }); // from the title screen the column meshes are built in frame-sized slices below, behind the loading screen
     // Block light for canBlockFreeze/canSnowAt/melting is the scene's light volume.
     world.blockLight = (x, y, z) => scene.light.blockAt(x, y, z);
     world.fullLight = (x, y, z) => scene.light.level(x, y, z, 0); // World.getFullBlockLightValue (plant-light.js: mushrooms)
@@ -1328,7 +1335,7 @@ async function launch(record, prepared) {
     restorePopulation(record,world,survival,mobs);
     if (record.villages) mobs.villages.loadJSON(record.villages);
     materializeFresh();
-    placeBonusChest(record);
+    if (pendingBonusChests) { Object.assign(survival.chests, pendingBonusChests); pendingBonusChests = null; saved = false; } // placed at creation (openWorld), tile data handed over here
     // A new EntityPlayerMP is spawn-protected for 60 ticks (damage is refused, Creative or not).
     survival.protection = 60;
     inhabited = new InhabitedTime(record.inhabited, survival.time);
@@ -1401,6 +1408,7 @@ async function launch(record, prepared) {
     playerBody.reset(position, yaw, pitch);
     keys.clear();
     accumulator = 0;
+    if (slice) while (scene.buildPending(12)) await nextPaint();
     screen = "playing";
     gui.hide();
     $("#hud").classList.remove("hidden");
@@ -2905,41 +2913,6 @@ function tickMining() {
   });
   mining = state.mining;
   mineCooldown = state.cooldown;
-}
-// WorldServer.createBonusChest at world creation: once, around the spawn, with an unseeded Random like World.rand (native contents differ per creation; tests inject a fixed Random).
-function placeBonusChest(record) {
-  if (!record.bonusChest || record.bonusChestPlaced || world.dimension || !record.worldSpawn) return;
-  record.bonusChestPlaced = true;
-  const solid = (x, y, z) => world.solid(x, y, z), orig = (x, y, z) => toOriginal(world.get(x, y, z), world.getMeta(x, y, z))?.[0] ?? 0;
-  const changes = [], access = {
-    id: orig,
-    blocksMovement: (x, y, z) => solid(x, y, z),
-    solidTop: (x, y, z) => solid(x, y, z) && orig(x, y, z) !== 54,
-    put(x, y, z, id, meta) {
-      // BlockTorch.onBlockAdded (bytecode-read): a torch set with metadata 0 takes the first of west (1), east (2), north (3), south (4) whose neighbour has a
-      // solid side facing it, else standing (5) on a solid top; with none it cannot stay (func_150109_e drops it), so it is not placed.
-      if (id === 50 && meta === 0) {
-        const wall = [[-1, 0, 1], [1, 0, 2], [0, -1, 3], [0, 1, 4]].find(([dx, dz]) => solid(x + dx, y, z + dz) && orig(x + dx, y, z + dz) !== 54);
-        meta = wall ? wall[2] : solid(x, y - 1, z) && orig(x, y - 1, z) !== 54 ? 5 : -1;
-        if (meta < 0) return;
-      }
-      const cell = fromOriginal(id, meta);
-      if (!cell) return;
-      const old = world.get(x, y, z);
-      world.set(x, y, z, cell.id, true, cell.meta);
-      changes.push([x, y, z, old, cell.id]);
-      if (id === 54) settleFacing(world, survival.chests, x, y, z);
-    },
-    fill(x, y, z, slot, s) {
-      const live = ORIGINAL_ITEMS[`${s.id}:${s.damage}`] ?? ORIGINAL_ITEMS[s.id];
-      const chest = survival.chests[`${x},${y},${z}`];
-      if (live && chest) chest.items[slot] = makeStack(live, s.count, s.damage);
-    },
-  };
-  const [sx, , sz] = record.worldSpawn;
-  createBonusChest(access, unseededBonusRandom(JavaRandom), sx, sz);
-  if (changes.length) scene.updateBlocks(changes);
-  saved = false;
 }
 // Streamed population (version 13): chests, animals, spawners, carts and liquid ticks of columns that
 // just became resident for the first time. Resident columns already claimed are never handed over again.

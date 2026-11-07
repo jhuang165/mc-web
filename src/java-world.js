@@ -173,6 +173,14 @@ export function nativeWorldSpawn(gen, seed, state, worldType) {
 // same function of them, so using it changes nothing but when the work happens.
 export const presolvedSpawns = new Map();
 export const spawnKey = (seed, generationVersion, worldType, generatorOptions) => `${javaSeed(seed)}|${generationVersion}|${worldType}|${generatorOptions}`;
+// The resident 8 x 8 window is population cell (0, 0) (CELL = 8, streaming-population.js). It is built in the same worker after the spawn (its origin follows
+// from the spawn) and adopted by generateJavaWorld, which then finds the cell instead of generating it on the page thread (spawn-presolve.js).
+export const presolvedCells = new Map();
+export function solveResidentCell({ seed, generationVersion, worldType, generatorOptions }, spawn) {
+  const s = javaSeed(seed), originX = ((spawn.x >> 4) - 4) * 16, originZ = ((spawn.z >> 4) - 4) * 16;
+  const source = streamedSource({ seed: s, generationVersion, originX, originZ, worldType, generatorOptions });
+  return { originX, originZ, cell: source.population.export(0, 0) };
+}
 export function solveNativeSpawn({ seed, generationVersion, worldType, generatorOptions }) {
   const s = javaSeed(seed), gen = newGenerator(s, worldType, generatorOptions, generationVersion);
   const { x, y, z, foundBiome, steps } = nativeWorldSpawn(gen, s, gen.biomeState ?? new BiomeTerrainState(), worldType);
@@ -186,8 +194,8 @@ export function generateJavaWorld(world) {
       : new ChunkProviderGenerate(seed, world.streaming ? world.worldType : JAVA_LANDSCAPES[world.biome], state, biomeLayerOptions(world.generationVersion)),
     manager = gen.manager;
   let spawn = null;
+  const key = world.streaming ? spawnKey(world.seed, world.generationVersion, world.worldType, world.generatorOptions) : null;
   if (world.streaming && nativeSpawnGeneration(world.generationVersion)) {
-    const key = spawnKey(world.seed, world.generationVersion, world.worldType, world.generatorOptions);
     const native = presolvedSpawns.get(key) ?? nativeWorldSpawn(gen, seed, state, world.worldType);
     presolvedSpawns.delete(key);
     world.nativeSpawn = [native.x, native.y, native.z];
@@ -220,7 +228,13 @@ export function generateJavaWorld(world) {
   // built ahead of the player wait in `pregenerated` and are used once; it runs the same chain.
   if (world.streaming) {
     const source = streamedSource({ seed, gen, worldType: world.worldType, generatorOptions: world.generatorOptions, originX: world.originX, originZ: world.originZ, generationVersion: world.generationVersion });
-    if (source.population) world.population = source.population;
+    if (source.population) {
+      world.population = source.population;
+      // The window's cell built by the worker (presolvedCells): the same class and inputs, so the same cell; only valid for the same origin.
+      const pre = presolvedCells.get(key);
+      presolvedCells.delete(key);
+      if (pre && pre.originX === world.originX && pre.originZ === world.originZ) source.population.adopt(pre.cell);
+    }
     world.pregenerated = new Map();
     world.generateTerrainChunk = (cx, cz) => {
       const k = `${cx},${cz}`, hit = world.pregenerated.get(k);

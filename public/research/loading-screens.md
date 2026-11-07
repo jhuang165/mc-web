@@ -54,7 +54,7 @@ Javap dumps of the classes read are in the ignored research folder `loading/` (`
   with and without a presolved result).
 - Load errors from the title screen use `errorScreen` (red gradient, title, wrapped message, Cancel back to the title screen) instead of the toast;
   loads started in-game (portal trips) keep the toast.
-- `workingScreen` (GuiScreenWorking) and `downloadTerrainScreen` (GuiDownloadTerrain) are built and tested but not shown anywhere yet.
+- `workingScreen` (GuiScreenWorking) is built and tested but not shown; `downloadTerrainScreen` (GuiDownloadTerrain) is shown since batch 21 (below).
 
 ## Browser check (muted headless Chrome 1280 x 720, Vite on :5202)
 - New default world, seed 4 (the slowest reference seed, a 241-step walk, about 1 s of walking in Node, 1.9 s in the worker including its start):
@@ -66,8 +66,34 @@ Javap dumps of the classes read are in the ignored research folder `loading/` (`
 - Frames longer than 100 ms remain, all after the spawn walk: the `World` constructor populates the 8 x 8 window synchronously (0.9 to 1.3 s on seed 4/11, 1 s in
   Node) and the post-construction restore/storage/launch work adds 0.9 to 1.2 s. The screen is static during those; they are the next thing to move off the page thread.
 
+## Batch 21: the freezes during "Building terrain" are sliced
+- Before (batch 20, measured again in batch 21 on the same machine with the same harness, muted headless Chrome 1280 x 720, Vite dev server): seed 4 had main-thread tasks of 1307 ms
+  (the `World` constructor populating the 8 x 8 window) and 961 ms (`launch`: light volume plus 64 column meshes); seed 11 had 1386 ms and 1171 ms.
+- The resident window is exactly population cell (0, 0) (`CELL` is 8 and the origin is chosen so the window starts at a cell edge). `spawn-worker.js` now posts the spawn, then
+  builds that cell with `solveResidentCell` (same `StreamingPopulation.export` the prefetch worker already uses) and posts its buffers with a transfer list. `presolveWorld`
+  (`spawn-presolve.js`) parks the cell in `presolvedCells`, keyed like the spawn; `generateJavaWorld` calls `population.adopt(cell)` when the origin matches, so the constructor's 64-column copy
+  finds the cell and generates nothing (`population.generated === 0`). Only the 64 `Uint8Array` pairs are copied on the page thread. The screen switches to "Building terrain" as soon as the spawn
+  arrives, so that stage now covers the worker building the window.
+- `launch` from the title screen calls `scene.setWorld(world, { defer: true })`, which queues the resident columns in `pendingBuild`; `openWorld` then shows `downloadTerrainScreen` and `launch` builds the meshes
+  12 ms at a time with a paint between slices (`scene.buildPending`) before it hides the GUI. Meshing is a pure function of the world data, so the order and timing change nothing; a column rebuilt meanwhile by an edit is skipped.
+  Portal trips and every other caller keep the synchronous build.
+- After: the longest main-thread task during creation is the light volume build (`StreamingLight`, `LightVolume.relight` over the whole window, not sliced): 121 to 147 ms on seed 4 and 11
+  (three runs; one 175 to 208 ms run while the machine was busy). No other task over 100 ms, `Loading world`, `Building terrain` and `Downloading terrain` all repaint. Seed 4: "Building terrain" from 1.0 s to 2.0 s,
+  "Downloading terrain" about 1.4 s (slices), total about 3.4 s against 4.0 s before.
+- Equality: tests build the same world with and without the presolved cell (3 generator records: default seed, Superflat, plus a mismatched-origin cell that is dropped) and compare all 64 columns' blocks and metadata,
+  biome ids, spawn, origin, the cell's records and `claimFreshColumns()`. Worlds below generation 18 (no worker spawn) and any worker failure take the old synchronous path.
+- GuiDownloadTerrain is now shown: bytecode-read (`bjb` = NetHandlerPlayClient): `handleJoinGame` (`a(hd)`) and `handleRespawn` (`a(hs)`) both do `loadWorld` then `displayGuiScreen(new GuiDownloadTerrain(this))`, and the
+  player position/look handler (`a(fu)`) sets a first-packet flag and calls `displayGuiScreen(null)`. In single player the integrated server logs the player in through the same handler (`launchIntegratedServer`
+  connects with `provideLocalClient`), so "Downloading terrain" follows "Building terrain" natively. Its draw (`bdu`) is the dirt background and the string at `h / 2 - 50`, `keyTyped` is empty, `doesGuiPauseGame` is false. The port shows it
+  from the end of "Building terrain" until the column meshes are built and the player is placed. The native duration is assumed (not probed): a few client ticks of packet exchange, longer when the server is busy.
+- Not wired: portal trips. Natively `handleRespawn` shows GuiDownloadTerrain for a dimension change as well; the port keeps the game on screen there because showing a GUI mid-game also pauses input and the loop, so this stays a gap.
+  GuiScreenWorking has no counterpart in this flow: bytecode-read, the only class referencing `bdt` besides itself is `brc` (the save-format list); the conversion progress goes to the server's `outputPercentRemaining`
+  log line, never a screen, in the integrated start; the port has no world conversion either. It stays built and unused.
+
 ## Gaps
-- The `World` constructor's initial population and `launch` still block the page for about 1 to 2 s total; only the spawn walk moved.
+- The light volume build (about 120 to 150 ms in one task) still runs on the page thread inside `launch`; `LightVolume.relight` floods the whole window and is not split.
+- Reopening saved generation 18 and 19 worlds uses the worker for the spawn and the cell as well; generation 13 to 17 saves have no worker spawn and still build their window in the constructor.
+- Portal trips (dimension changes) neither show GuiDownloadTerrain nor slice their work.
 - No progress bar is shown (natively none either); the console percentage is coarse.
-- GuiScreenWorking and GuiDownloadTerrain are not wired (the port has no conversion step; portal arrival uses no screen); no save screen on quit (natively blank).
+- No save screen on quit (natively blank).
 - Boot failure still uses the page overlay's HTML text.
