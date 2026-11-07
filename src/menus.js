@@ -33,7 +33,7 @@ export const UNAVAILABLE = {
   stream: "Twitch broadcasting was a desktop-only feature; a web page cannot stream.",
   showCape: "There are no accounts or capes in this browser build, so the Show Cape button is drawn disabled.",
   snooper: "This build sends no usage data, so there is nothing to configure.",
-  languages: "Only English (US) is installed. Run npm run lang:fetch for the other languages.",
+  languages: "Only English (US) is installed (npm run lang:fetch).",
   touchscreen: "Touch input in this browser build uses its own on-screen controls.",
   fixedVideo: "This renderer has no switch for this setting; the button shows what it always does.",
   mapFeatures: "Structure generation is fixed by the world type in this browser build.",
