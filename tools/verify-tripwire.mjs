@@ -4,9 +4,11 @@
 // pending tick and the world Random agree, and writes public/research/tripwire-reference.json for
 // src/tripwire.test.js. Needs a JDK, the pinned client JAR (tools/research or MC_RESEARCH) and the
 // guava / log4j-api / commons-lang3 / netty-all library JARs (MC_PROBE_LIBS or a launcher/gradle cache).
-// Not probed (bytecode-read only): BlockTripWire.onBlockHarvested (shears set metadata |8 with
-// flags 4), the client-side setBlockBoundsBasedOnState, and random ticks (updateTick runs from the
-// scheduled tick only).
+// Batch 17 probes shears disarm (onBlockHarvested via a scripted player), random ticks (both blocks
+// tick randomly), projectile/bat entity classes and their doesEntityNotTriggerPressurePlate answers.
+// Which entity classes call Entity.func_145775_I (sa.I, the only caller of onEntityCollidedWithBlock
+// for moving entities) is checked with javap over the original classes (collisionCallers below);
+// not probed: the client-side setBlockBoundsBasedOnState and running those entities' onUpdate.
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdir, readFile, writeFile, access, rm } from "node:fs/promises";
@@ -135,6 +137,67 @@ for (const gap of [41, 42]) {
   const ev = [[3, "entity", 3, 1, 2, 1], [3, "collide", 3, 1, 2], [8, "air", 6, 1, 2], [10, "placehook", 6, 1, 2, HOOK, 1], [30, "unentity", 3, 1, 2]];
   SCENARIOS.push(scenario("hook-replaced-while-powered", { size: [8, 3, 5], ticks: 40, cells: c, events: ev, note: "the far hook is broken while powered and placed again: the line re-attaches and powers again if an entity is still there" }));
 }
+// 12. batch 17: shears disarm (BlockTripWire.onBlockHarvested), random ticks, projectile and bat entity classes.
+// harvest: arg 1 = held item (0 empty hand, 1 shears, 2 a stick).
+for (const [name, held, withEntity, note] of [
+  ["shears-harvest-break-powered", 1, true, "a player trips the line, then breaks a string while holding shears: onBlockHarvested sets metadata |8 (flags 4), breakBlock then reports the disarmed meta to the hooks"],
+  ["stick-harvest-break-powered", 2, true, "the same break with a stick in hand: no disarm, the powered line is told the string vanished"],
+  ["empty-harvest-break-powered", 0, true, "the same break with an empty hand: getCurrentEquippedItem is null, no disarm"],
+  ["shears-harvest-break-idle", 1, false, "shears break an idle attached string"],
+  ["stick-harvest-break-idle", 2, false, "a stick breaks an idle attached string"],
+]) {
+  const c = xLine({}, 0, 7, 2, { attachedBits: 4, stringMeta: 4 });
+  const ev = [];
+  if (withEntity) ev.push([3, "entity", 3, 1, 2, 1], [3, "collide", 3, 1, 2]);
+  ev.push([14, "harvest", 4, 1, 2, held], [14, "air", 4, 1, 2]);
+  SCENARIOS.push(scenario(name, { size: [8, 3, 5], ticks: 40, cells: c, events: ev, note }));
+}
+{
+  const c = xLine({}, 0, 7, 2, { attachedBits: 4, stringMeta: 4 });
+  const ev = [[3, "harvest", 3, 1, 2, 1], [8, "entity", 3, 1, 2, 1], [8, "collide", 3, 1, 2], [20, "unentity", 3, 1, 2], [24, "harvest", 1, 1, 2, 1], [26, "harvest", 5, 1, 2, 1]];
+  SCENARIOS.push(scenario("shears-disarm-without-break", { size: [8, 3, 5], ticks: 40, cells: c, events: ev, note: "shears harvest on a string without removing it (flags 4: no neighbour update), a player then trips the disarmed string; harvests on the hooks do nothing" }));
+}
+{
+  const c = xLine({}, 0, 7, 2, { attachedBits: 4, stringMeta: 4 });
+  const ev = [[3, "harvest", 3, 1, 2, 1], [5, "entity", 4, 1, 2, 1], [5, "collide", 4, 1, 2], [20, "unentity", 4, 1, 2], [22, "air", 3, 1, 2], [24, "place", 3, 1, 2, STRING, 0]];
+  SCENARIOS.push(scenario("shears-disarm-then-replace", { size: [8, 3, 5], ticks: 40, cells: c, events: ev, note: "a disarmed string stays in an attached line: another string trips the line, the disarmed one is ignored; it is then broken and replaced by a fresh armed string" }));
+}
+// Random ticks: both blocks tick randomly (header tripwireEntities.tickRandomly) and call updateTick.
+{
+  const c = xLine({}, 0, 7, 2, { attachedBits: 4, stringMeta: 4 });
+  put(c, 3, 1, 2, `${STRING}:${4 | 1}`);
+  const ev = [[2, "randomtick", 3, 1, 2], [6, "entity", 3, 1, 2, 1], [8, "randomtick", 3, 1, 2], [9, "randomtick", 4, 1, 2], [20, "unentity", 3, 1, 2], [22, "randomtick", 3, 1, 2]];
+  SCENARIOS.push(scenario("random-tick-string", { size: [8, 3, 5], ticks: 40, cells: c, events: ev, note: "a string stored active (meta 5) with nobody on it is re-sensed by a random tick and cleared; an idle string's random tick does nothing; with an entity on it a random tick keeps it active and schedules the 10-tick re-sense" }));
+}
+{
+  const c = xLine({}, 0, 7, 2, { attachedBits: 4, stringMeta: 4 });
+  put(c, 3, 1, 2, `${STRING}:${4 | 1}`);
+  const ev = [[2, "randomtick", 1, 1, 2], [6, "randomtick", 6, 1, 2], [10, "air", 3, 1, 2], [12, "randomtick", 1, 1, 2]];
+  SCENARIOS.push(scenario("random-tick-hook", { size: [8, 3, 5], ticks: 30, cells: c, events: ev, note: "random ticks on the hooks of a line that stores one active string: the hook updateTick path attaches/powers both ends; after the string is broken another tick unpowers them" }));
+}
+{
+  const c = xLine({}, 0, 7, 2, { strings: true });
+  const ev = [[2, "randomtick", 1, 1, 2], [6, "randomtick", 6, 1, 2], [10, "entity", 3, 1, 2, 2], [10, "collide", 3, 1, 2], [12, "randomtick", 1, 1, 2], [30, "unentity", 3, 1, 2]];
+  SCENARIOS.push(scenario("random-tick-hook-unattached", { size: [8, 3, 5], ticks: 40, cells: c, events: ev, note: "hooks and strings stored unattached (metadata 3/1 and 0): a random tick on a hook attaches the whole line" }));
+}
+// Entity classes in the sensing box: the entity is a scripted instance of the real class (entity2 kinds).
+for (const [name, kind, note] of [
+  ["arrow-trips", 3, "an arrow (0.5 wide box) in the string's cell trips it"],
+  ["snowball-trips", 4, "an EntitySnowball colliding with the string"],
+  ["egg-trips", 5, "an EntityEgg colliding with the string"],
+  ["pearl-trips", 6, "an EntityEnderPearl colliding with the string"],
+  ["potion-trips", 7, "an EntityPotion colliding with the string"],
+  ["bat-ignored", 8, "an EntityBat answers true to doesEntityNotTriggerPressurePlate: the string never trips"],
+]) {
+  const c = xLine({}, 0, 7, 2, { attachedBits: 4, stringMeta: 4 });
+  const ev = [[3, "entity2", 3, 1, 2, kind], [3, "collide", 3, 1, 2], [20, "unentity", 3, 1, 2]];
+  SCENARIOS.push(scenario(name, { size: [8, 3, 5], ticks: 40, cells: c, events: ev, note }));
+}
+{
+  const c = xLine({}, 0, 7, 2, { attachedBits: 4, stringMeta: 4 });
+  const ev = [[3, "entity2", 3, 1, 2, 1], [3, "collide", 3, 1, 2], [5, "entity2", 3, 1, 2, 4], [8, "unentity2", 3, 1, 2, 1], [20, "unentity2", 3, 1, 2, 4], [24, "entity2", 3, 1, 2, 8], [28, "entity2", 3, 1, 2, 3], [40, "unentity2", 3, 1, 2, 3], [44, "unentity2", 3, 1, 2, 8]];
+  SCENARIOS.push(scenario("projectiles-keep-line-powered", { size: [8, 3, 5], ticks: 60, cells: c, events: ev, note: "a mob trips the line; a snowball joins (no collide call, as thrown entities never run Entity.func_145775_I) and the mob leaves: the scheduled re-sense keeps the line powered until the snowball goes; a bat then does not hold it, an arrow does" }));
+}
 
 // ---- Native run ----
 const researchDirs = [process.env.MC_RESEARCH, path.join(root, "research"), path.join(root, "../../tools/research")].filter(Boolean);
@@ -155,7 +218,7 @@ async function library(prefix) {
   }
   throw new Error(`Missing ${prefix}*.jar; list library JARs in MC_PROBE_LIBS.`);
 }
-const libs = await Promise.all(["guava-", "log4j-api-", "commons-lang3-", "netty-all-"].map(library));
+const libs = await Promise.all(["guava-", "log4j-api-", "commons-lang3-", "netty-all-", "authlib-"].map(library));
 const classes = path.join(out, "classes");
 await rm(classes, { recursive: true, force: true });
 await mkdir(classes, { recursive: true });
@@ -164,7 +227,7 @@ const probe = path.join(out, "probe");
 await rm(probe, { recursive: true, force: true });
 await mkdir(probe, { recursive: true });
 const cp = [probe, classes, ...libs].join(path.delimiter);
-await exec("javac", ["-nowarn", "-cp", cp, "-d", probe, path.join(root, "probes/RedstoneProbe.java")]);
+await exec("javac", ["-nowarn", "-cp", cp, "-d", probe, path.join(root, "probes/RedstoneProbe.java"), path.join(root, "probes/TripwireHolder.java")]);
 const input = SCENARIOS.map((s) => `scenario ${s.name} ${s.origin.join(" ")} ${s.size.join(" ")} ${s.ticks} ${s.seed} ${s.sky} ${s.skylightSubtracted} ${s.angle} ${s.noSky ? 1 : 0}\ngrid ${s.grid}\n${s.events.map((e) => `event ${e.join(" ")}`).join("\n")}\n`).join("");
 const child = spawn("java", ["-cp", cp, "RedstoneProbe"], { stdio: ["pipe", "pipe", "pipe"] });
 let stdout = "", stderr = "";
@@ -208,6 +271,20 @@ for (const [i, native] of lines.entries()) {
   const { kind, name, tiles, ...rest } = native;
   results.push({ ...s, ...rest });
 }
+// javap check: which entity classes reach Entity.func_145775_I (sa.I) from their own code. sa.d is moveEntity.
+const { stdout: javapOut } = await exec("javap", ["-p", "-c", "-cp", classes, ...["sa", "zc", "zk", "zj", "zl", "zm", "zn", "zo", "xk", "xl", "xs", "xw", "xj", "xi", "sq", "zf", "zg", "we"]], { maxBuffer: 1 << 26 });
+const collisionCallers = {};
+for (const chunk of javapOut.split(/\n(?=(?:public |final |abstract )*class )/)) {
+  const m = /class (\w+)/.exec(chunk);
+  if (!m) continue;
+  collisionCallers[m[1]] = { doBlockCollisions: /Method (?:\w+\.)?I:\(\)V/.test(chunk), moveEntity: /Method (?:\w+\.)?d:\(DDD\)V/.test(chunk) };
+}
+assert.ok(collisionCallers.sa.doBlockCollisions && collisionCallers.zc.doBlockCollisions && collisionCallers.xk.moveEntity);
+assert.ok(!collisionCallers.zk.doBlockCollisions && !collisionCallers.zk.moveEntity && !collisionCallers.zg.moveEntity, "EntityThrowable and fireballs never collide with blocks");
+assert.equal(blocks.tripwireEntities.tickRandomly[131], true);
+assert.equal(blocks.tripwireEntities.tickRandomly[132], true);
+assert.equal(blocks.tripwireEntities.tickRandomly[1], false);
+assert.deepEqual(Object.entries(blocks.tripwireEntities.ignoresPlates).filter(([, v]) => v).map(([k]) => k), ["bat"]);
 const digest = async (name) => createHash("sha256").update((await exec("unzip", ["-p", jar, name + ".class"], { encoding: "buffer", maxBuffer: 1 << 24 })).stdout).digest("hex");
 const names = { aog: "BlockTripWireHook", aof: "BlockTripWire", ahb: "World", apx: "Chunk", ahs: "NextTickListEntry", aji: "Block" };
 const reference = {
@@ -215,7 +292,9 @@ const reference = {
   clientSha1,
   classes: Object.fromEntries(await Promise.all(Object.entries(names).map(async ([c, n]) => [c, { name: n, sha256: await digest(c) }]))),
   method:
-    "Same harness as redstone-reference.json (RedstoneProbe: real World/Chunk, copied WorldServer pending ticks, recorded sounds/drops, scripted entity list with strict AABB intersection). Native BlockTripWireHook and BlockTripWire run unchanged. Events: place (setBlock flags 3), place2 (flags 2), placehook (setBlock flags 3 then Block.onPostBlockPlaced(meta), as ItemBlock.placeBlockAt), air, entity (0 item, 1 mob, 2 player: 0.25 box on the cell floor), unentity, collide (onEntityCollidedWithBlock, null entity), notify. Not probed: shears disarm (onBlockHarvested), selection bounds, random ticks. Per tick: changed region cells, call log (E event, s setBlock, m setBlockMetadataWithNotify, n notify, t schedule, u updateTick, p sound, e drop, T tick), sounds, drops, pending ticks, world Random nextInt.",
+    "Same harness as redstone-reference.json (RedstoneProbe: real World/Chunk, copied WorldServer pending ticks, recorded sounds/drops, scripted entity list with strict AABB intersection). Native BlockTripWireHook and BlockTripWire run unchanged. Events: place (setBlock flags 3), place2 (flags 2), placehook (setBlock flags 3 then Block.onPostBlockPlaced(meta), as ItemBlock.placeBlockAt), air, entity (0 item, 1 mob, 2 player: 0.25 box on the cell floor), unentity, collide (onEntityCollidedWithBlock, null entity), notify. Batch 17 events: entity2 (kinds 0 item, 1 mob, 2 player, 3 arrow, 4 snowball, 5 egg, 6 ender pearl, 7 thrown potion, 8 bat: real class instances), unentity2 (by kind), harvest (Block.onBlockHarvested with a TripwireHolder player: 0 empty hand, 1 shears, 2 stick), randomtick (Block.updateTick with the world Random). Not probed: selection bounds, Entity.func_145775_I call sites (bytecode-read; javap-checked below). Per tick: changed region cells, call log (E event, s setBlock, m setBlockMetadataWithNotify, n notify, t schedule, u updateTick, p sound, e drop, T tick), sounds, drops, pending ticks, world Random nextInt.",
+  tripwireEntities: blocks.tripwireEntities,
+  collisionCallers,
   scenarios: results,
 };
 await writeFile(path.join(root, "../public/research/tripwire-reference.json"), JSON.stringify(reference) + "\n");

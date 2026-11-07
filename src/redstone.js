@@ -35,7 +35,7 @@
 // public/research/piston-reference.json, replayed by src/pistons.test.js. Not ported: entity
 // pushing by TileEntityPiston (scripted entity list stays empty), creative-mode head harvest,
 // daylight refresh scheduling, powered rails/doors/TNT/
-// note blocks and unported inventory block behaviors, entity physics, random ticks, lighting,
+// note blocks and unported inventory block behaviors, entity physics, most random ticks (tripwire blocks only), lighting,
 // rendering. This module is not wired into the live game.
 import { JavaRandom } from "./java-random.js";
 
@@ -428,6 +428,10 @@ export class RedstoneWorld {
       this.behaviours[id]?.updateTick?.(this, e.x, e.y, e.z);
     }
   }
+  // WorldServer.func_147456_g: a random tick is Block.updateTick (no scheduled-tick log line, no TickNextTick bookkeeping).
+  randomTick(x, y, z) {
+    this.behaviours[this.getBlock(x, y, z)]?.updateTick?.(this, x, y, z);
+  }
   pendingTicks() {
     return this.tree.map((e) => ({ ...e }));
   }
@@ -449,10 +453,12 @@ export class RedstoneWorld {
   // World.getEntitiesWithinAABB over the scripted list. `mode` is the class asked for: "all"
   // (Entity), "living" (EntityLivingBase: mobs and players) or "player". The boxes intersect
   // with AxisAlignedBB.intersectsWith (strict on every axis).
+  // "tripwire" is BlockTripWire.func_150140_e's list: every entity but those whose class answers true to
+  // doesEntityNotTriggerPressurePlate (EntityBat only, probed).
   getEntities(mode, [x0, y0, z0, x1, y1, z1]) {
     return this.entities.filter(
       (e) =>
-        (mode === "all" || (mode === "living" && e.kind !== "item" && e.kind !== "minecart") || (mode === "player" && e.kind === "player") || (mode === "minecart" && e.kind === "minecart") || (mode === "inventory" && e.kind === "minecart" && e.signal !== undefined)) &&
+        (mode === "all" || (mode === "tripwire" && e.kind !== "bat") || (mode === "living" && !NON_LIVING_KINDS.has(e.kind)) || (mode === "player" && e.kind === "player") || (mode === "minecart" && e.kind === "minecart") || (mode === "inventory" && e.kind === "minecart" && e.signal !== undefined)) &&
         e.box[3] > x0 &&
         e.box[0] < x1 &&
         e.box[4] > y0 &&
@@ -1823,6 +1829,7 @@ const tnt = (() => {
 // classes; the entity-free paths are probed (tools/verify-tripwire.mjs). The string's sensing box uses the
 // constructor bounds (y 0..0.15625); the native singleton's bounds drift with the last
 // setBlockBoundsBasedOnState call (a client/selection quirk) and are not modelled.
+export const NON_LIVING_KINDS = new Set(["item", "minecart", "arrow", "snowball", "egg", "enderPearl", "potion"]);
 const hookCell = (w, x, y, z) => {
   const l = w.getBlockMetadata(x, y, z) & 3;
   return [x + (l === 3 ? -1 : l === 1 ? 1 : 0), z + (l === 0 ? -1 : l === 2 ? 1 : 0)];
@@ -1961,7 +1968,7 @@ function tripwireNotifyHooks(w, x, y, z, meta) {
 function tripwireSense(w, x, y, z) {
   let meta = w.getBlockMetadata(x, y, z);
   const was = (meta & 1) > 0,
-    active = w.getEntities("all", [x, y, z, x + 1, y + 0.15625, z + 1]).length > 0;
+    active = w.getEntities("tripwire", [x, y, z, x + 1, y + 0.15625, z + 1]).length > 0;
   if (active && !was) meta |= 1;
   if (!active && was) meta &= -2;
   if (active !== was) {
@@ -1986,6 +1993,10 @@ const tripwire = {
   breakBlock(w, x, y, z, old, meta) {
     tripwireNotifyHooks(w, x, y, z, meta | 1);
   },
+  // BlockTripWire.onBlockHarvested: a player holding shears disarms the string (metadata |8, flags 4) just before it breaks.
+  onBlockHarvested(w, x, y, z, meta, shears) {
+    if (shears) w.setBlockMetadataWithNotify(x, y, z, meta | 8, 4);
+  },
   onEntityCollidedWithBlock(w, x, y, z) {
     if ((w.getBlockMetadata(x, y, z) & 1) === 1) return;
     tripwireSense(w, x, y, z);
@@ -1996,6 +2007,7 @@ const tripwire = {
   },
 };
 
+const TRIPWIRE_KINDS = ["item", "mob", "player", "arrow", "snowball", "egg", "enderPearl", "potion", "bat"];
 const BEHAVIOUR = {
   [TNT]: tnt,
   [WOODEN_DOOR]: door(WOODEN_DOOR),
@@ -2096,7 +2108,16 @@ export function replayScenario(s, make = (options) => new RedstoneWorld(options)
         // BlockCauldron.func_150024_a(setWaterLevel): clamp 0..3, metadata flags 2, then the comparator update.
         w.setBlockMetadataWithNotify(x, y, z, Math.min(Math.max(id, 0), 3), 2);
         w.updateNeighbourForOutputSignal(x, y, z, CAULDRON);
-      } else if (op === "entity") {
+      } else if (op === "entity2") {
+        // Entity classes of the tripwire probe: 0 item, 1 mob, 2 player, 3 arrow (0.5 box), 4 snowball, 5 egg, 6 ender pearl, 7 thrown potion, 8 bat.
+        const kind = TRIPWIRE_KINDS[id],
+          r = id === 3 ? 0.25 : 0.125,
+          h = id === 3 ? 0.5 : 0.25;
+        w.entities.push({ kind, cell: [x, y, z], box: [x + 0.5 - r, y, z + 0.5 - r, x + 0.5 + r, y + h, z + 0.5 + r] });
+      } else if (op === "harvest") w.behaviours[w.getBlock(x, y, z)]?.onBlockHarvested?.(w, x, y, z, w.getBlockMetadata(x, y, z), id === 1);
+      else if (op === "unentity2") w.entities = w.entities.filter((e) => !(e.cell[0] === x && e.cell[1] === y && e.cell[2] === z && e.kind === TRIPWIRE_KINDS[id]));
+      else if (op === "randomtick") w.randomTick(x, y, z);
+      else if (op === "entity") {
         // Scripted entity standing in cell (x, y, z): 0.25-wide box at the cell centre, on the floor.
         const kind = ["item", "mob", "player"][id];
         w.entities.push({ kind, cell: [x, y, z], box: [x + 0.375, y, z + 0.375, x + 0.625, y + 0.25, z + 0.625] });

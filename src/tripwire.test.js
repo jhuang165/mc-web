@@ -9,7 +9,7 @@ const f32 = Math.fround;
 
 test("tripwire reference was recorded against the pinned client", () => {
   assert.equal(reference.clientSha1, "e80d9b3bf5085002218d4be59e668bac718abbc6");
-  assert.ok(reference.scenarios.length >= 16);
+  assert.ok(reference.scenarios.length >= 33);
 });
 
 for (const s of reference.scenarios)

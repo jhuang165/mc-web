@@ -59,18 +59,26 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     }
     return out;
   };
+  // Modes beyond the plates': "tripwire" (BlockTripWire.func_150140_e: all entities but EntityBat, whose class answers true to
+  // doesEntityNotTriggerPressurePlate) and "collider" (the entities that reach Entity.func_145775_I and so call
+  // onEntityCollidedWithBlock: not thrown snowballs/eggs/pearls/potions, not an arrow stuck in a block). Probed in
+  // tripwire-reference.json (tripwireEntities, collisionCallers).
   const entitiesIn = (box, mode) => {
     if (mode === "minecart" || mode === "inventory") return cartsIn(box, mode);
+    const tripwire = mode === "tripwire" || mode === "collider", collider = mode === "collider";
+    if (tripwire) mode = "all";
     const out = [], p = game.player?.();
     if (p && p.alive !== false && inside(pushBox(p.position, p.width ?? 0.6, p.height ?? 1.8), box)) out.push(p);
     const mobs = game.mobs?.();
     for (const e of mobs?.entities ?? []) {
-      if (!(e.health > 0) || !ENTITY_TYPES[e.type]) continue;
+      if (!(e.health > 0) || !ENTITY_TYPES[e.type] || (tripwire && e.type === "bat")) continue;
       if (inside(pushBox(e, ...mobs.size(e)), box)) out.push(e);
     }
     if (mode !== "all") return out;
     for (const e of game.items?.() ?? []) if (inside([e.x - ITEM_HALF, e.y, e.z - ITEM_HALF, e.x + ITEM_HALF, e.y + ITEM_SIZE, e.z + ITEM_HALF], box)) out.push(e);
-    for (const e of game.arrows?.() ?? []) if (!e.dead && inside([e.x - ARROW_HALF, e.y, e.z - ARROW_HALF, e.x + ARROW_HALF, e.y + ARROW_SIZE, e.z + ARROW_HALF], box)) out.push(e);
+    if (tripwire && !collider)
+      for (const e of game.thrown?.() ?? []) if (!e.dead && inside([e.x - ITEM_HALF, e.y, e.z - ITEM_HALF, e.x + ITEM_HALF, e.y + ITEM_SIZE, e.z + ITEM_HALF], box)) out.push(e);
+    for (const e of game.arrows?.() ?? []) if (!e.dead && !(collider && e.inGround) && inside([e.x - ARROW_HALF, e.y, e.z - ARROW_HALF, e.x + ARROW_HALF, e.y + ARROW_SIZE, e.z + ARROW_HALF], box)) out.push(e);
     for (const e of game.orbs?.() ?? []) if (e.bb && inside(e.bb, box)) out.push(e);
     for (const e of game.primed?.() ?? []) if (inside([e.x - TNT_HALF, e.y, e.z - TNT_HALF, e.x + TNT_HALF, e.y + TNT_SIZE, e.z + TNT_HALF], box)) out.push(e);
     out.push(...cartsIn(box, "minecart"));
@@ -257,7 +265,15 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     }
     flush();
   };
+  // WorldServer random tick of a tripwire hook or string (both Block.tickRandomly): updateTick, true when it was one of them.
+  const randomTick = (x, y, z, b) => {
+    if (b !== 113 && b !== 114) return false;
+    redstone.randomTick(x, y, z);
+    flush();
+    return true;
+  };
   return {
+    randomTick,
     redstone,
     pistons,
     commandBlocks,

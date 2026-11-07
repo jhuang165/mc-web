@@ -9,6 +9,7 @@ import { populateTail } from "./population-tail.js";
 import { StructurePopulation } from "./structure-population.js";
 import { randomLong } from "./structure-framework.js";
 import { POWER_SOURCES } from "./mineshaft-world.js";
+import { StructureRedstone } from "./structure-redstone.js";
 
 const SIDE_DX = [0, 0, 0, 0, -1, 1], SIDE_DY = [-1, 1, 0, 0, 0, 0], SIDE_DZ = [0, 0, -1, 1, 0, 0];
 // Jungle temple redstone (sticky piston, wire, lever, repeater, tripwire hook and wire). With relaxRedstone
@@ -46,7 +47,7 @@ export class StructurePopulationArea {
       // BlockDoor (64 wooden, 71 iron) onNeighborBlockChange as ItemDoor.func_150924_a triggers it: the
       // neighbour is the door itself, so only the support checks and the power reads run.
       neighborChanged(id, x, y, z, source) {
-        if (area.relaxRedstone && REDSTONE_PUZZLE.has(id)) return undefined;
+        if (REDSTONE_PUZZLE.has(id)) return area.relaxRedstone ? undefined : area.redstone.behaviours[id]?.onNeighborBlockChange?.(area.redstone, x, y, z, source);
         if (id !== 64 && id !== 71) return super.neighborChanged(id, x, y, z, source);
         const meta = this.getBlockMetadata(x, y, z);
         if ((meta & 8) === 0) {
@@ -103,7 +104,8 @@ export class StructurePopulationArea {
       }
       blockAdded(id, x, y, z) {
         // BlockContainer.onBlockAdded is only its super call; BlockFlowerPot adds nothing.
-        if (id === 140 || (area.relaxRedstone && REDSTONE_PUZZLE.has(id))) return undefined;
+        if (id === 140) return undefined;
+        if (REDSTONE_PUZZLE.has(id)) return area.relaxRedstone ? undefined : area.redstone.behaviours[id]?.onBlockAdded?.(area.redstone, x, y, z);
         // BlockTNT.onBlockAdded: a powered TNT block would prime itself; none is reachable in these structures.
         if (id === 46) { if (this.indirectlyPowered(x, y, z)) throw new Error("structure TNT power is unported"); return undefined; }
         if (id === 23 || id === 61 || id === 62) return this.containerFacing(x, y, z);
@@ -111,7 +113,8 @@ export class StructurePopulationArea {
       }
       // BlockButton.breakBlock only acts on a powered (metadata bit 8) button.
       breakBlock(id, x, y, z, meta) {
-        if ((id === 77 && (meta & 8) === 0) || (area.relaxRedstone && REDSTONE_PUZZLE.has(id))) return undefined;
+        if (id === 77 && (meta & 8) === 0) return undefined;
+        if (REDSTONE_PUZZLE.has(id)) return area.relaxRedstone ? undefined : area.redstone.behaviours[id]?.breakBlock?.(area.redstone, x, y, z, id, meta);
         return super.breakBlock(id, x, y, z, meta);
       }
       spawnEntity(e) {
@@ -120,6 +123,7 @@ export class StructurePopulationArea {
       }
     })({ rand: new JavaRandom(worldRandSeed), terrain });
     this.world.biomeAt = (x, z) => manager.biomeAt(x, z);
+    this.redstone = new StructureRedstone(this.world);
     // This standalone structure fixture only needs callback behavior for these
     // structure blocks. Their native placements have no observable added/broken
     // side effects in the checked worlds; ordered writes and final chunks below
