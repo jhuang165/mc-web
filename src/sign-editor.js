@@ -40,7 +40,8 @@ export function openSignEditor(host, signs, tile, world) {
   image.src = versioned(SIGN_TEXTURE);
   host.show(
     SIGN_TEXT.edit,
-    `<div style="display:flex;flex-direction:column;align-items:center;gap:calc(8*var(--u))"><canvas id="sign-edit-canvas" width="${L.boardGui * G}" height="${(L.boardGui / 2 + (standing ? (14 * L.boardGui) / 24 : 0)) * G}" style="width:calc(${L.boardGui}*var(--u));image-rendering:pixelated"></canvas><button class="button" id="sign-edit-done" style="width:calc(200*var(--u));height:calc(20*var(--u))">${SIGN_TEXT.done}</button></div>`,
+    `<div style="display:flex;flex-direction:column;align-items:center;gap:calc(8*var(--u))"><canvas id="sign-edit-canvas" width="${L.boardGui * G}" height="${(L.boardGui / 2 + (standing ? (14 * L.boardGui) / 24 : 0)) * G}" style="width:calc(${L.boardGui}*var(--u));image-rendering:pixelated"></canvas></div>`,
+    { done: () => finish() }, // the Done button is the native GuiButton drawn by the host (GuiEditSign: gui.done at h/4 + 120)
   );
   const canvas = document.getElementById('sign-edit-canvas'), ctx = canvas.getContext('2d');
   let ticks = 0;
@@ -62,7 +63,6 @@ export function openSignEditor(host, signs, tile, world) {
     paint();
   };
   window.addEventListener('keydown', onKey, true);
-  document.getElementById('sign-edit-done').onclick = finish;
   image.onload = paint;
   const offAtlas = onAtlasChange(paint);
   paint();

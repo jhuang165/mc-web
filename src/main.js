@@ -21,7 +21,7 @@ import { createMenus } from "./menus.js";
 import { commandBlockScreen } from "./command-block-screen.js";
 import { folderName, LANG, t as langT } from "./menu-screens.js";
 import { initResourcePacks } from "./resource-packs.js";
-import { worldDifficulty, gameOverView, deleteWorldStorage, HARDCORE_KICK, GAME_OVER_ENABLE_TICKS } from "./hardcore.js";
+import { worldDifficulty, deleteWorldStorage, HARDCORE_KICK } from "./hardcore.js";
 import { importSaveFolder, entriesFromFileList, entriesFromDirectoryHandle, indexSave } from "./save-folder-import.js";
 import { importWholeSave, regionFiles } from "./whole-save-import.js";
 import { canGoEndless, endlessCopy } from "./endless-world.js";
@@ -253,6 +253,8 @@ import { applyHangingEdit } from "./hanging-interaction.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
 import { startLoading, setStage, STAGES, loadingScreen, errorScreen, nextPaint, SpawnAreaLog } from "./loading-screen.js";
+import { gameOverScreen, exportScreen, notesScreen, signEditHost } from "./modal-dialogs.js";
+import { NOTES } from "./notes-content.js";
 import { presolveSpawn } from "./spawn-presolve.js";
 import "./lang-hooks.js";
 import { loadLanguageManifest, selectLanguage, setForceUnicodeFont } from "./lang.js";
@@ -723,12 +725,11 @@ function modal(title, body, extra = "") {
   };
   $("#modal").querySelector("button,input")?.focus();
 }
+// Port-only build notes (no 1.7.10 screen, no trigger element in index.html today): glyph text on a Gui screen.
 function notes() {
-  modal(
-    "Rebuilding 1.7.10, system by system.",
-    `<p class="modal-subtitle">Minecraft Java 1.7.10 is the compatibility target. Full parity is still unfinished.</p><div class="notes"><span class="note-tag">VERIFIED AGAINST BYTECODE</span><p>REA inventories the original JAR. MCP mappings and javap locate the original movement, FoodStats, crafting, furnace, and world-clock implementations.</p><div class="facts"><div><b>20 Hz</b><span>Physics ticks</span></div><div><b>200</b><span>Ticks / smelt</span></div><div><b>24,000</b><span>Ticks / day</span></div></div><span class="note-tag">IMPLEMENTED IN THIS BUILD</span><p>Creative and Survival, health, hunger, saturation, exhaustion, experience orbs/levels, regeneration, fall damage, drowning, death and recoverable inventory drops. Broken blocks, mob kills and thrown stacks drop item entities that fall, merge and are picked up. The Java 36-slot inventory with cursor, drag-splitting, shift- and double-click rules; shaped crafting, a crafting table, a fuel-driven furnace and single/large chests on real slots; the tabbed creative inventory with search; wood, stone, iron, diamond and gold tools with per-item durability and repair; leather, chain, iron, gold and diamond armor. Original 1.7.10 block/item textures, HUD sprites, sun, moon and sound effects; hand swings, equip transitions, bobbing, eating, animated water, crack frames and entity shadows. Pigs, cows, sheep, chickens and night-time zombies with 1.7.10 movement, knockback, pathfinding and AI task lists, melee combat with sprint knockback and critical hits, and food drops. Cows and sheep follow wheat and breed, pigs follow carrots and breed, chickens follow seeds and lay eggs; sheep graze, can be sheared and dyed. Sneaking slows you, lowers the view and stops you at edges. Flowing water and lava spread, mix into obsidian, cobblestone and stone, and lava burns players, mobs and items; buckets pick up and place liquids and milk cows; lakes and springs generate; flowers grow and craft into 16 dyes for wool; snowballs and eggs can be thrown; ladders can be placed and climbed; F5 shows the player model with armor. Rain and thunderstorms follow the original weather timers, darken the sky and light, and bring lightning that strikes and starts fires; fire spreads through wood, wool and leaves and is lit with flint and steel. The Snowy Tundra landscape has snowfall, snow layers and ice. Bows draw and fire arrows, and skeletons shoot back at night and burn by day. Oak saplings grow into trees, with bone meal or over time, and leaves decay and drop saplings and apples. Java worlds now use the original biome layers, terrain surfaces, caves and ravines at 256-block height; new Java worlds also generate mineshafts with cave-spider spawners and chest minecarts; ores, trees, lakes, dungeons, biome plants, animals and snow now generate too. Villages, strongholds and temples remain unfinished. Legacy landscapes keep their existing decoration. Torches; 1.7.10 sky/block light, smooth lighting, lightmap, sky, stars, fog and fancy clouds. Wheat, carrot and potato farming with five hoe tiers, moisture, eight growth stages, bone meal and harvesting; bread crafting and baked potatoes. Zombies rarely drop carrots, potatoes or iron when killed after a player hit. Creepers and TNT explode with block shielding, entity knockback, original puff/smoke effects and item drops; burning arrows light TNT and its fuse emits smoke. Sugar cane and cactus grow, paper/sugar/books craft, and sand/gravel fall and can be deflected by explosions.</p><span class="note-tag">MAJOR GAPS REMAIN</span><p>Streamed population and remaining Java structures, the complete block/item registry, most mobs and their full AI, other crops, advanced combat, enchantments, hoppers and other storage, redstone, dimensions, structures, other biomes, void fog, Java saves, and multiplayer. The renderer, terrain, entity AI and several interactions remain simplified. Original sounds and textures retain Mojang/Microsoft ownership.</p><div class="note-links"><a href="/research/textures-and-farming.md" target="_blank" rel="noopener">Textures & farming ↗</a><a href="/research/animations-and-sounds.md" target="_blank" rel="noopener">Animation & audio ↗</a><a href="/research/investigation.md" target="_blank" rel="noopener">Investigation ↗</a><a href="/research/items.md" target="_blank" rel="noopener">Item drops ↗</a><a href="/research/creative.md" target="_blank" rel="noopener">Creative inventory ↗</a><a href="/research/shadows.md" target="_blank" rel="noopener">Entity shadows ↗</a><a href="/research/fluids.md" target="_blank" rel="noopener">Flowing water ↗</a><a href="/research/third-person.md" target="_blank" rel="noopener">Third person ↗</a><a href="/research/sheep.md" target="_blank" rel="noopener">Sheep & wool ↗</a><a href="/research/projectiles.md" target="_blank" rel="noopener">Snowballs ↗</a><a href="/research/lava.md" target="_blank" rel="noopener">Lava ↗</a><a href="/research/buckets.md" target="_blank" rel="noopener">Buckets & lakes ↗</a><a href="/research/chickens.md" target="_blank" rel="noopener">Chickens & eggs ↗</a><a href="/research/dyes.md" target="_blank" rel="noopener">Flowers & dyes ↗</a><a href="/research/sneaking.md" target="_blank" rel="noopener">Sneaking & attacks ↗</a><a href="/research/pathfinding.md" target="_blank" rel="noopener">Pathfinding & AI ↗</a><a href="/research/weather.md" target="_blank" rel="noopener">Weather ↗</a><a href="/research/fire.md" target="_blank" rel="noopener">Fire ↗</a><a href="/research/snow.md" target="_blank" rel="noopener">Snow & ice ↗</a><a href="/research/bows.md" target="_blank" rel="noopener">Bows & skeletons ↗</a><a href="/research/crops.md" target="_blank" rel="noopener">Crops & pigs ↗</a><a href="/research/trees.md" target="_blank" rel="noopener">Saplings & trees ↗</a><a href="/research/ladders.md" target="_blank" rel="noopener">Ladders ↗</a><a href="/research/generation.md" target="_blank" rel="noopener">Java generation ↗</a><a href="/research/parity.md" target="_blank" rel="noopener">Feature coverage ↗</a><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA ↗</a></div></div>`,
-    "notes-modal",
-  );
+  if (document.pointerLockElement) document.exitPointerLock();
+  if (screen === "playing") screen = "paused";
+  gui.show(notesScreen({ notes: NOTES, openLink: (url) => window.open(url, "_blank", "noopener"), back: () => (screen === "home" ? gui.show(menus.mainMenu()) : pause()) }));
 }
 // GameSettings.setOptionValue / setOptionFloatValue: apply a change from the menu screens and
 // save the device preferences (options.txt).
@@ -945,23 +946,19 @@ async function exportWorld(record = active) {
 let openingWorld=false, exportBusy=false;
 function chooseExport(record=active) {
   if(exportBusy)return;
-  gui.hide();
-  const back=()=>{closeModal();if(screen==='home')gui.show(menus.selectWorld());else pause();};
-  modal('Export World', '<p>Keep a browser backup, or download a Java 1.7.10 save with region files and conversion notes.</p><div class="menu-actions"><button class="button primary full" id="export-browser">Browser backup (.json)</button><button class="button secondary full" id="export-java">Java 1.7.10 save (.zip)</button></div>');
-  $('#modal .close-button').onclick=back;
-  $('#export-browser').onclick=()=>{back();exportWorld(record);};
-  $('#export-java').onclick=async()=>{
-    exportBusy=true;
-    const buttons=$('#modal').querySelectorAll('button');for(const b of buttons)b.disabled=true;
-    try {
+  // Port-only dialog (no 1.7.10 screen): modal-dialogs.js exportScreen, drawn with the FontRenderer glyphs.
+  const back=()=>{if(screen==='home')gui.show(menus.selectWorld());else pause();};
+  gui.show(exportScreen({
+    back, busy: (on) => { exportBusy = on; }, notice: toast,
+    browser: () => { back(); exportWorld(record); },
+    java: async (progress) => {
       const snapshot = await exportSnapshot(record);
       const {exportJavaSave}=await import('./region-export.js');
-      const result=await exportJavaSave(snapshot,{readBases:readBaseColumns,maxChunks:snapshot.wholeSave?16384:4096,onProgress:(n,total)=>{$('#export-java').textContent=`Exporting ${n} / ${total} columns…`;}});
+      const result=await exportJavaSave(snapshot,{readBases:readBaseColumns,maxChunks:snapshot.wholeSave?16384:4096,onProgress:progress});
       const url=URL.createObjectURL(new Blob([result.zip],{type:'application/zip'})),a=document.createElement('a');a.href=url;a.download=record.name.replace(/[^a-z0-9]/gi,'-').toLowerCase()+'.java-1.7.10.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-      back();toast(`Java save exported (${result.report.columns} columns). Unzip it into the Java saves folder; conversion notes are included.`);
-    }catch(e){toast('Could not export Java save: '+e.message);for(const b of buttons)b.disabled=false;$('#export-java').textContent='Java 1.7.10 save (.zip)';}
-    finally{exportBusy=false;}
-  };
+      return `Java save exported (${result.report.columns} columns). Unzip it into the Java saves folder; conversion notes are included.`;
+    },
+  }));
 }
 function requestLock() {
   if (screen !== "playing") return;
@@ -2289,50 +2286,27 @@ function die() {
   const deathScore=experience.score;if(keep){const dropped=experience.death();if(gameRule("doMobLoot"))xpOrbs.spawn(dropped,position);}
   renderHotbar();renderVitals();$("#block-label").classList.remove("visible");
   save();
+  gameOverScore = deathScore;
+  showGameOver();
+}
+// GuiGameOver (modal-dialogs.js): the death screen and its GuiYesNo quit question are Gui screens, not DOM dialogs.
+let gameOverScore = 0;
+function showGameOver() {
+  keys.clear();
+  if (document.pointerLockElement) document.exitPointerLock();
   const hardcore = active?.hardcore === true;
-  if (hardcore) { // GuiGameOver (hardcore.js): "Game over!", the hardcore info line and a single "Delete world" button
-    const view = gameOverView(true);
-    modal(
-      langT(view.titleKey),
-      `<p class="death-score">${langT("deathScreen.score")}: <span>${deathScore}</span></p><p class="death-score" style="top:calc(25% + 92px)">${langT(view.infoKey)}</p><div class="menu-actions"><button class="button secondary full" id="death-delete">${langT(view.buttons[0].key)}</button></div>`,
-      'death-modal',
-    );
-    $("#modal .close-button").hidden = true;
-    const button = $("#death-delete");
-    button.disabled = true;
-    setTimeout(() => { if (screen === 'dead') button.disabled = false; }, GAME_OVER_ENABLE_TICKS * 50);
-    button.onclick = () => {
-      // GuiYesNo("Are you sure you want to quit?", "", "Title screen", "Respawn"): Title screen only leaves, Respawn makes the
-      // server kick the player and delete the world (NetHandlerPlayServer.processClientStatus).
-      modal(
-        langT("deathScreen.quit.confirm"),
-        `<div class="menu-actions"><button class="button secondary full" id="death-quit-title">${langT("deathScreen.titleScreen")}</button><button class="button secondary full" id="death-quit-delete">${langT("deathScreen.respawn")}</button></div>`,
-        'death-modal',
-      );
-      $("#modal .close-button").hidden = true;
-      $("#death-quit-title").onclick = () => leaveToTitle(true);
-      $("#death-quit-delete").onclick = async () => {
-        const record = active;
-        $("#death-quit-delete").disabled = true;
-        $("#death-quit-title").disabled = true;
-        leaveToTitle(false);
-        await deleteWorld(record);
-        toast(HARDCORE_KICK);
-      };
-    };
-    return;
-  }
-  modal(
-    "You died!",
-    `<p class="death-score">Score: <span>${deathScore}</span></p><div class="menu-actions"><button class="button primary full" id="respawn">Respawn</button><button class="button secondary full" id="death-home">Title screen</button></div>`,
-    'death-modal',
-  );
-  $("#modal .close-button").hidden = true;
-  const deathButtons=[$('#respawn'),$('#death-home')];for(const button of deathButtons)button.disabled=true;setTimeout(()=>{if(screen==='dead')for(const button of deathButtons)button.disabled=false;},1000);
-  $("#respawn").onclick = async () => {
-    for(const button of deathButtons)button.disabled=true;
+  gui.show(gameOverScreen({
+    hardcore, score: gameOverScore, show: (s) => gui.show(s), again: showGameOver, isDead: () => screen === "dead",
+    respawn: respawnPlayer,
+    leave: () => leaveToTitle(true),
+    // GuiGameOver.confirmClicked(false): Respawn. In a hardcore world the server kicks the player and deletes the world
+    // (NetHandlerPlayServer.processClientStatus).
+    confirmNo: hardcore ? async () => { const record = active; leaveToTitle(false); await deleteWorld(record); toast(HARDCORE_KICK); } : respawnPlayer,
+  }));
+}
+async function respawnPlayer() {
     if (dimensionOf(active)) { // died in the Nether/End: back to the Overworld, then the usual respawn below
-      if (await dims.leaveByDeath()) setTimeout(() => $("#respawn")?.onclick?.(), 0); else for(const button of deathButtons)button.disabled=false;
+      if (await dims.leaveByDeath()) await respawnPlayer();
       return;
     }
     try {
@@ -2368,9 +2342,6 @@ function die() {
     resume();
     save();
     } catch(e) {toast('Could not load the respawn area. Reopen the world to retry: '+e.message);}
-    finally {if(screen==='dead')for(const button of deathButtons)button.disabled=false;}
-  };
-  $("#death-home").onclick = goHome;
 }
 // One weather tick: timers, lightning (flash, damage, sound) and the client's rain
 // splashes and rain sound (see weather.js).
@@ -2759,7 +2730,7 @@ function edit(place = false) {
     useAnvil: key => { useAnvil(key); syncContainerState(); },
     useBeacon: key => { useBeacon(key); syncContainerState(); },
     useBed,
-    openSignEditor: (tile) => { screen = "inventory"; mining = null; mineHeld = false; openSignEditor({ show: (title, html) => modal(title, html), close: resume, markUnsaved: () => { saved = false; } }, signs, tile, world); syncContainerState(); },
+    openSignEditor: (tile) => { screen = "inventory"; mining = null; mineHeld = false; openSignEditor(signEditHost(gui, { close: resume, markUnsaved: () => { saved = false; } }), signs, tile, world); syncContainerState(); },
     // GuiScreenBook (book-ui.js); MC|BEdit / MC|BSign are applied to the selected stack as NetHandlerPlayServer does.
     openBook: (held) => { if (!held) return; screen = "inventory"; mining = null; mineHeld = false; openBookUi({ show: (title, html) => modal(title, html, "book-modal"), close: () => { resume(); renderHotbar(); }, markUnsaved: () => { saved = false; } }, { stack: held, editable: held.id === ITEM_WRITABLE_BOOK, playerName: PLAYER_NAME, send: (channel, packet) => { (channel === "MC|BSign" ? applyBookSign : applyBookEdit)(survival.held, packet, PLAYER_NAME); renderHotbar(); } }); syncContainerState(); },
     useCommandBlock: openCommandBlock,
