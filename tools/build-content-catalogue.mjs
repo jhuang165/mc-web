@@ -5,6 +5,7 @@ import { MC_IDS } from './inventory-replay.mjs';
 import { SEARCH_ORDER } from '../src/creative.js';
 import { ITEMS } from '../src/survival.js';
 import { internalIdsFor } from '../src/block-registry.js';
+import { auditSentence } from './catalogue-audit.mjs';
 
 const research = new URL('../public/research/', import.meta.url);
 // --check runs every assertion (as src/content-catalogue.test.js does) without rewriting the catalogues.
@@ -82,6 +83,8 @@ Includes **${native.items.length} original item registrations** and **${stacks.l
 
 Browser IDs are \`internal ID:stack damage\`. The **${mapped.size} listed browser entries** are matched to exact Creative subtypes using the existing inventory/Creative mappings. Listed means Partial; it does not verify use, acquisition or persistence. Unmapped means the current evidence has no mapping, and requires review before declaring Missing; Missing means the browser build has no such item or variant (checked against src/survival.js). Technical rows are block-only registrations or unlisted items with their browser counterpart named. Enchanted-book NBT entries map by their exact StoredEnchantments text; no other NBT entry has a browser mapping. Creative is not an exhaustive catalogue of arbitrary NBT combinations, all potion values, durability states, firework configurations, map contents, or player-authored data. Those require separate semantic cases. No row is certified fully verified.
 
+${auditSentence(rows)} Browser-listed Creative entries are Partial by rule; Unmapped marks technical registrations with no browser block or item (audit date: batch 19, every Unmapped and Missing row re-checked against src/).
+
 ## Acceptance and dependencies
 
 Each row inherits the gates in its last column. Evidence here verifies native registration/subtype enumeration only; browser behavior remains an audit. Dependencies refer to [roadmap](parity-roadmap.md) work packages/milestones.
@@ -129,7 +132,7 @@ const E = {
   ThrownPotion: ['Partial', 'potions.md', 'thrown aim gaussian unseeded; potions in flight absent from region export'],
   ThrownExpBottle: ['Implemented', 'spawn-eggs.md', 'Bottle o\' Enchanting throw and XP'],
   ItemFrame: ['Partial', 'hanging-entities.md', 'no Java region import of hanging entities'],
-  WitherSkull: ['Partial', 'wither-boss.md', 'wither effect damage on non-player mobs not ticked'],
+  WitherSkull: ['Partial', 'wither-boss.md', 'skull impact, heal and wither DoT on mobs probed (b15)'],
   PrimedTnt: ['Implemented', 'creepers.md', 'explosion replay in explosion.md; TNT is never written to saves, as in 1.7.10'],
   FallingSand: ['Partial', 'anvil-blocks.md', 'falling.js sand/gravel/anvil/dragon egg; see scheduled-ticks tests'],
   FireworksRocketEntity: ['Partial', 'fireworks.md', 'block collisions approximate; moves with the particle mover'],
@@ -154,8 +157,8 @@ const E = {
   Silverfish: ['Partial', 'silverfish.md', 'sneak/invisibility range scaling not ported'],
   Blaze: ['Implemented', 'blaze-ghast.md', 'fortress spawners wired in fortress.md'],
   LavaSlime: ['Implemented', 'magma-pigman.md', ''],
-  EnderDragon: ['Partial', 'dragon.md', 'ModelDragon and the End-chunk spawn are bytecode-derived, not probed'],
-  WitherBoss: ['Partial', 'wither-boss.md', 'no spawn snow particles or achievement; target order differs'],
+  EnderDragon: ['Partial', 'dragon.md', 'parts hit by projectiles and explosions (probed explosions); ModelDragon and the End-chunk spawn are bytecode-derived, not probed'],
+  WitherBoss: ['Partial', 'wither-boss.md', 'target order approximated; head particles bytecode-read; spawn snow is a server no-op'],
   Bat: ['Partial', 'squid-bat.md', 'spawn caps probed; no seeded spawn replay reached a bat'],
   Witch: ['Partial', 'witch.md', 'witch hut list looked up only in swamp slots; silent (no asset index sounds)'],
   Pig: ['Implemented', 'pig-saddle.md', ''],
@@ -188,7 +191,9 @@ ${common}
 
 All **${native.entities.length} numeric EntityList registrations**, read from its complete map rather than inferred from spawn eggs. Native class names are obfuscated names from the pinned original JAR. Abstract entries are registrations, not independently spawnable creatures. Spawn-egg presence is native evidence only; the browser has spawn eggs for 24 mobs ([spawn eggs](spawn-eggs.md)).
 
-Status words (batch 11 audit): **Implemented** means the browser has the entity and the linked doc replays it against native probe records; it is never whole-feature verified, because natural spawning is a SpawnerAnimals port with the approximations in [natural spawning](natural-spawning.md) and each doc lists approximations. **Partial** names the specific gap. **Missing** was confirmed absent in src/. Per-mob gaps beyond the row text are in [remaining gaps](remaining-gaps.md).
+${auditSentence(entityRows)}
+
+Status words (batch 19 audit, every row re-read against src/ and the linked doc): **Implemented** means the browser has the entity and the linked doc replays it against native probe records; it is never whole-feature verified, because natural spawning is a SpawnerAnimals port with the approximations in [natural spawning](natural-spawning.md) and each doc lists approximations. **Partial** names the specific gap. **Missing** was confirmed absent in src/. Per-mob gaps beyond the row text are in [remaining gaps](remaining-gaps.md).
 
 Gate **E** depends on WORLD-01/SIM-01 plus player/combat, mob/spawning, transport, progression or dimensions as applicable. Each row requires native identity and variant metadata, dimensions, attributes, spawn/despawn/caps, movement/collision/fluids, AI/targets/interaction/equipment, damage/immunity/knockback/attribution, drops/rewards, render/animation/sound, save/unload/reload and cross-system acceptance cases. Partial links state current evidence and limitations; registry extraction verifies enumeration only.
 
@@ -218,6 +223,8 @@ ${common}
 
 All **${native.biomes.length} occupied BiomeGenBase registry slots**, including mutations. Slot ID and the object's declared biomeID are retained separately: native slot 161 holds Mega Spruce Taiga with declared ID 160. This is original observed registration behavior, not a deduplication error. Do not collapse those slots or derive the registry from display names.
 
+${auditSentence(biomeRows)} Every slot is Partial by rule (batch 19 audit): generation, spawn lists, tint/weather and decoration are probe-checked, per-biome gameplay is not.
+
 Gate **G** depends on WORLD-01/WORLD-02, original RNG/Java generation and relevant content/mob systems. Every row requires original biome selection/layers and seed/call order; temperature/rain/snow, height/noise/surface/blocks/metadata, terrain and biome boundaries, decorators/resources/trees/structures/population, spawn lists, colour/sky/weather and dimension rules; verify fixed seed samples under varied chunk-generation order and save/reload. Registry evidence alone verifies none of those behaviors. New Java worlds (generation 9 and later) run the ported biome layers, terrain, caves, population and structures; only the legacy custom landscapes (versions 1-8) are not mapped Java biomes. Natural mob spawning per biome uses the browser's adapted pass, not the biome spawn lists.
 
 | Registry slot | Declared biomeID | Native name | Native class | Status / evidence | Gate |
@@ -232,18 +239,20 @@ const R = {
   doDaylightCycle: ['Implemented', 'time advance gate'],
   doFireTick: ['Implemented', 'fire.js tick gate; lightning places no fire'],
   doMobLoot: ['Implemented', 'drops, death orbs and breeding experience'],
-  doMobSpawning: ['Partial', 'gates the SpawnerAnimals port ([natural spawning](natural-spawning.md)); live portal pigmen not called yet'],
+  doMobSpawning: ['Partial', 'gates the SpawnerAnimals port ([natural spawning](natural-spawning.md)) and the live Overworld portal pigman'],
   doTileDrops: ['Implemented', 'block drops'],
   keepInventory: ['Implemented', 'death handling'],
-  mobGriefing: ['Partial', 'creeper, farmland, eat grass, silverfish; absent-feature call sites (e.g. every wither/dragon site) not individually replayed'],
+  mobGriefing: ['RAW', 'Wired at all 11 native read sites (javap scan); [game rules](game-rules.md). Silverfish, dragon and door gates are probe-replayed; the loot, enderman, wither, skull and fireball gates are bytecode-read and unit-tested. Partial: not every site\'s surrounding behaviour is probed'],
   naturalRegeneration: ['Implemented', 'including the Peaceful heal check'],
 };
-const ruleRows = native.gamerules.map(r => { assert(R[r.name], r.name); return `| ${r.name} | ${r.defaultValue} | ${R[r.name][0]}; [game rules](game-rules.md), ${R[r.name][1]} | R |`; });
+const ruleRows = native.gamerules.map(r => { assert(R[r.name], r.name); return `| ${r.name} | ${r.defaultValue} | ${R[r.name][0] === 'RAW' ? R[r.name][1] : `${R[r.name][0]}; [game rules](game-rules.md), ${R[r.name][1]}`} | R |`; });
 await write('gamerule-parity-catalogue.md', `# Original default gamerule parity catalogue
 
 ${common}
 
 All **${native.gamerules.length} GameRules constructor defaults**, enumerated from the unchanged original object. Later-version gamerules are outside the target. The browser has a configurable gamerule store and \`/gamerule\` ([commands](commands.md), [game rules](game-rules.md)): every name can be set and read, the nine defaults are wired at the native call sites listed in game-rules-reference.json, and the active world record persists them. Rows below are never marked verified; effects are replayed in \`src/game-rules.test.js\`.
+
+${auditSentence(ruleRows)} (batch 19 audit: each rule's call sites re-read against game-rules.md.)
 
 Gate **R** depends on SIM-01, commands/world settings and each affected subsystem. For every key, execute original default and toggled-value scenarios, exact tick/update ordering and all relevant call sites (not just one obvious effect), command/query permissions/output, world save/import/export and multiplayer synchronization (out of scope). GameRules also supports arbitrary named string values; custom-key storage, string/boolean conversion and persistence are covered by the command tests.
 

@@ -6,6 +6,8 @@ Includes **315 original item registrations** and **606 Creative search entries**
 
 Browser IDs are `internal ID:stack damage`. The **606 listed browser entries** are matched to exact Creative subtypes using the existing inventory/Creative mappings. Listed means Partial; it does not verify use, acquisition or persistence. Unmapped means the current evidence has no mapping, and requires review before declaring Missing; Missing means the browser build has no such item or variant (checked against src/survival.js). Technical rows are block-only registrations or unlisted items with their browser counterpart named. Enchanted-book NBT entries map by their exact StoredEnchantments text; no other NBT entry has a browser mapping. Creative is not an exhaustive catalogue of arbitrary NBT combinations, all potion values, durability states, firework configurations, map contents, or player-authored data. Those require separate semantic cases. No row is certified fully verified.
 
+Status counts (batch 19 audit, 629 rows): 629 Partial. Browser-listed Creative entries are Partial by rule; Unmapped marks technical registrations with no browser block or item (audit date: batch 19, every Unmapped and Missing row re-checked against src/).
+
 ## Acceptance and dependencies
 
 Each row inherits the gates in its last column. Evidence here verifies native registration/subtype enumeration only; browser behavior remains an audit. Dependencies refer to [roadmap](parity-roadmap.md) work packages/milestones.
