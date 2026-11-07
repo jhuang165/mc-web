@@ -112,7 +112,7 @@ test("flowers are plants that break instantly, drop themselves and keep their sp
   assert.equal(TILES[blockTile(YELLOW_FLOWER, 0)], "flower_dandelion");
 });
 
-test("a flower stays only on grass, dirt or farmland with light", () => {
+test("a flower stays only on grass, dirt or farmland (1.7.10 BlockBush has no light rule)", () => {
   const w = new World("Flowers", "meadow", 3);
   const x = 40, z = 40, y = w.surface(x, z);
   for (let yy = y - 1; yy < 64; yy++) w.put(x, yy, z, yy === y - 1 ? 1 : 0, 0, false);
@@ -121,9 +121,7 @@ test("a flower stays only on grass, dirt or farmland with light", () => {
   assert.ok(!flowerCanStay(w, ids, x, y, z));
   for (const ground of [1, 2, 29, 30]) { w.put(x, y - 1, z, ground, 0, false); assert.ok(flowerCanStay(w, ids, x, y, z), "ground " + ground); }
   w.put(x, y + 3, z, 3, 0, false);
-  assert.ok(!flowerCanStay(w, ids, x, y, z));
-  w.put(x + 1, y, z, 20, 0, false);
-  assert.ok(flowerCanStay(w, ids, x, y, z));
+  assert.ok(flowerCanStay(w, ids, x, y, z), "a roof does not remove it");
 });
 
 test("flower generation arrives with generation version 4 and only on grass or dirt", () => {

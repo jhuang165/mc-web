@@ -9,6 +9,7 @@ import { reedTarget, canPlaceReeds, cactusCanPlace, REEDS_ITEM } from "./plants.
 import { canPlaceChest, placeChest, placementFacing } from "./chest.js";
 import { isChestBlock, chestBlockOfItem, ENDER_CHEST, newEnderTile } from "./chest-blocks.js";
 import { flowerCanStay } from "./flowers.js";
+import { isMushroom, mushroomCanStay } from "./plant-light.js";
 import { saplingCanStay, placedLeavesMeta } from "./trees.js";
 import { canPlaceLadder, placedLadderMeta, clickedSide } from "./ladders.js";
 import { placedTorchMeta } from "./torches.js";
@@ -184,6 +185,8 @@ export function placeHeldBlock(state, request, hooks = {}) {
   // BlockPumpkin.canPlaceBlockAt (pumpkin 86, jack o'lantern 91): replaceable cell and a solid top surface below (block-audit-reference.json place rows).
   if ((id === 67 || id === 148) && !railSolidTop(world, p[0], p[1] - 1, p[2])) return result(false, "pumpkin-support", id, p);
   if (isFlower(id) && !flowerCanStay(world, flowers, ...p)) return result(false, "flower-support", id, p);
+  // BlockBush.canPlaceBlockAt = canBlockStay; the mushroom's adds the full-light < 13 term (plant-light.js).
+  if (isMushroom(id) && !mushroomCanStay(world, ...p)) return result(false, "mushroom-support", id, p);
   if (id === SAPLING && !saplingCanStay(world, ...p)) return result(false, "sapling-support", id, p);
   if (id === SNOW_LAYER && !snowCanStay(world, ...p)) return result(false, "snow-support", id, p);
   if (id === LADDER && !canPlaceLadder(world, ...p)) return result(false, "ladder-support", id, p);
