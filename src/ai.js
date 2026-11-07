@@ -489,11 +489,22 @@ class WatchClosest extends Task {
     this.mutex = 2;
     this.target = null;
     this.timer = 0;
+    this.watched = "player"; // the watched class: "player", or for the villager's tasks "villager" / "living" (EntityLiving)
   }
   shouldExecute() {
-    if (this.m.rand.nextFloat() >= this.chance) return false;
-    if (this.m.attackTarget) this.target = this.m.attackTarget;
-    this.target = this.m.ai.closestPlayer(this.m, this.range);
+    const m = this.m;
+    if (m.rand.nextFloat() >= this.chance) return false;
+    // un.a(): an attack target is watched as it is; else the closest player, or World.findNearestEntityWithinAABB(class, box.expand(range, 3, range), self)
+    if (m.attackTarget) this.target = m.attackTarget;
+    else if (this.watched === "player") this.target = m.ai.closestPlayer(m, this.range);
+    else {
+      let best = null, bd = Infinity;
+      for (const b of m.nearby(this.range, 3, this.range, (o) => (this.watched === "villager" ? o.e.type === "villager" : o.e.type !== "ender_crystal"))) {
+        const d = m.distSq(b);
+        if (d < bd) { best = b; bd = d; }
+      }
+      this.target = best;
+    }
     return !!this.target;
   }
   continueExecuting() {

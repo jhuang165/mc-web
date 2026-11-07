@@ -505,28 +505,6 @@ export function villageTasks(K) {
       return this.suitable(t) && (t.isPlayer ? !t.creative : true);
     }
   }
-  // EntityAIDefendVillage (vm), targets priority 1: the nearest aggressor of the village the golem belongs to, or
-  // (1 in 20 ticks) the nearest player whose reputation is -15 or lower.
-  class DefendVillage extends GolemTargetBase {
-    constructor(m) {
-      super(m, false);
-      this.aggressor = null;
-    }
-    shouldExecute() {
-      const m = this.m, village = m.village;
-      if (!village) return false;
-      const self = { distSqTo: (o) => m.distSq(o) };
-      this.aggressor = village.findNearestAggressor(self);
-      if (this.isSuitableTarget(this.aggressor)) return true;
-      if (m.rand.nextInt(20) !== 0) return false;
-      this.aggressor = village.findNearestTargetPlayer(self);
-      return this.isSuitableTarget(this.aggressor);
-    }
-    startExecuting() {
-      this.m.attackTarget = this.aggressor;
-      super.startExecuting();
-    }
-  }
   // EntityAIHurtByTarget (vn, no call for help) with the golem's class filter: a player-created golem never
   // turns on the player.
   class GolemHurtBy extends GolemTargetBase {
@@ -549,10 +527,11 @@ export function villageTasks(K) {
   // nearest of them wins. With nearbyOnly the last check is canEasilyReach (vu.a(sv)): one path search whose
   // answer (reachable 1, not 2) is cached on the TASK for 10 + nextInt(5) ticks whichever entity asked, and the end
   // of the path must lie within 1.5 blocks (horizontally) of the target. Probed in villager-polish-reference.json.
-  class NearestMonster extends GolemTargetBase {
+  // The nearbyOnly flag of EntityAITarget (vu): after the usual checks the target must pass canEasilyReach, whose answer is cached
+  // on the task. EntityAIDefendVillage (vm: vu(golem, false, true)) and the golem's nearest-monster task both use it.
+  class NearbyGolemTarget extends GolemTargetBase {
     constructor(m) {
       super(m, false);
-      this.target = null;
       this.reach = 0; // vu.b: 0 unknown, 1 reachable, 2 not
       this.reachTimer = 0; // vu.e
     }
@@ -572,6 +551,12 @@ export function villageTasks(K) {
       const dx = end.x - floor(t.x), dz = end.z - floor(t.z);
       return dx * dx + dz * dz <= 2.25;
     }
+  }
+  class NearestMonster extends NearbyGolemTarget {
+    constructor(m) {
+      super(m);
+      this.target = null;
+    }
     shouldExecute() {
       const m = this.m, d = this.range();
       let best = null, bd = Infinity;
@@ -587,6 +572,31 @@ export function villageTasks(K) {
       this.reach = 0;
       this.reachTimer = 0;
       this.m.attackTarget = this.target;
+      super.startExecuting();
+    }
+  }
+  // EntityAIDefendVillage (vm = vu(golem, false, true)), targets priority 1: the nearest aggressor of the village the golem belongs to, or
+  // (1 in 20 ticks) the nearest player whose reputation is -15 or lower; either must pass the nearbyOnly canEasilyReach path check (probed
+  // in village-aggressors-reference.json: the cache draws nextInt(5) on the golem's Random).
+  class DefendVillage extends NearbyGolemTarget {
+    constructor(m) {
+      super(m);
+      this.aggressor = null;
+    }
+    shouldExecute() {
+      const m = this.m, village = m.village;
+      if (!village) return false;
+      const self = { distSqTo: (o) => m.distSq(o) };
+      this.aggressor = village.findNearestAggressor(self);
+      if (this.isSuitableTarget(this.aggressor)) return true;
+      if (m.rand.nextInt(20) !== 0) return false;
+      this.aggressor = village.findNearestTargetPlayer(self);
+      return this.isSuitableTarget(this.aggressor);
+    }
+    startExecuting() {
+      this.reach = 0; // EntityAITarget.startExecuting
+      this.reachTimer = 0;
+      this.m.attackTarget = this.aggressor;
       super.startExecuting();
     }
   }

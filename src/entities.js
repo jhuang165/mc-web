@@ -33,7 +33,7 @@ import { MobAI } from "./ai.js";
 import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
 import { visualRandom } from "./village-ai.js";
 import { IRON_GOLEM_TYPE, IRON_GOLEM_SOUNDS, ironGolemFields, ironGolemShape, golemCollideRetargets, golemTail } from "./iron-golem.js";
-import { createVillages, PLAYER_NAME } from "./village-host.js";
+import { createVillages, PLAYER_NAME, villageAttacker } from "./village-host.js";
 import { SLIME, mobScale, slimeDamage, slimeTouches, slimeFields, slimeFieldsFrom, slimeRestore, slimeWidth, slimeSoundName, slimeVolume, slimeSquishStart, slimeSquishEnd, slimeActionState, slimeChildren, slimeCanSpawnHere, SLIMEBALL } from "./slime.js";
 import { isSlimeLike } from "./slime.js";
 import { PIGMAN, MAGMA, isPigman, isMagma, magmaDamage, magmaJumpMotion, pigmanEquipment } from "./nether-melee.js";
@@ -877,6 +877,7 @@ export class EntityWorld {
     if (e.type === "silverfish") this.silverfishHurt(e, source);
     if (e.type === "enderman" && e.health > 0 && !endermanHurt(this, e, source, entityRandom(e)).proceed) return true;
     if (ANIMALS.has(e.type)) { e.flee = 60; e.love = 0; e.mateTicks = 0; }
+    e.idle = 0; // EntityLivingBase.attackEntityFrom: entityAge = 0 (the despawn age EntityAIWander reads) before the health check
     if (e.health <= 0) return false;
     if (e.type === "pigman") pigmanHurt(this, e, source, entityRandom); // yh.a: a player's hit angers it and every pigman within 32 blocks
     // EntityWolf.attackEntityFrom: the Sit task's wish is cleared (EntityAISit.setSitting(false)) and damage from a
@@ -1611,8 +1612,12 @@ export class EntityWorld {
   // loses 1 reputation (3 for a child) and the villager shows angry particles.
   villagerHurtBy(e, source) {
     const brain = this.ai.brain(e), village = brain.village;
-    if (!village || !source.player) return;
-    village.addOrRenewAggressor(this.ai.player);
+    if (!village) return;
+    // Any living attacker is an aggressor (the player, a mob's melee, a shooter's arrow); only a player costs reputation.
+    const attacker = source.player ? this.ai.player : villageAttacker(this, e, source.attacker);
+    if (!attacker) return;
+    village.addOrRenewAggressor(attacker);
+    if (!source.player) return;
     village.changeReputation(PLAYER_NAME, e.growingAge < 0 ? -3 : -1);
     // status 13 is drawn by the client entity's Random (village-ai.js visualRandom), at the entity's real size
     if (e.health > 0) this.villageBurst("angryVillager", e, { width: brain.width, height: brain.height }, visualRandom(e));
