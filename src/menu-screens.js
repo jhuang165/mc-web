@@ -61,6 +61,8 @@ export const LANG = {
   "chat.link.confirmTrusted": "Do you want to open this link or copy it to your clipboard?", "chat.link.open": "Open in browser",
   "screenshot.success": "Saved screenshot as %s", "screenshot.failure": "Couldn't save screenshot: %s",
   "options.multiplayer.title": "Multiplayer Settings...", "options.snooper.view": "Snooper Settings...",
+  "resourcePack.openFolder": "Open resource pack folder", "resourcePack.title": "Select Resource Packs", "resourcePack.available.title": "Available Resource Packs",
+  "resourcePack.selected.title": "Selected Resource Packs", "resourcePack.folderInfo": "(Place resource pack files here)",
   "options.resourcepack": "Resource Packs...", "options.fullscreen": "Fullscreen", "options.vsync": "Use VSync",
   "options.touchscreen": "Touchscreen Mode", "options.mipmapLevels": "Mipmap Levels",
   "options.anisotropicFiltering": "Anisotropic Filtering", "options.forceUnicodeFont": "Force Unicode Font",

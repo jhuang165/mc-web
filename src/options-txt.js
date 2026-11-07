@@ -4,6 +4,7 @@
 // parseOptionsTxt reads a file with the loadOptions rules.
 import { BINDINGS, DEFAULT_KEYS } from "./keybindings.js";
 import { SOUND_CATEGORIES } from "./settings.js";
+import { formatResourcePacksOption, parseResourcePacksOption } from "./resource-packs.js";
 
 const f = Math.fround;
 // Float.toString (String.valueOf(float)) for the values options.txt holds: the shortest digits that
@@ -84,6 +85,8 @@ const FIELDS = {
   // "true" and "false" (saves before Smooth Lighting levels) read as Maximum and Off.
   ao: { write: (o) => String(Math.trunc(o.ao ?? 2)), read: (s) => ({ ao: s === "true" ? 2 : s === "false" ? 0 : parseJavaInt(s) }) },
   clouds: flag("clouds", true),
+  // A Gson list of the selected pack names, lowest priority first (resource-packs.js).
+  resourcePacks: { write: (o) => formatResourcePacksOption(o.resourcePacks ?? []), read: (s) => ({ resourcePacks: parseResourcePacksOption(s) }) },
   chatVisibility: int("chatVisibility", 0),
   chatColors: flag("chatColors", true),
   chatLinks: flag("chatLinks", true),
