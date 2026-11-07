@@ -35,15 +35,47 @@ paulscode's Library runs over fake channels, and OpenAL is never initialised. Co
   stops and delayed ones are dropped.
 - The cave mood player is the eye position (server `posY`), as `getClosestPlayer` uses.
 
-## Read from bytecode, not probed
-- Which call sites pass `distanceDelay` true (scan of every `World.playSound(..Z)` / `WorldClient` call: fireworks only).
-- `SoundManager.isSoundPlaying`'s 20-tick grace (`playingSoundsStopTime`), the `update` removal pass, `setListener`'s
-  orientation vectors and `stopAllSounds`.
+
+## Round 3 (batch 19): listener, bookkeeping, panning
+Evidence: `tools/probes/AudioProbe3.java`, run by `node tools/verify-audio3.mjs` (compiles into an `audio3-probe/` folder of the
+research directory, writes `audio3-reference.json`); `src/audio3.test.js` replays it. Code: `sound-channels.js` (listener, pan,
+S29), `sound-bookkeeping.js`, `moving-sounds.js`, `audio.js`.
+
+Probed (original `btj` SoundManager and minecart sound classes executed natively on Unsafe-allocated entities, no audio device):
+- `SoundManager.setListener`, 40 cases: position is `prev + (cur - prev) * (double) partial` per axis, rounded to float; yaw and pitch
+  interpolate in float; orientation vectors go through MathHelper's table. Replayed bit for bit (`nativeListener`).
+- Sneaking: no sneak code in the listener; it reads `posY`, which moveEntity lowers by `ySize` (0.08 sneaking). The port's listener now
+  interpolates `previous -> position`, adds `eye - motion.drop(t)`, and passes yaw and pitch (before: standing eye, no pitch).
+- `update` / `isSoundPlaying` / `stopSound` / playSound bookkeeping, 2100 operations over three traces (plain, tickable, repeat-delay
+  sounds) against a fake paulscode library: `playTime`, playing, stop-time, delayed and tickable counts and every `isSoundPlaying`
+  answer replay (`SoundBookkeeping`). A started sound gets `stopTime = playTime + 20`; `isSoundPlaying` is
+  `playing(name) || (stopTime <= playTime)`: a source that is not playing reads false for 20 ticks, then true until the update pass
+  removes it. Tickable sounds are updated each tick, stopped when done; repeat sounds are requeued at `playTime + delay`.
+- `MovingSoundMinecart` / `...Riding`, 160 ticks: volume `clamp(speed,0,0.5)*0.7` (riding `clamp(speed,0,1)*0.75`) when speed >= 0.01
+  else 0; distance +0.0025; done when the cart is dead or the player no longer rides it. Formulas in `moving-sounds.js`; not started
+  because the manifest has no minecart clips.
+
+Read from bytecode (javap), not probed:
+- `runTick` calls MusicTicker.update before SoundHandler.update, so end of stream is seen one tick late, and a MusicTicker type-change
+  stop leaves the music reading "playing" so the new delay is rolled on two consecutive ticks. `SoundBank.isPlaying` now follows the
+  probed rule, so MusicTicker inherits it.
+- paulscode never sets `AL_SOURCE_RELATIVE`: positions are absolute. An ATTENUATION_NONE source (GUI click) sits at 0,0,0 and is panned
+  toward the world origin with gain 1; the port does this for `gui.button.press` while a world is open.
+- S29PacketSoundEffect: sent to same-dimension players with `d^2 < range^2`, range `volume > 1 ? 16 * volume : 16`;
+  `playSoundToNearExcept` skips the source player (who plays it client-side). In single player this changes nothing audible beyond the
+  strict `<` (the linear gain is already zero there). `broadcastRange` / `receivesBroadcast` encode it, unit-tested, not wired.
+- paulscode's StreamThread/CommandThread start a stream well inside one tick; the port treats a started stream as playing at once.
+  Not timed.
+- OpenAL spatialises only mono buffers; stereo buffers (music, discs) follow only the distance gain. The port pans only mono clips.
+
+Assumption, not verified: the OpenAL Soft behind the LWJGL natives (no native library in the JAR set, no version constant read).
+`stereoPan` assumes speakers at -90/+90 degrees, azimuth in the listener frame (right = at x up, rear folded to the front) and a
+constant-power pair, i.e. a Web Audio StereoPanner position of azimuth / 90 degrees (before: the sine). Checked only as maths, never
+against an OpenAL device.
 
 ## Approximate or open
-- OpenAL's stereo panner is not in the JAR set: the port pans by the azimuth sine.
-- Positions are the port's doubles, cast to float only in the gain; the 1.7.10 server also filters S29PacketSoundEffect to
-  players within `16 * max(volume, 1)` (`sendToAllNear`), which the client gain already zeroes.
-- Sneaking changes the real listener height; the port uses the standing eye.
-- Streams still start through `HTMLAudioElement`, so the queued stop and start timing of paulscode's StreamThread is not
-  modelled. Sounds.json random choice uses `Math.random` (the original's unseeded Random).
+- The pan constants are an assumption; the Web Audio panner stands in for OpenAL Soft's mixer.
+- The listener yaw/pitch are the port's per-frame look, not previous-tick-to-tick rotations.
+- Positions are the port's doubles, cast to float only in the gain; the S29 filter is not wired into call sites.
+- Minecart moving sounds are not started (no clips). Stream start timing and `World` Random draws between mood draws remain open.
+- Sounds.json random choice uses `Math.random` (the original's unseeded Random).

@@ -92,10 +92,10 @@ test("World.C: the light check draws nextInt(1) and three nextInt(11) per tick, 
   }
 });
 
-test("stereoPan: the sine of the azimuth on the listener's right axis", () => {
+test("stereoPan: the azimuth on the listener's right axis (the full law is in audio3.test.js)", () => {
   const l = { x: 0, y: 0, z: 0 };
   assert.equal(stereoPan({ x: 0, y: 0, z: 5 }, l, 0), 0);
-  assert.equal(Math.abs(stereoPan({ x: 5, y: 0, z: 0 }, l, 0)), 1);
+  assert.ok(Math.abs(Math.abs(stereoPan({ x: 5, y: 0, z: 0 }, l, 0)) - 1) < 1e-6);
   assert.equal(stereoPan(l, l, 0), 0);
 });
 
