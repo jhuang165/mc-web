@@ -48,6 +48,7 @@ export class StreamPrefetch {
     this.world = world; this.port = port; this.margin = margin; this.inFlight = inFlight;
     this.cells = world.generationVersion >= 13 && !!world.population;
     this.pending = new Set();
+    this.waiters = new Set();
     this.failed = null;
     this.received = 0;
     if (this.cells) world.population.cells.max = Math.max(world.population.cells.max, CELL_CACHE);
@@ -59,6 +60,7 @@ export class StreamPrefetch {
     if (this.failed) return;
     this.failed = String(reason);
     this.pending.clear();
+    for (const w of [...this.waiters]) w();
     console.error(`streaming-generator: worker unavailable, generating on the main thread: ${this.failed}`);
   }
   // Units (cells or columns) holding a non-resident column within `margin` chunks of the square for
@@ -115,6 +117,24 @@ export class StreamPrefetch {
     this.received++;
     if (data.type === 'cell') this.world.population.adopt(data.cell);
     else if (data.type === 'column' && !this.world.chunks.has(k)) this.world.pregenerated.set(k, data.column);
+    for (const w of [...this.waiters]) w();
+  }
+  // Requests exactly these units (cells, or columns below generation 13) and resolves once each has arrived or the worker has failed
+  // (loading-screen paths: the arrival window of a portal trip, travel-loading.js). Units already held are not asked for.
+  whenHas(units) {
+    const todo = units.filter((u) => !this.has(u));
+    if (this.failed) return Promise.resolve();
+    for (const u of todo) {
+      const k = key(...u);
+      if (!this.pending.has(k)) { this.pending.add(k); this.port.postMessage({ type: this.cells ? 'cell' : 'column', x: u[0], z: u[1] }); }
+    }
+    return new Promise((resolve) => {
+      const check = () => {
+        if (!this.failed && todo.some((u) => this.pending.has(key(...u)))) return;
+        this.waiters.delete(check); resolve();
+      };
+      this.waiters.add(check); check();
+    });
   }
   // True when the square for (x, z) can be built without generating on this thread, or when there
   // is nothing to wait for (no worker, or a failed one).

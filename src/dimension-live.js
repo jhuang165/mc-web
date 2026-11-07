@@ -14,6 +14,7 @@ import { materialSolid } from "./plants.js";
 import { BED, BED_DIR, isBedHead } from "./bed.js";
 import { readChunkEdits } from "./world-storage.js";
 import { restoreImportedFortress } from "./fortress-restore.js";
+import { drain, runSteps } from "./steps.js";
 import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf, portalCooldown, readPlayerPortalState } from "./dimensions.js";
 import { EntityPortals, placeAfterTravel, POS_Y, mobYawToMc, mcToMobYaw } from "./entity-portal.js";
 import { entityActive } from "./streaming-ticks.js";
@@ -97,7 +98,9 @@ export class DimensionLive {
   openRecord(record, joined) { return record.dimension && !record.rootId ? viewRecord(joined, record.dimension) : record; }
   createWorld(record) { return record.rootId ? new DimensionWorld(record.seed, record.dimension) : new World(record.seed, record.biome, record.generationVersion ?? 1, record.worldType, record.generatorOptions); }
   // Called after the world exists and before the saved position is read. Sets record.position for a travel arrival.
-  async arrive(prepared, record) {
+  // `pause` (an async frame wait) spreads the Teleporter's scans over frames and `warm` ({ window, columns } of travel-loading.js
+  // arrivalWarmer) builds the terrain they read ahead of them; without them (every caller but a loading-screen trip) it runs at once.
+  async arrive(prepared, record, { pause = null, warm = null } = {}) {
     await restoreImportedFortress(prepared, record); // imported data/Fortress.dat starts (Nether views only)
     const t = record.transit; delete record.transit; this.writes = []; this.exit = false; this.peeks.clear();
     if (!t) return;
@@ -122,7 +125,14 @@ export class DimensionLive {
     world.dimension = to; world.actualHeight = providerOf(to).hasNoSky ? 128 : 256;
     world.seed = javaSeed(record.seed);
     const e = { x: tt.x, y: tt.y, z: tt.z, vx: 0, vy: 0, vz: 0, yaw: tt.yaw, pitch: 0, teleportDirection: t.dir ?? 0 };
-    new Teleporter(world, { isSolid: solidId, random: new JavaRandom(world.seed) }).placeInPortal(e, tt.x, tt.y, tt.z, tt.yaw);
+    const teleporter = new Teleporter(world, { isSolid: solidId, random: new JavaRandom(world.seed) });
+    if (warm && !prepared.noPrefetch) { // (Nether/End peeks read cheap terrain, and their window is built after the arrival) the columns the search and the portal-site scan will read: the window round the target and every saved portal in reach
+      await warm.window(tt.x, tt.z);
+      const found = world.portalColumns?.(GAME_IDS.portal, Math.floor(tt.x) - 128, Math.floor(tt.x) + 128, Math.floor(tt.z) - 128, Math.floor(tt.z) + 128);
+      if (found?.length) await warm.columns(found);
+    }
+    const steps = teleporter.placeInPortalSteps(e, tt.x, tt.y, tt.z, tt.yaw);
+    if (pause) await runSteps(steps, pause); else drain(steps);
     this.writes = world.writes;
     record.position = { x: e.x, y: e.y, z: e.z, yaw: gameYaw(e.yaw), pitch: 0 };
   }

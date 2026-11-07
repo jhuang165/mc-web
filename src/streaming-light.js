@@ -5,14 +5,16 @@ import { LightVolume } from './lighting.js';
 import { SIZE } from './world.js';
 
 export class StreamingLight {
-  constructor(world, emission) {
+  constructor(world, emission, { defer = false } = {}) {
     this.world = world;
     this.emission = emission;
     this.x = world.minX; this.z = world.minZ;
     this.inner = new LightVolume({ height: world.height, hasNoSky: world.hasNoSky, get: (x,y,z) => world.get(x+this.x,y,z+this.z),
       columnBlocks: (x,z) => world.columnBlocks(x+this.x,z+this.z) },
-      emission && ((x,y,z,b) => emission(x+this.x,y,z+this.z,b)));
+      emission && ((x,y,z,b) => emission(x+this.x,y,z+this.z,b)), { defer });
   }
+  // The deferred build's slices (LightVolume.buildSteps); nothing is readable as light until it has run to its end.
+  buildSteps() { return this.inner.buildSteps(); }
   skyAt(x,y,z) { return this.inner.skyAt(x-this.x,y,z-this.z); }
   blockAt(x,y,z) { return this.inner.blockAt(x-this.x,y,z-this.z); }
   packed(x,y,z) { return this.inner.packed(x-this.x,y,z-this.z); }

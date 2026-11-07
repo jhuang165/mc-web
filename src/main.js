@@ -263,10 +263,12 @@ import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRid
 import { StreamPrefetch } from "./streaming-generator.js";
 import { createRing, attachRing } from "./headless-columns.js";
 import { wrapMobHooks } from "./headless-env.js";
-import { startLoading, setStage, STAGES, loadingScreen, downloadTerrainScreen, errorScreen, nextPaint, SpawnAreaLog } from "./loading-screen.js";
+import { startLoading, setStage, STAGES, loadingScreen, downloadTerrainScreen, errorScreen, nextPaint, nextFrame, SpawnAreaLog } from "./loading-screen.js";
 import { gameOverScreen, exportScreen, notesScreen, signEditHost } from "./modal-dialogs.js";
 import { NOTES } from "./notes-content.js";
+import { runSteps } from "./steps.js";
 import { presolveWorld } from "./spawn-presolve.js";
+import { blankLoading, arrivalWarmer } from "./travel-loading.js";
 import "./lang-hooks.js";
 import { loadLanguageManifest, selectLanguage, setForceUnicodeFont, translate } from "./lang.js";
 import { loadFontResources, onFontChange, font } from "./font-renderer.js";
@@ -1049,6 +1051,7 @@ function applyWeatherEdit(w, x, y, z, block, meta) {
   saved = false;
 }
 // Hydrate only the resident window before constructing block runtimes and lighting.
+let tripLoading = false; // a portal trip is between worlds: screen is "home" for the loop but the music stays the game's
 let pendingBonusChests = null; // chest tiles of a bonus chest placed during creation, consumed by launch
 async function openWorld(record) {
   if(openingWorld)return;
@@ -1056,15 +1059,21 @@ async function openWorld(record) {
   sounds?.stopStreams(); // Minecraft.loadWorld: SoundHandler.stopSounds (music and records), also between dimensions
   lan.close();
   // From the title screen: LoadingScreenRenderer's "Loading world" screen (loading-screen.js); portal trips keep the game on screen.
-  const loading = screen === "home" ? startLoading() : null, spawnLog = new SpawnAreaLog(64);
+  // A portal trip (record.transit): Minecraft.loadWorld(world, "") draws a blank loading frame, then handleRespawn shows GuiDownloadTerrain (travel-loading.js).
+  const trip = screen !== "home" && !!record.transit, tripFrom = screen, loading = screen === "home" ? startLoading() : trip ? blankLoading() : null, spawnLog = new SpawnAreaLog(64, trip ? () => {} : undefined);
+  let warmer = null;
+  if (trip) { screen = "home"; tripLoading = true; keys.clear(); $("#hud").classList.add("hidden"); } // the title-start path: no ticking, no scene drawing, until launch
   if (loading) { gui.show(loadingScreen(loading)); await nextPaint(); }
+  if (trip) { gui.show(downloadTerrainScreen()); await nextPaint(); } // handleRespawn: GuiDownloadTerrain follows the blank frame for the whole transfer
   try {
     if (record.dimension && !record.rootId) record = dims.openRecord(record, await readRuntimeState(record)); // saved in the Nether/End: open that dimension
     const presolved = loading ? presolveWorld(record) : null; // the native spawn walk, then the resident window's cell, in a worker so this screen stays live (spawn-presolve.js)
     if (presolved) await presolved.spawn;
     // WorldServer.initialize runs createSpawnPosition under "Loading world"; the chunk load that follows is "Building terrain" (the World constructor populates the resident window).
-    if (loading) { setStage(loading, STAGES.terrain); spawnLog.report(0, performance.now()); await nextPaint(); await presolved.terrain; }
+    if (loading && !trip) { setStage(loading, STAGES.terrain); spawnLog.report(0, performance.now()); await nextPaint(); await presolved.terrain; }
+    else if (trip) await presolved.terrain; // the Overworld's resident cell from the worker; the Nether/End have none
     const prepared=dims.createWorld(record);
+    if (loading) warmer = arrivalWarmer(prepared, { pause: nextFrame });
     if (!record.chunked) prepared.restore(record.edits??[]);
     if (!prepared.dimension && !record.worldSpawn) {
       if (prepared.nativeSpawn) record.worldSpawn = [prepared.nativeSpawn[0] - prepared.originX, prepared.nativeSpawn[1], prepared.nativeSpawn[2] - prepared.originZ]; // WorldInfo spawn (world-spawn.js)
@@ -1072,9 +1081,9 @@ async function openWorld(record) {
     }
     prepared.restoreClaimedColumns(record.populatedColumns);
     const transit = record.transit;
-    await dims.arrive(prepared, record); // portal travel: the Teleporter's arrival position
+    await dims.arrive(prepared, record, loading ? { pause: nextFrame, warm: warmer } : {}); // portal travel: the Teleporter's arrival position
     const p=record.position;
-    if(prepared.streaming&&p&&[p.x,p.z].every(Number.isFinite))prepared.streamAround(p.x,p.z);
+    if(prepared.streaming&&p&&[p.x,p.z].every(Number.isFinite)){ if (warmer) await warmer.window(p.x,p.z); prepared.streamAround(p.x,p.z); }
     record=await readRuntimeState(record,prepared.streaming?{containerColumns:[...prepared.chunks.values()].map(c=>[c.x,c.z])}:{});
     const storage=prepared.streaming?new StreamStorage(prepared,record.id,{onError:e=>{pause();toast('Could not load saved columns. Reopen the world to retry: '+e.message);}}):null;
     prepared.nextEditOrder=Math.max(prepared.nextEditOrder,record.editSequence??(record.chunked?2000000:0));
@@ -1085,17 +1094,19 @@ async function openWorld(record) {
     streamStorage?.dispose();streamStorage=storage;
     if (loading) spawnLog.report(prepared.chunks?.size ?? 0, performance.now(), true);
     // NetHandlerPlayClient.handleJoinGame shows GuiDownloadTerrain until the first position packet: here, while the columns are meshed and the player is placed.
-    if (loading) { gui.show(downloadTerrainScreen()); await nextPaint(); }
+    warmer?.dispose(); warmer = null;
+    if (loading && !trip) { gui.show(downloadTerrainScreen()); await nextPaint(); }
     await launch(record,prepared,{slice:!!loading});
     // PlayerList.transferPlayerToDimension: leaving the End, Overworld -> End, or any other portal trip (not a respawn).
     if (transit && !transit.death) achievements.trigger(transit.exit ? "theEnd2" : transit.from === 0 && prepared.dimension === 1 ? "theEnd" : "portal");
   } catch(e) {
     if (pendingBonusChests) { pendingBonusChests = null; record.bonusChestPlaced = false; } // placed on a world that never launched: owed again
     // GuiErrorScreen replaces the toast when the load started from the title screen.
-    if (loading) gui.show(errorScreen({ title: "Could not open this world", message: String(e?.message ?? e), cancel: () => gui.show(menus.mainMenu()) }));
+    if (trip) { screen = tripFrom; $("#hud").classList.remove("hidden"); gui.hide(); toast('Could not open this world: '+e.message); } // the old world is still the active one
+    else if (loading) gui.show(errorScreen({ title: "Could not open this world", message: String(e?.message ?? e), cancel: () => gui.show(menus.mainMenu()) }));
     else toast('Could not open this world: '+e.message);
   }
-  finally{openingWorld=false;}
+  finally{openingWorld=false;tripLoading=false;warmer?.dispose();}
 }
 async function launch(record, prepared, { slice = false } = {}) {
   try {
@@ -1112,6 +1123,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     hideBedScreen();
     bedSleep.restore(record.bed); // the spawn point; a saved sleeping state is resumed after the player is placed
     scene.setWorld(world, { defer: slice }); // from the title screen the column meshes are built in frame-sized slices below, behind the loading screen
+    if (slice) while (scene.buildLight(12)) await nextFrame(); // the light volume's flood runs in the same frame-sized slices (Scene.buildLight)
     // Block light for canBlockFreeze/canSnowAt/melting is the scene's light volume.
     world.blockLight = (x, y, z) => scene.light.blockAt(x, y, z);
     world.fullLight = (x, y, z) => scene.light.level(x, y, z, 0); // World.getFullBlockLightValue (plant-light.js: mushrooms)
@@ -1280,7 +1292,7 @@ async function launch(record, prepared, { slice = false } = {}) {
       pendingDragon = false;
       if (world.dimension === 1) {
         // ChunkProviderEnd.populate: the spikes' crystals (dimension-world.js endCrystals), then the dragon at chunk (0, 0).
-        for (const c of world.endCrystals?.() ?? []) { const e = mobs.create("ender_crystal", c.x, c.y, c.z); e.yaw = (-c.yaw * Math.PI) / 180; mobs.entities.push(e); }
+        for (const c of slice && world.endCrystalSteps ? await runSteps(world.endCrystalSteps(), nextFrame) : world.endCrystals?.() ?? []) { const e = mobs.create("ender_crystal", c.x, c.y, c.z); e.yaw = (-c.yaw * Math.PI) / 180; mobs.entities.push(e); }
         spawnDragonIfAbsent(world, mobs);
       }
     }
@@ -3467,7 +3479,7 @@ function tickMusic(dt) {
   musicTicker ??= new MusicTicker({ play: (event) => sounds.playStream(event), stop: (h) => sounds.stop(h), isPlaying: (h) => sounds.isPlaying(h) });
   for (musicTime += dt; musicTime >= PHYSICS.tick; musicTime -= PHYSICS.tick) {
     musicTicker.update(ambientMusicType({
-      credits: screen === "credits", inWorld: screen !== "home", dimension: world?.dimension ?? 0,
+      credits: screen === "credits", inWorld: screen !== "home" || tripLoading, dimension: world?.dimension ?? 0,
       bossName: bossStatus.name, bossFrames: bossStatus.length, creative: !!survival?.creative,
     }));
     if (screen !== "home") (cartSounds ??= new CartSounds(sounds)).tick(minecarts?.carts ?? [], rider);

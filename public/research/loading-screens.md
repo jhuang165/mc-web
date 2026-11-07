@@ -90,10 +90,33 @@ Javap dumps of the classes read are in the ignored research folder `loading/` (`
   GuiScreenWorking has no counterpart in this flow: bytecode-read, the only class referencing `bdt` besides itself is `brc` (the save-format list); the conversion progress goes to the server's `outputPercentRemaining`
   log line, never a screen, in the integrated start; the port has no world conversion either. It stays built and unused.
 
+## Batch 22: light slicing, portal-trip screens, generation 13 to 17 presolve
+- Light: `LightVolume` and `StreamingLight` take `{ defer }`; `buildSteps()` and `relightSteps()` are generators that yield per x column in the setup, sky-seed, inflow and diff loops and every 4096 queue
+  entries in the flood. `relight()` is `drain(relightSteps())`, so the synchronous result is the same. `scene.setWorld(world, { defer })` queues `buildSteps()`; `launch` runs `scene.buildLight(12)` with a frame between slices.
+  Sky, block and height arrays were compared with the previous implementation on seeds 4, 11 and 17 (probed, temporary script) and `light-slicing.test.js` keeps the stepped-equals-drained checks.
+- Portal and dimension trips: bytecode-read (`bjb.a(hs)`, handleRespawn, see batch 21) does `loadWorld(world, "")` - one blank LoadingScreenRenderer frame (empty title and message) - then GuiDownloadTerrain, only when
+  the dimension changed. `openWorld` for a trip now shows one blank frame (`blankLoading`, `travel-loading.js`) then `downloadTerrainScreen` for the whole transfer. While the screen is up the game is paused
+  (`screen = "home"`, `tripLoading` keeps the in-world music); if the transfer throws, the old world is restored and a toast shown. The Stage lines of the new-world path are not shown (natively none).
+- Slicing: `Teleporter.placeInPortalSteps`, `placeInExistingPortalSteps` and `makePortalSteps` yield per column; the old methods drain them (the 36 native replay records still pass). The 257 x 257 portal search was
+  the freeze: `TerrainPeek.portalColumns` lists the columns that can hold a portal (assumed invariant, not probed: terrain never contains a portal block, so portals a peek sees come from its edits) and the search visits only those, in the same x-then-z order.
+  `arrivalWarmer` builds the terrain the synchronous readers will touch ahead of them: Overworld cells through a `StreamPrefetch` worker (`whenHas`), Nether/End columns on the page into `pregenerated` in 12 ms slices.
+  The End's dragon crystals (`endCrystalSteps`, 441 chunk populations, 0.4 s) are sliced in `launch` too.
+- Measurements (muted headless Chrome 1280x720, Vite dev server, longtask observer, own profile and DevTools port; before = main at 674d91b):
+  - World creation longest task: seed 4 117 ms -> 66 ms (runs 0 to 66); seed 11 202 ms -> 65 to 82 ms.
+  - Overworld -> Nether trip: seed 4 5259 ms -> no task over 97 ms (3.4 s wall); seed 11 6932 ms -> 109 ms once, otherwise under 100 ms.
+  - Nether -> Overworld: seed 4 12900 ms and 1752 ms -> 55 ms max (8.3 s wall, the worker building population cells); seed 11 19012 ms -> 65 ms.
+  - End trip (seed 4): 421 ms and 129 ms tasks before the crystals were sliced, none afterwards over 3 runs (1.6 s wall); End exit: none (3.6 s wall). End before-numbers were not measured.
+  - The screen sequence in all trips: blank frame at 8 to 450 ms, then "Downloading terrain" until the arrival.
+- Generation 13 to 17 saves: `spawn-worker.js` now also handles them. `solveLegacySpawn` runs the constructor's own `findBiomePosition(0, 0, 256, ...)`, `solveResidentCell` builds cell (0, 0) for that origin,
+  and `generateJavaWorld` adopts it when the origin matches (otherwise it is dropped). Generation 12 has no population and Superflat starts at 15, so those are not presolved. Equality tests compare 64 columns, biome ids, origin,
+  cell records and `claimFreshColumns()` for generations 13, 15 (Superflat), 16 (amplified) and 17, plus a mismatched-origin cell.
+
 ## Gaps
-- The light volume build (about 120 to 150 ms in one task) still runs on the page thread inside `launch`; `LightVolume.relight` floods the whole window and is not split.
-- Reopening saved generation 18 and 19 worlds uses the worker for the spawn and the cell as well; generation 13 to 17 saves have no worker spawn and still build their window in the constructor.
-- Portal trips (dimension changes) neither show GuiDownloadTerrain nor slice their work.
+- Light: sliced, but each slice still runs on the page thread (identical results); no worker light.
+- Portal trips depend on the `portalColumns` invariant (assumed); a future structure that places portal blocks in terrain would need `portalColumns` removed or extended.
+- The Overworld return trip still takes about 8 s wall (worker population cells); the screen stays live and no frame exceeds 100 ms. Native duration is assumed.
+- The native download-terrain duration is assumed in every path.
+- Console output during trips was not collected by the harness.
 - No progress bar is shown (natively none either); the console percentage is coarse.
 - No save screen on quit (natively blank).
 - Boot failure still uses the page overlay's HTML text.
