@@ -99,7 +99,7 @@ test('Riding chain: each mount is spawned at the command position and mounted by
 
 test('summon Painting, ItemFrame and LeashKnot follow readEntityFromNBT then setLocationAndAngles', async () => {
   const { Hanging } = await import('./hanging.js');
-  const g = game(); g.hosts.hanging = new Hanging();
+  const g = game(); g.hosts.hanging = new Hanging(); g.hosts.mobs.knotSummon = (...a) => g.mobs.knotSummon(...a);
   const h = g.hosts.hanging;
   assert.ok(!failed(g.run('/summon Painting ~ ~ ~ {Motive:Pool,Direction:1b,TileX:4,TileY:70,TileZ:5}')));
   let p = h.entities[0];
