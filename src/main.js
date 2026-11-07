@@ -232,6 +232,7 @@ import { entityDisplayName } from "./entity-names.js";
 import { Doors, WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, blockItemId, solidTopSurface } from "./doors-panes.js";
 import { spawnPointOf } from "./dimension-spawning.js"; // SpawnerAnimals' spawn point: the Overworld's in every dimension
 import { MinecartRenderer } from "./minecart-renderer.js";
+import { CartSounds } from "./cart-sounds.js";
 import { BoatRenderer } from "./boat-renderer.js";
 import { Boats, BOAT_ITEM } from "./boats.js";
 import { boatBoxProvider } from "./entity-collision.js";
@@ -393,7 +394,7 @@ let sounds,
   horseGearRenderer = null,
   eating = null;
 // Generated-structure entities (structure-simulation.js): mineshaft spawners and chest minecarts.
-let spawners = null, minecarts = null, minecartRenderer = null, aimedCart = null;
+let cartSounds = null, spawners = null, minecarts = null, minecartRenderer = null, aimedCart = null;
 // Boats (boats.js): their own system and renderer next to the minecarts.
 let boats = new Boats(), boatRenderer = null;
 // World.getCollidingBoundingBoxes adds EntityBoat's box: the player and mobs stand on and bump into boats (entity-collision.js).
@@ -3465,6 +3466,7 @@ function tickMusic(dt) {
       credits: screen === "credits", inWorld: screen !== "home", dimension: world?.dimension ?? 0,
       bossName: bossStatus.name, bossFrames: bossStatus.length, creative: !!survival?.creative,
     }));
+    if (screen !== "home") (cartSounds ??= new CartSounds(sounds)).tick(minecarts?.carts ?? [], rider);
     sounds.tick();
     sounds.updateStreams();
   }
@@ -3741,6 +3743,7 @@ async function boot(){try {
         y: previous.y + (position.y - previous.y) * t + PHYSICS.eye - motion.drop(t),
         z: previous.z + (position.z - previous.z) * t,
         yaw, pitch, inWorld: screen !== "home",
+        feet: { x: position.x, y: position.y, z: position.z }, // the server's position of the player, for the S29 range (sound-origin.js)
       };
     },
   );
