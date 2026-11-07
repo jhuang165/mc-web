@@ -66,9 +66,9 @@ Target: Minecraft Java 1.7.10. Evidence: `ControlsProbe` (`tools/probes/Controls
 | F3+H | `advancedItemTooltips`, then `saveOptions`. No chat line. | Same: toggles and saves, with no message. |
 | F3+P | `pauseOnLostFocus`, then `saveOptions` | Same. Off removes the 500 ms lost-focus pause (`EntityRenderer`). |
 | F3+F | `setOptionValue(RENDER_DISTANCE, ±1)`, but 1.7.10 has no RENDER_DISTANCE branch there, so it only saves | Only saves options. |
-| F3+B | `RenderManager.debugBoundingBox` | Not ported (no hitbox renderer). |
-| F3+S / F3+T | `refreshResources` | Not ported (no resource packs). |
-| F3+C | Held for 6 s: manual debug crash | Not ported. |
+| F3+B | `RenderManager.debugBoundingBox` | Draws the native white entity boxes (batch 22, `debug-keys.js`). |
+| F3+S / F3+T | `refreshResources` | In-place `refreshResources` plus every chunk mesh marked dirty; works in every GUI. |
+| F3+C | Held for 6 s: manual debug crash | Held 6 s with F3: shows the crash report with "Manually triggered debug crash" in a dialog, non-destructively. |
 | F4 | `deactivateShader` | Ported: drops the active post shader ([post-shaders.md](post-shaders.md)). |
 | F5 | `key.togglePerspective` | The binding (rebindable). |
 | F8 | No such check in 1.7.10. Cinematic camera is only `key.smoothCamera`, unbound by default | Nothing bound. The test asserts that `main.js` has no F8 or code 66 path. |
@@ -102,5 +102,5 @@ F2 (`key.screenshot`) saves the canvas frame with the DOM GUI drawn over it (`sr
   - The touch d-pad and Jump buttons hold their actions directly, whatever key those actions are bound to. Native 1.7.10 has no touch buttons.
 - Missing:
   - 3D Anaglyph: enabled and saved as `anaglyph3d` ([post-shaders.md](post-shaders.md)); an approximation of the native texture conversion.
-  - The F3+Shift profiler chart, F3+B hitboxes, resource reload, F3+C, F4 shaders and the stream actions.
+  - The stream actions (no Twitch stream). Hitbox line width is fixed at 1 px.
   - Touchscreen Mode stays disabled.
