@@ -1,6 +1,16 @@
 # Shared project state
 
-Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.50.0. Full parity is unfinished.
+Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.51.0. Full parity is unfinished.
+
+Batch 21 (2026-11-07, claude-b21-lead, seven Sonnet tracks merged into main plus a lead hint-toast removal):
+- World loading 2 (`loading-screens.md`, `spawn-presolve.js`, `spawn-worker.js`, `bonus-world.js`): the worker builds the resident window after the spawn walk and the page adopts it; column meshes are built in 12 ms slices; longest main-thread task during creation about 120-150 ms (was 1.3 s and 1.0 s); GuiDownloadTerrain shown after "Building terrain" (bytecode-read); the bonus chest is placed in world creation (createSpawnPosition order). Left: light volume build, portal trips unsliced, gen 13-17 saves.
+- Native dialogs (`modal-dialogs.md`, `modal-dialogs.js`): GuiGameOver, its GuiYesNo quit question (normal worlds now ask before leaving, as natively), sign editor title/Done, Export World and notes on FontRenderer glyphs and native positions (bytecode-read). Left: containers use the DOM modal shell.
+- Spawning 4 (`natural-spawning.md`, `headless-columns.js`, `headless-env.js`): chunks of the 15x15 eligible set outside the 8x8 window are held as headless data columns (worker `ring` requests) and take part in findChunksForSpawning; ring mobs are frozen (port policy) and saved. Ring-vs-all-resident replay identical over 260 ticks.
+- Interchange 2 (`region-import.md`, `owner-links.js`, `mob-attribute-list.js`): OwnerUUID and Leash links point at the exported player's offline UUID and re-link on import; every living class writes the native Attributes list (125 probe records); pigman IsBaby fixed.
+- Combat 3 (`combat.md`, `team-names.js`): Thorns wear (3 hit / 1 miss) with the Unbreaking roll for players and mobs (2916 probe rows); team prefix/suffix/colour on player names in death messages and chat as per-argument components (329 records). Left: zero-size broken stack, skeleton-arrow-on-villager replay.
+- F3 (`debug-screen.md`, `debug-overlay.js`): the native GuiIngame debug text, positions and colours (bytecode-read) and the Shift+F3 profiler pie; 1.7.10 has no lagometer. Renderer/entity counts approximate; F3+B/S/T/C not ported.
+- Fire FX (`fire-fx.md`, `fire-fx.js`, `screen-overlays.js`): first-person fire overlay (also in lava), in-block and underwater overlays, underwater FOV and Respiration/Water Breathing fog; positioned player fizz; item-in-lava fizz now plays.
+- Lead: removed every non-native gameplay hint toast (room to build, tool broke, not hungry, flight, recovery, world-open and pointer-lock hints); boarding any vehicle shows `mount.onboard` on the record line. Languages: `npm run lang:fetch` was run in the Desktop checkout (73 files, ignored by Git).
 
 Batch 20 (2026-11-07, claude-b20-lead, eight Sonnet tracks merged into main):
 - GUI polish (`books.md`, `menu-screens.js`, `achievements-ui.js`, `command-block-screen.js`): GuiSelectWorld's non-native Import/Export/Endless row moved to y 0-20 (no overlap 427x240 to 1920x1080); the Taking Inventory toast draws only its description wrapped to 120 px at y+7 (bytecode); GuiCommandBlock on the bitmap font (the non-native O/X track-output toggle removed); toasts use the glyphs; book arrow hover +23 px. Left: `modal()` DOM dialogs in the page font.
