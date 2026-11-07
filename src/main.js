@@ -90,7 +90,8 @@ import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
 import { showsPumpkinBlur } from "./wearable-heads.js";
 import { PlayerBody, PlayerRenderer, nextView, thirdPersonCamera, playerShadowCaster } from "./player-renderer.js";
 import { FirstPerson, itemTexture, setCompassTextureFrame } from "./first-person.js";
-import { ITEM_COMPASS, COMPASS_FRAMES, COMPASS_STRIP, compassAngle, createCompass, tickCompass } from "./compass.js";
+import { ITEM_COMPASS, COMPASS_FRAMES, COMPASS_STRIP, compassAngle, createCompass, tickCompass, setCompassWorld } from "./compass.js";
+import { compassFrameCount, spriteEpoch } from "./sprite-frames.js";
 import { InventoryPlayerView, PAPERDOLL_LAYOUTS } from "./inventory-player.js";
 import { HorsePreviewView, HORSE_PREVIEW_LAYOUT } from "./horse-preview.js";
 import {Experience,ExperienceOrbs,smeltExperience} from "./experience.js";
@@ -460,6 +461,7 @@ setGameRuleSource((name) => ruleOn(active, name));
 const projectiles = new Projectiles();
 const maps = new MapsClock(); // maps-clock-live.js: filled maps and the clock icon
 const compass = createCompass();
+let compassEpoch = 0, compassShownFrames = COMPASS_FRAMES;
 const eyes = new EyesOfEnder(); // eye-of-ender-live.js: flying eyes of ender
 const rockets = new FireworkRockets(); // fireworks-live.js: firework rockets in flight
 // The scene is created in start(), so particles look up its effect renderer when they spawn.
@@ -632,7 +634,7 @@ function sound(place, block = target ? world.get(...target.block) : 3) {
   const s = place ? placeSound(block) : breakSound(block), cell = place ? target?.adjacent ?? target?.block : target?.block;
   sounds?.play(s.name, { volume: s.volume, pitch: s.pitch, position: cell && { x: cell[0] + 0.5, y: cell[1] + 0.5, z: cell[2] + 0.5 } });
 }
-const compassIcon = () => `<span class="vanilla-item-icon creative-strip" style="--strip:url('${COMPASS_STRIP}');--frames:${COMPASS_FRAMES}" aria-hidden="true"></span>`;
+const compassIcon = () => `<span class="vanilla-item-icon creative-strip" style="--strip:url('${COMPASS_STRIP}');--frames:var(--compass-frames,${COMPASS_FRAMES})" aria-hidden="true"></span>`;
 function icon(id, damage = 0, stack) {
   const item = ITEMS[id];
   if (!id || !item) return '<span class="empty-hand">·</span>';
@@ -2468,11 +2470,15 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
   const facing = mcYaw(yaw);
   maps.tick({ survival, position, yaw: facing, world, time: survival.time, frames: hanging.entities });
-  const previousCompassFrame = compass.frame;
-  const frame = tickCompass(compass, compassAngle(position, Math.fround(facing), active.worldSpawn, !world.dimension));
-  if (frame !== previousCompassFrame) {
+  if (compassEpoch !== spriteEpoch()) { compassEpoch = spriteEpoch(); Object.assign(compass, createCompass()); } // new sprite after a pack with another strip
+  const previousCompassFrame = compass.frame, compassFrames = compassFrameCount();
+  setCompassWorld(active.worldSpawn, !world.dimension); // item frames read it (hanging-renderer.js)
+  const frame = tickCompass(compass, compassAngle(position, Math.fround(facing), active.worldSpawn, !world.dimension), compassFrames);
+  if (frame !== previousCompassFrame || compassFrames !== compassShownFrames) {
+    compassShownFrames = compassFrames;
     setCompassTextureFrame(frame);
-    document.documentElement.style.setProperty("--compass-position", `${frame * 100 / (COMPASS_FRAMES - 1)}%`);
+    document.documentElement.style.setProperty("--compass-frames", String(compassFrames));
+    document.documentElement.style.setProperty("--compass-position", `${frame * 100 / Math.max(1, compassFrames - 1)}%`);
   }
   tickEntitySimulation({ world, items, primed, projectiles, arrows, mobs, survival, position, sneaking: !!motion.sneaking,
     width: PHYSICS.width, height: PHYSICS.height }, {

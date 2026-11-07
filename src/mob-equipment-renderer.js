@@ -6,6 +6,7 @@
 import * as THREE from "three";
 import { modelBox, BIPED, armorLayer, heldKind, heldItemMatrix } from "./player-renderer.js";
 import { pixelTexture, itemTexture } from "./first-person.js";
+import { itemFrameTag } from "./item-animation.js";
 import { entityMaterial } from "./light-material.js";
 import { spriteGeometry } from "./sprite-geometry.js";
 import { headItemMatrix } from "./wearable-heads.js";
@@ -44,7 +45,9 @@ function dispose(r) {
 // Brings the rig's armour, held item and head block in line with `e.equipment`. Cheap when nothing changed.
 export function syncMobEquipment(renderer, r, e) {
   if (!e.equipment || !GEAR_TYPES.has(e.type) || !r.neck || r.villager) return;
-  const key = e.equipment.map((s) => (s ? `${s.id}:${s.damage | 0}` : "0")).join(",");
+  // The held item (slot 0) also carries its animated icon frame (item-animation.js), so a frame change rebuilds the sprite only then.
+  const heldStack = e.equipment[0], heldLive = heldStack ? toLiveStack(heldStack) : null;
+  const key = e.equipment.map((s) => (s ? `${s.id}:${s.damage | 0}` : "0")).join(",") + (heldLive ? ":" + itemFrameTag(itemTexture(heldLive.id, heldLive.damage)) : "");
   if (r.gearKey === key) return;
   r.gearKey = key;
   dispose(r);

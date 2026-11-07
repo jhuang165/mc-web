@@ -340,12 +340,63 @@ public class MapsClockProbe {
       if (t % 50 == 0) seq.append(seq.length() > 0 ? "," : "").append("[").append(t).append(",").append(((ahb) clientWorld).c(1.0f)).append(",").append(fd(bqd.class, "g").getInt(clock)).append(",").append(num(fd(bql.class, "i").getDouble(clock))).append("]");
     }
     System.out.println("{\"case\":\"clockDay\",\"samples\":[" + seq + "]}");
+    frameCounts(mc, clientWorld);
+  }
+
+  // TextureClock and TextureCompass index their frame list by size(): a strip of n frames (TextureAtlasSprite.framesTextureData) is
+  // n frame positions. Drives the unchanged bql / bqm with lists of other lengths (what a resource pack's strip supplies).
+  static bqm newCompass(int count) throws Exception {
+    bqm compass = new bqm("compass");
+    List frames = new ArrayList();
+    for (int i = 0; i < count; i++) frames.add(new int[1][1]);
+    fd(bqd.class, "a").set(compass, frames);
+    fd(bqd.class, "g").setInt(compass, 0);
+    return compass;
+  }
+  static void frameCounts(Object mc, Object clientWorld) throws Exception {
+    int[] counts = { 1, 2, 5, 32, 64, 128 };
+    long[] times = { 0, 4000, 9000, 14000, 20000 };
+    for (int n : counts) for (long t : times) {
+      bql clock = newClock(n);
+      time(t);
+      StringBuilder seq = new StringBuilder();
+      for (int i = 0; i < 120; i++) {
+        tickClock(clock);
+        if (i < 12 || i % 20 == 0 || i == 119) seq.append(seq.length() > 0 ? "," : "").append("[").append(i).append(",").append(fd(bqd.class, "g").getInt(clock)).append(",").append(num(fd(bql.class, "i").getDouble(clock))).append("]");
+      }
+      System.out.println("{\"case\":\"clockFrames\",\"frames\":" + n + ",\"time\":" + t + ",\"samples\":[" + seq + "]}");
+    }
+    // Compass: spawn (sx, sz), the player at (px, pz) facing yaw; settling from a fresh state, then the direct set the item frame uses.
+    Object player = fd(Class.forName("bao"), "h").get(mc);
+    int[][] cases = { { 0, 0, 40, -25, 0 }, { 100, -60, -12, 33, 90 }, { -30, 80, 5, 5, 180 }, { 7, 7, 7, 7, 270 }, { 0, 0, 1000, 3, -45 }, { 20, -20, -300, 400, 725 } };
+    for (int n : counts) for (int[] c : cases) {
+      spawn(c[0], c[1]);
+      fd(sa.class, "s").setDouble(player, c[2]); fd(sa.class, "u").setDouble(player, c[3]); fd(sa.class, "y").setFloat(player, c[4]);
+      bqm compass = newCompass(n);
+      StringBuilder seq = new StringBuilder();
+      for (int i = 0; i < 100; i++) {
+        try { compass.j(); } catch (Throwable e) { /* the GL upload after the frame index is stored */ }
+        if (i < 10 || i % 15 == 0 || i == 99) seq.append(seq.length() > 0 ? "," : "").append("[").append(i).append(",").append(fd(bqd.class, "g").getInt(compass)).append(",").append(num(compass.i)).append(",").append(num(compass.j)).append("]");
+      }
+      // RenderItemFrame: i = j = 0, then a(world, x, z, wrapAngleTo180(180 + dir * 90), false, true) sets the angle without smoothing.
+      StringBuilder direct = new StringBuilder();
+      for (int dir = 0; dir < 4; dir++) {
+        bqm k = newCompass(n);
+        k.i = 0; k.j = 0;
+        float yaw = qh.g((float) (180 + dir * 90));
+        try { k.a((ahb) clientWorld, c[2], c[3], (double) yaw, false, true); } catch (Throwable e) { }
+        direct.append(direct.length() > 0 ? "," : "").append("[").append(dir).append(",").append(fd(bqd.class, "g").getInt(k)).append(",").append(num(k.i)).append("]");
+      }
+      System.out.println("{\"case\":\"compassFrames\",\"frames\":" + n + ",\"spawn\":[" + c[0] + "," + c[1] + "],\"player\":[" + c[2] + "," + c[3] + "," + c[4] + "],\"samples\":[" + seq + "],\"frame\":[" + direct + "]}");
+    }
+    spawn(0, 0);
   }
   public static class CW extends bjf { CW() { super(null, null, 0, null, null); } }
-  static bql newClock() throws Exception {
+  static bql newClock() throws Exception { return newClock(64); }
+  static bql newClock(int count) throws Exception {
     bql clock = new bql("clock");
     List frames = new ArrayList();
-    for (int i = 0; i < 64; i++) frames.add(new int[1][1]);
+    for (int i = 0; i < count; i++) frames.add(new int[1][1]);
     fd(bqd.class, "a").set(clock, frames);
     fd(bqd.class, "g").setInt(clock, 0);
     return clock;

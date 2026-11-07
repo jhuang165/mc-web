@@ -5,7 +5,8 @@ import { toOriginal } from "./block-registry.js";
 import { blockLightOpacity } from "./map-colors.js";
 import { onResourcesRefreshed } from "./resource-refresh.js";
 import { versioned } from "./media-version.js";
-import { tickItemAnimations } from "./item-animation.js";
+import { tickItemAnimations, registerFrameTag } from "./item-animation.js";
+import { clockFrameCount, spriteEpoch } from "./sprite-frames.js";
 
 export function installMapsClockItems(items) {
   items[ITEM_CLOCK] = { id: ITEM_CLOCK, name: "Clock", texture: "clock", stack: 64, color: "#d6a937" };
@@ -21,6 +22,7 @@ export function mapsCraftingResult(cells, size) {
 
 // ---- the clock sprite (TextureClock): the live frame cut from clock.png ----
 export const clockState = createClock();
+let epochSeen = 0;
 const frameUrls = new Map(), urlSet = new Set();
 let strip = null;
 function loadStrip() {
@@ -36,7 +38,7 @@ export function clockFrameUrl(frame = clockState.frame) {
   if (!frameUrls.has(frame)) {
     const c = document.createElement("canvas"); const f = strip.naturalWidth; c.width = c.height = f; // TextureClock cells are square, as wide as the strip
     c.getContext("2d").drawImage(strip, 0, frame * f, f, f, 0, 0, f, f);
-    const url = c.toDataURL("image/png"); frameUrls.set(frame, url); urlSet.add(url);
+    const url = c.toDataURL("image/png"); frameUrls.set(frame, url); urlSet.add(url); registerFrameTag(url, frame);
   }
   return frameUrls.get(frame);
 }
@@ -66,7 +68,8 @@ export class MapsClock {
   // ItemMap.onUpdate for every filled map in the inventory, updateMapData for the selected slot (20 Hz).
   tick({ survival, position, yaw, world, time, name = "Player", frames = null }) {
     const surface = (world?.dimension ?? 0) === 0; // TextureClock: !worldProvider.isSurfaceWorld spins (dimensions track)
-    tickClock(clockState, clockAngle(time, surface));
+    if (epochSeen !== spriteEpoch()) { epochSeen = spriteEpoch(); Object.assign(clockState, createClock()); } // new sprite after a pack with another strip
+    tickClock(clockState, clockAngle(time, surface), clockFrameCount());
     tickItemAnimations(); // pack-animated item sprites (item-animation.js)
     if (typeof document !== "undefined") {
       const url = clockFrameUrl();
