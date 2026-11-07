@@ -300,6 +300,7 @@ export class VoxelScene {
     for (const child of group.children) child.geometry.dispose();
   }
   buildChunk(cx, cz) {
+    this.chunkUpdates = (this.chunkUpdates || 0) + 1; // WorldRenderer.chunksUpdated for the F3 title line (one column mesh per count)
     const key = `${cx},${cz}`, old = this.chunks.get(key);
     if (old) this.disposeChunk(old);
     this.dirty.delete(key);

@@ -1,0 +1,55 @@
+{
+  "source": "Minecraft 1.7.10 client jar, javap -c -constants. Obfuscated names: GuiIngame = bbv, Minecraft = bao, RenderGlobal = bma, EffectRenderer = bkn, WorldClient = bjf, GameSettings = bbj, Profiler = qi, Profiler.Result = qj, MathHelper = qh, Direction = p. Labels: bytecode-read, probed, assumed.",
+  "label": "bytecode-read unless a field says otherwise",
+  "toggle": { "key": "F3 (LWJGL 61) on key down toggles GameSettings.showDebugInfo (bbj.ax); showDebugProfilerChart (bbj.ay) = Shift held at that moment (bdw.r: LWJGL 42 or 54)", "bytecode": "bao.p key loop offsets 1056-1090" },
+  "draw": { "method": "bbv.a(float,boolean,int,int), profiler section \"debug\"", "style": "Gui.drawString -> FontRenderer.drawStringWithShadow (shadow = true); no background box; no GL scale; coordinates are GUI-scaled pixels", "background": "none (no drawRect in the debug branch)" },
+  "left": [
+    { "y": 2, "color": 16777215, "format": "\"Minecraft 1.7.10 (\" + Minecraft.debug + \")\"", "debug": "Minecraft.debug = <fps> + \" fps, \" + WorldRenderer.chunksUpdated + \" chunk updates\", rebuilt once per second (bao offset 600-655), chunksUpdated (blo.b) reset then" },
+    { "y": 12, "color": 16777215, "format": "RenderGlobal.getDebugInfoRenders (bma.d): \"C: \" + renderersBeingRendered + \"/\" + renderersLoaded + \". F: \" + renderersBeingClipped + \", O: \" + renderersBeingOccluded + \", E: \" + renderersSkippingRenderPass", "fieldNames": "assumed (MCP names for bma.ab/Y/Z/aa/ac)" },
+    { "y": 22, "color": 16777215, "format": "RenderGlobal.getDebugInfoEntities (bma.e): \"E: \" + countEntitiesRendered + \"/\" + countEntitiesTotal + \". B: \" + countEntitiesHidden + \", I: \" + (total - hidden - rendered)", "fieldNames": "assumed (bma.W/V/X)" },
+    { "y": 32, "color": 16777215, "format": "bao.t: \"P: \" + EffectRenderer.getStatistics (bkn.b: layers 0..2 sizes summed) + \". T: \" + World.getDebugLoadedEntities (ahb.z: \"All:\" + loadedEntityList.size())" },
+    { "y": 42, "color": 16777215, "format": "bao.s -> World.getProviderName -> ChunkProviderClient.makeString (bjd.f): \"MultiplayerChunkCache: \" + chunkMapping.size + \", \" + chunkListing.size" },
+    { "y": 64, "color": 14737632, "format": "String.format(\"x: %.5f (%d) // c: %d (%d)\", posX, floor(posX), floor(posX) >> 4, floor(posX) & 15)" },
+    { "y": 72, "color": 14737632, "format": "String.format(\"y: %.3f (feet pos, %.3f eyes pos)\", boundingBox.minY, posY)", "note": "floor(posY) is the block Y used below; posY is the eye position" },
+    { "y": 80, "color": 14737632, "format": "String.format(\"z: %.5f (%d) // c: %d (%d)\", posZ, floor(posZ), floor(posZ) >> 4, floor(posZ) & 15)" },
+    { "y": 88, "color": 14737632, "format": "\"f: \" + (floor(rotationYaw * 4.0F / 360.0F + 0.5D) & 3) + \" (\" + Direction.directions[that] + \") / \" + MathHelper.wrapAngleTo180_float(rotationYaw)", "directions": ["SOUTH", "WEST", "NORTH", "EAST"], "wrap": "f % 360; >= 180 -> -360; < -180 -> +360 (qh.g)", "float": "StringBuilder.append(float) = Float.toString" },
+    { "y": 96, "color": 14737632, "only": "world != null && world.blockExists(floor x, floor y, floor z)", "format": "\"lc: \" + (chunk.getTopFilledSegment() + 15) + \" b: \" + chunk.getBiomeGenForWorldCoords(x & 15, z & 15, chunkManager).biomeName + \" bl: \" + chunk.getSavedLightValue(Block, x & 15, y, z & 15) + \" sl: \" + chunk.getSavedLightValue(Sky, x & 15, y, z & 15) + \" rl: \" + chunk.getBlockLightValue(x & 15, y, z & 15, 0)" },
+    { "y": 104, "color": 14737632, "format": "String.format(\"ws: %.3f, fs: %.3f, g: %b, fl: %d\", capabilities.getWalkSpeed (yw.b, 0.1F), capabilities.getFlySpeed (yw.a, 0.05F), onGround, world.getHeightValue(floor x, floor z))", "heightValue": "bjf.f(II) returns 64 outside +-30000000" },
+    { "y": 112, "color": 14737632, "only": "an EntityRenderer shader is active", "format": "String.format(\"shader: %s\", shaderGroup name)", "port": "not drawn: no shader groups" }
+  ],
+  "right": [
+    { "y": 2, "color": 14737632, "x": "scaledWidth - getStringWidth(s) - 2", "format": "\"Used memory: \" + used * 100 / max + \"% (\" + used / 1024 / 1024 + \"MB) of \" + max / 1024 / 1024 + \"MB\"", "used": "Runtime.totalMemory - freeMemory (long division)" },
+    { "y": 12, "color": 14737632, "x": "scaledWidth - getStringWidth(s) - 2", "format": "\"Allocated memory: \" + total * 100 / max + \"% (\" + total / 1024 / 1024 + \"MB)\"" }
+  ],
+  "profilerPie": {
+    "condition": "showDebugInfo && showDebugProfilerChart; Profiler.profilingEnabled is turned on (and cleared when it was off), else off (bao offsets 340-405)",
+    "coordinates": "raw display pixels (glOrtho 0..displayWidth, displayHeight..0), not GUI scaled; text drawn unscaled",
+    "radius": 160, "center": "x = displayWidth - 160 - 10, y = displayHeight - 320",
+    "backPanel": "Tessellator.setColorRGBA_I(0, 200) quad x +-176 (1.1 * radius), y from center - 96 - 16 to center + 320",
+    "sectors": "per Result row: steps = floor(use / 4) + 1; top fan colour = (name.hashCode() & 0xAAAAAA) + 0x444444, ellipse half height (cos * radius * 0.5); side strip 10 px tall, colour (c & 0xFEFEFE) >> 1",
+    "sectionText": { "header": "(name != \"unspecified\" ? \"[0]\" : \"\") + (name.length == 0 ? \"ROOT\" : name + \" \") at (cx - 160, cy - 96), white; total % right aligned at cx + 160", "rows": "(row == \"unspecified\" ? \"[?]\" : \"[\" + (i + 1) + \"]\") + name at (cx - 160, cy + 80 + 8 i + 20) in the sector colour; use % right aligned at cx + 110, total % at cx + 160", "number": "DecimalFormat(\"##0.00\") + \"%\"" },
+    "digits": "while the chart shows, key 0 (LWJGL 11) goes to the parent (lastIndexOf(\".\")), keys 1-9 (LWJGL 2-10) descend into the nth row unless it is \"unspecified\" (bao.b(int))",
+    "firstRowRemoved": "getProfilingData(name).remove(0) is the section itself"
+  },
+  "hotkeys": {
+    "F3+S (31)": "bao.c: refresh resources. Not ported (no resource packs).",
+    "F3+T (20)": "same bao.c as F3+S. Not ported.",
+    "F3+F (33)": "GameSettings.setOptionValue(RENDER_DISTANCE-ish, +-1) with Shift reversing; controls.md records it only saves options. Existing port: saves options.",
+    "F3+A (30)": "RenderGlobal.loadRenderers (bma.a). Port: marks every chunk mesh dirty.",
+    "F3+H (35)": "advancedItemTooltips toggle + saveOptions. Port: same.",
+    "F3+B (48)": "RenderManager.debugBoundingBox (bnn.p) toggle. Not ported (no hitbox renderer).",
+    "F3+P (25)": "pauseOnLostFocus toggle + saveOptions. Port: same.",
+    "F3+C": "held 6 s crash (bao.am timestamp on key 46). Not ported.",
+    "absent in 1.7.10": ["lagometer / frame-time graph (bbj.ay is read only by bao: the profiler pie and its digit keys)", "F3+G chunk borders", "F3+D chat clear", "F3+N, F3+Q, F3+F4"]
+  },
+  "port": {
+    "title": "fps from the main loop; chunk updates = scene.buildChunk calls per second (one per column mesh, native counts 16^3 WorldRenderers) - assumed approximation",
+    "renderers": "assumed: sections = resident mesh columns * height/16; rendered = sections inside the camera frustum; F = loaded - rendered; O and E fixed 0",
+    "entities": "assumed: mobs, items, XP orbs, carts, boats, hanging entities by frustum sphere test (sampled 4 times a second) + the local player (rendered only in third person); B = frustum-culled",
+    "particles": "EffectRenderer.count() layers 0-2 (the port's own counter)",
+    "chunkCache": "world.chunks.size or the mesh column count, listed = loaded",
+    "memory": "assumed: performance.memory (Chromium) jsHeapSizeLimit / totalJSHeapSize / usedJSHeapSize; others use navigator.deviceMemory or 0",
+    "lc": "highest non-air block in the chunk, rounded down to a 16 section, + 15",
+    "profilerPie": "second Profiler over the frame: root.tick (particles/tick/bed/effects/player phases) and root.render; unspecified is the rest"
+  }
+}
