@@ -109,6 +109,7 @@ import { ChatUi, printChat, chat } from "./chat-ui.js";
 import { translation, fontWidth } from "./chat-component.js";
 import { lookupStat, statComponent, statHover, profilerTick } from "./commands-extra.js";
 import { Profiler } from "./profiler.js";
+import { DebugOverlay, selectSection, nativeYaw, readMemory, rendererStats, entityStats, columnStats, heightValue, floorD, WALK_SPEED, FLY_SPEED } from "./debug-overlay.js";
 import { parseJsonNbt } from "./json-nbt.js";
 import { itemStackFromNbt } from "./region-import.js";
 import { NBT } from "./nbt.js";
@@ -667,8 +668,6 @@ function icon(id, damage = 0, stack) {
 }
 const heldId = () => survival.held?.id || 0;
 const recordHud = createRecordHud(document.body);
-// F3 overlay lines in FontRenderer glyphs; the markup is rebuilt only when the text (or the font) changes.
-const debugText = (text) => { const el = $("#debug"), key = text + font.version; if (el.dataset.key !== key) { el.dataset.key = key; el.innerHTML = text.split("\n").map((l) => `<div class="mc-text">${bitmapHtml(l, 0xe0e0e0) || "&nbsp;"}</div>`).join(""); } };
 // Item, stack count and durability overlays, as RenderItem draws them.
 function stackHtml(s, count = s?.count) {
   if (!s) return "";
@@ -1449,6 +1448,10 @@ async function launch(record, prepared, { slice = false } = {}) {
 let chatOpen = false;
 // /debug's Profiler (profiler.js) over the tick loop below, and the tick counter (MinecraftServer.getTickCounter) it reports.
 const profiler = new Profiler();
+// F3 debug screen (debug-overlay.js): the Shift+F3 pie reads a second Profiler over the frame; the tick phases feed both.
+const clientProfiler = new Profiler(), debugOverlay = new DebugOverlay($("#debug"));
+const tickProf = { start: (n) => { profiler.start(n); clientProfiler.start(n === "root" ? "tick" : n); }, endStart: (n) => { profiler.endStart(n); clientProfiler.endStart(n); }, end: () => { profiler.end(); clientProfiler.end(); } };
+let debugChart = false, debugSection = "root", debugSecond = { at: 0, updates: 0, shown: 0 }, debugCache = { at: 0 };
 let tickCounter = 0;
 // The tooltip of a show_item hover: JsonToNBT, ItemStack.loadItemStackFromNBT, then the inventory tooltip's lines and colours.
 const TIP_CODES = { aqua: "b", blue: "9", gray: "7", pink: "d", purple: "5", red: "c", yellow: "e", white: "f", bold: "l", italic: "o" };
@@ -3279,7 +3282,8 @@ window.addEventListener("keydown", (e) => {
     if (f3 && code === 25) { options.pauseOnLostFocus = options.pauseOnLostFocus === false; saveOptions(); }
     if (code === 59) hideGUI = !hideGUI;
     if (code === 62) scene.post.deactivateShader(); // F4: EntityRenderer.deactivateShader (the shader is not saved)
-    if (code === 61) { debug = !debug; $("#debug").classList.toggle("hidden", !debug); }
+    if (code === 61) { debug = !debug; debugChart = e.shiftKey; $("#debug").classList.toggle("hidden", !debug); if (!debug) debugOverlay.hide(); }
+    if (debug && debugChart && (code === 11 || (code >= 2 && code <= 10))) debugSection = selectSection(clientProfiler, debugSection, code === 11 ? 0 : code - 1); // Minecraft.b(int)
     // KeyBinding.setKeyBindState + onTick through the hash, then the binding's action.
     const d = binds.set(code, true);
     if (d) bindingPressed(d, e.ctrlKey);
@@ -3458,33 +3462,34 @@ function animate(now) {
   }
   // Minecraft.isGamePaused: the game menu stops the world unless the LAN server is public (lan.js).
   const running = () => screen === "playing" || screen === "inventory" || (screen === "paused" && !lan.paused(true));
+  { const want = debug && debugChart; if (clientProfiler.enabled !== want) { clientProfiler.clear(); clientProfiler.enabled = want; } clientProfiler.section = ""; clientProfiler.sections.length = 0; clientProfiler.stamps.length = 0; clientProfiler.start("root"); } // Minecraft.runGameLoop: profiler on while Shift+F3
   tickMusic(dt);
   if (running()) {
     accumulator += dt;
     while (accumulator >= PHYSICS.tick && running()) {
       profilerTick(profiler); // MinecraftServer.tick: /debug start takes effect here
       tickCounter++;
-      profiler.start("root");
-      profiler.start("particles");
+      tickProf.start("root");
+      tickProf.start("particles");
       updateParticleOptions();
       // --- Block particles (particles.js): Entity.onEntityUpdate's sprint particle uses the
       // pre-move position, last tick's motion and in-water flag, before movementTick moves the
       // player; EffectRenderer.updateEffects then runs after this tick's spawns. ---
       if (motion.sprinting) spawnRunningParticles(scene.particles, world, { x: position.x, y: position.y, z: position.z, mx: velocity.x, mz: velocity.z, sprinting: true, inWater: wasInWater, ySize: motion.ySize }, playerRandom, [position.x, position.y + PHYSICS.eye, position.z]);
-      profiler.endStart("tick");
+      tickProf.endStart("tick");
       movementTick(captureMovementInput(bedSleep.sleeping ? () => false : (d) => binds.isDown(d))); // a sleeping player ignores the keys
-      profiler.endStart("bed");
+      tickProf.endStart("bed");
       tickBed();
-      profiler.endStart("effects");
+      tickProf.endStart("effects");
       scene.effectRenderer.tick(world);
-      profiler.endStart("player");
+      tickProf.endStart("player");
       // The model stands at posY - yOffset, and posY is lowered by ySize (the sneak drop).
       const lowered = (p, drop) => ({ x: p.x, y: p.y - drop, z: p.z });
       playerBody.tick({ position: lowered(position, motion.ySize), previous: lowered(previous, motion.prevYSize), yaw, pitch, swinging: animation.swingTime < SWING_SECONDS, riding: !!rider.vehicle });
       // EntityRenderer.updateRenderer: the cinematic camera filters advance once per tick.
       mouseLook.tick(options.sensitivity, smoothCamera);
-      profiler.end();
-      profiler.end();
+      tickProf.end();
+      tickProf.end();
       accumulator -= PHYSICS.tick;
     }
     const t = accumulator / PHYSICS.tick;
@@ -3575,9 +3580,33 @@ function animate(now) {
       $("#mining-meter i").style.width =
         Math.min(100, mining.progress * 100) + "%";
     }
-    if (debug)
-      debugText(
-        `BLOCKWORLD / Java 1.7.10 study\n${fps} FPS · ${(scene.worldTriangles || 0).toLocaleString()} triangles\nXYZ: ${position.x.toFixed(2)} / ${position.y.toFixed(2)} / ${position.z.toFixed(2)}\nSeed: ${active.seed}\n${survival.mode} · day ${Math.floor(survival.time / 24000) + 1} · ${survival.time % 24000} ticks\nHealth ${survival.health} · food ${survival.food} · saturation ${survival.saturation.toFixed(1)}\n${world.streaming ? world.chunks.size+" loaded chunks · " : ""}${world.edits.size} ${world.streaming ? "cached edited blocks" : "edited blocks"} · ${Object.keys(survival.chests).length + Object.keys(survival.furnaces).length} containers · ${items.items.length} items · ${mobs?.entities.length || 0} mobs\n${aimedEntity ? entityDisplayName(aimedEntity.entity.type) + " · " + aimedEntity.entity.health + " health" : target ? (ITEMS[world.get(...target.block)]?.name ?? BLOCKS[world.get(...target.block)].name) : "Looking into the distance"}`);
+    if (debug) {
+      // GuiIngame debug screen (debug-overlay.js). Counts that the port has no native source for are sampled four times a second.
+      const eyeY = position.y + PHYSICS.eye - motion.ySize, bx = floorD(position.x), by = floorD(eyeY), bz = floorD(position.z), ms = performance.now();
+      if (Math.floor(elapsed) !== debugSecond.at) { debugSecond.shown = (scene.chunkUpdates || 0) - debugSecond.updates; debugSecond.updates = scene.chunkUpdates || 0; debugSecond.at = Math.floor(elapsed); }
+      if (ms - debugCache.at > 250) {
+        const pts = [];
+        for (const m of mobs?.entities || []) pts.push([m.x, m.y + 0.9, m.z, 1.5]);
+        for (const i of items.items) pts.push([i.x, (i.posY ?? i.y ?? 0) + 0.125, i.z, 0.5]);
+        for (const o of xpOrbs.orbs) pts.push([o.x, o.y, o.z, 0.5]);
+        for (const c of [...(minecarts?.carts || []), ...boats.carts]) pts.push([c.x, c.posY ?? c.y ?? 0, c.z, 1.5]);
+        for (const h of hanging.entities) pts.push([h.x, h.y ?? 0, h.z, 1]);
+        const col = columnStats(world, bx >> 4, bz >> 4);
+        debugCache = { at: ms, renders: rendererStats(scene, world), entities: entityStats(scene, pts, { thirdPerson: thirdPersonView > 0 }), topSegment: col.topSegment, height: heightValue(world, bx, bz) };
+      }
+      const loaded = !world.chunkAt || !!world.chunkAt(bx >> 4, bz >> 4), lv = scene.light, biome = world.biomeAt?.(bx, bz)?.name ?? "Unknown";
+      const u = guiScale(innerWidth, innerHeight, Number(options.guiScale) || 0);
+      debugOverlay.update({
+        u, scaledWidth: Math.ceil(innerWidth / u), w: innerWidth, h: innerHeight, mem: readMemory(),
+        pie: debugChart ? { list: clientProfiler.results(debugSection) } : null,
+        left: {
+          fps, chunkUpdates: debugSecond.shown, renders: debugCache.renders, entities: debugCache.entities, particles: scene.effectRenderer.count(),
+          chunkCache: world.chunks?.size ?? scene.chunks.size, x: position.x, z: position.z, feetY: position.y, eyeY, yaw: nativeYaw(yaw), onGround: grounded && !flying, height: debugCache.height,
+          walkSpeed: WALK_SPEED, flySpeed: FLY_SPEED,
+          light: loaded && by >= 0 && by < 256 ? { topSegment: debugCache.topSegment, biome, block: lv ? lv.blockAt(bx, by, bz) : 0, sky: lv ? lv.skyAt(bx, by, bz) : 15, real: lv ? lv.level(bx, by, bz, 0) : 15 } : null,
+        },
+      });
+    }
     if (elapsed - lastSave > 5) save();
     scene.effects.crack(mining?.block, mining?.progress);
   } else if (screen === "dead") {
@@ -3648,7 +3677,10 @@ function animate(now) {
     scene.camera.updateProjectionMatrix();
   }
   // The title and world screens cover the view; a paused world still draws behind its menu.
+  clientProfiler.start("render");
   if (screen !== "home") scene.render(elapsed, dt);
+  clientProfiler.end();
+  clientProfiler.end();
   if (firstPerson && animate.pose)
     firstPerson.render(animate.pose, {
       // EntityRenderer.renderHand: first person only, and never while the player is sleeping.
