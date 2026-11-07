@@ -11,6 +11,7 @@ import {
   KEY_BINDINGS, keyListEntries, keyName, javaHash, chatOptionsLayout, confirmLinkLayout,
 } from "./menu-screens.js";
 import { lwjglCode, mouseCode } from "./keybindings.js";
+import { lang, sortedLanguages, languageLabel, selectLanguage, setForceUnicodeFont } from "./lang.js";
 import { CHAT_SETTING_DEFAULTS } from "./settings.js";
 import { canGoEndless } from "./endless-world.js";
 import { achievementsScreen } from "./achievements-ui.js";
@@ -32,15 +33,15 @@ export const UNAVAILABLE = {
   stream: "Twitch broadcasting was a desktop-only feature; a web page cannot stream.",
   showCape: "There are no accounts or capes in this browser build, so the Show Cape button is drawn disabled.",
   snooper: "This build sends no usage data, so there is nothing to configure.",
-  forceUnicode: "Only the default font and the English (US) strings are bundled.",
+  languages: "Only English (US) is installed. Run npm run lang:fetch for the other languages.",
   touchscreen: "Touch input in this browser build uses its own on-screen controls.",
   fixedVideo: "This renderer has no switch for this setting; the button shows what it always does.",
   mapFeatures: "Structure generation is fixed by the world type in this browser build.",
 };
 // The renderer's fixed state, shown by the disabled video buttons.
-const FIXED = { TOUCHSCREEN: false, FORCE_UNICODE_FONT: false };
+const FIXED = { TOUCHSCREEN: false };
 // GameSettings fields of the options the port implements.
-const FIELDS = { FOV: "fov", SENSITIVITY: "sensitivity", GAMMA: "gamma", RENDER_DISTANCE: "distance", VIEW_BOBBING: "bobbing", GUI_SCALE: "guiScale", PARTICLES: "particles", DIFFICULTY: "difficulty", INVERT_MOUSE: "invertMouse", GRAPHICS: "graphics", AMBIENT_OCCLUSION: "ao", RENDER_CLOUDS: "clouds", MIPMAP_LEVELS: "mipmapLevels", ANISOTROPIC_FILTERING: "anisotropic",
+const FIELDS = { FOV: "fov", SENSITIVITY: "sensitivity", GAMMA: "gamma", RENDER_DISTANCE: "distance", FORCE_UNICODE_FONT: "forceUnicodeFont", VIEW_BOBBING: "bobbing", GUI_SCALE: "guiScale", PARTICLES: "particles", DIFFICULTY: "difficulty", INVERT_MOUSE: "invertMouse", GRAPHICS: "graphics", AMBIENT_OCCLUSION: "ao", RENDER_CLOUDS: "clouds", MIPMAP_LEVELS: "mipmapLevels", ANISOTROPIC_FILTERING: "anisotropic",
   CHAT_VISIBILITY: "chatVisibility", CHAT_COLOR: "chatColors", CHAT_LINKS: "chatLinks", CHAT_OPACITY: "chatOpacity", CHAT_LINKS_PROMPT: "chatLinksPrompt",
   CHAT_SCALE: "chatScale", CHAT_HEIGHT_FOCUSED: "chatHeightFocused", CHAT_HEIGHT_UNFOCUSED: "chatHeightUnfocused", CHAT_WIDTH: "chatWidth", SHOW_CAPE: "showCape",
   // GameSettings.limitFramerate (frame-limit.js) and enableVsync (saved; requestAnimationFrame is always vsynced).
@@ -602,23 +603,43 @@ export function createMenus(gui, ctx) {
   }
 
   // --- GuiLanguage ---
+  // The list is LanguageManager.getLanguages (sorted by code, entries "name (region)"); a click selects the language,
+  // reloads the strings and sets the unicode flag. Only English (US) exists until `npm run lang:fetch` installs the others.
+  let languageScroll = 0;
   function languageScreen(parent) {
+    let list;
     return {
       id: "language",
       escape: close,
       init(g, w, h) {
-        const L = languageLayout(w, h);
-        // Only en_US.lang is bundled.
-        g.slotList(L.list, {
-          count: 1,
-          selected: () => true,
-          entry(i, y, parent) { g.text("English (US)", Math.trunc(w / 2), y + 1, { center: true, parent }); },
+        const L = languageLayout(w, h), codes = sortedLanguages(lang.languages);
+        list = g.slotList(L.list, {
+          count: codes.length,
+          scroll: languageScroll,
+          selected: (i) => codes[i] === lang.code,
+          entry(i, y, parent) { g.text(languageLabel(lang.languages[codes[i]]), Math.trunc(w / 2), y + 1, { center: true, parent }); },
+          async click(i) {
+            if (codes[i] === lang.code) return;
+            languageScroll = list?.scroll ?? 0;
+            await selectLanguage(codes[i]);
+            ctx.options.language = lang.code;
+            ctx.saveOptions();
+            g.build();
+          },
         });
         g.text(t("options.language"), ...L.title, { center: true });
         g.text("(" + t("options.languageWarning") + ")", ...L.warning, { center: true, color: COLOR.gray });
-        optionWidget(g, "FORCE_UNICODE_FONT", L.buttons.forceUnicode);
-        g.button(L.buttons.done, t("gui.done"), () => show(parent()));
+        if (!lang.installed) g.text(UNAVAILABLE.languages, L.warning[0], L.warning[1] + 10, { center: true, color: COLOR.gray });
+        g.button(L.buttons.forceUnicode, optionText("FORCE_UNICODE_FONT", !!ctx.options.forceUnicodeFont), () => {
+          ctx.options.forceUnicodeFont = !ctx.options.forceUnicodeFont;
+          setForceUnicodeFont(ctx.options.forceUnicodeFont);
+          ctx.saveOptions();
+          languageScroll = list?.scroll ?? 0;
+          g.build();
+        });
+        g.button(L.buttons.done, t("gui.done"), () => { languageScroll = 0; show(parent()); });
       },
+      close() { languageScroll = list?.scroll ?? 0; },
     };
   }
 

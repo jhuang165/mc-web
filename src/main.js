@@ -243,6 +243,9 @@ import { ITEM_WRITABLE_BOOK, applyBookEdit, applyBookSign } from "./books.js";
 import { applyHangingEdit } from "./hanging-interaction.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
+import "./lang-hooks.js";
+import { loadLanguageManifest, selectLanguage, setForceUnicodeFont } from "./lang.js";
+import { loadFontResources, onFontChange } from "./font-renderer.js";
 import { restoreStructureEntities, saveStructureEntities, tickMinecartSimulation, tickBoatSimulation, tickSpawnerSimulation, tickSpawnersClient, spawnerBurst, pickMinecart } from "./structure-simulation.js";
 // Generation version 10 (live mineshafts) maps original block ids while a World is built; the
 // entry module already holds the registry, so the mapper is set before any World exists.
@@ -553,9 +556,17 @@ const gui = new Gui($("#gui"), {
 });
 const menus = createMenus(gui, menuContext);
 // Selected resource packs (resource-packs.js): their lang entries replace the menu strings; textures and sounds are served by the worker.
-initResourcePacks(options, LANG).then(() => gui.screen && gui.build());
+initResourcePacks(options, LANG).then(async () => {
+  // Languages (lang.js): the installed manifest, the saved language, Force Unicode Font, then glyph_sizes.bin and ascii.png widths.
+  await loadLanguageManifest();
+  setForceUnicodeFont(options.forceUnicodeFont);
+  await selectLanguage(options.language || "en_US");
+  await loadFontResources();
+  gui.screen && gui.build();
+});
+onFontChange(() => gui.screen && gui.build());
 // In-place refresh (resource-refresh.js): the textures of three.js and the CSS sprites reload by themselves; these re-read the rest.
-onResourcesRefreshed(async () => { await initResourcePacks(options, LANG); gui.screen && gui.build(); });
+onResourcesRefreshed(async () => { await initResourcePacks(options, LANG); await selectLanguage(options.language || "en_US"); await loadFontResources(); gui.screen && gui.build(); });
 onResourcesRefreshed(() => scene?.textures.reload());
 onResourcesRefreshed(() => scene?.reloadStrips());
 onResourcesRefreshed(() => sounds?.refreshPacks?.());

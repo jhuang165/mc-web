@@ -4066,6 +4066,12 @@
       "bytes": 2703
     },
     {
+      "member": "assets/minecraft/font/glyph_sizes.bin",
+      "url": "/media/1.7.10/font/glyph_sizes.bin",
+      "sha1": "822f8be3025a81fb5be51472dfc07ca829aead4d",
+      "bytes": 65536
+    },
+    {
       "member": "assets/minecraft/textures/gui/book.png",
       "url": "/media/1.7.10/gui/book.png",
       "sha1": "23483345d16f726922d3312a9eafc42353b3174e",

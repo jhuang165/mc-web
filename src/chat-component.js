@@ -6,13 +6,14 @@
 import { fromJson, asString, asBoolean, cast, JsonError, JsonArray, JsonObject, JsonPrimitive, JsonNull } from "./json-lenient.js";
 import { charWidth } from "./menu-screens.js";
 import { LANG } from "./command-data.js";
+import { lang } from "./lang.js";
 
 // ---- StatCollector.translateToLocal over the full en_US.lang (lazily imported; the command strings are there at once) ----
 let fullLang = null;
 export const langReady = import("./lang-en-us.js").then((m) => { fullLang = m.EN_US; }, () => {});
 // StringTranslate turns each numeric conversion ("%[n$][digits.]d|f") of the file into "%[n$]s" while loading it.
 const asStrings = (v) => v.replace(/%(\d+\$)?[\d.]*[df]/g, "%$1s");
-export const translateKey = (key) => { const v = fullLang?.[key] ?? LANG[key]; return v == null ? key : asStrings(v); };
+export const translateKey = (key) => { const v = lang.table?.[key] ?? fullLang?.[key] ?? LANG[key]; return v == null ? key : asStrings(v); };
 
 // EnumChatFormatting (a): names, codes; the qf enum adapter maps the lower-case names, so "bold" or "reset" are "colours" too.
 export const FORMATTING = Object.freeze({

@@ -5,7 +5,7 @@
 //
 // Browser stack fields: `pages` (array of strings), `author`, `title` (strings). They ride on the stack object exactly like
 // `fireworks`/`explosion` do (inventory.makeStack metadata); books-nbt.js maps them to the pages/author/title NBT tags.
-import { charWidth as asciiWidth } from './menu-screens.js';
+import { getCharWidth } from './font-renderer.js';
 
 export const ITEM_WRITABLE_BOOK = 2110; // original 386
 export const ITEM_WRITTEN_BOOK = 2111; // original 387
@@ -63,7 +63,7 @@ export const sameBookTag = (a, b) => JSON.stringify([a.pages ?? null, a.author ?
 // ---- FontRenderer text metrics (bbu): getCharWidth, getStringWidth, sizeStringToWidth, wrapFormattedStringToWidth ----
 // Widths for codes 32-126 are the ascii.png widths (verified against the original classes); other characters use the
 // unicode-page glyph widths in the original, which are not ported (6 is used).
-export const charWidth = (c) => { const code = c.charCodeAt(0); return c === '§' ? -1 : code < 32 ? 0 : code < 127 ? asciiWidth(c) : 6; };
+export const charWidth = (c) => getCharWidth(c);
 export function stringWidth(s) {
   let w = 0, bold = false;
   for (let i = 0; i < s.length; i++) {

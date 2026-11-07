@@ -30,3 +30,5 @@ Show Cape is drawn disabled: there are no accounts, skins or capes in this build
 - Other players in the player list (the scoreboard column and teams were added in batch 13).
 - Screenshots include the HUD and chat.
 - F1 hide-HUD, `options.txt` persistence of these settings.
+
+Language (batch 15, [languages.md](languages.md)): chat translation keys (`chat.type.*`, `death.*`, `commands.*`, achievements) resolve through the selected language with en_US fallback, and the chat text uses the unicode font when the language or Force Unicode Font asks for it. Chat width wrapping uses the native FontRenderer widths.
