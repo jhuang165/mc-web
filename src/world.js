@@ -386,6 +386,7 @@ export function collisionBounds(world,x,y,z){
   const b=world.get(x,y,z);
   // A fence collides 1.5 high (BlockFence.addCollisionBoxesToList). Callers that take one box get
   // the union of its arms; collisionBoxes has the original separate boxes.
+  if(b===CAKE){const c=cakeBounds(world.getMeta(x,y,z));return[c[0],c[1],c[2],c[3],c[4]-0.0625,c[5]];} // BlockCake.getCollisionBoundingBoxFromPool: 1/16 lower than the selection box (block-audit-reference.json box rows)
   if(b===SOUL_SAND)return SOUL_SAND_COLLISION; // BlockSoulSand: 0.125 lower collision box, full selection box
   if(isFence(b))return fenceCollisionUnion(fenceMask(world,x,y,z));
   if(b===SHAPED_COBBLE_WALL)return shapedBoxes(world,x,y,z,wallSolid)[0];
