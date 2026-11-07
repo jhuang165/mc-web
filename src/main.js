@@ -1124,7 +1124,7 @@ async function launch(record, prepared) {
     // sugar cane and cactus (plants.js), then snow and ice melting in Weather.tickChunk itself.
     populationBlocks=new PopulationBlocks(world,{random:weather.random,drop:(stacks,x,y,z)=>items.dropBlock(stacks.map(d=>makeStack(d.id,d.count,d.damage||0)),x,y,z),apply:changes=>{scene.updateBlocks(changes);saved=false;}}).watch();
     world.populationBlocks=populationBlocks;
-    weather.blockTick = (x, y, z, b) => populationBlocks.randomTick(x,y,z,b) || fire.randomTick(x, y, z, b) || trees.randomTick(x, y, z, b) || plants.randomTick(x, y, z, b) || netherLive.randomTick(x, y, z, b);
+    weather.blockTick = (x, y, z, b) => populationBlocks.randomTick(x,y,z,b) || fire.randomTick(x, y, z, b) || trees.randomTick(x, y, z, b) || plants.randomTick(x, y, z, b) || netherLive.randomTick(x, y, z, b) || redstoneRuntime?.randomTick(x, y, z, b);
     scene.weather = weather;
     // EntityLightningBolt's fire, and the ticks of the fires saved with the world.
     weather.fire = fire.strikes;
@@ -1170,6 +1170,7 @@ async function launch(record, prepared) {
       mobs: () => mobs,
       items: () => items.items,
       arrows: () => arrows.list,
+      thrown: () => projectiles.balls,
       orbs: () => xpOrbs.orbs,
       primed: () => primed,
       minecarts: () => minecarts,

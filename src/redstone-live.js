@@ -233,7 +233,10 @@ export class LiveRedstone extends RedstoneWorld {
       }
       if (o === SENSOR) {
         if (this.time % 20 === 0) this.refreshSensor(p.x, p.y, p.z);
-      } else if (o === TRIPWIRE ? (this.getBlockMetadata(p.x, p.y, p.z) & 1) === 0 : this.getBlockMetadata(p.x, p.y, p.z) === 0) this.collide(p.x, p.y, p.z);
+      } else if (o === TRIPWIRE) {
+        // Only an entity that calls Entity.func_145775_I touches the string (a stuck arrow or a thrown snowball does not).
+        if ((this.getBlockMetadata(p.x, p.y, p.z) & 1) === 0 && this.getEntities("collider", [p.x, p.y, p.z, p.x + 1, p.y + 1, p.z + 1]).length) this.collide(p.x, p.y, p.z);
+      } else if (this.getBlockMetadata(p.x, p.y, p.z) === 0) this.collide(p.x, p.y, p.z);
     }
   }
   refreshSensor(x, y, z) {
