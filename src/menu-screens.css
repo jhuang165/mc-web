@@ -7,6 +7,11 @@
 #gui[data-background=error]{background:linear-gradient(#402020,#501010)}
 /* LoadingScreenRenderer's progress bar: a 0x808080 track and a 0x80FF80 fill, 2 units high. */
 .mc-load-track{background:#808080}.mc-load-fill{background:#80ff80}.mc-load-track[hidden],.mc-load-fill[hidden]{display:none}
+/* GuiGameOver.drawScreen: drawGradientRect(0, 0, w, h, 0x60500000, 0xA0303030) */
+#gui[data-background=game-over]{background:linear-gradient(#50000060,#303030a0)}
+body:has(#gui[data-screen=game-over]) #toast,body:has(#gui[data-screen=game-over-confirm]) #toast{display:none}
+body:has(#gui[data-screen=game-over]) #crosshair,body:has(#gui[data-screen=game-over]) #block-label,body:has(#gui[data-screen=game-over-confirm]) #crosshair,body:has(#gui[data-screen=game-over-confirm]) #block-label{display:none}
+.mc-notes-clip{overflow:hidden}.mc-notes-inner{left:0;top:0;width:100%}.mc-link{cursor:pointer}
 #gui[data-background=world]{background:linear-gradient(#101010c0,#101010d0)}
 #gui[data-background=panorama]{background:#000}
 .mc-panorama,.mc-panorama-shade{position:absolute;left:0;top:0;display:none}
