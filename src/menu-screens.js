@@ -15,6 +15,7 @@ export const LANG = {
   "gui.done": "Done", "gui.cancel": "Cancel", "gui.achievements": "Achievements", "gui.stats": "Statistics",
   "menu.game": "Game menu", "menu.singleplayer": "Singleplayer", "menu.multiplayer": "Multiplayer",
   "menu.online": "Minecraft Realms", "menu.options": "Options...", "menu.quit": "Quit Game",
+  "menu.loadingLevel": "Loading world", "menu.generatingTerrain": "Building terrain", "multiplayer.downloadingTerrain": "Downloading terrain",
   "menu.returnToMenu": "Save and Quit to Title", "menu.returnToGame": "Back to Game", "menu.shareToLan": "Open to LAN",
   "lanServer.title": "LAN World", "lanServer.start": "Start LAN World", "lanServer.otherPlayers": "Settings for Other Players",
   "selectWorld.gameMode.adventure": "Adventure", "selectWorld.gameMode.adventure.line1": "Same as survival mode, but blocks can't",

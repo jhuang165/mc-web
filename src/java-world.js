@@ -169,6 +169,15 @@ export function nativeWorldSpawn(gen, seed, state, worldType) {
   };
   return { ...createSpawnPosition({ seed, manager, blockAt, mayBeSpawn, averageGroundLevel: 64 }), blockAt };
 }
+// A spawn solved ahead of the World constructor (spawn-presolve.js runs this in a worker). The key is the world's inputs; the result is the
+// same function of them, so using it changes nothing but when the work happens.
+export const presolvedSpawns = new Map();
+export const spawnKey = (seed, generationVersion, worldType, generatorOptions) => `${javaSeed(seed)}|${generationVersion}|${worldType}|${generatorOptions}`;
+export function solveNativeSpawn({ seed, generationVersion, worldType, generatorOptions }) {
+  const s = javaSeed(seed), gen = newGenerator(s, worldType, generatorOptions, generationVersion);
+  const { x, y, z, foundBiome, steps } = nativeWorldSpawn(gen, s, gen.biomeState ?? new BiomeTerrainState(), worldType);
+  return { x, y, z, foundBiome, steps };
+}
 export function generateJavaWorld(world) {
   const seed = javaSeed(world.seed),
     state = new BiomeTerrainState(),
@@ -178,7 +187,9 @@ export function generateJavaWorld(world) {
     manager = gen.manager;
   let spawn = null;
   if (world.streaming && nativeSpawnGeneration(world.generationVersion)) {
-    const native = nativeWorldSpawn(gen, seed, state, world.worldType);
+    const key = spawnKey(world.seed, world.generationVersion, world.worldType, world.generatorOptions);
+    const native = presolvedSpawns.get(key) ?? nativeWorldSpawn(gen, seed, state, world.worldType);
+    presolvedSpawns.delete(key);
     world.nativeSpawn = [native.x, native.y, native.z];
     spawn = [native.x, 0, native.z];
   } else spawn = manager.findBiomePosition(

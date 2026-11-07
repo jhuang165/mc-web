@@ -4,6 +4,9 @@
 /* drawDefaultBackground: options_background.png every 32 units tinted 0x404040 outside a world,
    a 0xC0101010 to 0xD0101010 gradient over it. */
 #gui[data-background=dirt]{background:linear-gradient(#000000bf,#000000bf),url('/media/1.7.10/gui/options_background.png') 0 0/calc(32*var(--u)) calc(32*var(--u))}
+#gui[data-background=error]{background:linear-gradient(#402020,#501010)}
+/* LoadingScreenRenderer's progress bar: a 0x808080 track and a 0x80FF80 fill, 2 units high. */
+.mc-load-track{background:#808080}.mc-load-fill{background:#80ff80}.mc-load-track[hidden],.mc-load-fill[hidden]{display:none}
 #gui[data-background=world]{background:linear-gradient(#101010c0,#101010d0)}
 #gui[data-background=panorama]{background:#000}
 .mc-panorama,.mc-panorama-shade{position:absolute;left:0;top:0;display:none}

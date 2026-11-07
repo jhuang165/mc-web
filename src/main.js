@@ -251,6 +251,8 @@ import { ITEM_WRITABLE_BOOK, applyBookEdit, applyBookSign } from "./books.js";
 import { applyHangingEdit } from "./hanging-interaction.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
+import { startLoading, setStage, STAGES, loadingScreen, errorScreen, nextPaint, SpawnAreaLog } from "./loading-screen.js";
+import { presolveSpawn } from "./spawn-presolve.js";
 import "./lang-hooks.js";
 import { loadLanguageManifest, selectLanguage, setForceUnicodeFont } from "./lang.js";
 import { loadFontResources, onFontChange, font } from "./font-renderer.js";
@@ -1044,8 +1046,14 @@ async function openWorld(record) {
   openingWorld=true;
   sounds?.stopStreams(); // Minecraft.loadWorld: SoundHandler.stopSounds (music and records), also between dimensions
   lan.close();
+  // From the title screen: LoadingScreenRenderer's "Loading world" screen (loading-screen.js); portal trips keep the game on screen.
+  const loading = screen === "home" ? startLoading() : null, spawnLog = new SpawnAreaLog(64);
+  if (loading) { gui.show(loadingScreen(loading)); await nextPaint(); }
   try {
     if (record.dimension && !record.rootId) record = dims.openRecord(record, await readRuntimeState(record)); // saved in the Nether/End: open that dimension
+    if (loading) await presolveSpawn(record); // the native spawn walk in a worker, so this screen stays live (spawn-presolve.js)
+    // WorldServer.initialize runs createSpawnPosition under "Loading world"; the chunk load that follows is "Building terrain" (the World constructor populates the resident window).
+    if (loading) { setStage(loading, STAGES.terrain); spawnLog.report(0, performance.now()); await nextPaint(); }
     const prepared=dims.createWorld(record);
     if (!record.chunked) prepared.restore(record.edits??[]);
     if (!prepared.dimension && !record.worldSpawn) {
@@ -1063,10 +1071,15 @@ async function openWorld(record) {
     if(storage)await storage.ensure([...prepared.chunks.values()].map(c=>[c.x,c.z]));
     dims.applyWrites(prepared, record, { verifyBed: (w, s) => { const cell = verifyRespawn(w, s, false); return cell ? bedRespawnPosition(cell) : null; } }); // portal frame / End platform
     streamStorage?.dispose();streamStorage=storage;
+    if (loading) spawnLog.report(prepared.chunks?.size ?? 0, performance.now(), true);
     await launch(record,prepared);
     // PlayerList.transferPlayerToDimension: leaving the End, Overworld -> End, or any other portal trip (not a respawn).
     if (transit && !transit.death) achievements.trigger(transit.exit ? "theEnd2" : transit.from === 0 && prepared.dimension === 1 ? "theEnd" : "portal");
-  } catch(e) {toast('Could not open this world: '+e.message);}
+  } catch(e) {
+    // GuiErrorScreen replaces the toast when the load started from the title screen.
+    if (loading) gui.show(errorScreen({ title: "Could not open this world", message: String(e?.message ?? e), cancel: () => gui.show(menus.mainMenu()) }));
+    else toast('Could not open this world: '+e.message);
+  }
   finally{openingWorld=false;}
 }
 async function launch(record, prepared) {
