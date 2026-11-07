@@ -12,9 +12,18 @@ export class MoodSound {
     this.player = () => null; // the one player's feet {x, y, z}
     this.light = null; // { full(x, y, z), sky(x, y, z) }; moodLight(world, scene.light) builds it
   }
-  // World.setActivePlayerChunksAndCheckLight (ahb.C), once per tick before the chunk loop.
+  // World.setActivePlayerChunksAndCheckLight (ahb.C), once per tick before the chunk loop: the countdown drops, then with a
+  // player the light check draws rand.nextInt(playerCount) (one player: a full Random step) and three rand.nextInt(11)
+  // for the x, y, z offsets of the cell around that player whose light is rechecked (checkLight itself draws nothing).
+  // Replayed against sound-reference.json "light". Returns that cell, or null with no player.
   tick() {
     if (this.countdown > 0) this.countdown--;
+    const p = this.player();
+    if (!p) return null;
+    const r = this.state.random;
+    r.nextInt(1);
+    const x = Math.floor(p.x) + r.nextInt(11) - 5, y = Math.floor(p.y) + r.nextInt(11) - 5, z = Math.floor(p.z) + r.nextInt(11) - 5;
+    return { x, y, z };
   }
   // One chunk: while the countdown is 0, updateLCG picks a cell (x, z in the chunk, y 0..255); an air cell whose light
   // is at most rand.nextInt(8) and whose saved sky light is 0 plays the sound for the nearest player within 8 blocks

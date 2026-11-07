@@ -2,11 +2,12 @@ import { soundTypeOf } from "./block-sounds.js";
 import { soundLevel, normalizedVolume, normalizedPitch } from "./settings.js";
 import { applySoundLayers } from "./pack-sounds.js";
 import { packStore } from "./resource-packs.js";
+import { ATTENUATION, ChannelPool, NORMAL_CHANNELS, STREAMING_CHANNELS, alGain, attenuationDistance, distanceDelayTicks, sourceDistance, sourceGain, stereoPan } from "./sound-channels.js";
 // The sound family of a block's Block.SoundType: its break event is "dig." + family and its step event "step." + stepSound.
 // One native table (block-sounds.js, public/research/block-sounds.md) replaces the old per-block choices.
 export const blockSound = (id) => soundTypeOf(id).break.slice(4);
 export const stepSound = (id) => soundTypeOf(id).step.slice(5);
-export const attenuationDistance = (volume) => (Math.fround(volume) > 1 ? Math.fround(16 * Math.fround(volume)) : 16);
+export { attenuationDistance };
 export class SoundBank {
   constructor(options, listener) {
     this.options = options;
@@ -16,6 +17,11 @@ export class SoundBank {
     this.cache = new Map();
     this.active = new Map();
     this.status = "Loading original effects…";
+    // paulscode's channels: 28 normal (effects) and 4 streaming (music, records); a fifth source takes over the next in rotation.
+    this.normal = new ChannelPool(NORMAL_CHANNELS);
+    this.streaming = new ChannelPool(STREAMING_CHANNELS);
+    this.delayed = []; // SoundManager.delayedSounds: { due, event, options }
+    this.ticks = 0; // SoundManager.playTime
     this.streams = new Set(); // playing stream handles: music and records (HTMLAudioElement through the graph)
     this.records = new Map(); // "x,y,z" -> the jukebox's record handle (RenderGlobal.mapSoundPositions)
     this.streaming = false;
@@ -132,7 +138,23 @@ export class SoundBank {
     if (this.tabSilent) return 0;
     return soundLevel(this.options().soundLevels, "master");
   }
-  async play(event, { volume = 1, pitch = 1, position = null } = {}) {
+  // SoundManager.update (btj.d), once per client tick while the game runs: the tick counter and the sounds whose distance
+  // delay (WorldClient.playSound with distanceDelay: fireworks) is due.
+  tick() {
+    this.ticks++;
+    const due = this.delayed.filter((d) => this.ticks >= d.due);
+    if (!due.length) return;
+    this.delayed = this.delayed.filter((d) => this.ticks < d.due);
+    for (const d of due) this.play(d.event, d.options);
+  }
+  async play(event, { volume = 1, pitch = 1, position = null, distanceDelay = false } = {}) {
+    if (distanceDelay && position) {
+      const l = this.listener(), delay = distanceDelayTicks((position.x - l.x) ** 2 + ((position.y || 0) - l.y) ** 2 + (position.z - l.z) ** 2);
+      if (delay > 0) {
+        this.delayed.push({ due: this.ticks + delay, event, options: { volume, pitch, position } });
+        return;
+      }
+    }
     if (!this.options().sound || this.master() <= 0) return;
     this.unlock();
     if (!this.context) return;
@@ -142,42 +164,49 @@ export class SoundBank {
     const entryVolume = clip.volume ?? 1;
     if (normalizedVolume(volume, entryVolume, this.options().soundLevels, clip.category) === 0) return;
     const buffer = await this.buffer(clip.name);
-    if (!buffer || !this.options().sound || this.master() <= 0 || this.active.size >= 18) return;
+    if (!buffer || !this.options().sound || this.master() <= 0) return;
     try {
       const source = this.context.createBufferSource(),
         gain = this.context.createGain();
       source.buffer = buffer;
       source.playbackRate.value = normalizedPitch(pitch, clip.pitch ?? 1);
       const { attenuation, pan } = this.spatial(position, volume);
-      const playing = { gain, volume, entryVolume, category: clip.category, attenuation };
+      const playing = { gain, volume, entryVolume, category: clip.category, attenuation, position, playing: true, source };
+      const { prev, prevPlaying } = this.normal.acquire(playing);
+      if (prev && prevPlaying) this.evict(prev);
       gain.gain.value = this.gainOf(playing);
       source.connect(gain);
       if (position && this.context.createStereoPanner) {
-        const p = this.context.createStereoPanner();
+        const p = (playing.panner = this.context.createStereoPanner());
         p.pan.value = pan;
         gain.connect(p).connect(this.context.destination);
       } else gain.connect(this.context.destination);
       this.active.set(source, playing);
-      source.onended = () => this.active.delete(source);
+      source.onended = () => { playing.playing = false; this.active.delete(source); };
       source.start();
       return true;
     } catch (e) {
       this.status = e.message;
     }
   }
-  // LINEAR attenuation at a position: SoundManager.playSound passes 16 blocks, or 16 * volume above volume 1, as the
-  // attenuation distance; the linear falloff over it is assumed (paulscode, not in the JAR). No position: NONE.
+  // LINEAR attenuation at a position, as paulscode computes it (sound-channels.js, probed): SoundManager.playSound passes 16
+  // blocks, or 16 * volume above volume 1, as the distance; the gain is 1 - distance / distance in floats, with the listener at
+  // the player's interpolated eye position. No position: ATTENUATION NONE, gain 1.
   spatial(position, volume) {
     if (!position) return { attenuation: 1, pan: 0 };
-    const listener = this.listener(),
-      dx = position.x - listener.x,
-      dz = position.z - listener.z,
-      dy = (position.y || 0) - listener.y,
-      distance = Math.hypot(dx, dy, dz);
+    const listener = this.listener();
     return {
-      attenuation: Math.max(0, 1 - distance / attenuationDistance(volume)),
-      pan: Math.max(-1, Math.min(1, (dx * Math.cos(listener.yaw) - dz * Math.sin(listener.yaw)) / 12)),
+      attenuation: sourceGain(ATTENUATION.LINEAR, sourceDistance(position, listener), attenuationDistance(volume)),
+      pan: stereoPan(position, listener, listener.yaw),
     };
+  }
+  // A sound taken over by the channel rotation (Library.getNextChannel) stops at once.
+  evict(h) {
+    if (h.source && !h.audio) {
+      h.playing = false;
+      try { h.source.stop(); } catch {}
+      this.active.delete(h.source);
+    } else this.stop(h);
   }
   // A streamed sound (sounds.json "stream": music and records). The handle comes back at once, as SoundHandler.playSound
   // registers the ISound; isPlaying(handle) turns false when it ends, fails or is stopped, or when it was skipped (sound
@@ -198,6 +227,8 @@ export class SoundBank {
     const entryVolume = clip?.volume ?? 1;
     if (!file || !(file.stream || clip.stream) || !this.options().sound || this.master() <= 0
       || normalizedVolume(handle.volume, entryVolume, this.options().soundLevels, clip.category) === 0) return this.stop(handle);
+    const { prev, prevPlaying } = this.streaming.acquire(handle);
+    if (prev && prevPlaying) this.evict(prev);
     const audio = new Audio(file.url);
     audio.preload = "auto";
     audio.preservesPitch = false;
@@ -253,8 +284,17 @@ export class SoundBank {
         h.audio?.play().catch(() => this.stop(h));
       }
   }
+  // SoundManager.stopAllSounds: every playing sound stops and the delayed ones are dropped.
   stopStreams() {
     for (const h of [...this.streams]) this.stop(h);
+    for (const [source, p] of [...this.active]) {
+      p.playing = false;
+      try { source.stop(); } catch {}
+      this.active.delete(source);
+    }
+    this.delayed.length = 0;
+    this.normal.clear();
+    this.streaming.clear();
     this.records.clear();
   }
   // RenderGlobal.playRecord: stop the record at that jukebox, then (given a record sound from music.js recordSound)
@@ -265,9 +305,9 @@ export class SoundBank {
     this.records.delete(key);
     if (sound) this.records.set(key, this.playStream(sound.event, sound));
   }
-  // Once per tick: the listener has moved, so positioned streams (records) take their new falloff and pan.
+  // Once per tick: the listener has moved, so every positioned sound (Source.listenerMoved) takes its new falloff and pan.
   updateStreams() {
-    for (const h of this.streams) {
+    for (const h of [...this.streams, ...this.active.values()]) {
       if (!h.position) continue;
       const { attenuation, pan } = this.spatial(h.position, h.volume);
       h.attenuation = attenuation;
@@ -276,13 +316,15 @@ export class SoundBank {
     }
   }
   gainOf(p) {
-    return normalizedVolume(p.volume, p.entryVolume, this.options().soundLevels, p.category) * this.master() * p.attenuation;
+    // AL_GAIN = paulscode gain * normalized volume (floats); the master level is the listener gain.
+    return alGain(p.attenuation, normalizedVolume(p.volume, p.entryVolume, this.options().soundLevels, p.category)) * this.master();
   }
   // SoundManager.setSoundCategoryVolume: a master change regains every playing sound; another
   // category regains its sounds and stops those whose normalized volume drops to 0.
   updateVolumes() {
     for (const [source, p] of this.active) {
       if (p.category && p.category !== "master" && normalizedVolume(p.volume, p.entryVolume, this.options().soundLevels, p.category) <= 0) {
+        p.playing = false;
         try { source.stop(); } catch {}
         this.active.delete(source);
       } else p.gain.gain.value = this.gainOf(p);

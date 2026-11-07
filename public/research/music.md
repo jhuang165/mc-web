@@ -111,9 +111,10 @@ and the final LCG and Random state.
 Port: `MoodSound` is attached to each world's `Weather` (`weather.mood`), which holds World.rand and updateLCG.
 `Weather.tick` runs the countdown before the chunk loop, and `tickChunk` calls the mood roll first. The sound goes
 through the weather events. In the Nether and End, where `tickWeather` skips the weather, `main.js` runs the same
-countdown and chunk loop over the active chunks. `World.C`'s other draws are not modelled: one
-`rand.nextInt(playerCount)` and three `nextInt(11)` per tick for light checks. So the Random stream between chunks
-differs from the original, which also holds for the existing weather replay.
+countdown and chunk loop over the active chunks. Since batch 18 `MoodSound.tick` also draws `World.C`'s light-check
+numbers (`rand.nextInt(playerCount)`, a full Random step even for one player, then three `nextInt(11)`; probed over 5000
+ticks, see [sound.md](sound.md)). The player is the eye position (server `posY`). Other draws between ticks (entities, block
+updates) are still not in this stream.
 
 ## Assets
 
@@ -137,9 +138,8 @@ countdown reset and Random/LCG consumption. Read from bytecode, not probed: getA
 isGamePaused/pause/stop call sites, playRecord, nested event weights, the countdown's constructor and decrement.
 
 Approximate:
-- paulscode's linear falloff, its stereo model and the listener position (the port uses the feet, as for all effects).
+- paulscode's stereo model (OpenAL's panner): the port pans by the sine of the azimuth. The LINEAR gain, channel limits and
+  the eye-position listener are now probed ([sound.md](sound.md)).
 - Stopping a stream is instant, where paulscode queues it, so the ticker never sees a stopped song as still playing.
-- Streaming channel limits are not modelled.
 - Before the page's first click there is no running audio context: the menu music is skipped and comes back after the
   next MENU delay.
-- The Random draws for World.C's light checks are missing.

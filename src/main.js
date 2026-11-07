@@ -461,7 +461,7 @@ const compass = createCompass();
 const eyes = new EyesOfEnder(); // eye-of-ender-live.js: flying eyes of ender
 const rockets = new FireworkRockets(); // fireworks-live.js: firework rockets in flight
 // The scene is created in start(), so particles look up its effect renderer when they spawn.
-const fireworkFx = new FireworkParticles({ effects: { add: (p) => scene.effectRenderer.add(p) }, playSound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }) });
+const fireworkFx = new FireworkParticles({ effects: { add: (p) => scene.effectRenderer.add(p) }, playSound: (name, x, y, z, volume, pitch, distanceDelay) => sounds.play(name, { volume, pitch, position: { x, y, z }, distanceDelay: !!distanceDelay }) });
 // The fishing rod's bobber (fishing-simulation.js).
 const fishing = new Fishing();
 // Arrows in flight or stuck in blocks (bow.js) and the eased field-of-view modifier the
@@ -1070,7 +1070,7 @@ async function launch(record, prepared) {
     weather = new Weather().restore(record.weather).restoreSimulation(record.worldRandom);
     // The cave mood sound (cave-ambience.js) on this world's World.rand and updateLCG.
     weather.mood = new MoodSound(weather);
-    weather.mood.player = () => position;
+    weather.mood.player = () => ({ x: position.x, y: position.y + PHYSICS.eye, z: position.z }); // the server player's posY is the eye
     hideBedScreen();
     bedSleep.restore(record.bed); // the spawn point; a saved sleeping state is resumed after the player is placed
     scene.setWorld(world);
@@ -2368,10 +2368,9 @@ function tickWeather() {
   tickWeatherSimulation({ world, weather, mobs, survival }, position, PHYSICS.width, PHYSICS.height);
   weather.rainParticles(world, { x: position.x, y: position.y + PHYSICS.eye, z: position.z }, (kind, x, y, z) => scene.fx.addDirect(kind, x, y, z));
   for (const e of weather.drain()) {
-    // Thunder is volume 10000 in vanilla, so it carries at any distance; the
-    // rain loop and the explosion are placed where they happen.
-    const far = e.sound === "ambient.weather.thunder";
-    sounds.play(e.sound, { volume: Math.min(1, e.volume), pitch: e.pitch, position: far ? null : { x: e.x, y: e.y, z: e.z } });
+    // Thunder is volume 10000 in vanilla: gain 1, and a LINEAR distance of 160000 blocks (SoundManager.playSound), so the
+    // falloff is nil in range but it still pans. The rain loop and the explosion are placed where they happen.
+    sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } });
   }
 }
 // EntityPlayerSP.timeInPortal: Nausea longer than 60 ticks winds the screen warp up (potion-fx.js).
@@ -3450,6 +3449,7 @@ function tickMusic(dt) {
       credits: screen === "credits", inWorld: screen !== "home", dimension: world?.dimension ?? 0,
       bossName: bossStatus.name, bossFrames: bossStatus.length, creative: !!survival?.creative,
     }));
+    sounds.tick();
     sounds.updateStreams();
   }
 }
@@ -3718,7 +3718,7 @@ async function boot(){try {
   xpRenderer=new ExperienceRenderer(scene.scene);
   sounds = new SoundBank(
     () => options,
-    () => ({ ...position, yaw }),
+    () => ({ ...position, y: position.y + PHYSICS.eye, yaw }), // SoundManager.setListener: the player's posY, which is the eye
   );
   firstPerson = new FirstPerson(scene.renderer, scene.textures.texture, scene.lighting);
   mobRenderer = new MobRenderer(scene.scene, scene);
