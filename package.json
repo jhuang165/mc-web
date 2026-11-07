@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "server": "node server/server.js",
     "build": "vite build",
     "test": "node --test src/*.test.js",
     "setup:bridge": "python3 tools/setup_bridge.py",
@@ -16,7 +17,8 @@
     "lang:fetch": "node tools/fetch-lang.mjs"
   },
   "dependencies": {
-    "three": "^0.180.0"
+    "three": "^0.180.0",
+    "ws": "8.22.1"
   },
   "devDependencies": {
     "vite": "^6.3.5"

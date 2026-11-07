@@ -13,6 +13,10 @@ npm run dev
 
 Node 20.19+ and a browser with WebGL 2 and Web Locks (HTTPS or localhost) are required. Build with `npm run build`; output is `dist/`.
 
+## Browser multiplayer
+
+The title screen’s Multiplayer button connects browsers to an always-on Creative world on ledoge0 (Tailscale required). Movement, building, chat and player presence are server-authoritative; the first milestone has a 128 × 128 border and eight-player limit. Containers, mobs, Survival and dimensions are still separate work. See [setup, deployment, protocol choice and limits](public/research/multiplayer.md). Start the Node service with `npm run server` after setting `MC_WEB_TOKEN`.
+
 ## Current implementation
 
 Version **0.32.0** loads saved edits only as columns enter range, stores entity/container/pending-tick payloads per column, and prevents stale saves from competing tabs with one writable app per origin. Export now offers Java 1.7.10 ZIP saves (`level.dat` + Anvil regions), alongside the browser backup and explicit conversion notes. Runtime payloads still hydrate globally; full Java save parity remains unfinished. Native village/temple candidate decisions and stronghold positions are researched and replayed against the installed JDK; their buildings/population are still missing. See [streaming](public/research/streaming.md) and [structures](public/research/structures.md).

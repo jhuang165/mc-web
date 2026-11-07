@@ -1,7 +1,7 @@
 // The 1.7.10 menu screens as Gui screens (menu-ui.js): GuiMainMenu, GuiSelectWorld, GuiCreateWorld,
 // GuiYesNo (delete), GuiRenameWorld, GuiIngameMenu, GuiOptions, GuiVideoSettings, GuiControls,
 // GuiScreenOptionsSounds, GuiLanguage and GuiShareToLan. Layouts and strings are in menu-screens.js. Buttons the
-// browser cannot act on (Multiplayer, Realms, Quit, ...) keep their places, drawn disabled
+// browser cannot act on (Realms, Quit, ...) keep their places, drawn disabled
 // with a reason. main.js supplies `ctx` (options, worlds and the game actions).
 import {
   t, textWidth, COLOR, pickSplash, splashScale, LOGO, MINCERAFT_LOGO,
@@ -27,7 +27,6 @@ const SOUND_KEYS = ["master", "music", "record", "weather", "block", "hostile", 
 // Why each unavailable vanilla button is disabled here.
 export const UNAVAILABLE = {
   hardcoreDifficulty: "A hardcore world is locked to Hard difficulty.",
-  multiplayer: "Multiplayer needs a connection to a Minecraft server, which a web page cannot open.",
   online: "Minecraft Realms is an online Mojang service; this browser recreation has no account sign-in.",
   quit: "A web page cannot close its own tab. Close the tab to quit.",
   stream: "Twitch broadcasting was a desktop-only feature; a web page cannot stream.",
@@ -112,8 +111,8 @@ export function createMenus(gui, ctx) {
         g.text("Minecraft 1.7.10", L.version[0], L.version[1]);
         g.text("Copyright Mojang AB. Do not distribute!", L.copyright[0], L.copyright[1], { right: true });
         const b = L.buttons;
-        g.button(b.singleplayer, t("menu.singleplayer"), () => show(selectWorld()));
-        g.button(b.multiplayer, t("menu.multiplayer"), null, { reason: UNAVAILABLE.multiplayer });
+        g.button(b.singleplayer, t("menu.singleplayer"), () => show(selectWorld()), { enabled: ctx.canSingleplayer?.() !== false, reason: 'Another tab owns local saves. Close it and reload for Singleplayer.' });
+        g.button(b.multiplayer, t("menu.multiplayer"), () => ctx.multiplayer());
         g.button(b.online, t("menu.online"), null, { reason: UNAVAILABLE.online });
         g.button(b.options, t("menu.options"), () => show(optionsScreen(mainMenu)));
         g.button(b.quit, t("menu.quit"), null, { reason: UNAVAILABLE.quit });
@@ -364,7 +363,7 @@ export function createMenus(gui, ctx) {
       init(g, w, h) {
         const L = ingameMenuLayout(w, h), b = L.buttons;
         g.text(t("menu.game"), ...L.title, { center: true });
-        g.button(b.returnToMenu, t("menu.returnToMenu"), (h) => { h.enable(false); ctx.goHome(); });
+        g.button(b.returnToMenu, t(ctx.isRemote?.() ? "menu.disconnect" : "menu.returnToMenu"), (h) => { h.enable(false); ctx.goHome(); });
         g.button(b.returnToGame, t("menu.returnToGame"), () => ctx.resume());
         g.button(b.options, t("menu.options"), () => show(optionsScreen(ingameMenu)));
         // GuiIngameMenu: enabled while singleplayer and the integrated server is not public yet.
@@ -375,7 +374,7 @@ export function createMenus(gui, ctx) {
         })));
         g.button(b.stats, t("gui.stats"), () => show(statsScreen({ stats: ctx.stats, icon: ctx.icon, back: ingameMenu, show })));
         // Browser addition in the row vanilla leaves empty: download the world.
-        g.button(b.export, "Export World", () => ctx.exportWorld());
+        g.button(b.export, "Export World", () => ctx.exportWorld(), { enabled: !ctx.isRemote?.() });
       },
     };
   }

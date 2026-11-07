@@ -132,6 +132,10 @@ import { FrameLimiter, limitFramerate } from "./frame-limit.js";
 import { createCommandRunner, tr } from "./commands.js";
 import { runCommandCart } from "./command-cart.js";
 import { LanSession, LAN_NOTICE } from "./lan.js";
+import { DedicatedClient, restoreReplica } from "./multiplayer/client.js";
+import { RemotePlayers } from "./multiplayer/presence.js";
+import { multiplayerScreen } from "./multiplayer/screen.js";
+import { IDLE_INPUT } from "./multiplayer/protocol.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
 import { gameRule, setGameRuleSource } from "./game-rules.js";
 import { mayHitBlock } from "./adventure.js";
@@ -202,7 +206,7 @@ import { hurtCameraRoll } from "./damage-fx.js";
 import { displayTicks } from "./display-ticks.js";
 import { importedRuntime } from "./world-import.js";
 import { collectBases, basesFromJson } from "./whole-save-json.js";
-import { tickBlockSystems } from "./world-tick.js";
+import { tickWorldSystems } from "./world-tick.js";
 import { captureMovementInput } from "./player-input.js";
 import { movePlayer } from "./player-physics.js";
 import { tickPlayerEnvironment, finishPlayerMovement } from "./player-environment.js";
@@ -531,6 +535,78 @@ scoreboard.onChange = () => { saved = false; };
 
 // Open to LAN for this tab (lan.js); it lasts until the world is left.
 const lan = new LanSession();
+let multiplayer = null, remotePlayers = null, worldWriterAvailable = false;
+
+function multiplayerDefaults() {
+  try { return JSON.parse(localStorage.getItem('mc-web-server') || '{}'); } catch { return {}; }
+}
+function showMultiplayer() {
+  gui.show(multiplayerScreen({ back: () => gui.show(menus.mainMenu()), defaults: multiplayerDefaults(), connect: joinMultiplayer }));
+}
+function sendMultiplayerInput(controls = IDLE_INPUT) {
+  multiplayer?.send({ type: 'input', controls, yaw, pitch, current: survival.inventory.current,
+    hotbar: survival.inventory.main.slice(0, 9).map(s => s ? { id: s.id, damage: s.damage ?? 0 } : null) });
+}
+function applyMultiplayerTick(message) {
+  if (!multiplayer?.ready || !active?.remote) return;
+  if (redstoneRuntime?.redstone) redstoneRuntime.redstone.lit = new Set(message.redstone?.lit ?? []);
+  const cells = [];
+  for (const [x, y, z, id, meta] of message.changes) {
+    const old = world.get(x, y, z);
+    world.put(x, y, z, id, meta, false); cells.push([x, y, z, old, id]);
+  }
+  if (cells.length) scene.updateBlocks(cells);
+  const self = message.players.find(p => p.id === multiplayer.id);
+  if (self) {
+    previous.copy(position); position.set(self.x, self.y, self.z);
+    velocity.set(position.x - previous.x, position.y - previous.y, position.z - previous.z);
+    flying = self.flying; grounded = self.grounded;
+    motion.prevYSize = motion.ySize; motion.ySize = self.ySize ?? 0;
+    motion.sneaking = self.sneak;
+    motion.sprinting = self.sprinting;
+    walkFrozen = self.sneak && self.grounded;
+    $("#movement-label").textContent = flying ? 'FLYING' : 'WALKING';
+    playerBody.tick({ position, previous, yaw, pitch, swinging: self.swing > 0 });
+  }
+  survival.time = message.time; weather.restore(message.weather); scene.setTime(message.time);
+  chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
+  remotePlayers?.sync(message.players, multiplayer.id);
+}
+async function joinMultiplayer(settings) {
+  if (multiplayer) throw new Error('A connection is already open.');
+  const identityKey = 'mc-web-player:' + settings.url + ':' + settings.name.toLowerCase();
+  let resumeKey = localStorage.getItem(identityKey);
+  if (!resumeKey) { resumeKey = crypto.randomUUID(); localStorage.setItem(identityKey, resumeKey); }
+  const client = new DedicatedClient({
+    onTick: applyMultiplayerTick,
+    onChat: ({ name, text }) => printChat(name ? chatTextComponent(name, text) : text),
+    onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
+  });
+  multiplayer = client;
+  try {
+    const welcome = await client.connect({ ...settings, resumeKey });
+    localStorage.setItem('mc-web-server', JSON.stringify({ url: settings.url, name: settings.name }));
+    const snapshot = welcome.world, prepared = restoreReplica(snapshot);
+    const self = snapshot.players.find(p => p.id === client.id);
+    streamStorage?.dispose(); streamStorage = null;
+    const record = { id: 'remote-' + client.id, remote: true, name: 'ledoge0 — Multiplayer', seed: snapshot.seed,
+      biome: snapshot.biome, generationVersion: snapshot.generationVersion, mode: 'creative', difficulty: 0,
+      position: { ...self, yaw: welcome.self.yaw, pitch: welcome.self.pitch }, player: { ...welcome.self.player, time: snapshot.time },
+      entities: [], weather: snapshot.weather, allowCommands: false, edits: [] };
+    gui.show(downloadTerrainScreen()); await nextPaint();
+    await launch(record, prepared, { slice: true });
+    if (multiplayer !== client || client.socket.readyState !== WebSocket.OPEN) throw new Error('Disconnected while loading terrain.');
+    remotePlayers = new RemotePlayers(scene);
+    client.start();
+    sendMultiplayerInput();
+    printChat('Shared Creative world on ledoge0. World border: 128 × 128. Containers, mobs and dimension travel are not connected yet.');
+  } catch (error) {
+    client.close(); if (multiplayer === client) multiplayer = null;
+    remotePlayers?.clear(); remotePlayers = null;
+    if (active?.remote) leaveToTitle(false);
+    throw error;
+  }
+}
 // The 1.7.10 menu screens (menus.js) drawn over the game in #gui.
 const menuContext = {
   get options() { return options; },
@@ -546,6 +622,9 @@ const menuContext = {
   soundLevel: (k) => soundLevel(options.soundLevels, k),
   makeRecord,
   launch: openWorld,
+  multiplayer: showMultiplayer,
+  isRemote: () => !!multiplayer,
+  canSingleplayer: () => worldWriterAvailable,
   exportWorld: chooseExport,
   importWorld: () => $("#file-input").click(),
   importFolder: chooseSaveFolder,
@@ -564,7 +643,7 @@ const menuContext = {
   },
   inGame: () => screen !== "home",
   notice: toast,
-  lanOpen: () => lan.public,
+  lanOpen: () => lan.public || !!multiplayer,
   copyText: (text) => { try { navigator.clipboard?.writeText(text); } catch {} },
   // GuiShareToLan "Start LAN World": displayGuiScreen(null), shareToLAN, then commands.publish.started (or failed) in chat.
   shareToLan: (mode, cheats) => {
@@ -606,6 +685,7 @@ addEventListener("resize", () => gui.build());
 
 // `columns`: the active streamed world's edited column records (world-storage.js).
 async function persist(columns = []) {
+  if (!worldWriterAvailable) return false;
   try {
     await writeWorldShelf(worlds, localStorage, storageKey, columns);
     return true;
@@ -828,6 +908,7 @@ async function renameWorld(record, name) {
 }
 
 function save() {
+  if (active?.remote) return;
   if (!active || !world || screen === "home") return;
   // Streamed worlds store edits per column: only the columns edited since the last save are written.
   const columns = world.streaming ? world.takeDirtyColumns().map((c) => ({ world: active.id, ...c })) : [];
@@ -1054,6 +1135,8 @@ function applyWeatherEdit(w, x, y, z, block, meta) {
 let tripLoading = false; // a portal trip is between worlds: screen is "home" for the loop but the music stays the game's
 let pendingBonusChests = null; // chest tiles of a bonus chest placed during creation, consumed by launch
 async function openWorld(record) {
+  if (!worldWriterAvailable) { toast('Another tab owns local saves. Close it and reload to play Singleplayer.'); return; }
+  multiplayer?.close(); multiplayer = null; remotePlayers?.clear(); remotePlayers = null;
   if(openingWorld)return;
   openingWorld=true;
   sounds?.stopStreams(); // Minecraft.loadWorld: SoundHandler.stopSounds (music and records), also between dimensions
@@ -1443,6 +1526,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     $("#hud").classList.remove("hidden");
     $("#vignette").classList.add("in-game");
     $("#world-label").textContent = record.name;
+    $("#save-label").textContent = record.remote ? 'Connected to ledoge0' : 'Saved on this device';
     $("#mode-label").textContent = survival.mode.toUpperCase();
     $("#hud").classList.toggle("survival", !survival.creative);
     closeModal();
@@ -1520,7 +1604,7 @@ const commandHost = createCommandHost({
 const commands = createCommandRunner(commandHost);
 const chatUi = new ChatUi(document, {
   // ServerConfigurationManager prints "<Player> message"; a leading "/" runs the command.
-  submit: (text) => { if (text.startsWith("/")) commands.run(text); else printChat(chatTextComponent(scoreboard.formatName(PLAYER_NAME), text), 0, false); },
+  submit: (text) => { if (multiplayer) { if (text.startsWith('/')) printChat('Server commands are not available in this Creative milestone.'); else multiplayer.send({ type: 'chat', text }); } else if (text.startsWith("/")) commands.run(text); else printChat(chatTextComponent(scoreboard.formatName(PLAYER_NAME), text), 0, false); },
   // GuiChat.func_146407_a: with chatLinksPrompt a GuiConfirmOpenLink asks first; Yes opens a new tab, and every choice returns to the chat.
   confirmLink: (url) => {
     const typed = chatUi.input.value;
@@ -1684,6 +1768,7 @@ function pause() {
 }
 function goHome() { leaveToTitle(true); }
 function leaveToTitle(keep) {
+  multiplayer?.close(); multiplayer = null; remotePlayers?.clear(); remotePlayers = null;
   statsLive.leaveGame(); // ServerConfigurationManager.playerLoggedOut
   if (keep) save();
   lan.close();
@@ -2702,6 +2787,7 @@ function spawnHangingDrops() {
 }
 function edit(place = false) {
   if (screen !== "playing") return;
+  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); multiplayer.send({ type: 'edit', place }); animation.swing(); return; }
   // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
   if (applyHangingEdit({ hanging, world, survival, heldId: heldId(), place, target, aimed: aimedHanging }, {
     swing: () => animation.swing(),
@@ -2951,6 +3037,7 @@ async function spawnPosition() {
   return world.spawn();
 }
 function movementTick(controls) {
+  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); return; }
   if(containerResidency) {
     if(containerResidency.update(position.x,position.z).length)containerResidency.pruneRecord(active);
     if(!containerResidency.ready(position.x,position.z))return;
@@ -2977,14 +3064,9 @@ function movementTick(controls) {
       ? "SWIMMING"
       : "WALKING";
   tickSurvival(inWater, oldPosition, inLavaNow);
-  tickBlockSystems({ farming, fluids, fire },
+  tickWorldSystems({ farming, fluids, fire, hoppers: hopperTiles, brewing: tickBrewingStands, redstone: redstoneRuntime },
     { time: survival.time, daylight: scene.daylight, x: position.x, z: position.z },
     { farming: applyFarmUpdates, fluids: changes => { scene.updateBlocks(changes); redstoneRuntime?.fluidChanges(changes); }, fire: changes => scene.updateBlocks(changes) });
-  // Scheduled block updates, block events and the piston tile loop run after the fluid and fire ticks and before the mobs.
-  // TileEntityHopper.updateEntity for every loaded hopper (the tile-entity loop runs before the scheduled updates).
-  hopperTiles.tick();
-  tickBrewingStands();
-  redstoneRuntime?.tick();
   recordHud.tick();
   // NetHandlerPlayClient.handleEntityAttach: boarding any vehicle (cart, boat, pig, horse) shows
   // GuiIngame.func_110326_a(I18n "mount.onboard" with the sneak key's display string, false) above the hotbar.
@@ -3198,6 +3280,7 @@ function sidebarFrame() {
 }
 // key.playerlist (Tab) held: GuiIngame draws the list unless a lone integrated player is on the server (player-list.js).
 const showPlayerList = () => {
+  if (multiplayer) { playerList.show(multiplayer.players.map(p => ({ name: p.name, ping: 0 })), Math.ceil(innerWidth / guiScale(innerWidth, innerHeight, Number(options.guiScale) || 0))); return; }
   const listObjective = scoreboard.slot(0); // display slot "list": shows the overlay even for a lone player, with a score column
   if (!playerListVisible({ integrated: true, players: 1, hasObjective: !!listObjective, lanShared: lan.public })) return;
   playerList.show([{ name: scoreboard.formatName(PLAYER_NAME), ping: 0, score: listObjective ? scoreboard.peek(PLAYER_NAME, listObjective)?.value ?? 0 : undefined }], Math.floor(window.innerWidth / ((parseFloat(getComputedStyle(chatUi.box).fontSize) / 8) || 1)));
@@ -3542,7 +3625,7 @@ function animate(now) {
     fpsTime = elapsed;
   }
   // Minecraft.isGamePaused: the game menu stops the world unless the LAN server is public (lan.js).
-  const running = () => screen === "playing" || screen === "inventory" || (screen === "paused" && !lan.paused(true));
+  const running = () => screen === "playing" || screen === "inventory" || (screen === "paused" && (multiplayer || !lan.paused(true)));
   { const want = debug && debugChart; if (clientProfiler.enabled !== want) { clientProfiler.clear(); clientProfiler.enabled = want; } clientProfiler.section = ""; clientProfiler.sections.length = 0; clientProfiler.stamps.length = 0; clientProfiler.start("root"); } // Minecraft.runGameLoop: profiler on while Shift+F3
   tickMusic(dt);
   if (running()) {
@@ -3561,20 +3644,20 @@ function animate(now) {
       world.ringReads = !!world.ringSink; // simulation reads see the ring columns; meshing, light and the window shift do not
       try { movementTick(captureMovementInput(bedSleep.sleeping ? () => false : (d) => binds.isDown(d))); } finally { world.ringReads = false; } // a sleeping player ignores the keys
       tickProf.endStart("bed");
-      tickBed();
+      if (!multiplayer) tickBed();
       tickProf.endStart("effects");
       scene.effectRenderer.tick(world);
       tickProf.endStart("player");
       // The model stands at posY - yOffset, and posY is lowered by ySize (the sneak drop).
       const lowered = (p, drop) => ({ x: p.x, y: p.y - drop, z: p.z });
-      playerBody.tick({ position: lowered(position, motion.ySize), previous: lowered(previous, motion.prevYSize), yaw, pitch, swinging: animation.swingTime < SWING_SECONDS, riding: !!rider.vehicle });
+      if (!multiplayer) playerBody.tick({ position: lowered(position, motion.ySize), previous: lowered(previous, motion.prevYSize), yaw, pitch, swinging: animation.swingTime < SWING_SECONDS, riding: !!rider.vehicle });
       // EntityRenderer.updateRenderer: the cinematic camera filters advance once per tick.
       mouseLook.tick(options.sensitivity, smoothCamera);
       tickProf.end();
       tickProf.end();
       accumulator -= PHYSICS.tick;
     }
-    const t = accumulator / PHYSICS.tick;
+    const t = multiplayer ? Math.min(1, Math.max(0, (performance.now() - (multiplayer.at ?? performance.now())) / 50)) : accumulator / PHYSICS.tick;
     // EntityRenderer.updateCameraAndRender: this frame's mouse movement turns the player while the
     // game has focus (mouse-look.js: sensitivity curve, invertMouse, smoothCamera, +-90 degree pitch).
     if (screen === "playing") {
@@ -3737,6 +3820,7 @@ function animate(now) {
   }
   // The title and world screens cover the view; a paused world still draws behind its menu.
   clientProfiler.start("render");
+  remotePlayers?.frame();
   if (screen !== "home") scene.render(elapsed, dt);
   clientProfiler.end();
   clientProfiler.end();
@@ -3789,11 +3873,14 @@ function shadowCasters(partial) {
   return list;
 }
 async function boot(){try {
-  await acquireWorldWriter();
+  try { await acquireWorldWriter(); worldWriterAvailable = true; }
+  catch { worldWriterAvailable = false; } // another local-save owner must not prevent multiplayer-only tabs
   // Read the shelf under ownership: another tab may have finished a save while
   // this page was starting up, before the browser granted its lock.
-  try {const shelf=JSON.parse(localStorage.getItem(storageKey)||'[]');worlds=Array.isArray(shelf)?shelf:[];}catch{worlds=[];}
-  worlds = await readWorldShelf(worlds);
+  if (worldWriterAvailable) {
+    try {const shelf=JSON.parse(localStorage.getItem(storageKey)||'[]');worlds=Array.isArray(shelf)?shelf:[];}catch{worlds=[];}
+    worlds = await readWorldShelf(worlds);
+  } else worlds = [];
   scene = new VoxelScene($("#viewport"));
   scene.post.anaglyph = () => !!options.anaglyph; // GameSettings.anaglyph (options.txt anaglyph3d)
   scene.weather = weather;
@@ -3846,6 +3933,7 @@ async function boot(){try {
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
     window.__mc = { scene, dims, travel: (d) => dims.travel(d), get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get boats() { return boats; }, get hanging() { return hanging; }, get aimedHanging() { return aimedHanging; }, fishing, get target() { return target; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt };
+  if (import.meta.env.DEV) Object.defineProperty(window.__mc, 'multiplayer', { get: () => multiplayer });
   scene.preview(0);
   // The title screen's splash texts (assets/minecraft/texts/splashes.txt).
   menuContext.splashes = await fetch("/media/1.7.10/texts/splashes.txt").then((r) => (r.ok ? r.text() : "")).catch(() => "");

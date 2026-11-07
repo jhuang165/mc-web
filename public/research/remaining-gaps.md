@@ -113,7 +113,7 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 - Both resolved in batch 12: Multiplayer Settings opens Chat Settings, and the golden apple comment is fixed.
 
 ## Out of scope
-- Multiplayer networking, Realms, server list and direct connect screens.
+- Multiplayer: the first dedicated Creative building milestone has a connection form, server-owned movement/edits, chat, player presence and saves ([scope](multiplayer.md)); Survival/containers, mobs/items/projectiles/TNT, sounds/events, full tile/redstone/pistons, dimensions, infinite residency, Java protocol 5, real ping, account permissions and a server list remain missing. Realms remains unavailable. Open to LAN still has only local effects.
 - Twitch integration and the snooper/usage reporting.
 - Demo mode.
 - The 16 dedicated-server-only commands (not registered by the native integrated server either).

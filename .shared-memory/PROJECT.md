@@ -1,5 +1,12 @@
 # Shared project state
 
+Dedicated browser multiplayer milestone (2026-11-07, codex-dedicated-multiplayer, unpublished):
+- User selected authority B: Node on ledoge0 owns an always-running world. `src/multiplayer/`, `server/`, the shared `tickWorldSystems` block/tile segment, title-screen connection form and small main.js hooks implement an eight-player, finite 128×128 Creative building world with server movement/rays, block snapshots/deltas, chat, interpolated Steve presence/Tab, expiring input and atomic saves. Custom versioned JSON/RLE is deliberate; see `public/research/multiplayer.md`. No Java protocol-5 or full-parity claim.
+- The complete integrated tick, Survival/containers, entity/TNT replication, full piston/redstone/tile integration, dimensions and infinite multi-centre residency remain open. Open to LAN keeps its prior local-only effects. Additional tabs can join multiplayer while the Web Lock still protects Singleplayer saves.
+- SSH works as elheffeh on 100.75.167.95. Node v24.22.2 checksum-verified; launchd user agent `local.mc-web.dedicated` runs 127.0.0.1:8089, saving under `~/.local/share/mc-web/state/`. Keys stay outside the repository/notes. Tailscale Serve requires the owner to enable it in the admin UI; HTTPS/WSS verification is pending that action. Funnel is off. The LaunchAgent starts after user login, not before login/after logout like a system LaunchDaemon.
+- Validation: final `npm test` 4,347 pass/0 fail; `BASE_PATH=/mc-web/ npm run build` passes; focused replay/server/menu checks pass. Muted Chrome on isolated :5197: two same-origin tabs join, move, break/place through the server, converge on the same blocks and show both names; one favicon 404, no application exception. Two production-build tabs on :5198 also moved/chatted/broke/placed through ledoge0 via an SSH tunnel, with zero browser errors or failed responses. launchd restart retained world ticks, one edited cell and two saved player records. Secure HTTPS is still pending Serve enablement. User's :5179 was untouched.
+- Existing uncommitted chest/bed/icon changes belong to previous work and are excluded from this task's commits. No GitHub push/Pages deployment without the user's agreement.
+
 Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.52.0. Full parity is unfinished.
 
 Batch 22 (2026-11-07, claude-b22-lead, five Sonnet tracks merged into main):

@@ -6,3 +6,12 @@ export function tickBlockSystems({ farming, fluids, fire }, { time, daylight, x,
   if (fluids) observers.fluids(fluids.tick());
   if (fire) observers.fire(fire.tick(x, z));
 }
+
+// Shared server-side block/tile ordering. Browser presentation is supplied as
+// observers; Node can run the same segment without a scene or a document.
+export function tickWorldSystems(systems, clock, observers) {
+  tickBlockSystems(systems, clock, observers);
+  systems.hoppers?.tick();
+  systems.brewing?.();
+  systems.redstone?.tick();
+}
