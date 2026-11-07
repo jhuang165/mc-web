@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import { auditSentence } from './catalogue-audit.mjs';
 
 const research = new URL('../public/research/', import.meta.url);
 const reference = JSON.parse(await readFile(new URL('surface-registry-reference.json', research)));
@@ -56,6 +57,8 @@ await writeFile(new URL('command-parity-catalogue.md', research), `# Original co
 
 ${intro}
 
+${auditSentence(commandRows)} Dedicated-server commands are Out of scope as they are not registered by the integrated server (batch 19 audit).
+
 All **${commands.length} command registrations** in the original ServerCommandManager constructor: common entries plus dedicated-only entries and integrated-only publish. Registration membership/order comes from inspected constructor bytecode. The unchanged individual constructors, name/alias/default-permission/usage getters and CommandHandler.registerCommand execute in the probe. The actual ServerCommandManager constructor and command bodies are not executed; no server starts. Profile alias maps reproduce native registration with **35 integrated** and **50 dedicated** lookup keys, not 85 distinct commands.
 
 The declared permission number does not prove access: commands marked custom check override the base sender permission logic. Operator level, integrated-server rules, server configuration, sender kind and command-specific conditions need behavioral cases. Usage values are original translation keys, not a full syntax/subcommand inventory. The browser has a chat window and command runner (\`src/chat.js\`, \`src/commands.js\`, \`src/command-host.js\`, \`src/command-data.js\`): ${partialCount} commands are Partial (none reports itself unavailable since batch 13), and the ${dedicatedCount} dedicated-server commands are out of scope. Cheats follow the world's Allow Cheats flag; command blocks and the command block minecart execute through the same runner.
@@ -74,18 +77,18 @@ ${profileRows.join('\n')}
 `);
 
 const screenEvidence = {
-  GuiControls: ['Partial; Invert Mouse/Sensitivity and key list, only the cinematic camera key rebinds', 'parity.md'],
+  GuiControls: ['Partial; Invert Mouse/Sensitivity, a disabled Touchscreen Mode button and the sorted key list with rebinding, conflict labels, Reset and Reset Keys', 'controls.md'],
   GuiCreateWorld: ['Partial; Default/Superflat/Large Biomes/Amplified Java worlds, Customize for Superflat, Bonus Chest, cheats and seed', 'superflat.md'],
-  GuiGameOver: ['Partial; death screen', 'parity.md'],
+  GuiGameOver: ['Partial; death screen, with the Hardcore variant ([hardcore](hardcore.md))', 'parity.md'],
   GuiIngameMenu: ['Partial; pause menu with Open to LAN', 'parity.md'],
   GuiMainMenu: ['Partial; title/menu with panorama and splash', 'parity.md'],
-  GuiOptions: ['Partial; native layout, unavailable buttons drawn disabled', 'settings-parity-catalogue.md'],
+  GuiOptions: ['Partial; native layout; Resource Packs, Language, Super Secret Settings and chat options work, Broadcast and Snooper drawn disabled', 'settings-parity-catalogue.md'],
   GuiScreenOptionsSounds: ['Partial; master plus eight category sliders', 'settings-parity-catalogue.md'],
-  GuiVideoSettings: ['Partial; Graphics, Smooth Lighting, Mipmap, Max Framerate, Clouds, VSync drawn disabled (render settings in progress, batch 11)', 'settings-parity-catalogue.md'],
+  GuiVideoSettings: ['Partial; Graphics, Smooth Lighting, Mipmap, Anisotropic, Max Framerate, Clouds, 3D Anaglyph and VSync work; Advanced OpenGL is omitted', 'settings-parity-catalogue.md'],
   GuiSelectWorld: ['Partial; browser world list with rename/delete/recreate/export', 'parity.md'],
   GuiRenameWorld: ['Partial; rename world', 'parity.md'],
   GuiYesNo: ['Partial; delete confirmation', 'parity.md'],
-  GuiLanguage: ['Partial; one entry (English US)', 'settings-parity-catalogue.md'],
+  GuiLanguage: ['Partial; installed languages sorted by code (English US alone until the lang files are fetched) and Force Unicode Font', 'languages.md'],
   GuiShareToLan: ['Partial; local LAN settings, no browser sockets', 'commands.md'],
   GuiChat: ['Partial; native constants, history, Tab completion, cheats gating', 'commands.md'],
   GuiSleepMP: ['Partial; Leave Bed with chat field', 'bed.md'],
@@ -113,7 +116,7 @@ const screenEvidence = {
   GuiCreateFlatWorld: ['Partial; layer list, Remove Layer, Presets, Done/Cancel; Add/Edit Layer hidden as in 1.7.10 (flat-gui.js)', 'superflat.md'],
   GuiFlatPresets: ['Partial; the 8 native presets and the shareable string box (flat-gui.js); positions bytecode-read', 'superflat.md'],
   GuiConfirmOpenLink: ['Partial; Yes / Copy to Clipboard / No for http(s) links from chat click events', 'chat-options.md'],
-  GuiScreenResourcePacks: ['Missing; only the bundled 1.7.10 textures', 'settings-parity-catalogue.md'],
+  GuiScreenResourcePacks: ['Partial; two-list pack screen with .zip/folder import, move/reorder, Done refreshes in place (resource-packs-ui.js)', 'resource-packs.md'],
   GuiSnooper: ['Out of scope; no usage telemetry (drawn disabled)', 'settings-parity-catalogue.md'],
   GuiMultiplayer: ['Out of scope; multiplayer', 'parity.md'], GuiScreenAddServer: ['Out of scope; multiplayer', 'parity.md'],
   GuiScreenServerList: ['Out of scope; multiplayer', 'parity.md'], GuiConnecting: ['Out of scope; multiplayer', 'parity.md'],
@@ -121,7 +124,7 @@ const screenEvidence = {
   GuiScreenRealmsProxy: ['Out of scope; Mojang Realms service', 'parity.md'], GuiScreenDemo: ['Out of scope; demo mode', 'parity.md'],
   GuiIngestServers: ['Out of scope; Twitch streaming', 'parity.md'], GuiStreamOptions: ['Out of scope; Twitch streaming', 'parity.md'],
   GuiStreamUnavailable: ['Out of scope; Twitch streaming', 'parity.md'], GuiTwitchUserMode: ['Out of scope; Twitch streaming', 'parity.md'],
-  GuiErrorScreen: ['Missing; browser errors use the notice/modal path', 'parity.md'], GuiMemoryErrorScreen: ['Missing; no JVM memory screen', 'parity.md'],
+  GuiErrorScreen: ['Missing; browser errors use the notice/modal path', 'parity.md'], GuiMemoryErrorScreen: ['Out of scope; JVM out-of-memory screen, a browser tab has no equivalent', 'parity.md'],
   GuiScreenWorking: ['Missing; world loading uses the browser loading overlay', 'parity.md'],
   GuiScreen: ['Partial; shared menu GUI framework (menu-ui.js)', 'settings-parity-catalogue.md'],
   InventoryEffectRenderer: ['Partial; effect list in the inventory screen', 'effects.md'],
@@ -149,14 +152,16 @@ const SUPPORT_PARTIAL = new Set(['Gui', 'GuiIngame', 'GuiButton', 'GuiTextField'
   'ChatLine', 'GuiNewChat', 'MapItemRenderer', 'MapItemRenderer$1', 'MapItemRenderer$Instance', 'GuiAchievement', 'GuiMerchant$MerchantButton', 'GuiBeacon$Button',
   'GuiBeacon$CancelButton', 'GuiBeacon$ConfirmButton', 'GuiBeacon$PowerButton', 'GuiContainerCreative$ContainerCreative', 'GuiContainerCreative$CreativeSlot', 'CreativeCrafting']);
 const SUPPORT_EVIDENCE = new Set(['GuiCreateFlatWorld$Details', 'GuiFlatPresets$LayerItem', 'GuiFlatPresets$ListSlot']); // folded into flat-gui.js
-const SUPPORT_MISSING = new Set(['GuiPlayerInfo', 'GuiResourcePackAvailable', 'GuiResourcePackList', 'GuiResourcePackSelected', 'GuiScreenBook$NextPageButton', 'GuiSnooper$List']);
+const SUPPORT_RESOURCE_PACKS = new Set(['GuiResourcePackAvailable', 'GuiResourcePackList', 'GuiResourcePackSelected']); // folded into resource-packs-ui.js
+const SUPPORT_OUT_OF_SCOPE = new Set(['GuiSnooper$List']);
 const SUPPORT_PROGRESS = new Set(['GuiStats$Stats', 'GuiStats$StatsBlock', 'GuiStats$StatsBlock$1', 'GuiStats$StatsGeneral', 'GuiStats$StatsItem', 'GuiStats$StatsItem$1', 'GuiStats$StatsMobsList', 'IProgressMeter']);
 const supportStatus = name => {
   if (name === 'GuiScreenBook$NextPageButton') return 'Partial; the page arrows of the book screen (book-ui.js), no hover texture, see [books](books.md)';
   if (name === 'GuiPlayerInfo') return 'Partial; the Tab player list shows the local player (player-list.js), see [chat options](chat-options.md)';
   if (SUPPORT_EVIDENCE.has(name)) return 'Partial; folded into the Superflat screens (flat-gui.js), see [superflat](superflat.md)';
   if (SUPPORT_PROGRESS.has(name)) return 'Partial; statistics screen ([stats](stats.md))';
-  if (SUPPORT_MISSING.has(name)) return 'Missing; no counterpart (resource packs, snooper)';
+  if (SUPPORT_RESOURCE_PACKS.has(name)) return 'Partial; folded into the Resource Packs screen (resource-packs-ui.js), see [resource packs](resource-packs.md)';
+  if (SUPPORT_OUT_OF_SCOPE.has(name)) return 'Out of scope; Snooper telemetry (no usage data is sent)';
   if (SUPPORT_PARTIAL.has(name)) return 'Partial browser counterpart; see [GUI coverage](parity.md) and [settings catalogue](settings-parity-catalogue.md)';
   if (/Realms|ServerList|ServerSelection|Stream|Ingest/.test(name)) return 'Out of scope; multiplayer, Realms or Twitch';
   assert.fail(`no GUI support status for ${name}`);
@@ -166,9 +171,11 @@ await writeFile(new URL('gui-parity-catalogue.md', research), `# Original screen
 
 ${intro}
 
+${auditSentence([...screenRows, ...supportRows])} (screens plus support classes; batch 19 audit re-checked every Missing and Partial row against src/menus.js, menu-screens.js and the research docs.)
+
 The original JAR contains **${screens.length} classes in the GuiScreen inheritance tree**, including the base, container/effect bases and screens outside the gui package. A separate **${guiSupport.length} mapped classes/interfaces in the client/gui namespace** covers HUD, fonts, widgets, lists, entries, callbacks and other helpers that are not screen descendants. These are exhaustive within those explicit class-selection rules, not a claim that there are 124 independent screens. Anonymous/inner helpers remain distinct. Class header parsing records inheritance/abstract flags without initializing GUI classes or requiring GL. No layout, navigation or rendering is executed by this extractor.
 
-The Partial rows are reviewed conceptual browser counterparts, with current evidence/limits linked. Multiple original screens may share one adapted browser modal. Missing means no browser counterpart was found in src/; Out of scope marks multiplayer, Realms, Twitch and snooper screens; In progress marks batch 11 work not yet merged. Realms/Twitch and other original external-service screens are retained in the inventory; service availability and browser-specific constraints need explicit acceptance decisions. Supporting classes outside client/gui, overlays outside GuiScreen, all settings/control values and GUI substates need separate semantic audits.
+The Partial rows are reviewed conceptual browser counterparts, with current evidence/limits linked. Multiple original screens may share one adapted browser modal. Missing means no browser counterpart was found in src/ (batch 19 audit); Out of scope marks multiplayer, Realms, Twitch, demo, snooper and JVM-only screens. Realms/Twitch and other original external-service screens are retained in the inventory; service availability and browser-specific constraints need explicit acceptance decisions. Supporting classes outside client/gui, overlays outside GuiScreen, all settings/control values and GUI substates need separate semantic audits.
 
 | Gate | Dependencies | Full acceptance required |
 | --- | --- | --- |
@@ -213,16 +220,16 @@ const MAPGEN = {
   MapGenVillage: ['Implemented', '[villages](villages.md)'],
   MapGenStronghold: ['Implemented', '[strongholds](strongholds.md)'],
   MapGenScatteredFeature: ['Partial', '[scattered features](scattered-features.md); combined-population call counts match natively (the 319-call gap is closed)'],
-  MapGenNetherBridge: ['Partial', '[fortress](fortress.md); no start NBT/persistence'],
+  MapGenNetherBridge: ['Partial', '[fortress](fortress.md); start/piece NBT and Fortress.dat persistence probe-verified ([structure NBT](structure-nbt.md))'],
 };
 const mapRows = mapGenerators.map(s => { const m = MAPGEN[leaf(s.mappedName)]; assert(m, s.mappedName); return `| ${short(s.mappedName)} | ${s.class} | ${s.abstract ? 'yes' : 'no'} | ${m[0]}; ${m[1]} | G |`; });
-// WorldGen features: all but the bonus chest are ported under src/ (tree-generators.js, biome-decorator.js,
+// WorldGen features: all are ported under src/ (tree-generators.js, biome-decorator.js,
 // biome-features.js, decoration-features.js, lake-generator.js, dungeon-generator.js, ore-generator.js, nether-generator.js,
 // end-generator.js) and exercised by the native area replays in generation.md / population-live.md.
 const TREES = ['WorldGenAbstractTree', 'WorldGenBigTree', 'WorldGenCanopyTree', 'WorldGenForest', 'WorldGenHugeTrees', 'WorldGenMegaJungle', 'WorldGenMegaPineTree', 'WorldGenSavannaTree', 'WorldGenShrub', 'WorldGenSwamp', 'WorldGenTaiga1', 'WorldGenTaiga2', 'WorldGenTrees', 'WorldGenerator'];
 const NETHER = ['WorldGenFire', 'WorldGenGlowStone1', 'WorldGenGlowStone2', 'WorldGenHellLava'];
 const featureStatus = name => {
-  if (name === 'WorldGeneratorBonusChest') return 'Missing; no bonus chest (the world creation button is drawn disabled)';
+  if (name === 'WorldGeneratorBonusChest') return 'Implemented; Bonus Chest button in Create World; ten-attempt placement, contents and torches replayed over 40 native records in [superflat](superflat.md) (bonus-chest.js); the unseeded World.rand is entropy-seeded as natively';
   if (name === 'WorldGenSpikes') return 'Implemented; End spikes in [end generation](end.md)';
   if (NETHER.includes(name)) return 'Implemented; [Nether populate](nether.md); canNeighborBurn and non-opaque solid-top checks not ported';
   if (TREES.includes(name)) return 'Implemented; [tree generators](trees.md) and [generation](generation.md)';
@@ -232,6 +239,8 @@ const featureRows = features.map(s => `| ${short(s.mappedName)} | ${s.class} | $
 await writeFile(new URL('structure-parity-catalogue.md', research), `# Original structures and feature-generator parity catalogue
 
 ${intro}
+
+${auditSentence([...startRows, ...pieceRows, ...mapRows, ...featureRows])} (batch 19 audit.)
 
 The unchanged MapGenStructureIO static registration produces **${structureStarts.length} structure start IDs** and **${structurePieces.length} piece IDs**, with forward/reverse maps checked by the probe. These are native save/dispatch IDs, not an inventory of every procedural configuration. All are listed below. Separate class-header inventories list **${mapGenerators.length} top-level MapGen drivers/framework classes** (structure IO/data helpers excluded) and **${features.length} mapped WorldGen feature classes**, including abstract bases.
 

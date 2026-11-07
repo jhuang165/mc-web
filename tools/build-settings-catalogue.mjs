@@ -35,13 +35,13 @@ const S = {
   SENSITIVITY: ['Partial', 'Since 0.23.2: slider 0-1 default 0.5 with the native EntityRenderer curve (settings.js lookCurve, f=s*0.6+0.2, f^3*8, Entity.setAngles 0.15 deg per unit) and native *yawn*/HYPERSPEED!!!/percent labels (settings.test.js). Mouse movement is gathered per frame, pitch clamps to +-90 degrees as in Entity.setAngles, and the cinematic camera (MouseFilter) uses the same curve (mouse-look.js). Browser movement is in CSS pixels, not LWJGL device pixels.'],
   FOV: ['Implemented', 'Since 0.23.2: slider 30-110 step 1, default 70, Normal/Quake Pro labels (main.js, settings.js; settings.test.js, settings-catalogue.test.js). Bow/sprint/flight FOV modifiers exist in bow.js and main.js; the modifier set is audited separately.'],
   GAMMA: ['Partial', 'Slider 0-1 default 0 (Moody) matches native range/default; scene.setGamma lightmap application and native label strings not audited against native output.'],
-  SATURATION: ['Missing', 'Unused by 1.7.10 screens; no browser counterpart.'],
+  SATURATION: ['Missing', 'Unused by every 1.7.10 screen and by the renderer; the saturation key only round-trips in options.txt (options-txt.js).'],
   RENDER_DISTANCE: ['Partial', 'Since 0.23.2: chunk slider 2-16 step 1, default 12 (the 64-bit JVM default), "N chunks" label; fog far plane renderDistanceChunks*16 (settings.js renderDistanceBlocks). Chunk loading/culling by distance is open because worlds are finite columns.'],
   VIEW_BOBBING: ['Partial', 'Toggle default on matches native; bobbing application not audited here.'],
-  ANAGLYPH: ['Missing', 'No 3D anaglyph rendering; the Video Settings button is drawn disabled with a reason and options.txt keeps anaglyph3d (default false or an imported value).'],
-  ADVANCED_OPENGL: ['Missing', 'No occlusion-culling toggle (WebGL renderer).'],
+  ANAGLYPH: ['Partial', 'red/cyan two-pass rendering with the bytecode offsets and colour formula, applied to final pixels ([post-shaders.md](post-shaders.md)); saved as anaglyph3d.'],
+  ADVANCED_OPENGL: ['Out of scope', 'Occlusion-culling queries have no WebGL 1 counterpart; Video Settings omits the button and options.txt round-trips advancedOpengl (options-txt.js).'],
   FRAMERATE_LIMIT: ['Partial', 'Max Framerate slider 10-260 step 10 (260 "Unlimited"), default 120, saved as maxFps. The frame loop skips animation frames as Display.sync spaces them (max(next + 1000/fps, now)), 30 fps on the title screen as getLimitFramerate; frames cannot exceed the display refresh (frame-limit.js; controls.md).'],
-  FBO_ENABLE: ['Missing', 'Not applicable to WebGL; no browser counterpart.'],
+  FBO_ENABLE: ['Out of scope', 'Framebuffer-object fallback for old GPUs; not applicable to WebGL (the post shaders always render through render targets). options.txt round-trips fboEnable (options-txt.js).'],
   DIFFICULTY: ['Implemented', 'Select Peaceful/Easy/Normal/Hard, default Normal (main.js, difficulty.js; difficulty.test.js, particle/difficulty references). Hardcore lock and server-side difficulty open.'],
   GRAPHICS: ['Implemented', 'Fast/Fancy button (menus.js), saved as options.graphics; Fast: opaque *_opaque leaves with leaf-to-leaf faces culled, flat 8-block clouds, rain/snow radius 5, flat sprite items, one blended translucent pass, no entity shadows (render-settings.js; render-settings.md). Fast clouds, vignette and sprite items are approximated, not byte-compared.'],
   AMBIENT_OCCLUSION: ['Implemented', 'Off = flat per-face light, Minimum = full smooth path, Maximum = partial-bounds path for non-full-cube bounds (lighting.js flatFace/partialFace; render-settings.md). Changing it rebuilds chunk meshes.'],
@@ -53,28 +53,28 @@ const S = {
   CHAT_LINKS: ['Partial', 'Web Links toggle saved; clicks run the ClickEvent of a span (screenshot file name, open_url). Vanilla 1.7.10 does not auto-link plain text, so nothing else is clickable; open_file is a no-op in a browser.'],
   CHAT_OPACITY: ['Partial', 'Slider in Chat Settings, saved; 0.9 * opacity + 0.1 line alpha as GuiNewChat; label (int)(f * 90 + 10)% is bytecode-read.'],
   CHAT_LINKS_PROMPT: ['Partial', 'Prompt on Links toggle saved; on, an http/https click opens GuiConfirmOpenLink (Yes opens a new tab, Copy to Clipboard, No); off opens at once.'],
-  SNOOPER_ENABLED: ['Missing', 'Mojang snooper telemetry; no counterpart and likely out of scope (needs acceptance decision).'],
+  SNOOPER_ENABLED: ['Out of scope', 'Mojang snooper telemetry; this build sends no usage data. The Snooper Settings button is drawn disabled with a reason (menus.js) and options.txt round-trips snooperEnabled.'],
   USE_FULLSCREEN: ['Partial', 'The Video Settings button, the HUD button and key.fullscreen (F11, dispatchKeypresses) use the Fullscreen API (main.js); the options.txt mirror writes fullscreen:false (a browser cannot start in fullscreen).'],
   ENABLE_VSYNC: ['Partial', 'Use VSync toggles and saves enableVsync; requestAnimationFrame is always synchronized to the display, so turning it off cannot unlock frames above the refresh rate (controls.md).'],
   SHOW_CAPE: ['Partial', 'Button drawn disabled in Chat Settings (ON, the default); there are no skins or capes.'],
-  TOUCHSCREEN: ['Missing', 'Mobile on-screen controls exist but are not the native touchscreen option.'],
+  TOUCHSCREEN: ['Missing', 'Mobile on-screen controls exist but are not the native touchscreen option; the Touchscreen Mode button in Controls is drawn disabled with a reason (menus.js) and options.txt round-trips touchscreen.'],
   CHAT_SCALE: ['Partial', 'Slider, saved; wrap width floor(width / scale) and the drawn scale follow GuiNewChat; label OFF at 0 else (int)(f * 100)%.'],
   CHAT_WIDTH: ['Partial', 'Slider, saved; floor(f * 280 + 40) px (probe-replayed) and rewrapped; label in px.'],
   CHAT_HEIGHT_FOCUSED: ['Partial', 'Slider, saved; floor(f * 160 + 20) px / 9 lines (probe-replayed).'],
   CHAT_HEIGHT_UNFOCUSED: ['Partial', 'Slider, saved; floor(f * 160 + 20) px / 9 lines (probe-replayed).'],
   MIPMAP_LEVELS: ['Partial', '0-4 levels, default 4: per-tile TextureUtil.generateMipmapData chains with NEAREST_MIPMAP_LINEAR (block-textures.js, render-settings.js). Only the block atlas is mipmapped; other textures are not (render-settings.md).'],
   ANISOTROPIC_FILTERING: ['Partial', '1-16 snapped to a power of two, applied to the block atlas when EXT_texture_filter_anisotropic exists (clamped to the GPU maximum); other textures unchanged.'],
-  FORCE_UNICODE_FONT: ['Missing', 'No Unicode font page switch.'],
-  STREAM_BYTES_PER_PIXEL: ['Missing', 'Twitch streaming service; acceptance decision needed.'],
-  STREAM_VOLUME_MIC: ['Missing', 'Twitch streaming service; acceptance decision needed.'],
-  STREAM_VOLUME_SYSTEM: ['Missing', 'Twitch streaming service; acceptance decision needed.'],
-  STREAM_KBPS: ['Missing', 'Twitch streaming service; acceptance decision needed.'],
-  STREAM_FPS: ['Missing', 'Twitch streaming service; acceptance decision needed.'],
-  STREAM_COMPRESSION: ['Missing', 'Twitch streaming service; acceptance decision needed.'],
-  STREAM_SEND_METADATA: ['Missing', 'Twitch streaming service; acceptance decision needed.'],
-  STREAM_CHAT_ENABLED: ['Missing', 'Twitch streaming service; acceptance decision needed.'],
-  STREAM_CHAT_USER_FILTER: ['Missing', 'Twitch streaming service; acceptance decision needed.'],
-  STREAM_MIC_TOGGLE_BEHAVIOR: ['Missing', 'Twitch streaming service; acceptance decision needed.'],
+  FORCE_UNICODE_FONT: ['Implemented', 'Force Unicode Font button in the Language screen (menus.js), saved as forceUnicodeFont; the flag becomes Locale.isUnicode() || forceUnicodeFont and switches the glyph_sizes.bin width path and glyph pages (lang.js, font-renderer.js; widths for all 65536 characters replayed against the unchanged FontRenderer in languages.test.js, [languages.md](languages.md)). GuiLanguage layout bytecode-read, not probed.'],
+  STREAM_BYTES_PER_PIXEL: ['Out of scope', 'Twitch streaming service; the Broadcast Settings button is drawn disabled with a reason (menus.js) and options.txt round-trips the key (options-txt.js).'],
+  STREAM_VOLUME_MIC: ['Out of scope', 'Twitch streaming service; the Broadcast Settings button is drawn disabled with a reason (menus.js) and options.txt round-trips the key (options-txt.js).'],
+  STREAM_VOLUME_SYSTEM: ['Out of scope', 'Twitch streaming service; the Broadcast Settings button is drawn disabled with a reason (menus.js) and options.txt round-trips the key (options-txt.js).'],
+  STREAM_KBPS: ['Out of scope', 'Twitch streaming service; the Broadcast Settings button is drawn disabled with a reason (menus.js) and options.txt round-trips the key (options-txt.js).'],
+  STREAM_FPS: ['Out of scope', 'Twitch streaming service; the Broadcast Settings button is drawn disabled with a reason (menus.js) and options.txt round-trips the key (options-txt.js).'],
+  STREAM_COMPRESSION: ['Out of scope', 'Twitch streaming service; the Broadcast Settings button is drawn disabled with a reason (menus.js) and options.txt round-trips the key (options-txt.js).'],
+  STREAM_SEND_METADATA: ['Out of scope', 'Twitch streaming service; the Broadcast Settings button is drawn disabled with a reason (menus.js) and options.txt round-trips the key (options-txt.js).'],
+  STREAM_CHAT_ENABLED: ['Out of scope', 'Twitch streaming service; the Broadcast Settings button is drawn disabled with a reason (menus.js) and options.txt round-trips the key (options-txt.js).'],
+  STREAM_CHAT_USER_FILTER: ['Out of scope', 'Twitch streaming service; the Broadcast Settings button is drawn disabled with a reason (menus.js) and options.txt round-trips the key (options-txt.js).'],
+  STREAM_MIC_TOGGLE_BEHAVIOR: ['Out of scope', 'Twitch streaming service; the Broadcast Settings button is drawn disabled with a reason (menus.js) and options.txt round-trips the key (options-txt.js).'],
 };
 assert.deepEqual(Object.keys(S).sort(), options.map(o => o.name).sort());
 
@@ -92,7 +92,7 @@ const KEY_STATUS = {
   'key.pickItem': ['Partial', `${R} Pick block (main.js); no GuiContainer clone through a keyboard binding.`], 'key.command': ['Partial', `${R} Opens chat pre-filled with "/".`],
   'key.screenshot': ['Partial', `${R} dispatchKeypresses in every screen: downloads the 3D canvas as yyyy-MM-dd_HH.mm.ss.png and prints screenshot.success/failure; the DOM HUD is not captured and the file is a download.`], 'key.togglePerspective': ['Partial', `${R} Cycles first/behind/front.`],
   'key.smoothCamera': ['Partial', `${R} Unbound by default natively, and Minecraft.runTick toggles smoothCamera only through this binding (no F8 check in 1.7.10); smoothCamera is session-only (not in options.txt). MouseFilter.smooth, the 0.05 x curve tick filter and the partial-tick spread are ported (mouse-look.js; mouse-look.test.js).`], 'key.sprint': ['Partial', `${R} Held (with the double-tap forward rule).`],
-  'key.streamStartStop': ['Missing', `${R} No Twitch stream; the press does nothing.`], 'key.streamPauseUnpause': ['Missing', `${R} No Twitch stream.`], 'key.streamCommercial': ['Missing', `${R} No Twitch stream.`], 'key.streamToggleMic': ['Missing', `${R} No Twitch stream.`],
+  'key.streamStartStop': ['Out of scope', `${R} No Twitch stream; the press does nothing.`], 'key.streamPauseUnpause': ['Out of scope', `${R} No Twitch stream.`], 'key.streamCommercial': ['Out of scope', `${R} No Twitch stream.`], 'key.streamToggleMic': ['Out of scope', `${R} No Twitch stream.`],
   'key.fullscreen': ['Partial', `${R} dispatchKeypresses toggles the Fullscreen API (also the HUD button).`],
 };
 for (let i = 1; i <= 9; i++) KEY_STATUS[`key.hotbar.${i}`] = ['Partial', `${R} Selects slot ${i}; GuiContainer swaps the hovered slot with it; scroll also selects slots.`];
@@ -103,9 +103,9 @@ assert.deepEqual(Object.keys(KEY_STATUS).sort(), keyBindings.map(k => k.descript
 const ROUTED = 'Slider default 1 with the en_US label and OFF/percent value; audio.js multiplies sounds of this sounds.json category by its level inside getNormalizedVolume (clamp 0-1), skips 0 results and stops playing ones when set to 0 (settings.js normalizedVolume; settings.test.js).';
 const SOUND_STATUS = {
   MASTER: ['Implemented', 'Master Volume slider default 1 with OFF/percent label. As in SoundManager: getSoundCategoryVolume(MASTER) is 1, the level is the master gain over every sound, and playSound skips all sounds at 0 (audio.js; settings.test.js). A non-native Sounds on/off switch remains.'],
-  MUSIC: ['Partial', 'Slider and gain path exist, but the port has no MusicTicker, so no music category sound plays.'],
-  RECORDS: ['Partial', 'Slider and gain path exist; the jukebox block and 12 discs exist (note-jukebox.md) but no record audio files are shipped, so no record plays.'],
-  AMBIENT: ['Partial', 'Slider and gain path exist; only weather ambience is shipped (public/audio/1.7.10/ambient), no cave ambience.'],
+  MUSIC: ['Partial', 'Slider and gain path exist; the MusicTicker port (music.js) streams the Overworld/Creative/Nether/End music through it ([music.md](music.md)); music files are fetched by npm run music:fetch, so no track plays without them, and the HTMLAudioElement stream timing is not the native StreamThread.'],
+  RECORDS: ['Partial', 'Slider and gain path exist; the jukebox plays the 12 discs through RenderGlobal.playRecord (music.js, jukebox.js, [music.md](music.md)) with the record streams fetched like the music, so no disc plays without them.'],
+  AMBIENT: ['Partial', 'Slider and gain path exist; weather ambience and the cave mood sound (cave-ambience.js, [music.md](music.md)) route through it.'],
 };
 const soundStatus = c => SOUND_STATUS[c] ?? ['Implemented', ROUTED];
 
@@ -150,12 +150,12 @@ const layoutNote = s => s.initEvents.map(e => e.string ?? e.widget?.replace(/^ne
 const arrayRows = screenArrays.map(a => `| ${a.mappedClass.replace(/^net\/minecraft\/client\/gui\//, '')}.${a.srgField} | ${a.options.map((o, i) => `${i + 1} ${o}`).join(', ')} |`);
 const layoutRows = screenLayouts.map(s => `| ${s.mappedClass.replace(/^net\/minecraft\/client\/gui\//, '')} | ${cell(layoutNote(s))} |`);
 const SCREEN_STATUS = {
-  GuiOptions: 'Partial: the 1.7.10 layout and buttons (menus.js, menu-screens.js); FOV, difficulty (in a world), Music & Sounds, Video Settings, Controls and Language work; Super Secret Settings, Broadcast, Multiplayer, Resource Packs and Snooper are drawn disabled and explain why.',
-  GuiVideoSettings: 'Partial: the GuiOptionsRowList of two-column options (without Advanced OpenGL); render distance, view bobbing, GUI scale, brightness, particles and fullscreen work; Graphics, Smooth Lighting, Clouds, Mipmap Levels and Anisotropic Filtering work (render-settings.js); Max Framerate, 3D Anaglyph and VSync show the renderer\'s fixed state, disabled.',
+  GuiOptions: 'Partial: the 1.7.10 layout and buttons (menus.js, menu-screens.js); FOV, difficulty (in a world; locked in Hardcore), Super Secret Settings, Music & Sounds, Video Settings, Controls, Language, Multiplayer Settings (chat options) and Resource Packs work; Broadcast Settings and Snooper Settings are drawn disabled and explain why.',
+  GuiVideoSettings: 'Partial: the GuiOptionsRowList of two-column options (without Advanced OpenGL); render distance, view bobbing, GUI scale, brightness, particles and fullscreen work; Graphics, Smooth Lighting, Clouds, Mipmap Levels and Anisotropic Filtering work (render-settings.js); Max Framerate, 3D Anaglyph and VSync work (frame-limit.js, post-shaders.js; the display refresh still caps frames).',
   ScreenChatOptions: 'Partial: Multiplayer Settings... in GuiOptions opens the screen with the nine native options in native order and positions (bytecode-read) and Done; Show Cape is drawn disabled. See chat-options.md.',
   GuiScreenOptionsSounds: 'Partial: its own screen with the full-width Master Volume row and the eight category sliders in two columns, en_US "<category>: <value>" labels, gui.button.press on release (menus.js).',
-  GuiControls: 'Partial: Invert Mouse, Sensitivity and a disabled Touchscreen Mode button above the sorted GuiKeyBindingList with Reset and Reset Keys (menus.js); only key.smoothCamera can be rebound, the other keys are fixed by the browser game loop.',
-  GuiLanguage: 'Partial: the screen with a one-entry list (English (US), the only bundled lang file), the accuracy warning and a disabled Force Unicode Font button.', GuiSnooper: 'Missing.', GuiScreenResourcePacks: 'Missing (fixed original assets).',
+  GuiControls: 'Partial: Invert Mouse, Sensitivity and a disabled Touchscreen Mode button above the sorted GuiKeyBindingList with Reset and Reset Keys (menus.js); every key binding rebinds through the sorted list with conflict labels and Reset (keybindings.js, [controls.md](controls.md)).',
+  GuiLanguage: 'Partial: the list of installed languages sorted by code (English (US) alone until npm run lang:fetch installs the 73 files), the accuracy warning and a working Force Unicode Font button ([languages.md](languages.md)).', GuiSnooper: 'Out of scope: telemetry; the button is drawn disabled with a reason.', GuiScreenResourcePacks: 'Partial: Options > Resource Packs... opens the two-list screen (resource-packs-ui.js, [resource-packs.md](resource-packs.md)); .zip/folder import replaces the disk folder, bytecode-read, not probed.',
 };
 const screenStatusRows = screenLayouts.map(s => {
   const n = s.mappedClass.split('/').pop();
@@ -166,13 +166,13 @@ const screenStatusRows = screenLayouts.map(s => {
 const valueSetRows = valueSets.map(v => `| ${v.role} | ${v.srgField} | ${v.values.join(', ')} |`);
 const counts = { options: options.length, floats: options.filter(o => o.isFloat).length, bools: options.filter(o => o.isBoolean).length, enums: options.filter(o => !o.isFloat && !o.isBoolean).length };
 assert.deepEqual(counts, { options: 44, floats: 18, bools: 16, enums: 10 });
-const statusCount = rows => ['Missing', 'Partial', 'Implemented'].map(s => `${rows.filter(r => r[0] === s).length} ${s}`).join(', ');
+const statusCount = rows => ['Missing', 'Partial', 'Implemented', 'Out of scope'].map(s => `${rows.filter(r => r[0] === s).length} ${s}`).join(', ');
 
 const md = `# Original settings and controls parity catalogue
 
 Generated by \`node tools/build-settings-catalogue.mjs\`; refresh original evidence with \`node tools/verify-settings-catalogue.mjs\` (JDK, pinned client JAR, MCP SRG names and local libraries; also needs a Netty-all JAR and tiny verifier-only stubs under tools/probes/stubs). [Roadmap](parity-roadmap.md) · [GUI catalogue](gui-parity-catalogue.md) · [original evidence and provenance](settings-reference.json). Enumeration does not certify whole-feature parity; no row is marked Verified.
 
-The original GameSettings.Options enum has **${counts.options} constants** (${counts.floats} float sliders, ${counts.bools} booleans, ${counts.enums} enumerated cycle options), plus **${keyBindings.length} KeyBindings** (23 named fields and 9 hotbar keys), **${soundCategories.length} SoundCategory entries** and **${screenLayouts.length} settings-related screens** inspected. Browser status counts: options ${statusCount(options.map(o => S[o.name]))}; key bindings ${statusCount(Object.values(KEY_STATUS))}; sound categories ${statusCount(soundCategories.map(c => soundStatus(c.enum)))}.
+The original GameSettings.Options enum has **${counts.options} constants** (${counts.floats} float sliders, ${counts.bools} booleans, ${counts.enums} enumerated cycle options), plus **${keyBindings.length} KeyBindings** (23 named fields and 9 hotbar keys), **${soundCategories.length} SoundCategory entries** and **${screenLayouts.length} settings-related screens** inspected. Browser status counts (batch 19 audit; Out of scope marks Twitch streaming, snooper and WebGL-inapplicable GL options): options ${statusCount(options.map(o => S[o.name]))}; key bindings ${statusCount(Object.values(KEY_STATUS))}; sound categories ${statusCount(soundCategories.map(c => soundStatus(c.enum)))}.
 
 Evidence classes. Native-executed: Options static initialization and slider conversion methods, the unchanged GameSettings constructor run headlessly (a null-field Minecraft instance supplying only the isJava64bit flag, no options file), every constructed KeyBinding, SoundCategory constants/volumes, private string value arrays, EnumDifficulty/EnumChatVisibility and the static option arrays of GuiVideoSettings, ScreenChatOptions, GuiOptions and GuiControls. Bytecode-read: options.txt save/load key order and field binding, widget/string order in each screen initGui, display/cycle strings, and the mouse-look and sound gain constants (reference \`controls\`: EntityRenderer sensitivity curve, cinematic-camera factor 0.05, invert multiplier -1, MouseFilter.smooth, Entity.setAngles 0.15 degrees per unit and the [-90, 90] pitch clamp, SoundManager category/normalized volume clamp 0-1, pitch clamp 0.5-2, attenuation distance 16 x max(1, volume), and smoothCamera toggled only by key.smoothCamera). en_US.lang strings are read from the JAR (reference \`lang\`). Not executed: other locales, widget coordinates, controls-screen English sort order, per-click cycle arithmetic, resource pack and language list contents, snooper data. Render distance is 12 chunks here because the probe sets the 64-bit flag; the 32-bit path gives 8.
 
