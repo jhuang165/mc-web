@@ -167,7 +167,7 @@ test('flint and steel creeper ignition wins before general right-entity interact
   assert.deepEqual(calls, ['swing', ['fire.ignite', 1], 'broken', 'hotbar', 'dirty']);
 });
 
-test('food with no block target begins eating locally; full hunger only toasts', () => {
+test('food with no block target begins eating locally; full hunger is refused silently', () => {
   const hungry = fixture({ tool: 318, count: 2, place: true });
   assert.equal(applyPlayerEdit(hungry.state, hungry.request).branch, 'no-block-target');
   assert.deepEqual(hungry.state.eating, { id: 318, ticks: 32 });
@@ -175,7 +175,7 @@ test('food with no block target begins eating locally; full hunger only toasts',
   const full = fixture({ tool: 318, food: 20, place: true }), calls = [];
   applyPlayerEdit(full.state, full.request, { toast: (text) => calls.push(text) });
   assert.equal(full.state.eating, null);
-  assert.deepEqual(calls, ['You are not hungry.']);
+  assert.deepEqual(calls, []); // no message in 1.7.10
 });
 
 test('hoe branch tills real soil before later placement dispatch and keeps observer order', () => {

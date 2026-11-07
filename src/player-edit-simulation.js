@@ -435,7 +435,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       return act('open-hopper');
     }
     if (item?.kind === 'hoe') {
-      if (!state.survival.creative && !state.survival.count(id)) { hook('toast', 'Craft a hoe first.'); return act('hoe-no-item'); }
+      if (!state.survival.creative && !state.survival.count(id)) return act('hoe-no-item');
       if (target.adjacent?.[1] !== y - 1 && state.farming.till(x, y, z)) {
         state.survival.wear(id);
         hook('applyFarmUpdates', state.farming.drain());
@@ -590,6 +590,6 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
 }
 
 function beginEating(state, id, hook) {
-  if (state.survival.food >= 20 && !ITEMS[id]?.alwaysEdible) { hook('toast', 'You are not hungry.'); return; } // alwaysEdible: golden apple
+  if (state.survival.food >= 20 && !ITEMS[id]?.alwaysEdible) return; // alwaysEdible: golden apple; a full player is silently refused (no message in 1.7.10)
   if (state.survival.count(id) && !state.eating) state.eating = { id, ticks: 32 };
 }

@@ -71,7 +71,7 @@ test("real World collision rolls ItemBlock writes back and keeps old metadata/co
   assert.equal(world.getMeta(...p), 6);
   assert.equal(survival.count(2), 3);
   assert.deepEqual(calls.slice(-2), [[2, false, 0], [SNOW_LAYER, false, 6]]);
-  assert.deepEqual(messages, ["Give yourself a little room to build."]);
+  assert.deepEqual(messages, []); // 1.7.10 refuses the placement silently
 });
 
 test("snow stacking preserves high metadata bits and rolls back on real player collision", () => {
@@ -95,7 +95,7 @@ test("snow stacking preserves high metadata bits and rolls back on real player c
   assert.equal(failed.reason, "player-collision");
   assert.equal(world.getMeta(...rollbackCell), 5);
   assert.equal(survival.count(SNOW_LAYER), 1);
-  assert.deepEqual(messages, ["Give yourself a little room to build."]);
+  assert.deepEqual(messages, []); // 1.7.10 refuses the placement silently
 });
 
 test("reeds replace tall grass only with adjacent water support and consume once", () => {
@@ -190,7 +190,7 @@ test("ItemBlock count feedback and legacy versus Java top-layer bounds are retai
     id: 2, item: ITEMS[2], target: targetAt([1, y - 1, 1], [1, y, 1]),
   }, { collides: () => false, toast: (message) => messages.push(message) });
   assert.equal(itemBlock(255).reason, "empty-stack");
-  assert.deepEqual(messages, ["Gather this material first."]);
+  assert.deepEqual(messages, []);
   putStack(survival, 2, 1);
   assert.equal(itemBlock(255).placed, true, "Java worlds permit a block at y=255");
   assert.equal(itemBlock(256).reason, "invalid-position");

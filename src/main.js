@@ -125,7 +125,7 @@ import { ScoreboardLive, SidebarUi } from "./scoreboard-live.js";
 import { StatsLive, watchMobStats, watchDrops, addFallStat } from "./stats-live.js";
 import { watchMobs, craftedAchievement, smeltedAchievement, pickedAchievement, pigFall } from "./achievements-live.js";
 import { keyName as inventoryKeyName } from "./menu-screens.js";
-import { BINDINGS, KeyBindings, HeldKeys, HOTBAR, lwjglCode, mouseCode, storedKeyCodes } from "./keybindings.js";
+import { BINDINGS, KeyBindings, HeldKeys, HOTBAR, lwjglCode, mouseCode, storedKeyCodes, keyDisplayString } from "./keybindings.js";
 import { writeOptionsTxt, applyOptionsTxt } from "./options-txt.js";
 import { FrameLimiter, limitFramerate } from "./frame-limit.js";
 import { createCommandRunner, tr } from "./commands.js";
@@ -265,7 +265,7 @@ import { gameOverScreen, exportScreen, notesScreen, signEditHost } from "./modal
 import { NOTES } from "./notes-content.js";
 import { presolveWorld } from "./spawn-presolve.js";
 import "./lang-hooks.js";
-import { loadLanguageManifest, selectLanguage, setForceUnicodeFont } from "./lang.js";
+import { loadLanguageManifest, selectLanguage, setForceUnicodeFont, translate } from "./lang.js";
 import { loadFontResources, onFontChange, font } from "./font-renderer.js";
 import { restoreStructureEntities, saveStructureEntities, tickMinecartSimulation, tickBoatSimulation, tickSpawnerSimulation, tickSpawnersClient, spawnerBurst, pickMinecart } from "./structure-simulation.js";
 // Generation version 10 (live mineshafts) maps original block ids while a World is built; the
@@ -439,6 +439,7 @@ const hopperTiles = new Hoppers({
   changed: (keys) => { saved = false; redstoneRuntime?.containerClosed(keys); },
 });
 let rider = createPlayerRider();
+let onboardVehicle = null; // the vehicle the mount.onboard line was last shown for
 const animation = new PlayerAnimation();
 // GameSettings.thirdPersonView: 0 first person, 1 behind, 2 in front (F5).
 // Not saved, like 1.7.10.
@@ -973,7 +974,6 @@ function requestLock() {
     const result = scene.renderer.domElement.requestPointerLock?.();
     result?.catch(() => {
       lockFallback = true;
-      if (screen === "playing") toast("Drag to look. Left click to mine. Right click to use.");
     });
   } catch {
     lockFallback = true;
@@ -1439,11 +1439,6 @@ async function launch(record, prepared, { slice = false } = {}) {
     if (survival.health <= 0) die();
     else {
       requestLock();
-      if (!dims.quiet) toast(
-        survival.creative
-          ? "Creative mode · Double-tap Space to fly."
-          : "Survival mode · Punch a tree, then press E to craft.",
-      );
     }
   } catch (e) {
     console.error(e);
@@ -2499,7 +2494,6 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
       if (pickedId) achievements.trigger(pickedId);
       sounds.play("random.pop", { volume: 0.2, pitch: ((Math.random() - Math.random()) * 0.7 + 1) * 2 });
       scene.drops.pickup(item, position);
-      if (item.death && !items.items.some((e) => e.death)) toast("Recovered your dropped items.");
     },
     itemsCollected: () => { renderHotbar(); saved = false; },
     projectileTargets: () => mobTargets(mobs?.entities || [], position, PHYSICS.width, PHYSICS.height),
@@ -2660,8 +2654,7 @@ function eatEffects(id, n) {
 }
 function beginEating(id) {
   if (survival.food >= 20 && !ITEMS[id]?.alwaysEdible) { // ItemFood.onItemRightClick: canEat(alwaysEdible) - the golden apple is always edible
-    toast("You are not hungry.");
-    return;
+    return; // ItemFood.onItemRightClick refuses silently
   }
   if (survival.count(id) && !eating) eating = { id, ticks: 32 };
 }
@@ -2870,7 +2863,6 @@ function reportBrokenTool() {
   statsLive.broken(survival.broken);
   sounds.play("random.break", { volume: 0.8, pitch: 0.8 + Math.random() * 0.4 });
   itemCrumbs(scene.fx, 5, "iconcrack_" + survival.broken, playerEye(), playerRandom);
-  toast("Your " + (ITEMS[survival.broken]?.name || "tool").toLowerCase() + " broke.");
   survival.broken = 0;
   renderHotbar();
 }
@@ -2969,6 +2961,10 @@ function movementTick(controls) {
   tickBrewingStands();
   redstoneRuntime?.tick();
   recordHud.tick();
+  // NetHandlerPlayClient.handleEntityAttach: boarding any vehicle (cart, boat, pig, horse) shows
+  // GuiIngame.func_110326_a(I18n "mount.onboard" with the sneak key's display string, false) above the hotbar.
+  if (rider.vehicle && rider.vehicle !== onboardVehicle) recordHud.message(translate("mount.onboard", "Press %1$s to dismount").replace("%1$s", keyDisplayString(binds.code("key.sneak")) ?? "null"));
+  onboardVehicle = rider.vehicle ?? null;
   scene.setFurnaces(survival.furnaces);
   tickChests();
   enchantBooks.tick(world, [{ x: position.x, y: position.y, z: position.z }]); // TileEntityEnchantmentTable.updateEntity
@@ -3346,7 +3342,6 @@ $("#touch-fly").onclick = () => {
   if (survival.creative) {
     flying = !flying;
     velocity.y = 0;
-    toast(flying ? "Flight enabled" : "Back to walking");
   }
 };
 function setupPointer() {

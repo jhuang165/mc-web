@@ -136,6 +136,8 @@ export function createRecordHud(parent) {
   return {
     // GuiIngame.setRecordPlayingMessage: the text, 60 ticks, rainbow colour.
     show(item) { state.text = nowPlaying(item); state.upFor = 60; state.record = true; draw(); },
+    // GuiIngame.func_110326_a(text, false): the same line without the rainbow (mount.onboard).
+    message(text, rainbow = false) { state.text = String(text); state.upFor = 60; state.record = !!rainbow; draw(); },
     tick() { if (state.upFor > 0) state.upFor--; },
     frame: draw,
     state,

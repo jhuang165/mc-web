@@ -61,7 +61,6 @@ export function movePlayer(state, controls, toast = () => {}) {
   // EntityPlayerSP.onLivingUpdate: a double tap of jump toggles Creative flight (tick-based).
   if (motion.toggleFlight(jumpKey, survival.creative)) {
     flying = !flying;
-    toast(flying ? "Flight enabled · Space up · Shift down" : "Back to walking");
   }
   // ... then, flying, the sneak and jump keys move 0.15 a tick down and up.
   if (flying) velocity.y = flyVertical(velocity.y, { jump: jumpKey, sneak });
@@ -171,7 +170,6 @@ export function movePlayer(state, controls, toast = () => {}) {
   // EntityPlayerSP.onLivingUpdate: touching the ground ends Creative flight.
   if (flying && grounded) {
     flying = false;
-    toast("Back to walking");
   }
   // Below the floor is the void (Survival.tick's outOfWorld damage under y -64); only a player far
   // above the finite world is put back at spawn.
@@ -180,7 +178,6 @@ export function movePlayer(state, controls, toast = () => {}) {
     Object.assign(position, { x: spawn.x, y: spawn.y, z: spawn.z });
     Object.assign(previous, { x: position.x, y: position.y, z: position.z });
     Object.assign(velocity, { x: 0, y: 0, z: 0 });
-    toast("Back on solid ground.");
   }
   Object.assign(state, { grounded, collidedH, flying, fallDistance, landedFall });
   return { inWater, inLavaNow, sneakOnGround, oldPosition };

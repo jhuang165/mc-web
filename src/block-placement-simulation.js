@@ -73,7 +73,6 @@ export function placeHeldBlock(state, request, hooks = {}) {
     world.set(...here, SNOW_LAYER, false, stacked);
     if (intersects(world, position.x, position.y, position.z)) {
       world.set(...here, SNOW_LAYER, false, hereMeta);
-      toast("Give yourself a little room to build.");
       return result(false, "player-collision", SNOW_LAYER, here);
     }
     world.set(...here, SNOW_LAYER, true, stacked);
@@ -140,7 +139,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
   // place the half chosen by the side and the hit height. Item 82 is the sandstone slab (type 1); 1103's damage is the type.
   const slabType = id === WOOD_SLAB ? woodSlabType(survival.held?.damage || 0) : heldSlabType(itemId, survival.held?.damage || 0);
   if (slabType >= 0) {
-    if (!survival.creative && !survival.count(itemId)) { toast("Gather this material first."); return result(false, "empty-stack", id, p); }
+    if (!survival.creative && !survival.count(itemId)) return result(false, "empty-stack", id, p);
     const hitY = Math.fround(Math.fround(target.hit?.[1] ?? here[1] + 0.5) - here[1]);
     const plan = (id === WOOD_SLAB ? planWoodSlabUse : planSlabUse)(slabType, { id: block, meta: world.getMeta(...here) }, { id: world.get(...p), meta: world.getMeta(...p) }, side, hitY);
     const cell = plan.merge === "clicked" ? here : p, was = world.get(...cell), wasMeta = world.getMeta(...cell);
@@ -148,7 +147,6 @@ export function placeHeldBlock(state, request, hooks = {}) {
     world.set(...cell, plan.id, false, plan.meta);
     if (intersects(world, position.x, position.y, position.z)) {
       world.set(...cell, was, false, wasMeta);
-      toast("Give yourself a little room to build.");
       return result(false, "player-collision", plan.id, cell);
     }
     world.set(...cell, plan.id, true, plan.meta);
@@ -161,11 +159,9 @@ export function placeHeldBlock(state, request, hooks = {}) {
     return result(true, plan.merge ? "slab-merge" : "slab", plan.id, cell);
   }
   if ((!item?.block && !dispenserPistonItemBlock(itemId) && !redstoneItemBlock(itemId) && !brewingItemBlock(itemId) && !stoneUtilityItemBlock(itemId)) || isLiquid(id)) {
-    toast("Select a building block, food, or workstation.");
     return result(false, "not-a-building-block", id, p);
   }
   if (!survival.creative && !survival.count(itemId)) {
-    toast("Gather this material first.");
     return result(false, "empty-stack", id, p);
   }
   // World.canPlaceEntityOnSide: an occupied, non-replaceable cell (a torch, rail or flower the ray passed through, say)
@@ -225,7 +221,6 @@ export function placeHeldBlock(state, request, hooks = {}) {
   world.set(...p, id, false, meta);
   if (intersects(world, position.x, position.y, position.z)) {
     world.set(...p, old, false, oldMeta);
-    toast("Give yourself a little room to build.");
     return result(false, "player-collision", id, p);
   }
   world.set(...p, id, true, meta);

@@ -30,7 +30,7 @@ for (const name of ['land', 'water', 'lava', 'ladder', 'web', 'edge', 'ceiling']
   if (name === 'ladder') assert.ok(steps.some(step => step.collidedH && step.velocity[1] > 0), 'wall collision climbed the ladder');
   if (name === 'web') assert.equal(steps[0].motion.inWeb, false, 'movement consumed web slowdown');
   if (name === 'edge') assert.ok(steps.every(step => step.position[0] >= 0.31), 'finite-world clamp held');
-  if (name === 'ceiling') assert.ok(steps[0].toasts.includes('Back on solid ground.'));
+  if (name === 'ceiling') assert.equal(steps[0].toasts.length, 0); // reset without a message
 });
 
 // EntityLivingBase.updateFallState runs handleWaterMovement on the moved box before Entity's

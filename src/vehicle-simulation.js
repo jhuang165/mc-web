@@ -62,7 +62,7 @@ export function dispatchVehicleAction(state, action, hooks = {}) {
   if (action.place && (cart.boat || cart.type === 0)) {
     syncRider(state);
     const mounted = minecarts.mount(cart, rider, { sneaking: action.sneak });
-    if (mounted) { applySeat(state); hooks.markUnsaved?.(); hooks.toast?.('Press Shift to dismount.'); }
+    if (mounted) { applySeat(state); hooks.markUnsaved?.(); }
     return { handled: true, branch: mounted ? (cart.boat ? 'mount-boat' : 'mount-minecart') : 'occupied-or-sneaking-minecart' };
   }
   const result = action.boat ? useBoat(state, { place: action.place, boat: cart }, hooks) : useMinecart(state, { place: action.place, cart }, hooks);
