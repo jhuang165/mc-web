@@ -9,7 +9,7 @@ import { JavaRandom } from "./lighting.js";
 const ref = JSON.parse(await readFile(new URL('../public/research/spider-reference.json', import.meta.url)));
 const cases = name => ref.records.filter(r => r.case === name);
 const near = (a,b,label) => assert.ok(Math.abs(a-b)<1e-6, `${label}: ${a} != ${b}`);
-const flat = { numericSeed:123, solid:(x,y,z)=>y<0, get:(x,y,z)=>y<0?1:0, surface:()=>0, spawn:()=>({x:64,y:0,z:64}) };
+const flat = { numericSeed:123, solid:(x,y,z)=>y<0, get:(x,y,z)=>y<0?1:0, getMeta:()=>0, surface:()=>0, spawn:()=>({x:64,y:0,z:64}) };
 const random = seed => new JavaRandom(seed);
 test('spider constructor facts agree with the unchanged EntitySpider', () => {
   const r=cases('facts')[0], t=ENTITY_TYPES.spider;

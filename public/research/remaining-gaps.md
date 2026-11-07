@@ -2,6 +2,10 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 15
+
+Boat and vehicle `Riding` chains in region export/import (`region-import.md`), whole Java save import into stored columns (`region-import.md`), dragon part hit boxes and the wither effect on mobs (`dragon.md`, `wither-boss.md`), in-place resource pack refresh, `.png.mcmeta` animation, pack sounds, HD chests and colormaps (`resource-packs.md`), per-position biome tint and per-column precipitation (`biome-colors.md`), villager trade items and iron golem details (`villager-trading-live.md`), languages and the unicode font (`languages.md`), and live tripwire temple traps (`scattered-features.md`). Each doc lists what is still open.
+
 ## Done in batch 14
 
 The Resource Packs screen and pack loading (`resource-packs.md`), Super Secret Settings shaders and 3D Anaglyph (`post-shaders.md`), standable boats, mob passengers on boats and carts, the boat shadow (`boats.md`), hardcore mode and the in-browser Java save-folder import (`hardcore.md`), and the natural spawning cap, cadence, spawn point, witch hut lookup and portal pigmen fixes (`natural-spawning.md`). The rows below say what is still partial.

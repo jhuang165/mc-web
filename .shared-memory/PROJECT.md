@@ -1,6 +1,18 @@
 # Shared project state
 
-Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.44.0. Full parity is unfinished.
+Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.45.0. Full parity is unfinished.
+
+Batch 15 (2026-11-06, claude-b15-lead, eight Sonnet tracks merged into main):
+- Entity interchange (`region-import.md`, `boats.md`): region export writes `Boat` and nests ridden boats and carts as `Riding` mounts; region import reads them back. RidingNbtProbe (4 chains) and VillagerNbtProbe (3 villagers with real MerchantRecipe objects) are replayed in `riding-nbt.test.js`. Fireball, thrown potion and villager Offers interchange was already in and is now documented.
+- Whole Java save import (`region-import.md`): `whole-save-import.js` imports every region file of the Overworld, Nether and End, one chunk at a time, into a new IndexedDB `bases` store (version 5) whose stored columns win over generation. Rider/vehicle ids are remapped to stay unique. Import shows progress and Cancel deletes partial bases. The CLI is still area-only.
+- Bosses (`dragon.md`, `wither-boss.md`): projectiles and explosions hit the seven dragon part boxes (`dragon-parts.js`); the wither effect ticks on all mobs; skull damage on mobs by difficulty and the shooter heal are probed. The ModelDragon hurt pass and wither target order are bytecode-read, not replayed.
+- Resource packs, round 2 (`resource-packs.md`): packs apply in place without a page reload (`resource-refresh.js`, versioned media urls); water/lava/portal/fire animate from `.png.mcmeta` (TextureAnimationProbe; 1.7.10 has no `interpolate`); pack `sounds.json`, HD chests and colormaps are read; a non-native delete control. Item icon animation is open.
+- Biome colours (`biome-colors.md`): per-position grass, foliage and water tint through a grey terrain atlas plus per-vertex colours (BiomeColorProbe), per-column rain/snow and sky colour by temperature. Lily pads are tinted on every face; the per-biome decoration audit is still open.
+- Villagers (`villager-trading-live.md`): every trade item now maps (no "?" offers); iron golem step sounds, collide retargeting, rose and timers are probed; spawn eggs on ageable mobs make babies.
+- Languages (`languages.md`): Locale/LanguageManager port (`lang.js`, LanguageProbe), the Language screen with Force Unicode Font, `glyph_sizes.bin` widths and unicode glyph pages, options.txt `lang:`/`forceUnicodeFont:`. Other languages need `npm run lang:fetch` (files ignored). Item names, tooltips, signs and the HUD stay English.
+- Temples (`scattered-features.md`, `redstone.md`): tripwire hooks and strings ported and replayed against 16 native scenarios (640 ticks); the jungle tripwire traps, lever puzzle and desert plate-and-TNT trap run live. Shears disarm and random ticks are bytecode-read; projectiles other than arrows do not trip strings.
+- Lead fixes: the language install hint fits the screen; `spider.test.js` stub world gained `getMeta` (an enderman spawned in the loop crashed it intermittently).
+- Verification: full tests and the build pass on merged main. The lead's muted browser run on :5181 checked the Language screen and biome-tinted grass/leaves in a new Forest Hills world with no console errors.
 
 Batch 14 (2026-11-06, claude-b14-lead, five Sonnet tracks merged into main):
 - Resource packs (`resource-packs.md`): the GuiScreenResourcePacks screen, a zip and folder pack reader, packs stored in IndexedDB, and `resourcePacks` in options.txt. A service worker (`public/resource-pack-sw.js`) serves overridden `/media/1.7.10/**` and `/audio/1.7.10**` files. Pack en_US.lang strings reach the menus. Applying packs reloads the page; `.png.mcmeta` animation, sounds.json and font overrides are not read.
