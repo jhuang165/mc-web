@@ -62,7 +62,7 @@ export class Boats extends Minecarts {
   }
   // EntityBoat.interactFirst: a rider that is not the clicker blocks it; the clicker mounts.
   mount(boat, rider, { sneaking = false } = {}) {
-    if (boat.dead || sneaking || boat.rider || rider.vehicle) return false;
+    if (boat.dead || sneaking || boat.rider || boat.passenger || rider.vehicle) return false;
     boat.rider = rider; rider.vehicle = boat;
     this.updateRiderPosition(boat);
     return true;
@@ -268,7 +268,7 @@ export class Boats extends Minecarts {
   // With `mutual`, `other` is another boat that receives its share; otherwise the share is returned for the entity
   // (the player or a mob, whose own collideWithNearbyEntities calls this).
   collide(boat, other, mutual = false) {
-    if (boat.dead || other === boat.rider || other.vehicle === boat) return [0, 0];
+    if (boat.dead || other === boat.rider || other.vehicle === boat || other.ridingEntity === boat) return [0, 0];
     let dx = other.x - boat.x, dz = other.z - boat.z;
     const m = Math.max(Math.abs(dx), Math.abs(dz));
     if (!(m >= 0.009999999776482697)) return [0, 0];
@@ -294,9 +294,22 @@ export class Boats extends Minecarts {
   // ItemBoat.onItemRightClick (abj.a): a 5-block trace that stops on source water, the snow layer's cell one lower, the
   // boat at (x + 0.5, y + 1, z + 0.5) turned to the player's nearest axis, refused when its box (shrunk 0.1) meets a block or
   // an entity. Returns the boat, or null. The caller takes the item (not in Creative).
-  place(world, { eye, dir, yaw }, entities = []) {
-    const hit = traceBucket(world, eye, dir, true);
+  // Before the trace result is used, every canBeCollidedWith entity in the player's box swept 5 along the look vector (grown by 1)
+  // whose box grown by collisionBorderSize (0.1) contains the rayTraceBlocks start vector (which the trace has moved to the
+  // entry point of the last cell it visited, not the eye) cancels the placement. `sight` lists those entities' boxes
+  // ({ bb } or boxes; default `entities`), `entities` every box the spawned boat must not overlap.
+  place(world, { eye, dir, yaw, box }, entities = [], sight = entities) {
+    const trace = {}, hit = traceBucket(world, eye, dir, true, trace);
     if (!hit) return null;
+    const feet = box ?? [eye[0] - 0.3, eye[1] - f(1.62), eye[2] - 0.3, eye[0] + 0.3, eye[1] - f(1.62) + f(1.8), eye[2] + 0.3];
+    const look = [dir[0] * 5, dir[1] * 5, dir[2] * 5],
+      reach = feet.map((v, i) => (i < 3 ? (look[i] < 0 ? v + look[i] : v) : look[i - 3] > 0 ? v + look[i - 3] : v)).map((v, i) => (i < 3 ? v - 1 : v + 1)),
+      [sx, sy, sz] = trace.start;
+    for (const o of sight) {
+      const b = o.bb ?? o;
+      if (!intersects(reach, b)) continue;
+      if (sx > b[0] - 0.1 && sx < b[3] + 0.1 && sy > b[1] - 0.1 && sy < b[4] + 0.1 && sz > b[2] - 0.1 && sz < b[5] + 0.1) return null;
+    }
     let [x, y, z] = hit.block;
     if (world.get(x, y, z) === SNOW_LAYER) y--;
     const boat = this.spawnBoat({ x: x + 0.5, y: y + 1, z: z + 0.5, yaw: ((Math.floor(f(f(f(yaw) * 4) / 360) + 0.5) & 3) - 1) * 90 });
@@ -308,7 +321,7 @@ export class Boats extends Minecarts {
   // Browser save: the Entity fields a native reload keeps (position, motion, rotation, fall distance, fire).
   toJSON() {
     return this.carts.filter((c) => !c.dead).map((c) => ({
-      x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire,
+      id: c.id, x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire,
       onGround: c.onGround, ...(c.rider?.player === true ? { rider: true } : {}),
     }));
   }
@@ -318,6 +331,8 @@ export class Boats extends Minecarts {
       if (!ok(c?.x, c?.y, c?.z)) continue;
       const boat = m.spawnBoat({ x: c.x, y: c.y - BOAT_Y_OFFSET, z: c.z });
       boat.restorePlayer = c.rider === true;
+      if (Number.isInteger(c.id) && c.id > 0 && !m.carts.some((o) => o !== boat && o.id === c.id)) boat.id = c.id; // passengers name their boat by id
+      m.nextId = Math.max(m.nextId, boat.id + 1);
       const v = Array.isArray(c.motion) && c.motion.length === 3 && ok(...c.motion) ? c.motion : [0, 0, 0];
       // Entity.readFromNBT: motion components above 10 in magnitude are dropped to 0.
       [boat.vx, boat.vy, boat.vz] = v.map((x) => (Math.abs(x) > 10 ? 0 : x));

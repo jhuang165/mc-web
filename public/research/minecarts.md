@@ -104,3 +104,9 @@ Additional port tests cover JSON actions, inventory use, crafting, mounted reloa
 - Carts have no blocking box for player movement, natively; the shared cart-push path remains adapted to the browser tick.
 - `inventory.js copyStack` preserves stored enchantments but still drops custom item names when a stack moves through the container or becomes an item entity.
 - Unmapped original loot still has no live dropped-item representation.
+
+## Mob riders and collision (batch 14)
+
+- `EntityMinecart.getBoundingBox` returns null: players and mobs are not blocked by carts and cannot stand on them (the cart is blocked by pushable entities through its own `getCollisionBox`). Two native records replay the fall-through and the walk-through.
+- `EntityMinecart.applyEntityCollision` picks up a mob on the server: an `EntityLivingBase` that is not a player or an iron golem, in an empty cart (type 0) whose motion is above sqrt(0.01) with nobody on it, riding nothing, becomes the passenger (`src/vehicle-riders.js cartPicksUp`); the push still follows. Chest, furnace and other cart types never pick up mobs. A mob also rides any cart through `/summon ... {Riding:{id:MinecartRideable}}`.
+- The passenger sits at `posY - 0.3 + getYOffset` under the cart centre, is carried with it, adds the 0.997 ridden drag, and is released when the cart dies. The save keeps `id` on the cart and `riding: "cart-<id>"` on the mob. Region export writes the mob loose; Java region import of a `Riding` cart is not read.

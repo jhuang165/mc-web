@@ -88,9 +88,10 @@ test('Riding chain: each mount is spawned at the command position and mounted by
   const g2 = game();
   g2.run('/summon Zombie ~ ~ ~ {Riding:{id:Pig,Riding:{id:Dragon,Riding:{id:Sheep}}}}');
   assert.deepEqual(g2.mobs.entities.map((e) => e.type), ['zombie', 'pig']);
-  // A mob riding a cart: not supported, reported.
+  // A mob riding a cart: Entity.mountEntity(cart) links it (vehicle-riders.js) and the cart carries it.
   const g3 = game();
   const note = g3.run('/summon Zombie ~ ~ ~ {Riding:{id:MinecartRideable}}');
-  assert.equal(g3.minecarts.carts.length, 1); assert.equal(g3.mobs.entities[0].ridingEntity ?? null, null);
-  assert.match(note.lines.join('\n'), /Riding/);
+  assert.equal(g3.minecarts.carts.length, 1); assert.equal(g3.mobs.entities[0].ridingEntity, g3.minecarts.carts[0]);
+  assert.equal(g3.minecarts.carts[0].passenger, g3.mobs.entities[0]);
+  assert.doesNotMatch(note.lines.join('\n'), /Riding/);
 });

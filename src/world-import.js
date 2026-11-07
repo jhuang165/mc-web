@@ -78,6 +78,7 @@ const SANITIZE = {
   // Boats (boats.js toJSON): position, motion, rotation, fall distance, fire, ground flag and the mounted player.
   boats: (v) => Array.isArray(v)
     ? v.filter((c) => c && typeof c === "object" && [c.x, c.y, c.z].every(finite)).slice(0, 1024).map((c) => ({
+      ...(int(c.id) && c.id > 0 ? { id: c.id } : {}), // the id mobs saved riding this boat name
       x: c.x, y: c.y, z: c.z,
       ...(Array.isArray(c.motion) && c.motion.length === 3 && c.motion.every(finite) ? { motion: [...c.motion] } : {}),
       ...(Array.isArray(c.rotation) && c.rotation.length === 2 && c.rotation.every(finite) ? { rotation: [...c.rotation] } : {}),
@@ -96,6 +97,7 @@ const SANITIZE = {
     : undefined,
   minecarts: (v) => v && typeof v === "object" && Array.isArray(v.carts)
     ? { version: 1, carts: v.carts.filter((c) => c && typeof c === "object" && [c.x, c.y, c.z].every(finite)).slice(0, 1024).map((c) => ({
+      ...(int(c.id) && c.id > 0 ? { id: c.id } : {}), // the id mobs saved riding this cart name
       x: c.x, y: c.y, z: c.z,
       ...(c.type === 0 ? { type: 0, rider: c.rider === true } : isSupportedType(c.type) ? { type: c.type } : {}),
       ...(c.type === 2 ? { fuel: int(c.fuel) && c.fuel >= 0 ? c.fuel : 0, ...(finite(c.pushX) ? { pushX: c.pushX } : {}), ...(finite(c.pushZ) ? { pushZ: c.pushZ } : {}) } : {}),

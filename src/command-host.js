@@ -14,6 +14,7 @@ import { summonCart, cartTypeOfSummon } from "./cart-summon.js";
 import { summonFireworkRocket, FIREWORK_SUMMON } from "./firework-summon.js";
 import { summonEntity, entityIdOfSummon } from "./entity-summon.js";
 import { mountEntity } from "./mob-riding.js";
+import { mountMobOnVehicle } from "./vehicle-riders.js";
 import { newChest, settleFacing } from "./chest.js";
 import { newEnderTile } from "./chest-blocks.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
@@ -176,14 +177,14 @@ export function createCommandHost(env) {
       const mobs = env.mobs();
       const spawnOne = (type, nbt) => {
         if (type === FIREWORK_SUMMON) { const r = env.rockets?.() && summonFireworkRocket(env.rockets(), x, y, z, nbt); if (r) ignored.push(...r.ignored); return r ? { other: true } : null; }
-        if (cartTypeOfSummon(type) !== null) { const r = summonCart(env.minecarts?.(), cartTypeOfSummon(type), x, y, z, nbt); if (r) ignored.push(...r.ignored); return r ? { other: true } : null; }
+        if (cartTypeOfSummon(type) !== null) { const r = summonCart(env.minecarts?.(), cartTypeOfSummon(type), x, y, z, nbt); if (r) ignored.push(...r.ignored); return r ? { other: true, vehicle: r.cart } : null; }
         const id = entityIdOfSummon(type);
         if (id) {
           const hosts = env.entityHosts?.();
           if (!hosts) return null;
           const r = summonEntity(hosts, id, x, y, z, nbt, { convertItem });
           ignored.push(...r.ignored);
-          return { other: true };
+          return { other: true, vehicle: r.vehicle };
         }
         if (!mobs) return null;
         if (!nbt) { mobs.spawnNatural(type, x, y, z); return { other: true }; }
@@ -205,7 +206,8 @@ export function createCommandHost(env) {
         const ridingTag = nbtGet(nbt, 'Riding', NBT.COMPOUND), mount = spawnOne(SUMMONABLE[nbtGet(ridingTag, 'id', NBT.STRING, '')], ridingTag);
         if (!mount) break; // createEntityFromNBT returned null: the loop ends (bu.b: current = null)
         if (current.mob && mount.mob) mountEntity(current.mob, mount.mob, m => mobs.size(m)[1]);
-        else ignored.push('Riding (only mob on mob riding is kept; the mount spawned separately)');
+        else if (current.mob && mount.vehicle) { if (!mountMobOnVehicle(mount.vehicle, current.mob, m => mobs.size(m)[1])) ignored.push('Riding (the boat or minecart could not take the mob)'); }
+        else ignored.push('Riding (only a mob on a mob, boat or minecart is kept; the mount spawned separately)');
         current = mount; nbt = ridingTag;
       }
       env.changed();

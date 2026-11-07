@@ -5,6 +5,8 @@ import { solidBlock, WATER, SNOW_LAYER, LILY_PAD } from "./world.js";
 import { Boats, BOAT_Y_OFFSET } from "./boats.js";
 import { ITEMS, RECIPES } from "./survival.js";
 import { ORIGINAL_ITEMS } from "./original-items.js";
+import { moveEntity, setEntityBoxes } from "./entities.js";
+import { boatBoxProvider } from "./entity-collision.js";
 
 const f = Math.fround;
 // public/research/boat-reference.json: the unchanged EntityBoat/ItemBoat (tools/verify-boats.mjs).
@@ -97,6 +99,43 @@ for (const c of ref.cases.filter((r) => r.kind === "placement")) {
     if (c.boat === null) return assert.equal(boat, null);
     assert.ok(boat, "boat placed");
     near([boat.x, boat.posY, boat.z, boat.yaw], c.boat, "boat");
+  });
+}
+
+// ItemBoat's line of sight: the entities test the trace's mutated start vector, not the eye (BoatProbe sight records).
+for (const c of ref.cases.filter((r) => r.kind === "sight")) {
+  test(`boat placement sight ${c.name}`, () => {
+    const world = probeWorld(c.cells), boats = new Boats(), pitch = f(c.pitch * Math.PI / 180), yaw = f(c.yaw * Math.PI / 180);
+    const dir = [-Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)];
+    const eye = [c.pos[0], c.pos[1] + f(1.62), c.pos[2]];
+    const others = c.others.map((bb) => ({ bb: bb.map(num) })), boat = boats.place(world, { eye, dir, yaw: c.yaw }, others, others);
+    if (c.boat === null) return assert.equal(boat, null);
+    assert.ok(boat, "boat placed");
+    near([boat.x, boat.posY, boat.z], c.boat.slice(0, 3), "boat");
+  });
+}
+
+const COLLIDE_MOVES = { "stand-on-boat": [0, -0.2, 0, 40], "walk-into-boat-side": [0.2, -0.08, 0, 30], "walk-into-boat-side-z": [0, -0.08, -0.2, 30],
+  "step-onto-boat": [0.2, -0.08, 0, 30], "stand-on-raised-boat": [0.2, -0.08, 0, 30], "rise-into-boat-from-below": [0, 0.2, 0, 20],
+  "edge-walk-off-boat": [0.1, -0.08, 0, 30], "fall-through-minecart": [0, -0.2, 0, 40], "walk-through-minecart": [0.2, -0.08, 0, 30] };
+// World.getCollidingBoundingBoxes adds EntityBoat's box, never EntityMinecart's (BoatProbe collide records).
+for (const c of ref.cases.filter((r) => r.kind === "collide")) {
+  test(`entity ${c.name}`, () => {
+    const boats = new Boats(), world = probeWorld([]);
+    if (!c.cart) { const b = boats.spawnBoat({ x: c.vehicle[0], y: c.vehicle[1], z: c.vehicle[2] }); b.posY = c.vehicle[1]; b.bb = c.vehicleBox.map(num); }
+    setEntityBoxes(boatBoxProvider(boats));
+    try {
+      const e = { x: c.start[0], y: c.start[1], z: c.start[2], vx: 0, vy: 0, vz: 0, onGround: false, fallDistance: 0, living: true };
+      // The probe's mover is a player box (0.6 x 1.8) with stepHeight c.step; ticks list x, y, z, onGround, collidedHorizontally.
+      const move = COLLIDE_MOVES[c.name];
+      assert.equal(move[3], c.ticks.length, "move table");
+      c.ticks.forEach((t, i) => {
+        moveEntity(world, e, 0.6, 1.8, move[0], move[1], move[2], c.step);
+        near([e.x, e.y, e.z], [t[0], t[1], t[2]], `${c.name} tick ${i}`);
+        assert.equal(e.onGround, t[3], `${c.name} onGround ${i}`);
+        assert.equal(e.collidedH, t[4], `${c.name} collidedH ${i}`);
+      });
+    } finally { setEntityBoxes(null); }
   });
 }
 

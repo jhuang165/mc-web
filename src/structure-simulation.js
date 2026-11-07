@@ -9,6 +9,7 @@
 // fields are the truth: a looted cart stays looted, a broken cart or spawner stays gone.
 import { MobSpawners, boxesIntersect, mobBox, updateSpawner, updateSpawnerClient } from "./mob-spawner.js";
 import { Minecarts } from "./minecarts.js";
+import { syncVehiclePassengers } from "./vehicle-riders.js";
 import { furnaceUse } from "./cart-variants.js";
 import { MOB_SPAWNER } from "./world.js";
 import { mhSin, mhCos } from "./lighting.js";
@@ -71,7 +72,7 @@ export function tickMinecartSimulation(state, hooks = {}) {
   const pBox = playerBox(position, width, height);
   // Keep rider identity: its own cart excludes it from collision boxes and pushes.
   const player = rider ? Object.assign(rider, { x: position.x, y: position.y, z: position.z, dead: !alive, bb: pBox }) : { ...position, bb: pBox };
-  const blockers = [...(alive ? [player] : []), ...living.map((e) => ({ bb: sized(e) }))];
+  const blockers = [...(alive ? [player] : []), ...living.map((e) => ({ bb: sized(e), ref: e }))];
   minecarts.tick(world, { entities: blockers, host: hooks.cartHost ?? null });
   if (alive) {
     const [vx, vz] = minecarts.pushEntity(player, pBox);
@@ -83,6 +84,7 @@ export function tickMinecartSimulation(state, hooks = {}) {
     e.vx += vx;
     e.vz += vz;
   }
+  syncVehiclePassengers(minecarts.carts);
   const drops = minecarts.drain();
   for (const d of drops) hooks.drop?.(d);
   return drops;
@@ -237,7 +239,7 @@ export function tickBoatSimulation(state, hooks = {}) {
   const sized = (e) => { const [w, h] = mobs.size(e); return mobBox(e.x, e.y, e.z, w, h); };
   const pBox = playerBox(position, width, height);
   const player = rider ? Object.assign(rider, { x: position.x, y: position.y, z: position.z, dead: !alive, bb: pBox }) : { ...position, bb: pBox };
-  const blockers = [...(alive ? [player] : []), ...living.map((e) => ({ bb: sized(e) }))];
+  const blockers = [...(alive ? [player] : []), ...living.map((e) => ({ bb: sized(e), ref: e }))];
   boats.tick(world, { entities: blockers, hooks });
   if (alive) {
     const [vx, vz] = boats.pushEntity(player, pBox);
@@ -249,6 +251,7 @@ export function tickBoatSimulation(state, hooks = {}) {
     e.vx += vx;
     e.vz += vz;
   }
+  syncVehiclePassengers(boats.carts);
   const drops = boats.drain();
   for (const d of drops) hooks.drop?.(d);
   return drops;

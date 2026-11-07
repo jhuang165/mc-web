@@ -64,8 +64,10 @@ function collisionRayTrace(world, x, y, z, b, start, end) {
 // order (the start cell first, then at most 200 more) and returns the first one whose
 // block qualifies and whose box the segment crosses; null when none does or the
 // segment's end cell is reached. `returnLastUncollidable` is false for buckets.
-export function rayTraceBlocks(world, from, to, stopOnLiquid, ignoreNoBox) {
+// `out`, when given, receives `start`: the vector the original mutates as it steps (the entry point of the cell last visited).
+export function rayTraceBlocks(world, from, to, stopOnLiquid, ignoreNoBox, out) {
   const start = [...from], end = to;
+  if (out) out.start = start;
   if ([...start, ...end].some(Number.isNaN)) return null;
   const f = Math.floor, cell = (x, y, z) => {
     const b = world.get(x, y, z);
@@ -107,9 +109,9 @@ export function rayTraceBlocks(world, from, to, stopOnLiquid, ignoreNoBox) {
 // Item.getMovingObjectPositionFromPlayer(world, player, flag): an empty bucket asks
 // for liquids (and keeps blocks without a box), a filled one ignores liquids and
 // blocks without a box. `eye` and `dir` are the player's eye and view direction.
-export function traceBucket(world, eye, dir, empty) {
+export function traceBucket(world, eye, dir, empty, out) {
   const end = [eye[0] + dir[0] * BUCKET_REACH, eye[1] + dir[1] * BUCKET_REACH, eye[2] + dir[2] * BUCKET_REACH];
-  return rayTraceBlocks(world, eye, end, empty, !empty);
+  return rayTraceBlocks(world, eye, end, empty, !empty, out);
 }
 
 // ItemBucket.func_150910_a (abo.a(add, yz, adb)): a creative player keeps the stack;

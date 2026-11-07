@@ -50,6 +50,7 @@ import { squidBatUpdate, squidBatTalk, installSquidBat } from "./squid-bat-mobs.
 import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffects } from "./witch.js";
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
+import { isVehicle, vehicleSize } from "./vehicle-seat.js";
 import { mountEntity, releaseDead, ridingOrder, beginRidden, endRidden, ridingId, linkRiders, setLocationAndAngles, freeChickenNear, maxHealthOf } from "./mob-riding.js";
 import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, skeletonSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
 import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage } from "./mob-effects.js";
@@ -312,8 +313,12 @@ const STEP_HEIGHT = 0.5; // EntityLivingBase constructor: stepHeight = 0.5f
 const JUMP_MOVEMENT_FACTOR = f(0.02); // sv.aQ
 // World.getCollidingBoundingBoxes (ahb.a): block boxes overlapping `b`, as
 // [minX, minY, minZ, maxX, maxY, maxZ]. The scan starts a block low like the original.
-function collisionBoxes(world, b) {
-  const out = [];
+// World.getCollidingBoundingBoxes also gathers entity boxes (Entity.getBoundingBox of EntityBoat). entity-collision.js installs the
+// provider; it is only asked for a moving entity `e`, never for the spawn checks.
+let entityBoxes = null;
+export const setEntityBoxes = (fn) => { entityBoxes = fn; };
+function collisionBoxes(world, b, e) {
+  const out = entityBoxes && e ? entityBoxes(b, e) : [];
   for (let bx = Math.floor(b[0]); bx < Math.floor(b[3] + 1); bx++)
     for (let by = Math.floor(b[1]) - 1; by < Math.floor(b[4] + 1); by++)
       for (let bz = Math.floor(b[2]); bz < Math.floor(b[5] + 1); bz++)
@@ -411,14 +416,14 @@ export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks
   // A sneaking EntityPlayer on the ground never walks off an edge (player-movement.js).
   const sneakEdgeOn = !!(e.sneaking && e.onGround);
   if (sneakEdgeOn)
-    [dx, dz] = sneakEdge(dx, dz, (ox, oz) => !collisionBoxes(world, [e.x - w / 2 + ox, e.y - 1, e.z - w / 2 + oz, e.x + w / 2 + ox, e.y - 1 + h, e.z + w / 2 + oz]).length);
+    [dx, dz] = sneakEdge(dx, dz, (ox, oz) => !collisionBoxes(world, [e.x - w / 2 + ox, e.y - 1, e.z - w / 2 + oz, e.x + w / 2 + ox, e.y - 1 + h, e.z + w / 2 + oz], e).length);
   const odx = dx, ody = dy, odz = dz, half = w / 2,
     // An entity that keeps its bounding box (`e.bb`, as Entity.boundingBox) moves that
     // box itself, so its centre carries the same rounding as the original.
     bb = e.bb ? e.bb.slice() : [e.x - half, e.y, e.z - half, e.x + half, e.y + h, e.z + half],
     start = bb.slice(),
     grow = (box, gx, gy, gz) => [gx < 0 ? box[0] + gx : box[0], gy < 0 ? box[1] + gy : box[1], gz < 0 ? box[2] + gz : box[2], gx > 0 ? box[3] + gx : box[3], gy > 0 ? box[4] + gy : box[4], gz > 0 ? box[5] + gz : box[5]];
-  let list = collisionBoxes(world, grow(bb, dx, dy, dz));
+  let list = collisionBoxes(world, grow(bb, dx, dy, dz), e);
   for (const o of list) dy = offsetY(o, bb, dy);
   shift(bb, 0, dy, 0);
   const grounded = e.onGround || (ody !== dy && ody < 0);
@@ -432,7 +437,7 @@ export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks
     const sx = dx, sy = dy, sz = dz, flat = bb.slice();
     dx = odx; dy = step; dz = odz;
     bb.splice(0, 6, ...start);
-    list = collisionBoxes(world, grow(bb, odx, step, odz));
+    list = collisionBoxes(world, grow(bb, odx, step, odz), e);
     for (const o of list) dy = offsetY(o, bb, dy);
     shift(bb, 0, dy, 0);
     for (const o of list) dx = offsetX(o, bb, dx);
@@ -707,7 +712,7 @@ export class EntityWorld {
       ...(e.type === "pig" ? { saddled: e.saddled === true } : {}),
       // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
       ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer, chickenJockey: e.chickenJockey === true } : {}), // IsChickenJockey (mob-riding.md)
-      riding: typeof e.riding === "string" && /^mob-\d+$/.test(e.riding) ? e.riding : undefined, // the mount's id, linked by linkRiders
+      riding: typeof e.riding === "string" && /^(mob|boat|cart)-\d+$/.test(e.riding) ? e.riding : undefined, // the mount's id, linked by linkRiders
       ...(e.type === "zombie" ? { canBreakDoors: e.canBreakDoors === true, maxHealth: Number.isFinite(e.maxHealth) && e.maxHealth > t.health ? Math.min(e.maxHealth, 2048) : undefined } : { canBreakDoors: undefined, maxHealth: undefined }),
       // EntityBat.readEntityFromNBT: BatFlags bit 1 is the hanging state (datawatcher 16).
       ...(e.type === "bat" ? { batHanging: e.batHanging === true } : {}),
@@ -1349,7 +1354,7 @@ export class EntityWorld {
     if (breathe(this.world, e, t.height, entityRandom(e), this.fx) && !e.effects?.some((x) => x.id === 13)) this.hazard(e, 2, "drown");
     // The same block ends with `if (isRiding() && ridingEntity instanceof EntityLivingBase) mountEntity(null)` (sv.C offset 278): a rider whose
     // head is in water steps off a living mount (every mob mount here is one), onto the mount's top.
-    if (e.ridingEntity && e.health > 0 && eyeInWater(this.world, e.x, e.y + f(f(t.height) * f(0.85)), e.z)) mountEntity(e, null, (m) => this.size(m)[1]);
+    if (e.ridingEntity && !isVehicle(e.ridingEntity) && e.health > 0 && eyeInWater(this.world, e.x, e.y + f(f(t.height) * f(0.85)), e.z)) mountEntity(e, null, (m) => this.size(m)[1]);
   }
   // EntityLiving.onEntityUpdate (sw.C), after the air: rand.nextInt(1000) < livingSoundTime++
   // resets the time to -getTalkInterval (EntityAnimal 120, else 80) and plays the living sound
@@ -1790,6 +1795,7 @@ export class EntityWorld {
     this.swingLimbs(e);
   }
   size(o) {
+    if (isVehicle(o)) return vehicleSize(o); // a boat or minecart a rider asks the height of (vehicle-seat.js)
     const base = ENTITY_TYPES[o.type], s = mobScale(o);
     return [base.width * s, base.height * s];
   }

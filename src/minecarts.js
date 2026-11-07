@@ -23,6 +23,7 @@ import { StackArray, ChestContainer, copyStack } from "./inventory.js";
 import { ITEMS } from "./survival.js";
 import { itemFromOriginal, ORIGINAL_ITEMS } from "./region-import.js";
 import * as V from "./cart-variants.js";
+import { cartPicksUp, mountMobOnVehicle } from "./vehicle-riders.js";
 import { hopperSuck, hopperCartContainer } from "./cart-hopper.js";
 
 const f = Math.fround;
@@ -148,7 +149,7 @@ export class Minecarts {
     Object.assign(cart.rider, { x: cart.x, y: cart.posY + this.getMountedYOffset() - 0.5, z: cart.z });
   }
   mount(cart, rider, { sneaking = false } = {}) {
-    if (cart.dead || cart.type !== 0 || sneaking || cart.rider || rider.vehicle) return false;
+    if (cart.dead || cart.type !== 0 || sneaking || cart.rider || cart.passenger || rider.vehicle) return false;
     cart.rider = rider; rider.vehicle = cart;
     this.updateRiderPosition(cart);
     return true;
@@ -257,7 +258,7 @@ export class Minecarts {
           if (world.solid(bx, by, bz) && !this.railKind(world, bx, by, bz))
             for (const [a, c, d, g, h, i] of collisionBoxList(world, bx, by, bz))
               if (bx + g > b[0] && bx + a < b[3] && by + h > b[1] && by + c < b[4] && bz + i > b[2] && bz + d < b[5]) out.push([bx + a, by + c, bz + d, bx + g, by + h, bz + i]);
-    for (const o of others) if (o !== cart && o !== cart.rider && !o.dead && o.bb && intersects(o.bb, b)) out.push(o.bb);
+    for (const o of others) if (o !== cart && o !== cart.rider && o.ref !== cart.rider && o.ref?.ridingEntity !== cart && !o.dead && o.bb && intersects(o.bb, b)) out.push(o.bb);
     return out;
   }
   // Entity.moveEntity (sa.d) with stepHeight 0: web slowdown, y/x/z offsets, flags, fall state,
@@ -339,7 +340,7 @@ export class Minecarts {
   // EntityMinecartContainer.applyDrag: 0.98 + 0.001 per missing comparator level.
   drag(cart) {
     if (cart.type === 2) V.furnaceDrag(cart);
-    const k = !V.isContainerType(cart.type) ? (cart.rider ? f(0.997) : f(0.96)) : f(f(0.98) + f(f(15 - this.comparator(cart)) * f(0.001)));
+    const k = !V.isContainerType(cart.type) ? (cart.rider || cart.passenger ? f(0.997) : f(0.96)) : f(f(0.98) + f(f(15 - this.comparator(cart)) * f(0.001)));
     cart.vx *= k; cart.vy *= 0; cart.vz *= k;
   }
   // func_145821_a: one tick on the rail block (bx, by, bz).
@@ -386,7 +387,7 @@ export class Minecarts {
     cart.x = ax + dx * t;
     cart.z = az + dz * t;
     this.setPosition(cart, cart.x, cart.posY + Y_OFFSET, cart.z);
-    const ridden = cart.rider ? 0.75 : 1;
+    const ridden = cart.rider || cart.passenger ? 0.75 : 1;
     const mx = Math.max(-d, Math.min(d, cart.vx * ridden)), mz = Math.max(-d, Math.min(d, cart.vz * ridden));
     this.move(world, cart, mx, 0, mz, others);
     if (m[0][1] !== 0 && Math.floor(cart.x) - bx === m[0][0] && Math.floor(cart.z) - bz === m[0][2]) this.setPosition(cart, cart.x, cart.posY + m[0][1], cart.z);
@@ -470,7 +471,9 @@ export class Minecarts {
   // this for each pushable entity within 0.2) is pushed: returns the velocity [x, z] to add to it.
   // A chest cart never picks up a mob (only the empty cart, type 0, does).
   collide(cart, other) {
-    if (cart.dead || other === cart.rider) return [0, 0];
+    if (cart.dead || other === cart.rider || other.ridingEntity === cart) return [0, 0];
+    // The pickup comes first (xl.g): a fast empty cart takes a free mob, and the push below still applies.
+    if (cartPicksUp(cart, other)) mountMobOnVehicle(cart, other, (m) => m.height ?? 0);
     let dx = other.x - cart.x, dz = other.z - cart.z, d = dx * dx + dz * dz;
     if (!(d >= 9.999999747378752e-5)) return [0, 0];
     d = f(Math.sqrt(d));
@@ -629,7 +632,7 @@ export class Minecarts {
     return {
       version: 1,
       carts: this.carts.filter((c) => !c.dead).map((c) => ({
-        type: c.type, rider: c.rider?.player === true || undefined,
+        id: c.id, type: c.type, rider: c.rider?.player === true || undefined,
         x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire, onGround: c.onGround,
         customName: c.customName || undefined, ...V.variantJSON(c),
         items: c.slots.flatMap((s, slot) => {
@@ -651,6 +654,8 @@ export class Minecarts {
         (it.unbreakable === undefined || typeof it.unbreakable === 'boolean'));
       const cart = m.spawnCart(c.type, { x: c.x, y: c.y, z: c.z, items: V.isContainerType(c.type) ? items : [], fuel: c.fuel, spawner: c.spawner, pushX: c.pushX, pushZ: c.pushZ, fuse: c.fuse, cooldown: c.cooldown, command: c.command, customName: typeof c.customName === "string" && c.customName ? c.customName : null });
       cart.restorePlayer = c.type === 0 && c.rider === true;
+      if (Number.isInteger(c.id) && c.id > 0 && !m.carts.some((o) => o !== cart && o.id === c.id)) cart.id = c.id; // passengers name their cart by id
+      m.nextId = Math.max(m.nextId, cart.id + 1);
       const v = Array.isArray(c.motion) && c.motion.length === 3 && ok(...c.motion) ? c.motion : [0, 0, 0];
       // Entity.readFromNBT: motion components above 10 in magnitude are dropped to 0.
       [cart.vx, cart.vy, cart.vz] = v.map((x) => (Math.abs(x) > 10 ? 0 : x));

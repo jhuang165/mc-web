@@ -41,6 +41,7 @@ const doubles = (items) => pair(NBT.LIST, { elementType: NBT.DOUBLE, items });
 // Returns { ignored, spawned } (spawned false when the class discards itself on load, e.g. an Item without a stack).
 export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null } = {}) {
   const t = tag instanceof Map ? tag : new Map(), ignored = [];
+  let vehicle = null; // the Boat a Riding chain can seat a mob in
   const known = new Set([...BASE_KEYS, ...(KEYS[id] ?? [])]);
   if (JAVA_PROJECTILES[id]) {
     const entity = new Map(t);
@@ -89,9 +90,10 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
   } else if (id === "Boat") {
     const rotation = list(t, "Rotation", NBT.FLOAT, 2), boat = hosts.boats.spawnBoat({ x, y: y - BOAT_Y_OFFSET, z, yaw: rotation?.[0] ?? 0, vx: motion[0], vy: motion[1], vz: motion[2] });
     boat.pitch = boat.prevPitch = Math.fround(rotation?.[1] ?? 0);
+    vehicle = boat;
   } else return { ignored: [`${id} (not kept)`], spawned: false };
   for (const k of t.keys()) if (!known.has(k) || (KEYS[id].includes(k) && !KEPT[id].includes(k))) ignored.push(k);
-  return { ignored: ignored.filter((k) => k !== "id"), spawned };
+  return { ignored: ignored.filter((k) => k !== "id"), spawned, vehicle };
 }
 // Keys the projectile readers use beyond BASE_KEYS (java-projectiles.js).
 const PROJECTILE_KEYS = new Set(["xTile", "yTile", "zTile", "inTile", "inData", "shake", "inGround", "pickup", "life", "damage", "direction", "ExplosionPower", "ownerName", "Potion", "potionValue", "inTile", "Item", "Life", "LifeTime"]);
