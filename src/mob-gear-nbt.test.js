@@ -68,7 +68,7 @@ test('the leashed zombie NBT restores its holder and a knot never needs its own 
   assert.equal(knot.leash, '{X:5,Y:0,Z:0,}');
   const k = javaMobFromNbt(tagOf(knot.nbt), { shiftX: 16, shiftZ: 32 }), p = javaMobFromNbt(tagOf(player.nbt));
   assert.deepEqual(k.leash, { knot: { x: 21, y: 0, z: 32 } });
-  assert.deepEqual(p.leash, { holder: 'player' });
+  assert.deepEqual(p.leash, { holder: 'player', holderUuid: '00000000-0000-0001-0000-000000000002' }); // the holder's UUID is kept so a whole-save import can re-link it
   // The native knot compound (a foreign save's LeashKnot) is counted by region import, not reported lost, and the mobs' own Leash tags rebuild it.
   const chunk = new Chunk(0, 0), { x, z } = regionAddress(0, 0);
   const knotEntity = new Map([['id', { type: NBT.STRING, value: 'LeashKnot' }], ['TileX', { type: NBT.INT, value: 5 }], ['TileY', { type: NBT.INT, value: 0 }], ['TileZ', { type: NBT.INT, value: 0 }]]);
@@ -131,7 +131,7 @@ test('export then import round-trips equipment, drop chances, pickup, persistenc
     }
     assert.equal(!!b.persistent, !!m.persistent);
     assert.equal(b.portalCooldown, m.portalCooldown);
-    assert.deepEqual(b.leash, m.leash);
+    assert.deepEqual(b.leash && { ...b.leash, holderUuid: undefined }, m.leash && { ...m.leash, holderUuid: undefined }); // holderUuid is the link-up key of a whole-save import
   }
   // The restored record is the same live mob, and exporting it again gives the same gear tags.
   const ew = new EntityWorld(flat, back.map((b) => ({ ...b, x: 64.5, y: 1, z: 64.5 })), () => 0.5);

@@ -6,6 +6,8 @@ import { readNbt as readHorseNbt } from './horse.js';
 // The exporter is the mirror image in region-export.js; src/java-mobs.test.js round-trips them.
 import { uuidFields } from './entity-uuid.js';
 import { attributeFieldsFromNbt } from './mob-attributes.js';
+import { livingAttributeFields } from './mob-attribute-list.js';
+import { OWNED_TYPES, ownerFields, leashHolderUuid } from './owner-links.js';
 import { ocelotFieldsFrom } from './ocelot.js';
 import { NBT } from './nbt.js';
 import { endermanFieldsFrom } from './enderman.js';
@@ -159,6 +161,7 @@ function javaMobFromNbtBase(entity, { shiftX = 0, shiftZ = 0, convertItem = () =
   } else if (type === 'pigman') {
     // EntityPigZombie.writeEntityToNBT / readEntityFromNBT: only the short Anger (1.7.10 has no HurtBy tag); the sword is Equipment[0].
     record.angerLevel = tagValue(entity, 'Anger', NBT.SHORT, 0);
+    record.growingAge = tagValue(entity, 'IsBaby', NBT.BYTE, 0) !== 0 ? -1 : 0; // a baby pigman is a Zombie child (yq.a(dh) reads IsBaby)
     record.canBreakDoors = tagValue(entity, 'CanBreakDoors', NBT.BYTE, 0) !== 0; // yq.a(dh) reads it for a pigman too; its AI is off, so only saved
     const equipment = tagValue(entity, 'Equipment', NBT.LIST);
     if (equipment?.elementType === NBT.COMPOUND && equipment.items[0]) record.held = convertItem(equipment.items[0]) ?? null;
@@ -279,7 +282,12 @@ export function javaMobFromNbt(entity, options) {
   const record = javaMobFromNbtBase(entity, options);
   if (record) {
     Object.assign(record, uuidFields(entity));
-    if (record.type === 'zombie' || record.type === 'pigman') Object.assign(record, attributeFieldsFromNbt(entity));
+    // EntityLivingBase's Attributes (every living class; mob-attribute-list.js) and the owner / leash holder links (owner-links.js).
+    const javaId = tagValue(entity, 'id', NBT.STRING, '');
+    Object.assign(record, livingAttributeFields(entity, record, javaId));
+    if (OWNED_TYPES.has(record.type)) { const owned = ownerFields(entity, record.type); if (owned.owner) record.ownerUuid = owned.ownerUuid; }
+    const holder = record.leash?.holder === 'player' ? leashHolderUuid(entity) : undefined;
+    if (holder) record.leash = { ...record.leash, holderUuid: holder };
   }
   return record;
 }
