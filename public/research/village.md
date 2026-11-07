@@ -25,9 +25,20 @@ Ported from VillageCollection (`wc`), Village (`vz`), VillageDoorInfo (`vy`), Vi
 ## Approximations and open items
 
 - Entity-state packets 12/13/14 (hearts, angry, happy villager) are drawn by the client copy of the entity in the original, so the draws come from a per-entity visual Random (`visualRandom` in `village-ai.js`), never the server Entity.rand. The draw order and positions (3 nextGaussian * 0.02, then 3 nextFloat per particle, five particles, baby size 0.3 x 0.9) are replayed in `villager-polish.test.js` (72 native cases); the seed itself is free, as the client entity's is.
-- MoveIndoors now has the native clear-daytime rule: it returns early only when day, not raining and `BiomeGenBase.canSpawnLightningBolt` (deserts and snowy biomes do not return by day), or when the dimension has no sky (1,920 native rows). MoveThroughVillage does not break doors.
+- MoveIndoors now has the native clear-daytime rule: it returns early only when day, not raining and `BiomeGenBase.canSpawnLightningBolt` (deserts and snowy biomes do not return by day), or when the dimension has no sky (1,920 native rows). MoveThroughVillage never breaks doors itself: it only forbids closed doors for its own path search (see Batch 18 below).
 - Zombies now hunt villagers and convert them (see `zombie-villager.md`); only the local player is an attacker in the village aggressor list.
 - The default-reputation flag (`bz`, set by a cured zombie villager, `cd()`) gives every player the village already knows +5 once, on the first `updateAITick` that finds a village within 32; with no village the flag stays set, and players the village has no entry for get nothing (48 native cases, `villager-polish-reference.json`).
 - Java import reads `data/villages.dat` (villages whose centre is inside the imported area, shifted like entities; others are dropped and counted) and the Villager, VillagerGolem and Zombie entities (`src/java-mobs.js`). Imported mobs lose AI timers and the home area. When mobs are imported the world's usual animal seeding is skipped.
 - Villages from world generation are not pre-registered: a generated village becomes a record once a villager has registered a position near its doors.
 - Parity is not complete; this covers the listed systems only.
+
+## Batch 18: EntityAIMoveThroughVillage (probed)
+
+`tools/probes/MoveThroughVillageProbe.java` + `tools/verify-mob-doors.mjs` run the unchanged `us` on a zombie in the VillageLiveProbe double (12-door village, 20 rounds each of shouldExecute / startExecuting / continueExecuting / resetTask; day or night, nocturnal or not, navigator door flag on or off, 3 seeds; open ground, a zombie walled into a stone cell, and the village's door objects replaced by equal-coordinate clones): 120 records in `mob-doors-reference.json`, replayed by `src/mob-doors.test.js` (door chosen, path end, the navigator's `canBreakDoors` flag after each call, visited list, next Random draw). Bytecode and probe agree on four rules the port had approximated:
+
+- The search forbids closed doors (`setBreakDoors(false)`) only around the two `getPathToXYZ` calls, then restores the saved flag. `startExecuting` is just `setPath(path, speed)` and `resetTask` only records the door; neither touches the flag (the port set it false and then true).
+- The visited list holds doors by coordinates: `us.a(vy)` compares x, y, z, not identity, so a rebuilt village's clones are still excluded (the port compared objects). The list drops its first entry per `shouldExecute` while longer than 15; a door is added when the path is finished or the entity is within 4 blocks.
+- `nocturnal` (third constructor argument) returns false in daylight: the zombie passes false (it walks through villages in the day, priority 6), villagers and golems pass true.
+- When the path is null the task draws `findRandomTargetBlockTowards(10, 7, door)` and paths to that cell with the same flag handling (draws replayed through the walled scenario).
+
+The task does not break doors; breaking is the zombie's own `EntityAIBreakDoor` ([mob riding](mob-riding.md)). Not probed: a walking zombie following the path to the door in a ticking world.

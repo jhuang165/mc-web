@@ -46,7 +46,7 @@ test('export then import keeps zombie villagers, a curing timer, golems and vill
   const mobs = [
     { type: 'zombie', x: -2, y: 102, z: -2, health: 20, growingAge: 0, villager: true, conversionTime: 4000, effects: [{ id: 5, duration: 4000, amplifier: 0 }] },
     { type: 'zombie', x: -3, y: 102, z: -2, health: 12, growingAge: -1, villager: true },
-    { type: 'zombie', x: -4, y: 102, z: -2, health: 20, growingAge: 0 },
+    { type: 'zombie', x: -4, y: 102, z: -2, health: 20, growingAge: 0, canBreakDoors: true },
     { type: 'iron_golem', x: -5, y: 102, z: -2, health: 90, playerCreated: true },
     { type: 'villager', x: -6, y: 102, z: -2, health: 20, growingAge: -24000, profession: 3, riches: 5, effects: [{ id: 9, duration: 150, amplifier: 0 }] },
   ];
@@ -60,6 +60,7 @@ test('export then import keeps zombie villagers, a curing timer, golems and vill
   assert.deepEqual([curing.get('IsVillager').value, curing.get('ConversionTime').value, curing.has('IsBaby'), curing.get('CanBreakDoors').value], [1, 4000, false, 0]);
   assert.deepEqual([baby.get('IsBaby').value, baby.get('IsVillager').value, baby.get('ConversionTime').value], [1, 1, -1]);
   assert.equal(byId('Zombie')[2].has('IsVillager'), false);
+  assert.deepEqual(byId('Zombie').map((z) => z.get('CanBreakDoors').value), [0, 0, 1], 'CanBreakDoors is written from the break-door flag');
   assert.equal(byId('VillagerGolem')[0].get('PlayerCreated').value, 1);
   assert.equal(curing.get('ActiveEffects').value.items[0].get('Id').value, 5);
   const back = chunk.entities.map((e) => javaMobFromNbt(e, { shiftX: -w.originX, shiftZ: -w.originZ })).filter(Boolean);
@@ -68,6 +69,7 @@ test('export then import keeps zombie villagers, a curing timer, golems and vill
   assert.deepEqual([find('zombie', (m) => m.conversionTime).conversionTime, find('zombie', (m) => m.conversionTime).villager], [4000, true]);
   assert.deepEqual([find('zombie', (m) => m.growingAge < 0).villager, find('zombie', (m) => m.growingAge < 0).health], [true, 12]);
   assert.equal(find('zombie', (m) => !m.villager).villager, false);
+  assert.deepEqual([find('zombie', (m) => !m.villager).canBreakDoors, find('zombie', (m) => m.conversionTime).canBreakDoors], [true, false], 'CanBreakDoors imports');
   assert.equal(find('iron_golem').playerCreated, true);
   const v = find('villager');
   assert.deepEqual([v.profession, v.riches, v.growingAge, v.effects], [3, 5, -24000, [{ id: 9, amplifier: 0, duration: 150 }]]);

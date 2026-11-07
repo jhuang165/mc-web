@@ -49,6 +49,10 @@ A mob can ride another mob: a skeleton on a spider (a spider jockey), a baby zom
 
 `zombieSpawnRolls` already draws the leader (5 % of local difficulty): reinforcement chance plus 0.5 to 0.75, and a max-health bonus of 1 to 4 times (a multiplying modifier on 20). The reinforcement bonus was live; now the max health is kept as `maxHealth` (saved, validated, up to 2048) and used where a mob's cap matters (loading a record, the regeneration clamp). The spawn does not set the health, as in the original: a leader starts at 20 of a larger maximum. Leaders also break doors. The Hard reinforcement itself (`attackEntityFrom`, 50 tries, charge of -0.05 on both zombies) was already live; see [difficulty](difficulty.md).
 
+## Batch 18: saved flag and interchange
+
+`CanBreakDoors` is now written to Java region exports from the zombie's break-door flag (it was always 0) and read back on import and `/summon` (`setBreakDoorsAItask(tag.getBoolean("CanBreakDoors"))`), so rolled and leader zombies keep the door task across interchange (`java-mobs.test.js`). The break timing, the Hard-only removal, the 1/20 `mob.zombie.wood` roll, the crack stages and the aux events 1010, 1012 and 2001 were already probed above (32 records); the task never breaks iron doors. Pigmen run the same `EntityZombie.onSpawnWithEgg` roll natively (the draw is consumed here) but the port does not store or run a break-door task for them, and writes `CanBreakDoors` 0 for pigmen.
+
 ## Gaps
 
 - A rider's own movement is not run, so its collision flags, fall distance and step sounds are not reproduced: the rider's fall distance stays 0 (the original lets the rider's accumulate; not probed). A zombie jockey cannot trip the door task through its own collision.
