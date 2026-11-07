@@ -11,6 +11,9 @@ import { localDifficulty } from "./difficulty.js";
 import { HeadlessColumns, RingLight, compactColumn, createRing, ringKey } from "./headless-columns.js";
 import { createStreamWorker, StreamPrefetch } from "./streaming-generator.js";
 import { populationBlockMapperReady } from "./population-world.js";
+import { Survival } from "./survival.js";
+import { attachRing } from "./headless-columns.js";
+import { wrapMobHooks } from "./headless-env.js";
 
 await populationBlockMapperReady;
 const silence = (w) => { w.blockLight = () => 0; return w; };
@@ -197,4 +200,140 @@ test("Nether and End worlds fill their ring from their own generator and spawn b
     assert.equal(ring.size, 81, `dimension ${dim}`);
     assert.ok(outside > 0, `dimension ${dim}: ${outside} spawns beyond the window`);
   }
+});
+
+// Ring mobs tick (batch 22): a streamed world with a headless ring updates mobs in ring chunks exactly as the same world with
+// every chunk resident does, where an entity updates when the chunks two away from its own are loaded (checkChunksExist, 32 blocks).
+const TICK_STEPS = 320;
+function tickReplay(withRing) {
+  const world = world12();
+  const column = (cx, cz) => { const k = `${cx},${cz}`; return cache.get(k) ?? (cache.set(k, world.chunkAt(cx, cz) ? { blocks: world.chunkAt(cx, cz).blocks, metadata: world.chunkAt(cx, cz).meta } : world.generateTerrainChunk(cx, cz)), cache.get(k)); };
+  const ring = new HeadlessColumns(world, { generate: column, perTick: 1000, every: 1 });
+  const loaded = (cx, cz) => !!world.chunkAt(cx, cz) || ring.cols.has(ringKey(cx, cz));
+  let probe;
+  if (withRing) { ring.update(4, 4); attachRing(world, ring); probe = ring; } else {
+    for (let cx = -6; cx <= 14; cx++) for (let cz = -6; cz <= 14; cz++) {
+      if (world.chunkAt(cx, cz)) continue;
+      const c = column(cx, cz), chunk = new WorldChunk(cx, cz, 256);
+      chunk.blocks.set(c.blocks); chunk.meta.set(c.metadata);
+      world.chunks.set(`${cx},${cz}`, chunk);
+    }
+    world.minX = -96; world.maxX = 240; world.minZ = -96; world.maxZ = 240;
+    // The native rule on the all-resident world: the 5 x 5 chunks around the entity's chunk exist.
+    world.isTicking = (x, z) => { const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4; for (let a = cx - 2; a <= cx + 2; a++) for (let b = cz - 2; b <= cz + 2; b++) if (!world.chunkAt(a, b)) return false; return true; };
+    probe = new HeadlessColumns(world);
+  }
+  const rand = new JavaRandom(77);
+  const mobs = new EntityWorld(world, [], () => rand.nextDouble());
+  mobs.worldRandom = new JavaRandom(1234);
+  mobs.entitySeed = (r) => r.seed;
+  mobs.difficulty = 2;
+  mobs.localDifficulty = () => localDifficulty(2, 18000, 0, true);
+  mobs.currentDate = () => new Date(2014, 9, 31);
+  mobs.lightAt = (x, y, z) => probe.light.level(x, y, z, 11);
+  mobs.thunderLightAt = (x, y, z) => probe.light.level(x, y, z, 10);
+  mobs.fullLightAt = (x, y, z) => probe.light.level(x, y, z, 0);
+  mobs.skyLightAt = (x, y, z) => probe.light.skyAt(x, y, z);
+  mobs.lightSubtracted = () => 11;
+  mobs.isThundering = () => false;
+  mobs.isDaytime = () => false;
+  mobs.naturalSpawning = true;
+  if (withRing) mobs.ring = ring;
+  const player = { x: 72.5, y: 80, z: 72.5, alive: true, width: 0.6, height: 1.8 }, survival = new Survival(), log = [];
+  let ringTicked = 0;
+  for (let tick = 0; tick < TICK_STEPS; tick++) {
+    const total = mobs.naturalSpawn(player, { time: 18000 }, tick % 400 === 0);
+    mobs.tick(player, survival);
+    mobs.drain?.();
+    for (const e of mobs.entities) if (e.age > 0 && !(e.x >= 0 && e.x < 128 && e.z >= 0 && e.z < 128)) ringTicked++;
+    log.push({ tick, total, seed: String(mobs.worldRandom.seed), mobs: mobs.entities.map((e) => [e.id, e.type, e.x, e.y, e.z, e.health]) });
+  }
+  return { log, ringTicked, loaded };
+}
+
+test("mobs in ring chunks tick like mobs in an all-resident world: same positions, despawns and spawn draws over 320 ticks", () => {
+  const a = tickReplay(true), b = tickReplay(false);
+  assert.ok(a.ringTicked > 100, `ring mobs were updated (${a.ringTicked} mob-ticks)`);
+  for (let i = 0; i < a.log.length; i++) assert.deepEqual(a.log[i], b.log[i], `tick ${i}`);
+  // Mobs outside the window moved (not frozen at their spawn cell) and some were removed by despawning.
+  const first = new Map();
+  let moved = 0, gone = 0;
+  for (const s of a.log) {
+    const now = new Set();
+    for (const [id, , x, y, z] of s.mobs) {
+      now.add(id);
+      if (!first.has(id)) first.set(id, [x, y, z]);
+      else { const f = first.get(id); if ((x < 0 || x >= 128 || z < 0 || z >= 128) && Math.hypot(x - f[0], z - f[2]) > 0.5) moved++; }
+    }
+    for (const id of first.keys()) if (!now.has(id) && !first.get(id).gone) { first.get(id).gone = true; gone++; }
+  }
+  assert.ok(moved > 0, "a ring mob walked");
+  assert.ok(gone > 0, "mobs despawned or died");
+});
+
+test("ring columns take edits: writes land in the column, grow it, and reach the resident column when the window shifts to it", () => {
+  const world = world12(), ring = new HeadlessColumns(world, { generate: (cx, cz) => world.generateTerrainChunk(cx, cz), perTick: 1000, every: 1, radius: 6 });
+  ring.update(4, 4);
+  attachRing(world, ring);
+  const x = 150, z = 70; // chunk 9, 4: outside the window (chunks 0..7)
+  assert.equal(world.isLoaded(x, z), false);
+  const before = ring.get(x, 70, z), column = world.generateTerrainChunk(9, 4);
+  assert.equal(before, column.blocks[((x & 15) * 16 + (z & 15)) * 256 + 70]);
+  // Not readable through the plain world, readable while ringReads is set and through the view.
+  assert.equal(world.get(x, 70, z), 0);
+  world.ringReads = true; assert.equal(world.get(x, 70, z), before); world.ringReads = false;
+  assert.ok(world.set(x, 70, z, 7, true, 0) && world.set(x, 71, z, 5, true, 3) && world.set(x, 200, z, 4, true, 9), "writes accepted");
+  assert.equal(ring.get(x, 70, z), 7);
+  assert.equal(ring.getMeta(x, 71, z), 3);
+  assert.equal(ring.get(x, 200, z), 4, "the column grew to hold the cell");
+  assert.equal(ring.getMeta(x, 200, z), 9);
+  assert.equal(ring.top(9, 4), 192);
+  assert.equal(ring.get(x + 1, 70, z), column.blocks[(((x + 1) & 15) * 16 + (z & 15)) * 256 + 70], "neighbours untouched");
+  assert.equal(world.dirtyColumns.has("9,4"), true, "the edit is journalled for the save");
+  // Unhydrated journals refuse writes (the saved edits of that column could otherwise be lost).
+  ring.isHydrated = () => false;
+  assert.equal(world.set(x, 72, z, 1), false);
+  ring.isHydrated = () => true;
+  // The window shifts onto the column: the new resident chunk carries the edits.
+  assert.ok(world.streamAround(150, 70));
+  const chunk = world.chunkAt(9, 4);
+  assert.ok(chunk, "resident now");
+  assert.equal(world.get(x, 70, z), 7);
+  assert.equal(world.get(x, 71, z), 5);
+  assert.equal(world.getMeta(x, 71, z), 3);
+  assert.equal(world.get(x, 200, z), 4);
+  // And back: the column that leaves the window keeps its live blocks in the ring.
+  world.set(x, 73, z, 20);
+  assert.ok(world.streamAround(8, 70));
+  assert.equal(world.isLoaded(x, z), false);
+  assert.equal(ring.get(x, 73, z), 20);
+  assert.equal(ring.get(x, 200, z), 4);
+});
+
+test("stored edits reach a held ring column when its journal hydrates", () => {
+  const world = world12(), ring = new HeadlessColumns(world, { generate: (cx, cz) => world.generateTerrainChunk(cx, cz), perTick: 1000, every: 1, radius: 6 });
+  attachRing(world, ring);
+  ring.isHydrated = () => false;
+  ring.update(4, 4);
+  const x = 150, z = 70, cell = ((x & 15) * 16 + (z & 15)) * 256 + 60;
+  const stored = ring.get(x, 60, z);
+  world.restoreColumns([{ x: 9, z: 4, cells: Uint16Array.of(cell), values: Uint16Array.of(41 | (2 << 8)), order: Uint32Array.of(0) }]);
+  assert.equal(ring.get(x, 60, z), stored, "not hydrated: stored edit not yet shown");
+  ring.isHydrated = () => true;
+  world.restoreColumns([{ x: 9, z: 4, cells: Uint16Array.of(cell), values: Uint16Array.of(41 | (2 << 8)), order: Uint32Array.of(0) }]);
+  assert.equal(ring.get(x, 60, z), 41);
+  assert.equal(ring.getMeta(x, 60, z), 2);
+});
+
+test("ring light and sky hooks answer for ring-only cells", () => {
+  const world = world12(), ring = new HeadlessColumns(world, { generate: (cx, cz) => world.generateTerrainChunk(cx, cz), perTick: 1000, every: 1, radius: 6 });
+  ring.update(4, 4);
+  const mobs = { lightAt: () => -1, canSeeSky: () => "base" };
+  wrapMobHooks(mobs, ring, () => 0);
+  assert.equal(mobs.lightAt(10, 70, 10), -1, "resident cell: the scene's answer");
+  const x = 150, z = 70, top = ring.light.heightAt(x, z);
+  assert.equal(mobs.canSeeSky(x, top, z), true);
+  assert.equal(mobs.canSeeSky(x, top - 1, z), false);
+  assert.equal(mobs.lightAt(x, top, z), 15);
+  assert.equal(mobs.canSeeSky(10, 70, 10), "base");
 });

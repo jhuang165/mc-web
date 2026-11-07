@@ -7,7 +7,7 @@ export class StreamStorage {
     this.world=world;this.id=id;this.read=read;this.onError=onError;
     // Legacy/imported edits are already in memory and dirty until first save.
     this.loaded=new Set(world.chunkEdits.keys());this.pending=new Map();this.disposed=false;this.failed=null;
-    this.wanted=new Set([...world.chunks.keys()]);
+    this.wanted=new Set([...world.chunks.keys()]);this.margin=1; // columns kept hydrated beyond the window (the ring raises it)
   }
   columns(x,z,margin=0) {
     const {minX,minZ}=this.world.windowAt(x,z), out=[];
@@ -35,7 +35,7 @@ export class StreamStorage {
   }
   update(x,z) {
     if(this.disposed)return;
-    const columns=this.columns(x,z,1);
+    const columns=this.columns(x,z,this.margin);
     this.wanted=new Set(columns.map(c=>key(...c)));
     this.trim();
     if(!this.failed)this.ensure(columns).catch(()=>{});

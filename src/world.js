@@ -504,6 +504,10 @@ export class World {
     // Saved block light (World.getSavedLightValue(EnumSkyBlock.Block)): the scene sets this to
     // its LightVolume; until then snow.js works it out from the lava.
     this.blockLight = null;
+    // Headless ring columns (headless-columns.js): `ringSink` takes writes to unloaded cells of columns the ring holds, and answers reads
+    // of them while `ringReads` is set (main.js turns it on for the simulation tick only, so meshing and light keep reading the window).
+    this.ringSink = null;
+    this.ringReads = false;
     this.generate();
   }
   // Legacy numeric cell order; streaming uses a coordinate key without finite-width aliases.
@@ -560,6 +564,7 @@ export class World {
     }
     for (const [key, c] of this.chunks) if (!next.has(key)) removed.push(c);
     this.chunks = next; this.lastChunk = null;
+    this.ringSink?.adopt?.(removed); // a column that leaves the window stays in the ring with its current blocks
     this.minX = minX; this.minZ = minZ; this.maxX = minX + SIZE; this.maxZ = minZ + SIZE;
     // WorldChunkManager's standalone cache has no expiry. Retain the working set
     // and a biome halo here instead of retaining every explored biome array.
@@ -588,7 +593,7 @@ export class World {
   // World.getBlock: below y 0 (and above the top) is air, so a hole in the floor opens onto the void.
   get(x, y, z) {
     if (!this.inside(x, y, z)) return 0;
-    return this.chunkAt(x >> 4, z >> 4)?.blocks[cellIndex(x, y, z, this.height)] ?? 0;
+    return this.chunkAt(x >> 4, z >> 4)?.blocks[cellIndex(x, y, z, this.height)] ?? (this.ringReads ? this.ringSink.get(x, y, z) : 0);
   }
   // The block ids of column (x, z) bottom to top, as a view of the chunk's array; null when the
   // column is outside the world or not resident (all air to get).
@@ -598,7 +603,7 @@ export class World {
     return c ? c.blocks.subarray(start, start + this.height) : null;
   }
   getMeta(x, y, z) {
-    return this.inside(x, y, z) ? this.chunkAt(x >> 4, z >> 4)?.meta[cellIndex(x, y, z, this.height)] ?? 0 : 0;
+    return this.inside(x, y, z) ? this.chunkAt(x >> 4, z >> 4)?.meta[cellIndex(x, y, z, this.height)] ?? (this.ringReads ? this.ringSink.getMeta(x, y, z) : 0) : 0;
   }
   solid(x, y, z) {
     const b = this.get(x, y, z);
@@ -633,6 +638,7 @@ export class World {
   // for its own edits). A tracked edit is saved as block | meta << 8, so saves
   // from before metadata existed (plain block ids) read back as meta 0.
   put(x, y, z, b, meta = 0, track = true) {
+    if (this.ringSink && !this.isLoaded(x, z) && this.inside(x, y, z)) return this.ringSink.putOutside(x, y, z, b, meta, track);
     if (
       !this.inside(x, y, z) ||
       !this.isLoaded(x, z) ||
@@ -700,6 +706,7 @@ export class World {
       }
       this.chunkEdits.set(key,edits);
     }
+    this.ringSink?.onHydrated?.(records); // ring columns pick up the stored edits of columns that just became readable
   }
   // Column records (world-storage.js chunkRecords form, without the world id) of every column
   // edited since the last call. Each holds all of that column's edits.
@@ -750,7 +757,8 @@ export class World {
   // `onChange(x, y, z, oldBlock, newBlock)` plays World.setBlock's neighbour
   // notification for tracked edits that change the block or its metadata.
   set(x, y, z, b, track = true, meta = 0) {
-    const old = this.get(x, y, z), oldMeta = this.getMeta(x, y, z);
+    const out = this.ringSink && !this.isLoaded(x, z) && this.inside(x, y, z) ? this.ringSink : this;
+    const old = out.get(x, y, z), oldMeta = out.getMeta(x, y, z);
     if (!this.put(x, y, z, b, meta, track)) return false;
     if (track && (old !== b || oldMeta !== meta)) this.onChange?.(x, y, z, old, b);
     return true;

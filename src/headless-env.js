@@ -19,3 +19,14 @@ export function wrapRingEnv(env, ring, dim, subtracted) {
   wrap("thunderLightValue", (l, x, y, z) => l.level(x, y, z, 10));
   wrap("fullLight", (l, x, y, z) => l.level(x, y, z, 0));
 }
+
+// Light and sky for mobs ticking in ring chunks (EntityWorld.tick): the brightness tables (ai.js `brightness`, EntityMob path weights
+// and sunburn) read mobs.lightAt, and the sunburn and sun tasks read mobs.canSeeSky. Both answer from the scene's light volume and
+// the resident columns, which do not reach the ring, so a cell in a ring-only chunk is answered by RingLight instead (the same
+// fixed point as the volume, headless-columns.js). `subtracted()` is skylightSubtracted.
+export function wrapMobHooks(mobs, ring, subtracted) {
+  const light = mobs.lightAt, sky = mobs.canSeeSky;
+  mobs.lightAt = (x, y, z) => (ring.outside(x, z) ? ring.light.level(x, y, z, subtracted()) : light(x, y, z));
+  // Chunk.canBlockSeeTheSky: at or above the height map.
+  mobs.canSeeSky = (x, y, z) => (ring.outside(x, z) ? y >= ring.light.heightAt(x, z) : sky(x, y, z));
+}

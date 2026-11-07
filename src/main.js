@@ -261,7 +261,8 @@ import { ITEM_WRITABLE_BOOK, applyBookEdit, applyBookSign } from "./books.js";
 import { applyHangingEdit } from "./hanging-interaction.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
-import { createRing } from "./headless-columns.js";
+import { createRing, attachRing } from "./headless-columns.js";
+import { wrapMobHooks } from "./headless-env.js";
 import { startLoading, setStage, STAGES, loadingScreen, downloadTerrainScreen, errorScreen, nextPaint, SpawnAreaLog } from "./loading-screen.js";
 import { gameOverScreen, exportScreen, notesScreen, signEditHost } from "./modal-dialogs.js";
 import { NOTES } from "./notes-content.js";
@@ -1326,6 +1327,12 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs.ring = createRing(world, { worker: !!streamPrefetch && !streamPrefetch.failed });
     if (streamPrefetch) streamPrefetch.ring = mobs.ring;
     mobs.lightSubtracted = () => scene.subtracted;
+    if (mobs.ring) { // ring mobs tick and ring columns take edits (natural-spawning.md "Round 5")
+      attachRing(world, mobs.ring);
+      mobs.ring.isHydrated = (cx, cz) => !streamStorage || streamStorage.loaded.has(`${cx},${cz}`);
+      if (streamStorage) streamStorage.margin = 7; // hydrate the stored edits of every ring column too
+      wrapMobHooks(mobs, mobs.ring, () => scene.subtracted ?? 0);
+    }
     arrows.wet = (a) => isWet(weather, world, { x: a.x, y: a.y, z: a.z, inWater: a.water }, 0.5);
     mobRenderer.clear();
     animation.reset();
@@ -3539,7 +3546,8 @@ function animate(now) {
       // player; EffectRenderer.updateEffects then runs after this tick's spawns. ---
       if (motion.sprinting) spawnRunningParticles(scene.particles, world, { x: position.x, y: position.y, z: position.z, mx: velocity.x, mz: velocity.z, sprinting: true, inWater: wasInWater, ySize: motion.ySize }, playerRandom, [position.x, position.y + PHYSICS.eye, position.z]);
       tickProf.endStart("tick");
-      movementTick(captureMovementInput(bedSleep.sleeping ? () => false : (d) => binds.isDown(d))); // a sleeping player ignores the keys
+      world.ringReads = !!world.ringSink; // simulation reads see the ring columns; meshing, light and the window shift do not
+      try { movementTick(captureMovementInput(bedSleep.sleeping ? () => false : (d) => binds.isDown(d))); } finally { world.ringReads = false; } // a sleeping player ignores the keys
       tickProf.endStart("bed");
       tickBed();
       tickProf.endStart("effects");
