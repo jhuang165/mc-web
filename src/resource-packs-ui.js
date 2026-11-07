@@ -5,7 +5,7 @@
 // buttons 150 x 20 at y = height - 48. The folder button opens a file picker here (a web page has no pack folder).
 import { t, textWidth, trimToWidth, splitLines, slotMetrics, COLOR } from "./menu-screens.js";
 import {
-  packStore, openStoredPack, packInfo, PackLists, sameSelection, addPackFromFile, addPackFromFolder, applyPacks, refreshWorker,
+  packStore, openStoredPack, packInfo, PackLists, sameSelection, addPackFromFile, addPackFromFolder, applyPacks, refreshWorker, deleteStoredPack,
   DEFAULT_DESCRIPTION,
 } from "./resource-packs.js";
 
@@ -72,14 +72,42 @@ export function resourcePacksScreen(ctx, parent, show) {
       await applyPacks(names, store);
       await refreshWorker();
     } catch (e) { ctx.notice?.("Resource packs failed: " + (e.message ?? e)); return show(parent()); }
-    // Minecraft.refreshResources: the page reloads here (the world autosaves on unload).
-    (ctx.reloadResources ?? (() => location.reload()))();
+    // Minecraft.refreshResources: in place (resource-refresh.js), the world keeps running; without a refresher the page reloads.
+    try { await (ctx.reloadResources ? ctx.reloadResources() : location.reload()); } catch (e) { ctx.notice?.("Resource reload failed: " + (e.message ?? e)); }
+    show(parent());
+  };
+  // Not native (1.7.10 has no delete control; packs live in the pack folder there): hover a pack row and press Delete twice to remove
+  // the stored pack from this browser. A removed pack that was applied is dropped from the selection and the resources refresh.
+  let hovered = null, pendingDelete = null;
+  const removePack = async (name) => {
+    try {
+      const wasApplied = (ctx.options.resourcePacks ?? []).includes(name);
+      const left = await deleteStoredPack(store, name, lists ? lists.names : initial);
+      const i = initial.indexOf(name); if (i >= 0) initial.splice(i, 1);
+      ctx.notice?.(`Deleted resource pack "${name}"`);
+      if (wasApplied) {
+        ctx.options.resourcePacks = (ctx.options.resourcePacks ?? []).filter((n) => n !== name);
+        ctx.saveOptions();
+        await applyPacks(ctx.options.resourcePacks, store);
+        await refreshWorker();
+        await ctx.reloadResources?.();
+      }
+      lists = null; initial.length = 0; initial.push(...left);
+      await reload();
+    } catch (e) { ctx.notice?.("Cannot delete pack: " + (e.message ?? e)); }
   };
 
   const screen = {
     id: "resource-packs",
     // GuiScreen.keyTyped: Escape leaves without applying the lists.
     escape: () => ctx.closeScreen(),
+    key(e) {
+      if (e.code !== "Delete" || !hovered) return false;
+      if (pendingDelete !== hovered) { pendingDelete = hovered; ctx.notice?.(`Press Delete again to remove "${hovered}" from this browser`); return true; }
+      const name = hovered; pendingDelete = hovered = null;
+      removePack(name);
+      return true;
+    },
     close() { for (const u of urls) URL.revokeObjectURL(u); urls = []; },
     wheel(dir) {
       if (!gui) return;
@@ -159,6 +187,7 @@ export function resourcePacksScreen(ctx, parent, show) {
     };
     const paint = (hit) => {
       rows.forEach((r) => (r.overlay.style.display = "none"));
+      hovered = hit && !rows[hit.i].info.builtin ? rows[hit.i].info.name : null;
       if (!hit) return;
       const row = rows[hit.i], info = row.info;
       if (info.builtin) return;

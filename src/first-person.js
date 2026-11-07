@@ -16,6 +16,8 @@ import { clockFrameUrl, clockFrame } from "./maps-clock-live.js";
 import { ITEM_COMPASS, COMPASS_STATIC, COMPASS_STRIP } from "./compass.js";
 import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
 import { MapSurface, mapHandMatrices } from "./map-render.js";
+import { onResourcesRefreshed } from "./resource-refresh.js";
+import { versioned } from "./media-version.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
 const BLOCK_FACES=[
@@ -66,11 +68,15 @@ gl_FragColor=vec4((a+b)*vec3(.5,.25,.8),1.);}`,
 }
 let compassFrame = 0, compassCanvas, compassImage, compassTexture;
 function drawCompassFrame() {
+  // CompassTexture frames are square cells of the strip's width (16 px vanilla, bigger in HD packs).
+  const f = compassImage.naturalWidth || 16;
+  if (compassCanvas.width !== f) { compassCanvas.width = compassCanvas.height = f; compassTexture.dispose(); }
   const ctx = compassCanvas.getContext("2d");
-  ctx.clearRect(0, 0, 16, 16);
-  ctx.drawImage(compassImage, 0, compassFrame * 16, 16, 16, 0, 0, 16, 16);
+  ctx.clearRect(0, 0, f, f);
+  ctx.drawImage(compassImage, 0, compassFrame * f, f, f, 0, 0, f, f);
   compassTexture.needsUpdate = true;
 }
+onResourcesRefreshed((gen) => { if (compassImage) compassImage.src = versioned(COMPASS_STRIP, gen); });
 export function setCompassTextureFrame(frame) {
   if (frame === compassFrame) return;
   compassFrame = frame;
@@ -85,7 +91,7 @@ export function pixelTexture(url) {
       compassTexture.magFilter = compassTexture.minFilter = THREE.NearestFilter;
       compassImage = new Image();
       compassImage.onload = drawCompassFrame;
-      compassImage.src = COMPASS_STRIP;
+      compassImage.src = versioned(COMPASS_STRIP);
     }
     return compassTexture;
   }

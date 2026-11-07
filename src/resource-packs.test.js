@@ -4,7 +4,7 @@ import { deflateRawSync } from "node:zlib";
 import { readZip } from "./zip-reader.js";
 import {
   overrideUrls, parsePackMcmeta, parseLang, zipPack, folderPack, packInfo, resolveOverrides, resolveLang, PackLists, sameSelection,
-  parseResourcePacksOption, formatResourcePacksOption, memoryStore, applyPacks, openStoredPack, INVALID_META,
+  parseResourcePacksOption, formatResourcePacksOption, memoryStore, applyPacks, openStoredPack, INVALID_META, deleteStoredPack, applyLangLayer,
 } from "./resource-packs.js";
 import { writeOptionsTxt, parseOptionsTxt, applyOptionsTxt } from "./options-txt.js";
 import { arrowCells, resourcePacksLayout } from "./resource-packs-ui.js";
@@ -61,7 +61,8 @@ test("pack files map to the URLs the game requests", () => {
   assert.deepEqual(overrideUrls("assets/minecraft/textures/blocks/stone.png"), ["/media/1.7.10/blocks/stone.png"]);
   assert.deepEqual(overrideUrls("assets/minecraft/textures/gui/widgets.png"), ["/media/1.7.10/gui/widgets.png"]);
   assert.deepEqual(overrideUrls("assets/minecraft/sounds/dig/stone1.ogg"), ["/audio/1.7.10/dig/stone1.ogg", "/audio/1.7.10-streams/dig/stone1.ogg"]);
-  assert.deepEqual(overrideUrls("assets/minecraft/textures/blocks/water_still.png.mcmeta"), []);
+  assert.deepEqual(overrideUrls("assets/minecraft/textures/blocks/water_still.png.mcmeta"), ["/media/1.7.10/blocks/water_still.png.mcmeta"]);
+  assert.deepEqual(overrideUrls("assets/minecraft/sounds.json"), []); // parsed into the sound table, not served
   assert.deepEqual(overrideUrls("assets/minecraft/textures/../../x.png"), []);
   assert.deepEqual(overrideUrls("assets/other/textures/blocks/stone.png"), []);
   assert.deepEqual(overrideUrls("pack.png"), []);
@@ -150,4 +151,55 @@ test("options.txt resourcePacks persists in the native list format", () => {
   const bad = parseOptionsTxt("resourcePacks:oops\nclouds:false");
   assert.deepEqual(bad.skipped, ["resourcePacks:oops"]);
   assert.equal(applyOptionsTxt({ resourcePacks: ["keep"] }, "resourcePacks:oops").options.resourcePacks[0], "keep");
+});
+
+test("a pack png without its own mcmeta hides the vanilla mcmeta; a pack mcmeta above or beside it is used", async () => {
+  const mk = async (name, files) => zipPack(name, makeZip(files));
+  const png = "assets/minecraft/textures/blocks/water_still.png", mc = png + ".mcmeta";
+  const mcUrl = "/media/1.7.10/blocks/water_still.png.mcmeta";
+  let t = resolveOverrides([await mk("a", { [png]: "x" })]);
+  assert.equal(t.get(mcUrl).missing, true);
+  t = resolveOverrides([await mk("a", { [png]: "x", [mc]: "{}" })]);
+  assert.equal(t.get(mcUrl).missing, undefined);
+  // an mcmeta of a pack BELOW the png's pack is never used for it
+  t = resolveOverrides([await mk("low", { [mc]: "{}" }), await mk("high", { [png]: "x" })]);
+  assert.equal(t.get(mcUrl).missing, true);
+  // an mcmeta of a pack above the png's pack is used
+  t = resolveOverrides([await mk("low", { [png]: "x" }), await mk("high", { [mc]: '{"animation":{}}' })]);
+  assert.equal(t.get(mcUrl).pack, "high");
+});
+test("applyPacks keeps hidden mcmeta, sounds and texture facts in the store", async () => {
+  const store = memoryStore();
+  const files = {
+    "assets/minecraft/textures/blocks/lava_still.png": "p", "assets/minecraft/sounds.json": JSON.stringify({ "random.click": { sounds: ["custom/boop"] } }),
+    "assets/minecraft/sounds/custom/boop.ogg": "ogg",
+  };
+  await store.putPack({ name: "p.zip", kind: "zip", blob: new Blob([makeZip(files)]) });
+  const r = await applyPacks(["p.zip"], store);
+  assert.equal(r.sounds, 1);
+  const o = await store.getOverrides();
+  assert.equal(o.get("/media/1.7.10/blocks/lava_still.png.mcmeta").missing, true);
+  assert.equal(o.get("/media/1.7.10/blocks/lava_still.png.mcmeta").blob, null);
+  assert.ok(o.get("/audio/1.7.10/custom/boop.ogg"));
+  assert.ok(o.get("/audio/1.7.10-streams/custom/boop.ogg"));
+  assert.deepEqual((await store.getMeta("sounds")).files, ["custom/boop"]);
+  assert.deepEqual((await store.getMeta("textures")).hidden, ["/media/1.7.10/blocks/lava_still.png.mcmeta"]);
+  assert.equal(o.has("/audio/1.7.10/sounds.json"), false);
+});
+test("deleteStoredPack removes the pack and drops it from the selection", async () => {
+  const store = memoryStore();
+  await store.putPack({ name: "a", kind: "folder", files: {} });
+  await store.putPack({ name: "b", kind: "folder", files: {} });
+  assert.deepEqual(await deleteStoredPack(store, "a", ["a", "b"]), ["b"]);
+  assert.deepEqual(await store.listPacks(), ["b"]);
+  assert.deepEqual(await deleteStoredPack(store, "zzz", ["b"]), ["b"]);
+});
+test("pack lang layers restore the keys a later selection no longer sets", () => {
+  const lang = { "gui.done": "Done", "gui.back": "Back" };
+  applyLangLayer(lang, { "gui.done": "Low", "extra.key": "E" });
+  assert.deepEqual(lang, { "gui.done": "Low", "gui.back": "Back", "extra.key": "E" });
+  applyLangLayer(lang, { "gui.back": "Zurueck" });
+  assert.deepEqual(lang, { "gui.done": "Done", "gui.back": "Zurueck" });
+  applyLangLayer(lang, {});
+  assert.deepEqual(lang, { "gui.done": "Done", "gui.back": "Back" });
 });

@@ -3,6 +3,8 @@ import { ITEM_CLOCK, createClock, tickClock, clockAngle, CLOCK_FRAMES } from "./
 import { ITEM_FILLED_MAP, ITEM_EMPTY_MAP, mapStore, createEmptyMapData, updateMapData, updateVisiblePlayers, mapCloneResult, mapExtendResult } from "./maps.js";
 import { toOriginal } from "./block-registry.js";
 import { blockLightOpacity } from "./map-colors.js";
+import { onResourcesRefreshed } from "./resource-refresh.js";
+import { versioned } from "./media-version.js";
 
 export function installMapsClockItems(items) {
   items[ITEM_CLOCK] = { id: ITEM_CLOCK, name: "Clock", texture: "clock", stack: 64, color: "#d6a937" };
@@ -23,14 +25,16 @@ let strip = null;
 function loadStrip() {
   if (strip || typeof Image === "undefined") return;
   strip = new Image();
-  strip.src = "/media/1.7.10/items/clock.png";
+  strip.src = versioned("/media/1.7.10/items/clock.png");
 }
+// Resource pack refresh: forget the cut frames and re-read the strip.
+onResourcesRefreshed(() => { strip = null; frameUrls.clear(); });
 export function clockFrameUrl(frame = clockState.frame) {
   loadStrip();
   if (!strip?.complete || !strip.naturalWidth || typeof document === "undefined") return "/media/1.7.10/items/clock.png";
   if (!frameUrls.has(frame)) {
-    const c = document.createElement("canvas"); c.width = c.height = 16;
-    c.getContext("2d").drawImage(strip, 0, frame * 16, 16, 16, 0, 0, 16, 16);
+    const c = document.createElement("canvas"); const f = strip.naturalWidth; c.width = c.height = f; // TextureClock cells are square, as wide as the strip
+    c.getContext("2d").drawImage(strip, 0, frame * f, f, f, 0, 0, f, f);
     const url = c.toDataURL("image/png"); frameUrls.set(frame, url); urlSet.add(url);
   }
   return frameUrls.get(frame);
