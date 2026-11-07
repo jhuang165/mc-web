@@ -3,6 +3,8 @@
 // src/note-jukebox.test.js. The block state, the HUD line, the comparator and the ejection are the original's; the record
 // itself plays through main.js (audio.js playRecord, music.js recordSound) once npm run music:fetch has installed the
 // streams, which the repository does not ship (public/research/music.md).
+import { bitmapHtml } from './bitmap-text.js';
+import { font } from './font-renderer.js';
 import { NBT } from './nbt.js';
 import { nbtGet } from './nbt-get.js';
 import { isDisc, canonicalDisc, discIndex, discOriginal, DISC_ORIGINAL_FIRST, DISC_FIRST, DISC_COUNT, nowPlaying } from './note-jukebox-content.js';
@@ -119,8 +121,8 @@ export function recordLine(upFor, partial, isRecord = true) {
 // The HUD line: a div at the bottom centre (GuiIngame translates to (width / 2, height - 68), text centred at y -4).
 export function createRecordHud(parent) {
   const el = parent.ownerDocument.createElement('div');
-  el.id = 'record-hud';
-  el.style.cssText = 'position:fixed;left:50%;bottom:60px;transform:translateX(-50%);pointer-events:none;white-space:nowrap;font-size:16px;text-shadow:2px 2px #3f3f3f;z-index:4;display:none';
+  el.id = 'record-hud'; el.className = 'mc-text';
+  el.style.cssText = 'position:fixed;left:50%;bottom:calc(30*var(--u,2px));transform:translateX(-50%);pointer-events:none;white-space:nowrap;font-size:calc(8*var(--u,2px));line-height:calc(8*var(--u,2px));z-index:4;display:none';
   parent.appendChild(el);
   const state = { text: '', upFor: 0, record: false };
   const draw = (partial = 0) => {
@@ -128,8 +130,8 @@ export function createRecordHud(parent) {
     const line = recordLine(state.upFor, partial, state.record);
     el.style.display = line.visible ? 'block' : 'none';
     el.style.opacity = String(line.alpha / 255);
-    el.style.color = `#${line.rgb.toString(16).padStart(6, '0')}`;
-    el.textContent = state.text;
+    el.style.setProperty('--c', `#${line.rgb.toString(16).padStart(6, '0')}`); el.style.setProperty('--cs', `#${((line.rgb & 0xfcfcfc) >> 2).toString(16).padStart(6, '0')}`); // FontRenderer shadow colour
+    if (el.dataset.text !== state.text + font.version) { el.dataset.text = state.text + font.version; el.innerHTML = bitmapHtml(state.text, null); }
   };
   return {
     // GuiIngame.setRecordPlayingMessage: the text, 60 ticks, rainbow colour.

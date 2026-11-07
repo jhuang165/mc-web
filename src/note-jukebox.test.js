@@ -343,12 +343,13 @@ test("GuiIngame record text: 60 ticks, alpha and the HSB colour cycle", () => {
 
 test("the record HUD shows 'Now playing: C418 - <name>' and fades after 60 ticks", () => {
   const nodes = [];
-  const el = { style: {}, set textContent(v) { this._t = v; }, get textContent() { return this._t; } };
+  const el = { style: { setProperty() {} }, dataset: {}, innerHTML: "" }; // the line is FontRenderer glyph markup (bitmap-text.js)
   const doc = { createElement: () => el };
   const parent = { ownerDocument: doc, appendChild: (n) => nodes.push(n) };
   const hud = createRecordHud(parent);
   hud.show(DISC_FIRST + 4);
-  assert.equal(el.textContent, "Now playing: C418 - far");
+  assert.equal(hud.state.text, "Now playing: C418 - far");
+  assert.match(el.innerHTML.replace(/<[^>]+>/g, ""), /^Now playing: C418 - far$/);
   assert.equal(el.style.display, "block");
   for (let i = 0; i < 60; i++) hud.tick();
   hud.frame(0);

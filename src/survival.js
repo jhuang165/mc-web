@@ -718,6 +718,7 @@ export class Survival {
     // Entity's Fire NBT tag is a signed short, including negative ignition delay.
     this.fire = Number.isInteger(data.fire) && data.fire >= -32768 && data.fire <= 32767 ? data.fire : 0;
     this.lastDamage = "";
+    this.lastSource = null; this.lastAttacker = null;
     this.broken = 0;
   }
   get creative() {
@@ -838,6 +839,7 @@ export class Survival {
     this.health = Math.max(0, Math.fround(this.health - dealt));
     this.hurtAmount = n;
     this.lastDamage = reason;
+    this.lastSource = source ?? null; this.lastAttacker = from ?? null; // DamageSource.getEntity for the death message (death-messages.js)
     if (fresh) {
       this.hurtTicks = 10;
       this.hurtCount++;

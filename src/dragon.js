@@ -371,5 +371,6 @@ function orbs(total, host) {
 // Boss bar data (BossStatus.setBossStatus(dragon, true) in RenderDragon: name plus health fraction).
 // dragon-renderer.js feeds boss-bar.js with it from animateDragon.
 export function dragonBossStatus(e) {
-  return { name: translate("entity.EnderDragon.name", "Ender Dragon"), fraction: Math.max(0, Math.min(1, e.health / DRAGON_MAX_HEALTH)) };
+  return { name: e.customName || e.CustomName || translate("entity.EnderDragon.name", "Ender Dragon"), // getCommandSenderName: a custom name wins
+    fraction: Math.max(0, Math.min(1, e.health / DRAGON_MAX_HEALTH)) };
 }

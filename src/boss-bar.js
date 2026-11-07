@@ -20,12 +20,14 @@ export function barFrame() {
   return { width: BAR.width, fill: Math.trunc(f(status.healthScale * BAR.scale)), name: status.name, y: BAR.y, nameY: BAR.nameY };
 }
 export function clearBossStatus() { status.length = 0; status.name = null; }
+import { bitmapHtml } from "./bitmap-text.js";
+import { font } from "./font-renderer.js";
 let el = null, started = false;
 function build() {
   const style = document.createElement("style");
   const icons = "url('/media/1.7.10/gui/icons.png') no-repeat";
   style.textContent = `#boss-bar{position:fixed;left:50%;top:calc(2*var(--u,2px));transform:translateX(-50%);width:calc(182*var(--u,2px));pointer-events:none;z-index:4;text-align:center;image-rendering:pixelated;display:none;color:#fff;font-family:Minecraft,monospace;text-shadow:calc(1*var(--u,2px)) calc(1*var(--u,2px)) 0 #3f3f3f}
-#boss-bar .boss-name{height:calc(10*var(--u,2px));line-height:calc(8*var(--u,2px));font-size:calc(8*var(--u,2px))}
+#boss-bar .boss-name{white-space:pre;height:calc(10*var(--u,2px));line-height:calc(8*var(--u,2px));font-size:calc(8*var(--u,2px))}
 #boss-bar .boss-track,#boss-bar .boss-fill{height:calc(5*var(--u,2px));background:${icons} 0 calc(-74*var(--u,2px))/calc(256*var(--u,2px)) calc(256*var(--u,2px))}
 #boss-bar .boss-fill{background-position:0 calc(-79*var(--u,2px));max-width:calc(183/182*100%)}`;
   document.head.append(style);
@@ -40,7 +42,7 @@ function loop() {
   if (!el) { if (!frame) return; build(); }
   if (!frame) { el.style.display = "none"; return; }
   el.style.display = "block";
-  el.firstChild.textContent = frame.name;
+  if (el.firstChild.dataset.name !== frame.name + font.version) { el.firstChild.dataset.name = frame.name + font.version; el.firstChild.innerHTML = bitmapHtml(frame.name, 0xffffff); } // GuiIngame draws the name with drawStringWithShadow
   el.lastChild.firstChild.style.width = frame.fill / BAR.width * 100 + "%";
 }
 // Starts the draw loop once (browser only).

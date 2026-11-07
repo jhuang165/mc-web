@@ -83,5 +83,5 @@ export function animateWither(r, e, pose, partial = 0) {
   shellFrame.visible = armored(e.health);
   const [sx, sy] = armorScroll(pose.age);
   armor.uniforms.scroll.value.set(sx, sy);
-  if (e.health > 0) setBossStatus({ health: e.health, maxHealth: 300 }, translate("entity.WitherBoss.name", "Wither"), false);
+  if (e.health > 0) setBossStatus({ health: e.health, maxHealth: 300 }, e.customName || e.CustomName || translate("entity.WitherBoss.name", "Wither"), false) // getCommandSenderName: a custom name wins;
 }
