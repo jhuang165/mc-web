@@ -16,6 +16,7 @@
 //   (yaw is e.rotationYaw, Java degrees)
 //   host.hurt(e, amount, source)   livingHurt for the dragon (base attackEntityFrom: hurt window)
 import { mhSin, mhCos } from "./lighting.js";
+import { translate } from "./lang.js";
 
 const f = Math.fround;
 const PI_F = f(Math.PI);
@@ -370,5 +371,5 @@ function orbs(total, host) {
 // Boss bar data (BossStatus.setBossStatus(dragon, true) in RenderDragon: name plus health fraction).
 // dragon-renderer.js feeds boss-bar.js with it from animateDragon.
 export function dragonBossStatus(e) {
-  return { name: "Ender Dragon", fraction: Math.max(0, Math.min(1, e.health / DRAGON_MAX_HEALTH)) };
+  return { name: translate("entity.EnderDragon.name", "Ender Dragon"), fraction: Math.max(0, Math.min(1, e.health / DRAGON_MAX_HEALTH)) };
 }

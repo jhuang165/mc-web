@@ -9,6 +9,7 @@
 // villager-trading-live.md); native would still call it a result for the villager's yes sound, so that
 // decision is kept separately.
 import { Container, Slot, copyStack } from "./inventory.js";
+import { containerTitle } from "./container-names.js";
 import { liveStackToNative, nativeStackToLive } from "./anvil-container.js";
 import { findMatchingOffer, isOfferDisabled } from "./villager-trading.js";
 
@@ -235,7 +236,7 @@ export function offerItemAt(view, x, y) {
 }
 // The merchant screen's static decorations; main.js fills the item icons through renderMerchantView.
 export const merchantDecorationsHtml = () =>
-  '<span class="merchant-bag-label">Inventory</span>' +
+  `<span class="merchant-bag-label">${containerTitle("Inventory")}</span>` +
   '<i class="merchant-cross" data-merchant-cross="0" hidden></i><i class="merchant-cross" data-merchant-cross="1" hidden></i>' +
   ["buy", "buyB", "sell"].map((k) => `<span class="merchant-offer" data-merchant-offer="${k}"></span>`).join("") +
   '<button class="merchant-step next" data-merchant-step="1" aria-label="Next trade" disabled></button><button class="merchant-step previous" data-merchant-step="-1" aria-label="Previous trade" disabled></button>';

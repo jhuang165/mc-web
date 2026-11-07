@@ -6,6 +6,7 @@
 // Browser stack fields (no NBT writer is needed for gameplay; region-export/import map them to Explosion/Fireworks):
 //   star:   stack.explosion = { type, colors:[int], fade:[int], flicker, trail }            (NBT "Explosion")
 //   rocket: stack.fireworks = { flight (byte or undefined), explosions:[explosion] }        (NBT "Fireworks")
+import { translate } from './lang.js';
 export const ITEM_FIREWORK_STAR = 2070; // original item 402 (ItemFireworkCharge)
 export const ITEM_FIREWORK_ROCKET = 2071; // original item 401 (ItemFirework)
 export const FIREWORK_ITEMS = Object.freeze({ 402: ITEM_FIREWORK_STAR, 401: ITEM_FIREWORK_ROCKET });
@@ -20,9 +21,19 @@ export const registerSkullItem = (id) => { SKULL_ITEM_IDS.add(id); };
 export const DYE_COLORS = Object.freeze([1973019, 11743532, 3887386, 5320730, 2437522, 8073150, 2651799, 11250603, 4408131, 14188952, 4312372, 14602026, 6719955, 12801229, 15435844, 15790320]);
 // Lang strings item.fireworksCharge.* (en_US.lang): ItemDye.field_150923_a order.
 export const DYE_NAMES = Object.freeze(['Black', 'Red', 'Green', 'Brown', 'Blue', 'Purple', 'Cyan', 'Light Gray', 'Gray', 'Pink', 'Lime', 'Yellow', 'Light Blue', 'Magenta', 'Orange', 'White']);
+// en_US key suffixes of the same list (item.fireworksCharge.<suffix>; ItemDye.field_150923_a, probed per dye in lang-keys-reference.json).
+export const DYE_KEYS = Object.freeze(['black', 'red', 'green', 'brown', 'blue', 'purple', 'cyan', 'silver', 'gray', 'pink', 'lime', 'yellow', 'lightBlue', 'magenta', 'orange', 'white']);
 export const SHAPE_NAMES = Object.freeze(['Small Ball', 'Large Ball', 'Star-shaped', 'Creeper-shaped', 'Burst']);
 export const LANG = Object.freeze({ flight: 'Flight Duration:', fadeTo: 'Fade to', flicker: 'Twinkle', trail: 'Trail', custom: 'Custom', unknownShape: 'Unknown Shape',
   star: 'Firework Star', rocket: 'Firework Rocket' });
+// Selected-language text of the tooltip strings (item.fireworks.flight, item.fireworksCharge.*); English stays the fallback.
+const FW = 'item.fireworksCharge.';
+const T = {
+  flight: () => translate('item.fireworks.flight', LANG.flight), fadeTo: () => translate(FW + 'fadeTo', LANG.fadeTo),
+  flicker: () => translate(FW + 'flicker', LANG.flicker), trail: () => translate(FW + 'trail', LANG.trail),
+  custom: () => translate(FW + 'customColor', LANG.custom), unknownShape: () => translate(FW + 'type', LANG.unknownShape),
+  shape: (t) => translate(FW + 'type.' + t, SHAPE_NAMES[t]),
+};
 export const STAR_DEFAULT_TINT = 9079434; // ItemFireworkCharge.getColorFromItemStack pass 1 without Colors
 
 // The Explosion compound: Type byte, Colors int[], FadeColors int[], Flicker byte, Trail byte.
@@ -55,15 +66,15 @@ export const makeStar = (explosion) => ({ id: ITEM_FIREWORK_STAR, count: 1, dama
 export const makeRocket = (fireworks) => ({ id: ITEM_FIREWORK_ROCKET, count: 1, damage: 0, ...(fireworks ? { fireworks: normalizeFireworks(fireworks) } : {}) });
 
 // ---- tooltips ----
-const colorName = (c) => { const i = DYE_COLORS.indexOf(c); return i >= 0 ? DYE_NAMES[i] : LANG.custom; };
+const colorName = (c) => { const i = DYE_COLORS.indexOf(c); return i >= 0 ? translate(FW + DYE_KEYS[i], DYE_NAMES[i]) : T.custom(); };
 // ItemFireworkCharge.func_92107_a(NBTTagCompound, List): the lines of one Explosion; `prefix` indents lines 1+.
 export function explosionLines(e, prefix = '') {
   const lines = [], t = e.type;
-  lines.push(t >= 0 && t <= 4 ? SHAPE_NAMES[t] : LANG.unknownShape);
+  lines.push(t >= 0 && t <= 4 ? T.shape(t) : T.unknownShape());
   if (e.colors.length) lines.push(prefix + e.colors.map(colorName).join(', '));
-  if (e.fade.length) lines.push(prefix + LANG.fadeTo + ' ' + e.fade.map(colorName).join(', '));
-  if (e.trail) lines.push(prefix + LANG.trail);
-  if (e.flicker) lines.push(prefix + LANG.flicker);
+  if (e.fade.length) lines.push(prefix + T.fadeTo() + ' ' + e.fade.map(colorName).join(', '));
+  if (e.trail) lines.push(prefix + T.trail());
+  if (e.flicker) lines.push(prefix + T.flicker());
   return lines;
 }
 // ItemFireworkCharge/ItemFirework.addInformation (the star name itself comes from item-names.js).
@@ -72,7 +83,7 @@ export function fireworkLines(stack) {
   if (stack.id === ITEM_FIREWORK_STAR) return stack.explosion ? explosionLines(stack.explosion, '') : [];
   if (stack.id !== ITEM_FIREWORK_ROCKET || !stack.fireworks) return [];
   const lines = [];
-  if (Number.isFinite(stack.fireworks.flight)) lines.push(LANG.flight + ' ' + stack.fireworks.flight);
+  if (Number.isFinite(stack.fireworks.flight)) lines.push(T.flight() + ' ' + stack.fireworks.flight);
   for (const e of stack.fireworks.explosions) lines.push(...explosionLines(e, '  '));
   return lines;
 }

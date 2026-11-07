@@ -1,3 +1,4 @@
+import { translate } from "./lang.js";
 import {POPULATION_CREATIVE} from './population-creative.js';
 // Minecraft Java 1.7.10 creative inventory: CreativeTabs (abt),
 // GuiContainerCreative (bfl), its ContainerCreative (bfm) and CreativeSlot (bfn).
@@ -26,7 +27,8 @@ const TOOL_BOOKS = books(maxLevelBooks(["digger", "fishing_rod", "breakable"]));
 const COMBAT_BOOKS = books(maxLevelBooks(["armor", "armor_feet", "armor_head", "armor_legs", "armor_torso", "bow", "weapon"]));
 const SEARCH_BOOKS = books(allLevelBooks());
 export const entryId = (e) => (Array.isArray(e) ? e[0] : e);
-const tab = (index, label, name, icon, items, extra = {}) => ({ index, label, name, icon, items, column: index % 6, topRow: index < 6, background: "items.png", scrollbar: true, title: true, ...extra });
+// `name` is the tab text of the selected language (itemGroup.<label>, CreativeTabs.getTranslatedTabLabel, probed in lang-keys-reference.json).
+const tab = (index, label, name, icon, items, extra = {}) => ({ index, label, get name() { return translate(`itemGroup.${label}`, name); }, icon, items, column: index % 6, topRow: index < 6, background: "items.png", scrollbar: true, title: true, ...extra });
 // Game item IDs in original order; icons are the tab's getIconItemStack.
 export const CREATIVE_TABS = [
   tab(0, "buildingBlocks", "Building Blocks", { id: 8 }, [3, 1, 2, 12, 7, 11, 6, 25, 18, 16, 15, 4, 9, ...WOOLS, 27, 26, 8, 21, 22, 17, 28, ICE, 23, 24, 40]),

@@ -2,6 +2,7 @@
 // (public/research/beacon.md): the screen's local primary/secondary picks are sent on Confirm (MC|Beacon).
 import { BEACON_TIERS, PAYMENT_ITEMS } from './pyramid.js';
 import { POTION_TYPES } from './potions.js';
+import { translate } from './lang.js';
 
 export const BEACON_GUI = Object.freeze({ width: 230, height: 219 });
 // Button sprite columns on the sheet row at v = 219: normal, selected, disabled, hover (GuiBeacon.a).
@@ -29,11 +30,11 @@ const button = (b, selected, attrs, inner) =>
 
 // The local state: `levels` from the tile, `primary`/`secondary` the picks; `payment` whether slot 0 holds an item.
 export function beaconDecorationsHtml() {
-  return '<span class="beacon-label" style="left:calc(62*var(--u))">Primary Power</span><span class="beacon-label" style="left:calc(169*var(--u))">Secondary Power</span><div id="beacon-ui"></div>';
+  return `<span class="beacon-label" style="left:calc(62*var(--u))">${translate("tile.beacon.primary", "Primary Power")}</span><span class="beacon-label" style="left:calc(169*var(--u))">${translate("tile.beacon.secondary", "Secondary Power")}</span><div id="beacon-ui"></div>`;
 }
 export function beaconUiHtml({ levels, primary, secondary, payment, icon }) {
   if (levels < 0) return '';
-  const name = (id, tier) => POTION_TYPES[id]?.name + (tier === 3 && id !== 10 ? ROMAN : '');
+  const name = (id, tier) => (POTION_TYPES[id] ? translate(POTION_TYPES[id].key, POTION_TYPES[id].name) : undefined) + (tier === 3 && id !== 10 ? ROMAN : '');
   let html = '';
   for (const b of powerButtons(levels)) {
     html += button(b, b.id === primary, `data-beacon="power" data-tier="${b.tier}" data-id="${b.id}" title="${name(b.id, b.tier)}"`, `<i class="beacon-effect" style="${iconPos(POTION_TYPES[b.id].icon)}"></i>`);
@@ -42,8 +43,8 @@ export function beaconUiHtml({ levels, primary, secondary, payment, icon }) {
     html += button(b, b.id === secondary, `data-beacon="power" data-tier="3" data-id="${b.id}" title="${name(b.id, 3)}"`, `<i class="beacon-effect" style="${iconPos(POTION_TYPES[b.id].icon)}"></i>`);
   }
   const confirm = { x: 164, y: 107, disabled: !(payment && primary > 0) };
-  html += button(confirm, false, 'data-beacon="confirm" title="Done"', '<i class="beacon-mark" style="--mx:90"></i>');
-  html += button({ x: 190, y: 107, disabled: false }, false, 'data-beacon="cancel" title="Cancel"', '<i class="beacon-mark" style="--mx:112"></i>');
+  html += button(confirm, false, `data-beacon="confirm" title="${translate("gui.done", "Done")}"`, '<i class="beacon-mark" style="--mx:90"></i>');
+  html += button({ x: 190, y: 107, disabled: false }, false, `data-beacon="cancel" title="${translate("gui.cancel", "Cancel")}"`, '<i class="beacon-mark" style="--mx:112"></i>');
   // Payment items drawn at (42, 109), (64, 109), (86, 109), (108, 109): emerald, diamond, gold ingot, iron ingot.
   [367, 303, 304, 302].forEach((id, i) => { html += `<span class="beacon-pay" style="left:calc(${42 + i * 22}*var(--u));top:calc(109*var(--u))">${icon(id)}</span>`; });
   return html;

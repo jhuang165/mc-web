@@ -1,0 +1,353 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "method": "tools/probes/KeyTraceProbe.java: StatCollector.translator (dd.a) replaced by a de whose map answers '<key>' for every key; tabs from CreativeTabs.creativeTabArray, tooltips from ItemFirework/ItemFireworkCharge.addInformation (section signs shown as &). 'bytecode' lists keys read with javap -c -constants (not probed). 'values' are the en_US.lang values of every key recorded.",
+ "tabs": [
+  {
+   "index": 0,
+   "label": "buildingBlocks",
+   "key": "itemGroup.buildingBlocks"
+  },
+  {
+   "index": 1,
+   "label": "decorations",
+   "key": "itemGroup.decorations"
+  },
+  {
+   "index": 2,
+   "label": "redstone",
+   "key": "itemGroup.redstone"
+  },
+  {
+   "index": 3,
+   "label": "transportation",
+   "key": "itemGroup.transportation"
+  },
+  {
+   "index": 4,
+   "label": "misc",
+   "key": "itemGroup.misc"
+  },
+  {
+   "index": 5,
+   "label": "search",
+   "key": "itemGroup.search"
+  },
+  {
+   "index": 6,
+   "label": "food",
+   "key": "itemGroup.food"
+  },
+  {
+   "index": 7,
+   "label": "tools",
+   "key": "itemGroup.tools"
+  },
+  {
+   "index": 8,
+   "label": "combat",
+   "key": "itemGroup.combat"
+  },
+  {
+   "index": 9,
+   "label": "brewing",
+   "key": "itemGroup.brewing"
+  },
+  {
+   "index": 10,
+   "label": "materials",
+   "key": "itemGroup.materials"
+  },
+  {
+   "index": 11,
+   "label": "inventory",
+   "key": "itemGroup.inventory"
+  }
+ ],
+ "tooltips": [
+  {
+   "name": "star-small",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.red>"
+   ]
+  },
+  {
+   "name": "star-large-fade",
+   "lines": [
+    "<item.fireworksCharge.type.1>",
+    "<item.fireworksCharge.customColor>",
+    "<item.fireworksCharge.fadeTo> <item.fireworksCharge.red>, <item.fireworksCharge.customColor>",
+    "<item.fireworksCharge.trail>",
+    "<item.fireworksCharge.flicker>"
+   ]
+  },
+  {
+   "name": "star-star-multi",
+   "lines": [
+    "<item.fireworksCharge.type.2>",
+    "<item.fireworksCharge.red>, <item.fireworksCharge.green>, <item.fireworksCharge.blue>",
+    "<item.fireworksCharge.flicker>"
+   ]
+  },
+  {
+   "name": "star-creeper-trail",
+   "lines": [
+    "<item.fireworksCharge.type.3>",
+    "<item.fireworksCharge.customColor>",
+    "<item.fireworksCharge.trail>"
+   ]
+  },
+  {
+   "name": "star-burst",
+   "lines": [
+    "<item.fireworksCharge.type.4>",
+    "<item.fireworksCharge.red>"
+   ]
+  },
+  {
+   "name": "star-unknown-type",
+   "lines": [
+    "<item.fireworksCharge.type>",
+    "<item.fireworksCharge.red>"
+   ]
+  },
+  {
+   "name": "star-no-colors",
+   "lines": [
+    "<item.fireworksCharge.type.1>"
+   ]
+  },
+  {
+   "name": "star-bare",
+   "lines": []
+  },
+  {
+   "name": "rocket-bare",
+   "lines": []
+  },
+  {
+   "name": "rocket-flight-2",
+   "lines": [
+    "<item.fireworks.flight> 2"
+   ]
+  },
+  {
+   "name": "rocket-one",
+   "lines": [
+    "<item.fireworks.flight> 1",
+    "<item.fireworksCharge.type.1>",
+    "  <item.fireworksCharge.red>"
+   ]
+  },
+  {
+   "name": "rocket-two",
+   "lines": [
+    "<item.fireworks.flight> 3",
+    "<item.fireworksCharge.type.0>",
+    "  <item.fireworksCharge.red>",
+    "  <item.fireworksCharge.fadeTo> <item.fireworksCharge.customColor>",
+    "  <item.fireworksCharge.trail>",
+    "<item.fireworksCharge.type.4>",
+    "  <item.fireworksCharge.red>, <item.fireworksCharge.green>, <item.fireworksCharge.blue>",
+    "  <item.fireworksCharge.flicker>"
+   ]
+  },
+  {
+   "name": "dye-0",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.black>"
+   ]
+  },
+  {
+   "name": "dye-1",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.red>"
+   ]
+  },
+  {
+   "name": "dye-2",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.green>"
+   ]
+  },
+  {
+   "name": "dye-3",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.brown>"
+   ]
+  },
+  {
+   "name": "dye-4",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.blue>"
+   ]
+  },
+  {
+   "name": "dye-5",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.purple>"
+   ]
+  },
+  {
+   "name": "dye-6",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.cyan>"
+   ]
+  },
+  {
+   "name": "dye-7",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.silver>"
+   ]
+  },
+  {
+   "name": "dye-8",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.gray>"
+   ]
+  },
+  {
+   "name": "dye-9",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.pink>"
+   ]
+  },
+  {
+   "name": "dye-10",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.lime>"
+   ]
+  },
+  {
+   "name": "dye-11",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.yellow>"
+   ]
+  },
+  {
+   "name": "dye-12",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.lightBlue>"
+   ]
+  },
+  {
+   "name": "dye-13",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.magenta>"
+   ]
+  },
+  {
+   "name": "dye-14",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.orange>"
+   ]
+  },
+  {
+   "name": "dye-15",
+   "lines": [
+    "<item.fireworksCharge.type.0>",
+    "<item.fireworksCharge.white>"
+   ]
+  }
+ ],
+ "bytecode": {
+  "bez.b (GuiBeacon.drawGuiContainerForegroundLayer)": [
+   "tile.beacon.primary",
+   "tile.beacon.secondary"
+  ],
+  "bfb (GuiBeacon$ConfirmButton)": [
+   "gui.done"
+  ],
+  "bfa (GuiBeacon$CancelButton)": [
+   "gui.cancel"
+  ],
+  "bfc (GuiBeacon$PowerButton: translate(Potion.getName()) + ' II' for tier 3 except regeneration)": [
+   "potion.*"
+  ],
+  "bfv (GuiMerchant: title and bag label)": [
+   "entity.Villager.name",
+   "container.inventory"
+  ],
+  "wi.b_ (EntityHorse.getCommandSenderName by type 0..4)": [
+   "entity.horse.name",
+   "entity.donkey.name",
+   "entity.mule.name",
+   "entity.zombiehorse.name",
+   "entity.skeletonhorse.name"
+  ],
+  "sa.b_ (Entity.getCommandSenderName: 'entity.' + EntityList.getEntityString + '.name')": [
+   "entity.EnderDragon.name",
+   "entity.WitherBoss.name"
+  ]
+ },
+ "values": {
+  "container.inventory": "Inventory",
+  "entity.EnderDragon.name": "Ender Dragon",
+  "entity.Villager.name": "Villager",
+  "entity.WitherBoss.name": "Wither",
+  "entity.donkey.name": "Donkey",
+  "entity.horse.name": "Horse",
+  "entity.mule.name": "Mule",
+  "entity.skeletonhorse.name": "Skeleton Horse",
+  "entity.zombiehorse.name": "Zombie Horse",
+  "gui.cancel": "Cancel",
+  "gui.done": "Done",
+  "item.fireworks.flight": "Flight Duration:",
+  "item.fireworksCharge.black": "Black",
+  "item.fireworksCharge.blue": "Blue",
+  "item.fireworksCharge.brown": "Brown",
+  "item.fireworksCharge.customColor": "Custom",
+  "item.fireworksCharge.cyan": "Cyan",
+  "item.fireworksCharge.fadeTo": "Fade to",
+  "item.fireworksCharge.flicker": "Twinkle",
+  "item.fireworksCharge.gray": "Gray",
+  "item.fireworksCharge.green": "Green",
+  "item.fireworksCharge.lightBlue": "Light Blue",
+  "item.fireworksCharge.lime": "Lime",
+  "item.fireworksCharge.magenta": "Magenta",
+  "item.fireworksCharge.orange": "Orange",
+  "item.fireworksCharge.pink": "Pink",
+  "item.fireworksCharge.purple": "Purple",
+  "item.fireworksCharge.red": "Red",
+  "item.fireworksCharge.silver": "Light Gray",
+  "item.fireworksCharge.trail": "Trail",
+  "item.fireworksCharge.type": "Unknown Shape",
+  "item.fireworksCharge.type.0": "Small Ball",
+  "item.fireworksCharge.type.1": "Large Ball",
+  "item.fireworksCharge.type.2": "Star-shaped",
+  "item.fireworksCharge.type.3": "Creeper-shaped",
+  "item.fireworksCharge.type.4": "Burst",
+  "item.fireworksCharge.white": "White",
+  "item.fireworksCharge.yellow": "Yellow",
+  "itemGroup.brewing": "Brewing",
+  "itemGroup.buildingBlocks": "Building Blocks",
+  "itemGroup.combat": "Combat",
+  "itemGroup.decorations": "Decoration Blocks",
+  "itemGroup.food": "Foodstuffs",
+  "itemGroup.inventory": "Survival Inventory",
+  "itemGroup.materials": "Materials",
+  "itemGroup.misc": "Miscellaneous",
+  "itemGroup.redstone": "Redstone",
+  "itemGroup.search": "Search Items",
+  "itemGroup.tools": "Tools",
+  "itemGroup.transportation": "Transportation",
+  "tile.beacon.primary": "Primary Power",
+  "tile.beacon.secondary": "Secondary Power"
+ }
+}

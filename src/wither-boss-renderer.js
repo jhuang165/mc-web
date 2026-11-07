@@ -9,6 +9,7 @@ import { FOG_PARS } from "./light-material.js";
 import { mhCos } from "./lighting.js";
 import { witherTexture, witherScale, armored } from "./wither-boss.js";
 import { setBossStatus, startBossBar } from "./boss-bar.js";
+import { translate } from "./lang.js";
 const RAD = 1 / 57.3, f = Math.fround;
 export const WITHER_TEXTURES = { wither: "/media/1.7.10/entity/wither/wither.png", wither_invulnerable: "/media/1.7.10/entity/wither/wither_invulnerable.png" };
 const WITHER_LIGHT = 15728880; // xc.c(float): fullbright
@@ -79,5 +80,5 @@ export function animateWither(r, e, pose, partial = 0) {
   const shown = armored(e.health) && invul <= 0;
   for (const m of shell) m.visible = shown;
   armor.uniforms.scroll.value.set(Math.cos(age * 0.02) * 3, age * 0.01);
-  if (e.health > 0) setBossStatus({ health: e.health, maxHealth: 300 }, "Wither", false);
+  if (e.health > 0) setBossStatus({ health: e.health, maxHealth: 300 }, translate("entity.WitherBoss.name", "Wither"), false);
 }
