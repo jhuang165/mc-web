@@ -166,7 +166,12 @@ import { WitchPotions } from "./witch-potions.js";
 import {impactPlayerPearl} from './pearl-player.js';
 import { Arrows, arrowTargets, bowStage, bowFov, easeFov, ARROW } from "./bow.js";
 import { canSeeSky } from "./weather.js";
-import { Fluids, eyeInWater } from "./fluids.js";
+import { Fluids, eyeInWater, viewpointBlock } from "./fluids.js";
+import { ScreenOverlays } from "./screen-overlays.js";
+import { clientInsideOpaque, insideOverlayBlock, playerBrightness, worldFov, entityFizz } from "./fire-fx.js";
+import { insideOpaqueBlock } from "./suffocation.js";
+import { BRIGHTNESS } from "./lighting.js";
+import { getRespiration } from "./enchantments.js";
 import { Fire } from "./fire.js";
 import { difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.js";
 import { isInvisible } from "./mob-effects.js";
@@ -393,6 +398,7 @@ let primed = [];
 let populationBlocks, netherLive;
 let sounds,
   firstPerson,
+  screenOverlays,
   mobs,
   mobRenderer,
   chestRenderer,
@@ -2433,7 +2439,8 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
       }
       potionParticles(scene.fx, { x: position.x, y: posY, z: position.z, yOffset: Math.fround(PHYSICS.eye), width: PHYSICS.width, height: PHYSICS.height }, potionColor(survival.effects.active.values()), playerRandom, { invisible: survival.effects.has(INVISIBILITY) });
     },
-    fizz: () => sounds.play("random.fizz", { volume: 0.7, pitch: 1.6 + (Math.random() - Math.random()) * 0.4 }),
+    // Entity.moveEntity: playSoundAtEntity(random.fizz, 0.7, 1.6 + (r - r) * 0.4) at the player (fire-fx.js entityFizz).
+    fizz: () => { const s = entityFizz(Math.random); sounds.play(s.name, { volume: s.volume, pitch: s.pitch, position: { x: position.x, y: position.y, z: position.z } }); },
   });
   // Scheduled sand and gravel updates and the falling-block entities (WorldServer.tick).
   if (falling) {
@@ -3668,10 +3675,11 @@ function animate(now) {
   scene.particleView = { yaw, pitch, mirror: thirdPersonView === 2 };
   // EntityRenderer's potion terms (potion-fx.js): Night Vision / Blindness durations, the Nausea warp amount and the player's feet height.
   const potionEffects = screen === "home" ? null : survival?.effects;
-  scene.potionView = potionEffects ? { nightVision: potionEffects.get(NIGHT_VISION)?.duration ?? 0, blindness: potionEffects.get(BLINDNESS)?.duration ?? 0, nausea: potionEffects.has(NAUSEA), warp: portalTimer.amount(partial), feetY: position.y, eyeY: position.y + PHYSICS.eye, creative: survival.mode === "creative" } : null;
+  scene.potionView = potionEffects ? { nightVision: potionEffects.get(NIGHT_VISION)?.duration ?? 0, blindness: potionEffects.get(BLINDNESS)?.duration ?? 0, waterBreathing: potionEffects.has(13), respiration: getRespiration(survival.inventory.armor), nausea: potionEffects.has(NAUSEA), warp: portalTimer.amount(partial), feetY: position.y, eyeY: position.y + PHYSICS.eye, creative: survival.mode === "creative" } : null;
   scene.setShadows(screen === "home" ? [] : shadowCasters(scene.dropPartial), { x: position.x, y: position.y + PHYSICS.eye, z: position.z });
   // EntityRenderer.getFOVModifier multiplies the field of view by the eased modifier.
-  const fov = options.fov * (bowFovState.prev + (bowFovState.cur - bowFovState.prev) * partial);
+  // getFOVModifier: x 60 / 70 while the view block is water (fire-fx.js worldFov).
+  const fov = worldFov(options.fov * (bowFovState.prev + (bowFovState.cur - bowFovState.prev) * partial), viewpointBlock(world, scene.camera.position.x, scene.camera.position.y, scene.camera.position.z) === 10);
   if (Math.abs(scene.camera.fov - fov) > 1e-9) {
     scene.camera.fov = fov;
     scene.camera.updateProjectionMatrix();
@@ -3696,6 +3704,16 @@ function animate(now) {
       map: survival.held?.id === ITEM_FILLED_MAP ? { data: mapStore.get(survival.held.damage | 0) } : null, // ItemRenderer's map branch
       pitchDeg: -pitch / (Math.PI / 180),
     });
+  // ItemRenderer.renderOverlays (fire-fx.js, screen-overlays.js): fire, the inside-of-block darkening and the water tint, over the hand.
+  if (screenOverlays && screen !== "home" && ["playing", "inventory", "paused"].includes(screen)) {
+    const eye = playerEye(), posY = position.y + PHYSICS.eye, inside = clientInsideOpaque(insideOpaqueBlock, world, position.x, posY, position.z, 0.6, bedSleep.sleeping);
+    screenOverlays.render({
+      burning: survival.fire > 0, thirdPerson: thirdPersonView, sleeping: bedSleep.sleeping, inWater: clientEyeInWater(), viewInWater: viewpointBlock(world, scene.camera.position.x, scene.camera.position.y, scene.camera.position.z) === 10,
+      insideBlock: inside ? insideOverlayBlock((x, y, z) => world.get(x, y, z), position.x, posY, position.z, 0.6, 1.8) : 0,
+      brightness: playerBrightness((x, y, z) => scene.light.level(x, y, z, scene.subtracted), BRIGHTNESS, position.x, position.y, position.z, 1.8, !!scene.light),
+      yawDeg: eye.yaw, pitchDeg: eye.pitch, tick: elapsed * 20, aspect: innerWidth / innerHeight,
+    });
+  }
   if (screen !== "home") scene.endFrame(); // post shaders / anaglyph merge, after the hand
 }
 // Entities that cast a shadow, as Java positions: an item's posY is 0.125
@@ -3748,6 +3766,7 @@ async function boot(){try {
     },
   );
   firstPerson = new FirstPerson(scene.renderer, scene.textures.texture, scene.lighting);
+  screenOverlays = new ScreenOverlays(scene.renderer, scene.textures.texture);
   mobRenderer = new MobRenderer(scene.scene, scene);
   horseGearRenderer = new HorseGearRenderer(scene.scene);
   playerRenderer = new PlayerRenderer(scene.scene, scene, scene.textures.texture);

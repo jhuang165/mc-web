@@ -161,7 +161,7 @@ export function cloudColor(angle, rain = 0, thunder = 0) {
 }
 // EntityRenderer.updateFogColor. `look` is the view vector, `chunks` the render
 // distance in chunks and `brightness` the smoothed fogColor2/fogColor1 value.
-export function fogColor({ angle, temperature, look, chunks, brightness = 1, underwater = false, lava = false, rain = 0, thunder = 0, lightning = 0, partial = 0, provider = null }) {
+export function fogColor({ angle, temperature, look, chunks, brightness = 1, underwater = false, lava = false, respiration = 0, rain = 0, thunder = 0, lightning = 0, partial = 0, provider = null }) {
   const d = f(1 - f(Math.pow(f(0.25 + f(f(0.75 * chunks) / 16)), 0.25))),
     sky = skyColor(temperature, angle, rain, thunder, lightning, partial);
   let fog = provider ?? providerFogColor(angle); // `provider`: the Nether/End getFogColor (dimension-render.js)
@@ -179,7 +179,7 @@ export function fogColor({ angle, temperature, look, chunks, brightness = 1, und
   // thunder darkens all three by half of its strength. The water and lava colours replace this.
   if (rain > 0) fog = [f(fog[0] * f(1 - f(rain * f(0.5)))), f(fog[1] * f(1 - f(rain * f(0.5)))), f(fog[2] * f(1 - f(rain * f(0.4))))];
   if (thunder > 0) fog = fog.map((c) => f(c * f(1 - f(thunder * f(0.5)))));
-  if (underwater) fog = [f(0.02), f(0.02), f(0.2)];
+  if (underwater) { const g = f(f(respiration) * f(0.2)); fog = [f(f(0.02) + g), f(f(0.02) + g), f(f(0.2) + g)]; } // + Respiration x 0.2
   else if (lava) fog = [f(0.6), f(0.1), 0];
   return fog.map((c) => f(c * brightness));
 }

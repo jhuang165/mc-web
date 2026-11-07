@@ -92,6 +92,8 @@ export function tickLivingSimulation(state, hooks = {}) {
     }
   }
   for (const event of xpOrbs.sounds.splice(0)) orbSound(event);
+  // EntityItem in lava and fire/rain (item-entities.js) queues random.fizz the same way an orb does; it was never drained.
+  for (const event of items?.sounds?.splice(0) ?? []) orbSound(event);
   drainMobEvents({ mobs, xpOrbs, items }, { sound, explode, eatGrass, doorUpdate, blockEdit, push });
   // Player knockback queued by this tick's hits (survival.damage with a source entity; arrows and fireballs tick earlier or later).
   knock(survival);

@@ -47,6 +47,7 @@ import { anvilModelBoxes } from './anvil-block.js';
 import { isStair, stairBoxes } from './stairs.js';
 import { BED_DIR, bedTexture } from './bed.js';
 import { TICKS_PER_SECOND, stripOffset, resolveAnimation, fetchMcmeta } from './texture-animation.js';
+import { LAVA_FOG_DENSITY, waterFogDensity } from "./fire-fx.js";
 import { mediaGeneration, versioned } from './media-version.js';
 import { isDoor, isPane, doorFlags, doorBoundsFor, doorFaceFlip, paneMask, paneArms, paneSideRendered } from './doors-panes.js';
 export { blockTile } from "./block-textures.js";
@@ -1123,13 +1124,13 @@ export class VoxelScene {
       lava = eye === 42,
       // The frame-eased rain, thunder and lightning terms (World.getRainStrength(partial) ...).
       w = this.dimension ? null : this.weather, partial = this.dropPartial, rain = w ? w.rainStrength(partial) : 0, thunder = w ? w.weightedThunder(partial) : 0, lightning = w ? w.lastLightning : 0,
-      fog = fogColor({ angle, temperature: this.temperature ?? biomeTemperature("meadow"), look: [look.x, look.y, look.z], chunks: this.distance / 16, brightness: this.fogBrightness, underwater, lava, rain, thunder, lightning, partial, provider: this.dimension ? providerFog(this.dimension, angle) : null });
+      fog = fogColor({ angle, temperature: this.temperature ?? biomeTemperature("meadow"), look: [look.x, look.y, look.z], chunks: this.distance / 16, brightness: this.fogBrightness, underwater, lava, respiration: this.potionView?.respiration ?? 0, rain, thunder, lightning, partial, provider: this.dimension ? providerFog(this.dimension, angle) : null });
     // potion-fx.js: the void/Blindness/Night Vision terms of updateFogColor, and Blindness' own setupFog branch (it wins over water and lava).
     const pv = this.potionView, blind = pv?.blindness > 0;
     if (pv && (blind || pv.nightVision > 0 || pv.feetY !== undefined || pv.eyeY !== undefined)) fog = adjustFogColor(fog, { feetY: pv.eyeY ?? pv.feetY ?? c.position.y, voidFactor: voidFogYFactor(this.world?.worldType), blindness: pv.blindness, nightVision: pv.nightVision > 0 ? nightVisionBrightness(pv.nightVision, this.dropPartial) : 0 });
     u.fogColor.value.set(...fog);
     // setupFog: linear from 3/4 of the far plane; exponential 0.1 in water, 2.0 in lava.
-    u.fogDensity.value = blind ? 0 : lava ? 2 : underwater ? 0.1 : 0;
+    u.fogDensity.value = blind ? 0 : lava ? LAVA_FOG_DENSITY : underwater ? waterFogDensity({ breathing: pv?.waterBreathing, respiration: pv?.respiration }) : 0;
     const bf = blind ? blindnessFog(pv.blindness, this.distance) : null;
     u.fogNear.value = bf ? bf.start : this.distance * 0.75;
     u.fogFar.value = bf ? bf.end : this.distance;

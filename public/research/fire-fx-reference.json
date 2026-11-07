@@ -1,0 +1,22 @@
+{
+  "source": "Minecraft 1.7.10 client jar read with javap -p -c -constants (bly ItemRenderer, blt EntityRenderer, sa Entity, yz EntityPlayer, alw BlockLiquid, bma RenderGlobal, rv Potion, acw/acq/xz ignite sites)",
+  "labels": { "bytecodeRead": "constant read from javap output", "probed": "result of running the port in headless Chrome", "assumed": "no bytecode or probe evidence" },
+  "fireOverlay": { "label": "bytecodeRead", "method": "bly.d renderFireInFirstPerson", "alpha": 0.9, "colour": [1, 1, 1, 0.9], "passes": 2, "icon": "BlockFire.getFireIcon(1) (fire_layer_1, animated)", "offsetX": 0.24, "offsetY": -0.3, "yawDegrees": 10, "quad": [-0.5, 0.5], "z": -0.5, "blend": "SRC_ALPHA, ONE_MINUS_SRC_ALPHA" },
+  "waterOverlay": { "label": "bytecodeRead", "method": "bly.c renderWarpedTextureOverlay", "texture": "misc/underwater.png", "alpha": 0.5, "colour": "(b, b, b, 0.5), b = Entity.getBrightness", "quad": [-1, 1], "z": -0.5, "uvScale": 4, "scroll": "-yaw / 64, pitch / 64" },
+  "insideBlockOverlay": { "label": "bytecodeRead", "method": "bly.a(F, Icon) renderInsideOfBlock", "colour": [0.1, 0.1, 0.1, 0.5], "blend": "not enabled, alpha ignored", "side": 2, "quad": [-1, 1], "z": -0.5, "blockPick": "cell at the player, else the last normal cube of 8 corners at +-0.45 width x 0.9 / +-0.1 height x 0.2" },
+  "overlayGates": { "label": "bytecodeRead", "order": ["burning", "insideOpaqueBlock", "water"], "firstPersonOnly": true, "notWhileSleeping": true, "fireResistanceStillDrawsFire": true },
+  "clientEye": { "label": "bytecodeRead", "yOffset": 1.62, "getEyeHeight": 0.12, "note": "client posY is the eye; overlay tests sample posY + 0.12" },
+  "fov": { "label": "bytecodeRead", "hand": 70, "waterFactor": "60 / 70", "near": 0.05 },
+  "fog": { "label": "bytecodeRead", "lavaDensity": 2, "lavaColour": [0.6, 0.1, 0], "waterDensityBase": 0.1, "waterDensityPerRespiration": -0.03, "waterDensityBreathing": 0.05, "waterColour": [0.02, 0.02, 0.2], "waterColourPerRespiration": 0.2 },
+  "sounds": {
+    "label": "bytecodeRead",
+    "entityFizz": { "site": "Entity.moveEntity tail (sa.d)", "name": "random.fizz", "volume": 0.7, "pitch": "1.6 + (r - r) * 0.4", "random": "entity Random" },
+    "punchFizz": { "site": "RenderGlobal.playAuxSFX 1004", "name": "random.fizz", "volume": 0.5, "pitch": "2.6 + (r - r) * 0.8", "at": "cell centre" },
+    "liquidFizz": { "site": "BlockLiquid.func_149799_m (alw.m)", "name": "random.fizz", "volume": 0.5, "pitch": "2.6 + (r - r) * 0.8", "smoke": "8 largesmoke, dropped by the integrated server's WorldManager.spawnParticle" },
+    "lavaItemOrbFizz": { "site": "EntityItem.onUpdate / EntityXPOrb.onUpdate", "name": "random.fizz", "volume": 0.4, "pitch": "2.0 + r * 0.4" },
+    "ignite": { "site": "ItemFlintAndSteel, ItemFireball, EntityCreeper.interact", "name": "fire.ignite", "volume": 1, "pitch": "r * 0.4 + 0.8" },
+    "fireCrackle": { "site": "BlockFire.randomDisplayTick, 1 in 24", "name": "fire.fire", "volume": "1 + r", "pitch": "r * 0.7 + 0.3" },
+    "lavaAmbience": { "site": "BlockLiquid.randomDisplayTick", "names": ["liquid.lava", "liquid.lavapop"] },
+    "burnHurt": "No looping burn sound exists; each fire or lava damage tick is a hurt event (status 2) playing the entity's hurt sound."
+  }
+}
