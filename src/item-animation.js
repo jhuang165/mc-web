@@ -3,7 +3,7 @@
 // rule is texture-animation.js (probed against the original classes). Item icons here are plain <img>/THREE textures, so an
 // animated strip is cut into square frames (data URLs) and the current frame's url is what itemTexture() hands out. The DOM icons
 // are swapped on each client tick (tickItemAnimations, called from MapsClock.tick), the first-person item is rebuilt through
-// the frame tag in its cache key. Dropped items, item frames and third-person held items pick the frame current when they are built.
+// the frame tag in its cache key. Dropped items, item frames, mob held items and the third-person held item rebuild when itemFrameTag changes (cache key), never every frame.
 import { resolveAnimation, fetchMcmeta } from "./texture-animation.js";
 import { versioned, unversioned, mediaGeneration } from "./media-version.js";
 import { onResourcesRefreshed } from "./resource-refresh.js";
@@ -60,7 +60,10 @@ export function animatedItemUrl(url) {
   return entry?.state === "anim" ? currentUrl(entry) : url;
 }
 // Frame index of a url handed out by animatedItemUrl (0 for anything else): part of the held item's cache key.
-export const itemFrameTag = (url) => byData.get(url)?.anim.frame ?? 0;
+export const itemFrameTag = (url) => byData.get(url)?.anim.frame ?? specialTags.get(url) ?? 0;
+// Frame urls of the dynamic clock sprite (maps-clock-live.js): registered so every cache key built with itemFrameTag follows the clock.
+const specialTags = new Map();
+export function registerFrameTag(url, frame) { specialTags.set(url, frame); }
 
 function swapIcons() {
   for (const img of document.querySelectorAll("img.vanilla-item-icon")) {
@@ -82,5 +85,5 @@ export function tickItemAnimations() {
 }
 
 // Pack change: forget every cut frame; the next itemTexture() call reloads under the new generation.
-export function resetItemAnimations() { entries.clear(); byData.clear(); dirty = false; }
+export function resetItemAnimations() { entries.clear(); byData.clear(); specialTags.clear(); dirty = false; }
 onResourcesRefreshed(() => { resetItemAnimations(); });

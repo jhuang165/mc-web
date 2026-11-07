@@ -78,6 +78,17 @@ function drawCompassFrame() {
   compassTexture.needsUpdate = true;
 }
 onResourcesRefreshed((gen) => { if (compassImage) compassImage.src = versioned(COMPASS_STRIP, gen); });
+// Draws strip frame `frame` of compass.png into `canvas` (an item frame's own compass, hanging-renderer.js). False until the strip loads.
+export function drawCompassCell(canvas, frame) {
+  pixelTexture(COMPASS_STATIC); // makes sure the strip image is requested
+  if (!compassImage?.naturalWidth) return false;
+  const f = compassImage.naturalWidth;
+  if (canvas.width !== f) canvas.width = canvas.height = f;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, f, f);
+  ctx.drawImage(compassImage, 0, frame * f, f, f, 0, 0, f, f);
+  return true;
+}
 export function setCompassTextureFrame(frame) {
   if (frame === compassFrame) return;
   compassFrame = frame;

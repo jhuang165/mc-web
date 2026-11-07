@@ -11,7 +11,9 @@
 // Frames holding a map are drawn like any other frame (maps are not implemented).
 import * as THREE from "three";
 import { entityMaterial } from "./light-material.js";
-import { pixelTexture, itemTexture } from "./first-person.js";
+import { pixelTexture, itemTexture, drawCompassCell } from "./first-person.js";
+import { ITEM_COMPASS, itemFrameCompassFrame, compassWorld } from "./compass.js";
+import { compassFrameCount } from "./sprite-frames.js";
 import { itemFrameTag } from "./item-animation.js";
 import { blockTile, tileRect } from "./block-textures.js";
 import { DropRenderer } from "./drop-renderer.js";
@@ -122,7 +124,7 @@ export class HangingRenderer {
   syncItem(r, e) {
     const key = itemKey(e.item);
     if (r.item?.key !== key || r.item?.rotation !== e.rotation) {
-      if (r.item) { r.item.holder.removeFromParent(); r.item.surface?.dispose(); if (r.item.pile) this.drops.remove(r.item.pile); r.item = null; }
+      if (r.item) { r.item.holder.removeFromParent(); r.item.surface?.dispose(); r.item.compass?.texture.dispose(); if (r.item.pile) this.drops.remove(r.item.pile); r.item = null; }
       if (e.item?.id === ITEM_FILLED_MAP) { this.syncMap(r, e, key); return; }
       if (e.item) {
         const stack = { ...e.item, count: 1 }, pile = this.drops.build(stack, 0), sprite = !!itemTexture(stack.id, stack.damage);
@@ -144,8 +146,23 @@ export class HangingRenderer {
         holder.add(turn);
         r.root.add(holder);
         r.item = { key, rotation: e.rotation, pile, holder };
+        if (stack.id === ITEM_COMPASS && pile.material?.uniforms?.map) {
+          // RenderItemFrame sets the shared compass sprite from the frame's own position and facing, so a framed compass has its own texture.
+          const canvas = document.createElement("canvas"), texture = new THREE.CanvasTexture(canvas);
+          canvas.width = canvas.height = 16;
+          texture.magFilter = texture.minFilter = THREE.NearestFilter;
+          pile.material.uniforms.map.value = texture;
+          r.item.compass = { canvas, texture, frame: -1, count: 0 };
+        }
       }
     }
+  }
+
+  // The framed compass: frame from the frame entity's x/z and direction (itemFrameCompassFrame), redrawn only when it changes.
+  syncCompass(c, e) {
+    const count = compassFrameCount(), frame = itemFrameCompassFrame(e.x, e.z, e.dir, compassWorld.spawn, compassWorld.surface, count);
+    if (frame === c.frame && count === c.count) return;
+    if (drawCompassCell(c.canvas, frame)) { c.frame = frame; c.count = count; c.texture.needsUpdate = true; }
   }
 
   // RenderItemFrame.d, filled map: rotate 180 about y and z, scale 1/128, the per-rotation shift, then MapItemRenderer with only
@@ -188,6 +205,7 @@ export class HangingRenderer {
         r.root.position.set(e.tx + (DIR_X[e.dir] ?? 0) + 0.5, e.ty + 0.5, e.tz + (DIR_Z[e.dir] ?? 0) + 0.5);
         r.root.rotation.y = e.yaw * D;
         this.syncItem(r, e);
+        if (r.item?.compass) this.syncCompass(r.item.compass, e);
         const packed = this.view.brightness(e.x, e.y, e.z);
         for (const m of r.materials) m.setLight(packed);
         if (r.item?.surface) { r.item.surface.update(mapStore.get(r.item.map)); r.item.surface.setLight(packed); }
@@ -208,7 +226,7 @@ export class HangingRenderer {
     return this.view.brightness(i + 0.5, j + 0.5, k + 0.5);
   }
   dispose(r) {
-    if (r.item) { r.item.holder.removeFromParent(); r.item.surface?.dispose(); if (r.item.pile) this.drops.remove(r.item.pile); r.item = null; }
+    if (r.item) { r.item.holder.removeFromParent(); r.item.surface?.dispose(); r.item.compass?.texture.dispose(); if (r.item.pile) this.drops.remove(r.item.pile); r.item = null; }
     this.scene.remove(r.root);
     for (const g of r.geometries) g.dispose();
     for (const m of r.materials) m.dispose();

@@ -4,6 +4,7 @@ import { headWearable, headItemMatrix } from "./wearable-heads.js";
 import { ITEM_SKULL as SKULL_ITEM, SKULL_TEXTURES, skullTextureHeight } from "./skull.js";
 import * as THREE from "three";
 import { pixelTexture, itemTexture } from "./first-person.js";
+import { itemFrameTag } from "./item-animation.js";
 import { FISHING_ROD, rodState } from "./fishing-content.js";
 import { entityMaterial } from "./light-material.js";
 import { ITEMS, ARMOR_MATERIALS } from "./survival.js";
@@ -482,7 +483,7 @@ export class PlayerRenderer {
   }
   syncHeld(id, damage = 0, color = undefined, glint = false) {
     const leather = leatherItemLayers(id, color),
-      cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + damage + ":" + (leather?.color ?? 0) + ":" + (glint ? 1 : 0) + ":" + cast;
+      cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + damage + ":" + (leather?.color ?? 0) + ":" + (glint ? 1 : 0) + ":" + cast + ":" + (id ? itemFrameTag(itemTexture(id, damage, cast)) : 0); // animated icon frame (item-animation.js): rebuilt only when it changes
     if (key === this.heldKey) return;
     this.heldKey = key;
     this.heldId = id;

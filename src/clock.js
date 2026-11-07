@@ -20,8 +20,8 @@ export function celestialAngle(worldTime, partial = 1) {
 export const createClock = () => ({ angle: 0, velocity: 0, frame: 0 }); // bql.i, bql.j, bqd.g
 
 // TextureClock.updateAnimation. `angle` is undefined without a world/player (0), the celestial angle on the surface
-// and Math.random() elsewhere. Returns the frame index; `clock.frame` changes only when the texture would be uploaded.
-export function tickClock(clock, angle = 0) {
+// and Math.random() elsewhere. `frames` is the sprite's frame list size (sprite-frames.js; 64 for the vanilla strip). Returns the frame index; `clock.frame` changes only when the texture would be uploaded.
+export function tickClock(clock, angle = 0, frames = CLOCK_FRAMES) {
   let d = angle - clock.angle;
   while (d < -0.5) d += 1;
   while (d >= 0.5) d -= 1;
@@ -29,8 +29,8 @@ export function tickClock(clock, angle = 0) {
   clock.velocity += d * 0.1;
   clock.velocity *= 0.8;
   clock.angle += clock.velocity;
-  let index = Math.trunc((clock.angle + 1) * CLOCK_FRAMES) % CLOCK_FRAMES;
-  if (index < 0) index = (index + CLOCK_FRAMES) % CLOCK_FRAMES;
+  let index = Math.trunc((clock.angle + 1) * frames) % frames;
+  while (index < 0) index = (index + frames) % frames;
   clock.frame = index;
   return index;
 }

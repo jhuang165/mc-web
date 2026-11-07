@@ -72,8 +72,11 @@ export function refreshStyles(gen, doc = document) {
 }
 
 let overlay = null;
-// Whether native refreshResources draws a loading overlay in 1.7.10 was not verified (neither read from bytecode nor probed). The game
-// here keeps rendering while the textures reload and shows a small "Reloading resources..." note until it finishes.
+// Native Minecraft.refreshResources (bao.c, bytecode-read, batch 18) draws nothing: it rebuilds the pack list, runs
+// SimpleReloadableResourceManager.reloadResources (brg.a, logs "Reloading ResourceManager: ...") and the reload listeners
+// synchronously, reloads the language and RenderGlobal.loadRenderers, with no Display.update or splash call (the Mojang logo
+// splash is drawn only while the game starts). GuiScreenResourcePacks then shows its parent screen. So no overlay or note is shown
+// by default; the browser reload is asynchronous, so the frame keeps rendering instead of freezing. `label` is an opt-in note.
 function showNotice(text) {
   if (typeof document === "undefined") return;
   overlay = document.createElement("div");
@@ -85,11 +88,11 @@ function showNotice(text) {
 function hideNotice() { overlay?.remove(); overlay = null; }
 
 let running = null;
-export function refreshResources({ label = "Reloading resources..." } = {}) {
+export function refreshResources({ label = null } = {}) {
   if (running) return running;
   running = (async () => {
     const gen = bumpMediaGeneration();
-    showNotice(label);
+    if (label) showNotice(label);
     try {
       await refreshTextures(gen);
       refreshStyles(gen);
