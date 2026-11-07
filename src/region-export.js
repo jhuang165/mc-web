@@ -29,6 +29,7 @@ import { streamedWorldType } from './java-world.js';
 import { structureDataFiles } from './structure-data.js';
 import { villageDocument } from './village.js';
 import { mapDataFiles } from './maps-nbt.js';
+import { decodeBaseColumn } from './whole-save-columns.js';
 import { javaProjectileToNbt } from './java-projectiles.js';
 import { statsExportFile } from './stats.js';
 import { DEFAULT_RULES } from './game-rules.js';
@@ -233,18 +234,22 @@ function regionSource(record, w) {
   const [x,z]=k.split(',').map(Number),mask=BigInt('0x'+hex);
   for(let i=0;i<64;i++)if(mask&(1n<<BigInt(i)))owned.add(`${x*8+(i>>3)},${z*8+(i&7)}`);
  }
- return {record,w,owned,runtime};
+ return {record,w,owned,runtime,baseId:record.id};
 }
 
-async function exportRegions({record,w,owned,runtime}, files, report, prefix, progress) {
+async function exportRegions({record,w,owned,runtime,baseId,live=false}, files, report, prefix, progress, readBases=null) {
  const ox=w.originX??0,oz=w.originZ??0,regions=new Map();
  const farms=new Map(record.farms??[]),fluidCells=new Set((record.fluidTicks?.entries??[]).map(e=>`${e.x},${e.y},${e.z}:${e.block}`));
  for(const k of [...owned].sort((a,b)=>{const [x,z]=a.split(',').map(Number),[u,v]=b.split(',').map(Number);return x-u||z-v;})) {
-  const [cx,cz]=k.split(',').map(Number),source=w.chunks.get(k),generated=source?null:w.generateTerrainChunk(cx,cz),blocks=source?.blocks??generated.blocks,meta=source?.meta??generated.metadata,ids=new Int16Array(65536),metadata=new Uint8Array(65536),heights=new Int32Array(256),portals=[];
+  const [cx,cz]=k.split(',').map(Number),resident=w.chunks.get(k);
+  // Stored full column of a whole-save import (whole-save-columns.js): the saved cells, biomes and TerrainPopulated flag come back out. A live
+  // world's resident column already holds them (edits included), so only fresh worlds and non-resident columns read the stored record.
+  const stored=readBases&&baseId&&!(live&&resident)?(await readBases(baseId,[[cx,cz]]))[0]:null,base=stored?decodeBaseColumn(stored):null,
+   source=base?{blocks:base.blocks,meta:base.metadata}:resident,generated=source?null:w.generateTerrainChunk(cx,cz),blocks=source?.blocks??generated.blocks,meta=source?.meta??generated.metadata,ids=new Int16Array(65536),metadata=new Uint8Array(65536),heights=new Int32Array(256),portals=[];
   for(let lx=0;lx<16;lx++)for(let lz=0;lz<16;lz++)for(let y=0;y<w.height;y++) {const i=(lx*16+lz)*w.height+y,v=w.chunkEdits.get(k)?.get((lx*16+lz)*256+y),id=v===undefined?blocks[i]:v%4096&255,m=v===undefined?meta[i]:(v%4096)>>8,x=cx*16+lx,z=cz*16+lz,key=`${x},${y},${z}`;
    const o=toOriginal(id,m,{flowing:fluidCells.has(key+':'+id),moisture:farms.get(key),facing:record.player?.chests?.[key]?.facing,lit:(record.player?.furnaces?.[key]?.burn??0)>0});if(!o)throw new Error(`Unmapped block ${id}`);ids[(lx*16+lz)*256+y]=o[0];metadata[(lx*16+lz)*256+y]=o[1];if(id===149)portals.push([x+ox,y,z+oz]);if(lightOpacity(id)>0)heights[lx+lz*16]=y+1;}
-  const chunk=Chunk.fromGeneration(ids,metadata,cx+ox/16,cz+oz/16);chunk.isTerrainPopulated=true;chunk.isLightPopulated=false;chunk.inhabitedTime=typeof record.inhabited==='number'?record.inhabited:0;
-  for(let x=0;x<16;x++)for(let z=0;z<16;z++) {chunk.biomes[x+z*16]=w.biomeAt?.(cx*16+x,cz*16+z)?.id??1;chunk.heightMap[x+z*16]=heights[x+z*16];}
+  const chunk=Chunk.fromGeneration(ids,metadata,cx+ox/16,cz+oz/16);chunk.isTerrainPopulated=base?base.terrainPopulated:true;chunk.isLightPopulated=false;chunk.inhabitedTime=typeof record.inhabited==='number'?record.inhabited:0;
+  for(let x=0;x<16;x++)for(let z=0;z<16;z++) {chunk.biomes[x+z*16]=base?.biomes?base.biomes[x+z*16]:w.biomeAt?.(cx*16+x,cz*16+z)?.id??1;chunk.heightMap[x+z*16]=heights[x+z*16];}
   const blockAt=(x,y,z)=>chunk.getBlock(x&15,y,z&15);
   const document=chunkToNbt(chunk,{lastUpdate:BigInt(record.player?.time??0),...endPortalTiles(payload(runtime.get(k)??{},ox,oz,report,blockAt),portals)}),a=regionAddress(chunk.x,chunk.z),rk=`${a.regionX},${a.regionZ}`;
   if(!regions.has(rk))regions.set(rk,[]);regions.get(rk).push(await encodeRegionChunk(document,{x:a.x,z:a.z,timestamp:Math.floor((record.updated??0)/1000)}));
@@ -253,17 +258,18 @@ async function exportRegions({record,w,owned,runtime}, files, report, prefix, pr
  for(const [k,entries] of regions){const [x,z]=k.split(',');files.set(`${prefix}region/r.${x}.${z}.mca`,writeRegion(entries));}
 }
 
-export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChunks=4096}={}) {
+// readBases(worldId, [[x,z]...]) -> stored full column records or null (world-storage.js readBaseColumns) for a whole-save import.
+export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChunks=4096,readBases=null}={}) {
  await populationBlockMapperReady;
  const w=world??new World(record.seed,record.biome,record.generationVersion??1,record.worldType,record.generatorOptions);
  if(!world)w.restore(record.edits??[]);
- const surface=regionSource(record,w),sources=[['',surface]],ox=w.originX??0,oz=w.originZ??0;
+ const surface=regionSource(record,w);surface.live=!!world;const sources=[['',surface]],ox=w.originX??0,oz=w.originZ??0;
  for(const [dimension,prefix] of [[-1,'DIM-1/'],[1,'DIM1/']]) {
   const blob=record.dimensions?.[dimension];
   if(!blob && dimensionOf(record)!==dimension)continue;
   const view=viewRecord(record,dimension),dimensionWorld=new DimensionWorld(record.seed,dimension);
   dimensionWorld.restore(blob?.edits??[]);
-  const source=regionSource(view,dimensionWorld);
+  const source=regionSource(view,dimensionWorld);source.baseId=`${record.id}~${dimension}`;
   if(dimensionOf(record)===dimension && record.position) {
    const {x,z}=record.position;
    if(Number.isFinite(x)&&Number.isFinite(z))source.owned.add(`${Math.floor(x/16)},${Math.floor(z/16)}`);
@@ -281,7 +287,7 @@ export async function exportJavaSave(record,{world=null,onProgress=()=>{},maxChu
  ]},files=new Map();
  let count=0;
  const progress=async()=>{onProgress(++count,columns);if(count%8===0)await new Promise(r=>setTimeout(r,0));};
- for(const [prefix,source] of sources)await exportRegions(source,files,report,prefix,progress);
+ for(const [prefix,source] of sources)await exportRegions(source,files,report,prefix,progress,readBases);
  const {owned}=surface;
  files.set('level.dat',await encodeCompressedNbt(levelNbt(record,w,report)));
  // Structure starts: v14/v15 rerun the four range-8 searches over the exported native chunks; imported data/*.dat is merged (native precedence).

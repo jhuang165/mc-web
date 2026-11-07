@@ -4,6 +4,7 @@ import { normalizeFlatOptions } from "./flat-world.js";
 import { decorateFlowers } from "./flowers.js";
 import { generateLakes, generateSprings } from "./lakes.js";
 import { populateSnow } from "./snow.js";
+import { decodeBaseColumn } from "./whole-save-columns.js";
 import { generateTreeAt } from "./trees.js";
 import { ladderBounds } from "./ladders.js";
 import { CACTUS_COLLISION, REED_BOUNDS, decorateSand, decorateReeds } from "./plants.js";
@@ -480,6 +481,9 @@ export class World {
     // order is a monotonic first-edit ordinal, retained even after cache eviction; and the columns edited since
     // the last takeDirtyColumns (world-storage.js writes those).
     this.chunkEdits = new Map();
+    // Whole-save imports (whole-save-import.js): decoded stored full columns ({blocks, metadata}, the generator's own layout)
+    // that take precedence over generation. Hydrated per column like the edits, forgotten with them.
+    this.baseColumns = new Map();
     this.dirtyColumns = new Set();
     this.savingColumns = new Map();
     this.nextEditOrder = 0;
@@ -513,6 +517,13 @@ export class World {
       minZ: Math.max(-30000000-this.originZ, Math.min(29999872-this.originZ, (Math.floor(z / 16) - 4) * 16)),
     };
   }
+  // A stored full column (imported save chunk) wins over generation; its prefetched generated copy is dropped.
+  terrainFor(cx, cz) {
+    const key = columnKey(cx, cz), base = this.baseColumns.get(key);
+    if (!base) return this.generateTerrainChunk(cx, cz);
+    this.pregenerated?.delete?.(key);
+    return base;
+  }
   streamAround(x, z) {
     if (!this.streaming || !Number.isFinite(x) || !Number.isFinite(z)) return null;
     const { minX, minZ } = this.windowAt(x, z);
@@ -523,7 +534,7 @@ export class World {
       const key = columnKey(cx, cz);
       let c = this.chunks.get(key);
       if (!c) {
-        const generated = this.generateTerrainChunk(cx, cz);
+        const generated = this.terrainFor(cx, cz);
         c = new WorldChunk(cx, cz, this.height);
         c.blocks.set(generated.blocks); c.meta.set(generated.metadata);
         for (const [cell, stored] of this.chunkEdits.get(key) ?? []) {
@@ -649,13 +660,22 @@ export class World {
   // Hydrate a saved column without notifications, new scheduling, or marking it dirty.
   restoreColumns(records) {
     // Validate the batch before touching any column, including resident ones.
+    const decodedBases=new Map();
     for (const r of records) {
+      if (r?.base) decodedBases.set(r,decodeBaseColumn(r.base,BLOCKS.length));
       const n=r?.cells?.length;
       if (!Number.isInteger(r?.x)||!Number.isInteger(r?.z)||!Number.isInteger(n)||r.values?.length!==n||r.order?.length!==n) throw new Error('Saved chunk is damaged');
       for(let i=0;i<n;i++)if(!Number.isInteger(r.cells[i])||r.cells[i]<0||r.cells[i]>65535||!Number.isInteger(r.values[i])||r.values[i]<0||r.values[i]>4095||(r.values[i]&255)>=BLOCKS.length||!Number.isInteger(r.order[i])||r.order[i]<0||r.order[i]>4294967295)throw new Error('Saved chunk is damaged');
     }
     for (const r of records) {
       const key=columnKey(r.x,r.z);
+      // A stored full column (decoded by whole-save-columns.js) replaces the generated terrain, resident or not; edits replay on top.
+      if (r.base && !this.baseColumns.has(key)) {
+        const base=decodedBases.get(r);
+        this.baseColumns.set(key,base);
+        const live=this.chunks.get(key);
+        if (live && !this.dirtyColumns.has(key) && !this.savingColumns.has(key)) {live.blocks.set(base.blocks);live.meta.set(base.metadata);live.tickCounts=null;}
+      }
       if (this.dirtyColumns.has(key) || this.savingColumns.has(key)) continue;
       const edits=new Map(), chunk=this.chunks.get(key);
       for (let i=0;i<r.cells.length;i++) {
@@ -711,6 +731,7 @@ export class World {
     for (const cell of this.chunkEdits.get(key)?.keys() ?? [])
       this.edits.delete(`${x*16+(cell>>12)},${cell&255},${z*16+((cell>>8)&15)}`);
     this.chunkEdits.delete(key);
+    this.baseColumns.delete(key);
     return true;
   }
   // `onChange(x, y, z, oldBlock, newBlock)` plays World.setBlock's neighbour

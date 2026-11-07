@@ -18,9 +18,9 @@ Evidence label: bytecode-read, not probed. The GUI classes (bdb GuiCreateWorld, 
 ## Import
 - `hardcore` in level.dat carries to the record and is played as hardcore (it used to be played as Survival).
 - `abilities.flying` applies to a Creative player; `SpawnForced` becomes the browser's /spawnpoint (`playerSpawn`), an unforced spawn stays a bed spawn; `Sleeping` is applied as native does (the player is woken at once; the bed's occupied bit is cleared and the player stands beside it, `wakeFromBed`, applied at launch).
-- Import screen: "Java save folder..." uses `showDirectoryPicker` where present, else an `<input webkitdirectory>`. It reads level.dat, the player, stats and the region files covering the 8x8 chunk area around the player (else the world spawn). Nothing is uploaded.
+- Import screen: "Java save folder..." uses `showDirectoryPicker` where present, else an `<input webkitdirectory>`. Batch 15: a save with Anvil region files is imported whole (see [region-import](region-import.md#whole-save-import-batch-15)); a save without them still reads the 8x8 chunk area around the player (else the world spawn). level.dat, the player and stats are read either way. Nothing is uploaded.
 
 ## Limits
-- Only one 8x8 area is imported; other regions regenerate from the seed; DIM-1 and DIM1 regions are not read. A whole-save import needs a per-chunk diff against the generator, which the streamed chunk store does not offer.
+- Superseded in batch 15: all three dimensions' region files are imported as stored full columns (a separate IndexedDB store, not a diff against the generator). Pre-Anvil `.mcr` files are ignored.
 - Several player files: the most recently modified one is taken, and the choice is reported.
 - Sleeping and the hardcore kick sequence are bytecode-read only.
