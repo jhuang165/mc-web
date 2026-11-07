@@ -13,6 +13,7 @@ import { entityActive } from './streaming-ticks.js';
 // other entity systems. Contents are browser stacks mapped from original ids with
 // region-import.js itemFromOriginal; an original item this build cannot map stays in `unmapped`
 // (same slot) so it is saved and re-mapped later, and it still takes its native spill randoms.
+import { ensureUuid, isUuid } from "./entity-uuid.js";
 import * as W from "./world.js";
 import { collisionBoxList, normalCube, CACTUS, WEB } from "./world.js";
 import { blockCollisions, setInWeb } from "./block-collisions.js";
@@ -148,8 +149,9 @@ export class Minecarts {
     // EntityPlayer.getYOffset is yOffset - 0.5F (not just yOffset).
     Object.assign(cart.rider, { x: cart.x, y: cart.posY + this.getMountedYOffset() - 0.5, z: cart.z });
   }
-  mount(cart, rider, { sneaking = false } = {}) {
-    if (cart.dead || cart.type !== 0 || sneaking || cart.rider || cart.passenger || rider.vehicle) return false;
+  // `saved` seats the player on any cart type: EntityList.createEntityFromNBT + mountEntity (level.dat Player.Riding) do not check the cart's kind.
+  mount(cart, rider, { sneaking = false, saved = false } = {}) {
+    if (cart.dead || (cart.type !== 0 && !saved) || sneaking || cart.rider || cart.passenger || rider.vehicle) return false;
     cart.rider = rider; rider.vehicle = cart;
     this.updateRiderPosition(cart);
     return true;
@@ -632,7 +634,7 @@ export class Minecarts {
     return {
       version: 1,
       carts: this.carts.filter((c) => !c.dead).map((c) => ({
-        id: c.id, type: c.type, rider: c.rider?.player === true || undefined,
+        id: c.id, uuid: ensureUuid(c), type: c.type, rider: c.rider?.player === true || undefined,
         x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire, onGround: c.onGround,
         customName: c.customName || undefined, ...V.variantJSON(c),
         items: c.slots.flatMap((s, slot) => {
@@ -653,7 +655,8 @@ export class Minecarts {
         (it.repairCost === undefined || Number.isInteger(it.repairCost)) && (it.displayName === undefined || typeof it.displayName === 'string') &&
         (it.unbreakable === undefined || typeof it.unbreakable === 'boolean'));
       const cart = m.spawnCart(c.type, { x: c.x, y: c.y, z: c.z, items: V.isContainerType(c.type) ? items : [], fuel: c.fuel, spawner: c.spawner, pushX: c.pushX, pushZ: c.pushZ, fuse: c.fuse, cooldown: c.cooldown, command: c.command, customName: typeof c.customName === "string" && c.customName ? c.customName : null });
-      cart.restorePlayer = c.type === 0 && c.rider === true;
+      cart.restorePlayer = c.rider === true;
+      if (isUuid(c.uuid)) cart.uuid = c.uuid.toLowerCase(); // Entity.writeToNBT's UUIDMost/UUIDLeast (entity-uuid.js)
       if (Number.isInteger(c.id) && c.id > 0 && !m.carts.some((o) => o !== cart && o.id === c.id)) cart.id = c.id; // passengers name their cart by id
       m.nextId = Math.max(m.nextId, cart.id + 1);
       const v = Array.isArray(c.motion) && c.motion.length === 3 && ok(...c.motion) ? c.motion : [0, 0, 0];

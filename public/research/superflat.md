@@ -46,7 +46,7 @@ pinned jar; `MC_RESEARCH` points at `tools/research`). Parity with 1.7.10 is not
 - The spawn point of new (generation 18 and 19) worlds is the native `createSpawnPosition` walk ([world-spawn.md](world-spawn.md)); worlds saved at 15 to 17 keep the earlier `findBiomePosition` origin.
 - Bonus chest: native `World.rand` is `new Random()` (unseeded), so a native bonus chest differs every creation; the game now seeds its Random
   from fresh entropy (`unseededBonusRandom`) and tests inject a fixed `JavaRandom`. Material.blocksMovement and
-  `doesBlockHaveSolidTopSurface` use the live `World.solid`; torches are placed standing (meta 5) instead of running `onBlockAdded`.
+  `doesBlockHaveSolidTopSurface` use the live `World.solid`; torches run the `BlockTorch.onBlockAdded` orientation (bytecode-read: west, east, north, south neighbour with a solid side, else standing on a solid top, else dropped).
   The chest is placed once on first open (`bonusChest` and `bonusChestPlaced` on the world record); the chest is not placed in the
   creation screen itself.
 - Java ZIP export writes `generatorName "flat"` and `generatorOptions`. There is no level.dat import path in this build, so Java import of

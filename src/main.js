@@ -2904,7 +2904,14 @@ function placeBonusChest(record) {
     blocksMovement: (x, y, z) => solid(x, y, z),
     solidTop: (x, y, z) => solid(x, y, z) && orig(x, y, z) !== 54,
     put(x, y, z, id, meta) {
-      const cell = fromOriginal(id, id === 50 ? 5 : meta);
+      // BlockTorch.onBlockAdded (bytecode-read): a torch set with metadata 0 takes the first of west (1), east (2), north (3), south (4) whose neighbour has a
+      // solid side facing it, else standing (5) on a solid top; with none it cannot stay (func_150109_e drops it), so it is not placed.
+      if (id === 50 && meta === 0) {
+        const wall = [[-1, 0, 1], [1, 0, 2], [0, -1, 3], [0, 1, 4]].find(([dx, dz]) => solid(x + dx, y, z + dz) && orig(x + dx, y, z + dz) !== 54);
+        meta = wall ? wall[2] : solid(x, y - 1, z) && orig(x, y - 1, z) !== 54 ? 5 : -1;
+        if (meta < 0) return;
+      }
+      const cell = fromOriginal(id, meta);
       if (!cell) return;
       const old = world.get(x, y, z);
       world.set(x, y, z, cell.id, true, cell.meta);
