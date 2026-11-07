@@ -109,19 +109,11 @@ const NOT_NORMAL = new Set([0, 5, 9, 10, 20, 29, 30, 39, 41]);
 const normalCube = (b, ids) => !NOT_NORMAL.has(b) && b !== ids.yellow && b !== ids.red && !(b >= 31 && b <= 38);
 // BlockBush.canPlaceBlockOn: grass, dirt, farmland.
 export const flowerGround = (b) => b === 1 || b === 2 || b === 29 || b === 30;
-// BlockBush.canBlockStay: (getFullBlockLightValue >= 8 || canBlockSeeTheSky)
-// && canPlaceBlockOn. Light is the sky light left after the opacity above the
-// cell, or a torch within six blocks; lateral light spill is not modelled.
+// BlockBush.func_149718_j (ajr.j) in 1.7.10 is only canPlaceBlockOn(block below): grass, dirt or farmland. There is no light term
+// (javap of ajr.j; replayed against block-sweep3-reference.json, every sky/block light and skylightSubtracted); the light rules of this
+// family are the mushroom's (plant-light.js) and the growth conditions of saplings and crops.
 export function flowerCanStay(world, ids, x, y, z) {
-  if (!flowerGround(world.get(x, y - 1, z))) return false;
-  let light = 15;
-  for (let yy = y + 1; yy < 64 && light > 0; yy++) light -= opacity(world.get(x, yy, z), ids);
-  if (light >= 8) return true;
-  for (let dx = -6; dx <= 6; dx++)
-    for (let dy = -6 + Math.abs(dx); dy <= 6 - Math.abs(dx); dy++)
-      for (let dz = -(6 - Math.abs(dx) - Math.abs(dy)); dz <= 6 - Math.abs(dx) - Math.abs(dy); dz++)
-        if (world.get(x + dx, y + dy, z + dz) === 20) return true;
-  return false;
+  return flowerGround(world.get(x, y - 1, z));
 }
 // Chunk heightMap value: one above the highest light-blocking block.
 export function heightValue(world, ids, x, z) {

@@ -83,6 +83,9 @@ export function pushBoxOf(tile, bounds, arg) {
   }
   return b;
 }
+// BlockPistonMoving.getCollisionBoundingBoxFromPool: the same shift with progress = extending ? 1 - p : p (retracting uses p itself, unlike
+// pushArgument below, which is the entity-push argument). `p` is the eased progress (tileProgress). Replayed by block-sweep3.test.js.
+export const movingCollisionBox = (tile, bounds, p) => pushBoxOf(tile, bounds, tile.extending ? f32(1 - p) : f32(p));
 // The progress argument of func_145863_a: extending counts down from 1, retracting up from -1.
 export const pushArgument = (tile, progress) => (tile.extending ? f32(1 - progress) : f32(progress - 1));
 

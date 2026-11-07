@@ -1081,6 +1081,7 @@ async function launch(record, prepared) {
     scene.setWorld(world);
     // Block light for canBlockFreeze/canSnowAt/melting is the scene's light volume.
     world.blockLight = (x, y, z) => scene.light.blockAt(x, y, z);
+    world.fullLight = (x, y, z) => scene.light.level(x, y, z, 0); // World.getFullBlockLightValue (plant-light.js: mushrooms)
     // ItemBucket in the Nether: water makes fizz and 8 smoke puffs instead of a block.
     world.evaporated = (x, y, z) => { sounds.play('random.fizz', { volume: 0.5, pitch: 2.6 + (Math.random() - Math.random()) * 0.8, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } }); for (let i = 0; i < 8; i++) scene.fx.spawn('largesmoke', x + Math.random(), y + 0.2, z + Math.random(), 0, 0, 0); };
     // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
@@ -1120,6 +1121,7 @@ async function launch(record, prepared) {
     }, record.falling).watch();
     falling.load(record.fallingTicks);
     farming=new Farming(world,record.farms);
+    farming.lightLevel=(x,y,z)=>scene.light?scene.light.level(x,y,z,scene.subtracted):15; // World.getBlockLightValue for crop and stem growth
     restorePots(world,record.pots);
     // Rain moistens farmland (BlockFarmland.updateTick: canLightningStrikeAt(x, y + 1, z)).
     farming.rained = (x, y, z) => canLightningStrikeAt(weather, world, x, y + 1, z);

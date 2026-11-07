@@ -135,3 +135,32 @@ Torches 50/75/76 and buttons 77/143 (bounds set in collisionRayTrace or at place
 - Seeded-Random drops and grass/mycelium/leaf/redstone-ore/cocoa random ticks are not replayed stream-for-stream (the port draws other streams); sapling growth and leaf decay have their own references.
 - Tile-entity blocks (chests 36/54, comparators, moving pistons) have no probe rows; their boxes come from the b16 chest/piston references.
 - Stem growth, dragon egg and per-state redstone power outputs are covered elsewhere.
+
+## Batch 19: block sweep, round 3 (light-dependent plants, seeded drops, tile-entity boxes)
+
+Probe `tools/probes/BlockSweep3Probe.java` + `BlockSweep3Tile.java`, verifier `tools/verify-block-sweep3.mjs`, reference `block-sweep3-reference.json`, replay `src/block-sweep3.test.js`. Target 1.7.10 only; samples, not proof over every world state.
+
+**Probed (the unchanged jar classes executed on the map-backed World double):** `canBlockStay`/`canPlaceBlockAt` of flowers, tall grass, fern, dead bush, saplings, mushrooms, crops, stems, wart, reeds, cactus, lily pad, cocoa and double plants over sky 0-15 x block light {0,7,8,9,12,13,15} x skylightSubtracted {0,6,11} x sky view, per ground (`lp`); random-tick histograms over seeds for the BlockBush family and crops at 12 light combos (`ltick`); mushroom spread on a floor with 3000 seeds, ground and light variants and the five-neighbour cap (`mspread`); 55 (id, meta) drop sources x fortune 0-3 x 40 seeds, recording the stacks, experience and the next two `nextInt(1000)` of the seeded Random (`drop`); BlockPistonMoving with a real TileEntityPiston (stored block x facing x extending x progress) for bounds, selection box, collision box and collision list (`tebox`); whether the box methods of the other tile-entity blocks call `getTileEntity` (`teq`).
+
+**Bytecode-read only (javap, not executed in isolation):** `ajr.j` (BlockBush.canBlockStay has no light term), `amc.j` and `amc.a` (mushroom stay and spread), `ahb.j`/`ahb.k`/`ahb.b` (getFullBlockLightValue ignores skylightSubtracted; getBlockLightValue applies it). The probe replays them, so the javap reading is cross-checked by the executed rows.
+
+### Findings and fixes
+
+| Item | Port before | Now |
+|---|---|---|
+| Flower survival | removed unless lit or beside glass | ground only (native BlockBush has no light term); dark flowers stay |
+| Mushroom survival | no light rule | mycelium/podzol, or full light < 13 (sub 0) over an opaque cube (`src/plant-light.js`); also checked at placement |
+| Mushroom spread | none | `nextInt(25)`, five-neighbour cap, four-step walk, seed-for-seed (`PopulationBlocks.randomTick`, `world.ticksRandomly` 75/76) |
+| Crop and stem growth light | `daylight * 15` | saved light at y + 1 with skylightSubtracted (`Farming.lightLevel` hook from main.js); sapling growth already did |
+| Moving piston collision | none | `movingCollisionBox` in piston-live.js replays native (extending 1 - p, retracting p); not wired into player collision |
+
+The seeded drop streams of every `harvestBlock` source (stone, ores, gravel, leaves, melon, crops, tall grass, clay, bookshelf and so on) match native for fortune 0-3 including the stream afterwards. Sources outside `harvestBlock` (cocoa, wart, glowstone, snow layer, dead bush, double plant, reeds, farmland, sapling) match deterministically or by value range; where the port has no seeded `java.util.Random` (its live paths use `populationDrops`, `cropDrops`, `wartDropCount` with other streams) only the counts are compared, not the draws.
+
+Tile-entity blocks (chest 54, ender chest 130, trapped chest 146, skull 144, flower pot 140, brewing stand 117, enchanting table 116, anvil 145, end portal frame 120, beacon 138, cauldron 118, hopper 154, piston head/base, comparators): none call `getTileEntity` in their box methods (`teq` rows), so the b18 sweep rows (boxes, chest neighbour masks) are already the values with the tile entity present. Only BlockPistonMoving reads its tile entity.
+
+### Remaining gaps
+
+- Moving piston box is replayed as a function; the player and mob collision path still has no moving-block collider.
+- Native collision of a moving block reads the stored block's bounds fields primed by the preceding setBlockBoundsBasedOnState (an inverted box for top slabs); the replay uses the primed pool box from the probe, not the port's own stored-block bounds.
+- Drop streams outside `harvestBlock` use other streams than native; hopper/comparator/skull tile-entity contents are not probed.
+- Right-click activation and tile-entity NBT of the listed blocks are not covered here.

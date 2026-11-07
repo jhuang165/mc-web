@@ -310,7 +310,7 @@ export const isPlant=b=>isCrop(b)||b===NETHER_WART||b===PUMPKIN_STEM||b===MELON_
 // Grass, leaves, farmland, crops, lava, snow layer, ice and saplings here; snow and ice act on a
 // random tick in snow.js/weather.js, fire and still lava in fire.js, leaves (decay) and saplings (growth) in trees.js.
 // Cactus and sugar cane grow on a random tick (plants.js). Tripwire hooks (113) and strings (114) tick randomly too (redstone-runtime.js randomTick).
-export const ticksRandomly=b=>b===1||b===5||b===LEAVES2||b===LIT_REDSTONE_ORE||b===COCOA||b===29||b===30||isCrop(b)||b===LAVA||b===SNOW_LAYER||b===23||b===ICE||b===FIRE||b===SAPLING||b===CACTUS||b===REEDS||b===PUMPKIN_STEM||b===MELON_STEM||b===NETHER_WART||b===PORTAL||b===113||b===114;
+export const ticksRandomly=b=>b===1||b===5||b===LEAVES2||b===LIT_REDSTONE_ORE||b===COCOA||b===29||b===30||isCrop(b)||b===LAVA||b===SNOW_LAYER||b===23||b===ICE||b===FIRE||b===SAPLING||b===CACTUS||b===REEDS||b===PUMPKIN_STEM||b===MELON_STEM||b===NETHER_WART||b===PORTAL||b===113||b===114||b===75||b===76;
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
