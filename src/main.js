@@ -24,7 +24,7 @@ import { worldDifficulty, gameOverView, deleteWorldStorage, HARDCORE_KICK, GAME_
 import { importSaveFolder, entriesFromFileList, entriesFromDirectoryHandle, indexSave } from "./save-folder-import.js";
 import { importWholeSave, regionFiles } from "./whole-save-import.js";
 import { canGoEndless, endlessCopy } from "./endless-world.js";
-import {guiScale,stackCount,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks,withGlint,itemTint} from "./gui.js";
+import {guiScale,durabilityBar,tooltipLines,anvilName,anvilCost,pendingContainerStacks,withGlint,itemTint} from "./gui.js";
 import { stackHasEffect } from "./armor-enchantments.js";
 import { ITEM_SPAWN_EGG, spawnEggIconHtml } from "./spawn-eggs.js";
 import {AnvilContainer,nativeStackToLive} from './anvil-container.js';
@@ -225,6 +225,8 @@ import { discName } from "./note-jukebox-content.js";
 import { MusicTicker, ambientMusicType, recordSound } from "./music.js";
 import { MoodSound, moodLight } from "./cave-ambience.js";
 import { status as bossStatus } from "./boss-bar.js";
+import { countHtml, zeroCountHtml, tooltipHtml, drawLabels, xpLevelHtml, bitmapHtml } from "./bitmap-text.js";
+import { entityDisplayName } from "./entity-names.js";
 import { Doors, WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, blockItemId, solidTopSurface } from "./doors-panes.js";
 import { spawnPointOf } from "./dimension-spawning.js"; // SpawnerAnimals' spawn point: the Overworld's in every dimension
 import { MinecartRenderer } from "./minecart-renderer.js";
@@ -248,7 +250,7 @@ import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRid
 import { StreamPrefetch } from "./streaming-generator.js";
 import "./lang-hooks.js";
 import { loadLanguageManifest, selectLanguage, setForceUnicodeFont } from "./lang.js";
-import { loadFontResources, onFontChange } from "./font-renderer.js";
+import { loadFontResources, onFontChange, font } from "./font-renderer.js";
 import { restoreStructureEntities, saveStructureEntities, tickMinecartSimulation, tickBoatSimulation, tickSpawnerSimulation, tickSpawnersClient, spawnerBurst, pickMinecart } from "./structure-simulation.js";
 // Generation version 10 (live mineshafts) maps original block ids while a World is built; the
 // entry module already holds the registry, so the mapper is set before any World exists.
@@ -650,10 +652,12 @@ function icon(id, damage = 0, stack) {
 }
 const heldId = () => survival.held?.id || 0;
 const recordHud = createRecordHud(document.body);
+// F3 overlay lines in FontRenderer glyphs; the markup is rebuilt only when the text (or the font) changes.
+const debugText = (text) => { const el = $("#debug"), key = text + font.version; if (el.dataset.key !== key) { el.dataset.key = key; el.innerHTML = text.split("\n").map((l) => `<div class="mc-text">${bitmapHtml(l, 0xe0e0e0) || "&nbsp;"}</div>`).join(""); } };
 // Item, stack count and durability overlays, as RenderItem draws them.
 function stackHtml(s, count = s?.count) {
   if (!s) return "";
-  return withGlint(icon(s.id, s.damage, s), s, ITEMS[s.id]) + (count === 0 ? '<b class="item-count empty">0</b>' : stackCount(count)) + durabilityBar(s.damage, ITEMS[s.id]?.durability);
+  return withGlint(icon(s.id, s.damage, s), s, ITEMS[s.id]) + (count === 0 ? zeroCountHtml() : countHtml(count)) + durabilityBar(s.damage, ITEMS[s.id]?.durability);
 }
 function stackLabel(s) {
   if (!s) return "Empty";
@@ -681,7 +685,7 @@ function showHeldName() {
   clearTimeout(showHeldName.timer);
   // GuiIngame draws the highlighted item name only for a held stack: an empty hand (air) shows nothing.
   if (!held?.id || held.count <= 0) { $("#block-label").classList.remove("visible"); return; }
-  $("#block-label").textContent = stackName(held, ITEMS) || ITEMS[held.id]?.name || "";
+  $("#block-label").innerHTML = bitmapHtml(stackName(held, ITEMS) || ITEMS[held.id]?.name || "");
   $("#block-label").classList.add("visible");
   showHeldName.timer = setTimeout(
     () => $("#block-label").classList.remove("visible"),
@@ -1740,6 +1744,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   attachHorsePreview(kind === "horse" ? container.horse : null);
   if (kind === "chest") $("#modal .modal").style.setProperty("--rows", container.rows);
   $("#modal").insertAdjacentHTML("beforeend", '<div class="cursor-stack" id="cursor-stack" aria-hidden="true"></div><div class="slot-tooltip hidden" id="slot-tooltip" role="tooltip"></div>');
+  drawLabels($("#modal")); // titles and the "Inventory" label in FontRenderer glyphs, 0x404040 without a shadow
   document.activeElement?.blur();
   containerView = { container, gui, kind, key, hovered: null, x: innerWidth / 2, y: innerHeight / 2, gx: -1, gy: -1, shown: [] };
   enchantExtras?.dispose();
@@ -2002,7 +2007,9 @@ function refreshContainer() {
   tip.classList.toggle("hidden", !lines.length);
   if (lines.length) {
     // The title keeps its rarity colour (an enchanted book's yellow name); later lines default to gray.
-    tip.innerHTML = lines.map((l, i) => `<span class="${i ? l.color || "gray" : "title" + (l.color ? " " + l.color : "")}${l.italic ? " italic" : ""}">${esc(l.text) || "&nbsp;"}</span>`).join("");
+    const tipped = tooltipHtml(lines); // 1.7.10 FontRenderer glyphs (bitmap-text.js), box width = widest getStringWidth
+    if (tip.dataset.html !== tipped.html) { tip.dataset.html = tipped.html; tip.innerHTML = tipped.html; }
+    tip.style.setProperty("--tw", tipped.width);
     tip.style.left = view.x + "px";
     tip.style.top = view.y + "px";
   }
@@ -2033,7 +2040,7 @@ function refreshContainer() {
 }
 function renderVitals() {
   const jump=jumpBar(rider);$('#jump-hud').classList.toggle('hidden',!jump.visible);$('#jump-fill').style.width=jump.width/182*100+'%';
-  $('#experience-hud').classList.toggle('hidden',survival.creative||jump.visible);$('#experience-level').textContent=experience.level||'';$('#experience-fill').style.width=(experience.progress*100)+'%';$('#experience-hud').setAttribute('aria-label',`Experience level ${experience.level}, ${experience.points} of ${experience.level>=30?62+(experience.level-30)*7:experience.level>=15?17+(experience.level-15)*3:17} points`);
+  $('#experience-hud').classList.toggle('hidden',survival.creative||jump.visible);{const lv=$('#experience-level'),k=String(experience.level||'');if(lv.dataset.lv!==k+font.version){lv.dataset.lv=k+font.version;lv.innerHTML=xpLevelHtml(experience.level);}}$('#experience-fill').style.width=(experience.progress*100)+'%';$('#experience-hud').setAttribute('aria-label',`Experience level ${experience.level}, ${experience.points} of ${experience.level>=30?62+(experience.level-30)*7:experience.level>=15?17+(experience.level-15)*3:17} points`);
   $("#survival-hud").classList.toggle("hidden", survival.creative);
   if (survival.creative) return;
   // GuiIngame.renderPlayerStats (damage-hud.js): the hurt blink, low-health jiggle, regeneration wave, Absorption and hunger shake.
@@ -2246,7 +2253,7 @@ function die() {
   playHurtSounds();
   statsLive.death();
   // EntityPlayerMP.onDeath broadcasts the death message to chat at the moment of death.
-  const message = survival.died && deathMessage(survival.lastDamage, scoreboard.formatName(PLAYER_NAME)); // EntityPlayer.func_145748_c_: the team-formatted name
+  const message = survival.died && deathMessage(survival.lastDamage, scoreboard.formatName(PLAYER_NAME), { source: survival.lastSource, attacker: survival.lastAttacker }); // EntityPlayer.func_145748_c_: the team-formatted name
   survival.died = false;
   if (message) showChatLine(document, message);
   closeContainer();
@@ -3591,8 +3598,8 @@ function animate(now) {
         Math.min(100, mining.progress * 100) + "%";
     }
     if (debug)
-      $("#debug").textContent =
-        `BLOCKWORLD / Java 1.7.10 study\n${fps} FPS · ${(scene.worldTriangles || 0).toLocaleString()} triangles\nXYZ: ${position.x.toFixed(2)} / ${position.y.toFixed(2)} / ${position.z.toFixed(2)}\nSeed: ${active.seed}\n${survival.mode} · day ${Math.floor(survival.time / 24000) + 1} · ${survival.time % 24000} ticks\nHealth ${survival.health} · food ${survival.food} · saturation ${survival.saturation.toFixed(1)}\n${world.streaming ? world.chunks.size+" loaded chunks · " : ""}${world.edits.size} ${world.streaming ? "cached edited blocks" : "edited blocks"} · ${Object.keys(survival.chests).length + Object.keys(survival.furnaces).length} containers · ${items.items.length} items · ${mobs?.entities.length || 0} mobs\n${aimedEntity ? aimedEntity.entity.type + " · " + aimedEntity.entity.health + " health" : target ? (ITEMS[world.get(...target.block)]?.name ?? BLOCKS[world.get(...target.block)].name) : "Looking into the distance"}`;
+      debugText(
+        `BLOCKWORLD / Java 1.7.10 study\n${fps} FPS · ${(scene.worldTriangles || 0).toLocaleString()} triangles\nXYZ: ${position.x.toFixed(2)} / ${position.y.toFixed(2)} / ${position.z.toFixed(2)}\nSeed: ${active.seed}\n${survival.mode} · day ${Math.floor(survival.time / 24000) + 1} · ${survival.time % 24000} ticks\nHealth ${survival.health} · food ${survival.food} · saturation ${survival.saturation.toFixed(1)}\n${world.streaming ? world.chunks.size+" loaded chunks · " : ""}${world.edits.size} ${world.streaming ? "cached edited blocks" : "edited blocks"} · ${Object.keys(survival.chests).length + Object.keys(survival.furnaces).length} containers · ${items.items.length} items · ${mobs?.entities.length || 0} mobs\n${aimedEntity ? entityDisplayName(aimedEntity.entity.type) + " · " + aimedEntity.entity.health + " health" : target ? (ITEMS[world.get(...target.block)]?.name ?? BLOCKS[world.get(...target.block)].name) : "Looking into the distance"}`);
     if (elapsed - lastSave > 5) save();
     scene.effects.crack(mining?.block, mining?.progress);
   } else if (screen === "dead") {

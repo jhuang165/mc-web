@@ -263,3 +263,14 @@ body:has(.beacon-modal) #toast{display:none}
 /* GuiScreenBook (book-ui.js): the 320-unit screen is drawn at the GUI scale, so the modal box is only a transparent host. */
 .book-modal{width:auto;min-width:0;max-width:none;max-height:none;padding:0;border:0;border-radius:0;background:none;box-shadow:none;overflow:visible;transform:none!important}
 .book-modal .modal-top,.book-modal:before,.book-modal:after,.book-modal h2{display:none}
+/* Batch 18: in-game text through the FontRenderer glyph renderer (bitmap-text.js). Counts: white / yellow with the native shadow
+   colours; tooltip: drawHoverText geometry, 3 px padding, lines 8 px tall, 4 px after the title and 2 px between the others. */
+.item-count{--c:#fff;--cs:#3f3f3f;text-shadow:none!important}.item-count.empty,.item-count.full{--c:#ff5;--cs:#3f3f15}
+.item-count.mc-text{color:var(--c)}
+.slot-tooltip{padding:calc(3*var(--u));box-sizing:content-box;width:calc(var(--tw,0)*var(--u));display:block;text-shadow:none;line-height:calc(8*var(--u))}
+.slot-tooltip .tl{display:block;height:calc(8*var(--u));line-height:calc(8*var(--u));white-space:pre}
+.slot-tooltip .tl+.tl{margin-top:calc(2*var(--u))}.slot-tooltip .tl:first-child+.tl{margin-top:calc(4*var(--u))}
+.slot-tooltip .tl span{text-shadow:var(--u) var(--u) 0 var(--sh)}
+#experience-level{text-shadow:none!important}.xp-copy{white-space:pre}
+#debug{font-size:calc(8*var(--u));line-height:calc(9*var(--u));white-space:pre;padding:calc(3*var(--u));border-radius:0;top:calc(10*var(--u));left:calc(2*var(--u))}
+#debug .mc-text{height:calc(9*var(--u));line-height:calc(8*var(--u))}
