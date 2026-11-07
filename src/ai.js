@@ -1251,7 +1251,7 @@ export class MobAI {
     Object.assign(this.player, { lastTarget: record, lastTargetTime: this.clock });
   }
   get world() {
-    return this.ew.world;
+    return this.ew.ring?.view ?? this.ew.world; // a stable object: navigators keep the world they were built with (headless ring view)
   }
   entities() {
     return this.ew.entities;

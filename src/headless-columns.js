@@ -19,6 +19,8 @@ const KEEP = RING_RADIUS + 2; // hysteresis before a far column is dropped
 const KEY = 8388608; // |chunk z| < 1,875,000 (the 30,000,000 border), so cx * 2^23 + cz is unique
 export const ringKey = (cx, cz) => cx * KEY + cz;
 
+const columnKey = (cx, cz) => `${cx},${cz}`; // World's chunk key
+
 // A column of {blocks, metadata} in WorldChunk order (index (lx * 16 + lz) * height + y), trimmed to its highest filled section.
 export function compactColumn(blocks, metadata, height = 256) {
   let maxY = -1;
@@ -51,6 +53,30 @@ function metaOf(col, i) {
   return 0;
 }
 
+// Sets cell (column index c = lx * 16 + lz, height y) of a compact column; the column grows to the section the cell is in.
+function writeCell(col, c, y, b, m) {
+  if (y >= col.h) {
+    if (!b && !m) return;
+    const nh = ((y >> 4) + 1) * 16, blocks = new Uint8Array(256 * nh), meta = new Uint32Array(col.meta.length);
+    for (let k = 0; k < 256; k++) blocks.set(col.blocks.subarray(k * col.h, (k + 1) * col.h), k * nh);
+    for (let j = 0; j < meta.length; j++) { const i = col.meta[j] >> 4, cc = Math.floor(i / col.h); meta[j] = (((cc * nh + i - cc * col.h) << 4) | (col.meta[j] & 15)) >>> 0; }
+    col.h = nh; col.blocks = blocks; col.meta = meta;
+  }
+  const i = c * col.h + y, keys = col.meta;
+  col.blocks[i] = b;
+  let lo = 0, hi = keys.length - 1, at = -1;
+  while (lo <= hi) { const mid = (lo + hi) >> 1, k = keys[mid] >> 4; if (k === i) { at = mid; break; } if (k < i) lo = mid + 1; else hi = mid - 1; }
+  if (at >= 0) {
+    if (m) keys[at] = (i << 4) | m;
+    else { const n = new Uint32Array(keys.length - 1); n.set(keys.subarray(0, at)); n.set(keys.subarray(at + 1), at); col.meta = n; }
+  } else if (m) {
+    const n = new Uint32Array(keys.length + 1);
+    n.set(keys.subarray(0, lo)); n[lo] = (i << 4) | m; n.set(keys.subarray(lo), lo + 1);
+    col.meta = n;
+  }
+  if (b && (y >> 4) * 16 > col.top) col.top = (y >> 4) * 16;
+}
+
 export class HeadlessColumns {
   // `world`: the streamed World (or a DimensionWorld). `generate(cx, cz)`: optional synchronous source of
   // { blocks, metadata } used at `perTick` columns every `every` ticks (never for the Overworld's populated versions, whose cells
@@ -68,10 +94,17 @@ export class HeadlessColumns {
     this.last = null; this.lastKey = NaN;
     this.cells = !!world.population && world.generationVersion >= 13 && !world.dimension;
     this.light = new RingLight(this);
+    this.version = 0; this.act = new Map(); this.actVersion = -1;
+    this.isHydrated = () => true; // main.js: the StreamStorage's loaded set
     this.stats = { pulled: 0, generated: 0, received: 0, pruned: 0 };
     const view = Object.create(world);
     view.get = (x, y, z) => this.get(x, y, z);
     view.getMeta = (x, y, z) => this.getMeta(x, y, z);
+    // Writes go to the real world (World.put sends unloaded cells to this ring); `this` inside them must be the world. The window's
+    // chunk cache is the world's, not a copy that would go stale when the window moves.
+    view.set = (...a) => world.set(...a);
+    view.put = (...a) => world.put(...a);
+    Object.defineProperty(view, "lastChunk", { get: () => world.lastChunk, set: (v) => { world.lastChunk = v; } });
     this.view = view;
   }
   resident(x, z) { const w = this.world; return x >= w.minX && x < w.maxX && z >= w.minZ && z < w.maxZ; }
@@ -103,7 +136,75 @@ export class HeadlessColumns {
   // Chunk.getTopFilledSegment of a headless column, or -1.
   top(cx, cz) { return this.column(cx, cz)?.top ?? -1; }
   add(cx, cz, col) {
-    if (this.near(cx, cz, this.keep)) { this.cols.set(ringKey(cx, cz), col); this.dirty = true; this.light.clear(); this.lastKey = NaN; }
+    if (this.near(cx, cz, this.keep)) { this.store(cx, cz, col); this.dirty = true; this.light.clear(); this.lastKey = NaN; }
+  }
+  // Holds a column. A stored whole column (imported save) replaces the generated terrain, and the column's saved and in-memory
+  // edits are laid over it once its edit journal is readable (the page's StreamStorage; `isHydrated`), as streamAround does for a
+  // resident column. Without that the ring would show terrain the player or an explosion had already changed.
+  store(cx, cz, col) {
+    const key = columnKey(cx, cz), base = this.world.baseColumns?.get?.(key);
+    if (base) col = compactColumn(base.blocks, base.metadata, this.height);
+    this.cols.set(ringKey(cx, cz), col);
+    this.applyEdits(col, cx, cz);
+    this.touch();
+  }
+  touch() { this.version++; this.lastKey = NaN; }
+  applyEdits(col, cx, cz) {
+    if (!this.isHydrated(cx, cz)) return;
+    const edits = this.world.chunkEdits?.get?.(columnKey(cx, cz));
+    if (!edits) return;
+    const H = this.height;
+    for (const [cell, stored] of edits) {
+      const c = Math.floor(cell / H), value = stored % 4096;
+      writeCell(col, c, cell - c * H, value & 255, value >> 8);
+    }
+  }
+  // World.put for a cell whose column is not resident (World.ringSink). Accepted only for a held column whose edit journal is
+  // hydrated (otherwise the stored edits of that column could be lost when it is saved). The edit is recorded like any other
+  // (saved with the column, replayed when the column becomes resident).
+  putOutside(x, y, z, b, meta, track) {
+    const cx = x >> 4, cz = z >> 4;
+    if (!Number.isInteger(b) || b < 0 || b > 255 || !Number.isInteger(meta) || meta < 0 || meta > 15) return false;
+    const col = this.cols.get(ringKey(cx, cz));
+    if (!col || !this.isHydrated(cx, cz)) return false;
+    writeCell(col, (x & 15) * 16 + (z & 15), y, b, meta);
+    this.light.clear();
+    this.lastKey = NaN;
+    this.version++;
+    if (track) this.world.rememberEdit(x, y, z, b | (meta << 8));
+    return true;
+  }
+  // Columns leaving the resident window keep their current blocks in the ring (the cells' copy would lack the live changes).
+  adopt(chunks) {
+    for (const c of chunks) if (this.near(c.x, c.z, this.keep)) this.cols.set(ringKey(c.x, c.z), compactColumn(c.blocks, c.meta, this.height));
+    this.light.clear();
+    this.touch();
+  }
+  // StreamStorage just hydrated these column records: lay their edits over the held ring copies.
+  onHydrated(records) {
+    for (const r of records) {
+      const col = this.cols.get(ringKey(r.x, r.z));
+      if (col && !this.resident(r.x * 16, r.z * 16)) this.applyEdits(col, r.x, r.z);
+    }
+    this.light.clear();
+    this.touch();
+  }
+  // Natively an entity updates when the 65 x 65 blocks around it are loaded (World.updateEntityWithOptionalForce:
+  // checkChunksExist(floor(x) - 32 .. + 32); 32 blocks are two whole chunks, so the test depends on the entity's chunk only).
+  // True when every chunk from cx - 2 to cx + 2 and cz - 2 to cz + 2 is resident or held; cached until the ring or the window changes.
+  active(x, z) {
+    const w = this.world;
+    if (this.actVersion !== this.version || this.actMinX !== w.minX || this.actMinZ !== w.minZ) {
+      this.act.clear(); this.actVersion = this.version; this.actMinX = w.minX; this.actMinZ = w.minZ;
+    }
+    const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4, key = ringKey(cx, cz);
+    let v = this.act.get(key);
+    if (v === undefined) {
+      v = true;
+      for (let a = cx - 2; v && a <= cx + 2; a++) for (let b = cz - 2; b <= cz + 2; b++) if (!this.resident(a * 16, b * 16) && !this.cols.has(ringKey(a, b))) { v = false; break; }
+      this.act.set(key, v);
+    }
+    return v;
   }
   near(cx, cz, r) { return Math.abs(cx - this.cx) <= r && Math.abs(cz - this.cz) <= r; }
   // Called every spawner tick with the player's chunk (world-local coordinates). Re-centres, drops far columns and fills missing
@@ -113,7 +214,7 @@ export class HeadlessColumns {
       this.cx = pcx; this.cz = pcz; this.dirty = true;
       for (const [k, c] of this.cols) {
         const cz = ((k % KEY) + KEY + KEY / 2) % KEY - KEY / 2, cx = (k - cz) / KEY;
-        if (!this.near(cx, cz, this.keep)) { this.cols.delete(k); this.stats.pruned++; this.lastKey = NaN; }
+        if (!this.near(cx, cz, this.keep)) { this.cols.delete(k); this.stats.pruned++; this.touch(); }
       }
       this.light.clear();
     }
@@ -127,7 +228,7 @@ export class HeadlessColumns {
       if (this.cols.has(ringKey(cx, cz))) continue;
       const cell = cache?.get(`${cx >> 3},${cz >> 3}`), src = cell?.columns.get(`${cx},${cz}`);
       if (!src) continue;
-      this.cols.set(ringKey(cx, cz), compactColumn(src.blocks, src.metadata, this.height));
+      this.store(cx, cz, compactColumn(src.blocks, src.metadata, this.height));
       pulled++; this.stats.pulled++;
     }
     if (pulled) { this.dirty = true; this.light.clear(); this.lastKey = NaN; }
@@ -138,7 +239,7 @@ export class HeadlessColumns {
         if (this.cols.has(ringKey(cx, cz))) continue;
         const g = this.generate(cx, cz);
         if (!g) continue;
-        this.cols.set(ringKey(cx, cz), compactColumn(g.blocks, g.metadata, this.height));
+        this.store(cx, cz, compactColumn(g.blocks, g.metadata, this.height));
         made++; this.stats.generated++;
       }
       if (made) { this.dirty = true; this.light.clear(); this.lastKey = NaN; }
@@ -293,3 +394,5 @@ export function createRing(world, { worker = false } = {}) {
   };
   return new HeadlessColumns(world, { generate: source, perTick: 1, every: 2 });
 }
+// Attaches the ring to its world: writes to unloaded cells of held columns and (while world.ringReads) reads of them go through it.
+export function attachRing(world, ring) { world.ringSink = ring; return ring; }

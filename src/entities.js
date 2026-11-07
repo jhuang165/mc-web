@@ -1728,7 +1728,24 @@ export class EntityWorld {
       despawn:(e)=>{e.health=0;e.death=20;},
     });
   }
+  // The mob tick reads blocks through the headless ring's view (resident column first, then the ring's), so mobs outside the resident
+  // window move, path and take hazards against real terrain (headless-columns.js, natural-spawning.md "Round 5").
   tick(player, survival, heldItem=0) {
+    const real = this.world;
+    if (this.ring) this.world = this.ring.view;
+    try { return this.tickMobs(player, survival, heldItem); } finally { this.world = real; }
+  }
+  // EntityLiving updates when its surroundings are loaded (World.updateEntityWithOptionalForce, ahb.a(sa, boolean)): the resident ticking
+  // window, or any entity whose chunk and the two chunks around it are resident or held by the ring.
+  isActive(e) { return entityActive(this.world, e) || !!this.ring?.active(e.x, e.z); }
+  // Entities that ticked outside the resident ticking window stand where no client is: only their explosions are kept. Sounds,
+  // drops, experience and particles from there are dropped (item entities and experience orbs do not tick outside the window).
+  dropFarEvents(from) {
+    let n = from;
+    for (let i = from; i < this.events.length; i++) if (this.events[i].explode) this.events[n++] = this.events[i];
+    this.events.length = n;
+  }
+  tickMobs(player, survival, heldItem=0) {
     const night = !this.world.dimension &&
       survival.time % 24000 > 13000 && survival.time % 24000 < 23000;
     // World.isDaytime (skylightSubtracted < 4); main.js hooks the real light level in.
@@ -1751,8 +1768,11 @@ export class EntityWorld {
     // A mob spawned during the loop (a baby) joins the next tick's updates, as World.spawnEntityInWorld queues it.
     releaseDead(this.entities);
     const riders = [];
+    let farMark = -1; // index of the first event of the unticked-window mob being updated
     for (const e of ridingOrder(this.entities.slice())) {
-      if (!entityActive(this.world,e)) continue;
+      if (farMark >= 0) { this.dropFarEvents(farMark); farMark = -1; }
+      if (!this.isActive(e)) continue;
+      if (this.ring && !this.world.isTicking(e.x, e.z)) farMark = this.events.length;
       if (e.ridingEntity) { riders.push(e); beginRidden(e); }
       // World.updateEntityWithOptionalForce and EntityLivingBase.onEntityUpdate
       // keep last tick's state for RenderManager and RendererLivingEntity.
@@ -1866,6 +1886,7 @@ export class EntityWorld {
       this.turnBody(e);
       this.swingLimbs(e);
     }
+    if (farMark >= 0) this.dropFarEvents(farMark);
     // Entity.updateRidden's tail for each rider: updateRiderPosition, then the rider turns with its mount.
     for (const e of riders) if (e.ridingEntity) endRidden(e, (m) => this.size(m)[1]);
     // EntityPlayerMP.onLivingUpdate's collideWithNearbyEntities, in the network tick after the
@@ -1874,7 +1895,7 @@ export class EntityWorld {
     const p = this.ai.player;
     if (p?.alive) {
       const box = pushBox(p, p.width, p.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
-      for (const o of this.entities) if (pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) applyEntityCollision(o, p, true, false);
+      for (const o of this.entities) if (Math.abs(o.x - p.x) <= 12 && Math.abs(o.z - p.z) <= 12 && Math.abs(o.y - p.y) <= 12 && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) applyEntityCollision(o, p, true, false);
     }
     this.entities = this.entities.filter((e) => e.health > 0 || e.death < 20);
   }
@@ -1899,8 +1920,10 @@ export class EntityWorld {
   // this one's grown by 0.2 sideways runs applyEntityCollision against it.
   push(e, t) {
     const box = pushBox(e, t.width, t.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
+    // Cheap reject: the largest boxes (dragon 16 wide, giant 10.8 tall) reach under 12 blocks from their origin, so beyond 12 in x, z or y
+    // no box can meet and the pair is skipped without changing the result (the O(n^2) scan is the ring-mob cost).
     for (const o of this.entities)
-      if (o !== e && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) {
+      if (o !== e && Math.abs(o.x - e.x) <= 12 && Math.abs(o.z - e.z) <= 12 && Math.abs(o.y - e.y) <= 12 && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) {
         if (e.type === "iron_golem" && golemCollideRetargets(entityRandom(e), o.type)) this.ai.brain(e).attackTarget = this.ai.brain(o); // EntityIronGolem.collideWithEntity
         applyEntityCollision(o, e); // Entity.applyEntityCollision: not a mount and its rider
       }
@@ -1955,8 +1978,10 @@ export class EntityWorld {
     const rand = entityRandom(e);
     this.events.push(...mobStepEvents(this.world, e, from, { hostile: isEntityMob(e.type), random: () => rand.nextFloat(), onWalk: (x, y, z) => this.onEntityWalking?.(x, y, z, e) }));
     // The finite world's edge stops a mob like a wall.
+    // A streamed world's edge is its border (the 30,000,000 limit), not the resident window: mobs walk into the ring beyond it.
+    const w = this.world, lim = (axis, hi) => w.streaming ? (hi ? 30000000 : -30000000) - (axis === "x" ? w.originX || 0 : w.originZ || 0) : w[(hi ? "max" : "min") + axis.toUpperCase()];
     const edge = (axis, v) => {
-      const c = Math.max((this.world[axis === "x" ? "minX" : "minZ"] ?? 0)+0.6, Math.min((this.world[axis === "x" ? "maxX" : "maxZ"] ?? SIZE)-0.6, e[axis]));
+      const c = Math.max((lim(axis, false) ?? 0)+0.6, Math.min((lim(axis, true) ?? SIZE)-0.6, e[axis]));
       if (c !== e[axis]) (e[axis] = c), (e[v] = 0);
     };
     edge("x", "vx");
@@ -2169,7 +2194,7 @@ export class EntityWorld {
     // kept in `idle` as for the ticking mobs. Without it the spawner's outer chunks would fill the cap with mobs that never leave.
     const hit = 1 - (799 / 800) ** 20;
     this.entities = this.entities.filter((e) => {
-      if (entityActive(world, e) || !canDespawn(e) || e.ridingEntity || e.riddenByEntity) return true;
+      if (this.isActive(e) || !canDespawn(e) || e.ridingEntity || e.riddenByEntity) return true;
       const d = (player.x - e.x) ** 2 + (player.y - e.y) ** 2 + (player.z - e.z) ** 2;
       if (d > 128 ** 2) return false;
       if (d < 32 ** 2) { e.idle = 0; return true; }

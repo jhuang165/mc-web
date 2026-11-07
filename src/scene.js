@@ -1002,6 +1002,7 @@ export class VoxelScene {
   // Relights around an edit; the edited chunk and its touching neighbours
   // rebuild now, the rest of the changed light box over the next frames.
   updateBlock(x, z, y = 0) {
+    if (this.world.ringSink && !this.world.isLoaded(x, z)) return; // a ring column's edit (headless-columns.js) has no mesh or light volume here
     const box = this.light?.update(x, y, z), chunk = (v) => Math.floor(v / 16) * 16;
     const now = new Set([[chunk(x), chunk(z)], [chunk(x - 1), chunk(z)], [chunk(x + 1), chunk(z)], [chunk(x), chunk(z - 1)], [chunk(x), chunk(z + 1)]].filter(([a, b]) => this.world.isLoaded(a, b)).map((c) => c.join(",")));
     if (box)
@@ -1015,6 +1016,7 @@ export class VoxelScene {
   // emission relight, one LightVolume.relight per merged 31 x 31 box. The
   // render loop then rebuilds the queue at its usual two chunks per frame.
   updateBlocks(changes) {
+    if (this.world.ringSink) changes = changes.filter((c) => this.world.isLoaded(c[0], c[2])); // ring columns (headless-columns.js) have no mesh or light volume here
     if (!changes.length || !this.light) return;
     const chunk = (v) => Math.floor(v / 16) * 16, first = new Set(), later = new Set(), boxes = [],
       mark = (set, x0, x1, z0, z1) => {
