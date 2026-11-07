@@ -8,6 +8,8 @@
 // because ai.js imports villager.js and this file is reached from there.
 import { findRandomTargetTowards, findRandomTargetDirected, isWithinHome, isWithinHomeHere } from "./home-area.js";
 import { golemAttackDamage, golemCanAttack, IMOB_TYPES, IRON_GOLEM_SOUNDS } from "./iron-golem.js";
+import { JavaRandom } from "./java-random.js";
+import { biomeFacts } from "./biomes.js";
 const f = Math.fround;
 const floor = Math.floor;
 
@@ -16,20 +18,36 @@ const MONSTERS = IMOB_TYPES; // EntityAINearestAttackableTarget with IMob.mobSel
 const villagesOf = (m) => m.ai.ew.villages;
 // WorldServer.villageCollectionObj.findNearestVillage at the mob's block.
 export const nearestVillage = (m, extra) => villagesOf(m)?.findNearestVillage(floor(m.x), floor(m.y), floor(m.z), extra) ?? null;
-// World.setEntityState: 12 hearts, 13 angry villager, 14 happy villager (EntityVillager.handleHealthUpdate,
-// 5 particles, generateRandomParticles); 11 / 4 on the golem change the arm pose (entity counters here).
-// The client draws them from its own Random, so Entity.rand is left alone.
-const visual = { nextFloat: () => Math.random(), nextGaussian: () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random()) };
+// World.setEntityState: 12 hearts, 13 angry villager, 14 happy villager (EntityVillager.handleHealthUpdate -> b(String):
+// five times three nextGaussian * 0.02 velocities, then three nextFloat for the position, probed in
+// villager-polish-reference.json). 11 / 4 on the golem change the arm pose (entity counters here).
+// The packet is handled by the client's copy of the entity, whose Random is not the server entity's Random, so the
+// draws come from a per-entity visual Random (seeded freely, like the client entity's) and leave Entity.rand alone.
+const VISUAL = new WeakMap();
+export const visualRandom = (e) => {
+  let r = VISUAL.get(e);
+  if (!r) VISUAL.set(e, (r = new JavaRandom(Math.floor(Math.random() * 2 ** 48))));
+  return r;
+};
+// Seeds the visual Random (the particle replay in villager-polish.test.js).
+export const setVisualRandom = (e, rand) => VISUAL.set(e, rand);
 export function villagerParticles(m, name) {
   // EntityWorld.burst (entities.js owns the fx import; fx.js reaches back into entities.js).
-  m.ai.ew.villageBurst?.(name, m.e, { width: m.width, height: m.height }, visual);
+  m.ai.ew.villageBurst?.(name, m.e, { width: m.width, height: m.height }, visualRandom(m.e));
+}
+// BiomeGenBase.canSpawnLightningBolt (ahu.e) at a column, as weather.js reads it (a snowy biome or one without rain
+// answers false); a world without biome data is Plains.
+export function canSpawnLightningAt(world, x, z) {
+  const b = world?.biomeAt?.(x, z);
+  return b ? b.rainfall > 0 && !b.snowy : biomeFacts(world?.biome).canSpawnLightning;
 }
 
 export function villageTasks(K) {
   const { Task } = K;
 
-  // EntityAIMoveIndoors (ur), mutex 1, speed 1.0. In clear daytime it returns before drawing; otherwise it
-  // draws nextInt(50), skips a villager standing within 2 blocks of the door it used last, and needs a
+  // EntityAIMoveIndoors (ur), mutex 1, speed 1.0. In clear daytime in a biome that can rain (BiomeGenBase.e) or in a
+  // dimension without sky (WorldProvider.hasNoSky) it returns before drawing (deserts and snowy biomes do not
+  // return by day); otherwise it draws nextInt(50), skips a villager standing within 2 blocks of the door it used last, and needs a
   // village within 14 blocks with a door (the one with the fewest openings, vz.c).
   class MoveIndoors extends Task {
     constructor(m) {
@@ -42,7 +60,8 @@ export function villageTasks(K) {
     }
     shouldExecute() {
       const m = this.m;
-      if (m.ai.isDaytime() && !m.ai.isRaining()) return false;
+      const world = m.ai.world;
+      if ((m.ai.isDaytime() && !m.ai.isRaining() && canSpawnLightningAt(world, floor(m.x), floor(m.z))) || world?.hasNoSky) return false;
       if (m.rand.nextInt(50) !== 0) return false;
       if (this.insideX !== -1) {
         const dx = this.insideX - m.x, dy = m.y - m.y, dz = this.insideZ - m.z;
@@ -522,23 +541,48 @@ export function villageTasks(K) {
       super.startExecuting();
     }
   }
-  // EntityAINearestAttackableTarget (vo) for monsters (IMob), no sight needed, nearest within the follow range.
+  // EntityAINearestAttackableTarget (vo) for monsters (IMob), nearbyOnly, no sight needed. vo.a() lists the IMob
+  // entities in the (range, 4, range) box and keeps those EntityAITarget.a(sv, false) accepts, in list order; the
+  // nearest of them wins. With nearbyOnly the last check is canEasilyReach (vu.a(sv)): one path search whose
+  // answer (reachable 1, not 2) is cached on the TASK for 10 + nextInt(5) ticks whichever entity asked, and the end
+  // of the path must lie within 1.5 blocks (horizontally) of the target. Probed in villager-polish-reference.json.
   class NearestMonster extends GolemTargetBase {
     constructor(m) {
       super(m, false);
       this.target = null;
+      this.reach = 0; // vu.b: 0 unknown, 1 reachable, 2 not
+      this.reachTimer = 0; // vu.e
+    }
+    isSuitableTarget(t) {
+      return super.isSuitableTarget(t) && this.canEasilyReach(t);
+    }
+    canEasilyReach(t) {
+      if (--this.reachTimer <= 0) this.reach = 0;
+      if (this.reach === 0) this.reach = this.pathEndsNear(t) ? 1 : 2;
+      return this.reach !== 2;
+    }
+    pathEndsNear(t) {
+      const m = this.m;
+      this.reachTimer = 10 + m.rand.nextInt(5);
+      const end = m.navigator.getPathToEntityLiving(t)?.getFinalPathPoint();
+      if (!end) return false;
+      const dx = end.x - floor(t.x), dz = end.z - floor(t.z);
+      return dx * dx + dz * dz <= 2.25;
     }
     shouldExecute() {
       const m = this.m, d = this.range();
       let best = null, bd = Infinity;
       for (const o of m.nearby(d, 4, d, (b) => MONSTERS.has(b.e.type) && b.alive)) {
+        if (!this.isSuitableTarget(o)) continue;
         const s = m.distSq(o);
-        if (s < bd && this.isSuitableTarget(o) && s <= d * d) { best = o; bd = s; }
+        if (s < bd) { best = o; bd = s; }
       }
       this.target = best;
       return !!best;
     }
     startExecuting() {
+      this.reach = 0;
+      this.reachTimer = 0;
       this.m.attackTarget = this.target;
       super.startExecuting();
     }

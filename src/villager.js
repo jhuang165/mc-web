@@ -354,7 +354,7 @@ export function villagerHover(m, hasResult) {
 // The restock half of EntityVillager.updateAITick: while nobody is trading, timeUntilReset counts down;
 // at 0 a flagged villager raises the maximum uses of every spent recipe (when it has more than one
 // recipe) by rand(6) + rand(6) + 2, adds one more default offer, and either way gains Regeneration for
-// 200 ticks. Village reputation (villageObj.setReputationForPlayer) is not ported: no VillageCollection.
+// 200 ticks. The reputation rule lives below (+1 for the remembered buyer).
 export function tickVillagerRestock(m) {
   const e = m.e;
   if (isTrading(e) || !(e.timeUntilReset > 0)) return;

@@ -65,7 +65,7 @@ EntityList is not the complete feature roster: players, weather lightning, throw
 | 96 | MushroomCow | wm | no | yes | Partial; [mooshroom-golem](mooshroom-golem.md); cannot spawn on mycelium at runtime | E |
 | 97 | SnowMan | wr | no | no | Implemented; [mooshroom-golem](mooshroom-golem.md) | E |
 | 98 | Ozelot | wn | no | yes | Implemented; [ocelots](ocelots.md) | E |
-| 99 | VillagerGolem | wt | no | no | Partial; [iron-golem](iron-golem.md); step sounds, collide retargeting, rose model and walking dust are ported; NearestAttackable path check is a distance test | E |
+| 99 | VillagerGolem | wt | no | no | Partial; [iron-golem](iron-golem.md); step sounds, collide retargeting, rose model and walking dust are ported; the monster target nearbyOnly path check (end within 1.5, cached 10 + nextInt(5) ticks on the task) is probed and ported (villager-polish-reference.json) | E |
 | 100 | EntityHorse | wi | no | yes | Implemented; [horses](horses.md); renderer not visually verified | E |
-| 120 | Villager | yv | no | yes | Partial; [villager-trading-live](villager-trading-live.md); every trade-table item maps to a browser item (no "?"); village systems in village.md; villager NBT import belongs to the interchange track | E |
+| 120 | Villager | yv | no | yes | Partial; [villager-trading-live](villager-trading-live.md); every trade-table item maps to a browser item (no "?"); village systems in village.md; status 12/13/14 particles (visual Random draws), the +5 default-reputation flag and the MoveIndoors biome/hasNoSky gate are probed and ported; villager NBT import belongs to the interchange track | E |
 | 200 | EnderCrystal | wz | no | no | Implemented; [dragon](dragon.md); spike crystals placed by DimensionWorld.endCrystals() | E |
