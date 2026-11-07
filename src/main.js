@@ -91,7 +91,7 @@ import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import { NetherLive } from './nether-portal-live.js'; // nether portal lighting/removal and nether wart
 import {Farming,cropDrops} from "./farming.js";
-import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox } from "./entities.js";
+import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox, setEntityBoxes } from "./entities.js";
 import { BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
 import { deathMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
 import { ChatUi, printChat, chat } from "./chat-ui.js";
@@ -219,6 +219,8 @@ import { Doors, WOODEN_DOOR_ITEM, IRON_DOOR_ITEM, blockItemId } from "./doors-pa
 import { MinecartRenderer } from "./minecart-renderer.js";
 import { BoatRenderer } from "./boat-renderer.js";
 import { Boats, BOAT_ITEM } from "./boats.js";
+import { boatBoxProvider } from "./entity-collision.js";
+import { linkVehicleRiders } from "./vehicle-riders.js";
 import { Hanging, pickHanging, hangingArrowTargets } from "./hanging.js";
 import { HangingRenderer } from "./hanging-renderer.js";
 import { SKULL, SKULLS, Skulls } from "./skull.js";
@@ -375,6 +377,8 @@ let sounds,
 let spawners = null, minecarts = null, minecartRenderer = null, aimedCart = null;
 // Boats (boats.js): their own system and renderer next to the minecarts.
 let boats = new Boats(), boatRenderer = null;
+// World.getCollidingBoundingBoxes adds EntityBoat's box: the player and mobs stand on and bump into boats (entity-collision.js).
+setEntityBoxes(boatBoxProvider({ get carts() { return boats?.carts; } }));
 // Paintings and item frames (hanging.js): live entities, their renderer and the one under the crosshair.
 let hanging = new Hanging(), hangingRenderer = null, aimedHanging = null;
 // Signs (signs.js): the tile entities (text) of every sign block, drawn by sign-renderer.js.
@@ -1146,6 +1150,7 @@ async function launch(record, prepared) {
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
     mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities);
     mobs.fx = scene.fx;
+    linkVehicleRiders(mobs.entities, boats.carts, minecarts?.carts, (m) => mobs.size(m)[1]); // mobs saved riding a boat or cart
     if (pendingDragon) {
       pendingDragon = false;
       if (world.dimension === 1) {
@@ -2637,7 +2642,12 @@ function edit(place = false) {
     // ItemBoat.onItemRightClick: a water trace along the view ray (works on land too); the boat is taken
     // from the stack except in Creative.
     placeBoat: () => {
-      if (!eyeRay || !boats.place(world, { eye: eyeRay.origin, dir: eyeRay.dir, yaw: Math.fround(180 - yaw * 180 / Math.PI) })) return false;
+      // Entities the new boat must not overlap (the player, mobs, boats, carts) and the canBeCollidedWith ones its line of sight checks.
+      const pbox = [position.x - PHYSICS.width / 2, position.y, position.z - PHYSICS.width / 2, position.x + PHYSICS.width / 2, position.y + PHYSICS.height, position.z + PHYSICS.width / 2];
+      const alive = mobs.entities.filter((e) => e.health > 0).map((e) => { const [w, h] = mobs.size(e); return { bb: [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2] }; });
+      const solid = [...boats.carts, ...(minecarts?.carts ?? [])].filter((c) => !c.dead && c.bb).map((c) => ({ bb: c.bb }));
+      const sight = [...alive, ...solid];
+      if (!eyeRay || !boats.place(world, { eye: eyeRay.origin, dir: eyeRay.dir, yaw: Math.fround(180 - yaw * 180 / Math.PI), box: pbox }, [{ bb: pbox }, ...sight], sight)) return false;
       if (!survival.creative) survival.take(BOAT_ITEM, 1);
       animation.swing(); renderHotbar(); saved = false;
       return true;
@@ -3503,6 +3513,8 @@ function shadowCasters(partial) {
   for (const o of xpOrbs.orbs) list.push({ ...SHADOWS.orb, x: lerp(o.px, o.x), y: lerp(o.py, o.y) + 0.25, z: lerp(o.pz, o.z), pos: { x: o.x, y: o.posY, z: o.z }, height: 0.5 });
   // The local player casts a shadow only when it is on screen.
   if (thirdPersonView > 0 && !survival.effects.has(INVISIBILITY)) list.push(playerShadowCaster(position, previous, partial, SHADOWS.player, motion.prevYSize, motion.ySize));
+  // RenderBoat: shadowSize 0.5; getShadowSize is 0, so `height` 0 keeps the cast at the boat's posY.
+  for (const b of boats.carts) if (!b.dead && (!world.streaming || world.isLoaded(b.x, b.z))) list.push({ ...SHADOWS.boat, x: lerp(b.px, b.x), y: lerp(b.py, b.posY), z: lerp(b.pz, b.z), pos: { x: b.x, y: b.posY, z: b.z }, height: 0 });
   for (const e of mobs?.entities ?? []) {
     const child = e.growingAge < 0;
     // RendererLivingEntity passes Render.doRenderShadowAndFire no shadow for an invisible mob.

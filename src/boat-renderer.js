@@ -1,6 +1,6 @@
 // RenderBoat (bne) with ModelBoat (bhe): the five boxes of entity/boat.png (64 x 32) at 1/16, drawn after
 // translate to the interpolated position, rotate (180 - yaw) about Y, the hit wobble about X (Boats.renderPose)
-// and scale(-1, -1, 1). The 0.5 shadow is not drawn.
+// and scale(-1, -1, 1). The 0.5 shadow is drawn by shadows.js (main.js shadowCasters).
 import * as THREE from "three";
 import { skinBox, pixelTexture } from "./first-person.js";
 import { entityMaterial } from "./light-material.js";

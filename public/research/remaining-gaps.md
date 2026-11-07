@@ -40,12 +40,12 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 ## Priority 2: entities and AI
 - Spawner minecart (MinecartSpawner): implemented, see `spawner-cart.md`; gaps are Java region import of carts and SpawnData Riding chains.
 - Natural spawning: Partial. Batch 13 ports SpawnerAnimals.findChunksForSpawning with every biome's spawn lists, caps, HashMap chunk order, group data, the 400-tick animal cadence, Peaceful/doMobSpawning and the Nether/fortress/End lists (`natural-spawning.md`; 3 seeded native replays match). Open: the cap counts only the ticking window (36 chunks in streamed worlds, not 289), the cadence uses a session counter rather than the saved total world time, no dimension spawn point, the witch hut lookup only in swamp slots, and no replay reached bats, slimes, ocelots, horses or the Nether/End flow.
-- Boats: not standable; see `boats.md`.
+- Boats: standable and collidable (batch 14 native records), with the ItemBoat entity line of sight, mob passengers and the 0.5 shadow; remaining gaps in `boats.md`.
 - Fireballs and thrown potions: fireballs are not saved; thrown potions are missing from region export.
 - Wither: effect on mobs and wither skull behaviour listed in `entity-parity-catalogue.md` as Partial.
 - Ender Dragon: model is bytecode-derived; remaining gaps in `dragon.md`.
 - Villager: Partial; see the entity catalogue gap text.
-- Riders: region chains are saved since batch 11; `/summon` with a `Riding` tag now mounts mob on mob; mobs on carts/boats are unsupported.
+- Riders: region chains are saved since batch 11; `/summon` with a `Riding` tag now mounts mob on mob; mobs on carts and boats are kept by pickup (carts), `/summon` and browser saves (batch 14); region export/import of those chains and chunk-streamed saves are open (`boats.md`, `minecarts.md`).
 
 ## Priority 3: commands
 - Batch 13 implemented /tellraw (chat components with click/hover), /achievement, /spreadplayers, /debug and /scoreboard. See [commands-b13.md](commands-b13.md). No registered command reports itself unavailable now. What is still Partial:

@@ -38,7 +38,7 @@ export function summonCart(minecarts, type, x, y, z, tag) {
   const cart = minecarts.spawnCart(type, record);
   const motion = tag instanceof Map ? nbtGet(tag, "Motion", NBT.LIST) : null;
   if (motion?.elementType === NBT.DOUBLE) [cart.vx, cart.vy, cart.vz] = [0, 1, 2].map((i) => (Number.isFinite(motion.items[i]) && Math.abs(motion.items[i]) <= 10 ? motion.items[i] : 0));
-  return { ignored };
+  return { ignored, cart };
 }
 
 // MobSpawnerBaseLogic.readFromNBT (agq.a(dh)) over a command tag: EntityId, Delay, MinSpawnDelay (with MaxSpawnDelay and SpawnCount),

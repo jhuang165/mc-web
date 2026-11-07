@@ -8,6 +8,7 @@
 // (Entity.ridingEntity) and `riddenBy` on the mount (Entity.riddenByEntity). A save keeps one enumerable field,
 // `riding`: the mount's id on the rider, which loading turns back into the references (linkRiders).
 import { mhSin, mhCos } from "./lighting.js";
+import { isVehicle, vehicleSeat } from "./vehicle-seat.js";
 
 const f = Math.fround;
 
@@ -20,6 +21,7 @@ export const mountedYOffset = (height) => f(height) * 0.75;
 // (wg.ac) instead sits the rider on the chicken's body: (x + 0.1F * sin, y + height * 0.5F + rider.getYOffset(),
 // z - 0.1F * cos) from renderYawOffset, and gives a living rider the chicken's renderYawOffset.
 export function seatPosition(mount, rider, mountHeight) {
+  if (isVehicle(mount)) return vehicleSeat(mount, riderYOffset(rider.type)); // boats and minecarts (vehicle-seat.js)
   if (mount.type === "chicken") {
     const a = f(f(mount.renderYawOffset * f(Math.PI)) / 180), s = mhSin(a), c = mhCos(a);
     return { x: mount.x + f(f(0.1) * s), y: mount.y + f(f(mountHeight) * f(0.5)) + riderYOffset(rider.type) + 0, z: mount.z - f(f(0.1) * c), renderYaw: mount.renderYawOffset };
@@ -66,7 +68,8 @@ export function mountEntity(rider, mount, heightOf) {
 export function releaseDead(entities) {
   for (const e of entities) {
     const m = e.ridingEntity;
-    if (m && (!entities.includes(m) || (m.health <= 0 && m.death >= 20))) {
+    // A boat or minecart is not in the mob list: it frees the rider when it is dead (Entity.updateRidden's isDead branch).
+    if (m && (isVehicle(m) ? m.dead : !entities.includes(m) || (m.health <= 0 && m.death >= 20))) {
       hide(e, "ridingEntity", null);
       if (m.riddenBy === e) hide(m, "riddenBy", null);
     }
@@ -110,8 +113,8 @@ export function endRidden(e, heightOf) {
   e.z = seat.z;
   if (seat.renderYaw !== undefined && e.health > 0) e.renderYawOffset = seat.renderYaw;
   const d = deltas.get(e) ?? { yaw: 0, pitch: 0 };
-  d.yaw += f((m.rotationYaw ?? 0) - (m.prevRotationYaw ?? 0));
-  d.pitch += f((m.rotationPitch ?? 0) - (m.prevRotationPitch ?? 0));
+  d.yaw += f((m.rotationYaw ?? m.yaw ?? 0) - (m.prevRotationYaw ?? m.prevYaw ?? 0));
+  d.pitch += f((m.rotationPitch ?? m.pitch ?? 0) - (m.prevRotationPitch ?? m.prevPitch ?? 0));
   while (d.yaw >= 180) d.yaw -= 360;
   while (d.yaw < -180) d.yaw += 360;
   while (d.pitch >= 180) d.pitch -= 360;
@@ -126,11 +129,12 @@ export function endRidden(e, heightOf) {
 }
 
 // A saved rider records its mount's id; loading rebuilds the links and drops an id nothing carries.
-export const ridingId = (e) => e.ridingEntity?.id;
+export const ridingId = (e) => (isVehicle(e.ridingEntity) ? `${e.ridingEntity.boat ? "boat" : "cart"}-${e.ridingEntity.id}` : e.ridingEntity?.id);
 export function linkRiders(entities, heightOf) {
   const byId = new Map(entities.map((e) => [e.id, e]));
   for (const e of entities) {
     const id = e.riding;
+    if (typeof id === "string" && /^(boat|cart)-/.test(id)) continue; // a vehicle's rider: vehicle-riders.js links it once the vehicles are loaded
     delete e.riding;
     const m = typeof id === "string" ? byId.get(id) : null;
     if (m && m !== e && m.health > 0) mountEntity(e, m, heightOf);

@@ -10,6 +10,9 @@ public class BoatProbe extends VehicleProbe {
   static class BW extends VW {
     BW() { super(); }
     List<String> particles = new ArrayList<>();
+    // Record World.rayTraceBlocks [ahb.a(azw, azw, Z)]: it moves its start vector (the eye ItemBoat later tests) while stepping.
+    double[] traceStart;
+    public azu a(azw a, azw b, boolean c) { azu r = super.a(a, b, c); traceStart = new double[] {a.a, a.b, a.c}; return r; }
     public boolean d(int x, int y, int z, aji b, int meta, int flags) { put(x, y, z, aji.b(b), meta); return true; }
     public boolean f(int x, int y, int z) { put(x, y, z, 0, 0); return true; }
     public boolean a(int x, int y, int z, boolean drop) { put(x, y, z, 0, 0); return true; }
@@ -92,6 +95,44 @@ public class BoatProbe extends VehicleProbe {
     System.out.println("{\"kind\":\"placement\",\"block\":" + block + ",\"meta\":" + meta + ",\"yaw\":" + yaw + ",\"side\":" + sideBlock + ",\"creative\":" + creative + ",\"count\":" + result.b + ",\"boat\":"
       + (b == null ? "null" : "[" + num(b.s) + "," + num(b.t) + "," + num(b.u) + "," + b.y + "]") + "}");
   }
+
+  // Entity.moveEntity [sa.d] against World.getCollidingBoundingBoxes(entity, box) [ahb.a(sa, azt)] with entity boxes:
+  // EntityBoat.getBoundingBox [xi.J] is its box, EntityMinecart.getBoundingBox [xl.J] is null. A mover with `step` is
+  // sa.W (stepHeight). `moves` are [dx, dy, dz] per tick, applied each tick; the record lists feet, onGround and fall.
+  static void collide(String name, boolean cart, double[] vehicle, double[] start, double[][] moves, float step) throws Exception {
+    BW w = bw(new int[][] {});
+    sa v = cart ? new xm(w, vehicle[0], vehicle[1], vehicle[2]) : boat(w, vehicle[0], vehicle[1], vehicle[2], 0, 0, 0, 0);
+    if (cart) w.entities.add(v);
+    Rider p = rider(w, 0, 0); p.b(start[0], start[1], start[2]);
+    PlayerStepProbe.set(p, "c", new bli()); PlayerStepProbe.set(p, "J", true); PlayerStepProbe.set(p, "W", step);
+    StringBuilder ticks = new StringBuilder("[");
+    for (int t = 0; t < moves.length; t++) {
+      p.d(moves[t][0], moves[t][1], moves[t][2]);
+      if (t > 0) ticks.append(',');
+      ticks.append("[").append(num(p.s)).append(',').append(num(p.t)).append(',').append(num(p.u)).append(',').append(p.D).append(',').append(p.E).append(',').append(p.F).append(',').append(num(p.v)).append(',').append(num(p.w)).append(',').append(num(p.x)).append(']');
+    }
+    System.out.println("{\"kind\":\"collide\",\"name\":\"" + name + "\",\"cart\":" + cart + ",\"vehicle\":" + Arrays.toString(vehicle) + ",\"start\":" + Arrays.toString(start) + ",\"step\":" + step
+      + ",\"vehicleBox\":[" + num(v.C.a) + "," + num(v.C.b) + "," + num(v.C.c) + "," + num(v.C.d) + "," + num(v.C.e) + "," + num(v.C.f) + "],\"ticks\":" + ticks + "]}");
+  }
+  static double[][] repeat(int n, double dx, double dy, double dz) {
+    double[][] m = new double[n][]; for (int i = 0; i < n; i++) m[i] = new double[] {dx, dy, dz}; return m;
+  }
+  // ItemBoat.onItemRightClick's entity line of sight: any canBeCollidedWith entity within the 5-block look box whose
+  // collision box (grown by collisionBorderSize) contains the eye aborts placement. `others` are boats at [x, y, z].
+  static void sight(String name, int[][] cells, double[] pos, float pitch, float yaw, double[][] others, boolean creative) throws Exception {
+    BW w = bw(cells);
+    Rider p = rider(w, yaw, 0); p.b(pos[0], pos[1], pos[2]); p.z = pitch; p.B = pitch; p.A = yaw; p.S = pos[0]; p.T = pos[1]; p.U = pos[2]; p.p = pos[0]; p.q = pos[1]; p.r = pos[2]; p.bE.d = creative;
+    StringBuilder boxes = new StringBuilder("[");
+    for (double[] o : others) { xi b = boat(w, o[0], o[1], o[2], 0, 0, 0, 0); if (boxes.length() > 1) boxes.append(','); boxes.append("[").append(num(b.C.a)).append(',').append(num(b.C.b)).append(',').append(num(b.C.c)).append(',').append(num(b.C.d)).append(',').append(num(b.C.e)).append(',').append(num(b.C.f)).append(']'); }
+    boxes.append(']');
+    int before = w.spawned.size();
+    add stack = new add(adb.d(333), 2, 0);
+    add result = ((abj) stack.b()).a(stack, w, p);
+    sa b = w.spawned.size() > before ? w.spawned.get(w.spawned.size() - 1) : null;
+    System.out.println("{\"kind\":\"sight\",\"name\":\"" + name + "\",\"cells\":" + cells(cells) + ",\"pos\":" + Arrays.toString(pos) + ",\"pitch\":" + pitch + ",\"yaw\":" + yaw + ",\"creative\":" + creative + ",\"others\":" + boxes
+      + ",\"traceStart\":" + (w.traceStart == null ? "null" : "[" + num(w.traceStart[0]) + "," + num(w.traceStart[1]) + "," + num(w.traceStart[2]) + "]") + ",\"count\":" + result.b + ",\"boat\":"
+      + (b == null ? "null" : "[" + num(b.s) + "," + num(b.t) + "," + num(b.u) + "," + b.y + "]") + "}");
+  }
   static int[][] water(int x0, int x1, int z0, int z1) {
     List<int[]> c = new ArrayList<>();
     for (int x = x0; x <= x1; x++) for (int z = z0; z <= z1; z++) { c.add(new int[] {x, -1, z, 9, 0}); c.add(new int[] {x, 0, z, 9, 0}); }
@@ -130,5 +171,32 @@ public class BoatProbe extends VehicleProbe {
       for (float yaw : new float[] {0, 90, 135, 200, -45}) placement(b[0], b[1], yaw, false, false);
     placement(1, 0, 0, true, false); placement(9, 0, 0, true, false);
     placement(9, 0, 0, false, true);
+
+    // Standable boats, walk-through minecarts.
+    collide("stand-on-boat", false, new double[] {0.5, 0.0, 0.5}, new double[] {0.5, 3.0, 0.5}, repeat(40, 0, -0.2, 0), 0f);
+    collide("walk-into-boat-side", false, new double[] {0.5, 0.0, 0.5}, new double[] {-1.5, 0.0, 0.5}, repeat(30, 0.2, -0.08, 0), 0f);
+    collide("walk-into-boat-side-z", false, new double[] {0.5, 0.0, 0.5}, new double[] {0.5, 0.0, 3.0}, repeat(30, 0, -0.08, -0.2), 0f);
+    collide("step-onto-boat", false, new double[] {0.5, 0.0, 0.5}, new double[] {-1.5, 0.0, 0.5}, repeat(30, 0.2, -0.08, 0), 0.5f);
+    collide("stand-on-raised-boat", false, new double[] {0.5, 0.3, 0.5}, new double[] {-1.5, 0.3, 0.5}, repeat(30, 0.2, -0.08, 0), 0.5f);
+    collide("rise-into-boat-from-below", false, new double[] {0.5, 2.0, 0.5}, new double[] {0.5, 0.0, 0.5}, repeat(20, 0, 0.2, 0), 0f);
+    collide("edge-walk-off-boat", false, new double[] {0.5, 0.0, 0.5}, new double[] {0.5, 0.6, 0.5}, repeat(30, 0.1, -0.08, 0), 0f);
+    collide("fall-through-minecart", true, new double[] {0.5, 0.0, 0.5}, new double[] {0.5, 3.0, 0.5}, repeat(40, 0, -0.2, 0), 0f);
+    collide("walk-through-minecart", true, new double[] {0.5, 0.0, 0.5}, new double[] {-1.5, 0.0, 0.5}, repeat(30, 0.2, -0.08, 0), 0f);
+    // ItemBoat entity checks: the trace moves the eye vector, so the line of sight tests the hit cell's entry point.
+    int[][] one = {{2, 1, 4, 9, 0}}; double[] down = {2.5, 3, 4.5};
+    sight("none", one, down, 90, 0, new double[][] {}, false);
+    sight("eye-inside-boat", one, down, 90, 0, new double[][] {{2.5, 4.3, 4.5}}, false);
+    sight("boat-beside-target", one, down, 90, 0, new double[][] {{2.5, 4.3, 6.5}}, false);
+    sight("boat-on-target", one, down, 90, 0, new double[][] {{2.5, 2.0, 4.5}}, false);
+    sight("hit-entry-boat", one, down, 90, 0, new double[][] {{2.5, 1.4, 4.5}}, false);
+    sight("hit-entry-boat-creative", one, down, 90, 0, new double[][] {{2.5, 1.4, 4.5}}, true);
+    sight("hit-entry-boat-offset", one, down, 90, 0, new double[][] {{3.3, 1.4, 4.5}}, false);
+    sight("boat-above-target-clear", one, down, 90, 0, new double[][] {{2.5, 3.5, 4.5}}, false);
+    int[][] big = water(-4, 12, -4, 12);
+    sight("slant-45", big, new double[] {0.5, 1.9, 0.5}, 45, 0, new double[][] {}, false);
+    sight("slant-45-yaw-90", big, new double[] {0.5, 1.9, 0.5}, 45, 90, new double[][] {}, false);
+    sight("slant-60-yaw-200", big, new double[] {5.3, 2.2, 5.7}, 60, 200, new double[][] {}, false);
+    sight("shallow-25-yaw-30", big, new double[] {3.1, 0.9, 3.9}, 25, 30, new double[][] {}, false);
+    sight("slant-45-hit-entry", big, new double[] {0.5, 1.9, 0.5}, 45, 0, new double[][] {{0.5, 0.35, 3.02}}, false);
   }
 }
