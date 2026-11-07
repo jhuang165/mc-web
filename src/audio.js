@@ -2,7 +2,8 @@ import { soundTypeOf } from "./block-sounds.js";
 import { soundLevel, normalizedVolume, normalizedPitch } from "./settings.js";
 import { applySoundLayers } from "./pack-sounds.js";
 import { packStore } from "./resource-packs.js";
-import { ATTENUATION, ChannelPool, NORMAL_CHANNELS, STREAMING_CHANNELS, alGain, attenuationDistance, distanceDelayTicks, sourceDistance, sourceGain, stereoPan } from "./sound-channels.js";
+import { ATTENUATION, ChannelPool, NORMAL_CHANNELS, STREAMING_CHANNELS, UNPOSITIONED, alGain, attenuationDistance, distanceDelayTicks, sourceDistance, sourceGain, stereoPan } from "./sound-channels.js";
+import { SoundBookkeeping } from "./sound-bookkeeping.js";
 // The sound family of a block's Block.SoundType: its break event is "dig." + family and its step event "step." + stepSound.
 // One native table (block-sounds.js, public/research/block-sounds.md) replaces the old per-block choices.
 export const blockSound = (id) => soundTypeOf(id).break.slice(4);
@@ -23,6 +24,17 @@ export class SoundBank {
     this.delayed = []; // SoundManager.delayedSounds: { due, event, options }
     this.ticks = 0; // SoundManager.playTime
     this.streams = new Set(); // playing stream handles: music and records (HTMLAudioElement through the graph)
+    // SoundManager's playingSounds / playingSoundsStopTime for the streams (sound-bookkeeping.js, probe-replayed): isPlaying is
+    // SoundManager.isSoundPlaying, including the 20-tick stop time. The source plays from the moment the stream is started,
+    // as paulscode's command and stream threads begin a source within a tick (public/research/sound.md).
+    this.byName = new Map();
+    this.book = new SoundBookkeeping({
+      playing: (name) => !!this.byName.get(name)?.playing,
+      stop: (name) => this.stop(this.byName.get(name)),
+      remove: (name) => this.byName.delete(name),
+      start: (sound, name) => this.byName.set(name, sound.handle),
+      apply: () => {},
+    });
     this.records = new Map(); // "x,y,z" -> the jukebox's record handle (RenderGlobal.mapSoundPositions)
     this.streaming = false;
     // The music and record streams are optional: npm run music:fetch installs them under the Git-ignored
@@ -142,12 +154,16 @@ export class SoundBank {
   // delay (WorldClient.playSound with distanceDelay: fireworks) is due.
   tick() {
     this.ticks++;
+    this.book.update();
     const due = this.delayed.filter((d) => this.ticks >= d.due);
     if (!due.length) return;
     this.delayed = this.delayed.filter((d) => this.ticks < d.due);
     for (const d of due) this.play(d.event, d.options);
   }
   async play(event, { volume = 1, pitch = 1, position = null, distanceDelay = false } = {}) {
+    // The GUI button click is PositionedSoundRecord.func_147674_a: ATTENUATION_NONE at the world origin, which OpenAL still
+    // places in the world while a world is open (sound-channels.js UNPOSITIONED).
+    const ui = !position && event === "gui.button.press" && !!this.listener().inWorld;
     if (distanceDelay && position) {
       const l = this.listener(), delay = distanceDelayTicks((position.x - l.x) ** 2 + ((position.y || 0) - l.y) ** 2 + (position.z - l.z) ** 2);
       if (delay > 0) {
@@ -170,13 +186,14 @@ export class SoundBank {
         gain = this.context.createGain();
       source.buffer = buffer;
       source.playbackRate.value = normalizedPitch(pitch, clip.pitch ?? 1);
-      const { attenuation, pan } = this.spatial(position, volume);
-      const playing = { gain, volume, entryVolume, category: clip.category, attenuation, position, playing: true, source };
+      const { attenuation, pan } = this.spatial(position ?? (ui ? UNPOSITIONED : null), volume, ui);
+      const playing = { gain, volume, entryVolume, category: clip.category, attenuation, position, ui, playing: true, source };
       const { prev, prevPlaying } = this.normal.acquire(playing);
       if (prev && prevPlaying) this.evict(prev);
       gain.gain.value = this.gainOf(playing);
       source.connect(gain);
-      if (position && this.context.createStereoPanner) {
+      // OpenAL places only mono buffers; a stereo clip keeps its own image (only its gain follows the distance).
+      if ((position || ui) && buffer.numberOfChannels === 1 && this.context.createStereoPanner) {
         const p = (playing.panner = this.context.createStereoPanner());
         p.pan.value = pan;
         gain.connect(p).connect(this.context.destination);
@@ -192,12 +209,13 @@ export class SoundBank {
   // LINEAR attenuation at a position, as paulscode computes it (sound-channels.js, probed): SoundManager.playSound passes 16
   // blocks, or 16 * volume above volume 1, as the distance; the gain is 1 - distance / distance in floats, with the listener at
   // the player's interpolated eye position. No position: ATTENUATION NONE, gain 1.
-  spatial(position, volume) {
+  spatial(position, volume, ui = false) {
     if (!position) return { attenuation: 1, pan: 0 };
+    if (ui) return { attenuation: 1, pan: stereoPan(position, this.listener()) }; // ATTENUATION_NONE: gain 1
     const listener = this.listener();
     return {
       attenuation: sourceGain(ATTENUATION.LINEAR, sourceDistance(position, listener), attenuationDistance(volume)),
-      pan: stereoPan(position, listener, listener.yaw),
+      pan: stereoPan(position, listener),
     };
   }
   // A sound taken over by the channel rotation (Library.getNextChannel) stops at once.
@@ -212,12 +230,14 @@ export class SoundBank {
   // registers the ISound; isPlaying(handle) turns false when it ends, fails or is stopped, or when it was skipped (sound
   // off, master or category volume 0, streams not installed), so MusicTicker then rolls its next delay.
   playStream(event, { volume = 1, pitch = 1, position = null } = {}) {
-    const handle = { event, volume, pitch, position, playing: false, paused: false, audio: null };
+    const handle = { event, volume, pitch, position, playing: false, paused: false, audio: null, sound: null };
     if (!this.options().sound || this.master() <= 0) return handle;
     // Before the page's first gesture (which calls unlock) there is no running context and the browser refuses playback:
     // skipped, like a sound the sound system could not start (the menu music then retries after its next delay).
     if (!this.context || this.context.state !== "running") return handle;
     handle.playing = true;
+    handle.sound = { handle, canRepeat: false, repeatDelay: 0 };
+    this.book.play(handle.sound);
     this.ready.then(() => this.startStream(handle)).catch(() => this.stop(handle));
     return handle;
   }
@@ -234,23 +254,22 @@ export class SoundBank {
     audio.preservesPitch = false;
     audio.playbackRate = normalizedPitch(handle.pitch, clip.pitch ?? 1);
     const source = this.context.createMediaElementSource(audio), gain = this.context.createGain();
-    const { attenuation, pan } = this.spatial(handle.position, handle.volume);
+    const { attenuation } = this.spatial(handle.position, handle.volume);
     Object.assign(handle, { audio, source, gain, entryVolume, category: clip.category, attenuation });
     gain.gain.value = this.gainOf(handle);
+    // Music and the record discs are stereo ogg files: OpenAL does not place stereo buffers, so only the distance gain applies.
     source.connect(gain);
-    if (handle.position && this.context.createStereoPanner) {
-      handle.panner = this.context.createStereoPanner();
-      handle.panner.pan.value = pan;
-      gain.connect(handle.panner).connect(this.context.destination);
-    } else gain.connect(this.context.destination);
+    gain.connect(this.context.destination);
     this.streams.add(handle);
     const end = () => this.stop(handle);
     audio.onended = end;
     audio.onerror = end;
     if (!handle.paused) audio.play().catch(end);
   }
+  // SoundManager.isSoundPlaying (sound-bookkeeping.js): true while the source plays, and for a stopped or ended one until the
+  // update pass of the tick drops it once its 20-tick stop time is past; a sound that never started is not playing.
   isPlaying(handle) {
-    return !!handle?.playing;
+    return !!handle?.sound && this.book.isSoundPlaying(handle.sound);
   }
   stop(handle) {
     if (!handle) return;
@@ -293,6 +312,8 @@ export class SoundBank {
       this.active.delete(source);
     }
     this.delayed.length = 0;
+    this.book.stopAll();
+    this.byName.clear();
     this.normal.clear();
     this.streamChannels.clear();
     this.records.clear();
@@ -308,8 +329,8 @@ export class SoundBank {
   // Once per tick: the listener has moved, so every positioned sound (Source.listenerMoved) takes its new falloff and pan.
   updateStreams() {
     for (const h of [...this.streams, ...this.active.values()]) {
-      if (!h.position) continue;
-      const { attenuation, pan } = this.spatial(h.position, h.volume);
+      if (!h.position && !h.ui) continue;
+      const { attenuation, pan } = this.spatial(h.position ?? UNPOSITIONED, h.volume, !h.position);
       h.attenuation = attenuation;
       h.gain.gain.value = this.gainOf(h);
       if (h.panner) h.panner.pan.value = pan;

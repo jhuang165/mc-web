@@ -3731,7 +3731,16 @@ async function boot(){try {
   xpRenderer=new ExperienceRenderer(scene.scene);
   sounds = new SoundBank(
     () => options,
-    () => ({ ...position, y: position.y + PHYSICS.eye, yaw }), // SoundManager.setListener: the player's posY, which is the eye
+    // SoundManager.setListener (probed): the player's posY (the eye, lowered by ySize while sneaking) interpolated by the partial tick, and the look.
+    () => {
+      const t = Math.min(1, accumulator / PHYSICS.tick);
+      return {
+        x: previous.x + (position.x - previous.x) * t,
+        y: previous.y + (position.y - previous.y) * t + PHYSICS.eye - motion.drop(t),
+        z: previous.z + (position.z - previous.z) * t,
+        yaw, pitch, inWorld: screen !== "home",
+      };
+    },
   );
   firstPerson = new FirstPerson(scene.renderer, scene.textures.texture, scene.lighting);
   mobRenderer = new MobRenderer(scene.scene, scene);
