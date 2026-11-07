@@ -176,7 +176,8 @@ test("the CanBreakDoors roll and the leader zombie: doors, max health and reinfo
 });
 
 test("a zombie that has collided runs the task through the live tick", () => {
-  const { ew, z, w } = setup(3, 0, { collided: false });
+  // Seed 1: the first Wander roll (nextInt(120), ahead of the break-door task in the list) misses, so its path does not replace the door path.
+  const { ew, z, w } = setup(3, 1, { collided: false });
   z.collidedH = true;
   ew.world.solid = () => false;
   const player = { x: 5.5, y: 0, z: 5.5, health: 20 };

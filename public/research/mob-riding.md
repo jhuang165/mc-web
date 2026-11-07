@@ -51,7 +51,13 @@ A mob can ride another mob: a skeleton on a spider (a spider jockey), a baby zom
 
 ## Batch 18: saved flag and interchange
 
-`CanBreakDoors` is now written to Java region exports from the zombie's break-door flag (it was always 0) and read back on import and `/summon` (`setBreakDoorsAItask(tag.getBoolean("CanBreakDoors"))`), so rolled and leader zombies keep the door task across interchange (`java-mobs.test.js`). The break timing, the Hard-only removal, the 1/20 `mob.zombie.wood` roll, the crack stages and the aux events 1010, 1012 and 2001 were already probed above (32 records); the task never breaks iron doors. Pigmen run the same `EntityZombie.onSpawnWithEgg` roll natively (the draw is consumed here) but the port does not store or run a break-door task for them, and writes `CanBreakDoors` 0 for pigmen.
+`CanBreakDoors` is now written to Java region exports from the zombie's break-door flag (it was always 0) and read back on import and `/summon` (`setBreakDoorsAItask(tag.getBoolean("CanBreakDoors"))`), so rolled and leader zombies keep the door task across interchange (`java-mobs.test.js`). The break timing, the Hard-only removal, the 1/20 `mob.zombie.wood` roll, the crack stages and the aux events 1010, 1012 and 2001 were already probed above (32 records); the task never breaks iron doors. Pigmen run the same `EntityZombie.onSpawnWithEgg` roll natively (the draw is consumed here) and, as of batch 19, store the flag and export it (see below); the task itself never runs on them natively.
+
+## Batch 19: pigmen and the walking zombie
+
+`EntityPigZombie` (`yh`) extends `EntityZombie`: `yh.a(sy)` runs `yq.a(sy)` (the same CanBreakDoors roll and leader bonus) and then `setVillager(false)`, and `yq.a(dh)` / `yq.b(dh)` read and write `CanBreakDoors` for it. But `yh.bk()` (isAIEnabled) returns false, and `EntityLivingBase.onLivingUpdate` only calls `updateAITasks` when `bk()` is true, so no `EntityAI*` task, the break-door task included, ever runs on a pigman. Probed natively (`ZombieDoorWalkProbe`, 2 records: tag read, tag written, `bk()` on both classes; `zombie-door-walk-reference.json`): the pigman now stores the rolled flag, saves and loads it (`entities.js`), exports it to and imports it from Java regions and `/summon` (`CanBreakDoors`, previously always 0), and runs no door task. A leader pigman's max-health bonus is not stored (the port keeps `maxHealth` for zombies only).
+
+The zombie's full door walk in a ticking world is probed and replayed: see [village](village.md#batch-19-a-zombie-walking-a-door-path-probed).
 
 ## Gaps
 

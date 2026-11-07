@@ -207,6 +207,12 @@ for (const [name, kind, note] of [["potion-sustains", 7, "an EntityPotion in the
   const ev = [[3, "entity2", 3, 1, 2, 1], [3, "collide", 3, 1, 2], [5, "entity2", 3, 1, 2, kind], [8, "unentity2", 3, 1, 2, 1], [30, "unentity2", 3, 1, 2, kind]];
   SCENARIOS.push(scenario(name + "-hold-line", { size: [8, 3, 5], ticks: 60, cells: c, events: ev, note: note + " keeps a mob-tripped line powered (getEntitiesWithinAABB takes every entity) until it leaves" }));
 }
+// Batch 19: a thrown potion or bottle idling in the string's cell (no collide call, as neither runs Entity.func_145775_I) never trips an idle string.
+for (const [name, kind] of [["potion-idle", 7], ["exp-bottle-idle", 11]]) {
+  const c = xLine({}, 0, 7, 2, { attachedBits: 4, stringMeta: 4 });
+  const ev = [[3, "entity2", 3, 1, 2, kind], [20, "unentity2", 3, 1, 2, kind]];
+  SCENARIOS.push(scenario(name, { size: [8, 3, 5], ticks: 40, cells: c, events: ev, note: "an idle " + (kind === 7 ? "EntityPotion" : "EntityExpBottle") + " in the string cell with no collide call: the line is never powered" }));
+}
 
 // ---- Native run ----
 const researchDirs = [process.env.MC_RESEARCH, path.join(root, "research"), path.join(root, "../../tools/research")].filter(Boolean);

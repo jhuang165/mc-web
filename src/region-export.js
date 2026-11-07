@@ -118,7 +118,7 @@ function payload(state,ox,oz,report,blockAt) {
   // EntitySlime.writeEntityToNBT: Size (size - 1); a slime has no Age or InLove.
   if(e.type==='slime'||e.type==='magma_cube'){n.Size=int((e.size??1)-1);delete n.Age;delete n.InLove;}
   // EntityPigZombie.writeEntityToNBT: the short Anger (1.7.10 has no HurtBy tag), then EntityLiving's Equipment (slot 0 is the held sword) and DropChances (0.085 each); no Age or InLove.
-  if(e.type==='pigman'){delete n.Age;delete n.InLove;n.Anger=short(e.angerLevel??0);n.CanBreakDoors=byte(0);n.IsBaby=byte(0);n.IsVillager=byte(0);n.ConversionTime=int(-1);}
+  if(e.type==='pigman'){delete n.Age;delete n.InLove;n.Anger=short(e.angerLevel??0);n.CanBreakDoors=byte(e.canBreakDoors?1:0);n.IsBaby=byte(0);n.IsVillager=byte(0);n.ConversionTime=int(-1);}
   // EntityEnderman.writeEntityToNBT: carried and carriedData as shorts (original block id and metadata; Age and InLove do not apply).
   if(e.type==='enderman'){delete n.Age;delete n.InLove;n.carried=short(e.carried??0);n.carriedData=short(e.carriedData??0);}
   // EntityBat.writeEntityToNBT: BatFlags (bit 1 = hanging); neither a squid nor a bat is an EntityAgeable.

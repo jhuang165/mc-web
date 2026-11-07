@@ -76,6 +76,23 @@ test('export then import keeps zombie villagers, a curing timer, golems and vill
   assert.deepEqual([v.x, v.z], [-6, -2]);
 });
 
+test('a pigman exports and imports CanBreakDoors (batch 19)', async () => {
+  const w = new World('17', 'javaStreamed', 12), player = new Survival({}, 'survival').serialize();
+  const mobs = [
+    { type: 'pigman', x: -2, y: 102, z: -2, health: 20, growingAge: 0, canBreakDoors: true, angerLevel: 0 },
+    { type: 'pigman', x: -3, y: 102, z: -2, health: 20, growingAge: 0, angerLevel: 0 },
+  ];
+  const record = { id: 'pz', name: 'PZ', seed: '17', biome: 'javaStreamed', generationVersion: 12, mode: 'survival', edits: [], player,
+    position: { x: -0.5, y: 102, z: -0.5, yaw: 0, pitch: 0 }, entities: mobs, updated: 1700000000000 };
+  const { files } = await exportJavaSave(record, { world: w });
+  const cx = -1 + w.originX / 16, cz = -1 + w.originZ / 16, a = regionAddress(cx, cz);
+  const chunk = chunkFromNbt(await decodeRegionChunk(readRegion(files.get(`region/r.${a.regionX}.${a.regionZ}.mca`)).get(regionSlot(a.x, a.z))));
+  const pigs = chunk.entities.filter((e) => e.get('id').value === 'PigZombie');
+  assert.deepEqual(pigs.map((p) => p.get('CanBreakDoors').value), [1, 0]);
+  const back = pigs.map((e) => javaMobFromNbt(e, { shiftX: -w.originX, shiftZ: -w.originZ }));
+  assert.deepEqual(back.map((m) => m.canBreakDoors), [true, false]);
+});
+
 test('importing a Java area brings zombie villagers, golems, villagers and the villages inside it', async () => {
   const { Chunk } = await import('./chunk-store.js');
   const { chunkToNbt } = await import('./chunk-nbt.js');
