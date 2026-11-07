@@ -48,14 +48,16 @@ export class PlayerInventory {
     if (randomState) this.random.restore(randomState);
     if (Array.isArray(saved)) saved.slice(0, 36).forEach((s, i) => (this.main[i] = this.read(s)));
     // armor[0] boots ... armor[3] helmet, as InventoryPlayer.armorInventory.
-    if (Array.isArray(armor)) armor.slice(0, 4).forEach((s, i) => { const a = this.read(s); if (a && armorTypeOf(items, a.id) === 3 - i) this.armor[i] = a; });
+    if (Array.isArray(armor)) armor.slice(0, 4).forEach((s, i) => { const a = this.read(s, true); if (a && armorTypeOf(items, a.id) === 3 - i) this.armor[i] = a; });
   }
-  read(s) {
+  // `allowEmpty` keeps a size-0 stack (armour slots only: ItemStack.damageItem leaves a Thorns-broken piece at size 0 and
+  // InventoryPlayer.readFromNBT keeps it; the main inventory rejects it here, a documented difference, see zero-armour-stack.test.js).
+  read(s, allowEmpty = false) {
     // Saves from before ItemDye (id 351) kept bone meal as internal item 310.
     if (s && typeof s === "object" && s.id === 310) s = { ...s, id: 351, damage: 15 };
     const item = s && typeof s === "object" && s.id ? this.items[s.id] : null,
       count = Math.floor(Number(s?.count));
-    if (!item || !(count > 0)) return null;
+    if (!item || !(allowEmpty ? count >= 0 : count > 0)) return null;
     const metadata = {};
     for (const key of TAG_LISTS) if (Array.isArray(s[key])) metadata[key] = s[key].filter((e) => Number.isFinite(e?.id) && Number.isFinite(e?.lvl)).slice(0, 64).map((e) => ({ id: (Math.trunc(e.id) << 16) >> 16, lvl: (Math.trunc(e.lvl) << 16) >> 16 }));
     if (Number.isFinite(s.repairCost)) metadata.repairCost = s.repairCost | 0;
@@ -125,14 +127,16 @@ export class PlayerInventory {
     return true;
   }
   // ItemStack.damageItem, then destroyCurrentEquippedItem for an emptied stack.
-  damage(i, amount = 1) {
+  // `keepEmpty`: ItemStack.damageItem called directly (Thorns wear, the anvil helmet hit) leaves the broken piece at size 0;
+  // InventoryPlayer.damageArmor (ordinary armour wear) clears it, so that path leaves keepEmpty off.
+  damage(i, amount = 1, keepEmpty = false) {
     const s = this.getStack(i);
     if (!s || this.creative || s.unbreakable === true || amount <= 0 || !this.maxDamage(s)) return false;
     const item = this.items[s.id];
     if (!damageLiveItemStack(s, item, amount, this.random)) return false;
     s.count = Math.max(0, s.count - 1);
     s.damage = 0;
-    if (s.count === 0) this.setStack(i, null);
+    if (s.count === 0 && !(keepEmpty && i >= 36 && i < 40)) this.setStack(i, null);
     return true;
   }
   // Middle-click pick block (func_146030_a); `damage` is the block's metadata
@@ -152,7 +156,8 @@ export class PlayerInventory {
     } else this.main[this.current] = makeStack(id, 1, damage ?? 0);
   }
   takeAll() {
-    const out = [...this.main, ...this.armor].filter(Boolean);
+    // A size-0 armour piece is cleared but never dropped: EntityPlayer.func_146097_a returns null for stackSize 0 (bytecode-read).
+    const out = [...this.main, ...this.armor].filter((s) => s && s.count > 0);
     this.main.fill(null);
     this.armor.fill(null);
     return out;

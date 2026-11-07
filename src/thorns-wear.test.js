@@ -64,7 +64,7 @@ test("Thorns armour wear with Unbreaking replays natively for a survival player,
   assert.ok(seen.hit > 500 && seen.miss > 500 && seen.breaks > 100 && Object.keys(seen.unbreaking).length === 3, JSON.stringify(seen));
 });
 
-test("native keeps a broken Thorns piece as a zero-size stack that keeps rolling (probed); the port removes it (pinned difference)", () => {
+test("native keeps a broken Thorns piece as a zero-size stack that keeps rolling (probed); the player port keeps it too (zero-armour-stack.test.js); only the mob port removes it (pinned difference)", () => {
   assert.equal(reference.ghosts.length, 36);
   let rolled = 0;
   for (const [kind, , , , , first, wearerLog, , second] of reference.ghosts) {
@@ -76,5 +76,5 @@ test("native keeps a broken Thorns piece as a zero-size stack that keeps rolling
   assert.equal(rolled, 36);
   const mob = { equipment: [null, null, null, { id: 299, count: 1, damage: 528, enchantments: [{ id: 7, lvl: 1 }] }, null] };
   mobThornsOnPlayerHit(mob, new JavaRandom(5n), { hurt() {}, sound() {} });
-  assert.equal(mob.equipment[3], null, "the port empties the slot where the original keeps the zero-size stack");
+  assert.equal(mob.equipment[3], null, "mob equipment: the port empties the slot where the original keeps the zero-size stack (mob drops, NBT and rendering assume non-empty stacks; unprobed there)");
 });

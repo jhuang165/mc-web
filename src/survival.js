@@ -781,7 +781,7 @@ export class Survival {
       items: () => inv.armor, random: inv.random, hurt, sound,
       wear: (i, amount) => {
         const s = inv.getStack(36 + i);
-        if (s && inv.damage(36 + i, amount)) this.broken = s.id;
+        if (s && inv.damage(36 + i, amount, true)) this.broken = s.id; // Thorns calls ItemStack.damageItem: the piece stays at size 0
       },
     });
   }
@@ -798,7 +798,7 @@ export class Survival {
       // EntityLivingBase: (amount * 4 + rand.nextFloat() * amount * 2) cast to int.
       const randomPart = Math.fround(Math.fround(this.inventory.random.nextFloat() * amount) * 2),
         helmetWear = Math.trunc(Math.fround(Math.fround(amount * 4) + randomPart));
-      if (helmetWear > 0 && this.inventory.damage(39, helmetWear)) this.broken = helmet.id;
+      if (helmetWear > 0 && this.inventory.damage(39, helmetWear, true)) this.broken = helmet.id; // ItemStack.damageItem (bytecode-read): leaves size 0
       amount = Math.fround(amount * Math.fround(0.75));
     }
     return this.damage(amount, kind, true);
@@ -876,6 +876,8 @@ export class Survival {
       wear = Math.floor(Math.max(1, Math.fround(n / 4)));
     for (let i = 36; i < 40; i++) {
       const s = this.inventory.getStack(i);
+      // InventoryPlayer.damageArmor clears a size-0 piece after damageItem (probed), including one Thorns already emptied.
+      if (s && s.count === 0) { this.inventory.setStack(i, null); continue; }
       if (s && ITEMS[s.id]?.armor !== undefined && this.inventory.damage(i, wear)) this.broken = s.id;
     }
     return reduced;

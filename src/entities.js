@@ -1642,7 +1642,7 @@ export class EntityWorld {
     const brain = this.ai.brain(e), village = brain.village;
     if (!village) return;
     // Any living attacker is an aggressor (the player, a mob's melee, a shooter's arrow); only a player costs reputation.
-    const attacker = source.player ? this.ai.player : villageAttacker(this, e, source.attacker);
+    const attacker = source.player ? this.ai.player : villageAttacker(this, e, source.shooter ?? source.attacker);
     if (!attacker) return;
     village.addOrRenewAggressor(attacker);
     if (!source.player) return;

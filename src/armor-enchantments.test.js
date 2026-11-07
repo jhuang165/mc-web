@@ -170,7 +170,7 @@ test("Thorns replays EnchantmentHelper.func_151384_a: rolls, damage, sound and t
     after.forEach((st, i) => {
       const live = s.inventory.armor[i];
       if (st === null) assert.equal(live, null, row);
-      else if (live === null) { gone++; assert.equal(st[1], 0, "a broken piece natively resets to damage 0: " + row); }
+      else if (live === null || live.count === 0) { gone++; assert.equal(st[1], 0, "a broken piece natively resets to damage 0: " + row); } // the player keeps the broken piece at size 0, as natively (zero-armour-stack.test.js)
       else assert.equal(live.damage, st[1], "armour slot " + i + " " + row);
     });
     assert.equal(gone, wearerLog.length, row);
