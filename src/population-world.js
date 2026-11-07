@@ -44,10 +44,13 @@ export class PopulationArea {
   // `structures` (generation versions 14/15) runs the full native four-feature chain (mineshaft, village,
   // stronghold, scatteredFeature) instead of mineshafts only; it needs `manager` (or a StructureCache).
   //
+  // `mapFeatures:false` (streamed generation 17, a level.dat with MapFeatures off) builds no structure generator at all: no search,
+  // no structure populate, village false. Lakes, dungeons and decoration still run (ChunkProviderGenerate/Flat.populate).
+  //
   // `flat` (a FlatGeneratorInfo, flat-world.js) runs ChunkProviderFlat's structure list and populate instead
   // (flat-structures.js): the enabled features only, no animals, no snow, decoration only when the preset has it.
-  constructor({seed, chunkX, chunkZ, size=8, margin=0, terrain, biomeAt, worldRandSeed=0n, structures=false, manager=null, structureCache=null, flat=null}) {
-    this.seed=BigInt(seed); this.chunkX=chunkX; this.chunkZ=chunkZ; this.size=size; this.margin=margin; this.flat=flat;
+  constructor({seed, chunkX, chunkZ, size=8, margin=0, terrain, biomeAt, worldRandSeed=0n, structures=false, manager=null, structureCache=null, flat=null, mapFeatures=true}) {
+    this.seed=BigInt(seed); this.chunkX=chunkX; this.chunkZ=chunkZ; this.size=size; this.margin=margin; this.flat=flat; this.mapFeatures=mapFeatures;
     const full=structures||!!flat, Base=full?structureWorldClass(mineshaftGenWorldClass()):mineshaftGenWorldClass();
     this.world=new (class extends Base {
       // Halo terrain is available, but never populated or searched for new structure starts.
@@ -72,9 +75,9 @@ export class PopulationArea {
       w.getTopSolidOrLiquid=(x,z)=>w.getTopSolidOrLiquidBlock(x,z);
       w.getAverageGroundLevel=()=>64;
       w.notifyBlocksOfNeighborChange=(x,y,z,source)=>w.notifyNeighbors(x,y,z,source);
-      const cache=structureCache??(flat?new FlatStructureCache(this.seed,manager??new FlatChunkManager(flat.biome),flat):new StructureCache(this.seed,manager));
+      const cache=structureCache??(flat?new FlatStructureCache(this.seed,manager??new FlatChunkManager(flat.biome),flat,mapFeatures):new StructureCache(this.seed,manager));
       this.structures=flat
-        ?new (flatStructurePopulation(StructurePopulation))({worldSeed:this.seed,manager:cache.manager,world:w,generators:cache.generators(),info:flat})
+        ?new (flatStructurePopulation(StructurePopulation))({worldSeed:this.seed,manager:cache.manager,world:w,generators:cache.generators(),info:flat,mapFeatures})
         :new StructurePopulation({worldSeed:this.seed,manager:cache.manager,world:w,generators:cache.generators()});
       this.mineshafts=this.structures.generators.mineshaft;
     } else this.mineshafts=new MapGenMineshaft(this.seed);
@@ -84,15 +87,15 @@ export class PopulationArea {
     const {world:w,chunkX:cx,chunkZ:cz,size,margin,seed}=this;
     for(let x=cx-margin;x<cx+size;x++) for(let z=cz-margin;z<cz+size;z++) {
       if(this.structures) { w.chunk(x,z); this.structures.searchChunk(x,z); }
-      else { this.mineshafts.generate(x,z); w.chunk(x,z); }
+      else { if(this.mapFeatures) this.mineshafts.generate(x,z); w.chunk(x,z); }
     }
     const r=new JavaRandom(seed);
     for(let x=cx-margin;x<cx+size;x++) for(let z=cz-margin;z<cz+size;z++) {
       this.order.push([x,z]); hooks.beforePopulate?.(x,z);
       const result=this.structures?this.structures.populateChunk(r,x,z)
-        :populateBeforeDecoration(w,r,seed,x,z,{structures:(random,a,b)=>{
+        :populateBeforeDecoration(w,r,seed,x,z,{structures:this.mapFeatures?(random,a,b)=>{
           this.mineshafts.generateStructuresInChunk(w,random,a,b); return false;
-        }});
+        }:null});
       if(this.flat) { if(this.flat.has('decoration')) this.decoration.decorate(w,r,result.biome.slot,x*16,z*16); }
       else populateTail(w,r,this.decoration,x,z,result.biome.slot);
       hooks.afterPopulate?.(x,z,r,result);

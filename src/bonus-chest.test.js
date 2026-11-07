@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseFlatInfo, FlatChunkProvider } from './flat-world.js';
 import { JavaRandom } from './java-random.js';
-import { BONUS_CONTENTS, createBonusChest } from './bonus-chest.js';
+import { BONUS_CONTENTS, createBonusChest, fillBonusChest, unseededBonusRandom } from './bonus-chest.js';
 
 const reference = JSON.parse(readFileSync(new URL('../public/research/flat-world-reference.json', import.meta.url), 'utf8'));
 const rows = (kind) => reference.records.filter((r) => r.kind === kind);
@@ -40,4 +40,16 @@ test('createBonusChest replays every native record: attempts, block writes, ches
     const hi = random.next(32), lo = random.next(32);
     assert.equal(String(BigInt.asIntN(64, (BigInt(hi) << 32n) + BigInt(lo))), rec.nextLong, label);
   }
+});
+
+test('the game Random is unseeded like World.rand; injected Randoms keep the contents deterministic', () => {
+  // native World.rand = new Random(): a new seed per creation, so two worlds' chests differ; a fixed injected Random does not.
+  const a = unseededBonusRandom(JavaRandom, () => 0.25), b = unseededBonusRandom(JavaRandom, () => 0.75);
+  assert.equal(a.next(32), new JavaRandom(BigInt(2 ** 46)).next(32));
+  assert.notEqual(new JavaRandom(BigInt(Math.floor(0.25 * 2 ** 48))).next(32), b.next(32));
+  const roll = (random) => { const out = []; fillBonusChest(random, (slot, st) => out.push([slot, st.id, st.count])); return out; };
+  assert.deepEqual(roll(new JavaRandom(7)), roll(new JavaRandom(7)));
+  assert.notDeepEqual(roll(unseededBonusRandom(JavaRandom, () => 0.1)), roll(unseededBonusRandom(JavaRandom, () => 0.9)));
+  const x = unseededBonusRandom(JavaRandom), y = unseededBonusRandom(JavaRandom);
+  assert.notEqual(x.next(32), y.next(32));
 });

@@ -210,7 +210,7 @@ import { HorseGearRenderer } from "./horse-gear-renderer.js";
 import { capturePlayerAction, dispatchPlayerAction as dispatchPlayerActionRaw, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
 import { normalizeFlatOptions } from "./flat-world.js";
-import { createBonusChest } from "./bonus-chest.js";
+import { createBonusChest, unseededBonusRandom } from "./bonus-chest.js";
 import { ORIGINAL_ITEMS } from "./original-items.js";
 import { setOriginalBlockMapper } from "./mineshaft-world.js";
 import { spawnerDisplayEntity } from "./mob-spawner.js";
@@ -2879,7 +2879,7 @@ function tickMining() {
   mining = state.mining;
   mineCooldown = state.cooldown;
 }
-// WorldServer.createBonusChest at world creation: once, around the spawn, with the world's own Random (seeded from the world seed).
+// WorldServer.createBonusChest at world creation: once, around the spawn, with an unseeded Random like World.rand (native contents differ per creation; tests inject a fixed Random).
 function placeBonusChest(record) {
   if (!record.bonusChest || record.bonusChestPlaced || world.dimension || !record.worldSpawn) return;
   record.bonusChestPlaced = true;
@@ -2903,7 +2903,7 @@ function placeBonusChest(record) {
     },
   };
   const [sx, , sz] = record.worldSpawn;
-  createBonusChest(access, new JavaRandom(BigInt(javaSeed(record.seed)) ^ 0x5bcn), sx, sz);
+  createBonusChest(access, unseededBonusRandom(JavaRandom), sx, sz);
   if (changes.length) scene.updateBlocks(changes);
   saved = false;
 }

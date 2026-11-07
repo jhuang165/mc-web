@@ -90,7 +90,7 @@ test('levelGenerator continues each world type with its generator', () => {
   assert.equal(kinds['flat-creative-commands'].generatorOptions, '2;7,2x3,2;1;village');
   assert.equal(kinds['flat-creative-commands'].generationVersion, 16);
   assert.equal(kinds['largeBiomes-hardcore'].worldType, 'largeBiomes');
-  assert.equal(kinds['amplified-adventure-nofeatures'].generationVersion, 13);
+  assert.equal(kinds['amplified-adventure-nofeatures'].generationVersion, 17);
   assert.equal(kinds['amplified-adventure-nofeatures'].seed, '-9223372036854775808');
   assert.equal(kinds.default_1_1.worldType, 'default_1_1');
   assert.equal(kinds.default_1_1.seed, '9223372036854775807');
