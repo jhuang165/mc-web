@@ -133,6 +133,10 @@ function payload(state,ox,oz,report,blockAt) {
   if(e.effects?.length&&['zombie','villager','iron_golem'].includes(e.type))n.ActiveEffects=list(NBT.COMPOUND,e.effects.map(x=>new Map([['Id',byte(x.id)],['Amplifier',byte(x.amplifier??0)],['Duration',int(x.duration)],['Ambient',byte(0)]])));
   built.push({e,n});
  }
+ // EntityBoat.writeEntityToNBT writes nothing beyond Entity's fields. Boats and carts are mounts: a mob's `riding` ("boat-<id>", "cart-<id>") nests them
+ // as its Riding compound below, and writeToNBTOptional skips a vehicle that has a rider (riddenByEntity), so a ridden vehicle is no chunk entity of its own.
+ for(const {value:e} of state.boats??[])built.push({e:{...e,id:Number.isInteger(e.id)?`boat-${e.id}`:undefined},n:entity(e,'Boat',ox,oz)});
+ for(const {value:e} of state.carts??[]) {const items=(e.items??[]).map(s=>stackNbt(s,s.slot,report,true)).filter(Boolean),n=entity(e,CART_ENTITY_IDS[e.type]??'MinecartChest',ox,oz);if(isContainerType(e.type))n.Items=list(NBT.COMPOUND,items);for(const [k,p] of Object.entries(variantNBT(e)))n[k]=pairTag(p);if(e.customName)n.CustomName=str(e.customName);built.push({e:{...e,id:Number.isInteger(e.id)?`cart-${e.id}`:undefined},n});}
  // Entity.writeToNBT nests the mount as "Riding" inside its rider (Entity.writeMountToNBT writes it whatever rides it); Entity.writeToNBTOptional skips a
  // mob that has a rider, so a chunk lists only the top rider of each chain (mob-riding.md). A rider whose mount did not export stays unmounted.
  {const byId=new Map(built.filter(b=>typeof b.e.id==='string').map(b=>[b.e.id,b])),mountOf=b=>typeof b.e.riding==='string'&&b.e.riding!==b.e.id?byId.get(b.e.riding):undefined,ridden=new Set();
@@ -143,7 +147,6 @@ function payload(state,ox,oz,report,blockAt) {
  for(const {value:e} of state.tnt??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+TNT_Y_OFFSET},'PrimedTnt',ox,oz),Fuse:byte(e.fuse)})));
  for(const {value:e} of state.xpOrbs??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.25},'XPOrb',ox,oz),Health:short(e.health??5),Age:short(e.age??0),Value:short(e.value??1)})));
  for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta);entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET},'FallingSand',ox,oz),TileID:int(o[0]),Data:byte(o[1]),Time:byte(e.ticks&255),DropItem:byte(1)})));}
- for(const {value:e} of state.carts??[]) {const items=(e.items??[]).map(s=>stackNbt(s,s.slot,report,true)).filter(Boolean),n=entity(e,CART_ENTITY_IDS[e.type]??'MinecartChest',ox,oz);if(isContainerType(e.type))n.Items=list(NBT.COMPOUND,items);for(const [k,p] of Object.entries(variantNBT(e)))n[k]=pairTag(p);if(e.customName)n.CustomName=str(e.customName);entities.push(new Map(Object.entries(n)));}
  // EntityHanging.writeEntityToNBT: Direction (0 south, 1 west, 2 north, 3 east) and the legacy Dir byte (2, 1, 0, 3), the wall block
  // as TileX/Y/Z, then EntityPainting's Motive or EntityItemFrame's Item (original id), ItemRotation and ItemDropChance (src/hanging.js).
  for(const {value:e} of state.hanging??[]) {const base=entity({x:e.x,y:e.y,z:e.z,rotationYaw:e.yaw,rotationPitch:0},e.kind==='painting'?'Painting':'ItemFrame',ox,oz);

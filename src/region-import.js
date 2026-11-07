@@ -218,6 +218,15 @@ export function cartFromNbt(tag, type, { shiftX = 0, shiftZ = 0, lost = () => {}
   return cart;
 }
 
+// EntityBoat.readEntityFromNBT is empty: only Entity's fields come across (Pos[1] is posY, Rotation stays in native degrees) -> a boats.js toJSON record.
+export function boatFromNbt(tag, { shiftX = 0, shiftZ = 0 } = {}) {
+  const pos = get(tag, 'Pos', NBT.LIST).items, motion = get(tag, 'Motion', NBT.LIST), rotation = get(tag, 'Rotation', NBT.LIST);
+  return { x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ,
+    motion: motion?.elementType === NBT.DOUBLE && motion.items.length === 3 && motion.items.every(Number.isFinite) ? [...motion.items] : [0, 0, 0],
+    rotation: rotation?.elementType === NBT.FLOAT && rotation.items.length === 2 && rotation.items.every(Number.isFinite) ? [...rotation.items] : [0, 0],
+    fallDistance: get(tag, 'FallDistance', NBT.FLOAT, 0), fire: get(tag, 'Fire', NBT.SHORT, 0), onGround: get(tag, 'OnGround', NBT.BYTE, 0) !== 0 };
+}
+
 // The level.dat half of a level import: the streamed generator, WorldInfo's flags and the player (level-dat.md).
 function levelRecord(record, { level, levelGen, javaPlayer: first, world, generationVersion, mode, report, importedColumns, stats, name }) {
   const ox = world.originX, oz = world.originZ;
@@ -357,7 +366,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   const signs = [], skulls = [], beacons = [], spawners = [], importedColumns = {};
   const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = []; let chainCount = 0;
   const projectileLists = { projectiles: [], thrownPotions: [], arrows: [], fireballs: [], eyes: [], rockets: [] };
-  const hanging = [], carts = [];
+  const hanging = [], carts = [], boats = [];
   let edits = 0;
   const write = (x, y, z, block, meta) => {
     if (world.get(x, y, z) === block && world.getMeta(x, y, z) === meta) return;
@@ -528,9 +537,27 @@ export async function importJavaRegionArea(regions, options = {}) {
         if (mob) { if (mid) mob.id = mid; mobs.push(mob); tally(entityConverted, mtype); } else tally(entityLost, !inArea ? `${mtype} (outside area)` : `${mtype} (over mob limit)`);
         return mob;
       };
+      // A mount can also be an EntityBoat or EntityMinecart (vehicle-riders.js): the vehicle becomes a boats.js / minecarts.js record whose id
+      // the rider's `riding` names ("boat-<id>", "cart-<id>"; linkVehicleRiders mounts it on load). Nothing rides beyond a vehicle.
+      const vehicleOf = (member) => { const mid = get(member, 'id', NBT.STRING, '?'); return mid === 'Boat' ? { kind: 'boat', id: mid } : Object.values(CART_ENTITY_IDS).includes(mid) ? { kind: 'cart', id: mid, type: Object.values(CART_ENTITY_IDS).indexOf(mid) } : null; };
+      const importVehicle = (member, v, vid) => {
+        const mpos = doubles(member, 'Pos');
+        if (!mpos?.every(Number.isFinite)) { tally(entityLost, v.id); return null; }
+        const list = v.kind === 'boat' ? boats : carts;
+        if (!inAreaAt(mpos) || list.length >= 1024) { tally(entityLost, !inAreaAt(mpos) ? `${v.id} (outside area)` : `${v.id} (over limit)`); return null; }
+        list.push(Object.assign(v.kind === 'boat' ? boatFromNbt(member, { shiftX, shiftZ }) : cartFromNbt(member, v.type, { shiftX, shiftZ, lost: (k) => tally(itemLost, k) }), { id: vid }));
+        tally(entityConverted, v.id);
+        return { id: `${v.kind}-${vid}` };
+      };
       if (chain.length > 1 && importedMobType(id) && pos?.every(Number.isFinite)) {
         const stamp = ++chainCount * 100;
-        const made = chain.map((member, k) => importMob(member, `mob-${1000000 + stamp + k}`));
+        let ended = false;
+        const made = chain.map((member, k) => {
+          const v = k > 0 ? vehicleOf(member) : null;
+          if (ended) { tally(entityLost, get(member, 'id', NBT.STRING, '?')); return null; }
+          if (v) { ended = true; return importVehicle(member, v, 1000000 + stamp + k); }
+          return importMob(member, `mob-${1000000 + stamp + k}`);
+        });
         made.forEach((mob, k) => { if (mob && made[k + 1]) mob.riding = made[k + 1].id; });
         continue;
       }
@@ -564,6 +591,12 @@ export async function importJavaRegionArea(regions, options = {}) {
       if (cartType >= 0 && pos?.every(Number.isFinite)) {
         if (!inAreaAt(pos) || carts.length >= 1024) { tally(entityLost, !inAreaAt(pos) ? `${id} (outside area)` : `${id} (over limit)`); continue; }
         carts.push(cartFromNbt(entity, cartType, { shiftX, shiftZ, lost: (k) => tally(itemLost, k) }));
+        tally(entityConverted, id);
+        continue;
+      }
+      if (id === 'Boat' && pos?.every(Number.isFinite)) {
+        if (!inAreaAt(pos) || boats.length >= 1024) { tally(entityLost, !inAreaAt(pos) ? 'Boat (outside area)' : 'Boat (over limit)'); continue; }
+        boats.push(boatFromNbt(entity, { shiftX, shiftZ }));
         tally(entityConverted, id);
         continue;
       }
@@ -667,6 +700,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     // hanging.js fills in the entity position (EntityHanging.setDirection) that the column runtime is keyed by.
     ...(hanging.length ? { hanging: JSON.parse(JSON.stringify(Hanging.fromJSON(hanging).toJSON())) } : {}),
     ...(carts.length ? { minecarts: { version: 1, carts } } : {}),
+    ...(boats.length ? { boats } : {}),
     ...(scoreboard ? { scoreboard } : {}),
   };
   // The player converted with the area's item tallies, in the native frame (levelRecord shifts it).
