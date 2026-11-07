@@ -31,7 +31,7 @@ import { sheepColor, childColor } from "./sheep.js";
 import { sneakEdge, criticalDamage } from "./player-movement.js";
 import { MobAI } from "./ai.js";
 import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
-import { IRON_GOLEM_TYPE, IRON_GOLEM_SOUNDS, ironGolemFields, ironGolemShape } from "./iron-golem.js";
+import { IRON_GOLEM_TYPE, IRON_GOLEM_SOUNDS, ironGolemFields, ironGolemShape, golemCollideRetargets, golemTail } from "./iron-golem.js";
 import { createVillages, PLAYER_NAME } from "./village-host.js";
 import { SLIME, mobScale, slimeDamage, slimeTouches, slimeFields, slimeFieldsFrom, slimeRestore, slimeWidth, slimeSoundName, slimeVolume, slimeSquishStart, slimeSquishEnd, slimeActionState, slimeChildren, slimeCanSpawnHere, SLIMEBALL } from "./slime.js";
 import { isSlimeLike } from "./slime.js";
@@ -286,6 +286,10 @@ export const pushBox = (o, width, height) => {
   const w = f(f(width) / 2), h = f(height);
   return [o.x - w, o.y, o.z - w, o.x + w, o.y + h, o.z + w];
 };
+// EntityList names of the spawn eggs whose class is assignable from each ageable mob (ItemMonsterPlacer entity ids).
+const AGEABLE_EGG_TYPES = { Pig: ["pig"], Sheep: ["sheep"], Cow: ["cow", "mooshroom"], MushroomCow: ["mooshroom"], Chicken: ["chicken"], Wolf: ["wolf"], Ozelot: ["ocelot"], EntityHorse: ["horse"], Villager: ["villager"] };
+const AGEABLE_TYPES = new Set(Object.values(AGEABLE_EGG_TYPES).flat());
+export const isAgeable = (type) => AGEABLE_TYPES.has(type);
 const pushable = (o) => o.type !== "bat" && o.type !== "ender_crystal" && o.type !== "ender_dragon" && (o.health > 0 || (o.death ?? 0) < 20); // EntityBat.canBePushed is false
 // Chunk.canBlockSeeTheSky without a height map (weather.js `canSeeSky` is the real one
 // that main.js hooks in): no solid block at or above (x, y, z).
@@ -1417,6 +1421,14 @@ export class EntityWorld {
   // (40 mobs) keeps them waiting. Returns whether the baby was born.
   spawnBaby(a,b){
     if(this.entities.length>=40)return false;
+    const baby=this.makeBaby(a,b);
+    this.entities.push(baby);a.growingAge=b.growingAge=6000;a.love=b.love=0;a.mateTicks=b.mateTicks=0;
+    // The breeding experience needs gamerule doMobLoot.
+    if(gameRule("doMobLoot"))this.events.push({xp:1+Math.floor(Math.random()*7),position:{x:a.x,y:a.y,z:a.z}});
+    return true;
+  }
+  // The createChild half of the above (EntityAgeable.createChild of `a` with partner `b`): the unspawned baby.
+  makeBaby(a,b){
     const baby=this.create(a.type,a.x,a.y,a.z);baby.growingAge=-24000;
     // EntityWolf.createChild (wv.b): the puppy of a tamed wolf is tamed to the same owner.
     if(a.type==='wolf')Object.assign(baby,puppyFields(a));
@@ -1425,10 +1437,18 @@ export class EntityWorld {
     // EntitySheep.createChild (wp.b(rx)): the lamb's colour is the parents' dye mix.
     if(a.type==='sheep')baby.color=childColor(a.color,b.color,this.random);
     if(a.type==='horse')Object.assign(baby,horseChildFields(a,b,entityRandom(a)));
-    this.entities.push(baby);a.growingAge=b.growingAge=6000;a.love=b.love=0;a.mateTicks=b.mateTicks=0;
-    // The breeding experience needs gamerule doMobLoot.
-    if(gameRule("doMobLoot"))this.events.push({xp:1+Math.floor(Math.random()*7),position:{x:a.x,y:a.y,z:a.z}});
-    return true;
+    return baby;
+  }
+  // EntityAgeable.interact (rx.a): a spawn egg in hand on a living ageable mob. The click is consumed whatever the egg;
+  // when the egg's class is assignable from the mob's (Cow also takes a mooshroom) the mob's createChild(itself) is spawned
+  // as a baby (growing age -24000) at its position and one egg is used up outside Creative. `egg` is the SPAWN_EGGS row.
+  spawnEggBaby(e, survival, egg) {
+    if (!egg || !AGEABLE_EGG_TYPES[egg.entity]?.includes(e.type) || e.health <= 0) return false;
+    let baby;
+    if (e.type === "villager") baby = this.spawnVillagerChild(e);
+    else this.entities.push(baby = this.makeBaby(e, e));
+    if (!survival.creative) survival.take(survival.held.id);
+    return baby;
   }
   // EntityAIVillagerMate.giveBirth (up.g): EntityVillager.createChild is a new villager whose onSpawnWithEgg draws
   // World.rand.nextInt(5) for the profession; the child (growing age -24000) stands where the parent does.
@@ -1805,9 +1825,18 @@ export class EntityWorld {
   push(e, t) {
     const box = pushBox(e, t.width, t.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
     for (const o of this.entities)
-      if (o !== e && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) applyEntityCollision(o, e); // Entity.applyEntityCollision: not a mount and its rider
+      if (o !== e && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) {
+        if (e.type === "iron_golem" && golemCollideRetargets(entityRandom(e), o.type)) this.ai.brain(e).attackTarget = this.ai.brain(o); // EntityIronGolem.collideWithEntity
+        applyEntityCollision(o, e); // Entity.applyEntityCollision: not a mount and its rider
+      }
     const p = this.ai.player;
     if (p?.alive && boxesMeet(near, pushBox(p, p.width, p.height))) applyEntityCollision(p, e, false, true);
+    if (e.type === "iron_golem") this.golemTailTick(e);
+  }
+  // The end of EntityIronGolem.onLivingUpdate: the attack/rose counters and the walking dust (iron-golem.js golemTail).
+  golemTailTick(e) {
+    const w = this.world, spec = golemTail(e, entityRandom(e), (x, y, z) => { const id = w.get(x, y, z); return id ? { id, meta: w.getMeta?.(x, y, z) ?? 0 } : null; });
+    if (spec) this.blockParticle?.(spec.id, spec.meta, spec.x, spec.y, spec.z, spec.vx, spec.vy, spec.vz);
   }
   // Motion half of EntityLivingBase.onLivingUpdate (sv.e()): jump delay, motion
   // below 0.005 snapped to 0, EntityMoveHelper (tv.c) turning a move target into

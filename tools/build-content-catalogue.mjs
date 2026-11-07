@@ -167,9 +167,9 @@ const E = {
   MushroomCow: ['Partial', 'mooshroom-golem.md', 'cannot spawn on mycelium at runtime'],
   SnowMan: ['Implemented', 'mooshroom-golem.md', ''],
   Ozelot: ['Implemented', 'ocelots.md', ''],
-  VillagerGolem: ['Partial', 'iron-golem.md', 'step sounds and collide retargeting not ported'],
+  VillagerGolem: ['Partial', 'iron-golem.md', 'step sounds, collide retargeting, rose model and walking dust are ported; NearestAttackable path check is a distance test'],
   EntityHorse: ['Implemented', 'horses.md', 'renderer not visually verified'],
-  Villager: ['Partial', 'villager-trading-live.md', 'village systems in village.md; offers with absent items show "?"'],
+  Villager: ['Partial', 'villager-trading-live.md', 'every trade-table item maps to a browser item (no "?"); village systems in village.md; villager NBT import belongs to the interchange track'],
   EnderCrystal: ['Implemented', 'dragon.md', 'spike crystals placed by DimensionWorld.endCrystals()'],
 };
 for (const name of Object.keys(E)) assert(native.entities.some(e => e.name === name), name);

@@ -44,7 +44,7 @@ EntityList is not the complete feature roster: players, weather lightning, throw
 | 52 | Spider | yn | no | yes | Partial; [spiders](spiders.md); legacy EntityCreature AI adapted; see doc | E |
 | 53 | Giant | ye | no | no | Partial; [giant](giant.md); summon/region only as native; pathing reach unverified | E |
 | 54 | Zombie | yq | no | yes | Partial; [pathfinding](pathfinding.md); baby/villager/jockey variants in mob-riding.md and zombie-villager.md | E |
-| 55 | Slime | ym | no | yes | Partial; [slime](slime.md); natural spawns through the SpawnerAnimals port; no seeded `findChunksForSpawning` replay reaches a slime (its size rolls on the unseeded entity Random) | E |
+| 55 | Slime | ym | no | yes | Partial; [slime](slime.md); natural spawns through the SpawnerAnimals port; no seeded replay reached a slime | E |
 | 56 | Ghast | yd | no | yes | Implemented; [blaze-ghast](blaze-ghast.md) | E |
 | 57 | PigZombie | yh | no | yes | Implemented; [magma-pigman](magma-pigman.md); portal spawning in nether-portal-live.js | E |
 | 58 | Enderman | ya | no | yes | Implemented; [enderman](enderman.md); held-block use by the player probe not covered | E |
@@ -65,7 +65,7 @@ EntityList is not the complete feature roster: players, weather lightning, throw
 | 96 | MushroomCow | wm | no | yes | Partial; [mooshroom-golem](mooshroom-golem.md); cannot spawn on mycelium at runtime | E |
 | 97 | SnowMan | wr | no | no | Implemented; [mooshroom-golem](mooshroom-golem.md) | E |
 | 98 | Ozelot | wn | no | yes | Implemented; [ocelots](ocelots.md) | E |
-| 99 | VillagerGolem | wt | no | no | Partial; [iron-golem](iron-golem.md); step sounds and collide retargeting not ported | E |
+| 99 | VillagerGolem | wt | no | no | Partial; [iron-golem](iron-golem.md); step sounds, collide retargeting, rose model and walking dust are ported; NearestAttackable path check is a distance test | E |
 | 100 | EntityHorse | wi | no | yes | Implemented; [horses](horses.md); renderer not visually verified | E |
-| 120 | Villager | yv | no | yes | Partial; [villager-trading-live](villager-trading-live.md); village systems in village.md; offers with absent items show "?" | E |
+| 120 | Villager | yv | no | yes | Partial; [villager-trading-live](villager-trading-live.md); every trade-table item maps to a browser item (no "?"); village systems in village.md; villager NBT import belongs to the interchange track | E |
 | 200 | EnderCrystal | wz | no | no | Implemented; [dragon](dragon.md); spike crystals placed by DimensionWorld.endCrystals() | E |

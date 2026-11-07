@@ -22,6 +22,16 @@ public class VillageLiveProbe {
     public boolean w() { return day; }
     public boolean Q() { return rain; }
     public void a(sa e, byte b) { events.add(e.getClass().getSimpleName() + "|" + b); }
+    static List<String> particles = new ArrayList<>();
+    public void a(String name, double x, double y, double z, double vx, double vy, double vz) { particles.add(name + "|" + x + "|" + y + "|" + z + "|" + vx + "|" + vy + "|" + vz); }
+  }
+
+  // A Random that logs every nextInt(bound) and nextFloat so the replay can reuse the draws made at the end of a tick.
+  public static class LogRandom extends Random {
+    static List<String> log = new ArrayList<>();
+    LogRandom(long seed) { super(seed); }
+    public int nextInt(int bound) { int r = super.nextInt(bound); log.add("i" + bound + ":" + r); return r; }
+    public float nextFloat() { float r = super.nextFloat(); log.add("f:" + r); return r; }
   }
 
   static String num(double v) { return Double.toString(v); }
@@ -256,6 +266,63 @@ public class VillageLiveProbe {
         rows.append(rows.length() > 0 ? "," : "").append("[").append(it).append("]");
       }
       System.out.println("{\"case\":\"golemDrops\",\"rows\":[" + rows + "]}");
+    }
+
+    // IMob membership of every registered entity (EntityList name map), collideWithEntity retargeting over seeds,
+    // the step sound hook and the onLivingUpdate timers/walking particles
+    {
+      Field mapF = sg.class.getDeclaredField("c"); mapF.setAccessible(true);
+      Map<String, Class<?>> reg = (Map<String, Class<?>>) mapF.get(null);
+      List<String> names = new ArrayList<>(reg.keySet()); java.util.Collections.sort(names);
+      StringBuilder im = new StringBuilder();
+      for (String n : names) im.append(im.length() > 0 ? "," : "").append("[").append(q(n)).append(",").append(yb.class.isAssignableFrom(reg.get(n))).append("]");
+      System.out.println("{\"case\":\"imob\",\"rows\":[" + im + "]}");
+      Method collide = MobMoveProbe.method(wt.class, "o", sa.class);
+      StringBuilder rows = new StringBuilder();
+      for (String kind : new String[] {"Zombie", "Creeper", "Skeleton", "Spider", "Slime", "Villager", "Pig", "Enderman"}) {
+        for (long seed = 0; seed < 60; seed++) {
+          newCollection(1);
+          wt g = new wt(world);
+          MobMoveProbe.set(g, "Z", new Random(seed));
+          sa other = (sa) reg.get(kind).getConstructor(ahb.class).newInstance(world);
+          collide.invoke(g, other);
+          Random r = (Random) MobMoveProbe.field(g.getClass(), "Z").get(g);
+          rows.append(rows.length() > 0 ? "," : "").append("[").append(q(kind)).append(",").append(seed).append(",").append(g.o() == other).append(",").append(r.nextInt(1000000)).append("]");
+        }
+      }
+      System.out.println("{\"case\":\"golemCollide\",\"rows\":[" + rows + "]}");
+      // func_145780_a: the step sound ignores the block
+      newCollection(1);
+      wt g = new wt(world);
+      MobMoveProbe.method(wt.class, "a", int.class, int.class, int.class, aji.class).invoke(g, 0, -1, 0, ajn.b);
+      System.out.println("{\"case\":\"golemStep\",\"sounds\":" + VillagerProbe.strings(VillagerProbe.World.sounds) + "}");
+      VillagerProbe.World.sounds.clear();
+      // onLivingUpdate: attackTimer and holdRoseTick count down after the attack/rose, walking particles from the entity Random
+      StringBuilder tm = new StringBuilder();
+      for (long seed = 0; seed < 12; seed++) {
+        newCollection(1);
+        W.particles.clear();
+        wt h = new wt(world);
+        MobMoveProbe.set(h, "Z", new LogRandom(seed));
+        for (String n : new String[] {"y", "aO", "aM", "aN", "aP"}) MobMoveProbe.set(h, n, 0f);
+        MobMoveProbe.method(sa.class, "b", double.class, double.class, double.class).invoke(h, 64.5, 0.0, 64.5);
+        h.a(true);
+        yv v = VillagerProbe.villager((W) world, 0, 65.5, 64.5, 1);
+        h.n(v);
+        StringBuilder row = new StringBuilder();
+        for (int t = 0; t < 14; t++) {
+          if (seed % 2 == 0 || t == 0) { MobMoveProbe.set(h, "v", 0.1); MobMoveProbe.set(h, "x", 0.1); }
+          LogRandom.log.clear();
+          h.e();
+          int last = -1;
+          for (int i = 0; i < LogRandom.log.size(); i++) if (LogRandom.log.get(i).startsWith("i5:")) last = i;
+          row.append(row.length() > 0 ? "," : "").append("[").append(gi(h, "br")).append(",").append(gi(h, "bs")).append(",").append(num(MobMoveProbe.d(h, "v"))).append(",").append(num(MobMoveProbe.d(h, "x"))).append(",")
+            .append(VillagerProbe.strings(last < 0 ? new ArrayList<String>() : LogRandom.log.subList(last, LogRandom.log.size()))).append("]");
+        }
+        tm.append(tm.length() > 0 ? "," : "").append("{\"seed\":").append(seed).append(",\"timers\":[").append(row).append("],\"particles\":").append(VillagerProbe.strings(W.particles)).append(",\"next\":").append(((Random) MobMoveProbe.field(h.getClass(), "Z").get(h)).nextInt(1000000)).append("}");
+        VillagerProbe.World.sounds.clear(); W.events.clear();
+      }
+      System.out.println("{\"case\":\"golemTimers\",\"rows\":[" + tm + "]}");
     }
 
     // model: ModelIronGolem (bij) boxes

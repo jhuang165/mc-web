@@ -12,6 +12,8 @@ export const IRON_GOLEM_TYPE = { health: IRON_GOLEM.health, width: IRON_GOLEM.wi
 // getHurtSound, getDeathSound, func_145780_a (step), the attack's throw sound. No living sound.
 export const IRON_GOLEM_SOUNDS = Object.freeze({ hit: "mob.irongolem.hit", death: "mob.irongolem.death", walk: "mob.irongolem.walk", throw: "mob.irongolem.throw" });
 export const IRON_GOLEM_TEXTURE = "/media/1.7.10/entity/iron_golem.png";
+// The poppy RenderIronGolem draws in the raised hand: Blocks.red_flower meta 0 (flower_rose.png in the block atlas).
+export const IRON_GOLEM_ROSE_TEXTURE = "/media/1.7.10/blocks/flower_rose.png";
 export const IRON_INGOT = 302, POPPY_BLOCK_NAME = "Red flower";
 
 // What an iron golem record adds to an entity: the player-created flag (NBT PlayerCreated), the attack and
@@ -33,6 +35,29 @@ export function golemDrops(rand, poppy) {
 // EntityIronGolem.canAttackClass (wt.a(Class)): a player-created golem leaves players alone, and no golem
 // attacks creepers. Anything else follows EntityCreature (true).
 export const golemCanAttack = (golem, kind) => !(kind === "player" && golem.playerCreated) && kind !== "creeper";
+// IMob (yb) implementors among the registered entities, probe-checked ("imob" record): EntityMob subclasses (Zombie,
+// PigZombie, Skeleton, Spider, CaveSpider, Creeper, Enderman, Silverfish, Witch, Blaze, Giant, WitherBoss), EntitySlime,
+// EntityMagmaCube, EntityGhast and EntityDragon. The browser type names for them.
+export const IMOB_TYPES = new Set(["zombie", "pigman", "skeleton", "wither_skeleton", "spider", "cave_spider", "creeper", "enderman", "silverfish", "witch", "blaze", "giant", "wither", "slime", "magma_cube", "ghast", "ender_dragon"]);
+// EntityIronGolem.collideWithEntity (wt.o): touching an IMob entity retargets it with probability 1 in 20 (one
+// nextInt(20) on the golem's Random, drawn only for an IMob), before the usual Entity.applyEntityCollision push.
+// canAttackClass is not consulted, so a creeper can become the target this way.
+export const golemCollideRetargets = (rand, kind) => IMOB_TYPES.has(kind) && rand.nextInt(20) === 0;
+
+// The tail of EntityIronGolem.onLivingUpdate (wt.e) after EntityLiving's: attackTimer and holdRoseTick count down,
+// then with horizontal speed^2 > 2.5E-7 a 1 in 5 roll throws a blockcrack of the block 0.2 below the feet across
+// its width (draws: x, z, motionX, motionZ; none when that block is air). `blockAt(x, y, z)` returns the
+// { id, meta } there or null; the returned spec feeds the particle system, null means nothing was spawned.
+export function golemTail(e, rand, blockAt) {
+  if (e.attackTimer > 0) --e.attackTimer;
+  if (e.holdRose > 0) --e.holdRose;
+  if (!(e.vx * e.vx + e.vz * e.vz > 2.500000277905201e-7) || rand.nextInt(5) !== 0) return null;
+  const block = blockAt(Math.floor(e.x), Math.floor(e.y - 0.2), Math.floor(e.z));
+  if (!block) return null;
+  const w = IRON_GOLEM.width, x = e.x + (rand.nextFloat() - 0.5) * w, z = e.z + (rand.nextFloat() - 0.5) * w;
+  return { id: block.id, meta: block.meta ?? 0, x, y: e.y + 0.1, z, vx: 4 * (rand.nextFloat() - 0.5), vy: 0.5, vz: (rand.nextFloat() - 0.5) * 4 };
+}
+
 // EntityIronGolem.func_70682_h (j(int)): the air supply is not reduced.
 export const golemDecreaseAir = (air) => air;
 

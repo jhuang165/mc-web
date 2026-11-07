@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EntityWorld } from "./entities.js";
+import { EntityWorld, setEntityRandom } from "./entities.js";
+import { JavaRandom } from "./java-random.js";
 import { WOODEN_DOOR, PUMPKIN, BLOCKS } from "./world.js";
 
 // The live village systems on a double world: a flat plain with a row of doors, wooden roof-less so a door
@@ -64,12 +65,71 @@ test("an iron golem walks up to a monster and hits it for 7 to 21 with a fling",
   const g = ew.spawnIronGolem(66.5, 0, 64.5, false);
   const z = ew.create("zombie", 70.5, 0, 64.5);
   z.health = 20; z.noBurn = true;
+  // ew.create rolls the zombie's armour (defaultGear, Math.random): a leather helmet and boots cut the minimum 7 hit
+  // to 6.44, which made this test fail about 6% of runs. No armour here, and every Entity.rand is seeded.
+  z.equipment = z.equipment?.map(() => null);
+  ew.entities.forEach((e, i) => setEntityRandom(e, new JavaRandom(BigInt(1000 + i))));
+  setEntityRandom(g, new JavaRandom(7n)); setEntityRandom(z, new JavaRandom(8n));
   ew.entities.push(z);
   let hit = false;
   for (let t = 0; t < 400 && !hit; t++) { ew.tick(player, survival); hit = z.health < 20 || z.health <= 0; }
   assert.ok(hit, "the golem reached and hit the zombie");
   assert.ok(20 - z.health >= 7 || z.health <= 0);
   assert.ok(g.attackTimer >= 0);
+});
+
+test("touching a monster retargets the golem on a 1 in 20 roll of its own Random, villagers never do", () => {
+  const { ew } = village();
+  const g = ew.spawnIronGolem(66.5, 0, 64.5, false), z = ew.create("zombie", 66.5, 0, 64.5), v = ew.create("villager", 66.5, 0, 64.5);
+  ew.entities.push(z, v);
+  setEntityRandom(g, new JavaRandom(5n));
+  const mirror = new JavaRandom(5n);
+  let expected = -1;
+  for (let i = 0; i < 400 && expected < 0; i++) if (mirror.nextInt(20) === 0) expected = i;
+  assert.ok(expected >= 0);
+  // The zombie is the only IMob in the box (the villager is not): one nextInt(20) per push, retarget on the first 0.
+  let at = -1;
+  for (let i = 0; i < 400 && at < 0; i++) {
+    ew.ai.brain(g).attackTarget = null;
+    ew.push(g, { width: 1.4, height: 2.9 });
+    if (ew.ai.brain(g).attackTarget === ew.ai.brain(z)) at = i;
+  }
+  assert.equal(at, expected);
+  assert.notEqual(ew.ai.brain(g).attackTarget, ew.ai.brain(v));
+});
+
+test("a walking golem throws blockcrack dust of the block under its feet from its own Random", () => {
+  const { ew } = village();
+  const g = ew.spawnIronGolem(66.5, 0, 64.5, false), seen = [];
+  ew.blockParticle = (...args) => seen.push(args);
+  setEntityRandom(g, new JavaRandom(11n));
+  g.vx = 0.1; g.vz = 0.1; g.attackTimer = 3; g.holdRose = 2;
+  for (let i = 0; i < 60; i++) ew.golemTailTick(g);
+  assert.ok(seen.length > 5 && seen.length < 20, "about 1 in 5 of 60 ticks: " + seen.length);
+  assert.deepEqual([seen[0][0], seen[0][1]], [1, 1]);
+  assert.equal([g.attackTimer, g.holdRose].join(), "0,0");
+  ew.blockParticle = null;
+  for (let i = 0; i < 10; i++) ew.golemTailTick(g); // no sink: still no error
+});
+
+test("a spawn egg of the villager class on a villager spawns a baby and uses the egg (EntityAgeable.interact)", async () => {
+  const { eggOf } = await import("./spawn-eggs.js");
+  const { ew } = village();
+  const adult = ew.entities.find((e) => e.type === "villager"), cow = ew.create("cow", 70.5, 0, 64.5), moo = ew.create("mooshroom", 72.5, 0, 64.5);
+  ew.entities.push(cow, moo);
+  const taken = [], tank = (creative) => ({ creative, held: { id: 1950, damage: 120 }, take: (id) => taken.push(id) });
+  const before = ew.entities.length;
+  assert.equal(ew.spawnEggBaby(adult, tank(false), eggOf(120)) !== false, true);
+  assert.equal(ew.entities.length, before + 1);
+  const baby = ew.entities[ew.entities.length - 1];
+  assert.equal(baby.type, "villager"); assert.equal(baby.growingAge, -24000);
+  assert.deepEqual(taken, [1950]);
+  assert.equal(ew.spawnEggBaby(adult, tank(true), eggOf(120)) !== false, true); // creative keeps the egg
+  assert.deepEqual(taken, [1950]);
+  assert.equal(ew.spawnEggBaby(adult, tank(false), eggOf(92)), false); // a cow egg on a villager spawns nothing
+  assert.equal(ew.spawnEggBaby(moo, tank(false), eggOf(92)) !== false, true); // Cow is assignable from MushroomCow
+  assert.equal(ew.entities[ew.entities.length - 1].type, "mooshroom");
+  assert.equal(ew.spawnEggBaby(cow, tank(false), eggOf(96)), false); // a mooshroom egg does not fit a plain cow
 });
 
 test("a golem and the villages survive save and load", () => {

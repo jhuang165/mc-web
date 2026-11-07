@@ -908,10 +908,7 @@ export class Brain {
         const [cx, cy, cz] = this.village.center;
         setHomeArea(e, cx, cy, cz, Math.trunc(f(this.village.radius * f(0.6))));
       };
-      this.beforeAI = () => {
-        if (e.attackTimer > 0) --e.attackTimer;
-        if (e.holdRose > 0) --e.holdRose;
-      };
+      // attackTimer and holdRoseTick count down at the end of onLivingUpdate (EntityWorld.golemTail), after the AI.
       this.navigator.setAvoidsWater(true);
       this.tasks.add(1, new V.GolemAttack(this, 1.0));
       this.tasks.add(2, new V.MoveTowardsTarget(this, 0.9, 32));
