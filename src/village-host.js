@@ -6,9 +6,18 @@ import { JavaRandom } from "./lighting.js";
 
 export const PLAYER_NAME = "Player";
 
+// EntityVillager.setRevengeTarget's attacker as the village keeps it (VillageAggressor.agressor): the attacking mob's brain (the view the golem's
+// target tasks use), or null when the damage had no living attacker entity (a projectile of the player is the player's, handled by the caller).
+export function villageAttacker(ew, victim, attacker) {
+  if (!attacker || typeof attacker !== "object" || attacker === victim || !ew.entities.includes(attacker) || !(attacker.health > 0)) return null;
+  return ew.ai.brain(attacker);
+}
+
 export function createVillageHost(ew) {
   const world = ew.world;
   return {
+    // Entity.isEntityAlive for an aggressor: the player, or a mob still in the world with health left.
+    isAlive: (a) => (a.isPlayer ? !!a.alive : !!a.alive && ew.entities.includes(a.e)),
     // World.rand (the same Random that rolls the golem spawn).
     get rand() {
       return (ew.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));

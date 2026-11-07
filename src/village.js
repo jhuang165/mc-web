@@ -149,7 +149,8 @@ export class Village {
     return best;
   }
   removeDeadAndOldAggressors() {
-    this.aggressors = this.aggressors.filter((a) => !a.entity.dead && Math.abs(this.tickCounter - a.tick) <= 300);
+    const alive = this.host.isAlive ?? ((x) => x.alive !== false && !x.dead);   // Entity.isEntityAlive
+    this.aggressors = this.aggressors.filter((a) => alive(a.entity) && Math.abs(this.tickCounter - a.tick) <= 300);
   }
   // Persistence (Village.writeVillageDataToNBT)
   toJSON() {

@@ -251,7 +251,7 @@ function lookAtTradePlayerClass(Task) {
 export function buildVillagerTasks(m, K) {
   const AvoidEntity = avoidEntityClass(K.Task), OpenDoor = openDoorClass(K.Task), TradePlayer = tradePlayerClass(K.Task), LookAtTrade = lookAtTradePlayerClass(K.Task);
   const { MoveIndoors, RestrictOpenDoor, MoveTowardsRestriction, VillagerMate, FollowGolem, Play } = villageTasks(K);
-  const watch = (range, chance) => Object.assign(new K.WatchClosest(m, range), { chance: f(chance), mutex: 3 });
+  const watch = (range, chance, watched) => Object.assign(new K.WatchClosest(m, range), { chance: f(chance), mutex: 3, watched });
   m.navigator.setBreakDoors(true);
   m.navigator.setAvoidsWater(true);
   m.tasks.add(0, new K.Swim(m));
@@ -265,10 +265,10 @@ export function buildVillagerTasks(m, K) {
   m.tasks.add(6, new VillagerMate(m));
   m.tasks.add(7, new FollowGolem(m));
   m.tasks.add(8, new Play(m, 0.32));
-  m.tasks.add(9, watch(3, 1));
-  m.tasks.add(9, watch(5, 0.02));
+  m.tasks.add(9, watch(3, 1, "player"));
+  m.tasks.add(9, watch(5, 0.02, "villager")); // EntityAIWatchClosest2(EntityVillager.class, 5, 0.02)
   m.tasks.add(9, new K.Wander(m, m.ai.types.villager.ai.wander));
-  m.tasks.add(10, new K.WatchClosest(m, 8));
+  m.tasks.add(10, Object.assign(new K.WatchClosest(m, 8), { watched: "living" })); // EntityAIWatchClosest(EntityLiving.class, 8)
 }
 
 // EntityVillager.updateAITick (yv.bp), run after the navigator: every 70 + nextInt(50) ticks (the counter
