@@ -7,7 +7,7 @@ const exec=promisify(execFile),root=path.dirname(fileURLToPath(import.meta.url))
 const researchDirs=[process.env.MC_RESEARCH,path.join(root,'research'),path.join(root,'../../tools/research')].filter(Boolean);
 let research;for(const dir of researchDirs)if(await exists(path.join(dir,'minecraft-1.7.10.jar'))){research=dir;break;}
 if(!research)throw new Error('Place minecraft-1.7.10.jar in tools/research or set MC_RESEARCH.');
-const jar=path.join(research,'minecraft-1.7.10.jar'),out=path.join(research,'combat-tracker-probe');
+const jar=path.join(research,'minecraft-1.7.10.jar'),out=path.join(research,'deaths2-probe');
 assert.equal(createHash('sha1').update(await readFile(jar)).digest('hex'),'e80d9b3bf5085002218d4be59e668bac718abbc6');
 async function library(prefix){
  for(const p of (process.env.MC_PROBE_LIBS||'').split(path.delimiter).filter(Boolean))if(path.basename(p).startsWith(prefix))return p;
@@ -28,7 +28,7 @@ if(stderr.trim())console.error(stderr.trim());
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
 assert.ok(records.length>=150,'probe output: '+records.length);
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
-const names={sa:'Entity',sv:'EntityLivingBase',yz:'EntityPlayer',mw:'EntityPlayerMP',ro:'DamageSource',rp:'EntityDamageSource',rq:'EntityDamageSourceIndirect',rn:'CombatTracker',rm:'CombatEntry',fr:'ChatComponentTranslation'};
+const names={sa:'Entity',sv:'EntityLivingBase',yz:'EntityPlayer',mw:'EntityPlayerMP',ro:'DamageSource',rp:'EntityDamageSource',rq:'EntityDamageSourceIndirect',rn:'CombatTracker',rm:'CombatEntry',fr:'ChatComponentTranslation',xj:'EntityFallingBlock',wv:'EntityWolf',yg:'EntityMob',afv:'EnchantmentHelper',agj:'EnchantmentThorns'};
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}]))),
  method:'Unchanged original classes on the PlayerDamageProbe world double (Normal, air everywhere, en_US.lang loaded from the jar). The victim is the real EntityPlayerMP (profile name Player; PvP enabled on the stub server). Each record is a list of timed ops (see CombatTrackerProbe.java header): hits go through attackEntityFrom so the real EntityLivingBase.damageEntity feeds CombatTracker.func_94547_a; ticksExisted advances per tick and func_94549_h runs every 20 ticks. preview is CombatTracker.func_151521_b after each hit; message is what EntityPlayerMP.onDeath broadcasts on a fatal hit. Messages are ChatComponentTranslation key, argument texts and the localised text.',records};
 await writeFile(path.join(root,'../public/research/combat-tracker-reference.json'),JSON.stringify(reference)+'\n');

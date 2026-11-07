@@ -1112,10 +1112,10 @@ async function launch(record, prepared) {
       drop: (stack, x, posY, z) => items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, posY, z, { delay: 10 }),
       apply: (changes) => { scene.updateBlocks(changes); saved = false; },
       sound:(event,{x,y,z,volume,pitch})=>sounds.play(event,{volume,pitch,position:{x,y,z}}),
-      hurt:(box,amount)=>{
+      hurt:(box,amount,kind='anvil')=>{
         const intersects=b=>box[3]>b[0]&&box[0]<b[3]&&box[4]>b[1]&&box[1]<b[4]&&box[5]>b[2]&&box[2]<b[5];
-        if(intersects(pushBox(position,PHYSICS.width,PHYSICS.height)))survival.anvilDamage(amount);
-        for(const e of mobs.entities){const size=ENTITY_TYPES[e.type];if(intersects(pushBox(e,size.width,size.height)))mobs.attackEntityFrom(e,amount,{name:'anvil'});}
+        if(intersects(pushBox(position,PHYSICS.width,PHYSICS.height)))survival.anvilDamage(amount,kind);
+        for(const e of mobs.entities){const size=ENTITY_TYPES[e.type];if(intersects(pushBox(e,size.width,size.height)))mobs.attackEntityFrom(e,amount,{name:kind});}
         saved=false;
       },
     }, record.falling).watch();

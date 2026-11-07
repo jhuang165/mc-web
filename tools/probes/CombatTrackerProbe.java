@@ -27,6 +27,7 @@ public class CombatTrackerProbe {
       case "ghast": a = new yd(PlayerDamageProbe.w); break;
       case "creeper": a = new xz(PlayerDamageProbe.w); break;
       case "witch": a = new yp(PlayerDamageProbe.w); break;
+      case "wolf": case "wolfBob": case "wolfTamed": case "wolfTamedBob": a = new wv(PlayerDamageProbe.w); break;
       case "alex": case "alexSword":
         a = PlayerDamageProbe.make("player");
         u.putObject(a, u.objectFieldOffset(PlayerDamageProbe.fd(yz.class, "i")), new com.mojang.authlib.GameProfile(new UUID(0, 2), "Alex"));
@@ -34,8 +35,11 @@ public class CombatTrackerProbe {
       default: throw new IllegalArgumentException(id);
     }
     PlayerDamageProbe.pos(a, 66.5, 5.0, 64.5);
-    if (id.equals("zombieBob")) ((sw) a).a("Bob");
-    if (id.equals("zombieSword") || id.equals("alexSword")) a.c(0, new add(adb.d(276), 1, 0).c("Sting"));
+    if (id.equals("zombieBob") || id.equals("wolfBob") || id.equals("wolfTamedBob")) ((sw) a).a("Bob");
+    if (id.startsWith("wolfTamed")) { ((wv) a).j(true); ((wv) a).b("Alex"); }
+    if (id.equals("zombieSword")) a.c(0, new add(adb.d(276), 1, 0).c("Sting"));
+    // A player's held stack is InventoryPlayer.getCurrentItem (bm.a[bm.c]); setCurrentItemOrArmor(0, ...) does not reach it on this double.
+    if (id.equals("alexSword")) ((yz) a).bm.a[((yz) a).bm.c] = new add(adb.d(276), 1, 0).c("Sting");
     if (id.equals("skeletonBow")) a.c(0, new add(adb.d(261), 1, 0).c("Bow of Doom"));
     return a;
   }
@@ -58,7 +62,7 @@ public class CombatTrackerProbe {
       case "fireball": return ro.a(new zi(w), who);
       case "indirectMagic": return ro.b(new zo(w), who);
       case "thrown": return ro.a((sa) new zo(w), who);
-      case "thorns": return ro.a(who);
+      case "thorns": return ro.a((sa) who); // DamageSource.causeThornsDamage(Entity): ro.a(sa); a bare sv argument would pick causeMobDamage ro.a(sv)
       case "explosion": return ro.a(new agw(w, who, 64.5, 5.0, 64.5, 3.0f));
       default: throw new IllegalArgumentException(spec);
     }
@@ -118,9 +122,60 @@ public class CombatTrackerProbe {
     }
   }
 
+
+  // EntityFallingBlock.fall(float) (xj.b), executed natively against a world double whose entity query returns the real EntityPlayerMP:
+  // the damage dealt (min(floor(ceil(distance - 1) * fallHurtAmount), fallHurtMax)), DamageSource.anvil for an anvil and fallingBlock for
+  // another block, the helmet rule of EntityLivingBase.attackEntityFrom, and the death message. `helmet` wears a leather helmet.
+  static class FallWorld extends ahb {
+    List<sa> targets = Collections.emptyList();
+    FallWorld() { super((azc) null, null, (aqo) null, (ahj) null, null); }
+    protected apu j() { return null; } protected int p() { return 0; }
+    public sa a(int id) { return null; }
+    public aji a(int x, int y, int z) { return aji.e(0); }
+    public int e(int x, int y, int z) { return 0; }
+    public List a(sa self, azt bounds) { return targets; }
+    public List b(sa self, azt bounds) { return targets; }
+  }
+  static void falling(String name, int blockId, boolean hurtFlag, float distance, float amount, int max, boolean helmet, float health) throws Exception {
+    sv e = PlayerDamageProbe.prepare("player", 64.5, 5.0, 64.5, PlayerDamageProbe.setup("health", health));
+    MobMoveProbe.set(e, "b", u.allocateInstance(PvpFake.class));
+    PlayerDamageProbe.Player.message = null;
+    add cap = null;
+    if (helmet) { cap = new add(adb.d(298), 1, 0); ((yz) e).bm.b[3] = cap; }
+    FallWorld fw = (FallWorld) u.allocateInstance(FallWorld.class);
+    fw.targets = Collections.singletonList((sa) e);
+    xj x = (xj) u.allocateInstance(xj.class);
+    aji block = aji.e(blockId);
+    PlayerDamageProbe.fd(sa.class, "o").set(x, fw);
+    PlayerDamageProbe.fd(xj.class, "e").set(x, block);
+    PlayerDamageProbe.fd(xj.class, "g").setBoolean(x, hurtFlag);
+    PlayerDamageProbe.fd(xj.class, "h").setInt(x, max);
+    PlayerDamageProbe.fd(xj.class, "i").setFloat(x, amount);
+    PlayerDamageProbe.fd(sa.class, "Z").set(x, new Random(3));
+    java.lang.reflect.Method fall = xj.class.getDeclaredMethod("b", float.class);
+    fall.setAccessible(true);
+    float before = e.aS();
+    PlayerDamageProbe.World.events.clear();
+    fall.invoke(x, distance);
+    System.out.println("{\"case\":\"fallingBlock\",\"name\":\"" + name + "\",\"block\":" + blockId + ",\"hurtFlag\":" + hurtFlag + ",\"distance\":" + PlayerDamageProbe.num(distance)
+      + ",\"amount\":" + PlayerDamageProbe.num(amount) + ",\"max\":" + max + ",\"helmet\":" + helmet + ",\"health\":" + PlayerDamageProbe.num(health)
+      + ",\"healthAfter\":" + PlayerDamageProbe.num(e.aS()) + ",\"entries\":" + ((List) PlayerDamageProbe.fd(rn.class, "a").get(e.aW())).size()
+      + ",\"helmetWear\":" + (cap == null ? 0 : cap.k()) + ",\"preview\":" + (((List) PlayerDamageProbe.fd(rn.class, "a").get(e.aW())).isEmpty() ? "null" : PlayerDamageProbe.chat(e.aW().b()))
+      + ",\"message\":" + (PlayerDamageProbe.Player.message == null ? "null" : PlayerDamageProbe.Player.message) + "}");
+  }
+
   public static void main(String[] args) throws Exception {
     PlayerDamageProbe.init();
     u = PlayerDamageProbe.u;
+    // EntityFallingBlock.fall: anvil (145) and a plain block (12 sand with HurtEntities) over distances, amounts, caps, with and without a helmet.
+    for (int block : new int[] { 145, 12 }) for (float d : new float[] { 0.5f, 1f, 1.5f, 2f, 3f, 5.25f, 12f, 40f }) {
+      falling("fb-default", block, true, d, 2f, 40, false, 20f);
+      falling("fb-default-helmet", block, true, d, 2f, 40, true, 20f);
+      falling("fb-cap", block, true, d, 2f, 6, false, 20f);
+      falling("fb-amount", block, true, d, 0.5f, 40, false, 20f);
+      falling("fb-lethal", block, true, d, 2f, 40, false, 3f);
+      falling("fb-no-hurt", block, false, d, 2f, 40, false, 20f);
+    }
     String[] simple = { "inFire", "onFire", "lava", "inWall", "drown", "starve", "cactus", "fall", "outOfWorld", "generic", "magic", "wither", "anvil", "fallingBlock" };
     for (String s : simple) {
       both("alone-" + s, "0 hit " + s + " A");
@@ -132,7 +187,8 @@ public class CombatTrackerProbe {
     // Attacker sources.
     String[] attackers = { "mob:zombie", "mob:zombieBob", "mob:zombieSword", "mob:skeleton", "player:alex", "player:alexSword", "arrow:skeleton", "arrow:skeletonBow",
       "arrow:zombieSword", "arrow:null", "arrow:self", "fireball:ghast", "fireball:zombieSword", "fireball:null", "explosion:creeper", "explosion:null",
-      "indirectMagic:witch", "indirectMagic:zombieSword", "indirectMagic:null", "thrown:skeleton", "thrown:skeletonBow", "thrown:null", "thorns:zombie", "thorns:zombieSword" };
+      "indirectMagic:witch", "indirectMagic:zombieSword", "indirectMagic:null", "thrown:skeleton", "thrown:skeletonBow", "thrown:null", "thorns:zombie", "thorns:zombieBob", "thorns:zombieSword", "thorns:skeletonBow", "thorns:alex", "thorns:alexSword",
+      "mob:alexSword", "mob:skeletonBow", "mob:wolf", "mob:wolfBob", "mob:wolfTamed", "mob:wolfTamedBob", "fireball:alexSword", "arrow:alexSword" };
     for (String a : attackers) both("attack-" + a.replace(':', '-'), "0 hit " + a + " A");
     // Fall variants: the fall entry's distance must exceed 5 for any death.fell message.
     for (String env : new String[] { "none", "ladder", "vine", "water" }) {
@@ -167,6 +223,30 @@ public class CombatTrackerProbe {
     both("oow-then-fall", "0 hit outOfWorld 2", "12 fall 8 A");
     both("oow-then-zombie-then-fall", "0 hit outOfWorld 2", "12 hit mob:zombie 2", "24 fall 8 A");
     both("fall-two-hits-before", "0 hit mob:zombie 2", "12 hit cactus 2", "24 fall 8 A");
+    // Thorns: the victim of DamageSource.causeThornsDamage(wearer) is the one that hit the wearer; it assists a fall like any entity source.
+    both("fall-assist-thorns", "0 hit thorns:zombie 2", "12 fall 8 A");
+    both("fall-assist-thorns-sword", "0 hit thorns:zombieSword 2", "12 fall 8 A");
+    both("revenge-thorns", "0 hit thorns:zombie 2", "50 hit lava A");
+    both("killer-thorns-largest", "0 hit mob:skeleton 2", "12 hit thorns:zombie 5", "24 hit cactus A");
+    // Wolves: a wolf is a normal living source entity, its name the EntityList name or the custom name; ownership changes nothing.
+    both("revenge-wolf", "0 hit mob:wolf 2", "50 hit lava A");
+    both("revenge-wolf-tamed-bob", "0 hit mob:wolfTamedBob 2", "50 hit drown A");
+    both("fall-assist-wolf-tamed", "0 hit mob:wolfTamed 2", "12 fall 8 A");
+    both("fall-assist-sword-mob", "0 hit mob:zombieSword 2", "12 fall 8 A");
+    both("fall-assist-player-sword", "0 hit player:alexSword 2", "12 fall 8 A");
+    // Fall distance 0 (an ender pearl sets fallDistance 0 and then deals DamageSource.fall 5.0), alone and after other hits, per fall site.
+    for (String env : new String[] { "none", "ladder", "vine", "water" }) {
+      both("pearl-fall-" + env, "0 env " + env, "0 fall 0 A");
+      both("pearl-fall-after-fall-" + env, "0 env none", "0 fall 8 2", "12 env " + env, "12 fall 0 A");
+      both("pearl-fall-after-zombie-" + env, "0 env " + env, "0 hit mob:zombie 2", "12 fall 0 A");
+    }
+    both("pearl-fall-5", "0 fall 0 5");
+    // A vehicle's fall reaches the rider as EntityLivingBase.fall with the rider's own Entity.fallDistance (R) left alone: a rider that
+    // never fell has 0, one that mounted while falling keeps its value.
+    both("rider-fall-own-zero", "0 R 0", "0 hit fall A");
+    both("rider-fall-own-kept", "0 R 7", "0 hit fall A");
+    both("rider-fall-own-kept-after-zombie", "0 R 7", "0 hit mob:zombie 2", "12 hit fall A");
+    both("rider-fall-own-kept-ladder", "0 env ladder", "0 R 7", "0 hit fall A");
     // The fighting entity: the largest damage dealer, a player when it did at least a third of the living maximum.
     both("killer-largest", "0 hit mob:zombie 2", "12 hit mob:skeleton 5", "24 hit lava A");
     both("killer-first-larger", "0 hit mob:zombie 5", "12 hit mob:skeleton 2", "24 hit lava A");

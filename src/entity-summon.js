@@ -87,6 +87,8 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
     else {
       const e = spawnFalling(cell.id, cell.meta ?? 0, 0, 0, 0, hosts.falling.entityRandom());
       Object.assign(e, { x, y: y - FALLING_Y_OFFSET, z, px: x, py: y - FALLING_Y_OFFSET, pz: z, vx: motion[0], vy: motion[1], vz: motion[2], ticks: Math.max(1, nbtGet(t, "Time", NBT.BYTE, 0) & 255) });
+      // EntityFallingBlock.readEntityFromNBT: HurtEntities (a number) reads FallHurtAmount (float) and FallHurtMax (int); without it only an anvil hurts.
+      if (hasNumber(t, "HurtEntities")) Object.assign(e, { hurtEntities: nbtGet(t, "HurtEntities", NBT.BYTE, 0) !== 0, fallHurtAmount: nbtGet(t, "FallHurtAmount", NBT.FLOAT, 0), fallHurtMax: nbtGet(t, "FallHurtMax", NBT.INT, 0) });
       hosts.falling.entities.push(e);
     }
   } else if (id === "Boat") {
