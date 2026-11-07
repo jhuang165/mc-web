@@ -109,6 +109,7 @@ import { ChatUi, printChat, chat } from "./chat-ui.js";
 import { translation, fontWidth } from "./chat-component.js";
 import { lookupStat, statComponent, statHover, profilerTick } from "./commands-extra.js";
 import { Profiler } from "./profiler.js";
+import { HitboxRenderer, collectHitboxes, crashStep, crashReport, showCrashReport, KEY_C, KEY_F3, KEY_B, KEY_S, KEY_T } from "./debug-keys.js";
 import { DebugOverlay, selectSection, nativeYaw, readMemory, rendererStats, entityStats, columnStats, heightValue, floorD, WALK_SPEED, FLY_SPEED } from "./debug-overlay.js";
 import { parseJsonNbt } from "./json-nbt.js";
 import { itemStackFromNbt } from "./region-import.js";
@@ -3218,9 +3219,38 @@ function bindingReleased(d) {
   else if (d === "key.attack") { mineHeld = false; if (mining && !mining.auto) mining = null; }
   else if (d === "key.use") releaseBowUse();
 }
+// Minecraft.runTick keyboard loop, run on every screen (no currentScreen test): Keyboard.isKeyDown for the F3 combinations and the F3+C crash timer.
+// bytecode-read: F1 hideGUI and F3 (showDebugInfo, Shift = profiler chart) toggle on their press; with F3 down, B toggles RenderManager.debugBoundingBox,
+// S and T run refreshResources, F saves the options, A reloads the renderers, H and P toggle advancedItemTooltips / pauseOnLostFocus and save. No chat line.
+const rawHeld = new Set();
+let debugHitbox = false, crashStamp = -1, hitboxes = null;
+function debugCrashTick() {
+  const r = crashStep(crashStamp, performance.now(), rawHeld.has(KEY_C), rawHeld.has(KEY_F3));
+  crashStamp = r.stamp;
+  if (r.crash) { crashStamp = -1; rawHeld.clear(); if (screen === "playing") pause(); showCrashReport(document, crashReport(), () => {}); }
+}
+function debugKeyDown(e, code) {
+  rawHeld.add(code);
+  if (code === 59 || code === 61) e.preventDefault(); // F1, F3 are never the browser's
+  debugCrashTick();
+  if (e.repeat || screen === "home") return;
+  const f3 = rawHeld.has(KEY_F3);
+  if (f3 && code === 33) saveOptions();
+  if (f3 && code === 30) for (const k of scene.chunks.keys()) scene.dirty.add(k); // RenderGlobal.loadRenderers
+  if (f3 && (code === KEY_S || code === KEY_T)) { refreshResources(); for (const k of scene.chunks.keys()) scene.dirty.add(k); } // bao.c ends with loadRenderers
+  if (f3 && code === 35) { options.advancedTooltips = !options.advancedTooltips; saveOptions(); }
+  if (f3 && code === 25) { options.pauseOnLostFocus = options.pauseOnLostFocus === false; saveOptions(); }
+  if (f3 && code === KEY_B) debugHitbox = !debugHitbox;
+  if (code === 59) hideGUI = !hideGUI;
+  if (code === 62) scene.post.deactivateShader(); // F4: EntityRenderer.deactivateShader
+  if (code === 61) { debug = !debug; debugChart = e.shiftKey; $("#debug").classList.toggle("hidden", !debug); if (!debug) debugOverlay.hide(); }
+}
+window.addEventListener("keyup", (e) => { rawHeld.delete(lwjglCode(e)); debugCrashTick(); }, true);
+window.addEventListener("blur", () => rawHeld.clear());
 window.addEventListener("keydown", (e) => {
   if (screen === "credits") return;
   const code = lwjglCode(e);
+  debugKeyDown(e, code);
   if (exportBusy) { dispatchKeypress(e, code); e.preventDefault(); return; }
   // An open menu screen takes every key (GuiScreen.handleKeyboardInput), then dispatchKeypresses.
   if (gui.open) {
@@ -3274,18 +3304,6 @@ window.addEventListener("keydown", (e) => {
   if (binds.binding(code) || code === 59 || code === 61 || code === 62 || (e.ctrlKey && !e.metaKey && /^Key[A-Z]$|^Space$/.test(e.code)))
     e.preventDefault();
   if (!e.repeat) {
-    // Raw LWJGL codes, not KeyBindings: F1 hideGUI; F3 toggles the debug screen on its press, so an
-    // F3 + key combination also toggles it. F3+S/T reload resources (not ported), F3+F only saves the
-    // options in 1.7.10, F3+A reloads the chunk renderers, F3+H advanced tooltips and F3+P
-    // pauseOnLostFocus (both saved). F3+B hitboxes and F3+C (held crash) are not ported.
-    const f3 = keys.has("F3");
-    if (f3 && code === 33) saveOptions();
-    if (f3 && code === 30) for (const k of scene.chunks.keys()) scene.dirty.add(k);
-    if (f3 && code === 35) { options.advancedTooltips = !options.advancedTooltips; saveOptions(); }
-    if (f3 && code === 25) { options.pauseOnLostFocus = options.pauseOnLostFocus === false; saveOptions(); }
-    if (code === 59) hideGUI = !hideGUI;
-    if (code === 62) scene.post.deactivateShader(); // F4: EntityRenderer.deactivateShader (the shader is not saved)
-    if (code === 61) { debug = !debug; debugChart = e.shiftKey; $("#debug").classList.toggle("hidden", !debug); if (!debug) debugOverlay.hide(); }
     if (debug && debugChart && (code === 11 || (code >= 2 && code <= 10))) debugSection = selectSection(clientProfiler, debugSection, code === 11 ? 0 : code - 1); // Minecraft.b(int)
     // KeyBinding.setKeyBindState + onTick through the hash, then the binding's action.
     const d = binds.set(code, true);
@@ -3445,6 +3463,43 @@ function tickMusic(dt) {
     sounds.updateStreams();
   }
 }
+// GuiIngame's debug screen on every screen but the title: the playing, inventory and menu frames all call it (GuiIngame renders before the screen).
+function updateDebugOverlay() {
+  // GuiIngame debug screen (debug-overlay.js). Counts that the port has no native source for are sampled four times a second.
+  const eyeY = position.y + PHYSICS.eye - motion.ySize, bx = floorD(position.x), by = floorD(eyeY), bz = floorD(position.z), ms = performance.now();
+  if (Math.floor(elapsed) !== debugSecond.at) { debugSecond.shown = (scene.chunkUpdates || 0) - debugSecond.updates; debugSecond.updates = scene.chunkUpdates || 0; debugSecond.at = Math.floor(elapsed); }
+  if (ms - debugCache.at > 250) {
+    const pts = [];
+    for (const m of mobs?.entities || []) pts.push([m.x, m.y + 0.9, m.z, 1.5]);
+    for (const i of items.items) pts.push([i.x, (i.posY ?? i.y ?? 0) + 0.125, i.z, 0.5]);
+    for (const o of xpOrbs.orbs) pts.push([o.x, o.y, o.z, 0.5]);
+    for (const c of [...(minecarts?.carts || []), ...boats.carts]) pts.push([c.x, c.posY ?? c.y ?? 0, c.z, 1.5]);
+    for (const h of hanging.entities) pts.push([h.x, h.y ?? 0, h.z, 1]);
+    const col = columnStats(world, bx >> 4, bz >> 4);
+    debugCache = { at: ms, renders: rendererStats(scene, world), entities: entityStats(scene, pts, { thirdPerson: thirdPersonView > 0 }), topSegment: col.topSegment, height: heightValue(world, bx, bz) };
+  }
+  const loaded = !world.chunkAt || !!world.chunkAt(bx >> 4, bz >> 4), lv = scene.light, biome = world.biomeAt?.(bx, bz)?.name ?? "Unknown";
+  const u = guiScale(innerWidth, innerHeight, Number(options.guiScale) || 0);
+  debugOverlay.update({
+    u, scaledWidth: Math.ceil(innerWidth / u), w: innerWidth, h: innerHeight, mem: readMemory(),
+    pie: debugChart ? { list: clientProfiler.results(debugSection) } : null,
+    left: {
+      fps, chunkUpdates: debugSecond.shown, renders: debugCache.renders, entities: debugCache.entities, particles: scene.effectRenderer.count(),
+      chunkCache: world.chunks?.size ?? scene.chunks.size, x: position.x, z: position.z, feetY: position.y, eyeY, yaw: nativeYaw(yaw), onGround: grounded && !flying, height: debugCache.height,
+      walkSpeed: WALK_SPEED, flySpeed: FLY_SPEED,
+      light: loaded && by >= 0 && by < 256 ? { topSegment: debugCache.topSegment, biome, block: lv ? lv.blockAt(bx, by, bz) : 0, sky: lv ? lv.skyAt(bx, by, bz) : 15, real: lv ? lv.level(bx, by, bz, 0) : 15 } : null,
+    },
+  });
+}
+// F3+B: every rendered entity's native box (debug-keys.js); the view entity only in third person.
+function debugHitboxList() {
+  const live = (e) => !world.streaming || world.isLoaded(e.x, e.z);
+  return collectHitboxes({
+    mobs: (mobs?.entities ?? []).filter(live), items: items.items, orbs: xpOrbs.orbs, carts: minecarts?.carts ?? [], boats: boats.carts, hanging: hanging.entities, tnt: primed,
+    arrows: arrows.list, balls: [...projectiles.balls, ...(mobs?.potions?.projectiles?.balls ?? [])], rockets: rockets.rockets, fireballs: [...(mobs?.fireballs?.list ?? []), ...(mobs?.skulls?.list ?? [])],
+    player: thirdPersonView > 0 ? { x: position.x, y: position.y - motion.ySize, z: position.z } : null,
+  });
+}
 function animate(now) {
   requestAnimationFrame(animate);
   // Max Framerate: Display.sync(getLimitFramerate()) below Unlimited (frame-limit.js).
@@ -3582,33 +3637,7 @@ function animate(now) {
       $("#mining-meter i").style.width =
         Math.min(100, mining.progress * 100) + "%";
     }
-    if (debug) {
-      // GuiIngame debug screen (debug-overlay.js). Counts that the port has no native source for are sampled four times a second.
-      const eyeY = position.y + PHYSICS.eye - motion.ySize, bx = floorD(position.x), by = floorD(eyeY), bz = floorD(position.z), ms = performance.now();
-      if (Math.floor(elapsed) !== debugSecond.at) { debugSecond.shown = (scene.chunkUpdates || 0) - debugSecond.updates; debugSecond.updates = scene.chunkUpdates || 0; debugSecond.at = Math.floor(elapsed); }
-      if (ms - debugCache.at > 250) {
-        const pts = [];
-        for (const m of mobs?.entities || []) pts.push([m.x, m.y + 0.9, m.z, 1.5]);
-        for (const i of items.items) pts.push([i.x, (i.posY ?? i.y ?? 0) + 0.125, i.z, 0.5]);
-        for (const o of xpOrbs.orbs) pts.push([o.x, o.y, o.z, 0.5]);
-        for (const c of [...(minecarts?.carts || []), ...boats.carts]) pts.push([c.x, c.posY ?? c.y ?? 0, c.z, 1.5]);
-        for (const h of hanging.entities) pts.push([h.x, h.y ?? 0, h.z, 1]);
-        const col = columnStats(world, bx >> 4, bz >> 4);
-        debugCache = { at: ms, renders: rendererStats(scene, world), entities: entityStats(scene, pts, { thirdPerson: thirdPersonView > 0 }), topSegment: col.topSegment, height: heightValue(world, bx, bz) };
-      }
-      const loaded = !world.chunkAt || !!world.chunkAt(bx >> 4, bz >> 4), lv = scene.light, biome = world.biomeAt?.(bx, bz)?.name ?? "Unknown";
-      const u = guiScale(innerWidth, innerHeight, Number(options.guiScale) || 0);
-      debugOverlay.update({
-        u, scaledWidth: Math.ceil(innerWidth / u), w: innerWidth, h: innerHeight, mem: readMemory(),
-        pie: debugChart ? { list: clientProfiler.results(debugSection) } : null,
-        left: {
-          fps, chunkUpdates: debugSecond.shown, renders: debugCache.renders, entities: debugCache.entities, particles: scene.effectRenderer.count(),
-          chunkCache: world.chunks?.size ?? scene.chunks.size, x: position.x, z: position.z, feetY: position.y, eyeY, yaw: nativeYaw(yaw), onGround: grounded && !flying, height: debugCache.height,
-          walkSpeed: WALK_SPEED, flySpeed: FLY_SPEED,
-          light: loaded && by >= 0 && by < 256 ? { topSegment: debugCache.topSegment, biome, block: lv ? lv.blockAt(bx, by, bz) : 0, sky: lv ? lv.skyAt(bx, by, bz) : 15, real: lv ? lv.level(bx, by, bz, 0) : 15 } : null,
-        },
-      });
-    }
+    if (debug) updateDebugOverlay();
     if (elapsed - lastSave > 5) save();
     scene.effects.crack(mining?.block, mining?.progress);
   } else if (screen === "dead") {
@@ -3628,6 +3657,7 @@ function animate(now) {
     const roll = (hurtCameraRoll({ hurtTime: survival.hurtTime, health: 0, deathTime }, Math.min(1, accumulator / PHYSICS.tick)) * Math.PI) / 180;
     scene.camera.rotation.z = roll;
   } else if (screen === "home") scene.preview(elapsed);
+  if (debug && screen !== "home" && !running()) updateDebugOverlay();
   const partial = Math.min(1, accumulator / PHYSICS.tick);
   // TileEntityMobSpawnerRenderer: the spinning display mob of each spawner within 64 blocks.
   const shown = spawners?.size && screen !== "home" ? spawners.values().filter((sp) => (sp.x + 0.5 - position.x) ** 2 + (sp.y + 0.5 - position.y) ** 2 + (sp.z + 0.5 - position.z) ** 2 < 4096).map((sp) => spawnerDisplayEntity(sp, partial)).filter(Boolean) : [];
@@ -3637,6 +3667,7 @@ function animate(now) {
   minecartRenderer?.update(screen === "home" || !minecarts ? [] : minecarts.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);
   boatRenderer?.update(screen === "home" ? [] : boats.carts.filter(e=>!world.streaming||world.isLoaded(e.x,e.z)), partial, world);
   hangingRenderer?.update(screen === "home" ? [] : hanging.entities.filter(e => !world.streaming || world.isLoaded(e.x, e.z)));
+  if (screen !== "home") { hitboxes ??= new HitboxRenderer(scene.scene); hitboxes.update(debugHitbox ? debugHitboxList() : null); } // RenderManager.debugBoundingBox
   signRenderer?.update(screen === "home" ? [] : [...signs.tiles.values()], world, position);
   skullRenderer?.update(screen === "home" ? [] : [...SKULLS.tiles.values()], world, position);
   enchantBookRenderer?.update(screen === "home" ? [] : [...enchantBooks.tiles.values()], world, position, partial);

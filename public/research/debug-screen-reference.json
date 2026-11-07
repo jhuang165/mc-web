@@ -32,15 +32,17 @@
     "firstRowRemoved": "getProfilingData(name).remove(0) is the section itself"
   },
   "hotkeys": {
-    "F3+S (31)": "bao.c: refresh resources. Not ported (no resource packs).",
-    "F3+T (20)": "same bao.c as F3+S. Not ported.",
-    "F3+F (33)": "GameSettings.setOptionValue(RENDER_DISTANCE-ish, +-1) with Shift reversing; controls.md records it only saves options. Existing port: saves options.",
-    "F3+A (30)": "RenderGlobal.loadRenderers (bma.a). Port: marks every chunk mesh dirty.",
-    "F3+H (35)": "advancedItemTooltips toggle + saveOptions. Port: same.",
-    "F3+B (48)": "RenderManager.debugBoundingBox (bnn.p) toggle. Not ported (no hitbox renderer).",
-    "F3+P (25)": "pauseOnLostFocus toggle + saveOptions. Port: same.",
+    "F3+S (31)": "bao.c (refreshResources) then, inside bao.c, bma.a (loadRenderers); bytecode-read. There is no separate sound reload in 1.7.10: SoundHandler reloads as a resource-manager reload listener inside the same call. Port (batch 22): resource-refresh.js refreshResources() in place plus every chunk mesh marked dirty.",
+    "F3+T (20)": "identical to F3+S (same bao.c call, bytecode-read). Port: same.",
+    "F3+F (33)": "with F3 and Shift or no Shift: bbj.a(bbm.f RENDER_DISTANCE, +-1) only where the option exists; the key block saves nothing else (bytecode-read at 836-880). Port: saves options. No chat message.",
+    "F3+A (30)": "bma.a() loadRenderers (bytecode-read). No chat message. Port verified live: marks every chunk mesh dirty.",
+    "F3+H (35)": "bbj.v (advancedItemTooltips) toggle + bbj.b (saveOptions) (bytecode-read). No chat message in 1.7.10 (the whole key block from F3+S to F3+P contains no chat call: later versions print 'Advanced tooltips: shown/hidden'). Port verified live: toggles and saves.",
+    "F3+B (48)": "bao: bnn.p = !bnn.p (bytecode-read, requires F3 down). RenderManager.renderEntityStatic/bnn.a(sa,DDDFFZ) calls bnn.b(sa,DDDFF) when bnn.p, !entity.isInvisible() (sa.ap) and the shadow-only flag is false. Port (batch 22): debug-keys.js HitboxRenderer.",
+    "F3+P (25)": "bbj.w (pauseOnLostFocus) toggle + saveOptions (bytecode-read). No chat message. Port verified live.",
     "F3+C": "held 6 s crash (bao.am timestamp on key 46). Not ported.",
-    "absent in 1.7.10": ["lagometer / frame-time graph (bbj.ay is read only by bao: the profiler pie and its digit keys)", "F3+G chunk borders", "F3+D chat clear", "F3+N, F3+Q, F3+F4"]
+    "absent in 1.7.10": ["lagometer / frame-time graph (bbj.ay is read only by bao: the profiler pie and its digit keys)", "F3+G chunk borders", "F3+D chat clear", "F3+N, F3+Q, F3+F4"],
+    "F3+C (46)": "bao runTick keyboard loop (bytecode-read): C and F3 down with no stamp sets bao.am = Minecraft.getSystemTime(); with a stamp, on every keyboard event: now - stamp >= 6000 throws s(new b(\"Manually triggered debug crash\", new Throwable())) BEFORE the key test, else the stamp resets to -1 if C or F3 is up. Fires even if released on that event. Port: crashStep() + a non-destructive dialog (the JVM would write crash-reports and exit).",
+    "any screen": "The whole F1/F3/F4 block in runTick runs after Screen.handleKeyboardInput with no currentScreen test: F1, F3 and every F3 combination work in every GUI (bytecode-read). The port (batch 22) now handles them on every screen but the title."
   },
   "port": {
     "title": "fps from the main loop; chunk updates = scene.buildChunk calls per second (one per column mesh, native counts 16^3 WorldRenderers) - assumed approximation",
@@ -51,5 +53,25 @@
     "memory": "assumed: performance.memory (Chromium) jsHeapSizeLimit / totalJSHeapSize / usedJSHeapSize; others use navigator.deviceMemory or 0",
     "lc": "highest non-air block in the chunk, rounded down to a 16 section, + 15",
     "profilerPie": "second Profiler over the frame: root.tick (particles/tick/bed/effects/player phases) and root.render; unspecified is the rest"
-  }
+  },
+  "hitboxes": {
+    "source": "bytecode-read: bnn.b(sa,double,double,double,float,float) and bma.a(azt,int) (RenderGlobal.drawOutlinedBoundingBox), bnn.a(sa,DDDFFZ) gating",
+    "gate": "bnn.p && !entity.isInvisible() (sa.ap) && !renderOnlyShadow flag; also only for entities that have a renderer (bnn.a(sa) != null)",
+    "box": "(x - width/2, y, z - width/2) to (x + width/2, y + height, z + width/2), camera-relative x/y/z, using Entity.width (sa.M) and Entity.height (sa.N); NOT expanded (no expand/grow call), NOT the collision AABB",
+    "color": "0xFFFFFF (ldc 16777215), passed to bmh.c(int) (Tessellator.setColorOpaque_I)",
+    "geometry": "Tessellator mode 3 (GL_LINE_STRIP): bottom ring (minX,minY,minZ)->(maxX,..,minZ)->(maxX,..,maxZ)->(minX,..,maxZ)->back to start; top ring the same at maxY; then mode 1 (GL_LINES) for the four verticals",
+    "glState": "glDepthMask(false); glDisable TEXTURE_2D (3553), LIGHTING (2896), CULL_FACE (2884), BLEND (3042); depth test untouched (stays enabled); afterwards texture/lighting/cull enabled again, blend disabled, depth mask true",
+    "lineWidth": "never set in this code path: whatever glLineWidth was last set. RenderGlobal's block selection box sets 2.0F (bma.a(yz,azt,int) fconst_2) and nothing resets it; EntityRenderer's profiler/pie code sets 1.0F. So the native width is 2.0 after a block outline has been drawn, otherwise 1.0 (assumed from that ordering). WebGL lines are always 1 px.",
+    "notInVersion": "no eye-height line, no look vector, no blue/red parts (all 1.8+)",
+    "portSizes": "mobs: ENTITY_TYPES width/height (bytecode-read per class in earlier batches), calves 0.5 (assumed 1.7.10 setScale-free halving as the port's mobTargets); items 0.25; XP orbs 0.5; carts 0.98 x 0.7; boats 1.5 x 0.6; arrows 0.5; throwables and rockets 0.25; fireballs their width; primed TNT 0.98 and hanging entities 0.5 x 0.5 (assumed, from hanging.js note); the local player 0.6 x 1.8 only in third person (RenderGlobal.renderEntities draws the view entity only then)",
+    "notDrawn": "falling blocks, lightning, fishing bobbers, eyes of ender, ender crystals, wither skulls from the skull list and dragon parts (native parts have no renderer, so no box; the dragon's own 16 x 8 box is drawn when it is in ENTITY_TYPES) are not collected unless listed above: assumed gap"
+  },
+  "crash": {
+    "holdMs": 6000,
+    "description": "Manually triggered debug crash",
+    "throwable": "java.lang.Throwable (empty)",
+    "checkedOn": "every keyboard event (press, auto-repeat, release), not on a timer",
+    "portFlow": "non-destructive dialog 'Oops, Minecraft has crashed! (simulated)' with the report text and a Back to game button; the world is untouched (assumed presentation; native shows the crash dialog and exits)"
+  },
+  "overlayOverGui": "GuiIngame.renderGameOverlay runs in EntityRenderer.updateCameraAndRender before currentScreen.drawScreen (bytecode-read order), so the debug text sits under the GUI's dark gradient and panel. Port: #debug lives in #hud, below #modal; updateDebugOverlay() now runs on the playing, inventory, game-menu and death frames."
 }

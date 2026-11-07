@@ -24,7 +24,7 @@ Shift+F3 (Shift held when F3 goes down) draws the Profiler pie in raw pixels: bl
 
 ## Not in 1.7.10
 
-There is no lagometer or frame-time graph in 1.7.10 (the only reader of `showDebugProfilerChart` is the pie and its digit keys), so none was added. No F3+G, F3+D, F3+N or F3+Q. F3+H, F3+P, F3+A and F3+F already existed in the port; F3+B (hitboxes), F3+S/T (resource reload) and F3+C are native but not ported.
+There is no lagometer or frame-time graph in 1.7.10 (the only reader of `showDebugProfilerChart` is the pie and its digit keys), so none was added. No F3+G, F3+D, F3+N or F3+Q. F3+H, F3+P, F3+A and F3+F existed before batch 22; batch 22 added F3+B, F3+S/T and F3+C and checked all seven live.
 
 ## Approximations (assumed, not native values)
 
@@ -35,3 +35,34 @@ There is no lagometer or frame-time graph in 1.7.10 (the only reader of `showDeb
 - Biome name is the port's `biomeAt(x, z).name`; `fl:` scans the column for the topmost light-opaque block.
 
 Tests: `src/debug-overlay.test.js`.
+
+## F3 combinations (batch 22)
+
+All of F1, F3, F4 and the F3 combinations run in Minecraft.runTick's keyboard loop after the open screen's own key handling, with no screen test (bytecode-read), so they work in every GUI; the port now handles them on every screen except the title. F3 itself toggles on its press, so every F3+key combination also toggles the overlay (as in 1.7.10).
+
+| Combo | Native 1.7.10 | Label |
+|---|---|---|
+| F3+B | `RenderManager.debugBoundingBox` toggle (bnn.p) | bytecode-read |
+| F3+S, F3+T | the same `refreshResources` call (bao.c), which ends with `loadRenderers`. No separate sound reload | bytecode-read |
+| F3+C | held: timestamp set when C and F3 are both down; on any later keyboard event 6000 ms or more after it, throws "Manually triggered debug crash" | bytecode-read |
+| F3+H, F3+P | toggle advancedItemTooltips / pauseOnLostFocus, `saveOptions`, no chat line | bytecode-read, port verified live |
+| F3+A | `RenderGlobal.loadRenderers`, no chat line | bytecode-read, port verified live |
+| F3+F | saves options only here (no render-distance branch), no chat line | bytecode-read, port verified live |
+
+Later versions print chat feedback for H, P, A and others; the 1.7.10 key block contains no chat call, so the port prints nothing.
+
+### Hitboxes (F3+B)
+
+`RenderManager.renderEntityWithPosYaw` calls the hitbox routine (bnn.b) when `debugBoundingBox`, the entity is not invisible and the shadow-only flag is false. The box is `(x - width/2, y, z - width/2)` to `(x + width/2, y + height, z + width/2)` from the entity's `width` and `height` fields, not grown and not the collision box; it is drawn in white (0xFFFFFF) as a bottom and a top line strip plus four vertical lines, with depth writes, texture, lighting, cull and blend off and the depth test on. 1.7.10 draws no eye-height line and no look vector (1.8 additions), so none is drawn. The line width is never set there: it stays at whatever the last `glLineWidth` left (2.0 after a block selection outline, assumed), and WebGL lines are 1 px, so the port's outlines are 1 px (assumed gap). Port: `src/debug-keys.js` collects mobs, items, XP orbs, carts, boats, hanging entities, primed TNT, arrows, throwables, rockets, fireballs and the local player (third person only).
+
+Assumed sizes: calves half-size, primed TNT 0.98, hanging entities 0.5 x 0.5. Not collected: falling blocks, lightning, fishing bobbers, eyes of ender, ender crystals and the dragon's native parts.
+
+### F3+C
+
+Port flow (assumed presentation): the game menu opens and a dialog shows the crash report text with the native description and a "Back to game" button; nothing is closed or lost. Native writes crash-reports/ and exits.
+
+### Over GUIs
+
+GuiIngame draws before `currentScreen.drawScreen`, so the overlay lies under the GUI's dark gradient and panel (bytecode-read order). `#debug` sits in `#hud` below `#modal`, and `updateDebugOverlay()` now runs on the playing, inventory, game-menu and death frames. Checked in headless Chrome over the inventory (`artifacts/b22-debugkeys/f3-over-inventory.png`).
+
+Tests: `src/debug-keys.test.js`.
