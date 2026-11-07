@@ -21,11 +21,11 @@ import { doorSound } from "./doors-panes.js";
 import { hashSeed, WATER, LAVA } from "./world.js";
 
 const REPEATER = 112, FURNACE = 14;
-const PLATES = [70, 72, 147, 148], SENSOR = 151;
+const PLATES = [70, 72, 147, 148], SENSOR = 151, TRIPWIRE = 132; // plates and tripwire strings are re-sensed every tick while idle
 const COMPARATORS = [149, 150];
 const SIZES = { 54: 27, 146: 27, 61: 3, 62: 3, 23: 9, 158: 9, 154: 5, 117: 4 };
 // Original drop item id -> internal item id (block items are 1000 + internal id from 100 up).
-const DROP_ITEMS = { 331: 360, 356: 356, 404: 381, 324: 470, 330: 471 };
+const DROP_ITEMS = { 331: 360, 356: 356, 404: 381, 324: 470, 330: 471, 287: 321 };
 const dropItemId = (item) => {
   if (DROP_ITEMS[item] !== undefined) return DROP_ITEMS[item];
   const m = fromOriginal(item, 0);
@@ -55,7 +55,7 @@ export class LiveRedstone extends RedstoneWorld {
     this.deferred = []; // due pending ticks whose cell is not loaded
     this.watched = new Map(); // pressure plates and daylight sensors by cell
     this.watchIds = new Map();
-    for (const o of [...PLATES, SENSOR]) for (const id of internalIdsFor(o)) this.watchIds.set(id, o);
+    for (const o of [...PLATES, SENSOR, TRIPWIRE]) for (const id of internalIdsFor(o)) this.watchIds.set(id, o);
     this.lastScan = -1e9;
     this.clock = 0;
     if (hooks.funnel !== false) this.installFunnel();
@@ -233,7 +233,7 @@ export class LiveRedstone extends RedstoneWorld {
       }
       if (o === SENSOR) {
         if (this.time % 20 === 0) this.refreshSensor(p.x, p.y, p.z);
-      } else if (this.getBlockMetadata(p.x, p.y, p.z) === 0) this.collide(p.x, p.y, p.z);
+      } else if (o === TRIPWIRE ? (this.getBlockMetadata(p.x, p.y, p.z) & 1) === 0 : this.getBlockMetadata(p.x, p.y, p.z) === 0) this.collide(p.x, p.y, p.z);
     }
   }
   refreshSensor(x, y, z) {

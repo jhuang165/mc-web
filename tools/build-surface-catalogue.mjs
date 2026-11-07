@@ -196,7 +196,7 @@ const STRUCT = {
   Mineshaft: ['Implemented', '[mineshaft generator](mineshafts-live.md), structure NBT in [structure-nbt](structure-nbt.md)'],
   Stronghold: ['Implemented', '[stronghold generator](strongholds.md), live portal frames in [eye of ender](eye-of-ender.md)'],
   Village: ['Implemented', '[village generator](villages.md), live villagers in [village](village.md)'],
-  Temple: ['Partial', '[scattered features](scattered-features.md); combined-population temple read calls remain 319 short, no redstone power simulation in traps'],
+  Temple: ['Partial', '[scattered features](scattered-features.md); traps run live (tripwire, lever puzzle, plate and TNT; tripwire probe-replayed), shears disarm, random ticks and projectile triggers are not probed or modelled'],
   Fortress: ['Partial', '[fortress](fortress.md) generated live in the Nether; no start/piece NBT or MapGenStructureData persistence'],
 };
 const structFamily = id => id.startsWith('MS') || id === 'Mineshaft' ? 'Mineshaft' : id.startsWith('SH') || id === 'Stronghold' ? 'Stronghold' : id.startsWith('Vi') || id === 'Village' ? 'Village' : id.startsWith('Te') || id === 'Temple' ? 'Temple' : id.startsWith('Ne') || id === 'Fortress' ? 'Fortress' : assert.fail(id);
@@ -212,7 +212,7 @@ const MAPGEN = {
   MapGenMineshaft: ['Implemented', '[mineshafts](mineshafts-live.md)'],
   MapGenVillage: ['Implemented', '[villages](villages.md)'],
   MapGenStronghold: ['Implemented', '[strongholds](strongholds.md)'],
-  MapGenScatteredFeature: ['Partial', '[scattered features](scattered-features.md); temple read-call count 319 short'],
+  MapGenScatteredFeature: ['Partial', '[scattered features](scattered-features.md); combined-population call counts match natively (the 319-call gap is closed)'],
   MapGenNetherBridge: ['Partial', '[fortress](fortress.md); no start NBT/persistence'],
 };
 const mapRows = mapGenerators.map(s => { const m = MAPGEN[leaf(s.mappedName)]; assert(m, s.mappedName); return `| ${short(s.mappedName)} | ${s.class} | ${s.abstract ? 'yes' : 'no'} | ${m[0]}; ${m[1]} | G |`; });

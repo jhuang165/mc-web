@@ -2,7 +2,7 @@
 // BlockTorch (aoc), BlockLever (alv), BlockButton (ajs/anx/aon),
 // BlockRedstoneLight (anb), BlockCompressedPowered (ams), BlockRedstoneDiode (akj) with
 // BlockRedstoneRepeater (anf), BlockRedstoneComparator (akc) with TileEntityComparator (aoz),
-// BlockDaylightDetector (akg),
+// BlockDaylightDetector (akg), BlockTripWireHook (aog) and BlockTripWire (aof),
 // BlockBasePressurePlate (ajd) with BlockPressurePlate (amu) and BlockPressurePlateWeighted (aol),
 // and the comparator-override blocks BlockCauldron (ajw) and BlockEndPortalFrame (aku), all inside a real
 // World (ahb) whose chunk provider hands out real Chunk (apx) objects. The
@@ -229,6 +229,13 @@ public class RedstoneProbe {
           w.add("E," + e[2]);
           switch (e[2]) {
             case "place": w.d(x, y, z, aji.e(Integer.parseInt(e[6])), Integer.parseInt(e[7]), 3); break;
+            // World.setBlock flags 2 (structure generation) and ItemBlock.placeBlockAt: setBlock(.., 3), onPostBlockPlaced(meta).
+            case "place2": w.d(x, y, z, aji.e(Integer.parseInt(e[6])), Integer.parseInt(e[7]), 2); break;
+            case "placehook": {
+              aji b = aji.e(Integer.parseInt(e[6])); int pm = Integer.parseInt(e[7]);
+              if (w.d(x, y, z, b, pm, 3) && w.a(x, y, z) == b) b.e((ahb) w, x, y, z, pm);
+              break;
+            }
             case "air": w.f(x, y, z); break;
             case "use": w.a(x, y, z).a((ahb) w, x, y, z, (yz) null, 0, 0f, 0f, 0f); break;
             // ItemReed.onItemUse for a diode: setBlock(block, 0, 3) then Block.onBlockPlacedBy(placer facing yaw).
