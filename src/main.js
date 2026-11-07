@@ -3062,7 +3062,9 @@ window.addEventListener("keydown", (e) => {
     } else closeModal();
     return;
   }
-  if (e.target.matches("input,select,textarea")) return;
+  // A key event dispatched on window or document has a non-Element target with no matches(); without this
+  // guard the handler threw before reaching binds.set.
+  if (e.target instanceof Element && e.target.matches("input,select,textarea")) return;
   // GuiContainer.keyTyped compares key codes directly: key.inventory closes, the hotbar keys and
   // key.drop act on the hovered slot. GuiContainerCreative opens search with key.chat first.
   const hotbar = HOTBAR.findIndex((d) => binds.code(d) === code), drop = code !== 0 && code === binds.code("key.drop");

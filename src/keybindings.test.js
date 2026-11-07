@@ -147,6 +147,9 @@ test('game input reads the bindings, not fixed KeyboardEvent codes', () => {
   // No fixed action keys or mouse buttons in the game's handlers (Escape and the raw F-keys stay codes, as natively).
   for (const fixed of ['"KeyE"', '"KeyQ"', '"KeyT"', '"F5"', 'e.button === 2', 'e.button === 1', 'options.keys?.']) assert(!main.includes(fixed), fixed);
   assert.match(main, /binds\.set\(code, true\)/);
+  // Key events whose target is window or document (no Element.matches) still reach the bindings.
+  assert.match(main, /if \(e\.target instanceof Element && e\.target\.matches\("input,select,textarea"\)\) return;/);
+  assert(!/[^&] e\.target\.matches\(/.test(main), 'every e.target.matches is behind the Element guard');
   assert.match(main, /binds\.set\(mouseCode\(e\.button\), true\)/);
   assert.match(main, /captureMovementInput\(bedSleep\.sleeping \? \(\) => false : \(d\) => binds\.isDown\(d\)\)/);
   assert.match(main, /frameLimiter\.ready\(now, limitFramerate\(/);
