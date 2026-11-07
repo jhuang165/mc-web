@@ -33,6 +33,7 @@ export const BRIGHTNESS = Array.from({ length: 16 }, (_, i) => {
 // (func_149685_I: 0.2 for normal cubes) and getCanBlockGrass (s: materials
 // that let grass through, used by smooth lighting to decide corner samples).
 export function lightOpacity(b) {
+  if (b === 172) return 0; // BlockSkull lightOpacity 0 (block-audit-reference.json facts, original 144)
   if (b >= 140 && b <= 142) return 0; // stained glass, its pane and carpet (colored-blocks-reference.json: lightOpacity 0)
   if (b >= 132 && b <= 138) return lightOpacity3(b); // dropper, hopper, brewing stand, powered/detector/activator rails (blocks-0-40.js)
   if (b >= 119 && b <= 131) return lightOpacity2(b); // redstone torches, lamps, block, button, plates, comparators, sensor, moving piston and glowstone (redstone-blocks-2.js)

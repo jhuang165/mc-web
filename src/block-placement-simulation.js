@@ -12,7 +12,7 @@ import { flowerCanStay } from "./flowers.js";
 import { saplingCanStay, placedLeavesMeta } from "./trees.js";
 import { canPlaceLadder, placedLadderMeta, clickedSide } from "./ladders.js";
 import { placedTorchMeta } from "./torches.js";
-import { railCanPlace, railAdded, railItemBlock, isRailId } from "./rails.js";
+import { railCanPlace, solidTop as railSolidTop, railAdded, railItemBlock, isRailId } from "./rails.js";
 import { anvilPlacementMeta } from './anvil-block.js';
 import { isStair, stairPlacementMeta } from './stairs.js';
 import { paneItemBlock, doorItemBlock, useDoorItem, doorRotationYaw, solidTopSurface, doorReplaceable } from './doors-panes.js';
@@ -181,6 +181,8 @@ export function placeHeldBlock(state, request, hooks = {}) {
   if (isChestBlock(id) && !canPlaceChest(world, ...p, id)) return result(false, "chest-support", id, p); // pairs only with its own kind
   // BlockCarpet.canPlaceBlockAt: any non-air block below (colored-blocks.js).
   if (id === CARPET && !carpetCanStay(world, ...p)) return result(false, "carpet-support", id, p);
+  // BlockPumpkin.canPlaceBlockAt (pumpkin 86, jack o'lantern 91): replaceable cell and a solid top surface below (block-audit-reference.json place rows).
+  if ((id === 67 || id === 148) && !railSolidTop(world, p[0], p[1] - 1, p[2])) return result(false, "pumpkin-support", id, p);
   if (isFlower(id) && !flowerCanStay(world, flowers, ...p)) return result(false, "flower-support", id, p);
   if (id === SAPLING && !saplingCanStay(world, ...p)) return result(false, "sapling-support", id, p);
   if (id === SNOW_LAYER && !snowCanStay(world, ...p)) return result(false, "snow-support", id, p);

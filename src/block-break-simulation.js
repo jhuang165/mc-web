@@ -13,6 +13,8 @@ import { PISTON_HEAD, isPistonBase, pistonExtended, baseOfHead, headOfBase, head
 import { FLOWER_POT, potContents } from './stone-utility.js';
 import { enchantedBreakDrops, javaLikeRandom, playerMiningState } from './enchantment-effects.js';
 import { MONSTER_EGG, eggBreak } from './silverfish.js';
+import { NETHER_WART, ITEM_NETHER_WART, wartDropCount } from './nether-wart.js';
+import { getFortuneModifier } from './enchantments.js';
 import { QUARTZ_BLOCK, quartzDropDamage } from './nether-blocks.js';
 
 // The authoritative live player block-break path, with synchronous presentation
@@ -51,7 +53,9 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
   const leaves = (block === 5||block===71) && harvest && !creative && !shearing && !enchanted
     ? leafDrops(leafRandom, world.getMeta(...p),block).map((d) => ({ ...d, count: 1 }))
     : null;
-  const drops = (block === SKULL ? skullBreakDrops(p, harvest && !creative) : null) ?? enchanted?.drops ?? (harvest ? populationDrops(block,world.getMeta(...p),{random,shears:shearing}) : null) ?? leaves ?? crops ?? (drop ? [{ id: drop, count }] : []);
+  // BlockNetherWart.dropBlockAsItemWithChance: 1 wart, a mature one 2 + nextInt(3) (+ nextInt(fortune + 1)); none without a harvest.
+  const wart = block === NETHER_WART && harvest && !creative ? [{ id: ITEM_NETHER_WART, count: wartDropCount(world.getMeta(...p), heldStack?.id === tool ? getFortuneModifier(heldStack) : 0, dropRandom ?? javaLikeRandom(random)).count }] : null;
+  const drops = wart ?? (block === SKULL ? skullBreakDrops(p, harvest && !creative) : null) ?? enchanted?.drops ?? (harvest ? populationDrops(block,world.getMeta(...p),{random,shears:shearing}) : null) ?? leaves ?? crops ?? (drop ? [{ id: drop, count }] : []);
   // BlockFlowerPot.breakBlock: the pot's plant drops alongside the pot (world.pots, read before the cell is cleared).
   const potPlant = block === FLOWER_POT ? potContents(world, ...p) : null;
   if (potPlant) drops.push({ id: potPlant.id, count: 1, damage: potPlant.damage });

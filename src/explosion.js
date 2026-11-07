@@ -30,8 +30,10 @@ for (let id = 31; id <= 38; id++) RESIST[id] = 0;
 RESIST[WOODEN_DOOR] = 3; RESIST[IRON_DOOR] = 5; RESIST[IRON_BARS] = 6; RESIST[GLASS_PANE] = 0.3;
 RESIST[139] = 3600000; // BlockCommandBlock: setResistance(6000000), aji.p registration
 RESIST[171] = 45 / 5; // BlockDragonEgg: setHardness(3) setResistance(15) -> 45 / 5 (end-reference.json facts)
+// b16 block audit (block-audit-reference.json explosionResistance, internal ids): original 25 note block, 84 jukebox, 87 netherrack, 88 soul sand, 112 nether brick, 113 nether fence, 121 end stone, 153 quartz ore, 155 quartz block, 144 skull.
+Object.assign(RESIST, { 177: 0.8, 178: 6, 150: 0.4, 151: 0.5, 153: 6, 154: 6, 152: 9, 156: 3, 157: 0.8, 172: 1 });
 RESIST[173] = 3; // BlockBeacon setResistance(15) / 5 (pyramid.js)
-RESIST[149] = 1200000; // BlockEndPortal setResistance(6000000) / 5 (eye-of-ender.js)
+RESIST[149] = 3600000; // BlockEndPortal setResistance(6000000) / 5 (eye-of-ender.js)
 for (const [id, r] of Object.entries(CHEST_RESISTANCE)) RESIST[id] = r; // chest-blocks.js (trapped chest, ender chest)
 for (const [id, r] of Object.entries(SHAPED_RESISTANCE)) RESIST[id] = r; // shaped-blocks.js (wood slabs, gate and trapdoor, cobblestone wall)
 RESIST[138] = 0.2; // BlockBed (bed-reference.json facts)
