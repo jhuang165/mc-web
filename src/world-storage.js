@@ -10,7 +10,7 @@ import { splitRuntime, joinRuntime, hasRuntime, separateContainers, validateCont
 // writes the world record and only the columns edited since the last save in one
 // transaction. Records written before then (or imported) carry an `edits` array;
 // their first write moves it into column records.
-const DB = 'blockworld.storage.v1', STORE = 'worlds', CHUNKS = 'chunks', RUNTIME = 'runtime', CONTAINERS = 'containers';
+const DB = 'blockworld.storage.v1', STORE = 'worlds', CHUNKS = 'chunks', RUNTIME = 'runtime', CONTAINERS = 'containers', BASES = 'bases';
 // Bounded write fingerprints, never a second copy of every explored inventory.
 const runtimeCopies = new Map(), COPY_LIMIT = 256;
 const copyKey = (store,c) => JSON.stringify([store,c.world,c.x,c.z]);
@@ -35,7 +35,7 @@ export async function openWorldStorage(indexed = globalThis.indexedDB) {
   if (opening) return opening;
   if (!indexed) throw new Error('This browser cannot store streamed worlds');
   opening = new Promise((resolve,reject)=>{
-    const request = indexed.open(DB,4);
+    const request = indexed.open(DB,5);
     let abandoned = false;
     request.onupgradeneeded = () => {
       const db = request.result, migrateContainers=db.objectStoreNames.contains(RUNTIME)&&!db.objectStoreNames.contains(CONTAINERS);
@@ -43,6 +43,8 @@ export async function openWorldStorage(indexed = globalThis.indexedDB) {
       if (!db.objectStoreNames.contains(RUNTIME)) db.createObjectStore(RUNTIME,{keyPath:['world','x','z']}).createIndex('world','world');
       if (!db.objectStoreNames.contains(CHUNKS)) db.createObjectStore(CHUNKS,{keyPath:['world','x','z']}).createIndex('world','world');
       if (!db.objectStoreNames.contains(CONTAINERS)) db.createObjectStore(CONTAINERS,{keyPath:['world','x','z']}).createIndex('world','world');
+      // v5: stored full columns of imported Java saves (whole-save-columns.js), read by exact key like CHUNKS.
+      if (!db.objectStoreNames.contains(BASES)) db.createObjectStore(BASES,{keyPath:['world','x','z']}).createIndex('world','world');
       if(migrateContainers) {
         // The upgrade transaction moves inventories atomically; a failed upgrade
         // leaves the v3 runtime records intact for the next open attempt.
@@ -188,7 +190,9 @@ export async function deleteStoredWorld(id) {
   return serializeWrite(async()=>{
     const db = await openWorldStorage();
     await new Promise((resolve,reject)=>{
-      const tx = db.transaction([STORE,CHUNKS,RUNTIME,CONTAINERS],'readwrite'), chunkStore = tx.objectStore(CHUNKS);
+      const tx = db.transaction([STORE,CHUNKS,RUNTIME,CONTAINERS,BASES],'readwrite'), chunkStore = tx.objectStore(CHUNKS);
+      const baseStore=tx.objectStore(BASES), baseKeys=baseStore.index('world').getAllKeys(id);
+      baseKeys.onsuccess=()=>{for(const k of baseKeys.result)baseStore.delete(k);};
       const runtimeStore=tx.objectStore(RUNTIME), runtimeKeys=runtimeStore.index('world').getAllKeys(id);
       runtimeKeys.onsuccess=()=>{for(const k of runtimeKeys.result) runtimeStore.delete(k);};
       const containerStore=tx.objectStore(CONTAINERS), containerKeys=containerStore.index('world').getAllKeys(id);
@@ -206,12 +210,49 @@ export async function deleteStoredWorld(id) {
 export async function readChunkColumns(id, columns) {
   const db=await openWorldStorage();
   return new Promise((resolve,reject)=>{
-    const tx=db.transaction(CHUNKS), out=[];
+    const tx=db.transaction([CHUNKS,BASES]), out=[];
     for (const [x,z] of columns) {
-      const request=tx.objectStore(CHUNKS).get([id,x,z]);
-      request.onsuccess=()=>{out.push(request.result??{world:id,x,z,cells:new Uint16Array(),values:new Uint16Array(),order:new Uint32Array()});};
+      const request=tx.objectStore(CHUNKS).get([id,x,z]), record={};
+      request.onsuccess=()=>{Object.assign(record,request.result??{world:id,x,z,cells:new Uint16Array(),values:new Uint16Array(),order:new Uint32Array()});};
+      out.push(record);
+      // A stored full column of an imported save rides along with the edit record (World.restoreColumns decodes it).
+      const base=tx.objectStore(BASES).get([id,x,z]);
+      base.onsuccess=()=>{if(base.result)record.base=base.result;};
     }
     tx.oncomplete=()=>resolve(out); tx.onabort=tx.onerror=()=>reject(tx.error??new Error('Could not read columns'));
+  });
+}
+// Whole-save import: stored full columns, written in bounded batches while region files stream through the importer.
+export async function writeBaseColumns(records) {
+  if (!records.length) return;
+  return serializeWrite(async()=>{
+    const db=await openWorldStorage();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction([BASES],'readwrite'), store=tx.objectStore(BASES);
+      for(const r of records)store.put(r);
+      tx.oncomplete=resolve; tx.onabort=tx.onerror=()=>reject(tx.error??new Error('Could not store imported columns'));
+    });
+  });
+}
+// Exact-key reads of stored full columns (export, tests): [] entries for columns the world does not hold.
+export async function readBaseColumns(id, columns) {
+  const db=await openWorldStorage();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction([BASES]), out=[];
+    for (const [x,z] of columns) {
+      const request=tx.objectStore(BASES).get([id,x,z]);
+      request.onsuccess=()=>out.push(request.result??null);
+    }
+    tx.oncomplete=()=>resolve(out); tx.onabort=tx.onerror=()=>reject(tx.error??new Error('Could not read imported columns'));
+  });
+}
+// The coordinates of every stored full column of a world (keys only, nothing decoded).
+export async function listBaseColumns(id) {
+  const db=await openWorldStorage();
+  return new Promise((resolve,reject)=>{
+    const request=db.transaction([BASES]).objectStore(BASES).index('world').getAllKeys(id);
+    request.onsuccess=()=>resolve(request.result.map(([,x,z])=>[x,z]));
+    request.onerror=()=>reject(request.error);
   });
 }
 // Exact-key inventory reads: empty columns are explicit readiness records.

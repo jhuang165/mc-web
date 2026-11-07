@@ -22,18 +22,18 @@ export function indexSave(entries) {
   return { prefix, folder: prefix.replace(/\/$/, "").split("/").pop() || "", files };
 }
 
-async function bytesOf(entry, limit) {
+export async function bytesOf(entry, limit) {
   if (entry.size > limit) throw new Error(`${entry.path}: larger than ${limit >> 20} MiB`);
   const data = await entry.read();
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
   if (bytes.length > limit) throw new Error(`${entry.path}: larger than ${limit >> 20} MiB`);
   return bytes;
 }
-const inDir = (files, dir, ext) => [...files].filter(([p]) => p.startsWith(dir + "/") && p.slice(dir.length + 1).indexOf("/") < 0 && p.endsWith(ext));
+export const inDir = (files, dir, ext) => [...files].filter(([p]) => p.startsWith(dir + "/") && p.slice(dir.length + 1).indexOf("/") < 0 && p.endsWith(ext));
 
 // SaveHandler.readPlayerData: playerdata/<uuid>.dat since 1.7.6, players/<name>.dat before. With several players the most recently
 // written file is taken (the CLI asks for --player-file instead); the choice is reported.
-function pickPlayer(files) {
+export function pickPlayer(files) {
   for (const dir of ["playerdata", "players"]) {
     const list = inDir(files, dir, ".dat").map(([, e]) => e);
     if (!list.length) continue;
@@ -42,7 +42,7 @@ function pickPlayer(files) {
   }
   return null;
 }
-function pickStats(files, player) {
+export function pickStats(files, player) {
   const list = inDir(files, "stats", ".json").map(([p, e]) => [p.slice(6), e]);
   const uuid = player && player.path.split("/").pop().replace(/\.dat$/, "");
   const named = uuid && list.find(([n]) => n === `${uuid}.json`);
@@ -90,17 +90,18 @@ export async function importSaveFolder(entries, options = {}) {
 // <input type=file webkitdirectory>: File objects carry webkitRelativePath.
 export const entriesFromFileList = (list) => [...list].map((f) => ({ path: f.webkitRelativePath || f.name, size: f.size, modified: f.lastModified, read: () => f.arrayBuffer() }));
 
-// showDirectoryPicker: walk only what the importer reads (level.dat, playerdata, players, stats, region).
+// showDirectoryPicker: walk only what the importer reads (level.dat, playerdata, players, stats, data, region and the
+// region folders of DIM-1 and DIM1).
 export async function entriesFromDirectoryHandle(root) {
   const out = [];
-  const walk = async (dir, prefix) => {
+  const walk = async (dir, prefix, allowed) => {
     for await (const [name, handle] of dir.entries()) {
       if (handle.kind === "file") {
         const file = await handle.getFile();
         out.push({ path: prefix + name, size: file.size, modified: file.lastModified, read: () => handle.getFile().then((f) => f.arrayBuffer()) });
-      } else if (prefix === "" && ["playerdata", "players", "stats", "region"].includes(name)) await walk(handle, `${name}/`);
+      } else if (allowed?.[name]) await walk(handle, `${prefix}${name}/`, allowed[name] === true ? null : allowed[name]);
     }
   };
-  await walk(root, "");
+  await walk(root, "", { playerdata: true, players: true, stats: true, region: true, data: true, "DIM-1": { region: true }, DIM1: { region: true } });
   return out;
 }

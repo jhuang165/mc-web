@@ -314,7 +314,9 @@ export async function importJavaRegionArea(regions, options = {}) {
   const generationVersion = level ? options.generationVersion ?? levelGen.generationVersion : 9;
   if (level && level.worldType === 'flat' && generationVersion !== 15) throw new Error('Superflat worlds need streamed generation version 15');
   if (level) await populationBlockMapperReady;
-  const world = dimension ? new DimensionWorld(seedText, dimension)
+  // options.sink (whole-save-import.js ColumnSink): a stand-in for the generated world that records the converted cells
+  // (absolute block | meta << 8 over air) instead of generating terrain, so a whole save can stream chunk by chunk.
+  const world = options.sink ? options.sink : dimension ? new DimensionWorld(seedText, dimension)
     : level ? new World(seedText, 'javaStreamed', generationVersion, level.worldType, levelGen.generatorOptions) : new World(seedText, landscape, 9);
   const height = world.height, origin = { chunkX: world.originX >> 4, chunkZ: world.originZ >> 4 };
   // A level import defaults to the 8x8 chunks around the player (Pos), else around the world spawn.
@@ -403,6 +405,7 @@ export async function importJavaRegionArea(regions, options = {}) {
       const doc = await decodeRegionChunk(entry, { maxBytes: Math.min(CHUNK_INFLATE_LIMIT, remaining) });
       inflated += doc.bytesRead;
       decoded = chunkFromNbt(doc, { hasSky });
+      options.sink?.chunkDecoded?.(decoded.chunk);
       if (decoded.chunk.x !== cx || decoded.chunk.z !== cz) throw new Error(`expected chunk (${cx}, ${cz}), found (${decoded.chunk.x}, ${decoded.chunk.z})`);
     } catch (cause) {
       throw new Error(`${file.filename} slot ${regionSlot(address.x, address.z)}: ${cause.message}`, { cause });
@@ -620,6 +623,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     try {
       const root = (await decodeCompressedNbt(villageFile.bytes)).tag, data = root.value.get('data') ?? root;
       const json = villagesFromNbt(data), inside = (v) => {
+        if (options.wholeSave) return true; // a whole-save import keeps every village
         const x = v.c[0] + shiftX, z = v.c[2] + shiftZ;
         return x >= destination.chunkX * 16 && x < (destination.chunkX + area.width) * 16 && z >= destination.chunkZ * 16 && z < (destination.chunkZ + area.depth) * 16;
       };
