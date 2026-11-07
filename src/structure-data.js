@@ -17,7 +17,7 @@ import { FlatStructureCache, flatStructurePopulation } from "./flat-structures.j
 import { NBT } from "./nbt.js";
 import { encodeCompressedNbt, decodeCompressedNbt } from "./nbt-compression.js";
 
-export const STRUCTURE_DATA_VERSIONS = Object.freeze([14, 15, 16]);
+export const STRUCTURE_DATA_VERSIONS = Object.freeze([14, 15, 16, 18]);
 export const STRUCTURE_FILE_NAMES = Object.freeze(Object.values(STRUCTURE_DATA_NAMES).map((n) => `data/${n}.dat`));
 export const hasStructureData = (generationVersion) => STRUCTURE_DATA_VERSIONS.includes(generationVersion);
 

@@ -43,7 +43,7 @@ pinned jar; `MC_RESEARCH` points at `tools/research`). Parity with 1.7.10 is not
 - Flat worlds exist only as streamed generation version 15 or later worlds (17 when MapFeatures is off).
 - Biome ids that are holes in the 1.7.10 table (40, 126-128, 168-255) throw a NullPointerException natively when a chunk is built;
   the browser uses plains.
-- The spawn point uses the repository's `World.spawn` / `findBiomePosition`, not the native `canCoordinateBeSpawn` walk.
+- The spawn point of new (generation 18 and 19) worlds is the native `createSpawnPosition` walk ([world-spawn.md](world-spawn.md)); worlds saved at 15 to 17 keep the earlier `findBiomePosition` origin.
 - Bonus chest: native `World.rand` is `new Random()` (unseeded), so a native bonus chest differs every creation; the game now seeds its Random
   from fresh entropy (`unseededBonusRandom`) and tests inject a fixed `JavaRandom`. Material.blocksMovement and
   `doesBlockHaveSolidTopSurface` use the live `World.solid`; torches are placed standing (meta 5) instead of running `onBlockAdded`.

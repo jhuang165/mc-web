@@ -1,6 +1,8 @@
 import { skullBounds, installSkullBlocks } from "./skull-bounds.js";
 import { generateJavaWorld, isJavaLandscape, JAVA_LANDSCAPES, streamedWorldType } from "./java-world.js";
 import { normalizeFlatOptions } from "./flat-world.js";
+import { playerSpawnPoint, topSolidOrLiquidBlock } from "./world-spawn.js";
+import { JavaRandom } from "./java-random.js";
 import { decorateFlowers } from "./flowers.js";
 import { generateLakes, generateSprings } from "./lakes.js";
 import { populateSnow } from "./snow.js";
@@ -466,7 +468,7 @@ export class World {
   // in the biome layers (biome-layers.js biomeClassOf; 15 and older keep the earlier map). Finite Java worlds: 11 mineshafts, 14 all
   // structures. Saved worlds keep their generator.
   constructor(seed = "Overworld", biome = "meadow", generationVersion = biome === 'javaStreamed' ? 13 : isJavaLandscape(biome) ? 11 : 8, worldType = 'default', generatorOptions = '') {
-    if (biome === 'javaStreamed' && ![12, 13, 15, 16, 17].includes(generationVersion)) throw new Error('Unsupported streamed world generation version');
+    if (biome === 'javaStreamed' && ![12, 13, 15, 16, 17, 18, 19].includes(generationVersion)) throw new Error('Unsupported streamed world generation version');
     if (biome === 'javaStreamed' && worldType === 'flat' && generationVersion < 15) throw new Error('Superflat worlds need streamed generation version 15');
     this.seed = String(seed);
     this.biome = biome;
@@ -854,6 +856,7 @@ export class World {
 
   }
   spawn() {
+    if (this.nativeSpawn) return nativePlayerSpawn(this);
     if (this.height === 256) {
       // Prefer dry land near the viewport centre, with two clear cells for the player.
       for (let radius=0;radius<61;radius++) for(let dx=-radius;dx<=radius;dx++) for(const dz of [-radius,radius]) {
@@ -906,6 +909,16 @@ export class World {
       else this.set(...p, b, true, meta);
     }
   }
+}
+// Generation 18 worlds (java-world.js nativeSpawn): the EntityPlayerMP placement around the world spawn (world-spawn.js), in local
+// coordinates. The material test is blocksMovement (liquids do not count) and not leaves; solid() stands in for Material.blocksMovement.
+export function nativePlayerSpawn(world, options = {}) {
+  const [sx, sy, sz] = world.nativeSpawn;
+  const isTop = (x, y, z) => { const b = world.get(x, y, z); return b !== 5 && b !== LEAVES2 && world.solid(x, y, z); };
+  return playerSpawnPoint({
+    spawn: [sx - world.originX, sy, sz - world.originZ], adventure: !!options.adventure, random: options.random ?? new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))),
+    topSolid: (x, z) => topSolidOrLiquidBlock(x, z, isTop, world.height), collides: (x, y, z) => collides(world, x, y, z),
+  });
 }
 export function collides(world, x, y, z) {
   const r = PHYSICS.width / 2;

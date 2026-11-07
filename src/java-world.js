@@ -13,6 +13,7 @@ import { generateLiveMineshafts } from "./mineshaft-world.js";
 import { generateLivePopulation, populationBlockMapper } from './population-world.js';
 import { FlatChunkProvider, parseFlatInfo } from './flat-world.js';
 import { StreamingPopulation } from './streaming-population.js';
+import { createSpawnPosition } from './world-spawn.js';
 export const JAVA_TERRAIN_BLOCKS = Object.freeze({
   0: 0,
   1: 3,
@@ -65,6 +66,12 @@ export const NATIVE_BIOME_CLASS_GENERATION = 16;
 // No version (tools, tests) is the native rule.
 // Generation 17: MapFeatures off, population without any structure generator (and the native biome rule of 16).
 export const NO_MAP_FEATURES_GENERATION = 17;
+// Generation 18 is 16 plus the native world spawn (world-spawn.js createSpawnPosition, which also moves the origin chunk); 19 is 17 plus it.
+// Worlds saved at 12 to 17 keep the repository's findBiomePosition-only origin, since the origin decides where every block lies.
+export const NATIVE_SPAWN_GENERATION = 18;
+export const nativeSpawnGeneration = (generationVersion) => generationVersion >= NATIVE_SPAWN_GENERATION;
+// MapFeatures is off at 17 and 19.
+export const mapFeaturesOn = (generationVersion) => generationVersion !== NO_MAP_FEATURES_GENERATION && generationVersion !== NO_MAP_FEATURES_GENERATION + 2;
 export const biomeLayerOptions = (generationVersion) => ({ legacyMutated: generationVersion !== undefined && generationVersion < NATIVE_BIOME_CLASS_GENERATION });
 const newGenerator = (seed, worldType, generatorOptions, generationVersion) => worldType === 'flat'
   ? new FlatChunkProvider(parseFlatInfo(generatorOptions))
@@ -93,7 +100,7 @@ function flatSource({ seed, generationVersion, originX, originZ, gen }) {
   };
   const population = new StreamingPopulation({
     seed, originX, originZ, terrainOnly: terrain, terrain: (x, z) => gen.provideChunk(x, z), biomeAt: (x, z) => gen.manager.biomeAt(x, z),
-    manager: gen.manager, flat: gen.info, mapFeatures: generationVersion < NO_MAP_FEATURES_GENERATION,
+    manager: gen.manager, flat: gen.info, mapFeatures: mapFeaturesOn(generationVersion),
   });
   return { gen, population, column: (cx, cz) => population.column(cx, cz) };
 }
@@ -122,9 +129,45 @@ export function streamedSource({ seed, generationVersion, originX, originZ, worl
   if (generationVersion < 13) return { gen, population: null, column: terrain };
   const population = new StreamingPopulation({
     seed, originX, originZ, terrainOnly: terrain, terrain: original, biomeAt: (x, z) => manager.biomeAt(x, z),
-    manager: generationVersion >= 15 ? manager : null, mapFeatures: generationVersion < NO_MAP_FEATURES_GENERATION,
+    manager: generationVersion >= 15 ? manager : null, mapFeatures: mapFeaturesOn(generationVersion),
   });
   return { gen, population, column: (cx, cz) => population.column(cx, cz) };
+}
+// WorldServer.createSpawnPosition over the generator's own columns (terrain, caves and ravines; no population, as natively the walk
+// loads isolated chunks). Superflat has one column everywhere.
+export function nativeWorldSpawn(gen, seed, state, worldType) {
+  if (gen instanceof FlatChunkProvider) {
+    const blockAt = (x, y, z) => y < 0 || y >= 256 ? 0 : gen.column[y];
+    return { ...createSpawnPosition({ seed, manager: gen.manager, blockAt, averageGroundLevel: 4 }), blockAt };
+  }
+  const manager = gen.manager, topAt = (x, z) => state.topBlock(manager.biomeAt(x, z)),
+    caves = new MapGenCaves(seed, manager, topAt), ravines = new MapGenRavine(seed, manager, topAt), raw = new Map(), carved = new Map();
+  const rawChunk = (cx, cz) => {
+    const key = cx * 4294967296 + cz;
+    let chunk = raw.get(key);
+    if (!chunk) raw.set(key, chunk = gen.provideChunk(cx, cz));
+    return chunk;
+  };
+  const blockAt = (x, y, z) => {
+    if (y < 0 || y >= 256) return 0;
+    const cx = x >> 4, cz = z >> 4, key = cx * 4294967296 + cz;
+    let chunk = carved.get(key);
+    if (!chunk) {
+      chunk = { blocks: Uint8Array.from(rawChunk(cx, cz).blocks) };
+      caves.generate(cx, cz, chunk.blocks); ravines.generate(cx, cz, chunk.blocks);
+      carved.set(key, chunk);
+    }
+    return chunk.blocks[((x & 15) * 16 + (z & 15)) * 256 + y];
+  };
+  // Caves and ravines only remove blocks, and grass is only ever the top of a generated column, so a column that is not grass-topped
+  // before carving cannot become a spawn column after it: the check runs on the uncarved chunk first, exactly.
+  const mayBeSpawn = (x, z) => {
+    const blocks = rawChunk(x >> 4, z >> 4).blocks, base = ((x & 15) * 16 + (z & 15)) * 256;
+    let k = 63;
+    while (blocks[base + k + 1] !== 0 && k < 254) k++;
+    return k === 254 ? true : blocks[base + k] === 2;
+  };
+  return { ...createSpawnPosition({ seed, manager, blockAt, mayBeSpawn, averageGroundLevel: 64 }), blockAt };
 }
 export function generateJavaWorld(world) {
   const seed = javaSeed(world.seed),
@@ -133,7 +176,12 @@ export function generateJavaWorld(world) {
       ? new FlatChunkProvider(parseFlatInfo(world.generatorOptions))
       : new ChunkProviderGenerate(seed, world.streaming ? world.worldType : JAVA_LANDSCAPES[world.biome], state, biomeLayerOptions(world.generationVersion)),
     manager = gen.manager;
-  const spawn = manager.findBiomePosition(
+  let spawn = null;
+  if (world.streaming && nativeSpawnGeneration(world.generationVersion)) {
+    const native = nativeWorldSpawn(gen, seed, state, world.worldType);
+    world.nativeSpawn = [native.x, native.y, native.z];
+    spawn = [native.x, 0, native.z];
+  } else spawn = manager.findBiomePosition(
     0,
     0,
     256,
