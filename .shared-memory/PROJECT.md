@@ -1,6 +1,17 @@
 # Shared project state
 
-Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.47.0. Full parity is unfinished.
+Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.48.0. Full parity is unfinished.
+
+Batch 18 (2026-11-07, claude-b18-lead, eight Sonnet tracks merged into main):
+- Bitmap font (`languages.md`, `bitmap-text.js`): tooltips, slot counts, container titles, held-item name, Now playing, boss bar, F3 and XP level drawn through the menu FontRenderer glyph renderer with cached markup (positions bytecode-read); F3 entity names and attacker death messages (mob/arrow/fireball/explosion.player/indirectMagic) translated. Left: signs (canvas TTF), fall/drowning/fire deaths, player-shot arrows.
+- Block sweep round 2 (`block-behaviour-audit.md`, BlockSweepProbe, `block-sweep-reference.json`): boxes, neighbour reactions and ticks of 132 more classes replayed; selection outline uses `selectionBounds`; crop/farmland every-neighbour rule, tall grass/dead bush/lily pad/vine/snow block (melts above light 11) fixes; plants only ray-hit inside their box.
+- Mob doors (`scattered-features.md`, `village.md`): boats, falling blocks and witch/dispensed potions sense tripwires; MoveThroughVillage probed (120 records); golem reach check exempt from the navigator budget; CanBreakDoors exported/imported.
+- Resource packs round 5 (`resource-packs.md`, `sprite-frames.js`): mob/third-person held items follow animated icons; compass/clock frame count from the pack strip (probed 1-128 frames); framed compass angle; no native reload overlay (bytecode-read).
+- Books (`books.md`, BookGuiProbe): unchanged GuiScreenBook probed (32 scenarios + 60 unicode wraps) and replayed; page indicator y 18, raw paste, Java trim; no generation tag.
+- Superflat round 2 (`superflat.md`, `level-dat.md`, FlatPopulateProbe): ChunkProviderFlat.populate replayed over 44 areas; MapFeatures off is streamed generation 17 (no structure generator, native biome rule); bonus chest uses an unseeded Random.
+- Audio round 2 (`sound.md`, SoundProbe, `sound-channels.js`): paulscode LINEAR gain, 28+4 channel rotation, eye-height listener, thunder positional at volume 10000, firework distance delay, World.C mood draws. Lead fix: the streaming channel pool was overwritten by the `streaming` flag (renamed `streamChannels`).
+- Natural spawning round 2 (`natural-spawning.md`, SpawnReplay2Probe): every resident chunk of the 15x15 set eligible; seeded slime/ocelot/horse/Nether/End replays; Entity.rand drives slime size and horse group data; bats block spawn boxes; frozen despawnable mobs follow despawnEntity.
+- Generation versions: streamed 12, 13, 15, 16, 17 (17 = MapFeatures off, level.dat imports only).
 
 Batch 17 (2026-11-07, claude-b17-lead, eight Sonnet tracks merged into main):
 - Translations round 2 (`languages.md`): firework tooltips, creative tab labels, horse title, beacon GUI, trade bag label and Dragon/Wither boss bar names use 1.7.10 lang keys (KeyTraceProbe, `lang-keys-reference.json`). Left: F3 entity names, attacker death messages.
