@@ -416,7 +416,7 @@ export class Arrows {
       // zc.h: a burning arrow does setFire(5) on its target before attackEntityFrom (Fire Protection shortens it).
       if (a.fire > 0) survival.setFire?.(5);
       // The source entity is the shooter (the arrow itself when none): EntityLivingBase.knockBack runs from its position.
-      const hit = !!survival.damage(dmg, "an arrow", true, undefined, shooter === "player" ? undefined : shooter && typeof shooter === "object" ? shooter : a);
+      const hit = !!survival.damage(dmg, "an arrow", true, undefined, shooter === "player" ? undefined : shooter && typeof shooter === "object" ? shooter : a, shooter === "player" ? { self: true } : undefined);
       // zc.h: a landed hit on a living entity does setArrowCountInEntity(count + 1).
       if (hit && survival.health > 0) survival.arrowCount = addStuckArrow(survival.arrowCount);
       // A hit by an arrow a mob shot runs the wearer's Thorns on the shooter (EnchantmentHelper.func_151384_a).

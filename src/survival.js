@@ -29,6 +29,7 @@ import { installNetherItems, installNetherMaterials, installNetherRecipes, insta
 import { applyNativeNames } from './item-names.js';
 import { installFoodItems, installFoodRecipes, foodCraftingResult } from './food-items.js';
 import { queueKnockBack } from './player-knockback.js';
+import { CombatTracker, damageSource } from "./combat-tracker.js";
 import { installColoredItems, installColoredMaterials, COLORED_FUELS } from './colored-blocks.js';
 import { installNoteJukeboxItems, installNoteJukeboxMaterials, installNoteJukeboxRecipes } from './note-jukebox-content.js';
 // The lastDamage reason of DamageSource.outOfWorld (death-messages.js).
@@ -719,6 +720,9 @@ export class Survival {
     this.fire = Number.isInteger(data.fire) && data.fire >= -32768 && data.fire <= 32767 ? data.fire : 0;
     this.lastDamage = "";
     this.lastSource = null; this.lastAttacker = null;
+    // CombatTracker (combat-tracker.js): the hit entries behind the death message. `combatSite` ("ladder", "vines", "water" or null) and
+    // `combatFall` (Entity.fallDistance) are set by player-environment.js before a hit.
+    this.combat = new CombatTracker(); this.combatSite = null; this.combatFall = 0;
     this.broken = 0;
   }
   get creative() {
@@ -813,7 +817,7 @@ export class Survival {
   heal(n) { if (this.health > 0 && n > 0) this.health = Math.min(this.maxHealth, Math.fround(this.health + n)); }
   // `from` ({ x, z }) is the DamageSource entity (getEntity: a mob, the shooter of an arrow or fireball, the thrower of a potion). A fresh
   // hit with one runs EntityLivingBase.knockBack, queued for the movement tick (player-knockback.js drainKnockback).
-  damage(n, reason = "an accident", blockable = false, source = undefined, from = undefined) {
+  damage(n, reason = "an accident", blockable = false, source = undefined, from = undefined, via = undefined) {
     const outOfWorld = reason === VOID;
     if ((this.creative && !outOfWorld) || this.health <= 0 || n <= 0 || (this.protection > 0 && !outOfWorld))
       return false;
@@ -840,6 +844,11 @@ export class Survival {
     this.hurtAmount = n;
     this.lastDamage = reason;
     this.lastSource = source ?? null; this.lastAttacker = from ?? null; // DamageSource.getEntity for the death message (death-messages.js)
+    // EntityLivingBase.damageEntity: CombatTracker.func_94547_a after the health is set; attackEntityFrom sets the revenge target.
+    const hit = damageSource(reason, source, from, via);
+    if (dealt !== 0) this.combat.record(hit, before, dealt, this.ticks, { alive: this.health > 0, site: this.combatSite, fall: this.combatFall });
+    this.combat.noteAttacker(hit, this.ticks);
+    this.combatSite = null; this.combatFall = 0; // sampled per fall, not carried to the next hit
     if (fresh) {
       this.hurtTicks = 10;
       this.hurtCount++;
@@ -921,6 +930,7 @@ export class Survival {
   tick({ underwater = false, inWater = false, inLava = false, inWall = false, outOfWorld = false } = {}) {
     if (!this.timeFrozen) this.time++; // gamerule doDaylightCycle false stops the world clock
     this.ticks++;
+    this.combat.tick(this.ticks, (who) => !(who.raw?.health <= 0 || who.raw?.dead));
     // EntityPlayerMP.onUpdateEntity: --field_147101_bU and --hurtResistantTime (the latter is
     // skipped for the player in onEntityUpdate), before the update.
     this.protection = Math.max(0, this.protection - 1);
