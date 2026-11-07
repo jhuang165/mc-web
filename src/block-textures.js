@@ -190,12 +190,12 @@ export function tileRect(index,inset=.02){const x=index%ATLAS_COLUMNS,y=Math.flo
 function frameSize(source){return Math.max(1,Math.min(source.width||16,source.height||16));}
 function image(name){return new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(new Error('Texture missing: '+name));i.src=versioned('/media/1.7.10/'+name+'.png');});}
 export function createBlockAtlas(){
- const canvas=document.createElement('canvas');canvas.width=ATLAS_COLUMNS*TILE_SIZE;canvas.height=ATLAS_ROWS*TILE_SIZE;const ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=false;
+ const canvas=document.createElement('canvas');canvas.width=ATLAS_COLUMNS*TILE_SIZE;canvas.height=ATLAS_ROWS*TILE_SIZE;const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=false;
  const texture=new THREE.CanvasTexture(canvas);texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;const images=new Map(),icons=new Map();let biome='meadow',opaque=false,mipLevels=0;
  // Two atlases: `canvas`/`texture` carry the item colours (ColorizerGrass.getColor(0.5, 1.0) etc.: GUI icons, held and dropped blocks, particles);
  // `tcanvas`/`terrain` keep the grass, foliage, vine, reed and lily tiles grey and the grass side without its overlay, because the chunk
  // mesher multiplies the per-position biome colour (biome-colors.js) into the vertex colours as Block.colorMultiplier does.
- const tcanvas=document.createElement('canvas');tcanvas.width=canvas.width;tcanvas.height=canvas.height;const tctx=tcanvas.getContext('2d');tctx.imageSmoothingEnabled=false;
+ const tcanvas=document.createElement('canvas');tcanvas.width=canvas.width;tcanvas.height=canvas.height;const tctx=tcanvas.getContext('2d',{willReadFrequently:true});tctx.imageSmoothingEnabled=false;
  const terrain=new THREE.CanvasTexture(tcanvas);terrain.magFilter=terrain.minFilter=THREE.NearestFilter;terrain.generateMipmaps=false;
  const css=c=>`rgb(${c>>16&255},${c>>8&255},${c&255})`;
  function tinted(source,color,frame=0){const c=document.createElement('canvas');c.width=c.height=16;const x=c.getContext('2d');const f=frameSize(source);x.drawImage(source,0,frame*f,f,f,0,0,16,16);x.globalCompositeOperation='multiply';x.fillStyle=color;x.fillRect(0,0,16,16);x.globalCompositeOperation='destination-in';x.drawImage(source,0,frame*f,f,f,0,0,16,16);return c;}
