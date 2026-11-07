@@ -1,6 +1,14 @@
 # Shared project state
 
-Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.51.0. Full parity is unfinished.
+Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.52.0. Full parity is unfinished.
+
+Batch 22 (2026-11-07, claude-b22-lead, five Sonnet tracks merged into main):
+- Container UI (`container-screens.md`, `container-screens.js`): every container screen and the book open in a native GuiContainer shell (default background gradient, guiLeft/guiTop origin math, glyph labels at bytecode-read positions); `modal()` is gone. Horse and villager screens were not opened live; book width (320) assumed.
+- Debug keys (`debug-screen.md`, `debug-keys.js`): F3+B entity hitboxes, F3+S/T refresh, F3+C simulated crash dialog, F-keys on every screen, F3 overlay drawn under open GUIs. F3+C does not exit; hitbox line width and a few entity sizes assumed.
+- Loading 3 (`loading-screens.md`, `steps.js`, `travel-loading.js`): the light volume flood runs in 12 ms slices (identical arrays, seeds 4/11/17); portal and dimension trips show a blank frame then GuiDownloadTerrain, with the Teleporter search, makePortal and End crystals sliced and arrival terrain prebuilt (Nether trips went from 5-19 s long tasks to under 110 ms); generation 13-17 saves are presolved in the worker. Assumed: terrain never holds a portal block (`TerrainPeek.portalColumns`).
+- Villagers 4 (`village.md`, `combat.md`): a skeleton's arrow makes the skeleton a village aggressor (52 native records); the player as a zombie's target through a door matches tick for tick (11 records); Thorns/anvil-broken player armour stays at size 0 as natively (30 records). Mob and main-inventory zero stacks are still removed.
+- Spawning 5 (`natural-spawning.md`, `headless-columns.js`, `headless-env.js`): ring mobs tick with the normal AI, despawn and hazards (320-tick equality with an all-resident world), edits in ring columns apply and are journalled (StreamStorage margin 7), 12-block entity collision cull. Projectiles, items, orbs, falling blocks, redstone and fluids still tick only in the window.
+- Verification: `npm test` 4341 pass, 0 fail; `npm run build` ok; muted headless Chrome on :5189: a new world (gen 18) in 1.5 s, longest long task 93 ms, ring 284 columns, 121 mobs, native F3 and inventory (`artifacts/b22-lead/`), no console errors.
 
 Batch 21 (2026-11-07, claude-b21-lead, seven Sonnet tracks merged into main plus a lead hint-toast removal):
 - World loading 2 (`loading-screens.md`, `spawn-presolve.js`, `spawn-worker.js`, `bonus-world.js`): the worker builds the resident window after the spawn walk and the page adopts it; column meshes are built in 12 ms slices; longest main-thread task during creation about 120-150 ms (was 1.3 s and 1.0 s); GuiDownloadTerrain shown after "Building terrain" (bytecode-read); the bonus chest is placed in world creation (createSpawnPosition order). Left: light volume build, portal trips unsliced, gen 13-17 saves.

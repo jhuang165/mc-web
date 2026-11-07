@@ -1,0 +1,1 @@
+Containers and book now open in a native GuiContainer shell (container-screens.js); modal() removed. npm test 4312 pass / 0 fail, build ok. Horse and villager not opened live. See .shared-memory/notes/containerui-b22-track.md.
