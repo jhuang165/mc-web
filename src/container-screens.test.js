@@ -82,6 +82,9 @@ test("labels markup carries no page-font chrome and escapes text", () => {
   assert.match(html, /&lt;b>&amp;/);
   assert.doesNotMatch(html, /close-button|modal-top|<h2/);
   assert.match(labelsHtml("creative", { title: "" }), /id="modal-title"/);
+  // drawLabel skips an element whose data-bitmap already equals its text, so a pre-set data-bitmap leaves the label undrawn
+  assert.doesNotMatch(labelsHtml("workbench", { title: "Crafting" }), /data-bitmap/);
+  assert.match(labelsHtml("inventory", { title: "Crafting" }), />Crafting<\/span>/);
 });
 
 test("key handling: Escape and key.inventory close, a focused text field keeps the inventory key", () => {
