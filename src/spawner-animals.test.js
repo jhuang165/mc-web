@@ -311,6 +311,8 @@ test("Nether: the fortress list inside a fortress, BiomeGenHell's outside; the E
   const near = (e, pad) => e.x > 32 - pad && e.x < 128 + pad && e.z > -128 - pad && e.z < 128 + pad;
   const types = new Set(mobs.entities.map((e) => e.type));
   for (const e of mobs.entities) {
+    // A baby pigman's 5 % chicken-jockey roll (EntityZombie.onSpawnWithEgg, pigman-jockey-reference.json) brings its own chicken.
+    if (e.type === "chicken" && e.chickenJockey) continue;
     assert.ok(["ghast", "pigman", "magma_cube", "blaze", "skeleton", "wither_skeleton"].includes(e.type), e.type);
     if (["blaze", "skeleton", "wither_skeleton"].includes(e.type)) assert.ok(near(e, 21), `${e.type} at ${e.x},${e.z}`);
     if (e.type === "ghast") assert.ok(!near(e, -21), `ghast at ${e.x},${e.z}`);
