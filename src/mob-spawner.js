@@ -37,6 +37,12 @@ export function mobBox(x, y, z, width, height) {
   const w = f(f(width) / 2), h = f(height);
   return [x - w, y, z - w, x + w, y + h, z + w];
 }
+// Entity.setSize after placement (a foal, a baby zombie): the box keeps its minimum corner, so a (width, height) box centred on (x, y, z)
+// shrinks to (newWidth, newHeight) from that corner. The entity's next move recentres it (resetPositionToBB).
+export function anchoredShrunkBox(e, width, height, newWidth, newHeight) {
+  const w = f(f(width) / 2), minX = e.x - w, minZ = e.z - w;
+  return [minX, e.y, minZ, minX + f(newWidth), e.y + f(newHeight), minZ + f(newWidth)];
+}
 // The countNearby hook for a plain list of {type, x, y, z} with sizeOf(entity) -> [width, height].
 export function countInBox(entities, type, box, sizeOf) {
   let n = 0;
