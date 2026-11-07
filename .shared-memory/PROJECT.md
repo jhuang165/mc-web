@@ -1,6 +1,18 @@
 # Shared project state
 
-Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.46.0. Full parity is unfinished.
+Target: Minecraft Java 1.7.10 browser recreation. Latest app version: 0.47.0. Full parity is unfinished.
+
+Batch 17 (2026-11-07, claude-b17-lead, eight Sonnet tracks merged into main):
+- Translations round 2 (`languages.md`): firework tooltips, creative tab labels, horse title, beacon GUI, trade bag label and Dragon/Wither boss bar names use 1.7.10 lang keys (KeyTraceProbe, `lang-keys-reference.json`). Left: F3 entity names, attacker death messages.
+- Resource packs round 4 (`resource-packs.md`): block atlas tiles animate from `.png.mcmeta` strips; dropped items and item frames follow animated item icons; title panorama uses `preserveDrawingBuffer` for F2. Lead fix: only changed tiles' mip chains are rebuilt (a whole-atlas pass was ~17 ms at up to 20 Hz) and the atlas contexts set `willReadFrequently`.
+- Wither round 3 (`wither-boss.md`): head targeting, head particles and ModelWither boxes/pose probed and replayed (`wither-targeting.js`); armour pass re-draws at 1.1 scale. Armour GL state and skull orientation bytecode-read.
+- Block light (`block-behaviour-audit.md`): every block's light value and opacity probed (only the powered repeater diverged; now 9 via `scene.repeaterLit`); cake collision 1/16 lower; batch 16 box/neighbour/wart columns replayed.
+- Temples round 2 (`scattered-features.md`): 33 tripwire scenarios (shears disarm, random ticks, entity classes, projectiles) replayed; tripwire random ticks live; jungle pyramid populated Temple.dat byte-identical via `structure-redstone.js`.
+- Villagers round 2 (`villager-trading-live.md`): status 12/13/14 particles on a client-side `visualRandom`, +5 default reputation confirmed, golem nearbyOnly path check with its task cache, MoveIndoors biome gate (all probed).
+- Decoration round 2 (`biome-decoration-audit.md`): forced-biome regions for slots 10, 20, 151; 14 structures-on areas; chunk-level wells and melons; lily pad hashed UV rotation (`lily-pad.js`). No generation change.
+- Riders (`region-import.md`, `level-dat.md`, `commands.md`): the player's boat/cart/pig/horse probed, exported as `Player.Riding` and remounted on import (also fixed a horse export crash); summoned carts get the 0.35 yOffset and boats were 0.3 too low; any byte hanging Direction accepted; summoned knots clickable.
+- Lead: the agents wrote proposed gap lines into their track notes instead of editing remaining-gaps.md, which removed the doc merge conflicts; one code conflict (wither boss bar name) resolved by keeping both.
+- Verification: 3890 tests and the build pass on merged main. Muted browser run on :5181: a new world and a reloaded world render, frame time median 8.3 ms with no long frames over 5 s in-world (one 1 s frame on resuming from the pause menu).
 
 Batch 16 (2026-11-07, claude-b16-lead, eight Sonnet tracks merged into main):
 - Translations (`languages.md`): item and block names (probed item keys, `item-keys-data.js`), container titles, potion/enchantment tooltips, bed messages and the Now playing line follow the selected language through `translate(key, fallback)`. Still English: firework, horse, beacon and trade labels, creative tabs; text is drawn in the HTML/TTF font.
