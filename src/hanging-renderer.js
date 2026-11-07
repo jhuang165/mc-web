@@ -12,6 +12,7 @@
 import * as THREE from "three";
 import { entityMaterial } from "./light-material.js";
 import { pixelTexture, itemTexture } from "./first-person.js";
+import { itemFrameTag } from "./item-animation.js";
 import { blockTile, tileRect } from "./block-textures.js";
 import { DropRenderer } from "./drop-renderer.js";
 import { ARTS, DIR_X, DIR_Z } from "./hanging.js";
@@ -66,7 +67,7 @@ export const FRAME_PARTS = [
   { bounds: [0, 0.5 - F5, 0.5 + F5 - F3, F3, 0.5 + F5, 0.5 + F5] },
 ];
 
-const itemKey = (item) => (item ? item.id + ":" + (item.damage || 0) + ":" + (item.color ?? "") + ":" + JSON.stringify(item.tag?.ench ?? "") : "");
+const itemKey = (item) => (item ? item.id + ":" + (item.damage || 0) + ":" + itemFrameTag(itemTexture(item.id, item.damage || 0)) + ":" + (item.color ?? "") + ":" + JSON.stringify(item.tag?.ench ?? "") : "");
 
 export class HangingRenderer {
   constructor(scene, view) {

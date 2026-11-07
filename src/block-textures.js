@@ -1,6 +1,7 @@
-import {versioned} from './media-version.js';
+import {versioned,unversioned} from './media-version.js';
+import {parseAnimationMcmeta,spriteFrames,SpriteAnimation,fetchMcmeta,TICKS_PER_SECOND} from './texture-animation.js';
 import {colormapSource} from './colormap-source.js';
-import {atlasMips} from './render-settings.js';
+import {atlasMips,mipChain} from './render-settings.js';
 import * as THREE from 'three';
 import {setColormaps,itemGrassColor,itemFoliageColor,PINE,BIRCH,LILY_PAD_COLOR} from './biome-colors.js';
 import {WOOL_COLORS,RED_FLOWER,RED_FLOWERS,YELLOW_FLOWER,SAPLING,WEB,LADDER,CARROTS,POTATOES,CACTUS,REEDS,TNT,SANDSTONE,MYCELIUM,STAINED_CLAY,LILY_PAD,FENCE,RAIL,MOB_SPAWNER,ANVIL,ENCHANTING_TABLE,BED,WOODEN_DOOR,IRON_DOOR,IRON_BARS,GLASS_PANE,isCrop,isFlower} from './world.js';
@@ -197,11 +198,38 @@ export function createBlockAtlas(){
  const tcanvas=document.createElement('canvas');tcanvas.width=canvas.width;tcanvas.height=canvas.height;const tctx=tcanvas.getContext('2d');tctx.imageSmoothingEnabled=false;
  const terrain=new THREE.CanvasTexture(tcanvas);terrain.magFilter=terrain.minFilter=THREE.NearestFilter;terrain.generateMipmaps=false;
  const css=c=>`rgb(${c>>16&255},${c>>8&255},${c&255})`;
- function tinted(source,color){const c=document.createElement('canvas');c.width=c.height=16;const x=c.getContext('2d');const f=frameSize(source);x.drawImage(source,0,0,f,f,0,0,16,16);x.globalCompositeOperation='multiply';x.fillStyle=color;x.fillRect(0,0,16,16);x.globalCompositeOperation='destination-in';x.drawImage(source,0,0,f,f,0,0,16,16);return c;}
+ function tinted(source,color,frame=0){const c=document.createElement('canvas');c.width=c.height=16;const x=c.getContext('2d');const f=frameSize(source);x.drawImage(source,0,frame*f,f,f,0,0,16,16);x.globalCompositeOperation='multiply';x.fillStyle=color;x.fillRect(0,0,16,16);x.globalCompositeOperation='destination-in';x.drawImage(source,0,frame*f,f,f,0,0,16,16);return c;}
  function pixels(name){const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');x.drawImage(images.get('colormap/'+name),0,0);return x.getImageData(0,0,256,256).data;}
  const GRASS_TILES=['grass_top','tallgrass','reeds','fern','vine','double_plant_grass_bottom','double_plant_grass_top','double_plant_fern_bottom','double_plant_fern_top'];
  // terrainMode: grey tinted tiles and no overlay in the grass side (the mesher adds both per position). Otherwise the item colours.
- function drawAtlas(g,terrainMode){const grass=css(itemGrassColor()),foliage=css(itemFoliageColor()),chestImg=images.get('entity/chest/normal'),chestScale=chestImg.width/64;TILES.forEach((name,i)=>{const x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;if(CHEST_FACES[name]){for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])g.drawImage(chestImg,u*chestScale,v*chestScale,w*chestScale,h*chestScale,x+dx,y+dy,w,h);return;}let source=images.get('blocks/'+name+(opaque&&name.startsWith('leaves_')?'_opaque':''));if(!terrainMode){if(GRASS_TILES.includes(name))source=tinted(source,grass);else if(name.startsWith('leaves_'))source=tinted(source,name==='leaves_spruce'?css(PINE):name==='leaves_birch'?css(BIRCH):foliage);else if(name==='waterlily')source=tinted(source,css(LILY_PAD_COLOR));}{const f=frameSize(source);g.drawImage(source,0,0,f,f,x,y,16,16);}if(name==='grass_side'&&!terrainMode)g.drawImage(tinted(images.get('blocks/grass_side_overlay'),grass),x,y);});}
+ // Block tile animation (batch 17): a tile whose png is a strip with a ".png.mcmeta" animation section animates as
+ // TextureAtlasSprite.updateAnimation does (texture-animation.js, probed). `shown` is the frame index drawn per tile name.
+ const shown=new Map();let anims=new Map(),animToken=0,lastTick=0;
+ async function loadAnimations(){
+  const token=++animToken,next=new Map();
+  await Promise.all(TILES.filter(n=>!CHEST_FACES[n]).map(async n=>{
+   const img=images.get('blocks/'+n);if(!img||!(img.height>=2*img.width))return;
+   const text=await fetchMcmeta(unversioned(versioned('/media/1.7.10/blocks/'+n+'.png')));if(text==null)return;
+   try{const meta=parseAnimationMcmeta(text);if(meta)next.set(n,new SpriteAnimation(spriteFrames(meta,img.width,img.height)));}catch(e){console.warn('blocks/'+n+'.png.mcmeta: '+e.message);}
+  }));
+  if(token!==animToken)return;
+  anims=next;shown.clear();for(const[n,a]of anims)shown.set(n,a.frameAtTick(lastTick));
+  if(anims.size)redraw();
+ }
+ // Called each render with the 20 Hz client tick count; redraws only the tiles whose frame changed and re-uploads the atlas then.
+ function animate(tick){
+  lastTick=tick;if(!anims.size)return false;
+  const changed=new Set();
+  for(const[n,a]of anims){const f=a.frameAtTick(tick);if(shown.get(n)!==f){shown.set(n,f);changed.add(n);}}
+  if(!changed.size)return false;
+  icons.clear();drawAtlas(ctx,false,changed);drawAtlas(tctx,true,changed);
+  // Only the changed tiles' mip chains are rebuilt (a whole-atlas atlasMips pass costs ~17 ms; portal changes every tick).
+  if(mipLevels)for(const n of changed){const i=TILES.indexOf(n),x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;tileMips(texture,ctx,x,y);tileMips(terrain,tctx,x,y);}
+  texture.needsUpdate=true;terrain.needsUpdate=true;return true;
+ }
+ // One tile's mip levels written into the existing level canvases (same per-tile chain as atlasMips).
+ function tileMips(tex,g,x,y){if(tex.mipmaps.length<2)return;const max=tex.mipmaps.length-1,chain=mipChain(g.getImageData(x,y,TILE_SIZE,TILE_SIZE).data,TILE_SIZE,TILE_SIZE,max);for(let l=1;l<chain.length&&l<=max;l++){const c=chain[l];tex.mipmaps[l].getContext('2d').putImageData(new ImageData(c.data,c.width,c.height),x>>l,y>>l);}}
+ function drawAtlas(g,terrainMode,only=null){const grass=css(itemGrassColor()),foliage=css(itemFoliageColor()),chestImg=images.get('entity/chest/normal'),chestScale=chestImg.width/64;TILES.forEach((name,i)=>{if(only&&!only.has(name))return;const x=i%ATLAS_COLUMNS*16,y=Math.floor(i/ATLAS_COLUMNS)*16;if(only)g.clearRect(x,y,16,16);const fr=shown.get(name)??0;if(CHEST_FACES[name]){for(const[u,v,w,h,dx,dy]of CHEST_FACES[name])g.drawImage(chestImg,u*chestScale,v*chestScale,w*chestScale,h*chestScale,x+dx,y+dy,w,h);return;}let source=images.get('blocks/'+name+(opaque&&name.startsWith('leaves_')?'_opaque':''));if(!terrainMode){if(GRASS_TILES.includes(name))source=tinted(source,grass,fr);else if(name.startsWith('leaves_'))source=tinted(source,name==='leaves_spruce'?css(PINE):name==='leaves_birch'?css(BIRCH):foliage,fr);else if(name==='waterlily')source=tinted(source,css(LILY_PAD_COLOR),fr);}{const f=frameSize(source),k=source instanceof HTMLCanvasElement?0:fr;g.drawImage(source,0,k*f,f,f,x,y,16,16);}if(name==='grass_side'&&!terrainMode)g.drawImage(tinted(images.get('blocks/grass_side_overlay'),grass),x,y);});}
  function redraw(){if(!images.size)return;icons.clear();setColormaps(pixels('grass'),pixels('foliage'));ctx.clearRect(0,0,canvas.width,canvas.height);tctx.clearRect(0,0,tcanvas.width,tcanvas.height);drawAtlas(ctx,false);drawAtlas(tctx,true);updateMips(texture,ctx,canvas);updateMips(terrain,tctx,tcanvas);texture.needsUpdate=true;terrain.needsUpdate=true;}
  // TextureMap mipmaps (render-settings.js atlasMips): per-tile chains, NEAREST_MIPMAP_LINEAR when above level 0.
  function updateMips(tex,g,cv){const n=Math.min(mipLevels,4);if(n===0){if(tex.mipmaps.length){tex.mipmaps=[];tex.minFilter=THREE.NearestFilter;tex.dispose();}return;}const d=g.getImageData(0,0,cv.width,cv.height).data,chain=atlasMips(d,cv.width,cv.height,TILE_SIZE,n);tex.mipmaps=chain.map((l,i)=>{if(i===0)return cv;const c=document.createElement('canvas');c.width=l.width;c.height=l.height;c.getContext('2d').putImageData(new ImageData(l.data,l.width,l.height),0,0);return c;});tex.minFilter=THREE.NearestMipmapLinearFilter;const key=chain.length+':'+tex.mipmaps.length;if(tex.userData.mipKey!==key)tex.dispose();tex.userData.mipKey=key;}
@@ -266,9 +294,9 @@ export function createBlockAtlas(){
    quad(tiles[2],[1.75,1,-1.75,1,32,2+2*(16-h1)],a0,b0,a1,b1);
   }
  }
- const ready=Promise.all([...TILES.filter(n=>!CHEST_FACES[n]).map(n=>'blocks/'+n),'entity/chest/normal','blocks/grass_side_overlay','colormap/grass','colormap/foliage',...TILES.filter(n=>n.startsWith('leaves_')).map(n=>'blocks/'+n+'_opaque')].map(async n=>images.set(n,n.startsWith('colormap/')?colormapSource(await image(n),images.get(n),m=>console.warn(m)):await image(n)))).then(()=>redraw());
+ const ready=Promise.all([...TILES.filter(n=>!CHEST_FACES[n]).map(n=>'blocks/'+n),'entity/chest/normal','blocks/grass_side_overlay','colormap/grass','colormap/foliage',...TILES.filter(n=>n.startsWith('leaves_')).map(n=>'blocks/'+n+'_opaque')].map(async n=>images.set(n,n.startsWith('colormap/')?colormapSource(await image(n),images.get(n),m=>console.warn(m)):await image(n)))).then(()=>{redraw();return loadAnimations();});
  // Resource pack refresh: re-read every image (versioned url, so the service worker's new overrides are fetched) and redraw in place.
  const names=()=>[...TILES.filter(n=>!CHEST_FACES[n]).map(n=>'blocks/'+n),'entity/chest/normal','blocks/grass_side_overlay','colormap/grass','colormap/foliage',...TILES.filter(n=>n.startsWith('leaves_')).map(n=>'blocks/'+n+'_opaque')];
- async function reload(){const next=new Map(await Promise.all(names().map(async n=>[n,n.startsWith('colormap/')?colormapSource(await image(n),images.get(n),m=>console.warn(m)):await image(n)])));images.clear();for(const[k,v]of next)images.set(k,v);redraw();}
- return{texture,terrain,canvas,ready,reload,icon,setBiome(value){biome=value;},get biome(){return biome;},get leavesOpaque(){return opaque;},setOpaqueLeaves(v){opaque=!!v;redraw();},setFiltering(levels,aniso,max=1){const a=Math.max(1,Math.min(aniso,max)),changed=levels!==mipLevels;mipLevels=levels;for(const t of[texture,terrain])if(t.anisotropy!==a){t.anisotropy=a;t.needsUpdate=true;}if(changed)redraw();}};
+ async function reload(){const next=new Map(await Promise.all(names().map(async n=>[n,n.startsWith('colormap/')?colormapSource(await image(n),images.get(n),m=>console.warn(m)):await image(n)])));images.clear();for(const[k,v]of next)images.set(k,v);anims=new Map();shown.clear();redraw();await loadAnimations();}
+ return{texture,terrain,canvas,ready,reload,animate,icon,setBiome(value){biome=value;},get biome(){return biome;},get leavesOpaque(){return opaque;},setOpaqueLeaves(v){opaque=!!v;redraw();},setFiltering(levels,aniso,max=1){const a=Math.max(1,Math.min(aniso,max)),changed=levels!==mipLevels;mipLevels=levels;for(const t of[texture,terrain])if(t.anisotropy!==a){t.anisotropy=a;t.needsUpdate=true;}if(changed)redraw();}};
 }
