@@ -87,3 +87,51 @@ Not replayed: stem growth ticks (the native probe rows are NPE, the stem needs a
 ### Remaining
 
 The probed column rows cover only the 38 blocks of the b16 audit. Boxes, neighbour reactions and ticks of the other ~140 blocks are covered by their own subsystem references and tests but not by a block-by-block native sweep. Fence collision (1.5 high) and wall collision were read from bytecode and existing tests, not probed in this audit.
+
+## Batch 18: block sweep, round 2 (all remaining registered blocks)
+
+### Evidence chain (probed natively)
+
+`tools/probes/BlockSweepProbe.java` -> `tools/verify-block-sweep.mjs` -> `public/research/block-sweep-reference.json` (about 390 KB, 856 records) against the unchanged 1.7.10 jar. It covers ids 1-175 except the 38 of batch 16 and the unregistered 165-169 (132 classes with box rows). Per exact metadata state (0-15):
+
+- `sbox`: `setBlockBoundsBasedOnState` bounds, `getSelectedBoundingBoxFromPool`, `getCollisionBoundingBoxFromPool` and the `addCollisionBoxesToList` list (multi-box blocks included); the constructor bounds are restored between reads because the bounds fields are shared per class.
+- `mask`: fences, panes, bars, walls and nether fence over the 16 neighbour masks. `stair`: 12 stair ids x meta 0-7 x side x neighbour stair meta. `door`: both doors, lower meta x upper hinge.
+- `nb`: remove each of six supports (stone on all sides; grass and farmland below as extra layouts; door, tall plant and bed partners placed) and record breaks, stays or meta change plus the drops under a seeded Random.
+- `tick`: histograms of the resulting cell map for seeded random ticks (crops with farmland variants, sapling, cactus, reeds, farmland, ice, snow layer, snow block at block light 0/11/12/15, leaves, grass, mycelium, redstone ore, cocoa and plants).
+
+Probe doubles: a cell-map World with fixed light (sky and block light set per scenario). Tile-entity blocks (36, 54, 149, 150, pistons 29/33 at metas 8-14) throw in the double and are skipped.
+
+### Port replay (`src/block-sweep.test.js`, 8 tests)
+
+- Boxes: selection bounds, collision accessor and collision list for every exact state (over 1000 rows), all 16 masks, all 96 stair contexts, 32 door contexts.
+- Neighbours: about 23,000 state cases with the main.js watcher stack composed in wrapping order (watchFlowers closure, fire, trees, plants, population blocks, rails, torches, carpet, doors, beds, nether, redstone blocks, live redstone runtime); state and drops compared.
+- Ticks: farmland moisture and dirt reversion, crop growth probability (port growth rate against the native frequency, 4 sigma), cactus and sugar cane (deterministic), ice/snow layer/snow block melt thresholds.
+
+### Divergences fixed
+
+| Area | Before | Now |
+| --- | --- | --- |
+| In-game selection outline (main.js) | full cube except snow, ladder, cactus, reeds | `selectionBounds` (slabs, stairs, fences, plants, doors and so on) |
+| Crop selection and ray box | full cube | 0.25 high |
+| Sapling, tall grass, dandelion, rose boxes | full cube or wrong | native 0.1-0.9 x 0.8 and 0.3-0.7 x 0.6 |
+| Chest join bounds | independent per side | native else-if chain (north, south, west, east) |
+| Powered rail with meta 8+ | masked to 0-7 | selects flat like BlockRailBase's raw metadata test |
+| Cactus selection | collision box | full height, inset 1/16 on x and z |
+| Crops and farmland neighbour updates | only the cell below or above changed | every neighbour update (`farmNeighbourChange`): crop off farmland pops, farmland under a solid block turns to dirt |
+| Tall grass (meta 1) | never popped | pops with 1/8 seed drop when its ground goes |
+| Dead bush ground | grass accepted | sand, hardened clay, stained clay, dirt (BlockDeadBush bytecode) |
+| Lily pad | stayed after its water went | pops without still water (meta 0) below |
+| Vine | kept stale face bits | `BlockVine.func_150093_a`: unsupported face bits are cleared |
+| Snow block | never melted | random tick above block light 11 drops 4 snowballs |
+
+### Documented exemptions (not port bugs)
+
+Torches 50/75/76 and buttons 77/143 (bounds set in collisionRayTrace or at placement, so the idle probe value is stale); brewing stand 117 and end portal frame 120 (history-dependent bounds field); vine meta 0 (inverted native artefact); piston 29/33 metas 14-15; piston head, fence and snow layer meta 0 collision accessors (the replayed lists match); ladder metas 0, 1, 6, 7; liquids 8-11 (flow in Fluids); drops that draw from the probe's seeded Random (sapling, crops, tall grass, double plant) are state-compared only; flower pot contents (tile entity).
+
+### Remaining gaps
+
+- Flowers, saplings and mushrooms: BlockBush light rules read the probe's fixed light; the port uses the sky column and has no mushroom light rule (needs a world light provider in `populationPlantCanStay`).
+- Door cascade drops: native drops the door item through the partner call when the lower half is removed by non-player means; owned by the doors track.
+- Seeded-Random drops and grass/mycelium/leaf/redstone-ore/cocoa random ticks are not replayed stream-for-stream (the port draws other streams); sapling growth and leaf decay have their own references.
+- Tile-entity blocks (chests 36/54, comparators, moving pistons) have no probe rows; their boxes come from the b16 chest/piston references.
+- Stem growth, dragon egg and per-state redstone power outputs are covered elsewhere.

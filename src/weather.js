@@ -263,7 +263,7 @@ export class Weather {
         // Blocks ticked elsewhere (fire and still lava, in fire.js) take their updateTick here.
         if (this.blockTick?.(x, y, z, b)) continue;
         const melt = meltResult(b, light(x, y, z));
-        if (melt) this.apply(world, x, y, z, melt.block, melt.meta);
+        if (melt) { this.apply(world, x, y, z, melt.block, melt.meta); if (melt.drops) this.drop?.(world, x, y, z, melt.drops); }
       }
     }
   }

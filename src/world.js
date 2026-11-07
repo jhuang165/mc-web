@@ -7,7 +7,7 @@ import { populateSnow } from "./snow.js";
 import { decodeBaseColumn } from "./whole-save-columns.js";
 import { generateTreeAt } from "./trees.js";
 import { ladderBounds } from "./ladders.js";
-import { CACTUS_COLLISION, REED_BOUNDS, decorateSand, decorateReeds } from "./plants.js";
+import { CACTUS_COLLISION, CACTUS_SELECTION, REED_BOUNDS, decorateSand, decorateReeds } from "./plants.js";
 import { fenceMask, fenceConnectsTo, fenceBounds, fenceCollisionUnion, fenceCollisionBoxes, isFence } from "./fences.js";
 import { installNetherBlocks, NETHER_FENCE, NETHER_BRICK_STAIRS, QUARTZ_STAIRS, SOUL_SAND, SOUL_SAND_COLLISION } from "./nether-blocks.js";
 import { railBounds } from "./rails.js";
@@ -308,7 +308,7 @@ export const isPlant=b=>isCrop(b)||b===NETHER_WART||b===PUMPKIN_STEM||b===MELON_
 // Grass, leaves, farmland, crops, lava, snow layer, ice and saplings here; snow and ice act on a
 // random tick in snow.js/weather.js, fire and still lava in fire.js, leaves (decay) and saplings (growth) in trees.js.
 // Cactus and sugar cane grow on a random tick (plants.js). Tripwire hooks (113) and strings (114) tick randomly too (redstone-runtime.js randomTick).
-export const ticksRandomly=b=>b===1||b===5||b===LEAVES2||b===LIT_REDSTONE_ORE||b===COCOA||b===29||b===30||isCrop(b)||b===LAVA||b===SNOW_LAYER||b===ICE||b===FIRE||b===SAPLING||b===CACTUS||b===REEDS||b===PUMPKIN_STEM||b===MELON_STEM||b===NETHER_WART||b===PORTAL||b===113||b===114;
+export const ticksRandomly=b=>b===1||b===5||b===LEAVES2||b===LIT_REDSTONE_ORE||b===COCOA||b===29||b===30||isCrop(b)||b===LAVA||b===SNOW_LAYER||b===23||b===ICE||b===FIRE||b===SAPLING||b===CACTUS||b===REEDS||b===PUMPKIN_STEM||b===MELON_STEM||b===NETHER_WART||b===PORTAL||b===113||b===114;
 // Block.func_149730_j (opaque at construction) and isNormalCube for this
 // build's blocks. Leaves count as opaque: BlockLeaves reports an opaque cube
 // while its fancy-graphics flag is still unset in the Block constructor.
@@ -347,6 +347,10 @@ export function blockBounds(world,x,y,z){
   if(b===NETHER_WART)return WART_BOUNDS; // BlockNetherWart: 0.25 high
   if(b===END_PORTAL)return END_PORTAL_BOUNDS; // BlockEndPortal.setBlockBoundsBasedOnState: 1/16 high
   if(b===CAKE)return cakeBounds(world.getMeta(x,y,z)); // BlockCake: shrinks 2/16 per bite from the west
+  // BlockCrops (0.25 high, every stage), BlockSapling (f = 0.4: 0.8 high), BlockTallGrass and BlockFlower (0.2 / 0.6 high): block-sweep-reference.json.
+  if(isCrop(b))return[0,0,0,1,.25,1];
+  if(b===SAPLING||b===TALL_GRASS)return[0.09999999403953552,0,0.09999999403953552,0.8999999761581421,0.800000011920929,0.8999999761581421];
+  if(isFlower(b))return[0.30000001192092896,0,0.30000001192092896,0.699999988079071,0.6000000238418579,0.699999988079071];
   if([79,83,84].includes(b))return[0.09999999403953552,0,0.09999999403953552,0.8999999761581421,0.800000011920929,0.8999999761581421];
   if(b===VINE){const m=world.getMeta(x,y,z),boxes=[];if(m&1)boxes.push([0,0,15/16,1,1,1]);if(m&2)boxes.push([0,0,0,1/16,1,1]);if(m&4)boxes.push([0,0,0,1,1,1/16]);if(m&8)boxes.push([15/16,0,0,1,1,1]);return boxes.length?[...Array(3)].map((_,i)=>Math.min(...boxes.map(b=>b[i]))).concat([...Array(3)].map((_,i)=>Math.max(...boxes.map(b=>b[i+3])))):[0,15/16,0,1,1,1];}
   if(b===SANDSTONE_SLAB)return[0,0,0,1,.5,1];
@@ -371,14 +375,18 @@ export function blockBounds(world,x,y,z){
   if(isPane(b))return paneBounds(paneMask(world,x,y,z));
   if(b===RAIL)return railBounds(world.getMeta(x,y,z));
   if(b===134)return[...BREWING_SELECTION]; // brewing stand (brewing.js)
-  if(isRailBlock2(b))return railBounds(world.getMeta(x,y,z)&7); // powered/detector/activator rails: bit 3 is the powered flag (BlockRailBase.setBlockBoundsBasedOnState)
+  if(isRailBlock2(b))return railBounds(world.getMeta(x,y,z)); // BlockRailBase.setBlockBoundsBasedOnState tests the raw metadata (2-5 ascend), so a powered ascending rail (meta 10-13) selects flat: block-sweep-reference.json
   if(b===TORCH)return torchBounds(world.getMeta(x,y,z));
   if(b===172)return skullBounds(world.getMeta(x,y,z)); // BlockSkull.setBlockBoundsBasedOnState
   if(b===SIGN_POST||b===WALL_SIGN)return signBounds(b,world.getMeta(x,y,z)); // BlockSign.setBlockBoundsBasedOnState
   if(b===ENDER_CHEST)return[1/16,0,1/16,15/16,.875,15/16]; // BlockEnderChest: 0.0625 inset, never joins a neighbour
   if(!isChestShaped(b))return[0,0,0,1,blockHeight(b),1];
-  const c=(dx,dz)=>world.get(x+dx,y,z+dz)===b; // a chest joins only its own kind
-  return[c(-1,0)?0:1/16,0,c(0,-1)?0:1/16,c(1,0)?1:15/16,.875,c(0,1)?1:15/16];
+  const c=(dx,dz)=>world.get(x+dx,y,z+dz)===b; // a chest joins only its own kind, and BlockChest tests the neighbours in an else-if chain (north, south, west, east)
+  if(c(0,-1))return[1/16,0,0,15/16,.875,15/16];
+  if(c(0,1))return[1/16,0,1/16,15/16,.875,1];
+  if(c(-1,0))return[0,0,1/16,15/16,.875,15/16];
+  if(c(1,0))return[1/16,0,1/16,1,.875,15/16];
+  return[1/16,0,1/16,15/16,.875,15/16];
 }
 // Block.getCollisionBoundingBoxFromPool: as blockBounds, except BlockFarmland (aky) collides
 // as a full cube although it renders and selects 15/16 high.
@@ -415,6 +423,7 @@ export function selectionBounds(world,x,y,z){
   const b=world.get(x,y,z);
   if(b===SNOW_LAYER)return[0,0,0,1,snowSelectionHeight(world.getMeta(x,y,z)),1];
   if(b===REEDS)return[...REED_BOUNDS];
+  if(b===CACTUS)return CACTUS_SELECTION; // BlockCactus.getSelectedBoundingBoxFromPool: 1/16 in from the sides, full height
   return blockBounds(world,x,y,z);
 }
 // World.solid's test for one cell: what has a collision box. Sugar cane has none
@@ -944,7 +953,7 @@ export function raycast(world, origin, dir, reach = 6) {
       // drawn selection box is inset).
       // Fences, rails and torches are only hit inside their selection box (Block.collisionRayTrace
       // after setBlockBoundsBasedOnState).
-      if (isFence(hit) || hit === RAIL || isRailBlock2(hit) || hit === TORCH || isRedstoneBlock(hit) || isDoor(hit) || isPane(hit) || hasPartialBounds(hit) || hit === END_PORTAL || hit === DRAGON_EGG || hit === PORTAL || hit === NETHER_WART || hit === SIGN_POST || hit === WALL_SIGN || hit === 172 || isShaped(hit) || hit === PISTON_HEAD || (isPistonBase(hit) && pistonExtended(world.getMeta(...p)))) {
+      if (isFence(hit) || isPlant(hit) || hit === RAIL || isRailBlock2(hit) || hit === TORCH || isRedstoneBlock(hit) || isDoor(hit) || isPane(hit) || hasPartialBounds(hit) || hit === END_PORTAL || hit === DRAGON_EGG || hit === PORTAL || hit === NETHER_WART || hit === SIGN_POST || hit === WALL_SIGN || hit === 172 || isShaped(hit) || hit === PISTON_HEAD || (isPistonBase(hit) && pistonExtended(world.getMeta(...p)))) {
         const [x0, y0, z0, x1, y1, z1] = blockBounds(world, ...p), lx = origin.x + dir.x * d - p[0], ly = origin.y + dir.y * d - p[1], lz = origin.z + dir.z * d - p[2];
         if (lx < x0 || lx > x1 || ly < y0 || ly > y1 || lz < z0 || lz > z1) {
           passed = p;

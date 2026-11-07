@@ -73,6 +73,7 @@ import {
   PUMPKIN,
   JACK_O_LANTERN,
   normalCube as isNormalCube,
+  selectionBounds,
 } from "./world.js";
 import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
@@ -98,7 +99,7 @@ import {Experience,ExperienceOrbs,smeltExperience} from "./experience.js";
 import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import { NetherLive } from './nether-portal-live.js'; // nether portal lighting/removal and nether wart
-import {Farming,cropDrops} from "./farming.js";
+import {Farming,cropDrops,farmNeighbourChange} from "./farming.js";
 import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox, setEntityBoxes } from "./entities.js";
 import { wakeSavedSleeper, BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
 import { deathMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
@@ -1002,13 +1003,11 @@ function watchFlowers() {
       items.dropBlock([makeStack(b, 1, b === RED_FLOWER ? meta : 0)], fx, fy, fz);
       scene.updateBlock(fx, fz, fy);
     }
-    // BlockCrops.canBlockStay requires farmland beneath the plant.
-    const cy=y+1,cb=world.get(x,cy,z);
-    if(isCrop(cb)&&![29,30].includes(world.get(x,y,z))){
-      const drops=cropDrops(cb,Math.random,world.getMeta(x,cy,z));
-      world.set(x,cy,z,0);
-      items.dropBlock(drops.map(d=>makeStack(d.id,d.count)),x,cy,z);
-      scene.updateBlock(x,z,cy);
+    // BlockCrops.canBlockStay / BlockFarmland.onNeighborBlockChange on every neighbour update (farming.js farmNeighbourChange).
+    for(const c of farmNeighbourChange(world,x,y,z)){
+      if(c.drops.length)items.dropBlock(c.drops.map(d=>makeStack(d.id,d.count)),c.x,c.y,c.z);
+      farming?.observe(c.x,c.y,c.z);
+      scene.updateBlock(c.x,c.z,c.y);
     }
     // BlockLadder.onNeighborBlockChange: a ladder whose wall is no longer a normal cube drops itself.
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -1125,6 +1124,7 @@ async function launch(record, prepared) {
     // Rain moistens farmland (BlockFarmland.updateTick: canLightningStrikeAt(x, y + 1, z)).
     farming.rained = (x, y, z) => canLightningStrikeAt(weather, world, x, y + 1, z);
     weather.apply = applyWeatherEdit;
+    weather.drop = (w, x, y, z, stacks) => items.dropBlock(stacks.map((d) => makeStack(d.id, d.count)), x, y, z); // BlockSnowBlock.updateTick: 4 snowballs
     fire.sharedRandomTicks = true;
     // One WorldServer random-tick stream: fire and still lava (fire.js), saplings and leaves (trees.js),
     // sugar cane and cactus (plants.js), then snow and ice melting in Weather.tickChunk itself.
@@ -3588,10 +3588,9 @@ function animate(now) {
     if (aimedHanging) { aimedEntity = null; aimedCart = null; }
     scene.outline.visible = !hideGUI && !!target && !aimedEntity && !aimedCart && !aimedHanging; // drawSelectionBox skips while hideGUI
     if (target) {
-      // setBlockBoundsBasedOnState: a snow layer's box is (meta + 1) / 8 high and a ladder's is its
-      // plate; other blocks keep the full cube here. The outline is the box grown by 0.002.
-      const b = world.get(...target.block), meta = world.getMeta(...target.block),
-        [x0, y0, z0, x1, y1, z1] = b === SNOW_LAYER ? [0, 0, 0, 1, snowSelectionHeight(meta), 1] : b === LADDER ? ladderBounds(meta) : b === CACTUS ? CACTUS_SELECTION : b === REEDS ? REED_BOUNDS : [0, 0, 0, 1, 1, 1];
+      // getSelectedBoundingBoxFromPool after setBlockBoundsBasedOnState (world.js selectionBounds: slabs, stairs, fences, plants, snow,
+      // ladders, cactus...; block-sweep-reference.json). The outline is the box grown by 0.002.
+      const [x0, y0, z0, x1, y1, z1] = selectionBounds(world, ...target.block);
       scene.outline.scale.set((x1 - x0 + 0.004) / 1.004, (y1 - y0 + 0.004) / 1.004, (z1 - z0 + 0.004) / 1.004);
       scene.outline.position.set(target.block[0] + (x0 + x1) / 2, target.block[1] + (y0 + y1) / 2, target.block[2] + (z0 + z1) / 2);
     }
