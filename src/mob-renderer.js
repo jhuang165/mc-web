@@ -28,7 +28,7 @@ import { createBlazeRig, createGhastRig } from "./blaze-ghast-renderer.js";
 import { createWitherRig } from "./wither-boss-renderer.js";
 import { createSquidRig, createBatRig } from "./squid-bat-renderer.js";
 import { createCrystalRig } from "./ender-crystal-renderer.js";
-import { createDragonRig, disposeDragonRig } from "./dragon-renderer.js";
+import { createDragonRig, disposeDragonRig, DRAGON_HURT_ALPHA } from "./dragon-renderer.js";
 const RAD = Math.PI / 180;
 // RenderCreeper's powered pass (bni.a(xz, I, F), pass 1): creeper_armor.png with the texture
 // matrix translated by (scroll, scroll), colour 0.5, lighting off, blended GL_ONE, GL_ONE.
@@ -570,7 +570,8 @@ export class MobRenderer {
           if (white > 0) {
             const a = 1 - 0.6 * (1 - white), red = 0.4 * (1 - white);
             o.set((red * b + white) / a, white / a, white / a, a);
-          } else o.set(b, 0, 0, 0.4);
+          } else if (e.type === "ender_dragon") o.set(b, 0, 0, DRAGON_HURT_ALPHA); // RenderDragon.renderModel red 0.5 pass, then RendererLivingEntity's 0.4 pass: 1 - 0.5 * 0.6
+          else o.set(b, 0, 0, 0.4);
         } else if (white > 0) o.set(1, 1, 1, white);
         else o.set(0, 0, 0, 0);
       }

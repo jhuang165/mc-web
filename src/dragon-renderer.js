@@ -66,6 +66,9 @@ export const DRAGON_TEXTURES = Object.freeze({
   eyes: "/media/1.7.10/entity/enderdragon/dragon_eyes.png",
   beam: "/media/1.7.10/entity/endercrystal/endercrystal_beam.png",
 });
+// RenderDragon.renderModel draws a second red (1, 0, 0, 0.5) depth-equal pass while hurtTime > 0, on top of RendererLivingEntity's (b, 0, 0, 0.4) one:
+// the blends fold into one overlay of alpha 1 - 0.5 * 0.6. The dragon's deathTime never advances (onDeathUpdate is overridden), so only hurtTime counts.
+export const DRAGON_HURT_ALPHA = 1 - 0.5 * 0.6;
 const F1 = -16;
 
 // ModelDragon boxes: [x, y, z, w, h, d, u, v, mirror]. Rotation points are in model pixels (y down, as in Java).
@@ -73,7 +76,7 @@ export const DRAGON_MODEL = Object.freeze({
   head: { boxes: [[-6, -1, -8 + F1, 12, 5, 16, 176, 44], [-8, -8, 6 + F1, 16, 16, 16, 112, 30], [-5, -12, 12 + F1, 2, 4, 6, 0, 0, true], [-5, -3, -6 + F1, 2, 2, 4, 112, 0, true], [3, -12, 12 + F1, 2, 4, 6, 0, 0], [3, -3, -6 + F1, 2, 2, 4, 112, 0]] },
   jaw: { point: [0, 4, 8 + F1], boxes: [[-6, 0, -16, 12, 4, 16, 176, 65]] },
   neck: { boxes: [[-5, -5, -5, 10, 10, 10, 192, 104], [-1, -9, -3, 2, 4, 6, 48, 0]] },
-  body: { point: [0, 4, 8], boxes: [[-12, 0, -16, 24, 24, 64, 0, 0], [-1, -6, 10, 2, 6, 12, 220, 53], [-1, -6, 30, 2, 6, 12, 220, 53], [-1, -6, 50, 2, 6, 12, 220, 53]] },
+  body: { point: [0, 4, 8], boxes: [[-12, 0, -16, 24, 24, 64, 0, 0], [-1, -6, -10, 2, 6, 12, 220, 53], [-1, -6, 10, 2, 6, 12, 220, 53], [-1, -6, 30, 2, 6, 12, 220, 53]] },
   wing: { point: [-12, 5, 2], boxes: [[-56, -4, -4, 56, 8, 8, 112, 88], [-56, 0, 2, 56, 0, 56, -56, 88]] },
   wingtip: { point: [-56, 0, 0], boxes: [[-56, -2, -2, 56, 4, 4, 112, 136], [-56, 0, 2, 56, 0, 56, -56, 144]] },
   frontleg: { point: [-12, 20, 2], boxes: [[-4, -4, -4, 8, 24, 8, 112, 104]] },
@@ -102,7 +105,7 @@ function makePart(spec, material) {
 }
 
 // One complete copy of the model (the original draws the same ModelDragon in up to three passes).
-function buildModel(material) {
+export function buildModel(material) {
   const M = DRAGON_MODEL, p = {};
   p.head = makePart(M.head, material);
   p.jaw = makePart(M.jaw, material);
@@ -133,21 +136,21 @@ export function dragonPose(offset, t) {
   const jaw = (Math.sin(t * Math.PI * 2) + 1) * 0.2;
   let f7 = Math.sin(t * Math.PI * 2 - 1) + 1;
   f7 = (f7 * f7 + f7 * 2) * 0.05;
-  const f10 = 1.5, o7 = offset(7), o5 = offset(5);
+  const f10 = 1.5, o6 = offset(6), o5 = offset(5); // ModelDragon.render reads getMovementOffsets(6), RenderDragon.rotateCorpse (7)
   const f11 = wrap180(o5[0] - offset(10)[0]), f12 = wrap180(o5[0] + f11 / 2);
   const f13 = t * Math.PI * 2;
   let y = 20, z = -12, x = 0;
   const necks = [];
   for (let i = 0; i < 5; i++) {
-    const o = offset(5 - i), ry = wrap180(o[0] - o7[0]) * RAD * f10;
-    const rx = Math.cos(i * 0.45 + f13) * 0.15 + (o[1] - o7[1]) * RAD * f10 * 5, rz = -wrap180(o[0] - f12) * RAD * f10;
+    const o = offset(5 - i), ry = wrap180(o[0] - o6[0]) * RAD * f10;
+    const rx = Math.cos(i * 0.45 + f13) * 0.15 + (o[1] - o6[1]) * RAD * f10 * 5, rz = -wrap180(o[0] - f12) * RAD * f10;
     necks.push({ point: [x, y, z], angle: [rx, ry, rz] });
     y += Math.sin(rx) * 10;
     z -= Math.cos(ry) * Math.cos(rx) * 10;
     x -= Math.sin(ry) * Math.cos(rx) * 10;
   }
   const o0 = offset(0);
-  const head = { point: [x, y, z], angle: [0, wrap180(o0[0] - o7[0]) * RAD, -wrap180(o0[0] - f12) * RAD] };
+  const head = { point: [x, y, z], angle: [0, wrap180(o0[0] - o6[0]) * RAD, -wrap180(o0[0] - f12) * RAD] };
   const wing = { x: 0.125 - Math.cos(f13) * 0.2, y: 0.25, z: (Math.sin(f13) + 0.125) * 0.8, tip: -(Math.sin(f13 + 2) + 0.5) * 0.75 };
   const legs = { rearleg: 1 + f7 * 0.1, rearlegtip: 0.5 + f7 * 0.1, rearfoot: 0.75 + f7 * 0.1, frontleg: 1.3 + f7 * 0.1, frontlegtip: -0.5 - f7 * 0.1, frontfoot: 0.75 + f7 * 0.1 };
   const tails = [];
@@ -162,7 +165,19 @@ export function dragonPose(offset, t) {
     tz -= Math.cos(ry) * Math.cos(rx) * 10;
     tx -= Math.sin(ry) * Math.cos(rx) * 10;
   }
-  return { jaw, f7, f11, f10, necks, head, wing, legs, tails, yaw: o7[0], pitch: o5[1] - offset(10)[1] };
+  return { jaw, f7, f11, f10, necks, head, wing, legs, tails, yaw: offset(7)[0], pitch: o5[1] - offset(10)[1] };
+}
+
+// The pieces of one model copy under one holder; the body, wings and legs sit under the roll groups.
+export function assemblePass(p) {
+  const holder = new THREE.Group();
+  holder.add(p.head, ...p.necks, ...p.tails);
+  const rollOut = new THREE.Group(), rollIn = new THREE.Group();
+  rollOut.add(rollIn);
+  rollIn.add(p.body, p.sides[0].group, p.sides[1].group);
+  holder.add(rollOut);
+  p.rollOut = rollOut; p.rollIn = rollIn;
+  return holder;
 }
 
 export function createDragonRig(renderer) {
@@ -176,16 +191,7 @@ export function createDragonRig(renderer) {
   root.add(yawG); yawG.add(pitchG); pitchG.add(shiftG); shiftG.add(liftG); liftG.add(bobG);
   liftG.position.y = 1.5078125;
   const passes = [buildModel(skin), buildModel(exploding), buildModel(eyes)];
-  for (const p of passes) {
-    const holder = new THREE.Group();
-    holder.add(p.head, ...p.necks, ...p.tails);
-    const rollOut = new THREE.Group(), rollIn = new THREE.Group();
-    rollOut.add(rollIn);
-    rollIn.add(p.body, p.sides[0].group, p.sides[1].group);
-    holder.add(rollOut);
-    p.rollOut = rollOut; p.rollIn = rollIn;
-    bobG.add(holder);
-  }
+  for (const p of passes) bobG.add(assemblePass(p));
   passes[1].head.parent.visible = false;
   passes[2].head.parent.traverse((o) => { if (o.isMesh) o.renderOrder = 2; });
   // The crystal beam (RenderDragon.func_110827_a): 9 vertex pairs of a triangle strip, black thin end to white wide end.
@@ -223,7 +229,7 @@ export function createDragonRig(renderer) {
   };
 }
 
-function poseModel(p, pose) {
+export function poseModel(p, pose) {
   place(p.head, pose.head.point, pose.head.angle);
   place(p.jaw, DRAGON_MODEL.jaw.point, [pose.jaw, 0, 0]);
   pose.necks.forEach((n, i) => place(p.necks[i], n.point, n.angle));

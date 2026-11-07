@@ -5,7 +5,7 @@
 import { JavaRandom } from "./java-random.js";
 import { intercept, rayTraceBlocks } from "./projectiles.js";
 import { pushBox } from "./entities.js";
-import { dragonPartTargets, aimPart } from "./dragon-parts.js";
+import { dragonPartTargets, aimPart, sweepArea } from "./dragon-parts.js";
 import { FIREBALL, fireballAcceleration, fireballStep, deflect, faceCell } from "./blaze-ghast.js";
 import { gameRule } from "./game-rules.js";
 
@@ -72,7 +72,9 @@ export class Fireballs {
     const p = mobs.ai?.player;
     if (p?.alive && !(b.owner === "player" && b.ticks < FIREBALL.ownerGrace)) boxes.push({ target: { player: true }, box: pushBox(p, p.width, p.height) });
     let best = null, bd = Infinity;
+    const area = sweepArea(b);
     for (const c of boxes) {
+      if (c.reach && !c.reach(area)) continue; // a dragon part: the world lists it only for the dragon's own box and chunk (ze.h's query box)
       const g = SWEEP, box = [c.box[0] - g, c.box[1] - g, c.box[2] - g, c.box[3] + g, c.box[4] + g, c.box[5] + g], r = intercept(box, a, z);
       if (!r) continue;
       const d = (r.vec[0] - a[0]) ** 2 + (r.vec[1] - a[1]) ** 2 + (r.vec[2] - a[2]) ** 2;
