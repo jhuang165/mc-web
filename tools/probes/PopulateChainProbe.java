@@ -12,6 +12,7 @@ public class PopulateChainProbe {
   public static class C extends PopulationTailProbe.P {
     public int b(ahn l,int x,int y,int z){if(l!=ahn.a)return super.b(l,x,y,z);call(7,x,y,z);return Math.floorMod(x*3+y*5+z*7+lightBase,16);}
   }
+  static void dumpBlocks(String tag,aji[] b){StringBuilder s=new StringBuilder(tag);for(aji x:b)s.append(' ').append(x==null?0:aji.b(x));System.err.println(s);}
   static C world(long seed,long worldRand)throws Exception{
     C w=SpringProbe.world(C.class,seed,worldRand);w.manager=new aib(seed,ahm.b);w.info=(ays)TerrainProbe.unsafe.allocateInstance(ays.class);
     for(Field f:ays.class.getDeclaredFields())if(f.getType()==ahm.class){f.setAccessible(true);f.set(w.info,ahm.b);}
@@ -36,25 +37,34 @@ public class PopulateChainProbe {
     StringBuilder providers=new StringBuilder("[");for(int id=0;id<256;id++){aji b=aji.e(id);if(b!=null&&aji.b(b)==id&&b instanceof akw){if(providers.length()>1)providers.append(',');providers.append(id);}}providers.append(']');
     System.out.println("{\"kind\":\"config\",\"comparators\":"+comparators+",\"tileProviders\":"+providers+",\"blocks\":["+aji.b(ajn.ae)+","+aji.b(ajn.ac)+","+aji.b(ajn.j)+","+aji.b(ajn.l)+","+aji.b(ajn.bh)+"]}");
     // [seed, origin chunk x, z] of 6x6 regions; the inner 4x4 chunks are populated.
+    // Audit mode (-Daudit=regions.json): [seed, origin x, z, slot] rows from tools/find-biome-audit-regions.mjs. Each
+    // region populates only its inner 2x2 chunks, in x then z order, and reports one combined input hash.
+    String auditFile=System.getProperty("audit");boolean audit=auditFile!=null;
     long[][] regions=REGIONS;
+    if(audit){String[] rows=new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(auditFile))).trim().replaceAll("^\\[\\[|\\]\\]$","").split("\\],\\[");
+      regions=new long[rows.length][];for(int i=0;i<rows.length;i++){String[] f=rows[i].split(",");regions[i]=new long[]{Long.parseLong(f[0]),Long.parseLong(f[1]),Long.parseLong(f[2]),Long.parseLong(f[3])};}}
     Random pick=new Random(20261105L);
     for(int ri=0;ri<regions.length;ri++){
       long seed=regions[ri][0];int cx0=(int)regions[ri][1],cz0=(int)regions[ri][2];
       BiomeDecoratorProbe.D t=BiomeDecoratorProbe.world(seed,0);TerrainProbe.resetMesa();aqz g=new aqz(t,seed,false);aqw caves=new aqw();aqs ravines=new aqs();
-      List<Object[]> input=new ArrayList<>();StringBuilder inputs=new StringBuilder("[");
+      List<Object[]> input=new ArrayList<>();StringBuilder inputs=new StringBuilder("[");java.security.MessageDigest md=java.security.MessageDigest.getInstance("SHA-1");
       for(int x=cx0;x<cx0+6;x++)for(int z=cz0;z<cz0+6;z++){
         aji[] blocks=new aji[65536];byte[] meta=new byte[65536];((Random)TerrainProbe.get(g,"i")).setSeed((long)x*341873128712L+(long)z*132897987541L);
-        axl.a();g.a(x,z,blocks);axl.a();g.a(x,z,blocks,meta,t.manager.b(null,x*16,z*16,16,16));caves.a(null,t,x,z,blocks);ravines.a(null,t,x,z,blocks);
+        axl.a();g.a(x,z,blocks);axl.a();g.a(x,z,blocks,meta,t.manager.b(null,x*16,z*16,16,16));String dump=System.getProperty("audit.dump");boolean dd=dump!=null&&dump.equals(x+","+z);if(dd){dumpBlocks("PRE",blocks);StringBuilder sb=new StringBuilder("BIO");for(ahu bb:t.manager.b(null,x*16,z*16,16,16))sb.append(' ').append(bb.ay);System.err.println(sb);}caves.a(null,t,x,z,blocks);if(dd)dumpBlocks("CAVE",blocks);ravines.a(null,t,x,z,blocks);if(dd)dumpBlocks("RAV",blocks);
         input.add(new Object[]{x,z,blocks,meta});
-        if(inputs.length()>1)inputs.append(',');inputs.append('[').append(x).append(',').append(z).append(',').append(q(TerrainProbe.hash(blocks))).append(',').append(q(TerrainProbe.hash(meta))).append(']');
+        String hb=TerrainProbe.hash(blocks),hm=TerrainProbe.hash(meta);
+        if(audit){md.update((x+","+z+","+hb+","+hm+";").getBytes());if(System.getProperty("audit.debug")!=null)System.err.println("CH "+ri+" "+x+" "+z+" "+hb+" "+hm);continue;}
+        if(inputs.length()>1)inputs.append(',');inputs.append('[').append(x).append(',').append(z).append(',').append(q(hb)).append(',').append(q(hm)).append(']');
       }
       inputs.append(']');
-      System.out.println("{\"kind\":\"region\",\"index\":"+ri+",\"seed\":"+q(""+seed)+",\"origin\":["+cx0+","+cz0+"],\"inputs\":"+inputs+"}");
-      for(int k=0;k<2;k++){
+      if(audit){StringBuilder hex=new StringBuilder();for(byte b:md.digest())hex.append(String.format("%02x",b));inputs=new StringBuilder(q(hex.toString()));}
+      System.out.println("{\"kind\":\"region\",\"index\":"+ri+",\"seed\":"+q(""+seed)+",\"origin\":["+cx0+","+cz0+"],"+(audit?"\"slot\":"+regions[ri][3]+",\"inputsSha1\":":"\"inputs\":")+inputs+"}");
+      for(int k=0;k<(audit?1:2);k++){
         long worldRand=pick.nextLong();int lightBase=pick.nextInt(16);
         List<int[]> targets=new ArrayList<>();for(int x=cx0+1;x<cx0+5;x++)for(int z=cz0+1;z<cz0+5;z++)targets.add(new int[]{x,z});Collections.shuffle(targets,pick);
         // The first record populates all sixteen inner chunks, the second a shuffled subset.
         int n=k==0?16:4+pick.nextInt(9);
+        if(audit){targets.clear();for(int x=cx0+2;x<cx0+4;x++)for(int z=cz0+2;z<cz0+4;z++)targets.add(new int[]{x,z});n=4;}
         String label=ri+":"+k;if(only!=null&&!only.equals(label))continue;
         C w=world(seed,worldRand);w.lightBase=lightBase;if(only!=null)w.trace=new StringBuilder();
         // Chunks are loaded (Chunk.onChunkLoad's isChunkLoaded) before ChunkProviderServer populates them;

@@ -421,17 +421,17 @@ export class RareBiomeLayer extends CrossLayer {
 // GenLayerShore (axw).
 const jungleCompatible = (id) => {
   const b = getBiome(id);
-  if (b !== null && b.cls === "Jungle") return true;
+  if (b !== null && b.biomeClass === "Jungle") return true;
   return id === B.jungleEdge || id === B.jungle || id === B.jungleHills || id === B.forest || id === B.taiga || isOceanic(id);
 };
-const isMesa = (id) => getBiome(id)?.cls === "Mesa";
+const isMesa = (id) => getBiome(id)?.biomeClass === "Mesa";
 export class ShoreLayer extends CrossLayer {
   cell(v, up, right, left, down, x, z) {
     this.initChunkSeed(x, z);
     const biome = getBiome(v);
     const any = (f) => f(up) || f(right) || f(left) || f(down);
     if (v === B.mushroomIsland) return any((n) => n === B.ocean) ? B.mushroomIslandShore : v;
-    if (biome !== null && biome.cls === "Jungle") {
+    if (biome !== null && biome.biomeClass === "Jungle") {
       if (!(jungleCompatible(up) && jungleCompatible(right) && jungleCompatible(left) && jungleCompatible(down))) return B.jungleEdge;
       return any(isOceanic) ? B.beach : v;
     }
