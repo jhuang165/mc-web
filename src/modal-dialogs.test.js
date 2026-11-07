@@ -156,11 +156,11 @@ test('sign editor host: native title, Done and canvas routed through Gui.show', 
   assert.equal(screen.escape(), undefined);
 });
 
-test('main.js call sites: only the container screens and the book still use modal(); the rest go through modal-dialogs.js', () => {
+test('main.js call sites: no page-font modal() is left: containers and the book use containerShell, the rest modal-dialogs.js', () => {
   const src = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
   const calls = [...src.matchAll(/\bmodal\(/g)].length;
-  // definition + openContainer (containers) + openBook (book-modal)
-  assert.equal(calls, 3);
+  // batch 22: openContainer and openBook moved to containerShell (container-screens.js); modal() itself was removed
+  assert.equal(calls, 0);
   for (const name of ['gameOverScreen(', 'exportScreen(', 'notesScreen(', 'signEditHost(']) assert.ok(src.includes(name), name);
   assert.ok(!/Export World', '<p>/.test(src) && !/id="respawn"/.test(src) && !/death-modal/.test(src));
 });
