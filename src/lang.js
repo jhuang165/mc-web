@@ -76,6 +76,9 @@ export const lang = {
   bidirectional: false,
   forceUnicodeFont: false,
 };
+/** StatCollector.translateToLocal over the live table; `fallback` is the baked English text used while English is selected
+ *  (or the key is absent), so the hand-written English strings stay the source for en_US. */
+export const translate = (key, fallback) => lang.table?.[key] ?? fallback;
 const hooks = new Set();
 /** Registers fn(selectedKeys | null) called after every language change (menus, commands, achievements, death messages ...). */
 export const onLanguage = (fn) => { hooks.add(fn); return () => hooks.delete(fn); };

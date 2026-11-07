@@ -3,6 +3,7 @@
 // damage values as digests, ingredient application for every ingredient string, English names), replayed by src/potions.test.js.
 // See public/research/potions.md. A potion item's damage value holds the brew: bits 0-4 pick the effect and duration, bit 5 the
 // amplifier, bit 13 "drinkable" (8192), bit 14 "splash" (16384).
+import { translate as tl } from "./lang.js";
 const f = Math.fround;
 
 export const ITEM_GLASS_BOTTLE = 384, ITEM_POTION = 385; // internal ids (original 374 / 373)
@@ -233,21 +234,21 @@ export function potionTooltip(meta) {
   if (list && list.length) {
     for (const e of list) {
       const type = POTION_TYPES[e.id];
-      let text = type.name;
+      let text = tl(type.key, type.name);
       if (type.modifier) mods.push([type, e]);
-      if (e.amplifier > 0) text += " " + (L[`potion.potency.${e.amplifier}`] ?? `potion.potency.${e.amplifier}`);
+      if (e.amplifier > 0) text += " " + (tl(`potion.potency.${e.amplifier}`, L[`potion.potency.${e.amplifier}`] ?? `potion.potency.${e.amplifier}`));
       if (e.duration > 20) text += ` (${durationString(e.duration)})`;
       lines.push({ text, color: type.bad ? "#ff5555" : "#aaaaaa" });
     }
-  } else lines.push({ text: "No Effects", color: "#aaaaaa" });
+  } else lines.push({ text: tl("potion.empty", "No Effects"), color: "#aaaaaa" });
   const attrNames = { "generic.movementSpeed": "Speed", "generic.maxHealth": "Max Health", "generic.attackDamage": "Attack Damage" };
   const rows = [];
   for (const [type, e] of mods) {
     const amount = modifierAmount(type, e.amplifier), op = type.modifier.operation, shown = op === 1 || op === 2 ? amount * 100 : amount;
-    if (amount > 0) rows.push({ text: `+${decimal(shown)}${op === 0 ? "" : "%"} ${attrNames[type.modifier.attribute]}`, color: "#5555ff" });
-    else if (amount < 0) rows.push({ text: `-${decimal(shown * -1)}${op === 0 ? "" : "%"} ${attrNames[type.modifier.attribute]}`, color: "#ff5555" });
+    if (amount > 0) rows.push({ text: `+${decimal(shown)}${op === 0 ? "" : "%"} ${tl(`attribute.name.${type.modifier.attribute}`, attrNames[type.modifier.attribute])}`, color: "#5555ff" });
+    else if (amount < 0) rows.push({ text: `-${decimal(shown * -1)}${op === 0 ? "" : "%"} ${tl(`attribute.name.${type.modifier.attribute}`, attrNames[type.modifier.attribute])}`, color: "#ff5555" });
   }
-  if (rows.length) lines.push({ text: "", color: "#aaaaaa" }, { text: "When Applied:", color: "#aa00aa" }, ...rows);
+  if (rows.length) lines.push({ text: "", color: "#aaaaaa" }, { text: tl("potion.effects.whenDrank", "When Applied:"), color: "#aa00aa" }, ...rows);
   return lines;
 }
 // One-line tooltip form used by the probe: section-sign codes joined with "|".

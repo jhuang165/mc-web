@@ -115,3 +115,61 @@ test('no item or variant name has a lower-case word start (1.7.10 capitalisation
   }
   assert.deepEqual(bad, []);
 });
+
+// ---- Localization round 2: names through the selected language (inline fixtures; no fetched .lang files) ----
+import { lang, mergeLocale, parseLang } from './lang.js';
+import { localizedItemName, displayName } from './item-names.js';
+import { EN_US } from './lang-en-us.js';
+const withLang = (text, fn) => {
+  const saved = lang.table;
+  lang.table = mergeLocale([EN_US, parseLang(text)]).table;
+  try { return fn(); } finally { lang.table = saved; }
+};
+const FIXTURE = 'item.ingotIron.name=Eisenbarren\ntile.stone.name=Stein\ntile.wood.spruce.name=Fichtenholz\nitem.monsterPlacer.name=Erschaffe\nentity.Creeper.name=Schleicher\nitem.emptyPotion.name=Wasserflasche\npotion.prefix.grenade=Wurf\npotion.heal.postfix=Trank der Heilung\npotion.prefix.awkward=Seltsamer\nitem.potion.name=Trank\n';
+test('item and block names follow the selected language and fall back to en_US', () => {
+  assert.equal(localizedItemName(302), undefined, 'English selected: baked names stay');
+  withLang(FIXTURE, () => {
+    assert.equal(localizedItemName(302), 'Eisenbarren');
+    assert.equal(localizedItemName(3), 'Stein');
+    assert.equal(localizedItemName(2), 'Dirt', 'missing key reads en_US');
+    assert.equal(displayName({ id: 302, damage: 0, count: 1 }, ITEMS), 'Eisenbarren');
+    assert.equal(displayName({ id: 302, damage: 0, count: 1, displayName: 'Mein Barren' }, ITEMS), 'Mein Barren', 'custom names win');
+    assert.equal(displayName({ id: 385, damage: 0 }, ITEMS), 'Wasserflasche');
+    assert.equal(displayName({ id: 385, damage: 16421 }, ITEMS), 'Wurf Trank der Heilung');
+    assert.equal(displayName({ id: 385, damage: 16 }, ITEMS), 'Seltsamer Trank');
+  });
+  assert.equal(displayName({ id: 302, damage: 0 }, ITEMS), 'Iron Ingot');
+});
+test('spawn egg names compose item.monsterPlacer and entity.<name>.name', () => {
+  withLang(FIXTURE, () => assert.equal(displayName({ id: 1950, damage: 50 }, ITEMS), 'Erschaffe Schleicher'));
+});
+
+test('with en_US as the selected table every mapped item and variant reads its baked English name', () => {
+  withLang('', () => {
+    let checked = 0;
+    const bad = [];
+    for (const item of Object.values(ITEMS)) {
+      if (!item.id || item.id === 385) continue;
+      const damages = item.variants ? item.variants.map((_, d) => d) : [0];
+      for (const d of damages) {
+        const got = localizedItemName(item.id, d, !!item.variants);
+        if (got === undefined) continue; // internal-only items
+        checked++;
+        const want = item.variants ? item.variants[d] : item.name;
+        if (got !== want) bad.push(`${item.id}:${d} ${got} != ${want}`);
+      }
+    }
+    assert.deepEqual(bad, []);
+    assert.ok(checked > 600, `${checked} names compared`);
+  });
+});
+
+test('item-keys-data.js is the unchanged ItemKeyProbe output (item-keys-reference.json)', async () => {
+  const { ITEM_KEYS, EGG_ENTITIES } = await import('./item-keys-data.js');
+  const ref = JSON.parse(await readFile(new URL('../public/research/item-keys-reference.json', import.meta.url), 'utf8'));
+  assert.deepEqual(ITEM_KEYS, Object.fromEntries(Object.entries(ref.keys).map(([k, v]) => [k, v])));
+  assert.deepEqual(EGG_ENTITIES, ref.eggEntities);
+  assert.equal(Object.keys(ref.keys).length, 315);
+  assert.equal(ref.keys[265][0], 'item.ingotIron');
+  assert.deepEqual(Object.keys(ref.special), ['373', '383']);
+});
