@@ -9,6 +9,9 @@ const f = Math.fround;
 // The en_US.lang strings the screens use (assets/minecraft/lang/en_US.lang in the 1.7.10 JAR).
 import { getCharWidth, getStringWidth } from "./font-renderer.js";
 export const LANG = {
+  "advMode.setCommand": "Set Console Command for Block", "advMode.command": "Console Command",
+  "advMode.nearestPlayer": "Use \"@p\" to target nearest player", "advMode.randomPlayer": "Use \"@r\" to target random player",
+  "advMode.allPlayers": "Use \"@a\" to target all players", "advMode.previousOutput": "Previous Output",
   "gui.done": "Done", "gui.cancel": "Cancel", "gui.achievements": "Achievements", "gui.stats": "Statistics",
   "menu.game": "Game menu", "menu.singleplayer": "Singleplayer", "menu.multiplayer": "Multiplayer",
   "menu.online": "Minecraft Realms", "menu.options": "Options...", "menu.quit": "Quit Game",
@@ -173,16 +176,15 @@ export function mainMenuLayout(w, h) {
   };
 }
 export function selectWorldLayout(w, h) {
-  const c = half(w);
+  const c = half(w), ew = Math.max(20, Math.min(50, Math.trunc((w - 8) / 3) - 2));
   return {
     title: [c, 20], list: { top: 32, bottom: h - 64, slotHeight: 36, width: 220, scrollbarX: c + 124 },
     buttons: {
       select: btn(c - 154, h - 52, 150), create: btn(c + 4, h - 52, 150), rename: btn(c - 154, h - 28, 72),
       delete: btn(c - 76, h - 28, 72), recreate: btn(c + 4, h - 28, 72), cancel: btn(c + 82, h - 28, 72),
-      // Browser additions in the empty header band: import a .blockworld.json, export the selection.
-      import: btn(c - 154, 6, 72), export: btn(c + 82, 6, 72),
-      // Endless copy of a finite Java world, in the gap between Import and the title (endless-world.js).
-      endless: btn(c - 80, 6, 44),
+      // Browser additions (Import a .blockworld.json, Endless copy, Export the selection): one row at the very top of the header band,
+      // y 0..20, so it ends where the native title (y 20) begins and never overlaps it at any GUI size (3 buttons share the width).
+      import: btn(Math.trunc(c - 1.5 * ew - 2), 0, ew), endless: btn(Math.trunc(c - ew / 2), 0, ew), export: btn(Math.trunc(c + ew / 2 + 2), 0, ew),
     },
   };
 }

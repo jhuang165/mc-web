@@ -66,3 +66,8 @@ i.mc-caret{background:#d0d0d0}
 .ug{display:inline-block;position:relative;vertical-align:top;height:calc(8*var(--u));filter:drop-shadow(var(--u) var(--u) 0 var(--sh,#3f3f3f))}
 .mc-text.flat .ug{filter:none}
 .ug i{position:absolute;left:0;top:0;height:calc(8*var(--u));background:currentColor;-webkit-mask:var(--p) var(--mx) var(--my)/calc(128*var(--u)) calc(128*var(--u)) no-repeat;mask:var(--p) var(--mx) var(--my)/calc(128*var(--u)) calc(128*var(--u)) no-repeat;image-rendering:pixelated}
+
+/* The #toast notices (main.js toast()) on the bitmap glyph path: 8 px glyphs at the GUI scale, a flat translucent box. */
+#toast.mc-text{white-space:pre-wrap;padding:calc(4*var(--u)) calc(6*var(--u));border:0;border-radius:0;background:#000a;backdrop-filter:none;font-size:calc(8*var(--u));line-height:calc(9*var(--u));max-width:90vw;width:max-content}
+/* GuiScreenBook.NextPageButton (bff): the hovered arrow draws 23 px further right in book.png. */
+.book-arrow:hover{background-position-x:calc(-23*var(--u))!important}

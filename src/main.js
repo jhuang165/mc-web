@@ -18,6 +18,7 @@ import "./container-ui.css";
 import "./menu-screens.css";
 import { Gui } from "./menu-ui.js";
 import { createMenus } from "./menus.js";
+import { commandBlockScreen } from "./command-block-screen.js";
 import { folderName, LANG, t as langT } from "./menu-screens.js";
 import { initResourcePacks } from "./resource-packs.js";
 import { worldDifficulty, gameOverView, deleteWorldStorage, HARDCORE_KICK, GAME_OVER_ENABLE_TICKS } from "./hardcore.js";
@@ -623,8 +624,12 @@ function makeRecord(p) {
   };
 }
 function toast(message) {
-  $("#toast").textContent = message;
-  $("#toast").classList.add("show");
+  // Bitmap glyph path (bitmap-text.js) at the GUI scale instead of the page face; the message is plain text.
+  const el = $("#toast");
+  el.className = "mc-text";
+  el.style.setProperty("--u", `${guiScale(innerWidth, innerHeight, Number(options.guiScale) || 0)}px`);
+  el.innerHTML = bitmapHtml(String(message), 0xffffff);
+  el.classList.add("show");
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => $("#toast").classList.remove("show"), 4000);
 }
@@ -1704,18 +1709,11 @@ function openCommandBlock(x, y, z, cartTile = null) {
   const tile = cartTile ?? redstoneRuntime.commandBlocks.tile(x, y, z);
   screen = "inventory"; mining = null; mineHeld = false;
   document.exitPointerLock?.();
-  modal("Set Console Command for Block", `<label>Console Command<input id="command-block-input" maxlength="32767" autocomplete="off" spellcheck="false"></label><p>@p - nearest player<br>@r - random player<br>@a - all players</p><div style="display:flex;gap:8px;align-items:end"><label style="flex:1;min-width:0">Previous Output<input id="command-block-output" readonly></label><button class="button" id="command-block-track" style="width:40px;margin-bottom:2px"></button></div><div class="menu-actions" style="display:flex;gap:8px;margin-top:24px"><button class="button" id="command-block-done" style="flex:1">Done</button><button class="button" id="command-block-cancel" style="flex:1">Cancel</button></div>`);
-  const input = $("#command-block-input"), done = $("#command-block-done"), track = $("#command-block-track");
-  input.value = tile.command;
-  let tracking = tile.trackOutput;
-  const output = () => { try { return JSON.parse(tile.lastOutput)?.text ?? ""; } catch { return tile.lastOutput ?? ""; } };
-  const refresh = () => { track.textContent = tracking ? "O" : "X"; track.setAttribute("aria-label", "Track output: " + (tracking ? "on" : "off")); $("#command-block-output").value = tracking ? output() : "-"; done.disabled = !input.value.trim(); };
-  track.onclick = () => { tracking = !tracking; refresh(); };
-  input.oninput = refresh;
-  done.onclick = () => { tile.command = input.value; tile.trackOutput = tracking; if (!tracking) tile.lastOutput = null; saved = false; resume(); };
-  $("#command-block-cancel").onclick = resume;
-  input.onkeydown = e => { if (e.key === "Enter" && !done.disabled) { e.preventDefault(); done.click(); } };
-  refresh(); input.focus();
+  gui.show(commandBlockScreen({
+    command: tile.command, lastOutput: tile.trackOutput ? tile.lastOutput : null,
+    done: (command) => { tile.command = command; saved = false; resume(); },
+    cancel: resume,
+  }));
 }
 function openContainer(container, kind, key = null, gui = new ContainerScreen(container)) {
   screen = "inventory";
