@@ -1210,6 +1210,8 @@ async function launch(record, prepared) {
     }
     world.redstoneApply = redstoneRuntime.applyEdit;
     redstoneRuntime.restore(record);
+    scene.repeaterLit = (x, y, z) => redstoneRuntime?.redstone?.lit?.has(`${x},${y},${z}`) === true;
+    for (const k of redstoneRuntime.redstone.lit) { const [x, y, z] = k.split(",").map(Number); scene.updateBlock(x, z, y); } // restored powered repeaters emit light 9
     // Mineshaft spawners and chest minecarts: generation records on a world's first launch, the
     // saved live state afterwards. A broken spawner block removes its tile entity.
     ({ spawners, minecarts } = (() => {

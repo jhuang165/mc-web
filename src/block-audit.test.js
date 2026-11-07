@@ -19,8 +19,6 @@ import { lightOpacity, lightEmission } from "./lighting.js";
 // Replays public/research/block-audit-reference.json (tools/probes/BlockAuditProbe.java, unchanged 1.7.10 classes) for the 38 blocks of the b16 block audit.
 const ref = JSON.parse(readFileSync(new URL("../public/research/block-audit-reference.json", import.meta.url))).records;
 const of = (c) => ref.filter((r) => r.case === c);
-// Known open divergence recorded in block-behaviour-audit.md: a lit repeater (original 94) emits light 9 natively, the port emits none.
-const OPEN_LIGHT = new Set([94]);
 
 test("block audit: hardness, explosion resistance, opacity and light match the native facts", () => {
   for (const r of of("facts")) for (const i of internalIdsFor(r.id)) {
@@ -28,7 +26,7 @@ test("block audit: hardness, explosion resistance, opacity and light match the n
     assert.ok(h === r.hardness || (r.hardness < 0 && (h == null || h === Infinity)), `hardness ${r.id}/${i}: port ${h} native ${r.hardness}`);
     assert.ok(Math.abs(explosionResistance(i) - r.explosionResistance) < 1e-4, `resistance ${r.id}/${i}: port ${explosionResistance(i)} native ${r.explosionResistance}`);
     assert.equal(lightOpacity(i), r.lightOpacity, `opacity ${r.id}/${i}`);
-    if (!OPEN_LIGHT.has(r.id)) assert.equal(lightEmission(i, r.id === 62), r.lightValue, `light ${r.id}/${i}`);
+    assert.equal(lightEmission(i, r.id === 62 || r.id === 94), r.lightValue, `light ${r.id}/${i}`);
   }
 });
 

@@ -238,6 +238,8 @@ export class VoxelScene {
     this.temperature = world.temperatureAt?.(64, world.seaLevel, 64) ?? biomeTemperature(world.biome);
     this.clouds.height = world.height === 256 ? 128 : CLOUD_HEIGHT;
     this.litFurnaces = new Set();
+    this.repeaterLit = () => false; // main.js: LiveRedstone.lit lookup for the powered repeater's light 9
+    this.repeaterEmit = new Map(); // repeater cell -> lit state the light volume last used
     applyDimensionRender(this, world); // Nether/End: brightness table, sky mode, clouds (dimension-render.js)
     this.resetLight();
     for (const v of this.chunks.values()) this.disposeChunk(v);
@@ -263,7 +265,10 @@ export class VoxelScene {
   }
   resetLight() {
     const Light = this.world.streaming ? StreamingLight : LightVolume;
-    this.light = new Light(this.world, (x,y,z,b) => lightEmission(b,b===14 && this.litFurnaces.has(`${x},${y},${z}`)));
+    this.light = new Light(this.world, (x,y,z,b) => {
+      if (b === 112) { const lit = this.repeaterLit(x, y, z); this.repeaterEmit.set(`${x},${y},${z}`, lit); return lightEmission(b, lit); } // powered repeater: light 9
+      return lightEmission(b,b===14 && this.litFurnaces.has(`${x},${y},${z}`));
+    });
   }
   // After World.streamAround({ added, removed }): the light volume follows the square
   // (StreamingLight.shift), and only new columns, columns beside an added or removed one (their
@@ -1000,9 +1005,13 @@ export class VoxelScene {
         for (let a = chunk(Math.max(this.world.minX, x0)); a <= chunk(Math.min(this.world.maxX - 1, x1)); a += 16)
           for (let b = chunk(Math.max(this.world.minZ, z0)); b <= chunk(Math.min(this.world.maxZ - 1, z1)); b += 16) set.add(`${a},${b}`);
       };
-    for (const [x, , z, old, now] of changes) {
+    for (const [x, y, z, old, now] of changes) {
       mark(first, x - 1, x + 1, z - 1, z + 1);
-      if (lightOpacity(old) === lightOpacity(now) && lightEmission(old) === lightEmission(now)) continue;
+      if (old === 112 || now === 112) { // a repeater powering on or off keeps its id; relight only when its emission changed
+        const key = `${x},${y},${z}`, was = this.repeaterEmit.get(key) ?? !this.repeaterLit(x, y, z), is = now === 112 && this.repeaterLit(x, y, z);
+        if (now === 112) this.repeaterEmit.set(key, is); else this.repeaterEmit.delete(key);
+        if (was === is && lightOpacity(old) === lightOpacity(now)) continue;
+      } else if (lightOpacity(old) === lightOpacity(now) && lightEmission(old) === lightEmission(now)) continue;
       this.light.column(x, z);
       boxes.push([Math.max(this.world.minX, x - 15), Math.min(this.world.maxX - 1, x + 15), Math.max(this.world.minZ, z - 15), Math.min(this.world.maxZ - 1, z + 15)]);
     }
