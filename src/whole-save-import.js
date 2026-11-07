@@ -13,6 +13,7 @@
 // with no regions (the villages of the whole world are kept, not only those inside an area).
 import { REGION_LIMIT } from "./region-inspection.js";
 import { importJavaRegionArea } from "./region-import.js";
+import { relinkMobs } from "./owner-links.js";
 import { readLevelDat, readPlayerDat, levelGenerator } from "./level-dat.js";
 import { indexSave, bytesOf, inDir, pickPlayer, pickStats } from "./save-folder-import.js";
 import { readRegion, writeRegion } from "./region-file.js";
@@ -207,12 +208,14 @@ export async function importWholeSave(entries, options = {}) {
   for (const key of TILE_KEYS) if (over.tiles[key]) record.player[key] = { ...record.player[key], ...over.tiles[key] };
   for (const [name, value] of Object.entries(over.state)) record[name] = name === "entities" || Array.isArray(value) ? [...(record[name] ?? []), ...value] : value;
   record.populatedColumns = cellsRecord(over.cells);
+  if (record.playerUuid) relinkMobs(record.entities, record.playerUuid); // owner and leash links of the merged chunks (owner-links.js)
   record.edits = [];
   for (const { dimension } of DIMENSIONS.slice(1)) {
     const a = acc.get(dimension);
     if (!counts[dimension]) continue;
     const state = { ...a.state, populatedColumns: cellsRecord(a.cells) };
     if (dimension === 1) state.dragonSpawned = true;
+    if (record.playerUuid) relinkMobs(state.entities, record.playerUuid);
     (record.dimensions ??= {})[dimension] = { state, tiles: Object.fromEntries(TILE_KEYS.filter((k) => a.tiles[k]).map((k) => [k, a.tiles[k]])), edits: [] };
   }
   record.wholeSave = { version: 1, columns: counts };

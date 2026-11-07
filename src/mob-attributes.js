@@ -14,7 +14,7 @@ export const ZOMBIE_ATTRIBUTES = Object.freeze({
   zombie: { "generic.maxHealth": 20, "generic.knockbackResistance": 0, "generic.movementSpeed": 0.23000000417232513, "generic.followRange": 40, "generic.attackDamage": 3 },
   pigman: { "generic.maxHealth": 20, "generic.knockbackResistance": 0, "generic.movementSpeed": 0.5, "generic.followRange": 40, "generic.attackDamage": 5 },
 });
-export const MODIFIED_ATTRIBUTES = new Set([...Object.keys(ZOMBIE_ATTRIBUTES.zombie), "zombie.spawnReinforcements"]);
+export const MODIFIED_ATTRIBUTES = new Set([...Object.keys(ZOMBIE_ATTRIBUTES.zombie), "zombie.spawnReinforcements", "horse.jumpStrength"]);
 export const LEADER_BONUS = "Leader zombie bonus";
 
 // A saved modifier list cleaned the way the loader would accept it (a known attribute, a finite amount, operation 0 to 2).

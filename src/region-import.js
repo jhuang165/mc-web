@@ -28,6 +28,7 @@ import { ORIGINAL_ITEMS } from './original-items.js';
 import { uuidFields } from './entity-uuid.js';
 import { playerMountable } from './entities.js';
 import { importedMobType, IMPORT_MOB_LIMIT, javaMobFromNbt } from './java-mobs.js';
+import { relinkMobs } from './owner-links.js';
 import { JAVA_PROJECTILES, IMPORT_PROJECTILE_LIMIT, javaProjectileFromNbt } from './java-projectiles.js';
 import { decodeCompressedNbt } from './nbt-compression.js';
 import { villagesFromNbt } from './village.js';
@@ -256,7 +257,12 @@ function levelRecord(record, { level, levelGen, javaPlayer: first, world, genera
     }
     // abilities.flying only means something in Creative (a Survival player's capabilities are reset by the game mode).
     if (first.flying && mode === 'creative') out.flying = true;
-    if (first.uuid) out.playerUuid = first.uuid;
+    if (first.uuid) {
+      out.playerUuid = first.uuid;
+      // Owners equal to the player need no stored string; a lead held by another UUID drops (native playerWrongUuid): owner-links.js.
+      const dropped = relinkMobs(out.entities, first.uuid);
+      if (dropped) p.lost.push(`${dropped} lead${dropped === 1 ? '' : 's'} held by another UUID`);
+    }
     // Sleeping: the native load wakes the player at once (level-dat.js); the launch frees the bed and stands the player beside it.
     if (first.sleepingAt) out.wakeFromBed = [first.sleepingAt[0] - ox, first.sleepingAt[1], first.sleepingAt[2] - oz];
     if (first.dimension === 0 && first.position) out.position = { ...first.position, x: first.position.x - ox, z: first.position.z - oz };
