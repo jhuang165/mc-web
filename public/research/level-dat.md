@@ -54,3 +54,7 @@ The user's own saves (read-only) are 1.8+ (Border*, DataVersion), so no real 1.7
 
 - Applied since batch 14 (hardcore track): `abilities.flying` (a Creative player starts flying), `SpawnForced` (becomes the browser's /spawnpoint, `record.playerSpawn`, and is exported back as a forced spawn), `Sleeping` (native `readEntityFromNBT` wakes the player at once, bytecode-read, not probed: the launch frees the bed and stands the player beside it, `record.wakeFromBed`) and the hardcore flag. A Survival player's flying flag is dropped (the game mode resets capabilities).
 - In-browser save-folder import (Import screen, `save-folder-import.js`): level.dat, the player (Data.Player, else the newest playerdata/*.dat or players/*.dat), stats and the region files covering ONE 8x8 chunk area around the player (else the world spawn). Not imported: all other regions (they regenerate from the seed) and DIM-1/DIM1 regions. A whole-save import is not done: the streamed world stores chunk edits as a diff against its generator, so arbitrary chunk writes would need that diff for every chunk.
+
+## Batch 17: Player.Riding
+
+A player riding a boat, minecart, pig or horse is saved as `Player.Riding` (probed in `player-riding-reference.json`) and comes back mounted on import; see `region-import.md`. An unknown or missing `id` in `Riding` leaves the player unmounted (native `createEntityFromNBT` returns null).

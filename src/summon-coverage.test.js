@@ -115,10 +115,11 @@ test('summon Painting, ItemFrame and LeashKnot follow readEntityFromNBT then set
   assert.equal(h.entities[3].dir, 3);
   assert.ok(!failed(g.run('/summon Painting ~ ~ ~ {Dir:9b}')));
   assert.equal(h.entities[4].dir, 0); // an out-of-range legacy Dir leaves the field at its default 0
-  // Directions outside 0..3 are not kept.
+  // Native accepts any byte Direction (summon-reference.json); the value is kept as-is.
   const n = h.entities.length;
-  assert.match(g.run('/summon Painting ~ ~ ~ {Direction:7b}').lines.join('\n'), /Direction/);
-  assert.equal(h.entities.length, n);
+  assert.ok(!failed(g.run('/summon Painting ~ ~ ~ {Direction:7b}')));
+  assert.equal(h.entities.length, n + 1);
+  assert.equal(h.entities.at(-1).dir, 7);
   // Item frame: rotation and drop chance are read only with a non-empty Item; rotation is i % 4.
   assert.ok(!failed(g.run('/summon ItemFrame ~ ~ ~ {ItemRotation:6b,ItemDropChance:0.5f,Item:{id:264s,Count:2b,Damage:0s}}')));
   let f = h.entities.at(-1);

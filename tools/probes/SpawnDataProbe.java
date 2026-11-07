@@ -82,6 +82,11 @@ public class SpawnDataProbe {
       c("Type", "Zombie", "Weight", 1, "Properties", c("id", "Zombie", "Riding", c("id", "Chicken"))),
       c("Type", "Spider", "Weight", 2, "Properties", new dh()))));
     scenario("riding-without-spawn-data-key", 33, 40, spawner("Zombie", "Delay", (short) -1, "SpawnPotentials", l(c("Type", "Zombie", "Weight", 1, "Properties", c("Riding", c("id", "Pig"))))));
+    // onSpawnWithEgg (EntitySpider.a(sy): World.rand jockey / Hard potion rolls) runs only when the logic has no SpawnData (agq.a(sa)).
+    scenario("egg-absent-default-spider", 35, 120, spawner("Spider"));
+    scenario("egg-skipped-spawndata-spider", 36, 120, spawner("Spider", "SpawnData", c("id", "Spider")));
+    scenario("egg-skipped-empty-properties", 37, 200, spawner("Spider", "Delay", (short) -1, "SpawnPotentials", l(c("Type", "Spider", "Weight", 1, "Properties", new dh()))));
+    scenario("egg-potentials-without-properties", 38, 200, spawner("Spider", "Delay", (short) -1, "SpawnPotentials", l(c("Type", "Spider", "Weight", 1))));
     scenario("count-and-riders", 34, 120, spawner("Spider", "MaxNearbyEntities", (short) 3, "SpawnCount", (short) 4, "SpawnData", c("id", "Spider", "Riding", c("id", "Spider"))));
   }
   static dq rotation(float a, float b) { dq r = new dq(); r.a(new dm(a)); r.a(new dm(b)); return r; }

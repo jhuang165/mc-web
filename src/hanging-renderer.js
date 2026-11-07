@@ -127,7 +127,7 @@ export class HangingRenderer {
         const stack = { ...e.item, count: 1 }, pile = this.drops.build(stack, 0), sprite = !!itemTexture(stack.id, stack.damage);
         const holder = new THREE.Group(), turn = new THREE.Group(), shift = new THREE.Group();
         // glTranslatef(-0.453125 * offsetX, -0.18, -0.453125 * offsetZ); glRotatef(180 + yaw, Y); glRotatef(-90 * rotation, Z);
-        holder.position.set(-0.453125 * DIR_X[e.dir], -0.18, -0.453125 * DIR_Z[e.dir]);
+        holder.position.set(-0.453125 * (DIR_X[e.dir] ?? 0), -0.18, -0.453125 * (DIR_Z[e.dir] ?? 0));
         holder.rotation.y = (180 + e.yaw) * D;
         turn.rotation.z = -90 * e.rotation * D;
         const rot = e.rotation % 4;
@@ -157,7 +157,7 @@ export class HangingRenderer {
       return m;
     }, { frameOnly: true });
     const holder = new THREE.Group(), turn = new THREE.Group(), shift = new THREE.Group();
-    holder.position.set(-0.453125 * DIR_X[e.dir], -0.18, -0.453125 * DIR_Z[e.dir]);
+    holder.position.set(-0.453125 * (DIR_X[e.dir] ?? 0), -0.18, -0.453125 * (DIR_Z[e.dir] ?? 0));
     holder.rotation.y = (180 + e.yaw) * D;
     turn.rotation.z = -90 * e.rotation * D;
     const rot = e.rotation % 4;
@@ -184,7 +184,7 @@ export class HangingRenderer {
         for (const c of r.cells) c.m.setLight(this.cellLight(e, c.cx, c.cy));
       } else {
         // The centre of the cell in front of the wall block.
-        r.root.position.set(e.tx + DIR_X[e.dir] + 0.5, e.ty + 0.5, e.tz + DIR_Z[e.dir] + 0.5);
+        r.root.position.set(e.tx + (DIR_X[e.dir] ?? 0) + 0.5, e.ty + 0.5, e.tz + (DIR_Z[e.dir] ?? 0) + 0.5);
         r.root.rotation.y = e.yaw * D;
         this.syncItem(r, e);
         const packed = this.view.brightness(e.x, e.y, e.z);

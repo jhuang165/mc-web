@@ -717,6 +717,7 @@ export class EntityWorld {
       ...(e.type === "pig" ? { saddled: e.saddled === true } : {}),
       // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
       ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer, chickenJockey: e.chickenJockey === true } : {}), // IsChickenJockey (mob-riding.md)
+      playerRides: (e.type === "horse" || e.type === "pig") && e.playerRides === true ? true : undefined, // consumed by restorePlayerVehicle
       riding: typeof e.riding === "string" && /^(mob|boat|cart)-\d+$/.test(e.riding) ? e.riding : undefined, // the mount's id, linked by linkRiders
       ...(e.type === "zombie" ? { canBreakDoors: e.canBreakDoors === true, maxHealth: Number.isFinite(e.maxHealth) && e.maxHealth > t.health ? Math.min(e.maxHealth, 2048) : undefined } : { canBreakDoors: undefined, maxHealth: undefined }),
       // EntityBat.readEntityFromNBT: BatFlags bit 1 is the hanging state (datawatcher 16).
@@ -2385,6 +2386,9 @@ export class EntityWorld {
     const riding = ridingId(e);
     if (riding) saved.riding = riding;
     else delete saved.riding;
+    // The mob the local player rides (horse-live.js seat): vehicle-simulation.js restorePlayerVehicle seats the player on it again.
+    if (e.rider && e.rider.vehicle?.entity === e && !e.rider.dead) saved.playerRides = true;
+    else delete saved.playerRides;
     return saved;
   }
   // The sounds each client plays for status 2 and 3 (EntityLivingBase.handleHealthUpdate), apart from the server's.

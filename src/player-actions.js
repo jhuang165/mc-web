@@ -93,7 +93,7 @@ export function dispatchPlayerAction(state, action, hooks = {}) {
 
   let aimedEntity = null;
   if (captured.aimedEntity) {
-    const entity = state.mobs?.entities?.find((candidate) => candidate.id === captured.aimedEntity.id && candidate.health > 0) ?? state.mobs?._fireballs?.find(captured.aimedEntity.id); // a deflectable fireball (fireballs.js)
+    const entity = state.mobs?.entities?.find((candidate) => candidate.id === captured.aimedEntity.id && candidate.health > 0) ?? state.mobs?.knotEntity?.(captured.aimedEntity.id) ?? state.mobs?._fireballs?.find(captured.aimedEntity.id); // a deflectable fireball (fireballs.js)
     if (!entity) return { handled: true, branch: 'missing-entity-target', skipped: true };
     aimedEntity = { entity };
   }

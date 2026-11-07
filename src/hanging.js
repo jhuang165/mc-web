@@ -6,7 +6,9 @@
 // Replayed against the unchanged classes in src/hanging.test.js (tools/probes/HangingProbe.java,
 // public/research/hanging-reference.json).
 //
-// Facings are Direction indices: 0 south (+z), 1 west (-x), 2 north (-z), 3 east (+x). `tx,ty,tz` is the
+// Facings are Direction indices: 0 south (+z), 1 west (-x), 2 north (-z), 3 east (+x). A tag can carry any byte (summon-reference.json:
+// CommandSummon accepts Direction 4, 5, 127, -1; setDirection only sets yaw = dir * 90 and the box, and onValidSurface has no table lookup, so such
+// an entity is kept and behaves like the z-axis case); the renderers draw it with no wall offset. `tx,ty,tz` is the
 // wall block the entity hangs on (the clicked block); the entity itself sits 0.5625 in front of it.
 // Native quirk kept: setDirection shrinks the box by 0.03125 on every axis (`-0.03125f` is subtracted
 // from the minimum), which inverts the thickness axis (min > max). Every consumer therefore behaves as
@@ -249,7 +251,7 @@ export class Hanging {
   load(records) {
     this.entities = [];
     for (const r of Array.isArray(records) ? records : []) {
-      if (!r || !Number.isInteger(r.dir) || r.dir < 0 || r.dir > 3 || ![r.tx, r.ty, r.tz].every(Number.isInteger)) continue;
+      if (!r || !Number.isInteger(r.dir) || r.dir < -128 || r.dir > 127 || ![r.tx, r.ty, r.tz].every(Number.isInteger)) continue;
       if (r.kind === "painting") {
         const art = artIndex(r.art);
         this.entities.push(this.make("painting", r.dir, r.tx, r.ty, r.tz, { art: art < 0 ? 0 : art }));

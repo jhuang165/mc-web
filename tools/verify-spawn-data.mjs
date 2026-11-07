@@ -24,7 +24,7 @@ const cp=[probe,classes,...libs].join(path.delimiter);
 await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','PlantProbe','PlayerStepProbe','NbtProbe','MinecartProbe','MobSpawnerProbe','SpawnerCartProbe','SpawnDataProbe'].map(n=>path.join(root,`probes/${n}.java`))]);
 const {stdout}=await exec('java',['-cp',cp,'SpawnDataProbe'],{maxBuffer:1<<27});
 const scenarios=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse);
-assert.equal(scenarios.length,14);
+assert.equal(scenarios.length,18);
 assert.ok(scenarios.find(s=>s.name==='spider-jockey').ticks.some(t=>t.entities.length>=2),'a rider and its mount spawn together');
 const javap=async c=>(await exec('javap',['-c','-p','-constants','-cp',classes,c],{maxBuffer:1<<24})).stdout;
 const agq=await javap('agq');

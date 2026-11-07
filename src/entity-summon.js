@@ -31,8 +31,6 @@ const KEPT = {
   Painting: ["Direction", "Dir", "TileX", "TileY", "TileZ", "Motive"], ItemFrame: ["Direction", "Dir", "TileX", "TileY", "TileZ", "Item", "ItemRotation", "ItemDropChance"], LeashKnot: [],
 };
 
-// boats.js BOAT_Y_OFFSET (EntityBoat yOffset = height / 2); not imported because boats.js extends Minecarts and would close a cycle through commands.js.
-const BOAT_Y_OFFSET = Math.fround(Math.fround(0.6) / 2);
 const list = (tag, key, type, n) => {
   const l = nbtGet(tag, key, NBT.LIST);
   return l?.elementType === type && l.items.length >= n && l.items.slice(0, n).every(Number.isFinite) ? l.items : null;
@@ -92,7 +90,7 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
       hosts.falling.entities.push(e);
     }
   } else if (id === "Boat") {
-    const rotation = list(t, "Rotation", NBT.FLOAT, 2), boat = hosts.boats.spawnBoat({ x, y: y - BOAT_Y_OFFSET, z, yaw: rotation?.[0] ?? 0, vx: motion[0], vy: motion[1], vz: motion[2] });
+    const rotation = list(t, "Rotation", NBT.FLOAT, 2), boat = hosts.boats.spawnBoat({ x, y, z, yaw: rotation?.[0] ?? 0, vx: motion[0], vy: motion[1], vz: motion[2] });
     boat.pitch = boat.prevPitch = Math.fround(rotation?.[1] ?? 0);
     vehicle = boat;
   } else if (id === "Painting" || id === "ItemFrame") {
@@ -101,8 +99,8 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
     // ItemRotation (i % 4, Java remainder) and ItemDropChance.
     const dir = hasNumber(t, "Direction") ? nbtGet(t, "Direction", NBT.BYTE, 0) : [2, 1, 0, 3][nbtGet(t, "Dir", NBT.BYTE, 0)] ?? 0;
     const tx = nbtGet(t, "TileX", NBT.INT, 0), ty = nbtGet(t, "TileY", NBT.INT, 0), tz = nbtGet(t, "TileZ", NBT.INT, 0);
-    if (dir < 0 || dir > 3) { ignored.push(`Direction (${dir}: the build keeps facings 0 to 3 only)`); spawned = false; }
-    else if (!hosts.hanging) spawned = false;
+    // Any byte is kept (summon-reference.json: native CommandSummon spawns Direction 4, 5, 127 and -1; setDirection only turns yaw to dir * 90).
+    if (!hosts.hanging) spawned = false;
     else if (id === "Painting") {
       const motive = nbtGet(t, "Motive", NBT.STRING, ""), art = ARTS.findIndex((a) => a[0] === motive);
       hosts.hanging.summon("painting", dir, tx, ty, tz, x, y, z, { art: art < 0 ? 0 : art });

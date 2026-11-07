@@ -8,7 +8,7 @@
 // no saved structure state yet (its first launch); afterwards the saved `spawners` / `minecarts`
 // fields are the truth: a looted cart stays looted, a broken cart or spawner stays gone.
 import { MobSpawners, boxesIntersect, mobBox, updateSpawner, updateSpawnerClient } from "./mob-spawner.js";
-import { Minecarts, Y_OFFSET as CART_Y_OFFSET } from "./minecarts.js";
+import { Minecarts } from "./minecarts.js";
 import { CART_SUMMON, cartTypeOfSummon, summonCart } from "./cart-summon.js";
 import { syncVehiclePassengers } from "./vehicle-riders.js";
 import { furnaceUse } from "./cart-variants.js";
@@ -119,7 +119,7 @@ export function tickSpawnerSimulation(state, env = {}, hooks = {}) {
 // vehicle's yOffset (0.35 and 0.3, probed in spawn-data-reference.json). Null for any other id or when this world has no such list.
 export function spawnerVehicle({ minecarts, boats }, id, tag, rider) {
   const cart = cartTypeOfSummon(CART_SUMMON[id]);
-  if (cart !== null) return minecarts ? summonCart(minecarts, cart, rider.x, rider.y + CART_Y_OFFSET, rider.z, tag)?.cart ?? null : null;
+  if (cart !== null) return minecarts ? summonCart(minecarts, cart, rider.x, rider.y, rider.z, tag)?.cart ?? null : null;
   if (id !== "Boat" || !boats) return null;
   const boat = boats.spawnBoat({ x: rider.x, y: rider.y, z: rider.z, yaw: rider.rotationYaw ?? 0 });
   boat.pitch = boat.prevPitch = Math.fround(rider.rotationPitch ?? 0);
