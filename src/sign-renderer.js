@@ -11,22 +11,25 @@ import { entityMaterial } from "./light-material.js";
 import { pixelTexture, skinBox } from "./first-person.js";
 import { SIGN_RENDER } from "./sign-layout.js";
 import { SIGN_POST, WALL_SIGN } from "./world.js";
+import { drawFontString, atlasVersion } from "./sign-font.js";
+import { font, getStringWidth } from "./font-renderer.js";
 
 const SIGN_TEXTURE = "/media/1.7.10/entity/sign.png";
-const D = Math.PI / 180, S = SIGN_RENDER.scale, TEXT_W = 90, TEXT_H = 45, PX = 4; // the text plane is 90 x 45 font pixels
+const D = Math.PI / 180, S = SIGN_RENDER.scale, TEXT_W = 150, TEXT_H = 45, PX = 4; // the text plane is 150 x 45 font pixels
 
 // The standing sign's heading and the wall sign's heading in degrees (the GL rotation before the sign is drawn).
 export const signAngle = (block, meta) => (block === SIGN_POST ? (meta * 360) / 16 : SIGN_RENDER.wallAngle[meta] ?? 0);
 
-// Text on a canvas: each line k centred at x = w / 2 with its top at h / 2 + (k * 10 - 20) font pixels.
-export function drawSignText(canvas, lines) {
-  const ctx = canvas.getContext("2d"), w = canvas.width, h = canvas.height;
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = "#000";
-  ctx.textBaseline = "top";
-  ctx.textAlign = "center";
-  ctx.font = `${8 * PX}px Minecraft, monospace`;
-  for (let k = 0; k < 4; k++) if (lines[k]) ctx.fillText(lines[k], w / 2, h / 2 + (k * SIGN_RENDER.lineSpacing - 20) * PX);
+// Text on a canvas through the FontRenderer glyphs (sign-font.js): each line k is drawn at x = -getStringWidth / 2 (int division)
+// and y = k * 10 - 20 font pixels about the plane centre, colour 0, no shadow. The plane is wider than the original 90 px so wide
+// unicode lines are not cut off (the original text is not clipped either).
+export function drawSignText(canvas, lines, state = font) {
+  const ctx = canvas.getContext("2d"), w = canvas.width / PX, h = canvas.height / PX;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let k = 0; k < 4; k++) {
+    const line = lines[k];
+    if (line) drawFontString(ctx, line, w / 2 - Math.trunc(getStringWidth(line, state) / 2), h / 2 + k * SIGN_RENDER.lineSpacing - 20, PX, 0, state);
+  }
 }
 
 export class SignRenderer {
@@ -77,7 +80,7 @@ export class SignRenderer {
       const wall = block === WALL_SIGN;
       r.frame.position.set(...(wall ? SIGN_RENDER.wallTranslate : [0, 0, 0]));
       r.stick.visible = !wall;
-      const key = t.text.join("\n"), empty = t.text.every((l) => !l);
+      const key = `${font.version}|${font.unicode ? 1 : 0}|${atlasVersion()}|${t.text.join("\n")}`, empty = t.text.every((l) => !l);
       if (r.key !== key) { r.key = key; drawSignText(r.canvas, t.text); r.texture.needsUpdate = true; }
       r.text.visible = !empty;
       const packed = this.view.brightness(t.x, t.y, t.z);

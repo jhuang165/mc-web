@@ -6,6 +6,8 @@
 import { SignEditModel, SIGN_TEXT, SIGN_POST, MAX_LINE } from './signs.js';
 import { signLayout } from './sign-layout.js';
 import { versioned } from './media-version.js';
+import { drawFontString, onAtlasChange } from './sign-font.js';
+import { getStringWidth } from './font-renderer.js';
 
 const SIGN_TEXTURE = '/media/1.7.10/entity/sign.png';
 const G = 4; // canvas pixels per GUI pixel
@@ -23,13 +25,11 @@ export function drawSignGui(ctx, model, { standing, blink, image }) {
     ctx.fillStyle = '#9c7f4e';
     ctx.fillRect(0, 0, w, h);
   }
-  ctx.fillStyle = '#000';
-  ctx.textBaseline = 'top';
-  ctx.textAlign = 'center';
-  ctx.font = `${8 * L.textGui * G}px Minecraft, monospace`;
+  // TileEntitySignRenderer text through the FontRenderer glyphs: colour 0, centred by getStringWidth (int division).
+  const scale = L.textGui * G;
   for (let k = 0; k < 4; k++) {
     const text = k === model.line && blink ? `> ${model.lines[k]} <` : model.lines[k];
-    ctx.fillText(text, w / 2, h / 2 + (k * L.lineSpacing - 2 * L.lineSpacing) * L.textGui * G);
+    if (text) drawFontString(ctx, text, w / 2 / scale - Math.trunc(getStringWidth(text) / 2), h / 2 / scale + k * L.lineSpacing - 2 * L.lineSpacing, scale, 0);
   }
 }
 
@@ -46,7 +46,7 @@ export function openSignEditor(host, signs, tile, world) {
   let ticks = 0;
   const save = () => { if (signs.update(tile.x, tile.y, tile.z, model.lines)) host.markUnsaved?.(); };
   const paint = () => drawSignGui(ctx, model, { standing, blink: Math.floor(ticks / 6) % 2 === 0, image });
-  const stop = () => { clearInterval(timer); window.removeEventListener('keydown', onKey, true); };
+  const stop = () => { clearInterval(timer); offAtlas(); window.removeEventListener('keydown', onKey, true); };
   const timer = setInterval(() => { if (!document.getElementById('sign-edit-canvas')) { stop(); return; } ticks++; paint(); }, 50);
   const finish = () => { save(); stop(); host.close(); };
   const onKey = (e) => {
@@ -64,6 +64,7 @@ export function openSignEditor(host, signs, tile, world) {
   window.addEventListener('keydown', onKey, true);
   document.getElementById('sign-edit-done').onclick = finish;
   image.onload = paint;
+  const offAtlas = onAtlasChange(paint);
   paint();
   return { model, stop };
 }
