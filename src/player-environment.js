@@ -54,7 +54,13 @@ export function finishPlayerMovement(state, { inWater, inLavaNow, oldPosition },
       const jump = survival.effects?.get?.(JUMP_BOOST), by = Math.floor(position.y - 0.20000000298023224),
         fall = landingEffects(distance, { kind: "player", amplifier: jump ? jump.amplifier : -1, blockUnder: world.get(Math.floor(position.x), by, Math.floor(position.z)) });
       for (const sound of fall.sounds) fallSound(sound);
-      if (fall.points > 0) survival.damage(fall.points, 'a fall');
+      if (fall.points > 0) {
+        // CombatTracker's fall description and Entity.fallDistance, sampled for the entry (combat-tracker.js).
+        const cell = world.get(Math.floor(position.x), Math.floor(position.y), Math.floor(position.z));
+        survival.combatSite = cell === 65 ? "ladder" : cell === 72 ? "vines" : inWater ? "water" : null;
+        survival.combatFall = distance;
+        survival.damage(fall.points, 'a fall');
+      }
     }
     fallDistance = 0;
   }

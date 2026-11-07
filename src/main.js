@@ -102,7 +102,7 @@ import { NetherLive } from './nether-portal-live.js'; // nether portal lighting/
 import {Farming,cropDrops,farmNeighbourChange} from "./farming.js";
 import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox, setEntityBoxes } from "./entities.js";
 import { wakeSavedSleeper, BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
-import { deathMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
+import { trackerMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
 import { ChatUi, printChat, chat } from "./chat-ui.js";
 import { translation, fontWidth } from "./chat-component.js";
 import { lookupStat, statComponent, statHover, profilerTick } from "./commands-extra.js";
@@ -2256,7 +2256,7 @@ function die() {
   playHurtSounds();
   statsLive.death();
   // EntityPlayerMP.onDeath broadcasts the death message to chat at the moment of death.
-  const message = survival.died && deathMessage(survival.lastDamage, scoreboard.formatName(PLAYER_NAME), { source: survival.lastSource, attacker: survival.lastAttacker }); // EntityPlayer.func_145748_c_: the team-formatted name
+  const message = survival.died && trackerMessage(survival.combat, scoreboard.formatName(PLAYER_NAME), { selfItem: survival.held?.displayName }); // CombatTracker.func_151521_b; EntityPlayer.func_145748_c_: the team-formatted name
   survival.died = false;
   if (message) showChatLine(document, message);
   closeContainer();

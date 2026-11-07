@@ -126,21 +126,14 @@ test("below y -64 the player takes outOfWorld 4 every 10 ticks, protected, armou
   assert.equal(deaths, 5);
 });
 
-test("death messages for suffocation, starvation and the void use the original text; others stay unported", () => {
-  const lang = Object.fromEntries(Object.entries(DEATH_TEXT).map(([k, v]) => [`death.attack.${k}`, v]));
-  let mapped = 0;
+test("a death message of one hit alone reads the original text for every source (combat-tracker.test.js replays the full matrix)", () => {
+  let single = 0;
   for (const r of records("hits").filter((s) => s.name.startsWith("death-"))) {
     const last = r.hits.at(-1), [reason] = SOURCES[last.source];
     assert.equal(r.message.args[0], PLAYER_NAME, r.name);
-    if (DEATH_TEXT[last.source]) {
-      // No ".player" form exists, so a zombie hit 12 ticks before does not change the text.
-      assert.equal(r.message.key, `death.attack.${last.source}`, r.name);
-      assert.equal(lang[r.message.key].replace("%1$s", PLAYER_NAME), r.message.text, r.name);
-      assert.equal(deathMessage(reason), r.message.text, r.name);
-      mapped++;
-    } else assert.equal(deathMessage(reason), null, r.name);
+    if (r.hits.length === 1 && last.source !== "mob") { assert.equal(deathMessage(reason), r.message.text, r.name); single++; }
   }
-  assert.equal(mapped, 6);
+  assert.ok(single >= 6, `${single} single-hit deaths`);
   assert.equal(deathMessage("suffocation"), "Player suffocated in a wall");
   // Survival records the reason of the killing hit.
   const p = player({ health: 1 });

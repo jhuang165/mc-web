@@ -8,14 +8,15 @@ import { LANG } from "./menu-screens.js";
 import { LANG as COMMAND_LANG } from "./command-data.js";
 import { STRINGS as ACHIEVEMENT_STRINGS } from "./achievements.js";
 import { ENCHANTMENT_LANG } from "./enchanted-books.js";
-import { DEATH_TEXT } from "./death-messages.js";
+import { DEATH_TEXT, FELL_TEXT } from "./death-messages.js";
 
 const prefixed = (prefix) => (k) => (k.startsWith(prefix) ? k.slice(prefix.length) : null);
-const savedEnchants = {}, savedMenus = {}, savedCommands = {}, savedAchievements = {}, savedDeaths = {};
+const savedEnchants = {}, savedMenus = {}, savedCommands = {}, savedAchievements = {}, savedDeaths = {}, savedFalls = {};
 onLanguage((selected) => {
   overlayTable(LANG, savedMenus, selected);
   overlayTable(ENCHANTMENT_LANG, savedEnchants, selected, (k) => (k.startsWith("enchantment.") ? k : null));
   overlayTable(COMMAND_LANG, savedCommands, selected);
   overlayTable(ACHIEVEMENT_STRINGS, savedAchievements, selected, prefixed("achievement."));
   overlayTable(DEATH_TEXT, savedDeaths, selected, prefixed("death.attack."));
+  overlayTable(FELL_TEXT, savedFalls, selected, prefixed("death.fell."));
 });

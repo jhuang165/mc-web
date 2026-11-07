@@ -28,8 +28,8 @@ test("attacker death messages name the DamageSource entity", () => {
   assert.equal(deathMessage("magic", "Alex", { attacker: { type: "witch" } }), "Alex was killed by Witch using magic");
   assert.equal(deathMessage("magic", "Alex"), "Alex was killed by magic");
   assert.equal(deathMessage("a zombie", "Alex", { source: "mob", attacker: { type: "skeleton" }, item: "Sting" }), "Alex was slain by Skeleton", "mob has no .item key");
-  assert.equal(deathMessage("an arrow", "Alex", { attacker: { type: "skeleton" }, item: "Sting" }), "Alex was shot by Skeleton using Sting");
-  assert.equal(deathMessage("a fall", "Alex"), null);
+  assert.equal(deathMessage("an arrow", "Alex", { attacker: { type: "skeleton" }, item: "Sting" }), "Alex was shot by Skeleton using [Sting]");
+  assert.equal(deathMessage("a fall", "Alex"), "Alex hit the ground too hard");
 });
 
 test("attacker death messages go through the selected language", () => {

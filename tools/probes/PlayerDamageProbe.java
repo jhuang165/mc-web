@@ -183,7 +183,8 @@ public class PlayerDamageProbe {
     return m;
   }
 
-  public static void main(String[] args) throws Exception {
+  // The world double and the field handles, shared with CombatTrackerProbe.
+  public static void init() throws Exception {
     aji.p(); adb.l();
     u = MobMoveProbe.unsafe();
     w = (World) u.allocateInstance(World.class);
@@ -204,6 +205,10 @@ public class PlayerDamageProbe {
     for (Field f : ahb.class.getDeclaredFields()) if (f.getType() == bac.class) { f.setAccessible(true); f.set(w, new bac()); }
     DifficultyProbe.World.chunk = (apx) u.allocateInstance(apx.class);
     hr = fd(sa.class, "ad"); ht = fd(sv.class, "ax"); ld = fd(sv.class, "bb"); bu = fd(mw.class, "bU");
+  }
+
+  public static void main(String[] args) throws Exception {
+    init();
 
     // Hurt-window top-ups: a larger hit while hurtResistantTime > 10 deals the difference.
     for (String type : new String[] { "player", "zombie" }) {
