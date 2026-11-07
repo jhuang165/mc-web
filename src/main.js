@@ -608,10 +608,10 @@ function makeRecord(p) {
     // WorldInfo(NBTTagCompound) does: cheats on for a creative world, off for survival (commands.js cheatsAllowed).
     ...(typeof p.allowCommands === "boolean" ? { allowCommands: p.allowCommands } : {}),
     // Version 11 adds full Java population; 14 (finite) and 15 (streamed) add villages, strongholds and
-    // temples; 16 (streamed) uses the native mutated-biome class rule in the biome layers. Finite worlds stay on 14,
+    // temples; 16 (streamed) uses the native mutated-biome class rule in the biome layers; 18 (streamed, new worlds) adds the native world spawn walk. Finite worlds stay on 14,
     // the earlier biome rule. Saves retain their existing generator.
     // Default, Large Biomes and Amplified worlds are streamed (endless) with the matching WorldType generator.
-    generationVersion: p.biome === "javaStreamed" ? 16 : isJavaLandscape(p.biome) ? 14 : 8,
+    generationVersion: p.biome === "javaStreamed" ? 18 : isJavaLandscape(p.biome) ? 14 : 8,
     ...(p.biome === "javaStreamed" ? { worldType: streamedWorldType(p.worldType) } : {}),
     // Superflat: the FlatGeneratorInfo string (WorldInfo.generatorOptions), normalised as ass.toString writes it.
     ...(p.biome === "javaStreamed" && p.worldType === "flat" ? { generatorOptions: normalizeFlatOptions(p.generatorOptions) } : {}),
@@ -1044,8 +1044,8 @@ async function openWorld(record) {
     const prepared=dims.createWorld(record);
     if (!record.chunked) prepared.restore(record.edits??[]);
     if (!prepared.dimension && !record.worldSpawn) {
-      const { x, y, z } = prepared.spawn();
-      record.worldSpawn = [Math.floor(x), Math.floor(y), Math.floor(z)];
+      if (prepared.nativeSpawn) record.worldSpawn = [prepared.nativeSpawn[0] - prepared.originX, prepared.nativeSpawn[1], prepared.nativeSpawn[2] - prepared.originZ]; // WorldInfo spawn (world-spawn.js)
+      else { const { x, y, z } = prepared.spawn(); record.worldSpawn = [Math.floor(x), Math.floor(y), Math.floor(z)]; }
     }
     prepared.restoreClaimedColumns(record.populatedColumns);
     const transit = record.transit;
