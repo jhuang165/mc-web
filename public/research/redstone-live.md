@@ -36,7 +36,7 @@ Pistons draw through `pistons.frame(partial)` each rendered frame.
   `placeHeldBlock` (untracked then tracked set) skips the funnel, so the runtime calls `placed()` plus `onBlockPlacedBy` (diode, piston) after it,
   once, only for cells the funnel did not already notify (`redstone.touched`).
 - Fluids write with `world.put`; their tick changes go through `redstone.external()`.
-- The older inert `RedstoneBlocks` watcher is kept for tripwire only; its support drop and button release are bypassed for blocks the engine ports.
+- The older inert `RedstoneBlocks` watcher is bypassed for every block the engine ports, tripwire hook and string included.
 - Drops go to the item entities, sounds to the positional sound system, TNT to `lightTnt`.
 
 ## Save / load
@@ -52,5 +52,5 @@ clocks) and `record.pistons = pistons.save()` (chunk-runtime splits that list pe
   Furnace progress and chest-lid changes do not notify comparators.
 - Minecarts, thrown projectiles and tripwire do not trigger plates; arrows, items, orbs, primed TNT, mobs and the player do (strict AABB).
 - Sensor sky light uses the scene light volume; the daylight cycle follows `scene.angle`.
-- Tripwire and its hook are inert.
+- Tripwire hook (131) and string (132) are live (tripwire-reference.json, 16 native scenarios; see scattered-features.md, Live traps). Not probed: shears disarm, the selection bounds, random ticks; thrown projectiles, boats and falling blocks do not trip strings.
 - Redstone tile ticks are not written to Java exports.

@@ -231,6 +231,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
   function placedBy(x, y, z, state) {
     const id = redstone.getBlock(x, y, z), behaviour = redstone.behaviours[id];
     if (id === 137) { commandBlocks.tile(x, y, z).customName = state.survival?.held?.displayName ?? '@'; return; }
+    if (id === 131) { behaviour.onPostBlockPlaced(redstone, x, y, z, redstone.getBlockMetadata(x, y, z)); return; } // ItemBlock.placeBlockAt: onPostBlockPlaced(meta)
     if (!behaviour?.onBlockPlacedBy) return;
     const mcYaw = Math.fround(180 - (state.yaw * 180) / Math.PI);
     behaviour.onBlockPlacedBy(redstone, x, y, z, id === 33 || id === 29 ? { x: state.position.x, y: state.position.y, z: state.position.z, yaw: mcYaw } : mcYaw);

@@ -63,6 +63,8 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
   // BlockBed.onBlockHarvested: a Creative player breaking the head removes the foot first (the head then goes with it).
   const bed = block === BED;
   if (bed) bedHarvested(world, ...p, creative);
+  // BlockTripWire.onBlockHarvested: shears disarm the string (metadata |8, flags 4: no notify) before it breaks; breakBlock then sees the bit.
+  if (block === 114 && shearing) world.put(...p, 114, meta | 8);
   if (!world.set(...p, 0) && !((door || bed) && creative && !world.get(...p))) return false;
   // BlockIce.harvestBlock leaves flowing water over a solid/liquid cell in Survival.
   if (block === ICE && !creative && !enchanted?.silk && iceLeavesWater(world.get(p[0], p[1] - 1, p[2])))

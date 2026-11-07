@@ -63,7 +63,7 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 
 ## Priority 4: world generation, structures, dimensions
 - Nether Fortress: pieces are not in the structure NBT (`UNSUPPORTED_PIECE_IDS`); catalogued Partial.
-- Desert/jungle temples and witch huts: Partial in `structure-parity-catalogue.md`.
+- Desert/jungle temples and witch huts: Partial in `structure-parity-catalogue.md`. Batch 15: the jungle tripwire traps, lever puzzle and desert plate-and-TNT trap run live (tripwire probe-replayed, see `scattered-features.md`); the old "319 short" read-call gap was already closed. Open: shears disarm and random ticks unprobed, thrown projectiles do not trip strings, witch hut and structure NBT unchanged.
 - Per-biome tint, weather and decoration audit: every biome row is Partial.
 - Block behaviour audit: 39 blocks that were previously unmapped are mapped but their behaviour is audited only via the metadata catalogue.
 

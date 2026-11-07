@@ -19,6 +19,7 @@
 //   World.func_147453_f (updateNeighbourForOutputSignal);
 //   BlockBasePressurePlate (ajd) with BlockPressurePlate (amu, stone 70 / wood 72) and
 //   BlockPressurePlateWeighted (aol, light 147 / heavy 148) over a scripted entity-box list;
+//   BlockTripWireHook (aog, 131) and BlockTripWire (aof, 132) (tools/verify-tripwire.mjs);
 //   Block.dropBlockAsItemWithChance / dropBlockAsItem_do world-Random draws.
 //
 // Pistons (REDSTONE-04, see the "Pistons" section below): BlockPistonBase (app, 29 / 33),
@@ -33,7 +34,7 @@
 // scenario here. tools/probes/PistonProbe.java does the same for pistons and records
 // public/research/piston-reference.json, replayed by src/pistons.test.js. Not ported: entity
 // pushing by TileEntityPiston (scripted entity list stays empty), creative-mode head harvest,
-// tripwire, daylight refresh scheduling, powered rails/doors/TNT/
+// daylight refresh scheduling, powered rails/doors/TNT/
 // note blocks and unported inventory block behaviors, entity physics, random ticks, lighting,
 // rendering. This module is not wired into the live game.
 import { JavaRandom } from "./java-random.js";
@@ -84,6 +85,8 @@ export const PISTON = 33;
 export const PISTON_HEAD = 34;
 export const PISTON_MOVING = 36;
 export const OBSIDIAN = 49;
+export const TRIPWIRE_HOOK = 131;
+export const TRIPWIRE = 132;
 
 // Native block properties for every registered 1.7.10 block id, as dumped by RedstoneProbe:
 // "id(base36).flags[.top(base36)]"; flags = materialOpaque*4 + renderAsNormalBlock*2 +
@@ -688,6 +691,7 @@ const DROP_ITEM = {
   [POWERED_COMPARATOR]: 404,
   [WOODEN_DOOR]: 324,
   [IRON_DOOR]: 330,
+  [TRIPWIRE]: 287,
 };
 // Direction.offsetX / offsetZ and directionToFacing (south, west, north, east).
 const DIR_X = [0, -1, 0, 1],
@@ -1813,6 +1817,185 @@ const tnt = (() => {
   return { onBlockAdded: check, onNeighborBlockChange: check };
 })();
 
+// ---- BlockTripWireHook (aog, 131) and BlockTripWire (aof, 132) ----
+// Hook metadata: bits 0-1 facing (Direction index), 4 attached, 8 powered. String metadata: 1 active
+// (powered), 2 suspended (no solid top below), 4 attached, 8 disarmed. Ported from the bytecode of both
+// classes; the entity-free paths are probed (tools/verify-tripwire.mjs). The string's sensing box uses the
+// constructor bounds (y 0..0.15625); the native singleton's bounds drift with the last
+// setBlockBoundsBasedOnState call (a client/selection quirk) and are not modelled.
+const hookCell = (w, x, y, z) => {
+  const l = w.getBlockMetadata(x, y, z) & 3;
+  return [x + (l === 3 ? -1 : l === 1 ? 1 : 0), z + (l === 0 ? -1 : l === 2 ? 1 : 0)];
+};
+// func_150136_a's private notify: the hook itself, then the block it is attached to (direction `dir`).
+function hookNotify(w, x, y, z, dir) {
+  w.notifyBlocksOfNeighborChange(x, y, z, TRIPWIRE_HOOK);
+  if (dir === 3) w.notifyBlocksOfNeighborChange(x - 1, y, z, TRIPWIRE_HOOK);
+  else if (dir === 1) w.notifyBlocksOfNeighborChange(x + 1, y, z, TRIPWIRE_HOOK);
+  else if (dir === 0) w.notifyBlocksOfNeighborChange(x, y, z - 1, TRIPWIRE_HOOK);
+  else if (dir === 2) w.notifyBlocksOfNeighborChange(x, y, z + 1, TRIPWIRE_HOOK);
+}
+function hookSounds(w, x, y, z, attached, powered, wasAttached, wasPowered) {
+  const sx = x + 0.5,
+    sy = y + 0.1,
+    sz = z + 0.5;
+  if (powered && !wasPowered) w.playSoundEffect(sx, sy, sz, "random.click", Math.fround(0.4), Math.fround(0.6));
+  else if (!powered && wasPowered) w.playSoundEffect(sx, sy, sz, "random.click", Math.fround(0.4), Math.fround(0.5));
+  else if (attached && !wasAttached) w.playSoundEffect(sx, sy, sz, "random.click", Math.fround(0.4), Math.fround(0.7));
+  else if (!attached && wasAttached)
+    w.playSoundEffect(sx, sy, sz, "random.bowhit", Math.fround(0.4), Math.fround(Math.fround(1.2) / Math.fround(Math.fround(w.rand.nextFloat() * Math.fround(0.2)) + Math.fround(0.9))));
+}
+// BlockTripWireHook.func_150136_a(world, x, y, z, destroying, meta, notifySelf, overrideDist, overrideMeta).
+function hookUpdate(w, x, y, z, destroying, meta, notifySelf, overrideDist, overrideMeta) {
+  const l = meta & 3,
+    wasAttached = (meta & 4) > 0,
+    wasPowered = (meta & 8) > 0,
+    suspended = !w.doesBlockHaveSolidTopSurface(x, y - 1, z),
+    dx = DIR_X[l],
+    dz = DIR_Z[l],
+    line = new Array(42);
+  let attached = !destroying,
+    powered = false,
+    k = 0;
+  for (let j = 1; j < 42; j++) {
+    const cx = x + dx * j,
+      cz = z + dz * j,
+      id = w.getBlock(cx, y, cz);
+    if (id === TRIPWIRE_HOOK) {
+      if ((w.getBlockMetadata(cx, y, cz) & 3) === ROTATE_OPPOSITE[l]) k = j;
+      break;
+    }
+    if (id === TRIPWIRE || j === overrideDist) {
+      const m = j === overrideDist ? overrideMeta : w.getBlockMetadata(cx, y, cz),
+        armed = (m & 8) === 0;
+      attached = attached && (m & 2) > 0 === suspended;
+      powered = powered || (armed && (m & 1) > 0);
+      line[j] = m;
+      if (j === overrideDist) {
+        w.scheduleBlockUpdate(x, y, z, TRIPWIRE_HOOK, 10);
+        attached = attached && armed;
+      }
+    } else {
+      line[j] = -1;
+      attached = false;
+    }
+  }
+  attached = attached && k > 1;
+  powered = powered && attached;
+  const bits = (attached ? 4 : 0) | (powered ? 8 : 0),
+    newMeta = l | bits;
+  if (k > 0) {
+    const fx = x + dx * k,
+      fz = z + dz * k,
+      fd = ROTATE_OPPOSITE[l];
+    w.setBlockMetadataWithNotify(fx, y, fz, fd | bits, 3);
+    hookNotify(w, fx, y, fz, fd);
+    hookSounds(w, fx, y, fz, attached, powered, wasAttached, wasPowered);
+  }
+  hookSounds(w, x, y, z, attached, powered, wasAttached, wasPowered);
+  if (!destroying) {
+    w.setBlockMetadataWithNotify(x, y, z, newMeta, 3);
+    if (notifySelf) hookNotify(w, x, y, z, l);
+  }
+  if (wasAttached !== attached)
+    for (let i = 1; i < k; i++) {
+      let m = line[i];
+      if (m < 0) continue;
+      m = attached ? m | 4 : m & -5;
+      w.setBlockMetadataWithNotify(x + dx * i, y, z + dz * i, m, 3);
+    }
+}
+const hookCanPlace = (w, x, y, z) =>
+  w.isNormalCube(w.getBlock(x - 1, y, z)) || w.isNormalCube(w.getBlock(x + 1, y, z)) || w.isNormalCube(w.getBlock(x, y, z - 1)) || w.isNormalCube(w.getBlock(x, y, z + 1));
+const tripwireHook = {
+  onNeighborBlockChange(w, x, y, z, source) {
+    if (source === TRIPWIRE_HOOK) return;
+    const meta = w.getBlockMetadata(x, y, z);
+    if (!hookCanPlace(w, x, y, z)) {
+      w.dropBlockAsItem(x, y, z, TRIPWIRE_HOOK, meta);
+      w.setBlockToAir(x, y, z);
+      return;
+    }
+    const [ax, az] = hookCell(w, x, y, z);
+    if (!w.isNormalCube(w.getBlock(ax, y, az))) {
+      w.dropBlockAsItem(x, y, z, TRIPWIRE_HOOK, meta);
+      w.setBlockToAir(x, y, z);
+    }
+  },
+  onPostBlockPlaced(w, x, y, z, meta) {
+    hookUpdate(w, x, y, z, false, meta, false, -1, 0);
+  },
+  updateTick(w, x, y, z) {
+    hookUpdate(w, x, y, z, false, w.getBlockMetadata(x, y, z), true, -1, 0);
+  },
+  breakBlock(w, x, y, z, old, meta) {
+    const a = (meta & 4) > 0,
+      p = (meta & 8) > 0;
+    if (a || p) hookUpdate(w, x, y, z, true, meta, false, -1, 0);
+    if (p) hookNotify(w, x, y, z, meta & 3);
+  },
+  weak: (w, x, y, z) => ((w.getBlockMetadata(x, y, z) & 8) > 0 ? 15 : 0),
+  strong(w, x, y, z, side) {
+    const m = w.getBlockMetadata(x, y, z);
+    if ((m & 8) === 0) return 0;
+    const l = m & 3;
+    return (l === 2 && side === 2) || (l === 0 && side === 3) || (l === 1 && side === 4) || (l === 3 && side === 5) ? 15 : 0;
+  },
+};
+// BlockTripWire.func_150138_a: tell the hooks at both ends of the string line about its metadata.
+function tripwireNotifyHooks(w, x, y, z, meta) {
+  for (let i = 0; i < 2; i++)
+    for (let j = 1; j < 42; j++) {
+      const cx = x + DIR_X[i] * j,
+        cz = z + DIR_Z[i] * j,
+        id = w.getBlock(cx, y, cz);
+      if (id === TRIPWIRE_HOOK) {
+        const hm = w.getBlockMetadata(cx, y, cz);
+        if ((hm & 3) === ROTATE_OPPOSITE[i]) hookUpdate(w, cx, y, cz, false, hm, true, j, meta);
+        break;
+      }
+      if (id !== TRIPWIRE) break;
+    }
+}
+// func_150140_e: re-sense entities in the string's box and publish a change.
+function tripwireSense(w, x, y, z) {
+  let meta = w.getBlockMetadata(x, y, z);
+  const was = (meta & 1) > 0,
+    active = w.getEntities("all", [x, y, z, x + 1, y + 0.15625, z + 1]).length > 0;
+  if (active && !was) meta |= 1;
+  if (!active && was) meta &= -2;
+  if (active !== was) {
+    w.setBlockMetadataWithNotify(x, y, z, meta, 3);
+    tripwireNotifyHooks(w, x, y, z, meta);
+  }
+  if (active) w.scheduleBlockUpdate(x, y, z, TRIPWIRE, 10);
+}
+const tripwire = {
+  onNeighborBlockChange(w, x, y, z) {
+    const meta = w.getBlockMetadata(x, y, z);
+    if ((meta & 2) > 0 !== !w.doesBlockHaveSolidTopSurface(x, y - 1, z)) {
+      w.dropBlockAsItem(x, y, z, TRIPWIRE, meta);
+      w.setBlockToAir(x, y, z);
+    }
+  },
+  onBlockAdded(w, x, y, z) {
+    const meta = w.doesBlockHaveSolidTopSurface(x, y - 1, z) ? 0 : 2;
+    w.setBlockMetadataWithNotify(x, y, z, meta, 3);
+    tripwireNotifyHooks(w, x, y, z, meta);
+  },
+  breakBlock(w, x, y, z, old, meta) {
+    tripwireNotifyHooks(w, x, y, z, meta | 1);
+  },
+  onEntityCollidedWithBlock(w, x, y, z) {
+    if ((w.getBlockMetadata(x, y, z) & 1) === 1) return;
+    tripwireSense(w, x, y, z);
+  },
+  updateTick(w, x, y, z) {
+    if ((w.getBlockMetadata(x, y, z) & 1) !== 1) return;
+    tripwireSense(w, x, y, z);
+  },
+};
+
 const BEHAVIOUR = {
   [TNT]: tnt,
   [WOODEN_DOOR]: door(WOODEN_DOOR),
@@ -1836,6 +2019,8 @@ const BEHAVIOUR = {
   [WOOD_PLATE]: pressurePlate(WOOD_PLATE, { mode: "all", rate: 20 }),
   [LIGHT_PLATE]: pressurePlate(LIGHT_PLATE, { max: 15, rate: 10, weighted: true }),
   [HEAVY_PLATE]: pressurePlate(HEAVY_PLATE, { max: 150, rate: 10, weighted: true }),
+  [TRIPWIRE_HOOK]: tripwireHook,
+  [TRIPWIRE]: tripwire,
   [PISTON]: pistonBase(PISTON),
   [STICKY_PISTON]: pistonBase(STICKY_PISTON),
   [PISTON_HEAD]: pistonHead,
@@ -1896,7 +2081,10 @@ export function replayScenario(s, make = (options) => new RedstoneWorld(options)
         [id, meta] = args;
       w.record(`E,${op}`);
       if (op === "place") w.setBlock(x, y, z, id, meta, 3);
-      else if (op === "air") w.setBlockToAir(x, y, z);
+      else if (op === "place2") w.setBlock(x, y, z, id, meta, 2);
+      else if (op === "placehook") {
+        if (w.setBlock(x, y, z, id, meta, 3) && w.getBlock(x, y, z) === id) w.behaviours[id]?.onPostBlockPlaced?.(w, x, y, z, meta);
+      } else if (op === "air") w.setBlockToAir(x, y, z);
       else if (op === "use") w.activate(x, y, z);
       else if (op === "placeby") w.placeBy(x, y, z, id, meta);
       else if (op === "placepiston") {

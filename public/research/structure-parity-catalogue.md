@@ -18,7 +18,7 @@ Dungeons, desert wells, End spikes, bonus chests, trees and decorators are featu
 | Fortress | world/gen/structure/MapGenNetherBridge$Start | ate | Partial; [fortress](fortress.md) generated live in the Nether; no start/piece NBT or MapGenStructureData persistence | S |
 | Mineshaft | world/gen/structure/StructureMineshaftStart | atc | Implemented; [mineshaft generator](mineshafts-live.md), structure NBT in [structure-nbt](structure-nbt.md) | S |
 | Stronghold | world/gen/structure/MapGenStronghold$Start | auh | Implemented; [stronghold generator](strongholds.md), live portal frames in [eye of ender](eye-of-ender.md) | S |
-| Temple | world/gen/structure/MapGenScatteredFeature$Start | aty | Partial; [scattered features](scattered-features.md); combined-population temple read calls remain 319 short, no redstone power simulation in traps | S |
+| Temple | world/gen/structure/MapGenScatteredFeature$Start | aty | Partial; [scattered features](scattered-features.md); traps run live (tripwire, lever puzzle, plate and TNT; tripwire probe-replayed), shears disarm, random ticks and projectile triggers are not probed or modelled | S |
 | Village | world/gen/structure/MapGenVillage$Start | avo | Implemented; [village generator](villages.md), live villagers in [village](village.md) | S |
 
 ## Native structure piece save IDs
@@ -57,9 +57,9 @@ Dungeons, desert wells, End spikes, bonus chests, trees and decorators are featu
 | SHSD | world/gen/structure/StructureStrongholdPieces$Stairs | auy | Implemented; [stronghold generator](strongholds.md), live portal frames in [eye of ender](eye-of-ender.md) | S |
 | SHSSD | world/gen/structure/StructureStrongholdPieces$StairsStraight | avb | Implemented; [stronghold generator](strongholds.md), live portal frames in [eye of ender](eye-of-ender.md) | S |
 | SHStart | world/gen/structure/StructureStrongholdPieces$Stairs2 | auz | Implemented; [stronghold generator](strongholds.md), live portal frames in [eye of ender](eye-of-ender.md) | S |
-| TeDP | world/gen/structure/ComponentScatteredFeaturePieces$DesertPyramid | aub | Partial; [scattered features](scattered-features.md); combined-population temple read calls remain 319 short, no redstone power simulation in traps | S |
-| TeJP | world/gen/structure/ComponentScatteredFeaturePieces$JunglePyramid | auc | Partial; [scattered features](scattered-features.md); combined-population temple read calls remain 319 short, no redstone power simulation in traps | S |
-| TeSH | world/gen/structure/ComponentScatteredFeaturePieces$SwampHut | auf | Partial; [scattered features](scattered-features.md); combined-population temple read calls remain 319 short, no redstone power simulation in traps | S |
+| TeDP | world/gen/structure/ComponentScatteredFeaturePieces$DesertPyramid | aub | Partial; [scattered features](scattered-features.md); traps run live (tripwire, lever puzzle, plate and TNT; tripwire probe-replayed), shears disarm, random ticks and projectile triggers are not probed or modelled | S |
+| TeJP | world/gen/structure/ComponentScatteredFeaturePieces$JunglePyramid | auc | Partial; [scattered features](scattered-features.md); traps run live (tripwire, lever puzzle, plate and TNT; tripwire probe-replayed), shears disarm, random ticks and projectile triggers are not probed or modelled | S |
+| TeSH | world/gen/structure/ComponentScatteredFeaturePieces$SwampHut | auf | Partial; [scattered features](scattered-features.md); traps run live (tripwire, lever puzzle, plate and TNT; tripwire probe-replayed), shears disarm, random ticks and projectile triggers are not probed or modelled | S |
 | ViBH | world/gen/structure/StructureVillagePieces$House1 | avq | Implemented; [village generator](villages.md), live villagers in [village](village.md) | S |
 | ViDF | world/gen/structure/StructureVillagePieces$Field1 | avr | Implemented; [village generator](villages.md), live villagers in [village](village.md) | S |
 | ViF | world/gen/structure/StructureVillagePieces$Field2 | avs | Implemented; [village generator](villages.md), live villagers in [village](village.md) | S |
@@ -84,7 +84,7 @@ Dungeons, desert wells, End spikes, bonus chests, trees and decorators are featu
 | world/gen/MapGenRavine | aqs | no | Implemented; [caves and ravines](generation.md): 218 native records | G |
 | world/gen/structure/MapGenMineshaft | asw | no | Implemented; [mineshafts](mineshafts-live.md) | G |
 | world/gen/structure/MapGenNetherBridge | atd | no | Partial; [fortress](fortress.md); no start NBT/persistence | G |
-| world/gen/structure/MapGenScatteredFeature | atx | no | Partial; [scattered features](scattered-features.md); temple read-call count 319 short | G |
+| world/gen/structure/MapGenScatteredFeature | atx | no | Partial; [scattered features](scattered-features.md); combined-population call counts match natively (the 319-call gap is closed) | G |
 | world/gen/structure/MapGenStronghold | aug | no | Implemented; [strongholds](strongholds.md) | G |
 | world/gen/structure/MapGenStructure | ave | yes | Implemented; structure-framework.js ([structures](structures.md)) | G |
 | world/gen/structure/MapGenVillage | avn | no | Implemented; [villages](villages.md) | G |

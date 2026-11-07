@@ -183,7 +183,7 @@ Limits:
 ## Open items
 
 - Pistons: live-game integration and entity pushing (the headless core is in the Pistons section).
-- Tripwire and hooks, detector and powered rails; automatic daylight refresh scheduling with world time.
+- Automatic daylight refresh scheduling with world time.
 - Comparator inputs from brewing stands, jukeboxes, item frames and cake; live container behavior and tile-entity save/load.
 - Entity-driven pressure plates in a live world (real entity boxes, arrows, falling items, minecarts).
 - Repeater and comparator placement from the real item-use path, and tile entity save/load.
@@ -191,3 +191,7 @@ Limits:
 - Live-game integration: world storage, chunk saving, tick loop, player placement and removal, item drops.
 - Rendering: dust connection textures and colour by power, lit torch and lamp models, particles, sounds.
 - Random ticks and lighting for torches and lamps.
+
+## Tripwire (batch 15)
+
+`BlockTripWireHook` (aog, 131) and `BlockTripWire` (aof, 132) are in `src/redstone.js` and replayed from `public/research/tripwire-reference.json` (`node tools/verify-tripwire.mjs`, reusing `tools/probes/RedstoneProbe.java` with the new `place2` and `placehook` events). Details, limits and the live trap checks are in [scattered features](scattered-features.md#live-traps-batch-15).
