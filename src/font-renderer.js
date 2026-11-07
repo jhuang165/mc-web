@@ -95,7 +95,7 @@ export function unicodeGlyph(c, state = font) {
 }
 export const glyphPageUrl = (page) => versioned(`/media/1.7.10/font/unicode_page_${page.toString(16).padStart(2, "0")}.png`);
 
-/** The CSS inline-block for one unicode-page glyph (see menu-screens.css .ug); bold draws it twice, one unit apart. */
+/** The CSS inline-block for one unicode-page glyph (see menu-screens.css .ug); bold draws it twice, 1 unit apart (0.5 with the unicode flag, FontRenderer.renderStringAtPos) and advances 1 more. */
 export function glyphHtml(c, bold = false) {
   const g = unicodeGlyph(c);
   if (!g) return "";
@@ -103,7 +103,7 @@ export function glyphHtml(c, bold = false) {
   let inner = "";
   if (g.visible) {
     const base = `--p:url(${glyphPageUrl(g.page)});--mx:${unit(-g.x / 2)};--my:${unit(-g.y / 2)};width:${unit(g.w / 2)}`;
-    inner = `<i style="${base}"></i>` + (bold ? `<i style="${base};left:var(--u)"></i>` : "");
+    inner = `<i style="${base}"></i>` + (bold ? `<i style="${base};left:${unit(font.unicode ? 0.5 : 1)}"></i>` : "");
   }
   return `<span class="ug" style="width:${unit(adv)}">${inner}</span>`;
 }
