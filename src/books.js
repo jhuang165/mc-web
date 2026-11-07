@@ -27,6 +27,13 @@ export function installBookItems(items) {
   items[ITEM_WRITTEN_BOOK] = { id: ITEM_WRITTEN_BOOK, name: LANG.written, texture: 'book_written', stack: 16, color: '#8a5a2a', glyph: 'B', alwaysGlint: true, hiddenFromCreative: true };
 }
 
+// String.trim of Java: removes every character up to U+0020 (not the other Unicode spaces JavaScript's trim removes).
+export const javaTrim = (s) => s.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, '');
+// ItemStack.hasTagCompound over the tag fields a browser stack can carry (display name, enchantments, book fields, ...).
+export const hasItemTag = (s) => !!s && (Array.isArray(s.pages) || typeof s.author === 'string' || typeof s.title === 'string' || typeof s.displayName === 'string'
+  || Number.isFinite(s.repairCost) || Array.isArray(s.enchantments) || Array.isArray(s.storedEnchantments) || Array.isArray(s.stored) || typeof s.unbreakable === 'boolean'
+  || Number.isInteger(s.color) || !!s.fireworks || !!s.explosion);
+
 // ChatAllowedCharacters.isAllowedCharacter (t.a): not the section sign, at least 32, not DEL.
 export const isAllowedCharacter = (c) => typeof c === 'string' && c.length === 1 && c !== '§' && c.charCodeAt(0) >= 32 && c !== '\u007f';
 
@@ -61,8 +68,8 @@ export function readBookTags(s) {
 export const sameBookTag = (a, b) => JSON.stringify([a.pages ?? null, a.author ?? null, a.title ?? null]) === JSON.stringify([b.pages ?? null, b.author ?? null, b.title ?? null]);
 
 // ---- FontRenderer text metrics (bbu): getCharWidth, getStringWidth, sizeStringToWidth, wrapFormattedStringToWidth ----
-// Widths for codes 32-126 are the ascii.png widths (verified against the original classes); other characters use the
-// unicode-page glyph widths in the original, which are not ported (6 is used).
+// getCharWidth is the font-renderer.js port of FontRenderer.getCharWidth: ascii.png widths for the 256-entry table and
+// glyph_sizes.bin for the other characters (book-gui-reference.json wrapUnicode replays both unicode flags).
 export const charWidth = (c) => getCharWidth(c);
 export function stringWidth(s) {
   let w = 0, bold = false;
@@ -172,7 +179,7 @@ export function applyBookSign(held, packet, playerName) {
 // ---- GuiScreenBook (bfe) ----
 export const BOOK_GUI = Object.freeze({
   width: 192, height: 192, top: 2, textX: 36, textWidth: 116, textY: 34, titleLabelY: 34, titleY: 50, authorY: 60, warningY: 82,
-  buttonY: 196, nextX: 120, prevX: 38, pageButtonY: 154, indicatorRight: 44, indicatorY: 18,
+  buttonY: 196, nextX: 120, prevX: 38, pageButtonY: 154, indicatorRight: 44, indicatorY: 18, // y values are absolute GUI coordinates (top 2 + the offset in GuiScreenBook.drawScreen)
 });
 /**
  * state machine of GuiScreenBook: `item` is the held stack (mutated like the original mutates its stack copy), `send(channel, stack)`
@@ -180,10 +187,14 @@ export const BOOK_GUI = Object.freeze({
  * 4 Cancel, 5 Sign and Close.
  */
 export class BookScreen {
-  constructor({ item, editable, playerName = 'Player', send = () => {}, close = () => {} }) {
-    this.item = item; this.editable = !!editable; this.playerName = playerName; this.sendPacket = send; this.close = close;
+  // `playerName` is the profile name (EntityPlayer.getCommandSenderName); this build has one fixed local player, "Player"
+  // (death-messages.js PLAYER_NAME). `clipboard()` is the text ctrl+V reads (GuiScreen.getClipboardString).
+  constructor({ item, editable, playerName = 'Player', send = () => {}, close = () => {}, clipboard = () => '' }) {
+    this.item = item; this.editable = !!editable; this.playerName = playerName; this.sendPacket = send; this.close = close; this.clipboard = clipboard;
     this.modified = false; this.signing = false; this.page = 0; this.title = ''; this.ticks = 0;
-    this.pages = Array.isArray(item?.pages) ? item.pages.map(String) : null;
+    // GuiScreenBook(): a tagged stack reads NBTTagCompound.getTagList("pages"), which is an empty list when the tag has no pages
+    // (typing then changes nothing until pages exist); an untagged editable stack starts with one empty page.
+    this.pages = Array.isArray(item?.pages) ? item.pages.map(String) : hasItemTag(item) ? [] : null;
     this.total = 1;
     if (this.pages) this.total = Math.max(1, this.pages.length);
     if (!this.pages && this.editable) { this.pages = ['']; this.total = 1; }
@@ -200,7 +211,7 @@ export class BookScreen {
     if (this.editable) {
       b.sign = { visible: !this.signing };
       b.cancel = { visible: this.signing };
-      b.finalize = { visible: this.signing, enabled: this.title.trim().length > 0 };
+      b.finalize = { visible: this.signing, enabled: javaTrim(this.title).length > 0 };
     }
     return b;
   }
@@ -222,7 +233,7 @@ export class BookScreen {
       while (this.pages.length > 1 && this.pages[this.pages.length - 1].length === 0) this.pages.pop();
       this.item.pages = [...this.pages];
       const packet = { ...readBookTags(this.item), id: sign ? ITEM_WRITTEN_BOOK : ITEM_WRITABLE_BOOK, count: this.item.count ?? 1, damage: 0 };
-      if (sign) { packet.author = this.playerName; packet.title = this.title.trim(); }
+      if (sign) { packet.author = this.playerName; packet.title = javaTrim(this.title); }
       this.sendPacket(sign ? 'MC|BSign' : 'MC|BEdit', packet);
     }
   }
@@ -240,6 +251,7 @@ export class BookScreen {
   keyTyped(ch, code) {
     if (code === 1) { this.close(); return; }
     if (!this.editable) return;
+    if (ch === '\u0016' && !this.signing) { this.insert(this.clipboard() ?? ''); return; } // ctrl+V (a char below 32, so never typed in the title)
     if (this.signing) {
       if (code === 14) { if (this.title.length) this.title = this.title.slice(0, -1); } else if (code === 28 || code === 156) {
         if (this.title.length) { this.sendBook(true); this.close(); }
@@ -255,4 +267,21 @@ export class BookScreen {
     return s + (this.blinkOn ? '§0_' : '§7_');
   }
   titleText() { return this.title + (this.blinkOn ? '§0_' : '§7_'); }
+}
+
+/**
+ * What GuiScreenBook.drawScreen draws (verified by book-gui-reference.json): `[kind, text, x, y, wrapWidth]` where kind is
+ * 'string' (drawString, no shadow, colour 0) or 'split' (drawSplitString at wrapWidth). `width` is the GUI width in GUI units.
+ * Signing: label and title centred in the 116 px text column (the title carries the blinking cursor), the DARK_GRAY
+ * "by <player name>" line and the finalize warning. Otherwise: "Page x of y" ending 44 px from the page's right edge, and the page.
+ */
+export function bookDrawList(screen, playerName = screen.playerName, width = 320) {
+  const x = Math.trunc((width - BOOK_GUI.width) / 2), G = BOOK_GUI, centre = (s) => x + G.textX + Math.trunc((G.textWidth - stringWidth(s)) / 2);
+  if (screen.signing) {
+    const label = LANG['book.editTitle'], title = screen.titleText(), by = byAuthor(playerName);
+    return [['string', label, centre(label), G.titleLabelY], ['string', title, centre(title), G.titleY], ['string', '§8' + by, centre(by), G.authorY],
+      ['split', LANG['book.finalizeWarning'], x + G.textX, G.warningY, G.textWidth]];
+  }
+  const indicator = pageIndicator(screen.page + 1, screen.total);
+  return [['string', indicator, x - stringWidth(indicator) + G.width - G.indicatorRight, G.indicatorY], ['split', screen.pageText(), x + G.textX, G.textY, G.textWidth]];
 }

@@ -4,6 +4,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import javax.imageio.ImageIO;
@@ -16,7 +17,7 @@ import javax.imageio.ImageIO;
 //   display   ItemEditableBook.getItemStackDisplayName / addInformation by title and author
 //   recipe    CraftingManager.findMatchingRecipe over book recipes and cloning grids (result id, count, tag, name)
 //   wrap      FontRenderer.getStringWidth, listFormattedStringToWidth and splitStringWidth
-//   gui       GuiScreenBook driven through keyTyped/actionPerformed with a recording Minecraft double (see gui())
+//   (GuiScreenBook itself is driven by tools/probes/BookGuiProbe.java via tools/verify-book-gui.mjs)
 public class BookProbe {
   static String q(String s) { return CatalogueProbe.q(s); }
   static void out(String s) { System.out.println(s); }
@@ -52,8 +53,11 @@ public class BookProbe {
     }
     if (t.b("author", 8)) { b.append(first ? "" : ",").append("\"author\":").append(q(t.j("author"))); first = false; }
     if (t.b("title", 8)) { b.append(first ? "" : ",").append("\"title\":").append(q(t.j("title"))); first = false; }
-    if (t.b("display", 10)) { b.append(first ? "" : ",").append("\"name\":").append(q(t.m("display").j("Name"))); }
-    return b.append("}").toString();
+    if (t.b("display", 10)) { b.append(first ? "" : ",").append("\"name\":").append(q(t.m("display").j("Name"))); first = false; }
+    List<String> keys = new ArrayList<>();
+    for (Object k : t.c()) keys.add(q((String) k));
+    Collections.sort(keys);
+    return b.append(first ? "" : ",").append("\"keys\":[").append(String.join(",", keys)).append("]}").toString();
   }
   static String stack(add s) {
     if (s == null) return "null";
@@ -258,6 +262,5 @@ public class BookProbe {
     recipes();
     charWidths();
     wrap();
-    BookGuiProbe.run(u, font, args);
   }
 }

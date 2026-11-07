@@ -21,7 +21,7 @@ const classes=path.join(out,'classes');await rm(classes,{recursive:true,force:tr
 await exec('unzip',['-q','-o',jar,'*.class','assets/minecraft/lang/en_US.lang','assets/minecraft/textures/font/ascii.png','-d',classes],{maxBuffer:1<<24});
 const probe=path.join(out,'probe');await mkdir(probe,{recursive:true});
 const cp=[probe,classes,...libs].join(path.delimiter);
-await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['CatalogueProbe','MobMoveProbe','BookGuiProbe','BookProbe'].map(n=>path.join(root,`probes/${n}.java`))]);
+await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['CatalogueProbe','MobMoveProbe','BookProbe'].map(n=>path.join(root,`probes/${n}.java`))]);
 const {stdout}=await exec('java',['-cp',cp,'BookProbe',path.join(classes,'assets/minecraft/textures/font/ascii.png')],{maxBuffer:1<<28});
 const lines=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
 const pick=name=>lines.filter(l=>l.case===name);
