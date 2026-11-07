@@ -32,9 +32,11 @@ public class DragonProbe {
     public List b(sa ex, azt box) {
       List<sa> out = new ArrayList<>();
       for (sa e : ents) {
-        if (e != ex && e.C.d > box.a && e.C.a < box.d && e.C.e > box.b && e.C.b < box.e && e.C.f > box.c && e.C.c < box.f) out.add(e);
-        // Chunk.getEntitiesWithinAABBForEntity also lists entity.getParts() that meet the box (and are not the asking entity)
-        if (withParts && e.at() != null) for (sa part : e.at()) if (part != ex && part.C.d > box.a && part.C.a < box.d && part.C.e > box.b && part.C.b < box.e && part.C.f > box.c && part.C.c < box.f) out.add(part);
+        boolean meets = e != ex && e.C.d > box.a && e.C.a < box.d && e.C.e > box.b && e.C.b < box.e && e.C.f > box.c && e.C.c < box.f;
+        if (meets) out.add(e);
+        // Chunk.getEntitiesWithinAABBForEntity lists entity.getParts() that meet the box only inside the same branch: the entity's own box must meet it first
+        // (batch 16 read this from apx.a(sa, azt, List, sj); the full chunk/slice gate is replayed in DragonSweepProbe)
+        if (withParts && meets && e.at() != null) for (sa part : e.at()) if (part != ex && part.C.d > box.a && part.C.a < box.d && part.C.e > box.b && part.C.b < box.e && part.C.f > box.c && part.C.c < box.f) out.add(part);
       }
       return out;
     }

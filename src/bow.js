@@ -300,6 +300,7 @@ export class Arrows {
     const grow = f(0.3);
     for (const t of ctx.targets || []) {
       if (!overlap(t.box, area)) continue;
+      if (t.reach && !t.reach(area)) continue; // a dragon part: the dragon's own box and chunk decide whether the world lists it
       if (t.ref === a.shooter && a.ticksInAir < 5) continue;
       const e = t.box, r = intercept([e[0] - grow, e[1] - grow, e[2] - grow, e[3] + grow, e[4] + grow, e[5] + grow], start, end);
       if (!r) continue;

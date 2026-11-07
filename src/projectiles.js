@@ -266,7 +266,7 @@ export function inWater(world, x, y, z) {
 export function mobTargets(entities, player, width = 0.6, height = 1.8) {
   const out = entities.flatMap((e) => {
     // The ender dragon is not collidable; its parts are (each EntityDragonPart box), and `part` tells aimPart which one was struck.
-    if (e.type === "ender_dragon") return dragonPartTargets(e).map(({ target, part, box }) => ({ ref: target, part, box }));
+    if (e.type === "ender_dragon") return dragonPartTargets(e).map(({ target, part, box, reach }) => ({ ref: target, part, box, reach }));
     const t = ENTITY_TYPES[e.type], s = e.growingAge < 0 ? 0.5 : 1, w = f(t.width * s), h = f(t.height * s), hw = f(w / 2);
     return [{ ref: e, box: [e.x - hw, e.y, e.z - hw, e.x + hw, e.y + h, e.z + hw] }];
   });
@@ -410,6 +410,7 @@ export class Projectiles {
     for (const t of targets) {
       const e = t.box;
       if (!(e[3] > area[0] && e[0] < area[3] && e[4] > area[1] && e[1] < area[4] && e[5] > area[2] && e[2] < area[5])) continue;
+      if (t.reach && !t.reach(area)) continue; // a dragon part: the dragon's own box and chunk decide whether the world lists it
       if ((t.thrower || (t.playerThrower && b.owner === "player")) && b.ticks < 5) continue;
       const r = intercept([e[0] - grow, e[1] - grow, e[2] - grow, e[3] + grow, e[4] + grow, e[5] + grow], start, end);
       if (!r) continue;
