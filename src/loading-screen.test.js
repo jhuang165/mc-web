@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { LoadingState, SpawnAreaLog, loadingLayout, errorLayout, downloadLayout, workingLayout, workingLine, startLoading, setStage, STAGES, BAR, LOADING_THROTTLE_MS } from './loading-screen.js';
 import { t, LANG } from './menu-screens.js';
-import { presolveSpawn, spawnRequest } from './spawn-presolve.js';
-import { solveNativeSpawn, nativeWorldSpawn, presolvedSpawns } from './java-world.js';
+import { presolveSpawn, presolveWorld, spawnRequest } from './spawn-presolve.js';
+import { solveNativeSpawn, solveResidentCell, nativeWorldSpawn, presolvedSpawns, presolvedCells } from './java-world.js';
 import { ChunkProviderGenerate, BiomeTerrainState } from './terrain-generator.js';
 import { biomeLayerOptions } from './java-world.js';
 import { World } from './world.js';
@@ -97,6 +97,74 @@ test('a presolved spawn gives the World constructor the same spawn and origin as
     assert.deepEqual(fast.nativeSpawn, walked.nativeSpawn, seed);
     assert.deepEqual([fast.originX, fast.originZ], [walked.originX, walked.originZ], seed);
   }
+});
+
+// The worker's handler in-process: the spawn first, then the resident cell with a transfer list (as spawn-worker.js posts them).
+const workerDouble = (calls = []) => () => {
+  const w = { terminate() { this.ended = true; }, postMessage(data) {
+    calls.push(data.terrain);
+    queueMicrotask(() => {
+      const spawn = solveNativeSpawn(data);
+      w.onmessage({ data: { id: data.id, spawn } });
+      if (data.terrain) queueMicrotask(() => w.onmessage({ data: { id: data.id, resident: solveResidentCell(data, spawn) } }));
+    });
+  } };
+  return w;
+};
+const snapshotOf = (w) => ({
+  chunks: [...w.chunks.entries()].map(([k, c]) => [k, Buffer.from(c.blocks).toString('base64'), Buffer.from(c.meta).toString('base64')]),
+  biomeIds: Buffer.from(w.biomeIds).toString('base64'),
+});
+
+test('a presolved resident cell gives the World constructor the same 64 columns, records and spawn without generating on the page thread', async () => {
+  for (const [seed, type, options] of [['loading b20', 'default', ''], ['7', 'flat', '2;7,2x3,2;1;village']]) {
+    presolvedSpawns.clear(); presolvedCells.clear();
+    const walked = new World(seed, 'javaStreamed', 18, type, options);
+    const record = { biome: 'javaStreamed', seed, generationVersion: 18, worldType: type, generatorOptions: options };
+    const calls = [], start = presolveWorld(record, { createWorker: workerDouble(calls) });
+    assert.ok(await start.spawn);
+    assert.equal(await start.terrain, true);
+    assert.deepEqual(calls, [true]);
+    assert.equal(presolvedCells.size, 1);
+    const fast = new World(seed, 'javaStreamed', 18, type, options);
+    assert.equal(presolvedCells.size, 0, 'the entry is consumed');
+    assert.equal(fast.population.generated, 0, 'the window cell was adopted, not generated here');
+    assert.deepEqual(fast.nativeSpawn, walked.nativeSpawn, seed);
+    assert.deepEqual([fast.originX, fast.originZ], [walked.originX, walked.originZ], seed);
+    assert.deepEqual(snapshotOf(fast), snapshotOf(walked), seed);
+    // the cell's records (chests, animals, spawners, structures) are the ones the constructor-built cell holds
+    const records = (w) => JSON.stringify([...w.population.cell(0, 0).records.entries()]);
+    assert.equal(records(fast), records(walked), seed);
+    assert.equal(JSON.stringify(fast.claimFreshColumns()), JSON.stringify(walked.claimFreshColumns()), seed);
+  }
+});
+
+test('presolveWorld: a spawn-only request builds no cell; a mismatched origin or a terrain failure falls back to the constructor', async () => {
+  presolvedSpawns.clear(); presolvedCells.clear();
+  const record = { biome: 'javaStreamed', seed: 'loading b20', generationVersion: 18, worldType: 'default' };
+  const calls = [];
+  assert.ok(await presolveSpawn(record, { createWorker: workerDouble(calls) }));
+  assert.deepEqual(calls, [false]);
+  assert.equal(presolvedCells.size, 0);
+  // a cell for another origin is dropped, not adopted
+  presolvedSpawns.clear();
+  const walked = new World('loading b20', 'javaStreamed', 18, 'default', '');
+  const bad = solveResidentCell({ seed: 'loading b20', generationVersion: 18, worldType: 'default', generatorOptions: '' }, { x: 0, z: 0 });
+  presolvedCells.set(`${(await import('./java-world.js')).spawnKey('loading b20', 18, 'default', '')}`, bad);
+  const fast = new World('loading b20', 'javaStreamed', 18, 'default', '');
+  assert.deepEqual(snapshotOf(fast), snapshotOf(walked));
+  assert.equal(presolvedCells.size, 0);
+  // a worker that dies after the spawn: the spawn stays parked, the terrain promise settles false
+  presolvedSpawns.clear();
+  const warn = console.warn; console.warn = () => {};
+  try {
+    const half = () => { const w = { terminate() {}, postMessage(d) { queueMicrotask(() => { w.onmessage({ data: { id: d.id, spawn: solveNativeSpawn(d) } }); queueMicrotask(() => w.onerror({ message: 'crash' })); }); } }; return w; };
+    const start = presolveWorld(record, { createWorker: half });
+    assert.ok(await start.spawn);
+    assert.equal(await start.terrain, false);
+    assert.equal(presolvedSpawns.size, 1); assert.equal(presolvedCells.size, 0);
+  } finally { console.warn = warn; }
+  presolvedSpawns.clear();
 });
 
 test('presolveSpawn falls back (null, nothing parked) when the worker throws, errors or fails to start', async () => {

@@ -47,8 +47,10 @@ pinned jar; `MC_RESEARCH` points at `tools/research`). Parity with 1.7.10 is not
 - Bonus chest: native `World.rand` is `new Random()` (unseeded), so a native bonus chest differs every creation; the game now seeds its Random
   from fresh entropy (`unseededBonusRandom`) and tests inject a fixed `JavaRandom`. Material.blocksMovement and
   `doesBlockHaveSolidTopSurface` use the live `World.solid`; torches run the `BlockTorch.onBlockAdded` orientation (bytecode-read: west, east, north, south neighbour with a solid side, else standing on a solid top, else dropped).
-  The chest is placed once on first open (`bonusChest` and `bonusChestPlaced` on the world record); the chest is not placed in the
-  creation screen itself.
+  Batch 21: the chest is placed during world creation, as `WorldServer.createSpawnPosition` does (bytecode-read: `mt.b(ahj)` finds the spawn, calls `setSpawn`, clears the
+  finding-spawn flag, then `if (WorldSettings.isBonusChestEnabled()) createBonusChest()`; `mt.a(ahj)` runs it before `super.initialize`). `openWorld` calls `src/bonus-world.js`
+  `placeBonusChest` on the freshly built World (spawn known, before `launch` and every tile or block runtime), the block writes become edits saved with the world, and `launch` hands the chest tile to the player state.
+  `bonusChestPlaced` on the record keeps it once; old saves (flag set) load unchanged. The random stays unseeded (assumed equivalent of `new Random()`); a failed open before launch clears the flag.
 - Java ZIP export writes `generatorName "flat"` and `generatorOptions`. There is no level.dat import path in this build, so Java import of
   a Superflat save is not implemented. Browser JSON export/import keeps `generatorOptions`.
 - Live-world structure reads (door/redstone/tripwire neighbour chains) are not replayed; see the limits above.

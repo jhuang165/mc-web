@@ -220,7 +220,8 @@ export class VoxelScene {
     };
     window.addEventListener("resize", this.resize);
   }
-  setWorld(world) {
+  // `defer`: the resident columns' meshes are queued in `pendingBuild` for buildPending (frame-sliced, main.js openWorld) instead of built here.
+  setWorld(world, { defer = false } = {}) {
     this.effects.clear();
     this.effectRenderer.clear();
     this.fx.world = world;
@@ -246,7 +247,17 @@ export class VoxelScene {
     for (const v of this.chunks.values()) this.disposeChunk(v);
     this.chunks.clear();
     this.dirty.clear();
-    for (const c of world.chunks.values()) this.buildChunk(c.x*16, c.z*16);
+    this.pendingBuild = defer ? [...world.chunks.values()].map((c) => [c.x * 16, c.z * 16]) : [];
+    if (!defer) for (const [x, z] of this.pendingBuild.splice(0)) this.buildChunk(x, z);
+  }
+  // Builds queued meshes (setWorld defer) for up to `budgetMs`; returns how many are left. A column already built since (an edit) is skipped.
+  buildPending(budgetMs = 8) {
+    const end = performance.now() + budgetMs;
+    while (this.pendingBuild.length && performance.now() < end) {
+      const [x, z] = this.pendingBuild.shift();
+      if (!this.chunks.has(`${x},${z}`) && this.world.chunks.has(`${x / 16},${z / 16}`)) this.buildChunk(x, z);
+    }
+    return this.pendingBuild.length;
   }
   // Per-position biome colours (biome-colors.js): the field reads native coordinates (local + the world origin) and caches biomes per column.
   setBiomeColors(world) {
