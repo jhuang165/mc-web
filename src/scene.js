@@ -14,12 +14,14 @@ import { EffectRenderer } from "./effect-renderer.js";
 import { Fx } from "./fx.js";
 import { ParticleRenderer } from "./particle-renderer.js";
 import { woodSlabBounds, gateRenderBoxes, trapBounds, wallMask, wallRenderBoxes } from './shaped-blocks.js';
-import { HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, ANVIL, BED, PISTON_MOVING, wallSolid, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube, STAINED_GLASS, CARPET } from "./world.js";
+import { LILY_PAD, FERN, HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, ANVIL, BED, PISTON_MOVING, wallSolid, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube, STAINED_GLASS, CARPET } from "./world.js";
 import { StreamingLight } from './streaming-light.js';
 import { STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, endFrameBoxes, cauldronBoxes, cauldronWaterHeight, CAULDRON_FLOOR, CAULDRON_WALL, potContents, POT_BOUNDS, potPlantOf } from './stone-utility.js';
 import { REDSTONE_WIRE, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, LEVER, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, isRedstoneBlock, redstoneBounds, wireArms, wireClimbs, wireTint } from './redstone-blocks.js';
 import { REDSTONE_TORCH, REDSTONE_TORCH_OFF, COMPARATOR, COMPARATOR_POWERED, DAYLIGHT_SENSOR, isRedstone2Block, isCube2, redstoneBounds2 } from './redstone-blocks-2.js';
 import { tileByName } from './block-textures.js';
+import { BiomeColorField, PINE, BIRCH, LILY_PAD_COLOR } from "./biome-colors.js";
+import { biomeFacts } from "./biomes.js";
 import { createBlockAtlas, blockTile, tileRect, ATLAS_ROWS, ATLAS_COLUMNS, namedTile } from "./block-textures.js";
 import { pistonQuads, isPistonBase, PISTON_HEAD } from "./dispenser-piston.js";
 import { createLighting, worldMaterial } from "./light-material.js";
@@ -92,6 +94,11 @@ class Mesher {
     this.idx.push(v, v + 1, v + 2, v, v + 2, v + 3);
     if (twoSided) this.idx.push(v, v + 2, v + 1, v, v + 3, v + 2);
   }
+  // Block.colorMultiplier: multiplies the last quad's four vertex colours by 0xRRGGBB (the shade attribute is an rgb triple).
+  tint(color) {
+    const r = ((color >> 16) & 255) / 255, g = ((color >> 8) & 255) / 255, b = (color & 255) / 255, k = this.shade.length - 12;
+    for (let i = 0; i < 4; i++) { this.shade[k + i * 3] *= r; this.shade[k + i * 3 + 1] *= g; this.shade[k + i * 3 + 2] *= b; }
+  }
   geometry() {
     if (!this.idx.length) return null;
     const g = new THREE.BufferGeometry();
@@ -153,6 +160,8 @@ export class VoxelScene {
     this.particleRenderer = new ParticleRenderer(this.scene, this);
     this.particleView = null;
     this.material = worldMaterial(this.lighting, { map: this.textures.texture });
+    this.terrainMaterial = worldMaterial(this.lighting, { map: this.textures.terrain }); // chunk meshes: grey tinted tiles, per-vertex biome colours
+    this.biomeColors = new BiomeColorField(() => biomeFacts("meadow")); this.colorX = this.colorZ = 0;
     const animated = (url, frames, scale) => {
       const t = new THREE.TextureLoader().load(url);
       t.magFilter = t.minFilter = THREE.NearestFilter;
@@ -222,6 +231,7 @@ export class VoxelScene {
     this.fallingList = [];
     this.world = world;
     this.textures.setBiome(world.biome);
+    this.setBiomeColors(world);
     this.temperature = world.temperatureAt?.(64, world.seaLevel, 64) ?? biomeTemperature(world.biome);
     this.clouds.height = world.height === 256 ? 128 : CLOUD_HEIGHT;
     this.litFurnaces = new Set();
@@ -231,6 +241,22 @@ export class VoxelScene {
     this.chunks.clear();
     this.dirty.clear();
     for (const c of world.chunks.values()) this.buildChunk(c.x*16, c.z*16);
+  }
+  // Per-position biome colours (biome-colors.js): the field reads native coordinates (local + the world origin) and caches biomes per column.
+  setBiomeColors(world) {
+    const ox = world.originX ?? 0, oz = world.originZ ?? 0, preset = { ...biomeFacts(world.biome), slot: biomeFacts(world.biome).id };
+    this.colorX = ox; this.colorZ = oz;
+    this.biomeColors = new BiomeColorField(world.biomeAt ? (x, z) => world.biomeAt(x - ox, z - oz) ?? preset : () => preset);
+  }
+  grassTint(x, y, z) { return this.biomeColors.grass(x + this.colorX, y, z + this.colorZ); }
+  foliageTint(x, y, z) { return this.biomeColors.foliage(x + this.colorX, y, z + this.colorZ); }
+  // The block's colour multiplier for a face, or null for white (BlockGrass tints the top only; its sides take the overlay quad).
+  cubeTint(b, fi, x, y, z, meta) {
+    if (b === 1) return fi === 2 ? this.grassTint(x, y, z) : null;
+    if (b === 5) { const m = meta & 3; return m === 1 ? PINE : m === 2 ? BIRCH : this.foliageTint(x, y, z); }
+    if (b === 71) return this.foliageTint(x, y, z);
+    if (b === LILY_PAD) return LILY_PAD_COLOR;
+    return null;
   }
   resetLight() {
     const Light = this.world.streaming ? StreamingLight : LightVolume;
@@ -320,7 +346,7 @@ export class VoxelScene {
     };
     // Fancy graphics draws a translucent layer as a depth-only pass then colour; Fast as one blended pass.
     const pass = (o) => (render.fancy ? [o.depth, o.color] : [o.color]);
-    add(solid, this.material);
+    add(solid, this.terrainMaterial);
     add(water, ...pass(this.water));
     add(ice, ...pass({ depth: this.iceDepth, color: this.iceColor }));
     add(flow, ...pass(this.flow));
@@ -352,17 +378,20 @@ export class VoxelScene {
       if (boundary && hides(nb) && !(b === SNOW_LAYER && fi === 2)) return;
       if ((b === 9 || b === ICE) && nb === b) return;
       if (b === STAINED_GLASS && nb === b && w.getMeta(x + f.n[0], y + f.n[1], z + f.n[2]) === w.getMeta(x, y, z)) return;
-      const corners = f.v.map((v) => [v[0], v[1] * h, v[2]]), r = tileRect(blockTile(b, fi, lit, w.getMeta(x, y, z), b === 1 && (w.get(x, y + 1, z) === SNOW_LAYER || w.get(x, y + 1, z) === 23))), uvs = rectUvs(r);
+      const snowed = b === 1 && (w.get(x, y + 1, z) === SNOW_LAYER || w.get(x, y + 1, z) === 23);
+      const corners = f.v.map((v) => [v[0], v[1] * h, v[2]]), r = tileRect(blockTile(b, fi, lit, w.getMeta(x, y, z), snowed)), uvs = rectUvs(r);
       // RenderBlocks.renderBlockQuartz: a pillar lying on x (meta 3) turns the top, bottom and z faces a quarter, one on z (meta 4) the x faces.
       if (b === QUARTZ_BLOCK) { const qm = w.getMeta(x, y, z); if ((qm === 3 && fi >= 2) || (qm === 4 && fi < 2)) uvs.push(uvs.shift()); }
       // Side faces of short blocks crop the texture from the top, as renderMaxY does.
       if (fi !== 2 && fi !== 3 && h < 1) uvs[2][1] = uvs[3][1] = r.v0 + (r.v1 - r.v0) * h;
       const verts = corners.map((v) => [x + v[0], y + v[1], z + v[2]]);
-      if (lit) m.quad(verts, uvs, f.shade, L.packed(x + f.n[0], y + f.n[1], z + f.n[2]));
-      else {
-        const s = shadeFace(L, x, y, z, fi, corners, boundary, h < 1);
-        m.quad(verts, uvs, s.ao.map((a) => a * f.shade), s.packed);
-      }
+      const s = lit ? null : shadeFace(L, x, y, z, fi, corners, boundary, h < 1),
+        put = (uv) => (lit ? m.quad(verts, uv, f.shade, L.packed(x + f.n[0], y + f.n[1], z + f.n[2])) : m.quad(verts, uv, s.ao.map((a) => a * f.shade), s.packed)),
+        tint = this.cubeTint(b, fi, x, y, z, w.getMeta(x, y, z));
+      put(uvs);
+      if (tint !== null) m.tint(tint);
+      // RenderBlocks.renderStandardBlockWithAmbientOcclusion: with Fancy graphics a grass side also draws grass_side_overlay tinted by the biome.
+      if (b === 1 && fi !== 2 && fi !== 3 && !snowed && render.fancy) { put(rectUvs(tileRect(tileByName("grass_side_overlay")))); m.tint(this.grassTint(x, y, z)); }
     });
   }
   // RenderBlocks.renderBlockTorch (blm.c(aji, III)) and renderTorchAtAngle: wall torches
@@ -730,7 +759,7 @@ export class VoxelScene {
   vine(m,x,y,z) {
     const w=this.world,meta=w.getMeta(x,y,z),uv=rectUvs(tileRect(blockTile(VINE,0))),light=this.light.packed(x,y,z),e=1/64;
     for(const [bit,v] of [[1,[[0,0,1-e],[1,0,1-e],[1,1,1-e],[0,1,1-e]]],[2,[[e,0,0],[e,0,1],[e,1,1],[e,1,0]]],[4,[[1,0,e],[0,0,e],[0,1,e],[1,1,e]]],[8,[[1-e,0,1],[1-e,0,0],[1-e,1,0],[1-e,1,1]]]])
-      if(meta&bit)m.quad(v.map(p=>[x+p[0],y+p[1],z+p[2]]),uv,1,light,true);
+      if(meta&bit){m.quad(v.map(p=>[x+p[0],y+p[1],z+p[2]]),uv,1,light,true);m.tint(this.biomeColors.foliageAt(x+this.colorX,y,z+this.colorZ));}
   }
   // renderCrossedSquares, with the tall-grass position jitter from the block coordinates.
   // RenderBlocks.renderBlockStem (stems-cake.js stemQuads): crossed planes tinted by age, plus the connected plane beside a fruit.
@@ -760,8 +789,13 @@ export class VoxelScene {
     }
     const raw=w.getMeta(x,y,z), plantMeta=b===DOUBLE_PLANT&&(raw&8)?(w.getMeta(x,y-1,z)&7)|8:raw;
     const uvs = rectUvs(tileRect(blockTile(b, 0, false, plantMeta))), light = this.light.packed(x, y, z), a = 0.05, c = 0.95;
+    // BlockTallGrass (not the dead shrub), BlockReed and BlockDoublePlant grass/fern: the biome grass colour of this one position.
+    const grassy = b === 39 || b === FERN || b === REEDS || (b === DOUBLE_PLANT && ((plantMeta & 7) === 2 || (plantMeta & 7) === 3)),
+      tint = grassy ? this.biomeColors.grassAt(x + this.colorX, y, z + this.colorZ) : null;
     m.quad([[px + a, py, pz + a], [px + c, py, pz + c], [px + c, py + 1, pz + c], [px + a, py + 1, pz + a]], uvs, 1, light, true);
+    if (tint !== null) m.tint(tint);
     m.quad([[px + a, py, pz + c], [px + c, py, pz + a], [px + c, py + 1, pz + a], [px + a, py + 1, pz + c]], uvs, 1, light, true);
+    if (tint !== null) m.tint(tint);
   }
   // RenderBlocks.renderBlockCactusImpl (render type 13): no ambient occlusion. The bottom and top
   // follow shouldSideBeRendered (not under an opaque cube) in the brightness of the cell beyond;
@@ -907,24 +941,28 @@ export class VoxelScene {
       bright = (bx, by, bz) => maxPacked(L.packed(bx, by, bz), L.packed(bx, by + 1, bz)),
       top = w.get(x, y + 1, z) !== kind,
       h = [[liquidHeight(w, x, y, z, kind), liquidHeight(w, x, y, z + 1, kind)], [liquidHeight(w, x + 1, y, z, kind), liquidHeight(w, x + 1, y, z + 1, kind)]];
+    // BlockLiquid.colorMultiplier: water averages the biome water colour over x-1..x+1, z-1..z+1; lava is white.
+    let tint = null; const paint = (mesher) => { tint ??= kind === 10 ? this.biomeColors.water(x + this.colorX, z + this.colorZ) : 0xFFFFFF; if (tint !== 0xFFFFFF) mesher.tint(tint); };
     if (top) {
       for (const row of h) for (let i = 0; i < 2; i++) row[i] -= inset;
       const verts = [[x, y + h[0][0], z], [x, y + h[0][1], z + 1], [x + 1, y + h[1][1], z + 1], [x + 1, y + h[1][0], z]], angle = flowAngle(w, x, y, z, kind);
       if (angle > -999) {
         const a = Math.fround(angle), s = Math.fround(mhSin(a) * 0.25), c = Math.fround(mhCos(a) * 0.25),
           at = (du, dv) => [(8 + du * 16) / 16, 1 - (8 + dv * 16) / 16];
-        flow.quad(verts, [at(-c - s, -c + s), at(-c + s, c + s), at(c + s, c - s), at(c - s, -c - s)], 1, bright(x, y, z), true);
-      } else still.quad(verts, [[0, 1], [0, 0], [1, 0], [1, 1]], 1, bright(x, y, z), true);
+        flow.quad(verts, [at(-c - s, -c + s), at(-c + s, c + s), at(c + s, c - s), at(c - s, -c - s)], 1, bright(x, y, z), true); paint(flow);
+      } else { still.quad(verts, [[0, 1], [0, 0], [1, 0], [1, 1]], 1, bright(x, y, z), true); paint(still); }
     }
     const below = w.get(x, y - 1, z);
     if (below !== kind && !opaqueCube(below))
       still.quad([[x, y + e, z], [x + 1, y + e, z], [x + 1, y + e, z + 1], [x, y + e, z + 1]], [[0, 1], [1, 1], [1, 0], [0, 0]], 0.5, bright(x, y - 1, z));
+    if (below !== kind && !opaqueCube(below)) paint(still);
     for (const fi of [0, 1, 4, 5]) {
       const f = FACES[fi], nx = x + f.n[0], nz = z + f.n[2], nb = w.get(nx, y, nz);
       if (nb === kind || hides(nb)) continue;
       const verts = f.v.map((v) => [x + v[0] - f.n[0] * e, y + (v[1] ? h[v[0]][v[2]] : 0), z + v[2] - f.n[2] * e]),
         uvs = f.v.map((v, i) => [i === 1 || i === 2 ? 0.5 : 0, v[1] ? 1 - (1 - h[v[0]][v[2]]) * 0.5 : 0.5]);
       flow.quad(verts, uvs, f.shade, bright(nx, y, nz));
+      paint(flow);
     }
   }
   setFurnaces(data) {
@@ -1036,6 +1074,8 @@ export class VoxelScene {
     this.fireLayers[0].uv.w = 1 - (((fireStep + 16) % 32) + 1) / 32;
     this.fireLayers[1].uv.w = 1 - (fireStep + 1) / 32;
     for (let budget = 2; budget > 0 && this.dirty.size; budget--) this.buildChunk(...this.dirty.values().next().value.split(",").map(Number));
+    // World.getSkyColor reads the temperature at the viewer's own block, so it follows the player across biomes.
+    if (this.world?.temperatureAt) this.temperature = this.world.temperatureAt(Math.floor(this.camera.position.x), Math.floor(this.camera.position.y), Math.floor(this.camera.position.z));
     let c = this.camera, look = c.getWorldDirection(new THREE.Vector3()), u = this.lighting.uniforms, angle = this.angle,
       // ActiveRenderInfo.getBlockAtEntityViewpoint: water or lava fog while the eye is in it. A source
       // cell counts up to its top and the test then reads the cell above, so swimming through a

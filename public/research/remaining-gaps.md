@@ -64,7 +64,7 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 ## Priority 4: world generation, structures, dimensions
 - Nether Fortress: pieces are not in the structure NBT (`UNSUPPORTED_PIECE_IDS`); catalogued Partial.
 - Desert/jungle temples and witch huts: Partial in `structure-parity-catalogue.md`.
-- Per-biome tint, weather and decoration audit: every biome row is Partial.
+- Per-biome decoration audit: every biome row is Partial. Per-position grass, foliage and water tint and per-column rain/snow are ported ([biome colours](biome-colors.md)); decoration, fog edge cases and probes of the Fast-graphics overlay remain.
 - Block behaviour audit: 39 blocks that were previously unmapped are mapped but their behaviour is audited only via the metadata catalogue.
 
 ## Priority 5: saves and interchange
