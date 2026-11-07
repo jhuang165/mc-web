@@ -120,9 +120,10 @@ export function readContainerTile(id, tile, { convertItem = itemStackFromNbt, in
   if (id === 'Furnace') { record.burn = get(tile, 'BurnTime', NBT.SHORT, 0); record.cook = get(tile, 'CookTime', NBT.SHORT, 0); record.burnTotal = burnTime(items[1]); kept.add('BurnTime'); kept.add('CookTime'); }
   return { name, record, ignored: [...tile.keys()].filter(k => !kept.has(k)).concat(ignored) };
 }
-export function itemStackFromNbt(compound, { ignored = [] } = {}) {
+// `allowEmpty`: an armour-slot stack of Count 0 is kept (InventoryPlayer.readFromNBT keeps it; ItemStack.damageItem leaves a Thorns-broken piece at size 0).
+export function itemStackFromNbt(compound, { ignored = [], allowEmpty = false } = {}) {
   const mapped = itemFromOriginal(get(compound, 'id', NBT.SHORT), get(compound, 'Damage', NBT.SHORT, 0)), count = get(compound, 'Count', NBT.BYTE, 0);
-  if (!mapped || count <= 0) return null;
+  if (!mapped || (allowEmpty ? count < 0 : count <= 0)) return null;
   const stack = { id: mapped.id, damage: mapped.damage, count };
   const nbt = get(compound, 'tag', NBT.COMPOUND);
   if (nbt) ignored.push(...readItemTag(stack, nbt));

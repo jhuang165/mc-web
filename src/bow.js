@@ -433,7 +433,8 @@ export class Arrows {
     if (!mobs?.entities?.includes(ref) || ref.health <= 0) return false;
     if (a.fire > 0) ref.fire = Math.max(ref.fire || 0, 100);
     const s = a.shooter, from = s === "player" ? ctx.player || a : s && typeof s === "object" ? s : a;
-    return mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true });
+    // `shooter` is the DamageSource's entity (EntityLivingBase.attackEntityFrom -> setRevengeTarget: a villager registers it as a village aggressor).
+    return mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true, shooter: s && typeof s === "object" ? s : null });
   }
   // EntityArrow.onCollideWithPlayer (zc.b_): the player's box grown by (1, 0.5, 1) touches a
   // stuck arrow that has stopped shaking. canBePickedUp 1 needs room in the inventory (one

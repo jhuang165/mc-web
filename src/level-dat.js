@@ -128,7 +128,7 @@ const PLAYER_KEYS = new Set(['Pos', 'Riding', 'Motion', 'Rotation', 'FallDistanc
  * coordinates: native + shiftX/shiftZ), `experience` the Experience record. convertItem(compound) maps a stack
  * (region-import.js itemStackFromNbt by default). `lost` lists what was read but not kept.
  */
-export function javaPlayerFromNbt(tag, { convertItem = (c) => itemStackFromNbt(c), shiftX = 0, shiftZ = 0 } = {}) {
+export function javaPlayerFromNbt(tag, { convertItem = (c, o) => itemStackFromNbt(c, o), shiftX = 0, shiftZ = 0 } = {}) {
   if (!(tag instanceof Map)) throw new TypeError('Player must be a compound');
   const lost = [];
   const pos = list(tag, 'Pos', NBT.DOUBLE), rot = list(tag, 'Rotation', NBT.FLOAT);
@@ -147,7 +147,7 @@ export function javaPlayerFromNbt(tag, { convertItem = (c) => itemStackFromNbt(c
     const slot = get(entry, 'Slot', NBT.BYTE, 0) & 255;
     const target = slot < 36 ? [slots, slot] : slot >= 100 && slot < 104 ? [armor, slot - 100] : null;
     if (!target) { lost.push(`Inventory slot ${slot}`); continue; }
-    const stack = convertItem(entry);
+    const stack = convertItem(entry, { allowEmpty: target[0] === armor });
     if (stack) target[0][target[1]] = stack;
   }
   // InventoryEnderChest.loadInventoryFromNBT: Slot & 255, 0-26.
