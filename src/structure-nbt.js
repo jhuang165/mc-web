@@ -7,8 +7,9 @@
 // Compound key order: native NBTTagCompound is a java.util.HashMap, so names are written in
 // HashMap iteration order. javaHashMapOrder reproduces Java 8+ buckets (the project's
 // recorded JDK; Java 6/7 used a different hash spread and are not modelled).
-// Fortress/Nether bridge starts and pieces are not ported by the generators, so they are
-// listed in UNSUPPORTED_* and are skipped on read exactly like unknown ids.
+// Nether fortress (data/Fortress.dat, start id "Fortress", the fifteen Ne* pieces): only NeBEF
+// (Seed), NeSCLT/NeSCRT (Chest) and NeMT (Mob) persist fields beyond the shared id/BB/O/GD
+// (bytecode-read in ats/atg..atw and probe-verified in fortress-nbt-reference.json).
 import { NBT, encodeNbt, decodeNbt } from "./nbt.js";
 import { encodeCompressedNbt, decodeCompressedNbt } from "./nbt-compression.js";
 import { StructureBoundingBox, StructureMap } from "./structure-framework.js";
@@ -26,6 +27,11 @@ import {
   StrongholdCrossing, StrongholdChestCorridor, StrongholdLibrary, StrongholdPortalRoom, StrongholdCorridor,
   StructureStrongholdStart,
 } from "./stronghold-generator.js";
+import {
+  FortressStart, FortressCrossing3, FortressEnd, FortressStraight, FortressCorridor3, FortressCorridor4, FortressEntrance,
+  FortressCrossing2, FortressCorridor, FortressCorridor5, FortressCorridor2, FortressNetherStalkRoom, FortressThrone,
+  FortressCrossing, FortressStairs, NetherBridgeStart,
+} from "./fortress.js";
 import { DesertPyramid, JunglePyramid, SwampHut, StructureScatteredFeatureStart } from "./scattered-feature-generator.js";
 
 // ---- tag constructors -------------------------------------------------------------------------
@@ -174,6 +180,24 @@ const PIECES = {
   SHPR: strongholdPiece(StrongholdPortalRoom, (p) => [["Mob", tBool(p.hasSpawner)]], (p, m) => { p.hasSpawner = getBool(m, "Mob"); }),
   SHFC: strongholdPiece(StrongholdCorridor, (p) => [["Steps", tInt(p.steps)]], (p, m) => { p.steps = getInt(m, "Steps"); }),
 
+  // Nether fortress (StructureNetherBridgePieces); ats.func_143012_a/b are empty, so the rest add nothing.
+  NeStart: { cls: FortressStart, extras: () => [], read: () => {},
+    init: (p) => { p.lastPieceWeight = null; p.primaryWeights = []; p.secondaryWeights = []; p.pendingPieces = []; } },
+  NeBCr: plain(FortressCrossing3),
+  NeBEF: { cls: FortressEnd, extras: (p) => [["Seed", tInt(p.seed)]], read: (p, m) => { p.seed = getInt(m, "Seed"); } },
+  NeBS: plain(FortressStraight),
+  NeCCS: plain(FortressCorridor3),
+  NeCTB: plain(FortressCorridor4),
+  NeCE: plain(FortressEntrance),
+  NeSCSC: plain(FortressCrossing2),
+  NeSCLT: { cls: FortressCorridor, extras: (p) => [["Chest", tBool(p.hasChest)]], read: (p, m) => { p.hasChest = getBool(m, "Chest"); } },
+  NeSC: plain(FortressCorridor5),
+  NeSCRT: { cls: FortressCorridor2, extras: (p) => [["Chest", tBool(p.hasChest)]], read: (p, m) => { p.hasChest = getBool(m, "Chest"); } },
+  NeCSR: plain(FortressNetherStalkRoom),
+  NeMT: { cls: FortressThrone, extras: (p) => [["Mob", tBool(p.hasSpawner)]], read: (p, m) => { p.hasSpawner = getBool(m, "Mob"); } },
+  NeRC: plain(FortressCrossing),
+  NeSR: plain(FortressStairs),
+
   TeDP: {
     cls: DesertPyramid,
     extras: (p) => [...scatteredBase(p), ...[0, 1, 2, 3].map((i) => [`hasPlacedChest${i}`, tBool(p.hasPlacedChest[i])])],
@@ -196,8 +220,8 @@ const PIECES = {
   },
 };
 export const STRUCTURE_PIECE_IDS = Object.freeze(Object.keys(PIECES));
-// Native ids registered by MapGenStructureIO whose generators are not ported yet (Nether fortress).
-export const UNSUPPORTED_PIECE_IDS = Object.freeze(["NeBCr", "NeBEF", "NeBS", "NeCCS", "NeCE", "NeCSR", "NeCTB", "NeMT", "NeRC", "NeSC", "NeSCLT", "NeSCRT", "NeSCSC", "NeSR", "NeStart"]);
+// Every id MapGenStructureIO registers now has a port (the fortress ids were the last unported ones).
+export const UNSUPPORTED_PIECE_IDS = Object.freeze([]);
 for (const [id, spec] of Object.entries(PIECES)) {
   if (spec.cls.saveId !== id) throw new Error(`Piece registry id ${id} differs from ${spec.cls.name}.saveId`);
 }
@@ -215,7 +239,7 @@ export function pieceToNbt(piece) {
 }
 // MapGenStructureIO.func_143032_b + StructureComponent.func_143009_a + func_143011_b. Pieces are built
 // without their generator constructors (the original uses the no-argument constructor), so no Random is read.
-// Like the original ("Skipping Piece with id"), an unregistered id (the Nether fortress pieces) returns null.
+// Like the original ("Skipping Piece with id"), an unregistered id returns null.
 export function pieceFromNbt(tag) {
   if (tag.type !== NBT.COMPOUND) throw new TypeError("Structure piece NBT must be a compound");
   const m = tag.value, id = getString(m, "id"), spec = PIECES[id];
@@ -233,11 +257,14 @@ export function pieceFromNbt(tag) {
 // ---- start registry ---------------------------------------------------------------------------
 export const STRUCTURE_START_CLASSES = Object.freeze({
   Mineshaft: StructureMineshaftStart, Village: VillageStart, Stronghold: StructureStrongholdStart, Temple: StructureScatteredFeatureStart,
+  Fortress: NetherBridgeStart,
 });
-export const UNSUPPORTED_START_IDS = Object.freeze(["Fortress"]);
+export const UNSUPPORTED_START_IDS = Object.freeze([]);
 const START_BY_CLASS = new Map(Object.entries(STRUCTURE_START_CLASSES).map(([id, cls]) => [cls, id]));
 // MapGenStructure.func_143025_a names, keyed by the StructurePopulation generator names.
 export const STRUCTURE_DATA_NAMES = Object.freeze({ mineshaft: "Mineshaft", village: "Village", stronghold: "Stronghold", scatteredFeature: "Temple" });
+// The Nether generator's data file (MapGenNetherBridge.func_143025_a); written to the shared data/ directory.
+export const FORTRESS_DATA_NAME = "Fortress";
 
 export function startId(start) {
   const id = START_BY_CLASS.get(start.constructor);

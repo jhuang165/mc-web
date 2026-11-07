@@ -191,13 +191,13 @@ ${supportRows.join('\n')}
 // Structure status (batch 11 audit): every start and piece below has a ported generator (village-generator.js,
 // stronghold-generator.js, mineshaft-generator.js, scattered-feature-generator.js, fortress.js) that replays native records,
 // runs in new Java worlds (villages/strongholds/temples/huts/mineshafts since 0.38.0, the fortress in the Nether) and, except
-// fortress pieces, round-trips through structure-nbt.js. Fortress start/piece NBT is not ported (UNSUPPORTED_PIECE_IDS).
+// fortress pieces, round-trips through structure-nbt.js. Fortress start/piece NBT is ported and probe-verified (fortress-nbt-reference.json).
 const STRUCT = {
   Mineshaft: ['Implemented', '[mineshaft generator](mineshafts-live.md), structure NBT in [structure-nbt](structure-nbt.md)'],
   Stronghold: ['Implemented', '[stronghold generator](strongholds.md), live portal frames in [eye of ender](eye-of-ender.md)'],
   Village: ['Implemented', '[village generator](villages.md), live villagers in [village](village.md)'],
-  Temple: ['Partial', '[scattered features](scattered-features.md); traps run live (tripwire, lever puzzle, plate and TNT; tripwire probe-replayed), shears disarm, random ticks and projectile triggers are not probed or modelled'],
-  Fortress: ['Partial', '[fortress](fortress.md) generated live in the Nether; no start/piece NBT or MapGenStructureData persistence'],
+  Temple: ['Partial', '[scattered features](scattered-features.md); traps run live (tripwire, lever puzzle, plate and TNT; tripwire probe-replayed), witch hut created and populated NBT probe-verified (temple-nbt-reference.json), jungle populated flags not replayed in JS, shears disarm, random ticks and projectile triggers are not probed or modelled'],
+  Fortress: ['Partial', '[fortress](fortress.md) generated live in the Nether; start/piece NBT and data/Fortress.dat write and read are probe-verified byte for byte ([structure NBT](structure-nbt.md)); piece loot and spawner state beyond the persisted Chest/Mob/Seed flags is not'],
 };
 const structFamily = id => id.startsWith('MS') || id === 'Mineshaft' ? 'Mineshaft' : id.startsWith('SH') || id === 'Stronghold' ? 'Stronghold' : id.startsWith('Vi') || id === 'Village' ? 'Village' : id.startsWith('Te') || id === 'Temple' ? 'Temple' : id.startsWith('Ne') || id === 'Fortress' ? 'Fortress' : assert.fail(id);
 const structStatus = id => { const [w, t] = STRUCT[structFamily(id)]; return `${w}; ${t}`; };

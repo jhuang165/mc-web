@@ -60,18 +60,18 @@ function jsRun(rec, preload = null) {
   runs.set(key, out); return out;
 }
 
-test("reference covers ten native worlds and 31 of the 33 piece ids", () => {
+test("reference covers ten native worlds and 31 of the 48 piece ids (the 15 fortress ids are in fortress-nbt-reference.json)", () => {
   assert.equal(records.length, 10); assert.equal(full.length, 5); assert.equal(census.length, 5);
   assert.equal(reference.target, "Minecraft Java 1.7.10");
   assert.equal(reference.clientSha1, "e80d9b3bf5085002218d4be59e668bac718abbc6");
-  assert.equal(reference.pieceIdsRegistered, 33);
+  assert.equal(reference.pieceIdsRegistered, 33); // recorded before the fortress ids were registered
   const seen = Object.keys(reference.pieceCounts).sort();
-  assert.deepEqual(STRUCTURE_PIECE_IDS.filter((id) => !seen.includes(id)).sort(), ["SHRT", "ViW"]);
+  assert.deepEqual(STRUCTURE_PIECE_IDS.filter((id) => !seen.includes(id) && !id.startsWith("Ne")).sort(), ["SHRT", "ViW"]);
   assert.deepEqual(seen.filter((id) => !STRUCTURE_PIECE_IDS.includes(id)), []);
   assert.deepEqual(reference.startCounts, { Mineshaft: 2, Village: 3, Stronghold: 1, Temple: 4 });
   assert.equal(Object.values(reference.pieceCounts).reduce((a, b) => a + b, 0), 371);
   for (const rec of records) assert.equal(rec.nativeReadBackMatches, true, rec.label);
-  assert.equal(UNSUPPORTED_PIECE_IDS.length, 15); assert.deepEqual(UNSUPPORTED_START_IDS, ["Fortress"]);
+  assert.deepEqual(UNSUPPORTED_PIECE_IDS, []); assert.deepEqual(UNSUPPORTED_START_IDS, []); // Fortress is ported (fortress-nbt-reference.json)
   assert.equal(new Set([...STRUCTURE_PIECE_IDS, ...UNSUPPORTED_PIECE_IDS]).size, 48);
 });
 
@@ -203,17 +203,17 @@ test("unregistered ids are skipped like the original, and malformed fields follo
   const piece = decodeNbt(bytesOf(full[0].created.mineshaft)).tag.value.get("data").value.get("Features").value.values().next().value.value.get("Children").value.items[0];
   const start = (id, children) => compoundTag([["id", { type: NBT.STRING, value: id }], ["ChunkX", { type: NBT.INT, value: 3 }], ["ChunkZ", { type: NBT.INT, value: -4 }],
     ["BB", { type: NBT.INT_ARRAY, value: Int32Array.of(48, 1, -64, 63, 64, -49) }], ["Children", { type: NBT.LIST, value: { elementType: NBT.COMPOUND, items: children } }]]);
-  assert.equal(startFromNbt(start("Fortress", [])), null);
-  const fortressPiece = new Map(piece); fortressPiece.set("id", { type: NBT.STRING, value: "NeStart" });
+  assert.equal(startFromNbt(start("EndCity", [])), null); // not a 1.7.10 id
+  const fortressPiece = new Map(piece); fortressPiece.set("id", { type: NBT.STRING, value: "NeNotAPiece" });
   assert.equal(pieceFromNbt({ type: NBT.COMPOUND, value: fortressPiece }), null);
   const mixed = startFromNbt(start("Mineshaft", [fortressPiece, piece]));
   assert.equal(mixed.components.length, 1); assert.equal(pieceId(mixed.components[0]), "MSRoom");
   // MapGenStructure.func_143027_a skips compounds without ChunkX/ChunkZ and unknown start ids.
-  const features = compoundTag([["[3,-4]", start("Fortress", [])], ["[9,9]", compoundTag([["id", { type: NBT.STRING, value: "Mineshaft" }]])], ["[1,1]", start("Mineshaft", [piece])]]);
+  const features = compoundTag([["[3,-4]", start("EndCity", [])], ["[9,9]", compoundTag([["id", { type: NBT.STRING, value: "Mineshaft" }]])], ["[1,1]", start("Mineshaft", [piece])]]);
   const doc = { name: "", tag: compoundTag([["data", compoundTag([["Features", features]])]]) };
   const decoded = decodeStructureData(encodeNbt(doc));
   assert.deepEqual(decoded.starts.map((s) => [s.chunkX, s.chunkZ]), [[3, -4]]);
-  assert.deepEqual(decoded.skipped.map((s) => s.id), ["Fortress"]);
+  assert.deepEqual(decoded.skipped.map((s) => s.id), ["EndCity"]);
   assert.equal(decodeStructureData(encodeNbt({ name: "", tag: compoundTag([]) })).starts.length, 0);
   // Missing scalar tags read as 0/false; a wrong tag type is an error (NBTTagCompound.func_74762_e throws).
   const bare = compoundTag([["id", { type: NBT.STRING, value: "MSCorridor" }]]);
@@ -237,7 +237,7 @@ test("ViW and SHRT are never generated natively, so they are covered by syntheti
 
 test("every registered id and the data names match the recorded native registry", () => {
   assert.deepEqual(STRUCTURE_DATA_NAMES, { mineshaft: "Mineshaft", village: "Village", stronghold: "Stronghold", scatteredFeature: "Temple" });
-  assert.equal(STRUCTURE_PIECE_IDS.length, 33);
+  assert.equal(STRUCTURE_PIECE_IDS.length, 48); // 33 recorded in structure-nbt-reference.json + 15 fortress
   assert.deepEqual(Object.keys(reference.classes), ["avi", "avj", "avk", "avm", "ave", "asv", "atc", "auh", "aty", "avo", "du", "dh", "azq", "aqz"]);
   for (const c of Object.values(reference.classes)) assert.match(c.sha256, /^[0-9a-f]{64}$/);
 });

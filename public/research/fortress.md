@@ -23,7 +23,7 @@ exercised through `NetherArea` in tests. This is not full parity; see Gaps.
 ## Gaps
 
 - The live dimension regenerates fortress pieces and passes their loot chests and Blaze spawner tiles into the runtime once per column. Natural spawning (the SpawnerAnimals port, [natural spawning](natural-spawning.md)) draws from the fortress list at points inside the bridge's boxes, and a Skeleton from it becomes a wither skeleton four times out of five. The eligible chunks are the browser's ticking window.
-- No `MapGenStructureData` persistence (start list is regenerated from the seed), no NBT save/load of pieces, no `/locate`-style lookup (`nearestFortressStart` exists but is untested).
+- Batch 16: start/piece NBT (15 piece ids) and `data/Fortress.dat` are ported and probe-verified (`fortress-nbt-reference.json`, `fortress-nbt.test.js`); an imported Fortress.dat is installed into the live Nether (`fortress-restore.js`). Exported starts are in the created state. No `/locate`-style lookup (`nearestFortressStart` exists but is untested).
 - Placement was only probed on 16 seeds and two windows; the 1.7.10 `Start` save path is not exercised.
 - Light, entity and block-update side effects beyond those in `NetherGenWorld` (e.g. the lava flow after the Entrance tick) are exact only where the probe world double exercises them.
 - Seed 1 was exercised in Survival on the browser build, including a live Blaze spawner and rod pickup.

@@ -5,7 +5,7 @@ import { StreamStorage } from './streaming-storage.js';
 import { isColoredBlock, carpetNeighbourChange, coloredPickDamage, COLORED_ITEM_OFFSET, CARPET } from './colored-blocks.js';
 import { ContainerResidency } from './container-residency.js';
 import { acquireWorldWriter } from './world-lock.js';
-import { readWorldShelf, writeWorldShelf, deleteStoredWorld, readChunkEdits, readRuntimeState, chunkRecords, writeBaseColumns, readBaseColumns } from './world-storage.js';
+import { readWorldShelf, writeWorldShelf, deleteStoredWorld, readChunkEdits, readRuntimeState, chunkRecords, writeBaseColumns, readBaseColumns, listBaseColumns } from './world-storage.js';
 import {PopulationBlocks} from './population-blocks.js';
 import {hasSavedStructures as hasSavedPopulation} from './structure-simulation.js';
 import {restorePopulation,restorePopulationColumns} from './population-runtime.js';
@@ -188,6 +188,7 @@ import { vitalsLayout, heartsHtml, foodHtml, mountHeartLayout, mountHeartsHtml, 
 import { hurtCameraRoll } from "./damage-fx.js";
 import { displayTicks } from "./display-ticks.js";
 import { importedRuntime } from "./world-import.js";
+import { collectBases, basesFromJson } from "./whole-save-json.js";
 import { tickBlockSystems } from "./world-tick.js";
 import { captureMovementInput } from "./player-input.js";
 import { movePlayer } from "./player-physics.js";
@@ -870,6 +871,9 @@ async function exportWorld(record = active) {
   try { record = await exportSnapshot(record); }
   catch (e) { toast('Could not read this world: ' + e.message); return; }
   const { chunked, runtimeChunked, editSequence, ...rest } = record;
+  // A whole-save world's stored full columns ride along (whole-save-json.js); too many for one file are reported, not dropped silently.
+  const stored = record.wholeSave ? await collectBases({ list: listBaseColumns, read: readBaseColumns, key: (d) => (d ? viewId(rootIdOf(record), d) : rootIdOf(record)) }) : null;
+  if (stored) { rest.bases = stored.bases; if (stored.omitted) rest.wholeSave = { ...rest.wholeSave, basesOmitted: stored.omitted }; }
   const url = URL.createObjectURL(
     new Blob(
       [
@@ -3058,6 +3062,8 @@ async function importBlockworldData(data, { id } = {}) {
     (record.dimensions ??= {})[d] = state;
     columns.push(...chunkRecords(viewId(record.id, d), check.edits));
   }
+  const baseRecords = basesFromJson(data.bases, (d) => (d ? viewId(record.id, d) : record.id)); // stored full columns of a whole-save export
+  if (baseRecords.length) for (let i = 0; i < baseRecords.length; i += 16) await writeBaseColumns(baseRecords.slice(i, i + 16));
   worlds.unshift(record);
   if (!await persist(columns)) throw new Error('World imported in memory. Export a copy because device storage is unavailable.');
   if (gui.screen?.id === "select-world") gui.build();
@@ -3067,8 +3073,9 @@ $("#file-input").onchange = async (e) => {
   if (!file) return;
   try {
     if (file.size > 128 * 1024 * 1024) throw new Error("File is too large");
-    await importBlockworldData(JSON.parse(await file.text()));
-    toast("World imported.");
+    const data = JSON.parse(await file.text());
+    await importBlockworldData(data);
+    toast(data.wholeSave?.basesOmitted ? `World imported. ${data.wholeSave.basesOmitted} imported columns did not fit in the backup file and regenerate from the seed.` : "World imported.");
   } catch (err) {
     toast(err.message);
   }

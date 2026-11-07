@@ -46,3 +46,8 @@ One world per JVM is used because native class statics make a second run in one 
 - The temple world's native call stream is 319 calls longer than the port's (existing GEN-05g limit); its ordered writes and RNG streams agree.
 - HashMap order is modelled for Java 8+ only. Failure behaviour of malformed data matches the accessors, not the native warning logs; `NBTSizeTracker` accounting is not ported (see `nbt.md`).
 - No live save-folder, per-world `data/` wiring, chunk NBT or multi-chunk start sharing across chunk loads is implemented.
+
+## Fortress and witch hut (batch 16)
+
+- Fortress: `NeStart` and the 14 other `Ne*` pieces round-trip through `structure-nbt.js` (`NeBEF` Seed, `NeSCLT`/`NeSCRT` Chest, `NeMT` Mob); `data/Fortress.dat` is written by `fortressDataFile` and read back. Probed with `tools/probes/FortressNbtProbe.java` (`tools/verify-fortress-nbt.mjs`): JS bytes equal the native writer's and the native reload of the JS .dat equals the baseline. The root-`data/` location (shared MapStorage) is bytecode-read, not probed.
+- Witch hut: `tools/verify-temple-nbt.mjs` records created and populated states (worlds 0/2/46 and 0/3/46); `temple-nbt.test.js` replays them. Jungle temple populated flags cannot be replayed in the JS area world yet.
