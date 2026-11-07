@@ -61,29 +61,31 @@ test("the eligible-chunk HashMap iterates in java.util.HashMap order", () => {
 
 // SpawnListProbe's WorldServer double: stone with a grass top at y 63..66 per 8-block cell, ponds of water y 50..61.
 const PROBE_BIOMES = [4, 27, 21, 5, 2, 14, 3, 12];
-const probeBiome = (cx, cz) => PROBE_BIOMES[(((cx * 7 + cz * 3) % 8) + 8) % 8];
+const probeBiome = (cx, cz, biomes = PROBE_BIOMES) => biomes[(((cx * 7 + cz * 3) % 8) + 8) % 8];
 const surface = (x, z) => 64 + (((x >> 3) + (z >> 3)) & 3);
 const pond = (x, z) => (((x >> 4) + 2 * (z >> 4)) % 5 + 5) % 5 === 0 && (x & 15) >= 4 && (x & 15) <= 11 && (z & 15) >= 4 && (z & 15) <= 11;
-function originalId(x, y, z) {
+function originalId(x, y, z, caves = false) {
   if (y < 0 || y > 255) return 0;
   if (pond(x, z)) return y < 50 ? 1 : y < 62 ? 9 : 0;
+  if (caves && y >= 30 && y < 36 && (((x >> 4) + (z >> 4)) & 1) === 0) return 0; // the wet-caves replay's air pockets
   const s = surface(x, z);
   return y < s - 1 ? 1 : y === s - 1 ? 2 : 0;
 }
 const internal = { 0: 0, 1: fromOriginal(1).id, 2: fromOriginal(2).id, 9: fromOriginal(9).id };
-const probeWorld = {
+const makeProbeWorld = (biomes = PROBE_BIOMES, caves = false) => ({
   height: 256, numericSeed: 1,
-  get: (x, y, z) => internal[originalId(x, y, z)],
+  get: (x, y, z) => internal[originalId(x, y, z, caves)],
   getMeta: () => 0,
-  solid: (x, y, z) => { const id = originalId(x, y, z); return id === 1 || id === 2; },
-  biomeAt: (x, z) => ({ id: probeBiome(x >> 4, z >> 4) }),
+  solid: (x, y, z) => { const id = originalId(x, y, z, caves); return id === 1 || id === 2; },
+  biomeAt: (x, z) => ({ id: probeBiome(x >> 4, z >> 4, biomes) }),
   // Chunk.getTopFilledSegment: the probe fills every storage up to the highest block's.
   chunkTop: (cx, cz) => {
     let top = 0;
-    for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) for (let y = 255; y >= 0; y--) if (originalId(cx * 16 + x, y, cz * 16 + z)) { top = Math.max(top, y); break; }
+    for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) for (let y = 255; y >= 0; y--) if (originalId(cx * 16 + x, y, cz * 16 + z, caves)) { top = Math.max(top, y); break; }
     return (top >> 4) << 4;
   },
-};
+});
+const probeWorld = makeProbeWorld();
 
 test("canCreatureTypeSpawnAtLocation matches the native columns", () => {
   const w = { block: probeWorld.get, normalCube, liquid: isLiquid, bedrock: 11, solidTop: (x, y, z) => normalCube(probeWorld.get(x, y, z)) };
@@ -95,8 +97,8 @@ test("canCreatureTypeSpawnAtLocation matches the native columns", () => {
     }
 });
 
-function probeMobs(seed, spawn) {
-  const mobs = new EntityWorld(probeWorld, []);
+function probeMobs(seed, spawn, world = probeWorld) {
+  const mobs = new EntityWorld(world, []);
   mobs.worldRandom = new JavaRandom(seed);
   mobs.difficulty = 2;
   mobs.localDifficulty = () => 0;
@@ -121,7 +123,7 @@ function extras(e) {
 
 for (const replay of ref.replays) {
   test(`seeded findChunksForSpawning replay "${replay.name}" (${replay.steps.length} ticks) spawns as the jar`, () => {
-    const mobs = probeMobs(replay.seed, replay.spawn), player = { x: replay.player[0], y: replay.player[1], z: replay.player[2] };
+    const mobs = probeMobs(replay.seed, replay.spawn, makeProbeWorld(replay.biomes, replay.caves)), player = { x: replay.player[0], y: replay.player[1], z: replay.player[2] };
     for (let tick = 0; tick < replay.steps.length; tick++) {
       const step = replay.steps[tick], before = mobs.entities.length;
       const total = mobs.naturalSpawn(player, { time: 18000 }, tick % replay.animalsEvery === 0);
@@ -255,7 +257,7 @@ test("doMobSpawning false stops the pass; Peaceful still spawns animals but no m
   assert.ok(mobs.entities.some((e) => creatureTypeOf(e.type) === "monster"));
 });
 
-test("streamed worlds: only ticking chunks are eligible and count for the cap", () => {
+test("streamed worlds: points are drawn only in ticking chunks, the cap counts the native 289 eligible chunks and every loaded mob", () => {
   const h = 256, chunks = new Map();
   const chunkAt = (cx, cz) => {
     if (cx < 0 || cz < 0 || cx >= 8 || cz >= 8) return null;
@@ -273,17 +275,17 @@ test("streamed worlds: only ticking chunks are eligible and count for the cap", 
   let caps = 0;
   const seen = new Set();
   const real = mobs.naturalSpawn.bind(mobs);
-  for (let i = 0; i < 40; i++) { real(player, { time: 18000 }, true); caps = mobs._spawner.ctx.capChunks; }
-  assert.equal(caps, 36);
+  for (let i = 0; i < 120; i++) { real(player, { time: 18000 }, true); caps = mobs._spawner.ctx.capChunks; }
+  assert.equal(caps, 289);
   // Points are drawn only in ticking chunks; a group's jitter (four +-5 steps) may carry it up to 20 blocks into a resident one.
   for (const e of mobs.entities) {
     seen.add(creatureTypeOf(e.type));
     assert.ok(e.x > 16 - 21 && e.x < 112 + 21 && e.z > 16 - 21 && e.z < 112 + 21, `${e.type} at ${e.x},${e.z}`);
   }
   assert.ok(seen.has("monster") && seen.has("creature"));
-  // The monster cap is 70 * 36 / 256 = 9: a full pass stops once more than 9 count.
+  // The monster cap is 70 * 289 / 256 = 79: a full pass stops once more than 79 count.
   const monsters = mobs.entities.filter((e) => creatureTypeOf(e.type) === "monster" && !e.persistent).length;
-  assert.ok(monsters > 9);
+  assert.ok(monsters > 79, String(monsters));
   const before = mobs.entities.length;
   real(player, { time: 18000 }, false);
   assert.equal(mobs.entities.filter((e) => creatureTypeOf(e.type) === "monster").length, mobs.entities.filter((e, i) => i < before && creatureTypeOf(e.type) === "monster").length);
@@ -354,4 +356,69 @@ test("a natural spawn tick stays cheap on a streamed world", (t) => {
   }
   assert.ok(capped.spawned > 0 && uncapped.spawned > capped.spawned);
   assert.ok(uncapped.mean < 2, `mean ${uncapped.mean} ms`);
+});
+
+test("mobs in loaded chunks outside the ticking window still count for the cap", () => {
+  const h = 256, block = new Uint8Array(256 * h);
+  for (let col = 0; col < 256; col++) for (let y = 0; y <= 64; y++) block[col * h + y] = y === 64 ? GRASS : STONE;
+  const world = { ...daylightFlat(), streaming: true, originX: 0, originZ: 0, chunkAt: (cx, cz) => (cx >= 0 && cz >= 0 && cx < 8 && cz < 8 ? { height: h, blocks: block } : null), isTicking: (x, z) => x >= 16 && x < 112 && z >= 16 && z < 112, inside: () => true };
+  const mobs = liveMobs(world);
+  mobs.lightAt = () => 0; mobs.skyLightAt = () => 0;
+  const player = { x: 64.5, y: 65, z: 64.5 };
+  const frozen = () => { const e = mobs.create("zombie", 2000, 65, 2000); mobs.entities.push(e); return e; };
+  for (let i = 0; i < 79; i++) frozen();
+  // 79 counted is not above the cap of 79, so the monster pass runs (a pass may draw no valid point; it stops once 80 count).
+  for (let i = 0; i < 60 && mobs.entities.length <= 79; i++) mobs.naturalSpawn(player, { time: 18000 }, false);
+  const after79 = mobs.entities.filter((e) => creatureTypeOf(e.type) === "monster").length;
+  assert.ok(after79 > 79, "79 frozen zombies equal the cap, so one more pass runs");
+  const n = mobs.entities.length;
+  mobs.naturalSpawn(player, { time: 18000 }, false);
+  assert.equal(mobs.entities.filter((e) => creatureTypeOf(e.type) === "monster").length, mobs.entities.slice(0, n).filter((e) => creatureTypeOf(e.type) === "monster").length, "80+ monsters: the pass is skipped");
+});
+
+test("the animal cadence follows the saved total world time (WorldInfo.getWorldTotalTime before the tick adds 1)", () => {
+  const mobs = liveMobs(daylightFlat());
+  mobs.loadTotalTime(799);
+  assert.equal(mobs.saveTotalTime(), 799);
+  const player = { x: 0.5, y: 65, z: 0.5 };
+  const animals = () => mobs.entities.filter((e) => creatureTypeOf(e.type) === "creature").length;
+  mobs.tick(player, day); // sees 799
+  assert.equal(animals(), 0);
+  assert.equal(mobs.saveTotalTime(), 800);
+  mobs.tick(player, day); // sees 800
+  assert.ok(animals() > 0);
+  assert.equal(mobs.saveTotalTime(), 801);
+  // A fresh load of 801 skips to 1200.
+  const fresh = liveMobs(daylightFlat());
+  fresh.loadTotalTime(1199);
+  fresh.tick(player, day);
+  assert.equal(fresh.entities.filter((e) => creatureTypeOf(e.type) === "creature").length, 0);
+  fresh.tick(player, day);
+  assert.ok(fresh.entities.some((e) => creatureTypeOf(e.type) === "creature"));
+  assert.equal(new EntityWorld(daylightFlat(), []).saveTotalTime(), undefined);
+  mobs.loadTotalTime(undefined);
+  assert.equal(mobs.saveTotalTime(), 0);
+});
+
+test("the witch hut list applies wherever the hut box covers, whatever the biome slot", () => {
+  const hutSlots = new Set();
+  const world = { ...daylightFlat(), biomeAt: () => ({ id: 1 }) };
+  const mobs = liveMobs(world);
+  mobs.swampHutAt = (x, y, z) => { hutSlots.add(1); return x >= 0 && x < 7 && z >= 0 && z < 7; };
+  const hooks = mobs.spawnerState().ctx;
+  assert.equal(hooks.possibleCreatures({ name: "monster" }, 3, 64, 3), WITCH_HUT_MONSTERS);
+  assert.notEqual(hooks.possibleCreatures({ name: "monster" }, 30, 64, 3), WITCH_HUT_MONSTERS);
+  assert.ok(hutSlots.has(1), "the lookup ran for a Plains slot");
+});
+
+test("a portal pigman is a pig zombie with the golden sword roll, a random yaw and the 300-tick portal cooldown", () => {
+  const mobs = new EntityWorld(daylightFlat(), []);
+  mobs.worldRandom = new JavaRandom(3);
+  const rand = new JavaRandom(11), want = new JavaRandom(11).nextFloat();
+  const e = mobs.spawnPortalPigman([4.5, 65.1, 4.5], rand);
+  assert.equal(e.type, "pigman");
+  assert.equal(e.portalCooldown, 300);
+  assert.ok(mobs.entities.includes(e));
+  assert.equal(e.rotationYaw, e.rotationYawHead);
+  assert.ok(Math.abs(e.rotationYaw - (Math.fround(want * 360) > 180 ? Math.fround(want * 360) - 360 : Math.fround(want * 360))) < 1e-4);
 });

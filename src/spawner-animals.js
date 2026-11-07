@@ -7,6 +7,9 @@ import { weightedPick } from "./population-tail.js";
 
 const f = Math.fround;
 
+// eligibleChunksForSpawning.size() for one player: the 17 x 17 chunks within 8 of the player's chunk (edges included).
+export const ELIGIBLE_CHUNKS = 289;
+
 // ChunkCoordIntPair.hashCode (agu.hashCode).
 export function chunkPairHash(x, z) {
   const i = (Math.imul(1664525, x) + 1013904223) | 0;

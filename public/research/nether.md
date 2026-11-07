@@ -40,7 +40,7 @@ Not exact
 ## Gaps
 
 - Standing in a portal does nothing: no dimension switch, no Teleporter, no portal-cooldown or nausea overlay.
-- No live pigman spawning from portals (only the pure function; `portalPigmanSpawn` in nether-melee.js on main may supersede it, the lead decides). The probe also records a second entity ("wg") on one spawn that the position function does not model.
+- Live pigman spawning from portals (batch 14): `NetherLive.randomTick` runs `portalSpawnPosition` on a portal block's random tick (Overworld only, `doMobSpawning`, `nextInt(2000) < difficulty id`, no draw when gated) and `EntityWorld.spawnPortalPigman` creates the pig zombie (random yaw, `onSpawnWithEgg`, portal cooldown 300). The roll and position are probe-replayed; the probe also records a second entity ("wg", a chicken jockey) on one spawn, which the port's `onSpawnWithEgg` draws and drops.
 - The `portal.portal` sound file is not in public/audio (the importer regex now includes `portal\/`, the importer was NOT run). The ambient call is silent until it is imported.
 - `portalDisplayTick` (particles and ambience) was written from the decompile and is not probe-verified.
 - Wart planting by item use and the Creative listing rely on existing paths (item 386 was already listed); wart placement was not exercised in a browser.

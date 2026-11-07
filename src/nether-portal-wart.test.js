@@ -174,3 +174,38 @@ test("portal display tick spawns four particles and rolls the ambience", () => {
   portalDisplayTick(w, 0, 20, 0, new JavaRandom(5n), { spawn: (...a) => out.push(a) }, (...a) => sounds.push(a));
   assert.equal(out.length, 4); out.forEach((p) => assert.equal(p[0], "portal"));
 });
+
+// BlockPortal.updateTick wired into the live random tick (NetherLive.randomTick): the roll is nextInt(2000) < difficulty id and only
+// with a surface provider and doMobSpawning; a gated tick draws nothing (the && chain short-circuits before nextInt).
+function portalWorld() {
+  const w = new Stub(); w.putOriginal(0, 20, 0, 90, 1);
+  for (let y = 0; y <= 15; y++) w.putOriginal(0, y, 0, 1);
+  return w;
+}
+function portalTicks({ seed = 7n, ticks = 6000, difficulty = 3, mobSpawning = true, dimension = 0 } = {}) {
+  const w = portalWorld(); w.dimension = dimension;
+  const rnd = new JavaRandom(seed), made = [];
+  const live = new NetherLive(w, { random: rnd, pigman: (at) => made.push(at), difficulty: () => difficulty, mobSpawning: () => mobSpawning, solidTop: (x, y, z) => w.get(x, y, z) !== 0 && w.get(x, y, z) !== PORTAL, normalCube: (id) => id !== 0 && id !== PORTAL });
+  const handled = [];
+  for (let t = 0; t < ticks; t++) handled.push(live.randomTick(0, 20, 0, PORTAL));
+  return { made, rnd, handled };
+}
+test("live portal random tick: pigman rate follows the difficulty id and spawns on the first solid top below", () => {
+  const rates = [0, 1, 2, 3].map((difficulty) => portalTicks({ difficulty, ticks: 40000 }).made.length);
+  assert.equal(rates[0], 0);
+  for (const d of [1, 2, 3]) assert.ok(Math.abs(rates[d] - (d * 40000) / 2000) < 4 * Math.sqrt((d * 40000) / 2000), `difficulty ${d}: ${rates[d]}`);
+  const { made, handled } = portalTicks({ difficulty: 3 });
+  assert.ok(made.length > 0 && handled.every(Boolean));
+  for (const [x, y, z] of made) { near(x, 0.5); near(y, 16.1); near(z, 0.5); }
+  // The same seeds reproduce the probe's pure-function rolls tick for tick.
+  const a = portalTicks({ seed: 99n, difficulty: 2, ticks: 3000 }), b = portalTicks({ seed: 99n, difficulty: 2, ticks: 3000 });
+  assert.deepEqual(a.made, b.made);
+});
+test("live portal random tick: doMobSpawning false and non-surface dimensions neither spawn nor draw", () => {
+  const untouched = nextLong(new JavaRandom(5n));
+  for (const opts of [{ mobSpawning: false }, { dimension: -1 }, { dimension: 1 }]) {
+    const r = portalTicks({ seed: 5n, difficulty: 3, ticks: 5000, ...opts });
+    assert.equal(r.made.length, 0);
+    assert.equal(nextLong(r.rnd), untouched, JSON.stringify(opts));
+  }
+});

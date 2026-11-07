@@ -44,7 +44,7 @@ EntityList is not the complete feature roster: players, weather lightning, throw
 | 52 | Spider | yn | no | yes | Partial; [spiders](spiders.md); legacy EntityCreature AI adapted; see doc | E |
 | 53 | Giant | ye | no | no | Partial; [giant](giant.md); summon/region only as native; pathing reach unverified | E |
 | 54 | Zombie | yq | no | yes | Partial; [pathfinding](pathfinding.md); baby/villager/jockey variants in mob-riding.md and zombie-villager.md | E |
-| 55 | Slime | ym | no | yes | Partial; [slime](slime.md); natural spawns through the SpawnerAnimals port; no seeded replay reached a slime | E |
+| 55 | Slime | ym | no | yes | Partial; [slime](slime.md); natural spawns through the SpawnerAnimals port; no seeded `findChunksForSpawning` replay reaches a slime (its size rolls on the unseeded entity Random) | E |
 | 56 | Ghast | yd | no | yes | Implemented; [blaze-ghast](blaze-ghast.md) | E |
 | 57 | PigZombie | yh | no | yes | Implemented; [magma-pigman](magma-pigman.md); portal spawning in nether-portal-live.js | E |
 | 58 | Enderman | ya | no | yes | Implemented; [enderman](enderman.md); held-block use by the player probe not covered | E |

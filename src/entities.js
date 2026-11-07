@@ -1,6 +1,6 @@
 import { entityActive } from './streaming-ticks.js';
 import { dimensionSpawnList } from "./dimension-spawning.js";
-import { findChunksForSpawning, eligibleChunkOrder } from "./spawner-animals.js";
+import { findChunksForSpawning, eligibleChunkOrder, ELIGIBLE_CHUNKS } from "./spawner-animals.js";
 import { spawnList, ENTITY_TYPE_OF, maxSpawnedInChunk, creatureTypeOf, WITCH_HUT_MONSTERS } from "./spawn-lists.js";
 import { solidTopSurface } from "./doors-panes.js";
 import { fleeceColor } from "./population-tail.js";
@@ -1919,13 +1919,13 @@ export class EntityWorld {
       s.ctx.order = eligibleChunkOrder(pcx + ox, pcz + oz).map(([dx, dz, edge]) => [pcx + dx, pcz + dz, edge]);
     }
     const { ctx, tops } = s, order = ctx.order;
-    let capChunks = 0;
-    for (let i = 0; i < order.length; i++) if ((tops[i] = this.spawnChunkTop(order[i][0], order[i][1])) >= 0) capChunks++;
-    if (!capChunks) return 0;
+    let simulated = 0;
+    for (let i = 0; i < order.length; i++) if ((tops[i] = this.spawnChunkTop(order[i][0], order[i][1])) >= 0) simulated++;
+    if (!simulated) return 0;
     s.env.time = survival.time ?? 0;
     s.sub = skylightSubtracted(celestialAngle(s.env.time));
     s.player = player;
-    ctx.capChunks = capChunks;
+    ctx.capChunks = ELIGIBLE_CHUNKS; // eligibleChunksForSpawning.size(): always the 17x17 window of the one player
     ctx.rand = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
     ctx.spawn = this.spawnPoint ? this.spawnPoint() : null;
     if (!this.spawnPoint && !world.dimension && world.spawn) {
@@ -1952,7 +1952,8 @@ export class EntityWorld {
       rand: null, order: [], capChunks: 0, spawn: null,
       count: (name) => {
         let n = 0;
-        for (const e of this.entities) if (!e.persistent && creatureTypeOf(e.type) === name && entityActive(world, e)) n++;
+        // World.countEntities walks every loaded entity (ticking or not), so mobs frozen outside the ticking window count too.
+        for (const e of this.entities) if (!e.persistent && creatureTypeOf(e.type) === name) n++;
         return n;
       },
       chunkTop: (_cx, _cz, i) => (s.tops[i] >= 0 ? s.tops[i] : null),
@@ -1963,7 +1964,8 @@ export class EntityWorld {
       possibleCreatures: (type, x, y, z) => {
         if (dim) return type.name === "monster" ? dimensionSpawnList(world, x, y, z) : spawnList(dim === NETHER ? 8 : 9, type.name);
         const slot = world.biomeAt ? world.biomeAt(x, z)?.id ?? 1 : 1;
-        if (type.name === "monster" && (slot === 6 || slot === 134) && this.swampHutAt(x, y, z)) return WITCH_HUT_MONSTERS;
+        // ChunkProviderGenerate.getPossibleCreatures: the hut's box decides, whatever biome the block's slot holds.
+        if (type.name === "monster" && this.swampHutAt(x, y, z)) return WITCH_HUT_MONSTERS;
         return spawnList(slot, type.name);
       },
       create: (name, x, y, z, yaw) => (ENTITY_TYPE_OF[name] ? hooks.createMob(ENTITY_TYPE_OF[name], x, y, z, yaw) : null),
@@ -2008,6 +2010,21 @@ export class EntityWorld {
     const nx = x + (world.originX || 0), nz = z + (world.originZ || 0), cx = nx >> 4, cz = nz >> 4, key = `${cx},${cz}`;
     if (!huts.done.has(key)) { huts.gen.generate(cx, cz); huts.done.add(key); }
     return huts.gen.isSwampHut(nx, y, nz);
+  }
+  // WorldInfo.getWorldTotalTime as the spawner sees it (read before WorldServer.tick adds 1): worldTicks is that value for the
+  // current tick. The saved record keeps the value after the tick (level.dat Time); main.js loads and saves it.
+  loadTotalTime(t) { this.worldTicks = (Number.isSafeInteger(t) && t >= 0 ? t : 0) - 1; }
+  saveTotalTime() { return this.worldTicks === undefined ? undefined : this.worldTicks + 1; }
+  // BlockPortal.updateTick's ItemMonsterPlacer.spawnCreature(world, 57, x, y, z): setLocationAndAngles with wrap(nextFloat() * 360),
+  // onSpawnWithEgg, then timeUntilPortal = getPortalCooldown (300). `rand` is World.rand.
+  spawnPortalPigman([x, y, z], rand) {
+    const e = this.create("pigman", x, y, z), yaw = wrapDegrees(Math.fround(Math.fround(rand.nextFloat()) * 360));
+    for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) e[k] = yaw;
+    e.yaw = (-yaw * Math.PI) / 180;
+    this.onSpawnWithEgg(e);
+    e.portalCooldown = 300;
+    this.entities.push(e);
+    return e;
   }
   // Entities outside the ticking window never update, so EntityLiving.despawnEntity never removes them. Natively the chunks out
   // to the view distance keep updating, so a mob that may despawn and is beyond its 128-block range would be gone on its next
