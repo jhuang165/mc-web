@@ -10,9 +10,11 @@ import { primeTnt } from "./explosion.js";
 import { newOrb } from "./experience.js";
 import { spawnFalling, isFallingBlock, FALLING_Y_OFFSET } from "./falling.js";
 import { fromOriginal } from "./block-registry.js";
+import { ARTS } from "./hanging.js";
 
 export const ENTITY_SUMMON = Object.freeze({
   Item: "entity:Item", XPOrb: "entity:XPOrb", PrimedTnt: "entity:PrimedTnt", FallingSand: "entity:FallingSand", Boat: "entity:Boat",
+  Painting: "entity:Painting", ItemFrame: "entity:ItemFrame", LeashKnot: "entity:LeashKnot",
   ...Object.fromEntries(Object.keys(JAVA_PROJECTILES).filter((id) => id !== "FireworksRocketEntity").map((id) => [id, "entity:" + id])),
 });
 export const entityIdOfSummon = (type) => (typeof type === "string" && type.startsWith("entity:") ? type.slice(7) : null);
@@ -21,10 +23,12 @@ const BASE_KEYS = ["id", "Pos", "Motion", "Rotation", "FallDistance", "Fire", "A
 const KEYS = {
   Item: ["Health", "Age", "Item", "PickupDelay", "Thrower", "Owner"], XPOrb: ["Health", "Age", "Value"], PrimedTnt: ["Fuse"],
   FallingSand: ["Tile", "TileID", "Data", "Time", "DropItem", "HurtEntities", "FallHurtMax", "FallHurtAmount", "TileEntityData"], Boat: [],
+  Painting: ["Direction", "Dir", "TileX", "TileY", "TileZ", "Motive"], ItemFrame: ["Direction", "Dir", "TileX", "TileY", "TileZ", "Item", "ItemRotation", "ItemDropChance"], LeashKnot: [],
 };
 // What this build keeps of each key set (the rest is reported).
 const KEPT = {
   Item: ["Age", "Item", "PickupDelay", "Motion"], XPOrb: ["Value", "Motion"], PrimedTnt: ["Fuse"], FallingSand: ["Tile", "TileID", "Data", "Time"], Boat: ["Motion", "Rotation"],
+  Painting: ["Direction", "Dir", "TileX", "TileY", "TileZ", "Motive"], ItemFrame: ["Direction", "Dir", "TileX", "TileY", "TileZ", "Item", "ItemRotation", "ItemDropChance"], LeashKnot: [],
 };
 
 // boats.js BOAT_Y_OFFSET (EntityBoat yOffset = height / 2); not imported because boats.js extends Minecarts and would close a cycle through commands.js.
@@ -91,6 +95,30 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
     const rotation = list(t, "Rotation", NBT.FLOAT, 2), boat = hosts.boats.spawnBoat({ x, y: y - BOAT_Y_OFFSET, z, yaw: rotation?.[0] ?? 0, vx: motion[0], vy: motion[1], vz: motion[2] });
     boat.pitch = boat.prevPitch = Math.fround(rotation?.[1] ?? 0);
     vehicle = boat;
+  } else if (id === "Painting" || id === "ItemFrame") {
+    // EntityHanging.readEntityFromNBT: a numeric "Direction" wins over the pre-1.2 "Dir" (0 to 3 mapped 2, 1, 0, 3; anything else leaves 0); then
+    // TileX/Y/Z and setDirection. EntityPainting reads Motive first (an unknown name is Kebab); EntityItemFrame reads a non-empty Item and, only then,
+    // ItemRotation (i % 4, Java remainder) and ItemDropChance.
+    const dir = hasNumber(t, "Direction") ? nbtGet(t, "Direction", NBT.BYTE, 0) : [2, 1, 0, 3][nbtGet(t, "Dir", NBT.BYTE, 0)] ?? 0;
+    const tx = nbtGet(t, "TileX", NBT.INT, 0), ty = nbtGet(t, "TileY", NBT.INT, 0), tz = nbtGet(t, "TileZ", NBT.INT, 0);
+    if (dir < 0 || dir > 3) { ignored.push(`Direction (${dir}: the build keeps facings 0 to 3 only)`); spawned = false; }
+    else if (!hosts.hanging) spawned = false;
+    else if (id === "Painting") {
+      const motive = nbtGet(t, "Motive", NBT.STRING, ""), art = ARTS.findIndex((a) => a[0] === motive);
+      hosts.hanging.summon("painting", dir, tx, ty, tz, x, y, z, { art: art < 0 ? 0 : art });
+    } else {
+      const itemTag = nbtGet(t, "Item", NBT.COMPOUND), stack = itemTag && itemTag.size ? convertItem(itemTag) : null;
+      const extra = {};
+      if (stack) {
+        extra.item = stack;
+        extra.rotation = nbtGet(t, "ItemRotation", NBT.BYTE, 0) % 4;
+        if (hasNumber(t, "ItemDropChance")) extra.dropChance = nbtGet(t, "ItemDropChance", NBT.FLOAT, 1);
+      }
+      hosts.hanging.summon("frame", dir, tx, ty, tz, x, y, z, extra);
+    }
+  } else if (id === "LeashKnot") {
+    // su: readEntityFromNBT is empty, so only the base keys are read and the knot's tile stays 0, 0, 0.
+    if (hosts.mobs?.knotSummon) hosts.mobs.knotSummon(x, y, z); else spawned = false;
   } else return { ignored: [`${id} (not kept)`], spawned: false };
   for (const k of t.keys()) if (!known.has(k) || (KEYS[id].includes(k) && !KEPT[id].includes(k))) ignored.push(k);
   return { ignored: ignored.filter((k) => k !== "id"), spawned, vehicle };

@@ -1380,7 +1380,7 @@ const itemHoverLines = (snbt) => {
   return tooltipLines(ITEMS[stack.id], stack, options.advancedTooltips).map((l, i) => (l.color ?? (i ? "gray" : "white")).split(" ").map((c) => (TIP_CODES[c] ? "§" + TIP_CODES[c] : "")).join("") + (l.italic ? "§o" : "") + l.text);
 };
 const commandHost = createCommandHost({
-  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, rockets: () => rockets, entityHosts: () => ({ items, xpOrbs, primed, falling, boats, projectiles, arrows, eyes, mobs, dimension: world.dimension ?? 0 }), survival: () => survival, experience: () => experience,
+  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, rockets: () => rockets, entityHosts: () => ({ items, xpOrbs, primed, falling, boats, projectiles, arrows, eyes, mobs, hanging, dimension: world.dimension ?? 0 }), survival: () => survival, experience: () => experience,
   position: () => ({ x: position.x, y: position.y, z: position.z }),
   seed: () => active.seed,
   scoreboard: () => scoreboard,

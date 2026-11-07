@@ -28,7 +28,7 @@ function game() {
     minecarts: () => minecarts, entityHosts: () => hosts };
   const host = createCommandHost(env); host.print = (t) => lines.push(t);
   const runner = createCommandRunner(host);
-  return { mobs, minecarts, calls, run(s) { lines.length = 0; const ok = runner.run(s); return { ok, lines: [...lines] }; } };
+  return { mobs, minecarts, calls, hosts, run(s) { lines.length = 0; const ok = runner.run(s); return { ok, lines: [...lines] }; } };
 }
 const failed = (out) => out.lines.some((l) => /Unable to summon|summon\.failed/.test(l));
 
@@ -38,7 +38,8 @@ test('every EntityList registration the build implements is summonable; the rest
     assert.equal(SUMMONABLE[id], 'entity:' + id, id);
   assert.equal(SUMMONABLE.MinecartSpawner, CART_SUMMON.MinecartSpawner);
   assert.equal(entityIdOfSummon(SUMMONABLE.Boat), 'Boat');
-  for (const id of ['Painting', 'ItemFrame', 'LeashKnot', 'Mob', 'Monster']) assert.equal(SUMMONABLE[id], undefined, id);
+  for (const id of ['Painting', 'ItemFrame', 'LeashKnot']) assert.equal(SUMMONABLE[id], 'entity:' + id, id);
+  for (const id of ['Mob', 'Monster']) assert.equal(SUMMONABLE[id], undefined, id);
 });
 
 test('summon MinecartSpawner reads the logic keys and spawns a type 4 cart', () => {
@@ -74,7 +75,7 @@ test('summon projectiles reach their holders with the command position', () => {
 
 test('unregistered, abstract and unsupported ids fail the command like the original', () => {
   const g = game();
-  for (const id of ['Mob', 'Monster', 'Painting', 'ItemFrame', 'LeashKnot', 'NoSuchEntity']) { const out = g.run(`/summon ${id} ~ ~ ~`); assert.equal(out.ok, true); assert.ok(failed(out) || out.lines.every((l) => !l.startsWith('§c') || /summon/.test(l)), id); }
+  for (const id of ['Mob', 'Monster', 'NoSuchEntity']) { const out = g.run(`/summon ${id} ~ ~ ~`); assert.equal(out.ok, true); assert.ok(failed(out) || out.lines.every((l) => !l.startsWith('§c') || /summon/.test(l)), id); }
   assert.equal(g.mobs.entities.length, 0);
 });
 
@@ -94,4 +95,43 @@ test('Riding chain: each mount is spawned at the command position and mounted by
   assert.equal(g3.minecarts.carts.length, 1); assert.equal(g3.mobs.entities[0].ridingEntity, g3.minecarts.carts[0]);
   assert.equal(g3.minecarts.carts[0].passenger, g3.mobs.entities[0]);
   assert.doesNotMatch(note.lines.join('\n'), /Riding/);
+});
+
+test('summon Painting, ItemFrame and LeashKnot follow readEntityFromNBT then setLocationAndAngles', async () => {
+  const { Hanging } = await import('./hanging.js');
+  const g = game(); g.hosts.hanging = new Hanging();
+  const h = g.hosts.hanging;
+  assert.ok(!failed(g.run('/summon Painting ~ ~ ~ {Motive:Pool,Direction:1b,TileX:4,TileY:70,TileZ:5}')));
+  let p = h.entities[0];
+  assert.deepEqual([p.kind, p.art, p.dir, p.tx, p.ty, p.tz, p.x, p.y, p.z, p.yaw], ['painting', 0 + p.art, 1, 4, 70, 5, 10.5, 61, 10.5, 90]);
+  assert.deepEqual(p.bb, [10.25, 61, 10.25, 10.75, 61.5, 10.75]);
+  // No tag keys: Kebab, legacy Dir 0 maps to facing 2, tile 0, 0, 0.
+  assert.ok(!failed(g.run('/summon Painting ~ ~ ~ {}')));
+  p = h.entities[1];
+  assert.deepEqual([p.art, p.dir, p.tx, p.ty, p.tz], [0, 2, 0, 0, 0]);
+  assert.ok(!failed(g.run('/summon Painting ~ ~ ~ {Dir:1b,Direction:3b}')));
+  assert.equal(h.entities[2].dir, 3);
+  assert.ok(!failed(g.run('/summon Painting ~ ~ ~ {Dir:3b}')));
+  assert.equal(h.entities[3].dir, 3);
+  assert.ok(!failed(g.run('/summon Painting ~ ~ ~ {Dir:9b}')));
+  assert.equal(h.entities[4].dir, 0); // an out-of-range legacy Dir leaves the field at its default 0
+  // Directions outside 0..3 are not kept.
+  const n = h.entities.length;
+  assert.match(g.run('/summon Painting ~ ~ ~ {Direction:7b}').lines.join('\n'), /Direction/);
+  assert.equal(h.entities.length, n);
+  // Item frame: rotation and drop chance are read only with a non-empty Item; rotation is i % 4.
+  assert.ok(!failed(g.run('/summon ItemFrame ~ ~ ~ {ItemRotation:6b,ItemDropChance:0.5f,Item:{id:264s,Count:2b,Damage:0s}}')));
+  let f = h.entities.at(-1);
+  assert.deepEqual([f.kind, f.item.count, f.rotation, f.dropChance], ['frame', 2, 2, 0.5]);
+  assert.ok(!failed(g.run('/summon ItemFrame ~ ~ ~ {ItemRotation:3b,Item:{}}')));
+  f = h.entities.at(-1);
+  assert.deepEqual([f.item, f.rotation, f.dropChance], [null, 0, 1]);
+  // LeashKnot: tile 0,0,0, at the command position, dies on its 101st update without a fence.
+  assert.ok(!failed(g.run('/summon LeashKnot ~ ~ ~')));
+  const knots = g.mobs.leashKnots();
+  assert.deepEqual([knots.length, knots[0].x, knots[0].y, knots[0].z, knots[0].px, knots[0].py, knots[0].pz], [1, 0, 0, 0, 10.5, 61, 10.5]);
+  for (let i = 0; i < 100; i++) g.mobs.knotTick();
+  assert.equal(g.mobs.leashKnots().length, 1);
+  g.mobs.knotTick();
+  assert.equal(g.mobs.leashKnots().length, 0);
 });
