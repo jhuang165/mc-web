@@ -1,6 +1,8 @@
 // GuiAchievement (the "Achievement get!" toast) and GuiAchievements (the draggable, zoomable tree), ported from the
 // 1.7.10 beh / bei classes (see public/research/achievements.md). The pure parts (toast slide, background tile, scroll
 // physics, tooltip text) are exported for src/achievements.test.js; the DOM and canvas drawing is below them.
+import { onResourcesRefreshed } from "./resource-refresh.js";
+import { versioned } from "./media-version.js";
 import { lwjglCode } from "./keybindings.js";
 import { ACHIEVEMENTS, BY_ID, BOUNDS, STRINGS } from "./achievements.js";
 import { JavaRandom } from "./java-random.js";
@@ -142,7 +144,8 @@ const el = (tag, cls, css = "") => { const e = document.createElement(tag); if (
 const SPRITE = "/media/1.7.10/gui/achievement/achievement_background.png";
 const BLOCKS = ["sand", "bedrock", "stone", "dirt", "iron_ore", "coal_ore", "diamond_ore", "redstone_ore"];
 let sheet = null, textures = null;
-const load = (src) => { const i = new Image(); i.src = src; return i; };
+const load = (src) => { const i = new Image(); i.src = versioned(src); return i; };
+onResourcesRefreshed(() => { sheet = null; textures = null; });
 const assets = () => {
   sheet ??= load(SPRITE);
   textures ??= Object.fromEntries(BLOCKS.map((n) => [n, load(`/media/1.7.10/blocks/${n}.png`)]));

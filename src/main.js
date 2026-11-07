@@ -1,3 +1,4 @@
+import { refreshResources, onResourcesRefreshed } from "./resource-refresh.js"; // first: registers every pack-dependent texture as it loads
 import { isStemCake, popDrops } from './stems-cake.js';
 import { hasVoidParticles } from "./void-fog.js";
 import { StreamStorage } from './streaming-storage.js';
@@ -546,10 +547,17 @@ const gui = new Gui($("#gui"), {
   sound: () => sounds?.play("gui.button.press", { volume: 0.25, pitch: 1 }),
   notice: toast,
   inGame: () => screen !== "home",
+  // Minecraft.refreshResources, in place: the page and the running world stay (resource-refresh.js).
+  reloadResources: () => refreshResources(),
 });
 const menus = createMenus(gui, menuContext);
 // Selected resource packs (resource-packs.js): their lang entries replace the menu strings; textures and sounds are served by the worker.
 initResourcePacks(options, LANG).then(() => gui.screen && gui.build());
+// In-place refresh (resource-refresh.js): the textures of three.js and the CSS sprites reload by themselves; these re-read the rest.
+onResourcesRefreshed(async () => { await initResourcePacks(options, LANG); gui.screen && gui.build(); });
+onResourcesRefreshed(() => scene?.textures.reload());
+onResourcesRefreshed(() => scene?.reloadStrips());
+onResourcesRefreshed(() => sounds?.refreshPacks?.());
 addEventListener("resize", () => gui.build());
 
 // `columns`: the active streamed world's edited column records (world-storage.js).

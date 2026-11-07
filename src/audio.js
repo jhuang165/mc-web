@@ -1,5 +1,7 @@
 import { soundTypeOf } from "./block-sounds.js";
 import { soundLevel, normalizedVolume, normalizedPitch } from "./settings.js";
+import { applySoundLayers } from "./pack-sounds.js";
+import { packStore } from "./resource-packs.js";
 // The sound family of a block's Block.SoundType: its break event is "dig." + family and its step event "step." + stepSound.
 // One native table (block-sounds.js, public/research/block-sounds.md) replaces the old per-block choices.
 export const blockSound = (id) => soundTypeOf(id).break.slice(4);
@@ -38,12 +40,31 @@ export class SoundBank {
           this.streaming = true;
           this.status += `, ${Object.keys(s.files).length} music and record streams`;
         }
-        return m;
+        // The vanilla table is kept apart so selected resource packs' sounds.json can be layered over it again on each refresh.
+        this.base = { ...m, files: { ...m.files }, events: { ...m.events } };
+        await this.loadPackSounds();
+        return this.manifest;
       })
       .catch((e) => {
         this.status = e.message;
         return null;
       });
+  }
+  // SoundHandler.onResourceManagerReload with the selected packs: sounds.json of each pack layered over the vanilla events
+  // (pack-sounds.js). Pack ogg files replace same-named bundled ones through the service worker.
+  async loadPackSounds() {
+    let meta = null;
+    try { if (this.options().resourcePacks?.length && typeof indexedDB !== "undefined") meta = await packStore().getMeta("sounds"); } catch {}
+    const { manifest, warnings } = applySoundLayers(this.base, meta?.layers ?? [], meta?.files ?? []);
+    this.manifest = manifest;
+    for (const w of [...(meta?.warnings ?? []), ...warnings]) console.warn(w);
+  }
+  // Minecraft.refreshResources: re-read the pack sound tables and drop the decoded clips (their files may have changed).
+  async refreshPacks() {
+    await this.ready;
+    if (!this.base) return;
+    await this.loadPackSounds();
+    this.cache.clear();
   }
   unlock() {
     if (this.tabSilent) return;
@@ -175,7 +196,7 @@ export class SoundBank {
     if (!handle.playing) return;
     const clip = this.resolve(handle.event), file = clip && this.manifest?.files[clip.name];
     const entryVolume = clip?.volume ?? 1;
-    if (!file?.stream || !this.options().sound || this.master() <= 0
+    if (!file || !(file.stream || clip.stream) || !this.options().sound || this.master() <= 0
       || normalizedVolume(handle.volume, entryVolume, this.options().soundLevels, clip.category) === 0) return this.stop(handle);
     const audio = new Audio(file.url);
     audio.preload = "auto";

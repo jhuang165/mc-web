@@ -4,6 +4,7 @@
 // disk, so applying packs resolves every overridden file once, stores it in IndexedDB and a service worker
 // (public/resource-pack-sw.js) answers requests for /media/1.7.10/** and /audio/1.7.10** from that table.
 import { readZip } from "./zip-reader.js";
+import { parseSoundsJson } from "./pack-sounds.js";
 
 export const ASSETS = "assets/minecraft/";
 // PackMetadataSection format of 1.7.10.
@@ -19,7 +20,7 @@ const mimeOf = (url) => MIME[url.slice(url.lastIndexOf(".") + 1).toLowerCase()] 
 export function overrideUrls(entryName) {
   if (!entryName.startsWith(ASSETS) || entryName.endsWith("/") || entryName.includes("..")) return [];
   const rest = entryName.slice(ASSETS.length);
-  if (rest.startsWith("textures/") && rest.endsWith(".png")) return ["/media/1.7.10/" + rest.slice(9)];
+  if (rest.startsWith("textures/") && (rest.endsWith(".png") || rest.endsWith(".png.mcmeta"))) return ["/media/1.7.10/" + rest.slice(9)];
   if (rest.startsWith("sounds/") && rest.endsWith(".ogg")) return ["/audio/1.7.10/" + rest.slice(7), "/audio/1.7.10-streams/" + rest.slice(7)];
   return [];
 }
@@ -79,11 +80,43 @@ export async function packInfo(pack) {
   return { name: pack.name, kind: pack.kind, ...parsed, icon };
 }
 
+// The .png.mcmeta files the bundled set ships (FallbackResourceManager hides them when a pack supplies the png, see below).
+export const VANILLA_MCMETA = [
+  "blocks/fire_layer_0", "blocks/fire_layer_1", "blocks/lava_flow", "blocks/lava_still", "blocks/portal", "blocks/water_flow", "blocks/water_still",
+  "items/clock", "items/compass", "misc/enchanted_item_glint", "misc/pumpkinblur", "misc/shadow", "misc/vignette",
+].map((n) => `/media/1.7.10/${n}.png.mcmeta`);
+
 // Override resolution: `packs` run from the lowest priority to the highest, so a later pack wins a URL. Returns Map(url -> { pack, entry }).
+// Metadata follows FallbackResourceManager.getResource (bqq.a): walking from the top pack down, the first .mcmeta found is kept until a
+// pack holding the texture itself is reached, so a texture's mcmeta comes from the pack that supplies the png or one ABOVE it, never
+// from one below. A pack png without such an mcmeta therefore hides the bundled one (an entry with `missing: true`, served as 404).
 export function resolveOverrides(packs) {
-  const table = new Map();
-  for (const pack of packs) for (const [name, entry] of pack.entries) for (const url of overrideUrls(name)) table.set(url, { pack: pack.name, entry });
+  const table = new Map(), png = new Map(), meta = new Map();
+  packs.forEach((pack, index) => {
+    for (const [name, entry] of pack.entries) for (const url of overrideUrls(name)) {
+      const record = { pack: pack.name, entry, index };
+      table.set(url, record);
+      if (url.endsWith(".mcmeta")) meta.set(url, record); else if (url.endsWith(".png")) png.set(url, record);
+    }
+  });
+  for (const [url, record] of png) {
+    const m = meta.get(url + ".mcmeta");
+    if (m && m.index >= record.index) continue;
+    if (m) table.set(url + ".mcmeta", { pack: m.pack, entry: null, missing: true, index: m.index });
+    else if (VANILLA_MCMETA.includes(url + ".mcmeta")) table.set(url + ".mcmeta", { pack: record.pack, entry: null, missing: true, index: record.index });
+  }
   return table;
+}
+// sounds.json of every pack, lowest priority first: [{ pack, events }] plus the sound names the packs ship and any parse warnings.
+export async function resolveSounds(packs) {
+  const layers = [], files = new Set(), warnings = [];
+  for (const pack of packs) {
+    for (const name of pack.entries.keys()) if (name.startsWith(ASSETS + "sounds/") && name.endsWith(".ogg")) files.add(name.slice((ASSETS + "sounds/").length, -4));
+    const t = await text(pack, ASSETS + "sounds.json");
+    if (t == null) continue;
+    try { layers.push({ pack: pack.name, events: parseSoundsJson(t) }); } catch (e) { warnings.push(`${pack.name}: Invalid sounds.json: ${e.message}`); }
+  }
+  return { layers, files: [...files].sort(), warnings };
 }
 // The merged lang/en_US.lang of the packs in priority order (later packs win keys).
 export async function resolveLang(packs) {
@@ -164,11 +197,25 @@ export async function applyPacks(names, store) {
   const packs = [];
   for (const name of names) { const rec = await store.getPack(name); if (rec) packs.push(await openStoredPack(rec)); }
   const table = resolveOverrides(packs), overrides = new Map();
-  for (const [url, { entry }] of table) overrides.set(url, { blob: new Blob([await entry.read()], { type: mimeOf(url) }), type: mimeOf(url) });
-  const lang = await resolveLang(packs);
+  for (const [url, hit] of table) {
+    if (hit.missing) overrides.set(url, { blob: null, type: mimeOf(url), missing: true });
+    else overrides.set(url, { blob: new Blob([await hit.entry.read()], { type: mimeOf(url) }), type: mimeOf(url) });
+  }
+  const lang = await resolveLang(packs), sounds = await resolveSounds(packs);
+  // The texture animation files the packs supply or hide, for the block atlas (which only asks for mcmeta it knows exists).
+  const textures = { mcmeta: [...table].filter(([u, h]) => u.endsWith(".png.mcmeta") && !h.missing).map(([u]) => u), hidden: [...table].filter(([, h]) => h.missing).map(([u]) => u) };
   await store.replaceOverrides(overrides);
   await store.setMeta("lang", lang);
-  return { packs: packs.map((p) => p.name), overrides: overrides.size, lang: Object.keys(lang).length };
+  await store.setMeta("sounds", sounds);
+  await store.setMeta("textures", textures);
+  return { packs: packs.map((p) => p.name), overrides: overrides.size, lang: Object.keys(lang).length, sounds: sounds.layers.length, warnings: sounds.warnings };
+}
+
+// Deletes a stored pack. Native packs live in the resourcepacks folder and are removed there; the browser has no folder, so the
+// screen offers this instead. A selected pack is dropped from the selection too (the caller reapplies when that changes it).
+export async function deleteStoredPack(store, name, selected = []) {
+  await store.deletePack(name);
+  return selected.filter((n) => n !== name);
 }
 
 // ---- Browser glue ----
@@ -179,14 +226,33 @@ export async function registerPackWorker() {
   await navigator.serviceWorker.register("/resource-pack-sw.js", { scope: "/" });
   return navigator.serviceWorker.ready;
 }
+// Tells the worker to reload its override table and waits for its reply (a worker that is not running, or the lack of a controller,
+// resolves after a short timeout so a first-ever apply never hangs).
 export async function refreshWorker() {
   const reg = await registerPackWorker();
-  reg?.active?.postMessage({ type: "refresh" });
+  const active = reg?.active;
+  if (!active) return;
+  await new Promise((resolve) => {
+    const channel = new MessageChannel(), timer = setTimeout(resolve, 2000);
+    channel.port1.onmessage = () => { clearTimeout(timer); resolve(); };
+    active.postMessage({ type: "refresh" }, [channel.port2]);
+  });
 }
-// Page start: pack lang entries replace the strings of `lang` (the menu table).
+// Pack lang entries replace the strings of `lang` (the menu table). The replaced values are remembered so a later selection
+// change (in-place refresh) restores keys the new selection no longer sets.
+const langOriginals = new WeakMap();
+export function applyLangLayer(lang, layer = {}) {
+  let originals = langOriginals.get(lang);
+  if (!originals) langOriginals.set(lang, originals = new Map());
+  for (const [key, value] of originals) { if (value === undefined) delete lang[key]; else lang[key] = value; }
+  originals.clear();
+  for (const [key, value] of Object.entries(layer)) { originals.set(key, Object.hasOwn(lang, key) ? lang[key] : undefined); lang[key] = value; }
+}
+// Page start and in-place refresh.
 export async function initResourcePacks(options, lang) {
-  if (!options?.resourcePacks?.length || typeof indexedDB === "undefined") return;
-  try { Object.assign(lang, (await packStore().getMeta("lang")) ?? {}); } catch {}
+  if (typeof indexedDB === "undefined") return;
+  if (!options?.resourcePacks?.length) return applyLangLayer(lang, {});
+  try { applyLangLayer(lang, (await packStore().getMeta("lang")) ?? {}); } catch {}
 }
 
 // ---- GuiScreenResourcePacks lists ----

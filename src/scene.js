@@ -43,6 +43,8 @@ import { NETHER_FENCE, QUARTZ_BLOCK } from "./nether-blocks.js";
 import { anvilModelBoxes } from './anvil-block.js';
 import { isStair, stairBoxes } from './stairs.js';
 import { BED_DIR, bedTexture } from './bed.js';
+import { TICKS_PER_SECOND, stripOffset, resolveAnimation, fetchMcmeta } from './texture-animation.js';
+import { mediaGeneration, versioned } from './media-version.js';
 import { isDoor, isPane, doorFlags, doorBoundsFor, doorFaceFlip, paneMask, paneArms, paneSideRendered } from './doors-panes.js';
 export { blockTile } from "./block-textures.js";
 
@@ -153,6 +155,7 @@ export class VoxelScene {
     this.particleRenderer = new ParticleRenderer(this.scene, this);
     this.particleView = null;
     this.material = worldMaterial(this.lighting, { map: this.textures.texture });
+    this.strips = [];
     const animated = (url, frames, scale) => {
       const t = new THREE.TextureLoader().load(url);
       t.magFilter = t.minFilter = THREE.NearestFilter;
@@ -163,7 +166,7 @@ export class VoxelScene {
       // so only the nearest water surface shows.
       const depth = worldMaterial(this.lighting, { map: t, alphaTest: 0, transparent: true, uvTransform: uv });
       depth.colorWrite = false;
-      return { uv, frames, depth, color: worldMaterial(this.lighting, { map: t, alphaTest: 0, transparent: true, uvTransform: uv }) };
+      return this.strip({ uv, frames, texture: t, url, depth, color: worldMaterial(this.lighting, { map: t, alphaTest: 0, transparent: true, uvTransform: uv }) });
     };
     // BlockIce is a translucent-pass block (getRenderBlockPass 1): like water it
     // draws a depth-only pass, then blended colour, from the terrain atlas.
@@ -181,7 +184,7 @@ export class VoxelScene {
       t.generateMipmaps = false;
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       const uv = new THREE.Vector4(1, 1 / frames, 0, 0);
-      return { uv, frames, material: worldMaterial(this.lighting, { map: t, alphaTest, uvTransform: uv }) };
+      return this.strip({ uv, frames, texture: t, url, material: worldMaterial(this.lighting, { map: t, alphaTest, uvTransform: uv }) });
     };
     this.lavaStill = opaque("/media/1.7.10/blocks/lava_still.png", 20);
     this.lavaFlow = opaque("/media/1.7.10/blocks/lava_flow.png", 16);
@@ -1018,23 +1021,32 @@ export class VoxelScene {
     this.gamma = gamma;
     this.lighting.update(this.sun ?? sunBrightness(this.angle), this.flicker.x, gamma, this.flash, this.nightVision ?? 0, this.dimension);
   }
+  // Registers an animated texture strip and resolves its frame count and timing from the image size and its .png.mcmeta (pack
+  // overrides included). Until that loads, the vanilla frame count stays and the strip shows its first frame.
+  strip(strip) {
+    strip.texture.userData.packStrip = true;
+    strip.load = async (gen = mediaGeneration()) => {
+      const img = await new Promise((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = reject; i.src = versioned(strip.url, gen); });
+      const text = await fetchMcmeta(strip.url);
+      const anim = resolveAnimation(text, img.width, img.height);
+      if (anim.error) console.warn(`${strip.url}: ${anim.error}`);
+      if (gen) { strip.texture.image = img; strip.texture.dispose(); strip.texture.needsUpdate = true; }
+      strip.anim = anim; strip.frames = anim.count; strip.uv.y = 1 / anim.count;
+    };
+    strip.load().catch(() => {});
+    this.strips.push(strip);
+    return strip;
+  }
+  // In-place resource refresh: every strip re-reads its png and mcmeta.
+  reloadStrips() { return Promise.all(this.strips.map((s) => s.load().catch(() => {}))); }
   // Brightness for an entity or tile entity at a world position.
   brightness(x, y, z) {
     return this.light ? this.light.packed(Math.floor(x), Math.floor(y), Math.floor(z)) : 15 << 20;
   }
   render(time, dt = 1 / 60) {
-    this.water.uv.w = 1 - ((Math.floor(time * 10) % 32) + 1) / 32;
-    this.flow.uv.w = 1 - ((Math.floor(time * 20) % 32) + 1) / 32;
-    this.portal.uv.w = 1 - ((Math.floor(time * 20) % 32) + 1) / 32;
-    // lava_still: frametime 2 over frames 0..19 and back down to 1 (38 steps);
-    // lava_flow: frametime 3 over 16 frames.
-    const step = Math.floor(time * 10) % 38;
-    this.lavaStill.uv.w = 1 - ((step < 20 ? step : 38 - step) + 1) / 20;
-    this.lavaFlow.uv.w = 1 - ((Math.floor((time * 20) / 3) % 16) + 1) / 16;
-    // fire_layer_0 plays frames 16..31 then 0..15 (its mcmeta), layer_1 plays in order; one tick each.
-    const fireStep = Math.floor(time * 20) % 32;
-    this.fireLayers[0].uv.w = 1 - (((fireStep + 16) % 32) + 1) / 32;
-    this.fireLayers[1].uv.w = 1 - (fireStep + 1) / 32;
+    // Strip animations come from the .png.mcmeta files (texture-animation.js): vanilla's reproduce the old hard-coded phases exactly.
+    const tick = Math.floor(time * TICKS_PER_SECOND);
+    for (const strip of this.strips) if (strip.anim) strip.uv.w = stripOffset(strip.anim.frameAtTick(tick), strip.frames);
     for (let budget = 2; budget > 0 && this.dirty.size; budget--) this.buildChunk(...this.dirty.values().next().value.split(",").map(Number));
     let c = this.camera, look = c.getWorldDirection(new THREE.Vector3()), u = this.lighting.uniforms, angle = this.angle,
       // ActiveRenderInfo.getBlockAtEntityViewpoint: water or lava fog while the eye is in it. A source

@@ -16,13 +16,20 @@ function load() {
 }
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
-self.addEventListener("message", (e) => { if (e.data?.type === "refresh") table = null; });
+self.addEventListener("message", (e) => {
+  if (e.data?.type !== "refresh") return;
+  table = null;
+  // Reload the table now and answer once it is ready, so the page can refresh its resources in place afterwards.
+  e.waitUntil(load().then(() => e.ports?.[0]?.postMessage("ready")));
+});
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || event.request.method !== "GET") return;
   if (!url.pathname.startsWith("/media/1.7.10/") && !url.pathname.startsWith("/audio/1.7.10")) return;
   event.respondWith(load().then((t) => {
     const hit = t.get(decodeURIComponent(url.pathname));
+    // An mcmeta the packs hide (a pack png without its own mcmeta) answers 404, as the missing resource does natively.
+    if (hit?.missing) return new Response(null, { status: 404 });
     return hit ? new Response(hit.blob, { headers: { "Content-Type": hit.type, "Cache-Control": "no-store" } }) : fetch(event.request);
   }));
 });

@@ -3,6 +3,8 @@
 // public/research/spawn-eggs-reference.json (tools/probes/SpawnEggProbe.java, the unchanged original classes), checked by
 // spawn-eggs.test.js; anything the probe could not run is marked "bytecode-derived". Notes: public/research/spawn-eggs.md.
 // Browser ids 383-385 are glowstone dust, glass bottle and potion, so the three originals take 1950-1952 (original-items.js).
+import { onResourcesRefreshed } from "./resource-refresh.js";
+import { versioned } from "./media-version.js";
 export const ITEM_SPAWN_EGG = 1950, ITEM_EXP_BOTTLE = 1951, ITEM_FIRE_CHARGE = 1952;
 export const SPAWN_EGG_ITEMS = Object.freeze({ 383: ITEM_SPAWN_EGG, 384: ITEM_EXP_BOTTLE, 385: ITEM_FIRE_CHARGE });
 
@@ -76,9 +78,10 @@ const BASE = "/media/1.7.10/items/spawn_egg.png", OVERLAY = "/media/1.7.10/items
 let images = null;
 function loadImages() {
   if (images || typeof Image === "undefined" || typeof document === "undefined") return images;
-  images = [BASE, OVERLAY].map((src) => { const img = new Image(); img.src = src; return img; });
+  images = [BASE, OVERLAY].map((src) => { const img = new Image(); img.src = versioned(src); return img; });
   return images;
 }
+onResourcesRefreshed(() => { images = null; composed.clear(); loadImages(); });
 loadImages();
 export function spawnEggTexture(damage = 0) {
   const e = eggOf(damage), key = e ? e.damage : -1;
