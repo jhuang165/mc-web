@@ -13,6 +13,7 @@ import { isStair, stairBoxes } from "./stairs.js";
 import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
 import { enterWater } from "./fx.js";
 import { GaussianRandom, intercept, rayTraceBlocks } from "./projectiles.js";
+import { aimPart } from "./dragon-parts.js";
 import { addStuckArrow } from "./stuck-arrows.js";
 import { bowEffects } from "./mob-equipment.js";
 import { arrowPunch } from "./player-knockback.js";
@@ -316,6 +317,7 @@ export class Arrows {
         const speed = sqrtF(a.mx * a.mx + a.my * a.my + a.mz * a.mz);
         let dmg = ceil(speed * a.damage);
         if (a.crit) dmg += a.rand.nextInt(Math.trunc(dmg / 2) + 2);
+        aimPart(hit.entity); // an arrow into one of the dragon's parts
         if (this.damageTarget(a, hit.entity.ref, dmg, ctx)) {
           // Knockback (the Knockback enchantment only): addVelocity(m * k * 0.6 / h, 0.1, ...).
           const h = sqrtF(a.mx * a.mx + a.mz * a.mz);

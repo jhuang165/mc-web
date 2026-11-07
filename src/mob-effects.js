@@ -5,11 +5,11 @@ import { potionColor, potionParticles } from "./fx.js";
 import { attributeValue } from "./difficulty.js";
 const f = Math.fround;
 export const SPEED = 1, STRENGTH = 5, REGENERATION = 10, INVISIBILITY = 14;
-export const SLOWNESS = 2, INSTANT_HEALTH = 6, FIRE_RESISTANCE = 12, WATER_BREATHING = 13, WEAKNESS = 18, POISON = 19;
+export const SLOWNESS = 2, INSTANT_HEALTH = 6, FIRE_RESISTANCE = 12, WATER_BREATHING = 13, WEAKNESS = 18, POISON = 19, WITHER = 20;
 // Speed, strength, regeneration and invisibility from the spider spawn roll, plus what an EntityWitch drinks (instant health, speed, fire
 // resistance, water breathing) or throws (slowness, weakness, poison; witch.js).
 // Nausea (9) is the cured zombie villager's villager (EntityZombie.convertToVillager); it has no effect on the mob here.
-const MOB_EFFECTS = new Set([SPEED, SLOWNESS, 9, INSTANT_HEALTH, STRENGTH, REGENERATION, INVISIBILITY, FIRE_RESISTANCE, WATER_BREATHING, WEAKNESS, POISON]);
+const MOB_EFFECTS = new Set([SPEED, SLOWNESS, 9, INSTANT_HEALTH, STRENGTH, REGENERATION, INVISIBILITY, FIRE_RESISTANCE, WATER_BREATHING, WEAKNESS, POISON, WITHER]);
 
 // NBT "ActiveEffects": Id, Amplifier (byte), Duration (int). Unknown ids and spent effects
 // are dropped.
@@ -26,6 +26,7 @@ export const mobEffect = (e, id) => e.effects?.find((x) => x.id === id) ?? null;
 // longer duration at equal strength. The HashMap iterates small Integer keys in order.
 export function addMobEffect(e, id, duration = 2147483647, amplifier = 0) {
   if (!MOB_EFFECTS.has(id)) return false;
+  if (e.type === "wither") return false; // EntityWither.addPotionEffect (xc.c(rj)) is empty: the boss takes no effects
   const list = (e.effects ??= []), old = list.find((x) => x.id === id);
   if (!old) list.push({ id, duration, amplifier }), list.sort((a, b) => a.id - b.id);
   else if (amplifier > old.amplifier) Object.assign(old, { duration, amplifier });
@@ -54,7 +55,7 @@ export function attackDamage(e, base) {
 // (fx.potionParticles; rare while invisible). `size` is the mob's box (width, height),
 // `rand` its Entity.rand; without `fx` the swirl rolls are still drawn.
 const NO_FX = { spawn() {} };
-export function tickMobEffects(e, size, maxHealth, rand, fx) {
+export function tickMobEffects(e, size, maxHealth, rand, fx, hurt) {
   if (!e.effects?.length) return;
   for (const effect of e.effects) {
     if (effect.duration <= 0) continue;
@@ -67,6 +68,12 @@ export function tickMobEffects(e, size, maxHealth, rand, fx) {
     if (effect.id === POISON && e.health > 1) {
       const k = 25 >> effect.amplifier;
       if (k <= 0 || effect.duration % k === 0) e.health = Math.max(1, f(e.health - 1));
+    }
+    // Potion.performEffect for the wither: attackEntityFrom(DamageSource.wither, 1.0F) every 40 >> amplifier ticks (every tick when the
+    // shift reaches zero), so the hurt window and a kill go through the world's attack path (`hurt`, which also plays the sounds).
+    if (effect.id === WITHER && e.health > 0 && hurt) {
+      const k = 40 >> effect.amplifier;
+      if (k <= 0 || effect.duration % k === 0) hurt(e, 1);
     }
     effect.duration--;
   }

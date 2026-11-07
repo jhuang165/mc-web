@@ -24,7 +24,7 @@ const {stdout,stderr}=await exec('java',['-Xmx2g','-cp',cp,'DragonProbe'],{maxBu
 if(/Exception|Caused by:/.test(stderr))throw new Error(stderr);
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(JSON.parse);
 const count=c=>records.filter(r=>r.case===c).length;
-const expect={facts:1,flight:5,ring:1,damage:112,damageMain:1,hurtWindow:1,crystal:4,collide:8,collideHurt:1,destroy:32,destroyTicks:1,death:2};
+const expect={facts:1,flight:5,ring:1,damage:112,damageMain:1,hurtWindow:1,explosionParts:28,crystal:4,collide:8,collideHurt:1,destroy:32,destroyTicks:1,death:2};
 for(const [c,n] of Object.entries(expect))assert.equal(count(c),n,`records of ${c}`);
 assert.equal(records.length,Object.values(expect).reduce((a,b)=>a+b),'no stray records');
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');

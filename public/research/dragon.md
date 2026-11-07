@@ -4,10 +4,10 @@ Target: Minecraft Java 1.7.10 only. This is a partial port; it is not full parit
 
 ## Evidence
 
-- `tools/probes/DragonProbe.java` drives the unchanged original classes (EntityDragon `xa`, EntityDragonPart `wy`, EntityEnderCrystal `wz`, EntityLivingBase `sv`) on a World double with real chunk storage. `tools/verify-dragon.mjs` compiles and runs it (set `MC_RESEARCH` to `tools/research`) and writes `public/research/dragon-reference.json`: 169 records (facts 1, flight 5, ring 1, damage 112, damageMain 1, hurtWindow 1, crystal 4, collide 8, collideHurt 1, destroy 32, destroyTicks 1, death 2).
+- `tools/probes/DragonProbe.java` drives the unchanged original classes (EntityDragon `xa`, EntityDragonPart `wy`, EntityEnderCrystal `wz`, EntityLivingBase `sv`) on a World double with real chunk storage. `tools/verify-dragon.mjs` compiles and runs it (set `MC_RESEARCH` to `tools/research`) and writes `public/research/dragon-reference.json`: 197 records (facts 1, flight 5, ring 1, damage 112, damageMain 1, hurtWindow 1, crystal 4, collide 8, collideHurt 1, destroy 32, destroyTicks 1, death 2, explosionParts 28).
 - `src/dragon.test.js` replays those records against `src/dragon.js` bit for bit (floats go through `Math.fround`, the MathHelper sine table is the one in `lighting.js`). It includes SHA-1 digests over thousands of flight ticks. V8's `Math.log` differs from Java `StrictMath.log` in the last bit, so the test carries an fdlibm port for the entity Random; in game the drift is possible.
 - The probe's flight `state()` field 13 is the sound volume, not the yaw velocity (cosmetic; the trace is still compared on the other fields).
-- Bytecode-derived or recalled (not probed): the ModelDragon reconstruction, the spawn in the End chunk (ChunkProviderEnd.populate at chunk 0,0, (0, 128, 0), random heading), the growl draw (EntityLiving.onEntityUpdate), the wing flap sound.
+- Bytecode-derived or recalled (not probed): the ModelDragon reconstruction, the spawn in the End chunk (ChunkProviderEnd.populate at chunk 0,0, (0, 128, 0), random heading), the growl draw (EntityLiving.onEntityUpdate); the wing flap sound's float/Random order is bytecode-read (`wingFlapPitch`), not probed. Explosion part damage (`World.newExplosion` testing every EntityDragonPart, probe `explosionParts`) is replayed bit for bit.
 
 ## Behaviour implemented
 
@@ -22,8 +22,9 @@ Target: Minecraft Java 1.7.10 only. This is a partial port; it is not full parit
 
 ## Gaps
 
-- The original model geometry and hurt pass have not been replayed. The dragon only ticks while its chunk is ticking. Java Anvil conversion does not preserve the browser’s death timer.
-- Arrows, snowballs and other projectiles still use the 16x8 entity box and route to the nearest part; explosions route to the body instead of testing every part.
-- The wing sound is a client approximation using `Math.cos` and `Math.random`, not the original's float/Random sequence. The matching `mob/enderdragon/*` sound files are in the manifest.
+- The original model geometry and hurt pass have not been replayed (ModelDragon is bytecode-derived; no probe covers rendering). Java Anvil conversion does not preserve the browser's death timer.
+- Ticking: the dragon ticks only while its chunk ticks, which matches native `World.updateEntities` (entities in unloaded or non-ticking chunks are skipped); there is no separate always-ticking path, and the port keeps that behaviour on purpose.
+- Projectiles (arrows, thrown snowballs/eggs/pearls, fireballs, wither skulls) now test the seven part boxes (`src/dragon-parts.js`, `mobTargets`) and route through `attackEntityFromPart` (head full damage, other parts dmg / 4 + 1); explosions test every part. Covered by `dragon-world.test.js` and the `explosionParts` probe records; projectile sweep order across parts was not probed.
+- The wing sound uses the native float/Random order (`wingFlapPitch`, evaluated before the tick on the previous animTime pair, client Random for the pitch) but this is bytecode-read, not probed; the client Random seed is not the native one, so the pitches are not identical to a Java session.
 - Hit random draws (4 floats, plus a double for a player source) were matched against the probe, not read from every code path.
 - Item ids 2130-2139 are unused; no drops other than the egg and portal, and the egg is placed by the portal only (the second kill behaviour of the original is not modelled).

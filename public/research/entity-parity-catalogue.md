@@ -25,7 +25,7 @@ EntityList is not the complete feature roster: players, weather lightning, throw
 | 16 | ThrownPotion | zo | no | no | Partial; [potions](potions.md); thrown aim gaussian unseeded; potions in flight absent from region export | E |
 | 17 | ThrownExpBottle | zn | no | no | Implemented; [spawn-eggs](spawn-eggs.md); Bottle o' Enchanting throw and XP | E |
 | 18 | ItemFrame | st | no | no | Partial; [hanging-entities](hanging-entities.md); no Java region import of hanging entities | E |
-| 19 | WitherSkull | zp | no | no | Partial; [wither-boss](wither-boss.md); wither effect damage on non-player mobs not ticked | E |
+| 19 | WitherSkull | zp | no | no | Partial; [wither-boss](wither-boss.md); skull impact, heal and wither DoT on mobs probed (b15) | E |
 | 20 | PrimedTnt | xw | no | no | Implemented; [creepers](creepers.md); explosion replay in explosion.md; TNT is never written to saves, as in 1.7.10 | E |
 | 21 | FallingSand | xj | no | no | Partial; [anvil-blocks](anvil-blocks.md); falling.js sand/gravel/anvil/dragon egg; see scheduled-ticks tests | E |
 | 22 | FireworksRocketEntity | zf | no | no | Partial; [fireworks](fireworks.md); block collisions approximate; moves with the particle mover | E |
@@ -52,8 +52,8 @@ EntityList is not the complete feature roster: players, weather lightning, throw
 | 60 | Silverfish | yk | no | yes | Partial; [silverfish](silverfish.md); sneak/invisibility range scaling not ported | E |
 | 61 | Blaze | xx | no | yes | Implemented; [blaze-ghast](blaze-ghast.md); fortress spawners wired in fortress.md | E |
 | 62 | LavaSlime | yf | no | yes | Implemented; [magma-pigman](magma-pigman.md) | E |
-| 63 | EnderDragon | xa | no | no | Partial; [dragon](dragon.md); ModelDragon and the End-chunk spawn are bytecode-derived, not probed | E |
-| 64 | WitherBoss | xc | no | no | Partial; [wither-boss](wither-boss.md); no spawn snow particles or achievement; target order differs | E |
+| 63 | EnderDragon | xa | no | no | Partial; [dragon](dragon.md); parts hit by projectiles and explosions (probed explosions); ModelDragon and the End-chunk spawn are bytecode-derived, not probed | E |
+| 64 | WitherBoss | xc | no | no | Partial; [wither-boss](wither-boss.md); target order approximated; head particles bytecode-read; spawn snow is a server no-op | E |
 | 65 | Bat | we | no | yes | Partial; [squid-bat](squid-bat.md); spawn caps probed; no seeded spawn replay reached a bat | E |
 | 66 | Witch | yp | no | yes | Partial; [witch](witch.md); witch hut list looked up only in swamp slots; silent (no asset index sounds) | E |
 | 90 | Pig | wo | no | yes | Implemented; [pig-saddle](pig-saddle.md) | E |

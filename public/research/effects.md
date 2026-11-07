@@ -28,6 +28,10 @@ Matching effects combine using the original `PotionEffect.combine`: a stronger e
 
 The probe captures damage, exhaustion, delivery and clearing on a minimal player double. It does not run the full player tick or renderer. `src/status-effects.test.js` replays all records and separately tests FoodStats integration, armor bypass, hurt resistance, low-health Poison, Creative, invalid save data and save/reload continuation. Muted browser checks confirmed both HUD sprites, one-item food consumption and effect application, milk clearing both effects/returning a bucket, and Hunger persisting after Save and Quit/reload. Only an isolated imported test world was used.
 
+## Wither effect on mobs
+
+Potion.wither (id 20) now ticks on every non-player mob in `mob-effects.js`: `attackEntityFrom(DamageSource.wither, 1.0)` when `duration % (40 >> amplifier) == 0` (every tick when the interval is 0 or less). It bypasses armour and the hurt window still limits repeats. EntityWither ignores the effect. Probe-backed (`WitherBossProbe` witherDot); other mob effects are not implemented.
+
 ## Limits
 
 Other effects, potion items, brewing, effect particles, the inventory's effect list and its panel offset are unfinished. Existing simplified player hurt resistance and HUD damage animation remain. This is food-effect parity for the implemented foods, not a complete potion system.

@@ -96,3 +96,23 @@ test("a dying dragon resumes the death timer and builds its exit after a reload"
   assert.equal(reloaded.entities.some(e => e.type === "ender_dragon"), false);
   assert.ok([...cells.values()].includes(149));
 });
+
+test("projectile part routing: mobTargets lists seven part boxes, head full damage, body dmg / 4 + 1", async () => {
+  const { mobTargets, aimPart } = await import("./projectiles.js");
+  const w = make(), d = spawnDragonIfAbsent(world, w), s = surv(), p = player(200, 70, 200);
+  setDragonRandom(d, new JavaRandom(7));
+  w.tick(p, s);
+  const targets = mobTargets([d], null);
+  assert.equal(targets.length, 7);
+  assert.ok(targets.every((t, i) => t.ref === d && t.part === i && t.box.length === 6));
+  const hit = (part, dmg) => {
+    d.hurtResist = 0; d.hurtTime = 0;
+    const before = d.health;
+    aimPart(targets[part]);
+    w.attackEntityFrom(d, dmg, { player: true, name: "player", projectile: true });
+    return before - d.health;
+  };
+  assert.equal(hit(0, 8), 8, "head takes the full damage");
+  assert.equal(hit(1, 8), 8 / 4 + 1, "the neck takes dmg / 4 + 1");
+  assert.equal(hit(2, 8), 8 / 4 + 1, "the body takes dmg / 4 + 1");
+});

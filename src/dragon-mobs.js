@@ -10,7 +10,7 @@ import { gameRule } from "./game-rules.js";
 import { createExitPortal } from "./exit-portal.js";
 import {
   DRAGON_MAX_HEALTH, DRAGON_WIDTH, DRAGON_HEIGHT, DRAGON_SOUNDS, createDragonState, dragonTick, deathTick, attackFromPart,
-  livingHurt, partBox,
+  livingHurt, partBox, wingFlapPitch,
 } from "./dragon.js";
 
 export const ENDER_DRAGON = "ender_dragon";
@@ -18,6 +18,10 @@ export const ENDER_DRAGON_TYPE = Object.freeze({ health: DRAGON_MAX_HEALTH, widt
 const OBSIDIAN = 22, BEDROCK = 11, END_STONE = 152;
 const RANDOMS = new WeakMap();
 const rngOf = (e) => { let r = RANDOMS.get(e); if (!r) RANDOMS.set(e, (r = new JavaRandom(Math.floor(Math.random() * 2 ** 48)))); return r; };
+// The client copy of the entity has its own Entity.rand (the wing flap pitch draws from it, not from the server's).
+const CLIENT_RANDOMS = new WeakMap();
+const clientRngOf = (e) => { let r = CLIENT_RANDOMS.get(e); if (!r) CLIENT_RANDOMS.set(e, (r = new JavaRandom(Math.floor(Math.random() * 2 ** 48)))); return r; };
+export const setDragonClientRandom = (e, r) => CLIENT_RANDOMS.set(e, r);
 export const setDragonRandom = (e, r) => RANDOMS.set(e, r);
 
 const meets = (a, b) => a[0] < b[3] && a[3] > b[0] && a[1] < b[4] && a[4] > b[1] && a[2] < b[5] && a[5] > b[2];
@@ -124,12 +128,10 @@ export function dragonUpdate(mobs, e, player, survival) {
       mobs.events.push({ sound: DRAGON_SOUNDS.growl, volume: DRAGON_SOUNDS.volume, pitch: 1, position: { x: e.x, y: e.y, z: e.z } });
     }
   }
+  // The client's wing flap sound is the first thing xa.e does (isRemote), on the animTime pair left by the previous tick.
+  const flap = wingFlapPitch(s.prevAnim, s.anim, clientRngOf(e));
+  if (flap !== null) mobs.clientSounds?.push({ sound: DRAGON_SOUNDS.wings, volume: DRAGON_SOUNDS.volume, pitch: flap, position: { x: e.x, y: e.y, z: e.z } });
   dragonTick(e, host);
-  // The client's wing flap sound (EntityDragon.onLivingUpdate, isRemote): cos(anim * 2 pi) crosses -0.3 upward.
-  if (e.health > 0) {
-    const a = Math.cos(s.anim * Math.PI * 2), b = Math.cos(s.prevAnim * Math.PI * 2);
-    if (b <= -0.3 && a >= -0.3) mobs.clientSounds?.push({ sound: DRAGON_SOUNDS.wings, volume: DRAGON_SOUNDS.volume, pitch: 0.8 + Math.random() * 0.3, position: { x: e.x, y: e.y, z: e.z } });
-  }
   e.yaw = (-e.rotationYaw * Math.PI) / 180;
   e.rotationYawHead = e.renderYawOffset = e.rotationYaw;
   if (host.edits.length) mobs.events.push({ blockEdit: host.edits });
@@ -148,6 +150,7 @@ function restoreState(e) {
 // body for an explosion (the original hits every part inside the blast), else the head.
 function partFor(e, source) {
   const s = e.dragon;
+  if (Number.isInteger(source.part) && source.part >= 0 && source.part < s.parts.length) return source.part; // an explosion tests every part itself
   if (source.player && s.lastPart !== undefined) return s.lastPart;
   if (source.from) {
     let best = 0, bd = Infinity;

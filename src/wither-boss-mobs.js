@@ -5,6 +5,7 @@
 import { ENTITY_TYPES, HOSTILE, entityRandom, livingSoundRoll } from "./entities.js";
 import { JavaRandom } from "./java-random.js";
 import { Fireballs } from "./fireballs.js";
+import { aimPart } from "./dragon-parts.js";
 import { fireballAcceleration } from "./blaze-ghast.js";
 import { intercept, rayTraceBlocks } from "./projectiles.js";
 import { gameRule } from "./game-rules.js";
@@ -14,7 +15,16 @@ import { POTION } from "./potions.js";
 import { WITHER, SKULL, WITHER_EYE, WITHER_PROOF_INTERNAL, chase, trackHead, headPosition, invulStep, startHealth, armored, witherSkullEffectTicks } from "./wither-boss.js";
 const f = Math.fround;
 export const NETHER_STAR = 2060;
-const UNDEAD = new Set(["zombie", "skeleton", "wither_skeleton", "pigman", "wither", "zombie_pigman"]);
+const UNDEAD_TYPES = new Set(["zombie", "skeleton", "wither_skeleton", "pigman", "wither", "zombie_pigman"]);
+// The wither's attackEntitySelector (xc.bp): any EntityLivingBase whose creature attribute is not UNDEAD. Zombie and skeleton horses (types 3, 4)
+// report UNDEAD too; the giant does not (EntityGiantZombie keeps the default).
+export const witherIsUndead = (o) => UNDEAD_TYPES.has(o.type) || (o.type === "horse" && (o.horse?.type === 3 || o.horse?.type === 4));
+// World.getEntitiesWithinAABB walks the chunks (x, then z) and each chunk's 16 high slices upwards (the entity lists are in insertion
+// order), so a candidate list is ordered by that triple; ties keep the engine's array order. Slice lists re-append an entity that crosses a
+// slice or chunk, which this engine does not track (approximate within one slice).
+export const nativeOrder = (list, at = (o) => o) => list.map((o, i) => ({ o, i, p: at(o) }))
+  .sort((a, b) => (Math.floor(a.p.x / 16) - Math.floor(b.p.x / 16)) || (Math.floor(a.p.z / 16) - Math.floor(b.p.z / 16))
+    || (Math.min(15, Math.max(0, Math.floor(a.p.y / 16))) - Math.min(15, Math.max(0, Math.floor(b.p.y / 16)))) || a.i - b.i).map((x) => x.o);
 const states = new WeakMap();
 // The fields EntityWither keeps outside the datawatcher: bt (next head shot tick), bu (the random-shot counter), bv (the block-break
 // counter) and the three head targets (datawatcher 17 to 19, here the target views).
@@ -52,10 +62,27 @@ export function witherUpdate(m, e) {
   chase(e, target, armored(e.health));
   e.yaw = (-e.rotationYaw * Math.PI) / 180;
 }
+// xc.e's tail, drawn by the client copy of the entity (its own Entity.rand `Z`, the client world's rand for the 1 in 4 armour roll): a gaussian
+// smoke puff at each head (0.3 spread), a "mobSpell" at the head one tick in four while armoured, and three bluish "mobSpell"
+// around the body while Invul > 0. The spawn's BlockSkull "snowballpoof" burst is a server-world spawnParticle (a no-op), so none is drawn.
+const visual = new WeakMap();
+function headParticles(m, e) {
+  if (!m.fx) return;
+  let r = visual.get(e);
+  if (!r) visual.set(e, (r = { z: new JavaRandom(Math.floor(Math.random() * 2 ** 48)), w: new JavaRandom(Math.floor(Math.random() * 2 ** 48)) }));
+  const g = (rand) => rand.nextGaussian() * f(0.3), arm = armored(e.health);
+  for (let i = 0; i < 3; i++) {
+    const h = headPosition(e, i);
+    m.fx.spawn("smoke", h.x + g(r.z), h.y + g(r.z), h.z + g(r.z), 0, 0, 0);
+    if (arm && r.w.nextInt(4) === 0) m.fx.spawn("mobSpell", h.x + g(r.z), h.y + g(r.z), h.z + g(r.z), f(0.7), f(0.7), 0.5);
+  }
+  if ((e.invul ?? 0) > 0) for (let i = 0; i < 3; i++) m.fx.spawn("mobSpell", e.x + r.z.nextGaussian(), e.y + f(r.z.nextFloat() * f(3.3)), e.z + r.z.nextGaussian(), f(0.7), f(0.7), f(0.9));
+}
 // xc.e after EntityMob's: the side heads turn to their targets.
 export function witherPost(m, e) {
   const s = witherState(e), body = e.renderYawOffset ?? e.rotationYaw ?? 0;
   for (let i = 0; i < 2; i++) trackHead(e, i + 1, s.heads[i + 1]?.alive ? s.heads[i + 1] : null, body);
+  headParticles(m, e);
 }
 
 // xc.a(IDDDZ) / a(ILsv;): a skull from a head, event 1014, aimed at (x, y, z) or the target's chest (eye height / 2).
@@ -86,9 +113,11 @@ export function witherAITick(brain) {
   }
   const difficulty = m.difficulty ?? 2, pool = () => {
     const out = [];
-    for (const o of m.entities) if (o !== e && o.health > 0 && !UNDEAD.has(o.type) && brain.ai.overlaps(brain, m.ai.brain(o), 20, 8, 20)) out.push(m.ai.brain(o));
+    const near = [];
+    for (const o of m.entities) if (o !== e && o.health > 0 && !witherIsUndead(o) && brain.ai.overlaps(brain, m.ai.brain(o), 20, 8, 20)) near.push(o);
     const p = m.ai.player;
-    if (p?.alive && brain.ai.overlaps(brain, p, 20, 8, 20)) out.push(p);
+    if (p?.alive && brain.ai.overlaps(brain, p, 20, 8, 20)) near.push(p);
+    for (const o of nativeOrder(near)) out.push(o === p ? p : m.ai.brain(o));
     return out;
   };
   for (let i = 1; i < 3; i++) {
@@ -167,7 +196,7 @@ export class WitherSkulls extends Fireballs {
       const start = [b.x, b.y, b.z], end = [b.x + b.vx, b.y + b.vy, b.z + b.vz];
       let hit = rayTraceBlocks(mobs.world, start, end);
       const entity = this.sweep(b, start, hit ? hit.vec : end);
-      if (entity) hit = { entity: entity.target };
+      if (entity) { hit = { entity: entity.target }; aimPart(entity); }
       if (hit) { this.impact(b, hit); continue; }
       const water = mobs.world.get(Math.floor(b.x), Math.floor(b.y), Math.floor(b.z)), wet = water >= 8 && water <= 9, k = wet ? f(0.8) : b.blue ? SKULL.factorBlue : SKULL.factor;
       b.x += b.vx; b.y += b.vy; b.z += b.vz;
@@ -206,7 +235,7 @@ export function buildWitherTasks(m, K) {
   class NearestNonUndead extends TargetBase {
     constructor() { super(m, false); this.target = null; }
     shouldExecute() {
-      const r = this.range(), c = m.ai.entities().filter((o) => o !== e && o.health > 0 && !UNDEAD.has(o.type)).map((o) => m.ai.brain(o)).filter((b) => m.ai.overlaps(m, b, r, 4, r));
+      const r = this.range(), c = nativeOrder(m.ai.entities().filter((o) => o !== e && o.health > 0 && !witherIsUndead(o))).map((o) => m.ai.brain(o)).filter((b) => m.ai.overlaps(m, b, r, 4, r));
       if (!c.length) return false;
       this.target = c.reduce((a, b) => (m.distSq(b) < m.distSq(a) ? b : a));
       return true;
@@ -253,7 +282,7 @@ export function installWither(EntityWorld) {
     const name = source.name ?? "generic", a = source.attacker;
     if (name === "drown" || (e.invul ?? 0) > 0 || name === "onFire" || name === "inFire" || name === "lava") return false;
     if (armored(e.health) && (source.arrow || name === "arrow")) return false;
-    if (a && typeof a === "object" && !source.player && UNDEAD.has(a.type)) return false;
+    if (a && typeof a === "object" && !source.player && witherIsUndead(a)) return false;
     const s = witherState(e);
     if (s.bv <= 0) s.bv = WITHER.blockBreakCooldown;
     s.bu[0] += 3; s.bu[1] += 3;

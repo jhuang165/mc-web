@@ -10,6 +10,9 @@ import { SUMMONABLE } from "./commands.js";
 import { summonedMobRecord } from "./java-mobs.js";
 import { NBT } from "./nbt.js";
 import { JavaRandom } from "./java-random.js";
+import { addMobEffect } from "./mob-effects.js";
+import { POTION } from "./potions.js";
+import { witherIsUndead, nativeOrder } from "./wither-boss-mobs.js";
 
 // tools/probes/WitherBossProbe.java (tools/verify-wither-boss.mjs): the unchanged EntityWither (xc), EntityWitherSkull (zp) and
 // EntityFireball (ze) of 1.7.10 on the MobMoveProbe world double. Post-invulnerability bn()/e() are bytecode-derived (not run).
@@ -19,7 +22,7 @@ const rows = (name) => reference.rows.filter((r) => r.case === name);
 const near = (a, b, eps, what) => assert.ok(Math.abs(a - b) <= eps, `${what}: ${a} vs ${b}`);
 
 const flat = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 64.5, y: 0, z: 64.5 }), set() { return true; } };
-const world = () => { const w = new EntityWorld(flat, [], () => 0.5); w.difficulty = 2; return w; };
+const world = () => { const w = new EntityWorld(flat, [], () => 0.5); w.difficulty = 2; w.isDaytime = () => false; return w; };
 
 test("the probe record counts are the ones the evidence was written with", () => {
   assert.equal(reference.rows.length, Object.values(reference.counts).reduce((a, b) => a + b, 0));
@@ -183,4 +186,84 @@ test("world: a spawned Wither counts down, explodes, heals and shoots; killing i
   assert.ok(exploded >= 215 && exploded <= 222, `explosion at tick ${exploded}`);
   assert.ok(events.some((x) => x.sound === "mob.wither.spawn"), "broadcast spawn sound");
   assert.ok(events.filter((x) => x.explode).some((x) => x.explode.size === 7 || x.explode.power === 7));
+});
+
+// --- batch 15: the wither effect on mobs, the skull's mob impact, target order, head particles, sounds ---
+const player = () => ({ x: 64.5, y: 1, z: 75.5, alive: true, width: 0.6, height: 1.8, eyeHeight: 1.62 });
+const tickN = (w, n, p = player(), s = new Survival({})) => { for (let i = 0; i < n; i++) { w.tick(p, s); w.drain(); } };
+const calm = (e) => { e.noAI = true; return e; };
+const put = (w, e) => { w.entities.push(e); return e; };
+
+test("witherDot: the Wither effect hurts a cow and a zombie like Potion.wither (1 damage every 40 >> amplifier ticks, hurt window, armour ignored)", () => {
+  for (const r of rows("witherDot")) {
+    const w = world(), e = put(w, calm(w.create(r.kind, 64.5, 1, 64.5)));
+    e.health = r.health0;
+    assert.equal(addMobEffect(e, POTION.WITHER, 130, r.amplifier), true);
+    const got = [];
+    for (let t = 0; t < r.ticks.length; t++) {
+      w.tick(player(), new Survival({}));
+      w.drain();
+      got.push(e.health);
+      if (e.health <= 0) break;
+    }
+    assert.deepEqual(got, r.ticks, `${r.kind} amplifier ${r.amplifier}`);
+  }
+});
+
+test("skullMob: the skull's 8 damage, the effect by difficulty (none on Easy, 10 s Normal, 40 s Hard, amplifier 1) and the 5 heal on a kill", () => {
+  for (const r of rows("skullMob")) {
+    const w = world(); w.difficulty = r.difficulty;
+    const owner = w.spawnWither(64.5, 1, 64.5, 0); owner.invul = 0; owner.health = 100;
+    const v = put(w, calm(w.create(r.kind, 70.5, 1, 70.5))); v.health = r.health0;
+    w.skulls.impact({ x: 70.5, y: 1.5, z: 70.5, owner, blue: false, dead: false }, { entity: v });
+    near(r.health0 - Math.max(0, v.health), r.damage, 1e-5, `${r.kind} d${r.difficulty} h${r.health0} damage`);
+    assert.equal(owner.health - 100, r.ownerHealed, "shooter heal");
+    const eff = v.effects?.find((x) => x.id === POTION.WITHER) ?? null;
+    assert.deepEqual(eff && { duration: eff.duration, amplifier: eff.amplifier }, r.effect, `${r.kind} d${r.difficulty} effect`);
+  }
+});
+
+test("the Wither boss takes no effects (addPotionEffect is empty) and an effect hurting a mob to death goes through the kill path", () => {
+  const w = world(), boss = w.spawnWither(64.5, 1, 64.5, 0);
+  assert.equal(addMobEffect(boss, POTION.WITHER, 100, 1), false);
+  const cow = put(w, calm(w.create("cow", 80.5, 1, 80.5)));
+  cow.health = 1; addMobEffect(cow, POTION.WITHER, 100, 0);
+  tickN(w, 25);
+  assert.ok(cow.health <= 0, "withered to death");
+});
+
+test("the Wither's target candidates skip undead (zombie/skeleton horses included, a giant is not undead) and follow the chunk/slice order", () => {
+  assert.equal(witherIsUndead({ type: "zombie" }), true);
+  assert.equal(witherIsUndead({ type: "wither_skeleton" }), true);
+  assert.equal(witherIsUndead({ type: "horse", horse: { type: 3 } }), true);
+  assert.equal(witherIsUndead({ type: "horse", horse: { type: 0 } }), false);
+  assert.equal(witherIsUndead({ type: "giant" }), false);
+  assert.equal(witherIsUndead({ type: "cow" }), false);
+  const a = { x: 20, y: 5, z: 3 }, b = { x: 3, y: 40, z: 3 }, c = { x: 3, y: 5, z: 3 }, d = { x: 3, y: 5, z: 20 };
+  assert.deepEqual(nativeOrder([a, b, c, d]), [c, b, d, a], "chunk x, then chunk z, then the 16 high slice, ties in list order");
+});
+
+test("head particles: smoke at each head, mobSpell above half health lost and around the body while Invul > 0", () => {
+  const w = world(), spawned = [];
+  w.fx = { spawn: (name, ...a) => spawned.push([name, ...a]) };
+  const boss = w.spawnWither(64.5, 1, 64.5, 0);
+  tickN(w, 1);
+  assert.equal(spawned.filter((x) => x[0] === "smoke").length, 3);
+  assert.equal(spawned.filter((x) => x[0] === "mobSpell").length >= 3, true, "invulnerable swirls (3) plus any armour ones");
+  spawned.length = 0; boss.invul = 0; boss.health = 300;
+  tickN(w, 1);
+  assert.equal(spawned.filter((x) => x[0] === "mobSpell").length, 0, "full health, no swirls");
+  spawned.length = 0; boss.health = 100;
+  for (let i = 0; i < 40; i++) tickN(w, 1);
+  assert.ok(spawned.some((x) => x[0] === "mobSpell"), "armoured swirls at the heads");
+});
+
+test("hurt and death sounds are mob.wither.hurt / mob.wither.death", () => {
+  const w = world(), boss = w.spawnWither(64.5, 1, 64.5, 0);
+  boss.invul = 0; boss.health = 300;
+  w.attackEntityFrom(boss, 4, { name: "player", player: true, from: { x: 60, z: 60 } });
+  assert.ok(w.drain().some((x) => x.sound === "mob.wither.hurt"));
+  boss.hurt = 0;
+  w.attackEntityFrom(boss, 400, { name: "generic" });
+  assert.ok(w.drain().some((x) => x.sound === "mob.wither.death"));
 });

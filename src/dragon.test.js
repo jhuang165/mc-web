@@ -6,8 +6,9 @@ import { JavaRandom } from "./java-random.js";
 import { exitPortalBlocks } from "./exit-portal.js";
 import {
   DRAGON_MAX_HEALTH, DRAGON_SOUNDS, DRAGON_XP_TOTAL, PART_SIZES, createDragonState, dragonTick, deathTick, movementOffsets,
-  attackFromPart, crystalUpdate, destroyBlocks, dragonBossStatus, livingHurt,
+  attackFromPart, crystalUpdate, destroyBlocks, dragonBossStatus, livingHurt, wingFlapPitch,
 } from "./dragon.js";
+import { explosionImpact } from "./explosion.js";
 
 const ref = JSON.parse(await readFile(new URL("../public/research/dragon-reference.json", import.meta.url)));
 const by = (c) => ref.records.filter((r) => r.case === c);
@@ -284,4 +285,36 @@ test("boss bar status and the hurt window helper", () => {
   assert.equal(livingHurt(e, 4), false);
   assert.equal(livingHurt(e, 9), true);
   assert.equal(e.health, 191);
+});
+
+// Batch 15: World.newExplosion lists every EntityDragonPart (Chunk.getEntitiesWithinAABBForEntity adds getParts), so each part inside the blast
+// takes its own distance/exposure damage (Entity.getEyeHeight is 0 for a part) and attackEntityFromPart divides it for the non-head parts.
+test("explosionParts: each part in the blast takes its own damage through attackEntityFromPart (probe: Explosion.doExplosionA)", () => {
+  const air = { get: () => 0, getMeta: () => 0, set: () => false };
+  for (const r of by("explosionParts")) {
+    const { e, h } = dragon(10, 100, -6, 135, 177 + r.part);
+    for (let t = 0; t < 3; t++) dragonTick(e, h);
+    assert.deepEqual(e.dragon.parts.map((p) => p.box), r.boxes, "part boxes before the blast");
+    const [cx, cy, cz] = r.center;
+    e.dragon.parts.forEach((p, i) => {
+      const impact = explosionImpact(air, cx, cy, cz, r.size, p.x, p.y, p.z, p.y, p.box);
+      if (impact) attackFromPart(e, i, { explosion: true }, impact.damage, h);
+    });
+    assert.equal(e.health, r.healthAfter, JSON.stringify([r.part, r.size, r.lift]));
+    assert.equal(e.hurtTime, r.hurtTime);
+    assert.equal(nextLong(h.rand), r.rand, "random draws after the blast");
+  }
+});
+
+test("the wing flap sound: cos(anim * 2 pi) crossing -0.3 upward draws the client Random float for the pitch", () => {
+  const r = new StrictRandom(5), twin = new StrictRandom(5);
+  const e = { prev: 0, anim: 0 };
+  let flaps = 0;
+  for (let t = 0; t < 400; t++) {
+    e.prev = e.anim; e.anim = Math.fround(e.anim + 0.05);
+    const p = wingFlapPitch(e.prev, e.anim, r);
+    if (p !== null) { flaps++; assert.equal(p, Math.fround(Math.fround(0.8) + Math.fround(twin.nextFloat() * Math.fround(0.3)))); }
+  }
+  assert.equal(flaps, 20, "one flap per anim cycle (20 ticks at 0.05)");
+  assert.equal(nextLong(r), nextLong(twin), "no draw when there is no flap");
 });
