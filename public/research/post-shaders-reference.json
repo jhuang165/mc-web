@@ -1,0 +1,19 @@
+{
+  "source": "minecraft-1.7.10.jar sha1 e80d9b3bf5085002218d4be59e668bac718abbc6, javap -c of the obfuscated classes (bytecode-read, not probed: the GL calls cannot run headless)",
+  "shaderList": ["notch", "fxaa", "art", "bumpy", "blobs2", "pencil", "color_convolve", "deconverge", "flip", "invert", "ntsc", "outline", "phosphor", "scan_pincushion", "sobel", "bits", "desaturate", "green", "blur", "wobble", "blobs", "antialias"],
+  "noShaderIndex": 22,
+  "cycle": "EntityRenderer.activateNextShader (blt.c): index = (index + 1) % (length + 1)",
+  "f4": "Minecraft.runTick key 62 calls EntityRenderer.deactivateShader (blt.b) only; it never activates a shader",
+  "button": { "event": "random from the ANIMALS, BLOCKS, MOBS, PLAYERS and WEATHER sound categories", "volume": 0.25, "pitch": 0.5, "normalClick": false },
+  "shaderTarget": "minecraft:main is the game framebuffer; other targets default to its size",
+  "outputState": { "clear": [0, 0, 0, 0], "depthMask": false, "colorMask": [true, true, true, false], "blend": "add one/zero" },
+  "projMat": "orthographic(0, w, h, 0, 0.1, 1000); the quad is at z = 500",
+  "timeUniform": "accumulated partialTicks wrapped at 20, divided by 20",
+  "anaglyph": {
+    "passMask": [["green", "blue"], ["red"]],
+    "projectionShift": 0.07,
+    "eyeShift": 0.1,
+    "textureFormula": "r' = (30r + 59g + 11b) / 100, g' = (30r + 70g) / 100, b' = (30r + 70b) / 100 (integer division, TextureUtil bqi.a(int[]))",
+    "fogFormula": "same weights as floats in EntityRenderer.updateFogColor"
+  }
+}

@@ -69,7 +69,7 @@ Target: Minecraft Java 1.7.10. Evidence: `ControlsProbe` (`tools/probes/Controls
 | F3+B | `RenderManager.debugBoundingBox` | Not ported (no hitbox renderer). |
 | F3+S / F3+T | `refreshResources` | Not ported (no resource packs). |
 | F3+C | Held for 6 s: manual debug crash | Not ported. |
-| F4 | `deactivateShader` | Not ported (no Super Secret Settings shaders). |
+| F4 | `deactivateShader` | Ported: drops the active post shader ([post-shaders.md](post-shaders.md)). |
 | F5 | `key.togglePerspective` | The binding (rebindable). |
 | F8 | No such check in 1.7.10. Cinematic camera is only `key.smoothCamera`, unbound by default | Nothing bound. The test asserts that `main.js` has no F8 or code 66 path. |
 
@@ -101,6 +101,6 @@ F2 (`key.screenshot`) and F11 (`key.fullscreen`) are bindings handled by `dispat
   - A lost pointer lock while the window keeps focus still opens the pause menu even with pauseOnLostFocus off. The browser needs a click to regain the lock.
   - The touch d-pad and Jump buttons hold their actions directly, whatever key those actions are bound to. Native 1.7.10 has no touch buttons.
 - Missing:
-  - 3D Anaglyph: the red/cyan two-pass renderer is not built. The button is drawn disabled with a reason, and `anaglyph3d` is kept in options.txt.
+  - 3D Anaglyph: enabled and saved as `anaglyph3d` ([post-shaders.md](post-shaders.md)); an approximation of the native texture conversion.
   - The F3+Shift profiler chart, F3+B hitboxes, resource reload, F3+C, F4 shaders and the stream actions.
   - Touchscreen Mode stays disabled.
