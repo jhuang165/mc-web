@@ -13,6 +13,7 @@ import os from "node:os";
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { RedstoneWorld } from "../src/redstone.js";
+import { fromOriginal } from "../src/block-registry.js";
 import { installPistons, tileOffset, tileProgress } from "../src/piston-live.js";
 
 const exec = promisify(execFile), root = path.dirname(fileURLToPath(import.meta.url)), exists = (p) => access(p).then(() => true, () => false);
@@ -59,6 +60,29 @@ const SCENARIOS = [];
     ent(1, 1, box(1.3, 1, 0.3)), ent(1, 2, box(4.3, 1, 1.3)), [1, "place", 2, 1, 1, REDSTONE_BLOCK, 0], [1, "place", 5, 2, 1, REDSTONE_BLOCK, 0]] }));
 }
 
+{
+  const c = { "1,1,1": `${PISTON}:3`, "1,1,2": STONE, "4,1,1": `${STICKY}:3`, "4,1,2": STONE };
+  SCENARIOS.push(scenario("south-facing", { cells: c, ticks: 14, note: "pistons facing south (+z, plain and sticky) push and pull stones; entities inside, beside, in the cell ahead and on top", events: [
+    ent(1, 1, box(1.3, 1, 2.3)), ent(1, 2, box(2.3, 1, 2.3)), ent(1, 3, box(1.3, 1, 3.3)), ent(1, 4, box(1.3, 2, 2.3)), ent(1, 5, box(4.3, 1, 2.3)),
+    [1, "place", 2, 1, 1, REDSTONE_BLOCK, 0], [1, "place", 5, 2, 1, REDSTONE_BLOCK, 0], [8, "air", 2, 1, 1], [8, "air", 5, 2, 1]] }));
+}
+{
+  const c = { "1,1,1": `${PISTON}:1`, "1,2,1": STONE, "3,1,1": `${PISTON}:0`, "3,3,1": STONE, "5,1,3": `${STICKY}:1`, "5,2,3": STONE };
+  SCENARIOS.push(scenario("standing-on-moving-block", { cells: c, ticks: 14, note: "entities standing exactly on top of a block pushed up, a block pushed down, and a block lifted then pulled back (sticky); one beside each", events: [
+    ent(1, 1, box(1.3, 3, 1.3)), ent(1, 2, box(2.3, 3, 1.3)), ent(1, 3, box(3.3, 2, 1.3)), ent(1, 4, box(3.3, 4, 1.3)), ent(1, 5, box(5.3, 3, 3.3)),
+    [1, "place", 2, 1, 1, REDSTONE_BLOCK, 0], [1, "place", 4, 1, 1, REDSTONE_BLOCK, 0], [1, "place", 6, 1, 3, REDSTONE_BLOCK, 0], [8, "air", 6, 1, 3]] }));
+}
+for (const [f, dx, dy, dz] of [[0, 0, -1, 0], [1, 0, 1, 0], [2, 0, 0, -1], [3, 0, 0, 1], [4, -1, 0, 0]]) {
+  const c = { "3,3,3": `${PISTON}:${f}`, [`${3 + dx},${3 + dy},${3 + dz}`]: "96:0" };
+  SCENARIOS.push(scenario("trapdoor-facing-" + f, { cells: c, ticks: 6, note: "piston facing " + f + " pushes a trapdoor (box reads the moving cell's metadata = facing)", events: [[1, "place", 3, 4, 3, REDSTONE_BLOCK, 0]] }));
+}
+for (const [name, id] of [["slab-bottom", "44:0"], ["slab-top", "44:8"], ["fence", "85:0"], ["stairs-up", "53:4"], ["snow-layer", "78:3"], ["chest", "54:2"], ["nether-fence", "113:0"], ["fence-gate", "107:0"], ["fence-gate-1", "107:1"], ["fence-gate-2", "107:2"], ["trapdoor-open", "96:5"], ["trapdoor-top", "96:8"], ["stairs-0", "53:0"], ["stairs-7", "53:7"], ["cobble-stairs", "67:2"], ["end-portal-frame", "120:0"], ["brewing-stand", "117:0"], ["enchanting-table", "116:0"], ["anvil", "145:1"], ["carpet", "171:0"], ["pane-meta", "160:0"], ["hopper", "154:0"], ["flower-pot", "140:0"], ["cobble-wall", "139:0"], ["iron-bars", "101:0"], ["glass-pane", "102:0"], ["trapdoor", "96:0"], ["cactus", "81:0"], ["bed", "26:0"], ["cauldron", "118:0"], ["soul-sand", "88:0"], ["farmland", "60:0"], ["wooden-slab", "126:8"], ["torch", "50:5"], ["lily-pad", "111:0"], ["head-only-south", "0"]]) {
+  const c = { "1,1,1": `${PISTON}:5`, "2,1,1": id === "0" ? 0 : id };
+  if (id === "0") delete c["2,1,1"];
+  SCENARIOS.push(scenario("odd-block-" + name, { cells: c, ticks: 12, note: "piston pushes " + id + " (collision box smaller than the cube, stale bounds quirk) east; retract at tick 7; entity inside, on top and beside", events: [
+    ent(1, 1, box(2.3, 1, 1.3)), ent(1, 2, box(2.3, 1.55, 1.3, 0.4, 0.4)), ent(1, 3, box(2.3, 2.0, 1.3)), [1, "place", 1, 2, 1, REDSTONE_BLOCK, 0], [7, "air", 1, 2, 1]] }));
+}
+
 const researchDirs = [process.env.MC_RESEARCH, path.join(root, "../../tools/research")].filter(Boolean);
 let research;
 for (const dir of researchDirs) if (await exists(path.join(dir, "minecraft-1.7.10.jar"))) { research = dir; break; }
@@ -103,8 +127,8 @@ export function replay(s) {
   }
   const ents = [], moves = [];
   let tick = 0;
-  const p = installPistons({ redstone: w, blocks: { toInternal: (id, meta) => (id === 0 ? null : { id: { 1: 1, 29: 116, 33: 117, 34: 118 }[id] ?? id, meta }) }, entities: { extra: () => ents } });
-  const tes = [], boxes = [], entityPos = [], samples = [];
+  const p = installPistons({ redstone: w, blocks: { toInternal: (id, meta) => (id === 0 ? null : { id: { 1: 1, 29: 116, 33: 117, 34: 118 }[id] ?? fromOriginal(id, meta)?.id ?? id, meta: fromOriginal(id, meta)?.meta ?? meta }) }, entities: { extra: () => ents } });
+  const tes = [], boxes = [], entityPos = [], samples = [], collide = [];
   for (tick = 1; tick <= s.ticks; tick++) {
     for (const [t, op, x0, y0, z0, a, ...rest] of s.events) {
       if (t !== tick) continue;
@@ -124,13 +148,14 @@ export function replay(s) {
     const tiles = w.pistonTiles();
     tes.push(tiles.map((t) => [t.x - ox, t.y - oy, t.z - oz, t.block, t.meta, t.facing, t.extending ? 1 : 0, t.renderHead ? 1 : 0, t.progress, t.lastProgress]));
     boxes.push(p.pushBoxes().map((b) => b && [b[0] - ox, b[1] - oy, b[2] - oz, b[3] - ox, b[4] - oy, b[5] - oz]));
+    collide.push(tiles.map((t) => p.collisionBoxes([t.x + 0.001, t.y + 0.001, t.z + 0.001, t.x + 0.999, t.y + 0.999, t.z + 0.999]).map((b) => [b[0] - ox, b[1] - oy, b[2] - oz, b[3] - ox, b[4] - oy, b[5] - oz])));
     entityPos.push(ents.map((e) => [e.label, e.box[0] - ox, e.box[1] - oy, e.box[2] - oz]));
   }
-  return { tes, boxes, entityPos, moves, api: p };
+  return { tes, boxes, entityPos, moves, collide, api: p };
 }
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`);
 const failures = [];
-let totalMoves = 0, tileStates = 0, offsets = 0, boxCount = 0;
+let collideCount = 0, totalMoves = 0, tileStates = 0, offsets = 0, boxCount = 0;
 const results = [];
 for (const [i, n] of natives.entries()) {
   const s = SCENARIOS[i];
@@ -155,18 +180,24 @@ for (const [i, n] of natives.entries()) {
         if (b) b.forEach((v, j) => close(v, nb[j], `${s.name}: push box at tick ${t + 1}`));
         boxCount++;
       });
+      assert.equal(mine.collide[t].length, n.collide[t].length, `${s.name}: collide tile count at tick ${t + 1}`);
+      mine.collide[t].forEach((list, k) => {
+        assert.equal(list.length, n.collide[t][k].length, `${s.name}: collision box count at tick ${t + 1}: ${JSON.stringify(list)} vs ${JSON.stringify(n.collide[t][k])}`);
+        list.forEach((b, i) => b.forEach((v, j) => close(v, n.collide[t][k][i][j], `${s.name}: collision box at tick ${t + 1}`)));
+        collideCount += list.length;
+      });
       mine.entityPos[t].forEach((e, k) => e.forEach((v, j) => close(v, n.entities[t][k][j], `${s.name}: entity position at tick ${t + 1}`)));
       tileStates += mine.tes[t].length;
     }
     assert.equal(mine.moves.length, n.moves.length, `${s.name}: number of entity moves`);
     mine.moves.forEach((m, k) => m.forEach((v, j) => close(v, n.moves[k][j], `${s.name}: move ${k}`)));
     totalMoves += n.moves.length;
-    results.push({ ...s, te: n.te, pushBoxes: n.pushBoxes, entities: n.entities, moves: n.moves });
+    results.push({ ...s, te: n.te, pushBoxes: n.pushBoxes, collide: n.collide, entities: n.entities, moves: n.moves });
   } catch (e) {
     failures.push(`${s.name}: ${String(e.message).split("\n").slice(0, 8).join(" | ")}`);
   }
 }
-if (process.env.DBG) console.log(JSON.stringify(natives[0].te[0]), JSON.stringify(natives[0].pushBoxes[0]), JSON.stringify(replay(SCENARIOS[0]).boxes[0]));
+if (process.env.DBG) for (const nm of process.env.DBG.split(",")) { const i = SCENARIOS.findIndex((s) => s.name === nm); console.log(nm, JSON.stringify(natives[i].te[0]).slice(0, 80), "native", JSON.stringify(natives[i].pushBoxes.slice(0, 5)), "port", JSON.stringify(replay(SCENARIOS[i]).boxes.slice(0, 5))); }
 if (failures.length) { console.error(failures.join("\n\n")); throw new Error(`${failures.length} of ${SCENARIOS.length} scenarios differ from the original classes`); }
 const digest = async (name) => createHash("sha256").update((await exec("unzip", ["-p", jar, name + ".class"], { encoding: "buffer", maxBuffer: 1 << 24 })).stdout).digest("hex");
 const names = { aps: "TileEntityPiston", apr: "BlockPistonMoving", app: "BlockPistonBase", apq: "BlockPistonExtension", bmq: "TileEntityRendererPiston", blm: "RenderBlocks", sa: "Entity", ahb: "World" };
@@ -177,4 +208,4 @@ const reference = {
   scenarios: results,
 };
 await writeFile(path.join(root, "../public/research/piston-live-reference.json"), JSON.stringify(reference) + "\n");
-console.log(`PASS: ${SCENARIOS.length} scenarios, ${tileStates} tile states, ${offsets} render offsets, ${boxCount} push boxes, ${totalMoves} entity moves identical to the original classes.`);
+console.log(`PASS: ${SCENARIOS.length} scenarios, ${tileStates} tile states, ${offsets} render offsets, ${boxCount} push boxes, ${collideCount} collision boxes, ${totalMoves} entity moves identical to the original classes.`);

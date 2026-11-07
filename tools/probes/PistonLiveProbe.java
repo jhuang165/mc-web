@@ -36,6 +36,7 @@ public class PistonLiveProbe {
       int ox = Integer.parseInt(h[2]), oy = Integer.parseInt(h[3]), oz = Integer.parseInt(h[4]);
       int dx = Integer.parseInt(h[5]), dy = Integer.parseInt(h[6]), dz = Integer.parseInt(h[7]), ticks = Integer.parseInt(h[8]);
       PistonProbe.W w = PistonProbe.world(Long.parseLong(h[9]));
+      field(ahb.class, "L").set(w, new ArrayList()); // World.collidingBoundingBoxes scratch list
       wireSet.set(ajn.af, new HashSet());
       String[] cells = in.readLine().substring(5).split(",");
       for (int x = 0; x < dx; x++) for (int y = 0; y < dy; y++) for (int z = 0; z < dz; z++) {
@@ -46,7 +47,7 @@ public class PistonLiveProbe {
       List<String[]> events = new ArrayList<>();
       for (line = in.readLine(); line != null && line.startsWith("event "); line = in.readLine()) events.add(line.split(" "));
       List<String> moves = new ArrayList<>();
-      StringBuilder tes = new StringBuilder(), boxes = new StringBuilder(), cellsOut = new StringBuilder();
+      StringBuilder tes = new StringBuilder(), boxes = new StringBuilder(), cellsOut = new StringBuilder(), collOut = new StringBuilder();
       for (int t = 1; t <= ticks; t++) {
         w.tick = t; w.log.setLength(0);
         for (String[] e : events) if (Integer.parseInt(e[1]) == t) {
@@ -72,12 +73,17 @@ public class PistonLiveProbe {
         w.tickUpdates();
         w.sendQueuedBlockEvents();
         w.h();
-        StringBuilder te = new StringBuilder(), bx = new StringBuilder();
+        StringBuilder te = new StringBuilder(), bx = new StringBuilder(), cl = new StringBuilder();
         for (Object o : (List) field(ahb.class, "g").get(w)) if (o instanceof aps) {
           aps p = (aps) o;
           StringBuilder samples = new StringBuilder();
           for (float pt : partials) samples.append(samples.length() > 0 ? "," : "").append("[").append(p.a(pt)).append(",").append(p.b(pt)).append(",").append(p.c(pt)).append(",").append(p.d(pt)).append("]");
           te.append(te.length() > 0 ? "," : "").append("[").append(p.c - ox).append(",").append(p.d - oy).append(",").append(p.e - oz).append(",").append(aji.b(p.a())).append(",").append(p.p()).append(",").append(p.c()).append(",").append(p.b() ? 1 : 0).append(",").append(p.d() ? 1 : 0).append(",").append(field(aps.class, "m").getFloat(p)).append(",").append(field(aps.class, "n").getFloat(p)).append(",[").append(samples).append("]]");
+          // World.getCollidingBoundingBoxes(null, the tile's cell inset by 0.001): only the moving block's own box can intersect it. The mover is an unconstructed Ent (World asks the other entities h(mover)).
+          List<azt> hits = w.a((sa) PistonProbe.unsafe.allocateInstance(Ent.class), azt.a(p.c + 0.001, p.d + 0.001, p.e + 0.001, p.c + 0.999, p.d + 0.999, p.e + 0.999));
+          StringBuilder hb = new StringBuilder();
+          for (azt hh : hits) hb.append(hb.length() > 0 ? "," : "").append("[").append(hh.a - ox).append(",").append(hh.b - oy).append(",").append(hh.c - oz).append(",").append(hh.d - ox).append(",").append(hh.e - oy).append(",").append(hh.f - oz).append("]");
+          cl.append(cl.length() > 0 ? "," : "").append("[").append(hb).append("]");
           float prog = field(aps.class, "m").getFloat(p), arg = p.b() ? 1.0f - prog : prog - 1.0f;
           azt box = ((apr) ajn.M).a((ahb) w, p.c, p.d, p.e, p.a(), arg, p.c());
           bx.append(bx.length() > 0 ? "," : "").append(box == null ? "null" : "[" + (box.a - ox) + "," + (box.b - oy) + "," + (box.c - oz) + "," + (box.d - ox) + "," + (box.e - oy) + "," + (box.f - oz) + "]");
@@ -86,9 +92,10 @@ public class PistonLiveProbe {
         boxes.append(t > 1 ? "," : "").append("[").append(bx).append("]");
         StringBuilder ec = new StringBuilder();
         for (Object[] o : w.ents) { double[] b = (double[]) o[1]; ec.append(ec.length() > 0 ? "," : "").append("[").append(((Ent) o[0]).label).append(",").append(b[0] - ox).append(",").append(b[1] - oy).append(",").append(b[2] - oz).append("]"); }
+        collOut.append(t > 1 ? "," : "").append("[").append(cl).append("]");
         cellsOut.append(t > 1 ? "," : "").append("[").append(ec).append("]");
       }
-      System.out.println("{\"name\":" + q(name) + ",\"te\":[" + tes + "],\"pushBoxes\":[" + boxes + "],\"entities\":[" + cellsOut + "],\"moves\":[" + String.join(",", moves) + "],\"sounds\":[" + String.join(",", w.sounds) + "]}");
+      System.out.println("{\"name\":" + q(name) + ",\"te\":[" + tes + "],\"pushBoxes\":[" + boxes + "],\"collide\":[" + collOut + "],\"entities\":[" + cellsOut + "],\"moves\":[" + String.join(",", moves) + "],\"sounds\":[" + String.join(",", w.sounds) + "]}");
     }
   }
 }
