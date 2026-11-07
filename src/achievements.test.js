@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { ACHIEVEMENTS, BY_ID, BOUNDS, EXPLORE_BIOMES, Achievements } from "./achievements.js";
-import { toastState, backgroundTile, AchievementView, nodeStyle, tooltipFor, iconItem } from "./achievements-ui.js";
+import { toastHintLines, toastState, backgroundTile, AchievementView, nodeStyle, tooltipFor, iconItem } from "./achievements-ui.js";
 import { craftedAchievement, smeltedAchievement, pickedAchievement, IMOB } from "./achievements-live.js";
 import { javaHash } from "./menu-screens.js";
 import { ITEMS } from "./survival.js";
@@ -141,4 +141,11 @@ test("game events map to achievements in this build's item ids", () => {
   assert.equal(pickedAchievement(387), "blazeRod");
   assert.ok(IMOB.has("zombie") && !IMOB.has("cow"));
   for (const a of ACHIEVEMENTS) assert.ok(ITEMS[iconItem(a)], `${a.id} icon ${iconItem(a)}`);
+});
+
+test('the Taking Inventory hint draws only the wrapped description, lines from y 7, inside the 32 px box (beh.b / a)', () => {
+  const a = { description: "Press '%1$s' to open your inventory." };
+  const lines = toastHintLines(a, 'E');
+  assert.equal(lines.join(' '), "Press 'E' to open your inventory.");
+  assert.ok(lines.length >= 2 && 7 + 9 * lines.length <= 32);
 });

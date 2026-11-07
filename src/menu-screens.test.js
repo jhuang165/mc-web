@@ -52,9 +52,12 @@ test('world screens follow GuiSelectWorld, GuiCreateWorld, GuiYesNo and GuiRenam
   const S = selectWorldLayout(427, 240);
   assert.deepEqual(S.list, { top: 32, bottom: 176, slotHeight: 36, width: 220, scrollbarX: 337 });
   assert.deepEqual([S.buttons.select, S.buttons.cancel], [{ x: 59, y: 188, w: 150, h: 20 }, { x: 295, y: 212, w: 72, h: 20 }]);
-  // The browser's Endless button sits between Import and the centred title without touching either.
-  assert.deepEqual(S.buttons.endless, { x: 133, y: 6, w: 44, h: 20 });
-  assert.ok(S.buttons.import.x + S.buttons.import.w < S.buttons.endless.x && S.buttons.endless.x + S.buttons.endless.w < 213 - textWidth(t('selectWorld.title')) / 2);
+  // The browser's Import / Endless / Export row ends at y 20 where the native title starts: no overlap at any width.
+  for (const w of [213, 285, 427, 640, 960]) {
+    const B = selectWorldLayout(w, 240).buttons, row = [B.import, B.endless, B.export];
+    assert.ok(row.every((b) => b.y + b.h <= 20 && b.x >= 0 && b.x + b.w <= w), `row fits at ${w}`);
+    assert.ok(B.import.x + B.import.w < B.endless.x && B.endless.x + B.endless.w < B.export.x);
+  }
   const C = createWorldLayout(427, 240);
   assert.deepEqual([C.buttons.gameMode, C.buttons.moreOptions, C.field], [{ x: 138, y: 115, w: 150, h: 20 }, { x: 138, y: 187, w: 150, h: 20 }, { x: 113, y: 60, w: 200, h: 20 }]);
   assert.deepEqual([C.buttons.create.y, C.labels.resultFolder, C.labels.allowCommandsInfo], [212, [113, 85], [63, 172]]);

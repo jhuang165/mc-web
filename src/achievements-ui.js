@@ -29,6 +29,9 @@ export function toastState(toast, now, width) {
   return { x: width - TOAST_W, y: 0 - Math.trunc(e * 36) };
 }
 
+// The wrapped description lines of the hint toast (bbu.a(String, x, y, 120, -1): listFormattedStringToWidth at 120 px).
+export const toastHintLines = (a, key = "E") => splitLines(a.description.replace("%1$s", key), 120);
+
 // The browser item for an achievement icon (original ids -> this build's through original-items.js).
 export function iconItem(a) {
   return ORIGINAL_ITEMS[`${a.item}:${a.damage}`] ?? ORIGINAL_ITEMS[a.item] ?? a.item;
@@ -201,8 +204,8 @@ export class AchievementToast {
     root.append(icon);
     const text = (s, x, y, color) => { const t = el("div", "mc-text flat", `left:${px(x)};top:${px(y)}`); t.innerHTML = textHtml(s, color); root.append(t); };
     if (toast.hint) {
-      text(a.name, 30, 7, 0xffffff);
-      splitLines(a.description.replace("%1$s", this.keyName()), 120).forEach((l, i) => text(l, 30, 18 + 9 * i, 0xffffff));
+      // beh.b(pb) / a(): the hint draws only the description, drawSplitString(j, x + 30, y + 7, 120, -1): lines 9 px apart from y 7.
+      for (const [i, l] of toastHintLines(a, this.keyName()).entries()) text(l, 30, 7 + 9 * i, 0xffffff);
     } else {
       text(STRINGS.get, 30, 7, 0xffff00);
       text(a.name, 30, 18, 0xffffff);
