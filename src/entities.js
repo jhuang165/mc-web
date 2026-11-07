@@ -1,6 +1,7 @@
 import { entityActive } from './streaming-ticks.js';
 import { dimensionSpawnList } from "./dimension-spawning.js";
 import { findChunksForSpawning, eligibleChunkOrder, ELIGIBLE_CHUNKS } from "./spawner-animals.js";
+import { wrapRingEnv } from "./headless-env.js";
 import { spawnList, ENTITY_TYPE_OF, maxSpawnedInChunk, creatureTypeOf, WITCH_HUT_MONSTERS } from "./spawn-lists.js";
 import { solidTopSurface } from "./doors-panes.js";
 import { fleeceColor } from "./population-tail.js";
@@ -2023,6 +2024,7 @@ export class EntityWorld {
     const world = this.world, s = (this._spawner ??= this.spawnerState());
     const ox = Math.floor((world.originX || 0) / 16), oz = Math.floor((world.originZ || 0) / 16);
     const pcx = Math.floor(player.x / 16), pcz = Math.floor(player.z / 16);
+    this.ring?.update(pcx, pcz); // headless columns beyond the resident window (headless-columns.js)
     if (s.pcx !== pcx || s.pcz !== pcz || s.ox !== ox || s.oz !== oz) {
       Object.assign(s, { pcx, pcz, ox, oz });
       s.ctx.order = eligibleChunkOrder(pcx + ox, pcz + oz).map(([dx, dz, edge]) => [pcx + dx, pcz + dz, edge]);
@@ -2041,7 +2043,10 @@ export class EntityWorld {
       const p = (this.cachedSpawnPoint ??= world.spawn());
       ctx.spawn = { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
     }
-    return findChunksForSpawning(ctx, this.difficulty !== PEACEFUL, true, animals);
+    // Headless columns: the spawn pass reads blocks through the ring's view (resident column first), as natively every chunk is loaded.
+    const real = this.world;
+    if (this.ring) this.world = this.ring.view;
+    try { return findChunksForSpawning(ctx, this.difficulty !== PEACEFUL, true, animals); } finally { this.world = real; }
   }
   // The reusable SpawnerAnimals context for this EntityWorld (its world and dimension are fixed).
   spawnerState() {
@@ -2054,6 +2059,7 @@ export class EntityWorld {
       fullLight: (x, y, z) => (this.fullLightAt ? this.fullLightAt(x, y, z) : sky(x, y, z)),
     };
     Object.assign(s.env, { thundering: () => !!this.isThundering?.(), time: 0, limit: 256, brightness: dim ? lightBrightnessTable(providerOf(dim).ambient) : SPAWN_BRIGHTNESS });
+    wrapRingEnv(s.env, () => this.ring, dim, () => this.lightSubtracted?.() ?? s.sub);
     const hooks = this.spawnerHooks(s.env);
     // Test doubles without metadata read meta 0.
     const metaWorld = world.getMeta ? world : { get: (a, b, c) => world.get(a, b, c), getMeta: () => 0 };
@@ -2066,12 +2072,12 @@ export class EntityWorld {
         return n;
       },
       chunkTop: (_cx, _cz, i) => (s.tops[i] >= 0 ? s.tops[i] : null),
-      block: (x, y, z) => world.get(x, y, z), normalCube, liquid: isLiquid, bedrock: 11, // internal id of Blocks.bedrock
-      solidTop: (x, y, z) => solidTopSurface(metaWorld, x, y, z),
+      block: (x, y, z) => this.world.get(x, y, z), normalCube, liquid: isLiquid, bedrock: 11, // internal id of Blocks.bedrock
+      solidTop: (x, y, z) => solidTopSurface(this.world === world ? metaWorld : this.world, x, y, z),
       isMaterial: (type, id) => (type.material === "water" ? id === WATER : id === 0), // Material.water / Material.air
       playerWithin: (x, y, z) => { const p = s.player; return (p.x - x) ** 2 + (p.y - y) ** 2 + (p.z - z) ** 2 < 576; },
       possibleCreatures: (type, x, y, z) => {
-        if (dim) return type.name === "monster" ? dimensionSpawnList(world, x, y, z) : spawnList(dim === NETHER ? 8 : 9, type.name);
+        if (dim) return type.name === "monster" ? dimensionSpawnList(this.world, x, y, z) : spawnList(dim === NETHER ? 8 : 9, type.name);
         const slot = world.biomeAt ? world.biomeAt(x, z)?.id ?? 1 : 1;
         // ChunkProviderGenerate.getPossibleCreatures: the hut's box decides, whatever biome the block's slot holds.
         if (type.name === "monster" && this.swampHutAt(x, y, z)) return WITCH_HUT_MONSTERS;
@@ -2114,7 +2120,7 @@ export class EntityWorld {
       return Math.max(0, (world.surface?.(x0 + 8, z0 + 8) ?? 0) - 1) & ~15;
     }
     const chunk = world.chunkAt(cx, cz);
-    if (!chunk) return -1;
+    if (!chunk) return this.ring ? this.ring.top(cx, cz) : -1;
     const tick = this.worldTicks ?? 0, hit = (this.chunkTops ??= new WeakMap()).get(chunk);
     if (hit && tick - hit.tick < 400 && tick >= hit.tick) return hit.top;
     // A column's 16 cells of a section are four aligned 32-bit words (height is a multiple of 16).
