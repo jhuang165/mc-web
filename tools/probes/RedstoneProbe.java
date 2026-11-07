@@ -167,7 +167,7 @@ public class RedstoneProbe {
     StringBuilder b = new StringBuilder("{\"tickRandomly\":{");
     for (int id : new int[] {1, 59, 131, 132}) b.append(id == 1 ? "" : ",").append(q(String.valueOf(id))).append(":").append(aji.e(id).t());
     b.append("},\"ignoresPlates\":{");
-    Object[][] kinds = {{"item", xk.class}, {"mob", yq.class}, {"player", mw.class}, {"arrow", zc.class}, {"snowball", zj.class}, {"egg", zl.class}, {"enderPearl", zm.class}, {"potion", zo.class}, {"expBottle", zn.class}, {"bat", we.class}, {"fireball", zg.class}, {"minecart", xs.class}, {"tnt", xw.class}, {"xpOrb", sq.class}};
+    Object[][] kinds = {{"item", xk.class}, {"mob", yq.class}, {"player", mw.class}, {"arrow", zc.class}, {"snowball", zj.class}, {"egg", zl.class}, {"enderPearl", zm.class}, {"potion", zo.class}, {"expBottle", zn.class}, {"bat", we.class}, {"fireball", zg.class}, {"minecart", xs.class}, {"tnt", xw.class}, {"xpOrb", sq.class}, {"boat", xi.class}, {"fallingBlock", xj.class}};
     for (int i = 0; i < kinds.length; i++) b.append(i == 0 ? "" : ",").append(q((String) kinds[i][0])).append(":").append(((sa) unsafe.allocateInstance((Class<?>) kinds[i][1])).az());
     return b.append("}}").toString();
   }
@@ -282,13 +282,13 @@ public class RedstoneProbe {
               w.ents.add(new Object[] {ent, new double[] {x + 0.375, y, z + 0.375, x + 0.625, y + 0.25, z + 0.625}, new int[] {x, y, z}});
               break;
             }
-            // Entity classes the tripwire sensing box is asked about: 0 item, 1 mob, 2 player, 3 arrow, 4 snowball, 5 egg, 6 ender pearl, 7 thrown potion, 8 bat.
+            // Entity classes the tripwire sensing box is asked about: 0 item, 1 mob, 2 player, 3 arrow, 4 snowball, 5 egg, 6 ender pearl, 7 thrown potion, 8 bat, 9 boat, 10 falling block, 11 thrown experience bottle.
             // Arrows are 0.5 wide, the rest 0.25 (the scripted box is only the intersection geometry; the class decides doesEntityNotTriggerPressurePlate).
             case "entity2": {
               int kind = Integer.parseInt(e[6]);
-              Class<?>[] kinds = {xk.class, yq.class, mw.class, zc.class, zj.class, zl.class, zm.class, zo.class, we.class};
+              Class<?>[] kinds = {xk.class, yq.class, mw.class, zc.class, zj.class, zl.class, zm.class, zo.class, we.class, xi.class, xj.class, zn.class};
               Object ent = unsafe.allocateInstance(kinds[kind]);
-              double r = kind == 3 ? 0.25 : 0.125, hgt = kind == 3 ? 0.5 : 0.25;
+              double r = kind == 3 ? 0.25 : kind == 9 ? 0.75 : kind == 10 ? 0.49 : 0.125, hgt = kind == 3 ? 0.5 : kind == 9 ? 0.6 : kind == 10 ? 0.98 : 0.25;
               w.ents.add(new Object[] {ent, new double[] {x + 0.5 - r, y, z + 0.5 - r, x + 0.5 + r, y + hgt, z + 0.5 + r}, new int[] {x, y, z}});
               break;
             }
@@ -306,7 +306,7 @@ public class RedstoneProbe {
             case "unentity": w.ents.removeIf(o -> { int[] c = (int[]) o[2]; return c[0] == x && c[1] == y && c[2] == z; }); break;
             // Remove only the scripted entities of one entity2 kind in the cell.
             case "unentity2": {
-              Class<?>[] kinds = {xk.class, yq.class, mw.class, zc.class, zj.class, zl.class, zm.class, zo.class, we.class};
+              Class<?>[] kinds = {xk.class, yq.class, mw.class, zc.class, zj.class, zl.class, zm.class, zo.class, we.class, xi.class, xj.class, zn.class};
               Class<?> k = kinds[Integer.parseInt(e[6])];
               w.ents.removeIf(o -> { int[] c = (int[]) o[2]; return c[0] == x && c[1] == y && c[2] == z && o[0].getClass() == k; });
               break;

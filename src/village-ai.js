@@ -564,7 +564,7 @@ export function villageTasks(K) {
     pathEndsNear(t) {
       const m = this.m;
       this.reachTimer = 10 + m.rand.nextInt(5);
-      const end = m.navigator.getPathToEntityLiving(t)?.getFinalPathPoint();
+      const end = m.navigator.getPathToEntityLiving(t, true)?.getFinalPathPoint(); // no budget: a denied search would read as unreachable
       if (!end) return false;
       const dx = end.x - floor(t.x), dz = end.z - floor(t.z);
       return dx * dx + dz * dz <= 2.25;

@@ -126,3 +126,18 @@ test("golem monster target: the nearbyOnly path check (end within 1.5, cached on
   }
   assert.ok(blocked >= 32, "some scenes are unreachable");
 });
+
+test("golem monster target: the reach check ignores an exhausted per-tick search budget", () => {
+  const r = records("golemReach").find((x) => x.nearbyOnly && x.ticks[0][0] === true);
+  const golemEntity = { type: "iron_golem", x: 64.5, y: 0, z: 64.5, width: f(1.4), height: f(2.9), inWater: false, inLava: false, onGround: true, maxSafePointTries: () => 3 };
+  const budget = { left: 0, denied: 0, perTick: 8 };
+  const nav = new PathNavigate(golemEntity, stoneWorld(r), { followRange: 16, budget });
+  nav.setAvoidsWater(true);
+  const [zx, zy, zz] = r.zombie;
+  const zombie = { alive: true, x: zx, y: zy, z: zz, width: f(0.6), height: f(1.8), e: { type: "zombie" }, isPlayer: false };
+  const m = { e: { type: "iron_golem", playerCreated: false, homeRadius: -1, home: null }, x: 64.5, y: 0, z: 64.5, rand: new JavaRandom(r.seed), navigator: nav, attackTarget: null, ai: {}, distSq: () => 0, nearby: () => [zombie] };
+  const task = new V.NearestMonster(m);
+  assert.equal(task.shouldExecute(), true);
+  assert.equal(budget.denied, 0);
+  assert.equal(budget.left, 0);
+});
