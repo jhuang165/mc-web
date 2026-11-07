@@ -70,7 +70,7 @@ Statistics (`stats.md`), Graphics/Smooth Lighting/Clouds/Mipmap/Anisotropic sett
 ## Priority 5: saves and interchange
 - level.dat import: Done (batch 13, `level-dat.md`) through the Node CLI (`--save`, `--level`, `--player-file`, `--stats`): level.dat (WorldInfo, WorldType and generator options, game rules), the player (Data.Player, playerdata/players fallbacks) and stats/<uuid>.json import; painting, item frame and all minecart types in region import; thrown potions were already in. Batch 14 (hardcore track, `hardcore.md`): hardcore play, flying/SpawnForced/Sleeping on import and an in-browser Java save-folder picker (Import screen: showDirectoryPicker, else `webkitdirectory`) are in. Still open: a whole-save import (one 8x8 area per import; the rest regenerates; DIM-1/DIM1 regions are not read), MapFeatures off (approximated) and the player's UUID.
 - Stats and achievements export: already in since batch 11; the Java ZIP export writes `stats/<uuid>.json` under the offline UUID of "Player" ([stats.md](stats.md)).
-- Only one language; one local player.
+- One local player. Other languages need `npm run lang:fetch` (batch 15, [languages](languages.md)); item and block names, signs, tooltips, the HUD and containers still use the English baked tables and the TTF font; no bidi reordering or Arabic shaping; glyph underline/strikethrough/italic are not drawn on unicode pages.
 
 ## Stale strings outside this track's scope
 - Both resolved in batch 12: Multiplayer Settings opens Chat Settings, and the golden apple comment is fixed.

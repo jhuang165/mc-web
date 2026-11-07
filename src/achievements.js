@@ -144,7 +144,7 @@ export const OVERKILL_DAMAGE = 18;
 export const FLY_PIG_DISTANCE = 5;
 
 export const ACHIEVEMENTS = ACHIEVEMENT_TABLE.map(([id, column, row, item, damage, parent, special]) =>
-  Object.freeze({ id, column, row, item, damage, parent, special: !!special, name: STRINGS[id], description: STRINGS[id + ".desc"] }));
+  Object.freeze({ id, column, row, item, damage, parent, special: !!special, get name() { return STRINGS[id]; }, get description() { return STRINGS[id + ".desc"]; } }));
 export const BY_ID = Object.freeze(Object.fromEntries(ACHIEVEMENTS.map((a) => [a.id, a])));
 // AchievementList.a..d: the extent of the tree (grows with every achievement constructed).
 export const BOUNDS = Object.freeze({

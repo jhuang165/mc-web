@@ -12,7 +12,8 @@
     "push:github": "node tools/push-github.mjs",
     "agent:codex": "node tools/start-codex.mjs",
     "agent:claude": "claude",
-    "music:fetch": "node tools/fetch-music-streams.mjs"
+    "music:fetch": "node tools/fetch-music-streams.mjs",
+    "lang:fetch": "node tools/fetch-lang.mjs"
   },
   "dependencies": {
     "three": "^0.180.0"

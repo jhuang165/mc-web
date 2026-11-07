@@ -7,6 +7,7 @@ import { BINDINGS, keyDisplayString } from "./keybindings.js";
 const f = Math.fround;
 
 // The en_US.lang strings the screens use (assets/minecraft/lang/en_US.lang in the 1.7.10 JAR).
+import { getCharWidth, getStringWidth } from "./font-renderer.js";
 export const LANG = {
   "gui.done": "Done", "gui.cancel": "Cancel", "gui.achievements": "Achievements", "gui.stats": "Statistics",
   "menu.game": "Game menu", "menu.singleplayer": "Singleplayer", "menu.multiplayer": "Multiplayer",
@@ -96,18 +97,10 @@ export function t(key, ...args) {
   return s.replace(/%(?:(\d+)\$)?([sd%])/g, (_, pos, kind) => (kind === "%" ? "%" : String(args[pos ? pos - 1 : n++])));
 }
 
-// FontRenderer.charWidth for ascii.png codes 32-126 (the minecraft-1710.ttf advances match).
-const ASCII_WIDTHS = [4, 2, 5, 6, 6, 6, 6, 3, 5, 5, 5, 6, 2, 6, 2, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 2, 2, 5, 6, 5, 6, 7, 6, 6, 6, 6, 6, 6, 6, 6, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 4, 6, 4, 6, 6, 3, 6, 6, 6, 6, 6, 5, 6, 6, 2, 6, 5, 3, 6, 6, 6, 6, 6, 6, 6, 4, 6, 6, 6, 6, 6, 6, 5, 2, 5, 7];
-export const charWidth = (c) => { const i = c.charCodeAt(0) - 32; return i >= 0 && i < ASCII_WIDTHS.length ? ASCII_WIDTHS[i] : 6; };
-// FontRenderer.getStringWidth: formatting codes (section sign + one character) take no width.
-export function textWidth(s) {
-  let w = 0;
-  for (let i = 0; i < s.length; i++) {
-    if (s[i] === "§" && i + 1 < s.length) { i++; continue; }
-    w += charWidth(s[i]);
-  }
-  return w;
-}
+// FontRenderer.getCharWidth / getStringWidth (font-renderer.js: ascii.png widths, glyph_sizes.bin when the unicode flag is on or the
+// character is outside the 256 entry table; formatting codes take no width and bold adds one per glyph).
+export const charWidth = (c) => getCharWidth(c);
+export const textWidth = (s) => getStringWidth(s);
 // FontRenderer.trimStringToWidth (forward).
 export function trimToWidth(s, width) {
   let w = 0, i = 0;

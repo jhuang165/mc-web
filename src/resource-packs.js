@@ -21,6 +21,7 @@ export function overrideUrls(entryName) {
   const rest = entryName.slice(ASSETS.length);
   if (rest.startsWith("textures/") && rest.endsWith(".png")) return ["/media/1.7.10/" + rest.slice(9)];
   if (rest.startsWith("sounds/") && rest.endsWith(".ogg")) return ["/audio/1.7.10/" + rest.slice(7), "/audio/1.7.10-streams/" + rest.slice(7)];
+  if (rest === "font/glyph_sizes.bin") return ["/media/1.7.10/font/glyph_sizes.bin"];
   return [];
 }
 

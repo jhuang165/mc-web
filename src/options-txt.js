@@ -103,6 +103,9 @@ const FIELDS = {
   mipmapLevels: int("mipmapLevels", 4),
   anisotropicFiltering: int("anisotropic", 1),
   anaglyph3d: flag("anaglyph", false),
+  // LanguageManager code (GameSettings.language) and the Force Unicode Font button (GameSettings.forceUnicodeFont).
+  lang: { write: (o) => o.language || "en_US", read: (s) => ({ language: s }) },
+  forceUnicodeFont: flag("forceUnicodeFont", false),
 };
 // Lines the browser stores but does not use (an imported options.txt keeps them on export).
 export const UNUSED_LINES = OPTION_LINES.map(([k]) => k).filter((k) => !(k in FIELDS));

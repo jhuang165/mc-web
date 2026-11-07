@@ -4,6 +4,7 @@
 // GuiScreen.mouseClicked does, and play gui.button.press.
 import { textWidth, trimToWidth, splitLines, shadowColor, FORMAT_COLORS, charWidth, knobOffset, sliderValue, slotMetrics, slotAt, scaledSize } from "./menu-screens.js";
 import { Panorama } from "./menu-panorama.js";
+import { font, usesAscii, glyphHtml } from "./font-renderer.js";
 
 const hex = (c) => "#" + (c & 0xffffff).toString(16).padStart(6, "0");
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -26,7 +27,18 @@ export function textHtml(s, color = 0xffffff) {
     if (bold) css += ";letter-spacing:var(--u);text-shadow:var(--u) 0 0 currentColor,var(--u) var(--u) 0 var(--sh),calc(2*var(--u)) var(--u) 0 var(--sh)";
     return css;
   };
-  const flush = () => { if (run) out += `<span style="${style(cur)}">${escapeHtml(random ? obfuscate(run) : run)}</span>`; run = ""; };
+  // Characters drawn from ascii.png stay text; the others (everything when the unicode flag is on) are unicode-page glyphs.
+  const runHtml = (text) => {
+    let html = "", seg = "";
+    for (let k = 0; k < text.length; k++) {
+      const c = text.charCodeAt(k);
+      if (usesAscii(c) || (c === 32 && !font.unicode)) { seg += text[k]; continue; }
+      if (seg) { html += escapeHtml(seg); seg = ""; }
+      html += c === 32 ? '<span class="ug" style="width:calc(4*var(--u))"></span>' : glyphHtml(c, bold);
+    }
+    return html + escapeHtml(seg);
+  };
+  const flush = () => { if (run) out += `<span style="${style(cur)}">${runHtml(random ? obfuscate(run) : run)}</span>`; run = ""; };
   for (let i = 0; i < s.length; i++) {
     if (s[i] === "§" && i + 1 < s.length) {
       flush();
