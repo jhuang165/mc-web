@@ -8,7 +8,7 @@ import { MapGenScatteredFeature } from "./scattered-feature-generator.js";
 import { canDespawn } from "./ai.js";
 import { gameRule } from "./game-rules.js";
 import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE, isSpider, soundType, caveSpiderPoisonTicks } from "./spider.js";
-import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, SPAWN_BRIGHTNESS } from "./mob-spawner.js";
+import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, SPAWN_BRIGHTNESS, spawnerType } from "./mob-spawner.js";
 import { ENDERMAN_HEALTH, ENDERMAN_WIDTH, ENDERMAN_HEIGHT, ENDERMAN_SPEED, ENDERMAN_ATTACK, SPEED_BOOST as ENDERMAN_BOOST, endermanFields, endermanFieldsFrom, SOUNDS as ENDERMAN_SOUNDS, livingSound as endermanLiving } from "./enderman.js";
 import { endermanTick, endermanHurt, ENDERMAN_TRANSIENT } from "./enderman-live.js";
 import { GIANT, GIANT_SOUNDS, giantPathWeight, giantAttackReady } from "./giant.js";
@@ -58,7 +58,8 @@ import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startCon
 import { landingEffects, JUMP_BOOST, statusPitchRandom } from "./damage-fx.js";
 import { WOLF_WIDTH, WOLF_HEIGHT, WOLF_SPEED, WILD_MAX_HEALTH, TAMED_MAX_HEALTH, WOLF_SOUNDS, wolfFields, wolfFieldsFrom, isTamed as wolfTamed, maxHealth as wolfMaxHealth, tailAngle, interestedAngle, shakeAngle, wetShade, wolfSay, hurtAmount as wolfHurtAmount, attackStrength as wolfAttack, puppyFields, interact as wolfClick, updateWolf } from "./wolf.js";
 import { noteWolfHurt } from "./wolf-ai.js";
-import { summonedMobRecord } from "./java-mobs.js";
+import { summonedMobRecord, importedMobType } from "./java-mobs.js";
+import { mountMobOnVehicle } from "./vehicle-riders.js";
 import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest, canSpawnHere as ocelotCanSpawnHere } from "./ocelot.js";
 import { NETHER, providerOf, lightBrightnessTable } from "./dimensions.js";
 import { cloneStack, attackBonus, meleeEffects } from "./mob-equipment.js";
@@ -1020,20 +1021,19 @@ export class EntityWorld {
       const now = this.currentDate?.() ?? new Date(), r = zombieSpawnRolls(rand, world, this.difficulty, local, { month: now.getMonth() + 1, day: now.getDate() }, type === "pigman", type === "zombie" ? opts.group?.zombie : null);
       if (type === "zombie") opts.group = { zombie: r.group };
       // EntityZombie.GroupData: a child (isChild never ages out for a zombie) and a zombie villager. EntityPigZombie.onSpawnWithEgg
-      // (yh.a) runs EntityZombie's rolls with bC giving only the golden sword; the child and villager rolls are drawn and dropped.
-      if (type === "zombie") {
-        if (r.child) e.growingAge = -1;
-        if (r.villager) e.villager = true;
-      }
+      // (yh.a) runs EntityZombie's rolls with bC giving only the golden sword, then setVillager(false): a pigman can be a child (and so a
+      // chicken jockey), never a villager (tools/probes/PigmanJockeyProbe.java, pigman-jockey-reference.json).
+      if (r.child) e.growingAge = -1;
+      if (type === "zombie" && r.villager) e.villager = true;
       this.applyGear(e, r);
       e.knockbackResistance = r.knockback;
       e.followRange = r.followRange;
+      if (r.child) this.chickenJockeyRolls(e, r);
       if (type === "zombie") {
         e.reinforcement = reinforcementChance(e.reinforcement + r.reinforcementBonus);
         // EntityZombie.a(sy): the child's chicken (5 %: the first free chicken in a 5 x 3 x 5 box, and nothing else when
         // there is none; else 5 %: a new chicken jockey), then setBreakDoorsAItask(roll < local * 0.1) and the leader's
         // max-health bonus (the health itself stays), which also breaks doors (mob-riding.md).
-        if (r.child) this.chickenJockeyRolls(e, r);
         e.canBreakDoors = !!(r.doors || r.leader);
         if (r.leader && r.maxHealth > ENTITY_TYPES.zombie.health) e.maxHealth = r.maxHealth;
       }
@@ -1182,15 +1182,42 @@ export class EntityWorld {
       applyProperties: (e, props) => {
         const parsed = summonedMobRecord(e.type, props), pos = props.get("Pos")?.value?.items;
         const r = parsed && this.restore({ ...parsed.record, x: pos?.[0] ?? e.x, y: pos?.[1] ?? e.y, z: pos?.[2] ?? e.z }, { summoned: true });
-        if (r) Object.assign(e, r, { id: e.id }, props.has("Rotation") ? {} : { yaw: e.yaw });
+        // The written entity's Rotation (the rolled yaw) is read back unless the Properties carry their own (Entity.readFromNBT); a Riding mount is placed at it.
+        const turn = Object.fromEntries(["yaw", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw", "rotationPitch", "prevRotationPitch"].map((k) => [k, e[k]]));
+        if (r) Object.assign(e, r, { id: e.id }, props.has("Rotation") ? {} : turn);
+        const rot = props.get("Rotation")?.value?.items;
+        if (r && rot?.length >= 2) { e.rotationYaw = e.prevRotationYaw = Math.fround(rot[0]); e.rotationPitch = e.prevRotationPitch = Math.fround(rot[1]); }
       },
       addMob: (e) => this.entities.push(e),
+      // MobSpawnerBaseLogic.a(sa)'s Riding loop (spawner-riding.js): one mount of a SpawnData chain.
+      spawnMount: (id, tag, rider) => this.spawnerMount(id, tag, rider, env),
       // EntityLiving.spawnExplosionParticle (entity status 20 on the client): 20 explode puffs.
       explosionParticles: (e) => {
         const t = ENTITY_TYPES[e.type];
         if (this.fx) burst(this.fx, "explode", 20, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, entityRandom(e));
       },
     };
+  }
+  // One step of agq.a(sa)'s Riding loop for a rider that is a mob: the mount made from its compound, placed at the rider with its position and angles
+  // (Properties' Pos and Rotation are overwritten by setLocationAndAngles), spawned and mounted. A boat or minecart comes from env.spawnVehicle
+  // (structure-simulation.js); a mob riding a vehicle can carry nothing further (a vehicle cannot ride here). Null when this build cannot keep it.
+  spawnerMount(id, tag, rider, env = {}) {
+    if (typeof rider?.type !== "string") return null;
+    const heightOf = (m) => this.size(m)[1], type = importedMobType(id) ?? spawnerType(id);
+    if (!type) {
+      const vehicle = env.spawnVehicle?.(id, tag, rider);
+      return vehicle && mountMobOnVehicle(vehicle, rider, heightOf) ? vehicle : null;
+    }
+    const parsed = summonedMobRecord(type, tag);
+    if (!parsed || this.entities.length >= (env.limit ?? 40)) return null;
+    const mount = this.restore({ ...parsed.record, x: rider.x, y: rider.y, z: rider.z }, { summoned: true });
+    if (!mount) return null;
+    setLocationAndAngles(mount, rider.x, rider.y, rider.z, rider.rotationYaw ?? 0, rider.rotationPitch ?? 0);
+    for (const k of ["renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) mount[k] = rider.rotationYaw ?? 0;
+    this.entities.push(mount);
+    this.nextId++;
+    mountEntity(rider, mount, heightOf);
+    return mount;
   }
   // EntityMob.attackEntityAsMob (yg.n(sa)): the attackDamage attribute (Strength applies) as a
   // mob damage source, which EntityPlayer.attackEntityFrom scales by difficulty

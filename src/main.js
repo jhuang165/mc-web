@@ -1416,7 +1416,7 @@ const itemHoverLines = (snbt) => {
   return tooltipLines(ITEMS[stack.id], stack, options.advancedTooltips).map((l, i) => (l.color ?? (i ? "gray" : "white")).split(" ").map((c) => (TIP_CODES[c] ? "§" + TIP_CODES[c] : "")).join("") + (l.italic ? "§o" : "") + l.text);
 };
 const commandHost = createCommandHost({
-  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, rockets: () => rockets, entityHosts: () => ({ items, xpOrbs, primed, falling, boats, projectiles, arrows, eyes, mobs, dimension: world.dimension ?? 0 }), survival: () => survival, experience: () => experience,
+  active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, spawners: () => spawners, rockets: () => rockets, entityHosts: () => ({ items, xpOrbs, primed, falling, boats, projectiles, arrows, eyes, mobs, dimension: world.dimension ?? 0 }), survival: () => survival, experience: () => experience,
   position: () => ({ x: position.x, y: position.y, z: position.z }),
   seed: () => active.seed,
   scoreboard: () => scoreboard,
@@ -2992,7 +2992,7 @@ function movementTick(controls) {
   // MobSpawnerBaseLogic.updateSpawner on the server (tile entities tick after the entities).
   if (mobs && (spawners?.size || minecarts?.carts.some((c) => c.type === 4))) {
     const level = (x, y, z, sub) => (scene.light ? scene.light.level(x, y, z, sub) : 15);
-    const spawned = tickSpawnerSimulation({ spawners, mobs, minecarts, random: weather.random, isLoaded: world.streaming ? (x, z) => world.isLoaded(x, z) : null,
+    const spawned = tickSpawnerSimulation({ spawners, mobs, minecarts, boats, random: weather.random, isLoaded: world.streaming ? (x, z) => world.isLoaded(x, z) : null,
       feet: survival.health > 0 ? { x: position.x, y: position.y, z: position.z } : null }, {
       skyLight: (x, y, z) => (scene.light ? scene.light.skyAt(x, y, z) : 15),
       lightValue: (x, y, z) => level(x, y, z, scene.subtracted ?? 0),

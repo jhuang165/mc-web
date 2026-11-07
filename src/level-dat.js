@@ -117,7 +117,7 @@ export function levelGenerator(level) {
 export const browserYaw = (rotationYaw) => { const y = Math.PI - (rotationYaw * Math.PI) / 180; return Math.atan2(Math.sin(y), Math.cos(y)); };
 export const browserPitch = (rotationPitch) => (-rotationPitch * Math.PI) / 180;
 
-const PLAYER_KEYS = new Set(['Pos', 'Motion', 'Rotation', 'FallDistance', 'Fire', 'Air', 'OnGround', 'Dimension', 'Invulnerable', 'PortalCooldown', 'UUIDMost', 'UUIDLeast',
+const PLAYER_KEYS = new Set(['Pos', 'Riding', 'Motion', 'Rotation', 'FallDistance', 'Fire', 'Air', 'OnGround', 'Dimension', 'Invulnerable', 'PortalCooldown', 'UUIDMost', 'UUIDLeast',
   'HealF', 'Health', 'AbsorptionAmount', 'HurtTime', 'DeathTime', 'AttackTime', 'Attributes', 'ActiveEffects', 'Inventory', 'SelectedItemSlot', 'Sleeping', 'SleepTimer',
   'XpP', 'XpLevel', 'XpTotal', 'Score', 'SpawnX', 'SpawnY', 'SpawnZ', 'SpawnForced', 'foodLevel', 'foodTickTimer', 'foodSaturationLevel', 'foodExhaustionLevel',
   'abilities', 'EnderItems', 'playerGameType']);
@@ -217,6 +217,8 @@ export function javaPlayerFromNbt(tag, { convertItem = (c) => itemStackFromNbt(c
     // EntityPlayerMP.readEntityFromNBT: playerGameType (-1 when absent, then the world's GameType applies).
     playerGameType,
     bedSpawn,
+    // Entity.writeToNBT's Riding: ServerConfigurationManager.initializeConnectionToPlayer creates it (sg.a, no nested chain) and mounts the player.
+    riding: get(tag, 'Riding', NBT.COMPOUND) ?? null,
     lost,
   };
 }

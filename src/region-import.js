@@ -258,6 +258,15 @@ function levelRecord(record, { level, levelGen, javaPlayer: first, world, genera
     if (first.sleepingAt) out.wakeFromBed = [first.sleepingAt[0] - ox, first.sleepingAt[1], first.sleepingAt[2] - oz];
     if (first.dimension === 0 && first.position) out.position = { ...first.position, x: first.position.x - ox, z: first.position.z - oz };
     else { out.position = { x: worldSpawn[0] + 0.5, y: worldSpawn[1], z: worldSpawn[2] + 0.5, yaw: 0, pitch: 0 }; p.placed = 'world spawn (the player was saved in another dimension)'; }
+    // The mount saved as the player's Riding: a boat or rideable minecart becomes a record with `rider: true` (boats.js / minecarts.js
+    // restorePlayer seats the player on load). Other carts have no seat in the browser; the player stays at Pos.
+    if (first.riding && first.dimension === 0) {
+      const mid = get(first.riding, 'id', NBT.STRING, '?'), mpos = doubles(first.riding, 'Pos');
+      if (!mpos?.every(Number.isFinite)) p.lost.push(`Riding ${mid} (no position)`);
+      else if (mid === 'Boat') out.boats = [...(record.boats ?? []), { ...boatFromNbt(first.riding, { shiftX: -ox, shiftZ: -oz }), rider: true }];
+      else if (mid === CART_ENTITY_IDS[0]) out.minecarts = { version: 1, carts: [...(record.minecarts?.carts ?? []), { ...cartFromNbt(first.riding, 0, { shiftX: -ox, shiftZ: -oz }), rider: true }] };
+      else p.lost.push(`Riding ${mid} (only a boat or a rideable minecart is kept)`);
+    }
   } else out.player = { ...record.player, time: level.dayTime };
   if (typeof stats === 'string') {
     const parsed = statsRecordFromJson(stats);
