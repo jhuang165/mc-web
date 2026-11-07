@@ -380,8 +380,11 @@ export function villageTasks(K) {
     }
   }
 
-  // EntityAIMoveThroughVillage (us, speed 0.6, only at night), mutex 1: walks to the nearest door of its village
-  // that it has not visited among the last 15 (the original also breaks doors off while pathing; approximated).
+  // EntityAIMoveThroughVillage (us), mutex 1: walks to the nearest door of the nearest village (extra 0) that is not among the
+  // last 15 visited. Probed in mob-doors-reference.json (120 records). The visited list matches doors by COORDINATES (us.a(vy)),
+  // not identity; the list is trimmed by one entry per shouldExecute while longer than 15. Only the path search runs with
+  // closed doors forbidden (the flag is restored right after): startExecuting and resetTask leave the navigator's flag alone.
+  // `nocturnal` (the third constructor argument) makes the task refuse in daylight: villagers and golems pass true, zombies false.
   class MoveThroughVillage extends Task {
     constructor(m, speed, nocturnal) {
       super();
@@ -393,6 +396,9 @@ export function villageTasks(K) {
       this.door = null;
       this.path = null;
     }
+    wasVisited(d) {
+      return this.visited.some((v) => v.x === d.x && v.y === d.y && v.z === d.z);
+    }
     shouldExecute() {
       const m = this.m;
       if (this.visited.length > 15) this.visited.shift();
@@ -402,10 +408,10 @@ export function villageTasks(K) {
       let best = null, bd = 2147483647;
       for (const d of village.doors) {
         const s = d.distSqTo(floor(m.x), floor(m.y), floor(m.z));
-        if (s < bd && !this.visited.includes(d)) { best = d; bd = s; }
+        if (s < bd && !this.wasVisited(d)) { best = d; bd = s; }
       }
-      if (!best) return false;
       this.door = best;
+      if (!best) return false;
       const nav = m.navigator, flag = nav.canPassClosedDoors;
       nav.setBreakDoors(false);
       this.path = nav.getPathToXYZ(best.x, best.y, best.z);
@@ -425,13 +431,10 @@ export function villageTasks(K) {
       return m.distSq({ x: d.x, y: d.y, z: d.z }) > f(w * w);
     }
     startExecuting() {
-      const nav = this.m.navigator;
-      nav.setBreakDoors(false);
-      nav.setPath(this.path, this.speed);
+      this.m.navigator.setPath(this.path, this.speed);
     }
     resetTask() {
       const m = this.m, d = this.door;
-      m.navigator.setBreakDoors(true);
       if (d && (m.navigator.noPath() || m.distSq({ x: d.x, y: d.y, z: d.z }) < 16)) this.visited.push(d);
     }
   }
