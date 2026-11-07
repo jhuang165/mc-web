@@ -5,6 +5,7 @@
 // classes keep, default and normalise (tools/probes/LevelDatProbe.java), and src/level-dat.test.js replays those cases.
 // javaPlayerFromNbt follows EntityPlayer.readEntityFromNBT and its superclasses (Entity, EntityLivingBase) as far as
 // the browser player carries the state, and lists what it does not keep. Level and player docs: level-dat.md.
+import { uuidFields } from './entity-uuid.js';
 import { decodeCompressedNbt } from './nbt-compression.js';
 import { NBT } from './nbt.js';
 import { nbtGet, hasNumber } from './nbt-get.js';
@@ -205,7 +206,7 @@ export function javaPlayerFromNbt(tag, { convertItem = (c) => itemStackFromNbt(c
       absorption: get(tag, 'AbsorptionAmount', NBT.FLOAT, 0),
       slots, armor, current: Math.max(0, Math.min(8, selected)), enderItems,
     },
-    position,
+    position, ...uuidFields(tag),
     // The native values the browser player clamps: SelectedItemSlot is kept unclamped by InventoryPlayer, effects keep Ambient.
     selectedItemSlot: selected, effects,
     fallDistance: get(tag, 'FallDistance', NBT.FLOAT, 0),

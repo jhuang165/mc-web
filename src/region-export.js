@@ -35,6 +35,8 @@ import { statsExportFile } from './stats.js';
 import { DEFAULT_RULES } from './game-rules.js';
 import { Scoreboard, scoreboardFromJSON, scoreboardDocument } from './scoreboard.js';
 import { GEAR_TYPES, gearFieldsFrom } from './mob-equipment-live.js';
+import { uuidOf, uuidLongs } from './entity-uuid.js';
+import { attributesNbt } from './mob-attributes.js';
 // A [type, value] pair of cart-variants.js variantNBT (compound [10, {key: pair}], list [9, elementType, items]) as a tag.
 const pairTag=p=>p[0]===NBT.COMPOUND?comp(Object.fromEntries(Object.entries(p[1]).map(([k,v])=>[k,pairTag(v)]))):p[0]===NBT.LIST?tag(NBT.LIST,{elementType:p[2].length?p[1]:NBT.END,items:p[1]===NBT.COMPOUND?p[2].map(i=>new Map(Object.entries(i).map(([k,v])=>[k,pairTag(v)]))):p[2]}):tag(p[0],p[0]===NBT.SHORT?(p[1]<<16)>>16:p[1]);
 const tag=(type,value)=>({type,value}), comp=value=>tag(NBT.COMPOUND,new Map(Object.entries(value))), list=(type,items)=>tag(NBT.LIST,{elementType:items.length?type:NBT.END,items});
@@ -65,8 +67,10 @@ const inventory=(items,report)=>list(NBT.COMPOUND,(items??[]).flatMap((s,i)=>{co
 const NAMES={enderman:'Enderman',pig:'Pig',cow:'Cow',mooshroom:'MushroomCow',snow_golem:'SnowMan',sheep:'Sheep',chicken:'Chicken',wolf:'Wolf',ocelot:'Ozelot',horse:'EntityHorse',zombie:'Zombie',skeleton:'Skeleton',spider:'Spider',cave_spider:'CaveSpider',caveSpider:'CaveSpider',creeper:'Creeper',villager:'Villager',silverfish:'Silverfish',witch:'Witch',slime:'Slime',magma_cube:'LavaSlime',pigman:'PigZombie',iron_golem:'VillagerGolem',squid:'Squid',bat:'Bat',ender_crystal:'EnderCrystal',wither_skeleton:'Skeleton',blaze:'Blaze',ghast:'Ghast',wither:'WitherBoss',ender_dragon:'EnderDragon',giant:'Giant'};
 function entity(e,name,ox,oz) {
  return {id:str(name),Pos:list(NBT.DOUBLE,[e.x+ox,e.posY??e.y,e.z+oz]),Motion:list(NBT.DOUBLE,e.motion??[e.vx??e.mx??0,e.vy??e.my??0,e.vz??e.mz??0]),
- Rotation:list(NBT.FLOAT,e.rotation??(name==='Player'?[(Math.PI-(e.yaw??0))*180/Math.PI,-(e.pitch??0)*180/Math.PI]:[e.rotationYaw??(-(e.yaw??0)*180/Math.PI+0),e.rotationPitch??0])),FallDistance:float(e.fallDistance??0),Fire:short(e.fire??-1),Air:short(e.air??300),OnGround:byte(e.onGround?1:0),Dimension:int(0),Invulnerable:byte(0),PortalCooldown:int(0)};
+ Rotation:list(NBT.FLOAT,e.rotation??(name==='Player'?[(Math.PI-(e.yaw??0))*180/Math.PI,-(e.pitch??0)*180/Math.PI]:[e.rotationYaw??(-(e.yaw??0)*180/Math.PI+0),e.rotationPitch??0])),FallDistance:float(e.fallDistance??0),Fire:short(e.fire??-1),Air:short(e.air??300),OnGround:byte(e.onGround?1:0),Dimension:int(0),Invulnerable:byte(0),PortalCooldown:int(0),...uuidTags(uuidOf(e,name==='Player'?`Player|${e.id??''}`:`${name}|${e.x}|${e.posY??e.y}|${e.z}|${e.id??''}`))};
 }
+// Entity.writeToNBT's UUIDMost / UUIDLeast (entity-uuid.js).
+function uuidTags(uuid){const {most,least}=uuidLongs(uuid);return {UUIDMost:tag(NBT.LONG,most),UUIDLeast:tag(NBT.LONG,least)};}
 // Shared TileEntity.writeToNBT used by region export and /testforblock.
 export function writeContainerTile(name,e,x,y,z,{report={unmappedItems:0},dropper=false}={}) {
  const n={id:str(name==='chests'?'Chest':name==='dispensers'?(dropper?'Dropper':'Trap'):name==='hoppers'?'Hopper':name==='brewing'?'Cauldron':'Furnace'),x:int(x),y:int(y),z:int(z),Items:inventory(e.items,report)};
@@ -81,6 +85,7 @@ function payload(state,ox,oz,report,blockAt) {
   const n=entity(e,name,ox,oz);Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
   // EntityLiving.writeEntityToNBT: CustomName / CustomNameVisible (only when named), PersistenceRequired and Leashed with its Leash compound (a knot's X/Y/Z, or the holder's UUID).
   if(e.customName){n.CustomName=str(e.customName);n.CustomNameVisible=byte(e.customNameVisible?1:0);}
+  if(e.type==='zombie'||e.type==='pigman')n.Attributes=attributesNbt(e,e.type); // EntityLivingBase.writeEntityToNBT: the spawn modifiers incl. the leader bonus (mob-attributes.js)
   n.PersistenceRequired=byte(e.persistent?1:0);n.Leashed=byte(e.leash?1:0);
   if(e.leash?.knot)n.Leash=comp({X:int(e.leash.knot.x+ox),Y:int(e.leash.knot.y),Z:int(e.leash.knot.z+oz)});
   else if(e.leash)n.Leash=comp({UUIDMost:long(0),UUIDLeast:long(0)});
@@ -189,7 +194,7 @@ export function levelNbt(record,w,report={unmappedItems:0}) {
  const spawn=record.worldSpawn??Object.values(w.spawn()).map(Math.floor);
  const health=Number.isFinite(p.health)?p.health:20;
  // EntityLivingBase.writeEntityToNBT: HealF and the legacy Health short (ceil); EntityPlayerMP adds playerGameType.
- const player={...entity({...pos,air:Number.isInteger(p.air)?p.air:300,fire:Number.isInteger(p.fire)?p.fire:0},'Player',dimension?0:ox,dimension?0:oz),Dimension:int(dimension),Health:short(Math.ceil(health)),HealF:float(health),AbsorptionAmount:float(Number.isFinite(p.absorption)?p.absorption:0),foodLevel:int(p.food??20),foodSaturationLevel:float(p.saturation??5),foodExhaustionLevel:float(p.exhaustion??0),foodTickTimer:int(p.timer??0),XpLevel:int(xp.level),XpP:float(xp.progress),XpTotal:int(xp.total),Score:int(xp.score),SelectedItemSlot:int(p.current??0),playerGameType:int(gameType),SleepTimer:short(0),Sleeping:byte(0),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Attributes:list(NBT.COMPOUND,[['generic.maxHealth',20],['generic.knockbackResistance',0],['generic.movementSpeed',Math.fround(.1)],['generic.attackDamage',1]].map(([n,b])=>new Map([['Name',str(n)],['Base',tag(NBT.DOUBLE,b)]]))),abilities:comp({invulnerable:byte(creative?1:0),flying:byte(record.flying===true&&creative?1:0),mayfly:byte(creative?1:0),instabuild:byte(creative?1:0),mayBuild:byte(gameType===2?0:1),flySpeed:float(.05),walkSpeed:float(.1)})};
+ const player={...entity({...pos,id:record.id,uuid:record.playerUuid,air:Number.isInteger(p.air)?p.air:300,fire:Number.isInteger(p.fire)?p.fire:0},'Player',dimension?0:ox,dimension?0:oz),Dimension:int(dimension),Health:short(Math.ceil(health)),HealF:float(health),AbsorptionAmount:float(Number.isFinite(p.absorption)?p.absorption:0),foodLevel:int(p.food??20),foodSaturationLevel:float(p.saturation??5),foodExhaustionLevel:float(p.exhaustion??0),foodTickTimer:int(p.timer??0),XpLevel:int(xp.level),XpP:float(xp.progress),XpTotal:int(xp.total),Score:int(xp.score),SelectedItemSlot:int(p.current??0),playerGameType:int(gameType),SleepTimer:short(0),Sleeping:byte(0),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Attributes:list(NBT.COMPOUND,[['generic.maxHealth',20],['generic.knockbackResistance',0],['generic.movementSpeed',Math.fround(.1)],['generic.attackDamage',1]].map(([n,b])=>new Map([['Name',str(n)],['Base',tag(NBT.DOUBLE,b)]]))),abilities:comp({invulnerable:byte(creative?1:0),flying:byte(record.flying===true&&creative?1:0),mayfly:byte(creative?1:0),instabuild:byte(creative?1:0),mayBuild:byte(gameType===2?0:1),flySpeed:float(.05),walkSpeed:float(.1)})};
  delete player.id;
  // EntityPlayerMP's saved mount: Entity.writeToNBT nests it as Riding (ServerConfigurationManager.initializeConnectionToPlayer creates and mounts it on load).
  if(report.playerMount)player.Riding=tag(NBT.COMPOUND,report.playerMount);

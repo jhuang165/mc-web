@@ -25,6 +25,8 @@ import { DISPENSER } from './dispenser-piston.js';
 import { PISTON_MOVING } from './redstone-blocks-2.js';
 import { DISPENSER_SLOTS } from './dispenser-container.js';
 import { ORIGINAL_ITEMS } from './original-items.js';
+import { uuidFields } from './entity-uuid.js';
+import { playerMountable } from './entities.js';
 import { importedMobType, IMPORT_MOB_LIMIT, javaMobFromNbt } from './java-mobs.js';
 import { JAVA_PROJECTILES, IMPORT_PROJECTILE_LIMIT, javaProjectileFromNbt } from './java-projectiles.js';
 import { decodeCompressedNbt } from './nbt-compression.js';
@@ -193,7 +195,7 @@ export function cartFromNbt(tag, type, { shiftX = 0, shiftZ = 0, lost = () => {}
   const cart = { type, x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ,
     motion: motion?.elementType === NBT.DOUBLE && motion.items.length === 3 && motion.items.every(Number.isFinite) ? [...motion.items] : [0, 0, 0],
     rotation: rotation?.elementType === NBT.FLOAT && rotation.items.length === 2 && rotation.items.every(Number.isFinite) ? [...rotation.items] : [0, 0],
-    fallDistance: get(tag, 'FallDistance', NBT.FLOAT, 0), fire: get(tag, 'Fire', NBT.SHORT, 0), onGround: get(tag, 'OnGround', NBT.BYTE, 0) !== 0, items: [] };
+    fallDistance: get(tag, 'FallDistance', NBT.FLOAT, 0), fire: get(tag, 'Fire', NBT.SHORT, 0), onGround: get(tag, 'OnGround', NBT.BYTE, 0) !== 0, items: [], ...uuidFields(tag) };
   const name = get(tag, 'CustomName', NBT.STRING, '');
   if (name) cart.customName = name;
   if (type === 2) { cart.fuel = Math.max(0, get(tag, 'Fuel', NBT.SHORT, 0)); cart.pushX = get(tag, 'PushX', NBT.DOUBLE, 0); cart.pushZ = get(tag, 'PushZ', NBT.DOUBLE, 0); }
@@ -224,7 +226,7 @@ export function boatFromNbt(tag, { shiftX = 0, shiftZ = 0 } = {}) {
   return { x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ,
     motion: motion?.elementType === NBT.DOUBLE && motion.items.length === 3 && motion.items.every(Number.isFinite) ? [...motion.items] : [0, 0, 0],
     rotation: rotation?.elementType === NBT.FLOAT && rotation.items.length === 2 && rotation.items.every(Number.isFinite) ? [...rotation.items] : [0, 0],
-    fallDistance: get(tag, 'FallDistance', NBT.FLOAT, 0), fire: get(tag, 'Fire', NBT.SHORT, 0), onGround: get(tag, 'OnGround', NBT.BYTE, 0) !== 0 };
+    fallDistance: get(tag, 'FallDistance', NBT.FLOAT, 0), fire: get(tag, 'Fire', NBT.SHORT, 0), onGround: get(tag, 'OnGround', NBT.BYTE, 0) !== 0, ...uuidFields(tag) };
 }
 
 // The level.dat half of a level import: the streamed generator, WorldInfo's flags and the player (level-dat.md).
@@ -254,6 +256,7 @@ function levelRecord(record, { level, levelGen, javaPlayer: first, world, genera
     }
     // abilities.flying only means something in Creative (a Survival player's capabilities are reset by the game mode).
     if (first.flying && mode === 'creative') out.flying = true;
+    if (first.uuid) out.playerUuid = first.uuid;
     // Sleeping: the native load wakes the player at once (level-dat.js); the launch frees the bed and stands the player beside it.
     if (first.sleepingAt) out.wakeFromBed = [first.sleepingAt[0] - ox, first.sleepingAt[1], first.sleepingAt[2] - oz];
     if (first.dimension === 0 && first.position) out.position = { ...first.position, x: first.position.x - ox, z: first.position.z - oz };
@@ -264,14 +267,18 @@ function levelRecord(record, { level, levelGen, javaPlayer: first, world, genera
       const mid = get(first.riding, 'id', NBT.STRING, '?'), mpos = doubles(first.riding, 'Pos');
       if (!mpos?.every(Number.isFinite)) p.lost.push(`Riding ${mid} (no position)`);
       else if (mid === 'Boat') out.boats = [...(record.boats ?? []), { ...boatFromNbt(first.riding, { shiftX: -ox, shiftZ: -oz }), rider: true }];
-      else if (mid === CART_ENTITY_IDS[0]) out.minecarts = { version: 1, carts: [...(record.minecarts?.carts ?? []), { ...cartFromNbt(first.riding, 0, { shiftX: -ox, shiftZ: -oz }), rider: true }] };
-      else if (mid === 'Pig' || mid === 'EntityHorse') {
-        // A saddled pig or a horse: a live mob record flagged `playerRides`, which restorePlayerVehicle seats the player on (ServerConfigurationManager
-        // creates the Riding entity with EntityList.createEntityFromNBT and mounts the player; player-riding-reference.json).
+      else if (Object.values(CART_ENTITY_IDS).includes(mid)) {
+        // Any cart variant: the saved seat is kept (minecarts.js mount({saved}) seats the player in a chest/furnace/TNT/spawner/hopper/command cart too;
+        // every one mounted in interchange-reference.json's playerRiding probe).
+        const typeIndex = Object.values(CART_ENTITY_IDS).indexOf(mid);
+        out.minecarts = { version: 1, carts: [...(record.minecarts?.carts ?? []), { ...cartFromNbt(first.riding, typeIndex, { shiftX: -ox, shiftZ: -oz }), rider: true }] };
+      } else {
+        // Any other mount is a live mob record flagged `playerRides`, which restorePlayerVehicle seats the player on (ServerConfigurationManager creates
+        // the Riding entity with EntityList.createEntityFromNBT and mounts the player). A mob the port cannot represent is dropped with a note.
         const mob = javaMobFromNbt(first.riding, { shiftX: -ox, shiftZ: -oz, convertItem });
-        if (mob) out.entities = [...(record.entities ?? []), { ...mob, playerRides: true }]; else p.lost.push(`Riding ${mid} (not importable)`);
+        if (mob && playerMountable(mob)) out.entities = [...(record.entities ?? []), { ...mob, playerRides: true }];
+        else p.lost.push(`Riding ${mid} (${mob ? 'a ' + mob.type + ' cannot carry the player here' : 'not an importable entity'}; the player stays at Pos)`);
       }
-      else p.lost.push(`Riding ${mid} (only a boat, a rideable minecart, a pig or a horse is kept)`);
     }
   } else out.player = { ...record.player, time: level.dayTime };
   if (typeof stats === 'string') {

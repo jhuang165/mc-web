@@ -146,7 +146,7 @@ export const JOCKEY_EXPERIENCE = 10;
 // EntityChicken.canDespawn (wg.v): a jockey with nobody on it.
 export const chickenJockeyDespawns = (e) => e.type === "chicken" && !!e.chickenJockey && !e.riddenBy;
 // The leader zombie's max-health bonus raises the cap only (nothing sets the health): a mob's own maximum, else its type's.
-export const maxHealthOf = (e, base) => (e.type === "zombie" && Number.isFinite(e.maxHealth) && e.maxHealth > base ? e.maxHealth : base);
+export const maxHealthOf = (e, base) => ((e.type === "zombie" || e.type === "pigman") && Number.isFinite(e.maxHealth) && e.maxHealth > base ? e.maxHealth : base);
 
 // EntityAISelector sj.b over a chicken list: alive and not ridden. The box is the zombie's grown by 5, 3, 5.
 export function freeChickenNear(zombie, entities, size) {

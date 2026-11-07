@@ -10,6 +10,7 @@ import * as H from "./horse.js";
 import { cleanItems, ensureItems, syncGear } from "./horse-gear.js";
 import { entityRandom } from "./entities.js";
 import { PIG_MOUNTED_OFFSET } from "./pig-saddle.js";
+import { mountedYOffset } from "./mob-riding.js";
 
 const f = Math.fround;
 export const HORSE_ENTITY = {
@@ -97,7 +98,8 @@ export function horseSeats(mobs) {
       if (!rider) return;
       const lift = e.rearAmount ? f(0.15 * e.rearAmount) : 0;
       // EntityPig keeps Entity.getMountedYOffset (height * 0.75, pig-saddle.js).
-      const offset = e.type === "pig" ? PIG_MOUNTED_OFFSET : H.mountedOffset(view(e));
+      // Any other mob a save seats the player on (level.dat Player.Riding) keeps Entity.getMountedYOffset: height * 0.75 (mob-riding.js).
+      const offset = e.type === "pig" ? PIG_MOUNTED_OFFSET : e.type === "horse" ? H.mountedOffset(view(e)) : mountedYOffset(mobs.size(e)[1]);
       Object.assign(rider, { x: e.x, y: e.y + offset - 0.5 + lift, z: e.z });
     },
     // EntityPlayerSP's jump key counter: charged while Space is held, sent as (int)(power * 100) on release.

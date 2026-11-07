@@ -10,6 +10,7 @@
 // Boats reuse the Minecarts bookkeeping (a `carts` list, pickable(), drain(), boxes(), mount/dismount)
 // with an empty rail table. Like a cart, a boat keeps posY (the native field) and its box `bb`; `y` is the
 // box bottom. Riders use the same feet convention as carts (vehicle-simulation.js).
+import { ensureUuid, isUuid } from "./entity-uuid.js";
 import { Minecarts } from "./minecarts.js";
 import { WATER, SNOW_LAYER, LILY_PAD } from "./world.js";
 import { blockCollisions } from "./block-collisions.js";
@@ -321,7 +322,7 @@ export class Boats extends Minecarts {
   // Browser save: the Entity fields a native reload keeps (position, motion, rotation, fall distance, fire).
   toJSON() {
     return this.carts.filter((c) => !c.dead).map((c) => ({
-      id: c.id, x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire,
+      id: c.id, uuid: ensureUuid(c), x: c.x, y: c.posY, z: c.z, motion: [c.vx, c.vy, c.vz], rotation: [c.yaw, c.pitch], fallDistance: c.fallDistance, fire: c.fire,
       onGround: c.onGround, ...(c.rider?.player === true ? { rider: true } : {}),
     }));
   }
@@ -331,6 +332,7 @@ export class Boats extends Minecarts {
       if (!ok(c?.x, c?.y, c?.z)) continue;
       const boat = m.spawnBoat({ x: c.x, y: c.y - BOAT_Y_OFFSET, z: c.z });
       boat.restorePlayer = c.rider === true;
+      if (isUuid(c.uuid)) boat.uuid = c.uuid.toLowerCase(); // Entity.writeToNBT's UUIDMost/UUIDLeast (entity-uuid.js)
       if (Number.isInteger(c.id) && c.id > 0 && !m.carts.some((o) => o !== boat && o.id === c.id)) boat.id = c.id; // passengers name their boat by id
       m.nextId = Math.max(m.nextId, boat.id + 1);
       const v = Array.isArray(c.motion) && c.motion.length === 3 && ok(...c.motion) ? c.motion : [0, 0, 0];

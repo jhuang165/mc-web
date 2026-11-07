@@ -192,7 +192,7 @@ test("new worlds spawn sheep among the passive animals and colour them", () => {
   const types = new Set();
   for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) for (const e of new EntityWorld({ ...grass, numericSeed: seed }).entities) types.add(e.type);
   assert.ok(types.has("sheep") && types.has("pig") && types.has("cow"));
-  const again = (seed) => new EntityWorld({ ...grass, numericSeed: seed }).serialize();
+  const again = (seed) => new EntityWorld({ ...grass, numericSeed: seed }).serialize().map(({ uuid, ...rest }) => rest); // UUIDs are random
   assert.deepEqual(again(3), again(3));
   for (const e of new EntityWorld(grass).entities) if (e.type === "sheep") assert.ok(e.color >= 0 && e.color < 16);
 });

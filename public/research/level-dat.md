@@ -56,7 +56,7 @@ reports an approximation for it. Worlds saved at 13, 15 and 16 keep their output
 - Hardcore is carried and played as hardcore (hardcore.md). `initialized`, LastPlayed, SizeOnDisk and newer-version keys are reported as ignored.
 - Not carried (reported in `report.level.player.lost`): non-default fly/walk speeds, effect `Ambient`, large Motion, Count 0 stacks (native keeps them; item losses are in `report.items`), Attributes beyond the base values, and any key the reader does not know.
 - A player in the Nether or End is placed at the world spawn, and the area is the spawn's.
-- The UUID is not written; the export's stats file uses the offline UUID of "Player".
+- `UUIDMost`/`UUIDLeast` are written for the player (record `playerUuid`, else derived from the world id) and read back on import;  the export's stats file uses the offline UUID of "Player".
 - Only one 8×8 chunk area is imported; the rest of the save regenerates from the seed and is not the player's edits.
 
 - Applied since batch 14 (hardcore track): `abilities.flying` (a Creative player starts flying), `SpawnForced` (becomes the browser's /spawnpoint, `record.playerSpawn`, and is exported back as a forced spawn), `Sleeping` (native `readEntityFromNBT` wakes the player at once, bytecode-read, not probed: the launch frees the bed and stands the player beside it, `record.wakeFromBed`) and the hardcore flag. A Survival player's flying flag is dropped (the game mode resets capabilities).

@@ -52,6 +52,8 @@ import { WITCH, WITCH_SOUNDS, witchDrink, witchDamage, ITEM_POTION, potionEffect
 import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
 import { isVehicle, vehicleSize } from "./vehicle-seat.js";
+import { newUuid } from "./entity-uuid.js";
+import { cleanModifiers, modifiedValue } from "./mob-attributes.js";
 import { mountEntity, releaseDead, ridingOrder, beginRidden, endRidden, ridingId, linkRiders, setLocationAndAngles, freeChickenNear, maxHealthOf } from "./mob-riding.js";
 import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, skeletonSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
 import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage } from "./mob-effects.js";
@@ -647,6 +649,17 @@ export function heldAttackDamage(tool, survival) {
   const base = item.kind === "sword" ? 5 + (item.name.startsWith("Golden") ? 0 : item.tier) : item.kind === "axe" ? 4 + item.tier : item.kind === "pickaxe" ? 3 + item.tier : 2 + item.tier;
   return survival.effects?.attackDamage ? survival.effects.attackDamage(base) : base;
 }
+// The Attributes a saved zombie or pigman keeps: its modifiers (mob-attributes.js) and a max health above 20 (the leader bonus is the operation 2
+// modifier on generic.maxHealth, so the modifier list decides when it is present; a bare `maxHealth` is an older save's).
+function savedAttributeFields(e, base) {
+  const modifiers = cleanModifiers(e.modifiers);
+  const fromModifiers = modifiers?.some((m) => m.attribute === "generic.maxHealth") ? modifiedValue({ modifiers }, "generic.maxHealth", base, 0, 2048) : undefined;
+  const max = fromModifiers ?? (Number.isFinite(e.maxHealth) ? Math.min(e.maxHealth, 2048) : undefined);
+  return { modifiers, maxHealth: max > base ? max : undefined };
+}
+// A mob the player can sit on from a save (level.dat Player.Riding, `playerRides`): EntityList.createEntityFromNBT + mountEntity accept any entity. Left
+// out are the chicken (its own seat maths, mob-riding.js seatPosition), the Ender Dragon, the Wither and the End crystal (no mount seat here).
+export const playerMountable = (e) => !!e && e.type !== "chicken" && e.type !== "ender_dragon" && e.type !== "wither" && e.type !== "ender_crystal" && (e.growingAge ?? 0) >= 0;
 export class EntityWorld {
   constructor(world, saved, random = Math.random) {
     this.world = world;
@@ -723,9 +736,10 @@ export class EntityWorld {
       ...(e.type === "pig" ? { saddled: e.saddled === true } : {}),
       // timeUntilNextEgg is not saved in 1.7.10: a fresh roll from create, whatever the save says.
       ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer, chickenJockey: e.chickenJockey === true } : {}), // IsChickenJockey (mob-riding.md)
-      playerRides: (e.type === "horse" || e.type === "pig") && e.playerRides === true ? true : undefined, // consumed by restorePlayerVehicle
+      playerRides: playerMountable(e) && e.playerRides === true ? true : undefined, // consumed by restorePlayerVehicle
       riding: typeof e.riding === "string" && /^(mob|boat|cart)-\d+$/.test(e.riding) ? e.riding : undefined, // the mount's id, linked by linkRiders
-      ...(e.type === "zombie" ? { canBreakDoors: e.canBreakDoors === true, maxHealth: Number.isFinite(e.maxHealth) && e.maxHealth > t.health ? Math.min(e.maxHealth, 2048) : undefined } : { canBreakDoors: e.type === "pigman" ? e.canBreakDoors === true : undefined, maxHealth: undefined }), // a pigman only saves the flag: EntityPigZombie.isAIEnabled is false, so the task never runs (mob-riding.md)
+      ...(e.type === "zombie" || e.type === "pigman" ? savedAttributeFields(e, t.health) : { maxHealth: undefined, modifiers: undefined }),
+      ...(e.type === "zombie" ? { canBreakDoors: e.canBreakDoors === true } : { canBreakDoors: e.type === "pigman" ? e.canBreakDoors === true : undefined }), // a pigman only saves the flag: EntityPigZombie.isAIEnabled is false, so the task never runs (mob-riding.md)
       // EntityBat.readEntityFromNBT: BatFlags bit 1 is the hanging state (datawatcher 16).
       ...(e.type === "bat" ? { batHanging: e.batHanging === true } : {}),
       ...(isSpider(e.type) ? { climbing: false, spiderTarget: false, spiderRevenge: 0, stepDistance: 0, nextStep: 1 } : {}),
@@ -765,6 +779,7 @@ export class EntityWorld {
   create(type, x, y, z, random = this.random) {
     return syncInterpolation({
       id: "mob-" + this.nextId++,
+      uuid: newUuid(), // Entity.writeToNBT's UUIDMost/UUIDLeast (entity-uuid.js); kept by serialize and restore
       type,
       x,
       y,
@@ -1038,6 +1053,9 @@ export class EntityWorld {
       e.knockbackResistance = r.knockback;
       e.followRange = r.followRange;
       if (r.child) this.chickenJockeyRolls(e, r);
+      // The rolls as saved AttributeModifiers (mob-attributes.js, probed in interchange-reference.json); the leader's max-health bonus is one of them.
+      e.modifiers = cleanModifiers(r.modifiers);
+      if (r.leader && r.maxHealth > ENTITY_TYPES.zombie.health) e.maxHealth = r.maxHealth;
       if (type === "pigman") e.canBreakDoors = !!(r.doors || r.leader); // yh.a(sy) runs yq.a(sy): the same roll, stored but never run
       if (type === "zombie") {
         e.reinforcement = reinforcementChance(e.reinforcement + r.reinforcementBonus);
@@ -1045,7 +1063,6 @@ export class EntityWorld {
         // there is none; else 5 %: a new chicken jockey), then setBreakDoorsAItask(roll < local * 0.1) and the leader's
         // max-health bonus (the health itself stays), which also breaks doors (mob-riding.md).
         e.canBreakDoors = !!(r.doors || r.leader);
-        if (r.leader && r.maxHealth > ENTITY_TYPES.zombie.health) e.maxHealth = r.maxHealth;
       }
     } else if (type === "skeleton" || type === "wither_skeleton") {
       // EntitySkeleton.onSpawnWithEgg: armour, bow and enchantments (or the wither's stone sword), the pickup roll and the Halloween head.

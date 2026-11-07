@@ -149,13 +149,20 @@ export function zombieSpawnRolls(rand, worldRand, d, local, date = { month: 6, d
   const bonus = rand.nextDouble() * 1.5 * local;
   if (bonus > 1) follow.push([bonus, 2]);
   out.followRange = attributeValue(40, follow, 0, 2048);
+  // The same modifiers as saved Attributes (interchange-reference.json): { attribute, name, amount, operation }, UUIDs are added on application.
+  out.modifiers = [{ attribute: "generic.followRange", name: "Random spawn bonus", amount: follow[0][0], operation: 1 },
+    { attribute: "generic.knockbackResistance", name: "Random spawn bonus", amount: out.knockback, operation: 0 }];
+  if (bonus > 1) out.modifiers.push({ attribute: "generic.followRange", name: "Random zombie-spawn bonus", amount: bonus, operation: 2 });
   // The leader: reinforcement chance + 0.5 to 0.75, max health x (2 to 5), breaks doors.
   out.leader = rand.nextFloat() < f(local * f(0.05));
   out.reinforcementBonus = 0;
   out.maxHealth = 20;
   if (out.leader) {
     out.reinforcementBonus = rand.nextDouble() * 0.25 + 0.5;
-    out.maxHealth = attributeValue(20, [[rand.nextDouble() * 3 + 1, 2]], 0, Number.MAX_VALUE);
+    const healthAmount = rand.nextDouble() * 3 + 1;
+    out.maxHealth = attributeValue(20, [[healthAmount, 2]], 0, Number.MAX_VALUE);
+    out.modifiers.push({ attribute: "zombie.spawnReinforcements", name: "Leader zombie bonus", amount: out.reinforcementBonus, operation: 0 },
+      { attribute: "generic.maxHealth", name: "Leader zombie bonus", amount: healthAmount, operation: 2 });
     out.doors = true;
   }
   return out;

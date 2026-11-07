@@ -15,5 +15,5 @@ test('generated dungeon loot, spawners and supported animals enter live state ex
   const imported={...saved,...importedRuntime(saved)};
   const p2=new Survival(imported.player),m2=new EntityWorld(w,imported.entities);
   assert.equal(restorePopulation(imported,w,p2,m2).fresh,false);assert.equal(p2.chests[key].items.filter(Boolean).length,0);assert.equal(m2.entities.length,0);
-  const again=restoreStructureEntities(imported,w);assert.deepEqual(saveStructureEntities(again),saveStructureEntities(live));
+  const again=restoreStructureEntities(imported,w);const noUuid=(j)=>JSON.parse(JSON.stringify(j,(k,v)=>k==='uuid'?undefined:v));assert.deepEqual(noUuid(saveStructureEntities(again)),noUuid(saveStructureEntities(live))); // each regenerated cart draws its own random UUID
 });

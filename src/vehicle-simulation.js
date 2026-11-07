@@ -105,7 +105,7 @@ export function releaseRider(state) {
 export function restorePlayerVehicle(state) {
   for(const sys of [state.minecarts,state.boats]) if(sys) for(const c of sys.carts) if(c.restorePlayer) {
     c.restorePlayer=false;
-    if(!state.rider.vehicle && state.survival.health>0 && (c.boat || c.type===0)){syncRider(state);sys.mount(c,state.rider);applySeat(state);}
+    if(!state.rider.vehicle && state.survival.health>0){syncRider(state);sys.mount(c,state.rider,{saved:true});applySeat(state);}
   }
   // A saved or imported horse or pig that carried the player (entities.js `playerRides`, the Riding compound of level.dat).
   for(const e of state.horses?.mobs?.entities ?? []) if(e.playerRides) {

@@ -16,7 +16,8 @@ const flat = {
 test("passive spawns are seeded, stand on the surface, and survive reload without duplicate IDs", () => {
   const a = new EntityWorld(flat),
     b = new EntityWorld(flat);
-  assert.deepEqual(a.serialize(), b.serialize());
+  const noUuid = (list) => list.map(({ uuid, ...rest }) => rest); // each mob draws its own random UUID (Entity constructor)
+  assert.deepEqual(noUuid(a.serialize()), noUuid(b.serialize()));
   assert.equal(a.entities.length, 8);
   const c = new EntityWorld(flat, a.serialize());
   assert.equal(c.entities.length, 8);

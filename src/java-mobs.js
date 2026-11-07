@@ -4,6 +4,8 @@ import { readNbt as readHorseNbt } from './horse.js';
 // JAVA_SUMMON_MOBS reuse summonedMobRecord. The record is what EntityWorld's
 // constructor reads back (entities.js); fields it re-derives (AI timers, velocities, the village home) are not written.
 // The exporter is the mirror image in region-export.js; src/java-mobs.test.js round-trips them.
+import { uuidFields } from './entity-uuid.js';
+import { attributeFieldsFromNbt } from './mob-attributes.js';
 import { ocelotFieldsFrom } from './ocelot.js';
 import { NBT } from './nbt.js';
 import { endermanFieldsFrom } from './enderman.js';
@@ -110,7 +112,7 @@ function savedMaxHealth(entity) {
   for (const a of list?.elementType === NBT.COMPOUND ? list.items : []) if (tagValue(a, 'Name', NBT.STRING, '') === 'generic.maxHealth') return tagValue(a, 'Base', NBT.DOUBLE);
   return undefined;
 }
-export function javaMobFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = () => null } = {}) {
+function javaMobFromNbtBase(entity, { shiftX = 0, shiftZ = 0, convertItem = () => null } = {}) {
   const summonType = JAVA_SUMMON_MOBS[tagValue(entity, 'id', NBT.STRING, '')];
   if (summonType) {
     const pos = numbers(entity, 'Pos', NBT.DOUBLE, 3), parsed = pos && summonedMobRecord(summonType, entity, { convertItem });
@@ -227,10 +229,11 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
     native.set('Pos', { type: NBT.LIST, value: { elementType: NBT.DOUBLE, items: [0, 0, 0] } });
     Object.assign(record, javaMobFromNbt(native, { convertItem }));
     record.health = tagValue(tag, 'HealF', NBT.FLOAT, tagValue(tag, 'Health', NBT.SHORT, health));
-    for (const k of type === 'villager' ? ['Profession', 'Riches', 'Offers'] : type === 'iron_golem' ? ['PlayerCreated'] : ['IsBaby', 'IsVillager', 'ConversionTime', 'CanBreakDoors']) kept.add(k);
+    for (const k of type === 'villager' ? ['Profession', 'Riches', 'Offers'] : type === 'iron_golem' ? ['PlayerCreated'] : ['IsBaby', 'IsVillager', 'ConversionTime', 'CanBreakDoors', 'Attributes']) kept.add(k);
   }
   if (type === 'horse') { Object.assign(record, horseNbtFields(tag, convertItem)); for (const k of HORSE_NBT_KEYS) kept.add(k); }
   if (type === 'pigman') {
+    Object.assign(record, attributeFieldsFromNbt(tag)); kept.add('Attributes');
     record.angerLevel = tagValue(tag, 'Anger', NBT.SHORT, 0);
     record.canBreakDoors = tagValue(tag, 'CanBreakDoors', NBT.BYTE, 0) !== 0;
     const equipment = tagValue(tag, 'Equipment', NBT.LIST);
@@ -263,8 +266,20 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
   record.health = Math.max(0, Math.min(type === 'wolf' && record.owner ? 20 : type === 'horse' ? record.horse.maxHealth : health, record.health));
   Object.assign(record, gearNbtFields(tag));
   for (const k of GEAR_NBT_KEYS) kept.add(k);
+  Object.assign(record, uuidFields(tag)); kept.add('UUIDMost'); kept.add('UUIDLeast');
   const ignored = [...tag.keys()].filter(k => !kept.has(k));
   if (rotation?.[1]) ignored.push('Rotation[1] (pitch)');
   if (type === 'witch' && record.held && record.held.id !== 385) ignored.push('Equipment[0]');
   return { record, ignored };
+}
+
+// A chunk or Riding mob compound as a record: the type's own fields (above) plus Entity's UUID and a zombie or pigman's saved Attributes
+// (the leader bonus and the other spawn modifiers: mob-attributes.js).
+export function javaMobFromNbt(entity, options) {
+  const record = javaMobFromNbtBase(entity, options);
+  if (record) {
+    Object.assign(record, uuidFields(entity));
+    if (record.type === 'zombie' || record.type === 'pigman') Object.assign(record, attributeFieldsFromNbt(entity));
+  }
+  return record;
 }
