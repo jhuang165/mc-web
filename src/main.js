@@ -103,7 +103,8 @@ import { NetherLive } from './nether-portal-live.js'; // nether portal lighting/
 import {Farming,cropDrops,farmNeighbourChange} from "./farming.js";
 import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox, setEntityBoxes } from "./entities.js";
 import { wakeSavedSleeper, BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
-import { trackerMessage, showChatLine, PLAYER_NAME } from "./death-messages.js";
+import { showChatLine, PLAYER_NAME } from "./death-messages.js";
+import { deathComponent, chatTextComponent } from "./team-names.js";
 import { ChatUi, printChat, chat } from "./chat-ui.js";
 import { translation, fontWidth } from "./chat-component.js";
 import { lookupStat, statComponent, statHover, profilerTick } from "./commands-extra.js";
@@ -126,7 +127,7 @@ import { keyName as inventoryKeyName } from "./menu-screens.js";
 import { BINDINGS, KeyBindings, HeldKeys, HOTBAR, lwjglCode, mouseCode, storedKeyCodes } from "./keybindings.js";
 import { writeOptionsTxt, applyOptionsTxt } from "./options-txt.js";
 import { FrameLimiter, limitFramerate } from "./frame-limit.js";
-import { createCommandRunner, chatLine, tr } from "./commands.js";
+import { createCommandRunner, tr } from "./commands.js";
 import { runCommandCart } from "./command-cart.js";
 import { LanSession, LAN_NOTICE } from "./lan.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
@@ -1484,7 +1485,7 @@ const commandHost = createCommandHost({
 const commands = createCommandRunner(commandHost);
 const chatUi = new ChatUi(document, {
   // ServerConfigurationManager prints "<Player> message"; a leading "/" runs the command.
-  submit: (text) => { if (text.startsWith("/")) commands.run(text); else printChat(chatLine(scoreboard.formatName(PLAYER_NAME), text), 0, false); },
+  submit: (text) => { if (text.startsWith("/")) commands.run(text); else printChat(chatTextComponent(scoreboard.formatName(PLAYER_NAME), text), 0, false); },
   // GuiChat.func_146407_a: with chatLinksPrompt a GuiConfirmOpenLink asks first; Yes opens a new tab, and every choice returns to the chat.
   confirmLink: (url) => {
     const typed = chatUi.input.value;
@@ -2270,7 +2271,7 @@ function die() {
   playHurtSounds();
   statsLive.death();
   // EntityPlayerMP.onDeath broadcasts the death message to chat at the moment of death.
-  const message = survival.died && trackerMessage(survival.combat, scoreboard.formatName(PLAYER_NAME), { selfItem: survival.held?.displayName }); // CombatTracker.func_151521_b; EntityPlayer.func_145748_c_: the team-formatted name
+  const message = survival.died && deathComponent(survival.combat, scoreboard.formatName(PLAYER_NAME), { selfItem: survival.held?.displayName }); // CombatTracker.func_151521_b; EntityPlayer.func_145748_c_: the team-formatted name, one component per argument (team-names.js)
   survival.died = false;
   if (message) showChatLine(document, message);
   closeContainer();

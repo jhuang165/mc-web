@@ -36,7 +36,8 @@ function entity(raw, { self = false, projectile = null } = {}) {
   if (self) return { self: true, living: true, tracked: true, player: true, name: (ctx) => ctx.name, held: (ctx) => ctx.selfItem ?? null };
   if (projectile) return { living: false, tracked: projectile === FIREBALL, player: false, name: () => translate(...projectile), held: () => null };
   const named = raw?.equipment?.[0]?.displayName ?? raw?.heldItem?.displayName ?? raw?.held?.displayName;
-  return { raw, living: true, tracked: true, player: !!raw?.isPlayer, name: () => entityDisplayName(raw), held: () => (typeof named === "string" && named ? named : null) };
+  // EntityPlayer.func_145748_c_ applies the scoreboard team (team-names.js); Entity.func_145748_c_ of any other entity is the plain name.
+  return { raw, living: true, tracked: true, player: !!raw?.isPlayer, name: () => (raw?.isPlayer && typeof raw.formattedName === "string" ? raw.formattedName : entityDisplayName(raw)), held: () => (typeof named === "string" && named ? named : null) };
 }
 const ARROW = ["entity.Arrow.name", "arrow"], FIREBALL = ["entity.SmallFireball.name", "Small Fireball"];
 // EntityPotion has no "entity.ThrownPotion.name" key in en_US, so an ownerless thrown or indirectMagic source prints the raw key (probed).
