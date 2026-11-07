@@ -150,6 +150,11 @@ public class ScoreboardProbe {
 
     List<String> criteria = new ArrayList<>();
     for (Object k : bah.a.keySet()) criteria.add((String) k);
+    // StatList.allStats (pp.b) of the same JVM: the craftItem stats come from a HashSet of Items (identity hash codes), so their order
+    // differs between runs and the criteria HashMap's collision chains follow it.
+    List<String> statOrder = new ArrayList<>();
+    for (Object o : pp.b) statOrder.add(((ph) o).e);
+    System.out.println("{\"case\":\"statOrder\",\"ids\":" + arr(statOrder) + "}");
     StringBuilder ro = new StringBuilder("[");
     for (Object k : bah.a.keySet()) if (((bah) bah.a.get(k)).b()) { if (ro.length() > 1) ro.append(','); ro.append(q((String) k)); }
     System.out.println("{\"case\":\"criteria\",\"keys\":" + arr(criteria) + ",\"readOnly\":" + ro.append(']') + "}");

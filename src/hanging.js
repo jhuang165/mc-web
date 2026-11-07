@@ -90,6 +90,18 @@ export class Hanging {
     return this.place(e);
   }
 
+  // /summon Painting | ItemFrame. EntityList.createEntityFromNBT runs readEntityFromNBT (setDirection puts the entity on its tile), then
+  // CommandSummon.setLocationAndAngles(x, y, z, yaw, pitch) moves it to the command position keeping the yaw setDirection set. Entity.setPosition
+  // then rebuilds the box from the constructor's 0.5 x 0.5 size (setDirection's own box is gone), so a summoned entity is a small cube standing on
+  // (x, y, z) that onValidSurface, picking and arrows see; the tile, the art and the wall test keep the tag's TileX/Y/Z. A save and reload runs
+  // setDirection again, which snaps it back to its tile.
+  summon(kind, dir, tx, ty, tz, x, y, z, extra = {}) {
+    const e = this.make(kind, dir, tx, ty, tz, extra);
+    Object.assign(e, { x, y, z, bb: [x - 0.25, y, z - 0.25, x + 0.25, y + 0.5, z + 0.25], summoned: true });
+    this.entities.push(e);
+    return e;
+  }
+
   // EntityHanging.onValidSurface [ss.e]. World.getCollidingBoundingBoxes only finds blocks here (the
   // entity part of that call matches boxes and other hanging entities never intersect, see above).
   valid(world, e) {

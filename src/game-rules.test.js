@@ -27,7 +27,7 @@ test("every native GameRules read is accounted for, and each wired site names a 
   assert.deepEqual(wired("doFireTick"), ["BlockFire.updateTick", "EntityLightningBolt.<init>", "EntityLightningBolt.onUpdate"]);
   assert.deepEqual(wired("doMobLoot"), ["EntityAIMate.spawnBaby", "EntityLivingBase.onDeath", "EntityLivingBase.onDeathUpdate"]);
   assert.deepEqual(wired("doMobSpawning"), ["WorldServer.tick"]);
-  assert.deepEqual(wired("mobGriefing"), ["BlockFarmland.onFallenUpon", "EntityAIEatGrass.updateTask", "EntityCreeper.func_146077_cc", "EntitySilverfish.updateEntityActionState"]);
+  assert.deepEqual(wired("mobGriefing"), ["BlockFarmland.onFallenUpon", "EntityAIBreakDoor.shouldExecute", "EntityAIEatGrass.updateTask", "EntityCreeper.func_146077_cc", "EntityDragon.destroyBlocksInAABB", "EntityEnderman.onLivingUpdate", "EntityLargeFireball.onImpact", "EntityLiving.onLivingUpdate", "EntitySilverfish.updateEntityActionState", "EntityWither.updateAITasks", "EntityWitherSkull.onImpact"]);
 });
 
 test("the rule source follows the world record and falls back to the 1.7.10 defaults", () => {

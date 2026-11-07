@@ -19,6 +19,9 @@ const leashStates = new WeakMap();
 let restrictionClass = null;
 const KNOT_HALF_HEIGHT = 9 / 32; // ss: a 9 pixel box either side of the centre
 const knotsOf = (w) => (w.knotList ??= []);
+// A knot's entity position: the block centre, or the command position of a /summon LeashKnot (whose tile stays 0, 0, 0).
+const knotCentre = (k) => (k.summoned ? { x: k.px, y: k.py, z: k.pz } : { x: k.x + 0.5, y: k.y + 0.5, z: k.z + 0.5 });
+let knotSeq = 0;
 const alive = (m, e) => e.health > 0 && m.entities.includes(e);
 
 // EntityPlayerSP.isRidingHorse: the ridden entity is a saddled horse.
@@ -59,7 +62,7 @@ export function installHorseGear(EntityWorld) {
     const l = e.leash;
     if (l?.holder === "player") { const p = this.ai?.player; return p && p.alive !== false ? { x: p.x, y: p.y, z: p.z, player: true } : null; }
     // A knot holds while its entity lives, whatever the fence block is (the fence is only checked every 101st knot tick).
-    if (l?.knot) { const k = this.knotAt(l.knot.x, l.knot.y, l.knot.z); return k ? { x: k.x + 0.5, y: k.y + 0.5, z: k.z + 0.5, knot: k } : null; }
+    if (l?.knot) { const k = this.knotAt(l.knot.x, l.knot.y, l.knot.z); return k ? { ...knotCentre(k), knot: k } : null; }
     return null;
   };
   // The leash is set (EntityLiving.setLeashedToEntity): the mob is known to the leash tick from now on.
@@ -72,6 +75,9 @@ export function installHorseGear(EntityWorld) {
   proto.knotAt = function (x, y, z) { return knotsOf(this).find((k) => !k.dead && k.x === x && k.y === y && k.z === z) ?? null; };
   // su.a(world, x, y, z): a knot is made without looking at the block (the fence check comes with its first 100 ticks).
   proto.knotCreate = function (x, y, z) { const k = { x, y, z, age: 0, dead: false }; knotsOf(this).push(k); return k; };
+  // /summon LeashKnot (EntityList.createEntityFromNBT: su(world), whose readEntityFromNBT is empty, so TileX/Y/Z stay 0, 0, 0; then
+  // CommandSummon.setLocationAndAngles). It looks for a fence at tile 0, 0, 0 on its 101st update, so it normally dies there.
+  proto.knotSummon = function (px, py, pz) { const k = { x: 0, y: 0, z: 0, age: 0, dead: false, summoned: true, px, py, pz, id: ++knotSeq }; knotsOf(this).push(k); return k; };
   // Entity.setDead on a knot: nothing drops (su.b(Entity) is empty) and the mobs it held lose the lead on their next tick.
   proto.knotKill = function (k) {
     k.dead = true;
@@ -103,7 +109,7 @@ export function installHorseGear(EntityWorld) {
   proto.knotInteract = function (k, survival) {
     const lead = G.originalId(survival.held) === G.LEAD_ORIGINAL, tie = { x: k.x, y: k.y, z: k.z };
     let attached = 0;
-    if (lead) for (const m of this.leashedNear({ x: k.x + 0.5, y: k.y + 0.5, z: k.z + 0.5 })) { this.setLeash(m, { knot: { ...tie } }); attached++; }
+    if (lead) for (const m of this.leashedNear(knotCentre(k))) { this.setLeash(m, { knot: { ...tie } }); attached++; }
     const out = G.knotClick({ attached, creative: !!survival.creative });
     if (out.kill) {
       this.knotKill(k);
@@ -113,7 +119,7 @@ export function installHorseGear(EntityWorld) {
   };
   proto.leashNearKnot = function (m, k) {
     const [w, h] = this.size(m);
-    return G.knotAttach([{ x: m.x, y: m.y, z: m.z, halfWidth: w / 2, height: h, leash: { holder: "player" } }], { x: k.x + 0.5, y: k.y + 0.5, z: k.z + 0.5 }).length > 0;
+    return G.knotAttach([{ x: m.x, y: m.y, z: m.z, halfWidth: w / 2, height: h, leash: { holder: "player" } }], knotCentre(k)).length > 0;
   };
   // EntityLiving.clearLeashed(true, dropLead): the lead item drops where the mob stands. The knot stays; the home area goes with it.
   proto.unleash = function (e, drop = true) {
@@ -206,7 +212,7 @@ export function installHorseGear(EntityWorld) {
     return lead;
   };
   // Every live knot entity (the renderer draws the knot model on each, tied mobs or not).
-  proto.leashKnots = function () { return knotsOf(this).filter((k) => !k.dead).map((k) => ({ x: k.x, y: k.y, z: k.z })); };
+  proto.leashKnots = function () { return knotsOf(this).filter((k) => !k.dead).map((k) => ({ x: k.x, y: k.y, z: k.z, ...(k.summoned ? { px: k.px, py: k.py, pz: k.pz, id: k.id } : {}) })); };
   // ItemNameTag.itemInteractionForEntity: the tag's display name becomes the mob's CustomName and the mob stops despawning.
   proto.nameTagUse = function (e, survival) {
     if (!alive(this, e) || G.originalId(survival.held) !== G.NAME_TAG_ORIGINAL) return false;

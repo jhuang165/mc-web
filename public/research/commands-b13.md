@@ -49,7 +49,7 @@ It also matches:
 
 **Approximate:**
 
-- The per-item and entity stats in the middle of allStats are grouped by kind rather than in StatList registration order. This affects only completion order.
+- Batch 16 replaced the grouped order with the StatList registration order (`order` in `src/stats-data.js`, from `StatList.allStats` in the same JVM as the criteria record). All 803 completion positions replay from that run's order (`criteriaOrder` in `src/scoreboard.js`, a Java HashMap model). The shipped default matches over 700 positions; the rest is the craftItem run, whose order comes from an identity-hash HashSet of Items and differs between JVM runs, so it cannot be reproduced exactly.
 - Item stats are named by the port's item names.
 
 ## /spreadplayers

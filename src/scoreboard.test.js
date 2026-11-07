@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createCommandRunner } from "./commands.js";
-import { Scoreboard, SLOT_NAMES, slotIndex, criteriaNames, isCriteria, isReadOnly, sidebarLayout, scoreboardToJSON, scoreboardFromJSON, scoreboardDocument, scoreboardJSONFromNbt } from "./scoreboard.js";
+import { Scoreboard, SLOT_NAMES, slotIndex, criteriaNames, criteriaOrder, isCriteria, isReadOnly, sidebarLayout, scoreboardToJSON, scoreboardFromJSON, scoreboardDocument, scoreboardJSONFromNbt } from "./scoreboard.js";
 import { joinNiceString, formattingByName, COLOR_VALUES } from "./commands-scoreboard.js";
 import { ScoreboardLive } from "./scoreboard-live.js";
 import { JavaHashMap, JavaHashSet, javaStringHash } from "./java-hash.js";
@@ -90,6 +90,23 @@ test("IScoreObjectiveCriteria.field_96643_a has the native key set and only heal
   assert.ok(!isCriteria("stat.nonsense") && !isCriteria("Dummy"));
   assert.deepEqual(r.readOnly, ["health"]);
   assert.deepEqual(mine.filter(isReadOnly), r.readOnly);
+});
+
+test("criteria iteration order: every one of the 803 positions replays from the stat order of the same native run", () => {
+  const r = records("criteria")[0], statOrder = records("statOrder")[0].ids;
+  assert.equal(r.keys.length, 803);
+  assert.deepEqual(criteriaOrder(statOrder), r.keys);
+});
+
+test("the shipped criteria order uses StatList's own registration order", () => {
+  const mine = criteriaNames();
+  assert.equal(mine.length, 803);
+  assert.equal(new Set(mine).size, 803);
+  // The one run-dependent part is the craftItem run (a HashSet of Items keyed by identity hash): every other stat sits where the native map puts it.
+  const ref = records("criteria")[0].keys, craft = (k) => k.startsWith("stat.craftItem.");
+  const same = mine.filter((k, i) => k === ref[i]).length;
+  assert.ok(same > 700, String(same));
+  assert.deepEqual(mine.filter((k) => !craft(k)).sort(), ref.filter((k) => !craft(k)).sort());
 });
 
 test("EnumChatFormatting.getValueByName, getValidValues and joinNiceString", () => {

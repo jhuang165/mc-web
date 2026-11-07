@@ -46,10 +46,10 @@ export class HorseGearRenderer {
       }
     }
     for (const k of knots) {
-      const key = `${k.x},${k.y},${k.z}`;
+      const key = k.id ? `summoned:${k.id}` : `${k.x},${k.y},${k.z}`;
       let m = this.knots.get(key);
       if (!m) { m = new THREE.Mesh(this.knotGeometry, this.knotMaterial); this.group.add(m); this.knots.set(key, m); }
-      m.position.set(k.x + 0.5, k.y + 0.5 - 0.1875 + 0.5 - 0.5, k.z + 0.5);
+      if (k.id) m.position.set(k.px, k.py - 0.1875, k.pz); else m.position.set(k.x + 0.5, k.y + 0.5 - 0.1875 + 0.5 - 0.5, k.z + 0.5);
       seenKnots.add(key);
     }
     this.sweep(this.leashes, seen, (v) => { this.group.remove(v.mesh); v.mesh.geometry.dispose(); v.mesh.material.dispose(); });
