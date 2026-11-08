@@ -2,7 +2,7 @@
 // through EntityLivingBase.updatePotionEffects (sv.aO) and the Potion attribute modifiers.
 // Recorded in DifficultyProbe's "potion" cases (public/research/difficulty-reference.json).
 import { potionColor, potionParticles } from "./fx.js";
-import { attributeValue } from "./difficulty.js";
+import { liveAttribute } from "./mob-attributes.js";
 const f = Math.fround;
 export const SPEED = 1, STRENGTH = 5, REGENERATION = 10, INVISIBILITY = 14;
 export const SLOWNESS = 2, INSTANT_HEALTH = 6, FIRE_RESISTANCE = 12, WATER_BREATHING = 13, WEAKNESS = 18, POISON = 19, WITHER = 20;
@@ -44,9 +44,11 @@ export function speedModifiers(e) {
 }
 // Potion.damageBoost (PotionAttackDamage): attackDamage x (1 + 1.3 x (amplifier + 1)),
 // operation 2; EntityMob.attackEntityAsMob casts the value to float.
-export function attackDamage(e, base) {
+// `gear` is the held/worn items' attack modifiers (operation 0, applied live by EntityLivingBase.onUpdate and never saved: probed `weapon`
+// records); the mob's own saved attackDamage base and modifiers (an imported list, mob-attributes.js liveAttribute) count too.
+export function attackDamage(e, base, gear = 0) {
   const s = mobEffect(e, STRENGTH);
-  return f(s ? attributeValue(base, [[1.3 * (s.amplifier + 1), 2]]) : base);
+  return f(liveAttribute(e, "generic.attackDamage", base, [...(gear ? [[gear, 0]] : []), ...(s ? [[1.3 * (s.amplifier + 1), 2]] : [])]));
 }
 
 // updatePotionEffects: each PotionEffect.onUpdate runs performEffect when Potion.isReady

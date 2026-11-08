@@ -145,8 +145,10 @@ export function linkRiders(entities, heightOf) {
 export const JOCKEY_EXPERIENCE = 10;
 // EntityChicken.canDespawn (wg.v): a jockey with nobody on it.
 export const chickenJockeyDespawns = (e) => e.type === "chicken" && !!e.chickenJockey && !e.riddenBy;
-// The leader zombie's max-health bonus raises the cap only (nothing sets the health): a mob's own maximum, else its type's.
-export const maxHealthOf = (e, base) => ((e.type === "zombie" || e.type === "pigman") && Number.isFinite(e.maxHealth) && e.maxHealth > base ? e.maxHealth : base);
+// The leader zombie's max-health bonus raises the cap only (nothing sets the health): a mob's own maximum, else its type's. Since batch 24 any mob
+// can carry one (an imported generic.maxHealth base or modifier); wolves, slimes and horses derive theirs from their own state instead.
+export const OWN_MAX_HEALTH = new Set(["wolf", "slime", "magma_cube", "horse"]);
+export const maxHealthOf = (e, base) => (!OWN_MAX_HEALTH.has(e.type) && Number.isFinite(e.maxHealth) && e.maxHealth > 0 ? e.maxHealth : base);
 
 // EntityAISelector sj.b over a chicken list: alive and not ridden. The box is the zombie's grown by 5, 3, 5.
 export function freeChickenNear(zombie, entities, size) {

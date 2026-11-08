@@ -53,6 +53,7 @@ export const JAVA_ATTRIBUTE_BASES = Object.freeze(Object.fromEntries(Object.entr
 export const REINFORCEMENTS = "zombie.spawnReinforcements";
 export const BABY_BOOST = Object.freeze({ name: "Baby speed boost", attribute: "generic.movementSpeed", amount: 0.5, operation: 1, uuid: "b9766b59-9566-4402-bc1f-2ee2a276d836" });
 export const SPAWN_BONUS = "Random spawn bonus";
+const OWN_MAX_HEALTH_IDS = new Set(["Wolf", "Slime", "LavaSlime", "EntityHorse"]);
 const isZombieLike = (id) => id === "Zombie" || id === "PigZombie";
 const tag = (type, value) => ({ type, value });
 
@@ -76,7 +77,8 @@ function modifiersFor(e, javaId, name, base) {
   if (name === N.S && isZombieLike(javaId) && (e.growingAge ?? 0) < 0 && !out.some((m) => m.uuid === BABY_BOOST.uuid)) out.push({ name: BABY_BOOST.name, amount: BABY_BOOST.amount, operation: BABY_BOOST.operation, uuid: BABY_BOOST.uuid });
   if (!stored.length) {
     if (name === N.F && Number.isFinite(e.followRange) && base > 0 && Math.abs(e.followRange - base) > 1e-9) out.push({ name: SPAWN_BONUS, amount: e.followRange / base - 1, operation: 1, uuid: deriveUuid(`followRange|${e.uuid ?? e.id ?? ""}`) });
-    if (name === N.K && Number.isFinite(e.knockbackResistance) && e.knockbackResistance > 0) out.push({ name: SPAWN_BONUS, amount: e.knockbackResistance, operation: 0, uuid: deriveUuid(`knockback|${e.uuid ?? e.id ?? ""}`) });
+    // The final value less the base (an imported base override already counts once).
+    if (name === N.K && Number.isFinite(e.knockbackResistance) && Math.abs(e.knockbackResistance - base) > 1e-12) out.push({ name: SPAWN_BONUS, amount: e.knockbackResistance - base, operation: 0, uuid: deriveUuid(`knockback|${e.uuid ?? e.id ?? ""}`) });
   }
   return out.sort((a, b) => a.operation - b.operation);
 }
@@ -125,7 +127,9 @@ export function livingAttributeFields(compound, record, javaId) {
       if (!Number.isFinite(amount) || ![0, 1, 2].includes(operation) || modifiers.length >= 32) continue;
       const most = nbtGet(m, "UUIDMost", NBT.LONG), least = nbtGet(m, "UUIDLeast", NBT.LONG);
       const uuid = most !== undefined && least !== undefined ? longsUuid(most, least) : newUuid();
-      if (uuid === BABY_BOOST.uuid && name === BABY_BOOST.attribute && amount === BABY_BOOST.amount && operation === BABY_BOOST.operation) continue;
+      // The child flag stands for the baby boost of a baby zombie or pigman; an adult keeps a saved one (EntityZombie.readEntityFromNBT calls setChild
+      // only for IsBaby true, so the modifier stays: probed `babyBoost`, movementSpeed 0.345 on an adult zombie).
+      if (uuid === BABY_BOOST.uuid && name === BABY_BOOST.attribute && amount === BABY_BOOST.amount && operation === BABY_BOOST.operation && isZombieLike(javaId) && (record.growingAge ?? 0) < 0) continue;
       modifiers.push({ attribute: name, name: nbtGet(m, "Name", NBT.STRING, ""), amount, operation, uuid });
     }
   }
@@ -136,10 +140,14 @@ export function livingAttributeFields(compound, record, javaId) {
   const follow = modifiedValue(holder, N.F, baseOf(N.F), 0, 2048);
   if (modifiers.some((m) => m.attribute === N.F) || follow !== fallback[N.F]) out.followRange = follow;
   const knock = modifiedValue(holder, N.K, baseOf(N.K), 0, 1);
-  if (knock > 0) out.knockbackResistance = knock;
+  if (knock > 0 || javaId === "Zombie") out.knockbackResistance = knock; // a loaded zombie keeps its saved 0 (no fresh spawn roll)
+  // Any class but those deriving their own maximum (tamed wolf, slime size, horse roll) keeps a max health its list changes (no 2048 cap: probed
+  // `modEffect` clamp, 3020 kept); the zombie leader bonus is one such modifier.
+  if (!OWN_MAX_HEALTH_IDS.has(javaId)) {
+    const maxHealth = modifiedValue(holder, N.H, baseOf(N.H), 0, Number.MAX_VALUE);
+    if (maxHealth !== fallback[N.H]) out.maxHealth = maxHealth;
+  }
   if (isZombieLike(javaId)) {
-    const maxHealth = modifiedValue(holder, N.H, baseOf(N.H), 0, 2048);
-    if (maxHealth > 20) out.maxHealth = maxHealth;
     if (bases[REINFORCEMENTS] !== undefined || modifiers.some((m) => m.attribute === REINFORCEMENTS)) out.reinforcement = modifiedValue(holder, REINFORCEMENTS, bases[REINFORCEMENTS] ?? 0, 0, 1);
   }
   const overrides = {};

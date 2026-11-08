@@ -38,9 +38,9 @@ export function horseFields(random, group = null) {
 }
 // EntityHorse.onSpawnWithEgg on the entity's own Random (wi.a(sy)): `group` is the {type, variant} a herd passes on (EntityHorse.GroupData).
 export function horseSpawn(rand, group = null) {
-  const { horse, group: next } = H.spawnHorse(rand, group);
+  const { horse, group: next, followBonus } = H.spawnHorse(rand, group);
   const { age, health, ...rest } = horse;
-  return { fields: { horse: pick(rest), health, growingAge: age, speedAttr: horse.speed }, group: next };
+  return { fields: { horse: pick(rest), health, growingAge: age, speedAttr: horse.speed }, group: next, followBonus };
 }
 const pick = (h) => Object.fromEntries(KEEP.map((k) => [k, h[k]]));
 
