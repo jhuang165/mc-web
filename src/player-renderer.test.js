@@ -4,8 +4,10 @@ import * as THREE from "three";
 import {
   cameraDistance, thirdPersonCamera, nextView, PlayerBody, javaYaw, modelBox, bipedPose, armorLayer, heldKind,
   heldItemMatrix, ARMOR_PASS_PARTS, playerShadowCaster, BIPED, sleepingTransform, SLEEP_YAW,
+  playerRootRotation, sleeperShadowCaster, SLEEP_SIZE,
 } from "./player-renderer.js";
 import { BedSleep, BED_DIR } from "./bed.js";
+import { mobPose } from "./entities.js";
 import { shadowQuads, SHADOWS } from "./shadows.js";
 
 const slab = (z0, z1) => ({ get: (x, y, z) => (z >= z0 && z < z1 && x >= 0 && x < 40 && y >= 0 && y < 20 ? 1 : 0) });
@@ -260,4 +262,50 @@ test("the sleeping eye (posY + 0.12, orientCamera) clears the lying head and hat
   // Hat: 8 px head inflated by 0.5 px, at the 0.9375 player scale, centred on the body's lying axis.
   const hatTop = at.y + ((4 + 0.5) / 16) * 0.9375;
   assert.ok(hatTop < pos.y + 0.12 - 0.05, `hat top ${hatTop}`); // beyond the 0.05 near plane
+});
+
+// RendererLivingEntity.rotateCorpse (boh.a(sv,F,F,F)): f = sqrt((deathTime + partial - 1) / 20 * 1.6), clamped to 1,
+// times getDeathMaxRotation (boh.a(sv) returns 90.0f), about z after glRotatef(180 - renderYawOffset, 0, 1, 0).
+test("the player death roll follows rotateCorpse: sqrt((deathTime + partial - 1) / 20 * 1.6) * 90, clamped", () => {
+  const body = new PlayerBody();
+  body.reset({ x: 0, y: 0, z: 0 }, 0, 0);
+  assert.equal(mobPose(body, 0.5).death, 0); // alive: deathTime 0, no rotation
+  const roll = (deathTime, partial) => { body.death = deathTime; return mobPose(body, partial).death; };
+  assert.ok(Math.abs(roll(1, 0) - 0) < 1e-4); // sqrt(0) = 0
+  assert.ok(Math.abs(roll(5, 0.5) - Math.sqrt((5.5 - 1) / 20 * 1.6) * 90) < 1e-3);
+  assert.ok(Math.abs(roll(10, 0) - Math.sqrt(9 / 20 * 1.6) * 90) < 1e-3);
+  assert.equal(roll(13, 0.5), 90); // (12.5 / 20 * 1.6 = 1) reaches the clamp
+  assert.equal(roll(19, 0.9), 90);
+  const [x, y, z] = playerRootRotation(30, 90);
+  assert.equal(x, 0);
+  assert.ok(Math.abs(y - 150 * Math.PI / 180) < 1e-12 && Math.abs(z - Math.PI / 2) < 1e-12);
+  // A lying corpse's head (model up) ends level: Ry(180 - yaw) * Rz(90) turns the model's up (+y, feet to head) sideways.
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...playerRootRotation(180, 90)));
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+  assert.ok(Math.abs(up.y) < 1e-9);
+});
+
+test("a sleeper keeps the head yaw and pitch frozen at bed entry (mobPose of the unticked body)", () => {
+  const body = new PlayerBody();
+  body.reset({ x: 0, y: 0, z: 0 }, 0, 0);
+  // Walk and look 40 degrees to the side with the head, then stop ticking as GuiSleepMP does.
+  for (let i = 0; i < 30; i++) body.tick({ position: { x: 0, y: 0, z: 0 }, previous: { x: 0, y: 0, z: 0 }, yaw: 0.7, pitch: -0.3 });
+  const a = mobPose(body, 0), b = mobPose(body, 0.7);
+  assert.equal(a.headYaw, b.headYaw);
+  assert.equal(a.headPitch, b.headPitch);
+  assert.ok(Math.abs(a.headPitch - 0.3 * 180 / Math.PI) < 0.01); // Java pitch is positive downward
+});
+
+// Render.doRenderShadowAndFire runs after doRender for every entity (bnn.a(sa,DDDFFZ) at 70-82), centred on
+// posY + getShadowSize() (sa.Y() = height / 2); a sleeping player's box is 0.2 high.
+test("a sleeper's shadow is centred 0.1 above the entity position with the player's 0.5 size", () => {
+  const pos = { x: 10.9, y: 64.9375, z: 20.5 }, caster = sleeperShadowCaster(pos, SHADOWS.player);
+  assert.equal(caster.height, SLEEP_SIZE);
+  assert.equal(caster.size, Math.fround(0.5));
+  const floor = { get: (x, y) => (y < 64 ? 1 : 0), light: () => 15 };
+  const quads = shadowQuads(caster, { x: pos.x, y: pos.y + 0.12, z: pos.z }, floor);
+  // ey = 65.0375, so the scan starts at cell y 64 (floor 64.5375) and ends at 65; only cell 64 rests on stone (y 63).
+  assert.ok(quads.length > 0 && quads.every((q) => q.y === 64 + 0.015625));
+  // alpha = (opacity - (ey - by) / 2) * 0.5 * brightness(15 = 1); opacity ~1 at the viewer's distance.
+  assert.ok(Math.abs(quads[0].alpha - (1 - (65.0375 - 64) / 2) * 0.5) < 1e-3);
 });
