@@ -65,3 +65,21 @@ test("a damage source without a living entity sets no revenge target", () => {
   ew.attackEntityFrom(zombie, 1, { name: "fall", player: false });
   assert.ok(!zombie.revenge);
 });
+
+test("a skeleton's combat task follows its held item (EntitySkeleton.setCombatTask): a bow shoots, an empty hand or a sword closes in", () => {
+  const { ew, mobs: [s], tick } = setup([["skeleton", 10.5, 10.5]]);
+  const kind = () => ew.ai.brain(s).combatTask?.constructor.name;
+  s.equipment = [null, null, null, null, null];
+  tick(1);
+  const melee = kind();
+  s.equipment = [{ id: 261, count: 1, damage: 0 }, null, null, null, null];
+  tick(1);
+  const bow = kind();
+  assert.notEqual(bow, melee);
+  s.equipment = [{ id: 272, count: 1, damage: 0 }, null, null, null, null];
+  tick(1);
+  assert.equal(kind(), melee);
+  // the combat task stays the last entry (priority 4 added after Wander and the look tasks) after every swap
+  assert.equal(ew.ai.brain(s).tasks.entries.at(-1).action, ew.ai.brain(s).combatTask);
+  assert.equal(ew.ai.brain(s).tasks.entries.filter((x) => x.priority === 4).length, 1);
+});

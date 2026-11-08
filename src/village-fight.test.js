@@ -8,14 +8,12 @@ import { replayFight, fightReference as reference } from "./village-fight-replay
 //     expiry and removal, and the player's reputation (-1 per hit, -5 for killing a village golem, a second name starting at 0);
 //  2. the MOB layer: per tick every mob's position (within MOVE_TOL), health, attack target, revenge target and Entity.rand draws (exact), up to
 //     the first tick that diverges. FIRST_DIVERGENCE pins that tick per scenario, so a fix or a regression moves it and fails here.
-const MOVE_TOL = 1e-3;
-// Why each scenario first diverges (bytecode-read and probe-observed):
-//  player-fights-zombie-0 114: villager 1 flees (AvoidEntity draws i32/i14) from a zombie natively; the port's villager does not see it (the sight ray
-//    passes the door natively, the port's door cell blocks or is in another state).
-//  player-fights-zombie-1 241 and zombies-and-shooters-1 232: a killed mob's death ticks draw nextGaussian x3 and nextFloat x3 per tick natively
-//    (the death explosion particle arguments of EntityLiving.onDeathUpdate); the port plays them as events without drawing Entity.rand.
-//  zombies-and-shooters-0 and player-turns-aggressive 322: zombie 3 drifts about 1e-3 in x after many collision pushes (position only).
-const FIRST_DIVERGENCE = { "player-fights-zombie-0": 114, "zombies-and-shooters-0": 322, "player-fights-zombie-1": 241, "zombies-and-shooters-1": 232, "player-turns-aggressive": 322 };
+const MOVE_TOL = 0;
+// Batch 30: every scenario now matches to the end of the recording with exact positions. Fixed since batch 29: the probe double's rayTraceBlocks
+//  returned null (a villager saw a zombie through a closed door; the port was right: probe bug, now real rays), killed mobs draw g g g f f f x 20 at
+//  deathTime 20 on Entity.rand (a null fx still draws), a mob keeps its bounding box between moves (x = (minX + maxX) / 2 carries the rounding), and
+//  EntityIronGolem lifts its target by the double 0.4000000059604645.
+const FIRST_DIVERGENCE = "end";
 
 function firstDivergence(r, got) {
   for (let t = 0; t < r.ticks; t++) {
@@ -30,7 +28,7 @@ function firstDivergence(r, got) {
 const replay = replayFight;
 
 test("village fight: player hits, aggressor list and reputation up to the first mob-on-mob death in each native scenario", () => {
-  assert.equal(reference.records.length, 5);
+  assert.equal(reference.records.length, 7);
   const limits = {};
   for (const r of reference.records) {
     const got = replay(r);
@@ -55,8 +53,8 @@ test("village fight: player hits, aggressor list and reputation up to the first 
 test("village fight: the mob layer (targets, revenge, positions, Random draws) matches the native rows up to the pinned first divergence", () => {
   for (const r of reference.records) {
     const got = replayFight(r), first = firstDivergence(r, got);
-    assert.equal(first, FIRST_DIVERGENCE[r.name], `${r.name} first diverging tick`);
-    assert.ok(first >= 100, `${r.name} matches for at least 100 ticks`);
+    assert.equal(first, r.ticks, `${r.name} first diverging tick`);
+    assert.ok(first >= 100, `${r.name} matches for the whole recording`);
   }
 });
 
@@ -70,4 +68,22 @@ test("village fight: every mob-on-mob revenge target in the first 200 ticks of t
     if (want >= 0 && want !== 7) { mobOnMob++; assert.equal(got.states[t][i][5], want, `tick ${t} mob ${i} revenge`); }
   }
   assert.ok(mobOnMob > 100);
+});
+
+test("village fight: villagers flee from two zombies (the golem kills one; WatchClosest still picks the corpse) and Peaceful mobs run one last tick, then go, as natively", () => {
+  const names = reference.records.map((r) => r.name);
+  assert.ok(names.includes("villagers-flee-two-zombies") && names.includes("peaceful"));
+  const peaceful = reference.records.find((r) => r.name === "peaceful");
+  assert.equal(peaceful.difficulty, 0);
+  // native tick 0: the zombies and the target-less skeletons still move/draw once (EntityMob.onUpdate runs super.onUpdate before setDead), none ticks again
+  assert.deepEqual(peaceful.rows[0][0][2][6], ["i1000", "i7"]);
+  assert.deepEqual(peaceful.rows[1][0][2][6], []);
+  const got = replayFight(peaceful);
+  assert.deepEqual(got.states[0][2][6], ["i1000", "i7"]);
+  assert.deepEqual(got.states[1][2][6], []);
+  const flee = reference.records.find((r) => r.name === "villagers-flee-two-zombies");
+  // the villagers draw their AvoidEntity flee rolls (i32 / i14) in the native rows, and the port draws the same
+  const drew = (rows) => rows.filter((row) => row[0][0][6].includes("i14") || row[0][1][6].includes("i14")).length;
+  assert.ok(drew(flee.rows) > 0);
+  assert.equal(drew(flee.rows), replayFight(flee).states.filter((s) => s[0][6].includes("i14") || s[1][6].includes("i14")).length);
 });

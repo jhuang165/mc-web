@@ -466,7 +466,7 @@ export function burst(fx, name, count, e, rand, up = 0) {
   for (let i = 0; i < count; i++) {
     const vx = rand.nextGaussian() * 0.02, vy = rand.nextGaussian() * 0.02, vz = rand.nextGaussian() * 0.02;
     const x = e.x + f(f(rand.nextFloat() * w) * 2) - w, y = e.y + up + f(rand.nextFloat() * h), z = e.z + f(f(rand.nextFloat() * w) * 2) - w;
-    fx.spawn(name, x, y, z, vx, vy, vz);
+    fx?.spawn(name, x, y, z, vx, vy, vz); // a null fx still draws: the server's World.spawnParticle is a no-op but its arguments are evaluated
   }
 }
 
