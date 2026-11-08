@@ -1210,6 +1210,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     world = prepared;
     portalTimer.reset();
     dims.restorePlayer(record);
+    if (record.wholeSave) dims.warmStored({ id: rootIdOf(record), wholeSave: record.wholeSave }, dimensionOf(record)); // stored-column index for /spreadplayers and portal peeks (background)
     startPrefetch();
     // Restore World.rand before constructing the block runtimes that share it.
     weather = new Weather().restore(record.weather).restoreSimulation(record.worldRandom);
@@ -1590,6 +1591,7 @@ const itemHoverLines = (snbt) => {
 const commandHost = createCommandHost({
   active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, spawners: () => spawners, rockets: () => rockets, entityHosts: () => ({ items, xpOrbs, primed, falling, boats, projectiles, arrows, eyes, mobs, hanging, dimension: world.dimension ?? 0 }), survival: () => survival, experience: () => experience,
   position: () => ({ x: position.x, y: position.y, z: position.z }),
+  storedTop: (x, z) => dims.storedTop({ id: rootIdOf(active) }, dimensionOf(active), x, z),
   seed: () => active.seed,
   scoreboard: () => scoreboard,
   beaconTile: (x, y, z) => beacons.ensure(x, y, z),
@@ -3257,9 +3259,9 @@ async function importPickedSave(entries) {
       menuContext.importCancel = () => abort.abort();
       let last = 0;
       try {
-        const { record, report } = await importWholeSave(entries, { worldId, writeBases: writeBaseColumns, signal: abort.signal, onProgress: (p) => {
+        const { record, report } = await importWholeSave(entries, { worldId, writeBases: writeBaseColumns, readBases: readBaseColumns, signal: abort.signal, onProgress: (p) => {
           const now = performance.now(); if (now - last < 250) return; last = now;
-          status(p.phase === 'chunks' ? `Importing chunks: ${p.chunks} (region file ${p.fileIndex + 1} / ${p.fileCount})` : 'Reading level.dat...');
+          status(p.phase === 'chunks' ? `Importing chunks: ${p.chunks} (region file ${p.fileIndex + 1} / ${p.fileCount})` : p.phase === 'populate' ? `Populating chunks the save never populated: ${p.done} / ${p.total}` : 'Reading level.dat...');
         } });
         await importBlockworldData(record, { id: worldId });
         const s = report.save, c = report.chunks;
