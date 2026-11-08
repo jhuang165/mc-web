@@ -29,8 +29,20 @@ The port's fixed point equals the native light after every edit once the chunk t
 4. **No-sky worlds keep height 256** in `heights` (the native heightMap holds the real top); block light matches exactly in the Nether scenario.
 5. **Timing.** The port relights the whole +-15 box synchronously; natively the incremental queue is bounded (32,768 entries, 17-block Manhattan distance) and spread over `setBlock` and the chunk tick.
 
-Not covered: End/Nether worlds with real generated terrain, lighting across the 128-block volume edge and `StreamingLight.shift` (covered by `streaming-light.test.js`), `Chunk.func_150809_p` neighbour-chunk population ordering, and the rare queue overflow case.
+Not covered: End/Nether worlds with real generated terrain, and lighting across the 128-block volume edge and `StreamingLight.shift` (covered by `streaming-light.test.js`). Batch 25 (below) covers `func_150809_p` ordering, the queue limits and overflow.
+
+## Batch 25: native incremental engine (`src/native-light.js`, not wired into the game)
+
+`NativeLight` is a line-by-line port of `World.updateLightByType`, which has a 32,768-entry `Int32Array` queue. Its removal pass checks `j < length`. Its addition pass checks `j < length - 6` and the 17-block Manhattan reach. Every neighbour push from the removal pass that is dropped is counted in `stats.overflow`. The port also covers `checkChunksExist` / `doChunksNearChunkExist(17)` and the Chunk light code with its null-section rules (`generateSkylightMap`, `relightBlock`, `recheckGaps`, `func_150804_b`, `func_150809_p` in its bytecode neighbour and edge order, `enqueueRelightChecks` with the 4096-check counter, and `populateChunk`'s isTerrainPopulated/isLightPopulated sequence). Evidence: `tools/probes/LightEngine2Probe.java`, `tools/verify-light-engine2.mjs`, `light-engine2-reference.json` (9 scenarios, 170 snapshots). `src/native-light.test.js` replays these and the 18 batch-20 scenarios; all 27 match exactly.
+
+- The 32,768 queue never overflowed naturally (the peak was about 29k in a cavern stress run). The overflow path is verified with 4096- and 1024-entry queues, which change the light in 21 of 41 snapshots. A reach of 30 instead of 17 changes 5 of 41.
+- `unloaded-edge`: a torch within 17 blocks of an unloaded chunk is skipped while that chunk is unloaded; the snapshots after the cx = 1 column loads are matched too.
+- `fresh-spiral-301/302`, `fresh-xmajor-301`: fresh chunks are loaded in a spiral or x-major order with server populate (decorations, trees, torches, lava). The test replays the probe's `HashMap<Long>` iteration order (`hashMapOrder`); tick order made no difference in the scenarios.
+- `null-sections`: a floating block above the top section leaves stale sky 15 under it. A later block below the height map creates a section with zero sky across the whole chunk, including open air. Server ticks keep it dark. After `reset` (`Chunk.n`), `enqueueRelightChecks` heals part of it by 32 ticks and all of it by 512.
+- Bytecode-read only: server chunks start with the counter at 4096, so `o()` does nothing. The client resets it on chunk receive, `WorldClient.func_147456_g` checks at most 10 chunks per tick, and `func_150804_b` runs with isRemote true (one-column recheckGaps).
+
+The game still uses the fixed-point `LightVolume` / `StreamingLight`, so the differences listed above remain in game play. Wiring the engine in would need it to start from the eager build, take an old-opacity hook in `scene.updateBlocks`, a per-tick chunk tick, and `shift` support.
 
 ## Regenerating
 
-`MC_RESEARCH=<research dir> node tools/verify-light-engine.mjs` (needs a JDK; compiled output goes in `<research dir>/lightengine-probe/`).
+`MC_RESEARCH=<research dir> node tools/verify-light-engine.mjs` and `node tools/verify-light-engine2.mjs` (need a JDK; compiled output goes in `<research dir>/lightengine-probe/` and `lightengine2-probe/`).
