@@ -2,6 +2,7 @@ import {hash,isCrop,cropAge,cropKind,CARROTS,POTATOES,HEIGHT} from './world.js';
 import {plantedBlock,rootDrops} from './crops.js';
 import {isStem,stemTick,stemCanFertilize,stemFertilized} from './stems-cake.js';
 import {JavaRandom} from './java-random.js';
+import {ringRandomActive} from './streaming-ticks.js';
 export const RANDOM_TICK_CHANCE=3/4096;
 export function cropDrops(block,random=Math.random,meta=0){if(block===CARROTS||block===POTATOES)return rootDrops(block,cropAge(block,meta),n=>Math.floor(random()*n));if(block===39)return random()<1/8?[{id:309,count:1}]:[];if(!isCrop(block))return null;if(block<38)return[{id:309,count:1}];let seeds=0;for(let i=0;i<3;i++)if(Math.floor(random()*15)<=7)seeds++;return[{id:305,count:1},...(seeds?[{id:309,count:seeds}]:[])];}
 // BlockCrops.canBlockStay (farmland below) and BlockFarmland.onNeighborBlockChange (a solid block above turns it to dirt): both run on EVERY
@@ -35,7 +36,7 @@ export class Farming {
  const kind=cropKind(this.world.get(x,y,z)),crop=(dx,dz)=>cropKind(this.world.get(x+dx,y,z+dz))===kind,row=crop(-1,0)||crop(1,0),column=crop(0,-1)||crop(0,1),diagonal=crop(-1,-1)||crop(-1,1)||crop(1,-1)||crop(1,1);if(row&&column||diagonal)rate/=2;return rate;}
  light(x,y,z,daylight){let sky=true;for(let by=y+1;by<(this.world.height??HEIGHT);by++)if(this.world.solid(x,by,z)){sky=false;break;}let level=sky?Math.floor(daylight*15):0;if(level>=9)return level;for(let dx=-5;dx<=5;dx++)for(let dz=-5;dz<=5;dz++)for(let dy=-3;dy<=3;dy++){if(Math.abs(dx)+Math.abs(dy)+Math.abs(dz)>5)continue;if(this.world.get(x+dx,y+dy,z+dz)===20)level=Math.max(level,14-Math.abs(dx)-Math.abs(dy)-Math.abs(dz));}return level;}
   grow(x,y,z,daylight,random=Math.random){const b=this.world.get(x,y,z);if(isStem(b))return this.growStem(x,y,z,daylight);const age=cropAge(b,this.world.getMeta(x,y,z));if(!isCrop(b)||age===7||(this.lightLevel?this.lightLevel(x,y+1,z):this.light(x,y,z,daylight))<9)return false;const denominator=Math.floor(25/this.growthRate(x,y,z))+1;if(Math.floor(random()*denominator)!==0)return false;this.setAge(x,y,z,b,age+1);return true;}
- tick(time,daylight){for(const key of this.fields.keys()){const[x,y,z]=key.split(',').map(Number);if(this.world.streaming&&!this.world.isTicking(x,z))continue;if(hash(x+time*13,z,this.world.numericSeed+91)<RANDOM_TICK_CHANCE)this.soilTick(x,y,z);if(hash(x+time*29,z,this.world.numericSeed+449)<RANDOM_TICK_CHANCE)this.grow(x,y+1,z,daylight,()=>hash(x+time,z,780));}return this.drain();}
+ tick(time,daylight){for(const key of this.fields.keys()){const[x,y,z]=key.split(',').map(Number);if(this.world.streaming&&!ringRandomActive(this.world,x,z))continue;if(hash(x+time*13,z,this.world.numericSeed+91)<RANDOM_TICK_CHANCE)this.soilTick(x,y,z);if(hash(x+time*29,z,this.world.numericSeed+449)<RANDOM_TICK_CHANCE)this.grow(x,y+1,z,daylight,()=>hash(x+time,z,780));}return this.drain();}
  drain(){const out=[...this.updates.values()];this.updates.clear();return out;}
  serialize(){return[...this.fields];}
 }

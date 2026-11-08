@@ -508,6 +508,7 @@ export class World {
     // of them while `ringReads` is set (main.js turns it on for the simulation tick only, so meshing and light keep reading the window).
     this.ringSink = null;
     this.ringReads = false;
+    this.misses = { map: null, size: -1, keys: new Set() };
     this.generate();
   }
   // Legacy numeric cell order; streaming uses a coordinate key without finite-width aliases.
@@ -522,6 +523,9 @@ export class World {
     return x >= 0 && x < SIZE && z >= 0 && z < SIZE && y >= 0 && y < this.height;
   }
   isLoaded(x, z) { return !!this.chunkAt(Math.floor(x / 16), Math.floor(z / 16)); }
+  // Chunk existence for simulation reads (precipitation height, sky exposure): the window, and during the simulation tick (ringReads) the
+  // ring's held columns, which natively are loaded chunks.
+  isReadable(x, z) { return this.isLoaded(x, z) || (this.ringReads && !!this.ringSink?.holds(x, z)); }
   // A one-chunk halo keeps block and entity updates away from unloaded neighbours.
   // This is a browser working set, not the native spawn-ticket/watch-distance policy.
   isTicking(x, z) {
@@ -586,8 +590,15 @@ export class World {
   chunkAt(cx, cz) {
     const c = this.lastChunk;
     if (c && c.x === cx && c.z === cz) return c;
-    const found = this.chunks.get(columnKey(cx, cz)) || null;
+    // Ring reads (headless-columns.js) ask for the same few non-resident chunks again and again: a miss is remembered (by number, so
+    // that no key string is built) until the chunk map is replaced or grows.
+    const chunks = this.chunks, misses = this.misses;
+    if (misses.map !== chunks || misses.size !== chunks.size) { misses.keys.clear(); misses.map = chunks; misses.size = chunks.size; }
+    const mk = cx * 8388608 + cz;
+    if (misses.keys.has(mk)) return null;
+    const found = chunks.get(columnKey(cx, cz)) || null;
     if (found) this.lastChunk = found;
+    else { if (misses.keys.size >= 4096) misses.keys.clear(); misses.keys.add(mk); }
     return found;
   }
   // World.getBlock: below y 0 (and above the top) is air, so a hole in the floor opens onto the void.
@@ -611,7 +622,9 @@ export class World {
   }
   // Section (16 high) random-tick refcounts, kept up to date by put() once built.
   sectionTickCount(cx, cz, s) {
-    return this.chunkAt(cx, cz)?.sectionTickCount(s) ?? 0;
+    const c = this.chunkAt(cx, cz);
+    if (c) return c.sectionTickCount(s);
+    return this.ringReads && this.ringSink ? this.ringSink.sectionTickCount(cx, cz, s) : 0; // a held ring column keeps its own refcounts
   }
   // Every cell as flat block and metadata arrays in index() order (tests and whole-world copies).
   snapshot() {

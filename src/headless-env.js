@@ -31,6 +31,18 @@ export function wrapMobHooks(mobs, ring, subtracted) {
   mobs.canSeeSky = (x, y, z) => (ring.outside(x, z) ? y >= ring.light.heightAt(x, z) : sky(x, y, z));
 }
 
+// Light for random ticks in ring chunks (weather.js tickChunk, trees.js, farming.js): the hooks they read (world.blockLight, world.fullLight,
+// trees.light, farming.lightLevel) answer from the scene's light volume, which covers the resident window only, so a cell in a
+// ring-only chunk is answered by RingLight instead. `subtracted()` is skylightSubtracted.
+export function wrapRandomTickLight(world, ring, subtracted, trees, farming) {
+  const block = world.blockLight, full = world.fullLight;
+  if (block) world.blockLight = (x, y, z) => (ring.outside(x, z) ? ring.light.blockAt(x, y, z) : block(x, y, z));
+  if (full) world.fullLight = (x, y, z) => (ring.outside(x, z) ? ring.light.level(x, y, z, 0) : full(x, y, z));
+  const level = (base) => (x, y, z, ...rest) => (ring.outside(x, z) ? ring.light.level(x, y, z, subtracted()) : base(x, y, z, ...rest));
+  if (trees?.light) trees.light = level(trees.light);
+  if (farming?.lightLevel) farming.lightLevel = level(farming.lightLevel);
+}
+
 // Item entities, orbs, arrows, thrown balls and falling blocks now tick in ring chunks (streaming-ticks.js ringEntityActive), where the
 // page has no meshes: like ring mobs (main.js mobRenderer), they are drawn only while their column is resident.
 export function residentOnly(world, list) {

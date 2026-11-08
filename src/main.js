@@ -270,7 +270,7 @@ import { applyHangingEdit } from "./hanging-interaction.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
 import { createRing, attachRing } from "./headless-columns.js";
-import { wrapMobHooks, residentOnly } from "./headless-env.js";
+import { wrapMobHooks, wrapRandomTickLight, residentOnly } from "./headless-env.js";
 import { startLoading, setStage, STAGES, loadingScreen, downloadTerrainScreen, errorScreen, nextPaint, nextFrame, SpawnAreaLog } from "./loading-screen.js";
 import { gameOverScreen, exportScreen, notesScreen, signEditHost } from "./modal-dialogs.js";
 import { NOTES } from "./notes-content.js";
@@ -1446,6 +1446,7 @@ async function launch(record, prepared, { slice = false } = {}) {
       mobs.ring.isHydrated = (cx, cz) => !streamStorage || streamStorage.loaded.has(`${cx},${cz}`);
       if (streamStorage) streamStorage.margin = 7; // hydrate the stored edits of every ring column too
       wrapMobHooks(mobs, mobs.ring, () => scene.subtracted ?? 0);
+      wrapRandomTickLight(world, mobs.ring, () => scene.subtracted ?? 0, trees, farming); // random ticks in ring chunks read RingLight (natural-spawning.md "Round 8")
     }
     arrows.wet = (a) => isWet(weather, world, { x: a.x, y: a.y, z: a.z, inWater: a.water }, 0.5);
     mobRenderer.clear();
@@ -2743,7 +2744,7 @@ function trampleFarmland(entity, distance) {
     saved = false;
   }
 }
-function applyFarmUpdates(updates){const chunks=new Set();for(const[x,y,z]of updates)chunks.add([Math.floor(x/16)*16,Math.floor(z/16)*16].join(','));for(const key of chunks)scene.buildChunk(...key.split(',').map(Number));}
+function applyFarmUpdates(updates){const chunks=new Set();for(const[x,y,z]of updates)if(!world.ringSink||world.isLoaded(x,z))chunks.add([Math.floor(x/16)*16,Math.floor(z/16)*16].join(','));for(const key of chunks)scene.buildChunk(...key.split(',').map(Number));}
 // Shared synchronous event routing, also used immediately after player attacks/interaction.
 function mobEventHooks() {
   return {

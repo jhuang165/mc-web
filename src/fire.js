@@ -15,7 +15,7 @@
 // `difficulty` and `fireTick` (the doFireTick game rule) complete it.
 import { gameRule } from "./game-rules.js";
 import { FIRE, LAVA, HEIGHT, SIZE, TNT, isLiquid, normalCube } from "./world.js";
-import { pauseUnloadedTicks } from './streaming-ticks.js';
+import { pauseUnloadedTicks, ringBlockTickActive } from './streaming-ticks.js';
 import { Weather, canLightningStrikeAt, stopsPrecipitation } from "./weather.js";
 import { saveTicks, readTicks } from "./scheduled-ticks.js";
 import { NETHERRACK } from "./nether-blocks.js";
@@ -441,7 +441,7 @@ export class Fire {
   // cells changed as [x, y, z, old, new].
   tick(px = SIZE / 2, pz = SIZE / 2) {
     this.time++;
-    pauseUnloadedTicks(this.world, this.queue.heap);
+    pauseUnloadedTicks(this.world, this.queue.heap, (x, z) => ringBlockTickActive(this.world, x, z, 4)); // ring columns too (natural-spawning.md "Round 8")
     const w = this.world, n = SIZE / 16, secs = (w.height ?? HEIGHT) / 16;
     if (!this.sharedRandomTicks && (!this.marks || this.time % 20 === 1)) this.scan();
     for (let m = MAX_TICKS; m > 0 && this.queue.due(this.time); m--) {

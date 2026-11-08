@@ -19,4 +19,11 @@ export const ringTickActive = (world, x, z) => entityActive(world, { x, z }) || 
 // Scheduled block ticks of fluids and redstone (natural-spawning.md "Round 7"): the ticking window, or a ring column whose own chunk
 // takes writes (tickUpdates' b0 = 0) and whose eight neighbour chunks are held, so that no update reads a missing column as air
 // (HeadlessColumns.blockTicks; natively those chunks are loaded).
-export const ringBlockTickActive = (world, x, z) => entityActive(world, { x, z }) || !!world.ringSink?.blockTicks(x, z);
+// `reach` (blocks, batch 26): an entry whose update cannot read further than that from its cell needs only the chunks that span it,
+// not all eight neighbours (fluids 5: the flow search is 4 deep; fire 4), so it runs up to the rim; without `reach` the eight are needed.
+export const ringBlockTickActive = (world, x, z, reach = 0) => entityActive(world, { x, z }) || !!(reach ? world.ringSink?.writable(x, z) && world.ringSink.reaches(x, z, reach) : world.ringSink?.blockTicks(x, z));
+// Random block ticks (WorldServer.func_147456_g, natural-spawning.md "Round 8") run natively in every chunk of activeChunkSet, and the
+// chunk itself is all a random tick needs to exist. Here a block outside the resident ticking window ticks when its own column takes
+// writes (resident halo, or held and hydrated; HeadlessColumns.randomTickChunks) and the chunks within `reach` blocks of it are
+// resident or held, so that no update reads a missing column as air (an adaptation: natively those chunks are loaded).
+export const ringRandomActive = (world, x, z, reach = 4) => entityActive(world, { x, z }) || (!!world.ringSink?.writable(x, z) && world.ringSink.reaches(x, z, reach));
