@@ -7,6 +7,7 @@
 import { resolveAnimation, fetchMcmeta } from "./texture-animation.js";
 import { versioned, unversioned, mediaGeneration } from "./media-version.js";
 import { onResourcesRefreshed } from "./resource-refresh.js";
+import { rawImgSrc } from "./gui-anaglyph.js"; // an icon converted for 3D Anaglyph keeps the page's own src here
 
 const ITEM_URL = /\/media\/1\.7\.10\/items\/[^/]+\.png$/;
 const SPECIAL = /\/items\/(clock|compass)\.png$/;
@@ -67,7 +68,7 @@ export function registerFrameTag(url, frame) { specialTags.set(url, frame); }
 
 function swapIcons() {
   for (const img of document.querySelectorAll("img.vanilla-item-icon")) {
-    const src = img.getAttribute("src");
+    const src = rawImgSrc(img);
     const entry = byData.get(src) ?? (src && entries.get(unversioned(src)));
     if (entry?.state !== "anim") continue;
     const want = currentUrl(entry);

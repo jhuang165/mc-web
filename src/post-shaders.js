@@ -264,6 +264,15 @@ export class PostProcessor {
     return program;
   }
 
+  // The option changed outside a frame (title screen, menus: scene.render is not running): GameSettings.setOptionValue refreshes the
+  // resources immediately, so scene.setRenderSettings calls this after every settings change.
+  syncAnaglyph() {
+    const anaglyph = !!this.anaglyph();
+    if (anaglyph === !!this.anaglyphOn) return;
+    this.anaglyphOn = anaglyph;
+    this.onAnaglyphChange?.(anaglyph);
+  }
+
   // --- frame boundaries -------------------------------------------------------------------------------
   // scene.render calls begin() before the sky is drawn; scene.endFrame() (after the first-person hand) calls end().
   begin(partial = 0) {

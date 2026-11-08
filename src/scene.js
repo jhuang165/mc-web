@@ -33,6 +33,7 @@ import { hasVoidParticles, voidFogYFactor, voidFogFar } from "./void-fog.js";
 import { Sky, Clouds } from "./sky.js";
 import { PostProcessor, anaglyphFog } from "./post-shaders.js";
 import { installAnaglyphUpload, meshAnaglyph, anaglyphMultiplier } from "./anaglyph.js"; // 3D Anaglyph at the native conversion points
+import { setGuiAnaglyph } from "./gui-anaglyph.js"; // ... and the DOM GUI
 import { refreshResources } from "./resource-refresh.js"; // Super Secret Settings shaders and 3D Anaglyph
 import { render, setRender, usePartialAo, leavesOpaque, shouldRenderClouds, shadowsEnabled } from "./render-settings.js";
 import { liquidHeight, flowAngle, viewpointBlock } from "./fluids.js";
@@ -138,6 +139,7 @@ export class VoxelScene {
     this.anaglyphUpload = installAnaglyphUpload(this.renderer.getContext());
     this.post.onAnaglyphChange = (on) => {
       this.anaglyphUpload.state.on = on && !this.post.legacyAnaglyph;
+      setGuiAnaglyph(this.anaglyphUpload.state.on); // DOM GUI images, and the extra GL contexts' upload hooks
       meshAnaglyph.on = this.anaglyphUpload.state.on; // RenderBlocks colour multipliers; loadRenderers remeshes every chunk
       for (const k of this.chunks.keys()) this.dirty.add(k);
       refreshResources().catch(() => {});
@@ -1119,6 +1121,7 @@ export class VoxelScene {
   setRenderSettings(options) {
     const before = { ...render };
     setRender(options);
+    this.post.syncAnaglyph(); // the option may change while no frame renders (title screen)
     if (before.fancy !== render.fancy || this.textures.leavesOpaque !== !render.fancy) this.textures.setOpaqueLeaves(!render.fancy);
     this.textures.setFiltering(render.mipmapLevels, render.anisotropic, this.renderer.capabilities.getMaxAnisotropy?.() ?? 1);
     if (before.fancy !== render.fancy || before.ao !== render.ao) for (const k of this.chunks.keys()) this.dirty.add(k);

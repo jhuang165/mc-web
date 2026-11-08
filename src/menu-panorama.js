@@ -4,6 +4,8 @@
 // three-tap blur (seven times; the texture the screen samples holds the sixth result), and
 // renderSkybox stretches the texture over the screen with transposed coordinates. Plain WebGL 1.
 import { mediaGeneration, versioned } from "./media-version.js";
+import { installAnaglyphUpload } from "./anaglyph.js";
+import { guiAnaglyph } from "./gui-anaglyph.js";
 const SIZE = 256;
 const VS = `attribute vec3 p;attribute vec2 uv;uniform mat4 m;varying vec2 v;void main(){v=uv;gl_Position=m*vec4(p,1.);}`;
 const FS = `precision mediump float;uniform sampler2D tex;uniform float a;varying vec2 v;void main(){gl_FragColor=vec4(texture2D(tex,v).rgb,a);}`;
@@ -32,6 +34,7 @@ export class Panorama {
   constructor(canvas, base = "/media/1.7.10/gui/title/background/panorama_") {
     this.canvas = canvas;
     const gl = (this.gl = canvas.getContext("webgl", { alpha: false, antialias: false, depth: false, premultipliedAlpha: false, preserveDrawingBuffer: true }));
+    if (gl) installAnaglyphUpload(gl, guiAnaglyph); // the panorama faces are textures too: converted while 3D Anaglyph is on
     if (!gl) return;
     const shader = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
     const prog = (this.prog = gl.createProgram());

@@ -3,6 +3,8 @@
 // against the probe). The texture is original: `enchanting_table_book.png` is a Mojang asset, so this build paints its own
 // 64 x 32 layout (bookTexturePixels) onto the same UV regions.
 import * as THREE from "three";
+import { installAnaglyphUpload } from "./anaglyph.js";
+import { guiAnaglyph } from "./gui-anaglyph.js";
 import { entityMaterial } from "./light-material.js";
 import {
   BOOK_PARTS, BOOK_PART_ORDER, BOOK_TEXTURE, BOOK_RENDER_DISTANCE_SQUARED, bookAngles, modelBoxQuads, tilePose, guiBookPose, GUI_BOOK_VIEW,
@@ -151,6 +153,7 @@ export class EnchantingGuiBookView {
   constructor(canvas) {
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false });
+    installAnaglyphUpload(this.renderer.getContext(), guiAnaglyph); // GUI textures upload converted while 3D Anaglyph is on (TextureUtil.anaglyphColor)
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(canvas.width, canvas.height, false);
     this.renderer.setClearColor(0, 0);
