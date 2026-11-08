@@ -1,0 +1,1 @@
+negstacks b26 on batch26-negstacks (3789382, 737ef20): native -1 stacks, zero-size use gates, Count -1/0 reads in all container tiles, world-Random tool-break pitch. 88 probe records. npm test 4591/4591, build ok. Gaps in .shared-memory/notes/negstacks-b26-track.md.

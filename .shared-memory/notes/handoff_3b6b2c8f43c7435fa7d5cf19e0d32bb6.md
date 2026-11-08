@@ -1,0 +1,1 @@
+Ring random ticks, fire scheduled ticks, per-block reach guard, chunkAt miss cache. npm test 4593/4593, build ok. Ring fluid sum -35%, max ~70 to ~42 ms. Gaps in notes/ringticks2-b26-track.md.
