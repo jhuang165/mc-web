@@ -22,6 +22,7 @@ import { animatedItemUrl, itemFrameTag, onItemFramesReady } from "./item-animati
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 import { GUN_MODELS, buildGunMesh, gunViewPose, gunViewMatrix, applyGunParts } from "./mods/guns/model.js";
 import { gunAssets, gunParts, PackGunView } from "./mods/guns/pack-view.js";
+import { meleeAssets, PackMeleeView } from "./mods/guns/melee-view.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
 const BLOCK_FACES=[
@@ -244,6 +245,9 @@ export class FirstPerson {
     // pack) the box model of model.js, or nothing for a pack-only gun.
     const packAssets = gun?.pack ? gunAssets(gun) : null, parts = packAssets ? gunParts(gun) : null;
     if (gun) { meta = 0; use = packAssets ? `1${gun.fitKey ?? ""}/${parts.ready}` : 0; }
+    // An LR Tactical melee weapon (the CS2 knives): its pack model once loaded, until then its icon.
+    const knife = ITEMS[id]?.melee, knifeAssets = knife ? meleeAssets(knife) : null;
+    if (knifeAssets) { meta = 0; use = "knife"; }
     const leather = leatherItemLayers(id, color),
       cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + meta + ":" + use + ":" + (glint ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + cast + ":" + (id === ITEM_CLOCK ? clockFrame() : 0) + ":" + (id ? itemFrameTag(itemTexture(id, meta, cast ? 1 : gun ? 0 : use)) : 0);
     if (key === this.last) return;
@@ -260,6 +264,12 @@ export class FirstPerson {
     const data = ITEMS[id];
     this.arm.visible = !id;
     if (!id || !data) return;
+    if (knifeAssets) {
+      this.sprite = false;
+      this.item = new PackMeleeView(knife, knifeAssets, { material: (o) => this.material(o), texture: pixelTexture, arm: (left) => this.packArm(left) }).root;
+      this.pivot.add(this.item);
+      return;
+    }
     if (gun) {
       this.sprite = false;
       if (packAssets) this.item = new PackGunView(gun, packAssets, { material: (o) => this.material(o), texture: pixelTexture, arm: (left) => this.packArm(left) }).root;
@@ -351,7 +361,8 @@ export class FirstPerson {
     this.camera.updateProjectionMatrix();
     const mapMode = !!map?.data && pose.item === ITEM_FILLED_MAP;
     // `gun` is the guns mod's view state (hooks.js view()) while a gun is held: its own hold and animation.
-    const gunMesh = gun && this.item?.userData?.gunId === gun.gunId ? this.item : null;
+    // An LR Tactical melee weapon's view state comes the same way (hooks.js view(): meleeId, its clip and draw).
+    const gunMesh = gun && ((gun.gunId != null && this.item?.userData?.gunId === gun.gunId) || (gun.meleeId != null && this.item?.userData?.meleeId === gun.meleeId)) ? this.item : null;
     const packView = gunMesh?.userData.view;
     this.camera.fov = packView ? packView.fov(gun.aim) : 70;
     this.camera.updateProjectionMatrix();

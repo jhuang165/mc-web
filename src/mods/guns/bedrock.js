@@ -26,8 +26,11 @@ const FACES = {
   up: { n: [0, 1, 0], c: [[0, 1, 0], [1, 1, 0], [1, 1, 1], [0, 1, 1]] },
   down: { n: [0, -1, 0], c: [[0, 0, 1], [1, 0, 1], [1, 0, 0], [0, 0, 0]] },
 };
-// Bedrock's per-face names refer to its own (unmirrored) axes; after mirroring x, its east face is the -x side.
-const FACE_SOURCE = { north: "north", south: "south", east: "west", west: "east", up: "up", down: "down" };
+// Each face reads the JSON face of its own name, after mirroring x as Blockbench does: a cube's "west" rectangle is on
+// its -x side here. TaCZ gets the same: its BedrockCubePerFace builds the EAST quad at the unmirrored +x and gives it
+// FaceUVsItem.getFace(EAST), which is the JSON "west" field, and the model is drawn turned half a turn about z. The
+// pack's one-sided walls (the M4A1's left magwell, decal plates) are on the outside only with this reading.
+const FACE_SOURCE = { north: "north", south: "south", east: "east", west: "west", up: "up", down: "down" };
 
 // Appends one cube's faces to the arrays, in the bone's local space (relative to its pivot).
 function addCube(out, cube, bonePivot, width, height) {

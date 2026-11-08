@@ -22,3 +22,5 @@ public/lang/1.7.10/
 # TaCZ default gun pack files (CC BY-NC-ND 4.0) installed by npm run mods:fetch-tacz; never committed
 public/mods/tacz/
 public/audio/mods/tacz/
+# LR Tactical melee packs (the CS2 knives) installed from local zips by npm run mods:fetch-knives; never committed
+public/mods/lrtactical/

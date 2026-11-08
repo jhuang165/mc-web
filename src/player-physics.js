@@ -98,7 +98,7 @@ export function movePlayer(state, controls, toast = () => {}) {
     : flying
       ? FLY_SPEED
       : onGroundMove
-        ? groundAccel(sprint, friction, survival.effects?.moveSpeedMultiplier?.() ?? 1)
+        ? groundAccel(sprint, friction, (survival.effects?.moveSpeedMultiplier?.() ?? 1) * (state.moveSpeedMultiplier ?? 1))
         : airAccel(sprint);
   velocity.x += (Math.cos(yaw) * dx - Math.sin(yaw) * dz) * accel;
   velocity.z += (-Math.sin(yaw) * dx - Math.cos(yaw) * dz) * accel;

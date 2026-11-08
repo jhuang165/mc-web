@@ -1,7 +1,9 @@
 // Guns mod (not 1.7.10): adds the locally installed TaCZ sounds (npm run mods:fetch-tacz, Git-ignored) to a SoundBank as
 // "guns.<path>" events in the player category, where <path> is the file under the pack's tacz_sounds/ folder without
 // ".ogg" ("ak47/ak47_shoot", "dry_fire"). Without the install, the index fetch fails and guns stay silent.
+// The LR Tactical melee packs' sounds (melee.js) join as "guns.<namespace>:<path>", the name their animation keyframes give.
 import { PACK_ROOT, packUrl } from "./pack.js";
+import { MELEE_ROOT, meleeUrl } from "./melee.js";
 
 const installed = new WeakMap(); // SoundBank -> Promise<boolean>
 
@@ -14,12 +16,18 @@ export function installGunSounds(bank, load = (url) => fetch(url).then((r) => (r
   if (!bank) return Promise.resolve(false);
   if (!installed.has(bank)) {
     installed.set(bank, (async () => {
-      const [index] = await Promise.all([load(`${PACK_ROOT}index.json`).catch(() => null), bank.ready]);
-      if (!Array.isArray(index?.sounds) || !bank.base) return false;
+      const [index, meleeIndex] = await Promise.all([load(`${PACK_ROOT}index.json`).catch(() => null), load(`${MELEE_ROOT}index.json`).catch(() => null), bank.ready]);
+      const packs = Array.isArray(meleeIndex?.packs) ? meleeIndex.packs : [];
+      if ((!Array.isArray(index?.sounds) && !packs.length) || !bank.base) return false;
       const files = {}, events = {};
-      for (const path of index.sounds) {
+      for (const path of index?.sounds ?? []) {
         files[fileName(path)] = { url: packUrl.sound(path) };
         events[gunSoundEvent(path)] = { category: "player", sounds: [fileName(path)] };
+      }
+      for (const p of packs) for (const path of p.sounds ?? []) {
+        const name = `mods/lrtactical/${p.namespace}/${path}`;
+        files[name] = { url: meleeUrl.sound(path, p.namespace) };
+        events[gunSoundEvent(`${p.namespace}:${path}`)] = { category: "player", sounds: [name] };
       }
       for (const table of [bank.base, bank.manifest]) {
         if (!table) continue;

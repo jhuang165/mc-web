@@ -51,3 +51,15 @@ export const TACZ_ATTACHMENT_IDS = {
   stock_heavy_spas_12: 4518, stock_hk_slim_line: 4519, stock_m4ss: 4520, stock_militech_b5: 4521, stock_moe: 4522,
   stock_psg: 4523, stock_ripstock: 4524, stock_sba3: 4525, stock_tactical_ar: 4526, stock_tactical_spas_12: 4527,
 };
+// LR Tactical melee weapons (melee.js) by "<namespace>:<name>": 4600 and up. The CS2 Knifes Pack v1.0.1 (cs2_wt) in its
+// alphabetical order; other packs' weapons get the next ids as they are added.
+export const LRT_MELEE_IDS = {
+  "cs2_wt:bayonet": 4600, "cs2_wt:butterfly": 4601, "cs2_wt:css": 4602, "cs2_wt:karambit": 4603, "cs2_wt:m9": 4604,
+  "cs2_wt:push": 4605, "cs2_wt:skeleton": 4606, "cs2_wt:stiletto": 4607, "cs2_wt:tactical": 4608, "cs2_wt:talon": 4609,
+};
+// English names for a pack that ships only other languages (the CS2 pack has zh_cn only): the knives' CS2 names.
+export const LRT_MELEE_NAMES = {
+  "cs2_wt:bayonet": "Bayonet", "cs2_wt:butterfly": "Butterfly Knife", "cs2_wt:css": "Classic Knife", "cs2_wt:karambit": "Karambit",
+  "cs2_wt:m9": "M9 Bayonet", "cs2_wt:push": "Shadow Daggers", "cs2_wt:skeleton": "Skeleton Knife", "cs2_wt:stiletto": "Stiletto Knife",
+  "cs2_wt:tactical": "Huntsman Knife", "cs2_wt:talon": "Talon Knife",
+};

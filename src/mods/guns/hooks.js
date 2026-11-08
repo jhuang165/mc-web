@@ -1,11 +1,13 @@
 // Guns mod (not 1.7.10): the glue between main.js and firing.js / feel.js. main.js calls these only while a guns world is
 // loaded; each input hook returns false when the held item is not a gun, so vanilla input carries on unchanged.
+import { createMeleeHooks } from "./melee-hooks.js";
 import { GunController, fireShot, GLASS_BLOCKS, TICK } from "./firing.js";
 import { gunOf, roundsLeft } from "./catalog.js";
 import { Aim, Recoil, SoundSchedule, SHARED_SOUNDS, soundsOf } from "./feel.js";
 import { gunSoundEvent } from "./sounds.js";
 import { carriedAmmo, takeAmmo } from "./ammo-box.js";
 import { gunMuzzle } from "./model.js";
+import { isTracerRound } from "./tracers.js";
 import { ammoHudState, modeLabel } from "./hud.js";
 import { ENTITY_TYPES } from "../../entities.js";
 import { rayTraceBlocks } from "../../projectiles.js";
@@ -15,12 +17,15 @@ const KEY_R = 19, KEY_G = 34, KEY_F = 33, KEY_Z = 44; // LWJGL codes; none is bo
 const HEAD_MARGIN = 0.25; // a hit within this far below the eye line, or above it, is a headshot
 const RAD = Math.PI / 180;
 const MUZZLE_DEPTH = 1.2; // blocks ahead of the eye for the muzzle smoke
+// A gun without the pack's data (the hand-made guns alone): a white tracer every round at a rifle bullet's speed.
+const DEFAULT_TRACER = { speed: 250, life: 10, interval: 0, color: "#FFFFFF" };
 
 // deps: { survival, world, mobs, eye() -> { origin, dir }, playerPos() -> {x, z},
 //   sneaking(), moving(), breakBlock([x,y,z]), renderHotbar(), markUnsaved(), toast(text), playing?(), onEvent?(event), random?,
 //   sound?(event, options), preload?(folder), fx?(name, x, y, z, vx, vy, vz), blockHit?([x,y,z], side), crosshair?(visible),
-//   now?() -> ms, hud?(state | null), explode?(x, y, z, radius, { damage, destroy }) }
+//   now?() -> ms, hud?(state | null), explode?(x, y, z, radius, { damage, destroy }), tracer?(tracer) (tracers.js tracerBox) }
 export function createGunHooks(deps) {
+  const melee = createMeleeHooks(deps);
   const controller = new GunController(), aim = new Aim(), recoil = new Recoil(), schedule = new SoundSchedule();
   let tapTicks = 0; // a tap (touch, or a click without pointer lock) holds the trigger until it fires or for this many ticks
   let crosshair = true;
@@ -99,15 +104,26 @@ export function createGunHooks(deps) {
 
   // Smoke and a little flame where the model's muzzle appears on screen: the hand-camera muzzle point, pushed out along its
   // line of sight to MUZZLE_DEPTH so it stays clear of the near plane (the first-person model draws its own flash).
-  function muzzle(gun, { origin, dir }) {
-    if (!deps.fx) return;
+  function muzzlePoint(gun, { origin, dir }) {
     let right = [-dir[2], 0, dir[0]];
     const rl = Math.hypot(...right) || 1; right = right.map((v) => v / rl);
     const up = [right[1] * dir[2] - right[2] * dir[1], right[2] * dir[0] - right[0] * dir[2], right[0] * dir[1] - right[1] * dir[0]];
     const [mx, my, mz] = gunMuzzle(gun.id, { aim: aim.progress }), k = MUZZLE_DEPTH / Math.max(0.05, -mz);
-    const p = origin.map((v, i) => v + (dir[i] * -mz + right[i] * mx + up[i] * my) * k);
+    return origin.map((v, i) => v + (dir[i] * -mz + right[i] * mx + up[i] * my) * k);
+  }
+  function muzzle(gun, ray) {
+    if (!deps.fx) return;
+    const { dir } = ray, p = muzzlePoint(gun, ray);
     deps.fx("flame", ...p, dir[0] * 0.02, dir[1] * 0.02, dir[2] * 0.02);
     for (let i = 0, n = gun.pellets > 1 || gun.explosion ? 4 : 2; i < n; i++) deps.fx("smoke", ...p, dir[0] * 0.03, 0.02, dir[2] * 0.03);
+  }
+  // TaCZ tracer rounds (tracers.js), one per pellet: from the muzzle on screen, joining the shot's line further out.
+  let shotCount = 0;
+  function tracers(gun, out) {
+    const t = gun.pack?.tracer ?? DEFAULT_TRACER, ray = out.ray;
+    if (!deps.tracer || !ray || !isTracerRound(t.interval, shotCount++)) return;
+    const p = muzzlePoint(gun, ray), offset = p.map((v, i) => v - ray.origin[i] - ray.dir[i] * MUZZLE_DEPTH);
+    for (const { dir, distance } of out.paths ?? []) deps.tracer({ origin: ray.origin, dir, distance, offset, speed: t.speed, life: t.life, color: t.color });
   }
   function impacts(gun, out) {
     const perHit = gun.pellets > 1 ? 2 : 4; // a shotgun's nine pellets already make a spray
@@ -130,15 +146,21 @@ export function createGunHooks(deps) {
   return {
     controller, aim, recoil,
     holdingGun,
+    holdingMelee: melee.holding,
+    speed: melee.speed,
+    cancelMelee: () => melee.cancel(),
     // key.attack pressed (down) or released while playing. True when a gun took it.
     attack(down) {
       tapTicks = 0;
+      if (melee.holding()) { melee.press("left", down); return true; }
+      if (!down) melee.press("left", false);
       if (!holdingGun()) { if (!down) controller.release(); return false; }
       if (down) controller.press(); else controller.release();
       return true;
     },
     // A tap with no held button (the touch break button, a click without pointer lock): one trigger pull. True when a gun took it.
     tap() {
+      if (melee.press("left", true, true)) return true;
       if (!holdingGun()) return false;
       controller.press();
       tapTicks = 20;
@@ -146,6 +168,8 @@ export function createGunHooks(deps) {
     },
     // key.use pressed (down) or released: aim down sights while it is held. True when a gun took the press.
     aimHold(down) {
+      if (melee.holding()) { melee.press("right", down); return true; }
+      if (!down) melee.press("right", false);
       if (!down) { aim.held = false; return false; }
       if (!holdingGun()) return false;
       aim.held = true;
@@ -154,6 +178,7 @@ export function createGunHooks(deps) {
     },
     // The touch use button: each tap toggles aiming.
     aimToggle() {
+      if (melee.press("right", true, true)) return true;
       if (!holdingGun()) return false;
       aim.held = !aim.held;
       if (aim.held) stopInspect();
@@ -161,6 +186,7 @@ export function createGunHooks(deps) {
     },
     // A raw key press while playing with no screen open: R reloads, G switches fire mode.
     key(code) {
+      if (melee.key(code)) return true;
       const gun = heldGun();
       if (!gun) return false;
       if (code === KEY_R) {
@@ -177,7 +203,7 @@ export function createGunHooks(deps) {
         if (controller.reload || controller.draw > 0 || aim.held) return true;
         stopInspect();
         anim.inspectAt = now(); anim.inspectEmpty = rounds(held()) <= 0;
-        const keys = gun.inspectSounds;
+        const keys = (gun.base ?? gun).inspectSounds; // a gun with parts fitted is a copy made before its sounds loaded (fit.js)
         if (keys) schedule.add((anim.inspectEmpty && keys.empty?.length ? keys.empty : keys.full) ?? [], ev, "inspect");
         return true;
       }
@@ -200,14 +226,16 @@ export function createGunHooks(deps) {
     },
     // A world was loaded: start from rest, with the crosshair shown.
     reset() {
+      melee.reset();
       controller.release(); controller.heldKey = null; controller.reload = null;
-      tapTicks = 0; aim.held = false; aim.progress = 0; recoil.reset(); schedule.cancel();
+      tapTicks = 0; shotCount = 0; aim.held = false; aim.progress = 0; recoil.reset(); schedule.cancel();
       Object.assign(anim, { drawAt: -Infinity, shotAt: -Infinity, reload: null, aimFrom: 0, aimTo: 0, inspectAt: -Infinity });
       deps.hud?.(null);
       if (!crosshair) { crosshair = true; deps.crosshair?.(true); }
     },
     // Once per rendered frame: the first-person model's state (model.js gunViewPose), or null without a gun in hand.
     view() {
+      if (melee.holding()) return melee.view();
       const gun = heldGun();
       if (!gun) return null;
       const t = now(), s = (at) => (t - at) / 1000, r = anim.reload;
@@ -239,6 +267,7 @@ export function createGunHooks(deps) {
     },
     // Once per game tick.
     tick() {
+      const meleeEvents = melee.tick();
       if (deps.playing && !deps.playing()) { controller.release(); tapTicks = 0; aim.held = false; } // a screen opened mid-burst lets go
       const wasReloading = !!controller.reload;
       const events = controller.tick(inventory());
@@ -260,7 +289,7 @@ export function createGunHooks(deps) {
           sound(ev(g.silenced && s.silenced ? s.silenced : s.shoot)); // a silencer: the pack's own suppressed report
           if (s.pump) { schedule.cancel("pump"); schedule.add(s.pump, ev, "pump"); }
           muzzle(g, event.result.ray ?? deps.eye() ?? { origin: [0, 0, 0], dir: [0, 0, -1] });
-          impacts(g, event.result);
+          impacts(g, event.result); tracers(g, event.result);
         }
         if (event.type === "empty") shared("dry");
         if (event.type === "shell") {
@@ -285,7 +314,7 @@ export function createGunHooks(deps) {
       if (show !== crosshair) { crosshair = show; deps.crosshair?.(show); }
       if (changed) { deps.renderHotbar(); deps.markUnsaved(); }
       deps.hud?.(this.hudState());
-      return events;
+      return [...events, ...meleeEvents];
     },
   };
 }

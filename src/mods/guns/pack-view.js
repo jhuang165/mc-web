@@ -84,6 +84,37 @@ function fitParts(model, gun, { material, texture, lod = false, side = THREE.Fro
   return out;
 }
 
+// TaCZ BedrockGunModel.renderAdditionalMagazine: the additional_magazine bone has no cubes of its own; while a reload
+// animates it, the gun's `magazine` node (the fitted magazine and its rounds) is drawn a second time in that bone's frame,
+// so the old magazine leaves while the new one goes in. Here: a copy of the magazine's children under the bone (sharing
+// geometry and materials), whose transforms and visibility follow the originals each frame they show.
+export function mirrorMagazine(model) {
+  const bone = model.bones.get("additional_magazine"), mag = model.bones.get("magazine");
+  if (!bone || !mag) return null;
+  const copy = new THREE.Group(), pairs = [];
+  const walk = (src, dst) => {
+    for (const child of src.children) {
+      const c = child.isMesh ? new THREE.Mesh(child.geometry, child.material) : new THREE.Group();
+      c.name = child.name;
+      pairs.push([child, c]);
+      dst.add(c);
+      walk(child, c);
+    }
+  };
+  walk(mag, copy);
+  bone.add(copy);
+  return {
+    copy,
+    sync() {
+      copy.visible = mag.visible;
+      for (const [src, dst] of pairs) {
+        dst.position.copy(src.position); dst.quaternion.copy(src.quaternion); dst.scale.copy(src.scale);
+        dst.visible = src.visible;
+      }
+    },
+  };
+}
+
 export async function loadGunAssets(gun, load = fetchJson) {
   const p = gun.pack;
   const [geoJson, lodJson, animJson, defJson] = await Promise.all([
@@ -99,13 +130,18 @@ export async function loadGunAssets(gun, load = fetchJson) {
   return { geo, lod: bedrockGeometry(lodJson), animations, defaults };
 }
 
-// A pack gun's reload and action sounds are the sound_effects keyframes of its animations.
+// A pack gun's inspect, reload and action sounds are the sound_effects keyframes of its animations, plus, as TaCZ's
+// SoundPlayManager plays them, the display's whole-action clip for an inspect or a reload (sounds.inspect, reload_tactical,
+// ...). The AA-12, M16s, MK14, M320, RPG-7, UMP45, Uzi and double barrels have only the clip: their keyframes name sound
+// files the pack does not ship. No pack gun has both a clip and keyframes that resolve.
 function fillSounds(gun, animations) {
-  gun.inspectSounds = { full: animations.get("inspect")?.sounds ?? [], empty: animations.get("inspect_empty")?.sounds ?? [] };
+  const keys = (name) => animations.get(name)?.sounds ?? [], s = gun.sounds ?? {};
+  const clip = (path) => (path ? [[0, path]] : []);
+  gun.inspectSounds = { full: [...clip(s.inspect), ...keys("inspect")], empty: [...clip(s.inspectEmpty), ...keys("inspect_empty")] };
   if (GUN_SOUNDS[gun.id] || !gun.sounds) return; // the hand-made guns keep their own timing (feel.js)
-  const keys = (name) => animations.get(name)?.sounds ?? [];
+  const tactical = [...clip(s.reloadTactical), ...keys("reload_tactical")], empty = [...clip(s.reloadEmpty), ...keys("reload_empty")];
   Object.assign(gun.sounds, {
-    tactical: keys("reload_tactical"), empty: keys("reload_empty").length ? keys("reload_empty") : keys("reload_tactical"),
+    tactical, empty: empty.length ? empty : tactical,
     start: keys("reload_intro"), shellKeys: keys("reload_loop"), end: keys("reload_end"),
     pump: gun.bolt === "manual_action" && keys("bolt").length ? keys("bolt") : null,
   });
@@ -113,6 +149,43 @@ function fillSounds(gun, animations) {
 
 const S = 1 / 16;
 const flashTextures = new Map();
+
+// The player's arms over TaCZ's arm placeholders (lefthand_pos / righthand_pos), matched to each placeholder cube's box;
+// `arm(left)` makes an upright 4 x 12 x 4 pixel player-arm mesh in blocks, the hand at -y (turned over here). The melee
+// weapons' models (melee-view.js) hold their arms the same way.
+export function fitArms(model, arm) {
+  for (const side of ["lefthand_pos", "righthand_pos"]) {
+    const bone = model.bones.get(side), holder = model.meshes.get(side);
+    if (!bone || !arm) continue;
+    // Without a placeholder cube, the usual one: 4 x 12 x 4 out to the side, rising from the bone's pivot.
+    const x = side === "righthand_pos" ? -8 : 4;
+    const box = holder ? new THREE.Box3().setFromBufferAttribute(holder.geometry.attributes.position) : new THREE.Box3(new THREE.Vector3(x, 0, -2), new THREE.Vector3(x + 4, 12, 2));
+    const m = arm(side === "lefthand_pos"), size = box.getSize(new THREE.Vector3()), centre = box.getCenter(new THREE.Vector3());
+    m.scale.set(size.x / 4 * 16, size.y / 12 * 16, size.z / 4 * 16);
+    m.position.copy(centre);
+    m.rotation.x = Math.PI; // TaCZ's placeholder has the hand at its far (+y) end, away from the bone's pivot
+    bone.add(m);
+  }
+}
+
+// The first-person pivot matrix (camera space, blocks) for a model posed this frame: the camera at `from` (the idle_view
+// bone's matrix) blended to `to` (iron_view or a scope's) by the aim, then the view bob and sway, damped while aiming.
+export function handCameraMatrix(from, to, aim, bob = null, sway = null, out = new THREE.Matrix4()) {
+  const pa = new THREE.Vector3(), qa = new THREE.Quaternion(), pb = new THREE.Vector3(), qb = new THREE.Quaternion(), sc = new THREE.Vector3();
+  from.decompose(pa, qa, sc); to.decompose(pb, qb, sc);
+  aim = Math.max(0, Math.min(1, aim ?? 0));
+  const e = aim * aim * (3 - 2 * aim);
+  const cam = new THREE.Matrix4().compose(pa.lerp(pb, e), qa.slerp(qb, e), new THREE.Vector3(1, 1, 1));
+  out.copy(cam.invert()).premultiply(new THREE.Matrix4().makeScale(S, S, S));
+  if (bob || sway) {
+    const k = 1 - 0.85 * aim, m = new THREE.Matrix4();
+    if (bob) m.multiply(new THREE.Matrix4().makeTranslation(bob.x * k, bob.y * k, 0)).multiply(new THREE.Matrix4().makeRotationZ(bob.rz * k)).multiply(new THREE.Matrix4().makeRotationX(bob.rx * k));
+    if (sway) m.multiply(new THREE.Matrix4().makeRotationX(sway.x * k)).multiply(new THREE.Matrix4().makeRotationY(sway.y * k));
+    out.premultiply(m);
+  }
+  return out;
+}
+
 
 // The first-person gun: `material(options)` makes a lit entity material (first-person.js), `texture(url)` a pixel texture,
 // `arm(left)` an upright player-arm mesh in blocks
@@ -127,24 +200,13 @@ export class PackGunView {
     const hidden = defaultVisibility(a.geo, { adapters: gun.pack.adapters, parts: gun.parts ?? null, extendedLevel: gun.extendedLevel });
     this.model = buildBedrockModel(a.geo, () => skin, { hidden, hiddenCubes: (n) => MARKER_BONES.has(n) || n.endsWith("_view") });
     this.parts = fitParts(this.model, gun, { material, texture, side: THREE.DoubleSide });
+    this.outgoing = mirrorMagazine(this.model);
     this.root = new THREE.Group();
     this.root.matrixAutoUpdate = false;
     this.root.add(this.model.root);
     this.root.userData = { gunId: gun.id, pack: true, view: this };
     this.pose = new Pose();
-    // The player's arms over TaCZ's arm placeholders, matched to each placeholder cube's box.
-    for (const side of ["lefthand_pos", "righthand_pos"]) {
-      const bone = this.model.bones.get(side), holder = this.model.meshes.get(side);
-      if (!bone || !arm) continue;
-      // Without a placeholder cube, the usual one: 4 x 12 x 4 out to the side, rising from the bone's pivot.
-      const x = side === "righthand_pos" ? -8 : 4;
-      const box = holder ? new THREE.Box3().setFromBufferAttribute(holder.geometry.attributes.position) : new THREE.Box3(new THREE.Vector3(x, 0, -2), new THREE.Vector3(x + 4, 12, 2));
-      const m = arm(side === "lefthand_pos"), size = box.getSize(new THREE.Vector3()), centre = box.getCenter(new THREE.Vector3());
-      m.scale.set(size.x / 4 * 16, size.y / 12 * 16, size.z / 4 * 16);
-      m.position.copy(centre);
-      m.rotation.x = Math.PI; // TaCZ's placeholder has the hand at its far (+y) end, away from the bone's pivot
-      bone.add(m);
-    }
+    fitArms(this.model, arm);
     // The muzzle flash: the pack's flash texture on a quad facing the camera, spun at random each shot.
     const flashBone = this.model.bones.get("muzzle_flash");
     this.flash = new THREE.Group();
@@ -194,9 +256,10 @@ export class PackGunView {
       timeline: view.timeline, sinceInspect: view.sinceInspect, inspectEmpty: view.inspectEmpty,
     });
     poseModel(this.model, layers, this.pose);
-    // The magazine coming out (additional_magazine) exists only for the reload animations, which shrink it away at the swap.
     const outgoing = this.model.bones.get("additional_magazine");
-    if (outgoing) outgoing.visible = layers.some(([anim]) => anim.name?.startsWith("reload"));
+    // ModelAdditionalMagazineListener: shown only while a playing animation moves the bone.
+    if (outgoing) outgoing.visible = layers.some(([anim]) => anim.bones?.has?.("additional_magazine") ?? anim.name?.startsWith("reload"));
+    if (outgoing?.visible) this.outgoing?.sync();
     // Rounds in the gun: the chambered round and the magazine's top round show only while there are rounds.
     for (const n of ["bullet_in_barrel", "bullet_in_mag", "bullet_chain"]) { const b = this.model.bones.get(n); if (b) b.visible = !view.empty; }
     this.flash.visible = !this.gun.silenced && view.sinceShot >= 0 && view.sinceShot < 0.05;
@@ -206,17 +269,7 @@ export class PackGunView {
     // Through a scope or sight: the gun's scope_pos bone times the part's own scope_view.
     const scope = this.parts.scope, sv = scope && boneMatrix(scope.model, "scope_view", this.scopeView);
     const iron = (sv && boneMatrix(this.model, "scope_pos", this.iron)?.multiply(sv)) || boneMatrix(this.model, "iron_view", this.iron) || idle;
-    const pa = new THREE.Vector3(), qa = new THREE.Quaternion(), pb = new THREE.Vector3(), qb = new THREE.Quaternion(), sc = new THREE.Vector3();
-    idle.decompose(pa, qa, sc); iron.decompose(pb, qb, sc);
-    const aim = Math.max(0, Math.min(1, view.aim ?? 0)), e = aim * aim * (3 - 2 * aim);
-    const cam = new THREE.Matrix4().compose(pa.lerp(pb, e), qa.slerp(qb, e), new THREE.Vector3(1, 1, 1));
-    out.copy(cam.invert()).premultiply(new THREE.Matrix4().makeScale(S, S, S));
-    if (bob || sway) {
-      const k = 1 - 0.85 * aim, m = new THREE.Matrix4();
-      if (bob) m.multiply(new THREE.Matrix4().makeTranslation(bob.x * k, bob.y * k, 0)).multiply(new THREE.Matrix4().makeRotationZ(bob.rz * k)).multiply(new THREE.Matrix4().makeRotationX(bob.rx * k));
-      if (sway) m.multiply(new THREE.Matrix4().makeRotationX(sway.x * k)).multiply(new THREE.Matrix4().makeRotationY(sway.y * k));
-      out.premultiply(m);
-    }
+    handCameraMatrix(idle, iron, view.aim, bob, sway, out);
     this.root.matrix.identity();
     // The muzzle in camera space (blocks), for the smoke hooks.js puts in the world.
     const mz = boneMatrix(this.model, "muzzle_flash") ?? boneMatrix(this.model, "muzzle_pos");

@@ -120,6 +120,7 @@ export function taczGun(name, entry, lang = {}) {
     sounds: {
       shoot: soundPath(sounds.shoot), silenced: soundPath(sounds.silence), draw: soundPath(sounds.draw), putAway: soundPath(sounds.put_away),
       inspect: soundPath(sounds.inspect), inspectEmpty: soundPath(sounds.inspect_empty),
+      reloadTactical: soundPath(sounds.reload_tactical), reloadEmpty: soundPath(sounds.reload_empty),
       // Reload keyframes come from the animation file's sound_effects once it is loaded (assets.js).
       tactical: [], empty: [], start: [], shell: [], end: [], pump: null,
     },
@@ -128,6 +129,10 @@ export function taczGun(name, entry, lang = {}) {
       defaultAnimation: v.use_default_animation ?? null,
       modelFov: +v.model_fov || null, zoomModelFov: +v.zoom_model_fov || null,
       flash: v.muzzle_flash ? { texture: v.muzzle_flash.texture, scale: +v.muzzle_flash.scale || 1 } : null,
+      // Tracer rounds (tracers.js): bullet speed in blocks a second and life in seconds, tracer_count_interval (0 every
+      // round, -1 none), and the gun display's ammo.tracer_color; install.js falls back to the ammo display's colour.
+      tracer: { speed: +d.bullet?.speed > 0 ? +d.bullet.speed : 250, life: +d.bullet?.life > 0 ? +d.bullet.life : 10,
+        interval: Number.isFinite(+d.bullet?.tracer_count_interval) ? +d.bullet.tracer_count_interval : -1, color: v.ammo?.tracer_color ?? null },
       thirdPersonScale: v.transform?.scale?.thirdperson ?? [1, 1, 1],
       // The factory parts fitted with no attachments (builtin_attachments' default_attached), as bone names.
       adapters: Object.values(d.builtin_attachments ?? {}).map((b) => path(typeof b === "string" ? b : b?.default_attached)).filter(Boolean),
@@ -138,7 +143,7 @@ export function taczGun(name, entry, lang = {}) {
 export function taczAmmo(name, entry, lang = {}) {
   const id = TACZ_AMMO_IDS[name];
   if (id == null) return null;
-  return { id, key: name, pack: name, name: strip(lang[entry.index.name]) || name, stack: Math.max(1, entry.index.stack_size | 0 || 64), slot: entry.display?.slot ?? null };
+  return { id, key: name, pack: name, name: strip(lang[entry.index.name]) || name, stack: Math.max(1, entry.index.stack_size | 0 || 64), slot: entry.display?.slot ?? null, tracerColor: entry.display?.tracer_color ?? null };
 }
 
 // TaCZ material tags -> this game's items ([id], [id, damage] or "log"/"planks" for any variant), with a count divisor for

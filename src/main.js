@@ -80,7 +80,7 @@ import {
 } from "./world.js";
 import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
-import { ladderBounds, ladderSupported, countsVertical } from "./ladders.js";
+import { ladderBounds, ladderSupported, countsVertical, isOnLadder } from "./ladders.js";
 import { snowFalls } from "./snow.js";
 import { flowerCanStay, JRandom } from "./flowers.js";
 import { Trees } from "./trees.js";
@@ -152,11 +152,13 @@ import { DISPENSER, DROPPER, PISTON_HEAD, isDispenserPiston, itemForBlock, headB
 import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
 import { HopperContainer, Hoppers, HOPPER } from "./hopper.js";
 import { Survival, ITEMS, burnTime, gameModeOf, setExtraCrafting } from "./survival.js";
-import { setGunsEnabled, gunsWorld, gunsEnabled, setGunPack, gunSmithRecipes } from "./mods/guns/install.js";
+import { setGunsEnabled, gunsWorld, gunsEnabled, setGunPack, setMeleePacks, gunSmithRecipes } from "./mods/guns/install.js";
+import { loadMeleePacks } from "./mods/guns/melee.js";
 import { gunSmithScreen, smithCraft } from "./mods/guns/smith-screen.js";
 import { GUN_SMITH, gunOf } from "./mods/guns/catalog.js";
 import { loadTaczPack } from "./mods/guns/pack.js";
 import { createGunHooks } from "./mods/guns/hooks.js";
+import { GunTracers } from "./mods/guns/tracers.js";
 import { playGunSound, preloadGunSounds, gunSoundEvent } from "./mods/guns/sounds.js";
 import { attachmentScreen, fitFromInventory } from "./mods/guns/attachment-screen.js";
 import { isAmmoBox, fillBox, emptyBox, boxLabel } from "./mods/guns/ammo-box.js";
@@ -431,17 +433,22 @@ const guns = createGunHooks({
   sound: (event, options) => playGunSound(sounds, event, options),
   preload: (folder) => preloadGunSounds(sounds, folder),
   fx: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz),
+  tracer: (t) => (gunTracers ??= new GunTracers(scene.scene)).spawn(t, performance.now()), // TaCZ tracer rounds (tracers.js)
   blockHit: ([x, y, z], side) => scene.particles.hitBlock(world, x, y, z, side),
   crosshair: (visible) => { $("#crosshair").style.visibility = visible ? "" : "hidden"; },
   hud: (state) => gunHud.update(state),
   // TaCZ grenades and rockets: Explosion with the pack's radius; `destroy_block` false keeps the blocks (isSmoking off).
   explode: (x, y, z, radius, { destroy }) => explodeAt(x, y, z, radius, { exploder: null, attacker: "player", smoking: !!destroy }),
+  meleeCritical: () => fallDistance > 0 && !grounded && !flying && !rider.vehicle && !wasInWater && !isOnLadder(world, position.x, position.y, position.z) && !survival.effects?.has?.(15),
   attachments: () => openGunAttachments(), // Z
 });
 const gunHud = createAmmoHud(bitmapHtml);
+let gunTracers = null; // the tracer boxes in the world scene, made at the first tracer round
 // The locally installed TaCZ gun pack (Git-ignored; pack.js), read once, the first time a guns world loads.
 let gunPackLoad = null;
-const gunPackReady = () => (gunPackLoad ??= loadTaczPack().catch(() => null).then((raw) => { setGunPack(raw); return raw; }));
+// With it, the locally installed LR Tactical melee packs (the CS2 knives; melee.js).
+const gunPackReady = () => (gunPackLoad ??= Promise.all([loadTaczPack().catch(() => null), loadMeleePacks().catch(() => null)])
+  .then(([raw, melee]) => { setGunPack(raw); setMeleePacks(melee); return raw; }));
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer,playerTicks=0;
 let weather = new Weather(), trees, plants, falling;
 const bedSleep = new BedSleep(); // EntityPlayer's sleeping state and bed spawn point (bed.js)
@@ -1535,6 +1542,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     // Opt-in guns mod (not 1.7.10): register or remove its items before the saved inventory is read; multiplayer stays vanilla.
     setGunsEnabled(gunsWorld(record) && !multiplayer, { items: ITEMS, combatTab: CREATIVE_TABS[8].items, search: SEARCH_ORDER, setCrafting: setExtraCrafting });
     guns.reset(); // no aim, recoil or queued gun sounds carried over from the last world
+    gunTracers?.clear();
     // Opt-in recipe viewer (not 1.7.10): shown beside container screens only in worlds created with it; multiplayer stays vanilla.
     if (setJeiEnabled(jeiWorld(record) && !multiplayer)) recipeViewer.reset();
     survival = new Survival(legacyPlayer(record), record.mode || "creative");
@@ -3246,7 +3254,7 @@ function movementTick(controls) {
   const change = !hold && world.streamAround(position.x,position.z);
   if (change) { scene.syncChunks(change); materializeFresh(); }
   const state = { world, position, previous, velocity, motion, survival, yaw, eating, minecarts, boats, horses: seatsFor(mobs, rider), rider,
-    grounded, collidedH, flying, fallDistance, landedFall, sleeping: bedSleep.sleeping };
+    grounded, collidedH, flying, fallDistance, landedFall, sleeping: bedSleep.sleeping, moveSpeedMultiplier: gunsEnabled() ? guns.speed() : 1 };
   const { inWater, inLavaNow, sneakOnGround, oldPosition } = moveRidingPlayer(state, controls,
     { trace: traceAction, markUnsaved: () => { saved = false; } }) ?? movePlayer(state, controls, toast);
   ({ grounded, collidedH, flying, fallDistance, landedFall } = state);
@@ -3336,7 +3344,7 @@ function movementTick(controls) {
   if (gunsEnabled()) guns.tick();
   if (survival.health <= 0) die();
   // EntityRenderer.updateFovModifierHand: once a tick, toward getFOVMultiplier (flight, sprint, bow).
-  easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: survival.effects?.moveSpeedMultiplier?.() ?? 1, bow: eating?.bow ? bowFov(eating.ticks) : gunsEnabled() ? guns.fov() : 1 }));
+  easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: (survival.effects?.moveSpeedMultiplier?.() ?? 1) * (gunsEnabled() ? guns.speed() : 1), bow: eating?.bow ? bowFov(eating.ticks) : gunsEnabled() ? guns.fov() : 1 }));
   tickMining();
   reportBrokenTool();
 }
@@ -4041,8 +4049,10 @@ function animate(now) {
     scene.camera.updateProjectionMatrix();
   }
   // The title and world screens cover the view; a paused world still draws behind its menu.
+  if (screen !== "playing" && gunsEnabled()) guns.cancelMelee();
   clientProfiler.start("render");
   remotePlayers?.frame();
+  gunTracers?.update(performance.now()); // guns mod: tracer rounds in flight
   if (screen !== "home") scene.render(elapsed, dt);
   clientProfiler.end();
   clientProfiler.end();

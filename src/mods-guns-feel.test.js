@@ -85,13 +85,15 @@ test("sound keyframes play on their tick and a tag can be cancelled", () => {
 test("installGunSounds adds the TaCZ files to the base and live tables once", async () => {
   const bank = { ready: Promise.resolve(), base: { files: {}, events: {} }, manifest: { files: { x: {} }, events: {} } };
   let loads = 0;
-  const load = async (url) => { loads++; assert.equal(url, "/mods/tacz/index.json"); return { guns: [], sounds: ["ak47/ak47_shoot", "dry_fire"] }; };
+  const load = async (url) => { loads++; return url === "/mods/tacz/index.json" ? { guns: [], sounds: ["ak47/ak47_shoot", "dry_fire"] } : { packs: [{ namespace: "test", sounds: ["melee/draw"] }] }; };
   assert.equal(await installGunSounds(bank, load), true);
   assert.equal(await installGunSounds(bank, load), true);
-  assert.equal(loads, 1);
+  assert.equal(loads, 2);
   for (const t of [bank.base, bank.manifest]) {
     assert.deepEqual(t.files["mods/tacz/ak47/ak47_shoot"], { url: "/mods/tacz/pack/assets/tacz/tacz_sounds/ak47/ak47_shoot.ogg" });
     assert.deepEqual(t.events[gunSoundEvent("dry_fire")], { category: "player", sounds: ["mods/tacz/dry_fire"] });
+    assert.deepEqual(t.files["mods/lrtactical/test/melee/draw"], { url: "/mods/lrtactical/test/assets/test/tacz_sounds/melee/draw.ogg" });
+    assert.deepEqual(t.events[gunSoundEvent("test:melee/draw")], { category: "player", sounds: ["mods/lrtactical/test/melee/draw"] });
   }
   const missing = { ready: Promise.resolve(), base: { files: {}, events: {} }, manifest: { files: {}, events: {} } };
   assert.equal(await installGunSounds(missing, async () => null), false); // not fetched: silent guns

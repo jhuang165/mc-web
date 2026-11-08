@@ -135,12 +135,15 @@ export function gunLayers(own, defaults, state) {
   return layers;
 }
 function mainAnimation(own, defaults, s) {
-  const tl = s.timeline, playing = (anim, time) => (anim && time >= 0 && (time < anim.length || anim.hold) ? { anim, time: Math.min(time, anim.length) } : null);
+  // TaCZ's main track plays draw, inspect and bolt PLAY_ONCE_STOP: they end at their length even when the file says
+  // hold_on_last_frame, so a finished inspect no longer covers the bolt catch and shot. Only a reload still in
+  // progress (hooks.js clears its timeline at the end) holds its last frame. A time of Infinity means never played.
+  const tl = s.timeline, playing = (anim, time, hold = false) => (anim && Number.isFinite(time) && time >= 0 && (time < anim.length || (hold && anim.hold)) ? { anim, time: Math.min(time, anim.length) } : null);
   // A reload in progress (or its last frames), unless the gun has fired since it began.
   if (tl && !(s.sinceShot < tl.since)) {
     if (tl.kind === "magazine") {
       const anim = pick(own, defaults, tl.empty ? "reload_empty" : "reload_tactical", "reload_tactical", "reload_empty");
-      const r = playing(anim, tl.since);
+      const r = playing(anim, tl.since, true);
       if (r) return r;
     } else {
       if (tl.sinceEnd != null) { const r = playing(pick(own, defaults, "reload_end"), tl.sinceEnd); if (r) return r; }

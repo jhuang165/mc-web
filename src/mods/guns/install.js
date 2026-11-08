@@ -8,7 +8,8 @@
 // registers as a placeholder item, so a world saved with pack guns keeps its stacks until the pack is back.
 import { GUN_ITEMS, GUNS, AMMO, ATTACHMENTS, CREATIVE_ORDER, P320, AKM, M870, AMMO_45ACP, AMMO_762X39, AMMO_12G, GUN_SMITH } from "./catalog.js";
 import { taczGun, taczAmmo, taczRecipes, packUrl } from "./pack.js";
-import { TACZ_GUN_IDS, TACZ_AMMO_IDS, TACZ_ATTACHMENT_IDS } from "./ids.js";
+import { TACZ_GUN_IDS, TACZ_AMMO_IDS, TACZ_ATTACHMENT_IDS, LRT_MELEE_IDS } from "./ids.js";
+import { meleeWeapon, meleeUrl } from "./melee.js";
 import { taczAttachment, resolveAllowed, readGunTag, ATTACHMENT_TYPES, TYPE_NAMES } from "./fit.js";
 import { AMMO_BOXES, AMMO_BOX_IRON, AMMO_BOX_GOLD, AMMO_BOX_DIAMOND, AMMO_BOX_CREATIVE, readBoxTag, boxLabel } from "./ammo-box.js";
 import { partSummary } from "./attachment-screen.js";
@@ -23,6 +24,32 @@ export const gunsEnabled = () => enabled;
 const pack = { installed: false, guns: [], ammo: [], attachments: [], recipes: [], items: [] };
 export const gunPack = () => pack;
 export const gunSmithRecipes = () => pack.recipes;
+
+// LR Tactical melee weapons (melee.js: the CS2 knives) once setMeleePacks ran with installed packs, and their items (with
+// placeholders for ids no installed pack provides, so saved knife stacks survive a missing install).
+const melee = { installed: false, weapons: [], items: [] };
+export const meleePacks = () => melee;
+export const MELEE = {}; // item id -> weapon
+export const meleeOf = (stack) => MELEE[stack?.id];
+// packs: loadMeleePacks's result, or null. Once, before the first world loads.
+export function setMeleePacks(packs) {
+  if (enabled) throw new Error("setMeleePacks before setGunsEnabled");
+  for (const id of Object.keys(MELEE)) delete MELEE[id];
+  Object.assign(melee, { installed: false, weapons: [], items: [] });
+  for (const p of packs ?? []) {
+    for (const [name, entry] of Object.entries(p.melee ?? {})) {
+      const w = meleeWeapon(p.namespace, name, entry, p.lang);
+      if (w) { melee.weapons.push(w); MELEE[w.id] = w; }
+    }
+  }
+  melee.installed = melee.weapons.length > 0;
+  melee.weapons.sort((a, b) => a.id - b.id);
+  for (const w of melee.weapons) melee.items.push({ id: w.id, name: w.name, stack: 1, iconUrl: w.pack.slot ? meleeUrl.texture(w.pack.slot, w.namespace) : "/media/mods/guns/gun_smith_table.png",
+    melee: w, tooltip: () => [`+${w.damage} Attack Damage`] });
+  const have = new Set(melee.items.map((i) => i.id));
+  for (const id of Object.values(LRT_MELEE_IDS)) if (!have.has(id)) melee.items.push({ id, name: "Missing Melee Weapon", stack: 1, iconUrl: "/media/mods/guns/gun_smith_table.png", missingPack: true });
+  return melee;
+}
 const LEGACY = new Set(Object.keys(GUNS).map(Number).concat(Object.keys(AMMO).map(Number)));
 // Pack type order in the creative tab, as TaCZ's gun smith table groups them.
 const TYPE_ORDER = ["pistol", "smg", "rifle", "dmr", "sniper", "shotgun", "mg", "rpg"];
@@ -62,6 +89,9 @@ export function setGunPack(raw) {
     }
     pack.guns.sort((a, b) => (TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)) || (a.sort - b.sort) || (a.key < b.key ? -1 : 1));
     pack.ammo.sort((a, b) => a.id - b.id);
+    // A tracer without its gun's own colour takes its round's (TaCZ: the gun display's ammo.tracer_color overrides the ammo's).
+    const ammoById = new Map(pack.ammo.map((a) => [a.id, a]));
+    for (const g of pack.guns) if (g.pack.tracer && !g.pack.tracer.color) g.pack.tracer.color = ammoById.get(g.ammo)?.tracerColor ?? "#FFFFFF";
     for (const a of pack.ammo) if (!LEGACY.has(a.id)) AMMO[a.id] = a;
     for (const g of pack.guns) {
       // The hand-made guns keep their own stats, recoil and sound timing; they take only the pack's visuals.
@@ -77,6 +107,9 @@ export function setGunPack(raw) {
   }
   // A legacy gun with the pack's biggest magazine fitted counts up to its size (PlayerInventory.read keeps damage in range).
   for (const item of GUN_ITEMS) if (item.gun) item.damageRange = Math.max(item.gun.magazine, ...(item.gun.extendedMag ?? []));
+  // With the pack installed the hand-made guns show its slot icons too (the P320, AKM and M870 draw its models already);
+  // without it, this project's own placeholder icons.
+  for (const item of GUN_ITEMS) if (item.gun) item.iconUrl = ICON(item.gun.pack?.slot, `/media/mods/guns/${item.gun.key}.png`);
   for (const g of pack.guns) {
     // A stack with the biggest magazine fitted counts up to its size (PlayerInventory.read keeps damage in range).
     const item = pack.items.find((i) => i.id === g.id);
@@ -103,10 +136,10 @@ export function setGunPack(raw) {
 // The ammo boxes (ammo-box.js): this project's own icons.
 const BOX_ITEMS = Object.values(AMMO_BOXES).map((b) => ({ id: b.id, name: b.name, stack: 1, iconUrl: `/media/mods/guns/ammo_box_${b.key}.png`,
   ammoBox: b, readTag: readBoxTag, tooltip: (s) => [boxLabel(s), b.id === AMMO_BOX_CREATIVE ? null : "Use: fill  Sneak + use: empty"] }));
-// Creative order: the three hand-made guns and their ammo, the gun smith table, the ammo boxes, then the pack's guns, ammo
-// and attachments.
+// Creative order: the three hand-made guns and their ammo, the gun smith table, the ammo boxes, then the pack's guns, the
+// melee packs' knives, the pack's ammo and attachments.
 export const creativeOrder = () => [...CREATIVE_ORDER, ...BOX_ITEMS.map((i) => i.id),
-  ...pack.guns.filter((g) => !LEGACY.has(g.id)).map((g) => g.id), ...pack.ammo.filter((a) => !LEGACY.has(a.id)).map((a) => a.id),
+  ...pack.guns.filter((g) => !LEGACY.has(g.id)).map((g) => g.id), ...melee.weapons.map((w) => w.id), ...pack.ammo.filter((a) => !LEGACY.has(a.id)).map((a) => a.id),
   ...pack.attachments.map((a) => a.id)];
 
 // tables: { items: ITEMS, combatTab: CREATIVE_TABS[8].items, search: SEARCH_ORDER, setCrafting } (main.js passes the live ones).
@@ -122,7 +155,7 @@ export function setGunsEnabled(on, tables) {
   for (const item of registered.items) delete items[item.id];
   registered = { items: [], order: [] };
   if (on) {
-    registered = { items: [...GUN_ITEMS, ...BOX_ITEMS, ...pack.items], order: creativeOrder() };
+    registered = { items: [...GUN_ITEMS, ...BOX_ITEMS, ...pack.items, ...melee.items], order: creativeOrder() };
     for (const item of registered.items) items[item.id] = item;
     combatTab.push(...registered.order); search.push(...registered.order);
   }
@@ -179,3 +212,6 @@ export function gunCraftingResult(cells, size) {
   }
   return null;
 }
+
+// Without setMeleePacks at boot (tests that import this module alone), the knife ids hold placeholders.
+setMeleePacks(null);

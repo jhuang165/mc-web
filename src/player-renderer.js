@@ -20,6 +20,7 @@ import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 import { arrowGeometry } from "./arrow-renderer.js";
 import { GUN_MODELS, buildGunMesh, gunHeldMatrix, gunArmPose } from "./mods/guns/model.js";
 import { gunAssets, gunParts, packHeldModel } from "./mods/guns/pack-view.js";
+import { meleeAssets, meleeHeldModel } from "./mods/guns/melee-view.js";
 import { stuckArrowPlacements } from "./stuck-arrows.js";
 export { LEATHER_COLOR } from "./leather-dye.js";
 
@@ -489,6 +490,8 @@ export class PlayerRenderer {
     const gun = fitted?.id === id ? fitted : ITEMS[id]?.gun; // guns mod: one model whatever rounds are left (the stack damage)
     const packAssets = gun?.pack ? gunAssets(gun) : null; // the pack's LOD model once loaded (pack-view.js), else the box model
     if (gun) damage = packAssets ? `1${gun.fitKey ?? ""}/${gunParts(gun).ready}` : 0;
+    const knife = ITEMS[id]?.melee, knifeAssets = knife ? meleeAssets(knife) : null;
+    if (knifeAssets) damage = "knife";
     const leather = leatherItemLayers(id, color),
       cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + damage + ":" + (leather?.color ?? 0) + ":" + (glint ? 1 : 0) + ":" + cast + ":" + (id ? itemFrameTag(itemTexture(id, damage, cast)) : 0); // animated icon frame (item-animation.js): rebuilt only when it changes
     if (key === this.heldKey) return;
@@ -502,6 +505,15 @@ export class PlayerRenderer {
       this.held = this.heldMaterial = this.heldOverlayMaterial = this.heldGeometry = null;
     }
     if (!id || !ITEMS[id]) return;
+    if (knifeAssets) {
+      const group = new THREE.Group();
+      group.matrixAutoUpdate = false;
+      group.matrix.copy(gunHeldMatrix(1));
+      group.add(meleeHeldModel(knife, knifeAssets, (o) => this.material(o), pixelTexture));
+      this.pivots.rightArm.add(group);
+      this.held = group;
+      return;
+    }
     if (gun) {
       const group = new THREE.Group();
       group.matrixAutoUpdate = false;

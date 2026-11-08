@@ -162,10 +162,11 @@ export class GunController {
 // Every pellet of one shot, with damage summed per mob: TaCZ bullets ignore the hurt-resistance window, so the caller resets it
 // and applies each mob's total once. ctx adds aim { origin, dir }, moving/sneaking/aiming and random to traceShot's ctx.
 export function fireShot(gun, ctx) {
-  const spread = inaccuracyOf(gun, ctx), hits = new Map(), impacts = [];
+  const spread = inaccuracyOf(gun, ctx), hits = new Map(), impacts = [], paths = [];
   for (let i = 0; i < gun.pellets; i++) {
     const dir = spreadDirection(ctx.dir, spread, ctx.random);
     const hit = traceShot(ctx.origin, dir, ctx);
+    paths.push({ dir, distance: hit ? hit.distance : RANGE }); // each pellet's flight, for its tracer (tracers.js)
     if (!hit) continue;
     impacts.push(hit);
     if (!hit.entity) continue;
@@ -174,5 +175,5 @@ export function fireShot(gun, ctx) {
     const prev = hits.get(hit.entity);
     hits.set(hit.entity, { entity: hit.entity, amount: (prev?.amount ?? 0) + amount, head: head || !!prev?.head });
   }
-  return { hits: [...hits.values()], impacts };
+  return { hits: [...hits.values()], impacts, paths };
 }

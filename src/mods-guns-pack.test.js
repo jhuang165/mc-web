@@ -9,10 +9,10 @@ import { bedrockGeometry, buildBedrockModel, boneMatrix, defaultVisibility } fro
 import { parseAnimations, sampleTrack, Pose, poseModel, gunLayers } from "./mods/guns/animation.js";
 import { taczGun, taczAmmo, taczRecipes, loadTaczPack, packUrl } from "./mods/guns/pack.js";
 import { setGunPack, gunPack, gunSmithRecipes, creativeOrder } from "./mods/guns/install.js";
-import { gunAssets, gunAssetsFailed, PackGunView } from "./mods/guns/pack-view.js";
+import { gunAssets, gunAssetsFailed, loadGunAssets, PackGunView, mirrorMagazine } from "./mods/guns/pack-view.js";
 import { muzzleOverride, gunMuzzle } from "./mods/guns/model.js";
 import { smithMatches, smithCount, canSmith, smithCraft } from "./mods/guns/smith-screen.js";
-import { GUNS, AMMO, AKM, CREATIVE_ORDER } from "./mods/guns/catalog.js";
+import { GUNS, AMMO, AKM, CREATIVE_ORDER, GUN_ITEMS } from "./mods/guns/catalog.js";
 import { GunController } from "./mods/guns/firing.js";
 import { TACZ_GUN_IDS, TACZ_AMMO_IDS } from "./mods/guns/ids.js";
 
@@ -106,6 +106,17 @@ test("setGunPack adds the pack's guns, ammo, recipes and placeholders, and undoe
   assert.ok(gunPack().items.every((i) => i.missingPack)); // without the pack every pack id is a placeholder
 });
 
+test("with the pack, the hand-made guns use its slot icons; without it, their own", () => {
+  const akm = GUN_ITEMS.find((i) => i.id === AKM);
+  const entry = glockEntry();
+  try {
+    setGunPack({ ...rawPack(), guns: { ...rawPack().guns, ak47: entry } });
+    assert.ok(GUNS[AKM].pack.slot);
+    assert.equal(akm.iconUrl, packUrl.texture(GUNS[AKM].pack.slot));
+  } finally { setGunPack(null); }
+  assert.equal(akm.iconUrl, "/media/mods/guns/akm.png");
+});
+
 test("burst fire: count rounds at the burst rate, then the minimum interval", () => {
   try {
     setGunPack(rawPack());
@@ -194,6 +205,23 @@ test("gun layers: idle under a reload, the shoot animation added after a shot", 
   assert.deepEqual(shot.map(([x, , m]) => [x.name, m]), [["static_idle", "set"], ["shoot", "add"]]);
 });
 
+test("a finished or never-played inspect does not cover the bolt catch (TaCZ PLAY_ONCE_STOP)", () => {
+  const a = parseAnimations({ animations: {
+    static_idle: { loop: true, bones: { root: { position: [0, 0, 0] } } },
+    static_bolt_caught: { loop: true, animation_length: 0.5, bones: { slide: { position: [0, 0, 2.25] } } },
+    inspect: { loop: "hold_on_last_frame", animation_length: 6, bones: { slide: { position: { "0": [0, 0, 0], "6": [0, 0, 0] } } } },
+    shoot: { animation_length: 0.6, bones: { slide: { position: { "0": [0, 0, 0], "0.03": [0, 0, 2.5], "0.06": [0, 0, 0] } } } },
+  } });
+  const names = (s) => gunLayers(a, null, { sinceDraw: Infinity, sinceShot: Infinity, timeline: null, mode: "semi", ...s }).map(([x]) => x.name);
+  assert.deepEqual(names({ empty: true, sinceInspect: Infinity }), ["static_idle", "static_bolt_caught"]); // never inspected
+  assert.deepEqual(names({ empty: true, sinceInspect: 9 }), ["static_idle", "static_bolt_caught"]); // inspect ended
+  assert.deepEqual(names({ empty: false, sinceInspect: 2 }), ["static_idle", "inspect"]); // inspect playing
+  const pose = new Pose();
+  const slide = (s) => { pose.clear(); for (const [x, t, m] of gunLayers(a, null, { sinceDraw: Infinity, sinceShot: Infinity, timeline: null, sinceInspect: Infinity, ...s })) pose.apply(x, t, m); return pose.bones.get("slide")?.position[2] ?? 0; };
+  assert.equal(slide({ empty: false }), 0); // rounds left: slide forward
+  assert.equal(slide({ empty: true }), 2.25); // empty: locked back
+});
+
 // The fake pack's files for one gun: a model with idle_view, iron_view and muzzle_flash bones.
 const VIEW_GEO = { "minecraft:geometry": [{ description: {}, bones: [
   { name: "root", pivot: [0, 0, 0] },
@@ -221,6 +249,18 @@ test("gun assets load once, report arrival, and take reload sounds from the anim
   gunAssets(broken, undefined, async () => null);
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(gunAssetsFailed(broken), true);
+});
+
+test("a gun's display clips for inspect and reload play with its keyframes (TaCZ SoundPlayManager)", async () => {
+  const entry = glockEntry();
+  entry.display.sounds = { ...entry.display.sounds, inspect: "tacz:mk14/mk14_inspect", inspect_empty: "tacz:mk14/mk14_inspect_empty", reload_tactical: "tacz:mk14/mk14_reload_tactical" };
+  const gun = { ...taczGun("glock_17", entry, LANG), flash: null };
+  const anim = { animations: { inspect: { animation_length: 2, bones: {} }, reload_tactical: { animation_length: 2, bones: {}, sound_effects: { "0.4": { effect: "tacz:mk14/mag_out" } } } } };
+  const a = await loadGunAssets(gun, async (url) => (url.includes("geo_models") ? VIEW_GEO : url.endsWith(".animation.json") && !url.includes("_default") ? anim : null));
+  assert.ok(a);
+  assert.deepEqual(gun.inspectSounds, { full: [[0, "mk14/mk14_inspect"]], empty: [[0, "mk14/mk14_inspect_empty"]] });
+  assert.deepEqual(gun.sounds.tactical, [[0, "mk14/mk14_reload_tactical"], [0.4, "mk14/mag_out"]]);
+  assert.deepEqual(gun.sounds.empty, gun.sounds.tactical); // no reload_empty clip or keys: the tactical ones
 });
 
 test("the first-person pack view puts the camera at idle_view, moving to iron_view as it aims", () => {
@@ -267,4 +307,30 @@ test("the gun smith crafts from carried materials: any log, exact dye, guns unlo
   } finally { setGunPack(null); }
   const ammo = smithCraft([{ id: DYE, count: 1, damage: 4 }], lapis);
   assert.deepEqual(ammo, { id: 4220, count: 30, damage: 0 });
+});
+
+test("the outgoing magazine is a copy of the fitted magazine drawn in the additional_magazine bone (TaCZ)", () => {
+  const cube = (origin) => ({ origin, size: [1, 2, 1], uv: { north: { uv: [0, 0], uv_size: [1, 2] } } });
+  const geo = { width: 16, height: 16, bones: [
+    { name: "root", pivot: [0, 0, 0] },
+    { name: "additional_magazine", parent: "root", pivot: [0, 4, 2] },
+    { name: "magazine", parent: "root", pivot: [0, 4, 2] },
+    { name: "mag_standard", parent: "magazine", pivot: [0, 3, 2], cubes: [cube([0, 1, 2])] },
+    { name: "mag_extended_1", parent: "magazine", pivot: [0, 3, 2], cubes: [cube([0, 0, 2])] },
+  ] };
+  const mat = new THREE.MeshBasicMaterial();
+  const model = buildBedrockModel(geo, () => mat, { hidden: (n) => n === "mag_standard" });
+  const mirror = mirrorMagazine(model);
+  const out = model.bones.get("additional_magazine");
+  const ext = mirror.copy.getObjectByName("mag_extended_1"), std = mirror.copy.getObjectByName("mag_standard");
+  assert.equal(mirror.copy.parent, out);
+  assert.ok(ext && std);
+  model.bones.get("mag_extended_1").position.y += 1;
+  mirror.sync();
+  assert.equal(std.visible, false, "the hidden standard magazine stays hidden in the copy");
+  assert.equal(ext.visible, true);
+  assert.deepEqual(ext.position.toArray(), model.bones.get("mag_extended_1").position.toArray());
+  const meshOf = (g) => g.children.find((c) => c.isMesh);
+  assert.equal(meshOf(ext).geometry, meshOf(model.bones.get("mag_extended_1")).geometry, "geometry is shared");
+  assert.equal(mirrorMagazine(buildBedrockModel({ width: 16, height: 16, bones: [{ name: "magazine", pivot: [0, 0, 0] }] }, () => mat)), null);
 });

@@ -10,9 +10,9 @@
 // $TACZ_JAR may point at a local copy of the same jar instead of downloading it.
 import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { inflateRawSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { zipEntries as entries } from "./zip-entries.mjs";
 
 const URL = "https://cdn.modrinth.com/data/SzzJttH8/versions/QGCbNkTy/tacz-forge-1.20.1-1.2.0.jar";
 const SHA512 = "7784dd103fbaa5d26a6130ae6a716a1909f93c126fd226193b21dec38f8c345b0044e9e392a1aa6737e468a346b7e95dc38a3e76f22ecaf37cef438ae57874c1";
@@ -48,24 +48,6 @@ async function jar() {
   if (hash !== SHA512) throw new Error(`TaCZ jar SHA-512 mismatch (${hash.slice(0, 16)}...)`);
   return b;
 }
-// Minimal zip reader: the end-of-central-directory record, then each central entry's local header (stored or deflated).
-function* entries(zip) {
-  let eocd = zip.length - 22;
-  while (eocd >= 0 && zip.readUInt32LE(eocd) !== 0x06054b50) eocd--;
-  if (eocd < 0) throw new Error("not a zip file");
-  let p = zip.readUInt32LE(eocd + 16);
-  for (let i = 0, n = zip.readUInt16LE(eocd + 10); i < n; i++) {
-    const method = zip.readUInt16LE(p + 10), size = zip.readUInt32LE(p + 20), nameLen = zip.readUInt16LE(p + 28);
-    const extraLen = zip.readUInt16LE(p + 30), commentLen = zip.readUInt16LE(p + 32), local = zip.readUInt32LE(p + 42);
-    const name = zip.toString("utf8", p + 46, p + 46 + nameLen);
-    p += 46 + nameLen + extraLen + commentLen;
-    yield { name, read() {
-      const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28), body = zip.subarray(start, start + size);
-      return method === 0 ? Buffer.from(body) : method === 8 ? inflateRawSync(body) : null;
-    } };
-  }
-}
-
 const zip = await jar();
 await rm(out, { recursive: true, force: true });
 await rm(path.join(root, "public/audio/mods/tacz"), { recursive: true, force: true }); // the sounds-only install this replaces
