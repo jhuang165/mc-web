@@ -36,8 +36,12 @@ body:has(.native-inventory) #toast,body:has(.furnace-modal) #toast{display:none}
 .container-slots{position:absolute;inset:0;pointer-events:none}
 .container-slot{position:absolute!important;width:calc(16*var(--u))!important;height:calc(16*var(--u))!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:none!important;box-shadow:none!important;transform:none!important;line-height:0;overflow:visible;pointer-events:auto;cursor:default;outline:0}
 .container-slot:focus-visible{outline:var(--u) solid #fff}
-/* GuiContainer highlights the hovered slot and drag targets with 0x80FFFFFF over the item. */
-.container-slot.hovered:after,.container-slot.dragged:after{content:'';position:absolute;inset:0;background:rgba(255,255,255,.5);z-index:6;pointer-events:none}
+/* GuiContainer (container-widgets.js SLOT): the hovered slot gets a 0x80FFFFFF (alpha 128/255) gradient over the item and its count after
+   every slot is drawn; a split-drag target gets the same colour as a drawRect before its item, so the quad sits under the item. */
+.container-slot.hovered:after{content:'';position:absolute;inset:0;background:rgba(255,255,255,0.502);z-index:6;pointer-events:none}
+.container-slot.dragged{background:rgba(255,255,255,0.502)!important}
+/* Glyph runs and drawRect quads placed in GUI units inside a widget (container-widgets.js). */
+.gui-glyphs,.gui-rect{position:absolute;display:block;margin:0;padding:0;pointer-events:none}.gui-glyphs{white-space:pre}
 .container-slot .vanilla-item-icon,.cursor-stack .vanilla-item-icon{display:block;width:calc(16*var(--u));height:calc(16*var(--u));margin:0;padding:0;filter:none;image-rendering:pixelated}
 .container-slot .item-count,.cursor-stack .item-count{position:absolute;left:auto;right:calc(-1*var(--u));top:calc(9*var(--u));bottom:auto;margin:0;padding:0;height:calc(8*var(--u));white-space:nowrap;background:none;color:#fff;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-shadow:var(--u) var(--u) #3f3f3f;z-index:4;pointer-events:none}
 .item-count.empty,.item-count.full{color:#ff5!important;text-shadow:var(--u) var(--u) #3f3f15!important}
@@ -154,25 +158,25 @@ body:has(.creative-modal) #toast{display:none}
 .anvil-modal h2{position:absolute;left:calc(60*var(--u));top:calc(6*var(--u));margin:0;padding:0;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-shadow:none;white-space:nowrap}
 .anvil-name-background,.anvil-error{position:absolute;background:url('/media/1.7.10/gui/container/anvil.png') no-repeat;background-size:calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated;pointer-events:none}
 .anvil-name-background{left:calc(59*var(--u));top:calc(20*var(--u));width:calc(110*var(--u));height:calc(16*var(--u));background-position:0 calc(-182*var(--u))}.anvil-name-background.active{background-position:0 calc(-166*var(--u))}
-#anvil-name{position:absolute;left:calc(62*var(--u));top:calc(24*var(--u));width:calc(103*var(--u));height:calc(12*var(--u));margin:0;padding:0;border:0;border-radius:0;background:transparent;outline:0;box-shadow:none;color:white;font:inherit;font-size:calc(8*var(--u));line-height:calc(8*var(--u));user-select:text;z-index:3}#anvil-name:disabled{color:white;opacity:1}
-.anvil-cost{position:absolute;right:calc(8*var(--u));top:calc(67*var(--u));color:#80ff20;text-shadow:var(--u) var(--u) #203f08;white-space:nowrap}.anvil-cost.unavailable{color:#ff6060;text-shadow:var(--u) var(--u) #3f1818}
+/* The <input> only takes keys, selection and the clipboard (its text and caret are transparent); #anvil-name-draw draws the GuiTextField
+   glyphs, caret and selection box at (62, 24), and #anvil-cost the cost line copies, both in GUI units from the sheet origin. */
+#anvil-name{position:absolute;left:calc(62*var(--u));top:calc(24*var(--u));width:calc(103*var(--u));height:calc(12*var(--u));margin:0;padding:0;border:0;border-radius:0;background:transparent;outline:0;box-shadow:none;color:transparent;caret-color:transparent;font:inherit;font-size:calc(8*var(--u));line-height:calc(8*var(--u));user-select:text;z-index:3}#anvil-name:disabled{color:transparent;opacity:1}#anvil-name::selection{background:transparent;color:transparent}
+.anvil-name-draw{position:absolute;left:calc(62*var(--u));top:calc(24*var(--u));width:0;height:0;overflow:visible;pointer-events:none;z-index:2}
+.anvil-cost{position:absolute;inset:0;pointer-events:none;z-index:2}
 .anvil-error{left:calc(99*var(--u));top:calc(45*var(--u));width:calc(28*var(--u));height:calc(21*var(--u));background-position:calc(-176*var(--u)) 0}.anvil-error[hidden]{display:none}
 body:has(.anvil-modal) #toast{display:none}
 .enchanting-modal{position:relative;width:calc(176*var(--u));height:calc(166*var(--u));min-width:calc(176*var(--u));min-height:calc(166*var(--u));max-width:none;max-height:none;flex-shrink:0;padding:0;border:0;border-radius:0;box-shadow:none;overflow:visible;background:url('/media/1.7.10/gui/container/enchanting_table.png') 0 0/calc(256*var(--u)) calc(256*var(--u)) no-repeat;transform:none!important;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u));image-rendering:pixelated}
 .enchanting-modal .modal-top,.enchanting-modal:before,.enchanting-modal:after{display:none}
 .enchanting-modal h2{position:absolute;left:calc(12*var(--u));top:calc(5*var(--u));margin:0;padding:0;color:#404040;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-shadow:none;white-space:nowrap}
 .enchant-option{position:absolute;left:calc(60*var(--u));width:calc(108*var(--u));height:calc(19*var(--u));margin:0;padding:0;border:0;border-radius:0;outline:0;box-shadow:none;cursor:default;background:url('/media/1.7.10/gui/container/enchanting_table.png') 0 calc(-185*var(--u))/calc(256*var(--u)) calc(256*var(--u)) no-repeat;image-rendering:pixelated;color:#80ff20;font:inherit;z-index:2}
-.enchant-option.on{background-position:0 calc(-166*var(--u));cursor:pointer}.enchant-option.on:hover,.enchant-option.on:focus-visible{background-position:0 calc(-204*var(--u))}
-.enchant-icon{position:absolute;left:var(--u);top:var(--u);width:calc(16*var(--u));height:calc(16*var(--u));background:url('/media/1.7.10/gui/container/enchanting_table.png') 0 calc(-239*var(--u))/calc(256*var(--u)) calc(256*var(--u)) no-repeat;image-rendering:pixelated;pointer-events:none}
-.enchant-option.on .enchant-icon{background-position-y:calc(-223*var(--u))}
-.enchant-option[data-enchant-option="1"] .enchant-icon{background-position-x:calc(-16*var(--u))}.enchant-option[data-enchant-option="2"] .enchant-icon{background-position-x:calc(-32*var(--u))}
-.enchant-option.off .enchant-icon{opacity:1}
-.enchant-level{position:absolute;right:calc(2*var(--u));top:calc(7*var(--u));font-weight:normal;color:#80ff20;text-shadow:var(--u) var(--u) #203f08;white-space:nowrap;pointer-events:none}
-.enchant-option.poor .enchant-level{color:#407f10;text-shadow:var(--u) var(--u) #101f04}
+/* The row (v 185 / 166 / 204), name tint and glyph level are set per frame by container-widgets.js refreshEnchantOptions; 1.7.10 has no
+   option icons (those are 1.8). */
+.enchant-option.on,.enchant-option.hover{cursor:pointer}
+.enchant-level{position:absolute;inset:0;pointer-events:none}
 /* GuiEnchantment: the galactic option names (drawn as a mask, tinted 6839882 / hover 16777088 / disabled 3420965) and the ModelBook
    viewport (320 x 240 centred on the 176 x 166 sheet, drawn before the slots). */
 .enchant-name{--name-mask:linear-gradient(transparent,transparent);position:absolute;left:calc(2*var(--u));top:calc(2*var(--u));width:calc(104*var(--u));height:calc(9*var(--u));background:#685e4a;-webkit-mask:var(--name-mask) 0 0/100% 100% no-repeat;mask:var(--name-mask) 0 0/100% 100% no-repeat;image-rendering:pixelated;pointer-events:none}
-.enchant-option.poor .enchant-name{background:#342f25}.enchant-option.on:hover .enchant-name,.enchant-option.on:focus-visible .enchant-name{background:#ffff80}.enchant-option.off .enchant-name{display:none}
+.enchant-option.off .enchant-name{display:none}
 .enchant-book-canvas{position:absolute;left:calc(-72*var(--u));top:calc(-37*var(--u));width:calc(320*var(--u));height:calc(240*var(--u));pointer-events:none}
 .enchant-shelves{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 body:has(.enchanting-modal) #toast{display:none}

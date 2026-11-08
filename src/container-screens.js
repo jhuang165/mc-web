@@ -119,7 +119,7 @@ const scaleOf = () => Number.parseFloat(getComputedStyle(document.documentElemen
 
 /**
  * Show the host: the overlay gets the drawDefaultBackground gradient and the panel the guiLeft / guiTop offsets. `kind` "screen" (the book)
- * is a plain GuiScreen: panel at x trunc((scaledWidth - width) / 2), y 0. Returns a function that removes the resize listener.
+ * is a plain GuiScreen: the panel spans the ScaledResolution width from (0, 0) (or centres opts.width). Returns a function that removes the resize listener.
  */
 export function placeShell(overlay, kind, opts = {}) {
   overlay.classList.add("gui-shell");
@@ -129,7 +129,8 @@ export function placeShell(overlay, kind, opts = {}) {
   const place = () => {
     const scale = scaleOf(), u = `${scale}px`;
     if (kind === "screen") {
-      const { w } = scaledSize(innerWidth, innerHeight, scale), width = opts.width ?? 320;
+      // A full GuiScreen (the book) lays out on the whole ScaledResolution width; it draws at its own x offsets from 0.
+      const { w } = scaledSize(innerWidth, innerHeight, scale), width = opts.width ?? w;
       panel.style.left = `${half(w - width) * scale}px`;
       panel.style.top = "0px";
       return;

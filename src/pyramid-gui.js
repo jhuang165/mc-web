@@ -32,19 +32,34 @@ const button = (b, selected, attrs, inner) =>
 export function beaconDecorationsHtml() {
   return `<span class="beacon-label" style="left:calc(62*var(--u))">${translate("tile.beacon.primary", "Primary Power")}</span><span class="beacon-label" style="left:calc(169*var(--u))">${translate("tile.beacon.secondary", "Secondary Power")}</span><div id="beacon-ui"></div>`;
 }
+const name = (id, tier) => (POTION_TYPES[id] ? translate(POTION_TYPES[id].key, POTION_TYPES[id].name) : undefined) + (tier === 3 && id !== 10 ? ROMAN : '');
+export const BEACON_CONFIRM = Object.freeze({ x: 164, y: 107 }), BEACON_CANCEL = Object.freeze({ x: 190, y: 107 });
+/**
+ * GuiBeacon.drawScreen: the hovered button (field_146123_n, set by drawButton whether or not the button is enabled) draws its
+ * drawCreativeTabHoveringText line: the effect name (" II" on the secondary row except Regeneration), gui.done or gui.cancel.
+ * `x`, `y` are GUI units relative to guiLeft / guiTop; returns the string or null.
+ */
+export function beaconTooltip(x, y, { levels, primary }) {
+  if (levels < 0) return null;
+  const over = (b) => x >= b.x && y >= b.y && x < b.x + 22 && y < b.y + 22;
+  for (const b of powerButtons(levels)) if (over(b)) return name(b.id, b.tier);
+  for (const b of secondaryButtons(levels, primary)) if (over(b)) return name(b.id, 3);
+  if (over(BEACON_CONFIRM)) return translate("gui.done", "Done");
+  if (over(BEACON_CANCEL)) return translate("gui.cancel", "Cancel");
+  return null;
+}
 export function beaconUiHtml({ levels, primary, secondary, payment, icon }) {
   if (levels < 0) return '';
-  const name = (id, tier) => (POTION_TYPES[id] ? translate(POTION_TYPES[id].key, POTION_TYPES[id].name) : undefined) + (tier === 3 && id !== 10 ? ROMAN : '');
   let html = '';
   for (const b of powerButtons(levels)) {
-    html += button(b, b.id === primary, `data-beacon="power" data-tier="${b.tier}" data-id="${b.id}" title="${name(b.id, b.tier)}"`, `<i class="beacon-effect" style="${iconPos(POTION_TYPES[b.id].icon)}"></i>`);
+    html += button(b, b.id === primary, `data-beacon="power" data-tier="${b.tier}" data-id="${b.id}" aria-label="${name(b.id, b.tier)}"`, `<i class="beacon-effect" style="${iconPos(POTION_TYPES[b.id].icon)}"></i>`);
   }
   for (const b of secondaryButtons(levels, primary)) {
-    html += button(b, b.id === secondary, `data-beacon="power" data-tier="3" data-id="${b.id}" title="${name(b.id, 3)}"`, `<i class="beacon-effect" style="${iconPos(POTION_TYPES[b.id].icon)}"></i>`);
+    html += button(b, b.id === secondary, `data-beacon="power" data-tier="3" data-id="${b.id}" aria-label="${name(b.id, 3)}"`, `<i class="beacon-effect" style="${iconPos(POTION_TYPES[b.id].icon)}"></i>`);
   }
-  const confirm = { x: 164, y: 107, disabled: !(payment && primary > 0) };
-  html += button(confirm, false, `data-beacon="confirm" title="${translate("gui.done", "Done")}"`, '<i class="beacon-mark" style="--mx:90"></i>');
-  html += button({ x: 190, y: 107, disabled: false }, false, `data-beacon="cancel" title="${translate("gui.cancel", "Cancel")}"`, '<i class="beacon-mark" style="--mx:112"></i>');
+  const confirm = { ...BEACON_CONFIRM, disabled: !(payment && primary > 0) };
+  html += button(confirm, false, `data-beacon="confirm" aria-label="${translate("gui.done", "Done")}"`, '<i class="beacon-mark" style="--mx:90"></i>');
+  html += button({ ...BEACON_CANCEL, disabled: false }, false, `data-beacon="cancel" aria-label="${translate("gui.cancel", "Cancel")}"`, '<i class="beacon-mark" style="--mx:112"></i>');
   // Payment items drawn at (42, 109), (64, 109), (86, 109), (108, 109): emerald, diamond, gold ingot, iron ingot.
   [367, 303, 304, 302].forEach((id, i) => { html += `<span class="beacon-pay" style="left:calc(${42 + i * 22}*var(--u));top:calc(109*var(--u))">${icon(id)}</span>`; });
   return html;

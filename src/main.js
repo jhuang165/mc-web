@@ -165,7 +165,8 @@ import { BEACON, Beacons, validPrimary, validSecondary } from "./pyramid.js";
 import { tickBeacons } from "./pyramid-live.js";
 import { BeaconRenderer } from "./pyramid-renderer.js";
 import { BeaconContainer } from "./pyramid-container.js";
-import { beaconDecorationsHtml, beaconUiHtml } from "./pyramid-gui.js";
+import { beaconDecorationsHtml, beaconUiHtml, beaconTooltip } from "./pyramid-gui.js";
+import { slotAt, slotShown, anvilDecorationsHtml, refreshAnvil, enchantDecorationsHtml, refreshEnchantOptions } from "./container-widgets.js";
 import { Fishing } from "./fishing-simulation.js";
 import { FISHING_ROD } from "./fishing-content.js";
 import { WitchPotions } from "./witch-potions.js";
@@ -1868,13 +1869,13 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   mineHeld = false;
   const decorations =
     kind === "enchanting"
-      ? `${[0, 1, 2].map((i) => `<button class="enchant-option off" data-enchant-option="${i}" style="top:calc(${14 + 19 * i}*var(--u))" aria-label="Enchantment option ${i + 1}"><i class="enchant-icon"></i><i class="enchant-name"></i><b class="enchant-level"></b></button>`).join("")}<span class="enchant-shelves" id="enchant-shelves" aria-live="polite"></span>`
+      ? enchantDecorationsHtml()
       : kind === "beacon"
       ? beaconDecorationsHtml()
       : kind === "merchant"
       ? merchantDecorationsHtml()
       : kind === "anvil"
-      ? '<i class="anvil-name-background" id="anvil-name-background"></i><input id="anvil-name" aria-label="Item name" maxlength="40" autocomplete="off" spellcheck="false" disabled><span id="anvil-cost" class="anvil-cost" aria-live="polite"></span><i class="anvil-error" id="anvil-error" hidden></i>'
+      ? anvilDecorationsHtml()
       : kind === "brewing"
       ? '<i class="brewing-bubbles" id="brewing-bubbles"></i><i class="brewing-arrow" id="brewing-arrow"></i>'
       : kind === "furnace"
@@ -1913,7 +1914,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
         u = box.width / (creative ? GUI_WIDTH : kind === "beacon" ? 230 : 176),
         x = Math.floor((e.clientX - box.left) / u),
         y = Math.floor((e.clientY - box.top) / u);
-      return { slot: container.slots[el?.closest("[data-container-slot]")?.dataset.containerSlot] ?? null, outside: creative ? x < 0 || y < 0 || e.clientX >= box.right || e.clientY >= box.bottom : !el?.closest(".container-screen"), x, y };
+      return { slot: slotAt(container.slots, x, y), outside: creative ? x < 0 || y < 0 || e.clientX >= box.right || e.clientY >= box.bottom : !el?.closest(".container-screen"), x, y };
     },
     // GuiContainerCreative.mouseMovedOrUp: releasing the left button over a tab selects it.
     switchTab = (t) => {
@@ -2075,31 +2076,18 @@ function refreshContainer() {
     { container, gui } = view,
     preview = gui.preview(),
     dragging = gui.dragging && gui.dragSlots.size > 1;
-  if(view.kind==='anvil'){
-    const left=container.inputs.getStack(0), cost=anvilCost(container);
-    $('#anvil-name').disabled=!left;
-    $('#anvil-name-background').classList.toggle('active',!!left);
-    $('#anvil-cost').textContent=cost.text;
-    $('#anvil-cost').classList.toggle('unavailable',cost.unavailable);
-    $('#anvil-error').hidden=!(left||container.inputs.getStack(1))||!!container.output;
-  }
+  if (view.kind === "anvil") refreshAnvil($("#modal"), container, anvilCost(container)); // GuiRepair glyph field, cost line, cross
   if (view.kind === "beacon") refreshBeacon(view);
   if (view.kind === "merchant") renderMerchantView(view);
   if (view.kind === "enchanting") {
     const levels = container.levels, shelves = `Bookshelves: ${container.bookshelves}`;
-    for (const b of document.querySelectorAll("[data-enchant-option]")) {
-      const i = +b.dataset.enchantOption, state = levels[i] === 0 ? "off" : container.canEnchant(i) ? "on" : "poor";
-      b.className = `enchant-option ${state}`;
-      b.setAttribute("aria-disabled", String(state !== "on"));
-      b.querySelector(".enchant-level").textContent = levels[i] ? String(levels[i]) : "";
-      b.setAttribute("aria-label", levels[i] ? `Enchantment option ${i + 1}: level ${levels[i]}${state === "poor" ? " (not enough experience levels)" : ""}` : `Enchantment option ${i + 1}: unavailable`);
-    }
+    refreshEnchantOptions($("#modal"), levels, { xpLevel: container.experienceLevel(), creative: container.creative(), mouseX: view.gx, mouseY: view.gy });
     if ($("#enchant-shelves").textContent !== shelves) $("#enchant-shelves").textContent = shelves;
     enchantExtras?.names(container);
   }
   let contentChanged = false;
   container.slots.forEach((slot, i) => {
-    const shown = preview.slots.get(slot) ?? slot.stack,
+    const shown = slotShown(gui, slot, preview),
       over = preview.capped.has(slot),
       key = shown ? `${shown.id},${shown.count},${shown.damage},${shown.color},${over},${stackHasEffect(shown, ITEMS[shown.id])}` : "",
       b = document.querySelector(`[data-container-slot="${i}"]`);
@@ -2138,6 +2126,7 @@ function refreshContainer() {
     const offered = offerItemAt(container.view(), view.gx, view.gy)?.live;
     if (offered) lines = tooltipLines(ITEMS[offered.id], offered, options.advancedTooltips);
   }
+  if (view.kind === "beacon" && !lines.length) { const text = beaconTooltip(view.gx, view.gy, { levels: container.tile.levels, primary: view.pick?.primary }); if (text) lines = [{ text }]; }
   if (view.kind === "creative") {
     // renderToolTip: the search tab names each item's own tab in bold blue.
     const own = hovered && gui.tab === SEARCH && itemTab(hovered.id);
@@ -2287,7 +2276,7 @@ function useBeacon(key) {
 }
 function refreshBeacon(view) {
   const tile = view.container.tile, pick = view.pick ??= { primary: tile.primary, secondary: tile.secondary }, payment = !!view.container.payment;
-  const html = beaconUiHtml({ levels: tile.levels, ...pick, payment, icon: (id) => stackHtml({ id, count: 1, damage: 0 }, 0).replace(/<b class="item-count empty">0<\/b>/, "") }), ui = $("#beacon-ui");
+  const html = beaconUiHtml({ levels: tile.levels, ...pick, payment, icon: (id) => stackHtml({ id, count: 1, damage: 0 }) }) /* renderItemAndEffectIntoGUI only: no count */, ui = $("#beacon-ui");
   if (ui && ui.dataset.shown !== html) { ui.dataset.shown = html; ui.innerHTML = html; }
 }
 function beaconClick(button) {
