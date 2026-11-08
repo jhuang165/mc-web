@@ -23,6 +23,7 @@ import { resourcePacksScreen } from "./resource-packs-ui.js";
 import { cycleCreateMode, createdWorldFlags, createModeOf, cheatsButtonEnabled, cheatsShownOn, bonusShownOn, HARDCORE_COLOR, isHardcoreRecord, difficultyLocked } from "./hardcore.js";
 import { importScreen } from "./import-screen.js";
 import { errorScreen } from "./loading-screen.js";
+import { withWorldMod } from "./mods/world-mods.js";
 
 const SOUND_KEYS = ["master", "music", "record", "weather", "block", "hostile", "neutral", "player", "ambient"];
 // Why each unavailable vanilla button is disabled here.
@@ -227,13 +228,14 @@ export function createMenus(gui, ctx) {
       // GuiCreateWorld.field_146334_a (the generator string of a Superflat world) and field_146338_v (Bonus Chest).
       options: from?.generatorOptions ?? DEFAULT_FLAT_STRING,
       bonus: from?.bonusChest === true,
+      recipes: from?.mods?.jei === true, // opt-in recipe viewer mod (not 1.7.10; mods/jei/install.js)
     };
     let name, seed, create;
     const folder = () => folderName(state.name, (s) => ctx.worlds.some((w) => (w.folder || folderName(w.name || "World")) === s));
     const submit = () => {
       if (!create.enabled || state.created) return;
       state.created = true;
-      ctx.launch(ctx.makeRecord({
+      ctx.launch(ctx.makeRecord(withWorldMod({
         name: state.name.trim() || folder(),
         folder: folder(),
         seed: state.seed.trim() || String(Math.floor(Math.random() * 2147483647)),
@@ -242,7 +244,7 @@ export function createMenus(gui, ctx) {
         generatorOptions: state.options,
         // GuiCreateWorld: Hardcore is Survival plus the WorldInfo flag, and drops Allow Cheats and the Bonus Chest.
         ...createdWorldFlags(state),
-      }));
+      }, "jei", state.recipes)));
       // launch closes the screen; a world that failed to open leaves it usable.
       state.created = false;
     };
@@ -283,12 +285,14 @@ export function createMenus(gui, ctx) {
           allowCommands.set(t("selectWorld.allowCommands") + " " + t(cheatsShownOn(state) ? "options.on" : "options.off"));
           allowCommands.enable(cheatsButtonEnabled(state));
           bonusItems.enable(cheatsButtonEnabled(state));
+          recipes.set("Recipes (mod): " + t(state.recipes ? "options.on" : "options.off"));
           notice?.remove();
           notice = state.more && types[state.type].notice ? g.splitText(types[state.type].notice, ...L.notice, COLOR.label) : null;
         };
         const page = () => {
           // func_146316_a: which buttons and text the page shows.
           gameMode.show(!state.more);
+          recipes.show(!state.more);
           for (const k of [mapFeatures, bonusItems, mapType, allowCommands]) k.show(state.more);
           customize.show(state.more && types[state.type].worldType === "flat");
           moreOptions.set(state.more ? t("gui.done") : t("selectWorld.moreWorldOptions"));
@@ -303,6 +307,7 @@ export function createMenus(gui, ctx) {
         g.button(b.cancel, t("gui.cancel"), () => show(parent));
         // actionPerformed id 2: Survival -> Hardcore -> Creative -> Survival (hardcore.js).
         const gameMode = g.button(b.gameMode, "", () => { cycleCreateMode(state); update(); });
+        const recipes = g.button(b.recipes, "", () => { state.recipes = !state.recipes; update(); });
         const moreOptions = g.button(b.moreOptions, "", () => { state.more = !state.more; page(); });
         const mapFeatures = g.button(b.mapFeatures, "", null, { reason: UNAVAILABLE.mapFeatures });
         const bonusItems = g.button(b.bonusItems, t("selectWorld.bonusItems") + " " + t("options.off"), () => { state.bonus = !state.bonus; update(); });

@@ -17,6 +17,7 @@ import "./style.css";
 import "./minecraft-ui.css";
 import "./container-ui.css";
 import "./menu-screens.css";
+import "./mods/jei/jei.css"; // recipe viewer mod (not 1.7.10)
 import { Gui, textHtml } from "./menu-ui.js";
 import { createMenus } from "./menus.js";
 import { commandBlockScreen } from "./command-block-screen.js";
@@ -152,6 +153,8 @@ import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
 import { HopperContainer, Hoppers, HOPPER } from "./hopper.js";
 import { Survival, ITEMS, burnTime, gameModeOf } from "./survival.js";
 import { stackName } from "./item-names.js";
+import { jeiWorld, jeiEnabled, setJeiEnabled, worldMods } from "./mods/jei/install.js";
+import { createViewerPanel } from "./mods/jei/panel.js";
 import { containerTitle } from "./container-names.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
@@ -732,6 +735,8 @@ function makeRecord(p) {
     ...(p.biome === "javaStreamed" && p.worldType === "flat" ? { generatorOptions: normalizeFlatOptions(p.generatorOptions) } : {}),
     // GuiCreateWorld "Bonus Chest": WorldInfo.isBonusChestEnabled; the chest is placed once (bonusChestPlaced).
     ...(p.bonusChest === true ? { bonusChest: true } : {}),
+    // Opt-in world mods (not 1.7.10), e.g. the recipe viewer (mods/jei/install.js): only flags that are exactly true are kept.
+    ...(worldMods(p.mods) ? { mods: worldMods(p.mods) } : {}),
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -779,6 +784,26 @@ function stackHtml(s, count = s?.count) {
   if (!s) return "";
   return withGlint(icon(s.id, s.damage, s), s, ITEMS[s.id]) + (count === 0 ? zeroCountHtml() : countHtml(count)) + durabilityBar(s.damage, ITEMS[s.id]?.durability);
 }
+// Recipe viewer mod (not 1.7.10; mods/jei/panel.js): attached to container screens while jeiEnabled().
+const recipeViewer = createViewerPanel({
+  stackHtml: (s) => stackHtml(s),
+  tooltip: (s) => tooltipHtml(tooltipLines(ITEMS[s.id], s, options.advancedTooltips)),
+  name: (s) => stackName(s, ITEMS) || "Item",
+  creative: () => !!survival?.creative,
+  give: (s, n) => {
+    // Creative only: a stack into the inventory, as the creative screen's middle click would make one.
+    if (!survival?.creative || !ITEMS[s.id]) return;
+    survival.inventory.add(makeStack(s.id, n, s.damage | 0, s.stored));
+    saved = false;
+    if (containerView) containerView.shown = [];
+    refreshContainer();
+    renderHotbar();
+  },
+  hovered: () => containerView?.hovered?.stack ?? null,
+  sound: () => sounds?.play("gui.button.press", { volume: 0.25, pitch: 1 }),
+});
+// The event began inside the recipe viewer (its path is fixed at dispatch, so this holds after the viewer re-renders the target away).
+const inRecipeViewer = (e) => e.composedPath().some((n) => n.classList?.contains("jei-ui"));
 function stackLabel(s) {
   if (!s) return "Empty";
   const item = ITEMS[s.id];
@@ -1467,6 +1492,8 @@ async function launch(record, prepared, { slice = false } = {}) {
     eating = null;
     stepDistance = 0;
     wasInWater = false;
+    // Opt-in recipe viewer (not 1.7.10): shown beside container screens only in worlds created with it; multiplayer stays vanilla.
+    if (setJeiEnabled(jeiWorld(record) && !multiplayer)) recipeViewer.reset();
     survival = new Survival(legacyPlayer(record), record.mode || "creative");
     statsLive.bind(survival);
     // Achievements belong to the world (a portal trip keeps them in memory); the hint waits for "Taking Inventory".
@@ -1944,6 +1971,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   if (kind === "beacon") drawBeaconLabels($("#modal"));
   document.activeElement?.blur();
   containerView = { container, gui, kind, key, hovered: null, x: innerWidth / 2, y: innerHeight / 2, gx: -1, gy: -1, shown: [] };
+  if (jeiEnabled()) recipeViewer.attach($("#modal")); // recipe viewer mod: the item list right of the screen
   enchantExtras?.dispose();
   enchantExtras = kind === "enchanting" ? new EnchantingScreenExtras(document.querySelector("#modal .enchanting-modal"), (canvas) => new EnchantingGuiBookView(canvas)) : null;
   const creative = kind === "creative",
@@ -1966,7 +1994,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
     };
   if (creative) renderCreativeBody();
   overlay.onpointerdown = (e) => {
-    if (!containerView || e.target.closest(".close-button")) return;
+    if (!containerView || e.target.closest(".close-button") || inRecipeViewer(e)) return;
     if (e.target.closest('#anvil-name')) return;
     const beaconButton = e.target.closest("[data-beacon]");
     if (beaconButton) { e.preventDefault(); beaconClick(beaconButton); return; }
@@ -1997,7 +2025,8 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
     if (!containerView) return;
     containerView.x = e.clientX;
     containerView.y = e.clientY;
-    const { slot, x, y } = at(e);
+    const { slot: under, x, y } = at(e);
+    const slot = inRecipeViewer(e) ? null : under; // recipe viewer mod: its list and recipe view cover the slots under them
     Object.assign(containerView, { hovered: slot, gx: x, gy: y });
     if (creative) {
       if (!(e.buttons & 1)) gui.release();
@@ -2007,7 +2036,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
     refreshContainer();
   };
   overlay.onpointerup = (e) => {
-    if (!containerView) return;
+    if (!containerView || inRecipeViewer(e)) return;
     if (e.target.closest('#anvil-name') || e.target.closest("[data-enchant-option]") || e.target.closest("[data-merchant-step]") || e.target.closest("[data-beacon]")) return;
     const { slot, outside, x, y } = at(e), button = javaButton(e.button), t = creative && button === 0 ? gui.tabAt(x, y) : null;
     if (creative && button === 0) gui.release();
@@ -2016,7 +2045,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
     refreshContainer();
   };
   overlay.onwheel = (e) => {
-    if (!creative || !containerView) return;
+    if (!creative || !containerView || inRecipeViewer(e)) return;
     e.preventDefault();
     gui.wheel(-e.deltaY);
     refreshContainer();
@@ -2024,7 +2053,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   overlay.oncontextmenu = (e) => e.preventDefault();
   // Keyboard activation of a focused slot or tab acts as a left click.
   overlay.onclick = (e) => {
-    if (!containerView || e.detail !== 0) return;
+    if (!containerView || e.detail !== 0 || inRecipeViewer(e)) return;
     const stepper = e.target.closest("[data-merchant-step]");
     if (stepper) {
       if (!stepper.disabled && container.step(+stepper.dataset.merchantStep)) sounds?.play("gui.button.press", { volume: 0.25, pitch: 1 });
@@ -2097,6 +2126,7 @@ function horsePreviewFrame() {
 function closeContainer() {
   paperdoll?.detach();
   horsePreview?.detach();
+  recipeViewer.detach();
   enchantExtras?.dispose();
   enchantExtras = null;
   if (!containerView) return;
@@ -3417,6 +3447,7 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "Escape") {
     e.preventDefault();
     if (screen === "dead") return;
+    if (screen === "inventory" && recipeViewer.escape()) return; // recipe viewer mod: Escape closes its recipe view first
     if (screen === "inventory") resume();
     else if (screen === "playing") pause();
     else if (screen === "paused") {
@@ -3431,6 +3462,12 @@ window.addEventListener("keydown", (e) => {
   // GuiContainer.keyTyped compares key codes directly: key.inventory closes, the hotbar keys and
   // key.drop act on the hovered slot. GuiContainerCreative opens search with key.chat first.
   const hotbar = HOTBAR.findIndex((d) => binds.code(d) === code), drop = code !== 0 && code === binds.code("key.drop");
+  // Recipe viewer mod: R and U over an item open its recipes or uses, Backspace goes back (the creative search field has the keys first).
+  if (screen === "inventory" && containerView && !(containerView.kind === "creative" && containerView.gui.tab === SEARCH) && recipeViewer.key(e)) {
+    e.preventDefault();
+    if (recipeViewer.state.view) { containerView.hovered = null; refreshContainer(); } // the recipe view covers the slot's tooltip
+    return;
+  }
   if (screen === "inventory" && containerView?.kind === "creative") {
     const gui = containerView.gui, before = gui.tab;
     if (gui.typed({ code: e.code, key: e.key, ctrl: e.ctrlKey || e.metaKey, chat: code !== 0 && code === binds.code("key.chat"), hotbar }, containerView.hovered)) {
