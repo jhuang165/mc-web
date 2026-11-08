@@ -150,11 +150,12 @@ import { isChestBlock, ENDER_CHEST, newEnderTile, enderDisplayParticles } from "
 import { DISPENSER, DROPPER, PISTON_HEAD, isDispenserPiston, itemForBlock, headBaseId } from "./dispenser-piston.js";
 import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
 import { HopperContainer, Hoppers, HOPPER } from "./hopper.js";
-import { Survival, ITEMS, burnTime, gameModeOf } from "./survival.js";
+import { Survival, ITEMS, burnTime, gameModeOf, setExtraCrafting } from "./survival.js";
+import { setGunsEnabled, gunsWorld } from "./mods/guns/install.js";
 import { stackName } from "./item-names.js";
 import { containerTitle } from "./container-names.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
-import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
+import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH, SEARCH_ORDER } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { EyesOfEnder } from "./eye-of-ender-live.js";
@@ -731,6 +732,8 @@ function makeRecord(p) {
     ...(p.biome === "javaStreamed" && p.worldType === "flat" ? { generatorOptions: normalizeFlatOptions(p.generatorOptions) } : {}),
     // GuiCreateWorld "Bonus Chest": WorldInfo.isBonusChestEnabled; the chest is placed once (bonusChestPlaced).
     ...(p.bonusChest === true ? { bonusChest: true } : {}),
+    // Opt-in guns mod (not 1.7.10): mods/guns/install.js registers its items only in worlds with this flag.
+    ...(p.mods?.guns === true ? { mods: { guns: true } } : {}),
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -1454,6 +1457,8 @@ async function launch(record, prepared, { slice = false } = {}) {
     eating = null;
     stepDistance = 0;
     wasInWater = false;
+    // Opt-in guns mod (not 1.7.10): register or remove its items before the saved inventory is read; multiplayer stays vanilla.
+    setGunsEnabled(gunsWorld(record) && !multiplayer, { items: ITEMS, combatTab: CREATIVE_TABS[8].items, search: SEARCH_ORDER, setCrafting: setExtraCrafting });
     survival = new Survival(legacyPlayer(record), record.mode || "creative");
     statsLive.bind(survival);
     // Achievements belong to the world (a portal trip keeps them in memory); the hint waits for "Taking Inventory".

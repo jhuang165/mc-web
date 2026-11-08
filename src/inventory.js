@@ -67,7 +67,7 @@ export class PlayerInventory {
     if (Number.isInteger(s.color) && s.color >= 0 && s.color <= 0xFFFFFF) metadata.color = s.color;
     Object.assign(metadata, readFireworkTags(s), readBookTags(s));
     const storedList = item.storesEnchantments ? normalizeStored(s.storedEnchantments ?? s.stored) ?? [] : s.stored;
-    return makeStack(s.id, Math.min(count, item.stack ?? STACK_LIMIT), Math.max(0, Math.min(item.durability || (item.variants?.length ?? 1) - 1, Math.floor(Number(s.damage) || 0))), storedList, metadata);
+    return makeStack(s.id, Math.min(count, item.stack ?? STACK_LIMIT), Math.max(0, Math.min(item.durability || item.damageRange || (item.variants?.length ?? 1) - 1, Math.floor(Number(s.damage) || 0))), storedList, metadata);
   }
   maxStack(s) { return this.items[s.id]?.stack ?? STACK_LIMIT; }
   maxDamage(s) { return this.items[s.id]?.durability || 0; }

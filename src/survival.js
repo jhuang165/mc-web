@@ -516,6 +516,9 @@ export function ingredients(recipe) {
   for (const id of recipe.pattern) if (id) counts[id] = (counts[id] || 0) + 1;
   return counts;
 }
+// Crafting added by an opt-in world mod (not 1.7.10): fn(cells, size) -> { id, count, damage } | null.
+let extraCrafting = null;
+export function setExtraCrafting(fn) { extraCrafting = typeof fn === "function" ? fn : null; }
 // CraftingManager.findMatchingRecipe: two single damageable items of one kind
 // repair with a 5% bonus before any recipe is consulted.
 export function craftingResult(cells, size) {
@@ -534,6 +537,8 @@ export function craftingResult(cells, size) {
   if(population)return makeStack(population.id,population.count,population.damage);
   const nether=netherCraftingResult(cells,size);
   if(nether)return makeStack(nether.id,nether.count,nether.damage);
+  const extra = extraCrafting?.(cells, size); // opt-in world mods (mods/guns/install.js); null in vanilla worlds
+  if (extra) return makeStack(extra.id, extra.count, extra.damage ?? 0);
   const r = matchRecipe(cells.map((c) => c?.id || 0), size);
   if (r) return makeStack(r.output, r.count);
   const sl = matchShapeless(cells);

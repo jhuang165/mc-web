@@ -150,6 +150,7 @@ export function itemTexture(id, damage = 0, use = 0) {
 }
 function itemTextureRaw(id, damage = 0, use = 0) {
   const item = ITEMS[id];
+  if (item?.iconUrl) return item.iconUrl; // opt-in world mod items (mods/guns/catalog.js)
   if (id === ITEM_SKULL) return skullIconUrl(damage); // skull.js: one flat sprite per head type
   if (id === ITEM_SPAWN_EGG) return spawnEggTexture(damage); // two tinted layers composed (spawn-eggs.js)
   if (id === ITEM_CLOCK) return clockFrameUrl(); // TextureClock frame (maps-clock-live.js)

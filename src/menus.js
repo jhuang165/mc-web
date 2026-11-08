@@ -227,6 +227,7 @@ export function createMenus(gui, ctx) {
       // GuiCreateWorld.field_146334_a (the generator string of a Superflat world) and field_146338_v (Bonus Chest).
       options: from?.generatorOptions ?? DEFAULT_FLAT_STRING,
       bonus: from?.bonusChest === true,
+      guns: from?.mods?.guns === true, // opt-in guns mod (not 1.7.10; mods/guns/install.js)
     };
     let name, seed, create;
     const folder = () => folderName(state.name, (s) => ctx.worlds.some((w) => (w.folder || folderName(w.name || "World")) === s));
@@ -242,6 +243,7 @@ export function createMenus(gui, ctx) {
         generatorOptions: state.options,
         // GuiCreateWorld: Hardcore is Survival plus the WorldInfo flag, and drops Allow Cheats and the Bonus Chest.
         ...createdWorldFlags(state),
+        ...(state.guns ? { mods: { guns: true } } : {}),
       }));
       // launch closes the screen; a world that failed to open leaves it usable.
       state.created = false;
@@ -282,6 +284,7 @@ export function createMenus(gui, ctx) {
           bonusItems.set(t("selectWorld.bonusItems") + " " + t(bonusShownOn(state) ? "options.on" : "options.off"));
           allowCommands.set(t("selectWorld.allowCommands") + " " + t(cheatsShownOn(state) ? "options.on" : "options.off"));
           allowCommands.enable(cheatsButtonEnabled(state));
+          guns.set("Guns (mod): " + t(state.guns ? "options.on" : "options.off"));
           bonusItems.enable(cheatsButtonEnabled(state));
           notice?.remove();
           notice = state.more && types[state.type].notice ? g.splitText(types[state.type].notice, ...L.notice, COLOR.label) : null;
@@ -289,6 +292,7 @@ export function createMenus(gui, ctx) {
         const page = () => {
           // func_146316_a: which buttons and text the page shows.
           gameMode.show(!state.more);
+          guns.show(!state.more);
           for (const k of [mapFeatures, bonusItems, mapType, allowCommands]) k.show(state.more);
           customize.show(state.more && types[state.type].worldType === "flat");
           moreOptions.set(state.more ? t("gui.done") : t("selectWorld.moreWorldOptions"));
@@ -303,6 +307,7 @@ export function createMenus(gui, ctx) {
         g.button(b.cancel, t("gui.cancel"), () => show(parent));
         // actionPerformed id 2: Survival -> Hardcore -> Creative -> Survival (hardcore.js).
         const gameMode = g.button(b.gameMode, "", () => { cycleCreateMode(state); update(); });
+        const guns = g.button(b.guns, "", () => { state.guns = !state.guns; update(); });
         const moreOptions = g.button(b.moreOptions, "", () => { state.more = !state.more; page(); });
         const mapFeatures = g.button(b.mapFeatures, "", null, { reason: UNAVAILABLE.mapFeatures });
         const bonusItems = g.button(b.bonusItems, t("selectWorld.bonusItems") + " " + t("options.off"), () => { state.bonus = !state.bonus; update(); });
