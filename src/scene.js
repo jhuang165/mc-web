@@ -51,6 +51,7 @@ import { LAVA_FOG_DENSITY, waterFogDensity } from "./fire-fx.js";
 import { mediaGeneration, versioned } from './media-version.js';
 import { isDoor, isPane, doorFlags, doorBoundsFor, doorFaceFlip, paneMask, paneArms, paneSideRendered } from './doors-panes.js';
 import { residentOnly } from './headless-env.js';
+import { createAtlasUploader } from './atlas-upload.js';
 export { blockTile } from "./block-textures.js";
 
 // Face order +x, -x, +y, -y, +z, -z with RenderBlocks' AO-path shades:
@@ -140,6 +141,7 @@ export class VoxelScene {
     this.clouds = new Clouds(this.lighting, CLOUD_HEIGHT);
     this.scene.add(this.clouds.depth, this.clouds.mesh);
     this.textures = createBlockAtlas();
+    this.textures.setUploader(createAtlasUploader(this.renderer, THREE)); // animated tiles upload as sub-rects (atlas-upload.js)
     this.drops = new DropRenderer(this.scene, this);
     this.projectiles = new ProjectileRenderer(this.scene, this);
     this.fishingRenderer = new FishingRenderer(this.scene, this);
