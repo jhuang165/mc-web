@@ -6,6 +6,7 @@
 //   targets 1 OwnerHurtByTarget (1), 2 OwnerHurtTarget (1), 3 HurtByTarget with help (1), 4 TargetNonTamed sheep 200 (1)
 // The classes take Task, TargetBase and the generic tasks from ai.js (as the village kits do), so this file does not
 // import it back.
+import { ownerPresent, ownerKey } from "./owner-links.js";
 import { isTamed, shouldAttackEntity, canMateWith, WOLF_MEAT, BONE } from "./wolf.js";
 const f = Math.fround;
 // Who last hurt a wolf (a mob record, or "player"): the record keeps only the 100 tick `revenge` counter.
@@ -131,7 +132,7 @@ export function buildWolfTasks(m, K) {
   const { Sit, Leap, FollowOwner } = tameableTasks(m, K);
   m.navigator.setAvoidsWater(true);
   // tg.cb: the owner is the (single) player once tamed.
-  m.owner = () => (isTamed(e) ? m.ai.player : null);
+  m.owner = () => (isTamed(e) && ownerPresent(e) ? m.ai.player : null); // an owner who is not here (foreign OwnerUUID) is null
   // EntityWolf.getEyeHeight: height * 0.8; EntityWolf.getVerticalFaceSpeed (x): 20 while sitting, else 40.
   Object.defineProperty(m, "eyeHeight", { get: () => f(m.height * f(0.8)), configurable: true });
   Object.defineProperty(m, "verticalFaceSpeed", { get: () => (e.sitting ? 20 : 40), set() {}, configurable: true });
@@ -162,7 +163,7 @@ export function buildWolfTasks(m, K) {
     if (!TargetBase.prototype.isSuitableTarget.call(task, t, mustSee)) return false;
     if (isTamed(e)) {
       if (t === m.owner()) return false;
-      if (t.e && t.e.type === "wolf" && t.e.owner === e.owner) return false;
+      if (t.e && t.e.type === "wolf" && ownerKey(t.e) === ownerKey(e)) return false;
     }
     return true;
   };

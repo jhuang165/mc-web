@@ -125,7 +125,7 @@ export function buildBlazeGhastTasks(m, K) {
 // player's pick and punch of a large fireball (EntityFireball.canBeCollidedWith / attackEntityFrom).
 export function installFireballMobs(EntityWorld) {
   ENTITY_TYPES.blaze = { health: BLAZE.health, width: BLAZE.width, height: BLAZE.height, movement: BLAZE.speed, ai: { wander: 1, chase: 1 }, damage: BLAZE.attackDamage, drop: 0 };
-  ENTITY_TYPES.ghast = { health: GHAST.health, width: GHAST.width, height: GHAST.height, movement: 0.25, ai: {}, drop: 0 };
+  ENTITY_TYPES.ghast = { health: GHAST.health, width: GHAST.width, height: GHAST.height, movement: 0.10000000149011612, ai: {}, drop: 0 };
   HOSTILE.add("blaze");
   HOSTILE.add("ghast");
   const P = EntityWorld.prototype;
