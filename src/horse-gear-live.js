@@ -49,7 +49,7 @@ export function gearFieldsFrom(e) {
   return {
     // The home area td.bL set around a holder is not saved by EntityCreature; it is set again on the first leashed tick.
     ...(e.leashHome ? { homeRadius: -1, leashHome: undefined } : {}),
-    leash: e.leash?.lost ? { lost: true } : e.leash?.holder === "player" ? { holder: "player" } : e.leash?.holder === "mob" && typeof e.leash.holderUuid === "string" ? { holder: "mob", holderUuid: e.leash.holderUuid } : knot ? { knot } : undefined,
+    leash: e.leash?.lost ? { lost: true, ...(typeof e.leash.raw === "string" ? { raw: e.leash.raw } : {}) } : e.leash?.holder === "player" ? { holder: "player" } : e.leash?.holder === "mob" && typeof e.leash.holderUuid === "string" ? { holder: "mob", holderUuid: e.leash.holderUuid } : knot ? { knot } : undefined,
     customName: typeof e.customName === "string" && e.customName ? e.customName.slice(0, 64) : undefined,
     customNameVisible: e.customNameVisible === true ? true : undefined,
     persistent: e.persistent === true ? true : undefined,

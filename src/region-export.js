@@ -30,7 +30,7 @@ import { structureDataFiles, fortressDataFile } from './structure-data.js';
 import { villageDocument } from './village.js';
 import { mapDataFiles } from './maps-nbt.js';
 import { decodeBaseColumn } from './whole-save-columns.js';
-import { spreadTicks } from './tile-ticks.js';
+import { spreadTicks, tileTickRows } from './tile-ticks.js';
 import { javaProjectileToNbt } from './java-projectiles.js';
 import { statsExportFile } from './stats.js';
 import { DEFAULT_RULES } from './game-rules.js';
@@ -39,6 +39,7 @@ import { GEAR_TYPES, gearFieldsFrom } from './mob-equipment-live.js';
 import { uuidOf, uuidLongs } from './entity-uuid.js';
 import { livingAttributesNbt } from './mob-attribute-list.js';
 import { exportPlayerUuid, ownerText, playerLeashTag } from './owner-links.js';
+import { leashRawTag } from './java-mobs.js';
 // A [type, value] pair of cart-variants.js variantNBT (compound [10, {key: pair}], list [9, elementType, items]) as a tag.
 const pairTag=p=>p[0]===NBT.COMPOUND?comp(Object.fromEntries(Object.entries(p[1]).map(([k,v])=>[k,pairTag(v)]))):p[0]===NBT.LIST?tag(NBT.LIST,{elementType:p[2].length?p[1]:NBT.END,items:p[1]===NBT.COMPOUND?p[2].map(i=>new Map(Object.entries(i).map(([k,v])=>[k,pairTag(v)]))):p[2]}):tag(p[0],p[0]===NBT.SHORT?(p[1]<<16)>>16:p[1]);
 const tag=(type,value)=>({type,value}), comp=value=>tag(NBT.COMPOUND,new Map(Object.entries(value))), list=(type,items)=>tag(NBT.LIST,{elementType:items.length?type:NBT.END,items});
@@ -89,7 +90,8 @@ function payload(state,ox,oz,report,blockAt) {
   if(e.customName){n.CustomName=str(e.customName);n.CustomNameVisible=byte(e.customNameVisible?1:0);}
   {const attributes=livingAttributesNbt(e,name);if(attributes)n.Attributes=attributes;} // EntityLivingBase.writeEntityToNBT: the full native list per class with the modeled modifiers (mob-attribute-list.js, probed)
   n.PersistenceRequired=byte(e.persistent?1:0);n.Leashed=byte(e.leash?1:0);
-  if(e.leash?.knot)n.Leash=comp({X:int(e.leash.knot.x+ox),Y:int(e.leash.knot.y),Z:int(e.leash.knot.z+oz)});
+  if(e.leash?.lost){const raw=leashRawTag(e.leash.raw);if(raw)n.Leash=raw;} // an unticked unusable tag: written back as it was (java-mobs.js leashRaw)
+  else if(e.leash?.knot)n.Leash=comp({X:int(e.leash.knot.x+ox),Y:int(e.leash.knot.y),Z:int(e.leash.knot.z+oz)});
   else if(e.leash?.holder==='mob'&&e.leash.holderUuid)n.Leash=tag(NBT.COMPOUND,playerLeashTag(e.leash.holderUuid)); // another mob holds: its UUID (leads2-reference.json)
   else if(e.leash)n.Leash=tag(NBT.COMPOUND,playerLeashTag(report.playerUuid??exportPlayerUuid({}))); // the holder is the local player: its exported UUID (owner-links.js)
   // EntityLiving.writeEntityToNBT: CanPickUpLoot, Equipment (five compounds: held, boots, leggings, chestplate, helmet; an empty slot is an empty compound) and
@@ -173,6 +175,8 @@ function payload(state,ox,oz,report,blockAt) {
  for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const [k,e] of Object.entries(state[name]??{})) {
   const [x,y,z]=k.split(',').map(Number);tiles.push(writeContainerTile(name,e,x+ox,y,z+oz,{report,dropper:blockAt(x,y,z)===158}));
  }
+ // TileEntityComparator.writeToNBT: OutputSignal (int), only where the chunk still holds a comparator (original id 149 or 150).
+ for(const {value:e} of state.comparatorTiles??[]){const b=blockAt(e.x,e.y,e.z);if(b===149||b===150)tiles.push(new Map(Object.entries({id:str('Comparator'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),OutputSignal:int(e.signal)})));}
  for(const {value:e} of state.commandBlocks??[])tiles.push(writeCommandBlock(e,e.x+ox,e.y,e.z+oz));
  // TileEntityNote (Music) and TileEntityJukebox (RecordPlayer): the note byte, the Record int and the RecordItem stack.
  for(const {value:e} of state.musicTiles??[])tiles.push(e.kind==='note'?writeNoteTile(e,e.x+ox,e.y,e.z+oz):writeJukeboxTile(e,e.x+ox,e.y,e.z+oz));
@@ -186,12 +190,7 @@ function payload(state,ox,oz,report,blockAt) {
  for(const w of state.pistons??[]){const e=w.value??w;tiles.push(new Map(Object.entries({id:str('Piston'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),blockId:int(e.block),blockData:int(e.meta),facing:int(e.facing),progress:float(e.progress??0),extending:byte(e.extending?1:0)})));}
  // TileTicks (tile-ticks.js): {i, x, y, z, t, p} per pending tick, in tree order (t, p, then the list and its order); a fluid keeps the original id
  // it was imported with (still lava 11 is not flowing lava 10), redstone ticks keep their original id and priority.
- {const rows=[],clamp=v=>Math.max(-2147483648,Math.min(2147483647,v));
-  ['fluidTicks','fireTicks','fallingTicks','redstoneTicks'].forEach((name,sys)=>{for(const {value:e,order} of state[name]??[]){
-   const red=name==='redstoneTicks',o=red?[e.id,0]:e.orig!==undefined?[e.orig,0]:toOriginal(e.block,0,{flowing:name==='fluidTicks'});if(!o)continue;
-   rows.push({t:clamp(e.delay),p:red?(e.priority|0):0,sys,order:order??0,id:o[0],x:e.x,y:e.y,z:e.z});}});
-  rows.sort((a,b)=>a.t-b.t||a.p-b.p||a.sys-b.sys||a.order-b.order);
-  for(const r of rows)ticks.push(new Map(Object.entries({i:int(r.id),x:int(r.x+ox),y:int(r.y),z:int(r.z+oz),t:int(r.t),p:int(r.p)})));}
+ for(const r of tileTickRows(state,toOriginal,ox,oz))ticks.push(new Map(Object.entries({i:int(r.i),x:int(r.x),y:int(r.y),z:int(r.z),t:int(r.t),p:int(r.p)})));
  return {entities,tileEntities:tiles,tileTicks:ticks};
 }
 // TileEntityEndPortal (id Airportal) has no fields besides x, y, z.
@@ -259,7 +258,11 @@ function regionSource(record, w) {
  {const rs=record.redstone;for(const list of [rs?.pending,rs?.deferred])for(const [i,e] of (Array.isArray(list)?list:[]).entries()){if(!Array.isArray(e)||![e[0],e[2],e[3],e[4]].every(Number.isFinite))continue;
   const k=`${Math.floor(e[0]/16)},${Math.floor(e[2]/16)}`;if(!runtime.has(k))runtime.set(k,{});owned.add(k);
   (runtime.get(k).redstoneTicks??=[]).push({order:e[6]??i,value:{x:e[0],y:e[1],z:e[2],id:e[3],delay:e[4]-(rs.time|0),priority:e[5]|0}});}}
- // Ticks within 2 blocks of a chunk border are also saved in the neighbour (WorldServer.getPendingBlockUpdates box).
+ // Comparator output signals (redstone-live.js `comparators`: ["x,y,z", signal]), written as TileEntityComparator by exportChunk.
+ for(const [i,e] of (Array.isArray(record.redstone?.comparators)?record.redstone.comparators:[]).entries()){if(!Array.isArray(e)||typeof e[0]!=='string'||!Number.isInteger(e[1]))continue;
+  const [x,y,z]=e[0].split(',').map(Number);if(![x,y,z].every(Number.isInteger))continue;const k=`${Math.floor(x/16)},${Math.floor(z/16)}`;if(!runtime.has(k))runtime.set(k,{});owned.add(k);
+  (runtime.get(k).comparatorTiles??=[]).push({order:i,value:{x,y,z,signal:e[1]}});}
+ // A tick in the last 2 columns or rows of a chunk is saved in the next higher chunk too (WorldServer.getPendingBlockUpdates box [c*16-2, c*16+16)).
  spreadTicks(runtime,owned,['fluidTicks','fireTicks','fallingTicks','redstoneTicks']);
  return {record,w,owned,runtime,baseId:record.id};
 }

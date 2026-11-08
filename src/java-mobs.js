@@ -10,7 +10,7 @@ import { livingAttributeFields } from './mob-attribute-list.js';
 import { maxHealthOf, OWN_MAX_HEALTH } from './mob-riding.js';
 import { OWNED_TYPES, ownerFields, ownerFromNbt, leashHolderUuid } from './owner-links.js';
 import { ocelotFieldsFrom } from './ocelot.js';
-import { NBT } from './nbt.js';
+import { NBT, encodeNbt, decodeNbt } from './nbt.js';
 import { endermanFieldsFrom } from './enderman.js';
 import { nbtGet } from './nbt-get.js';
 import { slimeSizeFromNbt } from './slime.js';
@@ -61,8 +61,13 @@ export function horseNbtFields(tag, convertItem = () => null) {
     const items = [];
     const stacks = tagValue(tag, 'Items', NBT.LIST);
     for (const c of stacks?.elementType === NBT.COMPOUND ? stacks.items : []) {
-      const slot = tagValue(c, 'Slot', NBT.BYTE, -1) & 255, stack = slot >= 2 && slot < 17 ? convertItem(c) : null;
-      if (stack) items[slot] = stack;
+      // EntityHorse.readEntityFromNBT: Slot & 255 in [2, size) goes to AnimalChest.setInventorySlotContents(slot, loadItemStackFromNBT): a Count of 0 or a
+      // negative byte is kept, a count above 64 is lowered to 64, an unknown item id loads null and so clears an earlier stack of the same slot
+      // (horse-items-nbt-reference.json). A negative Damage reads 0 (convertItem).
+      const slot = tagValue(c, 'Slot', NBT.BYTE, -1) & 255;
+      if (slot < 2 || slot >= 17) continue;
+      const stack = convertItem(c, { allowEmpty: true });
+      items[slot] = stack ? { ...stack, count: Math.min(stack.count, 64) } : null;
     }
     if (items.length) rest.items = Array.from({ length: 17 }, (_, i) => items[i] ?? null);
   }
@@ -71,6 +76,15 @@ export function horseNbtFields(tag, convertItem = () => null) {
 
 // EntityLiving.readEntityFromNBT: CustomName, CustomNameVisible, PersistenceRequired and the Leashed / Leash compound (a knot's X/Y/Z,
 // else the holder's UUID, which is the single player here). `shift` moves a knot with the imported region.
+// Leash tag <-> JSON-safe string: a one-entry compound wrapper encoded to base64; null when the key was absent.
+export function leashRaw(leash) {
+  if (!leash) return {};
+  try { return { raw: btoa(String.fromCharCode(...encodeNbt({ tag: { type: NBT.COMPOUND, value: new Map([['Leash', leash]]) } }))) }; } catch { return {}; }
+}
+export function leashRawTag(raw) {
+  if (typeof raw !== 'string') return null;
+  try { return decodeNbt(Uint8Array.from(atob(raw), (c) => c.charCodeAt(0))).tag.value.get('Leash') ?? null; } catch { return null; }
+}
 export const GEAR_NBT_KEYS = ['CustomName', 'CustomNameVisible', 'PersistenceRequired', 'Leashed', 'Leash'];
 export function gearNbtFields(tag, shiftX = 0, shiftZ = 0) {
   const out = {}, name = String(tagValue(tag, 'CustomName', NBT.STRING, '')).slice(0, 64);
@@ -84,7 +98,9 @@ export function gearNbtFields(tag, shiftX = 0, shiftZ = 0) {
     else if (l && isNum('X') && isNum('Y') && isNum('Z')) out.leash = { knot: { x: Math.floor(Number(l.get('X').value)) + shiftX, y: Math.floor(Number(l.get('Y').value)), z: Math.floor(Number(l.get('Z').value)) + shiftZ } };
     // No usable holder: sw.bP finds none and clearLeashed(false, true) drops a lead item at the mob's feet on its first tick (leads3-reference.json
     // leadRead). `lost` keeps the Leashed flag until horse-gear-live.js leashRestore does that.
-    else out.leash = { lost: true };
+    // The unusable tag itself rides along (a base64 NBT wrapper, JSON-safe) so the export writes it back as it was (EntityLiving keeps no copy,
+    // but the unticked mob is only a load away from the original tag; leashRaw/leashRawTag below).
+    else out.leash = { lost: true, ...leashRaw(tag.get?.('Leash') ?? tag.value?.get?.('Leash')) };
   }
   return out;
 }

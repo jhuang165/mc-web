@@ -42,10 +42,12 @@ export function ensureItems(h) {
   h.items = items;
   return items;
 }
-// A saved stack list, sanitised: {id, count, damage} stacks (or null) in at most 17 slots; anything else is dropped.
+// A saved stack list, sanitised: {id, count, damage} stacks (or null) in at most 17 slots; anything else is dropped. AnimalChest keeps a stack of any
+// count (horse-items-nbt-reference.json: 0, -1 and -128 stay, as ItemStack.loadItemStackFromNBT reads the Count byte) and only InventoryBasic.
+// setInventorySlotContents lowers a count above the stack limit (64) to 64.
 export function cleanItems(raw) {
   if (!Array.isArray(raw)) return undefined;
-  return raw.slice(0, CHEST_SIZE).map((s) => (s && Number.isInteger(s.id) && Number.isInteger(s.count) && s.count > 0 ? { ...s, count: Math.min(s.count, 64), damage: Number.isInteger(s.damage) ? s.damage : 0 } : null));
+  return raw.slice(0, CHEST_SIZE).map((s) => (s && Number.isInteger(s.id) && Number.isInteger(s.count) ? { ...s, count: Math.min(s.count, 64), damage: Number.isInteger(s.damage) && s.damage > 0 ? s.damage : 0 } : null));
 }
 // EntityHorse.isHorseSaddled and getHorseArmorIndex read the AnimalChest slots; the record keeps them as flags too.
 export function syncGear(h) {

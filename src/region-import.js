@@ -10,7 +10,7 @@ import { parseStructureDataFiles } from './structure-data.js';
 import { World, SIZE, MOB_SPAWNER, SAPLING, WEB, LADDER, YELLOW_FLOWER, RED_FLOWER, DYE, SNOW_LAYER, ICE, CACTUS, TNT, FENCE, RAIL } from './world.js';
 import { DimensionWorld } from './dimension-world.js';
 import { DIM_KEYS, TILE_KEYS } from './dimension-live.js';
-import { importTileTicks, tickRecordFields } from './tile-ticks.js';
+import { importTileTicks, tickRecordFields, intOf } from './tile-ticks.js';
 import { isJavaLandscape } from './java-world.js';
 import { fromOriginal, isRegistered } from './block-registry.js';
 import { readRegion, decodeRegionChunk, regionAddress, regionSlot } from './region-file.js';
@@ -50,6 +50,7 @@ const FURNACE = 14, CHUNK_INFLATE_LIMIT = 16 * 1024 * 1024, AREA_INFLATE_LIMIT =
 
 export { ORIGINAL_ITEMS };
 // Subtype families whose stack damage the browser stores as the same variant index.
+const COMPARATOR_BLOCKS = new Set([149, 150].map(o => fromOriginal(o, 0)?.id)); // the browser ids of the unpowered and powered comparator
 const VARIANT_DAMAGE = new Set([35, 38, 351, 3, 5, 6, 12, 17, 18, 24, 44, 98, 97, 145, 155, 159, 161, 162, 175, 95, 160, 171, 397, 322]); // 397: ItemSkull, damage = SkullType 0-4 (skull.js); 322:1 the enchanted golden apple (food-items.js)
 
 /** Browser stack fields for an original item ID/damage, or null when the build has no such item. */
@@ -123,7 +124,8 @@ export function readContainerTile(id, tile, { convertItem = itemStackFromNbt, in
 }
 // `allowEmpty`: an armour-slot stack of Count 0 is kept (InventoryPlayer.readFromNBT keeps it; ItemStack.damageItem leaves a Thorns-broken piece at size 0).
 export function itemStackFromNbt(compound, { ignored = [], allowEmpty = false } = {}) {
-  const mapped = itemFromOriginal(get(compound, 'id', NBT.SHORT), get(compound, 'Damage', NBT.SHORT, 0)), count = get(compound, 'Count', NBT.BYTE, 0);
+  // ItemStack.readFromNBT: a negative Damage reads 0.
+  const mapped = itemFromOriginal(get(compound, 'id', NBT.SHORT), Math.max(0, get(compound, 'Damage', NBT.SHORT, 0))), count = get(compound, 'Count', NBT.BYTE, 0);
   if (!mapped || (!allowEmpty && count <= 0)) return null; // allowEmpty keeps Count 0 and negative bytes as loadItemStackFromNBT does
   const stack = { id: mapped.id, damage: mapped.damage, count };
   const nbt = get(compound, 'tag', NBT.COMPOUND);
@@ -397,7 +399,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = []; let chainCount = 0;
   const projectileLists = { projectiles: [], thrownPotions: [], arrows: [], fireballs: [], eyes: [], rockets: [] };
   const hanging = [], carts = [], boats = [];
-  const tickList = { fluid: [], fire: [], falling: [], redstone: [] }, tickSeen = new Set(), tickDropped = new Map(), litRepeaters = [];
+  const tickList = { fluid: [], fire: [], falling: [], redstone: [] }, tickSeen = new Set(), tickDropped = new Map(), litRepeaters = [], comparatorSignals = [];
   let tickDuplicates = 0, tickOutside = 0;
   const inAreaAt3 = (x, y, z) => x >= destination.chunkX * 16 && x < (destination.chunkX + area.width) * 16 && z >= destination.chunkZ * 16 && z < (destination.chunkZ + area.depth) * 16;
   let edits = 0;
@@ -548,6 +550,9 @@ export async function importJavaRegionArea(regions, options = {}) {
         signs.push({ x: lx, y, z: lz, text: [1, 2, 3, 4].map(i => String(get(tile, `Text${i}`, NBT.STRING, '')).slice(0, 15)) }); tally(tileConverted, id);
       } else if (inside && id === 'Beacon' && block === 173) {
         beacons.push({ x: lx, y, z: lz, primary: get(tile, 'Primary', NBT.INT, 0), secondary: get(tile, 'Secondary', NBT.INT, 0), levels: get(tile, 'Levels', NBT.INT, 0) }); tally(tileConverted, id); // pyramid.js
+      } else if (inside && id === 'Comparator' && COMPARATOR_BLOCKS.has(block)) {
+        // TileEntityComparator.readFromNBT: OutputSignal (getInteger, any value kept); the live engine's comparator tile (redstone-live.js `comparators`).
+        comparatorSignals.push([key, intOf(tile.get('OutputSignal'))]); tally(tileConverted, id);
       } else if (inside && id === 'Piston' && world.get(lx, y, lz) === PISTON_MOVING) {
         // TileEntityPiston.readFromNBT: blockId, blockData, facing, progress (lastProgress = progress), extending. The
         // restore (piston-live.js) lets the move finish on the first tick, as native does.
@@ -670,7 +675,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     const m = mapOriginalState(key);
     return { id: key >> 4, meta: key & 15, cells, to: [m.id, m.meta], exact: m.exact, ...(m.state ? { state: Object.keys(m.state) } : {}) };
   });
-  report.ticks = { fluid: tickList.fluid.length, fire: tickList.fire.length, falling: tickList.falling.length, redstone: tickList.redstone.length, litRepeaters: litRepeaters.length, duplicates: tickDuplicates, outsideArea: tickOutside,
+  report.ticks = { fluid: tickList.fluid.length, fire: tickList.fire.length, falling: tickList.falling.length, redstone: tickList.redstone.length, litRepeaters: litRepeaters.length, comparators: comparatorSignals.length, duplicates: tickDuplicates, outsideArea: tickOutside,
     dropped: [...tickDropped].sort(([a], [b]) => a - b).map(([id, count]) => ({ id, count })) };
   report.tileEntities.converted = Object.fromEntries(tileConverted);
   report.tileEntities.lost = sortedCounts(tileLost);
@@ -737,7 +742,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     player: { chests, furnaces, dispensers, hoppers, brewing },
     pistons, commandBlocks, ...(musicTiles.length ? { musicTiles } : {}), ...(signs.length ? { signs } : {}), ...(skulls.length ? { skulls } : {}), ...(beacons.length ? { beacons } : {}),
     drops,
-    ...tickRecordFields(tickList, litRepeaters),
+    ...tickRecordFields(tickList, litRepeaters, comparatorSignals),
     ...(spawners.length ? { spawners } : {}),
     ...(mobs.length ? { entities: mobs } : {}),
     ...Object.fromEntries(Object.entries(projectileLists).filter(([, list]) => list.length).map(([name, list]) => [name, name === 'eyes' ? { eyes: list } : name === 'rockets' ? { rockets: list } : list])),
