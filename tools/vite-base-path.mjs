@@ -6,7 +6,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-const ROOTS = ["media", "audio", "lang", "research", "fonts"];
+const ROOTS = ["media", "audio", "lang", "research", "fonts", "mods"];
 // A quote, backtick or url( opener followed directly by one of the public roots.
 const ASSET = new RegExp(`([\`"'(])/(${ROOTS.join("|")})/`, "g");
 // Public files that carry root-absolute URLs the page fetches at runtime.

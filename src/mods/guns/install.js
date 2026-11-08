@@ -13,6 +13,8 @@ import { meleeWeapon, meleeUrl } from "./melee.js";
 import { taczAttachment, resolveAllowed, readGunTag, ATTACHMENT_TYPES, TYPE_NAMES } from "./fit.js";
 import { AMMO_BOXES, AMMO_BOX_IRON, AMMO_BOX_GOLD, AMMO_BOX_DIAMOND, AMMO_BOX_CREATIVE, readBoxTag, boxLabel } from "./ammo-box.js";
 import { partSummary } from "./attachment-screen.js";
+import { smithCraft, smithIconId } from "./smith-screen.js";
+import { registerRecipeSource } from "../jei/recipes.js";
 import { ORIGINAL_ITEMS } from "../../original-items.js";
 
 export const gunsWorld = (record) => record?.mods?.guns === true;
@@ -23,7 +25,19 @@ export const gunsEnabled = () => enabled;
 // The pack's guns, ammo, attachments and smithing recipes once setGunPack ran with an installed pack.
 const pack = { installed: false, guns: [], ammo: [], attachments: [], recipes: [], items: [] };
 export const gunPack = () => pack;
-export const gunSmithRecipes = () => pack.recipes;
+export const gunSmithRecipes = () => {
+  const have = new Set(pack.recipes.map((r) => r.output));
+  const fallback = GUN_RECIPES.filter((r) => GUNS[r.output] && !have.has(r.output)).map((r) => {
+    const materials = new Map();
+    for (const row of r.rows) for (const c of row) if (c !== " ") {
+      const k = r.keys[c], item = k === LOG ? "log" : Array.isArray(k) ? k[0] : k, damage = k !== LOG && Array.isArray(k) ? k[1] : undefined;
+      const key = `${item}:${damage}`, m = materials.get(key) ?? { item, ...(damage == null ? {} : { damage }), count: 0 };
+      m.count++; materials.set(key, m);
+    }
+    return { key: "fallback:" + GUNS[r.output].key, output: r.output, count: r.count, kind: "gun", materials: [...materials.values()] };
+  });
+  return [...pack.recipes, ...fallback];
+};
 
 // LR Tactical melee weapons (melee.js: the CS2 knives) once setMeleePacks ran with installed packs, and their items (with
 // placeholders for ids no installed pack provides, so saved knife stacks survive a missing install).
@@ -160,6 +174,7 @@ export function setGunsEnabled(on, tables) {
     combatTab.push(...registered.order); search.push(...registered.order);
   }
   setCrafting?.(on ? gunCraftingResult : null);
+  registerRecipeSource("guns", on ? () => gunRecipeEntries(items) : null);
 }
 
 // Crafting table recipes (this project's own; 1.7.10 has no copper or iron nuggets). A key is an item id or [id, damage];
@@ -183,6 +198,27 @@ export const GUN_RECIPES = [
   { output: AMMO_BOX_GOLD, count: 1, rows: ["G G", "GCG", "GGG"], keys: { G: GOLD, C: CHEST } },
   { output: AMMO_BOX_DIAMOND, count: 1, rows: ["D D", "DCD", "DDD"], keys: { D: DIAMOND, C: CHEST } },
 ];
+
+// The recipe browser reads the same crafting patterns and smithing material lists as the live handlers. Smithing
+// entries carry their station and validate their output through smithCraft rather than pretending to be grid recipes.
+export function gunRecipeEntries(items) {
+  const variants = (id) => Array.from({ length: Math.max(1, items[id]?.variants?.length ?? 1) }, (_, damage) => [id, damage]);
+  const crafting = GUN_RECIPES.map((r) => {
+    const slots = Array(9).fill(null);
+    r.rows.forEach((row, y) => [...row].forEach((c, x) => {
+      if (c === " ") return;
+      const k = r.keys[c];
+      slots[y * 3 + x] = k === LOG ? LOG.flatMap(variants) : Array.isArray(k) ? [k] : variants(k);
+    }));
+    return { shapeless: false, width: Math.max(...r.rows.map((row) => row.length)), height: r.rows.length, slots };
+  });
+  const smithing = gunSmithRecipes().map((r) => ({
+    category: "smithing", station: GUN_SMITH,
+    slots: r.materials.map((m) => [{ id: smithIconId(m), count: m.count, damage: m.damage ?? 0 }]),
+    craft: (slots) => smithCraft(slots, r),
+  }));
+  return [...crafting, ...smithing];
+}
 
 function accepts(key, stack) {
   if (key === undefined) return !stack;

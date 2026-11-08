@@ -14,6 +14,8 @@
 //      alternatives the grid accepts there (the viewer cycles them); a dynamic example's slot may carry a full stack instead.
 //   { category: "smelting", slots: [[[id, 0]]], output, xp }  (FurnaceRecipes ignore the input's damage)
 //   { category: "fuel", slots: [[[id, 0]]], burn }            (getItemBurnTime ignores the damage)
+// Mod sources may also supply { category: "smithing", station, slots, craft(slots) -> output }; ingredients carry their
+// full counts as stack alternatives, and the source's live smithing function verifies the result while building the table.
 import { ITEMS, RECIPES, SHAPELESS, SMELTING, FUELS, craftingResult, smeltingResult, burnTime } from "../../survival.js";
 import { makeStack } from "../../inventory.js";
 import { smeltExperience } from "../../experience.js";
@@ -23,8 +25,8 @@ import { NATIVE_RECIPES } from "./native-recipes.js";
 
 const sources = new Map();
 let table = null;
-// fn() -> crafting entries ({ shapeless, width, height, slots, output } as above). Mods call this when they turn on; the
-// table is rebuilt on its next use, and each entry still goes through craftingResult (a mod's own matcher sits there).
+// fn() -> crafting or smithing entries as above. Mods call this when they turn on; the table is rebuilt on its next use,
+// and every entry goes through its live crafting handler.
 export function registerRecipeSource(name, fn) {
   if (typeof fn === "function") sources.set(name, fn);
   else sources.delete(name);
@@ -46,7 +48,7 @@ export function entryGrid(entry, k = 0) {
 const outputOf = (s) => ({ ...s, damage: s.damage | 0 });
 // Two entries with the same output and the same ingredients are one recipe to a player (a live 1x1 shaped recipe repeats a
 // native shapeless one); the first kept wins, so native entries come first.
-const key = (e) => JSON.stringify([e.slots.filter(Boolean).map((s) => JSON.stringify(s[0])).sort(), e.output.id, e.output.damage, e.output.count]);
+const key = (e) => JSON.stringify([e.category, e.station, e.slots.filter(Boolean).map((s) => JSON.stringify(s[0])).sort(), e.output.id, e.output.damage, e.output.count]);
 
 // survival.js RECIPES: id-only patterns (the matcher ignores damage) at the grid's top left.
 function liveShaped(r) {
@@ -73,17 +75,19 @@ function dynamicExamples() {
 }
 
 function build() {
-  const crafting = [], seen = new Set();
+  const crafting = [], smithing = [], seen = new Set();
   const add = (entry, source) => {
     if (!entry?.slots?.length) return;
     let out = null;
-    try { out = craftingResult(entryGrid(entry), 3); } catch { out = null; }
+    const isSmithing = entry.category === "smithing" && typeof entry.craft === "function" && ITEMS[entry.station];
+    try { out = isSmithing ? entry.craft(entry.slots.map((s) => stackOf(s))) : craftingResult(entryGrid(entry), 3); } catch { out = null; }
     if (!out || !ITEMS[out.id]) return;
-    const e = { category: "crafting", ...entry, output: outputOf(out), source };
+    const { craft, ...fields } = entry;
+    const e = { ...fields, category: isSmithing ? "smithing" : "crafting", output: outputOf(out), source };
     const k = key(e);
     if (seen.has(k)) return;
     seen.add(k);
-    crafting.push(e);
+    (isSmithing ? smithing : crafting).push(e);
   };
   for (const r of NATIVE_RECIPES) add({ shapeless: r.shapeless, width: r.width, height: r.height, slots: r.slots }, "native");
   for (const r of RECIPES) add(liveShaped(r), "live");
@@ -105,15 +109,15 @@ function build() {
     const burn = ITEMS[id] ? burnTime(makeStack(id, 1, 0)) : 0;
     if (burn > 0) fuel.push({ category: "fuel", slots: [[[id, 0]]], burn });
   }
-  return { crafting, smelting, fuel, all: [...crafting, ...smelting, ...fuel] };
+  return { crafting, smithing, smelting, fuel, all: [...crafting, ...smithing, ...smelting, ...fuel] };
 }
 export const recipeTable = () => (table ??= build());
 
 // Damage that names a different item (dye colours, wool, planks, potions) must match; a tool's damage is wear and never does.
-const sameKind = (id, a, b) => (a | 0) === (b | 0) || !!ITEMS[id]?.durability;
-const slotHas = (slot, stack) => !!slot?.some((alt) => (Array.isArray(alt) ? alt[0] === stack.id && sameKind(stack.id, alt[1], stack.damage) : alt.id === stack.id));
+const sameKind = (id, a, b) => (a | 0) === (b | 0) || !!ITEMS[id]?.durability || !!ITEMS[id]?.gun;
+const slotHas = (slot, stack) => !!slot?.some((alt) => (Array.isArray(alt) ? alt[0] === stack.id && sameKind(stack.id, alt[1], stack.damage) : alt.id === stack.id && sameKind(stack.id, alt.damage, stack.damage)));
 // FurnaceRecipes and getItemBurnTime look at the id only.
-const anyDamage = (e) => e.category !== "crafting";
+const anyDamage = (e) => e.category === "smelting" || e.category === "fuel";
 
 // The entries that make `stack`.
 export function recipesFor(stack) {
@@ -123,5 +127,5 @@ export function recipesFor(stack) {
 // The entries that take `stack` as an ingredient or fuel.
 export function usesOf(stack) {
   if (!stack) return [];
-  return recipeTable().all.filter((e) => e.slots.some((s) => (anyDamage(e) ? s?.some((a) => a[0] === stack.id) : slotHas(s, stack))));
+  return recipeTable().all.filter((e) => e.station === stack.id || e.slots.some((s) => (anyDamage(e) ? s?.some((a) => a[0] === stack.id) : slotHas(s, stack))));
 }

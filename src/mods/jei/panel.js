@@ -13,6 +13,7 @@ const SLOT = 18, BUTTON = 20, MARGIN = 4, SEARCH_H = 16, VIEW_W = 176, ENTRY_GAP
 // The recipe box: the title row above the entries, the Back/Fwd/page row below them.
 const VIEW_HEAD = 26, VIEW_FOOT = BUTTON + 8;
 const ENTRY_H = { crafting: 10 + 54, smelting: 10 + 36, fuel: 10 + 18 };
+const entryHeight = (e) => e.category === "smithing" ? 10 + Math.max(3, Math.ceil(e.slots.length / 3)) * SLOT : ENTRY_H[e.category] ?? 64;
 const at = (x, y, w, h) => `left:calc(${x}*var(--u));top:calc(${y}*var(--u))` + (w != null ? `;width:calc(${w}*var(--u));height:calc(${h}*var(--u))` : "");
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const text = (s, x, y, color = 0xffffff, flat = false) => `<span class="mc-text jei-text${flat ? " flat" : ""}" style="${at(x, y)}">${bitmapHtml(s, color)}</span>`;
@@ -20,7 +21,7 @@ const button = (action, label, x, y, w, { disabled = false, title = label } = {}
   `<button type="button" class="mc-button jei-button${disabled ? " disabled" : ""}" data-jei="${action}" aria-label="${esc(title)}" style="${at(x, y, w, BUTTON)};--hw:${Math.trunc(w / 2)}">` +
   `<span class="mc-text mc-label" style="${at(Math.trunc(w / 2) - Math.trunc(getStringWidth(label) / 2), 6)}">${bitmapHtml(label, null)}</span></button>`;
 
-export const CATEGORY_NAMES = { crafting: "Crafting", smelting: "Smelting", fuel: "Fuel" };
+export const CATEGORY_NAMES = { crafting: "Crafting", smithing: "Gun Smith Table", smelting: "Smelting", fuel: "Fuel" };
 
 /**
  * deps: {
@@ -84,7 +85,7 @@ export function createViewerPanel(deps) {
   const viewStacks = new Map();
   function viewPerPage() {
     const room = layout.H - 2 * MARGIN - VIEW_HEAD - VIEW_FOOT;
-    const tallest = Math.max(...state.view.entries.map((e) => ENTRY_H[e.category] ?? 64));
+    const tallest = Math.max(...state.view.entries.map(entryHeight));
     return Math.max(1, Math.min(3, Math.floor(room / (tallest + ENTRY_GAP))));
   }
   function entryHtml(e, y, n) {
@@ -95,9 +96,10 @@ export function createViewerPanel(deps) {
     if (e.note) html += text(e.note, VIEW_W - 8 - getStringWidth(e.note), y, 0x707070, true);
     y += 10;
     const put = (stack, x, sy, i) => { viewStacks.set(ref(i), stack); return slotHtml(stack, x, sy, ref(i), { frame: true }); };
-    if (e.category === "crafting") {
-      const cells = Array.from({ length: 9 }, (_, i) => cellAt(e, i));
-      for (let i = 0; i < 9; i++) html += put(cells[i], 30 + (i % 3) * SLOT, y + Math.floor(i / 3) * SLOT, i);
+    if (e.category === "crafting" || e.category === "smithing") {
+      const cells = Array.from({ length: e.category === "crafting" ? 9 : e.slots.length }, (_, i) => cellAt(e, i));
+      for (let i = 0; i < cells.length; i++) html += put(cells[i], 30 + (i % 3) * SLOT, y + Math.floor(i / 3) * SLOT, i);
+      if (e.station) html += put({ id: e.station, count: 1, damage: 0 }, 8, y + 18, "station");
       html += `<i class="jei-arrow" style="${at(30 + 54 + 6, y + 18 + 1)}"></i>`;
       html += put(e.output, 30 + 54 + 36, y + 18, "out");
     } else if (e.category === "smelting") {
@@ -126,7 +128,7 @@ export function createViewerPanel(deps) {
     viewStacks.clear();
     if (!state.view) return;
     const per = viewPerPage(), entries = state.viewEntries(per), pages = state.viewPages(per), v = state.view;
-    const h = VIEW_HEAD + entries.reduce((n, e) => n + (ENTRY_H[e.category] ?? 64) + ENTRY_GAP, 0) + VIEW_FOOT;
+    const h = VIEW_HEAD + entries.reduce((n, e) => n + entryHeight(e) + ENTRY_GAP, 0) + VIEW_FOOT;
     const x = Math.max(MARGIN, Math.min(layout.x - VIEW_W - MARGIN, layout.centre - VIEW_W / 2)) | 0;
     const y = Math.max(MARGIN, Math.min(layout.viewTop, layout.H - h - MARGIN));
     const title = `${v.mode === "uses" ? "Uses" : "Recipes"}: ${deps.name(v.stack)}`;
@@ -143,7 +145,7 @@ export function createViewerPanel(deps) {
     html += button("vnext", ">", VIEW_W - 6 - BUTTON, h - BUTTON - 4, BUTTON, { disabled: pages < 2, title: "Next recipe page" });
     html += button("forward", "Fwd", 50, h - BUTTON - 4, 30, { disabled: !state.forward.length, title: "Forward" });
     let ey = VIEW_HEAD;
-    entries.forEach((e, n) => { html += entryHtml(e, ey, n); ey += (ENTRY_H[e.category] ?? 64) + ENTRY_GAP; });
+    entries.forEach((e, n) => { html += entryHtml(e, ey, n); ey += entryHeight(e) + ENTRY_GAP; });
     html += "</div></div>";
     root.insertAdjacentHTML("beforeend", html);
   }

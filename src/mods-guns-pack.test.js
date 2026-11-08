@@ -90,7 +90,7 @@ test("setGunPack adds the pack's guns, ammo, recipes and placeholders, and undoe
     assert.equal(p.installed, true);
     assert.equal(GUNS[glock].name, "Glock 17");
     assert.equal(AMMO[nine].name, "9mm Round");
-    assert.equal(gunSmithRecipes().length, 2);
+    assert.equal(gunSmithRecipes().length, 5); // the pack's two entries plus the three fallback guns
     assert.deepEqual(creativeOrder().slice(0, CREATIVE_ORDER.length), CREATIVE_ORDER);
     assert.ok(creativeOrder().includes(glock));
     const items = new Map(gunPack().items.map((i) => [i.id, i]));
@@ -102,7 +102,7 @@ test("setGunPack adds the pack's guns, ammo, recipes and placeholders, and undoe
   }
   assert.equal(GUNS[TACZ_GUN_IDS.glock_17], undefined);
   assert.equal(AMMO[TACZ_AMMO_IDS["9mm"]], undefined);
-  assert.equal(gunSmithRecipes().length, 0);
+  assert.equal(gunSmithRecipes().length, 3); // fallback guns remain craftable at the table without a pack
   assert.ok(gunPack().items.every((i) => i.missingPack)); // without the pack every pack id is a placeholder
 });
 

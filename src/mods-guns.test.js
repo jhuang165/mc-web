@@ -3,8 +3,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ITEMS, craftingResult, setExtraCrafting, Survival } from "./survival.js";
 import { CREATIVE_TABS, SEARCH_ORDER } from "./creative.js";
-import { setGunsEnabled, gunsWorld, gunsEnabled, gunCraftingResult, creativeOrder } from "./mods/guns/install.js";
-import { P320, AKM, M870, AMMO_45ACP, AMMO_762X39, AMMO_12G, GUNS, roundsLeft, CREATIVE_ORDER } from "./mods/guns/catalog.js";
+import { setGunsEnabled, gunsWorld, gunsEnabled, gunCraftingResult, creativeOrder, gunSmithRecipes } from "./mods/guns/install.js";
+import { P320, AKM, M870, GUN_SMITH, AMMO_45ACP, AMMO_762X39, AMMO_12G, GUNS, roundsLeft, CREATIVE_ORDER } from "./mods/guns/catalog.js";
+import { recipesFor, usesOf, recipeTable, entryGrid } from "./mods/jei/recipes.js";
+import { smithCraft } from "./mods/guns/smith-screen.js";
 
 const tables = () => ({ items: ITEMS, combatTab: CREATIVE_TABS[8].items, search: SEARCH_ORDER, setCrafting: setExtraCrafting });
 const grid = (rows, keys) => rows.join("").split("").map((c) => (c === " " ? null : { count: 1, damage: 0, ...keys[c] }));
@@ -83,4 +85,33 @@ test("rounds left come from the stack damage and saved gun stacks load in a guns
   } finally {
     setGunsEnabled(false, tables());
   }
+});
+
+test("the recipe browser lists the table's grid recipe and every fallback gun's real smithing recipe", () => {
+  setGunsEnabled(true, tables());
+  try {
+    const table = recipesFor({ id: GUN_SMITH, count: 1, damage: 0 }).find((r) => r.category === "crafting");
+    assert.ok(table);
+    const cells = entryGrid(table);
+    assert.equal(cells.filter((s) => s?.id === 302).length, 5);
+    assert.equal(craftingResult(cells, 3).id, GUN_SMITH);
+    const smith = recipeTable().smithing;
+    assert.deepEqual(smith.map((e) => e.output.id).sort(), [P320, AKM, M870].sort());
+    for (const gun of Object.values(GUNS)) {
+      // Creative guns start at damage 0; a crafted gun is unloaded. Both find the same recipe.
+      const r = recipesFor({ id: gun.id, count: 1, damage: 0 }).find((r) => r.category === "smithing");
+      assert.ok(r, gun.name);
+      assert.equal(r.station, GUN_SMITH);
+      const live = gunSmithRecipes().find((s) => s.output === gun.id);
+      const slots = r.slots.map((alts) => ({ ...alts[0] }));
+      assert.deepEqual(smithCraft(slots, live), r.output);
+      assert.ok(slots.every((s) => s === null));
+      assert.ok(usesOf({ id: GUN_SMITH, count: 1, damage: 0 }).some((e) => e.output.id === gun.id));
+    }
+    const pistol = smith.find((e) => e.output.id === P320);
+    assert.ok(usesOf({ id: 351, count: 1, damage: 4 }).includes(pistol));
+    assert.ok(!usesOf({ id: 351, count: 1, damage: 1 }).includes(pistol));
+  } finally { setGunsEnabled(false, tables()); }
+  assert.equal(recipeTable().smithing.length, 0);
+  assert.deepEqual(recipesFor({ id: GUN_SMITH, count: 1, damage: 0 }), []);
 });
