@@ -30,7 +30,7 @@ import { structureDataFiles, fortressDataFile } from './structure-data.js';
 import { villageDocument } from './village.js';
 import { mapDataFiles } from './maps-nbt.js';
 import { decodeBaseColumn } from './whole-save-columns.js';
-import { spreadTicks } from './tile-ticks.js';
+import { spreadTicks, tileTickRows } from './tile-ticks.js';
 import { javaProjectileToNbt } from './java-projectiles.js';
 import { statsExportFile } from './stats.js';
 import { DEFAULT_RULES } from './game-rules.js';
@@ -186,12 +186,7 @@ function payload(state,ox,oz,report,blockAt) {
  for(const w of state.pistons??[]){const e=w.value??w;tiles.push(new Map(Object.entries({id:str('Piston'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),blockId:int(e.block),blockData:int(e.meta),facing:int(e.facing),progress:float(e.progress??0),extending:byte(e.extending?1:0)})));}
  // TileTicks (tile-ticks.js): {i, x, y, z, t, p} per pending tick, in tree order (t, p, then the list and its order); a fluid keeps the original id
  // it was imported with (still lava 11 is not flowing lava 10), redstone ticks keep their original id and priority.
- {const rows=[],clamp=v=>Math.max(-2147483648,Math.min(2147483647,v));
-  ['fluidTicks','fireTicks','fallingTicks','redstoneTicks'].forEach((name,sys)=>{for(const {value:e,order} of state[name]??[]){
-   const red=name==='redstoneTicks',o=red?[e.id,0]:e.orig!==undefined?[e.orig,0]:toOriginal(e.block,0,{flowing:name==='fluidTicks'});if(!o)continue;
-   rows.push({t:clamp(e.delay),p:red?(e.priority|0):0,sys,order:order??0,id:o[0],x:e.x,y:e.y,z:e.z});}});
-  rows.sort((a,b)=>a.t-b.t||a.p-b.p||a.sys-b.sys||a.order-b.order);
-  for(const r of rows)ticks.push(new Map(Object.entries({i:int(r.id),x:int(r.x+ox),y:int(r.y),z:int(r.z+oz),t:int(r.t),p:int(r.p)})));}
+ for(const r of tileTickRows(state,toOriginal,ox,oz))ticks.push(new Map(Object.entries({i:int(r.i),x:int(r.x),y:int(r.y),z:int(r.z),t:int(r.t),p:int(r.p)})));
  return {entities,tileEntities:tiles,tileTicks:ticks};
 }
 // TileEntityEndPortal (id Airportal) has no fields besides x, y, z.
@@ -259,7 +254,7 @@ function regionSource(record, w) {
  {const rs=record.redstone;for(const list of [rs?.pending,rs?.deferred])for(const [i,e] of (Array.isArray(list)?list:[]).entries()){if(!Array.isArray(e)||![e[0],e[2],e[3],e[4]].every(Number.isFinite))continue;
   const k=`${Math.floor(e[0]/16)},${Math.floor(e[2]/16)}`;if(!runtime.has(k))runtime.set(k,{});owned.add(k);
   (runtime.get(k).redstoneTicks??=[]).push({order:e[6]??i,value:{x:e[0],y:e[1],z:e[2],id:e[3],delay:e[4]-(rs.time|0),priority:e[5]|0}});}}
- // Ticks within 2 blocks of a chunk border are also saved in the neighbour (WorldServer.getPendingBlockUpdates box).
+ // A tick in the last 2 columns or rows of a chunk is saved in the next higher chunk too (WorldServer.getPendingBlockUpdates box [c*16-2, c*16+16)).
  spreadTicks(runtime,owned,['fluidTicks','fireTicks','fallingTicks','redstoneTicks']);
  return {record,w,owned,runtime,baseId:record.id};
 }

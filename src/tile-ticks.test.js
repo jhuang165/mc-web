@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {World} from './world.js';import {exportJavaSave} from './region-export.js';import {readRegion,decodeRegionChunk,regionAddress,regionSlot} from './region-file.js';import {chunkFromNbt} from './chunk-nbt.js';import {Survival} from './survival.js';
-import {tickBlockIds,importTileTicks,tickRecordFields,mergeTickState,spreadTicks} from './tile-ticks.js';
+import {tickBlockIds,importTileTicks,tickRecordFields,mergeTickState,spreadTicks,tileTickRows,treeOrder,intOf} from './tile-ticks.js';
 const num=(v)=>({value:v});
 const tick=(i,x,y,z,t,p=0)=>new Map([['i',num(i)],['x',num(x)],['y',num(y)],['z',num(z)],['t',num(t)],['p',num(p)]]);
 test('tick kinds cover fluids, fire, falling blocks and the redstone behaviours',()=>{
@@ -23,10 +23,10 @@ test('mergeTickState keeps a tick saved in two chunks once',()=>{
  mergeTickState(acc,seen,'redstone',{pending:[[1,2,3,93,4,0,0]],lit:['1,2,3']});mergeTickState(acc,seen,'redstone',{pending:[[1,2,3,93,4,0,0],[2,2,3,93,4,0,0]],lit:['1,2,3']});
  assert.deepEqual(acc.redstone.pending.map(p=>p[6]),[0,1]);assert.deepEqual(acc.redstone.lit,['1,2,3']);assert.equal(mergeTickState(acc,seen,'drops',{}),false);
 });
-test('spreadTicks copies a tick within 2 blocks of a border into the owned neighbour only',()=>{
- const rt=new Map([['0,0',{fluidTicks:[{order:0,value:{x:15,y:1,z:5}},{order:1,value:{x:8,y:1,z:8}}]}]]);
- spreadTicks(rt,new Set(['0,0','1,0','0,1']),['fluidTicks']);
- assert.equal(rt.get('1,0').fluidTicks.length,1);assert.equal(rt.get('0,1'),undefined);assert.equal(rt.get('0,0').fluidTicks.length,2);
+test('spreadTicks copies a tick in the last 2 columns into the owned higher neighbour only',()=>{
+ const rt=new Map([['0,0',{fluidTicks:[{order:0,value:{x:15,y:1,z:5}},{order:1,value:{x:8,y:1,z:8}},{order:2,value:{x:1,y:1,z:1}}]}]]);
+ spreadTicks(rt,new Set(['-1,0','0,-1','0,0','1,0','0,1']),['fluidTicks']);
+ assert.equal(rt.get('1,0').fluidTicks.length,1);assert.equal(rt.get('0,1'),undefined);assert.equal(rt.get('-1,0'),undefined);assert.equal(rt.get('0,-1'),undefined);assert.equal(rt.get('0,0').fluidTicks.length,3);
 });
 test('export writes pending redstone ticks with original ids, delay and priority',async()=>{
  const w=new World('17','javaStreamed',12);w.restore([['-1,100,-1',1]]);
@@ -36,4 +36,62 @@ test('export writes pending redstone ticks with original ids, delay and priority
  const {files}=await exportJavaSave(r,{world:w});
  const cx=-1+w.originX/16,cz=-1+w.originZ/16,a=regionAddress(cx,cz),c=chunkFromNbt(await decodeRegionChunk(readRegion(files.get(`region/r.${a.regionX}.${a.regionZ}.mca`)).get(regionSlot(a.x,a.z))));
  const t=c.tileTicks.find(e=>e.get('i').value===93);assert.ok(t);assert.equal(t.get('t').value,3);assert.equal(t.get('p').value,-1);assert.equal(t.get('x').value,w.originX-1);
+});
+
+// ---- native replay: public/research/tile-ticks-reference.json (tools/probes/TileTicksProbe.java, tools/verify-tile-ticks.mjs)
+import {readFileSync} from 'node:fs';
+const reference=JSON.parse(readFileSync(new URL('../public/research/tile-ticks-reference.json',import.meta.url)));
+const KEYS=['i','x','y','z','t','p'];
+const nativeMap=(a,absentZero)=>new Map(KEYS.flatMap((k,q)=>absentZero&&a[q]===0?[]:[[k,num(a[q])]]));
+const supported=()=>{const k=tickBlockIds();return new Set([...k.fluid,...k.fire,...k.falling,...k.redstone]);};
+test('replay of the unchanged WorldServer load path: pending list, order, times and priorities match',()=>{
+ const ids=supported();let checked=0,kept=0;
+ for(const c of reference.cases.filter(c=>c.kind==='read')){
+  const seen=new Set(),rows=[];
+  for(const load of c.loads){
+   const got=importTileTicks(load.ticks.map(a=>nativeMap(a,load.absentWhenZero)),{seen});
+   for(const k of ['fluid','fire','falling'])for(const e of got[k])rows.push({row:[e.orig,e.x,e.y,e.z,e.delay,e.p],t:e.delay,p:e.p});
+   for(const e of got.redstone)rows.push({row:[e[3],e[0],e[1],e[2],e[4],e[5]],t:e[4],p:e[5]});
+  }
+  // Native: every entry is kept (also air, unknown ids and y out of range); the port keeps the ones it schedules, in the same tree order.
+  // Native: every entry is kept (also air, unknown ids and y out of range); the port keeps the ones it schedules. The port's kinds are separate
+  // lists, so tree order (time, priority, load order) is compared inside each kind.
+  const kinds={fluid:[8,9,10,11],fire:[51],falling:[12,13,122,145],redstone:tickBlockIds().redstone};
+  const kindOfId=(i)=>Object.keys(kinds).find(k=>kinds[k].includes(i));
+  const byKind=(list,key)=>Object.fromEntries(Object.keys(kinds).map(k=>[k,list.filter(r=>kindOfId(key(r))===k)]));
+  const actual=byKind(treeOrder(rows,r=>r.t,r=>r.p).map(r=>r.row),r=>r[0]);
+  const expected=byKind(c.pending.filter(([i,,y])=>ids.has(i)&&y>=0&&y<=255),r=>r[0]);
+  kept+=Object.values(actual).flat().length;
+  assert.deepEqual(actual,expected,`read scenario ${c.index}`);checked++;
+ }
+ assert.equal(checked,14);assert.ok(kept>40);
+});
+test('replay of getPendingBlockUpdates and the writer: border box, order and priorities match',()=>{
+ const ids=supported();let checked=0,rowsSeen=0;
+ const kindOf=(id)=>tickBlockIds().fluid.includes(id)?'fluidTicks':id===51?'fireTicks':tickBlockIds().falling.includes(id)?'fallingTicks':'redstoneTicks';
+ for(const c of reference.cases.filter(c=>c.kind==='write')){
+  const runtime=new Map(),owned=new Set();
+  c.pending.forEach(([i,x,y,z,t,p],order)=>{
+   if(!ids.has(i))return;
+   const k=`${Math.floor(x/16)},${Math.floor(z/16)}`,name=kindOf(i);owned.add(k);
+   if(!runtime.has(k))runtime.set(k,{});
+   (runtime.get(k)[name]??=[]).push({order,value:name==='redstoneTicks'?{x,y,z,id:i,delay:t,priority:p}:{x,y,z,orig:i,block:1,delay:t}});
+  });
+  for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)owned.add(`${c.cx+dx},${c.cz+dz}`);
+  spreadTicks(runtime,owned,['fluidTicks','fireTicks','fallingTicks','redstoneTicks']);
+  const rows=tileTickRows(runtime.get(`${c.cx},${c.cz}`)??{},()=>null).map(r=>[r.i,r.x,r.y,r.z,r.t,r.p]);
+  // The native writer lists the tree entries first and the ThisTick entries after them (only filled while a tick runs); both use the box [c*16-2, c*16+16).
+  const inBox=([,x,,z])=>x>=c.cx*16-2&&x<c.cx*16+16&&z>=c.cz*16-2&&z<c.cz*16+16;
+  const tail=c.pendingThisTick.filter(inBox).length;
+  const treeSaved=c.saved.slice(0,c.saved.length-tail).filter(([i])=>ids.has(i));
+  assert.deepEqual(rows,treeSaved,`write scenario ${c.index}`);
+  assert.deepEqual(c.saved.slice(c.saved.length-tail),c.pendingThisTick.filter(inBox),`native ThisTick tail ${c.index}`);
+  checked++;rowsSeen+=rows.length;
+ }
+ assert.equal(checked,10);assert.ok(rowsSeen>10);
+});
+test('intOf reads numeric tags like NBTTagCompound.getInteger and other types as 0',()=>{
+ assert.equal(intOf(undefined),0);assert.equal(intOf({type:8,value:'5'}),0);assert.equal(intOf({type:3,value:-7}),-7);
+ assert.equal(intOf({type:4,value:4294967301n}),5);assert.equal(intOf({type:4,value:-2147483649n}),2147483647);
+ assert.equal(intOf({type:6,value:-1.5}),-2);assert.equal(intOf({type:5,value:3.9}),3);assert.equal(intOf({type:6,value:1e20}),2147483647);assert.equal(intOf({type:6,value:NaN}),0);
 });
