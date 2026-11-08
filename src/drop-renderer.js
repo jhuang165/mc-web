@@ -14,6 +14,7 @@ import { blockTile, tileRect } from "./block-textures.js";
 import { JavaRandom } from "./lighting.js";
 import { leatherItemLayers } from "./leather-dye.js";
 import { flatItemSprites } from "./render-settings.js";
+import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 
 const copies = (n) => (n > 40 ? 5 : n > 20 ? 4 : n > 5 ? 3 : n > 1 ? 2 : 1);
 
@@ -47,8 +48,10 @@ export class DropRenderer {
   build(stack, hover) {
     const glint = stackHasEffect(stack, ITEMS[stack.id]), url = itemTexture(stack.id, stack.damage), leather = leatherItemLayers(stack.id, stack.color),
       color = leather?.color ?? 0, group = new THREE.Group(), spin = new THREE.Group(), random = new JavaRandom(187),
+      chestUrl = !url && chestItemTexture(stack.id),
       material = url
         ? entityMaterial(this.view.lighting, { map: pixelTexture(url), alphaTest: 0.1, side: THREE.DoubleSide, ...(leather ? { color: leather.tint } : {}) })
+        : chestUrl ? entityMaterial(this.view.lighting, { map: pixelTexture(chestUrl) })
         : entityMaterial(this.view.lighting, { map: this.view.textures.texture });
     const overlayUrl = leather?.overlay,
       overlayMaterial = overlayUrl ? entityMaterial(this.view.lighting, { map: pixelTexture(overlayUrl), alphaTest: 0.1, side: THREE.DoubleSide }) : null;
@@ -75,12 +78,12 @@ export class DropRenderer {
           continue;
         }
       } else {
-        mesh = new THREE.Mesh(this.cube(stack.id, stack.damage || 0), material);
+        mesh = chestUrl ? chestItemModel(material, 0.25) : new THREE.Mesh(this.cube(stack.id, stack.damage || 0), material);
         // Extra copies scatter by (rand * 2 - 1) * 0.2 blocks on each axis.
         if (i) mesh.position.set((random.nextFloat() * 2 - 1) * 0.2, (random.nextFloat() * 2 - 1) * 0.2, (random.nextFloat() * 2 - 1) * 0.2);
       }
       // ItemStack.hasEffect: the dropped item's glint pass (first-person.js glintMesh, an approximated scroll).
-      if (glint && !url) mesh.add(glintMesh(mesh.geometry, this.view.textures.texture));
+      if (glint && !url && mesh.geometry) mesh.add(glintMesh(mesh.geometry, this.view.textures.texture));
       spin.add(mesh);
     }
     group.add(spin);
@@ -91,6 +94,7 @@ export class DropRenderer {
     this.scene.remove(pile.group);
     const owned = new Set();
     pile.group.traverse((node) => {
+      if (node.userData.ownGeometry) node.geometry.dispose();
       if (node.material) for (const material of Array.isArray(node.material) ? node.material : [node.material]) owned.add(material);
     });
     for (const material of owned) material.dispose();

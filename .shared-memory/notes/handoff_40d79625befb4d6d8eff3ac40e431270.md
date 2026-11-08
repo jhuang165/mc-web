@@ -1,0 +1,7 @@
+Published multiplayer accounts, names and skins, with user approval ("Yes, ship it").
+- Commits: 9c4d0e4 (feature) and 07ccb0f (PROJECT.md release record), both fast-forwarded onto GitHub main from 7e8a6de, pushed from the clean wt23-accounts worktree (branch accounts-skins). Local check before pushing: npm test 4,351 pass / 0 fail, bridge tests 5/5, build OK.
+- GitHub Pages Actions run 42433551488 succeeded. ledoge0 was redeployed with server/deploy-ledoge0.sh from the same clean tree. /health reports protocol 2, and the world was kept (tick 154487). Serve is tailnet-only and Funnel is off.
+- Live check from the Pages origin, in headless muted Chrome: the Multiplayer screen defaults to wss://ledoge0.tail92abaf.ts.net/multiplayer, and a fake login gets a 401 "Wrong name or password." with no page errors.
+- The first load right after the deploy got transient GitHub Pages 503s on three block textures, which aborted startup with "Couldn't load the world". The retry was fine. Possible follow-up: retry failed texture fetches.
+- The canonical game/ checkout is still at local main a514448 with the unapproved chest/bed/icon edits. It was NOT fast-forwarded, because its dirty src/main.js conflicts with the new commits; pull it after those edits are resolved.
+- The server key was not printed or stored anywhere new.

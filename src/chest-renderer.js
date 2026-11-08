@@ -3,11 +3,56 @@
 import * as THREE from "three";
 import { skinBox, pixelTexture } from "./first-person.js";
 import { chestPair, lidAngle, christmas } from "./chest.js";
-import { isChestBlock, TRAPPED_CHEST, ENDER_CHEST } from "./chest-blocks.js";
+import { isChestBlock, TRAPPED_CHEST, ENDER_CHEST, ITEM_TRAPPED_CHEST, ITEM_ENDER_CHEST } from "./chest-blocks.js";
 import { entityMaterial } from "./light-material.js";
 
 // The model's front faces +z (south, metadata 3); others turn about Y.
 const ROTATION = { 2: Math.PI, 3: 0, 4: -Math.PI / 2, 5: Math.PI / 2 };
+
+const chestTextureName = (kind, double, festive) =>
+  kind === ENDER_CHEST ? "ender" : (kind === TRAPPED_CHEST ? "trapped" : festive ? "christmas" : "normal") + (double ? "_double" : "");
+
+// ModelChest / ModelLargeChest boxes in pixels from the block corner: base 0..10 high, lid 9..14 hinged at the back
+// (y 9, z 1), knob 7..11 on the front face. The root's origin is the bottom centre of the (first) block; the front faces +z.
+export function chestModel(material, double = false) {
+  const w = double ? 30 : 14,
+    tw = double ? 128 : 64,
+    root = new THREE.Group(),
+    model = new THREE.Group(),
+    lid = new THREE.Group(),
+    box = (parent, bw, bh, bd, u, v, x, y, z) => {
+      const mesh = new THREE.Mesh(skinBox(bw, bh, bd, u, v, tw, 64), material);
+      mesh.position.set(x / 16, y / 16, z / 16);
+      parent.add(mesh);
+    };
+  box(model, w, 10, 14, 0, 19, 1 + w / 2, 5, 8);
+  lid.position.set(0, 9 / 16, 1 / 16);
+  box(lid, w, 5, 14, 0, 0, 1 + w / 2, 2.5, 7);
+  box(lid, 2, 4, 1, 0, 0, double ? 16 : 8, 0, 14.5);
+  model.add(lid);
+  model.position.set(double ? -1 : -0.5, 0, -0.5);
+  root.add(model);
+  return { root, lid };
+}
+
+// Chest, trapped chest and ender chest items render through TileEntityRendererChestHelper (block render type 22),
+// not a textured cube: the closed single chest model with its entity texture.
+export const isChestItem = (id) => id === 41 || id === ITEM_TRAPPED_CHEST || id === ITEM_ENDER_CHEST;
+export function chestItemTexture(id, date = new Date()) {
+  if (!isChestItem(id)) return null;
+  const kind = id === ITEM_ENDER_CHEST ? ENDER_CHEST : id === ITEM_TRAPPED_CHEST ? TRAPPED_CHEST : 41;
+  return `/media/1.7.10/entity/chest/${chestTextureName(kind, false, christmas(date))}.png`;
+}
+// RenderBlocks.renderBlockAsItem for type 22: the helper's chest has no world, so TileEntityChestRenderer uses metadata 0
+// (no turn, front +z) and the model fills the unit cube centred on the origin, like the held/dropped block cube, at `scale`.
+export function chestItemModel(material, scale = 1) {
+  const { root } = chestModel(material, false), group = new THREE.Group();
+  root.traverse((node) => { if (node.isMesh) node.userData.ownGeometry = true; }); // not shared: dispose with the item
+  root.position.y = -0.5;
+  group.add(root);
+  group.scale.setScalar(scale);
+  return group;
+}
 
 export class ChestRenderer {
   // `view` supplies the lightmap and world brightness (VoxelScene).
@@ -21,30 +66,11 @@ export class ChestRenderer {
   material(name) {
     return entityMaterial(this.view.lighting, { map: pixelTexture(`/media/1.7.10/entity/chest/${name}.png`) });
   }
-  // Boxes in pixels from the block corner: base 0..10 high, lid 9..14 hinged at
-  // the back (y 9, z 1), knob 7..11 on the front face.
   // `kind` picks the texture: a trapped chest always uses trapped(.png / _double) (TileEntityChestRenderer checks the
   // type before the Christmas date), the ender chest the single-model ender.png (TileEntityEnderChestRenderer).
   build(double, festive, kind = 0) {
-    const w = double ? 30 : 14,
-      tw = double ? 128 : 64,
-      material = this.material(kind === ENDER_CHEST ? "ender" : (kind === TRAPPED_CHEST ? "trapped" : festive ? "christmas" : "normal") + (double ? "_double" : "")),
-      root = new THREE.Group(),
-      model = new THREE.Group(),
-      lid = new THREE.Group(),
-      box = (parent, bw, bh, bd, u, v, x, y, z) => {
-        const mesh = new THREE.Mesh(skinBox(bw, bh, bd, u, v, tw, 64), material);
-        mesh.position.set(x / 16, y / 16, z / 16);
-        parent.add(mesh);
-      };
-    box(model, w, 10, 14, 0, 19, 1 + w / 2, 5, 8);
-    lid.position.set(0, 9 / 16, 1 / 16);
-    box(lid, w, 5, 14, 0, 0, 1 + w / 2, 2.5, 7);
-    box(lid, 2, 4, 1, 0, 0, double ? 16 : 8, 0, 14.5);
-    model.add(lid);
-    model.position.set(double ? -1 : -0.5, 0, -0.5);
-    root.add(model);
-    return { root, lid, material };
+    const material = this.material(chestTextureName(kind, double, festive));
+    return { ...chestModel(material, double), material };
   }
   // Rebuilds models whose pairing, facing or texture changed.
   // `enders` maps "x,y,z" to the runtime ender chest tiles ({ users, lid, prevLid }; the facing is the cell's metadata).

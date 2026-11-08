@@ -16,6 +16,7 @@ import { rayTraceBlocks } from "./projectiles.js";
 import { PHYSICS } from "./world.js";
 import { LEATHER_ARMOR, LEATHER_COLOR, leatherColorComponents, leatherItemLayers } from "./leather-dye.js";
 import { glintMesh } from "./first-person.js";
+import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 import { arrowGeometry } from "./arrow-renderer.js";
 import { stuckArrowPlacements } from "./stuck-arrows.js";
 export { LEATHER_COLOR } from "./leather-dye.js";
@@ -489,16 +490,20 @@ export class PlayerRenderer {
     this.heldId = id;
     if (this.held) {
       this.held.parent?.remove(this.held);
-      this.heldGeometry?.dispose();
       const owned = new Set();
-      this.held.traverse((node) => { if (node.material) for (const material of Array.isArray(node.material) ? node.material : [node.material]) owned.add(material); });
+      this.held.traverse((node) => { node.geometry?.dispose(); if (node.material) for (const material of Array.isArray(node.material) ? node.material : [node.material]) owned.add(material); });
       for (const material of owned) this.forget(material);
       this.held = this.heldMaterial = this.heldOverlayMaterial = this.heldGeometry = null;
     }
     if (!id || !ITEMS[id]) return;
     const kind = heldKind(id, damage), url = itemTexture(id, damage, id === FISHING_ROD && rodState.cast ? 1 : 0);
     let mesh;
-    if (url) {
+    const chestUrl = !url && chestItemTexture(id);
+    if (chestUrl) {
+      this.heldMaterial = this.material({ map: pixelTexture(chestUrl) });
+      mesh = chestItemModel(this.heldMaterial);
+      mesh.rotation.y = Math.PI / 2; // as the held block cube
+    } else if (url) {
       this.heldGeometry = spriteGeometry();
       this.heldMaterial = this.material({ map: pixelTexture(url), ...(leather ? { color: leather.tint } : {}) });
       mesh = new THREE.Mesh(this.heldGeometry, this.heldMaterial);
@@ -523,7 +528,7 @@ export class PlayerRenderer {
       mesh = new THREE.Mesh(g, this.heldMaterial);
       mesh.rotation.y = Math.PI / 2;
     }
-    if (glint) mesh.add(glintMesh(mesh.geometry, url ? pixelTexture(url) : this.atlas));
+    if (glint && mesh.geometry) mesh.add(glintMesh(mesh.geometry, url ? pixelTexture(url) : this.atlas));
     const group = new THREE.Group();
     group.matrixAutoUpdate = false;
     group.matrix.copy(heldItemMatrix(kind));

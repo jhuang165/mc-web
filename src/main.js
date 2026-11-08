@@ -17,7 +17,7 @@ import "./style.css";
 import "./minecraft-ui.css";
 import "./container-ui.css";
 import "./menu-screens.css";
-import { Gui } from "./menu-ui.js";
+import { Gui, textHtml } from "./menu-ui.js";
 import { createMenus } from "./menus.js";
 import { commandBlockScreen } from "./command-block-screen.js";
 import { folderName, LANG, t as langT } from "./menu-screens.js";
@@ -1680,10 +1680,15 @@ function showBedScreen() {
     bedFade = document.createElement("div");
     bedFade.style.cssText = "position:fixed;inset:0;z-index:30;pointer-events:none;background:#101020;opacity:0;display:none";
     bedButton = document.createElement("button");
-    bedButton.className = "button secondary";
-    bedButton.textContent = BED_TEXT.leave; // multiplayer.stopSleeping
-    // GuiSleepMP.initGui: a 200x20 button at (width / 2 - 100, height - 40), in GUI pixels.
-    bedButton.style.cssText = "position:fixed;left:50%;bottom:calc(20*var(--u));transform:translateX(-50%);width:calc(200*var(--u));height:calc(20*var(--u));font-size:calc(8*var(--u));padding:0;z-index:31;display:none";
+    bedButton.type = "button";
+    // A GuiButton like the menus' (menu-screens.css .mc-button), labelled multiplayer.stopSleeping.
+    bedButton.className = "mc-button";
+    bedButton.setAttribute("aria-label", BED_TEXT.leave);
+    bedButton.innerHTML = `<span class="mc-text mc-label" style="left:0;width:100%;text-align:center;top:calc(6*var(--u))">${textHtml(BED_TEXT.leave, null)}</span>`;
+    // GuiSleepMP.initGui: a 200x20 button at (width / 2 - 100, height - 40), in GUI pixels. Centred with `left`, since
+    // .mc-button (like the old .button) forces transform:none.
+    bedButton.style.cssText = "position:fixed;box-sizing:border-box;left:calc(50% - 100*var(--u));bottom:calc(20*var(--u));width:calc(200*var(--u));height:calc(20*var(--u));--hw:100;z-index:31;display:none";
+    bedButton.addEventListener("mousedown", (e) => e.preventDefault());
     bedButton.onclick = () => bedWake(true, false);
     document.body.append(bedFade, bedButton);
   }
@@ -1705,7 +1710,11 @@ function updateBedFade() {
   bedFade.style.opacity = String(a);
   if (a === 0 && !bedSleep.sleeping) bedFade.style.display = "none";
 }
-function enterSleep() {
+// Not native: 1.7.10 cuts straight to the lying view. Clicking a bed glides the camera there over BED_EASE_MS instead.
+const BED_EASE_MS = 450;
+let bedEase = null;
+function enterSleep(ease = false) {
+  bedEase = ease ? { position: scene.camera.position.clone(), quaternion: scene.camera.quaternion.clone(), start: performance.now() } : null;
   screen = "inventory";
   mining = null; mineHeld = false; eating = null;
   keys.clear();
@@ -1734,7 +1743,7 @@ function useBed(x, y, z) {
   };
   const out = activateBed(world, x, y, z, bedSleep, ctx);
   if (out.message) showChatLine(document, out.message);
-  if (bedSleep.sleeping) { enterSleep(); saved = false; lastHealth = survival.health; }
+  if (bedSleep.sleeping) { enterSleep(thirdPersonView === 0); saved = false; lastHealth = survival.health; }
 }
 // EntityPlayer.wakeUpPlayer(resetTimer, update, setSpawn): stand beside the bed (or above its head), clear the occupied bit.
 function bedWake(resetTimer, setSpawn, leaveScreen = true) {
@@ -3705,7 +3714,15 @@ function animate(now) {
       const [hx, hz] = BED_DIR[bedSleep.facing];
       scene.camera.position.set(bedSleep.pos.x, bedSleep.pos.y - 0.1, bedSleep.pos.z);
       scene.camera.rotation.set(0, Math.atan2(hx, hz), 0, "YXZ");
-    }
+      if (bedEase) {
+        const t = Math.min(1, (performance.now() - bedEase.start) / BED_EASE_MS), e = t * t * (3 - 2 * t); // smoothstep
+        if (t >= 1) bedEase = null;
+        else {
+          scene.camera.position.lerpVectors(bedEase.position, scene.camera.position, e);
+          scene.camera.quaternion.slerpQuaternions(bedEase.quaternion, scene.camera.quaternion.clone(), e);
+        }
+      }
+    } else bedEase = null;
     animate.pose = pose;
     const dir = new THREE.Vector3();
     scene.camera.getWorldDirection(dir);

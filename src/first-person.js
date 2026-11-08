@@ -19,6 +19,7 @@ import { MapSurface, mapHandMatrices } from "./map-render.js";
 import { onResourcesRefreshed } from "./resource-refresh.js";
 import { versioned } from "./media-version.js";
 import { animatedItemUrl, itemFrameTag, onItemFramesReady } from "./item-animation.js";
+import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
 const BLOCK_FACES=[
@@ -239,9 +240,8 @@ export class FirstPerson {
     this.last = key;
     if (this.item) {
       this.pivot.remove(this.item);
-      this.item.geometry?.dispose();
       const owned = new Set();
-      this.item.traverse((node) => { if (node.material) for (const material of Array.isArray(node.material) ? node.material : [node.material]) owned.add(material); });
+      this.item.traverse((node) => { node.geometry?.dispose(); if (node.material) for (const material of Array.isArray(node.material) ? node.material : [node.material]) owned.add(material); });
       for (const material of owned) material.dispose();
       this.materials = this.materials.filter((material) => !owned.has(material));
       this.item = null;
@@ -250,8 +250,11 @@ export class FirstPerson {
     this.arm.visible = !id;
     if (!id || !data) return;
     let mesh;
-    const url = itemTexture(id, meta, cast ? 1 : use);
-    if(id===ANVIL||STAIRS[id]){
+    const url = itemTexture(id, meta, cast ? 1 : use), chestUrl = !url && chestItemTexture(id);
+    if (chestUrl) {
+      mesh = chestItemModel(this.material({ map: pixelTexture(chestUrl) }));
+      mesh.rotation.y = Math.PI / 2;
+    } else if(id===ANVIL||STAIRS[id]){
       mesh=new THREE.Mesh(STAIRS[id]?stairItemGeometry(id):anvilItemGeometry(meta),this.material({map:this.atlas,alphaTest:.1}));
       mesh.rotation.y=Math.PI/2;
     } else if (url) {
@@ -289,7 +292,7 @@ export class FirstPerson {
       mesh.rotation.y = Math.PI / 2;
     }
     this.sprite = !!url;
-    if (glint) mesh.add(glintMesh(mesh.geometry, url ? pixelTexture(url) : this.atlas));
+    if (glint && mesh.geometry) mesh.add(glintMesh(mesh.geometry, url ? pixelTexture(url) : this.atlas));
     this.pivot.add(mesh);
     this.item = mesh;
   }
