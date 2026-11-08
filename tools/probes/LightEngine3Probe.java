@@ -171,7 +171,8 @@ public class LightEngine3Probe {
     newWorld();
   }
   static String ints(int[] f) { StringBuilder s = new StringBuilder("["); for (int j = 0; j < f.length; j++) s.append(j > 0 ? "," : "").append(f[j]); return s.append("]").toString(); }
-  static void end(String name) {
+  static void end(String name) { System.out.println(endLine(name)); }
+  static String endLine(String name) {
     StringBuilder s = new StringBuilder("{\"case\":\"" + name + "\",\"fills\":[");
     for (int i = 0; i < fills.size(); i++) s.append(i > 0 ? "," : "").append(ints(fills.get(i)));
     s.append("],\"decorations\":[");
@@ -179,7 +180,7 @@ public class LightEngine3Probe {
     for (Map.Entry<Long, List<int[]>> e : decorations.entrySet())
       for (int[] d : e.getValue()) { s.append(first ? "" : ",").append(ints(d)); first = false; }
     s.append("],\"ops\":[").append(String.join(",", ops)).append("],\"snaps\":[").append(String.join(",", snaps)).append("],\"provider\":").append(providerJson()).append("}");
-    System.out.println(s);
+    return s.toString();
   }
   // The flags and tables of the provider the scenario ran on: aqo.f, aqo.g, dimensionId (aqo.i), World.getActualHeight (S()) and
   // WorldProvider.lightBrightnessTable (aqo.h), which generateLightBrightnessTable (a()) fills.

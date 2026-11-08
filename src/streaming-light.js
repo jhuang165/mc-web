@@ -24,10 +24,9 @@ for (let b = 0; b < 256; b++) OPACITY[b] = Math.min(255, lightOpacity(b));
 
 const drain = (g) => { for (let r = g.next(); !r.done; r = g.next()); };
 
-// WorldProvider.hasNoSky for the light engine (aqo.g, read by World.getSavedLightValue, Chunk.generateSkylightMap and ExtendedBlockStorage): set
-// by WorldProviderHell and WorldProviderEnd. The port's `world.hasNoSky` carries aqo.f (isHellWorld, Nether only; see dimensions.js), so a
-// world names the light fact as `lightNoSky`. Only the native path uses it: with `?nativeLight=0` the End keeps its old sky-lit volume.
-const noSkyFor = (world, native) => (native && world.lightNoSky !== undefined ? !!world.lightNoSky : !!world.hasNoSky);
+// WorldProvider.hasNoSky (aqo.g: Nether and End; `world.hasNoSky`, dimensions.js) for the light engine. Only `?nativeLight=0`, the pre-native
+// fallback volume, keeps the End sky-lit as it always was.
+const noSkyFor = (world, native) => !!world.hasNoSky && (native || !world.isEnd);
 const merge = (a, b) => (!a ? b : !b ? a : { x0: Math.min(a.x0, b.x0), x1: Math.max(a.x1, b.x1), y0: Math.min(a.y0, b.y0), y1: Math.max(a.y1, b.y1), z0: Math.min(a.z0, b.z0), z1: Math.max(a.z1, b.z1) });
 
 export class StreamingLight {

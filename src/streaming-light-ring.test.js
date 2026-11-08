@@ -66,7 +66,7 @@ for (const dim of [-1, 1]) {
   test(`dimension ${dim} runs on NativeLight with the native hasNoSky: block light follows torches, sky stays 0 in built sections`, () => {
     const w = new DimensionWorld('12345', dim);
     assert.ok(w.streamAround(dim === 1 ? 100 : 0, 0));
-    assert.equal(w.lightNoSky, true);
+    assert.equal(w.hasNoSky, true);
     const L = new StreamingLight(w, emission, { native: true });
     assert.ok(L.native && L.noSky);
     const px = w.minX + 64 + 3, pz = w.minZ + 64 + 5;

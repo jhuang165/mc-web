@@ -87,7 +87,7 @@ import { VoxelScene } from "./scene.js";
 import { SoundBank } from "./audio.js";
 import { randomSuperSecretEvent, SUPER_SECRET_SOUND } from "./post-shaders.js";
 import { breakSound, placeSound, hitSound, footstepSound, placesSilently } from "./block-sounds.js";
-import { Weather, isWet, canLightningStrikeAt } from "./weather.js";
+import { Weather, isWet, canLightningStrikeAt, simulationKey } from "./weather.js";
 import { tickWeatherSimulation } from "./weather-simulation.js";
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
 import { showsPumpkinBlur } from "./wearable-heads.js";
@@ -949,7 +949,7 @@ function save() {
   active.weather = weather.save();
   active.bed = bedSleep.save();
   active.flying = flying && survival.creative ? true : undefined;
-  active.worldRandom = weather.saveSimulation();
+  active[simulationKey(world.dimension)] = weather.saveSimulation(); // the Overworld's World.rand/updateLCG stay in worldRandom; each other dimension keeps its own (dimension state `simulation`)
   active.fluidTicks = fluids.save();
   active.fireTicks = fire.save();
   if (redstoneRuntime) { active.redstone = redstoneRuntime.save(); active.pistons = redstoneRuntime.pistons.save(); active.commandBlocks = redstoneRuntime.commandBlocks.save(); active.musicTiles = redstoneRuntime.music.save(); }
@@ -1213,7 +1213,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     if (record.wholeSave) dims.warmStored({ id: rootIdOf(record), wholeSave: record.wholeSave }, dimensionOf(record)); // stored-column index for /spreadplayers and portal peeks (background)
     startPrefetch();
     // Restore World.rand before constructing the block runtimes that share it.
-    weather = new Weather().restore(record.weather).restoreSimulation(record.worldRandom);
+    weather = new Weather().restore(record.weather).restoreSimulation(record[simulationKey(world.dimension)]);
     // The cave mood sound (cave-ambience.js) on this world's World.rand and updateLCG.
     weather.mood = new MoodSound(weather);
     weather.mood.player = () => ({ x: position.x, y: position.y + PHYSICS.eye, z: position.z }); // the server player's posY is the eye

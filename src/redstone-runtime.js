@@ -121,7 +121,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     primeTnt: (x, y, z) => game.primeTnt?.(x, y, z),
     entitiesIn,
     containerSlots,
-    environment: () => ({ skylightSubtracted: game.subtracted?.() ?? 0, celestialAngle: Math.fround((game.angle?.() ?? 0) * Math.PI * 2), sky: 15 }),
+    environment: () => ({ skylightSubtracted: game.subtracted?.() ?? 0, celestialAngle: Math.fround((game.angle?.() ?? 0) * Math.PI * 2), sky: 15, noSky: !!world.hasNoSky }), // BlockDaylightDetector.func_149957_e returns early where provider.hasNoSky (aqo.g)
     skyLight: (x, y, z) => game.skyLight?.(x, y, z) ?? 15,
   });
   const commandBlocks = installCommandBlocks(redstone, { host: () => game.commandHost(), changed: () => game.markUnsaved?.() });
