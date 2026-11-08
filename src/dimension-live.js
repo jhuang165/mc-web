@@ -17,7 +17,7 @@ import { restoreImportedFortress } from "./fortress-restore.js";
 import { drain, runSteps } from "./steps.js";
 import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf, portalCooldown, readPlayerPortalState } from "./dimensions.js";
 import { EntityPortals, placeAfterTravel, POS_Y, mobYawToMc, mcToMobYaw } from "./entity-portal.js";
-import { entityActive } from "./streaming-ticks.js";
+import { ringEntityActive } from "./streaming-ticks.js";
 import { LEAD_ITEM } from "./horse-gear.js";
 
 // Per-dimension runtime state: everything main.js's save() writes that is keyed by block coordinates or holds entities.
@@ -179,7 +179,7 @@ export class DimensionLive {
       for (const e of list) {
         // BlockPortal and BlockEndPortal collide only with an entity that has no rider and no vehicle (mob jockeys too).
         if (kind === "mob" && (e.rider || e.vehicle || e.ridingEntity || e.riddenBy)) { this.portals.step(e, kind, { ...at, riding: true }); continue; }
-        if (!entityActive(world, e)) continue;
+        if (!ringEntityActive(world, e)) continue; // Entity.onEntityUpdate's portal step runs for every updated entity, ring ones too
         const r = this.portals.step(e, kind, at);
         if (!r) continue;
         (gone ??= new Set()).add(e);

@@ -63,8 +63,17 @@ export class LiveRedstone extends RedstoneWorld {
   }
 
   // ---- storage over the live World ----
+  // Resident cells, and during the simulation tick (World.ringReads) cells of ring columns that take writes (headless-columns.js;
+  // natural-spawning.md "Round 7"). Outside the tick ring reads answer air, so the ring is not offered then.
   loaded(x, y, z) {
-    return this.world.inside(x, y, z) && this.world.isLoaded(x, z);
+    const w = this.world;
+    return w.inside(x, y, z) && (w.isLoaded(x, z) || (w.ringReads && !!w.ringSink?.writable(x, z)));
+  }
+  // WorldServer.tickUpdates runs a due entry whose own chunk exists (b0 = 0): resident cells, or ring cells whose column and its
+  // eight neighbours are held (HeadlessColumns.blockTicks), so the update never reads a missing column as air.
+  tickable(x, y, z) {
+    const w = this.world;
+    return w.inside(x, y, z) && (w.isLoaded(x, z) || (w.ringReads && !!w.ringSink?.blockTicks(x, z)));
   }
   getBlock(x, y, z) {
     const id = this.world.get(x, y, z);
@@ -196,12 +205,12 @@ export class LiveRedstone extends RedstoneWorld {
       if (e.time > this.time) break;
       this.tree.shift();
       this.pending.delete(`${e.x},${e.y},${e.z},${this.groupOf(e.id)}`);
-      if (this.loaded(e.x, e.y, e.z)) this.thisTick.push(e);
+      if (this.tickable(e.x, e.y, e.z)) this.thisTick.push(e);
       else this.deferred.push(e);
     }
     if (this.deferred.length) {
       const wait = [];
-      for (const e of this.deferred) (this.loaded(e.x, e.y, e.z) ? this.thisTick : wait).push(e);
+      for (const e of this.deferred) (this.tickable(e.x, e.y, e.z) ? this.thisTick : wait).push(e);
       this.deferred = wait;
     }
     while (this.thisTick.length) {
@@ -258,6 +267,25 @@ export class LiveRedstone extends RedstoneWorld {
           found.set(cellKey(x, y, z), { x, y, z, orig: this.watchIds.get(id) });
         }
       }
+    }
+    // Ring columns (headless-columns.js): plates, strings and sensors there are sensed while the ring ticks. A column's cells are
+    // searched again only when it was replaced or written since (its `stamp`).
+    const ring = this.world.ringSink;
+    if (ring?.eachColumn) {
+      this.ringFound ??= new WeakMap();
+      ring.eachColumn((cx, cz, col) => {
+        if (ring.resident(cx * 16, cz * 16)) return;
+        let hit = this.ringFound.get(col), list = hit?.stamp === (col.stamp | 0) ? hit.list : null;
+        if (!list) {
+          list = [];
+          for (const id of ids) for (let i = col.blocks.indexOf(id); i >= 0; i = col.blocks.indexOf(id, i + 1)) {
+            const c = Math.floor(i / col.h);
+            list.push([cx * 16 + (c >> 4), i - c * col.h, cz * 16 + (c & 15), this.watchIds.get(id)]);
+          }
+          this.ringFound.set(col, { stamp: col.stamp | 0, list });
+        }
+        for (const [x, y, z, orig] of list) found.set(cellKey(x, y, z), { x, y, z, orig });
+      });
     }
     for (const [key, p] of this.watched) if (!found.has(key) && this.loaded(p.x, p.y, p.z)) this.watched.delete(key);
     for (const [key, p] of found) if (!this.watched.has(key)) this.watched.set(key, p);

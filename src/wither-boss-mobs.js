@@ -158,9 +158,9 @@ export class WitherSkulls extends Fireballs {
   tick() {
     const mobs = this.mobs;
     for (const b of this.list) {
-      if (b.dead) continue;
+      if (b.dead || !mobs.isActive(b)) continue; // World.updateEntityWithOptionalForce: +-32 blocks loaded (natural-spawning.md "Round 7")
       b.px = b.x; b.py = b.y; b.pz = b.z;
-      if (this.ownerGone(b)) { b.dead = true; continue; }
+      if (this.ownerGone(b) || !this.blockExists(b)) { b.dead = true; continue; }
       b.ticks++;
       mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
       const start = [b.x, b.y, b.z], end = [b.x + b.vx, b.y + b.vy, b.z + b.vz];

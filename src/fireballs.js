@@ -43,12 +43,19 @@ export class Fireballs {
     const o = b.owner;
     return !!o && o !== "player" && (!this.mobs.entities.includes(o) || (o.health <= 0 && (o.death ?? 0) >= 20));
   }
+  // ze.h: setDead when !World.blockExists((int) posX, (int) posY, (int) posZ): y outside 0..255 (ahb.d tests 256 in every
+  // dimension) or the chunk not loaded (resident or held by the ring). Finite worlds keep their solid-border rule instead.
+  blockExists(b) {
+    const x = Math.trunc(b.x), y = Math.trunc(b.y), z = Math.trunc(b.z), w = this.mobs.world;
+    if (y < 0 || y >= 256) return false;
+    return !w.streaming || w.isLoaded(x, z) || !!this.mobs.ring?.holds(x, z);
+  }
   tick() {
     const mobs = this.mobs;
     for (const b of this.list) {
-      if (b.dead) continue;
+      if (b.dead || !mobs.isActive(b)) continue; // World.updateEntityWithOptionalForce: +-32 blocks loaded (natural-spawning.md "Round 7")
       b.px = b.x; b.py = b.y; b.pz = b.z;
-      if (this.ownerGone(b)) { b.dead = true; continue; }
+      if (this.ownerGone(b) || !this.blockExists(b)) { b.dead = true; continue; }
       b.ticks++;
       mobs.fx?.spawn("smoke", b.x, b.y + 0.5, b.z, 0, 0, 0);
       const start = [b.x, b.y, b.z], end = [b.x + b.vx, b.y + b.vy, b.z + b.vz];
