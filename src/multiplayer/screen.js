@@ -38,8 +38,7 @@ export function multiplayerScreen({ back, connect, profile, defaults = {}, makeA
       if (state === 'signedIn') {
         const a = api.account;
         g.text(`Signed in as ${a.name}${a.admin ? ' (admin)' : ''}`, w / 2, top, { center: true });
-        g.text(values.url.slice(0, 50), w / 2, top + 12, { center: true, color: 0xaaaaaa });
-        g.text('Shared Creative world · 128 × 128 blocks', w / 2, top + 24, { center: true, color: 0xaaaaaa });
+        g.text('Shared Creative world · 128 × 128 blocks', w / 2, top + 16, { center: true, color: 0xaaaaaa });
         g.button({ x, y: top + 44, w: 300, h: 20 }, busy ? 'Connecting…' : 'Join Server', () => run(g, async () => {
           note = 'Connecting and downloading terrain…'; g.build();
           await connect({ url: values.url, session: api.session, api });
@@ -59,9 +58,10 @@ export function multiplayerScreen({ back, connect, profile, defaults = {}, makeA
         g.button({ x: x + 152, y: top + 130, w: 148, h: 20 }, 'Cancel', back, { enabled: !busy });
         return;
       }
-      const fields = [['url', 'Server address', 512], ['name', 'Name', 16], ['password', 'Password', 128], ['invite', 'Invite code (new accounts only)', 128]];
+      // There is one server, so its address is not shown or editable.
+      const fields = [['name', 'Name', 16], ['password', 'Password', 128], ['invite', 'Invite code (new accounts only)', 128]];
       fields.forEach(([key, label, maxLength], index) => {
-        const y = top + index * 30;
+        const y = top + 15 + index * 30;
         g.text(label, x, y, { color: 0xaaaaaa });
         g.field({ x, y: y + 10, w: 300, h: 16 }, { value: values[key], maxLength, label, secret: key === 'password', input: value => { values[key] = value; } });
       });

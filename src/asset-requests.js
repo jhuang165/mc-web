@@ -19,3 +19,18 @@ export function createAssetQueue(limit = 16) {
 }
 
 export const requestAsset = createAssetQueue();
+
+// Static hosts briefly answer 5xx right after a deploy (seen on GitHub Pages),
+// and one missing atlas tile aborts startup. `load(attempt)` is retried after
+// each delay; the queue slot is released while waiting.
+export const RETRY_DELAYS = [500, 2000];
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+export async function retryAsset(load, { delays = RETRY_DELAYS, wait = sleep } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    try { return await load(attempt); }
+    catch (error) { if (attempt >= delays.length) throw error; await wait(delays[attempt]); }
+  }
+}
+// Distinct URL per retry so no cached failure is reused; the resource-pack
+// service worker matches overrides by path, so the query does not affect them.
+export const retryUrl = (url, attempt) => attempt ? url + (url.includes('?') ? '&' : '?') + 'retry=' + attempt : url;

@@ -23,7 +23,7 @@ export class DedicatedClient {
     const ws = this.socket = new WebSocket(serverUrl(url));
     return new Promise((resolve, reject) => {
       let welcomed = false;
-      const timeout = setTimeout(() => { reject(new Error('Server did not respond. Check Tailscale and the server address.')); this.close(); }, 15000);
+      const timeout = setTimeout(() => { reject(new Error('Server did not respond. Check that Tailscale is connected.')); this.close(); }, 15000);
       ws.onopen = () => this.send({ type: 'join', protocol: PROTOCOL, session });
       ws.onmessage = event => {
         try {
@@ -45,7 +45,7 @@ export class DedicatedClient {
         if (!welcomed) reject(new Error(reason));
         if (!this.intentional && welcomed) this.onClose(reason);
       };
-      ws.onerror = () => { if (!welcomed) reject(new Error('Could not connect. Check Tailscale and the server address.')); };
+      ws.onerror = () => { if (!welcomed) reject(new Error('Could not connect. Check that Tailscale is connected.')); };
     });
   }
   // While terrain loads, ticks merge into one: each cell keeps its last write and

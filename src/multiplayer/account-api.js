@@ -22,7 +22,7 @@ export class AccountApi {
     else if (type) headers['Content-Type'] = type;
     let response;
     try { response = await this.fetch(new URL(path, this.base), { method, headers, body, cache: 'no-store' }); }
-    catch { throw new Error('Could not reach the server. Check Tailscale and the server address.'); }
+    catch { throw new Error('Could not reach the server. Check that Tailscale is connected.'); }
     const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
     if (response.status === 401 && path !== 'login') this.remember(null);
     if (!response.ok) throw new Error(data.error || `Server answered ${response.status}.`);

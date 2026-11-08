@@ -595,7 +595,7 @@ async function joinMultiplayer(settings) {
   multiplayer = client;
   try {
     const welcome = await client.connect({ url: settings.url, session: settings.session });
-    localStorage.setItem('mc-web-server', JSON.stringify({ url: settings.url, name: settings.api.account?.name ?? '' }));
+    localStorage.setItem('mc-web-server', JSON.stringify({ name: settings.api.account?.name ?? '' }));
     const snapshot = welcome.world, prepared = restoreReplica(snapshot);
     const self = snapshot.players.find(p => p.id === client.id);
     streamStorage?.dispose(); streamStorage = null;

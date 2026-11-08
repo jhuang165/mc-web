@@ -1,5 +1,5 @@
 import {versioned,unversioned} from './media-version.js';
-import {requestAsset} from './asset-requests.js';
+import {requestAsset,retryAsset,retryUrl} from './asset-requests.js';
 import {parseAnimationMcmeta,spriteFrames,SpriteAnimation,fetchMcmeta,TICKS_PER_SECOND} from './texture-animation.js';
 import {colormapSource} from './colormap-source.js';
 import {atlasMips,mipChain} from './render-settings.js';
@@ -189,7 +189,7 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
 export function tileRect(index,inset=.02){const x=index%ATLAS_COLUMNS,y=Math.floor(index/ATLAS_COLUMNS);return{u0:(x*TILE_SIZE+inset)/(ATLAS_COLUMNS*TILE_SIZE),u1:((x+1)*TILE_SIZE-inset)/(ATLAS_COLUMNS*TILE_SIZE),v0:1-((y+1)*TILE_SIZE-inset)/(ATLAS_ROWS*TILE_SIZE),v1:1-(y*TILE_SIZE+inset)/(ATLAS_ROWS*TILE_SIZE)};}
 // A resource pack tile may be larger than 16 px (HD) or an animation strip (width x n*width): the atlas keeps its 16 px cells and draws the first square frame, scaled.
 function frameSize(source){return Math.max(1,Math.min(source.width||16,source.height||16));}
-function image(name){const url=versioned('/media/1.7.10/'+name+'.png');return requestAsset(()=>new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(new Error('Texture missing: '+name));i.src=url;}));}
+function image(name){const url=versioned('/media/1.7.10/'+name+'.png');return retryAsset(attempt=>requestAsset(()=>new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(new Error('Texture missing: '+name));i.src=retryUrl(url,attempt);})));}
 export function createBlockAtlas(){
  const canvas=document.createElement('canvas');canvas.width=ATLAS_COLUMNS*TILE_SIZE;canvas.height=ATLAS_ROWS*TILE_SIZE;const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=false;
  const texture=new THREE.CanvasTexture(canvas);texture.magFilter=texture.minFilter=THREE.NearestFilter;texture.generateMipmaps=false;const images=new Map(),icons=new Map();let biome='meadow',opaque=false,mipLevels=0;

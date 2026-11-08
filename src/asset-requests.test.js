@@ -25,3 +25,16 @@ test('a synchronous asset-loader error frees capacity for the next asset', async
   assert.equal(await queue(() => 'next'), 'next');
   assert.throws(() => createAssetQueue(0), RangeError);
 });
+
+test('a transiently failing asset is retried with a fresh URL, then gives up', async () => {
+  const { retryAsset, retryUrl } = await import('./asset-requests.js');
+  const waits = [], urls = [];
+  const flaky = attempt => { urls.push(retryUrl('/media/1.7.10/blocks/cake_side.png?r=2', attempt)); if (attempt < 2) throw new Error('503'); return 'ok'; };
+  assert.equal(await retryAsset(flaky, { wait: async ms => { waits.push(ms); } }), 'ok');
+  assert.deepEqual(waits, [500, 2000]);
+  assert.deepEqual(urls, ['/media/1.7.10/blocks/cake_side.png?r=2', '/media/1.7.10/blocks/cake_side.png?r=2&retry=1', '/media/1.7.10/blocks/cake_side.png?r=2&retry=2']);
+  assert.equal(retryUrl('/a.png', 1), '/a.png?retry=1');
+  let tries = 0;
+  await assert.rejects(retryAsset(() => { tries++; throw new Error('Texture missing: x'); }, { wait: async () => {} }), /Texture missing/);
+  assert.equal(tries, 3, 'a texture that is really missing still fails after two retries');
+});
