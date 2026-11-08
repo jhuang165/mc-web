@@ -113,7 +113,7 @@ test("a villager runs from a zombie it can see and keeps running: avoid replays 
     const ran = new Set();
     want.ticks.forEach((row, i) => {
       // The probe's zombie is scripted: set before the villager ticks, motionless, unharmed by the sun.
-      Object.assign(z, { x: want.zombie[i][0], y: 0, z: want.zombie[i][1], vx: 0, vz: 0, health: 20, fire: 0 });
+      Object.assign(z, { x: want.zombie[i][0], y: 0, z: want.zombie[i][1], vx: 0, vz: 0, health: 20, fire: 0, persistent: true }); // sw.w despawns a mob 336 blocks from the player every tick
       ew.tick(far, p, 0);
       for (const t of ew.ai.brain(e).tasks.running) ran.add(t.action.constructor.name);
       for (const k of ["x", "y", "z"]) assert.ok(Math.abs(e[k] - row[k]) < 1e-9, `${want.mode} tick ${i} ${k} ${e[k]} ${row[k]}`);

@@ -20,6 +20,7 @@ import { setHomeArea, detachHome } from "./home-area.js";
 import { homeFilter, isWithinHome } from "./home-area.js";
 import { zombieVillagerTargets } from "./zombie-villager.js";
 import { buildWolfTasks } from "./wolf-ai.js";
+import { revengeBrain } from "./revenge-target.js";
 import { buildSnowGolemTasks } from "./mooshroom-golem-live.js";
 import { isTamed as wolfTamed } from "./wolf.js";
 import { buildOcelotTasks, makeAvoid } from "./ocelot-ai.js";
@@ -117,6 +118,9 @@ export class TaskList {
   }
   tick() {
     if (this.tickCount++ % this.rate === 0) {
+      // uj.a(): startExecuting runs after the whole evaluation pass, so a reset of a
+      // lower-priority task cannot clear a target the new task just set.
+      const started = [];
       for (const entry of this.entries) {
         if (this.running.includes(entry)) {
           if (this.canUse(entry) && entry.action.continueExecuting()) continue;
@@ -124,10 +128,11 @@ export class TaskList {
           this.running.splice(this.running.indexOf(entry), 1);
         }
         if (this.canUse(entry) && entry.action.shouldExecute()) {
-          entry.action.startExecuting();
+          started.push(entry);
           this.running.push(entry);
         }
       }
+      for (const entry of started) entry.action.startExecuting();
     } else
       for (let i = 0; i < this.running.length; ) {
         const entry = this.running[i];
@@ -861,6 +866,9 @@ class HurtByTarget extends TargetBase {
 let zombieKit = null;
 const zombieVillage = () => (zombieKit ??= { ...villageTasks({ Task, TargetBase }), ...zombieVillagerTargets({ TargetBase }) });
 
+// EntityMob subclasses that run Brain.updateAITasks (spiders, silverfish and giants keep their own think).
+const ENTITY_MOB = new Set(["zombie", "pigman", "skeleton", "wither_skeleton", "creeper", "enderman", "witch", "blaze", "wither"]);
+
 // --- One mob's brain: the entity as the navigator, helpers and tasks see it ---
 export class Brain {
   constructor(e, ai) {
@@ -977,14 +985,17 @@ export class Brain {
       // EntitySkeleton (yl): swim 1, restrict sun 2, flee sun 3, the bow's arrow attack 4
       // (setCombatTask, with a bow in hand), wander 5, watch the player 6, look idle 6;
       // targets hurt-by 1 (no call for help) and the nearest visible player 2.
+      // Every EntityAI* of a skeleton draws on Entity.rand too (village-fight-reference.json: Wander nextInt(120), WatchClosest and LookIdle nextFloat).
+      if (ai.deps.entityRandom) this.rand = ai.deps.entityRandom(e);
       this.tasks.add(1, new Swim(this));
       this.tasks.add(2, new RestrictSun(this));
       this.tasks.add(3, new FleeSun(this, 1));
-      // EntitySkeleton.bZ: a stone sword (type 1) swaps the bow task for AttackOnCollide(player, 1.2, false).
-      this.tasks.add(4, e.type === "wither_skeleton" ? new AttackOnCollide(this, 1.2, "player", false) : new ArrowAttack(this, 1, 20, 60, 15));
       this.tasks.add(5, new Wander(this, A.wander));
       this.tasks.add(6, new WatchClosest(this, 8));
       this.tasks.add(6, new LookIdle(this));
+      // The constructor ends with setCombatTask, so the attack task is last in the list: Wander and the look tasks are evaluated before it.
+      // EntitySkeleton.bZ: no bow in hand (a sword, or `unarmed` as in the village-fight probe) swaps the bow task for AttackOnCollide(player, 1.2, false).
+      this.tasks.add(4, e.type === "wither_skeleton" || e.unarmed ? new AttackOnCollide(this, 1.2, "player", false) : new ArrowAttack(this, 1, 20, 60, 15));
       this.targets.add(1, new HurtByTarget(this, false));
       this.targets.add(2, new NearestAttackable(this));
     } else if (e.type === "snow_golem") {
@@ -1098,8 +1109,9 @@ export class Brain {
     this.e.aiMoveSpeed = v;
     this.e.moveForward = v;
   }
+  // EntityLivingBase.getAITarget: whoever hurt this mob last (revenge-target.js), not only the player.
   get revengeTarget() {
-    return this.e.revenge ? this.ai.player : null;
+    return revengeBrain(this.ai, this.e);
   }
   // Entity.getDistanceSqToEntity: feet to feet.
   distSq(o) {
@@ -1150,6 +1162,12 @@ export class Brain {
   updateAITasks() {
     const e = this.e;
     if (e.type === "zombie") this.syncBreakDoors();
+    // EntityMob.onLivingUpdate (yg.e): a brightness above 0.5 at the mob ages it 2 more ticks (the despawn age Wander reads); EntityLiving's
+    // updateEntityActionState adds the 1. Seen in village-fight-reference.json: a skeleton in a lit field stops wandering after 34 ticks.
+    if (ENTITY_MOB.has(e.type)) {
+      const h = this.ai.size(e).height;
+      if (this.ai.brightness(Math.floor(e.x), Math.floor(e.y + h * 0.66), Math.floor(e.z)) > 0.5) e.idle = (e.idle || 0) + 2;
+    }
     e.idle = (e.idle || 0) + 1;
     this.despawnEntity();
     this.senseCache.clear();
@@ -1164,12 +1182,12 @@ export class Brain {
     this.jumpHelper.doJump();
     e.yaw = (-e.rotationYaw * Math.PI) / 180;
   }
-  // sw.w(): every 32 ticks the nearest player decides. Only mobs that may despawn
+  // sw.w(): every tick the nearest player decides. Only mobs that may despawn
   // (the zombie) go: beyond 128 blocks at once, beyond 32 after 600 idle ticks with a
   // 1 in 800 roll; within 32 the idle age resets, which is what lets Wander run.
   despawnEntity() {
     const e = this.e, p = this.ai.player;
-    if ((e.idle & 31) !== 31 || !p) return;
+    if (!p) return; // sw.w() has no age gate in 1.7.10: it runs every tick (bytecode-read)
     const d3 = this.distSq(p), can = canDespawn(e);
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
