@@ -1,0 +1,378 @@
+{
+  "source": "tools/verify-container-widgets.mjs: javap -c -p of the unchanged 1.7.10 client jar (sha1 e80d9b3b...), integer runs asserted per method",
+  "widgets": {
+    "evidence": "bytecode-read: integer-constant runs asserted in javap -c -p -constants output of the unchanged 1.7.10 jar by tools/verify-container-widgets.mjs (nothing executed); class sha256 below",
+    "classes": {
+      "bex": {
+        "name": "GuiContainer",
+        "sha256": "c9f8b3b8a42fd7877c94e0ebdc8521fe8dc37025851b3a62ed1d1ebe19e78c44"
+      },
+      "bey": {
+        "name": "GuiRepair",
+        "sha256": "14db7ec725f529adaceab8f6a1e5f7bf13cd21012e091f0c7161703001bc3728"
+      },
+      "bcd": {
+        "name": "GuiTextField",
+        "sha256": "66bb09dfe77c1f52ebe00c38b7c6e4b30c30974db16c62a3c2aa3c573a9085fa"
+      },
+      "bfq": {
+        "name": "GuiEnchantment",
+        "sha256": "426fb8479d0f2fb28ec20561392bbc095056344ca6a811888bacc393383469e4"
+      },
+      "bfv": {
+        "name": "GuiMerchant",
+        "sha256": "ba7b543e85f3e7f15a13c3574f0dc0ad9d667e3c0a5ae8f99eebb9c3ce116d89"
+      },
+      "bfw": {
+        "name": "GuiMerchant.MerchantButton",
+        "sha256": "e7e3b7bf85e33371e92c2fef2e48bc9c513a126b147656ce240bbb08d4437fcc"
+      },
+      "bez": {
+        "name": "GuiBeacon",
+        "sha256": "e9d7d2840307dddab30bae0d1b938327452605ecfde49743b022522779a4f567"
+      },
+      "bfd": {
+        "name": "GuiBeacon.Button",
+        "sha256": "edfd460d51f013b3aa7f43867f1f3a55257c43d7e21d8dd9633485f3034f3dd2"
+      },
+      "bfc": {
+        "name": "GuiBeacon.PowerButton",
+        "sha256": "972cb61ad344838d36755cfb7187689f3f7689c619dcad5fa0d4c0ea6b8d75b8"
+      },
+      "bfb": {
+        "name": "GuiBeacon.ConfirmButton",
+        "sha256": "ff2c969c79e5d285a0ece8d81e6f388b98fb44ba9c1350a2743b9f33e58efba0"
+      },
+      "bfa": {
+        "name": "GuiBeacon.CancelButton",
+        "sha256": "835a03c81d7b6f2e83d19d659761b4c2e326e28dcb5a21cf9a53fbb6ae17f462"
+      },
+      "bft": {
+        "name": "GuiScreenHorseInventory",
+        "sha256": "836428be5c6069339453f9aeaee647ba0cc7d60c03537c91f1880268006f5e12"
+      },
+      "bfe": {
+        "name": "GuiScreenBook",
+        "sha256": "c3cbf52f475afea6ff285198f0d6ea25d79fff4e039495e994e1ab23873f53ca"
+      }
+    },
+    "slot": {
+      "hover": {
+        "argb": -2130706433,
+        "hex": "0x80FFFFFF",
+        "size": 16,
+        "draw": "drawGradientRect(x, y, x + 16, y + 16) after every slot is drawn, colour mask RGB only, over the item and its count"
+      },
+      "drag": {
+        "argb": -2130706433,
+        "hex": "0x80FFFFFF",
+        "size": 16,
+        "draw": "drawRect inside drawSlot before renderItemAndEffectIntoGUI (under the item), for a slot taking part in a split of two or more slots; with one dragged slot drawSlot returns early and that slot draws nothing"
+      },
+      "hitPad": 1,
+      "hitSize": 16,
+      "hit": "isPointInRegion(x, y, 16, 16): x - 1 <= mx < x + 16 + 1, same for y; first matching slot in list order"
+    },
+    "anvil": {
+      "title": {
+        "x": 60,
+        "y": 6,
+        "color": 4210752
+      },
+      "field": {
+        "x": 62,
+        "y": 24,
+        "width": 103,
+        "height": 12,
+        "textColor": -1,
+        "disabledTextColor": -1,
+        "background": false,
+        "maxLength": 40,
+        "shadow": true,
+        "blinkTicks": 6,
+        "blinkPeriod": 2,
+        "cursorBar": -3092272,
+        "cursorBarHex": "0xFFD0D0D0",
+        "backgroundTextOffset": {
+          "x": 4,
+          "heightLess": 8,
+          "div": 2
+        }
+      },
+      "cost": {
+        "color": 8453920,
+        "expensiveAt": 40,
+        "tooExpensiveColor": 16736352,
+        "shadowMask": 16579836,
+        "shadowShift": 2,
+        "right": 8,
+        "y": 67,
+        "copies": [
+          [
+            0,
+            1
+          ],
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "unicodeRects": [
+          {
+            "dx0": -3,
+            "dy0": -2,
+            "xSizeLess": 7,
+            "dy1": 10,
+            "color": -16777216
+          },
+          {
+            "dx0": -2,
+            "dy0": -1,
+            "xSizeLess": 8,
+            "dy1": 9,
+            "color": -12895429
+          }
+        ],
+        "rule": "cost > 0: green \"container.repair.cost\"; cost >= 40 and not creative: red \"container.repair.expensive\" (drawn without an output); else no output: nothing; output not takeable: red"
+      },
+      "nameBackground": {
+        "x": 59,
+        "y": 20,
+        "u": 0,
+        "vWithInput": 166,
+        "vEmpty": 182,
+        "width": 110,
+        "height": 16
+      },
+      "error": {
+        "x": 99,
+        "y": 45,
+        "u": 176,
+        "v": 0,
+        "width": 28,
+        "height": 21,
+        "rule": "(slot 0 or slot 1 filled) and slot 2 empty"
+      }
+    },
+    "enchanting": {
+      "title": {
+        "x": 12,
+        "y": 5,
+        "color": 4210752
+      },
+      "button": {
+        "x": 60,
+        "y": 14,
+        "pitch": 19,
+        "width": 108,
+        "height": 19,
+        "u": 0
+      },
+      "clickBox": {
+        "x": 60,
+        "y": 14,
+        "pitch": 19,
+        "width": 108,
+        "height": 19
+      },
+      "v": {
+        "off": 185,
+        "poor": 185,
+        "hover": 204,
+        "normal": 166
+      },
+      "name": {
+        "dx": 2,
+        "dy": 2,
+        "width": 104,
+        "color": 6839882,
+        "hoverColor": 16777088,
+        "poorColorMask": 16711422,
+        "poorColorShift": 1
+      },
+      "level": {
+        "right": 106,
+        "dy": 9,
+        "color": 8453920,
+        "poorColor": 4226832,
+        "shadow": true
+      },
+      "rule": "level 0: v 185 only; experienceLevel < level and not creative: v 185, name (0x685E4A & 0xFEFEFE) >> 1, level 0x407F10; else v 204 under the mouse (name 0xFFFF80) or v 166 (name 0x685E4A), level 0x80FF20",
+      "icons": "none: five drawTexturedModalRect calls (the sheet and the off, poor, hover, normal button blits); the 1.8 lapis/level icons do not exist in 1.7.10"
+    },
+    "merchant": {
+      "title": {
+        "y": 6,
+        "color": 4210752,
+        "centered": true
+      },
+      "next": {
+        "x": 147,
+        "y": 23,
+        "forward": true
+      },
+      "previous": {
+        "x": 17,
+        "y": 23,
+        "forward": false
+      },
+      "button": {
+        "width": 12,
+        "height": 19,
+        "u": 176,
+        "hoverU": 188,
+        "disabledU": 200,
+        "backwardV": 19
+      },
+      "cross": [
+        {
+          "x": 83,
+          "y": 21
+        },
+        {
+          "x": 83,
+          "y": 51
+        }
+      ],
+      "crossUV": {
+        "u": 212,
+        "v": 0,
+        "width": 28,
+        "height": 21
+      },
+      "offers": {
+        "buy": [
+          36,
+          24
+        ],
+        "buyB": [
+          62,
+          24
+        ],
+        "sell": [
+          120,
+          24
+        ],
+        "size": 16
+      }
+    },
+    "beacon": {
+      "xSize": 230,
+      "ySize": 219,
+      "confirm": {
+        "x": 164,
+        "y": 107,
+        "u": 90,
+        "v": 220
+      },
+      "cancel": {
+        "x": 190,
+        "y": 107,
+        "u": 112,
+        "v": 220
+      },
+      "button": {
+        "width": 22,
+        "height": 22,
+        "v": 219,
+        "states": "disabled u + 2w, selected u + w, hover u + 3w",
+        "icon": {
+          "dx": 2,
+          "dy": 2,
+          "size": 18
+        }
+      },
+      "primary": {
+        "x": 76,
+        "step": 24,
+        "y": 22,
+        "tierStep": 25,
+        "buttonWidth": 22,
+        "gap": 2
+      },
+      "secondary": {
+        "x": 167,
+        "step": 24,
+        "y": 47
+      },
+      "powerIcon": {
+        "columns": 8,
+        "size": 18,
+        "v": 198
+      },
+      "payment": {
+        "x": 42,
+        "y": 109,
+        "step": 22
+      },
+      "labels": [
+        {
+          "centerX": 62,
+          "y": 10,
+          "color": 14737632
+        },
+        {
+          "centerX": 169,
+          "y": 10,
+          "color": 14737632
+        }
+      ],
+      "tooltips": "drawCreativeTabHoveringText: power name (+ \" II\" on the secondary row except regeneration), gui.done, gui.cancel; disabled buttons too"
+    },
+    "horse": {
+      "labels": [
+        {
+          "x": 8,
+          "y": 6,
+          "color": 4210752
+        },
+        {
+          "x": 8,
+          "y": "-96 + 2 from ySize",
+          "color": 4210752
+        }
+      ],
+      "chest": {
+        "x": 79,
+        "y": 17,
+        "u": 0,
+        "v": 166,
+        "width": 90,
+        "height": 54
+      },
+      "armor": {
+        "x": 7,
+        "y": 35,
+        "u": 0,
+        "v": 220,
+        "width": 18,
+        "height": 18
+      },
+      "preview": {
+        "x": 51,
+        "y": 60,
+        "scale": 17,
+        "mouseX": 51,
+        "mouseY": 25
+      }
+    },
+    "book": {
+      "width": 192,
+      "height": 192,
+      "top": 2,
+      "left": "(width - 192) / 2 of the ScaledResolution width (no fixed box)",
+      "buttons": {
+        "left": -100,
+        "right": 2,
+        "y": 196,
+        "width": 98,
+        "doneWidth": 200,
+        "height": 20
+      }
+    }
+  }
+}

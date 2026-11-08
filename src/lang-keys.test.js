@@ -76,16 +76,16 @@ test('horse inventory title follows the language (native key per type, custom na
 test('beacon and trade GUI labels follow the language', () => {
   assert.match(beaconDecorationsHtml(), />Primary Power<.*>Secondary Power</);
   const html = beaconUiHtml({ levels: 4, primary: 1, secondary: 0, payment: true, icon: () => '' });
-  assert.match(html, /title="Done"/);
-  assert.match(html, /title="Cancel"/);
-  assert.match(html, /title="Speed II"/);
+  assert.match(html, /aria-label="Done"/);
+  assert.match(html, /aria-label="Cancel"/);
+  assert.match(html, /aria-label="Speed II"/);
   const de = german('tile.beacon.primary=Hauptkraft\ntile.beacon.secondary=Nebenkraft\ngui.done=Fertig\ngui.cancel=Abbrechen\npotion.moveSpeed=Tempo\ncontainer.inventory=Inventar\n');
   withTable(de, () => {
     assert.match(beaconDecorationsHtml(), />Hauptkraft<.*>Nebenkraft</);
     const h = beaconUiHtml({ levels: 4, primary: 1, secondary: 0, payment: true, icon: () => '' });
-    assert.match(h, /title="Fertig"/);
-    assert.match(h, /title="Abbrechen"/);
-    assert.match(h, /title="Tempo II"/);
+    assert.match(h, /aria-label="Fertig"/);
+    assert.match(h, /aria-label="Abbrechen"/);
+    assert.match(h, /aria-label="Tempo II"/);
     assert.match(merchantDecorationsHtml(), />Inventar</);
   });
   assert.match(merchantDecorationsHtml(), />Inventory</);

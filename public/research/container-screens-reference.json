@@ -47,5 +47,5 @@
     "creative": { "guiLeft": 116, "guiTop": 52, "labels": [["Building Blocks", 8, 6]] },
     "book": { "x": 53, "y": 0 }
   },
-  "notNativeVerified": ["horse and merchant live screens were not opened in a world", "the sheet textures, slot positions and widgets inside each panel are unchanged from earlier batches", "GuiScreenBook width fixed at 320 units"]
+  "notNativeVerified": ["horse and merchant screens were opened live in headless Chrome (batch 24) but not compared with a running 1.7.10 client", "widget geometry inside the panels: container-widgets-reference.json (bytecode-read, batch 24)", "GuiScreenBook now uses the ScaledResolution width (batch 24)"]
 }
