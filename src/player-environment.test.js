@@ -123,3 +123,50 @@ test('a sleeping player beside a wall takes no suffocation damage', () => {
     assert.equal(s.survival.health, sleeping ? 20 : 19);
   }
 });
+
+// ---- Batch 25: a piston push runs the player's moveEntity tail and landing (piston-push.js pushPlayer) ----
+import { pushPlayer } from './piston-push.js';
+import { FIRE } from './world.js';
+import { landPlayer, playerMoveTail } from './player-environment.js';
+function pushed(s, over = {}) {
+  const st = { onGround: false, collidedH: false, fallDistance: 0, ...over };
+  return {
+    position: s.position, velocity: { x: 0, y: 0, z: 0 }, motion: s.motion, width: 0.6, height: 1.8, flying: false,
+    get onGround() { return st.onGround; }, set onGround(v) { st.onGround = v; }, get collidedH() { return st.collidedH; }, set collidedH(v) { st.collidedH = v; },
+    get fallDistance() { return st.fallDistance; }, set fallDistance(v) { st.fallDistance = v; },
+    tail: (body) => playerMoveTail({ world: s.world, weather: s.weather, survival: s.survival, flying: false, inWater: false }, body),
+    land: (d) => landPlayer({ world: s.world, position: s.position, survival: s.survival, inWater: false }, d),
+  };
+}
+
+test('a push that lands the player applies the fall (updateFallState on the ground: EntityLivingBase.fall)', () => {
+  const s = fixture();
+  s.position.y = 10.5;
+  const p = pushed(s, { fallDistance: 4.5 });
+  const landed = pushPlayer(s.world, p, 0, -0.5625, 0);
+  assert.equal(landed, 4.5, 'the fall distance before the landing move (updateFallState adds nothing on the ground)');
+  assert.equal(s.position.y, 10);
+  assert.equal(p.onGround, true);
+  assert.equal(p.fallDistance, 0);
+  assert.equal(s.survival.health, 18, 'ceil(4.5 - 3) = 2 points');
+  assert.equal(s.survival.lastDamage, 'a fall');
+});
+
+test('a push into a cactus hurts the player; one into fire burns it and catches with setFire(8) at the counter rollover', () => {
+  const s = fixture();
+  s.world.put(65, 10, 64, CACTUS, 0, false);
+  const p = pushed(s, { onGround: true });
+  pushPlayer(s.world, p, 0.5625, 0, 0);
+  assert.ok(Math.abs(s.position.x - (65.0625 - Math.fround(0.6) / 2)) < 1e-6, `stopped by the cactus box: ${s.position.x}`);
+  assert.equal(s.survival.lastDamage, 'a cactus');
+  const f = fixture();
+  f.world.put(65, 10, 64, FIRE, 0, false);
+  f.survival.fire = -1;
+  pushPlayer(f.world, pushed(f, { onGround: true }), 0.5625, 0, 0);
+  assert.equal(f.survival.lastDamage, 'fire');
+  assert.equal(f.survival.fire, 160, 'the counter reaches 0 and setFire(8) gives 160 ticks');
+  const g = fixture();
+  g.survival.fire = 30;
+  pushPlayer(g.world, pushed(g, { onGround: true }), 0.5625, 0, 0);
+  assert.equal(g.survival.fire, 30, 'outside a burning box a positive counter is left to the burn tick');
+});

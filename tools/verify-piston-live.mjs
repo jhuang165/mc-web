@@ -12,7 +12,8 @@ import path from "node:path";
 import os from "node:os";
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
-import { RedstoneWorld } from "../src/redstone.js";
+import { installShapedBlocks, trapdoorSupportOriginal } from "../src/shaped-blocks.js";
+import { RedstoneWorld, blockProperties } from "../src/redstone.js";
 import { fromOriginal } from "../src/block-registry.js";
 import { installPistons, tileOffset, tileProgress } from "../src/piston-live.js";
 import { pistonPushExtras } from "../src/piston-push.js";
@@ -22,20 +23,23 @@ import { Minecarts, Y_OFFSET } from "../src/minecarts.js";
 import { Boats } from "../src/boats.js";
 import { boatBoxProvider } from "../src/entity-collision.js";
 import { solidBlock } from "../src/world.js";
+import { ItemEntities } from "../src/item-entities.js";
+import { ExperienceOrbs, newOrb } from "../src/experience.js";
+import { detectorRailBehaviour, DETECTOR } from "../src/powered-rails.js";
 
 const exec = promisify(execFile), root = path.dirname(fileURLToPath(import.meta.url)), exists = (p) => access(p).then(() => true, () => false);
 const STONE = 1, STICKY = 29, PISTON = 33, REDSTONE_BLOCK = 152;
 const reference_partials = [0, 0.25, 0.5, 0.75, 1];
 const ORIGIN = [4, 10, 4], SIZE = [7, 6, 6];
-function scenario(name, { cells, events, ticks, note }) {
+function scenario(name, { cells, events, ticks, note, order }) {
   const grid = [];
   for (let x = 0; x < SIZE[0]; x++) for (let y = 0; y < SIZE[1]; y++) for (let z = 0; z < SIZE[2]; z++) grid.push(cells[`${x},${y},${z}`] ?? (y === 0 ? STONE : 0));
-  return { name, note, ticks, seed: 1, grid: grid.join(","), events };
+  return { name, note, ticks, seed: 1, grid: grid.join(","), events, ...(order ? { order: true } : {}) };
 }
 const box = (x, y, z, w = 0.4, h = 0.8) => [x, y, z, x + w, y + h, z + w];
 const ent = (t, label, b) => [t, "entity", 0, 0, 0, label, ...b];
 // A real entity (probe: EntityPig / EntityMinecartEmpty / EntityBoat constructed in the World) at the cell's centre, feet on its floor.
-const PIG = 0, CART = 1, BOAT = 2;
+const PIG = 0, CART = 1, BOAT = 2, ITEM = 3, ITEM_NOCLIP = 4, TNT = 5, SAND = 6, ORB = 7;
 const live = (t, label, kind, [x, y, z], [vx, vy, vz] = [0, 0, 0]) => [t, "live", x, y, z, label, kind, vx, vy, vz];
 const SCENARIOS = [];
 {
@@ -143,6 +147,80 @@ for (const [name, id] of [["slab-bottom", "44:0"], ["slab-top", "44:8"], ["fence
   }
 }
 
+// Push order (batch 25): TileEntityPiston.updateEntity pushes inside World.updateEntities' loadedTileEntityList loop, so a push
+// sees the tiles before it updated and the ones after it not yet (their lastProgress, which BlockPistonMoving's collision box
+// reads, and a finished tile's placed block). Each of these is checked twice: the port's in-loop order must match the original
+// classes and the batch 20-24 order (every push after the loop, replay(..., { deferred: true })) must not. Found by a random
+// search over two-piston layouts (about 1% depend on the order); cells as "x,y,z": "id:meta".
+for (const [name, cells, events, note] of [
+  ["order-pig-two-pistons", { "2,1,1": "33:3", "2,1,4": "29:2" }, [live(1, 1, PIG, [2, 1, 3]), [2, "place", 2, 1, 0, REDSTONE_BLOCK, 0], [3, "place", 2, 1, 5, REDSTONE_BLOCK, 0], [9, "air", 2, 1, 5]], "two pistons facing each other (south, sticky north) push the same pig, a tick apart; the sticky one retracts at tick 9"],
+  ["order-pig-into-moving-stone", { "1,1,4": "33:5", "4,1,4": STONE, "5,1,4": "33:4" }, [live(1, 1, PIG, [3, 1, 4], [0.05, 0, 0]), [2, "place", 0, 1, 4, REDSTONE_BLOCK, 0], [3, "place", 6, 1, 4, REDSTONE_BLOCK, 0]], "a head pushes a pig east into a stone another piston pushes west: the pig is pushed between two moving blocks"],
+  ["order-pig-sticky-stone", { "1,1,3": "33:5", "4,1,3": STONE, "5,1,3": "29:4" }, [live(1, 1, PIG, [2, 1, 3], [0.05, 0, 0]), [2, "place", 0, 1, 3, REDSTONE_BLOCK, 0], [3, "place", 6, 1, 3, REDSTONE_BLOCK, 0], [8, "air", 6, 1, 3]], "as order-pig-into-moving-stone with a sticky piston that pulls the stone back at tick 8"],
+  ["order-pig-slab-same-tick", { "1,1,1": "29:5", "4,1,1": "44:0", "5,1,1": "33:4" }, [live(1, 1, PIG, [2, 1, 1], [-0.05, 0, 0]), [2, "place", 0, 1, 1, REDSTONE_BLOCK, 0], [2, "place", 6, 1, 1, REDSTONE_BLOCK, 0], [7, "air", 6, 1, 1], [9, "air", 0, 1, 1]], "both pistons powered in the same tick: a sticky head pushes a pig into a slab pushed the other way"],
+  ["order-pigs-trapdoor", { "1,1,1": "33:5", "2,1,1": "96:0", "4,1,1": "29:4" }, [live(1, 1, PIG, [1, 2, 1], [0.05, 0, 0]), live(1, 2, PIG, [3, 1, 1]), [1, "place", 5, 1, 1, REDSTONE_BLOCK, 0], [2, "place", 0, 1, 1, REDSTONE_BLOCK, 0], [4, "air", 5, 1, 1]], "a pushed trapdoor and a sticky head close on a pig; another pig on the piston"],
+  ["order-boat-two-pistons", { "1,1,1": "139:0", "1,1,3": "33:5", "2,1,1": "33:4", "2,1,3": "88:0" }, [live(1, 1, BOAT, [2, 1, 2], [0, 0, 0.05]), [1, "place", 3, 1, 1, REDSTONE_BLOCK, 0], [1, "place", 0, 1, 3, REDSTONE_BLOCK, 0]], "two pistons (one pushing soul sand) push the same boat in the same tick"],
+  ["order-boat-cart", { "1,1,1": "29:5", "2,1,1": "88:0", "4,1,3": "33:5" }, [live(1, 1, BOAT, [2, 1, 2], [0, 0, -0.05]), live(1, 2, CART, [4, 1, 4], [0.05, 0, 0]), [3, "place", 0, 1, 1, REDSTONE_BLOCK, 0], [3, "place", 3, 1, 3, REDSTONE_BLOCK, 0]], "a pushed boat blocked by a minecart (EntityBoat.getCollisionBox returns any entity's box), two pistons in the same tick"],
+  ["order-two-boats", { "1,1,2": "33:5", "2,1,2": "88:0", "3,1,3": "33:5" }, [live(1, 1, BOAT, [5, 1, 4], [0.05, 0, -0.05]), live(1, 2, BOAT, [2, 1, 1], [0.05, 0, 0.05]), [3, "place", 0, 1, 2, REDSTONE_BLOCK, 0], [3, "place", 2, 1, 3, REDSTONE_BLOCK, 0], [7, "air", 2, 1, 3]], "two boats, two pistons powered in the same tick"],
+]) SCENARIOS.push(scenario(name, { cells, ticks: 14, note, events, order: true }));
+
+// BlockTrapDoor's support test (aoe.a: opaque material and normal render, glowstone, slab, stairs; no power test) accepts a
+// redstone block: a trapdoor hung on one stays when the block is placed, then pushed and pulled.
+SCENARIOS.push(scenario("trapdoor-on-redstone-block", { cells: { "4,1,3": "29:5", "4,1,4": "33:4", "5,1,3": "96:0" }, ticks: 14, note: "a trapdoor next to a redstone block, pushed and pulled by a sticky piston; a pig pushed west by another piston", events: [
+  live(1, 1, PIG, [2, 1, 4], [-0.05, 0, -0.05]), [1, "place", 5, 1, 4, REDSTONE_BLOCK, 0], [1, "place", 3, 1, 3, REDSTONE_BLOCK, 0], [5, "air", 3, 1, 3]] }));
+
+// Batch 25: dropped items (one with noClip set, as EntityItem.onUpdate's pushOutOfBlocks leaves an item inside a block), primed
+// TNT, falling sand and an XP orb pushed through their own Entity.moveEntity; a boat blocked by an item (EntityBoat.getCollisionBox
+// returns any entity's box); two minecarts pushed onto detector rails (BlockRailDetector powered through the cart's move
+// tail; the 20-tick recheck keeps it powered); pigs on a cobblestone wall and a fence gate lifted by pistons (their 1.5-high boxes reach above the
+// moving cell, so World.getCollidingBoundingBoxes' cell range from floor(minY) - 1 matters).
+{
+  const c = { "1,1,1": `${PISTON}:5`, "4,1,1": STONE, "1,1,3": `${PISTON}:5`, "3,1,3": STONE, "1,1,5": `${PISTON}:5`, "3,1,5": "81:0" };
+  SCENARIOS.push(scenario("live-items-pushed", { cells: c, ticks: 10, note: "heads push a dropped item (motion 0.05 east) towards a wall, a noClip item through a stone and an item into a cactus", events: [
+    live(1, 1, ITEM, [2, 1, 1], [0.05, 0, 0]), live(1, 2, ITEM_NOCLIP, [2, 1, 3], [0.02, 0, 0]), live(1, 3, ITEM, [2, 1, 5]),
+    [1, "place", 0, 1, 1, REDSTONE_BLOCK, 0], [1, "place", 0, 1, 3, REDSTONE_BLOCK, 0], [1, "place", 0, 1, 5, REDSTONE_BLOCK, 0]] }));
+}
+{
+  const c = { "1,1,1": `${PISTON}:5`, "4,1,1": STONE, "1,1,3": `${PISTON}:5`, "4,1,3": STONE, "1,1,5": `${PISTON}:5`, "3,1,5": STONE, "5,0,3": 0 };
+  SCENARIOS.push(scenario("live-tnt-sand-orb", { cells: c, ticks: 10, note: "heads push primed TNT (motion 0.1 east, 0.05 south), falling sand (falling at -0.04) and an XP orb towards walls", events: [
+    live(1, 1, TNT, [2, 1, 1], [0.1, 0, 0.05]), live(1, 2, SAND, [2, 1, 3], [0.02, -0.04, 0]), live(1, 3, ORB, [2, 1, 5], [0.05, 0, 0]),
+    [1, "place", 0, 1, 1, REDSTONE_BLOCK, 0], [1, "place", 0, 1, 3, REDSTONE_BLOCK, 0], [1, "place", 0, 1, 5, REDSTONE_BLOCK, 0]] }));
+}
+{
+  const c = { "1,1,1": `${PISTON}:1`, "1,2,1": STONE, "1,1,4": `${PISTON}:5` };
+  SCENARIOS.push(scenario("live-items-lifted-boat-item", { cells: c, ticks: 10, note: "a piston facing up lifts a stone with an item and an orb on it; a head pushes a boat into a dropped item (the item's box blocks the boat)", events: [
+    live(1, 1, ITEM, [1, 3, 1]), live(1, 2, ORB, [1, 3, 1]), live(1, 3, BOAT, [3, 1, 4], [0.05, 0, 0]), live(1, 4, ITEM, [5, 1, 4]),
+    [1, "place", 0, 1, 1, REDSTONE_BLOCK, 0], [2, "place", 0, 1, 4, REDSTONE_BLOCK, 0]] }));
+}
+{
+  const c = { "1,1,2": `${PISTON}:5`, "3,1,2": "28:1", "1,1,4": `${PISTON}:5`, "3,1,4": "28:1" };
+  SCENARIOS.push(scenario("live-cart-detector-rail", { cells: c, ticks: 30, note: "heads push an empty minecart onto an east-west detector rail (powered by the cart's move tail) and another (motion 0.1 west) towards one; the heads retract at tick 5; the rails' 20-tick recheck still finds the carts", events: [
+    [1, "watch", 3, 1, 2], [1, "watch", 3, 1, 4], live(1, 1, CART, [2, 1, 2]), live(1, 2, CART, [2, 1, 4], [-0.1, 0, 0]), [1, "place", 0, 1, 2, REDSTONE_BLOCK, 0], [3, "place", 0, 1, 4, REDSTONE_BLOCK, 0], [5, "air", 0, 1, 2], [5, "air", 0, 1, 4]] }));
+}
+{
+  const c = { "1,0,1": `${PISTON}:1`, "1,1,1": "139:0", "4,0,1": `${PISTON}:1`, "4,1,1": "107:0", "1,0,4": `${STICKY}:1`, "1,1,4": "139:1" };
+  SCENARIOS.push(scenario("live-pigs-on-lifted-wall-gate", { cells: c, ticks: 14, note: "pistons in the floor lift a cobblestone wall, a fence gate and (sticky, pulled back at tick 8) a mossy wall with a pig standing above each", events: [
+    live(1, 1, PIG, [1, 2, 1]), live(1, 2, PIG, [4, 2, 1]), live(1, 3, PIG, [1, 2, 4]),
+    [1, "place", 2, 0, 1, REDSTONE_BLOCK, 0], [1, "place", 5, 0, 1, REDSTONE_BLOCK, 0], [1, "place", 2, 0, 4, REDSTONE_BLOCK, 0], [8, "air", 2, 0, 4]] }));
+}
+// More stored blocks (batch 25): the remaining gate and trapdoor metadata, snow depths, anvil and farmland metadata, other
+// stairs facings, and connecting blocks (wall, panes, bars) whose box reads a stone beside the cell they move through.
+{
+  const ids = [
+    "107:3", "107:5", "107:6", "107:7", "96:6", "96:7", "96:9", "96:10", "96:11", "96:14", "96:15", "78:1", "78:2", "78:4", "78:5", "78:6",
+    "145:2", "145:5", "145:6", "145:9", "60:3", "67:4", "67:7", "108:6", "134:5", "156:3", "163:2", "164:7", "114:0", "128:4", "135:2", "136:6", "109:3",
+  ];
+  for (const id of ids) {
+    const c = { "1,1,1": `${PISTON}:5`, "2,1,1": id };
+    SCENARIOS.push(scenario("odd-block3-" + id.replace(":", "-"), { cells: c, ticks: 12, note: "piston pushes " + id + " east (stored-block collision box at each progress); retract at tick 7; entity inside, on top and beside", events: [
+      ent(1, 1, box(2.3, 1, 1.3)), ent(1, 2, box(2.3, 1.55, 1.3, 0.4, 0.4)), ent(1, 3, box(2.3, 2.0, 1.3)), [1, "place", 1, 2, 1, REDSTONE_BLOCK, 0], [7, "air", 1, 2, 1]] }));
+  }
+  for (const id of ["139:0", "102:0", "101:0", "160:3"]) {
+    const c = { "1,1,1": `${PISTON}:5`, "2,1,1": id, "3,1,0": STONE, "2,1,2": STONE };
+    SCENARIOS.push(scenario("odd-block3-beside-stone-" + id.replace(":", "-"), { cells: c, ticks: 12, note: "piston pushes " + id + " east past stones north of its target cell and south of its start; retract at tick 7; entities inside and on top", events: [
+      ent(1, 1, box(2.3, 1, 1.3)), ent(1, 2, box(2.3, 1.55, 1.3, 0.4, 0.4)), ent(1, 3, box(3.05, 1, 0.55, 0.3, 0.8)), [1, "place", 1, 2, 1, REDSTONE_BLOCK, 0], [7, "air", 1, 2, 1]] }));
+  }
+}
+
 const researchDirs = [process.env.MC_RESEARCH, path.join(root, "../../tools/research")].filter(Boolean);
 let research;
 for (const dir of researchDirs) if (await exists(path.join(dir, "minecraft-1.7.10.jar"))) { research = dir; break; }
@@ -179,8 +257,15 @@ assert.equal(natives.length, SCENARIOS.length);
 
 // ---- Replay with src/redstone.js + src/piston-live.js (same tick order as the probe) ----
 const [ox, oy, oz] = ORIGIN;
-export function replay(s) {
+// `deferred`: the batch 20-24 order (every push after the whole tile loop) instead of the native per-tile order, used to show that
+// the order scenarios depend on it.
+export function replay(s, { deferred = false } = {}) {
   const w = new RedstoneWorld({ seed: s.seed }), cells = s.grid.split(",");
+  installShapedBlocks(w, trapdoorSupportOriginal(blockProperties())); // as redstone-runtime.js: trapdoor support loss, gate opening
+  // The detector rail's entity and tick behaviour (powered-rails.js, as redstone-runtime.js installs it); its rail-shape hooks
+  // need the game World (RailLogic) and stay out: no rail here is placed or loses support.
+  const { onBlockAdded, onNeighborBlockChange, breakBlock, ...detector } = detectorRailBehaviour;
+  w.registerBehaviour(DETECTOR, detector);
   for (let x = 0; x < SIZE[0]; x++) for (let y = 0; y < SIZE[1]; y++) for (let z = 0; z < SIZE[2]; z++) {
     const [id, meta = 0] = cells[(x * SIZE[1] + y) * SIZE[2] + z].split(":").map(Number);
     if (id) w.setRaw(ox + x, oy + y, oz + z, id, meta);
@@ -194,14 +279,32 @@ export function replay(s) {
   // Real entities: pigs in an EntityWorld (pushMove), carts and boats in their systems (Minecarts.move / Boats.move), as the
   // redstone runtime wires them (piston-push.js pistonPushExtras), each move recorded before it runs.
   const mobs = new EntityWorld(view, [], () => 0.5), carts = new Minecarts({ random: () => ({ nextFloat: () => 0.5, nextInt: () => 0, nextDouble: () => 0.5, nextGaussian: () => 0 }) }), boats = new Boats();
+  // Items, orbs, primed TNT and falling sand (batch 25): their own moves through pistonPushExtras (ItemEntities.push,
+  // ExperienceOrbs.move, moveEntity on the entity). A cart over a detector rail reaches BlockRailDetector through the engine's
+  // collide, the redstone runtime's cartTouch; the engine's entity list sees the carts' live boxes.
+  const items = new ItemEntities(() => 0.5), orbs = new ExperienceOrbs([], () => 0.5), primed = [], falling = [];
+  carts.blockHook = (x, y, z) => w.collide(x, y, z);
   for (const [obj, key, label] of [[mobs, "pushMove", (e) => e.label], [carts, "move", (c, a) => a[1].label], [boats, "move", (c, a) => a[1].label]]) {
     const orig = obj[key].bind(obj);
     obj[key] = (...a) => { const d = key === "pushMove" ? a.slice(1, 4) : a.slice(2, 5); liveMoves.push([tick, key === "pushMove" ? label(a[0]) : label(null, a), ...d]); return orig(...a); };
   }
-  const p = installPistons({ redstone: w, world: view, blocks: { toInternal }, entities: { mobs, extra: () => [...ents, ...pistonPushExtras(view, { minecarts: () => carts, boatSystem: () => boats, mobs: () => mobs, player: () => null })] } });
+  // The probe World's entity query returns its scripted list in spawn order (PistonProbe.W), so pushes follow the spawn order here.
+  let seq = 0;
+  const order = (list) => list.slice().sort((a, b) => (a.entity?.seq ?? 1e9) - (b.entity?.seq ?? 1e9));
+  const game = { minecarts: () => carts, boatSystem: () => boats, mobs: () => mobs, player: () => null, itemSystem: () => items, orbSystem: () => orbs, primed: () => primed, falling: () => falling };
+  // The loose entities' moves are recorded at the push (the probe records at Entity.moveEntity's entry).
+  const recorded = (x) => (x.entity?.loose ? { ...x, move: (dx, dy, dz) => { liveMoves.push([tick, x.entity.label, dx, dy, dz]); x.move(dx, dy, dz); } } : x);
+  const p = installPistons({ redstone: w, world: view, blocks: { toInternal }, entities: { mobs, order, extra: () => [...ents, ...pistonPushExtras(view, game).map(recorded)] } });
+  let flush = () => {};
+  if (deferred) {
+    const real = w.pistonPush, queue = [], later = (...a) => queue.push(a);
+    later.pistonLive = true;
+    w.pistonPush = later;
+    flush = () => { for (const a of queue.splice(0)) real(...a); };
+  }
   setMovingBoxes((b) => p.collisionBoxes(b));
   setEntityBoxes(boatBoxProvider({ get carts() { return boats.carts; } }));
-  const tes = [], boxes = [], entityPos = [], samples = [], collide = [], liveStates = [];
+  const tes = [], boxes = [], entityPos = [], samples = [], collide = [], liveStates = [], watch = [], watched = [];
   try {
   for (tick = 1; tick <= s.ticks; tick++) {
     for (const [t, op, x0, y0, z0, a, ...rest] of s.events) {
@@ -210,15 +313,21 @@ export function replay(s) {
       if (op === "place") w.setBlock(x, y, z, a, rest[0], 3);
       else if (op === "air") w.setBlockToAir(x, y, z);
       else if (op === "entity") {
-        const b = [ox + rest[0], oy + rest[1], oz + rest[2], ox + rest[3], oy + rest[4], oz + rest[5]], e = { label: a, box: b, move(dx, dy, dz) { moves.push([tick, a, dx, dy, dz]); b[0] += dx; b[3] += dx; b[1] += dy; b[4] += dy; b[2] += dz; b[5] += dz; } };
+        const b = [ox + rest[0], oy + rest[1], oz + rest[2], ox + rest[3], oy + rest[4], oz + rest[5]], e = { label: a, seq: seq++, box: b, move(dx, dy, dz) { moves.push([tick, a, dx, dy, dz]); b[0] += dx; b[3] += dx; b[1] += dy; b[4] += dy; b[2] += dz; b[5] += dz; } };
         ents.push(e);
-      } else if (op === "live") {
+      } else if (op === "watch") watch.push([x, y, z]);
+      else if (op === "live") {
         const [kind, vx, vy, vz] = rest, px = x + 0.5, pz = z + 0.5;
         let e;
         if (kind === PIG) { e = { id: mobs.nextId++, type: "pig", x: px, y, z: pz, vx, vy, vz, onGround: true, fallDistance: 0, health: 10, growingAge: 0, rotationYaw: 0 }; mobs.entities.push(e); }
-        else if (kind === CART) { e = carts.spawnEmpty({ x: px, y: y + Y_OFFSET, z: pz }, { seed: 1 }); Object.assign(e, { vx, vy, vz, onGround: true }); }
-        else { e = boats.spawnBoat({ x: px, y, z: pz, vx, vy, vz }, { seed: 1 }); e.onGround = true; }
+        else if (kind === CART) { e = carts.spawnEmpty({ x: px, y: y + Y_OFFSET, z: pz }, { seed: 1 }); Object.assign(e, { vx, vy, vz, onGround: true }); w.entities.push({ kind: "minecart", get box() { return e.bb; } }); }
+        else if (kind === BOAT) { e = boats.spawnBoat({ x: px, y, z: pz, vx, vy, vz }, { seed: 1 }); e.onGround = true; }
+        else if (kind === ITEM || kind === ITEM_NOCLIP) { e = items.spawn({ id: 1, count: 1, damage: 0 }, px, y + 0.125, pz); Object.assign(e, { y, mx: vx, my: vy, mz: vz, onGround: true, noClip: kind === ITEM_NOCLIP, loose: true }); }
+        else if (kind === TNT) { e = { x: px, y, z: pz, vx, vy, vz, onGround: true, fuse: 80, loose: true }; primed.push(e); }
+        else if (kind === SAND) { e = { x: px, y, z: pz, vx, vy, vz, onGround: true, block: 12, loose: true }; falling.push(e); }
+        else { e = newOrb(3, px, y + 0.25, pz); Object.assign(e, { vx, vy, vz, onGround: true, loose: true }); orbs.orbs.push(e); }
         e.label = a;
+        e.seq = seq++;
         lives.push(e);
       }
     }
@@ -226,20 +335,22 @@ export function replay(s) {
     w.tickUpdates();
     w.sendQueuedBlockEvents();
     w.updateTileEntities();
+    flush();
     p.tick();
     const tiles = w.pistonTiles();
     tes.push(tiles.map((t) => [t.x - ox, t.y - oy, t.z - oz, t.block, t.meta, t.facing, t.extending ? 1 : 0, t.renderHead ? 1 : 0, t.progress, t.lastProgress]));
     boxes.push(p.pushBoxes().map((b) => b && [b[0] - ox, b[1] - oy, b[2] - oz, b[3] - ox, b[4] - oy, b[5] - oz]));
     collide.push(tiles.map((t) => p.collisionBoxes([t.x + 0.001, t.y + 0.001, t.z + 0.001, t.x + 0.999, t.y + 0.999, t.z + 0.999]).map((b) => [b[0] - ox, b[1] - oy, b[2] - oz, b[3] - ox, b[4] - oy, b[5] - oz])));
     entityPos.push(ents.map((e) => [e.label, e.box[0] - ox, e.box[1] - oy, e.box[2] - oz]));
-    liveStates.push(lives.map((e) => [e.label, e.x - ox, (e.bb ? e.bb[1] : e.y) - oy, e.z - oz, e.vx, e.vy, e.vz, e.onGround ? 1 : 0, e.collidedH ? 1 : 0, e.fallDistance ?? 0]));
+    liveStates.push(lives.map((e) => [e.label, e.x - ox, (e.bb ? e.bb[1] : e.y) - oy, e.z - oz, e.vx ?? e.mx, e.vy ?? e.my, e.vz ?? e.mz, e.onGround ? 1 : 0, e.collidedH ? 1 : 0, e.fallDistance ?? 0]));
+    watched.push(watch.map(([x, y, z]) => [x - ox, y - oy, z - oz, w.getBlock(x, y, z), w.getBlockMetadata(x, y, z)]));
   }
   } finally { setMovingBoxes(null); setEntityBoxes(null); }
-  return { tes, boxes, entityPos, moves, collide, live: liveStates, liveMoves, api: p };
+  return { tes, boxes, entityPos, moves, collide, live: liveStates, liveMoves, watch: watched, api: p };
 }
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`);
 const failures = [];
-let liveStates = 0, totalLiveMoves = 0, collideCount = 0, totalMoves = 0, tileStates = 0, offsets = 0, boxCount = 0;
+let orderDependent = 0, liveStates = 0, totalLiveMoves = 0, collideCount = 0, totalMoves = 0, tileStates = 0, offsets = 0, boxCount = 0;
 const results = [];
 for (const [i, n] of natives.entries()) {
   const s = SCENARIOS[i];
@@ -261,7 +372,7 @@ for (const [i, n] of natives.entries()) {
       mine.boxes[t].forEach((b, k) => {
         const nb = n.pushBoxes[t][k];
         assert.equal(b === null, nb === null, `${s.name}: push box existence at tick ${t + 1}`);
-        if (b) b.forEach((v, j) => close(v, nb[j], `${s.name}: push box at tick ${t + 1}`));
+        if (b) b.forEach((v, j) => close(v, nb[j], `${s.name}: push box at tick ${t + 1} [${j}] ${JSON.stringify(b)} vs ${JSON.stringify(nb)}`));
         boxCount++;
       });
       assert.equal(mine.collide[t].length, n.collide[t].length, `${s.name}: collide tile count at tick ${t + 1}`);
@@ -278,13 +389,19 @@ for (const [i, n] of natives.entries()) {
       mine.live[t].forEach((e, k) => e.forEach((v, j) => close(v, n.live[t][k][j], `${s.name}: live entity ${e[0]} field ${j} at tick ${t + 1}: ${JSON.stringify(e)} vs ${JSON.stringify(n.live[t][k])}`)));
       liveStates += mine.live[t].length;
     }
+    assert.deepEqual(mine.watch, n.watch, `${s.name}: watched cells`);
     assert.equal(mine.liveMoves.length, n.liveMoves.length, `${s.name}: number of live moves ${JSON.stringify(mine.liveMoves)} vs ${JSON.stringify(n.liveMoves)}`);
     mine.liveMoves.forEach((m, k) => m.forEach((v, j) => close(v, n.liveMoves[k][j], `${s.name}: live move ${k}`)));
     totalLiveMoves += n.liveMoves.length;
     assert.equal(mine.moves.length, n.moves.length, `${s.name}: number of entity moves`);
     mine.moves.forEach((m, k) => m.forEach((v, j) => close(v, n.moves[k][j], `${s.name}: move ${k}`)));
     totalMoves += n.moves.length;
-    results.push({ ...s, te: n.te, pushBoxes: n.pushBoxes, collide: n.collide, entities: n.entities, moves: n.moves, ...(n.live.some((l) => l.length) ? { live: n.live, liveMoves: n.liveMoves } : {}) });
+    if (s.order) {
+      const late = replay(s, { deferred: true }), key = (r) => JSON.stringify([r.live, r.liveMoves, r.entityPos, r.moves]);
+      assert.notEqual(key(late), key(mine), `${s.name}: the push order does not matter here (the deferred order gives the same result)`);
+      orderDependent++;
+    }
+    results.push({ ...s, te: n.te, pushBoxes: n.pushBoxes, collide: n.collide, entities: n.entities, moves: n.moves, ...(n.live.some((l) => l.length) ? { live: n.live, liveMoves: n.liveMoves } : {}), ...(n.watch.some((l) => l.length) ? { watch: n.watch } : {}) });
   } catch (e) {
     failures.push(`${s.name}: ${String(e.message).split("\n").slice(0, 8).join(" | ")}`);
   }
@@ -300,4 +417,4 @@ const reference = {
   scenarios: results,
 };
 await writeFile(path.join(root, "../public/research/piston-live-reference.json"), JSON.stringify(reference) + "\n");
-console.log(`PASS: ${SCENARIOS.length} scenarios, ${tileStates} tile states, ${offsets} render offsets, ${boxCount} push boxes, ${collideCount} collision boxes, ${totalMoves} entity moves, ${liveStates} live entity states, ${totalLiveMoves} live entity moves identical to the original classes.`);
+console.log(`PASS: ${SCENARIOS.length} scenarios, ${tileStates} tile states, ${offsets} render offsets, ${boxCount} push boxes, ${collideCount} collision boxes, ${totalMoves} entity moves, ${liveStates} live entity states, ${totalLiveMoves} live entity moves identical to the original classes; ${orderDependent} order scenarios differ under the deferred (after-the-loop) push order.`);

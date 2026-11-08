@@ -19,14 +19,58 @@ export function tickPlayerEnvironment({ world, weather, position, survival, moti
   afterSurvival();
   const tail = { fire: survival.fire || 0, inWeb: motion.inWeb, fallDistance: 0 }, fireBefore = tail.fire;
   blockCollisions(world, entityBox(position, PHYSICS.width, PHYSICS.height), tail, {
-    hurt: (source, n) => survival.health > 0 && survival.damage(n, source === 'cactus' ? 'a cactus' : 'fire', true),
-    wet, flying, resistance: PLAYER_FIRE_RESISTANCE, fizz, slow,
+    hurt: playerHurt(survival), wet, flying, resistance: PLAYER_FIRE_RESISTANCE, fizz, slow,
   });
-  // blockCollisions catches fire with setFire(8): 160 ticks, which Fire Protection shortens (Entity.setFire).
-  if (fireBefore < 0 && tail.fire === 160 && survival.setFire) { survival.fire = 0; survival.setFire(8); }
-  else survival.fire = tail.fire;
+  finishPlayerFire(survival, fireBefore, tail.fire);
   motion.inWeb = tail.inWeb;
   return { underwater, wet, inWall };
+}
+
+// Block.onEntityCollidedWithBlock (cactus) and dealFireDamage on the player: attackEntityFrom, which the hurt timer gates.
+const playerHurt = (survival) => (source, n) => survival.health > 0 && survival.damage(n, source === 'cactus' ? 'a cactus' : 'fire', true);
+// blockCollisions catches fire with setFire(8): 160 ticks, which Fire Protection shortens (Entity.setFire).
+function finishPlayerFire(survival, before, after) {
+  if (before < 0 && after === 160 && survival.setFire) { survival.fire = 0; survival.setFire(8); }
+  else survival.fire = after;
+}
+
+// The tail of the player's Entity.moveEntity for a move outside its own tick (a piston push, piston-push.js pushPlayer):
+// doBlockCollisions (cactus, webs, soul sand on the body's motion) and the burning-box test with the player's fire counter and
+// fire resistance 20. isWet is read after the move (inWater from the last water update, rain at the moved body). Returns
+// { fire, hooks, finish(body) } for moveEntity's hooks; finish writes the fire counter back (setFire(8) as above).
+export function playerMoveTail({ world, weather, survival, flying, inWater }, body, { fizz = () => {} } = {}) {
+  const fire = survival.fire || 0;
+  return {
+    fire,
+    hooks: { hurt: playerHurt(survival), get wet() { return isWet(weather, world, { x: body.x, y: body.y, z: body.z, inWater }, PHYSICS.height); }, flying, resistance: PLAYER_FIRE_RESISTANCE, fizz },
+    finish: (moved) => finishPlayerFire(survival, fire, moved.fire),
+  };
+}
+
+// EntityPlayer.fall / EntityLivingBase.fall for a landing of `distance` blocks (Entity.updateFallState on the ground): farmland
+// trampling, landing dust over 3 blocks, the fall sound and damage. The live tick calls it from finishPlayerMovement; a piston push
+// that lands the player calls it at once (the port has one player; the integrated server's EntityPlayerMP takes the same landing
+// from the client's movement packets through handleFalling).
+export function landPlayer({ world, position, survival, inWater }, distance, { trample = () => {}, landingDust = () => {}, fallSound = () => {} } = {}) {
+  if (distance > 0) trample(position, distance);
+  if (distance > 3) {
+    const bx = Math.floor(position.x), by = Math.floor(position.y - 0.20000000298023224), bz = Math.floor(position.z);
+    if (world.get(bx, by, bz)) landingDust(bx, by, bz, Math.ceil(Math.fround(distance - 3)));
+  }
+  // EntityPlayer.fall skips Creative flight; EntityLivingBase.fall: ceil(distance - 3 - jump boost level), the fall sound
+  // (EntityPlayerSP plays it itself), the block's step sound, then the damage (damage-fx.js).
+  if (!survival.creative && distance > 0) {
+    const jump = survival.effects?.get?.(JUMP_BOOST), by = Math.floor(position.y - 0.20000000298023224),
+      fall = landingEffects(distance, { kind: "player", amplifier: jump ? jump.amplifier : -1, blockUnder: world.get(Math.floor(position.x), by, Math.floor(position.z)) });
+    for (const sound of fall.sounds) fallSound(sound);
+    if (fall.points > 0) {
+      // CombatTracker's fall description and Entity.fallDistance, sampled for the entry (combat-tracker.js).
+      const cell = world.get(Math.floor(position.x), Math.floor(position.y), Math.floor(position.z));
+      survival.combatSite = cell === 65 ? "ladder" : cell === 72 ? "vines" : inWater ? "water" : null;
+      survival.combatFall = distance;
+      survival.damage(fall.points, 'a fall');
+    }
+  }
 }
 
 // This remains a separate step because falling blocks and client display ticks
@@ -43,25 +87,7 @@ export function finishPlayerMovement(state, { inWater, inLavaNow, oldPosition },
   if (grounded) {
     const distance = landedFall;
     landedFall = 0;
-    if (distance > 0) trample(position, distance);
-    if (distance > 3) {
-      const bx = Math.floor(position.x), by = Math.floor(position.y - 0.20000000298023224), bz = Math.floor(position.z);
-      if (world.get(bx, by, bz)) landingDust(bx, by, bz, Math.ceil(Math.fround(distance - 3)));
-    }
-    // EntityPlayer.fall skips Creative flight; EntityLivingBase.fall: ceil(distance - 3 - jump boost level), the fall sound
-    // (EntityPlayerSP plays it itself), the block's step sound, then the damage (damage-fx.js).
-    if (!survival.creative && distance > 0) {
-      const jump = survival.effects?.get?.(JUMP_BOOST), by = Math.floor(position.y - 0.20000000298023224),
-        fall = landingEffects(distance, { kind: "player", amplifier: jump ? jump.amplifier : -1, blockUnder: world.get(Math.floor(position.x), by, Math.floor(position.z)) });
-      for (const sound of fall.sounds) fallSound(sound);
-      if (fall.points > 0) {
-        // CombatTracker's fall description and Entity.fallDistance, sampled for the entry (combat-tracker.js).
-        const cell = world.get(Math.floor(position.x), Math.floor(position.y), Math.floor(position.z));
-        survival.combatSite = cell === 65 ? "ladder" : cell === 72 ? "vines" : inWater ? "water" : null;
-        survival.combatFall = distance;
-        survival.damage(fall.points, 'a fall');
-      }
-    }
+    landPlayer({ world, position, survival, inWater }, distance, { trample, landingDust, fallSound });
     fallDistance = 0;
   }
   if (inWater || motion.inWeb) fallDistance = 0;
