@@ -31,7 +31,9 @@ import { applyDimensionRender, fixedAngle, providerFog } from "./dimension-rende
 import { nightVisionBrightness, blindnessFog, adjustFogColor, warpMatrix } from "./potion-fx.js";
 import { hasVoidParticles, voidFogYFactor, voidFogFar } from "./void-fog.js";
 import { Sky, Clouds } from "./sky.js";
-import { PostProcessor } from "./post-shaders.js"; // Super Secret Settings shaders and 3D Anaglyph
+import { PostProcessor, anaglyphFog } from "./post-shaders.js";
+import { installAnaglyphUpload } from "./anaglyph.js"; // 3D Anaglyph at the native conversion points
+import { refreshResources } from "./resource-refresh.js"; // Super Secret Settings shaders and 3D Anaglyph
 import { render, setRender, usePartialAo, leavesOpaque, shouldRenderClouds, shadowsEnabled } from "./render-settings.js";
 import { liquidHeight, flowAngle, viewpointBlock } from "./fluids.js";
 import { DropRenderer } from "./drop-renderer.js";
@@ -131,6 +133,9 @@ export class VoxelScene {
     this.renderer.autoClear = false;
     container.appendChild(this.renderer.domElement);
     this.post = new PostProcessor(this.renderer, { anaglyph: () => this.anaglyph });
+    // Texture uploads are converted while anaglyph is on; toggling it refreshes resources like GameSettings.setOptionValue (bao.c()).
+    this.anaglyphUpload = installAnaglyphUpload(this.renderer.getContext());
+    this.post.onAnaglyphChange = (on) => { this.anaglyphUpload.state.on = on && !this.post.legacyAnaglyph; refreshResources().catch(() => {}); };
     this.scene = new THREE.Scene();
     this.lighting = createLighting();
     this.flicker = new TorchFlicker();
@@ -1159,6 +1164,7 @@ export class VoxelScene {
     // potion-fx.js: the void/Blindness/Night Vision terms of updateFogColor, and Blindness' own setupFog branch (it wins over water and lava).
     const pv = this.potionView, blind = pv?.blindness > 0;
     if (pv && (blind || pv.nightVision > 0 || pv.feetY !== undefined || pv.eyeY !== undefined)) fog = adjustFogColor(fog, { feetY: pv.eyeY ?? pv.feetY ?? c.position.y, voidFactor: voidFogYFactor(this.world?.worldType), blindness: pv.blindness, nightVision: pv.nightVision > 0 ? nightVisionBrightness(pv.nightVision, this.dropPartial) : 0 });
+    if (this.post.anaglyphOn && !this.post.legacyAnaglyph) fog = anaglyphFog(fog); // EntityRenderer.updateFogColor
     u.fogColor.value.set(...fog);
     // setupFog: linear from 3/4 of the far plane; exponential 0.1 in water, 2.0 in lava.
     u.fogDensity.value = blind ? 0 : lava ? LAVA_FOG_DENSITY : underwater ? waterFogDensity({ breathing: pv?.waterBreathing, respiration: pv?.respiration }) : 0;
@@ -1171,11 +1177,11 @@ export class VoxelScene {
         far = voidFogFar({ far: this.distance, skyLight: sky, y, creative: !!pv.creative, hasVoid: hasVoidParticles({ worldType: this.world.worldType, dimension: this.dimension ?? 0 }) });
       if (far < this.distance) { u.fogFar.value = far; u.fogNear.value = far * 0.75; }
     }
-    const sky = underwater || lava || blind ? fog : skyColor(this.temperature ?? 0.8, angle, rain, thunder, lightning, partial);
+    const sky = underwater || lava || blind ? fog : (this.post.anaglyphOn && !this.post.legacyAnaglyph ? anaglyphFog : (c) => c)(skyColor(this.temperature ?? 0.8, angle, rain, thunder, lightning, partial));
     this.sky.update({ angle, sky, fog, sunrise: underwater || lava || blind ? null : sunriseColors(angle), stars: blind ? 0 : starBrightness(angle), moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater: underwater || lava || blind, rain });
     this.clouds.setFancy(render.fancy);
     this.clouds.setEnabled(!this.dimension && shouldRenderClouds(this.distance / 16));
-    this.clouds.update(c, time * 20, cloudColor(angle, rain, thunder));
+    this.clouds.update(c, time * 20, this.post.anaglyphOn && !this.post.legacyAnaglyph ? anaglyphFog(cloudColor(angle, rain, thunder)) : cloudColor(angle, rain, thunder));
     this.weatherRenderer.update(w, this.world, c, partial, time);
     this.drops.update(this.dropList, this.dropPartial, time * 20);
     this.updateFalling(this.dropPartial);
