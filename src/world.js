@@ -468,7 +468,7 @@ export class World {
   // in the biome layers (biome-layers.js biomeClassOf; 15 and older keep the earlier map). Finite Java worlds: 11 mineshafts, 14 all
   // structures. Saved worlds keep their generator.
   constructor(seed = "Overworld", biome = "meadow", generationVersion = biome === 'javaStreamed' ? 13 : isJavaLandscape(biome) ? 11 : 8, worldType = 'default', generatorOptions = '') {
-    if (biome === 'javaStreamed' && ![12, 13, 15, 16, 17, 18, 19].includes(generationVersion)) throw new Error('Unsupported streamed world generation version');
+    if (biome === 'javaStreamed' && ![12, 13, 15, 16, 17, 18, 19, 20, 21].includes(generationVersion)) throw new Error('Unsupported streamed world generation version');
     if (biome === 'javaStreamed' && worldType === 'flat' && generationVersion < 15) throw new Error('Superflat worlds need streamed generation version 15');
     this.seed = String(seed);
     this.biome = biome;

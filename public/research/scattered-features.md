@@ -33,6 +33,12 @@ Replayed exactly by the test:
 - The `StructureMap` iteration order is JVM dependent (recorded on JDK 19.0.1).
 - Framework gaps worked around inside the module (no framework file edited): `getStructureAt`-based `isSwampHut`, the dispenser contents overload, the average-height adjust and the `Stones` selector are implemented in `scattered-feature-generator.js`.
 
+## Generation-time neighbour updates (batch 30)
+
+- The temple writes (jungle tripwires, hook, repeater, lever, piston, desert TNT and pressure plate, dispensers) now run their native neighbour chains in generation 20 worlds
+  (`src/native-neighbor-world.js`); the call stream, writes, World.rand, pending ticks and final chunks match the unchanged native areas (jungle N/E/W, desert S/N/W records in
+  `flat-populate-reference.json` and the default-world records in `structure-area-reference.json`). Earlier generation versions keep the quiet callbacks (`QUIET_*`) below.
+
 ## Live traps (batch 15)
 
 - **Jungle pyramid tripwires.** `BlockTripWireHook` (aog, original 131) and `BlockTripWire` (aof, 132) are ported in `src/redstone.js` and replayed by `src/tripwire.test.js` against `public/research/tripwire-reference.json` (33 scenarios, 1330 ticks since batch 17, recorded by `tools/verify-tripwire.mjs` through the unchanged native classes in `tools/probes/RedstoneProbe.java`: placement order with flags 3 and 2, `onPostBlockPlaced`, entity enter and leave, 10-tick rechecks, hook powering through its anchor block into wire and a lamp, z-axis lines, suspended strings, broken hooks, strings, anchors and floors, a disarmed string, gaps and obstructions, the 41-cell range limit, same-facing hooks, a hook replaced while powered; batch 17: shears/stick/empty-hand harvest, random ticks, projectile and bat entity classes). Sounds (`random.click` 0.6/0.5/0.7, `random.bowhit` with the world-Random pitch), drops (string item 287, hook), pending ticks and the world Random match the native run.

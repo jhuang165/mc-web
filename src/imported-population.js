@@ -81,7 +81,7 @@ export function populateOne(population, x, z, terrain) {
   const pass = new PopulationArea({
     seed: population.seed, chunkX: x, chunkZ: z, size: 0, terrain, biomeAt: population.biomeAt,
     structures: !!population.structureCache, manager: population.structureCache?.manager, structureCache: population.structureCache,
-    flat: population.flat, mapFeatures: population.mapFeatures,
+    flat: population.flat, mapFeatures: population.mapFeatures, neighbors: population.neighbors,
   });
   const w = pass.world;
   for (let a = x - 1; a <= x + 2; a++) for (let b = z - 1; b <= z + 2; b++) {

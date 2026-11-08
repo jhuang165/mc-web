@@ -10,11 +10,15 @@ export class StructureRedstone extends RedstoneWorld {
   constructor(area) {
     super({ seed: 0, log: false });
     this.area = area;
+    // The native blocks draw from World.rand (the bowhit pitch of a detaching tripwire hook): the area world's Random, not a private one.
+    Object.defineProperty(this, "rand", { get: () => area.rand, set() {} });
   }
   getBlock(x, y, z) { return this.area.getBlock(x, y, z); }
   getBlockMetadata(x, y, z) { return this.area.getBlockMetadata(x, y, z); }
   setBlock(x, y, z, id, meta, flags) { return this.area.setBlock(x, y, z, id, meta, flags); }
   setBlockMetadataWithNotify(x, y, z, meta, flags) { return this.area.setBlockMetadata(x, y, z, meta, flags); }
+  // World.getTileEntity reads the chunk directly (no World.getBlock call in the native stream); nothing in a fresh structure keeps a tile beside the redstone family.
+  getTileEntity(x, y, z) { return this.area.getTileEntity(x, y, z); }
   notifyBlockOfNeighborChange(x, y, z, source) { this.area.notifyNeighbor(x, y, z, source); }
   scheduleBlockUpdate(x, y, z, id, delay, priority = 0) { this.area.scheduleBlockUpdate(x, y, z, id, delay, priority); }
   dropBlockAsItem(x, y, z, id, meta) { this.area.dropBlockAsItem(id, x, y, z, meta, 0); }
