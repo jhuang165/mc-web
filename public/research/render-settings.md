@@ -19,3 +19,6 @@ Saved device settings: `graphics` (true = Fancy), `ao` 0..2, `clouds`, `mipmapLe
 - Anisotropic filtering needs EXT_texture_filter_anisotropic and is clamped to the GPU maximum; it applies to the block atlas only.
 - three.js user mip levels use immutable storage, so the atlas texture is recreated whenever the level count changes.
 - Mesher differences are covered by lighting-level unit tests (flat/partial faces) rather than full chunk-mesh tests, which need a WebGL scene.
+
+## 3D Anaglyph (batch 27)
+Converted at texture upload and for fog/sky/cloud colours, merged by channel masks; toggling refreshes resources. Details and numbers in `post-shaders.md`. Vertex-colour conversion (RenderBlocks), the font colour table and the DOM GUI are not ported.
