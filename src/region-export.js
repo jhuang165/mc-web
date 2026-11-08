@@ -39,6 +39,7 @@ import { GEAR_TYPES, gearFieldsFrom } from './mob-equipment-live.js';
 import { uuidOf, uuidLongs } from './entity-uuid.js';
 import { livingAttributesNbt } from './mob-attribute-list.js';
 import { exportPlayerUuid, ownerText, playerLeashTag } from './owner-links.js';
+import { leashRawTag } from './java-mobs.js';
 // A [type, value] pair of cart-variants.js variantNBT (compound [10, {key: pair}], list [9, elementType, items]) as a tag.
 const pairTag=p=>p[0]===NBT.COMPOUND?comp(Object.fromEntries(Object.entries(p[1]).map(([k,v])=>[k,pairTag(v)]))):p[0]===NBT.LIST?tag(NBT.LIST,{elementType:p[2].length?p[1]:NBT.END,items:p[1]===NBT.COMPOUND?p[2].map(i=>new Map(Object.entries(i).map(([k,v])=>[k,pairTag(v)]))):p[2]}):tag(p[0],p[0]===NBT.SHORT?(p[1]<<16)>>16:p[1]);
 const tag=(type,value)=>({type,value}), comp=value=>tag(NBT.COMPOUND,new Map(Object.entries(value))), list=(type,items)=>tag(NBT.LIST,{elementType:items.length?type:NBT.END,items});
@@ -89,7 +90,8 @@ function payload(state,ox,oz,report,blockAt) {
   if(e.customName){n.CustomName=str(e.customName);n.CustomNameVisible=byte(e.customNameVisible?1:0);}
   {const attributes=livingAttributesNbt(e,name);if(attributes)n.Attributes=attributes;} // EntityLivingBase.writeEntityToNBT: the full native list per class with the modeled modifiers (mob-attribute-list.js, probed)
   n.PersistenceRequired=byte(e.persistent?1:0);n.Leashed=byte(e.leash?1:0);
-  if(e.leash?.knot)n.Leash=comp({X:int(e.leash.knot.x+ox),Y:int(e.leash.knot.y),Z:int(e.leash.knot.z+oz)});
+  if(e.leash?.lost){const raw=leashRawTag(e.leash.raw);if(raw)n.Leash=raw;} // an unticked unusable tag: written back as it was (java-mobs.js leashRaw)
+  else if(e.leash?.knot)n.Leash=comp({X:int(e.leash.knot.x+ox),Y:int(e.leash.knot.y),Z:int(e.leash.knot.z+oz)});
   else if(e.leash?.holder==='mob'&&e.leash.holderUuid)n.Leash=tag(NBT.COMPOUND,playerLeashTag(e.leash.holderUuid)); // another mob holds: its UUID (leads2-reference.json)
   else if(e.leash)n.Leash=tag(NBT.COMPOUND,playerLeashTag(report.playerUuid??exportPlayerUuid({}))); // the holder is the local player: its exported UUID (owner-links.js)
   // EntityLiving.writeEntityToNBT: CanPickUpLoot, Equipment (five compounds: held, boots, leggings, chestplate, helmet; an empty slot is an empty compound) and
