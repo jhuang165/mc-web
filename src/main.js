@@ -3051,9 +3051,10 @@ let streamPrefetch = null, streamStorage = null, containerResidency = null;
 function startPrefetch() {
   streamPrefetch?.dispose();
   streamPrefetch = null;
-  if (!world.streaming || world.noPrefetch || typeof Worker !== "function") return; // the worker only knows Overworld terrain
+  if (!world.streaming || (world.noPrefetch && !world.dimension) || typeof Worker !== "function") return; // the worker builds Overworld terrain and, through DimensionWorld, Nether/End columns (batch 28)
   try {
-    streamPrefetch = new StreamPrefetch(world, new Worker(new URL("./streaming-worker.js", import.meta.url), { type: "module" }));
+    const spawn = () => new Worker(new URL("./streaming-worker.js", import.meta.url), { type: "module" });
+    streamPrefetch = new StreamPrefetch(world, spawn(), { ringPorts: Array.from({ length: Math.max(1, Math.min(3, (navigator.hardwareConcurrency ?? 4) - 3)) }, spawn) }); // the ring fills from extra workers (a Nether/End column 40-60 ms, an Overworld cell 1-2 s each)
   } catch (e) {
     console.error(`streaming-generator: no worker, generating on the main thread: ${e.message}`);
   }

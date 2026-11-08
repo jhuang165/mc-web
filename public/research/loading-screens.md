@@ -122,3 +122,20 @@ Javap dumps of the classes read are in the ignored research folder `loading/` (`
 - No progress bar is shown (natively none either); the console percentage is coarse.
 - No save screen on quit (natively blank).
 - Boot failure still uses the page overlay's HTML text.
+
+## Batch 28: dimension trips off the page thread
+Gameplay and generated data are unchanged (workers run the same `DimensionWorld.netherChunk`/`endChunk` and `StreamingPopulation.export`); only where the work runs changed. Muted headless Chrome 1280x800, vite dev server, `artifacts/b28-dimperf/trip.mjs` (new world, 8 s idle, then Nether, Overworld, End, Overworld; long-task observer; ring size polled every 0.5 s). Numbers are from two or three runs each; the machine has 18 cores.
+- Causes found: the Nether/End ring generated one column every other tick on the page (`createRing` with a `generate` source, 40-60 ms each): that was the 50-164 ms long-task train (53 tasks over 50 ms in 45 s) and the 44 s ring fill (28-30 s in earlier measures). The window shift and the arrival warm-up also generated Nether columns on the page (`chunk` in `nether-generator.js`, `pathCost`). The Overworld return waited on three population cells built one after another by a single worker (5.1 s of the 8 s).
+- Changes: `createStreamWorker` accepts `dimension`/`dimensionSeed` and builds Nether/End columns in a worker (a Nether column's chest/spawner records ride along and are adopted on the page unless the column is already materialized); `StreamPrefetch` takes `ringPorts`, extra workers that only build ring columns (up to 3, `hardwareConcurrency - 3`), for every dimension; `startPrefetch` runs for the Nether/End; `arrivalWarmer` asks workers for Nether/End columns and deals a large request (cells or columns) over up to 3 workers; `HeadlessColumns.units()` returns nothing before the ring is centred.
+- Before (main 7b67a97, 2 runs) vs after (6 runs):
+
+| | before | after |
+|---|---|---|
+| Nether: tasks over 50 ms, first ~50 s | 53 (max 164 ms) and 9 (max 261 ms) | 1-4 (max 61-85 ms) |
+| Nether ring (441 columns) | 44 s | 8-10 s |
+| End ring | 44 s | 6.5-7 s |
+| End trip long tasks | none | 0-1 (max 60-122 ms) |
+| Overworld return from the Nether, wall | 8.1 s (5.4 s in one run) | 4.5-6.9 s (4.5 s in the last run) |
+| Overworld ring after return | 10.6-12.6 s | 3.5-5.7 s |
+
+- Remaining: an End-to-Overworld return sometimes (about one run in three, before and after) shows a train of 70-170 ms tasks for 1-3 s, about 9-16 s after arrival, once the ring is complete; the profile points at spawn-side ring reads (`canLightningStrikeAt`, `RingLight` `heightAt`/`search`), not at loading. The 1.3 s first Nether arrival task from the page (`launch`: meshes, light) stays near 60-70 ms. A one-off 1.1 s task seen in one run (first run after a source edit) did not repeat.

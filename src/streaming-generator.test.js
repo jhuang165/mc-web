@@ -85,3 +85,48 @@ test('a failed worker stops prefetching and never holds the world back', async (
   try { q.onmessage({ data: { type: 'error', message: 'bad cell' } }); } finally { console.error = error; }
   assert.equal(other.failed, 'bad cell');
 });
+
+// Batch 28: Nether/End columns and their ring come from workers.
+import { DimensionWorld } from './dimension-world.js';
+import { HeadlessColumns } from './headless-columns.js';
+
+test('dimension workers build the same Nether and End columns as the page, with the fortress records', async () => {
+  for (const dim of [-1, 1]) {
+    const page = new DimensionWorld('28', dim), p = port(), prefetch = new StreamPrefetch(page, p, { margin: 0 });
+    assert.equal(p.posted[0].dimension, dim);
+    const reference = new DimensionWorld('28', dim);
+    prefetch.update(8, 8);
+    assert.deepEqual(p.posted.slice(1), [{ type: 'column', x: 0, z: 0 }].slice(0, 1), 'the window is requested one column at a time');
+    await p.flush();
+    assert.ok(page.pregenerated.has('0,0'));
+    const want = reference.generateTerrainChunk(0, 0), got = page.pregenerated.get('0,0');
+    assert.deepEqual(Buffer.from(got.blocks), Buffer.from(want.blocks), `dimension ${dim} blocks`);
+    assert.deepEqual(Buffer.from(got.metadata), Buffer.from(want.metadata));
+    assert.deepEqual([...page.population?.records ?? []], [...reference.population?.records ?? []], 'chest/spawner records ride along');
+  }
+});
+
+test('ring workers take ring columns while the main worker keeps the window, and never get a NaN centre', async () => {
+  const w = new DimensionWorld('28', -1), main = port(), spare = port();
+  const ring = new HeadlessColumns(w);
+  const prefetch = new StreamPrefetch(w, main, { margin: 0, ringPorts: [spare] });
+  prefetch.ring = ring;
+  assert.deepEqual(ring.units(), [], 'an uncentred ring asks for nothing');
+  prefetch.update(8, 8);
+  assert.equal(spare.posted.length, 1, 'only init: no ring request before the ring is centred');
+  ring.update(0, 0);
+  prefetch.update(8, 8);
+  const ringRequests = (p) => p.posted.filter((m) => m.type === 'ring');
+  assert.equal(ringRequests(spare).length, 1, 'the spare worker takes a ring column at once');
+  assert.equal(main.posted.filter((m) => m.type === 'column').length, 1, 'the window column is not blocked by ring requests');
+  prefetch.update(8, 8);
+  assert.equal(ringRequests(spare).length, 1, 'a busy ring worker gets no second request');
+  await spare.flush(); await main.flush();
+  assert.ok(ring.cols.size >= 1, 'the ring received its column');
+  ring.update(0, 0);
+  prefetch.update(8, 8);
+  assert.equal(ringRequests(spare).length, 1, 'an idle ring worker takes the next one (flush consumed the first)');
+  assert.equal(main.posted.filter((m) => m.type === 'column').length, 1, 'the main worker is busy with the next window column, so it takes no ring column');
+  prefetch.dispose();
+  assert.ok(spare.terminated && main.terminated);
+});
