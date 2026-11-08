@@ -5,6 +5,7 @@ import { toOriginal } from "./block-registry.js";
 import { blockLightOpacity } from "./map-colors.js";
 import { onResourcesRefreshed } from "./resource-refresh.js";
 import { versioned } from "./media-version.js";
+import { rawImgSrc } from "./gui-anaglyph.js"; // icons converted for 3D Anaglyph keep the page's own src (data-raw-src)
 import { tickItemAnimations, registerFrameTag } from "./item-animation.js";
 import { clockFrameCount, spriteEpoch } from "./sprite-frames.js";
 
@@ -82,10 +83,10 @@ export class MapsClock {
       const url = clockFrameUrl();
       if (this.lastFrame !== clockState.frame) {
         this.lastFrame = clockState.frame;
-        for (const img of document.querySelectorAll("img.vanilla-item-icon")) if (urlSet.has(img.getAttribute("src")) && img.getAttribute("src") !== url) img.setAttribute("src", url);
+        for (const img of document.querySelectorAll("img.vanilla-item-icon")) if (urlSet.has(rawImgSrc(img)) && rawImgSrc(img) !== url) img.setAttribute("src", url);
       }
       // Freshly drawn slots point at the raw 16x1024 strip; swap in the current frame once it has loaded.
-      if (urlSet.has(url)) for (const img of document.querySelectorAll('img[src="/media/1.7.10/items/clock.png"]')) img.setAttribute("src", url);
+      if (urlSet.has(url)) for (const img of document.querySelectorAll("img.vanilla-item-icon")) if (rawImgSrc(img) === "/media/1.7.10/items/clock.png") img.setAttribute("src", url);
     }
     mapStore.spawn = mapStore.spawn ?? { x: 0, z: 0 };
     const player = { name, x: position.x, z: position.z, yaw, dimension: world?.dimension ?? 0 };

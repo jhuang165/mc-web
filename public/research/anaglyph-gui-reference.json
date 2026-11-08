@@ -1,0 +1,3688 @@
+{
+ "source": "tools/verify-anaglyph-gui.mjs: unchanged bqi.a(int[]) (TextureUtil.anaglyphColor) run over jar textures read with ImageIO.getRGB",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "textures": [
+  {
+   "name": "blocks/dirt.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "3762feae1f362d9381e0ef158ac7dd063086cd3f",
+   "conv": "770731789c2e75bcbc8fa5cb8defd55e916d648d",
+   "first": [
+    0,
+    -4618916,
+    -7302025
+   ]
+  },
+  {
+   "name": "entity/chest/christmas.png",
+   "w": 64,
+   "h": 64,
+   "type": 6,
+   "translucent": 0,
+   "raw": "db33facc6fd0427cc7726720a7911dd9ca7042f6",
+   "conv": "e00357b753b1441eefb8ecc46a0ba0bdae528138",
+   "first": [
+    1,
+    -3701,
+    -1444435
+   ]
+  },
+  {
+   "name": "entity/chest/christmas_double.png",
+   "w": 128,
+   "h": 64,
+   "type": 6,
+   "translucent": 0,
+   "raw": "07013f3c7c917d9382df1eb135cb0c473a73d057",
+   "conv": "458e979bab86ed434bbc8f5843409f2cdabb63a9",
+   "first": [
+    1,
+    -3131346,
+    -10197666
+   ]
+  },
+  {
+   "name": "entity/chest/ender.png",
+   "w": 64,
+   "h": 64,
+   "type": 6,
+   "translucent": 0,
+   "raw": "d2f406918c9aed07b429ae98a8d9d7c4c797a4c6",
+   "conv": "91ab778430340747536c3fe8b16cf35d468ff41f",
+   "first": [
+    1,
+    -1186131,
+    -1972032
+   ]
+  },
+  {
+   "name": "entity/chest/normal.png",
+   "w": 64,
+   "h": 64,
+   "type": 6,
+   "translucent": 0,
+   "raw": "b9104049f343af012ddbb75697564b173e3c2c75",
+   "conv": "90ec9bb13d0c7945aa51b015bd7d899813ffc182",
+   "first": [
+    1,
+    -3289651,
+    -3289651
+   ]
+  },
+  {
+   "name": "entity/chest/normal_double.png",
+   "w": 128,
+   "h": 64,
+   "type": 6,
+   "translucent": 0,
+   "raw": "a07794f0b1edb7ae1dfd33d0f94cd86d565b8b36",
+   "conv": "3deaa78ae4805f81ef47867343f5004fba08c43e",
+   "first": [
+    1,
+    -3289651,
+    -3289651
+   ]
+  },
+  {
+   "name": "entity/chest/trapped.png",
+   "w": 64,
+   "h": 64,
+   "type": 6,
+   "translucent": 0,
+   "raw": "76f57244d63ab9b913e6c13e9438c60bce6daec6",
+   "conv": "569efe5fd4cacd54c3b16fd152b219c8d817e5eb",
+   "first": [
+    1,
+    -3289651,
+    -3289651
+   ]
+  },
+  {
+   "name": "entity/chest/trapped_double.png",
+   "w": 128,
+   "h": 64,
+   "type": 6,
+   "translucent": 0,
+   "raw": "bfbdba12894464df9bf3dab9f94dcf69de0c0452",
+   "conv": "198160b43438af92338c667f8594e32bfedfc3b4",
+   "first": [
+    1,
+    -3289651,
+    -3289651
+   ]
+  },
+  {
+   "name": "entity/steve.png",
+   "w": 64,
+   "h": 32,
+   "type": 6,
+   "translucent": 0,
+   "raw": "5952e32a29d5aaee87a29c75602b388ca7f56fc7",
+   "conv": "ea5d08e49c235dab1e8f8ad9fe530e0ef3b5817a",
+   "first": [
+    8,
+    -14017267,
+    -14737387
+   ]
+  },
+  {
+   "name": "gui/achievement/achievement_background.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 4380,
+   "raw": "041f13696ecd41d866ede4813aebe2029b52a256",
+   "conv": "041f13696ecd41d866ede4813aebe2029b52a256",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/achievement/achievement_icons.png",
+   "w": 256,
+   "h": 256,
+   "type": 13,
+   "translucent": 0,
+   "raw": "0f0e43b132e38fd54ba762a4010451a766886a27",
+   "conv": "3c5735c599236aa4f338e1845e91400d056d658b",
+   "first": [
+    0,
+    -2719745,
+    -5793294
+   ]
+  },
+  {
+   "name": "gui/book.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "8a658ffae6e98b571cccb1824a804f93c3a32b1a",
+   "conv": "f997992af7986797b747f3dd7325a4b4bad25c36",
+   "first": [
+    281,
+    -14938368,
+    -15658488
+   ]
+  },
+  {
+   "name": "gui/container/anvil.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "cab7708abb6d759b8c6c054f5ccbdeef055da509",
+   "conv": "811c5096cc3843685e0993bfe1b84ca5d326a11c",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/container/beacon.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "d38a1dc9766a70df837af9f33f8f6f15b76605cb",
+   "conv": "b984a4f28b12215dd25a9652b1ce4ee4f98c25c3",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/container/brewing_stand.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "6c0d85bf4ca3847b7c65a6153293e583e33a7f85",
+   "conv": "6c0d85bf4ca3847b7c65a6153293e583e33a7f85",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/container/crafting_table.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "86f9c7ba160f0728d0941f9cf46240d0a5e484fe",
+   "conv": "86f9c7ba160f0728d0941f9cf46240d0a5e484fe",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/container/creative_inventory/tab_inventory.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "dd6f4f168607bd60ca9ef7472282c9bd202dcd76",
+   "conv": "79a6e84883e8cf57f323133a507fdd15941d80d7",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/container/creative_inventory/tab_item_search.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "fce97822bdacc67986a66870f69032527a3e3f3d",
+   "conv": "fce97822bdacc67986a66870f69032527a3e3f3d",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/container/creative_inventory/tab_items.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "54b742555b11f2fc123b73b2c0a0cb710d780a4d",
+   "conv": "54b742555b11f2fc123b73b2c0a0cb710d780a4d",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/container/creative_inventory/tabs.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "320919ba836711da10a993bbaaf2e66091ad9f4d",
+   "conv": "f8bf2888ba53e2d855cc15cadb54a21012e90268",
+   "first": [
+    168,
+    -16711930,
+    -6835708
+   ]
+  },
+  {
+   "name": "gui/container/dispenser.png",
+   "w": 256,
+   "h": 256,
+   "type": 13,
+   "translucent": 0,
+   "raw": "ccc5533c46a326f737d3c4e7e79643b8ff3c7f10",
+   "conv": "ccc5533c46a326f737d3c4e7e79643b8ff3c7f10",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/container/enchanting_table.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "b62343268150830adb1e2b2fddab704fc372fea4",
+   "conv": "b1bd53749c71de5157792a42c9dac64a56c2d027",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/container/furnace.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "33bab530df58861b09289ce57b430bbff820a2ca",
+   "conv": "00cab13aafd9fb23a983277521706e21d14bf164",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/container/generic_54.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "81c3745fd3e392b99a20fe4f9a1d482c9bda6f56",
+   "conv": "81c3745fd3e392b99a20fe4f9a1d482c9bda6f56",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/container/hopper.png",
+   "w": 256,
+   "h": 256,
+   "type": 13,
+   "translucent": 0,
+   "raw": "7e06cc107ef5977a411536c940a0d3190971f180",
+   "conv": "7e06cc107ef5977a411536c940a0d3190971f180",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/container/horse.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "f37c5e3d8de9558989fd194db2f51586e55512cd",
+   "conv": "f5e089a1eb0c3f36875000699925a2a90435cf03",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/container/inventory.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "13245c2121e027aa0b855bb9e0651536113c7621",
+   "conv": "57b0b4b17f73f621995f7fc9ed483917a2f9029d",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/container/stats_icons.png",
+   "w": 128,
+   "h": 128,
+   "type": 6,
+   "translucent": 0,
+   "raw": "54f18807eaf6084e0d60d7c6cee1b95c77fcca2d",
+   "conv": "208673f01fc28a4d82d3b533235f1d95fe9ca33b",
+   "first": [
+    0,
+    -13158601,
+    -13158601
+   ]
+  },
+  {
+   "name": "gui/container/villager.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "ff9e34a10620205bb26dcb2844f4e4f473b9a50d",
+   "conv": "c3a52a56376ea5936aca1208392f49a69d1a53dd",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/demo_background.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "7d376a7724d6e009c4832cee865dd0d8af10b867",
+   "conv": "7d376a7724d6e009c4832cee865dd0d8af10b867",
+   "first": [
+    2,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/icons.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 18,
+   "raw": "894d31cb6b55b99fe26b166f910e26007aa3aefc",
+   "conv": "5aa2168a9bb496ee10d8f361ec4ec817a0117655",
+   "first": [
+    18,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/options_background.png",
+   "w": 16,
+   "h": 16,
+   "type": 13,
+   "translucent": 0,
+   "raw": "0039db8c4bb2109c6d2671c68a99c1d23bc4e9df",
+   "conv": "75151b4b25c234e88f5cd58b6fb8f88359a83182",
+   "first": [
+    0,
+    -4618916,
+    -7302025
+   ]
+  },
+  {
+   "name": "gui/resource_packs.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "670a6108667d28641ecec22dbb91828750a65698",
+   "conv": "cb14a39b6547009c1255a7af3b78d1bde47f717e",
+   "first": [
+    1290,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "gui/stream_indicator.png",
+   "w": 16,
+   "h": 64,
+   "type": 6,
+   "translucent": 0,
+   "raw": "b9ecc2660bd1bfbc2e0402031e97f82a2160c6a9",
+   "conv": "b8c0b18b6f495473e68854a5dda68f6a15ffa05f",
+   "first": [
+    5,
+    -9934744,
+    -9934744
+   ]
+  },
+  {
+   "name": "gui/title/background/panorama_0.png",
+   "w": 256,
+   "h": 256,
+   "type": 5,
+   "translucent": 0,
+   "raw": "08c052ff876a50ae81612bcd3378238d2fc9437f",
+   "conv": "9242fb110a38690d8e269b6b08cf254b22c5f416",
+   "first": [
+    0,
+    -7363585,
+    -5792291
+   ]
+  },
+  {
+   "name": "gui/title/background/panorama_1.png",
+   "w": 256,
+   "h": 256,
+   "type": 5,
+   "translucent": 0,
+   "raw": "d1939a4cf370156181d15bb6ee482f82cdcbaea3",
+   "conv": "384c88b8c07e35905a2860265c2daa202e788033",
+   "first": [
+    0,
+    -7297793,
+    -5726499
+   ]
+  },
+  {
+   "name": "gui/title/background/panorama_2.png",
+   "w": 256,
+   "h": 256,
+   "type": 5,
+   "translucent": 0,
+   "raw": "604f969617338cb27755239a5c6b6befe3d6c930",
+   "conv": "af06b8f887b2caf40b593b30fac82edd20209695",
+   "first": [
+    0,
+    -5525308,
+    -5198148
+   ]
+  },
+  {
+   "name": "gui/title/background/panorama_3.png",
+   "w": 256,
+   "h": 256,
+   "type": 5,
+   "translucent": 0,
+   "raw": "5c0ceb1e40016e122d6f737bf0cbf36580023a5b",
+   "conv": "f031662ababccc90eb698e9d925a3f85a96a0b3b",
+   "first": [
+    0,
+    -7297793,
+    -5726499
+   ]
+  },
+  {
+   "name": "gui/title/background/panorama_4.png",
+   "w": 256,
+   "h": 256,
+   "type": 5,
+   "translucent": 0,
+   "raw": "a588ad62cfb391104320422e748351e74d0dde7b",
+   "conv": "36e5f04d8ec5100c622740d21d0e8411f1a5284f",
+   "first": [
+    0,
+    -7297793,
+    -5726499
+   ]
+  },
+  {
+   "name": "gui/title/background/panorama_5.png",
+   "w": 256,
+   "h": 256,
+   "type": 5,
+   "translucent": 0,
+   "raw": "d557ecd222794aa4a9d89577cffd8f826665ebce",
+   "conv": "c17c14e1362d9c697572b3c5e81100f6ed9736c6",
+   "first": [
+    0,
+    -14076396,
+    -13749734
+   ]
+  },
+  {
+   "name": "gui/title/minecraft.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "ac4a6bbf68d591d136fd599a853679a7be4bd097",
+   "conv": "fefc12ff5c41c1ec6f62b93063415783a8f02a04",
+   "first": [
+    10,
+    -16514301,
+    -16579837
+   ]
+  },
+  {
+   "name": "gui/title/mojang.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "cfe12139d78d9d16898f0dc7ed995d0a928a9ea0",
+   "conv": "cdbe1024726e0b4e45a5b76770ccaab0c5e14877",
+   "first": [
+    0,
+    -1,
+    -1
+   ]
+  },
+  {
+   "name": "gui/widgets.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 54763,
+   "raw": "e8caff20d9ccb37262bfdd3eec7a9d7ed008b06d",
+   "conv": "eebba1b077be21ddf8fc90f834e4114caec71636",
+   "first": [
+    0,
+    -50134269,
+    -50134269
+   ]
+  },
+  {
+   "name": "items/apple.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "77fa07121ec36636f24f78f95ac513af6aee4523",
+   "conv": "19181fec198d0db80bde196962de520b250ac671",
+   "first": [
+    25,
+    -8965107,
+    -12367828
+   ]
+  },
+  {
+   "name": "items/apple_golden.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "b0cf2bf85ada074ef0de40cf651cd88e6571629e",
+   "conv": "1154d2a07fff0dd30193775b99fce339d72c68f6",
+   "first": [
+    25,
+    -15132391,
+    -15132391
+   ]
+  },
+  {
+   "name": "items/arrow.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "1a53466f51d6594a9fd8a8ce5b5068805f60f6f8",
+   "conv": "c6d2b370f989785c664f495e95a6d4903ad49d5e",
+   "first": [
+    44,
+    -6908266,
+    -6908266
+   ]
+  },
+  {
+   "name": "items/bed.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "8c831c28e0f7c166b91a2a7f942d6f90b40459cc",
+   "conv": "d5ebcefae74509691706ad5b6391e28c99fb9813",
+   "first": [
+    25,
+    -9276814,
+    -9276814
+   ]
+  },
+  {
+   "name": "items/beef_cooked.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 2,
+   "raw": "c1f7910465849c48434adc2d18d1d1f770e6c351",
+   "conv": "26d1bf294c799cd9e8988e6b097f95e8b5768d16",
+   "first": [
+    57,
+    -9749974,
+    -12171203
+   ]
+  },
+  {
+   "name": "items/beef_raw.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "ed05dc0c9cb693caaf0520bfe4a2c950420fa0e3",
+   "conv": "092043c1285ca6f402ae2941d09c446fd93a3d12",
+   "first": [
+    57,
+    -5426386,
+    -11053228
+   ]
+  },
+  {
+   "name": "items/blaze_powder.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "81e1bcbd40665796cfd8c90b8407e1b1528fe000",
+   "conv": "48f8102511b8a2580ee70861a7b5296c0a3ab1de",
+   "first": [
+    22,
+    -6999296,
+    -11907028
+   ]
+  },
+  {
+   "name": "items/blaze_rod.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "7b521ecec14b1e316d515a72203d416e8512e600",
+   "conv": "64fab05f0b591e795e88130e9750bd5481e0abfa",
+   "first": [
+    28,
+    -5018855,
+    -8945593
+   ]
+  },
+  {
+   "name": "items/boat.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "d5da349ba9303e9126f2488aadc5a69d307a2c1b",
+   "conv": "7bf71a0cba7c52acf5aa8227a1e9c9396970195f",
+   "first": [
+    40,
+    -14148085,
+    -14802669
+   ]
+  },
+  {
+   "name": "items/bone.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "1778787a1814e6eda97a9ed6fa40a2a63d3063e1",
+   "conv": "a07fc861819b2db8df6ae8e965941d8c07941ec7",
+   "first": [
+    28,
+    -1776942,
+    -2039081
+   ]
+  },
+  {
+   "name": "items/book_enchanted.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 5,
+   "raw": "692407150e01030bdcaee3cb322d25e55a054a6f",
+   "conv": "7a9d001ae63136b753f83752e4f904c5a2ccc5a6",
+   "first": [
+    24,
+    -12768502,
+    -13881319
+   ]
+  },
+  {
+   "name": "items/book_normal.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "8044f617882ab7c18036845c054d855fcfb190d9",
+   "conv": "f2e1d581ba71716e96bc1e371cf5703428128574",
+   "first": [
+    24,
+    -14279928,
+    -14934511
+   ]
+  },
+  {
+   "name": "items/book_writable.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "a428d916befcb04e4701723e4ca707bcd0b1d579",
+   "conv": "c938aed0e63defb76f395f4cca4777708f570e41",
+   "first": [
+    20,
+    -921103,
+    -921103
+   ]
+  },
+  {
+   "name": "items/book_written.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "1a635aadb3a0789de5453a62b1849b15387e7016",
+   "conv": "f7fa6736bc5e540d32f6902045a946ca38de5a3b",
+   "first": [
+    24,
+    -14938368,
+    -15658488
+   ]
+  },
+  {
+   "name": "items/bow_pulling_0.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "79198eb37b81fba9ff46dc4369e673274dca4e5d",
+   "conv": "a0ae9a3664bad7195f0c648137e605ddc9822cd0",
+   "first": [
+    1,
+    -1,
+    -1
+   ]
+  },
+  {
+   "name": "items/bow_pulling_1.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "2859d6845b2a29ad98746d757a79750902a860a9",
+   "conv": "9d98daaf49c4fbbde519dde2f5104ea0ad612951",
+   "first": [
+    18,
+    -1,
+    -1
+   ]
+  },
+  {
+   "name": "items/bow_pulling_2.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "34bead8d50d6dea0e98404a8d43b578d07384ab4",
+   "conv": "e6afaca79b54fd625873611a972414270dd690ec",
+   "first": [
+    35,
+    -1,
+    -1
+   ]
+  },
+  {
+   "name": "items/bow_standby.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "725709cd741b5d178d84a94d1608a9a0a4686bf6",
+   "conv": "da43e68773657c43bc83f2bba1e1b8b45123b27a",
+   "first": [
+    27,
+    -11979243,
+    -13092060
+   ]
+  },
+  {
+   "name": "items/bowl.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "f64e0d5ddc4d9f1ad01b6ff5eab8d7f2e423f5a8",
+   "conv": "97ca041b0c520a1e7a4e78182700ae7a7de43e92",
+   "first": [
+    85,
+    -12966138,
+    -14078955
+   ]
+  },
+  {
+   "name": "items/bread.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "387cf40c10dcaa89a6e865aada3141d5a528f9c7",
+   "conv": "1b4677896d0e911299b739f47291d61e2cd81047",
+   "first": [
+    41,
+    -9087205,
+    -10919882
+   ]
+  },
+  {
+   "name": "items/brewing_stand.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "05443c1de17b2340f5ad295f413e2e4da5288e32",
+   "conv": "9b4c78eebd5040f90f1cb529bb55bdc356a2d370",
+   "first": [
+    26,
+    -13553359,
+    -13553359
+   ]
+  },
+  {
+   "name": "items/brick.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "61666be7927b77c7a443e92356fd19d81bf2d81d",
+   "conv": "637188da4f3b323bd63baaa7a59ac094bb540ad0",
+   "first": [
+    42,
+    -12968940,
+    -14408417
+   ]
+  },
+  {
+   "name": "items/bucket_empty.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "935655f8e59ed48348173a1adc41765f9983ba60",
+   "conv": "935655f8e59ed48348173a1adc41765f9983ba60",
+   "first": [
+    37,
+    -13290187,
+    -13290187
+   ]
+  },
+  {
+   "name": "items/bucket_lava.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "be1d5aafdeb89757e1b45ed1f1b5f59d1e0c3ce4",
+   "conv": "dd7756769c7aecbf0f83e4b650bd3b171af2a174",
+   "first": [
+    37,
+    -13290187,
+    -13290187
+   ]
+  },
+  {
+   "name": "items/bucket_milk.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "75e55b60a252dab66f2a8ca66715fef26bbbee7e",
+   "conv": "75e55b60a252dab66f2a8ca66715fef26bbbee7e",
+   "first": [
+    37,
+    -13290187,
+    -13290187
+   ]
+  },
+  {
+   "name": "items/bucket_water.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "a6ca672e2c213df40760d5a591218aeb8bdcd42c",
+   "conv": "f3886a13e80b1bb5f2896e4a1b8b72f73d4a80cc",
+   "first": [
+    37,
+    -13290187,
+    -13290187
+   ]
+  },
+  {
+   "name": "items/cake.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "23aabfc51449918193f53ddfef1ae5e55a9f4877",
+   "conv": "b4552a000664ebd3569d3e27dde384543867da30",
+   "first": [
+    21,
+    -9208708,
+    -8816263
+   ]
+  },
+  {
+   "name": "items/carrot.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "fd6500cd53930d7b5ce7294ffd945431f7543f72",
+   "conv": "35bf63029eb1248a289bccae5031d09ea87eeff3",
+   "first": [
+    45,
+    -16754176,
+    -13287680
+   ]
+  },
+  {
+   "name": "items/carrot_golden.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "830cbe5a5e615c69459798815c6d9cd8bbc23deb",
+   "conv": "e209344bcdc59f3468645ffe1c24fff777b15f0f",
+   "first": [
+    45,
+    -10139897,
+    -12038109
+   ]
+  },
+  {
+   "name": "items/carrot_on_a_stick.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "82fa17146c33d11da16999dd3a6bba40bd68c34b",
+   "conv": "810eb6830bafd3511c378ba8b904d68ef6e26b76",
+   "first": [
+    29,
+    -12303292,
+    -12303292
+   ]
+  },
+  {
+   "name": "items/cauldron.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "394aabb0df173d991afb052cc5c91f078284352e",
+   "conv": "56bcd0cea983e7a8cfd8d7c7928828cc201333de",
+   "first": [
+    55,
+    -10395295,
+    -10395295
+   ]
+  },
+  {
+   "name": "items/chainmail_boots.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "c66b760d271de8cc1fb2f87213eb2bef059c9c00",
+   "conv": "c66b760d271de8cc1fb2f87213eb2bef059c9c00",
+   "first": [
+    52,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/chainmail_chestplate.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "85f16e16b224a629d72fa28c651ac2a461398659",
+   "conv": "85f16e16b224a629d72fa28c651ac2a461398659",
+   "first": [
+    36,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/chainmail_helmet.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "c734ebcaf3c18244fe78d3b51a019ea4738e21d5",
+   "conv": "0a45d658d21ec3671bf6081d6dd6fc2d197e5f7e",
+   "first": [
+    53,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/chainmail_leggings.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "3a040dec20abda6cccd1936815f2406d4e689b5b",
+   "conv": "3a040dec20abda6cccd1936815f2406d4e689b5b",
+   "first": [
+    36,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/charcoal.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "77dd7144d5b26d649a1851082126db25a9c50e27",
+   "conv": "d0ae8a0ee1b8bed3b6470bf36a67849c04b6a4d2",
+   "first": [
+    23,
+    -16251131,
+    -16316667
+   ]
+  },
+  {
+   "name": "items/chicken_cooked.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "bc0b4967a3710fd8c87ddca0af1ed0cae3f27ed5",
+   "conv": "6206c60589627ae340929999122bb2302e76040b",
+   "first": [
+    21,
+    -7846111,
+    -11118017
+   ]
+  },
+  {
+   "name": "items/chicken_raw.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "0aeba7685ee419ea470c117e995bbdd9c1fa519c",
+   "conv": "dfca6b69795e67cc5dbd73ad967125d24adba3d7",
+   "first": [
+    21,
+    -4684685,
+    -7236729
+   ]
+  },
+  {
+   "name": "items/clay_ball.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "32aac981c317d54ef33cddb89fdcc6f3f31741ef",
+   "conv": "1e5f6c1d9ea49ba45d4eeb609cd075ab35c4d5a5",
+   "first": [
+    55,
+    -13158076,
+    -13027264
+   ]
+  },
+  {
+   "name": "items/clock.png",
+   "w": 16,
+   "h": 1024,
+   "type": 6,
+   "translucent": 0,
+   "raw": "271d68687afbd7f92212b1ae85161706cdc49398",
+   "conv": "45ab725778bbf9f6523d74ae04a8c8703d89f302",
+   "first": [
+    6,
+    -12303345,
+    -12696546
+   ]
+  },
+  {
+   "name": "items/coal.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "7c06c34d2fa154a033ad47f9263303cd15c0823a",
+   "conv": "7c06c34d2fa154a033ad47f9263303cd15c0823a",
+   "first": [
+    37,
+    -16579837,
+    -16579837
+   ]
+  },
+  {
+   "name": "items/comparator.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "6019e14f7634d973c593d0aa628cdb01f9d55ffc",
+   "conv": "c903cc4e8b23258a6d312f85b0730dabc00c3906",
+   "first": [
+    44,
+    -11009791,
+    -15000805
+   ]
+  },
+  {
+   "name": "items/compass.png",
+   "w": 16,
+   "h": 512,
+   "type": 6,
+   "translucent": 0,
+   "raw": "a1ccc9f13faa7080804f0f4859fd3d74ac078acd",
+   "conv": "4fdf9debbe8131adb9eba916a8b100245f4a01dc",
+   "first": [
+    37,
+    -13158601,
+    -13158601
+   ]
+  },
+  {
+   "name": "items/cookie.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "debe5543bf963cb51c4d53eb7005782bd126ec8f",
+   "conv": "54af803479a36bfb5a9a6150b969baabe73e8d85",
+   "first": [
+    37,
+    -2522306,
+    -6972308
+   ]
+  },
+  {
+   "name": "items/diamond.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "a5b6477fdc6a7d143ee8eac195fecf7909fa0e7e",
+   "conv": "43d300f0860569a7265eec83377657624da79416",
+   "first": [
+    38,
+    -15976656,
+    -14079451
+   ]
+  },
+  {
+   "name": "items/diamond_axe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "ab8a7ccdc51ffd1e5d511cab66d8589d2440f5b9",
+   "conv": "8a6e2b85d258910710bebae7a6a2ca2f54a381a7",
+   "first": [
+    25,
+    -15843530,
+    -13684694
+   ]
+  },
+  {
+   "name": "items/diamond_boots.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "43558ccee132b2832f896ae8182246de00d44e16",
+   "conv": "e9fdf4c6d7f5b7e0cb704a290a66b859715101d1",
+   "first": [
+    52,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/diamond_chestplate.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "7a556f28bb3af7dc2b37cea0d6050c130ca31118",
+   "conv": "87d69363df0828fd234c26839d4d6a67542b2297",
+   "first": [
+    36,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/diamond_helmet.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "3c946ceb0e179ee267e5947fe7f3591303e67078",
+   "conv": "ac19ea187eb4c9154a1f4d00ae0b851ab09be9f3",
+   "first": [
+    53,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/diamond_hoe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "a1900f5c21610482596bb935ee42f35b9e795805",
+   "conv": "5d0ab6574695b2512c75ca520370248157132965",
+   "first": [
+    23,
+    -15843530,
+    -13684694
+   ]
+  },
+  {
+   "name": "items/diamond_horse_armor.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "d298f314ad005d581128881de761edc275af4f1c",
+   "conv": "7d11556957719d3171fc0d134f756bdde8066871",
+   "first": [
+    43,
+    -9731701,
+    -8684927
+   ]
+  },
+  {
+   "name": "items/diamond_leggings.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "69bd694c0d97c213d390d64b74e08efc12e8341a",
+   "conv": "9b2c8f5b81a41eb62ee4b38cecccebfed675d123",
+   "first": [
+    36,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/diamond_pickaxe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "e1d243bbe7aad5622ca706dc0c1b160a25cbdf27",
+   "conv": "1eda38b57504ce24b74a4da97edd574ab2abb231",
+   "first": [
+    38,
+    -15843530,
+    -13684694
+   ]
+  },
+  {
+   "name": "items/diamond_shovel.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "f53584e1a6b21f342fc79012552bab981cb8444c",
+   "conv": "b0310378e13bb41cb6a0bfd60f72363ff9d9c285",
+   "first": [
+    43,
+    -15843530,
+    -13684694
+   ]
+  },
+  {
+   "name": "items/diamond_sword.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "b85d83802ead3cac584e700b06404fb0889fdaab",
+   "conv": "a06fbe9b3f5e65b367a076f615b5ad1bf73b9567",
+   "first": [
+    13,
+    -15843530,
+    -13684694
+   ]
+  },
+  {
+   "name": "items/door_iron.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "fc0a0d615b5fed6c3e6f6ac1aace63255ce4139f",
+   "conv": "fc0a0d615b5fed6c3e6f6ac1aace63255ce4139f",
+   "first": [
+    35,
+    -3289651,
+    -3289651
+   ]
+  },
+  {
+   "name": "items/door_wood.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "cedfdaf70823f46caeda6ea5ae68c159fe851d75",
+   "conv": "731fd5adb8ca4bf63581052ab0669ea589b7c99b",
+   "first": [
+    35,
+    -6323123,
+    -7959451
+   ]
+  },
+  {
+   "name": "items/dye_powder_black.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "bbef7a66d1de3a1e95b48828875765515f51fa50",
+   "conv": "509d0a298c9e4479f8f370e6e081484f1cf42085",
+   "first": [
+    74,
+    -7247777,
+    -9210770
+   ]
+  },
+  {
+   "name": "items/dye_powder_blue.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "bf497fad86903492bd5532b2cd438dc5801a26a9",
+   "conv": "0571f33774a2f9ad5fd6c84fcec7eb9deb4eebe7",
+   "first": [
+    39,
+    -16110726,
+    -14081704
+   ]
+  },
+  {
+   "name": "items/dye_powder_brown.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "ac5a2606c17a1578ca4be153ff7f77387c296ba3",
+   "conv": "35c4ad825c69117fbd17deee5e82cf1df857e6f5",
+   "first": [
+    59,
+    -6854842,
+    -9341602
+   ]
+  },
+  {
+   "name": "items/dye_powder_cyan.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "742c14936ead13ef9f902918cd365f4d5ad717be",
+   "conv": "64a9a661d734c88b20feb72b45c682ad6e05923d",
+   "first": [
+    39,
+    -15908006,
+    -13290942
+   ]
+  },
+  {
+   "name": "items/dye_powder_gray.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "e552d2858cb52d4e954e69f79443309812a12596",
+   "conv": "e552d2858cb52d4e954e69f79443309812a12596",
+   "first": [
+    70,
+    -12500671,
+    -12500671
+   ]
+  },
+  {
+   "name": "items/dye_powder_green.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "215b4adada36b16be0ac3bb70b6d7ed8fc994cb6",
+   "conv": "3af9f43381f376c2b33423243387cbf5995e22d0",
+   "first": [
+    27,
+    -14535419,
+    -14012659
+   ]
+  },
+  {
+   "name": "items/dye_powder_light_blue.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "ee738f859932fdce38f0c859328915864ab3cb95",
+   "conv": "c6f643d50bd6d3274f9b0e4d6ff640cc7d9e0426",
+   "first": [
+    69,
+    -13675384,
+    -11646867
+   ]
+  },
+  {
+   "name": "items/dye_powder_lime.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "7c582103f02190f78ff45528770be53edea8a9d1",
+   "conv": "0d4176e9c98e895246371ef6805787a47b4bc2f3",
+   "first": [
+    70,
+    -12751616,
+    -11379182
+   ]
+  },
+  {
+   "name": "items/dye_powder_magenta.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "6ac10acb7a6b2248c72da39131d368a15a46d042",
+   "conv": "b67e54471a0fe627b8df4e238910602d8793573d",
+   "first": [
+    70,
+    -9756314,
+    -12699801
+   ]
+  },
+  {
+   "name": "items/dye_powder_orange.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "0fbca09d375acae575b25e16dbcd8a6fc075b150",
+   "conv": "03cbb97b3a4119ab4589202b1021cbae89327fe1",
+   "first": [
+    38,
+    -7191028,
+    -11117516
+   ]
+  },
+  {
+   "name": "items/dye_powder_pink.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "334f0bfbb22d707bc5767f6abcbaf07fd31853e1",
+   "conv": "c5f01645fb273e04349b2f77e314e87f291a2836",
+   "first": [
+    70,
+    -8374692,
+    -11514778
+   ]
+  },
+  {
+   "name": "items/dye_powder_purple.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "dcaf3b116c37bc40b31b04ea8db6c45a19dccdf9",
+   "conv": "09befcb1738a1f864d3d51b501109e7cf3c407b5",
+   "first": [
+    70,
+    -11462031,
+    -13358489
+   ]
+  },
+  {
+   "name": "items/dye_powder_red.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "7773f806ff4a5c36121d8f31dbd01eeff022e748",
+   "conv": "be59425adf3587885ddeabdd7d211f1629b864e5",
+   "first": [
+    55,
+    -8780025,
+    -14079703
+   ]
+  },
+  {
+   "name": "items/dye_powder_silver.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "6b9c098566558facf92fec5aec6ed59eccbf98de",
+   "conv": "17bef5b55761469fa44fe5092f5f19ba4472e020",
+   "first": [
+    39,
+    -12763828,
+    -12698297
+   ]
+  },
+  {
+   "name": "items/dye_powder_white.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "788e1307d74d2a9406563b56da70a7a985a4ab62",
+   "conv": "bd3dfb48ec38659f1b4855c90acf96b95695df5e",
+   "first": [
+    20,
+    -11250584,
+    -11119518
+   ]
+  },
+  {
+   "name": "items/dye_powder_yellow.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "571c00c6b9ba331984b02e6d5dece8d6fd6e8076",
+   "conv": "b76f1e39cc184910e4ac5c0dc4563b6c3c835d37",
+   "first": [
+    27,
+    -7443693,
+    -9734857
+   ]
+  },
+  {
+   "name": "items/egg.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "45fa21178a20f63962cd21b7c2ed062a9e3380ac",
+   "conv": "f240093f28bc0676f0c98d3a0272cab6a57a97c7",
+   "first": [
+    39,
+    -9147567,
+    -9802405
+   ]
+  },
+  {
+   "name": "items/emerald.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "3c433e42a7051221c890d6d43cfb6d156fb2b543",
+   "conv": "ec156d58b2d80d4c61003f634a0f2b8e2a7dc04f",
+   "first": [
+    23,
+    -16755968,
+    -13616640
+   ]
+  },
+  {
+   "name": "items/empty_armor_slot_boots.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "5d389070220b98862e3c97de7acd2f3c8e710056",
+   "conv": "111747fd53f9267f5e33528b9acd48957d69f488",
+   "first": [
+    52,
+    -15130590,
+    -14803681
+   ]
+  },
+  {
+   "name": "items/empty_armor_slot_chestplate.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "e93b7272739b0e5fa666e30438bc3b7b97740c2e",
+   "conv": "9c1821576c534a9cd6766e635c3c6a3a57194360",
+   "first": [
+    36,
+    -15130590,
+    -14803681
+   ]
+  },
+  {
+   "name": "items/empty_armor_slot_helmet.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "2fd61efb591abbd79516ae1b323bca644fa3f581",
+   "conv": "b63333eb68b509b1139d65d9b3242cf08fbc8961",
+   "first": [
+    53,
+    -15130590,
+    -14803681
+   ]
+  },
+  {
+   "name": "items/empty_armor_slot_leggings.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "9d29f3c8a1bbaea7dccf5f433424108f86bbab5c",
+   "conv": "5bb1454b637999264d42c0d2a26a7de890578a67",
+   "first": [
+    36,
+    -15130590,
+    -14803681
+   ]
+  },
+  {
+   "name": "items/ender_eye.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "0ebc40301a5f0c39c28e0727795f10e97eebbca4",
+   "conv": "2dcbeccece9d905808f5d70e48b492a95a26fdf3",
+   "first": [
+    39,
+    -15190722,
+    -13816782
+   ]
+  },
+  {
+   "name": "items/ender_pearl.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "84ddc7ace1bb14a3ce6ac1b4f45260f160687e49",
+   "conv": "ca3eb87754a44da331ca5044d1e3bc11f54295ee",
+   "first": [
+    39,
+    -15976656,
+    -14079451
+   ]
+  },
+  {
+   "name": "items/experience_bottle.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "924e926db793535afe99bbec3f79039ab62fe90d",
+   "conv": "faefb56a3549b58877ab3f9b22613713a6f24b74",
+   "first": [
+    23,
+    -655473,
+    -1049427
+   ]
+  },
+  {
+   "name": "items/feather.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "992b50265dbb3587f7262c9f759a7d8c110987d5",
+   "conv": "992b50265dbb3587f7262c9f759a7d8c110987d5",
+   "first": [
+    44,
+    -2894893,
+    -2894893
+   ]
+  },
+  {
+   "name": "items/fireball.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "88388655e1258b450d7cde43263a5ad5cb8e1d0e",
+   "conv": "b18e7adbeb53e20f8516f70e890b6e581778f6ed",
+   "first": [
+    38,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "items/fireworks.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "794a488e55cfdc3b67e20be00f370846e465d3a7",
+   "conv": "fdda98151df2525a95b5f5e305c87061840a253f",
+   "first": [
+    24,
+    -8111333,
+    -11710406
+   ]
+  },
+  {
+   "name": "items/fireworks_charge.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "96651328164453fc481a9f8a8fa83f2cfcff193d",
+   "conv": "e002274d0e6cfdb36b536efbdba1a17f7e270e32",
+   "first": [
+    39,
+    -11974327,
+    -11974327
+   ]
+  },
+  {
+   "name": "items/fireworks_charge_overlay.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "8cff5630126c47b25e40870d9de9dad6b5fd7a4d",
+   "conv": "ebf124ceac65f9fccb70d9d691c855d77a92343c",
+   "first": [
+    55,
+    -3355444,
+    -3355444
+   ]
+  },
+  {
+   "name": "items/fish_clownfish_raw.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "c18a9093ccc84d8128dca9daf8d5f0afeaed41f7",
+   "conv": "4f9de4fb1d457d2eeca9beb0f2993d857a794faf",
+   "first": [
+    26,
+    -7845852,
+    -11052222
+   ]
+  },
+  {
+   "name": "items/fish_cod_cooked.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "bece494daeb8291f5d04509207d68592723ec9bc",
+   "conv": "c7b3037b93523613e7194beb54c68beb2ea7f057",
+   "first": [
+    27,
+    -5390629,
+    -4409139
+   ]
+  },
+  {
+   "name": "items/fish_cod_raw.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "b4afa38dd8e7e2479d5a45bc55cd5b0cb11dfcd0",
+   "conv": "e216b160a2fb98aa1a820379b566f2ea4d7db039",
+   "first": [
+    27,
+    -5390629,
+    -4409139
+   ]
+  },
+  {
+   "name": "items/fish_pufferfish_raw.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 3,
+   "raw": "a60581cb9b76ce7de686964be8cd352869136d4b",
+   "conv": "8b58bec66d49f7e6459cd7d1acdfcf22f86edf16",
+   "first": [
+    25,
+    -1319367,
+    -3153554
+   ]
+  },
+  {
+   "name": "items/fish_salmon_cooked.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 2,
+   "raw": "2e53621f63ba0c518106f79b5ae2a61c7e2c5150",
+   "conv": "232823e1c617eab9e973fcc68637a8e32cc37948",
+   "first": [
+    27,
+    -2909068,
+    -5722992
+   ]
+  },
+  {
+   "name": "items/fish_salmon_raw.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 2,
+   "raw": "1ffb169e7aa98a40c6fc53335ddec8e69210316e",
+   "conv": "5f63b1f3fc5d3d7b57b20d251bc7891e5542ef93",
+   "first": [
+    27,
+    -4353397,
+    -6381926
+   ]
+  },
+  {
+   "name": "items/fishing_rod_cast.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "3d281bb728134148bb7cbe37c8745b4e3b2cddbe",
+   "conv": "36a9357499f6efac087f6358cc95e1510af420cb",
+   "first": [
+    29,
+    -12303292,
+    -12303292
+   ]
+  },
+  {
+   "name": "items/fishing_rod_uncast.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "e8093a8d47ff57153af4a1927e9832d08b06fcd7",
+   "conv": "92dd013dda0aa2fc38b5a6753a4222a213534dde",
+   "first": [
+    29,
+    -12303292,
+    -12303292
+   ]
+  },
+  {
+   "name": "items/flint.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "3ab10b876c9163b1da0f54d1bd7ff0c9925048cc",
+   "conv": "3ab10b876c9163b1da0f54d1bd7ff0c9925048cc",
+   "first": [
+    40,
+    -14145496,
+    -14145496
+   ]
+  },
+  {
+   "name": "items/flint_and_steel.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "d4f30a5bf698aa6da4e355769215cb2a7a61b476",
+   "conv": "d4f30a5bf698aa6da4e355769215cb2a7a61b476",
+   "first": [
+    20,
+    -12105913,
+    -12105913
+   ]
+  },
+  {
+   "name": "items/flower_pot.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "6420248a7a7411bee4035942e4814bc8bf410bbc",
+   "conv": "72246ee4c4a119f90bbf0c7cd222f38e3596780f",
+   "first": [
+    38,
+    -13429232,
+    -14803430
+   ]
+  },
+  {
+   "name": "items/ghast_tear.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "b34472cf800e7ce584c77744a52bbb5fa0670a2a",
+   "conv": "9395b7bb73b613b54a2f24718d19cb1c368462bd",
+   "first": [
+    71,
+    -13153718,
+    -12303292
+   ]
+  },
+  {
+   "name": "items/glowstone_dust.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "d102c251fd4aeb822f8d371e72872661585336b8",
+   "conv": "af6637d903a1035205ea219db73d60f2a92a37a8",
+   "first": [
+    55,
+    -11316480,
+    -11971816
+   ]
+  },
+  {
+   "name": "items/gold_axe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "f75bd5d2e48f76c02ec6f16c96eecd4231bbdda2",
+   "conv": "d749de3fabd49ee46beed52d9d3efc713b72ab60",
+   "first": [
+    25,
+    -12763868,
+    -12960469
+   ]
+  },
+  {
+   "name": "items/gold_boots.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "61247dec8b6812931f3855c8c8abdc02499e5aab",
+   "conv": "23a326bc1f6ab97b1f2b83ae18d1f2fff403731d",
+   "first": [
+    52,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/gold_chestplate.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "bdd8009c48cf4bfef2ffc4a9f82842ff8e230270",
+   "conv": "c070f3d1ca18ff821ae87210819844a80520435f",
+   "first": [
+    36,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/gold_helmet.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "0db1b7806310085e9a1d98529dd6912243936d92",
+   "conv": "8d9eecbc27668bb08cb3a6c0b874b385d0fd1d76",
+   "first": [
+    53,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/gold_hoe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "3cb18d09ef0bf26c5aa690c19141034303c0f6df",
+   "conv": "18c942b3a9b9957f6dc72a946c4980184fc207da",
+   "first": [
+    23,
+    -12763868,
+    -12960469
+   ]
+  },
+  {
+   "name": "items/gold_horse_armor.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "ab9a8fcdae22f5122ef1cc4e278bdaf16a22a432",
+   "conv": "a6e2743a8abab8e0aaf3a0592f26afeb04a87a36",
+   "first": [
+    43,
+    -5407999,
+    -8615372
+   ]
+  },
+  {
+   "name": "items/gold_ingot.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "1e90153bdca5f60caa13efc7b92717a11a7ecb88",
+   "conv": "9e6c65ba328cf92b9c25effbe33ec66f0fd5c954",
+   "first": [
+    42,
+    -11513856,
+    -12103656
+   ]
+  },
+  {
+   "name": "items/gold_leggings.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "5d3ec23dfb10838d163297a5873e0c6ff99e57a2",
+   "conv": "cfc7f21b6de2699d8d360d353156f2f4cf034005",
+   "first": [
+    36,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/gold_nugget.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "88c3a2a6e09a8244a7c7be7eda8bdaf6f6ed81e4",
+   "conv": "5288ad316c069ab5d9bfb6d89b3507db1205fa89",
+   "first": [
+    70,
+    -8816384,
+    -9733852
+   ]
+  },
+  {
+   "name": "items/gold_pickaxe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "fa85e0417a6ef2a1021f9f10e0a74f231948132e",
+   "conv": "391a1005a8399b6beee71b522946a1c97fc72273",
+   "first": [
+    38,
+    -12763868,
+    -12960469
+   ]
+  },
+  {
+   "name": "items/gold_shovel.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "ac1bd162476f82b60a92b58bab43cf252d91b4b5",
+   "conv": "220153f8d641d84929a01db909561ea95d2c467a",
+   "first": [
+    43,
+    -12763868,
+    -12960469
+   ]
+  },
+  {
+   "name": "items/gold_sword.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "4ebb18de1140956f50074062e7c8b79c31a99c59",
+   "conv": "808ee5bf2bbe5c3cd96234e1d9165502df5487ac",
+   "first": [
+    13,
+    -12763868,
+    -12960469
+   ]
+  },
+  {
+   "name": "items/gunpowder.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "8e801f42289fd7ccafcad6d58082421eab100790",
+   "conv": "8e801f42289fd7ccafcad6d58082421eab100790",
+   "first": [
+    55,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/hopper.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "251fcefda1fe587b064c48fa646dd421e2b27cbd",
+   "conv": "f650169262c0a356c5d17cd0f1ebd82c46f75b74",
+   "first": [
+    35,
+    -10132123,
+    -10132123
+   ]
+  },
+  {
+   "name": "items/iron_axe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "3315520e498ea8d7f2e3a706bc55985d9e4cf81d",
+   "conv": "0a731c850e1772f8ebc420ea7416def88ed4d4f6",
+   "first": [
+    25,
+    -12303292,
+    -12303292
+   ]
+  },
+  {
+   "name": "items/iron_boots.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "baf6f6560b43b4dd6d6340fc0a9c25dc120e704e",
+   "conv": "baf6f6560b43b4dd6d6340fc0a9c25dc120e704e",
+   "first": [
+    52,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/iron_chestplate.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "911930c9fc2265ccc68069c772582ca3f78c1712",
+   "conv": "911930c9fc2265ccc68069c772582ca3f78c1712",
+   "first": [
+    36,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/iron_helmet.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "8eb05b29d3d5a515b5264582e11b8aa314ca115d",
+   "conv": "8765fc4f3e7c03e59c75078a937d1f8370435f58",
+   "first": [
+    53,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/iron_hoe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "7af987ae93a594d7146d20806d95bdc6d58c7fb6",
+   "conv": "aacda792751360b4867e7ee59efbc53d59dbc057",
+   "first": [
+    23,
+    -12303292,
+    -12303292
+   ]
+  },
+  {
+   "name": "items/iron_horse_armor.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "1c8e7d02da017c165f97c872f0b9119fe6814556",
+   "conv": "1c8e7d02da017c165f97c872f0b9119fe6814556",
+   "first": [
+    43,
+    -8553091,
+    -8553091
+   ]
+  },
+  {
+   "name": "items/iron_ingot.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "f5c5d107e8960cecfef948242e54f92cbb8d4834",
+   "conv": "f5c5d107e8960cecfef948242e54f92cbb8d4834",
+   "first": [
+    42,
+    -12303292,
+    -12303292
+   ]
+  },
+  {
+   "name": "items/iron_leggings.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "ea2f858889663e1fb5bd4e0ffb1ec4277483e2b4",
+   "conv": "ea2f858889663e1fb5bd4e0ffb1ec4277483e2b4",
+   "first": [
+    36,
+    -13816531,
+    -13816531
+   ]
+  },
+  {
+   "name": "items/iron_pickaxe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "bfd6dd4c6d8acebe7b63dcf6cd58c35d0850222d",
+   "conv": "104a1d94141fe28828092f329f4c1dfad33e20c4",
+   "first": [
+    38,
+    -12303292,
+    -12303292
+   ]
+  },
+  {
+   "name": "items/iron_shovel.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "72d597d6bb5d78e25b73d9b9c64495088444551a",
+   "conv": "51c1cf2ab2503193ade35375ea3230fe02357e31",
+   "first": [
+    43,
+    -12303292,
+    -12303292
+   ]
+  },
+  {
+   "name": "items/iron_sword.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "1906edc70909827067640778a93f3b0811d493a4",
+   "conv": "66951caea5ac67116366e61a77a297a616494451",
+   "first": [
+    13,
+    -12303292,
+    -12303292
+   ]
+  },
+  {
+   "name": "items/item_frame.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "7e3513ff212c4f65cee0d29e9e28f14487dbff40",
+   "conv": "3eb7535a68c99cb7e640f63f7c3b648b788aeb2e",
+   "first": [
+    39,
+    -14277082,
+    -14277082
+   ]
+  },
+  {
+   "name": "items/lead.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "4948145321113de61ea74a8f1c032cb03bb638f3",
+   "conv": "6bb0ef8d67151646223388073cc1e5a458c097fd",
+   "first": [
+    37,
+    -8363958,
+    -10000038
+   ]
+  },
+  {
+   "name": "items/leather.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "7a13e770d6eb8fad34a7ade490e51c7bc837b57c",
+   "conv": "e351a573a2c290982cc630c96cdeaa62b49f9c01",
+   "first": [
+    22,
+    -11262186,
+    -13487064
+   ]
+  },
+  {
+   "name": "items/leather_boots.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "0a33833e563c337276a476e196be67de0f6201a5",
+   "conv": "0a33833e563c337276a476e196be67de0f6201a5",
+   "first": [
+    52,
+    -11316397,
+    -11316397
+   ]
+  },
+  {
+   "name": "items/leather_boots_overlay.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "3f81710db1cfc90e6d65b9a40c286d3791d5ad3b",
+   "conv": "8353659047e69433710db09d6dfbac919985e541",
+   "first": [
+    146,
+    -13360875,
+    -14342626
+   ]
+  },
+  {
+   "name": "items/leather_chestplate.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "32a05b3368cada72b6603dad10fc8c6590818d2d",
+   "conv": "32a05b3368cada72b6603dad10fc8c6590818d2d",
+   "first": [
+    36,
+    -11316397,
+    -11316397
+   ]
+  },
+  {
+   "name": "items/leather_chestplate_overlay.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "d14b7ae62938630984e3389cdc4050fef29a3d52",
+   "conv": "69b34f255ed50c0bb2cede95d0bdf260d5eaf419",
+   "first": [
+    -1,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "items/leather_helmet.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "eda3473efd90713aa73e585d5243e838c757937f",
+   "conv": "eda3473efd90713aa73e585d5243e838c757937f",
+   "first": [
+    53,
+    -11316397,
+    -11316397
+   ]
+  },
+  {
+   "name": "items/leather_helmet_overlay.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "8511dbc701bef54278a1fbdf34e83bcaab919d0b",
+   "conv": "279709acaac8bd0b33a9ba200bb020880d3f4dcd",
+   "first": [
+    55,
+    -13360875,
+    -14342626
+   ]
+  },
+  {
+   "name": "items/leather_leggings.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "d4886f48cce1350234916dbf69fd60e306186632",
+   "conv": "d4886f48cce1350234916dbf69fd60e306186632",
+   "first": [
+    36,
+    -11316397,
+    -11316397
+   ]
+  },
+  {
+   "name": "items/leather_leggings_overlay.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "cbd44a161af140130d2d33d17d452d681eecf6d9",
+   "conv": "e29b510013b9fae60bdb9954b524185ec3028f2f",
+   "first": [
+    116,
+    -13360875,
+    -14342626
+   ]
+  },
+  {
+   "name": "items/magma_cream.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "6b92f5cc934ffdd83149a1a1c0c56ef68ed36f26",
+   "conv": "619c0428caa70e4b312c108741b7dd0a2659345d",
+   "first": [
+    38,
+    -11504088,
+    -10327500
+   ]
+  },
+  {
+   "name": "items/map_empty.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "0df8152da2f55c891a7ebd4c685a55b9870ce23f",
+   "conv": "59235004b70d08e5a8b1b8f19b1a535b64d19756",
+   "first": [
+    57,
+    -1381689,
+    -1643823
+   ]
+  },
+  {
+   "name": "items/map_filled.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "d024ce3501d0c8453d5959b28700d5955a8a90a0",
+   "conv": "6e3db660ab2b511a244de82d92e3c800c52e99f8",
+   "first": [
+    40,
+    -1381689,
+    -1643823
+   ]
+  },
+  {
+   "name": "items/melon.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "a0d78a4620a8282413ab0f22cabf4e132fccecb2",
+   "conv": "c4f642b18ae6b03ec3ebfe803a954bf39b7537cd",
+   "first": [
+    42,
+    -8091360,
+    -8681666
+   ]
+  },
+  {
+   "name": "items/melon_speckled.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "216d47a929818b902bcb85a8dff583d7526117ce",
+   "conv": "b37a1422e54d7d7422f4988672e3a595e6d8f848",
+   "first": [
+    36,
+    -10595317,
+    -11643101
+   ]
+  },
+  {
+   "name": "items/minecart_chest.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "7c76b8ddb8ef115e36aeab7b13ea733a702a3bac",
+   "conv": "3ce85472c47c6cc3a02e4c3b7b528674d9d9066e",
+   "first": [
+    7,
+    -14148085,
+    -14802669
+   ]
+  },
+  {
+   "name": "items/minecart_command_block.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "5cc41bf6e812da5e833a9a8e037fca27f864fc1a",
+   "conv": "647b40e69e3d5e68096c024205bfdef9f79dc1fd",
+   "first": [
+    7,
+    -14148085,
+    -14802669
+   ]
+  },
+  {
+   "name": "items/minecart_furnace.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "4c36305200b33614cc218e54eb4636f0470c2e39",
+   "conv": "4787b189d5f4bc1e44adf31f09f54183f896fc41",
+   "first": [
+    7,
+    -15658735,
+    -15658735
+   ]
+  },
+  {
+   "name": "items/minecart_hopper.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "d82654ed4e445ababdbdd3aeccebc60ba5898e72",
+   "conv": "925acb20ef0a53a31d9b43e92aaf68746699899c",
+   "first": [
+    7,
+    -15658735,
+    -15658735
+   ]
+  },
+  {
+   "name": "items/minecart_normal.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "599847853d0b9dc859bc0e04e3539b255c288847",
+   "conv": "5556f8693ee495b65fdeb290ad015c3280d26360",
+   "first": [
+    24,
+    -15395306,
+    -15395563
+   ]
+  },
+  {
+   "name": "items/minecart_tnt.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "a2bf6fedb52795f6fa3e7662af1ccef988a00ab8",
+   "conv": "3acff3376c6877613b2ff649a08b1c753ab9ff29",
+   "first": [
+    7,
+    -14148085,
+    -14802669
+   ]
+  },
+  {
+   "name": "items/mushroom_stew.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "8e38d6f7c07d3e3f3077f0a54b79502caf9ae49b",
+   "conv": "3206184f080aa5068810fcbea44aed9b5d460394",
+   "first": [
+    85,
+    -12966138,
+    -14078955
+   ]
+  },
+  {
+   "name": "items/name_tag.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 3,
+   "raw": "ba29660aa7da91d345c32659e6bc5a1951f700c1",
+   "conv": "343ad354e4159d6998465761abd5f7cc73f6dc91",
+   "first": [
+    26,
+    -12303292,
+    -12303292
+   ]
+  },
+  {
+   "name": "items/nether_star.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "edce03df88db55705a532cbe6b6e4c4cda942a49",
+   "conv": "6717a65a6c66ee6195a87ee0436d60e13bb49985",
+   "first": [
+    56,
+    -4601399,
+    -3881788
+   ]
+  },
+  {
+   "name": "items/nether_wart.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "99ea15793ddf962c2aeeb01e605ca5fa707f68f9",
+   "conv": "bfd2fbdc088aab04caee1d97565f39def59d8464",
+   "first": [
+    69,
+    -4309174,
+    -10066580
+   ]
+  },
+  {
+   "name": "items/netherbrick.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "fe4b74851c30e36d11e90e08c01cb5eb16401b11",
+   "conv": "06aa2da3bbfa330cf81447d516560f82b313934c",
+   "first": [
+    42,
+    -13625316,
+    -14737630
+   ]
+  },
+  {
+   "name": "items/painting.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "1526b6f9bd0335dfa3ea96c133ea234f934736db",
+   "conv": "5ee76ce32573d282248d9d5538e7500f058651d3",
+   "first": [
+    24,
+    -13290187,
+    -13290187
+   ]
+  },
+  {
+   "name": "items/paper.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "85f363b5b83f8da5f12edb3a996d4edfb944e014",
+   "conv": "85f363b5b83f8da5f12edb3a996d4edfb944e014",
+   "first": [
+    40,
+    -1381654,
+    -1381654
+   ]
+  },
+  {
+   "name": "items/porkchop_cooked.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 2,
+   "raw": "bbc2288210a07da4446fac0ca04052a9571170c0",
+   "conv": "772c4421e91ceb21ec6bf0a38fe07afe52fb06b2",
+   "first": [
+    57,
+    -7575246,
+    -9604275
+   ]
+  },
+  {
+   "name": "items/porkchop_raw.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "68e2c320fba66609dd9b6b22756ba99e02bf79a2",
+   "conv": "6f521cfe52caf4f8a3a1dff7f039458311a6694c",
+   "first": [
+    57,
+    -5811373,
+    -9671572
+   ]
+  },
+  {
+   "name": "items/potato.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "55b169851fcafffb24c3cf818b20547ef41e3134",
+   "conv": "4f988ce80f6b3d07d30f5616b03d10b57639043d",
+   "first": [
+    86,
+    -3039683,
+    -6115991
+   ]
+  },
+  {
+   "name": "items/potato_baked.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "9799360a0f52becbc303c10adc64b5203df30dab",
+   "conv": "51ebf6e35a190c977d17310934c8c93192bfdd03",
+   "first": [
+    86,
+    -1926070,
+    -5787273
+   ]
+  },
+  {
+   "name": "items/potato_poisonous.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "be84bc0baa61058be0d82cdce6824b994ca56bf7",
+   "conv": "ef7e5f0eff979dcce9bac27cd2f7c189bd34db69",
+   "first": [
+    102,
+    -3036873,
+    -5720731
+   ]
+  },
+  {
+   "name": "items/potion_bottle_drinkable.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "e330ed51545e13cb99b2294b78e1400e82d97d9f",
+   "conv": "36f487558f95baae237da1d2ed8a4facb009bd4c",
+   "first": [
+    39,
+    -2855607,
+    -7894158
+   ]
+  },
+  {
+   "name": "items/potion_bottle_empty.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "e330ed51545e13cb99b2294b78e1400e82d97d9f",
+   "conv": "36f487558f95baae237da1d2ed8a4facb009bd4c",
+   "first": [
+    39,
+    -2855607,
+    -7894158
+   ]
+  },
+  {
+   "name": "items/potion_bottle_splash.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "06760503dbd368e5f6aef173884990b96198a78c",
+   "conv": "69992cfb56ab558c4294b0a1e22d0eec3ab88526",
+   "first": [
+    43,
+    -10734038,
+    -12566215
+   ]
+  },
+  {
+   "name": "items/potion_overlay.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "105fb96967b8858ee34de77331a057660a59cd75",
+   "conv": "105fb96967b8858ee34de77331a057660a59cd75",
+   "first": [
+    134,
+    -263173,
+    -263173
+   ]
+  },
+  {
+   "name": "items/pumpkin_pie.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "80bf8805c8167622ffa6922f625867b3b7e5fe34",
+   "conv": "b97da3237e3010e6027133a6ce938cafd424e845",
+   "first": [
+    69,
+    -1401248,
+    -5393271
+   ]
+  },
+  {
+   "name": "items/quartz.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "d37da548f551f177af1060583b41c63377e23ed5",
+   "conv": "b7f943e5354e77736d475440283ea30b5b11bdb9",
+   "first": [
+    55,
+    -4411999,
+    -5197399
+   ]
+  },
+  {
+   "name": "items/quiver.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "1312b6791e82ca49f0e5f697c7afb7c95ca5e1b6",
+   "conv": "a2349cd9ea897e67f416cd6bc4d53bc43c4120ed",
+   "first": [
+    38,
+    -13880523,
+    -13553614
+   ]
+  },
+  {
+   "name": "items/record_11.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "70a9eb96c32475161aa8923e206a7660319332b7",
+   "conv": "70a9eb96c32475161aa8923e206a7660319332b7",
+   "first": [
+    53,
+    -14606047,
+    -14606047
+   ]
+  },
+  {
+   "name": "items/record_13.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "bf27e3f5dd1649e1061ed7e3738c886b882fb833",
+   "conv": "e48e8c5c4a12c140604c82d5fc236583f3404028",
+   "first": [
+    53,
+    -14606047,
+    -14606047
+   ]
+  },
+  {
+   "name": "items/record_blocks.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "0b1ef6c7c2b9627bf4200f9d00f6094ea5ce02eb",
+   "conv": "cecdd277c5a09bd8c9bafa7556286f40d5047cac",
+   "first": [
+    53,
+    -14606047,
+    -14606047
+   ]
+  },
+  {
+   "name": "items/record_cat.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "6678d2f326d81b62d8caebb511e93bb4922c4c0a",
+   "conv": "49eb6293df75ce059e77e33faf996981c60a6b7f",
+   "first": [
+    53,
+    -14606047,
+    -14606047
+   ]
+  },
+  {
+   "name": "items/record_chirp.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "0cce753d4fdae32502b3f06e2f6514665e5f6d2e",
+   "conv": "5773512e987d7ca1e8e415004f8babf974083100",
+   "first": [
+    53,
+    -14606047,
+    -14606047
+   ]
+  },
+  {
+   "name": "items/record_far.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "01f4bc7298a8672f0d0c2716e0e8a072664b15c1",
+   "conv": "39ed77ed1d86d2553fcce7e04aec571434b89a29",
+   "first": [
+    53,
+    -14606047,
+    -14606047
+   ]
+  },
+  {
+   "name": "items/record_mall.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "5decac05432da5a379727ac083bc445d03bf25ad",
+   "conv": "2e5e0fb7136ad701cd33d539e1dab859f97d3656",
+   "first": [
+    53,
+    -14606047,
+    -14606047
+   ]
+  },
+  {
+   "name": "items/record_mellohi.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "ee16b7e9fbb9acd44a653b39e343805498414081",
+   "conv": "53cda152107d9b8bdf0aac3f60c7f70c8c74eedc",
+   "first": [
+    53,
+    -14606047,
+    -14606047
+   ]
+  },
+  {
+   "name": "items/record_stal.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "3a9d5910aac289fd7720250e42d29cad2e3eefa9",
+   "conv": "3a9d5910aac289fd7720250e42d29cad2e3eefa9",
+   "first": [
+    53,
+    -14606047,
+    -14606047
+   ]
+  },
+  {
+   "name": "items/record_strad.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "ad64c964431f4f29bd71cb85c1f9c7fe10964ff5",
+   "conv": "ad64c964431f4f29bd71cb85c1f9c7fe10964ff5",
+   "first": [
+    53,
+    -14606047,
+    -14606047
+   ]
+  },
+  {
+   "name": "items/record_wait.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "d2981c1a6374abd5a04e070855ff0f79a2423cf1",
+   "conv": "90dec351853604f9463e292498833718038ae91b",
+   "first": [
+    53,
+    -14606047,
+    -14606047
+   ]
+  },
+  {
+   "name": "items/record_ward.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "78034cae149885ae06c4ee255cddfe29a9233582",
+   "conv": "7fcc66833b19d39508dd3ea9f78e4543eedb330c",
+   "first": [
+    53,
+    -14606047,
+    -14606047
+   ]
+  },
+  {
+   "name": "items/redstone_dust.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "333497fcf5d46745799276807394d5bad0cec4a5",
+   "conv": "8627403b33ebcfcc42a0f1e8dfd9de6f01db6b8a",
+   "first": [
+    55,
+    -13828096,
+    -15921907
+   ]
+  },
+  {
+   "name": "items/reeds.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "23598cac2d87a155ea9e0e5d9016b5fd106172e4",
+   "conv": "4e1b2fc975da057f9257d6d808db0b057fd064ca",
+   "first": [
+    41,
+    -5579916,
+    -4141948
+   ]
+  },
+  {
+   "name": "items/repeater.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "e482ea8bcf11e05c21ddbd4cc9b57e60ea11e4fc",
+   "conv": "42811bdce4c3fb88d9be552595043c48f0ecc3ca",
+   "first": [
+    44,
+    -11009791,
+    -15000805
+   ]
+  },
+  {
+   "name": "items/rotten_flesh.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "494ded95d25c0b736699727861f5648d6d6ce664",
+   "conv": "9ff32e34dace40876eeea9be183568e67efc8bae",
+   "first": [
+    25,
+    -9751791,
+    -12565716
+   ]
+  },
+  {
+   "name": "items/ruby.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "8c8d45188a65f041f3332d0fea20b733e83307db",
+   "conv": "c8dd09ff957096201bbcca61213eaf6242beffad",
+   "first": [
+    38,
+    -13762555,
+    -15856367
+   ]
+  },
+  {
+   "name": "items/saddle.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "5caa87789247de9b3e402d551d9d423e8a00db1c",
+   "conv": "e1b1cc1812d2c8626f278dec78f1b688ebdb6c14",
+   "first": [
+    42,
+    -13297910,
+    -14802922
+   ]
+  },
+  {
+   "name": "items/seeds_melon.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "00e6c0c3eb814e21580277be99d1ea0f66900139",
+   "conv": "9a2fcf92c00f9a6db1725266c83728d49949d643",
+   "first": [
+    40,
+    -10398411,
+    -11184062
+   ]
+  },
+  {
+   "name": "items/seeds_pumpkin.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "e151139c071e88aa942ed125c898c0ff096b50ad",
+   "conv": "145f9130e266bb96727a563f51feb591a0de950e",
+   "first": [
+    69,
+    -3615574,
+    -3419981
+   ]
+  },
+  {
+   "name": "items/seeds_wheat.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "94ea7883824e92efd0cb05f65963a0bc53958faf",
+   "conv": "a3d7baa075362cd9206655b9cbbfc8008405e0e4",
+   "first": [
+    69,
+    -16719344,
+    -7889397
+   ]
+  },
+  {
+   "name": "items/shears.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "1be598ce0e7a89ff002e302fe28c9646dfae9061",
+   "conv": "7996667e2c9815a377fa6f1ce1d1c3f7de59bd2c",
+   "first": [
+    40,
+    -11191760,
+    -12500421
+   ]
+  },
+  {
+   "name": "items/sign.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "f8c6c1c31ed59241015abd689de8ea6b66252e64",
+   "conv": "1002da0b27ff7f7c3233ae355e022f5e1828eefb",
+   "first": [
+    34,
+    -6323123,
+    -7959451
+   ]
+  },
+  {
+   "name": "items/skull_creeper.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "84a82238bd8914408fb80a7b156565ce55489e16",
+   "conv": "53c9dd72a8924704cf1da5a073cb50374be7e0e1",
+   "first": [
+    68,
+    -5911137,
+    -4472416
+   ]
+  },
+  {
+   "name": "items/skull_skeleton.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "d49d5f27e9d8bb4c213d232b79a251aafc0234d3",
+   "conv": "8c8abdd140cf63485dbfbe26ebe3e2ccfa5bc14f",
+   "first": [
+    68,
+    -6184543,
+    -6184543
+   ]
+  },
+  {
+   "name": "items/skull_steve.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "b408dbd52ca972f42a31c125250dcf49f395131a",
+   "conv": "57cf3d8bf782721a8e06e699f74a058cd663f7ec",
+   "first": [
+    68,
+    -13688819,
+    -14539753
+   ]
+  },
+  {
+   "name": "items/skull_wither.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "d371d4b7aa38995c13834e13204b54d0edfc9722",
+   "conv": "732137c7fa5abfb9f47ee95714cb79244ea1fd97",
+   "first": [
+    68,
+    -13948117,
+    -13948117
+   ]
+  },
+  {
+   "name": "items/skull_zombie.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "2b6893621b61cb831ecc52dad63cc72ffd8b0a9d",
+   "conv": "c0ff4f982ad0c59d9386b03bcdfa352d118cb34c",
+   "first": [
+    68,
+    -12159690,
+    -10525126
+   ]
+  },
+  {
+   "name": "items/slimeball.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "9ec468a43f8fb0d7d32f1094aa6a33b84b6b1c46",
+   "conv": "937f1fe9b2098e4350a353e93ddfe9e5908fc44a",
+   "first": [
+    38,
+    -12951754,
+    -11578569
+   ]
+  },
+  {
+   "name": "items/snowball.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "c4e4dffe5fcb17b431276c1f61837ad29583c167",
+   "conv": "bdaf927182ea6ebb09a04615c834db5bd6be6f4e",
+   "first": [
+    38,
+    -9208708,
+    -8816263
+   ]
+  },
+  {
+   "name": "items/spawn_egg.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "816a72cedca56ee6a15e619946275b2ba71ad714",
+   "conv": "578f88f2c71290b4849ca7df42aed3e6c4923056",
+   "first": [
+    39,
+    -8421505,
+    -8421505
+   ]
+  },
+  {
+   "name": "items/spawn_egg_overlay.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "c53d5e4ede049c436ca6724d4d99292aa552128a",
+   "conv": "6aa0339a85c6bade72cfb2c6054a8df0d87db0f7",
+   "first": [
+    53,
+    -8355712,
+    -8355712
+   ]
+  },
+  {
+   "name": "items/spider_eye.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "bc0e902e56ff943dc7c5a0163e8a1cb50da9fb7c",
+   "conv": "ee9185772cb3270879c9c4b37a2404a03bb4b95d",
+   "first": [
+    86,
+    -14024688,
+    -15856617
+   ]
+  },
+  {
+   "name": "items/spider_eye_fermented.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "2239750980793029ee85e9e2d26dab99a1ef5df5",
+   "conv": "8be5c300c8fb2e2a7b47d8b4dde825b3612e0e97",
+   "first": [
+    71,
+    -14024688,
+    -15856617
+   ]
+  },
+  {
+   "name": "items/stick.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "6d57d2b3061bcbe55dbce92a4c70ab2db603360b",
+   "conv": "fe96d7723f03897f0b494e4730656d598b21ab1c",
+   "first": [
+    45,
+    -11979243,
+    -13092060
+   ]
+  },
+  {
+   "name": "items/stone_axe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "e2f29d36713ff421472d3dee71ba049602ff799f",
+   "conv": "f29c29e6b080901aefb3b998a086ac58ab8a5a41",
+   "first": [
+    25,
+    -11974327,
+    -11974327
+   ]
+  },
+  {
+   "name": "items/stone_hoe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "0958f41ce10adf6af2ff790625c42e83b78156ce",
+   "conv": "5a7fe96f46bea08941ceff6fe3b7489eee33d042",
+   "first": [
+    23,
+    -11974327,
+    -11974327
+   ]
+  },
+  {
+   "name": "items/stone_pickaxe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "1f9c4f64664c3a02369727375c05bd677d58da1e",
+   "conv": "bbbb8da98d74811dba2c078acd93ae52fe38961f",
+   "first": [
+    38,
+    -11974327,
+    -11974327
+   ]
+  },
+  {
+   "name": "items/stone_shovel.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "59426477752583db892887e5a5fcfc588ff3be35",
+   "conv": "68b574dd81fb7edf9779499a417610d5f3325656",
+   "first": [
+    43,
+    -11974327,
+    -11974327
+   ]
+  },
+  {
+   "name": "items/stone_sword.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "2da8615fc94b1d66a00dfe5a6aa2680b20eebe0e",
+   "conv": "b67e51bb068a91bec8e3683de11a3f4cd1c7a7e4",
+   "first": [
+    13,
+    -11974327,
+    -11974327
+   ]
+  },
+  {
+   "name": "items/string.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "958e7acb0951e8cd231ed7e2c30992c6660bfe2e",
+   "conv": "958e7acb0951e8cd231ed7e2c30992c6660bfe2e",
+   "first": [
+    26,
+    -2368549,
+    -2368549
+   ]
+  },
+  {
+   "name": "items/sugar.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "2331356da85a96145f59d69ecc4135b710efd1ae",
+   "conv": "d6399d0fac41a6e9459cf7ce9b5f88fd001729c8",
+   "first": [
+    55,
+    -11250584,
+    -11119518
+   ]
+  },
+  {
+   "name": "items/wheat.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "1b72a567a3c6134c72f713cd6cbb746bb9bed8d3",
+   "conv": "7192cd76e23fa1f1392e909e727bd3d65f8d5ad9",
+   "first": [
+    10,
+    -9346779,
+    -10525381
+   ]
+  },
+  {
+   "name": "items/wood_axe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "c0e47cafb5ad36225faff660885e02e71b1657d8",
+   "conv": "7c8a344bcd7870294b59af2bd13230334208b7d9",
+   "first": [
+    25,
+    -13162224,
+    -14013157
+   ]
+  },
+  {
+   "name": "items/wood_hoe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "a45e99141095f9939621d840d74930988c832529",
+   "conv": "2682745fab6f287f765243bf4537dccd6880db6e",
+   "first": [
+    23,
+    -13162224,
+    -14013157
+   ]
+  },
+  {
+   "name": "items/wood_pickaxe.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "1c59408138e60c80e25d576e5a6fcdb31a35c919",
+   "conv": "fcbd9913b6834d2cb98cc8b68886af3749b64767",
+   "first": [
+    38,
+    -13162224,
+    -14013157
+   ]
+  },
+  {
+   "name": "items/wood_shovel.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "7d44ab04be5c66d84d24c8ab2cf04a7cbd2d224a",
+   "conv": "10a7ee6a29358a97213ff3de2bf74e74c7bd52e1",
+   "first": [
+    43,
+    -13162224,
+    -14013157
+   ]
+  },
+  {
+   "name": "items/wood_sword.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 0,
+   "raw": "c74f28a8973dedf819b5b1a11f175fd599257368",
+   "conv": "724e70d536caa721b7788e75d149ab4c94d3171d",
+   "first": [
+    13,
+    -13162224,
+    -14013157
+   ]
+  },
+  {
+   "name": "misc/enchanted_item_glint.png",
+   "w": 64,
+   "h": 64,
+   "type": 13,
+   "translucent": 0,
+   "raw": "74ab1ef3f03a79fd2d69d5c752a4dc89fb5d0d85",
+   "conv": "74ab1ef3f03a79fd2d69d5c752a4dc89fb5d0d85",
+   "first": [
+    0,
+    -9934744,
+    -9934744
+   ]
+  },
+  {
+   "name": "misc/pumpkinblur.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 45449,
+   "raw": "2950f9fb45e333d9e01ee31109945aa4cfe9b27e",
+   "conv": "2950f9fb45e333d9e01ee31109945aa4cfe9b27e",
+   "first": [
+    0,
+    -16777216,
+    -16777216
+   ]
+  },
+  {
+   "name": "misc/shadow.png",
+   "w": 64,
+   "h": 64,
+   "type": 6,
+   "translucent": 199,
+   "raw": "f02cdaf7e4fbfc2b711298a0828b33713ef8f72e",
+   "conv": "f02cdaf7e4fbfc2b711298a0828b33713ef8f72e",
+   "first": [
+    92,
+    536870912,
+    536870912
+   ]
+  },
+  {
+   "name": "misc/underwater.png",
+   "w": 16,
+   "h": 16,
+   "type": 6,
+   "translucent": 256,
+   "raw": "a80a9ebac6bd5ffd3d1d0b52cf18b6089cf785da",
+   "conv": "c6671e524ac678b422f62c0872a6d4f95a17edf7",
+   "first": [
+    0,
+    -1841467905,
+    -1838260540
+   ]
+  },
+  {
+   "name": "misc/unknown_pack.png",
+   "w": 128,
+   "h": 128,
+   "type": 6,
+   "translucent": 0,
+   "raw": "e4bcd9e2c11fe8aeed5be12d765afb12bdd60bec",
+   "conv": "e4bcd9e2c11fe8aeed5be12d765afb12bdd60bec",
+   "first": [
+    0,
+    -5263441,
+    -5263441
+   ]
+  },
+  {
+   "name": "misc/vignette.png",
+   "w": 256,
+   "h": 256,
+   "type": 6,
+   "translucent": 0,
+   "raw": "37c78874282f5c0d4ec79d6585f6aa21e4028e7c",
+   "conv": "37c78874282f5c0d4ec79d6585f6aa21e4028e7c",
+   "first": [
+    0,
+    -2960686,
+    -2960686
+   ]
+  }
+ ]
+}

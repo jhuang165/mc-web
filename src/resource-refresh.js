@@ -2,11 +2,12 @@
 // re-reads every pack-dependent resource without reloading the page, so the world keeps running.
 //   - Every THREE.TextureLoader texture of /media/1.7.10/** is registered (weakly) as it is created; a refresh re-requests the
 //     image under a versioned url (media-version.js, the service worker ignores the query) and swaps it into the texture.
-//   - Stylesheet rules and <img>/inline-style urls get the same version query so CSS sprites reload.
+//   - Stylesheet rules and <img>/inline-style urls get the same version query so CSS sprites reload (and, with 3D Anaglyph on, their converted copies).
 //   - Modules with their own image caches subscribe with onResourcesRefreshed(fn); fn(generation) may return a promise.
 // This module must be imported before any texture is created (main.js imports it first).
 import * as THREE from "three";
 import { bumpMediaGeneration, versioned, unversioned } from "./media-version.js";
+import { rewriteGuiText, refreshGuiNodes, prepareGuiImages } from "./gui-anaglyph.js"; // the same rewrite swaps in converted copies while 3D Anaglyph is on
 
 const MEDIA = "/media/1.7.10/";
 const textures = new Set();
@@ -47,29 +48,11 @@ export async function refreshTextures(gen) {
   return jobs.length;
 }
 
-const URL_IN_CSS = /(\/media\/1\.7\.10\/[^"')\s?]+?\.png)(\?r=\d+)?/g;
-export function rewriteCssText(text, gen) { return text.replace(URL_IN_CSS, (_m, path) => versioned(path, gen)); }
-
-function rewriteRule(rule, gen) {
-  if (rule.cssRules) for (const r of rule.cssRules) rewriteRule(r, gen);
-  const style = rule.style;
-  if (!style) return;
-  for (let i = 0; i < style.length; i++) {
-    const name = style[i], value = style.getPropertyValue(name);
-    if (value.includes(MEDIA)) style.setProperty(name, rewriteCssText(value, gen), style.getPropertyPriority(name));
-  }
-}
+// Stylesheet rules, <img> and inline-style urls get the generation query (and, while 3D Anaglyph is on, their converted copy: gui-anaglyph.js).
+export const rewriteCssText = rewriteGuiText;
 
 // Browsers keep decoded CSS images under their resolved url, so the rewritten url forces a fresh request through the service worker.
-export function refreshStyles(gen, doc = document) {
-  for (const sheet of doc.styleSheets) {
-    let rules;
-    try { rules = sheet.cssRules; } catch { continue; }
-    for (const rule of rules) rewriteRule(rule, gen);
-  }
-  for (const img of doc.querySelectorAll(`img[src*="${MEDIA}"]`)) img.src = rewriteCssText(img.getAttribute("src"), gen);
-  for (const el of doc.querySelectorAll(`[style*="${MEDIA}"]`)) el.setAttribute("style", rewriteCssText(el.getAttribute("style"), gen));
-}
+export function refreshStyles(gen, doc = document) { refreshGuiNodes(gen, doc); }
 
 let overlay = null;
 // Native Minecraft.refreshResources (bao.c, bytecode-read, batch 18) draws nothing: it rebuilds the pack list, runs
@@ -95,6 +78,7 @@ export function refreshResources({ label = null } = {}) {
     if (label) showNotice(label);
     try {
       await refreshTextures(gen);
+      await prepareGuiImages(gen); // 3D Anaglyph: convert the GUI pngs first so the synchronous rewrite finds them
       refreshStyles(gen);
       const results = await Promise.allSettled([...hooks].map((fn) => fn(gen)));
       for (const r of results) if (r.status === "rejected") console.warn("resource refresh hook failed", r.reason);

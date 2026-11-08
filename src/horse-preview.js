@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { installAnaglyphUpload } from "./anaglyph.js";
+import { guiAnaglyph } from "./gui-anaglyph.js";
 import { createHorseRig } from "./horse-renderer.js";
 import { createLighting } from "./light-material.js";
 import { paperdollPose, paperdollMatrix, paperdollLights } from "./inventory-player.js";
@@ -22,6 +24,7 @@ export class HorsePreviewView {
     this.canvas.className = "paperdoll-canvas";
     this.canvas.setAttribute("aria-hidden", "true");
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, alpha: true, powerPreference: "low-power" });
+    installAnaglyphUpload(this.renderer.getContext(), guiAnaglyph); // GUI textures upload converted while 3D Anaglyph is on (TextureUtil.anaglyphColor)
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.renderer.setClearColor(0, 0);
     this.scene = new THREE.Scene();
