@@ -20,6 +20,7 @@ import { readRegion, writeRegion } from "./region-file.js";
 import { World } from "./world.js";
 import { DIM_KEYS, TILE_KEYS, viewId } from "./dimension-live.js";
 import { encodeBaseColumn } from "./whole-save-columns.js";
+import { impliedOriginal } from "./stored-overlay.js";
 import { populateImportedColumns } from "./imported-population.js";
 import { populationBlockMapperReady } from "./population-world.js";
 
@@ -30,26 +31,33 @@ export const DIMENSIONS = [{ dimension: 0, dir: "region" }, { dimension: -1, dir
 export class ColumnSink {
   constructor({ originX = 0, originZ = 0 } = {}) {
     this.originX = originX; this.originZ = originZ; this.height = 256;
-    this.edits = []; this.cols = new Map(); this.decoded = null;
+    this.edits = []; this.cols = new Map(); this.decoded = null; this.overlays = new Map();
   }
   streamAround() { return null; }
   biomeAt() { return { id: -1 }; }
   solid() { return false; }
   get(x, y, z) { const c = this.cols.get(`${x >> 4},${z >> 4}`); return c ? c[((x & 15) * 16 + (z & 15)) * 256 + y] & 255 : 0; }
   getMeta(x, y, z) { const c = this.cols.get(`${x >> 4},${z >> 4}`); return c ? c[((x & 15) * 16 + (z & 15)) * 256 + y] >> 8 : 0; }
-  set(x, y, z, block, track, meta = 0) {
+  // `original` (packed id << 4 | meta of the source cell) is kept in the column's overlay when the cell alone cannot imply it.
+  set(x, y, z, block, track, meta = 0, original) {
     const key = `${x >> 4},${z >> 4}`;
     let c = this.cols.get(key);
     if (!c) this.cols.set(key, c = new Uint16Array(65536));
-    c[((x & 15) * 16 + (z & 15)) * 256 + y] = block | (meta & 15) << 8;
+    const i = ((x & 15) * 16 + (z & 15)) * 256 + y;
+    c[i] = block | (meta & 15) << 8;
+    if (original !== undefined && block && original !== impliedOriginal(block, meta & 15)) {
+      let o = this.overlays.get(key);
+      if (!o) this.overlays.set(key, o = new Map());
+      o.set(i, original);
+    } else this.overlays.get(key)?.delete(i);
     return true;
   }
   chunkDecoded(chunk) { this.decoded = { biomes: chunk.biomes, terrainPopulated: chunk.isTerrainPopulated, lightPopulated: chunk.isLightPopulated }; }
   /** The cells of local column (x, z) (air when nothing was written) and the flags of the chunk just decoded; resets the sink. */
   take(x, z) {
-    const cells = this.cols.get(`${x},${z}`) ?? new Uint16Array(65536), decoded = this.decoded;
-    this.cols.clear(); this.decoded = null;
-    return { cells, decoded };
+    const cells = this.cols.get(`${x},${z}`) ?? new Uint16Array(65536), decoded = this.decoded, overlay = this.overlays.get(`${x},${z}`) ?? null;
+    this.cols.clear(); this.overlays.clear(); this.decoded = null;
+    return { cells, decoded, overlay };
   }
 }
 
@@ -148,7 +156,7 @@ export async function importWholeSave(entries, options = {}) {
   await populationBlockMapperReady;
   const originWorld = new World(gen.seed, "javaStreamed", gen.generationVersion, gen.worldType, gen.generatorOptions);
   const origin = { chunkX: originWorld.originX >> 4, chunkZ: originWorld.originZ >> 4 };
-  const storedOverworld = [], unpopulated = [], unpopulatedOther = { "-1": 0, 1: 0 };
+  const storedOverworld = [], unpopulated = [], unpopulatedOther = { "-1": 0, 1: 0 }, storedOther = { "-1": [], 1: [] }, unpopulatedList = { "-1": [], 1: [] };
   const sinkFor = (dimension) => new ColumnSink(dimension ? {} : { originX: origin.chunkX * 16, originZ: origin.chunkZ * 16 });
 
   // Player, level fields and world-wide data: the converter with no regions and the whole-world villages.
@@ -185,10 +193,10 @@ export async function importWholeSave(entries, options = {}) {
             ? { seed: level.seed, dimension: file.dimension, area, sink }
             : { level: perChunkLevel, area, sink });
           const lx = file.dimension ? cx : cx - origin.chunkX, lz = file.dimension ? cz : cz - origin.chunkZ;
-          const { cells, decoded } = sink.take(lx, lz);
-          pending.push(encodeBaseColumn(id, lx, lz, cells, decoded ?? {}));
+          const { cells, decoded, overlay } = sink.take(lx, lz);
+          pending.push(encodeBaseColumn(id, lx, lz, cells, { ...(decoded ?? {}), overlay }));
           if (!file.dimension) { storedOverworld.push([lx, lz]); if (decoded?.terrainPopulated === false) unpopulated.push([lx, lz]); }
-          else if (decoded?.terrainPopulated === false) unpopulatedOther[file.dimension]++;
+          else { storedOther[file.dimension].push([lx, lz]); if (decoded?.terrainPopulated === false) { unpopulatedOther[file.dimension]++; unpopulatedList[file.dimension].push([lx, lz]); } }
           const blob = file.dimension ? record.dimensions?.[file.dimension] : null;
           mergeRuntime(acc.get(file.dimension), blob ? blob.state : pickState(record), blob ? blob.tiles : record.player, ++seq);
           mergeReport(total, report);
@@ -211,15 +219,34 @@ export async function importWholeSave(entries, options = {}) {
   // Populate stored overworld columns the save never populated (imported-population.js); needs readBases to re-read stored columns.
   let populated = null;
   const wantPopulate = options.populate !== false && typeof options.readBases === "function" && unpopulated.length && originWorld.population && originWorld.generationVersion >= 13;
+  // The runtime records a populate produced join the dimension's accumulator (overworld: record lists; Nether/End: the dimension blob).
+  const mergePopulated = (target, result) => {
+    const merge = (name, entries) => { if (Object.keys(entries).length) Object.assign((target.tiles[name] ??= {}), entries); };
+    merge("chests", result.chests); merge("dispensers", result.dispensers);
+    const push = (name, list) => { if (list.length) (target.state[name] ??= []).push(...list); };
+    push("spawners", result.spawners); push("entities", result.entities); push("pots", result.pots);
+    if (result.carts.length) (target.state.minecarts ??= { version: 1, carts: [] }).carts.push(...result.carts);
+    for (const name of ["fluidTicks", "fireTicks", "fallingTicks"]) {
+      if (!result[name].length) continue;
+      const env = (target.state[name] ??= { version: 1, time: 0, entries: [] });
+      env.entries.push(...result[name]);
+    }
+  };
   if (wantPopulate) {
     aborted();
     populated = await populateImportedColumns({ population: originWorld.population, origin, worldKey: worldId, coords: storedOverworld, unpopulated, read: options.readBases, write: writeBases, signal, onProgress });
-    const over = acc.get(0);
-    const merge = (name, entries) => { if (Object.keys(entries).length) Object.assign((over.tiles[name] ??= {}), entries); };
-    merge("chests", populated.chests); merge("dispensers", populated.dispensers);
-    if (populated.spawners.length) (over.state.spawners ??= []).push(...populated.spawners);
-    if (populated.carts.length) (over.state.minecarts ??= { version: 1, carts: [] }).carts.push(...populated.carts);
-    if (populated.fluidTicks.length) over.state.fluidTicks = { version: 1, time: 0, entries: populated.fluidTicks };
+    mergePopulated(acc.get(0), populated);
+  }
+  // Nether and End: ChunkProviderHell / ChunkProviderEnd populate over the stored columns (imported-population-dims.js).
+  const populatedDims = {};
+  if (options.populate !== false && typeof options.readBases === "function") {
+    for (const dimension of [-1, 1]) {
+      if (!unpopulatedList[dimension].length) continue;
+      aborted();
+      const result = await populateImportedColumns({ population: null, origin: { chunkX: 0, chunkZ: 0 }, worldKey: viewId(worldId, dimension), coords: storedOther[dimension], unpopulated: unpopulatedList[dimension], read: options.readBases, write: writeBases, signal, dimension, seed: gen.seed, onProgress: (p) => onProgress({ ...p, dimension }) });
+      mergePopulated(acc.get(dimension), result);
+      populatedDims[dimension] = result;
+    }
   }
 
   // Assemble: the world record from the metadata call, the merged runtime state of the overworld chunks and a blob per dimension.
@@ -246,7 +273,7 @@ export async function importWholeSave(entries, options = {}) {
     playerFile: !level.player && chosen ? { name: chosen.entry.path.split("/").pop(), of: chosen.count } : null,
     statsFile: stats ? stats.path.split("/").pop() : null, dataFiles: structureData.map((f) => f.filename),
     notImported: [...(skipped.length ? [`${skipped.length} chunk(s) or region file(s) could not be read and regenerate from the seed`] : []),
-      "SkyLight/BlockLight, heightmaps and per-chunk InhabitedTime/LastUpdate (the browser relights); "+(populated ? "" : "chunks the save marked TerrainPopulated=false stay unpopulated (no stored-column reader, nothing to populate, or generation below 13)")],
+      "SkyLight/BlockLight, heightmaps and per-chunk InhabitedTime/LastUpdate (the browser relights); "+(populated || Object.keys(populatedDims).length ? "" : "chunks the save marked TerrainPopulated=false stay unpopulated (no stored-column reader, nothing to populate, or generation below 13)")],
   };
   report.chunks = { converted: counts[0] + counts[-1] + counts[1], overworld: counts[0], nether: counts[-1], end: counts[1], skipped: skipped.length };
   report.blocks = { ...total.blocks, unsupported: sorted(total.maps.unsupported, "key"), approximations: sorted(total.maps.approximations, "key") };
@@ -261,7 +288,13 @@ export async function importWholeSave(entries, options = {}) {
     skipped: populated?.skipped ?? null, changedCells: populated?.changedCells ?? 0, unmappedCells: populated?.unmappedCells ?? 0,
     chests: populated ? Object.keys(populated.chests).length : 0, dispensers: populated ? Object.keys(populated.dispensers).length : 0,
     spawners: populated?.spawners.length ?? 0, carts: populated?.carts.length ?? 0, fluidTicks: populated?.fluidTicks.length ?? 0,
-    dropped: populated?.dropped ?? null, unpopulatedNetherEnd: unpopulatedOther, ms: populated?.ms ?? 0,
+    fireTicks: populated?.fireTicks.length ?? 0, fallingTicks: populated?.fallingTicks.length ?? 0, animals: populated?.kept.animals ?? 0, villagers: populated?.kept.villagers ?? 0, pots: populated?.pots.length ?? 0,
+    dropped: populated?.dropped ?? null, droppedTickIds: populated?.droppedTickIds ?? null, unpopulatedNetherEnd: unpopulatedOther, ms: populated?.ms ?? 0,
+    dimensions: Object.fromEntries(Object.entries(populatedDims).map(([d, r]) => [d, {
+      unpopulatedStored: unpopulatedOther[d], populated: r.populated, stillUnpopulated: unpopulatedOther[d] - r.populated, skipped: r.skipped, changedCells: r.changedCells, unmappedCells: r.unmappedCells,
+      chests: Object.keys(r.chests).length, spawners: r.spawners.length, entities: r.entities.length, fluidTicks: r.fluidTicks.length, fireTicks: r.fireTicks.length, dropped: r.dropped, ms: r.ms,
+      ...(r.errors ? { errors: r.errors } : {}),
+    }])),
     ...(populated?.errors ? { errors: populated.errors } : {}),
   };
   return { record, report };

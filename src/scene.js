@@ -1011,7 +1011,7 @@ export class VoxelScene {
     }
   }
   setFurnaces(data) {
-    const next = new Set(Object.entries(data).filter(([, f]) => f.burn > 0).map(([key]) => key)),
+    const next = new Set(Object.entries(data).filter(([, f]) => f.lit ?? f.burn > 0).map(([key]) => key)),
       changed = [...new Set([...next, ...(this.litFurnaces || [])])].filter((k) => next.has(k) !== this.litFurnaces?.has(k));
     this.litFurnaces = next;
     for (const k of changed) {

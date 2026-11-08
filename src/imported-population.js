@@ -26,9 +26,27 @@ import { toOriginal, fromOriginal } from "./block-registry.js";
 import { encodeBaseColumn, decodeBaseColumn } from "./whole-save-columns.js";
 import { itemFromOriginal } from "./region-import.js";
 import { makeStack } from "./inventory.js";
+import { EntityWorld, ENTITY_TYPES } from "./entities.js";
+import { villagerFields } from "./villager.js";
+import { dimensionRunner } from "./imported-population-dims.js";
 
 const key = (x, z) => `${x},${z}`;
 const CHEST_ID = 54, DISPENSER_ID = 23, LIQUIDS = new Set([8, 9, 10, 11]);
+// Scheduled ticks kept as runtime queues (fluid, fire, falling blocks), by original block id.
+const TICK_LISTS = { 8: "fluidTicks", 9: "fluidTicks", 10: "fluidTicks", 11: "fluidTicks", 51: "fireTicks", 12: "fallingTicks", 13: "fallingTicks" };
+const MOBS = { Pig: "pig", Cow: "cow", MushroomCow: "mooshroom", Sheep: "sheep", Chicken: "chicken", Wolf: "wolf", EntityHorse: "horse", Villager: "villager", Witch: "witch", ender_crystal: "ender_crystal", ender_dragon: "ender_dragon" };
+let entityFactory = null;
+/** A populate-time mob ({name|type, x, y, z, yaw, fleece, profession}) as a runtime entity record in local coordinates. */
+export function entityRecord(e, ox = 0, oz = 0) {
+  const type = MOBS[e.type === "Villager" || e.type === "Witch" ? e.type : e.name ?? e.type];
+  if (!type || !ENTITY_TYPES[type]) return null;
+  entityFactory ??= new EntityWorld(null, [], () => 0.5);
+  const m = entityFactory.create(type, e.x - ox, e.y, e.z - oz);
+  if (type === "villager") Object.assign(m, villagerFields(e.profession, 0));
+  else if (e.yaw !== undefined && type !== "witch" && type !== "ender_crystal") m.yaw = Math.fround(e.yaw * Math.PI / 180);
+  if (type === "sheep") m.color = e.fleece;
+  return entityFactory.serializeOne(m);
+}
 const CACHE_MAX = 96, CACHE_KEEP = 48, RETRY = 8, BATCH = 16;
 
 /**
@@ -91,9 +109,10 @@ class NeedChunk extends Error { constructor(x, z) { super(`need stored chunk ${x
  * observe(nativeX, nativeZ, {blocks, metadata}) called with the original-id arrays of every chunk written back (tests).
  * Returns {populated, skipped: {...}, tiles: {chests, dispensers}, spawners, carts, fluidTicks, dropped: {...}, ms}.
  */
-export async function populateImportedColumns({ population, origin, worldKey, coords, unpopulated, read, write, onProgress = () => {}, signal, mapBlock = fromOriginal, observe = null, exactInput = null }) {
+export async function populateImportedColumns({ population, origin, worldKey, coords, unpopulated, read, write, onProgress = () => {}, signal, mapBlock = fromOriginal, observe = null, exactInput = null, dimension = 0, seed = 0n }) {
+  const runner = dimension ? dimensionRunner(dimension, seed) : null;
   const started = Date.now(), ox = origin.chunkX * 16, oz = origin.chunkZ * 16;
-  const out = { populated: 0, calls: 0, skipped: { noNeighbours: 0, unmapped: 0, failed: 0 }, chests: {}, dispensers: {}, spawners: [], carts: [], fluidTicks: [], dropped: { animals: 0, pots: 0, villagers: 0, ticks: 0 }, unmappedCells: 0, changedCells: 0, retries: 0, reads: 0, ms: 0 };
+  const out = { populated: 0, calls: 0, skipped: { noNeighbours: 0, unmapped: 0, failed: 0 }, chests: {}, dispensers: {}, spawners: [], carts: [], fluidTicks: [], dropped: { animals: 0, pots: 0, villagers: 0, ticks: 0 }, kept: { animals: 0, villagers: 0 }, droppedTickIds: {}, entities: [], pots: [], fireTicks: [], fallingTicks: [], unmappedCells: 0, changedCells: 0, retries: 0, reads: 0, ms: 0 };
   const stored = new Set(coords.map(([x, z]) => key(x + origin.chunkX, z + origin.chunkZ)));
   const flagged = new Set(unpopulated.map(([x, z]) => key(x + origin.chunkX, z + origin.chunkZ)));
   const plan = populationPlan(coords.map(([x, z]) => [x + origin.chunkX, z + origin.chunkZ, !flagged.has(key(x + origin.chunkX, z + origin.chunkZ))]));
@@ -126,9 +145,10 @@ export async function populateImportedColumns({ population, origin, worldKey, co
         if (o < 0) { out.unmappedCells++; continue; }
         orig.blocks[i2] = o >> 4; orig.metadata[i2] = o & 15;
       }
+      for (const [i3, k] of decoded.overlay) { orig.blocks[i3] = k >> 4; orig.metadata[i3] = k & 15; }
       const exact = exactInput?.(x, z);
       if (exact) { orig.blocks.set(exact.blocks); orig.metadata.set(exact.metadata); }
-      cache.set(key(x, z), { x, z, decoded, orig });
+      cache.set(key(x, z), { x, z, decoded, orig, overlay: decoded.overlay });
     });
   };
   const trim = (keep) => {
@@ -136,14 +156,19 @@ export async function populateImportedColumns({ population, origin, worldKey, co
     for (const k of [...cache.keys()]) { if (cache.size <= CACHE_KEEP) break; if (!keep.has(k)) cache.delete(k); }
   };
   const entryChange = (entry, changes) => {
-    for (const [i, id, meta, m] of changes) { entry.orig.blocks[i] = id; entry.orig.metadata[i] = meta; entry.decoded.blocks[i] = m.id; entry.decoded.metadata[i] = m.meta; }
+    for (const [i, id, meta, m] of changes) {
+      entry.orig.blocks[i] = id; entry.orig.metadata[i] = meta; entry.decoded.blocks[i] = m.id; entry.decoded.metadata[i] = m.meta;
+      // The cell cannot tell the original apart when the registry would imply another one: keep the exact original in the overlay.
+      const key2 = id << 4 | meta;
+      if (origin1(m.id, m.meta) === key2) entry.overlay.delete(i); else entry.overlay.set(i, key2);
+    }
   };
   const commit = (entry, populated) => {
     const cells = new Uint16Array(65536);
     for (let i = 0; i < 65536; i++) cells[i] = entry.decoded.blocks[i] | entry.decoded.metadata[i] << 8;
     if (populated) entry.decoded.terrainPopulated = true;
     observe?.(entry.x, entry.z, entry.orig);
-    pending.push(encodeBaseColumn(worldKey, entry.x - origin.chunkX, entry.z - origin.chunkZ, cells, { biomes: entry.decoded.biomes, terrainPopulated: entry.decoded.terrainPopulated, lightPopulated: entry.decoded.lightPopulated }));
+    pending.push(encodeBaseColumn(worldKey, entry.x - origin.chunkX, entry.z - origin.chunkZ, cells, { biomes: entry.decoded.biomes, terrainPopulated: entry.decoded.terrainPopulated, lightPopulated: entry.decoded.lightPopulated, overlay: entry.overlay }));
   };
   const dropTile = (lx, y, lz) => {
     const k = `${lx},${y},${lz}`;
@@ -154,19 +179,29 @@ export async function populateImportedColumns({ population, origin, worldKey, co
   for (const [index, [x, z]] of plan.entries()) {
     if (signal?.aborted) throw new DOMException("Import cancelled", "AbortError");
     const needed = [];
-    for (let a = x - 1; a <= x + 2; a++) for (let b = z - 1; b <= z + 2; b++) needed.push([a, b]);
+    if (runner) needed.push(...runner.window(x, z));
+    else for (let a = x - 1; a <= x + 2; a++) for (let b = z - 1; b <= z + 2; b++) needed.push([a, b]);
     await load(needed);
     let pass = null;
+    const mark = runner?.mark();
     for (let attempt = 0; ; attempt++) {
       try {
-        pass = populateOne(population, x, z, (a, b) => {
-          const entry = cache.get(key(a, b));
-          if (entry) return entry.orig;
-          if (stored.has(key(a, b))) throw new NeedChunk(a, b);
-          return population.original(a, b);
-        });
+        pass = runner
+          ? runner.run(x, z, (a, b) => {
+            const entry = cache.get(key(a, b));
+            if (entry) return entry.orig;
+            if (stored.has(key(a, b))) throw new NeedChunk(a, b);
+            return null;
+          })
+          : populateOne(population, x, z, (a, b) => {
+            const entry = cache.get(key(a, b));
+            if (entry) return entry.orig;
+            if (stored.has(key(a, b))) throw new NeedChunk(a, b);
+            return population.original(a, b);
+          });
         break;
       } catch (error) {
+        runner?.reset(mark);
         if (error instanceof NeedChunk && attempt < RETRY) { out.retries++; await load([error.need]); continue; }
         pass = null; out.skipped.failed++;
         if (!(error instanceof NeedChunk) && out.errors?.length !== 8) (out.errors ??= []).push(`${x},${z}: ${error.message}`);
@@ -178,10 +213,22 @@ export async function populateImportedColumns({ population, origin, worldKey, co
     // Diff every stored chunk the call touched against its input; refuse the populate when a result has no exact cell.
     const changes = new Map();
     let refuse = false;
-    for (const c of w.chunks.values()) {
+    for (const c of (runner ? pass.chunks : w.chunks).values()) {
       const entry = cache.get(key(c.x, c.z));
       if (!entry) continue;
       const list = [];
+      if (runner) {
+        for (let i = 0; i < 65536; i++) {
+          const id = c.blocks[i], meta = c.metadata[i];
+          if (id === entry.orig.blocks[i] && meta === entry.orig.metadata[i]) continue;
+          const m = mapBlock(id, meta);
+          if (!m?.exact || m.id > 255) { refuse = true; out.unmappedCells++; break; }
+          list.push([i, id, meta, m]);
+        }
+        if (refuse) break;
+        if (list.length) changes.set(key(c.x, c.z), list);
+        continue;
+      }
       for (let s = 0; s < 16 && !refuse; s++) {
         const section = c.sections[s];
         if (!section) continue;
@@ -220,29 +267,44 @@ export async function populateImportedColumns({ population, origin, worldKey, co
     if (!changes.has(key(x, z))) commit(self, true);
     // Records of the touched stored chunks.
     const inside = (bx, bz) => stored.has(key(bx >> 4, bz >> 4));
-    const tiles = structureTileRecords(w, inside), local = (t) => ({ x: t.x - ox, y: t.y, z: t.z - oz });
+    const local = (t) => ({ x: t.x - ox, y: t.y, z: t.z - oz });
     const stackOf = (items) => { const tile = Array(27).fill(null); for (const s of items ?? []) { const m = itemFromOriginal(s.id, s.damage); if (m) tile[s.slot] = makeStack(m.id, s.count, m.damage, s.stored); } return tile; };
-    for (const t of tiles.chests) if (w.getBlock(t.x, t.y, t.z) === CHEST_ID) out.chests[`${t.x - ox},${t.y},${t.z - oz}`] = { items: stackOf(t.items), facing: t.facing };
-    for (const t of tiles.dispensers) if (w.getBlock(t.x, t.y, t.z) === DISPENSER_ID) {
-      const items = Array(9).fill(null);
-      for (const s of t.items ?? []) { const m = itemFromOriginal(s.id, s.damage); if (m && s.slot < 9) items[s.slot] = makeStack(m.id, s.count, m.damage, s.stored); }
-      out.dispensers[`${t.x - ox},${t.y},${t.z - oz}`] = { items, facing: t.facing };
+    if (runner && dimension === -1) {
+      const tiles = structureTileRecords(w, inside);
+      for (const t of tiles.chests) if (w.getBlock(t.x, t.y, t.z) === CHEST_ID) out.chests[`${t.x - ox},${t.y},${t.z - oz}`] = { items: stackOf(t.items), facing: t.facing };
+      for (const c of w.chunks.values()) for (const t of c.tiles.values()) if (t.kind === "spawner" && inside(t.x, t.z) && w.getBlock(t.x, t.y, t.z) === 52) {
+        const l = local(t); out.spawners = out.spawners.filter((q) => !(q.x === l.x && q.y === l.y && q.z === l.z)); out.spawners.push({ ...l, EntityId: t.name });
+      }
+    } else if (!runner) {
+      const tiles = structureTileRecords(w, inside);
+      for (const t of tiles.chests) if (w.getBlock(t.x, t.y, t.z) === CHEST_ID) out.chests[`${t.x - ox},${t.y},${t.z - oz}`] = { items: stackOf(t.items), facing: t.facing };
+      for (const t of tiles.dispensers) if (w.getBlock(t.x, t.y, t.z) === DISPENSER_ID) {
+        const items = Array(9).fill(null);
+        for (const s of t.items ?? []) { const m = itemFromOriginal(s.id, s.damage); if (m && s.slot < 9) items[s.slot] = makeStack(m.id, s.count, m.damage, s.stored); }
+        out.dispensers[`${t.x - ox},${t.y},${t.z - oz}`] = { items, facing: t.facing };
+      }
+      for (const t of tiles.pots) if (inside(t.x, t.z)) out.pots.push({ ...t, x: t.x - ox, z: t.z - oz });
+      for (const t of w.liveSpawners()) if (inside(t.x, t.z)) { const l = local(t); out.spawners = out.spawners.filter((s) => !(s.x === l.x && s.y === l.y && s.z === l.z)); out.spawners.push({ ...l, EntityId: t.name }); }
+      for (const e of w.carts) {
+        if (!inside(Math.floor(e.x), Math.floor(e.z))) continue;
+        out.carts.push({ x: e.x - ox, y: e.y, z: e.z - oz, type: 1, onGround: false, items: e.slots.flatMap((s, slot) => (s ? [{ slot, id: s[0], count: s[1], damage: s[2], ...(s[3]?.length ? { stored: s[3].map(([id, lvl]) => ({ id, lvl })) } : {}) }] : [])) });
+      }
     }
-    out.dropped.pots += tiles.pots.length;
-    for (const t of w.liveSpawners()) if (inside(t.x, t.z)) { const l = local(t); out.spawners = out.spawners.filter((s) => !(s.x === l.x && s.y === l.y && s.z === l.z)); out.spawners.push({ ...l, EntityId: t.name }); }
-    for (const e of w.carts) {
+    const mobs = runner ? pass.entities : w.animals;
+    for (const e of mobs) {
       if (!inside(Math.floor(e.x), Math.floor(e.z))) continue;
-      out.carts.push({ x: e.x - ox, y: e.y, z: e.z - oz, type: 1, onGround: false, items: e.slots.flatMap((s, slot) => (s ? [{ slot, id: s[0], count: s[1], damage: s[2], ...(s[3]?.length ? { stored: s[3].map(([id, lvl]) => ({ id, lvl })) } : {}) }] : [])) });
+      const rec = entityRecord(e, ox, oz);
+      if (rec) { out.entities.push(rec); out.kept[e.type === "Villager" ? "villagers" : "animals"]++; }
+      else out.dropped[e.type === "Villager" ? "villagers" : "animals"]++;
     }
-    for (const e of w.animals) if (inside(Math.floor(e.x), Math.floor(e.z))) out.dropped[e.type === "Villager" ? "villagers" : "animals"]++;
-    for (const [px, py, pz, id, delay] of w.pending) {
+    for (const [px, py, pz, id, delay] of runner ? pass.pending : w.pending) {
       if (!inside(px, pz)) continue;
-      if (!LIQUIDS.has(id)) { out.dropped.ticks++; continue; }
-      const m = mapBlock(w.getBlock(px, py, pz), w.getBlockMetadata(px, py, pz));
-      if (m?.exact && LIQUIDS.has(w.getBlock(px, py, pz))) out.fluidTicks.push({ x: px - ox, y: py, z: pz - oz, block: m.id, delay });
-      else out.dropped.ticks++;
+      const bid = w.getBlock(px, py, pz), m = mapBlock(bid, w.getBlockMetadata(px, py, pz)), list = TICK_LISTS[id];
+      // A fluid tick stays on whatever fluid the cell holds now (BlockLiquid.onBlockAdded turns a closed pocket static); the others need their block.
+      if (list && m?.exact && (list === "fluidTicks" ? LIQUIDS.has(bid) : bid === id)) out[list].push({ x: px - ox, y: py, z: pz - oz, block: m.id, delay });
+      else { out.dropped.ticks++; (out.droppedTickIds[id] = (out.droppedTickIds[id] ?? 0) + 1); }
     }
-    out.populated++; out.calls++;
+    out.populated++; out.calls++; (out.order ??= []).push([x, z]);
     trim(new Set(needed.map(([a, b]) => key(a, b))));
     if (pending.length >= BATCH) await flush();
     if (index % 4 === 3) { onProgress({ phase: "populate", done: index + 1, total: plan.length }); await new Promise((r) => setTimeout(r, 0)); }
