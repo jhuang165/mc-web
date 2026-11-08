@@ -34,12 +34,13 @@ const sameWidth = (w, state) => {
 /**
  * The drawing ops of one string: {kind: "ascii", index, x, color, italic}, {kind: "unicode", code, glyph, x, color, italic} and
  * {kind: "bar", x0, y0, x1, y1, color}; x and the bars are in font pixels from the pen start, glyphs are drawn at y 0..7.99.
- * `width` is the pen move (the float sum; getStringWidth is its integer version).
+ * `width` is the pen move: the sum of the integer parts of the advances, as drawString's pen.
  */
 export function layoutString(s, color = 0, state = font, rand = Math.random) {
   const ops = [];
   let x = 0, cur = color, bold = false, italic = false, under = false, strike = false, random = false;
-  const text = String(s ?? "");
+  let text = String(s ?? "");
+  if (state.bidi && state.bidiReorder) text = state.bidiReorder(text); // drawString -> bidiReorder when the language is bidirectional
   for (let i = 0; i < text.length; i++) {
     let c = text.charCodeAt(i);
     if (c === 167 && i + 1 < text.length) {
@@ -75,7 +76,7 @@ export function layoutString(s, color = 0, state = font, rand = Math.random) {
     if (bold) { draw(offset); advance += 1; }
     if (strike) ops.push({ kind: "bar", x0: start, y0: 3, x1: start + advance, y1: 4, color: cur });
     if (under) ops.push({ kind: "bar", x0: start - 1, y0: 8, x1: start + advance, y1: 9, color: cur });
-    x += advance;
+    x += Math.trunc(advance); // the pen moves by (int) advance (renderStringAtPos); the bars above use the float advance
   }
   return { ops, width: x };
 }

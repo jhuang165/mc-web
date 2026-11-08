@@ -19,12 +19,10 @@ const SAME_WIDTH = new Map();
 for (let c = 33; c < 127; c++) { const ch = String.fromCharCode(c), w = charWidth(ch); if (!SAME_WIDTH.has(w)) SAME_WIDTH.set(w, []); SAME_WIDTH.get(w).push(ch); }
 const obfuscate = (s) => s.replace(/[^ ]/g, (ch) => { const set = SAME_WIDTH.get(charWidth(ch)); return set ? set[Math.floor(Math.random() * set.length)] : ch; });
 export function textHtml(s, color = 0xffffff) {
+  if (font.bidi && s) s = font.bidiReorder(String(s)); // FontRenderer.renderString: bidiReorder of the whole string, colour codes included
   let out = "", run = "", cur = color, under = false, bold = false, italic = false, strike = false, random = false;
   const style = (c) => {
     let css = c == null ? "color:var(--c);--sh:var(--cs)" : `color:${hex(c)};--sh:${hex(shadowColor(c))}`;
-    const deco = [under && "underline", strike && "line-through"].filter(Boolean).join(" ");
-    if (deco) css += ";text-decoration:" + deco;
-    if (italic) css += ";font-style:italic";
     if (bold) css += ";letter-spacing:var(--u);text-shadow:var(--u) 0 0 currentColor,var(--u) var(--u) 0 var(--sh),calc(2*var(--u)) var(--u) 0 var(--sh)";
     return css;
   };
@@ -39,7 +37,16 @@ export function textHtml(s, color = 0xffffff) {
     }
     return html + escapeHtml(seg);
   };
-  const flush = () => { if (run) out += `<span style="${style(cur)}">${runHtml(random ? obfuscate(run) : run)}</span>`; run = ""; };
+  // Underline / strikethrough are 1 unit bars (y + 8 and y + 3, from 1 left of the run, drawn in the glyph colour and shadowed like text)
+  // and italic leans the glyphs 1 unit right at the top and 1 left at the bottom, for ascii.png and unicode glyphs alike
+  // (renderStringAtPos / renderUnicodeChar); see menu-screens.css .tf.
+  const flush = () => {
+    if (run) {
+      const cls = [under && "tu", strike && "ts", italic && "ti"].filter(Boolean);
+      out += `<span${cls.length ? ` class="tf ${cls.join(" ")}"` : ""} style="${style(cur)}">${runHtml(random ? obfuscate(run) : run)}</span>`;
+    }
+    run = "";
+  };
   for (let i = 0; i < s.length; i++) {
     if (s[i] === "§" && i + 1 < s.length) {
       flush();
@@ -174,7 +181,8 @@ export class Gui {
   // FontRenderer.drawSplitString: word-wrapped lines 9 units apart, without a shadow.
   splitText(s, x, y, width, color) {
     const e = el("div", "mc-split");
-    splitLines(s, width).forEach((line, i) => this.text(line, x, y + 9 * i, { color, shadow: false, parent: e }));
+    // renderSplitString: a bidirectional language right aligns every line on the reordered width, at x + width - that width
+    splitLines(s, width).forEach((line, i) => this.text(line, font.bidi ? x + width - textWidth(font.bidiReorder(line)) : x, y + 9 * i, { color, shadow: false, parent: e }));
     this.layer.append(e);
     return e;
   }
