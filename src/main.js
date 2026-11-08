@@ -1710,6 +1710,7 @@ function updateBedFade() {
   bedFade.style.opacity = String(a);
   if (a === 0 && !bedSleep.sleeping) bedFade.style.display = "none";
 }
+const SLEEP_EYE_RISE = 0.42 - 0.3; // orientCamera's sleeping offsets above posY
 // Not native: 1.7.10 cuts straight to the lying view. Clicking a bed glides the camera there over BED_EASE_MS instead.
 const BED_EASE_MS = 450;
 let bedEase = null;
@@ -3710,9 +3711,11 @@ function animate(now) {
     const hurt = -(hurtCameraRoll({ hurtTime: survival.hurtTime, health: survival.health }, Math.min(1, accumulator / PHYSICS.tick)) * Math.PI) / 180;
     scene.camera.rotation.set(pitch + b.rx, yaw, b.rz - hurt, "YXZ");
     if (bedSleep.sleeping) {
-      // EntityRenderer.orientCamera while sleeping: the view lies on the mattress looking along the bed towards its foot (approximation of the native offsets).
+      // EntityRenderer.orientCamera while sleeping: glTranslatef(0, 0.3, 0), glRotatef(bed meta * 90, 0, 1, 0), and the
+      // player's yaw/pitch turns cancel against the common ones, then glTranslatef(0, yOffset - 1.62 + 1 = -0.42, 0).
+      // The eye is posY + 0.12, just over the lying head, looking level along the bed towards its foot.
       const [hx, hz] = BED_DIR[bedSleep.facing];
-      scene.camera.position.set(bedSleep.pos.x, bedSleep.pos.y - 0.1, bedSleep.pos.z);
+      scene.camera.position.set(bedSleep.pos.x, bedSleep.pos.y + SLEEP_EYE_RISE, bedSleep.pos.z);
       scene.camera.rotation.set(0, Math.atan2(hx, hz), 0, "YXZ");
       if (bedEase) {
         const t = Math.min(1, (performance.now() - bedEase.start) / BED_EASE_MS), e = t * t * (3 - 2 * t); // smoothstep
@@ -3728,8 +3731,8 @@ function animate(now) {
     scene.camera.getWorldDirection(dir);
     // Mining and picking start at the player's eye in every view.
     const aim = scene.camera.position.clone();
-    if (thirdPersonView) {
-      // EntityRenderer.orientCamera: back off from the eye, pulled in by the world.
+    if (thirdPersonView && !bedSleep.sleeping) {
+      // EntityRenderer.orientCamera: back off from the eye, pulled in by the world. A sleeper takes the bed branch instead.
       const cam = thirdPersonCamera(world, aim, yaw, pitch, thirdPersonView);
       scene.camera.position.set(...cam.position);
       scene.camera.rotation.set(cam.rotation.x + (thirdPersonView === 2 ? -b.rx : b.rx), cam.rotation.y, b.rz - hurt, "YXZ");
@@ -3815,7 +3818,9 @@ function animate(now) {
   redstoneRuntime?.frame(screen === "home" ? 1 : partial);
   recordHud.frame(partial);
   playerRenderer?.update(playerBody, partial, {
-    visible: thirdPersonView > 0 && ["playing", "inventory", "paused"].includes(screen),
+    // RenderGlobal draws the view entity in first person too while it is sleeping (isPlayerSleeping).
+    visible: (thirdPersonView > 0 || bedSleep.sleeping) && ["playing", "inventory", "paused"].includes(screen),
+    sleeping: bedSleep.sleeping ? { pos: bedSleep.pos, offset: bedSleep.offset, facing: bedSleep.facing } : null,
     swing: animate.pose ? (animate.pose.progress < 1 ? animate.pose.progress : 0) : 0,
     armor: survival?.inventory?.armor ?? [],
     held: heldId(),
@@ -3962,7 +3967,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, dims, travel: (d) => dims.travel(d), get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get boats() { return boats; }, get hanging() { return hanging; }, get aimedHanging() { return aimedHanging; }, fishing, get target() { return target; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt };
+    window.__mc = { scene, dims, travel: (d) => dims.travel(d), get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get boats() { return boats; }, get hanging() { return hanging; }, get aimedHanging() { return aimedHanging; }, fishing, get target() { return target; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt, useBed, get bedSleep() { return bedSleep; }, get playerRenderer() { return playerRenderer; } };
   if (import.meta.env.DEV) Object.defineProperty(window.__mc, 'multiplayer', { get: () => multiplayer });
   scene.preview(0);
   // The title screen's splash texts (assets/minecraft/texts/splashes.txt).

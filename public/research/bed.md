@@ -11,6 +11,7 @@ Internal block 138 = Bed (`138: same(26)` in the block registry); item 355 maps 
 - Hardness 0.2, height 9/16, light opacity 0, stone sound, not opaque; explosion resistance 0.2.
 - Placement: top face only, facing from yaw; both cells must be replaceable with solid tops below. Breaking either half removes the other; one bed drops from the foot half, the head drops nothing.
 - Sleeping: status messages, 0.2 x 0.2 lying box, "Leave Bed" button, sleepTimer to 100, then the time skips to the next morning and weather clears. The spawn point is set to the bed and verified on respawn; otherwise "Your home bed was missing or obstructed" and world spawn. Spawn and sleeping state are saved.
+- Lying render (bytecode-read RenderPlayer, RenderGlobal and EntityRenderer): the player model lies on its back with its feet 1.8 from the entity position (`func_71013_b`), turned `bK` (90/0/270/180 by bed direction), 90 about z and 270 about y, drawn at posY - 0.2. RenderGlobal draws the sleeper in first person too. The bed view sits at posY + 0.12 (0.3 lift, -0.42 offset), looking level towards the bed foot. F5 has no back-off while sleeping. Not native: the head is drawn straight instead of keeping the frozen head yaw and pitch, and clicking a bed glides the camera into place.
 - Zombie-villager cure boost: `BOOST_BLOCKS` includes the bed.
 
 ## Native evidence

@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import {
   cameraDistance, thirdPersonCamera, nextView, PlayerBody, javaYaw, modelBox, bipedPose, armorLayer, heldKind,
-  heldItemMatrix, ARMOR_PASS_PARTS, playerShadowCaster, BIPED,
+  heldItemMatrix, ARMOR_PASS_PARTS, playerShadowCaster, BIPED, sleepingTransform, SLEEP_YAW,
 } from "./player-renderer.js";
+import { BedSleep, BED_DIR } from "./bed.js";
 import { shadowQuads, SHADOWS } from "./shadows.js";
 
 const slab = (z0, z1) => ({ get: (x, y, z) => (z >= z0 && z < z1 && x >= 0 && x < 40 && y >= 0 && y < 20 ? 1 : 0) });
@@ -229,4 +230,34 @@ test("the player shadow is centred on posY (eye height) + height / 2, as 1.7.10"
   // With a ceiling just above the head, the shadow lands on it.
   const ceiling = { get: (x, y) => (y === 11 ? 1 : 0), light: () => 15 };
   assert.ok(shadowQuads(caster, viewer, ceiling).length > 0);
+});
+
+test("a sleeper lies on its back along the bed with its feet 1.8 from the entity position (RenderPlayer.rotateCorpse)", () => {
+  assert.deepEqual(SLEEP_YAW, [90, 0, 270, 180]);
+  for (let facing = 0; facing < 4; facing++) {
+    const [dx, dz] = BED_DIR[facing], pos = { x: 10.5 + dx * 0.4, y: 64.9375, z: 20.5 + dz * 0.4 };
+    const offset = [-1.8 * dx, 0, -1.8 * dz], at = sleepingTransform({ pos, offset, facing });
+    assert.ok(Math.abs(at.x - (pos.x - 1.8 * dx)) < 1e-9 && Math.abs(at.z - (pos.z - 1.8 * dz)) < 1e-9);
+    assert.ok(Math.abs(at.y - 64.7375) < 1e-9);
+    // Model up (feet to head) points at the bed head; the face (-z) points at the sky.
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(at.quaternion), face = new THREE.Vector3(0, 0, -1).applyQuaternion(at.quaternion);
+    assert.ok(up.distanceTo(new THREE.Vector3(dx, 0, dz)) < 1e-9, `facing ${facing} up ${up.toArray()}`);
+    assert.ok(face.distanceTo(new THREE.Vector3(0, 1, 0)) < 1e-9, `facing ${facing} face ${face.toArray()}`);
+  }
+});
+
+test("BedSleep.offset agrees with the sleeping corpse offset", () => {
+  const s = new BedSleep();
+  for (let facing = 0; facing < 4; facing++) {
+    s.facing = facing;
+    const [dx, dz] = BED_DIR[facing];
+    assert.deepEqual(s.offset.map((v) => v + 0), [-1.8 * dx + 0, 0, -1.8 * dz + 0]);
+  }
+});
+
+test("the sleeping eye (posY + 0.12, orientCamera) clears the lying head and hat", () => {
+  const pos = { x: 0.5, y: 64.9375, z: 0.9 }, at = sleepingTransform({ pos, offset: [0, 0, -1.8], facing: 0 });
+  // Hat: 8 px head inflated by 0.5 px, at the 0.9375 player scale, centred on the body's lying axis.
+  const hatTop = at.y + ((4 + 0.5) / 16) * 0.9375;
+  assert.ok(hatTop < pos.y + 0.12 - 0.05, `hat top ${hatTop}`); // beyond the 0.05 near plane
 });

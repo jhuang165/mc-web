@@ -563,13 +563,23 @@ export class PlayerRenderer {
     }
   }
   // `body` is a PlayerBody; `swing` is the swing progress (0 at rest); `armor`
-  // is inventory.armor (boots first); `held` the held item id.
-  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, hurt = false, sneak = false, riding = false, invisible = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180 } = {}) {
+  // is inventory.armor (boots first); `held` the held item id. `sleeping` is
+  // { pos, offset, facing } from BedSleep while the player lies in a bed.
+  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, hurt = false, sneak = false, riding = false, invisible = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180, sleeping = null } = {}) {
     this.root.visible = visible;
     if (!visible) { this.fire.root.visible = false; return; }
-    const pose = mobPose(body, partial);
-    this.root.position.set(pose.x, pose.y, pose.z);
-    this.root.rotation.y = (180 - pose.bodyYaw) * RAD;
+    let pose = mobPose(body, partial);
+    if (sleeping) {
+      const at = sleepingTransform(sleeping);
+      // A sleeper does not walk; its entity position (not the corpse offset) is where light and fire sample.
+      // Not native: the head is drawn straight, where ModelBiped would still turn it by the frozen head yaw and pitch.
+      pose = { ...pose, x: sleeping.pos.x, y: at.y, z: sleeping.pos.z, limbSwing: 0, limbSwingAmount: 0, headYaw: 0, headPitch: 0 };
+      this.root.position.set(at.x, at.y, at.z);
+      this.root.quaternion.copy(at.quaternion);
+    } else {
+      this.root.position.set(pose.x, pose.y, pose.z);
+      this.root.rotation.set(0, (180 - pose.bodyYaw) * RAD, 0);
+    }
     this.fire.update(pose, burning, fireViewYaw);
     this.syncArmor([3, 2, 1, 0].map((slot) => armor[slot]));
     for (const m of this.armorGlints) m.uniforms.time.value = pose.age;
@@ -577,7 +587,7 @@ export class PlayerRenderer {
     this.syncArrows(arrowCount, arrowEntityId);
     const parts = bipedPose({
       limbSwing: pose.limbSwing, limbSwingAmount: pose.limbSwingAmount, age: pose.age,
-      headYaw: pose.headYaw, headPitch: pose.headPitch, swing, sneak, riding, heldRight: held ? 1 : 0,
+      headYaw: pose.headYaw, headPitch: pose.headPitch, swing, sneak: sneak && !sleeping, riding: riding && !sleeping, heldRight: held ? 1 : 0,
     });
     for (const name of PART_NAMES) {
       const { point, rot } = parts[name], pivot = this.pivots[name];
@@ -588,7 +598,8 @@ export class PlayerRenderer {
     }
     // Entity.getBrightnessForRender samples feet + 0.66 * height. Hurt tints
     // red like RendererLivingEntity (brightness, 0, 0, 0.4).
-    const packed = this.view.brightness(pose.x, pose.y + PHYSICS.height * 0.66, pose.z),
+    // A sleeper's box is 0.2 tall (EntityPlayer.sleepInBedAt setSize(0.2, 0.2)).
+    const packed = this.view.brightness(pose.x, pose.y + (sleeping ? SLEEP_SIZE : PHYSICS.height) * 0.66, pose.z),
       level = Math.max(((packed >> 20) & 15) - (this.view.subtracted ?? 0), (packed >> 4) & 15),
       b = BRIGHTNESS[Math.max(0, level)];
     this.arrowMaterial?.setLight(packed);
@@ -597,6 +608,22 @@ export class PlayerRenderer {
       m.uniforms.overlay.value.set(hurt ? b : 0, 0, 0, hurt ? 0.4 : 0);
     }
   }
+}
+
+// EntityPlayer.sleepInBedAt: setSize(0.2, 0.2) and yOffset 0.2, so RenderPlayer draws at posY - 0.2.
+export const SLEEP_SIZE = 0.2;
+// EntityPlayer.getBedOrientationInDegrees (bK) for bed direction 0..3.
+export const SLEEP_YAW = Object.freeze([90, 0, 270, 180]);
+const Y_AXIS = new THREE.Vector3(0, 1, 0), Z_AXIS = new THREE.Vector3(0, 0, 1);
+// RenderPlayer.renderLivingAt adds the sleeping offset (field_71079_bU, 0, field_71089_bV) to the
+// render position, and rotateCorpse for a living sleeper turns glRotatef(bK, 0,1,0),
+// glRotatef(getDeathMaxRotation = 90, 0,0,1), glRotatef(270, 0,1,0) in place of the body yaw.
+// `pos` is the BedSleep entity position (posY = bed + 0.9375), `offset` BedSleep.offset.
+export function sleepingTransform({ pos, offset = [0, 0, 0], facing = 0 }) {
+  const quaternion = new THREE.Quaternion().setFromAxisAngle(Y_AXIS, SLEEP_YAW[facing & 3] * RAD)
+    .multiply(new THREE.Quaternion().setFromAxisAngle(Z_AXIS, 90 * RAD))
+    .multiply(new THREE.Quaternion().setFromAxisAngle(Y_AXIS, 270 * RAD));
+  return { x: pos.x + offset[0], y: pos.y - SLEEP_SIZE + offset[1], z: pos.z + offset[2], quaternion };
 }
 
 // RendererLivingEntity's armour effect: two SRC_COLOR/ONE passes, tint (0.38, 0.19, 0.608),
