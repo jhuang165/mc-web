@@ -16,6 +16,8 @@ const RUNTIME_FIELDS = [
   "gameRules", "bed", "stats", "achievements", "mapFeatures", "hardcore", "totalTime",
   // Player abilities.flying (Creative only), a forced spawn (/spawnpoint) and a bed to free after a saved Sleeping player wakes.
   "flying", "playerSpawn", "wakeFromBed",
+  // Live redstone save (redstone-live.js): pending scheduled ticks, lit repeaters, comparator signals, moving pistons (sanitised below).
+  "redstone",
 ];
 
 const int = Number.isInteger, finite = Number.isFinite;
@@ -26,6 +28,20 @@ const SPAWNER_NUMBERS = ["Delay", "MinSpawnDelay", "MaxSpawnDelay", "SpawnCount"
 // spawners and full carts on its first launch, as an older save does.
 // Column runtime arrays (chunk-runtime.js) are keyed by the record position, so x and z must be numbers.
 const list = (v, max) => (Array.isArray(v) ? v.filter((e) => e && typeof e === "object" && finite(e.x) && finite(e.z)).slice(0, max) : undefined);
+const ints = (a, n) => Array.isArray(a) && a.length >= n && a.slice(0, n).every(int);
+const nums = (a, n) => Array.isArray(a) && a.length === n && a.every(finite);
+// redstone-live.js save(): only the shapes restore() reads are kept; the engine's Random and block-event queue are not trusted from a file.
+function sanitizeRedstone(v) {
+  if (!v || typeof v !== "object" || v.version !== 1) return undefined;
+  const ticks = (a) => (Array.isArray(a) ? a.filter((e) => ints(e, 7)).slice(0, LIST_CAP).map((e) => e.slice(0, 7)) : []);
+  return {
+    version: 1, clock: int(v.clock) ? v.clock : 0, time: int(v.time) ? v.time : 0, pending: ticks(v.pending), deferred: ticks(v.deferred),
+    torches: (Array.isArray(v.torches) ? v.torches.filter((e) => ints(e, 4)) : []).slice(0, LIST_CAP).map((e) => e.slice(0, 4)),
+    lit: (Array.isArray(v.lit) ? v.lit.filter((k) => typeof k === "string" && /^-?\d+,\d+,-?\d+$/.test(k)) : []).slice(0, LIST_CAP),
+    comparators: (Array.isArray(v.comparators) ? v.comparators.filter((e) => Array.isArray(e) && typeof e[0] === "string" && int(e[1])) : []).slice(0, LIST_CAP).map((e) => [e[0], e[1]]),
+    pistons: (Array.isArray(v.pistons) ? v.pistons.filter((e) => nums(e, 10)) : []).slice(0, LIST_CAP),
+  };
+}
 const triple = (v) => Array.isArray(v) && v.length === 3 && v.every(int);
 // Per-list bound of the merged runtime record (signs, hanging, spawners, minecarts, villages, boats, pistons, populated columns...).
 // It used to be 4096 (1024 for carts, boats and villages); a whole save with more entries lost the rest at import. The record is
@@ -37,6 +53,7 @@ export const LIST_CAP = 1 << 20;
 const simulationStream = (v) => (v && typeof v === "object" && JSON.stringify(new Weather().restoreSimulation(v).saveSimulation()) === JSON.stringify(v) ? v : undefined);
 const SANITIZE = {
   worldRandom: simulationStream, simulation: simulationStream,
+  redstone: (v) => sanitizeRedstone(v),
   hanging: (v) => list(v, LIST_CAP), signs: (v) => list(v, LIST_CAP), skulls: (v) => list(v, LIST_CAP), beacons: (v) => list(v, LIST_CAP),
   commandBlocks: (v) => list(v, LIST_CAP), musicTiles: (v) => list(v, LIST_CAP),
   // VillageCollection.toJSON: Village.fromJSON spreads the centre and door rows, so malformed villages are dropped here.

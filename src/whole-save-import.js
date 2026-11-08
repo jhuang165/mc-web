@@ -21,6 +21,7 @@ import { World } from "./world.js";
 import { DIM_KEYS, TILE_KEYS, viewId } from "./dimension-live.js";
 import { encodeBaseColumn } from "./whole-save-columns.js";
 import { impliedOriginal } from "./stored-overlay.js";
+import { mergeTickState } from "./tile-ticks.js";
 import { populateImportedColumns } from "./imported-population.js";
 import { populationBlockMapperReady } from "./population-world.js";
 
@@ -92,6 +93,7 @@ function mergeRuntime(acc, state, tiles, seq) {
     if (name === "populatedColumns") {
       for (const [k, hex] of Object.entries(value.cells)) acc.cells.set(k, (acc.cells.get(k) ?? 0n) | BigInt(`0x${hex}`));
     } else if (LIST_SKIP.has(name)) continue;
+    else if (mergeTickState(acc.state, (acc.tickSeen ??= new Set()), name, value)) continue;
     else if (name === "minecarts") {
       const m = (acc.state.minecarts ??= { version: 1, carts: [] });
       for (const c of value.carts ?? []) { vehicleOf(c, "cart"); m.carts.push(c); }
@@ -126,6 +128,8 @@ function mergeReport(total, rep) {
   total.items.converted += rep.items.converted; total.items.tagsStripped += rep.items.tagsStripped; total.items.clamped += rep.items.clamped;
   total.tileEntities.total += rep.tileEntities.total; total.entities.total += rep.entities.total;
   total.scheduledTicks += rep.scheduledTicks;
+  for (const k of ["fluid", "fire", "falling", "redstone", "litRepeaters", "duplicates", "outsideArea"]) total.ticks[k] += rep.ticks?.[k] ?? 0;
+  for (const e of rep.ticks?.dropped ?? []) tally(total.ticks.dropped, e.id, e.count);
 }
 const sorted = (map, name = "id") => [...map].sort(([a], [b]) => String(a).localeCompare(String(b), "en", { numeric: true })).map(([key, count]) => ({ [name]: key, count }));
 
@@ -167,6 +171,7 @@ export async function importWholeSave(entries, options = {}) {
   const total = {
     blocks: { sourceCells: 0, exact: 0, approximated: 0, omitted: 0 },
     items: { converted: 0, tagsStripped: 0, clamped: 0 }, tileEntities: { total: 0 }, entities: { total: 0 }, scheduledTicks: 0,
+    ticks: { fluid: 0, fire: 0, falling: 0, redstone: 0, litRepeaters: 0, duplicates: 0, outsideArea: 0, dropped: new Map() },
     maps: { unsupported: new Map(), approximations: new Map(), tileLost: new Map(), itemLost: new Map(), entityLost: new Map(), tileConverted: new Map(), entityConverted: new Map() },
   };
   const acc = new Map(DIMENSIONS.map(({ dimension }) => [dimension, { state: {}, tiles: {}, cells: new Map() }]));
@@ -281,6 +286,7 @@ export async function importWholeSave(entries, options = {}) {
   report.items = { ...total.items, lost: sorted(total.maps.itemLost) };
   report.entities = { ...total.entities, converted: Object.fromEntries(total.maps.entityConverted), lost: sorted(total.maps.entityLost) };
   report.scheduledTicks = total.scheduledTicks;
+  report.ticks = { ...total.ticks, dropped: sorted(total.ticks.dropped) };
   report.edits = 0;
   report.population = {
     unpopulatedStored: unpopulated.length, ran: !!populated, populated: populated?.populated ?? 0,
