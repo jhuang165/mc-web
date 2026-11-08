@@ -15,7 +15,7 @@ import { Fx } from "./fx.js";
 import { ParticleRenderer } from "./particle-renderer.js";
 import { woodSlabBounds, gateRenderBoxes, trapBounds, wallMask, wallRenderBoxes } from './shaped-blocks.js';
 import { LILY_PAD, FERN, HEIGHT, SEA, FIRE, SNOW_LAYER, ICE, WEB, LADDER, CACTUS, REEDS, FENCE, RAIL, VINE, COCOA, DOUBLE_PLANT, SANDSTONE_SLAB, LIT_REDSTONE_ORE, ANVIL, BED, PISTON_MOVING, wallSolid, blockBounds, blockHeight, snowSelectionHeight, isPlant, isCrop, isFlower, opaqueCube, STAINED_GLASS, CARPET } from "./world.js";
-import { StreamingLight } from './streaming-light.js';
+import { StreamingLight, nativeLightEnabled } from './streaming-light.js';
 import { STONE_SLAB, END_PORTAL_FRAME, CAULDRON, FLOWER_POT, endFrameBoxes, cauldronBoxes, cauldronWaterHeight, CAULDRON_FLOOR, CAULDRON_WALL, potContents, POT_BOUNDS, potPlantOf } from './stone-utility.js';
 import { REDSTONE_WIRE, STONE_PRESSURE_PLATE, WOODEN_PRESSURE_PLATE, STONE_BUTTON, LEVER, REPEATER, TRIPWIRE_HOOK, TRIPWIRE, isRedstoneBlock, redstoneBounds, wireArms, wireClimbs, wireTint } from './redstone-blocks.js';
 import { REDSTONE_TORCH, REDSTONE_TORCH_OFF, COMPARATOR, COMPARATOR_POWERED, DAYLIGHT_SENSOR, isRedstone2Block, isCube2, redstoneBounds2 } from './redstone-blocks-2.js';
@@ -284,7 +284,7 @@ export class VoxelScene {
     this.light = new Light(this.world, (x,y,z,b) => {
       if (b === 112) { const lit = this.repeaterLit(x, y, z); this.repeaterEmit.set(`${x},${y},${z}`, lit); return lightEmission(b, lit); } // powered repeater: light 9
       return lightEmission(b,b===14 && this.litFurnaces.has(`${x},${y},${z}`));
-    }, { defer });
+    }, { defer, native: this.world.streaming && !this.dimension && nativeLightEnabled() });
     this.lightPending = defer ? this.light.buildSteps() : null;
   }
   // Runs the deferred light build for up to `budgetMs`; returns true while steps remain.
@@ -1043,6 +1043,11 @@ export class VoxelScene {
         if (now === 112) this.repeaterEmit.set(key, is); else this.repeaterEmit.delete(key);
         if (was === is && lightOpacity(old) === lightOpacity(now)) continue;
       } else if (lightOpacity(old) === lightOpacity(now) && lightEmission(old) === lightEmission(now)) continue;
+      if (this.light.native) { // World.setBlock's light part with the replaced block's opacity
+        const box = this.light.update(x, y, z, old);
+        if (box) mark(later, box.x0 - 1, box.x1 + 1, box.z0 - 1, box.z1 + 1);
+        continue;
+      }
       this.light.column(x, z);
       boxes.push([Math.max(this.world.minX, x - 15), Math.min(this.world.maxX - 1, x + 15), Math.max(this.world.minZ, z - 15), Math.min(this.world.maxZ - 1, z + 15)]);
     }
@@ -1061,6 +1066,14 @@ export class VoxelScene {
     }
     this.dirty = new Set([...first, ...this.dirty, ...later]);
   }
+  // Native light only: Chunk.func_150804_b for the resident chunks (pending gap rechecks); the changed box is remeshed over the next frames.
+  tickLight() {
+    const box = this.light?.native && this.light.tick();
+    if (!box) return;
+    const chunk = (v) => Math.floor(v / 16) * 16;
+    for (let a = chunk(Math.max(this.world.minX, box.x0 - 1)); a <= chunk(Math.min(this.world.maxX - 1, box.x1 + 1)); a += 16)
+      for (let b = chunk(Math.max(this.world.minZ, box.z0 - 1)); b <= chunk(Math.min(this.world.maxZ - 1, box.z1 + 1)); b += 16) this.dirty.add(`${a},${b}`);
+  }
   preview(time) {
     this.setTime(6000);
     this.camera.position.set(91 + Math.sin(time * 0.025) * 4, 48, 108 + Math.cos(time * 0.025) * 4);
@@ -1075,6 +1088,7 @@ export class VoxelScene {
     const w = this.dimension ? null : this.weather, // no weather in the Nether/End
       rain = w ? w.rainStrength(1) : 0, thunder = w ? w.weightedThunder(1) : 0;
     this.subtracted = skylightSubtracted(this.angle, rain, thunder);
+    this.tickLight();
     this.sun = sunBrightness(this.angle, rain, thunder);
     this.flash = !!w && w.lastLightning > 0;
     // Farming and mobs read the sky light that remains at this time of day.
