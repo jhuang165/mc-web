@@ -23,11 +23,11 @@ const cp=[probe,classes,...libs].join(path.delimiter);
 await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','VillagerProbe','ModelProbe','VillageLiveProbe','VillageFightProbe'].map(n=>path.join(root,`probes/${n}.java`))],{maxBuffer:1<<24});
 const {stdout}=await exec('java',['-cp',cp,'VillageFightProbe'],{maxBuffer:1<<29});
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
-assert.equal(records.length,5);
+assert.equal(records.length,7);
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const names={vz:'Village',wa:'VillageAggressor',vm:'EntityAIDefendVillage',yv:'EntityVillager',wt:'EntityIronGolem',yq:'EntityZombie',yl:'EntitySkeleton',tw:'EntityAIAvoidEntity',sv:'EntityLivingBase'};
 const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}]))),
- method:'Unchanged classes in the VillageLiveProbe double with every mob ticked by Entity.onUpdate after the VillageCollection: entities 0,1 villagers, 2,3 zombies, 4 iron golem, 5,6 skeletons (ticked, never targeting), 7 a real EntityPlayer that is moved and whose hits are scripted. A row per tick is [[x,y,z,health,attackTarget,revengeTarget,randomDraws] per mob, [x,y,z,health] for the player],[[aggressorIndex,tick]...],reputation of the player name. Hits are [tick,accepted,victimHealthAfter]. Difficulty 2, night.',
+ method:'Unchanged classes in the VillageLiveProbe double with every mob ticked by Entity.onUpdate after the VillageCollection: entities 0,1 villagers, 2,3 zombies, 4 iron golem, 5,6 skeletons (ticked, never targeting), 7 a real EntityPlayer that is moved and whose hits are scripted. A row per tick is [[x,y,z,health,attackTarget,revengeTarget,randomDraws] per mob, [x,y,z,health] for the player],[[aggressorIndex,tick]...],reputation of the player name. Hits are [tick,accepted,victimHealthAfter]. Night; difficulty 2 (record field `difficulty`; the peaceful record runs on 0). Batch 30: World.rayTraceBlocks is the real one (sight rays), and the villagers-flee-two-zombies and peaceful records were added.',
  records};
 await writeFile(path.join(root,'../public/research/village-fight-reference.json'),JSON.stringify(reference)+'\n');
 console.log('Fight records:',records.length,'bytes:',JSON.stringify(reference).length);

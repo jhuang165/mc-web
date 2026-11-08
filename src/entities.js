@@ -1835,7 +1835,7 @@ export class EntityWorld {
     if (this.naturalSpawning && gameRule("doMobSpawning")) this.naturalSpawn(player, survival);
     // A mob spawned during the loop (a baby) joins the next tick's updates, as World.spawnEntityInWorld queues it.
     releaseDead(this.entities);
-    const riders = [];
+    const riders = [], peacefulGone = [];
     let farMark = -1; // index of the first event of the unticked-window mob being updated
     for (const e of ridingOrder(this.entities.slice())) {
       if (farMark >= 0) { this.dropFarEvents(farMark); farMark = -1; }
@@ -1855,12 +1855,9 @@ export class EntityWorld {
       const base=ENTITY_TYPES[e.type],scale=mobScale(e),t={...base,width:base.width*scale,height:base.height*scale};
       if (e.type === "ender_dragon") { dragonUpdate(this, e, player, survival); continue; } // EntityDragon (dragon-mobs.js)
       if (e.type === "ender_crystal") { if (e.health > 0) crystalUpdate(this, e); continue; } // EntityEnderCrystal.onUpdate: fire in the End, nothing else
-      // EntityMob.onUpdate (yg.h): on Peaceful the mob is setDead, with no death or drops.
-      if (HOSTILE.has(e.type) && this.difficulty === PEACEFUL) {
-        e.health = 0;
-        e.death = 20;
-        continue;
-      }
+      // EntityMob.onUpdate (yg.h): super.onUpdate() runs in full (movement, AI and their draws, a corpse's death tick) and then, on Peaceful, the mob is setDead
+      // with no death or drops: removed at the end of this tick (below).
+      if (HOSTILE.has(e.type) && this.difficulty === PEACEFUL) peacefulGone.push(e);
       if (e.health <= 0) {
         // Entity.onEntityUpdate still runs the fire (attackEntityFrom refuses the hits).
         this.burn(e, t);
@@ -1965,6 +1962,7 @@ export class EntityWorld {
       const box = pushBox(p, p.width, p.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
       for (const o of this.entities) if (Math.abs(o.x - p.x) <= 12 && Math.abs(o.z - p.z) <= 12 && Math.abs(o.y - p.y) <= 12 && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) applyEntityCollision(o, p, true, false);
     }
+    for (const e of peacefulGone) { e.removedHealth = e.health; e.health = 0; e.death = 20; }
     this.entities = this.entities.filter((e) => e.health > 0 || e.death < 20);
   }
   // A dying mob: onDeathUpdate, recentlyHit running down, then onLivingUpdate with its movement

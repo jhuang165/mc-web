@@ -28,7 +28,7 @@ function firstDivergence(r, got) {
 const replay = replayFight;
 
 test("village fight: player hits, aggressor list and reputation up to the first mob-on-mob death in each native scenario", () => {
-  assert.equal(reference.records.length, 5);
+  assert.equal(reference.records.length, 7);
   const limits = {};
   for (const r of reference.records) {
     const got = replay(r);
@@ -68,4 +68,22 @@ test("village fight: every mob-on-mob revenge target in the first 200 ticks of t
     if (want >= 0 && want !== 7) { mobOnMob++; assert.equal(got.states[t][i][5], want, `tick ${t} mob ${i} revenge`); }
   }
   assert.ok(mobOnMob > 100);
+});
+
+test("village fight: villagers flee from two zombies (the golem kills one; WatchClosest still picks the corpse) and Peaceful mobs run one last tick, then go, as natively", () => {
+  const names = reference.records.map((r) => r.name);
+  assert.ok(names.includes("villagers-flee-two-zombies") && names.includes("peaceful"));
+  const peaceful = reference.records.find((r) => r.name === "peaceful");
+  assert.equal(peaceful.difficulty, 0);
+  // native tick 0: the zombies and the target-less skeletons still move/draw once (EntityMob.onUpdate runs super.onUpdate before setDead), none ticks again
+  assert.deepEqual(peaceful.rows[0][0][2][6], ["i1000", "i7"]);
+  assert.deepEqual(peaceful.rows[1][0][2][6], []);
+  const got = replayFight(peaceful);
+  assert.deepEqual(got.states[0][2][6], ["i1000", "i7"]);
+  assert.deepEqual(got.states[1][2][6], []);
+  const flee = reference.records.find((r) => r.name === "villagers-flee-two-zombies");
+  // the villagers draw their AvoidEntity flee rolls (i32 / i14) in the native rows, and the port draws the same
+  const drew = (rows) => rows.filter((row) => row[0][0][6].includes("i14") || row[0][1][6].includes("i14")).length;
+  assert.ok(drew(flee.rows) > 0);
+  assert.equal(drew(flee.rows), replayFight(flee).states.filter((s) => s[0][6].includes("i14") || s[1][6].includes("i14")).length);
 });
