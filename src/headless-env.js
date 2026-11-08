@@ -30,3 +30,9 @@ export function wrapMobHooks(mobs, ring, subtracted) {
   // Chunk.canBlockSeeTheSky: at or above the height map.
   mobs.canSeeSky = (x, y, z) => (ring.outside(x, z) ? y >= ring.light.heightAt(x, z) : sky(x, y, z));
 }
+
+// Item entities, orbs, arrows, thrown balls and falling blocks now tick in ring chunks (streaming-ticks.js ringEntityActive), where the
+// page has no meshes: like ring mobs (main.js mobRenderer), they are drawn only while their column is resident.
+export function residentOnly(world, list) {
+  return world?.ringSink && list.length ? list.filter((e) => world.isLoaded(e.x, e.z)) : list;
+}

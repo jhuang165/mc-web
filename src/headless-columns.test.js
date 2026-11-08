@@ -337,3 +337,182 @@ test("ring light and sky hooks answer for ring-only cells", () => {
   assert.equal(mobs.lightAt(x, top, z), 15);
   assert.equal(mobs.canSeeSky(10, 70, 10), "base");
 });
+
+// Ring entities (batch 24): item entities, experience orbs, arrows, thrown balls and falling blocks in ring chunks update exactly as
+// the same entities in the all-resident world do (World.updateEntities: every loaded entity through updateEntityWithOptionalForce's
+// 32-block checkChunksExist; WorldServer.tickUpdates' b0 = 0 own-chunk test for the sand's scheduled update). Ring mobs' deaths drop
+// items and orbs that tick there too.
+import { ItemEntities } from "./item-entities.js";
+import { ExperienceOrbs } from "./experience.js";
+import { Arrows, arrowTargets } from "./bow.js";
+import { Projectiles, mobTargets } from "./projectiles.js";
+import { FallingBlocks } from "./falling.js";
+import { drainMobEvents } from "./living-simulation.js";
+import { residentOnly } from "./headless-env.js";
+import { SAND, GRAVEL } from "./world.js";
+
+const ENTITY_STEPS = 320;
+const inWindow = (e) => e.x >= 0 && e.x < 128 && e.z >= 0 && e.z < 128;
+function seeded(seed) { const r = new JavaRandom(seed); return () => r.nextDouble(); }
+function entityReplay(withRing) {
+  const realRandom = Math.random;
+  Math.random = seeded(4242); // orb motion (EntityXPOrb's Math.random) and the other Math.random draws: identical in both replays
+  try {
+    const world = world12();
+    const column = (cx, cz) => { const k = `${cx},${cz}`; return cache.get(k) ?? (cache.set(k, world.chunkAt(cx, cz) ? { blocks: world.chunkAt(cx, cz).blocks, metadata: world.chunkAt(cx, cz).meta } : world.generateTerrainChunk(cx, cz)), cache.get(k)); };
+    const ring = new HeadlessColumns(world, { generate: column, perTick: 1000, every: 1 });
+    let probe;
+    if (withRing) { ring.update(4, 4); attachRing(world, ring); probe = ring; } else {
+      for (let cx = -6; cx <= 14; cx++) for (let cz = -6; cz <= 14; cz++) {
+        if (world.chunkAt(cx, cz)) continue;
+        const c = column(cx, cz), chunk = new WorldChunk(cx, cz, 256);
+        chunk.blocks.set(c.blocks); chunk.meta.set(c.metadata);
+        world.chunks.set(`${cx},${cz}`, chunk);
+      }
+      world.minX = -96; world.maxX = 240; world.minZ = -96; world.maxZ = 240;
+      world.isTicking = (x, z) => { const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4; for (let a = cx - 2; a <= cx + 2; a++) for (let b = cz - 2; b <= cz + 2; b++) if (!world.chunkAt(a, b)) return false; return true; };
+      probe = new HeadlessColumns(world);
+    }
+    const read = withRing ? (x, y, z) => ring.get(x, y, z) : (x, y, z) => world.get(x, y, z);
+    const surface = (x, z) => { let y = 200; while (y > 0 && !read(x, y, z)) y--; return y + 1; };
+    const rand = new JavaRandom(77);
+    const mobs = new EntityWorld(world, [], () => rand.nextDouble());
+    mobs.worldRandom = new JavaRandom(1234);
+    mobs.entitySeed = (r) => r.seed;
+    mobs.difficulty = 2;
+    mobs.localDifficulty = () => localDifficulty(2, 18000, 0, true);
+    mobs.currentDate = () => new Date(2014, 9, 31);
+    mobs.lightAt = (x, y, z) => probe.light.level(x, y, z, 11);
+    mobs.thunderLightAt = (x, y, z) => probe.light.level(x, y, z, 10);
+    mobs.fullLightAt = (x, y, z) => probe.light.level(x, y, z, 0);
+    mobs.skyLightAt = (x, y, z) => probe.light.skyAt(x, y, z);
+    mobs.lightSubtracted = () => 11;
+    mobs.isThundering = () => false;
+    mobs.isDaytime = () => false;
+    mobs.naturalSpawning = true;
+    if (withRing) mobs.ring = ring;
+    const items = new ItemEntities(seeded(11)), xpOrbs = new ExperienceOrbs([], seeded(12)), arrows = new Arrows(seeded(13)), balls = new Projectiles(seeded(14));
+    let fallSeed = 900n;
+    const falling = new FallingBlocks(world, { drop: (stack, x, posY, z) => items.spawn(stack, x, posY, z), entityRandom: () => new JavaRandom(fallSeed++) }).watch();
+    mobs.shoot = (e, target, scale) => arrows.skeletonShoot(e, target, scale, 2);
+    mobs.lootItems = items;
+    const player = { x: 72.5, y: 80, z: 72.5, alive: true, width: 0.6, height: 1.8 }, survival = new Survival(), log = [];
+    // Ring places: chunks 8 to 12 (outside the 8 x 8 window, inside the ring's 5 x 5 test) and chunk 7 (resident, outside the ticking window).
+    const spots = [[150, 40], [170, 90], [190, 60], [120, 120], [40, 170], [180, 180], [-40, 60], [200, 20], [125, 30]];
+    const sand = [];
+    if (withRing) world.ringReads = true;
+    for (const [i, [x, z]] of spots.entries()) {
+      const y = surface(x, z);
+      for (let k = 0; k < 3; k++) { world.set(x, y + 4 + k, z, k === 1 ? GRAVEL : SAND, true, 0); sand.push([x, z]); }
+      items.spawn({ id: 264, count: 1 + i }, x + 0.5, y + 6, z + 0.5);
+      items.spawn({ id: 264, count: 1 }, x + 0.6, y + 6, z + 0.4); // merges with the one above when they meet
+      xpOrbs.spawn(7 + i, { x: x + 0.5, y: y + 3, z: z + 0.5 });
+      arrows.list.push(arrows.make({ x: x + 0.5, y: y + 8, z: z + 0.5, mx: 0.4, my: 0.3, mz: -0.2, yaw: 0, pitch: 0 }, arrows.rng(), { pickup: 0 }));
+      balls.spawnThrowable({ x: x + 0.5, y: y + 1, z: z + 0.5 }, i, -0.6, "snowball");
+    }
+    world.ringReads = false;
+    let ringItems = 0, ringOrbs = 0, ringArrows = 0, ringFalling = 0, ringBalls = 0, deathDrops = 0, deathXp = 0, killed = 0;
+    for (let tick = 0; tick < ENTITY_STEPS; tick++) {
+      if (withRing) world.ringReads = true; // main.js: simulation reads see the ring columns
+      try {
+        falling.tick();
+        items.tick(world);
+        balls.tick(world, mobTargets(mobs.entities, null));
+        balls.drain();
+        mobs.tick(player, survival);
+        xpOrbs.tick(world, player);
+        const before = items.items.length;
+        for (const ev of drainMobEvents({ mobs, xpOrbs, items })) if (ev.xp && !inWindow(ev.position)) deathXp++;
+        for (const it of items.items.slice(before)) if (!inWindow(it)) deathDrops++;
+        arrows.tick(world, { targets: arrowTargets(mobTargets(mobs.entities, null), false), mobs, survival, player });
+        arrows.drain();
+        if (tick % 25 === 5) { // a ring mob dies (the player's kill: drops now, experience at deathTime 20)
+          const e = mobs.entities.find((m) => m.health > 0 && !inWindow(m) && mobs.isActive(m));
+          if (e) { mobs.kill(e); killed++; }
+        }
+      } finally { world.ringReads = false; }
+      ringItems += items.items.filter((e) => !inWindow(e)).length;
+      ringOrbs += xpOrbs.orbs.filter((e) => !inWindow(e)).length;
+      ringArrows += arrows.list.filter((e) => !inWindow(e)).length;
+      ringFalling += falling.entities.filter((e) => !inWindow(e)).length;
+      ringBalls += balls.balls.filter((e) => !inWindow(e)).length;
+      log.push({
+        tick, seed: String(mobs.worldRandom.seed),
+        mobs: mobs.entities.map((e) => [e.id, e.type, e.x, e.y, e.z, e.health]),
+        items: items.items.map((e) => [e.stack.id, e.stack.count, e.x, e.y, e.z, e.age, e.onGround]),
+        orbs: xpOrbs.orbs.map((o) => [o.value, o.x, o.posY, o.z, o.age]),
+        arrows: arrows.list.map((a) => [a.x, a.y, a.z, a.inGround, a.ticksInGround]),
+        balls: balls.balls.map((b) => [b.x, b.y, b.z]),
+        falling: falling.entities.map((e) => [e.block, e.x, e.y, e.z, e.ticks]),
+      });
+    }
+    const columns = sand.map(([x, z]) => { const out = []; for (let y = 40; y < 140; y++) out.push(read(x, y, z)); return out; });
+    return { log, columns, counts: { ringItems, ringOrbs, ringArrows, ringFalling, ringBalls, deathDrops, deathXp, killed }, items, world, ring, falling };
+  } finally { Math.random = realRandom; }
+}
+
+test("item entities, orbs, arrows, thrown balls and falling sand in ring chunks tick like the all-resident world over 320 ticks", () => {
+  const a = entityReplay(true), b = entityReplay(false);
+  for (let i = 0; i < a.log.length; i++) assert.deepEqual(a.log[i], b.log[i], `tick ${i}`);
+  assert.deepEqual(a.columns, b.columns, "the sand and gravel landed in the same ring cells");
+  const c = a.counts;
+  assert.ok(c.ringItems > 1000 && c.ringOrbs > 1000 && c.ringArrows > 1000 && c.ringBalls > 0 && c.ringFalling > 20, JSON.stringify(c));
+  assert.ok(c.killed > 3 && c.deathDrops > 0 && c.deathXp > 0, `ring deaths dropped items and experience (${JSON.stringify(c)})`);
+  // The entities moved: arrows stuck in ring ground, sand fell onto ring terrain, an item pair merged, orbs from ring deaths exist.
+  const last = a.log.at(-1);
+  assert.ok(last.arrows.some((r) => r[3] && !inWindow({ x: r[0], z: r[2] })), "an arrow stuck in a ring column");
+  assert.ok(last.falling.length === 0 && a.columns.some((col) => col.includes(SAND)), "falling blocks landed");
+  assert.ok(last.items.some(([, n]) => n > 1), "items merged");
+  assert.ok(last.orbs.length > 9, "death orbs joined the seeded ones");
+});
+
+test("sand whose own chunk is held but whose 32-block surroundings are not falls instantly, as BlockFalling does (metadata 0)", () => {
+  const world = world12(), ring = new HeadlessColumns(world, { generate: (cx, cz) => world.generateTerrainChunk(cx, cz), perTick: 1000, every: 1 });
+  ring.update(4, 4);
+  attachRing(world, ring);
+  const falling = new FallingBlocks(world).watch();
+  const x = 13 * 16 + 5, z = 4 * 16 + 7; // chunk 13: held, but chunk 15 (two further) is not
+  assert.equal(ring.holds(x, z), true);
+  assert.equal(ring.active(x, z), false);
+  world.ringReads = true;
+  let ground = 200; while (ground > 0 && !world.get(x, ground, z)) ground--;
+  const y = ground + 10;
+  world.set(x, y, z, SAND, true, 1); // red sand
+  for (let i = 0; i < 4; i++) falling.tick();
+  assert.equal(falling.entities.length, 0, "no EntityFallingBlock");
+  assert.equal(world.get(x, y, z), 0);
+  assert.equal(world.get(x, ground + 1, z), SAND, "landed on the first cell it cannot fall through");
+  assert.equal(world.getMeta(x, ground + 1, z), 0, "setBlock(x, y, z, this) drops the metadata");
+  // Inside the ring's 5 x 5 test the same block spawns the falling entity.
+  const x2 = 10 * 16 + 5;
+  let g2 = 200; while (g2 > 0 && !world.get(x2, g2, z)) g2--;
+  world.set(x2, g2 + 10, z, SAND, true, 1);
+  for (let i = 0; i < 4; i++) falling.tick();
+  world.ringReads = false;
+  assert.equal(falling.entities.length, 1);
+  assert.equal(falling.entities[0].meta, 1);
+});
+
+test("ring entities are drawn only while their column is resident", () => {
+  const world = world12(), list = [{ x: 10, z: 10 }, { x: 150, z: 70 }];
+  assert.equal(residentOnly(world, list), list, "no ring: unchanged");
+  attachRing(world, new HeadlessColumns(world));
+  assert.deepEqual(residentOnly(world, list), [list[0]]);
+});
+
+test("the ring's entity and scheduled-tick tests are the bytecode-read ranges (ring-entities-reference.json)", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { ringEntityActive, ringTickActive } = await import("./streaming-ticks.js");
+  const ref = JSON.parse(await readFile(new URL("../public/research/ring-entities-reference.json", import.meta.url), "utf8")).facts;
+  assert.deepEqual([ref.entityCheckRange, ref.tickUpdatesRange, ref.fallingCheckRange, ref.updateEntitiesTypeTests], [32, 0, 32, 0]);
+  const world = world12(), ring = new HeadlessColumns(world, { generate: (cx, cz) => world.generateTerrainChunk(cx, cz), perTick: 1000, every: 1 });
+  ring.update(4, 4); // chunks -6..14 held
+  attachRing(world, ring);
+  // 32 blocks are two whole chunks: an entity anywhere in chunk 12 updates (12 + 2 = 14 held), in chunk 13 it does not.
+  assert.equal(ringEntityActive(world, { x: 12 * 16, z: 70 }), true);
+  assert.equal(ringEntityActive(world, { x: 12 * 16 + 15.9, z: 70 }), true);
+  assert.equal(ringEntityActive(world, { x: 13 * 16, z: 70 }), false);
+  // b0 = 0: a scheduled update runs wherever its own chunk is held.
+  assert.equal(ringTickActive(world, 14 * 16 + 15, 70), true);
+  assert.equal(ringTickActive(world, 15 * 16, 70), false);
+});

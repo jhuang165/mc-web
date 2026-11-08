@@ -50,6 +50,7 @@ import { TICKS_PER_SECOND, stripOffset, resolveAnimation, fetchMcmeta } from './
 import { LAVA_FOG_DENSITY, waterFogDensity } from "./fire-fx.js";
 import { mediaGeneration, versioned } from './media-version.js';
 import { isDoor, isPane, doorFlags, doorBoundsFor, doorFaceFlip, paneMask, paneArms, paneSideRendered } from './doors-panes.js';
+import { residentOnly } from './headless-env.js';
 export { blockTile } from "./block-textures.js";
 
 // Face order +x, -x, +y, -y, +z, -z with RenderBlocks' AO-path shades:
@@ -871,7 +872,7 @@ export class VoxelScene {
     this.scene.add(this.fallingMesh);
   }
   setFalling(list) {
-    this.fallingList = list;
+    this.fallingList = residentOnly(this.world, list);
   }
   // TileEntityRendererPiston (piston-live.js): moving blocks as [{ x, y, z, parts: [{ block, meta, quads|null, offset }] }].
   // Parts with quads (piston bases and heads) draw those; any other stored block draws as a cube/box with every face
@@ -1194,12 +1195,12 @@ export class VoxelScene {
   }
   // `partial` is how far the frame is into the next physics tick.
   setDrops(drops, partial = this.dropPartial) {
-    this.dropList = drops;
+    this.dropList = residentOnly(this.world, drops);
     this.dropPartial = partial;
   }
   // Thrown snowballs and their particles (see projectiles.js).
   setProjectiles(balls, particles) {
-    this.projectileList = { balls, particles };
+    this.projectileList = { balls: residentOnly(this.world, balls), particles };
   }
   // The fishing bobber and line (fishing-renderer.js): { hook, first, sneaking } or null.
   setFishing(state) {
@@ -1207,7 +1208,7 @@ export class VoxelScene {
   }
   // Flying and stuck arrows (see bow.js).
   setArrows(list) {
-    this.arrowList = list;
+    this.arrowList = residentOnly(this.world, list);
   }
   setDistance(distance) {
     this.distance = distance;

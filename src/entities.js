@@ -1738,11 +1738,13 @@ export class EntityWorld {
   // EntityLiving updates when its surroundings are loaded (World.updateEntityWithOptionalForce, ahb.a(sa, boolean)): the resident ticking
   // window, or any entity whose chunk and the two chunks around it are resident or held by the ring.
   isActive(e) { return entityActive(this.world, e) || !!this.ring?.active(e.x, e.z); }
-  // Entities that ticked outside the resident ticking window stand where no client is: only their explosions are kept. Sounds,
-  // drops, experience and particles from there are dropped (item entities and experience orbs do not tick outside the window).
+  // Events of a mob that ticked outside the resident ticking window are kept (natural-spawning.md "Round 6"): its drops and
+  // experience become item entities and orbs that tick in the ring (streaming-ticks.js ringEntityActive), its explosions and block
+  // edits apply there, and its positioned sounds go through the S29 range filter (sound-origin.js) like any other. A sound without a
+  // position would play at the listener, so one of those is dropped.
   dropFarEvents(from) {
     let n = from;
-    for (let i = from; i < this.events.length; i++) if (this.events[i].explode) this.events[n++] = this.events[i];
+    for (let i = from; i < this.events.length; i++) { const ev = this.events[i]; if (!ev.sound || ev.position) this.events[n++] = ev; }
     this.events.length = n;
   }
   tickMobs(player, survival, heldItem=0) {

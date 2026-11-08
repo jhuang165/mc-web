@@ -1,4 +1,4 @@
-import { entityActive } from './streaming-ticks.js';
+import { ringEntityActive } from './streaming-ticks.js';
 // EntityItem (xk) from the 1.7.10 JAR: 0.25 x 0.25 boxes with gravity 0.04,
 // 0.98 drag (block slipperiness x 0.98 on the ground), Entity.moveEntity
 // collision, func_145771_j push-out, merging with neighbours within 0.5
@@ -216,7 +216,7 @@ export class ItemEntities {
   // EntityItem.onUpdate for every item.
   tick(world, maxStack = () => 64) {
     for (const e of this.items) {
-      if (e.dead || !entityActive(world,e)) continue;
+      if (e.dead || !ringEntityActive(world,e)) continue;
       let wasWet = false;
       // Entity.onUpdate runs handleWaterMovement first; EntityItem (xk.N) passes
       // its own box to World.handleMaterialAcceleration, unshrunk.
@@ -251,6 +251,8 @@ export class ItemEntities {
         const [a, b, c, d, g, h] = this.box(e);
         for (const o of this.items) {
           if (o === e || o.dead) continue;
+          // Cheap reject, result-neutral: the grown boxes meet only within 0.75 sideways and 0.25 up (ring items made the scan longer).
+          if (Math.abs(o.x - e.x) >= 1 || Math.abs(o.z - e.z) >= 1 || Math.abs(o.y - e.y) >= 1) continue;
           const [oa, ob, oc, od, og, oh] = this.box(o);
           if (od > a - 0.5 && oa < d + 0.5 && og > b && ob < g && oh > c - 0.5 && oc < h + 0.5) this.combine(e, o, maxStack);
           if (e.dead) break;
