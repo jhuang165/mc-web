@@ -143,5 +143,19 @@ Never claim full parity. Labels: probed / bytecode-read / assumed.
 - **Zero-size use** (`tryPlaceItemIntoWorld` / `useItemRightClick` at stackSize 0):
   - `ItemBlock`, `ItemReed`, `ItemSlab` and `ItemSnow` refuse in either mode. The port's `placeHeldBlock` and cake placement now refuse a held size-0 stack too.
   - Redstone, doors, signs, skulls, seeds, nether wart, spawn eggs, bone meal and minecarts act at 0 and leave a -1 stack. So do throwables, food, stew, milk, potions, buckets and bottles. The hoe and flint and steel take damage without a stack check.
-  - Gap: the port has no negative stacks, so in Survival these items still need a real item.
+  - Batch 26 closed this gap (below): the port now keeps negative stacks.
   - Bed placement was not probed (the probe's world double refused it at count 1).
+
+### Negative stacks (negstacks, batch 26)
+
+- **Probed** (`neg-stacks-reference.json`, `tools/probes/NegStacksProbe.java`, `tools/verify-neg-stacks.mjs`; 88 records: tileRead 16, playerRead 6, use 52, rightClick 14; replayed by `src/neg-stacks.test.js`):
+  - `TileEntityChest`, `Dispenser`, `Furnace` and `BrewingStand` `readFromNBT` keep a slot of Count -1, 0 or 127 and write the same Count byte back. So does `InventoryPlayer.readFromNBT` (main and armour). `ItemStack.loadItemStackFromNBT` and `TileEntityHopper` already kept them (attributes2).
+  - At stackSize -1 and -2, `ItemBlock`, `ItemSlab` and `ItemReed` place and leave count - 1 (their refusal is `stackSize == 0` only). Redstone, doors, seeds, nether wart, spawn eggs (Survival only), bone meal and minecarts do the same. The ItemStack-level probe also shows -1 in Creative, because Creative restores the stack in `ItemInWorldManager`, not `ItemStack`.
+  - Bytecode-read: `ItemSign.onItemUse` and `ItemSkull.onItemUse` end with an unchecked `--stackSize` (the probe's world double throws before it). Torches are ItemBlock.
+  - Throwables, apple, bread and milk go to count - 1 at -1. Buckets and bottles replace the stack when `--stackSize <= 0`.
+- **Ported:**
+  - Every container tile read keeps Count 0 and negative bytes. `PlayerInventory.read` keeps any count when empty stacks are allowed.
+  - `Survival.take` shrinks a held stack at size 0 or below itself (0 -> -1; only an exact 0 clears the slot), and `Survival.usable` replaces the `count(id)` gate at the held-item use sites (placement, doors, redstone, signs, skulls, seeds, wart, bone meal, cake, throwables, eating, spawn eggs). `PlayerInventory.count` ignores stacks of size 0 or below.
+  - `placeHeldBlock` and cake placement refuse only an exact 0.
+  - The player's tool-break pitch (`main.js reportBrokenTool`) uses the world Random (`weather.random`).
+- **Gaps:** an armour slot read at Count -1 for a non-armour item is still dropped (the port filters armour by slot type, native does not). Furnace, dispenser and brewing ticks on size-0 or negative stacks were not probed. A negative stack in a container GUI or the creative drag path was not checked. `FireworksItem` and plain `/give` still refuse Count 0.

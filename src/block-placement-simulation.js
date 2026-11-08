@@ -65,7 +65,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
   // ItemBlock, ItemReed, ItemSlab and ItemSnow.onItemUse open with `if (stack.stackSize == 0) return false` in either game mode; ItemRedstone,
   // ItemDoor and ItemDye (cocoa) have no such check (probed: attributes2-reference.json use, stone/torch/slab/cake/reed/string/repeater/flower pot).
   const held = survival.held;
-  if (held?.id === itemId && !(held.count > 0) && itemId !== ITEM_REDSTONE && !doorItemBlock(itemId) && !(itemId === 351 && held.damage === 3)) return result(false, "empty-stack", itemId, target.adjacent ?? target.block);
+  if (held?.id === itemId && held.count === 0 && itemId !== ITEM_REDSTONE && !doorItemBlock(itemId) && !(itemId === 351 && held.damage === 3)) return result(false, "empty-stack", itemId, target.adjacent ?? target.block);
   const here = [...target.block], adjacent = target.adjacent ? [...target.adjacent] : null,
     block = world.get(...here), hereMeta = block === SNOW_LAYER ? world.getMeta(...here) : 0,
     stacked = stackedSnowMeta(hereMeta);

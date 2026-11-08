@@ -82,7 +82,7 @@ export function placeSign(state, { id, target }, hooks = {}) {
   const side = clickedFace(here, adjacent);
   if (side === 0) return result(false, 'sign-bottom', null, adjacent);
   if (!signSolid(world.get(...here))) return result(false, 'sign-support', null, adjacent);
-  if (!survival.creative && !survival.count(id)) return result(false, 'empty-stack', null, adjacent);
+  if (!survival.creative && !survival.usable(id)) return result(false, 'empty-stack', null, adjacent);
   const [x, y, z] = [here[0] + FACE_OFFSET[side][0], here[1] + FACE_OFFSET[side][1], here[2] + FACE_OFFSET[side][2]];
   if (y < 0 || y >= (world.height ?? 256) || (world.inside && !world.inside(x, y, z))) return result(false, 'sign-range', null, [x, y, z]);
   if (!doorReplaceable(world.get(x, y, z))) return result(false, 'sign-occupied', null, [x, y, z]);

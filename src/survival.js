@@ -746,7 +746,16 @@ export class Survival {
     return n - s.count;
   }
   // Placing, eating and feeding shrink the held stack in 1.7.10.
+  // A held stack that is already at size 0 or below still acts and keeps shrinking (`--stackSize` without a check): 0 becomes -1 and stays,
+  // only an exact 0 after the decrement clears the slot (neg-stacks-reference.json use / rightClick).
+  usable(id) { return this.inventory.held?.id === id || this.count(id) > 0; }
   take(id, n = 1) {
+    const held = this.inventory.held;
+    if (held?.id === id && held.count <= 0) {
+      held.count -= n;
+      if (held.count === 0) this.inventory.main[this.inventory.current] = null;
+      return true;
+    }
     if (this.count(id) < n) return false;
     const inv = this.inventory;
     for (let k = 0; k < n; k++)
@@ -884,7 +893,7 @@ export class Survival {
   }
   eat(id, random = Math.random) {
     const item = ITEMS[id];
-    if (!item?.food || (this.food >= 20 && !item.alwaysEdible) || !this.count(id)) return false;
+    if (!item?.food || (this.food >= 20 && !item.alwaysEdible) || !this.usable(id)) return false;
     const inv = this.inventory, eaten = inv.held?.id === id ? inv.held : inv.main[inv.find(id)], damage = eaten?.damage | 0; // ItemAppleGold.onFoodEaten reads the stack's damage
     if (!this.take(id)) return false;
     this.food = Math.min(20, this.food + item.food);

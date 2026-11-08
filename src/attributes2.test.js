@@ -140,8 +140,7 @@ test("native loadItemStackFromNBT keeps any Count; the port keeps 0 and above wh
   for (const r of by("itemRead").filter((r) => r.what === "loadItemStackFromNBT")) {
     assert.equal(r.stack[1], r.count);
     const port = itemStackFromNbt(itemTag(1, r.count), { allowEmpty: true });
-    if (r.count < 0) assert.equal(port, null); // gap: a negative stack is dropped
-    else assert.equal(port.count, r.count);
+    assert.equal(port.count, r.count); // -1 is kept too since batch 26
   }
 });
 
@@ -184,7 +183,7 @@ test("native ItemBlock / ItemReed refuse stackSize 0; redstone, doors, signs, se
   const act = ["redstone", "door", "seeds", "spawnEgg", "boneMealSapling", "netherWart", "minecartOnRail"];
   for (const name of refuse) for (const r of use.filter((r) => r.name === name && r.count === 0)) assert.deepEqual([r.used, r.events.length], [false, 0], name);
   for (const name of act) assert.equal(use.find((r) => r.name === name && r.count === 0 && !r.creative).after, -1, name);
-  // Throwables and food also act at size 0 (gap in the port: no negative stacks).
+  // Throwables and food also act at size 0 (the port leaves -1 now, neg-stacks.test.js).
   for (const name of ["snowball", "egg", "enderPearl", "apple", "bread"]) assert.equal(by("rightClick").find((r) => r.name === name && r.count === 0 && !r.creative).after, -1, name);
 });
 
@@ -194,7 +193,7 @@ test("port placeHeldBlock refuses a held size-0 ItemBlock or ItemReed stack in b
   const target = { block: [0, 63, 0], adjacent: [0, 64, 0], hit: [0.5, 64, 0.5] };
   const place = (native, creative, count) => {
     const mapped = itemFromOriginal(native, 0), held = { id: mapped.id, count, damage: mapped.damage };
-    const survival = { creative, held, count: () => Math.max(0, count), take: () => true };
+    const survival = { creative, held, count: () => Math.max(0, count), usable: () => true, take: () => true };
     try { return placeHeldBlock({ world: worldStub, survival, position: { x: 5, y: 64, z: 5 }, flowers: [], yaw: 0, farming: { observe() {} } }, { id: mapped.id, item: null, target }); }
     catch (err) { if (err === stop) return { reason: "world" }; throw err; }
   };
@@ -202,7 +201,7 @@ test("port placeHeldBlock refuses a held size-0 ItemBlock or ItemReed stack in b
     assert.equal(place(native, creative, 0).reason, "empty-stack", `${native} ${creative}`);
     assert.equal(place(native, creative, 1).reason, "world", `${native} ${creative} count 1`);
   }
-  // No stackSize check natively: redstone dust and doors go on (Creative acts as native; Survival still needs an item, a gap).
+  // No stackSize check natively: redstone dust and doors go on (Creative acts as native; Survival now acts on the held stack too, neg-stacks.test.js).
   for (const native of [331, 324]) assert.equal(place(native, true, 0).reason, "world", `${native}`);
 });
 

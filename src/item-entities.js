@@ -29,7 +29,7 @@ export class ItemEntities {
   // (rand * 0.2 - 0.1, 0.2, rand * 0.2 - 0.1); the pickup delay field starts at 0.
   // `empty` keeps a Count 0 stack, as EntityItem.readEntityFromNBT does (a read one lives and ticks; attributes2-reference.json itemRead).
   spawn(stack, x, posY, z, { delay = 0, motion = null, death = false, empty = false } = {}) {
-    if (!(stack?.count > 0 || (empty && stack?.count === 0))) return null;
+    if (!(stack?.count > 0 || (empty && stack?.count <= 0))) return null; // Count -1 is kept too (neg-stacks: its pickup would put a -1 stack in the inventory natively, not modelled)
     const r = this.random,
       item = {
         stack: copyStack(stack),

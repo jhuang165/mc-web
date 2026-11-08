@@ -27,7 +27,7 @@ const clear = () => { for (let x = 4; x <= 12; x++) for (let y = Y - 3; y <= Y +
 const count = { tested: 0, skipped: 0 };
 const must = (ok) => { if (ok) count.tested++; else count.skipped++; return ok; };
 const near = (a, b, m) => { assert.equal(a.length, b.length, m); a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1e-6, `${m}: ${a} vs ${b}`)); };
-const player = (n = 16, creative = false) => ({ creative, n, count() { return this.n; }, take() { this.n--; return true; } });
+const player = (n = 16, creative = false) => ({ creative, n, count() { return this.n; }, usable() { return this.n > 0; }, take() { this.n--; return true; } });
 
 test("registry, item, names, drops and recipe match the native classes", () => {
   assert.deepEqual([SIGN_POST, WALL_SIGN, ITEM_SIGN], [175, 176, 480]);
