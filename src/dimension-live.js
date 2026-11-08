@@ -16,13 +16,13 @@ import { readChunkEdits, listBaseColumns, readBaseColumns } from "./world-storag
 import { buildStoredIndex } from "./stored-peek.js";
 import { restoreImportedFortress } from "./fortress-restore.js";
 import { drain, runSteps } from "./steps.js";
-import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf, portalCooldown, readPlayerPortalState } from "./dimensions.js";
+import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf, actualHeight, portalCooldown, readPlayerPortalState } from "./dimensions.js";
 import { EntityPortals, placeAfterTravel, POS_Y, mobYawToMc, mcToMobYaw } from "./entity-portal.js";
 import { ringEntityActive } from "./streaming-ticks.js";
 import { LEAD_ITEM } from "./horse-gear.js";
 
 // Per-dimension runtime state: everything main.js's save() writes that is keyed by block coordinates or holds entities.
-export const DIM_KEYS = ["drops", "projectiles", "eyes", "rockets", "fishing", "thrownPotions", "fireballs", "arrows", "tnt", "fluidTicks", "fireTicks", "redstone", "pistons", "commandBlocks", "musicTiles", "entities", "villages", "farms", "pots", "xpOrbs", "falling", "fallingTicks", "spawners", "minecarts", "boats", "hanging", "signs", "skulls", "beacons", "populatedColumns", "containerScope", "editSequence", "dragonSpawned"];
+export const DIM_KEYS = ["drops", "projectiles", "eyes", "rockets", "fishing", "thrownPotions", "fireballs", "arrows", "tnt", "fluidTicks", "fireTicks", "redstone", "pistons", "commandBlocks", "musicTiles", "entities", "villages", "farms", "pots", "xpOrbs", "falling", "fallingTicks", "spawners", "minecarts", "boats", "hanging", "signs", "skulls", "beacons", "populatedColumns", "containerScope", "editSequence", "dragonSpawned", "simulation"];
 // Tile entities that survival.serialize() keeps in the player record, by block coordinate.
 export const TILE_KEYS = ["furnaces", "chests", "dispensers", "brewing", "hoppers"];
 const VIEW_ONLY = new Set(["id", "rootId", "chunked", "biome", "edits", "runtimeChunked", "dimensions", "dimension", "transit", "portalArrivals", "pendingArrivals"]);
@@ -61,7 +61,7 @@ export function rulesOf(world) {
   const d = world?.dimension ?? OVERWORLD, p = providerOf(d);
   return {
     dimension: d,
-    waterEvaporates: p.hasNoSky, // ItemBucket.a(ahb,III)Z bytecode: ahb.t.f (hasNoSky, Nether only) with water -> random.fizz + smoke, no block
+    waterEvaporates: p.isHellWorld, // ItemBucket.a(ahb,III)Z bytecode: ahb.t.f (isHellWorld, Nether only) with water -> random.fizz + smoke, no block
     bedExplodes: !p.canRespawnHere, // BlockBed.onBlockActivated: !provider.canRespawnHere() || biome == hell
     compassSpins: d !== OVERWORLD, // ItemCompass/TextureCompass: !worldProvider.isSurfaceWorld
     clockSpins: d !== OVERWORLD, // ItemClock/TextureClock: !worldProvider.isSurfaceWorld
@@ -123,7 +123,7 @@ export class DimensionLive {
     const inbox = record.rootId ? record.pendingArrivals : record.portalArrivals?.[0];
     if (edits) for (const [x, y, z, id, meta] of inbox?.writes ?? []) edits.set(`${x},${y},${z}`, id | (meta << 8)); // portals built for travelling mobs
     const world = prepared.streaming ? new TerrainPeek(prepared, edits ?? new Map()) : new LivePeek(prepared);
-    world.dimension = to; world.actualHeight = providerOf(to).hasNoSky ? 128 : 256;
+    world.dimension = to; world.actualHeight = actualHeight(to);
     world.seed = javaSeed(record.seed);
     if (prepared.streaming && (record.wholeSave || record.rootId)) world.stored = await this.warmStored(record.rootId ? this.host.worlds?.().find((w) => w.id === record.rootId) ?? record : record, to);
     const e = { x: tt.x, y: tt.y, z: tt.z, vx: 0, vy: 0, vz: 0, yaw: tt.yaw, pitch: 0, teleportDirection: t.dir ?? 0 };
@@ -247,7 +247,7 @@ export class DimensionLive {
         for (const [x, y, z, id, meta] of writes) peek.preset(x, y, z, id, meta);
       }
     }
-    peek.dimension = to; peek.actualHeight = providerOf(to).hasNoSky ? 128 : 256; peek.seed = javaSeed(root.seed);
+    peek.dimension = to; peek.actualHeight = actualHeight(to); peek.seed = javaSeed(root.seed);
     if (peek.portalColumns) peek.stored = await this.warmStored(root, to);
     peek.teleporter = new Teleporter(peek, { isSolid: solidId, random: new JavaRandom(peek.seed) });
     this.peeks.set(key, peek);

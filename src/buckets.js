@@ -130,14 +130,14 @@ const SIDE = [[0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0
 // ItemBucket.tryPlaceContainedLiquid (abo.a(ahb, III)Z): the cell must be air or not
 // solid (liquids, torches, plants, ladders); a non-liquid block there is broken with its drops
 // first (ahb.a(IIIZ), `destroy`); then setBlock(liquid, 0, 3). Nothing is played in the
-// Overworld (the fizz and smoke are only for water where WorldProvider.hasNoSky).
+// Overworld (the fizz and smoke are only for water where WorldProvider.isHellWorld, aqo.f).
 // Returns whether the bucket counts as used.
 export function placeContainedLiquid(world, x, y, z, liquid, destroy) {
   if (!liquid || !world.inside(x, y, z)) return false;
   const old = world.get(x, y, z);
   // A ladder has a collision box but Material.circuits is not solid, so the liquid replaces it.
   if (old !== 0 && old !== LADDER && world.solid(x, y, z)) return false;
-  if (world.hasNoSky && liquid === WATER) { world.evaporated?.(x, y, z); return true; } // the Nether: fizz and smoke, the water is not placed (dimension-live.js)
+  if (world.isHell && liquid === WATER) { world.evaporated?.(x, y, z); return true; } // the Nether: fizz and smoke, the water is not placed (dimension-live.js)
   if (old !== 0 && !isLiquid(old)) destroy?.(x, y, z, old);
   world.set(x, y, z, liquid, true, 0);
   return true;

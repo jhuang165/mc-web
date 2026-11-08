@@ -137,6 +137,11 @@ export class LightningBolt {
   }
 }
 
+// Where a record keeps the saved World.rand / updateLCG of a dimension. Natively every WorldServer constructs its own unseeded `rand` and
+// `updateLCG` (ahb constructors, dimension-rules-reference.json), so the Nether and the End draw from streams of their own and never advance
+// the Overworld's. `worldRandom` is the Overworld's (unchanged); the others live in the per-dimension state key `simulation` (DIM_KEYS).
+export const simulationKey = (dimension = 0) => (dimension ? "simulation" : "worldRandom");
+
 export class Weather {
   // `random` is World.rand (timers and the lightning roll); `lcg` is World.updateLCG.
   constructor({ random = new JavaRandom(Math.floor(Math.random() * 2 ** 48)), lcg = new JavaRandom(Math.floor(Math.random() * 2 ** 48)).nextInt() } = {}) {
