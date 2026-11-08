@@ -17,6 +17,7 @@ for (let b = 0; b < 256; b++) {
 }
 export { OPACITY, EMISSION, COST };
 
+const BARRIER = 1; // stone: opacity 15, no emission
 const N = 48; // work volume: 3 x 3 chunks
 let work = new Uint8Array(0), skyArr = new Uint8Array(0), blockArr = new Uint8Array(0);
 const heights = new Uint16Array(N * N);
@@ -72,6 +73,9 @@ export function computeColumnLight(ring, cx, cz, noSky) {
   Hh = Math.min(H, Hh + 16);
   const centre = src[4];
   if (!centre) return null;
+  // A neighbouring chunk that is neither resident nor held is unloaded: natively no light update runs within 17 blocks of an unloaded
+  // chunk and generation leaves lateral light lazy, so nothing is lit from or across it. It is a barrier here (no seeds, no emitters,
+  // receives and carries nothing) instead of open air with sky 15, which lit rim columns brighter than native.
   const total = N * N * Hh;
   if (work.length < total) { work = new Uint8Array(total); skyArr = new Uint8Array(total); blockArr = new Uint8Array(total); }
   const ids = work.subarray(0, total), sky = skyArr.subarray(0, total), block = blockArr.subarray(0, total);
@@ -94,6 +98,7 @@ export function computeColumnLight(ring, cx, cz, noSky) {
       heights[c] = y + 1;
     }
     for (let lx = 0; lx < N; lx++) for (let lz = 0; lz < N; lz++) {
+      if (!src[(lx >> 4) * 3 + (lz >> 4)]) continue;
       const c = lx * N + lz, h = heights[c], base = c * Hh;
       let m = h;
       if (lx > 0 && heights[c - N] > m) m = heights[c - N];
@@ -106,8 +111,13 @@ export function computeColumnLight(ring, cx, cz, noSky) {
       if (m > Hh) m = Hh;
       for (let y = h; y < m; y++) buckets[15].push(base + y);
     }
-    spread(sky, ids, Hh);
   }
+  // Barrier cells for the absent chunks (after the height map, which reads them as air and so never lets them raise a neighbour's seeds).
+  for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
+    if (src[a * 3 + b]) continue;
+    for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) { const to = ((a * 16 + x) * N + b * 16 + z) * Hh; ids.fill(BARRIER, to, to + Hh); }
+  }
+  if (!noSky) spread(sky, ids, Hh);
   // Block light: every emitter, then the spread.
   for (let i = 0; i < total; i++) {
     const e = EMISSION[ids[i]];
