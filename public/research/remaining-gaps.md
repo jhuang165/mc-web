@@ -2,6 +2,28 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 28
+
+Batch 28 covered these areas:
+- **Anaglyph, round 2.** Block colour multipliers (biome tints, stems) are converted in the mesher at the native RenderBlocks sites; water, vines, lily pads and redstone wire stay raw as natively. The sunrise fan centre is converted. Toggling remeshes every chunk ([post-shaders.md](post-shaders.md)).
+- **Villages.** Reputation is name-ordered like the native TreeMap. Killing a village iron golem (not player-made) costs 5 reputation. A scripted village fight is probed and its village layer replayed ([village.md](village.md)).
+- **Dimension rules.** The End has no sky and an actual height of 128 everywhere, not only in the light engine; `hasNoSky` and `isHellWorld` now carry the native names and meanings. The Nether and End use their own Random stream (`simulation`). Nether and End mushroom ticks were probed and already matched.
+- **Text.** Bidi handles later strong-less paragraphs as ICU 51 does. §k picks from all 256 cells with the native random stream, and DOM text re-picks every frame. The § colour table follows the anaglyph option at startup ([languages.md](languages.md)).
+- **Leads and size 0 stacks on mobs.** A lead held by another mob works live, on Java import and on export. Tamed wolves and ocelots refuse a non-owner's lead. Feeding, dyeing and wild-horse clicks with size 0 or less stacks match 2700 probe records; horse owner checks were probed and already matched.
+- **Negative stacks, round 3.** `/give` drops the whole stack at the player with pickup delay 0 and the player as owner. Dispensers and droppers fire from negative slots. The drop key keeps refusing only an exact size 0. Furnace, brewing and hopper ticks were probed (8100 records) and already matched ([combat.md](combat.md)).
+- **Import, round 5.** Nether and End chunks with TerrainPopulated=false are populated at import (406 native populate calls). Stored cells keep level-0 flowing fluid, hardened lava levels and chest facing through an `orig` overlay. Populate-time animals, villagers, flower pots and fire and falling-block ticks are kept. Imported furnaces keep their saved lit state ([region-import.md](region-import.md)).
+- **Dimension trip speed.** Nether and End columns and the headless ring are built in workers, and the arrival warm-up is shared over up to three workers. Nether long tasks over 50 ms fell from about 53 to 1-4 in the first 50 s; the Nether ring fills in 8-10 s instead of 44 s ([loading-screens.md](loading-screens.md)).
+
+Still open from batch 28:
+- Anaglyph: the DOM GUI is not converted, and the native chunk-update skip while anaglyph is on is not modelled.
+- Bidi: explicit embedding codes or format characters after a separator in multi-paragraph strings differ from ICU 51. Sign textures do not re-pick §k every frame.
+- Villages: mob positions and targets in a village fight are recorded but not matched (the port has no mob-on-mob revenge target). Several named players are model-only.
+- Nether and End sapling and leaf ticks are unprobed. World import drops the Nether and End `simulation` stream.
+- A leashed mob's own death drops the lead in the port; natively it seems not to (bytecode-read). An imported unusable `Leash` tag loses the lead without the lead item. Mob-held leads are dropped after a dimension change.
+- `CreativeContainer.drop` keeps a `count > 0` filter (unprobed). Hopper negative-stack coverage is one layout per scenario. `/give` motion matches within 1e-4.
+- Saved `TileTicks` are only counted on import. The Nether populate RNG and the End per-chunk seed are modelled (natively time-dependent). Export applies the overlay to fluids only.
+- An End-to-Overworld return sometimes shows a 1-3 s train of 70-170 ms tasks after the ring completes (spawn-side ring reads), as before batch 28. A played world can run 4-6 workers; memory not measured.
+
 ## Done in batch 27
 
 Batch 27 covered these areas:
@@ -13,20 +35,10 @@ Batch 27 covered these areas:
 - **Import.** Imported Overworld chunks with TerrainPopulated=false are populated at import with the native rule. Portal search and `/spreadplayers` read the stored-column index. The runtime list caps were raised to 1<<20 ([region-import.md](region-import.md)).
 - **Atlas and anaglyph.** GPU sub-rect atlas uploads. Anaglyph colours are now converted at texture upload and in the fog, sky and cloud colours, as natively ([post-shaders.md](post-shaders.md), [resource-packs.md](resource-packs.md)).
 
-Still open from batch 27:
-- `/give` adds to the inventory and drops only the remainder. Native `CommandGive` drops the whole stack at the player.
-- Natively the End has no sky light and an actual height of 128. Outside the light engine, the port's End keeps `hasNoSky:false` and a height of 256, which affects mob spawning and the portal clamp.
-- Nether and End chunks are not populated on import.
-- Stored cells cannot hold level-0 flowing fluid or chest facing.
-- Animals, flower pots and villagers placed at populate time are dropped on import.
-- Unlit furnaces with BurnTime in a save are read as lit.
-- Anaglyph does not convert vertex colours (biome tints), the font colour table, sunrise colours or the DOM GUI. Overlay pixels were not compared with native frames.
-- Bidi differs on strings with separators and strong-less later paragraphs.
-- The Nether shares the Overworld's weather Random.
-- Nether mushroom, sapling and leaf ticks are not replayed.
+Still open from batch 27 (the /give drop, End sky and height, Nether/End import population, stored fluids and chest facing, populate-time animals, furnace lit state, the separate Nether Random, mushroom ticks, anaglyph tints and sunrise, the font table, and the lead/horse/container probes were done in batch 28):
+- Anaglyph overlay pixels were not compared with native frames.
 - One light volume serves both server light and client relight, which are separate natively.
 - Ring columns beyond the window have no light until resident.
-- Bytecode-read only, not probed: horse owner checks, a lead held by another mob, wolf, ocelot and horse feeding at size 0 or less, and container ticks on negative stacks.
 
 ## Done in batch 22
 
