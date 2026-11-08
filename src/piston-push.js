@@ -7,16 +7,17 @@
 //
 //   pushPlayer(world, player, dx, dy, dz)        the player's state through entities.js moveEntity (as movePlayer builds it)
 //   pistonPushExtras(world, game) -> [{ box, move(dx, dy, dz) }]   dropped items, primed TNT, experience orbs, falling blocks
-//                                    (body copy through moveEntity), minecarts and boats (their own Minecarts.move / Boats.move)
-// `game` is the runtime hook object of redstone-runtime.js (items(), primed(), orbs(), falling(), minecarts(), boatSystem(),
-// boats(), player(), mobs()).
+//                                    and minecarts / boats, each through its own move
+// `game` is the runtime hook object of redstone-runtime.js (items(), itemSystem(), primed(), orbs(), orbSystem(), falling(),
+// minecarts(), boatSystem(), boats(), player(), mobs()).
 import { moveEntity } from "./entities.js";
 
 const ITEM = { half: 0.125, size: 0.25 }, TNT = { half: 0.49, size: 0.98 }, FALLING = { half: 0.49, size: 0.98 };
 const CART = { width: 0.98, height: 0.7 }, BOAT = { width: 1.5, height: 0.6 }, ORB = { width: 0.5, height: 0.5 };
 
-// Entity.moveEntity on a copy of the body, written back (entities keep their own velocity and flag fields). `y` is the box
-// bottom as in every entity system here; carts, boats and orbs keep posY, which shifts by the same delta.
+// Entity.moveEntity on a copy of the body, written back (entities keep their own velocity and flag fields): the fallback for an
+// entity without its system's move. `y` is the box bottom as in every entity system here; orbs keep posY, which shifts by the
+// same delta.
 export function bodyMove(world, e, width, height, dx, dy, dz) {
   const tmp = { x: e.x, y: e.y, z: e.z, vx: 0, vy: 0, vz: 0, onGround: !!e.onGround };
   if (e.bb) tmp.bb = e.bb.slice();
@@ -36,8 +37,11 @@ const flat = (e, h, s) => [e.x - h, e.y, e.z - h, e.x + h, e.y + s, e.z + h];
 // motion, onGround, sneaking (the sneak edge applies: a sneaking player on the ground is not pushed off an edge), ySize,
 // fallDistance (unchanged while flying), isInWeb and inWater. Written back: position, motion (zeroed on blocked axes, soul sand
 // x 0.4), onGround, collidedH, fallDistance, ySize and the web flag. `player` is the runtime adapter
-// { position, velocity?, motion?, onGround, collidedH, fallDistance, flying, inWater, vehicle, width, height, land?(distance) }
+// { position, velocity?, motion?, onGround, collidedH, fallDistance, flying, inWater, vehicle, width, height, land?, tail? }
 // (setters for the flags); without `world` the delta is applied as is. Returns the landing fall distance (0 when none).
+// The move's tail runs as in the player's own moveEntity: `player.tail(body)` (player-environment.js playerMoveTail) gives the
+// fire counter and the hooks (cactus and fire hurt, wetness, fire resistance, fizz) and writes the counter back; a landing
+// (updateFallState on the ground) calls `player.land(distance)` (player-environment.js landPlayer: trampling, fall sound, damage).
 export function pushPlayer(world, player, dx, dy, dz) {
   const pos = player.position ?? player, vel = player.velocity, motion = player.motion;
   const body = {
@@ -47,8 +51,11 @@ export function pushPlayer(world, player, dx, dy, dz) {
   };
   if (typeof motion?.ySize === "number") body.ySize = motion.ySize;
   let landed = 0;
-  if (world) landed = moveEntity(world, body, player.width ?? 0.6, player.height ?? 1.8, dx, dy, dz);
+  const tail = world ? player.tail?.(body) : null;
+  if (tail) body.fire = tail.fire;
+  if (world) landed = moveEntity(world, body, player.width ?? 0.6, player.height ?? 1.8, dx, dy, dz, undefined, tail?.hooks);
   else { body.x += dx; body.y += dy; body.z += dz; }
+  tail?.finish(body);
   pos.x = body.x; pos.y = body.y; pos.z = body.z;
   if (!world) return 0;
   if (vel) { vel.x = body.vx; vel.y = body.vy; vel.z = body.vz; }
@@ -81,15 +88,22 @@ function vehicleBlockers(game) {
   return out;
 }
 
+// Dropped items, primed TNT, falling blocks and orbs move through their own Entity.moveEntity (none of EntityItem, EntityTNTPrimed,
+// EntityFallingBlock, EntityXPOrb overrides it): the item system's move with the item's noClip and inWater (ItemEntities.push),
+// the orb system's move with its hurt / wet / fizz tail (ExperienceOrbs.move), and entities.js moveEntity on the TNT and falling
+// block themselves (stepHeight 0, no hurt tail). Written to the entity: position, blocked-axis motion, onGround, isCollidedHorizontally,
+// fallDistance, the web flag. Without the systems (`game.itemSystem` / `game.orbSystem`) or a world, the body copy (bodyMove) is used.
 export function pistonPushExtras(world, game) {
   const out = [];
-  const add = (list, box, w, h) => {
-    for (const e of list ?? []) if (!e.dead && !e.removed) out.push({ box: box(e), entity: e, now: () => box(e), move: (dx, dy, dz) => bodyMove(world, e, w, h, dx, dy, dz) });
+  const add = (list, box, w, h, own) => {
+    for (const e of list ?? []) if (!e.dead && !e.removed) out.push({ box: box(e), entity: e, now: () => box(e), move: world && own ? (dx, dy, dz) => own(e, dx, dy, dz) : (dx, dy, dz) => bodyMove(world, e, w, h, dx, dy, dz) });
   };
-  add(game.items?.(), (e) => flat(e, ITEM.half, ITEM.size), ITEM.size, ITEM.size);
-  add(game.primed?.(), (e) => flat(e, TNT.half, TNT.size), TNT.size, TNT.size);
-  add(game.falling?.(), (e) => flat(e, FALLING.half, FALLING.size), FALLING.size, FALLING.size);
-  add(game.orbs?.(), (e) => e.bb ?? flat(e, 0.25, 0.5), ORB.width, ORB.height);
+  const itemSystem = game.itemSystem?.(), orbSystem = game.orbSystem?.();
+  add(game.items?.() ?? itemSystem?.items, (e) => flat(e, ITEM.half, ITEM.size), ITEM.size, ITEM.size, itemSystem?.push && ((e, dx, dy, dz) => itemSystem.push(world, e, dx, dy, dz)));
+  const direct = (size) => (e, dx, dy, dz) => { if (!e.dead) moveEntity(world, e, size, size, dx, dy, dz, 0); };
+  add(game.primed?.(), (e) => flat(e, TNT.half, TNT.size), TNT.size, TNT.size, direct(TNT.size));
+  add(game.falling?.(), (e) => flat(e, FALLING.half, FALLING.size), FALLING.size, FALLING.size, direct(FALLING.size));
+  add(game.orbs?.() ?? orbSystem?.orbs, (e) => e.bb ?? flat(e, 0.25, 0.5), ORB.width, ORB.height, orbSystem?.move && ((e, dx, dy, dz) => { if (!e.dead) orbSystem.move(world, e, dx, dy, dz); }));
   // Minecarts and boats move with their own Entity.moveEntity port (Minecarts.move / Boats.move): blocked by the other carts
   // (boats) and the pushable entities, flags, fall state (a boat's crash), block hurts and, for carts, detector rails.
   // World.getCollidingBoundingBoxes adds mover.getCollisionBox(other) and other.getBoundingBox() for each entity in range

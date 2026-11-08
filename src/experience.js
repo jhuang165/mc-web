@@ -138,12 +138,7 @@ export class ExperienceOrbs {
     let pull=1-d;
     if(pull>0){pull*=pull;o.vx+=dx/d*pull*0.1;o.vy+=dy/d*pull*0.1;o.vz+=dz/d*pull*0.1;}
    }
-   // Entity.moveEntity with stepHeight 0; the tail hurts on cactus and fire cells and runs the
-   // fire counter (fireResistance 1), with a rain fizz when wet.
-   const self=this;
-   moveEntity(world,o,SIZE,SIZE,o.vx,o.vy,o.vz,0,{hurt:(source,n)=>this.hurt(o,source,n),get wet(){return !!self.wet?.(o);},
-    fizz:()=>this.sounds.push({name:'random.fizz',volume:f(0.7),pitch:f(f(1.6)+f(f(f(this.random())-f(this.random()))*f(0.4))),x:o.x,y:o.posY,z:o.z})});
-   o.posY=o.bb[1]+HALF;
+   this.move(world,o,o.vx,o.vy,o.vz);
    const fr=o.onGround?f(slipperiness(world.get(Math.floor(o.x),Math.floor(o.bb[1])-1,Math.floor(o.z)))*f(0.98)):f(0.98);
    o.vx*=fr;o.vy*=0.9800000190734863;o.vz*=fr;
    if(o.onGround)o.vy*=-0.8999999761581421;
@@ -151,6 +146,15 @@ export class ExperienceOrbs {
    if(++o.age>=LIFETIME)o.dead=true;
   }
   this.orbs=this.orbs.filter(o=>!o.dead);
+ }
+ // Entity.moveEntity with stepHeight 0; the tail hurts on cactus and fire cells and runs the
+ // fire counter (fireResistance 1), with a rain fizz when wet. The orb's tick moves by its motion;
+ // a piston push (TileEntityPiston, piston-push.js) by the push delta.
+ move(world,o,dx,dy,dz){
+  const self=this;
+  moveEntity(world,o,SIZE,SIZE,dx,dy,dz,0,{hurt:(source,n)=>this.hurt(o,source,n),get wet(){return !!self.wet?.(o);},
+   fizz:()=>this.sounds.push({name:'random.fizz',volume:f(0.7),pitch:f(f(1.6)+f(f(f(this.random())-f(this.random()))*f(0.4))),x:o.x,y:o.posY,z:o.z})});
+  o.posY=o.bb[1]+HALF;
  }
  serialize(){return this.orbs.map(strip);}
  serializeOne(o){return strip(o);}

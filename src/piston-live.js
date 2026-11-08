@@ -53,7 +53,7 @@
 //   Returned object: { frame(partial), tick(), tiles(), pushBoxes(), moves, save(), restore(list) }.
 //
 import { fromOriginal } from "./block-registry.js";
-import { blockBounds } from "./world.js";
+import { blockBounds, collisionBounds } from "./world.js";
 import { pistonQuads, FACING_OFFSETS, PISTON, STICKY_PISTON, PISTON_HEAD } from "./dispenser-piston.js";
 import { ENTITY_TYPES, pushBox, moveEntity } from "./entities.js";
 import { pistonTile } from "./redstone.js";
@@ -106,9 +106,12 @@ export function shortenHead(quads, facing) {
 
 // Stored blocks whose native pool box differs from their render bounds when read through the moving cell (probed natively with
 // PistonLiveProbe: odd-block-* and trapdoor-facing-* scenarios): carpet comes out zero high ([0,0,0,1,0,1], native stale bounds), fences, nether fences and farmland as the full cube
-// (BlockFence / BlockFarmland keep their constructor bounds), soul sand 7/8 high, a cobblestone wall its post 1.5 high. Every other stored block uses blockBounds with the moving cell's metadata
+// (BlockFence / BlockFarmland keep their constructor bounds), soul sand 7/8 high. Glass panes, stained panes and iron bars (BlockPane has
+// no getCollisionBoundingBoxFromPool, so it keeps stale shared bounds) come out as the full cube even beside a stone (batch 25:
+// odd-block3-beside-stone-*); a cobblestone wall runs its own setBlockBoundsBasedOnState at the moving cell, so it reads the
+// neighbours there and is 1.5 high (collisionBounds). Every other stored block uses blockBounds with the moving cell's metadata
 // (batch 24 added every stairs id, the slab variants, anvil / trapdoor / ladder / snow metadata, carpet colour, the mossy wall: odd-block2-*).
-const POOL_OVERRIDES = { 171: [0, 0, 0, 1, 0, 1], 85: [0, 0, 0, 1, 1, 1], 113: [0, 0, 0, 1, 1, 1], 60: [0, 0, 0, 1, 1, 1], 88: [0, 0, 0, 1, 0.875, 1], 139: [0.25, 0, 0.25, 0.75, 1.5, 0.75] };
+const POOL_OVERRIDES = { 171: [0, 0, 0, 1, 0, 1], 85: [0, 0, 0, 1, 1, 1], 113: [0, 0, 0, 1, 1, 1], 60: [0, 0, 0, 1, 1, 1], 88: [0, 0, 0, 1, 0.875, 1], 101: [0, 0, 0, 1, 1, 1], 102: [0, 0, 0, 1, 1, 1], 160: [0, 0, 0, 1, 1, 1] };
 const NO_POOL_BOX = new Set([27, 28, 66, 157]);
 const isBase = (id) => id === ORIGINAL_PISTON || id === ORIGINAL_STICKY;
 // TileEntityRendererPiston.renderTileEntityAt as drawing parts: [{ block, meta, quads?, offset }] in the cell's own frame.
@@ -166,7 +169,7 @@ export function installPistons({ redstone, scene = null, world = null, entities 
       getMeta: (x, y, z) => (x === tile.x && y === tile.y && z === tile.z ? (tile.block === 44 || tile.block === 126 ? stored.meta & 7 : stored.meta) : world?.getMeta ? world.getMeta(x, y, z) : 0),
     };
     try {
-      const b = blockBounds(view, tile.x, tile.y, tile.z);
+      const b = tile.block === 139 ? collisionBounds(view, tile.x, tile.y, tile.z) : blockBounds(view, tile.x, tile.y, tile.z);
       return Array.isArray(b) ? b : [0, 0, 0, 1, 1, 1];
     } catch {
       return [0, 0, 0, 1, 1, 1];

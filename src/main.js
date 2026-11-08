@@ -211,7 +211,7 @@ import { collectBases, basesFromJson } from "./whole-save-json.js";
 import { tickWorldSystems } from "./world-tick.js";
 import { captureMovementInput } from "./player-input.js";
 import { movePlayer } from "./player-physics.js";
-import { tickPlayerEnvironment, finishPlayerMovement } from "./player-environment.js";
+import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
 import { tickEntitySimulation } from "./entity-simulation.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
 import { tickLivingSimulation, drainMobEvents } from "./living-simulation.js";
@@ -1315,13 +1315,16 @@ async function launch(record, prepared, { slice = false } = {}) {
       // Pistons push the player through its own moveEntity state (piston-push.js pushPlayer).
       player: () => ({ position, velocity, motion, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0, flying, inWater: wasInWater, vehicle: rider.vehicle ?? null, rider,
         get onGround() { return grounded; }, set onGround(v) { grounded = v; }, get collidedH() { return collidedH; }, set collidedH(v) { collidedH = v; },
-        get fallDistance() { return fallDistance; }, set fallDistance(v) { fallDistance = v; } }),
+        get fallDistance() { return fallDistance; }, set fallDistance(v) { fallDistance = v; },
+        // The push's moveEntity tail (cactus, fire, webs) and its landing (fall damage), as in the player's own move.
+        tail: (body) => playerMoveTail({ world, weather, survival, flying, inWater: wasInWater }, body, { fizz: playerFizz }),
+        land: (d) => { addFallStat(stats, d, survival.creative); landPlayer({ world, position, survival, inWater: wasInWater }, d, playerLanding()); } }),
       mobs: () => mobs,
-      items: () => items.items,
+      items: () => items.items, itemSystem: () => items, // the systems: pistons push items and orbs through their own move (piston-push.js)
       arrows: () => arrows.list,
       thrown: () => [...projectiles.balls, ...(mobs.potions?.projectiles?.balls ?? [])], // string sensing: witch and dispensed potions fly in mobs.potions
       boats: () => boats.carts, boatSystem: () => boats, falling: () => falling.entities,
-      orbs: () => xpOrbs.orbs,
+      orbs: () => xpOrbs.orbs, orbSystem: () => xpOrbs,
       primed: () => primed,
       minecarts: () => minecarts,
       chests: () => survival.chests,
@@ -2525,6 +2528,16 @@ function watchAchievements() {
     achievements.beacon(key, tile.levels | 0, near);
   }
 }
+// Entity.moveEntity: playSoundAtEntity(random.fizz, 0.7, 1.6 + (r - r) * 0.4) at the player (fire-fx.js entityFizz).
+function playerFizz() { const s = entityFizz(Math.random); sounds.play(s.name, { volume: s.volume, pitch: s.pitch, position: { x: position.x, y: position.y, z: position.z } }); }
+// The landing hooks of player-environment.js landPlayer (the tick's landing and a piston push's).
+function playerLanding() {
+  return {
+    trample: trampleFarmland,
+    fallSound: (s) => sounds?.play(s.name, { volume: s.volume, pitch: s.pitch }),
+    landingDust: (x, y, z, count) => scene.particles.landingDust(world, x, y, z, count, [position.x, position.y + PHYSICS.eye, position.z]),
+  };
+}
 function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // Game rules the Survival object reads (gamerule naturalRegeneration / doDaylightCycle).
   survival.naturalRegeneration = ruleOn(active, "naturalRegeneration");
@@ -2545,8 +2558,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
       }
       potionParticles(scene.fx, { x: position.x, y: posY, z: position.z, yOffset: Math.fround(PHYSICS.eye), width: PHYSICS.width, height: PHYSICS.height }, potionColor(survival.effects.active.values()), playerRandom, { invisible: survival.effects.has(INVISIBILITY) });
     },
-    // Entity.moveEntity: playSoundAtEntity(random.fizz, 0.7, 1.6 + (r - r) * 0.4) at the player (fire-fx.js entityFizz).
-    fizz: () => { const s = entityFizz(Math.random); sounds.play(s.name, { volume: s.volume, pitch: s.pitch, position: { x: position.x, y: position.y, z: position.z } }); },
+    fizz: playerFizz,
   });
   // Scheduled sand and gravel updates and the falling-block entities (WorldServer.tick).
   if (falling) {
@@ -2570,11 +2582,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     { particle: (name, x, y, z) => scene.fx.spawn(name, x, y, z) });
   if (grounded) addFallStat(stats, landedFall, survival.creative); // EntityPlayer.fall
   const movement = { world, position, survival, motion, grounded, fallDistance, landedFall };
-  finishPlayerMovement(movement, { inWater, inLavaNow, oldPosition }, {
-    trample: trampleFarmland,
-    fallSound: (s) => sounds?.play(s.name, { volume: s.volume, pitch: s.pitch }),
-    landingDust: (x, y, z, count) => scene.particles.landingDust(world, x, y, z, count, [position.x, position.y + PHYSICS.eye, position.z]),
-  });
+  finishPlayerMovement(movement, { inWater, inLavaNow, oldPosition }, playerLanding());
   ({ fallDistance, landedFall } = movement);
   tickBeacons(beacons, { world, time: survival.time, players: [{ x: position.x, y: position.y, z: position.z, width: PHYSICS.width, height: PHYSICS.height }], apply: (_p, e) => survival.effects.add(e) });
   watchAchievements();

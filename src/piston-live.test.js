@@ -12,6 +12,9 @@ import { RedstoneWorld, blockProperties } from "./redstone.js";
 import { installShapedBlocks, trapdoorSupportOriginal } from "./shaped-blocks.js";
 import { installPistons, tileOffset, tileProgress, movingParts, shortenHead, pistonTileFields, ORIGINAL_MOVING, ORIGINAL_HEAD } from "./piston-live.js";
 import { pistonQuads, PISTON_HEAD, PISTON, STICKY_PISTON } from "./dispenser-piston.js";
+import { ItemEntities } from "./item-entities.js";
+import { ExperienceOrbs, newOrb } from "./experience.js";
+import { detectorRailBehaviour, DETECTOR } from "./powered-rails.js";
 
 // Recorded by tools/verify-piston-live.mjs from the unchanged 1.7.10 TileEntityPiston / BlockPistonMoving classes.
 const ref = JSON.parse(readFileSync(new URL("../public/research/piston-live-reference.json", import.meta.url)));
@@ -23,6 +26,9 @@ const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs 
 function build(s) {
   const w = new RedstoneWorld({ seed: s.seed ?? 1 }), cells = s.grid.split(",");
   installShapedBlocks(w, trapdoorSupportOriginal(blockProperties())); // as redstone-runtime.js
+  // The detector rail's entity and tick behaviour (its rail-shape hooks need the game World; no rail here is placed or unsupported).
+  const { onBlockAdded, onNeighborBlockChange, breakBlock, ...detector } = detectorRailBehaviour;
+  w.registerBehaviour(DETECTOR, detector);
   for (let x = 0; x < sx; x++) for (let y = 0; y < sy; y++) for (let z = 0; z < sz; z++) {
     const [id, meta = 0] = cells[(x * sy + y) * sz + z].split(":").map(Number);
     if (id) w.setRaw(ox + x, oy + y, oz + z, id, meta);
@@ -35,7 +41,10 @@ function liveSystems(w) {
   const cell = (x, y, z) => blocks.toInternal(w.getBlock(x, y, z), w.getBlockMetadata(x, y, z));
   const view = { get: (x, y, z) => cell(x, y, z)?.id ?? 0, getMeta: (x, y, z) => cell(x, y, z)?.meta ?? 0, solid: (x, y, z) => { const c = cell(x, y, z); return !!c && solidBlock(c.id, c.meta); }, set() {} };
   const rand = { nextFloat: () => 0.5, nextInt: () => 0, nextDouble: () => 0.5, nextGaussian: () => 0 };
-  const sys = { view, mobs: new EntityWorld(view, [], () => 0.5), carts: new Minecarts({ random: () => rand }), boats: new Boats(), lives: [], liveMoves: [], seq: 0 };
+  const sys = { view, mobs: new EntityWorld(view, [], () => 0.5), carts: new Minecarts({ random: () => rand }), boats: new Boats(), lives: [], liveMoves: [], seq: 0, watch: [],
+    items: new ItemEntities(() => 0.5), orbs: new ExperienceOrbs([], () => 0.5), primed: [], falling: [] };
+  // A cart's move tail reaches BlockRailDetector through the engine's collide; the engine's entity list sees the carts' boxes.
+  sys.carts.blockHook = (x, y, z) => w.collide(x, y, z);
   for (const [obj, key] of [[sys.mobs, "pushMove"], [sys.carts, "move"], [sys.boats, "move"]]) {
     const orig = obj[key].bind(obj);
     obj[key] = (...a) => { sys.liveMoves.push(key === "pushMove" ? [sys.now, a[0].label, ...a.slice(1, 4)] : [sys.now, a[1].label, ...a.slice(2, 5)]); return orig(...a); };
@@ -53,12 +62,18 @@ function step(w, p, s, tick, ents, moves, sys) {
     else if (op === "entity") {
       const b = [ox + rest[0], oy + rest[1], oz + rest[2], ox + rest[3], oy + rest[4], oz + rest[5]];
       ents.push({ label: a, seq: sys ? sys.seq++ : 0, box: b, move(dx, dy, dz) { moves.push([moves.now, a, dx, dy, dz]); b[0] += dx; b[3] += dx; b[1] += dy; b[4] += dy; b[2] += dz; b[5] += dz; } });
-    } else if (op === "live" && sys) {
+    } else if (op === "watch" && sys) sys.watch.push([x, y, z]);
+    else if (op === "live" && sys) {
       const [kind, vx, vy, vz] = rest, px = x + 0.5, pz = z + 0.5;
       let e;
       if (kind === 0) { e = { id: sys.mobs.nextId++, type: "pig", x: px, y, z: pz, vx, vy, vz, onGround: true, fallDistance: 0, health: 10, growingAge: 0, rotationYaw: 0 }; sys.mobs.entities.push(e); }
-      else if (kind === 1) { e = sys.carts.spawnEmpty({ x: px, y: y + Y_OFFSET, z: pz }, { seed: 1 }); Object.assign(e, { vx, vy, vz, onGround: true }); }
-      else { e = sys.boats.spawnBoat({ x: px, y, z: pz, vx, vy, vz }, { seed: 1 }); e.onGround = true; }
+      else if (kind === 1) { e = sys.carts.spawnEmpty({ x: px, y: y + Y_OFFSET, z: pz }, { seed: 1 }); Object.assign(e, { vx, vy, vz, onGround: true }); w.entities.push({ kind: "minecart", get box() { return e.bb; } }); }
+      else if (kind === 2) { e = sys.boats.spawnBoat({ x: px, y, z: pz, vx, vy, vz }, { seed: 1 }); e.onGround = true; }
+      // Dropped item (4: noClip set), primed TNT, falling sand, XP orb of value 3.
+      else if (kind === 3 || kind === 4) { e = sys.items.spawn({ id: 1, count: 1, damage: 0 }, px, y + 0.125, pz); Object.assign(e, { y, mx: vx, my: vy, mz: vz, onGround: true, noClip: kind === 4, loose: true }); }
+      else if (kind === 5) { e = { x: px, y, z: pz, vx, vy, vz, onGround: true, fuse: 80, loose: true }; sys.primed.push(e); }
+      else if (kind === 6) { e = { x: px, y, z: pz, vx, vy, vz, onGround: true, block: 12, loose: true }; sys.falling.push(e); }
+      else { e = newOrb(3, px, y + 0.25, pz); Object.assign(e, { vx, vy, vz, onGround: true, loose: true }); sys.orbs.orbs.push(e); }
       e.label = a;
       e.seq = sys.seq++;
       sys.lives.push(e);
@@ -75,7 +90,10 @@ for (const s of ref.scenarios)
     const w = build(s), ents = [], moves = [], sys = liveSystems(w);
     // The probe World's entity query returns its list in spawn order (PistonProbe.W).
     const order = (list) => list.slice().sort((a, b) => (a.entity?.seq ?? 1e9) - (b.entity?.seq ?? 1e9));
-    const p = installPistons({ redstone: w, world: sys.view, blocks, entities: { mobs: sys.mobs, order, extra: () => [...ents, ...pistonPushExtras(sys.view, { minecarts: () => sys.carts, boatSystem: () => sys.boats, mobs: () => sys.mobs, player: () => null })] } });
+    const game = { minecarts: () => sys.carts, boatSystem: () => sys.boats, mobs: () => sys.mobs, player: () => null, itemSystem: () => sys.items, orbSystem: () => sys.orbs, primed: () => sys.primed, falling: () => sys.falling };
+    // Loose entities' moves are recorded at the push (the probe records at Entity.moveEntity's entry).
+    const recorded = (x) => (x.entity?.loose ? { ...x, move: (dx, dy, dz) => { sys.liveMoves.push([sys.now, x.entity.label, dx, dy, dz]); x.move(dx, dy, dz); } } : x);
+    const p = installPistons({ redstone: w, world: sys.view, blocks, entities: { mobs: sys.mobs, order, extra: () => [...ents, ...pistonPushExtras(sys.view, game).map(recorded)] } });
     setMovingBoxes((b) => p.collisionBoxes(b));
     setEntityBoxes(boatBoxProvider({ get carts() { return sys.boats.carts; } }));
     try {
@@ -105,9 +123,11 @@ for (const s of ref.scenarios)
       });
       ents.forEach((e, k) => [e.box[0] - ox, e.box[1] - oy, e.box[2] - oz].forEach((v, j) => close(v, s.entities[tick - 1][k][j + 1], `entity ${k} tick ${tick}`)));
       // Real entities: position (box bottom), motion, onGround, isCollidedHorizontally, fallDistance after the tick.
-      const live = sys.lives.map((e) => [e.label, e.x - ox, (e.bb ? e.bb[1] : e.y) - oy, e.z - oz, e.vx, e.vy, e.vz, e.onGround ? 1 : 0, e.collidedH ? 1 : 0, e.fallDistance ?? 0]);
+      const live = sys.lives.map((e) => [e.label, e.x - ox, (e.bb ? e.bb[1] : e.y) - oy, e.z - oz, e.vx ?? e.mx, e.vy ?? e.my, e.vz ?? e.mz, e.onGround ? 1 : 0, e.collidedH ? 1 : 0, e.fallDistance ?? 0]);
       assert.equal(live.length, s.live?.[tick - 1].length ?? 0);
       live.forEach((e, k) => e.forEach((v, j) => close(v, s.live[tick - 1][k][j], `live ${e[0]} field ${j} tick ${tick}`)));
+      // Watched cells (a detector rail's block and metadata).
+      assert.deepEqual(sys.watch.map(([x, y, z]) => [x - ox, y - oy, z - oz, w.getBlock(x, y, z), w.getBlockMetadata(x, y, z)]), s.watch?.[tick - 1] ?? [], `watched cells tick ${tick}`);
     }
     } finally { setMovingBoxes(null); setEntityBoxes(null); }
     assert.equal(sys.liveMoves.length, s.liveMoves?.length ?? 0);
@@ -394,4 +414,49 @@ test("moving boxes collide for minecarts, boats and dropped items (shared moving
   } finally {
     setMovingBoxes(null);
   }
+});
+
+// ---- Batch 25: items, orbs, TNT and falling blocks pushed through their own move (piston-push.js pistonPushExtras) ----
+test("pistonPushExtras: a pushed item runs ItemEntities.move with its own noClip (cactus tail, blocked motion zeroed)", async () => {
+  const { ItemEntities } = await import("./item-entities.js");
+  const { CACTUS } = await import("./world.js");
+  const cells = { "3,1,1": 1, "3,1,2": CACTUS };
+  const world = { get: (x, y, z) => (y === 0 ? 1 : cells[`${x},${y},${z}`] ?? 0), getMeta: () => 0, solid: (x, y, z) => y === 0 || !!cells[`${x},${y},${z}`] };
+  const items = new ItemEntities(() => 0.5);
+  const a = items.spawn({ id: 1, count: 1, damage: 0 }, 2.5, 1.125, 1.5), b = items.spawn({ id: 1, count: 1, damage: 0 }, 2.5, 1.125, 2.5), c = items.spawn({ id: 1, count: 1, damage: 0 }, 2.5, 1.125, 1.5);
+  for (const e of [a, b, c]) { e.y = 1; e.mx = 0.1; e.my = 0; e.mz = 0; e.onGround = true; }
+  c.noClip = true; // its last tick's pushOutOfBlocks found it inside a block
+  const extras = pistonPushExtras(world, { itemSystem: () => items });
+  assert.equal(extras.length, 3);
+  for (const x of extras) x.move(0.75, 0, 0);
+  close(a.x, 3 - 0.125, "stopped by the stone");
+  assert.equal(a.mx, 0, "blocked axis zeroes the motion");
+  assert.equal(a.onGround, false, "Entity.moveEntity: onGround = dy blocked and dy < 0");
+  close(b.x, 3 + 0.0625 - 0.125, "stopped by the cactus box");
+  assert.equal(b.health, 4, "BlockCactus.onEntityCollidedWithBlock: attackEntityFrom(cactus, 1)");
+  close(c.x, 3.25, "noClip: the delta is applied as is");
+  assert.equal(c.mx, 0.1);
+  assert.equal(c.onGround, true, "noClip branch leaves onGround (javap sa.d)");
+});
+
+test("pistonPushExtras: orbs run ExperienceOrbs.move (posY follows); TNT and falling blocks their own moveEntity fields", async () => {
+  const { ExperienceOrbs, newOrb } = await import("./experience.js");
+  const world = { get: (x, y, z) => (y === 0 || (x === 3 && y === 1) ? 1 : 0), getMeta: () => 0, solid: (x, y, z) => y === 0 || (x === 3 && y === 1) };
+  const orbs = new ExperienceOrbs([], () => 0.5);
+  orbs.orbs.push(newOrb(3, 2.5, 1.25, 1.5));
+  const orb = orbs.orbs[0];
+  const tnt = { x: 2.5, y: 1, z: 2.5, vx: 0.2, vy: 0, vz: 0.05, onGround: true, fuse: 40 };
+  const sand = { x: 2.5, y: 1, z: 3.5, vx: 0.1, vy: -0.04, vz: 0, onGround: false, block: 12 };
+  const extras = pistonPushExtras(world, { orbSystem: () => orbs, primed: () => [tnt], falling: () => [sand] });
+  assert.equal(extras.length, 3);
+  for (const x of extras) x.move(0.75, 0, 0);
+  close(orb.bb[3], 3, "orb stopped at the wall");
+  close(orb.posY, orb.bb[1] + 0.25, "posY is the box bottom + half height");
+  assert.ok(Math.abs(tnt.x - (3 - 0.49)) < 1e-6, `TNT stopped at the wall (float half width): ${tnt.x}`);
+  assert.equal(tnt.vx, 0, "blocked x zeroes motionX");
+  assert.equal(tnt.vz, 0.05);
+  assert.equal(tnt.collidedH, true);
+  assert.equal(tnt.onGround, false, "a sideways push leaves the ground flag false (dy = 0)");
+  assert.equal(sand.vx, 0);
+  assert.equal(sand.collidedH, true);
 });

@@ -122,17 +122,24 @@ export class ItemEntities {
   }
   // Entity.moveEntity without stepping: y, then x, then z against block boxes. The tail
   // (block-collisions.js): cactus and fire take 1 of the item's 5 health, webs, the fire
-  // counter (fireResistance 1) and the wet fizz. A noClip move returns before it.
-  move(world, e, noClip, wet = false) {
+  // counter (fireResistance 1) and the wet fizz. A noClip move returns before it. `delta` is an outside move's [dx, dy, dz] (a
+  // piston push, push() below) instead of the item's motion; blocked axes still zero the motion.
+  move(world, e, noClip, wet = false, delta = null) {
     let dx = e.mx, dy = e.my, dz = e.mz;
+    if (delta) [dx, dy, dz] = delta;
     if (noClip) {
       e.x += dx;
       e.y += dy;
       e.z += dz;
-      e.onGround = false;
-      return;
+      return; // Entity.moveEntity's noClip branch only offsets the box (onGround stays, javap sa.d)
     }
-    [dx, dy, dz] = webMove(e, e, ['mx', 'my', 'mz']);
+    if (!delta) [dx, dy, dz] = webMove(e, e, ['mx', 'my', 'mz']);
+    else if (e.inWeb) {
+      // Entity.moveEntity's web slowdown on the given delta, which also zeroes the motion.
+      e.inWeb = false;
+      dx *= 0.25; dy *= 0.05000000074505806; dz *= 0.25;
+      e.mx = e.my = e.mz = 0;
+    }
     const [a, b, c, d, g, h] = this.box(e),
       list = this.boxes(world, Math.min(a, a + dx), Math.min(b, b + dy), Math.min(c, c + dz), Math.max(d, d + dx), Math.max(g, g + dy), Math.max(h, h + dz)),
       box = [a, b, c, d, g, h];
@@ -160,6 +167,7 @@ export class ItemEntities {
     e.y += dy;
     e.z += dz;
     e.onGround = ody !== dy && ody < 0;
+    e.collidedH = odx !== dx || odz !== dz; // isCollidedHorizontally
     if (odx !== dx) e.mx = 0;
     if (odz !== dz) e.mz = 0;
     if (ody !== dy) e.my = 0;
@@ -171,6 +179,11 @@ export class ItemEntities {
         this.sounds.push({ name: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(r() - r()) * 0.4)), x: e.x, y: e.y, z: e.z });
       },
     });
+  }
+  // TileEntityPiston pushing the item: Entity.moveEntity by the push delta with the item's own fields, the noClip its last tick's
+  // pushOutOfBlocks set (EntityItem.onUpdate: noClip = func_145771_j) and inWater from its last handleWaterMovement.
+  push(world, e, dx, dy, dz) {
+    if (!e.dead) this.move(world, e, !!e.noClip, !!e.inWater, [dx, dy, dz]);
   }
   // EntityItem.combineItems: the smaller stack joins the larger one.
   combine(e, other, maxStack) {
@@ -237,6 +250,8 @@ export class ItemEntities {
       e.pz = e.z;
       e.my -= 0.03999999910593033;
       const noClip = this.pushOut(world, e);
+      e.noClip = noClip; // kept for a piston push between ticks (push()); not saved
+      e.inWater = wasWet;
       this.move(world, e, noClip, wasWet);
       const moved = Math.trunc(e.px) !== Math.trunc(e.x) || Math.trunc(e.py + W) !== Math.trunc(e.y + W) || Math.trunc(e.pz) !== Math.trunc(e.z);
       if (moved || e.ticks % 25 === 0) {
