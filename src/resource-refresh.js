@@ -7,7 +7,7 @@
 // This module must be imported before any texture is created (main.js imports it first).
 import * as THREE from "three";
 import { bumpMediaGeneration, versioned, unversioned } from "./media-version.js";
-import { rewriteGuiText, refreshGuiNodes, prepareGuiImages } from "./gui-anaglyph.js"; // the same rewrite swaps in converted copies while 3D Anaglyph is on
+import { rewriteGuiText, refreshGuiNodes, prepareGuiImages, commitGuiAnaglyph, wantsGuiAnaglyph, convertExact, refreshIcons } from "./gui-anaglyph.js"; // the same rewrite swaps in converted copies while 3D Anaglyph is on
 
 const MEDIA = "/media/1.7.10/";
 const textures = new Set();
@@ -38,6 +38,9 @@ function loadImage(url) {
 
 export async function refreshTextures(gen) {
   const jobs = [];
+  // 3D Anaglyph: the exact converted pixels of every registered texture are ready before its image is swapped in, so the GL upload hook
+  // uses them (straight alpha) instead of a canvas read.
+  if (wantsGuiAnaglyph()) await Promise.all([...new Set([...textures].map((e) => e.ref.deref() && !e.ref.deref().userData?.packStrip ? e.url : null).filter(Boolean))].map((u) => convertExact(u)));
   for (const entry of [...textures]) {
     const texture = entry.ref.deref();
     if (!texture) { textures.delete(entry); continue; }
@@ -72,16 +75,21 @@ function hideNotice() { overlay?.remove(); overlay = null; }
 
 let running = null;
 export function refreshResources({ label = null } = {}) {
-  if (running) return running;
+  if (running) { return running.then(() => refreshResources({ label })); } // a toggle during a refresh gets its own pass
   running = (async () => {
     const gen = bumpMediaGeneration();
     if (label) showNotice(label);
     try {
+      // 3D Anaglyph: every GUI png and texture is converted first; the GUI keeps its old state until commitGuiAnaglyph flips it, so the
+      // synchronous rewrite below finds everything ready (native refreshResources converts before the next frame).
+      await prepareGuiImages(gen);
       await refreshTextures(gen);
-      await prepareGuiImages(gen); // 3D Anaglyph: convert the GUI pngs first so the synchronous rewrite finds them
+      await prepareGuiImages(gen); // images or sheets the texture reload added
+      commitGuiAnaglyph();
       refreshStyles(gen);
       const results = await Promise.allSettled([...hooks].map((fn) => fn(gen)));
       for (const r of results) if (r.status === "rejected") console.warn("resource refresh hook failed", r.reason);
+      refreshIcons(); // after the atlas hook: tagged item icons are rebuilt from the current (converted or raw) atlas
       if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("mcweb:resources-refreshed", { detail: { generation: gen } }));
       return gen;
     } finally { hideNotice(); running = null; }

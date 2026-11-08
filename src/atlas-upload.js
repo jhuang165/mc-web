@@ -15,13 +15,16 @@ export function createAtlasUploader(renderer, THREE) {
     // Rects are queued and written together: one bind and one pixel-store setup per texture, then a bare texSubImage2D per
     // rect (renderer.copyTextureToTexture re-reads five UNPACK_* parameters per call, which stalls the driver).
     // `data` is RGBA, w*h*4 bytes, top row first (canvas order); (x, y) is the canvas-space origin in that level.
-    queue(tex, level, x, y, w, h, data) {
+    queue(tex, level, x, y, w, h, data, converted = false) {
       let q = pending.get(tex);
       if (!q) pending.set(tex, (q = []));
-      q.push({ level, x, y, w, h, data: new Uint8Array(data.buffer, data.byteOffset, w * h * 4) });
+      q.push({ level, x, y, w, h, converted, data: new Uint8Array(data.buffer, data.byteOffset, w * h * 4) });
     },
     flush() {
       const gl = renderer.getContext();
+      // 3D Anaglyph: rects flagged `converted` hold pixels the item atlas already converted (block-textures.js), so the upload hook
+      // (anaglyph.js, which converts every texSubImage2D while the option is on) is bypassed for them.
+      const hook = gl.__anaglyphHooked, hookOn = hook?.state.on;
       for (const [tex, rects] of pending) {
         // The destination has flipY set: GL row 0 is the canvas bottom, and the unpacker flips each rect's rows.
         renderer.state.bindTexture(gl.TEXTURE_2D, renderer.properties.get(tex).__webglTexture);
@@ -30,7 +33,9 @@ export function createAtlasUploader(renderer, THREE) {
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
         for (const r of rects) {
           const levelHeight = r.level === 0 ? tex.image.height : Math.floor(tex.image.height / 2 ** r.level);
+          if (hook && r.converted) hook.state.on = false;
           gl.texSubImage2D(gl.TEXTURE_2D, r.level, r.x, levelHeight - r.y - r.h, r.w, r.h, gl.RGBA, gl.UNSIGNED_BYTE, r.data);
+          if (hook) hook.state.on = hookOn;
           stats.subRects++; stats.bytes += r.data.length;
         }
         renderer.state.unbindTexture();
