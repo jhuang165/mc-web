@@ -151,7 +151,8 @@ import { DISPENSER, DROPPER, PISTON_HEAD, isDispenserPiston, itemForBlock, headB
 import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
 import { HopperContainer, Hoppers, HOPPER } from "./hopper.js";
 import { Survival, ITEMS, burnTime, gameModeOf, setExtraCrafting } from "./survival.js";
-import { setGunsEnabled, gunsWorld } from "./mods/guns/install.js";
+import { setGunsEnabled, gunsWorld, gunsEnabled } from "./mods/guns/install.js";
+import { createGunHooks } from "./mods/guns/hooks.js";
 import { stackName } from "./item-names.js";
 import { containerTitle } from "./container-names.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
@@ -403,6 +404,19 @@ let screen = "home",
   saved = true;
 const editActionLog = []; // Development-only bounded edit/release action trace; never part of a save.
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
+// Opt-in guns mod (not 1.7.10): used only while gunsEnabled(); the getters follow the current world and player.
+const guns = createGunHooks({
+  get survival() { return survival; }, get world() { return world; }, get mobs() { return mobs; },
+  eye: () => eyeRay, // the crosshair ray from the eye, in every camera view
+  playerPos: () => position,
+  sneaking: () => binds.isDown("key.sneak"),
+  moving: () => ["key.forward", "key.back", "key.left", "key.right"].some((d) => binds.isDown(d)),
+  breakBlock: (p) => breakBlock(p, false),
+  renderHotbar: () => renderHotbar(),
+  markUnsaved: () => { saved = false; },
+  toast: (text) => toast(text),
+  playing: () => screen === "playing",
+});
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer,playerTicks=0;
 let weather = new Weather(), trees, plants, falling;
 const bedSleep = new BedSleep(); // EntityPlayer's sleeping state and bed spawn point (bed.js)
@@ -3175,6 +3189,7 @@ function movementTick(controls) {
     markUnsaved: () => { saved = false; },
     random: Math.random,
   }).use;
+  if (gunsEnabled()) guns.tick();
   if (survival.health <= 0) die();
   // EntityRenderer.updateFovModifierHand: once a tick, toward getFOVMultiplier (flight, sprint, bow).
   easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: survival.effects?.moveSpeedMultiplier?.() ?? 1, bow: eating?.bow ? bowFov(eating.ticks) : 1 }));
@@ -3350,7 +3365,7 @@ function bindingPressed(d, ctrl) {
   else if (d === "key.drop") dropHeld(ctrl);
   else if (d === "key.chat") openChat("");
   else if (d === "key.command") openChat("/");
-  else if (d === "key.attack") { mineHeld = true; edit(false); }
+  else if (d === "key.attack") { if (gunsEnabled() && guns.attack(true)) return; mineHeld = true; edit(false); }
   else if (d === "key.use") edit(true);
   else if (d === "key.pickItem") pickBlock();
   else if (d === "key.playerlist") showPlayerList();
@@ -3359,7 +3374,7 @@ function bindingPressed(d, ctrl) {
 // A binding released: key.playerlist hides the list, key.attack stops mining and key.use stops using.
 function bindingReleased(d) {
   if (d === "key.playerlist") playerList.hide();
-  else if (d === "key.attack") { mineHeld = false; if (mining && !mining.auto) mining = null; }
+  else if (d === "key.attack") { if (gunsEnabled()) guns.attack(false); mineHeld = false; if (mining && !mining.auto) mining = null; }
   else if (d === "key.use") releaseBowUse();
 }
 // Minecraft.runTick keyboard loop, run on every screen (no currentScreen test): Keyboard.isKeyDown for the F3 combinations and the F3+C crash timer.
@@ -3451,6 +3466,7 @@ window.addEventListener("keydown", (e) => {
     // KeyBinding.setKeyBindState + onTick through the hash, then the binding's action.
     const d = binds.set(code, true);
     if (d) bindingPressed(d, e.ctrlKey);
+    else if (gunsEnabled()) guns.key(code); // guns mod: R reload, G fire mode on otherwise unbound keys
     if (screen !== "playing") return;
   }
   keys.add(e.code);
@@ -3496,7 +3512,7 @@ document.querySelectorAll("[data-key]").forEach((b) => {
   };
   b.onpointerup = b.onpointercancel = () => { keys.delete(b.dataset.key); binds.touch.delete(d); };
 });
-$("#touch-break").onclick = () => edit(false);
+$("#touch-break").onclick = () => { if (!(gunsEnabled() && guns.tap())) edit(false); };
 $("#touch-place").onclick = () => edit(true);
 $("#touch-inventory").onclick = () => inventory();
 $("#touch-fly").onclick = () => {
@@ -3536,7 +3552,7 @@ function setupPointer() {
   });
   canvas.addEventListener("pointerup", (e) => {
     bindingReleased(binds.set(mouseCode(e.button), false));
-    if (dragging && dragDistance < 5 && e.pointerType !== "touch") edit(false);
+    if (dragging && dragDistance < 5 && e.pointerType !== "touch" && !(gunsEnabled() && guns.tap())) edit(false);
     dragging = false;
     mineHeld = false;
     if (mining && !mining.auto) mining = null;
