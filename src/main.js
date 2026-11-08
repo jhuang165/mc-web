@@ -1226,7 +1226,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     // ItemBucket in the Nether: water makes fizz and 8 smoke puffs instead of a block.
     world.evaporated = (x, y, z) => { sounds.play('random.fizz', { volume: 0.5, pitch: 2.6 + (Math.random() - Math.random()) * 0.8, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } }); for (let i = 0; i < 8; i++) scene.fx.spawn('largesmoke', x + Math.random(), y + 0.2, z + Math.random(), 0, 0, 0); };
     // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
-    fluids = new Fluids(world, { random: weather.random, fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === WEB ? [{ id: 321, count: 1 }] : b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : b === SAPLING ? [{ id: b, count: 1, damage: world.getMeta(x, y, z) & 7 }] : cropDrops(b,Math.random,world.getMeta(x,y,z)); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
+    fluids = new Fluids(world, { nether: !!world.isHell, skyless: !!world.dimension, random: weather.random, fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === WEB ? [{ id: 321, count: 1 }] : b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : b === SAPLING ? [{ id: b, count: 1, damage: world.getMeta(x, y, z) & 7 }] : cropDrops(b,Math.random,world.getMeta(x,y,z)); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
     fluids.load(record.fluidTicks);
     watchFlowers();
     // BlockFire and the static-lava ignition roll: scheduled and random ticks (fire.js). Fire reaches the
@@ -2499,19 +2499,15 @@ async function respawnPlayer() {
 }
 // One weather tick: timers, lightning (flash, damage, sound) and the client's rain
 // splashes and rain sound (see weather.js).
-const sceneLight = { skyAt: (x, y, z) => scene.light?.skyAt(x, y, z) ?? 15, blockAt: (x, y, z) => scene.light?.blockAt(x, y, z) ?? 0 };
+const sceneLight = { skyAt: (x, y, z) => (world.ringSink?.outside(x, z) ? world.ringSink.light.skyAt(x, y, z) : scene.light?.skyAt(x, y, z) ?? 15), blockAt: (x, y, z) => (world.ringSink?.outside(x, z) ? world.ringSink.light.blockAt(x, y, z) : scene.light?.blockAt(x, y, z) ?? 0) }; // ring cells read RingLight (the mood roll of a ring chunk draws but cannot be heard)
 function tickWeather() {
   if (weather.mood) weather.mood.light ??= moodLight(world, sceneLight);
   if (world.dimension) {
-    // The Nether and the End have no weather (their own world has no rain state), but the cave mood sound still rolls
-    // in WorldServer's chunk loop there (no sky: saved sky light is 0 everywhere).
-    const mood = weather.mood;
-    if (!mood) return;
-    mood.tick();
-    for (const [cx, cz] of Weather.activeChunks(position.x, position.z, 10, world)) {
-      const e = mood.chunk(world, cx, cz);
-      if (e) sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } });
-    }
+    // The Nether and the End have no weather (World.updateWeatherBody skips provider.hasNoSky), but WorldServer's chunk loop runs there
+    // unchanged: mood sound, the lightning/ice rolls and the random block ticks (natural-spawning.md "Round 9").
+    if (!weather.mood) return;
+    weather.tickDimension(world, position);
+    for (const e of weather.drain()) sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } });
     return;
   }
   tickWeatherSimulation({ world, weather, mobs, survival }, position, PHYSICS.width, PHYSICS.height);

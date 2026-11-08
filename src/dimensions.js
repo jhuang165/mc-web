@@ -28,7 +28,8 @@ export function endFogColor(angle = 0) {
   return hexRgb(10518688).map((c) => f(c * f(f(k * 0) + 0.15)));
 }
 
-// The provider facts that matter to this port, by dimension id. hasNoSky (aqo.f) is only set by Hell; isHellWorld (aqo.g) by Hell and End;
+// The provider facts that matter to this port, by dimension id. NOTE (batch 27, dimension-ticks-reference.json): aqo.f is really isHellWorld (Hell only)
+// and aqo.g hasNoSky (Hell and End), so this table's `hasNoSky` is aqo.f and its `isHellWorld` is aqo.g. Original comment: hasNoSky (aqo.f) is only set by Hell; isHellWorld (aqo.g) by Hell and End;
 // canRespawnHere (d) and isSurfaceWorld (e) are false for both; celestial angle: Hell 0.5, End 0.0, Overworld from the world time.
 export const PROVIDERS = Object.freeze({
   [OVERWORLD]: Object.freeze({ id: 0, name: "Overworld", hasNoSky: false, isHellWorld: false, canRespawnHere: true, isSurfaceWorld: true, ambient: 0, fixedAngle: null, cloudHeight: 128 }),

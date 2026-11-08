@@ -239,9 +239,10 @@ export class Weather {
   // lay a snow layer there while it is raining), then three random block ticks (updateLCG
   // picks x, z, y) in every 16-high section that has a randomly ticking block.
   tickChunk(world, cx, cz) {
-    // The cave mood sound (cave-ambience.js) comes first in WorldServer's chunk loop; main.js installs it.
-    // Chunks outside the resident window never hear it (the sound needs the player within 8 blocks), and take no mood roll here.
-    const mood = world.ringSink && !world.isTicking(cx * 16, cz * 16) ? null : this.mood?.chunk(world, cx, cz);
+    // The cave mood sound (cave-ambience.js) comes first in WorldServer's chunk loop for every chunk of activeChunkSet, ring chunks included
+    // (World.func_147467_a is server-side: it draws while ambientTickCountdown is 0 and plays only for a player within 8 blocks, so a
+    // ring chunk takes its draws and never a sound; dimension-ticks-reference.json). main.js installs it.
+    const mood = this.mood?.chunk(world, cx, cz);
     if (mood) this.events.push(mood);
     this.rollLightningChunk(world, cx, cz);
     const bx = cx * 16, bz = cz * 16, light = lightOf(world);
@@ -272,7 +273,7 @@ export class Weather {
         if (world.ringSink && !world.isTicking(x, z) && !ringRandomActive(world, x, z, randomTickReach(b))) continue; // its surroundings are not held yet
         // Blocks ticked elsewhere (fire and still lava, in fire.js) take their updateTick here.
         if (this.blockTick?.(x, y, z, b)) continue;
-        const melt = meltResult(b, light(x, y, z));
+        const melt = meltResult(b, light(x, y, z), !!world.isHell); // BlockIce.updateTick: air instead of water where provider.isHellWorld (the Nether)
         if (melt) { this.apply(world, x, y, z, melt.block, melt.meta); if (melt.drops) this.drop?.(world, x, y, z, melt.drops); }
       }
     }
@@ -293,6 +294,14 @@ export class Weather {
     for (let x = Math.max(0, cx - radius); x <= Math.min(n - 1, cx + radius); x++)
       for (let z = Math.max(0, cz - radius); z <= Math.min(n - 1, cz + radius); z++) out.push([x, z]);
     return out;
+  }
+  // One game tick of a dimension that has no weather (the Nether and the End: World.updateWeatherBody does nothing where
+  // provider.hasNoSky, and WorldServer.func_147456_g has no provider test, so its chunk loop runs unchanged): the mood countdown and the
+  // per-chunk steps (the lightning and ice rolls draw but find no biome that rains, snows or freezes) and the three random block ticks.
+  tickDimension(world, player) {
+    this.struck.length = 0;
+    this.mood?.tick();
+    this.tickChunks(world, Weather.activeChunks(player?.x ?? SIZE / 2, player?.z ?? SIZE / 2, 10, world));
   }
   // One game tick. `world` may be null (timers only).
   tick(world = null, player = null) {

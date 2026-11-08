@@ -71,7 +71,8 @@ export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, tree
   if (block === 114 && shearing) world.put(...p, 114, meta | 8);
   if (!world.set(...p, 0) && !((door || bed) && creative && !world.get(...p))) return false;
   // BlockIce.harvestBlock leaves flowing water over a solid/liquid cell in Survival.
-  if (block === ICE && !creative && !enchanted?.silk && iceLeavesWater(world.get(p[0], p[1] - 1, p[2])))
+  // (alp.a(ahb, yz, ...) returns after setBlockToAir where provider.isHellWorld: the Nether leaves no water.)
+  if (block === ICE && !creative && !enchanted?.silk && !world.isHell && iceLeavesWater(world.get(p[0], p[1] - 1, p[2])))
     world.set(...p, WATER, true, 0);
   farming.observe(...p);
   // BlockSilverfish.onBlockDestroyedByPlayer (one silverfish) and, outside Creative, dropBlockAsItemWithChance (a second
