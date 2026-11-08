@@ -271,7 +271,7 @@ export class Container {
   transfer() { return null; }
   canMerge() { return true; }
   canDrag() { return true; }
-  drop(s) { if (s?.count > 0) this.drops.push(s); }
+  drop(s) { if (s && s.count !== 0) this.drops.push(s); } // EntityPlayer.func_146097_a refuses only an exact size 0 (neg-stacks3-reference.json inventory)
   close() { if (this.inv.cursor) { this.drop(this.inv.cursor); this.inv.cursor = null; } }
   resetDrag() { this.dragEvent = 0; this.dragSlots.clear(); }
   // Container.slotClick(slotId, button, mode). Modes: 0 click, 1 shift-click,

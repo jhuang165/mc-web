@@ -55,7 +55,7 @@ public class HopperProbe {
   }
   static void slot(L w, int x, int y, int z, int slot, int item, int count, int damage) throws Exception {
     Object i = w.o(x, y, z);
-    i.getClass().getMethod("a", int.class, add.class).invoke(i, slot, count > 0 ? new add(adb.d(item), count, damage) : null);
+    i.getClass().getMethod("a", int.class, add.class).invoke(i, slot, count == 0 ? null : new add(adb.d(item), count == -999 ? 0 : count, damage));
   }
   public static void main(String[] args) throws Exception {
     Field uf = sun.misc.Unsafe.class.getDeclaredField("theUnsafe"); uf.setAccessible(true); RedstoneProbe.unsafe = (sun.misc.Unsafe) uf.get(null);
