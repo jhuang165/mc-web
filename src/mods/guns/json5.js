@@ -1,7 +1,7 @@
 // Guns mod (not 1.7.10): TaCZ's pack files are JSON with // and /* */ comments and trailing commas (Gson's lenient reader).
-// parseLenient strips both outside strings, then parses as JSON.
+// parseLenient strips both outside strings (and a leading byte-order mark, which some tag files carry), then parses as JSON.
 export function parseLenient(text) {
-  let out = "", i = 0, inString = false;
+  let out = "", i = text.charCodeAt(0) === 0xfeff ? 1 : 0, inString = false;
   while (i < text.length) {
     const c = text[i];
     if (inString) {

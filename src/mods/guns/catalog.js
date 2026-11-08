@@ -13,6 +13,8 @@ export const P320 = 4000, AKM = 4001, M870 = 4002;
 export const AMMO_45ACP = 4010, AMMO_762X39 = 4011, AMMO_12G = 4012;
 export const GUN_SMITH = 4300; // the gun smith table (an item here: use it to open the smithing screen)
 
+import { fitGun, readGunTag, stackParts } from "./fit.js";
+
 const ICON = (name) => `/media/mods/guns/${name}.png`;
 
 export const AMMO = {
@@ -42,14 +44,30 @@ export const GUNS = {
     pellets: 9, damage: [[18, 36 / 9], [32, 27 / 9], [Infinity, 18 / 9]], headshot: 1.33, knockback: 0.15,
     inaccuracy: { stand: 3.65, move: 3.7, sneak: 3.65, aim: 3.5 },
     reload: { kind: "shell", start: 0.67, perShell: 0.5 }, draw: 0.25, aim: 0.18,
+    bolt: "manual_action", boltTime: 0.55, // the pump between shots (TaCZ m870 script bolt_time)
   },
 };
 
 // The `damage` field of a gun stack counts rounds fired from a full magazine, so it saves with the stack like durability does
 // without the item being damageable (no `durability`: no wear, repair or Unbreaking). `damageRange` lets PlayerInventory.read keep it.
 // An inventory-fed gun (the minigun) has no magazine: its rounds are the matching ammo carried (`count(id)`), or endless in creative.
-export const roundsLeft = (stack, count = null, creative = false) => {
+// The pack's attachments by item id (fit.js; filled by install.js).
+export const ATTACHMENTS = {};
+// The stack's gun with the attachments it carries applied (fit.js fitGun), cached per gun and set of parts; undefined for a
+// stack that is not a gun. An empty slot holds the gun's built-in part, if it has one (builtinParts, install.js).
+const fitted = new Map();
+export function gunOf(stack) {
   const gun = GUNS[stack?.id];
+  if (!gun || (!stack.modTag?.attachments && !gun.builtinParts)) return gun;
+  const parts = stackParts(stack, ATTACHMENTS);
+  for (const [type, id] of Object.entries(gun.builtinParts ?? {})) if (!parts[type] && ATTACHMENTS[id]) parts[type] = ATTACHMENTS[id];
+  const key = `${gun.id}:${Object.entries(parts).map(([t, a]) => t + a.id).join(",")}`;
+  let g = fitted.get(key);
+  if (!g || (g.base ?? g) !== gun) { g = fitGun(gun, parts); fitted.set(key, g); }
+  return g;
+}
+export const roundsLeft = (stack, count = null, creative = false) => {
+  const gun = gunOf(stack);
   if (gun?.feed === "inventory") return creative ? Infinity : count ? count(gun.ammo) : 0;
   return Math.max(0, (gun?.magazine ?? 0) - (stack?.damage | 0));
 };
@@ -57,7 +75,8 @@ export const isGun = (id) => GUNS[id] !== undefined;
 export const isAmmo = (id) => AMMO[id] !== undefined;
 
 export const GUN_ITEMS = [
-  ...Object.values(GUNS).map((g) => ({ id: g.id, name: g.name, stack: 1, damageRange: g.magazine, iconUrl: ICON(g.key), gun: g })),
+  // readTag keeps a saved gun's parts even in a session whose pack failed to load (fit.js readGunTag).
+  ...Object.values(GUNS).map((g) => ({ id: g.id, name: g.name, stack: 1, damageRange: g.magazine, iconUrl: ICON(g.key), gun: g, readTag: readGunTag })),
   ...Object.values(AMMO).map((a) => ({ id: a.id, name: a.name, stack: a.stack, iconUrl: ICON("ammo_" + a.key), ammo: a })),
   { id: GUN_SMITH, name: "Gun Smith Table", stack: 64, iconUrl: ICON("gun_smith_table"), gunSmith: true },
 ];

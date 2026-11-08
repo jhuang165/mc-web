@@ -122,7 +122,7 @@ const maxPacked = (a, b) => Math.max(a & 0xffff, b & 0xffff) | (Math.max(a >>> 1
 
 export class VoxelScene {
   constructor(container) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, stencil: true, powerPreference: "high-performance" }); // stencil: the guns mod's scope lenses (pack-view.js)
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
     this.renderer.setSize(innerWidth, innerHeight);
     // Colours stay in the game's own space end to end, as fixed-function GL did.

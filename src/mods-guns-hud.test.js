@@ -20,7 +20,7 @@ test("the counter shows the magazine, the ammo carried and the fire mode", () =>
   // Nothing to load: no prompt, and the empty reserve is red.
   const dry = ammoHudState({ id: M870, damage: GUNS[M870].magazine }, { count: () => 0 });
   assert.equal(dry.prompt, false);
-  assert.deepEqual(ammoHudLines(dry), [[["0", HUD_RED, 2], [" / 0", HUD_RED, 1]], [["SEMI", HUD_GRAY, 1]]]);
+  assert.deepEqual(ammoHudLines(dry), [[["0", HUD_RED, 2], [" / 0", HUD_RED, 1]], [["PUMP", HUD_GRAY, 1]]]);
   // Creative reloads are free: an infinite reserve, and the prompt with no ammo carried.
   const creative = ammoHudState({ id: P320, damage: 12 }, { count: () => 0, creative: true });
   assert.equal(creative.reserve, null);

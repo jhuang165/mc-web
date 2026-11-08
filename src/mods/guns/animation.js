@@ -150,6 +150,11 @@ function mainAnimation(own, defaults, s) {
   }
   // A manual action (pump, bolt) works its action after each shot: TaCZ's "bolt" animation, from the shot.
   if (s.bolt === "manual_action") { const r = playing(pick(own, null, "bolt"), s.sinceShot); if (r) return r; }
+  // F: the inspect animation (inspect_empty with the magazine empty), until it ends; hooks.js clears it on a shot or reload.
+  if (s.sinceInspect >= 0) {
+    const r = playing(pick(own, defaults, ...(s.inspectEmpty ? ["inspect_empty", "inspect"] : ["inspect"])), s.sinceInspect);
+    if (r) return r;
+  }
   return playing(pick(own, defaults, "draw"), s.sinceDraw);
 }
 

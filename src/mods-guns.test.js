@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ITEMS, craftingResult, setExtraCrafting, Survival } from "./survival.js";
 import { CREATIVE_TABS, SEARCH_ORDER } from "./creative.js";
-import { setGunsEnabled, gunsWorld, gunsEnabled, gunCraftingResult } from "./mods/guns/install.js";
+import { setGunsEnabled, gunsWorld, gunsEnabled, gunCraftingResult, creativeOrder } from "./mods/guns/install.js";
 import { P320, AKM, M870, AMMO_45ACP, AMMO_762X39, AMMO_12G, GUNS, roundsLeft, CREATIVE_ORDER } from "./mods/guns/catalog.js";
 
 const tables = () => ({ items: ITEMS, combatTab: CREATIVE_TABS[8].items, search: SEARCH_ORDER, setCrafting: setExtraCrafting });
@@ -37,8 +37,9 @@ test("enabling registers the items, Combat tab, search and crafting once; disabl
     assert.equal(ITEMS[M870].stack, 1);
     assert.equal(ITEMS[AMMO_12G].stack, 36);
     assert.equal(ITEMS[P320].durability, undefined); // not damageable: no wear, repair or Unbreaking
-    assert.deepEqual(CREATIVE_TABS[8].items, [...combat, ...CREATIVE_ORDER]);
-    assert.deepEqual(SEARCH_ORDER, [...search, ...CREATIVE_ORDER]);
+    assert.deepEqual(CREATIVE_TABS[8].items, [...combat, ...creativeOrder()]);
+    assert.deepEqual(SEARCH_ORDER, [...search, ...creativeOrder()]);
+    assert.deepEqual(creativeOrder().slice(0, CREATIVE_ORDER.length + 4), [...CREATIVE_ORDER, 4301, 4302, 4303, 4304]); // the ammo boxes follow
     const crafted = craftingResult(grid(["III", "GL ", "I  "], { I: IRON, G: GOLD, L: LAPIS }), 3);
     assert.deepEqual([crafted.id, crafted.count, crafted.damage], [P320, 1, GUNS[P320].magazine]); // crafted empty
   } finally {
@@ -61,6 +62,11 @@ test("gun and ammo recipes: shaped, mirrored, shifted, damage-checked lapis, any
   assert.deepEqual(r(["  I", "  G", "  G"], { I: IRON, G: POWDER }), [AMMO_762X39, 12]);
   assert.deepEqual(r(["P  ", "G  ", "I  "], { P: PAPER, G: POWDER, I: IRON }), [AMMO_12G, 6]);
   assert.equal(r(["I  ", "G  ", "G I"], { I: IRON, G: POWDER }), null); // an extra item breaks the match
+  const COAL = { id: 301 }, CHARCOAL = { id: 301, damage: 1 };
+  assert.deepEqual(r(["   ", "  C", "   "], { C: COAL }), [330, 1]); // one coal, anywhere: one gunpowder
+  assert.deepEqual(r(["C"], { C: COAL }, 2), [330, 1]);
+  assert.deepEqual(r(["C"], { C: CHARCOAL }, 2), [330, 1]); // charcoal too
+  assert.equal(r(["CC"], { C: COAL }, 2), null);
 });
 
 test("rounds left come from the stack damage and saved gun stacks load in a guns world", () => {

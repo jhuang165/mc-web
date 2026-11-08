@@ -21,7 +21,7 @@ import { versioned } from "./media-version.js";
 import { animatedItemUrl, itemFrameTag, onItemFramesReady } from "./item-animation.js";
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 import { GUN_MODELS, buildGunMesh, gunViewPose, gunViewMatrix, applyGunParts } from "./mods/guns/model.js";
-import { gunAssets, PackGunView } from "./mods/guns/pack-view.js";
+import { gunAssets, gunParts, PackGunView } from "./mods/guns/pack-view.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
 const BLOCK_FACES=[
@@ -236,14 +236,16 @@ export class FirstPerson {
     this.last = -1;
   }
   // `meta` is the wool colour (the stack's damage) of a held block.
-  select(id, meta = 0, use = 0, glint = false, color = undefined) {
-    const gun = ITEMS[id]?.gun; // guns mod: one model whatever rounds are left (the stack damage)
+  select(id, meta = 0, use = 0, glint = false, color = undefined, fitted = null) {
+    // Guns mod: one model whatever rounds are left (the stack damage); `fitted` is the held stack's gun with its attachments
+    // (hooks.js view().gun), whose parts the model carries.
+    const gun = fitted?.id === id ? fitted : ITEMS[id]?.gun;
     // A TaCZ pack gun's own model once its files are in (pack-view.js); until then (or for a hand-made gun without the
     // pack) the box model of model.js, or nothing for a pack-only gun.
-    const packAssets = gun?.pack ? gunAssets(gun) : null;
-    if (gun) { meta = 0; use = packAssets ? 1 : 0; }
+    const packAssets = gun?.pack ? gunAssets(gun) : null, parts = packAssets ? gunParts(gun) : null;
+    if (gun) { meta = 0; use = packAssets ? `1${gun.fitKey ?? ""}/${parts.ready}` : 0; }
     const leather = leatherItemLayers(id, color),
-      cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + meta + ":" + use + ":" + (glint ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + cast + ":" + (id === ITEM_CLOCK ? clockFrame() : 0) + ":" + (id ? itemFrameTag(itemTexture(id, meta, cast ? 1 : use)) : 0);
+      cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + meta + ":" + use + ":" + (glint ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + cast + ":" + (id === ITEM_CLOCK ? clockFrame() : 0) + ":" + (id ? itemFrameTag(itemTexture(id, meta, cast ? 1 : gun ? 0 : use)) : 0);
     if (key === this.last) return;
     this.last = key;
     if (this.item) {
@@ -344,7 +346,7 @@ export class FirstPerson {
   render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0, bow = null, glint = false, color = undefined, map = null, pitchDeg = 0, gun = null } = {}) {
     if (!visible) return;
     // `bow` is { stage, draw } while the bow is drawn (bow.js bowStage and the draw term).
-    this.select(pose.item, pose.meta, bow ? bow.stage : 0, glint, color);
+    this.select(pose.item, pose.meta, bow ? bow.stage : 0, glint, color, gun?.gun);
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
     const mapMode = !!map?.data && pose.item === ITEM_FILLED_MAP;
@@ -368,7 +370,7 @@ export class FirstPerson {
     for (const m of this.materials) m.setLight(light);
     const clear = this.renderer.autoClear;
     this.renderer.autoClear = false;
-    this.renderer.clearDepth();
+    this.renderer.clear(false, true, true); // depth, and the stencil a gun's scope lens marks (pack-view.js)
     this.renderer.render(this.scene, this.camera);
     this.renderer.autoClear = clear;
   }

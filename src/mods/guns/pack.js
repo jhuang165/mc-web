@@ -4,9 +4,9 @@
 // is null and only the three hand-made guns of catalog.js exist.
 //
 // The conversion follows the pack's own fields (data/guns/<gun>_data.json, display/guns/<gun>_display.json); what this game
-// cannot do yet (attachments, projectile flight, heat, crawling, melee) is ignored.
+// cannot do yet (projectile flight, heat, crawling, melee, an attachment's scripted functions) is ignored.
 import { parseLenient } from "./json5.js";
-import { TACZ_GUN_IDS, TACZ_AMMO_IDS } from "./ids.js";
+import { TACZ_GUN_IDS, TACZ_AMMO_IDS, TACZ_ATTACHMENT_IDS } from "./ids.js";
 
 export const PACK_ROOT = "/mods/tacz/";
 const ASSETS = PACK_ROOT + "pack/assets/tacz/", DATA = PACK_ROOT + "pack/data/tacz/";
@@ -24,13 +24,15 @@ export const soundPath = (loc) => (loc ? path(loc) : null);
 const defaultFetch = (url) => fetch(url).then((r) => (r.ok ? r.text() : null)).catch(() => null);
 const strip = (s) => String(s ?? "").replace(/§./g, "").trim();
 
-// The raw pack: { index, lang, guns: { name: { index, data, display } }, ammo: { name: { index, display } }, recipes: [...] },
-// or null when public/mods/tacz/index.json is missing (the pack is not installed).
+// The raw pack: { index, lang, guns: { name: { index, data, display } }, ammo: { name: { index, display } },
+// attachments: { name: { index, data, display } }, tags: { "allow_attachments/ak47": [...], ... }, recipes: [...] }, or null
+// when public/mods/tacz/index.json is missing (the pack is not installed).
 export async function loadTaczPack(fetchText = defaultFetch) {
-  const json = async (url) => { const t = await fetchText(url); return t == null ? null : parseLenient(t); };
+  // A file that does not parse counts as missing, so one bad file costs only its own entry.
+  const json = async (url) => { const t = await fetchText(url); if (t == null) return null; try { return parseLenient(t); } catch { return null; } };
   const index = await json(PACK_ROOT + "index.json").catch(() => null);
   if (!index?.guns) return null;
-  const pack = { index, lang: (await json(ASSETS + "lang/en_us.json")) ?? {}, guns: {}, ammo: {}, recipes: [] };
+  const pack = { index, lang: (await json(ASSETS + "lang/en_us.json")) ?? {}, guns: {}, ammo: {}, attachments: {}, tags: {}, recipes: [] };
   await Promise.all([
     ...index.guns.map(async (name) => {
       const gi = await json(`${DATA}index/guns/${name}.json`);
@@ -43,6 +45,13 @@ export async function loadTaczPack(fetchText = defaultFetch) {
       if (!ai) return;
       pack.ammo[name] = { index: ai, display: await json(`${ASSETS}display/ammo/${path(ai.display)}.json`) };
     }),
+    ...(index.attachments ?? []).map(async (name) => {
+      const ai = await json(`${DATA}index/attachments/${name}.json`);
+      if (!ai) return;
+      const [data, display] = await Promise.all([json(`${DATA}data/attachments/${path(ai.data)}.json`), json(`${ASSETS}display/attachments/${path(ai.display)}.json`)]);
+      pack.attachments[name] = { index: ai, data: data ?? {}, display: display ?? {} };
+    }),
+    ...(index.attachmentTags ?? []).map(async (name) => { const t = await json(`${DATA}tacz_tags/attachments/${name}.json`); if (Array.isArray(t)) pack.tags[name] = t; }),
     ...(index.recipes ?? []).map(async (name) => { const r = await json(`${DATA}recipes/${name}.json`); if (r) pack.recipes.push({ name, ...r }); }),
   ]);
   pack.recipes.sort((a, b) => (a.name < b.name ? -1 : 1));
@@ -94,10 +103,23 @@ export function taczGun(name, entry, lang = {}) {
       : { kind: "magazine", tactical: +cd.tactical || 2, empty: +cd.empty || +cd.tactical || 2.5 },
     draw: +d.draw_time || 0.5, aim: +d.aim_time || 0.2,
     bolt: d.bolt ?? "closed_bolt",
+    // A manual action (bolt, pump, lever) is worked after every shot before the next: bolt_action_time, or the gun script's
+    // bolt_time for the scripted shotguns and lever guns.
+    boltTime: d.bolt === "manual_action" ? +d.bolt_action_time || +sp.bolt_time || 0 : 0,
     recoil: { pitch: recoilKeys(d.recoil?.pitch), yaw: recoilKeys(d.recoil?.yaw) },
     zoom: +v.iron_zoom || 1,
+    // Attachments (fit.js): the extended magazine sizes by level, and the slots the gun has at all; install.js sets
+    // `attachments`, the allow list (tacz_tags/attachments/allow_attachments/<gun>.json) as a set of names.
+    extendedMag: Array.isArray(d.extended_mag_ammo_amount) ? d.extended_mag_ammo_amount.map((n) => n | 0) : null,
+    attachmentTypes: Array.isArray(d.allow_attachment_types) ? d.allow_attachment_types : [],
+    // builtin_attachments: per slot, the factory parts the gun takes besides its allow list, and the one fitted while the
+    // slot is empty ({ type: { attachments: [names], default: name | null } }; the P90's is a bare name).
+    builtin: Object.fromEntries(Object.entries(d.builtin_attachments ?? {}).map(([type, b]) => typeof b === "string"
+      ? [type, { attachments: [path(b)], default: path(b) }]
+      : [type, { attachments: (Array.isArray(b?.attachments) ? b.attachments : []).map(path), default: b?.default_attached ? path(b.default_attached) : null }])),
     sounds: {
-      shoot: soundPath(sounds.shoot), draw: soundPath(sounds.draw), putAway: soundPath(sounds.put_away),
+      shoot: soundPath(sounds.shoot), silenced: soundPath(sounds.silence), draw: soundPath(sounds.draw), putAway: soundPath(sounds.put_away),
+      inspect: soundPath(sounds.inspect), inspectEmpty: soundPath(sounds.inspect_empty),
       // Reload keyframes come from the animation file's sound_effects once it is loaded (assets.js).
       tactical: [], empty: [], start: [], shell: [], end: [], pump: null,
     },
@@ -108,7 +130,7 @@ export function taczGun(name, entry, lang = {}) {
       flash: v.muzzle_flash ? { texture: v.muzzle_flash.texture, scale: +v.muzzle_flash.scale || 1 } : null,
       thirdPersonScale: v.transform?.scale?.thirdperson ?? [1, 1, 1],
       // The factory parts fitted with no attachments (builtin_attachments' default_attached), as bone names.
-      adapters: Object.values(d.builtin_attachments ?? {}).map((b) => path(b?.default_attached)).filter(Boolean),
+      adapters: Object.values(d.builtin_attachments ?? {}).map((b) => path(typeof b === "string" ? b : b?.default_attached)).filter(Boolean),
     },
   };
 }
@@ -120,12 +142,19 @@ export function taczAmmo(name, entry, lang = {}) {
 }
 
 // TaCZ material tags -> this game's items ([id], [id, damage] or "log"/"planks" for any variant), with a count divisor for
-// materials 1.7.10 only has in a bigger form. Copper (no 1.7.10 ore) becomes gold nuggets; amethyst emeralds; netherite diamonds.
+// materials 1.7.10 only has in a bigger form. Copper (no 1.7.10 ore) becomes coal or charcoal; amethyst emeralds; netherite diamonds;
+// the later blocks their nearest 1.7.10 kin (crying obsidian obsidian, shroomlight glowstone, observer a comparator, an end
+// crystal an eye of ender, a copper block a block of coal).
 export const SMITH_MATERIALS = {
+  "forge:dusts/redstone": { item: 360 }, "forge:dusts/glowstone": { item: 383 }, "forge:glass": { item: 9 },
+  "forge:leather": { item: 315 }, "minecraft:wool": { item: "wool" }, "minecraft:gunpowder": { item: 330 },
+  "minecraft:blaze_powder": { item: 388 }, "minecraft:fire_charge": { item: 1952 }, "minecraft:ender_eye": { item: 1960 },
+  "minecraft:end_crystal": { item: 1960 }, "minecraft:crying_obsidian": { item: 22 }, "minecraft:shroomlight": { item: 1131 },
+  "minecraft:observer": { item: 381 }, "minecraft:copper_block": { item: 1144 },
   "forge:ingots/iron": { item: 302 }, "forge:ingots/gold": { item: 304 }, "forge:gems/diamond": { item: 303 },
   "forge:rods/blaze": { item: 387 }, "forge:gems/quartz": { item: 382 }, "forge:gems/lapis": { item: 351, damage: 4 },
   "minecraft:logs": { item: "log" }, "minecraft:planks": { item: "planks" }, "forge:rods/wooden": { item: 300 },
-  "forge:gunpowder": { item: 330 }, "forge:ingots/copper": { item: 394 }, "forge:gems/amethyst": { item: 367 },
+  "forge:gunpowder": { item: 330 }, "forge:ingots/copper": { item: 301 }, "forge:gems/amethyst": { item: 367 },
   "forge:ingots/netherite": { item: 303 }, "forge:nuggets/iron": { item: 302, per: 9 },
 };
 // The gun smith table's recipes: { key, output, count, group, materials: [{ item, damage?, count }] }, only those whose output
@@ -134,7 +163,8 @@ export function taczRecipes(pack) {
   const out = [];
   for (const r of pack?.recipes ?? []) {
     const res = r.result ?? {}, name = path(res.id);
-    const output = res.type === "gun" ? TACZ_GUN_IDS[name] : res.type === "ammo" ? TACZ_AMMO_IDS[name] : undefined;
+    const output = res.type === "gun" ? TACZ_GUN_IDS[name] : res.type === "ammo" ? TACZ_AMMO_IDS[name]
+      : res.type === "attachment" ? TACZ_ATTACHMENT_IDS[name] : undefined;
     if (output == null) continue;
     const materials = [];
     for (const m of r.materials ?? []) {

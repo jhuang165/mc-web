@@ -59,6 +59,8 @@ export function tooltipLines(item,stack,advanced=false){
  // ItemRecord: EnumRarity.rare (aqua name) and addInformation's item.record.<name>.desc line in gray.
  if(item.record){lines[0].color??='aqua';lines.push({text:item.description,color:'gray'});}
  if(attack)lines.push({text:''},{text:`+${attack} ${translate('attribute.name.generic.attackDamage','Attack Damage')}`,color:'blue'});
+ // Not 1.7.10: a mod item's own lines (mods/guns: an ammo box's rounds, a gun's fitted parts, an attachment's effects).
+ if(typeof item.tooltip==='function')for(const text of item.tooltip(stack))if(text)lines.push({text,color:'gray'});
  if(stack.unbreakable)lines.push({text:translate('item.unbreakable','Unbreakable'),color:'blue'});
  if(advanced&&item.durability&&stack.damage>0)lines.push({text:`Durability: ${item.durability-stack.damage} / ${item.durability}`});
  return lines;

@@ -1,7 +1,7 @@
 // Guns mod (not 1.7.10): trigger, fire rate, magazine/shell reloads and the instant-hit shot. Pure logic: main.js supplies the
 // held stack, inventory access and world/mob tracing through `ctx`, so tests drive it headless. Times are seconds; the game
 // calls tick() once per 20 Hz game tick.
-import { GUNS, roundsLeft } from "./catalog.js";
+import { GUNS, gunOf, roundsLeft } from "./catalog.js";
 
 export const TICK = 0.05;
 export const RANGE = 128; // blocks; TaCZ bullets fly speed * life (150-250 blocks) but only loaded chunks matter here
@@ -58,6 +58,7 @@ export function traceShot(origin, dir, ctx, range = RANGE) {
   return null;
 }
 
+export const boltDelay = (gun) => (gun.bolt === "manual_action" ? +gun.boltTime || 0 : 0);
 // Seconds left after one tick; float leftovers below a microsecond count as done.
 const countDown = (t) => (t - TICK > 1e-6 ? t - TICK : 0);
 
@@ -83,7 +84,7 @@ export class GunController {
   release() { this.trigger = false; this.spent = false; } // a burst under way still finishes (tick)
   // R: start a reload when the magazine is not full and there is ammo (or the player is in creative).
   startReload(ctx) {
-    const stack = ctx.held, gun = GUNS[stack?.id];
+    const stack = ctx.held, gun = gunOf(stack);
     if (!gun || gun.feed === "inventory" || this.reload || this.draw > 0) return false; // the minigun feeds from the inventory
     const left = roundsLeft(stack);
     if (left >= gun.magazine || (!ctx.creative && ctx.count(gun.ammo) <= 0)) return false;
@@ -94,7 +95,7 @@ export class GunController {
   }
   // One game tick. ctx: { held, slot, creative, count(id), take(id, n) }. Returns events (draw, shot, empty, shell, reloaded).
   tick(ctx) {
-    const stack = ctx.held, gun = GUNS[stack?.id], events = [];
+    const stack = ctx.held, gun = gunOf(stack), events = []; // the gun with its attachments (fit.js)
     const key = gun ? `${ctx.slot}:${gun.id}` : null;
     if (key !== this.heldKey) { // drawing a gun (or another one): TaCZ draw_time before it can fire
       this.heldKey = key; this.reload = null; this.cooldown = 0; this.spent = this.trigger; this.burstLeft = 0;
@@ -130,7 +131,8 @@ export class GunController {
       if (this.burstLeft === 0 && !gun.burst.continuous) this.spent = true;
     } else {
       this.burstLeft = 0;
-      this.cooldown = carry + 60 / gun.rpm;
+      // A bolt, pump or lever gun cannot fire again until its action is worked (TaCZ bolt_action_time), however high its rpm.
+      this.cooldown = carry + Math.max(60 / gun.rpm, boltDelay(gun));
       if (mode !== "auto") this.spent = true;
     }
     events.push({ type: "shot", gun });

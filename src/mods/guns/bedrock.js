@@ -111,22 +111,40 @@ export function boneMatrix(model, name, target = new THREE.Matrix4()) {
   return target;
 }
 
-// TaCZ's functional bones as this game shows them with no attachments fitted (BedrockGunModel's renderers): the standard
-// magazine, the iron sight and carry handle, the default handguard and each attachment slot's `_default` part; the
-// pack's factory parts (`adapters`, from builtin_attachments' default_attached) under attachment_adapter. Positioning
-// and view bones carry no cubes worth drawing; the placeholder arm cubes give way to the player's arms (pack-view.js).
-const ATTACHMENT_TYPES = ["scope", "muzzle", "stock", "grip", "laser", "extended_mag"];
+// TaCZ's functional bones as this game shows them (BedrockGunModel's renderers). With nothing fitted: the standard
+// magazine, the iron sight and carry handle, the default handguard and each slot's `_default` part, and the pack's factory
+// parts (`adapters`, from builtin_attachments' default_attached) under attachment_adapter. `parts` ({ type: attachment },
+// fit.js) changes that: an extended magazine swaps mag_standard for mag_extended_<level>; a scope raises the mount, folds
+// the iron sight (sight_folded) and takes off the carry handle; a muzzle part replaces muzzle_default unless it shows it
+// (show_muzzle), a stock stock_default, and a grip or laser puts on the tactical handguard. A part's `adapter`, and a
+// part whose name is a bone under attachment_adapter (the OEM stocks and covers), show that bone. The `<type>_pos` bones
+// are empty in every pack gun: the parts' own models hang there (pack-view.js). Positioning and view bones carry no
+// cubes worth drawing; the placeholder arm cubes give way to the player's arms.
 const HIDDEN = new Set(["mag_extended_1", "mag_extended_2", "mag_extended_3", "mount", "sight_folded", "handguard_tactical",
   "additional_magazine"]);
 // Bones whose own cubes are markers (TaCZ draws something else there, or nothing), though their children may show.
 export const MARKER_BONES = new Set(["muzzle_flash", "lefthand_pos", "righthand_pos", "constraint", "camera", "views", "idle_view",
   "iron_view", "positioning", "fixed", "ground", "thirdperson_hand", "shell", "muzzle_pos"]);
-export function defaultVisibility(geo, { adapters = [] } = {}) {
+export function defaultVisibility(geo, { adapters = [], parts = null, extendedLevel = 0 } = {}) {
   const parent = new Map(geo.bones.map((b) => [b.name, b.parent ?? null]));
-  const keep = new Set(adapters);
+  const list = Object.values(parts ?? {});
+  // Without the parts system (no pack attachments), the builtin defaults stand for the fitted parts.
+  const keep = new Set(parts ? list.flatMap((a) => [a.adapter, a.key]).filter(Boolean) : adapters);
+  const shown = new Set(), hidden = new Set(HIDDEN);
+  let level = Math.max(0, Math.min(3, extendedLevel | 0));
+  while (level > 0 && !parent.has(`mag_extended_${level}`)) level--;
+  if (level > 0) { hidden.add("mag_standard"); shown.add(`mag_extended_${level}`); }
+  if (parts?.scope) {
+    if (parts.scope.showMount) shown.add("mount");
+    if (parent.has("sight_folded")) { hidden.add("sight"); shown.add("sight_folded"); }
+    hidden.add("carry_handle");
+  }
+  if (parts?.muzzle && !parts.muzzle.showMuzzle) hidden.add("muzzle_default");
+  if (parts?.stock) hidden.add("stock_default");
+  if ((parts?.grip || parts?.laser) && parent.has("handguard_tactical")) { hidden.add("handguard_default"); shown.add("handguard_tactical"); }
   return (name) => {
-    if (HIDDEN.has(name)) return true;
-    if (ATTACHMENT_TYPES.some((t) => name === `${t}_pos`) && name !== "scope_pos") return true;
+    if (shown.has(name)) return false;
+    if (hidden.has(name)) return true;
     if (parent.get(name) === "attachment_adapter") return !keep.has(name);
     return false;
   };

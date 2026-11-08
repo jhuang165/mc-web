@@ -153,10 +153,12 @@ import { HopperContainer, Hoppers, HOPPER } from "./hopper.js";
 import { Survival, ITEMS, burnTime, gameModeOf, setExtraCrafting } from "./survival.js";
 import { setGunsEnabled, gunsWorld, gunsEnabled, setGunPack, gunSmithRecipes } from "./mods/guns/install.js";
 import { gunSmithScreen, smithCraft } from "./mods/guns/smith-screen.js";
-import { GUN_SMITH } from "./mods/guns/catalog.js";
+import { GUN_SMITH, gunOf } from "./mods/guns/catalog.js";
 import { loadTaczPack } from "./mods/guns/pack.js";
 import { createGunHooks } from "./mods/guns/hooks.js";
-import { playGunSound, preloadGunSounds } from "./mods/guns/sounds.js";
+import { playGunSound, preloadGunSounds, gunSoundEvent } from "./mods/guns/sounds.js";
+import { attachmentScreen, fitFromInventory } from "./mods/guns/attachment-screen.js";
+import { isAmmoBox, fillBox, emptyBox, boxLabel } from "./mods/guns/ammo-box.js";
 import { createAmmoHud } from "./mods/guns/hud.js";
 import { stackName } from "./item-names.js";
 import { containerTitle } from "./container-names.js";
@@ -429,6 +431,7 @@ const guns = createGunHooks({
   hud: (state) => gunHud.update(state),
   // TaCZ grenades and rockets: Explosion with the pack's radius; `destroy_block` false keeps the blocks (isSmoking off).
   explode: (x, y, z, radius, { destroy }) => explodeAt(x, y, z, radius, { exploder: null, attacker: "player", smoking: !!destroy }),
+  attachments: () => openGunAttachments(), // Z
 });
 const gunHud = createAmmoHud(bitmapHtml);
 // The locally installed TaCZ gun pack (Git-ignored; pack.js), read once, the first time a guns world loads.
@@ -1942,6 +1945,44 @@ function openGunSmith() {
     close: resume, show: (self) => gui.show(self),
   }));
 }
+// Guns mod: using a held gun smith table opens it; an ammo box fills from the inventory (empties while sneaking). True when
+// the use was the mod's.
+function gunsUse() {
+  if (!gunsEnabled()) return false;
+  const inv = survival.inventory, held = inv.held;
+  if (held?.id === GUN_SMITH) { openGunSmith(); return true; }
+  if (!isAmmoBox(held?.id)) return false;
+  if (binds.isDown("key.sneak")) {
+    const out = emptyBox(inv.main, inv.current);
+    for (const s of out) { const stored = survival.add(s.id, s.count, s.damage); if (stored < s.count) throwStacks([{ ...s, count: s.count - stored }]); }
+    if (out.length) sounds?.play("random.pop", { volume: 0.2, pitch: 0.8 });
+  } else if (fillBox(inv.main, inv.current) > 0) sounds?.play("random.pop", { volume: 0.2, pitch: 1.2 });
+  toast(boxLabel(inv.held));
+  saved = false;
+  renderHotbar();
+  return true;
+}
+// Guns mod: Z with a gun in hand opens its attachment screen (attachment-screen.js); parts taken off, and rounds a smaller
+// magazine no longer holds, go back to the inventory (thrown when it is full).
+function openGunAttachments() {
+  if (screen !== "playing" || !survival.held) return;
+  screen = "inventory"; mining = null; mineHeld = false;
+  document.exitPointerLock?.();
+  const inv = survival.inventory;
+  gui.show(attachmentScreen({
+    slots: () => inv.main, index: () => inv.current, creative: survival.creative, icon,
+    fit: (type, attachment) => {
+      const out = fitFromInventory(inv.main, inv.current, type, attachment, { creative: survival.creative });
+      if (!out.ok) return false;
+      for (const s of out.give) { const stored = survival.add(s.id, s.count, s.damage); if (stored < s.count) throwStacks([{ ...s, count: s.count - stored }]); }
+      if (out.sound) playGunSound(sounds, gunSoundEvent(out.sound));
+      saved = false;
+      renderHotbar();
+      return true;
+    },
+    close: resume, show: (self) => gui.show(self),
+  }));
+}
 function openContainer(container, kind, key = null, gui = new ContainerScreen(container)) {
   screen = "inventory";
   mining = null;
@@ -2103,6 +2144,7 @@ function paperdollFrame() {
       armor: survival?.inventory?.armor ?? [],
       held: heldId(),
       heldDamage: survival.held?.damage || 0,
+      heldGun: gunsEnabled() ? gunOf(survival.held) : null, // the guns mod's held gun with its attachments
       heldColor: survival.held?.color,
       heldGlint: stackHasEffect(survival.held, ITEMS[survival.held?.id]),
       hurt: survival.hurtTime > 0,
@@ -3404,7 +3446,7 @@ function bindingPressed(d, ctrl) {
   else if (d === "key.chat") openChat("");
   else if (d === "key.command") openChat("/");
   else if (d === "key.attack") { if (gunsEnabled() && guns.attack(true)) return; mineHeld = true; edit(false); }
-  else if (d === "key.use") { if (gunsEnabled() && survival.inventory.held?.id === GUN_SMITH) openGunSmith(); else if (!(gunsEnabled() && guns.aimHold(true))) edit(true); } // guns mod: use aims down sights
+  else if (d === "key.use") { if (!gunsUse() && !(gunsEnabled() && guns.aimHold(true))) edit(true); } // guns mod: use aims down sights
   else if (d === "key.pickItem") pickBlock();
   else if (d === "key.playerlist") showPlayerList();
   else if (HOTBAR.includes(d)) selectSlot(HOTBAR.indexOf(d));
@@ -3504,7 +3546,7 @@ window.addEventListener("keydown", (e) => {
     // KeyBinding.setKeyBindState + onTick through the hash, then the binding's action.
     const d = binds.set(code, true);
     if (d) bindingPressed(d, e.ctrlKey);
-    else if (gunsEnabled()) guns.key(code); // guns mod: R reload, G fire mode on otherwise unbound keys
+    else if (gunsEnabled()) guns.key(code); // guns mod: R reload, G fire mode, F inspect, Z attachments on otherwise unbound keys
     if (screen !== "playing") return;
   }
   keys.add(e.code);
@@ -3551,7 +3593,7 @@ document.querySelectorAll("[data-key]").forEach((b) => {
   b.onpointerup = b.onpointercancel = () => { keys.delete(b.dataset.key); binds.touch.delete(d); };
 });
 $("#touch-break").onclick = () => { if (!(gunsEnabled() && guns.tap())) edit(false); };
-$("#touch-place").onclick = () => { if (gunsEnabled() && survival.inventory.held?.id === GUN_SMITH) openGunSmith(); else if (!(gunsEnabled() && guns.aimToggle())) edit(true); };
+$("#touch-place").onclick = () => { if (!gunsUse() && !(gunsEnabled() && guns.aimToggle())) edit(true); };
 $("#touch-inventory").onclick = () => inventory();
 $("#touch-fly").onclick = () => {
   if (survival.creative) {
@@ -3567,7 +3609,7 @@ function setupPointer() {
     // Mouse buttons reach their KeyBinding through the hash as -100 + button (Mouse.getEventButton).
     const d = binds.set(mouseCode(e.button), true);
     if (d === "key.use") {
-      if (gunsEnabled() && survival.inventory.held?.id === GUN_SMITH) openGunSmith(); else if (!(gunsEnabled() && guns.aimHold(true))) edit(true); // guns mod: use aims down sights
+      if (!gunsUse() && !(gunsEnabled() && guns.aimHold(true))) edit(true); // guns mod: use aims down sights
       return;
     }
     if (d === "key.pickItem") {
@@ -3898,6 +3940,7 @@ function animate(now) {
     armor: survival?.inventory?.armor ?? [],
     held: heldId(),
     heldDamage: survival.held?.damage || 0,
+    heldGun: gunsEnabled() ? gunOf(survival.held) : null, // the guns mod's held gun with its attachments
     heldColor: survival.held?.color,
     heldGlint: stackHasEffect(survival.held, ITEMS[survival.held?.id]),
     hurt: survival.hurtTime > 0,

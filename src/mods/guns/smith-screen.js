@@ -5,10 +5,10 @@
 import { GUNS } from "./catalog.js";
 import { ORIGINAL_ITEMS } from "../../original-items.js";
 
-// "log" is any 1.7.10 log (log 17 and log2 162, every wood), "planks" any planks (5), as this game's live ids; a material
-// with `damage` needs that exact value.
+// "log" is any 1.7.10 log (log 17 and log2 162, every wood), "planks" any planks (5), "wool" any colour of wool (35), as
+// this game's live ids; a material with `damage` needs that exact value.
 const live = (original) => ORIGINAL_ITEMS[original] ?? original;
-const ANY = { log: new Set([live(17), live(162)]), planks: new Set([live(5)]) };
+const ANY = { log: new Set([live(17), live(162)]), planks: new Set([live(5)]), wool: new Set([live(35)]) };
 export const smithIconId = (m) => (typeof m.item === "string" ? [...ANY[m.item]][0] : m.item);
 export const smithMatches = (stack, m) => {
   if (!stack || !(stack.count > 0)) return false;
@@ -38,9 +38,10 @@ export function smithCraft(slots, recipe) {
   return { id: recipe.output, count: recipe.count, damage: gun && gun.feed !== "inventory" ? gun.magazine : 0 };
 }
 
-const TABS = [["gun", "Guns"], ["ammo", "Ammo"]];
+const TABS = [["gun", "Guns"], ["ammo", "Ammo"], ["attachment", "Attachments"]];
 let styled = false;
-function ensureStyle() {
+// The item icons in list rows (here and attachment-screen.js).
+export function ensureStyle() {
   if (styled || typeof document === "undefined") return;
   styled = true;
   const s = document.createElement("style");
@@ -59,7 +60,7 @@ export function gunSmithScreen({ recipes, slots, icon, name, craft, close, show,
       const c = Math.trunc(w / 2), list = recipes.filter((r) => r.kind === tab);
       g.text("Gun Smith Table", c, 8, { center: true });
       TABS.forEach(([k, label], i) => {
-        g.button({ x: c - 101 + i * 102, y: 18, w: 100, h: 20 }, label, () => { if (tab !== k) { tab = k; selected = -1; scroll = 0; show(self); } }, { enabled: tab !== k });
+        g.button({ x: c - 152 + i * 102, y: 18, w: 100, h: 20 }, label, () => { if (tab !== k) { tab = k; selected = -1; scroll = 0; show(self); } }, { enabled: tab !== k });
       });
       if (!list.length) {
         g.text(recipes.length ? "Nothing to make here" : "No recipes: install the TaCZ gun pack (npm run mods:fetch-tacz)", c, Math.trunc(h / 2) - 4, { center: true, color: 0xa0a0a0 });

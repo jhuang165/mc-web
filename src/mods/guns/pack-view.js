@@ -2,7 +2,9 @@
 // and LOD), animations and the mod's default animations once; PackGunView poses the first-person model each frame from
 // hooks.js view() the way TaCZ's first-person renderer does (the camera at the model's idle_view bone, moving to its
 // iron_view bone as the player aims, the hands at lefthand_pos / righthand_pos, the flash at muzzle_flash), and
-// packHeldModel gives the LOD model for third person, held at its thirdperson_hand bone.
+// packHeldModel gives the LOD model for third person, held at its thirdperson_hand bone. A fitted gun (fit.js) also carries
+// its attachments' own models on the gun's <type>_pos bones; aiming through a scope or sight puts the camera at the part's
+// scope_view bone, with the world seen through its ocular and the reticle (division) drawn only there (stencil).
 import * as THREE from "three";
 import { parseLenient } from "./json5.js";
 import { packUrl } from "./pack.js";
@@ -14,19 +16,73 @@ import { muzzleOverride } from "./model.js";
 const assets = new Map(); // gun id -> { promise, value }
 const fetchJson = (url) => fetch(url).then((r) => (r.ok ? r.text() : null)).then((t) => (t == null ? null : parseLenient(t))).catch(() => null);
 
-// The gun's pack assets once loaded, else null (and the load starts). `changed` runs when they arrive.
-export function gunAssets(gun, changed = () => {}, load = fetchJson) {
-  if (!gun?.pack) return null;
-  let a = assets.get(gun.id);
+function cachedLoad(cache, key, loader, changed) {
+  let a = cache.get(key);
   if (!a) {
     a = { value: null, failed: false, waiters: new Set() };
-    assets.set(gun.id, a);
-    a.promise = loadGunAssets(gun, load).then((v) => { a.value = v; a.failed = !v; for (const w of a.waiters) w(); a.waiters.clear(); return v; });
+    cache.set(key, a);
+    a.promise = loader().then((v) => { a.value = v; a.failed = !v; for (const w of a.waiters) w(); a.waiters.clear(); return v; });
   }
   if (!a.value && !a.failed) a.waiters.add(changed);
   return a.value;
 }
-export const gunAssetsFailed = (gun) => !!assets.get(gun?.id)?.failed;
+// The gun's pack assets once loaded, else null (and the load starts). `changed` runs when they arrive. A fitted gun shares
+// its catalog gun's assets.
+export function gunAssets(gun, changed = () => {}, load = fetchJson) {
+  if (!gun?.pack) return null;
+  const base = gun.base ?? gun;
+  return cachedLoad(assets, base.id, () => loadGunAssets(base, load), changed);
+}
+export const gunAssetsFailed = (gun) => !!assets.get((gun?.base ?? gun)?.id)?.failed;
+
+// An attachment's models ({ geo, lod }), like gunAssets; null for a part without a model (the extended magazines and ammo
+// mods draw nothing of their own).
+const partCache = new Map();
+export function partAssets(att, changed = () => {}, load = fetchJson) {
+  if (!att?.model) return null;
+  return cachedLoad(partCache, att.id, async () => {
+    const [geo, lod] = await Promise.all([load(packUrl.geo(att.model)), att.lod?.model ? load(packUrl.geo(att.lod.model)) : null]);
+    const g = bedrockGeometry(geo);
+    return g ? { geo: g, lod: bedrockGeometry(lod) } : null;
+  }, changed);
+}
+export const partAssetsFailed = (att) => !att?.model || !!partCache.get(att.id)?.failed;
+// The fitted parts with a model, and whether every one of them has loaded (or failed): the views rebuild once they have.
+export function gunParts(gun, changed) {
+  const list = Object.entries(gun?.parts ?? {}).filter(([, a]) => a.model);
+  const ready = list.filter(([, a]) => partAssets(a, changed) || partAssetsFailed(a)).length;
+  return { list, ready, done: ready === list.length };
+}
+
+// Scope internals (TaCZ BedrockAttachmentModel): the ocular is the eyepiece the world shows through, the division the
+// reticle seen only through it; *_view bones are camera marks.
+const isOcular = (n) => n === "ocular" || /^ocular_(scope|sight)/.test(n);
+const isDivision = (n) => n === "division" || n === "divisions";
+// Hangs each loaded part's model on the gun model's <type>_pos bone. lod: third person's simpler models and textures.
+// Returns { type: { model, ocular: [meshes], division: [meshes] } }.
+function fitParts(model, gun, { material, texture, lod = false, side = THREE.FrontSide }) {
+  const out = {};
+  for (const [type, att] of Object.entries(gun.parts ?? {})) {
+    const a = att.model ? partAssets(att) : null, bone = model.bones.get(`${type}_pos`);
+    if (!a || !bone) continue;
+    const geo = lod && a.lod ? a.lod : a.geo, tex = lod && a.lod && att.lod?.texture ? att.lod.texture : att.texture;
+    if (!tex) continue;
+    const map = texture(packUrl.texture(tex)), skin = material({ map, alphaTest: 0.1, side });
+    const part = buildBedrockModel(geo, () => skin, { hiddenCubes: (n) => n.endsWith("_view") || (lod && (isOcular(n) || isDivision(n))) });
+    // Nested scope internals, found by walking up from each bone (division_illuminated sits under division).
+    const parentOf = new Map(geo.bones.map((b) => [b.name, b.parent ?? null]));
+    const under = (n, test) => { for (let x = n; x; x = parentOf.get(x)) if (test(x)) return true; return false; };
+    const entry = { model: part, ocular: [], division: [] };
+    let reticle = null;
+    if (!lod) for (const [n, mesh] of part.meshes) {
+      if (under(n, isOcular)) entry.ocular.push(mesh);
+      else if (under(n, isDivision)) { mesh.material = reticle ??= material({ map, alphaTest: 0.1, side }); entry.division.push(mesh); }
+    }
+    bone.add(part.root);
+    out[type] = entry;
+  }
+  return out;
+}
 
 export async function loadGunAssets(gun, load = fetchJson) {
   const p = gun.pack;
@@ -45,6 +101,7 @@ export async function loadGunAssets(gun, load = fetchJson) {
 
 // A pack gun's reload and action sounds are the sound_effects keyframes of its animations.
 function fillSounds(gun, animations) {
+  gun.inspectSounds = { full: animations.get("inspect")?.sounds ?? [], empty: animations.get("inspect_empty")?.sounds ?? [] };
   if (GUN_SOUNDS[gun.id] || !gun.sounds) return; // the hand-made guns keep their own timing (feel.js)
   const keys = (name) => animations.get(name)?.sounds ?? [];
   Object.assign(gun.sounds, {
@@ -64,9 +121,12 @@ export class PackGunView {
   constructor(gun, a, { material, texture, arm }) {
     this.gun = gun;
     this.animations = a.animations; this.defaults = a.defaults;
-    const skin = material({ map: texture(packUrl.texture(gun.pack.texture)), alphaTest: 0.1 });
-    const hidden = defaultVisibility(a.geo, { adapters: gun.pack.adapters });
+    // Unculled, as TaCZ and Blockbench draw these models: a cube seen through a cut-out (the TEC-9's barrel shroud) shows
+    // its far wall, and the few faces the pack's models wind the wrong way still draw.
+    const skin = material({ map: texture(packUrl.texture(gun.pack.texture)), alphaTest: 0.1, side: THREE.DoubleSide });
+    const hidden = defaultVisibility(a.geo, { adapters: gun.pack.adapters, parts: gun.parts ?? null, extendedLevel: gun.extendedLevel });
     this.model = buildBedrockModel(a.geo, () => skin, { hidden, hiddenCubes: (n) => MARKER_BONES.has(n) || n.endsWith("_view") });
+    this.parts = fitParts(this.model, gun, { material, texture, side: THREE.DoubleSide });
     this.root = new THREE.Group();
     this.root.matrixAutoUpdate = false;
     this.root.add(this.model.root);
@@ -98,27 +158,54 @@ export class PackGunView {
       flashBone.add(this.flash);
     }
     this.flash.visible = false;
-    this.idle = new THREE.Matrix4(); this.iron = new THREE.Matrix4();
+    // A muzzle part moves the flash out to its own end (muzzle_flash_offset, pixels along the barrel); a silencer has none.
+    this.flashOffset = gun.parts?.muzzle?.flashOffset ?? 0;
+    this.flash.position.z -= this.flashOffset;
+    this.idle = new THREE.Matrix4(); this.iron = new THREE.Matrix4(); this.scopeView = new THREE.Matrix4();
+    this.lens(this.parts.scope); // last: the arms and flash take the stencil test too
+  }
+  // A scope or sight's eyepiece marks the stencil (drawn first, no colour or depth); the reticle draws only there, over the
+  // scope's own insides, and everything else of the hand pass only outside it, so the world shows through the glass.
+  lens(scope) {
+    if (!scope?.ocular.length) return;
+    const mask = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, side: THREE.DoubleSide, stencilWrite: true,
+      stencilRef: 1, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp });
+    for (const m of scope.ocular) { m.material = mask; m.renderOrder = -1; }
+    // The materials are this view's own (the reticle's apart, fitParts), so they change in place.
+    const reticle = new Set(scope.division);
+    this.root.traverse((n) => {
+      if (!n.isMesh || n.material === mask) return;
+      const inside = reticle.has(n);
+      Object.assign(n.material, { stencilWrite: true, stencilRef: 1, stencilFunc: inside ? THREE.EqualStencilFunc : THREE.NotEqualStencilFunc,
+        stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp });
+      if (inside) { n.material.depthTest = false; n.material.depthWrite = false; n.renderOrder = 2; }
+    });
   }
   // TaCZ's model_fov / zoom_model_fov for the hand camera: the gun's own field of view, narrowing as it aims.
+  // A scope's own `fov` replaces the gun's while aimed through it.
   fov(aim) {
-    const p = this.gun.pack, from = p.modelFov ?? 70, to = p.zoomModelFov ?? from;
+    const p = this.gun.pack, from = p.modelFov ?? 70, to = (this.parts.scope && this.gun.scopeFov) || (p.zoomModelFov ?? from);
     return from + (to - from) * aim;
   }
   // view: hooks.js view(); bob/sway: first-person-pose.js's. Returns the pivot matrix (camera space, blocks).
   update(view, bob = null, sway = null, out = new THREE.Matrix4()) {
     const layers = gunLayers(this.animations, this.defaults, {
       sinceDraw: view.sinceDraw ?? Infinity, sinceShot: view.sinceShot, empty: view.empty, mode: view.mode, bolt: this.gun.pack.bolt ?? this.gun.bolt,
-      timeline: view.timeline,
+      timeline: view.timeline, sinceInspect: view.sinceInspect, inspectEmpty: view.inspectEmpty,
     });
     poseModel(this.model, layers, this.pose);
+    // The magazine coming out (additional_magazine) exists only for the reload animations, which shrink it away at the swap.
+    const outgoing = this.model.bones.get("additional_magazine");
+    if (outgoing) outgoing.visible = layers.some(([anim]) => anim.name?.startsWith("reload"));
     // Rounds in the gun: the chambered round and the magazine's top round show only while there are rounds.
     for (const n of ["bullet_in_barrel", "bullet_in_mag", "bullet_chain"]) { const b = this.model.bones.get(n); if (b) b.visible = !view.empty; }
-    this.flash.visible = view.sinceShot >= 0 && view.sinceShot < 0.05;
+    this.flash.visible = !this.gun.silenced && view.sinceShot >= 0 && view.sinceShot < 0.05;
     if (this.flash.visible) this.flash.rotation.z = (view.sinceShot * 9301 % 1) * Math.PI * 2;
     // The camera: idle_view, blended to iron_view by the aim (TaCZ's idleSightPath / ironSightPath).
     const idle = boneMatrix(this.model, "idle_view", this.idle) ?? this.idle.identity();
-    const iron = boneMatrix(this.model, "iron_view", this.iron) ?? idle;
+    // Through a scope or sight: the gun's scope_pos bone times the part's own scope_view.
+    const scope = this.parts.scope, sv = scope && boneMatrix(scope.model, "scope_view", this.scopeView);
+    const iron = (sv && boneMatrix(this.model, "scope_pos", this.iron)?.multiply(sv)) || boneMatrix(this.model, "iron_view", this.iron) || idle;
     const pa = new THREE.Vector3(), qa = new THREE.Quaternion(), pb = new THREE.Vector3(), qb = new THREE.Quaternion(), sc = new THREE.Vector3();
     idle.decompose(pa, qa, sc); iron.decompose(pb, qb, sc);
     const aim = Math.max(0, Math.min(1, view.aim ?? 0)), e = aim * aim * (3 - 2 * aim);
@@ -149,9 +236,10 @@ export function packHeldModel(gun, a, material, texture) {
   const lod = a.lod ?? a.geo, url = packUrl.texture(a.lod && gun.pack.lod?.texture ? gun.pack.lod.texture : gun.pack.texture);
   const skin = material({ map: texture(url), alphaTest: 0.1 });
   const model = buildBedrockModel(lod, () => skin, {
-    hidden: defaultVisibility(lod, { adapters: gun.pack.adapters }),
+    hidden: defaultVisibility(lod, { adapters: gun.pack.adapters, parts: gun.parts ?? null, extendedLevel: gun.extendedLevel }),
     hiddenCubes: (n) => MARKER_BONES.has(n) || n.endsWith("_view") || n === "lefthand" || n === "righthand",
   });
+  fitParts(model, gun, { material, texture, lod: true });
   const hand = boneMatrix(model, "thirdperson_hand");
   const group = new THREE.Group(), inner = new THREE.Group();
   inner.add(model.root);

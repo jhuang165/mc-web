@@ -39,7 +39,7 @@ const rawPack = () => ({
   recipes: [
     { name: "glock_17", result: { type: "gun", id: "tacz:glock_17" }, materials: [
       { item: { tag: "forge:ingots/iron" }, count: 12 }, { item: { tag: "forge:nuggets/iron" }, count: 10 }, { item: { tag: "minecraft:logs" }, count: 2 }] },
-    { name: "9mm", result: { type: "ammo", id: "tacz:9mm", count: 30 }, materials: [{ item: { tag: "forge:gunpowder" }, count: 1 }, { item: { tag: "forge:gems/lapis" }, count: 1 }] },
+    { name: "9mm", result: { type: "ammo", id: "tacz:9mm", count: 30 }, materials: [{ item: { tag: "forge:gunpowder" }, count: 1 }, { item: { tag: "forge:gems/lapis" }, count: 1 }, { item: { tag: "forge:ingots/copper" }, count: 2 }] },
     { name: "odd", result: { type: "gun", id: "tacz:glock_17" }, materials: [{ item: { item: "minecraft:obsidian_unknown" }, count: 1 }] },
   ],
 });
@@ -75,7 +75,7 @@ test("pack recipes map materials to this game's items, merging and dropping unkn
   assert.deepEqual(glock.materials, [{ item: 302, count: 14 }, { item: "log", count: 2 }]); // 10 nuggets round up to 2 ingots
   const ammo = r.find((x) => x.key === "9mm");
   assert.equal(ammo.count, 30);
-  assert.deepEqual(ammo.materials, [{ item: 330, count: 1 }, { item: 351, damage: 4, count: 1 }]);
+  assert.deepEqual(ammo.materials, [{ item: 330, count: 1 }, { item: 351, damage: 4, count: 1 }, { item: 301, count: 2 }]); // copper is coal or charcoal
   assert.equal(taczAmmo("9mm", rawPack().ammo["9mm"], LANG).stack, 60);
 });
 
@@ -249,6 +249,7 @@ test("the gun smith crafts from carried materials: any log, exact dye, guns unlo
   const slots = [{ id: IRON, count: 10, damage: 0 }, { id: IRON, count: 10, damage: 0 }, { id: ACACIA, count: 1, damage: 1 }, { id: LOG, count: 3, damage: 2 }, { id: DYE, count: 5, damage: 0 }];
   assert.equal(smithMatches(slots[2], { item: "log" }), true);
   assert.equal(smithMatches(slots[4], { item: DYE, damage: 4 }), false); // ink sac is not lapis
+  assert.equal(smithMatches({ id: 301, count: 1, damage: 1 }, { item: 301 }), true); // charcoal stands in for copper too
   assert.equal(smithCount(slots, { item: "log" }), 4);
   const glock = { output: 4114, count: 1, materials: [{ item: IRON, count: 14 }, { item: "log", count: 2 }] };
   const lapis = { output: 4220, count: 30, materials: [{ item: DYE, damage: 4, count: 1 }] };

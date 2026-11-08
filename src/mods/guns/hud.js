@@ -2,21 +2,24 @@
 // It shows the rounds in the magazine (large), the matching ammo carried, the fire mode, and the reload state, like TaCZ's
 // ammo HUD in this project's own layout. The state is pure; the element is made on first use, inside #hud, so it hides
 // with the HUD (F1, menus) like the rest of GuiIngame.
-import { GUNS, roundsLeft } from "./catalog.js";
+import { gunOf, roundsLeft } from "./catalog.js";
 
+// The fire mode as the counter names it: a bolt, pump or lever gun's single shots are its action, not semi-automatic fire.
+export const modeLabel = (gun, mode) => gun.bolt === "manual_action" && mode !== "burst" ? (gun.type === "shotgun" ? "PUMP" : "BOLT") : String(mode).toUpperCase();
 export const HUD_WHITE = 0xffffff, HUD_YELLOW = 0xffff55, HUD_RED = 0xff5555, HUD_GRAY = 0xaaaaaa;
 
 // stack: the held stack. ctx: { count(id), creative, mode ("auto" | "semi" | "burst"), reloading }. Null without a gun in hand.
 // An inventory-fed gun (the minigun) shows only the rounds carried: it has no magazine.
 export function ammoHudState(stack, { count = () => 0, creative = false, mode = null, reloading = false } = {}) {
-  const gun = GUNS[stack?.id];
+  const gun = gunOf(stack);
   if (!gun) return null;
   const inventoryFed = gun.feed === "inventory";
-  const rounds = inventoryFed ? roundsLeft(stack, count, creative) : roundsLeft(stack), reserve = creative || inventoryFed ? null : count(gun.ammo);
+  const rounds = inventoryFed ? roundsLeft(stack, count, creative) : roundsLeft(stack), carried = count(gun.ammo),
+    reserve = creative || inventoryFed || carried === Infinity ? null : carried; // a creative ammo box: no count to show
   return {
     gunId: gun.id, rounds, magazine: gun.magazine,
     reserve, // null: creative reloads are free
-    mode: String(mode ?? gun.modes[0]).toUpperCase(),
+    mode: modeLabel(gun, mode ?? gun.modes[0]),
     reloading: !!reloading,
     // Out of rounds with something to load: prompt the reload key.
     prompt: !inventoryFed && !reloading && rounds <= 0 && (creative || reserve > 0), // the minigun has nothing to reload

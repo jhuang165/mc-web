@@ -1,16 +1,17 @@
 // Guns mod (not 1.7.10): the glue between main.js and firing.js / feel.js. main.js calls these only while a guns world is
 // loaded; each input hook returns false when the held item is not a gun, so vanilla input carries on unchanged.
 import { GunController, fireShot, GLASS_BLOCKS, TICK } from "./firing.js";
-import { GUNS, roundsLeft } from "./catalog.js";
+import { gunOf, roundsLeft } from "./catalog.js";
 import { Aim, Recoil, SoundSchedule, SHARED_SOUNDS, soundsOf } from "./feel.js";
 import { gunSoundEvent } from "./sounds.js";
+import { carriedAmmo, takeAmmo } from "./ammo-box.js";
 import { gunMuzzle } from "./model.js";
-import { ammoHudState } from "./hud.js";
+import { ammoHudState, modeLabel } from "./hud.js";
 import { ENTITY_TYPES } from "../../entities.js";
 import { rayTraceBlocks } from "../../projectiles.js";
 import { mobScale } from "../../slime.js";
 
-const KEY_R = 19, KEY_G = 34; // LWJGL codes; neither is bound in 1.7.10's default controls
+const KEY_R = 19, KEY_G = 34, KEY_F = 33, KEY_Z = 44; // LWJGL codes; none is bound in 1.7.10's default controls
 const HEAD_MARGIN = 0.25; // a hit within this far below the eye line, or above it, is a headshot
 const RAD = Math.PI / 180;
 const MUZZLE_DEPTH = 1.2; // blocks ahead of the eye for the muzzle smoke
@@ -25,11 +26,13 @@ export function createGunHooks(deps) {
   let crosshair = true;
   // What the first-person model shows, in now() milliseconds: the draw, the last shot, the reload in progress, and the
   // aim progress of the last two ticks (the view interpolates between them).
-  const anim = { drawAt: -Infinity, drawTime: 0, shotAt: -Infinity, reload: null, aimFrom: 0, aimTo: 0, tickAt: -Infinity };
+  const anim = { drawAt: -Infinity, drawTime: 0, shotAt: -Infinity, reload: null, aimFrom: 0, aimTo: 0, tickAt: -Infinity, inspectAt: -Infinity, inspectEmpty: false };
+  // F: TaCZ's inspect animation and its sounds; firing, reloading, aiming or drawing cuts it short.
+  const stopInspect = () => { anim.inspectAt = -Infinity; schedule.cancel("inspect"); };
   const random = () => (deps.random ?? Math.random)();
   const now = () => deps.now?.() ?? performance.now();
   const held = () => deps.survival.inventory.held;
-  const heldGun = () => GUNS[held()?.id];
+  const heldGun = () => gunOf(held()); // with the stack's attachments applied (fit.js)
   const holdingGun = () => heldGun() !== undefined;
   const sound = (event, options) => { if (event) deps.sound?.(event, options); };
   const ev = (path) => (path ? gunSoundEvent(path) : null);
@@ -38,22 +41,17 @@ export function createGunHooks(deps) {
   const soundTable = (gun) => soundsOf(gun.id) ?? NO_SOUNDS;
   // The folder a gun's sounds sit in ("ak47"), for preloading.
   const soundFolder = (gun) => String(soundTable(gun).shoot ?? "").split("/")[0] || null;
-  const rounds = (stack) => roundsLeft(stack, (id) => deps.survival.inventory.count(id), deps.survival.creative);
-  const MODE_NAMES = { auto: "Automatic", semi: "Semi-automatic", burst: "Burst" };
+  const rounds = (stack) => roundsLeft(stack, (id) => carriedAmmo(deps.survival.inventory.main, id), deps.survival.creative);
+  const MODE_NAMES = { AUTO: "Automatic", SEMI: "Semi-automatic", BURST: "Burst", BOLT: "Bolt action", PUMP: "Pump action" };
   const inventory = () => ({
     held: held(),
     slot: deps.survival.inventory.current,
     creative: deps.survival.creative,
-    count: (id) => deps.survival.inventory.count(id),
+    // Loose rounds, then those in ammo boxes (ammo-box.js).
+    count: (id) => carriedAmmo(deps.survival.inventory.main, id),
     take(id, n) {
       const inv = deps.survival.inventory;
-      if (inv.count(id) < n) return false;
-      for (let i = 0; i < 36 && n > 0; i++) {
-        const s = inv.main[i];
-        if (s?.id !== id || !(s.count > 0)) continue;
-        n -= inv.decr(i, Math.min(n, s.count))?.count ?? 0;
-      }
-      return n <= 0;
+      return takeAmmo(inv.main, id, n, (i, k) => inv.decr(i, k));
     },
   });
 
@@ -151,12 +149,14 @@ export function createGunHooks(deps) {
       if (!down) { aim.held = false; return false; }
       if (!holdingGun()) return false;
       aim.held = true;
+      stopInspect();
       return true;
     },
     // The touch use button: each tap toggles aiming.
     aimToggle() {
       if (!holdingGun()) return false;
       aim.held = !aim.held;
+      if (aim.held) stopInspect();
       return true;
     },
     // A raw key press while playing with no screen open: R reloads, G switches fire mode.
@@ -166,21 +166,32 @@ export function createGunHooks(deps) {
       if (code === KEY_R) {
         const wasEmpty = rounds(held()) <= 0;
         if (controller.startReload(inventory())) {
+          stopInspect();
           startReloadSounds(gun, wasEmpty);
           const r = controller.reload;
           anim.reload = { kind: r.kind, at: now(), time: r.time, shellAt: -Infinity, endAt: null, empty: wasEmpty, shells: 0 };
         }
         return true;
       }
+      if (code === KEY_F) {
+        if (controller.reload || controller.draw > 0 || aim.held) return true;
+        stopInspect();
+        anim.inspectAt = now(); anim.inspectEmpty = rounds(held()) <= 0;
+        const keys = gun.inspectSounds;
+        if (keys) schedule.add((anim.inspectEmpty && keys.empty?.length ? keys.empty : keys.full) ?? [], ev, "inspect");
+        return true;
+      }
+      // The attachment screen (main.js), not mid-reload or while drawing, as TaCZ's refit screen.
+      if (code === KEY_Z) { if (!controller.reload && controller.draw <= 0) { stopInspect(); controller.release(); aim.held = false; deps.attachments?.(); } return true; }
       if (code === KEY_G) {
         const mode = controller.toggleMode(held());
-        if (mode) { deps.toast(`${gun.name}: ${MODE_NAMES[mode] ?? mode}`); shared("mode"); }
+        if (mode) { const label = modeLabel(gun, mode); deps.toast(`${gun.name}: ${MODE_NAMES[label] ?? label}`); shared("mode"); }
         return true;
       }
       return false;
     },
     // The fovMultiplier `bow` factor this tick: the iron-sight zoom while aiming.
-    fov() { const gun = heldGun(); return gun ? aim.fov(gun.id) : 1; },
+    fov() { const gun = heldGun(); return gun ? aim.fov(gun) : 1; },
     // Once per rendered frame: the recoil turn, in radians, to add to [pitch, yaw].
     frame() {
       if (!recoil.active) return [0, 0];
@@ -191,7 +202,7 @@ export function createGunHooks(deps) {
     reset() {
       controller.release(); controller.heldKey = null; controller.reload = null;
       tapTicks = 0; aim.held = false; aim.progress = 0; recoil.reset(); schedule.cancel();
-      Object.assign(anim, { drawAt: -Infinity, shotAt: -Infinity, reload: null, aimFrom: 0, aimTo: 0 });
+      Object.assign(anim, { drawAt: -Infinity, shotAt: -Infinity, reload: null, aimFrom: 0, aimTo: 0, inspectAt: -Infinity });
       deps.hud?.(null);
       if (!crosshair) { crosshair = true; deps.crosshair?.(true); }
     },
@@ -217,13 +228,14 @@ export function createGunHooks(deps) {
         empty: rounds(held()) <= 0,
         mode: controller.mode(gun.id),
         reload, timeline,
-        gun,
+        sinceInspect: s(anim.inspectAt), inspectEmpty: anim.inspectEmpty,
+        gun, // with its attachments (fit.js): the views draw its parts
       };
     },
     // The ammo counter's state (hud.js), or null without a gun in hand.
     hudState() {
       const stack = held(), inv = deps.survival.inventory;
-      return ammoHudState(stack, { count: (id) => inv.count(id), creative: deps.survival.creative, mode: controller.mode(stack?.id), reloading: !!controller.reload });
+      return ammoHudState(stack, { count: (id) => carriedAmmo(inv.main, id), creative: deps.survival.creative, mode: controller.mode(stack?.id), reloading: !!controller.reload });
     },
     // Once per game tick.
     tick() {
@@ -238,14 +250,14 @@ export function createGunHooks(deps) {
         const g = event.gun, s = soundTable(g);
         if (event.type === "draw") {
           schedule.cancel(); recoil.reset(); aim.progress = 0;
-          Object.assign(anim, { drawAt: now(), drawTime: g.draw, shotAt: -Infinity, reload: null, aimFrom: 0, aimTo: 0 });
+          Object.assign(anim, { drawAt: now(), drawTime: g.draw, shotAt: -Infinity, reload: null, aimFrom: 0, aimTo: 0, inspectAt: -Infinity });
           sound(ev(s.draw)); deps.preload?.(soundFolder(g)); deps.drawn?.(g);
         }
         if (event.type === "shot") {
           event.result = shoot(g); changed = true;
-          recoil.kick(g.id, aim.progress, now(), random); anim.shotAt = now();
+          recoil.kick(g, aim.progress, now(), random); anim.shotAt = now(); stopInspect();
           if (anim.reload?.kind === "shell" && anim.reload.endAt == null) anim.reload.endAt = now(); // the trigger stopped the loading
-          sound(ev(s.shoot));
+          sound(ev(g.silenced && s.silenced ? s.silenced : s.shoot)); // a silencer: the pack's own suppressed report
           if (s.pump) { schedule.cancel("pump"); schedule.add(s.pump, ev, "pump"); }
           muzzle(g, event.result.ray ?? deps.eye() ?? { origin: [0, 0, 0], dir: [0, 0, -1] });
           impacts(g, event.result);

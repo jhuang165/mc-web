@@ -25,8 +25,10 @@ export const RECOIL = {
 // Iron-sight magnification (display "iron_zoom"); none of the three guns has a scope, so there is no scope overlay.
 export const IRON_ZOOM = { [P320]: 1.2, [AKM]: 1.33, [M870]: 1.2 };
 // The pack's guns carry their own recoil, zoom and sounds (pack.js); the three hand-made guns use the tables here.
-export const recoilOf = (id) => RECOIL[id] ?? GUNS[id]?.recoil ?? null;
-export const zoomOf = (id) => IRON_ZOOM[id] ?? GUNS[id]?.zoom ?? 1;
+// `g` is a gun id or a gun (a fitted one, fit.js: a scope's magnification replaces the iron sight's).
+const idOf = (g) => (typeof g === "object" && g ? g.id : g);
+export const recoilOf = (g) => RECOIL[idOf(g)] ?? GUNS[idOf(g)]?.recoil ?? null;
+export const zoomOf = (g) => (typeof g === "object" && g?.scopeZoom) || (IRON_ZOOM[idOf(g)] ?? GUNS[idOf(g)]?.zoom ?? 1);
 export const soundsOf = (id) => GUN_SOUNDS[id] ?? GUNS[id]?.sounds ?? null;
 
 // A natural cubic spline through (xs, ys), as Apache Commons Math's SplineInterpolator builds it (TaCZ's recoil curves).
@@ -73,12 +75,13 @@ export const recoilModifier = (gunId, aim) => (1 - aim) + aim / Math.min(Math.sq
 // both curves from zero, so a burst's kicks add up the way TaCZ's do.
 export class Recoil {
   constructor() { this.pitch = null; this.yaw = null; this.start = 0; this.lastPitch = 0; this.lastYaw = 0; }
-  kick(gunId, aim, now, random = Math.random) {
-    const data = recoilOf(gunId);
+  // `gun`: an id or a gun; a fitted gun's grip, stock and muzzle scale the kick (recoilScale, fit.js).
+  kick(gun, aim, now, random = Math.random) {
+    const data = recoilOf(gun);
     if (!data?.pitch?.length && !data?.yaw?.length) return;
-    const m = recoilModifier(gunId, aim);
-    this.pitch = data.pitch?.length ? recoilCurve(data.pitch, m, random) : null;
-    this.yaw = data.yaw?.length ? recoilCurve(data.yaw, m, random) : null;
+    const m = recoilModifier(gun, aim), [sp, sy] = (typeof gun === "object" && gun?.recoilScale) || [1, 1];
+    this.pitch = data.pitch?.length ? recoilCurve(data.pitch, m * sp, random) : null;
+    this.yaw = data.yaw?.length ? recoilCurve(data.yaw, m * sy, random) : null;
     this.start = now; this.lastPitch = 0; this.lastYaw = 0;
   }
   // Degrees to add to the view this frame: [pitch (up), yaw (left)].
@@ -106,8 +109,8 @@ export class Aim {
     return this.progress;
   }
   // The field of view multiplier, fed to fovMultiplier's `bow` slot: 1 / zoom at full aim, eased in.
-  fov(gunId) {
-    const zoom = zoomOf(gunId), a = this.progress, e = a * a * (3 - 2 * a);
+  fov(gun) {
+    const zoom = zoomOf(gun), a = this.progress, e = a * a * (3 - 2 * a);
     return 1 / (1 + (zoom - 1) * e);
   }
 }
