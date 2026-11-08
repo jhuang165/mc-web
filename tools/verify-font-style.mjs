@@ -30,7 +30,6 @@ for (let k = 0; k < 400; k++) {
   strings.push(s);
 }
 // several paragraphs (a separator inside one string), including strong-less later paragraphs: `a\n(` mirrors natively, `a\n\n(` does not.
-// Left out: explicit embedding codes (U+202A-202E) and format characters (BN) at the start of a later paragraph, see the track note.
 strings.push("א\nב", "a\nא", "א\n(b)", "אבג\r\nabc", "a ב", "ב\u0085a", "(ב\nc)");
 strings.push("a\n(", "a\n\n(", "a\n(\n(", "(\n(", "(\na", "a\n1", "a\n(b", "a\n \n(", "\n(", "ab\n\n)\n)", "א\n(", "a\r\n(", "a (", "a\u001c<", "a\u0085[");
 const psets = ["abc XYZ", "0123", "ابلمنتيءآأإةهو", "َُّ", "١٢", "אבג", "()[]<>,.:;!-+%$/ \"'", "\n\n\r \u0085\u001c", "§c§l§k", "ـ", "²€٫", "\n", "\n\r", "ab", "א", "()", "̀", "‎‏"];
@@ -40,6 +39,16 @@ for (let k = 0; k < 600; k++) {
   for (let i = 0; i < len; i++) { const set = psets[Math.floor(rnd() * psets.length)]; s += set[Math.floor(rnd() * set.length)]; }
   strings.push(s);
 }
+// multi-paragraph strings dominated by separators, explicit embedding codes (LRE/RLE/PDF/LRO/RLO), BN and neutrals: ICU runs its level runs over the
+// whole text (a code at the start of a paragraph extends the previous run), see src/bidi.js resolveText
+const hsets = ["a", "b", "א", "ب", "12", "١", "(", " ", "\n", "\r", "\u0085", "\u001c", "‪", "‫", "‬", "‭", "‮", "‪", "‫", "‬", "‭", "‮", "\u00ad", "\u200d", "\u0001", "̀", "‎", "‏", "§"];
+for (let k = 0; k < 1500; k++) {
+  const len = 2 + Math.floor(rnd() * 13);
+  let s = "";
+  for (let i = 0; i < len; i++) s += hsets[Math.floor(rnd() * hsets.length)];
+  strings.push(s);
+}
+strings.push("a\u000a\u202b\u0028", "a \u202b\u000a\u202d\u200f\u007f \u001c2\u202a<\u0300", "\u200e\u202b\u200d\n\u202d\u200f\u0640\n\n", "\u20ac\u0300\u05d0\n\u202c\u0300X2\u0300");
 const draw = (await runProbe("draw")).trim().split("\n").map((l) => JSON.parse(l));
 const bidiOut = (await runProbe("bidi", strings.map(hex).join("\n") + "\n")).split("\n");
 const bidi = strings.map((s, i) => [hex(s), bidiOut[i].trim()]);
