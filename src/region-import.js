@@ -124,7 +124,8 @@ export function readContainerTile(id, tile, { convertItem = itemStackFromNbt, in
 }
 // `allowEmpty`: an armour-slot stack of Count 0 is kept (InventoryPlayer.readFromNBT keeps it; ItemStack.damageItem leaves a Thorns-broken piece at size 0).
 export function itemStackFromNbt(compound, { ignored = [], allowEmpty = false } = {}) {
-  const mapped = itemFromOriginal(get(compound, 'id', NBT.SHORT), get(compound, 'Damage', NBT.SHORT, 0)), count = get(compound, 'Count', NBT.BYTE, 0);
+  // ItemStack.readFromNBT: a negative Damage reads 0.
+  const mapped = itemFromOriginal(get(compound, 'id', NBT.SHORT), Math.max(0, get(compound, 'Damage', NBT.SHORT, 0))), count = get(compound, 'Count', NBT.BYTE, 0);
   if (!mapped || (!allowEmpty && count <= 0)) return null; // allowEmpty keeps Count 0 and negative bytes as loadItemStackFromNBT does
   const stack = { id: mapped.id, damage: mapped.damage, count };
   const nbt = get(compound, 'tag', NBT.COMPOUND);

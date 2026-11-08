@@ -61,8 +61,13 @@ export function horseNbtFields(tag, convertItem = () => null) {
     const items = [];
     const stacks = tagValue(tag, 'Items', NBT.LIST);
     for (const c of stacks?.elementType === NBT.COMPOUND ? stacks.items : []) {
-      const slot = tagValue(c, 'Slot', NBT.BYTE, -1) & 255, stack = slot >= 2 && slot < 17 ? convertItem(c) : null;
-      if (stack) items[slot] = stack;
+      // EntityHorse.readEntityFromNBT: Slot & 255 in [2, size) goes to AnimalChest.setInventorySlotContents(slot, loadItemStackFromNBT): a Count of 0 or a
+      // negative byte is kept, a count above 64 is lowered to 64, an unknown item id loads null and so clears an earlier stack of the same slot
+      // (horse-items-nbt-reference.json). A negative Damage reads 0 (convertItem).
+      const slot = tagValue(c, 'Slot', NBT.BYTE, -1) & 255;
+      if (slot < 2 || slot >= 17) continue;
+      const stack = convertItem(c, { allowEmpty: true });
+      items[slot] = stack ? { ...stack, count: Math.min(stack.count, 64) } : null;
     }
     if (items.length) rest.items = Array.from({ length: 17 }, (_, i) => items[i] ?? null);
   }
