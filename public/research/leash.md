@@ -35,3 +35,15 @@ The port: `leashStep` (pure rules), `leashTick` (sets the home with `setHomeArea
 - The browser does not ray-test the knot's 9-pixel box nor route left clicks to knots, so a hit on a knot (`knotAttack`) is only reachable from code, and a click on the fence acts on the knot.
 - The navigator's path budget (per-tick search count) applies to leash searches, so a crowded tick can delay a path by a tick; 1.7.10 has no such budget.
 - Not run in a browser; verified by the native probe, unit tests and the build.
+
+## Leads held by another mob, owners and size <= 0 (batch 28 leads2)
+
+Evidence: `leads2-reference.json` (`tools/probes/Leads2Probe.java`, unchanged 1.7.10 classes), replayed by `src/leads2.test.js`.
+
+- Save: `Leashed` always, `Leash` only with a holder. A living holder gives `UUIDMost`/`UUIDLeast`, a hanging holder `X`/`Y`/`Z`. Any mob can hold: a pig, horse, wolf or ocelot holder is written as its own UUID (`leadWrite`).
+- Load (`sw.bP`, first tick): a pair of two long tags wins over `X/Y/Z`; the holder is the first living entity of that UUID in the mob's box grown by 10 (the mob itself and a dead one are found too). A wrong UUID is not rescued by `X/Y/Z`; a `UUIDMost` alone with `X/Y/Z` becomes a knot. `X/Y/Z` of any numeric tag type (byte to double) are floored; string or missing coordinates drop the lead. A dead or absent holder is dropped on the next tick with a lead item (`leadRead`, `leadLive`).
+- `td.bL` pulls, paths and breaks the same for a mob holder as for the player (`leadLive`, `leadCycle`: two mobs holding each other).
+- `sw.c`: only a player holder frees a leashed mob; a lead in hand never moves a mob held by a mob. A tamed wolf or ocelot is leashed only by its owner (`isOwner`): a foreign or blank `OwnerUUID` refuses and the lead stays in the hand (`leadUse`). Creative clicks a copy (`interactWith`), so the lead is not used up there.
+- Port: `leash: {holder: "mob", holderUuid}` (`horse-gear-live.js`: `leashHolder`, `leashRestore`, `leashTick`); `relinkMobs` links an imported holder UUID to a mob of the same save, else drops the lead; export writes the holder mob's UUID.
+- Horse owner: the OwnerUUID text is written and read back verbatim and changes nothing in `interact`, riding or the inventory GUI (432 `horseOwner` records, no owner checks in bytecode either). A non-player rider of an untamed horse is thrown (status 6) with no temper change and no taming (`horseTame`); the port only models the player rider.
+- Size <= 0 (`sizes`, 2700 records): `interactWith` spends nothing from Creative; a mob click that returns true destroys a held stack left at size <= 0 outside Creative, whatever the stack is (wild horse, sheep dye, sheep feeding all count). Wolf meat or bone and ocelot fish also empty a size <= 0 stack in Creative; EntityAnimal feeding does not. The port's wolf, ocelot, sheep, feeding and wild-horse clicks match all 2160 wolf/ocelot/sheep/horse records.

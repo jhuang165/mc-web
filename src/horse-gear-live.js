@@ -10,6 +10,7 @@ import { NETHER_FENCE } from "./nether-blocks.js";
 import { Task } from "./ai.js";
 import { villageTasks } from "./village-ai.js";
 import { setHomeArea } from "./home-area.js";
+import { ownerPresent } from "./owner-links.js";
 import * as G from "./horse-gear.js";
 
 const isFence = (b) => b === FENCE || b === NETHER_FENCE;
@@ -48,7 +49,7 @@ export function gearFieldsFrom(e) {
   return {
     // The home area td.bL set around a holder is not saved by EntityCreature; it is set again on the first leashed tick.
     ...(e.leashHome ? { homeRadius: -1, leashHome: undefined } : {}),
-    leash: e.leash?.holder === "player" ? { holder: "player" } : knot ? { knot } : undefined,
+    leash: e.leash?.holder === "player" ? { holder: "player" } : e.leash?.holder === "mob" && typeof e.leash.holderUuid === "string" ? { holder: "mob", holderUuid: e.leash.holderUuid } : knot ? { knot } : undefined,
     customName: typeof e.customName === "string" && e.customName ? e.customName.slice(0, 64) : undefined,
     customNameVisible: e.customNameVisible === true ? true : undefined,
     persistent: e.persistent === true ? true : undefined,
@@ -61,9 +62,15 @@ export function installHorseGear(EntityWorld) {
   proto.leashHolder = function (e) {
     const l = e.leash;
     if (l?.holder === "player") { const p = this.ai?.player; return p && p.alive !== false ? { x: p.x, y: p.y, z: p.z, player: true } : null; }
+    // Another mob holds (EntityLiving.func_110162_b with a living holder): found by UUID among this world's mobs; a dead or missing one holds nothing.
+    if (l?.holder === "mob") { const m = this.leashHolderMob(l); return m ? { x: m.x, y: m.y, z: m.z, mob: m } : null; }
     // A knot holds while its entity lives, whatever the fence block is (the fence is only checked every 101st knot tick).
     if (l?.knot) { const k = this.knotAt(l.knot.x, l.knot.y, l.knot.z); return k ? { ...knotCentre(k), knot: k } : null; }
     return null;
+  };
+  proto.leashHolderMob = function (l) {
+    const m = this.entities.find((x) => x.uuid === l.holderUuid);
+    return m && m.health > 0 ? m : null;
   };
   // The leash is set (EntityLiving.setLeashedToEntity): the mob is known to the leash tick from now on.
   proto.setLeash = function (e, leash) {
@@ -164,7 +171,8 @@ export function installHorseGear(EntityWorld) {
   proto.leashRestore = function (e) {
     const l = e.leash;
     if (l.knot) { if (!this.knotAt(l.knot.x, l.knot.y, l.knot.z)) this.knotCreate(l.knot.x, l.knot.y, l.knot.z); return; }
-    const p = this.ai?.player;
+    // sw.bP: any living entity of the UUID in the 10-block box (the first in the list; a dead one is found and then dropped by the next tick).
+    const p = l.holder === "mob" ? (() => { const m = this.entities.find((x) => x.uuid === l.holderUuid); const [mw, mh] = m ? this.size(m) : []; return m && { x: m.x, y: m.y, z: m.z, width: mw, height: mh }; })() : this.ai?.player;
     if (!p) { this.unleash(e, true); return; }
     const [w, h] = this.size(e), pw = p.width ?? 0.6, ph = p.height ?? 1.8;
     const near = Math.abs(p.x - e.x) <= 10 + (w + pw) / 2 && Math.abs(p.z - e.z) <= 10 + (w + pw) / 2 && p.y + ph >= e.y - 10 && p.y <= e.y + h + 10;
@@ -210,7 +218,7 @@ export function installHorseGear(EntityWorld) {
     if (step.task) {
       st ??= leashStates.get(e);
       if (!st.task) addRestriction(this, e, st);
-      if (step.path) this.ai.brain(e).navigator.tryMoveToEntityLiving(h.player ? this.ai.player : { x: h.x, y: h.y - KNOT_HALF_HEIGHT, z: h.z }, G.LEASH_PATH_SPEED);
+      if (step.path) this.ai.brain(e).navigator.tryMoveToEntityLiving(h.player ? this.ai.player : h.mob ? h.mob : { x: h.x, y: h.y - KNOT_HALF_HEIGHT, z: h.z }, G.LEASH_PATH_SPEED);
       if (step.pull) { e.vx = (e.vx || 0) + step.pull[0]; e.vy = (e.vy || 0) + step.pull[1]; e.vz = (e.vz || 0) + step.pull[2]; }
     }
     if (step.unleash) this.unleash(e, true);
@@ -220,10 +228,12 @@ export function installHorseGear(EntityWorld) {
     if (e?.knotRef) return !e.knotRef.dead && this.knotInteract(e.knotRef, survival); // a summoned knot picked by view ray
     if (!alive(this, e)) return false;
     const creative = !!survival.creative;
-    const out = G.leashUse({ leashed: !!e.leash, holderIsPlayer: e.leash?.holder === "player", heldLead: G.originalId(survival.held) === G.LEAD_ORIGINAL, creative, type: e.type });
+    // sw.c: a tamed wolf or ocelot is leashed only by its owner (EntityTameable.isOwner, leads2-reference.json leadUse).
+    const ownerBlocked = (e.type === "wolf" || e.type === "ocelot") && !!e.owner && !ownerPresent(e);
+    const out = G.leashUse({ ownerBlocked, leashed: !!e.leash, holderIsPlayer: e.leash?.holder === "player", heldLead: G.originalId(survival.held) === G.LEAD_ORIGINAL, creative, type: e.type });
     if (!out.used) return false;
     if (out.action === "free") this.unleash(e, out.dropLead);
-    else { this.setLeash(e, { holder: "player" }); if (out.consume) survival.inventory.decr(survival.inventory.current, 1); }
+    else { this.setLeash(e, { holder: "player" }); if (out.consume && !creative) survival.inventory.decr(survival.inventory.current, 1); }
     return true;
   };
   // A click on a fence block. A knot there is clicked first (EntityLeashKnot.interactFirst, su.c: the knot's 9 pixel box is wider than

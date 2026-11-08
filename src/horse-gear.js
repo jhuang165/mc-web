@@ -158,9 +158,9 @@ export function knotAge(age, valid) {
 // Monsters (IMob), bats and the dragon refuse the lead.
 export const NOT_LEASHABLE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper", "enderman", "silverfish", "witch", "slime", "bat", "ghast", "blaze", "magma_cube", "zombie_pigman", "wither", "ender_dragon"]);
 export const leashable = (type) => !NOT_LEASHABLE.has(type);
-export function leashUse({ leashed, holderIsPlayer, heldLead, creative, type }) {
+export function leashUse({ ownerBlocked = false, leashed, holderIsPlayer, heldLead, creative, type }) {
   if (leashed && holderIsPlayer) return { used: true, action: "free", dropLead: !creative };
-  if (heldLead && !leashed && leashable(type)) return { used: true, action: "tie", consume: true };
+  if (heldLead && !leashed && !ownerBlocked && leashable(type)) return { used: true, action: "tie", consume: true };
   return { used: false, action: "none" };
 }
 // ItemLead.func_150909_a over a fence (box around the block's integer corner) and su.c on a knot (box around the knot, block + 0.5):
