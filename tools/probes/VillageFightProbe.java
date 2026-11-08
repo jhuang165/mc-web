@@ -43,7 +43,9 @@ public class VillageFightProbe {
     return s.toString();
   }
 
+  static int difficulty = 2; // batch 30: rd ordinal (0 Peaceful .. 3 Hard) the next scenarios run on
   static void scenario(String name, long seed, int ticks, double[][] pos, String[] script) throws Exception {
+    MobMoveProbe.set(VillageLiveProbe.world, "r", rd.values()[difficulty]);
     wc c = VillageLiveProbe.newCollection(seed);
     VillageLiveProbe.W.players.clear();
     VillageLiveProbe.W.day = false;
@@ -125,13 +127,14 @@ public class VillageFightProbe {
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     for (String r : rows) rs.append(rs.length() > 0 ? "," : "").append(r);
     for (String h : hits) hs.append(hs.length() > 0 ? "," : "").append(h);
-    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"ticks\":" + ticks + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
+    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
   }
 
   public static void main(String[] args) throws Exception {
     aji.p();
     adb.l();
     VillagerProbe.World.pickEntities = true;
+    VillagerProbe.World.realRays = true; // batch 30: real EntitySenses sight rays (the village3 double returned null: a villager saw a zombie through a closed door)
     sun.misc.Unsafe u = MobMoveProbe.unsafe();
     VillageLiveProbe.W w = (VillageLiveProbe.W) u.allocateInstance(VillageLiveProbe.W.class);
     VillageLiveProbe.world = w;
@@ -153,6 +156,12 @@ public class VillageFightProbe {
       // two zombies and two shooters at once: arrows on both villagers, the golem picks between the aggressors as they move and expire
       scenario("zombies-and-shooters-" + seed, seed, 430, open, new String[] {"20 hit 0 5 2.0 arrow", "26 hit 1 6 2.0 arrow", "60 hit 0 6 2.0 arrow", "90 move 5 52.5 70.5", "120 hit 1 5 2.0 arrow", "200 move 6 58.5 40.5", "260 hit 0 2 1.0 mob"});
     }
+    // batch 30: both zombies and a villager pair squeezed between them (villager flee from several zombies, the golem west of the door), then Peaceful (EntityMob.onUpdate setDead)
+    double[][] pinch = {{52.5, 52.5}, {56.5, 54.5}, {61.5, 50.5}, {43.5, 55.5}, {46.5, 51.5}, {52.5, 80.5}, {60.5, 25.5}, {62.5, 58.5}};
+    scenario("villagers-flee-two-zombies", 3, 300, pinch, new String[] {"150 hit 1 2 1.0 mob", "200 hit 0 3 1.0 mob"});
+    difficulty = 0;
+    scenario("peaceful", 4, 120, open, new String[] {"0 walk 7 -0.1 -0.05", "60 hit 0 7 1.0 player"}); // villager hit only: a removed mob is no longer in the world, so the port cannot take a hit that a probe script lands on its corpse
+    difficulty = 2;
     // 15 small player hits on a villager reach reputation -15: the golem then targets the player; killing the golem costs another 5; a second name takes over the reputation key
     scenario("player-turns-aggressive", 0, 700, open, new String[] {"10 hit 0 7 0.1 player", "31 hit 0 7 0.1 player", "52 hit 0 7 0.1 player", "73 hit 0 7 0.1 player", "94 hit 0 7 0.1 player", "115 hit 0 7 0.1 player", "136 hit 0 7 0.1 player", "157 hit 0 7 0.1 player",
       "178 hit 0 7 0.1 player", "199 hit 0 7 0.1 player", "220 hit 0 7 0.1 player", "241 hit 0 7 0.1 player", "262 hit 0 7 0.1 player", "283 hit 0 7 0.1 player", "304 hit 0 7 0.1 player", "330 move 7 50.5 56.5", "500 hit 4 7 300.0 player", "600 rename alt", "610 hit 1 7 0.1 player"});

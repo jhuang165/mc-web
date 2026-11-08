@@ -142,7 +142,7 @@ test("hoppers with negative and zero stacks, every facing, single and double che
 
 test("creative drops need 0 < size <= 64 and a non-negative damage (nh.processCreativeInventoryAction, bytecode-read)", () => {
   const drops = [];
-  const fake = { container: { drops } };
+  const fake = { container: { drops }, tick: () => 0 };
   const drop = CreativeScreen.prototype.drop.bind(fake);
   for (const s of [makeStack(1, 1), makeStack(1, 64), makeStack(1, 0), makeStack(1, -3), makeStack(1, 65), makeStack(1, 1, -1)]) drop(s);
   assert.deepEqual(drops.map((s) => s.count), [1, 64]);

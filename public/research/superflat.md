@@ -26,10 +26,11 @@ pinned jar; `MC_RESEARCH` points at `tools/research`). Parity with 1.7.10 is not
   after each populate, the final chunk hash, tile entities, entities, minecarts, pending ticks and item drops. Each area runs in its own JVM
   because the native jungle temple leaves static state that changes later areas. No divergence was found in the structure-free
   paths; the call order is the native one.
-- Limits of that replay: the live `PopulationArea` has no native `neighborChanged` chain, so the ordered call stream (reads) is not compared
-  for areas with a village, and for the stronghold and desert temple areas; writes still match there. Jungle temples differ by 8 to 10
-  tripwire/redstone updater writes, their World.rand draws and pending ticks, so those three comparisons are skipped for that area; the
-  final chunk bytes, tiles and entities still match.
+- Batch 30: the live `PopulationArea` in neighbours mode (`neighbors: true`, `src/native-neighbor-world.js`) runs the native onBlockAdded / onNeighborBlockChange /
+  breakBlock chains of doors, buttons, tripwire, the redstone family and the dispenser markDirty reads, so every area now compares ordered calls, writes,
+  both Randoms, final chunks, tiles, entities and pending ticks (44 original areas plus 6 jungle and desert temple areas, jungle temple included).
+  Native stack traces (`SpringProbe -DtraceStack`) located the triggering writes. Vanilla jungle temple generation never leaves a repeater, torch, lever or button
+  powered (no id 94/75 or lever/button bit 8 is written), asserted in `structure-live-neighbors.test.js`.
 - `mapFeatures` false (`off-*` areas): no structure generator is constructed (no village, biome_1, mineshaft, stronghold), populate still
   runs lake, lava_lake, dungeon and decoration. That is streamed generation 17.
 
@@ -43,7 +44,7 @@ pinned jar; `MC_RESEARCH` points at `tools/research`). Parity with 1.7.10 is not
 - Flat worlds exist only as streamed generation version 15 or later worlds (17 when MapFeatures is off).
 - Biome ids that are holes in the 1.7.10 table (40, 126-128, 168-255) throw a NullPointerException natively when a chunk is built;
   the browser uses plains.
-- The spawn point of new (generation 18 and 19) worlds is the native `createSpawnPosition` walk ([world-spawn.md](world-spawn.md)); worlds saved at 15 to 17 keep the earlier `findBiomePosition` origin.
+- The spawn point of new (generation 18 to 21) worlds is the native `createSpawnPosition` walk ([world-spawn.md](world-spawn.md)); worlds saved at 15 to 17 keep the earlier `findBiomePosition` origin.
 - Bonus chest: native `World.rand` is `new Random()` (unseeded), so a native bonus chest differs every creation; the game now seeds its Random
   from fresh entropy (`unseededBonusRandom`) and tests inject a fixed `JavaRandom`. Material.blocksMovement and
   `doesBlockHaveSolidTopSurface` use the live `World.solid`; torches run the `BlockTorch.onBlockAdded` orientation (bytecode-read: west, east, north, south neighbour with a solid side, else standing on a solid top, else dropped).
@@ -53,4 +54,4 @@ pinned jar; `MC_RESEARCH` points at `tools/research`). Parity with 1.7.10 is not
   `bonusChestPlaced` on the record keeps it once; old saves (flag set) load unchanged. The random stays unseeded (assumed equivalent of `new Random()`); a failed open before launch clears the flag.
 - Java ZIP export writes `generatorName "flat"` and `generatorOptions`. There is no level.dat import path in this build, so Java import of
   a Superflat save is not implemented. Browser JSON export/import keeps `generatorOptions`.
-- Live-world structure reads (door/redstone/tripwire neighbour chains) are not replayed; see the limits above.
+- Generation 20 (21 with MapFeatures off) turns the neighbour callbacks on; worlds saved at 15 to 19 keep the quiet callbacks and regenerate as before. A cell whose neighbour chain throws (an unported powered state) is retried quietly and logged, never dropped.

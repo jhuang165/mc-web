@@ -1919,16 +1919,22 @@ function hookUpdate(w, x, y, z, destroying, meta, notifySelf, overrideDist, over
 const hookCanPlace = (w, x, y, z) =>
   w.isNormalCube(w.getBlock(x - 1, y, z)) || w.isNormalCube(w.getBlock(x + 1, y, z)) || w.isNormalCube(w.getBlock(x, y, z - 1)) || w.isNormalCube(w.getBlock(x, y, z + 1));
 const tripwireHook = {
+  // BlockTripWireHook.onNeighborBlockChange (aog.a, bytecode-read): func_150137_e (canPlaceBlockAt, or drop and air), then the metadata read and
+  // all four side reads (x-1, x+1, z-1, z+1, each `!isNormalCube && facing == 3, 1, 0, 2`) before the single drop test.
   onNeighborBlockChange(w, x, y, z, source) {
     if (source === TRIPWIRE_HOOK) return;
-    const meta = w.getBlockMetadata(x, y, z);
     if (!hookCanPlace(w, x, y, z)) {
-      w.dropBlockAsItem(x, y, z, TRIPWIRE_HOOK, meta);
+      w.dropBlockAsItem(x, y, z, TRIPWIRE_HOOK, w.getBlockMetadata(x, y, z));
       w.setBlockToAir(x, y, z);
       return;
     }
-    const [ax, az] = hookCell(w, x, y, z);
-    if (!w.isNormalCube(w.getBlock(ax, y, az))) {
+    const meta = w.getBlockMetadata(x, y, z), l = meta & 3;
+    let loose = false;
+    if (!w.isNormalCube(w.getBlock(x - 1, y, z)) && l === 3) loose = true;
+    if (!w.isNormalCube(w.getBlock(x + 1, y, z)) && l === 1) loose = true;
+    if (!w.isNormalCube(w.getBlock(x, y, z - 1)) && l === 0) loose = true;
+    if (!w.isNormalCube(w.getBlock(x, y, z + 1)) && l === 2) loose = true;
+    if (loose) {
       w.dropBlockAsItem(x, y, z, TRIPWIRE_HOOK, meta);
       w.setBlockToAir(x, y, z);
     }
@@ -1962,7 +1968,8 @@ function tripwireNotifyHooks(w, x, y, z, meta) {
         id = w.getBlock(cx, y, cz);
       if (id === TRIPWIRE_HOOK) {
         const hm = w.getBlockMetadata(cx, y, cz);
-        if ((hm & 3) === ROTATE_OPPOSITE[i]) hookUpdate(w, cx, y, cz, false, hm, true, j, meta);
+        // BlockTripWire.func_150138_a (aof, bytecode-read) reads the hook's metadata twice: once for the facing test, once as the argument.
+        if ((hm & 3) === ROTATE_OPPOSITE[i]) hookUpdate(w, cx, y, cz, false, w.getBlockMetadata(cx, y, cz), true, j, meta);
         break;
       }
       if (id !== TRIPWIRE) break;

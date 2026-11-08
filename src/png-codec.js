@@ -87,3 +87,16 @@ export async function encodePng(width, height, data) {
   for (const p of parts) { out.set(p, at); at += p.length; }
   return out;
 }
+
+// Exact converted pixels by source path, for the GL upload hook (anaglyph.js): an Image whose url is known uploads these straight-alpha
+// converted bytes instead of going through a 2D canvas (getImageData premultiplies, which rounds translucent pixels). Filled by
+// gui-anaglyph.js (convertExact), cleared with its per-generation cache.
+const exactPixels = new Map();
+export const exactKey = (src) => {
+  if (typeof src !== "string" || src.startsWith("data:") || src.startsWith("blob:")) return null;
+  const path = src.replace(/^https?:\/\/[^/]+/, "").replace(/[?#].*$/, "");
+  return path.startsWith("/media/1.7.10/") ? path : null;
+};
+export const setExactPixels = (key, width, height, data) => { exactPixels.set(key, { width, height, data }); };
+export const getExactPixels = (src) => { const key = exactKey(src); return key ? exactPixels.get(key) ?? null : null; };
+export const clearExactPixels = () => exactPixels.clear();

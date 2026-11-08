@@ -50,7 +50,7 @@ test("native and port: a Leash tag with a long UUID pair wins over X/Y/Z; otherw
     if (r.holder === "knot") assert.deepEqual(out, { knot: { x: r.knotAt[0], y: r.knotAt[1], z: r.knotAt[2] } }, r.name);
     else if (r.name === "mobNear" || r.name === "uuidWinsOverXyz" || r.name === "wrongUuidWithXyz") assert.deepEqual(out, { holder: "player" }, r.name); // the holder is resolved by UUID at link time
     else if (r.leashKind === "uuid") assert.deepEqual(out, { holder: "player" }, r.name);
-    else if (r.drops.length) assert.deepEqual(out, { lost: true }, r.name); // no usable holder: the lead item drops on the first tick (leads3)
+    else if (r.drops.length) { assert.equal(out.lost, true, r.name); assert.deepEqual(Object.keys(out).filter((k) => k !== 'raw'), ['lost'], r.name); } // no usable holder: the lead item drops on the first tick (leads3)
     else assert.equal(out, undefined, r.name);
     checked++;
   }

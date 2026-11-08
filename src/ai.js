@@ -504,7 +504,7 @@ class WatchClosest extends Task {
     else if (this.watched === "player") this.target = m.ai.closestPlayer(m, this.range);
     else {
       let best = null, bd = Infinity;
-      for (const b of m.nearby(this.range, 3, this.range, (o) => (this.watched === "villager" ? o.e.type === "villager" : o.e.type !== "ender_crystal"))) {
+      for (const b of m.nearby(this.range, 3, this.range, (o) => (this.watched === "villager" ? o.e.type === "villager" : o.e.type !== "ender_crystal"), 0, true)) {
         const d = m.distSq(b);
         if (d < bd) { best = b; bd = d; }
       }
@@ -994,8 +994,10 @@ export class Brain {
       this.tasks.add(6, new WatchClosest(this, 8));
       this.tasks.add(6, new LookIdle(this));
       // The constructor ends with setCombatTask, so the attack task is last in the list: Wander and the look tasks are evaluated before it.
-      // EntitySkeleton.bZ: no bow in hand (a sword, or `unarmed` as in the village-fight probe) swaps the bow task for AttackOnCollide(player, 1.2, false).
-      this.tasks.add(4, e.type === "wither_skeleton" || e.unarmed ? new AttackOnCollide(this, 1.2, "player", false) : new ArrowAttack(this, 1, 20, 60, 15));
+      // The constructor ends with setCombatTask (EntitySkeleton.bZ, also run by setCurrentItemOrArmor(0) and the NBT read): a bow in the held slot gives the
+      // arrow attack, anything else AttackOnCollide(player, 1.2, false). Equipment arrives after construction here, so syncCombatTask() re-runs it from the held item.
+      this.combatTask = null;
+      this.syncCombatTask();
       this.targets.add(1, new HurtByTarget(this, false));
       this.targets.add(2, new NearestAttackable(this));
     } else if (e.type === "snow_golem") {
@@ -1118,6 +1120,16 @@ export class Brain {
     const dx = this.x - o.x, dy = this.y - o.y, dz = this.z - o.z;
     return dx * dx + dy * dy + dz * dz;
   }
+  // EntitySkeleton.setCombatTask (yl.bZ): removes the bow and the melee task, then adds the one for the held item (priority 4, so last in the list as natively).
+  // The held-slot bow (id 261) decides; it is re-read here instead of at each equipment write, so a swap takes effect at the skeleton's next AI tick.
+  syncCombatTask() {
+    const bow = this.e.equipment?.[0]?.id === 261;
+    if (this.combatTask && this.combatBow === bow) return;
+    if (this.combatTask) this.tasks.remove(this.combatTask);
+    this.combatBow = bow;
+    this.combatTask = bow ? new ArrowAttack(this, 1, 20, 60, 15) : new AttackOnCollide(this, 1.2, "player", false);
+    this.tasks.add(4, this.combatTask);
+  }
   // EntitySenses.canSee (vw.a): a line from eye to eye with no block in the way,
   // cached for the tick.
   canSee(t) {
@@ -1128,10 +1140,12 @@ export class Brain {
     return seen;
   }
   // World.getEntitiesWithinAABB around this mob's box grown by (rx, ry, rz).
-  nearby(rx, ry, rz, test, base = 0) {
+  // `dying` keeps mobs with health 0 that are not yet removed: World.getEntitiesWithinAABB lists a corpse until setDead (deathTime 20), and only the task's own
+  // isEntityAlive test drops it (findNearestEntityWithinAABB in EntityAIWatchClosest hands back a corpse, which ends the watch one tick later).
+  nearby(rx, ry, rz, test, base = 0, dying = false) {
     const out = [];
     for (const e of this.ai.entities()) {
-      if (e === this.e || e.health <= 0) continue;
+      if (e === this.e || (e.health <= 0 && !(dying && (e.death ?? 0) < 20))) continue;
       const b = this.ai.brain(e);
       if (test(b) && this.ai.overlaps(this, b, rx, ry, rz, base)) out.push(b);
     }
@@ -1172,6 +1186,7 @@ export class Brain {
     this.despawnEntity();
     this.senseCache.clear();
     this.beforeAI?.();
+    if (this.combatTask !== undefined) this.syncCombatTask();
     this.targets.tickCount = this.tasks.tickCount = Math.trunc(e.age) - 1;
     this.targets.tick();
     this.tasks.tick();

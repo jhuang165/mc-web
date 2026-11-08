@@ -238,6 +238,7 @@ import { horseSeatsFor as seatsFor } from "./horse-live.js";
 import { HorseContainer, canInteract as horseReach, canWearArmor as horseWearsArmor } from "./horse-gear.js";
 import { riddenHorse, jumpBar } from "./horse-gear-live.js";
 import { HorseGearRenderer } from "./horse-gear-renderer.js";
+import { SpamCounter, chatPacket } from "./server-handlers.js";
 import { capturePlayerAction, dispatchPlayerAction as dispatchPlayerActionRaw, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
 import { normalizeFlatOptions } from "./flat-world.js";
@@ -287,6 +288,7 @@ import { startLoading, setStage, STAGES, loadingScreen, downloadTerrainScreen, e
 import { gameOverScreen, exportScreen, notesScreen, signEditHost } from "./modal-dialogs.js";
 import { NOTES } from "./notes-content.js";
 import { runSteps, taskPause } from "./steps.js";
+import { MeshPool, meshWorkersEnabled } from "./mesh-pool.js";
 import { presolveWorld } from "./spawn-presolve.js";
 import { blankLoading, arrivalWarmer } from "./travel-loading.js";
 import "./lang-hooks.js";
@@ -761,10 +763,10 @@ function makeRecord(p) {
     // WorldInfo(NBTTagCompound) does: cheats on for a creative world, off for survival (commands.js cheatsAllowed).
     ...(typeof p.allowCommands === "boolean" ? { allowCommands: p.allowCommands } : {}),
     // Version 11 adds full Java population; 14 (finite) and 15 (streamed) add villages, strongholds and
-    // temples; 16 (streamed) uses the native mutated-biome class rule in the biome layers; 18 (streamed, new worlds) adds the native world spawn walk. Finite worlds stay on 14,
+    // temples; 16 (streamed) uses the native mutated-biome class rule in the biome layers; 18 (streamed) adds the native world spawn walk; 20 (streamed, new worlds) adds the population's neighbour callbacks (java-world.js). Finite worlds stay on 14,
     // the earlier biome rule. Saves retain their existing generator.
     // Default, Large Biomes and Amplified worlds are streamed (endless) with the matching WorldType generator.
-    generationVersion: p.biome === "javaStreamed" ? 18 : isJavaLandscape(p.biome) ? 14 : 8,
+    generationVersion: p.biome === "javaStreamed" ? 20 : isJavaLandscape(p.biome) ? 14 : 8,
     ...(p.biome === "javaStreamed" ? { worldType: streamedWorldType(p.worldType) } : {}),
     // Superflat: the FlatGeneratorInfo string (WorldInfo.generatorOptions), normalised as ass.toString writes it.
     ...(p.biome === "javaStreamed" && p.worldType === "flat" ? { generatorOptions: normalizeFlatOptions(p.generatorOptions) } : {}),
@@ -1215,6 +1217,7 @@ async function openWorld(record) {
   leaveMultiplayer();
   if(openingWorld)return;
   openingWorld=true; performance.mark?.('trip:open');
+  if (!record.transit) dims.endAway(); // away-world.js: a trip's pending Overworld run does not outlive the session it belongs to
   sounds?.stopStreams(); // Minecraft.loadWorld: SoundHandler.stopSounds (music and records), also between dimensions
   lan.close();
   // From the title screen: LoadingScreenRenderer's "Loading world" screen (loading-screen.js); portal trips keep the game on screen.
@@ -1621,7 +1624,9 @@ async function launch(record, prepared, { slice = false } = {}) {
     keys.clear();
     accumulator = 0;
     performance.mark?.('trip:runtimes');
-    if (slice) while (scene.buildPending(12)) await yieldTask();
+    const warmed = slice ? scene.warmShaders() : null; // the End's sky and portal programs link here, behind the loading screen, while the workers mesh
+    if (slice) await scene.buildPendingAsync(yieldTask); // column meshes in the worker pool (the page thread when there is none)
+    await warmed;
     if (slice) { // the random-tick refcounts of the resident columns (WorldChunk.sectionTickCount, built on first use) are counted here, in slices, instead of in the first tick
       const cols = [...world.chunks.values()];
       for (let i = 0; i < cols.length;) { const end = performance.now() + 8; while (i < cols.length && performance.now() < end) cols[i++].sectionTickCount?.(0); await yieldTask(); }
@@ -1709,9 +1714,17 @@ const commandHost = createCommandHost({
   saveFile: (name, text) => downloadBlob(new Blob([text], { type: "text/plain" }), name),
 });
 const commands = createCommandRunner(commandHost);
+// NetHandlerPlayServer chat: single player is not exempt from the spam kick unless the owner may use commands (oi.g).
+const chatSpam = new SpamCounter();
+function chatSpamGate(text, deliver) {
+  if (multiplayer) return deliver(text);
+  const r = chatPacket(chatSpam, tickCounter, text, commandHost.cheats);
+  if (r.deliver !== null) deliver(r.deliver);
+  if (r.kick) { leaveToTitle(true); toast(r.kick); }
+}
 const chatUi = new ChatUi(document, {
   // ServerConfigurationManager prints "<Player> message"; a leading "/" runs the command.
-  submit: (text) => { if (multiplayer) { if (text.startsWith('/')) printChat('Server commands are not available in this Creative milestone.'); else multiplayer.send({ type: 'chat', text }); } else if (text.startsWith("/")) commands.run(text); else printChat(chatTextComponent(scoreboard.formatName(PLAYER_NAME), text), 0, false); },
+  submit: (text) => chatSpamGate(text, (text) => { if (multiplayer) { if (text.startsWith('/')) printChat('Server commands are not available in this Creative milestone.'); else multiplayer.send({ type: 'chat', text }); } else if (text.startsWith("/")) commands.run(text); else printChat(chatTextComponent(scoreboard.formatName(PLAYER_NAME), text), 0, false); }),
   // GuiChat.func_146407_a: with chatLinksPrompt a GuiConfirmOpenLink asks first; Yes opens a new tab, and every choice returns to the chat.
   confirmLink: (url) => {
     const typed = chatUi.input.value;
@@ -1918,6 +1931,7 @@ function openCreative() {
   const gui = new CreativeScreen(survival.inventory, {
     playerContainer: () => survival.openInventory(),
     tooltip: (s) => tooltipLines(ITEMS[s.id], s, options.advancedTooltips).map((l) => l.text),
+    tick: () => tickCounter,
   });
   openContainer(gui.container, "creative", null, gui);
 }
@@ -2670,6 +2684,10 @@ function tickWeather() {
 const portalTimer = new PortalTimer();
 const dims = new DimensionLive({
   active: () => active, worlds: () => worlds, save: () => save(), openWorld, dirty: () => { saved = false; },
+  // Away run (away-world.js): copies of the resident columns, the physics tick counter, and the clock ticks a loading screen skipped.
+  ticks: () => tickCounter,
+  chunks: (cols) => cols.flatMap(([x, z]) => { const c = world.chunks?.get(`${x},${z}`); return c ? [{ x, z, blocks: c.blocks.slice(), meta: c.meta.slice() }] : []; }),
+  advanceTicks: (n) => { if (n > 0 && !survival.timeFrozen) { survival.time += n; scene.setTime?.(survival.time); } },
   player: () => ({ x: position.x, y: position.y, z: position.z, yaw }),
   sound: (n, o) => sounds.play(n, o),
   showCredits: async () => {
@@ -3906,23 +3924,23 @@ function animate(now) {
       world,
       aim,
       dir,
-      survival.creative ? 6 : 4.5,
+      survival.creative ? 5 : 4.5,
     );
     eyeRay = { origin: [aim.x, aim.y, aim.z], dir: [dir.x, dir.y, dir.z] };
     aimedEntity = mobs.pick(
       aim,
       dir,
-      survival.creative ? 5 : 3,
+      survival.creative ? 6 : 3,
       target?.distance ?? 6,
     );
     // EntityRenderer.getMouseOver: the nearest entity box (a cart grown by its 0.1 border) wins.
-    aimedCart = pickMinecart(minecarts, aim, dir, survival.creative ? 5 : 3, target?.distance ?? 6, rider.vehicle);
-    const aimedBoat = pickMinecart(boats, aim, dir, survival.creative ? 5 : 3, target?.distance ?? 6, rider.vehicle);
+    aimedCart = pickMinecart(minecarts, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, rider.vehicle);
+    const aimedBoat = pickMinecart(boats, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, rider.vehicle);
     if (aimedBoat && (!aimedCart || aimedBoat.distance < aimedCart.distance)) aimedCart = aimedBoat;
     if (aimedCart && aimedEntity && aimedEntity.distance <= aimedCart.distance) aimedCart = null;
     if (aimedCart) aimedEntity = null;
     // EntityRenderer.getMouseOver: a painting or frame (box grown by 0.1) nearer than the block and any mob/cart.
-    aimedHanging = pickHanging(hanging, aim, dir, survival.creative ? 5 : 3, target?.distance ?? 6);
+    aimedHanging = pickHanging(hanging, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6);
     if (aimedHanging && ((aimedEntity && aimedEntity.distance <= aimedHanging.distance) || (aimedCart && aimedCart.distance <= aimedHanging.distance))) aimedHanging = null;
     if (aimedHanging) { aimedEntity = null; aimedCart = null; }
     scene.outline.visible = !hideGUI && !!target && !aimedEntity && !aimedCart && !aimedHanging; // drawSelectionBox skips while hideGUI
@@ -4089,6 +4107,7 @@ async function boot(){try {
     try { worlds = await readWorldShelf(worlds); } catch (e) { worlds = []; worldsError = String(e?.message ?? e); }
   } else worlds = [];
   scene = new VoxelScene($("#viewport"));
+  if (meshWorkersEnabled()) scene.setMeshPool(new MeshPool()); // column meshes in workers; ?meshWorkers=0 keeps them on the page thread
   scene.post.anaglyph = () => !!options.anaglyph; // GameSettings.anaglyph (options.txt anaglyph3d)
   scene.weather = weather;
   projectiles.useEffects(scene.effectRenderer);

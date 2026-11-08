@@ -3,6 +3,7 @@
 // two 200 wide lists at width / 2 - 204 and width / 2 + 4, top 32, bottom height - 51, 36 high rows with a 13 unit header;
 // a 32 x 32 icon, the name at (x + 34, y + 1) and two description lines at y + 12 and y + 22 (wrapped at 157, gray);
 // buttons 150 x 20 at y = height - 48. The folder button opens a file picker here (a web page has no pack folder).
+import { guiAnaglyph, convertPngBytes } from "./gui-anaglyph.js";
 import { t, textWidth, trimToWidth, splitLines, slotMetrics, COLOR } from "./menu-screens.js";
 import {
   packStore, openStoredPack, packInfo, PackLists, sameSelection, addPackFromFile, addPackFromFolder, applyPacks, refreshWorker, deleteStoredPack,
@@ -156,8 +157,11 @@ export function resourcePacksScreen(ctx, parent, show) {
     entries.forEach((info, i) => {
       const y = HEADER + i * ROW, x = 2;
       const icon = div("", at(x, y, 32, 32));
-      const src = info.icon ? (urls.push(URL.createObjectURL(new Blob([info.icon], { type: "image/png" }))), urls.at(-1)) : "/media/1.7.10/misc/unknown_pack.png";
-      icon.style.background = `url('${src}') 0 0/100% 100% no-repeat`;
+      const paint = (src) => { icon.style.background = `url('${src}') 0 0/100% 100% no-repeat`; };
+      if (info.icon && guiAnaglyph.on) {
+        // 3D Anaglyph: the pack icon is a texture too (converted at upload natively); the blob is converted from its PNG bytes first.
+        convertPngBytes(new Uint8Array(info.icon)).then((out) => { if (out) { urls.push(URL.createObjectURL(new Blob([out], { type: "image/png" }))); paint(urls.at(-1)); } }, () => {});
+      } else paint(info.icon ? (urls.push(URL.createObjectURL(new Blob([info.icon], { type: "image/png" }))), urls.at(-1)) : "/media/1.7.10/misc/unknown_pack.png");
       icon.style.imageRendering = "pixelated";
       content.append(icon);
       let name = info.name;

@@ -70,15 +70,20 @@ export const NO_MAP_FEATURES_GENERATION = 17;
 // Worlds saved at 12 to 17 keep the repository's findBiomePosition-only origin, since the origin decides where every block lies.
 export const NATIVE_SPAWN_GENERATION = 18;
 export const nativeSpawnGeneration = (generationVersion) => generationVersion >= NATIVE_SPAWN_GENERATION;
-// MapFeatures is off at 17 and 19.
-export const mapFeaturesOn = (generationVersion) => generationVersion !== NO_MAP_FEATURES_GENERATION && generationVersion !== NO_MAP_FEATURES_GENERATION + 2;
+// MapFeatures is off at 17, 19 and 21 (odd versions from 17 on).
+export const mapFeaturesOn = (generationVersion) => !(generationVersion >= NO_MAP_FEATURES_GENERATION && generationVersion % 2 === 1);
+// Generation 20 (21 with MapFeatures off) runs the generation-time neighbour callbacks of the population (door, redstone, tripwire, button and plate
+// onNeighborBlockChange / onBlockAdded chains, the dispenser's markDirty reads): structure-population-area.js `nativeNeighborWorldClass`, call-for-call
+// against the unchanged ChunkProviderFlat / ChunkProviderGenerate areas. Earlier worlds keep their quiet callbacks, so saves regenerate as they did.
+export const NEIGHBOR_GENERATION = 20;
+export const neighborsOn = (generationVersion) => generationVersion >= NEIGHBOR_GENERATION;
 export const biomeLayerOptions = (generationVersion) => ({ legacyMutated: generationVersion !== undefined && generationVersion < NATIVE_BIOME_CLASS_GENERATION });
 const newGenerator = (seed, worldType, generatorOptions, generationVersion) => worldType === 'flat'
   ? new FlatChunkProvider(parseFlatInfo(generatorOptions))
   : new ChunkProviderGenerate(seed, streamedWorldType(worldType), new BiomeTerrainState(), biomeLayerOptions(generationVersion));
 // Superflat: no caves, ravines or noise; every column is the preset's layers. Generation 15 or later (its population runs
 // ChunkProviderFlat's structure list and populate, flat-structures.js).
-function flatSource({ seed, generationVersion, originX, originZ, gen }) {
+function flatSource({ seed, generationVersion, originX, originZ, gen, neighbors }) {
   if (generationVersion < 15) throw new Error('Superflat worlds need streamed generation version 15');
   let live = null;
   const liveColumn = () => {
@@ -100,15 +105,15 @@ function flatSource({ seed, generationVersion, originX, originZ, gen }) {
   };
   const population = new StreamingPopulation({
     seed, originX, originZ, terrainOnly: terrain, terrain: (x, z) => gen.provideChunk(x, z), biomeAt: (x, z) => gen.manager.biomeAt(x, z),
-    manager: gen.manager, flat: gen.info, mapFeatures: mapFeaturesOn(generationVersion),
+    manager: gen.manager, flat: gen.info, mapFeatures: mapFeaturesOn(generationVersion), neighbors,
   });
   return { gen, population, column: (cx, cz) => population.column(cx, cz) };
 }
 // The streamed generator chain at local chunk coordinates (native chunk = local + origin / 16).
 // Generation 12 is terrain, caves and ravines with live block ids; 13 populates per cell
 // (streaming-population.js). `column(cx, cz)` returns { blocks, metadata } in WorldChunk order.
-export function streamedSource({ seed, generationVersion, originX, originZ, worldType = 'default', generatorOptions = '', gen = newGenerator(seed, worldType, generatorOptions, generationVersion) }) {
-  if (gen instanceof FlatChunkProvider) return flatSource({ seed, generationVersion, originX, originZ, gen });
+export function streamedSource({ seed, generationVersion, originX, originZ, worldType = 'default', generatorOptions = '', gen = newGenerator(seed, worldType, generatorOptions, generationVersion), neighbors = neighborsOn(generationVersion) }) {
+  if (gen instanceof FlatChunkProvider) return flatSource({ seed, generationVersion, originX, originZ, gen, neighbors });
   const manager = gen.manager, topAt = (x, z) => gen.biomeState.topBlock(manager.biomeAt(x, z)),
     caves = new MapGenCaves(seed, manager, topAt),
     ravines = new MapGenRavine(seed, manager, topAt);
@@ -129,7 +134,7 @@ export function streamedSource({ seed, generationVersion, originX, originZ, worl
   if (generationVersion < 13) return { gen, population: null, column: terrain };
   const population = new StreamingPopulation({
     seed, originX, originZ, terrainOnly: terrain, terrain: original, biomeAt: (x, z) => manager.biomeAt(x, z),
-    manager: generationVersion >= 15 ? manager : null, mapFeatures: mapFeaturesOn(generationVersion),
+    manager: generationVersion >= 15 ? manager : null, mapFeatures: mapFeaturesOn(generationVersion), neighbors,
   });
   return { gen, population, column: (cx, cz) => population.column(cx, cz) };
 }

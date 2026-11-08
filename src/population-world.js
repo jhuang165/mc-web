@@ -17,6 +17,8 @@ import { structureWorldClass } from './structure-world-blocks.js';
 import { potContentsOfMeta } from './stone-utility.js';
 import { FlatStructureCache, flatStructurePopulation } from './flat-structures.js';
 import { FlatChunkManager } from './flat-world.js';
+import { nativeNeighborWorldClass } from './native-neighbor-world.js';
+import { StructureRedstone } from './structure-redstone.js';
 
 const key = (x,z) => `${x},${z}`;
 // Original ids whose add/break callbacks the structure fixtures replay as no-ops (stairs, fences' neighbours,
@@ -49,9 +51,9 @@ export class PopulationArea {
   //
   // `flat` (a FlatGeneratorInfo, flat-world.js) runs ChunkProviderFlat's structure list and populate instead
   // (flat-structures.js): the enabled features only, no animals, no snow, decoration only when the preset has it.
-  constructor({seed, chunkX, chunkZ, size=8, margin=0, terrain, biomeAt, worldRandSeed=0n, structures=false, manager=null, structureCache=null, flat=null, mapFeatures=true}) {
-    this.seed=BigInt(seed); this.chunkX=chunkX; this.chunkZ=chunkZ; this.size=size; this.margin=margin; this.flat=flat; this.mapFeatures=mapFeatures;
-    const full=structures||!!flat, Base=full?structureWorldClass(mineshaftGenWorldClass()):mineshaftGenWorldClass();
+  constructor({seed, chunkX, chunkZ, size=8, margin=0, terrain, biomeAt, worldRandSeed=0n, structures=false, manager=null, structureCache=null, flat=null, mapFeatures=true, neighbors=false}) {
+    this.seed=BigInt(seed); this.chunkX=chunkX; this.chunkZ=chunkZ; this.size=size; this.margin=margin; this.flat=flat; this.mapFeatures=mapFeatures; this.neighbors=neighbors&&(structures||!!flat); this.relaxRedstone=false;
+    const full=structures||!!flat, Base0=full?structureWorldClass(mineshaftGenWorldClass()):mineshaftGenWorldClass(), Base=this.neighbors?nativeNeighborWorldClass(this,Base0):Base0;
     this.world=new (class extends Base {
       // Halo terrain is available, but never populated or searched for new structure starts.
       chunkExists() { return true; }
@@ -67,10 +69,13 @@ export class PopulationArea {
       }
     })({rand:new JavaRandom(worldRandSeed),terrain});
     this.world.biomeAt=biomeAt; this.world.animals=[];
+    if(this.neighbors) this.redstone=new StructureRedstone(this.world);
     if(full) {
       const w=this.world;
       const added=w.blockAdded.bind(w), broke=w.breakBlock.bind(w);
-      w.blockAdded=(id,x,y,z)=>QUIET_ADDED.includes(id)?undefined:added(id,x,y,z);
+      // BlockTNT.onBlockAdded reads the power around it natively (neighbours mode); the older worlds keep it silent.
+      const quiet=this.neighbors?QUIET_ADDED.filter(id=>id!==46):QUIET_ADDED;
+      w.blockAdded=(id,x,y,z)=>quiet.includes(id)?undefined:added(id,x,y,z);
       w.breakBlock=(id,x,y,z,meta)=>QUIET_BROKEN.includes(id)?undefined:broke(id,x,y,z,meta);
       w.getTopSolidOrLiquid=(x,z)=>w.getTopSolidOrLiquidBlock(x,z);
       w.getAverageGroundLevel=()=>64;

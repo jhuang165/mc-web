@@ -50,8 +50,8 @@ export class StreamingPopulation {
   // version 15; without it the cell runs mineshafts only (version 13). `mapFeatures: false` (generation 17) runs no structure
   // generator at all. The stronghold ring (a biome
   // search) is computed once per population object, i.e. once per world or worker, never per cell.
-  constructor({ seed, originX, originZ, terrain, biomeAt, terrainOnly, mapBlock = null, cells = 6, terrainChunks = 192, manager = null, flat = null, mapFeatures = true }) {
-    this.flat = flat; this.mapFeatures = mapFeatures;
+  constructor({ seed, originX, originZ, terrain, biomeAt, terrainOnly, mapBlock = null, cells = 6, terrainChunks = 192, manager = null, flat = null, mapFeatures = true, neighbors = false }) {
+    this.flat = flat; this.mapFeatures = mapFeatures; this.neighbors = neighbors;
     this.seed = BigInt(seed);
     this.originChunkX = originX >> 4; this.originChunkZ = originZ >> 4;
     this.terrain = terrain; this.biomeAt = biomeAt; this.terrainOnly = terrainOnly; this.mapBlock = mapBlock;
@@ -69,8 +69,16 @@ export class StreamingPopulation {
     const hit = this.cells.get(k);
     if (hit) return hit;
     let built;
-    try { built = this.generate(cellX, cellZ); }
-    catch (error) {
+    try {
+      // Neighbours mode (generation 20): an unported chain (a powered door, a fallen button) retries the cell with the earlier quiet callbacks, which is
+      // deterministic too, rather than losing the cell's population.
+      try { built = this.generate(cellX, cellZ); }
+      catch (error) {
+        if (!this.neighbors) throw error;
+        console.warn(`streaming-population: cell ${k} retried without neighbour callbacks: ${error.message}`);
+        built = this.generate(cellX, cellZ, false);
+      }
+    } catch (error) {
       // Generation is deterministic, so a cell that throws always falls back the same way. This is a
       // labelled approximation (terrain, caves and ravines only), never silent.
       console.error(`streaming-population: cell ${k} fell back to unpopulated terrain: ${error.message}`);
@@ -87,14 +95,14 @@ export class StreamingPopulation {
     }
     return { cellX, cellZ, columns, records: new Map(), mineshafts: [], populates: 0, failed: String(error?.message ?? error) };
   }
-  generate(cellX, cellZ) {
+  generate(cellX, cellZ, neighbors = this.neighbors) {
     const mapBlock = this.mapBlock ?? populationBlockMapper();
     if (!mapBlock) throw new Error('original block mapper not ready');
     const baseX = this.originChunkX + cellX * CELL, baseZ = this.originChunkZ + cellZ * CELL;
     const pass = new PopulationArea({
       seed: this.seed, chunkX: baseX, chunkZ: baseZ, size: CELL, margin: 1,
       terrain: (x, z) => this.original(x, z), biomeAt: this.biomeAt,
-      structures: !!this.structureCache, manager: this.structureCache?.manager, structureCache: this.structureCache, flat: this.flat, mapFeatures: this.mapFeatures,
+      structures: !!this.structureCache, manager: this.structureCache?.manager, structureCache: this.structureCache, flat: this.flat, mapFeatures: this.mapFeatures, neighbors,
     }).run();
     const w = pass.world;
     // (original id, metadata) -> live id << 4 | live metadata, resolved once per state.

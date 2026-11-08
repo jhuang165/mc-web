@@ -176,6 +176,19 @@ export async function writeWorldShelf(records, storage, key, chunks = []) {
     storage.setItem(key,shelfJSON);
   });
 }
+// Edit columns an away run produced (away-world.js): complete column records, written in one transaction after the shelf writes before it.
+export async function writeChunkColumns(id, columns) {
+  if (!columns.length) return;
+  return serializeWrite(async () => {
+    const db = await openWorldStorage();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction([CHUNKS], 'readwrite'), store = tx.objectStore(CHUNKS);
+      for (const c of columns) store.put({ world: id, x: c.x, z: c.z, cells: c.cells, values: c.values, order: c.order });
+      tx.oncomplete = resolve;
+      tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('Away columns could not be saved'));
+    });
+  });
+}
 // The stored edits of a chunked world, in first-edit order.
 export async function readChunkEdits(id) {
   const db = await openWorldStorage();

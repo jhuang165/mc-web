@@ -42,9 +42,11 @@ public class VillagerProbe {
     public void a(yz player, int event, int x, int y, int z, int data) { aux.add(event + "|" + x + "," + y + "," + z); }
     public float n(int x, int y, int z) { return 1.0f; }
     public ahu a(int x, int z) { return ahu.d(1); } // plains: MoveIndoors reads its biome
-    public azu a(azw a, azw b) { return null; }
-    public azu a(azw a, azw b, boolean c) { return null; }
-    public azu a(azw a, azw b, boolean c, boolean d, boolean e) { return null; }
+    // Batch 30: World.rayTraceBlocks is the real one (EntitySenses.canSee, doors in the way) only when VillageFightProbe asks; every other probe keeps the stub its reference was recorded with.
+    static boolean realRays = false;
+    public azu a(azw a, azw b) { return realRays ? super.a(a, b) : null; }
+    public azu a(azw a, azw b, boolean c) { return realRays ? super.a(a, b, c) : null; }
+    public azu a(azw a, azw b, boolean c, boolean d, boolean e) { return realRays ? super.a(a, b, c, d, e) : null; }
     public boolean d(sa entity) { spawned.add(entity); return true; }
     public void a(sa entity, String sound, float volume, float pitch) { sounds.add(sound + "|" + volume + "|" + pitch); }
     // World.getClosestPlayerToEntity (a(sa, D)): only VillageFightProbe fills this (batch 29), so EntityLiving.despawnEntity sees its player; elsewhere null as before.

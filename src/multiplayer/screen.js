@@ -1,4 +1,5 @@
 import { DEFAULT_SERVER, validName } from './protocol.js';
+import { convertGuiCanvas } from '../gui-anaglyph.js';
 import { AccountApi } from './account-api.js';
 import { skinCanvas, canvasPng, drawSkinPreview, PREVIEW_WIDTH, PREVIEW_HEIGHT } from '../skin.js';
 
@@ -114,7 +115,7 @@ export function profileScreen({ api, back, steve, loadSkin, changed = () => {} }
       box.style.background = 'rgba(0,0,0,.35)';
       box.append(canvas);
       const skin = pending ?? current ?? steve;
-      if (skin && (skin.naturalWidth ?? skin.width)) drawSkinPreview(canvas.getContext('2d'), skin); // Steve may still be loading
+      if (skin && (skin.naturalWidth ?? skin.width)) { drawSkinPreview(canvas.getContext('2d'), skin); convertGuiCanvas(canvas); } // Steve may still be loading; the skin is a texture, so it is converted under 3D Anaglyph
       g.text(pending ? 'New skin (front, back)' : current ? 'Your skin (front, back)' : 'Default skin (front, back)', x, top + 100, { color: 0xaaaaaa });
       const rx = x + 120, rw = 180;
       g.text('Name', rx, top, { color: 0xaaaaaa });

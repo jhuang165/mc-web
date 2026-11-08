@@ -42,5 +42,11 @@
  "off-classic:17:82:-87:5:0:2;7,2x3,2;1;village",
  "off-overworld:9:0:0:5:0:2;7,59x1,3x3,2;1;village,biome_1,decoration,stronghold,mineshaft,lake,lava_lake,dungeon",
  "off-dense:5:0:0:5:0:2;7,59x1,3x3,2;1;village(distance=9 size=2),lake,lava_lake,dungeon,decoration",
- "off-allfeat:11:0:0:5:0:2;7,59x1,3x3,2;1;village(distance=8),biome_1(distance=9),mineshaft(chance=0.05),stronghold(distance=3 count=12 spread=4),lake,lava_lake,dungeon,decoration"
+ "off-allfeat:11:0:0:5:0:2;7,59x1,3x3,2;1;village(distance=8),biome_1(distance=9),mineshaft(chance=0.05),stronghold(distance=3 count=12 spread=4),lake,lava_lake,dungeon,decoration",
+ "jungleN-scatteredFeature1:1:-1:-1:3:1:2;7,59x1,3x3,2;21;biome_1(distance=9),decoration,lake",
+ "jungleE-scatteredFeature2:2:-1:-1:3:1:2;7,59x1,3x3,2;21;biome_1(distance=9),decoration,lake",
+ "jungleW-scatteredFeature4:4:-1:-1:3:1:2;7,59x1,3x3,2;21;biome_1(distance=9),decoration,lake",
+ "desertS-scatteredFeature1:1:-1:-1:3:1:2;7,3x1,52x24;2;biome_1(distance=9),mineshaft(chance=0.05),decoration,dungeon",
+ "desertN-scatteredFeature3:3:-1:-1:3:1:2;7,3x1,52x24;2;biome_1(distance=9),mineshaft(chance=0.05),decoration,dungeon",
+ "desertW-scatteredFeature4:4:-1:-1:3:1:2;7,3x1,52x24;2;biome_1(distance=9),mineshaft(chance=0.05),decoration,dungeon"
 ]

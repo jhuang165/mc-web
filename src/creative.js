@@ -9,6 +9,7 @@ import { DYE, RED_FLOWER, YELLOW_FLOWER, SNOW_LAYER, ICE, SAPLING, WEB, LADDER, 
 import { ENCHANTED_BOOK_ITEM, maxLevelBooks, allLevelBooks } from "./enchanted-books.js";
 import { REEDS_ITEM, PAPER, SUGAR } from "./plants.js";
 import { BREWING_TAB, POTION_SEARCH } from "./potion-items.js";
+import { SpamCounter, creativeDrop } from "./server-handlers.js";
 import { Container, ContainerScreen, Slot, StackArray, copyStack, makeStack, OUTSIDE } from "./inventory.js";
 
 // A list entry is an item id, or [id, damage] for a metadata subtype: BlockColored
@@ -147,14 +148,15 @@ export class CreativeContainer extends Container {
   canDrag(slot) { return slot.inventory === this.inv || (slot.y > 90 && slot.x <= 162); }
 }
 
+const dropSpam = new SpamCounter(); // NetHandlerPlayServer.m
 let selectedTab = 0; // GuiContainerCreative.selectedTabIndex is static
 export const resetCreativeTab = () => (selectedTab = 0);
 
 // GuiContainerCreative: tab switching, scrolling, search and handleMouseClick.
 export class CreativeScreen extends ContainerScreen {
-  constructor(inv, { playerContainer, tooltip = (s) => [], tmp } = {}) {
+  constructor(inv, { playerContainer, tooltip = (s) => [], tmp, tick = () => 0 } = {}) {
     super(new CreativeContainer(inv, tmp));
-    Object.assign(this, { inv, playerContainer, tooltip, scroll: 0, scrolling: false, clearSearch: false, bin: null, saved: null, player: null });
+    Object.assign(this, { inv, playerContainer, tooltip, tick, scroll: 0, scrolling: false, clearSearch: false, bin: null, saved: null, player: null });
     this.field = new TextField();
     const start = selectedTab;
     selectedTab = -1;
@@ -227,8 +229,9 @@ export class CreativeScreen extends ContainerScreen {
     return false;
   }
   // NetHandlerPlayServer.processCreativeInventoryAction (nh, bytecode-read): a creative drop needs a stack with damage >= 0 and 0 < size <= 64
-  // (a spam counter, +20 per drop and refused at 200 or more, also exists server-side). The delete slot only clears the cursor.
-  drop(s) { if (s && s.count > 0 && s.count <= 64 && !(s.damage < 0)) this.container.drops.push(s); }
+  // and the drop spam counter (server-handlers.js: +20 per drop, refused at 200 or more, 1 per tick decay). The delete slot only clears the cursor.
+  // The counter is per connection, so it outlives the screen: tick() is the game tick clock (decay 1 per tick).
+  drop(s) { if (s && creativeDrop(dropSpam, this.tick(), s)) this.container.drops.push(s); }
   // handleMouseClick(slot, slotId, button, mode)
   send(slot, id, button, mode) {
     const inv = this.inv, c = this.container, held = inv.cursor, survival = this.tab === SURVIVAL_TAB;

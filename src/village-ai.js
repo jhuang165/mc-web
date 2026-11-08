@@ -614,7 +614,7 @@ export function golemStrike(m, target) {
   if (target.isPlayer) hit = target.survival?.scaledDamage ? ew.hitGolemPlayer?.(e, damage, target.survival) : false;
   else {
     hit = ew.attackEntityFrom(target.e, damage, { from: { x: e.x, z: e.z }, attacker: e, name: "mob", player: false });
-    if (hit) target.e.vy += 0.4;
+    if (hit) target.e.vy += 0.4000000059604645; // wt.n: ldc2_w 0.4000000059604645d (the float 0.4F widened)
   }
   ew.events.push({ sound: IRON_GOLEM_SOUNDS.throw, volume: 1, pitch: 1, position: { x: e.x, y: e.y, z: e.z } });
   return hit;
