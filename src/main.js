@@ -267,7 +267,7 @@ import { applyHangingEdit } from "./hanging-interaction.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle } from "./vehicle-simulation.js";
 import { StreamPrefetch } from "./streaming-generator.js";
 import { createRing, attachRing } from "./headless-columns.js";
-import { wrapMobHooks } from "./headless-env.js";
+import { wrapMobHooks, residentOnly } from "./headless-env.js";
 import { startLoading, setStage, STAGES, loadingScreen, downloadTerrainScreen, errorScreen, nextPaint, nextFrame, SpawnAreaLog } from "./loading-screen.js";
 import { gameOverScreen, exportScreen, notesScreen, signEditHost } from "./modal-dialogs.js";
 import { NOTES } from "./notes-content.js";
@@ -3813,7 +3813,7 @@ function animate(now) {
   if (screen === "inventory") { paperdollFrame(); horsePreviewFrame(); }
   chestRenderer?.update(running() ? accumulator / PHYSICS.tick : 1);
   endPortalRenderer?.update(world, position, performance.now() / 1000);
-  if(xpRenderer)xpRenderer.update(xpOrbs.orbs,partial);
+  if(xpRenderer)xpRenderer.update(residentOnly(world,xpOrbs.orbs),partial); // ring orbs are not drawn (headless-env.js)
   scene.dropPartial = partial;
   scene.particleView = { yaw, pitch, mirror: thirdPersonView === 2 };
   // EntityRenderer's potion terms (potion-fx.js): Night Vision / Blindness durations, the Nausea warp amount and the player's feet height.

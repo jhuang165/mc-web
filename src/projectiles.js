@@ -1,4 +1,4 @@
-import { entityActive } from './streaming-ticks.js';
+import { ringEntityActive } from './streaming-ticks.js';
 // EntitySnowball (zj) from the 1.7.10 JAR, with EntityThrowable (zk) and
 // ItemSnowball (aed); EntityEgg (zl) and EntityEnderPearl (zm) share its flight
 // rules but provide their own impact adapters and item icons. Thrown entities are
@@ -374,7 +374,7 @@ export class Projectiles {
   // hits. Ender pearls require `onPearlImpact({pearl,world,hit,target,block})`;
   // it runs synchronously and owns impact ordering and server-only death.
   tick(world, targets = [], onHit = () => {}, onPearlImpact = null) {
-    for (const b of this.balls) if (!b.dead && entityActive(world,b)) this.step(world, b, targets, onHit, onPearlImpact);
+    for (const b of this.balls) if (!b.dead && ringEntityActive(world,b)) this.step(world, b, targets, onHit, onPearlImpact);
     this.balls = this.balls.filter((b) => !b.dead);
     if (this.ownsEffects) this.effects.tick(world);
   }

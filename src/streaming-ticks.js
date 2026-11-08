@@ -8,3 +8,10 @@ export function pauseUnloadedTicks(world, entries) {
   if (changed) entries.sort((a,b)=>a.time-b.time || (a.id??0)-(b.id??0));
 }
 export const entityActive = (world, e) => !world.streaming || world.isTicking(e.x,e.z);
+// World.updateEntities updates every loaded entity through updateEntityWithOptionalForce(e, true), which returns unless
+// checkChunksExist(floor(x) - 32, 0, floor(z) - 32, floor(x) + 32, 0, floor(z) + 32) (bytecode-read, ring-entities-reference.json):
+// with a headless ring (headless-columns.js, World.ringSink) that is the resident ticking window or the ring's 5 x 5 chunk test.
+// Used by item entities, experience orbs, arrows, thrown projectiles, falling blocks and primed TNT (natural-spawning.md "Round 6").
+export const ringEntityActive = (world, e) => entityActive(world, e) || !!world.ringSink?.active(e.x, e.z);
+// WorldServer.tickUpdates runs a due entry when checkChunksExist(x - b0, .., z + b0) with b0 = 0: the entry's own chunk is loaded.
+export const ringTickActive = (world, x, z) => entityActive(world, { x, z }) || !!world.ringSink?.holds(x, z);

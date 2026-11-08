@@ -6,7 +6,7 @@ import { WATER, LAVA, FIRE, SAND, GRAVEL, ANVIL } from "./world.js";
 import { moveEntity } from "./entities.js";
 import { replaceable } from "./plants.js";
 import { saveTicks, readTicks } from "./scheduled-ticks.js";
-import { entityActive } from './streaming-ticks.js';
+import { ringEntityActive, ringTickActive } from './streaming-ticks.js';
 import { JavaRandom } from './java-random.js';
 import { DRAGON_EGG, EGG_TICK_RATE } from './dragon-egg.js';
 import { anvilDropDamage, anvilImpact } from './anvil-block.js';
@@ -92,10 +92,21 @@ export class FallingBlocks {
   }
   // BlockFalling.updateTick -> func_149830_m: with room below (and y >= 0) an EntityFallingBlock
   // is spawned at the block's centre carrying its metadata. The source stays until the entity's
-  // first tick. (The instant fall only happens when the chunks around are not loaded.)
+  // first tick. The instant fall happens when the chunks around are not loaded (akx.m: checkChunksExist over 32 blocks, else
+  // setBlockToAir, then the block, metadata 0, lands on the first cell below that it cannot fall through, if that is above y 0).
+  // That is only reachable in a headless ring column near the ring's rim (natural-spawning.md "Round 6").
   fall(x, y, z) {
     const w = this.world, b = w.get(x, y, z);
     if (!canFallBelow(w.get(x, y - 1, z)) || y < 0) return null;
+    if (w.ringSink && !ringEntityActive(w, { x, z })) {
+      if (!w.set(x, y, z, 0)) return null;
+      this.apply([[x, y, z, b, 0]]);
+      let at = y;
+      while (canFallBelow(w.get(x, at - 1, z)) && at > 0) at--;
+      const old = w.get(x, at, z);
+      if (at > 0 && w.set(x, at, z, b, true, 0)) this.apply([[x, at, z, old, b]]);
+      return null;
+    }
     const e = spawnFalling(b, w.getMeta(x, y, z), x, y, z, this.entityRandom());
     this.entities.push(e);
     return e;
@@ -105,12 +116,12 @@ export class FallingBlocks {
   tick() {
     this.time++;
     for (const [k, u] of this.pending) {
-      if (!entityActive(this.world,u)) { u.time++; continue; }
+      if (!ringTickActive(this.world, u.x, u.z)) { u.time++; continue; }
       if (u.time > this.time) continue;
       this.pending.delete(k);
       if (this.world.get(u.x, u.y, u.z) === u.block) this.fall(u.x, u.y, u.z);
     }
-    for (const e of this.entities) if (!e.dead && entityActive(this.world,e)) this.tickEntity(e);
+    for (const e of this.entities) if (!e.dead && ringEntityActive(this.world,e)) this.tickEntity(e);
     this.entities = this.entities.filter((e) => !e.dead);
   }
   // EntityFallingBlock ignores blast damage but receives knockback. Its posY is the box centre.
