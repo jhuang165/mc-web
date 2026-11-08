@@ -31,6 +31,9 @@ export function replayFight(r) {
   ew.isDaytime = () => false;
   ew.lightAt = () => 15; // the probe world's getLightBrightness is 1.0 everywhere
   ew.ai.deps.canSeeSky = (x, y, z) => !(x >= 40 && x <= 49 && z >= 0 && z <= 100);
+  // EntityLiving.despawnEntity is setDead: the native row keeps the health it had, the port marks a despawn as health 0 / death 20 (a corpse's removal)
+  const gone = new Map(), despawn = ew.ai.deps.despawn;
+  ew.ai.deps.despawn = (e) => { gone.set(e, e.health); despawn(e); };
   const c = ew.villages;
   for (let t = 0; t < 5; t++) { if (t % 60 === 0) c.addVillagerPosition(52, 0, 52); c.tick(); }
   const village = c.villages[0], ents = [], logs = [], states = [];
@@ -70,7 +73,7 @@ export function replayFight(r) {
     survival.health = 1000;
     const agg = village.aggressors.map((a) => [a.entity.isPlayer ? 7 : ents.indexOf(a.entity.e), a.tick]);
     const idx = (b) => (!b ? -1 : b.isPlayer ? 7 : ents.indexOf(b.e));
-    states.push(ents.map((e, i) => [e.x, e.y, e.z, e.health, idx(ew.ai.brain(e).attackTarget), (e.revenge ? (revengeOf(e) === "player" ? 7 : ents.indexOf(revengeOf(e))) : -1), logs[i].log.slice()]));
+    states.push(ents.map((e, i) => [e.x, e.y, e.z, gone.has(e) ? gone.get(e) : e.health, idx(ew.ai.brain(e).attackTarget), (e.revenge ? (revengeOf(e) === "player" ? 7 : ents.indexOf(revengeOf(e))) : -1), logs[i].log.slice()]));
     rows.push([agg, village.playerReputation(name === "alt" ? "Player" : "Player")]);
   }
   return { hits, rows, states };

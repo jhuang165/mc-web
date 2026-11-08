@@ -132,6 +132,7 @@ public class VillageFightProbe {
     aji.p();
     adb.l();
     VillagerProbe.World.pickEntities = true;
+    VillagerProbe.World.realRays = true; // batch 30: real EntitySenses sight rays (the village3 double returned null: a villager saw a zombie through a closed door)
     sun.misc.Unsafe u = MobMoveProbe.unsafe();
     VillageLiveProbe.W w = (VillageLiveProbe.W) u.allocateInstance(VillageLiveProbe.W.class);
     VillageLiveProbe.world = w;

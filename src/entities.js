@@ -425,6 +425,16 @@ function pushOutCorner(world, e, px, py, pz) {
 // The player also passes `ySize` (after onLivingUpdate's sneak raise); it decays here.
 // `step` is Entity.stepHeight (0 for EntityTNTPrimed, which never steps). The tail runs the block
 // collisions and the burning-box test (block-collisions.js) with `hooks`; without them only webs.
+// Entity.boundingBox persists between ticks natively and moveEntity offsets it, so each tick's posX = (minX + maxX) / 2 carries the box's accumulated
+// rounding (a rebuilt x - w/2, x + w/2 box loses it: a 1-ulp x difference per push, amplified to 1e-3 over 300 ticks). The last box is kept per entity
+// and reused only while it still sits on the entity's position and size (any teleport or setPosition builds a fresh box, as natively).
+const boxes = new WeakMap();
+function keptBox(e, w, h) {
+  const k = boxes.get(e);
+  if (!k || k[1] !== w || k[2] !== h) return null;
+  const b = k[0];
+  return e.x === (b[0] + b[3]) / 2 && e.y === b[1] && e.z === (b[2] + b[5]) / 2 ? b.slice() : null;
+}
 export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks) {
   // Entity.width/height are floats (setSize), so the box edges use their float values.
   w = f(w);
@@ -443,7 +453,7 @@ export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks
   const odx = dx, ody = dy, odz = dz, half = w / 2,
     // An entity that keeps its bounding box (`e.bb`, as Entity.boundingBox) moves that
     // box itself, so its centre carries the same rounding as the original.
-    bb = e.bb ? e.bb.slice() : [e.x - half, e.y, e.z - half, e.x + half, e.y + h, e.z + half],
+    bb = e.bb ? e.bb.slice() : keptBox(e, w, h) ?? [e.x - half, e.y, e.z - half, e.x + half, e.y + h, e.z + half],
     start = bb.slice(),
     grow = (box, gx, gy, gz) => [gx < 0 ? box[0] + gx : box[0], gy < 0 ? box[1] + gy : box[1], gz < 0 ? box[2] + gz : box[2], gx > 0 ? box[3] + gx : box[3], gy > 0 ? box[4] + gy : box[4], gz > 0 ? box[5] + gz : box[5]];
   let list = collisionBoxes(world, grow(bb, dx, dy, dz), e);
@@ -479,6 +489,7 @@ export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks
   e.y = bb[1];
   e.z = (bb[2] + bb[5]) / 2;
   if (e.bb) e.bb = bb;
+  else boxes.set(e, [bb.slice(), w, h]);
   e.collidedH = odx !== dx || odz !== dz;
   e.onGround = ody !== dy && ody < 0;
   if (odx !== dx) e.vx = 0;
@@ -1425,7 +1436,7 @@ export class EntityWorld {
       this.events.push({ xp: experiencePoints(e, rand, world), position: { x: e.x, y: e.y, z: e.z } });
     }
     if (isSlimeLike(e)) this.splitSlime(e, rand);
-    if (this.fx) burst(this.fx, "explode", 20, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, rand);
+    burst(this.fx, "explode", 20, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, rand); // draws g g g f f f x 20 on Entity.rand even without a client (onDeathUpdate's spawnParticle arguments)
   }
   // EntityLivingBase.fall (sv.b(F)): ceil(distance - 3) points of fall damage
   // (no jump boost), through attackEntityFrom without an attacker, so no knockback.
