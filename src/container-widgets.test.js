@@ -3,9 +3,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SLOT, ANVIL, ENCHANT, argbCss, slotAt, slotShown, anvilCostDraw, anvilCostHtml, followScroll, textFieldDraw, fieldClickCursor, enchantOptionDraw, enchantDecorationsHtml, anvilDecorationsHtml, poorNameColor } from './container-widgets.js';
-import { beaconTooltip, powerButtons, BEACON_CONFIRM, BEACON_CANCEL } from './pyramid-gui.js';
+import { SLOT, ANVIL, MERCHANT_ARROW, merchantArrowDraw, slotDrawOps, slotDrawHtml, ENCHANT, argbCss, slotAt, slotShown, anvilCostDraw, anvilCostHtml, followScroll, textFieldDraw, fieldClickCursor, enchantOptionDraw, enchantDecorationsHtml, anvilDecorationsHtml, poorNameColor } from './container-widgets.js';
+import { beaconTooltip, beaconButtonDraw, beaconUiHtml, powerButtons, BEACON_CONFIRM, BEACON_CANCEL } from './pyramid-gui.js';
 import { bookScreenWidth } from './book-ui.js';
+import { GuiTextField } from './text-field.js';
 
 const W = JSON.parse(readFileSync(new URL('../public/research/container-widgets-reference.json', import.meta.url), 'utf8')).widgets;
 const css = readFileSync(new URL('./container-ui.css', import.meta.url), 'utf8');
@@ -16,9 +17,7 @@ test('slot quads: 0x80FFFFFF hover over the item, drag under it, hit region padd
   assert.equal(SLOT.drag, W.slot.drag.argb);
   assert.equal(SLOT.hitPad, W.slot.hitPad);
   assert.equal(argbCss(SLOT.hover), 'rgba(255,255,255,0.5020)');
-  assert.match(css, /\.container-slot\.hovered:after\{[^}]*background:rgba\(255,255,255,0\.502\)[^}]*z-index:6/);
-  assert.match(css, /\.container-slot\.dragged\{background:rgba\(255,255,255,0\.502\)!important\}/);
-  assert.doesNotMatch(css, /\.container-slot\.dragged:after/);
+  assert.doesNotMatch(css, /container-slot\.hovered|container-slot\.dragged|container-slot[^{]*:hover/); // quads come from the draw plan, not CSS
   const slots = [{ x: 8, y: 84 }, { x: 26, y: 84 }, { x: -2000, y: 0 }, { x: 44, y: 84, enabled: false }];
   assert.equal(slotAt(slots, 7, 83), slots[0]);
   assert.equal(slotAt(slots, 24, 100), slots[0]); // x + 16 is still inside the padded box
@@ -114,4 +113,85 @@ test('book: laid out on the ScaledResolution width, not a fixed 320', () => {
   assert.equal(bookScreenWidth(1280, 720, 2), 640);
   assert.equal(bookScreenWidth(1281, 720, 2), 641);
   assert.equal(bookScreenWidth(854, 480, 2), 427);
+});
+
+test('GuiContainer.drawSlot plan: item, armour icon, one-slot drag hole, drag quad under, hover quad over', () => {
+  const stack = { id: 1, count: 3 }, item = { stack }, armour = { stack: null, type: 1 }, plain = { stack: null };
+  const preview = { slots: new Map(), capped: new Set() }, idle = { dragging: false, dragSlots: new Set(), container: { inv: {} } };
+  assert.deepEqual(slotDrawOps(item, { gui: idle, preview }).map((o) => o.kind), ['stack']);
+  assert.deepEqual(slotDrawOps(armour, { gui: idle, preview }), [{ kind: 'icon', name: 'chestplate' }]);
+  assert.deepEqual(slotDrawOps(plain, { gui: idle, preview }), []);
+  // hover quad after the item, only for the hit-tested slot, never a disabled one
+  assert.deepEqual(slotDrawOps(item, { gui: idle, preview, hovered: item }).map((o) => o.kind + (o.z ?? '')), ['stack', 'rectover']);
+  assert.deepEqual(slotDrawOps({ ...item, enabled: false }, { gui: idle, preview, hovered: item }).length, 1);
+  // a one-slot split drag: drawSlot returns first (no item, no armour icon) but drawScreen still draws the hover quad
+  const cursor = { id: 2, count: 8 }, one = { dragging: true, dragSlots: new Set([armour]), container: { inv: { cursor } } };
+  assert.deepEqual(slotDrawOps(armour, { gui: one, preview }), []);
+  assert.deepEqual(slotDrawOps(armour, { gui: one, preview, hovered: armour }).map((o) => o.kind), ['rect']);
+  one.dragSlots.add(plain); // two or more: the share previews, the quad lies under the item
+  assert.deepEqual(slotDrawOps(armour, { gui: one, preview }).map((o) => o.kind + (o.z ?? '')), ['rectunder', 'icon']);
+  const html = slotDrawHtml(slotDrawOps(item, { gui: idle, preview, hovered: item }), (st) => `<b>${st.id}</b>`);
+  assert.match(html, /^<b>1<\/b><i class="gui-rect slot-quad over"[^>]*rgba\(255,255,255,0\.5020\)/);
+  assert.match(css, /\.slot-quad\.under\{z-index:-1\}[^}]*\.slot-quad\.over\{z-index:6\}/);
+});
+
+test('GuiMerchant arrows: sprite column from enabled + Gui hit test (bfw)', () => {
+  const m = MERCHANT_ARROW, base = { enabled: true };
+  assert.deepEqual([m.width, m.height, m.u], [12, 19, 176]);
+  assert.deepEqual(merchantArrowDraw('next', { ...base, mouseX: 0, mouseY: 0 }), { hover: false, u: 176, v: 0 });
+  assert.deepEqual(merchantArrowDraw('next', { ...base, mouseX: 147, mouseY: 23 }), { hover: true, u: 188, v: 0 });
+  assert.equal(merchantArrowDraw('next', { ...base, mouseX: 159, mouseY: 30 }).hover, false); // x < 147 + 12
+  assert.equal(merchantArrowDraw('previous', { ...base, mouseX: 28, mouseY: 41 }).hover, true);
+  assert.equal(merchantArrowDraw('previous', { ...base, mouseX: 28, mouseY: 42 }).hover, false);
+  assert.deepEqual(merchantArrowDraw('previous', { enabled: false, mouseX: 20, mouseY: 30 }), { hover: true, u: 200, v: 19 }); // disabled wins
+  assert.doesNotMatch(css, /merchant-step[^{]*:hover/);
+});
+
+test('GuiBeacon buttons (bfd): disabled 44, selected 22, hover 66; icon never dimmed', () => {
+  const b = { x: 50, y: 22, disabled: false };
+  assert.deepEqual(beaconButtonDraw(b, false, 0, 0), { hover: false, u: 0 });
+  assert.deepEqual(beaconButtonDraw(b, false, 71, 43), { hover: true, u: 66 });
+  assert.equal(beaconButtonDraw(b, false, 72, 43).hover, false);
+  assert.equal(beaconButtonDraw(b, true, 60, 30).u, 22); // selected beats hover
+  assert.deepEqual(beaconButtonDraw({ ...b, disabled: true }, true, 60, 30), { hover: true, u: 44 }); // disabled beats both, and still reports the hit
+  assert.doesNotMatch(css, /beacon-btn[^{]*:hover|beacon-btn\.off \.beacon-effect\{/);
+  const p = powerButtons(1)[0], html = (x, y) => beaconUiHtml({ levels: 1, primary: 0, secondary: 0, payment: false, icon: () => '', mouseX: x, mouseY: y });
+  assert.match(html(p.x + 1, p.y + 1), new RegExp(`left:calc\\(${p.x}\\*var\\(--u\\)\\);top:calc\\(${p.y}\\*var\\(--u\\)\\);--su:66`));
+  assert.doesNotMatch(html(-1, -1), /--su:66/);
+});
+
+test('GuiTextField.textboxKeyTyped: selection, word jumps, deletes, clipboard keys', () => {
+  const f = (text = 'iron sword  fire', opts) => new GuiTextField({ maxLength: 20, text, ...opts });
+  const key = (field, k, mods = {}, o = {}) => field.keyTyped({ key: k, ...mods }, o);
+  let t = f();
+  assert.equal(key(t, 'x', { ctrl: false }), true); assert.equal(t.text, 'iron sword  firex');
+  t = f(); key(t, 'ArrowLeft', { ctrl: true }); assert.equal(t.cursor, 12); // word start
+  key(t, 'ArrowLeft', { ctrl: true }); assert.equal(t.cursor, 5);
+  key(t, 'ArrowRight', { ctrl: true }); assert.equal(t.cursor, 12); // past the word's trailing spaces
+  key(t, 'ArrowRight', { ctrl: true }); assert.equal(t.cursor, 16);
+  t = f(); key(t, 'ArrowLeft', { shift: true }); key(t, 'ArrowLeft', { shift: true });
+  assert.deepEqual([t.cursor, t.selectionEnd, t.selectedText()], [16, 14, 're']);
+  key(t, 'ArrowLeft', { shift: true, ctrl: true }); assert.equal(t.selectionEnd, 12);
+  key(t, 'Home', { shift: true }); assert.equal(t.selectionEnd, 0);
+  key(t, 'x'); assert.equal(t.text, 'x'); // typing replaces the selection
+  t = f(); key(t, 'Backspace', { ctrl: true }); assert.equal(t.text, 'iron sword  '); // deleteWords(-1)
+  key(t, 'Backspace', { ctrl: true }); assert.equal(t.text, 'iron ');
+  t = f(); key(t, 'Home'); key(t, 'Delete', { ctrl: true }); assert.equal(t.text, 'sword  fire'); // deleteWords(1) skips the spaces
+  key(t, 'Delete'); assert.equal(t.text, 'word  fire');
+  key(t, 'End', { shift: true }); assert.equal(t.selectedText(), 'word  fire');
+  key(t, 'Backspace'); assert.equal(t.text, ''); // a selection is deleted whole
+  // ctrl+A, C, V, X; Command also works for the word keys (native: Command on a Mac, Control elsewhere)
+  let clip = '';
+  const clipboard = { read: () => clip, write: (s) => { clip = s; } };
+  t = f('abc def'); key(t, 'a', { ctrl: true }); assert.equal(t.selectedText(), 'abc def');
+  key(t, 'c', { ctrl: true }, { clipboard }); assert.equal(clip, 'abc def');
+  key(t, 'x', { ctrl: true }, { clipboard }); assert.equal(t.text, '');
+  key(t, 'v', { ctrl: true }, { clipboard }); assert.equal(t.text, 'abc def');
+  t = f('abc def'); key(t, 'ArrowLeft', { meta: true }, { mac: true }); assert.equal(t.cursor, 4);
+  key(t, 'ArrowLeft', { ctrl: true }, { mac: true }); assert.equal(t.cursor, 0); // Control also jumps words
+  // length limit, ChatAllowedCharacters filter, disabled and unfocused fields
+  t = f('', { maxLength: 4 }); t.writeText('ab\u00a7c\ndefg'); assert.equal(t.text, 'abcd');
+  t = f('x', { enabled: false }); key(t, 'y'); key(t, 'Backspace'); assert.equal(t.text, 'x');
+  t = f('x', { focused: false }); assert.equal(key(t, 'y'), false);
+  assert.equal(f().keyTyped({ key: 'F5' }), false);
 });

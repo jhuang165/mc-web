@@ -26,7 +26,14 @@ Widget geometry inside the panels is bytecode-read by `tools/verify-container-wi
 - Beacon: tooltips through the 22 x 22 hit test as drawCreativeTabHoveringText (disabled buttons included), not browser `title`; payment icons draw no count.
 - Book: laid out on the ScaledResolution width (`(width - 192) / 2`, buttons at `width / 2 - 100` / `+ 2`), re-laid out on resize.
 
+## Batch 26 (containerui3)
+- Slots: `container-widgets.js` `slotDrawOps` follows `GuiContainer.drawSlot` (bex.a(Slot)) / `drawScreen`. Items, counts, durability bars, the empty armour icon and the 0x80FFFFFF quads are drawn into `.container-draw` (`.gui-slot` per Slot at its x / y); the `<button>`s over it are transparent hit and focus targets keeping `data-container-slot` and `aria-label`. Order per slot as native: drag rect under the item, item, then (drawScreen) the hover quad over item and count for the `slotAt` hit, never for a disabled slot.
+- Armour icon: drawSlot returns before the background icon when a one-slot split drag holds the slot (`dragSlots.size() == 1`), so the icon is not drawn then; the hover quad still is (drawScreen draws it after drawSlot returns).
+- Merchant arrows (bfw `drawButton`): villager.png u 176, +12 when hovered and enabled, +24 when disabled; v 0 (next) or 19 (previous); hover is the Gui hit test on the GUI mouse position, not CSS. `merchantArrowDraw`.
+- Beacon buttons (bfd `drawButton`): the sprite column is disabled 44, else selected 22, else hovered 66, else 0; the hit test (22 x 22) runs even when disabled. The icon quad is drawn with `glColor4f(1,1,1,1)`: the batch 24 opacity .5 on disabled icons was wrong and is removed. `beaconButtonDraw`.
+- Anvil field: `src/text-field.js` `GuiTextField` ports `textboxKeyTyped` (bcd.a(char,int)): Ctrl+A/C/V/X, Backspace / Delete (word with Ctrl or Command), Home / End, arrows with Shift selection, `writeText`, `deleteFromCursor`, `deleteWords`, `getNthWordFromPos`. The `<input>` only mirrors the model; its own key editing is cancelled.
+
 ## Not verified / assumed
 - Horse, donkey (chest) and villager screens were opened live in a world in headless Chrome (batch 24); the anvil, enchanting, beacon and book too. Nothing was compared against a running 1.7.10 client.
-- Slots are still DOM buttons, not Gui-drawn quads; merchant arrows and beacon buttons still use CSS `:hover` on the button rect (same rect as the native mouse test).
-- The galactic names stay a CSS mask (enchanting-book-live.js); the text field's keyboard editing is the browser's.
+- Batch 26: nothing was compared against a running 1.7.10 client; the draw layer is DOM elements placed in GUI units, not GL.
+- The galactic names stay a CSS mask (enchanting-book-live.js); the anvil field's mouse handling has no drag selection (native has none either). Word shortcuts accept Control or Command on every platform; native `bdw.q()` is Command on a Mac and Control elsewhere.

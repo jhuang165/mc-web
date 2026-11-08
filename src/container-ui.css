@@ -36,14 +36,17 @@ body:has(.native-inventory) #toast,body:has(.furnace-modal) #toast{display:none}
 .container-slots{position:absolute;inset:0;pointer-events:none}
 .container-slot{position:absolute!important;width:calc(16*var(--u))!important;height:calc(16*var(--u))!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;background:none!important;box-shadow:none!important;transform:none!important;line-height:0;overflow:visible;pointer-events:auto;cursor:default;outline:0}
 .container-slot:focus-visible{outline:var(--u) solid #fff}
-/* GuiContainer (container-widgets.js SLOT): the hovered slot gets a 0x80FFFFFF (alpha 128/255) gradient over the item and its count after
-   every slot is drawn; a split-drag target gets the same colour as a drawRect before its item, so the quad sits under the item. */
-.container-slot.hovered:after{content:'';position:absolute;inset:0;background:rgba(255,255,255,0.502);z-index:6;pointer-events:none}
-.container-slot.dragged{background:rgba(255,255,255,0.502)!important}
+/* GuiContainer.drawScreen (container-widgets.js slotDrawOps): items, counts, the empty armour icon and the 0x80FFFFFF quads are drawn into
+   .container-draw at each slot's x / y from a plan, never from CSS :hover. The <button>s above it are transparent hit / focus targets. */
+.container-draw{position:absolute;inset:0;pointer-events:none}
+.gui-slot{position:absolute;width:calc(16*var(--u));height:calc(16*var(--u));isolation:isolate;line-height:0;pointer-events:none}
+.gui-slot[hidden]{display:none}
+.gui-slot .slot-quad.under{z-index:-1}.gui-slot .slot-quad.over{z-index:6}
+.gui-slot .slot-icon{position:absolute;inset:0;background:center/100% 100% no-repeat;image-rendering:pixelated}
 /* Glyph runs and drawRect quads placed in GUI units inside a widget (container-widgets.js). */
 .gui-glyphs,.gui-rect{position:absolute;display:block;margin:0;padding:0;pointer-events:none}.gui-glyphs{white-space:pre}
-.container-slot .vanilla-item-icon,.cursor-stack .vanilla-item-icon{display:block;width:calc(16*var(--u));height:calc(16*var(--u));margin:0;padding:0;filter:none;image-rendering:pixelated}
-.container-slot .item-count,.cursor-stack .item-count{position:absolute;left:auto;right:calc(-1*var(--u));top:calc(9*var(--u));bottom:auto;margin:0;padding:0;height:calc(8*var(--u));white-space:nowrap;background:none;color:#fff;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-shadow:var(--u) var(--u) #3f3f3f;z-index:4;pointer-events:none}
+.gui-slot .vanilla-item-icon,.cursor-stack .vanilla-item-icon{display:block;width:calc(16*var(--u));height:calc(16*var(--u));margin:0;padding:0;filter:none;image-rendering:pixelated}
+.gui-slot .item-count,.cursor-stack .item-count{position:absolute;left:auto;right:calc(-1*var(--u));top:calc(9*var(--u));bottom:auto;margin:0;padding:0;height:calc(8*var(--u));white-space:nowrap;background:none;color:#fff;font-size:calc(8*var(--u));line-height:calc(8*var(--u));text-shadow:var(--u) var(--u) #3f3f3f;z-index:4;pointer-events:none}
 .item-count.empty,.item-count.full{color:#ff5!important;text-shadow:var(--u) var(--u) #3f3f15!important}
 .cursor-stack{position:fixed;z-index:1000;width:calc(16*var(--u));height:calc(16*var(--u));margin:calc(-8*var(--u)) 0 0 calc(-8*var(--u));pointer-events:none;line-height:0}
 /* RenderItem durability: black 13 x 2 bar at (2, 13), a 12-pixel shade row, then the green-to-red fill. */
@@ -60,12 +63,6 @@ body:has(.native-inventory) #toast,body:has(.furnace-modal) #toast{display:none}
 .furnace-flame{left:calc(56*var(--u));top:calc((48 - var(--flame,0))*var(--u));width:calc(14*var(--u));height:calc((var(--flame,0) + 1)*var(--u));background-position:calc(-176*var(--u)) calc((var(--flame,0) - 12)*var(--u))}
 .furnace-flame[hidden]{display:none}
 .furnace-arrow{left:calc(79*var(--u));top:calc(34*var(--u));width:calc(var(--arrow,1)*var(--u));height:calc(16*var(--u));background-position:calc(-176*var(--u)) calc(-14*var(--u))}
-/* Empty armor slots show ItemArmor's empty_armor_slot silhouettes. */
-.container-slot[data-armor]:empty{background:center/100% 100% no-repeat!important;image-rendering:pixelated}
-.container-slot[data-armor=helmet]:empty{background-image:url('/media/1.7.10/items/empty_armor_slot_helmet.png')!important}
-.container-slot[data-armor=chestplate]:empty{background-image:url('/media/1.7.10/items/empty_armor_slot_chestplate.png')!important}
-.container-slot[data-armor=leggings]:empty{background-image:url('/media/1.7.10/items/empty_armor_slot_leggings.png')!important}
-.container-slot[data-armor=boots]:empty{background-image:url('/media/1.7.10/items/empty_armor_slot_boots.png')!important}
 .tinted-item{position:relative;display:block}.tinted-item>i,.tinted-item>img{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated}
 .tinted-item>i{background:var(--base) center/100% 100%,var(--tint);background-blend-mode:multiply;-webkit-mask:var(--base) center/100% 100%;mask:var(--base) center/100% 100%}
 #hotbar .slot>.tinted-item{width:calc(16*var(--u));height:calc(16*var(--u))}
@@ -207,10 +204,7 @@ body:has(.enchanting-modal) #toast{display:none}
 .merchant-step{position:absolute!important;width:calc(12*var(--u))!important;height:calc(19*var(--u))!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;transform:none!important;background:url('/media/1.7.10/gui/container/villager.png') no-repeat!important;background-size:calc(256*var(--u)) calc(256*var(--u))!important;image-rendering:pixelated;cursor:default;z-index:3;outline:0}
 .merchant-step.next{left:calc(147*var(--u));top:calc(23*var(--u));background-position:calc(-176*var(--u)) 0!important}
 .merchant-step.previous{left:calc(17*var(--u));top:calc(23*var(--u));background-position:calc(-176*var(--u)) calc(-19*var(--u))!important}
-.merchant-step.next:hover:not(:disabled){background-position:calc(-188*var(--u)) 0!important}
-.merchant-step.previous:hover:not(:disabled){background-position:calc(-188*var(--u)) calc(-19*var(--u))!important}
-.merchant-step.next:disabled{background-position:calc(-200*var(--u)) 0!important}
-.merchant-step.previous:disabled{background-position:calc(-200*var(--u)) calc(-19*var(--u))!important}
+/* The arrow sprite (u 176 / 188 / 200) is set inline per frame by container-widgets.js merchantArrowDraw from the Gui hit test. */
 .merchant-step:focus-visible{outline:var(--u) solid #fff}
 body:has(.merchant-modal) #toast{display:none}
 /* GuiHopper (bfs): 176 x 133 gui/container/hopper.png, title left at (8, 6), "Inventory" at y 39 (ySize - 96 + 2). */
@@ -256,10 +250,10 @@ body:has(.horse-modal) #toast{display:none}
 .beacon-label{position:absolute;top:calc(10*var(--u));width:0;margin:0;color:#e0e0e0;font-size:calc(8*var(--u));line-height:calc(8*var(--u));white-space:nowrap;text-shadow:none;transform:translateX(-50%);pointer-events:none}
 #beacon-ui{position:absolute;inset:0;z-index:3;pointer-events:none}
 .beacon-btn{position:absolute;display:block;width:calc(22*var(--u));height:calc(22*var(--u));margin:0;padding:0;border:0;border-radius:0;pointer-events:auto;background:url('/media/1.7.10/gui/container/beacon.png') no-repeat calc(var(--su)*-1*var(--u)) calc(-219*var(--u))/calc(256*var(--u)) calc(256*var(--u));image-rendering:pixelated;cursor:pointer}
-.beacon-btn.off{cursor:default}.beacon-btn:not(.off):not(.on):hover{background-position:calc(-66*var(--u)) calc(-219*var(--u))}
+.beacon-btn.off{cursor:default}
 .beacon-effect,.beacon-mark{position:absolute;left:calc(2*var(--u));top:calc(2*var(--u));width:calc(18*var(--u));height:calc(18*var(--u));image-rendering:pixelated;pointer-events:none}
 .beacon-effect{background:url('/media/1.7.10/gui/container/inventory.png') no-repeat calc(var(--ix)*-1*var(--u)) calc(var(--iy)*-1*var(--u))/calc(256*var(--u)) calc(256*var(--u))}
-.beacon-btn.off .beacon-effect{opacity:.5}
+/* GuiBeacon$Button (bfd) draws the icon quad with the plain white glColor4f(1,1,1,1): a disabled button's icon is not dimmed. */
 .beacon-mark{background:url('/media/1.7.10/gui/container/beacon.png') no-repeat calc(var(--mx)*-1*var(--u)) calc(-220*var(--u))/calc(256*var(--u)) calc(256*var(--u))}
 .beacon-pay{position:absolute;width:calc(16*var(--u));height:calc(16*var(--u));pointer-events:none}
 .beacon-pay .vanilla-item-icon,.beacon-pay img{display:block;width:calc(16*var(--u));height:calc(16*var(--u))}
