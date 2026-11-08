@@ -565,20 +565,25 @@ export class PlayerRenderer {
   // `body` is a PlayerBody; `swing` is the swing progress (0 at rest); `armor`
   // is inventory.armor (boots first); `held` the held item id. `sleeping` is
   // { pos, offset, facing } from BedSleep while the player lies in a bed.
-  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, hurt = false, sneak = false, riding = false, invisible = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180, sleeping = null } = {}) {
+  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, hurt = false, sneak = false, riding = false, invisible = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180, sleeping = null, deathTime = 0 } = {}) {
     this.root.visible = visible;
     if (!visible) { this.fire.root.visible = false; return; }
+    // EntityLivingBase.deathTime drives RendererLivingEntity.rotateCorpse (mobPose turns it into the 0..90 degree roll).
+    body.death = deathTime;
     let pose = mobPose(body, partial);
     if (sleeping) {
       const at = sleepingTransform(sleeping);
       // A sleeper does not walk; its entity position (not the corpse offset) is where light and fire sample.
-      // Not native: the head is drawn straight, where ModelBiped would still turn it by the frozen head yaw and pitch.
-      pose = { ...pose, x: sleeping.pos.x, y: at.y, z: sleeping.pos.z, limbSwing: 0, limbSwingAmount: 0, headYaw: 0, headPitch: 0 };
+      // The head keeps the yaw and pitch frozen at bed entry: EntityPlayer.isMovementBlocked skips the old-AI
+      // rotationYawHead copy, GuiSleepMP releases the mouse and renderYawOffset stays inside its 75 degree clamp, so
+      // ModelBiped still turns the head by rotationYawHead - renderYawOffset and rotationPitch (PlayerBody does not tick
+      // its yaw while the player lies, and mobPose reads those frozen fields).
+      pose = { ...pose, x: sleeping.pos.x, y: at.y, z: sleeping.pos.z, limbSwing: 0, limbSwingAmount: 0 };
       this.root.position.set(at.x, at.y, at.z);
       this.root.quaternion.copy(at.quaternion);
     } else {
       this.root.position.set(pose.x, pose.y, pose.z);
-      this.root.rotation.set(0, (180 - pose.bodyYaw) * RAD, 0);
+      this.root.rotation.set(...playerRootRotation(pose.bodyYaw, pose.death));
     }
     this.fire.update(pose, burning, fireViewYaw);
     this.syncArmor([3, 2, 1, 0].map((slot) => armor[slot]));
@@ -605,9 +610,24 @@ export class PlayerRenderer {
     this.arrowMaterial?.setLight(packed);
     for (const m of this.materials) {
       m.setLight(packed);
-      m.uniforms.overlay.value.set(hurt ? b : 0, 0, 0, hurt ? 0.4 : 0);
+      // RendererLivingEntity tints while hurtTime > 0 || deathTime > 0.
+      const tint = hurt || deathTime > 0;
+      m.uniforms.overlay.value.set(tint ? b : 0, 0, 0, tint ? 0.4 : 0);
     }
   }
+}
+
+// RendererLivingEntity.rotateCorpse (boh.a(sv,F,F,F)): glRotatef(180 - renderYawOffset, 0,1,0), then for deathTime > 0
+// glRotatef(min(1, sqrt((deathTime + partial - 1) / 20 * 1.6)) * getDeathMaxRotation (90), 0,0,1). `death` is that
+// angle in degrees (mobPose); returns the three.js Euler [x, y, z] in radians (order XYZ = Ry * Rz here).
+export function playerRootRotation(bodyYaw, death = 0) {
+  return [0, (180 - bodyYaw) * RAD, death * RAD];
+}
+
+// Render.doRenderShadowAndFire runs for every rendered entity at its interpolated position, so a sleeper (rendered in
+// first person too) casts the shadow at the BedSleep entity position with its 0.2 box: Entity.getShadowSize is height / 2.
+export function sleeperShadowCaster(pos, size) {
+  return { ...size, x: pos.x, y: pos.y, z: pos.z, pos: { x: pos.x, y: pos.y, z: pos.z }, height: SLEEP_SIZE };
 }
 
 // EntityPlayer.sleepInBedAt: setSize(0.2, 0.2) and yOffset 0.2, so RenderPlayer draws at posY - 0.2.

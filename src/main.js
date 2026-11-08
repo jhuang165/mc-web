@@ -91,7 +91,7 @@ import { Weather, isWet, canLightningStrikeAt } from "./weather.js";
 import { tickWeatherSimulation } from "./weather-simulation.js";
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
 import { showsPumpkinBlur } from "./wearable-heads.js";
-import { PlayerBody, PlayerRenderer, STEVE_URL, nextView, thirdPersonCamera, playerShadowCaster } from "./player-renderer.js";
+import { PlayerBody, PlayerRenderer, STEVE_URL, nextView, thirdPersonCamera, playerShadowCaster, sleeperShadowCaster } from "./player-renderer.js";
 import { FirstPerson, itemTexture, setCompassTextureFrame } from "./first-person.js";
 import { ITEM_COMPASS, COMPASS_FRAMES, COMPASS_STRIP, compassAngle, createCompass, tickCompass, setCompassWorld } from "./compass.js";
 import { compassFrameCount, spriteEpoch } from "./sprite-frames.js";
@@ -3789,6 +3789,7 @@ function animate(now) {
     while (accumulator >= PHYSICS.tick) {
       gui.tick(); // GuiGameOver / GuiYesNo updateScreen: the 20-tick button delay counts these client ticks
       survival.hurtTime = Math.max(0, survival.hurtTime - 1);
+      { const feet = { x: position.x, y: position.y - motion.ySize, z: position.z }; playerBody.tick({ position: feet, previous: feet, yaw, pitch }); } // limb swing settles; the head and body stay put
       if (++deathTime === 20) burst(scene.fx, "explode", 20, { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z, width: PHYSICS.width, height: PHYSICS.height }, playerRandom);
       scene.effectRenderer.tick(world);
       accumulator -= PHYSICS.tick;
@@ -3819,7 +3820,9 @@ function animate(now) {
   recordHud.frame(partial);
   playerRenderer?.update(playerBody, partial, {
     // RenderGlobal draws the view entity in first person too while it is sleeping (isPlayerSleeping).
-    visible: (thirdPersonView > 0 || bedSleep.sleeping) && ["playing", "inventory", "paused"].includes(screen),
+    // The death screen keeps drawing the dying model until onDeathUpdate's setDead at deathTime 20 removes the entity.
+    visible: (thirdPersonView > 0 || bedSleep.sleeping) && (["playing", "inventory", "paused"].includes(screen) || (screen === "dead" && deathTime < 20)),
+    deathTime: screen === "dead" ? deathTime : 0,
     sleeping: bedSleep.sleeping ? { pos: bedSleep.pos, offset: bedSleep.offset, facing: bedSleep.facing } : null,
     swing: animate.pose ? (animate.pose.progress < 1 ? animate.pose.progress : 0) : 0,
     armor: survival?.inventory?.armor ?? [],
@@ -3897,7 +3900,9 @@ function shadowCasters(partial) {
   for (const e of primed) list.push({ ...SHADOWS.tnt, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + TNT_Y_OFFSET, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + TNT_Y_OFFSET, z: e.z }, height: TNT_SIZE });
   for (const o of xpOrbs.orbs) list.push({ ...SHADOWS.orb, x: lerp(o.px, o.x), y: lerp(o.py, o.y) + 0.25, z: lerp(o.pz, o.z), pos: { x: o.x, y: o.posY, z: o.z }, height: 0.5 });
   // The local player casts a shadow only when it is on screen.
-  if (thirdPersonView > 0 && !survival.effects.has(INVISIBILITY)) list.push(playerShadowCaster(position, previous, partial, SHADOWS.player, motion.prevYSize, motion.ySize));
+  // A sleeper is rendered in first person too (RenderGlobal), so its shadow draws at the bed position in every view.
+  if (bedSleep.sleeping && !survival.effects.has(INVISIBILITY)) list.push(sleeperShadowCaster(bedSleep.pos, SHADOWS.player));
+  else if (thirdPersonView > 0 && !survival.effects.has(INVISIBILITY)) list.push(playerShadowCaster(position, previous, partial, SHADOWS.player, motion.prevYSize, motion.ySize));
   // RenderBoat: shadowSize 0.5; getShadowSize is 0, so `height` 0 keeps the cast at the boat's posY.
   for (const b of boats.carts) if (!b.dead && (!world.streaming || world.isLoaded(b.x, b.z))) list.push({ ...SHADOWS.boat, x: lerp(b.px, b.x), y: lerp(b.py, b.posY), z: lerp(b.pz, b.z), pos: { x: b.x, y: b.posY, z: b.z }, height: 0 });
   for (const e of mobs?.entities ?? []) {

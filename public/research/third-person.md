@@ -52,7 +52,7 @@ The rules come from the bytecode of the original client JAR (javap), with 1.7.10
 
 - Four passes, helmet to boots, reading `armor[3 - pass]`. Pass 2 (leggings) uses the 0.5 model and `_layer_2`; the others use the 1.0 model and `_layer_1` (`RenderBiped.getArmorResource`, `bnw.a`). Textures are `models/armor/<material>_layer_N.png`.
 - Visible parts: head and hat on pass 0, body on 1 and 2, arms on 1, legs on 2 and 3.
-- Leather (`abd.a`) is tinted with `ItemArmor.getColor`, 0xA06540 for an undyed piece, and always draws the untinted `_overlay` on top. The glint (enchantments) is not ported.
+- Leather (`abd.a`) is tinted with `ItemArmor.getColor`, 0xA06540 for an undyed piece, and always draws the untinted `_overlay` on top. The glint is ported (`armorGlintMesh`).
 
 ## Held item: `RenderPlayer.renderSpecials` (`bop.a(blg, float)`)
 
@@ -65,12 +65,13 @@ The item hangs off the right arm after its rotation: `translate(-0.0625, 0.4375,
 
 ## Shadow
 
-`RenderPlayer` passes shadowSize 0.5 (opaque 1). The player is added to `shadowCasters` only in views 1 and 2. `Render.renderShadow` centres the shadow on `posY + getShadowSize()` and `EntityPlayer` does not override `getShadowSize` (height / 2 = 0.9). The local player's `posY` is its eye (`yOffset` 1.62), so the centre is 2.52 above the feet. On flat ground there is then no solid cell below it, and the shadow shows only where a block sits near head height (a low ceiling). This is kept as the bytecode reads; it has not been compared with a running 1.7.10 client.
+`RenderPlayer` passes shadowSize 0.5 (opaque 1). The player is added to `shadowCasters` in views 1 and 2, and while sleeping in every view (`sleeperShadowCaster`: entity position, height 0.2). `Render.renderShadow` centres the shadow on `posY + getShadowSize()` and `EntityPlayer` does not override `getShadowSize` (height / 2 = 0.9). The local player's `posY` is its eye (`yOffset` 1.62), so the centre is 2.52 above the feet. On flat ground there is then no solid cell below it, and the shadow shows only where a block sits near head height (a low ceiling). This is kept as the bytecode reads; it has not been compared with a running 1.7.10 client.
 
 ## Differences
 
-- Riding uses ModelBiped arm/leg angles and follows the cart seat (see [minecarts](minecarts.md)); no bow or block poses; no cape, ears, pumpkin helmet or enchantment glint; no dyed leather.
-- The death roll is not drawn on the player model.
+- Riding uses ModelBiped arm/leg angles and follows the cart seat (see [minecarts](minecarts.md)); no bow or block poses; no cape or ears (an offline player has no cape skin). Armor and held-item glint and dyed leather are ported.
+- Death: `RendererLivingEntity.rotateCorpse` (`boh.a(sv,F,F,F)`) rolls the model `min(1, sqrt((deathTime + partial - 1) / 20 * 1.6)) * 90` degrees about z after the body yaw, and the hurt tint stays while `deathTime > 0`. The death screen keeps drawing the model in views 1 and 2 until `onDeathUpdate` calls `setDead` at deathTime 20, which removes the entity. No other death-time hiding exists in the renderer.
+- Sleeping head: see [beds](bed.md); the head stays turned by the yaw and pitch frozen at bed entry.
 - Held items use a simplified item mesh, not `ItemRenderer` and `RenderBlocks.renderBlockAsItem`; torches and other sprite blocks draw as flat sprites.
 - The view is not saved. There is no F1 debug camera.
 - The camera trace uses the bobbed eye as its origin (1.7.10 applies the bob in view space after the trace).
