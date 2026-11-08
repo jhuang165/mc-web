@@ -1517,11 +1517,14 @@ function tileClear(w, te) {
     }
   }
 }
-// TileEntityPiston.updateEntity: progress 0 -> 0.5 -> 1.0, then the next update replaces the moving block.
-// Entity pushing (func_145863_a) is not ported: the scripted entity list is empty in every scenario.
+// TileEntityPiston.updateEntity: progress 0 -> 0.5 -> 1.0, then the next update replaces the moving block. Entity pushing
+// (func_145863_a) runs inside each tile's update, in loadedTileEntityList order, through the optional `w.pistonPush(te, progress,
+// delta)` hook (src/piston-live.js installs it): the final update pushes (1.0, 0.25) before the stored block is put back, an
+// extending update pushes (progress, progress - lastProgress + 0.0625) after the step.
 function tileUpdate(w, te) {
   te.lastProgress = te.progress;
   if (te.lastProgress >= 1) {
+    w.pistonPush?.(te, 1, 0.25);
     w.removeTileEntity(te.x, te.y, te.z);
     te.invalid = true;
     if (w.getBlock(te.x, te.y, te.z) === PISTON_MOVING) {
@@ -1532,6 +1535,7 @@ function tileUpdate(w, te) {
   }
   te.progress += 0.5;
   if (te.progress >= 1) te.progress = 1;
+  if (te.extending) w.pistonPush?.(te, te.progress, Math.fround(Math.fround(te.progress - te.lastProgress) + Math.fround(0.0625)));
 }
 // BlockPistonBase.canPushBlock.
 function canPushBlock(w, id, x, y, z, allowDestroy) {

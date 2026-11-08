@@ -68,13 +68,14 @@ export function pushPlayer(world, player, dx, dy, dz) {
 function vehicleBlockers(game) {
   const out = [], p = game.player?.();
   if (p && p.alive !== false) {
-    const pos = p.position ?? p, w = p.width ?? 0.6, h = p.height ?? 1.8;
+    // Entity.setSize takes floats: the box half-width is (float) width / 2.
+    const pos = p.position ?? p, w = Math.fround(p.width ?? 0.6), h = Math.fround(p.height ?? 1.8);
     out.push({ x: pos.x, y: pos.y, z: pos.z, bb: [pos.x - w / 2, pos.y, pos.z - w / 2, pos.x + w / 2, pos.y + h, pos.z + w / 2], ref: p.rider ?? null });
   }
   const mobs = game.mobs?.();
   for (const e of mobs?.entities ?? []) {
     if (!(e.health > 0 || (e.death ?? 0) < 20) || !mobs.size) continue;
-    const [w, h] = mobs.size(e);
+    const [w, h] = mobs.size(e).map(Math.fround);
     out.push({ bb: [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2], ref: e });
   }
   return out;
@@ -83,7 +84,7 @@ function vehicleBlockers(game) {
 export function pistonPushExtras(world, game) {
   const out = [];
   const add = (list, box, w, h) => {
-    for (const e of list ?? []) if (!e.dead && !e.removed) out.push({ box: box(e), move: (dx, dy, dz) => bodyMove(world, e, w, h, dx, dy, dz) });
+    for (const e of list ?? []) if (!e.dead && !e.removed) out.push({ box: box(e), entity: e, now: () => box(e), move: (dx, dy, dz) => bodyMove(world, e, w, h, dx, dy, dz) });
   };
   add(game.items?.(), (e) => flat(e, ITEM.half, ITEM.size), ITEM.size, ITEM.size);
   add(game.primed?.(), (e) => flat(e, TNT.half, TNT.size), TNT.size, TNT.size);
@@ -91,15 +92,21 @@ export function pistonPushExtras(world, game) {
   add(game.orbs?.(), (e) => e.bb ?? flat(e, 0.25, 0.5), ORB.width, ORB.height);
   // Minecarts and boats move with their own Entity.moveEntity port (Minecarts.move / Boats.move): blocked by the other carts
   // (boats) and the pushable entities, flags, fall state (a boat's crash), block hurts and, for carts, detector rails.
-  let blockers = null;
-  const others = (system) => [...system.carts, ...(blockers ??= vehicleBlockers(game))];
-  const vehicles = (system, list, w, h) => {
+  // World.getCollidingBoundingBoxes adds mover.getCollisionBox(other) and other.getBoundingBox() for each entity in range
+  // (javap): EntityBoat.getCollisionBox returns any entity's box and its getBoundingBox its own; EntityMinecart.getCollisionBox
+  // returns the box of a canBePushed entity (carts, boats, living) and its getBoundingBox null. So a pushed cart is blocked by
+  // carts, boats, the player and mobs; a pushed boat also by dropped items, primed TNT, orbs and falling blocks.
+  const carts = game.minecarts?.(), boats = game.boatSystem?.();
+  const cartList = carts?.carts ?? carts?.list ?? (Array.isArray(carts) ? carts : null), boatList = boats?.carts ?? game.boats?.();
+  // Boxes are read when the vehicle moves (an entity pushed earlier in the same call has moved).
+  const loose = out.slice();
+  const looseBoxes = () => loose.filter((x) => !x.entity.dead && !x.entity.removed).map((x) => ({ bb: x.now(), ref: x.entity }));
+  const others = (boat) => [...(cartList ?? []), ...(boatList ?? []), ...vehicleBlockers(game), ...(boat ? looseBoxes() : [])];
+  const vehicles = (system, list, w, h, boat) => {
     if (!system?.move || !world) return add(list, (e) => e.bb, w, h);
-    for (const e of list ?? []) if (!e.dead && e.bb) out.push({ box: e.bb, move: (dx, dy, dz) => { if (!e.dead) system.move(world, e, dx, dy, dz, others(system)); } });
+    for (const e of list ?? []) if (!e.dead && e.bb) out.push({ box: e.bb, entity: e, move: (dx, dy, dz) => { if (!e.dead) system.move(world, e, dx, dy, dz, others(boat)); } });
   };
-  const carts = game.minecarts?.();
-  vehicles(carts?.move ? carts : null, carts?.carts ?? carts?.list ?? (Array.isArray(carts) ? carts : null), CART.width, CART.height);
-  const boats = game.boatSystem?.();
-  vehicles(boats, boats?.carts ?? game.boats?.(), BOAT.width, BOAT.height);
+  vehicles(carts?.move ? carts : null, cartList, CART.width, CART.height, false);
+  vehicles(boats, boatList, BOAT.width, BOAT.height, true);
   return out.filter((x) => x.box && x.box.every(Number.isFinite));
 }

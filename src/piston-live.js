@@ -11,7 +11,8 @@
 //   redstone  the live engine (LiveRedstone) or a plain RedstoneWorld: needs pistonTiles(), getBlock(x, y, z) and
 //             setTileEntity(x, y, z, tile) (ORIGINAL ids, as in redstone.js) and an updateTileEntities() method that its
 //             tick runs once per game tick after the block events (the native World.updateEntities tile loop). The
-//             installer wraps that one method on the instance; nothing in redstone.js changes.
+//             installer sets the instance's `pistonPush(tile, progress, delta)` hook, which that loop's TileEntityPiston
+//             update calls at the native points (src/redstone.js tileUpdate).
 //   scene     VoxelScene: needs setMovingBlocks(list) (src/scene.js). Optional (headless tests omit it).
 //   world     the live World ({ get(x, y, z), getMeta(x, y, z) }, INTERNAL ids): collision boxes of stored blocks
 //             (blockBounds) and the default entity mover (entities.js moveEntity). Optional for headless runs.
@@ -26,9 +27,9 @@
 //
 // CONTRACT FOR THE COORDINATOR (main.js):
 //   const pistons = installPistons({ redstone, scene, world, entities, blocks });   // once, after LiveRedstone exists
-//   per game tick (20 Hz):  redstone.tick()  (it runs the wrapped updateEntities tile loop: progress +0.5, entity pushes,
-//                           replacement of finished moving blocks), THEN pistons.tick()  (re-wraps if the engine was
-//                           replaced; returns the number of moving tiles).
+//   per game tick (20 Hz):  redstone.tick()  (it runs the updateEntities tile loop: per tile progress +0.5 and its entity
+//                           pushes, or the final push and the replacement of the finished moving block), THEN pistons.tick()
+//                           (re-installs the push hook if the engine was replaced; returns the number of moving tiles).
 //   per render frame:       pistons.frame(partialTicks)  -> hands the parts to scene.setMovingBlocks(list); scene.update()
 //                           then calls updateMoving() itself (geometry cached per part, only the offset changes per frame).
 //   sounds:                 none to do here: redstone.hooks.sound(name, x, y, z, volume, pitch) already receives
@@ -46,7 +47,9 @@
 //             main.js should pass the live player object (or give move() that updates its own position/velocity).
 //     mobs:   EntityWorld | array | () => array of { x, y, z, type, growingAge, health? } (box from ENTITY_TYPES);
 //     extra:  () => [{ box: [minX, minY, minZ, maxX, maxY, maxZ], move(dx, dy, dz) }] for drops, orbs, carts;
-//     move:   (target, dx, dy, dz) overrides every mover.
+//     move:   (target, dx, dy, dz) overrides every mover;
+//     order:  (candidates) => candidates in push order (default nativeOrder: chunk, then 16-high slice); each candidate is
+//             { box, move, entity } with `entity` the pushed object (the extra itself when it has no `entity`).
 //   Returned object: { frame(partial), tick(), tiles(), pushBoxes(), moves, save(), restore(list) }.
 //
 import { fromOriginal } from "./block-registry.js";
@@ -132,6 +135,15 @@ export function movingParts(tile, partial, internal) {
   return [{ block: stored.id, meta: stored.meta, quads: isPiston ? pistonQuads(stored.id, stored.meta) : null, offset }];
 }
 
+// World.getEntitiesWithinAABBExcludingEntity's order: chunk x, then chunk z, then the chunk's 16-high entity slice (Chunk.entityLists,
+// clamped 0..15), then each slice's own list order. The port has no shared entity list, so inside one slice the entity systems keep
+// their order (player, mobs, then the extras: items, TNT, falling blocks, orbs, carts, boats); the slice is read from the box bottom.
+const chunkKey = (c) => [Math.floor((c.box[0] + c.box[3]) / 32), Math.floor((c.box[2] + c.box[5]) / 32), Math.max(0, Math.min(15, Math.floor(c.box[1] / 16)))];
+export function nativeOrder(list) {
+  const keyed = list.map((c, i) => ({ c, i, k: chunkKey(c) }));
+  keyed.sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.k[2] - b.k[2] || a.i - b.i);
+  return keyed.map((x) => x.c);
+}
 export function installPistons({ redstone, scene = null, world = null, entities = {}, blocks = null } = {}) {
   const internal = blocks?.toInternal ?? ((id, meta) => fromOriginal(id, meta));
   // The stored block's collision box in the cell. blockBounds reads the world at the cell, so give it a one-cell view.
@@ -181,7 +193,7 @@ export function installPistons({ redstone, scene = null, world = null, entities 
     if (pb) {
       const p = entities.player, pos = p.position ?? p;
       out.push({
-        box: pb,
+        box: pb, entity: p,
         // Entity.moveEntity on the player's own state (piston-push.js pushPlayer): motion, flags, ySize, sneak edge.
         move: (dx, dy, dz) => {
           if (entities.move) return entities.move(p, dx, dy, dz);
@@ -196,7 +208,7 @@ export function installPistons({ redstone, scene = null, world = null, entities 
       if (!t || !(e.health > 0 || (e.death ?? 0) < 20)) continue;
       const [width, height] = source?.size ? source.size(e) : [t.width * ((e.growingAge ?? 0) < 0 ? 0.5 : 1), t.height * ((e.growingAge ?? 0) < 0 ? 0.5 : 1)];
       out.push({
-        box: pushBox(e, width, height),
+        box: pushBox(e, width, height), entity: e,
         // EntityWorld.pushMove: the mob's own moveEntity (stepHeight, cactus/fire tails, steps, fall); else entities.js moveEntity.
         move: (dx, dy, dz) => {
           if (entities.move) return entities.move(e, dx, dy, dz);
@@ -207,8 +219,8 @@ export function installPistons({ redstone, scene = null, world = null, entities 
         },
       });
     }
-    for (const x of entities.extra?.() ?? []) out.push({ box: x.box, move: (dx, dy, dz) => (entities.move ? entities.move(x, dx, dy, dz) : x.move(dx, dy, dz)) });
-    return out;
+    for (const x of entities.extra?.() ?? []) out.push({ box: x.box, move: (dx, dy, dz) => (entities.move ? entities.move(x, dx, dy, dz) : x.move(dx, dy, dz)), entity: x.entity ?? x });
+    return entities.order ? entities.order(out) : nativeOrder(out);
   };
   const moved = []; // every func_145863_a move this session (for diagnostics and tests)
   // TileEntityPiston.func_145863_a(progress, delta): the box of the stored block at `progress`, then every entity that
@@ -223,23 +235,16 @@ export function installPistons({ redstone, scene = null, world = null, entities 
       moved.push({ x: tile.x, y: tile.y, z: tile.z, move: mv });
     }
   }
-  // World.updateEntities' tile loop wrapped: snapshot the piston tiles, let the native loop update them (progress +0.5,
-  // replacement of a finished block), then apply updateEntity's pushes from the snapshot:
+  // TileEntityPiston.updateEntity's func_145863_a calls, made from inside the native tile loop (redstone.js tileUpdate calls
+  // `pistonPush` on the engine): each tile pushes in World.loadedTileEntityList order, so a tile later in the list sees the
+  // entities already moved by earlier tiles, the earlier tiles' new lastProgress in their collision boxes and the later tiles'
+  // old one, and a finishing tile pushes (1.0, 0.25) while its cell still holds the moving block.
   //   lastProgress >= 1: push(1.0, 0.25) (the final update);  extending: push(progress, progress - lastProgress + 0.0625).
-  const original = redstone.updateTileEntities;
-  const wrapped = function (...args) {
-    const before = redstone.pistonTiles().map((t) => ({ tile: t, progress: t.progress }));
-    const result = original.apply(redstone, args);
-    for (const { tile, progress } of before) {
-      if (progress >= 1) push(tile, 1, 0.25);
-      else if (tile.extending) push(tile, tile.progress, f32(f32(tile.progress - tile.lastProgress) + f32(0.0625)));
-    }
-    return result;
-  };
-  wrapped.pistonLive = true;
+  const hook = (tile, progress, delta) => push(tile, progress, delta);
+  hook.pistonLive = true;
   const wrap = () => {
-    if (redstone.updateTileEntities?.pistonLive) return;
-    redstone.updateTileEntities = wrapped;
+    if (redstone.pistonPush?.pistonLive) return;
+    redstone.pistonPush = hook;
   };
   wrap();
 
@@ -267,7 +272,10 @@ export function installPistons({ redstone, scene = null, world = null, entities 
     collisionBoxes(box) {
       const out = [];
       for (const t of redstone.pistonTiles()) {
-        if (t.x + 1 <= box[0] || t.x >= box[3] || t.y + 1 <= box[1] || t.y >= box[4] || t.z + 1 <= box[2] || t.z >= box[5]) continue;
+        // World.getCollidingBoundingBoxes visits the cells floor(minX)..floor(maxX) (and z), floor(minY) - 1..floor(maxY): the
+        // cell below counts, so a stored block taller than 1 (cobblestone wall post, fence gate) still meets a box above its cell.
+        // An invalidated tile is no longer returned by World.getTileEntity.
+        if (t.invalid || t.x < Math.floor(box[0]) || t.x > Math.floor(box[3]) || t.y < Math.floor(box[1]) - 1 || t.y > Math.floor(box[4]) || t.z < Math.floor(box[2]) || t.z > Math.floor(box[5])) continue;
         const b = movingCollisionBox(t, boundsOf(t), tileProgress(t, 0));
         if (b && b[3] > box[0] && b[0] < box[3] && b[4] > box[1] && b[1] < box[4] && b[5] > box[2] && b[2] < box[5]) out.push(b);
       }

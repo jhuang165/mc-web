@@ -8,7 +8,8 @@ import { Minecarts, Y_OFFSET } from "./minecarts.js";
 import { Boats } from "./boats.js";
 import { boatBoxProvider } from "./entity-collision.js";
 import { solidBlock } from "./world.js";
-import { RedstoneWorld } from "./redstone.js";
+import { RedstoneWorld, blockProperties } from "./redstone.js";
+import { installShapedBlocks, trapdoorSupportOriginal } from "./shaped-blocks.js";
 import { installPistons, tileOffset, tileProgress, movingParts, shortenHead, pistonTileFields, ORIGINAL_MOVING, ORIGINAL_HEAD } from "./piston-live.js";
 import { pistonQuads, PISTON_HEAD, PISTON, STICKY_PISTON } from "./dispenser-piston.js";
 
@@ -21,6 +22,7 @@ const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs 
 
 function build(s) {
   const w = new RedstoneWorld({ seed: s.seed ?? 1 }), cells = s.grid.split(",");
+  installShapedBlocks(w, trapdoorSupportOriginal(blockProperties())); // as redstone-runtime.js
   for (let x = 0; x < sx; x++) for (let y = 0; y < sy; y++) for (let z = 0; z < sz; z++) {
     const [id, meta = 0] = cells[(x * sy + y) * sz + z].split(":").map(Number);
     if (id) w.setRaw(ox + x, oy + y, oz + z, id, meta);
@@ -33,7 +35,7 @@ function liveSystems(w) {
   const cell = (x, y, z) => blocks.toInternal(w.getBlock(x, y, z), w.getBlockMetadata(x, y, z));
   const view = { get: (x, y, z) => cell(x, y, z)?.id ?? 0, getMeta: (x, y, z) => cell(x, y, z)?.meta ?? 0, solid: (x, y, z) => { const c = cell(x, y, z); return !!c && solidBlock(c.id, c.meta); }, set() {} };
   const rand = { nextFloat: () => 0.5, nextInt: () => 0, nextDouble: () => 0.5, nextGaussian: () => 0 };
-  const sys = { view, mobs: new EntityWorld(view, [], () => 0.5), carts: new Minecarts({ random: () => rand }), boats: new Boats(), lives: [], liveMoves: [] };
+  const sys = { view, mobs: new EntityWorld(view, [], () => 0.5), carts: new Minecarts({ random: () => rand }), boats: new Boats(), lives: [], liveMoves: [], seq: 0 };
   for (const [obj, key] of [[sys.mobs, "pushMove"], [sys.carts, "move"], [sys.boats, "move"]]) {
     const orig = obj[key].bind(obj);
     obj[key] = (...a) => { sys.liveMoves.push(key === "pushMove" ? [sys.now, a[0].label, ...a.slice(1, 4)] : [sys.now, a[1].label, ...a.slice(2, 5)]); return orig(...a); };
@@ -50,7 +52,7 @@ function step(w, p, s, tick, ents, moves, sys) {
     else if (op === "air") w.setBlockToAir(x, y, z);
     else if (op === "entity") {
       const b = [ox + rest[0], oy + rest[1], oz + rest[2], ox + rest[3], oy + rest[4], oz + rest[5]];
-      ents.push({ label: a, box: b, move(dx, dy, dz) { moves.push([moves.now, a, dx, dy, dz]); b[0] += dx; b[3] += dx; b[1] += dy; b[4] += dy; b[2] += dz; b[5] += dz; } });
+      ents.push({ label: a, seq: sys ? sys.seq++ : 0, box: b, move(dx, dy, dz) { moves.push([moves.now, a, dx, dy, dz]); b[0] += dx; b[3] += dx; b[1] += dy; b[4] += dy; b[2] += dz; b[5] += dz; } });
     } else if (op === "live" && sys) {
       const [kind, vx, vy, vz] = rest, px = x + 0.5, pz = z + 0.5;
       let e;
@@ -58,6 +60,7 @@ function step(w, p, s, tick, ents, moves, sys) {
       else if (kind === 1) { e = sys.carts.spawnEmpty({ x: px, y: y + Y_OFFSET, z: pz }, { seed: 1 }); Object.assign(e, { vx, vy, vz, onGround: true }); }
       else { e = sys.boats.spawnBoat({ x: px, y, z: pz, vx, vy, vz }, { seed: 1 }); e.onGround = true; }
       e.label = a;
+      e.seq = sys.seq++;
       sys.lives.push(e);
     }
   }
@@ -70,7 +73,9 @@ function step(w, p, s, tick, ents, moves, sys) {
 for (const s of ref.scenarios)
   test(`native replay: ${s.name}`, () => {
     const w = build(s), ents = [], moves = [], sys = liveSystems(w);
-    const p = installPistons({ redstone: w, world: sys.view, blocks, entities: { mobs: sys.mobs, extra: () => [...ents, ...pistonPushExtras(sys.view, { minecarts: () => sys.carts, boatSystem: () => sys.boats, mobs: () => sys.mobs, player: () => null })] } });
+    // The probe World's entity query returns its list in spawn order (PistonProbe.W).
+    const order = (list) => list.slice().sort((a, b) => (a.entity?.seq ?? 1e9) - (b.entity?.seq ?? 1e9));
+    const p = installPistons({ redstone: w, world: sys.view, blocks, entities: { mobs: sys.mobs, order, extra: () => [...ents, ...pistonPushExtras(sys.view, { minecarts: () => sys.carts, boatSystem: () => sys.boats, mobs: () => sys.mobs, player: () => null })] } });
     setMovingBoxes((b) => p.collisionBoxes(b));
     setEntityBoxes(boatBoxProvider({ get carts() { return sys.boats.carts; } }));
     try {
@@ -144,7 +149,7 @@ test("render parts follow TileEntityRendererPiston", () => {
   assert.deepEqual(tileOffset(tile({ block: 1, meta: 0, extending: false, facing: 1, progress: 0.5, lastProgress: 0 }), 0.5), [0, 0.75, 0]);
 });
 
-test("live scenario: frame() hands the scene the moving parts and tick() keeps the wrapper", () => {
+test("live scenario: frame() hands the scene the moving parts and tick() keeps the push hook", () => {
   const s = ref.scenarios[0], w = build(s), seen = [], scene = { setMovingBlocks: (l) => seen.push(l) };
   const p = installPistons({ redstone: w, scene, blocks });
   const ents = [], moves = [];
@@ -153,9 +158,10 @@ test("live scenario: frame() hands the scene the moving parts and tick() keeps t
   assert.equal(seen.at(-1), list);
   assert.equal(list.length, 3);
   assert.ok(list.every((e) => e.parts.length === 1 && e.parts[0].offset[0] < 0));
-  assert.ok(w.updateTileEntities.pistonLive);
+  assert.ok(w.pistonPush.pistonLive);
+  w.pistonPush = null;
   p.tick();
-  assert.ok(w.updateTileEntities.pistonLive);
+  assert.ok(w.pistonPush.pistonLive, "tick() reinstalls the per-tile push hook");
 });
 
 test("saving and restoring tiles mid-motion", () => {

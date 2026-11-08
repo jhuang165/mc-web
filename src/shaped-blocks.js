@@ -218,11 +218,13 @@ export function shapedCraftingResult(cells, size) {
 }
 
 // BlockTrapDoor.func_150119_a over original ids: `rows` are redstone.js blockProperties() rows ([id, opaque, renderNormal, power, isNormalCube, top]);
-// the support is a normal cube, glowstone (89), a slab (44, 126) or one of the original stairs.
+// the support is an opaque-material block that renders as a normal block (aoe.a(aji): Material.isOpaque && Block.renderAsNormalBlock,
+// no canProvidePower test, so the block of redstone 152 holds a trapdoor; probed by PistonLiveProbe trapdoor-on-redstone-block),
+// glowstone (89), a slab (44, 126) or one of the original stairs.
 export const ORIGINAL_STAIRS = [53, 67, 108, 109, 114, 128, 134, 135, 136, 156, 163, 164];
 export function trapdoorSupportOriginal(rows) {
   const ok = new Set([89, 44, 126, ...ORIGINAL_STAIRS]);
-  for (const r of rows) if (r[4]) ok.add(r[0]);
+  for (const r of rows) if (r[1] && r[2]) ok.add(r[0]);
   return (id) => ok.has(id);
 }
 

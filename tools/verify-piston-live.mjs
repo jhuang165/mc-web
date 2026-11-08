@@ -12,7 +12,8 @@ import path from "node:path";
 import os from "node:os";
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
-import { RedstoneWorld } from "../src/redstone.js";
+import { installShapedBlocks, trapdoorSupportOriginal } from "../src/shaped-blocks.js";
+import { RedstoneWorld, blockProperties } from "../src/redstone.js";
 import { fromOriginal } from "../src/block-registry.js";
 import { installPistons, tileOffset, tileProgress } from "../src/piston-live.js";
 import { pistonPushExtras } from "../src/piston-push.js";
@@ -27,10 +28,10 @@ const exec = promisify(execFile), root = path.dirname(fileURLToPath(import.meta.
 const STONE = 1, STICKY = 29, PISTON = 33, REDSTONE_BLOCK = 152;
 const reference_partials = [0, 0.25, 0.5, 0.75, 1];
 const ORIGIN = [4, 10, 4], SIZE = [7, 6, 6];
-function scenario(name, { cells, events, ticks, note }) {
+function scenario(name, { cells, events, ticks, note, order }) {
   const grid = [];
   for (let x = 0; x < SIZE[0]; x++) for (let y = 0; y < SIZE[1]; y++) for (let z = 0; z < SIZE[2]; z++) grid.push(cells[`${x},${y},${z}`] ?? (y === 0 ? STONE : 0));
-  return { name, note, ticks, seed: 1, grid: grid.join(","), events };
+  return { name, note, ticks, seed: 1, grid: grid.join(","), events, ...(order ? { order: true } : {}) };
 }
 const box = (x, y, z, w = 0.4, h = 0.8) => [x, y, z, x + w, y + h, z + w];
 const ent = (t, label, b) => [t, "entity", 0, 0, 0, label, ...b];
@@ -143,6 +144,27 @@ for (const [name, id] of [["slab-bottom", "44:0"], ["slab-top", "44:8"], ["fence
   }
 }
 
+// Push order (batch 25): TileEntityPiston.updateEntity pushes inside World.updateEntities' loadedTileEntityList loop, so a push
+// sees the tiles before it updated and the ones after it not yet (their lastProgress, which BlockPistonMoving's collision box
+// reads, and a finished tile's placed block). Each of these is checked twice: the port's in-loop order must match the original
+// classes and the batch 20-24 order (every push after the loop, replay(..., { deferred: true })) must not. Found by a random
+// search over two-piston layouts (about 1% depend on the order); cells as "x,y,z": "id:meta".
+for (const [name, cells, events, note] of [
+  ["order-pig-two-pistons", { "2,1,1": "33:3", "2,1,4": "29:2" }, [live(1, 1, PIG, [2, 1, 3]), [2, "place", 2, 1, 0, REDSTONE_BLOCK, 0], [3, "place", 2, 1, 5, REDSTONE_BLOCK, 0], [9, "air", 2, 1, 5]], "two pistons facing each other (south, sticky north) push the same pig, a tick apart; the sticky one retracts at tick 9"],
+  ["order-pig-into-moving-stone", { "1,1,4": "33:5", "4,1,4": STONE, "5,1,4": "33:4" }, [live(1, 1, PIG, [3, 1, 4], [0.05, 0, 0]), [2, "place", 0, 1, 4, REDSTONE_BLOCK, 0], [3, "place", 6, 1, 4, REDSTONE_BLOCK, 0]], "a head pushes a pig east into a stone another piston pushes west: the pig is pushed between two moving blocks"],
+  ["order-pig-sticky-stone", { "1,1,3": "33:5", "4,1,3": STONE, "5,1,3": "29:4" }, [live(1, 1, PIG, [2, 1, 3], [0.05, 0, 0]), [2, "place", 0, 1, 3, REDSTONE_BLOCK, 0], [3, "place", 6, 1, 3, REDSTONE_BLOCK, 0], [8, "air", 6, 1, 3]], "as order-pig-into-moving-stone with a sticky piston that pulls the stone back at tick 8"],
+  ["order-pig-slab-same-tick", { "1,1,1": "29:5", "4,1,1": "44:0", "5,1,1": "33:4" }, [live(1, 1, PIG, [2, 1, 1], [-0.05, 0, 0]), [2, "place", 0, 1, 1, REDSTONE_BLOCK, 0], [2, "place", 6, 1, 1, REDSTONE_BLOCK, 0], [7, "air", 6, 1, 1], [9, "air", 0, 1, 1]], "both pistons powered in the same tick: a sticky head pushes a pig into a slab pushed the other way"],
+  ["order-pigs-trapdoor", { "1,1,1": "33:5", "2,1,1": "96:0", "4,1,1": "29:4" }, [live(1, 1, PIG, [1, 2, 1], [0.05, 0, 0]), live(1, 2, PIG, [3, 1, 1]), [1, "place", 5, 1, 1, REDSTONE_BLOCK, 0], [2, "place", 0, 1, 1, REDSTONE_BLOCK, 0], [4, "air", 5, 1, 1]], "a pushed trapdoor and a sticky head close on a pig; another pig on the piston"],
+  ["order-boat-two-pistons", { "1,1,1": "139:0", "1,1,3": "33:5", "2,1,1": "33:4", "2,1,3": "88:0" }, [live(1, 1, BOAT, [2, 1, 2], [0, 0, 0.05]), [1, "place", 3, 1, 1, REDSTONE_BLOCK, 0], [1, "place", 0, 1, 3, REDSTONE_BLOCK, 0]], "two pistons (one pushing soul sand) push the same boat in the same tick"],
+  ["order-boat-cart", { "1,1,1": "29:5", "2,1,1": "88:0", "4,1,3": "33:5" }, [live(1, 1, BOAT, [2, 1, 2], [0, 0, -0.05]), live(1, 2, CART, [4, 1, 4], [0.05, 0, 0]), [3, "place", 0, 1, 1, REDSTONE_BLOCK, 0], [3, "place", 3, 1, 3, REDSTONE_BLOCK, 0]], "a pushed boat blocked by a minecart (EntityBoat.getCollisionBox returns any entity's box), two pistons in the same tick"],
+  ["order-two-boats", { "1,1,2": "33:5", "2,1,2": "88:0", "3,1,3": "33:5" }, [live(1, 1, BOAT, [5, 1, 4], [0.05, 0, -0.05]), live(1, 2, BOAT, [2, 1, 1], [0.05, 0, 0.05]), [3, "place", 0, 1, 2, REDSTONE_BLOCK, 0], [3, "place", 2, 1, 3, REDSTONE_BLOCK, 0], [7, "air", 2, 1, 3]], "two boats, two pistons powered in the same tick"],
+]) SCENARIOS.push(scenario(name, { cells, ticks: 14, note, events, order: true }));
+
+// BlockTrapDoor's support test (aoe.a: opaque material and normal render, glowstone, slab, stairs; no power test) accepts a
+// redstone block: a trapdoor hung on one stays when the block is placed, then pushed and pulled.
+SCENARIOS.push(scenario("trapdoor-on-redstone-block", { cells: { "4,1,3": "29:5", "4,1,4": "33:4", "5,1,3": "96:0" }, ticks: 14, note: "a trapdoor next to a redstone block, pushed and pulled by a sticky piston; a pig pushed west by another piston", events: [
+  live(1, 1, PIG, [2, 1, 4], [-0.05, 0, -0.05]), [1, "place", 5, 1, 4, REDSTONE_BLOCK, 0], [1, "place", 3, 1, 3, REDSTONE_BLOCK, 0], [5, "air", 3, 1, 3]] }));
+
 const researchDirs = [process.env.MC_RESEARCH, path.join(root, "../../tools/research")].filter(Boolean);
 let research;
 for (const dir of researchDirs) if (await exists(path.join(dir, "minecraft-1.7.10.jar"))) { research = dir; break; }
@@ -179,8 +201,11 @@ assert.equal(natives.length, SCENARIOS.length);
 
 // ---- Replay with src/redstone.js + src/piston-live.js (same tick order as the probe) ----
 const [ox, oy, oz] = ORIGIN;
-export function replay(s) {
+// `deferred`: the batch 20-24 order (every push after the whole tile loop) instead of the native per-tile order, used to show that
+// the order scenarios depend on it.
+export function replay(s, { deferred = false } = {}) {
   const w = new RedstoneWorld({ seed: s.seed }), cells = s.grid.split(",");
+  installShapedBlocks(w, trapdoorSupportOriginal(blockProperties())); // as redstone-runtime.js: trapdoor support loss, gate opening
   for (let x = 0; x < SIZE[0]; x++) for (let y = 0; y < SIZE[1]; y++) for (let z = 0; z < SIZE[2]; z++) {
     const [id, meta = 0] = cells[(x * SIZE[1] + y) * SIZE[2] + z].split(":").map(Number);
     if (id) w.setRaw(ox + x, oy + y, oz + z, id, meta);
@@ -198,7 +223,17 @@ export function replay(s) {
     const orig = obj[key].bind(obj);
     obj[key] = (...a) => { const d = key === "pushMove" ? a.slice(1, 4) : a.slice(2, 5); liveMoves.push([tick, key === "pushMove" ? label(a[0]) : label(null, a), ...d]); return orig(...a); };
   }
-  const p = installPistons({ redstone: w, world: view, blocks: { toInternal }, entities: { mobs, extra: () => [...ents, ...pistonPushExtras(view, { minecarts: () => carts, boatSystem: () => boats, mobs: () => mobs, player: () => null })] } });
+  // The probe World's entity query returns its scripted list in spawn order (PistonProbe.W), so pushes follow the spawn order here.
+  let seq = 0;
+  const order = (list) => list.slice().sort((a, b) => (a.entity?.seq ?? 1e9) - (b.entity?.seq ?? 1e9));
+  const p = installPistons({ redstone: w, world: view, blocks: { toInternal }, entities: { mobs, order, extra: () => [...ents, ...pistonPushExtras(view, { minecarts: () => carts, boatSystem: () => boats, mobs: () => mobs, player: () => null })] } });
+  let flush = () => {};
+  if (deferred) {
+    const real = w.pistonPush, queue = [], later = (...a) => queue.push(a);
+    later.pistonLive = true;
+    w.pistonPush = later;
+    flush = () => { for (const a of queue.splice(0)) real(...a); };
+  }
   setMovingBoxes((b) => p.collisionBoxes(b));
   setEntityBoxes(boatBoxProvider({ get carts() { return boats.carts; } }));
   const tes = [], boxes = [], entityPos = [], samples = [], collide = [], liveStates = [];
@@ -210,7 +245,7 @@ export function replay(s) {
       if (op === "place") w.setBlock(x, y, z, a, rest[0], 3);
       else if (op === "air") w.setBlockToAir(x, y, z);
       else if (op === "entity") {
-        const b = [ox + rest[0], oy + rest[1], oz + rest[2], ox + rest[3], oy + rest[4], oz + rest[5]], e = { label: a, box: b, move(dx, dy, dz) { moves.push([tick, a, dx, dy, dz]); b[0] += dx; b[3] += dx; b[1] += dy; b[4] += dy; b[2] += dz; b[5] += dz; } };
+        const b = [ox + rest[0], oy + rest[1], oz + rest[2], ox + rest[3], oy + rest[4], oz + rest[5]], e = { label: a, seq: seq++, box: b, move(dx, dy, dz) { moves.push([tick, a, dx, dy, dz]); b[0] += dx; b[3] += dx; b[1] += dy; b[4] += dy; b[2] += dz; b[5] += dz; } };
         ents.push(e);
       } else if (op === "live") {
         const [kind, vx, vy, vz] = rest, px = x + 0.5, pz = z + 0.5;
@@ -219,6 +254,7 @@ export function replay(s) {
         else if (kind === CART) { e = carts.spawnEmpty({ x: px, y: y + Y_OFFSET, z: pz }, { seed: 1 }); Object.assign(e, { vx, vy, vz, onGround: true }); }
         else { e = boats.spawnBoat({ x: px, y, z: pz, vx, vy, vz }, { seed: 1 }); e.onGround = true; }
         e.label = a;
+        e.seq = seq++;
         lives.push(e);
       }
     }
@@ -226,6 +262,7 @@ export function replay(s) {
     w.tickUpdates();
     w.sendQueuedBlockEvents();
     w.updateTileEntities();
+    flush();
     p.tick();
     const tiles = w.pistonTiles();
     tes.push(tiles.map((t) => [t.x - ox, t.y - oy, t.z - oz, t.block, t.meta, t.facing, t.extending ? 1 : 0, t.renderHead ? 1 : 0, t.progress, t.lastProgress]));
@@ -239,7 +276,7 @@ export function replay(s) {
 }
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`);
 const failures = [];
-let liveStates = 0, totalLiveMoves = 0, collideCount = 0, totalMoves = 0, tileStates = 0, offsets = 0, boxCount = 0;
+let orderDependent = 0, liveStates = 0, totalLiveMoves = 0, collideCount = 0, totalMoves = 0, tileStates = 0, offsets = 0, boxCount = 0;
 const results = [];
 for (const [i, n] of natives.entries()) {
   const s = SCENARIOS[i];
@@ -284,6 +321,11 @@ for (const [i, n] of natives.entries()) {
     assert.equal(mine.moves.length, n.moves.length, `${s.name}: number of entity moves`);
     mine.moves.forEach((m, k) => m.forEach((v, j) => close(v, n.moves[k][j], `${s.name}: move ${k}`)));
     totalMoves += n.moves.length;
+    if (s.order) {
+      const late = replay(s, { deferred: true }), key = (r) => JSON.stringify([r.live, r.liveMoves, r.entityPos, r.moves]);
+      assert.notEqual(key(late), key(mine), `${s.name}: the push order does not matter here (the deferred order gives the same result)`);
+      orderDependent++;
+    }
     results.push({ ...s, te: n.te, pushBoxes: n.pushBoxes, collide: n.collide, entities: n.entities, moves: n.moves, ...(n.live.some((l) => l.length) ? { live: n.live, liveMoves: n.liveMoves } : {}) });
   } catch (e) {
     failures.push(`${s.name}: ${String(e.message).split("\n").slice(0, 8).join(" | ")}`);
@@ -300,4 +342,4 @@ const reference = {
   scenarios: results,
 };
 await writeFile(path.join(root, "../public/research/piston-live-reference.json"), JSON.stringify(reference) + "\n");
-console.log(`PASS: ${SCENARIOS.length} scenarios, ${tileStates} tile states, ${offsets} render offsets, ${boxCount} push boxes, ${collideCount} collision boxes, ${totalMoves} entity moves, ${liveStates} live entity states, ${totalLiveMoves} live entity moves identical to the original classes.`);
+console.log(`PASS: ${SCENARIOS.length} scenarios, ${tileStates} tile states, ${offsets} render offsets, ${boxCount} push boxes, ${collideCount} collision boxes, ${totalMoves} entity moves, ${liveStates} live entity states, ${totalLiveMoves} live entity moves identical to the original classes; ${orderDependent} order scenarios differ under the deferred (after-the-loop) push order.`);
