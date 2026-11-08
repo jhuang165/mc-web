@@ -90,7 +90,7 @@ function game({ mode = "survival", allowCommands } = {}) {
   const state = { time: null, mode: null, teleport: null, changed: 0 }, lan = new LanSession();
   const env = {
     active: () => active, world: () => world, weather: () => weather, mobs: () => null, survival: () => survival, experience: () => experience,
-    position: () => ({ ...pos }), seed: () => active.seed, stackName: (s) => "Item" + s.id, dropStack: (s) => log.push(["drop", s.id, s.count]),
+    position: () => ({ ...pos }), seed: () => active.seed, stackName: (s) => "Item" + s.id, giveDrop: (s) => log.push(["drop", s.id, s.count]),
     refreshInventory() {}, changed: () => state.changed++, setTime: (t) => (state.time = t),
     teleport: (x, y, z) => (state.teleport = [x, y, z]), setDifficulty: (d) => (state.difficulty = d),
     setMode: (m) => { survival.mode = m; survival.inventory.creative = survival.creative; state.mode = m; },
@@ -100,7 +100,7 @@ function game({ mode = "survival", allowCommands } = {}) {
   const host = createCommandHost(env);
   const runner = createCommandRunner(host);
   const out = () => chat.lines.map((l) => l.text).reverse();
-  return { world, survival, weather, experience, active, host, runner, state, lan, run: (t) => { chat.clear(); runner.run(t); return out(); } };
+  return { log, world, survival, weather, experience, active, host, runner, state, lan, run: (t) => { chat.clear(); runner.run(t); return out(); } };
 }
 
 test("cheats off refuses permission-level commands in red and keeps help, me, tell and seed", () => {
@@ -146,8 +146,12 @@ test("time, weather and toggledownfall use the native semantics", () => {
 
 test("give, clear, xp, effect and enchant change the real inventory, experience and effects", () => {
   const g = game({ allowCommands: true });
-  assert.deepEqual(g.run("/give @p minecraft:diamond 5"), ["Given [Itemundefined] * 5 to Player"].map((s) => s.replace("undefined", String(g.survival.inventory.main.find(Boolean).id))));
-  assert.equal(g.survival.count(g.survival.inventory.main.find(Boolean).id), 5);
+  // CommandGive drops the whole stack at the player and never adds it to the inventory (neg-stacks3-reference.json give).
+  const out = g.run("/give @p minecraft:diamond 5");
+  assert.equal(g.survival.inventory.main.find(Boolean), undefined);
+  assert.match(out[0], /^Given \[Item\d+\] \* 5 to Player$/);
+  assert.deepEqual(g.log.at(-1).slice(2), [5]);
+  g.survival.inventory.add({ id: g.log.at(-1)[1], count: 5, damage: 0 });
   assert.match(g.run("/give @p minecraft:nonsense")[0], /^§c/);
   assert.match(g.run("/give @p minecraft:diamond 65")[0], /^§c/);
   assert.match(g.run("/clear @p minecraft:diamond")[0], /^Cleared the inventory of Player, removing 5 items$/);
@@ -166,6 +170,7 @@ test("give, clear, xp, effect and enchant change the real inventory, experience 
   assert.match(g.run("/enchant @p 16")[0], /^§c/); // nothing in hand
   // /enchant works on the held stack: a diamond sword takes Sharpness; Sharpness and Smite do not combine.
   assert.match(g.run("/give @p minecraft:diamond_sword")[0], /^Given/);
+  g.survival.inventory.add({ id: g.log.at(-1)[1], count: 1, damage: 0 });
   const sword = g.survival.inventory.main.find((s) => s && s.count === 1);
   g.survival.inventory.current = g.survival.inventory.main.indexOf(sword);
   assert.deepEqual(g.run("/enchant @p 16 3"), ["Enchanting succeeded"]);

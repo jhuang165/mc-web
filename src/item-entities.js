@@ -316,7 +316,7 @@ export class ItemEntities {
     return this.items.map((e) => this.serializeOne(e));
   }
   serializeOne(e) {
-    return { stack: copyStack(e.stack), x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, age: e.age, delay: e.delay, hover: e.hover, death: e.death || undefined, portalCooldown: e.portalCooldown || undefined };
+    return { stack: copyStack(e.stack), x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, age: e.age, delay: e.delay, hover: e.hover, death: e.death || undefined, owner: e.owner || undefined, portalCooldown: e.portalCooldown || undefined };
   }
   // Reads saved items, and the stack piles written before 0.10 (one item per
   // stack at the pile's position, aged by the time the pile had left).
@@ -331,6 +331,7 @@ export class ItemEntities {
         if (!e) continue;
         e.age = ok(d.age) ? Math.max(0, Math.min(LIFETIME - 1, d.age)) : 0;
         if (ok(d.hover)) e.hover = d.hover;
+        if (typeof d.owner === "string" && d.owner) e.owner = d.owner.slice(0, 64); // EntityItem Owner (func_145797_a)
         if (Number.isInteger(d.portalCooldown) && d.portalCooldown > 0) e.portalCooldown = Math.min(300, d.portalCooldown); // PortalCooldown (entity-portal.js)
       } else if (Array.isArray(d?.stacks) && d.position && ok(d.position.x, d.position.y, d.position.z)) {
         const age = ok(d.expires) ? Math.max(0, Math.min(LIFETIME - 1, LIFETIME - (d.expires - time))) : 0;

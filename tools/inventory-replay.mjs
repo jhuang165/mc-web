@@ -14,6 +14,10 @@ import {Survival,ITEMS,burnTime,smeltingResult} from '../src/survival.js';
 import {CART_ORIGINAL_ITEMS} from '../src/cart-variants.js';
 import {makeStack,copyStack,ChestContainer,LargeChestInventory} from '../src/inventory.js';
 import {newChest,chestInventory} from '../src/chest.js';
+import {DispenserContainer,newDispenser} from '../src/dispenser-container.js';
+import {HopperContainer,newHopperTile} from '../src/hopper.js';
+import {BrewingContainer} from '../src/brewing-container.js';
+import {brewingView,newBrewingTile} from '../src/brewing.js';
 import {YELLOW_FLOWER,RED_FLOWER,DYE,SNOW_LAYER,ICE,SAPLING,WEB,LADDER,CACTUS,TNT,FENCE,RAIL,ANVIL,ENCHANTING_TABLE} from '../src/world.js';
 
 // Minecraft 1.7.10 numeric IDs (and metadata for subtypes) of this build's items.
@@ -58,6 +62,9 @@ export function replay(script){
    case 'furnace':container=Object.assign(p.openFurnace('0,0,0'),{drops});break;
    case 'chest':container=Object.assign(new ChestContainer(inv,chestInventory(newChest())),{drops});break;
    case 'largechest':container=Object.assign(new ChestContainer(inv,new LargeChestInventory(chestInventory(newChest()),chestInventory(newChest()))),{drops});break;
+   case 'dispenser':container=Object.assign(new DispenserContainer(inv,newDispenser()),{drops});break;
+   case 'hopper':container=Object.assign(new HopperContainer(inv,newHopperTile()),{drops});break;
+   case 'brewing':container=Object.assign(new BrewingContainer(inv,brewingView(newBrewingTile())),{drops});break;
    case 'inv':inv.main[+a[1]]=stack(a,2);break;
    case 'fill':for(let i=0;i<36;i++)inv.main[i]??=stack(a,1);break;
    case 'burn':results.push(burnTime(stack(a,1)));break;

@@ -11,7 +11,7 @@ function game() {
   const world = new World('command-tags', 'meadow', 1), survival = new Survival({}, 'creative'), mobs = new EntityWorld(world, []);
   const active = { mode: 'creative', allowCommands: true }, lines = [], breaks = [];
   const env = { world: () => world, survival: () => survival, mobs: () => mobs, active: () => active,
-    position: () => ({ x: 10.8, y: 60.6, z: 10.1 }), changed() {}, refreshInventory() {}, stackName: s => s.displayName ?? 'stack', dropStack() {}, updateBlock() {},
+    position: () => ({ x: 10.8, y: 60.6, z: 10.1 }), changed() {}, refreshInventory() {}, stackName: s => s.displayName ?? 'stack', giveDrop: (s) => survival.inventory.add(s), updateBlock() {},
     destroyBlock(x, y, z) { breaks.push([x, y, z]); world.set(x, y, z, 0); } };
   const host = createCommandHost(env); host.print = t => lines.push(t);
   const runner = createCommandRunner(host);

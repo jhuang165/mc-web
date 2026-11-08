@@ -24,7 +24,7 @@ function game() {
     mobs: { potions: holder('potions'), fireballs: holder('fireballs'), skulls: holder('skulls') }, dimension: 0,
   };
   const env = { world: () => world, survival: () => survival, mobs: () => mobs, active: () => ({ mode: 'creative', allowCommands: true }),
-    position: () => ({ x: 10.8, y: 60.6, z: 10.1 }), changed() {}, refreshInventory() {}, stackName: () => 'stack', dropStack() {}, updateBlock() {}, destroyBlock() {},
+    position: () => ({ x: 10.8, y: 60.6, z: 10.1 }), changed() {}, refreshInventory() {}, stackName: () => 'stack', giveDrop() {}, updateBlock() {}, destroyBlock() {},
     minecarts: () => minecarts, entityHosts: () => hosts };
   const host = createCommandHost(env); host.print = (t) => lines.push(t);
   const runner = createCommandRunner(host);

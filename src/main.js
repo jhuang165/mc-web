@@ -1598,7 +1598,7 @@ const commandHost = createCommandHost({
   beaconTile: (x, y, z) => beacons.ensure(x, y, z),
   commandTile: (x, y, z) => redstoneRuntime?.commandBlocks.tile(x, y, z),
   stackName: (s) => stackName(s, ITEMS) || ITEMS[s.id]?.name || "",
-  dropStack: (s) => items.dropPlayer(s, position, yaw, pitch, true, true),
+  giveDrop: (s, owner) => { const e = items.dropPlayer(s, position, yaw, pitch); if (e) { e.delay = 0; e.owner = owner; } },
   refreshInventory: () => { renderHotbar(); renderVitals(); saved = false; },
   changed: () => { saved = false; },
   setTime: (t) => scene.setTime(t),
