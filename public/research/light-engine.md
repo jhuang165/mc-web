@@ -31,7 +31,7 @@ The port's fixed point equals the native light after every edit once the chunk t
 
 Not covered: End/Nether worlds with real generated terrain, and lighting across the 128-block volume edge and `StreamingLight.shift` (covered by `streaming-light.test.js`). Batch 25 (below) covers `func_150809_p` ordering, the queue limits and overflow.
 
-## Batch 25: native incremental engine (`src/native-light.js`, not wired into the game)
+## Batch 25: native incremental engine (`src/native-light.js`)
 
 `NativeLight` is a line-by-line port of `World.updateLightByType`, which has a 32,768-entry `Int32Array` queue. Its removal pass checks `j < length`. Its addition pass checks `j < length - 6` and the 17-block Manhattan reach. Every neighbour push from the removal pass that is dropped is counted in `stats.overflow`. The port also covers `checkChunksExist` / `doChunksNearChunkExist(17)` and the Chunk light code with its null-section rules (`generateSkylightMap`, `relightBlock`, `recheckGaps`, `func_150804_b`, `func_150809_p` in its bytecode neighbour and edge order, `enqueueRelightChecks` with the 4096-check counter, and `populateChunk`'s isTerrainPopulated/isLightPopulated sequence). Evidence: `tools/probes/LightEngine2Probe.java`, `tools/verify-light-engine2.mjs`, `light-engine2-reference.json` (9 scenarios, 170 snapshots). `src/native-light.test.js` replays these and the 18 batch-20 scenarios; all 27 match exactly.
 
@@ -41,7 +41,21 @@ Not covered: End/Nether worlds with real generated terrain, and lighting across 
 - `null-sections`: a floating block above the top section leaves stale sky 15 under it. A later block below the height map creates a section with zero sky across the whole chunk, including open air. Server ticks keep it dark. After `reset` (`Chunk.n`), `enqueueRelightChecks` heals part of it by 32 ticks and all of it by 512.
 - Bytecode-read only: server chunks start with the counter at 4096, so `o()` does nothing. The client resets it on chunk receive, `WorldClient.func_147456_g` checks at most 10 chunks per tick, and `func_150804_b` runs with isRemote true (one-column recheckGaps).
 
-The game still uses the fixed-point `LightVolume` / `StreamingLight`, so the differences listed above remain in game play. Wiring the engine in would need it to start from the eager build, take an old-opacity hook in `scene.updateBlocks`, a per-tick chunk tick, and `shift` support.
+Batch 25 left it test-only. Batch 26 wires it in (next section).
+
+## Batch 26: native light in the Overworld (`StreamingLight`, default on)
+
+Streamed Overworld worlds (`world.streaming`, not the Nether/End) now run edits, gap rechecks and window shifts through `NativeLight`. `?nativeLight=0` (or localStorage `blockworld.nativeLight` = `0`) switches back to the fixed-point path; `NATIVE_LIGHT_DEFAULT` in `src/streaming-light.js` is the default.
+
+- The first sky/block arrays still come from the eager `LightVolume` build; `NativeLight` shares those arrays. Per chunk it adds the section mask (sections holding a non-air block; the light arrays of a missing section are rewritten to its rule: sky 15 at or above the height map, 0 below, block 0), `hmMin`, no pending gaps, `isLightPopulated`, and the 4096 relight counter. At the default spawn this changes no light cell against the fixed-point build.
+- `scene.updateBlock` and `scene.updateBlocks` call `World.setBlock`'s light half through `StreamingLight.update(x, y, z, oldId)`: the replaced block's opacity comes from the caller (fluids, explosions) or from an id shadow kept by the light volume. Edits do not relight a 31 x 31 box any more; they follow the 17-block queue.
+- `scene.setTime` (once per game tick) calls `StreamingLight.tick()`: `Chunk.func_150804_b` for every resident chunk with pending gaps. Changed cells are remeshed with the usual dirty queue.
+- `shift()` translates the per-chunk arrays and the id shadow with the light arrays; chunks entering the square are initialised after their strip is relit.
+- The outer ring of the 8 x 8 chunk square counts as unloaded: an edit within 17 blocks of it is skipped (the middle 4 x 4 chunks always light, plus the parts of the next ring that stay 17 blocks from the edge), and the ring reads the unloaded defaults (sky 15, block 0).
+- Differences now visible in play (all 1.7.10 behaviour, replayed by `native-light.test.js`): a first block placed in an empty section leaves the cells under it unlit or stale; edits near the square's edge keep stale light; a light update never reaches past 17 blocks.
+- Still not native: relight checks run only for chunks reset by `resetRelightChecks` (none here), chunk population ordering does not run (the eager build fills the arrays), and the client-side scheduling is bytecode-read only.
+- `src/streaming-light-native.test.js` (8 tests): the switch, initial state, edits equal to the fixed-point volume where native agrees, the dark-pit difference, the edge skip, shifts equal to a fresh build along each axis and after long jumps, and the deferred build.
+- Timings (muted headless Chrome, 3 runs each, `artifacts/b26-lighting3/measure.mjs`, machine shared with other tracks): new world playable 1.02-1.53 s with the old path, 0.92-1.33 s native; longest long task after load 0-136 ms old, 0-99 ms native; one-chunk shifts 63-94 ms old, 58-124 ms native; a 20-edit loop averages 11-15 ms per edit old and 8-26 ms native. The two paths are within noise of each other; the load itself has a 90 ms long task in both.
 
 ## Regenerating
 
