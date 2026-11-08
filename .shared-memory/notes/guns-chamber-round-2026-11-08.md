@@ -1,0 +1,10 @@
+# Chambered +1 reloads (2026-11-08)
+
+Implemented in `../wt-guns` on `guns-prototype`, following the existing guns prototype rather than canonical main.
+
+- Nonempty reloads on guns with TaCZ `closed_bolt` or `manual_action` fill the magazine while retaining one chambered round (magazine size +1). Empty reloads fill only the nominal magazine size; another reload can top off one round. Open-bolt/fixed-capacity weapons and the inventory-fed minigun do not gain capacity. Shell-by-shell guns keep the capacity selected at reload start.
+- Added `src/mods/guns/ammo.js` for capacity/count mutations. Existing nonnegative stack damage and old save counts remain valid; only the one round above magazine capacity is saved as validated `modTag.extraRound`. Firing spends that round once and removes the flag. Reserve ammo is deducted for every added round, with Creative's existing free reloads preserved.
+- Refits preserve loaded ammo, include chamber capacity when reducing magazine size, return excess rounds, and preserve the extra round when removing the last attachment. Extended magazines reload to their fitted capacity +1. The HUD already uses total loaded rounds; its accessible label now says rounds loaded.
+- Added coverage for tactical/empty/full reloads, shell reloads, reserve limits, Creative, repeated reloads, slot cancellation, firing to empty, serialization with/without attachments, old saves, extended magazines/refits, HUD count and synthetic pack classifications.
+
+Validation before commit: 90 focused gun tests pass; full `npm test` 4,938 pass / 0 fail; `npm run build` passes; `git diff --check` clean. Direct installed-pack smoke checked all 70 guns: 54 with chamber capacity, 15 fixed-capacity, 1 inventory-fed. Both empty/nonempty reloads, reserve deductions and first shots passed for every magazine-fed gun. Private pack assets remain ignored. Existing local preview on :5331 is running. Release handoff records final commit/push validation. No Sites, Pages or server deployment.

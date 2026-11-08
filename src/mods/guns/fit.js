@@ -3,6 +3,7 @@
 // gives the gun with its attachments' data applied the way TaCZ's attachment modifiers read (data/attachments/*.json):
 // extended magazines, aim time, spread, recoil, headshot, damage, range, fire rate and the silencer. Pure: no DOM, no three.
 import { TACZ_ATTACHMENT_IDS } from "./ids.js";
+import { hasChamber, loadedRounds, setLoadedRounds } from "./ammo.js";
 
 // The slots, in the order the attachment screen lists them.
 export const ATTACHMENT_TYPES = ["scope", "muzzle", "stock", "grip", "laser", "extended_mag"];
@@ -104,21 +105,24 @@ export const fitsGun = (gun, attachment) => (gun && attachment && gun.attachment
 // `removed` is the attachment taken out (or null) and `unloaded` the rounds a smaller magazine no longer holds; the stack
 // keeps its rounds otherwise (stack.damage counts rounds fired from a full magazine, so it moves with the magazine size).
 export function refit(stack, type, attachment, { gunOf, ATTACHMENTS }) {
-  const before = gunOf(stack), rounds = Math.max(0, before.magazine - (stack.damage | 0));
+  const before = gunOf(stack), rounds = loadedRounds(before, stack);
   const tag = { ...(stack.modTag?.attachments ?? {}) }, removed = ATTACHMENTS[tag[type]] ?? null;
   if (attachment) tag[type] = attachment.id; else delete tag[type];
-  const next = { ...stack, modTag: Object.keys(tag).length ? { ...(stack.modTag ?? {}), attachments: tag } : undefined };
-  if (!next.modTag) delete next.modTag;
-  const after = gunOf(next), kept = Math.min(rounds, after.magazine);
-  next.damage = after.magazine - kept;
+  const next = { ...stack, modTag: { ...stack.modTag } };
+  if (Object.keys(tag).length) next.modTag.attachments = tag;
+  else delete next.modTag.attachments;
+  const after = gunOf(next), kept = Math.min(rounds, after.magazine + (hasChamber(after) ? 1 : 0));
+  setLoadedRounds(after, next, kept);
   return { stack: next, removed, unloaded: before.feed === "inventory" ? 0 : rounds - kept };
 }
 
-// A saved gun stack's tag, kept only in its known shape: { attachments: { type: id } } (item readTag, install.js).
+// A saved gun's attachments and the round above magazine capacity (item readTag, install.js).
 export function readGunTag(tag) {
   const a = tag?.attachments;
-  if (!a || typeof a !== "object") return null;
-  const out = {};
-  for (const type of ATTACHMENT_TYPES) if (Number.isInteger(a[type]) && a[type] > 0) out[type] = a[type];
-  return Object.keys(out).length ? { attachments: out } : null;
+  const out = {}, attachments = {};
+  if (a && typeof a === "object") for (const type of ATTACHMENT_TYPES)
+    if (Number.isInteger(a[type]) && a[type] > 0) attachments[type] = a[type];
+  if (Object.keys(attachments).length) out.attachments = attachments;
+  if (tag?.extraRound === true) out.extraRound = true;
+  return Object.keys(out).length ? out : null;
 }

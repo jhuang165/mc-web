@@ -103,9 +103,9 @@ test("refitting keeps the rounds loaded; a smaller magazine hands back what it n
     const loaded = { ...big.stack, damage: 0 }; // 40 of 40
     const back = refit(loaded, "extended_mag", null, { gunOf, ATTACHMENTS });
     assert.equal(back.removed, MAG);
-    assert.equal(back.unloaded, 10);
-    assert.equal(roundsLeft(back.stack), 30);
-    assert.equal(back.stack.modTag, undefined);
+    assert.equal(back.unloaded, 9);
+    assert.equal(roundsLeft(back.stack), 31); // the chamber plus the smaller magazine
+    assert.deepEqual(back.stack.modTag, { extraRound: true });
   });
 });
 

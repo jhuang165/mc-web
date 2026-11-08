@@ -60,7 +60,7 @@ test("the element mounts in #hud on first use, hides without a gun and redraws o
   assert.equal(el.classList.contains("hidden"), false);
   assert.match(el.innerHTML, /class="mc-text x2"><ffffff>30<\/span>/);
   assert.match(el.innerHTML, /<aaaaaa> \/ 60/);
-  assert.equal(el.attrs["aria-label"], "30 of 30 rounds");
+  assert.equal(el.attrs["aria-label"], "30 rounds loaded");
   const n = calls.length;
   hud.update({ ...s });
   assert.equal(calls.length, n, "same text: no redraw");

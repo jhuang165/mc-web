@@ -167,12 +167,13 @@ test("an empty gun clicks once per press, then a magazine reload takes ammo", ()
   assert.equal(c.startReload(ctx), false); // no ammo left
 });
 
-test("a tactical reload is shorter, a full magazine or no ammo does not reload, creative reloads free", () => {
+test("a tactical reload is shorter and adds the chamber round, no ammo does not reload, creative reloads free", () => {
   const a = harness(P320, { damage: 4, ammo: 60 });
   a.run(ticksFor(GUNS[P320].draw));
   assert.equal(a.c.startReload(a.ctx), true);
   assert.equal(a.run(ticksFor(GUNS[P320].reload.tactical)).some((e) => e.type === "reloaded"), true);
-  assert.equal(a.inv[AMMO_45ACP], 56);
+  assert.equal(a.inv[AMMO_45ACP], 55);
+  assert.equal(roundsLeft(a.stack), 13);
   assert.equal(a.c.startReload(a.ctx), false); // full
   const b = harness(P320, { damage: 4 });
   b.run(ticksFor(GUNS[P320].draw));

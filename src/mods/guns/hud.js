@@ -1,5 +1,5 @@
 // Guns mod (not 1.7.10): the ammo counter at the bottom right of the screen, in the 1.7.10 bitmap font (bitmap-text.js).
-// It shows the rounds in the magazine (large), the matching ammo carried, the fire mode, and the reload state, like TaCZ's
+// It shows the rounds loaded, including the chamber (large), the matching ammo carried, the fire mode, and the reload state, like TaCZ's
 // ammo HUD in this project's own layout. The state is pure; the element is made on first use, inside #hud, so it hides
 // with the HUD (F1, menus) like the rest of GuiIngame.
 import { gunOf, roundsLeft } from "./catalog.js";
@@ -66,7 +66,7 @@ export function createAmmoHud(text, doc = globalThis.document) {
       last = key;
       if (!mount()) return;
       el.classList.toggle("hidden", !lines.length);
-      el.setAttribute("aria-label", !state ? "" : state.magazine > 0 ? `${state.rounds} of ${state.magazine} rounds` : `${state.rounds} rounds`);
+      el.setAttribute("aria-label", !state ? "" : `${state.rounds} rounds loaded`);
       el.innerHTML = lines.map((row) => `<div class="row">${row.map(([t, c, size]) =>
         `<span class="mc-text${size === 2 ? " x2" : ""}">${text(t, c)}</span>`).join("")}</div>`).join("");
     },

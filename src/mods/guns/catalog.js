@@ -14,6 +14,7 @@ export const AMMO_45ACP = 4010, AMMO_762X39 = 4011, AMMO_12G = 4012;
 export const GUN_SMITH = 4300; // the gun smith table (an item here: use it to open the smithing screen)
 
 import { fitGun, readGunTag, stackParts } from "./fit.js";
+import { loadedRounds } from "./ammo.js";
 
 const ICON = (name) => `/media/mods/guns/${name}.png`;
 
@@ -30,13 +31,13 @@ export const GUNS = {
     id: P320, key: "p320", taczKey: "p320", name: "P320", type: "pistol", ammo: AMMO_45ACP, magazine: 12, rpm: 450, modes: ["semi"],
     pellets: 1, damage: [[20, 10], [50, 7], [Infinity, 5]], headshot: 1.75,
     inaccuracy: { stand: 1.8, move: 2, sneak: 1.25, aim: 0.175 },
-    reload: { kind: "magazine", tactical: 1.98, empty: 2.48 }, draw: 0.63, aim: 0.16,
+    reload: { kind: "magazine", tactical: 1.98, empty: 2.48 }, draw: 0.63, aim: 0.16, bolt: "closed_bolt",
   },
   [AKM]: {
     id: AKM, key: "akm", taczKey: "ak47", name: "AKM", type: "rifle", ammo: AMMO_762X39, magazine: 30, rpm: 600, modes: ["auto", "semi"],
     pellets: 1, damage: [[30, 9], [60, 7.5], [Infinity, 6]], headshot: 1.5,
     inaccuracy: { stand: 4.5, move: 5, sneak: 2.5, aim: 0.15 },
-    reload: { kind: "magazine", tactical: 2.0, empty: 2.6 }, draw: 0.35, aim: 0.22,
+    reload: { kind: "magazine", tactical: 2.0, empty: 2.6 }, draw: 0.35, aim: 0.22, bolt: "closed_bolt",
   },
   [M870]: {
     id: M870, key: "m870", taczKey: "m870", name: "M870", type: "shotgun", ammo: AMMO_12G, magazine: 5, rpm: 180, modes: ["semi"],
@@ -50,6 +51,7 @@ export const GUNS = {
 
 // The `damage` field of a gun stack counts rounds fired from a full magazine, so it saves with the stack like durability does
 // without the item being damageable (no `durability`: no wear, repair or Unbreaking). `damageRange` lets PlayerInventory.read keep it.
+// The one round above magazine capacity lives in modTag.extraRound (ammo.js); old saves keep their existing round counts.
 // An inventory-fed gun (the minigun) has no magazine: its rounds are the matching ammo carried (`count(id)`), or endless in creative.
 // The pack's attachments by item id (fit.js; filled by install.js).
 export const ATTACHMENTS = {};
@@ -69,7 +71,7 @@ export function gunOf(stack) {
 export const roundsLeft = (stack, count = null, creative = false) => {
   const gun = gunOf(stack);
   if (gun?.feed === "inventory") return creative ? Infinity : count ? count(gun.ammo) : 0;
-  return Math.max(0, (gun?.magazine ?? 0) - (stack?.damage | 0));
+  return loadedRounds(gun, stack);
 };
 export const isGun = (id) => GUNS[id] !== undefined;
 export const isAmmo = (id) => AMMO[id] !== undefined;

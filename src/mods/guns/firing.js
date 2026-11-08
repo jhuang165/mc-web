@@ -2,6 +2,7 @@
 // held stack, inventory access and world/mob tracing through `ctx`, so tests drive it headless. Times are seconds; the game
 // calls tick() once per 20 Hz game tick.
 import { GUNS, gunOf, roundsLeft } from "./catalog.js";
+import { reloadCapacity, setLoadedRounds } from "./ammo.js";
 
 export const TICK = 0.05;
 export const RANGE = 128; // blocks; TaCZ bullets fly speed * life (150-250 blocks) but only loaded chunks matter here
@@ -87,10 +88,11 @@ export class GunController {
     const stack = ctx.held, gun = gunOf(stack);
     if (!gun || gun.feed === "inventory" || this.reload || this.draw > 0) return false; // the minigun feeds from the inventory
     const left = roundsLeft(stack);
-    if (left >= gun.magazine || (!ctx.creative && ctx.count(gun.ammo) <= 0)) return false;
+    const capacity = reloadCapacity(gun, stack);
+    if (left >= capacity || (!ctx.creative && ctx.count(gun.ammo) <= 0)) return false;
     this.reload = gun.reload.kind === "shell"
-      ? { kind: "shell", time: gun.reload.start, loading: true }
-      : { kind: "magazine", time: left > 0 ? gun.reload.tactical : gun.reload.empty };
+      ? { kind: "shell", time: gun.reload.start, loading: true, capacity }
+      : { kind: "magazine", time: left > 0 ? gun.reload.tactical : gun.reload.empty, capacity };
     return true;
   }
   // One game tick. ctx: { held, slot, creative, count(id), take(id, n) }. Returns events (draw, shot, empty, shell, reloaded).
@@ -117,7 +119,7 @@ export class GunController {
       this.spent = true; this.cooldown = 0; this.burstLeft = 0; events.push({ type: "empty", gun }); return events;
     }
     this.reload = null;
-    if (!inventoryFed) stack.damage = (stack.damage | 0) + 1;
+    if (!inventoryFed) setLoadedRounds(gun, stack, roundsLeft(stack) - 1);
     else if (!ctx.creative) ctx.take(gun.ammo, 1);
     // Only a cooldown that ran out during this tick carries over; an idle gun (a full tick past zero) starts fresh.
     const carry = this.cooldown > 1e-6 - TICK ? this.cooldown : 0, mode = this.mode(gun.id);
@@ -142,17 +144,17 @@ export class GunController {
     const r = this.reload;
     r.time = countDown(r.time);
     if (r.time > 0) return;
-    const missing = gun.magazine - roundsLeft(stack);
+    const left = roundsLeft(stack), missing = Math.max(0, r.capacity - left);
     if (r.kind === "magazine") {
       const n = ctx.creative ? missing : Math.min(missing, ctx.count(gun.ammo));
-      if (n > 0 && (ctx.creative || ctx.take(gun.ammo, n))) stack.damage = (stack.damage | 0) - n;
+      if (n > 0 && (ctx.creative || ctx.take(gun.ammo, n))) setLoadedRounds(gun, stack, left + n);
       this.reload = null;
       events.push({ type: "reloaded", gun, rounds: n });
       return;
     }
     // Shell reload: one shell per perShell seconds until full or out of shells.
     if (missing <= 0 || (!ctx.creative && ctx.count(gun.ammo) <= 0)) { this.reload = null; events.push({ type: "reloaded", gun }); return; }
-    if (ctx.creative || ctx.take(gun.ammo, 1)) stack.damage = (stack.damage | 0) - 1;
+    if (ctx.creative || ctx.take(gun.ammo, 1)) setLoadedRounds(gun, stack, left + 1);
     events.push({ type: "shell", gun });
     if (missing - 1 <= 0) { this.reload = null; events.push({ type: "reloaded", gun }); }
     else r.time += gun.reload.perShell;
