@@ -130,6 +130,22 @@ export class HeadlessColumns {
     for (let a = cx - 1; a <= cx + 1; a++) for (let b = cz - 1; b <= cz + 1; b++) if (!this.resident(a * 16, b * 16) && !this.cols.has(ringKey(a, b))) return false;
     return true;
   }
+  // A resident cell changed (World.put). Light reaches 14 cells, so only held columns in the eight chunks around the edit can be affected: their bulk
+  // light and the cells cached by the search go. Edits not beside a held column (the window interior) cost the nine lookups only.
+  edited(x, z) {
+    if (!this.lstate.size && !this.light.cache.size) return;
+    const cx = x >> 4, cz = z >> 4;
+    let hit = false;
+    for (let a = cx - 1; a <= cx + 1; a++) for (let b = cz - 1; b <= cz + 1; b++) {
+      if (a === cx && b === cz) continue;
+      const st = this.lstate.get(ringKey(a, b));
+      if (!st || this.resident(a * 16, b * 16)) continue;
+      hit = true;
+      if (st.light) st.light = null;
+      st.asked = 0;
+    }
+    if (hit) this.light.clear();
+  }
   // A change in chunk (cx, cz) can alter the light of its own column and the eight around it (light travels 14 cells). Its own height and
   // precipitation maps go too: a replaced column object (arrival, adopt) starts its stamp again, so the stamp check alone would keep them.
   invalidateLight(cx, cz) {
@@ -425,6 +441,7 @@ export class RingLight {
     this.grid = new Int8Array(SEARCH_N);
     this.seen = new Int32Array(SEARCH_N);
     this.gen = 0;
+    this.present = new Uint8Array(9);
     this.buckets = Array.from({ length: R + 1 }, () => []);
     this.hot = HOT;
     this.queries = 0; this.bulk = 0; this.bulkMs = 0;
@@ -469,11 +486,11 @@ export class RingLight {
     this.cache.set(k, r);
     return r;
   }
-  // Lights a whole column when its eight neighbours are present (otherwise rim columns would be lit against air and recomputed as
-  // neighbours arrive) and the per-tick budget allows.
+  // Lights a whole column when the per-tick budget allows. Neighbouring chunks that are not held are unloaded (barriers, ring-light.js);
+  // the light is dropped when one arrives (store -> invalidateLight).
   light(cx, cz, st) {
     const ring = this.ring;
-    if (ring.lightBudget <= 0 || !ring.complete(cx, cz)) return null;
+    if (ring.lightBudget <= 0) return null;
     ring.lightBudget--;
     const t = performance.now(), L = computeColumnLight(ring, cx, cz, !!ring.world.hasNoSky);
     this.bulk++; this.bulkMs += performance.now() - t;
@@ -496,6 +513,9 @@ export class RingLight {
     if (COST[qb] >= 15) return sky << 4 | block;
     // Reverse Dijkstra over cells reached through receiving cells: acc is the summed cost of the cells after the node on its path.
     const grid = this.grid, seen = this.seen, buckets = this.buckets, gen = ++this.gen;
+    // Chunks around the query that are neither resident nor held are unloaded: no light comes from or passes through them (ring-light.js).
+    const pcx = qx >> 4, pcz = qz >> 4, present = this.present;
+    for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) present[a * 3 + b] = ring.holds((pcx + a - 1) * 16, (pcz + b - 1) * 16) ? 1 : 0;
     const mid = (R * W + R) * W + R;
     grid[mid] = 0; seen[mid] = gen;
     buckets[0].push(0, 0, 0);
@@ -504,7 +524,9 @@ export class RingLight {
       for (let q = 0; q < list.length; q += 3) {
         const dx = list[q], dy = list[q + 1], dz = list[q + 2], i0 = ((dx + R) * W + dy + R) * W + dz + R;
         if (grid[i0] !== acc) continue;
-        const x = qx + dx, y = qy + dy, z = qz + dz, b = ring.get(x, y, z);
+        const x = qx + dx, y = qy + dy, z = qz + dz;
+        if (!present[((x >> 4) - pcx + 1) * 3 + (z >> 4) - pcz + 1]) continue;
+        const b = ring.get(x, y, z);
         if (acc > 0) {
           if (!noSky && 15 - acc > sky && y >= this.heightAt(x, z)) sky = 15 - acc;
           const e = EMISSION[b] - acc;

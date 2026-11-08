@@ -677,6 +677,7 @@ export class World {
     c.blocks[i] = b;
     c.meta[i] = meta;
     if (this.blockTap !== null) this.blockTap(x, y, z, b);
+    if (this.ringSink !== null) this.ringSink.edited(x, z); // ring columns within light reach drop their light (headless-columns.js)
     if (track) this.rememberEdit(x, y, z, b | (meta << 8));
     return true;
   }
