@@ -33,7 +33,7 @@ function replay(rec) {
   let calls, writes, callCount, writeCount;
   const area = new PopulationArea({
     seed: BigInt(rec.seed), chunkX: cx, chunkZ: cz, size: rec.size, terrain: (x, z) => gen.provideChunk(x, z), biomeAt: (x, z) => gen.manager.biomeAt(x, z),
-    manager: gen.manager, flat: info, mapFeatures: rec.mapFeatures,
+    manager: gen.manager, flat: info, mapFeatures: rec.mapFeatures, neighbors: true,
   });
   const w = area.world;
   area.run({
@@ -62,9 +62,6 @@ test('the flat populate reference covers every preset, custom options and map fe
   assert.ok(reference.records.flatMap((r) => r.chunks.flatMap((c) => c.entities)).some((e) => e[0] === 'Villager'));
 });
 
-const NEIGHBOR_WRITES = new Set(['jungle-scatteredFeature0']);
-// Read-only call streams differ where native neighborChanged reads (doors, redstone, tripwire) are not modelled in the live world; writes still match.
-const NEIGHBOR_CALLS = new Set(['jungle-scatteredFeature0', 'tunnelers-stronghold0', 'desertTemple-scatteredFeature0']);
 
 for (const rec of reference.records) {
   test(`native flat area ${rec.label} (${rec.options}, seed ${rec.seed}, map features ${rec.mapFeatures}) replays chunk by chunk`, () => {
@@ -84,17 +81,12 @@ for (const rec of reference.records) {
     }
     steps.forEach((row, i) => {
       const native = rec.steps[i], at = `${rec.label} chunk ${native.chunk}`;
-      // Known limit: the live PopulationArea has no tripwire/redstone neighborChanged, so native jungle temples add a few updater writes.
-      if (!NEIGHBOR_WRITES.has(rec.label)) {
-        assert.equal(row.writeCount, native.writeCount, `ordered writes ${at}`);
-        assert.equal(row.writesSha1, native.writesSha1, `ordered write hash ${at}`);
-      }
+      assert.equal(row.writeCount, native.writeCount, `ordered writes ${at}`);
+      assert.equal(row.writesSha1, native.writesSha1, `ordered write hash ${at}`);
       assert.equal(row.nextLong, native.providerNextLong, `provider Random ${at}`);
-      if (!NEIGHBOR_WRITES.has(rec.label)) assert.equal(row.worldNextLong, native.worldNextLong, `World.rand ${at}`);
-      if (process.env.FLAT_CALLS || !(rec.generators.includes('village') || NEIGHBOR_CALLS.has(rec.label))) {
-        assert.equal(row.callCount, native.callCount, `ordered world calls ${at}`);
-        assert.equal(row.callsSha1, native.callsSha1, `ordered call hash ${at}`);
-      }
+      assert.equal(row.worldNextLong, native.worldNextLong, `World.rand ${at}`);
+      assert.equal(row.callCount, native.callCount, `ordered world calls ${at}`);
+      assert.equal(row.callsSha1, native.callsSha1, `ordered call hash ${at}`);
     });
     const w = area.world, tilesByChunk = new Map(), entitiesByChunk = new Map();
     for (const c of w.chunks.values()) for (const t of c.tiles.values()) {
@@ -110,7 +102,7 @@ for (const rec of reference.records) {
       assert.deepEqual(entitiesByChunk.get(k) ?? [], native.entities, `entities ${at}`);
     }
     assert.deepEqual(w.carts.map((e) => [e.x, e.y, e.z, e.slots.map(stack)]), rec.carts, 'carts');
-    if (!NEIGHBOR_WRITES.has(rec.label)) assert.deepEqual(w.pending, rec.pending, 'pending ticks');
+    assert.deepEqual(w.pending, rec.pending, 'pending ticks');
     assert.deepEqual(w.items.map((d) => [d.x, d.y, d.z, d.item, d.count, d.damage, 10]), rec.drops, 'drops (EntityItem pickup delay 10)');
   });
 }

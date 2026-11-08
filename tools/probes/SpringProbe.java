@@ -16,7 +16,7 @@ public class SpringProbe {
     StringBuilder trace;int lightBase;agy rules=new agy();
     static long ck(int x,int z){return ((long)x<<32)^(z&0xffffffffL);}
     static void put(MessageDigest d,int... a){for(int v:a)for(int s=0;s<32;s+=8)d.update((byte)(v>>s));}
-    void call(int... a){callCount++;put(calls,a);if(trace!=null)trace.append(Arrays.toString(a)).append('\n');}
+    void call(int... a){callCount++;put(calls,a);if(trace!=null){trace.append(Arrays.toString(a));if(System.getProperty("traceStack")!=null){StackTraceElement[] st=new Throwable().getStackTrace();StringBuilder sb=new StringBuilder(" @");for(int i=1;i<Math.min(st.length,7);i++)sb.append(' ').append(st[i].getClassName()).append('.').append(st[i].getMethodName()).append(':').append(st[i].getLineNumber());trace.append(sb);}trace.append('\n');}}
     static void add(StringBuilder s,String v){if(s.length()>0)s.append(',');s.append(v);}
     public boolean c(int x,int z){return chunks.containsKey(ck(x,z));}
     public apx e(int x,int z){apx c=chunks.get(ck(x,z));if(c==null)throw new AssertionError("unloaded chunk "+x+","+z);return c;}

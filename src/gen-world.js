@@ -262,7 +262,9 @@ export class GenWorld {
       // TileEntityDispenser (9 slots) and TileEntityFurnace (3 slots); structures only fill the dispenser.
       const size = id === 23 ? 9 : 3;
       Object.assign(t, { kind: id === 23 ? "dispenser" : "furnace", size, slots: new Array(size).fill(null) });
-      t.setSlot = (i, stack) => { t.slots[i] = stack; };
+      // TileEntityDispenser.setInventorySlotContents ends in markDirty like the chest's (traced natively: aor.e reads the metadata, the first call the block, then
+      // the comparator side reads of func_147453_f); the furnace is never filled during generation.
+      t.setSlot = id === 23 ? (i, stack) => this.setChestSlot(t, i, stack) : (i, stack) => { t.slots[i] = stack; };
     } else if (id === 140) {
       // BlockFlowerPot.createNewTileEntity: the metadata names the plant (native-checked for 7, red mushroom).
       const [item, data] = FLOWER_POT_CONTENTS[meta] ?? [-1, 0];
