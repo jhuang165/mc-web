@@ -19,5 +19,6 @@ public/audio/1.7.10-streams/
 # Original Minecraft language files installed by npm run lang:fetch
 public/lang/1.7.10/
 
-# TaCZ sounds (CC BY-NC-ND 4.0) installed by npm run mods:fetch-tacz; never committed
+# TaCZ default gun pack files (CC BY-NC-ND 4.0) installed by npm run mods:fetch-tacz; never committed
+public/mods/tacz/
 public/audio/mods/tacz/

@@ -151,8 +151,13 @@ import { DISPENSER, DROPPER, PISTON_HEAD, isDispenserPiston, itemForBlock, headB
 import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
 import { HopperContainer, Hoppers, HOPPER } from "./hopper.js";
 import { Survival, ITEMS, burnTime, gameModeOf, setExtraCrafting } from "./survival.js";
-import { setGunsEnabled, gunsWorld, gunsEnabled } from "./mods/guns/install.js";
+import { setGunsEnabled, gunsWorld, gunsEnabled, setGunPack, gunSmithRecipes } from "./mods/guns/install.js";
+import { gunSmithScreen, smithCraft } from "./mods/guns/smith-screen.js";
+import { GUN_SMITH } from "./mods/guns/catalog.js";
+import { loadTaczPack } from "./mods/guns/pack.js";
 import { createGunHooks } from "./mods/guns/hooks.js";
+import { playGunSound, preloadGunSounds } from "./mods/guns/sounds.js";
+import { createAmmoHud } from "./mods/guns/hud.js";
 import { stackName } from "./item-names.js";
 import { containerTitle } from "./container-names.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
@@ -416,7 +421,19 @@ const guns = createGunHooks({
   markUnsaved: () => { saved = false; },
   toast: (text) => toast(text),
   playing: () => screen === "playing",
+  sound: (event, options) => playGunSound(sounds, event, options),
+  preload: (folder) => preloadGunSounds(sounds, folder),
+  fx: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz),
+  blockHit: ([x, y, z], side) => scene.particles.hitBlock(world, x, y, z, side),
+  crosshair: (visible) => { $("#crosshair").style.visibility = visible ? "" : "hidden"; },
+  hud: (state) => gunHud.update(state),
+  // TaCZ grenades and rockets: Explosion with the pack's radius; `destroy_block` false keeps the blocks (isSmoking off).
+  explode: (x, y, z, radius, { destroy }) => explodeAt(x, y, z, radius, { exploder: null, attacker: "player", smoking: !!destroy }),
 });
+const gunHud = createAmmoHud(bitmapHtml);
+// The locally installed TaCZ gun pack (Git-ignored; pack.js), read once, the first time a guns world loads.
+let gunPackLoad = null;
+const gunPackReady = () => (gunPackLoad ??= loadTaczPack().catch(() => null).then((raw) => { setGunPack(raw); return raw; }));
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer,playerTicks=0;
 let weather = new Weather(), trees, plants, falling;
 const bedSleep = new BedSleep(); // EntityPlayer's sleeping state and bed spawn point (bed.js)
@@ -1223,6 +1240,7 @@ async function openWorld(record) {
 }
 async function launch(record, prepared, { slice = false } = {}) {
   try {
+    if (gunsWorld(record) && !multiplayer) await gunPackReady(); // before its items register (setGunsEnabled below)
     active = record;
     world = prepared;
     portalTimer.reset();
@@ -1473,6 +1491,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     wasInWater = false;
     // Opt-in guns mod (not 1.7.10): register or remove its items before the saved inventory is read; multiplayer stays vanilla.
     setGunsEnabled(gunsWorld(record) && !multiplayer, { items: ITEMS, combatTab: CREATIVE_TABS[8].items, search: SEARCH_ORDER, setCrafting: setExtraCrafting });
+    guns.reset(); // no aim, recoil or queued gun sounds carried over from the last world
     survival = new Survival(legacyPlayer(record), record.mode || "creative");
     statsLive.bind(survival);
     // Achievements belong to the world (a portal trip keeps them in memory); the hint waits for "Taking Inventory".
@@ -1902,6 +1921,25 @@ function openCommandBlock(x, y, z, cartTile = null) {
     command: tile.command, lastOutput: tile.trackOutput ? tile.lastOutput : null,
     done: (command) => { tile.command = command; saved = false; resume(); },
     cancel: resume,
+  }));
+}
+// Guns mod (not 1.7.10): using a held gun smith table opens its recipe screen; crafted stacks that do not fit are thrown.
+function openGunSmith() {
+  screen = "inventory"; mining = null; mineHeld = false;
+  document.exitPointerLock?.();
+  gui.show(gunSmithScreen({
+    recipes: gunSmithRecipes(), slots: () => survival.inventory.main, icon,
+    name: (id) => ITEMS[id]?.name ?? String(id),
+    craft: (recipe) => {
+      const out = smithCraft(survival.inventory.main, recipe);
+      if (!out) return false;
+      const stored = survival.add(out.id, out.count, out.damage);
+      if (stored < out.count) throwStacks([{ ...out, count: out.count - stored }]);
+      saved = false;
+      renderHotbar();
+      return true;
+    },
+    close: resume, show: (self) => gui.show(self),
   }));
 }
 function openContainer(container, kind, key = null, gui = new ContainerScreen(container)) {
@@ -3192,7 +3230,7 @@ function movementTick(controls) {
   if (gunsEnabled()) guns.tick();
   if (survival.health <= 0) die();
   // EntityRenderer.updateFovModifierHand: once a tick, toward getFOVMultiplier (flight, sprint, bow).
-  easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: survival.effects?.moveSpeedMultiplier?.() ?? 1, bow: eating?.bow ? bowFov(eating.ticks) : 1 }));
+  easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: survival.effects?.moveSpeedMultiplier?.() ?? 1, bow: eating?.bow ? bowFov(eating.ticks) : gunsEnabled() ? guns.fov() : 1 }));
   tickMining();
   reportBrokenTool();
 }
@@ -3366,7 +3404,7 @@ function bindingPressed(d, ctrl) {
   else if (d === "key.chat") openChat("");
   else if (d === "key.command") openChat("/");
   else if (d === "key.attack") { if (gunsEnabled() && guns.attack(true)) return; mineHeld = true; edit(false); }
-  else if (d === "key.use") edit(true);
+  else if (d === "key.use") { if (gunsEnabled() && survival.inventory.held?.id === GUN_SMITH) openGunSmith(); else if (!(gunsEnabled() && guns.aimHold(true))) edit(true); } // guns mod: use aims down sights
   else if (d === "key.pickItem") pickBlock();
   else if (d === "key.playerlist") showPlayerList();
   else if (HOTBAR.includes(d)) selectSlot(HOTBAR.indexOf(d));
@@ -3375,7 +3413,7 @@ function bindingPressed(d, ctrl) {
 function bindingReleased(d) {
   if (d === "key.playerlist") playerList.hide();
   else if (d === "key.attack") { if (gunsEnabled()) guns.attack(false); mineHeld = false; if (mining && !mining.auto) mining = null; }
-  else if (d === "key.use") releaseBowUse();
+  else if (d === "key.use") { if (gunsEnabled()) guns.aimHold(false); releaseBowUse(); }
 }
 // Minecraft.runTick keyboard loop, run on every screen (no currentScreen test): Keyboard.isKeyDown for the F3 combinations and the F3+C crash timer.
 // bytecode-read: F1 hideGUI and F3 (showDebugInfo, Shift = profiler chart) toggle on their press; with F3 down, B toggles RenderManager.debugBoundingBox,
@@ -3513,7 +3551,7 @@ document.querySelectorAll("[data-key]").forEach((b) => {
   b.onpointerup = b.onpointercancel = () => { keys.delete(b.dataset.key); binds.touch.delete(d); };
 });
 $("#touch-break").onclick = () => { if (!(gunsEnabled() && guns.tap())) edit(false); };
-$("#touch-place").onclick = () => edit(true);
+$("#touch-place").onclick = () => { if (gunsEnabled() && survival.inventory.held?.id === GUN_SMITH) openGunSmith(); else if (!(gunsEnabled() && guns.aimToggle())) edit(true); };
 $("#touch-inventory").onclick = () => inventory();
 $("#touch-fly").onclick = () => {
   if (survival.creative) {
@@ -3529,7 +3567,7 @@ function setupPointer() {
     // Mouse buttons reach their KeyBinding through the hash as -100 + button (Mouse.getEventButton).
     const d = binds.set(mouseCode(e.button), true);
     if (d === "key.use") {
-      edit(true);
+      if (gunsEnabled() && survival.inventory.held?.id === GUN_SMITH) openGunSmith(); else if (!(gunsEnabled() && guns.aimHold(true))) edit(true); // guns mod: use aims down sights
       return;
     }
     if (d === "key.pickItem") {
@@ -3716,6 +3754,7 @@ function animate(now) {
     if (screen === "playing") {
       const [turnYaw, turnPitch] = mouseLook.frame(mouseDelta.x, -mouseDelta.y, t, { sensitivity: options.sensitivity, invertMouse: options.invertMouse, smoothCamera });
       ({ yaw, pitch } = setAngles({ yaw, pitch }, turnYaw, turnPitch));
+      if (gunsEnabled()) { const [kick, turn] = guns.frame(); pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch + kick)); yaw += turn; } // guns mod recoil
     }
     mouseDelta.x = mouseDelta.y = 0;
     scene.camera.position.lerpVectors(previous, position, t);
@@ -3907,6 +3946,7 @@ function animate(now) {
       color: survival.held?.color,
       map: survival.held?.id === ITEM_FILLED_MAP ? { data: mapStore.get(survival.held.damage | 0) } : null, // ItemRenderer's map branch
       pitchDeg: -pitch / (Math.PI / 180),
+      gun: gunsEnabled() ? guns.view() : null,
     });
   // ItemRenderer.renderOverlays (fire-fx.js, screen-overlays.js): fire, the inside-of-block darkening and the water tint, over the hand.
   if (screenOverlays && screen !== "home" && ["playing", "inventory", "paused"].includes(screen)) {
@@ -4003,7 +4043,7 @@ async function boot(){try {
   setupPointer();
   // Development-only handle for browser checks; Vite strips it from builds.
   if (import.meta.env.DEV)
-    window.__mc = { scene, dims, travel: (d) => dims.travel(d), get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get boats() { return boats; }, get hanging() { return hanging; }, get aimedHanging() { return aimedHanging; }, fishing, get target() { return target; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt, useBed, get bedSleep() { return bedSleep; }, get playerRenderer() { return playerRenderer; } };
+    window.__mc = { scene, dims, travel: (d) => dims.travel(d), get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get boats() { return boats; }, get hanging() { return hanging; }, get aimedHanging() { return aimedHanging; }, fishing, get target() { return target; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt, useBed, get bedSleep() { return bedSleep; }, get playerRenderer() { return playerRenderer; }, get firstPerson() { return firstPerson; } };
   if (import.meta.env.DEV) Object.defineProperty(window.__mc, 'multiplayer', { get: () => multiplayer });
   scene.preview(0);
   // The title screen's splash texts (assets/minecraft/texts/splashes.txt).

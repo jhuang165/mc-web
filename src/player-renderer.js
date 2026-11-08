@@ -18,6 +18,8 @@ import { LEATHER_ARMOR, LEATHER_COLOR, leatherColorComponents, leatherItemLayers
 import { glintMesh } from "./first-person.js";
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
 import { arrowGeometry } from "./arrow-renderer.js";
+import { GUN_MODELS, buildGunMesh, gunHeldMatrix, gunArmPose } from "./mods/guns/model.js";
+import { gunAssets, packHeldModel } from "./mods/guns/pack-view.js";
 import { stuckArrowPlacements } from "./stuck-arrows.js";
 export { LEATHER_COLOR } from "./leather-dye.js";
 
@@ -483,6 +485,9 @@ export class PlayerRenderer {
     this.armorNodes.push(group);
   }
   syncHeld(id, damage = 0, color = undefined, glint = false) {
+    const gun = ITEMS[id]?.gun; // guns mod: one model whatever rounds are left (the stack damage)
+    const packAssets = gun?.pack ? gunAssets(gun) : null; // the pack's LOD model once loaded (pack-view.js), else the box model
+    if (gun) damage = packAssets ? 1 : 0;
     const leather = leatherItemLayers(id, color),
       cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + damage + ":" + (leather?.color ?? 0) + ":" + (glint ? 1 : 0) + ":" + cast + ":" + (id ? itemFrameTag(itemTexture(id, damage, cast)) : 0); // animated icon frame (item-animation.js): rebuilt only when it changes
     if (key === this.heldKey) return;
@@ -496,6 +501,20 @@ export class PlayerRenderer {
       this.held = this.heldMaterial = this.heldOverlayMaterial = this.heldGeometry = null;
     }
     if (!id || !ITEMS[id]) return;
+    if (gun) {
+      const group = new THREE.Group();
+      group.matrixAutoUpdate = false;
+      if (packAssets) {
+        group.matrix.copy(gunHeldMatrix(1));
+        group.add(packHeldModel(gun, packAssets, (o) => this.material(o), pixelTexture));
+      } else if (GUN_MODELS[gun.id]) {
+        group.matrix.copy(gunHeldMatrix());
+        group.add(buildGunMesh(gun.id, (o) => this.material(o)));
+      } else return;
+      this.pivots.rightArm.add(group);
+      this.held = group;
+      return;
+    }
     const kind = heldKind(id, damage), url = itemTexture(id, damage, id === FISHING_ROD && rodState.cast ? 1 : 0);
     let mesh;
     const chestUrl = !url && chestItemTexture(id);
@@ -594,6 +613,10 @@ export class PlayerRenderer {
       limbSwing: pose.limbSwing, limbSwingAmount: pose.limbSwingAmount, age: pose.age,
       headYaw: pose.headYaw, headPitch: pose.headPitch, swing, sneak: sneak && !sleeping, riding: riding && !sleeping, heldRight: held ? 1 : 0,
     });
+    if (ITEMS[held]?.gun && !sleeping && !riding) { // guns mod: both arms up along the look direction
+      const arms = gunArmPose(parts.head.rot);
+      parts.rightArm.rot = arms.rightArm; parts.leftArm.rot = arms.leftArm;
+    }
     for (const name of PART_NAMES) {
       const { point, rot } = parts[name], pivot = this.pivots[name];
       // RendererLivingEntity.renderModel draws no body for an invisible entity (Entity.isInvisibleToPlayer, no teams); armour and the held item still draw.

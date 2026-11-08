@@ -121,6 +121,25 @@ const SPRITES = {
     "................",
     "................",
   ],
+  // The gun smith table: a workbench with a pistol and tools on its top.
+  gun_smith_table: [
+    "................",
+    "................",
+    "....kkkkk.......",
+    "...kmmmmmk..kk..",
+    "..kkkkkkgk.kssk.",
+    "kkkkkkkkkkkkkkkk",
+    "khhhhhhhhhhhhhhk",
+    "kwwwwwwwwwwwwwwk",
+    "kdkkkkkkkkkkkkdk",
+    "kdkllllkkllllkdk",
+    "kdkmmmmkkmmmmkdk",
+    "kdkkkkkkkkkkkkdk",
+    "kdk..........kdk",
+    "kdk..........kdk",
+    "kkk..........kkk",
+    "................",
+  ],
 };
 
 const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });

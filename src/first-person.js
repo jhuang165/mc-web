@@ -20,6 +20,8 @@ import { onResourcesRefreshed } from "./resource-refresh.js";
 import { versioned } from "./media-version.js";
 import { animatedItemUrl, itemFrameTag, onItemFramesReady } from "./item-animation.js";
 import { chestItemTexture, chestItemModel } from "./chest-renderer.js";
+import { GUN_MODELS, buildGunMesh, gunViewPose, gunViewMatrix, applyGunParts } from "./mods/guns/model.js";
+import { gunAssets, PackGunView } from "./mods/guns/pack-view.js";
 const loader = new THREE.TextureLoader(),
   cache = new Map();
 const BLOCK_FACES=[
@@ -235,11 +237,17 @@ export class FirstPerson {
   }
   // `meta` is the wool colour (the stack's damage) of a held block.
   select(id, meta = 0, use = 0, glint = false, color = undefined) {
+    const gun = ITEMS[id]?.gun; // guns mod: one model whatever rounds are left (the stack damage)
+    // A TaCZ pack gun's own model once its files are in (pack-view.js); until then (or for a hand-made gun without the
+    // pack) the box model of model.js, or nothing for a pack-only gun.
+    const packAssets = gun?.pack ? gunAssets(gun) : null;
+    if (gun) { meta = 0; use = packAssets ? 1 : 0; }
     const leather = leatherItemLayers(id, color),
       cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + meta + ":" + use + ":" + (glint ? 1 : 0) + ":" + (leather?.color ?? 0) + ":" + cast + ":" + (id === ITEM_CLOCK ? clockFrame() : 0) + ":" + (id ? itemFrameTag(itemTexture(id, meta, cast ? 1 : use)) : 0);
     if (key === this.last) return;
     this.last = key;
     if (this.item) {
+      this.item.userData.view?.dispose();
       this.pivot.remove(this.item);
       const owned = new Set();
       this.item.traverse((node) => { node.geometry?.dispose(); if (node.material) for (const material of Array.isArray(node.material) ? node.material : [node.material]) owned.add(material); });
@@ -250,6 +258,14 @@ export class FirstPerson {
     const data = ITEMS[id];
     this.arm.visible = !id;
     if (!id || !data) return;
+    if (gun) {
+      this.sprite = false;
+      if (packAssets) this.item = new PackGunView(gun, packAssets, { material: (o) => this.material(o), texture: pixelTexture, arm: (left) => this.packArm(left) }).root;
+      else if (!GUN_MODELS[gun.id]) return;
+      else this.item = buildGunMesh(gun.id, (o) => this.material(o));
+      this.pivot.add(this.item);
+      return;
+    }
     let mesh;
     const url = itemTexture(id, meta, cast ? 1 : use), chestUrl = !url && chestItemTexture(id);
     if (chestUrl) {
@@ -297,6 +313,10 @@ export class FirstPerson {
     this.pivot.add(mesh);
     this.item = mesh;
   }
+  // The player's arm for a pack gun's hands (pack-view.js): the upright 1.7.10 arm box, hand down, the left one mirrored.
+  packArm(left) {
+    return new THREE.Mesh(skinBox(4, 12, 4, 40, 16, 64, 32, left), this.material({ map: pixelTexture('/media/1.7.10/entity/steve.png') }, true));
+  }
   material(options) {
     const m = entityMaterial(this.lighting, { ...options, fog: false, lights: this.lights });
     if (options.depthWrite !== undefined) m.depthWrite = options.depthWrite;
@@ -321,18 +341,29 @@ export class FirstPerson {
     this.mapSurface.update(data);
     return m.base;
   }
-  render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0, bow = null, glint = false, color = undefined, map = null, pitchDeg = 0 } = {}) {
+  render(pose, { visible = true, light = 15 << 20, view = null, eating = null, time = 0, bow = null, glint = false, color = undefined, map = null, pitchDeg = 0, gun = null } = {}) {
     if (!visible) return;
     // `bow` is { stage, draw } while the bow is drawn (bow.js bowStage and the draw term).
     this.select(pose.item, pose.meta, bow ? bow.stage : 0, glint, color);
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
     const mapMode = !!map?.data && pose.item === ITEM_FILLED_MAP;
+    // `gun` is the guns mod's view state (hooks.js view()) while a gun is held: its own hold and animation.
+    const gunMesh = gun && this.item?.userData?.gunId === gun.gunId ? this.item : null;
+    const packView = gunMesh?.userData.view;
+    this.camera.fov = packView ? packView.fov(gun.aim) : 70;
+    this.camera.updateProjectionMatrix();
+    if (packView) this.pivot.matrix.copy(packView.update(gun, pose.bob, pose.sway));
+    else if (gunMesh) {
+      const gp = gunViewPose(gun.gunId, gun);
+      applyGunParts(gunMesh, gp, gun.sinceShot);
+      this.pivot.matrix.copy(gunViewMatrix(gun.gunId, gp, pose.bob, pose.sway));
+    } else
     this.pivot.matrix.copy(mapMode ? this.mapPose(pose, pitchDeg, map.data) : firstPersonMatrix(pose,{sprite:this.sprite,eatingTicks:eating,bowDraw:bow ? bow.draw : null}));
     if (this.mapRoot) this.mapRoot.visible = mapMode;
     if (this.item) this.item.visible = !mapMode;
     // Keep the native pose visible when the browser panel is narrower than a game window.
-    if(this.camera.aspect<1.3)this.pivot.matrix.premultiply(new THREE.Matrix4().makeTranslation((pose.item ? .56 : .64)*(this.camera.aspect/1.3-1),0,0));
+    if(this.camera.aspect<1.3)this.pivot.matrix.premultiply(new THREE.Matrix4().makeTranslation((pose.item ? .56 : .64)*(this.camera.aspect/1.3-1)*(gunMesh ? 1 - gun.aim : 1),0,0));
     if (view) this.lights.forEach((l, i) => l.copy(ITEM_LIGHTS[i]).transformDirection(view.matrixWorldInverse));
     for (const m of this.materials) m.setLight(light);
     const clear = this.renderer.autoClear;

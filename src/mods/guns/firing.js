@@ -14,8 +14,11 @@ export function damageAt(gun, distance) {
   for (const [reach, damage] of gun.damage) if (distance <= reach) return damage;
   return gun.damage[gun.damage.length - 1][1];
 }
-export const inaccuracyOf = (gun, { aiming = false, sneaking = false, moving = false } = {}) =>
-  aiming ? gun.inaccuracy.aim : sneaking ? gun.inaccuracy.sneak : moving ? gun.inaccuracy.move : gun.inaccuracy.stand;
+// `aiming` is the aim progress (0 hip, 1 fully aimed; true counts as 1): the spread narrows toward the aimed value with it.
+export function inaccuracyOf(gun, { aiming = 0, sneaking = false, moving = false } = {}) {
+  const i = gun.inaccuracy, hip = sneaking ? i.sneak : moving ? i.move : i.stand, a = aiming === true ? 1 : Math.max(0, Math.min(1, +aiming || 0));
+  return a >= 1 ? i.aim : a <= 0 ? hip : hip + (i.aim - hip) * a;
+}
 
 // A direction inside a cone of `degrees` half-angle around `dir` (unit vector), uniform over the cone's disc.
 export function spreadDirection(dir, degrees, random = Math.random) {
@@ -62,10 +65,10 @@ const countDown = (t) => (t - TICK > 1e-6 ? t - TICK : 0);
 export class GunController {
   constructor() {
     this.heldKey = null; this.draw = 0; this.cooldown = 0; this.trigger = false; this.spent = false;
-    this.reload = null; this.modes = {};
+    this.reload = null; this.modes = {}; this.burstLeft = 0;
   }
   mode(id) { const gun = GUNS[id]; return gun ? (this.modes[id] ?? gun.modes[0]) : null; }
-  // G: cycle auto/semi on guns that have both; returns the new mode or null.
+  // G: cycle the gun's fire modes (auto, semi, burst, in the pack's order); returns the new mode or null.
   toggleMode(stack) {
     const gun = GUNS[stack?.id];
     if (!gun || gun.modes.length < 2) return null;
@@ -77,11 +80,11 @@ export class GunController {
     this.trigger = true; this.spent = false;
     if (this.reload?.kind === "shell" && this.reload.loading) this.reload = null; // a shotgun's shell-by-shell reload stops on the trigger
   }
-  release() { this.trigger = false; this.spent = false; }
+  release() { this.trigger = false; this.spent = false; } // a burst under way still finishes (tick)
   // R: start a reload when the magazine is not full and there is ammo (or the player is in creative).
   startReload(ctx) {
     const stack = ctx.held, gun = GUNS[stack?.id];
-    if (!gun || this.reload || this.draw > 0) return false;
+    if (!gun || gun.feed === "inventory" || this.reload || this.draw > 0) return false; // the minigun feeds from the inventory
     const left = roundsLeft(stack);
     if (left >= gun.magazine || (!ctx.creative && ctx.count(gun.ammo) <= 0)) return false;
     this.reload = gun.reload.kind === "shell"
@@ -94,7 +97,7 @@ export class GunController {
     const stack = ctx.held, gun = GUNS[stack?.id], events = [];
     const key = gun ? `${ctx.slot}:${gun.id}` : null;
     if (key !== this.heldKey) { // drawing a gun (or another one): TaCZ draw_time before it can fire
-      this.heldKey = key; this.reload = null; this.cooldown = 0; this.spent = this.trigger;
+      this.heldKey = key; this.reload = null; this.cooldown = 0; this.spent = this.trigger; this.burstLeft = 0;
       this.draw = gun ? gun.draw : 0;
       if (gun) events.push({ type: "draw", gun });
     }
@@ -103,17 +106,33 @@ export class GunController {
     // The cooldown keeps the fraction of a tick past zero, so 450 rpm averages 2.67 ticks a shot instead of rounding to 3.
     this.cooldown -= TICK;
     if (this.reload) this.tickReload(ctx, gun, stack, events);
-    const ready = this.cooldown <= 1e-6;
-    if (this.reload?.kind === "magazine" || !this.trigger || this.spent || !ready) {
+    const ready = this.cooldown <= 1e-6, bursting = this.burstLeft > 0;
+    if (this.reload?.kind === "magazine" || (!bursting && (!this.trigger || this.spent)) || !ready) {
       if (this.cooldown < 0) this.cooldown = 0;
       return events;
     }
-    if (roundsLeft(stack) <= 0) { this.spent = true; this.cooldown = 0; events.push({ type: "empty", gun }); return events; }
+    const inventoryFed = gun.feed === "inventory";
+    if (roundsLeft(stack, ctx.count, ctx.creative) <= 0) {
+      this.spent = true; this.cooldown = 0; this.burstLeft = 0; events.push({ type: "empty", gun }); return events;
+    }
     this.reload = null;
-    stack.damage = (stack.damage | 0) + 1;
+    if (!inventoryFed) stack.damage = (stack.damage | 0) + 1;
+    else if (!ctx.creative) ctx.take(gun.ammo, 1);
     // Only a cooldown that ran out during this tick carries over; an idle gun (a full tick past zero) starts fresh.
-    this.cooldown = (this.cooldown > 1e-6 - TICK ? this.cooldown : 0) + 60 / gun.rpm;
-    if (this.mode(gun.id) !== "auto") this.spent = true;
+    const carry = this.cooldown > 1e-6 - TICK ? this.cooldown : 0, mode = this.mode(gun.id);
+    if (mode === "burst" && gun.burst) {
+      // TaCZ burst_data: `count` rounds at `bpm`, then at least `min_interval` seconds before the next burst; a continuous
+      // burst gun keeps bursting while the trigger is held.
+      if (!bursting) this.burstLeft = gun.burst.count;
+      this.burstLeft--;
+      const between = 60 / gun.burst.bpm;
+      this.cooldown = carry + (this.burstLeft > 0 ? between : Math.max(between, gun.burst.minInterval));
+      if (this.burstLeft === 0 && !gun.burst.continuous) this.spent = true;
+    } else {
+      this.burstLeft = 0;
+      this.cooldown = carry + 60 / gun.rpm;
+      if (mode !== "auto") this.spent = true;
+    }
     events.push({ type: "shot", gun });
     return events;
   }
