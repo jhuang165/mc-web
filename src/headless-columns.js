@@ -345,6 +345,7 @@ export class HeadlessColumns {
   // Units the worker should build next, nearest first: population cells [cellX, cellZ] for generation 13 and later, otherwise
   // chunks. Units already cached on the page are excluded (update() pulls those without a worker).
   units() {
+    if (!Number.isFinite(this.cx) || !Number.isFinite(this.cz)) return []; // not centred yet (update() has not run)
     if (this.dirty) this.rebuildQueue();
     if (this.generate) return [];
     const out = new Map(), cache = this.cells ? this.world.population.cells.map : null;
@@ -473,7 +474,7 @@ RingLight.prototype.level = LightVolume.prototype.level;
 export function createRing(world, { worker = false } = {}) {
   if (!world.streaming || !world.generateTerrainChunk) return null;
   const populated = !!world.population && world.generationVersion >= 13 && !world.dimension;
-  if (populated || (worker && !world.dimension)) return new HeadlessColumns(world);
+  if (populated || worker) return new HeadlessColumns(world);
   const source = (cx, cz) => {
     const k = `${cx},${cz}`;
     return world.pregenerated?.get(k) ?? world.baseColumns?.get(k) ?? world.generateTerrainChunk(cx, cz);

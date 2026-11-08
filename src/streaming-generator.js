@@ -11,6 +11,7 @@ import { streamedSource } from './java-world.js';
 import { populationBlockMapperReady } from './population-world.js';
 import { CELL } from './streaming-population.js';
 import { compactColumn } from './headless-columns.js';
+import { DimensionWorld } from './dimension-world.js';
 
 // Chunks of lead beyond the resident square on every side.
 export const PREFETCH_MARGIN = 2;
@@ -19,8 +20,9 @@ const CELL_CACHE = 9;
 const key = (x, z) => `${x},${z}`;
 
 // Worker side: builds the requested cell or column and lists the buffers to transfer.
-export async function createStreamWorker({ seed, generationVersion, originX, originZ, worldType, generatorOptions }) {
+export async function createStreamWorker({ seed, generationVersion, originX, originZ, worldType, generatorOptions, dimension, dimensionSeed }) {
   await populationBlockMapperReady;
+  if (dimension) return createDimensionWorker(dimensionSeed, dimension);
   const source = streamedSource({ seed: BigInt(seed), generationVersion, originX, originZ, worldType, generatorOptions });
   return (request) => {
     if (request.type === 'cell') {
@@ -42,9 +44,28 @@ export async function createStreamWorker({ seed, generationVersion, originX, ori
   };
 }
 
+// Worker side of a Nether/End world (batch 28): the same stateless column builders DimensionWorld runs on the page (netherChunk /
+// endChunk), so a column from here equals the page's. The Nether's chest/spawner records of the column ride along with it.
+function createDimensionWorker(seed, dimension) {
+  const dw = new DimensionWorld(seed, dimension), build = (cx, cz) => {
+    const c = dimension === -1 ? dw.netherChunk(cx, cz) : dw.endChunk(cx, cz), k = `${cx},${cz}`;
+    const records = dw.population?.records.get(k) ?? null;
+    dw.population?.records.delete(k);
+    return { c, records };
+  };
+  return (request) => {
+    if (request.type === 'ring') {
+      const { c } = build(request.x, request.z), col = compactColumn(c.blocks, c.metadata);
+      return { message: { type: 'ring', x: request.x, z: request.z, cell: false, columns: [[request.x, request.z, col]] }, transfer: [col.blocks.buffer, col.meta.buffer] };
+    }
+    const { c, records } = build(request.x, request.z);
+    return { message: { type: 'column', x: request.x, z: request.z, column: { blocks: c.blocks, metadata: c.metadata }, records }, transfer: [c.blocks.buffer, c.metadata.buffer] };
+  };
+}
+
 // Page side. `port` is a Worker (or anything with postMessage and onmessage/onerror slots).
 export class StreamPrefetch {
-  constructor(world, port, { margin = PREFETCH_MARGIN, inFlight = 1 } = {}) {
+  constructor(world, port, { margin = PREFETCH_MARGIN, inFlight = 1, ringPorts = [] } = {}) {
     this.world = world; this.port = port; this.margin = margin; this.inFlight = inFlight;
     this.cells = world.generationVersion >= 13 && !!world.population;
     this.pending = new Set();
@@ -54,7 +75,17 @@ export class StreamPrefetch {
     if (this.cells) world.population.cells.max = Math.max(world.population.cells.max, CELL_CACHE);
     port.onmessage = ({ data }) => this.receive(data);
     port.onerror = (event) => this.fail(event?.message ?? 'worker error');
-    port.postMessage({ type: 'init', seed: String(world.javaSeed), generationVersion: world.generationVersion, originX: world.originX, originZ: world.originZ, worldType: world.worldType, generatorOptions: world.generatorOptions });
+    // Extra workers that only build headless ring columns (batch 28: a Nether/End column is generated from scratch, about 40-60 ms of
+    // worker CPU, and one worker serving both the window and the ring filled the 441-column ring in about 28 s).
+    this.mainRing = null;
+    this.ringPorts = ringPorts.map((p) => ({ port: p, busy: null }));
+    const init = () => ({ type: 'init', seed: String(world.javaSeed), generationVersion: world.generationVersion, originX: world.originX, originZ: world.originZ, worldType: world.worldType, generatorOptions: world.generatorOptions, dimension: world.dimension || 0, dimensionSeed: world.dimension ? world.seed : undefined });
+    port.postMessage(init());
+    for (const r of this.ringPorts) {
+      r.port.onmessage = ({ data }) => { r.busy = null; this.receive(data); };
+      r.port.onerror = (event) => this.fail(event?.message ?? 'worker error');
+      r.port.postMessage(init());
+    }
   }
   fail(reason) {
     if (this.failed) return;
@@ -79,6 +110,8 @@ export class StreamPrefetch {
       return (ax - px) ** 2 + (az - pz) ** 2 - ((bx - px) ** 2 + (bz - pz) ** 2);
     });
   }
+  // Requests in flight on the main worker (window columns, cells and its own ring request; ring-worker requests do not count).
+  windowPending() { let n = 0; for (const k of this.pending) if (k[0] !== 'r' || k === this.mainRing) n++; return n; }
   has([x, z]) { return this.cells ? this.world.population.hasCell(x, z) : this.world.pregenerated.has(key(x, z)); }
   // Called once per tick with the player's position: requests missing units and trims the column cache.
   update(x, z) {
@@ -89,34 +122,47 @@ export class StreamPrefetch {
       for (const k of this.world.pregenerated.keys()) if (!keep.has(k)) this.world.pregenerated.delete(k);
     }
     for (const u of wanted) {
-      if (this.pending.size >= this.inFlight) break;
+      if (this.windowPending() >= this.inFlight) break;
       const k = key(...u);
       if (this.pending.has(k) || this.has(u)) continue;
       this.pending.add(k);
       this.port.postMessage({ type: this.cells ? 'cell' : 'column', x: u[0], z: u[1] });
     }
-    // Idle worker: headless columns for the spawner's chunks beyond the resident square (lowest priority).
-    if (this.ring && this.pending.size < this.inFlight) {
-      for (const u of this.ring.units()) {
-        const k = `r${key(...u)}`;
-        if (this.pending.has(k)) continue;
-        this.pending.add(k);
-        this.port.postMessage({ type: 'ring', cell: this.cells, x: u[0], z: u[1] });
-        break;
+    // Idle worker: headless columns for the spawner's chunks beyond the resident square (lowest priority). Dedicated ring workers
+    // take them first; the main worker only when it has no window request in flight.
+    if (this.ring) {
+      const idle = this.ringPorts.filter((r) => !r.busy);
+      if (this.windowPending() + (this.mainRing ? 1 : 0) < this.inFlight) idle.push(null);
+      if (idle.length) {
+        for (const u of this.ring.units()) {
+          const k = `r${key(...u)}`;
+          if (this.pending.has(k)) continue;
+          const slot = idle.shift();
+          this.pending.add(k);
+          const msg = { type: 'ring', cell: this.cells, x: u[0], z: u[1] };
+          if (slot) { slot.busy = k; slot.port.postMessage(msg); } else { this.mainRing = k; this.port.postMessage(msg); }
+          if (!idle.length) break;
+        }
       }
     }
   }
   receive(data) {
     if (data?.type === 'error') { this.fail(data.message); return; }
     if (data?.type === 'ring') {
-      if (this.pending.delete(`r${key(data.x, data.z)}`)) { this.received++; this.ring?.receive(data.columns); }
+      const rk = `r${key(data.x, data.z)}`;
+      if (rk === this.mainRing) this.mainRing = null;
+      if (this.pending.delete(rk)) { this.received++; this.ring?.receive(data.columns); }
       return;
     }
     const k = key(data.x, data.z);
     if (!this.pending.delete(k)) return;
     this.received++;
     if (data.type === 'cell') this.world.population.adopt(data.cell);
-    else if (data.type === 'column' && !this.world.chunks.has(k)) this.world.pregenerated.set(k, data.column);
+    else if (data.type === 'column' && !this.world.chunks.has(k)) {
+      this.world.pregenerated.set(k, data.column);
+      const pop = this.world.population;
+      if (data.records && pop?.records && !pop.isMaterialized?.(data.x, data.z)) pop.records.set(k, data.records); // DimensionWorld.netherChunk's side effect
+    }
     for (const w of [...this.waiters]) w();
   }
   // Requests exactly these units (cells, or columns below generation 13) and resolves once each has arrived or the worker has failed
@@ -145,6 +191,7 @@ export class StreamPrefetch {
   dispose() {
     this.port.onmessage = this.port.onerror = null;
     this.port.terminate?.();
+    for (const r of this.ringPorts) { r.port.onmessage = r.port.onerror = null; r.port.terminate?.(); }
     this.pending.clear();
   }
 }
