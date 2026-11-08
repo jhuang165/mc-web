@@ -130,8 +130,11 @@ export class HeadlessColumns {
     for (let a = cx - 1; a <= cx + 1; a++) for (let b = cz - 1; b <= cz + 1; b++) if (!this.resident(a * 16, b * 16) && !this.cols.has(ringKey(a, b))) return false;
     return true;
   }
-  // A change in chunk (cx, cz) can alter the light of its own column and the eight around it (light travels 14 cells).
+  // A change in chunk (cx, cz) can alter the light of its own column and the eight around it (light travels 14 cells). Its own height and
+  // precipitation maps go too: a replaced column object (arrival, adopt) starts its stamp again, so the stamp check alone would keep them.
   invalidateLight(cx, cz) {
+    const own = this.lstate.get(ringKey(cx, cz));
+    if (own) { own.hm = null; own.pm = null; }
     for (let a = cx - 1; a <= cx + 1; a++) for (let b = cz - 1; b <= cz + 1; b++) {
       const st = this.lstate.get(ringKey(a, b));
       if (st) { st.light = null; st.asked = 0; }

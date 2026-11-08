@@ -187,3 +187,25 @@ test("ice and snow in ring chunks (cold rain, torches placed before and during t
   assert.deepEqual(search.end, resident.end);
   assert.equal(bulk.ice, resident.ice);
 });
+
+test("a replaced ring column (adopt) drops its cached height and precipitation maps", async () => {
+  const { canSeeSky, precipitationHeight } = await import("./weather.js");
+  const a = world12();
+  const ring = new HeadlessColumns(a, { generate: (cx, cz) => a.generateTerrainChunk(cx, cz), perTick: 1000, every: 1, radius: 6 });
+  ring.update(11, 3);
+  attachRing(a, ring);
+  const cx = 14, cz = 5, x = cx * 16 + 3, z = cz * 16 + 3, H = ring.height;
+  assert.ok(ring.outside(x, z));
+  a.ringReads = true;
+  try {
+    const h0 = ring.light.heightAt(x, z), p0 = precipitationHeight(a, x, z);
+    assert.ok(h0 < 140 && p0 < 140 && canSeeSky(a, x, 139, z));
+    // The chunk leaves the resident window with a stone pillar to y 139: adopt replaces the held column object (its stamp starts again).
+    const g = a.generateTerrainChunk(cx, cz), blocks = new Uint8Array(g.blocks), meta = new Uint8Array(g.metadata);
+    for (let y = 0; y < 140; y++) blocks[(3 * 16 + 3) * H + y] = STONE;
+    ring.adopt([{ x: cx, z: cz, blocks, meta }]);
+    assert.equal(ring.light.heightAt(x, z), 140);
+    assert.equal(precipitationHeight(a, x, z), 140);
+    assert.equal(canSeeSky(a, x, 139, z), false);
+  } finally { a.ringReads = false; }
+});
