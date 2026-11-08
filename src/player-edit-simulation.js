@@ -78,14 +78,14 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
   // places the boat along the view ray (hooks.placeBoat returns whether one was placed).
   if (place && id === BOAT_ITEM && !usesBlock && !aimedEntity && hook('placeBoat')) return act('place-boat');
   // Snowball/egg, bow and buckets return before the vanilla hand swing.
-  if (place && isThrowable(id) && (state.survival.creative || state.survival.count(id)) && !usesBlock) {
+  if (place && isThrowable(id) && (state.survival.creative || state.survival.usable(id)) && !usesBlock) {
     const thrown = throwHeldItem(state, id, hooks);
     return act('throw-projectile', { projectile: thrown.kind });
   }
   // ItemExpBottle (spawn-egg-use.js): thrown like a snowball; Creative keeps the stack.
-  if (place && id === ITEM_EXP_BOTTLE && !usesBlock && (state.survival.creative || state.survival.count(id)) && throwExpBottle(state, hooks)) return act('throw-projectile', { projectile: 'expBottle' });
+  if (place && id === ITEM_EXP_BOTTLE && !usesBlock && (state.survival.creative || state.survival.usable(id)) && throwExpBottle(state, hooks)) return act('throw-projectile', { projectile: 'expBottle' });
   // ItemEnderEye: onItemUse on a frame, else onItemRightClick towards the nearest stronghold (eye-of-ender-live.js).
-  if (place && id === ITEM_EYE_OF_ENDER && state.eyes && (state.survival.creative || state.survival.count(id))) {
+  if (place && id === ITEM_EYE_OF_ENDER && state.eyes && (state.survival.creative || state.survival.usable(id))) {
     const used = useEyeOfEnder(state, { target, usesBlock }, hooks);
     if (used) return act(used.branch);
   }
@@ -98,7 +98,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     return act('use-empty-map', { map: made.data.id });
   }
   // ItemFirework.onItemUse launches a rocket from the clicked block face (fireworks-live.js).
-  if (place && id === ITEM_FIREWORK_ROCKET && state.rockets && (state.survival.creative || state.survival.count(id))) {
+  if (place && id === ITEM_FIREWORK_ROCKET && state.rockets && (state.survival.creative || state.survival.usable(id))) {
     const used = useFirework(state, { target, usesBlock }, hooks);
     if (used) return act(used.branch);
   }
@@ -435,7 +435,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       return act('open-hopper');
     }
     if (item?.kind === 'hoe') {
-      if (!state.survival.creative && !state.survival.count(id)) return act('hoe-no-item');
+      if (!state.survival.creative && !state.survival.usable(id)) return act('hoe-no-item');
       if (target.adjacent?.[1] !== y - 1 && state.farming.till(x, y, z)) {
         state.survival.wear(id);
         hook('applyFarmUpdates', state.farming.drain());
@@ -448,7 +448,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       return act('use-hoe');
     }
     // ItemSeeds(nether wart, soul sand).onItemUse: the top face of soul sand with air above (nether-wart.js).
-    if (id === ITEM_NETHER_WART && (state.survival.creative || state.survival.count(id)) && target.adjacent?.[1] === y + 1 && block === SOUL_SAND && state.world.get(x, y + 1, z) === 0 && y + 1 < (state.world.height ?? 128) - 1) {
+    if (id === ITEM_NETHER_WART && (state.survival.creative || state.survival.usable(id)) && target.adjacent?.[1] === y + 1 && block === SOUL_SAND && state.world.get(x, y + 1, z) === 0 && y + 1 < (state.world.height ?? 128) - 1) {
       state.world.set(x, y + 1, z, NETHER_WART, true, 0);
       if (!state.survival.creative) state.survival.take(id);
       hook('updateBlock', x, z, y + 1);
@@ -457,7 +457,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       return act('plant-nether-wart');
     }
     if (plantedBlock(id)) {
-      if ((state.survival.creative || state.survival.count(id)) && target.adjacent?.[1] === y + 1 && state.farming.plant(x, y, z, id)) {
+      if ((state.survival.creative || state.survival.usable(id)) && target.adjacent?.[1] === y + 1 && state.farming.plant(x, y, z, id)) {
         if (!state.survival.creative) state.survival.take(id);
         hook('applyFarmUpdates', state.farming.drain());
         hook('renderHotbar');
@@ -467,7 +467,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       if (id === 309) return act('plant-seeds-failed');
     }
     if (id === DYE && state.survival.held?.damage === 15) {
-      if (!state.survival.creative && !state.survival.count(id)) return act('bone-meal-no-item');
+      if (!state.survival.creative && !state.survival.usable(id)) return act('bone-meal-no-item');
       let used = false;
       if (block === SAPLING) { state.trees.boneMeal(x, y, z); used = true; }
       else if (block === 1) {
@@ -478,7 +478,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
         used = true;
       }
       if (used) {
-        if (!state.survival.creative) state.survival.inventory.decr(state.survival.inventory.current, 1);
+        if (!state.survival.creative) state.survival.take(id); // the held stack, even at size 0 or below (neg-stacks-reference.json use boneMeal)
         hook('renderHotbar');
         // ItemDye (bone meal) plays no sound in 1.7.10: only level event 2005 (the sparkles below); verified in block-sounds-reference.json.
         hook('markUnsaved');
@@ -517,7 +517,7 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     if (id === ITEM_CAKE) {
       const cell = cakePlacement(state.world, target, doorReplaceable);
       // ItemReed refuses a size-0 stack in either mode (attributes2-reference.json use, cake).
-      if (!cell || (!state.survival.creative && !state.survival.count(id)) || (state.survival.held?.id === id && !(state.survival.held.count > 0))) return act('placement-cake');
+      if (!cell || (!state.survival.creative && !state.survival.usable(id)) || (state.survival.held?.id === id && state.survival.held.count === 0)) return act('placement-cake');
       state.world.set(cell[0], cell[1], cell[2], CAKE, true, 0);
       if (!state.survival.creative) state.survival.take(id);
       hooks.updateBlock?.(cell[0], cell[2], cell[1]); hooks.renderHotbar?.(); hooks.markUnsaved?.(); hooks.sound?.(true, CAKE);
@@ -592,5 +592,5 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
 
 function beginEating(state, id, hook) {
   if (state.survival.food >= 20 && !ITEMS[id]?.alwaysEdible) return; // alwaysEdible: golden apple; a full player is silently refused (no message in 1.7.10)
-  if (state.survival.count(id) && !state.eating) state.eating = { id, ticks: 32 };
+  if (state.survival.usable(id) && !state.eating) state.eating = { id, ticks: 32 };
 }

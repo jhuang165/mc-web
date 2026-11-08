@@ -114,6 +114,7 @@ import { HitboxRenderer, collectHitboxes, crashStep, crashReport, showCrashRepor
 import { DebugOverlay, selectSection, nativeYaw, readMemory, rendererStats, entityStats, columnStats, heightValue, floorD, WALK_SPEED, FLY_SPEED } from "./debug-overlay.js";
 import { parseJsonNbt } from "./json-nbt.js";
 import { itemStackFromNbt } from "./region-import.js";
+import { breakSoundPitch } from "./mob-equipment.js";
 import { NBT } from "./nbt.js";
 import { chatCanOpen } from "./chat.js";
 import { PlayerListUi, playerListVisible } from "./player-list.js";
@@ -2787,7 +2788,7 @@ function beginEating(id) {
   if (survival.food >= 20 && !ITEMS[id]?.alwaysEdible) { // ItemFood.onItemRightClick: canEat(alwaysEdible) - the golden apple is always edible
     return; // ItemFood.onItemRightClick refuses silently
   }
-  if (survival.count(id) && !eating) eating = { id, ticks: 32 };
+  if (survival.usable(id) && !eating) eating = { id, ticks: 32 };
 }
 // Development-only bounded trace of captured edit/release actions with their player tick.
 function traceAction(action) {
@@ -2993,7 +2994,7 @@ function dropHeld(all) {
 function reportBrokenTool() {
   if (!survival.broken) return;
   statsLive.broken(survival.broken);
-  sounds.play("random.break", { volume: 0.8, pitch: 0.8 + Math.random() * 0.4 });
+  sounds.play("random.break", { volume: 0.8, pitch: breakSoundPitch(weather.random) }); // World.rand, as every renderBrokenItemStack (attributes2-reference.json breakPitch)
   itemCrumbs(scene.fx, 5, "iconcrack_" + survival.broken, playerEye(), playerRandom);
   survival.broken = 0;
   renderHotbar();

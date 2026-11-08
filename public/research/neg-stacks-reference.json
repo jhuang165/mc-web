@@ -1,0 +1,1115 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "add": {
+   "name": "ItemStack",
+   "sha256": "64d2e44b4f07561c143cce29f5f570ce8abfb857cc4d6dc0c8f9cfd6c31ad37d"
+  },
+  "abh": {
+   "name": "ItemBlock",
+   "sha256": "609f7eea5ac1a41fb2f9a6a9a0c42c31fcc35e22367de7e842f93744c6697997"
+  },
+  "aow": {
+   "name": "TileEntityChest",
+   "sha256": "ace4b008c7d8527e0abd5edf2cc418b86295749254964becae166cbbb96cb10a"
+  },
+  "apb": {
+   "name": "TileEntityDispenser",
+   "sha256": "c40dfc5b1009d1245d60c297c475640da61443141c8dd5236f144bc4f5b83f51"
+  },
+  "apg": {
+   "name": "TileEntityFurnace",
+   "sha256": "abecc96da88293aa8caff853ba291e27c650351eca1671f2932720115b35d004"
+  },
+  "aov": {
+   "name": "TileEntityBrewingStand",
+   "sha256": "81783998a864a95ed60865bb601785f2657b04bb02d6e50a1f4086d67f30220d"
+  },
+  "yx": {
+   "name": "InventoryPlayer",
+   "sha256": "3a896b6e729e110f77c5754915c50e11ccf8fd20a9a36f5849fc87dc7bc32232"
+  },
+  "yz": {
+   "name": "EntityPlayer",
+   "sha256": "9833d8bb183188c3e2085fcf77cc269b7d7c74cbbadf2b37452958b75eaa54e1"
+  }
+ },
+ "method": "Unchanged classes (tools/probes/NegStacksProbe.java). tileRead: a chest / dispenser / furnace / brewing stand readFromNBT of one diamond slot at Count -1, 0, 1 or 127, the slot read back and the Items list written again (writtenCount, -999 when the list is empty). playerRead: InventoryPlayer.readFromNBT of slot 3 (main) or 100 (armour 0) then writeToNBT. use: ItemStack.tryPlaceItemIntoWorld on the top face of (0,63,0) at stackSize -1 and -2, Survival and Creative (EyeOfEnderProbe's EW world). rightClick: useItemRightClick then onFoodEaten at stackSize -1. Stacks are [item id, stackSize, damage].",
+ "counts": {
+  "tileRead": 16,
+  "playerRead": 6,
+  "use": 52,
+  "rightClick": 14
+ },
+ "records": [
+  {
+   "case": "tileRead",
+   "tile": "chest",
+   "count": -1,
+   "stack": [
+    264,
+    -1,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": -1
+  },
+  {
+   "case": "tileRead",
+   "tile": "chest",
+   "count": 0,
+   "stack": [
+    264,
+    0,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": 0
+  },
+  {
+   "case": "tileRead",
+   "tile": "chest",
+   "count": 1,
+   "stack": [
+    264,
+    1,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": 1
+  },
+  {
+   "case": "tileRead",
+   "tile": "chest",
+   "count": 127,
+   "stack": [
+    264,
+    127,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": 127
+  },
+  {
+   "case": "tileRead",
+   "tile": "dispenser",
+   "count": -1,
+   "stack": [
+    264,
+    -1,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": -1
+  },
+  {
+   "case": "tileRead",
+   "tile": "dispenser",
+   "count": 0,
+   "stack": [
+    264,
+    0,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": 0
+  },
+  {
+   "case": "tileRead",
+   "tile": "dispenser",
+   "count": 1,
+   "stack": [
+    264,
+    1,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": 1
+  },
+  {
+   "case": "tileRead",
+   "tile": "dispenser",
+   "count": 127,
+   "stack": [
+    264,
+    127,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": 127
+  },
+  {
+   "case": "tileRead",
+   "tile": "furnace",
+   "count": -1,
+   "stack": [
+    264,
+    -1,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": -1
+  },
+  {
+   "case": "tileRead",
+   "tile": "furnace",
+   "count": 0,
+   "stack": [
+    264,
+    0,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": 0
+  },
+  {
+   "case": "tileRead",
+   "tile": "furnace",
+   "count": 1,
+   "stack": [
+    264,
+    1,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": 1
+  },
+  {
+   "case": "tileRead",
+   "tile": "furnace",
+   "count": 127,
+   "stack": [
+    264,
+    127,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": 127
+  },
+  {
+   "case": "tileRead",
+   "tile": "brewing",
+   "count": -1,
+   "stack": [
+    264,
+    -1,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": -1
+  },
+  {
+   "case": "tileRead",
+   "tile": "brewing",
+   "count": 0,
+   "stack": [
+    264,
+    0,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": 0
+  },
+  {
+   "case": "tileRead",
+   "tile": "brewing",
+   "count": 1,
+   "stack": [
+    264,
+    1,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": 1
+  },
+  {
+   "case": "tileRead",
+   "tile": "brewing",
+   "count": 127,
+   "stack": [
+    264,
+    127,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": 127
+  },
+  {
+   "case": "playerRead",
+   "slot": "main",
+   "count": -1,
+   "main": [
+    264,
+    -1,
+    0
+   ],
+   "armour": null,
+   "listSize": 1,
+   "writtenCount": -1
+  },
+  {
+   "case": "playerRead",
+   "slot": "armour",
+   "count": -1,
+   "main": null,
+   "armour": [
+    264,
+    -1,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": -1
+  },
+  {
+   "case": "playerRead",
+   "slot": "main",
+   "count": 0,
+   "main": [
+    264,
+    0,
+    0
+   ],
+   "armour": null,
+   "listSize": 1,
+   "writtenCount": 0
+  },
+  {
+   "case": "playerRead",
+   "slot": "armour",
+   "count": 0,
+   "main": null,
+   "armour": [
+    264,
+    0,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": 0
+  },
+  {
+   "case": "playerRead",
+   "slot": "main",
+   "count": 1,
+   "main": [
+    264,
+    1,
+    0
+   ],
+   "armour": null,
+   "listSize": 1,
+   "writtenCount": 1
+  },
+  {
+   "case": "playerRead",
+   "slot": "armour",
+   "count": 1,
+   "main": null,
+   "armour": [
+    264,
+    1,
+    0
+   ],
+   "listSize": 1,
+   "writtenCount": 1
+  },
+  {
+   "case": "use",
+   "name": "stone",
+   "item": 1,
+   "creative": false,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "stone",
+   "item": 1,
+   "creative": false,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "stone",
+   "item": 1,
+   "creative": true,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "stone",
+   "item": 1,
+   "creative": true,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "torch",
+   "item": 50,
+   "creative": false,
+   "count": -1,
+   "used": false,
+   "after": -1,
+   "error": "java.lang.NullPointerException: Cannot invoke 'apu.d(int, int)' because 'this.v' is null",
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "torch",
+   "item": 50,
+   "creative": false,
+   "count": -2,
+   "used": false,
+   "after": -2,
+   "error": "java.lang.NullPointerException: Cannot invoke 'apu.d(int, int)' because 'this.v' is null",
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "torch",
+   "item": 50,
+   "creative": true,
+   "count": -1,
+   "used": false,
+   "after": -1,
+   "error": "java.lang.NullPointerException: Cannot invoke 'apu.d(int, int)' because 'this.v' is null",
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "torch",
+   "item": 50,
+   "creative": true,
+   "count": -2,
+   "used": false,
+   "after": -2,
+   "error": "java.lang.NullPointerException: Cannot invoke 'apu.d(int, int)' because 'this.v' is null",
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "slab",
+   "item": 44,
+   "creative": false,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "slab",
+   "item": 44,
+   "creative": false,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "slab",
+   "item": 44,
+   "creative": true,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "slab",
+   "item": 44,
+   "creative": true,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "cake",
+   "item": 354,
+   "creative": false,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "cake",
+   "item": 354,
+   "creative": false,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "cake",
+   "item": 354,
+   "creative": true,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "cake",
+   "item": 354,
+   "creative": true,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "redstone",
+   "item": 331,
+   "creative": false,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "redstone",
+   "item": 331,
+   "creative": false,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "redstone",
+   "item": 331,
+   "creative": true,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "redstone",
+   "item": 331,
+   "creative": true,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "door",
+   "item": 324,
+   "creative": false,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "door",
+   "item": 324,
+   "creative": false,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "door",
+   "item": 324,
+   "creative": true,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "door",
+   "item": 324,
+   "creative": true,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "bed",
+   "item": 355,
+   "creative": false,
+   "count": -1,
+   "used": false,
+   "after": -1,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "bed",
+   "item": 355,
+   "creative": false,
+   "count": -2,
+   "used": false,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "bed",
+   "item": 355,
+   "creative": true,
+   "count": -1,
+   "used": false,
+   "after": -1,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "bed",
+   "item": 355,
+   "creative": true,
+   "count": -2,
+   "used": false,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "seeds",
+   "item": 295,
+   "creative": false,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "seeds",
+   "item": 295,
+   "creative": false,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "seeds",
+   "item": 295,
+   "creative": true,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "seeds",
+   "item": 295,
+   "creative": true,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "spawnEgg",
+   "item": 383,
+   "creative": false,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 1
+  },
+  {
+   "case": "use",
+   "name": "spawnEgg",
+   "item": 383,
+   "creative": false,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 1
+  },
+  {
+   "case": "use",
+   "name": "spawnEgg",
+   "item": 383,
+   "creative": true,
+   "count": -1,
+   "used": true,
+   "after": -1,
+   "error": null,
+   "spawned": 1
+  },
+  {
+   "case": "use",
+   "name": "spawnEgg",
+   "item": 383,
+   "creative": true,
+   "count": -2,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 1
+  },
+  {
+   "case": "use",
+   "name": "boneMealSapling",
+   "item": 351,
+   "creative": false,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "boneMealSapling",
+   "item": 351,
+   "creative": false,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "boneMealSapling",
+   "item": 351,
+   "creative": true,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "boneMealSapling",
+   "item": 351,
+   "creative": true,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "reed",
+   "item": 338,
+   "creative": false,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "reed",
+   "item": 338,
+   "creative": false,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "reed",
+   "item": 338,
+   "creative": true,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "reed",
+   "item": 338,
+   "creative": true,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "netherWart",
+   "item": 372,
+   "creative": false,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "netherWart",
+   "item": 372,
+   "creative": false,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "netherWart",
+   "item": 372,
+   "creative": true,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "netherWart",
+   "item": 372,
+   "creative": true,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 0
+  },
+  {
+   "case": "use",
+   "name": "minecartOnRail",
+   "item": 328,
+   "creative": false,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 1
+  },
+  {
+   "case": "use",
+   "name": "minecartOnRail",
+   "item": 328,
+   "creative": false,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 1
+  },
+  {
+   "case": "use",
+   "name": "minecartOnRail",
+   "item": 328,
+   "creative": true,
+   "count": -1,
+   "used": true,
+   "after": -2,
+   "error": null,
+   "spawned": 1
+  },
+  {
+   "case": "use",
+   "name": "minecartOnRail",
+   "item": 328,
+   "creative": true,
+   "count": -2,
+   "used": true,
+   "after": -3,
+   "error": null,
+   "spawned": 1
+  },
+  {
+   "case": "rightClick",
+   "name": "snowball",
+   "creative": false,
+   "count": -1,
+   "result": [
+    332,
+    -2,
+    0
+   ],
+   "same": true,
+   "eaten": null,
+   "after": -2,
+   "error": null
+  },
+  {
+   "case": "rightClick",
+   "name": "snowball",
+   "creative": true,
+   "count": -1,
+   "result": [
+    332,
+    -1,
+    0
+   ],
+   "same": true,
+   "eaten": null,
+   "after": -1,
+   "error": null
+  },
+  {
+   "case": "rightClick",
+   "name": "enderPearl",
+   "creative": false,
+   "count": -1,
+   "result": [
+    368,
+    -2,
+    0
+   ],
+   "same": true,
+   "eaten": null,
+   "after": -2,
+   "error": null
+  },
+  {
+   "case": "rightClick",
+   "name": "enderPearl",
+   "creative": true,
+   "count": -1,
+   "result": [
+    368,
+    -1,
+    0
+   ],
+   "same": true,
+   "eaten": null,
+   "after": -1,
+   "error": null
+  },
+  {
+   "case": "rightClick",
+   "name": "apple",
+   "creative": false,
+   "count": -1,
+   "result": [
+    260,
+    -2,
+    0
+   ],
+   "same": true,
+   "eaten": [
+    260,
+    -2,
+    0
+   ],
+   "after": -2,
+   "error": null
+  },
+  {
+   "case": "rightClick",
+   "name": "apple",
+   "creative": true,
+   "count": -1,
+   "result": [
+    260,
+    -2,
+    0
+   ],
+   "same": true,
+   "eaten": [
+    260,
+    -2,
+    0
+   ],
+   "after": -2,
+   "error": null
+  },
+  {
+   "case": "rightClick",
+   "name": "milk",
+   "creative": false,
+   "count": -1,
+   "result": [
+    335,
+    -2,
+    0
+   ],
+   "same": true,
+   "eaten": [
+    325,
+    1,
+    0
+   ],
+   "after": -2,
+   "error": null
+  },
+  {
+   "case": "rightClick",
+   "name": "milk",
+   "creative": true,
+   "count": -1,
+   "result": [
+    335,
+    -1,
+    0
+   ],
+   "same": true,
+   "eaten": [
+    325,
+    1,
+    0
+   ],
+   "after": -1,
+   "error": null
+  },
+  {
+   "case": "rightClick",
+   "name": "emptyBucketWater",
+   "creative": false,
+   "count": -1,
+   "result": [
+    326,
+    1,
+    0
+   ],
+   "same": false,
+   "eaten": null,
+   "after": -2,
+   "error": null
+  },
+  {
+   "case": "rightClick",
+   "name": "emptyBucketWater",
+   "creative": true,
+   "count": -1,
+   "result": [
+    325,
+    -1,
+    0
+   ],
+   "same": true,
+   "eaten": null,
+   "after": -1,
+   "error": null
+  },
+  {
+   "case": "rightClick",
+   "name": "waterBucket",
+   "creative": false,
+   "count": -1,
+   "result": [
+    325,
+    1,
+    0
+   ],
+   "same": false,
+   "eaten": null,
+   "after": -1,
+   "error": null
+  },
+  {
+   "case": "rightClick",
+   "name": "waterBucket",
+   "creative": true,
+   "count": -1,
+   "result": [
+    326,
+    -1,
+    0
+   ],
+   "same": true,
+   "eaten": null,
+   "after": -1,
+   "error": null
+  },
+  {
+   "case": "rightClick",
+   "name": "glassBottleWater",
+   "creative": false,
+   "count": -1,
+   "result": [
+    373,
+    1,
+    0
+   ],
+   "same": false,
+   "eaten": null,
+   "after": -2,
+   "error": null
+  },
+  {
+   "case": "rightClick",
+   "name": "glassBottleWater",
+   "creative": true,
+   "count": -1,
+   "result": [
+    373,
+    1,
+    0
+   ],
+   "same": false,
+   "eaten": null,
+   "after": -2,
+   "error": null
+  }
+ ]
+}

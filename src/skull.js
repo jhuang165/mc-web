@@ -103,7 +103,7 @@ export function placeSkull(state, { id, damage = 0, target }, hooks = {}) {
   const side = clickedFace(here, adjacent);
   if (side === 0) return result(false, 'skull-bottom'); // ItemSkull: side 0 returns false
   if (!signSolid(world.get(...here))) return result(false, 'skull-support'); // the clicked block's material must be solid
-  if (!survival.creative && !survival.count(id)) return result(false, 'empty-stack');
+  if (!survival.creative && !survival.usable(id)) return result(false, 'empty-stack');
   const [x, y, z] = [here[0] + FACE_OFFSET[side][0], here[1] + FACE_OFFSET[side][1], here[2] + FACE_OFFSET[side][2]];
   if (y < 0 || y >= (world.height ?? 256) || (world.inside && !world.inside(x, y, z))) return result(false, 'skull-range', [x, y, z]);
   // There is no canPlace or replaceable test: setBlock replaces whatever stands in the target cell.

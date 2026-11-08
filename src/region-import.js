@@ -110,7 +110,7 @@ export function readContainerTile(id, tile, { convertItem = itemStackFromNbt, in
     let slot = get(entry, 'Slot', NBT.BYTE, 0);
     if (unsigned) slot &= 255;
     if (slot < 0 || slot >= size) { invalidSlot(slot); continue; }
-    const lost = [], stack = convertItem(entry, { ignored: lost, allowEmpty: id === 'Hopper' }); // a hopper keeps Count 0 (attributes2-reference.json itemRead)
+    const lost = [], stack = convertItem(entry, { ignored: lost, allowEmpty: true }); // every container tile keeps Count 0 and -1 (neg-stacks-reference.json tileRead)
     ignored.push(...lost.map(k => `Items[${slot}].tag.${k}`));
     if (stack) items[slot] = stack;
   }
@@ -123,7 +123,7 @@ export function readContainerTile(id, tile, { convertItem = itemStackFromNbt, in
 // `allowEmpty`: an armour-slot stack of Count 0 is kept (InventoryPlayer.readFromNBT keeps it; ItemStack.damageItem leaves a Thorns-broken piece at size 0).
 export function itemStackFromNbt(compound, { ignored = [], allowEmpty = false } = {}) {
   const mapped = itemFromOriginal(get(compound, 'id', NBT.SHORT), get(compound, 'Damage', NBT.SHORT, 0)), count = get(compound, 'Count', NBT.BYTE, 0);
-  if (!mapped || (allowEmpty ? count < 0 : count <= 0)) return null;
+  if (!mapped || (!allowEmpty && count <= 0)) return null; // allowEmpty keeps Count 0 and negative bytes as loadItemStackFromNBT does
   const stack = { id: mapped.id, damage: mapped.damage, count };
   const nbt = get(compound, 'tag', NBT.COMPOUND);
   if (nbt) ignored.push(...readItemTag(stack, nbt));
@@ -407,7 +407,7 @@ export async function importJavaRegionArea(regions, options = {}) {
   function convertItem(compound, { allowEmpty = false } = {}) {
     const id = get(compound, 'id', NBT.SHORT), count = get(compound, 'Count', NBT.BYTE, 0), damage = get(compound, 'Damage', NBT.SHORT, 0);
     const mapped = id === undefined ? null : itemFromOriginal(id, damage);
-    if (!mapped || (allowEmpty ? count < 0 : count <= 0)) {
+    if (!mapped || (!allowEmpty && count <= 0)) {
       tally(itemLost, id === undefined ? `${get(compound, 'id', NBT.STRING) ?? '?'}` : `${id}:${Math.max(0, damage)}`);
       return null;
     }

@@ -58,7 +58,7 @@ export class PlayerInventory {
     if (s && typeof s === "object" && s.id === 310) s = { ...s, id: 351, damage: 15 };
     const item = s && typeof s === "object" && s.id ? this.items[s.id] : null,
       count = Math.floor(Number(s?.count));
-    if (!item || !(allowEmpty ? count >= 0 : count > 0)) return null;
+    if (!item || !(allowEmpty ? count >= -128 : count > 0)) return null; // loadItemStackFromNBT keeps any Count byte, negative too (neg-stacks-reference.json)
     const metadata = {};
     for (const key of TAG_LISTS) if (Array.isArray(s[key])) metadata[key] = s[key].filter((e) => Number.isFinite(e?.id) && Number.isFinite(e?.lvl)).slice(0, 64).map((e) => ({ id: (Math.trunc(e.id) << 16) >> 16, lvl: (Math.trunc(e.lvl) << 16) >> 16 }));
     if (Number.isFinite(s.repairCost)) metadata.repairCost = s.repairCost | 0;
@@ -85,7 +85,7 @@ export class PlayerInventory {
     return out;
   }
   get held() { return this.main[this.current] ?? null; }
-  count(id) { return this.main.reduce((n, s) => n + (s?.id === id ? s.count : 0), 0); }
+  count(id) { return this.main.reduce((n, s) => n + (s?.id === id && s.count > 0 ? s.count : 0), 0); } // size 0 and negative stacks hold nothing
   firstEmpty() { return this.main.findIndex((s) => !s); }
   find(id, damage) { return this.main.findIndex((s) => s?.id === id && (damage === undefined || s.damage === damage)); }
   storeItemStack(s) {

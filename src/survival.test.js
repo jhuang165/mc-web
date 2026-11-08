@@ -205,8 +205,8 @@ test("untrusted saved resources and stats are bounded", () => {
   assert.equal(p.count(100), 1);
   assert.equal(p.count(666), 0);
   assert.equal(Object.keys(p.furnaces).length, 0);
-  const q = new Survival({ slots: [{ id: 4, count: 900 }, { id: 666, count: 1 }, { id: 100, count: 3, damage: 9999 }, { id: 7, count: -2 }, "bad"], current: 40 });
-  assert.deepEqual(q.inventory.main.slice(0, 5), [makeStack(4, 64), null, makeStack(100, 1, ITEMS[100].durability), null, null]);
+  const q = new Survival({ slots: [{ id: 4, count: 900 }, { id: 666, count: 1 }, { id: 100, count: 3, damage: 9999 }, { id: 7, count: -2 }, { id: 7, count: -200 }, "bad"], current: 40 });
+  assert.deepEqual(q.inventory.main.slice(0, 5), [makeStack(4, 64), null, makeStack(100, 1, ITEMS[100].durability), makeStack(7, -2), null]); // a Count byte below 0 is kept (loadItemStackFromNBT), one outside the byte range is not
   assert.equal(q.inventory.current, 8);
 });
 test("armor reduces blockable damage, wears each piece, and survives saves", () => {
