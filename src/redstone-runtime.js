@@ -297,8 +297,9 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
       commandBlocks.restore(record?.commandBlocks);
       music.restore(record?.musicTiles);
       // A Java import carries only Piston tile entities (record.pistons).
+      // A Java import's `redstone` carries pending ticks and lit repeaters but no piston tiles: those stay in record.pistons.
       if (record?.redstone) redstone.restore(record.redstone);
-      else if (Array.isArray(record?.pistons)) pistons.restore(record.pistons);
+      if (Array.isArray(record?.pistons) && !record?.redstone?.pistons?.length) pistons.restore(record.pistons);
       flush();
     },
     dispose: () => { setMovingBoxes(null); redstone.dispose(); },

@@ -28,6 +28,7 @@ while (args.length) { const k = args.shift().replace(/^--/, ''); opt[k] = args.s
 const W = Number(opt.width), D = Number(opt.depth), X0 = Number(opt['first-x']), Z0 = Number(opt['first-z']);
 
 const t = (type, value) => ({ type, value });
+const t0 = t;
 const compound = (o) => new Map(Object.entries(o));
 const list = (type, items) => t(NBT.LIST, { elementType: type, items });
 const doubles = (...v) => list(NBT.DOUBLE, v);
@@ -37,7 +38,7 @@ const mob = (id, x, y, z, extra = {}) => compound({ id: t(NBT.STRING, id), Pos: 
   OnGround: t(NBT.BYTE, 1), Health: t(NBT.SHORT, 10), Air: t(NBT.SHORT, 300), Fire: t(NBT.SHORT, -1), FallDistance: t(NBT.FLOAT, 0), ...extra });
 
 // Float a small furnished platform at y 200 (generated terrain never reaches it): chest, sign, furnace, hopper, spawner, skull.
-function furnish(chunk, cx, cz, tiles, entities, seq) {
+function furnish(chunk, cx, cz, tiles, entities, seq, ticks) {
   const bx = cx * 16, bz = cz * 16, put = (lx, y, lz, id, meta = 0) => { const s = chunk.section(y >> 4, true); s.setBlock(lx, y & 15, lz, id); s.setMeta(lx, y & 15, lz, meta); };
   for (let lx = 2; lx < 9; lx++) put(lx, 199, 2, 1);
   put(2, 200, 2, 54, 2); tiles.push(tile('Chest', bx + 2, 200, bz + 2, { Items: list(NBT.COMPOUND, [item(0, 264, 5), item(1, 276, 1, 12), item(13, 322, 2, 1)]) }));
@@ -46,6 +47,24 @@ function furnish(chunk, cx, cz, tiles, entities, seq) {
   put(5, 200, 2, 154, 0); tiles.push(tile('Hopper', bx + 5, 200, bz + 2, { TransferCooldown: t(NBT.INT, 0), Items: list(NBT.COMPOUND, [item(0, 296, 3)]) }));
   put(6, 200, 2, 52); tiles.push(tile('MobSpawner', bx + 6, 200, bz + 2, { EntityId: t(NBT.STRING, 'Zombie'), Delay: t(NBT.SHORT, 20), MinSpawnDelay: t(NBT.SHORT, 200), MaxSpawnDelay: t(NBT.SHORT, 800), SpawnCount: t(NBT.SHORT, 4), MaxNearbyEntities: t(NBT.SHORT, 6), RequiredPlayerRange: t(NBT.SHORT, 16), SpawnRange: t(NBT.SHORT, 4) }));
   put(7, 200, 2, 144, 1); tiles.push(tile('Skull', bx + 7, 200, bz + 2, { SkullType: t(NBT.BYTE, 3), Rot: t(NBT.BYTE, 4), ExtraType: t(NBT.STRING, 'Notch') }));
+  // Scheduled-tick and stored-state platform at y 210 (batch 29): farmland, repeaters, comparators, a torch, flowing water, sand, fire, a dispenser, a chest,
+  // each with the TileTick a running server would hold (i block id, t ticks from now, p priority). Cells the port cannot imply from its own cell.
+  for (let lx = 2; lx < 15; lx++) put(lx, 209, 6, 1);
+  const tk = (i, lx, y, t, p = 0) => ticks.push(compound({ i: t0(NBT.INT, i), x: t0(NBT.INT, bx + lx), y: t0(NBT.INT, y), z: t0(NBT.INT, bz + 6), t: t0(NBT.INT, t), p: t0(NBT.INT, p) }));
+  put(2, 210, 6, 60, 5);            // farmland, moisture 5
+  put(3, 210, 6, 60, 0);            // dry farmland
+  put(4, 210, 6, 93, 5); tk(93, 4, 210, 2, -1);   // repeater delay 2 mid-delay
+  put(5, 210, 6, 94, 3); tk(94, 5, 210, 1, -1);   // powered repeater turning off
+  put(6, 210, 6, 149, 1);           // comparator
+  put(7, 210, 6, 150, 5);           // powered comparator
+  put(8, 210, 6, 75, 5); tk(75, 8, 210, 3);       // unlit redstone torch
+  put(9, 210, 6, 8, 3); tk(8, 9, 210, 5);         // flowing water level 3
+  put(10, 210, 6, 11, 0); tk(11, 10, 210, 30);    // still lava
+  put(11, 210, 6, 12, 0); tk(12, 11, 210, 2);     // falling sand
+  put(12, 210, 6, 51, 3); tk(51, 12, 210, 20);    // fire
+  put(13, 210, 6, 23, 3); tk(23, 13, 210, 4);     // dispenser
+  put(14, 210, 6, 54, 5); tiles.push(tile('Chest', bx + 14, 210, bz + 6, { Items: list(NBT.COMPOUND, [item(0, 264, 1)]) }));
+  tk(9, 3, 210, 7); // still water tick (kept: fluids.js schedules both water ids)
   entities.push(mob('Pig', bx + 3.5, 201, bz + 3.5, { Age: t(NBT.INT, 0), InLove: t(NBT.INT, 0) }));
   entities.push(mob('Cow', bx + 5.5, 201, bz + 3.5, { Age: t(NBT.INT, 0), InLove: t(NBT.INT, 0) }));
   if (seq % 2 === 0) entities.push(mob('Zombie', bx + 8.5, 201, bz + 8.5, { IsVillager: t(NBT.BYTE, 0), IsBaby: t(NBT.BYTE, 0), Equipment: list(NBT.COMPOUND, [compound({}), compound({}), compound({}), compound({}), compound({})]) }));
@@ -56,16 +75,16 @@ function furnish(chunk, cx, cz, tiles, entities, seq) {
 }
 
 function toChunk(cx, cz, o, { populated, hasSky, furnished, seq, nether }) {
-  const c = new Chunk(cx, cz, hasSky), tiles = [], entities = [];
+  const c = new Chunk(cx, cz, hasSky), tiles = [], entities = [], ticks = [];
   for (let lx = 0; lx < 16; lx++) for (let lz = 0; lz < 16; lz++) for (let y = 0; y < 256; y++) {
     const i = (lx * 16 + lz) * 256 + y, id = o.blocks[i];
     if (!id) continue;
     const s = c.section(y >> 4, true); s.setBlock(lx, y & 15, lz, id); s.setMeta(lx, y & 15, lz, o.metadata?.[i] ?? 0);
   }
-  if (furnished) furnish(c, cx, cz, tiles, entities, seq);
+  if (furnished) furnish(c, cx, cz, tiles, entities, seq, ticks);
   c.isTerrainPopulated = populated; c.isLightPopulated = false;
   for (let lx = 0; lx < 16; lx++) for (let lz = 0; lz < 16; lz++) c.biomes[lz * 16 + lx] = nether ? 8 : 1;
-  return { chunk: c, tileEntities: tiles, entities };
+  return { chunk: c, tileEntities: tiles, entities, ...(ticks.length ? { tileTicks: ticks } : {}) };
 }
 const regions = new Map();
 async function addChunk(dim, built) {

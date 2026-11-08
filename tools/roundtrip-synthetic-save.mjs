@@ -83,7 +83,20 @@ for (const [key, a] of before) {
     for (const [k, n] of Object.entries(src.e)) to[1][k] = (to[1][k] ?? 0) + n;
   }
 }
+// TileTicks (batch 29): the multiset of {i, x, y, z, t, p} per dimension before and after.
+const tickKey = (m) => ['i', 'x', 'y', 'z', 't', 'p'].map((k) => m.get(k).value).join(',');
+const tickRows = {};
+for (const [which, set] of [['in', before], ['out', after]]) for (const [key, c] of set) {
+  const dim = key.split('|')[0] || 'overworld', r = (tickRows[dim] ??= { in: new Map(), out: new Map() });
+  for (const m of c.tileTicks ?? []) r[which].set(tickKey(m), (r[which].get(tickKey(m)) ?? 0) + 1);
+}
+const tickReport = Object.fromEntries(Object.entries(tickRows).map(([dim, r]) => {
+  const lost = [], added = [];
+  for (const [k, n] of r.in) if ((r.out.get(k) ?? 0) < n) lost.push(k);
+  for (const [k, n] of r.out) if ((r.in.get(k) ?? 0) < n) added.push(k);
+  return [dim, { distinctIn: r.in.size, distinctOut: r.out.size, identical: r.in.size - lost.length, lost: lost.slice(0, 12), lostCount: lost.length, added: added.slice(0, 12), addedCount: added.length }];
+}));
 const topKinds = [...kinds].sort((p, q) => q[1] - p[1]).filter(([k], i) => i < 20 || !k.startsWith('overworld')).map(([k, n]) => `${k} x${n}`);
-const report = { changedCellKinds: topKinds, importMs: tImport, batches: written.length, population: imported.report.population, notImported: imported.report.notImported, levelFiles: [...exported.files.keys()].filter((p) => !p.endsWith('.mca')), dimensions: rows, exportReport: exported.report };
+const report = { tileTicks: tickReport, importTicks: imported.report.ticks, changedCellKinds: topKinds, importMs: tImport, batches: written.length, population: imported.report.population, notImported: imported.report.notImported, levelFiles: [...exported.files.keys()].filter((p) => !p.endsWith('.mca')), dimensions: rows, exportReport: exported.report };
 if (reportPath) await writeFile(reportPath, JSON.stringify(report, (k, v) => (typeof v === 'bigint' ? String(v) : v), 2));
 console.log(JSON.stringify(report, (k, v) => (typeof v === 'bigint' ? String(v) : v), 2).slice(0, 6000));

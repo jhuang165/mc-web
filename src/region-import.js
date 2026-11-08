@@ -10,6 +10,7 @@ import { parseStructureDataFiles } from './structure-data.js';
 import { World, SIZE, MOB_SPAWNER, SAPLING, WEB, LADDER, YELLOW_FLOWER, RED_FLOWER, DYE, SNOW_LAYER, ICE, CACTUS, TNT, FENCE, RAIL } from './world.js';
 import { DimensionWorld } from './dimension-world.js';
 import { DIM_KEYS, TILE_KEYS } from './dimension-live.js';
+import { importTileTicks, tickRecordFields } from './tile-ticks.js';
 import { isJavaLandscape } from './java-world.js';
 import { fromOriginal, isRegistered } from './block-registry.js';
 import { readRegion, decodeRegionChunk, regionAddress, regionSlot } from './region-file.js';
@@ -396,6 +397,9 @@ export async function importJavaRegionArea(regions, options = {}) {
   const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = []; let chainCount = 0;
   const projectileLists = { projectiles: [], thrownPotions: [], arrows: [], fireballs: [], eyes: [], rockets: [] };
   const hanging = [], carts = [], boats = [];
+  const tickList = { fluid: [], fire: [], falling: [], redstone: [] }, tickSeen = new Set(), tickDropped = new Map(), litRepeaters = [];
+  let tickDuplicates = 0, tickOutside = 0;
+  const inAreaAt3 = (x, y, z) => x >= destination.chunkX * 16 && x < (destination.chunkX + area.width) * 16 && z >= destination.chunkZ * 16 && z < (destination.chunkZ + area.depth) * 16;
   let edits = 0;
   const write = (x, y, z, block, meta, original) => {
     if (world.get(x, y, z) === block && world.getMeta(x, y, z) === meta) return;
@@ -476,6 +480,7 @@ export async function importJavaRegionArea(regions, options = {}) {
         if (key && (!mapped.exact || (mapped.state && !carried))) { report.blocks.approximated++; tally(approximations, key); }
         else if (key) report.blocks.exact++;
         write(baseX + dx, y, baseZ + dz, mapped.id, mapped.meta, key);
+        if (mapped.state?.powered === true) litRepeaters.push(`${baseX + dx},${y},${baseZ + dz}`); // powered repeater (94): the live engine keeps it as side state
       }
     }
     for (const [cell, facing] of facings) {
@@ -647,6 +652,13 @@ export async function importJavaRegionArea(regions, options = {}) {
       tally(entityConverted, id);
     }
     report.scheduledTicks += tileTicks?.length ?? 0;
+    // TileTicks (tile-ticks.js): ticks of the area go to the port's scheduled-tick lists, delay = saved t.
+    if (tileTicks?.length) {
+      const got = importTileTicks(tileTicks, { shiftX, shiftZ, seen: tickSeen, inside: inAreaAt3 });
+      for (const k of Object.keys(tickList)) tickList[k].push(...got[k]);
+      for (const [id, n] of got.dropped) tickDropped.set(id, (tickDropped.get(id) ?? 0) + n);
+      tickDuplicates += got.duplicates; tickOutside += got.outside;
+    }
   }
 
   for (const file of files.values()) (file.used ? report.source.regions : report.source.unusedRegions).push(file.filename);
@@ -658,6 +670,8 @@ export async function importJavaRegionArea(regions, options = {}) {
     const m = mapOriginalState(key);
     return { id: key >> 4, meta: key & 15, cells, to: [m.id, m.meta], exact: m.exact, ...(m.state ? { state: Object.keys(m.state) } : {}) };
   });
+  report.ticks = { fluid: tickList.fluid.length, fire: tickList.fire.length, falling: tickList.falling.length, redstone: tickList.redstone.length, litRepeaters: litRepeaters.length, duplicates: tickDuplicates, outsideArea: tickOutside,
+    dropped: [...tickDropped].sort(([a], [b]) => a - b).map(([id, count]) => ({ id, count })) };
   report.tileEntities.converted = Object.fromEntries(tileConverted);
   report.tileEntities.lost = sortedCounts(tileLost);
   report.items.lost = sortedCounts(itemLost);
@@ -723,6 +737,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     player: { chests, furnaces, dispensers, hoppers, brewing },
     pistons, commandBlocks, ...(musicTiles.length ? { musicTiles } : {}), ...(signs.length ? { signs } : {}), ...(skulls.length ? { skulls } : {}), ...(beacons.length ? { beacons } : {}),
     drops,
+    ...tickRecordFields(tickList, litRepeaters),
     ...(spawners.length ? { spawners } : {}),
     ...(mobs.length ? { entities: mobs } : {}),
     ...Object.fromEntries(Object.entries(projectileLists).filter(([, list]) => list.length).map(([name, list]) => [name, name === 'eyes' ? { eyes: list } : name === 'rockets' ? { rockets: list } : list])),
