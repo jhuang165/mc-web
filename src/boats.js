@@ -16,7 +16,7 @@ import { WATER, SNOW_LAYER, LILY_PAD } from "./world.js";
 import { blockCollisions } from "./block-collisions.js";
 import { entityWaterBox, waterAcceleration, inLava } from "./fluids.js";
 import { traceBucket } from "./buckets.js";
-import { entityActive } from "./streaming-ticks.js";
+import { ringEntityActive } from "./streaming-ticks.js";
 import { JavaRandom } from "./java-random.js";
 
 const f = Math.fround;
@@ -261,7 +261,8 @@ export class Boats extends Minecarts {
   }
   tick(world, { entities = [], hooks = {} } = {}) {
     const out = [];
-    for (const boat of [...this.carts]) if (!boat.dead && entityActive(world, boat)) out.push(...this.tickBoat(world, boat, entities, hooks).map((p) => (hooks.particle?.(p), p)));
+    // World.updateEntityWithOptionalForce: +-32 blocks loaded (the window, or the ring's 5 x 5 chunk test; natural-spawning.md "Round 7").
+    for (const boat of [...this.carts]) if (!boat.dead && ringEntityActive(world, boat)) out.push(...this.tickBoat(world, boat, entities, hooks).map((p) => (hooks.particle?.(p), p)));
     this.carts = this.carts.filter((c) => !c.dead);
     return out;
   }

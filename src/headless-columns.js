@@ -75,6 +75,7 @@ function writeCell(col, c, y, b, m) {
     col.meta = n;
   }
   if (b && (y >> 4) * 16 > col.top) col.top = (y >> 4) * 16;
+  col.stamp = (col.stamp | 0) + 1; // redstone-live.js re-scans a column whose stamp moved
 }
 
 export class HeadlessColumns {
@@ -205,6 +206,37 @@ export class HeadlessColumns {
       this.act.set(key, v);
     }
     return v;
+  }
+  // A cell whose column takes writes: resident, or held with its edit journal hydrated (putOutside's test).
+  writable(x, z) {
+    if (this.resident(x, z)) return true;
+    const cx = x >> 4, cz = z >> 4;
+    return this.cols.has(ringKey(cx, cz)) && this.isHydrated(cx, cz);
+  }
+  // Scheduled block ticks (fluids, redstone; natural-spawning.md "Round 7"). WorldServer.tickUpdates runs a due entry when its own
+  // chunk exists (b0 = 0); natively every chunk a block update reads is loaded too (view distance, or loaded on demand), while a
+  // missing ring column reads as air here. So an entry runs when its own column is writable and the eight chunks around it are
+  // resident or held: no fluid, wire or piston reaches more than 16 blocks from its cell. Cached like `active`.
+  blockTicks(x, z) {
+    const w = this.world;
+    if (this.tickVersion !== this.version || this.tickMinX !== w.minX || this.tickMinZ !== w.minZ) {
+      (this.ticks ??= new Map()).clear(); this.tickVersion = this.version; this.tickMinX = w.minX; this.tickMinZ = w.minZ;
+    }
+    const cx = x >> 4, cz = z >> 4, key = ringKey(cx, cz);
+    let v = this.ticks.get(key);
+    if (v === undefined) {
+      v = this.writable(x, z);
+      for (let a = cx - 1; v && a <= cx + 1; a++) for (let b = cz - 1; b <= cz + 1; b++) if (!this.resident(a * 16, b * 16) && !this.cols.has(ringKey(a, b))) { v = false; break; }
+      this.ticks.set(key, v);
+    }
+    return v;
+  }
+  // fn(cx, cz, col) for every held column.
+  eachColumn(fn) {
+    for (const [k, c] of this.cols) {
+      const cz = ((k % KEY) + KEY + KEY / 2) % KEY - KEY / 2;
+      fn((k - cz) / KEY, cz, c);
+    }
   }
   near(cx, cz, r) { return Math.abs(cx - this.cx) <= r && Math.abs(cz - this.cz) <= r; }
   // Called every spawner tick with the player's chunk (world-local coordinates). Re-centres, drops far columns and fills missing

@@ -1,4 +1,4 @@
-import { entityActive } from './streaming-ticks.js';
+import { ringEntityActive } from './streaming-ticks.js';
 // EntityMinecartChest (xm) with EntityMinecartContainer (xp) and EntityMinecart (xl) from the
 // Minecraft Java 1.7.10 JAR: a 0.98 x 0.7 box with yOffset 0.35, gravity 0.04, the derailed
 // func_94088_b (0.4 clamp, x0.5 on the ground, x0.95 in the air), rail travel through
@@ -438,8 +438,9 @@ export class Minecarts {
     if (kind) { this.onRail(world, cart, bx, by, bz, kind, world.getMeta?.(bx, by, bz) ?? 0, others); if (cart.type === 2) V.furnaceRail(cart); }
     else this.offRail(world, cart, others);
     // Stop at resident bounds. Streaming advances the window before rider movement;
-    // finite worlds retain their existing viewport guard.
-    if (world.inside) {
+    // finite worlds retain their existing viewport guard. With a headless ring (natural-spawning.md "Round 7") a cart
+    // updates only where its 32-block surroundings are held (ringEntityActive) and needs no clamp, as natively.
+    if (world.inside && !world.ringSink) {
       const x = Math.max((world.minX ?? 0)+HALF, Math.min((world.maxX ?? W.SIZE) - HALF, cart.x)), z = Math.max((world.minZ ?? 0)+HALF, Math.min((world.maxZ ?? W.SIZE) - HALF, cart.z));
       if (x !== cart.x || z !== cart.z) {
         if (x !== cart.x) cart.vx = 0;
@@ -466,7 +467,8 @@ export class Minecarts {
   // `host` (optional): { explode(cart, x, y, z, power), particle(name, x, y, z, mx, my, mz), sound(name, cart), transfer, changed }.
   tick(world, { entities = [], host = null } = {}) {
     this.host = host;
-    for (const cart of [...this.carts]) if (!cart.dead && entityActive(world,cart)) this.tickCart(world, cart, entities);
+    // World.updateEntityWithOptionalForce: +-32 blocks loaded (the window, or the ring's 5 x 5 chunk test).
+    for (const cart of [...this.carts]) if (!cart.dead && ringEntityActive(world,cart)) this.tickCart(world, cart, entities);
     this.carts = this.carts.filter((c) => !c.dead);
   }
   // EntityMinecart.applyEntityCollision(other) on `cart`. Another cart trades motion along the
