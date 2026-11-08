@@ -650,6 +650,7 @@ export class Survival {
         burn: Math.floor(clamp(f.burn, 0, 20000, 0)),
         burnTotal: Math.floor(clamp(f.burnTotal, 0, 20000, 0)),
         cook: Math.floor(clamp(f.cook, 0, 199, 0)),
+        ...(typeof f.lit === "boolean" ? { lit: f.lit } : {}), // an imported furnace keeps its block id (61/62) until the burning flag flips
       };
     }
     // TileEntityChest contents and facing metadata; lid state is not saved.
@@ -1027,6 +1028,7 @@ export class Survival {
   tickFurnaces() {
     for (const [key, f] of Object.entries(this.furnaces)) {
       if (this.furnaceActive && !this.furnaceActive(key)) continue;
+      const burning = f.burn > 0; // TileEntityFurnace.updateEntity: the block flips only when this flag changes
       if (f.burn > 0) f.burn--;
       if (f.burn === 0 && this.canSmelt(f)) {
         f.burn = f.burnTotal = burnTime(f.items[1]);
@@ -1045,6 +1047,7 @@ export class Survival {
           this.furnaceChanged?.(key);
         }
       } else f.cook = 0;
+      if (f.lit !== undefined && burning !== f.burn > 0) delete f.lit;
     }
   }
   serialize() {

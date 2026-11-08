@@ -5,7 +5,8 @@
 // tools/probes/InterchangePopulateProbe.java (tools/verify-interchange-populate.mjs).
 //   node tools/make-synthetic-save.mjs OUT_DIR [--seed N] [--width 16] [--depth 6] [--first-x 28] [--first-z 0]
 // Overworld rectangle: width x depth chunks from (first-x, first-z) (default 28..43 x 0..5: regions r.0.0 and r.1.0). Every
-// third chunk column is left unpopulated (TerrainPopulated=0) so the importer's population pass has work.
+// third chunk column is left unpopulated (TerrainPopulated=0) so the importer's population pass has work; so is one Nether chunk
+// (-1,-2) and one End chunk (-1,-1), whose +x/+z neighbours are stored (batch 28: Nether/End population).
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { populationBlockMapperReady } from '../src/population-world.js';
@@ -88,11 +89,11 @@ for (let x = X0; x < X0 + W; x++) for (let z = Z0; z < Z0 + D; z++) {
 const nether = new DimensionWorld(String(seed), -1), end = new DimensionWorld(String(seed), 1);
 for (let x = -2; x < 2; x++) for (let z = -2; z < 2; z++) {
   const c = nether.generateTerrainChunk(x, z);
-  await addChunk(-1, toChunk(x, z, toOrig(c.blocks, c.metadata), { populated: true, hasSky: false, furnished: x === 0 && z === 0, seq: seq++, nether: true }));
+  await addChunk(-1, toChunk(x, z, toOrig(c.blocks, c.metadata), { populated: !(x === -1 && z === -2), hasSky: false, furnished: x === 0 && z === 0, seq: seq++, nether: true }));
 }
 for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
   const c = end.generateTerrainChunk(x, z);
-  await addChunk(1, toChunk(x, z, toOrig(c.blocks, c.metadata), { populated: true, hasSky: false, furnished: x === 0 && z === 0, seq: seq++ }));
+  await addChunk(1, toChunk(x, z, toOrig(c.blocks, c.metadata), { populated: !(x === -1 && z === -1), hasSky: false, furnished: x === 0 && z === 0, seq: seq++ }));
 }
 
 await mkdir(out, { recursive: true });

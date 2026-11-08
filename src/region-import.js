@@ -397,10 +397,10 @@ export async function importJavaRegionArea(regions, options = {}) {
   const projectileLists = { projectiles: [], thrownPotions: [], arrows: [], fireballs: [], eyes: [], rockets: [] };
   const hanging = [], carts = [], boats = [];
   let edits = 0;
-  const write = (x, y, z, block, meta) => {
+  const write = (x, y, z, block, meta, original) => {
     if (world.get(x, y, z) === block && world.getMeta(x, y, z) === meta) return;
     // Past the limit keep counting, but stop growing the edit map.
-    if (++edits <= IMPORT_EDIT_LIMIT) world.set(x, y, z, block, true, meta);
+    if (++edits <= IMPORT_EDIT_LIMIT) world.set(x, y, z, block, true, meta, original);
   };
 
   // `allowEmpty` (player inventory and mob Equipment) keeps Count 0 as ItemStack.loadItemStackFromNBT does (zero-stacks-reference.json).
@@ -475,7 +475,7 @@ export async function importJavaRegionArea(regions, options = {}) {
         const carried = isChestBlock(mapped.id) && mapped.exact;
         if (key && (!mapped.exact || (mapped.state && !carried))) { report.blocks.approximated++; tally(approximations, key); }
         else if (key) report.blocks.exact++;
-        write(baseX + dx, y, baseZ + dz, mapped.id, mapped.meta);
+        write(baseX + dx, y, baseZ + dz, mapped.id, mapped.meta, key);
       }
     }
     for (const [cell, facing] of facings) {
@@ -503,6 +503,8 @@ export async function importJavaRegionArea(regions, options = {}) {
         const loaded = readContainerTile(id, tile, { convertItem, invalidSlot: slot => tally(itemLost, `slot ${slot}`) });
         const stores = { chests, furnaces, dispensers, hoppers, brewing };
         stores[loaded.name][key] = { ...stores[loaded.name][key], ...loaded.record };
+        // The furnace block id is the lit state (61 unlit, 62 lit); TileEntityFurnace only flips it when its burning flag changes.
+        if (loaded.name === 'furnaces') stores.furnaces[key].lit = originalState(chunk.sections[y >> 4], x & 15, y, z & 15) >> 4 === 62;
         tally(tileConverted, id);
       } else if (inside && id === 'MobSpawner' && block === MOB_SPAWNER) {
         const values = ['Delay', 'MinSpawnDelay', 'MaxSpawnDelay', 'SpawnCount', 'MaxNearbyEntities', 'RequiredPlayerRange', 'SpawnRange'];

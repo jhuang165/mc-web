@@ -13,7 +13,7 @@
 export const BASE_VERSION = 1, COLUMN_CELLS = 65536;
 
 /** cells: Uint16Array(65536), block | meta << 8 at (lx * 16 + lz) * 256 + y. */
-export function encodeBaseColumn(world, x, z, cells, { biomes = null, terrainPopulated = true, lightPopulated = false } = {}) {
+export function encodeBaseColumn(world, x, z, cells, { biomes = null, terrainPopulated = true, lightPopulated = false, overlay = null } = {}) {
   const sections = [];
   for (let s = 0; s < 16; s++) {
     let blocks = null, meta = null;
@@ -27,7 +27,32 @@ export function encodeBaseColumn(world, x, z, cells, { biomes = null, terrainPop
     }
     if (blocks) sections.push({ s, blocks, meta });
   }
-  return { world, x, z, v: BASE_VERSION, sections, biomes: biomes ? Uint8Array.from(biomes, (b) => b & 255) : null, terrainPopulated: !!terrainPopulated, lightPopulated: !!lightPopulated };
+  const record = { world, x, z, v: BASE_VERSION, sections, biomes: biomes ? Uint8Array.from(biomes, (b) => b & 255) : null, terrainPopulated: !!terrainPopulated, lightPopulated: !!lightPopulated };
+  const orig = overlayToList(overlay);
+  if (orig.length) record.orig = orig;
+  return record;
+}
+
+// Original-state overlay (batch 28): the cell format keeps one internal id and 4 bits of meta, which cannot tell a level-0 flowing fluid
+// from a still one nor carry the facing of a chest. `orig` is an OPTIONAL sparse list [index, id << 4 | meta, ...] (index as in `cells`,
+// sorted) of the original-id state of exactly the cells whose original differs from what the registry implies for the stored cell
+// (toOriginal(id, meta, {flowing: meta !== 0})). Records without it (every column stored before batch 28) read as before.
+export function overlayToList(overlay) {
+  if (!overlay?.size) return [];
+  const out = [];
+  for (const i of [...overlay.keys()].sort((a, b) => a - b)) out.push(i, overlay.get(i));
+  return out;
+}
+export function overlayFromList(list) {
+  const map = new Map();
+  if (!Array.isArray(list) && !ArrayBuffer.isView(list)) return map;
+  if (list.length % 2) throw new Error('Saved imported column is damaged');
+  for (let k = 0; k < list.length; k += 2) {
+    const i = list[k], v = list[k + 1];
+    if (!Number.isInteger(i) || i < 0 || i >= COLUMN_CELLS || !Number.isInteger(v) || v < 0 || v > 0xffff) throw new Error('Saved imported column is damaged');
+    map.set(i, v);
+  }
+  return map;
 }
 
 /** The {blocks, metadata} the generator contract expects (world.js streamAround), plus the saved biome bytes and flags. */
@@ -44,5 +69,5 @@ export function decodeBaseColumn(record, blockCount = 256) {
       metadata[col * 256 + s * 16 + dy] = (m[i >> 1] >> ((i & 1) * 4)) & 15;
     }
   }
-  return { blocks, metadata, biomes: record.biomes ?? null, terrainPopulated: record.terrainPopulated !== false, lightPopulated: !!record.lightPopulated };
+  return { blocks, metadata, overlay: overlayFromList(record.orig), biomes: record.biomes ?? null, terrainPopulated: record.terrainPopulated !== false, lightPopulated: !!record.lightPopulated };
 }
