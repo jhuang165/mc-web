@@ -10,17 +10,25 @@ import { JavaRandom, biomeTemperature, lightOpacity } from "./lighting.js";
 import { rainParticleAttempts } from "./particle-settings.js";
 import { rainParticleStrength } from "./render-settings.js";
 import { SIZE, HEIGHT, FIRE, LAVA, SNOW_LAYER, ICE, isPlant, ticksRandomly } from "./world.js";
+import { ringRandomActive } from "./streaming-ticks.js";
 import { biomeFacts } from "./biomes.js";
 import { canBlockFreeze, canSnowAt, lightOf, meltResult } from "./snow.js";
 import { CAULDRON, cauldronRain } from "./stone-utility.js";
 
 const f = Math.fround;
+// How far (blocks) a random tick of a block reads or writes from its cell, for chunks outside the resident ticking window (their
+// neighbours may be missing, streaming-ticks.js ringRandomActive): leaf decay looks 5 out (BlockLeaves.updateTick's 4-block search
+// plus its chunk test), saplings and mushrooms grow trees and spread over larger areas, the rest (fire, lava, farmland water at 4,
+// crops, cactus, cane, ice, snow) stay within 4.
+export const randomTickReach = (b) => (b === 5 || b === 71 ? 5 : b === 48 || b === 75 || b === 76 ? 8 : 4);
 
 // Random.nextLong: (next(32) << 32) + next(32), as a signed 64-bit BigInt.
 export function nextLong(random) {
   const hi = BigInt(random.next(32)), lo = BigInt(random.next(32));
   return BigInt.asIntN(64, (hi << 32n) + lo);
 }
+// Chunk existence for a world read (the resident window, plus held ring columns during the simulation tick).
+const readable = (world, x, z) => (world.isReadable ? world.isReadable(x, z) : world.isLoaded(x, z));
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 // Material.blocksMovement || Material.isLiquid: the blocks Chunk.getPrecipitationHeight
@@ -30,14 +38,14 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 export const stopsPrecipitation = (b) => b !== 72 && b !== 73 && b !== 0 && b !== 20 && b !== SNOW_LAYER && b !== FIRE && b !== 59 && !isPlant(b);
 // Chunk.getPrecipitationHeight (apx.d): one above the topmost such block, or -1.
 export function precipitationHeight(world, x, z) {
-  if (world.streaming ? !world.isLoaded(x,z) : x < 0 || z < 0 || x >= SIZE || z >= SIZE) return -1;
+  if (world.streaming ? !readable(world, x, z) : x < 0 || z < 0 || x >= SIZE || z >= SIZE) return -1;
   for (let y = (world.height ?? HEIGHT) - 1; y >= 0; y--) if (stopsPrecipitation(world.get(x, y, z))) return y + 1;
   return -1;
 }
 // Chunk.canBlockSeeTheSky (apx.c): at or above the height map, which rests on
 // the topmost block with any light opacity (glass, torches and plants do not count).
 export function canSeeSky(world, x, y, z) {
-  if (world.streaming ? !world.isLoaded(x,z) : x < 0 || z < 0 || x >= SIZE || z >= SIZE) return false;
+  if (world.streaming ? !readable(world, x, z) : x < 0 || z < 0 || x >= SIZE || z >= SIZE) return false;
   let top = (world.height ?? HEIGHT) - 1;
   while (top >= 0 && lightOpacity(world.get(x, top, z)) === 0) top--;
   return y >= top + 1;
@@ -232,7 +240,8 @@ export class Weather {
   // picks x, z, y) in every 16-high section that has a randomly ticking block.
   tickChunk(world, cx, cz) {
     // The cave mood sound (cave-ambience.js) comes first in WorldServer's chunk loop; main.js installs it.
-    const mood = this.mood?.chunk(world, cx, cz);
+    // Chunks outside the resident window never hear it (the sound needs the player within 8 blocks), and take no mood roll here.
+    const mood = world.ringSink && !world.isTicking(cx * 16, cz * 16) ? null : this.mood?.chunk(world, cx, cz);
     if (mood) this.events.push(mood);
     this.rollLightningChunk(world, cx, cz);
     const bx = cx * 16, bz = cz * 16, light = lightOf(world);
@@ -260,6 +269,7 @@ export class Weather {
           y = s * 16 + ((j >> 16) & 15),
           b = world.get(x, y, z);
         if (!ticksRandomly(b)) continue;
+        if (world.ringSink && !world.isTicking(x, z) && !ringRandomActive(world, x, z, randomTickReach(b))) continue; // its surroundings are not held yet
         // Blocks ticked elsewhere (fire and still lava, in fire.js) take their updateTick here.
         if (this.blockTick?.(x, y, z, b)) continue;
         const melt = meltResult(b, light(x, y, z));
@@ -273,7 +283,12 @@ export class Weather {
   // The chunks WorldServer ticks around a player: its view distance (10 by
   // default) clipped to the world.
   static activeChunks(px, pz, radius = 10, world = null) {
-    if (world?.streaming) return [...world.chunks.values()].filter(c=>Math.abs(c.x-Math.floor(px/16))<=radius && Math.abs(c.z-Math.floor(pz/16))<=radius && world.isTicking(c.x*16,c.z*16)).map(c=>[c.x,c.z]);
+    if (world?.streaming) {
+      const out = [...world.chunks.values()].filter(c=>Math.abs(c.x-Math.floor(px/16))<=radius && Math.abs(c.z-Math.floor(pz/16))<=radius && world.isTicking(c.x*16,c.z*16)).map(c=>[c.x,c.z]);
+      // The ring: chunks of activeChunkSet beyond the resident ticking window (headless-columns.js randomTickChunks).
+      if (world.ringSink?.randomTickChunks) for (const e of world.ringSink.randomTickChunks(Math.floor(px/16), Math.floor(pz/16), radius)) out.push(e);
+      return out;
+    }
     const out = [], n = SIZE / 16, cx = Math.floor(px / 16), cz = Math.floor(pz / 16);
     for (let x = Math.max(0, cx - radius); x <= Math.min(n - 1, cx + radius); x++)
       for (let z = Math.max(0, cz - radius); z <= Math.min(n - 1, cz + radius); z++) out.push([x, z]);

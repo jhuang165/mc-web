@@ -174,7 +174,7 @@ test("blockTicks: a ring entry runs when its column takes writes and the eight c
 test("a fluid entry at the ring rim waits; it runs once the ring holds the chunks around it", () => {
   const { world, ring } = setup(true);
   const fluids = new Fluids(world, { seed: 1 });
-  const x = 14 * 16 + 8, z = 72;
+  const x = 14 * 16 + 13, z = 72; // 13 + 5 reaches into chunk 15, which is not held (a fluid's 5-block reach, batch 26)
   world.ringReads = true;
   let y = 200; while (y > 0 && !world.get(x, y, z)) y--;
   world.set(x, y + 3, z, STONE, true, 0);

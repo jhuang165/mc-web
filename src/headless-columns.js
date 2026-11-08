@@ -12,6 +12,7 @@
 // are skipped by the spawner exactly like before (no draws); once they arrive they take part with the native draw order.
 // `view` is a World look-alike whose get/getMeta read the resident column first and a headless column second.
 import { lightEmission, lightOpacity, LightVolume } from "./lighting.js";
+import { ticksRandomly } from "./world.js";
 
 // Chunks around the player that get a headless column: 7 (non-edge eligible) + 2 (a spawn attempt's reach) + 1 (light inflow).
 export const RING_RADIUS = 10;
@@ -20,6 +21,14 @@ const KEY = 8388608; // |chunk z| < 1,875,000 (the 30,000,000 border), so cx * 2
 export const ringKey = (cx, cz) => cx * KEY + cz;
 
 const columnKey = (cx, cz) => `${cx},${cz}`; // World's chunk key
+const TICKS = new Uint8Array(256); // Block.tickRandomly by port id
+for (let b = 0; b < 256; b++) TICKS[b] = ticksRandomly(b) ? 1 : 0;
+// Random-tick refcounts of a compact column (ExtendedBlockStorage.tickRefCount, as WorldChunk.sectionTickCount keeps them).
+function countTicking(col, height) {
+  const counts = new Int32Array(height / 16), blocks = col.blocks, h = col.h;
+  for (let i = 0; i < blocks.length; i++) if (TICKS[blocks[i]]) counts[(i % h) >> 4]++;
+  return counts;
+}
 
 // A column of {blocks, metadata} in WorldChunk order (index (lx * 16 + lz) * height + y), trimmed to its highest filled section.
 export function compactColumn(blocks, metadata, height = 256) {
@@ -63,6 +72,10 @@ function writeCell(col, c, y, b, m) {
     col.h = nh; col.blocks = blocks; col.meta = meta;
   }
   const i = c * col.h + y, keys = col.meta;
+  if (col.tickCounts) { // kept up to date once built, like World.put does for the window
+    if (TICKS[col.blocks[i]]) col.tickCounts[y >> 4]--;
+    if (TICKS[b]) col.tickCounts[y >> 4]++;
+  }
   col.blocks[i] = b;
   let lo = 0, hi = keys.length - 1, at = -1;
   while (lo <= hi) { const mid = (lo + hi) >> 1, k = keys[mid] >> 4; if (k === i) { at = mid; break; } if (k < i) lo = mid + 1; else hi = mid - 1; }
@@ -230,6 +243,47 @@ export class HeadlessColumns {
       this.ticks.set(key, v);
     }
     return v;
+  }
+  // WorldServer.func_147456_g random-ticks every chunk of activeChunkSet (the chunks within the view distance of the player, 10 here:
+  // weather.js Weather.activeChunks) and, per 16-high section that getNeedsRandomTick, draws three cells (natural-spawning.md "Round 8").
+  // `sectionTickCount` answers that refcount for a held ring column, built on first use.
+  sectionTickCount(cx, cz, s) {
+    const col = this.cols.get(ringKey(cx, cz));
+    if (!col) return 0;
+    return (col.tickCounts ??= countTicking(col, this.height))[s];
+  }
+  // Chunks (outside the resident ticking window) that take random ticks within `radius` of the player chunk (pcx, pcz): a held ring
+  // column whose own chunk takes writes, or a resident halo column. Refcounts are built within a per-call budget, so the first ticks
+  // after a column arrives skip it for a moment. Cached until the ring or the window changes.
+  randomTickChunks(pcx, pcz, radius) {
+    const w = this.world;
+    if (this.rtVersion !== this.version || this.rtMinX !== w.minX || this.rtMinZ !== w.minZ || this.rtCx !== pcx || this.rtCz !== pcz || this.rtRadius !== radius) {
+      this.rtVersion = this.version; this.rtMinX = w.minX; this.rtMinZ = w.minZ; this.rtCx = pcx; this.rtCz = pcz; this.rtRadius = radius;
+      this.rtList = [];
+      for (let cx = pcx - radius; cx <= pcx + radius; cx++) for (let cz = pcz - radius; cz <= pcz + radius; cz++) {
+        const x = cx * 16, z = cz * 16;
+        if (w.isTicking(x, z) || !this.writable(x, z)) continue;
+        this.rtList.push([cx, cz]);
+      }
+    }
+    // Resident halo columns count themselves lazily (WorldChunk); held ring columns are counted here, a few a call.
+    let budget = 8;
+    const out = [];
+    for (const e of this.rtList) {
+      const col = this.cols.get(ringKey(e[0], e[1]));
+      if (col && !col.tickCounts) { if (budget <= 0) continue; budget--; col.tickCounts = countTicking(col, this.height); }
+      out.push(e);
+    }
+    return out;
+  }
+  // True when every chunk a block update at (x, z) can read within `r` blocks is resident or held (natively those chunks are always
+  // loaded; here a missing column reads as air, so an update that would reach one waits instead).
+  reaches(x, z, r) {
+    const lx = x & 15, lz = z & 15;
+    if (lx >= r && lx + r <= 15 && lz >= r && lz + r <= 15) return true;
+    for (let cx = (x - r) >> 4; cx <= (x + r) >> 4; cx++) for (let cz = (z - r) >> 4; cz <= (z + r) >> 4; cz++)
+      if (!this.resident(cx * 16, cz * 16) && !this.cols.has(ringKey(cx, cz))) return false;
+    return true;
   }
   // fn(cx, cz, col) for every held column.
   eachColumn(fn) {

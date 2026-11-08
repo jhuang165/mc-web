@@ -337,7 +337,7 @@ export class Fluids {
   tick() {
     this.time++;
     // Entries in held ring columns run too (natural-spawning.md "Round 7"); their writes go to the ring (World.ringSink).
-    pauseUnloadedTicks(this.world, this.heap, (x, z) => ringBlockTickActive(this.world, x, z));
+    pauseUnloadedTicks(this.world, this.heap, (x, z) => ringBlockTickActive(this.world, x, z, 5)); // the flow search is 4 deep
     for (let n = Math.min(this.heap.length, MAX_TICKS); n > 0 && this.heap[0].time <= this.time; n--) {
       const { x, y, z, key, block } = this.pop();
       this.pending.delete(key);
