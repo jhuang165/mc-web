@@ -50,7 +50,9 @@ export function cleanItems(raw) {
 // EntityHorse.isHorseSaddled and getHorseArmorIndex read the AnimalChest slots; the record keeps them as flags too.
 export function syncGear(h) {
   if (!Array.isArray(h.items)) return h;
-  h.saddled = originalId(h.items[SADDLE_SLOT]) === SADDLE_ID;
+  // EntityHorse.func_110232_cE (wi.cE, from AnimalChest.onInventoryChanged) sets the saddled flag from "slot 0 holds any stack", not the id
+  // (leads3-reference.json horseNeg: a stick moved into slot 0 reads saddled); slot validity is what keeps other items out of it.
+  h.saddled = !!h.items[SADDLE_SLOT];
   h.armor = HORSE_ARMOR_IDS[originalId(h.items[ARMOR_SLOT])] ?? 0;
   return h;
 }
@@ -92,7 +94,8 @@ export function gearDrops(h) {
 
 class HorseSlot extends Slot {
   constructor(inventory, index, x, y, horse) { super(inventory, index, x, y); this.horse = horse; }
-  get limit() { return this.index < CHEST_FIRST ? 1 : this.inventory.limit; }
+  // aan and aao do not override getSlotStackLimit, so every horse slot takes the AnimalChest limit (64): a size-2 saddle goes in whole on a
+  // left click (leads3-reference.json horseNeg); only the right click places one.
   get enabled() { return slotEnabled(this.horse, this.index); }
   valid(s) { return !!s && slotValid(this.horse, this.index, s, this.has); }
 }

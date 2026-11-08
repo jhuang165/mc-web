@@ -266,7 +266,7 @@ export class DimensionLive {
     if (kind === "mob") {
       delete rec.id;
       Object.assign(rec, { x: e.x, y, z: e.z, yaw: mcToMobYaw(e.yaw), portalMotion: { vx: e.vx, vy: e.vy, vz: e.vz } });
-      if (leashed) { delete rec.leash; inbox.drops.push({ stack: { id: LEAD_ITEM, count: 1, damage: 0 }, x: e.x, y, z: e.z, mx: 0, my: 0, mz: 0, age: 0, delay: 10, hover: 0 }); } // the holder is not in the new world
+      if (leashed) { delete rec.leash; inbox.drops.push({ stack: { id: LEAD_ITEM, count: 1, damage: 0 }, x: e.x, y, z: e.z, mx: Math.random() * 0.2 - 0.1, my: 0.2, mz: Math.random() * 0.2 - 0.1, age: 0, delay: 10, hover: 0 }); } // the holder is not in the new world; EntityItem's constructor motion
       inbox.entities.push(rec);
     } else if (kind === "item") {
       Object.assign(rec, { x: e.x, y, z: e.z, mx: e.vx, my: e.vy, mz: e.vz });

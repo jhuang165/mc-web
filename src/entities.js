@@ -1390,7 +1390,7 @@ export class EntityWorld {
     if (e.type === "villager") this.villagerDied(e, source);
     // EntityIronGolem.onDeath (wt.a(ro)): a village golem (not player-created) killed while a player is its attackingPlayer costs that player 5.
     else if (e.type === "iron_golem" && !e.playerCreated && e.recentlyHit > 0) this.ai.brain(e).village?.changeReputation(source.playerName ?? PLAYER_NAME, -5);
-    this.gearDeath(e); // horse-gear-live.js: the horse inventory and the lead drop
+    this.gearDeath(e); // horse-gear-live.js: the horse inventory (the lead stays on the corpse)
     // ... and only while gamerule doMobLoot is true (dropFewItems, dropEquipment and the rare drop alike).
     if ((e.growingAge >= 0 || e.type === "zombie" || e.type === "pigman") && gameRule("doMobLoot")) {
       const at = { x: e.x, y: e.y, z: e.z };
@@ -1959,6 +1959,7 @@ export class EntityWorld {
     this.push(e, t);
     if (e.type === "chicken") this.chickenUpdate(e);
     this.swingLimbs(e);
+    if (e.leash) this.leashTick(e); // EntityLiving.onUpdate -> updateLeashedState also runs for a corpse (horse-gear-live.js)
   }
   size(o) {
     if (isVehicle(o)) return vehicleSize(o); // a boat or minecart a rider asks the height of (vehicle-seat.js)
