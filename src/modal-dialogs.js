@@ -5,7 +5,8 @@
 // GuiGameOver (bdc), bytecode-read:
 //   initGui: Respawn (id 0, deathScreen.respawn) at (w/2 - 100, h/4 + 72) and Title screen (id 1) at (w/2 - 100, h/4 + 96), 200 x 20; a
 //     hardcore world has the single Delete world button (id 1) at (w/2 - 100, h/4 + 96); every button starts disabled and updateScreen
-//     enables them when its counter reaches 20 ticks. (deathScreen.leaveServer replaces the hardcore button on a remote server only.)
+//     enables them when its counter reaches 20 ticks (updateScreen: ++counter == 20, once per client tick; initGui does not reset
+//     the counter). (deathScreen.leaveServer replaces the hardcore button on a remote server only.)
 //   drawScreen: drawGradientRect 0x60500000 -> 0xA0303030; glScalef(2, 2, 2) then the title (deathScreen.title or .title.hardcore)
 //     centred at (w/2/2, 30) in white, so it is drawn at twice the size centred on w/2 at y 60; hardcore info (deathScreen.hardcoreInfo)
 //     centred at (w/2, 144); "Score: " + EnumChatFormatting.YELLOW + score centred at (w/2, 100), all white with a shadow.
@@ -14,20 +15,22 @@
 //     in a hardcore world as well as in a normal one. confirmClicked: yes leaves to the title screen, no respawns (the hardcore server
 //     deletes the world, see hardcore.md).
 // GuiYesNo (bcw), bytecode-read: line1 centred at (w/2, 70), line2 at (w/2, 90); two 150 x 20 buttons (id 0 yes, id 1 no) at
-//   (w/2 - 155, h/6 + 96) and (w/2 + 5, h/6 + 96); setButtonDelay(n) disables them for n ticks. It has no keyTyped of its own, so
+//   (w/2 - 155, h/6 + 96) and (w/2 + 5, h/6 + 96); setButtonDelay(n) disables them for n ticks (updateScreen: --counter == 0
+//   enables them; a later initGui makes fresh, enabled buttons). It has no keyTyped of its own, so
 //   GuiScreen.keyTyped applies: Escape displayGuiScreen(null). Minecraft.displayGuiScreen(null) with a dead player (health <= 0)
 //   opens a new GuiGameOver, so Escape on the quit confirmation brings the death screen back with its 20 tick delay.
 // GuiEditSign (bfx), bytecode-read: Done (gui.done) 200 x 20 at (w/2 - 100, h/4 + 120); title sign.edit centred at (w/2, 40) white;
-//   drawDefaultBackground. The board is the ModelSign rendered with a 93.75 scale; where the port's canvas sits inside it is assumed.
+//   drawDefaultBackground. The sign is the ModelSign under glTranslatef(w/2, 0, 50), glScalef(-93.75) and glRotatef(180, 0, 1, 0):
+//   sign-layout.js signGuiGeometry places the canvas on the board's native rectangle (gui-screens-reference.json "editSign").
 // Export World and the notes page have no 1.7.10 counterpart: they are port-only, laid out like GuiIngameMenu / GuiOptions (assumed).
 import { LANG, t, splitLines, textWidth } from "./menu-screens.js";
 import { yesNoLayout } from "./menu-screens.js";
+import { signGuiGeometry } from "./sign-layout.js";
 
 const half = (n) => Math.trunc(n / 2);
 const btn = (x, y, w = 200, h = 20) => ({ x, y, w, h });
 const tr = (key, fallback) => (LANG[key] !== undefined ? t(key) : fallback);
 export const BUTTON_DELAY_TICKS = 20;
-const TICK_MS = 50;
 
 /** GuiGameOver geometry. `hardcore` swaps the buttons and adds the info line. */
 export function gameOverLayout(w, h, hardcore = false) {
@@ -42,10 +45,10 @@ export function gameOverLayout(w, h, hardcore = false) {
 }
 /** The GuiYesNo of the quit question is the stock one (yesNoLayout); this names it for the test. */
 export const quitConfirmLayout = yesNoLayout;
-/** GuiEditSign: title y 40, Done at h/4 + 120. The canvas top is the port's own placement (assumed). */
-export function signEditLayout(w, h) {
-  const c = half(w), q = Math.trunc(h / 4);
-  return { title: [c, 40], done: btn(c - 100, q + 120), canvasTop: 52, canvasBottom: q + 120 - 8 };
+/** GuiEditSign: title y 40, Done at h/4 + 120, the sign drawn on its native rectangle about x = w/2 (GUI px, fractional). */
+export function signEditLayout(w, h, standing = true) {
+  const c = half(w), q = Math.trunc(h / 4), S = signGuiGeometry(standing);
+  return { title: [c, 40], done: btn(c - 100, q + 120), sign: { x: c + S.bounds.x, y: S.bounds.y, w: S.bounds.w, h: S.bounds.h }, geometry: S };
 }
 /** Export World (port-only, assumed): rows like GuiIngameMenu (title y 40, buttons 24 apart from h/4 + 24), Cancel last. */
 export function exportLayout(w, h) {
@@ -58,21 +61,23 @@ export function notesLayout(w, h) {
   return { title: [c, 15], area: { x: c - 150, y: 32, w: 300, h: Math.max(20, h - 64) }, lineHeight: 10, done: btn(c - 100, h - 27) };
 }
 
-// Buttons that start disabled and come alive after `ticks` GUI ticks (GuiGameOver.updateScreen / GuiYesNo.setButtonDelay). Time based:
-// Gui.frame runs per animation frame, one tick is 50 ms.
+// Buttons that start disabled and come alive after `ticks` client ticks (GuiGameOver.updateScreen / GuiYesNo.setButtonDelay). The
+// screen's tick() is GuiScreen.updateScreen, called by Gui.tick once per client tick (main.js runs it in its tick loops), so the delay
+// counts game ticks, not wall-clock time. `init()` starts a new widget set (initGui); the count carries over, as natively.
 function delayed(ticks = BUTTON_DELAY_TICKS) {
-  const buttons = [];
-  let start = null, released = false;
+  let buttons = [], count = 0, released = false;
+  const all = (on) => { for (const b of buttons) b.enable(on); };
   return {
+    init() { buttons = []; },
     add(b) { buttons.push(b); b.enable(released); return b; },
-    reset() { start = null; released = false; for (const b of buttons) b.enable(false); },
-    frame(now) {
+    reset() { count = 0; released = false; all(false); },
+    tick() {
       if (released) return;
-      if (start === null) start = now;
-      if (Math.floor((now - start) / TICK_MS) >= ticks) { released = true; for (const b of buttons) b.enable(true); }
+      if (++count >= ticks) { released = true; all(true); }
     },
-    release() { released = true; for (const b of buttons) b.enable(true); },
+    release() { released = true; all(true); },
     get released() { return released; },
+    get count() { return count; },
   };
 }
 
@@ -87,10 +92,13 @@ export function gameOverScreen({ hardcore = false, score = 0, respawn, leave, co
     id: "game-over",
     background: () => "game-over",
     escape() {}, // keyTyped is empty
-    frame: (now) => gate.frame(now),
+    tick: () => gate.tick(),
     init(g, w, h) {
       const L = gameOverLayout(w, h, hardcore);
-      gate.reset();
+      // Native initGui creates the buttons disabled without resetting the counter, so a resize after tick 20 leaves them disabled for
+      // good (++counter never equals 20 again). The port keeps them enabled after a resize instead (deliberate: a browser window
+      // resizes far more often, and the native case is a soft lock).
+      gate.init();
       // glScalef(2, 2, 2): a layer scaled from the top left.
       const big = g.image("mc-scale2", 0, 0, w, h);
       big.style.transform = "scale(2)";
@@ -116,14 +124,17 @@ export function gameOverScreen({ hardcore = false, score = 0, respawn, leave, co
 /** The quit question of GuiGameOver: GuiYesNo(..., "", Title screen, Respawn) with a 20 tick button delay. */
 export function quitConfirmScreen({ yes, no, again }) {
   const gate = delayed();
+  let inits = 0;
   return {
     id: "game-over-confirm",
     background: () => "default", // drawDefaultBackground
     escape: () => again(), // GuiScreen.keyTyped -> displayGuiScreen(null) -> new GuiGameOver
-    frame: (now) => gate.frame(now),
+    tick: () => gate.tick(),
     init(g, w, h) {
       const L = yesNoLayout(w, h);
-      gate.reset();
+      // setButtonDelay(20) runs once, after the first initGui; a later initGui (resize) builds enabled buttons, as natively.
+      gate.init();
+      if (inits++ > 0) gate.release();
       g.text(t("deathScreen.quit.confirm"), ...L.line1, { center: true });
       g.text("", ...L.line2, { center: true });
       gate.add(g.button(L.buttons.yes, t("deathScreen.titleScreen"), () => yes()));
@@ -202,30 +213,28 @@ export function notesScreen({ notes, openLink, back }) {
 }
 
 /**
- * GuiEditSign host for sign-editor.js: show(title, html, { done }) puts the canvas html in the Gui layer with the native title and Done
- * button; close() goes through `close`. `gui` is the main Gui.
+ * GuiEditSign host for sign-editor.js: show(title, canvas, { done, standing, tick, closed }) puts the sign canvas on its native
+ * rectangle with the title and Done button; tick() is GuiEditSign.updateScreen, closed() runs when the screen goes away; close()
+ * goes through `close`. `gui` is the main Gui.
  */
 export function signEditHost(gui, { close, markUnsaved }) {
   return {
     markUnsaved,
     close,
-    show(title, html, { done } = {}) {
+    show(title, canvas, { done, standing = true, tick, closed } = {}) {
       if (document.pointerLockElement) document.exitPointerLock();
-      // Built once: a GUI rebuild (window resize) moves the same canvas instead of replacing it under sign-editor.js.
-      const content = document.createElement("div");
-      content.innerHTML = html;
+      // The same canvas is re-parented on a GUI rebuild (window resize) instead of being replaced under sign-editor.js.
       gui.show({
         id: "edit-sign",
         background: () => "default",
         escape() {}, // sign-editor.js owns the keys (Escape is keyCode 1 of the model)
+        tick: () => tick?.(),
+        close: () => closed?.(),
         init(g, w, h) {
-          const L = signEditLayout(w, h);
+          const L = signEditLayout(w, h, standing);
           g.text(title, ...L.title, { center: true });
-          const holder = g.image("mc-sign-holder", 0, L.canvasTop, w, Math.max(20, L.canvasBottom - L.canvasTop));
-          holder.style.display = "flex";
-          holder.style.alignItems = "center";
-          holder.style.justifyContent = "center";
-          holder.append(...content.childNodes);
+          // drawScreen order: title, sign, then the buttons (super.drawScreen) over it.
+          g.image("mc-sign-holder", L.sign.x, L.sign.y, L.sign.w, L.sign.h).append(canvas);
           g.button(L.done, t("gui.done"), () => done?.());
         },
       });

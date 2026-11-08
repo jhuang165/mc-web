@@ -1,0 +1,148 @@
+{
+  "source": "javap -c -p -constants of the unchanged 1.7.10 client jar (bytecode-read, nothing executed); tools/verify-gui-screens.mjs",
+  "jarSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+  "classes": {
+    "bfx": "GuiEditSign",
+    "bmr": "TileEntitySignRenderer",
+    "beh": "GuiAchievement",
+    "bdc": "GuiGameOver",
+    "bcw": "GuiYesNo",
+    "bcd": "GuiTextField",
+    "bfh": "GuiCommandBlock",
+    "bdh": "GuiErrorScreen",
+    "bdx": "GuiSelectWorld",
+    "bdt": "GuiScreenWorking"
+  },
+  "classSha256": {
+    "bfx": "be1c769199af9d903f9418937134f12a9b91976291a60f7ef10d542a8f2ac4ec",
+    "bmr": "f1424895dd521ffa0def3d9e523ea0a5f1c80a7d9d950d33059cfe7109d2aa17",
+    "beh": "19017da9ba94dbd3fdef74daf6c607d5d79d8a9ed64dca6221c92edefe02d9ce",
+    "bdc": "648f6a64dcababcec1e86b82e0da9004b18bdeb46110e9135a9ec3732118f6a3",
+    "bcw": "9c81bf4e121a64a22a0bccb6a4da9a96b9ded1723c2bf059844689df99b03f55",
+    "bcd": "ac0d68f633d4318a5c117f6de34467bd3894fc5c46e063c1f44ddd934fd21048",
+    "bfh": "0313eb94afe8531b8c7e634726f8cb8b0a5c598e623d21d3f7672f938e3e6584",
+    "bdh": "5e8531599a50f33cfee9eeba2d93339ce269c7596495c9db9e8e1cebe5876de0",
+    "bdx": "cd0a6c4c0380088ad5218d5a3233592192b343cb8dc597dcca0180dca756affb",
+    "bdt": "4b90bcc785814325a06034352687e2d47943744d4eb17dc1a85f50aa008d2335"
+  },
+  "editSign": {
+    "titleY": 40,
+    "done": [
+      "w/2-100",
+      "h/4+120"
+    ],
+    "translate": [
+      "w/2",
+      0,
+      50
+    ],
+    "scale": -93.75,
+    "rotateY": 180,
+    "lift": -1.0625,
+    "tile": [
+      -0.5,
+      -0.75,
+      -0.5
+    ],
+    "blinkDivisor": 6,
+    "standing": {
+      "origin": 123.046875,
+      "board": {
+        "x": -46.87500139698386,
+        "y": 68.3593733701855,
+        "w": 93.75000279396772,
+        "h": 46.87500139698386
+      },
+      "stick": {
+        "x": -3.906250116415322,
+        "y": 115.23437476716936,
+        "w": 7.812500232830644,
+        "h": 54.687501629814506
+      },
+      "textY": 91.79687406867743,
+      "textScale": 1.0416667792014778
+    },
+    "wall": {
+      "origin": 152.34375,
+      "board": {
+        "x": -46.87500139698386,
+        "y": 97.6562483701855,
+        "w": 93.75000279396772,
+        "h": 46.87500139698386
+      },
+      "stick": null,
+      "textY": 121.09374906867743,
+      "textScale": 1.0416667792014778
+    }
+  },
+  "achievementToast": {
+    "windowMs": 3000,
+    "hintDelayMs": 2500,
+    "hintClamp": 0.5,
+    "curve": "e = 2d (2 - 2d above 1); e = max(0, 1 - 4e); e = e^4; y = -(int)(e * 36)",
+    "width": 160,
+    "height": 32,
+    "slide": 36,
+    "texture": {
+      "path": "textures/gui/achievement/achievement_background.png",
+      "u": 96,
+      "v": 202,
+      "w": 160,
+      "h": 32
+    },
+    "icon": [
+      8,
+      8
+    ],
+    "hint": {
+      "x": 30,
+      "y": 7,
+      "wrap": 120,
+      "color": "0xFFFFFFFF"
+    },
+    "get": {
+      "title": [
+        30,
+        7,
+        "0xFFFFFF00"
+      ],
+      "name": [
+        30,
+        18,
+        "0xFFFFFFFF"
+      ],
+      "shadow": false
+    },
+    "x": "scaledWidth - 160"
+  },
+  "gameOver": {
+    "delayTicks": 20,
+    "counterResetInInit": false
+  },
+  "yesNo": {
+    "delayDecrementsTo": 0,
+    "initGuiEnables": true
+  },
+  "textField": {
+    "enabledColor": "0xE0E0E0",
+    "disabledColor": "0x707070",
+    "commandBlockOutputEnabled": false
+  },
+  "errorScreen": {
+    "gradient": [
+      "0xFF402020",
+      "0xFF501010"
+    ],
+    "titleY": 90,
+    "messageY": 110,
+    "cancel": [
+      "w/2-100",
+      140
+    ],
+    "selectWorldTitle": "Unable to load worlds"
+  },
+  "workingScreen": {
+    "titleY": 70,
+    "lineY": 90
+  }
+}

@@ -296,7 +296,7 @@ const esc = (s) =>
       ],
   );
 const storageKey = "blockworld.worlds.v1";
-let worlds = [];
+let worlds = [], worldsError = null;
 try {
   worlds = JSON.parse(localStorage.getItem(storageKey) || "[]");
   if (!Array.isArray(worlds)) worlds = [];
@@ -622,6 +622,7 @@ const menuContext = {
   get options() { return options; },
   bindings: binds,
   get worlds() { return worlds; },
+  worldsError: () => worldsError, // GuiSelectWorld -> GuiErrorScreen "Unable to load worlds"
   get achievements() { return achievements; },
   get stats() { return stats; },
   icon: (id, damage) => icon(id, damage),
@@ -695,7 +696,7 @@ addEventListener("resize", () => gui.build());
 
 // `columns`: the active streamed world's edited column records (world-storage.js).
 async function persist(columns = []) {
-  if (!worldWriterAvailable) return false;
+  if (!worldWriterAvailable || worldsError) return false; // an unread shelf is never overwritten with the empty list
   try {
     await writeWorldShelf(worlds, localStorage, storageKey, columns);
     return true;
@@ -3634,6 +3635,7 @@ function animate(now) {
     while (accumulator >= PHYSICS.tick && running()) {
       profilerTick(profiler); // MinecraftServer.tick: /debug start takes effect here
       tickCounter++;
+      gui.tick(); // Minecraft.runTick: currentScreen.updateScreen (sign editor blink)
       tickProf.start("root");
       tickProf.start("particles");
       updateParticleOptions();
@@ -3756,6 +3758,7 @@ function animate(now) {
     // in 20 "explode" from posY, which is its eye.
     accumulator += dt;
     while (accumulator >= PHYSICS.tick) {
+      gui.tick(); // GuiGameOver / GuiYesNo updateScreen: the 20-tick button delay counts these client ticks
       survival.hurtTime = Math.max(0, survival.hurtTime - 1);
       if (++deathTime === 20) burst(scene.fx, "explode", 20, { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z, width: PHYSICS.width, height: PHYSICS.height }, playerRandom);
       scene.effectRenderer.tick(world);
@@ -3880,7 +3883,7 @@ async function boot(){try {
   // this page was starting up, before the browser granted its lock.
   if (worldWriterAvailable) {
     try {const shelf=JSON.parse(localStorage.getItem(storageKey)||'[]');worlds=Array.isArray(shelf)?shelf:[];}catch{worlds=[];}
-    worlds = await readWorldShelf(worlds);
+    try { worlds = await readWorldShelf(worlds); } catch (e) { worlds = []; worldsError = String(e?.message ?? e); }
   } else worlds = [];
   scene = new VoxelScene($("#viewport"));
   scene.post.anaglyph = () => !!options.anaglyph; // GameSettings.anaglyph (options.txt anaglyph3d)

@@ -22,6 +22,7 @@ import { DEFAULT_FLAT_STRING } from "./flat-world.js";
 import { resourcePacksScreen } from "./resource-packs-ui.js";
 import { cycleCreateMode, createdWorldFlags, createModeOf, cheatsButtonEnabled, cheatsShownOn, bonusShownOn, HARDCORE_COLOR, isHardcoreRecord, difficultyLocked } from "./hardcore.js";
 import { importScreen } from "./import-screen.js";
+import { errorScreen } from "./loading-screen.js";
 
 const SOUND_KEYS = ["master", "music", "record", "weather", "block", "hostile", "neutral", "player", "ambient"];
 // Why each unavailable vanilla button is disabled here.
@@ -128,7 +129,12 @@ export function createMenus(gui, ctx) {
   }
 
   // --- GuiSelectWorld ---
+  // initGui's loadSaves catches AnvilConverterException with displayGuiScreen(new GuiErrorScreen("Unable to load worlds",
+  // message)) (bdx, bytecode-read); its Cancel is displayGuiScreen(null), the main menu without a world. ctx.worldsError() is the
+  // message when the browser world shelf could not be read.
   function selectWorld() {
+    const failed = ctx.worldsError?.();
+    if (failed) return errorScreen({ title: "Unable to load worlds", message: failed, cancel: () => show(mainMenu()) });
     let selected = -1, scroll = 0, records = [], list, buttons;
     const screen = {
       id: "select-world",

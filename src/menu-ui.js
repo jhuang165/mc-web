@@ -143,6 +143,8 @@ export class Gui {
     this.screen.init(this, w, h);
     if (focused) this.layer.querySelector(`.mc-field input[aria-label="${CSS.escape(focused)}"]`)?.focus();
   }
+  // GuiScreen.updateScreen: Minecraft.runTick calls it once per client tick on the open screen (main.js feeds it).
+  tick() { this.screen?.tick?.(); }
   frame(now) {
     this.raf = requestAnimationFrame(this.frame);
     if (!this.screen) return;
@@ -268,8 +270,11 @@ export class Gui {
   // (x + 4, y + (height - 8) / 2) scrolled by lineScrollOffset, a blinking "_" at the end or a
   // 0xD0D0D0 bar inside the text, and the selection drawn with GL_OR_REVERSE in blue. A
   // transparent <input> takes the typing, clipboard and selection keys.
-  // `secret`: a browser addition for account passwords, drawn as "*" per character.
-  field(r, { value = "", maxLength = 32, focus = false, input, label = "", secret = false }) {
+  // `secret`: a browser addition for account passwords, drawn as "*" per character. `enabled` false is setEnabled(false): the text
+  // (and the "_" cursor) in the disabledColor 0x707070 instead of the enabledColor 0xE0E0E0 (bcd constructor, drawTextBox), and no
+  // edits; the field can still take focus, select and copy, as natively.
+  field(r, { value = "", maxLength = 32, focus = false, input, label = "", secret = false, enabled = true }) {
+    const color = enabled ? 0xe0e0e0 : 0x707070;
     const box = el("div", "mc-field", at(r.x - 1, r.y - 1, r.w + 2, r.h + 2));
     const ty = Math.trunc((r.h - 8) / 2), width = r.w - 8;
     const mirror = el("div", "mc-field-draw", at(1, 1, r.w, r.h));
@@ -278,6 +283,7 @@ export class Gui {
     field.maxLength = maxLength;
     field.spellcheck = false;
     field.autocomplete = secret ? "current-password" : "off";
+    field.readOnly = !enabled;
     const drawn = () => (secret ? "*".repeat(field.value.length) : field.value);
     field.value = value.slice(0, maxLength);
     field.setAttribute("aria-label", label);
@@ -306,14 +312,14 @@ export class Gui {
       const l = 4, s = trimToWidth(text.slice(scroll), width), j = cursor - scroll, k = Math.min(end - scroll, s.length);
       const shown = j >= 0 && j <= s.length, bar = cursor < text.length || text.length >= maxLength;
       let html = "", j1 = l;
-      const draw = (str, x) => { html += `<div class="mc-text" style="${at(x, ty)}">${textHtml(str, 0xe0e0e0)}</div>`; return x + textWidth(str) + 1; };
+      const draw = (str, x) => { html += `<div class="mc-text" style="${at(x, ty)}">${textHtml(str, color)}</div>`; return x + textWidth(str) + 1; };
       if (s.length) j1 = draw(shown ? s.slice(0, j) : s, l);
       let k1 = j1;
       if (!shown) k1 = j > 0 ? l + r.w : l;
       else if (bar) { k1 = j1 - 1; j1--; }
       if (s.length && shown && j < s.length) draw(s.slice(j), j1);
       if (document.activeElement === field && shown) {
-        html += bar ? `<i class="mc-caret" style="${at(k1, ty - 1, 1, 11)}"></i>` : `<div class="mc-text mc-caret" style="${at(k1, ty)}">${textHtml("_", 0xe0e0e0)}</div>`;
+        html += bar ? `<i class="mc-caret" style="${at(k1, ty - 1, 1, 11)}"></i>` : `<div class="mc-text mc-caret" style="${at(k1, ty)}">${textHtml("_", color)}</div>`;
       }
       if (k !== j) {
         // drawCursorVertical(k1, y - 1, l1 - 1, y + 10), clipped to the field.
