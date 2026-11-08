@@ -10,7 +10,8 @@ const u = (n) => `calc(${n}*var(--u))`;
 const at = (x, y, w, h) => `left:${u(x)};top:${u(y)};width:${u(w)};height:${u(h)}`;
 const text = (s, x, y, color = 0) => `<div class="mc-text flat" style="left:${u(x)};top:${u(y)}">${textHtml(s, color)}</div>`;
 // drawSplitString: with the bidirectional flag every wrapped line is reordered and right aligned at x + width - its reordered width (bbu bytecode)
-const lines = (s, x, y, w, color = 0) => listFormatted(s, w).map((l, i) => text(l, font.bidi ? x + w - textWidth(font.bidiReorder(l)) : x, y + 9 * i, color)).join('');
+export const splitLayout = (s, x, y, w, bidi = font.bidi) => listFormatted(s, w).map((l, i) => ({ text: l, x: bidi ? x + w - textWidth(font.bidiReorder(l)) : x, y: y + 9 * i }));
+const lines = (s, x, y, w, color = 0) => splitLayout(s, x, y, w).map((l) => text(l.text, l.x, l.y, color)).join('');
 const arrow = (id, x, y, forward) => `<button class="book-arrow" data-id="${id}" style="position:absolute;${at(x, y, 23, 13)};padding:0;border:0;background:url('/media/1.7.10/gui/book.png') 0 ${u(-(192 + (forward ? 0 : 13)))}/${u(256)} ${u(256)};image-rendering:pixelated;--hover:${u(-23)}"></button>`;
 const button = (id, label, x, y, w, enabled = true) => `<button class="mc-button${enabled ? '' : ' disabled'}" data-id="${id}" style="${at(x, y, w, 20)};--hw:${Math.trunc(w / 2)}"><span class="mc-text mc-label" style="position:absolute;left:0;width:100%;text-align:center;top:${u(6)};color:var(--c);text-shadow:${u(1)} ${u(1)} 0 var(--cs)">${label}</span></button>`;
 

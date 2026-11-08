@@ -226,6 +226,7 @@ import { horseSeatsFor as seatsFor } from "./horse-live.js";
 import { HorseContainer, canInteract as horseReach, canWearArmor as horseWearsArmor } from "./horse-gear.js";
 import { riddenHorse, jumpBar } from "./horse-gear-live.js";
 import { HorseGearRenderer } from "./horse-gear-renderer.js";
+import { SpamCounter, chatPacket } from "./server-handlers.js";
 import { capturePlayerAction, dispatchPlayerAction as dispatchPlayerActionRaw, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
 import { normalizeFlatOptions } from "./flat-world.js";
@@ -1642,9 +1643,17 @@ const commandHost = createCommandHost({
   saveFile: (name, text) => downloadBlob(new Blob([text], { type: "text/plain" }), name),
 });
 const commands = createCommandRunner(commandHost);
+// NetHandlerPlayServer chat: single player is not exempt from the spam kick unless the owner may use commands (oi.g).
+const chatSpam = new SpamCounter();
+function chatSpamGate(text, deliver) {
+  if (multiplayer) return deliver(text);
+  const r = chatPacket(chatSpam, tickCounter, text, commandHost.cheats);
+  if (r.deliver !== null) deliver(r.deliver);
+  if (r.kick) { leaveToTitle(true); toast(r.kick); }
+}
 const chatUi = new ChatUi(document, {
   // ServerConfigurationManager prints "<Player> message"; a leading "/" runs the command.
-  submit: (text) => { if (multiplayer) { if (text.startsWith('/')) printChat('Server commands are not available in this Creative milestone.'); else multiplayer.send({ type: 'chat', text }); } else if (text.startsWith("/")) commands.run(text); else printChat(chatTextComponent(scoreboard.formatName(PLAYER_NAME), text), 0, false); },
+  submit: (text) => chatSpamGate(text, (text) => { if (multiplayer) { if (text.startsWith('/')) printChat('Server commands are not available in this Creative milestone.'); else multiplayer.send({ type: 'chat', text }); } else if (text.startsWith("/")) commands.run(text); else printChat(chatTextComponent(scoreboard.formatName(PLAYER_NAME), text), 0, false); }),
   // GuiChat.func_146407_a: with chatLinksPrompt a GuiConfirmOpenLink asks first; Yes opens a new tab, and every choice returns to the chat.
   confirmLink: (url) => {
     const typed = chatUi.input.value;
@@ -1851,6 +1860,7 @@ function openCreative() {
   const gui = new CreativeScreen(survival.inventory, {
     playerContainer: () => survival.openInventory(),
     tooltip: (s) => tooltipLines(ITEMS[s.id], s, options.advancedTooltips).map((l) => l.text),
+    tick: () => tickCounter,
   });
   openContainer(gui.container, "creative", null, gui);
 }
@@ -3768,23 +3778,23 @@ function animate(now) {
       world,
       aim,
       dir,
-      survival.creative ? 6 : 4.5,
+      survival.creative ? 5 : 4.5,
     );
     eyeRay = { origin: [aim.x, aim.y, aim.z], dir: [dir.x, dir.y, dir.z] };
     aimedEntity = mobs.pick(
       aim,
       dir,
-      survival.creative ? 5 : 3,
+      survival.creative ? 6 : 3,
       target?.distance ?? 6,
     );
     // EntityRenderer.getMouseOver: the nearest entity box (a cart grown by its 0.1 border) wins.
-    aimedCart = pickMinecart(minecarts, aim, dir, survival.creative ? 5 : 3, target?.distance ?? 6, rider.vehicle);
-    const aimedBoat = pickMinecart(boats, aim, dir, survival.creative ? 5 : 3, target?.distance ?? 6, rider.vehicle);
+    aimedCart = pickMinecart(minecarts, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, rider.vehicle);
+    const aimedBoat = pickMinecart(boats, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6, rider.vehicle);
     if (aimedBoat && (!aimedCart || aimedBoat.distance < aimedCart.distance)) aimedCart = aimedBoat;
     if (aimedCart && aimedEntity && aimedEntity.distance <= aimedCart.distance) aimedCart = null;
     if (aimedCart) aimedEntity = null;
     // EntityRenderer.getMouseOver: a painting or frame (box grown by 0.1) nearer than the block and any mob/cart.
-    aimedHanging = pickHanging(hanging, aim, dir, survival.creative ? 5 : 3, target?.distance ?? 6);
+    aimedHanging = pickHanging(hanging, aim, dir, survival.creative ? 6 : 3, target?.distance ?? 6);
     if (aimedHanging && ((aimedEntity && aimedEntity.distance <= aimedHanging.distance) || (aimedCart && aimedCart.distance <= aimedHanging.distance))) aimedHanging = null;
     if (aimedHanging) { aimedEntity = null; aimedCart = null; }
     scene.outline.visible = !hideGUI && !!target && !aimedEntity && !aimedCart && !aimedHanging; // drawSelectionBox skips while hideGUI
