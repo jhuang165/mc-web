@@ -36,7 +36,7 @@
 
 - Looting is not ported (there are no enchantments).
 - Creepers killed by a skeleton draw the record roll, but this build has no records.
-- Revenge targets come only from player hits; mobs do not retaliate against other mobs.
+- Revenge targets (batch 29, `src/revenge-target.js`): any accepted hit whose DamageSource has a living entity (player, a mob's melee, an arrow's shooter) sets `getAITarget` for 100 ticks or until the attacker dies (bytecode-read `sv.C`, `sv.b(sv)`), and EntityAIHurtByTarget turns it into the attack target (call-for-help only for the zombie/golem types that ask). Zombies hit by a golem or a skeleton arrow retaliate; checked against the native fight rows, see village.md "Batch 29".
 - Mobs are updated in this build's entity list order, not the original's chunk order, so pushes between three or more mobs can land in a different order.
 - Every skeleton is assumed to hold a bow; spawn equipment rolls are not run.
 

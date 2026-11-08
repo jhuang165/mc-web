@@ -67,7 +67,9 @@ public class VillageFightProbe {
     player.a(yj.a).a(1000.0);
     player.g(1000.0f);
     MobMoveProbe.set(player, "L", 0f);
+    at(player, pos[7][0], 0, pos[7][1]); // yOffset 0 as EntityPlayerMP: rebuild the box that the loop above made with EntityPlayer's 1.62 (batch 29: the stale box made a zombie's AttackOnCollide see a target that had moved)
     VillageLiveProbe.W.players.put("probe", player);
+    VillagerProbe.World.closePlayers = new ArrayList<yz>(java.util.Arrays.asList(player));
     double[][] vel = new double[ents.length][2];
     List<String> rows = new ArrayList<>(), hits = new ArrayList<>();
     for (int t = 0; t < ticks; t++) {
@@ -92,7 +94,7 @@ public class VillageFightProbe {
       if (t % 60 == 0) c.a(52, 0, 52);
       c.a();
       for (Log l : logs) l.log.clear();
-      for (int i = 0; i < ents.length - 1; i++) { sa e = (sa) ents[i]; if (e.K) continue; VillagerProbe.World.entities.size(); e.h(); }
+      for (int i = 0; i < ents.length - 1; i++) { sa e = (sa) ents[i]; if (e.K) continue; VillagerProbe.World.entities.size(); e.aa++; e.h(); } // World.updateEntityWithOptionalForce does ++ticksExisted before onUpdate
       vz village = (vz) c.b().get(0);
       StringBuilder row = new StringBuilder("[[");
       for (int i = 0; i < ents.length; i++) {
@@ -129,6 +131,7 @@ public class VillageFightProbe {
   public static void main(String[] args) throws Exception {
     aji.p();
     adb.l();
+    VillagerProbe.World.pickEntities = true;
     sun.misc.Unsafe u = MobMoveProbe.unsafe();
     VillageLiveProbe.W w = (VillageLiveProbe.W) u.allocateInstance(VillageLiveProbe.W.class);
     VillageLiveProbe.world = w;

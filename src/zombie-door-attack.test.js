@@ -77,13 +77,14 @@ export function runAttack(r) {
   const { w, cells } = walkWorld(r.variant);
   room(cells);
   const ew = new EntityWorld(w, [
-    { id: "mob-1", type: "zombie", x: 54.5, y: 0, z: 50.5, health: 20, canBreakDoors: true },
+    { id: "mob-1", type: "zombie", x: 54.5, y: 0, z: 50.5, health: 20, canBreakDoors: true, persistent: true }, // the native probe has no despawn roll; sw.w runs every tick, so a far player would remove it
     { id: "mob-2", type: "villager", x: 66.5, y: 0, z: 50.5, health: 20, profession: 0 },
   ]);
   ew.difficulty = r.difficulty;
   ew.worldRandom = new JavaRandom(1);
   ew.villageCollection = village(cells, w);
   ew.isDaytime = () => false;
+  ew.lightAt = () => 0; // the native probe's zombie ages 1 per tick (no nextInt(800) despawn roll by tick 200): brightness not above 0.5
   ew.ai.deps.canSeeSky = (x, y, z) => !(x >= 61 && x <= 75 && z >= 40 && z <= 60);
   new Doors(w, { drop() {} }).watch();
   const [z, v] = ew.entities, zl = logged(r.seed), vl = logged(r.seed + 100);

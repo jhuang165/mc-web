@@ -63,7 +63,7 @@ import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDam
 import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startConversionTicks, conversionBoost, canCure, startConversion, remedySound, auxSound, readZombieVillager } from "./zombie-villager.js";
 import { landingEffects, JUMP_BOOST, statusPitchRandom } from "./damage-fx.js";
 import { WOLF_WIDTH, WOLF_HEIGHT, WOLF_SPEED, WILD_MAX_HEALTH, TAMED_MAX_HEALTH, WOLF_SOUNDS, wolfFields, wolfFieldsFrom, isTamed as wolfTamed, maxHealth as wolfMaxHealth, tailAngle, interestedAngle, shakeAngle, wetShade, wolfSay, hurtAmount as wolfHurtAmount, attackStrength as wolfAttack, puppyFields, interact as wolfClick, updateWolf } from "./wolf.js";
-import { noteWolfHurt } from "./wolf-ai.js";
+import { noteRevenge, revengeOf, sourceEntity } from "./revenge-target.js";
 import { summonedMobRecord, importedMobType } from "./java-mobs.js";
 import { mountMobOnVehicle } from "./vehicle-riders.js";
 import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest, canSpawnHere as ocelotCanSpawnHere } from "./ocelot.js";
@@ -958,9 +958,10 @@ export class EntityWorld {
       this.damageEntity(e, amount, name, source);
       e.hurt = 10;
     }
-    if (source.player) { e.revenge = (e.age || 0) + 1; e.recentlyHit = 100; if (e.type === "wolf") noteWolfHurt(e, "player"); }
-    // A wolf also takes revenge on a creature that hit it (EntityAIHurtByTarget reads getAITarget).
-    else if (e.type === "wolf" && source.attacker && source.attacker !== e) { e.revenge = (e.age || 0) + 1; noteWolfHurt(e, source.attacker); }
+    // EntityLivingBase.attackEntityFrom: a living source entity (player, mob melee, an arrow's shooter) becomes the revenge target (revenge-target.js).
+    const by = sourceEntity(this, e, source);
+    if (by) { e.revenge = (e.age || 0) + 1; noteRevenge(e, by); }
+    if (source.player) e.recentlyHit = 100;
     if (e.type === "villager") this.villagerHurtBy(e, source);
     if (fresh) {
       if (name !== "drown") rand.nextDouble();
@@ -977,7 +978,7 @@ export class EntityWorld {
       this.onDeath(e, source);
       if (fresh) (this.clientSounds ??= []).push({ sound: deathOf(e), ...sound, pitch: statusPitchRandom() });
     } else if (fresh) this.events.push({ sound: hurtOf(e), ...sound, pitch: soundPitch(rand, child) });
-    if (e.type === "zombie") this.callReinforcement(e, !!source.player);
+    if (e.type === "zombie") this.callReinforcement(e, sourceEntity(this, e, source));
     // EntityMob.attackEntityFrom: a hit that counted makes the attacker the target (only the player here).
     if (e.type === "silverfish" && source.player && e.health > 0) this.silverfishState(e).target = this.ai.player;
     return true;
@@ -995,9 +996,11 @@ export class EntityWorld {
   // target is the attack target, else the revenge target, else the attacker; only the player
   // is a target here, so a hit by a skeleton's arrow on a zombie with no target calls no one.
   // The new zombie stands at the integer corner of its block, as setPosition puts it.
-  callReinforcement(e, byPlayer) {
-    const player = this.ai.player;
-    if (!(byPlayer || e.revenge || this.ai.brain(e).attackTarget === player) || this.entities.length >= 40) return null;
+  callReinforcement(e, by) {
+    const player = this.ai.player, brain = this.ai.brain(e);
+    // yq.a: the attack target, else the revenge target (the legacy entityToAttack stands in), else the hit's living source entity.
+    const target = brain.attackTarget ?? brain.revengeTarget ?? (by === "player" ? player : by ? this.ai.brain(by) : null);
+    if (!target || this.entities.length >= 40) return null;
     const t = ENTITY_TYPES.zombie, w = t.width / 2;
     const spot = zombieReinforcement(entityRandom(e), this.difficulty, e.reinforcement ?? 0, e.x, e.y, e.z, {
       solidTop: (x, y, z) => y >= 0 && y < (this.world.height ?? HEIGHT) && normalCube(this.world.get(x, y, z)),
@@ -1022,7 +1025,7 @@ export class EntityWorld {
     });
     if (!spot) return null;
     const z = this.spawnNatural("zombie", spot.x, spot.y, spot.z);
-    this.ai.brain(z).attackTarget = player;
+    this.ai.brain(z).attackTarget = target;
     e.reinforcement = reinforcementChance(e.reinforcement + REINFORCEMENT_CHARGE);
     z.reinforcement = reinforcementChance(z.reinforcement + REINFORCEMENT_CHARGE);
     return z;
@@ -1486,7 +1489,11 @@ export class EntityWorld {
     if (e.type === "wither") return witherTalk(this, e); // wither-boss-mobs.js
     if (e.type === "horse") return this.horseTalk(e, livingSoundRoll);
     const rand = entityRandom(e);
-    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem" || e.type === "snow_golem" || e.type === "giant" || isSlimeLike(e)) return; // EntityGiantZombie has no living sound (the roll still runs)
+    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120)) return;
+    // EntityGolem.getLivingSound is "none" (wl.t): the sound is silent but r() still evaluates getSoundVolume and getSoundPitch (two nextFloat)
+    // (village-fight-reference.json: the golem draws "f", "f" after a successful roll).
+    if (e.type === "iron_golem" || e.type === "snow_golem") { rand.nextFloat(); rand.nextFloat(); return; }
+    if (e.type === "creeper" || e.type === "giant" || isSlimeLike(e)) return; // EntityGiantZombie has no living sound (the roll still runs)
     // EntityWolf.getLivingSound (t) rolls before the sound's pitch.
     const wolfSound = e.type === "wolf" ? wolfSay(e, rand) : e.type === "ocelot" ? ocelotSay(e, rand) : null;
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
@@ -1873,7 +1880,7 @@ export class EntityWorld {
       e.attack = Math.max(0, e.attack - 1);
       e.flee = Math.max(0, e.flee - 1);
       // EntityLivingBase.onEntityUpdate: the revenge target lapses after 100 ticks.
-      if (e.revenge && e.age + 1 - e.revenge > 100) e.revenge = 0;
+      if (e.revenge && (e.age + 1 - e.revenge > 100 || (revengeOf(e) !== "player" && !(revengeOf(e)?.health > 0 && this.entities.includes(revengeOf(e)))))) e.revenge = 0;
       const wasInWater = e.inWater;
       if (e.inWater = inWater(this.world, e, t.width, t.height)) e.fallDistance = 0;
       // Entity.handleWaterMovement: entering water (not on the entity's first update, when
@@ -1943,7 +1950,7 @@ export class EntityWorld {
     // world's entities: each mob beside the player is pushed away once more (the server's copy
     // of the player is pushed too, which the client never sees).
     const p = this.ai.player;
-    if (p?.alive) {
+    if (p?.alive && !p.unticked) { // `unticked`: the village-fight replay's player, which the native probe never ticks
       const box = pushBox(p, p.width, p.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
       for (const o of this.entities) if (Math.abs(o.x - p.x) <= 12 && Math.abs(o.z - p.z) <= 12 && Math.abs(o.y - p.y) <= 12 && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) applyEntityCollision(o, p, true, false);
     }
@@ -2285,7 +2292,7 @@ export class EntityWorld {
     if (!p.alive || s.creative) {
       if (e.spiderTarget) m.navigator.clearPathEntity();
       e.spiderTarget = false;
-    } else if (e.revenge && e.revenge !== e.spiderRevenge) {
+    } else if (e.revenge && e.revenge !== e.spiderRevenge && revengeOf(e) === "player") {
       e.spiderRevenge = e.revenge;
       e.spiderTarget = true;
     } else if (!e.spiderTarget && this.ai.closestVulnerablePlayer(e, 16) && spiderFindsPlayer(light)) e.spiderTarget = true;

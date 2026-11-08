@@ -9,9 +9,6 @@
 import { ownerPresent, ownerKey } from "./owner-links.js";
 import { isTamed, shouldAttackEntity, canMateWith, WOLF_MEAT, BONE } from "./wolf.js";
 const f = Math.fround;
-// Who last hurt a wolf (a mob record, or "player"): the record keeps only the 100 tick `revenge` counter.
-const revengeBy = new WeakMap();
-export const noteWolfHurt = (wolf, attacker) => revengeBy.set(wolf, attacker);
 // The owner's EntityLivingBase.getAITarget (aJ): the creature that hurt the owner in the last 100 ticks, if it lives.
 export function ownerRevenge(ai) {
   const p = ai.player;
@@ -147,16 +144,7 @@ export function buildWolfTasks(m, K) {
     },
     configurable: true,
   });
-  // The hurt-by target: the player (Entity.revenge) or the mob that hit it (noteWolfHurt), for 100 ticks.
-  Object.defineProperty(m, "revengeTarget", {
-    get() {
-      if (!e.revenge) return null;
-      const by = revengeBy.get(e);
-      if (by === "player") return m.ai.player;
-      return by && by.health > 0 ? m.ai.brain(by) : null;
-    },
-    configurable: true,
-  });
+  // The hurt-by target is the Brain default (revenge-target.js): the player or the mob that hit it, for 100 ticks.
   // EntityAITarget.isSuitableTarget (vu.a) on top of TargetBase: an owned wolf never targets its owner or another
   // creature with the same owner (the owner's wolves).
   const suitable = (task, t, mustSee) => {
