@@ -98,3 +98,17 @@ test("backups keep the level.dat fields, hanging entities, tiles and every cart 
   assert.deepEqual(out.minecarts.carts[0].spawner, { EntityId: "Zombie", Delay: 3 });
   assert.deepEqual(out.minecarts.carts[1].command, { command: "/say hi", successCount: 0, trackOutput: false });
 });
+
+test("merged runtime lists are not truncated at the old 4096/1024 caps and still split per column", async () => {
+  const { splitRuntime, joinRuntime } = await import("./chunk-runtime.js");
+  const N = 20000;
+  const signs = Array.from({ length: N }, (_, i) => ({ x: i, y: 64, z: i % 7, lines: ["a", "", "", ""] }));
+  const spawners = Array.from({ length: 6000 }, (_, i) => ({ x: i, y: 10, z: 3, EntityId: "Zombie" }));
+  const carts = Array.from({ length: 3000 }, (_, i) => ({ x: i + 0.5, y: 5, z: 0.5, type: 0, rider: false, items: [] }));
+  const out = importedRuntime({ signs, spawners, minecarts: { version: 1, carts } });
+  assert.equal(out.signs.length, N); assert.equal(out.spawners.length, 6000); assert.equal(out.minecarts.carts.length, 3000);
+  const split = splitRuntime({ id: "w", ...out });
+  const per = new Map(split.columns.map((c) => [`${c.x},${c.z}`, c.state.signs?.length ?? 0]));
+  assert.equal([...per.values()].reduce((a, b) => a + b, 0), N); // every sign lands in exactly one column
+  assert.equal(joinRuntime(split.metadata, split.columns).signs.length, N);
+});

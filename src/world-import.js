@@ -26,13 +26,19 @@ const SPAWNER_NUMBERS = ["Delay", "MinSpawnDelay", "MaxSpawnDelay", "SpawnCount"
 // Column runtime arrays (chunk-runtime.js) are keyed by the record position, so x and z must be numbers.
 const list = (v, max) => (Array.isArray(v) ? v.filter((e) => e && typeof e === "object" && finite(e.x) && finite(e.z)).slice(0, max) : undefined);
 const triple = (v) => Array.isArray(v) && v.length === 3 && v.every(int);
+// Per-list bound of the merged runtime record (signs, hanging, spawners, minecarts, villages, boats, pistons, populated columns...).
+// It used to be 4096 (1024 for carts, boats and villages); a whole save with more entries lost the rest at import. The record is
+// split per column at the first persist (chunk-runtime.js splitRuntime), so only the import-time merge holds a list whole:
+// roughly 150-400 bytes of heap per entry, 1 << 20 entries per list at most (a few hundred MB worst case, never reached by a
+// real save; a save past it is truncated, not refused). Sanitising is linear in the entries.
+export const LIST_CAP = 1 << 20;
 const SANITIZE = {
-  hanging: (v) => list(v, 4096), signs: (v) => list(v, 4096), skulls: (v) => list(v, 4096), beacons: (v) => list(v, 4096),
-  commandBlocks: (v) => list(v, 4096), musicTiles: (v) => list(v, 4096),
+  hanging: (v) => list(v, LIST_CAP), signs: (v) => list(v, LIST_CAP), skulls: (v) => list(v, LIST_CAP), beacons: (v) => list(v, LIST_CAP),
+  commandBlocks: (v) => list(v, LIST_CAP), musicTiles: (v) => list(v, LIST_CAP),
   // VillageCollection.toJSON: Village.fromJSON spreads the centre and door rows, so malformed villages are dropped here.
   villages: (v) => v && typeof v === "object" && Array.isArray(v.villages)
     ? { tick: int(v.tick) ? v.tick : 0, villages: v.villages.filter((g) => g && triple(g.c) && triple(g.ac) && Array.isArray(g.doors)
-      && g.doors.every((d) => Array.isArray(d) && d.length >= 6 && d.slice(0, 6).every(int))).slice(0, 1024) }
+      && g.doors.every((d) => Array.isArray(d) && d.length >= 6 && d.slice(0, 6).every(int))).slice(0, LIST_CAP) }
     : undefined,
   maps: (v) => (v && typeof v === "object" && Array.isArray(v.maps) ? v : undefined),
   // structure-data.js: {Name: base64 gzip of data/<Name>.dat}.
@@ -65,11 +71,11 @@ const SANITIZE = {
   // chests/animals/spawners were already handed to the live world. Bad entries just hand over again.
   populatedColumns: (v) => v && typeof v === "object" && v.version === 1 && v.cells && typeof v.cells === "object"
     ? { version: 1, cells: Object.fromEntries(Object.entries(v.cells)
-      .filter(([k, hex]) => /^-?\d+,-?\d+$/.test(k) && typeof hex === "string" && /^[0-9a-f]{1,16}$/.test(hex)).slice(0, 262144)) }
+      .filter(([k, hex]) => /^-?\d+,-?\d+$/.test(k) && typeof hex === "string" && /^[0-9a-f]{1,16}$/.test(hex)).slice(0, LIST_CAP)) }
     : undefined,
   // Moving piston tiles (piston-live.js save()): validated field by field; bad entries are dropped.
   pistons: (v) => Array.isArray(v)
-    ? v.filter((t) => t && typeof t === "object" && [t.x, t.y, t.z, t.block, t.meta, t.facing].every(int) && t.facing >= 0 && t.facing <= 5 && finite(t.progress)).slice(0, 4096).map((t) => ({
+    ? v.filter((t) => t && typeof t === "object" && [t.x, t.y, t.z, t.block, t.meta, t.facing].every(int) && t.facing >= 0 && t.facing <= 5 && finite(t.progress)).slice(0, LIST_CAP).map((t) => ({
       x: t.x, y: t.y, z: t.z, block: t.block, meta: t.meta, facing: t.facing, progress: Math.max(0, Math.min(1, t.progress)),
       ...(finite(t.lastProgress) ? { lastProgress: Math.max(0, Math.min(1, t.lastProgress)) } : {}),
       extending: t.extending === true, renderHead: t.renderHead === true,
@@ -77,7 +83,7 @@ const SANITIZE = {
     : undefined,
   // Boats (boats.js toJSON): position, motion, rotation, fall distance, fire, ground flag and the mounted player.
   boats: (v) => Array.isArray(v)
-    ? v.filter((c) => c && typeof c === "object" && [c.x, c.y, c.z].every(finite)).slice(0, 1024).map((c) => ({
+    ? v.filter((c) => c && typeof c === "object" && [c.x, c.y, c.z].every(finite)).slice(0, LIST_CAP).map((c) => ({
       ...(int(c.id) && c.id > 0 ? { id: c.id } : {}), // the id mobs saved riding this boat name
       x: c.x, y: c.y, z: c.z,
       ...(Array.isArray(c.motion) && c.motion.length === 3 && c.motion.every(finite) ? { motion: [...c.motion] } : {}),
@@ -89,14 +95,14 @@ const SANITIZE = {
     }))
     : undefined,
   spawners: (v) => Array.isArray(v)
-    ? v.filter((t) => t && typeof t === "object" && [t.x, t.y, t.z].every(int)).slice(0, 4096).map((t) => ({
+    ? v.filter((t) => t && typeof t === "object" && [t.x, t.y, t.z].every(int)).slice(0, LIST_CAP).map((t) => ({
       x: t.x, y: t.y, z: t.z,
       ...(typeof t.EntityId === "string" ? { EntityId: t.EntityId.slice(0, 64) } : {}),
       ...Object.fromEntries(SPAWNER_NUMBERS.filter((k) => int(t[k])).map((k) => [k, t[k]])),
     }))
     : undefined,
   minecarts: (v) => v && typeof v === "object" && Array.isArray(v.carts)
-    ? { version: 1, carts: v.carts.filter((c) => c && typeof c === "object" && [c.x, c.y, c.z].every(finite)).slice(0, 1024).map((c) => ({
+    ? { version: 1, carts: v.carts.filter((c) => c && typeof c === "object" && [c.x, c.y, c.z].every(finite)).slice(0, LIST_CAP).map((c) => ({
       ...(int(c.id) && c.id > 0 ? { id: c.id } : {}), // the id mobs saved riding this cart name
       x: c.x, y: c.y, z: c.z,
       ...(c.type === 0 ? { type: 0, rider: c.rider === true } : isSupportedType(c.type) ? { type: c.type } : {}),

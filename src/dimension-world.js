@@ -212,7 +212,7 @@ export class TerrainPeek {
     const key = `${cx},${cz}`;
     let c = this.columns.get(key);
     if (!c) {
-      c = this.world.peekChunk?.(cx, cz) ?? this.world.generateTerrainChunk(cx, cz);
+      c = this.stored?.column(cx, cz) ?? this.world.peekChunk?.(cx, cz) ?? this.world.generateTerrainChunk(cx, cz);
       if (this.columns.size >= this.limit) this.columns.delete(this.columns.keys().next().value);
       this.columns.set(key, c);
     }
@@ -241,6 +241,8 @@ export class TerrainPeek {
       if (x < x0 || x > x1 || z < z0 || z > z1 || seen.has(k)) continue;
       seen.add(k); out.push([x, z]);
     }
+    // Imported stored columns (stored-peek.js StoredIndex, attached as `stored`) can hold a portal block too.
+    if (this.stored?.marker === id) for (const [x, z] of this.stored.portalColumns(x0, x1, z0, z1)) { const k = `${x},${z}`; if (!seen.has(k)) { seen.add(k); out.push([x, z]); } }
     return out.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   }
 }

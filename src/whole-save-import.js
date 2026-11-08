@@ -20,6 +20,8 @@ import { readRegion, writeRegion } from "./region-file.js";
 import { World } from "./world.js";
 import { DIM_KEYS, TILE_KEYS, viewId } from "./dimension-live.js";
 import { encodeBaseColumn } from "./whole-save-columns.js";
+import { populateImportedColumns } from "./imported-population.js";
+import { populationBlockMapperReady } from "./population-world.js";
 
 const SMALL_LIMIT = 16 << 20, BATCH = 16;
 export const DIMENSIONS = [{ dimension: 0, dir: "region" }, { dimension: -1, dir: "DIM-1/region" }, { dimension: 1, dir: "DIM1/region" }];
@@ -143,7 +145,10 @@ export async function importWholeSave(entries, options = {}) {
   // The generator origin of the seed: local chunk = native chunk - origin (region-import.js level frame).
   const gen = levelGenerator(level);
   onProgress({ phase: "origin" });
-  const origin = (() => { const w = new World(gen.seed, "javaStreamed", gen.generationVersion, gen.worldType, gen.generatorOptions); return { chunkX: w.originX >> 4, chunkZ: w.originZ >> 4 }; })();
+  await populationBlockMapperReady;
+  const originWorld = new World(gen.seed, "javaStreamed", gen.generationVersion, gen.worldType, gen.generatorOptions);
+  const origin = { chunkX: originWorld.originX >> 4, chunkZ: originWorld.originZ >> 4 };
+  const storedOverworld = [], unpopulated = [], unpopulatedOther = { "-1": 0, 1: 0 };
   const sinkFor = (dimension) => new ColumnSink(dimension ? {} : { originX: origin.chunkX * 16, originZ: origin.chunkZ * 16 });
 
   // Player, level fields and world-wide data: the converter with no regions and the whole-world villages.
@@ -182,6 +187,8 @@ export async function importWholeSave(entries, options = {}) {
           const lx = file.dimension ? cx : cx - origin.chunkX, lz = file.dimension ? cz : cz - origin.chunkZ;
           const { cells, decoded } = sink.take(lx, lz);
           pending.push(encodeBaseColumn(id, lx, lz, cells, decoded ?? {}));
+          if (!file.dimension) { storedOverworld.push([lx, lz]); if (decoded?.terrainPopulated === false) unpopulated.push([lx, lz]); }
+          else if (decoded?.terrainPopulated === false) unpopulatedOther[file.dimension]++;
           const blob = file.dimension ? record.dimensions?.[file.dimension] : null;
           mergeRuntime(acc.get(file.dimension), blob ? blob.state : pickState(record), blob ? blob.tiles : record.player, ++seq);
           mergeReport(total, report);
@@ -200,6 +207,20 @@ export async function importWholeSave(entries, options = {}) {
     }
     await flush();
   } catch (error) { pending = []; throw error; }
+
+  // Populate stored overworld columns the save never populated (imported-population.js); needs readBases to re-read stored columns.
+  let populated = null;
+  const wantPopulate = options.populate !== false && typeof options.readBases === "function" && unpopulated.length && originWorld.population && originWorld.generationVersion >= 13;
+  if (wantPopulate) {
+    aborted();
+    populated = await populateImportedColumns({ population: originWorld.population, origin, worldKey: worldId, coords: storedOverworld, unpopulated, read: options.readBases, write: writeBases, signal, onProgress });
+    const over = acc.get(0);
+    const merge = (name, entries) => { if (Object.keys(entries).length) Object.assign((over.tiles[name] ??= {}), entries); };
+    merge("chests", populated.chests); merge("dispensers", populated.dispensers);
+    if (populated.spawners.length) (over.state.spawners ??= []).push(...populated.spawners);
+    if (populated.carts.length) (over.state.minecarts ??= { version: 1, carts: [] }).carts.push(...populated.carts);
+    if (populated.fluidTicks.length) over.state.fluidTicks = { version: 1, time: 0, entries: populated.fluidTicks };
+  }
 
   // Assemble: the world record from the metadata call, the merged runtime state of the overworld chunks and a blob per dimension.
   const record = { ...meta.record };
@@ -225,7 +246,7 @@ export async function importWholeSave(entries, options = {}) {
     playerFile: !level.player && chosen ? { name: chosen.entry.path.split("/").pop(), of: chosen.count } : null,
     statsFile: stats ? stats.path.split("/").pop() : null, dataFiles: structureData.map((f) => f.filename),
     notImported: [...(skipped.length ? [`${skipped.length} chunk(s) or region file(s) could not be read and regenerate from the seed`] : []),
-      "SkyLight/BlockLight, heightmaps and per-chunk InhabitedTime/LastUpdate (the browser relights); imported chunks are never re-populated, including chunks the save marked TerrainPopulated=false"],
+      "SkyLight/BlockLight, heightmaps and per-chunk InhabitedTime/LastUpdate (the browser relights); "+(populated ? "" : "chunks the save marked TerrainPopulated=false stay unpopulated (no stored-column reader, nothing to populate, or generation below 13)")],
   };
   report.chunks = { converted: counts[0] + counts[-1] + counts[1], overworld: counts[0], nether: counts[-1], end: counts[1], skipped: skipped.length };
   report.blocks = { ...total.blocks, unsupported: sorted(total.maps.unsupported, "key"), approximations: sorted(total.maps.approximations, "key") };
@@ -234,6 +255,15 @@ export async function importWholeSave(entries, options = {}) {
   report.entities = { ...total.entities, converted: Object.fromEntries(total.maps.entityConverted), lost: sorted(total.maps.entityLost) };
   report.scheduledTicks = total.scheduledTicks;
   report.edits = 0;
+  report.population = {
+    unpopulatedStored: unpopulated.length, ran: !!populated, populated: populated?.populated ?? 0,
+    stillUnpopulated: unpopulated.length - (populated?.populated ?? 0),
+    skipped: populated?.skipped ?? null, changedCells: populated?.changedCells ?? 0, unmappedCells: populated?.unmappedCells ?? 0,
+    chests: populated ? Object.keys(populated.chests).length : 0, dispensers: populated ? Object.keys(populated.dispensers).length : 0,
+    spawners: populated?.spawners.length ?? 0, carts: populated?.carts.length ?? 0, fluidTicks: populated?.fluidTicks.length ?? 0,
+    dropped: populated?.dropped ?? null, unpopulatedNetherEnd: unpopulatedOther, ms: populated?.ms ?? 0,
+    ...(populated?.errors ? { errors: populated.errors } : {}),
+  };
   return { record, report };
 }
 const pickState = (rec) => Object.fromEntries(DIM_KEYS.filter((k) => Object.hasOwn(rec, k)).map((k) => [k, rec[k]]));

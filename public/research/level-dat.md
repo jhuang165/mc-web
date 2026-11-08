@@ -65,3 +65,6 @@ reports an approximation for it. Worlds saved at 13, 15 and 16 keep their output
 ## Batch 17: Player.Riding
 
 A player riding a boat, minecart, pig or horse is saved as `Player.Riding` (probed in `player-riding-reference.json`) and comes back mounted on import; see `region-import.md`. An unknown or missing `id` in `Riding` leaves the player unmounted (native `createEntityFromNBT` returns null).
+
+
+Batch 27: the Node CLI `--save DIR --whole-save` now includes `playerdata`/`players`, `stats` and `data/*.dat` and accepts `--player-file`/`--stats`, like the browser folder import (see region-import.md).
