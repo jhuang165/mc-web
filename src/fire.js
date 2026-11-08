@@ -76,10 +76,11 @@ export function tryCatchFire(L, x, y, z, chance, age) {
 }
 
 // BlockFire.updateTick (alb.a(ahb, x, y, z, Random)). `flag` of the original is fire over
-// netherrack (it burns forever: no rain, burn-out or age-15 removal); the End's bedrock case does not exist here.
+// netherrack in any dimension, or bedrock in the End (alb.a: `ahb.t instanceof aqr` and the block below is Blocks.bedrock): it burns forever,
+// with no rain, burn-out or age-15 removal (dimension-ticks-reference.json).
 export function updateTick(L, x, y, z) {
   if (!L.fireTick) return;
-  const flag = L.get(x, y - 1, z) === NETHERRACK;
+  const below = L.get(x, y - 1, z), flag = below === NETHERRACK || (L.endWorld && below === END_BEDROCK);
   if (!canPlace(L, x, y, z)) L.setAir(x, y, z); // no return: the rest still runs
   if (!flag && L.raining() && (L.strike(x, y, z) || L.strike(x - 1, y, z) || L.strike(x + 1, y, z) || L.strike(x, y, z - 1) || L.strike(x, y, z + 1))) {
     L.setAir(x, y, z);
@@ -317,6 +318,7 @@ class TickQueue {
 export const MAX_TICKS = 1000;
 // Blocks of this build whose Block.setTickRandomly is true (grass, leaves, farmland, wheat,
 // tall grass and flowers (BlockBush), lava, fire); they decide which sections are drawn for.
+const END_BEDROCK = 11; // internal id of Blocks.bedrock (original 7)
 const RANDOM_TICKS = new Uint8Array(256);
 for (const b of [1, 5, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 43, 44, LAVA, FIRE]) RANDOM_TICKS[b] = 1;
 export class Fire {
@@ -348,6 +350,7 @@ export class Fire {
         if (b !== 0) world.put(x, y, z, b, meta);
       },
       schedule: (x, y, z, delay) => self.schedule(x, y, z, delay),
+      get endWorld() { return world.isEnd === true; },
       raining: () => self.weather().isRaining(),
       strike: (x, y, z) => canLightningStrikeAt(self.weather(), world, x, y, z),
       // isBlockHighHumidity (BiomeGenBase rainfall > 0.85): the plains, hills and island

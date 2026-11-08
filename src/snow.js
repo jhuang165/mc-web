@@ -88,9 +88,9 @@ export function populateSnow(world) {
 // null. Snow melts above block light 11; ice above 11 - lightOpacity (8) and leaves still
 // water (the original sets Blocks.water, a source).
 export const SNOW_BLOCK = 23;
-export function meltResult(block, blockLight) {
+export function meltResult(block, blockLight, hell = false) {
   if (block === SNOW_LAYER && blockLight > 11) return { block: 0, meta: 0 };
-  if (block === ICE && blockLight > 11 - ICE_LIGHT_OPACITY) return { block: WATER, meta: 0 };
+  if (block === ICE && blockLight > 11 - ICE_LIGHT_OPACITY) return { block: hell ? 0 : WATER, meta: 0 }; // BlockIce.updateTick (alp.a): setBlockToAir where provider.isHellWorld (aqo.f)
   // BlockSnowBlock.updateTick: above block light 11 it drops 4 snowballs (item 312) and goes (block-sweep-reference.json tick column).
   if (block === SNOW_BLOCK && blockLight > 11) return { block: 0, meta: 0, drops: [{ id: 312, count: 4 }] };
   return null;

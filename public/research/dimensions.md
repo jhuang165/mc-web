@@ -16,6 +16,7 @@ Target: Minecraft Java 1.7.10. Not full parity. Evidence is the probe `tools/pro
 
 ## Bytecode notes
 
+- Batch 27 correction (bytecode-read, `dimension-ticks-reference.json`): `aqo.f` is `isHellWorld` (Hell only) and `aqo.g` is `hasNoSky` (Hell and End). `ahb.o` (weather), `alw.a` (lava rate 10), `apx` (Chunk sky light) and `ahb.S` (`getActualHeight`) read `g`; `akr.a` (lava step 1), `alp` (ice to air) and the bucket read `f`. So the End has no sky light and a 128-block `getActualHeight` natively; `dimensions.js` still has `hasNoSky` false there and nothing models it. The next two items use the old labels.
 - `WorldProviderHell` (`aqp`): id -1, `hasNoSky` true (field `aqo.f`), `isHellWorld` true, `canRespawnHere` false, light table ambient 0.1, celestial angle constant 0.5, fog (0.2, 0.03, 0.03). `WorldProviderEnd` (`aqr`): id 1, `isHellWorld` true, `hasNoSky` false, `canRespawnHere` false, cloud height 8, entrance (100, 50, 0), fog from 0xA080A0 scaled by 0.15, angle 0. Its chunk provider is `ChunkProviderEnd`: `end-generator.js` (`EndTerrain`, documented in `end.md`); the dragon is spawned by `EnderDragon` logic on first load of the End (`decorateEnd` records an `ender_dragon` spec at (0,128,0) in this port).
 - `EntityPlayer.getMaxInPortalTime` (`yz.D`) returns 0 in Creative and 80 otherwise; the task description said 1. The probe value (0) is implemented.
 - `Direction.rotateLeft/rotateRight` and `getMovementDirection` are replayed from the probe; the first port had them reversed and the replay caught it.
@@ -47,10 +48,12 @@ Import the resulting JSON through Select World. The converter keeps native coord
 
 ## Gaps
 
+- Batch 27: the Nether and End run WorldServer's chunk loop (3 random ticks per section, fire and fluid scheduled ticks, lava rate 10, ice to air in the Nether, eternal fire over End bedrock, no weather) in the window and the headless ring; see [natural spawning](natural-spawning.md) Round 9. The End's no-sky light and 128 actual height are still unmodelled.
+
 - Natural spawning uses the SpawnerAnimals flow with the browser's six-by-six ticking window as the eligible chunks (cap 70 × 36 / 256 = 9 monsters) and no spawn-point rule in dimensions (natively the overworld's spawn point applies); see [natural spawning](natural-spawning.md). Portal pigmen (`portalSpawnPosition` in nether-portal.js) are not called by the live world yet.
 - Followers (wolves, riders, leashed animals) do not follow through portals, as in 1.7.10. Mobs, dropped items and experience orbs use portals themselves (see entity-portal.md); boats, minecarts, projectiles, riders, the dragon and end crystals do not.
 - Maps are one store (no per-dimension map data). The compass in an item frame shares the player-relative sprite. Java 1.7.10 computes an item frame's compass relative to the frame position and facing.
 - The bed explosion (power 5, flaming) is recalled from the 1.7.10 class and not probed; `portal.travel` timing and volume are approximations.
-- Weather keeps its Overworld state while the player is away (no simulation in the other dimensions; the Overworld does not advance either).
+- Weather keeps its Overworld state while the player is away (no simulation in the other dimensions; the Overworld does not advance either). The Nether and End take their own chunk loop (random ticks, mood) but no weather.
 - Finite (non-streamed) Overworld worlds: 8x coordinates outside the world fall back to the world spawn.
 - A staged Survival browser run on seed 1 used the lit Nether portal, collected a rod from a fortress blaze and pearls from an Enderman, crafted an eye, opened the generated stronghold portal, saw natural Endermen, defeated the dragon, returned through the credits, and collected the Wither’s Nether Star. Travel, combat and some supplies were scripted. A fresh, unaided run remains open.

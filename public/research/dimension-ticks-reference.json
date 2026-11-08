@@ -1,0 +1,207 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "mt": {
+   "name": "WorldServer",
+   "sha256": "b45a7fb9ca9aaf7b30f90f14141758cc61f985c5de1071f55f32ead83a3a3ebf"
+  },
+  "ahb": {
+   "name": "World",
+   "sha256": "e682175e53be8972a6d04dff07da5780467754a7ffce2e396643c102893fd58a"
+  },
+  "alw": {
+   "name": "BlockLiquid",
+   "sha256": "45cb2e868c806f25df7c412fa82a3eff959c6374375436276dca60768aacad72"
+  },
+  "akr": {
+   "name": "BlockDynamicLiquid",
+   "sha256": "8fe7ecc8c33d3177411bc407f67a609013f37c1617367bfcdf46cb4ab77376ff"
+  },
+  "alp": {
+   "name": "BlockIce",
+   "sha256": "a9b97a3bbe07d7cc841cdf60a0da81b95d6d94c8baf628185424030cdfeaccaa"
+  },
+  "alb": {
+   "name": "BlockFire",
+   "sha256": "ef6059f46040a3668b22c9f253530d57553ec0dbadd47e4991552f946ad86196"
+  },
+  "amp": {
+   "name": "BlockPortal",
+   "sha256": "9984a89f4fd8b3fc85a0b80cc95cb875a54d213c57189e3f177a253a0d15958c"
+  },
+  "aqp": {
+   "name": "WorldProviderHell",
+   "sha256": "7b5a717b12da8faf0adeacaa301616c27423ae2876f9ddfd333b6bff04216ec3"
+  },
+  "aqr": {
+   "name": "WorldProviderEnd",
+   "sha256": "1ac72ab5f1d8a63df3998db4c72abce433da20b5537c0a4ae9e1cfb48a3ae520"
+  },
+  "ahu": {
+   "name": "BiomeGenBase",
+   "sha256": "f089c5156a2e31832967ed1ceade3b84ce0fb14971d40391ddce445970e205f9"
+  }
+ },
+ "method": "javap -c -p -constants of the unchanged classes (tools/verify-dimension-ticks.mjs); bytecode-read, no class was executed. The asserted instruction sequences are stored below.",
+ "facts": {
+  "worldServerLoopReadsProvider": false,
+  "weatherTimersSkippedWhen": "aqo.g (hasNoSky: Nether and End)",
+  "providerFields": {
+   "aqo.f": "isHellWorld: set by WorldProviderHell only",
+   "aqo.g": "hasNoSky: set by WorldProviderHell and WorldProviderEnd",
+   "aqo.i": "dimensionId: -1 and 1",
+   "note": "dimensions.js labels these two fields the other way round (its hasNoSky is aqo.f, its isHellWorld aqo.g)"
+  },
+  "lavaTickRate": {
+   "water": 5,
+   "lavaWhereG": 10,
+   "lavaOtherwise": 30,
+   "field": "aqo.g"
+  },
+  "lavaLevelStepField": "aqo.f",
+  "iceHellField": "aqo.f",
+  "iceMeltsToAirIn": "Nether",
+  "fireEndBedrock": true,
+  "firePortalAttemptWhen": "dimensionId <= 0",
+  "portalUpdateTickNeeds": "aqo.d() isSurfaceWorld",
+  "isSurfaceWorld": {
+   "Nether": false,
+   "End": false
+  },
+  "biomesDisableRain": [
+   "Hell",
+   "Sky"
+  ],
+  "moodIsServerSide": true,
+  "moodDrawsForEveryActiveChunkWhileCountdownIsZero": true,
+  "actualHeightField": "aqo.g (End is 128 tall in World.getActualHeight)"
+ },
+ "bytecode": {
+  "mt.g()": [
+   "getfield      // Field F:Ljava/util/Set;",
+   "invokevirtual // Method a:(IILapx;)V",
+   "invokevirtual // Method c:(Lsa;)Z",
+   "invokevirtual // Method b:(IIILaji;)Z",
+   "invokevirtual // Method b:(IIILaji;)Z",
+   "invokevirtual // Method a:(II)Lahu;",
+   "invokevirtual // Method a:(III)Laji;"
+  ],
+  "ahb.o() head": [
+   "aload_0",
+   "getfield      // Field t:Laqo;",
+   "getfield      // Field aqo.g:Z",
+   "ifeq          11",
+   "return",
+   "aload_0",
+   "getfield      // Field E:Z",
+   "ifeq          19"
+  ],
+  "ahb.a(II,apx) head": [
+   "aload_0",
+   "getfield      // Field C:Lqi;",
+   "ldc           // String moodSound",
+   "invokevirtual // Method qi.c:(Ljava/lang/String;)V",
+   "aload_0",
+   "getfield      // Field K:I",
+   "ifne          273",
+   "aload_0",
+   "getfield      // Field E:Z",
+   "ifne          273",
+   "aload_0",
+   "aload_0",
+   "getfield      // Field k:I",
+   "iconst_3",
+   "imul",
+   "ldc           // int 1013904223"
+  ],
+  "aqp.b()": [
+   "aload_0",
+   "new           // class aie",
+   "dup",
+   "getstatic     // Field ahu.w:Lahu;",
+   "fconst_0",
+   "invokespecial // Method aie.\"<init>\":(Lahu;F)V",
+   "putfield      // Field e:Laib;",
+   "aload_0",
+   "iconst_1",
+   "putfield      // Field f:Z",
+   "aload_0",
+   "iconst_1",
+   "putfield      // Field g:Z",
+   "aload_0",
+   "iconst_m1",
+   "putfield      // Field i:I",
+   "return"
+  ],
+  "aqr.b()": [
+   "aload_0",
+   "new           // class aie",
+   "dup",
+   "getstatic     // Field ahu.x:Lahu;",
+   "fconst_0",
+   "invokespecial // Method aie.\"<init>\":(Lahu;F)V",
+   "putfield      // Field e:Laib;",
+   "aload_0",
+   "iconst_1",
+   "putfield      // Field i:I",
+   "aload_0",
+   "iconst_1",
+   "putfield      // Field g:Z",
+   "return"
+  ],
+  "alw.a(ahb)": [
+   "aload_0",
+   "getfield      // Field J:Lawt;",
+   "getstatic     // Field awt.h:Lawt;",
+   "if_acmpne     12",
+   "iconst_5",
+   "ireturn",
+   "aload_0",
+   "getfield      // Field J:Lawt;",
+   "getstatic     // Field awt.i:Lawt;",
+   "if_acmpne     38",
+   "aload_1",
+   "getfield      // Field ahb.t:Laqo;",
+   "getfield      // Field aqo.g:Z",
+   "ifeq          35",
+   "bipush        10",
+   "ireturn",
+   "bipush        30",
+   "ireturn",
+   "iconst_0",
+   "ireturn"
+  ],
+  "alb.a() End branch": [
+   "aload_1",
+   "getfield      // Field ahb.t:Laqo;",
+   "instanceof    // class aqr",
+   "ifeq          65",
+   "aload_1",
+   "iload_2",
+   "iload_3",
+   "iconst_1",
+   "isub",
+   "iload         4",
+   "invokevirtual // Method ahb.a:(III)Laji;",
+   "getstatic     // Field ajn.h:Laji;",
+   "if_acmpne     65",
+   "iconst_1",
+   "istore        6"
+  ],
+  "alb.b() portal": [
+   "aload_1",
+   "getfield      // Field ahb.t:Laqo;",
+   "getfield      // Field aqo.i:I",
+   "ifgt          25",
+   "getstatic     // Field ajn.aO:Lamp;",
+   "aload_1",
+   "iload_2",
+   "iload_3",
+   "iload         4",
+   "invokevirtual // Method amp.e:(Lahb;III)Z",
+   "ifeq          25",
+   "return"
+  ]
+ }
+}

@@ -110,8 +110,9 @@ and the final LCG and Random state.
 
 Port: `MoodSound` is attached to each world's `Weather` (`weather.mood`), which holds World.rand and updateLCG.
 `Weather.tick` runs the countdown before the chunk loop, and `tickChunk` calls the mood roll first. The sound goes
-through the weather events. In the Nether and End, where `tickWeather` skips the weather, `main.js` runs the same
-countdown and chunk loop over the active chunks. Since batch 18 `MoodSound.tick` also draws `World.C`'s light-check
+through the weather events. In the Nether and End, where `tickWeather` skips the weather, `main.js` runs `Weather.tickDimension`: the same
+countdown and the full chunk loop over the window and ring chunks. Since batch 27 ring chunks roll the mood draws too (the roll is server-side and every
+active chunk draws while the countdown is 0; only a player within 8 blocks hears it, so ring chunks draw but never play). Since batch 18 `MoodSound.tick` also draws `World.C`'s light-check
 numbers (`rand.nextInt(playerCount)`, a full Random step even for one player, then three `nextInt(11)`; probed over 5000
 ticks, see [sound.md](sound.md)). The player is the eye position (server `posY`). Other draws between ticks (entities, block
 updates) are still not in this stream.
