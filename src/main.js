@@ -1154,6 +1154,7 @@ async function openWorld(record) {
   leaveMultiplayer();
   if(openingWorld)return;
   openingWorld=true; performance.mark?.('trip:open');
+  if (!record.transit) dims.endAway(); // away-world.js: a trip's pending Overworld run does not outlive the session it belongs to
   sounds?.stopStreams(); // Minecraft.loadWorld: SoundHandler.stopSounds (music and records), also between dimensions
   lan.close();
   // From the title screen: LoadingScreenRenderer's "Loading world" screen (loading-screen.js); portal trips keep the game on screen.
@@ -2542,6 +2543,10 @@ function tickWeather() {
 const portalTimer = new PortalTimer();
 const dims = new DimensionLive({
   active: () => active, worlds: () => worlds, save: () => save(), openWorld, dirty: () => { saved = false; },
+  // Away run (away-world.js): copies of the resident columns, the physics tick counter, and the clock ticks a loading screen skipped.
+  ticks: () => tickCounter,
+  chunks: (cols) => cols.flatMap(([x, z]) => { const c = world.chunks?.get(`${x},${z}`); return c ? [{ x, z, blocks: c.blocks.slice(), meta: c.meta.slice() }] : []; }),
+  advanceTicks: (n) => { if (n > 0 && !survival.timeFrozen) { survival.time += n; scene.setTime?.(survival.time); } },
   player: () => ({ x: position.x, y: position.y, z: position.z, yaw }),
   sound: (n, o) => sounds.play(n, o),
   showCredits: async () => {

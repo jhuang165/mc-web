@@ -12,7 +12,8 @@ import { javaSeed } from "./java-world.js";
 import { JavaRandom } from "./java-random.js";
 import { materialSolid } from "./plants.js";
 import { BED, BED_DIR, isBedHead } from "./bed.js";
-import { readChunkEdits, listBaseColumns, readBaseColumns } from "./world-storage.js";
+import { readChunkEdits, listBaseColumns, readBaseColumns, readChunkColumns, writeChunkColumns } from "./world-storage.js";
+import { stateColumns, awayPlan, MAX_AWAY_TICKS } from "./away-plan.js";
 import { buildStoredIndex } from "./stored-peek.js";
 import { restoreImportedFortress } from "./fortress-restore.js";
 import { drain, runSteps } from "./steps.js";
@@ -92,7 +93,7 @@ export class DimensionLive {
   constructor(host) {
     this.host = host; this.state = new PortalState(); this.busy = false; this.overlayAmount = 0; this.writes = [];
     this.portals = new EntityPortals(); this.peeks = new Map(); this.queue = Promise.resolve(); this.flights = 0;
-    this.readEdits = readChunkEdits; this.listBases = listBaseColumns; this.readBases = readBaseColumns; this.storedIndexes = new Map(); this.onDragonSpawn = () => {}; this.quiet = false; this.overlay = null; this.trigger = false;
+    this.readEdits = readChunkEdits; this.readColumns = readChunkColumns; this.writeColumns = writeChunkColumns; this.away = null; this.awayLog = null; this.makeAwayWorker = () => new Worker(new URL("./away-worker.js", import.meta.url), { type: "module" }); this.listBases = listBaseColumns; this.readBases = readBaseColumns; this.storedIndexes = new Map(); this.onDragonSpawn = () => {}; this.quiet = false; this.overlay = null; this.trigger = false;
   }
   // main.js openWorld hooks ------------------------------------------------------------
   // A record saved while the player was in a dimension opens as that dimension's view.
@@ -277,6 +278,51 @@ export class DimensionLive {
     }
     this.host.dirty?.();
   }
+  // Away ticks (away-world.js, dimensions.md "Batch 30"): leaving the Overworld copies its spawn-area work and starts a worker; the run
+  // happens on return, for the ticks the player was gone (host.ticks()) plus the loading screens' (milliseconds / 50).
+  async beginAway(root) {
+    this.endAway();
+    const h = this.host;
+    if (!h.chunks || !h.ticks || root.biome !== "javaStreamed") return;
+    try {
+      const cols = stateColumns(root);
+      if (!cols.length) return;
+      const chunks = h.chunks(cols), have = new Set(chunks.map((c) => `${c.x},${c.z}`)), list = cols.filter(([x, z]) => have.has(`${x},${z}`));
+      if (!chunks.length) return;
+      const records = await this.readColumns(root.id, list);
+      const worker = this.makeAwayWorker(), ready = new Promise((resolve) => { worker.onmessage = ({ data }) => { if (data.type === "ready") resolve(true); }; worker.onerror = () => resolve(false); });
+      this.away = { rootId: root.id, ticks0: h.ticks(), tripMs: 0, chunks, records, columns: list, worker, ready };
+    } catch (error) { console.warn("away run not prepared:", error); this.away = null; }
+  }
+  endAway() { try { this.away?.worker?.terminate(); } catch { /* already gone */ } this.away = null; }
+  // The run for `ticks`; patches the root record (runtime and tile maps in place, drops appended) and stores the edited columns.
+  async finishAway(root) {
+    const a = this.away;
+    this.away = null;
+    if (!a || a.rootId !== root.id) { a?.worker?.terminate(); return null; }
+    const ticks = Math.min(MAX_AWAY_TICKS, (this.host.ticks() - a.ticks0) + Math.round(a.tripMs / 50));
+    try {
+      if (ticks <= 0 || !(await Promise.race([a.ready, new Promise((r) => setTimeout(() => r(false), 4000))]))) return null;
+      const plan = { ...awayPlan(root, a.columns, ticks), chunks: a.chunks, records: a.records };
+      const msg = await new Promise((resolve) => {
+        const t = setTimeout(() => resolve({ type: "error", message: "timeout" }), 12000);
+        a.worker.onmessage = ({ data }) => { clearTimeout(t); resolve(data); };
+        a.worker.onerror = (e) => { clearTimeout(t); resolve({ type: "error", message: String(e?.message ?? e) }); };
+        a.worker.postMessage(plan, a.chunks.flatMap((c) => [c.blocks.buffer, c.meta.buffer]));
+      });
+      if (msg.type !== "result" || !msg.result) { if (msg.type === "error") console.warn("away run failed:", msg.message); return null; }
+      const r = msg.result;
+      root.fluidTicks = r.fluidTicks; root.fireTicks = r.fireTicks; root.fallingTicks = r.fallingTicks; root.falling = r.falling;
+      root.redstone = r.redstone; root.pistons = r.pistons;
+      root.player = { ...(root.player ?? {}), ...r.tiles };
+      if (r.drops.length) root.drops = [...(root.drops ?? []), ...r.drops];
+      if (r.columns.length) await this.writeColumns(root.id, r.columns);
+      root.editSequence = Math.max(root.editSequence | 0, r.editSequence | 0);
+      this.awayLog = { ...r.stats, ticks };
+      this.host.dirty?.();
+      return this.awayLog;
+    } catch (error) { console.warn("away run failed:", error); return null; } finally { a.worker.terminate(); }
+  }
   // Travel ---------------------------------------------------------------------------
   async travel(target, { exit = false, death = false } = {}) {
     if (this.busy) return false;
@@ -289,11 +335,18 @@ export class DimensionLive {
       const root = h.worlds().find((w) => w.id === rootIdOf(rec));
       if (!root) return false;
       if (exit) await h.showCredits?.();
+      if (!target && dimensionOf(rec) !== OVERWORLD && this.away) { if (await this.finishAway(root)) await h.save(); }
+      else if (target && dimensionOf(rec) === OVERWORLD) await this.beginAway(root);
       const next = { ...root, transit: { from: dimensionOf(rec), x: p.x, y: p.y, z: p.z, yaw: p.yaw, dir: this.state.teleportDirection, exit, death } };
       if (target) next.dimension = target; else delete next.dimension;
       this.quiet = true;
       h.sound("portal.travel", { volume: 0.25, pitch: 0.8 + Math.random() * 0.4 });
+      const t0 = performance.now();
       await h.openWorld(next);
+      const ms = performance.now() - t0;
+      if (this.away) this.away.tripMs += ms;
+      this.tripLog = { ms: Math.round(ms), to: target };
+      if (target === OVERWORLD || !target) h.advanceTicks?.(Math.round(ms / 50)); // the loading screen's ticks the Overworld clock did not run
       return true;
     } finally { this.busy = false; this.quiet = false; this.setOverlay(0); }
   }
