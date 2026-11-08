@@ -208,7 +208,7 @@ import { spawnDragonIfAbsent } from "./dragon-mobs.js";
 import { vitalsLayout, heartsHtml, foodHtml, mountHeartLayout, mountHeartsHtml, REGENERATION, WITHER_EFFECT } from "./damage-hud.js";
 import { hurtCameraRoll } from "./damage-fx.js";
 import { displayTicks } from "./display-ticks.js";
-import { importedRuntime } from "./world-import.js";
+import { importedRuntime, importedDimensionState } from "./world-import.js";
 import { collectBases, basesFromJson } from "./whole-save-json.js";
 import { tickWorldSystems } from "./world-tick.js";
 import { captureMovementInput } from "./player-input.js";
@@ -947,10 +947,11 @@ function save() {
   active.arrows = arrows.serialize();
   // EntityTNTPrimed.writeEntityToNBT keeps only the fuse (plus Entity's position and motion).
   active.tnt = primed.map((e) => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse }));
-  active.weather = weather.save();
+  active.weather = weather.saveWeather(); // while in the Nether/End: the Overworld's timers, which keep running (weather.js awayOverworld)
   active.bed = bedSleep.save();
   active.flying = flying && survival.creative ? true : undefined;
-  active[simulationKey(world.dimension)] = weather.saveSimulation(); // the Overworld's World.rand/updateLCG stay in worldRandom; each other dimension keeps its own (dimension state `simulation`)
+  active[simulationKey(world.dimension)] = weather.saveSimulation();
+  if (weather.overworld) active.worldRandom = weather.saveOverworldSimulation(); // the Overworld's World.rand/updateLCG stay in worldRandom; each other dimension keeps its own (dimension state `simulation`)
   active.fluidTicks = fluids.save();
   active.fireTicks = fire.save();
   if (redstoneRuntime) { active.redstone = redstoneRuntime.save(); active.pistons = redstoneRuntime.pistons.save(); active.commandBlocks = redstoneRuntime.commandBlocks.save(); active.musicTiles = redstoneRuntime.music.save(); }
@@ -1215,6 +1216,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     startPrefetch();
     // Restore World.rand before constructing the block runtimes that share it.
     weather = new Weather().restore(record.weather).restoreSimulation(record[simulationKey(world.dimension)]);
+    if (world.dimension) weather.awayOverworld(record); // the Overworld keeps its weather timers running while the player is in the Nether/End
     // The cave mood sound (cave-ambience.js) on this world's World.rand and updateLCG.
     weather.mood = new MoodSound(weather);
     weather.mood.player = () => ({ x: position.x, y: position.y + PHYSICS.eye, z: position.z }); // the server player's posY is the eye
@@ -3223,7 +3225,7 @@ async function importBlockworldData(data, { id } = {}) {
     const check = new DimensionWorld(record.seed, d);
     check.restore(blob.edits ?? []);
     const { edits, ...state } = blob;
-    (record.dimensions ??= {})[d] = state;
+    (record.dimensions ??= {})[d] = importedDimensionState(state);
     columns.push(...chunkRecords(viewId(record.id, d), check.edits));
   }
   const baseRecords = basesFromJson(data.bases, (d) => (d ? viewId(record.id, d) : record.id)); // stored full columns of a whole-save export
