@@ -1311,12 +1311,15 @@ async function launch(record, prepared, { slice = false } = {}) {
       drop: (x, y, z, d) => items.dropBlock([makeStack(d.id, d.count, d.damage || 0)], x, y, z),
       primeTnt: (x, y, z) => lightTnt(x, y, z, null),
       markUnsaved: () => { saved = false; },
-      player: () => ({ position, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0 }),
+      // Pistons push the player through its own moveEntity state (piston-push.js pushPlayer).
+      player: () => ({ position, velocity, motion, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0, flying, inWater: wasInWater, vehicle: rider.vehicle ?? null, rider,
+        get onGround() { return grounded; }, set onGround(v) { grounded = v; }, get collidedH() { return collidedH; }, set collidedH(v) { collidedH = v; },
+        get fallDistance() { return fallDistance; }, set fallDistance(v) { fallDistance = v; } }),
       mobs: () => mobs,
       items: () => items.items,
       arrows: () => arrows.list,
       thrown: () => [...projectiles.balls, ...(mobs.potions?.projectiles?.balls ?? [])], // string sensing: witch and dispensed potions fly in mobs.potions
-      boats: () => boats.carts, falling: () => falling.entities,
+      boats: () => boats.carts, boatSystem: () => boats, falling: () => falling.entities,
       orbs: () => xpOrbs.orbs,
       primed: () => primed,
       minecarts: () => minecarts,

@@ -6,6 +6,7 @@ import { entityActive } from './streaming-ticks.js';
 // bottom of the box; EntityItem's posY sits half the height (0.125) above it.
 import { explosionImpact } from "./explosion.js";
 import { collisionBoxList, slipperiness } from "./world.js";
+import { movingBoxes } from "./moving-boxes.js";
 import { copyStack, sameStackItem } from "./inventory.js";
 import { waterAcceleration, inLava } from "./fluids.js";
 import { LAVA } from "./world.js";
@@ -101,9 +102,9 @@ export class ItemEntities {
   box(e) {
     return [e.x - W, e.y, e.z - W, e.x + W, e.y + H, e.z + W];
   }
-  // Solid block boxes overlapping [x0..x1] (World.getCollidingBoundingBoxes).
+  // Solid block boxes overlapping [x0..x1] (World.getCollidingBoundingBoxes), with the moving piston blocks' boxes.
   boxes(world, x0, y0, z0, x1, y1, z1) {
-    const out = [];
+    const out = movingBoxes([x0, y0, z0, x1, y1, z1]);
     for (let bx = Math.floor(x0); bx < Math.floor(x1 + 1); bx++)
       for (let by = Math.floor(y0) - 1; by < Math.floor(y1 + 1); by++)
         for (let bz = Math.floor(z0); bz < Math.floor(z1 + 1); bz++)

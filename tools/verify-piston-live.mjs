@@ -15,6 +15,13 @@ import assert from "node:assert/strict";
 import { RedstoneWorld } from "../src/redstone.js";
 import { fromOriginal } from "../src/block-registry.js";
 import { installPistons, tileOffset, tileProgress } from "../src/piston-live.js";
+import { pistonPushExtras } from "../src/piston-push.js";
+import { setMovingBoxes } from "../src/moving-boxes.js";
+import { EntityWorld, setEntityBoxes } from "../src/entities.js";
+import { Minecarts, Y_OFFSET } from "../src/minecarts.js";
+import { Boats } from "../src/boats.js";
+import { boatBoxProvider } from "../src/entity-collision.js";
+import { solidBlock } from "../src/world.js";
 
 const exec = promisify(execFile), root = path.dirname(fileURLToPath(import.meta.url)), exists = (p) => access(p).then(() => true, () => false);
 const STONE = 1, STICKY = 29, PISTON = 33, REDSTONE_BLOCK = 152;
@@ -27,6 +34,9 @@ function scenario(name, { cells, events, ticks, note }) {
 }
 const box = (x, y, z, w = 0.4, h = 0.8) => [x, y, z, x + w, y + h, z + w];
 const ent = (t, label, b) => [t, "entity", 0, 0, 0, label, ...b];
+// A real entity (probe: EntityPig / EntityMinecartEmpty / EntityBoat constructed in the World) at the cell's centre, feet on its floor.
+const PIG = 0, CART = 1, BOAT = 2;
+const live = (t, label, kind, [x, y, z], [vx, vy, vz] = [0, 0, 0]) => [t, "live", x, y, z, label, kind, vx, vy, vz];
 const SCENARIOS = [];
 {
   const c = { "1,1,2": `${PISTON}:5`, "2,1,2": STONE, "3,1,2": STONE };
@@ -83,6 +93,56 @@ for (const [name, id] of [["slab-bottom", "44:0"], ["slab-top", "44:8"], ["fence
     ent(1, 1, box(2.3, 1, 1.3)), ent(1, 2, box(2.3, 1.55, 1.3, 0.4, 0.4)), ent(1, 3, box(2.3, 2.0, 1.3)), [1, "place", 1, 2, 1, REDSTONE_BLOCK, 0], [7, "air", 1, 2, 1]] }));
 }
 
+// Real entities pushed through their own Entity.moveEntity (goal: the port's EntityWorld.pushMove, Minecarts.move and Boats.move
+// against the block boxes, BlockPistonMoving's collision box and the other entities' boxes).
+{
+  const c = { "1,1,2": `${PISTON}:5`, "4,1,2": STONE, "4,2,2": STONE };
+  SCENARIOS.push(scenario("live-pig-into-wall", { cells: c, ticks: 12, note: "the head pushes a pig (moving east at 0.05) into a wall two cells ahead; retract at tick 7", events: [
+    live(1, 1, PIG, [2, 1, 2], [0.05, 0, 0.02]), [1, "place", 1, 2, 2, REDSTONE_BLOCK, 0], [7, "air", 1, 2, 2]] }));
+}
+{
+  const c = { "1,1,2": `${PISTON}:1`, "1,2,2": STONE, "1,5,2": STONE, "4,1,2": `${PISTON}:1`, "4,2,2": STONE };
+  SCENARIOS.push(scenario("live-pig-lift", { cells: c, ticks: 10, note: "pistons facing up lift a stone with a pig on top, one under a ceiling (blocked) and one free (falling motion -0.08)", events: [
+    live(1, 1, PIG, [1, 3, 2]), live(1, 2, PIG, [4, 3, 2], [0, -0.08, 0]), [1, "place", 0, 1, 2, REDSTONE_BLOCK, 0], [1, "place", 5, 1, 2, REDSTONE_BLOCK, 0]] }));
+}
+{
+  const c = { "1,1,1": `${PISTON}:5`, "3,1,1": "44:0", "1,1,4": `${PISTON}:5`, "3,1,4": STONE };
+  SCENARIOS.push(scenario("live-pig-step", { cells: c, ticks: 10, note: "the head pushes a grounded pig into a bottom slab (steps up 0.5) and another into a full block (no step)", events: [
+    live(1, 1, PIG, [2, 1, 1]), live(1, 2, PIG, [2, 1, 4]), [1, "place", 0, 1, 1, REDSTONE_BLOCK, 0], [1, "place", 0, 1, 4, REDSTONE_BLOCK, 0]] }));
+}
+{
+  const c = { "1,1,1": `${PISTON}:5`, "4,1,1": STONE, "1,1,4": `${PISTON}:5`, "5,1,4": STONE };
+  SCENARIOS.push(scenario("live-cart-boat-wall", { cells: c, ticks: 10, note: "the head pushes an empty minecart (motion 0.1 east) into a wall and a boat into a wall", events: [
+    live(1, 1, CART, [2, 1, 1], [0.1, 0, 0]), live(1, 2, BOAT, [3, 1, 4]), [1, "place", 0, 1, 1, REDSTONE_BLOCK, 0], [1, "place", 0, 1, 4, REDSTONE_BLOCK, 0]] }));
+}
+{
+  const c = { "1,1,2": `${PISTON}:5`, "6,1,2": STONE };
+  SCENARIOS.push(scenario("live-pig-into-boat", { cells: c, ticks: 10, note: "the head pushes a pig into a boat (EntityBoat.getBoundingBox is a collision box for other movers)", events: [
+    live(1, 1, PIG, [2, 1, 2]), live(1, 2, BOAT, [4, 1, 2]), [1, "place", 0, 1, 2, REDSTONE_BLOCK, 0]] }));
+}
+{
+  const c = { "1,2,2": `${PISTON}:5`, "2,2,2": STONE, "3,1,2": STONE, "4,1,2": STONE };
+  SCENARIOS.push(scenario("live-pig-on-moving-path", { cells: c, ticks: 12, note: "a pig standing in the cell the pushed stone enters, on a raised floor, pushed east along it; retract at tick 7", events: [
+    live(1, 1, PIG, [3, 2, 2]), [1, "place", 1, 3, 2, REDSTONE_BLOCK, 0], [7, "air", 1, 3, 2]] }));
+}
+
+// More stored blocks (batch 24): every stairs id, the slab variants, carpet colour, mossy wall, anvil metadata, rails, an open
+// gate, wet farmland, trapdoor metadata, ladders, snow depths. Appended after the earlier scenarios, so the stale-bounds state the
+// earlier scenarios leave in the shared Block instances is unchanged for them.
+{
+  const ids = [
+    ...[53, 67, 108, 109, 114, 128, 134, 135, 136, 156, 163, 164].map((id) => `${id}:1`), "53:2", "53:3", "53:5", "53:6",
+    ...[1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15].map((m) => `44:${m}`), ...[0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13].map((m) => `126:${m}`),
+    "171:5", "139:1", "145:0", "145:3", "145:4", "145:8", "122:0", "66:0", "66:1", "27:0", "28:0", "157:0", "107:4", "60:7",
+    "96:1", "96:2", "96:3", "96:4", "96:12", "96:13", "65:2", "65:5", "78:0", "78:7", "120:4", "88:0", "1:0",
+  ];
+  for (const id of ids) {
+    const c = { "1,1,1": `${PISTON}:5`, "2,1,1": id };
+    SCENARIOS.push(scenario("odd-block2-" + id.replace(":", "-"), { cells: c, ticks: 12, note: "piston pushes " + id + " east (stored-block collision box at each progress); retract at tick 7; entity inside, on top and beside", events: [
+      ent(1, 1, box(2.3, 1, 1.3)), ent(1, 2, box(2.3, 1.55, 1.3, 0.4, 0.4)), ent(1, 3, box(2.3, 2.0, 1.3)), [1, "place", 1, 2, 1, REDSTONE_BLOCK, 0], [7, "air", 1, 2, 1]] }));
+  }
+}
+
 const researchDirs = [process.env.MC_RESEARCH, path.join(root, "../../tools/research")].filter(Boolean);
 let research;
 for (const dir of researchDirs) if (await exists(path.join(dir, "minecraft-1.7.10.jar"))) { research = dir; break; }
@@ -125,10 +185,24 @@ export function replay(s) {
     const [id, meta = 0] = cells[(x * SIZE[1] + y) * SIZE[2] + z].split(":").map(Number);
     if (id) w.setRaw(ox + x, oy + y, oz + z, id, meta);
   }
-  const ents = [], moves = [];
+  const ents = [], moves = [], liveMoves = [], lives = [];
   let tick = 0;
-  const p = installPistons({ redstone: w, blocks: { toInternal: (id, meta) => (id === 0 ? null : { id: { 1: 1, 29: 116, 33: 117, 34: 118 }[id] ?? fromOriginal(id, meta)?.id ?? id, meta: fromOriginal(id, meta)?.meta ?? meta }) }, entities: { extra: () => ents } });
-  const tes = [], boxes = [], entityPos = [], samples = [], collide = [];
+  const toInternal = (id, meta) => (id === 0 ? null : { id: { 1: 1, 29: 116, 33: 117, 34: 118 }[id] ?? fromOriginal(id, meta)?.id ?? id, meta: fromOriginal(id, meta)?.meta ?? meta });
+  // The live World as the game sees it (internal ids; the moving cell is the internal moving block, which has no box of its own).
+  const cell = (x, y, z) => toInternal(w.getBlock(x, y, z), w.getBlockMetadata(x, y, z));
+  const view = { get: (x, y, z) => cell(x, y, z)?.id ?? 0, getMeta: (x, y, z) => cell(x, y, z)?.meta ?? 0, solid: (x, y, z) => { const c = cell(x, y, z); return !!c && solidBlock(c.id, c.meta); }, set() {} };
+  // Real entities: pigs in an EntityWorld (pushMove), carts and boats in their systems (Minecarts.move / Boats.move), as the
+  // redstone runtime wires them (piston-push.js pistonPushExtras), each move recorded before it runs.
+  const mobs = new EntityWorld(view, [], () => 0.5), carts = new Minecarts({ random: () => ({ nextFloat: () => 0.5, nextInt: () => 0, nextDouble: () => 0.5, nextGaussian: () => 0 }) }), boats = new Boats();
+  for (const [obj, key, label] of [[mobs, "pushMove", (e) => e.label], [carts, "move", (c, a) => a[1].label], [boats, "move", (c, a) => a[1].label]]) {
+    const orig = obj[key].bind(obj);
+    obj[key] = (...a) => { const d = key === "pushMove" ? a.slice(1, 4) : a.slice(2, 5); liveMoves.push([tick, key === "pushMove" ? label(a[0]) : label(null, a), ...d]); return orig(...a); };
+  }
+  const p = installPistons({ redstone: w, world: view, blocks: { toInternal }, entities: { mobs, extra: () => [...ents, ...pistonPushExtras(view, { minecarts: () => carts, boatSystem: () => boats, mobs: () => mobs, player: () => null })] } });
+  setMovingBoxes((b) => p.collisionBoxes(b));
+  setEntityBoxes(boatBoxProvider({ get carts() { return boats.carts; } }));
+  const tes = [], boxes = [], entityPos = [], samples = [], collide = [], liveStates = [];
+  try {
   for (tick = 1; tick <= s.ticks; tick++) {
     for (const [t, op, x0, y0, z0, a, ...rest] of s.events) {
       if (t !== tick) continue;
@@ -138,6 +212,14 @@ export function replay(s) {
       else if (op === "entity") {
         const b = [ox + rest[0], oy + rest[1], oz + rest[2], ox + rest[3], oy + rest[4], oz + rest[5]], e = { label: a, box: b, move(dx, dy, dz) { moves.push([tick, a, dx, dy, dz]); b[0] += dx; b[3] += dx; b[1] += dy; b[4] += dy; b[2] += dz; b[5] += dz; } };
         ents.push(e);
+      } else if (op === "live") {
+        const [kind, vx, vy, vz] = rest, px = x + 0.5, pz = z + 0.5;
+        let e;
+        if (kind === PIG) { e = { id: mobs.nextId++, type: "pig", x: px, y, z: pz, vx, vy, vz, onGround: true, fallDistance: 0, health: 10, growingAge: 0, rotationYaw: 0 }; mobs.entities.push(e); }
+        else if (kind === CART) { e = carts.spawnEmpty({ x: px, y: y + Y_OFFSET, z: pz }, { seed: 1 }); Object.assign(e, { vx, vy, vz, onGround: true }); }
+        else { e = boats.spawnBoat({ x: px, y, z: pz, vx, vy, vz }, { seed: 1 }); e.onGround = true; }
+        e.label = a;
+        lives.push(e);
       }
     }
     w.time++;
@@ -150,12 +232,14 @@ export function replay(s) {
     boxes.push(p.pushBoxes().map((b) => b && [b[0] - ox, b[1] - oy, b[2] - oz, b[3] - ox, b[4] - oy, b[5] - oz]));
     collide.push(tiles.map((t) => p.collisionBoxes([t.x + 0.001, t.y + 0.001, t.z + 0.001, t.x + 0.999, t.y + 0.999, t.z + 0.999]).map((b) => [b[0] - ox, b[1] - oy, b[2] - oz, b[3] - ox, b[4] - oy, b[5] - oz])));
     entityPos.push(ents.map((e) => [e.label, e.box[0] - ox, e.box[1] - oy, e.box[2] - oz]));
+    liveStates.push(lives.map((e) => [e.label, e.x - ox, (e.bb ? e.bb[1] : e.y) - oy, e.z - oz, e.vx, e.vy, e.vz, e.onGround ? 1 : 0, e.collidedH ? 1 : 0, e.fallDistance ?? 0]));
   }
-  return { tes, boxes, entityPos, moves, collide, api: p };
+  } finally { setMovingBoxes(null); setEntityBoxes(null); }
+  return { tes, boxes, entityPos, moves, collide, live: liveStates, liveMoves, api: p };
 }
 const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`);
 const failures = [];
-let collideCount = 0, totalMoves = 0, tileStates = 0, offsets = 0, boxCount = 0;
+let liveStates = 0, totalLiveMoves = 0, collideCount = 0, totalMoves = 0, tileStates = 0, offsets = 0, boxCount = 0;
 const results = [];
 for (const [i, n] of natives.entries()) {
   const s = SCENARIOS[i];
@@ -189,10 +273,18 @@ for (const [i, n] of natives.entries()) {
       mine.entityPos[t].forEach((e, k) => e.forEach((v, j) => close(v, n.entities[t][k][j], `${s.name}: entity position at tick ${t + 1}`)));
       tileStates += mine.tes[t].length;
     }
+    for (let t = 0; t < s.ticks; t++) {
+      assert.equal(mine.live[t].length, n.live[t].length, `${s.name}: live entity count at tick ${t + 1}`);
+      mine.live[t].forEach((e, k) => e.forEach((v, j) => close(v, n.live[t][k][j], `${s.name}: live entity ${e[0]} field ${j} at tick ${t + 1}: ${JSON.stringify(e)} vs ${JSON.stringify(n.live[t][k])}`)));
+      liveStates += mine.live[t].length;
+    }
+    assert.equal(mine.liveMoves.length, n.liveMoves.length, `${s.name}: number of live moves ${JSON.stringify(mine.liveMoves)} vs ${JSON.stringify(n.liveMoves)}`);
+    mine.liveMoves.forEach((m, k) => m.forEach((v, j) => close(v, n.liveMoves[k][j], `${s.name}: live move ${k}`)));
+    totalLiveMoves += n.liveMoves.length;
     assert.equal(mine.moves.length, n.moves.length, `${s.name}: number of entity moves`);
     mine.moves.forEach((m, k) => m.forEach((v, j) => close(v, n.moves[k][j], `${s.name}: move ${k}`)));
     totalMoves += n.moves.length;
-    results.push({ ...s, te: n.te, pushBoxes: n.pushBoxes, collide: n.collide, entities: n.entities, moves: n.moves });
+    results.push({ ...s, te: n.te, pushBoxes: n.pushBoxes, collide: n.collide, entities: n.entities, moves: n.moves, ...(n.live.some((l) => l.length) ? { live: n.live, liveMoves: n.liveMoves } : {}) });
   } catch (e) {
     failures.push(`${s.name}: ${String(e.message).split("\n").slice(0, 8).join(" | ")}`);
   }
@@ -204,8 +296,8 @@ const names = { aps: "TileEntityPiston", apr: "BlockPistonMoving", app: "BlockPi
 const reference = {
   target: "Minecraft Java 1.7.10", clientSha1, origin: ORIGIN, size: SIZE, partials: [0, 0.25, 0.5, 0.75, 1],
   classes: Object.fromEntries(await Promise.all(Object.entries(names).map(async ([c, n]) => [c, { name: n, sha256: await digest(c) }]))),
-  method: "tools/probes/PistonLiveProbe.java on the PistonProbe world: per tick te rows [x,y,z,storedBlock,meta,facing,extending,renderHead,progress,lastProgress,[[progress(partial),offX,offY,offZ] x5 partials]] from aps.a/b/c/d(partial); pushBoxes from apr.a(world,x,y,z,stored,arg,facing) with arg = extending ? 1-progress : progress-1; entities [label,minX,minY,minZ] after the tick; moves [tick,label,dx,dy,dz] from native TileEntityPiston.func_145863_a through Entity.moveEntity stand-ins (EntityItem subclasses that record the delta and shift their scripted box). Coordinates region-relative to origin.",
+  method: "tools/probes/PistonLiveProbe.java on the PistonProbe world: per tick te rows [x,y,z,storedBlock,meta,facing,extending,renderHead,progress,lastProgress,[[progress(partial),offX,offY,offZ] x5 partials]] from aps.a/b/c/d(partial); pushBoxes from apr.a(world,x,y,z,stored,arg,facing) with arg = extending ? 1-progress : progress-1; entities [label,minX,minY,minZ] after the tick; moves [tick,label,dx,dy,dz] from native TileEntityPiston.func_145863_a through Entity.moveEntity stand-ins (EntityItem subclasses that record the delta and shift their scripted box). Live entities (EntityPig, EntityMinecartEmpty, EntityBoat constructed in the World, their own moveEntity run after recording the delta): live [label,posX,minY,posZ,motionX,motionY,motionZ,onGround,isCollidedHorizontally,fallDistance] after each tick, liveMoves [tick,label,dx,dy,dz]. Coordinates region-relative to origin.",
   scenarios: results,
 };
 await writeFile(path.join(root, "../public/research/piston-live-reference.json"), JSON.stringify(reference) + "\n");
-console.log(`PASS: ${SCENARIOS.length} scenarios, ${tileStates} tile states, ${offsets} render offsets, ${boxCount} push boxes, ${collideCount} collision boxes, ${totalMoves} entity moves identical to the original classes.`);
+console.log(`PASS: ${SCENARIOS.length} scenarios, ${tileStates} tile states, ${offsets} render offsets, ${boxCount} push boxes, ${collideCount} collision boxes, ${totalMoves} entity moves, ${liveStates} live entity states, ${totalLiveMoves} live entity moves identical to the original classes.`);

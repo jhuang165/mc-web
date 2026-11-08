@@ -7,7 +7,9 @@
 // so the native getEntitiesWithinAABBExcludingEntity intersection and every func_145863_a move are observable.
 // Per tick (same order as PistonProbe): events, world time + 1, tickUpdates, sendQueuedBlockEvents, World.updateEntities.
 // stdin per scenario: "scenario name ox oy oz dx dy dz ticks seed", "grid id[:meta],...", then "event tick op args" lines
-// (place x y z id meta | air x y z | use x y z | entity x y z label minx miny minz maxx maxy maxz, region-relative).
+// (place x y z id meta | air x y z | use x y z | entity x y z label minx miny minz maxx maxy maxz | live x y z label kind vx vy vz,
+// region-relative). Real entities ("live": EntityPig, EntityMinecartEmpty, EntityBoat) give per-tick
+// [label, posX, minY, posZ, motionX, motionY, motionZ, onGround, isCollidedHorizontally, fallDistance] and their move deltas.
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
@@ -21,6 +23,15 @@ public class PistonLiveProbe {
       box[0] += x; box[3] += x; box[1] += y; box[4] += y; box[2] += z; box[5] += z;
     }
   }
+  // Real entities (constructed in the probe world): their own Entity.moveEntity runs (collision with the World's block boxes,
+  // BlockPistonMoving.getCollisionBoundingBoxFromPool, other entities' boxes, step, flags, fall state, block collisions); the
+  // subclasses only record the requested delta first. No onUpdate runs (the probe World has no loaded entities).
+  interface Live { int label(); }
+  static List<String> liveMoves; static long liveTick;
+  static void rec(int label, double x, double y, double z) { liveMoves.add("[" + liveTick + "," + label + "," + x + "," + y + "," + z + "]"); }
+  public static class Pig extends wo implements Live { int label; public Pig(ahb w) { super(w); } public int label() { return label; } public void d(double x, double y, double z) { rec(label, x, y, z); super.d(x, y, z); } }
+  public static class Cart extends xm implements Live { int label; public Cart(ahb w, double x, double y, double z) { super(w, x, y, z); } public int label() { return label; } public void d(double x, double y, double z) { rec(label, x, y, z); super.d(x, y, z); } }
+  public static class Boat extends xi implements Live { int label; public Boat(ahb w, double x, double y, double z) { super(w, x, y, z); } public int label() { return label; } public void d(double x, double y, double z) { rec(label, x, y, z); super.d(x, y, z); } }
   static String q(String s) { return "\"" + s + "\""; }
   static Field field(Class<?> c, String n) throws Exception { return PistonProbe.field(c, n); }
   public static void main(String[] args) throws Exception {
@@ -46,7 +57,8 @@ public class PistonLiveProbe {
       }
       List<String[]> events = new ArrayList<>();
       for (line = in.readLine(); line != null && line.startsWith("event "); line = in.readLine()) events.add(line.split(" "));
-      List<String> moves = new ArrayList<>();
+      List<String> moves = new ArrayList<>(); liveMoves = new ArrayList<>();
+      StringBuilder liveOut = new StringBuilder();
       StringBuilder tes = new StringBuilder(), boxes = new StringBuilder(), cellsOut = new StringBuilder(), collOut = new StringBuilder();
       for (int t = 1; t <= ticks; t++) {
         w.tick = t; w.log.setLength(0);
@@ -64,10 +76,23 @@ public class PistonLiveProbe {
               w.ents.add(new Object[] {ent, ent.box, new int[] {x, y, z}});
               break;
             }
+            case "live": { // live x y z label kind vx vy vz: kind 0 pig, 1 empty minecart, 2 boat at feet (x+0.5, y, z+0.5)
+              int label = Integer.parseInt(e[6]), kind = Integer.parseInt(e[7]);
+              double px = x + 0.5, py = y, pz = z + 0.5;
+              sa ent;
+              if (kind == 0) { Pig g = new Pig(w); g.label = label; g.b(px, py, pz); ent = g; }
+              else if (kind == 1) { Cart c = new Cart(w, px, py, pz); c.b(px, py + c.L, pz); c.label = label; ent = c; } // EntityMinecart(w, x, y, z) takes posY; feet + yOffset
+              else { Boat b = new Boat(w, px, py, pz); b.label = label; ent = b; }
+              ent.v = Double.parseDouble(e[8]); ent.w = Double.parseDouble(e[9]); ent.x = Double.parseDouble(e[10]);
+              ent.D = true;
+              w.ents.add(new Object[] {ent, null, new int[] {x, y, z}});
+              break;
+            }
             default: throw new IllegalArgumentException(op);
           }
         }
-        for (Object[] o : w.ents) ((Ent) o[0]).tick = t;
+        for (Object[] o : w.ents) if (o[0] instanceof Ent) ((Ent) o[0]).tick = t;
+        liveTick = t;
         w.time++;
         w.add("T");
         w.tickUpdates();
@@ -80,7 +105,9 @@ public class PistonLiveProbe {
           for (float pt : partials) samples.append(samples.length() > 0 ? "," : "").append("[").append(p.a(pt)).append(",").append(p.b(pt)).append(",").append(p.c(pt)).append(",").append(p.d(pt)).append("]");
           te.append(te.length() > 0 ? "," : "").append("[").append(p.c - ox).append(",").append(p.d - oy).append(",").append(p.e - oz).append(",").append(aji.b(p.a())).append(",").append(p.p()).append(",").append(p.c()).append(",").append(p.b() ? 1 : 0).append(",").append(p.d() ? 1 : 0).append(",").append(field(aps.class, "m").getFloat(p)).append(",").append(field(aps.class, "n").getFloat(p)).append(",[").append(samples).append("]]");
           // World.getCollidingBoundingBoxes(null, the tile's cell inset by 0.001): only the moving block's own box can intersect it. The mover is an unconstructed Ent (World asks the other entities h(mover)).
+          w.blocksOnly = true;
           List<azt> hits = w.a((sa) PistonProbe.unsafe.allocateInstance(Ent.class), azt.a(p.c + 0.001, p.d + 0.001, p.e + 0.001, p.c + 0.999, p.d + 0.999, p.e + 0.999));
+          w.blocksOnly = false;
           StringBuilder hb = new StringBuilder();
           for (azt hh : hits) hb.append(hb.length() > 0 ? "," : "").append("[").append(hh.a - ox).append(",").append(hh.b - oy).append(",").append(hh.c - oz).append(",").append(hh.d - ox).append(",").append(hh.e - oy).append(",").append(hh.f - oz).append("]");
           cl.append(cl.length() > 0 ? "," : "").append("[").append(hb).append("]");
@@ -91,11 +118,17 @@ public class PistonLiveProbe {
         tes.append(t > 1 ? "," : "").append("[").append(te).append("]");
         boxes.append(t > 1 ? "," : "").append("[").append(bx).append("]");
         StringBuilder ec = new StringBuilder();
-        for (Object[] o : w.ents) { double[] b = (double[]) o[1]; ec.append(ec.length() > 0 ? "," : "").append("[").append(((Ent) o[0]).label).append(",").append(b[0] - ox).append(",").append(b[1] - oy).append(",").append(b[2] - oz).append("]"); }
+        StringBuilder lv = new StringBuilder();
+        for (Object[] o : w.ents) if (o[0] instanceof Live) {
+          sa a = (sa) o[0];
+          lv.append(lv.length() > 0 ? "," : "").append("[").append(((Live) a).label()).append(",").append(a.s - ox).append(",").append(a.C.b - oy).append(",").append(a.u - oz).append(",").append(a.v).append(",").append(a.w).append(",").append(a.x).append(",").append(a.D ? 1 : 0).append(",").append(a.E ? 1 : 0).append(",").append(a.R).append("]");
+        }
+        liveOut.append(t > 1 ? "," : "").append("[").append(lv).append("]");
+        for (Object[] o : w.ents) if (o[0] instanceof Ent) { double[] b = (double[]) o[1]; ec.append(ec.length() > 0 ? "," : "").append("[").append(((Ent) o[0]).label).append(",").append(b[0] - ox).append(",").append(b[1] - oy).append(",").append(b[2] - oz).append("]"); }
         collOut.append(t > 1 ? "," : "").append("[").append(cl).append("]");
         cellsOut.append(t > 1 ? "," : "").append("[").append(ec).append("]");
       }
-      System.out.println("{\"name\":" + q(name) + ",\"te\":[" + tes + "],\"pushBoxes\":[" + boxes + "],\"collide\":[" + collOut + "],\"entities\":[" + cellsOut + "],\"moves\":[" + String.join(",", moves) + "],\"sounds\":[" + String.join(",", w.sounds) + "]}");
+      System.out.println("{\"name\":" + q(name) + ",\"te\":[" + tes + "],\"pushBoxes\":[" + boxes + "],\"collide\":[" + collOut + "],\"entities\":[" + cellsOut + "],\"moves\":[" + String.join(",", moves) + "],\"live\":[" + liveOut + "],\"liveMoves\":[" + String.join(",", liveMoves) + "],\"sounds\":[" + String.join(",", w.sounds) + "]}");
     }
   }
 }

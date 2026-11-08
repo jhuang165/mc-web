@@ -21,6 +21,7 @@ import { creeperFields, creeperSavedFields, creeperTick, creeperFall, creeperDro
 import { SIZE, HEIGHT, hash, slipperiness, collisionBoxes as cellCollisionBoxes, normalCube, WOOL, isLiquid, DYE, BLOCKS, PUMPKIN, WATER, LEAVES2 } from "./world.js";
 import { isOnLadder, ladderClamp, LADDER_CLIMB } from "./ladders.js";
 import { mobStepEvents, isEntityMob } from "./mob-steps.js";
+import { setMovingBoxes, movingBoxes } from "./moving-boxes.js";
 import { ITEMS } from "./survival.js";
 import { weaponEnchantments, arthropodSlowness, javaLikeRandom } from "./enchantment-effects.js";
 import { insideOpaqueBlock, mobEyeHeight } from "./suffocation.js";
@@ -327,12 +328,11 @@ const JUMP_MOVEMENT_FACTOR = f(0.02); // sv.aQ
 // provider; it is only asked for a moving entity `e`, never for the spawn checks.
 let entityBoxes = null;
 export const setEntityBoxes = (fn) => { entityBoxes = fn; };
-// BlockPistonMoving.getCollisionBoundingBoxFromPool boxes (piston-live.js collisionBoxes), set by redstone-runtime.js.
-let movingBoxes = null;
-export const setMovingBoxes = (fn) => { movingBoxes = fn; };
+// BlockPistonMoving.getCollisionBoundingBoxFromPool boxes (moving-boxes.js, piston-live.js collisionBoxes), set by redstone-runtime.js.
+export { setMovingBoxes };
 function collisionBoxes(world, b, e) {
   const out = entityBoxes && e ? entityBoxes(b, e) : [];
-  if (movingBoxes) out.push(...movingBoxes(b));
+  out.push(...movingBoxes(b));
   for (let bx = Math.floor(b[0]); bx < Math.floor(b[3] + 1); bx++)
     for (let by = Math.floor(b[1]) - 1; by < Math.floor(b[4] + 1); by++)
       for (let bz = Math.floor(b[2]); bz < Math.floor(b[5] + 1); bz++)
@@ -1962,21 +1962,44 @@ export class EntityWorld {
     if (e.moveStrafing) e.moveStrafing = f(e.moveStrafing * f(0.98)); // EntitySlime strafes (moveStrafing x 0.98)
     this.moveWith(e, t, e.moveForward);
   }
-  // EntityLivingBase.moveEntityWithHeading(strafe, forward) with this engine's tails; walk() runs it once a tick and
-  // EntityAIControlledByPlayer (ai.js, pig-saddle.js) once more from inside the AI.
-  moveWith(e, t, forward) {
-    // moveEntity's tail: cactus and fire (inFire) damage, webs, the fire counter and the rain fizz.
-    const self = this, hooks = {
+  // moveEntity's tail: cactus and fire (inFire) damage, webs, the fire counter and the rain fizz.
+  moveHooks(e, t) {
+    const self = this;
+    return {
       living: true,
       hurt: (source, points) => this.hazard(e, points, source),
       get wet() { return e.inWater || !!self.wet?.(e, t.height); },
       fizz: () => this.events.push({ sound: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(this.random() - this.random()) * 0.4)), position: { x: e.x, y: e.y, z: e.z } }),
     };
-    const from = { x: e.x, y: e.y, z: e.z };
-    const landed = moveEntityWithHeading(this.world, e, t.width, t.height, forward, hooks);
-    // moveEntity's step tail (mob-steps.js): every mob with canTriggerWalking plays its own step event.
+  }
+  // moveEntity's step tail (mob-steps.js): every mob with canTriggerWalking plays its own step event.
+  moveSteps(e, from) {
     const rand = entityRandom(e);
     this.events.push(...mobStepEvents(this.world, e, from, { hostile: isEntityMob(e.type), random: () => rand.nextFloat(), onWalk: (x, y, z) => this.onEntityWalking?.(x, y, z, e) }));
+  }
+  // The landing of a move (EntityLivingBase.fall).
+  moveLanding(e, landed) {
+    if (landed > 0) this.onLand?.(e, landed);
+    // EntityChicken.fall, EntityBat.fall, EntityOcelot.fall and EntityGolem.fall do nothing.
+    if (landed > 0 && e.type !== "chicken" && e.type !== "bat" && e.type !== "ocelot" && e.type !== "snow_golem" && e.type !== "iron_golem" && e.type !== "magma_cube") this.fall(e, landed); // EntityMagmaCube.fall does nothing
+  }
+  // TileEntityPiston.func_145863_a moves a mob with Entity.moveEntity (no living class overrides it): the same move, tails,
+  // step events and landing as moveWith's for the piston's delta, stepHeight 0.5 (enderman 1). Returns the landing distance.
+  pushMove(e, dx, dy, dz) {
+    const base = ENTITY_TYPES[e.type];
+    if (!base) return 0;
+    const s = mobScale(e), t = { ...base, width: base.width * s, height: base.height * s }, from = { x: e.x, y: e.y, z: e.z };
+    const landed = moveEntity(this.world, e, t.width, t.height, dx, dy, dz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, this.moveHooks(e, t));
+    this.moveSteps(e, from);
+    this.moveLanding(e, landed);
+    return landed;
+  }
+  // EntityLivingBase.moveEntityWithHeading(strafe, forward) with this engine's tails; walk() runs it once a tick and
+  // EntityAIControlledByPlayer (ai.js, pig-saddle.js) once more from inside the AI.
+  moveWith(e, t, forward) {
+    const from = { x: e.x, y: e.y, z: e.z };
+    const landed = moveEntityWithHeading(this.world, e, t.width, t.height, forward, this.moveHooks(e, t));
+    this.moveSteps(e, from);
     // The finite world's edge stops a mob like a wall.
     // A streamed world's edge is its border (the 30,000,000 limit), not the resident window: mobs walk into the ring beyond it.
     const w = this.world, lim = (axis, hi) => w.streaming ? (hi ? 30000000 : -30000000) - (axis === "x" ? w.originX || 0 : w.originZ || 0) : w[(hi ? "max" : "min") + axis.toUpperCase()];
@@ -1986,9 +2009,7 @@ export class EntityWorld {
     };
     edge("x", "vx");
     edge("z", "vz");
-    if (landed > 0) this.onLand?.(e, landed);
-    // EntityChicken.fall, EntityBat.fall, EntityOcelot.fall and EntityGolem.fall do nothing.
-    if (landed > 0 && e.type !== "chicken" && e.type !== "bat" && e.type !== "ocelot" && e.type !== "snow_golem" && e.type !== "iron_golem" && e.type !== "magma_cube") this.fall(e, landed); // EntityMagmaCube.fall does nothing
+    this.moveLanding(e, landed);
   }
   // EntitySlime.onUpdate (ym.h): the squish before and after EntityLivingBase.onUpdate (walk), the landing particles
   // ("slime" is EntityBreakingFX with a slimeball) and sounds, then onCollideWithPlayer. slime.js holds the rules.

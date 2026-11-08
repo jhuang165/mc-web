@@ -45,7 +45,8 @@ public class PistonProbe {
     W() { super((azc) null, null, (aqo) null, (ahj) null, null); }
     long time; agy rules; StringBuilder log; int calls; long tick; int sky = 15; float angle;
     List<String> sounds, drops;
-    List<Object[]> ents; // {entity, double[6] box}
+    List<Object[]> ents; // {entity, double[6] box} (box null: a real entity, its live boundingBox)
+    boolean blocksOnly; // the collision-box readout asks for block boxes only (EntityBoat.getBoundingBox is not null)
     Set<ahs> M; TreeSet<ahs> N; List<ahs> V;
     protected apu j() { return null; }
     protected int p() { return 0; }
@@ -64,16 +65,19 @@ public class PistonProbe {
     public void a(String name, double x, double y, double z, double vx, double vy, double vz) {}
     // World.getEntitiesWithinAABB(Class, AABB) and getEntitiesWithinAABBExcludingEntity(null, AABB)
     // over the scripted entities, with AxisAlignedBB.intersectsWith semantics.
-    List scripted(Class c, azt box) {
+    List scripted(Class c, azt box, Object except) {
       List r = new ArrayList();
+      if (blocksOnly) return r;
       for (Object[] e : ents) {
-        double[] b = (double[]) e[1];
+        if (e[0] == except) continue;
+        double[] b = e[1] != null ? (double[]) e[1] : live(((sa) e[0]).C);
         if ((c == null || c.isInstance(e[0])) && b[3] > box.a && b[0] < box.d && b[4] > box.b && b[1] < box.e && b[5] > box.c && b[2] < box.f) r.add(e[0]);
       }
       return r;
     }
-    public List a(Class c, azt box) { return scripted(c, box); }
-    public List b(sa e, azt box) { return scripted(null, box); }
+    static double[] live(azt b) { return new double[] {b.a, b.b, b.c, b.d, b.e, b.f}; }
+    public List a(Class c, azt box) { return scripted(c, box, null); }
+    public List b(sa e, azt box) { return scripted(null, box, e); }
     public boolean d(sa e) {
       xk item = (xk) e; add stack = item.f();
       drops.add("[" + tick + "," + e.s + "," + e.t + "," + e.u + "," + adb.b(stack.b()) + "," + stack.b + "," + stack.k() + "]");
