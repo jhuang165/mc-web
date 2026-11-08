@@ -7,6 +7,7 @@ import { readNbt as readHorseNbt } from './horse.js';
 import { uuidFields } from './entity-uuid.js';
 import { attributeFieldsFromNbt } from './mob-attributes.js';
 import { livingAttributeFields } from './mob-attribute-list.js';
+import { maxHealthOf, OWN_MAX_HEALTH } from './mob-riding.js';
 import { OWNED_TYPES, ownerFields, ownerFromNbt, leashHolderUuid } from './owner-links.js';
 import { ocelotFieldsFrom } from './ocelot.js';
 import { NBT } from './nbt.js';
@@ -286,10 +287,20 @@ export function javaMobFromNbt(entity, options) {
     const javaId = tagValue(entity, 'id', NBT.STRING, '');
     Object.assign(record, livingAttributeFields(entity, record, javaId));
     // setHealth(HealF) runs after the Attributes, so the cap is the modified maximum (probed `modEffect` bases: HealF 28 kept under maxHealth 30).
-    if (Number.isFinite(record.maxHealth) && !['wolf', 'slime', 'magma_cube', 'horse'].includes(record.type)) {
+    if (Number.isFinite(record.maxHealth) && !OWN_MAX_HEALTH.has(record.type)) {
       const healF = tagValue(entity, 'HealF', NBT.FLOAT, tagValue(entity, 'Health', NBT.SHORT));
       if (Number.isFinite(healF)) record.health = Math.max(0, Math.min(healF, record.maxHealth));
     }
+    // Wolves, slimes and horses: HealF is clamped to the maximum read from the list, then setTamed / setSlimeSize may reset the base; a slime is
+    // healed to its full modified maximum (probed attributes2 `maxHealth`). mob-riding.js maxHealthOf is the live maximum afterwards.
+    if (OWN_MAX_HEALTH.has(record.type)) {
+      const healF = tagValue(entity, 'HealF', NBT.FLOAT, tagValue(entity, 'Health', NBT.SHORT));
+      const cap = record.loadHealthCap ?? (record.type === 'wolf' ? 8 : record.type === 'horse' ? record.horse.maxHealth : Infinity);
+      if (record.type === 'slime' || record.type === 'magma_cube') record.health = maxHealthOf(record, 1);
+      else if (Number.isFinite(healF)) record.health = Math.max(0, Math.min(healF, cap));
+      else record.health = Math.max(0, Math.min(record.health, cap));
+    }
+    delete record.loadHealthCap;
     if (OWNED_TYPES.has(record.type)) { const owned = ownerFields(entity, record.type); if (owned.owner) record.ownerUuid = owned.ownerUuid; }
     const holder = record.leash?.holder === 'player' ? leashHolderUuid(entity) : undefined;
     if (holder) record.leash = { ...record.leash, holderUuid: holder };

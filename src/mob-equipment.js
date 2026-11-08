@@ -94,6 +94,10 @@ export function brokenItemDraws(random) {
   for (let i = 0; i < 15; i++) random.nextFloat();
 }
 
+/** renderBrokenItemStack's pitch, 0.8F + world.rand.nextFloat() * 0.4F on the World Random (not Entity.rand); probed with World.rand seeds 1-4
+ *  (attributes2-reference.json breakPitch). */
+export const breakSoundPitch = (worldRandom) => Math.fround(0.8 + Math.fround(worldRandom.nextFloat() * Math.fround(0.4)));
+
 /** ItemStack.damageItem's break: stackSize - 1 (never below 0) and damage 0; the stack stays in its slot. */
 export function breakStack(stack) {
   stack.count = Math.max(0, (stack.count ?? 1) - 1);

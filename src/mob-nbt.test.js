@@ -60,7 +60,9 @@ test('HealF is clamped by the saved generic.maxHealth (Attributes are read first
   const tag = new Map(tagOf(wolf));
   tag.delete('Attributes');
   tag.set('HealF', { type: NBT.FLOAT, value: 18 });
-  assert.equal(javaMobFromNbt(tag).health, 18, 'without Attributes the tamed wolf cap (20) applies');
+  // Without a list the constructor's base 8 is the cap when HealF is read; setTamed raises the maximum to 20 only afterwards (probed attributes2
+  // `maxHealth` noList tamed: HealF 1000 loads as 8 under a maximum of 20).
+  assert.equal(javaMobFromNbt(tag).health, 8, 'without Attributes the constructor base (8) caps HealF');
 });
 
 test('a region with the native mobs imports them all as saved entities', async () => {

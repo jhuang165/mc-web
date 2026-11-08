@@ -134,3 +134,14 @@ Never claim full parity. Labels: probed / bytecode-read / assumed.
 - **Main inventory.** `InventoryPlayer.readFromNBT` keeps a Count 0 main stack, and so do the port's `PlayerInventory` constructor and `javaPlayerFromNbt` (the `inventory-odd-slots` level.dat row reads back `[1,0,0]`). Every native held-item `damageItem` caller clears a stack at size 0 afterwards, broken or not, so a zero-size tool is cleared on its next use; `PlayerInventory.damage` now does the same.
 - **Container clicks.** All 41 click scripts on a zero armour slot already replayed natively: pick-up, place, swap, shift-click, number keys, Q / ctrl-Q, outside drops, close, collect, drag and creative clone. This includes the native quirk where right-clicking outside with a zero cursor drops a whole piece and leaves the cursor at -1.
 - Not ported or unprobed: a zero-size block, food or armour used from the hand (`ItemBlock.onItemUse` refuses stackSize 0; the port's consume path does not check). Rendering of a zero stack on a mob is bytecode-read only (`RenderBiped` draws any non-null stack, and the port does too). The player's own 15 `renderBrokenItemStack` draws are not modelled.
+
+### Movement attributes, zero-size use and the break pitch (attributes2, batch 25)
+
+- **Probed** (`attributes2-reference.json`, `src/attributes2.test.js`):
+  - `isAIEnabled` is false for the blaze, cave spider, dragon, enderman, ghast, giant, magma cube, pigman, silverfish, slime, spider and squid. Their `getAIMoveSpeed` is a fixed 0.1, with 0.02 water acceleration. The port's ground movers in that set (`LEGACY_MOVE`) now use these factors. The giant and silverfish speeds, and the baby pigman's +50% boost, come from the attribute.
+  - `renderBrokenItemStack` pitch is `0.8 + world.rand.nextFloat() * 0.4` on the World Random, not `Entity.rand`. The mob Thorns and anvil-helmet break sounds now use the world Random.
+- **Zero-size use** (`tryPlaceItemIntoWorld` / `useItemRightClick` at stackSize 0):
+  - `ItemBlock`, `ItemReed`, `ItemSlab` and `ItemSnow` refuse in either mode. The port's `placeHeldBlock` and cake placement now refuse a held size-0 stack too.
+  - Redstone, doors, signs, skulls, seeds, nether wart, spawn eggs, bone meal and minecarts act at 0 and leave a -1 stack. So do throwables, food, stew, milk, potions, buckets and bottles. The hoe and flint and steel take damage without a stack check.
+  - Gap: the port has no negative stacks, so in Survival these items still need a real item.
+  - Bed placement was not probed (the probe's world double refused it at count 1).

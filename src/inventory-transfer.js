@@ -125,7 +125,7 @@ export function insertStack(inv, stack, side, maxStack) {
 export function pullSlot(hopperInv, above, slot, side, maxStack) {
   const s = above.get(slot);
   if (!s || (above.sides && !above.sides.canExtract(slot, s, side))) return false;
-  const before = copyStack(s), one = copyStack({ ...s, count: 1 });
+  const before = copyStack(s), one = copyStack({ ...s, count: Math.min(1, s.count) }); // decrStackSize(slot, 1) hands over a size-0 stack whole
   s.count--; if (s.count <= 0) above.set(slot, null);
   const rest = insertStack(hopperInv, one, -1, maxStack);
   if (!rest || rest.count === 0) return true;
@@ -144,7 +144,7 @@ export function pushOne(hopperInv, target, side, maxStack) {
   for (let j = 0; j < hopperInv.size; j++) {
     const s = hopperInv.get(j);
     if (!s) continue;
-    const before = copyStack(s), one = copyStack({ ...s, count: 1 });
+    const before = copyStack(s), one = copyStack({ ...s, count: Math.min(1, s.count) }); // a size-0 stack moves whole and inserts nothing
     s.count--; if (s.count <= 0) hopperInv.set(j, null);
     const rest = insertStack(target, one, side, maxStack);
     if (!rest || rest.count === 0) return true;

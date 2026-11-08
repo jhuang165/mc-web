@@ -27,8 +27,9 @@ export class ItemEntities {
   }
   // EntityItem(world, x, posY, z, stack): random hover phase, motion
   // (rand * 0.2 - 0.1, 0.2, rand * 0.2 - 0.1); the pickup delay field starts at 0.
-  spawn(stack, x, posY, z, { delay = 0, motion = null, death = false } = {}) {
-    if (!stack?.count) return null;
+  // `empty` keeps a Count 0 stack, as EntityItem.readEntityFromNBT does (a read one lives and ticks; attributes2-reference.json itemRead).
+  spawn(stack, x, posY, z, { delay = 0, motion = null, death = false, empty = false } = {}) {
+    if (!(stack?.count > 0 || (empty && stack?.count === 0))) return null;
     const r = this.random,
       item = {
         stack: copyStack(stack),
@@ -280,7 +281,8 @@ export class ItemEntities {
       const [a, b, c, d, g, h] = this.box(e);
       if (!(d > feet.x - r && a < feet.x + r && g > feet.y - 0.5 && b < feet.y + height + 0.5 && h > feet.z - r && c < feet.z + r)) continue;
       const before = e.stack.count;
-      if (!add(e.stack)) continue;
+      // InventoryPlayer.addItemStackToInventory refuses stackSize 0, so a Count 0 item stays (probed, itemRead EntityItem count 0).
+      if (before <= 0 || !add(e.stack)) continue;
       picked.push({ item: e, count: before - e.stack.count });
       if (e.stack.count <= 0) e.dead = true;
     }
@@ -305,7 +307,8 @@ export class ItemEntities {
       if (d?.stack && ok(d.x, d.y, d.z)) {
         const stack = read(d.stack);
         if (!stack) continue;
-        const e = this.spawn(stack, d.x, d.y + W, d.z, { delay: ok(d.delay) ? Math.max(0, Math.min(40, d.delay)) : 0, motion: [ok(d.mx) ? d.mx : 0, ok(d.my) ? d.my : 0, ok(d.mz) ? d.mz : 0], death: !!d.death });
+        const e = this.spawn(stack, d.x, d.y + W, d.z, { delay: ok(d.delay) ? Math.max(0, Math.min(40, d.delay)) : 0, motion: [ok(d.mx) ? d.mx : 0, ok(d.my) ? d.my : 0, ok(d.mz) ? d.mz : 0], death: !!d.death, empty: true });
+        if (!e) continue;
         e.age = ok(d.age) ? Math.max(0, Math.min(LIFETIME - 1, d.age)) : 0;
         if (ok(d.hover)) e.hover = d.hover;
         if (Number.isInteger(d.portalCooldown) && d.portalCooldown > 0) e.portalCooldown = Math.min(300, d.portalCooldown); // PortalCooldown (entity-portal.js)

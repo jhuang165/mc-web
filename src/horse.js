@@ -88,8 +88,9 @@ export function feedHorse(h, itemId, { creative = false } = {}) {
   if (!feed || isUndead(h.type)) return null; // zombie/skeleton horses ignore food (probe: result false/mount)
   const out = { ...h };
   let used = false;
-  if (h.health < h.maxHealth && feed.heal > 0) {
-    out.health = Math.min(h.maxHealth, h.health + feed.heal);
+  const max = h.liveMaxHealth ?? h.maxHealth; // getMaxHealth, saved modifiers included (horse-live.js view)
+  if (h.health < max && feed.heal > 0) {
+    out.health = Math.min(max, h.health + feed.heal);
     used = true;
   }
   if (h.age < 0 && feed.growth > 0) {
@@ -168,7 +169,7 @@ export function childOf(a, b, r) {
 
 // wi.cT(): ready to breed.
 export const canBreed = (h, ridden = false) =>
-  !ridden && h.tame && h.age >= 0 && !isUndeadOrMule(h.type) && h.health >= h.maxHealth;
+  !ridden && h.tame && h.age >= 0 && !isUndeadOrMule(h.type) && h.health >= (h.liveMaxHealth ?? h.maxHealth);
 // wi.a(wf) canMateWith (love is checked by the caller).
 export function canMateWith(a, b, rideA = false, rideB = false) {
   if (a === b) return false;

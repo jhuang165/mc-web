@@ -113,7 +113,9 @@ export function livingAttributesNbt(e, javaId) {
 // `attributeBases` for any other base that differs from what the record itself implies. `record` is the mob after its own fields were read.
 export function livingAttributeFields(compound, record, javaId) {
   const list = nbtGet(compound, "Attributes", NBT.LIST), rows = tableFor(javaId);
-  if (!rows || list?.elementType !== NBT.COMPOUND) return {};
+  // No list: the constructor's attributes stay. The zombie's knockback roll belongs to onSpawnWithEgg, which a load never runs (probed attributes2
+  // `noAttributes`: 0 on every seed), so the port must not roll a fresh one either.
+  if (!rows || list?.elementType !== NBT.COMPOUND) return javaId === "Zombie" ? { knockbackResistance: 0 } : {};
   const known = new Set([...rows.map(([n]) => n), ...(isZombieLike(javaId) ? [REINFORCEMENTS] : [])]);
   const bases = {}, modifiers = [];
   for (const a of list.items) {
@@ -150,9 +152,17 @@ export function livingAttributeFields(compound, record, javaId) {
   if (isZombieLike(javaId)) {
     if (bases[REINFORCEMENTS] !== undefined || modifiers.some((m) => m.attribute === REINFORCEMENTS)) out.reinforcement = modifiedValue(holder, REINFORCEMENTS, bases[REINFORCEMENTS] ?? 0, 0, 1);
   }
+  // EntityLivingBase.readEntityFromNBT clamps HealF to the maximum read from the list (the saved base, or the constructor's when there is none)
+  // before EntityTameable's setTamed or EntitySlime's setSlimeSize resets the base (probed attributes2 `maxHealth`: a tamed wolf saved with base 8
+  // and +4 keeps HealF 1000 as 12 under a maximum of 24; a slime is then healed to its full maximum). java-mobs.js applies `loadHealthCap`.
+  if (OWN_MAX_HEALTH_IDS.has(javaId)) {
+    const ctor = javaId === "Wolf" ? 8 : javaId === "EntityHorse" ? baseOf(N.H) : fallback[N.H];
+    out.loadHealthCap = modifiedValue(holder, N.H, bases[N.H] ?? ctor, 0, Number.MAX_VALUE);
+  }
+  const reset = (javaId === "Wolf" && record.owner) || javaId === "Slime" || javaId === "LavaSlime"; // setTamed / setSlimeSize overwrite the base
   const overrides = {};
   for (const [name, base] of Object.entries(bases)) {
-    if (name === REINFORCEMENTS) continue;
+    if (name === REINFORCEMENTS || (reset && name === N.H)) continue;
     if (base !== derivedBase(record, javaId, name, fallback[name])) overrides[name] = base;
   }
   if (Object.keys(overrides).length) out.attributeBases = overrides;

@@ -516,7 +516,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     // ItemReed.onItemUse for the cake item (stems-cake.js).
     if (id === ITEM_CAKE) {
       const cell = cakePlacement(state.world, target, doorReplaceable);
-      if (!cell || (!state.survival.creative && !state.survival.count(id))) return act('placement-cake');
+      // ItemReed refuses a size-0 stack in either mode (attributes2-reference.json use, cake).
+      if (!cell || (!state.survival.creative && !state.survival.count(id)) || (state.survival.held?.id === id && !(state.survival.held.count > 0))) return act('placement-cake');
       state.world.set(cell[0], cell[1], cell[2], CAKE, true, 0);
       if (!state.survival.creative) state.survival.take(id);
       hooks.updateBlock?.(cell[0], cell[2], cell[1]); hooks.renderHotbar?.(); hooks.markUnsaved?.(); hooks.sound?.(true, CAKE);

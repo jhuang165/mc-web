@@ -8,9 +8,9 @@ import { originalOfLive } from "./item-names.js";
 import { burst } from "./fx.js";
 import * as H from "./horse.js";
 import { cleanItems, ensureItems, syncGear } from "./horse-gear.js";
-import { entityRandom } from "./entities.js";
+import { entityRandom, aiMoveSpeed } from "./entities.js";
 import { PIG_MOUNTED_OFFSET } from "./pig-saddle.js";
-import { mountedYOffset } from "./mob-riding.js";
+import { mountedYOffset, maxHealthOf } from "./mob-riding.js";
 
 const f = Math.fround;
 export const HORSE_ENTITY = {
@@ -21,7 +21,8 @@ const KEEP = ["items", "type", "variant", "temper", "tame", "saddled", "chested"
 const seedFrom = (random) => new JavaRandom(Math.floor(random() * 2 ** 31));
 
 // The view horse.js works on: record fields merged with the shared record's age, health and love.
-export const view = (e) => ({ ...H.blankHorse(), ...e.horse, age: e.growingAge ?? 0, health: e.health, inLove: (e.love ?? 0) > 0 });
+// `maxHealth` stays the base (createChild averages bases); `liveMaxHealth` is getMaxHealth with saved modifiers (feeding, breeding readiness).
+export const view = (e) => ({ ...H.blankHorse(), ...e.horse, age: e.growingAge ?? 0, health: e.health, inLove: (e.love ?? 0) > 0, liveMaxHealth: maxHealthOf(e, e.horse?.maxHealth) });
 function apply(e, h) {
   for (const k of KEEP) e.horse[k] = h[k];
   if (Array.isArray(e.horse.items)) ensureItems(e.horse); // a chest just attached grows the stack list
@@ -145,9 +146,12 @@ export function horseRideThink(mobs, e) {
     }
     e.jumpPower = 0;
   }
+  // jumpMovementFactor is getAIMoveSpeed() * 0.1 (the prior bp) before setAIMoveSpeed((float) movementSpeed.getAttributeValue()): the attribute
+  // with its saved modifiers (probed attributes2 `horseRide`: +50% gives bp 0.38358983 and aQ 0.038358983; a prior bp of 0.9 gives aQ 0.09 once).
+  const speed = aiMoveSpeed(e, 1);
   e.stepHeight = 1;
-  e.jumpFactor = f(f(h.speed) * f(0.1));
-  e.aiMoveSpeed = f(h.speed);
+  e.jumpFactor = f((Number.isFinite(e.aiMoveSpeed) ? e.aiMoveSpeed : speed) * f(0.1));
+  e.aiMoveSpeed = speed;
   e.moveStrafing = strafe;
   e.moveForward = forward;
   e.jumping = false;
@@ -186,7 +190,8 @@ export function installHorse(EntityWorld) {
     if (e.rearing && ++e.rearTicks > 20) { e.rearing = false; e.rearTicks = 0; } // wi.bP counter, recalled (not probed)
     e.rearAmount = e.rearing ? Math.min(1, (e.rearAmount ?? 0) + 0.1) : Math.max(0, (e.rearAmount ?? 0) - 0.1);
     if (e.onGround) { e.jumpingHorse = false; if (!e.rider) e.jumpPower = 0; }
-    if (e.health < e.horse.maxHealth && rand.nextInt(900) === 0) e.health = Math.min(e.horse.maxHealth, e.health + 1); // wi.e(): heal(1)
+    const max = maxHealthOf(e, e.horse.maxHealth);
+    if (e.health < max && rand.nextInt(900) === 0) e.health = Math.min(max, e.health + 1); // wi.e(): heal(1)
     const rider = e.rider;
     if (rider && !e.horse.tame && rider.player) {
       const out = H.tameTick(view(e), rand, "player");
