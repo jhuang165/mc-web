@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fromOriginal } from "./block-registry.js";
 import { pistonPushExtras, bodyMove } from "./piston-push.js";
-import { moveEntity, setMovingBoxes } from "./entities.js";
+import { moveEntity, setMovingBoxes, EntityWorld, setEntityBoxes } from "./entities.js";
+import { Minecarts, Y_OFFSET } from "./minecarts.js";
+import { Boats } from "./boats.js";
+import { boatBoxProvider } from "./entity-collision.js";
+import { solidBlock } from "./world.js";
 import { RedstoneWorld } from "./redstone.js";
 import { installPistons, tileOffset, tileProgress, movingParts, shortenHead, pistonTileFields, ORIGINAL_MOVING, ORIGINAL_HEAD } from "./piston-live.js";
 import { pistonQuads, PISTON_HEAD, PISTON, STICKY_PISTON } from "./dispenser-piston.js";
@@ -23,7 +27,21 @@ function build(s) {
   }
   return w;
 }
-function step(w, p, s, tick, ents, moves) {
+// The game's view of the redstone world (internal ids) and real entity systems for the "live" events (EntityPig, empty
+// minecart, boat in the probe): pigs through EntityWorld.pushMove, carts / boats through Minecarts.move / Boats.move.
+function liveSystems(w) {
+  const cell = (x, y, z) => blocks.toInternal(w.getBlock(x, y, z), w.getBlockMetadata(x, y, z));
+  const view = { get: (x, y, z) => cell(x, y, z)?.id ?? 0, getMeta: (x, y, z) => cell(x, y, z)?.meta ?? 0, solid: (x, y, z) => { const c = cell(x, y, z); return !!c && solidBlock(c.id, c.meta); }, set() {} };
+  const rand = { nextFloat: () => 0.5, nextInt: () => 0, nextDouble: () => 0.5, nextGaussian: () => 0 };
+  const sys = { view, mobs: new EntityWorld(view, [], () => 0.5), carts: new Minecarts({ random: () => rand }), boats: new Boats(), lives: [], liveMoves: [] };
+  for (const [obj, key] of [[sys.mobs, "pushMove"], [sys.carts, "move"], [sys.boats, "move"]]) {
+    const orig = obj[key].bind(obj);
+    obj[key] = (...a) => { sys.liveMoves.push(key === "pushMove" ? [sys.now, a[0].label, ...a.slice(1, 4)] : [sys.now, a[1].label, ...a.slice(2, 5)]); return orig(...a); };
+  }
+  return sys;
+}
+function step(w, p, s, tick, ents, moves, sys) {
+  if (sys) sys.now = tick;
   moves.now = tick;
   for (const [t, op, x0, y0, z0, a, ...rest] of s.events) {
     if (t !== tick) continue;
@@ -33,6 +51,14 @@ function step(w, p, s, tick, ents, moves) {
     else if (op === "entity") {
       const b = [ox + rest[0], oy + rest[1], oz + rest[2], ox + rest[3], oy + rest[4], oz + rest[5]];
       ents.push({ label: a, box: b, move(dx, dy, dz) { moves.push([moves.now, a, dx, dy, dz]); b[0] += dx; b[3] += dx; b[1] += dy; b[4] += dy; b[2] += dz; b[5] += dz; } });
+    } else if (op === "live" && sys) {
+      const [kind, vx, vy, vz] = rest, px = x + 0.5, pz = z + 0.5;
+      let e;
+      if (kind === 0) { e = { id: sys.mobs.nextId++, type: "pig", x: px, y, z: pz, vx, vy, vz, onGround: true, fallDistance: 0, health: 10, growingAge: 0, rotationYaw: 0 }; sys.mobs.entities.push(e); }
+      else if (kind === 1) { e = sys.carts.spawnEmpty({ x: px, y: y + Y_OFFSET, z: pz }, { seed: 1 }); Object.assign(e, { vx, vy, vz, onGround: true }); }
+      else { e = sys.boats.spawnBoat({ x: px, y, z: pz, vx, vy, vz }, { seed: 1 }); e.onGround = true; }
+      e.label = a;
+      sys.lives.push(e);
     }
   }
   w.time++;
@@ -43,9 +69,13 @@ function step(w, p, s, tick, ents, moves) {
 }
 for (const s of ref.scenarios)
   test(`native replay: ${s.name}`, () => {
-    const w = build(s), ents = [], moves = [], p = installPistons({ redstone: w, blocks, entities: { extra: () => ents } });
+    const w = build(s), ents = [], moves = [], sys = liveSystems(w);
+    const p = installPistons({ redstone: w, world: sys.view, blocks, entities: { mobs: sys.mobs, extra: () => [...ents, ...pistonPushExtras(sys.view, { minecarts: () => sys.carts, boatSystem: () => sys.boats, mobs: () => sys.mobs, player: () => null })] } });
+    setMovingBoxes((b) => p.collisionBoxes(b));
+    setEntityBoxes(boatBoxProvider({ get carts() { return sys.boats.carts; } }));
+    try {
     for (let tick = 1; tick <= s.ticks; tick++) {
-      step(w, p, s, tick, ents, moves);
+      step(w, p, s, tick, ents, moves, sys);
       const rows = w.pistonTiles().map((t) => [t.x - ox, t.y - oy, t.z - oz, t.block, t.meta, t.facing, t.extending ? 1 : 0, t.renderHead ? 1 : 0, t.progress, t.lastProgress]);
       assert.deepEqual(rows, s.te[tick - 1].map((r) => r.slice(0, 10)), `tiles at tick ${tick}`);
       s.te[tick - 1].forEach((r, k) => {
@@ -69,7 +99,14 @@ for (const s of ref.scenarios)
         if (b) b.forEach((v, j) => close(v - [ox, oy, oz, ox, oy, oz][j], nb[j], `push box tick ${tick}`));
       });
       ents.forEach((e, k) => [e.box[0] - ox, e.box[1] - oy, e.box[2] - oz].forEach((v, j) => close(v, s.entities[tick - 1][k][j + 1], `entity ${k} tick ${tick}`)));
+      // Real entities: position (box bottom), motion, onGround, isCollidedHorizontally, fallDistance after the tick.
+      const live = sys.lives.map((e) => [e.label, e.x - ox, (e.bb ? e.bb[1] : e.y) - oy, e.z - oz, e.vx, e.vy, e.vz, e.onGround ? 1 : 0, e.collidedH ? 1 : 0, e.fallDistance ?? 0]);
+      assert.equal(live.length, s.live?.[tick - 1].length ?? 0);
+      live.forEach((e, k) => e.forEach((v, j) => close(v, s.live[tick - 1][k][j], `live ${e[0]} field ${j} tick ${tick}`)));
     }
+    } finally { setMovingBoxes(null); setEntityBoxes(null); }
+    assert.equal(sys.liveMoves.length, s.liveMoves?.length ?? 0);
+    sys.liveMoves.forEach((m, k) => m.forEach((v, j) => close(v, s.liveMoves[k][j], `live move ${k}`)));
     assert.equal(moves.length, s.moves.length);
     moves.forEach((m, k) => m.forEach((v, j) => close(v, s.moves[k][j], `move ${k}`)));
   });
@@ -248,6 +285,106 @@ test("moving-block collision: an entity standing on a block being lifted is carr
     moveEntity(world, body, 0.6, 1.8, 0, -0.5, 0);
     assert.ok(body.y >= boxes[0][4] - 1e-9, `stopped on the moving block: ${body.y} vs ${boxes[0][4]}`);
     assert.equal(body.onGround, true);
+  } finally {
+    setMovingBoxes(null);
+  }
+});
+
+// ---- Batch 24: the pushed entity's own moveEntity state (piston-push.js pushPlayer, EntityWorld.pushMove, Minecarts.move) ----
+const flatWorld = (solid = () => false) => ({ get: (x, y, z) => (solid(x, y, z) ? 1 : 0), getMeta: () => 0, solid, set() {} });
+const floorAndWall = flatWorld((x, y) => y < 0 || (x >= 2 && y < 3));
+const adapter = (over = {}) => {
+  const st = { onGround: true, collidedH: false, fallDistance: 0 };
+  return Object.assign({
+    position: { x: 1.5, y: 0, z: 0.5 }, velocity: { x: 0.2, y: 0, z: 0.1 }, motion: { ySize: 0.5, sneaking: false, inWeb: false }, width: 0.6, height: 1.8, flying: false,
+    get onGround() { return st.onGround; }, set onGround(v) { st.onGround = v; }, get collidedH() { return st.collidedH; }, set collidedH(v) { st.collidedH = v; },
+    get fallDistance() { return st.fallDistance; }, set fallDistance(v) { st.fallDistance = v; },
+  }, over);
+};
+
+test("pushPlayer: a push into a wall stops at it, zeroes that axis of motion, sets collidedH and decays ySize by 0.4", async () => {
+  const { pushPlayer } = await import("./piston-push.js");
+  const p = adapter();
+  pushPlayer(floorAndWall, p, 0.5625, 0, 0);
+  close(p.position.x, 2 - Math.fround(0.6) / 2, "stopped at the wall face (float width)");
+  assert.equal(p.velocity.x, 0);
+  assert.equal(p.velocity.z, 0.1);
+  assert.equal(p.collidedH, true);
+  assert.equal(p.motion.ySize, Math.fround(Math.fround(0.5) * Math.fround(0.4)));
+});
+
+test("pushPlayer: an upward push leaves the player off the ground (onGround = ody != dy && ody < 0) and keeps vertical motion", async () => {
+  const { pushPlayer } = await import("./piston-push.js");
+  const p = adapter({ position: { x: 0.5, y: 0, z: 0.5 }, velocity: { x: 0, y: -0.0784, z: 0 } });
+  pushPlayer(flatWorld((x, y) => y < 0), p, 0, 0.5625, 0);
+  close(p.position.y, 0.5625, "lifted");
+  assert.equal(p.onGround, false);
+  assert.equal(p.velocity.y, -0.0784);
+});
+
+test("pushPlayer: a sneaking grounded player is kept on the edge; the web flag slows the push and is cleared", async () => {
+  const { pushPlayer } = await import("./piston-push.js");
+  const ledge = flatWorld((x, y) => y < 0 && x < 1);
+  const p = adapter({ position: { x: 0.5, y: 0, z: 0.5 }, motion: { ySize: 0, sneaking: true, inWeb: false } });
+  pushPlayer(ledge, p, 1, 0, 0);
+  assert.ok(p.position.x < 1.3 + 1e-9, `sneak edge: ${p.position.x}`);
+  const q = adapter({ position: { x: 0.5, y: 0, z: 0.5 }, motion: { ySize: 0, sneaking: false, inWeb: true } });
+  pushPlayer(flatWorld((x, y) => y < 0), q, 0.5, 0, 0);
+  close(q.position.x, 0.5 + 0.5 * 0.25, "web x 0.25");
+  assert.equal(q.motion.inWeb, false);
+  assert.deepEqual([q.velocity.x, q.velocity.y, q.velocity.z], [0, 0, 0]);
+});
+
+test("EntityWorld.pushMove: a grounded mob steps 0.5 up onto a slab-high box; an ungrounded one does not", async () => {
+  const { EntityWorld } = await import("./entities.js");
+  // a bottom-slab-high obstacle at x 2 through the moving-box provider
+  setMovingBoxes((b) => (b[3] > 2 && b[0] < 3 && b[1] < 0.5 && b[4] > 0 ? [[2, 0, 0, 3, 0.5, 1]] : []));
+  try {
+    const mobs = new EntityWorld({ ...flatWorld((x, y) => y < 0) }, [], () => 0.5);
+    const a = { id: 1, type: "pig", x: 1.5, y: 0, z: 0.5, vx: 0, vy: 0, vz: 0, onGround: true, fallDistance: 0, health: 10, growingAge: 0, rotationYaw: 0 };
+    const b = { ...a, id: 2, onGround: false };
+    mobs.entities.push(a, b);
+    mobs.pushMove(a, 0.5625, 0, 0);
+    mobs.pushMove(b, 0.5625, 0, 0);
+    close(a.y, 0.5, "stepped");
+    close(a.x, 2.0625, "moved the full delta");
+    close(b.y, 0, "no step off the ground");
+    assert.equal(b.collidedH, true);
+  } finally {
+    setMovingBoxes(null);
+  }
+});
+
+test("pistonPushExtras: a pushed minecart runs Minecarts.move (detector rail hook), a pushed boat Boats.move; both stop at walls", async () => {
+  const { Minecarts, Y_OFFSET } = await import("./minecarts.js");
+  const { Boats } = await import("./boats.js");
+  const DETECTOR = 136; // internal detector rail
+  const world = { get: (x, y) => (y === 0 && x === 3 ? DETECTOR : y < 0 || x >= 5 ? 1 : 0), getMeta: () => 0, solid: (x, y) => y < 0 || x >= 5, set() {} };
+  const carts = new Minecarts(), boats = new Boats(), touched = [];
+  carts.blockHook = (x, y, z, cart) => touched.push([x, y, z, cart.id]);
+  const cart = carts.spawnEmpty({ x: 2.5, y: Y_OFFSET, z: 0.5 }, { seed: 1 }), boat = boats.spawnBoat({ x: 3.5, y: 0, z: 3.5 }, { seed: 1 });
+  const extras = pistonPushExtras(world, { minecarts: () => carts, boatSystem: () => boats, mobs: () => null, player: () => null });
+  assert.equal(extras.length, 2);
+  for (const e of extras) e.move(0.5625, 0, 0);
+  close(cart.x, 3.0625, "cart pushed");
+  assert.ok(touched.some(([x, y]) => x === 3 && y === 0), "detector rail under the pushed cart");
+  close(boat.x, 4.0625, "boat pushed");
+  for (const e of pistonPushExtras(world, { minecarts: () => carts, boatSystem: () => boats })) e.move(1, 0, 0);
+  close(boat.bb[3], 5, "boat stopped at the wall");
+  assert.equal(boat.collidedH, true);
+});
+
+test("moving boxes collide for minecarts, boats and dropped items (shared moving-boxes.js provider)", async () => {
+  const { Minecarts, Y_OFFSET } = await import("./minecarts.js");
+  const { ItemEntities } = await import("./item-entities.js");
+  const world = flatWorld((x, y) => y < 0);
+  setMovingBoxes((b) => (b[3] > 3 && b[0] < 4 && b[4] > 0 && b[1] < 1 ? [[3, 0, 0, 4, 1, 1]] : []));
+  try {
+    const carts = new Minecarts(), cart = carts.spawnEmpty({ x: 2.5, y: Y_OFFSET, z: 0.5 }, { seed: 1 });
+    carts.move(world, cart, 1, 0, 0, []);
+    close(cart.bb[3], 3, "cart stopped by the moving box");
+    const items = new ItemEntities();
+    assert.ok(items.boxes(world, 2.9, 0.1, 0.1, 3.1, 0.3, 0.3).some((b) => b[0] === 3 && b[4] === 1), "item collision list holds the moving box");
   } finally {
     setMovingBoxes(null);
   }

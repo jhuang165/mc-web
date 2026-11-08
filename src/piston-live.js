@@ -54,6 +54,7 @@ import { blockBounds } from "./world.js";
 import { pistonQuads, FACING_OFFSETS, PISTON, STICKY_PISTON, PISTON_HEAD } from "./dispenser-piston.js";
 import { ENTITY_TYPES, pushBox, moveEntity } from "./entities.js";
 import { pistonTile } from "./redstone.js";
+import { pushPlayer } from "./piston-push.js";
 
 const f32 = Math.fround;
 export const ORIGINAL_PISTON = 33, ORIGINAL_STICKY = 29, ORIGINAL_HEAD = 34, ORIGINAL_MOVING = 36;
@@ -102,8 +103,10 @@ export function shortenHead(quads, facing) {
 
 // Stored blocks whose native pool box differs from their render bounds when read through the moving cell (probed natively with
 // PistonLiveProbe: odd-block-* and trapdoor-facing-* scenarios): carpet comes out zero high ([0,0,0,1,0,1], native stale bounds), fences, nether fences and farmland as the full cube
-// (BlockFence / BlockFarmland keep their constructor bounds), soul sand 7/8 high, a cobblestone wall its post 1.5 high. Every other stored block uses blockBounds with the moving cell's metadata.
+// (BlockFence / BlockFarmland keep their constructor bounds), soul sand 7/8 high, a cobblestone wall its post 1.5 high. Every other stored block uses blockBounds with the moving cell's metadata
+// (batch 24 added every stairs id, the slab variants, anvil / trapdoor / ladder / snow metadata, carpet colour, the mossy wall: odd-block2-*).
 const POOL_OVERRIDES = { 171: [0, 0, 0, 1, 0, 1], 85: [0, 0, 0, 1, 1, 1], 113: [0, 0, 0, 1, 1, 1], 60: [0, 0, 0, 1, 1, 1], 88: [0, 0, 0, 1, 0.875, 1], 139: [0.25, 0, 0.25, 0.75, 1.5, 0.75] };
+const NO_POOL_BOX = new Set([27, 28, 66, 157]);
 const isBase = (id) => id === ORIGINAL_PISTON || id === ORIGINAL_STICKY;
 // TileEntityRendererPiston.renderTileEntityAt as drawing parts: [{ block, meta, quads?, offset }] in the cell's own frame.
 // Skips an air block or a finished move (progress >= 1). `internal(original, meta)` maps to the live ids.
@@ -139,6 +142,9 @@ export function installPistons({ redstone, scene = null, world = null, entities 
     // PistonLiveProbe); BlockPistonExtension has no getCollisionBoundingBoxFromPool of its own.
     if (tile.block === ORIGINAL_HEAD) return [0, 0, 0, 1, 1, 1];
     if (POOL_OVERRIDES[tile.block]) return POOL_OVERRIDES[tile.block].slice();
+    // No pool box at all, so func_149964_a returns null (no push, no collision): BlockRailBase (rails, powered, detector and
+    // activator rails) and an open fence gate (probed: odd-block2-66-*, 27, 28, 157, 107-4).
+    if (NO_POOL_BOX.has(tile.block) || (tile.block === 107 && tile.meta & 4)) return null;
     // Fence gate: the 1.5 high collision slab (closed on z for even metadata, x for odd), not the 1.0 render box.
     if (tile.block === 107) return stored.meta & 1 ? [0.375, 0, 0, 0.625, 1.5, 1] : [0, 0, 0.375, 1, 1.5, 0.625];
     // Native: the stored block's box methods run with the world at this cell, which holds the MOVING block. A top slab (stone or
@@ -160,10 +166,9 @@ export function installPistons({ redstone, scene = null, world = null, entities 
     const pos = p.position ?? p, w = p.width ?? 0.6, h = p.height ?? 1.8;
     return [pos.x - w / 2, pos.y, pos.z - w / 2, pos.x + w / 2, pos.y + h, pos.z + w / 2];
   };
-  const mobList = () => {
-    const m = entities.mobs;
-    return !m ? [] : typeof m === "function" ? m() : Array.isArray(m) ? m : m.entities ?? [];
-  };
+  // The mob source: an EntityWorld (its pushMove runs the mob's own moveEntity with tails), an array, or a function of either.
+  const mobSource = () => (typeof entities.mobs === "function" ? entities.mobs() : entities.mobs);
+  const mobList = (m) => (!m ? [] : Array.isArray(m) ? m : m.entities ?? []);
   // Every pushable entity as { box, move }.
   const candidates = () => {
     const out = [],
@@ -177,26 +182,27 @@ export function installPistons({ redstone, scene = null, world = null, entities 
       const p = entities.player, pos = p.position ?? p;
       out.push({
         box: pb,
+        // Entity.moveEntity on the player's own state (piston-push.js pushPlayer): motion, flags, ySize, sneak edge.
         move: (dx, dy, dz) => {
           if (entities.move) return entities.move(p, dx, dy, dz);
           if (p.move) return p.move(dx, dy, dz);
-          const tmp = { x: pos.x, y: pos.y, z: pos.z, vx: 0, vy: 0, vz: 0, onGround: false };
-          if (world) moveEntity(world, tmp, p.width ?? 0.6, p.height ?? 1.8, dx, dy, dz);
-          else { tmp.x += dx; tmp.y += dy; tmp.z += dz; }
-          pos.x = tmp.x; pos.y = tmp.y; pos.z = tmp.z;
+          pushPlayer(world, p, dx, dy, dz);
         },
       });
     }
-    for (const e of mobList()) {
+    const source = mobSource();
+    for (const e of mobList(source)) {
       const t = ENTITY_TYPES[e.type];
       if (!t || !(e.health > 0 || (e.death ?? 0) < 20)) continue;
-      const scale = (e.growingAge ?? 0) < 0 ? 0.5 : 1, width = t.width * scale, height = t.height * scale;
+      const [width, height] = source?.size ? source.size(e) : [t.width * ((e.growingAge ?? 0) < 0 ? 0.5 : 1), t.height * ((e.growingAge ?? 0) < 0 ? 0.5 : 1)];
       out.push({
         box: pushBox(e, width, height),
+        // EntityWorld.pushMove: the mob's own moveEntity (stepHeight, cactus/fire tails, steps, fall); else entities.js moveEntity.
         move: (dx, dy, dz) => {
           if (entities.move) return entities.move(e, dx, dy, dz);
           if (e.move) return e.move(dx, dy, dz);
-          if (world) moveEntity(world, e, width, height, dx, dy, dz);
+          if (world && source?.pushMove) source.pushMove(e, dx, dy, dz);
+          else if (world) moveEntity(world, e, width, height, dx, dy, dz);
           else { e.x += dx; e.y += dy; e.z += dz; }
         },
       });

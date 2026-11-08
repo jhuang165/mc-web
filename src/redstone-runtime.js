@@ -11,7 +11,9 @@
 //   game.primeTnt(x, y, z)                     BlockTNT.func_150114_a (the block is removed by the engine)
 //   game.markUnsaved()
 //   game.music: particle(name, x, y, z, vx, vy, vz), play(discItem | null, x, y, z) (record start / stop), spawn(stack, x, y, z) (an ejected disc)
-//   game.player()  -> { position: {x, y, z}, width, height, alive } | null
+//   game.player()  -> { position: {x, y, z}, width, height, alive, velocity?, motion?, onGround?, collidedH?, fallDistance?,
+//                       flying?, inWater?, vehicle?, rider? } | null (the flag fields as getters/setters on the live state)
+//   game.boatSystem() -> Boats (pistons move boats with Boats.move)
 //   game.mobs()    -> EntityWorld | null         game.items() / arrows() / orbs() / primed() -> arrays
 //   game.chests() / furnaces() / dispensers() / hoppers()    keyed "x,y,z" stores (survival.js)
 //   game.maxStack(stack)
@@ -180,12 +182,9 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     scene,
     world,
     entities: {
-      player: {
-        get position() { return game.player?.()?.position ?? { x: 0, y: -1000, z: 0 }; },
-        width: 0.6,
-        height: 1.8,
-      },
-      mobs: () => game.mobs?.()?.entities ?? [],
+      // The runtime player adapter (position, velocity, motion, flag setters): pushed through its own moveEntity (piston-push.js).
+      get player() { return game.player?.() ?? null; },
+      mobs: () => game.mobs?.() ?? [], // the EntityWorld: pushMove runs each mob's own moveEntity
       extra: () => pistonPushExtras(world, game),
     },
   });

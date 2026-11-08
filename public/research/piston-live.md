@@ -42,3 +42,33 @@ Probed natively (executed on the unchanged jar; `tools/probes/PistonLiveProbe.ja
 - 1.7.10 has no sticky entity pulling: the native moves of the sticky scenarios are only forward pushes (+0.0625 per tick extending, the final 0.25), never a backward delta on retract; the replay asserts it.
 
 Limits (remaining): the native push uses scripted `moveEntity` stand-ins, not a real EntityLivingBase/EntityMinecart `moveEntity` (their collision tails are the browser's own); a pushed rider's passenger and player velocity/ySize are not modelled (the player body copy is written back to the position only); entity-vs-entity collision with a pushed boat or cart is not re-run; blocks outside the probed list use the render bounds and may differ in their pool box.
+
+## Batch 24 (pistons2): real entities pushed through their own moveEntity
+
+Probed natively (same driver and reference): 124 scenarios (was 49), 646 push boxes, 420 collision boxes, 525 scripted pushes, plus 104 per-tick states and 19 moves of real entities. All identical to the jar.
+
+- Real entities: `PistonLiveProbe` can now construct an EntityPig, an EntityMinecartEmpty and an EntityBoat in the probe World (`live` event). Their own `Entity.moveEntity` runs against the World's block boxes, BlockPistonMoving's box and the other entities' boxes; the subclasses only record the delta first. Each tick records [label, posX, minY, posZ, motion, onGround, isCollidedHorizontally, fallDistance]. `PistonProbe.W` gives a real entity's live boundingBox to the entity queries and leaves the mover out of `getEntitiesWithinAABBExcludingEntity`. The collision-box readout asks for block boxes only, because EntityBoat.getBoundingBox is not null.
+  - Scenarios:
+    - a pig pushed into a wall (with motion: the blocked axis zeroed, collidedH);
+    - pigs lifted under a ceiling and free (onGround false after an upward push, vertical motion kept);
+    - a grounded pig stepping 0.5 onto a slab, and one stopped by a full block;
+    - a cart and a boat pushed into walls;
+    - a pig pushed into a boat (the boat's box blocks it);
+    - a pig in the cell the pushed stone enters.
+  - Native quirk: after a sideways push, onGround is false (no downward move). A later push of the same entity does not step. No onUpdate ran in these scenarios.
+- Port:
+  - The player is pushed with `piston-push.js` `pushPlayer`, which uses the player's own motion, onGround, sneaking (sneak edge), ySize (×0.4), fallDistance, web flag and inWater. It writes back position, motion, flags, ySize and the web flag (main.js `player()` adapter).
+  - Mobs are pushed with `EntityWorld.pushMove`, which runs the same moveEntity, hooks, step events and landing as `moveWith`.
+  - Carts and boats are pushed with `Minecarts.move` / `Boats.move` (detector rail hook, block hurts, fall state). They are blocked by the player and living mobs.
+  - The moving box is now also a collider for carts, boats and dropped items (`src/moving-boxes.js`, shared by entities.js, minecarts.js and item-entities.js).
+- More stored blocks (`odd-block2-*`):
+  - every stairs id, the stone and wooden slab variants, carpet colour 5, the mossy wall, anvil metadata, the dragon egg, an open gate, wet farmland, trapdoor metadata 1–4 and 12–13, ladders, snow depths 0 and 7, the end portal frame with an eye, and stone;
+  - rails (66, 27, 28, 157).
+  - Rails and an open fence gate have no pool box. The native `func_149964_a` returns null for them, so they push nothing and give no collision box (`NO_POOL_BOX` in `piston-live.js`). All other new blocks matched `blockBounds`.
+
+Limits (remaining):
+- Pushes still run after the whole tile loop rather than inside each tile's `updateEntity`. This matched natively in every probed scenario, but it could differ when two tiles push the same colliding entity in one tick.
+- A landing caused by a push on the player does not deal fall damage (`land` is not wired in main.js). The player's cactus and fire tail does not run on a push.
+- Dropped items, TNT, orbs and falling blocks still use the body copy, not their own move.
+- Riders follow on their next tick.
+- Stored blocks outside the probed lists remain unverified.
