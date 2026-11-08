@@ -55,6 +55,7 @@ import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
 import { isVehicle, vehicleSize } from "./vehicle-seat.js";
 import { newUuid } from "./entity-uuid.js";
+import { ownerPresent } from "./owner-links.js";
 import { cleanModifiers, modifiedValue, liveAttribute, hasStoredBabyBoost, spawnBonusModifier } from "./mob-attributes.js";
 import { mountEntity, releaseDead, ridingOrder, beginRidden, endRidden, ridingId, linkRiders, setLocationAndAngles, freeChickenNear, maxHealthOf, OWN_MAX_HEALTH } from "./mob-riding.js";
 import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, skeletonSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
@@ -226,7 +227,7 @@ export const ENTITY_TYPES = {
   // EntitySkeleton (yl): 0.6 x 1.8, 20 health, speed 0.25 (applyEntityAttributes). Its
   // arrow and bone drops are rolled in `kill`, so there is no `drop`; the task
   // speeds (ArrowAttack 1.0, FleeSun 1.0, Wander 1.0) are in the AI's brain.
-  skeleton: { health: 20, width: 0.6, height: 1.8, movement: 0.25, ai: { wander: 1 }, drop: 0 },
+  skeleton: { health: 20, width: 0.6, height: 1.8, movement: 0.25, ai: { wander: 1 }, damage: 2, drop: 0 },
   wither_skeleton: WITHER_SKELETON_STATS, // EntitySkeleton type 1 (wither-skeleton.js)
   // EntityCreeper (xz): 0.6 x 1.8, EntityMob's 20 health, speed 0.25; EntityAIAttackOnCollide
   // 1.0 and EntityAIWander 0.8. `damage` is EntityMob's attackDamage 2, which the swell
@@ -248,14 +249,14 @@ export const ENTITY_TYPES = {
   // EntitySlime (ym): 0.6 x 0.6 at size 1, scaled by `size` (mobScale); health and damage are size-based (slime.js), drops in combat.js.
   slime: { health: 1, width: 0.6, height: 0.6, movement: SLIME.speed, ai: {}, damage: 1, drop: 0 },
   // EntityMagmaCube (yf): a slime with its own numbers (nether-melee.js); health, damage and armour follow the size.
-  magma_cube: { health: 1, width: 0.6, height: 0.6, movement: MAGMA.speed, ai: {}, damage: 3, drop: 0 },
+  magma_cube: { health: 1, width: 0.6, height: 0.6, movement: f(0.2), ai: {}, damage: 3, drop: 0 },
   // EntityPigZombie (yh): 0.6 x 1.8, 20 health, speed 0.5 (+0.45 while it has a target), attack 5, armour 2; legacy AI (nether-melee-live.js).
   pigman: { health: PIGMAN.health, width: PIGMAN.width, height: PIGMAN.height, movement: PIGMAN.movement, ai: { wander: 1 }, damage: PIGMAN.attackDamage, drop: 0 },
   // EntitySquid (ws) 0.95 x 0.95, 10 health; EntityBat (we) 0.5 x 0.9, 6 health. Legacy motion, no AI tasks (squid-bat.js, squid-bat-mobs.js).
   // EntityEnderCrystal (wz) 2 x 2, 5 health: not a living mob (ender-crystal-mobs.js).
   ender_crystal: ENDER_CRYSTAL_TYPE,
-  squid: { health: SQUID.health, width: SQUID.width, height: SQUID.height, movement: 0.25, ai: {}, drop: 0 },
-  bat: { health: BAT.health, width: BAT.width, height: BAT.height, movement: 0.10000000149011612, ai: {}, drop: 0 },
+  squid: { health: SQUID.health, width: SQUID.width, height: SQUID.height, movement: 0.10000000149011612, ai: {}, drop: 0 },
+  bat: { health: BAT.health, width: BAT.width, height: BAT.height, movement: 0.699999988079071, ai: {}, drop: 0 },
 };
 // The slime's own sound names and volume depend on its size.
 const hurtOf = (e) => (isSlimeLike(e) ? slimeSoundName(e.size) : isPigman(e) ? PIGMAN.sounds.hurt : hurtSound(e.type));
@@ -652,6 +653,17 @@ export function entityHit(origin, dir, e, reach) {
     }
   }
   return near <= reach ? near : null;
+}
+// The amount of EntityMob.attackEntityAsMob (the attackDamage attribute with the held weapon's modifier and Strength) or, for the classes whose own
+// attack ignores the attribute, the fixed one: a wolf's 2 (4 tamed) and an ocelot's 3 are plain floats, a slime's is its size (getAttackStrength) and an iron
+// golem rolls 7 + nextInt(15). None reads Strength or a saved attackDamage entry (probed attributes3 `attack` and `strength`, 339 records).
+const FIXED_ATTACK = new Set(["wolf", "ocelot", "slime", "magma_cube"]);
+export function mobHitAmount(e) {
+  if (e.type === "wolf") return wolfAttack(e);
+  if (e.type === "slime") return slimeDamage(e.size);
+  if (e.type === "magma_cube") return magmaDamage(e.size);
+  if (FIXED_ATTACK.has(e.type)) return ENTITY_TYPES[e.type].damage;
+  return attackDamage(e, ENTITY_TYPES[e.type].damage, e.equipment ? attackBonus(e.equipment) : 0);
 }
 // The player's attackDamage attribute with the held item's modifier (1 bare-handed): swords
 // 5 + tier (gold 5), axes 4, pickaxes 3 and shovels 2 + tier, only for an item actually held.
@@ -1294,7 +1306,7 @@ export class EntityWorld {
     };
     // EntityMob.attackEntityAsMob: the attribute (the held weapon's modifier included) plus Sharpness (getEnchantmentModifierLiving), Fire Aspect after.
     const melee = e.equipment ? meleeEffects(e.equipment[0]) : null;
-    const hit = survival.scaledDamage(f(attackDamage(e, e.type === "wolf" ? wolfAttack(e) : e.type === "slime" ? slimeDamage(e.size) : e.type === "magma_cube" ? magmaDamage(e.size) : ENTITY_TYPES[e.type].damage, e.equipment ? attackBonus(e.equipment) : 0) + (melee ? melee.damage : 0)), "a " + e.type, { attacker: NO_THORNS_ATTACKER.has(e.type) ? undefined : thorns, from: e });
+    const hit = survival.scaledDamage(f(mobHitAmount(e) + (melee ? melee.damage : 0)), "a " + e.type, { attacker: NO_THORNS_ATTACKER.has(e.type) ? undefined : thorns, from: e });
     // EntityMob.attackEntityAsMob: Knockback on the held item pushes the player along the mob's facing and slows the mob (player-knockback.js).
     if (hit && melee?.knockback > 0) mobKnockbackKick(survival, e, melee.knockback);
     if (hit && melee?.fire > 0) survival.setFire(melee.fire);
@@ -1562,7 +1574,7 @@ export class EntityWorld {
   hitMob(e, target) {
     if (!this.entities.includes(target) || target.health <= 0) return false;
     const melee = e.equipment ? meleeEffects(e.equipment[0]) : null;
-    const hit = this.attackEntityFrom(target, f(attackDamage(e, e.type === "wolf" ? wolfAttack(e) : ENTITY_TYPES[e.type].damage, e.equipment ? attackBonus(e.equipment) : 0) + (melee ? melee.damage : 0)), { from: { x: e.x, z: e.z }, attacker: e, name: "mob", player: false });
+    const hit = this.attackEntityFrom(target, f(mobHitAmount(e) + (melee ? melee.damage : 0)), { from: { x: e.x, z: e.z }, attacker: e, name: "mob", player: false });
     if (hit && melee) {
       // Knockback (EntityLivingBase.getKnockbackModifier): Entity.addVelocity along the mob's facing; Fire Aspect: setFire(level * 4).
       if (melee.knockback > 0) {
@@ -2449,7 +2461,7 @@ export class EntityWorld {
     if (e.type !== "wolf" || e.health <= 0 || !this.entities.includes(e)) return false;
     const stack = survival.held, held = stack ? { id: stack.id, damage: stack.damage || 0, count: stack.count || 1 } : null;
     const creative = !!survival.creative, rand = entityRandom(e), box = { x: e.x, y: e.y, z: e.z, width: ENTITY_TYPES.wolf.width, height: ENTITY_TYPES.wolf.height };
-    const out = wolfClick(e, held, wolfTamed(e), creative, rand), brain = this.ai.brain(e);
+    const out = wolfClick(e, held, ownerPresent(e), creative, rand), brain = this.ai.brain(e);
     const take = (n) => { if (n > 0 && !creative) survival.inventory.decr(survival.inventory.current, n); };
     take(out.consume);
     if (out.tamed || out.sitToggle) { brain.navigator.clearPathEntity(); brain.attackTarget = null; }
@@ -2477,7 +2489,7 @@ export class EntityWorld {
     const stack = survival.held, held = stack ? { id: stack.id, damage: stack.damage || 0, count: stack.count || 1 } : null;
     const creative = !!survival.creative, rand = entityRandom(e), box = { x: e.x, y: e.y, z: e.z, width: ENTITY_TYPES.ocelot.width, height: ENTITY_TYPES.ocelot.height };
     const brain = this.ai.brain(e), p = this.ai.player, worldRand = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
-    const out = ocelotClick(e, held, { isOwner: ocelotTamed(e), creative, tempting: !!brain.temptRunning?.(), distSq: brain.distSq(p), rand, worldRand });
+    const out = ocelotClick(e, held, { isOwner: ownerPresent(e), creative, tempting: !!brain.temptRunning?.(), distSq: brain.distSq(p), rand, worldRand });
     const take = (n) => { if (n > 0 && !creative) survival.inventory.decr(survival.inventory.current, n); };
     take(out.consume);
     if (out.tamed || out.sitToggle) { brain.navigator.clearPathEntity(); brain.attackTarget = null; }
