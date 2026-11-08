@@ -27,6 +27,27 @@ export function cleanModifiers(list) {
 // ModifiableAttributeInstance.getAttributeValue over this record's modifiers for one attribute.
 export const modifiedValue = (e, attribute, base, min = -Infinity, max = Infinity) =>
   attributeValue(base, (e.modifiers ?? []).filter((m) => m.attribute === attribute).map((m) => [m.amount, m.operation]), min, max);
+// Batch 24 (interchange-spawn-reference.json, InterchangeSpawnProbe): every EntityLiving class except EntityCaveSpider (xy.a(sy) returns without super)
+// takes the followRange "Random spawn bonus" in onSpawnWithEgg as the first Entity.rand draw (nextGaussian() * 0.05, operation 1); the record keeps it
+// as a stored modifier (random UUID, as natively), so export writes and import reads it like any other.
+export const SPAWN_BONUS_NAME = "Random spawn bonus";
+export const spawnBonusModifier = (amount) => ({ attribute: "generic.followRange", name: SPAWN_BONUS_NAME, amount, operation: 1 });
+// The baby zombie / pigman speed boost (EntityZombie.setChild): a fixed UUID; an adult whose saved list carries it keeps it (IsBaby false never removes it,
+// probed `babyBoost`), so it counts once whether it comes from the child flag or a stored modifier.
+export const BABY_BOOST_UUID = "b9766b59-9566-4402-bc1f-2ee2a276d836";
+export const hasStoredBabyBoost = (e) => (e.modifiers ?? []).some((m) => m.attribute === "generic.movementSpeed" && m.uuid === BABY_BOOST_UUID);
+// RangedAttribute bounds of SharedMonsterAttributes (probed `modEffect` clamp records: maxHealth 3020 is kept, followRange stops at 2048,
+// knockbackResistance at 1, movementSpeed and attackDamage at 0).
+export const ATTRIBUTE_RANGE = Object.freeze({ "generic.maxHealth": [0, Number.MAX_VALUE], "generic.followRange": [0, 2048], "generic.knockbackResistance": [0, 1],
+  "generic.movementSpeed": [0, Number.MAX_VALUE], "generic.attackDamage": [0, Number.MAX_VALUE] });
+// ModifiableAttributeInstance.getAttributeValue at run time: the saved base override (`attributeBases`, an imported base the port does not derive)
+// or the port's own base, the stored modifiers of that attribute (the baby boost excluded: callers add it once from the flag or the stored copy)
+// and the caller's live modifiers ([amount, operation]: potion effects, held-item modifiers, transient boosts).
+export function liveAttribute(e, attribute, base, extra = []) {
+  const [min, max] = ATTRIBUTE_RANGE[attribute] ?? [-Infinity, Infinity];
+  const stored = (e.modifiers ?? []).filter((m) => m.attribute === attribute && m.uuid !== BABY_BOOST_UUID).map((m) => [m.amount, m.operation]);
+  return attributeValue(e.attributeBases?.[attribute] ?? base, [...stored, ...extra], min, max);
+}
 export const leaderAmount = (e, attribute) => (e.modifiers ?? []).find((m) => m.attribute === attribute && m.name === LEADER_BONUS)?.amount;
 
 const tag = (type, value) => ({ type, value });

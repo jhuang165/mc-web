@@ -51,7 +51,7 @@ export function blankHorse() {
 
 // wi.a(sy) onSpawnWithEgg. Follow range (wf.a -> rx.a) takes one nextGaussian first.
 export function spawnHorse(r, group = null, base = blankHorse()) {
-  r.nextGaussian();
+  const followBonus = r.nextGaussian() * 0.05; // EntityLiving.onSpawnWithEgg's followRange "Random spawn bonus" (interchange-spawn-reference.json)
   let type;
   let variant;
   if (group) {
@@ -77,7 +77,7 @@ export function spawnHorse(r, group = null, base = blankHorse()) {
   }
   h.jump = type === 1 || type === 2 ? 0.5 : rollJump(r);
   h.health = h.maxHealth;
-  return { horse: h, group: { type, variant } };
+  return { horse: h, group: { type, variant }, followBonus };
 }
 
 export const growthScale = (age) => (age >= 0 ? 1 : f(0.5 + f(f(age + 24000) / 24000) * 0.5)); // ci()

@@ -3,7 +3,12 @@
 //    `owner` records). Taming stores player.getUniqueID().toString() (bytecode-read: EntityWolf and EntityOcelot call tg.b(String) with it).
 //  - EntityTameable.readEntityFromNBT reads OwnerUUID when the key exists, otherwise the pre-1.7 `Owner` name through PreYggdrasilConverter (nz.a):
 //    an empty or over-16-character value is used as it is, else the profile cache or, in a single-player or offline server, UUID.nameUUIDFromBytes
-//    ("OfflinePlayer:" + name) (bytecode-read; the probe has no MinecraftServer, so the call fails there). A non-empty result tames the animal (probed).
+//    ("OfflinePlayer:" + name). A non-empty result tames the animal (probed). Batch 24 ran nz.a on a MinecraftServer stub (InterchangeSpawnProbe,
+//    interchange-spawn-reference.json `legacyOwner`/`wolfOwner`). Single player (IntegratedServer bsx.e sets online mode on) with no network gives
+//    the offline UUID of the name as written; a profile already in usercache.json wins (keyed in lower case). A dedicated offline server takes the
+//    lower-cased name (PlayerProfileCache builds the profile from it); an online server whose lookup fails gives "" (untamed). 17+ characters are
+//    kept as the owner text; " " throws (Name and ID cannot both be blank). The port is a single-player world with no usercache: the name as written.
+//  - An OwnerUUID of " " (or any non-UUID text) is kept as the owner and tames the animal: only the empty string means wild (probed `wolfOwner`).
 //  - EntityHorse writes OwnerUUID always ("" when none) and reads only OwnerUUID, no legacy name (probed). Tame is its own byte.
 //  - EntityLiving writes Leashed and Leash: {UUIDMost, UUIDLeast} for a living holder (the player), {X, Y, Z} for a fence knot (probed: wolf, ocelot, horse, pig).
 // The port has one possible owner and holder, the local player. Export writes the player's real exported UUID (`exportPlayerUuid`, the level.dat
@@ -33,7 +38,7 @@ export function ownerFromNbt(compound, type) {
 }
 // { owner: "player", ownerUuid? } for an owned compound, else { owner: "" }. `ownerUuid` is kept as read (a foreign owner).
 export function ownerFields(compound, type) {
-  const text = ownerFromNbt(compound, type).trim();
+  const text = ownerFromNbt(compound, type);
   return text ? { owner: "player", ownerUuid: text } : { owner: "" };
 }
 

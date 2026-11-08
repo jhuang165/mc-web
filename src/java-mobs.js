@@ -7,7 +7,7 @@ import { readNbt as readHorseNbt } from './horse.js';
 import { uuidFields } from './entity-uuid.js';
 import { attributeFieldsFromNbt } from './mob-attributes.js';
 import { livingAttributeFields } from './mob-attribute-list.js';
-import { OWNED_TYPES, ownerFields, leashHolderUuid } from './owner-links.js';
+import { OWNED_TYPES, ownerFields, ownerFromNbt, leashHolderUuid } from './owner-links.js';
 import { ocelotFieldsFrom } from './ocelot.js';
 import { NBT } from './nbt.js';
 import { endermanFieldsFrom } from './enderman.js';
@@ -169,7 +169,7 @@ function javaMobFromNbtBase(entity, { shiftX = 0, shiftZ = 0, convertItem = () =
     record.batHanging = (tagValue(entity, 'BatFlags', NBT.BYTE, 0) & 1) !== 0; // EntityBat.readEntityFromNBT
   } else if (type === 'ocelot') {
     // EntityTameable/EntityOcelot.readEntityFromNBT: OwnerUUID (or Owner), Sitting, CatType (0 to 3), Age and InLove.
-    const owner = String(tagValue(entity, 'OwnerUUID', NBT.STRING, '') || tagValue(entity, 'Owner', NBT.STRING, '')).trim();
+    const owner = ownerFromNbt(entity, 'ocelot'); // an OwnerUUID key wins even when empty; any non-empty text tames (owner-links.js, probed)
     record.growingAge = tagValue(entity, 'Age', NBT.INT, 0);
     record.love = tagValue(entity, 'InLove', NBT.INT, 0);
     Object.assign(record, ocelotFieldsFrom({ owner: owner ? 'player' : '', sitting: !!owner && !!tagValue(entity, 'Sitting', NBT.BYTE, 0), catType: tagValue(entity, 'CatType', NBT.INT, 0) }));
@@ -214,7 +214,7 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
   if (type === 'wolf') {
     // EntityTameable/EntityWolf.readEntityFromNBT: OwnerUUID (or the pre-UUID Owner name), Sitting, Angry, CollarColor.
     // The single player here is the only possible owner, so any non-blank owner means "the player" (wolf.js).
-    const owner = String(tagValue(tag, 'OwnerUUID', NBT.STRING, '') || tagValue(tag, 'Owner', NBT.STRING, '')).trim();
+    const owner = ownerFromNbt(tag, 'wolf'); // an OwnerUUID key wins even when empty; any non-empty text tames (owner-links.js, probed)
     record.owner = owner ? 'player' : '';
     record.sitting = record.sitWish = !!owner && !!tagValue(tag, 'Sitting', NBT.BYTE, 0);
     record.angry = !!tagValue(tag, 'Angry', NBT.BYTE, 0);
@@ -222,7 +222,7 @@ export function summonedMobRecord(type, tag, { convertItem = () => null } = {}) 
     for (const k of ['OwnerUUID', 'Owner', 'Sitting', 'Angry', 'CollarColor']) kept.add(k);
   }
   if (type === 'ocelot') {
-    const owner = String(tagValue(tag, 'OwnerUUID', NBT.STRING, '') || tagValue(tag, 'Owner', NBT.STRING, '')).trim();
+    const owner = ownerFromNbt(tag, 'wolf'); // an OwnerUUID key wins even when empty; any non-empty text tames (owner-links.js, probed)
     Object.assign(record, ocelotFieldsFrom({ owner: owner ? 'player' : '', sitting: !!owner && !!tagValue(tag, 'Sitting', NBT.BYTE, 0), catType: tagValue(tag, 'CatType', NBT.INT, 0) }));
     for (const k of ['OwnerUUID', 'Owner', 'Sitting', 'CatType']) kept.add(k);
   }
@@ -285,6 +285,11 @@ export function javaMobFromNbt(entity, options) {
     // EntityLivingBase's Attributes (every living class; mob-attribute-list.js) and the owner / leash holder links (owner-links.js).
     const javaId = tagValue(entity, 'id', NBT.STRING, '');
     Object.assign(record, livingAttributeFields(entity, record, javaId));
+    // setHealth(HealF) runs after the Attributes, so the cap is the modified maximum (probed `modEffect` bases: HealF 28 kept under maxHealth 30).
+    if (Number.isFinite(record.maxHealth) && !['wolf', 'slime', 'magma_cube', 'horse'].includes(record.type)) {
+      const healF = tagValue(entity, 'HealF', NBT.FLOAT, tagValue(entity, 'Health', NBT.SHORT));
+      if (Number.isFinite(healF)) record.health = Math.max(0, Math.min(healF, record.maxHealth));
+    }
     if (OWNED_TYPES.has(record.type)) { const owned = ownerFields(entity, record.type); if (owned.owner) record.ownerUuid = owned.ownerUuid; }
     const holder = record.leash?.holder === 'player' ? leashHolderUuid(entity) : undefined;
     if (holder) record.leash = { ...record.leash, holderUuid: holder };

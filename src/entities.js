@@ -54,8 +54,8 @@ import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
 import { isVehicle, vehicleSize } from "./vehicle-seat.js";
 import { newUuid } from "./entity-uuid.js";
-import { cleanModifiers, modifiedValue } from "./mob-attributes.js";
-import { mountEntity, releaseDead, ridingOrder, beginRidden, endRidden, ridingId, linkRiders, setLocationAndAngles, freeChickenNear, maxHealthOf } from "./mob-riding.js";
+import { cleanModifiers, modifiedValue, liveAttribute, hasStoredBabyBoost, spawnBonusModifier } from "./mob-attributes.js";
+import { mountEntity, releaseDead, ridingOrder, beginRidden, endRidden, ridingId, linkRiders, setLocationAndAngles, freeChickenNear, maxHealthOf, OWN_MAX_HEALTH } from "./mob-riding.js";
 import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, skeletonSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
 import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDamage } from "./mob-effects.js";
 import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startConversionTicks, conversionBoost, canCure, startConversion, remedySound, auxSound, readZombieVillager } from "./zombie-villager.js";
@@ -263,16 +263,23 @@ const volumeOf = (e) => (isSlimeLike(e) ? slimeVolume(e.size) : soundVolume(e.ty
 // Fire-immune mobs (Entity.isImmuneToFire): the magma cube and the pigman.
 const fireproof = (e) => e.type === "magma_cube" || e.type === "pigman";
 // EntityMob subclasses: no panic counter, 5 experience, despawning, 0.5 - brightness path weights.
+// Classes whose onSpawnWithEgg rolls draw the follow-range spawn bonus themselves (difficulty.js, horse.js) or, for the cave spider, never.
+const OWN_SPAWN_BONUS = new Set(["spider", "cave_spider", "zombie", "pigman", "skeleton", "wither_skeleton", "horse", "ender_crystal"]); // the crystal is no EntityLiving
+// generic.followRange bases above EntityLiving's 16 (mob-attribute-list.js: Zombie, PigZombie, WitherBoss 40).
+const FOLLOW_BASE = new Set(["zombie", "pigman", "wither"]);
 export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper", "silverfish", "witch", "slime", "enderman", "magma_cube", "pigman", "wither_skeleton", "giant"]);
 // EntityMoveHelper.onUpdateMoveHelper (tv.c) hands EntityLiving.setAIMoveSpeed
 // (sw.i) `(float)(speed * movementSpeed)`; sw.i also sets moveForward to it. The
 // zombie's "Baby speed boost" (yq.br) is operation 1: base * (1 + 0.5); a Speed effect
 // (mob-effects.js) is operation 2.
 export function aiMoveSpeed(e, multiplier) {
-  const boost = e.type === "zombie" && e.growingAge < 0 ? [[0.5, 1]] : e.type === "enderman" && e.speedBoost ? [[ENDERMAN_BOOST, 0]] : e.type === "pigman" && e.pigTarget ? [[PIGMAN.boost, 0]] : [];
+  // The baby boost counts once, from the child flag or a saved copy (an imported adult keeps it: mob-attributes.js hasStoredBabyBoost).
+  const baby = (e.type === "zombie" && e.growingAge < 0) || hasStoredBabyBoost(e) ? [[0.5, 1]] : [];
+  const boost = e.type === "enderman" && e.speedBoost ? [[ENDERMAN_BOOST, 0]] : e.type === "pigman" && e.pigTarget ? [[PIGMAN.boost, 0]] : [];
   // EntityWitch: the "Drinking speed penalty" modifier (-0.25, operation 0) while a potion is being drunk.
   const drink = e.type === "witch" && e.drinking ? [[-0.25, 0]] : [];
-  return f(multiplier * attributeValue(e.horse?.speed ?? ENTITY_TYPES[e.type].movement, [...drink, ...boost, ...speedModifiers(e)]));
+  // Saved movementSpeed base and modifiers (an imported Attributes list) apply as well (liveAttribute).
+  return f(multiplier * liveAttribute(e, "generic.movementSpeed", e.horse?.speed ?? ENTITY_TYPES[e.type].movement, [...drink, ...baby, ...boost, ...speedModifiers(e)]));
 }
 // Wheat (ade.O) breeds and tempts cows and sheep; chickens take wheat seeds (309, any
 // ItemSeeds in the original) through EntityAITempt / isBreedingItem.
@@ -650,13 +657,16 @@ export function heldAttackDamage(tool, survival) {
   const base = item.kind === "sword" ? 5 + (item.name.startsWith("Golden") ? 0 : item.tier) : item.kind === "axe" ? 4 + item.tier : item.kind === "pickaxe" ? 3 + item.tier : 2 + item.tier;
   return survival.effects?.attackDamage ? survival.effects.attackDamage(base) : base;
 }
-// The Attributes a saved zombie or pigman keeps: its modifiers (mob-attributes.js) and a max health above 20 (the leader bonus is the operation 2
-// modifier on generic.maxHealth, so the modifier list decides when it is present; a bare `maxHealth` is an older save's).
+// The Attributes a saved mob keeps: its modifiers (mob-attributes.js; every mob since batch 24, e.g. the follow-range spawn bonus) and a max health
+// other than its type's (the zombie leader bonus or an imported modifier or base: the modifier list decides when it is present; a bare `maxHealth`
+// is an older save's). Wolves, slimes and horses derive their maximum elsewhere (OWN_MAX_HEALTH), so they keep none.
 function savedAttributeFields(e, base) {
   const modifiers = cleanModifiers(e.modifiers);
-  const fromModifiers = modifiers?.some((m) => m.attribute === "generic.maxHealth") ? modifiedValue({ modifiers }, "generic.maxHealth", base, 0, 2048) : undefined;
-  const max = fromModifiers ?? (Number.isFinite(e.maxHealth) ? Math.min(e.maxHealth, 2048) : undefined);
-  return { modifiers, maxHealth: max > base ? max : undefined };
+  if (OWN_MAX_HEALTH.has(e.type)) return { modifiers, maxHealth: undefined };
+  const own = Number.isFinite(e.attributeBases?.["generic.maxHealth"]) ? e.attributeBases["generic.maxHealth"] : undefined;
+  const fromModifiers = modifiers?.some((m) => m.attribute === "generic.maxHealth") || own !== undefined ? modifiedValue({ modifiers }, "generic.maxHealth", own ?? base, 0, Number.MAX_VALUE) : undefined;
+  const max = fromModifiers ?? (Number.isFinite(e.maxHealth) && e.maxHealth > 0 ? e.maxHealth : undefined);
+  return { modifiers, maxHealth: max !== undefined && max !== base ? max : undefined };
 }
 // A mob the player can sit on from a save (level.dat Player.Riding, `playerRides`): EntityList.createEntityFromNBT + mountEntity accept any entity. Left
 // out are the chicken (its own seat maths, mob-riding.js seatPosition), the Ender Dragon, the Wither and the End crystal (no mount seat here).
@@ -739,7 +749,7 @@ export class EntityWorld {
       ...(e.type === "chicken" ? { eggTimer: fresh.eggTimer, chickenJockey: e.chickenJockey === true } : {}), // IsChickenJockey (mob-riding.md)
       playerRides: playerMountable(e) && e.playerRides === true ? true : undefined, // consumed by restorePlayerVehicle
       riding: typeof e.riding === "string" && /^(mob|boat|cart)-\d+$/.test(e.riding) ? e.riding : undefined, // the mount's id, linked by linkRiders
-      ...(e.type === "zombie" || e.type === "pigman" ? savedAttributeFields(e, t.health) : { maxHealth: undefined, modifiers: undefined }),
+      ...savedAttributeFields(e, t.health),
       ...(e.type === "zombie" ? { canBreakDoors: e.canBreakDoors === true } : { canBreakDoors: e.type === "pigman" ? e.canBreakDoors === true : undefined }), // a pigman only saves the flag: EntityPigZombie.isAIEnabled is false, so the task never runs (mob-riding.md)
       // EntityBat.readEntityFromNBT: BatFlags bit 1 is the hanging state (datawatcher 16).
       ...(e.type === "bat" ? { batHanging: e.batHanging === true } : {}),
@@ -1023,6 +1033,11 @@ export class EntityWorld {
     e.dropChances = r.dropChances.slice();
     e.canPickUpLoot = !!r.loot;
   }
+  // The followRange "Random spawn bonus" (operation 1) as a stored modifier (saved and exported with a random UUID, as natively) and its value.
+  addSpawnBonus(e, amount) {
+    e.modifiers = cleanModifiers([...(e.modifiers ?? []), spawnBonusModifier(amount)]);
+    e.followRange = modifiedValue(e, "generic.followRange", FOLLOW_BASE.has(e.type) ? 40 : 16, 0, 2048);
+  }
   // EntityLiving.onSpawnWithEgg(data) and its overrides. EntityCaveSpider's (xy.a(sy)) returns
   // its argument without calling super: no follow-range roll, no jockey, no effect. `opts.group` is the
   // IEntityLivingData SpawnerAnimals threads through one group (null for a spawn egg or a single spawn);
@@ -1032,10 +1047,13 @@ export class EntityWorld {
     const type = e.type, x = e.x, y = e.y, z = e.z, rand = entityRandom(e);
     const world = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
     const local = this.localDifficulty ? this.localDifficulty(Math.floor(x), Math.floor(y), Math.floor(z)) : 0;
+    // EntityLiving.onSpawnWithEgg's followRange "Random spawn bonus" is the first Entity.rand draw of every class but the cave spider (probed:
+    // interchange-spawn-reference.json); the spider, zombie, pigman, skeleton and horse rolls draw it themselves.
+    if (!OWN_SPAWN_BONUS.has(type)) this.addSpawnBonus(e, spawnBonus(rand)[0]);
     if (type === "spider") {
       const r = spiderSpawnRolls(rand, world, this.difficulty, local, opts.group?.spider);
       opts.group = { spider: r.group };
-      e.followRange = r.followRange;
+      this.addSpawnBonus(e, r.followBonus);
       // EntitySpider.onSpawnWithEgg (yn.a): one spawn in a hundred seats a skeleton on the spider (its own onSpawnWithEgg first,
       // then spawnEntityInWorld and mountEntity), before the Hard potion effect.
       if (r.jockey) this.spawnSpiderJockey(e);
@@ -1071,7 +1089,7 @@ export class EntityWorld {
       const now = this.currentDate?.() ?? new Date(), r = skeletonSpawnRolls(rand, this.difficulty, local, { month: now.getMonth() + 1, day: now.getDate() }, this.world.dimension === NETHER, free ? null : type === "wither_skeleton");
       if (free && r.wither) { e.type = "wither_skeleton"; e.health = ENTITY_TYPES.wither_skeleton.health; }
       this.applyGear(e, r);
-      e.followRange = r.followRange;
+      this.addSpawnBonus(e, r.followBonus);
     } else if (type === "sheep") {
       // EntitySheep.onSpawnWithEgg (wp.a(sy)): setFleeceColor(getRandomFleeceColor(worldObj.rand)).
       e.color = fleeceColor(world);
@@ -1081,6 +1099,7 @@ export class EntityWorld {
       const r = horseSpawn(rand, opts.group?.horse ?? null);
       opts.group = { horse: r.group };
       Object.assign(e, r.fields);
+      this.addSpawnBonus(e, r.followBonus);
       if (e.growingAge < 0) { const t = ENTITY_TYPES.horse, k = mobScale(e); e.spawnBox = anchoredShrunkBox(e, t.width, t.height, t.width * k, t.height * k); e.spawnBoxTick = this.worldTicks; }
     } else if (type === "ocelot") {
       // EntityOcelot.onSpawnWithEgg: one chance in seven of two kittens (age -24000, CatType 0) at the same spot.
@@ -1268,7 +1287,7 @@ export class EntityWorld {
     };
     // EntityMob.attackEntityAsMob: the attribute (the held weapon's modifier included) plus Sharpness (getEnchantmentModifierLiving), Fire Aspect after.
     const melee = e.equipment ? meleeEffects(e.equipment[0]) : null;
-    const hit = survival.scaledDamage(f(attackDamage(e, (e.type === "wolf" ? wolfAttack(e) : e.type === "slime" ? slimeDamage(e.size) : e.type === "magma_cube" ? magmaDamage(e.size) : ENTITY_TYPES[e.type].damage) + (e.equipment ? attackBonus(e.equipment) : 0)) + (melee ? melee.damage : 0)), "a " + e.type, { attacker: NO_THORNS_ATTACKER.has(e.type) ? undefined : thorns, from: e });
+    const hit = survival.scaledDamage(f(attackDamage(e, e.type === "wolf" ? wolfAttack(e) : e.type === "slime" ? slimeDamage(e.size) : e.type === "magma_cube" ? magmaDamage(e.size) : ENTITY_TYPES[e.type].damage, e.equipment ? attackBonus(e.equipment) : 0) + (melee ? melee.damage : 0)), "a " + e.type, { attacker: NO_THORNS_ATTACKER.has(e.type) ? undefined : thorns, from: e });
     // EntityMob.attackEntityAsMob: Knockback on the held item pushes the player along the mob's facing and slows the mob (player-knockback.js).
     if (hit && melee?.knockback > 0) mobKnockbackKick(survival, e, melee.knockback);
     if (hit && melee?.fire > 0) survival.setFire(melee.fire);
@@ -1535,7 +1554,7 @@ export class EntityWorld {
   hitMob(e, target) {
     if (!this.entities.includes(target) || target.health <= 0) return false;
     const melee = e.equipment ? meleeEffects(e.equipment[0]) : null;
-    const hit = this.attackEntityFrom(target, f(attackDamage(e, (e.type === "wolf" ? wolfAttack(e) : ENTITY_TYPES[e.type].damage) + (e.equipment ? attackBonus(e.equipment) : 0)) + (melee ? melee.damage : 0)), { from: { x: e.x, z: e.z }, attacker: e, name: "mob", player: false });
+    const hit = this.attackEntityFrom(target, f(attackDamage(e, e.type === "wolf" ? wolfAttack(e) : ENTITY_TYPES[e.type].damage, e.equipment ? attackBonus(e.equipment) : 0) + (melee ? melee.damage : 0)), { from: { x: e.x, z: e.z }, attacker: e, name: "mob", player: false });
     if (hit && melee) {
       // Knockback (EntityLivingBase.getKnockbackModifier): Entity.addVelocity along the mob's facing; Fire Aspect: setFire(level * 4).
       if (melee.knockback > 0) {
@@ -1594,7 +1613,7 @@ export class EntityWorld {
   cureZombie(e) {
     const v = this.create("villager", e.x, e.y, e.z);
     for (const k of ["yaw", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch"]) if (e[k] !== undefined) v[k] = e[k];
-    v.followRange = attributeValue(16, [spawnBonus(entityRandom(v))], 0, 2048);
+    this.addSpawnBonus(v, spawnBonus(entityRandom(v))[0]);
     v.profession = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48))).nextInt(5);
     v.defaultReputation = true;
     if (e.growingAge < 0) v.growingAge = -24000;

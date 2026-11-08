@@ -96,13 +96,13 @@ export const spawnBonus = (rand) => [rand.nextGaussian() * 0.05, 1];
 // next spider of the same group, which takes its effect without drawing.
 export const SPIDER_EFFECTS = [1, 1, 5, 10, 14];
 export function spiderSpawnRolls(rand, worldRand, d, local, group = null) {
-  const followRange = attributeValue(16, [spawnBonus(rand)], 0, 2048);
+  const bonus = spawnBonus(rand), followRange = attributeValue(16, [bonus], 0, 2048);
   const jockey = worldRand.nextInt(100) === 0;
   if (!group) {
     group = { effect: 0 };
     if (d === HARD && worldRand.nextFloat() < f(f(0.1) * local)) group.effect = SPIDER_EFFECTS[worldRand.nextInt(5)];
   }
-  return { followRange, jockey, effect: group.effect, group };
+  return { followRange, followBonus: bonus[0], jockey, effect: group.effect, group };
 }
 
 // EntityZombie.onSpawnWithEgg (yq.a(sy)) in the original draw order; GroupData (ys: child, villager)
@@ -184,7 +184,7 @@ export function skeletonSpawnRolls(rand, d, local, date = { month: 6, day: 1 }, 
   }
   const loot = rand.nextFloat() < f(f(0.55) * local);
   halloweenHead(rand, slots, chances, date);
-  return { stacks: slots, dropChances: chances, wither, loot, followRange: attributeValue(16, follow, 0, 2048) };
+  return { stacks: slots, dropChances: chances, wither, loot, followRange: attributeValue(16, follow, 0, 2048), followBonus: follow[0][0] };
 }
 
 // EntityZombie.applyEntityAttributes: zombie.spawnReinforcements (yq.bp, range 0 to 1) has the
