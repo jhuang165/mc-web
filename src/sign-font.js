@@ -11,32 +11,18 @@
 //   renderDefaultChar: ascii.png cell (index % 16, index / 16) of 8 px, quad (charWidth - 1.01) x 7.99.
 //   renderUnicodeChar: page cell 16 x 16 at start..end + 1 - 0.02 glyph px drawn at half size ((end - start - 0.02) / 2 x 7.99).
 //   A sign line is drawn (text colour 0, no shadow) at x = -getStringWidth / 2 (int division), y = line * 10 - 20.
-import { font, getCharWidth, usesAscii, unicodeGlyph, glyphPageUrl, onFontChange, CHAR_TABLE } from "./font-renderer.js";
-import { FORMAT_COLORS } from "./menu-screens.js";
+import { font, usesAscii, unicodeGlyph, glyphPageUrl, onFontChange, CHAR_TABLE, colorOf, randomGlyphIndex } from "./font-renderer.js";
 import { versioned } from "./media-version.js";
 import { onResourcesRefreshed } from "./resource-refresh.js";
 
 const CODES = "0123456789abcdefklmnor";
 const tableIndex = (c) => (c > 0 ? CHAR_TABLE.indexOf(String.fromCharCode(c)) : -1);
-const SAME_WIDTH = new Map();
-const sameWidth = (w, state) => {
-  const key = `${state.version}|${w}`;
-  let list = SAME_WIDTH.get(key);
-  if (!list) {
-    if (SAME_WIDTH.size > 40) SAME_WIDTH.clear();
-    list = [];
-    for (let i = 0; i < CHAR_TABLE.length; i++) if (getCharWidth(CHAR_TABLE.charCodeAt(i), state) === w) list.push(CHAR_TABLE.charCodeAt(i));
-    SAME_WIDTH.set(key, list);
-  }
-  return list;
-};
-
 /**
  * The drawing ops of one string: {kind: "ascii", index, x, color, italic}, {kind: "unicode", code, glyph, x, color, italic} and
  * {kind: "bar", x0, y0, x1, y1, color}; x and the bars are in font pixels from the pen start, glyphs are drawn at y 0..7.99.
  * `width` is the pen move: the sum of the integer parts of the advances, as drawString's pen.
  */
-export function layoutString(s, color = 0, state = font, rand = Math.random) {
+export function layoutString(s, color = 0, state = font, nextInt = (n) => Math.floor(Math.random() * n)) {
   const ops = [];
   let x = 0, cur = color, bold = false, italic = false, under = false, strike = false, random = false;
   let text = String(s ?? "");
@@ -48,7 +34,7 @@ export function layoutString(s, color = 0, state = font, rand = Math.random) {
       if (k < 16) {
         if (k < 0) k = 15;
         random = bold = strike = under = italic = false;
-        cur = FORMAT_COLORS[k];
+        cur = colorOf(k, false, state);
       } else if (k === 16) random = true;
       else if (k === 17) bold = true;
       else if (k === 18) strike = true;
@@ -58,10 +44,7 @@ export function layoutString(s, color = 0, state = font, rand = Math.random) {
       continue;
     }
     let index = tableIndex(c);
-    if (random && index !== -1) {
-      const list = sameWidth(getCharWidth(c, state), state);
-      if (list.length) { c = list[Math.floor(rand() * list.length)]; index = tableIndex(c); }
-    }
+    if (random && index !== -1) index = randomGlyphIndex(index, nextInt, state.widths); // the cell is replaced, never the character: the unicode flag draws c itself
     const start = x, offset = state.unicode ? 0.5 : 1;
     let advance = 0;
     const draw = (dx) => {
@@ -101,7 +84,6 @@ function image(url) {
   return entry.ready ? entry.img : null;
 }
 onResourcesRefreshed(() => { images.clear(); bump(); });
-onFontChange(() => SAME_WIDTH.clear());
 
 const hex = (c) => "#" + (c & 0xffffff).toString(16).padStart(6, "0");
 function tinted(img, color) {

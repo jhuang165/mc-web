@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { readFontWidths, setGlyphSizes, font } from './font-renderer.js';
 import { drawStringPrims } from './font-quads.js';
 import { bidiReorder } from './bidi.js';
+import { JavaRandom } from './java-random.js';
 import { readPng } from '../tools/png-rgba.mjs';
 
 const ref = JSON.parse(readFileSync(new URL('../public/research/font-style-reference.json', import.meta.url), 'utf8'));
@@ -64,4 +65,48 @@ test('bidiReorder: shaping, mirroring and run reversal on known strings', () => 
   assert.equal(bidiReorder('(א)'), '(א)'.replace(/./g, (c) => c)); // brackets mirror and the order flips: (א) stays (א) visually
   assert.equal(bidiReorder('لا'), 'ﻻ'); // lam + alef ligature
   assert.equal(bidiReorder('ب'), 'ﺏ'); // isolated beh... at paragraph level RTL, joined forms only next to letters
+});
+
+test('§k replays the native random stream: 224 seeded rows, shadow and normal pass on one stream, both unicode flags', () => {
+  assert.ok(ref.random.length >= 200);
+  let obfuscated = 0;
+  for (const r of ref.random) {
+    const state = { unicode: r.unicode, widths, glyphSizes: sizes };
+    const rnd = new JavaRandom(r.seed);
+    const got = drawStringPrims(r.s, r.x, r.y, r.color, r.shadow, state, (n) => rnd.nextInt(n), null);
+    assert.deepEqual(got.prims.map((p) => norm({ ...p, tex: p.k === 'g' ? p.tex : '' })), r.prims.map(norm), `${JSON.stringify(r.s)} seed ${r.seed} shadow=${r.shadow} unicode=${r.unicode}`);
+    assert.equal(got.x, r.ret);
+    assert.equal(rnd.nextInt(256), r.next, `stream position after ${JSON.stringify(r.s)}`);
+    obfuscated++;
+  }
+  assert.equal(obfuscated, ref.random.length);
+});
+
+test('§k does nothing visible with the unicode flag but still draws random numbers', () => {
+  const state = { unicode: true, widths, glyphSizes: sizes };
+  let n = 0;
+  const a = drawStringPrims('§kabc', 0, 0, 0xffffff, false, state, () => { n++; return 0; }, null);
+  const b = drawStringPrims('abc', 0, 0, 0xffffff, false, state, () => 0, null);
+  assert.deepEqual(a.prims.map(norm), b.prims.map(norm));
+  assert.ok(n >= 3);
+});
+
+test('the colour table follows GameSettings.anaglyph (bbu constructor): conversion before the shadow division', async () => {
+  const { colorCodeTable } = await import('./font-renderer.js');
+  const plain = colorCodeTable(false), ana = colorCodeTable(true);
+  assert.equal(plain[6], 0xffaa00); assert.equal(plain[22], 0x2a2a00); // the +85 red applies to entry 6 only: the gold shadow is (170,170,0) / 4, not (255,170,0) / 4
+  // entry 12 (255,85,85): R' = (30*255+59*85+11*85)/100 = 136, G' = (30*255+70*85)/100 = 136, B' = 136
+  assert.equal(ana[12], 0x888888);
+  assert.equal(ana[28], 0x222222); // the shadow entry is the converted colour over 4
+  for (const i of [0, 15]) assert.ok(ana[i] >= 0);
+});
+
+test('the 32 entry colour table equals the unchanged constructor for anaglyph off and on', async () => {
+  const { colorCodeTable } = await import('./font-renderer.js');
+  assert.equal(ref.colors.length, 64);
+  for (const r of ref.colors) {
+    const c = colorCodeTable(r.anaglyph)[r.code + (r.shadow ? 16 : 0)];
+    // the plain call has no shadow pass; the shadow call's first quad is the shadow colour
+    assert.deepEqual(r.c.slice(0, 3).map(Math.fround), [(c >> 16) & 255, (c >> 8) & 255, c & 255].map((v) => Math.fround(v / 255)), JSON.stringify(r));
+  }
 });

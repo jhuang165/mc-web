@@ -236,16 +236,66 @@ export function reorderLevels(text, levels) {
 export function bidiReorder(s) {
   const text = shapeArabic(s);
   if (!text.length) return text;
-  // ICU shortcut: no R, AL, AN or explicit-embedding characters and an LTR first paragraph is trivially LTR (no reordering, no mirroring)
-  let rtl = false;
-  for (let i = 0; i < text.length && !rtl; i++) {
-    const t = bidiClass(text.charCodeAt(i));
-    rtl = t === R || t === AL || t === AN || t === RLE || t === RLO || t === LRE || t === LRO;
+  // ICU shortcut: with no R, AL, AN or explicit-embedding characters and an LTR first paragraph the text is trivially LTR (a single
+  // run: no reordering, no mirroring, whatever the later paragraphs resolve to) unless a later paragraph raises the right-to-left flag.
+  const types = new Array(text.length);
+  let rtl = false, explicit = false;
+  for (let i = 0; i < text.length; i++) {
+    const t = types[i] = bidiClass(text.charCodeAt(i));
+    rtl = rtl || t === R || t === AL || t === AN;
+    explicit = explicit || t === RLE || t === RLO || t === LRE || t === LRO;
   }
   if (!rtl) {
     let pe = 0;
-    while (pe < text.length && bidiClass(text.charCodeAt(pe)) !== B) pe++;
-    if (firstStrong(text.split('').map((c) => bidiClass(c.charCodeAt(0))), 0, Math.min(pe + 1, text.length), 1) === 0) return text;
+    while (pe < text.length && types[pe] !== B) pe++;
+    if (firstStrong(types, 0, Math.min(pe + 1, text.length), 1) === 0 && !laterParagraphIsRtl(types) && !(explicit && embeddedRtl(types))) return text;
   }
   return reorderLevels(text, resolveLevels(text).levels);
+}
+
+/**
+ * ICU 51 getDirProps flags a strong-less paragraph (default level 1) that has content besides its separator and follows a level 0
+ * paragraph as right to left, which turns an otherwise left-to-right text into the MIXED direction (levels resolved per character).
+ * A strong-less paragraph after a separator-only paragraph does not raise it (probed: `a\n(` mirrors, `a\n\n(` does not).
+ */
+function laterParagraphIsRtl(types) {
+  let prevLevel = -1, prevEnd = 0;
+  for (let ps = 0; ps < types.length;) {
+    let pe = ps;
+    while (pe < types.length && types[pe] !== B) pe++;
+    if (pe < types.length) pe++;
+    const level = firstStrong(types, ps, pe, 1);
+    let content = false;
+    for (let i = ps; i < pe && !content; i++) content = !(types[i] === B || types[i] === BN || isCode(types[i]));
+    if (ps > 0 && prevLevel === 0 && level === 1 && content && !hasStrong(types, ps, pe)) return true;
+    prevLevel = level;
+    ps = pe;
+  }
+  return false;
+}
+const isCode = (t) => t === LRE || t === LRO || t === RLE || t === RLO || t === PDF;
+const hasStrong = (types, s, e) => { for (let i = s; i < e; i++) if (types[i] === L || types[i] === R || types[i] === AL) return true; return false; };
+
+/**
+ * ICU flags right to left only for a character that is actually drawn at an odd embedding level (RLE/RLO with a character after
+ * them in the same paragraph, X1-X8 stack as resolveParagraph); explicit codes with nothing under them leave the text left to right.
+ */
+function embeddedRtl(types) {
+  let stack = [0], overflow = 0;
+  for (let i = 0, pastB = true; i < types.length; i++) {
+    const t = types[i];
+    if (pastB) { stack = [firstStrongFrom(types, i)]; overflow = 0; pastB = false; }
+    if (t === RLE || t === LRE || t === RLO || t === LRO) {
+      const top = stack[stack.length - 1], next = (t === RLE || t === RLO) ? (top + 1) | 1 : (top + 2) & ~1;
+      if (next <= MAX_DEPTH && overflow === 0) stack.push(next); else overflow++;
+    } else if (t === PDF) { if (overflow > 0) overflow--; else if (stack.length >= 2) stack.pop(); }
+    else if (t === B) pastB = true;
+    else if (t !== BN && stack.length > 1 && stack[stack.length - 1] & 1) return true; // the paragraph's own level never counts
+  }
+  return false;
+}
+function firstStrongFrom(types, s) {
+  let e = s;
+  while (e < types.length && types[e] !== B) e++;
+  return firstStrong(types, s, e, 1);
 }

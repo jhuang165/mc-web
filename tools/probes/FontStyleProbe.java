@@ -45,6 +45,63 @@ public class FontStyleProbe {
     bao.rm = res;
     if (args[0].equals("data")) { data(); return; }
     if (args[0].equals("shape")) { shapeData(); return; }
+    if (args[0].equals("levels")) {
+      // direction, paragraph levels and per-character levels of Bidi(ArabicShaping(LETTERS_SHAPE).shape(s), DEFAULT_RTL): the evidence for src/bidi.js
+      BufferedReader in = new BufferedReader(new InputStreamReader(System.in, "UTF-8"));
+      com.ibm.icu.text.ArabicShaping sh = new com.ibm.icu.text.ArabicShaping(8);
+      String line;
+      while ((line = in.readLine()) != null) {
+        StringBuilder s = new StringBuilder();
+        for (String h : line.trim().split(" ")) if (!h.isEmpty()) s.append((char) Integer.parseInt(h, 16));
+        com.ibm.icu.text.Bidi b = new com.ibm.icu.text.Bidi(sh.shape(s.toString()), 127);
+        StringBuilder o = new StringBuilder("d" + b.getDirection() + " p");
+        for (int i = 0; i < b.countParagraphs(); i++) o.append(b.getParagraphByIndex(i).getEmbeddingLevel());
+        o.append(" l");
+        for (int i = 0; i < b.getLength(); i++) o.append(b.getLevelAt(i)).append(',');
+        System.out.println(o);
+      }
+      return;
+    }
+    if (args[0].equals("random")) {
+      // §k: renderStringAtPos picks fontRandom.nextInt(256) until the ascii.png width matches; bbu.b (fontRandom) is public, so a seeded
+      // java.util.Random makes the draw replayable (drawStringWithShadow runs the shadow pass first, then the normal pass, on one stream)
+      String[] strs = {"§kHello World", "§kiii WWW lll", "§k§lBold random", "§kAbc§r def §kXyz", "§k§n§mfull", "§kÀÁÂ ñÑ ░▒▓ ŒŞ", "§kあいう abc", "§kfi jt !", "§cr§kandom§ctext", "§k§oitalic", "§k\u0000x a", "§kx§rx§kx", "§4§kcolour resets", "§k§l§nWide mmm @@@"};
+      long[] seeds = {1L, 42L, 20271108L, 987654321L};
+      StringBuilder rows = new StringBuilder();
+      for (boolean unicode : new boolean[] {false, true}) {
+        bbu fr = new bbu(new bbj(), new bqx("textures/font/ascii.png"), new bqf(null), unicode);
+        fr.a((bqy) res);
+        for (String s : strs) for (long seed : seeds) for (int shadow = 0; shadow < 2; shadow++) {
+          GL11.prims.clear(); GL11.verts.clear();
+          fr.b = new java.util.Random(seed);
+          int x = 7, y = 11, col = 0xff8040;
+          int ret = shadow == 1 ? fr.a(s, x, y, col) : fr.b(s, x, y, col);
+          if (rows.length() > 0) rows.append(',');
+          rows.append("{\"unicode\":").append(unicode).append(",\"seed\":").append(seed).append(",\"s\":").append(q(s)).append(",\"shadow\":").append(shadow == 1).append(",\"x\":").append(x).append(",\"y\":").append(y).append(",\"color\":").append(col).append(",\"ret\":").append(ret).append(",\"next\":").append(fr.b.nextInt(256)).append(",\"prims\":[").append(String.join(",", GL11.prims)).append("]}");
+        }
+      }
+      System.out.println("[" + rows + "]");
+      return;
+    }
+    if (args[0].equals("colors")) {
+      // the glColor4f of "§<c>A" (normal and shadow pass) with GameSettings.anaglyph (bbj.e) off and on: the 32 entry colour table of the constructor
+      StringBuilder rows = new StringBuilder();
+      for (boolean ana : new boolean[] {false, true}) {
+        bbj opt = new bbj(); opt.e = ana;
+        bbu fr = new bbu(opt, new bqx("textures/font/ascii.png"), new bqf(null), false);
+        fr.a((bqy) res);
+        for (int k = 0; k < 16; k++) for (int shadow = 0; shadow < 2; shadow++) {
+          GL11.prims.clear(); GL11.verts.clear();
+          String s = "§" + Integer.toHexString(k) + "A";
+          if (shadow == 1) fr.a(s, 0, 0, 0xffffff); else fr.b(s, 0, 0, 0xffffff);
+          // drawStringWithShadow draws the shadow pass first: its first glyph quad; the plain call has one pass
+          if (rows.length() > 0) rows.append(',');
+          rows.append("{\"anaglyph\":").append(ana).append(",\"code\":").append(k).append(",\"shadow\":").append(shadow == 1).append(",\"first\":").append(GL11.prims.get(0)).append("}");
+        }
+      }
+      System.out.println("[" + rows + "]");
+      return;
+    }
     Method reorder = bbu.class.getDeclaredMethod("b", String.class);
     reorder.setAccessible(true);
     if (args[0].equals("bidi")) {

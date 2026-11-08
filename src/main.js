@@ -279,7 +279,7 @@ import { presolveWorld } from "./spawn-presolve.js";
 import { blankLoading, arrivalWarmer } from "./travel-loading.js";
 import "./lang-hooks.js";
 import { loadLanguageManifest, selectLanguage, setForceUnicodeFont, translate } from "./lang.js";
-import { loadFontResources, onFontChange, font } from "./font-renderer.js";
+import { loadFontResources, onFontChange, font, setFontAnaglyph } from "./font-renderer.js";
 import { restoreStructureEntities, saveStructureEntities, tickMinecartSimulation, tickBoatSimulation, tickSpawnerSimulation, tickSpawnersClient, spawnerBurst, pickMinecart } from "./structure-simulation.js";
 // Generation version 10 (live mineshafts) maps original block ids while a World is built; the
 // entry module already holds the registry, so the mapper is set before any World exists.
@@ -681,6 +681,7 @@ const menus = createMenus(gui, menuContext);
 // Selected resource packs (resource-packs.js): their lang entries replace the menu strings; textures and sounds are served by the worker.
 initResourcePacks(options, LANG).then(async () => {
   // Languages (lang.js): the installed manifest, the saved language, Force Unicode Font, then glyph_sizes.bin and ascii.png widths.
+  setFontAnaglyph(options.anaglyph); // FontRenderer's constructor reads GameSettings.anaglyph once: the § colour table is fixed for the session
   await loadLanguageManifest();
   setForceUnicodeFont(options.forceUnicodeFont);
   await selectLanguage(options.language || "en_US");

@@ -1,5 +1,6 @@
 // Records unchanged 1.7.10 FontRenderer (bbu) behaviour for the styled-text and bidirectional work; see probes/FontStyleProbe.java.
 //   draw: every primitive drawString/drawStringWithShadow issues (glyph quads, underline and strikethrough bars), both unicode flags
+//   random: §k text with a seeded java.util.Random in fontRandom (bbu.b), both unicode flags, shadow and plain
 //   bidi: FontRenderer.bidiReorder (ICU4J ArabicShaping LETTERS_SHAPE, then Bidi DEFAULT_RTL with DO_MIRRORING) of probe strings
 // Requires the pinned client JAR, a JDK and the usual probe libraries. Writes public/research/font-style-reference.json,
 // replayed by src/font-style.test.js.
@@ -28,15 +29,26 @@ for (let k = 0; k < 400; k++) {
   for (let i = 0; i < len; i++) { const set = sets[mix[Math.floor(rnd() * mix.length)]]; s += set[Math.floor(rnd() * set.length)]; }
   strings.push(s);
 }
-// paragraph separators: only inputs with a strong character in the first paragraph (see Follow-ups on strong-less paragraphs)
-strings.push("א\nב", "a\nא", "א\n(b)", "אבג\r\nabc", "a ב", "ב\u0085a", "(ב\nc)");
+// several paragraphs (a separator inside one string), including strong-less later paragraphs: `a\n(` mirrors natively, `a\n\n(` does not.
+// Left out: explicit embedding codes (U+202A-202E) and format characters (BN) at the start of a later paragraph, see the track note.
+strings.push("א\nב", "a\nא", "א\n(b)", "אבג\r\nabc", "a ב", "ב\u0085a", "(ב\nc)");
+strings.push("a\n(", "a\n\n(", "a\n(\n(", "(\n(", "(\na", "a\n1", "a\n(b", "a\n \n(", "\n(", "ab\n\n)\n)", "א\n(", "a\r\n(", "a (", "a\u001c<", "a\u0085[");
+const psets = ["abc XYZ", "0123", "ابلمنتيءآأإةهو", "َُّ", "١٢", "אבג", "()[]<>,.:;!-+%$/ \"'", "\n\n\r \u0085\u001c", "§c§l§k", "ـ", "²€٫", "\n", "\n\r", "ab", "א", "()", "̀", "‎‏"];
+for (let k = 0; k < 600; k++) {
+  const len = 2 + Math.floor(rnd() * 13);
+  let s = "";
+  for (let i = 0; i < len; i++) { const set = psets[Math.floor(rnd() * psets.length)]; s += set[Math.floor(rnd() * set.length)]; }
+  strings.push(s);
+}
 const draw = (await runProbe("draw")).trim().split("\n").map((l) => JSON.parse(l));
 const bidiOut = (await runProbe("bidi", strings.map(hex).join("\n") + "\n")).split("\n");
 const bidi = strings.map((s, i) => [hex(s), bidiOut[i].trim()]);
+const random = JSON.parse((await runProbe("random")).trim());
+const colors = JSON.parse((await runProbe("colors")).trim()).map((r) => ({ anaglyph: r.anaglyph, code: r.code, shadow: r.shadow, c: r.first.c }));
 const out = fileURLToPath(new URL("../public/research/font-style-reference.json", import.meta.url));
 await writeFile(out, JSON.stringify({
   source: "unchanged 1.7.10 client jar (sha1 e80d9b3b...), FontRenderer bbu; ICU4J 51.2 (icu4j-core-mojang) for the bidirectional reorder",
   note: "draw rows: [x, y] pen start, ret is the int drawString returns, prims are the Tessellator vertices (float32) per quad in call order",
-  draw, bidi,
+  draw, bidi, random, colors,
 }));
-console.log("draw rows", draw.reduce((n, d) => n + d.rows.length, 0), "bidi strings", bidi.length, "->", out);
+console.log("draw rows", draw.reduce((n, d) => n + d.rows.length, 0), "random rows", random.length, "bidi strings", bidi.length, "->", out);
