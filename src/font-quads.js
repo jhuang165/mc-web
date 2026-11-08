@@ -12,21 +12,12 @@
 //     every character including spaces; `advance` is the float one (unicode glyphs advance (end - start) / 2 + 1, bold + 1).
 //   The pen then moves by (int) advance, so half advances never accumulate, and the style flags are NOT reset between the shadow pass and
 //     the normal pass (e1 reset at drawString start only): a trailing §n of the shadow pass underlines the start of the second pass.
-import { font, getStringWidth, CHAR_TABLE } from "./font-renderer.js";
+import { font, getStringWidth, CHAR_TABLE, colorCodeTable, randomGlyphIndex } from "./font-renderer.js";
 
 const f32 = Math.fround;
 const F799 = f32(7.99), F1598 = f32(15.98), F001 = f32(0.01), F002 = f32(0.02);
 const CODES = "0123456789abcdefklmnor";
-const COLOR_TABLE = (() => {
-  const t = [];
-  for (let i = 0; i < 32; i++) {
-    let j = ((i >> 3) & 1) * 85, k = ((i >> 2) & 1) * 170 + j, l = ((i >> 1) & 1) * 170 + j, m = (i & 1) * 170 + j;
-    if (i === 6) k += 85;
-    if (i >= 16) { k = Math.trunc(k / 4); l = Math.trunc(l / 4); m = Math.trunc(m / 4); }
-    t.push(((k & 255) << 16) | ((l & 255) << 8) | (m & 255));
-  }
-  return t;
-})();
+const COLOR_TABLE = colorCodeTable(false); // a state without a colour table (tests) is the non-anaglyph one
 const tableIndex = (c) => CHAR_TABLE.indexOf(String.fromCharCode(c));
 const rgba = (c) => [f32(((c >> 16) & 255) / 255), f32(((c >> 8) & 255) / 255), f32((c & 255) / 255), f32(((c >>> 24) & 255) / 255)];
 
@@ -85,7 +76,7 @@ function pass(s, x, y, color, shadow, st, state, rand) {
         st.random = st.bold = st.strike = st.under = st.italic = false;
         if (k < 0 || k > 15) k = 15;
         if (shadow) k += 16;
-        const col = COLOR_TABLE[k];
+        const col = (state.colorCode ?? COLOR_TABLE)[k];
         const [r, g, b] = rgba(col);
         cur = [r, g, b, base[3]];
       } else if (k === 16) st.random = true;
@@ -98,9 +89,7 @@ function pass(s, x, y, color, shadow, st, state, rand) {
     }
     let idx = tableIndex(c);
     if (st.random && idx !== -1) {
-      let j;
-      do j = Math.floor(rand() * 256); while (state.widths[idx] !== state.widths[j]);
-      idx = j;
+      idx = randomGlyphIndex(idx, rand, state.widths);
     }
     const flag = (c === 0 || idx === -1 || state.unicode) && shadow;
     const draw = (dx) => {
@@ -131,9 +120,9 @@ const newStyle = () => ({ random: false, bold: false, strike: false, under: fals
 
 /**
  * drawString(s, x, y, color, shadow) -> {prims, x}: the shadow pass (at +1 +1, shadow colour) then the normal pass, `x` is the value
- * the native method returns (the larger of both passes' end x). `bidi` applies the bidiReorder first when the font is bidirectional.
+ * the native method returns (the larger of both passes' end x). `rand(n)` is Random.nextInt(n) for §k. `bidi` applies the bidiReorder first when the font is bidirectional.
  */
-export function drawStringPrims(s, x, y, color, shadow, state = font, rand = Math.random, reorder = state.bidi ? state.bidiReorder : null) {
+export function drawStringPrims(s, x, y, color, shadow, state = font, rand = (n) => Math.floor(Math.random() * n), reorder = state.bidi ? state.bidiReorder : null) {
   const st = newStyle();
   const text = reorder && s != null ? reorder(String(s)) : s;
   if (shadow) {
