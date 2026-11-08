@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World } from './world.js';
 import { populationBlockMapperReady } from './population-world.js';
-import { StreamPrefetch, createStreamWorker } from './streaming-generator.js';
+import { StreamPrefetch, createStreamWorker, RING_IDLE_TICKS } from './streaming-generator.js';
 
 await populationBlockMapperReady;
 const silence = (w) => { w.blockLight = () => 0; return w; };
@@ -129,4 +129,41 @@ test('ring workers take ring columns while the main worker keeps the window, and
   assert.equal(main.posted.filter((m) => m.type === 'column').length, 1, 'the main worker is busy with the next window column, so it takes no ring column');
   prefetch.dispose();
   assert.ok(spare.terminated && main.terminated);
+});
+
+test('ring workers: made up front, ended after RING_IDLE_TICKS once the ring is full, made again when units stay unserved', async () => {
+  const w = new DimensionWorld('29', -1), main = port(), made = [];
+  const ring = new HeadlessColumns(w);
+  const prefetch = new StreamPrefetch(w, main, { margin: 0, ringSpawn: () => { const p = port(); made.push(p); return p; }, ringMax: 2 });
+  prefetch.ring = ring;
+  assert.equal(made.length, 2, 'ringMax workers start with the prefetch, while the loading screen finishes');
+  assert.ok(made.every((p) => p.posted.some((m) => m.type === 'init')));
+  ring.update(0, 0);
+  prefetch.update(8, 8);
+  assert.ok(made.every((p) => p.posted.some((m) => m.type === 'ring')), 'both take ring columns');
+  // The ring completes: every column is held.
+  for (let us = ring.units(); us.length; us = ring.units()) for (const u of us) { prefetch.pending.delete(`r${u.join(',')}`); ring.receive([[u[0], u[1], { blocks: new Uint8Array(0), meta: new Uint8Array(0) }]]); }
+  assert.deepEqual(ring.units(), []);
+  for (const r of prefetch.ringPorts) r.busy = null;
+  prefetch.mainRing = null;
+  for (let i = 0; i < RING_IDLE_TICKS - 1; i++) prefetch.update(8, 8);
+  assert.equal(prefetch.ringPorts.length, 2, 'not before the idle limit');
+  prefetch.update(8, 8);
+  assert.equal(prefetch.ringPorts.length, 0, 'ended once idle for RING_IDLE_TICKS updates');
+  assert.ok(made.every((p) => p.terminated));
+  ring.update(80, 80);
+  for (let i = 0; i < 4; i++) { prefetch.update(8, 8); if (prefetch.mainRing) prefetch.pending.delete(prefetch.mainRing), prefetch.mainRing = null; }
+  assert.ok(made.length > 2, 'a shift that leaves units unserved makes workers again');
+  prefetch.dispose();
+});
+
+test('ringMax 0 (low-core machines) makes no ring workers; the main worker takes ring columns when idle', () => {
+  const w = new DimensionWorld('29', -1), main = port(), ring = new HeadlessColumns(w);
+  let made = 0;
+  const prefetch = new StreamPrefetch(w, main, { margin: 0, ringSpawn: () => { made++; return port(); }, ringMax: 0 });
+  prefetch.ring = ring; ring.update(0, 0);
+  prefetch.update(8, 8);
+  assert.equal(made, 0);
+  assert.ok(main.posted.some((m) => m.type === 'ring' || m.type === 'column'));
+  prefetch.dispose();
 });

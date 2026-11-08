@@ -4,7 +4,7 @@ import * as D from './dimensions.js';
 import { TerrainPeek, DimensionWorld } from './dimension-world.js';
 import { blankLoading, arrivalWarmer } from './travel-loading.js';
 import { StreamPrefetch } from './streaming-generator.js';
-import { runSteps, drain } from './steps.js';
+import { runSteps, drain, taskPause } from './steps.js';
 import { World } from './world.js';
 import { populationBlockMapperReady } from './population-world.js';
 import { createStreamWorker } from './streaming-generator.js';
@@ -107,4 +107,16 @@ test('arrivalWarmer shares a large worker request over several lanes and dispose
   warm.dispose();
   assert.ok(ports.every((p) => p.ended));
   await done; globalThis.Worker = had;
+});
+
+test('taskPause yields to a macrotask, and to a real frame only after frameMs without one', async () => {
+  let t = 0, frames = 0, tasks = 0;
+  const channel = () => { const c = { port1: { onmessage: null, close() {} }, port2: { postMessage() { tasks++; queueMicrotask(() => c.port1.onmessage()); } } }; return c; };
+  const pause = taskPause({ frameMs: 100, now: () => t, frame: async () => { frames++; }, channel });
+  await pause(); t = 60; await pause();
+  assert.deepEqual([tasks, frames], [2, 0], 'short gaps yield to tasks only');
+  t = 120; await pause();
+  assert.deepEqual([tasks, frames], [2, 1], 'a frame once 100 ms have gone by');
+  await pause();
+  assert.deepEqual([tasks, frames], [3, 1], 'the frame clock restarts');
 });

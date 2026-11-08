@@ -274,7 +274,7 @@ import { wrapMobHooks, wrapRandomTickLight, residentOnly } from "./headless-env.
 import { startLoading, setStage, STAGES, loadingScreen, downloadTerrainScreen, errorScreen, nextPaint, nextFrame, SpawnAreaLog } from "./loading-screen.js";
 import { gameOverScreen, exportScreen, notesScreen, signEditHost } from "./modal-dialogs.js";
 import { NOTES } from "./notes-content.js";
-import { runSteps } from "./steps.js";
+import { runSteps, taskPause } from "./steps.js";
 import { presolveWorld } from "./spawn-presolve.js";
 import { blankLoading, arrivalWarmer } from "./travel-loading.js";
 import "./lang-hooks.js";
@@ -1153,13 +1153,14 @@ async function openWorld(record) {
   if (!worldWriterAvailable) { toast('Another tab owns local saves. Close it and reload to play Singleplayer.'); return; }
   leaveMultiplayer();
   if(openingWorld)return;
-  openingWorld=true;
+  openingWorld=true; performance.mark?.('trip:open');
   sounds?.stopStreams(); // Minecraft.loadWorld: SoundHandler.stopSounds (music and records), also between dimensions
   lan.close();
   // From the title screen: LoadingScreenRenderer's "Loading world" screen (loading-screen.js); portal trips keep the game on screen.
   // A portal trip (record.transit): Minecraft.loadWorld(world, "") draws a blank loading frame, then handleRespawn shows GuiDownloadTerrain (travel-loading.js).
   const trip = screen !== "home" && !!record.transit, tripFrom = screen, loading = screen === "home" ? startLoading() : trip ? blankLoading() : null, spawnLog = new SpawnAreaLog(64, trip ? () => {} : undefined);
   let warmer = null;
+  const yieldTask = taskPause();
   if (trip) { screen = "home"; tripLoading = true; keys.clear(); $("#hud").classList.add("hidden"); } // the title-start path: no ticking, no scene drawing, until launch
   if (loading) { gui.show(loadingScreen(loading)); await nextPaint(); }
   if (trip) { gui.show(downloadTerrainScreen()); await nextPaint(); } // handleRespawn: GuiDownloadTerrain follows the blank frame for the whole transfer
@@ -1170,8 +1171,9 @@ async function openWorld(record) {
     // WorldServer.initialize runs createSpawnPosition under "Loading world"; the chunk load that follows is "Building terrain" (the World constructor populates the resident window).
     if (loading && !trip) { setStage(loading, STAGES.terrain); spawnLog.report(0, performance.now()); await nextPaint(); await presolved.terrain; }
     else if (trip) await presolved.terrain; // the Overworld's resident cell from the worker; the Nether/End have none
+    performance.mark?.('trip:terrain');
     const prepared=dims.createWorld(record);
-    if (loading) warmer = arrivalWarmer(prepared, { pause: nextFrame });
+    if (loading) warmer = arrivalWarmer(prepared, { pause: yieldTask });
     if (!record.chunked) prepared.restore(record.edits??[]);
     if (!prepared.dimension && !record.worldSpawn) {
       if (prepared.nativeSpawn) record.worldSpawn = [prepared.nativeSpawn[0] - prepared.originX, prepared.nativeSpawn[1], prepared.nativeSpawn[2] - prepared.originZ]; // WorldInfo spawn (world-spawn.js)
@@ -1179,9 +1181,10 @@ async function openWorld(record) {
     }
     prepared.restoreClaimedColumns(record.populatedColumns);
     const transit = record.transit;
-    await dims.arrive(prepared, record, loading ? { pause: nextFrame, warm: warmer } : {}); // portal travel: the Teleporter's arrival position
-    const p=record.position;
+    await dims.arrive(prepared, record, loading ? { pause: yieldTask, warm: warmer } : {}); // portal travel: the Teleporter's arrival position
+    const p=record.position; performance.mark?.('trip:arrived');
     if(prepared.streaming&&p&&[p.x,p.z].every(Number.isFinite)){ if (warmer) await warmer.window(p.x,p.z); prepared.streamAround(p.x,p.z); }
+    performance.mark?.('trip:windowed');
     record=await readRuntimeState(record,prepared.streaming?{containerColumns:[...prepared.chunks.values()].map(c=>[c.x,c.z])}:{});
     const storage=prepared.streaming?new StreamStorage(prepared,record.id,{onError:e=>{pause();toast('Could not load saved columns. Reopen the world to retry: '+e.message);}}):null;
     prepared.nextEditOrder=Math.max(prepared.nextEditOrder,record.editSequence??(record.chunked?2000000:0));
@@ -1194,7 +1197,9 @@ async function openWorld(record) {
     // NetHandlerPlayClient.handleJoinGame shows GuiDownloadTerrain until the first position packet: here, while the columns are meshed and the player is placed.
     warmer?.dispose(); warmer = null;
     if (loading && !trip) { gui.show(downloadTerrainScreen()); await nextPaint(); }
+    performance.mark?.('trip:launch');
     await launch(record,prepared,{slice:!!loading});
+    performance.mark?.('trip:done');
     // PlayerList.transferPlayerToDimension: leaving the End, Overworld -> End, or any other portal trip (not a respawn).
     if (transit && !transit.death) achievements.trigger(transit.exit ? "theEnd2" : transit.from === 0 && prepared.dimension === 1 ? "theEnd" : "portal");
   } catch(e) {
@@ -1214,6 +1219,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     dims.restorePlayer(record);
     if (record.wholeSave) dims.warmStored({ id: rootIdOf(record), wholeSave: record.wholeSave }, dimensionOf(record)); // stored-column index for /spreadplayers and portal peeks (background)
     startPrefetch();
+    if (world.dimension && (navigator.hardwareConcurrency ?? 4) >= 4) { const root = worlds.find((w) => w.id === rootIdOf(record)); if (root) presolveWorld({ ...root, dimension: 0 }); } // the Overworld's spawn walk and resident cell are built while this dimension is played, so a return does not wait for them (spawn-presolve.js parks them)
     // Restore World.rand before constructing the block runtimes that share it.
     weather = new Weather().restore(record.weather).restoreSimulation(record[simulationKey(world.dimension)]);
     if (world.dimension) weather.awayOverworld(record); // the Overworld keeps its weather timers running while the player is in the Nether/End
@@ -1223,7 +1229,10 @@ async function launch(record, prepared, { slice = false } = {}) {
     hideBedScreen();
     bedSleep.restore(record.bed); // the spawn point; a saved sleeping state is resumed after the player is placed
     scene.setWorld(world, { defer: slice }); // from the title screen the column meshes are built in frame-sized slices below, behind the loading screen
-    if (slice) while (scene.buildLight(12)) await nextFrame(); // the light volume's flood runs in the same frame-sized slices (Scene.buildLight)
+    performance.mark?.('trip:setworld');
+    const yieldTask = taskPause(); // macrotask pauses between slices (steps.js), not a frame each
+    if (slice) while (scene.buildLight(12)) await yieldTask();
+    performance.mark?.('trip:lit');
     // Block light for canBlockFreeze/canSnowAt/melting is the scene's light volume.
     world.blockLight = (x, y, z) => scene.light.blockAt(x, y, z);
     world.fullLight = (x, y, z) => scene.light.level(x, y, z, 0); // World.getFullBlockLightValue (plant-light.js: mushrooms)
@@ -1544,7 +1553,13 @@ async function launch(record, prepared, { slice = false } = {}) {
     playerBody.reset(position, yaw, pitch);
     keys.clear();
     accumulator = 0;
-    if (slice) while (scene.buildPending(12)) await nextPaint();
+    performance.mark?.('trip:runtimes');
+    if (slice) while (scene.buildPending(12)) await yieldTask();
+    if (slice) { // the random-tick refcounts of the resident columns (WorldChunk.sectionTickCount, built on first use) are counted here, in slices, instead of in the first tick
+      const cols = [...world.chunks.values()];
+      for (let i = 0; i < cols.length;) { const end = performance.now() + 8; while (i < cols.length && performance.now() < end) cols[i++].sectionTickCount?.(0); await yieldTask(); }
+    }
+    performance.mark?.('trip:built');
     screen = "playing";
     gui.hide();
     $("#hud").classList.remove("hidden");
@@ -3057,7 +3072,7 @@ function startPrefetch() {
   if (!world.streaming || (world.noPrefetch && !world.dimension) || typeof Worker !== "function") return; // the worker builds Overworld terrain and, through DimensionWorld, Nether/End columns (batch 28)
   try {
     const spawn = () => new Worker(new URL("./streaming-worker.js", import.meta.url), { type: "module" });
-    streamPrefetch = new StreamPrefetch(world, spawn(), { ringPorts: Array.from({ length: Math.max(1, Math.min(3, (navigator.hardwareConcurrency ?? 4) - 3)) }, spawn) }); // the ring fills from extra workers (a Nether/End column 40-60 ms, an Overworld cell 1-2 s each)
+    streamPrefetch = new StreamPrefetch(world, spawn(), { ringSpawn: spawn, ringMax: Math.max(0, Math.min(3, (navigator.hardwareConcurrency ?? 4) - 3)) }); // the ring fills from extra workers made on demand and ended once it is full (a Nether/End column 40-60 ms, an Overworld cell 1-2 s each); none up to 3 cores
   } catch (e) {
     console.error(`streaming-generator: no worker, generating on the main thread: ${e.message}`);
   }
