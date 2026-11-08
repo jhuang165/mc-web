@@ -25,8 +25,10 @@ import { importScreen } from "./import-screen.js";
 
 const SOUND_KEYS = ["master", "music", "record", "weather", "block", "hostile", "neutral", "player", "ambient"];
 // Why each unavailable vanilla button is disabled here.
+export const MULTIPLAYER_ENABLED = false;
 export const UNAVAILABLE = {
   hardcoreDifficulty: "A hardcore world is locked to Hard difficulty.",
+  multiplayer: "Multiplayer is paused while the game is played locally.",
   online: "Minecraft Realms is an online Mojang service; this browser recreation has no account sign-in.",
   quit: "A web page cannot close its own tab. Close the tab to quit.",
   stream: "Twitch broadcasting was a desktop-only feature; a web page cannot stream.",
@@ -111,8 +113,9 @@ export function createMenus(gui, ctx) {
         g.text("Minecraft 1.7.10", L.version[0], L.version[1]);
         g.text("Copyright Mojang AB. Do not distribute!", L.copyright[0], L.copyright[1], { right: true });
         const b = L.buttons;
-        g.button(b.singleplayer, t("menu.singleplayer"), () => show(selectWorld()), { enabled: ctx.canSingleplayer?.() !== false, reason: 'Another tab owns local saves. Close it and reload for Singleplayer.' });
-        g.button(b.multiplayer, t("menu.multiplayer"), () => ctx.multiplayer());
+        g.button(b.singleplayer, t("menu.singleplayer"), () => show(selectWorld()), { reason: ctx.canSingleplayer?.() === false ? 'Another tab owns local saves. Close it and reload for Singleplayer.' : '' });
+        // Multiplayer is paused (2026-11-07): Singleplayer only. Set MULTIPLAYER_ENABLED to bring the dedicated-server screen back.
+        g.button(b.multiplayer, t("menu.multiplayer"), MULTIPLAYER_ENABLED ? () => ctx.multiplayer() : null, MULTIPLAYER_ENABLED ? {} : { reason: UNAVAILABLE.multiplayer });
         g.button(b.online, t("menu.online"), null, { reason: UNAVAILABLE.online });
         g.button(b.options, t("menu.options"), () => show(optionsScreen(mainMenu)));
         g.button(b.quit, t("menu.quit"), null, { reason: UNAVAILABLE.quit });
