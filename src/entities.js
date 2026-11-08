@@ -687,6 +687,11 @@ function savedAttributeFields(e, base) {
 // A mob the player can sit on from a save (level.dat Player.Riding, `playerRides`): EntityList.createEntityFromNBT + mountEntity accept any entity. Left
 // out are the chicken (its own seat maths, mob-riding.js seatPosition), the Ender Dragon, the Wither and the End crystal (no mount seat here).
 export const playerMountable = (e) => !!e && e.type !== "chicken" && e.type !== "ender_dragon" && e.type !== "wither" && e.type !== "ender_crystal" && (e.growingAge ?? 0) >= 0;
+// The slot of a held stack whose size fell to 0 or below is cleared (the native `setInventorySlotContents(currentItem, null)` after a use).
+function clearSpentStack(survival) {
+  const inv = survival.inventory, held = inv.held;
+  if (held && held.count <= 0) inv.main[inv.current] = null;
+}
 export class EntityWorld {
   constructor(world, saved, random = Math.random) {
     this.world = world;
@@ -1515,10 +1520,12 @@ export class EntityWorld {
     // Fire blocks and cactus act in moveEntity's tail (walk, block-collisions.js).
     e.burn = e.fire > 0 ? 1 : 0;
   }
+  // EntityAnimal.interact (leads2-reference.json sizes): the check is the held stack itself, whatever its size (a stack of size <= 0 still feeds);
+  // `--stackSize` and the emptying of a slot left at size <= 0 run outside Creative only.
   feed(e,id,survival){
-    if(!this.entities.includes(e)||e.health<=0||!BREED_ITEM[e.type]||id!==BREED_ITEM[e.type]||(!survival.creative&&!survival.count(id)))return false;
+    if(!this.entities.includes(e)||e.health<=0||!BREED_ITEM[e.type]||id!==BREED_ITEM[e.type]||(survival.inventory.held?.id!==id&&!survival.count(id)))return false;
     if(e.growingAge!==0||e.love>0)return false;e.love=600;
-    if(!survival.creative)survival.take(id);
+    if(!survival.creative){if(survival.inventory.held?.id===id)survival.inventory.decr(survival.inventory.current,1);else survival.take(id);}
     // EntityAnimal.func_146082_f: World.setEntityState(18), which the client shows as 7 hearts.
     if(this.fx){const t=ENTITY_TYPES[e.type];burst(this.fx,'heart',7,{x:e.x,y:e.y,z:e.z,width:t.width,height:t.height},entityRandom(e),0.5);}
     return true;
@@ -2462,8 +2469,9 @@ export class EntityWorld {
     const stack = survival.held, held = stack ? { id: stack.id, damage: stack.damage || 0, count: stack.count || 1 } : null;
     const creative = !!survival.creative, rand = entityRandom(e), box = { x: e.x, y: e.y, z: e.z, width: ENTITY_TYPES.wolf.width, height: ENTITY_TYPES.wolf.height };
     const out = wolfClick(e, held, ownerPresent(e), creative, rand), brain = this.ai.brain(e);
-    const take = (n) => { if (n > 0 && !creative) survival.inventory.decr(survival.inventory.current, n); };
-    take(out.consume);
+    const take = (n, spend = false) => { if (n > 0 && !creative) survival.inventory.decr(survival.inventory.current, n); if (spend && n > 0) clearSpentStack(survival); };
+    take(out.consume, true); // wolf and ocelot: `if (size <= 0) setInventorySlotContents(null)` follows the use in every mode (love's EntityAnimal path does not)
+    if (out.heal > 0 || out.status > 0) clearSpentStack(survival); // meat that heals, a bone that tames or fails: the emptied slot is cleared in Creative too (leads2-reference.json sizes)
     if (out.tamed || out.sitToggle) { brain.navigator.clearPathEntity(); brain.attackTarget = null; }
     // EntityTameable.func_70908_e: 7 hearts after taming (status 7) or 7 smoke after a failed bone (status 6).
     if (out.status && this.fx) burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5);
@@ -2490,8 +2498,9 @@ export class EntityWorld {
     const creative = !!survival.creative, rand = entityRandom(e), box = { x: e.x, y: e.y, z: e.z, width: ENTITY_TYPES.ocelot.width, height: ENTITY_TYPES.ocelot.height };
     const brain = this.ai.brain(e), p = this.ai.player, worldRand = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
     const out = ocelotClick(e, held, { isOwner: ownerPresent(e), creative, tempting: !!brain.temptRunning?.(), distSq: brain.distSq(p), rand, worldRand });
-    const take = (n) => { if (n > 0 && !creative) survival.inventory.decr(survival.inventory.current, n); };
-    take(out.consume);
+    const take = (n, spend = false) => { if (n > 0 && !creative) survival.inventory.decr(survival.inventory.current, n); if (spend && n > 0) clearSpentStack(survival); };
+    take(out.consume, true); // wolf and ocelot: `if (size <= 0) setInventorySlotContents(null)` follows the use in every mode (love's EntityAnimal path does not)
+    if (out.status > 0) clearSpentStack(survival); // a fish that tames or fails: the emptied slot is cleared in Creative too (leads2-reference.json sizes)
     if (out.tamed || out.sitToggle) { brain.navigator.clearPathEntity(); brain.attackTarget = null; }
     // EntityTameable.func_70908_e: 7 hearts after taming (status 7) or 7 smoke after a failed fish (status 6).
     if (out.status && this.fx) burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5);

@@ -89,6 +89,7 @@ function payload(state,ox,oz,report,blockAt) {
   {const attributes=livingAttributesNbt(e,name);if(attributes)n.Attributes=attributes;} // EntityLivingBase.writeEntityToNBT: the full native list per class with the modeled modifiers (mob-attribute-list.js, probed)
   n.PersistenceRequired=byte(e.persistent?1:0);n.Leashed=byte(e.leash?1:0);
   if(e.leash?.knot)n.Leash=comp({X:int(e.leash.knot.x+ox),Y:int(e.leash.knot.y),Z:int(e.leash.knot.z+oz)});
+  else if(e.leash?.holder==='mob'&&e.leash.holderUuid)n.Leash=tag(NBT.COMPOUND,playerLeashTag(e.leash.holderUuid)); // another mob holds: its UUID (leads2-reference.json)
   else if(e.leash)n.Leash=tag(NBT.COMPOUND,playerLeashTag(report.playerUuid??exportPlayerUuid({}))); // the holder is the local player: its exported UUID (owner-links.js)
   // EntityLiving.writeEntityToNBT: CanPickUpLoot, Equipment (five compounds: held, boots, leggings, chestplate, helmet; an empty slot is an empty compound) and
   // DropChances (five floats) for every mob, then Entity.writeToNBT's PortalCooldown (the live Entity.timeUntilPortal). mob-gear-nbt-reference.json.

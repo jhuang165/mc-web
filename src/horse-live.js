@@ -241,7 +241,7 @@ export function installHorse(EntityWorld) {
     const out = H.interactHorse(h, id, { sneak: !!ctx.sneak });
     if (!out.result) return false;
     apply(e, out.horse);
-    if (out.action === "rear") { this.horseRear(e, true); }
+    if (out.action === "rear") { this.horseRear(e, true); if (!creative && stack && stack.count <= 0) survival.inventory.main[survival.inventory.current] = null; /* interactWith destroys a spent held stack */ }
     else if (out.action === "chest") {
       take(1);
       this.events.push({ sound: "mob.chickenplop", volume: 1, pitch: f(1 + f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2))), position: { x: e.x, y: e.y, z: e.z } });
