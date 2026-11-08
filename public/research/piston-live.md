@@ -72,3 +72,32 @@ Limits (remaining):
 - Dropped items, TNT, orbs and falling blocks still use the body copy, not their own move.
 - Riders follow on their next tick.
 - Stored blocks outside the probed lists remain unverified.
+
+## Batch 25 (pistons3)
+
+- Pushes now run inside each `TileEntityPiston.updateEntity`, in tile-list order (`redstone.js` tile update calls `w.pistonPush`). Entities are taken in `World.getEntitiesWithinAABBExcludingEntity` order: chunk, then slice, then list. Eight `order-*` scenarios match natively, and they differ when the pushes are deferred to after the loop (the verifier checks this). The cell range starts at `floor(minY) - 1`.
+- Player push: the moveEntity tail now runs, covering cactus and fire hurts, the fire counter, webs and the fizz (`player-environment.js` `playerMoveTail`). A landing deals fall damage (`landPlayer`).
+  - This is an approximation. Native `EntityPlayerMP.updateFallState` is a no-op, so the server applies the fall later from client packets. The port applies it at the push.
+- Dropped items, primed TNT, falling blocks and XP orbs now move through their own move:
+  - items use `ItemEntities.push`, with the noClip set by their last tick's pushOutOfBlocks and their inWater;
+  - orbs use `ExperienceOrbs.move`;
+  - TNT and falling blocks run moveEntity with step 0.
+  - A noClip item keeps its onGround (javap `sa.d`). Items now record isCollidedHorizontally.
+- New native records:
+  - live-items-pushed (a wall, a noClip item through stone, cactus);
+  - live-tnt-sand-orb;
+  - live-items-lifted-boat-item (a boat blocked by an item);
+  - live-cart-detector-rail (two carts pushed onto detector rails, which power through the cart's move tail; the `watch` event records the rail block and metadata);
+  - live-pigs-on-lifted-wall-gate;
+  - odd-block3-* (33 more stored ids or metadata values);
+  - odd-block3-beside-stone-* (wall, panes, bars).
+- Stored-block findings:
+  - A cobblestone wall's pool box reads its neighbours at the moving cell (`collisionBounds`).
+  - Glass panes, stained panes and iron bars come out as the full cube even beside a stone. BlockPane has no pool override, so the box comes from stale shared bounds.
+- Verifier: 175 scenarios pass.
+
+Limits (remaining):
+- Pane, fence and carpet pool boxes depend on stale shared bounds. The port uses the fresh-JVM values.
+- Port items have no fallDistance. Falling blocks' own tick still uses the default step.
+- `structure-simulation.js` vehicle blockers do not use fround widths and ignore items.
+- Riders follow on their next tick. Stored blocks outside the probed lists remain unverified.
