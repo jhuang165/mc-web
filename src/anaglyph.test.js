@@ -24,3 +24,30 @@ test('upload hook converts typed-array uploads only while on, and never render-t
   assert.equal(calls.pop()[9], null);
   assert.equal(installAnaglyphUpload(gl).state, state);
 });
+
+import { readFileSync } from 'node:fs';
+import { meshAnaglyph, anaglyphMultiplier } from './anaglyph.js';
+const colorsRef = JSON.parse(readFileSync(new URL('../public/research/anaglyph-colors-reference.json', import.meta.url)));
+
+test('RenderBlocks colour multipliers convert like the native float expression, only while meshAnaglyph is on', () => {
+  for (const { rgb, out } of colorsRef.multipliers) {
+    assert.deepEqual(anaglyphMultiplier(rgb, true), out.map(Math.fround), rgb.toString(16));
+    assert.deepEqual(anaglyphMultiplier(rgb, false), [rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255].map((v) => Math.fround(v / 255)));
+  }
+  assert.equal(meshAnaglyph.on, false);
+  assert.deepEqual(anaglyphMultiplier(0xFF0000), [1, 0, 0]);
+  meshAnaglyph.on = true;
+  try { assert.deepEqual(anaglyphMultiplier(0xFFFFFF), [1, 1, 1]); assert.ok(Math.abs(anaglyphMultiplier(0xFF0000)[1] - 0.3) < 1e-6); } finally { meshAnaglyph.on = false; }
+});
+
+test('sunrise fan: only the centre vertex converts, the rim keeps the raw rgb', async () => {
+  const { anaglyphFog } = await import('./post-shaders.js');
+  for (const { in: s, centre, rim } of colorsRef.sunrise) {
+    assert.deepEqual(anaglyphFog(s), centre.map(Math.fround));
+    assert.deepEqual(rim, s.slice(0, 3));
+  }
+});
+
+test('the native reader inventory lists the 13 RenderBlocks sites', () => {
+  assert.equal(Object.keys(colorsRef.readers['EntityRenderer.anaglyphEnable (blt.a, static)'].readers[0].methods).length, 13);
+});

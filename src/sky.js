@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { starQuads, mhSin } from "./lighting.js";
 import { buildEndSky } from "./dimension-render.js";
 import { mediaGeneration, versioned } from "./media-version.js";
+import { anaglyphFog } from "./post-shaders.js";
 
 const additive = { transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide };
 
@@ -93,7 +94,7 @@ gl_FragColor=vec4(c,1.);}`,
   // `state`: celestial angle, sky/fog colours (0-1), sunrise RGBA or null,
   // star brightness, moon phase, camera height above the horizon, far plane.
   // `rain` is getRainStrength: renderSky fades the sun, moon and stars by 1 - rain.
-  update({ angle, sky, fog, sunrise, stars, moonPhase, aboveHorizon, far, underwater = false, rain = 0 }) {
+  update({ angle, sky, fog, sunrise, stars, moonPhase, aboveHorizon, far, underwater = false, rain = 0, anaglyph = false }) {
     const u = this.dome.material.uniforms;
     u.sky.value.set(...sky);
     u.fog.value.set(...fog);
@@ -110,7 +111,9 @@ gl_FragColor=vec4(c,1.);}`,
         p = this.fan.geometry.attributes.position, c = this.fan.geometry.attributes.color, v = new THREE.Vector3();
       v.set(0, 100, 0).applyMatrix4(m);
       p.setXYZ(0, v.x, v.y, v.z);
-      c.setXYZW(0, sunrise[0], sunrise[1], sunrise[2], sunrise[3]);
+      // RenderGlobal.renderSky (bma.a, @566): anaglyph converts only the centre vertex colour; the rim vertices keep the raw RGB at alpha 0.
+      const centre = anaglyph ? anaglyphFog(sunrise) : sunrise;
+      c.setXYZW(0, centre[0], centre[1], centre[2], sunrise[3]);
       for (let j = 0; j <= 16; j++) {
         const a = (j * Math.PI * 2) / 16, s = Math.sin(a), co = Math.cos(a);
         v.set(s * 120, co * 120, -co * 40 * sunrise[3]).applyMatrix4(m);

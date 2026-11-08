@@ -1,7 +1,8 @@
 // 3D Anaglyph at the native conversion points (TextureUtil.anaglyphColor, bqi.a(int[]), applied to every texture upload;
 // RenderGlobal/EntityRenderer sky, cloud and fog colours). The eye merge is then a pure channel mask (eye 0 -> G,B; eye 1 -> R).
-// Not ported: RenderBlocks vertex colours (the 13 blt.a sites), the FontRenderer colour table, and the DOM GUI.
-import { anaglyphColor } from "./post-shaders.js";
+// RenderBlocks vertex colours (the 13 blt.a sites) convert the block colour multiplier while the chunk mesher runs (meshAnaglyph);
+// the sunrise fan centre converts in sky.js. Not ported: the FontRenderer colour table (bbu constructor) and the DOM GUI.
+import { anaglyphColor, anaglyphFog } from "./post-shaders.js";
 
 // bqi.a(int[]) on RGBA bytes in place: R' = (30r+59g+11b)/100, G' = (30r+70g)/100, B' = (30r+70b)/100, integer division, alpha kept.
 export function anaglyphRgba(d) {
@@ -12,6 +13,16 @@ export function anaglyphRgba(d) {
   return d;
 }
 export { anaglyphColor };
+
+// blt.a (EntityRenderer.anaglyphEnable) is set to GameSettings.anaglyph at the top of each render pass; RenderBlocks reads it at 13 sites to
+// convert the colour multiplier before the face shade is applied. The mesher consults this flag, and scene.js remeshes every chunk when
+// it changes. Paths that never read it (renderBlockLiquid water tint, vines, lily pads, redstone wire) keep their raw tint.
+export const meshAnaglyph = { on: false };
+// RenderBlocks conversion of a 0xRRGGBB colour multiplier, as the float triple it feeds the tessellator.
+export function anaglyphMultiplier(color, on = meshAnaglyph.on) {
+  const f = Math.fround, rgb = [f((color >> 16 & 255) / 255), f((color >> 8 & 255) / 255), f((color & 255) / 255)];
+  return on ? anaglyphFog(rgb) : rgb;
+}
 
 // Wraps texImage2D / texSubImage2D on a WebGL context so uploads are converted while `state.on` is true. Render-target
 // allocations (null data) pass through. Sources that cannot be read (cross-origin, video) pass through unconverted.
