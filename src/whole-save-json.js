@@ -23,6 +23,7 @@ export function baseToJson(record) {
     x: record.x, z: record.z, v: record.v, t: !!record.terrainPopulated, l: !!record.lightPopulated,
     biomes: record.biomes ? toBase64(Uint8Array.from(record.biomes)) : null,
     sections: record.sections.map((s) => [s.s, toBase64(s.blocks), toBase64(s.meta)]),
+    ...(record.orig?.length ? { o: Array.from(record.orig) } : {}),
   };
 }
 // Validated like a stored column (decodeBaseColumn throws on a damaged one); `world` is the new owner key.
@@ -32,6 +33,7 @@ export function baseFromJson(world, json) {
     world, x: json.x, z: json.z, v: BASE_VERSION,
     sections: json.sections.map((s) => ({ s: s?.[0], blocks: fromBase64(String(s?.[1])), meta: fromBase64(String(s?.[2])) })),
     biomes: json.biomes ? fromBase64(json.biomes) : null, terrainPopulated: json.t !== false, lightPopulated: !!json.l,
+    ...(json.o === undefined ? {} : { orig: Array.from(json.o) }),
   };
   decodeBaseColumn(record);
   return record;

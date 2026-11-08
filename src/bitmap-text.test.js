@@ -53,3 +53,25 @@ test("entity names: custom name first, then entity.<EntityList>.name, English fa
   assert.equal(entityDisplayName({ type: "wither", customName: "Withie" }), "Withie");
   assert.equal(entityDisplayName("ender_crystal"), "Ender Crystal");
 });
+
+test("§ colours come from the FontRenderer table: native gold shadow, unknown code = white with styles cleared, anaglyph conversion", async () => {
+  const { textHtml } = await import("./menu-ui.js");
+  const { setFontAnaglyph } = await import("./font-renderer.js");
+  const gold = textHtml("§6x", 0xffffff);
+  assert.match(gold, /color:#ffaa00;--sh:#2a2a00/); // entry 22 = (170,170,0)/4: the +85 red is entry 6 only
+  assert.match(textHtml("§nu§zq", 0xff0000), /color:#ffffff[^>]*>q/); // §z: indexOf -1 < 16 -> reset + colour 15
+  assert.doesNotMatch(textHtml("§nu§zq", 0xff0000).split("§")[0].split("</span>")[1] ?? "", /tu/);
+  setFontAnaglyph(true);
+  try {
+    assert.match(textHtml("§cx", 0xffffff), /color:#888888;--sh:#222222/); // (255,85,85) -> (136,136,136); shadow = that / 4
+  } finally { setFontAnaglyph(false); }
+  assert.match(textHtml("§cx", 0xffffff), /color:#ff5555/);
+});
+
+test("§k: random-capable runs are re-picked spans, nothing changes with the unicode flag", async () => {
+  const { textHtml } = await import("./menu-ui.js");
+  const html = textHtml("§kabc d", 0xffffff);
+  assert.match(html, /class="kr" style="[^"]*" data-k="abc d" data-b="0"/);
+  font.unicode = true;
+  try { assert.doesNotMatch(textHtml("§kabc", 0xffffff), /kr/); } finally { font.unicode = false; }
+});

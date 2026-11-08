@@ -12,16 +12,17 @@ import { javaSeed } from "./java-world.js";
 import { JavaRandom } from "./java-random.js";
 import { materialSolid } from "./plants.js";
 import { BED, BED_DIR, isBedHead } from "./bed.js";
-import { readChunkEdits } from "./world-storage.js";
+import { readChunkEdits, listBaseColumns, readBaseColumns } from "./world-storage.js";
+import { buildStoredIndex } from "./stored-peek.js";
 import { restoreImportedFortress } from "./fortress-restore.js";
 import { drain, runSteps } from "./steps.js";
-import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf, portalCooldown, readPlayerPortalState } from "./dimensions.js";
+import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf, actualHeight, portalCooldown, readPlayerPortalState } from "./dimensions.js";
 import { EntityPortals, placeAfterTravel, POS_Y, mobYawToMc, mcToMobYaw } from "./entity-portal.js";
 import { ringEntityActive } from "./streaming-ticks.js";
 import { LEAD_ITEM } from "./horse-gear.js";
 
 // Per-dimension runtime state: everything main.js's save() writes that is keyed by block coordinates or holds entities.
-export const DIM_KEYS = ["drops", "projectiles", "eyes", "rockets", "fishing", "thrownPotions", "fireballs", "arrows", "tnt", "fluidTicks", "fireTicks", "redstone", "pistons", "commandBlocks", "musicTiles", "entities", "villages", "farms", "pots", "xpOrbs", "falling", "fallingTicks", "spawners", "minecarts", "boats", "hanging", "signs", "skulls", "beacons", "populatedColumns", "containerScope", "editSequence", "dragonSpawned"];
+export const DIM_KEYS = ["drops", "projectiles", "eyes", "rockets", "fishing", "thrownPotions", "fireballs", "arrows", "tnt", "fluidTicks", "fireTicks", "redstone", "pistons", "commandBlocks", "musicTiles", "entities", "villages", "farms", "pots", "xpOrbs", "falling", "fallingTicks", "spawners", "minecarts", "boats", "hanging", "signs", "skulls", "beacons", "populatedColumns", "containerScope", "editSequence", "dragonSpawned", "simulation"];
 // Tile entities that survival.serialize() keeps in the player record, by block coordinate.
 export const TILE_KEYS = ["furnaces", "chests", "dispensers", "brewing", "hoppers"];
 const VIEW_ONLY = new Set(["id", "rootId", "chunked", "biome", "edits", "runtimeChunked", "dimensions", "dimension", "transit", "portalArrivals", "pendingArrivals"]);
@@ -60,7 +61,7 @@ export function rulesOf(world) {
   const d = world?.dimension ?? OVERWORLD, p = providerOf(d);
   return {
     dimension: d,
-    waterEvaporates: p.hasNoSky, // ItemBucket.a(ahb,III)Z bytecode: ahb.t.f (hasNoSky, Nether only) with water -> random.fizz + smoke, no block
+    waterEvaporates: p.isHellWorld, // ItemBucket.a(ahb,III)Z bytecode: ahb.t.f (isHellWorld, Nether only) with water -> random.fizz + smoke, no block
     bedExplodes: !p.canRespawnHere, // BlockBed.onBlockActivated: !provider.canRespawnHere() || biome == hell
     compassSpins: d !== OVERWORLD, // ItemCompass/TextureCompass: !worldProvider.isSurfaceWorld
     clockSpins: d !== OVERWORLD, // ItemClock/TextureClock: !worldProvider.isSurfaceWorld
@@ -91,7 +92,7 @@ export class DimensionLive {
   constructor(host) {
     this.host = host; this.state = new PortalState(); this.busy = false; this.overlayAmount = 0; this.writes = [];
     this.portals = new EntityPortals(); this.peeks = new Map(); this.queue = Promise.resolve(); this.flights = 0;
-    this.readEdits = readChunkEdits; this.onDragonSpawn = () => {}; this.quiet = false; this.overlay = null; this.trigger = false;
+    this.readEdits = readChunkEdits; this.listBases = listBaseColumns; this.readBases = readBaseColumns; this.storedIndexes = new Map(); this.onDragonSpawn = () => {}; this.quiet = false; this.overlay = null; this.trigger = false;
   }
   // main.js openWorld hooks ------------------------------------------------------------
   // A record saved while the player was in a dimension opens as that dimension's view.
@@ -122,8 +123,9 @@ export class DimensionLive {
     const inbox = record.rootId ? record.pendingArrivals : record.portalArrivals?.[0];
     if (edits) for (const [x, y, z, id, meta] of inbox?.writes ?? []) edits.set(`${x},${y},${z}`, id | (meta << 8)); // portals built for travelling mobs
     const world = prepared.streaming ? new TerrainPeek(prepared, edits ?? new Map()) : new LivePeek(prepared);
-    world.dimension = to; world.actualHeight = providerOf(to).hasNoSky ? 128 : 256;
+    world.dimension = to; world.actualHeight = actualHeight(to);
     world.seed = javaSeed(record.seed);
+    if (prepared.streaming && (record.wholeSave || record.rootId)) world.stored = await this.warmStored(record.rootId ? this.host.worlds?.().find((w) => w.id === record.rootId) ?? record : record, to);
     const e = { x: tt.x, y: tt.y, z: tt.z, vx: 0, vy: 0, vz: 0, yaw: tt.yaw, pitch: 0, teleportDirection: t.dir ?? 0 };
     const teleporter = new Teleporter(world, { isSolid: solidId, random: new JavaRandom(world.seed) });
     if (warm && !prepared.noPrefetch) { // (Nether/End peeks read cheap terrain, and their window is built after the arrival) the columns the search and the portal-site scan will read: the window round the target and every saved portal in reach
@@ -201,6 +203,28 @@ export class DimensionLive {
     this.flights++;
     this.queue = this.queue.then(() => this.deliver(rootId, from, kind, rec, mc, r.arg, leashed)).catch(() => {}).then(() => { this.flights--; });
   }
+  // The stored-column index (stored-peek.js) of an imported whole save's dimension d, built once per world: null for a world that
+  // holds no stored columns. Concurrent callers share the one build.
+  storedIndex(root, d) {
+    if (!root?.wholeSave) return Promise.resolve(null);
+    const key = `${root.id}:${d}`;
+    let p = this.storedIndexes.get(key);
+    if (!p) {
+      const world = d === OVERWORLD ? root.id : viewId(root.id, d);
+      p = buildStoredIndex({ list: () => this.listBases(world), read: (cols) => this.readBases(world, cols), marker: GAME_IDS.portal })
+        .then((index) => (index.tops.size ? index : null)).catch(() => null);
+      this.storedIndexes.set(key, p);
+    }
+    return p;
+  }
+  // /spreadplayers' top block + 1 of a stored column that is not resident: synchronous, so it reads the finished index only
+  // (undefined while it builds or for a column the save does not store).
+  storedTop(root, d, x, z) { return this.storedDone?.get(`${root?.id}:${d}`)?.topY(x, z); }
+  async warmStored(root, d) {
+    const index = await this.storedIndex(root, d);
+    if (index) (this.storedDone ??= new Map()).set(`${root.id}:${d}`, index);
+    return index;
+  }
   // Teleporter state per target dimension, kept while the player stays in the loaded one.
   async peekFor(root, to) {
     const key = `${root.id}:${to}`;
@@ -223,7 +247,8 @@ export class DimensionLive {
         for (const [x, y, z, id, meta] of writes) peek.preset(x, y, z, id, meta);
       }
     }
-    peek.dimension = to; peek.actualHeight = providerOf(to).hasNoSky ? 128 : 256; peek.seed = javaSeed(root.seed);
+    peek.dimension = to; peek.actualHeight = actualHeight(to); peek.seed = javaSeed(root.seed);
+    if (peek.portalColumns) peek.stored = await this.warmStored(root, to);
     peek.teleporter = new Teleporter(peek, { isSolid: solidId, random: new JavaRandom(peek.seed) });
     this.peeks.set(key, peek);
     return peek;
@@ -241,7 +266,7 @@ export class DimensionLive {
     if (kind === "mob") {
       delete rec.id;
       Object.assign(rec, { x: e.x, y, z: e.z, yaw: mcToMobYaw(e.yaw), portalMotion: { vx: e.vx, vy: e.vy, vz: e.vz } });
-      if (leashed) { delete rec.leash; inbox.drops.push({ stack: { id: LEAD_ITEM, count: 1, damage: 0 }, x: e.x, y, z: e.z, mx: 0, my: 0, mz: 0, age: 0, delay: 10, hover: 0 }); } // the holder is not in the new world
+      if (leashed) { delete rec.leash; inbox.drops.push({ stack: { id: LEAD_ITEM, count: 1, damage: 0 }, x: e.x, y, z: e.z, mx: Math.random() * 0.2 - 0.1, my: 0.2, mz: Math.random() * 0.2 - 0.1, age: 0, delay: 10, hover: 0 }); } // the holder is not in the new world; EntityItem's constructor motion
       inbox.entities.push(rec);
     } else if (kind === "item") {
       Object.assign(rec, { x: e.x, y, z: e.z, mx: e.vx, my: e.vy, mz: e.vz });

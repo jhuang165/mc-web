@@ -15,6 +15,7 @@
 //     glyph pixels; the pen advances (end + 1 - start) / 2 + 1 (a float, so the text can sit on half units).
 import { CHAR_TABLE } from "./font-table.js";
 import { DEFAULT_CHAR_WIDTHS } from "./font-widths.js";
+import { bidiReorder } from "./bidi.js";
 
 export { CHAR_TABLE };
 
@@ -38,11 +39,49 @@ export function readFontWidths(rgba, width, height) {
 }
 
 // The font state: the ascii.png widths, glyph_sizes.bin (an Int8Array of 65536 once loaded) and the unicode flag.
-export const font = { unicode: false, widths: DEFAULT_CHAR_WIDTHS, glyphSizes: null, version: 0 };
+export const font = { unicode: false, bidi: false, anaglyph: false, colorCode: null, bidiReorder, widths: DEFAULT_CHAR_WIDTHS, glyphSizes: null, version: 0 };
+
+/**
+ * The FontRenderer colour table (colorCode[32], bbu constructor, javap): entry i has intensity 85 * bit 3 added to 170 * bits 2, 1, 0
+ * (red, green, blue), +85 red for entry 6 (gold); with GameSettings.anaglyph (bbj.e) each entry becomes
+ * ((30r + 59g + 11b) / 100, (30r + 70g) / 100, (30r + 70b) / 100) in integer arithmetic; entries 16-31 (the shadow colours) are then divided
+ * by 4 per channel, so a shadow is the anaglyph colour over 4, not the anaglyph of the shadow colour. Only the constructor reads the
+ * flag (onResourceManagerReload reads the textures only): toggling Anaglyph later leaves the § colours as they were until a restart.
+ */
+export function colorCodeTable(anaglyph = false) {
+  const t = [];
+  for (let i = 0; i < 32; i++) {
+    const j = ((i >> 3) & 1) * 85;
+    let r = ((i >> 2) & 1) * 170 + j, g = ((i >> 1) & 1) * 170 + j, b = (i & 1) * 170 + j;
+    if (i === 6) r += 85;
+    if (anaglyph) { const r2 = Math.trunc((r * 30 + g * 59 + b * 11) / 100), g2 = Math.trunc((r * 30 + g * 70) / 100), b2 = Math.trunc((r * 30 + b * 70) / 100); r = r2; g = g2; b = b2; }
+    if (i >= 16) { r = Math.trunc(r / 4); g = Math.trunc(g / 4); b = Math.trunc(b / 4); }
+    t.push(((r & 255) << 16) | ((g & 255) << 8) | (b & 255));
+  }
+  return t;
+}
+font.colorCode = colorCodeTable(false);
+/** Fixes the § colour table for the session (FontRenderer construction reads GameSettings.anaglyph once, at startup). */
+export function setFontAnaglyph(on) { on = !!on; if (font.anaglyph !== on) { font.anaglyph = on; font.colorCode = colorCodeTable(on); changed(); } }
+/** The colour (0xRRGGBB) of a § code index 0-15; `shadow` selects the shadow table entry (index + 16). */
+export const colorOf = (index, shadow = false, state = font) => (state.colorCode ?? font.colorCode)[index + (shadow ? 16 : 0)];
+
+/**
+ * The §k pick of renderStringAtPos for a character drawn from ascii.png cell `index`: fontRandom.nextInt(256) is drawn until that
+ * cell has the same width, so the candidates are all 256 cells (accented letters, box drawing and the unused cells included), not
+ * just the printable ASCII ones. `nextInt(n)` is java.util.Random.nextInt (one draw per attempt, the shadow and normal passes share the stream).
+ */
+export function randomGlyphIndex(index, nextInt, widths = font.widths) {
+  let j;
+  do j = nextInt(256); while (widths[index] !== widths[j]);
+  return j;
+}
 const listeners = new Set();
 export const onFontChange = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 const changed = () => { font.version++; for (const fn of listeners) fn(); };
 export function setUnicodeFlag(on) { on = !!on; if (font.unicode !== on) { font.unicode = on; changed(); } }
+/** FontRenderer.setBidiFlag: set when the language is bidirectional (ar_SA, he_IL); drawString then reorders every string (bidi.js). */
+export function setBidiFlag(on) { on = !!on; if (font.bidi !== on) { font.bidi = on; changed(); } }
 export function setGlyphSizes(bytes) { font.glyphSizes = bytes ? new Int8Array(bytes.buffer ?? bytes, bytes.byteOffset ?? 0, 65536) : null; changed(); }
 export function setCharWidths(widths) { font.widths = widths ?? DEFAULT_CHAR_WIDTHS; changed(); }
 
@@ -95,11 +134,11 @@ export function unicodeGlyph(c, state = font) {
 }
 export const glyphPageUrl = (page) => versioned(`/media/1.7.10/font/unicode_page_${page.toString(16).padStart(2, "0")}.png`);
 
-/** The CSS inline-block for one unicode-page glyph (see menu-screens.css .ug); bold draws it twice, 1 unit apart (0.5 with the unicode flag, FontRenderer.renderStringAtPos) and advances 1 more. */
+/** The CSS inline-block for one unicode-page glyph (see menu-screens.css .ug); bold draws it twice, 1 unit apart (0.5 with the unicode flag, FontRenderer.renderStringAtPos) and advances 1 more. The pen moves by the integer part of the advance (renderStringAtPos: (int) f), only the underline and strikethrough bars use the float one. */
 export function glyphHtml(c, bold = false) {
   const g = unicodeGlyph(c);
   if (!g) return "";
-  const adv = g.advance + (bold ? 1 : 0), unit = (n) => `calc(${+n.toFixed(4)}*var(--u))`;
+  const adv = Math.trunc(g.advance + (bold ? 1 : 0)), unit = (n) => `calc(${+n.toFixed(4)}*var(--u))`;
   let inner = "";
   if (g.visible) {
     const base = `--p:url(${glyphPageUrl(g.page)});--mx:${unit(-g.x / 2)};--my:${unit(-g.y / 2)};width:${unit(g.w / 2)}`;

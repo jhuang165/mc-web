@@ -2,6 +2,7 @@
 // wolf-ai.js, the model animation wolf-renderer.js, and entities.js hooks these in (wolfTick, wolfInteract, ...).
 // Every rule here is checked against public/research/wolf-reference.json, which tools/probes/WolfProbe.java records
 // from the unchanged original classes. See public/research/wolves.md for the obfuscated names and the limits.
+import { ownerPresent } from "./owner-links.js";
 import { mhSin } from "./lighting.js";
 import { maxHealthOf } from "./mob-riding.js";
 const f = Math.fround;
@@ -91,7 +92,8 @@ export const attackStrength = (e) => (isTamed(e) ? 4 : 2);
 // which refuses the owner and anything with the owner's own owner.
 export function shouldAttackEntity(wolf, target) {
   if (target.type === "creeper") return false;
-  if (target.type === "wolf" && isTamed(target) && target.owner === wolf.owner) return false;
+  // wolf.getOwner() != owner: two ownerless (foreign-owned) wolves compare equal as null (probed attributes3 `foreign`).
+  if (target.type === "wolf" && isTamed(target) && (ownerPresent(target) ? ownerPresent(wolf) && target.owner === wolf.owner : !ownerPresent(wolf))) return false;
   return true;
 }
 // EntityWolf.canMateWith (a(wf)): another tamed wolf, neither sitting, both in love.

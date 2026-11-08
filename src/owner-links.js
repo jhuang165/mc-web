@@ -23,6 +23,12 @@ export const OWNED_TYPES = new Set(["wolf", "ocelot", "horse"]);
 // The UUID the exported Player carries: the imported one, else the offline-mode UUID of "Player" (the one stats/<uuid>.json already uses).
 export const exportPlayerUuid = (record) => (isUuid(record?.playerUuid) ? record.playerUuid.toLowerCase() : offlineUuid("Player"));
 
+// getOwner() (EntityTameable.func_152113_b -> World.func_152378_a): the owner is found among the world's players by UUID, so an owned animal whose
+// OwnerUUID is a foreign string (kept as `ownerUuid`) has no owner in this one-player world: getOwner() is null (probed attributes3 `foreign`).
+export const ownerPresent = (e) => !!e?.owner && !(typeof e.ownerUuid === "string" && e.ownerUuid);
+// The OwnerUUID text compared by EntityAITarget.isSuitableTarget (equals on func_152113_b): "player" stands for the local player's own UUID.
+export const ownerKey = (e) => (typeof e.ownerUuid === "string" && e.ownerUuid ? e.ownerUuid : e.owner ? "player" : "");
+
 // OwnerUUID text for a record: "" for an unowned one, else the foreign owner string kept from an import, else the player's UUID.
 export const ownerText = (e, ownerOwned, playerUuid) => (!ownerOwned ? "" : typeof e.ownerUuid === "string" && e.ownerUuid ? e.ownerUuid : playerUuid);
 
@@ -45,8 +51,9 @@ export function ownerFields(compound, type) {
 // Leash: { holder: "player", holderUuid } from UUIDMost/UUIDLeast.
 export function leashHolderUuid(compound) {
   const l = nbtGet(compound, "Leash", NBT.COMPOUND);
-  const most = l && nbtGet(l, "UUIDMost", NBT.LONG), least = l && nbtGet(l, "UUIDLeast", NBT.LONG);
-  return most !== undefined && least !== undefined && most !== null ? longsUuid(most, least) : undefined;
+  // Two long tags only (sw.bP uses hasKey(.., 4)); other tag types are no UUID.
+  if (!l || l.get("UUIDMost")?.type !== NBT.LONG || l.get("UUIDLeast")?.type !== NBT.LONG) return undefined;
+  return longsUuid(nbtGet(l, "UUIDMost", NBT.LONG), nbtGet(l, "UUIDLeast", NBT.LONG));
 }
 // The Leash compound of a record held by the player.
 export function playerLeashTag(playerUuid) {
@@ -58,9 +65,15 @@ export function playerLeashTag(playerUuid) {
 // (native: the holder is looked up by UUID and the lead drops). Returns the number of leads dropped.
 export function relinkMobs(mobs, playerUuid) {
   let dropped = 0;
-  for (const m of Array.isArray(mobs) ? mobs : []) {
+  const list = Array.isArray(mobs) ? mobs : [], byUuid = new Map();
+  // sw.bP searches every living entity by UUID, the first in the list winning: another mob can hold the lead (leads2-reference.json).
+  for (const m of list) if (isUuid(m?.uuid) && !(m.health <= 0) && !byUuid.has(m.uuid.toLowerCase())) byUuid.set(m.uuid.toLowerCase(), m);
+  for (const m of list) {
     if (m?.leash?.holderUuid !== undefined) {
-      if (isUuid(playerUuid) && m.leash.holderUuid.toLowerCase() !== playerUuid.toLowerCase()) { delete m.leash; dropped++; } else delete m.leash.holderUuid;
+      const u = m.leash.holderUuid.toLowerCase();
+      if (!isUuid(playerUuid) || u === playerUuid.toLowerCase()) delete m.leash.holderUuid;
+      else if (byUuid.has(u)) m.leash = { holder: "mob", holderUuid: u };
+      else { delete m.leash; dropped++; }
     }
     if (typeof m?.ownerUuid === "string" && isUuid(playerUuid) && m.ownerUuid.toLowerCase() === playerUuid.toLowerCase()) delete m.ownerUuid;
   }

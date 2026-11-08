@@ -30,6 +30,7 @@ import { structureDataFiles, fortressDataFile } from './structure-data.js';
 import { villageDocument } from './village.js';
 import { mapDataFiles } from './maps-nbt.js';
 import { decodeBaseColumn } from './whole-save-columns.js';
+import { spreadTicks } from './tile-ticks.js';
 import { javaProjectileToNbt } from './java-projectiles.js';
 import { statsExportFile } from './stats.js';
 import { DEFAULT_RULES } from './game-rules.js';
@@ -89,6 +90,7 @@ function payload(state,ox,oz,report,blockAt) {
   {const attributes=livingAttributesNbt(e,name);if(attributes)n.Attributes=attributes;} // EntityLivingBase.writeEntityToNBT: the full native list per class with the modeled modifiers (mob-attribute-list.js, probed)
   n.PersistenceRequired=byte(e.persistent?1:0);n.Leashed=byte(e.leash?1:0);
   if(e.leash?.knot)n.Leash=comp({X:int(e.leash.knot.x+ox),Y:int(e.leash.knot.y),Z:int(e.leash.knot.z+oz)});
+  else if(e.leash?.holder==='mob'&&e.leash.holderUuid)n.Leash=tag(NBT.COMPOUND,playerLeashTag(e.leash.holderUuid)); // another mob holds: its UUID (leads2-reference.json)
   else if(e.leash)n.Leash=tag(NBT.COMPOUND,playerLeashTag(report.playerUuid??exportPlayerUuid({}))); // the holder is the local player: its exported UUID (owner-links.js)
   // EntityLiving.writeEntityToNBT: CanPickUpLoot, Equipment (five compounds: held, boots, leggings, chestplate, helmet; an empty slot is an empty compound) and
   // DropChances (five floats) for every mob, then Entity.writeToNBT's PortalCooldown (the live Entity.timeUntilPortal). mob-gear-nbt-reference.json.
@@ -182,7 +184,14 @@ function payload(state,ox,oz,report,blockAt) {
  for(const {value:e} of state.spawners??[]) {const n={id:str('MobSpawner'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz)};for(const [k,v] of Object.entries(e))if(!['x','y','z','SpawnData','SpawnPotentials'].includes(k))n[k]=typeof v==='string'?str(v):short(v);if(e.SpawnData||e.SpawnPotentials){const s=makeSpawner(0,0,0);readSpawnerNBT(s,e);const w=spawnerPairs(s);for(const k of ['SpawnData','SpawnPotentials'])if(w[k])n[k]=pairTag(w[k]);}tiles.push(new Map(Object.entries(n)));}
  // TileEntityPiston.writeToNBT: blockId, blockData, facing, progress, extending (original ids; renderHead is not saved by Java).
  for(const w of state.pistons??[]){const e=w.value??w;tiles.push(new Map(Object.entries({id:str('Piston'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),blockId:int(e.block),blockData:int(e.meta),facing:int(e.facing),progress:float(e.progress??0),extending:byte(e.extending?1:0)})));}
- for(const name of ['fluidTicks','fireTicks','fallingTicks'])for(const {value:e} of state[name]??[]) {const o=toOriginal(e.block,0,{flowing:name==='fluidTicks'});if(o)ticks.push(new Map(Object.entries({i:int(o[0]),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),t:int(Math.max(-2147483648,Math.min(2147483647,e.delay))),p:int(0)})));}
+ // TileTicks (tile-ticks.js): {i, x, y, z, t, p} per pending tick, in tree order (t, p, then the list and its order); a fluid keeps the original id
+ // it was imported with (still lava 11 is not flowing lava 10), redstone ticks keep their original id and priority.
+ {const rows=[],clamp=v=>Math.max(-2147483648,Math.min(2147483647,v));
+  ['fluidTicks','fireTicks','fallingTicks','redstoneTicks'].forEach((name,sys)=>{for(const {value:e,order} of state[name]??[]){
+   const red=name==='redstoneTicks',o=red?[e.id,0]:e.orig!==undefined?[e.orig,0]:toOriginal(e.block,0,{flowing:name==='fluidTicks'});if(!o)continue;
+   rows.push({t:clamp(e.delay),p:red?(e.priority|0):0,sys,order:order??0,id:o[0],x:e.x,y:e.y,z:e.z});}});
+  rows.sort((a,b)=>a.t-b.t||a.p-b.p||a.sys-b.sys||a.order-b.order);
+  for(const r of rows)ticks.push(new Map(Object.entries({i:int(r.id),x:int(r.x+ox),y:int(r.y),z:int(r.z+oz),t:int(r.t),p:int(r.p)})));}
  return {entities,tileEntities:tiles,tileTicks:ticks};
 }
 // TileEntityEndPortal (id Airportal) has no fields besides x, y, z.
@@ -246,13 +255,19 @@ function regionSource(record, w) {
   const [x,z]=k.split(',').map(Number),mask=BigInt('0x'+hex);
   for(let i=0;i<64;i++)if(mask&(1n<<BigInt(i)))owned.add(`${x*8+(i>>3)},${z*8+(i&7)}`);
  }
+ // Live redstone pending ticks (redstone-live.js save): [x,y,z,id,time,priority,serial] with time on the engine's own clock; t is time - clock time.
+ {const rs=record.redstone;for(const list of [rs?.pending,rs?.deferred])for(const [i,e] of (Array.isArray(list)?list:[]).entries()){if(!Array.isArray(e)||![e[0],e[2],e[3],e[4]].every(Number.isFinite))continue;
+  const k=`${Math.floor(e[0]/16)},${Math.floor(e[2]/16)}`;if(!runtime.has(k))runtime.set(k,{});owned.add(k);
+  (runtime.get(k).redstoneTicks??=[]).push({order:e[6]??i,value:{x:e[0],y:e[1],z:e[2],id:e[3],delay:e[4]-(rs.time|0),priority:e[5]|0}});}}
+ // Ticks within 2 blocks of a chunk border are also saved in the neighbour (WorldServer.getPendingBlockUpdates box).
+ spreadTicks(runtime,owned,['fluidTicks','fireTicks','fallingTicks','redstoneTicks']);
  return {record,w,owned,runtime,baseId:record.id};
 }
 
 async function exportRegions({record,w,owned,runtime,baseId,live=false}, files, report, prefix, progress, readBases=null) {
  report.playerUuid??=exportPlayerUuid(record); // the owner and leash links point at the exported Player's UUID (owner-links.js)
  const ox=w.originX??0,oz=w.originZ??0,regions=new Map();
- const farms=new Map(record.farms??[]),fluidCells=new Set((record.fluidTicks?.entries??[]).map(e=>`${e.x},${e.y},${e.z}:${e.block}`));
+ const farms=new Map(record.farms??[]),litCells=new Set(record.redstone?.lit??[]),hasLit=Array.isArray(record.redstone?.lit),fluidCells=new Set((record.fluidTicks?.entries??[]).filter(e=>e.orig===undefined||e.orig===8||e.orig===10).map(e=>`${e.x},${e.y},${e.z}:${e.block}`));
  for(const k of [...owned].sort((a,b)=>{const [x,z]=a.split(',').map(Number),[u,v]=b.split(',').map(Number);return x-u||z-v;})) {
   const [cx,cz]=k.split(',').map(Number),resident=w.chunks.get(k);
   // Stored full column of a whole-save import (whole-save-columns.js): the saved cells, biomes and TerrainPopulated flag come back out. A live
@@ -260,7 +275,12 @@ async function exportRegions({record,w,owned,runtime,baseId,live=false}, files, 
   const stored=readBases&&baseId&&!(live&&resident)?(await readBases(baseId,[[cx,cz]]))[0]:null,base=stored?decodeBaseColumn(stored):null,
    source=base?{blocks:base.blocks,meta:base.metadata}:resident,generated=source?null:w.generateTerrainChunk(cx,cz),blocks=source?.blocks??generated.blocks,meta=source?.meta??generated.metadata,ids=new Int16Array(65536),metadata=new Uint8Array(65536),heights=new Int32Array(256),portals=[];
   for(let lx=0;lx<16;lx++)for(let lz=0;lz<16;lz++)for(let y=0;y<w.height;y++) {const i=(lx*16+lz)*w.height+y,v=w.chunkEdits.get(k)?.get((lx*16+lz)*256+y),id=v===undefined?blocks[i]:v%4096&255,m=v===undefined?meta[i]:(v%4096)>>8,x=cx*16+lx,z=cz*16+lz,key=`${x},${y},${z}`;
-   const o=toOriginal(id,m,{flowing:fluidCells.has(key+':'+id),moisture:farms.get(key),facing:record.player?.chests?.[key]?.facing,lit:(record.player?.furnaces?.[key]?.burn??0)>0});if(!o)throw new Error(`Unmapped block ${id}`);ids[(lx*16+lz)*256+y]=o[0];metadata[(lx*16+lz)*256+y]=o[1];if(id===149)portals.push([x+ox,y,z+oz]);if(lightOpacity(id)>0)heights[lx+lz*16]=y+1;}
+   const ov=v===undefined&&base?.overlay.size?base.overlay.get((lx*16+lz)*256+y):undefined,
+    // The stored exact original (whole-save-columns.js overlay) wins for a cell the runtime has not edited, except where runtime records own live state:
+    // a farmland whose tracked moisture moved off the default 7, a furnace with a tile record (lit follows its burn flag) and a repeater once the live
+    // redstone save lists lit repeaters (its powered state is side state, not the cell).
+    od=ov===undefined?-1:ov>>4,runtimeOwns=od===60?farms.has(key)&&farms.get(key)!==7:od===61||od===62?!!record.player?.furnaces?.[key]:od===93||od===94?hasLit:false,
+    o=ov!==undefined&&!runtimeOwns?[ov>>4,ov&15]:toOriginal(id,m,{flowing:fluidCells.has(key+':'+id),moisture:farms.get(key),facing:record.player?.chests?.[key]?.facing,lit:record.player?.furnaces?.[key]?.lit??(record.player?.furnaces?.[key]?.burn??0)>0,powered:hasLit?litCells.has(key):undefined});/* exact original: overlay first, see above */if(!o)throw new Error(`Unmapped block ${id}`);ids[(lx*16+lz)*256+y]=o[0];metadata[(lx*16+lz)*256+y]=o[1];if(id===149)portals.push([x+ox,y,z+oz]);if(lightOpacity(id)>0)heights[lx+lz*16]=y+1;}
   const chunk=Chunk.fromGeneration(ids,metadata,cx+ox/16,cz+oz/16);chunk.isTerrainPopulated=base?base.terrainPopulated:true;chunk.isLightPopulated=false;chunk.inhabitedTime=typeof record.inhabited==='number'?record.inhabited:0;
   for(let x=0;x<16;x++)for(let z=0;z<16;z++) {chunk.biomes[x+z*16]=base?.biomes?base.biomes[x+z*16]:w.biomeAt?.(cx*16+x,cz*16+z)?.id??1;chunk.heightMap[x+z*16]=heights[x+z*16];}
   const blockAt=(x,y,z)=>chunk.getBlock(x&15,y,z&15);

@@ -25,6 +25,9 @@ First person only (view 0, not sleeping), in the order fire, inside block, water
 - Fov: x 60 / 70 while the view block is water (hand 70, world option). Fixed this batch.
 - Fog: lava exp density 2.0 colour (0.6, 0.1, 0); water exp density 0.1 - 0.03 x Respiration, 0.05 with Water Breathing; water colour (0.02, 0.02, 0.2) + 0.2 x Respiration. Respiration and Water Breathing terms added this batch.
 
+## Batch 27 re-read of the overlay math (bly, ItemRenderer)
+Bytecode re-read of `bly.a(F,rf)` (inside block), `bly.c(F)` (water) and `bly.d(F)` (fire) against `fire-fx.js`: no differences found. Inside block: colour (0.1,0.1,0.1,0.5), blend not enabled (the alpha is ignored, `screen-overlays.js` draws it opaque), quad z -0.5, atlas tile of side 2. Water: colour (b,b,b,0.5) with b = `getBrightness`, blend 770/771 (separate alpha 1,0), scale 4, UV offset yaw/64 and pitch/64, z -0.5. Fire: alpha 0.9 (two quads), as `FIRE_OVERLAY`. Overlays draw between the hand and the anaglyph merge, so in anaglyph mode they render per eye. A browser pixel capture of underwater/pumpkin/fire was attempted (`artifacts/b27-atlas2/overlays.mjs`) but the scripted world did not put the camera inside water, so it is not evidence; the numbers above come from bytecode and the existing unit tests only.
+
 ## Remaining gaps
 - Water overlay tint is subtle under the fog; its pixel match is not compared with a native frame.
 - Punch-out fizz and flint and steel were checked by code and unit tests, not driven by live input.

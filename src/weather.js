@@ -38,6 +38,7 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 export const stopsPrecipitation = (b) => b !== 72 && b !== 73 && b !== 0 && b !== 20 && b !== SNOW_LAYER && b !== FIRE && b !== 59 && !isPlant(b);
 // Chunk.getPrecipitationHeight (apx.d): one above the topmost such block, or -1.
 export function precipitationHeight(world, x, z) {
+  if (world.ringReads && world.ringSink?.outside(x, z)) return world.ringSink.precipitation(x, z, stopsPrecipitation); // held ring column: per-column cache
   if (world.streaming ? !readable(world, x, z) : x < 0 || z < 0 || x >= SIZE || z >= SIZE) return -1;
   for (let y = (world.height ?? HEIGHT) - 1; y >= 0; y--) if (stopsPrecipitation(world.get(x, y, z))) return y + 1;
   return -1;
@@ -45,6 +46,7 @@ export function precipitationHeight(world, x, z) {
 // Chunk.canBlockSeeTheSky (apx.c): at or above the height map, which rests on
 // the topmost block with any light opacity (glass, torches and plants do not count).
 export function canSeeSky(world, x, y, z) {
+  if (world.ringReads && world.ringSink?.outside(x, z)) return y >= world.ringSink.light.heightAt(x, z); // held ring column: cached height map
   if (world.streaming ? !readable(world, x, z) : x < 0 || z < 0 || x >= SIZE || z >= SIZE) return false;
   let top = (world.height ?? HEIGHT) - 1;
   while (top >= 0 && lightOpacity(world.get(x, top, z)) === 0) top--;
@@ -70,6 +72,7 @@ export function strikeRule({ raining, sees, precipitation, y, temperature, canSp
   return canSpawn;
 }
 export function canLightningStrikeAt(weather, world, x, y, z) {
+  if (!weather.isRaining()) return false; // strikeRule's first test, before the column reads (ahb.y begins with isRaining)
   return strikeRule({
     raining: weather.isRaining(),
     sees: canSeeSky(world, x, y, z),
@@ -137,6 +140,11 @@ export class LightningBolt {
   }
 }
 
+// Where a record keeps the saved World.rand / updateLCG of a dimension. Natively every WorldServer constructs its own unseeded `rand` and
+// `updateLCG` (ahb constructors, dimension-rules-reference.json), so the Nether and the End draw from streams of their own and never advance
+// the Overworld's. `worldRandom` is the Overworld's (unchanged); the others live in the per-dimension state key `simulation` (DIM_KEYS).
+export const simulationKey = (dimension = 0) => (dimension ? "simulation" : "worldRandom");
+
 export class Weather {
   // `random` is World.rand (timers and the lightning roll); `lcg` is World.updateLCG.
   constructor({ random = new JavaRandom(Math.floor(Math.random() * 2 ** 48)), lcg = new JavaRandom(Math.floor(Math.random() * 2 ** 48)).nextInt() } = {}) {
@@ -173,6 +181,18 @@ export class Weather {
       && this.random.restore(data.random)) this.lcg = data.lcg;
     return this;
   }
+  // The Overworld while the player is in another dimension. Natively MinecraftServer.updateTimeLightAndEntities ticks every WorldServer
+  // each tick whether or not a player is in it, so World.updateWeather (ahb.o) keeps rolling the Overworld's rain/thunder timers and
+  // strengths (the Nether/End share its WorldInfo through DerivedWorldInfo and skip it, hasNoSky). `overworld` is a Weather holding
+  // the Overworld's timers and `worldRandom` stream; tickDimension advances it and the save paths write it back (weather.md).
+  awayOverworld(record) {
+    this.overworld = new Weather().restore(record?.weather).restoreSimulation(record?.worldRandom);
+    return this;
+  }
+  // The WorldInfo fields of the Overworld: this world's own, or the away copy while the player is in another dimension. The away copy
+  // also keeps its live strengths (browser continuity; the native NBT keeps only the four fields and restarts at full strength).
+  saveWeather() { return this.overworld ? { ...this.overworld.save(), rain: this.overworld.rain, thunder: this.overworld.thunder } : this.save(); }
+  saveOverworldSimulation() { return (this.overworld ?? this).saveSimulation(); }
   // World.calculateInitialWeather (ahb.a): a raining world starts at full rain,
   // and at full thunder when it is thundering too.
   restore(data) {
@@ -185,6 +205,10 @@ export class Weather {
     this.prevRain = this.prevThunder = 0;
     this.rain = this.raining ? 1 : 0;
     this.thunder = this.raining && this.thundering ? 1 : 0;
+    // A save written while the Overworld ticked in the background keeps its ramping strengths (a fade in progress), not a restart at full.
+    const unit = (v) => Number.isFinite(v) && v >= 0 && v <= 1;
+    if (unit(data.rain)) this.rain = data.rain;
+    if (unit(data.thunder)) this.thunder = data.thunder;
     return this;
   }
   // World.getRainStrength / getWeightedThunderStrength (ahb.j, ahb.h).
@@ -239,9 +263,10 @@ export class Weather {
   // lay a snow layer there while it is raining), then three random block ticks (updateLCG
   // picks x, z, y) in every 16-high section that has a randomly ticking block.
   tickChunk(world, cx, cz) {
-    // The cave mood sound (cave-ambience.js) comes first in WorldServer's chunk loop; main.js installs it.
-    // Chunks outside the resident window never hear it (the sound needs the player within 8 blocks), and take no mood roll here.
-    const mood = world.ringSink && !world.isTicking(cx * 16, cz * 16) ? null : this.mood?.chunk(world, cx, cz);
+    // The cave mood sound (cave-ambience.js) comes first in WorldServer's chunk loop for every chunk of activeChunkSet, ring chunks included
+    // (World.func_147467_a is server-side: it draws while ambientTickCountdown is 0 and plays only for a player within 8 blocks, so a
+    // ring chunk takes its draws and never a sound; dimension-ticks-reference.json). main.js installs it.
+    const mood = this.mood?.chunk(world, cx, cz);
     if (mood) this.events.push(mood);
     this.rollLightningChunk(world, cx, cz);
     const bx = cx * 16, bz = cz * 16, light = lightOf(world);
@@ -272,7 +297,7 @@ export class Weather {
         if (world.ringSink && !world.isTicking(x, z) && !ringRandomActive(world, x, z, randomTickReach(b))) continue; // its surroundings are not held yet
         // Blocks ticked elsewhere (fire and still lava, in fire.js) take their updateTick here.
         if (this.blockTick?.(x, y, z, b)) continue;
-        const melt = meltResult(b, light(x, y, z));
+        const melt = meltResult(b, light(x, y, z), !!world.isHell); // BlockIce.updateTick: air instead of water where provider.isHellWorld (the Nether)
         if (melt) { this.apply(world, x, y, z, melt.block, melt.meta); if (melt.drops) this.drop?.(world, x, y, z, melt.drops); }
       }
     }
@@ -293,6 +318,15 @@ export class Weather {
     for (let x = Math.max(0, cx - radius); x <= Math.min(n - 1, cx + radius); x++)
       for (let z = Math.max(0, cz - radius); z <= Math.min(n - 1, cz + radius); z++) out.push([x, z]);
     return out;
+  }
+  // One game tick of a dimension that has no weather (the Nether and the End: World.updateWeatherBody does nothing where
+  // provider.hasNoSky, and WorldServer.func_147456_g has no provider test, so its chunk loop runs unchanged): the mood countdown and the
+  // per-chunk steps (the lightning and ice rolls draw but find no biome that rains, snows or freezes) and the three random block ticks.
+  tickDimension(world, player) {
+    this.struck.length = 0;
+    this.overworld?.updateWeather(); // the Overworld's timers keep running while the player is away
+    this.mood?.tick();
+    this.tickChunks(world, Weather.activeChunks(player?.x ?? SIZE / 2, player?.z ?? SIZE / 2, 10, world));
   }
   // One game tick. `world` may be null (timers only).
   tick(world = null, player = null) {

@@ -60,8 +60,9 @@ export function createCommandHost(env) {
       const stack = makeStack(item.id, count, item.damage);
       const ignored = tag ? readItemTag(stack, tag) : [];
       const name = env.stackName(stack);
-      survival().inventory.add(stack);
-      if (stack.count > 0) env.dropStack(stack); // what does not fit lands at the player's feet
+      // CommandGive (bytecode-read, neg-stacks3-reference.json give): EntityPlayer.func_146097_a(stack, false, false) drops the whole
+      // stack along the view, then sets the pickup delay to 0 and the owner (func_145797_a) to the player. It never touches the inventory.
+      env.giveDrop(stack, this.name);
       env.refreshInventory();
       return { name: "[" + name + "]", ignored };
     },
@@ -119,9 +120,11 @@ export function createCommandHost(env) {
       const w = env.world(), xi = Math.floor(x), zi = Math.floor(z);
       if (!w.inside(xi, 0, zi)) return 257;
       let col = w.columnBlocks?.(xi, zi) ?? null;
+      // A stored column of an imported save that is not resident reads its import-time top (stored-peek.js; edits made after the import to an evicted column are not seen).
+      if (!col && w.streaming && !w.baseColumns?.has?.(`${xi >> 4},${zi >> 4}`) && !w.chunkEdits?.has?.(`${xi >> 4},${zi >> 4}`)) { const t = env.storedTop?.(xi, zi); if (t !== undefined) return t; }
       if (!col && w.streaming && w.generateTerrainChunk) {
         const cx = xi >> 4, cz = zi >> 4, h = w.height, start = ((xi & 15) * 16 + (zi & 15)) * h;
-        const c = w.peekChunk?.(cx, cz) ?? w.generateTerrainChunk(cx, cz);
+        const c = w.baseColumns?.get?.(`${cx},${cz}`) ?? w.peekChunk?.(cx, cz) ?? w.generateTerrainChunk(cx, cz);
         col = Uint8Array.from(c.blocks.subarray(start, start + h));
         for (const [cell, stored] of w.chunkEdits?.get(`${cx},${cz}`) ?? []) if (cell >= start && cell < start + h) col[cell - start] = (stored % 4096) & 255;
       }

@@ -257,6 +257,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
     } else if (!state.survival.creative && item?.food) {
       beginEating(state, id, hook);
     }
+    // EntityPlayer.interactWith / interactFirst returned true: a held stack left at size <= 0 is destroyed outside Creative (leads2-reference.json sizes).
+    if (!state.survival.creative && state.survival.held && state.survival.held.count <= 0) { state.survival.inventory.main[state.survival.inventory.current] = null; hook('renderHotbar'); }
     return act('interact-entity');
   }
 

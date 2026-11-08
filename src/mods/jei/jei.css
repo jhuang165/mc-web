@@ -1,0 +1,25 @@
+/* Recipe viewer mod (not 1.7.10; panel.js). Sizes are GUI pixels (var(--u)). */
+.jei-ui{position:absolute;inset:0;z-index:20;pointer-events:none;user-select:none;-webkit-user-select:none;touch-action:none}
+.jei-ui[hidden]{display:none}
+.jei-ui .jei-list,.jei-ui .jei-view-box,.jei-ui .jei-backdrop{pointer-events:auto}
+.jei-ui .jei-list,.jei-ui .jei-view,.jei-ui .jei-view-box,.jei-ui .jei-text,.jei-ui .jei-slot,.jei-ui .jei-button,.jei-ui .jei-search,.jei-ui i{position:absolute;box-sizing:border-box}
+.jei-ui .jei-view{inset:0}
+/* The item list stays above the recipe view's backdrop, so a click in the list opens the next view (Back returns). */
+.jei-ui .jei-list{z-index:2}
+.jei-ui .jei-backdrop{inset:0;background:rgba(16,16,16,.55)}
+/* The panel of a GuiContainer background: #c6c6c6, a white top-left and #555 bottom-right bevel inside a black edge. */
+.jei-ui .jei-view-box{background:#c6c6c6;border:var(--u) solid #000;box-shadow:inset calc(2*var(--u)) calc(2*var(--u)) #fff,inset calc(-2*var(--u)) calc(-2*var(--u)) #555}
+.jei-ui .jei-slot{width:calc(18*var(--u));height:calc(18*var(--u))}
+.jei-ui .jei-slot>.gui-slot{left:var(--u);top:var(--u)}
+/* A Slot frame: #373737 top-left, white bottom-right, #8b8b8b fill. */
+.jei-ui .jei-slot.framed{background:#8b8b8b;box-shadow:inset var(--u) var(--u) #373737,inset calc(-1*var(--u)) calc(-1*var(--u)) #fff}
+.jei-ui .jei-slot.hover>.gui-slot::after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.5);z-index:7}
+.jei-ui .jei-button{position:absolute}
+/* GuiTextField: a #a0a0a0 edge round a black field, 0xE0E0E0 text. */
+.jei-ui .jei-search{margin:0;padding:0 calc(3*var(--u));border:var(--u) solid #a0a0a0;background:#000;color:#e0e0e0;font-size:calc(8*var(--u));line-height:calc(14*var(--u));outline:0;pointer-events:auto;user-select:text;-webkit-user-select:text}
+.jei-ui .jei-search::placeholder{color:#707070}
+.jei-ui .jei-search:focus{border-color:#fff}
+/* GuiFurnace's empty progress arrow (79, 34) and the lit flame (176, 0) from furnace.png. */
+.jei-ui .jei-arrow{width:calc(24*var(--u));height:calc(17*var(--u));background:url('/media/1.7.10/gui/container/furnace.png') calc(-79*var(--u)) calc(-34*var(--u))/calc(256*var(--u)) calc(256*var(--u)) no-repeat;image-rendering:pixelated}
+.jei-ui .jei-flame{width:calc(14*var(--u));height:calc(14*var(--u));background:url('/media/1.7.10/gui/container/furnace.png') calc(-176*var(--u)) 0/calc(256*var(--u)) calc(256*var(--u)) no-repeat;image-rendering:pixelated}
+.jei-ui .jei-tooltip{z-index:30}

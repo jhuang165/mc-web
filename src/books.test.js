@@ -237,7 +237,7 @@ test('/give with a data tag writes pages, author and title onto the stack', () =
   const active = { mode: 'survival', allowCommands: true, seed: 'books' };
   const env = {
     active: () => active, world: () => world, weather: () => weather, mobs: () => null, survival: () => survival, experience: () => experience,
-    position: () => ({ x: 10.5, y: 40, z: 10.5 }), seed: () => active.seed, stackName: (s) => stackName(s, ITEMS), dropStack() {}, refreshInventory() {}, changed() {},
+    position: () => ({ x: 10.5, y: 40, z: 10.5 }), seed: () => active.seed, stackName: (s) => stackName(s, ITEMS), giveDrop: (s) => survival.inventory.add(s), refreshInventory() {}, changed() {},
     setTime() {}, teleport() {}, setDifficulty() {}, setMode() {}, lan: () => false, shareToLan() {}, updateBlock() {}, destroyBlock() {},
   };
   const runner = createCommandRunner(createCommandHost(env));

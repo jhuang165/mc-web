@@ -2,10 +2,10 @@
 // drawn from gui/widgets.png and gui/options_background.png at the GUI scale (--u is one scaled
 // unit in CSS pixels). Positions come from menu-screens.js. Buttons act on mouse press, as
 // GuiScreen.mouseClicked does, and play gui.button.press.
-import { textWidth, trimToWidth, splitLines, shadowColor, FORMAT_COLORS, charWidth, knobOffset, sliderValue, slotMetrics, slotAt, scaledSize } from "./menu-screens.js";
+import { textWidth, trimToWidth, splitLines, shadowColor, charWidth, knobOffset, sliderValue, slotMetrics, slotAt, scaledSize } from "./menu-screens.js";
 import { Panorama } from "./menu-panorama.js";
 import { onResourcesRefreshed } from "./resource-refresh.js";
-import { font, usesAscii, glyphHtml } from "./font-renderer.js";
+import { font, usesAscii, glyphHtml, colorOf, randomGlyphIndex, CHAR_TABLE } from "./font-renderer.js";
 
 const hex = (c) => "#" + (c & 0xffffff).toString(16).padStart(6, "0");
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -15,36 +15,74 @@ const at = (x, y, w, h) => `left:${px(x)};top:${px(y)}` + (w != null ? `;width:$
 // draws the base runs in the widget's own --c / --cs (a button's state colour). §l bold (the glyph drawn again one pixel
 // right, one pixel wider), §o italic, §n underline, §m strikethrough and §k obfuscated (each glyph replaced by a random one of
 // the same width) as FontRenderer.renderStringAtPos; a colour code or §r clears them.
-const SAME_WIDTH = new Map();
-for (let c = 33; c < 127; c++) { const ch = String.fromCharCode(c), w = charWidth(ch); if (!SAME_WIDTH.has(w)) SAME_WIDTH.set(w, []); SAME_WIDTH.get(w).push(ch); }
-const obfuscate = (s) => s.replace(/[^ ]/g, (ch) => { const set = SAME_WIDTH.get(charWidth(ch)); return set ? set[Math.floor(Math.random() * set.length)] : ch; });
+// §k (renderStringAtPos): a character of the 256 entry ascii.png table is replaced by the cell fontRandom.nextInt(256) lands on first with
+// the same width (all 256 cells are candidates; the unused cells draw blank), a new pick on every drawn frame, and with the unicode flag
+// or for a character outside the table nothing changes. Spans of such runs carry their source text (`kr`) and one animation-frame loop
+// re-picks them while any is on the page.
+const nextInt = (n) => Math.floor(Math.random() * n);
+const obfuscate = (s) => {
+  let out = "";
+  for (const ch of s) {
+    const c = ch.charCodeAt(0);
+    if (ch === " " || !usesAscii(c)) { out += ch; continue; }
+    const idx = CHAR_TABLE.indexOf(ch), j = randomGlyphIndex(idx, nextInt);
+    out += CHAR_TABLE[j] === "\u0000" ? String.fromCharCode(0xe000 + font.widths[idx]) : CHAR_TABLE[j]; // U+E000 + w: a blank cell of width w
+  }
+  return out;
+};
+// Characters drawn from ascii.png stay text; the others (everything when the unicode flag is on) are unicode-page glyphs.
+function runHtml(text, bold, random) {
+  if (random) text = obfuscate(text);
+  let html = "", seg = "";
+  for (let k = 0; k < text.length; k++) {
+    const c = text.charCodeAt(k);
+    if (c >= 0xe000 && c < 0xe100) { if (seg) { html += escapeHtml(seg); seg = ""; } html += `<span class="ug" style="width:calc(${c - 0xe000}*var(--u))"></span>`; continue; }
+    if (usesAscii(c) || (c === 32 && !font.unicode)) { seg += text[k]; continue; }
+    if (seg) { html += escapeHtml(seg); seg = ""; }
+    html += c === 32 ? '<span class="ug" style="width:calc(4*var(--u))"></span>' : glyphHtml(c, bold);
+  }
+  return html + escapeHtml(seg);
+}
+let krFrames = 0, krRunning = false;
+function krTick() {
+  const nodes = document.querySelectorAll(".kr");
+  krFrames = nodes.length ? 0 : krFrames + 1;
+  for (const el of nodes) el.innerHTML = runHtml(el.dataset.k, el.dataset.b === "1", true);
+  if (krFrames < 30) requestAnimationFrame(krTick); else krRunning = false;
+}
+function startKr() {
+  if (krRunning || typeof requestAnimationFrame !== "function" || typeof document === "undefined") return;
+  krRunning = true; krFrames = 0;
+  requestAnimationFrame(krTick);
+}
 export function textHtml(s, color = 0xffffff) {
-  let out = "", run = "", cur = color, under = false, bold = false, italic = false, strike = false, random = false;
+  if (font.bidi && s) s = font.bidiReorder(String(s)); // FontRenderer.renderString: bidiReorder of the whole string, colour codes included
+  let out = "", run = "", cur = color, curShadow = null, under = false, bold = false, italic = false, strike = false, random = false;
   const style = (c) => {
-    let css = c == null ? "color:var(--c);--sh:var(--cs)" : `color:${hex(c)};--sh:${hex(shadowColor(c))}`;
-    const deco = [under && "underline", strike && "line-through"].filter(Boolean).join(" ");
-    if (deco) css += ";text-decoration:" + deco;
-    if (italic) css += ";font-style:italic";
+    let css = c == null ? "color:var(--c);--sh:var(--cs)" : `color:${hex(c)};--sh:${hex(curShadow ?? shadowColor(c))}`;
     if (bold) css += ";letter-spacing:var(--u);text-shadow:var(--u) 0 0 currentColor,var(--u) var(--u) 0 var(--sh),calc(2*var(--u)) var(--u) 0 var(--sh)";
     return css;
   };
-  // Characters drawn from ascii.png stay text; the others (everything when the unicode flag is on) are unicode-page glyphs.
-  const runHtml = (text) => {
-    let html = "", seg = "";
-    for (let k = 0; k < text.length; k++) {
-      const c = text.charCodeAt(k);
-      if (usesAscii(c) || (c === 32 && !font.unicode)) { seg += text[k]; continue; }
-      if (seg) { html += escapeHtml(seg); seg = ""; }
-      html += c === 32 ? '<span class="ug" style="width:calc(4*var(--u))"></span>' : glyphHtml(c, bold);
+  // Underline / strikethrough are 1 unit bars (y + 8 and y + 3, from 1 left of the run, drawn in the glyph colour and shadowed like text)
+  // and italic leans the glyphs 1 unit right at the top and 1 left at the bottom, for ascii.png and unicode glyphs alike
+  // (renderStringAtPos / renderUnicodeChar); see menu-screens.css .tf.
+  const flush = () => {
+    if (run) {
+      const cls = [under && "tu", strike && "ts", italic && "ti"].filter(Boolean);
+      const kr = random && !font.unicode && [...run].some((ch) => ch !== " " && usesAscii(ch.charCodeAt(0)));
+      if (kr) { cls.push("kr"); startKr(); }
+      out += `<span${cls.length ? ` class="${(under || strike || italic ? "tf " : "") + cls.join(" ")}"` : ""} style="${style(cur)}"${kr ? ` data-k="${escapeHtml(run)}" data-b="${bold ? 1 : 0}"` : ""}>${runHtml(run, bold, random)}</span>`;
     }
-    return html + escapeHtml(seg);
+    run = "";
   };
-  const flush = () => { if (run) out += `<span style="${style(cur)}">${runHtml(random ? obfuscate(run) : run)}</span>`; run = ""; };
   for (let i = 0; i < s.length; i++) {
     if (s[i] === "§" && i + 1 < s.length) {
       flush();
       const code = s[++i].toLowerCase(), k = "0123456789abcdef".indexOf(code);
-      if (k >= 0 || code === "r") { cur = k >= 0 ? FORMAT_COLORS[k] : color; under = bold = italic = strike = random = false; }
+      // bbu: indexOf in "0123456789abcdefklmnor" below 16 (an unknown code is -1) resets the styles and takes colour 15; the colour comes
+      // from the constructor's table (anaglyph converted when the game started with Anaglyph on, shadow = entry + 16)
+      if (code === "r") { cur = color; curShadow = null; under = bold = italic = strike = random = false; }
+      else if (k >= 0 || !"klmno".includes(code)) { const ci = k >= 0 ? k : 15; cur = colorOf(ci); curShadow = colorOf(ci, true); under = bold = italic = strike = random = false; }
       else if (code === "n") under = true;
       else if (code === "l") bold = true;
       else if (code === "o") italic = true;
@@ -174,7 +212,8 @@ export class Gui {
   // FontRenderer.drawSplitString: word-wrapped lines 9 units apart, without a shadow.
   splitText(s, x, y, width, color) {
     const e = el("div", "mc-split");
-    splitLines(s, width).forEach((line, i) => this.text(line, x, y + 9 * i, { color, shadow: false, parent: e }));
+    // renderSplitString: a bidirectional language right aligns every line on the reordered width, at x + width - that width
+    splitLines(s, width).forEach((line, i) => this.text(line, font.bidi ? x + width - textWidth(font.bidiReorder(line)) : x, y + 9 * i, { color, shadow: false, parent: e }));
     this.layer.append(e);
     return e;
   }

@@ -31,7 +31,10 @@ import { applyDimensionRender, fixedAngle, providerFog } from "./dimension-rende
 import { nightVisionBrightness, blindnessFog, adjustFogColor, warpMatrix } from "./potion-fx.js";
 import { hasVoidParticles, voidFogYFactor, voidFogFar } from "./void-fog.js";
 import { Sky, Clouds } from "./sky.js";
-import { PostProcessor } from "./post-shaders.js"; // Super Secret Settings shaders and 3D Anaglyph
+import { PostProcessor, anaglyphFog } from "./post-shaders.js";
+import { installAnaglyphUpload, meshAnaglyph, anaglyphMultiplier } from "./anaglyph.js"; // 3D Anaglyph at the native conversion points
+import { setGuiAnaglyph } from "./gui-anaglyph.js"; // ... and the DOM GUI
+import { refreshResources } from "./resource-refresh.js"; // Super Secret Settings shaders and 3D Anaglyph
 import { render, setRender, usePartialAo, leavesOpaque, shouldRenderClouds, shadowsEnabled } from "./render-settings.js";
 import { liquidHeight, flowAngle, viewpointBlock } from "./fluids.js";
 import { DropRenderer } from "./drop-renderer.js";
@@ -51,6 +54,7 @@ import { LAVA_FOG_DENSITY, waterFogDensity } from "./fire-fx.js";
 import { mediaGeneration, versioned } from './media-version.js';
 import { isDoor, isPane, doorFlags, doorBoundsFor, doorFaceFlip, paneMask, paneArms, paneSideRendered } from './doors-panes.js';
 import { residentOnly } from './headless-env.js';
+import { createAtlasUploader } from './atlas-upload.js';
 export { blockTile } from "./block-textures.js";
 
 // Face order +x, -x, +y, -y, +z, -z with RenderBlocks' AO-path shades:
@@ -100,8 +104,9 @@ class Mesher {
     if (twoSided) this.idx.push(v, v + 2, v + 1, v, v + 3, v + 2);
   }
   // Block.colorMultiplier: multiplies the last quad's four vertex colours by 0xRRGGBB (the shade attribute is an rgb triple).
-  tint(color) {
-    const r = ((color >> 16) & 255) / 255, g = ((color >> 8) & 255) / 255, b = (color & 255) / 255, k = this.shade.length - 12;
+  // `native` false marks the paths that never read EntityRenderer.anaglyphEnable (vine, water, redstone wire): their tint stays raw.
+  tint(color, native = true) {
+    const [r, g, b] = anaglyphMultiplier(color, native && meshAnaglyph.on), k = this.shade.length - 12;
     for (let i = 0; i < 4; i++) { this.shade[k + i * 3] *= r; this.shade[k + i * 3 + 1] *= g; this.shade[k + i * 3 + 2] *= b; }
   }
   geometry() {
@@ -130,6 +135,15 @@ export class VoxelScene {
     this.renderer.autoClear = false;
     container.appendChild(this.renderer.domElement);
     this.post = new PostProcessor(this.renderer, { anaglyph: () => this.anaglyph });
+    // Texture uploads are converted while anaglyph is on; toggling it refreshes resources like GameSettings.setOptionValue (bao.c()).
+    this.anaglyphUpload = installAnaglyphUpload(this.renderer.getContext());
+    this.post.onAnaglyphChange = (on) => {
+      this.anaglyphUpload.state.on = on && !this.post.legacyAnaglyph;
+      setGuiAnaglyph(this.anaglyphUpload.state.on); // DOM GUI images, and the extra GL contexts' upload hooks
+      meshAnaglyph.on = this.anaglyphUpload.state.on; // RenderBlocks colour multipliers; loadRenderers remeshes every chunk
+      for (const k of this.chunks.keys()) this.dirty.add(k);
+      refreshResources().catch(() => {});
+    };
     this.scene = new THREE.Scene();
     this.lighting = createLighting();
     this.flicker = new TorchFlicker();
@@ -140,6 +154,7 @@ export class VoxelScene {
     this.clouds = new Clouds(this.lighting, CLOUD_HEIGHT);
     this.scene.add(this.clouds.depth, this.clouds.mesh);
     this.textures = createBlockAtlas();
+    this.textures.setUploader(createAtlasUploader(this.renderer, THREE)); // animated tiles upload as sub-rects (atlas-upload.js)
     this.drops = new DropRenderer(this.scene, this);
     this.projectiles = new ProjectileRenderer(this.scene, this);
     this.fishingRenderer = new FishingRenderer(this.scene, this);
@@ -284,7 +299,7 @@ export class VoxelScene {
     this.light = new Light(this.world, (x,y,z,b) => {
       if (b === 112) { const lit = this.repeaterLit(x, y, z); this.repeaterEmit.set(`${x},${y},${z}`, lit); return lightEmission(b, lit); } // powered repeater: light 9
       return lightEmission(b,b===14 && this.litFurnaces.has(`${x},${y},${z}`));
-    }, { defer, native: this.world.streaming && !this.dimension && nativeLightEnabled() });
+    }, { defer, native: this.world.streaming && nativeLightEnabled() });
     this.lightPending = defer ? this.light.buildSteps() : null;
   }
   // Runs the deferred light build for up to `budgetMs`; returns true while steps remain.
@@ -797,12 +812,12 @@ export class VoxelScene {
   vine(m,x,y,z) {
     const w=this.world,meta=w.getMeta(x,y,z),uv=rectUvs(tileRect(blockTile(VINE,0))),light=this.light.packed(x,y,z),e=1/64;
     for(const [bit,v] of [[1,[[0,0,1-e],[1,0,1-e],[1,1,1-e],[0,1,1-e]]],[2,[[e,0,0],[e,0,1],[e,1,1],[e,1,0]]],[4,[[1,0,e],[0,0,e],[0,1,e],[1,1,e]]],[8,[[1-e,0,1],[1-e,0,0],[1-e,1,0],[1-e,1,1]]]])
-      if(meta&bit){m.quad(v.map(p=>[x+p[0],y+p[1],z+p[2]]),uv,1,light,true);m.tint(this.biomeColors.foliageAt(x+this.colorX,y,z+this.colorZ));}
+      if(meta&bit){m.quad(v.map(p=>[x+p[0],y+p[1],z+p[2]]),uv,1,light,true);m.tint(this.biomeColors.foliageAt(x+this.colorX,y,z+this.colorZ),false);}
   }
   // renderCrossedSquares, with the tall-grass position jitter from the block coordinates.
   // RenderBlocks.renderBlockStem (stems-cake.js stemQuads): crossed planes tinted by age, plus the connected plane beside a fruit.
   stem(m, b, x, y, z) {
-    const meta = this.world.getMeta(x, y, z), dir = stemDirection(this.world, x, y, z, b), light = this.light.packed(x, y, z), tint = stemTint(meta),
+    const meta = this.world.getMeta(x, y, z), dir = stemDirection(this.world, x, y, z, b), light = this.light.packed(x, y, z), tint = meshAnaglyph.on ? anaglyphFog(stemTint(meta)) : stemTint(meta), // renderBlockStem (blm.m) converts the age colour
       prefix = b === PUMPKIN_STEM ? "pumpkin_stem_" : "melon_stem_";
     for (const q of stemQuads(meta, dir)) {
       const r = tileRect(tileByName(prefix + (q.tile === "connected" ? "connected" : "disconnected")));
@@ -980,7 +995,7 @@ export class VoxelScene {
       top = w.get(x, y + 1, z) !== kind,
       h = [[liquidHeight(w, x, y, z, kind), liquidHeight(w, x, y, z + 1, kind)], [liquidHeight(w, x + 1, y, z, kind), liquidHeight(w, x + 1, y, z + 1, kind)]];
     // BlockLiquid.colorMultiplier: water averages the biome water colour over x-1..x+1, z-1..z+1; lava is white.
-    let tint = null; const paint = (mesher) => { tint ??= kind === 10 ? this.biomeColors.water(x + this.colorX, z + this.colorZ) : 0xFFFFFF; if (tint !== 0xFFFFFF) mesher.tint(tint); };
+    let tint = null; const paint = (mesher) => { tint ??= kind === 10 ? this.biomeColors.water(x + this.colorX, z + this.colorZ) : 0xFFFFFF; if (tint !== 0xFFFFFF) mesher.tint(tint, false); }; // renderBlockLiquid (blm.p) never reads anaglyphEnable
     if (top) {
       for (const row of h) for (let i = 0; i < 2; i++) row[i] -= inset;
       const verts = [[x, y + h[0][0], z], [x, y + h[0][1], z + 1], [x + 1, y + h[1][1], z + 1], [x + 1, y + h[1][0], z]], angle = flowAngle(w, x, y, z, kind);
@@ -1004,7 +1019,7 @@ export class VoxelScene {
     }
   }
   setFurnaces(data) {
-    const next = new Set(Object.entries(data).filter(([, f]) => f.burn > 0).map(([key]) => key)),
+    const next = new Set(Object.entries(data).filter(([, f]) => f.lit ?? f.burn > 0).map(([key]) => key)),
       changed = [...new Set([...next, ...(this.litFurnaces || [])])].filter((k) => next.has(k) !== this.litFurnaces?.has(k));
     this.litFurnaces = next;
     for (const k of changed) {
@@ -1106,6 +1121,7 @@ export class VoxelScene {
   setRenderSettings(options) {
     const before = { ...render };
     setRender(options);
+    this.post.syncAnaglyph(); // the option may change while no frame renders (title screen)
     if (before.fancy !== render.fancy || this.textures.leavesOpaque !== !render.fancy) this.textures.setOpaqueLeaves(!render.fancy);
     this.textures.setFiltering(render.mipmapLevels, render.anisotropic, this.renderer.capabilities.getMaxAnisotropy?.() ?? 1);
     if (before.fancy !== render.fancy || before.ao !== render.ao) for (const k of this.chunks.keys()) this.dirty.add(k);
@@ -1157,6 +1173,7 @@ export class VoxelScene {
     // potion-fx.js: the void/Blindness/Night Vision terms of updateFogColor, and Blindness' own setupFog branch (it wins over water and lava).
     const pv = this.potionView, blind = pv?.blindness > 0;
     if (pv && (blind || pv.nightVision > 0 || pv.feetY !== undefined || pv.eyeY !== undefined)) fog = adjustFogColor(fog, { feetY: pv.eyeY ?? pv.feetY ?? c.position.y, voidFactor: voidFogYFactor(this.world?.worldType), blindness: pv.blindness, nightVision: pv.nightVision > 0 ? nightVisionBrightness(pv.nightVision, this.dropPartial) : 0 });
+    if (this.post.anaglyphOn && !this.post.legacyAnaglyph) fog = anaglyphFog(fog); // EntityRenderer.updateFogColor
     u.fogColor.value.set(...fog);
     // setupFog: linear from 3/4 of the far plane; exponential 0.1 in water, 2.0 in lava.
     u.fogDensity.value = blind ? 0 : lava ? LAVA_FOG_DENSITY : underwater ? waterFogDensity({ breathing: pv?.waterBreathing, respiration: pv?.respiration }) : 0;
@@ -1169,11 +1186,11 @@ export class VoxelScene {
         far = voidFogFar({ far: this.distance, skyLight: sky, y, creative: !!pv.creative, hasVoid: hasVoidParticles({ worldType: this.world.worldType, dimension: this.dimension ?? 0 }) });
       if (far < this.distance) { u.fogFar.value = far; u.fogNear.value = far * 0.75; }
     }
-    const sky = underwater || lava || blind ? fog : skyColor(this.temperature ?? 0.8, angle, rain, thunder, lightning, partial);
-    this.sky.update({ angle, sky, fog, sunrise: underwater || lava || blind ? null : sunriseColors(angle), stars: blind ? 0 : starBrightness(angle), moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater: underwater || lava || blind, rain });
+    const sky = underwater || lava || blind ? fog : (this.post.anaglyphOn && !this.post.legacyAnaglyph ? anaglyphFog : (c) => c)(skyColor(this.temperature ?? 0.8, angle, rain, thunder, lightning, partial));
+    this.sky.update({ angle, sky, fog, sunrise: underwater || lava || blind ? null : sunriseColors(angle), stars: blind ? 0 : starBrightness(angle), anaglyph: this.post.anaglyphOn && !this.post.legacyAnaglyph, moonPhase: Math.floor(this.ticks / 24000) % 8, aboveHorizon: c.position.y - SEA, far: this.distance, underwater: underwater || lava || blind, rain });
     this.clouds.setFancy(render.fancy);
     this.clouds.setEnabled(!this.dimension && shouldRenderClouds(this.distance / 16));
-    this.clouds.update(c, time * 20, cloudColor(angle, rain, thunder));
+    this.clouds.update(c, time * 20, this.post.anaglyphOn && !this.post.legacyAnaglyph ? anaglyphFog(cloudColor(angle, rain, thunder)) : cloudColor(angle, rain, thunder));
     this.weatherRenderer.update(w, this.world, c, partial, time);
     this.drops.update(this.dropList, this.dropPartial, time * 20);
     this.updateFalling(this.dropPartial);

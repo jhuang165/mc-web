@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { installAnaglyphUpload } from "./anaglyph.js";
+import { guiAnaglyph } from "./gui-anaglyph.js";
 import { PlayerRenderer } from "./player-renderer.js";
 import { createLighting, ITEM_LIGHTS } from "./light-material.js";
 
@@ -72,6 +74,7 @@ export class InventoryPlayerView {
     this.canvas.className = "paperdoll-canvas";
     this.canvas.setAttribute("aria-hidden", "true");
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, alpha: true, powerPreference: "low-power" });
+    installAnaglyphUpload(this.renderer.getContext(), guiAnaglyph); // GUI textures upload converted while 3D Anaglyph is on (TextureUtil.anaglyphColor)
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.renderer.setClearColor(0, 0);
     this.scene = new THREE.Scene();

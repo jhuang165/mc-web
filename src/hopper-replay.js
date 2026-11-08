@@ -54,7 +54,7 @@ export function replayHopperScenario(s, { origin = O } = {}) {
   };
   const give = (x, y, z, slot, item, count, damage) => {
     const id = world.get(...abs(x, y, z)), orig = toOriginal(id, world.getMeta(...abs(x, y, z)))[0];
-    tile(x, y, z, orig).items[slot] = count > 0 ? stackOf(item, count, damage) : null;
+    tile(x, y, z, orig).items[slot] = count === 0 ? null : stackOf(item, count === -999 ? 0 : count, damage);
     runtime.containerClosed([keyOf(x, y, z)]);
   };
   const spawn = (x, y, z, item, count, damage) => entities.push({ x, y: y - 0.125, z, stack: stackOf(item, count, damage), dead: false });

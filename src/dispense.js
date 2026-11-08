@@ -48,7 +48,7 @@ const key = (x, y, z) => `${x},${y},${z}`;
 // TileEntityDispenser.func_146017_i: every non-empty slot replaces the pick when nextInt(j++) == 0 (its own Random).
 export function chooseSlot(items, rand) {
   let pick = -1, j = 1;
-  for (let i = 0; i < items.length; i++) if (items[i] && items[i].count > 0 && rand.nextInt(j++) === 0) pick = i;
+  for (let i = 0; i < items.length; i++) if (items[i] && rand.nextInt(j++) === 0) pick = i;
   return pick;
 }
 // TileEntityDispenser.func_146019_a: the first empty slot, or -1.
@@ -131,7 +131,7 @@ export class Dispensing {
     const stack = tile.items[slot];
     if (dropper) { this.dropperDispense(w, x, y, z, facing, tile, slot, stack); return; }
     const result = this.dispense(w, x, y, z, facing, stack);
-    tile.items[slot] = result && result.count > 0 ? result : null;
+    tile.items[slot] = result && result.count !== 0 ? result : null;
     this.changed(w, [key(x, y, z)]);
   }
   // BlockDropper.dispense: into the facing inventory when there is one (TileEntityHopper.func_145889_a), else the default throw.

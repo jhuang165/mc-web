@@ -1,11 +1,12 @@
 import { isSupportedType } from "./cart-variants.js";
 import { readPlayerPortalState } from "./dimensions.js";
+import { Weather } from "./weather.js";
 // Keep the runtime payload shared between local saves and imported exports.
 // Each subsystem validates its own payload on launch. Identity and the validated
 // world/player fields are built by the caller rather than copied from the file.
 const RUNTIME_FIELDS = [
   "position", "drops", "entities", "farms", "experience", "xpOrbs", "falling",
-  "weather", "worldRandom", "projectiles", "thrownPotions", "fireballs", "eyes", "rockets", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "inhabited",
+  "weather", "worldRandom", "simulation", "projectiles", "thrownPotions", "fireballs", "eyes", "rockets", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "inhabited",
   "spawners", "pistons", "boats", "minecarts", "populatedColumns",
   "portalState", "worldSpawn",
   // Tile entities and hanging entities (each loader validates its records), villages, map items, generated-structure starts.
@@ -15,6 +16,8 @@ const RUNTIME_FIELDS = [
   "gameRules", "bed", "stats", "achievements", "mapFeatures", "hardcore", "totalTime",
   // Player abilities.flying (Creative only), a forced spawn (/spawnpoint) and a bed to free after a saved Sleeping player wakes.
   "flying", "playerSpawn", "wakeFromBed",
+  // Live redstone save (redstone-live.js): pending scheduled ticks, lit repeaters, comparator signals, moving pistons (sanitised below).
+  "redstone",
 ];
 
 const int = Number.isInteger, finite = Number.isFinite;
@@ -25,14 +28,38 @@ const SPAWNER_NUMBERS = ["Delay", "MinSpawnDelay", "MaxSpawnDelay", "SpawnCount"
 // spawners and full carts on its first launch, as an older save does.
 // Column runtime arrays (chunk-runtime.js) are keyed by the record position, so x and z must be numbers.
 const list = (v, max) => (Array.isArray(v) ? v.filter((e) => e && typeof e === "object" && finite(e.x) && finite(e.z)).slice(0, max) : undefined);
+const ints = (a, n) => Array.isArray(a) && a.length >= n && a.slice(0, n).every(int);
+const nums = (a, n) => Array.isArray(a) && a.length === n && a.every(finite);
+// redstone-live.js save(): only the shapes restore() reads are kept; the engine's Random and block-event queue are not trusted from a file.
+function sanitizeRedstone(v) {
+  if (!v || typeof v !== "object" || v.version !== 1) return undefined;
+  const ticks = (a) => (Array.isArray(a) ? a.filter((e) => ints(e, 7)).slice(0, LIST_CAP).map((e) => e.slice(0, 7)) : []);
+  return {
+    version: 1, clock: int(v.clock) ? v.clock : 0, time: int(v.time) ? v.time : 0, pending: ticks(v.pending), deferred: ticks(v.deferred),
+    torches: (Array.isArray(v.torches) ? v.torches.filter((e) => ints(e, 4)) : []).slice(0, LIST_CAP).map((e) => e.slice(0, 4)),
+    lit: (Array.isArray(v.lit) ? v.lit.filter((k) => typeof k === "string" && /^-?\d+,\d+,-?\d+$/.test(k)) : []).slice(0, LIST_CAP),
+    comparators: (Array.isArray(v.comparators) ? v.comparators.filter((e) => Array.isArray(e) && typeof e[0] === "string" && int(e[1])) : []).slice(0, LIST_CAP).map((e) => [e[0], e[1]]),
+    pistons: (Array.isArray(v.pistons) ? v.pistons.filter((e) => nums(e, 10)) : []).slice(0, LIST_CAP),
+  };
+}
 const triple = (v) => Array.isArray(v) && v.length === 3 && v.every(int);
+// Per-list bound of the merged runtime record (signs, hanging, spawners, minecarts, villages, boats, pistons, populated columns...).
+// It used to be 4096 (1024 for carts, boats and villages); a whole save with more entries lost the rest at import. The record is
+// split per column at the first persist (chunk-runtime.js splitRuntime), so only the import-time merge holds a list whole:
+// roughly 150-400 bytes of heap per entry, 1 << 20 entries per list at most (a few hundred MB worst case, never reached by a
+// real save; a save past it is truncated, not refused). Sanitising is linear in the entries.
+export const LIST_CAP = 1 << 20;
+// A saved World.rand/updateLCG stream (Weather.saveSimulation): kept only when Weather.restoreSimulation would accept it.
+const simulationStream = (v) => (v && typeof v === "object" && JSON.stringify(new Weather().restoreSimulation(v).saveSimulation()) === JSON.stringify(v) ? v : undefined);
 const SANITIZE = {
-  hanging: (v) => list(v, 4096), signs: (v) => list(v, 4096), skulls: (v) => list(v, 4096), beacons: (v) => list(v, 4096),
-  commandBlocks: (v) => list(v, 4096), musicTiles: (v) => list(v, 4096),
+  worldRandom: simulationStream, simulation: simulationStream,
+  redstone: (v) => sanitizeRedstone(v),
+  hanging: (v) => list(v, LIST_CAP), signs: (v) => list(v, LIST_CAP), skulls: (v) => list(v, LIST_CAP), beacons: (v) => list(v, LIST_CAP),
+  commandBlocks: (v) => list(v, LIST_CAP), musicTiles: (v) => list(v, LIST_CAP),
   // VillageCollection.toJSON: Village.fromJSON spreads the centre and door rows, so malformed villages are dropped here.
   villages: (v) => v && typeof v === "object" && Array.isArray(v.villages)
     ? { tick: int(v.tick) ? v.tick : 0, villages: v.villages.filter((g) => g && triple(g.c) && triple(g.ac) && Array.isArray(g.doors)
-      && g.doors.every((d) => Array.isArray(d) && d.length >= 6 && d.slice(0, 6).every(int))).slice(0, 1024) }
+      && g.doors.every((d) => Array.isArray(d) && d.length >= 6 && d.slice(0, 6).every(int))).slice(0, LIST_CAP) }
     : undefined,
   maps: (v) => (v && typeof v === "object" && Array.isArray(v.maps) ? v : undefined),
   // structure-data.js: {Name: base64 gzip of data/<Name>.dat}.
@@ -65,11 +92,11 @@ const SANITIZE = {
   // chests/animals/spawners were already handed to the live world. Bad entries just hand over again.
   populatedColumns: (v) => v && typeof v === "object" && v.version === 1 && v.cells && typeof v.cells === "object"
     ? { version: 1, cells: Object.fromEntries(Object.entries(v.cells)
-      .filter(([k, hex]) => /^-?\d+,-?\d+$/.test(k) && typeof hex === "string" && /^[0-9a-f]{1,16}$/.test(hex)).slice(0, 262144)) }
+      .filter(([k, hex]) => /^-?\d+,-?\d+$/.test(k) && typeof hex === "string" && /^[0-9a-f]{1,16}$/.test(hex)).slice(0, LIST_CAP)) }
     : undefined,
   // Moving piston tiles (piston-live.js save()): validated field by field; bad entries are dropped.
   pistons: (v) => Array.isArray(v)
-    ? v.filter((t) => t && typeof t === "object" && [t.x, t.y, t.z, t.block, t.meta, t.facing].every(int) && t.facing >= 0 && t.facing <= 5 && finite(t.progress)).slice(0, 4096).map((t) => ({
+    ? v.filter((t) => t && typeof t === "object" && [t.x, t.y, t.z, t.block, t.meta, t.facing].every(int) && t.facing >= 0 && t.facing <= 5 && finite(t.progress)).slice(0, LIST_CAP).map((t) => ({
       x: t.x, y: t.y, z: t.z, block: t.block, meta: t.meta, facing: t.facing, progress: Math.max(0, Math.min(1, t.progress)),
       ...(finite(t.lastProgress) ? { lastProgress: Math.max(0, Math.min(1, t.lastProgress)) } : {}),
       extending: t.extending === true, renderHead: t.renderHead === true,
@@ -77,7 +104,7 @@ const SANITIZE = {
     : undefined,
   // Boats (boats.js toJSON): position, motion, rotation, fall distance, fire, ground flag and the mounted player.
   boats: (v) => Array.isArray(v)
-    ? v.filter((c) => c && typeof c === "object" && [c.x, c.y, c.z].every(finite)).slice(0, 1024).map((c) => ({
+    ? v.filter((c) => c && typeof c === "object" && [c.x, c.y, c.z].every(finite)).slice(0, LIST_CAP).map((c) => ({
       ...(int(c.id) && c.id > 0 ? { id: c.id } : {}), // the id mobs saved riding this boat name
       x: c.x, y: c.y, z: c.z,
       ...(Array.isArray(c.motion) && c.motion.length === 3 && c.motion.every(finite) ? { motion: [...c.motion] } : {}),
@@ -89,14 +116,14 @@ const SANITIZE = {
     }))
     : undefined,
   spawners: (v) => Array.isArray(v)
-    ? v.filter((t) => t && typeof t === "object" && [t.x, t.y, t.z].every(int)).slice(0, 4096).map((t) => ({
+    ? v.filter((t) => t && typeof t === "object" && [t.x, t.y, t.z].every(int)).slice(0, LIST_CAP).map((t) => ({
       x: t.x, y: t.y, z: t.z,
       ...(typeof t.EntityId === "string" ? { EntityId: t.EntityId.slice(0, 64) } : {}),
       ...Object.fromEntries(SPAWNER_NUMBERS.filter((k) => int(t[k])).map((k) => [k, t[k]])),
     }))
     : undefined,
   minecarts: (v) => v && typeof v === "object" && Array.isArray(v.carts)
-    ? { version: 1, carts: v.carts.filter((c) => c && typeof c === "object" && [c.x, c.y, c.z].every(finite)).slice(0, 1024).map((c) => ({
+    ? { version: 1, carts: v.carts.filter((c) => c && typeof c === "object" && [c.x, c.y, c.z].every(finite)).slice(0, LIST_CAP).map((c) => ({
       ...(int(c.id) && c.id > 0 ? { id: c.id } : {}), // the id mobs saved riding this cart name
       x: c.x, y: c.y, z: c.z,
       ...(c.type === 0 ? { type: 0, rider: c.rider === true } : isSupportedType(c.type) ? { type: c.type } : {}),
@@ -136,4 +163,13 @@ export function importedRuntime(data) {
   return Object.fromEntries(RUNTIME_FIELDS.filter((key) => Object.hasOwn(data, key))
     .map((key) => [key, SANITIZE[key] ? SANITIZE[key](data[key]) : data[key]])
     .filter(([, value]) => value !== undefined));
+}
+
+// The per-dimension record of a Blockworld export (`dimensions[d]` = { state, tiles }): the Nether/End `simulation` stream (the
+// per-dimension World.rand/updateLCG, dimension-live.js DIM_KEYS) is checked like the Overworld's `worldRandom`; every other
+// field passes through to the loaders, which validate their own payloads.
+export function importedDimensionState(blob) {
+  if (!blob || typeof blob !== "object" || !blob.state || typeof blob.state !== "object" || !Object.hasOwn(blob.state, "simulation")) return blob;
+  const { simulation, ...rest } = blob.state, kept = simulationStream(simulation);
+  return { ...blob, state: kept ? { ...rest, simulation: kept } : rest };
 }

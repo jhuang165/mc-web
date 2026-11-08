@@ -55,6 +55,7 @@ import { webMove } from './webs.js';
 import { blockCollisions } from "./block-collisions.js";
 import { isVehicle, vehicleSize } from "./vehicle-seat.js";
 import { newUuid } from "./entity-uuid.js";
+import { ownerPresent } from "./owner-links.js";
 import { cleanModifiers, modifiedValue, liveAttribute, hasStoredBabyBoost, spawnBonusModifier } from "./mob-attributes.js";
 import { mountEntity, releaseDead, ridingOrder, beginRidden, endRidden, ridingId, linkRiders, setLocationAndAngles, freeChickenNear, maxHealthOf, OWN_MAX_HEALTH } from "./mob-riding.js";
 import { NORMAL, PEACEFUL, attributeValue, spawnBonus, spiderSpawnRolls, zombieSpawnRolls, skeletonSpawnRolls, reinforcementBase, reinforcementChance, REINFORCEMENT_CHARGE, zombieReinforcement, zombieFireOnHit } from "./difficulty.js";
@@ -62,7 +63,7 @@ import { readMobEffects, addMobEffect, tickMobEffects, speedModifiers, attackDam
 import { NAUSEA, CURE_NAUSEA_TICKS, AUX_INFECT, AUX_CURE, killConverts, startConversionTicks, conversionBoost, canCure, startConversion, remedySound, auxSound, readZombieVillager } from "./zombie-villager.js";
 import { landingEffects, JUMP_BOOST, statusPitchRandom } from "./damage-fx.js";
 import { WOLF_WIDTH, WOLF_HEIGHT, WOLF_SPEED, WILD_MAX_HEALTH, TAMED_MAX_HEALTH, WOLF_SOUNDS, wolfFields, wolfFieldsFrom, isTamed as wolfTamed, maxHealth as wolfMaxHealth, tailAngle, interestedAngle, shakeAngle, wetShade, wolfSay, hurtAmount as wolfHurtAmount, attackStrength as wolfAttack, puppyFields, interact as wolfClick, updateWolf } from "./wolf.js";
-import { noteWolfHurt } from "./wolf-ai.js";
+import { noteRevenge, revengeOf, sourceEntity } from "./revenge-target.js";
 import { summonedMobRecord, importedMobType } from "./java-mobs.js";
 import { mountMobOnVehicle } from "./vehicle-riders.js";
 import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest, canSpawnHere as ocelotCanSpawnHere } from "./ocelot.js";
@@ -226,7 +227,7 @@ export const ENTITY_TYPES = {
   // EntitySkeleton (yl): 0.6 x 1.8, 20 health, speed 0.25 (applyEntityAttributes). Its
   // arrow and bone drops are rolled in `kill`, so there is no `drop`; the task
   // speeds (ArrowAttack 1.0, FleeSun 1.0, Wander 1.0) are in the AI's brain.
-  skeleton: { health: 20, width: 0.6, height: 1.8, movement: 0.25, ai: { wander: 1 }, drop: 0 },
+  skeleton: { health: 20, width: 0.6, height: 1.8, movement: 0.25, ai: { wander: 1 }, damage: 2, drop: 0 },
   wither_skeleton: WITHER_SKELETON_STATS, // EntitySkeleton type 1 (wither-skeleton.js)
   // EntityCreeper (xz): 0.6 x 1.8, EntityMob's 20 health, speed 0.25; EntityAIAttackOnCollide
   // 1.0 and EntityAIWander 0.8. `damage` is EntityMob's attackDamage 2, which the swell
@@ -248,14 +249,14 @@ export const ENTITY_TYPES = {
   // EntitySlime (ym): 0.6 x 0.6 at size 1, scaled by `size` (mobScale); health and damage are size-based (slime.js), drops in combat.js.
   slime: { health: 1, width: 0.6, height: 0.6, movement: SLIME.speed, ai: {}, damage: 1, drop: 0 },
   // EntityMagmaCube (yf): a slime with its own numbers (nether-melee.js); health, damage and armour follow the size.
-  magma_cube: { health: 1, width: 0.6, height: 0.6, movement: MAGMA.speed, ai: {}, damage: 3, drop: 0 },
+  magma_cube: { health: 1, width: 0.6, height: 0.6, movement: f(0.2), ai: {}, damage: 3, drop: 0 },
   // EntityPigZombie (yh): 0.6 x 1.8, 20 health, speed 0.5 (+0.45 while it has a target), attack 5, armour 2; legacy AI (nether-melee-live.js).
   pigman: { health: PIGMAN.health, width: PIGMAN.width, height: PIGMAN.height, movement: PIGMAN.movement, ai: { wander: 1 }, damage: PIGMAN.attackDamage, drop: 0 },
   // EntitySquid (ws) 0.95 x 0.95, 10 health; EntityBat (we) 0.5 x 0.9, 6 health. Legacy motion, no AI tasks (squid-bat.js, squid-bat-mobs.js).
   // EntityEnderCrystal (wz) 2 x 2, 5 health: not a living mob (ender-crystal-mobs.js).
   ender_crystal: ENDER_CRYSTAL_TYPE,
-  squid: { health: SQUID.health, width: SQUID.width, height: SQUID.height, movement: 0.25, ai: {}, drop: 0 },
-  bat: { health: BAT.health, width: BAT.width, height: BAT.height, movement: 0.10000000149011612, ai: {}, drop: 0 },
+  squid: { health: SQUID.health, width: SQUID.width, height: SQUID.height, movement: 0.10000000149011612, ai: {}, drop: 0 },
+  bat: { health: BAT.health, width: BAT.width, height: BAT.height, movement: 0.699999988079071, ai: {}, drop: 0 },
 };
 // The slime's own sound names and volume depend on its size.
 const hurtOf = (e) => (isSlimeLike(e) ? slimeSoundName(e.size) : isPigman(e) ? PIGMAN.sounds.hurt : hurtSound(e.type));
@@ -653,6 +654,17 @@ export function entityHit(origin, dir, e, reach) {
   }
   return near <= reach ? near : null;
 }
+// The amount of EntityMob.attackEntityAsMob (the attackDamage attribute with the held weapon's modifier and Strength) or, for the classes whose own
+// attack ignores the attribute, the fixed one: a wolf's 2 (4 tamed) and an ocelot's 3 are plain floats, a slime's is its size (getAttackStrength) and an iron
+// golem rolls 7 + nextInt(15). None reads Strength or a saved attackDamage entry (probed attributes3 `attack` and `strength`, 339 records).
+const FIXED_ATTACK = new Set(["wolf", "ocelot", "slime", "magma_cube"]);
+export function mobHitAmount(e) {
+  if (e.type === "wolf") return wolfAttack(e);
+  if (e.type === "slime") return slimeDamage(e.size);
+  if (e.type === "magma_cube") return magmaDamage(e.size);
+  if (FIXED_ATTACK.has(e.type)) return ENTITY_TYPES[e.type].damage;
+  return attackDamage(e, ENTITY_TYPES[e.type].damage, e.equipment ? attackBonus(e.equipment) : 0);
+}
 // The player's attackDamage attribute with the held item's modifier (1 bare-handed): swords
 // 5 + tier (gold 5), axes 4, pickaxes 3 and shovels 2 + tier, only for an item actually held.
 export function heldAttackDamage(tool, survival) {
@@ -675,6 +687,11 @@ function savedAttributeFields(e, base) {
 // A mob the player can sit on from a save (level.dat Player.Riding, `playerRides`): EntityList.createEntityFromNBT + mountEntity accept any entity. Left
 // out are the chicken (its own seat maths, mob-riding.js seatPosition), the Ender Dragon, the Wither and the End crystal (no mount seat here).
 export const playerMountable = (e) => !!e && e.type !== "chicken" && e.type !== "ender_dragon" && e.type !== "wither" && e.type !== "ender_crystal" && (e.growingAge ?? 0) >= 0;
+// The slot of a held stack whose size fell to 0 or below is cleared (the native `setInventorySlotContents(currentItem, null)` after a use).
+function clearSpentStack(survival) {
+  const inv = survival.inventory, held = inv.held;
+  if (held && held.count <= 0) inv.main[inv.current] = null;
+}
 export class EntityWorld {
   constructor(world, saved, random = Math.random) {
     this.world = world;
@@ -941,9 +958,10 @@ export class EntityWorld {
       this.damageEntity(e, amount, name, source);
       e.hurt = 10;
     }
-    if (source.player) { e.revenge = (e.age || 0) + 1; e.recentlyHit = 100; if (e.type === "wolf") noteWolfHurt(e, "player"); }
-    // A wolf also takes revenge on a creature that hit it (EntityAIHurtByTarget reads getAITarget).
-    else if (e.type === "wolf" && source.attacker && source.attacker !== e) { e.revenge = (e.age || 0) + 1; noteWolfHurt(e, source.attacker); }
+    // EntityLivingBase.attackEntityFrom: a living source entity (player, mob melee, an arrow's shooter) becomes the revenge target (revenge-target.js).
+    const by = sourceEntity(this, e, source);
+    if (by) { e.revenge = (e.age || 0) + 1; noteRevenge(e, by); }
+    if (source.player) e.recentlyHit = 100;
     if (e.type === "villager") this.villagerHurtBy(e, source);
     if (fresh) {
       if (name !== "drown") rand.nextDouble();
@@ -960,7 +978,7 @@ export class EntityWorld {
       this.onDeath(e, source);
       if (fresh) (this.clientSounds ??= []).push({ sound: deathOf(e), ...sound, pitch: statusPitchRandom() });
     } else if (fresh) this.events.push({ sound: hurtOf(e), ...sound, pitch: soundPitch(rand, child) });
-    if (e.type === "zombie") this.callReinforcement(e, !!source.player);
+    if (e.type === "zombie") this.callReinforcement(e, sourceEntity(this, e, source));
     // EntityMob.attackEntityFrom: a hit that counted makes the attacker the target (only the player here).
     if (e.type === "silverfish" && source.player && e.health > 0) this.silverfishState(e).target = this.ai.player;
     return true;
@@ -978,9 +996,11 @@ export class EntityWorld {
   // target is the attack target, else the revenge target, else the attacker; only the player
   // is a target here, so a hit by a skeleton's arrow on a zombie with no target calls no one.
   // The new zombie stands at the integer corner of its block, as setPosition puts it.
-  callReinforcement(e, byPlayer) {
-    const player = this.ai.player;
-    if (!(byPlayer || e.revenge || this.ai.brain(e).attackTarget === player) || this.entities.length >= 40) return null;
+  callReinforcement(e, by) {
+    const player = this.ai.player, brain = this.ai.brain(e);
+    // yq.a: the attack target, else the revenge target (the legacy entityToAttack stands in), else the hit's living source entity.
+    const target = brain.attackTarget ?? brain.revengeTarget ?? (by === "player" ? player : by ? this.ai.brain(by) : null);
+    if (!target || this.entities.length >= 40) return null;
     const t = ENTITY_TYPES.zombie, w = t.width / 2;
     const spot = zombieReinforcement(entityRandom(e), this.difficulty, e.reinforcement ?? 0, e.x, e.y, e.z, {
       solidTop: (x, y, z) => y >= 0 && y < (this.world.height ?? HEIGHT) && normalCube(this.world.get(x, y, z)),
@@ -1005,7 +1025,7 @@ export class EntityWorld {
     });
     if (!spot) return null;
     const z = this.spawnNatural("zombie", spot.x, spot.y, spot.z);
-    this.ai.brain(z).attackTarget = player;
+    this.ai.brain(z).attackTarget = target;
     e.reinforcement = reinforcementChance(e.reinforcement + REINFORCEMENT_CHARGE);
     z.reinforcement = reinforcementChance(z.reinforcement + REINFORCEMENT_CHARGE);
     return z;
@@ -1294,7 +1314,7 @@ export class EntityWorld {
     };
     // EntityMob.attackEntityAsMob: the attribute (the held weapon's modifier included) plus Sharpness (getEnchantmentModifierLiving), Fire Aspect after.
     const melee = e.equipment ? meleeEffects(e.equipment[0]) : null;
-    const hit = survival.scaledDamage(f(attackDamage(e, e.type === "wolf" ? wolfAttack(e) : e.type === "slime" ? slimeDamage(e.size) : e.type === "magma_cube" ? magmaDamage(e.size) : ENTITY_TYPES[e.type].damage, e.equipment ? attackBonus(e.equipment) : 0) + (melee ? melee.damage : 0)), "a " + e.type, { attacker: NO_THORNS_ATTACKER.has(e.type) ? undefined : thorns, from: e });
+    const hit = survival.scaledDamage(f(mobHitAmount(e) + (melee ? melee.damage : 0)), "a " + e.type, { attacker: NO_THORNS_ATTACKER.has(e.type) ? undefined : thorns, from: e });
     // EntityMob.attackEntityAsMob: Knockback on the held item pushes the player along the mob's facing and slows the mob (player-knockback.js).
     if (hit && melee?.knockback > 0) mobKnockbackKick(survival, e, melee.knockback);
     if (hit && melee?.fire > 0) survival.setFire(melee.fire);
@@ -1371,7 +1391,9 @@ export class EntityWorld {
   // counter starts on the next onEntityUpdate, or in this one for fire and drowning.
   onDeath(e, source = {}) {
     if (e.type === "villager") this.villagerDied(e, source);
-    this.gearDeath(e); // horse-gear-live.js: the horse inventory and the lead drop
+    // EntityIronGolem.onDeath (wt.a(ro)): a village golem (not player-created) killed while a player is its attackingPlayer costs that player 5.
+    else if (e.type === "iron_golem" && !e.playerCreated && e.recentlyHit > 0) this.ai.brain(e).village?.changeReputation(source.playerName ?? PLAYER_NAME, -5);
+    this.gearDeath(e); // horse-gear-live.js: the horse inventory (the lead stays on the corpse)
     // ... and only while gamerule doMobLoot is true (dropFewItems, dropEquipment and the rare drop alike).
     if ((e.growingAge >= 0 || e.type === "zombie" || e.type === "pigman") && gameRule("doMobLoot")) {
       const at = { x: e.x, y: e.y, z: e.z };
@@ -1467,7 +1489,11 @@ export class EntityWorld {
     if (e.type === "wither") return witherTalk(this, e); // wither-boss-mobs.js
     if (e.type === "horse") return this.horseTalk(e, livingSoundRoll);
     const rand = entityRandom(e);
-    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120) || e.type === "creeper" || e.type === "iron_golem" || e.type === "snow_golem" || e.type === "giant" || isSlimeLike(e)) return; // EntityGiantZombie has no living sound (the roll still runs)
+    if (!livingSoundRoll(e, rand, HOSTILE.has(e.type) || e.type === "villager" ? 80 : 120)) return;
+    // EntityGolem.getLivingSound is "none" (wl.t): the sound is silent but r() still evaluates getSoundVolume and getSoundPitch (two nextFloat)
+    // (village-fight-reference.json: the golem draws "f", "f" after a successful roll).
+    if (e.type === "iron_golem" || e.type === "snow_golem") { rand.nextFloat(); rand.nextFloat(); return; }
+    if (e.type === "creeper" || e.type === "giant" || isSlimeLike(e)) return; // EntityGiantZombie has no living sound (the roll still runs)
     // EntityWolf.getLivingSound (t) rolls before the sound's pitch.
     const wolfSound = e.type === "wolf" ? wolfSay(e, rand) : e.type === "ocelot" ? ocelotSay(e, rand) : null;
     const pitch = f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2)) + (e.growingAge < 0 ? f(1.5) : 1));
@@ -1503,10 +1529,12 @@ export class EntityWorld {
     // Fire blocks and cactus act in moveEntity's tail (walk, block-collisions.js).
     e.burn = e.fire > 0 ? 1 : 0;
   }
+  // EntityAnimal.interact (leads2-reference.json sizes): the check is the held stack itself, whatever its size (a stack of size <= 0 still feeds);
+  // `--stackSize` and the emptying of a slot left at size <= 0 run outside Creative only.
   feed(e,id,survival){
-    if(!this.entities.includes(e)||e.health<=0||!BREED_ITEM[e.type]||id!==BREED_ITEM[e.type]||(!survival.creative&&!survival.count(id)))return false;
+    if(!this.entities.includes(e)||e.health<=0||!BREED_ITEM[e.type]||id!==BREED_ITEM[e.type]||(survival.inventory.held?.id!==id&&!survival.count(id)))return false;
     if(e.growingAge!==0||e.love>0)return false;e.love=600;
-    if(!survival.creative)survival.take(id);
+    if(!survival.creative){if(survival.inventory.held?.id===id)survival.inventory.decr(survival.inventory.current,1);else survival.take(id);}
     // EntityAnimal.func_146082_f: World.setEntityState(18), which the client shows as 7 hearts.
     if(this.fx){const t=ENTITY_TYPES[e.type];burst(this.fx,'heart',7,{x:e.x,y:e.y,z:e.z,width:t.width,height:t.height},entityRandom(e),0.5);}
     return true;
@@ -1562,7 +1590,7 @@ export class EntityWorld {
   hitMob(e, target) {
     if (!this.entities.includes(target) || target.health <= 0) return false;
     const melee = e.equipment ? meleeEffects(e.equipment[0]) : null;
-    const hit = this.attackEntityFrom(target, f(attackDamage(e, e.type === "wolf" ? wolfAttack(e) : ENTITY_TYPES[e.type].damage, e.equipment ? attackBonus(e.equipment) : 0) + (melee ? melee.damage : 0)), { from: { x: e.x, z: e.z }, attacker: e, name: "mob", player: false });
+    const hit = this.attackEntityFrom(target, f(mobHitAmount(e) + (melee ? melee.damage : 0)), { from: { x: e.x, z: e.z }, attacker: e, name: "mob", player: false });
     if (hit && melee) {
       // Knockback (EntityLivingBase.getKnockbackModifier): Entity.addVelocity along the mob's facing; Fire Aspect: setFire(level * 4).
       if (melee.knockback > 0) {
@@ -1673,7 +1701,7 @@ export class EntityWorld {
     if (!attacker) return;
     village.addOrRenewAggressor(attacker);
     if (!source.player) return;
-    village.changeReputation(PLAYER_NAME, e.growingAge < 0 ? -3 : -1);
+    village.changeReputation(source.playerName ?? PLAYER_NAME, e.growingAge < 0 ? -3 : -1);
     // status 13 is drawn by the client entity's Random (village-ai.js visualRandom), at the entity's real size
     if (e.health > 0) this.villageBurst("angryVillager", e, { width: brain.width, height: brain.height }, visualRandom(e));
   }
@@ -1682,7 +1710,7 @@ export class EntityWorld {
   villagerDied(e, source) {
     const village = this.ai.brain(e).village;
     if (!village) return;
-    if (source.player) village.changeReputation(PLAYER_NAME, -2);
+    if (source.player) village.changeReputation(source.playerName ?? PLAYER_NAME, -2);
     else if (source.attacker && HOSTILE.has(source.attacker.type ?? source.attacker)) village.endMatingSeason();
     else if (!source.attacker) {
       const p = this.ai.player;
@@ -1852,7 +1880,7 @@ export class EntityWorld {
       e.attack = Math.max(0, e.attack - 1);
       e.flee = Math.max(0, e.flee - 1);
       // EntityLivingBase.onEntityUpdate: the revenge target lapses after 100 ticks.
-      if (e.revenge && e.age + 1 - e.revenge > 100) e.revenge = 0;
+      if (e.revenge && (e.age + 1 - e.revenge > 100 || (revengeOf(e) !== "player" && !(revengeOf(e)?.health > 0 && this.entities.includes(revengeOf(e)))))) e.revenge = 0;
       const wasInWater = e.inWater;
       if (e.inWater = inWater(this.world, e, t.width, t.height)) e.fallDistance = 0;
       // Entity.handleWaterMovement: entering water (not on the entity's first update, when
@@ -1922,7 +1950,7 @@ export class EntityWorld {
     // world's entities: each mob beside the player is pushed away once more (the server's copy
     // of the player is pushed too, which the client never sees).
     const p = this.ai.player;
-    if (p?.alive) {
+    if (p?.alive && !p.unticked) { // `unticked`: the village-fight replay's player, which the native probe never ticks
       const box = pushBox(p, p.width, p.height), near = [box[0] - 0.2, box[1], box[2] - 0.2, box[3] + 0.2, box[4], box[5] + 0.2];
       for (const o of this.entities) if (Math.abs(o.x - p.x) <= 12 && Math.abs(o.z - p.z) <= 12 && Math.abs(o.y - p.y) <= 12 && pushable(o) && boxesMeet(near, pushBox(o, ...this.size(o)))) applyEntityCollision(o, p, true, false);
     }
@@ -1938,6 +1966,7 @@ export class EntityWorld {
     this.push(e, t);
     if (e.type === "chicken") this.chickenUpdate(e);
     this.swingLimbs(e);
+    if (e.leash) this.leashTick(e); // EntityLiving.onUpdate -> updateLeashedState also runs for a corpse (horse-gear-live.js)
   }
   size(o) {
     if (isVehicle(o)) return vehicleSize(o); // a boat or minecart a rider asks the height of (vehicle-seat.js)
@@ -2264,7 +2293,7 @@ export class EntityWorld {
     if (!p.alive || s.creative) {
       if (e.spiderTarget) m.navigator.clearPathEntity();
       e.spiderTarget = false;
-    } else if (e.revenge && e.revenge !== e.spiderRevenge) {
+    } else if (e.revenge && e.revenge !== e.spiderRevenge && revengeOf(e) === "player") {
       e.spiderRevenge = e.revenge;
       e.spiderTarget = true;
     } else if (!e.spiderTarget && this.ai.closestVulnerablePlayer(e, 16) && spiderFindsPlayer(light)) e.spiderTarget = true;
@@ -2449,9 +2478,10 @@ export class EntityWorld {
     if (e.type !== "wolf" || e.health <= 0 || !this.entities.includes(e)) return false;
     const stack = survival.held, held = stack ? { id: stack.id, damage: stack.damage || 0, count: stack.count || 1 } : null;
     const creative = !!survival.creative, rand = entityRandom(e), box = { x: e.x, y: e.y, z: e.z, width: ENTITY_TYPES.wolf.width, height: ENTITY_TYPES.wolf.height };
-    const out = wolfClick(e, held, wolfTamed(e), creative, rand), brain = this.ai.brain(e);
-    const take = (n) => { if (n > 0 && !creative) survival.inventory.decr(survival.inventory.current, n); };
-    take(out.consume);
+    const out = wolfClick(e, held, ownerPresent(e), creative, rand), brain = this.ai.brain(e);
+    const take = (n, spend = false) => { if (n > 0 && !creative) survival.inventory.decr(survival.inventory.current, n); if (spend && n > 0) clearSpentStack(survival); };
+    take(out.consume, true); // wolf and ocelot: `if (size <= 0) setInventorySlotContents(null)` follows the use in every mode (love's EntityAnimal path does not)
+    if (out.heal > 0 || out.status > 0) clearSpentStack(survival); // meat that heals, a bone that tames or fails: the emptied slot is cleared in Creative too (leads2-reference.json sizes)
     if (out.tamed || out.sitToggle) { brain.navigator.clearPathEntity(); brain.attackTarget = null; }
     // EntityTameable.func_70908_e: 7 hearts after taming (status 7) or 7 smoke after a failed bone (status 6).
     if (out.status && this.fx) burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5);
@@ -2477,9 +2507,10 @@ export class EntityWorld {
     const stack = survival.held, held = stack ? { id: stack.id, damage: stack.damage || 0, count: stack.count || 1 } : null;
     const creative = !!survival.creative, rand = entityRandom(e), box = { x: e.x, y: e.y, z: e.z, width: ENTITY_TYPES.ocelot.width, height: ENTITY_TYPES.ocelot.height };
     const brain = this.ai.brain(e), p = this.ai.player, worldRand = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
-    const out = ocelotClick(e, held, { isOwner: ocelotTamed(e), creative, tempting: !!brain.temptRunning?.(), distSq: brain.distSq(p), rand, worldRand });
-    const take = (n) => { if (n > 0 && !creative) survival.inventory.decr(survival.inventory.current, n); };
-    take(out.consume);
+    const out = ocelotClick(e, held, { isOwner: ownerPresent(e), creative, tempting: !!brain.temptRunning?.(), distSq: brain.distSq(p), rand, worldRand });
+    const take = (n, spend = false) => { if (n > 0 && !creative) survival.inventory.decr(survival.inventory.current, n); if (spend && n > 0) clearSpentStack(survival); };
+    take(out.consume, true); // wolf and ocelot: `if (size <= 0) setInventorySlotContents(null)` follows the use in every mode (love's EntityAnimal path does not)
+    if (out.status > 0) clearSpentStack(survival); // a fish that tames or fails: the emptied slot is cleared in Creative too (leads2-reference.json sizes)
     if (out.tamed || out.sitToggle) { brain.navigator.clearPathEntity(); brain.attackTarget = null; }
     // EntityTameable.func_70908_e: 7 hearts after taming (status 7) or 7 smoke after a failed fish (status 6).
     if (out.status && this.fx) burst(this.fx, out.status === 7 ? "heart" : "smoke", 7, box, rand, 0.5);

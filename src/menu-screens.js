@@ -197,8 +197,10 @@ export function createWorldLayout(w, h) {
       create: btn(c - 155, h - 28, 150), cancel: btn(c + 5, h - 28, 150), gameMode: btn(c - 75, 115, 150),
       moreOptions: btn(c - 75, 187, 150), mapFeatures: btn(c - 155, 100, 150), bonusItems: btn(c + 5, 151, 150),
       mapType: btn(c + 5, 100, 150), allowCommands: btn(c - 155, 151, 150), customize: btn(c + 5, 120, 150),
-      // Browser addition (not 1.7.10): the opt-in guns mod toggle, on the name page under the game mode lines.
-      guns: btn(c - 75, 163, 150),
+      // Browser addition (not 1.7.10): the opt-in mod toggles, on the name page under the game mode lines: guns on the left
+      // half of the row, the recipe viewer on the right.
+      guns: btn(c - 155, 163, 150),
+      recipes: btn(c + 5, 163, 150),
     },
     field: btn(c - 100, 60, 200),
     labels: {

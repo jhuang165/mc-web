@@ -77,9 +77,14 @@ export function gearNbtFields(tag, shiftX = 0, shiftZ = 0) {
   if (name) { out.customName = name; if (tagValue(tag, 'CustomNameVisible', NBT.BYTE, 0)) out.customNameVisible = true; }
   if (tagValue(tag, 'PersistenceRequired', NBT.BYTE, 0)) out.persistent = true;
   if (tagValue(tag, 'Leashed', NBT.BYTE, 0)) {
-    const l = tagValue(tag, 'Leash', NBT.COMPOUND);
-    if (l && tagValue(l, 'X', NBT.INT) !== undefined && tagValue(l, 'Y', NBT.INT) !== undefined && tagValue(l, 'Z', NBT.INT) !== undefined) out.leash = { knot: { x: tagValue(l, 'X', NBT.INT) + shiftX, y: tagValue(l, 'Y', NBT.INT), z: tagValue(l, 'Z', NBT.INT) + shiftZ } };
-    else if (l && tagValue(l, 'UUIDMost', NBT.LONG) !== undefined) out.leash = { holder: 'player' };
+    // sw.bP (bytecode-read, probed leads2-reference.json leadRead): a UUIDMost/UUIDLeast pair of two long tags wins over X/Y/Z (a wrong UUID is not
+    // rescued by the knot); otherwise X, Y and Z of any numeric tag type (byte to double) are floored into a knot; anything else drops the lead.
+    const l = tagValue(tag, 'Leash', NBT.COMPOUND), kind = (k) => l?.get(k)?.type, isNum = (k) => kind(k) >= NBT.BYTE && kind(k) <= NBT.DOUBLE;
+    if (l && kind('UUIDMost') === NBT.LONG && kind('UUIDLeast') === NBT.LONG) out.leash = { holder: 'player' };
+    else if (l && isNum('X') && isNum('Y') && isNum('Z')) out.leash = { knot: { x: Math.floor(Number(l.get('X').value)) + shiftX, y: Math.floor(Number(l.get('Y').value)), z: Math.floor(Number(l.get('Z').value)) + shiftZ } };
+    // No usable holder: sw.bP finds none and clearLeashed(false, true) drops a lead item at the mob's feet on its first tick (leads3-reference.json
+    // leadRead). `lost` keeps the Leashed flag until horse-gear-live.js leashRestore does that.
+    else out.leash = { lost: true };
   }
   return out;
 }

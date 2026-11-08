@@ -10,7 +10,7 @@
 // is how BlockStaticLiquid.onNeighborBlockChange (ant.a) wakes it up.
 //
 // Lava differs from water in akr.a (updateTick): the level step is 2 in the
-// overworld (1 where WorldProvider.hasNoSky), a rising level takes four times
+// overworld (1 where WorldProvider.isHellWorld, aqo.f), a rising level takes four times
 // as long three times in four (the only use of the Random there), there is no
 // infinite source, and lava may flow into water (it never lets water in). The
 // BlockLiquid.func_149805_n hardening (obsidian for a source, cobblestone for
@@ -27,8 +27,8 @@ const f = Math.fround,
   STONE = 3,
   COBBLESTONE = 12,
   OBSIDIAN = 22;
-// BlockLiquid.tickRate (alw.a(ahb)): 5 for water, 30 for lava (10 when
-// WorldProvider.isHellWorld). WorldServer.tickUpdates takes at most 1000 entries
+// BlockLiquid.tickRate (alw.a(ahb)): 5 for water, 30 for lava (10 where `ahb.t.g` is set: both the Nether and the End; dimension-ticks-reference.json,
+// bytecode-read. The same class has the field of the level step, `aqo.f`, set by the Nether only). WorldServer.tickUpdates takes at most 1000 entries
 // per tick.
 export const TICK_RATE = 5,
   LAVA_TICK_RATE = 30,
@@ -199,12 +199,14 @@ export class Fluids {
   // pitch)` is BlockLiquid.func_149799_m's random.fizz at volume 0.5. `seed`
   // seeds a standalone Random; the game supplies World.rand as `random` so lava
   // ticks and fizz pitches share it with weather/fire/trees as in ahb.s.
-  // `nether` selects the lava tick rate 10 and level step 1 of the Nether.
-  constructor(world, { wash = () => {}, fizz = () => {}, seed = 0, random = new JavaRandom(seed), nether = false } = {}) {
+  // `nether` selects the lava level step 1 (aqo.f, the Nether only); `skyless` the lava tick rate 10 (aqo.g: the Nether and the End,
+  // default: the same as `nether`).
+  constructor(world, { wash = () => {}, fizz = () => {}, seed = 0, random = new JavaRandom(seed), nether = false, skyless = nether } = {}) {
     this.world = world;
     this.wash = wash;
     this.onFizz = fizz;
     this.nether = nether;
+    this.skyless = skyless;
     this.random = random;
     this.time = 0;
     this.serial = 0;
@@ -257,7 +259,7 @@ export class Fluids {
   schedule(x, y, z, delay) {
     const block = this.world.get(x, y, z);
     if (!this.world.inside(x, y, z) || !isLiquid(block)) return;
-    this.enqueue(x, y, z, block, delay ?? tickRate(block, this.nether));
+    this.enqueue(x, y, z, block, delay ?? tickRate(block, this.skyless));
   }
   enqueue(x, y, z, block, delay) {
     const key = this.key(x, y, z, block);
@@ -433,9 +435,9 @@ export class Fluids {
   // BlockDynamicLiquid.updateTick (akr.a(ahb, IIILjava/util/Random;)V).
   updateTick(x, y, z) {
     const w = this.world, kind = w.get(x, y, z), lava = kind === LAVA;
-    // var7: the level step (2 for lava except where WorldProvider.hasNoSky).
+    // var7: the level step (2 for lava except where WorldProvider.isHellWorld, aqo.f: the Nether).
     const step = lava && !this.nether ? 2 : 1;
-    let rate = tickRate(kind, this.nether);
+    let rate = tickRate(kind, this.skyless);
     let l = decay(w, x, y, z, kind);
     if (l > 0) {
       this.sources = 0;

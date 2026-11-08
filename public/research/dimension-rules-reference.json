@@ -1,0 +1,242 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classCount": 1782,
+ "method": "javap -c -p -constants over every non-library class of the jar (tools/verify-dimension-rules.mjs); bytecode-read, no class was executed. Provider flags and World.getActualHeight at run time are in light-engine3-reference.json (unchanged classes).",
+ "providerFields": {
+  "aqo.f": "isHellWorld: WorldProviderHell only",
+  "aqo.g": "hasNoSky: WorldProviderHell and WorldProviderEnd",
+  "ahb.S": "getActualHeight = aqo.g ? 128 : 256"
+ },
+ "readers": {
+  "aqo.f": [
+   {
+    "class": "abo",
+    "name": "ItemBucket",
+    "method": "public boolean a(ahb, int, int, int);"
+   },
+   {
+    "class": "akr",
+    "name": "BlockDynamicLiquid",
+    "method": "public void a(ahb, int, int, int, java.util.Random);"
+   },
+   {
+    "class": "alp",
+    "name": "BlockIce",
+    "method": "public void a(ahb, int, int, int, java.util.Random);"
+   },
+   {
+    "class": "alp",
+    "name": "BlockIce",
+    "method": "public void a(ahb, yz, int, int, int, int);"
+   }
+  ],
+  "aqo.g": [
+   {
+    "class": "adh",
+    "name": "ItemMap",
+    "method": "public void a(ahb, sa, ayi);"
+   },
+   {
+    "class": "ahb",
+    "name": "World",
+    "method": "protected void o();"
+   },
+   {
+    "class": "ahb",
+    "name": "World",
+    "method": "public boolean t(int, int, int);"
+   },
+   {
+    "class": "ahb",
+    "name": "World",
+    "method": "public int a(ahn, int, int, int);"
+   },
+   {
+    "class": "ahb",
+    "name": "World",
+    "method": "public int S();"
+   },
+   {
+    "class": "ahb",
+    "name": "World",
+    "method": "public void b(int, int, int, int);"
+   },
+   {
+    "class": "ahr",
+    "name": "ChunkCache",
+    "method": "public int a(ahn, int, int, int);"
+   },
+   {
+    "class": "akg",
+    "name": "BlockDaylightDetector",
+    "method": "public void e(ahb, int, int, int);"
+   },
+   {
+    "class": "alw",
+    "name": "BlockLiquid",
+    "method": "public int a(ahb);"
+   },
+   {
+    "class": "apx",
+    "name": "Chunk",
+    "method": "private void h(int, int, int);"
+   },
+   {
+    "class": "apx",
+    "name": "Chunk",
+    "method": "public apx(ahb, aji[], byte[], int, int);"
+   },
+   {
+    "class": "apx",
+    "name": "Chunk",
+    "method": "public apx(ahb, aji[], int, int);"
+   },
+   {
+    "class": "apx",
+    "name": "Chunk",
+    "method": "public boolean a(int, int, int, aji, int);"
+   },
+   {
+    "class": "apx",
+    "name": "Chunk",
+    "method": "public int a(ahn, int, int, int);"
+   },
+   {
+    "class": "apx",
+    "name": "Chunk",
+    "method": "public int b(int, int, int, int);"
+   },
+   {
+    "class": "apx",
+    "name": "Chunk",
+    "method": "public void a(ahn, int, int, int, int);"
+   },
+   {
+    "class": "apx",
+    "name": "Chunk",
+    "method": "public void a(byte[], int, int, boolean);"
+   },
+   {
+    "class": "apx",
+    "name": "Chunk",
+    "method": "public void b();"
+   },
+   {
+    "class": "apx",
+    "name": "Chunk",
+    "method": "public void b(boolean);"
+   },
+   {
+    "class": "apx",
+    "name": "Chunk",
+    "method": "public void p();"
+   },
+   {
+    "class": "aqk",
+    "name": "AnvilChunkLoader",
+    "method": "private apx a(ahb, dh);"
+   },
+   {
+    "class": "aqk",
+    "name": "AnvilChunkLoader",
+    "method": "private void a(apx, ahb, dh);"
+   },
+   {
+    "class": "aqu",
+    "name": "ChunkProviderFlat",
+    "method": "public apx d(int, int);"
+   },
+   {
+    "class": "arm",
+    "name": "WorldGen (flower family, reads hasNoSky)",
+    "method": "public boolean a(ahb, java.util.Random, int, int, int);"
+   },
+   {
+    "class": "aro",
+    "name": "WorldGen (flower family, reads hasNoSky)",
+    "method": "public boolean a(ahb, java.util.Random, int, int, int);"
+   },
+   {
+    "class": "bjf",
+    "name": "WorldClient",
+    "method": "protected void o();"
+   },
+   {
+    "class": "gx",
+    "name": "S21PacketChunkData (extractor)",
+    "method": "public static gy a(apx, boolean, int);"
+   },
+   {
+    "class": "gz",
+    "name": "S26PacketMapChunkBulk",
+    "method": "public gz(java.util.List);"
+   },
+   {
+    "class": "mw",
+    "name": "EntityPlayerMP",
+    "method": "public mw(net.minecraft.server.MinecraftServer, mt, com.mojang.authlib.GameProfile, mx);"
+   },
+   {
+    "class": "ur",
+    "name": "EntityAIMoveIndoors",
+    "method": "public boolean a();"
+   }
+  ],
+  "World.getActualHeight": [
+   {
+    "class": "aho",
+    "name": "SpawnerAnimals",
+    "method": "protected static agt a(ahb, int, int);"
+   },
+   {
+    "class": "ahp",
+    "name": "Teleporter",
+    "method": "public boolean a(sa);"
+   },
+   {
+    "class": "ahp",
+    "name": "Teleporter",
+    "method": "public boolean b(sa, double, double, double, float);"
+   }
+  ]
+ },
+ "worldRandom": {
+  "rand": "new Random() (unseeded)",
+  "updateLCG": "new Random().nextInt() (unseeded)",
+  "perInstance": true,
+  "worldServerReseeds": false,
+  "constructors": [
+   {
+    "signature": "public ahb(azc, java.lang.String, aqo, ahj, qi);",
+    "randomInstructions": [
+     "new           // class java/util/Random",
+     "invokespecial // Method java/util/Random.\"<init>\":()V",
+     "invokevirtual // Method java/util/Random.nextInt:()I",
+     "putfield      // Field k:I",
+     "new           // class java/util/Random",
+     "invokespecial // Method java/util/Random.\"<init>\":()V",
+     "putfield      // Field s:Ljava/util/Random;",
+     "getfield      // Field s:Ljava/util/Random;",
+     "invokevirtual // Method java/util/Random.nextInt:(I)I"
+    ],
+    "sequence": "new init() nextInt() put k new init() put s get s nextInt(int)"
+   },
+   {
+    "signature": "public ahb(azc, java.lang.String, ahj, aqo, qi);",
+    "randomInstructions": [
+     "new           // class java/util/Random",
+     "invokespecial // Method java/util/Random.\"<init>\":()V",
+     "invokevirtual // Method java/util/Random.nextInt:()I",
+     "putfield      // Field k:I",
+     "new           // class java/util/Random",
+     "invokespecial // Method java/util/Random.\"<init>\":()V",
+     "putfield      // Field s:Ljava/util/Random;",
+     "getfield      // Field s:Ljava/util/Random;",
+     "invokevirtual // Method java/util/Random.nextInt:(I)I"
+    ],
+    "sequence": "new init() nextInt() put k new init() put s get s nextInt(int)"
+   }
+  ]
+ }
+}

@@ -7,7 +7,7 @@
 // is GuiEditSign.updateScreen's (one per client tick, fed by the host's tick), and "> text <" is drawn while counter / 6 % 2 == 0.
 import { SignEditModel, SIGN_TEXT, SIGN_POST, MAX_LINE } from './signs.js';
 import { signGuiGeometry } from './sign-layout.js';
-import { versioned } from './media-version.js';
+import { loadGuiImage } from './gui-anaglyph.js';
 import { drawFontString, onAtlasChange } from './sign-font.js';
 import { getStringWidth } from './font-renderer.js';
 
@@ -39,8 +39,7 @@ export function drawSignGui(ctx, model, { standing, blink, image }) {
 // `host`: {show(title, canvas, { done, standing, tick, closed }), close(), markUnsaved()}; `signs` the Signs store; `tile` the tile.
 export function openSignEditor(host, signs, tile, world) {
   const standing = world?.get?.(tile.x, tile.y, tile.z) === SIGN_POST, S = signGuiGeometry(standing);
-  const model = new SignEditModel(tile.text), image = new Image();
-  image.src = versioned(SIGN_TEXTURE);
+  const model = new SignEditModel(tile.text), image = loadGuiImage(SIGN_TEXTURE); // converted while 3D Anaglyph is on
   const canvas = document.createElement('canvas');
   canvas.id = 'sign-edit-canvas';
   canvas.width = Math.ceil(S.bounds.w * G);
@@ -50,7 +49,10 @@ export function openSignEditor(host, signs, tile, world) {
   let ticks = 0, stopped = false;
   const save = () => { if (signs.update(tile.x, tile.y, tile.z, model.lines)) host.markUnsaved?.(); };
   const paint = () => drawSignGui(ctx, model, { standing, blink: Math.floor(ticks / 6) % 2 === 0, image });
-  const stop = () => { if (stopped) return; stopped = true; offAtlas(); window.removeEventListener('keydown', onKey, true); };
+  // GuiEditSign.drawScreen draws the lines through FontRenderer every frame: a line with a section sign (§k picks new glyphs each draw) repaints per animation frame
+  let raf = 0;
+  const frame = () => { if (stopped) return; if (model.lines.some((l) => l.includes('§'))) paint(); raf = requestAnimationFrame(frame); };
+  const stop = () => { if (stopped) return; stopped = true; if (raf) cancelAnimationFrame(raf); offAtlas(); window.removeEventListener('keydown', onKey, true); };
   const finish = () => { save(); stop(); host.close(); };
   const onKey = (e) => {
     if (!canvas.isConnected) { stop(); return; }
@@ -74,6 +76,7 @@ export function openSignEditor(host, signs, tile, world) {
   window.addEventListener('keydown', onKey, true);
   image.onload = paint;
   paint();
+  if (typeof requestAnimationFrame === 'function') raf = requestAnimationFrame(frame);
   return { model, stop, tick: () => { ticks++; paint(); } };
 }
 export { MAX_LINE };

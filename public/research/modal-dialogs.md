@@ -2,7 +2,7 @@
 
 Target: Minecraft Java 1.7.10. Evidence label for every native claim below: **bytecode-read** (javap -c -p of the unchanged client jar, nothing executed, no probe). Positions are in `modal-dialogs.json` and pinned by `src/modal-dialogs.test.js`. This does not claim full GUI parity.
 
-The DOM `modal()` helper of `main.js` is now used only by the container screens (`openContainer`) and the written-book screen. Every other call site was rebuilt in `src/modal-dialogs.js` as a `menu-ui.js` Gui screen: FontRenderer glyphs, GuiButton widgets, the `gui.button.press` click, GUI-scale units.
+Batch 27 audit: `main.js` has no `modal()` call left (the container screens moved to `src/container-screens.js` and the written book to `book-ui.js` in batch 22; `grep 'modal(' src/*.js` finds only comments). The `#modal` element remains only as the host of the GuiContainer shell (`main.js` shell open/close, batch 22); no dialog is built in it. Every dialog was rebuilt in `src/modal-dialogs.js` as a `menu-ui.js` Gui screen: FontRenderer glyphs, GuiButton widgets, the `gui.button.press` click, GUI-scale units.
 
 | Call site (old modal) | Native counterpart | Status |
 | --- | --- | --- |

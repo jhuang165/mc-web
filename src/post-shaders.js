@@ -165,11 +165,13 @@ export function anaglyphFog([r, g, b]) {
 
 const QUAD_VS = "in vec3 Position;\nout vec2 uv;\nvoid main(){ uv = Position.xy * 0.5 + 0.5; gl_Position = vec4(Position.xy, 0.0, 1.0); }";
 const BLIT_FS = "uniform sampler2D tex;\nin vec2 uv;\nvoid main(){ fragColor = vec4(texture(tex, uv).rgb, 1.0); }";
-// Both eyes converted by the TextureUtil/updateFogColor matrix, then the pass masks: eye 0 writes G and B, eye 1 writes R.
+// Native merge: only the pass colour masks (eye 0 writes G and B, eye 1 writes R). The colour conversion happens earlier, at texture
+// upload and for fog/sky/cloud colours (anaglyph.js). `legacy` converts the final pixels instead (the pre-batch-27 method, kept
+// for comparison: window.__mcweb.post.legacyAnaglyph = true).
 const ANAGLYPH_FS = [
-  "uniform sampler2D eye0;\nuniform sampler2D eye1;\nin vec2 uv;",
+  "uniform sampler2D eye0;\nuniform sampler2D eye1;\nuniform float legacy;\nin vec2 uv;",
   "vec3 conv(vec3 c){ return vec3((c.r * 30.0 + c.g * 59.0 + c.b * 11.0) / 100.0, (c.r * 30.0 + c.g * 70.0) / 100.0, (c.r * 30.0 + c.b * 70.0) / 100.0); }",
-  "void main(){ vec3 a = conv(texture(eye0, uv).rgb), b = conv(texture(eye1, uv).rgb); fragColor = vec4(b.r, a.g, a.b, 1.0); }",
+  "void main(){ vec3 a = texture(eye0, uv).rgb, b = texture(eye1, uv).rgb; if (legacy > 0.5) { a = conv(a); b = conv(b); } fragColor = vec4(b.r, a.g, a.b, 1.0); }",
 ].join("\n");
 
 const target = (THREE_, w, h, depth) => new THREE_.WebGLRenderTarget(Math.max(1, w), Math.max(1, h), { depthBuffer: depth, minFilter: THREE_.NearestFilter, magFilter: THREE_.NearestFilter, format: THREE_.RGBAFormat, type: THREE_.UnsignedByteType });
@@ -196,7 +198,7 @@ export class PostProcessor {
     this.fsGeometry.setAttribute("Position", new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3));
     this.fsGeometry.setIndex([0, 1, 2, 0, 2, 3]);
     this.blit = this.#screenQuad(BLIT_FS, { tex: { value: null } });
-    this.merge = this.#screenQuad(ANAGLYPH_FS, { eye0: { value: null }, eye1: { value: null } });
+    this.merge = this.#screenQuad(ANAGLYPH_FS, { eye0: { value: null }, eye1: { value: null }, legacy: { value: 0 } });
     // The wrapped renderer methods run twice per frame in anaglyph mode (see #wrap).
     this.#wrap();
   }
@@ -262,11 +264,21 @@ export class PostProcessor {
     return program;
   }
 
+  // The option changed outside a frame (title screen, menus: scene.render is not running): GameSettings.setOptionValue refreshes the
+  // resources immediately, so scene.setRenderSettings calls this after every settings change.
+  syncAnaglyph() {
+    const anaglyph = !!this.anaglyph();
+    if (anaglyph === !!this.anaglyphOn) return;
+    this.anaglyphOn = anaglyph;
+    this.onAnaglyphChange?.(anaglyph);
+  }
+
   // --- frame boundaries -------------------------------------------------------------------------------
   // scene.render calls begin() before the sky is drawn; scene.endFrame() (after the first-person hand) calls end().
   begin(partial = 0) {
     const anaglyph = !!this.anaglyph(), group = this.group;
     this.partial = partial;
+    if (anaglyph !== !!this.anaglyphOn) this.onAnaglyphChange?.(anaglyph);
     this.anaglyphOn = anaglyph;
     this.active = anaglyph || !!group;
     if (!this.active) return false;
@@ -289,6 +301,7 @@ export class PostProcessor {
     this.active = false;
     const r = this.renderer;
     if (this.anaglyphOn) {
+      this.merge.material.uniforms.legacy.value = this.legacyAnaglyph ? 1 : 0;
       this.merge.material.uniforms.eye0.value = this.eyes[0].texture;
       this.merge.material.uniforms.eye1.value = this.eyes[1].texture;
       r.setRenderTarget(this.group ? this.main : null);

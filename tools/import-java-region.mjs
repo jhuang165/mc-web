@@ -14,7 +14,8 @@ const USAGE = `Usage: node tools/import-java-region.mjs [options] --out new.bloc
   --whole-save                         with --save: convert the whole save (every region file of the overworld, Nether and End)
                                        and embed the stored full columns under "bases" in the .blockworld.json (the browser
                                        importer writes them back); columns beyond ~96 MiB of JSON are left out and counted in
-                                       wholeSave.basesOmitted (they regenerate from the seed). No --area options apply.
+                                       wholeSave.basesOmitted (they regenerate from the seed). Same importer as the browser (player,
+                                       stats and data/*.dat included; chunks the save never populated are populated). No --area options apply.
   --level level.dat                    read the generator, flags and player from this level.dat (with region paths)
   --player-file PLAYER.dat             a playerdata/<uuid>.dat or players/<name>.dat instead of Data.Player
   --stats stats.json                   a stats/<uuid>.json for the statistics and achievements
@@ -70,17 +71,30 @@ async function saveStats(dir, playerPath) {
   return files.length === 1 ? join(dir, 'stats', files[0]) : null;
 }
 
-// --whole-save: the save folder as importWholeSave entries ({path, size, modified, read}); only level.dat and the region files.
-async function saveEntries(dir) {
+// --whole-save: the save folder as importWholeSave entries ({path, size, modified, read}), the same inputs the browser's folder
+// picker hands it: level.dat, the region files, playerdata/players/stats and data/*.dat (the importer picks the most recently
+// modified player and its stats exactly as in the browser). --player-file / --stats replace that choice.
+async function saveEntries(dir, {playerPath = null, statsPath = null} = {}) {
   const prefix = basename(dir) || 'save', entries = [];
   const add = async (rel) => {
     const path = join(dir, rel), info = await stat(path).catch(() => null);
     if (!info?.isFile()) return;
     entries.push({ path: `${prefix}/${rel.split('\\').join('/')}`, size: info.size, modified: info.mtimeMs, read: () => readBounded(path) });
   };
+  const addAs = async (file, rel) => {
+    const info = await stat(file).catch(() => null);
+    if (!info?.isFile()) throw new Error(`${file}: not a file`);
+    entries.push({ path: `${prefix}/${rel}`, size: info.size, modified: info.mtimeMs, read: () => readBounded(file) });
+  };
   await add('level.dat');
   for (const sub of ['region', 'DIM-1/region', 'DIM1/region'])
     for (const f of (await list(join(dir, sub))).filter((n) => n.endsWith('.mca'))) await add(`${sub}/${f}`);
+  if (playerPath) await addAs(playerPath, `playerdata/${basename(playerPath)}`);
+  else for (const sub of ['playerdata', 'players'])
+    for (const f of (await list(join(dir, sub))).filter((n) => n.endsWith('.dat'))) await add(`${sub}/${f}`);
+  if (statsPath) await addAs(statsPath, `stats/${basename(statsPath)}`);
+  else for (const f of (await list(join(dir, 'stats'))).filter((n) => n.endsWith('.json'))) await add(`stats/${f}`);
+  for (const f of (await list(join(dir, 'data'))).filter((n) => n.endsWith('.dat'))) await add(`data/${f}`);
   return entries;
 }
 async function writeNew(path, text) {
@@ -126,10 +140,10 @@ try {
     else inputs.push(arg);
   }
   if (wholeSave) {
-    if (!saveDir || levelPath || inputs.length || dimensionAreas.size || options.area || options.destination) throw new Error('--whole-save takes only --save DIR (plus --name, --report, --out)');
+    if (!saveDir || levelPath || inputs.length || dimensionAreas.size || options.area || options.destination) throw new Error('--whole-save takes only --save DIR (plus --player-file, --stats, --name, --report, --out)');
     if (!out?.endsWith('.blockworld.json')) throw new Error(USAGE);
     for (const path of [out, reportPath].filter(Boolean)) if (await exists(path)) throw new Error(`${path} already exists; choose a new output file`);
-    const result = await wholeSaveRecord(await saveEntries(saveDir), {name: options.name});
+    const result = await wholeSaveRecord(await saveEntries(saveDir, {playerPath, statsPath}), {name: options.name});
     await writeNew(out, JSON.stringify(result.record));
     if (reportPath) await writeNew(reportPath, JSON.stringify(result.report, null, 2));
     console.log(JSON.stringify(result.report, null, 2));

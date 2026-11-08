@@ -7,6 +7,7 @@
 //   creeper task 3: AvoidEntity ocelot 6 / 1.0 / 1.2 (1)
 // The classes take Task, TargetBase and the generic tasks from ai.js (as wolf-ai.js does), so this file does not import it back.
 import { tameableTasks } from "./wolf-ai.js";
+import { ownerPresent } from "./owner-links.js";
 import { isTamed, isRawFish, canMateWith, movePose, findSitSpot, sitBlockValid, SNEAK_SPEED, SPRINT_SPEED } from "./ocelot.js";
 import { BED } from "./world.js";
 const f = Math.fround;
@@ -90,7 +91,7 @@ export function buildOcelotTasks(m, K) {
   // EntityOcelot's constructor: getNavigator().setAvoidsWater(true).
   m.navigator.setAvoidsWater(true);
   // tg.cb: the owner is the (single) player once tamed.
-  m.owner = () => (isTamed(e) ? m.ai.player : null);
+  m.owner = () => (isTamed(e) && ownerPresent(e) ? m.ai.player : null);
   // EntityOcelot.bp (the AI update after the navigator, before the move helper): the speed the helper is about to use
   // decides sneaking (EntityAITempt's 0.6) and sprinting (1.33).
   m.updateAITick = () => Object.assign(e, movePose(m.moveHelper.update, m.moveHelper.speed));

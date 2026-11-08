@@ -20,7 +20,7 @@ export class NetherLive {
     this.world.onChange = (x, y, z, old, now) => {
       next?.(x, y, z, old, now);
       if (this.silent || old === now) return;
-      if (now === FIRE) this.light(x, y, z);
+      if (now === FIRE && this.world.dimension !== 1) this.light(x, y, z); // BlockFire.onBlockAdded (alb.b) tries the portal only where dimensionId <= 0
       for (const [dx, dy, dz] of NEIGHBOURS) this.neighbourChanged(x + dx, y + dy, z + dz);
     };
     return this;

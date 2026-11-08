@@ -4,7 +4,7 @@ import * as D from './dimensions.js';
 import { TerrainPeek, DimensionWorld } from './dimension-world.js';
 import { blankLoading, arrivalWarmer } from './travel-loading.js';
 import { StreamPrefetch } from './streaming-generator.js';
-import { runSteps, drain } from './steps.js';
+import { runSteps, drain, taskPause } from './steps.js';
 import { World } from './world.js';
 import { populationBlockMapperReady } from './population-world.js';
 import { createStreamWorker } from './streaming-generator.js';
@@ -91,4 +91,32 @@ test('endCrystalSteps yields between chunk rows and returns exactly the crystals
   assert.deepEqual(r.value, w.endCrystals(2));
   assert.deepEqual(await runSteps(w.endCrystalSteps(2), async () => {}), w.endCrystals(2));
   assert.deepEqual(drain(new DimensionWorld('12345', -1).endCrystalSteps()), []);
+});
+
+test('arrivalWarmer shares a large worker request over several lanes and disposes them all', async () => {
+  const ports = [];
+  const world = { streaming: true, generationVersion: 13, population: { cells: { max: 1 }, hasCell: () => false }, chunks: new Map(), pregenerated: new Map(), windowAt: () => ({ minX: 0, minZ: 0 }), baseColumns: new Map(), javaSeed: 1n };
+  const createWorker = () => { const p = { posted: [], postMessage(m) { p.posted.push(m); }, terminate() { p.ended = true; } }; ports.push(p); return p; };
+  const had = globalThis.Worker; globalThis.Worker = function Worker() {};
+  const warm = arrivalWarmer(world, { pause: async () => {}, createWorker, maxWorkers: 3, timeoutMs: 30 });
+  const done = warm.columns([[0, 0], [200, 0], [400, 0], [600, 0]]);
+  await Promise.resolve();
+  const asked = ports.map((p) => p.posted.filter((m) => m.type === 'cell').map((m) => m.x));
+  assert.equal(ports.length, 3, 'three lanes');
+  assert.deepEqual(asked.map((a) => a.length), [2, 1, 1], 'units dealt round-robin');
+  warm.dispose();
+  assert.ok(ports.every((p) => p.ended));
+  await done; globalThis.Worker = had;
+});
+
+test('taskPause yields to a macrotask, and to a real frame only after frameMs without one', async () => {
+  let t = 0, frames = 0, tasks = 0;
+  const channel = () => { const c = { port1: { onmessage: null, close() {} }, port2: { postMessage() { tasks++; queueMicrotask(() => c.port1.onmessage()); } } }; return c; };
+  const pause = taskPause({ frameMs: 100, now: () => t, frame: async () => { frames++; }, channel });
+  await pause(); t = 60; await pause();
+  assert.deepEqual([tasks, frames], [2, 0], 'short gaps yield to tasks only');
+  t = 120; await pause();
+  assert.deepEqual([tasks, frames], [2, 1], 'a frame once 100 ms have gone by');
+  await pause();
+  assert.deepEqual([tasks, frames], [3, 1], 'the frame clock restarts');
 });

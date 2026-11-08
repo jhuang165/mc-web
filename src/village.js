@@ -35,6 +35,7 @@ export class Village {
     this.doors = [];
     this.centerHelper = [0, 0, 0]; this.center = [0, 0, 0]; this.radius = 0;
     this.lastAddDoorTimestamp = 0; this.tickCounter = 0; this.numVillagers = 0; this.noBreedTicks = 0;
+    // Village.playerReputation is a TreeMap<String, Integer> (vz.j): keyed by the player's name, iterated in String.compareTo (UTF-16 code unit) order.
     this.reputation = new Map(); this.aggressors = []; this.numGolems = 0;
   }
   tick(t) {
@@ -119,6 +120,7 @@ export class Village {
     if (changed) this.recalculate();
   }
   // Reputation
+  reputationNames() { return [...this.reputation.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)); }   // TreeMap.keySet order
   playerReputation(name) { return this.reputation.get(name) ?? 0; }
   changeReputation(name, delta) {
     const v = Math.min(REPUTATION_MAX, Math.max(REPUTATION_MIN, this.playerReputation(name) + delta));
@@ -126,7 +128,7 @@ export class Village {
     return v;
   }
   isPlayerReputationTooLow(name) { return this.playerReputation(name) <= REPUTATION_AGGRESSIVE; }
-  changeAllReputations(delta) { for (const name of this.reputation.keys()) this.changeReputation(name, delta); }
+  changeAllReputations(delta) { for (const name of this.reputationNames()) this.changeReputation(name, delta); }
   endMatingSeason() { this.noBreedTicks = this.tickCounter; }
   isMatingSeason() { return this.noBreedTicks === 0 || this.tickCounter - this.noBreedTicks >= MATING_SEASON_TICKS; }
   // Aggressors (VillageAggressor: entity + tick)
@@ -141,7 +143,7 @@ export class Village {
   }
   findNearestTargetPlayer(self) {
     let best = null, bd = Infinity;
-    for (const name of this.reputation.keys()) {
+    for (const name of this.reputationNames()) {          // vz.c: keySet order, the later of two equally near players wins
       if (!this.isPlayerReputationTooLow(name)) continue;
       const p = this.host.playerEntity?.(name);
       if (p) { const s = self.distSqTo(p); if (s <= bd) { best = p; bd = s; } }
@@ -157,7 +159,7 @@ export class Village {
     return { pop: this.numVillagers, radius: this.radius, golems: this.numGolems, stable: this.lastAddDoorTimestamp, tick: this.tickCounter,
       mtick: this.noBreedTicks, c: [...this.center], ac: [...this.centerHelper],
       doors: this.doors.map((d) => [d.x, d.y, d.z, d.insideX, d.insideZ, d.lastActivity]),
-      players: [...this.reputation].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)) };
+      players: this.reputationNames().map((n) => [n, this.reputation.get(n)]) };
   }
   static fromJSON(host, j) {
     const v = new Village(host);

@@ -107,6 +107,8 @@ export class HeadlessColumns {
     this.calls = 0;
     this.last = null; this.lastKey = NaN;
     this.cells = !!world.population && world.generationVersion >= 13 && !world.dimension;
+    this.lightBudget = 2;
+    this.lstate = new Map(); // ringKey -> { hm, stamp, light, asked }: derived light data, kept off the column objects
     this.light = new RingLight(this);
     this.version = 0; this.act = new Map(); this.actVersion = -1;
     this.isHydrated = () => true; // main.js: the StreamStorage's loaded set
@@ -121,6 +123,23 @@ export class HeadlessColumns {
     Object.defineProperty(view, "lastChunk", { get: () => world.lastChunk, set: (v) => { world.lastChunk = v; } });
     this.view = view;
   }
+  key(cx, cz) { return ringKey(cx, cz); }
+  state(cx, cz) { const k = ringKey(cx, cz); let s = this.lstate.get(k); if (!s) this.lstate.set(k, s = { hm: null, hmStamp: 0, stamp: 0, light: null, asked: 0 }); return s; }
+  // Every neighbour chunk of (cx, cz) is resident or held (the bulk light of the column would read no air in their place).
+  complete(cx, cz) {
+    for (let a = cx - 1; a <= cx + 1; a++) for (let b = cz - 1; b <= cz + 1; b++) if (!this.resident(a * 16, b * 16) && !this.cols.has(ringKey(a, b))) return false;
+    return true;
+  }
+  // A change in chunk (cx, cz) can alter the light of its own column and the eight around it (light travels 14 cells). Its own height and
+  // precipitation maps go too: a replaced column object (arrival, adopt) starts its stamp again, so the stamp check alone would keep them.
+  invalidateLight(cx, cz) {
+    const own = this.lstate.get(ringKey(cx, cz));
+    if (own) { own.hm = null; own.pm = null; }
+    for (let a = cx - 1; a <= cx + 1; a++) for (let b = cz - 1; b <= cz + 1; b++) {
+      const st = this.lstate.get(ringKey(a, b));
+      if (st) { st.light = null; st.asked = 0; }
+    }
+  }
   resident(x, z) { const w = this.world; return x >= w.minX && x < w.maxX && z >= w.minZ && z < w.maxZ; }
   column(cx, cz) {
     const k = ringKey(cx, cz);
@@ -128,6 +147,19 @@ export class HeadlessColumns {
     const c = this.cols.get(k);
     if (c) { this.last = c; this.lastKey = k; }
     return c;
+  }
+  // Chunk.getPrecipitationHeight of a cell in a held column outside the window (weather.js precipitationHeight): one above the topmost
+  // block `stops` accepts, or -1. Kept per column (built on first use, rebuilt when the column's stamp moves).
+  precipitation(x, z, stops) {
+    const col = this.column(x >> 4, z >> 4);
+    if (!col) return -1;
+    const st = this.state(x >> 4, z >> 4);
+    if (!st.pm || st.pmStamp !== (col.stamp | 0)) {
+      const pm = st.pm = new Uint16Array(256), blocks = col.blocks, h = col.h;
+      st.pmStamp = col.stamp | 0;
+      for (let c = 0; c < 256; c++) { let y = h - 1; const base = c * h; while (y >= 0 && !stops(blocks[base + y])) y--; pm[c] = y < 0 ? 0 : y + 2; } // stored +1 so that -1 (nothing stops rain) is 0
+    }
+    return st.pm[(x & 15) * 16 + (z & 15)] - 1;
   }
   // Is the block at (x, z) in a chunk the spawner can read (resident, or with a headless column)?
   holds(x, z) { return this.resident(x, z) || this.cols.has(ringKey(x >> 4, z >> 4)); }
@@ -160,6 +192,7 @@ export class HeadlessColumns {
     if (base) col = compactColumn(base.blocks, base.metadata, this.height);
     this.cols.set(ringKey(cx, cz), col);
     this.applyEdits(col, cx, cz);
+    this.invalidateLight(cx, cz);
     this.touch();
   }
   touch() { this.version++; this.lastKey = NaN; }
@@ -182,6 +215,7 @@ export class HeadlessColumns {
     const col = this.cols.get(ringKey(cx, cz));
     if (!col || !this.isHydrated(cx, cz)) return false;
     writeCell(col, (x & 15) * 16 + (z & 15), y, b, meta);
+    this.invalidateLight(cx, cz);
     this.light.clear();
     this.lastKey = NaN;
     this.version++;
@@ -190,7 +224,7 @@ export class HeadlessColumns {
   }
   // Columns leaving the resident window keep their current blocks in the ring (the cells' copy would lack the live changes).
   adopt(chunks) {
-    for (const c of chunks) if (this.near(c.x, c.z, this.keep)) this.cols.set(ringKey(c.x, c.z), compactColumn(c.blocks, c.meta, this.height));
+    for (const c of chunks) if (this.near(c.x, c.z, this.keep)) { this.cols.set(ringKey(c.x, c.z), compactColumn(c.blocks, c.meta, this.height)); this.invalidateLight(c.x, c.z); }
     this.light.clear();
     this.touch();
   }
@@ -198,7 +232,7 @@ export class HeadlessColumns {
   onHydrated(records) {
     for (const r of records) {
       const col = this.cols.get(ringKey(r.x, r.z));
-      if (col && !this.resident(r.x * 16, r.z * 16)) this.applyEdits(col, r.x, r.z);
+      if (col && !this.resident(r.x * 16, r.z * 16)) { this.applyEdits(col, r.x, r.z); this.invalidateLight(r.x, r.z); }
     }
     this.light.clear();
     this.touch();
@@ -300,10 +334,13 @@ export class HeadlessColumns {
       this.cx = pcx; this.cz = pcz; this.dirty = true;
       for (const [k, c] of this.cols) {
         const cz = ((k % KEY) + KEY + KEY / 2) % KEY - KEY / 2, cx = (k - cz) / KEY;
-        if (!this.near(cx, cz, this.keep)) { this.cols.delete(k); this.stats.pruned++; this.touch(); }
+        if (!this.near(cx, cz, this.keep)) { this.cols.delete(k); this.lstate.delete(k); this.stats.pruned++; this.touch(); this.invalidateLight(cx, cz); }
       }
+      // The window moved with the player: columns beside it read different resident chunks now.
+      for (const [k, c] of this.cols) if (this.lstate.get(k)?.light) { const cz = ((k % KEY) + KEY + KEY / 2) % KEY - KEY / 2, cx = (k - cz) / KEY; if (this.resident(cx * 16 - 16, cz * 16) || this.resident(cx * 16 + 16, cz * 16) || this.resident(cx * 16, cz * 16 - 16) || this.resident(cx * 16, cz * 16 + 16) || this.resident(cx * 16 - 16, cz * 16 - 16) || this.resident(cx * 16 + 16, cz * 16 + 16) || this.resident(cx * 16 - 16, cz * 16 + 16) || this.resident(cx * 16 + 16, cz * 16 - 16)) { const st = this.lstate.get(k); st.light = null; st.asked = 0; } }
       this.light.clear();
     }
+    this.lightBudget = 2;
     if (this.dirty) this.rebuildQueue();
     if (!this.queue.length) return;
     this.calls++;
@@ -345,6 +382,7 @@ export class HeadlessColumns {
   // Units the worker should build next, nearest first: population cells [cellX, cellZ] for generation 13 and later, otherwise
   // chunks. Units already cached on the page are excluded (update() pulls those without a worker).
   units() {
+    if (!Number.isFinite(this.cx) || !Number.isFinite(this.cz)) return []; // not centred yet (update() has not run)
     if (this.dirty) this.rebuildQueue();
     if (this.generate) return [];
     const out = new Map(), cache = this.cells ? this.world.population.cells.map : null;
@@ -375,43 +413,72 @@ export class HeadlessColumns {
 // column's height map see the sky at 15. A reverse search from the queried cell finds the best source within 14 steps, which is
 // the same maximum over paths, so the value equals the volume's wherever the surrounding columns are present. Columns that are
 // missing read as air, so a cell within 15 blocks of the headless area's rim can read brighter than natively.
-const OPACITY = new Uint8Array(256), EMISSION = new Uint8Array(256), COST = new Uint8Array(256);
-for (let b = 0; b < 256; b++) {
-  const op = Math.min(255, lightOpacity(b)), e = lightEmission(b);
-  OPACITY[b] = op; EMISSION[b] = e;
-  COST[b] = op >= 15 && e > 0 ? 1 : Math.max(1, Math.min(15, op));
-}
-const R = 14, W = 2 * R + 1;
+import { OPACITY, EMISSION, COST, computeColumnLight } from "./ring-light.js";
+const R = 14, W = 2 * R + 1, HOT = 6; // a column asked about `hot` times by the search is lit whole (ring-light.js)
+const SEARCH_N = W * W * W;
 export class RingLight {
   constructor(ring) {
     this.ring = ring;
     this.emission = (x, y, z, b) => lightEmission(b);
     this.cache = new Map();
-    this.heights = new Map();
-    this.grid = new Int8Array(W * W * W);
-    this.queries = 0;
+    this.heights = new Map(); // resident cells only; held columns keep a height map of their own (col.hm)
+    this.grid = new Int8Array(SEARCH_N);
+    this.seen = new Int32Array(SEARCH_N);
+    this.gen = 0;
+    this.buckets = Array.from({ length: R + 1 }, () => []);
+    this.hot = HOT;
+    this.queries = 0; this.bulk = 0; this.bulkMs = 0;
   }
   get world() { return this.ring.view; } // LightVolume.packed reads blocks through world.get
   clear() { if (this.cache.size) this.cache.clear(); if (this.heights.size) this.heights.clear(); }
   // The first y from the top whose block has any opacity, plus one (LightVolume.column).
   heightAt(x, z) {
+    const ring = this.ring;
+    if (!ring.resident(x, z)) {
+      const col = ring.column(x >> 4, z >> 4);
+      if (!col) return 0; // a missing column reads as air
+      const st = ring.state(x >> 4, z >> 4);
+      let hm = st.hm;
+      if (!hm || st.hmStamp !== (col.stamp | 0)) {
+        hm = st.hm = new Uint16Array(256); st.hmStamp = col.stamp | 0;
+        const blocks = col.blocks, h = col.h;
+        for (let c = 0; c < 256; c++) { let y = h - 1; const base = c * h; while (y >= 0 && OPACITY[blocks[base + y]] === 0) y--; hm[c] = y + 1; }
+      }
+      return hm[(x & 15) * 16 + (z & 15)];
+    }
     const k = x * 2147483648 + z, hit = this.heights.get(k);
     if (hit !== undefined) return hit;
-    const ring = this.ring;
     let y = ring.height - 1;
-    const col = ring.resident(x, z) ? null : ring.column(x >> 4, z >> 4);
-    if (col) y = col.h - 1;
     while (y >= 0 && OPACITY[ring.get(x, y, z)] === 0) y--;
     this.heights.set(k, y + 1);
     return y + 1;
   }
-  // [sky, block] of a cell.
+  // [sky << 4 | block] of a cell.
   at(x, y, z) {
+    const ring = this.ring, col = ring.resident(x, z) ? null : ring.column(x >> 4, z >> 4);
+    if (col) {
+      const st = ring.state(x >> 4, z >> 4);
+      let L = st.light;
+      if (L && st.stamp !== (col.stamp | 0)) L = st.light = null;
+      if (!L && ++st.asked >= this.hot) L = this.light(x >> 4, z >> 4, st);
+      if (L) return y >= L.hh ? (ring.world.hasNoSky ? 0 : 240) : L.packed[((x & 15) * 16 + (z & 15)) * L.hh + y];
+    }
     const k = (x * 2147483648 + z) * 256 + y, hit = this.cache.get(k);
     if (hit !== undefined) return hit;
     const r = this.search(x, y, z);
     this.cache.set(k, r);
     return r;
+  }
+  // Lights a whole column when its eight neighbours are present (otherwise rim columns would be lit against air and recomputed as
+  // neighbours arrive) and the per-tick budget allows.
+  light(cx, cz, st) {
+    const ring = this.ring;
+    if (ring.lightBudget <= 0 || !ring.complete(cx, cz)) return null;
+    ring.lightBudget--;
+    const t = performance.now(), L = computeColumnLight(ring, cx, cz, !!ring.world.hasNoSky);
+    this.bulk++; this.bulkMs += performance.now() - t;
+    st.stamp = (ring.column(cx, cz).stamp | 0);
+    return (st.light = L);
   }
   skyAt(x, y, z) {
     if (y >= this.ring.height) return 15;
@@ -424,27 +491,23 @@ export class RingLight {
   search(qx, qy, qz) {
     this.queries++;
     const ring = this.ring, H = ring.height, noSky = ring.world.hasNoSky;
-    const init = (x, y, z, b) => [!noSky && y >= this.heightAt(x, z) ? 15 : 0, EMISSION[b]];
     const qb = ring.get(qx, qy, qz);
-    let [sky, block] = init(qx, qy, qz, qb);
+    let sky = !noSky && qy >= this.heightAt(qx, qz) ? 15 : 0, block = EMISSION[qb];
     if (COST[qb] >= 15) return sky << 4 | block;
     // Reverse Dijkstra over cells reached through receiving cells: acc is the summed cost of the cells after the node on its path.
-    const grid = this.grid;
-    grid.fill(127);
-    const at = (dx, dy, dz) => ((dx + R) * W + dy + R) * W + dz + R;
-    const buckets = Array.from({ length: R + 1 }, () => []);
-    grid[at(0, 0, 0)] = 0;
+    const grid = this.grid, seen = this.seen, buckets = this.buckets, gen = ++this.gen;
+    const mid = (R * W + R) * W + R;
+    grid[mid] = 0; seen[mid] = gen;
     buckets[0].push(0, 0, 0);
-    const maxSky = sky;
     for (let acc = 0; acc <= R; acc++) {
       const list = buckets[acc];
       for (let q = 0; q < list.length; q += 3) {
-        const dx = list[q], dy = list[q + 1], dz = list[q + 2];
-        if (grid[at(dx, dy, dz)] !== acc) continue;
+        const dx = list[q], dy = list[q + 1], dz = list[q + 2], i0 = ((dx + R) * W + dy + R) * W + dz + R;
+        if (grid[i0] !== acc) continue;
         const x = qx + dx, y = qy + dy, z = qz + dz, b = ring.get(x, y, z);
         if (acc > 0) {
-          const s = !noSky && y >= this.heightAt(x, z) ? 15 - acc : 0, e = EMISSION[b] - acc;
-          if (s > sky) sky = s;
+          if (!noSky && 15 - acc > sky && y >= this.heightAt(x, z)) sky = 15 - acc;
+          const e = EMISSION[b] - acc;
           if (e > block) block = e;
         }
         const cost = COST[b];
@@ -452,15 +515,14 @@ export class RingLight {
         const next = acc + cost;
         if (next > R) continue;
         for (let d = 0; d < 6; d++) {
-          const ax = d === 0 ? 1 : d === 1 ? -1 : 0, ay = d === 2 ? 1 : d === 3 ? -1 : 0, az = d === 4 ? 1 : d === 5 ? -1 : 0;
-          const nx = dx + ax, ny = dy + ay, nz = dz + az;
-          if (Math.abs(nx) > R || Math.abs(ny) > R || Math.abs(nz) > R || qy + ny < 0 || qy + ny >= H) continue;
-          const i = at(nx, ny, nz);
-          if (next < grid[i]) { grid[i] = next; buckets[next].push(nx, ny, nz); }
+          const nx = dx + (d === 0 ? 1 : d === 1 ? -1 : 0), ny = dy + (d === 2 ? 1 : d === 3 ? -1 : 0), nz = dz + (d === 4 ? 1 : d === 5 ? -1 : 0);
+          if (nx > R || nx < -R || ny > R || ny < -R || nz > R || nz < -R || qy + ny < 0 || qy + ny >= H) continue;
+          const i = ((nx + R) * W + ny + R) * W + nz + R;
+          if (seen[i] !== gen || next < grid[i]) { seen[i] = gen; grid[i] = next; buckets[next].push(nx, ny, nz); }
         }
       }
+      list.length = 0;
     }
-    void maxSky;
     return sky << 4 | block;
   }
 }
@@ -473,7 +535,7 @@ RingLight.prototype.level = LightVolume.prototype.level;
 export function createRing(world, { worker = false } = {}) {
   if (!world.streaming || !world.generateTerrainChunk) return null;
   const populated = !!world.population && world.generationVersion >= 13 && !world.dimension;
-  if (populated || (worker && !world.dimension)) return new HeadlessColumns(world);
+  if (populated || worker) return new HeadlessColumns(world);
   const source = (cx, cz) => {
     const k = `${cx},${cz}`;
     return world.pregenerated?.get(k) ?? world.baseColumns?.get(k) ?? world.generateTerrainChunk(cx, cz);

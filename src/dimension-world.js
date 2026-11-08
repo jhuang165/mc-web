@@ -18,7 +18,7 @@ import { structureTileRecords } from "./population-world.js";
 import { StreamingPopulation } from "./streaming-population.js";
 import { ChunkProviderHell, NetherGenWorld, hellChunkSeed } from "./nether-generator.js";
 import { EndTerrain, EndWorld, populateEndChunk, END_BIOME_ID, END_HEIGHT } from "./end-generator.js";
-import { providerOf, NETHER, END } from "./dimensions.js";
+import { providerOf, actualHeight, NETHER, END } from "./dimensions.js";
 
 const CHUNK = 65536;
 // Original block id -> internal id (metadata ignored by the generators except where noted). Unknown ids become netherrack/end stone.
@@ -63,8 +63,8 @@ export class DimensionWorld extends World {
     const dimension = DimensionWorld.pending;
     this.dimension = dimension;
     this.isEnd = dimension === END;
-    this.hasNoSky = providerOf(dimension).hasNoSky; // the Nether
-    this.isHell = dimension === NETHER;
+    this.hasNoSky = providerOf(dimension).hasNoSky; // aqo.g: Nether and End
+    this.isHell = providerOf(dimension).isHellWorld; // aqo.f: the Nether
     this.originX = this.originZ = 0;
     this.javaSeed = javaSeed(this.seed);
     this.javaGenerator = { manager: { cache: new Map() } }; // streamAround trims this biome cache
@@ -83,8 +83,8 @@ export class DimensionWorld extends World {
     this.maxX = this.maxZ = 0;
     this.seaLevel = dimension === NETHER ? 32 : 0;
   }
-  // The Nether has 128 usable layers (WorldProvider.getActualHeight); the End 128 of terrain with a build limit of 256.
-  get actualHeight() { return providerOf(this.dimension).hasNoSky ? 128 : 256; }
+  // World.getActualHeight: 128 in the Nether and the End (provider.hasNoSky); the build limit stays 256 (`height`).
+  get actualHeight() { return actualHeight(this.dimension); }
   fortressSpawns(x, y, z) {
     return fortressMonsterSpawnList(this.provider.bridge,
       (bx, by, bz) => this.get(bx, by, bz) === NETHER_BRICK ? 112 : 0, x, y, z);
@@ -205,13 +205,13 @@ export class TerrainPeek {
   constructor(world, edits = new Map(), { limit = 600 } = {}) {
     this.world = world; this.edits = edits; this.columns = new Map(); this.limit = limit; this.writes = [];
     this.dimension = world.dimension ?? 0; this.time = 0; this.seed = world.javaSeed ?? 0n;
-    this.actualHeight = this.dimension === NETHER ? 128 : 256;
+    this.actualHeight = actualHeight(this.dimension);
   }
   column(cx, cz) {
     const key = `${cx},${cz}`;
     let c = this.columns.get(key);
     if (!c) {
-      c = this.world.peekChunk?.(cx, cz) ?? this.world.generateTerrainChunk(cx, cz);
+      c = this.stored?.column(cx, cz) ?? this.world.peekChunk?.(cx, cz) ?? this.world.generateTerrainChunk(cx, cz);
       if (this.columns.size >= this.limit) this.columns.delete(this.columns.keys().next().value);
       this.columns.set(key, c);
     }
@@ -240,6 +240,8 @@ export class TerrainPeek {
       if (x < x0 || x > x1 || z < z0 || z > z1 || seen.has(k)) continue;
       seen.add(k); out.push([x, z]);
     }
+    // Imported stored columns (stored-peek.js StoredIndex, attached as `stored`) can hold a portal block too.
+    if (this.stored?.marker === id) for (const [x, z] of this.stored.portalColumns(x0, x1, z0, z1)) { const k = `${x},${z}`; if (!seen.has(k)) { seen.add(k); out.push([x, z]); } }
     return out.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   }
 }

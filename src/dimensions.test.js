@@ -23,10 +23,12 @@ test("Direction arrays and movement direction", () => {
 test("provider flags, light table, celestial angle and entrance", () => {
   for (const p of of("provider")) {
     const mine = D.providerOf(p.dimension);
-    assert.equal(!!mine.hasNoSky, p.hasNoSky === true && p.dimension === -1 ? true : !!mine.hasNoSky);
+    // The probe's `hasNoSky` is aqo.f (WorldProviderHell only); the table's names are native since batch 28 (hasNoSky = aqo.g).
+    assert.equal(mine.isHellWorld, p.hasNoSky === true);
+    assert.equal(mine.hasNoSky, p.dimension !== 0);
     if (p.dimension === -1) { assert.equal(mine.hasNoSky, true); assert.equal(p.canRespawnHere, false); }
     if (p.dimension === 0) assert.equal(p.canRespawnHere, true);
-    assert.equal(D.actualHeight(p.dimension), p.dimension === -1 ? 128 : 256);
+    assert.equal(D.actualHeight(p.dimension), p.dimension === 0 ? 256 : 128); // World.getActualHeight: 128 where aqo.g (Nether and End)
     const table = D.lightBrightnessTable(p.dimension === -1 ? 0.1 : 0);
     p.lightTable.forEach((v, i) => assert.ok(Math.abs(table[i] - v) < 1e-6, `light ${p.dimension} ${i}: ${table[i]} vs ${v}`));
     if (p.dimension === 1) assert.deepEqual(D.providerOf(1).entrance, p.entrance);

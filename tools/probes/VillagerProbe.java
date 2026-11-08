@@ -47,9 +47,24 @@ public class VillagerProbe {
     public azu a(azw a, azw b, boolean c, boolean d, boolean e) { return null; }
     public boolean d(sa entity) { spawned.add(entity); return true; }
     public void a(sa entity, String sound, float volume, float pitch) { sounds.add(sound + "|" + volume + "|" + pitch); }
-    public yz a(sa e, double d) { return null; }
+    // World.getClosestPlayerToEntity (a(sa, D)): only VillageFightProbe fills this (batch 29), so EntityLiving.despawnEntity sees its player; elsewhere null as before.
+    static List<yz> closePlayers = null;
+    public yz a(sa e, double d) {
+      if (closePlayers == null) return null;
+      yz best = null; double bd = -1;
+      for (yz p : closePlayers) { double dx = p.s - e.s, dy = p.t - e.t, dz = p.u - e.u, q = dx * dx + dy * dy + dz * dz; if ((d < 0 || q < d * d) && (bd == -1 || q < bd)) { bd = q; best = p; } }
+      return best;
+    }
     public yz b(sa e, double d) { return null; }
-    public List b(sa entity, azt box) { return new ArrayList(); }
+    // Batch 29: VillageFightProbe turns this on so entities push each other and collideWithEntity runs (getEntitiesWithinAABBExcludingEntity); every
+    // other probe leaves it off and keeps the empty answer its reference was recorded with.
+    static boolean pickEntities = false;
+    static List others(sa entity, azt box, sj selector) {
+      List out = new ArrayList();
+      for (sa o : entities) if (o != entity && o.C.b(box) && (selector == null || selector.a(o))) out.add(o);
+      return out;
+    }
+    public List b(sa entity, azt box) { return pickEntities ? others(entity, box, null) : new ArrayList(); }
     public List a(sa entity, azt box) {
       List out = super.a(entity, box);
       for (int x = (int) Math.floor(box.a); x < (int) Math.floor(box.d + 1); x++)
@@ -63,7 +78,7 @@ public class VillagerProbe {
       for (sa o : entities) if (c.isInstance(o) && o.C.b(box) && (selector == null || selector.a(o))) out.add(o);
       return out;
     }
-    public List a(sa entity, azt box, sj selector) { return new ArrayList(); }
+    public List a(sa entity, azt box, sj selector) { return pickEntities ? others(entity, box, selector) : new ArrayList(); }
     public List a(Class c, azt box) { return pick(c, box, null); }
     public List a(Class c, azt box, sj selector) { return pick(c, box, selector); }
     public ayf a(sa e, int x, int y, int z, float range, boolean open, boolean doors, boolean water, boolean swim) { return new ayg(this, open, doors, water, swim).a(e, x, y, z, range); }

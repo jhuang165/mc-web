@@ -36,7 +36,7 @@
 
 - Looting is not ported (there are no enchantments).
 - Creepers killed by a skeleton draw the record roll, but this build has no records.
-- Revenge targets come only from player hits; mobs do not retaliate against other mobs.
+- Revenge targets (batch 29, `src/revenge-target.js`): any accepted hit whose DamageSource has a living entity (player, a mob's melee, an arrow's shooter) sets `getAITarget` for 100 ticks or until the attacker dies (bytecode-read `sv.C`, `sv.b(sv)`), and EntityAIHurtByTarget turns it into the attack target (call-for-help only for the zombie/golem types that ask). Zombies hit by a golem or a skeleton arrow retaliate; checked against the native fight rows, see village.md "Batch 29".
 - Mobs are updated in this build's entity list order, not the original's chunk order, so pushes between three or more mobs can land in a different order.
 - Every skeleton is assumed to hold a bow; spawn equipment rolls are not run.
 
@@ -158,4 +158,26 @@ Never claim full parity. Labels: probed / bytecode-read / assumed.
   - `Survival.take` shrinks a held stack at size 0 or below itself (0 -> -1; only an exact 0 clears the slot), and `Survival.usable` replaces the `count(id)` gate at the held-item use sites (placement, doors, redstone, signs, skulls, seeds, wart, bone meal, cake, throwables, eating, spawn eggs). `PlayerInventory.count` ignores stacks of size 0 or below.
   - `placeHeldBlock` and cake placement refuse only an exact 0.
   - The player's tool-break pitch (`main.js reportBrokenTool`) uses the world Random (`weather.random`).
-- **Gaps:** an armour slot read at Count -1 for a non-armour item is still dropped (the port filters armour by slot type, native does not). Furnace, dispenser and brewing ticks on size-0 or negative stacks were not probed. A negative stack in a container GUI or the creative drag path was not checked. `FireworksItem` and plain `/give` still refuse Count 0.
+- **Gaps (batch 26, partly closed in batch 27):** furnace, dispenser and brewing ticks on size-0 or negative stacks were not probed. A negative stack in a container GUI or the creative drag path was not checked. `FireworksItem` and plain `/give` still refuse Count 0.
+
+### Negative stacks 2 (negstacks2, batch 27)
+
+- **Probed** (`neg-stacks2-reference.json`, `tools/probes/NegStacks2Probe.java`, `tools/verify-neg-stacks2.mjs`; 362 records: add 200, pickup 18, decr 60, drop 12, armour 6, firework 6, interact 60; replayed by `src/neg-stacks2.test.js`; unchanged 1.7.10 classes):
+  - `InventoryPlayer.addItemStackToInventory` refuses only an exact 0. A -n stack is added anyway (a new -n slot, or it lowers a matching stack by n), the stack size ends 0 and the call returns false. `PlayerInventory.add` already matched all 200 records.
+  - `EntityItem.onCollideWithPlayer` of a Count -n item therefore puts a -n stack (or lowers a matching one) in the inventory, empties the entity to Count 0 and leaves it alive with no pickup event; the next tick refuses Count 0. Ported in `ItemEntities.collect`.
+  - `InventoryPlayer.decrStackSize` (60 records) matched already: `size <= n` hands over the stack and clears the slot; otherwise `splitStack(n)`.
+  - `EntityPlayer.func_146097_a` returns null only for an exact 0, so `dropOneItem` and death (`dropAllItems`, main and armour) throw -n stacks and drop nothing for 0. Ported: `takeAll`, `ItemEntities.dropPlayer`, `throwStacks`.
+  - `InventoryPlayer.readFromNBT` puts any item in an armour slot (diamond at Count 1, -1 or 0 verified in batch 26) and `getTotalArmorValue` counts `ItemArmor` pieces whatever their size; the port no longer filters saved armour by slot type.
+  - `ItemFirework.onItemUse` has no count check: it launches at -1 and 0 and leaves count - 1 (Creative unchanged). The port already matched (`usable` and `take`); a test now pins it.
+  - `EntityPlayer.interactWith` (a pig and a horse holding a saddle, lead or name tag): `--stackSize` and the slot is cleared whenever the result is <= 0 outside Creative (2 -> 1, 1 -> 0 and -2..0 -> cleared). In Creative the stack is a copy, so nothing is used up; the port wrongly used a name tag up in Creative and is fixed. So `inventory.decr(current, 1)` for these click paths is equivalent to native for every size.
+  - `CommandGive` (bytecode-read): count is `parseIntBounded(1, 64)` and the stack is dropped through `dropPlayerItemWithRandomChoice`; a Count 0 `/give` cannot exist natively and the port bounds match.
+- **Gaps:** the port's `/give` adds to the inventory first (native always drops the stack at the player with delay 0 and owner = the player); wolf, ocelot, sheep-dye and horse feeding were checked by bytecode only (`EntityPlayer.interactWith` copy/clear logic), not with live mobs.
+
+### Negative stacks 3 (negstacks3, batch 28)
+
+- **Probed** (`neg-stacks3-reference.json`, `tools/probes/NegStacks3Probe.java` plus `HopperProbe`, `tools/verify-neg-stacks3.mjs`, scripts in `tools/neg-stacks3-scripts.mjs` and `tools/neg-stacks3-hopper.mjs`; give 180, container clicks 5400, furnace 1500, brewing 720, dispenser/dropper 302, hopper 13 scenarios; replayed by `src/neg-stacks3.test.js`; unchanged 1.7.10 classes):
+  - `/give` (`CommandGive`, probed): the whole stack is thrown with `EntityPlayer.func_146097_a` (aimed along the view, not the random-choice scatter), pickup delay 0 and owner = the player; the inventory is untouched. The port used to add to the inventory first and drop only the remainder; `command-host.js give` now calls `giveDrop` (`main.js`) and the item entity saves its `owner`. Motion matches within 1e-4 (the original uses float and table sine).
+  - Container clicks (`Container.slotClick`, shift-click, number keys, drag, drop; player, furnace, chest, dispenser, hopper, brewing layouts): all 5400 records match except the drop key, which threw away `count <= 0` stacks; native refuses only an exact 0 (`PlayerInventory.drop`).
+  - `TileEntityDispenser.func_146017_i` picks any non-null slot whatever its size and `BlockDispenser` keeps a result whose size is not 0: a -2 stack dispenses one item and ends at -3. The port required `count > 0` (248 of 302 records differed); fixed in `dispense.js` (`chooseSlot`, `dispenseBlock`). Dropper into a container matched.
+  - Furnace smelting and fuel, brewing ingredients and bottles, hopper pushes, pulls and pickups matched without a change (the furnace lit block id is not compared: the probe starts hot tiles on an unlit block).
+- **Gaps:** `CreativeContainer.drop` still keeps a `count > 0` filter (not probed); the probe covers 1 hopper layout family per scenario, not every facing; entity feeding at size <= 0 stays bytecode-read.

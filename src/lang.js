@@ -10,7 +10,7 @@
 //     widened to double > 0.1. The comparison is done in float, so exactly 10 percent counts as unicode.
 //   LanguageManager.getLanguages: a TreeSet of Language ordered by code (String.compareTo); Language.toString is "name (region)".
 //   Locale.formatMessage: String.format over the value; a bad format gives "Format error: " + value; an unknown key is the key.
-import { font, setUnicodeFlag } from "./font-renderer.js";
+import { font, setUnicodeFlag, setBidiFlag } from "./font-renderer.js";
 
 /** Locale's per-line rules. Returns a plain object of key -> value. */
 export function parseLang(text) {
@@ -84,7 +84,8 @@ const hooks = new Set();
 export const onLanguage = (fn) => { hooks.add(fn); return () => hooks.delete(fn); };
 
 // GuiLanguage / Minecraft.refreshResources: fontRenderer.setUnicodeFlag(isCurrentLocaleUnicode || forceUnicodeFont).
-export function applyFontFlag() { setUnicodeFlag(lang.unicode || lang.forceUnicodeFont); }
+// Minecraft.refreshResources also calls fontRenderer.setBidiFlag(languageManager.isCurrentLanguageBidirectional()).
+export function applyFontFlag() { setUnicodeFlag(lang.unicode || lang.forceUnicodeFont); setBidiFlag(lang.bidirectional); }
 export function setForceUnicodeFont(on) { lang.forceUnicodeFont = !!on; applyFontFlag(); }
 
 /** Reads /lang/1.7.10/manifest.json. A missing file (or a dev server answering with index.html) leaves English only. */

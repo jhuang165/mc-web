@@ -1,0 +1,1 @@
+Native light wired into streamed Overworld (StreamingLight native option, default on; scene update/updateBlocks/tick hooks; shift support). npm test 4593/4593, build ok. Timings old vs native within noise. Note: .shared-memory/notes/lighting3-b26-track.md.

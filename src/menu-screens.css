@@ -71,6 +71,12 @@ i.mc-caret{background:#d0d0d0}
 /* GuiSlot clips nothing: the bands hide what scrolls past the list. */
 .mc-slot-content{pointer-events:auto}
 /* FontRenderer.renderUnicodeChar: a glyph of unicode_page_XX.png drawn at half size (mask tinted by the run colour, shadow one unit down-right). */
+.tf{display:inline-block;position:relative;vertical-align:top;height:calc(8*var(--u))}
+.ti{transform:skewX(-14.0362deg)}
+.tu::after,.ts::before{content:"";position:absolute;right:0;height:var(--u);background:currentColor;box-shadow:var(--u) var(--u) 0 var(--sh)}
+.tu::after{left:calc(-1*var(--u));top:calc(8*var(--u))}
+.ts::before{left:0;top:calc(3*var(--u))}
+.mc-text.flat .tu::after,.mc-text.flat .ts::before{box-shadow:none}
 .ug{display:inline-block;position:relative;vertical-align:top;height:calc(8*var(--u));filter:drop-shadow(var(--u) var(--u) 0 var(--sh,#3f3f3f))}
 .mc-text.flat .ug{filter:none}
 .ug i{position:absolute;left:0;top:0;height:calc(8*var(--u));background:currentColor;-webkit-mask:var(--p) var(--mx) var(--my)/calc(128*var(--u)) calc(128*var(--u)) no-repeat;mask:var(--p) var(--mx) var(--my)/calc(128*var(--u)) calc(128*var(--u)) no-repeat;image-rendering:pixelated}

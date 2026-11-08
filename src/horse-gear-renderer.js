@@ -38,7 +38,8 @@ export class HorseGearRenderer {
     const seen = new Set(), seenPlates = new Set(), seenKnots = new Set();
     for (const e of mobs) {
       if (e.leash) {
-        const h = e.leash.holder === "player" ? holder : e.leash.knot && { x: e.leash.knot.x + 0.5, y: e.leash.knot.y + 0.5, z: e.leash.knot.z + 0.5, hang: true };
+        const hm = e.leash.holder === "mob" ? mobs.find((m) => m.uuid === e.leash.holderUuid && m.health > 0) : null;
+        const h = e.leash.holder === "player" ? holder : hm ? { x: hm.x, y: hm.y, z: hm.z } : e.leash.knot && { x: e.leash.knot.x + 0.5, y: e.leash.knot.y + 0.5, z: e.leash.knot.z + 0.5, hang: true };
         if (h) { this.leash(e, h); seen.add(e); }
       }
       if (e.customName && nameplateShown({ name: e.customName, visible: e.customNameVisible, looked: looked === e, distance: Math.hypot(e.x - camera.x, e.y - camera.y, e.z - camera.z), sneaking, ridden: !!e.rider })) {

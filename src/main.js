@@ -17,6 +17,7 @@ import "./style.css";
 import "./minecraft-ui.css";
 import "./container-ui.css";
 import "./menu-screens.css";
+import "./mods/jei/jei.css"; // recipe viewer mod (not 1.7.10)
 import { Gui, textHtml } from "./menu-ui.js";
 import { createMenus } from "./menus.js";
 import { commandBlockScreen } from "./command-block-screen.js";
@@ -87,7 +88,7 @@ import { VoxelScene } from "./scene.js";
 import { SoundBank } from "./audio.js";
 import { randomSuperSecretEvent, SUPER_SECRET_SOUND } from "./post-shaders.js";
 import { breakSound, placeSound, hitSound, footstepSound, placesSilently } from "./block-sounds.js";
-import { Weather, isWet, canLightningStrikeAt } from "./weather.js";
+import { Weather, isWet, canLightningStrikeAt, simulationKey } from "./weather.js";
 import { tickWeatherSimulation } from "./weather-simulation.js";
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
 import { showsPumpkinBlur } from "./wearable-heads.js";
@@ -161,6 +162,8 @@ import { attachmentScreen, fitFromInventory } from "./mods/guns/attachment-scree
 import { isAmmoBox, fillBox, emptyBox, boxLabel } from "./mods/guns/ammo-box.js";
 import { createAmmoHud } from "./mods/guns/hud.js";
 import { stackName } from "./item-names.js";
+import { jeiWorld, jeiEnabled, setJeiEnabled, worldMods } from "./mods/jei/install.js";
+import { createViewerPanel } from "./mods/jei/panel.js";
 import { containerTitle } from "./container-names.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH, SEARCH_ORDER } from "./creative.js";
@@ -217,7 +220,7 @@ import { spawnDragonIfAbsent } from "./dragon-mobs.js";
 import { vitalsLayout, heartsHtml, foodHtml, mountHeartLayout, mountHeartsHtml, REGENERATION, WITHER_EFFECT } from "./damage-hud.js";
 import { hurtCameraRoll } from "./damage-fx.js";
 import { displayTicks } from "./display-ticks.js";
-import { importedRuntime } from "./world-import.js";
+import { importedRuntime, importedDimensionState } from "./world-import.js";
 import { collectBases, basesFromJson } from "./whole-save-json.js";
 import { tickWorldSystems } from "./world-tick.js";
 import { captureMovementInput } from "./player-input.js";
@@ -283,12 +286,12 @@ import { wrapMobHooks, wrapRandomTickLight, residentOnly } from "./headless-env.
 import { startLoading, setStage, STAGES, loadingScreen, downloadTerrainScreen, errorScreen, nextPaint, nextFrame, SpawnAreaLog } from "./loading-screen.js";
 import { gameOverScreen, exportScreen, notesScreen, signEditHost } from "./modal-dialogs.js";
 import { NOTES } from "./notes-content.js";
-import { runSteps } from "./steps.js";
+import { runSteps, taskPause } from "./steps.js";
 import { presolveWorld } from "./spawn-presolve.js";
 import { blankLoading, arrivalWarmer } from "./travel-loading.js";
 import "./lang-hooks.js";
 import { loadLanguageManifest, selectLanguage, setForceUnicodeFont, translate } from "./lang.js";
-import { loadFontResources, onFontChange, font } from "./font-renderer.js";
+import { loadFontResources, onFontChange, font, setFontAnaglyph } from "./font-renderer.js";
 import { restoreStructureEntities, saveStructureEntities, tickMinecartSimulation, tickBoatSimulation, tickSpawnerSimulation, tickSpawnersClient, spawnerBurst, pickMinecart } from "./structure-simulation.js";
 // Generation version 10 (live mineshafts) maps original block ids while a World is built; the
 // entry module already holds the registry, so the mapper is set before any World exists.
@@ -716,6 +719,7 @@ const menus = createMenus(gui, menuContext);
 // Selected resource packs (resource-packs.js): their lang entries replace the menu strings; textures and sounds are served by the worker.
 initResourcePacks(options, LANG).then(async () => {
   // Languages (lang.js): the installed manifest, the saved language, Force Unicode Font, then glyph_sizes.bin and ascii.png widths.
+  setFontAnaglyph(options.anaglyph); // FontRenderer's constructor reads GameSettings.anaglyph once: the § colour table is fixed for the session
   await loadLanguageManifest();
   setForceUnicodeFont(options.forceUnicodeFont);
   await selectLanguage(options.language || "en_US");
@@ -766,8 +770,9 @@ function makeRecord(p) {
     ...(p.biome === "javaStreamed" && p.worldType === "flat" ? { generatorOptions: normalizeFlatOptions(p.generatorOptions) } : {}),
     // GuiCreateWorld "Bonus Chest": WorldInfo.isBonusChestEnabled; the chest is placed once (bonusChestPlaced).
     ...(p.bonusChest === true ? { bonusChest: true } : {}),
-    // Opt-in guns mod (not 1.7.10): mods/guns/install.js registers its items only in worlds with this flag.
-    ...(p.mods?.guns === true ? { mods: { guns: true } } : {}),
+    // Opt-in world mods (not 1.7.10): the guns mod (mods/guns/install.js) and the recipe viewer (mods/jei/install.js); only
+    // flags that are exactly true are kept.
+    ...(worldMods(p.mods) ? { mods: worldMods(p.mods) } : {}),
     edits: [],
     updated: Date.now(),
     version: 1,
@@ -815,6 +820,26 @@ function stackHtml(s, count = s?.count) {
   if (!s) return "";
   return withGlint(icon(s.id, s.damage, s), s, ITEMS[s.id]) + (count === 0 ? zeroCountHtml() : countHtml(count)) + durabilityBar(s.damage, ITEMS[s.id]?.durability);
 }
+// Recipe viewer mod (not 1.7.10; mods/jei/panel.js): attached to container screens while jeiEnabled().
+const recipeViewer = createViewerPanel({
+  stackHtml: (s) => stackHtml(s),
+  tooltip: (s) => tooltipHtml(tooltipLines(ITEMS[s.id], s, options.advancedTooltips)),
+  name: (s) => stackName(s, ITEMS) || "Item",
+  creative: () => !!survival?.creative,
+  give: (s, n) => {
+    // Creative only: a stack into the inventory, as the creative screen's middle click would make one.
+    if (!survival?.creative || !ITEMS[s.id]) return;
+    survival.inventory.add(makeStack(s.id, n, s.damage | 0, s.stored));
+    saved = false;
+    if (containerView) containerView.shown = [];
+    refreshContainer();
+    renderHotbar();
+  },
+  hovered: () => containerView?.hovered?.stack ?? null,
+  sound: () => sounds?.play("gui.button.press", { volume: 0.25, pitch: 1 }),
+});
+// The event began inside the recipe viewer (its path is fixed at dispatch, so this holds after the viewer re-renders the target away).
+const inRecipeViewer = (e) => e.composedPath().some((n) => n.classList?.contains("jei-ui"));
 function stackLabel(s) {
   if (!s) return "Empty";
   const item = ITEMS[s.id];
@@ -983,10 +1008,11 @@ function save() {
   active.arrows = arrows.serialize();
   // EntityTNTPrimed.writeEntityToNBT keeps only the fuse (plus Entity's position and motion).
   active.tnt = primed.map((e) => ({ x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz, fuse: e.fuse }));
-  active.weather = weather.save();
+  active.weather = weather.saveWeather(); // while in the Nether/End: the Overworld's timers, which keep running (weather.js awayOverworld)
   active.bed = bedSleep.save();
   active.flying = flying && survival.creative ? true : undefined;
-  active.worldRandom = weather.saveSimulation();
+  active[simulationKey(world.dimension)] = weather.saveSimulation();
+  if (weather.overworld) active.worldRandom = weather.saveOverworldSimulation(); // the Overworld's World.rand/updateLCG stay in worldRandom; each other dimension keeps its own (dimension state `simulation`)
   active.fluidTicks = fluids.save();
   active.fireTicks = fire.save();
   if (redstoneRuntime) { active.redstone = redstoneRuntime.save(); active.pistons = redstoneRuntime.pistons.save(); active.commandBlocks = redstoneRuntime.commandBlocks.save(); active.musicTiles = redstoneRuntime.music.save(); }
@@ -1188,13 +1214,14 @@ async function openWorld(record) {
   if (!worldWriterAvailable) { toast('Another tab owns local saves. Close it and reload to play Singleplayer.'); return; }
   leaveMultiplayer();
   if(openingWorld)return;
-  openingWorld=true;
+  openingWorld=true; performance.mark?.('trip:open');
   sounds?.stopStreams(); // Minecraft.loadWorld: SoundHandler.stopSounds (music and records), also between dimensions
   lan.close();
   // From the title screen: LoadingScreenRenderer's "Loading world" screen (loading-screen.js); portal trips keep the game on screen.
   // A portal trip (record.transit): Minecraft.loadWorld(world, "") draws a blank loading frame, then handleRespawn shows GuiDownloadTerrain (travel-loading.js).
   const trip = screen !== "home" && !!record.transit, tripFrom = screen, loading = screen === "home" ? startLoading() : trip ? blankLoading() : null, spawnLog = new SpawnAreaLog(64, trip ? () => {} : undefined);
   let warmer = null;
+  const yieldTask = taskPause();
   if (trip) { screen = "home"; tripLoading = true; keys.clear(); $("#hud").classList.add("hidden"); } // the title-start path: no ticking, no scene drawing, until launch
   if (loading) { gui.show(loadingScreen(loading)); await nextPaint(); }
   if (trip) { gui.show(downloadTerrainScreen()); await nextPaint(); } // handleRespawn: GuiDownloadTerrain follows the blank frame for the whole transfer
@@ -1205,8 +1232,9 @@ async function openWorld(record) {
     // WorldServer.initialize runs createSpawnPosition under "Loading world"; the chunk load that follows is "Building terrain" (the World constructor populates the resident window).
     if (loading && !trip) { setStage(loading, STAGES.terrain); spawnLog.report(0, performance.now()); await nextPaint(); await presolved.terrain; }
     else if (trip) await presolved.terrain; // the Overworld's resident cell from the worker; the Nether/End have none
+    performance.mark?.('trip:terrain');
     const prepared=dims.createWorld(record);
-    if (loading) warmer = arrivalWarmer(prepared, { pause: nextFrame });
+    if (loading) warmer = arrivalWarmer(prepared, { pause: yieldTask });
     if (!record.chunked) prepared.restore(record.edits??[]);
     if (!prepared.dimension && !record.worldSpawn) {
       if (prepared.nativeSpawn) record.worldSpawn = [prepared.nativeSpawn[0] - prepared.originX, prepared.nativeSpawn[1], prepared.nativeSpawn[2] - prepared.originZ]; // WorldInfo spawn (world-spawn.js)
@@ -1214,9 +1242,10 @@ async function openWorld(record) {
     }
     prepared.restoreClaimedColumns(record.populatedColumns);
     const transit = record.transit;
-    await dims.arrive(prepared, record, loading ? { pause: nextFrame, warm: warmer } : {}); // portal travel: the Teleporter's arrival position
-    const p=record.position;
+    await dims.arrive(prepared, record, loading ? { pause: yieldTask, warm: warmer } : {}); // portal travel: the Teleporter's arrival position
+    const p=record.position; performance.mark?.('trip:arrived');
     if(prepared.streaming&&p&&[p.x,p.z].every(Number.isFinite)){ if (warmer) await warmer.window(p.x,p.z); prepared.streamAround(p.x,p.z); }
+    performance.mark?.('trip:windowed');
     record=await readRuntimeState(record,prepared.streaming?{containerColumns:[...prepared.chunks.values()].map(c=>[c.x,c.z])}:{});
     const storage=prepared.streaming?new StreamStorage(prepared,record.id,{onError:e=>{pause();toast('Could not load saved columns. Reopen the world to retry: '+e.message);}}):null;
     prepared.nextEditOrder=Math.max(prepared.nextEditOrder,record.editSequence??(record.chunked?2000000:0));
@@ -1229,7 +1258,9 @@ async function openWorld(record) {
     // NetHandlerPlayClient.handleJoinGame shows GuiDownloadTerrain until the first position packet: here, while the columns are meshed and the player is placed.
     warmer?.dispose(); warmer = null;
     if (loading && !trip) { gui.show(downloadTerrainScreen()); await nextPaint(); }
+    performance.mark?.('trip:launch');
     await launch(record,prepared,{slice:!!loading});
+    performance.mark?.('trip:done');
     // PlayerList.transferPlayerToDimension: leaving the End, Overworld -> End, or any other portal trip (not a respawn).
     if (transit && !transit.death) achievements.trigger(transit.exit ? "theEnd2" : transit.from === 0 && prepared.dimension === 1 ? "theEnd" : "portal");
   } catch(e) {
@@ -1248,23 +1279,29 @@ async function launch(record, prepared, { slice = false } = {}) {
     world = prepared;
     portalTimer.reset();
     dims.restorePlayer(record);
+    if (record.wholeSave) dims.warmStored({ id: rootIdOf(record), wholeSave: record.wholeSave }, dimensionOf(record)); // stored-column index for /spreadplayers and portal peeks (background)
     startPrefetch();
+    if (world.dimension && (navigator.hardwareConcurrency ?? 4) >= 4) { const root = worlds.find((w) => w.id === rootIdOf(record)); if (root) presolveWorld({ ...root, dimension: 0 }); } // the Overworld's spawn walk and resident cell are built while this dimension is played, so a return does not wait for them (spawn-presolve.js parks them)
     // Restore World.rand before constructing the block runtimes that share it.
-    weather = new Weather().restore(record.weather).restoreSimulation(record.worldRandom);
+    weather = new Weather().restore(record.weather).restoreSimulation(record[simulationKey(world.dimension)]);
+    if (world.dimension) weather.awayOverworld(record); // the Overworld keeps its weather timers running while the player is in the Nether/End
     // The cave mood sound (cave-ambience.js) on this world's World.rand and updateLCG.
     weather.mood = new MoodSound(weather);
     weather.mood.player = () => ({ x: position.x, y: position.y + PHYSICS.eye, z: position.z }); // the server player's posY is the eye
     hideBedScreen();
     bedSleep.restore(record.bed); // the spawn point; a saved sleeping state is resumed after the player is placed
     scene.setWorld(world, { defer: slice }); // from the title screen the column meshes are built in frame-sized slices below, behind the loading screen
-    if (slice) while (scene.buildLight(12)) await nextFrame(); // the light volume's flood runs in the same frame-sized slices (Scene.buildLight)
+    performance.mark?.('trip:setworld');
+    const yieldTask = taskPause(); // macrotask pauses between slices (steps.js), not a frame each
+    if (slice) while (scene.buildLight(12)) await yieldTask();
+    performance.mark?.('trip:lit');
     // Block light for canBlockFreeze/canSnowAt/melting is the scene's light volume.
     world.blockLight = (x, y, z) => scene.light.blockAt(x, y, z);
     world.fullLight = (x, y, z) => scene.light.level(x, y, z, 0); // World.getFullBlockLightValue (plant-light.js: mushrooms)
     // ItemBucket in the Nether: water makes fizz and 8 smoke puffs instead of a block.
     world.evaporated = (x, y, z) => { sounds.play('random.fizz', { volume: 0.5, pitch: 2.6 + (Math.random() - Math.random()) * 0.8, position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 } }); for (let i = 0; i < 8; i++) scene.fx.spawn('largesmoke', x + Math.random(), y + 0.2, z + Math.random(), 0, 0, 0); };
     // Water washes away torches, wheat and tall grass (Block.dropBlockAsItem).
-    fluids = new Fluids(world, { random: weather.random, fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === WEB ? [{ id: 321, count: 1 }] : b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : b === SAPLING ? [{ id: b, count: 1, damage: world.getMeta(x, y, z) & 7 }] : cropDrops(b,Math.random,world.getMeta(x,y,z)); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
+    fluids = new Fluids(world, { nether: !!world.isHell, skyless: !!world.dimension, random: weather.random, fizz: (x, y, z, pitch) => sounds.play("random.fizz", { volume: 0.5, pitch, position: { x, y, z } }), wash: (x, y, z, b) => { const d = b === WEB ? [{ id: 321, count: 1 }] : b === 20 ? [{ id: 20, count: 1 }] : isFlower(b) ? [{ id: b, count: 1, damage: b === RED_FLOWER ? world.getMeta(x, y, z) : 0 }] : b === SAPLING ? [{ id: b, count: 1, damage: world.getMeta(x, y, z) & 7 }] : cropDrops(b,Math.random,world.getMeta(x,y,z)); if (d?.length) items.dropBlock(d.map((e) => makeStack(e.id, e.count, e.damage || 0)), x, y, z); } });
     fluids.load(record.fluidTicks);
     watchFlowers();
     // BlockFire and the static-lava ignition roll: scheduled and random ticks (fire.js). Fire reaches the
@@ -1495,6 +1532,8 @@ async function launch(record, prepared, { slice = false } = {}) {
     // Opt-in guns mod (not 1.7.10): register or remove its items before the saved inventory is read; multiplayer stays vanilla.
     setGunsEnabled(gunsWorld(record) && !multiplayer, { items: ITEMS, combatTab: CREATIVE_TABS[8].items, search: SEARCH_ORDER, setCrafting: setExtraCrafting });
     guns.reset(); // no aim, recoil or queued gun sounds carried over from the last world
+    // Opt-in recipe viewer (not 1.7.10): shown beside container screens only in worlds created with it; multiplayer stays vanilla.
+    if (setJeiEnabled(jeiWorld(record) && !multiplayer)) recipeViewer.reset();
     survival = new Survival(legacyPlayer(record), record.mode || "creative");
     statsLive.bind(survival);
     // Achievements belong to the world (a portal trip keeps them in memory); the hint waits for "Taking Inventory".
@@ -1581,7 +1620,13 @@ async function launch(record, prepared, { slice = false } = {}) {
     playerBody.reset(position, yaw, pitch);
     keys.clear();
     accumulator = 0;
-    if (slice) while (scene.buildPending(12)) await nextPaint();
+    performance.mark?.('trip:runtimes');
+    if (slice) while (scene.buildPending(12)) await yieldTask();
+    if (slice) { // the random-tick refcounts of the resident columns (WorldChunk.sectionTickCount, built on first use) are counted here, in slices, instead of in the first tick
+      const cols = [...world.chunks.values()];
+      for (let i = 0; i < cols.length;) { const end = performance.now() + 8; while (i < cols.length && performance.now() < end) cols[i++].sectionTickCount?.(0); await yieldTask(); }
+    }
+    performance.mark?.('trip:built');
     screen = "playing";
     gui.hide();
     $("#hud").classList.remove("hidden");
@@ -1631,12 +1676,13 @@ const itemHoverLines = (snbt) => {
 const commandHost = createCommandHost({
   active: () => active, world: () => world, weather: () => weather, mobs: () => mobs, minecarts: () => minecarts, spawners: () => spawners, rockets: () => rockets, entityHosts: () => ({ items, xpOrbs, primed, falling, boats, projectiles, arrows, eyes, mobs, hanging, dimension: world.dimension ?? 0 }), survival: () => survival, experience: () => experience,
   position: () => ({ x: position.x, y: position.y, z: position.z }),
+  storedTop: (x, z) => dims.storedTop({ id: rootIdOf(active) }, dimensionOf(active), x, z),
   seed: () => active.seed,
   scoreboard: () => scoreboard,
   beaconTile: (x, y, z) => beacons.ensure(x, y, z),
   commandTile: (x, y, z) => redstoneRuntime?.commandBlocks.tile(x, y, z),
   stackName: (s) => stackName(s, ITEMS) || ITEMS[s.id]?.name || "",
-  dropStack: (s) => items.dropPlayer(s, position, yaw, pitch, true, true),
+  giveDrop: (s, owner) => { const e = items.dropPlayer(s, position, yaw, pitch); if (e) { e.delay = 0; e.owner = owner; } },
   refreshInventory: () => { renderHotbar(); renderVitals(); saved = false; },
   changed: () => { saved = false; },
   setTime: (t) => scene.setTime(t),
@@ -2022,6 +2068,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   if (kind === "beacon") drawBeaconLabels($("#modal"));
   document.activeElement?.blur();
   containerView = { container, gui, kind, key, hovered: null, x: innerWidth / 2, y: innerHeight / 2, gx: -1, gy: -1, shown: [] };
+  if (jeiEnabled()) recipeViewer.attach($("#modal")); // recipe viewer mod: the item list right of the screen
   enchantExtras?.dispose();
   enchantExtras = kind === "enchanting" ? new EnchantingScreenExtras(document.querySelector("#modal .enchanting-modal"), (canvas) => new EnchantingGuiBookView(canvas)) : null;
   const creative = kind === "creative",
@@ -2044,7 +2091,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
     };
   if (creative) renderCreativeBody();
   overlay.onpointerdown = (e) => {
-    if (!containerView || e.target.closest(".close-button")) return;
+    if (!containerView || e.target.closest(".close-button") || inRecipeViewer(e)) return;
     if (e.target.closest('#anvil-name')) return;
     const beaconButton = e.target.closest("[data-beacon]");
     if (beaconButton) { e.preventDefault(); beaconClick(beaconButton); return; }
@@ -2075,7 +2122,8 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
     if (!containerView) return;
     containerView.x = e.clientX;
     containerView.y = e.clientY;
-    const { slot, x, y } = at(e);
+    const { slot: under, x, y } = at(e);
+    const slot = inRecipeViewer(e) ? null : under; // recipe viewer mod: its list and recipe view cover the slots under them
     Object.assign(containerView, { hovered: slot, gx: x, gy: y });
     if (creative) {
       if (!(e.buttons & 1)) gui.release();
@@ -2085,7 +2133,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
     refreshContainer();
   };
   overlay.onpointerup = (e) => {
-    if (!containerView) return;
+    if (!containerView || inRecipeViewer(e)) return;
     if (e.target.closest('#anvil-name') || e.target.closest("[data-enchant-option]") || e.target.closest("[data-merchant-step]") || e.target.closest("[data-beacon]")) return;
     const { slot, outside, x, y } = at(e), button = javaButton(e.button), t = creative && button === 0 ? gui.tabAt(x, y) : null;
     if (creative && button === 0) gui.release();
@@ -2094,7 +2142,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
     refreshContainer();
   };
   overlay.onwheel = (e) => {
-    if (!creative || !containerView) return;
+    if (!creative || !containerView || inRecipeViewer(e)) return;
     e.preventDefault();
     gui.wheel(-e.deltaY);
     refreshContainer();
@@ -2102,7 +2150,7 @@ function openContainer(container, kind, key = null, gui = new ContainerScreen(co
   overlay.oncontextmenu = (e) => e.preventDefault();
   // Keyboard activation of a focused slot or tab acts as a left click.
   overlay.onclick = (e) => {
-    if (!containerView || e.detail !== 0) return;
+    if (!containerView || e.detail !== 0 || inRecipeViewer(e)) return;
     const stepper = e.target.closest("[data-merchant-step]");
     if (stepper) {
       if (!stepper.disabled && container.step(+stepper.dataset.merchantStep)) sounds?.play("gui.button.press", { volume: 0.25, pitch: 1 });
@@ -2176,6 +2224,7 @@ function horsePreviewFrame() {
 function closeContainer() {
   paperdoll?.detach();
   horsePreview?.detach();
+  recipeViewer.detach();
   enchantExtras?.dispose();
   enchantExtras = null;
   if (!containerView) return;
@@ -2327,7 +2376,7 @@ function renderVitals() {
 // the view with a 40-tick pickup delay.
 function throwStacks(stacks) {
   if (!world) return;
-  for (const s of stacks) if (s?.count > 0) items.dropPlayer(copyStack(s), position, yaw, pitch);
+  for (const s of stacks) if (s?.count) items.dropPlayer(copyStack(s), position, yaw, pitch); // func_146097_a refuses only an exact size 0
   saved = false;
 }
 function useFurnace(key) {
@@ -2598,19 +2647,15 @@ async function respawnPlayer() {
 }
 // One weather tick: timers, lightning (flash, damage, sound) and the client's rain
 // splashes and rain sound (see weather.js).
-const sceneLight = { skyAt: (x, y, z) => scene.light?.skyAt(x, y, z) ?? 15, blockAt: (x, y, z) => scene.light?.blockAt(x, y, z) ?? 0 };
+const sceneLight = { skyAt: (x, y, z) => (world.ringSink?.outside(x, z) ? world.ringSink.light.skyAt(x, y, z) : scene.light?.skyAt(x, y, z) ?? 15), blockAt: (x, y, z) => (world.ringSink?.outside(x, z) ? world.ringSink.light.blockAt(x, y, z) : scene.light?.blockAt(x, y, z) ?? 0) }; // ring cells read RingLight (the mood roll of a ring chunk draws but cannot be heard)
 function tickWeather() {
   if (weather.mood) weather.mood.light ??= moodLight(world, sceneLight);
   if (world.dimension) {
-    // The Nether and the End have no weather (their own world has no rain state), but the cave mood sound still rolls
-    // in WorldServer's chunk loop there (no sky: saved sky light is 0 everywhere).
-    const mood = weather.mood;
-    if (!mood) return;
-    mood.tick();
-    for (const [cx, cz] of Weather.activeChunks(position.x, position.z, 10, world)) {
-      const e = mood.chunk(world, cx, cz);
-      if (e) sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } });
-    }
+    // The Nether and the End have no weather (World.updateWeatherBody skips provider.hasNoSky), but WorldServer's chunk loop runs there
+    // unchanged: mood sound, the lightning/ice rolls and the random block ticks (natural-spawning.md "Round 9").
+    if (!weather.mood) return;
+    weather.tickDimension(world, position);
+    for (const e of weather.drain()) sounds.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } });
     return;
   }
   tickWeatherSimulation({ world, weather, mobs, survival }, position, PHYSICS.width, PHYSICS.height);
@@ -3152,9 +3197,10 @@ let streamPrefetch = null, streamStorage = null, containerResidency = null;
 function startPrefetch() {
   streamPrefetch?.dispose();
   streamPrefetch = null;
-  if (!world.streaming || world.noPrefetch || typeof Worker !== "function") return; // the worker only knows Overworld terrain
+  if (!world.streaming || (world.noPrefetch && !world.dimension) || typeof Worker !== "function") return; // the worker builds Overworld terrain and, through DimensionWorld, Nether/End columns (batch 28)
   try {
-    streamPrefetch = new StreamPrefetch(world, new Worker(new URL("./streaming-worker.js", import.meta.url), { type: "module" }));
+    const spawn = () => new Worker(new URL("./streaming-worker.js", import.meta.url), { type: "module" });
+    streamPrefetch = new StreamPrefetch(world, spawn(), { ringSpawn: spawn, ringMax: Math.max(0, Math.min(3, (navigator.hardwareConcurrency ?? 4) - 3)) }); // the ring fills from extra workers made on demand and ended once it is full (a Nether/End column 40-60 ms, an Overworld cell 1-2 s each); none up to 3 cores
   } catch (e) {
     console.error(`streaming-generator: no worker, generating on the main thread: ${e.message}`);
   }
@@ -3323,7 +3369,7 @@ async function importBlockworldData(data, { id } = {}) {
     const check = new DimensionWorld(record.seed, d);
     check.restore(blob.edits ?? []);
     const { edits, ...state } = blob;
-    (record.dimensions ??= {})[d] = state;
+    (record.dimensions ??= {})[d] = importedDimensionState(state);
     columns.push(...chunkRecords(viewId(record.id, d), check.edits));
   }
   const baseRecords = basesFromJson(data.bases, (d) => (d ? viewId(record.id, d) : record.id)); // stored full columns of a whole-save export
@@ -3357,9 +3403,9 @@ async function importPickedSave(entries) {
       menuContext.importCancel = () => abort.abort();
       let last = 0;
       try {
-        const { record, report } = await importWholeSave(entries, { worldId, writeBases: writeBaseColumns, signal: abort.signal, onProgress: (p) => {
+        const { record, report } = await importWholeSave(entries, { worldId, writeBases: writeBaseColumns, readBases: readBaseColumns, signal: abort.signal, onProgress: (p) => {
           const now = performance.now(); if (now - last < 250) return; last = now;
-          status(p.phase === 'chunks' ? `Importing chunks: ${p.chunks} (region file ${p.fileIndex + 1} / ${p.fileCount})` : 'Reading level.dat...');
+          status(p.phase === 'chunks' ? `Importing chunks: ${p.chunks} (region file ${p.fileIndex + 1} / ${p.fileCount})` : p.phase === 'populate' ? `Populating chunks the save never populated: ${p.done} / ${p.total}` : 'Reading level.dat...');
         } });
         await importBlockworldData(record, { id: worldId });
         const s = report.save, c = report.chunks;
@@ -3500,6 +3546,7 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "Escape") {
     e.preventDefault();
     if (screen === "dead") return;
+    if (screen === "inventory" && recipeViewer.escape()) return; // recipe viewer mod: Escape closes its recipe view first
     if (screen === "inventory") resume();
     else if (screen === "playing") pause();
     else if (screen === "paused") {
@@ -3514,6 +3561,12 @@ window.addEventListener("keydown", (e) => {
   // GuiContainer.keyTyped compares key codes directly: key.inventory closes, the hotbar keys and
   // key.drop act on the hovered slot. GuiContainerCreative opens search with key.chat first.
   const hotbar = HOTBAR.findIndex((d) => binds.code(d) === code), drop = code !== 0 && code === binds.code("key.drop");
+  // Recipe viewer mod: R and U over an item open its recipes or uses, Backspace goes back (the creative search field has the keys first).
+  if (screen === "inventory" && containerView && !(containerView.kind === "creative" && containerView.gui.tab === SEARCH) && recipeViewer.key(e)) {
+    e.preventDefault();
+    if (recipeViewer.state.view) { containerView.hovered = null; refreshContainer(); } // the recipe view covers the slot's tooltip
+    return;
+  }
   if (screen === "inventory" && containerView?.kind === "creative") {
     const gui = containerView.gui, before = gui.tab;
     if (gui.typed({ code: e.code, key: e.key, ctrl: e.ctrlKey || e.metaKey, chat: code !== 0 && code === binds.code("key.chat"), hotbar }, containerView.hovered)) {

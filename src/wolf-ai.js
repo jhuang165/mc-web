@@ -6,11 +6,9 @@
 //   targets 1 OwnerHurtByTarget (1), 2 OwnerHurtTarget (1), 3 HurtByTarget with help (1), 4 TargetNonTamed sheep 200 (1)
 // The classes take Task, TargetBase and the generic tasks from ai.js (as the village kits do), so this file does not
 // import it back.
+import { ownerPresent, ownerKey } from "./owner-links.js";
 import { isTamed, shouldAttackEntity, canMateWith, WOLF_MEAT, BONE } from "./wolf.js";
 const f = Math.fround;
-// Who last hurt a wolf (a mob record, or "player"): the record keeps only the 100 tick `revenge` counter.
-const revengeBy = new WeakMap();
-export const noteWolfHurt = (wolf, attacker) => revengeBy.set(wolf, attacker);
 // The owner's EntityLivingBase.getAITarget (aJ): the creature that hurt the owner in the last 100 ticks, if it lives.
 export function ownerRevenge(ai) {
   const p = ai.player;
@@ -131,7 +129,7 @@ export function buildWolfTasks(m, K) {
   const { Sit, Leap, FollowOwner } = tameableTasks(m, K);
   m.navigator.setAvoidsWater(true);
   // tg.cb: the owner is the (single) player once tamed.
-  m.owner = () => (isTamed(e) ? m.ai.player : null);
+  m.owner = () => (isTamed(e) && ownerPresent(e) ? m.ai.player : null); // an owner who is not here (foreign OwnerUUID) is null
   // EntityWolf.getEyeHeight: height * 0.8; EntityWolf.getVerticalFaceSpeed (x): 20 while sitting, else 40.
   Object.defineProperty(m, "eyeHeight", { get: () => f(m.height * f(0.8)), configurable: true });
   Object.defineProperty(m, "verticalFaceSpeed", { get: () => (e.sitting ? 20 : 40), set() {}, configurable: true });
@@ -146,23 +144,14 @@ export function buildWolfTasks(m, K) {
     },
     configurable: true,
   });
-  // The hurt-by target: the player (Entity.revenge) or the mob that hit it (noteWolfHurt), for 100 ticks.
-  Object.defineProperty(m, "revengeTarget", {
-    get() {
-      if (!e.revenge) return null;
-      const by = revengeBy.get(e);
-      if (by === "player") return m.ai.player;
-      return by && by.health > 0 ? m.ai.brain(by) : null;
-    },
-    configurable: true,
-  });
+  // The hurt-by target is the Brain default (revenge-target.js): the player or the mob that hit it, for 100 ticks.
   // EntityAITarget.isSuitableTarget (vu.a) on top of TargetBase: an owned wolf never targets its owner or another
   // creature with the same owner (the owner's wolves).
   const suitable = (task, t, mustSee) => {
     if (!TargetBase.prototype.isSuitableTarget.call(task, t, mustSee)) return false;
     if (isTamed(e)) {
       if (t === m.owner()) return false;
-      if (t.e && t.e.type === "wolf" && t.e.owner === e.owner) return false;
+      if (t.e && t.e.type === "wolf" && ownerKey(t.e) === ownerKey(e)) return false;
     }
     return true;
   };

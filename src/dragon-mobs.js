@@ -14,7 +14,7 @@ import {
 } from "./dragon.js";
 
 export const ENDER_DRAGON = "ender_dragon";
-export const ENDER_DRAGON_TYPE = Object.freeze({ health: DRAGON_MAX_HEALTH, width: DRAGON_WIDTH, height: DRAGON_HEIGHT, movement: 0, ai: {}, drop: 0 });
+export const ENDER_DRAGON_TYPE = Object.freeze({ health: DRAGON_MAX_HEALTH, width: DRAGON_WIDTH, height: DRAGON_HEIGHT, movement: Math.fround(0.1), ai: {}, drop: 0 }); // movementSpeed 0.1 (probed attributes3 `speed`); the dragon moves by its own code
 const OBSIDIAN = 22, BEDROCK = 11, END_STONE = 152;
 const RANDOMS = new WeakMap();
 const rngOf = (e) => { let r = RANDOMS.get(e); if (!r) RANDOMS.set(e, (r = new JavaRandom(Math.floor(Math.random() * 2 ** 48)))); return r; };
