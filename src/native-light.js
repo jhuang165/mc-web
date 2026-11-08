@@ -14,14 +14,14 @@
 // Per chunk: the ExtendedBlockStorage sections that exist (a bit mask: a missing section reads as 15 sky at or above the heightMap and
 // 0 otherwise, and writing light into it creates it and runs generateSkylightMap), heightMapMinimum, updateSkylightColumns and
 // isGapLightingUpdated, isTerrainPopulated, isLightPopulated and queuedLightChecks.
-export const SKY = 0, BLOCK = 1, QUEUE_LENGTH = 32768;
+export const SKY = 0, BLOCK = 1, QUEUE_LENGTH = 32768, SKIP_LIMIT = 1 << 16;
 const ORIGIN = 133152, MAX_INT = 2147483647; // 32 | 32 << 6 | 32 << 12: the queued cell is the update's own position
 // Facing offsets (q.b, q.c, q.d): down, up, north, south, west, east.
 const FX = [0, 0, 0, 0, -1, 1], FY = [-1, 1, 0, 0, 0, 0], FZ = [0, 0, -1, 1, 0, 0];
 
 export class NativeLight {
   // blockAt(x, y, z): the block id of a loaded cell; opacity(id): Block.getLightOpacity; emission(x, y, z, id): Block.getLightValue.
-  constructor({ width, height = 256, hasNoSky = false, sky = null, block = null, heights = null, blockAt, opacity, emission, isRemote = false, queueLength = QUEUE_LENGTH, reach = 17 }) {
+  constructor({ width, height = 256, hasNoSky = false, sky = null, block = null, heights = null, blockAt, opacity, emission, isRemote = false, queueLength = QUEUE_LENGTH, reach = 17, replaySkipped = false }) {
     this.W = width; this.H = height; this.n = width >> 4; this.sections = height >> 4;
     this.hasNoSky = !!hasNoSky; this.isRemote = isRemote;
     this.sky = sky ?? new Uint8Array(width * width * height);
@@ -40,7 +40,14 @@ export class NativeLight {
     this.queue = new Int32Array(queueLength); // World.lightUpdateBlockList: new int[32768] in both World constructors
     this.reach = reach; // the 17-block cutoff (a test hook: research tools compare against a longer reach)
     this.dirty = null;
-    this.stats = { updates: 0, overflow: 0, peak: 0 };
+    this.stats = { updates: 0, overflow: 0, peak: 0, skipped: 0, replayed: 0 };
+    // Not native: the port's light arrays cover a square whose outer chunks are loaded (they hold blocks) but not light-resident. With
+    // `replaySkipped` an updateLightByType that doChunksNearChunkExist refuses is remembered (type and cell, insertion order, at most
+    // SKIP_LIMIT) and a setBlock in a non-resident chunk is deferred; `replayDeferred()` runs both once the chunks are marked loaded,
+    // which is what the native server did all along for chunks it had loaded (public/research/light-engine.md, batch 27).
+    this.replaySkipped = replaySkipped;
+    this.skipped = new Map(); // type + 2 * local cell index -> true
+    this.deferred = []; // [x, y, z, oldOpacity, newId] of edits whose chunk was not resident
   }
 
   // --- bookkeeping (not native) ---
@@ -58,6 +65,79 @@ export class NativeLight {
   chunkIndex(cx, cz) { return cx < 0 || cz < 0 || cx >= this.n || cz >= this.n || !this.loaded[cx * this.n + cz] ? -1 : cx * this.n + cz; }
   chunkAt(x, z) { return this.chunkIndex(x >> 4, z >> 4); }
   hasSection(c, s) { return ((this.mask[c] >> s) & 1) !== 0; }
+
+  // --- residency replay (not native) ---
+  skip(type, x, y, z) {
+    if (this.hasNoSky && type === SKY) return;
+    if (y < 0 || y >= this.H || x < 0 || z < 0 || x >= this.W || z >= this.W) return;
+    this.stats.skipped++;
+    const m = this.skipped, k = type + 2 * ((x * this.W + z) * this.H + y);
+    if (m.has(k)) return;
+    if (m.size >= SKIP_LIMIT) m.delete(m.keys().next().value);
+    m.set(k, true);
+  }
+  defer(x, y, z, oldOpacity, newId) {
+    if (this.deferred.length >= SKIP_LIMIT) this.deferred.shift();
+    this.deferred.push([x, y, z, oldOpacity, newId]);
+  }
+  // Replays what was refused while a chunk was not resident: the deferred setBlocks of chunks that are loaded now, then the skipped
+  // updates whose 17-block neighbourhood is loaded now. Entries that are still refused are kept (or re-recorded by the update itself).
+  replayDeferred() {
+    const d = this.deferred;
+    this.deferred = [];
+    for (const e of d) {
+      if (this.chunkAt(e[0], e[2]) < 0) this.deferred.push(e);
+      else { this.stats.replayed++; this.setBlock(e[0], e[1], e[2], e[3], e[4], false); }
+    }
+    const m = this.skipped, H = this.H, W = this.W;
+    this.skipped = new Map();
+    const emitters = [];
+    for (const k of m.keys()) {
+      const type = k & 1, i = k >> 1, y = i % H, t = (i - y) / H, z = t % W, x = (t - z) / W;
+      if (!this.near(x, y, z, 17)) { this.skipped.set(k, true); continue; }
+      this.stats.replayed++;
+      if (type === BLOCK && this.lightValue(x, y, z) > 0) emitters.push(x, y, z);
+      this.updateLightByType(type, x, y, z);
+    }
+    // An update that reached an emitter whose own update is still queued reads that cell as already lit, so the emitter's own update would
+    // do nothing and its spread would stop at the first update's 17-block reach; natively each placement ran its own full update.
+    for (let i = 0; i < emitters.length; i += 3) {
+      const x = emitters[i], y = emitters[i + 1], z = emitters[i + 2];
+      this.spreadBlock(x, y, z);
+    }
+  }
+  // Port model: the addition pass of a placement's own update, run again from an emitter whose cells already read part of its light (an
+  // earlier update stopped at its own 17-block reach there): cells keep spreading through equal values, raise lower ones, stop at the
+  // emitter's reach.
+  spreadBlock(x, y, z) {
+    if (!this.near(x, y, z, 17)) return;
+    const seen = new Set([(x * this.W + z) * this.H + y]), q = [x, y, z, this.saved(BLOCK, x, y, z)];
+    for (let i = 0; i < q.length; i += 4) {
+      const cx = q[i], cy = q[i + 1], cz = q[i + 2], v = q[i + 3];
+      if (v <= 1 || Math.abs(cx - x) + Math.abs(cy - y) + Math.abs(cz - z) >= this.reach) continue;
+      for (let f = 0; f < 6; f++) {
+        const nx = cx + FX[f], ny = cy + FY[f], nz = cz + FZ[f];
+        if (ny < 0 || ny >= this.H || this.chunkAt(nx, nz) < 0) continue;
+        const k = (nx * this.W + nz) * this.H + ny, nv = v - Math.max(1, this.opacity(this.getBlock(nx, ny, nz)));
+        if (nv <= 0 || seen.has(k)) continue;
+        const have = this.saved(BLOCK, nx, ny, nz);
+        if (have > nv) continue;
+        seen.add(k);
+        if (have < nv) this.setLight(BLOCK, nx, ny, nz, nv);
+        q.push(nx, ny, nz, nv);
+      }
+    }
+  }
+  // The window moved by (dx, dz) blocks (new local = old - d): translate the remembered cells, dropping those that left the square.
+  shiftDeferred(dx, dz) {
+    const H = this.H, W = this.W, m = new Map();
+    for (const k of this.skipped.keys()) {
+      const type = k & 1, i = k >> 1, y = i % H, t = (i - y) / H, z = t % W - dz, x = (t - t % W) / W - dx;
+      if (x >= 0 && z >= 0 && x < W && z < W) m.set(type + 2 * ((x * W + z) * H + y), true);
+    }
+    this.skipped = m;
+    this.deferred = this.deferred.map(([x, y, z, o, id]) => [x - dx, y, z - dz, o, id]).filter(([x, , z]) => x >= 0 && z >= 0 && x < W && z < W);
+  }
 
   // --- World ---
   // World.getBlock: air outside 0..255 and in unloaded chunks.
@@ -80,7 +160,7 @@ export class NativeLight {
     for (let s = 0; s < this.sections; s++) {
       if (this.hasSection(c, s)) continue;
       const y0 = s << 4, y1 = y0 + 16, cut = Math.min(y1, Math.max(y0, h));
-      this.sky.fill(0, base + y0, base + cut); this.sky.fill(15, base + cut, base + y1);
+      this.sky.fill(0, base + y0, base + cut); this.sky.fill(15, base + cut, base + y1) /* also without sky: LightEngine3Probe reads 15 above the heightMap of a missing section in the Nether and End */;
       this.block.fill(0, base + y0, base + y1);
     }
   }
@@ -140,7 +220,7 @@ export class NativeLight {
   // World.updateLightByType: a removal pass over cells holding the old value (up to QUEUE_LENGTH entries), then an addition pass
   // from every queued cell; spreading stops 17 blocks (|dx| + |dy| + |dz|) from (x, y, z) and when fewer than 6 entries are free.
   updateLightByType(type, x, y, z) {
-    if (!this.near(x, y, z, 17)) return false;
+    if (!this.near(x, y, z, 17)) { if (this.replaySkipped) this.skip(type, x, y, z); return false; }
     const q = this.queue, L = q.length;
     let i = 0, j = 0;
     this.stats.updates++;
@@ -280,7 +360,9 @@ export class NativeLight {
   }
   propagateSkylightOcclusion(c, lx, lz) { this.gaps[c * 256 + lx + lz * 16] = 1; this.gapFlag[c] = 1; }
   updateSkylightNeighborHeight(x, z, y0, y1) {
-    if (y1 > y0 && this.near(x, 0, z, 16)) for (let y = y0; y < y1; y++) this.updateLightByType(SKY, x, y, z);
+    if (y1 <= y0) return;
+    if (this.near(x, 0, z, 16)) for (let y = y0; y < y1; y++) this.updateLightByType(SKY, x, y, z);
+    else if (this.replaySkipped && this.chunkAt(x, z) >= 0) for (let y = y0; y < y1; y++) this.skip(SKY, x, y, z); // refused by the 16-block test
   }
   checkSkylightNeighborHeight(x, z, h) {
     const l = this.heightValue(x, z);

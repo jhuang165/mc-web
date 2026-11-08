@@ -64,6 +64,7 @@ export class DimensionWorld extends World {
     this.dimension = dimension;
     this.isEnd = dimension === END;
     this.hasNoSky = providerOf(dimension).hasNoSky; // the Nether
+    this.lightNoSky = providerOf(dimension).lightNoSky; // aqo.g: Nether and End (native light engine only, streaming-light.js)
     this.isHell = dimension === NETHER;
     this.originX = this.originZ = 0;
     this.javaSeed = javaSeed(this.seed);

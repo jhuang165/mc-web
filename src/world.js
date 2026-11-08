@@ -508,6 +508,9 @@ export class World {
     // of them while `ringReads` is set (main.js turns it on for the simulation tick only, so meshing and light keep reading the window).
     this.ringSink = null;
     this.ringReads = false;
+    // StreamingLight's native light (streaming-light.js) sets a (x, y, z, block) callback here to hear of every write to a resident cell,
+    // including the ones nobody reports with updateBlock; null otherwise.
+    this.blockTap = null;
     this.misses = { map: null, size: -1, keys: new Set() };
     this.generate();
   }
@@ -673,6 +676,7 @@ export class World {
     if (this.pots?.size && c.blocks[i] === FLOWER_POT && b !== FLOWER_POT) this.pots.delete(`${x},${y},${z}`);
     c.blocks[i] = b;
     c.meta[i] = meta;
+    if (this.blockTap !== null) this.blockTap(x, y, z, b);
     if (track) this.rememberEdit(x, y, z, b | (meta << 8));
     return true;
   }
