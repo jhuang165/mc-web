@@ -85,14 +85,17 @@ export function shapeArabic(s) {
 export function resolveLevels(text) {
   const n = text.length, types = new Array(n), levels = new Array(n).fill(0);
   for (let i = 0; i < n; i++) types[i] = bidiClass(text.charCodeAt(i));
-  let ps = 0;
-  while (ps < n) {
+  // paragraph level per character (P2, P3: first strong L, R or AL of the paragraph, else RTL), one paragraph per B
+  const paraOf = new Array(n);
+  for (let ps = 0; ps < n;) {
     let pe = ps;
     while (pe < n && types[pe] !== B) pe++;
     if (pe < n) pe++; // the separator belongs to its paragraph (CR LF is two separators here, as natively)
-    resolveParagraph(types, levels, ps, pe, 1);
+    const p = firstStrong(types, ps, pe, 1);
+    for (let i = ps; i < pe; i++) paraOf[i] = p;
     ps = pe;
   }
+  resolveText(types, levels, paraOf);
   return { levels, types };
 }
 function firstStrong(types, s, e, fallback) {
@@ -104,45 +107,78 @@ function firstStrong(types, s, e, fallback) {
   }
   return fallback;
 }
-function resolveParagraph(origTypes, levelsOut, s, e, inherited) {
-  const para = firstStrong(origTypes, s, e, inherited);
-  const len = e - s;
-  const types = origTypes.slice(s, e), levels = new Array(len).fill(para);
+/**
+ * ubidi_setPara after getDirProps: resolveExplicitLevels (X1-X8, the stack restarts at each paragraph), then ICU's loop over the level runs of
+ * the WHOLE text (not per paragraph): explicit codes and BN characters extend the run before them (so a code at the start of a paragraph
+ * belongs to the previous paragraph's last run), a run's sor is the previous run's eor unless the character before it is a B (then the
+ * paragraph level), the eor comes from max(level, level of the next run); override runs (LRO/RLO) and plain runs of the same level are separate.
+ */
+function resolveText(origTypes, levelsOut, paraOf) {
+  const len = origTypes.length;
+  const types = origTypes.slice(), levels = new Array(len), ovr = new Array(len).fill(false);
   const removed = new Array(len).fill(false);
-  // X1-X8
-  const stack = [{ level: para, override: -1 }];
-  let overflow = 0;
+  let stack = [], overflow = 0, cur = { level: paraOf[0] ?? 0, override: -1 };
   for (let i = 0; i < len; i++) {
-    const t = types[i], top = stack[stack.length - 1];
+    const t = types[i];
+    if (i === 0 || origTypes[i - 1] === B) { stack = []; overflow = 0; cur = { level: paraOf[i], override: -1 }; }
     if (t === RLE || t === LRE || t === RLO || t === LRO) {
-      levels[i] = top.level; removed[i] = true;
-      const next = (t === RLE || t === RLO) ? (top.level + 1) | 1 : (top.level + 2) & ~1;
-      if (next <= MAX_DEPTH && overflow === 0) stack.push({ level: next, override: t === RLO ? R : t === LRO ? L : -1 });
+      levels[i] = cur.level; removed[i] = true;
+      const next = (t === RLE || t === RLO) ? (cur.level + 1) | 1 : (cur.level + 2) & ~1;
+      if (next <= MAX_DEPTH && overflow === 0) { stack.push(cur); cur = { level: next, override: t === RLO ? R : t === LRO ? L : -1 }; }
       else overflow++;
     } else if (t === PDF) {
       removed[i] = true;
-      if (overflow > 0) overflow--; else if (stack.length >= 2) stack.pop();
-      levels[i] = stack[stack.length - 1].level;
+      if (overflow > 0) overflow--; else if (stack.length) cur = stack.pop();
+      levels[i] = cur.level;
     } else if (t === B) {
-      levels[i] = para;
+      levels[i] = paraOf[i];
     } else if (t === BN) {
-      levels[i] = top.level; removed[i] = true;
+      levels[i] = cur.level; removed[i] = true;
     } else {
-      levels[i] = top.level;
-      if (top.override >= 0) types[i] = top.override;
+      levels[i] = cur.level;
+      if (cur.override >= 0) { types[i] = cur.override; ovr[i] = true; }
     }
   }
-  // X9: work on the retained characters only
+  const lr = (level) => (level & 1 ? R : L);
   const idx = [];
   for (let i = 0; i < len; i++) if (!removed[i]) idx.push(i);
-  const m = idx.length, t = idx.map((i) => types[i]), lv = idx.map((i) => levels[i]), expl = lv.slice(); // expl: the explicit levels sor/eor read
-  // X10: level runs with sor/eor
+  const m = idx.length, t = idx.map((i) => types[i]), lv = idx.map((i) => levels[i]), res = lv.slice();
+  const ov = idx.map((i) => ovr[i]);
+  // level runs over the retained characters (a B always ends a run piece: the next paragraph starts afresh)
   const runs = [];
-  for (let a = 0; a < m;) { let b = a + 1; while (b < m && lv[b] === lv[a]) b++; runs.push([a, b]); a = b; }
+  for (let a = 0; a < m;) {
+    let b = a + 1;
+    while (origTypes[idx[b - 1]] !== B && b < m && lv[b] === lv[a] && ov[b] === ov[a]) b++;
+    runs.push([a, b, a > 0 && lv[a - 1] === lv[a] && ov[a - 1] === ov[a]]); a = b;
+  }
+  // a leading explicit code or BN is a run of its own (at the level it was given) when the first retained character is at another level
+  let eorPrev = m ? lr(Math.max(levels[0], lv[0])) : lr(paraOf[0] ?? 0);
   for (let r = 0; r < runs.length; r++) {
-    const [a, b] = runs[r], level = lv[a];
-    const before = r > 0 ? expl[a - 1] : para, after = r < runs.length - 1 ? expl[b] : para;
-    const sor = Math.max(level, before) & 1 ? R : L, eor = Math.max(level, after) & 1 ? R : L;
+    const [a, b, cont] = runs[r], level = lv[a];
+    const ri = idx[a];
+    const sor = cont ? lr(level) : ri > 0 && origTypes[ri - 1] === B ? lr(paraOf[ri]) : eorPrev;
+    const nextLevel = r < runs.length - 1 ? lv[b] : paraOf[len - 1];
+    const trueEor = lr(Math.max(level, nextLevel));
+    const eor = origTypes[idx[b - 1]] === B ? lr(level) : trueEor; // inside a run a B ends the paragraph: nothing after it counts
+    eorPrev = trueEor;
+    if (ov[a]) continue; // override runs keep their explicit level (the characters are already L or R at a matching level)
+    resolveRun(t, res, a, b, level, sor, eor);
+  }
+  // Retained removed characters (explicit codes, BN) take the level of the next retained character of their paragraph (the paragraph level at its end).
+  for (let i = len - 1, k = m - 1, next = paraOf[len - 1]; i >= 0; i--) {
+    if (!removed[i]) { next = res[k--]; levels[i] = next; } else levels[i] = next;
+  }
+  // L1: separators and trailing whitespace (with removed characters) go back to the paragraph level.
+  let tail = true;
+  for (let i = len - 1; i >= 0; i--) {
+    const o = origTypes[i];
+    if (o === B || o === S) { levels[i] = paraOf[i]; tail = true; }
+    else if (o === WS || removed[i]) { if (tail) levels[i] = paraOf[i]; }
+    else tail = false;
+  }
+  for (let i = 0; i < len; i++) levelsOut[i] = levels[i];
+}
+function resolveRun(t, lv, a, b, level, sor, eor) {
     // W1
     for (let i = a, prev = sor; i < b; i++) {
       if (t[i] === NSM) t[i] = prev;
@@ -193,22 +229,6 @@ function resolveParagraph(origTypes, levelsOut, s, e, inherited) {
       else if (t[i] === R) lv[i] = level + 1;
       else if (t[i] === AN || t[i] === EN) lv[i] = level + 2;
     }
-  }
-  // Retained removed characters (explicit codes, BN) take the level of the next retained character (the paragraph level at the end).
-  for (let i = len - 1, k = m - 1, next = para; i >= 0; i--) {
-    if (!removed[i]) { next = lv[k--]; levels[i] = next; } else levels[i] = next;
-  }
-  // L1: separators and trailing whitespace (with removed characters) go back to the paragraph level.
-  const orig = origTypes;
-  let tail = true;
-  for (let i = len - 1; i >= 0; i--) {
-    const o = orig[s + i];
-    if (o === B || o === S) { levels[i] = para; tail = true; }
-    else if (o === WS || removed[i]) { if (tail) levels[i] = para; }
-    else tail = false;
-  }
-  for (let i = 0; i < len; i++) levelsOut[s + i] = levels[i];
-  return para;
 }
 
 /** writeReordered(DO_MIRRORING) of the text for the given levels (L2 over the whole string, mirrored characters at odd levels). */
@@ -243,12 +263,17 @@ export function bidiReorder(s) {
   for (let i = 0; i < text.length; i++) {
     const t = types[i] = bidiClass(text.charCodeAt(i));
     rtl = rtl || t === R || t === AL || t === AN;
-    explicit = explicit || t === RLE || t === RLO || t === LRE || t === LRO;
+    explicit = explicit || t === RLE || t === RLO || t === LRE || t === LRO || t === PDF || t === BN;
   }
+  // With explicit codes or BN characters ICU's resolveExplicitLevels recounts the direction flags per character at its embedding level
+  // (an override counts as the direction it forces, not as the character's own class).
+  let ltr = true;
+  if (explicit) { const f = embeddedFlags(types); rtl = f.rtl; ltr = f.ltr; }
+  if (explicit && rtl && !ltr) return reorderLevels(text, new Array(text.length).fill(1)); // purely right to left: the whole string is reversed
   if (!rtl) {
     let pe = 0;
     while (pe < text.length && types[pe] !== B) pe++;
-    if (firstStrong(types, 0, Math.min(pe + 1, text.length), 1) === 0 && !laterParagraphIsRtl(types) && !(explicit && embeddedRtl(types))) return text;
+    if (firstStrong(types, 0, Math.min(pe + 1, text.length), 1) === 0 && (explicit || !laterParagraphIsRtl(types))) return text;
   }
   return reorderLevels(text, resolveLevels(text).levels);
 }
@@ -265,34 +290,47 @@ function laterParagraphIsRtl(types) {
     while (pe < types.length && types[pe] !== B) pe++;
     if (pe < types.length) pe++;
     const level = firstStrong(types, ps, pe, 1);
+    // content (not a separator, BN or code) before the paragraph's first strong character, or anywhere when it has none
     let content = false;
-    for (let i = ps; i < pe && !content; i++) content = !(types[i] === B || types[i] === BN || isCode(types[i]));
-    if (ps > 0 && prevLevel === 0 && level === 1 && content && !hasStrong(types, ps, pe)) return true;
+    for (let i = ps; i < pe && !content; i++) {
+      if (types[i] === L || types[i] === R || types[i] === AL) break;
+      content = !(types[i] === B || types[i] === BN || isCode(types[i]));
+    }
+    if (ps > 0 && prevLevel === 0 && level === 1 && content) return true;
     prevLevel = level;
     ps = pe;
   }
   return false;
 }
 const isCode = (t) => t === LRE || t === LRO || t === RLE || t === RLO || t === PDF;
-const hasStrong = (types, s, e) => { for (let i = s; i < e; i++) if (types[i] === L || types[i] === R || types[i] === AL) return true; return false; };
 
 /**
  * ICU flags right to left only for a character that is actually drawn at an odd embedding level (RLE/RLO with a character after
  * them in the same paragraph, X1-X8 stack as resolveParagraph); explicit codes with nothing under them leave the text left to right.
  */
-function embeddedRtl(types) {
-  let stack = [0], overflow = 0;
+function embeddedFlags(types) {
+  let stack = [{ level: 0, override: -1 }], overflow = 0, rtl = false, ltr = false, para = 0, prev = 0;
   for (let i = 0, pastB = true; i < types.length; i++) {
     const t = types[i];
-    if (pastB) { stack = [firstStrongFrom(types, i)]; overflow = 0; pastB = false; }
+    if (pastB) { stack = [{ level: firstStrongFrom(types, i), override: -1 }]; overflow = 0; pastB = false; if (i === 0) { para = prev = stack[0].level; } }
+    const top = stack[stack.length - 1];
     if (t === RLE || t === LRE || t === RLO || t === LRO) {
-      const top = stack[stack.length - 1], next = (t === RLE || t === RLO) ? (top + 1) | 1 : (top + 2) & ~1;
-      if (next <= MAX_DEPTH && overflow === 0) stack.push(next); else overflow++;
+      const next = (t === RLE || t === RLO) ? (top.level + 1) | 1 : (top.level + 2) & ~1;
+      if (next <= MAX_DEPTH && overflow === 0) stack.push({ level: next, override: t === RLO ? R : t === LRO ? L : -1 }); else overflow++;
     } else if (t === PDF) { if (overflow > 0) overflow--; else if (stack.length >= 2) stack.pop(); }
-    else if (t === B) pastB = true;
-    else if (t !== BN && stack.length > 1 && stack[stack.length - 1] & 1) return true; // the paragraph's own level never counts
+    else if (t === B) { pastB = true; prev = stack[0].level; } // the separator carries its paragraph's level over to the next paragraph
+    else if (t === BN) continue;
+    else {
+      // a character whose embedding differs from the previous character's counts as that embedding's direction (an override as the
+      // direction it forces); the character's own class counts only without an override
+      const key = top.level + (top.override >= 0 ? 256 : 0);
+      if (key !== prev) { prev = key; if (top.override >= 0) { if (top.override === R) rtl = true; else ltr = true; } else if (top.level & 1) rtl = true; else ltr = true; }
+      if (top.override < 0) { if (t === R || t === AL || t === AN) rtl = true; if (t === L || t === EN || t === AN) ltr = true; }
+    }
   }
-  return false;
+  // the codes and BN flag themselves, which counts as a neutral: the first paragraph's direction is added
+  if (para & 1) rtl = true; else ltr = true;
+  return { rtl, ltr };
 }
 function firstStrongFrom(types, s) {
   let e = s;
