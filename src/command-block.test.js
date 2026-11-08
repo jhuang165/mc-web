@@ -15,7 +15,7 @@ function game() {
   let runtime;
   const host = createCommandHost({ active: () => active, world: () => world, survival: () => survival,
     position: () => ({ x: 30.5, y: 60, z: 30.5 }), commandTile: (...p) => runtime.commandBlocks.tile(...p),
-    changed() {}, updateBlock() {}, refreshInventory() {}, stackName: () => 'diamond', dropStack() {},
+    changed() {}, updateBlock() {}, refreshInventory() {}, stackName: () => 'diamond', giveDrop: (s) => survival.inventory.add(s),
     setTime() {}, destroyBlock(x,y,z) { world.set(x,y,z,0); } });
   host.print = text => lines.push(text);
   runtime = createRedstoneRuntime({ world, game: { commandHost: () => host } });

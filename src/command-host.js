@@ -60,8 +60,9 @@ export function createCommandHost(env) {
       const stack = makeStack(item.id, count, item.damage);
       const ignored = tag ? readItemTag(stack, tag) : [];
       const name = env.stackName(stack);
-      survival().inventory.add(stack);
-      if (stack.count > 0) env.dropStack(stack); // what does not fit lands at the player's feet
+      // CommandGive (bytecode-read, neg-stacks3-reference.json give): EntityPlayer.func_146097_a(stack, false, false) drops the whole
+      // stack along the view, then sets the pickup delay to 0 and the owner (func_145797_a) to the player. It never touches the inventory.
+      env.giveDrop(stack, this.name);
       env.refreshInventory();
       return { name: "[" + name + "]", ignored };
     },
