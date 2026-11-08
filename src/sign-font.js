@@ -20,10 +20,13 @@ const tableIndex = (c) => (c > 0 ? CHAR_TABLE.indexOf(String.fromCharCode(c)) : 
 /**
  * The drawing ops of one string: {kind: "ascii", index, x, color, italic}, {kind: "unicode", code, glyph, x, color, italic} and
  * {kind: "bar", x0, y0, x1, y1, color}; x and the bars are in font pixels from the pen start, glyphs are drawn at y 0..7.99.
- * `width` is the pen move: the sum of the integer parts of the advances, as drawString's pen.
+ * `width` is the pen move: the sum of the integer parts of the advances, as drawString's pen; `picks` counts the random glyphs drawn for
+ * §k (non-zero: drawing the string again shows other glyphs, as FontRenderer does every frame).
  */
 export function layoutString(s, color = 0, state = font, nextInt = (n) => Math.floor(Math.random() * n)) {
   const ops = [];
+  let picks = 0;
+  const pick = (n) => { picks++; return nextInt(n); };
   let x = 0, cur = color, bold = false, italic = false, under = false, strike = false, random = false;
   let text = String(s ?? "");
   if (state.bidi && state.bidiReorder) text = state.bidiReorder(text); // drawString -> bidiReorder when the language is bidirectional
@@ -44,7 +47,7 @@ export function layoutString(s, color = 0, state = font, nextInt = (n) => Math.f
       continue;
     }
     let index = tableIndex(c);
-    if (random && index !== -1) index = randomGlyphIndex(index, nextInt, state.widths); // the cell is replaced, never the character: the unicode flag draws c itself
+    if (random && index !== -1) index = randomGlyphIndex(index, pick, state.widths); // the cell is replaced, never the character: the unicode flag draws c itself
     const start = x, offset = state.unicode ? 0.5 : 1;
     let advance = 0;
     const draw = (dx) => {
@@ -61,7 +64,7 @@ export function layoutString(s, color = 0, state = font, nextInt = (n) => Math.f
     if (under) ops.push({ kind: "bar", x0: start - 1, y0: 8, x1: start + advance, y1: 9, color: cur });
     x += Math.trunc(advance); // the pen moves by (int) advance (renderStringAtPos); the bars above use the float advance
   }
-  return { ops, width: x };
+  return { ops, width: x, picks };
 }
 
 // ---- Atlas images (ascii.png and the unicode pages, loaded on demand and tinted per colour) ----
@@ -105,10 +108,11 @@ function tinted(img, color) {
 
 /**
  * Draws a string with its pen start at (x, y) font pixels; `scale` canvas pixels per font pixel. Colour defaults to 0 (black),
- * the sign colour; like FontRenderer a plain colour without alpha bits is opaque. No shadow.
+ * the sign colour; like FontRenderer a plain colour without alpha bits is opaque. No shadow. Returns true when the string drew random
+ * (§k) glyphs, i.e. when drawing it again would show different ones.
  */
-export function drawFontString(ctx, s, x, y, scale, color = 0, state = font) {
-  const { ops } = layoutString(s, color, state);
+export function drawFontString(ctx, s, x, y, scale, color = 0, state = font, nextInt) {
+  const { ops, picks } = layoutString(s, color, state, nextInt);
   ctx.imageSmoothingEnabled = false;
   const ascii = ops.some((o) => o.kind === "ascii") ? image(versioned("/media/1.7.10/font/ascii.png")) : null;
   for (const o of ops) {
@@ -130,6 +134,7 @@ export function drawFontString(ctx, s, x, y, scale, color = 0, state = font) {
     }
     ctx.restore();
   }
+  return picks > 0;
 }
 
 export { getStringWidth } from "./font-renderer.js";

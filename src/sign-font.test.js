@@ -57,6 +57,25 @@ test("drawSignText draws centred lines with a recording context", () => {
   assert.ok(!calls.some((c) => c[0] === "drawImage")); // atlas images are not loadable outside a browser: nothing is drawn, nothing throws
 });
 
+test("§k signs: random lines are reported and only they are redrawn (batch 29)", () => {
+  assert.equal(layoutString("Hello", 0, state(false)).picks, 0);
+  let n = 0;
+  const seq = () => (n++ * 37) % 256;
+  const lay = layoutString("§kAbc§r d", 0, state(false), seq);
+  assert.ok(lay.picks >= 3); // one pick per obfuscated character at least (more while the widths differ), none for the plain ones
+  const calls = [];
+  const ctx = new Proxy({}, { get: (_, k) => (k === "imageSmoothingEnabled" ? false : (...a) => calls.push([k, ...a])), set: () => true });
+  const canvas = { width: 600, height: 180, getContext: () => ctx };
+  const lines = ["plain", "§kobfuscated", "", "x§kyz"];
+  assert.deepEqual(drawSignText(canvas, lines, state(false)), [1, 3]);
+  calls.length = 0;
+  assert.deepEqual(drawSignText(canvas, lines, state(false), [1, 3]), [1, 3]);
+  const clears = calls.filter((c) => c[0] === "clearRect");
+  assert.equal(clears.length, 2); // one band per random line, never the whole canvas, never line 0 or 2
+  for (const c of clears) assert.ok(c[4] === 10 * 4 && c[3] === 600);
+  assert.deepEqual(clears.map((c) => c[2]), [50, 130]); // y of lines 1 and 3 (plane centre 22.5 + k * 10 - 20) x 4
+});
+
 test("edit model: 15 character limit and allowed characters as GuiEditSign.keyTyped", () => {
   const m = new SignEditModel();
   for (const ch of "§abcdefghijklmnopqrstuvwxyz") m.type(ch);

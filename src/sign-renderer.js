@@ -15,6 +15,7 @@ import { drawFontString, atlasVersion } from "./sign-font.js";
 import { font, getStringWidth } from "./font-renderer.js";
 
 const SIGN_TEXTURE = "/media/1.7.10/entity/sign.png";
+const RANDOM_BUDGET = 16; // obfuscated signs redrawn per update (the nearest of a crowd of signs is not singled out; the rest wait one frame)
 const D = Math.PI / 180, S = SIGN_RENDER.scale, TEXT_W = 150, TEXT_H = 45, PX = 4; // the text plane is 150 x 45 font pixels
 
 // The standing sign's heading and the wall sign's heading in degrees (the GL rotation before the sign is drawn).
@@ -23,22 +24,32 @@ export const signAngle = (block, meta) => (block === SIGN_POST ? (meta * 360) / 
 // Text on a canvas through the FontRenderer glyphs (sign-font.js): each line k is drawn at x = -getStringWidth / 2 (int division)
 // and y = k * 10 - 20 font pixels about the plane centre, colour 0, no shadow. The plane is wider than the original 90 px so wide
 // unicode lines are not cut off (the original text is not clipped either).
-export function drawSignText(canvas, lines, state = font) {
-  const ctx = canvas.getContext("2d"), w = canvas.width / PX, h = canvas.height / PX;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+export function drawSignText(canvas, lines, state = font, only = null, nextInt) {
+  const ctx = canvas.getContext("2d"), w = canvas.width / PX, h = canvas.height / PX, random = [];
+  if (!only) ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (let k = 0; k < 4; k++) {
-    const line = lines[k];
-    if (line) drawFontString(ctx, line, w / 2 - Math.trunc(getStringWidth(line, state) / 2), h / 2 + k * SIGN_RENDER.lineSpacing - 20, PX, 0, state);
+    if (only && !only.includes(k)) continue;
+    const line = lines[k], y = h / 2 + k * SIGN_RENDER.lineSpacing - 20;
+    // a line owns the 10 font pixel band from its top (the glyphs are 8 high, the underline ends at y + 9): clearing it never touches a neighbour
+    if (only) ctx.clearRect(0, y * PX, canvas.width, SIGN_RENDER.lineSpacing * PX);
+    if (line && drawFontString(ctx, line, w / 2 - Math.trunc(getStringWidth(line, state) / 2), y, PX, 0, state, nextInt)) random.push(k);
   }
+  return random; // the lines that drew §k glyphs
 }
 
 export class SignRenderer {
   constructor(scene, view) {
-    Object.assign(this, { scene, view, records: new Map() });
+    Object.assign(this, { scene, view, records: new Map(), frustumOf: new THREE.Frustum(), sphere: new THREE.Sphere() });
     this.texture = pixelTexture(SIGN_TEXTURE);
     this.boardGeometry = skinBox(24, 12, 2, 0, 0, 64, 32);
     this.stickGeometry = skinBox(2, 14, 2, 0, 14, 64, 32);
     this.textGeometry = new THREE.PlaneGeometry(TEXT_W * SIGN_RENDER.textScale, TEXT_H * SIGN_RENDER.textScale);
+  }
+  frustum() {
+    const cam = this.view.camera;
+    cam.updateMatrixWorld();
+    this.projection ??= new THREE.Matrix4();
+    return this.frustumOf.setFromProjectionMatrix(this.projection.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
   }
   create() {
     const root = new THREE.Group(), frame = new THREE.Group(), model = new THREE.Group(), materials = [];
@@ -61,11 +72,12 @@ export class SignRenderer {
     frame.add(model, text);
     root.add(frame);
     this.scene.add(root);
-    return { root, frame, stick, text, canvas, texture, materials, key: null, block: 0 };
+    return { root, frame, stick, text, canvas, texture, materials, key: null, block: 0, random: [] };
   }
   // `tiles` is the Signs store's tile list; the camera position is in world coordinates.
   update(tiles, world, camera) {
     const seen = new Set();
+    let frustum = null, budget = RANDOM_BUDGET;
     for (const t of tiles) {
       const block = world.get(t.x, t.y, t.z);
       if (block !== SIGN_POST && block !== WALL_SIGN) continue;
@@ -81,7 +93,14 @@ export class SignRenderer {
       r.frame.position.set(...(wall ? SIGN_RENDER.wallTranslate : [0, 0, 0]));
       r.stick.visible = !wall;
       const key = `${font.version}|${font.unicode ? 1 : 0}|${atlasVersion()}|${t.text.join("\n")}`, empty = t.text.every((l) => !l);
-      if (r.key !== key) { r.key = key; drawSignText(r.canvas, t.text); r.texture.needsUpdate = true; }
+      if (r.key !== key) { r.key = key; r.random = drawSignText(r.canvas, t.text); r.texture.needsUpdate = true; }
+      else if (r.random.length && budget > 0 && (frustum ??= this.frustum()).intersectsSphere(this.sphere.set(r.root.position, 1.2))) {
+        // TileEntitySignRenderer draws through FontRenderer every frame, so §k lines show new glyphs each frame: only the signs holding §k, only
+        // when in view, and only those lines are redrawn
+        budget--;
+        r.random = drawSignText(r.canvas, t.text, font, r.random);
+        r.texture.needsUpdate = true;
+      }
       r.text.visible = !empty;
       const packed = this.view.brightness(t.x, t.y, t.z);
       for (const m of r.materials) m.setLight(packed);
