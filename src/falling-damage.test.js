@@ -25,15 +25,15 @@ test("every native EntityFallingBlock.fall record: damage, source text, helmet r
     const { damage } = fallingBlockDamage(r.distance, r.amount, r.max), kind = fallingBlockSource(r.block === 145);
     const dealt = r.hurtFlag && damage > 0 ? p.anvilDamage(damage, kind) : false, label = `${r.name} ${r.block} d${r.distance}`;
     assert.equal(dealt, r.entries === 1, label + " hit");
-    // A helmet that breaks on this hit (native: the stack resets to damage 0 and stays in the slot, still granting its armour point for this
-    // hit; the port removes it first) is a known difference, counted below.
+    // A helmet that breaks on this hit stays a zero-size stack, still granting its armour point for this hit, until InventoryPlayer.damageArmor
+    // clears it (zero-stacks-reference.json anvil rows); the port matches the health and the cleared slot.
     const broke = r.helmet && r.entries && r.helmetWear < 11; // a worn helmet reads 11 or more; a broken one resets
-    if (broke) { brokenHelmets++; continue; }
     assert.ok(Math.abs(p.health - r.healthAfter) < 1e-4, `${label} health ${p.health} vs ${r.healthAfter}`);
-    if (r.helmet) assert.equal(p.inventory.armor[3].damage > 0, r.helmetWear > 0, label + " helmet wear");
+    if (broke) { brokenHelmets++; assert.equal(p.inventory.armor[3], null, label + " broken helmet cleared by damageArmor"); }
+    else if (r.helmet) assert.equal(p.inventory.armor[3].damage > 0, r.helmetWear > 0, label + " helmet wear");
     if (r.entries) assert.equal(trackerMessage(p.combat, "Player"), p.health > 0 ? r.preview.text : r.message.text, label + " text");
   }
-  assert.ok(brokenHelmets <= 8, "broken-helmet records " + brokenHelmets);
+  assert.ok(brokenHelmets >= 1 && brokenHelmets <= 8, "broken-helmet records " + brokenHelmets);
 });
 
 test("a falling block landing: the anvil default hurts, a plain block hurts only with HurtEntities, the fields cap the damage", () => {

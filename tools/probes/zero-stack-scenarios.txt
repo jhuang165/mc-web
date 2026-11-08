@@ -1,0 +1,255 @@
+# Zero-size stack scripts (batch 24 zerostacks), the InventoryProbe script format, run by ZeroStacksProbe.java (native drops kept) and
+# tools/inventory-replay.mjs. Item IDs are Minecraft 1.7.10 IDs; `wear 2 307 0 0` is an iron chestplate at stackSize 0 in armour slot 2,
+# as ItemStack.damageItem leaves a Thorns- or anvil-broken piece. ContainerPlayer: 0 result, 1-4 grid, 5 helmet, 6 chestplate, 7 leggings,
+# 8 boots, 9-35 main, 36-44 hotbar. click SLOT BUTTON MODE (Container.slotClick modes 0-6).
+
+case zero-armour-pickup-left
+wear 2 307 0 0
+click 6 0 0
+end
+
+case zero-armour-pickup-right
+wear 2 307 0 0
+click 6 1 0
+end
+
+case zero-armour-place-main-left
+wear 2 307 0 0
+click 6 0 0
+click 9 0 0
+end
+
+case zero-armour-place-main-right
+wear 2 307 0 0
+click 6 0 0
+click 9 1 0
+end
+
+case zero-armour-place-hotbar
+wear 2 307 0 0
+click 6 0 0
+click 36 0 0
+end
+
+case zero-armour-return
+wear 2 307 0 0
+click 6 0 0
+click 6 0 0
+end
+
+case zero-armour-to-other-armour-slot
+wear 2 307 0 0
+click 6 0 0
+click 5 0 0
+end
+
+case zero-cursor-swap-main
+wear 2 307 0 0
+inv 9 4 10 0
+click 6 0 0
+click 9 0 0
+end
+
+case zero-cursor-onto-same-item
+wear 2 307 0 0
+inv 9 307 1 0
+click 6 0 0
+click 9 0 0
+end
+
+case zero-cursor-onto-same-item-right
+wear 2 307 0 0
+inv 9 307 1 0
+click 6 0 0
+click 9 1 0
+end
+
+case zero-cursor-onto-damaged-same
+wear 2 307 0 0
+inv 9 307 1 5
+click 6 0 0
+click 9 0 0
+end
+
+case zero-cursor-onto-zero
+wear 2 307 0 0
+inv 9 307 0 0
+click 6 0 0
+click 9 0 0
+end
+
+case cursor-onto-zero-armour
+wear 2 307 0 0
+cursor 307 1 0
+click 6 0 0
+end
+
+case cursor-right-onto-zero-armour
+wear 2 307 0 0
+cursor 307 1 0
+click 6 1 0
+end
+
+case damaged-cursor-onto-zero-armour
+wear 2 307 0 0
+cursor 307 1 40
+click 6 0 0
+end
+
+case other-armour-onto-zero-armour
+wear 2 307 0 0
+cursor 311 1 0
+click 6 0 0
+end
+
+case invalid-cursor-onto-zero-armour
+wear 2 307 0 0
+cursor 4 5 0
+click 6 0 0
+end
+
+case zero-armour-shift-click
+wear 2 307 0 0
+click 6 0 1
+end
+
+case zero-main-shift-click
+inv 9 307 0 0
+click 9 0 1
+end
+
+case zero-hotbar-shift-click
+inv 0 307 0 0
+click 36 0 1
+end
+
+case zero-main-shift-click-armour-full
+wear 2 311 1 0
+inv 9 307 0 0
+click 9 0 1
+end
+
+case zero-armour-hotbar-key-empty
+wear 2 307 0 0
+click 6 0 2
+end
+
+case zero-armour-hotbar-key-occupied
+wear 2 307 0 0
+inv 0 4 10 0
+click 6 0 2
+end
+
+case zero-armour-hotbar-key-armour
+wear 2 307 0 0
+inv 0 311 1 0
+click 6 0 2
+end
+
+case zero-hotbar-key-into-empty-armour
+inv 0 307 0 0
+click 6 0 2
+end
+
+case zero-main-hotbar-key
+inv 9 307 0 0
+click 9 3 2
+end
+
+case zero-armour-drop-key
+wear 2 307 0 0
+click 6 0 4
+end
+
+case zero-armour-drop-stack-key
+wear 2 307 0 0
+click 6 1 4
+end
+
+case zero-main-drop-key
+inv 9 307 0 0
+click 9 0 4
+end
+
+case zero-cursor-drop-outside-left
+wear 2 307 0 0
+click 6 0 0
+click -999 0 0
+end
+
+case zero-cursor-drop-outside-right
+wear 2 307 0 0
+click 6 0 0
+click -999 1 0
+end
+
+case zero-cursor-drop-outside-right-twice
+wear 2 307 0 0
+click 6 0 0
+click -999 1 0
+click -999 1 0
+end
+
+case zero-cursor-close
+wear 2 307 0 0
+click 6 0 0
+close
+end
+
+case zero-cursor-grid-close
+wear 2 307 0 0
+click 6 0 0
+click 1 0 0
+close
+end
+
+case zero-cursor-collect
+wear 2 307 0 0
+inv 20 307 1 0
+click 6 0 0
+click 9 0 6
+end
+
+case zero-cursor-drag-left
+wear 2 307 0 0
+click 6 0 0
+click -999 0 5
+click 9 1 5
+click 10 1 5
+click -999 2 5
+end
+
+case zero-cursor-drag-right
+wear 2 307 0 0
+click 6 0 0
+click -999 4 5
+click 9 5 5
+click 10 5 5
+click -999 6 5
+end
+
+case zero-armour-creative-clone
+creative
+wear 2 307 0 0
+click 6 2 3
+end
+
+case zero-main-add-merge
+inv 0 3 0 0
+add 3 10 0
+end
+
+case zero-main-add-tool
+inv 0 307 0 0
+add 307 1 0
+end
+
+case zero-main-consume
+inv 0 262 0 0
+consume 262
+end
+
+case zero-held-tool-damage
+inv 0 267 0 0
+damage 0 1
+end

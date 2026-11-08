@@ -95,9 +95,9 @@ export function mobGearNbtFields(tag, type, convertItem = () => null) {
   if (equipment) {
     gear.equipment = [0, 1, 2, 3, 4].map((i) => {
       const c = equipment.elementType === NBT.COMPOUND ? equipment.items[i] : undefined, id = c && tagValue(c, 'id', NBT.SHORT);
-      const live = id ? convertItem(c) : null;
+      const live = id ? convertItem(c, { allowEmpty: true }) : null; // Count 0 (a Thorns-broken piece) is kept, zero-stacks-reference.json mobNbt
       if (!live) return null;
-      return { id, count: Math.max(1, Math.min(64, tagValue(c, 'Count', NBT.BYTE, 1))), damage: Math.max(0, tagValue(c, 'Damage', NBT.SHORT, 0)), ...(live.enchantments?.length ? { enchantments: live.enchantments.map((e) => ({ id: e.id, lvl: e.lvl })) } : {}) };
+      return { id, count: Math.max(0, Math.min(64, tagValue(c, 'Count', NBT.BYTE, 1))), damage: Math.max(0, tagValue(c, 'Damage', NBT.SHORT, 0)), ...(live.enchantments?.length ? { enchantments: live.enchantments.map((e) => ({ id: e.id, lvl: e.lvl })) } : {}) };
     });
   }
   const chances = tagValue(tag, 'DropChances', NBT.LIST);

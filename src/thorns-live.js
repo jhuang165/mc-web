@@ -10,23 +10,25 @@
 // The death text is "death.attack.thorns" ("%1$s was killed trying to hurt %2$s") with the wearer as %2$s (probed, CombatTrackerProbe thorns:*).
 import { thornsReaction } from "./armor-enchantments.js";
 import { attemptDamageItem } from "./enchantments.js";
+import { brokenItemDraws, breakStack } from "./mob-equipment.js";
 
 /** Mob types whose melee does not extend EntityMob.attackEntityAsMob and so never triggers the victim's Thorns. */
 export const NO_THORNS_ATTACKER = new Set(["wolf", "slime", "magma_cube", "iron_golem", "ocelot", "snow_golem"]);
 
 /** The player hit a mob that wears Thorns: the mob's equipment rolls on its Random and hurts the player. `hurt(damage)` hurts the player
  *  (survival.damage with source "thorns"), `sound()` plays damage.thorns at the player. Stack wear is ItemStack.damageItem(amount, mob) on the mob's
- *  own stack: for a mob wearer too the Unbreaking rolls run on the mob's Random in the native order (probed over 2880 ThornsWearProbe rows; an
- *  earlier note here said Unbreaking was ignored for mobs, which the probe refutes), and a stack past its maximum is removed (the original keeps
- *  an empty stack there). Returns the damages dealt. */
-export function mobThornsOnPlayerHit(mob, random, { hurt, sound }) {
+ *  own stack: for a mob wearer too the Unbreaking rolls run on the mob's Random in the native order (probed over 2880 ThornsWearProbe rows).
+ *  A stack past its maximum stays in the slot as a zero-size stack with damage 0 (it keeps its Thorns, keeps rolling and is worn again), and
+ *  `broken(stack)` runs renderBrokenItemStack: by default the 15 Random draws; `breakSound()` plays random.break (zero-stacks-reference.json
+ *  mobThorns; ThornsWearProbe's double overrode renderBrokenItemStack, so its rows pass `broken: () => {}`). Returns the damages dealt. */
+export function mobThornsOnPlayerHit(mob, random, { hurt, sound, breakSound = () => {}, broken = () => { breakSound(); brokenItemDraws(random); } }) {
   if (!mob.equipment) return [];
   return thornsReaction({
     items: () => mob.equipment, random, hurt, sound,
     wear: (i, amount) => {
       const stack = mob.equipment[i];
       if (!stack) return;
-      if (attemptDamageItem(stack, amount, random)) mob.equipment[i] = null;
+      if (attemptDamageItem(stack, amount, random)) { broken(stack); breakStack(stack); }
     },
   });
 }

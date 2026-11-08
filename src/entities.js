@@ -66,7 +66,7 @@ import { summonedMobRecord, importedMobType } from "./java-mobs.js";
 import { mountMobOnVehicle } from "./vehicle-riders.js";
 import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest, canSpawnHere as ocelotCanSpawnHere } from "./ocelot.js";
 import { NETHER, providerOf, lightBrightnessTable } from "./dimensions.js";
-import { cloneStack, attackBonus, meleeEffects } from "./mob-equipment.js";
+import { cloneStack, attackBonus, meleeEffects, fallingBlockHelmet, brokenItemDraws } from "./mob-equipment.js";
 import { GEAR_TYPES, defaultGear, gearFieldsFrom as mobGearFieldsFrom, toLiveStack, pickUpLoot } from "./mob-equipment-live.js";
 import { enchantedDamage } from "./armor-enchantments.js";
 import { mobThornsOnPlayerHit, NO_THORNS_ATTACKER } from "./thorns-live.js";
@@ -912,6 +912,8 @@ export class EntityWorld {
     const rand = entityRandom(e), name = source.name ?? "generic";
     // Potion.fireResistance: fire damage is refused.
     if ((name === "onFire" || name === "inFire" || name === "lava") && (e.effects?.some((x) => x.id === 12) || fireproof(e))) return false;
+    // An anvil or falling block wears the helmet slot's stack (a broken one stays at size 0) and deals 0.75 (mob-equipment.js fallingBlockHelmet).
+    if ((name === "anvil" || name === "fallingBlock") && e.equipment) amount = fallingBlockHelmet(e.equipment, amount, rand, () => { this.events.push({ sound: "random.break", volume: 0.8, pitch: 0.8 + Math.random() * 0.4, position: { x: e.x, y: e.y, z: e.z } }); brokenItemDraws(rand); });
     e.limbSwingAmount = 1.5;
     let fresh = true;
     if (e.hurt > 0) {
@@ -1319,6 +1321,7 @@ export class EntityWorld {
       mobThornsOnPlayerHit(e, entityRandom(e), {
         hurt: (n) => survival.damage(n, "thorns", true, "thorns", e),
         sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: player.x, y: player.y ?? e.y, z: player.z } }),
+        breakSound: () => this.events.push({ sound: "random.break", volume: 0.8, pitch: 0.8 + Math.random() * 0.4, position: { x: e.x, y: e.y, z: e.z } }),
       });
       // Entity.addVelocity(-sin(yaw) * n * 0.5F, 0.1, cos(yaw) * n * 0.5F) with the sine table and Java
       // floats; player.yaw is this build's radian view yaw (Java yaw = 180 - yaw degrees).
