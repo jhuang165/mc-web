@@ -49,7 +49,7 @@ export function gearFieldsFrom(e) {
   return {
     // The home area td.bL set around a holder is not saved by EntityCreature; it is set again on the first leashed tick.
     ...(e.leashHome ? { homeRadius: -1, leashHome: undefined } : {}),
-    leash: e.leash?.holder === "player" ? { holder: "player" } : e.leash?.holder === "mob" && typeof e.leash.holderUuid === "string" ? { holder: "mob", holderUuid: e.leash.holderUuid } : knot ? { knot } : undefined,
+    leash: e.leash?.lost ? { lost: true } : e.leash?.holder === "player" ? { holder: "player" } : e.leash?.holder === "mob" && typeof e.leash.holderUuid === "string" ? { holder: "mob", holderUuid: e.leash.holderUuid } : knot ? { knot } : undefined,
     customName: typeof e.customName === "string" && e.customName ? e.customName.slice(0, 64) : undefined,
     customNameVisible: e.customNameVisible === true ? true : undefined,
     persistent: e.persistent === true ? true : undefined,
@@ -170,6 +170,7 @@ export function installHorseGear(EntityWorld) {
   // with no fence, which then dies in up to 100 ticks); a player holder must be within 10 blocks of the mob (the UUID is the one player's).
   proto.leashRestore = function (e) {
     const l = e.leash;
+    if (l.lost) { this.unleash(e, true); return; } // an imported Leashed mob whose Leash tag names no holder: the lead item drops
     if (l.knot) { if (!this.knotAt(l.knot.x, l.knot.y, l.knot.z)) this.knotCreate(l.knot.x, l.knot.y, l.knot.z); return; }
     // sw.bP: any living entity of the UUID in the 10-block box (the first in the list; a dead one is found and then dropped by the next tick).
     const p = l.holder === "mob" ? (() => { const m = this.entities.find((x) => x.uuid === l.holderUuid); const [mw, mh] = m ? this.size(m) : []; return m && { x: m.x, y: m.y, z: m.z, width: mw, height: mh }; })() : this.ai?.player;
@@ -207,7 +208,9 @@ export function installHorseGear(EntityWorld) {
     if (e.leash && !st) { leashStates.set(e, (st = { task: null })); this.leashRestore(e); }
     if (e.leash) {
       const h = this.leashHolder(e);
-      if (!h || e.health <= 0) this.unleash(e, true);
+      // sw.bL: only a missing or dead holder frees the mob. A corpse in its 20-tick death animation keeps the lead (td.bL still runs) and the lead
+      // is lost without a drop when the corpse is removed (setDead does not clear it; leads3-reference.json leadDeath).
+      if (!h) this.unleash(e, true);
     }
     if (!e.leash) { this.leashRelease(e); return; }
     const h = this.leashHolder(e);
@@ -215,7 +218,7 @@ export function installHorseGear(EntityWorld) {
     e.leashHome = true;
     const sitting = (e.type === "wolf" || e.type === "ocelot") && e.sitting === true;
     const step = G.leashStep(h.x - e.x, h.y - e.y, h.z - e.z, { sitting });
-    if (step.task) {
+    if (step.task && e.health > 0) { // a corpse's AI tasks never run
       st ??= leashStates.get(e);
       if (!st.task) addRestriction(this, e, st);
       if (step.path) this.ai.brain(e).navigator.tryMoveToEntityLiving(h.player ? this.ai.player : h.mob ? h.mob : { x: h.x, y: h.y - KNOT_HALF_HEIGHT, z: h.z }, G.LEASH_PATH_SPEED);
@@ -267,7 +270,7 @@ export function installHorseGear(EntityWorld) {
     if (!survival.creative) survival.inventory.decr(survival.inventory.current, out.consume);
     return true;
   };
-  // EntityHorse.cK on death plus the lead (EntityLiving.setDead -> clearLeashed): everything the horse carried drops.
+  // EntityHorse.cK on death: everything the horse carried drops.
   proto.gearDeath = function (e) {
     if (e.type === "horse" && e.horse) {
       const h = { ...e.horse };
@@ -278,7 +281,7 @@ export function installHorseGear(EntityWorld) {
       e.horse.armor = 0;
       e.horse.chested = false;
     }
-    if (e.leash) this.unleash(e, true);
+    // The lead is not cleared here: EntityLivingBase.onDeath and setDead never call clearLeashed (leads3-reference.json leadDeath).
   };
   // wi.a(yz) "gui": the screen's horse record, with the stacks the flags stand for.
   proto.horseGear = function (e) {

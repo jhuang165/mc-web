@@ -82,6 +82,9 @@ export function gearNbtFields(tag, shiftX = 0, shiftZ = 0) {
     const l = tagValue(tag, 'Leash', NBT.COMPOUND), kind = (k) => l?.get(k)?.type, isNum = (k) => kind(k) >= NBT.BYTE && kind(k) <= NBT.DOUBLE;
     if (l && kind('UUIDMost') === NBT.LONG && kind('UUIDLeast') === NBT.LONG) out.leash = { holder: 'player' };
     else if (l && isNum('X') && isNum('Y') && isNum('Z')) out.leash = { knot: { x: Math.floor(Number(l.get('X').value)) + shiftX, y: Math.floor(Number(l.get('Y').value)), z: Math.floor(Number(l.get('Z').value)) + shiftZ } };
+    // No usable holder: sw.bP finds none and clearLeashed(false, true) drops a lead item at the mob's feet on its first tick (leads3-reference.json
+    // leadRead). `lost` keeps the Leashed flag until horse-gear-live.js leashRestore does that.
+    else out.leash = { lost: true };
   }
   return out;
 }

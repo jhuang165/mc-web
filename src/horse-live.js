@@ -10,7 +10,7 @@ import * as H from "./horse.js";
 import { cleanItems, ensureItems, syncGear } from "./horse-gear.js";
 import { entityRandom, aiMoveSpeed } from "./entities.js";
 import { PIG_MOUNTED_OFFSET } from "./pig-saddle.js";
-import { mountedYOffset, maxHealthOf } from "./mob-riding.js";
+import { mountedYOffset, maxHealthOf, mountEntity } from "./mob-riding.js";
 
 const f = Math.fround;
 export const HORSE_ENTITY = {
@@ -193,6 +193,18 @@ export function installHorse(EntityWorld) {
     const max = maxHealthOf(e, e.horse.maxHealth);
     if (e.health < max && rand.nextInt(900) === 0) e.health = Math.min(max, e.health + 1); // wi.e(): heal(1)
     const rider = e.rider;
+    // EntityAIRunAroundLikeCrazy with a mob rider (a pig, /summon Riding): the same nextInt(50) roll, then the rider is thrown off and the horse
+    // rears (status 6) with no taming and no temper (leads2-reference.json horseTame, leads3-reference.json horseTameMob).
+    const mobRider = !rider && e.riddenBy && this.entities.includes(e.riddenBy) ? e.riddenBy : null;
+    if (mobRider && !e.horse.tame) {
+      const out = H.tameTick(view(e), rand, "");
+      if (out.status !== null) {
+        apply(e, out.horse);
+        mountEntity(mobRider, null, (m) => this.size(m)[1]);
+        this.horseRear(e, true);
+        burst(this.fx, "smoke", 7, e, rand, 0.5);
+      }
+    }
     if (rider && !e.horse.tame && rider.player) {
       const out = H.tameTick(view(e), rand, "player");
       if (out.status !== null) {

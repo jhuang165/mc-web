@@ -226,7 +226,9 @@ export class CreativeScreen extends ContainerScreen {
     if (this.field.key(event)) { this.search(); return true; }
     return false;
   }
-  drop(s) { if (s?.count > 0) this.container.drops.push(s); }
+  // NetHandlerPlayServer.processCreativeInventoryAction (nh, bytecode-read): a creative drop needs a stack with damage >= 0 and 0 < size <= 64
+  // (a spam counter, +20 per drop and refused at 200 or more, also exists server-side). The delete slot only clears the cursor.
+  drop(s) { if (s && s.count > 0 && s.count <= 64 && !(s.damage < 0)) this.container.drops.push(s); }
   // handleMouseClick(slot, slotId, button, mode)
   send(slot, id, button, mode) {
     const inv = this.inv, c = this.container, held = inv.cursor, survival = this.tab === SURVIVAL_TAB;

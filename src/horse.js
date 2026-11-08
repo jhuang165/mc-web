@@ -128,7 +128,7 @@ export function interactHorse(h, heldId, { sneak = false } = {}) {
   return { result: true, action: "mount", horse: h };
 }
 
-// vg.e() taming task, one tick with a rider present.
+// vg.e() taming task, one tick with a rider present. `rider` is "player" for an EntityPlayer, "" for any other mob (thrown off, never tamed).
 export function tameTick(h, r, rider = "player") {
   if (r.nextInt(50) !== 0) return { horse: h, status: null, dismount: false };
   if (rider && r.nextInt(MAX_TEMPER) < h.temper) {
@@ -137,7 +137,8 @@ export function tameTick(h, r, rider = "player") {
   // cJ(): the angry sound takes pitch (nextFloat - nextFloat) * 0.2 + 1 (two draws; fits all 150 probe seeds).
   r.nextFloat();
   r.nextFloat();
-  return { horse: { ...h, temper: Math.min(MAX_TEMPER, h.temper + 5), rearing: true }, status: 6, dismount: true };
+  // Only a player rider adds temper (EntityHorse.increaseTemper is inside the EntityPlayer branch: leads2-reference.json horseTame, a pig rider keeps its temper).
+  return { horse: { ...h, temper: rider ? Math.min(MAX_TEMPER, h.temper + 5) : h.temper, rearing: true }, status: 6, dismount: true };
 }
 
 // wi.w(int): the jump bar value sent by the client when the key is released.
