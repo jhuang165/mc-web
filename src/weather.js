@@ -38,6 +38,7 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 export const stopsPrecipitation = (b) => b !== 72 && b !== 73 && b !== 0 && b !== 20 && b !== SNOW_LAYER && b !== FIRE && b !== 59 && !isPlant(b);
 // Chunk.getPrecipitationHeight (apx.d): one above the topmost such block, or -1.
 export function precipitationHeight(world, x, z) {
+  if (world.ringReads && world.ringSink?.outside(x, z)) return world.ringSink.precipitation(x, z, stopsPrecipitation); // held ring column: per-column cache
   if (world.streaming ? !readable(world, x, z) : x < 0 || z < 0 || x >= SIZE || z >= SIZE) return -1;
   for (let y = (world.height ?? HEIGHT) - 1; y >= 0; y--) if (stopsPrecipitation(world.get(x, y, z))) return y + 1;
   return -1;
@@ -45,6 +46,7 @@ export function precipitationHeight(world, x, z) {
 // Chunk.canBlockSeeTheSky (apx.c): at or above the height map, which rests on
 // the topmost block with any light opacity (glass, torches and plants do not count).
 export function canSeeSky(world, x, y, z) {
+  if (world.ringReads && world.ringSink?.outside(x, z)) return y >= world.ringSink.light.heightAt(x, z); // held ring column: cached height map
   if (world.streaming ? !readable(world, x, z) : x < 0 || z < 0 || x >= SIZE || z >= SIZE) return false;
   let top = (world.height ?? HEIGHT) - 1;
   while (top >= 0 && lightOpacity(world.get(x, top, z)) === 0) top--;
@@ -70,6 +72,7 @@ export function strikeRule({ raining, sees, precipitation, y, temperature, canSp
   return canSpawn;
 }
 export function canLightningStrikeAt(weather, world, x, y, z) {
+  if (!weather.isRaining()) return false; // strikeRule's first test, before the column reads (ahb.y begins with isRaining)
   return strikeRule({
     raining: weather.isRaining(),
     sees: canSeeSky(world, x, y, z),
