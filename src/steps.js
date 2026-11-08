@@ -13,3 +13,15 @@ export async function runSteps(steps, pause, { budgetMs = 12, every = 16, now = 
     if (++n % every === 0 && now() >= end) { await pause(); end = now() + budgetMs; }
   }
 }
+
+// A pause between slices of loading-screen work that does not wait for a frame: a macrotask (MessageChannel) lets input and the browser's
+// own rendering run in between, and `nextPaint`'s two frames (about 33 ms) per 12 ms slice were most of the time the mesh and light
+// slices took (batch 29). A real animation frame is still waited for once `frameMs` of tasks have gone by without one, so the
+// screen keeps painting. `frame` and `now` are injectable for tests.
+export function taskPause({ frameMs = 100, now = () => performance.now(), frame = () => new Promise((r) => requestAnimationFrame(() => r())), channel = () => new MessageChannel() } = {}) {
+  let lastFrame = now();
+  return async () => {
+    if (now() - lastFrame >= frameMs) { await frame(); lastFrame = now(); return; }
+    await new Promise((resolve) => { const c = channel(); c.port1.onmessage = () => { c.port1.close?.(); resolve(); }; c.port2.postMessage(0); });
+  };
+}

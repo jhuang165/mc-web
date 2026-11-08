@@ -18,6 +18,10 @@ export const PREFETCH_MARGIN = 2;
 // A 12-column span touches at most three cells per axis.
 const CELL_CACHE = 9;
 const key = (x, z) => `${x},${z}`;
+// Ring workers made on demand (`ringSpawn`) are ended after this many updates (ticks) with the ring complete and the worker idle (batch 29:
+// each worker holds 8-12 MB of JS heap plus an isolate and a thread), and made again when ring units stay unserved.
+export const RING_IDLE_TICKS = 100;
+const RING_HUNGRY_TICKS = 3; // updates of unserved ring units before another ring worker is made (a walking player's few columns go to the main worker)
 
 // Worker side: builds the requested cell or column and lists the buffers to transfer.
 export async function createStreamWorker({ seed, generationVersion, originX, originZ, worldType, generatorOptions, dimension, dimensionSeed }) {
@@ -65,7 +69,7 @@ function createDimensionWorker(seed, dimension) {
 
 // Page side. `port` is a Worker (or anything with postMessage and onmessage/onerror slots).
 export class StreamPrefetch {
-  constructor(world, port, { margin = PREFETCH_MARGIN, inFlight = 1, ringPorts = [] } = {}) {
+  constructor(world, port, { margin = PREFETCH_MARGIN, inFlight = 1, ringPorts = [], ringSpawn = null, ringMax = 0 } = {}) {
     this.world = world; this.port = port; this.margin = margin; this.inFlight = inFlight;
     this.cells = world.generationVersion >= 13 && !!world.population;
     this.pending = new Set();
@@ -78,14 +82,18 @@ export class StreamPrefetch {
     // Extra workers that only build headless ring columns (batch 28: a Nether/End column is generated from scratch, about 40-60 ms of
     // worker CPU, and one worker serving both the window and the ring filled the 441-column ring in about 28 s).
     this.mainRing = null;
-    this.ringPorts = ringPorts.map((p) => ({ port: p, busy: null }));
+    this.ringPorts = ringPorts.map((p) => ({ port: p, busy: null, idle: 0 }));
+    this.hungry = 0; this.ringSpawn = ringSpawn; this.ringMax = ringMax; // lazily created ring workers: up to ringMax at once, none on a low-core machine
+    if (ringSpawn) for (let i = 0; i < ringMax; i++) { try { this.ringPorts.push({ port: ringSpawn(), busy: null, idle: 0 }); } catch { break; } } // made up front (they start while the loading screen finishes); ended when the ring is full, made again if units stay unserved
     const init = () => ({ type: 'init', seed: String(world.javaSeed), generationVersion: world.generationVersion, originX: world.originX, originZ: world.originZ, worldType: world.worldType, generatorOptions: world.generatorOptions, dimension: world.dimension || 0, dimensionSeed: world.dimension ? world.seed : undefined });
     port.postMessage(init());
-    for (const r of this.ringPorts) {
-      r.port.onmessage = ({ data }) => { r.busy = null; this.receive(data); };
-      r.port.onerror = (event) => this.fail(event?.message ?? 'worker error');
-      r.port.postMessage(init());
-    }
+    this.init = init;
+    for (const r of this.ringPorts) this.startRing(r);
+  }
+  startRing(r) {
+    r.port.onmessage = ({ data }) => { r.busy = null; this.receive(data); };
+    r.port.onerror = (event) => this.fail(event?.message ?? 'worker error');
+    r.port.postMessage(this.init());
   }
   fail(reason) {
     if (this.failed) return;
@@ -131,10 +139,24 @@ export class StreamPrefetch {
     // Idle worker: headless columns for the spawner's chunks beyond the resident square (lowest priority). Dedicated ring workers
     // take them first; the main worker only when it has no window request in flight.
     if (this.ring) {
+      const all = this.ringSpawn ? this.ring.units() : null; // at most four units at a time (HeadlessColumns.units)
+      if (all) { // on-demand ring workers: make some when units stay unserved, end idle ones once the ring is complete
+        const open = all.filter((u) => !this.pending.has(`r${key(...u)}`)).length, free = this.ringPorts.filter((r) => !r.busy).length + (this.windowPending() + (this.mainRing ? 1 : 0) < this.inFlight ? 1 : 0);
+        this.hungry = open > free ? this.hungry + 1 : 0;
+        if (this.hungry >= RING_HUNGRY_TICKS) {
+          for (let n = Math.min(this.ringMax - this.ringPorts.length, open - free); n > 0; n--) { try { const r = { port: this.ringSpawn(), busy: null, idle: 0 }; this.ringPorts.push(r); this.startRing(r); } catch { this.ringMax = 0; break; } }
+        }
+        for (const r of [...this.ringPorts]) {
+          if (r.busy || all.length) { r.idle = 0; continue; }
+          if (++r.idle < RING_IDLE_TICKS) continue;
+          r.port.onmessage = r.port.onerror = null; r.port.terminate?.();
+          this.ringPorts.splice(this.ringPorts.indexOf(r), 1);
+        }
+      }
       const idle = this.ringPorts.filter((r) => !r.busy);
       if (this.windowPending() + (this.mainRing ? 1 : 0) < this.inFlight) idle.push(null);
       if (idle.length) {
-        for (const u of this.ring.units()) {
+        for (const u of all ?? this.ring.units()) {
           const k = `r${key(...u)}`;
           if (this.pending.has(k)) continue;
           const slot = idle.shift();

@@ -139,3 +139,26 @@ Gameplay and generated data are unchanged (workers run the same `DimensionWorld.
 | Overworld ring after return | 10.6-12.6 s | 3.5-5.7 s |
 
 - Remaining: an End-to-Overworld return sometimes (about one run in three, before and after) shows a train of 70-170 ms tasks for 1-3 s, about 9-16 s after arrival, once the ring is complete; the profile points at spawn-side ring reads (`canLightningStrikeAt`, `RingLight` `heightAt`/`search`), not at loading. The 1.3 s first Nether arrival task from the page (`launch`: meshes, light) stays near 60-70 ms. A one-off 1.1 s task seen in one run (first run after a source edit) did not repeat.
+
+## Batch 29: arrival and return time, idle workers
+Gameplay and generated data are unchanged (same columns, same game state); only when and where the work runs changed. Muted headless Chrome 1280x800, vite dev server, `artifacts/b29-dimperf2/trip.mjs` (new world, 8 s idle, then Nether, Overworld, End, Overworld), three runs each, baseline run on a clean copy of 0.57.0 (port 5396) interleaved with the changed tree (5296); the `trip:*` marks in `main.js` (`performance.mark`) time the phases.
+- Where a return spent its time (Nether to Overworld, 4.1-4.6 s): the spawn walk and resident cell 1.1-1.9 s, the Teleporter and the window cells 1.3 s, light 0.15 s, column meshes 1.5-1.8 s. A column mesh costs about 22 ms (Overworld and Nether, 42-44 ms worst, End 8 ms), 64 columns, so meshing is CPU-bound once nothing waits between slices.
+- Changes: (1) the Overworld's `presolveWorld` runs when a Nether/End world launches (not below 4 cores), so a return finds the spawn cell parked in `presolvedCells` instead of waiting for it; (2) `taskPause` (`steps.js`) replaces `nextPaint`/`nextFrame` between mesh, light and Teleporter slices: a MessageChannel task, with a real frame at least every 100 ms (a mesh slice cost 12 ms of work per two frames, 33 ms, before); (3) the random-tick refcounts of the resident columns (`WorldChunk.sectionTickCount`, 20-40 ms on the first tick after arrival) are counted in 8 ms slices at the end of launch; (4) ring workers: `StreamPrefetch` takes `ringSpawn`/`ringMax` (`hardwareConcurrency - 3`, at most 3, none up to 3 cores where batch 28 always made one; the main worker then serves the ring when idle), starts them with the prefetch, ends them after `RING_IDLE_TICKS` (100) updates with the ring complete, and makes them again when ring units stay unserved for 3 updates.
+- Before (3 runs) and after (3 runs, final tree):
+
+| | before | after |
+|---|---|---|
+| Nether trip wall | 2.2-2.8 s | 1.75-1.9 s |
+| Overworld return from the Nether, wall | 3.8-4.6 s | 2.2-2.6 s |
+| End trip wall | 1.2-1.4 s | 1.1 s |
+| Overworld return from the End, wall | 2.8-3.3 s | 1.1-1.4 s |
+| Tasks over 50 ms during the arrival (Nether/End) | 0-1 (max 59) | 0 |
+| Tasks over 50 ms during the arrival (Overworld returns) | 0-1 (max 55) | 0-1 (max 56) |
+| Nether / End ring (441 columns) | 7-7.6 s / 6.5-7.1 s | 7-7.5 s / 6.5-6.6 s |
+| Overworld ring after a return | 2.5-4.1 s | 2.5-3.6 s |
+| Workers once the ring is full | 4 (44-57 MB JS heap, 8-12 MB each) | 1 (11-12 MB) |
+
+- Worker memory: per-worker JS heap through CDP `Runtime.getHeapUsage` on each worker target (`mem.mjs`); `performance.measureUserAgentSpecificMemory` needs cross-origin isolation, which the dev server does not set, and the renderer's RSS cannot be split by thread. The isolate and thread overhead of an ended worker is not in these numbers.
+- Return waits that remain: the Teleporter's window cells (1.0-1.3 s, three workers), a second window fetch when the Teleporter moves the player to another cell (about 1.3 s; queueing the neighbouring windows behind the first made it slower, 4.5 s extra, and was dropped), and the column meshes. Meshing in a worker is the next cut.
+- Not fixed here (ringlight track): after a return, mostly End to Overworld, a train of 60-200 ms tasks runs for 1-8 s once the ring is complete (`HeadlessColumns.search`/`heightAt` and `canLightningStrikeAt` with biome-layer `getInts`). It also showed on a new world (1 in about 20 loads on the changed tree, 0 in 12 on the baseline, too few to compare). 3 of 6 final-tree End returns showed 3-13 tasks of 50-100 ms.
+- The 1.1 s task after a source edit (batch 28): not seen again in about 40 dev loads, and in three `vite build` + `vite preview` runs (new world, 20 s) the longest task after load was 140 ms (the first two, 94-97 and 133-140 ms at 0.3-0.5 s, are page start-up), so it is consistent with dev-server dependency optimisation or HMR. `window.__mc` is dev-only, so trips cannot be driven in the production build with `trip.mjs`.
