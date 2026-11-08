@@ -284,7 +284,7 @@ export class VoxelScene {
     this.light = new Light(this.world, (x,y,z,b) => {
       if (b === 112) { const lit = this.repeaterLit(x, y, z); this.repeaterEmit.set(`${x},${y},${z}`, lit); return lightEmission(b, lit); } // powered repeater: light 9
       return lightEmission(b,b===14 && this.litFurnaces.has(`${x},${y},${z}`));
-    }, { defer, native: this.world.streaming && !this.dimension && nativeLightEnabled() });
+    }, { defer, native: this.world.streaming && nativeLightEnabled() });
     this.lightPending = defer ? this.light.buildSteps() : null;
   }
   // Runs the deferred light build for up to `budgetMs`; returns true while steps remain.

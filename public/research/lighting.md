@@ -78,3 +78,11 @@ Sources: `javap -c -p -constants` on the 1.7.10 client JAR, read through the 1.7
 - `getAoBrightness`;
 - torch and water light propagation and light removal;
 - AO under an overhang.
+
+## Batch 27 additions
+
+- The streamed Nether and End use `NativeLight` (hasNoSky, real heightMap, block light), `?nativeLight=0` falls back. Sky reads 15 above the heightMap of a missing section and 0 elsewhere, as in the unchanged classes; the End lightmap ignores the sky nibble.
+- Edits within 17 blocks of the window ring and edits into ring columns are replayed once they are light-resident (a port model, exact for placements, approximate for place-and-remove pairs; see `light-engine.md`).
+- `world.set` without `updateBlock` is picked up by the block tap; 64 distinct changed cells in a chunk reset relight checks like a chunk resend.
+- Evidence: `light-engine3-reference.json` (`tools/probes/LightEngine3Probe.java`), replayed by `src/native-light-ring.test.js`; `src/streaming-light-ring.test.js` covers the wiring.
+

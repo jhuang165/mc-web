@@ -15,6 +15,7 @@ const f = Math.fround;
 
 // WorldProvider.generateLightBrightnessTable: `ambient` is the 0.0 of the base class (Overworld, End) or the 0.1 of WorldProviderHell.
 export function lightBrightnessTable(ambient = 0) {
+  ambient = f(ambient); // the 0.1F field of WorldProviderHell is a float: 1 - 0.1F rounds differently from 1 - 0.1 (LightEngine3Probe: entries 5 and 6)
   const out = new Array(16);
   for (let i = 0; i <= 15; i++) { const g = f(1 - f(i / 15)); out[i] = f(f(f(f(1 - g) / f(f(g * 3) + 1)) * f(1 - ambient)) + ambient); }
   return out;
@@ -28,13 +29,16 @@ export function endFogColor(angle = 0) {
   return hexRgb(10518688).map((c) => f(c * f(f(k * 0) + 0.15)));
 }
 
-// The provider facts that matter to this port, by dimension id. NOTE (batch 27, dimension-ticks-reference.json): aqo.f is really isHellWorld (Hell only)
-// and aqo.g hasNoSky (Hell and End), so this table's `hasNoSky` is aqo.f and its `isHellWorld` is aqo.g. Original comment: hasNoSky (aqo.f) is only set by Hell; isHellWorld (aqo.g) by Hell and End;
+// The provider facts that matter to this port, by dimension id. NOTE (batch 27, dimension-ticks-reference.json and LightEngine3Probe): the port's
+// historical names are swapped. aqo.f (Nether only, read by ItemBucket) is really isHellWorld; aqo.g (set by WorldProviderHell AND WorldProviderEnd,
+// read by World.getSavedLightValue, World.getActualHeight and the Chunk light code) is really hasNoSky, so natively the End has no sky light and an
+// actual height of 128. This table's `hasNoSky` keeps the port's Nether-only meaning (aqo.f) and `isHellWorld` is aqo.g; `lightNoSky` is the real
+// aqo.g that the native light engine reads.
 // canRespawnHere (d) and isSurfaceWorld (e) are false for both; celestial angle: Hell 0.5, End 0.0, Overworld from the world time.
 export const PROVIDERS = Object.freeze({
-  [OVERWORLD]: Object.freeze({ id: 0, name: "Overworld", hasNoSky: false, isHellWorld: false, canRespawnHere: true, isSurfaceWorld: true, ambient: 0, fixedAngle: null, cloudHeight: 128 }),
-  [NETHER]: Object.freeze({ id: -1, name: "Nether", hasNoSky: true, isHellWorld: true, canRespawnHere: false, isSurfaceWorld: false, ambient: 0.1, fixedAngle: 0.5, cloudHeight: 128, fog: [f(0.2), f(0.03), f(0.03)], actualHeight: 128 }),
-  [END]: Object.freeze({ id: 1, name: "The End", hasNoSky: false, isHellWorld: true, canRespawnHere: false, isSurfaceWorld: false, ambient: 0, fixedAngle: 0, cloudHeight: 8, entrance: [100, 50, 0], averageGroundLevel: 50, actualHeight: 256, endSky: true }),
+  [OVERWORLD]: Object.freeze({ id: 0, name: "Overworld", hasNoSky: false, lightNoSky: false, isHellWorld: false, canRespawnHere: true, isSurfaceWorld: true, ambient: 0, fixedAngle: null, cloudHeight: 128 }),
+  [NETHER]: Object.freeze({ id: -1, name: "Nether", hasNoSky: true, lightNoSky: true, isHellWorld: true, canRespawnHere: false, isSurfaceWorld: false, ambient: 0.1, fixedAngle: 0.5, cloudHeight: 128, fog: [f(0.2), f(0.03), f(0.03)], actualHeight: 128 }),
+  [END]: Object.freeze({ id: 1, name: "The End", hasNoSky: false, lightNoSky: true, isHellWorld: true, canRespawnHere: false, isSurfaceWorld: false, ambient: 0, fixedAngle: 0, cloudHeight: 8, entrance: [100, 50, 0], averageGroundLevel: 50, actualHeight: 256, endSky: true }),
 });
 export const providerOf = (dimension = 0) => PROVIDERS[dimension] ?? PROVIDERS[OVERWORLD];
 // World.getActualHeight: the Nether is 128 tall (hasNoSky), the rest 256.
