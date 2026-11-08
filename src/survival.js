@@ -677,7 +677,7 @@ export class Survival {
     for (const [key, h] of Object.entries(data.hoppers || {})) {
       if (!/^-?\d+,\d+,-?\d+$/.test(key) || !h || typeof h !== "object") continue;
       const hopper = { items: Array(5).fill(null), cooldown: Number.isInteger(h.cooldown) && h.cooldown > 0 ? Math.min(h.cooldown, 8) : 0, name: typeof h.name === "string" && h.name ? h.name.slice(0, 64) : null };
-      if (Array.isArray(h.items)) h.items.slice(0, 5).forEach((s, i) => (hopper.items[i] = this.inventory.read(s)));
+      if (Array.isArray(h.items)) h.items.slice(0, 5).forEach((s, i) => (hopper.items[i] = this.inventory.read(s, true))); // Count 0 kept (TileEntityHopper.readFromNBT, probed)
       this.hoppers[key] = hopper;
     }
     // TileEntityBrewingStand: four slots (bottles 0-2, ingredient 3) and BrewTime.

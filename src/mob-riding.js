@@ -9,6 +9,7 @@
 // `riding`: the mount's id on the rider, which loading turns back into the references (linkRiders).
 import { mhSin, mhCos } from "./lighting.js";
 import { isVehicle, vehicleSeat } from "./vehicle-seat.js";
+import { liveAttribute } from "./mob-attributes.js";
 
 const f = Math.fround;
 
@@ -146,9 +147,17 @@ export const JOCKEY_EXPERIENCE = 10;
 // EntityChicken.canDespawn (wg.v): a jockey with nobody on it.
 export const chickenJockeyDespawns = (e) => e.type === "chicken" && !!e.chickenJockey && !e.riddenBy;
 // The leader zombie's max-health bonus raises the cap only (nothing sets the health): a mob's own maximum, else its type's. Since batch 24 any mob
-// can carry one (an imported generic.maxHealth base or modifier); wolves, slimes and horses derive theirs from their own state instead.
+// can carry one (an imported generic.maxHealth base or modifier). Wolves, slimes and horses set their own base (EntityWolf.setTamed 20 or 8,
+// EntitySlime.setSlimeSize size * size, the horse's rolled or saved base); their saved modifiers apply on top, operations 0/1/2 in
+// ModifiableAttributeInstance order (probed attributes2 `maxHealth`: a tamed wolf with +4 is 24, a size 4 slime with *1.5 is 24).
 export const OWN_MAX_HEALTH = new Set(["wolf", "slime", "magma_cube", "horse"]);
-export const maxHealthOf = (e, base) => (!OWN_MAX_HEALTH.has(e.type) && Number.isFinite(e.maxHealth) && e.maxHealth > 0 ? e.maxHealth : base);
+export const ownMaxHealthBase = (e, fallback) => e.type === "wolf" ? (e.owner ? 20 : 8)
+  : e.type === "horse" ? (Number.isFinite(e.horse?.maxHealth) ? e.horse.maxHealth : fallback)
+  : (Number.isInteger(e.size) && e.size >= 1 ? e.size * e.size : 1);
+// setTamed and setSlimeSize overwrite any saved base; a wild wolf or a horse keeps it (`attributeBases`).
+const baseIsReset = (e) => (e.type === "wolf" && !!e.owner) || e.type === "slime" || e.type === "magma_cube";
+export const maxHealthOf = (e, base) => OWN_MAX_HEALTH.has(e.type) ? liveAttribute(baseIsReset(e) ? { modifiers: e.modifiers } : e, "generic.maxHealth", ownMaxHealthBase(e, base))
+  : (Number.isFinite(e.maxHealth) && e.maxHealth > 0 ? e.maxHealth : base);
 
 // EntityAISelector sj.b over a chicken list: alive and not ridden. The box is the zombie's grown by 5, 3, 5.
 export function freeChickenNear(zombie, entities, size) {

@@ -100,3 +100,11 @@ The browser Import screen's "Java save folder..." now imports every chunk of `re
   - The pigman's ground speed is fixed, so its boost has no effect.
   - The horse's speed comes from horse-live.
   - The bonus chest timing was already at world creation, so it was not changed this batch. Torch onBlockAdded was not probed.
+
+## Batch 25: max health, horse speed, Count 0 reads (attributes2 track)
+
+- **Max health.** Wolves, slimes, magma cubes and horses now take saved max-health bases and modifiers (`mob-riding.js maxHealthOf`). Native `readEntityFromNBT` clamps HealF to the maximum from the saved base, or the constructor's 8 for a wolf with no list. `setTamed` then resets a tamed wolf's base to 20, and `setSlimeSize` sets size² and heals to the full maximum. A horse keeps its saved base. All 152 `maxHealth` records load with the native maximum. All but one load with the native health: a tamed wolf saved at base 30 + 4 natively keeps health 34 over a maximum of 24, and the port clamps it to 24.
+- **No Attributes list.** A zombie or pigman loads with knockback resistance 0 on every seed. The roll belongs to `onSpawnWithEgg`.
+- **Horse speed.** A ridden horse's `bp` is the movementSpeed attribute with its modifiers. `aQ` is the prior `bp` × 0.1.
+- **Count 0.** `loadItemStackFromNBT` keeps any Count (-1, 0, 65 and 127 were probed). The port now keeps Count 0 for dropped items (`EntityItem`: alive after a tick, never picked up), hopper slots and `/summon Item`. A negative Count is still dropped (gap). `/give` takes 1-64, so it has no zero path.
+- **Evidence.** `attributes2-reference.json` (369 records from `tools/probes/Attributes2Probe.java`, written by `tools/verify-attributes2.mjs`), replayed by `src/attributes2.test.js`. Not full parity.

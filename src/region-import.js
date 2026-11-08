@@ -110,7 +110,7 @@ export function readContainerTile(id, tile, { convertItem = itemStackFromNbt, in
     let slot = get(entry, 'Slot', NBT.BYTE, 0);
     if (unsigned) slot &= 255;
     if (slot < 0 || slot >= size) { invalidSlot(slot); continue; }
-    const lost = [], stack = convertItem(entry, { ignored: lost });
+    const lost = [], stack = convertItem(entry, { ignored: lost, allowEmpty: id === 'Hopper' }); // a hopper keeps Count 0 (attributes2-reference.json itemRead)
     ignored.push(...lost.map(k => `Items[${slot}].tag.${k}`));
     if (stack) items[slot] = stack;
   }
@@ -636,7 +636,7 @@ export async function importJavaRegionArea(regions, options = {}) {
       const insideArea = x >= destination.chunkX * 16 && x < (destination.chunkX + area.width) * 16 && z >= destination.chunkZ * 16 && z < (destination.chunkZ + area.depth) * 16;
       const item = get(entity, 'Item', NBT.COMPOUND);
       if (!insideArea || drops.length >= IMPORT_DROP_LIMIT || !item) { tally(entityLost, !insideArea ? 'Item (outside area)' : !item ? 'Item (no stack)' : 'Item (over drop limit)'); continue; }
-      const stack = convertItem(item);
+      const stack = convertItem(item, { allowEmpty: true }); // EntityItem.readEntityFromNBT keeps Count 0 (attributes2-reference.json itemRead)
       if (!stack) { tally(entityLost, 'Item (unsupported stack)'); continue; }
       const m = motion && motion.every(Number.isFinite) ? motion : [0, 0, 0];
       // Saved y is the bounding-box bottom; Pos[1] is posY (yOffset 0.125 above it).

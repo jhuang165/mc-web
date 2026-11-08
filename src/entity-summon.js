@@ -68,9 +68,9 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
   const motion = motionOf(t);
   let spawned = true;
   if (id === "Item") {
-    const item = nbtGet(t, "Item", NBT.COMPOUND), stack = item ? convertItem(item) : null;
+    const item = nbtGet(t, "Item", NBT.COMPOUND), stack = item ? convertItem(item, { allowEmpty: true }) : null; // Count 0 is kept (probed, itemRead)
     if (!stack) spawned = false; // EntityItem.readEntityFromNBT: no readable stack is setDead
-    else hosts.items.spawn(stack, x, y, z, { motion, delay: Math.max(0, Math.min(40, nbtGet(t, "PickupDelay", NBT.SHORT, 0))) }).age = Math.max(0, nbtGet(t, "Age", NBT.SHORT, 0));
+    else hosts.items.spawn(stack, x, y, z, { motion, empty: true, delay: Math.max(0, Math.min(40, nbtGet(t, "PickupDelay", NBT.SHORT, 0))) }).age = Math.max(0, nbtGet(t, "Age", NBT.SHORT, 0));
   } else if (id === "XPOrb") {
     const value = nbtGet(t, "Value", NBT.SHORT, 0);
     if (value <= 0) spawned = false; // a 0-value orb has nothing to give; not kept

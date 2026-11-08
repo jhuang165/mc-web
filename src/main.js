@@ -1,5 +1,6 @@
 import { refreshResources, onResourcesRefreshed } from "./resource-refresh.js"; // first: registers every pack-dependent texture as it loads
 import { isStemCake, popDrops } from './stems-cake.js';
+import { maxHealthOf } from "./mob-riding.js";
 import { hasVoidParticles } from "./void-fog.js";
 import { StreamStorage } from './streaming-storage.js';
 import { isColoredBlock, carpetNeighbourChange, coloredPickDamage, COLORED_ITEM_OFFSET, CARPET } from './colored-blocks.js';
@@ -1504,7 +1505,7 @@ async function launch(record, prepared, { slice = false } = {}) {
           ? { ...d, death: true, stacks: new Survival({ inventory: d.inventory, durability: d.durability }).inventory.main.filter(Boolean) }
           : d,
       ),
-      (st) => survival.inventory.read(st),
+      (st) => survival.inventory.read(st, true), // a Count 0 drop is kept (EntityItem.readEntityFromNBT)
       survival.time,
     );
     projectiles.load(record.projectiles);
@@ -2199,7 +2200,7 @@ function renderVitals() {
     air = survival.air < 300 ? `<div class="air" style="--lift:${vitals.lift}" aria-label="Air ${Math.max(0, survival.air)} of 300">${"<span></span>".repeat(bubbles)}${'<span class="pop"></span>'.repeat(popping)}</div>` : "";
   // GuiIngame: the food row is drawn only on foot; a living mount (pig, horse) shows its own hearts there, a cart or boat nothing.
   const mount = rider.vehicle ? rider.vehicle.entity ?? null : undefined,
-    mountMax = mount ? (mount.type === "horse" ? mount.horse?.maxHealth : ENTITY_TYPES[mount.type]?.health) ?? 20 : 0,
+    mountMax = mount ? (ENTITY_TYPES[mount.type] ? maxHealthOf(mount, mount.horse?.maxHealth ?? ENTITY_TYPES[mount.type].health) : null) ?? 20 : 0,
     foodRow = mount === undefined
       ? `<div class="hunger${survival.effects.has(HUNGER) ? ' afflicted' : ''}" aria-label="Hunger ${survival.food} of 20${survival.effects.has(HUNGER) ? ', Hunger effect' : ''}">${food}</div>`
       : mount ? `<div class="mount-hearts" aria-label="Mount health ${Math.ceil(mount.health)} of ${mountMax}">${mountHeartsHtml(mountHeartLayout({ health: mount.health, maxHealth: mountMax }))}</div>` : '<div class="mount-hearts"></div>';

@@ -67,7 +67,7 @@ import { summonedMobRecord, importedMobType } from "./java-mobs.js";
 import { mountMobOnVehicle } from "./vehicle-riders.js";
 import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS, ocelotFields, ocelotFieldsFrom, isTamed as ocelotTamed, ocelotSay, kittenFields, kittenLitter, interact as ocelotClick, sitsOnChest, canSpawnHere as ocelotCanSpawnHere } from "./ocelot.js";
 import { NETHER, providerOf, lightBrightnessTable } from "./dimensions.js";
-import { cloneStack, attackBonus, meleeEffects, fallingBlockHelmet, brokenItemDraws } from "./mob-equipment.js";
+import { cloneStack, attackBonus, meleeEffects, fallingBlockHelmet, brokenItemDraws, breakSoundPitch } from "./mob-equipment.js";
 import { GEAR_TYPES, defaultGear, gearFieldsFrom as mobGearFieldsFrom, toLiveStack, pickUpLoot } from "./mob-equipment-live.js";
 import { enchantedDamage } from "./armor-enchantments.js";
 import { mobThornsOnPlayerHit, NO_THORNS_ATTACKER } from "./thorns-live.js";
@@ -275,7 +275,8 @@ export const HOSTILE = new Set(["zombie", "skeleton", "spider", "cave_spider", "
 // (mob-effects.js) is operation 2.
 export function aiMoveSpeed(e, multiplier) {
   // The baby boost counts once, from the child flag or a saved copy (an imported adult keeps it: mob-attributes.js hasStoredBabyBoost).
-  const baby = (e.type === "zombie" && e.growingAge < 0) || hasStoredBabyBoost(e) ? [[0.5, 1]] : [];
+  // EntityPigZombie inherits EntityZombie.setChild, so a baby pigman carries the boost too (probed interchange `babyBoost`).
+  const baby = ((e.type === "zombie" || e.type === "pigman") && e.growingAge < 0) || hasStoredBabyBoost(e) ? [[0.5, 1]] : [];
   const boost = e.type === "enderman" && e.speedBoost ? [[ENDERMAN_BOOST, 0]] : e.type === "pigman" && e.pigTarget ? [[PIGMAN.boost, 0]] : [];
   // EntityWitch: the "Drinking speed penalty" modifier (-0.25, operation 0) while a potion is being drunk.
   const drink = e.type === "witch" && e.drinking ? [[-0.25, 0]] : [];
@@ -560,11 +561,14 @@ export function jump(e) {
 // friction is 0.91 * block slipperiness. Acceleration is aiMoveSpeed (spiders:
 // fixed 0.1) * 0.16277136 / friction^3; 0.02 in the air. Spiders can climb.
 // Gravity is 0.08 with 0.98 vertical drag. Returns the landing fall distance.
+// isAIEnabled false (probed attributes2 `aiEnabled`): getAIMoveSpeed is 0.1 and the water acceleration 0.02; EntityCreature.updateEntityActionState
+// puts the movementSpeed attribute in moveForward. The ghast, squid and dragon move by their own code.
+export const LEGACY_MOVE = new Set(["spider", "cave_spider", "silverfish", "giant", "pigman", "enderman", "slime", "magma_cube", "blaze"]);
 export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
   let landed;
   if (e.inWater) {
     const y0 = e.y;
-    moveFlying(e, e.moveStrafing || 0, forward, f(isSpider(e.type) || e.type === "silverfish" || e.type === "giant" ? 0.02 : 0.04));
+    moveFlying(e, e.moveStrafing || 0, forward, f(LEGACY_MOVE.has(e.type) ? 0.02 : 0.04));
     landed = moveEntity(world, e, w, h, e.vx, e.vy, e.vz, e.type === "enderman" ? 1 : e.stepHeight ?? STEP_HEIGHT, hooks);
     e.vx *= 0.800000011920929;
     e.vy *= 0.800000011920929;
@@ -585,7 +589,7 @@ export function moveEntityWithHeading(world, e, w, h, forward, hooks) {
     const slip = () => (e.onGround ? f(slipperiness(world.get(Math.floor(e.x), Math.floor(e.y) - 1, Math.floor(e.z))) * f(0.91)) : f(0.91));
     let friction = slip();
     const accel = f(f(0.16277136) / f(f(friction * friction) * friction));
-    moveFlying(e, e.moveStrafing || 0, forward, e.onGround ? f((isSpider(e.type) || e.type === "silverfish" || e.type === "pigman" || e.type === "giant" ? f(0.1) : e.aiMoveSpeed) * accel) : e.jumpFactor ?? JUMP_MOVEMENT_FACTOR);
+    moveFlying(e, e.moveStrafing || 0, forward, e.onGround ? f((LEGACY_MOVE.has(e.type) ? f(0.1) : e.aiMoveSpeed) * accel) : e.jumpFactor ?? JUMP_MOVEMENT_FACTOR);
     friction = slip();
     // isOnLadder: EntitySpider's override is its wall flag; others test the ladder cell (ladders.js).
     const climbable = () => (isSpider(e.type) ? e.climbing : isOnLadder(world, e.x, e.y, e.z));
@@ -726,7 +730,8 @@ export class EntityWorld {
       ...fresh,
       ...e,
       id: /^mob-\d+$/.test(e.id) ? e.id : fresh.id,
-      health: Math.max(0, Math.min(e.type === "wolf" && typeof e.owner === "string" && e.owner.trim() ? TAMED_MAX_HEALTH : isSlimeLike(e) ? slimeFieldsFrom(e).health : maxHealthOf(e, t.health), e.health)),
+      // Clamped to the live maximum (mob-riding.js maxHealthOf); a slime is healed to its full one below (slimeRestore).
+      health: Math.max(0, Math.min(maxHealthOf(e, t.health), e.health)),
       yaw: Number.isFinite(e.yaw) ? e.yaw : 0,
       age: Number.isFinite(e.age) ? e.age : 0,
       growingAge:Number.isInteger(e.growingAge)?(summoned?e.growingAge:Math.max(-24000,Math.min(6000,e.growingAge))):0,
@@ -757,7 +762,7 @@ export class EntityWorld {
       // EntitySilverfish has no NBT of its own: the summon cooldown starts over.
       ...(e.type === "silverfish" ? { summonCooldown: 0 } : {}),
       // EntitySlime.readEntityFromNBT: Size (size - 1); health is clamped to size * size, the jump and squish start over.
-      ...(isSlimeLike(e) ? slimeRestore(e, fresh) : {}),
+      ...(isSlimeLike(e) ? { ...slimeRestore(e, fresh), health: maxHealthOf({ ...e, size: slimeFieldsFrom(e).size }, t.health) } : {}), // full, modifiers included
       ...(e.type === "pigman" ? pigmanFieldsFrom(e) : {}),
       ...(GEAR_TYPES.has(e.type) ? mobGearFieldsFrom(e) : {}),
       ...(e.type === "enderman" ? endermanFieldsFrom(e) : {}),
@@ -923,7 +928,7 @@ export class EntityWorld {
     // Potion.fireResistance: fire damage is refused.
     if ((name === "onFire" || name === "inFire" || name === "lava") && (e.effects?.some((x) => x.id === 12) || fireproof(e))) return false;
     // An anvil or falling block wears the helmet slot's stack (a broken one stays at size 0) and deals 0.75 (mob-equipment.js fallingBlockHelmet).
-    if ((name === "anvil" || name === "fallingBlock") && e.equipment) amount = fallingBlockHelmet(e.equipment, amount, rand, () => { this.events.push({ sound: "random.break", volume: 0.8, pitch: 0.8 + Math.random() * 0.4, position: { x: e.x, y: e.y, z: e.z } }); brokenItemDraws(rand); });
+    if ((name === "anvil" || name === "fallingBlock") && e.equipment) amount = fallingBlockHelmet(e.equipment, amount, rand, () => { this.events.push({ sound: "random.break", volume: 0.8, pitch: breakSoundPitch((this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)))), position: { x: e.x, y: e.y, z: e.z } }); brokenItemDraws(rand); });
     e.limbSwingAmount = 1.5;
     let fresh = true;
     if (e.hurt > 0) {
@@ -1340,7 +1345,7 @@ export class EntityWorld {
       mobThornsOnPlayerHit(e, entityRandom(e), {
         hurt: (n) => survival.damage(n, "thorns", true, "thorns", e),
         sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: player.x, y: player.y ?? e.y, z: player.z } }),
-        breakSound: () => this.events.push({ sound: "random.break", volume: 0.8, pitch: 0.8 + Math.random() * 0.4, position: { x: e.x, y: e.y, z: e.z } }),
+        breakSound: () => this.events.push({ sound: "random.break", volume: 0.8, pitch: breakSoundPitch((this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)))), position: { x: e.x, y: e.y, z: e.z } }),
       });
       // Entity.addVelocity(-sin(yaw) * n * 0.5F, 0.1, cos(yaw) * n * 0.5F) with the sine table and Java
       // floats; player.yaw is this build's radian view yaw (Java yaw = 180 - yaw degrees).
@@ -2317,7 +2322,7 @@ export class EntityWorld {
     const m = this.ai.brain(e), p = this.ai.player, s = this.ai.survival, st = this.silverfishState(e), t = ENTITY_TYPES.silverfish;
     st.x = e.x; st.y = e.y; st.z = e.z; st.width = t.width; st.inWater = e.inWater; st.inLava = e.inLava;
     st.collidedH = e.collidedH; st.rotationYaw = e.rotationYaw; st.rotationPitch = e.rotationPitch || 0;
-    st.summonCooldown = e.summonCooldown ?? 0; st.jumping = false;
+    st.summonCooldown = e.summonCooldown ?? 0; st.jumping = false; st.speed = aiMoveSpeed(e, 1);
     if (st.attackTime > 0) st.attackTime--;
     m.senseCache.clear();
     const world = this.world, rand = entityRandom(e), cell = (x, y, z) => { this.events.push({ blockEdit: [[x, y, z]] }); };
@@ -2367,7 +2372,7 @@ export class EntityWorld {
     const m = this.ai.brain(e), p = this.ai.player, s = this.ai.survival, st = this.silverfishState(e), t = ENTITY_TYPES.giant;
     st.x = e.x; st.y = e.y; st.z = e.z; st.width = t.width; st.inWater = e.inWater; st.inLava = e.inLava;
     st.collidedH = e.collidedH; st.rotationYaw = e.rotationYaw; st.rotationPitch = e.rotationPitch || 0;
-    st.speed = GIANT.movement; st.jumping = false;
+    st.speed = aiMoveSpeed(e, 1); st.jumping = false; // td.be: the movementSpeed attribute, saved modifiers included
     // EntityLivingBase.moveForward is one field: the previous tick's x 0.98 decay (walk) carries over when the
     // legacy action state leaves it unset (no waypoint beyond width x 2).
     st.moveForward = f(f(st.moveForward || 0) * f(0.98));

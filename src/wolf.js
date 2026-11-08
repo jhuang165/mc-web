@@ -3,6 +3,7 @@
 // Every rule here is checked against public/research/wolf-reference.json, which tools/probes/WolfProbe.java records
 // from the unchanged original classes. See public/research/wolves.md for the obfuscated names and the limits.
 import { mhSin } from "./lighting.js";
+import { maxHealthOf } from "./mob-riding.js";
 const f = Math.fround;
 export const WOLF_WIDTH = f(0.6), WOLF_HEIGHT = f(0.8);
 // applyEntityAttributes: movementSpeed 0.3 (a float), maxHealth 8 wild and 20 tamed (EntityWolf.func_70903_f).
@@ -33,7 +34,8 @@ export const wolfFields = () => ({
   dwHealth: 1,
 });
 export const isTamed = (e) => !!e.owner;
-export const maxHealth = (e) => (isTamed(e) ? TAMED_MAX_HEALTH : WILD_MAX_HEALTH);
+// getMaxHealth: the base setTamed sets (20 tamed, 8 wild: a wild wolf keeps an imported base) with its saved modifiers (mob-riding.js maxHealthOf).
+export const maxHealth = (e) => maxHealthOf({ ...e, type: "wolf" }, isTamed(e) ? TAMED_MAX_HEALTH : WILD_MAX_HEALTH);
 // What a save, an imported Java mob or /summon may contain, sanitised.
 export function wolfFieldsFrom(e, fresh) {
   const owner = typeof e.owner === "string" ? e.owner.trim() : "";
@@ -142,7 +144,9 @@ export function interact(e, item, isOwner, creative, rand) {
     if (rand.nextInt(3) === 0) {
       e.owner = e.owner || "player";
       e.sitWish = true;
-      e.health = TAMED_MAX_HEALTH;
+      // setTamed(true) resets the maxHealth base to 20, then setHealth(20) clamps to the modified maximum (probed attributes2 `tame`: 10 under a -50% modifier).
+      if (e.attributeBases?.["generic.maxHealth"] !== undefined) { const { "generic.maxHealth": _, ...rest } = e.attributeBases; e.attributeBases = Object.keys(rest).length ? rest : undefined; }
+      e.health = Math.min(TAMED_MAX_HEALTH, maxHealth(e));
       out.status = 7;
       out.tamed = true;
     } else out.status = 6;

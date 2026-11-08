@@ -26,9 +26,7 @@ const liveOf = (r) => Object.fromEntries(r.live.map((a) => [a.name, a.value]));
 const world = (mobs = []) => new EntityWorld({ size: 128, height: 256 }, mobs, () => 0.5);
 const load = (record) => world([{ ...record, x: 64.5, y: 1, z: 64.5 }]).entities[0];
 const near = (a, b, msg, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps * Math.max(1, Math.abs(b)), `${msg}: ${a} vs ${b}`);
-// Classes that set their own maximum health from other fields (tamed wolf, slime size, horse roll): the port does not apply a saved
-// maxHealth base or modifier to them yet (follow-ups in interchange3-b24-track.md).
-const OWN_MAX_HEALTH = new Set(["Wolf", "Slime", "LavaSlime", "EntityHorse"]);
+import { maxHealthOf } from "./mob-riding.js";
 
 test("native: record counts and class digests", () => {
   assert.deepEqual(ref.counts, { spawnBonus: 87, modEffect: 84, babyBoost: 8, weapon: 36, legacyOwner: 30, wolfOwner: 5 });
@@ -102,10 +100,9 @@ test("imported Attributes bases and modifiers give the native live followRange, 
     near(e.knockbackResistance ?? 0, L["generic.knockbackResistance"], msg + " knockback", 1e-12);
     // setAIMoveSpeed takes the float of the attribute value.
     near(aiMoveSpeed(e, 1), Math.fround(L["generic.movementSpeed"]), msg + " speed");
-    if (!OWN_MAX_HEALTH.has(r.id)) {
-      near(e.maxHealth ?? ENTITY_TYPES[e.type].health, L["generic.maxHealth"], msg + " maxHealth", 1e-12);
-      near(e.health, r.health, msg + " health", 1e-12);
-    }
+    // Wolves, slimes and horses too since batch 25 (their own base under the saved modifiers: mob-riding.js maxHealthOf).
+    near(maxHealthOf(e, ENTITY_TYPES[e.type].health), L["generic.maxHealth"], msg + " maxHealth", 1e-12);
+    near(e.health, r.health, msg + " health", 1e-12);
     const attack = r.input.find((a) => a.name === "generic.attackDamage");
     if (L["generic.attackDamage"] !== undefined) near(attackDamage(e, ENTITY_TYPES[e.type].damage ?? attack.base), Math.fround(L["generic.attackDamage"]), msg + " attackDamage");
   }
@@ -127,7 +124,6 @@ test("native: max health is not capped at 2048, follow range is, knockback stops
 
 test("an imported Attributes list survives export and import again with the same live values", () => {
   for (const r of by("modEffect")) {
-    if (OWN_MAX_HEALTH.has(r.id)) continue;
     const record = javaMobFromNbt(nbtOf(r, r.id), {}), e = load(record);
     const tag = new Map(nbtOf(r, r.id));
     tag.set("Attributes", livingAttributesNbt(e, r.id));
@@ -135,6 +131,7 @@ test("an imported Attributes list survives export and import again with the same
     assert.equal(again.followRange, e.followRange, msg);
     assert.equal(again.knockbackResistance, e.knockbackResistance, msg);
     assert.equal(again.maxHealth, e.maxHealth, msg);
+    assert.equal(maxHealthOf(again, ENTITY_TYPES[again.type].health), maxHealthOf(e, ENTITY_TYPES[e.type].health), msg);
     assert.equal(aiMoveSpeed(again, 1), aiMoveSpeed(e, 1), msg);
     assert.equal(attackDamage(again, 2), attackDamage(e, 2), msg);
   }
@@ -148,7 +145,7 @@ test("baby boost: a baby always has it; an adult keeps a saved one (setChild run
     assert.equal(r.child, r.isBaby);
     const record = javaMobFromNbt(nbtOf(r, r.id), {}), e = load(record), msg = `${r.id} baby ${r.isBaby} saved ${r.modifier}`;
     assert.equal((e.growingAge ?? 0) < 0, r.isBaby, msg);
-    if (r.id === "Zombie") near(aiMoveSpeed(e, 1), Math.fround(speed.value), msg);
+    near(aiMoveSpeed(e, 1), Math.fround(speed.value), msg); // the pigman's baby boost too since batch 25 (it inherits setChild)
     // Export writes the boost exactly when the native mob carries it.
     const list = livingAttributesNbt(e, r.id).value.items, entry = list.find((a) => a.get("Name").value === "generic.movementSpeed");
     const saved = (entry.get("Modifiers")?.value.items ?? []).filter((m) => m.get("Name").value === "Baby speed boost");
