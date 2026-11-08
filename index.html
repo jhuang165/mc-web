@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>Unlock Blockworld</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100svh;display:grid;place-items:center;background:#101712;color:#edf2eb;font:16px system-ui,sans-serif;padding:24px;background-image:linear-gradient(135deg,#24362355,transparent 55%)}
+main{width:min(100%,390px);padding:36px;border:1px solid #465b43;background:#1b251e;box-shadow:10px 10px 0 #080d0a}
+.eyebrow{color:#acbd8c;font-size:12px;letter-spacing:.16em;text-transform:uppercase;margin:0 0 12px}h1{font-size:32px;letter-spacing:-.04em;margin:0 0 8px}p{color:#b7c2b6;line-height:1.5;margin:0 0 28px}label{display:block;font-size:14px;margin-bottom:8px}
+input,button{font:inherit;width:100%;border-radius:0;padding:13px}input{border:1px solid #64775e;background:#101712;color:white;outline-offset:3px}input:focus{outline:2px solid #b9d090}button{margin-top:14px;border:0;background:#bbd391;color:#14200f;font-weight:650;cursor:pointer;box-shadow:0 4px 0 #718453}button:disabled{opacity:.55;cursor:wait}#status{min-height:44px;font-size:14px;color:#e4c4a4;margin:20px 0 0}footer{margin-top:20px;font-size:12px;color:#8e9d8c}
+</style></head><body><main><div class="eyebrow">Private preview</div><h1>Blockworld</h1><p>Enter the passcode to play.</p>
+<form><label for="passcode">Passcode</label><input id="passcode" type="password" inputmode="numeric" autocomplete="current-password" required autofocus maxlength="128"><button type="submit" disabled>Unlock</button></form><p id="status" role="status" aria-live="polite">Preparing unlock…</p><footer>Guns preview</footer></main>
+<script>
+const BASE="/mc-web/", form=document.querySelector('form'), input=document.querySelector('input'), button=document.querySelector('button'), status=document.querySelector('#status');
+let worker;
+function ask(type, passcode) { return new Promise((resolve,reject)=>{const channel=new MessageChannel(), timer=setTimeout(()=>reject(Error('Unlock timed out. Please try again.')),30000);channel.port1.onmessage=e=>{clearTimeout(timer);channel.port1.close();resolve(e.data)};worker.postMessage({type,passcode},[channel.port2])}) }
+(async()=>{try{
+  if(!window.isSecureContext||!navigator.serviceWorker||!crypto.subtle)throw Error('Please open this page in a current browser over HTTPS.');
+  await navigator.serviceWorker.register(BASE+'resource-pack-sw.js',{scope:BASE,updateViaCache:'none'});
+  const registration=await navigator.serviceWorker.ready;worker=registration.active;
+  if(new URL(location.href).searchParams.has('lock'))await ask('lock');
+  else if((await ask('status')).ok){location.replace(BASE);return}
+  button.disabled=false;status.textContent='';
+}catch(e){status.textContent=e.message}})();
+form.addEventListener('submit',async e=>{e.preventDefault();button.disabled=true;status.textContent='Unlocking…';try{
+  const result=await ask('unlock',input.value);input.value='';
+  if(!result.ok)throw Error(result.error||'Incorrect passcode. Try again.');
+  location.replace(BASE);
+}catch(e){status.textContent=e.message;button.disabled=false;input.focus()}});
+</script></body></html>
