@@ -2,6 +2,28 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 30
+
+Batch 30 covered these areas:
+- **Village fights, round 2.** All seven recorded fights replay exactly, with bit-identical positions, health, targets and Random draws. Before this batch they diverged at ticks 114-322. The tick 114 split was a probe double, not a port bug. Also fixed: death-tick particle draws on the mob's Random, the mob bounding box kept between moves (the zombie drift), the golem lift as a double, and a skeleton's combat task following its held item. New probe records: Peaceful (hostiles tick once, then go) and villagers fleeing two zombies (WatchClosest lists corpses) ([village.md](village.md), [combat.md](combat.md)).
+- **Away ticks.** While the player is in the Nether or End, the Overworld spawn-area columns that hold work run in a worker on return: scheduled ticks for the whole time, and tile entities, falling blocks and pistons for the first 1200 ticks. The Overworld clock catches up the loading-screen ticks. Native rules bytecode-read ([dimensions.md](dimensions.md)).
+- **Ring light, round 2.** Chunks that are neither resident nor held count as unloaded, so rim columns are no longer lit against air. Resident edits drop the light of ring columns beside them (`World.put` -> `HeadlessColumns.edited`). An executed probe compared server and client light: block light and height maps never differ, and sky light differs only in empty sections beside pillar shadows and for one floating slab ([light-engine.md](light-engine.md)).
+- **Mesh workers.** Column meshing runs in a pool of up to 3 workers with byte-identical output; single-block edits stay on the page. End shaders compile during the loading screen. End portal frames are meshed again (a shadowed method name had hidden them). Under heavy machine load, Nether trips went from 3.4-3.6 s to 1.9 s and Overworld returns from 5.5 s to 2.6-2.8 s ([loading-screens.md](loading-screens.md)).
+- **Import, round 7.** An executed TileTicks probe found the native pending order (time, priority, creation) and the save box `[c*16-2, c*16+16)`; batch 29 used +18, now fixed. Comparator `OutputSignal` imports and exports. Horse chest stacks with count <= 0 are kept, as natively, and an unusable `Leash` tag round-trips unchanged ([region-import.md](region-import.md)).
+- **Anaglyph, round 4.** Toggles and page loads convert the GUI ahead and commit it in one step, with no raw frames; converted PNGs are cached across reloads. The item atlas applies tints after conversion, as natively. Resource-pack icons and the profile skin are converted, and the GUI converts in legacy mode ([post-shaders.md](post-shaders.md)).
+- **Generation neighbour callbacks.** New streamed worlds are generation 20. Population runs the door, redstone, tripwire, button, plate and dispenser neighbour callbacks call-for-call against the unchanged areas: 44 flat, 6 temple and 9 default-world areas, village door chains included. Generation 15-19 saves are unchanged ([superflat.md](superflat.md), [scattered-features.md](scattered-features.md)).
+- **Server handlers.** An executed NetHandlerPlayServer probe covered MC|BEdit and MC|BSign (41 cases, already matching), the Creative drop limiter (+20, refused at 200, now ported), the chat spam kick (single-player owner without cheats is not exempt, now ported, along with the 100-character cut and illegal-character kick), and the held-slot, sign, placement, digging and use-entity checks. Creative reach was swapped; it is now 5 for blocks and 6 for entities ([books.md](books.md)).
+
+Still open from batch 30:
+- Village fights with several skeletons shooting arrows, three or more zombies, Hard difficulty or a bow skeleton are unprobed. A hit on an already-removed mob cannot be replayed. A same-tick equipment swap changes the combat task a tick late.
+- While away, mobs, items, projectiles, carts, boats and TNT do not move. Dispensers, droppers, note blocks and command blocks do not run. Spawn-area columns outside the departure window do not advance. Weather timers miss the loading-screen ticks. The away run adds latency to the return trip, and imported whole saves are skipped.
+- Ring rim light is a bounded model: native rim chunks are darker still, with vertical-only light. Rendered light is the server volume; population spill, 64-change resends and Nether/End relight resets are not in the client-light probe.
+- About 40 frames over 50 ms per 120 blocks walked (streaming, light, entities). A Teleporter exit in another population cell still costs a second window fetch (1.9 s once in three returns). The worker cap is unmeasured on an idle machine.
+- TileTicks on air, unknown ids or y outside 0..255 are dropped; the ThisTick list of a mid-tick save is not modelled; ticks outside a 1x1 save are dropped at import rather than at their due time.
+- Atlas canvases still convert through 2D canvas premultiplied alpha, so translucent pixels can be 1 off; tint multipliers are rounded to bytes; lazily created textures use the canvas path. Pack icons and the profile screen were not exercised live.
+- Generation 20 falls back to quiet callbacks for unported power states (powered doors). Imported saves (16/17) keep quiet callbacks. Default-world jungle decoration outside temples still differs.
+- Server placement, digging and use-entity distance checks are not enforced in play. Creative survival-tab drops skip the limiter. Multiplayer chat is not gated.
+
 ## Done in batch 29
 
 Batch 29 covered these areas:
@@ -15,14 +37,8 @@ Batch 29 covered these areas:
 - **Trip speed, round 2.** The Overworld spawn cell is built while the player is away, loading slices pause with a task instead of two frames, and ring workers end once the ring is full (4 workers to 1). Overworld return from the End 2.8-3.3 s to 1.1-1.4 s, from the Nether 3.8-4.6 s to 2.2-2.6 s ([loading-screens.md](loading-screens.md)).
 
 Still open from batch 29:
-- Anaglyph GUI conversion is async (native: synchronous) and skips resource-pack blob icons and the profile skin; biome tints are applied before conversion (native: after); legacy anaglyph leaves the GUI raw.
 - Bidi and §k have no pixel comparison against native frames; §k signs are re-picked only when visible (16 per frame), unseeded.
-- Village fight replay diverges at tick 114 (villager flee sight ray through a door), at native death-tick particle draws, and by about 1e-3 in a pushed zombie. The port assumes every skeleton holds a bow. Peaceful and several-skeleton fights are unprobed.
-- Overworld spawn-area scheduled ticks and entity updates freeze while the player is away; trips pause the game tick for the loading screen. Decaying-leaf drops in the Nether/End are unprobed.
-- Saved horse stacks with count <= 0 are dropped; the Creative drop spam limiter is not modelled; export rewrites an unticked unusable `Leash` tag as a valid one.
-- TileTicks: priority only for redstone; comparator OutputSignal not imported; ticks outside a 1x1 whole-save chunk box dropped; no native probe of the pending list.
-- Ring rim columns (fewer than eight held neighbours) are lit against air. Resident edits beside a ring column invalidate its light only on window moves. Server light and client relight are still one volume (bytecode-read difference, not executed).
-- Column meshing (about 22 ms each) runs on the page thread; an End return can still show a short train of 50-190 ms tasks; the first End shader compile is not warmed; ring worker thread memory is unmeasured.
+- Decaying-leaf drops in the Nether/End are unprobed; ring worker thread memory is unmeasured.
 
 ## Done in batch 28
 

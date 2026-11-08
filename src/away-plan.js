@@ -50,4 +50,3 @@ export function awayPlan(root, columns, ticks) {
     redstone: root.redstone, pistons: root.pistons, tiles, weather: root.weather,
   };
 }
-
