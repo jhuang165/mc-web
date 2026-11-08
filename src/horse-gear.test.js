@@ -202,6 +202,16 @@ test("a name tag names a mob, keeps it from despawning and survives serialize", 
   assert.equal(w.nameTagUse(e, holding(375, 1)), false); // an unnamed tag does nothing
 });
 
+test("a name tag is used up outside Creative only (EntityPlayer.interactWith copies the stack in Creative; neg-stacks2 interact records)", () => {
+  const survival = holding(375, 2, { displayName: "Rex" }), creative = holding(375, 2, { displayName: "Rex" });
+  creative.mode = "creative";
+  const w = world({});
+  assert.equal(w.nameTagUse(w.entities[0], creative), true);
+  assert.equal(creative.held.count, 2);
+  w.nameTagUse(w.entities[0], survival);
+  assert.equal(survival.held.count, 1);
+});
+
 test("a dying chested horse drops its saddle, stacks and the chest", () => {
   const w = world({ type: "horse", health: 20, horse: { type: 1, tame: true, chested: true, saddled: true, armor: 0, owner: "player", speed: 0.2, jump: 0.5, maxHealth: 20 } }), e = w.entities[0];
   const items = w.horseGear(e).items;

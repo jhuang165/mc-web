@@ -48,8 +48,9 @@ export class PlayerInventory {
     if (randomState) this.random.restore(randomState);
     // InventoryPlayer.readFromNBT keeps a Count 0 stack in the main inventory too (zero-armour-stack-reference.json nbt row).
     if (Array.isArray(saved)) saved.slice(0, 36).forEach((s, i) => (this.main[i] = this.read(s, true)));
-    // armor[0] boots ... armor[3] helmet, as InventoryPlayer.armorInventory.
-    if (Array.isArray(armor)) armor.slice(0, 4).forEach((s, i) => { const a = this.read(s, true); if (a && armorTypeOf(items, a.id) === 3 - i) this.armor[i] = a; });
+    // armor[0] boots ... armor[3] helmet, as InventoryPlayer.armorInventory. readFromNBT puts any item in a slot 100-103 entry, armour or not,
+    // and keeps it (neg-stacks-reference.json playerRead; neg-stacks2-reference.json armour); only the container slot refuses a wrong piece.
+    if (Array.isArray(armor)) armor.slice(0, 4).forEach((s, i) => (this.armor[i] = this.read(s, true)));
   }
   // `allowEmpty` keeps a size-0 stack (ItemStack.damageItem leaves a Thorns-broken piece at size 0, a container click can move it into the
   // main inventory, and InventoryPlayer.readFromNBT keeps it in either part).
@@ -162,8 +163,9 @@ export class PlayerInventory {
     } else this.main[this.current] = makeStack(id, 1, damage ?? 0);
   }
   takeAll() {
-    // A size-0 armour piece is cleared but never dropped: EntityPlayer.func_146097_a returns null for stackSize 0 (bytecode-read).
-    const out = [...this.main, ...this.armor].filter((s) => s && s.count > 0);
+    // func_146097_a returns null only for stackSize 0, so a size-0 stack is cleared without a drop and a negative one is dropped
+    // (probed, neg-stacks2-reference.json drop).
+    const out = [...this.main, ...this.armor].filter((s) => s && s.count !== 0);
     this.main.fill(null);
     this.armor.fill(null);
     return out;

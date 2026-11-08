@@ -223,7 +223,8 @@ test("armor reduces blockable damage, wears each piece, and survives saves", () 
   assert.deepEqual(p.inventory.armor.map((s) => s.damage), [1, 1, 1, 1]);
   const q = new Survival(p.serialize());
   assert.deepEqual(q.inventory.armor, p.inventory.armor);
-  assert.equal(new Survival({ armor: [makeStack(408)] }).inventory.armor[0], null);
+  // InventoryPlayer.readFromNBT keeps any item in an armour entry, a wrong piece too (neg-stacks2-reference.json armour).
+  assert.deepEqual(new Survival({ armor: [makeStack(408)] }).inventory.armor[0], makeStack(408));
   const worn = new Survival({ armor: [makeStack(403, 1, 64)] });
   worn.damage(2, "a zombie", true);
   assert.deepEqual(worn.inventory.armor[0], makeStack(403, 1, 65));

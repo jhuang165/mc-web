@@ -2228,7 +2228,7 @@ function renderVitals() {
 // the view with a 40-tick pickup delay.
 function throwStacks(stacks) {
   if (!world) return;
-  for (const s of stacks) if (s?.count > 0) items.dropPlayer(copyStack(s), position, yaw, pitch);
+  for (const s of stacks) if (s?.count) items.dropPlayer(copyStack(s), position, yaw, pitch); // func_146097_a refuses only an exact size 0
   saved = false;
 }
 function useFurnace(key) {

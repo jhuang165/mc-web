@@ -29,7 +29,7 @@ export class ItemEntities {
   // (rand * 0.2 - 0.1, 0.2, rand * 0.2 - 0.1); the pickup delay field starts at 0.
   // `empty` keeps a Count 0 stack, as EntityItem.readEntityFromNBT does (a read one lives and ticks; attributes2-reference.json itemRead).
   spawn(stack, x, posY, z, { delay = 0, motion = null, death = false, empty = false } = {}) {
-    if (!(stack?.count > 0 || (empty && stack?.count <= 0))) return null; // Count -1 is kept too (neg-stacks: its pickup would put a -1 stack in the inventory natively, not modelled)
+    if (!(stack?.count > 0 || (empty && stack?.count <= 0))) return null; // Count -1 is kept too; its pickup puts a -1 stack in the inventory (neg-stacks2-reference.json pickup)
     const r = this.random,
       item = {
         stack: copyStack(stack),
@@ -98,7 +98,9 @@ export class ItemEntities {
         -Math.cos(yaw) * cp * s + Math.sin(angle) * kick,
       ];
     }
-    return this.spawn(stack, feet.x, feet.y + 1.32, feet.z, { delay: 40, motion, death });
+    // EntityPlayer.func_146097_a drops any stack but an exact size 0, a negative one included (neg-stacks2-reference.json drop).
+    if (!stack || stack.count === 0) return null;
+    return this.spawn(stack, feet.x, feet.y + 1.32, feet.z, { delay: 40, motion, death, empty: true });
   }
   box(e) {
     return [e.x - W, e.y, e.z - W, e.x + W, e.y + H, e.z + W];
@@ -296,8 +298,11 @@ export class ItemEntities {
       const [a, b, c, d, g, h] = this.box(e);
       if (!(d > feet.x - r && a < feet.x + r && g > feet.y - 0.5 && b < feet.y + height + 0.5 && h > feet.z - r && c < feet.z + r)) continue;
       const before = e.stack.count;
-      // InventoryPlayer.addItemStackToInventory refuses stackSize 0, so a Count 0 item stays (probed, itemRead EntityItem count 0).
-      if (before <= 0 || !add(e.stack)) continue;
+      // InventoryPlayer.addItemStackToInventory refuses exactly stackSize 0, so a Count 0 item stays (probed, itemRead EntityItem count 0). A negative
+      // stack is added anyway (a new -n slot, or it lowers a matching stack) and the stack size goes to 0, but the call reports false: no pickup event,
+      // and the entity lives on with Count 0 (neg-stacks2-reference.json pickup).
+      if (before === 0) continue;
+      if (!add(e.stack) || before < 0) continue;
       picked.push({ item: e, count: before - e.stack.count });
       if (e.stack.count <= 0) e.dead = true;
     }

@@ -253,7 +253,8 @@ export function installHorseGear(EntityWorld) {
     if (out.name) e.customName = out.name.slice(0, 64);
     else delete e.customName;
     if (out.persistent) e.persistent = true;
-    survival.inventory.decr(survival.inventory.current, out.consume); // ItemNameTag uses the tag up in Creative too
+    // EntityPlayer.interactWith hands Creative a copy of the stack, so the tag is only used up outside Creative (neg-stacks2-reference.json interact).
+    if (!survival.creative) survival.inventory.decr(survival.inventory.current, out.consume);
     return true;
   };
   // EntityHorse.cK on death plus the lead (EntityLiving.setDead -> clearLeashed): everything the horse carried drops.

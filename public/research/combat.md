@@ -158,4 +158,17 @@ Never claim full parity. Labels: probed / bytecode-read / assumed.
   - `Survival.take` shrinks a held stack at size 0 or below itself (0 -> -1; only an exact 0 clears the slot), and `Survival.usable` replaces the `count(id)` gate at the held-item use sites (placement, doors, redstone, signs, skulls, seeds, wart, bone meal, cake, throwables, eating, spawn eggs). `PlayerInventory.count` ignores stacks of size 0 or below.
   - `placeHeldBlock` and cake placement refuse only an exact 0.
   - The player's tool-break pitch (`main.js reportBrokenTool`) uses the world Random (`weather.random`).
-- **Gaps:** an armour slot read at Count -1 for a non-armour item is still dropped (the port filters armour by slot type, native does not). Furnace, dispenser and brewing ticks on size-0 or negative stacks were not probed. A negative stack in a container GUI or the creative drag path was not checked. `FireworksItem` and plain `/give` still refuse Count 0.
+- **Gaps (batch 26, partly closed in batch 27):** furnace, dispenser and brewing ticks on size-0 or negative stacks were not probed. A negative stack in a container GUI or the creative drag path was not checked. `FireworksItem` and plain `/give` still refuse Count 0.
+
+### Negative stacks 2 (negstacks2, batch 27)
+
+- **Probed** (`neg-stacks2-reference.json`, `tools/probes/NegStacks2Probe.java`, `tools/verify-neg-stacks2.mjs`; 362 records: add 200, pickup 18, decr 60, drop 12, armour 6, firework 6, interact 60; replayed by `src/neg-stacks2.test.js`; unchanged 1.7.10 classes):
+  - `InventoryPlayer.addItemStackToInventory` refuses only an exact 0. A -n stack is added anyway (a new -n slot, or it lowers a matching stack by n), the stack size ends 0 and the call returns false. `PlayerInventory.add` already matched all 200 records.
+  - `EntityItem.onCollideWithPlayer` of a Count -n item therefore puts a -n stack (or lowers a matching one) in the inventory, empties the entity to Count 0 and leaves it alive with no pickup event; the next tick refuses Count 0. Ported in `ItemEntities.collect`.
+  - `InventoryPlayer.decrStackSize` (60 records) matched already: `size <= n` hands over the stack and clears the slot; otherwise `splitStack(n)`.
+  - `EntityPlayer.func_146097_a` returns null only for an exact 0, so `dropOneItem` and death (`dropAllItems`, main and armour) throw -n stacks and drop nothing for 0. Ported: `takeAll`, `ItemEntities.dropPlayer`, `throwStacks`.
+  - `InventoryPlayer.readFromNBT` puts any item in an armour slot (diamond at Count 1, -1 or 0 verified in batch 26) and `getTotalArmorValue` counts `ItemArmor` pieces whatever their size; the port no longer filters saved armour by slot type.
+  - `ItemFirework.onItemUse` has no count check: it launches at -1 and 0 and leaves count - 1 (Creative unchanged). The port already matched (`usable` and `take`); a test now pins it.
+  - `EntityPlayer.interactWith` (a pig and a horse holding a saddle, lead or name tag): `--stackSize` and the slot is cleared whenever the result is <= 0 outside Creative (2 -> 1, 1 -> 0 and -2..0 -> cleared). In Creative the stack is a copy, so nothing is used up; the port wrongly used a name tag up in Creative and is fixed. So `inventory.decr(current, 1)` for these click paths is equivalent to native for every size.
+  - `CommandGive` (bytecode-read): count is `parseIntBounded(1, 64)` and the stack is dropped through `dropPlayerItemWithRandomChoice`; a Count 0 `/give` cannot exist natively and the port bounds match.
+- **Gaps:** the port's `/give` adds to the inventory first (native always drops the stack at the player with delay 0 and owner = the player); wolf, ocelot, sheep-dye and horse feeding were checked by bytecode only (`EntityPlayer.interactWith` copy/clear logic), not with live mobs.
