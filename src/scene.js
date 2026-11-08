@@ -33,7 +33,7 @@ import { hasVoidParticles, voidFogYFactor, voidFogFar } from "./void-fog.js";
 import { Sky, Clouds } from "./sky.js";
 import { PostProcessor, anaglyphFog } from "./post-shaders.js";
 import { installAnaglyphUpload, meshAnaglyph, anaglyphMultiplier } from "./anaglyph.js"; // 3D Anaglyph at the native conversion points
-import { setGuiAnaglyph } from "./gui-anaglyph.js"; // ... and the DOM GUI
+import { requestGuiAnaglyph } from "./gui-anaglyph.js"; // ... and the DOM GUI
 import { refreshResources } from "./resource-refresh.js"; // Super Secret Settings shaders and 3D Anaglyph
 import { render, setRender, usePartialAo, leavesOpaque, shouldRenderClouds, shadowsEnabled } from "./render-settings.js";
 import { liquidHeight, flowAngle, viewpointBlock } from "./fluids.js";
@@ -139,7 +139,7 @@ export class VoxelScene {
     this.anaglyphUpload = installAnaglyphUpload(this.renderer.getContext());
     this.post.onAnaglyphChange = (on) => {
       this.anaglyphUpload.state.on = on && !this.post.legacyAnaglyph;
-      setGuiAnaglyph(this.anaglyphUpload.state.on); // DOM GUI images, and the extra GL contexts' upload hooks
+      requestGuiAnaglyph(on); // DOM GUI images: converted ahead, committed by refreshResources (the native GUI converts even in the port's legacy mode, which only changes the 3D pass)
       meshAnaglyph.on = this.anaglyphUpload.state.on; // RenderBlocks colour multipliers; loadRenderers remeshes every chunk
       for (const k of this.chunks.keys()) this.dirty.add(k);
       refreshResources().catch(() => {});

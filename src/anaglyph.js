@@ -3,6 +3,7 @@
 // RenderBlocks vertex colours (the 13 blt.a sites) convert the block colour multiplier while the chunk mesher runs (meshAnaglyph);
 // the sunrise fan centre converts in sky.js. Not ported: the FontRenderer colour table (bbu constructor) and the DOM GUI.
 import { anaglyphColor, anaglyphFog } from "./post-shaders.js";
+import { getExactPixels } from "./png-codec.js";
 
 // bqi.a(int[]) on RGBA bytes in place: R' = (30r+59g+11b)/100, G' = (30r+70g)/100, B' = (30r+70b)/100, integer division, alpha kept.
 export function anaglyphRgba(d) {
@@ -30,10 +31,16 @@ export function installAnaglyphUpload(gl, state = { on: false }) {
   if (gl.__anaglyphHooked) return gl.__anaglyphHooked;
   const texImage2D = gl.texImage2D.bind(gl), texSubImage2D = gl.texSubImage2D.bind(gl);
   let scratch = null;
-  const stats = { converted: 0 };
+  const stats = { converted: 0, exact: 0, passed: 0 };
+  // Sources are converted at upload (TextureUtil.anaglyphColor) unless they are already converted: a canvas flagged `__agDone` holds
+  // converted pixels (the item atlas), and an Image whose /media url has exact converted pixels (png-codec.js, straight alpha, no
+  // premultiplied rounding) uploads those. Anything else is read through a 2D canvas, which rounds translucent pixels.
   const read = (src) => {
     const w = src.width ?? src.videoWidth, h = src.height ?? src.videoHeight;
     if (!w || !h) return null;
+    if (src.__agDone) { stats.passed++; return null; }
+    const url = src.currentSrc || src.src, known = typeof url === "string" ? getExactPixels(url) : null;
+    if (known && known.width === w && known.height === h) { stats.exact++; return { w, h, px: known.data, done: true }; }
     if (src.data && src.data.length === w * h * 4) return { w, h, px: new Uint8Array(src.data.buffer.slice(src.data.byteOffset, src.data.byteOffset + src.data.byteLength)) };
     if (!scratch) scratch = document.createElement("canvas");
     scratch.width = w; scratch.height = h;
@@ -46,7 +53,7 @@ export function installAnaglyphUpload(gl, state = { on: false }) {
     if (!state.on) return texImage2D(...a);
     if (a.length === 6 && a[2] === gl.RGBA && a[3] === gl.RGBA && a[4] === gl.UNSIGNED_BYTE && a[5]) {
       const r = read(a[5]);
-      if (r) return texImage2D(a[0], a[1], a[2], r.w, r.h, 0, a[3], a[4], convertedBytes(r.px));
+      if (r) return texImage2D(a[0], a[1], a[2], r.w, r.h, 0, a[3], a[4], (r.done ? r.px : convertedBytes(r.px)));
     } else if (a.length >= 9 && a[6] === gl.RGBA && a[7] === gl.UNSIGNED_BYTE && a[8] instanceof Uint8Array) {
       return texImage2D(...a.slice(0, 8), convertedBytes(new Uint8Array(a[8])));
     }
@@ -56,7 +63,7 @@ export function installAnaglyphUpload(gl, state = { on: false }) {
     if (!state.on) return texSubImage2D(...a);
     if (a.length === 7 && a[4] === gl.RGBA && a[5] === gl.UNSIGNED_BYTE && a[6]) {
       const r = read(a[6]);
-      if (r) return texSubImage2D(a[0], a[1], a[2], a[3], r.w, r.h, a[4], a[5], convertedBytes(r.px));
+      if (r) return texSubImage2D(a[0], a[1], a[2], a[3], r.w, r.h, a[4], a[5], (r.done ? r.px : convertedBytes(r.px)));
     } else if (a.length >= 9 && a[6] === gl.RGBA && a[7] === gl.UNSIGNED_BYTE && a[8] instanceof Uint8Array) {
       return texSubImage2D(...a.slice(0, 8), convertedBytes(new Uint8Array(a[8])));
     }
