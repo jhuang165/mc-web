@@ -19,6 +19,8 @@ const COUNTERPARTS = [
   ['gui-parity-catalogue.md', 'GuiLanguage', ['lang.js', 'setForceUnicodeFont']],
   ['gui-parity-catalogue.md', 'GuiSnooper', null, 'Out of scope'],
   ['gui-parity-catalogue.md', 'GuiMemoryErrorScreen', null, 'Out of scope'],
+  ['gui-parity-catalogue.md', 'GuiErrorScreen', ['loading-screen.js', 'errorScreen']],
+  ['gui-parity-catalogue.md', 'GuiScreenWorking', ['loading-screen.js', 'workingScreen']],
   ['structure-parity-catalogue.md', 'WorldGeneratorBonusChest', ['bonus-chest.js', 'createBonusChest']],
   ['settings-parity-catalogue.md', 'FORCE_UNICODE_FONT', ['lang.js', 'setForceUnicodeFont']],
   ['settings-parity-catalogue.md', 'ANAGLYPH', ['post-shaders.js', 'SHADER_LIST']],
@@ -34,7 +36,6 @@ const COUNTERPARTS = [
 // Keyed by the first cell of the row that may stay Missing/Unmapped/Not replayed, with the reason it is not a counterpart bug.
 const KNOWN_ABSENT = {
   'settings-parity-catalogue.md': { SATURATION: 'no 1.7.10 screen or renderer reads it', TOUCHSCREEN: 'native touch mode not ported; mobile controls differ' },
-  'gui-parity-catalogue.md': { GuiErrorScreen: 'browser errors use the notice modal', GuiScreenWorking: 'world loading uses the browser overlay' },
   'recipe-parity-catalogue.md': { C25: 'fire block ingredient', C26: 'fire block ingredient', C125: 'fire block ingredient', C126: 'fire block ingredient' },
 };
 

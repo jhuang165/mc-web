@@ -7,7 +7,7 @@ import { lwjglCode } from "./keybindings.js";
 import { ACHIEVEMENTS, BY_ID, BOUNDS, STRINGS } from "./achievements.js";
 import { JavaRandom } from "./java-random.js";
 import { ORIGINAL_ITEMS } from "./original-items.js";
-import { textWidth, splitLines, t } from "./menu-screens.js";
+import { textWidth, splitLines, t, scaledSize } from "./menu-screens.js";
 import { textHtml } from "./menu-ui.js";
 
 export const TOAST_MS = 3000, HINT_DELAY_MS = 2500;
@@ -155,7 +155,7 @@ const assets = () => {
   return { sheet, textures };
 };
 const STYLE = `
-.ach-toast{position:fixed;right:0;top:0;z-index:60;pointer-events:none;image-rendering:pixelated;display:none}
+.ach-toast{position:fixed;left:0;top:0;z-index:60;pointer-events:none;image-rendering:pixelated;display:none}
 .ach-toast div{position:absolute}
 .ach-sprite{background:url('${SPRITE}') no-repeat;image-rendering:pixelated}
 .ach-icon{pointer-events:none}
@@ -175,7 +175,9 @@ const ensureStyle = () => {
   document.head.append(s);
 };
 
-// The toast and the hint, drawn top right over the game with the GUI scale (gui.scale()).
+// The toast and the hint, drawn over the game and any open screen (Minecraft.runGameLoop draws GuiAchievement after the screen) at the
+// GUI scale: beh.c() sets up the ScaledResolution ortho, so the frame's left edge is x = scaledWidth - 160 GUI px (scaledWidth =
+// ceil(displayWidth / scale)), not the window's right edge; y is the slide offset of toastState.
 export class AchievementToast {
   constructor({ scale, icon, keyName = () => "E", playing = () => true }) {
     Object.assign(this, { scale, icon, keyName, playing });
@@ -217,10 +219,11 @@ export class AchievementToast {
     if (!root) return;
     if (!state || !this.playing()) { root.style.display = "none"; return; }
     root.style.setProperty("--u", `${this.scale()}px`);
-    root.style.cssText += `;display:block;top:${state.y * this.scale()}px;width:${160 * this.scale()}px;height:${32 * this.scale()}px`;
+    const u = this.scale();
+    root.style.cssText += `;display:block;left:${state.x * u}px;top:${state.y * u}px;width:${TOAST_W * u}px;height:${TOAST_H * u}px`;
   }
   tick(now) {
-    const state = toastState(this.toast, now, 160);
+    const state = toastState(this.toast, now, scaledSize(innerWidth, innerHeight, this.scale()).w);
     // A finished toast goes away; a hint stays (hidden until its delay has passed).
     if (this.toast && !this.toast.hint && !state) this.toast = null;
     if (this.toast && this.built !== this.toast) this.build(this.toast);

@@ -78,7 +78,7 @@ test('quit confirmation is GuiYesNo (150 wide buttons at h/6 + 96, lines at 70 /
   }
 });
 
-test('game over screen: normal world routes Respawn and Title screen; buttons wait 20 ticks; Escape/Enter do nothing', async () => {
+test('game over screen: normal world routes Respawn and Title screen; buttons wait 20 client ticks; Escape/Enter do nothing', async () => {
   const log = [];
   let shown = null, dead = true;
   const s = gameOverScreen({ score: 42, respawn: async () => { log.push('respawn'); dead = false; }, leave: () => log.push('leave'), confirmNo: () => log.push('no'), again: () => log.push('again'), isDead: () => dead, show: (x) => { shown = x; } });
@@ -89,8 +89,9 @@ test('game over screen: normal world routes Respawn and Title screen; buttons wa
   assert.ok(texts.includes('You died!') && texts.includes('Score: §e42'));
   assert.deepEqual(g.calls.button.map((b) => b.label), ['Respawn', 'Title screen']);
   assert.ok(g.calls.button.every((b) => !b.enabled));
-  s.frame(1000); s.frame(1000 + 50 * (BUTTON_DELAY_TICKS - 1)); assert.ok(g.calls.button.every((b) => !b.enabled));
-  s.frame(1000 + 50 * BUTTON_DELAY_TICKS); assert.ok(g.calls.button.every((b) => b.enabled));
+  for (let i = 1; i < BUTTON_DELAY_TICKS; i++) s.tick();
+  assert.ok(g.calls.button.every((b) => !b.enabled));
+  s.tick(); assert.ok(g.calls.button.every((b) => b.enabled));
   assert.equal(s.escape(), undefined); assert.equal(s.key, undefined);
   // Title screen opens the GuiYesNo, in a normal world too (bdc.actionPerformed id 1)
   g.calls.button[1].action();
@@ -109,7 +110,8 @@ test('hardcore game over has a single Delete world button and the info line; the
   assert.deepEqual(g2.calls.button.map((b) => b.label), ['Title screen', 'Respawn']);
   assert.equal(g2.calls.text[0].s, 'Are you sure you want to quit?');
   assert.ok(g2.calls.button.every((b) => !b.enabled));
-  c.frame(0); c.frame(50 * BUTTON_DELAY_TICKS); assert.ok(g2.calls.button.every((b) => b.enabled));
+  for (let i = 0; i < BUTTON_DELAY_TICKS; i++) c.tick();
+  assert.ok(g2.calls.button.every((b) => b.enabled));
   g2.calls.button[0].action(); g2.calls.button[1].action(); c.escape();
   assert.deepEqual(log, ['leave', 'no', 'again']);
 });
@@ -148,8 +150,12 @@ test('build notes screen: Done and Escape go back, links open, content is the fo
 test('sign editor host: native title, Done and canvas routed through Gui.show', () => {
   let screen = null; const log = [];
   const host = signEditHost({ show: (x) => { screen = x; } }, { close: () => log.push('close'), markUnsaved: () => log.push('unsaved') });
-  host.show('Edit sign message', '<canvas></canvas>', { done: () => log.push('done') });
-  const g = fakeGui(); g.image = (...a) => ({ style: {}, append() {} }); screen.init(g, 427, 240);
+  const canvas = { id: 'sign-edit-canvas' }, placed = [];
+  host.show('Edit sign message', canvas, { done: () => log.push('done'), tick: () => log.push('tick'), closed: () => log.push('closed') });
+  const g = fakeGui(); g.image = (cls, x, y, w, h) => ({ style: {}, append: (n) => placed.push({ n, x, y, w, h }) }); screen.init(g, 427, 240);
+  assert.equal(placed[0].n, canvas);
+  assert.ok(Math.abs(placed[0].x - (213 - 46.875)) < 1e-5 && Math.abs(placed[0].y - 68.359375) < 1e-5);
+  screen.tick(); screen.close(); assert.deepEqual(log.splice(0), ['tick', 'closed']);
   assert.deepEqual(g.calls.text[0], { s: 'Edit sign message', x: 213, y: 40, center: true });
   assert.deepEqual(g.calls.button[0].r, { x: 113, y: 180, w: 200, h: 20 });
   g.calls.button[0].action(); assert.deepEqual(log, ['done']);

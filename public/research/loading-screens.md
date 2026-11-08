@@ -29,6 +29,8 @@ Javap dumps of the classes read are in the ignored research folder `loading/` (`
   is built; the intermediate values are rarely seen because the window is populated inside the `World` constructor (see Gaps).
 - `GuiErrorScreen` (`bdh`): `drawGradientRect(0, 0, w, h, 0xFF402020, 0xFF501010)`, title centred at y 90, message at y 110 (both white, shadow),
   a `gui.cancel` 200 x 20 button at `(w / 2 - 100, 140)`; `keyTyped` is empty (Escape does nothing); the button does `displayGuiScreen(null)`.
+  Batch 25: GuiSelectWorld (`bdx.initGui`) catches a `loadSaves` failure with `new GuiErrorScreen("Unable to load worlds", e.getMessage())`; the
+  port shows the same screen when the boot-time `readWorldShelf` fails, and does not rewrite the shelf while it could not be read (no retry until reload).
 - `GuiScreenWorking` (`bdt`): `displayProgressMessage` sets the title (and the message "Working..."), `resetProgresAndWorkingMessage` sets the line and progress 0,
   `setLoadingProgress` the percent, `drawDefaultBackground`, title at y 70, `"<line> <progress>%"` at y 90. `GuiDownloadTerrain` (`bdu`):
   `drawBackground`, `multiplayer.downloadingTerrain` centred at `(w / 2, h / 2 - 50)`, no buttons, sends a keep-alive-style packet every 20 ticks.

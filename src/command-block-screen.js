@@ -39,8 +39,9 @@ export function commandBlockScreen({ command = "", lastOutput = null, done, canc
       if (text) g.text(t("advMode.previousOutput"), ...L.outputLabel, { color: gray });
       const field = g.field(L.command, { value: command, maxLength: 32767, focus: true, label: t("advMode.command"), input: (v) => doneButton.enable(v.trim().length > 0) });
       if (text) {
-        const out = g.field(L.output, { value: text, maxLength: 32767, label: t("advMode.previousOutput") });
-        out.el.readOnly = true; out.el.tabIndex = -1;
+        // setEnabled(false) (bcd.c(false)): drawn in the disabledColor 0x707070, not editable.
+        const out = g.field(L.output, { value: text, maxLength: 32767, label: t("advMode.previousOutput"), enabled: false });
+        out.el.tabIndex = -1;
       }
       const doneButton = g.button(L.done, t("gui.done"), () => done(field.value), { enabled: command.trim().length > 0 });
       g.button(L.cancel, t("gui.cancel"), cancel);
