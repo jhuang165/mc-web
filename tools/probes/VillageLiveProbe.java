@@ -25,6 +25,9 @@ public class VillageLiveProbe {
     public boolean Q() { return rain; }
     public void a(sa e, byte b) { events.add(e.getClass().getSimpleName() + "|" + b); }
     static List<String> particles = new ArrayList<>();
+    // World.getPlayerEntityByName: Village.findNearestVillageTargetPlayer asks for each reputation name (batch 28 village3; null when absent)
+    static java.util.Map<String, yz> players = new java.util.HashMap<>();
+    public yz a(String name) { return players.get(name); }
     public void a(String name, double x, double y, double z, double vx, double vy, double vz) { particles.add(name + "|" + x + "|" + y + "|" + z + "|" + vx + "|" + vy + "|" + vz); }
   }
 

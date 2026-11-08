@@ -1383,6 +1383,8 @@ export class EntityWorld {
   // counter starts on the next onEntityUpdate, or in this one for fire and drowning.
   onDeath(e, source = {}) {
     if (e.type === "villager") this.villagerDied(e, source);
+    // EntityIronGolem.onDeath (wt.a(ro)): a village golem (not player-created) killed while a player is its attackingPlayer costs that player 5.
+    else if (e.type === "iron_golem" && !e.playerCreated && e.recentlyHit > 0) this.ai.brain(e).village?.changeReputation(source.playerName ?? PLAYER_NAME, -5);
     this.gearDeath(e); // horse-gear-live.js: the horse inventory and the lead drop
     // ... and only while gamerule doMobLoot is true (dropFewItems, dropEquipment and the rare drop alike).
     if ((e.growingAge >= 0 || e.type === "zombie" || e.type === "pigman") && gameRule("doMobLoot")) {
@@ -1685,7 +1687,7 @@ export class EntityWorld {
     if (!attacker) return;
     village.addOrRenewAggressor(attacker);
     if (!source.player) return;
-    village.changeReputation(PLAYER_NAME, e.growingAge < 0 ? -3 : -1);
+    village.changeReputation(source.playerName ?? PLAYER_NAME, e.growingAge < 0 ? -3 : -1);
     // status 13 is drawn by the client entity's Random (village-ai.js visualRandom), at the entity's real size
     if (e.health > 0) this.villageBurst("angryVillager", e, { width: brain.width, height: brain.height }, visualRandom(e));
   }
@@ -1694,7 +1696,7 @@ export class EntityWorld {
   villagerDied(e, source) {
     const village = this.ai.brain(e).village;
     if (!village) return;
-    if (source.player) village.changeReputation(PLAYER_NAME, -2);
+    if (source.player) village.changeReputation(source.playerName ?? PLAYER_NAME, -2);
     else if (source.attacker && HOSTILE.has(source.attacker.type ?? source.attacker)) village.endMatingSeason();
     else if (!source.attacker) {
       const p = this.ai.player;
