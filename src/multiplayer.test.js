@@ -92,15 +92,19 @@ test('two WebSocket clients share authority, chat and departure; saves survive c
   const dir = await mkdtemp(path.join(os.tmpdir(), 'mc-web-dedicated-')), dataFile = path.join(dir, 'world.json');
   const app = await createDedicatedServer({ port: 0, token, dataFile, simulation: fixture(), tickMs: 10, saveMs: 60000 });
   t.after(async () => { await app.close(); await rm(dir, { recursive: true, force: true }); });
-  const connect = async (name, n, override = {}) => {
+  const sessions = {};
+  for (const name of ['Alice', 'Bob']) sessions[name] = (await app.accounts.register({ invite: token, name, password: 'correct horse' }, token)).session;
+  const connect = async (name, override = {}) => {
     const ws = new WebSocket(`ws://127.0.0.1:${app.port}/multiplayer`, { origin });
     const next = inbox(ws); await once(ws, 'open');
-    ws.send(JSON.stringify({ type: 'join', protocol: PROTOCOL, token, name, resumeKey: key(n), ...override }));
+    ws.send(JSON.stringify({ type: 'join', protocol: PROTOCOL, session: sessions[name], ...override }));
     return { ws, next };
   };
-  const bad = await connect('Rejected', 9, { token: 'wrong' });
-  const [badCode] = await once(bad.ws, 'close'); assert.equal(badCode, 1008);
-  const alice = await connect('Alice', 1), bob = await connect('Bob', 2);
+  const bad = await connect('Alice', { session: 'not-a-session' });
+  const [badCode, badReason] = await once(bad.ws, 'close'); assert.equal(badCode, 1008); assert.equal(String(badReason), 'Sign in again.');
+  const legacy = await connect('Alice', { protocol: 1, token });
+  const [legacyCode] = await once(legacy.ws, 'close'); assert.equal(legacyCode, 1008, 'the shared key no longer admits players');
+  const alice = await connect('Alice'), bob = await connect('Bob');
   const a = await alice.next(m => m.type === 'welcome'), b = await bob.next(m => m.type === 'welcome');
   assert.equal(a.world.columns.length, 64); assert.equal(b.world.players.length, 2);
   alice.ws.send(JSON.stringify({ type: 'chat', text: 'hello Bob' }));

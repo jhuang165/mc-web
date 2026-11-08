@@ -5,22 +5,28 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { DedicatedSimulation } from '../src/multiplayer/simulation.js';
-import { PROTOCOL, validName } from '../src/multiplayer/protocol.js';
+import { PROTOCOL } from '../src/multiplayer/protocol.js';
+import { AccountStore, AccountError } from './accounts.js';
+import { MAX_SKIN_BYTES } from '../src/skin.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 export const DEFAULT_ORIGINS = ['https://jhuang165.github.io', 'http://localhost:5179', 'http://127.0.0.1:5179', 'https://ledoge0.tail92abaf.ts.net'];
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.ogg': 'audio/ogg', '.woff2': 'font/woff2', '.svg': 'image/svg+xml' };
 const equalToken = (a, b) => typeof a === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
+// `token` is the owner's private server key. It no longer admits players: it
+// creates admin accounts and invites. Players join with an account session.
 export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', token, dataFile = path.join(ROOT, 'server-data/world.json'),
+  accountsFile = path.join(path.dirname(dataFile), 'accounts.json'), accounts = null,
   origins = DEFAULT_ORIGINS, simulation = null, tickMs = 50, saveMs = 10000, staticDir = path.join(ROOT, 'dist') } = {}) {
   if (typeof token !== 'string' || token.length < 16) throw new Error('MC_WEB_TOKEN must contain at least 16 characters');
+  accounts ??= await AccountStore.open(accountsFile);
   if (!simulation) {
     let saved = {};
     try { saved = JSON.parse(await readFile(dataFile, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
     simulation = new DedicatedSimulation(saved);
   }
-  const sockets = new Map();
+  const sockets = new Map(), owners = new Map(); // player id → socket, player id → account id
   let closing = false, saving = Promise.resolve(), saveError = null;
   const save = () => {
     // Serialize in tick order; atomic rename never truncates the last good save.
@@ -37,6 +43,12 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     let url;
     try { url = new URL(req.url, 'http://localhost'); }
     catch { res.writeHead(400); return res.end(); }
+    if (url.pathname.startsWith('/api/')) return api(req, res, url).catch(error => {
+      const status = error instanceof AccountError ? error.status : 500;
+      if (status === 500) console.error('Account request failed:', error.message);
+      if (!res.headersSent) json(res, status, { error: status === 500 ? 'Server error' : error.message }, req);
+      else res.end();
+    });
     if (url.pathname === '/health') {
       res.writeHead(saveError ? 503 : 200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
       return res.end(JSON.stringify({ protocol: PROTOCOL, tick: simulation.ticks, players: sockets.size, saving: !saveError }));
@@ -52,6 +64,70 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
       res.end(req.method === 'HEAD' ? undefined : await readFile(file));
     } catch { res.writeHead(404); res.end(); }
   });
+  const cors = req => {
+    const origin = req.headers.origin;
+    return origins.includes(origin) ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin', 'Access-Control-Allow-Private-Network': 'true' } : { Vary: 'Origin' };
+  };
+  const json = (res, status, body, req) => {
+    res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...cors(req), ...(status === 413 ? { Connection: 'close' } : {}) });
+    res.end(status === 204 ? undefined : JSON.stringify(body));
+  };
+  const body = (req, limit) => new Promise((resolve, reject) => {
+    // A declared oversized body is refused before reading, so the client still gets the 413.
+    if (Number(req.headers['content-length']) > limit) return reject(new AccountError(413, 'Request too large.'));
+    const chunks = []; let size = 0;
+    req.on('data', chunk => { size += chunk.length; if (size > limit) { reject(new AccountError(413, 'Request too large.')); req.destroy(); } else chunks.push(chunk); });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+  const jsonBody = async req => {
+    try { const value = JSON.parse((await body(req, 4096)).toString('utf8')); if (value && typeof value === 'object') return value; } catch (error) { if (error instanceof AccountError) throw error; }
+    throw new AccountError(400, 'Send a JSON object.');
+  };
+  const bearer = req => /^Bearer (\S{1,200})$/.exec(req.headers.authorization ?? '')?.[1] ?? null;
+  const signedIn = req => { const a = accounts.authenticate(bearer(req)); if (!a) throw new AccountError(401, 'Sign in again.'); return a; };
+  // Renames and skin changes reach connected players on the next presence tick.
+  const refresh = account => { for (const [id, owner] of owners) if (owner === account.id) Object.assign(simulation.players.get(id) ?? {}, { name: account.name, skin: account.skinHash }); };
+  async function api(req, res, url) {
+    // Browsers send Origin; a request from a page outside the allowlist is refused.
+    // Command-line clients (no Origin) still need a session or the server key.
+    if (req.headers.origin && !origins.includes(req.headers.origin)) return json(res, 403, { error: 'Origin not allowed' }, req);
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, { ...cors(req), 'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE', 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Max-Age': '600' });
+      return res.end();
+    }
+    const route = `${req.method} ${url.pathname}`;
+    const skin = /^\/api\/skins\/([a-f0-9]{20})\.png$/.exec(url.pathname);
+    if (skin && (req.method === 'GET' || req.method === 'HEAD')) {
+      const png = accounts.skins.get(skin[1]);
+      if (!png) return json(res, 404, { error: 'No such skin' }, req);
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff', ...cors(req) });
+      return res.end(req.method === 'HEAD' ? undefined : png);
+    }
+    if (route === 'POST /api/register') { const m = await jsonBody(req); return json(res, 201, await accounts.register(m, token), req); }
+    if (route === 'POST /api/login') { const m = await jsonBody(req); return json(res, 200, await accounts.login(m), req); }
+    if (route === 'POST /api/logout') { await accounts.logout(bearer(req)); return json(res, 204, null, req); }
+    if (route === 'GET /api/me') return json(res, 200, { account: accounts.public(signedIn(req)) }, req);
+    if (route === 'PATCH /api/me') {
+      const account = signedIn(req), m = await jsonBody(req);
+      const out = await accounts.rename(account, m.name); refresh(account);
+      return json(res, 200, { account: out }, req);
+    }
+    if (route === 'PUT /api/skin') {
+      const account = signedIn(req);
+      if (req.headers['content-type'] !== 'image/png') throw new AccountError(415, 'Upload a PNG image.');
+      const out = await accounts.setSkin(account, await body(req, MAX_SKIN_BYTES)); refresh(account);
+      return json(res, 200, { account: out }, req);
+    }
+    if (route === 'DELETE /api/skin') { const account = signedIn(req); const out = await accounts.clearSkin(account); refresh(account); return json(res, 200, { account: out }, req); }
+    if (route === 'POST /api/invites') {
+      const key = bearer(req), owner = equalToken(key, token), account = owner ? null : accounts.authenticate(key);
+      if (!owner && !account) throw new AccountError(401, 'Sign in again.');
+      if (!owner && !account.admin) throw new AccountError(403, 'Only admins can create invites.');
+      return json(res, 201, await accounts.createInvite(owner ? 'owner' : account.id), req);
+    }
+    return json(res, 404, { error: 'Unknown request' }, req);
+  }
   const wss = new WebSocketServer({ noServer: true, maxPayload: 8192, perMessageDeflate: false });
   const send = (ws, message) => {
     if (ws.readyState !== WebSocket.OPEN) return;
@@ -83,13 +159,21 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         const m = JSON.parse(data.toString());
         if (!m || typeof m !== 'object') return ws.close(1008, 'Invalid message');
         if (!joined) {
-          if (m.type !== 'join' || m.protocol !== PROTOCOL || !equalToken(m.token, token)) return ws.close(1008, 'Wrong server key or protocol');
-          if (sockets.size >= 8) return ws.close(1008, 'World is full (8 players)');
-          if (!validName(m.name) || typeof m.resumeKey !== 'string' || !/^[a-f0-9-]{36}$/.test(m.resumeKey)) return ws.close(1008, 'Invalid player identity');
-          simulation.addPlayer(id, m.name, m.resumeKey);
-          joined = true; clearTimeout(timer); sockets.set(id, ws);
+          if (m.type !== 'join' || m.protocol !== PROTOCOL) return ws.close(1008, 'This game version differs from the server. Reload the page.');
+          const account = accounts.authenticate(m.session);
+          if (!account) return ws.close(1008, 'Sign in again.');
+          // NetHandlerLoginServer: a second login replaces the first connection.
+          const previous = [...owners].find(([, owner]) => owner === account.id)?.[0];
+          if (previous === undefined && sockets.size >= 8) return ws.close(1008, 'World is full (8 players)');
+          if (previous !== undefined) {
+            const old = sockets.get(previous);
+            simulation.removePlayer(previous); sockets.delete(previous); owners.delete(previous);
+            old.replaced = true; old.close(1008, 'You logged in from another location');
+          }
+          simulation.addPlayer(id, account.name, account.id, { skin: account.skinHash });
+          joined = true; clearTimeout(timer); sockets.set(id, ws); owners.set(id, account.id);
           send(ws, { type: 'welcome', protocol: PROTOCOL, id, world: simulation.snapshot(), self: simulation.savePlayer(simulation.players.get(id)) });
-          broadcast({ type: 'chat', name: '', text: `${m.name} joined the game` });
+          if (previous === undefined) broadcast({ type: 'chat', name: '', text: `${account.name} joined the game` });
           return;
         }
         if (m.type === 'input') { if (!simulation.input(id, m)) ws.close(1008, 'Invalid input'); }
@@ -102,9 +186,9 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     });
     ws.on('close', () => {
       clearTimeout(timer);
-      if (!joined) return;
+      if (!joined || ws.replaced) return;
       const name = simulation.players.get(id)?.name;
-      simulation.removePlayer(id); sockets.delete(id);
+      simulation.removePlayer(id); sockets.delete(id); owners.delete(id);
       broadcast({ type: 'chat', name: '', text: `${name} left the game` });
     });
   });
@@ -124,8 +208,9 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     await new Promise(resolve => wss.close(resolve));
     await new Promise(resolve => server.close(resolve));
     await save();
+    await accounts.save();
   }
-  return { server, simulation, save, close, port: server.address().port };
+  return { server, simulation, accounts, save, close, port: server.address().port };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

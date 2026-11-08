@@ -268,15 +268,17 @@ export class Gui {
   // (x + 4, y + (height - 8) / 2) scrolled by lineScrollOffset, a blinking "_" at the end or a
   // 0xD0D0D0 bar inside the text, and the selection drawn with GL_OR_REVERSE in blue. A
   // transparent <input> takes the typing, clipboard and selection keys.
-  field(r, { value = "", maxLength = 32, focus = false, input, label = "" }) {
+  // `secret`: a browser addition for account passwords, drawn as "*" per character.
+  field(r, { value = "", maxLength = 32, focus = false, input, label = "", secret = false }) {
     const box = el("div", "mc-field", at(r.x - 1, r.y - 1, r.w + 2, r.h + 2));
     const ty = Math.trunc((r.h - 8) / 2), width = r.w - 8;
     const mirror = el("div", "mc-field-draw", at(1, 1, r.w, r.h));
     const field = el("input", "", at(5, ty + 1, width, 8));
-    field.type = "text";
+    field.type = secret ? "password" : "text";
     field.maxLength = maxLength;
     field.spellcheck = false;
-    field.autocomplete = "off";
+    field.autocomplete = secret ? "current-password" : "off";
+    const drawn = () => (secret ? "*".repeat(field.value.length) : field.value);
     field.value = value.slice(0, maxLength);
     field.setAttribute("aria-label", label);
     box.append(mirror, field);
@@ -294,7 +296,7 @@ export class Gui {
       scroll = Math.max(0, Math.min(scroll, text.length));
     };
     const render = () => {
-      const text = field.value, back = field.selectionDirection === "backward";
+      const text = drawn(), back = field.selectionDirection === "backward";
       const cursor = (back ? field.selectionEnd : field.selectionStart) ?? text.length;
       const end = (back ? field.selectionStart : field.selectionEnd) ?? cursor;
       if (end !== lastEnd || text !== lastText) follow(text, end);
@@ -328,7 +330,7 @@ export class Gui {
       if (e.button !== 0) return;
       e.preventDefault();
       field.focus();
-      const m = this.mouse(e), s = trimToWidth(field.value.slice(scroll), width);
+      const m = this.mouse(e), s = trimToWidth(drawn().slice(scroll), width);
       const p = trimToWidth(s, m.x - r.x - 4).length + scroll;
       field.setSelectionRange(p, p);
       render();

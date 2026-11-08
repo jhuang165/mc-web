@@ -1,5 +1,5 @@
 import { World, BLOCKS } from '../world.js';
-import { PROTOCOL, serverUrl, decodeColumn, validName } from './protocol.js';
+import { PROTOCOL, serverUrl, decodeColumn } from './protocol.js';
 
 export function restoreReplica(snapshot) {
   const world = new World(snapshot.seed, snapshot.biome, snapshot.generationVersion);
@@ -17,13 +17,14 @@ export class DedicatedClient {
   constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {} } = {}) {
     Object.assign(this, { onTick, onChat, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
   }
-  async connect({ url, name, token, resumeKey }) {
-    if (!validName(name)) throw new Error('Name must be 1–16 letters, numbers or underscores.');
+  // `session`: the account token from AccountApi; the server picks the name.
+  async connect({ url, session }) {
+    if (typeof session !== 'string' || !session) throw new Error('Sign in first.');
     const ws = this.socket = new WebSocket(serverUrl(url));
     return new Promise((resolve, reject) => {
       let welcomed = false;
       const timeout = setTimeout(() => { reject(new Error('Server did not respond. Check Tailscale and the server address.')); this.close(); }, 15000);
-      ws.onopen = () => this.send({ type: 'join', protocol: PROTOCOL, name, token, resumeKey });
+      ws.onopen = () => this.send({ type: 'join', protocol: PROTOCOL, session });
       ws.onmessage = event => {
         try {
           const message = JSON.parse(event.data);
@@ -34,10 +35,8 @@ export class DedicatedClient {
             resolve(message); return;
           }
           if (message.type === 'error') throw new Error(message.text);
-          if (!this.ready) {
-            if (this.messages.length >= 600) throw new Error('Terrain loading took too long. Reconnect.');
-            this.messages.push(message);
-          } else this.apply(message);
+          if (!this.ready) this.buffer(message);
+          else this.apply(message);
         } catch (error) { reject(error); this.onClose(error.message); this.close(); }
       };
       ws.onclose = event => {
@@ -46,14 +45,29 @@ export class DedicatedClient {
         if (!welcomed) reject(new Error(reason));
         if (!this.intentional && welcomed) this.onClose(reason);
       };
-      ws.onerror = () => { if (!welcomed) reject(new Error('Could not connect. Check Tailscale, the address and server key.')); };
+      ws.onerror = () => { if (!welcomed) reject(new Error('Could not connect. Check Tailscale and the server address.')); };
     });
   }
-  start() { this.ready = true; for (const message of this.messages.splice(0)) this.apply(message); }
+  // While terrain loads, ticks merge into one: each cell keeps its last write and
+  // presence/time/weather come from the newest tick, so a slow device never
+  // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines.
+  buffer(message) {
+    if (message.type === 'chat') { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
+    if (message.type !== 'tick') return;
+    const merged = this.pending ??= { cells: new Map() };
+    for (const change of message.changes) merged.cells.set(`${change[0]},${change[1]},${change[2]}`, change);
+    merged.last = message;
+  }
+  start() {
+    this.ready = true;
+    const merged = this.pending; this.pending = null;
+    if (merged) this.apply({ ...merged.last, changes: [...merged.cells.values()] });
+    for (const message of this.messages.splice(0)) this.apply(message);
+  }
   apply(message) {
     if (message.type === 'tick' && message.tick > this.lastTick) { this.at = performance.now(); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
     if (message.type === 'chat') this.onChat(message);
   }
   send(message) { if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 65536) this.socket.send(JSON.stringify(message)); }
-  close() { this.intentional = true; this.ready = false; this.socket?.close(); this.messages.length = 0; }
+  close() { this.intentional = true; this.ready = false; this.socket?.close(); this.messages.length = 0; this.pending = null; }
 }

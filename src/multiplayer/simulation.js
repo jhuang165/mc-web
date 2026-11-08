@@ -92,7 +92,7 @@ export class DedicatedSimulation {
     };
   }
   get darkness() { return skylightSubtracted(celestialAngle(this.time, 1), this.weather.rainStrength(), this.weather.weightedThunder()); }
-  addPlayer(id, name, resumeKey) {
+  addPlayer(id, name, resumeKey, { skin = null } = {}) {
     if (!validName(name) || [...this.players.values()].some(p => p.name.toLowerCase() === name.toLowerCase())) throw new Error('Choose an unused name (1–16 letters, numbers or underscores).');
     if ([...this.players.values()].some(p => p.resumeKey === resumeKey)) throw new Error('That player is already connected.');
     const saved = this.savedPlayers.get(resumeKey), start = saved?.position ?? this.world.spawn();
@@ -100,7 +100,7 @@ export class DedicatedSimulation {
     for (const key of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles']) survival[key] = this.tiles[key];
     const player = { id, name, resumeKey, world: this.world, position, previous: vector(position), velocity: vector({ x: 0, y: 0, z: 0 }), motion: new PlayerMotion(), survival,
       yaw: saved?.yaw ?? 0, pitch: saved?.pitch ?? 0, grounded: false, collidedH: false, flying: false, fallDistance: 0, landedFall: 0, eating: null,
-      input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0 };
+      input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin };
     this.players.set(id, player);
     return player;
   }
@@ -173,7 +173,7 @@ export class DedicatedSimulation {
   }
   presence() { return [...this.players.values()].map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
-    held: p.survival.held, ySize: p.motion.ySize })); }
+    held: p.survival.held, ySize: p.motion.ySize, skin: p.skin })); }
   snapshot() { const w = this.world; return { seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
     time: this.time, ticks: this.ticks, columns: [...w.chunks.values()].map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } }; }
   save() {

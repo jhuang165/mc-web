@@ -90,7 +90,7 @@ import { Weather, isWet, canLightningStrikeAt } from "./weather.js";
 import { tickWeatherSimulation } from "./weather-simulation.js";
 import { PlayerAnimation, SWING_SECONDS } from "./animation.js";
 import { showsPumpkinBlur } from "./wearable-heads.js";
-import { PlayerBody, PlayerRenderer, nextView, thirdPersonCamera, playerShadowCaster } from "./player-renderer.js";
+import { PlayerBody, PlayerRenderer, STEVE_URL, nextView, thirdPersonCamera, playerShadowCaster } from "./player-renderer.js";
 import { FirstPerson, itemTexture, setCompassTextureFrame } from "./first-person.js";
 import { ITEM_COMPASS, COMPASS_FRAMES, COMPASS_STRIP, compassAngle, createCompass, tickCompass, setCompassWorld } from "./compass.js";
 import { compassFrameCount, spriteEpoch } from "./sprite-frames.js";
@@ -134,7 +134,8 @@ import { runCommandCart } from "./command-cart.js";
 import { LanSession, LAN_NOTICE } from "./lan.js";
 import { DedicatedClient, restoreReplica } from "./multiplayer/client.js";
 import { RemotePlayers } from "./multiplayer/presence.js";
-import { multiplayerScreen } from "./multiplayer/screen.js";
+import { multiplayerScreen, profileScreen } from "./multiplayer/screen.js";
+import { skinCanvas } from "./skin.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
 import { gameRule, setGameRuleSource } from "./game-rules.js";
@@ -540,8 +541,19 @@ let multiplayer = null, remotePlayers = null, worldWriterAvailable = false;
 function multiplayerDefaults() {
   try { return JSON.parse(localStorage.getItem('mc-web-server') || '{}'); } catch { return {}; }
 }
+let steveSkin = null;
 function showMultiplayer() {
-  gui.show(multiplayerScreen({ back: () => gui.show(menus.mainMenu()), defaults: multiplayerDefaults(), connect: joinMultiplayer }));
+  if (!steveSkin) { steveSkin = new Image(); steveSkin.onload = () => gui.build(); steveSkin.src = STEVE_URL; }
+  const loadSkin = (api) => async (hash) => {
+    if (!hash) return null;
+    try { const r = await fetch(api.skinUrl(hash)); return r.ok ? await skinCanvas(await r.blob()) : null; } catch { return null; }
+  };
+  gui.show(multiplayerScreen({ back: () => gui.show(menus.mainMenu()), defaults: multiplayerDefaults(), connect: joinMultiplayer,
+    profile: (api, screen) => gui.show(profileScreen({ api, back: () => gui.show(screen), steve: steveSkin, loadSkin: loadSkin(api) })) }));
+}
+function leaveMultiplayer() {
+  multiplayer?.close(); multiplayer = null;
+  remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null;
 }
 function sendMultiplayerInput(controls = IDLE_INPUT) {
   multiplayer?.send({ type: 'input', controls, yaw, pitch, current: survival.inventory.current,
@@ -567,6 +579,7 @@ function applyMultiplayerTick(message) {
     walkFrozen = self.sneak && self.grounded;
     $("#movement-label").textContent = flying ? 'FLYING' : 'WALKING';
     playerBody.tick({ position, previous, yaw, pitch, swinging: self.swing > 0 });
+    if (playerRenderer) remotePlayers?.applySkin(playerRenderer, self.skin); // seen in F5
   }
   survival.time = message.time; weather.restore(message.weather); scene.setTime(message.time);
   chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
@@ -574,9 +587,6 @@ function applyMultiplayerTick(message) {
 }
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
-  const identityKey = 'mc-web-player:' + settings.url + ':' + settings.name.toLowerCase();
-  let resumeKey = localStorage.getItem(identityKey);
-  if (!resumeKey) { resumeKey = crypto.randomUUID(); localStorage.setItem(identityKey, resumeKey); }
   const client = new DedicatedClient({
     onTick: applyMultiplayerTick,
     onChat: ({ name, text }) => printChat(name ? chatTextComponent(name, text) : text),
@@ -584,8 +594,8 @@ async function joinMultiplayer(settings) {
   });
   multiplayer = client;
   try {
-    const welcome = await client.connect({ ...settings, resumeKey });
-    localStorage.setItem('mc-web-server', JSON.stringify({ url: settings.url, name: settings.name }));
+    const welcome = await client.connect({ url: settings.url, session: settings.session });
+    localStorage.setItem('mc-web-server', JSON.stringify({ url: settings.url, name: settings.api.account?.name ?? '' }));
     const snapshot = welcome.world, prepared = restoreReplica(snapshot);
     const self = snapshot.players.find(p => p.id === client.id);
     streamStorage?.dispose(); streamStorage = null;
@@ -596,13 +606,12 @@ async function joinMultiplayer(settings) {
     gui.show(downloadTerrainScreen()); await nextPaint();
     await launch(record, prepared, { slice: true });
     if (multiplayer !== client || client.socket.readyState !== WebSocket.OPEN) throw new Error('Disconnected while loading terrain.');
-    remotePlayers = new RemotePlayers(scene);
+    remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash) });
     client.start();
     sendMultiplayerInput();
     printChat('Shared Creative world on ledoge0. World border: 128 × 128. Containers, mobs and dimension travel are not connected yet.');
   } catch (error) {
-    client.close(); if (multiplayer === client) multiplayer = null;
-    remotePlayers?.clear(); remotePlayers = null;
+    client.close(); if (multiplayer === client) leaveMultiplayer();
     if (active?.remote) leaveToTitle(false);
     throw error;
   }
@@ -1136,7 +1145,7 @@ let tripLoading = false; // a portal trip is between worlds: screen is "home" fo
 let pendingBonusChests = null; // chest tiles of a bonus chest placed during creation, consumed by launch
 async function openWorld(record) {
   if (!worldWriterAvailable) { toast('Another tab owns local saves. Close it and reload to play Singleplayer.'); return; }
-  multiplayer?.close(); multiplayer = null; remotePlayers?.clear(); remotePlayers = null;
+  leaveMultiplayer();
   if(openingWorld)return;
   openingWorld=true;
   sounds?.stopStreams(); // Minecraft.loadWorld: SoundHandler.stopSounds (music and records), also between dimensions
@@ -1768,7 +1777,7 @@ function pause() {
 }
 function goHome() { leaveToTitle(true); }
 function leaveToTitle(keep) {
-  multiplayer?.close(); multiplayer = null; remotePlayers?.clear(); remotePlayers = null;
+  leaveMultiplayer();
   statsLive.leaveGame(); // ServerConfigurationManager.playerLoggedOut
   if (keep) save();
   lan.close();

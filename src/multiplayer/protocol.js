@@ -1,6 +1,6 @@
-// Browser protocol v1. These are port-state messages, not Java Edition packets.
+// Browser protocol v2 (v2: account sessions replace the shared join key). These are port-state messages, not Java Edition packets.
 // See public/research/multiplayer.md for the deliberate wire-format decision.
-export const PROTOCOL = 1;
+export const PROTOCOL = 2;
 export const DEFAULT_SERVER = 'wss://ledoge0.tail92abaf.ts.net/multiplayer';
 export const IDLE_INPUT = Object.freeze({ forward: 0, strafe: 0, jump: false, sneak: false, sprint: false });
 export const validName = name => typeof name === 'string' && /^[A-Za-z0-9_]{1,16}$/.test(name);
@@ -46,4 +46,11 @@ export function decodeColumn(packet, column, blockCount = 256) {
   }
   if (offset !== column.blocks.length) throw new Error('Incomplete column');
   column.tickCounts = null;
+}
+// The account API lives on the same host as the WebSocket endpoint.
+export function apiBase(value) {
+  const url = new URL(serverUrl(value));
+  url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
+  url.pathname = '/api/'; url.search = '';
+  return url.href;
 }
