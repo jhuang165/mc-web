@@ -6,6 +6,7 @@
 import { bitmapHtml } from "./bitmap-text.js";
 import { textWidth, trimToWidth, shadowColor } from "./menu-screens.js";
 import { font } from "./font-renderer.js";
+import { GuiTextField } from "./text-field.js";
 
 const u = (n) => `calc(${n}*var(--u))`;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -32,6 +33,32 @@ export function slotAt(slots, x, y) {
 export function slotShown(gui, slot, preview) {
   if (gui.dragging && gui.container?.inv?.cursor && gui.dragSlots?.size === 1 && gui.dragSlots.has(slot)) return null;
   return preview.slots.get(slot) ?? slot.stack;
+}
+
+export const ARMOR_ICONS = Object.freeze(["helmet", "chestplate", "leggings", "boots"]);
+/**
+ * GuiContainer.drawSlot (bex.a(Slot)) as draw ops in paint order, relative to the slot: `rect` (drawRect 0x80FFFFFF), `icon` (the slot's
+ * getBackgroundIconIndex, ItemArmor's empty_armor_slot_*), `stack` (renderItemAndEffectIntoGUI + renderItemOverlayIntoGUI: the item, its
+ * count, durability bar). A one-slot split drag returns before anything, background icon included (`shown` null). A multi-slot drag target
+ * that takes a share paints the rect under its item. The hover quad is drawScreen's: after the slot, over item and count, drawn
+ * for the hit-tested slot only (never a disabled one); it is emitted even for a slot drawSlot skipped.
+ */
+export function slotDrawOps(slot, { gui, preview, hovered = null }) {
+  const ops = [], shown = slotShown(gui, slot, preview), hole = !!(gui.dragging && gui.container?.inv?.cursor && gui.dragSlots?.size === 1 && gui.dragSlots.has(slot));
+  if (!hole) {
+    if (gui.dragging && gui.dragSlots?.size > 1 && gui.dragSlots.has(slot)) ops.push({ kind: "rect", color: SLOT.drag, z: "under" });
+    if (shown) ops.push({ kind: "stack", stack: shown, capped: preview.capped?.has(slot) === true });
+    else if (slot.type !== undefined && ARMOR_ICONS[slot.type]) ops.push({ kind: "icon", name: ARMOR_ICONS[slot.type] });
+  }
+  if (hovered === slot && slot.enabled !== false) ops.push({ kind: "rect", color: SLOT.hover, z: "over" });
+  return ops;
+}
+/** The ops as DOM: `stackHtml(stack)` renders the item layers. Empty string for an empty slot. */
+export function slotDrawHtml(ops, stackHtml) {
+  return ops.map((o) => o.kind === "rect"
+    ? `<i class="gui-rect slot-quad ${o.z}" style="left:0;top:0;width:${u(SLOT.size)};height:${u(SLOT.size)};background:${argbCss(o.color)}"></i>`
+    : o.kind === "icon" ? `<i class="slot-icon" style="background-image:url('/media/1.7.10/items/empty_armor_slot_${o.name}.png')"></i>`
+    : stackHtml(o.stack, o.capped)).join("");
 }
 
 // GuiRepair (bey).
@@ -119,34 +146,90 @@ export function fieldClickCursor(text, scroll, relX, width) {
   return (relX < 0 ? 0 : trimToWidth(visible, relX).length) + scroll;
 }
 const fieldState = new WeakMap();
+const mac = () => typeof navigator !== "undefined" && /Mac/i.test(navigator.platform ?? "");
+/** Mirrors the GuiTextField model into the (transparent) <input> so assistive tech and the browser's own state agree with it. */
+function syncInput(field, m) {
+  if (field.value !== m.text) field.value = m.text;
+  const a = Math.min(m.cursor, m.selectionEnd), b = Math.max(m.cursor, m.selectionEnd);
+  if (field.selectionStart !== a || field.selectionEnd !== b) field.setSelectionRange(a, b, m.selectionEnd < m.cursor ? "backward" : "forward");
+}
+/**
+ * The anvil name field's input: every key goes through GuiTextField.textboxKeyTyped (text-field.js) and the model, not the browser's own
+ * editing; copy / cut / paste events supply GuiScreen.get/setClipboardString. A plain pointer press calls mouseClicked (cursor by glyph
+ * widths). The <input> only receives focus and mirrors the model.
+ */
+function attachAnvilField(field, state) {
+  const m = (state.model = new GuiTextField({ maxLength: ANVIL.field.maxLength, text: field.value, enabled: !field.disabled, focused: false }));
+  const changed = (before) => { syncInput(field, m); if (m.text !== before) field.dispatchEvent(new Event("input", { bubbles: true })); };
+  field.addEventListener("focus", () => { m.focused = true; });
+  field.addEventListener("blur", () => { m.focused = false; });
+  field.addEventListener("keydown", (e) => {
+    if (e.isComposing || e.altKey) return;
+    m.enabled = !field.disabled;
+    const before = m.text, k = e.key.length === 1 && (e.ctrlKey || e.metaKey) ? e.key.toLowerCase() : "";
+    if (k === "c" || k === "v" || k === "x") return; // completed by the copy / cut / paste events below, which carry the data
+    if (m.keyTyped({ key: e.key, ctrl: e.ctrlKey, shift: e.shiftKey, meta: e.metaKey }, { mac: mac() })) { e.preventDefault(); changed(before); }
+  });
+  const clip = (e, cut) => {
+    m.enabled = !field.disabled;
+    const before = m.text;
+    e.clipboardData?.setData("text/plain", m.selectedText());
+    if (cut && m.enabled) m.writeText("");
+    e.preventDefault(); changed(before);
+  };
+  field.addEventListener("copy", (e) => clip(e, false));
+  field.addEventListener("cut", (e) => clip(e, true));
+  field.addEventListener("paste", (e) => {
+    e.preventDefault();
+    const before = m.text;
+    if (!field.disabled) m.writeText(e.clipboardData?.getData("text/plain") ?? "");
+    changed(before);
+  });
+  // Virtual keyboards deliver text without usable keydown keys: take the input's own edit.
+  field.addEventListener("input", (e) => {
+    if (e.isTrusted === false) return;
+    const value = [...field.value].filter((c) => c !== "\u00a7" && c.charCodeAt(0) >= 32 && c !== "\u007f").join("").slice(0, ANVIL.field.maxLength), at = field.selectionEnd ?? value.length;
+    m.text = value; m.setCursorPosition(at); syncInput(field, m);
+  });
+  // GuiTextField.mouseClicked: no native text drag selection; focus the input and move the cursor by FontRenderer widths.
+  field.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (field.disabled) return;
+    field.focus();
+    const box = field.getBoundingClientRect(), relX = Math.floor((e.clientX - box.left) / (box.width / ANVIL.field.width));
+    m.setCursorPosition(fieldClickCursor(m.text, state.scroll ?? 0, relX, ANVIL.field.width));
+    syncInput(field, m);
+  });
+}
 /** Per frame: the background row, the red cross, the field glyphs and the cost line. `container` is anvil-container.js AnvilContainer. */
 export function refreshAnvil(root, container, cost) {
   const left = container.inputs.getStack(0), right = container.inputs.getStack(1), field = root.querySelector("#anvil-name");
   if (!field) return;
   let state = fieldState.get(field);
-  if (!state) {
-    fieldState.set(field, (state = {}));
-    // The <input> keeps typing, selection and clipboard; a plain click places the cursor by FontRenderer widths, not page-font ones.
-    field.addEventListener("click", () => {
-      if (field.selectionStart !== field.selectionEnd) return;
-      const box = field.getBoundingClientRect(), relX = Math.floor((state.clickX - box.left) / (box.width / ANVIL.field.width));
-      const at = fieldClickCursor(field.value, state.scroll ?? 0, relX, ANVIL.field.width);
-      field.setSelectionRange(at, at);
-    });
-    field.addEventListener("pointerdown", (e) => { state.clickX = e.clientX; });
-  }
+  if (!state) { fieldState.set(field, (state = {})); attachAnvilField(field, state); }
+  const m = state.model;
   field.disabled = !left;
+  m.enabled = !!left;
+  if (field.value !== m.text) { m.setText(field.value); } // GuiTextField.setText: the screen replaced the text, cursor at the end
   root.querySelector("#anvil-name-background")?.classList.toggle("active", !!left);
   root.querySelector("#anvil-error").hidden = !(left || right) || !!container.output;
   const costEl = root.querySelector("#anvil-cost"), costHtml = anvilCostHtml(cost);
   if (costEl.dataset.html !== costHtml) { costEl.dataset.html = costHtml; costEl.innerHTML = costHtml; costEl.setAttribute("aria-label", cost.text); }
-  const text = field.value, back = field.selectionDirection === "backward", focused = root.ownerDocument.activeElement === field;
-  const cursor = (back ? field.selectionStart : field.selectionEnd) ?? text.length, end = (back ? field.selectionEnd : field.selectionStart) ?? cursor;
+  const text = m.text, focused = root.ownerDocument.activeElement === field && m.focused, cursor = m.cursor, end = m.selectionEnd;
   if (state.text !== text || state.end !== end) state.scroll = followScroll(text, end, state.scroll ?? 0, ANVIL.field.width);
   state.text = text; state.end = end;
   const html = textFieldHtml(textFieldDraw({ text, cursor, selEnd: end, scroll: state.scroll, width: ANVIL.field.width, maxLength: ANVIL.field.maxLength, focused, color: left ? ANVIL.field.color : ANVIL.field.disabledColor }));
   const draw = root.querySelector("#anvil-name-draw");
   if (draw.dataset.html !== html) { draw.dataset.html = html; draw.innerHTML = html; }
+}
+
+// GuiMerchant.MerchantButton (bfw) drawButton: villager.png at u 176 (+ width when the pointer is inside and enabled, + 2 x width when
+// disabled), v 0 for the next arrow and 19 for the previous one; hovered is the Gui hit test x >= button.x && < button.x + 12.
+export const MERCHANT_ARROW = Object.freeze({ width: 12, height: 19, u: 176, next: { x: 147, y: 23, v: 0 }, previous: { x: 17, y: 23, v: 19 } });
+export function merchantArrowDraw(which, { enabled, mouseX = -1, mouseY = -1 }) {
+  const a = MERCHANT_ARROW, b = a[which];
+  const hover = mouseX >= b.x && mouseY >= b.y && mouseX < b.x + a.width && mouseY < b.y + a.height;
+  return { hover, u: a.u + (!enabled ? a.width * 2 : hover ? a.width : 0), v: b.v };
 }
 
 // GuiEnchantment (bfq).

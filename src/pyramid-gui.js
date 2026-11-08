@@ -25,8 +25,17 @@ export function secondaryButtons(levels, primary) {
   return out;
 }
 const iconPos = (index) => `--ix:${(index % 8) * 18};--iy:${198 + Math.floor(index / 8) * 18}`;
-const button = (b, selected, attrs, inner) =>
-  `<button class="beacon-btn${b.disabled ? ' off' : ''}${selected ? ' on' : ''}" ${attrs} style="left:calc(${b.x}*var(--u));top:calc(${b.y}*var(--u));--su:${b.disabled ? SPRITE_U.disabled : selected ? SPRITE_U.selected : SPRITE_U.normal}"${b.disabled ? ' aria-disabled="true"' : ''}>${inner}</button>`;
+/**
+ * GuiBeacon$Button.drawButton (bfd): field_146123_n is the 22 x 22 Gui hit test whether or not the button is enabled; the sprite column is
+ * disabled (44) before selected (22) before hovered (66), else 0. The icon quad is drawn afterwards with plain white, so a disabled
+ * button's icon is not dimmed. `x`, `y` are GUI units relative to guiLeft / guiTop.
+ */
+export function beaconButtonDraw(b, selected, x = -1, y = -1) {
+  const hover = x >= b.x && y >= b.y && x < b.x + 22 && y < b.y + 22;
+  return { hover, u: b.disabled ? SPRITE_U.disabled : selected ? SPRITE_U.selected : hover ? SPRITE_U.hover : SPRITE_U.normal };
+}
+const button = (b, selected, attrs, inner, mouse) =>
+  `<button class="beacon-btn${b.disabled ? ' off' : ''}${selected ? ' on' : ''}" ${attrs} style="left:calc(${b.x}*var(--u));top:calc(${b.y}*var(--u));--su:${beaconButtonDraw(b, selected, mouse.x, mouse.y).u}"${b.disabled ? ' aria-disabled="true"' : ''}>${inner}</button>`;
 
 // The local state: `levels` from the tile, `primary`/`secondary` the picks; `payment` whether slot 0 holds an item.
 export function beaconDecorationsHtml() {
@@ -48,18 +57,19 @@ export function beaconTooltip(x, y, { levels, primary }) {
   if (over(BEACON_CANCEL)) return translate("gui.cancel", "Cancel");
   return null;
 }
-export function beaconUiHtml({ levels, primary, secondary, payment, icon }) {
+export function beaconUiHtml({ levels, primary, secondary, payment, icon, mouseX = -1, mouseY = -1 }) {
   if (levels < 0) return '';
+  const mouse = { x: mouseX, y: mouseY };
   let html = '';
   for (const b of powerButtons(levels)) {
-    html += button(b, b.id === primary, `data-beacon="power" data-tier="${b.tier}" data-id="${b.id}" aria-label="${name(b.id, b.tier)}"`, `<i class="beacon-effect" style="${iconPos(POTION_TYPES[b.id].icon)}"></i>`);
+    html += button(b, b.id === primary, `data-beacon="power" data-tier="${b.tier}" data-id="${b.id}" aria-label="${name(b.id, b.tier)}"`, `<i class="beacon-effect" style="${iconPos(POTION_TYPES[b.id].icon)}"></i>`, mouse);
   }
   for (const b of secondaryButtons(levels, primary)) {
-    html += button(b, b.id === secondary, `data-beacon="power" data-tier="3" data-id="${b.id}" aria-label="${name(b.id, 3)}"`, `<i class="beacon-effect" style="${iconPos(POTION_TYPES[b.id].icon)}"></i>`);
+    html += button(b, b.id === secondary, `data-beacon="power" data-tier="3" data-id="${b.id}" aria-label="${name(b.id, 3)}"`, `<i class="beacon-effect" style="${iconPos(POTION_TYPES[b.id].icon)}"></i>`, mouse);
   }
   const confirm = { ...BEACON_CONFIRM, disabled: !(payment && primary > 0) };
-  html += button(confirm, false, `data-beacon="confirm" aria-label="${translate("gui.done", "Done")}"`, '<i class="beacon-mark" style="--mx:90"></i>');
-  html += button({ ...BEACON_CANCEL, disabled: false }, false, `data-beacon="cancel" aria-label="${translate("gui.cancel", "Cancel")}"`, '<i class="beacon-mark" style="--mx:112"></i>');
+  html += button(confirm, false, `data-beacon="confirm" aria-label="${translate("gui.done", "Done")}"`, '<i class="beacon-mark" style="--mx:90"></i>', mouse);
+  html += button({ ...BEACON_CANCEL, disabled: false }, false, `data-beacon="cancel" aria-label="${translate("gui.cancel", "Cancel")}"`, '<i class="beacon-mark" style="--mx:112"></i>', mouse);
   // Payment items drawn at (42, 109), (64, 109), (86, 109), (108, 109): emerald, diamond, gold ingot, iron ingot.
   [367, 303, 304, 302].forEach((id, i) => { html += `<span class="beacon-pay" style="left:calc(${42 + i * 22}*var(--u));top:calc(109*var(--u))">${icon(id)}</span>`; });
   return html;

@@ -167,7 +167,7 @@ import { tickBeacons } from "./pyramid-live.js";
 import { BeaconRenderer } from "./pyramid-renderer.js";
 import { BeaconContainer } from "./pyramid-container.js";
 import { beaconDecorationsHtml, beaconUiHtml, beaconTooltip } from "./pyramid-gui.js";
-import { slotAt, slotShown, anvilDecorationsHtml, refreshAnvil, enchantDecorationsHtml, refreshEnchantOptions } from "./container-widgets.js";
+import { slotAt, slotDrawOps, slotDrawHtml, merchantArrowDraw, anvilDecorationsHtml, refreshAnvil, enchantDecorationsHtml, refreshEnchantOptions } from "./container-widgets.js";
 import { Fishing } from "./fishing-simulation.js";
 import { FISHING_ROD } from "./fishing-content.js";
 import { WitchPotions } from "./witch-potions.js";
@@ -1865,7 +1865,12 @@ function renderCreativeBody() {
 const CONTAINER_TITLES = { inventory: "Inventory", workbench: "Crafting", furnace: "Furnace", creative: "", anvil: "Repair & Name", enchanting: "Enchant", merchant: "Villager", beacon: "Beacon" },
   CONTAINER_CLASSES = { furnace: "furnace-modal", chest: "chest-modal", dispenser: "dispenser-modal", horse: "horse-modal", brewing: "brewing-modal", hopper: "hopper-modal", creative: "creative-modal", anvil: "anvil-modal", enchanting: "enchanting-modal", merchant: "merchant-modal", beacon: "beacon-modal" };
 // Slots are addressed by list index: wrapped creative slots all keep slotNumber 0.
-const slotsHtml = (container) => `<div class="container-slots">${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${slot.type !== undefined ? ` data-armor="${["helmet", "chestplate", "leggings", "boots"][slot.type]}"` : ""}${slot.x < -1000 || slot.enabled === false ? " hidden" : ""} style="left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))"></button>`).join("")}</div>`;
+// GuiContainer.drawScreen: .container-draw holds one .gui-slot per Slot (items, counts, quads from container-widgets.js slotDrawOps); the
+// <button>s over it are transparent hit / focus targets that keep the aria-labels (the pointer hit test is GuiContainer.func_146981_a).
+const slotsHtml = (container) => {
+  const hide = (slot) => (slot.x < -1000 || slot.enabled === false ? " hidden" : ""), at = (slot) => `left:calc(${slot.x}*var(--u));top:calc(${slot.y}*var(--u))`;
+  return `<div class="container-slots"><div class="container-draw" aria-hidden="true">${container.slots.map((slot, i) => `<div class="gui-slot" data-draw-slot="${i}"${hide(slot)} style="${at(slot)}"></div>`).join("")}</div>${container.slots.map((slot, i) => `<button class="container-slot" data-container-slot="${i}"${hide(slot)} style="${at(slot)}"></button>`).join("")}</div>`;
+};
 // GuiCommandBlock: Creative + command permission required; text and tracking changes are applied on Done only.
 function openCommandBlock(x, y, z, cartTile = null) {
   if (!survival.creative || !commandHost.cheats) return;
@@ -2089,8 +2094,7 @@ function refreshContainer() {
   if (!containerView) return;
   const view = containerView,
     { container, gui } = view,
-    preview = gui.preview(),
-    dragging = gui.dragging && gui.dragSlots.size > 1;
+    preview = gui.preview();
   if (view.kind === "anvil") refreshAnvil($("#modal"), container, anvilCost(container)); // GuiRepair glyph field, cost line, cross
   if (view.kind === "beacon") refreshBeacon(view);
   if (view.kind === "merchant") renderMerchantView(view);
@@ -2102,20 +2106,18 @@ function refreshContainer() {
   }
   let contentChanged = false;
   container.slots.forEach((slot, i) => {
-    const shown = slotShown(gui, slot, preview),
-      over = preview.capped.has(slot),
-      key = shown ? `${shown.id},${shown.count},${shown.damage},${shown.color},${over},${stackHasEffect(shown, ITEMS[shown.id])}` : "",
-      b = document.querySelector(`[data-container-slot="${i}"]`);
-    if (!b) return;
-    b.classList.toggle("hovered", view.hovered === slot);
-    b.classList.toggle("dragged", dragging && gui.dragSlots.has(slot));
+    const b = document.querySelector(`[data-container-slot="${i}"]`), d = document.querySelector(`[data-draw-slot="${i}"]`);
+    if (!b || !d) return;
+    const ops = slotDrawOps(slot, { gui, preview, hovered: view.hovered }),
+      part = (o) => o.kind === "stack" ? `s${o.stack.id},${o.stack.count},${o.stack.damage},${o.stack.color},${o.capped},${stackHasEffect(o.stack, ITEMS[o.stack.id])}` : o.kind === "icon" ? "i" + o.name : "r" + o.z,
+      key = ops.map(part).join("|"), content = ops.filter((o) => o.kind === "stack").map(part).join("");
     const label = stackLabel(slot.stack);
     if (b.getAttribute("aria-label") !== label) b.setAttribute("aria-label", label);
     if (view.shown[i] === key) return;
     view.shown[i] = key;
-    contentChanged = true;
-    b.innerHTML = stackHtml(shown);
-    b.querySelector(".item-count")?.classList.toggle("full", over);
+    if ((view.contents ??= [])[i] !== content) { view.contents[i] = content; contentChanged = true; } // a quad alone is not a content change
+    d.innerHTML = slotDrawHtml(ops, (stack, capped) => stackHtml(stack));
+    for (const c of d.querySelectorAll(".item-count")) c.classList.toggle("full", ops.some((o) => o.kind === "stack" && o.capped));
   });
   // World.func_147453_f: an open chest, furnace, dispenser or hopper screen reports content changes to comparators live.
   if (contentChanged && redstoneRuntime) {
@@ -2252,7 +2254,13 @@ function renderMerchantView(view) {
     if (el.dataset.shown !== html) { el.dataset.shown = html; el.innerHTML = html; }
   }
   for (const cross of document.querySelectorAll("[data-merchant-cross]")) cross.hidden = !recipe?.disabled;
-  for (const step of document.querySelectorAll("[data-merchant-step]")) step.disabled = !(+step.dataset.merchantStep > 0 ? info.next : info.previous);
+  for (const step of document.querySelectorAll("[data-merchant-step]")) {
+    // GuiMerchant.MerchantButton.drawButton: the sprite column follows enabled + the Gui hit test on the pointer (view.gx / gy), not :hover.
+    const next = +step.dataset.merchantStep > 0, enabled = next ? info.next : info.previous, d = merchantArrowDraw(next ? "next" : "previous", { enabled, mouseX: view.gx, mouseY: view.gy });
+    step.disabled = !enabled;
+    step.dataset.hover = String(d.hover);
+    step.style.setProperty("background-position", `calc(${-d.u}*var(--u)) calc(${-d.v}*var(--u))`, "important");
+  }
   handleEntityEvents();
 }
 function useAnvil(key){
@@ -2291,7 +2299,7 @@ function useBeacon(key) {
 }
 function refreshBeacon(view) {
   const tile = view.container.tile, pick = view.pick ??= { primary: tile.primary, secondary: tile.secondary }, payment = !!view.container.payment;
-  const html = beaconUiHtml({ levels: tile.levels, ...pick, payment, icon: (id) => stackHtml({ id, count: 1, damage: 0 }) }) /* renderItemAndEffectIntoGUI only: no count */, ui = $("#beacon-ui");
+  const html = beaconUiHtml({ levels: tile.levels, ...pick, payment, icon: (id) => stackHtml({ id, count: 1, damage: 0 }), mouseX: view.gx, mouseY: view.gy }) /* renderItemAndEffectIntoGUI only: no count */, ui = $("#beacon-ui");
   if (ui && ui.dataset.shown !== html) { ui.dataset.shown = html; ui.innerHTML = html; }
 }
 function beaconClick(button) {
