@@ -33,13 +33,14 @@ test("Thorns armour wear with Unbreaking replays natively for a survival player,
     if (kind === "mob") {
       // The probe's mob array is held, boots, leggings, chestplate, helmet; the mob owns native stacks.
       const mob = { equipment: before.map(native) };
-      mobThornsOnPlayerHit(mob, random, { hurt, sound });
+      // ThornsWearProbe's mob double overrides renderBrokenItemStack, so no break draws here (zero-stacks.test.js replays them).
+      mobThornsOnPlayerHit(mob, random, { hurt, sound, broken: () => {} });
       armour = mob.equipment.map((s, i) => [s, i]);
       rngNext = random.nextInt();
       before.forEach((b, i) => {
         const live = mob.equipment[i];
         if (after[i] === null) return assert.equal(live, null, row);
-        if (live === null) { assert.equal(after[i][1], 0, "a broken stack is natively reset: " + row); seen.breaks++; return; }
+        if (live.count === 0 && b[1] > 0) { assert.equal(after[i][1], 0, "a broken stack is natively reset: " + row); assert.equal(live.damage, 0); seen.breaks++; return; }
         assert.equal(live.damage, after[i][1], "slot " + i + " " + row);
       });
     } else {
@@ -64,7 +65,7 @@ test("Thorns armour wear with Unbreaking replays natively for a survival player,
   assert.ok(seen.hit > 500 && seen.miss > 500 && seen.breaks > 100 && Object.keys(seen.unbreaking).length === 3, JSON.stringify(seen));
 });
 
-test("native keeps a broken Thorns piece as a zero-size stack that keeps rolling (probed); the player port keeps it too (zero-armour-stack.test.js); only the mob port removes it (pinned difference)", () => {
+test("native keeps a broken Thorns piece as a zero-size stack that keeps rolling (probed); the player port (zero-armour-stack.test.js) and the mob port keep it", () => {
   assert.equal(reference.ghosts.length, 36);
   let rolled = 0;
   for (const [kind, , , , , first, wearerLog, , second] of reference.ghosts) {
@@ -76,5 +77,6 @@ test("native keeps a broken Thorns piece as a zero-size stack that keeps rolling
   assert.equal(rolled, 36);
   const mob = { equipment: [null, null, null, { id: 299, count: 1, damage: 528, enchantments: [{ id: 7, lvl: 1 }] }, null] };
   mobThornsOnPlayerHit(mob, new JavaRandom(5n), { hurt() {}, sound() {} });
-  assert.equal(mob.equipment[3], null, "mob equipment: the port empties the slot where the original keeps the zero-size stack (mob drops, NBT and rendering assume non-empty stacks; unprobed there)");
+  assert.equal(mob.equipment[3].count, 0, "mob equipment keeps the zero-size stack (zero-stacks-reference.json mobThorns)");
+  assert.equal(mob.equipment[3].damage, 0);
 });

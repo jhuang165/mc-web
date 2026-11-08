@@ -8,7 +8,7 @@
 // item, 1 boots to 4 helmet, as EntityLiving.getEquipmentInSlot) in the ORIGINAL 1.7.10 item ids that
 // enchantments.js uses, `dropChances` the five floats of equipmentDropChances and `canPickUpLoot`.
 // mob-equipment-live.js converts to the browser's item ids at the edges (drops, pickup, rendering).
-import { addRandomEnchantment, getEnchantmentLevel, getEnchantmentModifierLiving, getKnockbackModifier, getFireAspectModifier, ENCHANTMENT, itemInfo } from "./enchantments.js";
+import { attemptDamageItem, addRandomEnchantment, getEnchantmentLevel, getEnchantmentModifierLiving, getKnockbackModifier, getFireAspectModifier, ENCHANTMENT, itemInfo } from "./enchantments.js";
 
 const f = Math.fround;
 export const HELD = 0, BOOTS = 1, LEGGINGS = 2, CHESTPLATE = 3, HELMET = 4;
@@ -87,6 +87,32 @@ export const totalArmor = (equipment) => equipment.reduce((n, s) => n + (s ? arm
 // The sum of the equipment's attack modifiers added to the generic.attackDamage attribute.
 export const attackBonus = (equipment) => equipment.reduce((n, s) => n + (s ? weaponModifier(s.id) : 0), 0);
 
+/** EntityLivingBase.renderBrokenItemStack (sv.a(add)) on the wearer: the random.break sound (0.8, 0.8 + world.rand * 0.4) and five item-crack
+ *  particles, each drawing three floats of the wearer's Entity.rand (plus Math.random). Probed: after a mob's Thorns piece breaks its Random
+ *  is 15 floats further on (zero-stacks-reference.json mobThorns, anvil). */
+export function brokenItemDraws(random) {
+  for (let i = 0; i < 15; i++) random.nextFloat();
+}
+
+/** ItemStack.damageItem's break: stackSize - 1 (never below 0) and damage 0; the stack stays in its slot. */
+export function breakStack(stack) {
+  stack.count = Math.max(0, (stack.count ?? 1) - 1);
+  stack.damage = 0;
+}
+
+// EntityLivingBase.attackEntityFrom (sv.a(ro,F)) for DamageSource.anvil / fallingBlock on a mob with a helmet slot stack (a zero-size one
+// too): ItemStack.damageItem((int)(amount * 4 + rand.nextFloat() * amount * 2), mob) (Unbreaking on the mob's Random; a break runs
+// `broken(stack)` and leaves a zero-size stack that keeps its armour point), then amount * 0.75. Before limbSwingAmount, after the
+// fire-resistance refusal. Returns the amount (probed, zero-stacks-reference.json anvil zombie rows).
+export function fallingBlockHelmet(equipment, amount, random, broken = () => brokenItemDraws(random)) {
+  const helmet = equipment?.[HELMET];
+  if (!helmet) return amount;
+  amount = f(amount);
+  const wear = Math.trunc(f(f(amount * 4) + f(f(random.nextFloat() * amount) * 2)));
+  if (attemptDamageItem(helmet, wear, random)) { broken(helmet); breakStack(helmet); }
+  return f(amount * f(0.75));
+}
+
 // EntityLiving.dropEquipment (sw.a(ZI)): for each slot, `recentlyHit` or a chance above 1 (an item the mob
 // picked up, 2.0) lets nextFloat() - looting x 0.01F < the chance drop it; below 1 a damageable item
 // drops with damage maxDamage - nextInt(nextInt(max(maxDamage - 25, 1)) + 1) kept within [1, maxDamage - 25].
@@ -103,7 +129,8 @@ export function dropEquipment(gear, rand, { playerHit = false, looting = 0 } = {
       const k = Math.max(max - 25, 1);
       drop.damage = Math.max(1, Math.min(k, max - rand.nextInt(rand.nextInt(k) + 1)));
     }
-    out.push(drop);
+    // Entity.entityDropItem refuses a stackSize 0 stack (a Thorns-broken piece) after the rolls (probed, zero-stacks-reference.json mobDrop).
+    if ((s.count ?? 1) > 0) out.push(drop);
   });
   return out;
 }
@@ -146,7 +173,7 @@ export function pickUpItem(gear, candidate, rand) {
   const slot = armorPosition(candidate), current = gear.equipment[slot];
   if (!prefersPickup(slot, current, candidate)) return null;
   let dropped = null;
-  if (current && f(rand.nextFloat() - f(0.1)) < gear.dropChances[slot]) dropped = current;
+  if (current && f(rand.nextFloat() - f(0.1)) < gear.dropChances[slot] && (current.count ?? 1) > 0) dropped = current; // entityDropItem refuses stackSize 0
   gear.equipment[slot] = cloneStack(candidate);
   gear.dropChances[slot] = 2;
   return { slot, dropped };
@@ -174,7 +201,8 @@ export function readGear(saved) {
   if (Array.isArray(saved.equipment)) saved.equipment.slice(0, 5).forEach((s, i) => {
     if (!s || !Number.isInteger(s.id) || s.id <= 0 || s.id > 4095) return;
     const max = maxDamage(s.id);
-    gear.equipment[i] = { id: s.id, count: Math.max(1, Math.min(64, s.count | 0 || 1)), damage: Math.max(0, Math.min(max || 32767, Number.isFinite(s.damage) ? s.damage | 0 : 0)),
+    // ItemStack.loadItemStackFromNBT keeps Count 0 (a Thorns-broken piece; probed, zero-stacks-reference.json mobNbt).
+    gear.equipment[i] = { id: s.id, count: Number.isFinite(s.count) ? Math.max(0, Math.min(64, s.count | 0)) : 1, damage: Math.max(0, Math.min(max || 32767, Number.isFinite(s.damage) ? s.damage | 0 : 0)),
       ...(Array.isArray(s.enchantments) && s.enchantments.length ? { enchantments: s.enchantments.filter((e) => Number.isInteger(e?.id) && Number.isInteger(e?.lvl)).map((e) => ({ id: e.id, lvl: e.lvl })) } : {}) };
   });
   if (Array.isArray(saved.dropChances)) saved.dropChances.slice(0, 5).forEach((c, i) => { if (Number.isFinite(c)) gear.dropChances[i] = f(c); });

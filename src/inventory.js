@@ -46,12 +46,13 @@ export class PlayerInventory {
     this.creative = false;
     this.random = new JavaRandom(0);
     if (randomState) this.random.restore(randomState);
-    if (Array.isArray(saved)) saved.slice(0, 36).forEach((s, i) => (this.main[i] = this.read(s)));
+    // InventoryPlayer.readFromNBT keeps a Count 0 stack in the main inventory too (zero-armour-stack-reference.json nbt row).
+    if (Array.isArray(saved)) saved.slice(0, 36).forEach((s, i) => (this.main[i] = this.read(s, true)));
     // armor[0] boots ... armor[3] helmet, as InventoryPlayer.armorInventory.
     if (Array.isArray(armor)) armor.slice(0, 4).forEach((s, i) => { const a = this.read(s, true); if (a && armorTypeOf(items, a.id) === 3 - i) this.armor[i] = a; });
   }
-  // `allowEmpty` keeps a size-0 stack (armour slots only: ItemStack.damageItem leaves a Thorns-broken piece at size 0 and
-  // InventoryPlayer.readFromNBT keeps it; the main inventory rejects it here, a documented difference, see zero-armour-stack.test.js).
+  // `allowEmpty` keeps a size-0 stack (ItemStack.damageItem leaves a Thorns-broken piece at size 0, a container click can move it into the
+  // main inventory, and InventoryPlayer.readFromNBT keeps it in either part).
   read(s, allowEmpty = false) {
     // Saves from before ItemDye (id 351) kept bone meal as internal item 310.
     if (s && typeof s === "object" && s.id === 310) s = { ...s, id: 351, damage: 15 };
@@ -129,15 +130,20 @@ export class PlayerInventory {
   // ItemStack.damageItem, then destroyCurrentEquippedItem for an emptied stack.
   // `keepEmpty`: ItemStack.damageItem called directly (Thorns wear, the anvil helmet hit) leaves the broken piece at size 0;
   // InventoryPlayer.damageArmor (ordinary armour wear) clears it, so that path leaves keepEmpty off.
+  // Every native damageItem caller on a held stack (attackTargetEntityWithCurrentItem, tryHarvestBlock, tryUseItem, interactWith, the bow) and
+  // InventoryPlayer.damageArmor clear a stackSize 0 stack afterwards, broken or not: a zero-size tool moved into the main inventory is cleared
+  // by its next use (probed, zero-stacks-reference.json zero-held-tool-damage). `keepEmpty` is the Thorns / anvil-helmet path that leaves it.
   damage(i, amount = 1, keepEmpty = false) {
     const s = this.getStack(i);
-    if (!s || this.creative || s.unbreakable === true || amount <= 0 || !this.maxDamage(s)) return false;
-    const item = this.items[s.id];
-    if (!damageLiveItemStack(s, item, amount, this.random)) return false;
-    s.count = Math.max(0, s.count - 1);
-    s.damage = 0;
+    if (!s) return false;
+    let broke = false;
+    if (!(this.creative || s.unbreakable === true || amount <= 0 || !this.maxDamage(s)) && damageLiveItemStack(s, this.items[s.id], amount, this.random)) {
+      s.count = Math.max(0, s.count - 1);
+      s.damage = 0;
+      broke = true;
+    }
     if (s.count === 0 && !(keepEmpty && i >= 36 && i < 40)) this.setStack(i, null);
-    return true;
+    return broke;
   }
   // Middle-click pick block (func_146030_a); `damage` is the block's metadata
   // for subtype items such as wool, otherwise any stack of the item matches.

@@ -70,7 +70,7 @@ const exported = (armor, slots = []) => {
   return player;
 };
 
-test("a size-0 armour piece is written Count:0b, read back by javaPlayerFromNbt and a fresh PlayerInventory (probed nbt rows); the main inventory is the pinned difference", () => {
+test("a size-0 armour or main stack is written Count:0b and read back by javaPlayerFromNbt and a fresh PlayerInventory (probed nbt rows)", () => {
   const zero = chest(0, 0, { enchantments: [{ id: 7, lvl: 3 }] });
   const player = exported([null, null, zero, null], [null, null, null, null, null, zero]);
   const inventory = player.get("Inventory").value.items;
@@ -82,13 +82,13 @@ test("a size-0 armour piece is written Count:0b, read back by javaPlayerFromNbt 
   const back = javaPlayerFromNbt(player);
   assert.equal(back.player.armor[2].count, 0, "armour keeps the size-0 stack like InventoryPlayer.readFromNBT");
   assert.equal(back.player.armor[2].id, IRON_CHESTPLATE);
-  assert.equal(back.player.slots[5], null, "pinned difference: native keeps a size-0 stack in a main slot too (probed nbt row 2: [0,0]); the browser main inventory never holds one");
+  assert.equal(back.player.slots[5].count, 0, "native keeps a size-0 stack in a main slot too (probed nbt row 2: [0,0])");
   assert.deepEqual(reference.records.nbt.map((r) => r[3]), [[0, 0], [0, 0]]);
   assert.equal(itemStackFromNbt(armourEntry), null, "a plain stack read (hoppers, dropped items, /give) still rejects Count 0");
-  // A browser save: PlayerInventory keeps the armour stack, drops the main one.
+  // A browser save: PlayerInventory keeps both.
   const inv = new PlayerInventory(ITEMS, [null, null, null, null, null, chest(0)], [null, null, chest(0), null]);
   assert.equal(inv.armor[2].count, 0);
-  assert.equal(inv.main[5], null);
+  assert.equal(inv.main[5].count, 0);
   // The armour round trip survives a second export.
   const again = exported(back.player.armor);
   assert.equal(again.get("Inventory").value.items.find((e) => e.get("Slot").value === 102).get("Count").value, 0);

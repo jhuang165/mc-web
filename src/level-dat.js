@@ -147,7 +147,7 @@ export function javaPlayerFromNbt(tag, { convertItem = (c, o) => itemStackFromNb
     const slot = get(entry, 'Slot', NBT.BYTE, 0) & 255;
     const target = slot < 36 ? [slots, slot] : slot >= 100 && slot < 104 ? [armor, slot - 100] : null;
     if (!target) { lost.push(`Inventory slot ${slot}`); continue; }
-    const stack = convertItem(entry, { allowEmpty: target[0] === armor });
+    const stack = convertItem(entry, { allowEmpty: true }); // InventoryPlayer.readFromNBT keeps Count 0 in main and armour slots
     if (stack) target[0][target[1]] = stack;
   }
   // InventoryEnderChest.loadInventoryFromNBT: Slot & 255, 0-26.

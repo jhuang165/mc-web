@@ -403,10 +403,11 @@ export async function importJavaRegionArea(regions, options = {}) {
     if (++edits <= IMPORT_EDIT_LIMIT) world.set(x, y, z, block, true, meta);
   };
 
-  function convertItem(compound) {
+  // `allowEmpty` (player inventory and mob Equipment) keeps Count 0 as ItemStack.loadItemStackFromNBT does (zero-stacks-reference.json).
+  function convertItem(compound, { allowEmpty = false } = {}) {
     const id = get(compound, 'id', NBT.SHORT), count = get(compound, 'Count', NBT.BYTE, 0), damage = get(compound, 'Damage', NBT.SHORT, 0);
     const mapped = id === undefined ? null : itemFromOriginal(id, damage);
-    if (!mapped || count <= 0) {
+    if (!mapped || (allowEmpty ? count < 0 : count <= 0)) {
       tally(itemLost, id === undefined ? `${get(compound, 'id', NBT.STRING) ?? '?'}` : `${id}:${Math.max(0, damage)}`);
       return null;
     }

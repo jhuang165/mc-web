@@ -129,9 +129,10 @@ test('javaPlayerFromNbt reads what EntityPlayer.readEntityFromNBT keeps', () => 
     assert.ok(Math.abs(yaw - ((c.yaw % 360) + 360) % 360) < 1e-9, name);
     assert.ok(Math.abs((-p.position.pitch * 180) / Math.PI - c.pitch) < 1e-9, name);
   }
-  // The browser player has no zero-count stacks; javaPlayerFromNbt reports them.
-  const odd = javaPlayerFromNbt(fromHex(ref.players.find((c) => c.name === 'inventory-odd-slots').input));
-  assert.equal(odd.player.slots[3], null);
+  // InventoryPlayer.readFromNBT keeps a Count 0 main stack (the native read-back [1,0,0]); javaPlayerFromNbt keeps it too (zero-stacks.test.js).
+  const oddCase = ref.players.find((c) => c.name === 'inventory-odd-slots'), odd = javaPlayerFromNbt(fromHex(oddCase.input));
+  assert.deepEqual(oddCase.slots[3], [1, 0, 0]);
+  assert.equal(odd.player.slots[3].count, 0);
   assert.ok(odd.lost.includes('Inventory slot 36') && odd.lost.includes('Inventory slot 255'));
   const flying = javaPlayerFromNbt(fromHex(ref.players.find((c) => c.name === 'creative-flying').input));
   assert.equal(flying.playerGameType, 1);

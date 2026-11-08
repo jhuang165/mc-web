@@ -173,7 +173,7 @@ export function createCommandHost(env) {
     // the same point, spawned and ridden (current.mountEntity(mount)) until one cannot be created. Mounts are kept between mobs
     // (mob-riding.js); a vehicle, projectile or item on either end is spawned but not linked, and the command says so.
     summon(type, x, y, z, tag) {
-      const ignored = [], convertItem = t => itemStackFromNbt(t, { ignored });
+      const ignored = [], convertItem = (t, o) => itemStackFromNbt(t, { ...o, ignored });
       const mobs = env.mobs();
       const spawnOne = (type, nbt) => {
         if (type === FIREWORK_SUMMON) { const r = env.rockets?.() && summonFireworkRocket(env.rockets(), x, y, z, nbt); if (r) ignored.push(...r.ignored); return r ? { other: true } : null; }
