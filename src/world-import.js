@@ -1,11 +1,12 @@
 import { isSupportedType } from "./cart-variants.js";
 import { readPlayerPortalState } from "./dimensions.js";
+import { Weather } from "./weather.js";
 // Keep the runtime payload shared between local saves and imported exports.
 // Each subsystem validates its own payload on launch. Identity and the validated
 // world/player fields are built by the caller rather than copied from the file.
 const RUNTIME_FIELDS = [
   "position", "drops", "entities", "farms", "experience", "xpOrbs", "falling",
-  "weather", "worldRandom", "projectiles", "thrownPotions", "fireballs", "eyes", "rockets", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "inhabited",
+  "weather", "worldRandom", "simulation", "projectiles", "thrownPotions", "fireballs", "eyes", "rockets", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "inhabited",
   "spawners", "pistons", "boats", "minecarts", "populatedColumns",
   "portalState", "worldSpawn",
   // Tile entities and hanging entities (each loader validates its records), villages, map items, generated-structure starts.
@@ -32,7 +33,10 @@ const triple = (v) => Array.isArray(v) && v.length === 3 && v.every(int);
 // roughly 150-400 bytes of heap per entry, 1 << 20 entries per list at most (a few hundred MB worst case, never reached by a
 // real save; a save past it is truncated, not refused). Sanitising is linear in the entries.
 export const LIST_CAP = 1 << 20;
+// A saved World.rand/updateLCG stream (Weather.saveSimulation): kept only when Weather.restoreSimulation would accept it.
+const simulationStream = (v) => (v && typeof v === "object" && JSON.stringify(new Weather().restoreSimulation(v).saveSimulation()) === JSON.stringify(v) ? v : undefined);
 const SANITIZE = {
+  worldRandom: simulationStream, simulation: simulationStream,
   hanging: (v) => list(v, LIST_CAP), signs: (v) => list(v, LIST_CAP), skulls: (v) => list(v, LIST_CAP), beacons: (v) => list(v, LIST_CAP),
   commandBlocks: (v) => list(v, LIST_CAP), musicTiles: (v) => list(v, LIST_CAP),
   // VillageCollection.toJSON: Village.fromJSON spreads the centre and door rows, so malformed villages are dropped here.
@@ -142,4 +146,13 @@ export function importedRuntime(data) {
   return Object.fromEntries(RUNTIME_FIELDS.filter((key) => Object.hasOwn(data, key))
     .map((key) => [key, SANITIZE[key] ? SANITIZE[key](data[key]) : data[key]])
     .filter(([, value]) => value !== undefined));
+}
+
+// The per-dimension record of a Blockworld export (`dimensions[d]` = { state, tiles }): the Nether/End `simulation` stream (the
+// per-dimension World.rand/updateLCG, dimension-live.js DIM_KEYS) is checked like the Overworld's `worldRandom`; every other
+// field passes through to the loaders, which validate their own payloads.
+export function importedDimensionState(blob) {
+  if (!blob || typeof blob !== "object" || !blob.state || typeof blob.state !== "object" || !Object.hasOwn(blob.state, "simulation")) return blob;
+  const { simulation, ...rest } = blob.state, kept = simulationStream(simulation);
+  return { ...blob, state: kept ? { ...rest, simulation: kept } : rest };
 }

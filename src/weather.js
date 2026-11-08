@@ -178,6 +178,18 @@ export class Weather {
       && this.random.restore(data.random)) this.lcg = data.lcg;
     return this;
   }
+  // The Overworld while the player is in another dimension. Natively MinecraftServer.updateTimeLightAndEntities ticks every WorldServer
+  // each tick whether or not a player is in it, so World.updateWeather (ahb.o) keeps rolling the Overworld's rain/thunder timers and
+  // strengths (the Nether/End share its WorldInfo through DerivedWorldInfo and skip it, hasNoSky). `overworld` is a Weather holding
+  // the Overworld's timers and `worldRandom` stream; tickDimension advances it and the save paths write it back (weather.md).
+  awayOverworld(record) {
+    this.overworld = new Weather().restore(record?.weather).restoreSimulation(record?.worldRandom);
+    return this;
+  }
+  // The WorldInfo fields of the Overworld: this world's own, or the away copy while the player is in another dimension. The away copy
+  // also keeps its live strengths (browser continuity; the native NBT keeps only the four fields and restarts at full strength).
+  saveWeather() { return this.overworld ? { ...this.overworld.save(), rain: this.overworld.rain, thunder: this.overworld.thunder } : this.save(); }
+  saveOverworldSimulation() { return (this.overworld ?? this).saveSimulation(); }
   // World.calculateInitialWeather (ahb.a): a raining world starts at full rain,
   // and at full thunder when it is thundering too.
   restore(data) {
@@ -190,6 +202,10 @@ export class Weather {
     this.prevRain = this.prevThunder = 0;
     this.rain = this.raining ? 1 : 0;
     this.thunder = this.raining && this.thundering ? 1 : 0;
+    // A save written while the Overworld ticked in the background keeps its ramping strengths (a fade in progress), not a restart at full.
+    const unit = (v) => Number.isFinite(v) && v >= 0 && v <= 1;
+    if (unit(data.rain)) this.rain = data.rain;
+    if (unit(data.thunder)) this.thunder = data.thunder;
     return this;
   }
   // World.getRainStrength / getWeightedThunderStrength (ahb.j, ahb.h).
@@ -305,6 +321,7 @@ export class Weather {
   // per-chunk steps (the lightning and ice rolls draw but find no biome that rains, snows or freezes) and the three random block ticks.
   tickDimension(world, player) {
     this.struck.length = 0;
+    this.overworld?.updateWeather(); // the Overworld's timers keep running while the player is away
     this.mood?.tick();
     this.tickChunks(world, Weather.activeChunks(player?.x ?? SIZE / 2, player?.z ?? SIZE / 2, 10, world));
   }
