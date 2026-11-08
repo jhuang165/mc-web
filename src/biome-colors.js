@@ -117,3 +117,5 @@ export class BiomeColorField {
   foliageAt(x, y, z) { return biomeFoliageColor(this.biome(x, z), x, y, z); }
 }
 export const rgbFloats = (c) => [((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255];
+// The installed colormaps (packed 0xRRGGBB ints), for the mesh workers; null until setColormaps ran.
+export const colormaps = () => (grassMap && foliageMap ? { grass: grassMap, foliage: foliageMap } : null);

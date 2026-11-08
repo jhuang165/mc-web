@@ -276,6 +276,7 @@ import { startLoading, setStage, STAGES, loadingScreen, downloadTerrainScreen, e
 import { gameOverScreen, exportScreen, notesScreen, signEditHost } from "./modal-dialogs.js";
 import { NOTES } from "./notes-content.js";
 import { runSteps, taskPause } from "./steps.js";
+import { MeshPool, meshWorkersEnabled } from "./mesh-pool.js";
 import { presolveWorld } from "./spawn-presolve.js";
 import { blankLoading, arrivalWarmer } from "./travel-loading.js";
 import "./lang-hooks.js";
@@ -1556,7 +1557,9 @@ async function launch(record, prepared, { slice = false } = {}) {
     keys.clear();
     accumulator = 0;
     performance.mark?.('trip:runtimes');
-    if (slice) while (scene.buildPending(12)) await yieldTask();
+    const warmed = slice ? scene.warmShaders() : null; // the End's sky and portal programs link here, behind the loading screen, while the workers mesh
+    if (slice) await scene.buildPendingAsync(yieldTask); // column meshes in the worker pool (the page thread when there is none)
+    await warmed;
     if (slice) { // the random-tick refcounts of the resident columns (WorldChunk.sectionTickCount, built on first use) are counted here, in slices, instead of in the first tick
       const cols = [...world.chunks.values()];
       for (let i = 0; i < cols.length;) { const end = performance.now() + 8; while (i < cols.length && performance.now() < end) cols[i++].sectionTickCount?.(0); await yieldTask(); }
@@ -3964,6 +3967,7 @@ async function boot(){try {
     try { worlds = await readWorldShelf(worlds); } catch (e) { worlds = []; worldsError = String(e?.message ?? e); }
   } else worlds = [];
   scene = new VoxelScene($("#viewport"));
+  if (meshWorkersEnabled()) scene.setMeshPool(new MeshPool()); // column meshes in workers; ?meshWorkers=0 keeps them on the page thread
   scene.post.anaglyph = () => !!options.anaglyph; // GameSettings.anaglyph (options.txt anaglyph3d)
   scene.weather = weather;
   projectiles.useEffects(scene.effectRenderer);
