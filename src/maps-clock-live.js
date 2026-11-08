@@ -34,7 +34,13 @@ function loadStrip() {
 onResourcesRefreshed(() => { strip = null; frameUrls.clear(); });
 export function clockFrameUrl(frame = clockState.frame) {
   loadStrip();
-  if (!strip?.complete || !strip.naturalWidth || typeof document === "undefined") return "/media/1.7.10/items/clock.png";
+  if (!strip?.complete || !strip.naturalWidth || typeof document === "undefined") {
+    // The raw strip stands in until it loads. It gets its own frame tag (-1) so a framed or dropped clock built meanwhile
+    // is rebuilt when frame 0 arrives (tag 0 would equal the raw url's default tag and the first frame never replaced it).
+    const raw = "/media/1.7.10/items/clock.png";
+    registerFrameTag(raw, -1); registerFrameTag(versioned(raw), -1);
+    return raw;
+  }
   if (!frameUrls.has(frame)) {
     const c = document.createElement("canvas"); const f = strip.naturalWidth; c.width = c.height = f; // TextureClock cells are square, as wide as the strip
     c.getContext("2d").drawImage(strip, 0, frame * f, f, f, 0, 0, f, f);

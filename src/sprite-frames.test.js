@@ -57,3 +57,12 @@ test("a framed compass spins at random in the Nether and End", () => {
   for (let k = 0; k < 20; k++) seen.add(itemFrameCompassFrame(3, 4, 2, [0, 64, 0], false, 32, () => k / 20));
   assert.ok(seen.size > 10);
 });
+
+test("the raw clock strip stand-in has its own frame tag, so a clock built before the strip loads is rebuilt at frame 0", async () => {
+  const { clockFrameUrl } = await import("./maps-clock-live.js");
+  const { itemFrameTag } = await import("./item-animation.js");
+  const url = clockFrameUrl(0); // no DOM here: always the raw strip url
+  assert.equal(url, "/media/1.7.10/items/clock.png");
+  assert.equal(itemFrameTag(url), -1);
+  assert.notEqual(itemFrameTag(url), 0); // frame 0's tag
+});
