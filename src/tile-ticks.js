@@ -89,15 +89,15 @@ export function importTileTicks(list, { shiftX = 0, shiftZ = 0, inside = () => t
   return out;
 }
 
-/** Record fields for an import result: {fluidTicks, fireTicks, fallingTicks} envelopes and a `redstone` save carrying pending ticks and lit repeaters. */
-export function tickRecordFields(ticks, lit = []) {
+/** Record fields for an import result: {fluidTicks, fireTicks, fallingTicks} envelopes and a `redstone` save carrying pending ticks, lit repeaters and comparator output signals (["x,y,z", OutputSignal]). */
+export function tickRecordFields(ticks, lit = [], comparators = []) {
   // `p` (always 0 for these blocks in a vanilla world: only the repeater and comparator pass a priority) only orders the import, it is not stored.
   const env = (entries) => ({ version: 1, time: 0, entries: entries.map(({ p, ...e }) => e) });
   const fields = {};
   if (ticks.fluid.length) fields.fluidTicks = env(ticks.fluid);
   if (ticks.fire.length) fields.fireTicks = env(ticks.fire);
   if (ticks.falling.length) fields.fallingTicks = env(ticks.falling);
-  if (ticks.redstone.length || lit.length) fields.redstone = { version: 1, clock: 0, time: 0, pending: ticks.redstone.map((e, serial) => [...e, serial]), lit: [...lit] };
+  if (ticks.redstone.length || lit.length || comparators.length) fields.redstone = { version: 1, clock: 0, time: 0, pending: ticks.redstone.map((e, serial) => [...e, serial]), lit: [...lit], ...(comparators.length ? { comparators: comparators.map(([k, v]) => [k, v]) } : {}) };
   return fields;
 }
 
@@ -122,6 +122,7 @@ export function mergeTickState(acc, seen, name, value) {
       if (!seen.has(k)) { seen.add(k); r.pending.push([...e.slice(0, 6), r.pending.length]); }
     }
     for (const key of value?.lit ?? []) if (!seen.has(`lit|${key}`)) { seen.add(`lit|${key}`); r.lit.push(key); }
+    for (const [key, signal] of value?.comparators ?? []) if (!seen.has(`cmp|${key}`)) { seen.add(`cmp|${key}`); (r.comparators ??= []).push([key, signal]); }
     return true;
   }
   return false;

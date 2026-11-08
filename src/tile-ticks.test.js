@@ -22,6 +22,7 @@ test('mergeTickState keeps a tick saved in two chunks once',()=>{
  assert.ok(mergeTickState(acc,seen,'fluidTicks',{entries:[e]}));mergeTickState(acc,seen,'fluidTicks',{entries:[e]});assert.equal(acc.fluidTicks.entries.length,1);
  mergeTickState(acc,seen,'redstone',{pending:[[1,2,3,93,4,0,0]],lit:['1,2,3']});mergeTickState(acc,seen,'redstone',{pending:[[1,2,3,93,4,0,0],[2,2,3,93,4,0,0]],lit:['1,2,3']});
  assert.deepEqual(acc.redstone.pending.map(p=>p[6]),[0,1]);assert.deepEqual(acc.redstone.lit,['1,2,3']);assert.equal(mergeTickState(acc,seen,'drops',{}),false);
+ mergeTickState(acc,seen,'redstone',{comparators:[['1,2,3',5],['2,2,3',6]]});mergeTickState(acc,seen,'redstone',{comparators:[['1,2,3',5]]});assert.deepEqual(acc.redstone.comparators,[['1,2,3',5],['2,2,3',6]]);
 });
 test('spreadTicks copies a tick in the last 2 columns into the owned higher neighbour only',()=>{
  const rt=new Map([['0,0',{fluidTicks:[{order:0,value:{x:15,y:1,z:5}},{order:1,value:{x:8,y:1,z:8}},{order:2,value:{x:1,y:1,z:1}}]}]]);
@@ -94,4 +95,30 @@ test('intOf reads numeric tags like NBTTagCompound.getInteger and other types as
  assert.equal(intOf(undefined),0);assert.equal(intOf({type:8,value:'5'}),0);assert.equal(intOf({type:3,value:-7}),-7);
  assert.equal(intOf({type:4,value:4294967301n}),5);assert.equal(intOf({type:4,value:-2147483649n}),2147483647);
  assert.equal(intOf({type:6,value:-1.5}),-2);assert.equal(intOf({type:5,value:3.9}),3);assert.equal(intOf({type:6,value:1e20}),2147483647);assert.equal(intOf({type:6,value:NaN}),0);
+});
+
+// ---- comparator OutputSignal (TileEntityComparator, bytecode-read: readFromNBT getInteger "OutputSignal", writeToNBT setInteger)
+test('a Comparator tile entity imports its OutputSignal into the live redstone state and exports it again',async()=>{
+ const {Chunk}=await import('./chunk-store.js'),{chunkToNbt}=await import('./chunk-nbt.js'),{encodeRegionChunk,writeRegion}=await import('./region-file.js'),{importJavaRegionArea}=await import('./region-import.js'),{NBT}=await import('./nbt.js'),{LiveRedstone}=await import('./redstone-live.js');
+ const t=(type,value)=>({type,value}),compound=(o)=>new Map(Object.entries(o));
+ const chunk=new Chunk(-2,3);chunk.setBlockState(3,70,5,149,0);chunk.setBlockState(4,70,5,150,8);chunk.setBlockState(6,70,5,1,0);
+ const x0=-32,z0=48,tile=(id,x,z,extra)=>compound({id:t(NBT.STRING,id),x:t(NBT.INT,x0+x),y:t(NBT.INT,70),z:t(NBT.INT,z0+z),...extra});
+ const tileEntities=[tile('Comparator',3,5,{OutputSignal:t(NBT.INT,7)}),tile('Comparator',4,5,{OutputSignal:t(NBT.LONG,4294967299n)}),tile('Comparator',6,5,{OutputSignal:t(NBT.INT,3)}),tile('Comparator',9,5,{})];
+ const {regionX,regionZ,x,z}=regionAddress(chunk.x,chunk.z);
+ const files=[{filename:`r.${regionX}.${regionZ}.mca`,bytes:writeRegion([await encodeRegionChunk(chunkToNbt(chunk,{tileEntities}),{x,z})])}];
+ const {record,report}=await importJavaRegionArea(files,{area:{chunkX:-2,chunkZ:3,width:1,depth:1}});
+ assert.deepEqual(record.redstone.comparators,[['51,70,53',7],['52,70,53',3]]);
+ assert.equal(report.tileEntities.converted.Comparator,2);assert.equal(report.ticks.comparators,2);
+ assert.ok(report.tileEntities.lost.some(e=>e.id==='Comparator'),'a Comparator tile on a stone cell is lost');
+ // The live engine restores the signal as its comparator tile and saves it again.
+ const live=new LiveRedstone(new World('17','javaStreamed',12));live.restore({...record.redstone});
+ assert.deepEqual(live.save().comparators,[['51,70,53',7],['52,70,53',3]]);
+ // Export: a comparator tile is written only where the chunk holds a comparator.
+ const w=new World('17','javaStreamed',12);w.restore([['-1,100,-1',127],['-3,100,-1',128|(8<<8)],['-5,100,-1',1]]);
+ const r={id:'cmp',name:'Cmp',seed:'17',biome:'javaStreamed',generationVersion:12,mode:'survival',edits:[...w.edits],player:new Survival({},'survival').serialize(),position:{x:-.5,y:102,z:-.5,yaw:0,pitch:0},minecarts:{version:1,carts:[]},updated:1700000000000,
+  redstone:{version:1,clock:0,time:0,pending:[],lit:[],comparators:[['-1,100,-1',9],['-3,100,-1',2],['-5,100,-1',4],['-7,100,-1',1]]}};
+ const out=await exportJavaSave(r,{world:w});
+ const cx=-1+w.originX/16,cz=-1+w.originZ/16,a=regionAddress(cx,cz),c=chunkFromNbt(await decodeRegionChunk(readRegion(out.files.get(`region/r.${a.regionX}.${a.regionZ}.mca`)).get(regionSlot(a.x,a.z))));
+ const signals=c.tileEntities.filter(e=>e.get('id').value==='Comparator').map(e=>[e.get('x').value-w.originX,e.get('z').value-w.originZ,e.get('OutputSignal').value]).sort((p,q)=>p[0]-q[0]);
+ assert.deepEqual(signals,[[-3,-1,2],[-1,-1,9]]);
 });

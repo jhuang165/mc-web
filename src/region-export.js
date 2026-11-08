@@ -173,6 +173,8 @@ function payload(state,ox,oz,report,blockAt) {
  for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const [k,e] of Object.entries(state[name]??{})) {
   const [x,y,z]=k.split(',').map(Number);tiles.push(writeContainerTile(name,e,x+ox,y,z+oz,{report,dropper:blockAt(x,y,z)===158}));
  }
+ // TileEntityComparator.writeToNBT: OutputSignal (int), only where the chunk still holds a comparator (original id 149 or 150).
+ for(const {value:e} of state.comparatorTiles??[]){const b=blockAt(e.x,e.y,e.z);if(b===149||b===150)tiles.push(new Map(Object.entries({id:str('Comparator'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),OutputSignal:int(e.signal)})));}
  for(const {value:e} of state.commandBlocks??[])tiles.push(writeCommandBlock(e,e.x+ox,e.y,e.z+oz));
  // TileEntityNote (Music) and TileEntityJukebox (RecordPlayer): the note byte, the Record int and the RecordItem stack.
  for(const {value:e} of state.musicTiles??[])tiles.push(e.kind==='note'?writeNoteTile(e,e.x+ox,e.y,e.z+oz):writeJukeboxTile(e,e.x+ox,e.y,e.z+oz));
@@ -254,6 +256,10 @@ function regionSource(record, w) {
  {const rs=record.redstone;for(const list of [rs?.pending,rs?.deferred])for(const [i,e] of (Array.isArray(list)?list:[]).entries()){if(!Array.isArray(e)||![e[0],e[2],e[3],e[4]].every(Number.isFinite))continue;
   const k=`${Math.floor(e[0]/16)},${Math.floor(e[2]/16)}`;if(!runtime.has(k))runtime.set(k,{});owned.add(k);
   (runtime.get(k).redstoneTicks??=[]).push({order:e[6]??i,value:{x:e[0],y:e[1],z:e[2],id:e[3],delay:e[4]-(rs.time|0),priority:e[5]|0}});}}
+ // Comparator output signals (redstone-live.js `comparators`: ["x,y,z", signal]), written as TileEntityComparator by exportChunk.
+ for(const [i,e] of (Array.isArray(record.redstone?.comparators)?record.redstone.comparators:[]).entries()){if(!Array.isArray(e)||typeof e[0]!=='string'||!Number.isInteger(e[1]))continue;
+  const [x,y,z]=e[0].split(',').map(Number);if(![x,y,z].every(Number.isInteger))continue;const k=`${Math.floor(x/16)},${Math.floor(z/16)}`;if(!runtime.has(k))runtime.set(k,{});owned.add(k);
+  (runtime.get(k).comparatorTiles??=[]).push({order:i,value:{x,y,z,signal:e[1]}});}
  // A tick in the last 2 columns or rows of a chunk is saved in the next higher chunk too (WorldServer.getPendingBlockUpdates box [c*16-2, c*16+16)).
  spreadTicks(runtime,owned,['fluidTicks','fireTicks','fallingTicks','redstoneTicks']);
  return {record,w,owned,runtime,baseId:record.id};
