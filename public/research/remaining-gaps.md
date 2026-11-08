@@ -2,6 +2,28 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 29
+
+Batch 29 covered these areas:
+- **Anaglyph, round 3.** The DOM GUI (stylesheet sprites, inline styles, `<img>` icons, canvas screens and the paperdoll, horse, enchanting book and panorama contexts) is converted with the native formula through an exact PNG codec; the hashes match the unchanged `bqi.a(int[])` over 263 jar textures. The toggle works on the title screen. The chunk-update skip needs occlusion queries and Advanced OpenGL, which the port lacks, so it is unobservable ([post-shaders.md](post-shaders.md)).
+- **Text, round 3.** Bidi follows ICU 51 across paragraphs (0 differences in about 1.1M fuzzed strings). Visible §k signs and the sign editor re-pick every frame. The Language screen sets the bidi flag for ar_SA and he_IL ([languages.md](languages.md)).
+- **Mob AI.** Mob-on-mob revenge targets (golem, skeleton arrow, zombie call for help), EntityAITasks start-after-evaluation order, no age gate on the despawn check, EntityMob light ageing, skeleton task order and Random. Five native village fights replay exactly to ticks 114-322 (before: tick 0) ([village.md](village.md), [combat.md](combat.md)).
+- **Dimension rules, round 2.** Overworld weather timers, strengths and `worldRandom` keep running while the player is in the Nether or End. Nether/End sapling and leaf ticks were probed and already matched. World import keeps the `simulation` streams ([dimensions.md](dimensions.md)).
+- **Leads, round 3.** A leashed mob's death keeps the lead on the corpse as natively; an unusable `Leash` tag drops the lead item; the arrival lead item gets random motion; mob riders on untamed horses; horse armour and saddle slots take 64; the Creative drop bounds (1..64, damage >= 0).
+- **Import, round 6.** Saved TileTicks (fluid, fire, falling and redstone, with repeater delay and priority) import and export, with border copies as natively; export prefers the stored exact cell ([region-import.md](region-import.md)).
+- **Ring light.** Held ring columns with eight neighbours present are lit whole with the volume's fixed point; height and precipitation maps are cached per column; `canLightningStrikeAt` returns early when dry ([light-engine.md](light-engine.md), [natural-spawning.md](natural-spawning.md) round 10).
+- **Trip speed, round 2.** The Overworld spawn cell is built while the player is away, loading slices pause with a task instead of two frames, and ring workers end once the ring is full (4 workers to 1). Overworld return from the End 2.8-3.3 s to 1.1-1.4 s, from the Nether 3.8-4.6 s to 2.2-2.6 s ([loading-screens.md](loading-screens.md)).
+
+Still open from batch 29:
+- Anaglyph GUI conversion is async (native: synchronous) and skips resource-pack blob icons and the profile skin; biome tints are applied before conversion (native: after); legacy anaglyph leaves the GUI raw.
+- Bidi and §k have no pixel comparison against native frames; §k signs are re-picked only when visible (16 per frame), unseeded.
+- Village fight replay diverges at tick 114 (villager flee sight ray through a door), at native death-tick particle draws, and by about 1e-3 in a pushed zombie. The port assumes every skeleton holds a bow. Peaceful and several-skeleton fights are unprobed.
+- Overworld spawn-area scheduled ticks and entity updates freeze while the player is away; trips pause the game tick for the loading screen. Decaying-leaf drops in the Nether/End are unprobed.
+- Saved horse stacks with count <= 0 are dropped; the Creative drop spam limiter is not modelled; export rewrites an unticked unusable `Leash` tag as a valid one.
+- TileTicks: priority only for redstone; comparator OutputSignal not imported; ticks outside a 1x1 whole-save chunk box dropped; no native probe of the pending list.
+- Ring rim columns (fewer than eight held neighbours) are lit against air. Resident edits beside a ring column invalidate its light only on window moves. Server light and client relight are still one volume (bytecode-read difference, not executed).
+- Column meshing (about 22 ms each) runs on the page thread; an End return can still show a short train of 50-190 ms tasks; the first End shader compile is not warmed; ring worker thread memory is unmeasured.
+
 ## Done in batch 28
 
 Batch 28 covered these areas:
@@ -14,15 +36,9 @@ Batch 28 covered these areas:
 - **Import, round 5.** Nether and End chunks with TerrainPopulated=false are populated at import (406 native populate calls). Stored cells keep level-0 flowing fluid, hardened lava levels and chest facing through an `orig` overlay. Populate-time animals, villagers, flower pots and fire and falling-block ticks are kept. Imported furnaces keep their saved lit state ([region-import.md](region-import.md)).
 - **Dimension trip speed.** Nether and End columns and the headless ring are built in workers, and the arrival warm-up is shared over up to three workers. Nether long tasks over 50 ms fell from about 53 to 1-4 in the first 50 s; the Nether ring fills in 8-10 s instead of 44 s ([loading-screens.md](loading-screens.md)).
 
-Still open from batch 28:
-- Anaglyph: the DOM GUI is not converted, and the native chunk-update skip while anaglyph is on is not modelled.
-- Bidi: explicit embedding codes or format characters after a separator in multi-paragraph strings differ from ICU 51. Sign textures do not re-pick §k every frame.
-- Villages: mob positions and targets in a village fight are recorded but not matched (the port has no mob-on-mob revenge target). Several named players are model-only.
-- Nether and End sapling and leaf ticks are unprobed. World import drops the Nether and End `simulation` stream.
-- A leashed mob's own death drops the lead in the port; natively it seems not to (bytecode-read). An imported unusable `Leash` tag loses the lead without the lead item. Mob-held leads are dropped after a dimension change.
-- `CreativeContainer.drop` keeps a `count > 0` filter (unprobed). Hopper negative-stack coverage is one layout per scenario. `/give` motion matches within 1e-4.
-- Saved `TileTicks` are only counted on import. The Nether populate RNG and the End per-chunk seed are modelled (natively time-dependent). Export applies the overlay to fluids only.
-- An End-to-Overworld return sometimes shows a 1-3 s train of 70-170 ms tasks after the ring completes (spawn-side ring reads), as before batch 28. A played world can run 4-6 workers; memory not measured.
+Still open from batch 28 (the anaglyph GUI and chunk skip, bidi embedding codes, §k signs, the village fight targets, Nether/End tree ticks, the import `simulation` stream, leashed mob death, the unusable Leash tag, the Creative drop filter, TileTicks and the overlay on export were done in batch 29):
+- Several named village players are model-only. Hopper negative-stack coverage is one layout per scenario. `/give` motion matches within 1e-4.
+- The Nether populate RNG and the End per-chunk seed are modelled (natively provider-history and time dependent).
 
 ## Done in batch 27
 
@@ -38,7 +54,6 @@ Batch 27 covered these areas:
 Still open from batch 27 (the /give drop, End sky and height, Nether/End import population, stored fluids and chest facing, populate-time animals, furnace lit state, the separate Nether Random, mushroom ticks, anaglyph tints and sunrise, the font table, and the lead/horse/container probes were done in batch 28):
 - Anaglyph overlay pixels were not compared with native frames.
 - One light volume serves both server light and client relight, which are separate natively.
-- Ring columns beyond the window have no light until resident.
 
 ## Done in batch 22
 
