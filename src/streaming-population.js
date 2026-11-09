@@ -154,6 +154,11 @@ export class StreamingPopulation {
       const x = Math.floor(e.x), z = Math.floor(e.z);
       if (inside(x, z)) at(x, z).animals.push({ ...e, x: e.x - ox, z: e.z - oz });
     }
+    // Powered TNT of the population callbacks (native-neighbor-world.js tntPowered): posY is the block centre; the motion is chosen when the column is handed over.
+    for (const e of w.primedTnt ?? []) {
+      const x = Math.floor(e.x), z = Math.floor(e.z);
+      if (inside(x, z)) (at(x, z).primedTnt ??= []).push({ x: e.x - ox, y: e.y, z: e.z - oz, fuse: e.fuse });
+    }
     for (const [x, y, z, id, delay] of w.pending) if (inside(x, z)) at(x, z).pendingTicks.push({ x: x - ox, y, z: z - oz, id, delay });
     const local = (b) => [b.minX - ox, b.minY, b.minZ - oz, b.maxX - ox, b.maxY, b.maxZ - oz];
     const mineshafts = [...pass.mineshafts.structureMap.values()]

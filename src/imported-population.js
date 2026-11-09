@@ -27,6 +27,7 @@ import { encodeBaseColumn, decodeBaseColumn } from "./whole-save-columns.js";
 import { itemFromOriginal } from "./region-import.js";
 import { makeStack } from "./inventory.js";
 import { EntityWorld, ENTITY_TYPES } from "./entities.js";
+import { primedTntEntity, primedTntRecord } from "./population-runtime.js";
 import { villagerFields } from "./villager.js";
 import { dimensionRunner } from "./imported-population-dims.js";
 
@@ -112,7 +113,7 @@ class NeedChunk extends Error { constructor(x, z) { super(`need stored chunk ${x
 export async function populateImportedColumns({ population, origin, worldKey, coords, unpopulated, read, write, onProgress = () => {}, signal, mapBlock = fromOriginal, observe = null, exactInput = null, dimension = 0, seed = 0n }) {
   const runner = dimension ? dimensionRunner(dimension, seed) : null;
   const started = Date.now(), ox = origin.chunkX * 16, oz = origin.chunkZ * 16;
-  const out = { populated: 0, calls: 0, skipped: { noNeighbours: 0, unmapped: 0, failed: 0 }, chests: {}, dispensers: {}, spawners: [], carts: [], fluidTicks: [], dropped: { animals: 0, pots: 0, villagers: 0, ticks: 0 }, kept: { animals: 0, villagers: 0 }, droppedTickIds: {}, entities: [], pots: [], fireTicks: [], fallingTicks: [], unmappedCells: 0, changedCells: 0, retries: 0, reads: 0, ms: 0 };
+  const out = { populated: 0, calls: 0, skipped: { noNeighbours: 0, unmapped: 0, failed: 0 }, chests: {}, dispensers: {}, spawners: [], carts: [], fluidTicks: [], dropped: { animals: 0, pots: 0, villagers: 0, ticks: 0 }, kept: { animals: 0, villagers: 0 }, droppedTickIds: {}, entities: [], tnt: [], pots: [], fireTicks: [], fallingTicks: [], unmappedCells: 0, changedCells: 0, retries: 0, reads: 0, ms: 0 };
   const stored = new Set(coords.map(([x, z]) => key(x + origin.chunkX, z + origin.chunkZ)));
   const flagged = new Set(unpopulated.map(([x, z]) => key(x + origin.chunkX, z + origin.chunkZ)));
   const plan = populationPlan(coords.map(([x, z]) => [x + origin.chunkX, z + origin.chunkZ, !flagged.has(key(x + origin.chunkX, z + origin.chunkZ))]));
@@ -290,6 +291,8 @@ export async function populateImportedColumns({ population, origin, worldKey, co
         out.carts.push({ x: e.x - ox, y: e.y, z: e.z - oz, type: 1, onGround: false, items: e.slots.flatMap((s, slot) => (s ? [{ slot, id: s[0], count: s[1], damage: s[2], ...(s[3]?.length ? { stored: s[3].map(([id, lvl]) => ({ id, lvl })) } : {}) }] : [])) });
       }
     }
+    // Powered TNT of the population callbacks becomes a primed entity record (motion drawn from Math.random, as EntityTNTPrimed's constructor does).
+    for (const t of runner ? [] : w.primedTnt ?? []) if (inside(Math.floor(t.x), Math.floor(t.z))) out.tnt.push(primedTntRecord(primedTntEntity({ x: t.x - ox, y: t.y, z: t.z - oz, fuse: t.fuse })));
     const mobs = runner ? pass.entities : w.animals;
     for (const e of mobs) {
       if (!inside(Math.floor(e.x), Math.floor(e.z))) continue;

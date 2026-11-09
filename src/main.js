@@ -410,7 +410,7 @@ let weather = new Weather(), trees, plants, falling, foreignTicks;
 const bedSleep = new BedSleep(); // EntityPlayer's sleeping state and bed spawn point (bed.js)
 // EntityTNTPrimed entities (explosion.js primeTnt). Explosions draw ray lengths,
 // drops, chained fuses and sound pitch from the saved weather.random World.rand.
-let primed = [];
+let primed = [], genPrimed = null;
 let populationBlocks, netherLive;
 let sounds,
   firstPerson,
@@ -1487,6 +1487,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     survival.furnaceActive = key => !world.streaming || world.isTicking(...[key.split(",")[0],key.split(",")[2]].map(Number));
     survival.furnaceChanged = key => redstoneRuntime?.containerClosed([key]);
     restorePopulation(record,world,survival,mobs);
+    genPrimed = []; // generated primed TNT handed over before the saved `primed` list is read below
     if (record.villages) mobs.villages.loadJSON(record.villages);
     materializeFresh();
     if (pendingBonusChests) { Object.assign(survival.chests, pendingBonusChests); pendingBonusChests = null; saved = false; } // placed at creation (openWorld), tile data handed over here
@@ -1542,6 +1543,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     fishing.load(record.fishing);
     primed = (Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz }));
     tntRenderer?.clear();
+    if (genPrimed) { primed.push(...genPrimed); genPrimed = null; }
     arrows.load(record.arrows);
     scene.setArrows(arrows.list);
     velocity.set(0, 0, 0);
@@ -3103,8 +3105,8 @@ function materializeFresh() {
   containerResidency?.admit();
   const columns = world.claimFreshColumns();
   if (columns.length) {
-    const handed = restorePopulationColumns(columns, { world, survival, mobs, spawners, minecarts, fluids });
-    if (handed.animals || handed.chests || handed.dispensers || handed.pots || handed.spawners || handed.carts || handed.ticks) saved = false;
+    const handed = restorePopulationColumns(columns, { world, survival, mobs, spawners, minecarts, fluids, primed: genPrimed ?? primed });
+    if (handed.primed || handed.animals || handed.chests || handed.dispensers || handed.pots || handed.spawners || handed.carts || handed.ticks) saved = false;
   }
   // Chest models follow the resident columns (chests of columns that left the window are removed).
   chestRenderer?.sync(world, survival.chests, undefined, survival.enderTiles);

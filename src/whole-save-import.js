@@ -229,7 +229,7 @@ export async function importWholeSave(entries, options = {}) {
     const merge = (name, entries) => { if (Object.keys(entries).length) Object.assign((target.tiles[name] ??= {}), entries); };
     merge("chests", result.chests); merge("dispensers", result.dispensers);
     const push = (name, list) => { if (list.length) (target.state[name] ??= []).push(...list); };
-    push("spawners", result.spawners); push("entities", result.entities); push("pots", result.pots);
+    push("spawners", result.spawners); push("entities", result.entities); push("tnt", result.tnt); push("pots", result.pots);
     if (result.carts.length) (target.state.minecarts ??= { version: 1, carts: [] }).carts.push(...result.carts);
     for (const name of ["fluidTicks", "fireTicks", "fallingTicks"]) {
       if (!result[name].length) continue;

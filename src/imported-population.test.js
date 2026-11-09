@@ -191,3 +191,23 @@ test('imported unpopulated jungle temple populates with the neighbour callbacks 
   }
   assert.notEqual(hashes[22], hashes[16]);
 });
+
+test('powered TNT of an imported populate becomes a primed TNT record in the chunk runtime', async () => {
+  const { StructurePopulation } = await import('./structure-population.js');
+  const real = StructurePopulation.prototype.populateChunk;
+  let first = true;
+  // Synthetic callback result (no vanilla structure powers TNT): one TNT at the block centre of the first populated chunk.
+  StructurePopulation.prototype.populateChunk = function (random, x, z, opts) {
+    const out = real.call(this, random, x, z, opts);
+    if (first) { first = false; (this.world.primedTnt ??= []).push({ type: 'PrimedTnt', x: x * 16 + 8.5, y: 70.5, z: z * 16 + 8.5, fuse: 80 }); }
+    return out;
+  };
+  try {
+    const s = storedArea(17, 22, 'default', 3);
+    const out = await populateImportedColumns({ population: s.pop, origin: { chunkX: 0, chunkZ: 0 }, worldKey: 'w', coords: s.coords, unpopulated: s.unpopulated, read: s.read, write: s.write });
+    assert.equal(out.tnt.length, 1);
+    const [t] = out.tnt;
+    assert.deepEqual([t.x, t.z, t.fuse], [8.5, 8.5, 80]);
+    assert.ok(Math.abs(t.y - (70.5 - 0.49)) < 1e-6 && t.vy === 0.20000000298023224);
+  } finally { StructurePopulation.prototype.populateChunk = real; }
+});
