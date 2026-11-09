@@ -139,7 +139,7 @@ export class DimensionLive {
         for (const [x, z] of found) { const d = (x + 0.5 - tt.x) ** 2 + (z + 0.5 - tt.z) ** 2; if (d < best) { best = d; near = [x, z]; } }
         await warm.window(near[0] + 0.5, near[1] + 0.5);
         await warm.columns(found);
-      } else await warm.window(tt.x, tt.z); // a portal is built within 16 blocks of the target: the window round it
+      } else await warm.window(tt.x, tt.z, 18); // a portal is built within 16 blocks of the target: the window round it (and, in spare lanes, the windows round the spots it may be built at, so the exit's window is held too)
     }
     const steps = teleporter.placeInPortalSteps(e, tt.x, tt.y, tt.z, tt.yaw);
     if (pause) await runSteps(steps, pause); else drain(steps);

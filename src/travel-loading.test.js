@@ -109,6 +109,30 @@ test('arrivalWarmer shares a large worker request over several lanes and dispose
   await done; globalThis.Worker = had;
 });
 
+test('arrivalWarmer.window with a spread also asks for the cells round the spots an exit can be built at, nearest first, in spare lanes only', async () => {
+  const run = async (x, z, spread, present = []) => {
+    const ports = [], windowAt = (px, pz) => ({ minX: (Math.floor(px / 16) - 4) * 16, minZ: (Math.floor(pz / 16) - 4) * 16 });
+    const world = { streaming: true, generationVersion: 13, population: { cells: { max: 1 }, hasCell: (a, b) => present.includes(`${a},${b}`) }, chunks: new Map(), pregenerated: new Map(), windowAt, baseColumns: new Map(), javaSeed: 1n };
+    const createWorker = () => { const p = { posted: [], postMessage(m) { p.posted.push(m); }, terminate() {} }; ports.push(p); return p; };
+    const had = globalThis.Worker; globalThis.Worker = function Worker() {};
+    const warm = arrivalWarmer(world, { pause: async () => {}, createWorker, maxWorkers: 3, timeoutMs: 20 });
+    // Every chunk of a held cell counts as held (the real `missing` also reads world.chunks and baseColumns, empty here).
+    for (const k of present) { const [a, b] = k.split(",").map(Number); for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) world.baseColumns.set(`${a * 8 + i},${b * 8 + j}`, {}); }
+    await warm.window(x, z, spread);
+    globalThis.Worker = had;
+    const asked = ports.flatMap((p) => p.posted.filter((m) => m.type === 'cell').map((m) => `${m.x},${m.z}`)).sort();
+    warm.dispose();
+    return asked;
+  };
+  // Chunk (4, 4) centre: its window is chunks 0..7, exactly cell (0, 0); the exits within 18 blocks reach cells to the east and south too.
+  assert.deepEqual(await run(72, 72, 0), ['0,0']);
+  const spread = await run(72, 72, 18);
+  assert.ok(spread.includes('0,0') && spread.length === 3, `needed cell plus up to two spare lanes: ${spread}`);
+  assert.deepEqual(await run(72, 72, 18, ['0,0']).then((a) => a.length), 3, 'with the target window held, the three nearest candidates are asked');
+  // A window inside one cell with room to move asks for nothing extra.
+  assert.deepEqual(await run(8 * 16 * 4 + 8, 8 * 16 * 4 + 8, 18, ['0,0', '1,0', '0,1', '1,1']).then((a) => a.every((c) => !['0,0', '1,0', '0,1', '1,1'].includes(c))), true, 'held cells are not asked for');
+});
+
 test('taskPause yields to a macrotask, and to a real frame only after frameMs without one', async () => {
   let t = 0, frames = 0, tasks = 0;
   const channel = () => { const c = { port1: { onmessage: null, close() {} }, port2: { postMessage() { tasks++; queueMicrotask(() => c.port1.onmessage()); } } }; return c; };

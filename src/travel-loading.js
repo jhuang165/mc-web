@@ -35,9 +35,11 @@ export function arrivalWarmer(world, { pause, createWorker = () => new Worker(ne
     return prefetch;
   };
   const withTimeout = (p) => { let t; return Promise.race([p, new Promise((r) => { t = setTimeout(r, timeoutMs); })]).finally(() => clearTimeout(t)); };
-  async function chunks(list) { // [[cx, cz]...] local chunk coordinates
-    const need = list.filter(([cx, cz]) => missing(cx, cz));
-    if (!need.length || !world.streaming) return 0;
+  // `extra` (batch 32): chunks a later window may need (the exits a portal can be built at). Their units ride along with the units that
+  // are needed, one per spare lane at most and nearest `at` first, so a window round the exit finds them held instead of asking again.
+  async function chunks(list, extra = [], at = null) { // [[cx, cz]...] local chunk coordinates
+    const need = list.filter(([cx, cz]) => missing(cx, cz)), spec = extra.filter(([cx, cz]) => missing(cx, cz));
+    if (!need.length && !spec.length || !world.streaming) return 0;
     // Nether/End columns come from the worker too (DimensionWorld there builds the same column); only a missing worker keeps the page slices.
     const pf = typeof Worker === "function" ? open() : null;
     if (world.noPrefetch && (!pf || pf.failed)) {
@@ -52,7 +54,15 @@ export function arrivalWarmer(world, { pause, createWorker = () => new Worker(ne
     }
     if (!pf || pf.failed) return 0;
     const units = new Map();
-    for (const [cx, cz] of need) { const u = pf.cells ? [Math.floor(cx / CELL), Math.floor(cz / CELL)] : [cx, cz]; units.set(u.join(","), u); }
+    const unitOf = ([cx, cz]) => (pf.cells ? [Math.floor(cx / CELL), Math.floor(cz / CELL)] : [cx, cz]);
+    for (const c of need) { const u = unitOf(c); units.set(u.join(","), u); }
+    if (spec.length && at) {
+      const more = new Map(), centre = (u) => (pf.cells ? [(u[0] + 0.5) * CELL * 16, (u[1] + 0.5) * CELL * 16] : [(u[0] + 0.5) * 16, (u[1] + 0.5) * 16]);
+      for (const c of spec) { const u = unitOf(c), k = u.join(","); if (!units.has(k)) more.set(k, u); }
+      const room = Math.max(0, maxWorkers - units.size), dist = (u) => { const [a, b] = centre(u); return (a - at[0]) ** 2 + (b - at[1]) ** 2; };
+      for (const [k, u] of [...more].sort((a, b) => dist(a[1]) - dist(b[1])).slice(0, room)) units.set(k, u);
+    }
+    if (!units.size) return 0;
     const all = [...units.values()], lanes = [pf];
     for (let i = 1; i < Math.min(maxWorkers, all.length); i++) {
       if (!spares[i - 1]) { try { spares[i - 1] = new StreamPrefetch(world, createWorker(), { margin: 0 }); } catch { break; } }
@@ -63,11 +73,13 @@ export function arrivalWarmer(world, { pause, createWorker = () => new Worker(ne
   }
   return {
     // The resident square World.streamAround(x, z) would build.
-    window(x, z) {
+    // `spread` (blocks, default 0): the windows round every spot within that distance also count as wanted, behind the needed ones (see chunks).
+    window(x, z, spread = 0) {
       if (!Number.isFinite(x) || !Number.isFinite(z) || !world.streaming) return Promise.resolve(0);
-      const [c0, d0] = chunkRange(world, x, z), list = [];
-      for (let cx = c0; cx < c0 + WINDOW; cx++) for (let cz = d0; cz < d0 + WINDOW; cz++) list.push([cx, cz]);
-      return chunks(list);
+      const square = (px, pz, into) => { const [c0, d0] = chunkRange(world, px, pz); for (let cx = c0; cx < c0 + WINDOW; cx++) for (let cz = d0; cz < d0 + WINDOW; cz++) into.push([cx, cz]); return into; };
+      const list = square(x, z, []), extra = [];
+      if (spread > 0) for (let px = Math.floor((x - spread) / 16); px <= Math.floor((x + spread) / 16); px++) for (let pz = Math.floor((z - spread) / 16); pz <= Math.floor((z + spread) / 16); pz++) square(px * 16, pz * 16, extra);
+      return chunks(list, extra, [x, z]);
     },
     // Single block columns (portal candidates the Teleporter will read).
     columns(points) { return chunks(points.map(([x, z]) => [Math.floor(x / 16), Math.floor(z / 16)])); },
