@@ -278,11 +278,12 @@ class TickQueue {
     this.heap = [];
     this.pending = new Map();
     this.serial = 0;
+    this.ids = null; // the shared TickTree (tile-ticks.js): creation ids come from it once attached
   }
   // World.scheduleBlockUpdate: one entry per position; a second request keeps the first's time.
   add(key, entry) {
     if (this.pending.has(key)) return;
-    entry.id = this.serial++;
+    entry.id = this.ids ? this.ids.nextId() : this.serial++;
     entry.key = key;
     this.pending.set(key, entry);
     const h = this.heap;
@@ -369,9 +370,12 @@ export class Fire {
   key(x, y, z) {
     return this.world.index(x, y, z);
   }
-  schedule(x, y, z, delay = 30, p = 0) {
-    if (this.world.inside(x, y, z)) this.queue.add(this.key(x, y, z), { x, y, z, time: this.time + delay, p });
+  schedule(x, y, z, delay = 30, p = 0, n) {
+    if (this.world.inside(x, y, z)) this.queue.add(this.key(x, y, z), { x, y, z, time: this.time + delay, p, ...(Number.isSafeInteger(n) ? { n } : {}) });
   }
+  // The shared tick tree (tile-ticks.js TickTree) numbers creations for every kind.
+  get ids() { return this.queue.ids; }
+  set ids(tree) { this.queue.ids = tree; }
   // Wraps world.onChange (fluids.js installed it first, like watchFlowers in main.js):
   // World.setBlock's onBlockAdded for a new fire, then onNeighborBlockChange for the
   // fires around the cell.
@@ -387,14 +391,16 @@ export class Fire {
     };
   }
   save() {
-    return saveTicks(this.queue.pending.values(), this.time, FIRE);
+    return saveTicks(this.ids ? [...this.queue.pending.values()].map((e) => ({ ...e, n: e.id })) : this.queue.pending.values(), this.time, FIRE);
   }
   load(data) {
     const state = readTicks(data, this.world, (block) => block === FIRE);
     if (!state) { this.wake(); return; }
     this.time = state.time;
+    const ids = this.ids;
     this.queue = new TickQueue();
-    for (const e of state.entries) this.schedule(e.x, e.y, e.z, e.delay, e.p | 0);
+    this.queue.ids = ids;
+    for (const e of state.entries) this.schedule(e.x, e.y, e.z, e.delay, e.p | 0, e.n);
   }
   // Legacy saves have no TileTicks equivalent: reschedule each saved fire.
   wake() {
@@ -443,14 +449,23 @@ export class Fire {
   // lcg >> 2). Fire and static lava are the blocks here that this class ticks. Returns the
   // cells changed as [x, y, z, old, new].
   tick(px = SIZE / 2, pz = SIZE / 2) {
+    this.beginTick();
+    for (let m = MAX_TICKS; m > 0 && this.queue.due(this.time); m--) this.run(this.take());
+    return this.endTick(px, pz);
+  }
+  // The pieces of tick() the shared tick tree (tile-ticks.js TickTree) drives: clock, ring pause and section scan; taking and running one entry;
+  // then the random block ticks and the cells changed.
+  beginTick() {
     this.time++;
     pauseUnloadedTicks(this.world, this.queue.heap, (x, z) => ringBlockTickActive(this.world, x, z, 4)); // ring columns too (natural-spawning.md "Round 8")
-    const w = this.world, n = SIZE / 16, secs = (w.height ?? HEIGHT) / 16;
     if (!this.sharedRandomTicks && (!this.marks || this.time % 20 === 1)) this.scan();
-    for (let m = MAX_TICKS; m > 0 && this.queue.due(this.time); m--) {
-      const { x, y, z } = this.queue.pop();
-      if (w.get(x, y, z) === FIRE) updateTick(this.L, x, y, z);
-    }
+  }
+  take() { return this.queue.pop(); }
+  run({ x, y, z }) {
+    if (this.world.get(x, y, z) === FIRE) updateTick(this.L, x, y, z);
+  }
+  endTick(px = SIZE / 2, pz = SIZE / 2) {
+    const w = this.world, n = SIZE / 16, secs = (w.height ?? HEIGHT) / 16;
     const weather = this.weather();
     // In the game the random ticks come from Weather.tickChunk's single WorldServer loop,
     // which calls randomTick below; standalone (tests) this class runs its own.

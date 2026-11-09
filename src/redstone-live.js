@@ -204,21 +204,33 @@ export class LiveRedstone extends RedstoneWorld {
       const e = this.tree[0];
       if (e.time > this.time) break;
       this.tree.shift();
-      this.pending.delete(`${e.x},${e.y},${e.z},${this.groupOf(e.id)}`);
-      if (this.tickable(e.x, e.y, e.z)) this.thisTick.push(e);
-      else this.deferred.push(e);
+      this.accept(e);
     }
+    this.retryDeferred();
+    while (this.thisTick.length) this.runTaken(this.thisTick[0]);
+  }
+  // The pieces of tickUpdates the shared tick tree (tile-ticks.js TickTree) calls one entry at a time: `accept` for an entry it took from `tree`
+  // (it leaves the pending set; a cell that cannot tick waits in `deferred`), `retryDeferred` once all are taken, `runTaken` in tree order.
+  accept(e) {
+    this.pending.delete(`${e.x},${e.y},${e.z},${this.groupOf(e.id)}`);
+    if (this.tickable(e.x, e.y, e.z)) this.thisTick.push(e);
+    else this.deferred.push(e);
+  }
+  retryDeferred() {
     if (this.deferred.length) {
       const wait = [];
       for (const e of this.deferred) (this.tickable(e.x, e.y, e.z) ? this.thisTick : wait).push(e);
       this.deferred = wait;
     }
-    while (this.thisTick.length) {
-      const e = this.thisTick.shift(), id = this.getBlock(e.x, e.y, e.z);
-      if (id === AIR || this.groupOf(id) !== this.groupOf(e.id)) continue;
-      this.record(`u,${e.x},${e.y},${e.z},${id}`);
-      this.behaviours[id]?.updateTick?.(this, e.x, e.y, e.z);
-    }
+  }
+  runTaken(e) {
+    const at = this.thisTick.indexOf(e);
+    if (at < 0) return;
+    this.thisTick.splice(at, 1);
+    const id = this.getBlock(e.x, e.y, e.z);
+    if (id === AIR || this.groupOf(id) !== this.groupOf(e.id)) return;
+    this.record(`u,${e.x},${e.y},${e.z},${id}`);
+    this.behaviours[id]?.updateTick?.(this, e.x, e.y, e.z);
   }
   groupOf(id) {
     return id === 75 ? 76 : id === 94 ? 93 : id === 150 ? 149 : id;
@@ -226,9 +238,16 @@ export class LiveRedstone extends RedstoneWorld {
 
   // ---- the 20 TPS loop ----
   tick() {
+    this.beginTick();
+    this.tickUpdates();
+    this.endTick();
+  }
+  beginTick() {
     this.clock++;
     this.time++;
-    this.tickUpdates();
+  }
+  // Everything after the scheduled ticks: block events, the tile-entity loop, plate and sensor scans.
+  endTick() {
     this.sendQueuedBlockEvents();
     this.updateTileEntities();
     if (this.clock - this.lastScan >= 100) this.scan();

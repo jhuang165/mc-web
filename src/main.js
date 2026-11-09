@@ -79,7 +79,7 @@ import {
 } from "./world.js";
 import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
-import { ForeignTicks } from "./tile-ticks.js";
+import { ForeignTicks, attachTickTree } from "./tile-ticks.js";
 import { ladderBounds, ladderSupported, countsVertical } from "./ladders.js";
 import { snowFalls } from "./snow.js";
 import { flowerCanStay, JRandom } from "./flowers.js";
@@ -410,7 +410,7 @@ let weather = new Weather(), trees, plants, falling, foreignTicks;
 const bedSleep = new BedSleep(); // EntityPlayer's sleeping state and bed spawn point (bed.js)
 // EntityTNTPrimed entities (explosion.js primeTnt). Explosions draw ray lengths,
 // drops, chained fuses and sound pitch from the saved weather.random World.rand.
-let primed = [];
+let primed = [], genPrimed = null;
 let populationBlocks, netherLive;
 let sounds,
   firstPerson,
@@ -439,7 +439,7 @@ let enchantBookRenderer = null, enchantExtras = null;
 // Beacons (pyramid.js): the tile entities (levels, powers) of every beacon block, drawn by pyramid-renderer.js.
 let beacons = new Beacons(), beaconRenderer = null;
 // Live redstone and pistons (redstone-runtime.js), rebuilt for each world that loads.
-let redstoneRuntime = null;
+let redstoneRuntime = null, tickTree = null;
 // Hopper tick host: the shared inventory-transfer.js stores, EntityItem pickup and live comparator notifications.
 const hopperTiles = new Hoppers({
   get world() { return world; },
@@ -1389,6 +1389,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     }
     world.redstoneApply = redstoneRuntime.applyEdit;
     redstoneRuntime.restore(record);
+    tickTree = attachTickTree({ fluids, fire, falling, redstone: redstoneRuntime, foreign: foreignTicks, now: () => mobs?.saveTotalTime() ?? 0 }); // one WorldServer tick tree over the lists
     scene.repeaterLit = (x, y, z) => redstoneRuntime?.redstone?.lit?.has(`${x},${y},${z}`) === true;
     for (const k of redstoneRuntime.redstone.lit) { const [x, y, z] = k.split(",").map(Number); scene.updateBlock(x, z, y); } // restored powered repeaters emit light 9
     // Mineshaft spawners and chest minecarts: generation records on a world's first launch, the
@@ -1486,6 +1487,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     containerResidency=world.streaming&&!world.isDimension?new ContainerResidency(world,record.id,survival,{scope:record.containerScope,onError:e=>{pause();toast('Could not load saved containers. Reopen the world to retry: '+e.message);}}):null;
     survival.furnaceActive = key => !world.streaming || world.isTicking(...[key.split(",")[0],key.split(",")[2]].map(Number));
     survival.furnaceChanged = key => redstoneRuntime?.containerClosed([key]);
+    genPrimed = []; // generated primed TNT handed over before the saved `primed` list is read below
     restorePopulation(record,world,survival,mobs);
     if (record.villages) mobs.villages.loadJSON(record.villages);
     materializeFresh();
@@ -1541,6 +1543,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     rockets.load(record.rockets);
     fishing.load(record.fishing);
     primed = (Array.isArray(record.tnt) ? record.tnt : []).filter((t) => t && [t.x, t.y, t.z, t.vx, t.vy, t.vz, t.fuse].every(Number.isFinite)).map((t) => Object.assign(primeTnt(t.x, t.y + TNT_Y_OFFSET, t.z, { fuse: t.fuse }), { vx: t.vx, vy: t.vy, vz: t.vz }));
+    if (genPrimed) { primed.push(...genPrimed); genPrimed = null; }
     tntRenderer?.clear();
     arrows.load(record.arrows);
     scene.setArrows(arrows.list);
@@ -3105,8 +3108,8 @@ function materializeFresh() {
   containerResidency?.admit();
   const columns = world.claimFreshColumns();
   if (columns.length) {
-    const handed = restorePopulationColumns(columns, { world, survival, mobs, spawners, minecarts, fluids });
-    if (handed.animals || handed.chests || handed.dispensers || handed.pots || handed.spawners || handed.carts || handed.ticks) saved = false;
+    const handed = restorePopulationColumns(columns, { world, survival, mobs, spawners, minecarts, fluids, primed: genPrimed ?? primed });
+    if (handed.primed || handed.animals || handed.chests || handed.dispensers || handed.pots || handed.spawners || handed.carts || handed.ticks) saved = false;
   }
   // Chest models follow the resident columns (chests of columns that left the window are removed).
   chestRenderer?.sync(world, survival.chests, undefined, survival.enderTiles);
@@ -3161,7 +3164,7 @@ function movementTick(controls) {
       ? "SWIMMING"
       : "WALKING";
   tickSurvival(inWater, oldPosition, inLavaNow);
-  tickWorldSystems({ farming, fluids, fire, hoppers: hopperTiles, brewing: tickBrewingStands, redstone: redstoneRuntime },
+  tickWorldSystems({ farming, fluids, fire, tickTree, hoppers: hopperTiles, brewing: tickBrewingStands, redstone: redstoneRuntime },
     { time: survival.time, daylight: scene.daylight, x: position.x, z: position.z },
     { farming: applyFarmUpdates, fluids: changes => { scene.updateBlocks(changes); redstoneRuntime?.fluidChanges(changes); }, fire: changes => scene.updateBlocks(changes) });
   recordHud.tick();

@@ -4,6 +4,7 @@ import {newChest,CHEST} from './chest.js';
 import {itemFromOriginal} from './region-import.js';
 import {makeStack} from './inventory.js';
 import {ENTITY_TYPES} from './entities.js';
+import {primeTnt} from './explosion.js';
 import {villagerFields} from './villager.js';
 import {DISPENSER} from './dispenser-piston.js';
 import {newDispenser} from './dispenser-container.js';
@@ -72,12 +73,19 @@ export function restorePopulation(record,world,survival,mobs){
 // Streamed worlds (version 13): `columns` is World.claimFreshColumns(), each column handed over once.
 // Spawners, chest minecarts and generation-time liquid ticks go to the runtimes the caller passes.
 export const LIQUIDS=new Set([8,9,10,11]);
-export function restorePopulationColumns(columns,{world,survival,mobs,spawners,minecarts,fluids}){
-  const total={columns:columns.length,animals:0,chests:0,dispensers:0,pots:0,spawners:0,carts:0,ticks:0,unsupported:[]};
+// Powered TNT of the generation callbacks (EntityTNTPrimed): a live primed entity at the block centre with the generated fuse. The constructor's
+// motion is Math.random based natively (the heading of primeTnt), so any heading is native-legal; the port draws it from Math.random when the column is
+// handed over, once, and it is saved with the world afterwards (`primed` is the live list; the primed sound is not replayed).
+export function primedTntEntity(t,random=Math.random){return primeTnt(t.x,t.y,t.z,{fuse:t.fuse,random});}
+// The record form the world and chunk runtime keep (y is the box bottom): what an import writes into `tnt`.
+export const primedTntRecord=(e)=>({x:e.x,y:e.y,z:e.z,vx:e.vx,vy:e.vy,vz:e.vz,fuse:e.fuse});
+export function restorePopulationColumns(columns,{world,survival,mobs,spawners,minecarts,fluids,primed=null}){
+  const total={columns:columns.length,animals:0,primed:0,chests:0,dispensers:0,pots:0,spawners:0,carts:0,ticks:0,unsupported:[]};
   for(const {records:r} of columns){
     total.chests+=restoreChests(r.chests,world,survival);
     total.animals+=restoreAnimals(r.animals,mobs,total.unsupported);
     total.dispensers+=restoreDispensers(r.dispensers,world,survival);total.pots+=restorePots(r.pots,world);
+    for(const t of r.primedTnt??[])if(primed){primed.push(primedTntEntity(t));total.primed++;}
     for(const s of r.spawners){spawners.add(s);total.spawners++;}
     for(const c of r.minecartChests){minecarts.spawnChest(c);total.carts++;}
     for(const t of r.pendingTicks)if(LIQUIDS.has(t.id)){fluids.schedule(t.x,t.y,t.z,t.delay);total.ticks++;}

@@ -44,6 +44,8 @@ export class FallingBlocks {
     this.entityRandom = entityRandom;
     this.time = 0;
     this.pending = new Map();
+    this.ids = null; // the shared TickTree (tile-ticks.js) once the live game attaches one: creation ids come from it, and it takes the due entries
+    this.serial = 0;
     this.entities = [];
     if (Array.isArray(saved)) for (const e of saved.slice(0, 1024)) this.restoreEntity(e);
   }
@@ -51,13 +53,16 @@ export class FallingBlocks {
   schedule(x, y, z, b = this.world.get(x, y, z)) {
     this.enqueue(x, y, z, b, b === DRAGON_EGG ? EGG_TICK_RATE : FALL_DELAY); // egg tickRate 5, sand 2
   }
-  enqueue(x, y, z, b, delay, p = 0) {
+  enqueue(x, y, z, b, delay, p = 0, n) {
     const k = key(x, y, z) + ":" + b;
-    if (!this.pending.has(k)) this.pending.set(k, { x, y, z, block: b, time: this.time + delay, p });
+    if (this.pending.has(k)) return;
+    const e = { x, y, z, block: b, time: this.time + delay, p, id: this.ids ? this.ids.nextId() : this.serial++, key: k };
+    if (Number.isSafeInteger(n)) e.n = n; // saved shared creation id: the order key when a TickTree attaches
+    this.pending.set(k, e);
   }
   // Keep scheduled work separate from the existing falling-entity save array.
   save() {
-    return saveTicks([...this.pending.values()].map((e, id) => ({ ...e, id })), this.time);
+    return saveTicks([...this.pending.values()].map((e, id) => ({ ...e, id, ...(this.ids ? { n: e.id } : {}) })), this.time);
   }
   load(data) {
     const state = readTicks(data, this.world, isFallingBlock);
@@ -65,7 +70,7 @@ export class FallingBlocks {
     this.time = state.time;
     this.pending.clear();
     // Preserve the first entry per block/position, even when it is now stale.
-    for (const e of state.entries) this.enqueue(e.x, e.y, e.z, e.block, e.delay, e.p | 0);
+    for (const e of state.entries) this.enqueue(e.x, e.y, e.z, e.block, e.delay, e.p | 0, e.n);
     // Stable sort also handles imported entries that are not already time-ordered.
     this.pending = new Map([...this.pending].sort((a, b) => a[1].time - b[1].time || a[1].p - b[1].p));
   }
@@ -115,18 +120,42 @@ export class FallingBlocks {
   // One server tick: WorldServer.tickUpdates (due scheduled updates whose block is still there),
   // then the entities, the new ones included, as World.updateEntities runs after it.
   tick() {
-    this.time++;
-    // WorldServer.tickUpdates takes at most 1000 due entries per tick (mt.a: the cap is on the entries leaving the set, probed in tile-ticks-reference.json).
-    let left = MAX_TICKS;
-    for (const [k, u] of this.pending) {
-      if (!ringTickActive(this.world, u.x, u.z)) { u.time++; continue; }
-      if (u.time > this.time) continue;
-      if (left-- <= 0) continue;
-      this.pending.delete(k);
-      if (this.world.get(u.x, u.y, u.z) === u.block) this.fall(u.x, u.y, u.z);
+    // With a shared TickTree (tile-ticks.js) the scheduled updates are taken there, in one tree with the other kinds; only the entities tick here.
+    if (!this.ids) {
+      this.time++;
+      // WorldServer.tickUpdates takes at most 1000 due entries per tick (mt.a: the cap is on the entries leaving the set, probed in tile-ticks-reference.json).
+      let left = MAX_TICKS;
+      for (const [k, u] of this.pending) {
+        if (!ringTickActive(this.world, u.x, u.z)) { u.time++; continue; }
+        if (u.time > this.time) continue;
+        if (left-- <= 0) continue;
+        this.pending.delete(k);
+        if (this.world.get(u.x, u.y, u.z) === u.block) this.fall(u.x, u.y, u.z);
+      }
     }
     for (const e of this.entities) if (!e.dead && ringEntityActive(this.world,e)) this.tickEntity(e);
     this.entities = this.entities.filter((e) => !e.dead);
+  }
+  // The pieces of the scheduled-update part the shared tick tree drives: the clock and ring pause with the due list in tree order (time, priority,
+  // creation), taking the head, and running a taken entry.
+  beginTick() {
+    this.time++;
+    this.due = [];
+    this.di = 0;
+    for (const u of this.pending.values()) {
+      if (!ringTickActive(this.world, u.x, u.z)) { u.time++; continue; }
+      if (u.time <= this.time) this.due.push(u);
+    }
+    if (this.due.length > 1) this.due.sort((a, b) => a.time - b.time || a.p - b.p || a.id - b.id);
+  }
+  head() { return this.due?.[this.di]; }
+  take() {
+    const u = this.due[this.di++];
+    this.pending.delete(u.key);
+    return u;
+  }
+  run(u) {
+    if (this.world.get(u.x, u.y, u.z) === u.block) this.fall(u.x, u.y, u.z);
   }
   // EntityFallingBlock ignores blast damage but receives knockback. Its posY is the box centre.
   explode(x, y, z, size, exploder = null) {

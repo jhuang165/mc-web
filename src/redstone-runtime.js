@@ -202,12 +202,22 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     redstone.collide(x, y, z);
     flush();
   };
-  const tick = () => {
+  const tickBegin = () => {
     const mc = game.minecarts?.();
     if (mc && mc.blockHook !== cartTouch) mc.blockHook = cartTouch;
-    redstone.tick();
+    redstone.beginTick();
+  };
+  // After the scheduled ticks: block events, the tile-entity loop, the pistons' pushes. The shared tick tree (tile-ticks.js) calls tickBegin, takes and
+  // runs the scheduled entries with the other kinds, and world-tick.js calls tickEnd.
+  const tickEnd = () => {
+    redstone.endTick();
     pistons.tick();
     flush();
+  };
+  const tick = () => {
+    tickBegin();
+    redstone.tickUpdates();
+    tickEnd();
   };
   // A right click on a redstone block. True when the engine consumed the click.
   const use = (x, y, z) => {
@@ -287,6 +297,8 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     commandBlocks,
     music,
     tick,
+    tickBegin,
+    tickEnd,
     frame: (partial) => pistons.frame(partial),
     flush,
     use,
