@@ -279,7 +279,9 @@ export class LightVolume {
   column(x, z) {
     if (this.world.hasNoSky) { this.heights[x * SIZE + z] = this.height; return; } // the Nether: no cell sees the sky
     let y = this.height - 1;
-    while (y >= 0 && lightOpacity(this.world.get(x, y, z)) === 0) y--;
+    const col = this.world.columnBlocks?.(x, z);
+    if (col) { if (!OPACITY) lightTables(); while (y >= 0 && OPACITY[col[y]] === 0) y--; } // the same test through the table (a missing column reads as air)
+    else while (y >= 0 && lightOpacity(this.world.get(x, y, z)) === 0) y--;
     this.heights[x * SIZE + z] = y + 1;
   }
   skyAt(x, y, z) {
@@ -330,7 +332,10 @@ export class LightVolume {
         const base = (x * SIZE + z) * H, col = air && (w.columnBlocks(x, z) ?? air);
         oldSky.set(this.sky.subarray(base, base + H), k);
         oldBlock.set(this.block.subarray(base, base + H), k);
-        for (let y = 0; y < H; y++) {
+        // The air above a column's top block costs 1 and emits nothing (the typed arrays start at 0): filled in one call.
+        let top = H;
+        if (col) { while (top > 0 && col[top - 1] === 0) top--; if (top < H) cost.fill(1, k + top, k + H); }
+        for (let y = 0; y < top; y++) {
           const b = col ? col[y] : w.get(x, y, z), op = OPACITY[b] ?? lightOpacity(b),
             e = b && MAY_EMIT[b] !== 0 ? this.emission(x, y, z, b) : 0;
           emit[k + y] = e;
@@ -379,29 +384,42 @@ export class LightVolume {
       }
       // Light flowing in from cells outside the box (or outside the world).
       const outside = channel === "sky" && !w.hasNoSky ? 15 : 0;
-      const side = (nx, nz, y) =>
-        nx >= x0 && nx <= x1 && nz >= z0 && nz <= z1 ? 0 : nx < 0 || nz < 0 || nx >= SIZE || nz >= SIZE ? outside : arr[(nx * SIZE + nz) * H + y];
+      // Per edge column the four neighbours are classified once: inside the box (nothing flows in), outside the world (`outside`), or the
+      // base index of the neighbouring column in arr.
+      const nb = [0, 0, 0, 0], NONE = -2, OUT = -1;
       for (let x = x0; x <= x1; x++) {
         yield;
         for (let z = z0; z <= z1; z++) {
           const edge = x === x0 || x === x1 || z === z0 || z === z1, base = (x * SIZE + z) * H, kb = ((x - x0) * (z1 - z0 + 1) + (z - z0)) * H;
+          if (edge) {
+            for (let d = 0; d < 4; d++) {
+              const nx = d === 0 ? x - 1 : d === 1 ? x + 1 : x, nz = d === 2 ? z - 1 : d === 3 ? z + 1 : z;
+              nb[d] = nx >= x0 && nx <= x1 && nz >= z0 && nz <= z1 ? NONE : nx < 0 || nz < 0 || nx >= SIZE || nz >= SIZE ? OUT : (nx * SIZE + nz) * H;
+            }
+          }
           for (let y = edge ? 0 : H - 1; y < H; y++) {
             const c = cost[kb + y];
             if (c >= 15) continue;
-            const best = Math.max(y === H - 1 ? outside : 0, edge ? Math.max(side(x - 1, z, y), side(x + 1, z, y), side(x, z - 1, y), side(x, z + 1, y)) : 0);
+            let best = y === H - 1 ? outside : 0;
+            if (edge) for (let d = 0; d < 4; d++) { const o = nb[d], v = o === NONE ? 0 : o === OUT ? outside : arr[o + y]; if (v > best) best = v; }
             raise(base + y, best - c);
           }
         }
       }
       // The neighbour's index in cost[] is the cell's own plus the same offset as in arr[], scaled to the box (no closure per queue entry).
       const LZ = H, LX = (z1 - z0 + 1) * H;
+      // Shifts and masks for the cell index (y fastest, then z, then x) when H and SIZE are powers of two (they are for every real world).
+      const pow2 = (H & (H - 1)) === 0 && (SIZE & (SIZE - 1)) === 0, HM = H - 1, HS = 31 - Math.clz32(H), SM = SIZE - 1, SS = 31 - Math.clz32(SIZE);
       for (let level = 15; level > 1; level--) {
         const list = buckets[level];
         for (let q = 0; q < list.length; q++) {
           if ((q & 4095) === 4095) yield;
           const i = list[q];
           if (arr[i] !== level) continue;
-          const y = i % H, t = (i - y) / H, z = t % SIZE, x = (t - z) / SIZE, kc = ((x - x0) * (z1 - z0 + 1) + (z - z0)) * H + y;
+          let y, z, x;
+          if (pow2) { y = i & HM; const t = i >> HS; z = t & SM; x = t >> SS; }
+          else { y = i % H; const t = (i - y) / H; z = t % SIZE; x = (t - z) / SIZE; }
+          const kc = ((x - x0) * (z1 - z0 + 1) + (z - z0)) * H + y;
           let c;
           if (y + 1 < H && (c = cost[kc + 1]) < 15) raise(i + 1, level - c);
           if (y > 0 && (c = cost[kc - 1]) < 15) raise(i - 1, level - c);
@@ -414,9 +432,18 @@ export class LightVolume {
     }
     let box = null;
     k = 0;
+    const fast = H % 4 === 0, sky32 = fast && new Uint32Array(this.sky.buffer, this.sky.byteOffset, this.sky.length >> 2), block32 = fast && new Uint32Array(this.block.buffer, this.block.byteOffset, this.block.length >> 2),
+      oldSky32 = fast && new Uint32Array(oldSky.buffer, 0, oldSky.length >> 2), oldBlock32 = fast && new Uint32Array(oldBlock.buffer, 0, oldBlock.length >> 2);
     for (let x = x0; x <= x1; x++) {
       yield;
-      for (let z = z0; z <= z1; z++)
+      for (let z = z0; z <= z1; z++) {
+        // A column whose words all match the copy taken before the flood changed nowhere (4 cells per compare; H is a multiple of 4).
+        if (fast) {
+          const b4 = (x * SIZE + z) * H >> 2, k4 = k >> 2, n4 = H >> 2;
+          let same = true;
+          for (let j = 0; j < n4; j++) if (sky32[b4 + j] !== oldSky32[k4 + j] || block32[b4 + j] !== oldBlock32[k4 + j]) { same = false; break; }
+          if (same) { k += H; continue; }
+        }
         for (let y = 0; y < H; y++, k++) {
           const i = (x * SIZE + z) * H + y;
           if (this.sky[i] === oldSky[k] && this.block[i] === oldBlock[k]) continue;
@@ -429,6 +456,7 @@ export class LightVolume {
             box.y1 = Math.max(box.y1, y);
           }
         }
+      }
     }
     return box;
   }
