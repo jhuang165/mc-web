@@ -7,6 +7,9 @@ import { IDLE_INPUT, cleanInput, cleanLook, cleanAction, cleanSlot } from './pro
 import { PlayerCombat, PositionHistory, tickCombat, withinEvents } from './combat.js';
 import { Survival, ITEMS } from '../survival.js';
 import { tickPlayerItemUse } from '../player-item-use.js';
+import { ITEM_REGISTRY } from '../command-data.js';
+import { itemFromOriginal } from '../region-import.js';
+const MOD_ITEMS = 4000; // gun-mod item ids start here (mods/guns/catalog.js)
 import { makeStack } from '../inventory.js';
 import { movePlayer } from '../player-physics.js';
 import { drainKnockback } from '../player-knockback.js';
@@ -82,6 +85,24 @@ export class GunSimulation extends DedicatedSimulation {
     kit.armor.forEach((s, i) => { inv.armor[i] = s; });
     inv.current = 0;
     p.combat.reset();
+  }
+  // CommandGive's item argument: a Java registry name (minecraft: optional) or Java numeric id, read through the save importer's
+  // id table (this build numbers items its own way), else a gun-mod item by number or by name with underscores (creative_ammo_box).
+  // Returns the stack's { id, damage }, or null.
+  findItem(text, damage = 0) {
+    const t = String(text ?? '').toLowerCase(), java = /^\d+$/.test(t) ? +t : new Map(ITEM_REGISTRY).get(t.includes(':') ? t : 'minecraft:' + t);
+    const original = java === undefined ? null : itemFromOriginal(java, damage);
+    if (original) return { id: original.id, damage: original.damage };
+    if (java !== undefined && java >= MOD_ITEMS && ITEMS[java]) return { id: java, damage };
+    const key = t.replace(/^[a-z0-9_]+:/, '');
+    for (const [id, item] of Object.entries(ITEMS)) if (+id >= MOD_ITEMS && item?.name?.toLowerCase().replace(/[^a-z0-9]+/g, '_') === key) return { id: +id, damage };
+    return null;
+  }
+  // CommandGive: the stack goes into the inventory; what does not fit is lost (this server has no dropped items yet).
+  give(p, { id, damage }, count = 1) {
+    const stack = makeStack(id, count, damage);
+    p.survival.inventory.add(stack);
+    return count - stack.count;
   }
   setMode(p, mode) {
     const data = p.survival.serialize();

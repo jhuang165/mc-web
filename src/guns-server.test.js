@@ -13,6 +13,7 @@ import { canonical, packFingerprint } from './multiplayer/fingerprint.js';
 import { setMeleePacks, MELEE } from './mods/guns/install.js';
 import { GUNS, AKM, P320, M870 } from './mods/guns/catalog.js';
 import { loadedRounds } from './mods/guns/ammo.js';
+import { ITEMS } from './survival.js';
 import { installGunRules, diskFetcher } from '../server/pack-loader.js';
 import { createGunsServer, MESSAGES } from '../server/guns-server.js';
 import { ProfileVerifier } from '../server/profile-verifier.js';
@@ -128,6 +129,19 @@ test('the use button eats held food on the server; letting go stops it', () => {
   sim.action('a', { action: 'use', down: true });
   run(sim, 5, () => eat(0));
   assert.equal(a.eating, null, 'a gun in hand eats nothing');
+});
+
+test('/give finds items by registry name, number or mod item name and fills the inventory', () => {
+  const sim = arena(), p = sim.addPlayer('a', 'Alice', id(1));
+  const diamond = sim.findItem('minecraft:diamond');
+  assert.equal(ITEMS[diamond.id].name, 'Diamond');
+  assert.deepEqual(sim.findItem('diamond'), diamond); assert.deepEqual(sim.findItem('264'), diamond, 'numbers are Java ids');
+  assert.deepEqual(sim.findItem('creative_ammo_box'), { id: 4304, damage: 0 }); assert.deepEqual(sim.findItem('4304'), { id: 4304, damage: 0 });
+  assert.equal(sim.findItem('nonsense'), null);
+  assert.equal(sim.give(p, { id: 4304, damage: 0 }, 1), 1);
+  assert.ok(p.survival.inventory.main.some(s => s?.id === 4304));
+  for (let i = 0; i < 36; i++) p.survival.inventory.main[i] = { id: 1, count: 64, damage: 0 };
+  assert.equal(sim.give(p, diamond, 3), 0, 'a full inventory takes nothing');
 });
 
 test('the client is told how many shots the server fired, for its ammo prediction', () => {
@@ -324,6 +338,10 @@ test('two sockets fight through the server; commands follow op levels', async t 
   bob.ws.send(JSON.stringify({ type: 'respawn' }));
   await bob.next(m => m.type === 'tick' && m.you.dead === false && m.you.health === 20);
   bob.ws.send(JSON.stringify({ type: 'chat', text: '/gamemode creative' }));
+  await bob.next(m => m.type === 'chat' && m.text === 'You do not have permission to use this command');
+  alice.ws.send(JSON.stringify({ type: 'chat', text: '/give Bob creative_ammo_box' }));
+  assert.equal((await alice.next(m => m.type === 'chat' && /^Given|no such/.test(m.text))).text, 'Given Creative Ammo Box * 1 to Bob');
+  bob.ws.send(JSON.stringify({ type: 'chat', text: '/give Bob diamond 64' }));
   await bob.next(m => m.type === 'chat' && m.text === 'You do not have permission to use this command');
   alice.ws.send(JSON.stringify({ type: 'chat', text: '/gamemode creative Bob' }));
   assert.match((await alice.next(m => m.type === 'chat' && /game mode/.test(m.text))).text, /Bob's game mode to creative/);

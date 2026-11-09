@@ -656,7 +656,7 @@ function showMultiplayer() {
 }
 function leaveMultiplayer() {
   multiplayer?.close(); multiplayer = null;
-  serverInv = null; serverShots = null; predictedShots.length = 0;
+  serverInv = null; serverShots = null; predictedFood = null; predictedShots.length = 0;
   remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null;
 }
 // Protocol v3: movement, look, the selected hotbar slot and the newest server tick on screen; never item stacks.
@@ -665,7 +665,7 @@ function sendMultiplayerInput(controls = IDLE_INPUT) {
 }
 // The gun server's inventory as last sent, its count of this player's shots, and the shots fired here it has not counted yet.
 // The held gun shows the server's rounds less those still in flight, so a reply that crosses a newer shot doesn't put a round back.
-let serverInv = null, serverShots = null;
+let serverInv = null, serverShots = null, predictedFood = null; // predictedFood: { food, at } after a bite eaten here
 const predictedShots = []; // { slot, at }, oldest first
 const PREDICTION_TIMEOUT = 1000; // ms: a shot the server never fired (the two controllers disagreed) stops counting
 function rebuildServerInventory() {
@@ -3129,7 +3129,10 @@ function edit(place = false) {
     // Food: the server eats it (gun-simulation.js use); this tab only shows the 32 ticks of eating it expects.
     const food = ITEMS[heldId()];
     if (place && !survival.creative && food?.food) {
-      if (!eating && (survival.food < 20 || food.alwaysEdible)) eating = { id: heldId(), ticks: 32 };
+      // The food a bite just finished here will give, until the server's own count catches up: holding the button must not
+      // start another bite the server will refuse because it is already full.
+      const hunger = Math.max(survival.food, predictedFood && performance.now() - predictedFood.at < PREDICTION_TIMEOUT ? predictedFood.food : 0);
+      if (!eating && (hunger < 20 || food.alwaysEdible)) eating = { id: heldId(), ticks: 32 };
       multiplayer.send({ type: 'action', action: 'use', down: true, yaw, pitch, view: multiplayer.lastTick });
       return;
     }
@@ -3390,7 +3393,8 @@ function movementTick(controls) {
     sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT);
     if (gunsEnabled() && screen !== 'dead') guns.tick(); // the client's prediction: the server fires, strikes and reloads for itself
     // Eating as predicted here: crumbs, chewing and the burp; the food and the item come from the server.
-    if (eating && !eating.bow) eating = tickPlayerItemUse(eating, heldId(), { eat: () => true }, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }).use;
+    const eat = id => { predictedFood = { food: Math.min(20, survival.food + (ITEMS[id]?.food ?? 0)), at: performance.now() }; return true; };
+    if (eating && !eating.bow) eating = tickPlayerItemUse(eating, heldId(), { eat }, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }).use;
     if (screen === 'playing' && useHold.tick(binds.isDown("key.use"), !!eating, !survival.creative && !!ITEMS[heldId()]?.food)) edit(true);
     easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: gunsEnabled() ? guns.speed() : 1, bow: gunsEnabled() ? guns.fov() : 1 }));
     return;

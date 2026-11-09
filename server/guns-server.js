@@ -11,6 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { GunSimulation } from '../src/multiplayer/gun-simulation.js';
+import { ITEMS } from '../src/survival.js';
 import { PROTOCOL } from '../src/multiplayer/protocol.js';
 import { loadServerFiles, formatReport } from './properties.js';
 import { ProfileVerifier, ProfileUnavailable } from './profile-verifier.js';
@@ -168,7 +169,7 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
 
   // Vanilla-style commands. Levels follow ops.json: 1 bypass spawn protection, 2 cheats, 3 player management, 4 server.
   const COMMANDS = {
-    help: [0, () => 'Commands: list, kill, help; ops: gamemode, kit, kick, ban, pardon, whitelist, op, deop, save-all'],
+    help: [0, () => 'Commands: list, kill, help; ops: gamemode, give, kit, kick, ban, pardon, whitelist, op, deop, save-all'],
     list: [0, () => `There are ${sessions.size}/${config.maxPlayers} players online: ${[...sessions.values()].map(s => s.name).join(', ')}`],
     kill: [0, id => { const p = simulation.players.get(id); if (p && !p.dead) { p.survival.health = 0; p.lastHit = null; } return null; }],
     gamemode: [2, (id, [mode, target]) => {
@@ -179,6 +180,20 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
       if (!entry) return `Player ${target} not found`;
       simulation.setMode(simulation.players.get(entry[0]), m);
       return `Set ${entry[1].name}'s game mode to ${m}`;
+    }],
+    give: [2, (id, [target, item, amount, data]) => {
+      const usage = 'Usage: /give <player> <item> [amount] [data]';
+      const entry = target === '@p' || target === '@s' ? [id, sessions.get(id)] : target && byName(target);
+      if (!target || !item) return usage;
+      if (!entry) return `Player ${target} not found`;
+      const count = amount === undefined ? 1 : Number(amount), damage = data === undefined ? 0 : Number(data);
+      if (!Number.isInteger(count) || count < 1 || count > 64) return `The number (${amount}) is too small or too big, it must be between 1 and 64`;
+      if (!Number.isInteger(damage) || damage < 0 || damage > 32767) return usage;
+      const stack = simulation.findItem(item, damage);
+      if (!stack) return `There is no such item with name ${item}`;
+      const given = simulation.give(simulation.players.get(entry[0]), stack, count);
+      if (!given) return `${entry[1].name}'s inventory is full`;
+      return `Given ${ITEMS[stack.id].name} * ${given} to ${entry[1].name}`;
     }],
     kit: [2, (id, [target]) => {
       const entry = target ? byName(target) : [id, sessions.get(id)];
