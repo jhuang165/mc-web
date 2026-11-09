@@ -148,10 +148,12 @@ export class HeadlessColumns {
   }
   // A change in chunk (cx, cz) can alter the light of its own column and the eight around it (light travels 14 cells). Its own height and
   // precipitation maps go too: a replaced column object (arrival, adopt) starts its stamp again, so the stamp check alone would keep them.
+  // The rim state of a column (ring-light.js isRim) and the emitters its neighbours' own rim state turns off reach two chunks, so the dropped
+  // light covers the 5 x 5 chunks round a change in what is held.
   invalidateLight(cx, cz) {
     const own = this.lstate.get(ringKey(cx, cz));
     if (own) { own.hm = null; own.pm = null; }
-    for (let a = cx - 1; a <= cx + 1; a++) for (let b = cz - 1; b <= cz + 1; b++) {
+    for (let a = cx - 2; a <= cx + 2; a++) for (let b = cz - 2; b <= cz + 2; b++) {
       const st = this.lstate.get(ringKey(a, b));
       if (st) { st.light = null; st.asked = 0; }
     }
@@ -429,7 +431,7 @@ export class HeadlessColumns {
 // column's height map see the sky at 15. A reverse search from the queried cell finds the best source within 14 steps, which is
 // the same maximum over paths, so the value equals the volume's wherever the surrounding columns are present. Columns that are
 // missing read as air, so a cell within 15 blocks of the headless area's rim can read brighter than natively.
-import { OPACITY, EMISSION, COST, computeColumnLight } from "./ring-light.js";
+import { OPACITY, EMISSION, COST, computeColumnLight, isRim } from "./ring-light.js";
 const R = 14, W = 2 * R + 1, HOT = 6; // a column asked about `hot` times by the search is lit whole (ring-light.js)
 const SEARCH_N = W * W * W;
 export class RingLight {
@@ -442,6 +444,7 @@ export class RingLight {
     this.seen = new Int32Array(SEARCH_N);
     this.gen = 0;
     this.present = new Uint8Array(9);
+    this.emits = new Uint8Array(9);
     this.buckets = Array.from({ length: R + 1 }, () => []);
     this.hot = HOT;
     this.queries = 0; this.bulk = 0; this.bulkMs = 0;
@@ -477,7 +480,8 @@ export class RingLight {
       const st = ring.state(x >> 4, z >> 4);
       let L = st.light;
       if (L && st.stamp !== (col.stamp | 0)) L = st.light = null;
-      if (!L && ++st.asked >= this.hot) L = this.light(x >> 4, z >> 4, st);
+      // A rim column is only its vertical sky light (cheap, no budget); the others are lit whole once asked about often enough.
+      if (!L && (isRim(ring, x >> 4, z >> 4) || ++st.asked >= this.hot)) L = this.light(x >> 4, z >> 4, st);
       if (L) return y >= L.hh ? (ring.world.hasNoSky ? 0 : 240) : L.packed[((x & 15) * 16 + (z & 15)) * L.hh + y];
     }
     const k = (x * 2147483648 + z) * 256 + y, hit = this.cache.get(k);
@@ -490,8 +494,8 @@ export class RingLight {
   // the light is dropped when one arrives (store -> invalidateLight).
   light(cx, cz, st) {
     const ring = this.ring;
-    if (ring.lightBudget <= 0) return null;
-    ring.lightBudget--;
+    const rim = isRim(ring, cx, cz);
+    if (!rim) { if (ring.lightBudget <= 0) return null; ring.lightBudget--; }
     const t = performance.now(), L = computeColumnLight(ring, cx, cz, !!ring.world.hasNoSky);
     this.bulk++; this.bulkMs += performance.now() - t;
     st.stamp = (ring.column(cx, cz).stamp | 0);
@@ -515,7 +519,12 @@ export class RingLight {
     const grid = this.grid, seen = this.seen, buckets = this.buckets, gen = ++this.gen;
     // Chunks around the query that are neither resident nor held are unloaded: no light comes from or passes through them (ring-light.js).
     const pcx = qx >> 4, pcz = qz >> 4, present = this.present;
-    for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) present[a * 3 + b] = ring.holds((pcx + a - 1) * 16, (pcz + b - 1) * 16) ? 1 : 0;
+    const emits = this.emits; // a rim chunk's emitters are unlit (ring-light.js isRim)
+    for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
+      const here = ring.holds((pcx + a - 1) * 16, (pcz + b - 1) * 16);
+      present[a * 3 + b] = here ? 1 : 0;
+      emits[a * 3 + b] = here && (ring.resident((pcx + a - 1) * 16, (pcz + b - 1) * 16) || !isRim(ring, pcx + a - 1, pcz + b - 1)) ? 1 : 0;
+    }
     const mid = (R * W + R) * W + R;
     grid[mid] = 0; seen[mid] = gen;
     buckets[0].push(0, 0, 0);
@@ -530,7 +539,7 @@ export class RingLight {
         if (acc > 0) {
           if (!noSky && 15 - acc > sky && y >= this.heightAt(x, z)) sky = 15 - acc;
           const e = EMISSION[b] - acc;
-          if (e > block) block = e;
+          if (e > block && emits[((x >> 4) - pcx + 1) * 3 + (z >> 4) - pcz + 1]) block = e;
         }
         const cost = COST[b];
         if (cost >= 15) continue; // a cell that cannot receive light does not carry it on

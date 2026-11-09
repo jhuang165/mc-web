@@ -14,7 +14,7 @@ const make = () => {
   world.blockLight = () => 0;
   const cols = new Map();
   const generate = (cx, cz) => { const k = `${cx},${cz}`; if (!cols.has(k)) cols.set(k, world.chunkAt(cx, cz) ? { blocks: world.chunkAt(cx, cz).blocks, metadata: world.chunkAt(cx, cz).meta } : world.generateTerrainChunk(cx, cz)); return cols.get(k); };
-  const ring = new HeadlessColumns(world, { generate, perTick: 1000, every: 1, radius: 4 });
+  const ring = new HeadlessColumns(world, { generate, perTick: 1000, every: 1, radius: 6 });
   const cx0 = (world.minX + world.maxX) / 32 | 0, cz0 = (world.minZ + world.maxZ) / 32 | 0;
   ring.update(cx0, cz0);
   attachRing(world, ring);

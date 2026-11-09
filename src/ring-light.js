@@ -7,6 +7,7 @@
 // max(1, opacity); cells with opacity 15 receive nothing, an emitting opaque block costs 1, the rule of World.computeLightValue).
 // That is the fixed point LightVolume keeps for the resident window, so the centre column's values are exactly what a resident
 // column would hold at build time. Light travels at most 14 cells, so the centre needs only the ring of chunks around it.
+// Batch 31: the outermost held chunks (isRim) are not lit that way; they hold vertical-only sky and no block light, as native rim chunks do.
 import { lightEmission, lightOpacity } from "./lighting.js";
 
 const OPACITY = new Uint8Array(256), EMISSION = new Uint8Array(256), COST = new Uint8Array(256);
@@ -18,6 +19,45 @@ for (let b = 0; b < 256; b++) {
 export { OPACITY, EMISSION, COST };
 
 const BARRIER = 1; // stone: opacity 15, no emission
+
+// A held column is on the rim of the loaded set when one of its eight neighbouring chunks is neither resident nor held (batch 31,
+// public/research/light-engine.md "Batch 31"). Natively the outermost loaded chunks keep what Chunk.generateSkylightMap gave them (sky straight
+// down each column, no lateral light) and no block light: their blocks are not populated and the light updates of population and edits
+// within 17 blocks of an unloaded chunk are refused.
+export function isRim(ring, cx, cz) {
+  if (ring.noRim || ring.resident(cx * 16, cz * 16)) return false; // noRim: a test hook, the batch 29/30 barrier model
+  for (let a = cx - 1; a <= cx + 1; a++) for (let b = cz - 1; b <= cz + 1; b++)
+    if ((a !== cx || b !== cz) && !ring.resident(a * 16, b * 16) && !ring.cols.has(ring.key(a, b))) return true;
+  return false;
+}
+
+// Chunk.generateSkylightMap of a held column, as the packed light of computeColumnLight (sky << 4, block 0): 15 at and above the height map,
+// then 15 minus the opacity of the first solid block and one less per cell below (a translucent cell costs at least 1 once the light has
+// dropped), only in the sections the chunk has (a section holding a non-air block), 0 where the light reaches 0 and at y = 0.
+export function verticalLight(col, noSky) {
+  const h = col.h, blocks = col.blocks, out = new Uint8Array(256 * h);
+  if (noSky) return { hh: h, packed: out };
+  let present = 0;
+  for (let s = 0; s < h >> 4; s++) {
+    scan: for (let c = 0; c < 256; c++) { const base = c * h + s * 16; for (let y = 0; y < 16; y++) if (blocks[base + y]) { present |= 1 << s; break scan; } }
+  }
+  const top = (31 - Math.clz32(present)) << 4; // topFilledSegment (present is never 0 for a held column that has blocks)
+  for (let c = 0; c < 256; c++) {
+    const base = c * h;
+    let hm = 0;
+    for (let y = h - 1; y >= 0; y--) if (OPACITY[blocks[base + y]]) { hm = y + 1; break; }
+    for (let y = hm; y < h; y++) out[base + y] = 240;
+    let l = 15, y = Math.min(h - 1, top + 15);
+    do {
+      let o = OPACITY[blocks[base + y]];
+      if (o === 0 && l !== 15) o = 1;
+      l -= o;
+      if (l > 0 && (present >> (y >> 4)) & 1) out[base + y] = l << 4;
+      y--;
+    } while (y > 0 && l > 0);
+  }
+  return { hh: h, packed: out };
+}
 const N = 48; // work volume: 3 x 3 chunks
 let work = new Uint8Array(0), skyArr = new Uint8Array(0), blockArr = new Uint8Array(0);
 const heights = new Uint16Array(N * N);
@@ -73,6 +113,10 @@ export function computeColumnLight(ring, cx, cz, noSky) {
   Hh = Math.min(H, Hh + 16);
   const centre = src[4];
   if (!centre) return null;
+  if (isRim(ring, cx, cz)) return verticalLight(ring.cols.get(ring.key(cx, cz)), noSky);
+  // Emitters of a rim neighbour are unlit natively (see isRim); its sky still flows in (a column's sky above the height map is lit).
+  const rimmed = [];
+  for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) rimmed.push(src[a * 3 + b] && !ring.resident((cx + a - 1) * 16, (cz + b - 1) * 16) && isRim(ring, cx + a - 1, cz + b - 1));
   // A neighbouring chunk that is neither resident nor held is unloaded: natively no light update runs within 17 blocks of an unloaded
   // chunk and generation leaves lateral light lazy, so nothing is lit from or across it. It is a barrier here (no seeds, no emitters,
   // receives and carries nothing) instead of open air with sky 15, which lit rim columns brighter than native.
@@ -121,7 +165,11 @@ export function computeColumnLight(ring, cx, cz, noSky) {
   // Block light: every emitter, then the spread.
   for (let i = 0; i < total; i++) {
     const e = EMISSION[ids[i]];
-    if (e) { block[i] = e; if (e > 1) buckets[e].push(i); }
+    if (e) {
+      const t = (i / Hh) | 0, a = ((t / N) | 0) >> 4, b = (t % N) >> 4;
+      if (rimmed[a * 3 + b]) continue;
+      block[i] = e; if (e > 1) buckets[e].push(i);
+    }
   }
   spread(block, ids, Hh);
   const out = new Uint8Array(256 * Hh);
