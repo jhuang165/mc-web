@@ -385,9 +385,13 @@ test("breaking a monster egg in Creative releases one silverfish, in Survival tw
 });
 
 test("live silverfish: chases the player through the legacy flow and bites for 1", () => {
-  const world = stoneWorld(), w = new EntityWorld(world, [], () => 0.5), s = new Survival({ slots: [], time: 6000 }), p = { x: 64.5, y: 0, z: 64.5, alive: true };
-  w.spawnSilverfishAt(70, 0, 64);
-  const start = s.health;
-  for (let i = 0; i < 300 && s.health === start; i++) w.tick(p, s);
-  assert.equal(s.health, start - 1);
+  // Entity.rand is seeded from Math.random per entity, and about 1 start in 20000 wanders for over 300 ticks before it finds the player (measured over 40000 seeds, max
+  // 174 ticks otherwise), so an unseeded run failed now and then. Fixed seeds make the run deterministic with the same 300 tick bound.
+  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+    const world = stoneWorld(), w = new EntityWorld(world, [], () => 0.5), s = new Survival({ slots: [], time: 6000 }), p = { x: 64.5, y: 0, z: 64.5, alive: true };
+    setEntityRandom(w.spawnSilverfishAt(70, 0, 64), new JavaRandom(seed));
+    const start = s.health;
+    for (let i = 0; i < 300 && s.health === start; i++) w.tick(p, s);
+    assert.equal(s.health, start - 1, `seed ${seed}`);
+  }
 });

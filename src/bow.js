@@ -123,7 +123,8 @@ export function mobArrow(rand, shooter, target, velocity, inaccuracy) {
 // EntitySkeleton.attackEntityWithRangedAttack (yl.a(sv, F)) damage roll:
 // f * 2 + nextGaussian * 0.25 + difficulty * 0.11F, then Power (+ level * 0.5 + 0.5) and Punch/Flame of the
 // held bow; a skeleton's bow is never enchanted in this port, so those terms are zero.
-export const skeletonDamage = (rand, scale, difficulty = 2) => f(scale * 2) + rand.nextGaussian() * 0.25 + f(difficulty * f(0.11));
+// The native sum is f*2 + (gaussian*0.25 + difficulty*0.11F): the grouping matters in the last bit (replayed bit-exactly).
+export const skeletonDamage = (rand, scale, difficulty = 2) => f(scale * 2) + (rand.nextGaussian() * 0.25 + f(difficulty * f(0.11)));
 // EntityAIArrowAttack's clamp of the distance fraction: MathHelper.clamp_float(f, 0.1F, 1.0F).
 export const rangeScale = (fraction) => (fraction < f(0.1) ? f(0.1) : fraction > 1 ? 1 : fraction);
 

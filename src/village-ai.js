@@ -476,7 +476,7 @@ export function villageTasks(K) {
       m.lookHelper.setLookPositionWithEntity(t, 30, 30);
       const d = m.distSq(t), reach = f(f(f(f(m.width * 2) * m.width) * 2) + t.width);
       this.delay--;
-      if (m.canSee(t) && this.delay <= 0) {
+      if (this.delay <= 0) { // the golem's uq has the long-memory flag set: no sight test
         const moved = this.last.x === 0 && this.last.y === 0 && this.last.z === 0 ? true : (t.x - this.last.x) ** 2 + (t.y - this.last.y) ** 2 + (t.z - this.last.z) ** 2 >= 1;
         if (moved || r.nextFloat() < f(0.05)) {
           this.last = { x: t.x, y: t.y, z: t.z };

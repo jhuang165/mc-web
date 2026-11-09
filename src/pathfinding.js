@@ -230,6 +230,9 @@ export function getVerticalOffset(entity, x, y, z, size, avoidWater, breakDoors,
 // maxSafePointTries() (sw.ax).
 // Deviations from the original: `maxNodes` stops a search that has expanded that many
 // points (the original has no cap and a wall-less 40 block range expands about 70000).
+// The original floors the entity's stored bounding box minimum; the port rebuilds it as position - width / 2, which for an entity pressed against a block
+// face (the box edge is exactly an integer) can land an ulp below it and floor into the block next door. An edge within 1e-9 of an integer is that integer.
+const floorEdge = (v) => { const r = Math.round(v); return Math.abs(v - r) < 1e-9 ? r : floor(v); };
 export class PathFinder {
   constructor(world, openDoors, breakDoors, avoidsWater, canSwim, options = {}) {
     this.world = world;
@@ -262,7 +265,7 @@ export class PathFinder {
       avoids = this.avoidsWater;
       this.avoidsWater = false;
     } else y = floor(feet + 0.5);
-    const start = this.openPoint(floor(entity.x - half), y, floor(entity.z - half));
+    const start = this.openPoint(floorEdge(entity.x - half), y, floorEdge(entity.z - half));
     const end = this.openPoint(floor(tx - half), floor(ty), floor(tz - half));
     const size = new PathPoint(floorFloat(f(entity.width + 1)), floorFloat(f(entity.height + 1)), floorFloat(f(entity.width + 1)));
     const result = this.addToPath(entity, start, end, size, range);
@@ -361,6 +364,9 @@ export class PathFinder {
   }
 }
 
+// The live port caps a search at 1500 expanded points (the original has no cap); a native replay lifts the cap for the navigators it builds.
+let nodeCap = 1500;
+export const setPathNodeCap = (n) => { const was = nodeCap; nodeCap = n; return was; };
 // --- PathNavigate (vv) ---
 // The navigator reads its entity through a small interface (all in Java units):
 // x, y (feet, minY), z, width, height, inWater, inLava, onGround, moveHelper,
@@ -383,7 +389,7 @@ export class PathNavigate {
     this.canSwim = false;
     this.followRange = options.followRange ?? 16;
     this.classify = options.classify || cachedClassify;
-    this.maxNodes = options.maxNodes ?? 1500;
+    this.maxNodes = options.maxNodes ?? nodeCap;
     this.budget = options.budget || null;
     this.searches = 0;
   }

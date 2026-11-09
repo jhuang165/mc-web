@@ -36,6 +36,7 @@ public class VillagerProbe {
     static List<String> aux = new ArrayList<>();
     static int[] cell(int x, int y, int z) { return cells.get(key(x, y, z)); }
     public aji a(int x, int y, int z) { int[] c = cell(x, y, z); return c != null ? aji.e(c[0]) : super.a(x, y, z); }
+    boolean floor(int x, int y, int z) { return super.floor(x, y, z) && cell(x, y, z) == null; } // batch 32: a water pool replaces the floor cell
     public int e(int x, int y, int z) { int[] c = cell(x, y, z); return c != null ? c[1] : 0; }
     public boolean a(int x, int y, int z, int meta, int flags) { int[] c = cell(x, y, z); if (c == null) return false; c[1] = meta; return true; }
     public void c(int x0, int y0, int z0, int x1, int y1, int z1) {}
@@ -43,7 +44,8 @@ public class VillagerProbe {
     public float n(int x, int y, int z) { return 1.0f; }
     public java.util.Calendar V() { java.util.Calendar c = java.util.Calendar.getInstance(); c.setTimeInMillis(1592200000000L); return c; } // batch 31: World.getCurrentDate (EntityZombie.onSpawnWithEgg's Halloween pumpkin check), a fixed mid-June date
     public float B(int x, int y, int z) { return 0.0f; } // batch 31: World.func_147462_b (regional difficulty) reads a chunk; EntityZombie.onSpawnWithEgg of a converted villager asks, and its result is not observed
-    public int k(int x, int y, int z) { return 15; } // batch 31: World.getBlockLightValue (a Hard zombie's reinforcement site search reads it; fully lit, so none is ever spawned)
+    static int light = 15; // batch 32: a dark scenario lets a Hard zombie's reinforcement site search find a spot
+    public int k(int x, int y, int z) { return light; } // batch 31: World.getBlockLightValue (a Hard zombie's reinforcement site search reads it; fully lit, so none is ever spawned)
     public ahu a(int x, int z) { return ahu.d(1); } // plains: MoveIndoors reads its biome
     // Batch 30: World.rayTraceBlocks is the real one (EntitySenses.canSee, doors in the way) only when VillageFightProbe asks; every other probe keeps the stub its reference was recorded with.
     static boolean realRays = false;

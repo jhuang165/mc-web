@@ -10,7 +10,8 @@ import { buildWitherTasks } from "./wither-boss-mobs.js";
 import { PathNavigate } from "./pathfinding.js";
 import { chickenJockeyDespawns } from "./mob-riding.js";
 import { breakDoorClass } from "./zombie-door.js";
-import { raycast, HEIGHT } from "./world.js";
+import { HEIGHT } from "./world.js";
+import { rayTraceBlocks } from "./projectiles.js";
 import { BRIGHTNESS } from "./lighting.js";
 import { swellShould, swellState, creeperSafeTries } from "./creeper.js";
 import { maxSafePointTries } from "./difficulty.js";
@@ -634,7 +635,7 @@ class AttackOnCollide extends Task {
     m.lookHelper.setLookPositionWithEntity(t, 30, 30);
     const d = m.distSq(t), reach = f(f(f(f(m.width * 2) * m.width) * 2) + t.width);
     this.delay--;
-    if (m.canSee(t) && this.delay <= 0) {
+    if ((this.longMemory || m.canSee(t)) && this.delay <= 0) { // uq.e: the long-memory flag skips the sight test
       const moved = this.last.x === 0 && this.last.y === 0 && this.last.z === 0 ? true : (t.x - this.last.x) ** 2 + (t.y - this.last.y) ** 2 + (t.z - this.last.z) ** 2 >= 1;
       if (moved || r.nextFloat() < f(0.05)) {
         this.last = { x: t.x, y: t.y, z: t.z };
@@ -1137,8 +1138,10 @@ export class Brain {
   // cached for the tick.
   canSee(t) {
     if (this.senseCache.has(t)) return this.senseCache.get(t);
-    const ax = this.x, ay = this.y + this.eyeHeight, az = this.z, dx = t.x - ax, dy = t.y + t.eyeHeight - ay, dz = t.z - az, len = Math.hypot(dx, dy, dz);
-    const seen = len < 1e-9 || !raycast(this.ai.world, { x: ax, y: ay, z: az }, { x: dx / len, y: dy / len, z: dz / len }, len);
+    // Batch 32: World.rayTraceBlocks(eye, eye) itself (cell walk, Block.collisionRayTrace), not the click ray's 0.025 sampling, which misses a grazing line
+    // (a zombie against a door slab lost sight one tick late in the village-fight b31 records).
+    const ax = this.x, ay = this.y + this.eyeHeight, az = this.z;
+    const seen = !rayTraceBlocks(this.ai.world, [ax, ay, az], [t.x, t.y + t.eyeHeight, t.z]);
     this.senseCache.set(t, seen);
     return seen;
   }
@@ -1346,7 +1349,7 @@ export class MobAI {
   // World.getLightBrightness: the brightness table at the block light value. Without
   // a light engine (tests) a column with open sky is full daylight.
   brightness(x, y, z) {
-    let level = this.ew.lightAt?.(x, y, z);
+    let level = (this.ew.brightnessLevel ?? this.ew.lightAt)?.call(this.ew, x, y, z); // brightnessLevel: a replay hook where getLightBrightness and getBlockLightValue differ
     if (level === undefined) {
       level = 15;
       for (let yy = y + 1; yy < (this.world.height ?? HEIGHT); yy++)

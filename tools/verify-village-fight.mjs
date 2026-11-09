@@ -6,7 +6,7 @@ const exec=promisify(execFile),root=path.dirname(fileURLToPath(import.meta.url))
 const researchDirs=[process.env.MC_RESEARCH,path.join(root,'research'),path.join(root,'../../tools/research')].filter(Boolean);
 let research;for(const dir of researchDirs)if(await exists(path.join(dir,'minecraft-1.7.10.jar'))){research=dir;break;}
 if(!research)throw new Error('Place minecraft-1.7.10.jar in tools/research or set MC_RESEARCH.');
-const jar=path.join(research,'minecraft-1.7.10.jar'),out=path.join(research,'village3-probe');
+const jar=path.join(research,'minecraft-1.7.10.jar'),out=path.join(research,'village-fight-probe');
 assert.equal(createHash('sha1').update(await readFile(jar)).digest('hex'),'e80d9b3bf5085002218d4be59e668bac718abbc6');
 async function library(prefix){
  for(const p of (process.env.MC_PROBE_LIBS||'').split(path.delimiter).filter(Boolean))if(path.basename(p).startsWith(prefix))return p;
@@ -18,13 +18,32 @@ async function library(prefix){
 const libs=await Promise.all(['guava-','log4j-api-','commons-lang3-','authlib-'].map(library));
 const classes=path.join(out,'classes');await rm(classes,{recursive:true,force:true});await mkdir(classes,{recursive:true});
 await exec('unzip',['-q','-o',jar,'*.class','-d',classes],{maxBuffer:1<<24});
+// Batch 32: Entity (sa) builds its Entity.rand with `new Random()` (clock seeded). Add a constant-pool Class entry SeedRandom (probes/SeedRandom.java extends
+// Random and counts seeds up from a value the probe sets) and point the one `new Random; dup; invokespecial <init>` of sa.class at it: no instruction of
+// Entity changes except those two operands, every other use of Random in sa keeps the java/util/Random entry.
+{const file=path.join(classes,'sa.class'),buf=await readFile(file);
+ const count=buf.readUInt16BE(8),utf=new Map(),classes_=new Map(),methods=new Map();let at=10,i=1;
+ while(i<count){const tag=buf[at];
+  if(tag===1){const len=buf.readUInt16BE(at+1);utf.set(i,buf.toString('latin1',at+3,at+3+len));at+=3+len;}
+  else if(tag===3||tag===4){at+=5;}else if(tag===5||tag===6){at+=9;i++;}
+  else if(tag===7){classes_.set(i,buf.readUInt16BE(at+1));at+=3;}else if(tag===8||tag===16||tag===19||tag===20){at+=3;}
+  else if(tag===10){methods.set(i,at);at+=5;}else if([9,11,12,17,18].includes(tag)){at+=5;}else if(tag===15){at+=4;}else throw new Error('cp tag '+tag);
+  i++;}
+ const randomClass=[...classes_].find(([,n])=>utf.get(n)==='java/util/Random')[0];
+ const code=Buffer.from([0xbb,randomClass>>8,randomClass&255,0x59,0xb7]);let hit=-1,found=0;for(let k=buf.indexOf(code);k>=0;k=buf.indexOf(code,k+1)){found++;hit=k;}
+ assert.equal(found,1,'sa.class has one new Random');
+ const method=buf.readUInt16BE(hit+5),entry=methods.get(method);
+ const name=Buffer.from('SeedRandom'),add=Buffer.concat([Buffer.from([1,0,name.length]),name,Buffer.from([7,count>>8,count&255])]); // utf8 at index count, Class at count + 1
+ const out2=Buffer.concat([buf.subarray(0,at),add,buf.subarray(at)]);
+ out2.writeUInt16BE(count+2,8);out2.writeUInt16BE(count+1,entry+1);out2.writeUInt16BE(count+1,hit+add.length+1); // the cp entries precede `at`, so the Methodref offset is unchanged
+ await writeFile(file,out2);}
 const probe=path.join(out,'probe');await rm(probe,{recursive:true,force:true});await mkdir(probe,{recursive:true});
 const cp=[probe,classes,...libs].join(path.delimiter);
-await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','VillagerProbe','ModelProbe','VillageLiveProbe','ArmorEnchantmentProbe','VillageFightProbe'].map(n=>path.join(root,`probes/${n}.java`))],{maxBuffer:1<<24});
+await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','VillagerProbe','ModelProbe','VillageLiveProbe','ArmorEnchantmentProbe','SeedRandom','VillageFightProbe'].map(n=>path.join(root,`probes/${n}.java`))],{maxBuffer:1<<24});
 const {stdout}=await exec('java',['-cp',cp,'VillageFightProbe'],{maxBuffer:1<<29});
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
-const b31=records.filter(r=>r.name.startsWith('b31-')),base=records.filter(r=>!r.name.startsWith('b31-'));
-assert.equal(base.length,7);assert.equal(b31.length,19);
+const b31=records.filter(r=>r.name.startsWith('b31-')),b32=records.filter(r=>r.name.startsWith('b32-')),base=records.filter(r=>!/^b3[12]-/.test(r.name));
+assert.equal(base.length,7);assert.equal(b31.length,19);assert.equal(b32.length,Number(process.env.VF_EXPECT_B32??b32.length));assert.ok(b32.length>=20,'b32 records');
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const names={vz:'Village',wa:'VillageAggressor',vm:'EntityAIDefendVillage',yv:'EntityVillager',wt:'EntityIronGolem',yq:'EntityZombie',yl:'EntitySkeleton',tw:'EntityAIAvoidEntity',sv:'EntityLivingBase'};
 const classes_=Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}])));
@@ -36,4 +55,8 @@ const reference31={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf508500221
  records:b31};
 await writeFile(path.join(root,'../public/research/village-fight-reference.json'),JSON.stringify(reference)+'\n');
 await writeFile(path.join(root,'../public/research/village-fight-b31-reference.json'),JSON.stringify(reference31)+'\n');
+const reference32={target:'Minecraft Java 1.7.10',clientSha1:reference31.clientSha1,classes:{...reference31.classes,ajj:{name:'BlockDoor',sha256:await digest('ajj')},aji:{name:'Block',sha256:await digest('aji')},ahb:{name:'World',sha256:await digest('ahb')}},
+ method:'Batch 32. Same double, row layout and script ops as village-fight-b31-reference.json, plus: Entity.rand of every entity built after the mobs (arrows, converted villagers, reinforcements) is a SeedRandom seeded from the record (`shots[i][13]`, `zombies[j][5]`), so arrow start headings, damage and the extra zombies draws are derived, not copied; the Entity.rand of the initial zombies is also seeded (SeedRandom replaces the single `new Random` in sa.class at load: bytecode patch of the constant pool, no behaviour change). `bases` is each zombie spawnReinforcements attribute (nextDouble*0.1 drawn in its constructor, or the record `reinforce` value). Rows carry a 5th element: the extra zombies [x,y,z,health,attackTarget,revengeTarget,draws] in spawn order (index types.length+1+k). `zombies` is [tick, 1 for a conversion or 0 for a reinforcement, x, y, z, seed, isVillager]. Record fields `blocks` (fill specs [x0,y0,z0,x1,y1,z1,id,meta] applied before the run on the flat y=-1 floor), `water` (the real World water methods answer for liquid cells), `light` (World.getBlockLightValue) and `reinforce` describe the arena variant.',
+ records:b32};
+await writeFile(path.join(root,'../public/research/village-fight-b32-reference.json'),JSON.stringify(reference32)+'\n');
 console.log('Fight records:',base.length,'+',b31.length,'bytes:',JSON.stringify(reference).length,JSON.stringify(reference31).length);

@@ -17,19 +17,24 @@ import java.util.Random;
 //   rename name                       the player's name (reputation key); default "probe"
 // Output per record: each tick's rows [per ticked entity: x, y, z, health, attack target index, revenge target index, its Random draws], the village aggressor list
 // [entity index, tick], the reputation of every name, and the hit results.
+// (Batch 32: names b32-*. Entity.rand is a SeedRandom (see SeedRandom.java), so an arrow's heading draws and the onSpawnWithEgg draws of a converted
+// or reinforcement zombie are reproducible: each record lists them with their seed, and the zombies are ticked like any mob. The record fields
+// `blocks` ([x0,y0,z0,x1,y1,z1,id,meta] fills), `water` (real water physics), `light` (World.getBlockLightValue) and `reinforce` (the zombies'
+// spawnReinforcements base) describe the arena.)
 public class VillageFightProbe {
   static String num(double v) { return Double.toString(v); }
   static Object field(Object o, String n) throws Exception { return MobMoveProbe.field(o.getClass(), n).get(o); }
   static void at(sa e, double x, double y, double z) throws Exception { MobMoveProbe.method(sa.class, "b", double.class, double.class, double.class).invoke(e, x, y, z); }
   // EntityLivingBase.onUpdate sends an equipment packet through (WorldServer) when a slot differs from its previous one; the double has no WorldServer, so previousEquipment follows each swap.
   static void held(yl e, add stack) throws Exception { e.c(0, stack); ((add[]) MobMoveProbe.field(sv.class, "g").get(e))[0] = e.ak()[0]; }
+  static double[] bx(azt b) throws Exception { return new double[] {b.a, b.b, b.c, b.d, b.e, b.f}; }
   static String q(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
 
   public static class Log extends Random {
     List<String> log = new ArrayList<>();
     Log(long seed) { super(seed); }
-    public int nextInt(int bound) { int r = super.nextInt(bound); log.add("i" + bound); return r; }
-    public float nextFloat() { float r = super.nextFloat(); log.add("f"); return r; }
+    public int nextInt(int bound) { int r = super.nextInt(bound); log.add("i" + bound + (SeedRandom.TRACE ? SeedRandom.where() : "")); return r; }
+    public float nextFloat() { float r = super.nextFloat(); log.add("f" + (SeedRandom.TRACE ? SeedRandom.where() : "")); return r; }
     public double nextGaussian() { double r = super.nextGaussian(); log.add("g"); return r; }
     public boolean nextBoolean() { boolean r = super.nextBoolean(); log.add("b"); return r; } // batch 31: the zombie's onKillEntity roll on Normal
   }
@@ -41,12 +46,20 @@ public class VillageFightProbe {
     public r f_() { return null; }
     public String b_() { return n; }
   }
+  // Index of an entity in the record: the mobs, the player (types.length), then the zombies spawned during the fight in spawn order.
+  static int index(Object[] ents, List<yq> extra, Object e) {
+    for (int k = 0; k < ents.length; k++) if (ents[k] == e) return k;
+    for (int k = 0; k < extra.size(); k++) if (extra.get(k) == e) return ents.length + k;
+    return -1;
+  }
   static String draws(List<String> log) {
     StringBuilder s = new StringBuilder();
     for (String d : log) s.append(s.length() > 0 ? "," : "").append("\"").append(d).append("\"");
     return s.toString();
   }
 
+  static void base(yq z) throws Exception { if (reinforce > 0) ((ti) z.a((th) MobMoveProbe.field(yq.class, "bp").get(null))).a(reinforce); }
+  static int[][] blocks = {}; static boolean water = false; static int light = 15; static double reinforce = 0; // batch 32 arena (reset after each scenario)
   static int difficulty = 2; // batch 30: rd ordinal (0 Peaceful .. 3 Hard) the next scenarios run on
   static final String DEFAULT_TYPES = "VVZZGKK";
   static void scenario(String name, long seed, int ticks, double[][] pos, String[] script) throws Exception { scenario(name, seed, ticks, DEFAULT_TYPES, pos, script); }
@@ -55,12 +68,15 @@ public class VillageFightProbe {
   // carries the spawned arrows (`shots`: their initial state, which natively comes from an unseedable Random) and per tick the arrows' rows.
   static void scenario(String name, long seed, int ticks, String types, double[][] pos, String[] script) throws Exception {
     int n = types.length();
+    if (System.getenv("VF_ONLY") != null && !name.equals(System.getenv("VF_ONLY"))) return; // development aid: run one record
     MobMoveProbe.set(VillageLiveProbe.world, "r", rd.values()[difficulty]);
     wc c = VillageLiveProbe.newCollection(seed);
     VillageLiveProbe.W.players.clear();
     VillageLiveProbe.W.day = false;
     VillageLiveProbe.door(50, 0, 50, 0);
     VillageLiveProbe.W.roofs.add(new int[] {40, 0, 49, 100});
+    for (int[] b : blocks) for (int x = b[0]; x <= b[3]; x++) for (int y = b[1]; y <= b[4]; y++) for (int z = b[2]; z <= b[5]; z++) VillageLiveProbe.put(x, y, z, b[6], b[7]);
+    VillagerProbe.World.light = light; MobMoveProbe.ProbeWorld.water = water;
     for (int t = 0; t < 5; t++) { if (t % 60 == 0) c.a(52, 0, 52); c.a(); }
     ahb w = VillageLiveProbe.world;
     P player = new P(w, "probe");
@@ -68,8 +84,8 @@ public class VillageFightProbe {
     for (int i = 0; i < n; i++) {
       switch (types.charAt(i)) {
         case 'V': ents[i] = VillagerProbe.villager((VillageLiveProbe.W) w, i % 5, 0, 0, i + 1); break;
-        case 'Z': ents[i] = new yq(w); break;
-        case 'z': { yq z = new yq(w); dh tag = new dh(); tag.a("CanBreakDoors", true); z.a(tag); ents[i] = z; break; }
+        case 'Z': { yq z = new yq(w); base(z); ents[i] = z; break; }
+        case 'z': { yq z = new yq(w); dh tag = new dh(); tag.a("CanBreakDoors", true); z.a(tag); base(z); ents[i] = z; break; }
         case 'G': ents[i] = new wt(w); break;
         case 'K': ents[i] = new yl(w); break;
         case 'B': { yl k = new yl(w); held(k, ArmorEnchantmentProbe.make(261, 0, ArmorEnchantmentProbe.ench())); ents[i] = k; break; }
@@ -77,8 +93,14 @@ public class VillageFightProbe {
       }
     }
     ents[n] = player;
-    boolean extras = name.startsWith("b31-"); // rows then end with the arrows, and the record lists the shots and conversions
+    // EntityZombie.applyEntityAttributes draws the spawnReinforcements base (nextDouble * 0.1) from the constructor's Entity.rand: with Entity seeded it is part of the record.
+    StringBuilder bases = new StringBuilder("[");
+    for (int i = 0; i < n; i++) bases.append(i > 0 ? "," : "").append(ents[i] instanceof yq ? num(((ti) ((yq) ents[i]).a((th) MobMoveProbe.field(yq.class, "bp").get(null))).e()) : "null");
+    bases.append("]");
+    boolean extras = name.startsWith("b31-") || name.startsWith("b32-"); // rows then end with the arrows, and the record lists the shots and conversions
     VillagerProbe.World.spawned.clear();
+    SeedRandom.next = 1000000L + seed * 1000; // the first Entity built from here on (an arrow, a converted or reinforcement zombie) gets this seed
+    List<yq> extraZombies = new ArrayList<>(); List<String> zombieRecs = new ArrayList<>();
     Log[] logs = new Log[ents.length];
     for (int i = 0; i < ents.length; i++) {
       sa e = (sa) ents[i];
@@ -97,7 +119,7 @@ public class VillageFightProbe {
     VillagerProbe.World.closePlayers = new ArrayList<yz>(java.util.Arrays.asList(player));
     double[][] vel = new double[ents.length][2];
     List<String> rows = new ArrayList<>(), hits = new ArrayList<>(), shots = new ArrayList<>(), conversions = new ArrayList<>();
-    java.util.Map<sa, Integer> arrowId = new java.util.HashMap<>(); java.util.Map<sa, String> lastArrow = new java.util.HashMap<>(); List<zc> arrowList = new ArrayList<>(); List<sa> removed = new ArrayList<>();
+    java.util.Map<sa, Integer> arrowId = new java.util.HashMap<>(); java.util.Map<sa, String> lastArrow = new java.util.HashMap<>(); List<sa> arrowList = new ArrayList<>(); List<sa> removed = new ArrayList<>();
     for (int t = 0; t < ticks; t++) {
       for (String op : script) {
         String[] p = op.split(" ");
@@ -121,6 +143,7 @@ public class VillageFightProbe {
       if (t % 60 == 0) c.a(52, 0, 52);
       c.a();
       for (Log l : logs) l.log.clear();
+      for (yq z : extraZombies) ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(z)).log.clear();
       // World.updateEntities walks loadedEntityList by index, so an arrow spawned by a skeleton joins the end and ticks in the same pass; a dead entity
       // (setDead) leaves the list right after its own update (extras records only: the batch 28-30 records kept corpses in the list).
       List<String> tickArrows = new ArrayList<>();
@@ -145,25 +168,47 @@ public class VillageFightProbe {
             zc arrow = (zc) sp;
             int shooter = -1;
             for (int k = 0; k < n; k++) if (ents[k] == arrow.c) shooter = k;
-            MobMoveProbe.set(arrow, "Z", new Random(seed * 1000 + shots.size()));
             shots.add("[" + t + "," + shooter + "," + num(arrow.s) + "," + num(arrow.t) + "," + num(arrow.u) + "," + num(arrow.v) + "," + num(arrow.w) + "," + num(arrow.x) + "," + num(arrow.y) + "," + num(arrow.z)
-              + "," + num(arrow.e()) + "," + MobMoveProbe.field(zc.class, "aw").getInt(arrow) + "," + MobMoveProbe.field(sa.class, "e").getInt(arrow) + "]");
+              + "," + num(arrow.e()) + "," + MobMoveProbe.field(zc.class, "aw").getInt(arrow) + "," + MobMoveProbe.field(sa.class, "e").getInt(arrow) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(arrow)).seed + "]");
             arrowId.put(arrow, shots.size() - 1);
             arrowList.add(arrow);
             ticking.add(arrow);
             VillagerProbe.World.entities.add(arrow);
           } else if (sp instanceof yq) {
-            // EntityZombie.onKillEntity: the converted zombie (never ticked here: its onSpawnWithEgg draws come from an unseedable Random)
+            // Batch 32: a zombie spawned mid-pass (EntityZombie.onKillEntity's converted villager, or a Hard reinforcement) joins the world list and ticks in this
+            // pass like any entity. A conversion stands exactly where a dead villager did; a reinforcement is built by attackEntityFrom on an integer corner.
             yq z = (yq) sp;
-            conversions.add("[" + t + "," + num(z.s) + "," + num(z.t) + "," + num(z.u) + "]");
+            boolean conv = false;
+            for (int k = 0; k < n; k++) if (ents[k] instanceof yv && ((sv) ents[k]).aS() <= 0 && ((sa) ents[k]).s == z.s && ((sa) ents[k]).u == z.u) conv = true;
+            if (conv) conversions.add("[" + t + "," + num(z.s) + "," + num(z.t) + "," + num(z.u) + "]");
+            for (String fn : new String[] {"aO", "aM", "aN", "aP"}) MobMoveProbe.set(z, fn, 0f);
+            zombieRecs.add("[" + t + "," + (conv ? 1 : 0) + "," + num(z.s) + "," + num(z.t) + "," + num(z.u) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(z)).seed + "," + (z.bZ() ? 1 : 0) + "," + num(z.y) + "]"); // the last field is rotationYaw: EntityLivingBase's constructor rolls it with Math.random (0..2*pi degrees), which no Entity.rand seed reaches
+            extraZombies.add(z);
+            arrowList.add(z);
+            ticking.add(z);
+            VillagerProbe.World.entities.add(z);
           }
         }
         if (e instanceof zc) { // only an arrow whose state changed since the last row lists (a stuck arrow ticks on, unchanged)
           String as = "[" + arrowId.get(e) + "," + num(e.s) + "," + num(e.t) + "," + num(e.u) + "," + num(e.v) + "," + num(e.w) + "," + num(e.x) + "," + (e.K ? 1 : 0) + "]";
           if (!as.equals(lastArrow.put(e, as))) tickArrows.add(as);
         }
-        if (e.K && extras) { VillagerProbe.World.entities.remove(e); if (e instanceof zc) arrowList.remove(e); else removed.add(e); ticking.remove(i--); }
+        if (e.K && extras) { VillagerProbe.World.entities.remove(e); arrowList.remove(e); if (!(e instanceof zc)) removed.add(e); ticking.remove(i--); }
       }
+      if (System.getenv("VF_PATH") != null) { // development aid: the native path of mob VF_PATH after each tick
+        try {
+          sw m = (sw) ents[Integer.parseInt(System.getenv("VF_PATH"))]; Object nav = m.m(); Object path = null;
+          for (Field f : nav.getClass().getDeclaredFields()) if (f.getType() == ayf.class) { f.setAccessible(true); path = f.get(nav); }
+          StringBuilder pb = new StringBuilder();
+          if (path != null) for (Field f : ayf.class.getDeclaredFields()) if (f.getType().isArray() && !f.getType().getComponentType().isPrimitive()) { f.setAccessible(true); for (Object pt : (Object[]) f.get(path)) pb.append(pt == null ? "null" : "(" + MobMoveProbe.field(pt.getClass(), "a").getInt(pt) + "," + MobMoveProbe.field(pt.getClass(), "b").getInt(pt) + "," + MobMoveProbe.field(pt.getClass(), "c").getInt(pt) + ")"); }
+          System.err.println("path " + t + " " + pb);
+        } catch (Exception ex) { System.err.println("path ?" + ex); }
+      }
+      if (System.getenv("VF_COL") != null) { // development aid: collision flags of mob VF_COL after each tick
+        sa m = (sa) ents[Integer.parseInt(System.getenv("VF_COL"))];
+        System.err.println("col " + t + " E=" + MobMoveProbe.field(sa.class, "E").getBoolean(m) + " F=" + MobMoveProbe.field(sa.class, "F").getBoolean(m) + " D=" + MobMoveProbe.field(sa.class, "D").getBoolean(m) + " vy=" + m.w + " y=" + m.t + " off=" + m.c(m.v, m.w + 0.6 - m.t + Double.parseDouble(System.getenv("VF_Y0") == null ? "0" : System.getenv("VF_Y0")), m.x) + " coll=" + ((List) VillageLiveProbe.world.a(m, m.C.c(m.v, m.w + 0.6 - m.t + Double.parseDouble(System.getenv("VF_Y0") == null ? "0" : System.getenv("VF_Y0")), m.x))).size() + " box=" + java.util.Arrays.toString(bx(m.C.c(m.v, m.w + 0.6 - m.t + Double.parseDouble(System.getenv("VF_Y0") == null ? "0" : System.getenv("VF_Y0")), m.x))) + " hit=" + (((List) VillageLiveProbe.world.a(m, m.C.c(m.v, m.w + 0.6 - m.t + Double.parseDouble(System.getenv("VF_Y0") == null ? "0" : System.getenv("VF_Y0")), m.x))).isEmpty() ? "" : java.util.Arrays.toString(bx((azt) ((List) VillageLiveProbe.world.a(m, m.C.c(m.v, m.w + 0.6 - m.t + Double.parseDouble(System.getenv("VF_Y0") == null ? "0" : System.getenv("VF_Y0")), m.x))).get(0)))) + " liq=" + VillageLiveProbe.world.d(m.C.c(m.v, m.w + 0.6 - m.t + Double.parseDouble(System.getenv("VF_Y0") == null ? "0" : System.getenv("VF_Y0")), m.x)));
+      }
+      if (System.getenv("VF_DOOR") != null) { int[] dc = VillagerProbe.World.cell(50, 0, 50); System.err.println("door " + t + " " + (dc == null ? -1 : dc[0] + ":" + dc[1])); } // development aid
       vz village = (vz) c.b().get(0);
       StringBuilder row = new StringBuilder("[[");
       for (int i = 0; i < ents.length; i++) {
@@ -172,23 +217,27 @@ public class VillageFightProbe {
         row.append("[").append(num(e.s)).append(",").append(num(e.t)).append(",").append(num(e.u)).append(",").append(num(((sv) e).aS()));
         if (i < ents.length - 1) {
           sv tg = ((sw) e).o(), rv = (sv) MobMoveProbe.field(sv.class, "i").get(e);
-          int ti = -1, ri = -1;
-          for (int k = 0; k < ents.length; k++) { if (ents[k] == tg) ti = k; if (ents[k] == rv) ri = k; }
-          row.append(",").append(ti).append(",").append(ri).append(",[").append(draws(logs[i].log)).append("]");
+          row.append(",").append(index(ents, extraZombies, tg)).append(",").append(index(ents, extraZombies, rv)).append(",[").append(draws(logs[i].log)).append("]");
         }
         row.append("]");
       }
       row.append("],[");
       boolean first = true;
       for (Object o : (List) field(village, "k")) {
-        int idx = -1;
-        Object en = field(o, "a");
-        for (int i = 0; i < ents.length; i++) if (ents[i] == en) idx = i;
+        int idx = index(ents, extraZombies, field(o, "a"));
         row.append(first ? "" : ",").append("[").append(idx).append(",").append(MobMoveProbe.field(o.getClass(), "b").getInt(o)).append("]");
         first = false;
       }
       row.append("],").append(village.a(player.n));
-      if (extras) row.append(",[").append(String.join(",", tickArrows)).append("]");
+      if (extras) {
+        row.append(",[").append(String.join(",", tickArrows)).append("],[");
+        for (int k = 0; k < extraZombies.size(); k++) {
+          yq z = extraZombies.get(k);
+          row.append(k > 0 ? "," : "").append("[").append(num(z.s)).append(",").append(num(z.t)).append(",").append(num(z.u)).append(",").append(num(z.aS())).append(",")
+            .append(index(ents, extraZombies, z.o())).append(",").append(index(ents, extraZombies, (sv) MobMoveProbe.field(sv.class, "i").get(z))).append(",[").append(draws(((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(z)).log)).append("]]");
+        }
+        row.append("]");
+      }
       row.append("]");
       rows.add(row.toString());
     }
@@ -196,13 +245,14 @@ public class VillageFightProbe {
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     for (String r : rows) rs.append(rs.length() > 0 ? "," : "").append(r);
     for (String h : hits) hs.append(hs.length() > 0 ? "," : "").append(h);
-    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "]" : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
+    System.out.println("{\"case\":\"fight\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"difficulty\":" + difficulty + ",\"ticks\":" + ticks + (extras ? ",\"types\":" + q(types) + ",\"shots\":[" + String.join(",", shots) + "],\"conversions\":[" + String.join(",", conversions) + "],\"zombies\":[" + String.join(",", zombieRecs) + "]" + ",\"bases\":" + bases + (blocks.length > 0 ? ",\"blocks\":" + java.util.Arrays.deepToString(blocks) : "") + (water ? ",\"water\":true" : "") + (light != 15 ? ",\"light\":" + light : "") + (reinforce > 0 ? ",\"reinforce\":" + reinforce : "") : "") + ",\"pos\":" + java.util.Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"hits\":[" + hs + "],\"rows\":[" + rs + "]}");
   }
 
   public static void main(String[] args) throws Exception {
     aji.p();
     adb.l();
     VillagerProbe.World.pickEntities = true;
+    MobMoveProbe.ProbeWorld.exact = true;
     VillagerProbe.World.realRays = true; // batch 30: real EntitySenses sight rays (the village3 double returned null: a villager saw a zombie through a closed door)
     sun.misc.Unsafe u = MobMoveProbe.unsafe();
     ArmorEnchantmentProbe.U = u;
@@ -260,6 +310,56 @@ public class VillageFightProbe {
       scenario("b31-arrows-through-villagers-d" + d, 60 + d, 300, "VVGBBB", line, new String[] {"150 hit 3 6 1.0 player"});
     }
     difficulty = 2;
+    // Batch 32: arena variants (fill specs {x0,y0,z0,x1,y1,z1,id,meta}; the flat floor is y=-1, mobs stand at y=0). Zombies, villagers and the golem as in b31-three-zombies.
+    double[][] arena = three;
+    String[] fight = {"0 walk 7 -0.08 -0.04", "60 walk 7 0 0", "80 hit 3 7 5.0 player", "120 hit 3 7 5.0 player", "150 hit 0 4 1.0 mob"};
+    String[] hunt = {"250 hit 1 3 30.0 mob"};
+    // a one-block ledge (zombies and the golem jump it) and a two-block wall (they path around its ends); on Hard so that the villagers convert
+    for (int d = 2; d <= 3; d++) {
+      difficulty = d;
+      blocks = new int[][] {{58, 0, 40, 59, 0, 70, 1, 0}};
+      scenario("b32-step1-d" + d, 100 + d, 420, "VVzZZGK", arena, fight);
+      scenario("b32-step1-hunt-d" + d, 110 + d, 500, "VVzZZGK", new double[][] {{52.5, 52.5}, {54.5, 52.5}, {64.5, 51.5}, {68.5, 55.5}, {62.5, 47.5}, {10.5, 10.5}, {52.5, 80.5}, {62.5, 58.5}}, hunt);
+      blocks = new int[][] {{58, 0, 44, 59, 1, 60, 1, 0}};
+      scenario("b32-step2-d" + d, 120 + d, 420, "VVzZZGK", arena, fight);
+      scenario("b32-step2-hunt-d" + d, 130 + d, 500, "VVzZZGK", new double[][] {{52.5, 52.5}, {54.5, 52.5}, {64.5, 51.5}, {68.5, 55.5}, {62.5, 47.5}, {10.5, 10.5}, {52.5, 80.5}, {62.5, 58.5}}, hunt);
+      blocks = new int[][] {{56, 0, 40, 57, 1, 70, 1, 0}, {58, 0, 40, 59, 0, 70, 1, 0}, {60, 0, 40, 61, 0, 70, 2, 0}}; // a stair of three levels: 1, 1/2, grass-height ledges
+      scenario("b32-terrace-d" + d, 140 + d, 420, "VVzZZGK", arena, fight);
+    }
+    // a water pool (two deep) between the zombies and the villagers
+    difficulty = 3; water = true;
+    blocks = new int[][] {{56, -2, 44, 62, -1, 62, 9, 0}};
+    scenario("b32-pool-d3", 150, 420, "VVzZZGK", arena, fight);
+    scenario("b32-pool-hunt-d3", 151, 500, "VVzZZGK", new double[][] {{52.5, 52.5}, {54.5, 52.5}, {64.5, 51.5}, {68.5, 55.5}, {62.5, 47.5}, {10.5, 10.5}, {52.5, 80.5}, {62.5, 58.5}}, hunt);
+    blocks = new int[][] {{56, -2, 44, 62, -1, 62, 9, 0}, {63, -2, 44, 63, -1, 62, 1, 0}};
+    scenario("b32-pool-golem-d2", 152, 420, "VVzZZGK", arena, fight);
+    water = false; blocks = new int[][] {};
+    // closed doors: the villagers stand in a stone room with a wooden door; zombies (one breaks doors) outside
+    int[][] house = {{49, 0, 49, 56, 2, 49, 4, 0}, {49, 0, 56, 56, 2, 56, 4, 0}, {49, 0, 50, 49, 2, 55, 4, 0}, {56, 0, 50, 56, 2, 55, 4, 0}, {49, 3, 49, 56, 3, 56, 4, 0}, {56, 0, 52, 56, 0, 52, 64, 0}, {56, 1, 52, 56, 1, 52, 64, 8}};
+    for (int d = 2; d <= 3; d++) {
+      difficulty = d;
+      blocks = house;
+      scenario("b32-closed-door-d" + d, 160 + d, 500, "VVzZZGK", new double[][] {{52.5, 52.5}, {54.5, 53.5}, {64.5, 51.5}, {68.5, 55.5}, {62.5, 47.5}, {46.5, 40.5}, {52.5, 80.5}, {62.5, 58.5}}, hunt);
+    }
+    // an open door (meta 4) villagers walk through and close behind them
+    blocks = new int[][] {{49, 0, 49, 56, 2, 49, 4, 0}, {49, 0, 56, 56, 2, 56, 4, 0}, {49, 0, 50, 49, 2, 55, 4, 0}, {56, 0, 50, 56, 2, 55, 4, 0}, {49, 3, 49, 56, 3, 56, 4, 0}, {56, 0, 52, 56, 0, 52, 64, 4}, {56, 1, 52, 56, 1, 52, 64, 8}};
+    difficulty = 2;
+    scenario("b32-open-door-d2", 170, 500, "VVzZGK", new double[][] {{52.5, 52.5}, {54.5, 53.5}, {70.5, 51.5}, {46.5, 40.5}, {52.5, 80.5}, {62.5, 58.5}, {62.5, 60.5}}, new String[] {});
+    blocks = new int[][] {};
+    // arrows hit blocks: a stone wall, a fence and a glass pane line between the shooters (east) and the player and villagers (west)
+    difficulty = 3;
+    int[][][] shields = {{{60, 0, 48, 60, 2, 60, 1, 0}}, {{60, 0, 48, 60, 1, 60, 85, 0}}, {{60, 0, 48, 60, 2, 60, 20, 0}}, {{60, 0, 48, 60, 0, 60, 44, 0}}};
+    String[] shieldName = {"stone", "fence", "glass", "slab"};
+    for (int k = 0; k < shields.length; k++) {
+      blocks = shields[k];
+      scenario("b32-arrows-" + shieldName[k], 180 + k, 300, "VVGBBB", new double[][] {{54.5, 52.5}, {54.5, 54.5}, {10.5, 10.5}, {66.5, 52.5}, {66.5, 54.5}, {68.5, 53.5}, {52.5, 53.5}}, new String[] {"150 hit 3 6 1.0 player"});
+    }
+    blocks = new int[][] {};
+    // Hard reinforcements: a dark world and a reinforcement base of 1.0 (the base is otherwise nextDouble * 0.1): every hit on a zombie with a target can summon
+    difficulty = 3; light = 0; reinforce = 1.0;
+    scenario("b32-reinforce-d3", 190, 400, "VVzZZGK", arena, new String[] {"0 walk 7 -0.08 -0.04", "60 walk 7 0 0", "80 hit 3 7 1.0 player", "100 hit 3 7 1.0 player", "120 hit 2 7 1.0 player", "150 hit 0 4 1.0 mob"});
+    scenario("b32-reinforce-hunt-d3", 191, 450, "VVzZZGK", new double[][] {{52.5, 52.5}, {54.5, 52.5}, {64.5, 51.5}, {68.5, 55.5}, {62.5, 47.5}, {10.5, 10.5}, {52.5, 80.5}, {62.5, 58.5}}, new String[] {"100 hit 2 5 1.0 mob", "200 hit 3 1 1.0 mob"});
+    difficulty = 2; light = 15; reinforce = 0;
     // a moving player fights back at bow skeletons: walks to them, hits one, backs off (arrows reach the player and the villagers beside him)
     double[][] chase = {{58.5, 50.5}, {60.5, 50.5}, {46.5, 51.5}, {66.5, 52.5}, {70.5, 56.5}, {72.5, 50.5}, {62.5, 58.5}};
     scenario("b31-player-vs-bows", 30, 400, "VVGBBB", chase, new String[] {"0 walk 6 0.12 -0.1", "40 walk 6 0.1 0", "62 walk 6 0 0", "64 hit 3 6 4.0 player", "80 hit 3 6 4.0 player", "100 hit 3 6 4.0 player", "120 walk 6 -0.1 0.1", "180 walk 6 0 0", "200 hit 4 6 5.0 player", "260 hit 0 6 1.0 player"});
