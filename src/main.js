@@ -760,7 +760,7 @@ function applyMultiplayerTick(message) {
     const old = world.get(x, y, z);
     world.put(x, y, z, id, meta, false); cells.push([x, y, z, old, id]);
   }
-  if (cells.length) scene.updateBlocks(cells);
+  if (cells.length) { scene.updateBlocks(cells); remoteChestCells(cells); }
   const self = message.players.find(p => p.id === multiplayer.id);
   if (self) {
     previous.copy(position); position.set(self.x, self.y, self.z);
@@ -794,10 +794,44 @@ function applyMultiplayerTick(message) {
   }
   if (message.you) { remoteItems.sync(message.you.items); scene.setDrops(remoteItems.items); }
 }
+// A streamed gun-server world's window moved: the server's new columns replace the ones this tab let go (client.js ReplicaWorld).
+function applyMultiplayerColumns(message) {
+  if (!multiplayer?.ready || !active?.remote || typeof world.receive !== 'function') return;
+  const change = world.receive(message.window, message.columns);
+  if (!change) return;
+  scene.syncChunks(change);
+  remoteChestColumns(change);
+  chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
+}
+// A gun server keeps the chests' items; this tab keeps only what ChestRenderer draws: a tile for every chest cell, faced as
+// onBlockAdded settles it (BlockChest.func_149954_e), and the ender chests' lid state.
+function remoteChestCell(x, y, z) {
+  const key = `${x},${y},${z}`, b = world.get(x, y, z);
+  if (isChestBlock(b)) { if (!survival.chests[key]) settleFacing(world, survival.chests, x, y, z); } else delete survival.chests[key];
+  if (b === ENDER_CHEST) survival.enderTiles[key] ??= newEnderTile(); else delete survival.enderTiles[key];
+}
+function remoteChestCells(cells) {
+  for (const [x, y, z] of cells) for (const [dx, dz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) remoteChestCell(x + dx, y, z + dz); // a new partner turns its pair
+}
+function remoteChestColumns({ added = [], removed = [] }) {
+  const gone = new Set(removed.map(c => `${c.x},${c.z}`));
+  for (const tiles of [survival.chests, survival.enderTiles]) for (const key of Object.keys(tiles)) {
+    const [x, , z] = key.split(",").map(Number);
+    if (gone.has(`${x >> 4},${z >> 4}`)) delete tiles[key];
+  }
+  for (const c of added) {
+    const H = world.height, blocks = c.blocks;
+    for (let i = 0; i < blocks.length; i++) if (isChestBlock(blocks[i]) || blocks[i] === ENDER_CHEST) {
+      const y = i % H, t = (i - y) / H; // WorldChunk order: ((x * 16 + z) * height + y)
+      remoteChestCell(c.x * 16 + (t >> 4), y, c.z * 16 + (t & 15));
+    }
+  }
+}
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
   const client = new DedicatedClient({
     onTick: applyMultiplayerTick,
+    onColumns: applyMultiplayerColumns,
     onChat: ({ name, text }) => printChat(name ? chatTextComponent(name, text) : text),
     onClose: reason => { if (multiplayer === client) { leaveToTitle(false); gui.show(errorScreen({ title: 'Disconnected', message: reason, cancel: showMultiplayer })); } },
   });
@@ -1721,7 +1755,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     achievementToast.clear();
     if (!achievements.has("openInventory")) achievementToast.hint(BY_ACHIEVEMENT.openInventory);
     containerResidency?.dispose();
-    containerResidency=world.streaming&&!world.isDimension?new ContainerResidency(world,record.id,survival,{scope:record.containerScope,onError:e=>{pause();toast('Could not load saved containers. Reopen the world to retry: '+e.message);}}):null;
+    containerResidency=world.streaming&&!world.isDimension&&!record.remote?new ContainerResidency(world,record.id,survival,{scope:record.containerScope,onError:e=>{pause();toast('Could not load saved containers. Reopen the world to retry: '+e.message);}}):null;
     survival.furnaceActive = key => !world.streaming || world.isTicking(...[key.split(",")[0],key.split(",")[2]].map(Number));
     survival.furnaceChanged = key => redstoneRuntime?.containerClosed([key]);
     restorePopulation(record,world,survival,mobs);
@@ -1737,6 +1771,7 @@ async function launch(record, prepared, { slice = false } = {}) {
       if (isChestBlock(b) && !survival.chests[key]) settleFacing(world, survival.chests, ...key.split(",").map(Number));
       if (b === ENDER_CHEST) survival.enderTiles[key] ??= newEnderTile(); // lid state for the renderer (not saved)
     }
+    if (record.remote) remoteChestColumns({ added: [...world.chunks.values()] });
     chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
     const p = record.position,
       valid =

@@ -46,8 +46,8 @@ const describe = (victim, hit) => {
 
 export class GunSimulation extends DedicatedSimulation {
   // config: the server.properties values (properties.js readServerConfig), canEdit(p) -> op check for spawn protection.
-  constructor(saved = {}, { world = null, config = {}, random = Math.random, isOp = () => false } = {}) {
-    super({ ...saved, version: saved.version === 2 ? 1 : saved.version, players: [] }, { world });
+  constructor(saved = {}, { world = null, port = null, config = {}, random = Math.random, isOp = () => false } = {}) {
+    super({ ...saved, version: saved.version === 2 ? 1 : saved.version, players: [] }, { world, port });
     this.config = { gamemode: 'survival', difficulty: 2, pvp: true, spawnProtection: 16, forceGamemode: false, ...config };
     this.random = random; this.isOp = isOp;
     this.history = new PositionHistory();
@@ -74,6 +74,7 @@ export class GunSimulation extends DedicatedSimulation {
     p.lastHit = null; p.sentInv = null; p.sentMode = null; p.idleSince = this.ticks;
     if (!saved) this.giveKit(p);
     this.play.reset(p);
+    this.watch(p); // the saved position's window (the caller waited for its cells: whenReady)
     return p;
   }
   survivalFor(data, mode) {
@@ -84,6 +85,10 @@ export class GunSimulation extends DedicatedSimulation {
     return s;
   }
   spawnPoint() { return this.world.spawn(); }
+  // WorldInfo's spawn point (spawn protection's centre): the native world spawn, which spawn() scatters players around.
+  worldSpawn() { const w = this.world, n = w.nativeSpawn; return n ? { x: n[0] - w.originX, y: n[1], z: n[2] - w.originZ } : w.spawn(); }
+  // Where an account's player appears when it joins: its saved position, else null (the world spawn, always resident).
+  startFor(account) { return this.accounts.get(account)?.position ?? null; }
   giveKit(p) {
     const kit = arenaKit(), inv = p.survival.inventory;
     kit.main.forEach((s, i) => { inv.main[i] = s; });
@@ -178,7 +183,7 @@ export class GunSimulation extends DedicatedSimulation {
   }
   // Java's spawn-protection: within the radius of the world spawn only operators change blocks. PvP is not affected.
   canBreak(p, [x, , z]) {
-    const r = this.config.spawnProtection, s = this.world.spawn();
+    const r = this.config.spawnProtection, s = this.worldSpawn();
     if (!(r > 0) || this.isOp(p)) return true;
     return Math.max(Math.abs(Math.floor(x) - Math.floor(s.x)), Math.abs(Math.floor(z) - Math.floor(s.z))) > r;
   }
@@ -228,6 +233,7 @@ export class GunSimulation extends DedicatedSimulation {
     for (const p of players) { deps.canBreak = block => this.canBreak(p, block); tickCombat(p, deps); }
     for (const p of players) {
       if (p.dead) { Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); p.survival.time = this.time; continue; }
+      if (this.frozen(p)) { p.survival.time = this.time; continue; } // its column is not ticking yet (simulation.js updateViews)
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;
       drainKnockback(p.survival, p.velocity, p.position, this.random);
       const moved = movePlayer(p, controls);

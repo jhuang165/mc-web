@@ -5,7 +5,8 @@
 import http from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, rename, mkdir, copyFile, constants as fsConstants } from 'node:fs/promises';
+import { Worker } from 'node:worker_threads';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +17,7 @@ import { PROTOCOL } from '../src/multiplayer/protocol.js';
 import { loadServerFiles, formatReport } from './properties.js';
 import { ProfileVerifier, ProfileUnavailable } from './profile-verifier.js';
 import { installGunRules } from './pack-loader.js';
+import { STREAMED_BIOME, STREAMED_GENERATION, serverWorldReady, nodeWorkerPort } from '../src/multiplayer/server-world.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 export const DEFAULT_ORIGINS = ['https://jhuang165.github.io', 'http://localhost:5179', 'http://127.0.0.1:5179', 'https://ledoge0.tail92abaf.ts.net'];
@@ -33,6 +35,20 @@ export const MESSAGES = {
 const REVALIDATE_MS = 60000, UNAVAILABLE_KICK_MS = 600000;
 const reason = text => { let s = String(text); while (Buffer.byteLength(s) > 123) s = s.slice(0, -1); return s; }; // WebSocket close reasons
 const cleanText = text => String(text).replace(/[\x00-\x1f\x7f§]/g, '').trim().slice(0, 100);
+const COLUMN_BACKLOG = 32 << 20; // a tab this far behind on terrain is disconnected
+
+// A save of the finite 128 x 128 arena becomes a streamed world with the same seed: accounts keep their inventories, modes and
+// health but start at the new world spawn; the old file is kept beside it as `<level>.finite.json`.
+export async function migrateToStreamed(saved, dataFile, log = () => {}) {
+  if (saved.biome === STREAMED_BIOME) return saved;
+  const fresh = { seed: saved.seed ?? 'ledoge0', biome: STREAMED_BIOME, generationVersion: STREAMED_GENERATION };
+  if (!Object.keys(saved).length) return fresh;
+  const backup = dataFile.replace(/\.json$/, '') + '.finite.json';
+  try { await copyFile(dataFile, backup, fsConstants.COPYFILE_EXCL); log(`[world] Kept the finite world as ${path.basename(backup)}; this server now generates an infinite world.`); }
+  catch (error) { if (error.code !== 'EEXIST' && error.code !== 'ENOENT') throw error; }
+  const accounts = (saved.accounts ?? []).map(([id, a]) => { const { position, ...rest } = a ?? {}; return [id, rest]; });
+  return { ...fresh, version: 2, time: saved.time, ticks: saved.ticks, weather: saved.weather, worldRandom: saved.worldRandom, rules: saved.rules, accounts };
+}
 
 export function buildId(root = ROOT) {
   if (process.env.MC_GUNS_BUILD) return process.env.MC_GUNS_BUILD;
@@ -46,7 +62,7 @@ const banText = ban => `You are banned from this server.\nReason: ${ban.reason}$
 // build 'any' accepts every client build.
 export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateDir = path.join(ROOT, 'guns-data'), configDir = stateDir, packDir = path.join(ROOT, 'public/mods'),
   profiles = 'http://127.0.0.1:8090', verifier = null, origins = DEFAULT_ORIGINS, build = buildId(), tickMs = 50, saveMs = 30000,
-  rules = null, simulation = null, now = () => Date.now(), log = console.log, writeDefaults = true } = {}) {
+  rules = null, simulation = null, now = () => Date.now(), log = console.log, writeDefaults = true, streamed = true } = {}) {
   const { config, report, admin } = await loadServerFiles(configDir, { writeDefaults, now });
   for (const line of formatReport(report)) log(`[config] ${line}`);
   rules ??= await installGunRules({ packDir });
@@ -56,7 +72,10 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
   if (!simulation) {
     let saved = {};
     try { saved = JSON.parse(await readFile(dataFile, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-    simulation = new GunSimulation(saved, { config });
+    // Streamed (infinite) terrain: the columns around each player, generated ahead of them in a worker thread (server-world.js).
+    if (streamed) { saved = await migrateToStreamed(saved, dataFile, log); await serverWorldReady; }
+    const port = saved.biome === STREAMED_BIOME ? nodeWorkerPort(Worker, new URL('./stream-worker.js', import.meta.url)) : null;
+    simulation = new GunSimulation(saved, { config, port });
   }
   simulation.isOp = p => admin.opLevel(p.account) > 0;
   const sessions = new Map(); // player id -> { ws, account, name, session, checkedAt, unavailableSince }
@@ -90,6 +109,8 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
     wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req));
   });
   const send = (ws, m) => { if (ws.readyState === 1 && ws.bufferedAmount < 1 << 20) ws.send(typeof m === 'string' ? m : JSON.stringify(m)); };
+  // Terrain is never dropped (a tab would keep a hole); a tab that cannot keep up is disconnected instead.
+  const sendTerrain = (ws, m) => { if (ws.readyState !== 1) return; if (ws.bufferedAmount > COLUMN_BACKLOG) return ws.terminate(); ws.send(JSON.stringify(m)); };
   const broadcast = m => { const text = JSON.stringify(m); for (const s of sessions.values()) send(s.ws, text); };
   const system = text => broadcast({ type: 'chat', name: '', text });
   const tell = (id, text) => { const s = sessions.get(id); if (s) send(s.ws, { type: 'chat', name: '', text }); };
@@ -109,6 +130,9 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
     if (ban) return ws.close(1008, reason(banText(ban)));
     const op = admin.lists.ops.get(admin.resolve(profile.id));
     if (config.whitelist && !admin.whitelisted(profile.id) && !op) return ws.close(1008, MESSAGES.whitelist);
+    // A streamed world: the terrain around where this player appears is generated before it joins (GuiDownloadTerrain meanwhile).
+    const start = simulation.columns && simulation.startFor?.(profile.id);
+    if (start) { await simulation.columns.whenReady(simulation.columns.windowAt(start.x, start.z)); if (ws.readyState !== 1 || closing) return; }
     const previous = [...sessions.entries()].find(([, s]) => s.account === profile.id);
     if (!previous && sessions.size >= config.maxPlayers && !op?.bypassesPlayerLimit) return ws.close(1008, MESSAGES.full);
     if (previous) {
@@ -122,7 +146,8 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
     sessions.set(id, { ws, account: profile.id, name: profile.name, session: m.session, checkedAt: now(), unavailableSince: null });
     ws.playerId = id;
     const p = simulation.players.get(id);
-    send(ws, { type: 'welcome', protocol: PROTOCOL, build, pack: rules.pack, id, world: simulation.snapshot(), self: simulation.savePlayer(p),
+    p.sendColumns = null; // the welcome carries its whole window
+    sendTerrain(ws, { type: 'welcome', protocol: PROTOCOL, build, pack: rules.pack, id, world: simulation.snapshot(p.view ?? null), self: simulation.savePlayer(p),
       you: simulation.you(p), motd: config.motd, pvp: config.pvp !== false, op: level(id) });
     if (!previous) system(`${profile.name} joined the game`);
     log(`[join] ${profile.name} (${profile.id})`);
@@ -330,6 +355,8 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
       const p = simulation.players.get(id);
       if (!p) continue;
       send(s.ws, `${common},"you":${JSON.stringify(simulation.you(p))},"events":${JSON.stringify(simulation.drainEvents(p))}}`);
+      const columns = simulation.drainColumns?.(p); // a streamed world: the columns of this player's new window, after the tick that moved it
+      if (columns) sendTerrain(s.ws, columns);
       if (config.idleTimeout > 0 && simulation.ticks - p.idleSince > config.idleTimeout * 1200) kick(id, MESSAGES.idle);
     }
   }
@@ -353,6 +380,7 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
     await new Promise(resolve => server.close(resolve));
     await save();
     await admin.save().catch(() => {});
+    simulation.columns?.dispose();
   }
   return { server, simulation, admin, config, rules, build, status, save, close, tick, port: server.address().port };
 }

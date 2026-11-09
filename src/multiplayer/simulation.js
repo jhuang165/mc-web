@@ -20,6 +20,7 @@ import { placeHeldBlock } from '../block-placement-simulation.js';
 import { breakPlayerBlock } from '../block-break-simulation.js';
 import { makeStack } from '../inventory.js';
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn } from './protocol.js';
+import { ServerColumns, ServerLight } from './server-world.js';
 
 const noop = () => {};
 const vector = p => ({ ...p, copy(v) { Object.assign(this, { x: v.x, y: v.y, z: v.z }); return this; } });
@@ -34,18 +35,20 @@ export function cleanHotbar(slots) {
   return out;
 }
 
-// One dedicated world, independent of all connected tabs. Finite terrain is an
-// explicit first-milestone residency policy, not a host player's moving window.
+// One dedicated world, independent of all connected tabs: the finite 128 x 128 Java landscape, or a streamed (infinite) world
+// whose resident columns follow the connected players (server-world.js ServerColumns). Streamed worlds need the population block
+// mapper first (server-world.js serverWorldReady). `port`: the generator worker for a streamed world (nodeWorkerPort), or null.
 export class DedicatedSimulation {
-  constructor(saved = {}, { world = null } = {}) {
+  constructor(saved = {}, { world = null, port = null } = {}) {
     if (saved.version !== undefined && saved.version !== 1) throw new Error('Unsupported dedicated save version');
     this.world = world ?? new World(saved.seed ?? 'ledoge0', saved.biome ?? 'java', saved.generationVersion ?? 9);
-    if (this.world.streaming) throw new Error('Dedicated v1 requires a finite world');
+    this.columns = this.world.streaming ? new ServerColumns(this.world, { port }) : null;
     // World.restore deliberately limits browser import batches to 100k cells.
     // A long-lived dedicated world can legitimately edit more cells than that.
     const edits = saved.edits ?? [];
     if (!Array.isArray(edits)) throw new Error('Invalid dedicated edits');
     for (let i = 0; i < edits.length; i += 100000) this.world.restore(edits.slice(i, i + 100000));
+    if (this.columns) this.world.restoreClaimedColumns(saved.claimed); // population records already handed over stay handed over
     this.time = saved.time ?? 6000;
     this.ticks = saved.ticks ?? 0;
     this.players = new Map();
@@ -74,7 +77,9 @@ export class DedicatedSimulation {
       skyLight: (x, y, z) => this.light.skyAt(x, y, z),
     });
     this.redstone.restore(saved.redstone);
-    this.light = new LightVolume(this.world, (x, y, z, b) => lightEmission(b, this.redstone.lit.has(`${x},${y},${z}`)));
+    const emission = (x, y, z, b) => lightEmission(b, this.redstone.lit.has(`${x},${y},${z}`));
+    this.light = this.columns ? new ServerLight(this.world, emission) : new LightVolume(this.world, emission);
+    if (this.columns) this.light.columns({ added: [...this.world.chunks.values()] });
     this.world.blockLight = (x, y, z) => this.light.blockAt(x, y, z);
     this.world.fullLight = (x, y, z) => this.light.level(x, y, z, 0);
     this.farming.lightLevel = (x, y, z) => this.light.level(x, y, z, this.darkness);
@@ -88,8 +93,25 @@ export class DedicatedSimulation {
       const old = this.world.get(x, y, z), meta = this.world.getMeta(x, y, z);
       const result = put(x, y, z, b, m, track);
       if (result && (old !== b || meta !== m)) this.changes.set(`${x},${y},${z}`, [x, y, z, b, m]);
+      // A streamed column is rebuilt from the seed and its remembered writes when it comes back (ServerColumns.build), so
+      // the untracked writes (flowing water, redstone, falling sand) are remembered too.
+      if (result && !track && this.columns) this.world.rememberEdit(x, y, z, b | (m << 8));
       return result;
     };
+    if (this.columns) {
+      // WorldServer's chunk loop over every ticking column of every player, not one 10-chunk square (Weather.activeChunks).
+      const tickChunks = this.weather.tickChunks.bind(this.weather);
+      this.weather.tickChunks = world => tickChunks(world, [...this.columns.ticking].map(k => k.split(',').map(Number)));
+      this.materialize();
+    }
+  }
+  // Streamed worlds: the population records (dungeon and temple loot, flower pots, liquid ticks) of columns resident for the first time.
+  materialize() { return this.columns?.materialize({ tiles: this.tiles, fluids: this.fluids }) ?? null; }
+  // Streamed worlds: makes the columns of these windows resident (and the spawn window); new columns are lit and handed over.
+  reside(windows) {
+    const change = this.columns.reside(windows);
+    if (change.added.length || change.removed.length) { this.light.columns(change); this.materialize(); }
+    return change;
   }
   get darkness() { return skylightSubtracted(celestialAngle(this.time, 1), this.weather.rainStrength(), this.weather.weightedThunder()); }
   addPlayer(id, name, resumeKey, { skin = null } = {}) {
@@ -102,7 +124,34 @@ export class DedicatedSimulation {
       yaw: saved?.yaw ?? 0, pitch: saved?.pitch ?? 0, grounded: false, collidedH: false, flying: false, fallDistance: 0, landedFall: 0, eating: null,
       input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin };
     this.players.set(id, player);
+    this.watch(player);
     return player;
+  }
+  // Streamed worlds: player `p` sees the window around where it stands now (a join, or a teleport the caller already waited for).
+  watch(p) {
+    if (!this.columns) return;
+    p.view = this.columns.windowAt(p.position.x, p.position.z); p.sendColumns = null;
+    this.reside([...this.players.values()].map(o => o.view).filter(Boolean));
+  }
+  // Each tick, before anyone moves: a player's window follows it once the window's cells are built (until then it keeps the old one
+  // and, past the ticking columns, waits); the resident columns become the union of the windows; the worker builds what comes next.
+  updateViews() {
+    if (!this.columns) return;
+    const players = [...this.players.values()];
+    for (const p of players) {
+      const want = this.columns.windowAt(p.position.x, p.position.z);
+      if (ServerColumns.same(want, p.view) || !this.columns.ready(want)) continue;
+      const had = new Set(p.view && !p.sendColumns ? [...this.columns.keys(p.view)].map(k => k.join(',')) : []);
+      p.view = want; p.sendColumns = [...this.columns.keys(want)].filter(k => !had.has(k.join(',')));
+    }
+    this.reside(players.map(p => p.view).filter(Boolean));
+    this.columns.prefetchAround(players.map(p => p.position));
+  }
+  // The columns player `p` lacks for its new window, as they stand after this tick (sent after the tick message), or null.
+  drainColumns(p) {
+    if (!p.sendColumns) return null;
+    const list = p.sendColumns; p.sendColumns = null;
+    return { type: 'columns', window: p.view, columns: list.map(([cx, cz]) => encodeColumn(this.world.chunkAt(cx, cz))) };
   }
   removePlayer(id) {
     const p = this.players.get(id);
@@ -149,6 +198,7 @@ export class DedicatedSimulation {
   tick() {
     const beforeLit = new Set(this.redstone.lit);
     this.ticks++; this.time++;
+    this.updateViews();
     this.tickPlayers();
     for (const { id, place } of this.actions.splice(0)) { const p = this.players.get(id); if (p) this.edit(p, place); }
     return this.tickWorld(beforeLit);
@@ -156,6 +206,8 @@ export class DedicatedSimulation {
   // Movement of every connected player; the gun server's subclass adds combat and Survival (gun-simulation.js).
   tickPlayers() {
     for (const p of this.players.values()) {
+      p.survival.time = this.time;
+      if (this.frozen(p)) continue;
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;
       movePlayer(p, controls);
       if (p.position.y < -64) { p.position.copy(this.world.spawn()); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); }
@@ -163,6 +215,8 @@ export class DedicatedSimulation {
       if (p.swing) p.swing--;
     }
   }
+  // A streamed world's player whose column is not ticking (its window is still being generated) waits, like an unloaded chunk.
+  frozen(p) { return !!this.columns && !this.world.isTicking(p.position.x, p.position.z); }
   tickWorld(beforeLit) {
     this.weather.tick(this.world);
     this.weather.drain();
@@ -181,13 +235,17 @@ export class DedicatedSimulation {
   presence() { return [...this.players.values()].map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
     held: p.survival.held, ySize: p.motion.ySize, skin: p.skin })); }
-  snapshot() { const w = this.world; return { seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
-    time: this.time, ticks: this.ticks, columns: [...w.chunks.values()].map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } }; }
+  // `view`: a streamed world's window ({ minX, minZ }) whose columns this tab gets; a finite world sends all of them.
+  snapshot(view = null) {
+    const w = this.world, columns = view ? [...this.columns.keys(view)].map(([cx, cz]) => w.chunkAt(cx, cz)) : [...w.chunks.values()];
+    return { seed: w.seed, biome: w.biome, generationVersion: w.generationVersion, ...(view ? { window: view, originX: w.originX, originZ: w.originZ, nativeSpawn: w.nativeSpawn ?? null } : {}),
+      time: this.time, ticks: this.ticks, columns: columns.map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } };
+  }
   save() {
     for (const p of this.players.values()) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));
     return { version: 1, seed: this.world.seed, biome: this.world.biome, generationVersion: this.world.generationVersion,
       edits: [...this.world.edits], time: this.time, ticks: this.ticks, weather: this.weather.save(), worldRandom: this.weather.saveSimulation(),
       farms: this.farming.serialize(), fluidTicks: this.fluids.save(), fireTicks: this.fire.save(), falling: this.falling.serialize(), fallingTicks: this.falling.save(),
-      redstone: this.redstone.save(), tiles: this.tiles.serialize(), players: [...this.savedPlayers] };
+      redstone: this.redstone.save(), tiles: this.tiles.serialize(), players: [...this.savedPlayers], ...(this.columns ? { claimed: this.world.saveClaimedColumns() } : {}) };
   }
 }
