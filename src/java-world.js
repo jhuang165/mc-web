@@ -69,8 +69,10 @@ export const NO_MAP_FEATURES_GENERATION = 17;
 // Generation 18 is 16 plus the native world spawn (world-spawn.js createSpawnPosition, which also moves the origin chunk); 19 is 17 plus it.
 // Worlds saved at 12 to 17 keep the repository's findBiomePosition-only origin, since the origin decides where every block lies.
 export const NATIVE_SPAWN_GENERATION = 18;
-export const nativeSpawnGeneration = (generationVersion) => generationVersion >= NATIVE_SPAWN_GENERATION;
-// MapFeatures is off at 17, 19 and 21 (odd versions from 17 on).
+// Generations 22 and 23 (level.dat imports, MapFeatures on / off) are 16 and 17 plus the neighbour callbacks; they keep the import origin, not the native spawn.
+export const IMPORT_NEIGHBOR_GENERATIONS = Object.freeze([22, 23]);
+export const nativeSpawnGeneration = (generationVersion) => generationVersion >= NATIVE_SPAWN_GENERATION && !IMPORT_NEIGHBOR_GENERATIONS.includes(generationVersion);
+// MapFeatures is off at 17, 19, 21 and 23 (odd versions from 17 on).
 export const mapFeaturesOn = (generationVersion) => !(generationVersion >= NO_MAP_FEATURES_GENERATION && generationVersion % 2 === 1);
 // Generation 20 (21 with MapFeatures off) runs the generation-time neighbour callbacks of the population (door, redstone, tripwire, button and plate
 // onNeighborBlockChange / onBlockAdded chains, the dispenser's markDirty reads): structure-population-area.js `nativeNeighborWorldClass`, call-for-call

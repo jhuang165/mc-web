@@ -102,14 +102,15 @@ export async function readPlayerDat(bytes) {
 }
 
 // The browser generator for a level: streamed (endless) with the same seed and WorldType, so chunks beyond the import
-// generate as the source world would. Generation 16 has population, structures and the native mutated-biome rule; MapFeatures off is generation 17
-// (the same without any structure generator, as ChunkProviderGenerate / ChunkProviderFlat build none when mapFeatures is false).
+// generate as the source world would. Generation 22 (batch 31) has population, structures, the native mutated-biome rule and the generation-time
+// neighbour callbacks, with the import origin; MapFeatures off is generation 23 (the same without any structure generator, as ChunkProviderGenerate /
+// ChunkProviderFlat build none when mapFeatures is false). Worlds already imported at 16 or 17 keep their quiet callbacks.
 export function levelGenerator(level) {
   const flat = level.worldType === 'flat';
   return {
     seed: level.seed, biome: 'javaStreamed', worldType: level.worldType,
     generatorOptions: flat ? level.generatorOptions : '',
-    generationVersion: level.mapFeatures ? 16 : 17,
+    generationVersion: level.mapFeatures ? 22 : 23,
     approximate: [],
   };
 }

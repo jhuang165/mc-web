@@ -85,12 +85,12 @@ test('readLevelData keeps what WorldInfo(NBTTagCompound) keeps', () => {
 
 test('levelGenerator continues each world type with its generator', () => {
   const kinds = Object.fromEntries(ref.settings.map((s) => [s.name, levelGenerator(readLevelData(fromHex(s.written)))]));
-  assert.deepEqual(kinds['default-survival'], { seed: '17', biome: 'javaStreamed', worldType: 'default', generatorOptions: '', generationVersion: 16, approximate: [] });
+  assert.deepEqual(kinds['default-survival'], { seed: '17', biome: 'javaStreamed', worldType: 'default', generatorOptions: '', generationVersion: 22, approximate: [] });
   assert.equal(kinds['flat-creative-commands'].worldType, 'flat');
   assert.equal(kinds['flat-creative-commands'].generatorOptions, '2;7,2x3,2;1;village');
-  assert.equal(kinds['flat-creative-commands'].generationVersion, 16);
+  assert.equal(kinds['flat-creative-commands'].generationVersion, 22);
   assert.equal(kinds['largeBiomes-hardcore'].worldType, 'largeBiomes');
-  assert.equal(kinds['amplified-adventure-nofeatures'].generationVersion, 17);
+  assert.equal(kinds['amplified-adventure-nofeatures'].generationVersion, 23);
   assert.equal(kinds['amplified-adventure-nofeatures'].seed, '-9223372036854775808');
   assert.equal(kinds.default_1_1.worldType, 'default_1_1');
   assert.equal(kinds.default_1_1.seed, '9223372036854775807');
@@ -242,7 +242,7 @@ test('a browser world exported to Java and imported with its level.dat continues
   const statsName = [...files.keys()].find((n) => n.startsWith('stats/'));
   const { record: back, report } = await importJavaRegionArea(regions, { level, stats: new TextDecoder().decode(files.get(statsName)) });
   // Same seed and generator: the area differs from the regenerated world only by the player's edits.
-  assert.equal(back.seed, '8675309'); assert.equal(back.biome, 'javaStreamed'); assert.equal(back.worldType, 'default'); assert.equal(back.generationVersion, 16);
+  assert.equal(back.seed, '8675309'); assert.equal(back.biome, 'javaStreamed'); assert.equal(back.worldType, 'default'); assert.equal(back.generationVersion, 22);
   assert.deepEqual(report.base.generatorOrigin, { chunkX: w.originX >> 4, chunkZ: w.originZ >> 4 });
   assert.deepEqual(new Map(back.edits), new Map(record.edits));
   assert.equal(report.chunks.converted, 64);
