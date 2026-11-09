@@ -94,3 +94,11 @@ Evidence type: bytecode-read again (javap on `mt`, WorldServer), no probe. `mt.h
 - **Dispensers and droppers** fire (they are scheduled block ticks) through the entity systems above: item spawn, TNT, carts, buckets, flint and steel. A dispense that needs a projectile system (arrow, egg, snowball, potion, fire charge, firework) or bone meal on a non-crop is not run: the stack is put back. Command blocks are skipped (no command interpreter; before this the run would have thrown on one). Note blocks and jukeboxes run their scheduled ticks and make no sound.
 - **Weather.** `Weather.advance(n)` rolls `updateWeather` for the loading-screen ticks, on the Overworld's away copy while in the Nether/End. `DimensionLive.travel` now reports the loading ticks for every trip (the clock was only advanced on the return trip before).
 - **Still not ported.** Mobs (no movement, gravity or despawn while away, and they are not hurt by explosions), projectiles in flight, firework rockets, hanging entities, entities in columns outside the resident window at departure, and mob riders. Wall-clock budget stops the entity run early on a very busy spawn area (`stats.stopped = "budget"`).
+
+## Batch 32: away-run mobs and projectiles
+
+- Mobs, arrows, thrown projectiles and potions, rockets, fireballs, hanging entities and rideable/chest/furnace/TNT/spawner/hopper carts now tick in the Overworld away run for the first 1200 ticks, using the live `EntityWorld` with no player.
+- `EntityLiving.despawnEntity` (sw.w) was bytecode-read, not executed: a null `getClosestPlayerToEntity(this, -1.0)` returns before any despawn or age reset, so away mobs never despawn. `ai.player.absent` reproduces that.
+- Light in the run is approximated as open-sky brightness (no block light), so daylight burning and spawn light checks are approximate.
+- Dispensers shoot arrows, eggs, snowballs, potions, fire charges and fireworks. `redstone-runtime.js` did not forward fireball/firework to the dispense host, so live dispensers of those items consumed the item and did nothing; fixed.
+- Still open: command blocks do not run while away; ender pearls and ridden vehicles stay frozen; the 1200 counter is bytecode-read only (no probe).

@@ -166,6 +166,8 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     spawnItem: (...a) => hooks().spawnItem?.(...a),
     arrow: (...a) => hooks().arrow?.(...a),
     thrown: (...a) => hooks().thrown?.(...a),
+    fireball: (...a) => hooks().fireball?.(...a), // BehaviorDispenseFireball and BehaviorDispenseFirework: main.js and away-world.js provide them
+    firework: (...a) => hooks().firework?.(...a),
     cart: (...a) => hooks().cart?.(...a),
     spawnTnt: (...a) => hooks().spawnTnt?.(...a),
     setLiquid: (...a) => hooks().setLiquid?.(...a),

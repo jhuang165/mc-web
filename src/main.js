@@ -2558,6 +2558,7 @@ const dims = new DimensionLive({
   active: () => active, worlds: () => worlds, save: () => save(), openWorld, dirty: () => { saved = false; },
   // Away run (away-world.js): copies of the resident columns, the physics tick counter, and the clock ticks a loading screen skipped.
   ticks: () => tickCounter,
+  difficulty: () => worldDifficulty(active, options.difficulty),
   chunks: (cols) => cols.flatMap(([x, z]) => { const c = world.chunks?.get(`${x},${z}`); return c ? [{ x, z, blocks: c.blocks.slice(), meta: c.meta.slice() }] : []; }),
   advanceTicks: (n) => { if (n > 0) { weather.advance(n); if (!survival.timeFrozen) { survival.time += n; scene.setTime?.(survival.time); } } },
   player: () => ({ x: position.x, y: position.y, z: position.z, yaw }),
