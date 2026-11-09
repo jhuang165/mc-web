@@ -9,7 +9,8 @@
 //   blockExists/blocksMovement/blockId/blockMeta/isNormalCube(x, y, z), collides(box), liquidIn(box), setBlock(x, y, z, id, meta),
 //   canSeeSky/brightness(x, y, z), isDaytime(), rainingAt(x, y, z), lineBlocked(a, b), mobGriefing(),
 //   sound(name, x, y, z, volume, pitch), particle(name, x, y, z, vx, vy, vz).
-// Positions of players and targets are the original's posY (a player's eye, 1.62 above the feet).
+// Positions of players and targets are the server entity's posY: an EntityPlayerMP has yOffset 0, so posY is the feet and its
+// getEyeHeight is 1.62 (batch 33, eye-height-reference.json).
 import { mhSin, mhCos } from "./lighting.js";
 const f = Math.fround;
 
@@ -22,8 +23,9 @@ export const ENDERMAN_HEALTH = 40, ENDERMAN_SPEED = 0.30000001192092896, ENDERMA
 export const SPEED_BOOST = 6.199999809265137;
 // EntityEnderman.getEyeHeight is Entity's: height * 0.85 (a float).
 export const ENDERMAN_EYE_HEIGHT = f(ENDERMAN_HEIGHT * f(0.85));
-// EntityPlayer.getEyeHeight (yz.g): 0.12, added to the player's posY (which already is the eye).
-export const PLAYER_EYE_OFFSET = f(0.12);
+// EntityPlayerMP.getEyeHeight (mw.g, bytecode-read and replayed in eye-height-reference.json): 1.62 above the posY, which on the server
+// is the feet. (EntityPlayer.getEyeHeight, yz.g, is the client's 0.12 over a posY that already is the eye.)
+export const PLAYER_EYE_OFFSET = f(1.62);
 // The static boolean[256] br of ya: grass, dirt, sand, gravel, dandelion, rose, both mushrooms, TNT, cactus, clay, pumpkin,
 // melon and mycelium (probe: facts.carriable).
 export const CARRIABLE = new Set([2, 3, 12, 13, 37, 38, 39, 40, 46, 81, 82, 86, 103, 110]);
@@ -64,10 +66,10 @@ function normalize(v) {
   return d < 1e-4 ? { x: 0, y: 0, z: 0 } : { x: v.x / d, y: v.y / d, z: v.z / d };
 }
 
-// ya.f(yz) shouldAttackPlayer. `p` = { x, y (posY: the eye), z, yaw, pitch, helmet (original block id of the head slot or 0) }.
+// ya.f(yz) shouldAttackPlayer. `p` = { x, y (posY: the feet), z, yaw, pitch, helmet (original block id of the head slot or 0) }.
 // A carved pumpkin on the head (the item of Blocks.pumpkin, id 86 as a block) makes the player harmless; the jack-o-lantern
 // (91) does not. Then the look vector against the direction to the enderman's middle, the threshold 1 - 0.025 / distance, and
-// EntityLivingBase.canEntityBeSeen (a block ray from the player's eye to the enderman's eye).
+// EntityLivingBase.canEntityBeSeen (a block ray from the player's feet + 1.62 to the enderman's eye).
 export function staresAt(e, p, w) {
   if (p.helmet === PUMPKIN) return false;
   const look = lookVector(p.yaw, p.pitch);

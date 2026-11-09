@@ -156,12 +156,12 @@ test("teleportRandomly and teleportToEntity replay the original draw by draw", (
   for (const row of reference.teleportToEntity) {
     const w = makeWorld(); slab(w);
     const e = ender(10.5, 1, 12.5);
-    const r = E.teleportToEntity(e, { x: -4.5, y: 1.62, z: 3.5, eye: E.PLAYER_EYE_OFFSET }, w, rng(row.seed));
+    const r = E.teleportToEntity(e, { x: -4.5, y: 0.12, z: 3.5, eye: E.PLAYER_EYE_OFFSET }, w, rng(row.seed));
     assert.equal(r, row.success, `seed ${row.seed}`);
     assert.deepEqual([e.x, e.y, e.z], row.pos, `seed ${row.seed}`);
     near += r;
   }
-  assert.equal(near, 23);
+  assert.equal(near, 17); // with the server player's 1.62 eye added to the offset (batch 33); 23 with the old 0.12
 });
 
 test("attackEntityFrom: projectiles teleport and never hurt, a player hit enrages, the rest scream", () => {
@@ -266,7 +266,7 @@ test("daylight under open sky, water and rain teleport it; water and rain hurt i
 
 test("chase: a player target that is not staring is followed after 30 ticks beyond 16 blocks; a staring one makes it blink", () => {
   assert.ok(reference.chase.every((c) => c.firstTeleportTick >= 30 && c.firstTeleportTick <= 40));
-  const target = { id: "player", x: 0.5, y: 1.62, z: 0.5, eye: E.PLAYER_EYE_OFFSET };
+  const target = { id: "player", x: 0.5, y: 0.12, z: 0.5, eye: E.PLAYER_EYE_OFFSET };
   const attempts = (player, e, ticks, distSq) => {
     const w = makeWorld({ exists: false });
     const t = { ...target, player };
@@ -278,7 +278,8 @@ test("chase: a player target that is not staring is followed after 30 ticks beyo
     }
     return log;
   };
-  const away = { x: 0.5, y: 1.62, z: 0.5, yaw: 90, pitch: 0, helmet: 0 }, staring = { x: 0.5, y: 1.62, z: 0.5, yaw: 0, pitch: 0, helmet: 0 };
+  // Feet 0.12: the server player's eye (feet + 1.62) is at 1.74 as these ender positions were laid out for.
+  const away = { x: 0.5, y: 0.12, z: 0.5, yaw: 90, pitch: 0, helmet: 0 }, staring = { x: 0.5, y: 0.12, z: 0.5, yaw: 0, pitch: 0, helmet: 0 };
   const log = attempts(away, ender(0.5, 1, 30.5), 33, 900);
   assert.deepEqual(log.slice(0, 29), new Array(29).fill(0));
   assert.deepEqual(log.slice(29), [1, 1, 1, 1], "the first attempt is tick 30 and every later tick retries while it fails");

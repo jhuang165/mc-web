@@ -45,6 +45,7 @@ public class VillageFightProbe {
     public boolean a(int level, String command) { return false; }
     public r f_() { return null; }
     public String b_() { return n; }
+    public float g() { return 1.62f; } // EntityPlayerMP.getEyeHeight (mw.g, bytecode-read): the server player's eye over its feet (yOffset 0)
   }
   // Index of an entity in the record: the mobs, the player (types.length), then the zombies spawned during the fight in spawn order.
   static int index(Object[] ents, List<yq> extra, Object e) {
