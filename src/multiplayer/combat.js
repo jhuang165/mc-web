@@ -88,6 +88,7 @@ export function tickCombat(p, deps) {
     else if (a.action === 'reload') c.gun.startReload(ctx);
     else if (a.action === 'mode') c.gun.toggleMode(held);
     else if (a.action === 'use') deps.use?.(p, a.down);
+    else if (a.action === 'mine') deps.mine?.(p, a.down);
   }
   if (p.dead) { c.gun.release(); c.aim.held = false; c.melee.cancel(); return []; }
   const out = [];

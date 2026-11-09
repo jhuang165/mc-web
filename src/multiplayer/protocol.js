@@ -12,7 +12,7 @@ export const MULTIPLAYER_URL = ENV.VITE_MULTIPLAYER_URL || (ENV.DEV ? 'ws://loca
 // eslint-disable-next-line no-undef
 export const BUILD_ID = typeof __MC_BUILD__ === 'string' && __MC_BUILD__ ? __MC_BUILD__ : 'dev';
 // Gun-server actions (v3). `down` is the button state for held inputs; the others are one-shot key presses.
-export const HELD_ACTIONS = new Set(['trigger', 'aim', 'melee-left', 'melee-right', 'use']); // use: eating the held food (gun-simulation.js)
+export const HELD_ACTIONS = new Set(['trigger', 'aim', 'melee-left', 'melee-right', 'use', 'mine']); // use: eating the held food; mine: the attack button on a block (gun-simulation.js)
 export const KEY_ACTIONS = new Set(['reload', 'mode', 'inspect']);
 // A gun-server action with the look it was taken at and the server tick the client was showing (lag compensation).
 export function cleanAction(m) {

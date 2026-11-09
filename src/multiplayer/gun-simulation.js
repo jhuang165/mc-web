@@ -16,6 +16,7 @@ import { drainKnockback } from '../player-knockback.js';
 import { finishPlayerMovement } from '../player-environment.js';
 import { GUNS, AMMO, P320, AKM, M870 } from '../mods/guns/catalog.js';
 import { MELEE } from '../mods/guns/install.js';
+import { ServerPlay } from './server-play.js';
 
 export const STEAK = 205, IRON_ARMOR = [411, 410, 409, 408]; // armor[0] boots ... armor[3] helmet
 export const JOIN_PROTECTION = 60; // EntityPlayerMP.field_147101_bU: ticks of invulnerability after a join or respawn
@@ -53,6 +54,8 @@ export class GunSimulation extends DedicatedSimulation {
     this.outbox = new Map(); // player id -> events for that player's next tick message
     this.chatOut = [];
     this.accounts = new Map(saved.accounts ?? []); // account id -> saved player
+    this.rules = { keepInventory: false, ...(saved.rules ?? {}) }; // /gamerule (GameRules defaults)
+    this.play = new ServerPlay(this, saved.play ?? {}); // windows, mining, block use and dropped items (server-play.js)
   }
   // A website account joins; its saved state (inventory, health, position) is restored, or it gets the kit.
   addPlayer(id, name, account, { skin = null } = {}) {
@@ -70,12 +73,14 @@ export class GunSimulation extends DedicatedSimulation {
     p.survival.protection = JOIN_PROTECTION;
     p.lastHit = null; p.sentInv = null; p.sentMode = null; p.idleSince = this.ticks;
     if (!saved) this.giveKit(p);
+    this.play.reset(p);
     return p;
   }
   survivalFor(data, mode) {
     const s = new Survival(data ?? {}, mode);
     for (const key of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles']) s[key] = this.tiles[key];
     s.difficulty = DIFFICULTY[this.config.difficulty] ?? 2;
+    s.furnaceActive = () => false; // the shared furnaces tick once per world tick (tickWorld), not once per player
     return s;
   }
   spawnPoint() { return this.world.spawn(); }
@@ -105,13 +110,15 @@ export class GunSimulation extends DedicatedSimulation {
     return count - stack.count;
   }
   setMode(p, mode) {
+    this.play.close(p, 0); this.play.closeWindow(p);
     const data = p.survival.serialize();
     p.survival = this.survivalFor(data, mode);
     p.flying = p.flying && p.survival.creative;
+    this.play.reset(p);
   }
   removePlayer(id) {
     const p = this.players.get(id);
-    if (p) this.accounts.set(p.account, this.savePlayer(p));
+    if (p) { this.play.close(p, 0); this.play.closeWindow(p); this.accounts.set(p.account, this.savePlayer(p)); } // EntityPlayerMP logout closes its window
     this.players.delete(id);
     this.outbox.delete(id);
   }
@@ -145,14 +152,29 @@ export class GunSimulation extends DedicatedSimulation {
     if (p.eating || s.creative || !item?.food || (s.food >= 20 && !item.alwaysEdible) || !s.usable(held.id)) return;
     p.eating = { id: held.id, ticks: 32 };
   }
+  // A use-button click (C08PacketPlayerBlockPlacement); digging comes from the held 'mine' action (ServerPlay.tickMining).
   queueEdit(id, message) {
     const p = this.players.get(id);
-    if (!p || !p.survival.creative) return false; // Survival building is a later milestone; creative players and ops in creative may edit
+    if (!p || p.dead) return false;
     return super.queueEdit(id, message);
   }
-  edit(p, place) {
-    if (!p.survival.creative || p.dead) return false;
-    return super.edit(p, place);
+  edit(p, place) { return this.play.edit(p, place); }
+  mine(p, down) { p.mineHeld = !!down && !p.dead; if (!p.mineHeld && p.mining && !p.mining.auto) p.mining = null; }
+  click(id, message) { const p = this.players.get(id); return !!p && this.play.click(p, message); }
+  closeWindow(id, window) { const p = this.players.get(id); if (p && Number.isInteger(window)) this.play.close(p, window); }
+  drop(id, all) { const p = this.players.get(id); return !!p && this.play.dropHeld(p, !!all); }
+  // C10PacketCreativeInventoryAction: a Creative player sets a slot of window 0 (5-8 armour, 9-44 the inventory) or throws a stack (-1).
+  creative(id, message) {
+    const p = this.players.get(id);
+    if (!p || p.dead || !p.survival.creative) return false;
+    if (Number.isInteger(message?.seq)) p.clickAck = Math.max(p.clickAck, message.seq);
+    const inv = p.survival.inventory, slot = message?.slot;
+    const stack = message?.stack == null ? null : inv.read(message.stack);
+    if (message?.stack != null && !stack) return false;
+    if (slot === -1) { if (stack) this.play.items.dropPlayer(stack, p.position, p.yaw, p.pitch); return true; }
+    if (!Number.isInteger(slot) || slot < 1 || slot > 44) return false;
+    p.inventoryWindow.slots[slot].inventory.setStack(p.inventoryWindow.slots[slot].index, stack);
+    return true;
   }
   // Java's spawn-protection: within the radius of the world spawn only operators change blocks. PvP is not affected.
   canBreak(p, [x, , z]) {
@@ -170,8 +192,13 @@ export class GunSimulation extends DedicatedSimulation {
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     p.fallDistance = 0; p.landedFall = 0; p.flying = false; p.dead = false; p.lastHit = null;
     s.protection = JOIN_PROTECTION;
-    p.combat.reset(); p.eating = null;
+    p.combat.reset(); p.eating = null; this.play.reset(p);
     return true;
+  }
+  // A teleport moves the player and resets fall and velocity; the client takes the new position from its next tick (you.x).
+  teleport(p, to) {
+    p.position.copy(to); p.previous.copy(to); Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
+    p.fallDistance = 0; p.landedFall = 0; p.teleported = (p.teleported ?? 0) + 1;
   }
   kill(p, message = `${p.name} died`) {
     if (p.dead) return;
@@ -195,6 +222,7 @@ export class GunSimulation extends DedicatedSimulation {
       damage: (t, n, src) => this.damage(t, n, src),
       send: (p, e) => this.send(p, e), near: (p, e, self) => this.near(p, e, self),
       use: (p, down) => this.use(p, down),
+      mine: (p, down) => this.mine(p, down),
     };
     // Weapons act first, against where everyone stood when the shooter last saw them (tick - 1 is the newest recorded tick).
     for (const p of players) { deps.canBreak = block => this.canBreak(p, block); tickCombat(p, deps); }
@@ -214,6 +242,8 @@ export class GunSimulation extends DedicatedSimulation {
       p.survival.tick({ inWater: moved.inWater, inLava: moved.inLavaNow });
       p.inWater = moved.inWater;
       if (p.swing) p.swing--;
+      this.play.checkWindow(p);
+      this.play.tickMining(p);
     }
     for (const p of players) {
       if (p.dead || p.survival.health > 0) continue;
@@ -223,8 +253,16 @@ export class GunSimulation extends DedicatedSimulation {
       this.chatOut.push(describe(p.name, hit) ?? (reason === 'a fall' ? `${p.name} hit the ground too hard` : reason === 'void' ? `${p.name} fell out of the world` : `${p.name} died`));
       if (hit) { const killer = this.players.get(hit.by); if (killer) this.send(killer, { type: 'kill', target: p.id, name: p.name }); }
       p.combat.reset(); p.eating = null;
+      if (!this.rules.keepInventory) this.play.dropAll(p); else { this.play.closeWindow(p); this.play.close(p, 0); }
+      p.mining = null; p.mineHeld = false;
     }
     this.history.record(this.ticks, this.players.values());
+  }
+  // TileEntityFurnace.updateEntity once for the world, then EntityItem; then the shared world systems (simulation.js).
+  tickWorld(beforeLit) {
+    this.tiles.tickFurnaces();
+    this.play.tickItems();
+    return super.tickWorld(beforeLit);
   }
   presence() {
     return super.presence().map(entry => {
@@ -237,8 +275,13 @@ export class GunSimulation extends DedicatedSimulation {
     const s = p.survival, out = { health: s.health, food: s.food, saturation: s.saturation, absorption: s.absorption, hurt: s.hurtTime,
       dead: p.dead, protection: s.protection, mode: s.mode, current: s.inventory.current, x: p.position.x, y: p.position.y, z: p.position.z,
       vx: p.velocity.x, vy: p.velocity.y, vz: p.velocity.z, flying: p.flying, shots: p.combat.shots };
-    const inv = JSON.stringify([s.inventory.serialize(), s.inventory.serializeArmor()]);
-    if (inv !== p.sentInv) { p.sentInv = inv; out.inv = { slots: s.inventory.serialize(), armor: s.inventory.serializeArmor() }; }
+    const window = this.play.windowState(p), inv = JSON.stringify([s.inventory.serialize(), s.inventory.serializeArmor(), window]);
+    if (inv !== p.sentInv) { p.sentInv = inv; out.inv = { slots: s.inventory.serialize(), armor: s.inventory.serializeArmor(), window }; }
+    const open = this.play.openState(p), openKey = JSON.stringify(open);
+    if (openKey !== p.sentOpen) { p.sentOpen = openKey; out.open = open; } // a window the server opened (a block) or closed (reach, death)
+    out.ack = p.clickAck;
+    out.mining = p.mining ? { block: [...p.mining.block], progress: Math.min(1, p.mining.progress) } : null; // raycast cells may be typed arrays
+    out.items = this.play.itemsNear(p);
     return out;
   }
   drainEvents(p) { const e = this.outbox.get(p.id) ?? []; this.outbox.delete(p.id); return e; }
@@ -246,6 +289,6 @@ export class GunSimulation extends DedicatedSimulation {
     for (const p of this.players.values()) this.accounts.set(p.account, this.savePlayer(p));
     const base = super.save();
     delete base.players;
-    return { ...base, version: 2, accounts: [...this.accounts] };
+    return { ...base, version: 2, accounts: [...this.accounts], rules: this.rules, play: this.play.save() };
   }
 }

@@ -150,6 +150,10 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
         else if (m.type === 'action') { if (!simulation.action(id, m)) ws.close(1008, 'Invalid action'); }
         else if (m.type === 'edit') simulation.queueEdit(id, m);
         else if (m.type === 'respawn') simulation.respawn(id);
+        else if (m.type === 'click') { if (!simulation.click(id, m)) ws.close(1008, 'Invalid click'); }
+        else if (m.type === 'close') simulation.closeWindow(id, m.window);
+        else if (m.type === 'drop') simulation.drop(id, m.all === true);
+        else if (m.type === 'creative') simulation.creative(id, m);
         else if (m.type === 'chat' && typeof m.text === 'string') {
           const text = cleanText(m.text);
           if (text.startsWith('/')) command(id, text.slice(1));
@@ -169,7 +173,56 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
 
   // Vanilla-style commands. Levels follow ops.json: 1 bypass spawn protection, 2 cheats, 3 player management, 4 server.
   const COMMANDS = {
-    help: [0, () => 'Commands: list, kill, help; ops: gamemode, give, kit, kick, ban, pardon, whitelist, op, deop, save-all'],
+    help: [0, () => 'Commands: list, kill, me, tell, help; ops: gamemode, give, kit, tp, time, weather, gamerule, say, kick, ban, pardon, whitelist, op, deop, save-all'],
+    me: [0, (id, words) => { if (words.length) broadcast({ type: 'chat', name: '', text: `* ${sessions.get(id).name} ${words.join(' ')}` }); return words.length ? null : 'Usage: /me <action ...>'; }],
+    tell: [0, (id, [name, ...words]) => {
+      const entry = name && byName(name);
+      if (!entry || !words.length) return entry ? 'Usage: /tell <player> <private message ...>' : `Player ${name ?? ''} not found`.trim();
+      tell(entry[0], `${sessions.get(id).name} whispers to you: ${words.join(' ')}`);
+      return `You whisper to ${entry[1].name}: ${words.join(' ')}`;
+    }],
+    say: [1, (id, words) => { if (!words.length) return 'Usage: /say <message ...>'; system(`[${sessions.get(id).name}] ${words.join(' ')}`); return null; }],
+    // CommandTeleport: /tp [player] <target player> | /tp [player] <x> <y> <z>, with ~ relative coordinates.
+    tp: [2, (id, args) => {
+      const usage = 'Usage: /tp [target player] <destination player> OR /tp [target player] <x> <y> <z>';
+      const who = args.length === 2 || args.length === 4 ? byName(args.shift()) : [id, sessions.get(id)];
+      if (!who || !args.length) return who ? usage : 'That player cannot be found';
+      const p = simulation.players.get(who[0]);
+      let to;
+      if (args.length === 1) { const dest = byName(args[0]); if (!dest) return 'That player cannot be found'; to = { ...simulation.players.get(dest[0]).position }; }
+      else if (args.length === 3) {
+        const axes = ['x', 'y', 'z'].map((k, i) => { const a = args[i], rel = a.startsWith('~'), n = Number(rel ? a.slice(1) || 0 : a);
+          return Number.isFinite(n) ? (rel ? p.position[k] + n : k === 'y' ? n : Math.floor(n) === n && !a.includes('.') ? n + .5 : n) : NaN; });
+        if (axes.some(Number.isNaN) || Math.abs(axes[0]) > 3e7 || Math.abs(axes[2]) > 3e7 || axes[1] < -512 || axes[1] > 512) return usage;
+        to = { x: axes[0], y: axes[1], z: axes[2] };
+      } else return usage;
+      simulation.teleport(p, to);
+      return `Teleported ${who[1].name} to ${to.x.toFixed(2)}, ${to.y.toFixed(2)}, ${to.z.toFixed(2)}`;
+    }],
+    // CommandTime: set <value|day|night> | add <value>.
+    time: [2, (id, [sub, value]) => {
+      const n = value === 'day' ? 1000 : value === 'night' ? 13000 : Number(value);
+      if (!['set', 'add'].includes(sub) || !Number.isInteger(n) || n < 0) return 'Usage: /time <set|add> <value>';
+      simulation.time = sub === 'set' ? simulation.time - simulation.time % 24000 + n : simulation.time + n;
+      return `${sub === 'set' ? 'Set' : 'Added'} the time ${sub === 'set' ? 'to' : ''} ${n}`.replace('  ', ' ');
+    }],
+    // CommandWeather: clear|rain|thunder [seconds], 300-900 s by default.
+    weather: [2, (id, [kind, seconds]) => {
+      const s = seconds === undefined ? 300 + Math.floor(Math.random() * 600) : Number(seconds);
+      if (!['clear', 'rain', 'thunder'].includes(kind) || !Number.isInteger(s) || s < 1 || s > 1000000) return 'Usage: /weather <clear/rain/thunder> [duration in seconds]';
+      simulation.weather.set(kind, s);
+      return { clear: 'Changing to clear weather', rain: 'Changing to rainy weather', thunder: 'Changing to rain and thunder' }[kind];
+    }],
+    // CommandGameRule for the rules this server implements.
+    gamerule: [2, (id, [rule, value]) => {
+      const rules = simulation.rules;
+      if (!rule) return Object.keys(rules).join(', ');
+      if (!(rule in rules)) return 'No game rule called \'' + rule + '\' is available';
+      if (value === undefined) return `${rule} = ${rules[rule]}`;
+      if (value !== 'true' && value !== 'false') return 'Usage: /gamerule <rule name> <value> OR /gamerule <rule name>';
+      rules[rule] = value === 'true';
+      return 'Game rule has been updated';
+    }],
     list: [0, () => `There are ${sessions.size}/${config.maxPlayers} players online: ${[...sessions.values()].map(s => s.name).join(', ')}`],
     kill: [0, id => { const p = simulation.players.get(id); if (p && !p.dead) { p.survival.health = 0; p.lastHit = null; } return null; }],
     gamemode: [2, (id, [mode, target]) => {

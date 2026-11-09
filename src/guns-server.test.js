@@ -83,7 +83,7 @@ test('a new account gets the server-owned arena kit; client inventory claims are
   assert.equal(sim.input('a', { ...input(p), slot: 2, hotbar: [{ id: 46, count: 64 }], current: 7 }), true);
   assert.equal(inv.current, 2); assert.equal(JSON.stringify(inv.serialize()), before, 'v3 input carries no items');
   assert.equal(sim.input('a', { ...input(p), slot: 9 }), false);
-  assert.equal(sim.queueEdit('a', { place: true }), false, 'survival players cannot use the creative edit path');
+  assert.equal(sim.queueEdit('a', { place: 1 }), false, 'edits are a boolean use or attack');
 });
 
 test('server-side shots spend magazine rounds, damage through armour, and kill with a death message', () => {
@@ -131,6 +131,91 @@ test('the use button eats held food on the server; letting go stops it', () => {
   assert.equal(a.eating, null, 'a gun in hand eats nothing');
 });
 
+const itemId = name => +Object.keys(ITEMS).find(k => ITEMS[k].name === name);
+function digger(sim) {
+  const p = sim.addPlayer('a', 'Alice', id(1));
+  p.position.copy({ x: 64.5, y: 10, z: 64.5 }); p.previous.copy(p.position); p.survival.protection = 0;
+  p.survival.inventory.main.fill(null); p.survival.inventory.armor.fill(null);
+  return p;
+}
+test('survival digging runs on the server while the attack button is held; the block drops and is picked up', () => {
+  const sim = arena(), p = digger(sim), DIRT = 2;
+  sim.world.put(64, 9, 64, DIRT, 0, false);
+  p.pitch = -Math.PI / 2; const hold = keep(sim, p);
+  assert.equal(cleanAction({ action: 'mine', down: true })?.action, 'mine');
+  sim.action('a', { action: 'mine', down: true });
+  run(sim, 8, hold);
+  assert.ok(sim.you(p).mining.progress > 0.3 && sim.you(p).mining.progress < 1, 'dirt by hand takes 1 / (0.5 * 30) per tick');
+  assert.ok(Array.isArray(JSON.parse(JSON.stringify(sim.you(p))).mining.block), 'the cell is sent as a plain array');
+  sim.action('a', { action: 'mine', down: false }); run(sim, 1, hold);
+  assert.equal(p.mining, null, 'letting go resets the progress'); assert.equal(sim.world.get(64, 9, 64), DIRT);
+  sim.action('a', { action: 'mine', down: true });
+  let t = 0; while (sim.world.get(64, 9, 64) === DIRT && t < 40) { run(sim, 1, hold); t++; }
+  assert.ok(t >= 15 && t <= 17, `broke after ${t} ticks`);
+  assert.ok(sim.drainEvents(p).some(e => e.type === 'broke' && e.id === DIRT));
+  assert.equal(sim.play.items.items.length, 1);
+  assert.deepEqual(sim.you(p).items.map(r => r[4]), [DIRT], 'nearby players see the dropped item');
+  sim.action('a', { action: 'mine', down: false }); run(sim, 40, hold);
+  assert.equal(p.survival.inventory.main.find(Boolean)?.id, DIRT, 'the item is picked up after its 10-tick delay');
+  assert.ok(sim.drainEvents(p).some(e => e.type === 'pickup' && e.by === 'a'));
+  sim.world.put(64, 8, 64, 3, 0, false); sim.world.put(63, 9, 64, 3, 0, false);
+  p.position.copy({ x: 64.5, y: 9, z: 64.5 }); p.yaw = EAST + Math.PI; p.pitch = 0; sim.action('a', { action: 'mine', down: true });
+  t = 0; while (sim.world.get(63, 9, 64) === 3 && t < 200) { run(sim, 1, hold); t++; }
+  assert.ok(t > 140 && sim.play.items.items.length === 0, 'stone by hand takes 7.5 s and drops nothing');
+});
+test('inventory clicks run on the server: crafting, acknowledgements, closing throws the grid, bad clicks are refused', () => {
+  const sim = arena(), p = digger(sim), inv = p.survival.inventory, PLANKS = itemId('Oak Wood Planks'), TABLE = itemId('Crafting Table');
+  inv.main[9] = { id: PLANKS, count: 5, damage: 0 };
+  assert.equal(sim.click('a', { window: 0, seq: 1, clicks: [[9, 0, 0], [1, 1, 0], [2, 1, 0], [3, 1, 0], [4, 1, 0]] }), true);
+  const you = sim.you(p);
+  assert.equal(you.ack, 1);
+  assert.deepEqual(you.inv.window.cursor, { id: PLANKS, count: 1, damage: 0 });
+  assert.deepEqual(you.inv.window.slots.find(([i]) => i === 0)[1], { id: TABLE, count: 1, damage: 0 }, 'the 2x2 grid crafts');
+  sim.click('a', { window: 0, seq: 2, clicks: [[0, 0, 1]] }); // shift-click the result
+  assert.ok(inv.main.some(s => s?.id === TABLE));
+  sim.click('a', { window: 0, seq: 3, clicks: [[1, 1, 0]] });
+  sim.closeWindow('a', 0);
+  assert.equal(inv.cursor, null);
+  assert.equal(sim.play.items.items.reduce((n, e) => n + e.stack.count, 0), 1, 'closing throws the held stack');
+  assert.equal(sim.click('a', { window: 0, seq: 4, clicks: [[99, 0, 0]] }), false);
+  assert.equal(sim.click('a', { window: 0, seq: 5, clicks: Array(65).fill([9, 0, 0]) }), false);
+  assert.equal(sim.click('a', { window: 7, seq: 6, clicks: [[0, 0, 0]] }), true, 'a click for a window that already closed is ignored');
+  inv.main[9] = { id: PLANKS, count: 1, damage: 0 };
+  sim.click('a', { window: 0, seq: 7, clicks: [[9, 2, 3]] });
+  assert.equal(inv.cursor, null, 'middle-click cloning is Creative only');
+});
+test('a placed crafting table opens a server window, which closes when the player walks away', () => {
+  const sim = arena(), p = digger(sim), inv = p.survival.inventory, TABLE = itemId('Crafting Table'), PLANKS = itemId('Oak Wood Planks');
+  inv.main[0] = { id: TABLE, count: 1, damage: 0 }; inv.main[9] = { id: PLANKS, count: 3, damage: 0 }; inv.current = 0;
+  p.yaw = EAST; p.pitch = -0.6;
+  assert.equal(sim.edit(p, true), true);
+  assert.equal(sim.world.get(66, 10, 64), TABLE); assert.equal(inv.main[0], null);
+  sim.edit(p, true);
+  const open = sim.you(p).open;
+  assert.equal(open.kind, 'workbench'); assert.ok(open.id >= 1);
+  sim.click('a', { window: open.id, seq: 1, clicks: [[10 + 0, 0, 0], [1, 1, 0]] }); // container slot 10 is main[9] in ContainerWorkbench
+  assert.equal(p.window.container.grid.stacks[0]?.count, 1);
+  p.position.copy({ x: 76.5, y: 10, z: 64.5 }); run(sim, 1, keep(sim, p));
+  assert.equal(p.window, null); assert.equal(sim.you(p).open, null, 'Container.canInteractWith: more than 8 blocks away');
+  assert.ok(sim.play.items.items.length >= 2, 'the grid and the held stack are thrown');
+});
+test('creative players set inventory slots; Q drops; keepInventory keeps the inventory', () => {
+  const sim = arena(), p = digger(sim), inv = p.survival.inventory, DIAMOND = itemId('Diamond');
+  assert.equal(sim.creative('a', { slot: 36, stack: { id: DIAMOND, count: 64, damage: 0 } }), false, 'not in Survival');
+  sim.setMode(p, 'creative');
+  assert.equal(sim.creative('a', { slot: 36, stack: { id: DIAMOND, count: 64, damage: 0 }, seq: 3 }), true);
+  assert.equal(p.survival.inventory.main[0]?.id, DIAMOND); assert.equal(p.clickAck, 3);
+  assert.equal(sim.creative('a', { slot: 5, stack: { id: 408, count: 1, damage: 0 } }), true);
+  assert.equal(p.survival.inventory.armor[3]?.id, 408, 'slot 5 is the helmet');
+  sim.setMode(p, 'survival');
+  const held = p.survival.inventory; held.current = 0;
+  assert.equal(sim.drop('a', false), true); assert.equal(held.main[0].count, 63);
+  sim.drop('a', true); assert.equal(held.main[0], null);
+  assert.deepEqual(sim.play.items.items.map(e => e.stack.count), [1, 63]);
+  sim.rules.keepInventory = true; held.main[4] = { id: DIAMOND, count: 2, damage: 0 };
+  p.survival.health = 0; run(sim, 1);
+  assert.equal(p.dead, true); assert.equal(held.main[4]?.count, 2);
+});
 test('/give finds items by registry name, number or mod item name and fills the inventory', () => {
   const sim = arena(), p = sim.addPlayer('a', 'Alice', id(1));
   const diamond = sim.findItem('minecraft:diamond');
@@ -154,7 +239,7 @@ test('the client is told how many shots the server fired, for its ammo predictio
   assert.equal(sim.you(b).shots, 0);
 });
 
-test('death messages, respawn, keepInventory and join protection', () => {
+test('death messages, respawn, death drops and join protection', () => {
   const sim = arena(), { a, b } = pair(sim), keepUp = keep(sim, a, b);
   run(sim, 10, keepUp);
   sim.action('a', { action: 'trigger', down: true });
@@ -167,7 +252,8 @@ test('death messages, respawn, keepInventory and join protection', () => {
   assert.deepEqual({ x: b.position.x, z: b.position.z }, { x: pos.x, z: pos.z }, 'the dead do not move');
   assert.equal(sim.respawn('b'), true);
   assert.equal(b.survival.health, 20); assert.equal(b.dead, false); assert.equal(b.survival.protection, JOIN_PROTECTION);
-  assert.deepEqual(b.survival.inventory.main.slice(0, 4).map(s => s?.id), [AKM, P320, M870, KNIFE], 'arena keeps inventories');
+  assert.deepEqual(b.survival.inventory.main.slice(0, 4).map(s => s?.id), [undefined, undefined, undefined, undefined], 'without keepInventory a death drops everything');
+  assert.ok(sim.play.items.items.some(e => e.stack.id === AKM), 'the dropped guns lie where Bob died');
   assert.equal(sim.respawn('b'), false, 'only the dead respawn');
   const health = b.survival.health;
   sim.action('a', { action: 'trigger', down: true }); run(sim, 5, keepUp);
@@ -346,6 +432,19 @@ test('two sockets fight through the server; commands follow op levels', async t 
   alice.ws.send(JSON.stringify({ type: 'chat', text: '/gamemode creative Bob' }));
   assert.match((await alice.next(m => m.type === 'chat' && /game mode/.test(m.text))).text, /Bob's game mode to creative/);
   await bob.next(m => m.type === 'tick' && m.you.mode === 'creative');
+  alice.ws.send(JSON.stringify({ type: 'chat', text: '/gamerule keepInventory true' }));
+  assert.equal((await alice.next(m => m.type === 'chat' && /rule/.test(m.text))).text, 'Game rule has been updated');
+  assert.equal(sim.rules.keepInventory, true);
+  alice.ws.send(JSON.stringify({ type: 'chat', text: '/tp Bob 70 12 ~' }));
+  assert.match((await alice.next(m => m.type === 'chat' && /Teleported/.test(m.text))).text, /Teleported Bob to 70.50, 12.00/);
+  assert.equal(pb.position.x, 70.5);
+  alice.ws.send(JSON.stringify({ type: 'chat', text: '/time set night' }));
+  await alice.next(m => m.type === 'chat' && /time/.test(m.text));
+  assert.equal(sim.time % 24000, 13000);
+  bob.ws.send(JSON.stringify({ type: 'chat', text: '/tell Alice hi' }));
+  assert.equal((await alice.next(m => m.type === 'chat' && /whispers/.test(m.text))).text, 'Bob whispers to you: hi');
+  bob.ws.send(JSON.stringify({ type: 'click', window: 0, seq: 1, clicks: [[9, 0, 0]] }));
+  await bob.next(m => m.type === 'tick' && m.you.ack === 1);
   alice.ws.send(JSON.stringify({ type: 'chat', text: '/kick Bob Testing' }));
   assert.equal((await bob.closed).reason, 'Testing');
   await alice.next(m => m.type === 'chat' && m.text === 'Bob left the game');

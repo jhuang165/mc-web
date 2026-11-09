@@ -51,21 +51,21 @@ export class DedicatedClient {
   }
   // While terrain loads, ticks merge into one: each cell keeps its last write and
   // presence/time/weather come from the newest tick, so a slow device never
-  // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines. A gun server's inventory is sent only when it
-  // changes, so the newest one is kept; its per-player events (shots, hits) are past by the time the world shows.
+  // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines. A gun server's inventory and open window are sent only when
+  // they change, so the newest ones are kept; its per-player events (shots, hits) are past by the time the world shows.
   buffer(message) {
     if (message.type === 'chat') { this.messages.push(message); if (this.messages.length > 100) this.messages.shift(); return; }
     if (message.type !== 'tick') return;
-    const merged = this.pending ??= { cells: new Map(), inv: null };
+    const merged = this.pending ??= { cells: new Map(), sticky: {} };
     for (const change of message.changes) merged.cells.set(`${change[0]},${change[1]},${change[2]}`, change);
-    if (message.you?.inv) merged.inv = message.you.inv;
+    for (const key of ['inv', 'open']) if (message.you && key in message.you) merged.sticky[key] = message.you[key]; // sent only on change
     merged.last = message;
   }
   start() {
     this.ready = true;
     const merged = this.pending; this.pending = null;
     if (merged) {
-      const last = merged.last, you = last.you && { ...last.you, ...(merged.inv && !last.you.inv ? { inv: merged.inv } : {}) };
+      const last = merged.last, you = last.you && { ...merged.sticky, ...last.you };
       this.apply({ ...last, changes: [...merged.cells.values()], events: [], ...(you ? { you } : {}) });
     }
     for (const message of this.messages.splice(0)) this.apply(message);

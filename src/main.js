@@ -144,6 +144,7 @@ import { accountScreen } from './profile-screen.js';
 import { setPlayerName } from './player-name.js';
 import { IDLE_INPUT, MULTIPLAYER_URL } from "./multiplayer/protocol.js";
 import { gunContext } from "./multiplayer/combat.js";
+import { RemoteInventory, RemoteItems, remoteContainer } from "./multiplayer/remote-inventory.js";
 import { roundsLeft } from "./mods/guns/catalog.js";
 import { setLoadedRounds } from "./mods/guns/ammo.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
@@ -657,6 +658,7 @@ function showMultiplayer() {
 function leaveMultiplayer() {
   multiplayer?.close(); multiplayer = null;
   serverInv = null; serverShots = null; predictedFood = null; predictedShots.length = 0;
+  remoteInv.reset(); remoteItems.clear();
   remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null;
 }
 // Protocol v3: movement, look, the selected hotbar slot and the newest server tick on screen; never item stacks.
@@ -668,6 +670,9 @@ function sendMultiplayerInput(controls = IDLE_INPUT) {
 let serverInv = null, serverShots = null, predictedFood = null; // predictedFood: { food, at } after a bite eaten here
 const predictedShots = []; // { slot, at }, oldest first
 const PREDICTION_TIMEOUT = 1000; // ms: a shot the server never fired (the two controllers disagreed) stops counting
+// Inventory windows (clicks predicted here, replayed over the server's answer) and the dropped items the server reports.
+const remoteInv = new RemoteInventory(m => multiplayer?.send(m)), remoteItems = new RemoteItems();
+const sendMine = down => multiplayer?.send({ type: 'action', action: 'mine', down, yaw, pitch, view: multiplayer.lastTick });
 function rebuildServerInventory() {
   const inv = survival.inventory;
   inv.main = Array.from({ length: 36 }, (_, i) => inv.read(serverInv.slots?.[i] ?? null, true));
@@ -678,6 +683,22 @@ function rebuildServerInventory() {
     if (!gun) continue;
     if (gun.feed === "inventory") ctx.take(gun.ammo, 1);
     else setLoadedRounds(gun, stack, roundsLeft(stack) - 1);
+  }
+  const view = containerView, state = serverInv.window;
+  if (view?.kind === 'furnace' && state?.bars && remoteInv.window?.id === state.id) Object.assign(survival.furnace(view.key), state.bars);
+  remoteInv.restore(inv, state, { creative: view?.kind === 'creative' });
+  if (view) refreshContainer();
+}
+// A window the server opened by a block (you.open), or its close (reach, the block broken, death).
+function applyServerWindow(open) {
+  if (open && open.id !== remoteInv.window?.id) {
+    const container = remoteContainer(survival, open);
+    if (!container) return;
+    if (containerView) { remoteInv.forget(); closeModal(); }
+    remoteInv.attach(container, open.id);
+    openContainer(container, open.kind, open.key);
+  } else if (!open && remoteInv.window?.id > 0 && containerView?.container === remoteInv.window.container) {
+    remoteInv.forget(); resume();
   }
 }
 // What the gun server tells only this player (gun-simulation.js you()): health, food, mode, death and, when changed, the inventory.
@@ -704,7 +725,12 @@ function applyServerPlayer(you) {
   }
   const stale = performance.now() - PREDICTION_TIMEOUT;
   while (predictedShots.length && predictedShots[0].at < stale) { predictedShots.shift(); refresh = true; }
+  if ('open' in you) applyServerWindow(you.open);
   if (you.inv) { serverInv = you.inv; refresh = true; }
+  if (Number.isInteger(you.ack) && remoteInv.acked(you.ack)) refresh = true;
+  // PlayerControllerMP.curBlockDamageMP as the server counts it: the crack and the arm swinging while the button is held.
+  mining = you.mining && Array.isArray(you.mining.block) ? { block: you.mining.block, progress: you.mining.progress } : null;
+  if (mining && screen === 'playing') animation.swing();
   if (refresh && serverInv) { rebuildServerInventory(); changed = true; }
   if (Number.isInteger(you.current) && you.current !== s.inventory.current && screen !== 'playing') { s.inventory.current = you.current; changed = true; }
   if (changed) renderHotbar();
@@ -752,7 +778,21 @@ function applyMultiplayerTick(message) {
   chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
   remotePlayers?.sync(message.players, multiplayer.id);
   applyServerPlayer(message.you);
-  for (const event of Array.isArray(message.events) ? message.events : []) if (gunsEnabled()) guns.serverEvent(event);
+  for (const event of Array.isArray(message.events) ? message.events : []) {
+    if (event?.type === 'broke' && Array.isArray(event.block)) {
+      // RenderGlobal.playAuxSFX 2001: the break sound and the block's pieces.
+      const [x, y, z] = event.block, s = breakSound(event.id);
+      sounds?.play(s.name, { position: { x: x + 0.5, y: y + 0.5, z: z + 0.5 }, volume: s.volume, pitch: s.pitch });
+      scene.particles.destroyBlock(world, x, y, z, event.id);
+    } else if (event?.type === 'pickup') {
+      // S0DPacketCollectItem: the item flies to whoever picked it up, with random.pop.
+      const item = remoteItems.take(event.entity), by = event.by === multiplayer.id ? position : message.players.find(p => p.id === event.by);
+      if (!item) continue;
+      sounds?.play("random.pop", { volume: 0.2, pitch: ((Math.random() - Math.random()) * 0.7 + 1) * 2, position: { x: item.x, y: item.y, z: item.z } });
+      if (by) scene.drops.pickup(item, by);
+    } else if (gunsEnabled()) guns.serverEvent(event);
+  }
+  if (message.you) { remoteItems.sync(message.you.items); scene.setDrops(remoteItems.items); }
 }
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
@@ -784,7 +824,7 @@ async function joinMultiplayer(settings) {
     client.start();
     sendMultiplayerInput();
     if (welcome.motd) printChat(String(welcome.motd));
-    printChat(`Gun arena: the server owns health, ammo and inventories.${welcome.pvp ? ' PvP is on.' : ' PvP is off.'} Type /help for server commands.`);
+    printChat(`Gun arena: the server owns health, ammo, inventories, mining and dropped items.${welcome.pvp ? ' PvP is on.' : ' PvP is off.'} Type /help for server commands.`);
   } catch (error) {
     client.close(); if (multiplayer === client) leaveMultiplayer();
     if (active?.remote) leaveToTitle(false);
@@ -2053,10 +2093,15 @@ function leaveToTitle(keep) {
   gui.show(menus.mainMenu());
 }
 function openHorse(e) { openContainer(new HorseContainer(survival.inventory, mobs.horseGear(e), () => { saved = false; }, e.customName), "horse", String(e.id)); containerView.horseMob = e; }
-// On a gun server the inventory is the server's (gun-simulation.js): this tab shows it but cannot move, drop or pick items yet.
-const SERVER_INVENTORY = "Items are managed by the server; inventory moves are not connected yet.";
+// On a gun server the inventory is the server's (gun-simulation.js, server-play.js): clicks are predicted here and sent; gun attachments are not.
+const SERVER_INVENTORY = "Gun attachments are not connected to the server yet.";
 function inventory(station = false) {
-  if (multiplayer) { toast(SERVER_INVENTORY); return; }
+  // On a gun server window 0 (the inventory) opens here without a message, as in Java; its clicks go to the server.
+  if (multiplayer) {
+    if (survival.creative) { openCreative(); remoteInv.window = null; remoteInv.snapshot = [...survival.inventory.main, ...survival.inventory.armor].map(st => JSON.stringify(st ?? null)); return; }
+    openContainer(remoteInv.attach(survival.openInventory(), 0), "inventory");
+    return;
+  }
   // EntityPlayerSP.func_110322_i: the inventory key while riding a saddled horse opens the horse's screen.
   const ridden = !station && riddenHorse(rider);
   if (ridden) { openHorse(ridden); return; }
@@ -2190,6 +2235,7 @@ function openGunAttachments() {
 function openContainer(container, kind, key = null, gui = new ContainerScreen(container)) {
   screen = "inventory";
   mining = null;
+  if (multiplayer && mineHeld) sendMine(false);
   mineHeld = false;
   const decorations =
     kind === "enchanting"
@@ -2386,11 +2432,18 @@ function closeContainer() {
   enchantExtras?.dispose();
   enchantExtras = null;
   if (!containerView) return;
-  const { container, kind, key } = containerView;
+  const { container, kind, key, gui: screenGui } = containerView;
   containerView = null;
-  if (kind === "chest") redstoneRuntime?.containerClosed(container.keys); else if (key) redstoneRuntime?.containerClosed([key]);
   const overlay = $("#modal");
   overlay.onpointerdown = overlay.onpointermove = overlay.onpointerup = overlay.onwheel = overlay.oncontextmenu = overlay.onclick = null;
+  if (multiplayer) {
+    // The server closes its window and throws the held stack and the grid; Creative sends what changed and what it threw.
+    if (kind === "creative") { container.close(); remoteInv.creative(survival.inventory, [...container.drops.splice(0), ...(screenGui?.container?.drops?.splice(0) ?? [])]); }
+    else { remoteInv.close(container); container.close(); container.drops.length = 0; }
+    renderHotbar();
+    return;
+  }
+  if (kind === "chest") redstoneRuntime?.containerClosed(container.keys); else if (key) redstoneRuntime?.containerClosed([key]);
   container.close();
   if (kind === "chest") redstoneRuntime?.chestViewersChanged(container.keys); // a trapped chest's power follows its viewers
   throwStacks(container.drops.splice(0));
@@ -2401,8 +2454,10 @@ function closeContainer() {
 function refreshContainer() {
   if (!containerView) return;
   const view = containerView,
-    { container, gui } = view,
-    preview = gui.preview();
+    { container, gui } = view;
+  if (multiplayer && view.kind === "creative") remoteInv.creative(survival.inventory, [...container.drops.splice(0), ...(gui.container?.drops?.splice(0) ?? [])]);
+  else if (multiplayer) container.drops.length = 0;
+  const preview = gui.preview();
   if (view.kind === "anvil") refreshAnvil($("#modal"), container, anvilCost(container)); // GuiRepair glyph field, cost line, cross
   if (view.kind === "beacon") refreshBeacon(view);
   if (view.kind === "merchant") renderMerchantView(view);
@@ -3312,7 +3367,7 @@ function breakBlock(p, creative = false) {
 const pickItem = (block, meta = 0) => block === 139 ? 1139 : block === 177 || block === 178 ? block + 1000 : isColoredBlock(block) ? block + COLORED_ITEM_OFFSET : isDispenserPiston(block) ? (block === PISTON_HEAD ? itemForBlock(headBaseId(meta)) : itemForBlock(block)) : isRedstoneBlock(block) ? redstoneItemOf(block) : (block === 29 || block === 30 ? 2 : block === WOODEN_DOOR ? WOODEN_DOOR_ITEM : block === IRON_DOOR ? IRON_DOOR_ITEM : block === REEDS ? REEDS_ITEM : isCrop(block) ? cropItem(block) : !isLiquid(block) && ITEMS[block] ? blockItemId(block) : 0);
 // EntityPlayer.dropOneItem: Q throws one item, Ctrl + Q the whole stack.
 function dropHeld(all) {
-  if (multiplayer) { toast(SERVER_INVENTORY); return; }
+  if (multiplayer) { if (survival.inventory.held) multiplayer.send({ type: 'drop', all: !!all }); eating = null; return; } // the server throws it
   const inv = survival.inventory, s = inv.held;
   if (!s) return;
   throwStacks([inv.decr(inv.current, all ? s.count : 1)]);
@@ -3678,7 +3733,7 @@ function bindingPressed(d, ctrl) {
   else if (d === "key.drop") dropHeld(ctrl);
   else if (d === "key.chat") openChat("");
   else if (d === "key.command") openChat("/");
-  else if (d === "key.attack") { if (gunsEnabled() && guns.attack(true)) return; mineHeld = true; edit(false); }
+  else if (d === "key.attack") { if (gunsEnabled() && guns.attack(true)) return; mineHeld = true; if (multiplayer) { if (screen === "playing") { sendMultiplayerInput(captureMovementInput(k => binds.isDown(k))); sendMine(true); animation.swing(); } } else edit(false); }
   else if (d === "key.use") { useHold.press(); if (!gunsUse() && !(gunsEnabled() && guns.aimHold(true))) edit(true); } // guns mod: use aims down sights
   else if (d === "key.pickItem") pickBlock();
   else if (d === "key.playerlist") showPlayerList();
@@ -3687,7 +3742,7 @@ function bindingPressed(d, ctrl) {
 // A binding released: key.playerlist hides the list, key.attack stops mining and key.use stops using.
 function bindingReleased(d) {
   if (d === "key.playerlist") playerList.hide();
-  else if (d === "key.attack") { if (gunsEnabled()) guns.attack(false); mineHeld = false; if (mining && !mining.auto) mining = null; }
+  else if (d === "key.attack") { if (gunsEnabled()) guns.attack(false); if (multiplayer && mineHeld) sendMine(false); mineHeld = false; if (mining && !mining.auto) mining = null; }
   else if (d === "key.use") {
     if (gunsEnabled()) guns.aimHold(false);
     if (multiplayer) multiplayer.send({ type: 'action', action: 'use', down: false, yaw, pitch, view: multiplayer.lastTick });
@@ -4344,6 +4399,8 @@ async function boot(){try {
     window.__mc = { scene, dims, travel: (d) => dims.travel(d), get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get boats() { return boats; }, get hanging() { return hanging; }, get aimedHanging() { return aimedHanging; }, fishing, get target() { return target; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt, useBed, get bedSleep() { return bedSleep; }, get playerRenderer() { return playerRenderer; }, get firstPerson() { return firstPerson; } };
   if (import.meta.env.DEV) Object.defineProperty(window.__mc, 'multiplayer', { get: () => multiplayer });
   if (import.meta.env.DEV) Object.defineProperty(window.__mc, 'guns', { get: () => guns });
+  // Dev-only checks drive a key binding as a press or release, and read the open container and the server's window copy.
+  if (import.meta.env.DEV) Object.defineProperties(window.__mc, Object.getOwnPropertyDescriptors({ press: (d, down = true) => (down ? bindingPressed(d, false) : bindingReleased(d)), get containerView() { return containerView; }, remoteInv, remoteItems, get screen() { return screen; }, get mining() { return mining; } }));
   scene.preview(0);
   // The title screen's splash texts (assets/minecraft/texts/splashes.txt).
   menuContext.splashes = await fetch("/media/1.7.10/texts/splashes.txt").then((r) => (r.ok ? r.text() : "")).catch(() => "");
