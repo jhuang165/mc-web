@@ -1,14 +1,31 @@
-import { DEFAULT_SERVER, validName } from './protocol.js';
+import { MULTIPLAYER_URL, PROTOCOL, BUILD_ID, serverUrl, validName } from './protocol.js';
 import { convertGuiCanvas } from '../gui-anaglyph.js';
-import { AccountApi } from './account-api.js';
 import { skinCanvas, canvasPng, drawSkinPreview, PREVIEW_WIDTH, PREVIEW_HEIGHT } from '../skin.js';
 
-// Browser-server sign-in and join; intentionally doesn't pretend to discover
-// Java LAN servers. Accounts are invite-only and live on the server (server/accounts.js).
-// It uses the game's existing bitmap-font GUI widgets.
-export function multiplayerScreen({ back, connect, profile, defaults = {}, makeApi = url => new AccountApi(url) }) {
-  const values = { url: defaults.url || DEFAULT_SERVER, name: defaults.name || '', password: '', invite: '' };
-  let api = null, state = 'signedOut', busy = false, error = '', note = '', invite = '';
+// The gun server's address as plain HTTP(S), for its /status (server/guns-server.js).
+export function statusUrl(address) {
+  const url = new URL(serverUrl(address));
+  url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
+  url.pathname = '/status'; url.search = '';
+  return url.href;
+}
+// What a /status answer means for this tab: null when it can join, else the reason it cannot.
+export function statusProblem(status, pack) {
+  if (status.protocol !== PROTOCOL) return 'The server runs a different protocol. Reload the game.';
+  if (status.build !== 'any' && status.build !== BUILD_ID) return 'The server runs a different game build. Reload the game.';
+  if (pack && status.pack !== pack) return 'Your gun pack differs from the server\'s.';
+  if (status.players >= status.maxPlayers) return 'The server is full.';
+  return null;
+}
+
+// The gun server's join screen. It signs in with the website account (profile.js ProfileSession): the server checks the session
+// with the profile service and takes the account's name, so there is no separate multiplayer password. It intentionally doesn't
+// pretend to discover Java LAN servers. It uses the game's existing bitmap-font GUI widgets.
+// session: ProfileSession; connect({ url, session }) joins; signIn() opens the account screen; fetchStatus(url) -> JSON;
+// pack() -> this tab's weapon-rules fingerprint (or null before the packs load).
+export function multiplayerScreen({ back, connect, session, signIn, defaults = {}, fetchStatus = defaultStatus, pack = async () => null }) {
+  const values = { url: defaults.url || MULTIPLAYER_URL };
+  let busy = false, error = '', note = '', status = null, statusFor = null;
   const run = async (g, work) => {
     if (busy) return;
     busy = true; error = ''; note = ''; g.build();
@@ -16,71 +33,49 @@ export function multiplayerScreen({ back, connect, profile, defaults = {}, makeA
     catch (e) { error = String(e.message).slice(0, 85); }
     busy = false; g.build();
   };
-  const useAddress = () => { if (!api || api.address !== values.url) { api = makeApi(values.url); api.address = values.url; } return api; };
-  try { useAddress(); } catch { api = null; }
+  const refresh = async (g) => {
+    const address = values.url; statusFor = address; status = { checking: true }; g?.build();
+    let next;
+    try {
+      const [answer, fingerprint] = await Promise.all([fetchStatus(statusUrl(address)), pack().catch(() => null)]);
+      next = { ...answer, problem: statusProblem(answer, fingerprint) };
+    } catch (e) { next = { offline: true, problem: e.message.startsWith('Use a') || e.message.startsWith('This HTTPS') ? e.message : 'Can\'t reach the server.' }; }
+    if (statusFor === address) { status = next; g?.build(); }
+  };
   const screen = {
     id: 'multiplayer',
     escape: () => { if (!busy) back(); },
-    // A remembered session is checked once when the screen opens.
-    async check(g) {
-      if (!api?.session) return;
-      state = 'checking'; g?.build();
-      try { await api.me(); state = 'signedIn'; values.name = api.account.name; }
-      catch (e) { state = 'signedOut'; error = api.session ? String(e.message).slice(0, 85) : ''; }
-      g?.build();
-    },
-    get api() { return api; },
     init(g, w, h) {
-      if (state === 'signedIn' && !api?.account) state = 'signedOut';
-      if (!screen.checked) { screen.checked = true; void screen.check(g); }
-      const x = Math.floor(w / 2) - 150, top = Math.max(24, Math.floor(h / 2) - 92);
+      if (!screen.checked) { screen.checked = true; void refresh(g); }
+      const x = Math.floor(w / 2) - 150, top = Math.max(24, Math.floor(h / 2) - 70);
       g.text('Multiplayer', w / 2, 12, { center: true });
-      const message = (y, fallback) => g.text(error || note || (busy ? 'Contacting the server…' : fallback), w / 2, y, { center: true, color: error ? 0xff7777 : 0xaaaaaa });
-      if (state === 'checking') { g.text('Checking your sign-in…', w / 2, top + 40, { center: true, color: 0xaaaaaa }); g.button({ x: x + 77, y: top + 70, w: 146, h: 20 }, 'Cancel', back); return; }
-      if (state === 'signedIn') {
-        const a = api.account;
-        g.text(`Signed in as ${a.name}${a.admin ? ' (admin)' : ''}`, w / 2, top, { center: true });
-        g.text('Shared Creative world · 128 × 128 blocks', w / 2, top + 16, { center: true, color: 0xaaaaaa });
-        g.button({ x, y: top + 44, w: 300, h: 20 }, busy ? 'Connecting…' : 'Join Server', () => run(g, async () => {
-          note = 'Connecting and downloading terrain…'; g.build();
-          await connect({ url: values.url, session: api.session, api });
-        }), { enabled: !busy });
-        g.button({ x, y: top + 68, w: 148, h: 20 }, 'Name and Skin…', () => profile(api, screen), { enabled: !busy });
-        g.button({ x: x + 152, y: top + 68, w: 148, h: 20 }, 'Create Invite', () => run(g, async () => {
-          const { code } = await api.invite();
-          invite = code; note = 'One use, valid 7 days. Send it to one friend.';
-          try { await navigator.clipboard?.writeText(code); note = 'Copied. One use, valid 7 days.'; } catch {}
-        }), { enabled: !busy && a.admin, reason: a.admin ? '' : 'Only admin accounts can create invites.' });
-        if (invite) {
-          g.text('Invite code', x, top + 94, { color: 0xaaaaaa });
-          g.field({ x: x + 70, y: top + 92, w: 230, h: 14 }, { value: invite, maxLength: 11, label: 'Invite code', input: () => {} });
-        }
-        message(top + 114, a.admin ? 'Invite friends with a code; they choose their own name.' : 'Admins create invite codes for new friends.');
-        g.button({ x, y: top + 130, w: 148, h: 20 }, 'Sign Out', () => run(g, async () => { await api.signOut(); state = 'signedOut'; invite = ''; values.password = ''; }), { enabled: !busy });
-        g.button({ x: x + 152, y: top + 130, w: 148, h: 20 }, 'Cancel', back, { enabled: !busy });
-        return;
-      }
-      // There is one server, so its address is not shown or editable.
-      const fields = [['name', 'Name', 16], ['password', 'Password', 128], ['invite', 'Invite code (new accounts only)', 128]];
-      fields.forEach(([key, label, maxLength], index) => {
-        const y = top + 15 + index * 30;
-        g.text(label, x, y, { color: 0xaaaaaa });
-        g.field({ x, y: y + 10, w: 300, h: 16 }, { value: values[key], maxLength, label, secret: key === 'password', input: value => { values[key] = value; } });
-      });
-      message(top + 124, 'Ask the world owner for an invite code.');
-      const check = (registering) => {
-        if (!validName(values.name)) throw new Error('Names are 1–16 letters, numbers or underscores.');
-        if (values.password.length < 8) throw new Error('Passwords are at least 8 characters.');
-        if (registering && !values.invite.trim()) throw new Error('New accounts need an invite code.');
-        return useAddress();
-      };
-      const done = () => { state = 'signedIn'; values.password = ''; values.invite = ''; values.name = api.account.name; };
-      g.button({ x, y: top + 140, w: 98, h: 20 }, 'Log In', () => run(g, async () => { await check(false).signIn(values.name, values.password); done(); }), { enabled: !busy });
-      g.button({ x: x + 101, y: top + 140, w: 98, h: 20 }, 'Create Account', () => run(g, async () => { await check(true).register(values.name, values.password, values.invite.trim()); done(); }), { enabled: !busy });
-      g.button({ x: x + 202, y: top + 140, w: 98, h: 20 }, 'Cancel', back, { enabled: !busy });
+      const account = session.authenticated ? session.account : null;
+      g.text(account ? `Signed in as ${account.name}` : 'Sign in with your account to join.', w / 2, top, { center: true, color: account ? 0xffffff : 0xaaaaaa });
+      g.text('Server address', x, top + 18, { color: 0xaaaaaa });
+      g.field({ x, y: top + 28, w: 300, h: 16 }, { value: values.url, maxLength: 200, label: 'Server address', input: value => { values.url = value.trim(); status = null; } });
+      const line = status?.checking ? 'Checking the server…' : status?.offline ? status.problem
+        : status ? `${String(status.motd ?? 'Gun server').slice(0, 40)} · ${status.players}/${status.maxPlayers} players` : 'Press Refresh to check the server.';
+      g.text(line, w / 2, top + 52, { center: true, color: status?.offline ? 0xff7777 : 0xaaaaaa });
+      if (status?.problem && !status.offline) g.text(status.problem, w / 2, top + 64, { center: true, color: 0xff7777 });
+      g.text(error || note || (busy ? 'Connecting…' : ''), w / 2, top + 80, { center: true, color: error ? 0xff7777 : 0xaaaaaa });
+      if (!account) g.button({ x, y: top + 96, w: 300, h: 20 }, 'Sign In…', signIn, { enabled: !busy });
+      else g.button({ x, y: top + 96, w: 300, h: 20 }, busy ? 'Connecting…' : 'Join Server', () => run(g, async () => {
+        note = 'Connecting and downloading terrain…'; g.build();
+        await connect({ url: serverUrl(values.url), session: session.api.session });
+      }), { enabled: !busy && !!values.url });
+      g.button({ x, y: top + 120, w: 148, h: 20 }, 'Refresh', () => void refresh(g), { enabled: !busy && !status?.checking });
+      g.button({ x: x + 152, y: top + 120, w: 148, h: 20 }, 'Cancel', back, { enabled: !busy });
     },
   };
   return screen;
+}
+async function defaultStatus(url) {
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
+    if (!response.ok) throw new Error('status ' + response.status);
+    return await response.json();
+  } finally { clearTimeout(timer); }
 }
 
 // Name and skin for the signed-in account. A chosen PNG is previewed locally

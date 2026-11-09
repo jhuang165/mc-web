@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { PlayerBody, PlayerRenderer } from '../player-renderer.js';
 import { skinCanvas } from '../skin.js';
+import { gunOf } from '../mods/guns/catalog.js';
+import { gunsEnabled } from '../mods/guns/install.js';
+import { playerBox, rayBox } from './combat.js';
 
 export class RemotePlayers {
   // `skinUrl(hash)`: where the account server serves a skin PNG.
@@ -60,9 +63,21 @@ export class RemotePlayers {
     const t = Math.min(1, Math.max(0, (performance.now() - this.at) / 50));
     for (const entry of this.entries.values()) {
       const p = entry.state;
-      entry.renderer.update(entry.body, t, { held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sneak: p.sneak, swing: p.swing > 0 ? (6 - p.swing) / 6 : 0 });
-      entry.label.visible = !p.sneak;
+      entry.renderer.update(entry.body, t, { held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sneak: p.sneak, swing: p.swing > 0 ? (6 - p.swing) / 6 : 0,
+        heldGun: gunsEnabled() && p.held ? gunOf(p.held) ?? null : null, hurt: (p.hurt ?? 0) > 0, deathTime: p.dead ? 20 : 0 }); // a gun server's presence
+      entry.label.visible = !p.sneak && !p.dead;
     }
+  }
+  // The nearest live remote player a ray from `origin` along unit `dir` meets within `max`: { entity, distance } | null.
+  pick(origin, dir, max) {
+    let best = null;
+    for (const [id, entry] of this.entries) {
+      const p = entry.state;
+      if (!p || p.dead) continue;
+      const at = rayBox(origin, dir, playerBox({ x: p.x, y: p.y, z: p.z, sneak: p.sneak }), max);
+      if (at !== null && (!best || at < best.distance)) best = { entity: { id, ...p }, distance: at };
+    }
+    return best;
   }
   // Plain canvas text is only a name tag; untrusted names are never HTML.
   drawLabel(entry) {

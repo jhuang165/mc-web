@@ -149,6 +149,12 @@ export class DedicatedSimulation {
   tick() {
     const beforeLit = new Set(this.redstone.lit);
     this.ticks++; this.time++;
+    this.tickPlayers();
+    for (const { id, place } of this.actions.splice(0)) { const p = this.players.get(id); if (p) this.edit(p, place); }
+    return this.tickWorld(beforeLit);
+  }
+  // Movement of every connected player; the gun server's subclass adds combat and Survival (gun-simulation.js).
+  tickPlayers() {
     for (const p of this.players.values()) {
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;
       movePlayer(p, controls);
@@ -156,7 +162,8 @@ export class DedicatedSimulation {
       p.survival.time = this.time;
       if (p.swing) p.swing--;
     }
-    for (const { id, place } of this.actions.splice(0)) { const p = this.players.get(id); if (p) this.edit(p, place); }
+  }
+  tickWorld(beforeLit) {
     this.weather.tick(this.world);
     this.weather.drain();
     this.falling.tick();

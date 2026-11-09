@@ -1,7 +1,31 @@
-// Browser protocol v2 (v2: account sessions replace the shared join key). These are port-state messages, not Java Edition packets.
+// Browser protocol v3 (v2: account sessions replace the shared join key; v3: the gun server owns inventories and combat, and a
+// join carries the gameplay build and weapon-rules fingerprint). These are port-state messages, not Java Edition packets.
 // See public/research/multiplayer.md for the deliberate wire-format decision.
-export const PROTOCOL = 2;
+export const PROTOCOL = 3;
 export const DEFAULT_SERVER = 'wss://ledoge0.tail92abaf.ts.net/multiplayer';
+const ENV = import.meta.env ?? {};
+// Multiplayer is paused (2026-11-07) and stays opt-in: VITE_MULTIPLAYER=1 shows the gun-server screen. A dev server joins the local
+// gun server (server/guns-server.js, port 8091) unless VITE_MULTIPLAYER_URL names another.
+export const MULTIPLAYER_ENABLED = ENV.VITE_MULTIPLAYER === '1';
+export const MULTIPLAYER_URL = ENV.VITE_MULTIPLAYER_URL || (ENV.DEV ? 'ws://localhost:8091/multiplayer' : DEFAULT_SERVER);
+// The gameplay build: the Git commit vite.config.js defines for the bundle ('dev' in Node and unbuilt tests).
+// eslint-disable-next-line no-undef
+export const BUILD_ID = typeof __MC_BUILD__ === 'string' && __MC_BUILD__ ? __MC_BUILD__ : 'dev';
+// Gun-server actions (v3). `down` is the button state for held inputs; the others are one-shot key presses.
+export const HELD_ACTIONS = new Set(['trigger', 'aim', 'melee-left', 'melee-right']);
+export const KEY_ACTIONS = new Set(['reload', 'mode', 'inspect']);
+// A gun-server action with the look it was taken at and the server tick the client was showing (lag compensation).
+export function cleanAction(m) {
+  const held = HELD_ACTIONS.has(m?.action);
+  if (!held && !KEY_ACTIONS.has(m?.action)) return null;
+  if (held && typeof m.down !== 'boolean') return null;
+  const look = m.yaw === undefined && m.pitch === undefined ? null : cleanLook(m.yaw, m.pitch);
+  if ((m.yaw !== undefined || m.pitch !== undefined) && !look) return null;
+  if (m.view !== undefined && !Number.isInteger(m.view)) return null;
+  return { action: m.action, down: held ? m.down : true, look, view: m.view ?? null };
+}
+// The hotbar slot a v3 input selects; the server never takes item stacks from a client.
+export const cleanSlot = slot => Number.isInteger(slot) && slot >= 0 && slot <= 8 ? slot : null;
 export const IDLE_INPUT = Object.freeze({ forward: 0, strafe: 0, jump: false, sneak: false, sprint: false });
 export const validName = name => typeof name === 'string' && /^[A-Za-z0-9_]{1,16}$/.test(name);
 export function cleanInput(value) {

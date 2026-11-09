@@ -2,7 +2,7 @@
 // loaded; each input hook returns false when the held item is not a gun, so vanilla input carries on unchanged.
 import { createMeleeHooks } from "./melee-hooks.js";
 import { GunController, fireShot, GLASS_BLOCKS, TICK } from "./firing.js";
-import { gunOf, roundsLeft } from "./catalog.js";
+import { GUNS, gunOf, roundsLeft } from "./catalog.js";
 import { Aim, Recoil, SoundSchedule, SHARED_SOUNDS, soundsOf } from "./feel.js";
 import { gunSoundEvent } from "./sounds.js";
 import { carriedAmmo, takeAmmo } from "./ammo-box.js";
@@ -23,9 +23,20 @@ const DEFAULT_TRACER = { speed: 250, life: 10, interval: 0, color: "#FFFFFF" };
 // deps: { survival, world, mobs, eye() -> { origin, dir }, playerPos() -> {x, z},
 //   sneaking(), moving(), breakBlock([x,y,z]), renderHotbar(), markUnsaved(), toast(text), playing?(), onEvent?(event), random?,
 //   sound?(event, options), preload?(folder), fx?(name, x, y, z, vx, vy, vz), blockHit?([x,y,z], side), crosshair?(visible),
-//   now?() -> ms, hud?(state | null), explode?(x, y, z, radius, { damage, destroy }), tracer?(tracer) (tracers.js tracerBox) }
+//   now?() -> ms, hud?(state | null), explode?(x, y, z, radius, { damage, destroy }), tracer?(tracer) (tracers.js tracerBox),
+//   remote?() -> true on a gun server, action?(name, down) (protocol.js cleanAction), pickPlayer?(origin, dir, max) -> { entity, distance } }
+// On a gun server (multiplayer/gun-simulation.js) the server owns damage, glass, explosions, ammo and hit sounds: the local controller
+// only predicts the shot's look and sound, and each button change is forwarded once as a server action.
+const HELD = new Set(["trigger", "aim", "melee-left", "melee-right"]);
 export function createGunHooks(deps) {
+  const remote = () => !!deps.remote?.();
   const melee = createMeleeHooks(deps);
+  const sent = {};
+  const forward = (name, down = true) => {
+    if (!remote()) return;
+    if (HELD.has(name)) { if (sent[name] === down) return; sent[name] = down; }
+    deps.action?.(name, down);
+  };
   const controller = new GunController(), aim = new Aim(), recoil = new Recoil(), schedule = new SoundSchedule();
   let tapTicks = 0; // a tap (touch, or a click without pointer lock) holds the trigger until it fires or for this many ticks
   let crosshair = true;
@@ -64,6 +75,16 @@ export function createGunHooks(deps) {
     const ray = deps.eye();
     if (!ray) return { hits: [], impacts: [] };
     const { origin, dir } = ray;
+    if (remote()) { // a prediction: where the pellets land for the tracers and impact particles; the server traces the real shot
+      const out = fireShot(gun, {
+        origin, dir, random, sneaking: deps.sneaking(), moving: deps.moving(), aiming: aim.progress,
+        traceBlocks(start, end) { const hit = rayTraceBlocks(deps.world, start, end, true); return hit && { ...hit, id: deps.world.get(...hit.block) }; },
+        pickEntity: (o, d, max) => deps.pickPlayer?.(o, d, max) ?? null,
+        breakGlass() {},
+      });
+      out.hits = []; out.ray = ray;
+      return out;
+    }
     const out = fireShot(gun, {
       origin, dir, random, sneaking: deps.sneaking(), moving: deps.moving(), aiming: aim.progress,
       traceBlocks(start, end) {
@@ -132,7 +153,8 @@ export function createGunHooks(deps) {
       for (let i = 0; i < perHit; i++) deps.blockHit?.(hit.block, hit.side);
       deps.fx?.("smoke", ...hit.point, 0, 0.01, 0);
     }
-    // Hit feedback for the shooter: the kill sound beats a headshot, which beats a body hit.
+    // Hit feedback for the shooter: the kill sound beats a headshot, which beats a body hit (on a gun server: its hit events).
+    if (remote()) return;
     if (out.hits.some((h) => h.entity.health <= 0)) shared("kill");
     else if (out.hits.some((h) => h.head)) shared("head");
     else if (out.hits.length) shared("flesh");
@@ -143,44 +165,73 @@ export function createGunHooks(deps) {
     schedule.add((gun.reload.kind === "shell" ? s.start : wasEmpty ? s.empty : s.tactical) ?? [], ev, "reload");
   }
 
+  // Other players' shots on a gun server (combat.js `shot`): the report where they stand, their tracers and the impacts.
+  const remoteShots = new Map();
+  function remoteShot(e) {
+    const gun = GUNS[e.gun];
+    if (!gun || !Array.isArray(e.origin) || !Array.isArray(e.paths)) return;
+    const s = soundTable(gun), [x, y, z] = e.origin;
+    sound(ev(e.silenced && s.silenced ? s.silenced : s.shoot), { position: { x, y, z } });
+    const t = gun.pack?.tracer ?? DEFAULT_TRACER, n = remoteShots.get(e.id) ?? 0;
+    remoteShots.set(e.id, n + 1);
+    for (const [dx, dy, dz, distance] of e.paths) {
+      const dir = [dx, dy, dz];
+      if (n === 0 || isTracerRound(t.interval, n)) deps.tracer?.({ origin: e.origin, dir, distance, offset: [0, 0, 0], speed: t.speed, life: t.life, color: t.color });
+    }
+    const d = e.paths[0];
+    if (d) deps.fx?.("flame", x + d[0] * 0.7, y + d[1] * 0.7 - 0.15, z + d[2] * 0.7, d[0] * 0.02, d[1] * 0.02, d[2] * 0.02);
+    for (const hit of Array.isArray(e.impacts) ? e.impacts : []) {
+      if (!Array.isArray(hit.point)) continue;
+      if (hit.player != null) { for (let i = 0; i < 3; i++) deps.fx?.("crit", ...hit.point, random() - 0.5, random() * 0.5, random() - 0.5); continue; }
+      if (Array.isArray(hit.block)) for (let i = 0; i < (gun.pellets > 1 ? 1 : 3); i++) deps.blockHit?.(hit.block, hit.side);
+      deps.fx?.("smoke", ...hit.point, 0, 0.01, 0);
+    }
+  }
+
   return {
     controller, aim, recoil,
     holdingGun,
+    // One gun-server event addressed to this player (gun-simulation.js send/near).
+    serverEvent(e) {
+      if (e?.type === "hit") shared(e.kill ? "kill" : e.melee ? null : e.head ? "head" : "flesh");
+      else if (e?.type === "shot") remoteShot(e);
+    },
     holdingMelee: melee.holding,
     speed: melee.speed,
     cancelMelee: () => melee.cancel(),
     // key.attack pressed (down) or released while playing. True when a gun took it.
     attack(down) {
       tapTicks = 0;
-      if (melee.holding()) { melee.press("left", down); return true; }
-      if (!down) melee.press("left", false);
-      if (!holdingGun()) { if (!down) controller.release(); return false; }
+      if (melee.holding()) { melee.press("left", down); forward("melee-left", down); return true; }
+      if (!down) { melee.press("left", false); forward("melee-left", false); }
+      if (!holdingGun()) { if (!down) { controller.release(); forward("trigger", false); } return false; }
       if (down) controller.press(); else controller.release();
+      forward("trigger", down);
       return true;
     },
     // A tap with no held button (the touch break button, a click without pointer lock): one trigger pull. True when a gun took it.
     tap() {
-      if (melee.press("left", true, true)) return true;
+      if (melee.press("left", true, true)) { forward("melee-left", true); return true; }
       if (!holdingGun()) return false;
-      controller.press();
+      controller.press(); forward("trigger", true);
       tapTicks = 20;
       return true;
     },
     // key.use pressed (down) or released: aim down sights while it is held. True when a gun took the press.
     aimHold(down) {
-      if (melee.holding()) { melee.press("right", down); return true; }
-      if (!down) melee.press("right", false);
-      if (!down) { aim.held = false; return false; }
+      if (melee.holding()) { melee.press("right", down); forward("melee-right", down); return true; }
+      if (!down) { melee.press("right", false); forward("melee-right", false); }
+      if (!down) { aim.held = false; forward("aim", false); return false; }
       if (!holdingGun()) return false;
-      aim.held = true;
+      aim.held = true; forward("aim", true);
       stopInspect();
       return true;
     },
     // The touch use button: each tap toggles aiming.
     aimToggle() {
-      if (melee.press("right", true, true)) return true;
+      if (melee.press("right", true, true)) { forward("melee-right", true); return true; }
       if (!holdingGun()) return false;
-      aim.held = !aim.held;
+      aim.held = !aim.held; forward("aim", aim.held);
       if (aim.held) stopInspect();
       return true;
     },
@@ -190,6 +241,7 @@ export function createGunHooks(deps) {
       const gun = heldGun();
       if (!gun) return false;
       if (code === KEY_R) {
+        forward("reload");
         const wasEmpty = rounds(held()) <= 0;
         if (controller.startReload(inventory())) {
           stopInspect();
@@ -211,7 +263,7 @@ export function createGunHooks(deps) {
       if (code === KEY_Z) { if (!controller.reload && controller.draw <= 0) { stopInspect(); controller.release(); aim.held = false; deps.attachments?.(); } return true; }
       if (code === KEY_G) {
         const mode = controller.toggleMode(held());
-        if (mode) { const label = modeLabel(gun, mode); deps.toast(`${gun.name}: ${MODE_NAMES[label] ?? label}`); shared("mode"); }
+        if (mode) { forward("mode"); const label = modeLabel(gun, mode); deps.toast(`${gun.name}: ${MODE_NAMES[label] ?? label}`); shared("mode"); }
         return true;
       }
       return false;
@@ -228,6 +280,8 @@ export function createGunHooks(deps) {
     reset() {
       melee.reset();
       controller.release(); controller.heldKey = null; controller.reload = null;
+      for (const k of Object.keys(sent)) delete sent[k];
+      remoteShots.clear();
       tapTicks = 0; shotCount = 0; aim.held = false; aim.progress = 0; recoil.reset(); schedule.cancel();
       Object.assign(anim, { drawAt: -Infinity, shotAt: -Infinity, reload: null, aimFrom: 0, aimTo: 0, inspectAt: -Infinity });
       deps.hud?.(null);
@@ -313,6 +367,9 @@ export function createGunHooks(deps) {
       const show = !(gun && aim.progress >= 0.5); // TaCZ hides the crosshair while aiming down sights
       if (show !== crosshair) { crosshair = show; deps.crosshair?.(show); }
       if (changed) { deps.renderHotbar(); deps.markUnsaved(); }
+      // A trigger, aim or knife button let go here (a tap that fired, a screen opened, the gun put away) is let go on the server too.
+      forward("trigger", controller.trigger); forward("aim", aim.held);
+      forward("melee-left", melee.controller.held.left); forward("melee-right", melee.controller.held.right);
       deps.hud?.(this.hudState());
       return [...events, ...meleeEvents];
     },

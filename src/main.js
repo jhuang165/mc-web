@@ -142,7 +142,7 @@ import { skinCanvas } from "./skin.js";
 import { ProfileSession } from './profile.js';
 import { accountScreen } from './profile-screen.js';
 import { setPlayerName } from './player-name.js';
-import { IDLE_INPUT } from "./multiplayer/protocol.js";
+import { IDLE_INPUT, MULTIPLAYER_URL } from "./multiplayer/protocol.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
 import { gameRule, setGameRuleSource } from "./game-rules.js";
 import { mayHitBlock } from "./adventure.js";
@@ -155,12 +155,11 @@ import { DISPENSER, DROPPER, PISTON_HEAD, isDispenserPiston, itemForBlock, headB
 import { DispenserContainer, DISPENSER_TITLE } from "./dispenser-container.js";
 import { HopperContainer, Hoppers, HOPPER } from "./hopper.js";
 import { Survival, ITEMS, burnTime, gameModeOf, setExtraCrafting } from "./survival.js";
-import { setGunsEnabled, gunsWorld, gunsEnabled, setGunPack, setMeleePacks, gunSmithRecipes } from "./mods/guns/install.js";
-import { loadMeleePacks } from "./mods/guns/melee.js";
+import { setGunsEnabled, gunsWorld, gunsEnabled, gunSmithRecipes } from "./mods/guns/install.js";
+import { installGunPacks } from "./mods/guns/load-packs.js";
+import { packFingerprint } from "./multiplayer/fingerprint.js";
 import { gunSmithScreen, smithCraft } from "./mods/guns/smith-screen.js";
 import { GUN_SMITH, gunOf } from "./mods/guns/catalog.js";
-import { loadCS2Pack, mergeGunPacks } from "./mods/guns/cs2.js";
-import { loadTaczPack } from "./mods/guns/pack.js";
 import { createGunHooks } from "./mods/guns/hooks.js";
 import { GunTracers } from "./mods/guns/tracers.js";
 import { playGunSound, preloadGunSounds, gunSoundEvent } from "./mods/guns/sounds.js";
@@ -446,15 +445,19 @@ const guns = createGunHooks({
   // TaCZ grenades and rockets: Explosion with the pack's radius; `destroy_block` false keeps the blocks (isSmoking off).
   explode: (x, y, z, radius, { destroy }) => explodeAt(x, y, z, radius, { exploder: null, attacker: "player", smoking: !!destroy }),
   meleeCritical: () => fallDistance > 0 && !grounded && !flying && !rider.vehicle && !wasInWater && !isOnLadder(world, position.x, position.y, position.z) && !survival.effects?.has?.(15),
-  attachments: () => openGunAttachments(), // Z
+  attachments: () => (multiplayer ? toast(SERVER_INVENTORY) : openGunAttachments()), // Z
+  // A gun server (multiplayer/combat.js) owns damage and ammo: buttons go to it with the look and the tick on screen (lag compensation).
+  remote: () => !!multiplayer,
+  action: (action, down) => multiplayer?.send({ type: "action", action, down, yaw, pitch, view: multiplayer.lastTick }),
+  pickPlayer: (origin, dir, max) => remotePlayers?.pick(origin, dir, max) ?? null,
 });
 const gunHud = createAmmoHud(bitmapHtml);
 let gunTracers = null; // the tracer boxes in the world scene, made at the first tracer round
 // The locally installed TaCZ gun pack (Git-ignored; pack.js), read once, the first time a guns world loads.
 let gunPackLoad = null;
 // With it, the locally installed LR Tactical melee packs (the CS2 knives; melee.js).
-const gunPackReady = () => (gunPackLoad ??= Promise.all([loadTaczPack().catch(() => null), loadMeleePacks().catch(() => null), loadCS2Pack().catch(() => null)])
-  .then(([base, melee, cs2]) => { const raw = mergeGunPacks(base, cs2?.raw); setGunPack(raw); setMeleePacks(cs2 ? [...(melee ?? []).filter(p => p.namespace !== "cs2_wt" && p.namespace !== "cs2"), cs2.melee] : melee); return raw; }));
+// load-packs.js merges them exactly as the gun server does (server/pack-loader.js), so both reach the same weapon-rules fingerprint.
+const gunPackReady = () => (gunPackLoad ??= installGunPacks());
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer,playerTicks=0;
 let weather = new Weather(), trees, plants, falling;
 const bedSleep = new BedSleep(); // EntityPlayer's sleeping state and bed spawn point (bed.js)
@@ -642,21 +645,57 @@ window.addEventListener('storage', event => {
   void profiles.check();
 });
 function showMultiplayer() {
-  if (!steveSkin) { steveSkin = new Image(); steveSkin.onload = () => gui.build(); steveSkin.src = STEVE_URL; }
-  const loadSkin = (api) => async (hash) => {
-    if (!hash) return null;
-    try { const r = await fetch(api.skinUrl(hash)); return r.ok ? await skinCanvas(await r.blob()) : null; } catch { return null; }
-  };
-  gui.show(multiplayerScreen({ back: () => gui.show(menus.mainMenu()), defaults: multiplayerDefaults(), connect: joinMultiplayer,
-    profile: (api, screen) => gui.show(profileScreen({ api, back: () => gui.show(screen), steve: steveSkin, loadSkin: loadSkin(api) })) }));
+  // The gun server signs in with the website account; Sign In… opens the account screen and comes back here.
+  gui.show(multiplayerScreen({ back: () => gui.show(menus.mainMenu()), defaults: multiplayerDefaults(), connect: joinMultiplayer, session: profiles,
+    signIn: () => gui.show(accountScreen({ session: profiles, back: showMultiplayer, done: showMultiplayer })),
+    pack: async () => { await gunPackReady(); return packFingerprint(); } }));
 }
 function leaveMultiplayer() {
   multiplayer?.close(); multiplayer = null;
   remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null;
 }
+// Protocol v3: movement, look, the selected hotbar slot and the newest server tick on screen; never item stacks.
 function sendMultiplayerInput(controls = IDLE_INPUT) {
-  multiplayer?.send({ type: 'input', controls, yaw, pitch, current: survival.inventory.current,
-    hotbar: survival.inventory.main.slice(0, 9).map(s => s ? { id: s.id, damage: s.damage ?? 0 } : null) });
+  multiplayer?.send({ type: 'input', controls, yaw, pitch, slot: survival.inventory.current, view: multiplayer.lastTick });
+}
+// What the gun server tells only this player (gun-simulation.js you()): health, food, mode, death and, when changed, the inventory.
+function applyServerPlayer(you) {
+  if (!you) return;
+  const s = survival, before = s.health;
+  if (you.mode && you.mode !== s.mode) {
+    s.mode = you.mode; s.inventory.creative = s.creative; active.mode = you.mode;
+    if (!s.creative) flying = false;
+    $("#mode-label").textContent = you.mode.toUpperCase();
+    $("#hud").classList.toggle("survival", !s.creative);
+  }
+  for (const key of ['health', 'food', 'saturation', 'absorption', 'protection']) if (Number.isFinite(you[key])) s[key] = you[key];
+  if (Number.isFinite(you.hurt)) s.hurtTime = you.hurt;
+  if (s.health < before && !you.dead) sounds?.play('game.player.hurt', { volume: 1, pitch: (Math.random() - Math.random()) * 0.2 + 1 });
+  let changed = s.health !== before;
+  if (you.inv) {
+    const inv = s.inventory;
+    inv.main = Array.from({ length: 36 }, (_, i) => inv.read(you.inv.slots?.[i] ?? null, true));
+    inv.armor = Array.from({ length: 4 }, (_, i) => inv.read(you.inv.armor?.[i] ?? null, true));
+    changed = true;
+  }
+  if (Number.isInteger(you.current) && you.current !== s.inventory.current && screen !== 'playing') { s.inventory.current = you.current; changed = true; }
+  if (changed) { renderHotbar(); renderVitals(); }
+  if (you.dead && screen !== 'dead') remoteDeath();
+  else if (!you.dead && screen === 'dead') { screen = 'playing'; resume(); renderVitals(); } // the server respawned this player
+}
+// Death on a gun server: the server keeps the inventory and picks the spawn; Respawn asks it (gun-simulation.js respawn).
+function remoteDeath() {
+  closeContainer();
+  screen = 'dead'; deathTime = 0; keys.clear(); mining = null; mineHeld = false;
+  guns.reset();
+  sounds?.play('game.player.hurt', { volume: 1, pitch: 1 });
+  $("#block-label").classList.remove("visible");
+  if (document.pointerLockElement) document.exitPointerLock();
+  gui.show(gameOverScreen({
+    hardcore: false, score: 0, show: (sc) => gui.show(sc), again: remoteDeath, isDead: () => screen === 'dead',
+    respawn: () => multiplayer?.send({ type: 'respawn' }), confirmNo: () => multiplayer?.send({ type: 'respawn' }),
+    leave: () => leaveToTitle(true),
+  }));
 }
 function applyMultiplayerTick(message) {
   if (!multiplayer?.ready || !active?.remote) return;
@@ -683,6 +722,8 @@ function applyMultiplayerTick(message) {
   survival.time = message.time; weather.restore(message.weather); scene.setTime(message.time);
   chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
   remotePlayers?.sync(message.players, multiplayer.id);
+  applyServerPlayer(message.you);
+  for (const event of Array.isArray(message.events) ? message.events : []) if (gunsEnabled()) guns.serverEvent(event);
 }
 async function joinMultiplayer(settings) {
   if (multiplayer) throw new Error('A connection is already open.');
@@ -693,22 +734,28 @@ async function joinMultiplayer(settings) {
   });
   multiplayer = client;
   try {
-    const welcome = await client.connect({ url: settings.url, session: settings.session });
-    localStorage.setItem('mc-web-server', JSON.stringify({ name: settings.api.account?.name ?? '' }));
+    // The gun server checks this tab's weapon rules against its own: the same pack files, merged the same way (load-packs.js).
+    await gunPackReady();
+    const pack = await packFingerprint();
+    const welcome = await client.connect({ url: settings.url, session: settings.session, pack });
+    localStorage.setItem('mc-web-server', JSON.stringify({ url: settings.url }));
     const snapshot = welcome.world, prepared = restoreReplica(snapshot);
     const self = snapshot.players.find(p => p.id === client.id);
     streamStorage?.dispose(); streamStorage = null;
-    const record = { id: 'remote-' + client.id, remote: true, name: 'ledoge0 — Multiplayer', seed: snapshot.seed,
-      biome: snapshot.biome, generationVersion: snapshot.generationVersion, mode: 'creative', difficulty: 0,
+    const mode = welcome.you?.mode ?? welcome.self.mode ?? 'survival';
+    const record = { id: 'remote-' + client.id, remote: true, name: 'Gun server', seed: snapshot.seed,
+      biome: snapshot.biome, generationVersion: snapshot.generationVersion, mode, difficulty: 2, mods: { guns: true },
       position: { ...self, yaw: welcome.self.yaw, pitch: welcome.self.pitch }, player: { ...welcome.self.player, time: snapshot.time },
       entities: [], weather: snapshot.weather, allowCommands: false, edits: [] };
     gui.show(downloadTerrainScreen()); await nextPaint();
     await launch(record, prepared, { slice: true });
     if (multiplayer !== client || client.socket.readyState !== WebSocket.OPEN) throw new Error('Disconnected while loading terrain.');
-    remotePlayers = new RemotePlayers(scene, { skinUrl: hash => settings.api.skinUrl(hash) });
+    remotePlayers = new RemotePlayers(scene, { skinUrl: hash => profiles.api.skinUrl(hash) });
+    applyServerPlayer(welcome.you);
     client.start();
     sendMultiplayerInput();
-    printChat('Shared Creative world on ledoge0. World border: 128 × 128. Containers, mobs and dimension travel are not connected yet.');
+    if (welcome.motd) printChat(String(welcome.motd));
+    printChat(`Gun arena: the server owns health, ammo and inventories.${welcome.pvp ? ' PvP is on.' : ' PvP is off.'} Type /help for server commands.`);
   } catch (error) {
     client.close(); if (multiplayer === client) leaveMultiplayer();
     if (active?.remote) leaveToTitle(false);
@@ -1337,7 +1384,7 @@ async function openWorld(record) {
 }
 async function launch(record, prepared, { slice = false } = {}) {
   try {
-    if (gunsWorld(record) && !multiplayer) await gunPackReady(); // before its items register (setGunsEnabled below)
+    if (gunsWorld(record)) await gunPackReady(); // before its items register (setGunsEnabled below)
     active = record;
     world = prepared;
     portalTimer.reset();
@@ -1592,8 +1639,8 @@ async function launch(record, prepared, { slice = false } = {}) {
     eating = null;
     stepDistance = 0;
     wasInWater = false;
-    // Opt-in guns mod (not 1.7.10): register or remove its items before the saved inventory is read; multiplayer stays vanilla.
-    setGunsEnabled(gunsWorld(record) && !multiplayer, { items: ITEMS, combatTab: CREATIVE_TABS[8].items, search: SEARCH_ORDER, setCrafting: setExtraCrafting });
+    // Opt-in guns mod (not 1.7.10): register or remove its items before the saved inventory is read; a gun server's world has it on.
+    setGunsEnabled(gunsWorld(record), { items: ITEMS, combatTab: CREATIVE_TABS[8].items, search: SEARCH_ORDER, setCrafting: setExtraCrafting });
     guns.reset(); // no aim, recoil or queued gun sounds carried over from the last world
     gunTracers?.clear();
     // Opt-in recipe viewer (not 1.7.10): shown beside container screens only in worlds created with it; multiplayer stays vanilla.
@@ -1715,7 +1762,7 @@ async function launch(record, prepared, { slice = false } = {}) {
       if (feet) { position.set(feet.x, feet.y, feet.z); previous.copy(position); playerBody.reset(position, yaw, pitch); }
       delete record.wakeFromBed;
     }
-    if (survival.health <= 0) die();
+    if (survival.health <= 0 && !multiplayer) die(); // a gun server reports its own deaths (applyServerPlayer)
     else {
       requestLock();
     }
@@ -1787,7 +1834,7 @@ function chatSpamGate(text, deliver) {
 }
 const chatUi = new ChatUi(document, {
   // ServerConfigurationManager prints "<Player> message"; a leading "/" runs the command.
-  submit: (text) => chatSpamGate(text, (text) => { if (multiplayer) { if (text.startsWith('/')) printChat('Server commands are not available in this Creative milestone.'); else multiplayer.send({ type: 'chat', text }); } else if (text.startsWith("/")) commands.run(text); else printChat(chatTextComponent(scoreboard.formatName(PLAYER_NAME), text), 0, false); }),
+  submit: (text) => chatSpamGate(text, (text) => { if (multiplayer) multiplayer.send({ type: 'chat', text }); else if (text.startsWith("/")) commands.run(text); else printChat(chatTextComponent(scoreboard.formatName(PLAYER_NAME), text), 0, false); }),
   // GuiChat.func_146407_a: with chatLinksPrompt a GuiConfirmOpenLink asks first; Yes opens a new tab, and every choice returns to the chat.
   confirmLink: (url) => {
     const typed = chatUi.input.value;
@@ -1827,7 +1874,8 @@ function resume() {
   chatUi.close();
   // GuiSleepMP: leaving the screen (Escape) sends the stop-sleeping action, wakeUpPlayer(true, true, false).
   if (bedSleep.sleeping) { bedWake(true, false); return; }
-  if (survival.health <= 0) {
+  if (multiplayer && screen === "dead") return; // the gun server's Respawn ends it (applyServerPlayer)
+  if (survival.health <= 0 && !multiplayer) {
     screen = "playing";
     die();
     return;
@@ -1976,7 +2024,10 @@ function leaveToTitle(keep) {
   gui.show(menus.mainMenu());
 }
 function openHorse(e) { openContainer(new HorseContainer(survival.inventory, mobs.horseGear(e), () => { saved = false; }, e.customName), "horse", String(e.id)); containerView.horseMob = e; }
+// On a gun server the inventory is the server's (gun-simulation.js): this tab shows it but cannot move, drop or pick items yet.
+const SERVER_INVENTORY = "Items are managed by the server; inventory moves are not connected yet.";
 function inventory(station = false) {
+  if (multiplayer) { toast(SERVER_INVENTORY); return; }
   // EntityPlayerSP.func_110322_i: the inventory key while riding a saddled horse opens the horse's screen.
   const ridden = !station && riddenHorse(rider);
   if (ridden) { openHorse(ridden); return; }
@@ -3219,6 +3270,7 @@ function breakBlock(p, creative = false) {
 const pickItem = (block, meta = 0) => block === 139 ? 1139 : block === 177 || block === 178 ? block + 1000 : isColoredBlock(block) ? block + COLORED_ITEM_OFFSET : isDispenserPiston(block) ? (block === PISTON_HEAD ? itemForBlock(headBaseId(meta)) : itemForBlock(block)) : isRedstoneBlock(block) ? redstoneItemOf(block) : (block === 29 || block === 30 ? 2 : block === WOODEN_DOOR ? WOODEN_DOOR_ITEM : block === IRON_DOOR ? IRON_DOOR_ITEM : block === REEDS ? REEDS_ITEM : isCrop(block) ? cropItem(block) : !isLiquid(block) && ITEMS[block] ? blockItemId(block) : 0);
 // EntityPlayer.dropOneItem: Q throws one item, Ctrl + Q the whole stack.
 function dropHeld(all) {
+  if (multiplayer) { toast(SERVER_INVENTORY); return; }
   const inv = survival.inventory, s = inv.held;
   if (!s) return;
   throwStacks([inv.decr(inv.current, all ? s.count : 1)]);
@@ -3295,7 +3347,12 @@ async function spawnPosition() {
   return world.spawn();
 }
 function movementTick(controls) {
-  if (multiplayer) { sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT); return; }
+  if (multiplayer) {
+    sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT);
+    if (gunsEnabled() && screen !== 'dead') guns.tick(); // the client's prediction: the server fires, strikes and reloads for itself
+    easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: gunsEnabled() ? guns.speed() : 1, bow: gunsEnabled() ? guns.fov() : 1 }));
+    return;
+  }
   if(containerResidency) {
     if(containerResidency.update(position.x,position.z).length)containerResidency.pruneRecord(active);
     if(!containerResidency.ready(position.x,position.z))return;
@@ -3555,6 +3612,7 @@ function dispatchKeypress(e, code) {
 }
 // GuiContainer / GuiInventory: Block-pick of the targeted block (Minecraft.middleClickMouse).
 function pickBlock() {
+  if (multiplayer) return;
   const stonePick = target && (stoneUtilityPick(world, ...target.block) ?? shapedPick(world.get(...target.block), world.getMeta(...target.block)));
   const id = stonePick?.id ?? (target && pickItem(world.get(...target.block), world.getMeta(...target.block)));
   if (id) {
@@ -4235,6 +4293,7 @@ async function boot(){try {
   if (import.meta.env.DEV)
     window.__mc = { scene, dims, travel: (d) => dims.travel(d), get editActions() { return structuredClone(editActionLog); }, get survival() { return survival; }, get world() { return world; }, get streamStorage() { return streamStorage; }, get containerResidency() { return containerResidency; }, position, velocity, motion, get flying() { return flying; }, get grounded() { return grounded; }, look(p, y) { pitch = p; yaw = y; }, view(n) { thirdPersonView = n; }, playerBody, teleport(x, y, z) { position.set(x, y, z); }, items, projectiles, arrows, get mobs() { return mobs; }, get rider() { return rider; }, get minecarts() { return minecarts; }, get boats() { return boats; }, get hanging() { return hanging; }, get aimedHanging() { return aimedHanging; }, fishing, get target() { return target; }, get redstone() { return redstoneRuntime; }, get spawners() { return spawners; }, get aimedCart() { return aimedCart; }, save, breakBlock, get weather() { return weather; }, commands, chatUi, get chatOpen() { return chatOpen; }, get commandHost() { return commandHost; }, openChat, closeChat, get fire() { return fire; }, get trees() { return trees; }, get plants() { return plants; }, get falling() { return falling; }, get primed() { return primed; }, get xpOrbs() { return xpOrbs; }, get experience() { return experience; }, get sounds() { return sounds; }, explodeAt, lightTnt, useBed, get bedSleep() { return bedSleep; }, get playerRenderer() { return playerRenderer; }, get firstPerson() { return firstPerson; } };
   if (import.meta.env.DEV) Object.defineProperty(window.__mc, 'multiplayer', { get: () => multiplayer });
+  if (import.meta.env.DEV) Object.defineProperty(window.__mc, 'guns', { get: () => guns });
   scene.preview(0);
   // The title screen's splash texts (assets/minecraft/texts/splashes.txt).
   menuContext.splashes = await fetch("/media/1.7.10/texts/splashes.txt").then((r) => (r.ok ? r.text() : "")).catch(() => "");

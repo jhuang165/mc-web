@@ -38,7 +38,7 @@ export function createMeleeHooks(deps) {
   }
   function strike(event) {
     const ray = deps.eye();
-    if (!ray) return [];
+    if (!ray || deps.remote?.()) return []; // a gun server strikes for itself (multiplayer/combat.js)
     const { origin, dir } = ray;
     const visible = (e, b) => {
       // ITargetFilter: feet or any of the eight AABB corners visible through collider rays, ignoring fluids.

@@ -27,7 +27,8 @@ import { withWorldMod } from "./mods/world-mods.js";
 
 const SOUND_KEYS = ["master", "music", "record", "weather", "block", "hostile", "neutral", "player", "ambient"];
 // Why each unavailable vanilla button is disabled here.
-export const MULTIPLAYER_ENABLED = false;
+export { MULTIPLAYER_ENABLED } from "./multiplayer/protocol.js";
+import { MULTIPLAYER_ENABLED } from "./multiplayer/protocol.js";
 export const UNAVAILABLE = {
   hardcoreDifficulty: "A hardcore world is locked to Hard difficulty.",
   multiplayer: "Multiplayer is paused while the game is played locally.",
@@ -120,7 +121,7 @@ export function createMenus(gui, ctx) {
           g.text(ctx.profileName?.() ?? 'Sign-in required', 4, 9, { color: 0xaaaaaa });
           g.button({ x: w - 88, y: 4, w: 84, h: 20 }, 'Account', ctx.profile);
         }
-        // Multiplayer is paused (2026-11-07): Singleplayer only. Set MULTIPLAYER_ENABLED to bring the dedicated-server screen back.
+        // Multiplayer is paused (2026-11-07): Singleplayer only. VITE_MULTIPLAYER=1 brings the gun-server screen back (protocol.js).
         g.button(b.multiplayer, t("menu.multiplayer"), MULTIPLAYER_ENABLED ? () => ctx.multiplayer() : null, MULTIPLAYER_ENABLED ? {} : { reason: UNAVAILABLE.multiplayer });
         g.button(b.online, t("menu.online"), null, { reason: UNAVAILABLE.online });
         g.button(b.options, t("menu.options"), () => show(optionsScreen(mainMenu)));
