@@ -5,6 +5,8 @@
 import { StackArray, ChestContainer, copyStack } from '../inventory.js';
 import { DispenserContainer } from '../dispenser-container.js';
 import { HopperContainer } from '../hopper.js';
+import { MerchantContainer } from '../merchant-ui.js';
+import { HorseContainer } from '../horse-gear.js';
 
 export const MAX_CLICKS = 64;
 const noop = () => {};
@@ -21,6 +23,11 @@ export class RemoteInventory {
     const click = container.click.bind(container);
     container.localClick = click;
     container.click = (slot, button, mode) => { this.queueClick(id, [slot, button, mode]); return click(slot, button, mode); };
+    // A villager's arrows (MC|TrSel) go in order with the clicks; the payment slots are matched to the offer on both sides.
+    if (container instanceof MerchantContainer) {
+      const select = container.select.bind(container);
+      container.select = index => { this.flush(); this.send({ type: 'trade', window: id, index }); return select(index); };
+    }
     this.window = { id, container };
     return container;
   }
@@ -82,6 +89,10 @@ export class RemoteInventory {
       inv.cursor = inv.read(state.cursor ?? null, true);
       if (w && state.id === w.id) {
         const slots = w.container.slots;
+        if (Array.isArray(state.offers) && w.container.remote) {
+          w.container.remote.offers = state.offers;
+          if (!w.container.remote.seen) { w.container.remote.seen = true; if (Number.isInteger(state.recipe)) w.container.currentRecipeIndex = state.recipe; }
+        }
         for (const [i, stack] of state.slots ?? []) if (slots[i] && i !== 0) slots[i].inventory.setStack(slots[i].index, inv.read(stack, true));
         // The crafting result last: setting the grid recomputes it, and the server's word wins.
         const first = (state.slots ?? []).find(([i]) => i === 0);
@@ -114,6 +125,16 @@ export function remoteContainer(survival, open) {
   }
   if (open.kind === 'dispenser') return Object.assign(new DispenserContainer(inv, { items: Array(9).fill(null) }, noop), open.title ? { title: open.title } : {});
   if (open.kind === 'hopper') return new HopperContainer(inv, { items: Array(5).fill(null) }, noop);
+  if (open.kind === 'merchant') {
+    // The villager's offers come with the window's slots (ServerPlay.windowState); trades and their sounds happen on the server.
+    const remote = { offers: [], seen: false };
+    const c = new MerchantContainer(inv, { offers: () => remote.offers, useRecipe: noop, hover: noop, close: noop }, open.title ? { title: open.title } : {});
+    return Object.assign(c, { remote });
+  }
+  if (open.kind === 'horse') {
+    const h = { chested: !!open.horse?.chested, type: Number.isInteger(open.horse?.type) ? open.horse.type : 0, items: [] };
+    return new HorseContainer(inv, h, noop, open.title ?? '');
+  }
   return null;
 }
 

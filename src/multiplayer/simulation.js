@@ -110,7 +110,7 @@ export class DedicatedSimulation {
     }
   }
   // Streamed worlds: the population records (dungeon and temple loot, flower pots, liquid ticks) of columns resident for the first time.
-  materialize() { return this.columns?.materialize({ tiles: this.tiles, fluids: this.fluids, ...(this.mobs ? { mobs: this.mobs.ew, spawners: this.mobs.spawners } : {}) }) ?? null; }
+  materialize() { return this.columns?.materialize({ tiles: this.tiles, fluids: this.fluids, ...(this.mobs ? { mobs: this.mobs.ew, spawners: this.mobs.spawners, minecarts: this.mobs.minecarts } : {}) }) ?? null; }
   // The gun server's mobs (server-mobs.js); this base simulation has none.
   createMobs() { return null; }
   // Streamed worlds: makes the columns of these windows resident (and the spawn window); new columns are lit and handed over.
@@ -119,6 +119,14 @@ export class DedicatedSimulation {
     if (change.added.length || change.removed.length) { this.light.columns(change); this.mobs?.columns(change); this.materialize(); }
     return change;
   }
+  // What a tab needs of the weather each tick: WorldInfo's fields and the live rain and thunder strengths (World.rainingStrength,
+  // thunderingStrength, sent to clients as Packet43 game events in Java), so a tab fades them as the server does.
+  weatherState() {
+    const w = this.weather;
+    return { ...w.save(), rain: w.rain, thunder: w.thunder, lightning: w.lastLightning, bolts: w.bolts.filter(b => !b.dead).map(b => [b.x, b.y, b.z, String(b.vertex)]) };
+  }
+  // The weather tick's thunder sounds and the bolts that flashed (the gun server forwards and strikes them; this base drops them).
+  weatherEvents() {}
   get darkness() { return skylightSubtracted(celestialAngle(this.time, 1), this.weather.rainStrength(), this.weather.weightedThunder()); }
   addPlayer(id, name, resumeKey, { skin = null } = {}) {
     if (!validName(name) || [...this.players.values()].some(p => p.name.toLowerCase() === name.toLowerCase())) throw new Error('Choose an unused name (1–16 letters, numbers or underscores).');
@@ -225,7 +233,7 @@ export class DedicatedSimulation {
   frozen(p) { return !!this.columns && !this.world.isTicking(p.position.x, p.position.z); }
   tickWorld(beforeLit) {
     this.weather.tick(this.world);
-    this.weather.drain();
+    this.weatherEvents(this.weather.drain(), this.weather.struck);
     this.falling.tick();
     tickWorldSystems({ farming: this.farming, fluids: this.fluids, fire: this.fire, redstone: this.redstone },
       { time: this.time, daylight: 1 - this.darkness / 15, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
@@ -236,7 +244,7 @@ export class DedicatedSimulation {
     for (const [x, y, z] of this.changes.values()) this.light.update(x, y, z);
     const changes = [...this.changes.values()].map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
     this.changes.clear();
-    return { type: 'tick', tick: this.ticks, time: this.time, changes, players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } };
+    return { type: 'tick', tick: this.ticks, time: this.time, changes, players: this.presence(), weather: this.weatherState(), redstone: { lit: [...this.redstone.lit] } };
   }
   presence() { return [...this.players.values()].map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
@@ -245,7 +253,7 @@ export class DedicatedSimulation {
   snapshot(view = null) {
     const w = this.world, columns = view ? [...this.columns.keys(view)].map(([cx, cz]) => w.chunkAt(cx, cz)) : [...w.chunks.values()];
     return { seed: w.seed, biome: w.biome, generationVersion: w.generationVersion, ...(view ? { window: view, originX: w.originX, originZ: w.originZ, nativeSpawn: w.nativeSpawn ?? null } : {}),
-      time: this.time, ticks: this.ticks, columns: columns.map(encodeColumn), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] } };
+      time: this.time, ticks: this.ticks, columns: columns.map(encodeColumn), players: this.presence(), weather: this.weatherState(), redstone: { lit: [...this.redstone.lit] } };
   }
   save() {
     for (const p of this.players.values()) this.savedPlayers.set(p.resumeKey, this.savePlayer(p));

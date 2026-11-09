@@ -146,6 +146,7 @@ import { IDLE_INPUT, MULTIPLAYER_URL } from "./multiplayer/protocol.js";
 import { gunContext } from "./multiplayer/combat.js";
 import { RemoteInventory, RemoteItems, remoteContainer } from "./multiplayer/remote-inventory.js";
 import { RemoteMobs } from "./multiplayer/remote-mobs.js";
+import { RemoteThrown } from "./multiplayer/remote-thrown.js";
 import { roundsLeft } from "./mods/guns/catalog.js";
 import { setLoadedRounds } from "./mods/guns/ammo.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
@@ -195,7 +196,7 @@ import { Fishing } from "./fishing-simulation.js";
 import { FISHING_ROD } from "./fishing-content.js";
 import { WitchPotions } from "./witch-potions.js";
 import {impactPlayerPearl} from './pearl-player.js';
-import { Arrows, arrowTargets, bowStage, bowFov, easeFov, ARROW } from "./bow.js";
+import { Arrows, arrowTargets, bowStage, bowFov, easeFov, ARROW, BOW, canDraw } from "./bow.js";
 import { canSeeSky } from "./weather.js";
 import { Fluids, eyeInWater, viewpointBlock } from "./fluids.js";
 import { ScreenOverlays } from "./screen-overlays.js";
@@ -664,7 +665,7 @@ function showMultiplayer() {
 function leaveMultiplayer() {
   multiplayer?.close(); multiplayer = null;
   serverInv = null; serverShots = null; predictedFood = null; predictedShots.length = 0;
-  remoteInv.reset(); remoteItems.clear();
+  remoteInv.reset(); remoteItems.clear(); remoteThrown.clear();
   remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null;
 }
 // Protocol v3: movement, look, the selected hotbar slot and the newest server tick on screen; never item stacks.
@@ -678,6 +679,8 @@ const predictedShots = []; // { slot, at }, oldest first
 const PREDICTION_TIMEOUT = 1000; // ms: a shot the server never fired (the two controllers disagreed) stops counting
 // Inventory windows (clicks predicted here, replayed over the server's answer) and the dropped items the server reports.
 const remoteInv = new RemoteInventory(m => multiplayer?.send(m)), remoteItems = new RemoteItems();
+// The server's arrows, snowballs, pearls, bottles, rockets, eyes and experience orbs (server-mobs.js thrownRows).
+const remoteThrown = new RemoteThrown();
 // The gun server's mobs near this tab (server-mobs.js rows), drawn from the tab's own (never ticked) EntityWorld list.
 let remoteMobs = null;
 function syncRemoteMobs(rows) {
@@ -711,6 +714,7 @@ function applyServerWindow(open) {
     if (containerView) { remoteInv.forget(); closeModal(); }
     remoteInv.attach(container, open.id);
     openContainer(container, open.kind, open.key);
+    if (open.kind === 'horse') containerView.horseMob = mobs?.entities.find(e => e.id === open.key) ?? null; // the GUI's horse preview
   } else if (!open && remoteInv.window?.id > 0 && containerView?.container === remoteInv.window.container) {
     remoteInv.forget(); resume();
   }
@@ -727,6 +731,8 @@ function applyServerPlayer(you) {
   }
   for (const key of ['health', 'food', 'saturation', 'absorption', 'protection']) if (Number.isFinite(you[key])) s[key] = you[key];
   if (Number.isFinite(you.hurt)) s.hurtTime = you.hurt;
+  // The server's EntityPlayer experience (S1FPacketSetExperience): the bar and level the HUD shows.
+  if (Array.isArray(you.xp) && you.xp.every(Number.isFinite)) [experience.level, experience.progress, experience.points, experience.total] = you.xp;
   if (s.health < before && !you.dead) sounds?.play('game.player.hurt', { volume: 1, pitch: (Math.random() - Math.random()) * 0.2 + 1 });
   // Survival.tick's client half, which no local tick runs here: the hearts' blink after a change, and the HUD's update counter.
   s.ticks = (s.ticks | 0) + 1;
@@ -766,6 +772,7 @@ function remoteDeath() {
     leave: () => leaveToTitle(true),
   }));
 }
+const num0 = v => (Number.isFinite(v) ? v : 0);
 function applyMultiplayerTick(message) {
   if (!multiplayer?.ready || !active?.remote) return;
   if (redstoneRuntime?.redstone) redstoneRuntime.redstone.lit = new Set(message.redstone?.lit ?? []);
@@ -788,7 +795,7 @@ function applyMultiplayerTick(message) {
     playerBody.tick({ position, previous, yaw, pitch, swinging: self.swing > 0 });
     if (playerRenderer) remotePlayers?.applySkin(playerRenderer, self.skin); // seen in F5
   }
-  survival.time = message.time; weather.restore(message.weather); scene.setTime(message.time);
+  survival.time = message.time; syncServerWeather(message.weather); scene.setTime(message.time);
   chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
   remotePlayers?.sync(message.players, multiplayer.id);
   applyServerPlayer(message.you);
@@ -811,10 +818,46 @@ function applyMultiplayerTick(message) {
       // A creeper's blast on the server: the burst and random.explode here; the blocks arrive with the tick's changes.
       scene.explosionParticles.burst(event.x, event.y, event.z, event.size, [], { viewer: [position.x, position.y + PHYSICS.eye, position.z] });
       sounds?.play("random.explode", { volume: 4, pitch: (1 + (Math.random() - Math.random()) * 0.2) * 0.7, position: { x: event.x, y: event.y, z: event.z } });
+    } else if (event?.type === 'fx' && (event.kind === 'crit' || event.kind === 'magicCrit')) {
+      // EntityPlayer.onCriticalHit / onEnchantmentCritical on a server hit: the particles follow the mob or player that was hit.
+      const mob = Number.isInteger(event.mob) ? mobs?.entities.find(e => e.id === 'mob-' + event.mob) : null;
+      const other = Number.isInteger(event.player) || typeof event.player === 'string' ? message.players.find(p => p.id === event.player) : null;
+      const target = mob ? () => mobs.fxTarget(mob) : other ? () => ({ x: other.x, z: other.z, minY: other.y, width: PHYSICS.width, height: PHYSICS.height, mx: 0, my: 0, mz: 0 }) : null;
+      if (target) scene.fx.crit2(target, event.kind === 'magicCrit');
+    } else if (event?.type === 'fx' && event.kind === 'particle' && typeof event.name === 'string') {
+      scene.fx.spawn(event.name, event.x, event.y, event.z, event.vx, event.vy, event.vz); // an eye set in a portal frame
+    } else if (event?.type === 'firework' && [event.x, event.y, event.z].every(Number.isFinite)) {
+      // A server rocket's burst (EntityFireworkRocket.handleHealthUpdate 17 -> EntityFireworkStarterFX).
+      fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
+      fireworkFx.spawnStarter(event.x, event.y, event.z, num0(event.vx), num0(event.vy), num0(event.vz), event.fireworks ?? null);
+    } else if (event?.type === 'book') {
+      // ItemWritableBook / ItemEditableBook.onItemRightClick on the server: the book screen here; its MC|BEdit and MC|BSign go back.
+      openHeldBook(survival.held, (channel, packet) => multiplayer?.send({ type: 'book', channel, packet }), message.players.find(p => p.id === multiplayer.id)?.name ?? PLAYER_NAME);
     } else if (gunsEnabled()) guns.serverEvent(event);
   }
+  if (message.you?.thrown) {
+    remoteThrown.apply(message.you.thrown);
+    scene.setArrows(remoteThrown.arrows);
+    scene.setProjectiles(remoteThrown.balls, []);
+  }
+  if (message.you?.carts && minecarts) { remoteThrown.applyCarts(message.you.carts); minecarts.carts = remoteThrown.carts; } // drawn by minecartRenderer
   if (message.you) { remoteItems.sync(message.you.items); scene.setDrops(remoteItems.items); }
   if (message.you?.mobs) syncRemoteMobs(message.you.mobs);
+}
+// The gun server's weather each tick (simulation.js weatherState): its timers and live strengths. The previous tick's strengths
+// become prev*, so the sky and the rain fade between ticks as World.getRainStrength(partial) does, and the client's own tick count
+// (EntityRenderer.rendererUpdateCount) moves the falling rain on; the splashes and the rain loop are this tab's, as in Java.
+function syncServerWeather(w) {
+  if (!w || typeof w !== "object") return;
+  const rain = weather.rain, thunder = weather.thunder;
+  weather.restore(w);
+  weather.prevRain = rain; weather.prevThunder = thunder;
+  weather.lastLightning = Number.isInteger(w.lightning) ? w.lightning : 0;
+  weather.bolts = Array.isArray(w.bolts) ? w.bolts.flatMap(([x, y, z, v]) => { try { return [{ x, y, z, vertex: BigInt(v) }]; } catch { return []; } }) : [];
+  weather.clientTicks++;
+  if (world.dimension || screen === "dead") return;
+  weather.rainParticles(world, { x: position.x, y: position.y + PHYSICS.eye, z: position.z }, (kind, x, y, z) => scene.fx.addDirect(kind, x, y, z));
+  for (const e of weather.drain()) sounds?.play(e.sound, { volume: e.volume, pitch: e.pitch, position: { x: e.x, y: e.y, z: e.z } });
 }
 // A streamed gun-server world's window moved: the server's new columns replace the ones this tab let go (client.js ReplicaWorld).
 function applyMultiplayerColumns(message) {
@@ -3271,6 +3314,15 @@ function vehicleState() {
 function applyVehicleState(state) {
   ({ grounded, collidedH, flying, fallDistance, landedFall } = state);
 }
+// GuiScreenBook (book-ui.js) for the held book; `send(channel, packet)` takes its MC|BEdit / MC|BSign (applied here in single
+// player, as NetHandlerPlayServer does; sent to the gun server in multiplayer).
+function openHeldBook(held, send, playerName = PLAYER_NAME) {
+  if (!held || screen !== "playing") return;
+  screen = "inventory"; mining = null; mineHeld = false;
+  openBookUi({ show: (title, html) => containerShell("book", html, "book-modal", { noLabels: true }, "screen"), close: () => { resume(); renderHotbar(); }, markUnsaved: () => { saved = false; } },
+    { stack: held, editable: held.id === ITEM_WRITABLE_BOOK, playerName, send });
+  syncContainerState();
+}
 function spawnHangingDrops() {
   for (const d of hanging.drain()) { items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay }); saved = false; }
 }
@@ -3288,6 +3340,9 @@ function edit(place = false) {
       multiplayer.send({ type: 'action', action: 'use', down: true, yaw, pitch, view: multiplayer.lastTick });
       return;
     }
+    // ItemBow.onItemRightClick: the draw shown here (the arm, the bow's frames and the FOV); the server counts its own and shoots
+    // on the release (gun-simulation.js releaseBow).
+    if (place && heldId() === BOW) { if (!eating && canDraw(survival)) eating = { id: BOW, ticks: 0, bow: true }; multiplayer.send({ type: 'edit', place }); return; }
     multiplayer.send({ type: 'edit', place }); animation.swing(); return;
   }
   // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
@@ -3362,7 +3417,7 @@ function edit(place = false) {
     useBed,
     openSignEditor: (tile) => { screen = "inventory"; mining = null; mineHeld = false; openSignEditor(signEditHost(gui, { close: resume, markUnsaved: () => { saved = false; } }), signs, tile, world); syncContainerState(); },
     // GuiScreenBook (book-ui.js); MC|BEdit / MC|BSign are applied to the selected stack as NetHandlerPlayServer does.
-    openBook: (held) => { if (!held) return; screen = "inventory"; mining = null; mineHeld = false; openBookUi({ show: (title, html) => containerShell("book", html, "book-modal", { noLabels: true }, "screen"), close: () => { resume(); renderHotbar(); }, markUnsaved: () => { saved = false; } }, { stack: held, editable: held.id === ITEM_WRITABLE_BOOK, playerName: PLAYER_NAME, send: (channel, packet) => { (channel === "MC|BSign" ? applyBookSign : applyBookEdit)(survival.held, packet, PLAYER_NAME); renderHotbar(); } }); syncContainerState(); },
+    openBook: (held) => openHeldBook(held, (channel, packet) => { (channel === "MC|BSign" ? applyBookSign : applyBookEdit)(survival.held, packet, PLAYER_NAME); renderHotbar(); }),
     useCommandBlock: openCommandBlock,
     // ItemRecord.onItemUse / BlockJukebox / BlockNote.onBlockActivated; the disc leaves the stack outside Creative.
     useNoteJukebox: (x, y, z, held) => {
@@ -3546,9 +3601,10 @@ function movementTick(controls) {
     if (gunsEnabled() && screen !== 'dead') guns.tick(); // the client's prediction: the server fires, strikes and reloads for itself
     // Eating as predicted here: crumbs, chewing and the burp; the food and the item come from the server.
     const eat = id => { predictedFood = { food: Math.min(20, survival.food + (ITEMS[id]?.food ?? 0)), at: performance.now() }; return true; };
-    if (eating && !eating.bow) eating = tickPlayerItemUse(eating, heldId(), { eat }, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }).use;
+    if (eating?.bow) eating = heldId() === BOW ? { ...eating, ticks: eating.ticks + 1 } : null;
+    else if (eating) eating = tickPlayerItemUse(eating, heldId(), { eat }, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }).use;
     if (screen === 'playing' && useHold.tick(binds.isDown("key.use"), !!eating, !survival.creative && !!ITEMS[heldId()]?.food)) edit(true);
-    easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: gunsEnabled() ? guns.speed() : 1, bow: gunsEnabled() ? guns.fov() : 1 }));
+    easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: gunsEnabled() ? guns.speed() : 1, bow: eating?.bow ? bowFov(eating.ticks) : gunsEnabled() ? guns.fov() : 1 }));
     return;
   }
   if(containerResidency) {
@@ -3844,7 +3900,8 @@ function bindingReleased(d) {
   else if (d === "key.use") {
     if (gunsEnabled()) guns.aimHold(false);
     if (multiplayer) multiplayer.send({ type: 'action', action: 'use', down: false, yaw, pitch, view: multiplayer.lastTick });
-    releaseBowUse(); eating = null;
+    else releaseBowUse(); // on a server the arrow is the server's
+    eating = null;
   }
 }
 // Minecraft.runTick keyboard loop, run on every screen (no currentScreen test): Keyboard.isKeyDown for the F3 combinations and the F3+C crash timer.
@@ -4195,7 +4252,7 @@ function animate(now) {
       tickProf.end();
       accumulator -= PHYSICS.tick;
     }
-    const t = multiplayer ? Math.min(1, Math.max(0, (performance.now() - (multiplayer.at ?? performance.now())) / 50)) : accumulator / PHYSICS.tick;
+    const t = multiplayer ? multiplayer.partial() : accumulator / PHYSICS.tick;
     // EntityRenderer.updateCameraAndRender: this frame's mouse movement turns the player while the
     // game has focus (mouse-look.js: sensitivity curve, invertMouse, smoothCamera, +-90 degree pitch).
     if (screen === "playing") {
@@ -4317,7 +4374,8 @@ function animate(now) {
     scene.camera.rotation.z = roll;
   } else if (screen === "home") scene.preview(elapsed);
   if (debug && screen !== "home" && !running()) updateDebugOverlay();
-  const partial = Math.min(1, accumulator / PHYSICS.tick);
+  // A gun server's mobs, drops and players move once per server tick: they are drawn between its last two ticks.
+  const partial = multiplayer?.ready && active?.remote ? multiplayer.partial() : Math.min(1, accumulator / PHYSICS.tick);
   // TileEntityMobSpawnerRenderer: the spinning display mob of each spawner within 64 blocks.
   const shown = spawners?.size && screen !== "home" ? spawners.values().filter((sp) => (sp.x + 0.5 - position.x) ** 2 + (sp.y + 0.5 - position.y) ** 2 + (sp.z + 0.5 - position.z) ** 2 < 4096).map((sp) => spawnerDisplayEntity(sp, partial)).filter(Boolean) : [];
   if (minecarts && screen !== "home") for (const c of minecarts.carts) if (c.type === 4 && !c.dead && (c.x - position.x) ** 2 + (c.posY - position.y) ** 2 + (c.z - position.z) ** 2 < 4096) { const d = cartSpawnerDisplayEntity(minecarts, world, c, partial); if (d) shown.push(d); }
@@ -4360,7 +4418,7 @@ function animate(now) {
   if (screen === "inventory") { paperdollFrame(); horsePreviewFrame(); }
   chestRenderer?.update(running() ? accumulator / PHYSICS.tick : 1);
   endPortalRenderer?.update(world, position, performance.now() / 1000);
-  if(xpRenderer)xpRenderer.update(residentOnly(world,xpOrbs.orbs),partial); // ring orbs are not drawn (headless-env.js)
+  if(xpRenderer)xpRenderer.update(multiplayer?.ready&&active?.remote?remoteThrown.orbs:residentOnly(world,xpOrbs.orbs),partial); // ring orbs are not drawn (headless-env.js); a server's orbs are its own
   scene.dropPartial = partial;
   scene.particleView = { yaw, pitch, mirror: thirdPersonView === 2 };
   // EntityRenderer's potion terms (potion-fx.js): Night Vision / Blindness durations, the Nausea warp amount and the player's feet height.
@@ -4377,7 +4435,7 @@ function animate(now) {
   // The title and world screens cover the view; a paused world still draws behind its menu.
   if (screen !== "playing" && gunsEnabled()) guns.cancelMelee();
   clientProfiler.start("render");
-  remotePlayers?.frame();
+  remotePlayers?.frame(partial);
   gunTracers?.update(performance.now()); // guns mod: tracer rounds in flight
   if (screen !== "home") scene.render(elapsed, dt);
   clientProfiler.end();

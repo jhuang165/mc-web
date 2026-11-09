@@ -140,6 +140,13 @@ function shoot(p, gun, deps) {
     const dealt = deps.damage(target, amount, { attacker: p, kind: 'gun', weapon: gun, knockback: gun.knockback > 0 });
     if (dealt) hits.push({ target, head, kill: target.survival.health <= 0 });
   }
+  // Grenades and rockets (TaCZ bullet "explosion") burst where the first pellet lands, as hooks.js does in single player: a block
+  // hit just in front of the face, so the blast is not buried inside the wall.
+  if (gun.explosion && result.impacts.length && deps.explode) {
+    const first = result.impacts.reduce((a, b) => (b.distance < a.distance ? b : a));
+    const at = first.entity ? first.point : first.point.map((v, i) => v - dir[i] * 0.3);
+    deps.explode(p, at[0], at[1], at[2], gun.explosion.radius, { destroy: !!gun.explosion.destroy });
+  }
   for (const h of hits) deps.send(p, h.mob ? { type: 'hit', mob: mobId(h.mob), head: h.head, kill: h.kill } : { type: 'hit', target: h.target.id, head: h.head, kill: h.kill });
   deps.near(p, {
     type: 'shot', id: p.id, gun: gun.id, silenced: !!gun.silenced, origin: origin.map(round),

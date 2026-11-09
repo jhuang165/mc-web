@@ -136,10 +136,28 @@ export class DedicatedClient {
     for (const message of this.messages.splice(0)) this.apply(message);
   }
   apply(message) {
-    if (message.type === 'tick' && message.tick > this.lastTick) { this.at = performance.now(); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
+    if (message.type === 'tick' && message.tick > this.lastTick) { this.clock(message.tick - this.lastTick); this.lastTick = message.tick; this.players = message.players; this.onTick(message); }
     if (message.type === 'chat') this.onChat(message);
     if (message.type === 'columns') this.onColumns(message);
   }
+  // The render clock between server ticks (Timer.renderPartialTicks for a remote world): each tick is due one tick length after
+  // the last one, and its arrival only nudges that schedule, so network jitter does not stop the interpolation and then jump it;
+  // a gap of more than two ticks (a stall, a tab in the background) starts the clock again from now. The tick length is learnt
+  // from the arrivals (a server's timer runs a little slower than 50 ms), as a fixed 50 would leave the schedule behind them
+  // and hold every tick's last frame at the end of the step.
+  clock(steps = 1) {
+    const now = performance.now(), n = Math.max(1, Math.min(steps, 4));
+    this.period ??= 50;
+    if (this.arrived != null) {
+      const each = (now - this.arrived) / Math.max(1, steps);
+      if (each > 25 && each < 150) this.period = Math.min(80, Math.max(45, this.period + (each - this.period) * 0.05));
+    }
+    this.arrived = now;
+    const due = (this.at ?? now) + this.period * n;
+    this.at = Math.abs(now - due) > 2 * this.period ? now : due + (now - due) * 0.15;
+  }
+  // Where this frame sits between the previous tick and the latest one, 0..1.
+  partial() { return this.at == null ? 1 : Math.min(1, Math.max(0, (performance.now() - this.at) / (this.period ?? 50))); }
   send(message) { if (this.socket?.readyState === WebSocket.OPEN && this.socket.bufferedAmount < 65536) this.socket.send(JSON.stringify(message)); }
   close() { this.intentional = true; this.ready = false; this.socket?.close(); this.messages.length = 0; this.pending = null; this.columns.length = 0; }
 }

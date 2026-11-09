@@ -127,11 +127,11 @@ test('mobs of a column that leaves are kept and come back with it; a broken spaw
 
 test('a spawn egg used on a block hatches its mob on the server', () => {
   const sim = new GunSimulation({ ...STREAMED, time: 6000 }, { config: { ...quiet, spawnProtection: 0 }, random: seeded(5) });
-  sim.mobs.ew.entities.length = 0;
   const a = sim.addPlayer('a', 'Alice', 'acct-a');
   const y = platform(sim, a.position.x, a.position.z);
   sim.teleport(a, { x: Math.floor(a.position.x) + 0.5, y, z: Math.floor(a.position.z) + 0.5 });
   run(sim, 2);
+  sim.mobs.ew.entities.length = 0; // columns that streamed in meanwhile may have populated their animals
   a.survival.mode = 'survival'; a.survival.inventory.creative = false;
   a.survival.inventory.main[0] = makeStack(ITEM_SPAWN_EGG, 2, 90); a.survival.inventory.current = 0; // 90: Pig
   a.pitch = -Math.PI / 2; a.yaw = 0;

@@ -7,7 +7,13 @@
 import { EntityWorld, ENTITY_TYPES } from '../entities.js';
 import { MobSpawners } from '../mob-spawner.js';
 import { Arrows, arrowTargets } from '../bow.js';
-import { mobTargets } from '../projectiles.js';
+import { mobTargets, Projectiles, thrownHit } from '../projectiles.js';
+import { WitchPotions } from '../witch-potions.js';
+import { ExperienceOrbs } from '../experience.js';
+import { FireworkRockets } from '../fireworks-live.js';
+import { EyesOfEnder } from '../eye-of-ender-live.js';
+import { impactPlayerPearl } from '../pearl-player.js';
+import { JavaRandom } from '../java-random.js';
 import { isWet } from '../weather.js';
 import { localDifficulty } from '../difficulty.js';
 import { drainMobEvents } from '../living-simulation.js';
@@ -18,6 +24,9 @@ import { entityBox } from '../weather.js'; // the player's box
 import { PHYSICS } from '../world.js';
 import { gameRule } from '../game-rules.js';
 import { drainKnockback } from '../player-knockback.js';
+import { Minecarts } from '../minecarts.js';
+import { mobBox } from '../mob-spawner.js';
+import { copyStack } from '../inventory.js';
 
 const MOB_SPAWNER = 52;
 export const MOB_RANGE = 48; // blocks: the mobs a tab is told about (EntityTracker tracks most living entities to 80; 48 keeps a tick message small)
@@ -33,6 +42,9 @@ const EXTRA = ['color', 'sheared', 'eatTimer', 'saddled', 'powered', 'lastActive
   'carried', 'carriedData', 'screaming', 'held', 'charging', 'batHanging', 'invul', 'headYaw', 'headPitch', 'oFlap', 'oFlapSpeed', 'destPos',
   'wingRotation', 'effects', 'customName', 'chickenJockey'];
 export const mobNumber = e => Number(String(e.id).replace('mob-', ''));
+export const THROWN_RANGE = 64; // blocks: the arrows, thrown things and orbs a tab is told about
+const half = PHYSICS.width / 2;
+const boxOf = at => [at.x - half, at.y, at.z - half, at.x + half, at.y + PHYSICS.height, at.z + half];
 
 export class ServerMobs {
   // `sim`: the GunSimulation (its config, play, players and random are set after this is built, so they are read when needed).
@@ -42,6 +54,19 @@ export class ServerMobs {
     const ew = this.ew = new EntityWorld(sim.world, [], random);
     this.spawners = MobSpawners.fromJSON(Array.isArray(saved.spawners) ? saved.spawners : []);
     this.arrows = new Arrows(random);
+    // The players' own entities (EntityArrow, EntityThrowable, EntityXPOrb, EntityFireworkRocket, EntityEnderEye): each thing a
+    // player shot or threw carries `by`, that player's id, in place of the single-player "player" token's identity.
+    this.projectiles = new Projectiles(random);
+    this.projectiles.poof = noop; // the snowballpoof particles are the tabs' (thrown events)
+    ew.potions = new WitchPotions(ew, random); // witches' splash potions and thrown exp bottles; EntityWorld.tick flies them
+    this.orbs = new ExperienceOrbs(Array.isArray(saved.xpOrbs) ? saved.xpOrbs : [], random);
+    this.orbs.wet = o => isWet(sim.weather, sim.world, o, 0.25);
+    const java = () => new JavaRandom(Math.floor(random() * 2 ** 48));
+    this.rockets = new FireworkRockets(java());
+    this.eyes = new EyesOfEnder(java());
+    this.thrownIds = new WeakMap(); this.nextThrown = 1;
+    // Mineshaft chest minecarts (EntityMinecartChest), handed over with their columns' population (server-world.js materialize).
+    this.minecarts = Minecarts.fromJSON(saved.minecarts ?? null);
     this.stored = new Map(Array.isArray(saved.stored) ? saved.stored.filter(([k, list]) => typeof k === 'string' && Array.isArray(list)) : []);
     const light = () => sim.light;
     ew.lightAt = (x, y, z) => light().level(x, y, z, sim.darkness);
@@ -82,6 +107,8 @@ export class ServerMobs {
       }
       ew.entities = keep;
       this.arrows.list = this.arrows.list.filter(a => !gone.has(columnOf(a.x, a.z)));
+      this.projectiles.balls = this.projectiles.balls.filter(b => !gone.has(columnOf(b.x, b.z)));
+      this.orbs.orbs = this.orbs.orbs.filter(o => !gone.has(columnOf(o.x, o.z)));
     }
     for (const c of added) {
       const key = `${c.x},${c.z}`, list = this.stored.get(key);
@@ -138,20 +165,157 @@ export class ServerMobs {
     try { ew.tick(first.position, first.survival, first.survival.inventory.held?.id ?? 0); } finally { ew.beforeMob = null; }
     this.current = null; // beginTick showed the first player whatever was seen last
     this.tickArrows(players);
+    this.tickThrown(players);
+    this.tickOrbs(players);
+    this.tickCarts(players);
     this.tickSpawners(players);
     this.drain(players);
   }
-  // EntityArrow.onUpdate for each skeleton arrow, against the mobs and the arrow's nearest player.
+  // The things a player's edit just made (a bow's arrow, a snowball, an egg, a pearl, an exp bottle, a rocket, an eye): `mark()`
+  // before the edit, `claim(mark, p)` after it gives the new ones to player p.
+  mark() { return [this.arrows.list.length, this.projectiles.balls.length, this.ew.potions.balls.length, this.rockets.rockets.length, this.eyes.eyes.length]; }
+  claim([a, b, c, d, e], p) {
+    for (const list of [this.arrows.list.slice(a), this.projectiles.balls.slice(b), this.ew.potions.balls.slice(c), this.rockets.rockets.slice(d), this.eyes.eyes.slice(e)])
+      for (const x of list) x.by = p.id;
+  }
+  // The player whose shot or throw this is, while connected and alive (else the arrow or ball flies on with no one behind it).
+  owner(x) { const p = x.by == null ? null : this.sim.players.get(x.by); return p && !p.dead ? p : null; }
+  // Another player as a target of player p's arrow or ball: PvP on, alive, not p.
+  others(players, p) { return this.sim.config?.pvp === false ? [] : players.filter(q => q !== p); }
+  // EntityArrow.onUpdate for each arrow. A skeleton's goes for the mobs and its nearest player; a player's for the mobs and the
+  // nearest other player (PvP on), and its hits are that player's (the mob's revenge, looting, the death message).
   tickArrows(players) {
     const world = this.sim.world, ew = this.ew;
     if (!this.arrows.list.length) return;
     for (const a of this.arrows.list) {
       if (a.dead || !world.isTicking(a.x, a.z)) continue;
-      const p = this.nearest(players, a);
-      this.arrows.step(world, a, { targets: arrowTargets(mobTargets(ew.entities, p.position, PHYSICS.width, PHYSICS.height), p.survival.creative), mobs: ew, survival: p.survival, player: p.position });
+      if (a.by == null) {
+        const p = this.nearest(players, a);
+        this.arrows.step(world, a, { targets: arrowTargets(mobTargets(ew.entities, p.position, PHYSICS.width, PHYSICS.height), p.survival.creative), mobs: ew, survival: p.survival, player: p.position });
+        continue;
+      }
+      const shooter = this.owner(a), q = shooter ? this.nearest(this.others(players, shooter), a) : null;
+      if (shooter) this.see(shooter);
+      const survival = q ? this.shotBy(q, shooter) : null;
+      this.arrows.step(world, a, { targets: arrowTargets(mobTargets(ew.entities, q?.position ?? null, PHYSICS.width, PHYSICS.height), !!q?.survival.creative),
+        mobs: ew, survival, player: shooter?.position ?? null });
     }
     this.arrows.list = this.arrows.list.filter(a => !a.dead);
+    for (const p of players) if (p.survival.health > 0 && this.arrows.collect(boxOf(p.position), p.survival)) p.survival.inventory.changed?.(); // EntityArrow.onCollideWithPlayer
     for (const s of this.arrows.drain?.() ?? []) if (s?.sound) this.sound(s);
+  }
+  // Player q's Survival as an arrow from `shooter` sees it: the hit is credited to the shooter (lastHit, the death message), and its
+  // knockback comes from the shooter's position.
+  shotBy(q, shooter) {
+    const sim = this.sim, s = q.survival;
+    return new Proxy(s, { get: (t, k) => {
+      if (k === 'damage') return (amount, cause, ...rest) => {
+        const ok = t.damage(amount, cause, true, 'player', { type: 'player', isPlayer: true, name: shooter.name, x: shooter.position.x, z: shooter.position.z });
+        if (ok) { q.lastHit = { by: shooter.id, name: shooter.name, kind: 'arrow', weapon: null, tick: sim.ticks }; sim.send(shooter, { type: 'hit', target: q.id, head: false, kill: t.health <= 0 }); }
+        return ok;
+      };
+      const v = t[k];
+      return typeof v === 'function' ? v.bind(t) : v;
+    } });
+  }
+  // EntityThrowable.onUpdate for the players' snowballs, eggs and pearls; a rocket's flight and an eye's (EntityFireworkRocket,
+  // EntityEnderEye). A thrown ball skips its thrower for five ticks and hits mobs or another player (PvP on).
+  tickThrown(players) {
+    const sim = this.sim, world = sim.world, ew = this.ew, pr = this.projectiles;
+    for (const b of pr.balls) {
+      if (b.dead || !world.isTicking(b.x, b.z)) continue;
+      const thrower = this.owner(b);
+      const targets = mobTargets(ew.entities.filter(e => e.health > 0), thrower?.position ?? null, PHYSICS.width, PHYSICS.height);
+      for (const q of thrower ? this.others(players, thrower) : players) targets.push({ ref: q, box: boxOf(q.position) });
+      if (thrower) this.see(thrower);
+      pr.step(world, b, targets, (ref, ball) => this.thrownHit(ref, ball, thrower), ({ pearl, hit }) => this.pearl(pearl, hit, thrower));
+    }
+    pr.balls = pr.balls.filter(b => !b.dead);
+    for (const e of pr.drain()) {
+      if (e.sound) this.sound(e);
+      else if (e.chicks) for (let i = 0; i < e.chicks; i++) ew.hatch(e.x, e.y, e.z, e.yaw);
+    }
+    // Rockets: the launch sound, and the burst each tab draws (fireworks-live.js explode -> FireworkParticles.spawnStarter).
+    this.rockets.tick(world, {
+      sound: (sound, x, y, z, volume, pitch) => this.sound({ sound, volume, pitch, position: { x, y, z } }),
+      explode: (x, y, z, vx, vy, vz, fireworks) => { for (const p of sim.players.values()) if (Math.hypot(p.position.x - x, p.position.y - y, p.position.z - z) <= THROWN_RANGE * 2) sim.send(p, { type: 'firework', x, y, z, vx, vy, vz, fireworks }); },
+    });
+    this.eyes.tick({ drop: (stack, x, y, z) => sim.play.items.spawn(stack, x, y, z), inWater: (x, y, z) => world.get(Math.floor(x), Math.floor(y), Math.floor(z)) === 8 || world.get(Math.floor(x), Math.floor(y), Math.floor(z)) === 9 });
+  }
+  // EntitySnowball/EntityEgg.onImpact on a mob or player: the zero-damage thrown hit (knockback from the thrower; a blaze takes 3).
+  thrownHit(ref, ball, thrower) {
+    if (ref === 'player') return; // the thrower itself
+    if (ref && typeof ref === 'object' && ref.survival) {
+      const from = thrower ?? { position: ball };
+      ref.survival.damage(0, 'player', true, 'player', { type: 'player', isPlayer: true, name: thrower?.name ?? 'Player', x: from.position.x, z: from.position.z });
+      return;
+    }
+    thrownHit(this.ew, ref, thrower?.position ?? { x: ball.x, z: ball.z });
+  }
+  // EntityEnderPearl.onImpact: the thrower, if still here, is teleported to the pearl and takes 5 fall damage.
+  pearl(pearl, hit, thrower) {
+    const sim = this.sim;
+    if (!thrower) { pearl.dead = true; return; }
+    const state = { world: sim.world, position: thrower.position, previous: thrower.previous, survival: thrower.survival, rider: null,
+      minecarts: { dismount: noop }, fallDistance: thrower.fallDistance, landedFall: thrower.landedFall };
+    const result = impactPlayerPearl(state, pearl, hit && typeof hit === 'object' && !hit.survival ? hit : null, {
+      hit: (e, source) => this.ew.attackEntityFrom(e, source.amount, { name: 'thrown', player: true, attacker: 'projectile', from: { x: thrower.position.x, z: thrower.position.z } }),
+    });
+    pearl.dead = true;
+    if (result?.teleported) { thrower.fallDistance = state.fallDistance; thrower.landedFall = 0; Object.assign(thrower.velocity, { x: 0, y: 0, z: 0 }); thrower.teleported = (thrower.teleported ?? 0) + 1; }
+  }
+  // EntityXPOrb.onUpdate, each orb pulled toward its nearest player, and EntityXPOrb.onCollideWithPlayer for every player (each with
+  // their own two-tick xpCooldown).
+  tickOrbs(players) {
+    const o = this.orbs, world = this.sim.world;
+    if (!o.orbs.length) return;
+    const all = o.orbs, groups = new Map();
+    for (const orb of all) { const p = this.nearest(players, { x: orb.x, y: orb.posY ?? orb.y, z: orb.z }); (groups.get(p) ?? groups.set(p, []).get(p)).push(orb); }
+    const kept = [];
+    for (const [p, list] of groups) { o.orbs = list; o.tick(world, p.position); kept.push(...o.orbs); }
+    o.orbs = kept;
+    for (const p of players) {
+      if (!p.experience || p.survival.health <= 0) continue;
+      o.cooldown = p.xpCooldown ?? 0;
+      const value = o.collect(p.position, PHYSICS.width, PHYSICS.height);
+      p.xpCooldown = o.cooldown;
+      if (value) { const before = p.experience.level; p.experience.add(value); const volume = p.experience.levelUp(before, this.sim.ticks); if (volume) this.sim.send(p, { type: 'sound', sound: 'random.levelup', x: p.position.x, y: p.position.y, z: p.position.z, volume, pitch: 1 }); }
+    }
+    for (const s of o.sounds.splice(0)) this.sound({ sound: s.name, volume: s.volume, pitch: s.pitch, position: { x: s.x, y: s.y, z: s.z } });
+  }
+  // The arrows, thrown things and orbs near player p, for the tab's renderers: arrows [id, x, y, z, yaw, pitch, shake, crit], balls
+  // [id, kind, x, y, z], orbs [id, x, y, z, value].
+  thrownRows(p) {
+    const at = p.position, near = e => Math.abs(e.x - at.x) <= THROWN_RANGE && Math.abs(e.z - at.z) <= THROWN_RANGE && Math.abs(e.y - at.y) <= THROWN_RANGE;
+    const id = x => this.thrownIds.get(x) ?? (this.thrownIds.set(x, this.nextThrown++), this.thrownIds.get(x));
+    const arrows = this.arrows.list.filter(a => !a.dead && near(a)).slice(0, 64).map(a => [id(a), r3(a.x), r3(a.y), r3(a.z), r2(a.yaw), r2(a.pitch), a.shake | 0, a.crit ? 1 : 0]);
+    const balls = [...this.projectiles.balls, ...this.ew.potions.balls, ...this.rockets.balls, ...this.eyes.balls, ...(this.ew._golemBalls?.balls ?? []), ...(this.ew._fireballs?.balls ?? []), ...(this.ew._skulls?.balls ?? [])]
+      .filter(b => !b.dead && near(b)).slice(0, 64).map(b => {
+        const look = {};
+        for (const k of ['scale', 'fullbright', 'blue']) if (b[k] !== undefined) look[k] = b[k];
+        if (b.kind === 'witherSkull') Object.assign(look, { vx: r3(b.vx ?? 0), vy: r3(b.vy ?? 0), vz: r3(b.vz ?? 0) });
+        return [id(b), b.kind, r3(b.x), r3(b.y), r3(b.z), b.kind === 'potion' ? b.damage | 0 : 0, look];
+      });
+    const orbs = this.orbs.orbs.filter(o => !o.dead && near(o)).slice(0, 64).map(o => [o.id, r3(o.x), r3(o.y), r3(o.z), o.value]);
+    return { arrows, balls, orbs };
+  }
+  // EntityMinecartChest.onUpdate and the pushes between carts, players and mobs (structure-simulation.js tickMinecartSimulation
+  // for every player); a broken cart's contents and items drop as item entities.
+  tickCarts(players) {
+    const m = this.minecarts;
+    if (!m.carts.length) return;
+    const ew = this.ew, living = ew.entities.filter(e => e.health > 0), sized = e => { const [w, h] = ew.size(e); return mobBox(e.x, e.y, e.z, w, h); };
+    const bodies = players.map(p => ({ p, ref: { x: p.position.x, y: p.position.y, z: p.position.z, bb: boxOf(p.position) } }));
+    m.tick(this.sim.world, { entities: [...bodies.map(b => b.ref), ...living.map(e => ({ bb: sized(e), ref: e }))], host: null });
+    for (const { p, ref } of bodies) { const [vx, vz] = m.pushEntity(ref, ref.bb); p.velocity.x += vx; p.velocity.z += vz; }
+    for (const e of living) { const [vx, vz] = m.pushEntity(e, sized(e)); e.vx += vx; e.vz += vz; }
+    for (const d of m.drain()) if (d.stack) this.sim.play.items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion });
+  }
+  // The carts near player p for the tab's MinecartRenderer: [id, type, x, posY, z, yaw, pitch, rolling, rollingDir, damage].
+  cartRows(p) {
+    const at = p.position;
+    return this.minecarts.carts.filter(c => !c.dead && Math.abs(c.x - at.x) <= THROWN_RANGE && Math.abs(c.z - at.z) <= THROWN_RANGE && Math.abs(c.posY - at.y) <= THROWN_RANGE)
+      .slice(0, 32).map(c => [c.id, c.type, r3(c.x), r3(c.posY), r3(c.z), r2(c.yaw), r2(c.pitch), c.rolling | 0, c.rollingDir, r2(c.damage)]);
   }
   // TileEntityMobSpawner.updateEntity: a spawner works while a player is within 16 blocks; one whose block is gone is removed.
   tickSpawners(players) {
@@ -166,8 +330,7 @@ export class ServerMobs {
   // The mob events: sounds go to the players near them, drops become item entities, a creeper's blast goes off.
   drain(players) {
     const sim = this.sim;
-    const xpOrbs = { spawn: noop }; // experience is not kept on this server
-    drainMobEvents({ mobs: this.ew, xpOrbs, items: sim.play.items }, {
+    drainMobEvents({ mobs: this.ew, xpOrbs: this.orbs, items: sim.play.items }, {
       sound: s => this.sound(s),
       explode: (x, y, z, size, options) => this.explode(players, x, y, z, size, options),
     });
@@ -179,15 +342,24 @@ export class ServerMobs {
   }
   // Explosion.doExplosionA/B on the server's blocks, tiles and items, then on every player in reach (applyExplosion's player part,
   // which is written for one player, is skipped and run here per player).
-  explode(players, x, y, z, size, { exploder = null, attacker = null, smoking = true } = {}) {
-    const sim = this.sim, none = { explode: noop, spawn: noop }, tiles = Object.create(sim.tiles, { health: { value: 0 } });
-    applyExplosion({ world: sim.world, weather: sim.weather, mobs: this.ew, items: sim.play.items, xpOrbs: none, arrows: this.arrows, projectiles: none,
+  // `by`: the player whose grenade or rocket this is; another player it hurts (PvP on) is that player's kill.
+  explode(players, x, y, z, size, { exploder = null, attacker = null, smoking = true, by = null } = {}) {
+    const sim = this.sim, tiles = Object.create(sim.tiles, { health: { value: 0 } });
+    applyExplosion({ world: sim.world, weather: sim.weather, mobs: this.ew, items: sim.play.items, xpOrbs: this.orbs, arrows: this.arrows, projectiles: this.projectiles,
       falling: null, primed: [], hanging: null, survival: tiles, position: { x: 0, y: -1e6, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, farming: sim.farming },
     { x, y, z, size, exploder, attacker, smoking });
     for (const p of players) {
+      if (by && p !== by && sim.config?.pvp === false) continue;
       const at = p.position, hit = explosionImpact(sim.world, x, y, z, size, at.x, at.y, at.z, at.y + PHYSICS.eye, entityBox(at, PHYSICS.width, PHYSICS.height));
       if (!hit) continue;
-      if (!p.survival.creative) p.survival.scaledDamage(hit.damage, attacker && attacker !== 'player' ? 'a ' + attacker.type : 'an explosion', { source: 'explosion', from: attacker && attacker !== 'player' ? attacker : undefined });
+      if (!p.survival.creative) {
+        const before = p.survival.health;
+        p.survival.scaledDamage(hit.damage, attacker && attacker !== 'player' ? 'a ' + attacker.type : 'an explosion', { source: 'explosion', from: attacker && attacker !== 'player' ? attacker : undefined });
+        if (by && p !== by && p.survival.health < before) {
+          p.lastHit = { by: by.id, name: by.name, kind: 'explosion', weapon: null, tick: sim.ticks };
+          sim.send(by, { type: 'hit', target: p.id, head: false, kill: p.survival.health <= 0 });
+        }
+      }
       drainKnockback(p.survival, p.velocity, p.position);
       const kick = blastKnockback(p.survival.inventory?.armor ?? [], hit.impact), scale = hit.impact && kick !== hit.impact ? kick / hit.impact : 1;
       p.velocity.x += hit.push[0] * scale; p.velocity.y += hit.push[1] * scale; p.velocity.z += hit.push[2] * scale;
@@ -243,7 +415,7 @@ export class ServerMobs {
       stored.set(key, list);
     }
     return { stored: [...stored].map(([k, list]) => [k, list.map(r => JSON.parse(JSON.stringify(r, (key, v) => (typeof v === 'function' ? undefined : v))))]),
-      spawners: this.spawners.toJSON(), totalTime: this.ew.saveTotalTime(), nextId: this.ew.nextId };
+      spawners: this.spawners.toJSON(), totalTime: this.ew.saveTotalTime(), nextId: this.ew.nextId, xpOrbs: this.orbs.serialize(), minecarts: this.minecarts.toJSON() };
   }
 }
 export { ENTITY_TYPES };

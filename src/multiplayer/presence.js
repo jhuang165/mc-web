@@ -37,7 +37,6 @@ export class RemotePlayers {
   }
   resetSkin(renderer) { if (renderer?.steveMap) renderer.base.uniforms.map.value = renderer.steveMap; if (renderer) renderer.skinHash = null; }
   sync(players, self) {
-    this.at = performance.now();
     const seen = new Set();
     for (const p of players) {
       if (p.id === self) continue;
@@ -59,8 +58,8 @@ export class RemotePlayers {
     }
     for (const [id, entry] of this.entries) if (!seen.has(id)) { this.dispose(entry); this.entries.delete(id); }
   }
-  frame() {
-    const t = Math.min(1, Math.max(0, (performance.now() - this.at) / 50));
+  // `t`: the frame's place between the last two server ticks (DedicatedClient.partial).
+  frame(t = 1) {
     for (const entry of this.entries.values()) {
       const p = entry.state;
       entry.renderer.update(entry.body, t, { held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sneak: p.sneak, swing: p.swing > 0 ? (6 - p.swing) / 6 : 0,

@@ -18,7 +18,7 @@ export const serverWorldReady = populationBlockMapperReady;
 const SPAN = 8; // columns per side of a window (World.streamAround)
 const CELL_CACHE = 36; // population cells kept: about four players' worth of 3 x 3 cells
 const noop = () => {};
-const NO_MOBS = { create: () => ({}), entities: { push: noop } }, NO_SPAWNERS = { add: noop };
+const NO_MOBS = { create: () => ({}), entities: { push: noop } }, NO_SPAWNERS = { add: noop }, NO_CARTS = { spawnChest: noop };
 const columnKey = (cx, cz) => `${cx},${cz}`; // World's chunk-map key
 
 export class ServerColumns {
@@ -96,10 +96,10 @@ export class ServerColumns {
   // Population records (chest loot, dispensers, flower pots, liquid ticks, animals, villagers, witches and mob spawners) of columns
   // resident for the first time, handed to the server's tiles and its mob world (server-mobs.js) when it has one. Minecart chests
   // (mineshafts) have no server entity yet and are dropped (counted).
-  materialize({ tiles, fluids, mobs = NO_MOBS, spawners = NO_SPAWNERS }) {
+  materialize({ tiles, fluids, mobs = NO_MOBS, spawners = NO_SPAWNERS, minecarts = NO_CARTS }) {
     const columns = this.world.claimFreshColumns();
     if (!columns.length) return null;
-    return restorePopulationColumns(columns, { world: this.world, survival: tiles, mobs, spawners, minecarts: { spawnChest: noop }, fluids });
+    return restorePopulationColumns(columns, { world: this.world, survival: tiles, mobs, spawners, minecarts, fluids });
   }
   dispose() { this.prefetch?.dispose(); this.prefetch = null; }
 }
