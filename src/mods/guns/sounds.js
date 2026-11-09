@@ -1,3 +1,4 @@
+import { fetchPackJson } from "./pack-fetch.js";
 // Guns mod (not 1.7.10): adds the locally installed TaCZ sounds (npm run mods:fetch-tacz, Git-ignored) to a SoundBank as
 // "guns.<path>" events in the player category, where <path> is the file under the pack's tacz_sounds/ folder without
 // ".ogg" ("ak47/ak47_shoot", "dry_fire"). Without the install, the index fetch fails and guns stay silent.
@@ -13,7 +14,7 @@ const fileName = (path) => path.startsWith('cs2:') ? `mods/cs2/${path.slice(4)}`
 
 // Adds the files and events to both the bank's vanilla base table (resource-pack refreshes rebuild the manifest from it)
 // and its current manifest. Once per bank.
-export function installGunSounds(bank, load = (url) => fetch(url).then((r) => (r.ok ? r.json() : null))) {
+export function installGunSounds(bank, load = fetchPackJson) {
   if (!bank) return Promise.resolve(false);
   if (!installed.has(bank)) {
     installed.set(bank, (async () => {

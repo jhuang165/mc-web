@@ -1,9 +1,10 @@
+import { fetchPackText } from "./pack-fetch.js";
 // Read CS2 Unified's installed files; keep its payload separate from the default TaCZ pack.
 import { parseLenient } from './json5.js';
 import { loadTaczPack } from './pack.js';
 import { CS2_ROOT } from './resources.js';
 
-const defaultFetch = url => fetch(url).then(r => r.ok ? r.text() : null).catch(() => null);
+const defaultFetch = fetchPackText;
 export async function loadCS2Pack(fetchText = defaultFetch) {
   const raw = await loadTaczPack(fetchText, { root: CS2_ROOT, namespace: 'cs2' });
   if (!raw) return null;

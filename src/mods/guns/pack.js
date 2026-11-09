@@ -1,3 +1,4 @@
+import { fetchPackText } from "./pack-fetch.js";
 // Guns mod (not 1.7.10): reads the locally installed TaCZ default gun pack (npm run mods:fetch-tacz, Git-ignored, unmodified
 // CC BY-NC-ND 4.0 files under public/mods/tacz/) and turns its index, data, display, recipe and language files into this
 // project's gun, ammo and smithing tables. Nothing here copies TaCZ data into the repository: without the install, the pack
@@ -23,7 +24,7 @@ export const packUrl = {
 // "tacz:ak47/ak47_shoot" -> "ak47/ak47_shoot", the file under tacz_sounds/ (and the sound event's name, sounds.js).
 export const soundPath = (loc) => (loc ? path(loc) : null);
 
-const defaultFetch = (url) => fetch(url).then((r) => (r.ok ? r.text() : null)).catch(() => null);
+const defaultFetch = fetchPackText;
 const strip = (s) => String(s ?? "").replace(/§./g, "").trim();
 
 // The raw pack: { index, lang, guns: { name: { index, data, display } }, ammo: { name: { index, display } },

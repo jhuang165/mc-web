@@ -1,3 +1,4 @@
+import { fetchPackText } from "./pack-fetch.js";
 // Guns mod (not 1.7.10): melee weapons from LR Tactical packs (TaCZ-style "gun packs" whose index/melee/ entries are
 // lrtactical:melee items, such as the CS2 Knifes Pack). tools/fetch-knives.mjs installs a pack's files locally, unmodified
 // and Git-ignored, under public/mods/lrtactical/<namespace>/; without the install there are no knives and saved knife stacks
@@ -22,7 +23,7 @@ export const meleeUrl = {
   sound: asset("tacz_sounds", ".ogg"),
 };
 
-const defaultFetch = (url) => fetch(url).then((r) => (r.ok ? r.text() : null)).catch(() => null);
+const defaultFetch = fetchPackText;
 const strip = (s) => String(s ?? "").replace(/§./g, "").trim();
 
 // The installed packs: [{ namespace, lang, melee: { name: { index, display } }, sounds: [paths] }], or null without the

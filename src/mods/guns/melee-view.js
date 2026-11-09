@@ -1,3 +1,4 @@
+import { fetchPackJson } from "./pack-fetch.js";
 // Guns mod (not 1.7.10): an LR Tactical melee weapon's own model in first person (melee.js). meleeAssets loads its
 // geometry and animations once; PackMeleeView poses it each frame from hooks.js view() the way LR Tactical's melee renderer
 // drives the pack's state machine (default_melee_state_machine.lua and the pack's variants):
@@ -6,13 +7,12 @@
 // The camera sits at the model's idle_view bone and the player's arms on its lefthand_pos / righthand_pos placeholders,
 // as for the pack guns (pack-view.js).
 import * as THREE from "three";
-import { parseLenient } from "./json5.js";
 import { meleeUrl } from "./melee.js";
 import { bedrockGeometry, buildBedrockModel, boneMatrix, MARKER_BONES } from "./bedrock.js";
 import { parseAnimations, poseModel, Pose } from "./animation.js";
 import { fitArms, handCameraMatrix } from "./pack-view.js";
 
-const fetchJson = (url) => fetch(url).then((r) => (r.ok ? r.text() : null)).then((t) => (t == null ? null : parseLenient(t))).catch(() => null);
+const fetchJson = fetchPackJson;
 const cache = new Map(); // weapon id -> { value, failed, waiters, promise }
 
 // The weapon's { geo, animations } once loaded, else null (and the load starts); `changed` runs when they arrive.

@@ -89,7 +89,8 @@ async function serve(request, url) {
   }
   const entry = Object.hasOwn(s.manifest.files, rel) && s.manifest.files[rel];
   if (!entry) return new Response(null, { status: 404 });
-  const response = await fetch(CONFIG.base + "sealed/" + entry.file);
+  const response = await fetch(CONFIG.base + "sealed/" + entry.file + url.search,
+    url.search ? { cache: "no-store" } : undefined);
   if (!response.ok) return new Response("Preview file unavailable", { status: 502 });
   let bytes = await open(await response.arrayBuffer(), s.key, rel);
   if (entry.gzip) bytes = await inflate(bytes);

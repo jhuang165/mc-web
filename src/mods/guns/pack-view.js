@@ -1,3 +1,4 @@
+import { fetchPackJson } from "./pack-fetch.js";
 // Guns mod (not 1.7.10): the TaCZ pack's own gun models in this game. loadGunAssets fetches a gun's geometry (first-person
 // and LOD), animations and the mod's default animations once; PackGunView poses the first-person model each frame from
 // hooks.js view() the way TaCZ's first-person renderer does (the camera at the model's idle_view bone, moving to its
@@ -6,7 +7,6 @@
 // its attachments' own models on the gun's <type>_pos bones; aiming through a scope or sight puts the camera at the part's
 // scope_view bone, with the world seen through its ocular and the reticle (division) drawn only there (stencil).
 import * as THREE from "three";
-import { parseLenient } from "./json5.js";
 import { packUrl } from "./pack.js";
 import { bedrockGeometry, buildBedrockModel, boneMatrix, defaultVisibility, MARKER_BONES } from "./bedrock.js";
 import { parseAnimations, gunLayers, poseModel, Pose } from "./animation.js";
@@ -14,7 +14,7 @@ import { GUN_SOUNDS } from "./feel.js";
 import { muzzleOverride } from "./model.js";
 
 const assets = new Map(); // gun id -> { promise, value }
-const fetchJson = (url) => fetch(url).then((r) => (r.ok ? r.text() : null)).then((t) => (t == null ? null : parseLenient(t))).catch(() => null);
+const fetchJson = fetchPackJson;
 
 function cachedLoad(cache, key, loader, changed) {
   let a = cache.get(key);
