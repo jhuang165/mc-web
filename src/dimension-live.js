@@ -315,6 +315,10 @@ export class DimensionLive {
       root.fluidTicks = r.fluidTicks; root.fireTicks = r.fireTicks; root.fallingTicks = r.fallingTicks; root.falling = r.falling;
       root.redstone = r.redstone; root.pistons = r.pistons;
       root.player = { ...(root.player ?? {}), ...r.tiles };
+      if (r.entities) { // away-entities.js: the saved entity lists, whole
+        root.drops = r.entities.drops; root.xpOrbs = r.entities.xpOrbs; root.tnt = r.entities.tnt;
+        root.minecarts = r.entities.minecarts; if (r.entities.boats.length) root.boats = r.entities.boats; else delete root.boats;
+      }
       if (r.drops.length) root.drops = [...(root.drops ?? []), ...r.drops];
       if (r.columns.length) await this.writeColumns(root.id, r.columns);
       root.editSequence = Math.max(root.editSequence | 0, r.editSequence | 0);
@@ -346,7 +350,7 @@ export class DimensionLive {
       const ms = performance.now() - t0;
       if (this.away) this.away.tripMs += ms;
       this.tripLog = { ms: Math.round(ms), to: target };
-      if (target === OVERWORLD || !target) h.advanceTicks?.(Math.round(ms / 50)); // the loading screen's ticks the Overworld clock did not run
+      h.advanceTicks?.(Math.round(ms / 50)); // the loading screen's ticks the Overworld clock and weather timers did not run (every trip, not only the return)
       return true;
     } finally { this.busy = false; this.quiet = false; this.setOverlay(0); }
   }

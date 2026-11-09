@@ -237,6 +237,11 @@ export class Weather {
     this.prevRain = this.rain;
     this.rain = clamp01(f(this.raining ? this.rain + 0.01 : this.rain - 0.01));
   }
+  // `n` ticks of World.updateWeather that no tick loop ran (a loading screen); in the Nether/End the Overworld's away copy.
+  advance(n) {
+    const w = this.overworld ?? this;
+    for (let i = 0; i < n; i++) w.updateWeather();
+  }
   // WorldServer's per-chunk roll: one in 100000 per tickable chunk per tick, in
   // a thunderstorm only; the strike lands in a random column of that chunk where
   // canLightningStrikeAt holds.
