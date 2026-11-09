@@ -76,8 +76,8 @@ for (const rec of reference.records) {
       const starts = generator.structureMap.values().map((s) => [[s.chunkX, s.chunkZ], s.boundingBox.toArray(), s.components.length]);
       assert.deepEqual(starts, rec.starts[name], `${name} start maps`);
     }
-    // Known limit (structure-area.md): jungle-biome decoration diverges from native in the
-    // non-temple chunk 0,14 (flower/tree call stream); jungle steps and hashes are not asserted.
+    // This quiet world (relaxRedstone) skips the jungle temple's redstone hooks, so its jungle steps and hashes are not asserted here;
+    // structure-live-neighbors.test.js replays the same area with the neighbour callbacks, every chunk, against these records.
     const jungle = rec.label.startsWith("jungleTemple");
     if (!jungle) area.steps.forEach((row, i) => {
       const native = rec.steps[i], at = `${rec.label} chunk ${native.chunk}`;

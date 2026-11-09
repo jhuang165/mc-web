@@ -25,11 +25,12 @@ with pressure plate 70 power); door neighbor logic, button break, dispenser/furn
 tiles (`gen-world.js` createTile).
 
 ## Limits
-- jungleTemple671: native chunk (0,14) (not a temple chunk) diverges in jungle-biome decoration
-  (JS WorldGenFlowers reads y=35 where native continues tree-region calls near y=69; first 19,039
-  ordered calls match). It reproduces with size 1, so it is not structure related. The test therefore
-  checks only populate order, inputs, start maps and tile entities (not chunk 0,14), not step hashes,
-  final hashes, entities, carts, ticks or drops for that area. Owner of decoration code should fix it.
+- jungleTemple671 (batch 31 correction): the batch 14 note blamed chunk (0,14) on a JS jungle decoration difference ("WorldGenFlowers reads
+  y=35 where native continues tree-region calls"). That was the pre-generation-16 mutated-biome rule: with `legacyMutated: true` the replay
+  diverges at chunk (0,14) exactly as described (ordered writes 3000 expected), with the native rule (what every current test and generation
+  16+ world uses) the whole area replays call for call, writes, both Randoms, final chunk hashes, tiles, carts and ticks, in
+  `structure-live-neighbors.test.js` (neighbour callbacks on). The quiet `StructurePopulationArea` test here still skips the area's jungle
+  steps because `relaxRedstone` drops the temple's redstone hooks. Worlds saved at generation 13 or 15 keep the legacy biome map by design.
 - Redstone puzzle hooks (29, 55, 69, 93, 131, 132) are no-ops under `relaxRedstone` (jungle area only);
   the generic world still throws "unported" for them, so live jungle temples need an equivalent guard.
 - Flower pot contents come from a meta table in `gen-world.js`; only meta 7 (red mushroom) is

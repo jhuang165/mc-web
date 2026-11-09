@@ -48,13 +48,24 @@ export function nativeNeighborWorldClass(area, Base = mineshaftGenWorldClass()) 
             this.setBlockToAir(x, y, z); broke = true;
             if (this.getBlock(x, y + 1, z) === id) this.setBlockToAir(x, y + 1, z);
           }
-          if (broke) throw new Error(`structure door fell at ${x},${y},${z}: its drop is unported`);
+          // BlockDoor drops the door item (lower half only, chance 1) after the cells are cleared, as ahb.E (isRemote) is false.
+          if (broke) { this.dropBlockAsItem(id, x, y, z, meta, 0); return undefined; }
           const powered = this.indirectlyPowered(x, y, z) || this.indirectlyPowered(x, y + 1, z);
-          if (source !== id && (powered || POWER_SOURCES.includes(source))) throw new Error("structure door power change is unported");
+          if (source !== id && (powered || POWER_SOURCES.includes(source))) this.doorSetOpen(x, y, z, powered);
         } else {
           if (this.getBlock(x, y - 1, z) !== id) this.setBlockToAir(x, y, z);
           if (source !== id) this.neighborChanged(id, x, y - 1, z, source);
         }
+      }
+      // BlockDoor.func_150014_a (akn.a(ahb, x, y, z, boolean), bytecode-read; the result is replayed against the native toggle records of
+      // doors-panes-reference.json): the combined state (func_150012_g: this half's metadata, then the other half's), nothing when it already
+      // matches, else the lower half's metadata with bit 4 flipped (flags 2); the 1003 door sound is a client aux effect.
+      doorSetOpen(x, y, z, open) {
+        const own = this.getBlockMetadata(x, y, z), upper = (own & 8) !== 0;
+        const lowerMeta = upper ? this.getBlockMetadata(x, y - 1, z) : own;
+        if (!upper) this.getBlockMetadata(x, y + 1, z);
+        if (((lowerMeta & 4) !== 0) === open) return;
+        this.setBlockMetadata(x, upper ? y - 1 : y, z, (lowerMeta & 7) ^ 4, 2);
       }
       // World.isBlockIndirectlyGettingPowered (v), getIndirectPowerLevelTo (g), getBlockPowerInput (u) and
       // getStrongestIndirectPower side reads (e), with the power functions of the unpressed stone plate
@@ -81,7 +92,12 @@ export function nativeNeighborWorldClass(area, Base = mineshaftGenWorldClass()) 
         if (id === 70) return (!strong || side === 1) && this.getBlockMetadata(x, y, z) > 0 ? 15 : 0;
         // BlockButton.isProvidingWeakPower / StrongPower: a button not yet pressed (metadata bit 8 clear) gives nothing; the stronghold's is never pressed in generation.
         if (id === 77 && (this.getBlockMetadata(x, y, z) & 8) === 0) return 0;
-        if (POWER_SOURCES.includes(id)) throw new Error(`structure redstone power from block ${id} is unported`);
+        // The other providers (lever, wire, torch, repeater, hook, ...) use the native-replayed behaviours of redstone.js on the area's own block store.
+        if (POWER_SOURCES.includes(id)) {
+          const behaviour = area.redstone?.behaviours[id], read = strong ? behaviour?.strong : behaviour?.weak;
+          if (!behaviour) throw new Error(`structure redstone power from block ${id} is unported`);
+          return read ? read(area.redstone, x, y, z, side) : 0;
+        }
         return 0;
       }
       // BlockFurnace.func_149930_e / BlockDispenser.func_149938_m: face away from an opaque side.

@@ -1,7 +1,7 @@
 // The live PopulationArea in neighbours mode (generation-time onBlockAdded / onNeighborBlockChange chains: doors, redstone, tripwire, buttons,
 // plates, dispenser markDirty) over the native default-world structure areas (tools/verify-structure-area.mjs, structure-area-reference.json):
-// ordered World calls and writes, Random states, final chunks, tiles, carts and pending ticks. The jungle area keeps its known non-temple
-// decoration divergence (structure-area.md), so only its temple chunks are compared call by call.
+// ordered World calls and writes, Random states, final chunks, tiles, carts and pending ticks, every chunk of every area including the
+// jungle temple (the batch 14 non-temple decoration divergence no longer reproduces: batch 16's mutated-biome rule fixed it).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -49,7 +49,6 @@ for (const rec of reference.records) {
         steps.push({ chunk: [x, z], callCount, callsSha1: calls.digest('hex'), writeCount, writesSha1: writes.digest('hex'), nextLong: randomLong(random).toString(), worldNextLong: randomLong(w.rand).toString() });
       },
     });
-    const jungle = rec.label.startsWith('jungleTemple');
     // Vanilla generation never leaves a repeater, torch, lever or button powered: no id 94 (powered repeater is 94 with meta bit, 75/76 torch
     // swap) or lever (69) / button (77) with the powered bit 8 is written, in native or in the replay.
     for (const [x, y, z, id, meta] of placed) {
@@ -58,8 +57,6 @@ for (const rec of reference.records) {
     }
     steps.forEach((row, i) => {
       const native = rec.steps[i], at = `${rec.label} chunk ${native.chunk}`;
-      if (jungle && `${native.chunk}` !== '0,14' && row.writeCount !== native.writeCount) assert.fail(`ordered writes ${at}`);
-      if (jungle) return;
       assert.equal(row.writeCount, native.writeCount, `ordered writes ${at}`);
       assert.equal(row.writesSha1, native.writesSha1, `ordered write hash ${at}`);
       assert.equal(row.nextLong, native.providerNextLong, `provider Random ${at}`);
@@ -67,7 +64,6 @@ for (const rec of reference.records) {
       assert.equal(row.callCount, native.callCount, `ordered world calls ${at}`);
       assert.equal(row.callsSha1, native.callsSha1, `ordered call hash ${at}`);
     });
-    if (jungle) return;
     for (const native of rec.chunks) assert.equal(structureChunkSha1(w.chunk(...native.chunk)), native.sha1, `final chunk hash ${native.chunk}`);
     assert.deepEqual(w.carts.map((e) => [e.x, e.y, e.z, e.slots.map(stack)]), rec.carts, 'carts');
     assert.deepEqual(w.pending, rec.pending, 'pending ticks');
