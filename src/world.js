@@ -442,6 +442,7 @@ export function solidBlock(b, meta = 0) {
 // each, at (lx * 16 + lz) * HEIGHT + y, and the random-tick refcount of each 16-high section
 // (ExtendedBlockStorage.tickRefCount), built on first use. Ids are this build's internal ones;
 // chunk-store.js holds the original-id form.
+const BIOME_HALO = 16 * 12; // blocks of biome arrays kept around the streamed window (see streamAround)
 export class WorldChunk {
   constructor(x, z, height = HEIGHT) {
     this.height = height;
@@ -574,11 +575,13 @@ export class World {
     this.ringSink?.adopt?.(removed); // a column that leaves the window stays in the ring with its current blocks
     this.minX = minX; this.minZ = minZ; this.maxX = minX + SIZE; this.maxZ = minZ + SIZE;
     // WorldChunkManager's standalone cache has no expiry. Retain the working set
-    // and a biome halo here instead of retaining every explored biome array.
+    // and a biome halo here instead of retaining every explored biome array. The halo reaches the ring's 10-chunk tick radius
+    // (one 16 x 16 biome array per chunk, about 1 MB in all): a smaller halo made every ring chunk's one-in-16 ice roll
+    // recompute the biome layers on the page thread (about 40 frames over 50 ms per 120 blocks walked).
     for (const key of this.javaGenerator.manager.cache.keys()) {
       const [cx,cz] = key.split(',').map(Number);
       const x = cx*16-this.originX, z = cz*16-this.originZ;
-      if (x < minX-16 || x >= this.maxX+16 || z < minZ-16 || z >= this.maxZ+16) this.javaGenerator.manager.cache.delete(key);
+      if (x < minX-BIOME_HALO || x >= this.maxX+BIOME_HALO || z < minZ-BIOME_HALO || z >= this.maxZ+BIOME_HALO) this.javaGenerator.manager.cache.delete(key);
     }
     return { added, removed };
   }

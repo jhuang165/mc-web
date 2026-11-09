@@ -3508,6 +3508,7 @@ function movementTick(controls) {
     { trace: traceAction, markUnsaved: () => { saved = false; } }) ?? movePlayer(state, controls, toast);
   ({ grounded, collidedH, flying, fallDistance, landedFall } = state);
   streamPrefetch?.update(position.x, position.z);
+  if (world.ringSink?.rtList && world.warmBiomes) world.warmBiomes(world.ringSink.rtList); // ring chunks' biomes, a few ms a tick, before their ice rolls need them
   walkFrozen = sneakOnGround;
   $("#movement-label").textContent = rider.vehicle ? "RIDING" : flying
     ? "FLYING"
