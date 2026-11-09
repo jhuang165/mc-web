@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { World, SAND, GRAVEL, CACTUS, WATER, ANVIL, HEIGHT } from "./world.js";
 import { JRandom } from "./lakes.js";
-import { FallingBlocks, canFallBelow, gravelDrop, FALL_DELAY, FALLING_Y_OFFSET, isFallingBlock, spawnFalling } from "./falling.js";
+import { FallingBlocks, canFallBelow, gravelDrop, FALL_DELAY, MAX_TICKS, FALLING_Y_OFFSET, isFallingBlock, spawnFalling } from "./falling.js";
 import { MockWorld, toGame } from "../tools/plant-fixtures.mjs";
 import { JavaRandom } from "./java-random.js";
 
@@ -160,4 +160,16 @@ test("anvil falls damage targets, degrade metadata on impact, land with sound, a
   assert.equal(w.get(30, 7, 30), ANVIL);
   assert.equal(w.getMeta(30, 7, 30) >> 2, 1);
   assert.deepEqual(drops, []);
+});
+
+test("WorldServer.tickUpdates takes at most 1000 due falling-block updates per tick, the rest the next tick", () => {
+  const w = new World("falling-cap"), fb = new FallingBlocks(w);
+  let n = 0;
+  fb.fall = () => { n++; return null; };
+  for (let i = 0; i < 1500; i++) { w.set(20 + (i % 40), 40, 20 + Math.floor(i / 40), SAND, false); fb.enqueue(20 + (i % 40), 40, 20 + Math.floor(i / 40), SAND, 1); }
+  fb.tick();
+  assert.equal(n, MAX_TICKS);
+  assert.equal(fb.pending.size, 500);
+  fb.tick();
+  assert.equal(n, 1500);
 });

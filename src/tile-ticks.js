@@ -134,10 +134,68 @@ export function ageForeignTicks(env, now) {
   return out;
 }
 
+/** WorldServer.tickUpdates' per-call cap on entries leaving the pending set (mt.a: `if (n > 1000) n = 1000`, probed in tile-ticks-reference.json "tick" scenarios). */
+export const TICK_UPDATES_CAP = 1000;
+
+/**
+ * Which pending entries one WorldServer.tickUpdates(all) call takes: `entries` are {t, p} (t = scheduledTime - worldTime) in creation order.
+ * It takes the first min(size, 1000) in tree order (time, priority, creation) while their time is due (t <= 0; `all` ignores the time and takes them all),
+ * and it stops at the first entry not due, so what is left is the tail of the tree. Returns {taken, left} (both in tree order).
+ */
+export function tickUpdatesTake(entries, all = false, cap = TICK_UPDATES_CAP) {
+  const tree = entries.map((e, i) => [e, i]).sort(([a, i], [b, j]) => a.t - b.t || (a.p | 0) - (b.p | 0) || i - j).map(([e]) => e);
+  let n = 0;
+  while (n < Math.min(tree.length, cap) && (all || tree[n].t <= 0)) n++;
+  return { taken: tree.slice(0, n), left: tree.slice(n) };
+}
+
+/**
+ * Runs a record's foreign ticks (importTileTicks `foreign`, envelope {time, entries}) in the live world. Natively every entry stays in the pending set until
+ * the world has run its `t` ticks (air at scheduledTime 0 goes on the first), then WorldServer.tickUpdates takes it (at most 1000 per tick, in tree order) and
+ * ticks its block only if the cell is in a loaded chunk, 0 <= y < 256, non-air and still the entry's block; otherwise the entry is dropped. Here a taken entry
+ * whose cell now holds the block of a list the port runs (fluid, fire, falling, redstone, see tickBlockIds) is handed to `schedule[kind](x, y, z, entry)`
+ * at delay 0 (the tick runs with the next list tick); every other taken entry is removed, so a save written after it came due no longer has it
+ * (ageForeignTicks removes the same entries on export, which is why this changes nothing for a world that never reaches their time).
+ * `blockAt(x, y, z)` is the live internal block id or -1 outside the loaded world. The envelope is edited in place; `tick(now)` takes the world's total time.
+ */
+export class ForeignTicks {
+  constructor(env, blockAt, schedule) {
+    this.env = env && Array.isArray(env.entries) ? env : null;
+    this.blockAt = blockAt;
+    this.schedule = schedule;
+    this.minDue = null; // smallest elapsed at which something is due (air: 1); null = recompute
+  }
+  get size() { return this.env?.entries.length ?? 0; }
+  tick(now) {
+    const env = this.env;
+    if (!env || !env.entries.length || !Number.isInteger(now)) return 0;
+    const elapsed = now - (Number.isInteger(env.time) ? env.time : 0);
+    if (elapsed < 1) return 0;
+    const dueAt = (e) => (e.air ? 1 : e.t);
+    if (this.minDue === null) this.minDue = Math.min(...env.entries.map(dueAt));
+    if (elapsed < this.minDue) return 0;
+    const due = env.entries.filter((e) => dueAt(e) <= elapsed);
+    const { taken } = tickUpdatesTake(due.map((e) => ({ e, t: e.air ? -1e15 : e.t - elapsed, p: e.p })), false);
+    const gone = new Set(taken.map((v) => v.e));
+    if (gone.size) env.entries = env.entries.filter((e) => !gone.has(e));
+    this.minDue = null;
+    const { internal, redstone } = tables();
+    let ran = 0;
+    for (const { e } of taken) {
+      if (e.air || e.y < 0 || e.y > 255) continue;
+      const kind = internal.get(e.i)?.kind ?? (redstone.has(e.i) ? 'redstone' : null), want = fromOriginal(e.i, 0)?.id;
+      if (!kind || want === undefined || this.blockAt(e.x, e.y, e.z) !== want) continue;
+      this.schedule[kind]?.(e.x, e.y, e.z, e);
+      ran++;
+    }
+    return ran;
+  }
+}
+
 /** Record fields for an import result: {fluidTicks, fireTicks, fallingTicks} envelopes and a `redstone` save carrying pending ticks, lit repeaters and comparator output signals (["x,y,z", OutputSignal]). */
 export function tickRecordFields(ticks, lit = [], comparators = [], time = 0) {
-  // `p` (always 0 for these blocks in a vanilla world: only the repeater and comparator pass a priority) only orders the import, it is not stored.
-  const env = (entries) => ({ version: 1, time: 0, entries: entries.map(({ p, ...e }) => e) });
+  // `p` (always 0 for these blocks in a vanilla world: only the repeater and comparator pass a priority) is stored only when it is not 0 (the live lists order by it and write it back).
+  const env = (entries) => ({ version: 1, time: 0, entries: entries.map(({ p, ...e }) => (p ? { ...e, p } : e)) });
   const fields = {};
   if (ticks.foreign?.length) fields.foreignTicks = { version: 1, time, entries: ticks.foreign };
   if (ticks.fluid.length) fields.fluidTicks = env(ticks.fluid);
@@ -232,7 +290,7 @@ export function tileTickRows(state, toOriginalId = toOriginal, ox = 0, oz = 0) {
       const red = name === 'redstoneTicks';
       const o = name === 'foreignTicks' ? [e.i, 0] : red ? [e.id, 0] : e.orig !== undefined ? [e.orig, 0] : toOriginalId(e.block, 0, { flowing: name === 'fluidTicks' });
       if (!o) continue;
-      rows.push({ t: clamp(e.delay), p: red ? (e.priority | 0) : name === 'foreignTicks' ? (e.p | 0) : 0, sys, order: order ?? 0, i: o[0], x: e.x + ox, y: e.y, z: e.z + oz });
+      rows.push({ t: clamp(e.delay), p: red ? (e.priority | 0) : (e.p | 0), sys, order: order ?? 0, i: o[0], x: e.x + ox, y: e.y, z: e.z + oz });
     }
   });
   rows.sort((a, b) => a.t - b.t || a.p - b.p || a.sys - b.sys || a.order - b.order);

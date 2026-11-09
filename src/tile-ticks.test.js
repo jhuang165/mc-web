@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {World} from './world.js';import {exportJavaSave} from './region-export.js';import {readRegion,decodeRegionChunk,regionAddress,regionSlot} from './region-file.js';import {chunkFromNbt} from './chunk-nbt.js';import {Survival} from './survival.js';
-import {ageForeignTicks,placeForeignTicks,tickBlockIds,importTileTicks,tickRecordFields,mergeTickState,spreadTicks,tileTickRows,treeOrder,intOf} from './tile-ticks.js';
+import {World,SAND} from './world.js';import {exportJavaSave} from './region-export.js';import {readRegion,decodeRegionChunk,regionAddress,regionSlot} from './region-file.js';import {chunkFromNbt} from './chunk-nbt.js';import {Survival} from './survival.js';
+import {fromOriginal} from './block-registry.js';import {ForeignTicks,tickUpdatesTake,TICK_UPDATES_CAP,ageForeignTicks,placeForeignTicks,tickBlockIds,importTileTicks,tickRecordFields,mergeTickState,spreadTicks,tileTickRows,treeOrder,intOf} from './tile-ticks.js';
 const num=(v)=>({value:v});
 const tick=(i,x,y,z,t,p=0)=>new Map([['i',num(i)],['x',num(x)],['y',num(y)],['z',num(z)],['t',num(t)],['p',num(p)]]);
 test('tick kinds cover fluids, fire, falling blocks and the redstone behaviours',()=>{
@@ -191,4 +191,50 @@ test('a save taken mid tick: the native writer appends the ThisTick entries (t <
   assert.deepEqual(rows.map(key).sort(),expected.map(key).sort(),`write scenario ${c.index}`);
  }
  assert.ok(withThis>=2);
+});
+
+test('replay of the unchanged WorldServer.tickUpdates: at most 1000 entries leave the tree per call, in time, priority, creation order, and what is left matches',()=>{
+ const cases=reference.cases.filter(c=>c.kind==='tick');assert.equal(cases.length,6);
+ let capped=0;
+ for(const c of cases){
+  const entries=c.before.map(a=>({a,t:a[4],p:a[5]})),{taken,left}=tickUpdatesTake(entries,c.all);
+  assert.deepEqual(left.map(e=>e.a),c.remaining,`case ${c.index}`);assert.equal(c.remaining.length,c.hashSize);
+  assert.equal(taken.length+left.length,c.before.length);assert.ok(taken.length<=TICK_UPDATES_CAP);
+  if(taken.length===TICK_UPDATES_CAP)capped++;
+ }
+ assert.ok(capped>=4);assert.equal(cases[1].remaining.length,0);assert.equal(cases[2].remaining.length,1);
+});
+test('fluid, fire and falling tick priority is kept: import stores a non-zero p, the live lists order and save it, the export writes it back',async()=>{
+ const r=importTileTicks([tick(8,1,60,2,5,0),tick(9,2,60,2,5,-3),tick(51,3,60,3,20,2),tick(12,4,70,4,2,5)],{});
+ const f=tickRecordFields(r);
+ assert.deepEqual(f.fluidTicks.entries.map(e=>e.p),[-3,undefined]);assert.equal(f.fireTicks.entries[0].p,2);assert.equal(f.fallingTicks.entries[0].p,5);
+ const rows=tileTickRows({fluidTicks:f.fluidTicks.entries.map((value,order)=>({order,value})),fireTicks:[{order:0,value:f.fireTicks.entries[0]}],fallingTicks:[{order:0,value:f.fallingTicks.entries[0]}]});
+ assert.deepEqual(rows.map(x=>[x.i,x.t,x.p]),[[12,2,5],[9,5,-3],[8,5,0],[51,20,2]]);
+ // the live lists: the lower priority at the same time runs first and a saved envelope carries p only when it is not 0
+ const {Fluids}=await import('./fluids.js'),{Fire}=await import('./fire.js'),{FallingBlocks}=await import('./falling.js');
+ const w=new World('prio');for(const x of [1,2,3])w.set(x,60,2,0,false);w.set(1,60,2,10,false);w.set(2,60,2,10,false);
+ const fl=new Fluids(w);fl.schedule(1,60,2,5,0);fl.schedule(2,60,2,5,-3);
+ assert.deepEqual(fl.save().entries.map(e=>[e.x,e.p]),[[2,-3],[1,undefined]]);
+ const back=new Fluids(w);back.load(fl.save());assert.deepEqual(back.save().entries,fl.save().entries);assert.equal(back.pop().x,2);
+ const fire=new Fire(w,{weather:()=>({})});w.set(3,60,2,0,false);fire.schedule(3,60,2,20,2);fire.schedule(4,60,2,20,-1);
+ assert.deepEqual(fire.save().entries.map(e=>[e.x,e.p]),[[4,-1],[3,2]]);
+ const fb=new FallingBlocks(w);fb.enqueue(5,60,2,SAND,2,3);fb.enqueue(6,60,2,SAND,2,-1);
+ assert.deepEqual(fb.save().entries.map(e=>[e.x,e.p]),[[6,-1],[5,3]]);
+ const fb2=new FallingBlocks(w);fb2.load(fb.save());assert.deepEqual([...fb2.pending.values()].map(e=>e.p),[-1,3]);
+});
+test('foreign ticks are taken at their due time: air and unrunnable blocks are removed, a cell still holding a block the port ticks is scheduled',()=>{
+ const id=(o)=>fromOriginal(o,0).id;
+ const env={version:1,time:100,entries:[{i:0,x:1,y:5,z:1,p:0,air:true},{i:54,x:2,y:5,z:2,t:3,p:0},{i:8,x:3,y:5,z:3,t:2,p:1},{i:12,x:4,y:5,z:4,t:2,p:0},{i:12,x:5,y:300,z:5,t:2,p:0},{i:12,x:6,y:5,z:6,t:50,p:0},{i:93,x:7,y:5,z:7,t:2,p:-1}]};
+ const cells={'3,5,3':id(8),'4,5,4':0,'7,5,7':id(1),'6,5,6':id(12),'5,300,5':id(12)};const ran=[];
+ const ft=new ForeignTicks(env,(x,y,z)=>cells[`${x},${y},${z}`]??-1,{fluid:(x,y,z,e)=>ran.push(['fluid',x,e.p]),falling:(x)=>ran.push(['falling',x]),redstone:(x,y,z,e)=>ran.push(['redstone',x,e.p])});
+ assert.equal(ft.tick(100),0);assert.equal(env.entries.length,7,'nothing is due at elapsed 0');
+ assert.equal(ft.tick(101),0);assert.equal(env.entries.length,6,'air goes on the first tick and runs nothing');
+ assert.equal(ft.tick(102),1);assert.deepEqual(ran,[['fluid',3,1]]);
+ assert.deepEqual(env.entries.map(e=>e.i),[54,12],'the sand on air, the sand at y 300 and the repeater entry on a comparator are dropped; the chest (t 3) and the sand at t 50 wait');
+ assert.equal(ft.tick(103),0);assert.deepEqual(env.entries.map(e=>e.i),[12]);
+ assert.equal(ft.tick(149),0);assert.equal(ft.tick(150),1);assert.deepEqual(ran.at(-1),['falling',6]);assert.equal(env.entries.length,0);
+});
+test('foreign ticks: a backlog above 1000 due entries is taken 1000 per tick',()=>{
+ const env={version:1,time:0,entries:Array.from({length:2500},(_,k)=>({i:54,x:k,y:5,z:0,t:1,p:0}))};const ft=new ForeignTicks(env,()=>-1,{});
+ ft.tick(1);assert.equal(env.entries.length,1500);ft.tick(2);assert.equal(env.entries.length,500);ft.tick(3);assert.equal(env.entries.length,0);
 });

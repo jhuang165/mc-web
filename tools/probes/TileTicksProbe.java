@@ -110,6 +110,28 @@ public class TileTicksProbe {
       if (saved != null) for (int k = 0; k < saved.c(); k++) { dh e = saved.b(k); j.add("[" + e.f("i") + "," + e.f("x") + "," + e.f("y") + "," + e.f("z") + "," + e.f("t") + "," + e.f("p") + "]"); }
       out.add("{\"kind\":\"write\",\"index\":" + s + ",\"time\":" + time + ",\"cx\":" + cx + ",\"cz\":" + cz + ",\"pending\":" + json(pending) + ",\"pendingThisTick\":" + json(pendingThis) + ",\"saved\":" + (saved == null ? "null" : j.toString()) + "}");
     }
+    // ---- due-time side: the unchanged WorldServer.tickUpdates (mt.a(boolean)) runs on a world whose entries all sit at y 300, so the unchanged
+    // checkChunksExist test fails before any chunk is read (they are removed without ticking). The cap of 1000 entries per call and the order they
+    // leave in show in what is left in the real TreeSet: [id, x, y, z, scheduledTime - totalTime, priority] in tree order.
+    Method tickUpdates = mt.class.getDeclaredMethod("a", boolean.class); tickUpdates.setAccessible(true);
+    for (int s = 0; s < 6; s++) {
+      long time = new long[]{100, 100, 100, 5000, 100, 100}[s];
+      int n = new int[]{1500, 1000, 1001, 2600, 1200, 1200}[s];
+      boolean all = s == 5; // tickUpdates(true): scheduled times are ignored
+      mt w = world(time, true);
+      field(ahb.class, "C").set(w, unsafe.allocateInstance(qi.class));
+      TreeSet tree = (TreeSet) field(mt.class, "N").get(w); Set hash = (Set) field(mt.class, "M").get(w);
+      List<int[]> before = new ArrayList<>();
+      for (int k = 0; k < n; k++) {
+        int id = new int[]{8, 12, 51, 93}[k % 4], x = r.nextInt(500), z = r.nextInt(500), pr = s >= 3 ? r.nextInt(5) - 2 : 0;
+        long delay = s == 4 ? (k % 3 == 0 ? 50 : r.nextInt(60) - 30) : s == 3 ? r.nextInt(40) - 30 : r.nextInt(5) - 4;
+        ahs e = new ahs(x, 300, z, aji.e(id)); e.a(time + delay); e.a(pr);
+        if (hash.contains(e)) continue;
+        hash.add(e); tree.add(e); before.add(tick(id, x, 300, z, (int) delay, pr));
+      }
+      boolean ret = (Boolean) tickUpdates.invoke(w, all);
+      out.add("{\"kind\":\"tick\",\"index\":" + s + ",\"time\":" + time + ",\"all\":" + all + ",\"before\":" + json(before) + ",\"remaining\":" + dump(w, time) + ",\"hashSize\":" + ((Set) field(mt.class, "M").get(w)).size() + ",\"returned\":" + ret + "}");
+    }
     for (String l : out) System.out.println(l);
   }
   static boolean k0(int[] a, int q) { return a[q] == 0; }
