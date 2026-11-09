@@ -1,6 +1,6 @@
 // Replaces the normal resource-pack worker for this frozen encrypted publication only. Plaintext is never put in a
 // Cache API store. A nonextractable CryptoKey stays in this browser's IndexedDB until expiry or an explicit lock.
-const CONFIG = {"base":"/mc-web/","version":"cs2-unified-353b79ac-2026-11-08","salt":"DJR80OA2ozYSO4maH533ew==","iterations":600000,"sessionMs":43200000};
+const CONFIG = {"base":"/mc-web/","version":"d4f2ecbbd024","salt":"0dvvf4Q+/4BJsMPouQE9lw==","iterations":600000,"sessionMs":43200000};
 const enc = new TextEncoder(), dbName = "mc-web-protected:" + CONFIG.base;
 let session = null, overrides = null;
 function db() {
