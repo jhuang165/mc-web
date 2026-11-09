@@ -30,6 +30,8 @@ import { Experience } from '../experience.js';
 import { applyBookEdit, applyBookSign } from '../books.js';
 import { releaseHeldBow } from '../player-throw-simulation.js';
 import { riderFor, rideTick, seatTick, dismount, ridingOf, ridingKind } from './server-riding.js';
+import { tickFishing, dropHook, hookOf } from './server-fishing.js';
+import { ServerMaps } from './server-maps.js';
 
 export const STEAK = 205, IRON_ARMOR = [411, 410, 409, 408]; // armor[0] boots ... armor[3] helmet
 export const JOIN_PROTECTION = 60; // EntityPlayerMP.field_147101_bU: ticks of invulnerability after a join or respawn
@@ -71,6 +73,7 @@ export class GunSimulation extends DedicatedSimulation {
     this.accounts = new Map(saved.accounts ?? []); // account id -> saved player
     this.rules = { keepInventory: false, ...(saved.rules ?? {}) }; // /gamerule (GameRules defaults)
     this.play = new ServerPlay(this, saved.play ?? {}); // windows, mining, block use and dropped items (server-play.js)
+    this.maps = this.mobs ? new ServerMaps(this, saved.maps ?? null) : null; // the world's filled maps (server-maps.js)
   }
   // A streamed world has mobs (server-mobs.js); the finite test arenas stay empty. Runs inside super(): config, random and play
   // are read later, when the mobs tick.
@@ -143,7 +146,7 @@ export class GunSimulation extends DedicatedSimulation {
   }
   removePlayer(id) {
     const p = this.players.get(id);
-    if (p) { dismount(this, p); this.play.close(p, 0); this.play.closeWindow(p); this.accounts.set(p.account, this.savePlayer(p)); } // EntityPlayerMP logout closes its window and leaves its vehicle
+    if (p) { dismount(this, p); dropHook(p); this.play.close(p, 0); this.play.closeWindow(p); this.accounts.set(p.account, this.savePlayer(p)); } // EntityPlayerMP logout closes its window and leaves its vehicle
     this.players.delete(id);
     this.outbox.delete(id);
   }
@@ -279,7 +282,7 @@ export class GunSimulation extends DedicatedSimulation {
     const s = p.survival;
     Object.assign(s, { health: s.maxHealth, food: 20, saturation: 5, exhaustion: 0, fire: 0, air: 300, hurtTicks: 0, hurtTime: 0, died: false });
     s.effects = new (s.effects.constructor)(); s.effects.player = s;
-    dismount(this, p);
+    dismount(this, p); dropHook(p);
     p.position.copy(this.spawnPoint()); p.previous.copy(p.position);
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     p.fallDistance = 0; p.landedFall = 0; p.flying = false; p.dead = false; p.lastHit = null;
@@ -353,7 +356,7 @@ export class GunSimulation extends DedicatedSimulation {
       const reason = p.survival.lastDamage;
       this.chatOut.push(describe(p.name, hit) ?? (reason === 'a fall' ? `${p.name} hit the ground too hard` : reason === 'void' ? `${p.name} fell out of the world` : reason && reason !== 'player' ? this.trackerLine(p) : `${p.name} died`));
       if (hit) { const killer = this.players.get(hit.by); if (killer) this.send(killer, { type: 'kill', target: p.id, name: p.name }); }
-      p.combat.reset(); p.eating = null; dismount(this, p);
+      p.combat.reset(); p.eating = null; dismount(this, p); dropHook(p);
       if (!this.rules.keepInventory) {
         this.play.dropAll(p);
         const dropped = p.experience.death(); // EntityPlayer.getExperiencePoints: 7 per level, at most 100
@@ -373,6 +376,8 @@ export class GunSimulation extends DedicatedSimulation {
   tickWorld(beforeLit) {
     this.mobs?.tick();
     for (const p of this.players.values()) seatTick(this, p); // the riders back on their moved seats
+    tickFishing(this); // EntityFishHook.onUpdate (server-fishing.js)
+    this.maps?.tick(); // ItemMap.onUpdate for the carried maps (server-maps.js)
     this.tiles.tickFurnaces();
     this.play.tickItems();
     return super.tickWorld(beforeLit);
@@ -391,8 +396,8 @@ export class GunSimulation extends DedicatedSimulation {
   presence() {
     return super.presence().map(entry => {
       const p = this.players.get(entry.id);
-      const riding = ridingKind(p);
-      return { ...entry, hurt: p.survival.hurtTime, dead: p.dead, mode: p.survival.mode, ...(riding ? { riding } : {}) };
+      const riding = ridingKind(p), hook = hookOf(p);
+      return { ...entry, hurt: p.survival.hurtTime, dead: p.dead, mode: p.survival.mode, ...(riding ? { riding } : {}), ...(hook ? { hook } : {}) };
     });
   }
   // What only player `p` sees each tick: its health, food and, when changed, its inventory.
@@ -409,6 +414,8 @@ export class GunSimulation extends DedicatedSimulation {
     out.items = this.play.itemsNear(p);
     if (this.mobs) { out.mobs = this.mobs.rows(p); out.thrown = this.mobs.thrownRows(p); out.carts = this.mobs.cartRows(p); out.boats = this.mobs.boatRows(p); }
     out.riding = ridingOf(this, p);
+    const maps = this.maps?.rows(p);
+    if (maps?.length) out.maps = maps;
     const x = p.experience, xp = x ? `${x.level},${x.progress},${x.points}` : '';
     if (x && xp !== p.sentXp) { p.sentXp = xp; out.xp = [x.level, x.progress, x.points, x.total]; }
     return out;
@@ -418,6 +425,6 @@ export class GunSimulation extends DedicatedSimulation {
     for (const p of this.players.values()) this.accounts.set(p.account, this.savePlayer(p));
     const base = super.save();
     delete base.players;
-    return { ...base, version: 2, accounts: [...this.accounts], rules: this.rules, play: this.play.save(), ...(this.mobs ? { mobs: this.mobs.save() } : {}) };
+    return { ...base, version: 2, accounts: [...this.accounts], rules: this.rules, play: this.play.save(), ...(this.mobs ? { mobs: this.mobs.save() } : {}), ...(this.maps ? { maps: this.maps.save() } : {}) };
   }
 }

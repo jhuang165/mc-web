@@ -54,18 +54,27 @@ export class RemotePlayers {
       this.applySkin(entry.renderer, p.skin);
       if (entry.name !== p.name) { entry.name = p.name; this.drawLabel(entry); }
       entry.body.tick({ position: { ...p, y: p.y - (p.ySize ?? 0) }, previous: entry.last, yaw: p.yaw, pitch: p.pitch, swinging: p.swing > 0, riding: !!p.riding });
-      entry.last = { ...p, y: p.y - (p.ySize ?? 0) }; entry.state = p;
+      entry.prev = entry.last; entry.last = { ...p, y: p.y - (p.ySize ?? 0) }; entry.state = p;
+      // Its bobber (gun-simulation.js presence hook): last tick's place for the lerp, none when the line was just cast.
+      const hook = Array.isArray(p.hook) && p.hook.length === 3 && p.hook.every(Number.isFinite) ? p.hook : null;
+      entry.hookPrev = hook && entry.hook ? entry.hook : hook; entry.hook = hook;
     }
     for (const [id, entry] of this.entries) if (!seen.has(id)) { this.dispose(entry); this.entries.delete(id); }
   }
   // `t`: the frame's place between the last two server ticks (DedicatedClient.partial).
   frame(t = 1) {
-    for (const entry of this.entries.values()) {
+    const fishing = [];
+    for (const [id, entry] of this.entries) {
       const p = entry.state;
+      if (entry.hook && !p.dead) {
+        const a = entry.prev ?? entry.last, b = entry.last, l = (u, v) => u + (v - u) * t, [x, y, z] = entry.hook, [px, py, pz] = entry.hookPrev;
+        fishing.push({ id, hook: { px, py, pz, x, y, z }, yaw: p.yaw, pitch: p.pitch, sneaking: !!p.sneak, eye: { x: l(a.x, b.x), y: l(a.y, b.y) + 1.62, z: l(a.z, b.z) } });
+      }
       entry.renderer.update(entry.body, t, { held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sneak: p.sneak, swing: p.swing > 0 ? (6 - p.swing) / 6 : 0,
-        heldGun: gunsEnabled() && p.held ? gunOf(p.held) ?? null : null, hurt: (p.hurt ?? 0) > 0, deathTime: p.dead ? 20 : 0, riding: !!p.riding }); // a gun server's presence; `riding`: RenderPlayer's sitting pose
+        heldGun: gunsEnabled() && p.held ? gunOf(p.held) ?? null : null, hurt: (p.hurt ?? 0) > 0, deathTime: p.dead ? 20 : 0, riding: !!p.riding, rodCast: !!entry.hook }); // a gun server's presence; `riding`: RenderPlayer's sitting pose
       entry.label.visible = !p.sneak && !p.dead;
     }
+    this.scene.setRemoteFishing?.(fishing);
   }
   // The nearest live remote player a ray from `origin` along unit `dir` meets within `max`: { entity, distance } | null.
   pick(origin, dir, max) {
@@ -94,6 +103,7 @@ export class RemotePlayers {
   clear() {
     for (const entry of this.entries.values()) this.dispose(entry);
     this.entries.clear();
+    this.scene.setRemoteFishing?.([]);
     for (const p of this.skins.values()) void p.then(t => t?.dispose());
     this.skins.clear();
   }

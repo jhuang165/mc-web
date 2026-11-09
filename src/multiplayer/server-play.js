@@ -32,16 +32,16 @@ import { pickMinecart } from '../structure-simulation.js';
 import { placeHeldMinecart } from '../vehicle-simulation.js';
 import { horseSeatsFor } from '../horse-live.js';
 import { useVehicle } from './server-riding.js';
+import { useRod } from './server-fishing.js';
 import { HorseContainer, canInteract as horseReach } from '../horse-gear.js';
 
 const noop = () => {};
 const mobId = e => Number(String(e.id).replace('mob-', ''));
 export const MAX_CLICKS = 64; // per message: a drag is start + one per slot + end
-// Right-click uses that need an entity or screen this server does not have yet: maps (one map store per world) and the fishing
-// hook. The bow, thrown items, exp bottles, fire charges, eyes, rockets, eggs, books and boats need the server mobs
-// (server-mobs.js: its arrows, projectiles, rockets, eyes, orbs and boats), which every streamed gun world has.
-const UNSUPPORTED_USE = new Set([ITEM_EMPTY_MAP, FISHING_ROD]);
-const MOB_USE = new Set([ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, ITEM_FIRE_CHARGE, ITEM_EYE_OF_ENDER, ITEM_FIREWORK_ROCKET, BOW, BOAT_ITEM]);
+// Right-click uses the server runs only with its mobs (server-mobs.js: arrows, projectiles, rockets, eyes, orbs, boats, the fishing
+// hook's targets and server-maps.js), which every streamed gun world has; the finite test arenas refuse them.
+const UNSUPPORTED_USE = new Set();
+const MOB_USE = new Set([ITEM_EMPTY_MAP, FISHING_ROD, ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, ITEM_FIRE_CHARGE, ITEM_EYE_OF_ENDER, ITEM_FIREWORK_ROCKET, BOW, BOAT_ITEM]);
 export const unsupportedUse = (id, mobs = false) => UNSUPPORTED_USE.has(id) || (!mobs && (MOB_USE.has(id) || isThrowable(id) || isBook(id)));
 // The windows a block can open here; the client builds the same container around its own copy (main.js remoteWindow).
 export const WINDOW_KINDS = new Set(['workbench', 'furnace', 'chest', 'dispenser', 'hopper']);
@@ -186,7 +186,7 @@ export class ServerPlay {
       items: this.items, xpOrbs: sim.mobs?.orbs ?? { spawn: noop }, arrows: sim.mobs?.arrows ?? null, projectiles: sim.mobs?.projectiles ?? null,
       rockets: sim.mobs?.rockets ?? null, eyes: sim.mobs?.eyes ?? null, grounded: p.grounded, fallDistance: p.fallDistance, wasInWater: p.inWater, yaw: p.yaw, pitch: p.pitch,
       eating: p.eating, mining: p.mining, mineCooldown: p.mineCooldown, mineHeld: p.mineHeld, flowers: null, boneRandom: sim.random, itemRand: this.itemRand,
-      signs: null, difficulty: p.survival.difficulty, target };
+      signs: null, difficulty: p.survival.difficulty, target, maps: sim.maps ?? null };
   }
   // BlockBreak with the drops it makes, as the player who broke it; nearby players hear and see it (level event 2001).
   breakBlock(p, block, creative = false) {
@@ -290,6 +290,7 @@ export class ServerPlay {
         openBook: stack => { if (stack) sim.send(p, { type: 'book' }); },
         collides: w => [...sim.players.values()].some(o => !o.dead && collides(w, o.position.x, o.position.y, o.position.z)),
         placeBoat: () => this.placeBoat(p),
+        useFishingRod: () => useRod(sim, p),
       });
     } catch (error) {
       console.error('[gun-server] edit failed', error?.message ?? error);

@@ -106,6 +106,7 @@ export class VoxelScene {
     this.projectiles = new ProjectileRenderer(this.scene, this);
     this.fishingRenderer = new FishingRenderer(this.scene, this);
     this.fishingState = null;
+    this.remoteFishing = []; this.remoteFishingRenderers = new Map(); // other players' bobbers on a server
     this.projectileList = { balls: [], particles: [] };
     this.arrows = new ArrowRenderer(this.scene, this);
     this.arrowList = [];
@@ -199,6 +200,7 @@ export class VoxelScene {
     this.dropList = [];
     this.projectiles.clear();
     this.fishingRenderer.clear();
+    this.setRemoteFishing([]);
     this.arrows.clear();
     this.arrowList = [];
     this.projectileList = { balls: [], particles: [] };
@@ -652,6 +654,7 @@ export class VoxelScene {
     this.projectiles.update(this.projectileList.balls, this.effectRenderer.layers[2], c, this.dropPartial, particleView);
     this.arrows.update(this.arrowList, this.dropPartial);
     this.fishingRenderer.update(this.fishingState?.hook ?? null, c, this.dropPartial, { ...particleView, ...this.fishingState });
+    for (const f of this.remoteFishing) this.remoteFishingRenderers.get(f.id)?.update(f.hook, c, this.dropPartial, { yaw: f.yaw, pitch: f.pitch, eye: f.eye, first: false, sneaking: f.sneaking });
     this.particleRenderer.update(this.particles.list, this.dropPartial, particleView);
     this.explosionParticleRenderer.update(this.effectRenderer, this.dropPartial, particleView);
     // EntityRenderer.setupCameraTransform: the Nausea / portal warp, a matrix applied to eye space ahead of the projection.
@@ -689,6 +692,14 @@ export class VoxelScene {
   // The fishing bobber and line (fishing-renderer.js): { hook, first, sneaking } or null.
   setFishing(state) {
     this.fishingState = state;
+  }
+  // Other players' bobbers on a server, each drawn from its angler's rod as a third-person line (RenderFish):
+  // [{ id, hook: { px, py, pz, x, y, z }, yaw, pitch (radians), eye: { x, y, z }, sneaking }].
+  setRemoteFishing(list) {
+    this.remoteFishing = list;
+    const live = new Set(list.map(f => f.id));
+    for (const [id, r] of this.remoteFishingRenderers) if (!live.has(id)) { r.dispose(); this.remoteFishingRenderers.delete(id); }
+    for (const id of live) if (!this.remoteFishingRenderers.has(id)) this.remoteFishingRenderers.set(id, new FishingRenderer(this.scene, this));
   }
   // Flying and stuck arrows (see bow.js).
   setArrows(list) {

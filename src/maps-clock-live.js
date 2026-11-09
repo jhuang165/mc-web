@@ -55,7 +55,7 @@ export const clockFrame = () => clockState.frame;
 const opacityCache = new Map();
 const opacity = (id) => { let o = opacityCache.get(id); if (o === undefined) { const t = toOriginal(id, 0); o = t ? blockLightOpacity(t[0]) : 0; opacityCache.set(id, o); } return o; };
 // ItemMap.updateMapData reads world.provider.dimensionId and provider.hasNoSky (aqo.g: Nether and End, half radius, fixed dirt/stone dither).
-const worldContext = (world, dimension = world?.dimension ?? 0) => ({
+export const worldContext = (world, dimension = world?.dimension ?? 0) => ({
   dimension, noSky: !!world?.hasNoSky,
   blockAt: (x, y, z) => { const id = world.get(x, y, z); if (!id) return 0; const t = toOriginal(id, world.getMeta(x, y, z)); return t ? (t[0] << 4) | (t[1] & 15) : 0; },
   chunkEmpty: (x, z) => !world.isLoaded(x, z),

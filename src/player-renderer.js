@@ -490,14 +490,16 @@ export class PlayerRenderer {
     this.armorNodes.push(group);
   }
   // `fitted`: the guns mod's held gun with its attachments (catalog.js gunOf), whose parts the model carries.
-  syncHeld(id, damage = 0, color = undefined, glint = false, fitted = null) {
+  // `rodCast`: this player's own fishEntity (ItemFishingRod's cast icon); unset, the local player's rod (rodState).
+  syncHeld(id, damage = 0, color = undefined, glint = false, fitted = null, rodCast = undefined) {
+    const castOn = rodCast ?? rodState.cast;
     const gun = fitted?.id === id ? fitted : ITEMS[id]?.gun; // guns mod: one model whatever rounds are left (the stack damage)
     const packAssets = gun?.pack ? gunAssets(gun) : null; // the pack's LOD model once loaded (pack-view.js), else the box model
     if (gun) damage = packAssets ? `1${gun.fitKey ?? ""}/${gunParts(gun).ready}` : 0;
     const knife = ITEMS[id]?.melee, knifeAssets = knife ? meleeAssets(knife) : null;
     if (knifeAssets) damage = "knife";
     const leather = leatherItemLayers(id, color),
-      cast = id === FISHING_ROD && rodState.cast ? 1 : 0, key = id + ":" + damage + ":" + (leather?.color ?? 0) + ":" + (glint ? 1 : 0) + ":" + cast + ":" + (id ? itemFrameTag(itemTexture(id, damage, cast)) : 0); // animated icon frame (item-animation.js): rebuilt only when it changes
+      cast = id === FISHING_ROD && castOn ? 1 : 0, key = id + ":" + damage + ":" + (leather?.color ?? 0) + ":" + (glint ? 1 : 0) + ":" + cast + ":" + (id ? itemFrameTag(itemTexture(id, damage, cast)) : 0); // animated icon frame (item-animation.js): rebuilt only when it changes
     if (key === this.heldKey) return;
     this.heldKey = key;
     this.heldId = id;
@@ -532,7 +534,7 @@ export class PlayerRenderer {
       this.held = group;
       return;
     }
-    const kind = heldKind(id, damage), url = itemTexture(id, damage, id === FISHING_ROD && rodState.cast ? 1 : 0);
+    const kind = heldKind(id, damage), url = itemTexture(id, damage, id === FISHING_ROD && castOn ? 1 : 0);
     let mesh;
     const chestUrl = !url && chestItemTexture(id);
     if (chestUrl) {
@@ -601,7 +603,7 @@ export class PlayerRenderer {
   // `body` is a PlayerBody; `swing` is the swing progress (0 at rest); `armor`
   // is inventory.armor (boots first); `held` the held item id. `sleeping` is
   // { pos, offset, facing } from BedSleep while the player lies in a bed.
-  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, heldGun = null, hurt = false, sneak = false, riding = false, invisible = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180, sleeping = null, deathTime = 0 } = {}) {
+  update(body, partial, { visible = true, swing = 0, armor = [], held = 0, heldDamage = 0, heldColor = undefined, heldGlint = false, heldGun = null, hurt = false, sneak = false, riding = false, invisible = false, arrowCount = 0, arrowEntityId = body.entityId ?? 0, burning = false, fireViewYaw = 180, sleeping = null, deathTime = 0, rodCast = undefined } = {}) {
     this.root.visible = visible;
     if (!visible) { this.fire.root.visible = false; return; }
     // EntityLivingBase.deathTime drives RendererLivingEntity.rotateCorpse (mobPose turns it into the 0..90 degree roll).
@@ -624,7 +626,7 @@ export class PlayerRenderer {
     this.fire.update(pose, burning, fireViewYaw);
     this.syncArmor([3, 2, 1, 0].map((slot) => armor[slot]));
     for (const m of this.armorGlints) m.uniforms.time.value = pose.age;
-    this.syncHeld(held, heldDamage, heldColor, heldGlint, heldGun);
+    this.syncHeld(held, heldDamage, heldColor, heldGlint, heldGun, rodCast);
     this.syncArrows(arrowCount, arrowEntityId);
     const parts = bipedPose({
       limbSwing: pose.limbSwing, limbSwingAmount: pose.limbSwingAmount, age: pose.age,

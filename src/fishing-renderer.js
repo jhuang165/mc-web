@@ -67,4 +67,11 @@ export class FishingRenderer {
     if (this.mesh) this.mesh.visible = this.line.visible = false;
   }
   clear() { this.hide(); }
+  // Another player's bobber gone for good (it left the server): its meshes leave the scene.
+  dispose() {
+    if (!this.mesh) return;
+    this.mesh.removeFromParent(); this.line.removeFromParent();
+    this.mesh.geometry.dispose(); this.line.geometry.dispose(); this.material.dispose(); this.line.material.dispose();
+    this.mesh = this.line = null;
+  }
 }

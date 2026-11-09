@@ -182,7 +182,7 @@ import { ItemEntities } from "./item-entities.js";
 import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
 import { EyesOfEnder } from "./eye-of-ender-live.js";
 import { MapsClock } from "./maps-clock-live.js";
-import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
+import { ITEM_FILLED_MAP, MAP_SIZE, mapStore, createMapData } from "./maps.js";
 import { FireworkRockets, dispenseFirework } from "./fireworks-live.js";
 import { FireworkParticles } from "./firework-particles.js";
 import { EndPortalRenderer } from "./end-portal-renderer.js";
@@ -193,7 +193,7 @@ import { BeaconContainer } from "./pyramid-container.js";
 import { beaconDecorationsHtml, beaconUiHtml, beaconTooltip } from "./pyramid-gui.js";
 import { slotAt, slotDrawOps, slotDrawHtml, merchantArrowDraw, anvilDecorationsHtml, refreshAnvil, enchantDecorationsHtml, refreshEnchantOptions } from "./container-widgets.js";
 import { Fishing } from "./fishing-simulation.js";
-import { FISHING_ROD } from "./fishing-content.js";
+import { FISHING_ROD, rodState } from "./fishing-content.js";
 import { WitchPotions } from "./witch-potions.js";
 import {impactPlayerPearl} from './pearl-player.js';
 import { Arrows, arrowTargets, bowStage, bowFov, easeFov, ARROW, BOW, canDraw } from "./bow.js";
@@ -667,6 +667,7 @@ function leaveMultiplayer() {
   serverInv = null; serverShots = null; predictedFood = null; predictedShots.length = 0;
   remoteInv.reset(); remoteItems.clear(); remoteThrown.clear();
   rider.vehicle = null; rider.jumpPower = 0; remoteVehicle = null; onboardVehicle = null;
+  serverHook = null; rodState.cast = false; scene.setFishing(null);
   remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null;
 }
 // Protocol v3: movement, look, the selected hotbar slot and the newest server tick on screen; never item stacks.
@@ -720,9 +721,32 @@ function applyServerWindow(open) {
     remoteInv.forget(); resume();
   }
 }
+let serverHook = null; // this player's bobber on the gun server: { px, py, pz, x, y, z }
+// The gun server's maps this player carries (server-maps.js rows): each changed column's colour bytes and the current markers, into
+// this tab's map storage, which the held map, the item icons and the frames draw from (maps.js mapStore).
+function applyServerMaps(list) {
+  for (const m of list.slice(0, 64)) {
+    if (!m || !Number.isInteger(m.id) || m.id < 0 || ![m.scale, m.x, m.z, m.dim].every(Number.isInteger)) continue;
+    let data = mapStore.get(m.id);
+    if (!data || data.scale !== m.scale || data.xCenter !== m.x || data.zCenter !== m.z || data.dimension !== m.dim) {
+      data = createMapData(m.id, { scale: m.scale, xCenter: m.x, zCenter: m.z, dimension: m.dim });
+      mapStore.set(data);
+    }
+    for (const col of Array.isArray(m.cols) ? m.cols : []) {
+      const [x, lo, text] = Array.isArray(col) ? col : [];
+      if (!Number.isInteger(x) || !Number.isInteger(lo) || x < 0 || x >= MAP_SIZE || lo < 0 || lo >= MAP_SIZE || typeof text !== 'string') continue;
+      let bytes;
+      try { bytes = atob(text); } catch { continue; }
+      for (let i = 0; i < bytes.length && lo + i < MAP_SIZE; i++) data.colors[x + (lo + i) * MAP_SIZE] = (bytes.charCodeAt(i) << 24) >> 24;
+    }
+    if (Array.isArray(m.deco)) data.decorations = new Map(m.deco.slice(0, 256).filter(d => Array.isArray(d) && d.length === 4 && d.every(Number.isInteger)).map((d, i) => [String(i), d]));
+    data.revision++; mapStore.revision++;
+  }
+}
 // What the gun server tells only this player (gun-simulation.js you()): health, food, mode, death and, when changed, the inventory.
 function applyServerPlayer(you) {
   if (!you) return;
+  if (Array.isArray(you.maps)) applyServerMaps(you.maps);
   const s = survival, before = s.health;
   if (you.mode && you.mode !== s.mode) {
     s.mode = you.mode; s.inventory.creative = s.creative; active.mode = you.mode;
@@ -795,6 +819,11 @@ function applyMultiplayerTick(message) {
     $("#movement-label").textContent = self.riding ? 'RIDING' : flying ? 'FLYING' : 'WALKING';
     playerBody.tick({ position, previous, yaw, pitch, swinging: self.swing > 0, riding: !!self.riding });
     if (playerRenderer) remotePlayers?.applySkin(playerRenderer, self.skin); // seen in F5
+    // This player's bobber (gun-simulation.js presence hook), drawn from its rod as the single-player hook is; the rod shows cast.
+    const hook = Array.isArray(self.hook) && self.hook.length === 3 && self.hook.every(Number.isFinite) ? self.hook : null;
+    serverHook = hook ? { px: serverHook?.x ?? hook[0], py: serverHook?.y ?? hook[1], pz: serverHook?.z ?? hook[2], x: hook[0], y: hook[1], z: hook[2] } : null;
+    rodState.cast = !!hook;
+    scene.setFishing(serverHook ? { hook: serverHook, first: !thirdPersonView, sneaking: !!self.sneak } : null);
   }
   survival.time = message.time; syncServerWeather(message.weather); scene.setTime(message.time);
   chestRenderer.sync(world, survival.chests, undefined, survival.enderTiles);
