@@ -214,7 +214,7 @@ export function placeHeldBlock(state, request, hooks = {}) {
           : id === FENCE_GATE ? gatePlacedMeta(Math.fround(180 - (yaw * 180) / Math.PI))
           : id === TRAPDOOR ? trapMeta
           : id === 169 ? survival.held?.damage || 0
-          : id === ENDER_CHEST ? placementFacing(yaw) // BlockEnderChest.onBlockPlacedBy: facing metadata from the yaw
+          : id === 14 || id === ENDER_CHEST ? placementFacing(yaw) // Furnace/ender chest onBlockPlacedBy: face the placer
           : isStair(id) ? stairPlacementMeta(yaw, side, Math.fround(Math.fround(target.hit?.[1] ?? here[1] + 0.5) - here[1]))
           : isRedstoneBlock(id) ? rsMeta
           // BlockPistonBase/BlockDispenser.onBlockPlacedBy -> determineOrientation: from the player's position and yaw (six facings).

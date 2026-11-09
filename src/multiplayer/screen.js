@@ -31,6 +31,7 @@ export function multiplayerScreen({ back, connect, profile, defaults = {}, makeA
     },
     get api() { return api; },
     init(g, w, h) {
+      if (state === 'signedIn' && !api?.account) state = 'signedOut';
       if (!screen.checked) { screen.checked = true; void screen.check(g); }
       const x = Math.floor(w / 2) - 150, top = Math.max(24, Math.floor(h / 2) - 92);
       g.text('Multiplayer', w / 2, 12, { center: true });
@@ -84,7 +85,7 @@ export function multiplayerScreen({ back, connect, profile, defaults = {}, makeA
 
 // Name and skin for the signed-in account. A chosen PNG is previewed locally
 // (normalized as 1.7.10 reads skins) before Save Skin uploads it.
-export function profileScreen({ api, back, steve, loadSkin, changed = () => {} }) {
+export function profileScreen({ api, back, steve, loadSkin, changed = () => {}, signOut = null }) {
   let name = api.account.name, busy = false, error = '', note = '', pending = null, current = null, loaded = false;
   const run = async (g, work) => {
     if (busy) return;
@@ -105,9 +106,11 @@ export function profileScreen({ api, back, steve, loadSkin, changed = () => {} }
     id: 'multiplayer-profile',
     escape: () => { if (!busy) back(); },
     init(g, w, h) {
+      if (!api.account) { back(); return; }
       if (!loaded) { loaded = true; void loadSkin(api.account.skin).then(c => { current = c; g.build(); }); }
       const x = Math.floor(w / 2) - 150, top = Math.max(24, Math.floor(h / 2) - 80);
       g.text('Name and Skin', w / 2, 12, { center: true });
+      if (signOut && api.account.email) g.text(api.account.email.length > 44 ? api.account.email.slice(0, 41) + '…' : api.account.email, w / 2, 24, { center: true, color: 0xaaaaaa });
       const box = g.image('mc-skin-preview', x, top, PREVIEW_WIDTH * 3, PREVIEW_HEIGHT * 3);
       const canvas = document.createElement('canvas');
       canvas.width = PREVIEW_WIDTH; canvas.height = PREVIEW_HEIGHT;
@@ -126,13 +129,16 @@ export function profileScreen({ api, back, steve, loadSkin, changed = () => {} }
       }), { enabled: !busy });
       g.button({ x: rx, y: top + 56, w: rw, h: 20 }, 'Choose PNG Skin…', () => choose(g), { enabled: !busy });
       g.button({ x: rx, y: top + 78, w: 88, h: 20 }, 'Save Skin', () => run(g, async () => {
-        changed(await api.uploadSkin(await canvasPng(pending))); current = pending; pending = null; note = 'Skin saved. Other players see it now.';
+        changed(await api.uploadSkin(await canvasPng(pending))); current = pending; pending = null; note = signOut ? 'Skin saved.' : 'Skin saved. Other players see it now.';
       }), { enabled: !busy && !!pending });
       g.button({ x: rx + 92, y: top + 78, w: 88, h: 20 }, 'Use Default', () => run(g, async () => {
         changed(await api.clearSkin()); current = pending = null; note = 'Using the default skin.';
       }), { enabled: !busy && (!!current || !!pending) });
       g.text(error || note || (busy ? 'Saving…' : '64 × 32 or 64 × 64 PNG; 1.7.10 uses the top half.'), w / 2, top + 116, { center: true, color: error ? 0xff7777 : 0xaaaaaa });
-      g.button({ x: x + 77, y: top + 134, w: 146, h: 20 }, 'Done', back, { enabled: !busy });
+      if (signOut) {
+        g.button({ x, y: top + 134, w: 148, h: 20 }, 'Sign Out', () => run(g, signOut), { enabled: !busy });
+        g.button({ x: x + 152, y: top + 134, w: 148, h: 20 }, 'Done', back, { enabled: !busy });
+      } else g.button({ x: x + 77, y: top + 134, w: 146, h: 20 }, 'Done', back, { enabled: !busy });
     },
   };
 }

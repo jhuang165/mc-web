@@ -129,6 +129,7 @@ export class InventoryPlayerView {
       this.camera.updateProjectionMatrix();
     }
     const pose = paperdollLook(layout, guiX, guiY);
+    this.player.setSkin(this.sceneView.profileSkin ?? null);
     this.holder.matrix.copy(paperdollMatrix(layout, pose.tilt));
     this.holder.matrixWorldNeedsUpdate = true;
     this.player.update(paperdollBody(pose, limb), 1, { ...state, fireViewYaw: 180, visible: true });

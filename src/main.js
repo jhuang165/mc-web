@@ -139,6 +139,9 @@ import { DedicatedClient, restoreReplica } from "./multiplayer/client.js";
 import { RemotePlayers } from "./multiplayer/presence.js";
 import { multiplayerScreen, profileScreen } from "./multiplayer/screen.js";
 import { skinCanvas } from "./skin.js";
+import { ProfileSession } from './profile.js';
+import { accountScreen } from './profile-screen.js';
+import { setPlayerName } from './player-name.js';
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
 import { gameRule, setGameRuleSource } from "./game-rules.js";
@@ -230,6 +233,7 @@ import { movePlayer } from "./player-physics.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
 import { tickEntitySimulation } from "./entity-simulation.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
+import { UseHold } from "./use-hold.js";
 import { tickLivingSimulation, drainMobEvents } from "./living-simulation.js";
 import { tickPlayerMining } from "./player-mining.js";
 import { applyExplosion } from "./explosion-simulation.js";
@@ -418,6 +422,7 @@ let screen = "home",
   saved = true;
 const editActionLog = []; // Development-only bounded edit/release action trace; never part of a save.
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
+const useHold = new UseHold();
 // Opt-in guns mod (not 1.7.10): used only while gunsEnabled(); the getters follow the current world and player.
 const guns = createGunHooks({
   get survival() { return survival; }, get world() { return world; }, get mobs() { return mobs; },
@@ -592,6 +597,49 @@ function multiplayerDefaults() {
   try { return JSON.parse(localStorage.getItem('mc-web-server') || '{}'); } catch { return {}; }
 }
 let steveSkin = null;
+const profiles = new ProfileSession();
+let profileTexture = null, profileSkinKey = '', profileSkinRevision = 0;
+function defaultSkinPreview() {
+  if (!steveSkin) { steveSkin = new Image(); steveSkin.onload = () => gui.build(); steveSkin.src = STEVE_URL; }
+  return steveSkin;
+}
+async function loadProfileSkin(hash) {
+  if (!hash) return null;
+  const response = await fetch(profiles.api.skinUrl(hash), { cache: 'no-store' });
+  return response.ok ? skinCanvas(await response.blob()) : null;
+}
+function applyProfileTexture(texture) {
+  if (scene) scene.profileSkin = texture;
+  playerRenderer?.setSkin(texture); firstPerson?.setSkin(texture);
+  const previous = profileTexture; profileTexture = texture; if (previous !== texture) previous?.dispose();
+}
+profiles.onChange(account => {
+  setPlayerName(account?.name);
+  const key = account ? account.id + ':' + (account.skin ?? '') : '';
+  if (key !== profileSkinKey) {
+    profileSkinKey = key; const revision = ++profileSkinRevision;
+    applyProfileTexture(null);
+    if (account?.skin) void loadProfileSkin(account.skin).then(canvas => {
+      if (!canvas || revision !== profileSkinRevision) return;
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.magFilter = texture.minFilter = THREE.NearestFilter; texture.generateMipmaps = false;
+      applyProfileTexture(texture);
+    }).catch(() => {});
+  }
+  gui.build();
+});
+function showAccount() {
+  const back = () => gui.show(menus.mainMenu());
+  if (!profiles.authenticated) { gui.show(accountScreen({ session: profiles, back, done: showAccount })); return; }
+  gui.show(profileScreen({ api: profiles.api, back, steve: defaultSkinPreview(), loadSkin: hash => loadProfileSkin(hash).catch(() => null),
+    changed: account => profiles.accept(account), signOut: async () => { await profiles.signOut(); back(); } }));
+}
+window.addEventListener('storage', event => {
+  if (event.key !== profiles.api.key) return;
+  try { profiles.api.session = JSON.parse(event.newValue ?? 'null')?.session ?? null; } catch { profiles.api.session = null; }
+  if (screen !== 'home') goHome();
+  void profiles.check();
+});
 function showMultiplayer() {
   if (!steveSkin) { steveSkin = new Image(); steveSkin.onload = () => gui.build(); steveSkin.src = STEVE_URL; }
   const loadSkin = (api) => async (hash) => {
@@ -683,6 +731,9 @@ const menuContext = {
   makeRecord,
   launch: openWorld,
   multiplayer: showMultiplayer,
+  profile: showAccount,
+  authenticated: () => profiles.authenticated,
+  profileName: () => profiles.authenticated ? 'Signed in: ' + profiles.account.name : profiles.checking ? 'Checking sign-in…' : 'Sign-in required',
   isRemote: () => !!multiplayer,
   canSingleplayer: () => worldWriterAvailable,
   exportWorld: chooseExport,
@@ -1220,6 +1271,7 @@ function applyWeatherEdit(w, x, y, z, block, meta) {
 let tripLoading = false; // a portal trip is between worlds: screen is "home" for the loop but the music stays the game's
 let pendingBonusChests = null; // chest tiles of a bonus chest placed during creation, consumed by launch
 async function openWorld(record) {
+  if (screen === 'home' && !record.remote && !await profiles.check()) { showAccount(); return; }
   if (!worldWriterAvailable) { toast('Another tab owns local saves. Close it and reload to play Singleplayer.'); return; }
   leaveMultiplayer();
   if(openingWorld)return;
@@ -1640,6 +1692,8 @@ async function launch(record, prepared, { slice = false } = {}) {
       for (let i = 0; i < cols.length;) { const end = performance.now() + 8; while (i < cols.length && performance.now() < end) cols[i++].sectionTickCount?.(0); await yieldTask(); }
     }
     performance.mark?.('trip:built');
+    // A sign-out in another tab can arrive while terrain and shaders are loading.
+    if (!record.remote && !profiles.authenticated) { goHome(); showAccount(); return; }
     screen = "playing";
     gui.hide();
     $("#hud").classList.remove("hidden");
@@ -2409,7 +2463,7 @@ function useFurnace(key) {
 function useMerchant(entity) {
   const holdingEgg = false; // spawn eggs are not usable on mobs in this build
   const brain = mobs?.ai?.brain(entity);
-  if (!brain || !villagerInteract(brain, holdingEgg, "Player")) return false;
+  if (!brain || !villagerInteract(brain, holdingEgg, PLAYER_NAME)) return false;
   const merchant = { offers: () => villagerOffers(brain), useRecipe: (r) => { villagerUseRecipe(brain, r); saved = false; handleEntityEvents(); }, hover: (has) => villagerHover(brain, has), close: () => villagerClearCustomer(entity) };
   openContainer(new MerchantContainer(survival.inventory, merchant), "merchant");
   villagerOffers(brain);
@@ -3341,6 +3395,7 @@ function movementTick(controls) {
     markUnsaved: () => { saved = false; },
     random: Math.random,
   }).use;
+  if (useHold.tick(binds.isDown("key.use"), !!eating, !survival.creative && !!ITEMS[heldId()]?.food)) edit(true);
   if (gunsEnabled()) guns.tick();
   if (survival.health <= 0) die();
   // EntityRenderer.updateFovModifierHand: once a tick, toward getFOVMultiplier (flight, sprint, bow).
@@ -3518,7 +3573,7 @@ function bindingPressed(d, ctrl) {
   else if (d === "key.chat") openChat("");
   else if (d === "key.command") openChat("/");
   else if (d === "key.attack") { if (gunsEnabled() && guns.attack(true)) return; mineHeld = true; edit(false); }
-  else if (d === "key.use") { if (!gunsUse() && !(gunsEnabled() && guns.aimHold(true))) edit(true); } // guns mod: use aims down sights
+  else if (d === "key.use") { useHold.press(); if (!gunsUse() && !(gunsEnabled() && guns.aimHold(true))) edit(true); } // guns mod: use aims down sights
   else if (d === "key.pickItem") pickBlock();
   else if (d === "key.playerlist") showPlayerList();
   else if (HOTBAR.includes(d)) selectSlot(HOTBAR.indexOf(d));
@@ -3527,7 +3582,7 @@ function bindingPressed(d, ctrl) {
 function bindingReleased(d) {
   if (d === "key.playerlist") playerList.hide();
   else if (d === "key.attack") { if (gunsEnabled()) guns.attack(false); mineHeld = false; if (mining && !mining.auto) mining = null; }
-  else if (d === "key.use") { if (gunsEnabled()) guns.aimHold(false); releaseBowUse(); }
+  else if (d === "key.use") { if (gunsEnabled()) guns.aimHold(false); releaseBowUse(); eating = null; }
 }
 // Minecraft.runTick keyboard loop, run on every screen (no currentScreen test): Keyboard.isKeyDown for the F3 combinations and the F3+C crash timer.
 // bytecode-read: F1 hideGUI and F3 (showDebugInfo, Shift = profiler chart) toggle on their press; with F3 down, B toggles RenderManager.debugBoundingBox,
@@ -3688,6 +3743,7 @@ function setupPointer() {
     // Mouse buttons reach their KeyBinding through the hash as -100 + button (Mouse.getEventButton).
     const d = binds.set(mouseCode(e.button), true);
     if (d === "key.use") {
+      useHold.press();
       if (!gunsUse() && !(gunsEnabled() && guns.aimHold(true))) edit(true); // guns mod: use aims down sights
       return;
     }
@@ -3710,16 +3766,23 @@ function setupPointer() {
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener("pointerup", (e) => {
-    bindingReleased(binds.set(mouseCode(e.button), false));
+    const binding = binds.set(mouseCode(e.button), false);
+    bindingReleased(binding);
+    if (binding !== "key.attack") return;
     if (dragging && dragDistance < 5 && e.pointerType !== "touch" && !(gunsEnabled() && guns.tap())) edit(false);
     dragging = false;
     mineHeld = false;
     if (mining && !mining.auto) mining = null;
   });
   canvas.addEventListener("pointercancel", () => {
+    bindingReleased(binds.set(mouseCode(2), false));
     dragging = false;
     mineHeld = false;
     mining = null;
+  });
+  window.addEventListener("pointerup", (e) => {
+    const code = mouseCode(e.button);
+    if (binds.binding(code) === "key.use" && binds.isDown("key.use")) bindingReleased(binds.set(code, false));
   });
   window.addEventListener("pointermove", (e) => {
     if (screen !== "playing") return;
@@ -4174,6 +4237,7 @@ async function boot(){try {
   // The title screen's splash texts (assets/minecraft/texts/splashes.txt).
   menuContext.splashes = await fetch("/media/1.7.10/texts/splashes.txt").then((r) => (r.ok ? r.text() : "")).catch(() => "");
   gui.show(menus.mainMenu());
+  void profiles.check();
   renderHotbar();
   bindActions();
   $("#loading").classList.add("hidden");

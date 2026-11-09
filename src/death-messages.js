@@ -15,8 +15,8 @@ export const FELL_TEXT = pick("death.fell.");
 export const ATTACK_TEXT = DEATH_TEXT;
 setKnownKeys(Object.keys(EN_US).filter((k) => k.startsWith("death.")));
 
-// This build has no account name; "Player" stands in for the profile name.
-export const PLAYER_NAME = "Player";
+import { PLAYER_NAME } from './player-name.js';
+export { PLAYER_NAME } from './player-name.js';
 
 const fill = (text, ...args) => text.replace(/%(\d)\$s/g, (m, n) => args[n - 1] ?? m);
 const table = (key) => (key.startsWith("death.fell.") ? FELL_TEXT[key.slice(11)] : DEATH_TEXT[key.slice(13)]);

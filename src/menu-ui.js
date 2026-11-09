@@ -381,8 +381,8 @@ export class Gui {
       render();
     });
     field.addEventListener("input", () => {
-      // ChatAllowedCharacters.isAllowedCharacter: no section sign, control characters or DEL.
-      const clean = field.value.replace(/[§\u0000-\u001f\u007f]/g, "");
+      // ChatAllowedCharacters applies to native text fields. Passwords must retain the characters the user entered.
+      const clean = secret ? field.value : field.value.replace(/[§\u0000-\u001f\u007f]/g, "");
       if (clean !== field.value) field.value = clean;
       render();
       input?.(field.value);

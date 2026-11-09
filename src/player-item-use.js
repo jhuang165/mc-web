@@ -29,6 +29,7 @@ export function tickPlayerItemUse(use, heldId, survival, {
       if (survival.eat(use.id, random)) {
         sound("random.burp", { volume: 0.5 });
         renderHotbar();
+        markUnsaved();
       }
       next = null;
     }

@@ -4,7 +4,8 @@ import { VillageCollection } from "./village.js";
 import { WOODEN_DOOR, normalCube } from "./world.js";
 import { JavaRandom } from "./lighting.js";
 
-export const PLAYER_NAME = "Player";
+import { PLAYER_NAME } from './player-name.js';
+export { PLAYER_NAME } from './player-name.js';
 
 // EntityVillager.setRevengeTarget's attacker as the village keeps it (VillageAggressor.agressor): the attacking mob's brain (the view the golem's
 // target tasks use), or null when the damage had no living attacker entity (a projectile of the player is the player's, handled by the caller).

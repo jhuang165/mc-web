@@ -148,7 +148,7 @@ test('right entity interaction tries shearing before feeding/dyeing and then foo
     renderHotbar: () => calls.push('hotbar'), markUnsaved: () => calls.push('dirty'),
   });
   assert.equal(result.branch, 'shear-entity');
-  assert.deepEqual(calls, ['swing', 'shear', 'events', 'hotbar', 'dirty']);
+  assert.deepEqual(calls, ['shear', 'events', 'hotbar', 'dirty']);
   assert.equal(f.state.eating, null);
 });
 
@@ -169,13 +169,54 @@ test('flint and steel creeper ignition wins before general right-entity interact
 
 test('food with no block target begins eating locally; full hunger is refused silently', () => {
   const hungry = fixture({ tool: 318, count: 2, place: true });
-  assert.equal(applyPlayerEdit(hungry.state, hungry.request).branch, 'no-block-target');
+  let swings = 0;
+  assert.equal(applyPlayerEdit(hungry.state, hungry.request, { swing: () => swings++ }).branch, 'no-block-target');
+  assert.equal(swings, 0);
   assert.deepEqual(hungry.state.eating, { id: 318, ticks: 32 });
 
   const full = fixture({ tool: 318, food: 20, place: true }), calls = [];
   applyPlayerEdit(full.state, full.request, { toast: (text) => calls.push(text) });
   assert.equal(full.state.eating, null);
   assert.deepEqual(calls, []); // no message in 1.7.10
+});
+
+test('roots plant before eating; occupied farmland, crop targets and side clicks do not eat them', () => {
+  for (const tool of [322, 323]) {
+    const target = { block: [...POS], adjacent: [POS[0], POS[1] + 1, POS[2]] };
+    const f = fixture({ tool, count: 3, food: 5, block: 29, target, place: true }), sounds = [];
+    assert.equal(applyPlayerEdit(f.state, f.request, { playSound: (...a) => sounds.push(a) }).branch, 'plant-crop');
+    assert.equal(f.state.survival.count(tool), 2);
+    assert.equal(f.state.eating, null);
+    assert.equal(sounds.length, 1);
+    assert.equal(sounds[0][0], 'step.grass');
+    assert.equal(applyPlayerEdit(f.state, f.request).branch, 'plant-seeds-failed');
+    assert.equal(f.state.eating, null);
+    assert.equal(f.state.survival.count(tool), 2);
+    f.request.target = { block: [...POS], adjacent: [POS[0] + 1, POS[1], POS[2]] };
+    assert.equal(applyPlayerEdit(f.state, f.request).branch, 'plant-seeds-failed');
+    assert.equal(f.state.eating, null);
+    f.request.target = { block: [POS[0], POS[1] + 1, POS[2]], adjacent: [POS[0], POS[1] + 2, POS[2]] };
+    assert.equal(applyPlayerEdit(f.state, f.request).branch, 'plant-seeds-failed');
+    assert.equal(f.state.eating, null);
+    f.request.target = null;
+    applyPlayerEdit(f.state, f.request);
+    assert.deepEqual(f.state.eating, { id: tool, ticks: 32 }, 'looking away still lets the root be eaten');
+  }
+});
+
+test('successful wheat, melon, pumpkin and nether wart planting sound once; failed planting is silent', () => {
+  for (const tool of [309, 361, 362, 386]) {
+    const target = { block: [...POS], adjacent: [POS[0], POS[1] + 1, POS[2]] };
+    const f = fixture({ tool, count: 2, block: tool === 386 ? 151 : 29, target, place: true }), sounds = [];
+    const hooks = { playSound: (name) => sounds.push(name) };
+    const result = applyPlayerEdit(f.state, f.request, hooks);
+    assert.equal(result.branch, tool === 386 ? 'plant-nether-wart' : 'plant-crop');
+    assert.deepEqual(sounds, ['step.grass']);
+    assert.equal(f.state.survival.count(tool), 1);
+    applyPlayerEdit(f.state, f.request, hooks);
+    assert.deepEqual(sounds, ['step.grass']);
+    assert.equal(f.state.survival.count(tool), 1);
+  }
 });
 
 test('hoe branch tills real soil before later placement dispatch and keeps observer order', () => {

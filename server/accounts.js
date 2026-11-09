@@ -8,12 +8,16 @@ import { validName } from '../src/multiplayer/protocol.js';
 import { pngSize, SKIN_WIDTH, SKIN_HEIGHT, MAX_SKIN_BYTES } from '../src/skin.js';
 
 const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+// OWASP's 16 MiB scrypt configuration for the public profile service; legacy dedicated accounts keep their old KDF.
+export const PROFILE_SCRYPT = Object.freeze({ ...SCRYPT, p: 5 });
 export const SESSION_MS = 30 * 24 * 3600 * 1000, INVITE_MS = 7 * 24 * 3600 * 1000;
 const INVITE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I
 const sha = value => createHash('sha256').update(value).digest('hex');
-const scrypt = (password, salt) => new Promise((resolve, reject) =>
-  scryptCallback(password.normalize('NFKC'), salt, 32, SCRYPT, (error, key) => error ? reject(error) : resolve(key)));
+const scrypt = (password, salt, params = SCRYPT) => new Promise((resolve, reject) =>
+  scryptCallback(password.normalize('NFKC'), salt, 32, params, (error, key) => error ? reject(error) : resolve(key)));
 export const validPassword = p => typeof p === 'string' && p.length >= 8 && p.length <= 128;
+export const normalEmail = email => typeof email === 'string' ? email.trim().toLowerCase() : '';
+export const validEmail = email => typeof email === 'string' && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 export const normalInvite = code => typeof code === 'string' ? code.toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
 
 export class AccountError extends Error {
@@ -21,9 +25,11 @@ export class AccountError extends Error {
 }
 
 export class AccountStore {
-  constructor(data = {}, { file = null, now = () => Date.now() } = {}) {
+  constructor(data = {}, { file = null, now = () => Date.now(), openRegistration = false, requireEmail = false, passwordParams = SCRYPT } = {}) {
     if (data.version !== undefined && data.version !== 1) throw new Error('Unsupported accounts file version');
     this.file = file; this.now = now;
+    this.openRegistration = openRegistration; this.requireEmail = requireEmail;
+    this.passwordParams = { ...passwordParams };
     this.accounts = new Map((data.accounts ?? []).map(a => [a.id, a]));
     this.sessions = new Map((data.sessions ?? []).map(s => [s.hash, s]));
     this.invites = new Map((data.invites ?? []).map(i => [i.hash, i]));
@@ -59,6 +65,13 @@ export class AccountStore {
     return null;
   }
   public(a) { return { id: a.id, name: a.name, admin: !!a.admin, skin: a.skinHash ?? null }; }
+  self(a) { return { ...this.public(a), email: a.email ?? '' }; }
+  byEmail(email) {
+    const key = normalEmail(email);
+    if (!key) return null;
+    for (const a of this.accounts.values()) if (normalEmail(a.email) === key) return a;
+    return null;
+  }
   // Shared limit on password checks (every client arrives from Serve as
   // 127.0.0.1) plus a per-name lockout after repeated failures.
   throttle(name) {
@@ -80,34 +93,46 @@ export class AccountStore {
   }
   // `serverKey`: the owner's private MC_WEB_TOKEN. Using it as the invite makes
   // an admin account, which is how the first account is created.
-  async register({ invite, name, password }, serverKey) {
+  async register({ invite, name, email, password }, serverKey) {
     this.throttle(name);
     if (!validName(name)) throw new AccountError(400, 'Names are 1–16 letters, numbers or underscores.');
     if (!validPassword(password)) throw new AccountError(400, 'Passwords are 8–128 characters.');
+    email = normalEmail(email);
+    if ((this.requireEmail || email) && !validEmail(email)) throw new AccountError(400, 'Enter a valid email address.');
+    if (email && this.byEmail(email)) throw new AccountError(409, 'That email address is already registered.');
     const admin = typeof invite === 'string' && typeof serverKey === 'string' && Buffer.byteLength(invite) === Buffer.byteLength(serverKey) &&
       timingSafeEqual(Buffer.from(invite), Buffer.from(serverKey));
     const inviteHash = admin ? null : sha(normalInvite(invite)), record = inviteHash && this.invites.get(inviteHash);
-    if (!admin && (!record || record.expires <= this.now())) throw new AccountError(403, 'That invite code is wrong, used or expired.');
+    if (!this.openRegistration && !admin && (!record || record.expires <= this.now())) throw new AccountError(403, 'That invite code is wrong, used or expired.');
     if (this.byName(name)) throw new AccountError(409, 'That name is taken.');
     const salt = randomBytes(16);
-    const account = { id: randomUUID(), name, salt: salt.toString('base64'), hash: (await scrypt(password, salt)).toString('base64'),
-      admin, createdAt: this.now(), invitedBy: admin ? null : record.createdBy, skin: null, skinHash: null };
+    const account = { id: randomUUID(), name, salt: salt.toString('base64'), hash: (await scrypt(password, salt, this.passwordParams)).toString('base64'), passwordParams: { ...this.passwordParams },
+      admin, createdAt: this.now(), invitedBy: admin || this.openRegistration ? null : record.createdBy, skin: null, skinHash: null,
+      ...(email ? { email } : {}) };
     // Re-check after the asynchronous hash: two registrations may race.
     if (this.byName(name)) throw new AccountError(409, 'That name is taken.');
-    if (!admin) { if (!this.invites.has(inviteHash)) throw new AccountError(403, 'That invite code is wrong, used or expired.'); this.invites.delete(inviteHash); }
+    if (email && this.byEmail(email)) throw new AccountError(409, 'That email address is already registered.');
+    if (!this.openRegistration && !admin) { if (!this.invites.has(inviteHash)) throw new AccountError(403, 'That invite code is wrong, used or expired.'); this.invites.delete(inviteHash); }
     this.accounts.set(account.id, account);
     const session = this.newSession(account);
     await this.save();
     return { session, account: this.public(account) };
   }
   async login({ name, password }) {
-    this.throttle(name);
-    const account = typeof name === 'string' ? this.byName(name) : null;
+    const account = typeof name === 'string' ? this.byName(name) ?? this.byEmail(name) : null;
+    const identity = account?.name ?? name;
+    this.throttle(identity);
     // Hash even for an unknown name so timing does not reveal which names exist.
     const salt = account ? Buffer.from(account.salt, 'base64') : randomBytes(16);
-    const key = await scrypt(typeof password === 'string' ? password.slice(0, 128) : '', salt);
-    if (!account || !timingSafeEqual(key, Buffer.from(account.hash, 'base64'))) {
-      this.fail(name); throw new AccountError(401, 'Wrong name or password.');
+    const params = account ? account.passwordParams ?? SCRYPT : this.passwordParams;
+    const allowed = validPassword(password), key = await scrypt(allowed ? password : '', salt, params);
+    if (!allowed || !account || !timingSafeEqual(key, Buffer.from(account.hash, 'base64'))) {
+      this.fail(identity); throw new AccountError(401, 'Wrong name or password.');
+    }
+    if (this.passwordParams.N * this.passwordParams.r * this.passwordParams.p > params.N * params.r * params.p) {
+      const upgradedSalt = randomBytes(16);
+      account.hash = (await scrypt(password, upgradedSalt, this.passwordParams)).toString('base64');
+      account.salt = upgradedSalt.toString('base64'); account.passwordParams = { ...this.passwordParams };
     }
     const session = this.newSession(account);
     await this.save();

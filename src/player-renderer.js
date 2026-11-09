@@ -374,6 +374,10 @@ function boxGeometry(name, expand) {
 }
 
 export class PlayerRenderer {
+  setSkin(texture) {
+    this.defaultSkinMap ??= this.base.uniforms.map.value;
+    this.base.uniforms.map.value = texture ?? this.defaultSkinMap;
+  }
   // `view` supplies the lightmap and brightness (VoxelScene); `atlas` is the block atlas.
   constructor(scene, view, atlas) {
     this.scene = scene;

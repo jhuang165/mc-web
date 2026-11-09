@@ -115,7 +115,11 @@ export function createMenus(gui, ctx) {
         g.text("Minecraft 1.7.10", L.version[0], L.version[1]);
         g.text("Copyright Mojang AB. Do not distribute!", L.copyright[0], L.copyright[1], { right: true });
         const b = L.buttons;
-        g.button(b.singleplayer, t("menu.singleplayer"), () => show(selectWorld()), { reason: ctx.canSingleplayer?.() === false ? 'Another tab owns local saves. Close it and reload for Singleplayer.' : '' });
+        g.button(b.singleplayer, t("menu.singleplayer"), () => ctx.authenticated?.() === false ? ctx.profile() : show(selectWorld()), { reason: ctx.canSingleplayer?.() === false ? 'Another tab owns local saves. Close it and reload for Singleplayer.' : '' });
+        if (ctx.profile) {
+          g.text(ctx.profileName?.() ?? 'Sign-in required', 4, 9, { color: 0xaaaaaa });
+          g.button({ x: w - 88, y: 4, w: 84, h: 20 }, 'Account', ctx.profile);
+        }
         // Multiplayer is paused (2026-11-07): Singleplayer only. Set MULTIPLAYER_ENABLED to bring the dedicated-server screen back.
         g.button(b.multiplayer, t("menu.multiplayer"), MULTIPLAYER_ENABLED ? () => ctx.multiplayer() : null, MULTIPLAYER_ENABLED ? {} : { reason: UNAVAILABLE.multiplayer });
         g.button(b.online, t("menu.online"), null, { reason: UNAVAILABLE.online });

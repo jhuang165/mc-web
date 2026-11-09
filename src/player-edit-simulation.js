@@ -142,7 +142,8 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
 
   // ItemMonsterPlacer.onItemRightClick: an egg aimed at a water surface (spawn-egg-use.js); other clicks fall through to onItemUse.
   if (place && id === ITEM_SPAWN_EGG && !usesBlock && !aimedEntity && useEggOnWater(state, bucket, hooks)) { hook('swing'); return act('use-spawn-egg-water'); }
-  hook('swing');
+  // ItemFood starts the use animation, not an attack swing. A successful planting action swings separately below.
+  if (!place || !item?.food) hook('swing');
   if (!place && aimedEntity?.entity) {
     state.mining = null;
     const critical = isCritical({ fallDistance: state.fallDistance, onGround: state.grounded, inWater: state.wasInWater });
@@ -455,18 +456,22 @@ export function applyPlayerEdit(state, { place = false, target = null, aimedEnti
       if (!state.survival.creative) state.survival.take(id);
       hook('updateBlock', x, z, y + 1);
       hook('renderHotbar');
+      hook('playSound', 'step.grass', { volume: 0.5, pitch: 1, position: { x: x + 0.5, y: y + 1, z: z + 0.5 } });
       hook('markUnsaved');
       return act('plant-nether-wart');
     }
     if (plantedBlock(id)) {
       if ((state.survival.creative || state.survival.usable(id)) && target.adjacent?.[1] === y + 1 && state.farming.plant(x, y, z, id)) {
         if (!state.survival.creative) state.survival.take(id);
+        if (item?.food) hook('swing');
         hook('applyFarmUpdates', state.farming.drain());
         hook('renderHotbar');
+        hook('playSound', 'step.grass', { volume: 0.5, pitch: 1, position: { x: x + 0.5, y: y + 1, z: z + 0.5 } });
         hook('markUnsaved');
         return act('plant-crop');
       }
-      if (id === 309) return act('plant-seeds-failed');
+      // When aiming at farmland or a crop, a blocked/wrong-face placement remains a planting attempt.
+      if (!item?.food || block === 29 || block === 30 || isCrop(block)) return act('plant-seeds-failed');
     }
     if (id === DYE && state.survival.held?.damage === 15) {
       if (!state.survival.creative && !state.survival.usable(id)) return act('bone-meal-no-item');

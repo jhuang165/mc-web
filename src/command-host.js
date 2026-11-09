@@ -34,7 +34,7 @@ export { DEFAULT_RULES, ruleOn };
 export function createCommandHost(env) {
   const survival = () => env.survival();
   return {
-    name: PLAYER_NAME,
+    get name() { return PLAYER_NAME; },
     // ServerConfigurationManager.func_152596_g (canSendCommands) for the singleplayer owner: the world's allowCommands, or
     // commandsAllowedForAll, which shareToLAN sets from the LAN screen's Allow Cheats.
     get cheats() { return cheatsAllowed(env.active()) || !!env.lan?.()?.cheats; },

@@ -215,6 +215,8 @@ export class FirstPerson {
     // yaw, so they stay fixed in the world while the hand follows the view.
     this.lights = ITEM_LIGHTS.map((l) => l.clone());
     this.materials = [];
+    this.skinMaterials = new Set();
+    this.defaultSkinMap = this.skinMap = pixelTexture('/media/1.7.10/entity/steve.png');
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(
       70,
@@ -230,7 +232,7 @@ export class FirstPerson {
     // ModelBiped's local +Y points from shoulder to fingertips. Its UV rows
     // increase in that direction, unlike the world-space upright skin boxes.
     for(const face of [0,1,4,5]){const top=armUv.getY(face*4),bottom=armUv.getY(face*4+2);for(let v=0;v<4;v++)armUv.setY(face*4+v,top+bottom-armUv.getY(face*4+v));}
-    const armMesh=new THREE.Mesh(armGeometry,this.material({map:pixelTexture('/media/1.7.10/entity/steve.png')},true));
+    const armMesh=new THREE.Mesh(armGeometry,this.skinMaterial());
     armMesh.position.set(-1/16,4/16,0);this.arm.add(armMesh);this.arm.position.set(-5/16,2/16,0);this.arm.rotation.z=.1;
     this.pivot.add(this.arm);
     this.item = null;
@@ -327,7 +329,17 @@ export class FirstPerson {
   }
   // The player's arm for a pack gun's hands (pack-view.js): the upright 1.7.10 arm box, hand down, the left one mirrored.
   packArm(left) {
-    return new THREE.Mesh(skinBox(4, 12, 4, 40, 16, 64, 32, left), this.material({ map: pixelTexture('/media/1.7.10/entity/steve.png') }, true));
+    return new THREE.Mesh(skinBox(4, 12, 4, 40, 16, 64, 32, left), this.skinMaterial());
+  }
+  skinMaterial() {
+    const m = this.material({ map: this.skinMap }, true);
+    this.skinMaterials.add(m);
+    m.addEventListener('dispose', () => this.skinMaterials.delete(m));
+    return m;
+  }
+  setSkin(texture) {
+    this.skinMap = texture ?? this.defaultSkinMap;
+    for (const m of this.skinMaterials) m.uniforms.map.value = this.skinMap;
   }
   material(options) {
     const m = entityMaterial(this.lighting, { ...options, fog: false, lights: this.lights });
