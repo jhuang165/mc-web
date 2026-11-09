@@ -67,3 +67,24 @@ export const useEntityAllowed = (player, entity, visible) => sq(player, entity) 
 // PlayerControllerMP.getBlockReachDistance and EntityRenderer.getMouseOver: blocks 5 creative / 4.5 survival, entities 6 / 3.
 export const blockReach = (creative) => (creative ? 5 : 4.5);
 export const entityReach = (creative) => (creative ? 6 : 3);
+
+// Block face index (C08 / C07) of the clicked cell: 0 -y, 1 +y, 2 -z, 3 +z, 4 -x, 5 +x. Null when the cells are not neighbours.
+export function faceOf(block, adjacent) {
+  if (!block || !adjacent) return null;
+  const d = [adjacent[0] - block[0], adjacent[1] - block[1], adjacent[2] - block[2]];
+  const f = d[1] === -1 ? 0 : d[1] === 1 ? 1 : d[2] === -1 ? 2 : d[2] === 1 ? 3 : d[0] === -1 ? 4 : d[0] === 1 ? 5 : null;
+  return f !== null && d.reduce((n, v) => n + Math.abs(v), 0) === 1 ? f : null;
+}
+export const BUILD_HEIGHT_MESSAGE = 'Height limit for building is 256 blocks';
+// What the integrated server does with one block click or entity click. The single-player owner has no spawn protection: the integrated
+// server keeps MinecraftServer.isBlockProtected (always false, the probe's Srv double returns it unchanged). `player` is the feet [x, y, z].
+// Returns { accept } plus `message` (chat line the server sends) when the click is refused for height; a refused click resends the block.
+export function serverClick({ kind, player, pos, adjacent = null, entity = null, visible = true, hasMoved = true }) {
+  if (kind === 'place') {
+    const out = placementOutcome({ player, pos, face: faceOf(pos, adjacent) ?? 0, hasMoved });
+    return out === 'place' ? { accept: true } : { accept: false, message: out === 'tooHigh' ? BUILD_HEIGHT_MESSAGE : null };
+  }
+  if (kind === 'dig') return { accept: digAllowed({ player, pos }) };
+  if (kind === 'entity') return { accept: useEntityAllowed(player, entity, visible) };
+  return { accept: true };
+}

@@ -1,0 +1,18 @@
+# Batch 31 serverdist track (branch batch31-serverdist, from 2d4287be, release 0.59.0)
+
+## Summary
+- The b30 pure rules (`placementOutcome`, `digAllowed`, `useEntityAllowed`, already replayed against `server-handlers-reference.json` placement, digging and use-entity groups) are now called from play. New pure helpers in `src/server-handlers.js`: `faceOf` (clicked neighbour to packet face index) and `serverClick` (kind place / dig / entity, returns `{ accept, message }`). No probe change was needed: the records already hold the distance, eye-offset, build-height and has-moved cases.
+- `src/main.js` call sites only: `serverAcceptsClick(place)` at the top of `edit()` (after the multiplayer branch) gates a block place or use (C08: centre to feet squared < 64, y >= 255 top face or y >= 256 any face prints "Height limit for building is 256 blocks"), a dig start (C07 status 0: eye offset squared <= 36, y < 256) and a mob click (C02: feet to feet squared < 36). A refused block click resends both cells (`scene.updateBlock`) and changes nothing. The finished-dig hook handed to `tickPlayerMining` is gated the same way (status 2). Client reach in `getMouseOver` is unchanged.
+- Spawn protection: the integrated server uses the base `MinecraftServer.isBlockProtected`, which is false (the probe's `Srv` double leaves it unchanged), so single player has none. Not ported as a rule.
+- Not gated: paintings/item frames and minecarts/boats (they have their own pick paths), attacks on item entities or the player (cannot be aimed at), and the line-of-sight 3-block rule (the picked entity is always visible, so `visible` is true).
+- Creative survival-tab drops: `CreativeScreen.setTab` now replaces the player container's `drop` with the screen's limiter-backed `drop`, so every container-click drop on that tab shares the 200 limit (the direct mode 4 and outside paths already did).
+- Multiplayer chat: `server/server.js` now runs each connection's chat through `chatPacket` (per connection `SpamCounter`, 50 ms tick clock, nobody exempt): 100 character cut, whitespace collapse, 11th quick message delivered then the socket closes 1008 "Kicked for spamming", illegal characters close 1008 (before, they were silently stripped). No server was started or deployed.
+
+## Verification
+- `node --test src/server-handlers.test.js src/multiplayer.test.js`: 19 pass (new: `faceOf`, normal-play reach accepted at survival 4.5 / creative 5 and entities 3 / 6, edge positions for all three packets incl. strict 64, 36 and the 255 / 256 height cases, survival-tab limiter, multiplayer spam kick and rejoin).
+- Full `npm test`: 4837 tests, 4836 passed, 1 failed first run (`player-throw-replay`, which compiles main.js `edit()` in isolation and lacked `serverAcceptsClick`; a stub binding was added to the test and it plus `living-simulation-replay` pass). `npm run build` passes.
+- Browser (muted headless Chrome, `?silent`, vite 5336, script `artifacts/b31-serverdist/check.mjs`): creative right click with stone placed a block at 3 blocks reach on a fresh world (gate accepts normal play), no page errors. Refusals are not reachable from the client (reach is below every limit), so they are covered by unit tests only. Vite and Chrome were stopped.
+
+## Follow-ups (proposed gap lines)
+- "Placement, dig and mob-click distance checks run in play, but paintings, frames, minecarts and boats skip them, and the 3-block no-line-of-sight rule is not modelled."
+- "The dedicated multiplayer server cuts chat at 100 characters and kicks illegal characters; its edit path still uses its own ray rather than C07/C08 distances."

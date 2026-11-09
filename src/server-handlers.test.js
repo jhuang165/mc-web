@@ -4,11 +4,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  SpamCounter, SPAM, creativeDrop, chatPacket, heldSlot, placementOutcome, digAllowed, useEntityAllowed, blockReach, entityReach, normalizeChat,
+  SpamCounter, SPAM, creativeDrop, chatPacket, heldSlot, placementOutcome, digAllowed, useEntityAllowed, blockReach, entityReach, normalizeChat, faceOf, serverClick, BUILD_HEIGHT_MESSAGE,
 } from './server-handlers.js';
 import { applyBookEdit, applyBookSign, ITEM_WRITABLE_BOOK as WRITABLE, ITEM_WRITTEN_BOOK as WRITTEN } from './books.js';
 import { acceptLine } from './signs.js';
-import { CreativeScreen } from './creative.js';
+import { CreativeScreen, SURVIVAL_TAB } from './creative.js';
 import { Survival } from './survival.js';
 import { splitLayout } from './book-ui.js';
 import { font, setGlyphSizes, setBidiFlag } from './font-renderer.js';
@@ -145,4 +145,55 @@ test('book screen honours the bidirectional flag (bbu drawSplitString)', () => {
   try { assert.deepEqual(splitLayout(text, 36, 32, 116), on, 'the default follows font.bidi'); } finally { setBidiFlag(false); }
   assert.deepEqual(splitLayout(text, 36, 32, 116), off);
   assert.equal(font.bidi, false);
+});
+
+test('faceOf maps the clicked neighbour to the packet face index', () => {
+  const b = [5, 5, 5];
+  assert.deepEqual([[5, 4, 5], [5, 6, 5], [5, 5, 4], [5, 5, 6], [4, 5, 5], [6, 5, 5]].map((a) => faceOf(b, a)), [0, 1, 2, 3, 4, 5]);
+  assert.equal(faceOf(b, [7, 5, 5]), null);
+  assert.equal(faceOf(b, null), null);
+});
+
+test('normal play is accepted: the client reach stays inside every server limit', () => {
+  const feet = [0.5, 64, 0.5];
+  // Survival block reach 4.5 and creative 5 from the eye (feet + 1.62): worst case straight out, centre at most 5.5 from the eye.
+  for (const reach of [4.5, 5]) {
+    const x = Math.floor(0.5 + reach); // block whose face is within reach along +x at eye height
+    assert.ok(serverClick({ kind: 'place', player: feet, pos: [x, 65, 0], adjacent: [x - 1, 65, 0] }).accept, 'place ' + reach);
+    assert.ok(serverClick({ kind: 'dig', player: feet, pos: [x, 65, 0] }).accept, 'dig ' + reach);
+  }
+  // Straight up and down at creative reach.
+  assert.ok(serverClick({ kind: 'dig', player: feet, pos: [0, 64 + 8, 0] }).accept === false, 'a block 8 above the feet is past 6 from the eye');
+  assert.ok(serverClick({ kind: 'dig', player: feet, pos: [0, 64 + 6, 0] }).accept);
+  assert.ok(serverClick({ kind: 'dig', player: feet, pos: [0, 64 - 4, 0] }).accept);
+  assert.ok(serverClick({ kind: 'entity', player: feet, entity: [3.4, 64, 0.5] }).accept, 'survival entity reach 3');
+  assert.ok(serverClick({ kind: 'entity', player: feet, entity: [5.9, 64, 0.5] }).accept, 'creative entity reach 6 at the same height');
+});
+
+test('edge positions: refused past the native limits, resent block, build height message', () => {
+  const feet = [0.5, 64, 0.5];
+  // Placement: centre to feet squared < 64 (strict).
+  assert.equal(serverClick({ kind: 'place', player: feet, pos: [7, 64, 0], adjacent: [6, 64, 0] }).accept, true); // 7^2 + .25 = 49.25.. +.25
+  assert.equal(serverClick({ kind: 'place', player: [0, 0, 0], pos: [7, 0, 4], adjacent: [7, 1, 4] }).accept, false); // 7.5^2 + .5^2 + 4.5^2 = 76.75
+  assert.equal(serverClick({ kind: 'place', player: [0, 0, 0], pos: [7, 0, 0], adjacent: [7, 1, 0], hasMoved: false }).accept, false);
+  const high = serverClick({ kind: 'place', player: [0, 250, 0], pos: [0, 255, 0], adjacent: [0, 256, 0] });
+  assert.deepEqual(high, { accept: false, message: BUILD_HEIGHT_MESSAGE });
+  assert.equal(serverClick({ kind: 'place', player: [0, 250, 0], pos: [0, 255, 0], adjacent: [0, 255, 1] }).accept, true, 'a side face at y 255 is fine');
+  assert.equal(serverClick({ kind: 'place', player: [0, 250, 0], pos: [0, 256, 0], adjacent: [0, 256, 1] }).accept, false, 'any face at y 256');
+  // Digging: eye = feet + 1.5, centre squared <= 36, y < 256.
+  assert.equal(serverClick({ kind: 'dig', player: [0.5, 10, 0.5], pos: [6, 11, 0] }).accept, true); // 5.5^2 + (-0.5+... ) well inside
+  assert.equal(serverClick({ kind: 'dig', player: [0.5, 10, 0.5], pos: [7, 10, 0] }).accept, false); // 6.5^2 > 36
+  assert.equal(serverClick({ kind: 'dig', player: [0.5, 250, 0.5], pos: [0, 256, 0] }).accept, false);
+  // Entities: feet to feet squared < 36 with sight, < 9 without.
+  assert.equal(serverClick({ kind: 'entity', player: [0, 0, 0], entity: [6, 0, 0] }).accept, false);
+  assert.equal(serverClick({ kind: 'entity', player: [0, 0, 0], entity: [5.99, 0, 0] }).accept, true);
+  assert.equal(serverClick({ kind: 'entity', player: [0, 0, 0], entity: [3, 0, 0], visible: false }).accept, false);
+});
+
+test('survival tab drops go through the creative limiter too', () => {
+  const p = new Survival({ slots: [] }, 'creative');
+  const gui = new CreativeScreen(p.inventory, { playerContainer: () => p.openInventory(), tooltip: () => [], tick: () => 0 });
+  gui.setTab(SURVIVAL_TAB);
+  for (let i = 0; i < 12; i++) gui.player.drop({ id: 3, count: 1, damage: 0 });
+  assert.equal(gui.container.drops.length, 10);
 });

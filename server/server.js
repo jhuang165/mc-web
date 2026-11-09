@@ -8,6 +8,7 @@ import { DedicatedSimulation } from '../src/multiplayer/simulation.js';
 import { PROTOCOL } from '../src/multiplayer/protocol.js';
 import { AccountStore, AccountError } from './accounts.js';
 import { MAX_SKIN_BYTES } from '../src/skin.js';
+import { SpamCounter, chatPacket } from '../src/server-handlers.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 export const DEFAULT_ORIGINS = ['https://jhuang165.github.io', 'http://localhost:5179', 'http://127.0.0.1:5179', 'https://ledoge0.tail92abaf.ts.net'];
@@ -146,6 +147,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   });
   wss.on('connection', ws => {
     const id = randomUUID();
+    const chatSpam = new SpamCounter(); // NetHandlerPlayServer.l, one per connection, decays 1 per 50 ms game tick
     let joined = false, budget = 80, budgetAt = Date.now(), alive = true;
     const timer = setTimeout(() => ws.close(1008, 'Join timed out'), 10000);
     ws.on('error', () => {});
@@ -179,8 +181,11 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         if (m.type === 'input') { if (!simulation.input(id, m)) ws.close(1008, 'Invalid input'); }
         else if (m.type === 'edit') simulation.queueEdit(id, m);
         else if (m.type === 'chat' && typeof m.text === 'string') {
-          const text = m.text.replace(/[\x00-\x1f\x7f§]/g, '').trim().slice(0, 100);
-          if (text) broadcast({ type: 'chat', name: simulation.players.get(id).name, text });
+          // NetHandlerPlayServer chat: 100 character cut, whitespace collapse, illegal characters and spam (> 200, +20 per message) kick.
+          // The dedicated server has no operators, so nobody is exempt.
+          const r = chatPacket(chatSpam, Math.floor(Date.now() / 50), m.text, false);
+          if (r.deliver) broadcast({ type: 'chat', name: simulation.players.get(id).name, text: r.deliver });
+          if (r.kick) return ws.close(1008, r.kick);
         } else ws.close(1008, 'Unknown message');
       } catch (error) { send(ws, { type: 'error', text: error.message }); ws.close(1008, 'Request rejected'); }
     });
