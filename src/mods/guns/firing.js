@@ -5,6 +5,11 @@ import { GUNS, gunOf, roundsLeft } from "./catalog.js";
 import { reloadCapacity, setLoadedRounds } from "./ammo.js";
 
 export const TICK = 0.05;
+// GunData.getRoundsPerMinute(fireMode): the gun's rpm plus its fire_mode_adjust for the mode, 300 when that is not positive.
+export function roundsPerMinute(gun, mode) {
+  const rpm = gun.rpm + (+gun.rpmAdjust?.[mode] || 0);
+  return rpm > 0 ? rpm : 300;
+}
 export const RANGE = 128; // blocks; TaCZ bullets fly speed * life (150-250 blocks) but only loaded chunks matter here
 const SEGMENT = 32; // rayTraceBlocks walks at most 201 cells, so long traces go in pieces
 export const GLASS_BLOCKS = new Set([9, 100, 140, 141]); // glass, glass pane, stained glass, stained glass pane
@@ -106,10 +111,12 @@ export class GunController {
     }
     if (!gun) return events;
     if (this.draw > 0) { this.draw = countDown(this.draw); return events; }
-    // The cooldown keeps the fraction of a tick past zero, so 450 rpm averages 2.67 ticks a shot instead of rounding to 3.
+    // The cooldown is the time from this tick to the next allowed shot. TaCZ's LocalPlayerShoot fires once under 50 ms (a
+    // tick) is left and times the shot to that millisecond, so a shot due inside this tick fires now with `at`, its offset in
+    // seconds; 450 or 750 rpm keep even gaps instead of snapping to ticks (60000 / rpm ms apart).
     this.cooldown -= TICK;
     if (this.reload) this.tickReload(ctx, gun, stack, events);
-    const ready = this.cooldown <= 1e-6, bursting = this.burstLeft > 0;
+    const ready = this.cooldown < TICK - 1e-6, bursting = this.burstLeft > 0;
     if (this.reload?.kind === "magazine" || (!bursting && (!this.trigger || this.spent)) || !ready) {
       if (this.cooldown < 0) this.cooldown = 0;
       return events;
@@ -121,23 +128,23 @@ export class GunController {
     this.reload = null;
     if (!inventoryFed) setLoadedRounds(gun, stack, roundsLeft(stack) - 1);
     else if (!ctx.creative) ctx.take(gun.ammo, 1);
-    // Only a cooldown that ran out during this tick carries over; an idle gun (a full tick past zero) starts fresh.
-    const carry = this.cooldown > 1e-6 - TICK ? this.cooldown : 0, mode = this.mode(gun.id);
+    // An idle gun (cooldown clamped to 0 above, then a tick past it) fires at the start of the tick.
+    const at = Math.max(0, this.cooldown), mode = this.mode(gun.id);
     if (mode === "burst" && gun.burst) {
       // TaCZ burst_data: `count` rounds at `bpm`, then at least `min_interval` seconds before the next burst; a continuous
       // burst gun keeps bursting while the trigger is held.
       if (!bursting) this.burstLeft = gun.burst.count;
       this.burstLeft--;
       const between = 60 / gun.burst.bpm;
-      this.cooldown = carry + (this.burstLeft > 0 ? between : Math.max(between, gun.burst.minInterval));
+      this.cooldown = at + (this.burstLeft > 0 ? between : Math.max(between, gun.burst.minInterval));
       if (this.burstLeft === 0 && !gun.burst.continuous) this.spent = true;
     } else {
       this.burstLeft = 0;
       // A bolt, pump or lever gun cannot fire again until its action is worked (TaCZ bolt_action_time), however high its rpm.
-      this.cooldown = carry + Math.max(60 / gun.rpm, boltDelay(gun));
+      this.cooldown = at + Math.max(60 / roundsPerMinute(gun, mode), boltDelay(gun));
       if (mode !== "auto") this.spent = true;
     }
-    events.push({ type: "shot", gun });
+    events.push({ type: "shot", gun, at });
     return events;
   }
   tickReload(ctx, gun, stack, events) {

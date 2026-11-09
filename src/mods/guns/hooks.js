@@ -38,11 +38,13 @@ export function createGunHooks(deps) {
     deps.action?.(name, down);
   };
   const controller = new GunController(), aim = new Aim(), recoil = new Recoil(), schedule = new SoundSchedule();
+  let pendingKick = null; // { gun, aim, at }: the recoil of a shot due later this tick, started by frame() when it is due
   let tapTicks = 0; // a tap (touch, or a click without pointer lock) holds the trigger until it fires or for this many ticks
   let crosshair = true;
   // What the first-person model shows, in now() milliseconds: the draw, the last shot, the reload in progress, and the
   // aim progress of the last two ticks (the view interpolates between them).
-  const anim = { drawAt: -Infinity, drawTime: 0, shotAt: -Infinity, reload: null, aimFrom: 0, aimTo: 0, tickAt: -Infinity, inspectAt: -Infinity, inspectEmpty: false };
+  // A shot timed later in its tick (`at`) moves shotAt ahead of now(); prevShotAt keeps the model on the last shot until then.
+  const anim = { drawAt: -Infinity, drawTime: 0, shotAt: -Infinity, prevShotAt: -Infinity, reload: null, aimFrom: 0, aimTo: 0, tickAt: -Infinity, inspectAt: -Infinity, inspectEmpty: false };
   // F: TaCZ's inspect animation and its sounds; firing, reloading, aiming or drawing cuts it short.
   const stopInspect = () => { anim.inspectAt = -Infinity; schedule.cancel("inspect"); };
   const random = () => (deps.random ?? Math.random)();
@@ -52,7 +54,16 @@ export function createGunHooks(deps) {
   const holdingGun = () => heldGun() !== undefined;
   const sound = (event, options) => { if (event) deps.sound?.(event, options); };
   const ev = (path) => (path ? gunSoundEvent(path) : null);
-  const shared = (name) => sound(ev(SHARED_SOUNDS[name]));
+  const shared = (name, options) => sound(ev(SHARED_SOUNDS[name]), options);
+  // SoundPlayManager: a shot at volume 0.8 (0.6 silenced), dry fire at 1.0, each at pitch 0.9 + rand * 0.125.
+  // GunSoundInstance squares volume * distance gain, so the shooter hears 0.64, 0.36 and 1.0.
+  const shotPitch = () => 0.9 + random() * 0.125;
+  const shotSound = (gun, silenced, options = {}) => {
+    const s = soundTable(gun), quiet = silenced && s.silenced;
+    sound(ev(quiet ? s.silenced : s.shoot), { volume: quiet ? 0.36 : 0.64, pitch: shotPitch(), ...options });
+  };
+  // HitSoundConcurrencyLimit 1: a new hit sound stops the one still playing.
+  const hitSound = (name) => { if (name) shared(name, { exclusive: "guns.hit" }); };
   const NO_SOUNDS = { tactical: [], empty: [], start: [], shell: [], end: [] };
   const soundTable = (gun) => soundsOf(gun.id) ?? NO_SOUNDS;
   // The folder a gun's sounds sit in ("ak47"), for preloading.
@@ -155,9 +166,9 @@ export function createGunHooks(deps) {
     }
     // Hit feedback for the shooter: the kill sound beats a headshot, which beats a body hit (on a gun server: its hit events).
     if (remote()) return;
-    if (out.hits.some((h) => h.entity.health <= 0)) shared("kill");
-    else if (out.hits.some((h) => h.head)) shared("head");
-    else if (out.hits.length) shared("flesh");
+    if (out.hits.some((h) => h.entity.health <= 0)) hitSound("kill");
+    else if (out.hits.some((h) => h.head)) hitSound("head");
+    else if (out.hits.length) hitSound("flesh");
   }
   function startReloadSounds(gun, wasEmpty) {
     const s = soundTable(gun);
@@ -170,8 +181,8 @@ export function createGunHooks(deps) {
   function remoteShot(e) {
     const gun = GUNS[e.gun];
     if (!gun || !Array.isArray(e.origin) || !Array.isArray(e.paths)) return;
-    const s = soundTable(gun), [x, y, z] = e.origin;
-    sound(ev(e.silenced && s.silenced ? s.silenced : s.shoot), { position: { x, y, z } });
+    const [x, y, z] = e.origin;
+    shotSound(gun, e.silenced, { position: { x, y, z } });
     const t = gun.pack?.tracer ?? DEFAULT_TRACER, n = remoteShots.get(e.id) ?? 0;
     remoteShots.set(e.id, n + 1);
     for (const [dx, dy, dz, distance] of e.paths) {
@@ -193,7 +204,7 @@ export function createGunHooks(deps) {
     holdingGun,
     // One gun-server event addressed to this player (gun-simulation.js send/near).
     serverEvent(e) {
-      if (e?.type === "hit") shared(e.kill ? "kill" : e.melee ? null : e.head ? "head" : "flesh");
+      if (e?.type === "hit") hitSound(e.kill ? "kill" : e.melee ? null : e.head ? "head" : "flesh");
       else if (e?.type === "shot") remoteShot(e);
     },
     holdingMelee: melee.holding,
@@ -272,6 +283,7 @@ export function createGunHooks(deps) {
     fov() { const gun = heldGun(); return gun ? aim.fov(gun) : 1; },
     // Once per rendered frame: the recoil turn, in radians, to add to [pitch, yaw].
     frame() {
+      if (pendingKick && now() >= pendingKick.at) { recoil.kick(pendingKick.gun, pendingKick.aim, pendingKick.at, random); pendingKick = null; }
       if (!recoil.active) return [0, 0];
       const [p, y] = recoil.frame(now());
       return [p * RAD, y * RAD];
@@ -283,7 +295,8 @@ export function createGunHooks(deps) {
       for (const k of Object.keys(sent)) delete sent[k];
       remoteShots.clear();
       tapTicks = 0; shotCount = 0; aim.held = false; aim.progress = 0; recoil.reset(); schedule.cancel();
-      Object.assign(anim, { drawAt: -Infinity, shotAt: -Infinity, reload: null, aimFrom: 0, aimTo: 0, inspectAt: -Infinity });
+      pendingKick = null;
+      Object.assign(anim, { drawAt: -Infinity, shotAt: -Infinity, prevShotAt: -Infinity, reload: null, aimFrom: 0, aimTo: 0, inspectAt: -Infinity });
       deps.hud?.(null);
       if (!crosshair) { crosshair = true; deps.crosshair?.(true); }
     },
@@ -304,7 +317,7 @@ export function createGunHooks(deps) {
       return {
         gunId: gun.id,
         aim: anim.aimFrom + (anim.aimTo - anim.aimFrom) * partial,
-        sinceShot: s(anim.shotAt),
+        sinceShot: s(anim.shotAt <= t ? anim.shotAt : anim.prevShotAt),
         draw: anim.drawTime > 0 ? Math.min(1, s(anim.drawAt) / anim.drawTime) : 1,
         sinceDraw: s(anim.drawAt),
         empty: rounds(held()) <= 0,
@@ -333,19 +346,25 @@ export function createGunHooks(deps) {
         const g = event.gun, s = soundTable(g);
         if (event.type === "draw") {
           schedule.cancel(); recoil.reset(); aim.progress = 0;
-          Object.assign(anim, { drawAt: now(), drawTime: g.draw, shotAt: -Infinity, reload: null, aimFrom: 0, aimTo: 0, inspectAt: -Infinity });
+          pendingKick = null;
+          Object.assign(anim, { drawAt: now(), drawTime: g.draw, shotAt: -Infinity, prevShotAt: -Infinity, reload: null, aimFrom: 0, aimTo: 0, inspectAt: -Infinity });
           sound(ev(s.draw)); deps.preload?.(soundFolder(g)); deps.drawn?.(g);
         }
         if (event.type === "shot") {
           event.result = shoot(g); changed = true;
-          recoil.kick(g, aim.progress, now(), random); anim.shotAt = now(); stopInspect();
+          // TaCZ times each shot to the millisecond inside the tick (LocalPlayerShoot): its sound, kick and model follow `at`.
+          const shotAt = now() + (event.at ?? 0) * 1000;
+          if (pendingKick) recoil.kick(pendingKick.gun, pendingKick.aim, pendingKick.at, random);
+          pendingKick = { gun: g, aim: aim.progress, at: shotAt };
+          if (anim.shotAt <= now()) anim.prevShotAt = anim.shotAt;
+          anim.shotAt = shotAt; stopInspect();
           if (anim.reload?.kind === "shell" && anim.reload.endAt == null) anim.reload.endAt = now(); // the trigger stopped the loading
-          sound(ev(g.silenced && s.silenced ? s.silenced : s.shoot)); // a silencer: the pack's own suppressed report
+          shotSound(g, g.silenced, { delay: event.at ?? 0 }); // a silencer: the pack's own suppressed report
           if (s.pump) { schedule.cancel("pump"); schedule.add(s.pump, ev, "pump"); }
           muzzle(g, event.result.ray ?? deps.eye() ?? { origin: [0, 0, 0], dir: [0, 0, -1] });
           impacts(g, event.result); tracers(g, event.result);
         }
-        if (event.type === "empty") shared("dry");
+        if (event.type === "empty") shared("dry", { pitch: shotPitch() });
         if (event.type === "shell") {
           changed = true;
           if (anim.reload) { anim.reload.shellAt = now(); anim.reload.shells++; }

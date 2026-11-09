@@ -1,7 +1,7 @@
 // Guns mod (not 1.7.10): damage falloff, spread, the shot trace and the trigger/reload controller.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { damageAt, inaccuracyOf, spreadDirection, traceShot, GunController, fireShot, TICK } from "./mods/guns/firing.js";
+import { damageAt, inaccuracyOf, spreadDirection, traceShot, GunController, fireShot, TICK, roundsPerMinute } from "./mods/guns/firing.js";
 import { GUNS, P320, AKM, M870, AMMO_45ACP, AMMO_762X39, AMMO_12G, roundsLeft } from "./mods/guns/catalog.js";
 
 // Seeded LCG so spread tests are repeatable.
@@ -146,6 +146,38 @@ test("fire rates between whole ticks average out", () => {
     assert.equal(shots(run(40)), 15); // 450 rpm = 7.5 per second
     assert.equal(roundsLeft(stack), 15);
   } finally { GUNS[AKM].rpm = 600; }
+});
+
+// Shot times, in seconds: the tick each fired on plus its offset inside that tick (TaCZ LocalPlayerShoot's timer).
+function shotTimes(rpm, ticks, adjust) {
+  const { c, ctx } = harness(AKM, { creative: true });
+  const before = GUNS[AKM].rpm, beforeAdjust = GUNS[AKM].rpmAdjust;
+  GUNS[AKM].rpm = rpm; GUNS[AKM].rpmAdjust = adjust;
+  try {
+    for (let i = 0; i < ticksFor(GUNS[AKM].draw); i++) c.tick(ctx);
+    c.press();
+    const times = [];
+    for (let i = 0; i < ticks; i++) for (const e of c.tick(ctx)) if (e.type === "shot") times.push(i * TICK + e.at);
+    return times;
+  } finally { GUNS[AKM].rpm = before; GUNS[AKM].rpmAdjust = beforeAdjust; }
+}
+const gaps = (times) => times.slice(1).map((t, i) => t - times[i]);
+
+test("shots between whole ticks keep even gaps inside their ticks", () => {
+  for (const rpm of [450, 750, 900]) {
+    const times = shotTimes(rpm, 60);
+    assert.equal(times[0], 0); // a fresh trigger pull fires at once
+    for (const g of gaps(times)) assert.ok(Math.abs(g - 60 / rpm) < 1e-9, `${rpm} rpm gap ${g}`);
+  }
+  assert.deepEqual(shotTimes(600, 10).map((t) => Math.round(t / TICK * 1e6) / 1e6), [0, 2, 4, 6, 8]); // still whole ticks
+});
+
+test("fire_mode_adjust changes a mode's rounds per minute", () => {
+  assert.equal(roundsPerMinute({ rpm: 350, rpmAdjust: { auto: 300 } }, "auto"), 650); // FN FAL
+  assert.equal(roundsPerMinute({ rpm: 350, rpmAdjust: { auto: 300 } }, "semi"), 350);
+  assert.equal(roundsPerMinute({ rpm: 300, rpmAdjust: { semi: -400 } }, "semi"), 300); // not positive: TaCZ's 300
+  assert.equal(roundsPerMinute({ rpm: 600 }, "auto"), 600);
+  for (const g of gaps(shotTimes(350, 40, { auto: 300 }))) assert.ok(Math.abs(g - 60 / 650) < 1e-9);
 });
 
 test("an empty gun clicks once per press, then a magazine reload takes ammo", () => {

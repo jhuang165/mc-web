@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { SoundBank } from "./audio.js";
+import { SoundBank, clampBuffer } from "./audio.js";
 import { CartSounds } from "./cart-sounds.js";
 import { reachesPlayer, isClientMade } from "./sound-origin.js";
 import { normalizedVolume, normalizedPitch, categoryVolume } from "./settings.js";
@@ -126,4 +126,26 @@ test("getNormalizedVolume / Pitch: clamp(volume * entry * category), MASTER and 
   assert.equal(normalizedVolume(1, 1, { block: 0 }, "block"), 0);
   assert.equal(normalizedPitch(0.1, 1), 0.5);
   assert.equal(normalizedPitch(3, 1), 2);
+});
+
+test("a clip mastered above full scale is clamped at decode, as 16-bit loading would", () => {
+  const hot = [Float32Array.from([0.5, 2, -3]), Float32Array.from([0.25, -0.5, 1])];
+  const buffer = { numberOfChannels: 2, getChannelData: (c) => hot[c] };
+  assert.equal(clampBuffer(buffer), buffer);
+  assert.deepEqual([...hot[0]], [0.5, 1, -1]);
+  assert.deepEqual([...hot[1]], [0.25, -0.5, 1]);
+});
+
+test("a delayed sound starts later on the audio clock; an exclusive one stops its predecessor", async () => {
+  const { b } = bank();
+  b.manifest = manifest; b.ready = Promise.resolve(manifest);
+  const starts = [];
+  const node = () => ({ ...fakeNode(), start(when) { this.started = true; this.when = when; starts.push(this); } });
+  b.context = { currentTime: 10, createBufferSource: node, createGain: fakeNode, createStereoPanner: fakeNode, destination: {} };
+  b.buffer = async () => ({ numberOfChannels: 2 });
+  await b.play("random.click", { delay: 0.03, exclusive: "hit" });
+  assert.ok(Math.abs(starts[0].when - 10.03) < 1e-9);
+  await b.play("random.click", { exclusive: "hit" });
+  assert.equal(starts[0].stopped, true);
+  assert.equal(starts[1].when, 10);
 });

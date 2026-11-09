@@ -10,6 +10,20 @@ import { reachesPlayer } from "./sound-origin.js";
 export const blockSound = (id) => soundTypeOf(id).break.slice(4);
 export const stepSound = (id) => soundTypeOf(id).step.slice(5);
 export { attenuationDistance };
+// SoundBuffer loads each clip as 16-bit PCM, which caps every sample at full scale. decodeAudioData keeps float samples, and
+// Web Audio has no output limiter, so a clip mastered above 0 dBFS (several TaCZ shots peak at +2 to +7 dB) would clip hard
+// when sounds overlap. Clamp once at decode, only for a clip that goes over.
+export function clampBuffer(buffer) {
+  if (!buffer?.getChannelData) return buffer;
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const data = buffer.getChannelData(c);
+    let over = false;
+    for (let i = 0; i < data.length; i++) if (data[i] > 1 || data[i] < -1) { over = true; break; }
+    if (!over) continue;
+    for (let i = 0; i < data.length; i++) data[i] = data[i] > 1 ? 1 : data[i] < -1 ? -1 : data[i];
+  }
+  return buffer;
+}
 export class SoundBank {
   constructor(options, listener) {
     this.options = options;
@@ -18,6 +32,7 @@ export class SoundBank {
     this.listener = listener;
     this.cache = new Map();
     this.active = new Map();
+    this.exclusive = new Map(); // play({ exclusive }) key -> its last source
     this.status = "Loading original effects…";
     // paulscode's channels: 28 normal (effects) and 4 streaming (music, records); a fifth source takes over the next in rotation.
     this.normal = new ChannelPool(NORMAL_CHANNELS);
@@ -107,6 +122,7 @@ export class SoundBank {
             return r.arrayBuffer();
           })
           .then((b) => this.context.decodeAudioData(b))
+          .then(clampBuffer)
           .catch((e) => {
             this.status = e.message;
             return null;
@@ -163,7 +179,9 @@ export class SoundBank {
     this.delayed = this.delayed.filter((d) => this.ticks < d.due);
     for (const d of due) this.play(d.event, d.options);
   }
-  async play(event, { volume = 1, pitch = 1, position = null, distanceDelay = false, local = false } = {}) {
+  // `delay`: seconds on the audio clock after this call to start (a gun shot timed inside its tick). `exclusive`: a key whose
+  // previous sound this one stops (TaCZ's hit-sound concurrency limit of 1).
+  async play(event, { volume = 1, pitch = 1, position = null, distanceDelay = false, local = false, delay = 0, exclusive = null } = {}) {
     // S29 range: the server sends a world sound only to players within 16 blocks (16 * volume above 1) of their feet.
     if (position && !reachesPlayer(event, position, volume, this.listener().feet, { local })) return;
     // The GUI button click is PositionedSoundRecord.func_147674_a: ATTENUATION_NONE at the world origin, which OpenAL still
@@ -179,6 +197,7 @@ export class SoundBank {
     if (!this.options().sound || this.master() <= 0) return;
     this.unlock();
     if (!this.context) return;
+    const startAt = this.context.currentTime + Math.max(0, +delay || 0);
     await this.ready;
     const clip = this.resolve(event);
     if (!clip) return;
@@ -205,7 +224,12 @@ export class SoundBank {
       } else gain.connect(this.context.destination);
       this.active.set(source, playing);
       source.onended = () => { playing.playing = false; this.active.delete(source); };
-      source.start();
+      if (exclusive) {
+        const previous = this.exclusive.get(exclusive);
+        if (previous) try { previous.stop(); } catch {}
+        this.exclusive.set(exclusive, source);
+      }
+      source.start(Math.max(this.context.currentTime, startAt));
       return true;
     } catch (e) {
       this.status = e.message;

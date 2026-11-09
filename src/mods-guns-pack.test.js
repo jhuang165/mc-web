@@ -7,13 +7,13 @@ import * as THREE from "three";
 import { parseLenient } from "./mods/guns/json5.js";
 import { bedrockGeometry, buildBedrockModel, boneMatrix, defaultVisibility } from "./mods/guns/bedrock.js";
 import { parseAnimations, sampleTrack, Pose, poseModel, gunLayers } from "./mods/guns/animation.js";
-import { taczGun, taczAmmo, taczRecipes, loadTaczPack, packUrl } from "./mods/guns/pack.js";
+import { taczGun, taczAmmo, taczRecipes, loadTaczPack, packUrl, rpmAdjust } from "./mods/guns/pack.js";
 import { setGunPack, gunPack, gunSmithRecipes, creativeOrder } from "./mods/guns/install.js";
 import { gunAssets, gunAssetsFailed, loadGunAssets, PackGunView, mirrorMagazine } from "./mods/guns/pack-view.js";
 import { muzzleOverride, gunMuzzle } from "./mods/guns/model.js";
 import { smithMatches, smithCount, canSmith, smithCraft } from "./mods/guns/smith-screen.js";
 import { GUNS, AMMO, AKM, CREATIVE_ORDER, GUN_ITEMS } from "./mods/guns/catalog.js";
-import { GunController } from "./mods/guns/firing.js";
+import { GunController, roundsPerMinute } from "./mods/guns/firing.js";
 import { TACZ_GUN_IDS, TACZ_AMMO_IDS } from "./mods/guns/ids.js";
 
 const LANG = { "tacz.gun.glock_17.name": "§6Glock 17", "tacz.gun.minigun.name": "Minigun", "tacz.ammo.9mm.name": "9mm Round" };
@@ -42,6 +42,23 @@ const rawPack = () => ({
     { name: "9mm", result: { type: "ammo", id: "tacz:9mm", count: 30 }, materials: [{ item: { tag: "forge:gunpowder" }, count: 1 }, { item: { tag: "forge:gems/lapis" }, count: 1 }, { item: { tag: "forge:ingots/copper" }, count: 2 }] },
     { name: "odd", result: { type: "gun", id: "tacz:glock_17" }, materials: [{ item: { item: "minecraft:obsidian_unknown" }, count: 1 }] },
   ],
+});
+
+test("fire_mode_adjust becomes per-mode rpm offsets", async () => {
+  const e = minigunEntry();
+  e.data.fire_mode = ["auto", "semi"];
+  e.data.fire_mode_adjust = { auto: { rpm: 0 }, semi: { rpm: -400 }, burst: {} };
+  assert.deepEqual(taczGun("minigun", e, LANG).rpmAdjust, { semi: -400 });
+  assert.equal(taczGun("glock_17", glockEntry(), LANG).rpmAdjust, null);
+  assert.equal(rpmAdjust({ auto: { rpm: 300 } }).auto, 300);
+  // The installed TaCZ pack (Git-ignored), when present: TaCZ's per-mode rates for the guns that adjust them.
+  const { readFile } = await import("node:fs/promises");
+  const expect = { fn_fal: ["auto", 650], hk_g3: ["auto", 550], mk14: ["auto", 680], type_81: ["semi", 320], spr15hb: ["semi", 300] };
+  for (const [name, [mode, rpm]] of Object.entries(expect)) {
+    const text = await readFile(new URL(`../public/mods/tacz/pack/data/tacz/data/guns/${name}_data.json`, import.meta.url), "utf8").catch(() => null);
+    if (!text) continue;
+    assert.equal(roundsPerMinute({ rpm: +parseLenient(text).rpm, rpmAdjust: rpmAdjust(parseLenient(text).fire_mode_adjust) }, mode), rpm, name);
+  }
 });
 
 test("pack files parse with comments and trailing commas, strings untouched", () => {

@@ -79,6 +79,12 @@ function damageBands(bullet, pellets) {
   return out;
 }
 // TaCZ recoil keyframes { time, value: [min, max] } as feel.js's [time, [min, max]].
+// GunData fire_mode_adjust: { auto|semi|burst: { rpm } }, kept as { mode: rpm offset } for the modes that change it.
+export function rpmAdjust(adjust) {
+  const out = {};
+  for (const mode of ["auto", "semi", "burst"]) { const r = +adjust?.[mode]?.rpm; if (r) out[mode] = r; }
+  return Object.keys(out).length ? out : null;
+}
 const recoilKeys = (list) => (Array.isArray(list) ? list.map((k) => [+k.time || 0, [+k.value?.[0] || 0, +k.value?.[1] || 0]]) : []);
 
 // One pack gun in catalog.js's shape, plus `pack` (what the renderer and sounds read). `id` comes from ids.js.
@@ -102,6 +108,7 @@ export function taczGun(name, entry, lang = {}) {
     magazine: Math.max(0, d.ammo_amount | 0),
     feed: d.reload?.type === "inventory" ? "inventory" : "magazine", // the minigun fires straight from the inventory
     rpm: +d.rpm > 0 ? +d.rpm : 300,
+    rpmAdjust: rpmAdjust(d.fire_mode_adjust), // per-mode rpm offsets (firing.js roundsPerMinute)
     modes: modes.length ? modes : ["semi"],
     burst: d.burst_data ? { count: Math.max(1, d.burst_data.count | 0), bpm: +d.burst_data.bpm || 600, minInterval: +d.burst_data.min_interval || 0, continuous: !!d.burst_data.continuous_shoot } : null,
     pellets,
