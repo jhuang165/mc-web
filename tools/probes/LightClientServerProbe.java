@@ -181,6 +181,51 @@ public class LightClientServerProbe {
     out.add(diff("after 3 more ticks"));
     System.out.println("{\"case\":\"" + name + "\",\"clientChecks\":" + checks + ",\"snaps\":[" + String.join(",", out) + "]}");
   }
+  // Batch 31: PlayerInstance.sendChunkUpdate with 64 changed cells in one chunk sends an S21PacketChunkData(chunk, false, flaggedSections) instead
+  // of single block changes (bytecode-read in mr). The client's fillChunk then replaces the flagged sections' blocks, metadata, block light and
+  // sky light with the server's, runs generateHeightMap and (a partial chunk) resetRelightChecks. This runs 70 edits in chunk (0, 0) (stone, glowstone
+  // beside the chunk edge x = 0 so light also lands in the unflagged chunk -1, a slab at y 70) on the server, copies the flagged sections of that chunk
+  // to a client that did not run those setBlocks, and compares the two worlds at once, after 3 ticks, and after 600 client ticks of
+  // enqueueRelightChecks (Chunk.o(), 8 cells a tick; the client only calls it for newly active chunks, so the 600 ticks are an upper bound).
+  static void resend(String name, boolean checks, boolean sectionsOnly) throws Exception {
+    begin(); flat(); anchors();
+    server = newSim();
+    for (int cx = -R; cx <= R; cx++) for (int cz = -R; cz <= R; cz++) build(server, cx, cz, true);
+    for (apx c : server.prov.chunks.values()) c.k = true;
+    tick(server, true, true); tick(server, true, true);
+    makeClient();
+    List<String> out = new ArrayList<>();
+    out.add(diff("initial"));
+    int mask = 0, n = 0;
+    for (int i = 0; i < 70; i++) {
+      int x = i % 7 == 0 ? 0 : 1 + i % 7, z = 1 + (i / 7) % 10, y = i >= 60 ? 70 : 61, id = i % 5 == 0 ? 89 : 1;
+      server.world.d(x, y, z, aji.e(id), 0, 2);
+      mask |= 1 << (y >> 4); n++;
+      tick(server, true, true);
+    }
+    out.add(diff("server edits (client not yet updated)"));
+    apx sc = server.prov.chunks.get(agu.a(0, 0)), cc = client.prov.chunks.get(agu.a(0, 0));
+    apz[] ss = sc.i(), cs = cc.i();
+    for (int sec = 0; sec < 16; sec++) {
+      if ((mask >> sec & 1) == 0) continue;
+      if (ss[sec] == null) continue;
+      if (cs[sec] == null) cs[sec] = new apz(sec << 4, true); // fillChunk creates a section the packet carries
+      for (int x = 0; x < 16; x++) for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) {
+        if (ss[sec] == null) continue;
+        cs[sec].a(x, y, z, ss[sec].a(x, y, z)); // block (aji overload)
+        cs[sec].a(x, y, z, ss[sec].b(x, y, z)); // metadata (int overload)
+        cs[sec].b(x, y, z, ss[sec].c(x, y, z)); // sky
+        cs[sec].c(x, y, z, ss[sec].d(x, y, z)); // block light
+      }
+    }
+    cc.a(); // generateHeightMap
+    cc.n(); // resetRelightChecks: a partial chunk packet
+    out.add(diff("after the resend"));
+    for (int t = 0; t < 3; t++) { tick(server, true, true); tick(client, false, false); }
+    out.add(diff("3 ticks"));
+    if (checks) { for (int t = 0; t < 600; t++) { tick(server, true, true); tick(client, false, true); } out.add(diff("600 client relight ticks")); }
+    System.out.println("{\"case\":\"" + name + "\",\"clientChecks\":" + checks + ",\"edits\":" + n + ",\"sectionMask\":" + mask + ",\"snaps\":[" + String.join(",", out) + "]}");
+  }
   static Object[] e(int x, int y, int z, int id, int meta, String label) { return new Object[] {x, y, z, id, meta, label}; }
 
   public static void main(String[] args) throws Exception {
@@ -188,6 +233,8 @@ public class LightClientServerProbe {
     uf.setAccessible(true);
     unsafe = (sun.misc.Unsafe) uf.get(null);
     aji.p();
+    resend("resend64", false, false);
+    resend("resend64", true, false);
     for (boolean checks : new boolean[] {false, true}) {
       // Flat ground: a pillar (height map rises), the same pillar removed, a one-block pit (height map falls), a torch.
       begin(); flat(); anchors();
