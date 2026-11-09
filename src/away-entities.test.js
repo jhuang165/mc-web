@@ -70,7 +70,7 @@ test("a minecart rolls along rails and a boat settles; saved carts with a rider 
   assert.equal(held.x, 3.5);
 });
 
-test("a powered dropper spills an item entity that falls and merges; an arrow dispenser keeps its stack", async () => {
+test("a powered dropper spills an item entity that falls and merges; an arrow dispenser shoots a live arrow", async () => {
   const { World } = await import("./world.js");
   const { fromOriginal } = await import("./block-registry.js");
   const { createRedstoneRuntime } = await import("./redstone-runtime.js");
@@ -88,7 +88,7 @@ test("a powered dropper spills an item entity that falls and merges; an arrow di
     const r = await run(root, 200, (chunks) => { put({ put: (x, y, z, id, meta) => setBlock(chunks, x, y, z, id, meta) }, 0, orig, 3); put({ put: (x, y, z, id, meta) => setBlock(chunks, x, y, z, id, meta) }, 1, 152, 0); });
     const tile = r.tiles.dispensers["5,11,5"];
     if (orig === 158) { assert.equal(tile.items[0].count, 1); assert.equal(r.entities.drops.length, expected, "one item thrown"); }
-    else { assert.equal(tile.items[0].count, 2, "no arrow system in the run: the stack stays"); assert.equal(r.entities.drops.length, 0); }
+    else { assert.equal(tile.items[0].count, 1, "one arrow used"); assert.equal(r.entities.drops.length, 0); assert.equal(r.entities.arrows.length, 1, "the arrow is a saved entity (in flight or stuck)"); }
   }
 });
 

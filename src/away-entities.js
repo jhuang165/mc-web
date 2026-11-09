@@ -5,6 +5,12 @@
 // minecart and boat systems on the headless away world for those ticks. The saved records of entities that sit in a column the run did not
 // load stay as they were (they are not in a loaded chunk). Nothing here is a new rule: ItemEntities, ExperienceOrbs, tickTnt, Minecarts,
 // Boats and applyExplosion are the same modules the live game ticks.
+//
+// Batch 32 adds the mobs (EntityWorld with no player), arrows, thrown projectiles, rockets, potions, fireballs and hanging entities. With no
+// player World.getClosestPlayerToEntity is null, so EntityLiving.despawnEntity does nothing (bytecode-read, sw.w: the whole distance block sits
+// behind `player != null`): mobs run their AI and physics, take fall, fire, lava, drowning and explosion damage, and stay for as long as they
+// live; their entityAge keeps counting, so EntityAIWander (which needs age < 100) stops after the first 100 ticks. Natural spawning, spawners
+// and sieges need players and do not run.
 import { ItemEntities } from "./item-entities.js";
 import { ExperienceOrbs } from "./experience.js";
 import { primeTnt, TNT_Y_OFFSET } from "./explosion.js";
@@ -13,13 +19,28 @@ import { applyExplosion } from "./explosion-simulation.js";
 import { Minecarts } from "./minecarts.js";
 import { Boats } from "./boats.js";
 import { JavaRandom } from "./java-random.js";
+import { EntityWorld, ENTITY_TYPES } from "./entities.js";
+import { Survival } from "./survival.js";
+import { WitchPotions } from "./witch-potions.js";
+import { Arrows, arrowTargets } from "./bow.js";
+import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
+import { FireworkRockets } from "./fireworks-live.js";
+import { Hanging, hangingArrowTargets } from "./hanging.js";
+import { drainMobEvents } from "./living-simulation.js";
+import { isWet, canSeeSky } from "./weather.js";
+import { skylightSubtracted, celestialAngle } from "./lighting.js";
+import { copyStack } from "./inventory.js";
 
-// Cart kinds a headless run can tick: empty (0), chest (1), furnace (2) and TNT (3) carts. Hopper, spawner and command carts need hosts
-// (inventory transfer, mob spawning, the command interpreter) the run does not have, so they stay frozen as saved.
-const CART_TYPES = new Set([0, 1, 2, 3]);
+// Cart kinds a headless run can tick (cart-variants.js TYPE): empty (0), chest (1), furnace (2), TNT (3), spawner (4) and hopper (5) carts.
+// A spawner cart only moves: MobSpawnerBaseLogic needs a player within 16 blocks, so nothing spawns with nobody there. The hopper cart
+// transfers through the run's Hoppers host. The command cart (6) needs the command interpreter and stays frozen as saved.
+const CART_TYPES = new Set([0, 1, 2, 3, 4, 5]);
+// Mobs the run leaves as saved: the dimension bosses, and anything riding, ridden, leashed or carrying the player.
+const FROZEN_MOBS = new Set(["ender_dragon", "ender_crystal", "wither"]);
+const PLAYER_FAR = 1e9; // the stand-in position of the absent player (never read as a target: `absent` and not alive)
 const num = (v) => Number.isFinite(v);
 
-export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, readStack, maxStack, sound = () => {} }) {
+export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, readStack, maxStack, transfer = null, sound = () => {} }) {
   const e = plan.entities;
   if (!e) return null;
   const at = (r) => num(r?.x) && num(r?.z) && ticking(r.x, r.z);
@@ -30,6 +51,16 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
   const random = () => rng.nextDouble();
 
   const drops = split(e.drops), orbs = split(e.xpOrbs), tnt = split(e.tnt);
+  const mobList = Array.isArray(e.mobs) ? e.mobs : [], mounts = new Set(mobList.map((m) => m?.riding).filter((r) => typeof r === "string"));
+  const simMob = (m) => m && at(m) && ENTITY_TYPES[m.type] && !FROZEN_MOBS.has(m.type) && !m.riding && !mounts.has(m.id) && !m.leash && !m.playerRides;
+  const mobSplit = { inside: mobList.filter(simMob), rest: mobList.filter((m) => !simMob(m)) };
+  const arrowSplit = split(e.arrows);
+  const ballSplit = (() => { const inside = [], rest = []; for (const r of Array.isArray(e.projectiles) ? e.projectiles : []) (at(r) && r.kind !== "enderPearl" ? inside : rest).push(r); return { inside, rest }; })(); // a pearl needs its thrower
+  const potionSplit = split(e.potions);
+  const rocketList = Array.isArray(e.rockets?.rockets) ? e.rockets.rockets : [], rocketSplit = { inside: rocketList.filter(at), rest: rocketList.filter((r) => !at(r)) };
+  const fireList = Array.isArray(e.fireballs) ? e.fireballs : [], fireIn = (r) => (r?.dimension ?? 0) === 0 && at(r);
+  const hangList = Array.isArray(e.hanging) ? e.hanging : [], hangAt = (r) => num(r?.tx) && num(r?.tz) && ticking(r.tx, r.tz);
+  const hangSplit = { inside: hangList.filter(hangAt), rest: hangList.filter((r) => !hangAt(r)) };
   const cartList = Array.isArray(e.minecarts?.carts) ? e.minecarts.carts : [], boatList = Array.isArray(e.boats) ? e.boats : [];
   const simCart = (c) => at(c) && CART_TYPES.has(c.type) && !c.rider && !ridden.has(`cart-${c.id}`);
   const simBoat = (b) => at(b) && !b.rider && !ridden.has(`boat-${b.id}`);
@@ -47,18 +78,55 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
   minecarts.nextId = Math.max(minecarts.nextId, top + 1);
   boats.nextId = Math.max(boats.nextId, minecarts.nextId);
   minecarts.blockHook = (x, y, z) => { rt.redstone.collide(x, y, z); rt.flush(); };
+  const arrows = new Arrows(random), projectiles = new Projectiles(random), rockets = new FireworkRockets(new JavaRandom(BigInt(seed) * 40503n + 3n)), hanging = Hanging.fromJSON(hangSplit.inside);
+  arrows.load(arrowSplit.inside); projectiles.load(ballSplit.inside);
+  rockets.load({ rockets: rocketSplit.inside });
+  arrows.wet = (a) => isWet(weather, world, { x: a.x, y: a.y, z: a.z, inWater: a.water }, 0.5);
+  // The mobs: EntityWorld on the away world with no player. `absent` keeps despawnEntity out (ai.js); the survival has health 0, so the stand-in
+  // player is not alive and is never a target, a push partner or a victim. `isActive` is the run's loaded area (the saved world is Superflat-shaped).
+  const mobSv = new Survival({}, "survival");
+  mobSv.health = 0;
+  const player = { x: PLAYER_FAR, y: PLAYER_FAR, z: PLAYER_FAR };
+  const mobs = new EntityWorld(world, mobSplit.inside, random);
+  const mobTop = Math.max(0, ...mobList.map((m) => Number(String(m?.id).replace("mob-", "")) + 1).filter(num));
+  mobs.nextId = Math.max(mobs.nextId, mobTop);
+  mobs.ai.player.absent = true;
+  if (Number.isInteger(plan.difficulty)) mobs.difficulty = plan.difficulty;
+  let clock = Number.isFinite(plan.time) ? plan.time : 0;
+  const subtracted = () => skylightSubtracted(celestialAngle(clock), weather.rainStrength(1), weather.weightedThunder(1));
+  mobs.isActive = (m) => ticking(m.x, m.z);
+  mobs.worldRandom = weather.random;
+  mobs.wet = (m, height) => isWet(weather, world, m, height);
+  mobs.isDaytime = () => subtracted() < 4;
+  mobs.canSeeSky = (x, y, z) => canSeeSky(world, x, y, z);
+  mobs.isRaining = () => weather.isRaining();
+  mobs.isThundering = () => weather.isThundering();
+  // No lighting volume runs here: the brightness a mob reads is open sky less the skylight subtracted (no block light), which is what its
+  // sunburn and path weights need; spawning is off.
+  mobs.lightAt = (x, y, z) => (canSeeSky(world, x, y, z) ? Math.max(0, 15 - subtracted()) : 0);
+  mobs.shoot = (m, target, scale) => arrows.skeletonShoot(m, target, scale, mobs.difficulty);
+  mobs.ignite = (x, y, z) => fire.ignite(x, y, z);
+  mobs.potions = new WitchPotions(mobs, random);
+  mobs.potions.load(potionSplit.inside);
+  if (fireList.some(fireIn)) { const mine = fireList.filter(fireIn); mobs.fireballs.load(mine, 0); mobs.skulls.load(mine, 0); }
+  if (e.villages) mobs.villages.loadJSON(e.villages);
   const late = []; // spills after the gate: an item entity that would never tick, kept as a saved record
   let open = true;
 
-  // Explosion.doExplosionA/B over the run's own entity systems. Mobs, arrows and projectiles are not part of the run.
-  const noHit = { explode() {} };
+  // Explosion.doExplosionA/B over the run's own entity systems (mobs, arrows, projectiles and hanging entities included).
   const survival = { health: 0, furnaces: tiles.furnaces, chests: tiles.chests, dispensers: tiles.dispensers, brewing: tiles.brewing, hoppers: tiles.hoppers };
+  // drainMobEvents with the run's hooks: sounds, particles and block redraws are not drawn; deaths drop and give experience, mob explosions explode.
+  const drainMob = () => {
+    drainMobEvents({ mobs, xpOrbs: xp, items }, { explode: (x, y, z, size, opts) => self.explode(x, y, z, size, opts) });
+    mobs.drainClientSounds();
+    xp.sounds.splice(0); items.sounds?.splice(0);
+  };
   const self = {
-    items, xp, primed, minecarts, boats, falling: null,
-    explode(x, y, z, size, { exploder = null, attacker = null } = {}) {
-      const out = applyExplosion({ world, weather, mobs: null, items, xpOrbs: xp, arrows: noHit, projectiles: noHit, falling: self.falling, primed, survival,
+    items, xp, primed, minecarts, boats, mobs, arrows, projectiles, rockets, hanging, falling: null,
+    explode(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false, blue = false } = {}) {
+      const out = applyExplosion({ world, weather, mobs, items, xpOrbs: xp, arrows, projectiles, hanging, falling: self.falling, primed, survival,
         position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, farming: { observe() {} } },
-      { x, y, z, size, exploder, attacker, smoking: true }, { ignite: (fx, fy, fz) => fire.ignite(fx, fy, fz), sound });
+      { x, y, z, size, exploder, attacker, smoking, flaming, blue }, { ignite: (fx, fy, fz) => fire.ignite(fx, fy, fz), sound });
       rt.fluidChanges(out.changes.filter((c) => c[4] === 0 && c[3] !== 0));
       return out;
     },
@@ -68,11 +136,27 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
       else late.push({ stack: { ...stack }, x, y, z, age: 0, delay });
     },
     prime(x, y, z) { primed.push(primeTnt(x, y, z, { placer: null, random })); },
-    // One game tick of the entity gate, in the order of the live player tick: items, TNT, orbs, then carts and boats.
+    // One game tick of the entity gate, in the order of the live player tick (living simulation, then the entity simulation, rockets and
+    // hanging entities, then carts and boats): mobs and their own projectiles, orbs, mob events, rockets, items, TNT, thrown projectiles,
+    // arrows, hanging, carts, boats.
     tick() {
+      mobSv.time = clock;
+      if (mobs.entities.length || mobs.potions.balls.length || mobs._fireballs?.list.length || mobs._skulls?.list.length) { mobs.lootItems = items; mobs.tick(player, mobSv, 0); }
+      xp.tick(world, null);
+      drainMob();
+      rockets.tick(world, {});
       items.tick(world, maxStack);
       tickPrimedTnt(world, primed, { explode: (x, y, z, power, ctx) => self.explode(x, y, z, power, { exploder: ctx.exploder }) });
-      xp.tick(world, null);
+      if (projectiles.balls.length) {
+        projectiles.tick(world, mobTargets(mobs.entities, null), (ref, b) => ref !== "player" && thrownHit(mobs, ref, b), null);
+        for (const h of projectiles.drain()) if (!h.sound) for (let i = 0; i < h.chicks; i++) mobs.hatch(h.x, h.y, h.z, h.yaw);
+      }
+      drainMob();
+      if (arrows.list.length) {
+        arrows.tick(world, { targets: [...arrowTargets(mobTargets(mobs.entities, null), true), ...hangingArrowTargets(hanging)], hanging, mobs, survival: mobSv, player: null,
+          igniteTnt: (x, y, z, placer) => { primed.push(primeTnt(x + 0.5, y + 0.5, z + 0.5, { placer, random })); world.set(x, y, z, 0); rt.fluidChanges([[x, y, z, 46, 0]]); } });
+        arrows.drain();
+      }
       if (minecarts.carts.length) {
         minecarts.tick(world, { entities: [], host: cartHost });
         for (const d of minecarts.drain()) if (d.stack) self.spill(d.stack, d.x, d.posY, d.z, d.delay ?? 10);
@@ -81,6 +165,12 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
         boats.tick(world, { entities: [], hooks: {} });
         for (const d of boats.drain()) if (d.stack) self.spill(d.stack, d.x, d.posY, d.z, d.delay ?? 10);
       }
+      if (hanging.entities.length) {
+        hanging.tick(world, { active: (h) => ticking(h.x, h.z) });
+        for (const d of hanging.drain()) items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay });
+      }
+      drainMob();
+      clock++;
     },
     close() { open = false; },
     // Every list in its saved form: the records outside the run unchanged, the run's entities serialized.
@@ -90,11 +180,18 @@ export function awayEntities(plan, { world, ticking, rt, fire, weather, tiles, r
         tnt: [...tnt.rest, ...primed.map((t) => ({ x: t.x, y: t.y, z: t.z, vx: t.vx, vy: t.vy, vz: t.vz, fuse: t.fuse }))],
         minecarts: { version: 1, carts: [...carts.rest, ...(minecarts.carts.length ? minecarts.toJSON().carts : [])] },
         boats: [...boatsSplit.rest, ...(boats.carts.length ? boats.toJSON() : [])],
-        counts: { items: items.items.length, orbs: xp.orbs.length, tnt: primed.length, carts: minecarts.carts.length, boats: boats.carts.length },
+        mobs: [...mobSplit.rest, ...mobs.serialize()],
+        arrows: [...arrowSplit.rest, ...arrows.serialize()], projectiles: [...ballSplit.rest, ...projectiles.serialize()],
+        potions: [...potionSplit.rest, ...mobs.potions.serialize()],
+        rockets: e.rockets || rockets.rockets.length ? { ...(e.rockets ?? {}), ...rockets.serialize(), rockets: [...rocketSplit.rest, ...rockets.serialize().rockets] } : null,
+        fireballs: [...fireList.filter((r) => !fireIn(r)), ...(mobs._fireballs?.serialize(0) ?? []), ...(mobs._skulls?.serialize(0) ?? [])],
+        hanging: [...hangSplit.rest, ...hanging.toJSON()],
+        counts: { items: items.items.length, orbs: xp.orbs.length, tnt: primed.length, carts: minecarts.carts.length, boats: boats.carts.length,
+          mobs: mobs.entities.length, arrows: arrows.list.length, thrown: projectiles.balls.length, rockets: rockets.rockets.length, hanging: hanging.entities.length },
       };
     },
   };
   // EntityMinecartTNT and the furnace cart: the explosion; smoke and sounds are not drawn.
-  const cartHost = { explode: (cart, x, y, z, power) => { self.explode(x, y, z, power, {}); }, particle() {}, sound() {}, changed() {}, transfer: null };
+  const cartHost = { explode: (cart, x, y, z, power) => { self.explode(x, y, z, power, {}); }, particle() {}, sound() {}, changed() {}, transfer };
   return self;
 }

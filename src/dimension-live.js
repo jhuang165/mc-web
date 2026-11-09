@@ -310,7 +310,7 @@ export class DimensionLive {
     const ticks = Math.min(MAX_AWAY_TICKS, (this.host.ticks() - a.ticks0) + Math.round(a.tripMs / 50));
     try {
       if (ticks <= 0 || !(await Promise.race([a.ready, new Promise((r) => setTimeout(() => r(false), 4000))]))) return null;
-      const plan = { ...awayPlan(root, a.columns, ticks), chunks: a.chunks, records: a.records };
+      const plan = { ...awayPlan(root, a.columns, ticks, this.host.difficulty?.()), chunks: a.chunks, records: a.records };
       const msg = await new Promise((resolve) => {
         const t = setTimeout(() => resolve({ type: "error", message: "timeout" }), 12000);
         a.worker.onmessage = ({ data }) => { clearTimeout(t); resolve(data); };
@@ -325,6 +325,9 @@ export class DimensionLive {
       if (r.entities) { // away-entities.js: the saved entity lists, whole
         root.drops = r.entities.drops; root.xpOrbs = r.entities.xpOrbs; root.tnt = r.entities.tnt;
         root.minecarts = r.entities.minecarts; if (r.entities.boats.length) root.boats = r.entities.boats; else delete root.boats;
+        // Batch 32: mobs, arrows, thrown projectiles, rockets, potions, fireballs and hanging entities (the run returns whole lists).
+        root.entities = r.entities.mobs; root.arrows = r.entities.arrows; root.projectiles = r.entities.projectiles; root.thrownPotions = r.entities.potions;
+        root.rockets = r.entities.rockets; root.fireballs = r.entities.fireballs; root.hanging = r.entities.hanging;
       }
       if (r.drops.length) root.drops = [...(root.drops ?? []), ...r.drops];
       if (r.columns.length) await this.writeColumns(root.id, r.columns);

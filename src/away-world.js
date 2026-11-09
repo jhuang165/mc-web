@@ -22,6 +22,7 @@ import { brewingView, BREWING_STAND, maxStackOf } from "./brewing.js";
 import { Weather } from "./weather.js";
 import { makeStack } from "./inventory.js";
 import { awayEntities } from "./away-entities.js";
+import { dispenseFirework } from "./fireworks-live.js";
 import { WATER, LAVA } from "./world.js";
 import { JavaRandom } from "./java-random.js";
 import { AWAY_ENTITY_TICKS, SPAWN_RADIUS, MAX_AWAY_TICKS, MAX_COLUMNS, WALL_BUDGET_MS, inSpawnArea, spawnOf, stateColumns, awayPlan } from "./away-plan.js";
@@ -79,11 +80,11 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
   const rt = createRedstoneRuntime({ world, scene: null, game: {
     chests: () => tiles.chests, furnaces: () => tiles.furnaces, dispensers: () => tiles.dispensers, hoppers: () => tiles.hoppers, brewing: () => tiles.brewing, maxStack: (s) => maxStackOf(s.id ?? s),
     drop: (x, y, z, d) => spill(d, x + 0.5, y + 0.5, z + 0.5), sound() {}, markUnsaved() {}, player: () => null, mobs: () => null, commandHost: () => null,
-    items: () => ents?.items.items ?? [], itemSystem: () => ents?.items, arrows: () => [], orbs: () => ents?.xp.orbs ?? [], orbSystem: () => ents?.xp, primed: () => ents?.primed ?? [],
+    items: () => ents?.items.items ?? [], itemSystem: () => ents?.items, arrows: () => ents?.arrows.list ?? [], thrown: () => (ents ? [...ents.projectiles.balls, ...ents.mobs.potions.balls] : []), orbs: () => ents?.xp.orbs ?? [], orbSystem: () => ents?.xp, primed: () => ents?.primed ?? [],
     minecarts: () => ents?.minecarts, boats: () => ents?.boats.carts ?? [], boatSystem: () => ents?.boats, falling: () => falling.entities,
     primeTnt: (x, y, z) => ents?.prime(x + 0.5, y + 0.5, z + 0.5),
     dispense: {
-      rng: () => dispRand,
+      rng: () => (ents ? ents.arrows.rng() : dispRand),
       spawnItem: (stack, x, y, z, mx, my, mz) => { if (ents) ents.items.spawn(stack, x, y, z, { motion: [mx, my, mz] }); },
       cart: (type, x, y, z) => { if (!ents) return; if (type === 0) ents.minecarts.spawnEmpty({ x, y, z }); else ents.minecarts.spawnCart(type, { x, y, z, items: [] }); },
       spawnTnt: (x, y, z) => ents?.prime(x + 0.5, y + 0.5, z + 0.5),
@@ -92,14 +93,21 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
       setFire: (x, y, z) => { fire.ignite(x, y, z); },
       breakBlock: (x, y, z) => { const b = world.get(x, y, z); if (b) fluids.wash(x, y, z, b); },
       boneMeal: () => false,
-      arrow: () => { unsupported.hit = true; }, thrown: () => { unsupported.hit = true; }, fireball: () => { unsupported.hit = true; }, firework: () => { unsupported.hit = true; },
+      // Projectile dispenses create the live entities (as main.js does) when the entity run exists; without it the stack is put back.
+      arrow: (e) => { if (ents) ents.arrows.list.push(ents.arrows.make(e, e.rand, { shooter: null, pickup: 1 })); else unsupported.hit = true; },
+      thrown: (kind, e) => {
+        if (!ents) { unsupported.hit = true; return; }
+        const ball = { x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, yaw: e.yaw, pitch: e.pitch, kind, px: e.x, py: e.y, pz: e.z, prevYaw: e.yaw, prevPitch: e.pitch, ticks: 0, rand: e.rand, random: e.rand, dead: false };
+        if (kind === "potion") ents.mobs.potions.projectiles.balls.push({ ...ball, damage: e.damage, owner: null }); else ents.projectiles.balls.push(ball);
+      },
+      fireball: ({ x, y, z, ax, ay, az }) => { if (ents) ents.mobs.fireballs.launch({ large: false, owner: null, x, y, z, exact: [ax, ay, az] }); else unsupported.hit = true; },
+      firework: (stack, x, y, z, fx, fz) => { if (ents) dispenseFirework(ents.rockets, x, y, z, fx, fz, stack); else unsupported.hit = true; },
     },
   } });
   rt.restore({ redstone: plan.redstone, pistons: plan.pistons });
   const live = rt.redstone;
   // Dispensers and droppers fire through the entity systems above (items, TNT, carts, buckets, flint and steel). A dispense that
-  // needs a projectile system the run does not have (arrows, eggs, snowballs, potions, fire charges, fireworks) leaves the
-  // stack where it was. Command blocks need the command interpreter and are skipped (dimensions.md "Batch 31").
+  // needs a projectile system the run does not have (only without the entity run) leaves the stack where it was. Command blocks need the command interpreter and are skipped (dimensions.md "Batch 31").
   for (const id of [23, 158]) {
     const b = live.behaviours[id];
     if (!b) continue;
@@ -129,7 +137,7 @@ export async function runAway(plan, { now = () => performance.now(), budgetMs = 
     }
   };
 
-  ents = awayEntities(plan, { world, ticking, rt, fire, weather, tiles, readStack: (st) => sv.inventory.read(st, true), maxStack: (st) => sv.inventory.maxStack(st) });
+  ents = awayEntities(plan, { world, ticking, rt, fire, weather, tiles, transfer: hoppers.host, readStack: (st) => sv.inventory.read(st, true), maxStack: (st) => sv.inventory.maxStack(st) });
   if (ents) ents.falling = falling;
   const idle = () => !fluids.pending.size && !fire.queue.heap.length && !falling.pending.size && !live.tree.length && !live.thisTick.length
     && !live.deferred.length && !(live.torchToggles?.length) && !live.blockEvents.some((l) => l.length) && !live.pistonTiles().length;

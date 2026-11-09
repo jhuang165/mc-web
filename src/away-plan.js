@@ -31,6 +31,9 @@ export function stateColumns(root) {
   all(xyz(root.pistons));
   // Entities (away-entities.js): the columns they stand in take part in the run, with the halo.
   all(xyz(root.drops)); all(xyz(root.xpOrbs)); all(xyz(root.tnt)); all(xyz(root.minecarts?.carts)); all(xyz(root.boats));
+  // Mobs, arrows, thrown projectiles, rockets, potions and hanging entities (batch 32): hanging records carry their block position.
+  all(xyz(root.entities)); all(xyz(root.arrows)); all(xyz(root.projectiles)); all(xyz(root.thrownPotions)); all(xyz(root.rockets?.rockets));
+  all(xyz((root.fireballs ?? []).filter((b) => (b?.dimension ?? 0) === 0))); all(xyz(root.hanging));
   for (const name of TILE_SIM) all(tileCols(root.player?.[name]));
   if (!work.size) return [];
   const out = new Map();
@@ -42,7 +45,7 @@ export function stateColumns(root) {
 }
 
 // Everything the main thread sends the worker: the world recipe, the column list is read separately (stored edits per column).
-export function awayPlan(root, columns, ticks) {
+export function awayPlan(root, columns, ticks, difficulty) {
   const tiles = {};
   for (const name of [...TILE_SIM, ...TILE_DATA]) tiles[name] = structuredClone(root.player?.[name] ?? {});
   return {
@@ -51,7 +54,12 @@ export function awayPlan(root, columns, ticks) {
     fluidTicks: root.fluidTicks, fireTicks: root.fireTicks, fallingTicks: root.fallingTicks, falling: root.falling ?? [],
     redstone: root.redstone, pistons: root.pistons, tiles, weather: root.weather,
     // The saved entity lists (the run returns them whole); mob riders keep their vehicles out of the run.
-    entities: structuredClone({ drops: root.drops ?? [], xpOrbs: root.xpOrbs ?? [], tnt: root.tnt ?? [], minecarts: root.minecarts ?? null, boats: root.boats ?? [] }),
+    entities: structuredClone({
+      drops: root.drops ?? [], xpOrbs: root.xpOrbs ?? [], tnt: root.tnt ?? [], minecarts: root.minecarts ?? null, boats: root.boats ?? [],
+      mobs: root.entities ?? [], arrows: root.arrows ?? [], projectiles: root.projectiles ?? [], potions: root.thrownPotions ?? [], rockets: root.rockets ?? null,
+      fireballs: root.fireballs ?? [], hanging: root.hanging ?? [], villages: root.villages ?? null,
+    }),
     ridden: (root.entities ?? []).map((m) => m?.riding).filter((r) => typeof r === "string"),
+    time: Number.isFinite(root.player?.time) ? root.player.time : 0, difficulty: Number.isInteger(difficulty) ? difficulty : undefined,
   };
 }

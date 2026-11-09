@@ -1205,7 +1205,7 @@ export class Brain {
   // 1 in 800 roll; within 32 the idle age resets, which is what lets Wander run.
   despawnEntity() {
     const e = this.e, p = this.ai.player;
-    if (!p) return; // sw.w() has no age gate in 1.7.10: it runs every tick (bytecode-read)
+    if (!p || p.absent) return; // `absent`: the away run has no player (away-entities.js); getClosestPlayerToEntity is null and nothing happens. sw.w() has no age gate in 1.7.10: it runs every tick (bytecode-read)
     const d3 = this.distSq(p), can = canDespawn(e);
     if (can && d3 > 16384) return this.ai.despawn(e);
     if (e.idle > 600 && this.rand.nextInt(800) === 0 && d3 > 1024 && can) return this.ai.despawn(e);
