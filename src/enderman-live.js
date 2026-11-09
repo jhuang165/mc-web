@@ -13,7 +13,7 @@ export const ENDERMAN_TRANSIENT = ["stareCount", "chaseTimer", "speedBoost", "pr
 function playerView(mobs, p) {
   const look = mobs.look || { yaw: 0, pitch: 0 }, head = mobs.ai.survival?.inventory?.armor?.[3]; // armor[3] is the helmet slot
   return {
-    x: p.x, y: p.y + 1.62, z: p.z, yaw: f(180 - look.yaw / RAD), pitch: f(-look.pitch / RAD),
+    x: p.x, y: p.y, z: p.z, yaw: f(180 - look.yaw / RAD), pitch: f(-look.pitch / RAD),
     helmet: head?.id === 67 ? E.PUMPKIN : 0, // internal id 67 is Blocks.pumpkin (original 86)
   };
 }
@@ -74,7 +74,7 @@ export function endermanTick(mobs, e, rng) {
     if (E.findPlayerToAttack(e, view, w)) m.attackTarget = p;
   }
   const t = m.attackTarget;
-  const target = t && t.alive !== false ? { id: "player", x: view?.x ?? t.x, y: view?.y ?? t.y, z: view?.z ?? t.z, player: view } : null;
+  const target = t && t.alive !== false ? { id: "player", x: view?.x ?? t.x, y: view?.y ?? t.y, z: view?.z ?? t.z, player: view, eye: E.PLAYER_EYE_OFFSET } : null;
   if (t && !target) m.attackTarget = null;
   const bx = Math.floor(e.x), bz = Math.floor(e.z);
   const wet = !!e.inWater || (!!mobs.isRaining?.() && (ai.deps.canSeeSky(bx, Math.floor(e.y), bz) || ai.deps.canSeeSky(bx, Math.floor(e.y + E.ENDERMAN_HEIGHT), bz)));

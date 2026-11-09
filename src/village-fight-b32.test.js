@@ -40,7 +40,8 @@ test("village fight b32: hit results, shots, conversions and player damage match
     for (let i = 0; i < r.conversions.length; i++) r.conversions[i].forEach((v, k) => assert.ok(near(v, got.conversions[i][k]), r.name));
     shots += r.shots.length; conversions += r.conversions.length;
   }
-  assert.ok(shots >= 20 && conversions >= 7, `${shots} shots, ${conversions} conversions`);
+  // Batch 33: the probe player now has EntityPlayerMP's 1.62 eye (was 0.12): the records were regenerated and one conversion fewer happens natively (7 to 6).
+  assert.ok(shots >= 20 && conversions >= 6, `${shots} shots, ${conversions} conversions`);
 });
 
 test("village fight b32: arrow start headings come from the seeded Random, not the record", () => {

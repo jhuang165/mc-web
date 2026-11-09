@@ -193,6 +193,10 @@ export class MoveHelper {
     if (dy > 0 && dx * dx + dz * dz < 1) m.jumpHelper.setJumping();
   }
 }
+// Entity.getEyeHeight per living mob type: height * 0.85 (EntityLivingBase.g) except EntityWolf's height * 0.8. Everything that is not an
+// EntityLivingBase (carts, boats, items, paintings, arrows) is Entity's 0.
+export const PLAYER_EYE_HEIGHT = f(1.62);
+export const livingEyeHeight = (type, height) => f(f(height) * f(type === "wolf" ? 0.8 : 0.85));
 export class LookHelper {
   constructor(mob) {
     this.mob = mob;
@@ -1067,9 +1071,9 @@ export class Brain {
   get height() {
     return this.ai.size(this.e).height;
   }
-  // EntityLiving.getEyeHeight: height * 0.85.
+  // EntityLivingBase.getEyeHeight (sv.g): height * 0.85; EntityWolf overrides it with height * 0.8 (eye-height-reference.json).
   get eyeHeight() {
-    return f(this.height * f(0.85));
+    return livingEyeHeight(this.e.type, this.height);
   }
   get inWater() {
     return !!this.e.inWater;
@@ -1232,8 +1236,9 @@ class PlayerView {
     this.z = 0;
     this.width = f(0.6);
     this.height = f(1.8);
-    // The integrated server's EntityPlayerMP: posY is the feet and getEyeHeight() 0.12.
-    this.eyeHeight = f(0.12);
+    // The integrated server's EntityPlayerMP: yOffset 0, so posY is the feet, and getEyeHeight (mw.g) is 1.62 (eye-height-reference.json).
+    // Every mob call site (EntityLookHelper, EntitySenses.canSee, EntityAIWatchClosest) reads that virtual, never EntityPlayer's 0.12.
+    this.eyeHeight = PLAYER_EYE_HEIGHT;
     this.alive = true;
     this.creative = false;
     this.held = 0;

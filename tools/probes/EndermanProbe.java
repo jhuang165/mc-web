@@ -10,7 +10,7 @@ import java.util.UUID;
 // Runs the unchanged EntityEnderman (ya) of the 1.7.10 JAR (with EntityMob yg, EntityLivingBase sv, Entity sa) on a
 // block-map world double built on MobMoveProbe.ProbeWorld (stone below y 0, a settable block map, switchable
 // daylight / sky / rain / line of sight / brightness, captured sounds, particles and spawned entities). The
-// enderman is built with its real constructor; the player is an uninitialised EntityPlayer (yz). One JSON object
+// enderman is built with its real constructor; the player is an uninitialised EntityPlayer (yz) whose getEyeHeight is EntityPlayerMP's 1.62 (batch 33; posY is the feet). One JSON object
 // per line:
 //   facts      size, step height, attribute bases, XP value, datawatcher defaults, eye height, carriable block ids
 //   stare      ya.f(yz) (shouldAttackPlayer) over distances, aim offsets, look angles, helmets and line of sight
@@ -89,6 +89,9 @@ public class EndermanProbe {
   public static abstract class FakePlayerBase extends yz { FakePlayerBase() { super(null, null); } }
   public static class FakePlayer extends FakePlayerBase {
     FakePlayer() { super(); }
+    // The enderman runs on the server, where the player is an EntityPlayerMP (mw): its posY is the feet (yOffset 0) and its
+    // getEyeHeight (mw.g) is the constant 1.62 (bytecode-read). Entity.getEyeHeight is virtual, so this stands in for mw.g.
+    public float g() { return 1.62f; }
     public add be() { return null; }
     public add q(int slot) { return null; }
     public void c(int slot, add stack) {}
@@ -201,12 +204,12 @@ public class EndermanProbe {
             World.reset();
             World.blocked = blocked == 1;
             helmet(stack);
-            double px = 3.5, py = 63.62, pz = -2.25;
+            double px = 3.5, py = 62.0, pz = -2.25; // feet: the eye is py + 1.62 = 63.62 as before
             setPlayer(px, py, pz, look[0], look[1]);
             double yr = Math.toRadians(look[0]), pr = Math.toRadians(look[1]);
             double lx = -Math.sin(yr) * Math.cos(pr), ly = -Math.sin(pr), lz = Math.cos(yr) * Math.cos(pr);
             double rx = Math.cos(yr), rz = Math.sin(yr);
-            double ex = px + lx * dist + rx * lat, ez = pz + lz * dist + rz * lat, ey = py + ly * dist + vert;
+            double ex = px + lx * dist + rx * lat, ez = pz + lz * dist + rz * lat, ey = py + 1.62 + ly * dist + vert;
             ya e = ender(1, ex, ey - 1.45, ez);
             boolean r = shouldAttack(e, World.player);
             System.out.println("{\"case\":\"stare\",\"player\":[" + num(px) + "," + num(py) + "," + num(pz) + "],\"yaw\":" + num(look[0]) + ",\"pitch\":" + num(look[1])
@@ -264,7 +267,7 @@ public class EndermanProbe {
     }
     for (long seed = 0; seed < 60; seed++) {
       World.reset(); setPlayer(5000, 1.62, 5000, 0, 0);
-      setPlayer(-4.5, 1.62, 3.5, 0, 0);
+      setPlayer(-4.5, 0.12, 3.5, 0, 0); // feet 0.12: the same eye (1.74) as the batch 17 record
       World.slab();
       ya e = ender(seed, 10.5, 1, 12.5);
       boolean r = call(e, "c", new Class<?>[] { sa.class }, World.player);

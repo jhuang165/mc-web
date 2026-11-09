@@ -6,7 +6,7 @@ import { spawnList, ENTITY_TYPE_OF, maxSpawnedInChunk, creatureTypeOf, WITCH_HUT
 import { solidTopSurface } from "./doors-panes.js";
 import { fleeceColor } from "./population-tail.js";
 import { MapGenScatteredFeature } from "./scattered-feature-generator.js";
-import { canDespawn } from "./ai.js";
+import { canDespawn, livingEyeHeight } from "./ai.js";
 import { gameRule } from "./game-rules.js";
 import { spiderAttack, spiderDrops, spiderFindsPlayer, STRING, SPIDER_EYE, isSpider, soundType, caveSpiderPoisonTicks } from "./spider.js";
 import { countsAs, boxesIntersect, monsterCanSpawnHere, mobBox, anchoredShrunkBox, SPAWN_BRIGHTNESS, spawnerType } from "./mob-spawner.js";
@@ -24,7 +24,7 @@ import { mobStepEvents, isEntityMob } from "./mob-steps.js";
 import { setMovingBoxes, movingBoxes } from "./moving-boxes.js";
 import { ITEMS } from "./survival.js";
 import { weaponEnchantments, arthropodSlowness, javaLikeRandom } from "./enchantment-effects.js";
-import { insideOpaqueBlock, mobEyeHeight } from "./suffocation.js";
+import { insideOpaqueBlock } from "./suffocation.js";
 import { mhSin, mhCos, JavaRandom, skylightSubtracted, celestialAngle } from "./lighting.js";
 import { mobKnockbackKick, golemLift } from "./player-knockback.js";
 import { enterWater, burst, drownBubbles } from "./fx.js";
@@ -539,12 +539,12 @@ function offsetInLiquid(world, e, w, h, dx, dy, dz) {
         if (isLiquid(world.get(bx, by, bz))) return false;
   return true;
 }
-// The air part of EntityLivingBase.onEntityUpdate (sv.C): with the eye (posY + height * 0.85F)
+// The air part of EntityLivingBase.onEntityUpdate (sv.C): with the eye (posY + getEyeHeight: height * 0.85F, a wolf's 0.8F)
 // inside water the air supply drops by 1 (no Respiration, so no draw); at -20 it is set to 0
 // and 8 "bubble" from Entity.rand go up around posY. Out of water it is back to 300. Returns
 // true when attackEntityFrom(drown, 2) follows.
 export function breathe(world, e, height, rand, fx) {
-  if (!eyeInWater(world, e.x, e.y + f(f(height) * f(0.85)), e.z)) {
+  if (!eyeInWater(world, e.x, e.y + livingEyeHeight(e.type, height), e.z)) {
     e.air = 300;
     return false;
   }
@@ -1470,7 +1470,7 @@ export class EntityWorld {
   // that is still alive and has a corner of its eye box (suffocation.js) inside a normal cube takes
   // attackEntityFrom(inWall, 1): armour is bypassed, the hurt window applies, no knockback.
   suffocate(e, t) {
-    if (e.health > 0 && insideOpaqueBlock(this.world, e.x, e.y, e.z, t.width, mobEyeHeight(t.height))) this.hazard(e, 1, "inWall");
+    if (e.health > 0 && insideOpaqueBlock(this.world, e.x, e.y, e.z, t.width, livingEyeHeight(e.type, t.height))) this.hazard(e, 1, "inWall");
   }
   // EntityWitch.onLivingUpdate (yp.e), the server half before EntityLiving's: the drinking countdown and the rolls that start a drink
   // (witch.js witchDrink), on Entity.rand, then the effects of a finished potion are added.
@@ -1478,7 +1478,7 @@ export class EntityWorld {
     const m = this.ai.brain(e), target = m.attackTarget, w = { drinking: !!e.drinking, timer: e.drinkTimer || 0, held: e.held ?? null };
     const hasEffect = (id) => !!e.effects?.some((x) => x.id === id);
     const r = witchDrink(w, {
-      rand: entityRandom(e), inWater: eyeInWater(this.world, e.x, e.y + f(f(t.height) * f(0.85)), e.z), burning: e.fire > 0, health: e.health, maxHealth: t.health,
+      rand: entityRandom(e), inWater: eyeInWater(this.world, e.x, e.y + livingEyeHeight(e.type, t.height), e.z), burning: e.fire > 0, health: e.health, maxHealth: t.health,
       target, targetDistSq: target ? m.distSq(target) : 0, hasEffect,
     });
     e.drinking = w.drinking;
@@ -1492,7 +1492,7 @@ export class EntityWorld {
     if (breathe(this.world, e, t.height, entityRandom(e), this.fx) && !e.effects?.some((x) => x.id === 13)) this.hazard(e, 2, "drown");
     // The same block ends with `if (isRiding() && ridingEntity instanceof EntityLivingBase) mountEntity(null)` (sv.C offset 278): a rider whose
     // head is in water steps off a living mount (every mob mount here is one), onto the mount's top.
-    if (e.ridingEntity && !isVehicle(e.ridingEntity) && e.health > 0 && eyeInWater(this.world, e.x, e.y + f(f(t.height) * f(0.85)), e.z)) mountEntity(e, null, (m) => this.size(m)[1]);
+    if (e.ridingEntity && !isVehicle(e.ridingEntity) && e.health > 0 && eyeInWater(this.world, e.x, e.y + livingEyeHeight(e.type, t.height), e.z)) mountEntity(e, null, (m) => this.size(m)[1]);
   }
   // EntityLiving.onEntityUpdate (sw.C), after the air: rand.nextInt(1000) < livingSoundTime++
   // resets the time to -getTalkInterval (EntityAnimal 120, else 80) and plays the living sound

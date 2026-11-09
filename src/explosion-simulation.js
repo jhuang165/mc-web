@@ -5,6 +5,7 @@ import { drainKnockback } from "./player-knockback.js";
 import { WITHER_PROOF_INTERNAL, skullResistance } from "./wither-boss.js";
 import { explodeBlocks, explosionResistance, explosionImpact, explodeTnt, primeTnt } from "./explosion.js";
 import { ENTITY_TYPES } from "./entities.js";
+import { livingEyeHeight } from "./ai.js";
 import { makeStack, copyStack } from "./inventory.js";
 import { PHYSICS, opaqueCube, FIRE } from "./world.js";
 import { entityBox } from "./weather.js";
@@ -76,7 +77,7 @@ export function applyExplosion(state, request, hooks = {}) {
     const hit = explosionImpact(
       world, x, y, z, size,
       entity.x, entity.y, entity.z,
-      entity.y + Math.fround(Math.fround(height) * Math.fround(0.85)),
+      entity.y + livingEyeHeight(entity.type, height), // Explosion.doExplosionA reads posY + getEyeHeight()
       entityBox(entity, width, height),
     );
     if (!hit) continue;
