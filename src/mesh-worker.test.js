@@ -140,3 +140,13 @@ test("a snapshot is transferable typed arrays and the layers are typed", () => {
   assert.ok(out.length >= 5);
   assert.deepEqual(Object.keys(message.layers), LAYERS);
 });
+
+test('?meshWorkers=N sets the pool size (1 to 16); anything else keeps min(3, cores - 2)', async () => {
+  const { defaultMeshWorkers } = await import('./mesh-pool.js'), had = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  try {
+    for (const [search, want] of [['?meshWorkers=6', 6], ['?meshWorkers=1', 1], ['?meshWorkers=0', Math.max(1, Math.min(3, (globalThis.navigator?.hardwareConcurrency ?? 4) - 2))], ['?meshWorkers=99', Math.max(1, Math.min(3, (globalThis.navigator?.hardwareConcurrency ?? 4) - 2))]]) {
+      Object.defineProperty(globalThis, 'location', { value: { search }, configurable: true });
+      assert.equal(defaultMeshWorkers(), want, search);
+    }
+  } finally { if (had) Object.defineProperty(globalThis, 'location', had); else delete globalThis.location; }
+});

@@ -320,11 +320,7 @@ export class LightVolume {
   // (`drain`) is exactly the old whole-box call.
   *relightSteps(x0, x1, z0, z1) {
     const w = this.world, H = this.height, XS = SIZE * H, n = (x1 - x0 + 1) * (z1 - z0 + 1) * H,
-      oldSky = new Uint8Array(n), oldBlock = new Uint8Array(n), cost = new Uint8Array(n), emit = new Uint8Array(n),
-      local = (i) => {
-        const y = i % H, t = (i - y) / H, z = t % SIZE, x = (t - z) / SIZE;
-        return ((x - x0) * (z1 - z0 + 1) + (z - z0)) * H + y;
-      };
+      oldSky = new Uint8Array(n), oldBlock = new Uint8Array(n), cost = new Uint8Array(n), emit = new Uint8Array(n);
     if (!OPACITY) lightTables();
     const air = w.columnBlocks && new Uint8Array(H), emitters = [];
     let k = 0;
@@ -397,23 +393,22 @@ export class LightVolume {
           }
         }
       }
+      // The neighbour's index in cost[] is the cell's own plus the same offset as in arr[], scaled to the box (no closure per queue entry).
+      const LZ = H, LX = (z1 - z0 + 1) * H;
       for (let level = 15; level > 1; level--) {
         const list = buckets[level];
         for (let q = 0; q < list.length; q++) {
           if ((q & 4095) === 4095) yield;
           const i = list[q];
           if (arr[i] !== level) continue;
-          const y = i % H, t = (i - y) / H, z = t % SIZE, x = (t - z) / SIZE,
-            spread = (j) => {
-              const kk = local(j);
-              if (cost[kk] < 15) raise(j, level - cost[kk]);
-            };
-          if (y + 1 < H) spread(i + 1);
-          if (y > 0) spread(i - 1);
-          if (z < z1) spread(i + H);
-          if (z > z0) spread(i - H);
-          if (x < x1) spread(i + XS);
-          if (x > x0) spread(i - XS);
+          const y = i % H, t = (i - y) / H, z = t % SIZE, x = (t - z) / SIZE, kc = ((x - x0) * (z1 - z0 + 1) + (z - z0)) * H + y;
+          let c;
+          if (y + 1 < H && (c = cost[kc + 1]) < 15) raise(i + 1, level - c);
+          if (y > 0 && (c = cost[kc - 1]) < 15) raise(i - 1, level - c);
+          if (z < z1 && (c = cost[kc + LZ]) < 15) raise(i + H, level - c);
+          if (z > z0 && (c = cost[kc - LZ]) < 15) raise(i - H, level - c);
+          if (x < x1 && (c = cost[kc + LX]) < 15) raise(i + XS, level - c);
+          if (x > x0 && (c = cost[kc - LX]) < 15) raise(i - XS, level - c);
         }
       }
     }

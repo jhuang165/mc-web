@@ -130,9 +130,16 @@ export class DimensionLive {
     const e = { x: tt.x, y: tt.y, z: tt.z, vx: 0, vy: 0, vz: 0, yaw: tt.yaw, pitch: 0, teleportDirection: t.dir ?? 0 };
     const teleporter = new Teleporter(world, { isSolid: solidId, random: new JavaRandom(world.seed) });
     if (warm && !prepared.noPrefetch) { // (Nether/End peeks read cheap terrain, and their window is built after the arrival) the columns the search and the portal-site scan will read: the window round the target and every saved portal in reach
-      await warm.window(tt.x, tt.z);
       const found = world.portalColumns?.(GAME_IDS.portal, Math.floor(tt.x) - 128, Math.floor(tt.x) + 128, Math.floor(tt.z) - 128, Math.floor(tt.z) + 128);
-      if (found?.length) await warm.columns(found);
+      if (found?.length) {
+        // The search ends at the saved portal nearest the target (Teleporter.placeInExistingPortal) and the arrival window (main.js openWorld:
+        // World.streamAround at the exit) is built round it, up to 100 blocks from the target: fetch that window, not the target's, so the exit
+        // needs no second fetch (a whole window's cells, about 1.4-1.9 s, when the portal was in another population cell).
+        let near = found[0], best = Infinity;
+        for (const [x, z] of found) { const d = (x + 0.5 - tt.x) ** 2 + (z + 0.5 - tt.z) ** 2; if (d < best) { best = d; near = [x, z]; } }
+        await warm.window(near[0] + 0.5, near[1] + 0.5);
+        await warm.columns(found);
+      } else await warm.window(tt.x, tt.z); // a portal is built within 16 blocks of the target: the window round it
     }
     const steps = teleporter.placeInPortalSteps(e, tt.x, tt.y, tt.z, tt.yaw);
     if (pause) await runSteps(steps, pause); else drain(steps);
