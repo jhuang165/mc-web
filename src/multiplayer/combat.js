@@ -56,7 +56,7 @@ export class PositionHistory {
 
 // One player's weapon state: the same controllers the browser runs for its own prediction.
 export class PlayerCombat {
-  constructor() { this.gun = new GunController(); this.melee = new MeleeController(); this.aim = new Aim(); this.queue = []; this.view = null; }
+  constructor() { this.gun = new GunController(); this.melee = new MeleeController(); this.aim = new Aim(); this.queue = []; this.view = null; this.shots = 0; } // shots: fired since joining, for the client's ammo prediction
   reset() { this.gun = new GunController(); this.melee = new MeleeController(); this.aim = new Aim(); this.queue = []; }
 }
 
@@ -87,6 +87,7 @@ export function tickCombat(p, deps) {
     else if (a.action === 'melee-left' || a.action === 'melee-right') { if (weapon || !a.down) c.melee.press(a.action === 'melee-left' ? 'left' : 'right', a.down); }
     else if (a.action === 'reload') c.gun.startReload(ctx);
     else if (a.action === 'mode') c.gun.toggleMode(held);
+    else if (a.action === 'use') deps.use?.(p, a.down);
   }
   if (p.dead) { c.gun.release(); c.aim.held = false; c.melee.cancel(); return []; }
   const out = [];
@@ -96,7 +97,7 @@ export function tickCombat(p, deps) {
     if (e.type === 'strike' || e.strike) out.push(...strike(p, e, deps));
   }
   for (const e of c.gun.tick(gunContext(s))) {
-    if (e.type === 'shot') out.push(...shoot(p, e.gun, deps));
+    if (e.type === 'shot') { c.shots++; out.push(...shoot(p, e.gun, deps)); }
     else if (e.type === 'reloaded' || e.type === 'shell' || e.type === 'draw') deps.near(p, { type: e.type, id: p.id, gun: e.gun.id });
   }
   if (releaseTrigger) c.gun.release();

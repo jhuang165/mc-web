@@ -5,7 +5,8 @@
 import { DedicatedSimulation } from './simulation.js';
 import { IDLE_INPUT, cleanInput, cleanLook, cleanAction, cleanSlot } from './protocol.js';
 import { PlayerCombat, PositionHistory, tickCombat, withinEvents } from './combat.js';
-import { Survival } from '../survival.js';
+import { Survival, ITEMS } from '../survival.js';
+import { tickPlayerItemUse } from '../player-item-use.js';
 import { makeStack } from '../inventory.js';
 import { movePlayer } from '../player-physics.js';
 import { drainKnockback } from '../player-knockback.js';
@@ -115,6 +116,14 @@ export class GunSimulation extends DedicatedSimulation {
     p.combat.queue.push(a); p.idleSince = this.ticks;
     return true;
   }
+  // The use button with food in hand (ItemFood.onItemRightClick): start eating, or let go and stop. Each press eats one item;
+  // the client presses again after its own four-tick delay while the button stays down (use-hold.js).
+  use(p, down) {
+    if (!down) { p.eating = null; return; }
+    const s = p.survival, held = s.inventory.held, item = held ? ITEMS[held.id] : null;
+    if (p.eating || s.creative || !item?.food || (s.food >= 20 && !item.alwaysEdible) || !s.usable(held.id)) return;
+    p.eating = { id: held.id, ticks: 32 };
+  }
   queueEdit(id, message) {
     const p = this.players.get(id);
     if (!p || !p.survival.creative) return false; // Survival building is a later milestone; creative players and ops in creative may edit
@@ -140,7 +149,7 @@ export class GunSimulation extends DedicatedSimulation {
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     p.fallDistance = 0; p.landedFall = 0; p.flying = false; p.dead = false; p.lastHit = null;
     s.protection = JOIN_PROTECTION;
-    p.combat.reset();
+    p.combat.reset(); p.eating = null;
     return true;
   }
   kill(p, message = `${p.name} died`) {
@@ -164,6 +173,7 @@ export class GunSimulation extends DedicatedSimulation {
       canBreak: null, breakGlass: ([x, y, z]) => this.world.put(x, y, z, 0),
       damage: (t, n, src) => this.damage(t, n, src),
       send: (p, e) => this.send(p, e), near: (p, e, self) => this.near(p, e, self),
+      use: (p, down) => this.use(p, down),
     };
     // Weapons act first, against where everyone stood when the shooter last saw them (tick - 1 is the newest recorded tick).
     for (const p of players) { deps.canBreak = block => this.canBreak(p, block); tickCombat(p, deps); }
@@ -178,6 +188,8 @@ export class GunSimulation extends DedicatedSimulation {
         else { p.survival.damage(1000, 'void'); p.lastHit = null; }
       }
       p.survival.time = this.time;
+      // EntityPlayer.updateItemUse: 32 ticks of eating, then ItemFood.onEaten. The client only shows its own prediction.
+      if (p.eating) p.eating = tickPlayerItemUse(p.eating, p.survival.inventory.held?.id ?? 0, p.survival, { random: this.random }).use;
       p.survival.tick({ inWater: moved.inWater, inLava: moved.inLavaNow });
       p.inWater = moved.inWater;
       if (p.swing) p.swing--;
@@ -189,7 +201,7 @@ export class GunSimulation extends DedicatedSimulation {
       const reason = p.survival.lastDamage;
       this.chatOut.push(describe(p.name, hit) ?? (reason === 'a fall' ? `${p.name} hit the ground too hard` : reason === 'void' ? `${p.name} fell out of the world` : `${p.name} died`));
       if (hit) { const killer = this.players.get(hit.by); if (killer) this.send(killer, { type: 'kill', target: p.id, name: p.name }); }
-      p.combat.reset();
+      p.combat.reset(); p.eating = null;
     }
     this.history.record(this.ticks, this.players.values());
   }
@@ -203,7 +215,7 @@ export class GunSimulation extends DedicatedSimulation {
   you(p) {
     const s = p.survival, out = { health: s.health, food: s.food, saturation: s.saturation, absorption: s.absorption, hurt: s.hurtTime,
       dead: p.dead, protection: s.protection, mode: s.mode, current: s.inventory.current, x: p.position.x, y: p.position.y, z: p.position.z,
-      vx: p.velocity.x, vy: p.velocity.y, vz: p.velocity.z, flying: p.flying };
+      vx: p.velocity.x, vy: p.velocity.y, vz: p.velocity.z, flying: p.flying, shots: p.combat.shots };
     const inv = JSON.stringify([s.inventory.serialize(), s.inventory.serializeArmor()]);
     if (inv !== p.sentInv) { p.sentInv = inv; out.inv = { slots: s.inventory.serialize(), armor: s.inventory.serializeArmor() }; }
     return out;

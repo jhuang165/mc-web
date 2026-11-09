@@ -143,6 +143,9 @@ import { ProfileSession } from './profile.js';
 import { accountScreen } from './profile-screen.js';
 import { setPlayerName } from './player-name.js';
 import { IDLE_INPUT, MULTIPLAYER_URL } from "./multiplayer/protocol.js";
+import { gunContext } from "./multiplayer/combat.js";
+import { roundsLeft } from "./mods/guns/catalog.js";
+import { setLoadedRounds } from "./mods/guns/ammo.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
 import { gameRule, setGameRuleSource } from "./game-rules.js";
 import { mayHitBlock } from "./adventure.js";
@@ -449,6 +452,7 @@ const guns = createGunHooks({
   // A gun server (multiplayer/combat.js) owns damage and ammo: buttons go to it with the look and the tick on screen (lag compensation).
   remote: () => !!multiplayer,
   action: (action, down) => multiplayer?.send({ type: "action", action, down, yaw, pitch, view: multiplayer.lastTick }),
+  predictedShot: () => { if (multiplayer) predictedShots.push({ slot: survival.inventory.current, at: performance.now() }); },
   pickPlayer: (origin, dir, max) => remotePlayers?.pick(origin, dir, max) ?? null,
 });
 const gunHud = createAmmoHud(bitmapHtml);
@@ -652,11 +656,29 @@ function showMultiplayer() {
 }
 function leaveMultiplayer() {
   multiplayer?.close(); multiplayer = null;
+  serverInv = null; serverShots = null; predictedShots.length = 0;
   remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null;
 }
 // Protocol v3: movement, look, the selected hotbar slot and the newest server tick on screen; never item stacks.
 function sendMultiplayerInput(controls = IDLE_INPUT) {
   multiplayer?.send({ type: 'input', controls, yaw, pitch, slot: survival.inventory.current, view: multiplayer.lastTick });
+}
+// The gun server's inventory as last sent, its count of this player's shots, and the shots fired here it has not counted yet.
+// The held gun shows the server's rounds less those still in flight, so a reply that crosses a newer shot doesn't put a round back.
+let serverInv = null, serverShots = null;
+const predictedShots = []; // { slot, at }, oldest first
+const PREDICTION_TIMEOUT = 1000; // ms: a shot the server never fired (the two controllers disagreed) stops counting
+function rebuildServerInventory() {
+  const inv = survival.inventory;
+  inv.main = Array.from({ length: 36 }, (_, i) => inv.read(serverInv.slots?.[i] ?? null, true));
+  inv.armor = Array.from({ length: 4 }, (_, i) => inv.read(serverInv.armor?.[i] ?? null, true));
+  const ctx = gunContext(survival);
+  for (const shot of predictedShots) {
+    const stack = inv.main[shot.slot], gun = gunOf(stack);
+    if (!gun) continue;
+    if (gun.feed === "inventory") ctx.take(gun.ammo, 1);
+    else setLoadedRounds(gun, stack, roundsLeft(stack) - 1);
+  }
 }
 // What the gun server tells only this player (gun-simulation.js you()): health, food, mode, death and, when changed, the inventory.
 function applyServerPlayer(you) {
@@ -671,15 +693,22 @@ function applyServerPlayer(you) {
   for (const key of ['health', 'food', 'saturation', 'absorption', 'protection']) if (Number.isFinite(you[key])) s[key] = you[key];
   if (Number.isFinite(you.hurt)) s.hurtTime = you.hurt;
   if (s.health < before && !you.dead) sounds?.play('game.player.hurt', { volume: 1, pitch: (Math.random() - Math.random()) * 0.2 + 1 });
-  let changed = s.health !== before;
-  if (you.inv) {
-    const inv = s.inventory;
-    inv.main = Array.from({ length: 36 }, (_, i) => inv.read(you.inv.slots?.[i] ?? null, true));
-    inv.armor = Array.from({ length: 4 }, (_, i) => inv.read(you.inv.armor?.[i] ?? null, true));
-    changed = true;
+  // Survival.tick's client half, which no local tick runs here: the hearts' blink after a change, and the HUD's update counter.
+  s.ticks = (s.ticks | 0) + 1;
+  if (s.health !== s.syncedHealth) { s.clientResist = s.health < s.syncedHealth ? 20 : 10; s.syncedHealth = s.health; }
+  else s.clientResist = Math.max(0, (s.clientResist | 0) - 1);
+  let changed = false, refresh = false;
+  if (Number.isInteger(you.shots)) {
+    if (serverShots !== null && you.shots > serverShots) { predictedShots.splice(0, you.shots - serverShots); refresh = true; }
+    serverShots = you.shots;
   }
+  const stale = performance.now() - PREDICTION_TIMEOUT;
+  while (predictedShots.length && predictedShots[0].at < stale) { predictedShots.shift(); refresh = true; }
+  if (you.inv) { serverInv = you.inv; refresh = true; }
+  if (refresh && serverInv) { rebuildServerInventory(); changed = true; }
   if (Number.isInteger(you.current) && you.current !== s.inventory.current && screen !== 'playing') { s.inventory.current = you.current; changed = true; }
-  if (changed) { renderHotbar(); renderVitals(); }
+  if (changed) renderHotbar();
+  renderVitals(); // every tick, as tickSurvival does: food, saturation shake, regeneration wave and the hurt blink
   if (you.dead && screen !== 'dead') remoteDeath();
   else if (!you.dead && screen === 'dead') { screen = 'playing'; resume(); renderVitals(); } // the server respawned this player
 }
@@ -3095,7 +3124,17 @@ function spawnHangingDrops() {
 }
 function edit(place = false) {
   if (screen !== "playing") return;
-  if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); multiplayer.send({ type: 'edit', place }); animation.swing(); return; }
+  if (multiplayer) {
+    sendMultiplayerInput(captureMovementInput(d => binds.isDown(d)));
+    // Food: the server eats it (gun-simulation.js use); this tab only shows the 32 ticks of eating it expects.
+    const food = ITEMS[heldId()];
+    if (place && !survival.creative && food?.food) {
+      if (!eating && (survival.food < 20 || food.alwaysEdible)) eating = { id: heldId(), ticks: 32 };
+      multiplayer.send({ type: 'action', action: 'use', down: true, yaw, pitch, view: multiplayer.lastTick });
+      return;
+    }
+    multiplayer.send({ type: 'edit', place }); animation.swing(); return;
+  }
   // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
   if (applyHangingEdit({ hanging, world, survival, heldId: heldId(), place, target, aimed: aimedHanging }, {
     swing: () => animation.swing(),
@@ -3350,6 +3389,9 @@ function movementTick(controls) {
   if (multiplayer) {
     sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT);
     if (gunsEnabled() && screen !== 'dead') guns.tick(); // the client's prediction: the server fires, strikes and reloads for itself
+    // Eating as predicted here: crumbs, chewing and the burp; the food and the item come from the server.
+    if (eating && !eating.bow) eating = tickPlayerItemUse(eating, heldId(), { eat: () => true }, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }).use;
+    if (screen === 'playing' && useHold.tick(binds.isDown("key.use"), !!eating, !survival.creative && !!ITEMS[heldId()]?.food)) edit(true);
     easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: gunsEnabled() ? guns.speed() : 1, bow: gunsEnabled() ? guns.fov() : 1 }));
     return;
   }
@@ -3642,7 +3684,11 @@ function bindingPressed(d, ctrl) {
 function bindingReleased(d) {
   if (d === "key.playerlist") playerList.hide();
   else if (d === "key.attack") { if (gunsEnabled()) guns.attack(false); mineHeld = false; if (mining && !mining.auto) mining = null; }
-  else if (d === "key.use") { if (gunsEnabled()) guns.aimHold(false); releaseBowUse(); eating = null; }
+  else if (d === "key.use") {
+    if (gunsEnabled()) guns.aimHold(false);
+    if (multiplayer) multiplayer.send({ type: 'action', action: 'use', down: false, yaw, pitch, view: multiplayer.lastTick });
+    releaseBowUse(); eating = null;
+  }
 }
 // Minecraft.runTick keyboard loop, run on every screen (no currentScreen test): Keyboard.isKeyDown for the F3 combinations and the F3+C crash timer.
 // bytecode-read: F1 hideGUI and F3 (showDebugInfo, Shift = profiler chart) toggle on their press; with F3 down, B toggles RenderManager.debugBoundingBox,

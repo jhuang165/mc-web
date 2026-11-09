@@ -24,7 +24,8 @@ const DEFAULT_TRACER = { speed: 250, life: 10, interval: 0, color: "#FFFFFF" };
 //   sneaking(), moving(), breakBlock([x,y,z]), renderHotbar(), markUnsaved(), toast(text), playing?(), onEvent?(event), random?,
 //   sound?(event, options), preload?(folder), fx?(name, x, y, z, vx, vy, vz), blockHit?([x,y,z], side), crosshair?(visible),
 //   now?() -> ms, hud?(state | null), explode?(x, y, z, radius, { damage, destroy }), tracer?(tracer) (tracers.js tracerBox),
-//   remote?() -> true on a gun server, action?(name, down) (protocol.js cleanAction), pickPlayer?(origin, dir, max) -> { entity, distance } }
+//   remote?() -> true on a gun server, action?(name, down) (protocol.js cleanAction), pickPlayer?(origin, dir, max) -> { entity, distance },
+//   predictedShot?(gun) -> a shot fired locally on a gun server }
 // On a gun server (multiplayer/gun-simulation.js) the server owns damage, glass, explosions, ammo and hit sounds: the local controller
 // only predicts the shot's look and sound, and each button change is forwarded once as a server action.
 const HELD = new Set(["trigger", "aim", "melee-left", "melee-right"]);
@@ -94,6 +95,7 @@ export function createGunHooks(deps) {
         breakGlass() {},
       });
       out.hits = []; out.ray = ray;
+      deps.predictedShot?.(gun); // the round this took from the magazine, until the server's shot count catches up (main.js)
       return out;
     }
     const out = fireShot(gun, {

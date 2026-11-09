@@ -106,6 +106,40 @@ test('server-side shots spend magazine rounds, damage through armour, and kill w
   assert.ok(sim.drainEvents(a).some(e => e.type === 'kill' && e.target === 'b'));
 });
 
+test('the use button eats held food on the server; letting go stops it', () => {
+  const sim = arena(), { a } = pair(sim), eat = slot => sim.input('a', input(a, { slot }));
+  const steak = () => a.survival.inventory.main[8]?.count ?? 0;
+  eat(8); a.survival.food = 10; a.survival.saturation = 0;
+  sim.action('a', { action: 'use', down: true });
+  run(sim, 31, () => eat(8));
+  assert.equal(a.survival.food, 10, 'not yet: eating takes 32 ticks');
+  run(sim, 1, () => eat(8));
+  assert.equal(a.survival.food, 18); assert.equal(steak(), 15);
+  assert.equal(sim.you(a).food, 18, 'the new food level goes to the client');
+  sim.action('a', { action: 'use', down: true });
+  run(sim, 10, () => eat(8));
+  sim.action('a', { action: 'use', down: false });
+  run(sim, 40, () => eat(8));
+  assert.equal(a.survival.food, 18, 'released early: nothing eaten'); assert.equal(steak(), 15);
+  a.survival.food = 20;
+  sim.action('a', { action: 'use', down: true });
+  run(sim, 40, () => eat(8));
+  assert.equal(steak(), 15, 'a full player cannot eat');
+  sim.action('a', { action: 'use', down: true });
+  run(sim, 5, () => eat(0));
+  assert.equal(a.eating, null, 'a gun in hand eats nothing');
+});
+
+test('the client is told how many shots the server fired, for its ammo prediction', () => {
+  const sim = arena(), { a, b } = pair(sim), keepUp = keep(sim, a, b);
+  run(sim, 10, keepUp);
+  assert.equal(sim.you(a).shots, 0);
+  sim.action('a', { action: 'trigger', down: true, yaw: EAST, pitch: 1.2 }); sim.action('a', { action: 'trigger', down: false });
+  run(sim, 1, keepUp);
+  assert.equal(sim.you(a).shots, 1);
+  assert.equal(sim.you(b).shots, 0);
+});
+
 test('death messages, respawn, keepInventory and join protection', () => {
   const sim = arena(), { a, b } = pair(sim), keepUp = keep(sim, a, b);
   run(sim, 10, keepUp);
