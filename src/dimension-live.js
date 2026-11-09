@@ -23,7 +23,7 @@ import { ringEntityActive } from "./streaming-ticks.js";
 import { LEAD_ITEM } from "./horse-gear.js";
 
 // Per-dimension runtime state: everything main.js's save() writes that is keyed by block coordinates or holds entities.
-export const DIM_KEYS = ["drops", "projectiles", "eyes", "rockets", "fishing", "thrownPotions", "fireballs", "arrows", "tnt", "fluidTicks", "fireTicks", "redstone", "pistons", "commandBlocks", "musicTiles", "entities", "villages", "farms", "pots", "xpOrbs", "falling", "fallingTicks", "spawners", "minecarts", "boats", "hanging", "signs", "skulls", "beacons", "populatedColumns", "containerScope", "editSequence", "dragonSpawned", "simulation"];
+export const DIM_KEYS = ["drops", "projectiles", "eyes", "rockets", "fishing", "thrownPotions", "fireballs", "arrows", "tnt", "fluidTicks", "fireTicks", "redstone", "pistons", "commandBlocks", "musicTiles", "entities", "villages", "farms", "pots", "xpOrbs", "falling", "fallingTicks", "foreignTicks", "spawners", "minecarts", "boats", "hanging", "signs", "skulls", "beacons", "populatedColumns", "containerScope", "editSequence", "dragonSpawned", "simulation"];
 // Tile entities that survival.serialize() keeps in the player record, by block coordinate.
 export const TILE_KEYS = ["furnaces", "chests", "dispensers", "brewing", "hoppers"];
 const VIEW_ONLY = new Set(["id", "rootId", "chunked", "biome", "edits", "runtimeChunked", "dimensions", "dimension", "transit", "portalArrivals", "pendingArrivals"]);

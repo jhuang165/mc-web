@@ -64,6 +64,8 @@ function furnish(chunk, cx, cz, tiles, entities, seq, ticks) {
   put(12, 210, 6, 51, 3); tk(51, 12, 210, 20);    // fire
   put(13, 210, 6, 23, 3); tk(23, 13, 210, 4);     // dispenser
   put(14, 210, 6, 54, 5); tiles.push(tile('Chest', bx + 14, 210, bz + 6, { Items: list(NBT.COMPOUND, [item(0, 264, 1)]) }));
+  // Ticks the port keeps raw (tile-ticks.js foreignTicks): a chest tick (no handler), a tick on air (written as i 0, t = -world time, 24000 here) and y outside 0..255; native keeps all of them in the pending set.
+  tk(54, 14, 210, 40); tk(0, 15, 211, -24000); tk(1, 3, 300, 12); tk(1, 4, -3, 6);
   tk(9, 3, 210, 7); // still water tick (kept: fluids.js schedules both water ids)
   entities.push(mob('Pig', bx + 3.5, 201, bz + 3.5, { Age: t(NBT.INT, 0), InLove: t(NBT.INT, 0) }));
   entities.push(mob('Cow', bx + 5.5, 201, bz + 3.5, { Age: t(NBT.INT, 0), InLove: t(NBT.INT, 0) }));

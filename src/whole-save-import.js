@@ -128,7 +128,7 @@ function mergeReport(total, rep) {
   total.items.converted += rep.items.converted; total.items.tagsStripped += rep.items.tagsStripped; total.items.clamped += rep.items.clamped;
   total.tileEntities.total += rep.tileEntities.total; total.entities.total += rep.entities.total;
   total.scheduledTicks += rep.scheduledTicks;
-  for (const k of ["fluid", "fire", "falling", "redstone", "litRepeaters", "duplicates", "outsideArea"]) total.ticks[k] += rep.ticks?.[k] ?? 0;
+  for (const k of ["fluid", "fire", "falling", "redstone", "litRepeaters", "duplicates", "outsideArea", "foreign"]) total.ticks[k] += rep.ticks?.[k] ?? 0;
   for (const e of rep.ticks?.dropped ?? []) tally(total.ticks.dropped, e.id, e.count);
 }
 const sorted = (map, name = "id") => [...map].sort(([a], [b]) => String(a).localeCompare(String(b), "en", { numeric: true })).map(([key, count]) => ({ [name]: key, count }));
@@ -171,7 +171,7 @@ export async function importWholeSave(entries, options = {}) {
   const total = {
     blocks: { sourceCells: 0, exact: 0, approximated: 0, omitted: 0 },
     items: { converted: 0, tagsStripped: 0, clamped: 0 }, tileEntities: { total: 0 }, entities: { total: 0 }, scheduledTicks: 0,
-    ticks: { fluid: 0, fire: 0, falling: 0, redstone: 0, litRepeaters: 0, duplicates: 0, outsideArea: 0, dropped: new Map() },
+    ticks: { fluid: 0, fire: 0, falling: 0, redstone: 0, litRepeaters: 0, duplicates: 0, outsideArea: 0, foreign: 0, dropped: new Map() },
     maps: { unsupported: new Map(), approximations: new Map(), tileLost: new Map(), itemLost: new Map(), entityLost: new Map(), tileConverted: new Map(), entityConverted: new Map() },
   };
   const acc = new Map(DIMENSIONS.map(({ dimension }) => [dimension, { state: {}, tiles: {}, cells: new Map() }]));
@@ -256,6 +256,8 @@ export async function importWholeSave(entries, options = {}) {
 
   // Assemble: the world record from the metadata call, the merged runtime state of the overworld chunks and a blob per dimension.
   const record = { ...meta.record };
+  // Foreign ticks (tile-ticks.js) are aged against the world time they were saved at: the level's, for every dimension.
+  for (const { state } of acc.values()) if (state.foreignTicks) state.foreignTicks.time = Number.isSafeInteger(record.totalTime) ? record.totalTime : 0;
   const over = acc.get(0);
   record.player = { ...record.player };
   for (const key of TILE_KEYS) if (over.tiles[key]) record.player[key] = { ...record.player[key], ...over.tiles[key] };
