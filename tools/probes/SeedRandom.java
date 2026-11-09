@@ -9,7 +9,7 @@ public class SeedRandom extends Random {
   long seed;
   java.util.List<String> log = new java.util.ArrayList<>(); // draws, as VillageFightProbe.Log records them (a Log set after construction would miss a converted zombie's onSpawnWithEgg draws)
   static final boolean TRACE = System.getenv("VF_TRACE") != null; // development aid: tag each draw with its caller frames
-  static String where() { StringBuilder b = new StringBuilder("@"); int k = 0; for (StackTraceElement e : new Throwable().getStackTrace()) { if (e.getClassName().equals("SeedRandom") || e.getClassName().equals("java.util.Random")) continue; b.append(e.getClassName()).append('.').append(e.getMethodName()).append('>'); if (++k == 3) break; } return b.toString(); }
+  static String where() { StringBuilder b = new StringBuilder("@"); int k = 0; for (StackTraceElement e : new Throwable().getStackTrace()) { if (e.getClassName().equals("SeedRandom") || e.getClassName().startsWith("VillageFightProbe$Log") || e.getClassName().equals("java.util.Random")) continue; b.append(e.getClassName()).append('.').append(e.getMethodName()).append('>'); if (++k == 3) break; } return b.toString(); }
   public int nextInt(int bound) { int r = super.nextInt(bound); if (log != null) log.add("i" + bound + (TRACE ? where() : "")); return r; }
   public float nextFloat() { float r = super.nextFloat(); if (log != null) log.add("f"); return r; }
   public double nextGaussian() { double r = super.nextGaussian(); if (log != null) log.add("g"); return r; }

@@ -43,7 +43,7 @@ await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','VillagerPr
 const {stdout}=await exec('java',['-cp',cp,'VillageFightProbe'],{maxBuffer:1<<29});
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
 const b31=records.filter(r=>r.name.startsWith('b31-')),b32=records.filter(r=>r.name.startsWith('b32-')),base=records.filter(r=>!/^b3[12]-/.test(r.name));
-assert.equal(base.length,7);assert.equal(b31.length,19);
+assert.equal(base.length,7);assert.equal(b31.length,19);assert.equal(b32.length,Number(process.env.VF_EXPECT_B32??b32.length));assert.ok(b32.length>=20,'b32 records');
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const names={vz:'Village',wa:'VillageAggressor',vm:'EntityAIDefendVillage',yv:'EntityVillager',wt:'EntityIronGolem',yq:'EntityZombie',yl:'EntitySkeleton',tw:'EntityAIAvoidEntity',sv:'EntityLivingBase'};
 const classes_=Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}])));
@@ -55,4 +55,8 @@ const reference31={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf508500221
  records:b31};
 await writeFile(path.join(root,'../public/research/village-fight-reference.json'),JSON.stringify(reference)+'\n');
 await writeFile(path.join(root,'../public/research/village-fight-b31-reference.json'),JSON.stringify(reference31)+'\n');
+const reference32={target:'Minecraft Java 1.7.10',clientSha1:reference31.clientSha1,classes:{...reference31.classes,ajj:{name:'BlockDoor',sha256:await digest('ajj')},aji:{name:'Block',sha256:await digest('aji')},ahb:{name:'World',sha256:await digest('ahb')}},
+ method:'Batch 32. Same double, row layout and script ops as village-fight-b31-reference.json, plus: Entity.rand of every entity built after the mobs (arrows, converted villagers, reinforcements) is a SeedRandom seeded from the record (`shots[i][13]`, `zombies[j][5]`), so arrow start headings, damage and the extra zombies draws are derived, not copied; the Entity.rand of the initial zombies is also seeded (SeedRandom replaces the single `new Random` in sa.class at load: bytecode patch of the constant pool, no behaviour change). `bases` is each zombie spawnReinforcements attribute (nextDouble*0.1 drawn in its constructor, or the record `reinforce` value). Rows carry a 5th element: the extra zombies [x,y,z,health,attackTarget,revengeTarget,draws] in spawn order (index types.length+1+k). `zombies` is [tick, 1 for a conversion or 0 for a reinforcement, x, y, z, seed, isVillager]. Record fields `blocks` (fill specs [x0,y0,z0,x1,y1,z1,id,meta] applied before the run on the flat y=-1 floor), `water` (the real World water methods answer for liquid cells), `light` (World.getBlockLightValue) and `reinforce` describe the arena variant.',
+ records:b32};
+await writeFile(path.join(root,'../public/research/village-fight-b32-reference.json'),JSON.stringify(reference32)+'\n');
 console.log('Fight records:',base.length,'+',b31.length,'bytes:',JSON.stringify(reference).length,JSON.stringify(reference31).length);

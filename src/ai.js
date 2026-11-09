@@ -635,7 +635,7 @@ class AttackOnCollide extends Task {
     m.lookHelper.setLookPositionWithEntity(t, 30, 30);
     const d = m.distSq(t), reach = f(f(f(f(m.width * 2) * m.width) * 2) + t.width);
     this.delay--;
-    if (m.canSee(t) && this.delay <= 0) {
+    if ((this.longMemory || m.canSee(t)) && this.delay <= 0) { // uq.e: the long-memory flag skips the sight test
       const moved = this.last.x === 0 && this.last.y === 0 && this.last.z === 0 ? true : (t.x - this.last.x) ** 2 + (t.y - this.last.y) ** 2 + (t.z - this.last.z) ** 2 >= 1;
       if (moved || r.nextFloat() < f(0.05)) {
         this.last = { x: t.x, y: t.y, z: t.z };
@@ -1349,7 +1349,7 @@ export class MobAI {
   // World.getLightBrightness: the brightness table at the block light value. Without
   // a light engine (tests) a column with open sky is full daylight.
   brightness(x, y, z) {
-    let level = this.ew.lightAt?.(x, y, z);
+    let level = (this.ew.brightnessLevel ?? this.ew.lightAt)?.call(this.ew, x, y, z); // brightnessLevel: a replay hook where getLightBrightness and getBlockLightValue differ
     if (level === undefined) {
       level = 15;
       for (let yy = y + 1; yy < (this.world.height ?? HEIGHT); yy++)

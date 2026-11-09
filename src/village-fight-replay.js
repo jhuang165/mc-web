@@ -2,11 +2,12 @@ import { readFileSync } from "node:fs";
 import { JavaRandom } from "./lighting.js";
 import { EntityWorld, setEntityRandom } from "./entities.js";
 import { Survival } from "./survival.js";
-import { WOODEN_DOOR } from "./world.js";
+import { WOODEN_DOOR, WATER, LAVA, FENCE, STONE_SLAB } from "./world.js";
 import { revengeOf } from "./revenge-target.js"; // the raw field: a dead target is cleared on the target's next own update, as natively
 import { Arrows, arrowTargets } from "./bow.js";
 import { mobTargets } from "./projectiles.js";
 import { reinforcementBase } from "./difficulty.js";
+import { setPathNodeCap } from "./pathfinding.js";
 
 // Replays one VillageFightProbe record (public/research/village-fight-reference.json) through the port's ticked mobs: the same village, the same
 // positions, entity Randoms seeded like the probe's (seed * 10 + index) and logging their draws as the probe's Log does (nextInt(bound) "i<bound>", nextFloat
@@ -30,20 +31,27 @@ const key = (x, y, z) => `${x},${y},${z}`;
 const TYPE_OF = { V: "villager", Z: "zombie", z: "zombie", G: "iron_golem", K: "skeleton", B: "skeleton" };
 const BOW_STACK = () => ({ id: 261, count: 1, damage: 0, enchantments: [] });
 
+// The record's fills use the original block ids; the port's internal ids differ (world.js).
+const PORT_ID = { 1: 3, 2: 1, 4: 12, 5: 7, 8: WATER, 9: WATER, 10: LAVA, 11: LAVA, 20: 9, 44: STONE_SLAB, 64: WOODEN_DOOR, 85: FENCE };
 function plain(blocks = []) {
   const cells = new Map([[key(50, 0, 50), [WOODEN_DOOR, 0]], [key(50, 1, 50), [WOODEN_DOOR, 8]]]);
   // Batch 32: `blocks` are the record's [x0, y0, z0, x1, y1, z1, id, meta] fills (terrain steps, walls, glass, fences, a water pool replacing floor cells at y < 0).
-  for (const [x0, y0, z0, x1, y1, z1, id, meta] of blocks) for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) cells.set(key(x, y, z), [id, meta]);
+  for (const [x0, y0, z0, x1, y1, z1, id, meta] of blocks) for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) cells.set(key(x, y, z), [PORT_ID[id] ?? id, meta]);
   return { numericSeed: 1, height: 256, floorBelow: true, get: (x, y, z) => cells.get(key(x, y, z))?.[0] ?? (y < 0 ? 1 : 0), getMeta: (x, y, z) => cells.get(key(x, y, z))?.[1] ?? 0,
-    set: () => {}, put: (x, y, z, b, m) => cells.set(key(x, y, z), [b, m]), solid: (x, y, z) => (cells.has(key(x, y, z)) ? ![0, 8, 9, 10, 11].includes(cells.get(key(x, y, z))[0]) : y < 0), surface: () => 1, spawn: () => ({ x: 5.5, y: 0, z: 5.5 }) };
+    set: () => {}, put: (x, y, z, b, m) => cells.set(key(x, y, z), [b, m]), solid: (x, y, z) => (cells.has(key(x, y, z)) ? ![0, WATER, LAVA].includes(cells.get(key(x, y, z))[0]) : y < 0), surface: () => 1, spawn: () => ({ x: 5.5, y: 0, z: 5.5 }) };
 }
 
 export function replayFight(r) {
+  const was = setPathNodeCap(Infinity); // natively a path search has no node cap (the live port stops at 1500 expanded points)
+  try { return replayFightUncapped(r); } finally { setPathNodeCap(was); }
+}
+function replayFightUncapped(r) {
   const types = r.types ?? "VVZZGKK", n = types.length, extras = !!r.types, difficulty = r.difficulty ?? 2;
   const ew = new EntityWorld(plain(r.blocks), [], () => 0.5);
   ew.difficulty = difficulty;
   ew.worldRandom = new JavaRandom(r.seed);
   ew.isDaytime = () => false;
+  ew.brightnessLevel = () => 15; // natively the probe's World.getLightBrightness is 1.0 whatever k() answers
   ew.lightAt = () => r.light ?? 15; // the probe world's getLightBrightness is 1.0 everywhere; World.getBlockLightValue is the record's `light` (15 unless a dark arena)
   ew.ai.deps.canSeeSky = (x, y, z) => !(x >= 40 && x <= 49 && z >= 0 && z <= 100);
   // EntityLiving.despawnEntity is setDead: the native row keeps the health it had, the port marks a despawn as health 0 / death 20 (a corpse's removal)
@@ -101,6 +109,8 @@ export function replayFight(r) {
     const lr = new LogRandom(BigInt(rec ? rec[5] : 1)); lr.logBooleans = true; setEntityRandom(z, lr);
     z.growingAge = 0; z.onGround = false; // a new Entity starts in the air (the probe sets onGround only on the mobs it builds): canNavigate() is false until its first move lands
     z.reinforcement = reinforcementBase(() => lr.nextDouble()); // EntityZombie.applyEntityAttributes: the first draw of the new zombie's constructor
+    if (rec?.[7] !== undefined) for (const k of ["rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "bodyHeadYaw"]) z[k] = Math.fround(rec[7]); // the constructor's Math.random yaw (the one start heading no seed reaches)
+    if (rec?.[7] !== undefined) z.yaw = (-Math.fround(rec[7]) * Math.PI) / 180;
     extra.push(z); extraLogs.push(lr);
   };
   const vel = [0, 0], script = r.script.map((s) => s.split(" ")), hits = [], rows = [], playerDamage = [];
@@ -137,11 +147,11 @@ export function replayFight(r) {
     // a zombie built by a scripted hit (before this point) keeps its constructor-time draws: the probe notices it only in the entity pass that follows its log reset
     for (const l of [...logs, ...extraLogs.slice(0, knownExtras)]) l.log.length = 0;
     survival.health = 1000;
-    ew.tick(player, survival, 0);
-    // the arrows (zc.h) tick after every mob, in spawn order; one spawned this tick ticks in this pass
+    // the arrows (zc.h) tick after every mob, in spawn order; one spawned this tick ticks in this pass. A zombie an arrow's hit makes (a reinforcement) is appended after the arrows and ticks in the same pass.
     const changed = [];
+    ew.lateEntity = extras ? { lateHook: () => arrows.tick(ew.world, { targets: arrowTargets(mobTargets(ew.entities.filter((m) => !m.removedHealth), { x: player.x, y: 0, z: player.z }, 0.6, 1.8), false), mobs: ew, survival, player }) } : null;
+    ew.tick(player, survival, 0);
     if (extras) {
-      arrows.tick(ew.world, { targets: arrowTargets(mobTargets(ew.entities.filter((m) => !m.removedHealth), { x: player.x, y: 0, z: player.z }, 0.6, 1.8), false), mobs: ew, survival, player });
       for (const a of mine) {
         const s = JSON.stringify([a.id, a.x, a.y, a.z, a.mx, a.my, a.mz, a.dead ? 1 : 0]);
         if (arrowLast.get(a) !== s) { arrowLast.set(a, s); changed.push([a.id, a.x, a.y, a.z, a.mx, a.my, a.mz, a.dead ? 1 : 0]); }

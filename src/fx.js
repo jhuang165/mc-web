@@ -444,7 +444,8 @@ export function enterWater(fx, e, rand) {
   for (const name of ["bubble", "splash"])
     for (let i = 0; i < n; i++) {
       const dx = f(f(f(rand.nextFloat() * 2) - 1) * w), dz = f(f(f(rand.nextFloat() * 2) - 1) * w);
-      fx?.spawn(name, e.x + dx, top, e.z + dz, e.mx, name === "bubble" ? e.my - f(rand.nextFloat() * f(0.2)) : e.my, e.mz);
+      const my = name === "bubble" ? e.my - f(rand.nextFloat() * f(0.2)) : e.my; // drawn even without a client: the arguments are evaluated before World.spawnParticle returns
+      fx?.spawn(name, e.x + dx, top, e.z + dz, e.mx, my, e.mz);
     }
   return { volume, pitch };
 }

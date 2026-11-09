@@ -1014,7 +1014,7 @@ export class EntityWorld {
     if (!target || this.entities.length >= 40) return null;
     const t = ENTITY_TYPES.zombie, w = t.width / 2;
     const spot = zombieReinforcement(entityRandom(e), this.difficulty, e.reinforcement ?? 0, e.x, e.y, e.z, {
-      solidTop: (x, y, z) => y >= 0 && y < (this.world.height ?? HEIGHT) && normalCube(this.world.get(x, y, z)),
+      solidTop: (x, y, z) => y < (this.world.height ?? HEIGHT) && normalCube(this.world.get(x, y, z)),
       light: (x, y, z) => (this.lightAt ? this.lightAt(x, y, z) : 0),
       fits: (x, y, z) => {
         if ((this.world.streaming ? !this.world.isTicking(x,z) : x < 1 || z < 1 || x >= SIZE - 1 || z >= SIZE - 1) || y < 0 || y + t.height > (this.world.height ?? HEIGHT)) return false;
@@ -1036,6 +1036,7 @@ export class EntityWorld {
     });
     if (!spot) return null;
     const z = this.spawnNatural("zombie", spot.x, spot.y, spot.z, "reinforce");
+    this.tickOrder?.push(z); // World.spawnEntityInWorld: appended to the list being walked, so it updates in this pass
     this.ai.brain(z).attackTarget = target;
     e.reinforcement = reinforcementChance(e.reinforcement + REINFORCEMENT_CHARGE);
     z.reinforcement = reinforcementChance(z.reinforcement + REINFORCEMENT_CHARGE);
@@ -1631,6 +1632,7 @@ export class EntityWorld {
     z.villager = true;
     if (villager.growingAge < 0) z.growingAge = -1;
     this.entities.push(syncInterpolation(z));
+    this.tickOrder?.push(z);
     // The villager is removed at once (World.removeEntity), without a death animation or experience.
     villager.death = 20;
     villager.recentlyHit = 0;
@@ -1844,7 +1846,11 @@ export class EntityWorld {
     releaseDead(this.entities);
     const riders = [], peacefulGone = [];
     let farMark = -1; // index of the first event of the unticked-window mob being updated
-    for (const e of ridingOrder(this.entities.slice())) {
+    // World.spawnEntityInWorld adds to loadedEntityList at once and updateEntities walks it by index: a zombie that a kill converts a villager into updates in this same pass.
+    const order = this.tickOrder = ridingOrder(this.entities.slice());
+    if (this.lateEntity) order.push(this.lateEntity); // replay hook: a stand-in for the arrows at the end of the list, so a zombie one of them hurts into a reinforcement joins after it and ticks in this pass
+    for (const e of order) {
+      if (e.lateHook) { e.lateHook(); continue; }
       if (farMark >= 0) { this.dropFarEvents(farMark); farMark = -1; }
       if (e.removedNow || !this.isActive(e)) continue;
       if (this.ring && !this.world.isTicking(e.x, e.z)) farMark = this.events.length;
@@ -1900,10 +1906,7 @@ export class EntityWorld {
       if (e.inWater = inWater(this.world, e, t.width, t.height)) e.fallDistance = 0;
       // Entity.handleWaterMovement: entering water (not on the entity's first update, when
       // inWater is still unset) splashes. EntityMob plays the hostile sound.
-      if (e.inWater && wasInWater === false) {
-        const s = enterWater(this.fx, { x: e.x, z: e.z, minY: e.y, width: t.width, mx: e.vx, my: e.vy, mz: e.vz }, entityRandom(e));
-        this.events.push({ sound: HOSTILE.has(e.type) ? "game.hostile.swim.splash" : "game.neutral.swim.splash", volume: s.volume, pitch: s.pitch, position: { x: e.x, y: e.y, z: e.z } });
-      }
+      if (e.inWater && wasInWater === false) this.splash(e, t);
       this.burn(e, t);
       // Entity.onEntityUpdate: below posY -64, kill(), which EntityLivingBase makes
       // attackEntityFrom(outOfWorld, 4): no armour, the hurt window applies.
@@ -2047,6 +2050,19 @@ export class EntityWorld {
       fizz: () => this.events.push({ sound: "random.fizz", volume: 0.7, pitch: f(1.6 + f(f(this.random() - this.random()) * 0.4)), position: { x: e.x, y: e.y, z: e.z } }),
     };
   }
+  // Entity.handleWaterMovement's splash on entering water: the sound, then the bubble and splash particles (draws on Entity.rand).
+  splash(e, t) {
+    const s = enterWater(this.fx, { x: e.x, z: e.z, minY: e.y, width: t.width, mx: e.vx, my: e.vy, mz: e.vz }, entityRandom(e));
+    this.events.push({ sound: HOSTILE.has(e.type) ? "game.hostile.swim.splash" : "game.neutral.swim.splash", volume: s.volume, pitch: s.pitch, position: { x: e.x, y: e.y, z: e.z } });
+  }
+  // EntityLivingBase.updateFallState (inside moveEntity, after the move): a mob not yet in water asks handleWaterMovement again with the box it
+  // just moved to, so a mob that sinks into water splashes during that tick's move, not at the start of the next.
+  waterAfterMove(e, t) {
+    if (e.inWater !== false || !inWater(this.world, e, t.width, t.height)) return;
+    e.inWater = true;
+    e.fallDistance = 0;
+    this.splash(e, t);
+  }
   // moveEntity's step tail (mob-steps.js): every mob with canTriggerWalking plays its own step event.
   moveSteps(e, from) {
     const rand = entityRandom(e);
@@ -2074,6 +2090,7 @@ export class EntityWorld {
   moveWith(e, t, forward) {
     const from = { x: e.x, y: e.y, z: e.z };
     const landed = moveEntityWithHeading(this.world, e, t.width, t.height, forward, this.moveHooks(e, t));
+    this.waterAfterMove(e, t);
     this.moveSteps(e, from);
     // The finite world's edge stops a mob like a wall.
     // A streamed world's edge is its border (the 30,000,000 limit), not the resident window: mobs walk into the ring beyond it.
