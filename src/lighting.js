@@ -279,7 +279,9 @@ export class LightVolume {
   column(x, z) {
     if (this.world.hasNoSky) { this.heights[x * SIZE + z] = this.height; return; } // the Nether: no cell sees the sky
     let y = this.height - 1;
-    while (y >= 0 && lightOpacity(this.world.get(x, y, z)) === 0) y--;
+    const col = this.world.columnBlocks?.(x, z);
+    if (col) { if (!OPACITY) lightTables(); while (y >= 0 && OPACITY[col[y]] === 0) y--; } // the same cells as world.get, read from the column's array
+    else while (y >= 0 && lightOpacity(this.world.get(x, y, z)) === 0) y--;
     this.heights[x * SIZE + z] = y + 1;
   }
   skyAt(x, y, z) {
@@ -330,7 +332,10 @@ export class LightVolume {
         const base = (x * SIZE + z) * H, col = air && (w.columnBlocks(x, z) ?? air);
         oldSky.set(this.sky.subarray(base, base + H), k);
         oldBlock.set(this.block.subarray(base, base + H), k);
-        for (let y = 0; y < H; y++) {
+        // Air above a column's top block costs 1 and emits nothing (the loop below would write exactly that), so it is filled at once.
+        let top = H - 1;
+        if (col) { while (top >= 0 && col[top] === 0) top--; cost.fill(1, k + top + 1, k + H); }
+        for (let y = 0; y <= top; y++) {
           const b = col ? col[y] : w.get(x, y, z), op = OPACITY[b] ?? lightOpacity(b),
             e = b && MAY_EMIT[b] !== 0 ? this.emission(x, y, z, b) : 0;
           emit[k + y] = e;
@@ -414,10 +419,19 @@ export class LightVolume {
     }
     let box = null;
     k = 0;
+    // Columns are compared four cells at a time where the arrays allow it (every column starts on a multiple of H); only words that
+    // differ are looked at cell by cell, so the box is the same as the plain per-cell scan's.
+    const words = H % 4 === 0 && [this.sky, this.block].every((a) => a.byteOffset % 4 === 0 && a.length % 4 === 0),
+      sky32 = words && new Uint32Array(this.sky.buffer, this.sky.byteOffset, this.sky.length >> 2), block32 = words && new Uint32Array(this.block.buffer, this.block.byteOffset, this.block.length >> 2),
+      oldSky32 = words && new Uint32Array(oldSky.buffer), oldBlock32 = words && new Uint32Array(oldBlock.buffer);
     for (let x = x0; x <= x1; x++) {
       yield;
       for (let z = z0; z <= z1; z++)
         for (let y = 0; y < H; y++, k++) {
+          if (words && (y & 3) === 0) {
+            const wi = ((x * SIZE + z) * H + y) >> 2, wk = k >> 2;
+            if (sky32[wi] === oldSky32[wk] && block32[wi] === oldBlock32[wk]) { y += 3; k += 3; continue; }
+          }
           const i = (x * SIZE + z) * H + y;
           if (this.sky[i] === oldSky[k] && this.block[i] === oldBlock[k]) continue;
           if (!box) box = { x0: x, x1: x, y0: y, y1: y, z0: z, z1: z };
