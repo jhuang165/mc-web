@@ -52,7 +52,8 @@ public class VillagerProbe {
     public azu a(azw a, azw b) { return realRays ? super.a(a, b) : null; }
     public azu a(azw a, azw b, boolean c) { return realRays ? super.a(a, b, c) : null; }
     public azu a(azw a, azw b, boolean c, boolean d, boolean e) { return realRays ? super.a(a, b, c, d, e) : null; }
-    public boolean d(sa entity) { spawned.add(entity); return true; }
+    public boolean d(sa entity) { spawned.add(entity); if (pickEntities && immediateZombies && entity instanceof yq) entities.add(entity); return true; } // batch 33: World.spawnEntityInWorld makes an entity visible to getEntitiesWithinAABB at once (VillageFightProbe b33 records; earlier records keep the drain-time add)
+    static boolean immediateZombies = false;
     public void a(sa entity, String sound, float volume, float pitch) { sounds.add(sound + "|" + volume + "|" + pitch); }
     // World.getClosestPlayerToEntity (a(sa, D)): only VillageFightProbe fills this (batch 29), so EntityLiving.despawnEntity sees its player; elsewhere null as before.
     static List<yz> closePlayers = null;

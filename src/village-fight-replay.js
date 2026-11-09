@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { JavaRandom } from "./lighting.js";
 import { EntityWorld, setEntityRandom } from "./entities.js";
 import { Survival } from "./survival.js";
-import { WOODEN_DOOR, WATER, LAVA, FENCE, STONE_SLAB } from "./world.js";
+import { WOODEN_DOOR, WATER, LAVA, WEB, FENCE, STONE_SLAB } from "./world.js";
+import { fromOriginal } from "./block-registry.js";
 import { revengeOf } from "./revenge-target.js"; // the raw field: a dead target is cleared on the target's next own update, as natively
 import { Arrows, arrowTargets } from "./bow.js";
 import { mobTargets } from "./projectiles.js";
@@ -19,6 +20,8 @@ export const fightReference31 = JSON.parse(readFileSync(new URL("../public/resea
 // Batch 32: village-fight-b32-reference.json (arena variants: terrain steps, a water pool, walls, doors, glass and fences the arrows hit, dark Hard
 // reinforcements); rows carry a 5th element (the zombies built during the fight, ticked like any mob) and `zombies` lists their Entity.rand seeds.
 export const fightReference32 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b32-reference.json", import.meta.url)));
+// Batch 33: village-fight-b33-reference.json (stairs, ladders, trapdoors, fence gates, lava, ice, packed ice, soul sand, cobweb); a `pos` row may carry a start height.
+export const fightReference33 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b33-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
   logBooleans = false;
@@ -33,19 +36,26 @@ const BOW_STACK = () => ({ id: 261, count: 1, damage: 0, enchantments: [] });
 
 // The record's fills use the original block ids; the port's internal ids differ (world.js).
 const PORT_ID = { 1: 3, 2: 1, 4: 12, 5: 7, 8: WATER, 9: WATER, 10: LAVA, 11: LAVA, 20: 9, 44: STONE_SLAB, 64: WOODEN_DOOR, 85: FENCE };
+// original id and metadata to the port's cell: the few fixed ids above, else the block registry (stairs, ladder, trapdoor, gate, ice, soul sand, cobweb ...)
+function portCell(id, meta) {
+  if (id in PORT_ID) return [PORT_ID[id], meta];
+  const c = fromOriginal(id, meta);
+  if (!c) throw new Error(`no port block for original ${id}`);
+  return [c.id, c.meta];
+}
 function plain(blocks = []) {
   const cells = new Map([[key(50, 0, 50), [WOODEN_DOOR, 0]], [key(50, 1, 50), [WOODEN_DOOR, 8]]]);
   // Batch 32: `blocks` are the record's [x0, y0, z0, x1, y1, z1, id, meta] fills (terrain steps, walls, glass, fences, a water pool replacing floor cells at y < 0).
-  for (const [x0, y0, z0, x1, y1, z1, id, meta] of blocks) for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) cells.set(key(x, y, z), [PORT_ID[id] ?? id, meta]);
+  for (const [x0, y0, z0, x1, y1, z1, id, meta] of blocks) for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) cells.set(key(x, y, z), portCell(id, meta));
   return { numericSeed: 1, height: 256, floorBelow: true, get: (x, y, z) => cells.get(key(x, y, z))?.[0] ?? (y < 0 ? 1 : 0), getMeta: (x, y, z) => cells.get(key(x, y, z))?.[1] ?? 0,
-    set: () => {}, put: (x, y, z, b, m) => cells.set(key(x, y, z), [b, m]), solid: (x, y, z) => (cells.has(key(x, y, z)) ? ![0, WATER, LAVA].includes(cells.get(key(x, y, z))[0]) : y < 0), surface: () => 1, spawn: () => ({ x: 5.5, y: 0, z: 5.5 }) };
+    set: () => {}, put: (x, y, z, b, m) => cells.set(key(x, y, z), [b, m]), solid: (x, y, z) => (cells.has(key(x, y, z)) ? ![0, WATER, LAVA, WEB].includes(cells.get(key(x, y, z))[0]) : y < 0), surface: () => 1, spawn: () => ({ x: 5.5, y: 0, z: 5.5 }) };
 }
 
-export function replayFight(r) {
-  const was = setPathNodeCap(Infinity); // natively a path search has no node cap (the live port stops at 1500 expanded points)
-  try { return replayFightUncapped(r); } finally { setPathNodeCap(was); }
+export function replayFight(r, hooks = {}) {
+  const was = setPathNodeCap(Infinity); // natively a path search has no node cap (the live port stops at 6000 expanded points)
+  try { return replayFightUncapped(r, hooks); } finally { setPathNodeCap(was); }
 }
-function replayFightUncapped(r) {
+function replayFightUncapped(r, hooks) {
   const types = r.types ?? "VVZZGKK", n = types.length, extras = !!r.types, difficulty = r.difficulty ?? 2;
   const ew = new EntityWorld(plain(r.blocks), [], () => 0.5);
   ew.difficulty = difficulty;
@@ -61,7 +71,7 @@ function replayFightUncapped(r) {
   for (let t = 0; t < 5; t++) { if (t % 60 === 0) c.addVillagerPosition(52, 0, 52); c.tick(); }
   const village = c.villages[0], ents = [], logs = [], states = [];
   [...types].forEach((ch, i) => {
-    const type = TYPE_OF[ch], [x, z] = r.pos[i], e = type === "iron_golem" ? ew.spawnIronGolem(x, 0, z, false) : ew.create(type, x, 0, z);
+    const type = TYPE_OF[ch], [x, z, y0 = 0] = r.pos[i], e = type === "iron_golem" ? ew.spawnIronGolem(x, y0, z, false) : ew.create(type, x, y0, z);
     if (type !== "iron_golem") ew.entities.push(e);
     e.growingAge = 0; e.onGround = true;
     // the probe's `new EntityZombie` never ran onSpawnWithEgg: no random knockback-resistance bonus
@@ -77,7 +87,7 @@ function replayFightUncapped(r) {
   // no village link here: each villager and the golem finds it in its own first updateAITick refresh (nextInt(50) draw), as natively
   const survival = new Survival({}, "survival");
   survival.difficulty = difficulty; survival.protection = 0; survival.health = 1000;
-  const player = { x: r.pos[n][0], y: 0, z: r.pos[n][1], health: 1000, alive: true, isPlayer: true };
+  const player = { x: r.pos[n][0], y: r.pos[n][2] ?? 0, z: r.pos[n][1], health: 1000, alive: true, isPlayer: true };
   ew.ai.player.unticked = true;
   ew.ai.budget.perTick = Infinity; // natively a path search is never refused; the live port spreads them over ticks (ai.js budget), the replay does not
   // arrows: a skeleton's shot is the port's own end to end (Batch 32): the heading comes from the arrow's Entity.rand, which the record seeds (its
@@ -165,7 +175,27 @@ function replayFightUncapped(r) {
     states.push(ents.map((e, i) => [e.x, e.y, e.z, gone.has(e) ? gone.get(e) : e.removedHealth ?? e.health, idx(ew.ai.brain(e).attackTarget), (e.revenge ? (revengeOf(e) === "player" ? n : index(revengeOf(e))) : -1), logs[i].log.slice()]));
     states[states.length - 1].arrows = changed;
     states[states.length - 1].extras = extra.map((z, k) => [z.x, z.y, z.z, gone.has(z) ? gone.get(z) : z.removedHealth ?? z.health, idx(ew.ai.brain(z).attackTarget), (z.revenge ? (revengeOf(z) === "player" ? n : index(revengeOf(z))) : -1), extraLogs[k].log.slice()]);
+    hooks.onTick?.(t, ew, ents);
     rows.push([agg, village.playerReputation(name === "alt" ? "Player" : "Player")]);
   }
   return { ew, hits, rows, states, conversions: made.filter((m) => m[1] === "convert").map(([t, , x, y, z]) => [t, x, y, z]), made, extra, playerDamage, shotLog, shots: mine };
+}
+
+// The first tick, mob and field where a replay differs from a record (null when none): fields 0-5 are x, y, z, health, attack target, revenge target, then the draws.
+const near = (a, b) => Math.abs(a - b) < 1e-9;
+export function firstDivergence(r, got) {
+  const n = r.types.length;
+  for (let t = 0; t < r.ticks; t++) {
+    const want = r.rows[t][0];
+    for (let i = 0; i < n; i++) {
+      const w = want[i], g = got.states[t][i];
+      for (let k = 0; k < 6; k++) if (w[k] !== g[k]) return [t, i, k, w[k], g[k]];
+      if (JSON.stringify(w[6]) !== JSON.stringify(g[6])) return [t, i, "draws", w[6], g[6]];
+    }
+    if (JSON.stringify(r.rows[t][3]) !== JSON.stringify(got.states[t].arrows)) return [t, "arrows"];
+    if (JSON.stringify(r.rows[t][4]) !== JSON.stringify(got.states[t].extras)) return [t, "extra zombies", r.rows[t][4], got.states[t].extras];
+    const before = t ? r.rows[t - 1][0][n][3] : 1000;
+    if (!near(before - want[n][3], got.playerDamage[t])) return [t, "player damage", before - want[n][3], got.playerDamage[t]];
+  }
+  return null;
 }
