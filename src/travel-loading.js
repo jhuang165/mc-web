@@ -25,7 +25,7 @@ const chunkRange = (world, x, z) => { const { minX, minZ } = world.windowAt(x, z
 //  - Nether/End worlds (`noPrefetch`) ask the same worker for the columns since batch 28; without a worker they generate on the page one at a time into `pregenerated`, where
 //    generateTerrainChunk finds them, pausing between slices.
 // Either way World.streamAround then runs the same code on the same column data.
-export function arrivalWarmer(world, { pause, createWorker = () => new Worker(new URL("./streaming-worker.js", import.meta.url), { type: "module" }), timeoutMs = 120000, now = () => performance.now(), budgetMs = 12, maxWorkers = Math.max(1, Math.min(3, (globalThis.navigator?.hardwareConcurrency ?? 4) - 2)) } = {}) {
+export function arrivalWarmer(world, { pause, createWorker = () => new Worker(new URL("./streaming-worker.js", import.meta.url), { type: "module" }), timeoutMs = 120000, now = () => performance.now(), budgetMs = 12, pageFallback = true, specMax = null, maxWorkers = Math.max(1, Math.min(3, (globalThis.navigator?.hardwareConcurrency ?? 4) - 2)) } = {}) {
   let prefetch = null, broken = false;
   const spares = []; // extra workers that share a big request (batch 28: three population cells took 5.1 s on one worker)
   const missing = (cx, cz) => !world.chunks.has(`${cx},${cz}`) && !world.baseColumns?.has?.(`${cx},${cz}`);
@@ -35,14 +35,19 @@ export function arrivalWarmer(world, { pause, createWorker = () => new Worker(ne
     return prefetch;
   };
   const withTimeout = (p) => { let t; return Promise.race([p, new Promise((r) => { t = setTimeout(r, timeoutMs); })]).finally(() => clearTimeout(t)); };
+  // `specMax` (batch 33, exit-prewarm.js): how many speculative units may be asked for, whatever the lanes; the portal wait has seconds to spare.
   // `extra` (batch 32): chunks a later window may need (the exits a portal can be built at). Their units ride along with the units that
   // are needed, one per spare lane at most and nearest `at` first, so a window round the exit finds them held instead of asking again.
   async function chunks(list, extra = [], at = null) { // [[cx, cz]...] local chunk coordinates
-    const need = list.filter(([cx, cz]) => missing(cx, cz)), spec = extra.filter(([cx, cz]) => missing(cx, cz));
+    // A unit already held (a cell the portal wait built, exit-prewarm.js, or one an earlier request brought) is not asked for again, and when nothing is left no worker is opened.
+    const cellMode = world.generationVersion >= 13 && !!world.population;
+    const held = ([cx, cz]) => (cellMode ? world.population.hasCell(Math.floor(cx / CELL), Math.floor(cz / CELL)) : !!world.pregenerated?.has?.(`${cx},${cz}`));
+    const need = list.filter(([cx, cz]) => missing(cx, cz) && !held([cx, cz])), spec = extra.filter(([cx, cz]) => missing(cx, cz) && !held([cx, cz]));
     if (!need.length && !spec.length || !world.streaming) return 0;
     // Nether/End columns come from the worker too (DimensionWorld there builds the same column); only a missing worker keeps the page slices.
     const pf = typeof Worker === "function" ? open() : null;
     if (world.noPrefetch && (!pf || pf.failed)) {
+      if (!pageFallback) return 0; // a background request never builds on the page thread
       let end = now() + budgetMs, built = 0;
       for (const [cx, cz] of need) {
         const k = `${cx},${cz}`;
@@ -59,7 +64,7 @@ export function arrivalWarmer(world, { pause, createWorker = () => new Worker(ne
     if (spec.length && at) {
       const more = new Map(), centre = (u) => (pf.cells ? [(u[0] + 0.5) * CELL * 16, (u[1] + 0.5) * CELL * 16] : [(u[0] + 0.5) * 16, (u[1] + 0.5) * 16]);
       for (const c of spec) { const u = unitOf(c), k = u.join(","); if (!units.has(k)) more.set(k, u); }
-      const room = Math.max(0, maxWorkers - units.size), dist = (u) => { const [a, b] = centre(u); return (a - at[0]) ** 2 + (b - at[1]) ** 2; };
+      const room = Math.max(0, specMax ?? maxWorkers - units.size), dist = (u) => { const [a, b] = centre(u); return (a - at[0]) ** 2 + (b - at[1]) ** 2; };
       for (const [k, u] of [...more].sort((a, b) => dist(a[1]) - dist(b[1])).slice(0, room)) units.set(k, u);
     }
     if (!units.size) return 0;

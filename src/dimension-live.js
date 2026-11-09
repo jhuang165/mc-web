@@ -17,6 +17,7 @@ import { stateColumns, awayPlan, MAX_AWAY_TICKS } from "./away-plan.js";
 import { buildStoredIndex } from "./stored-peek.js";
 import { restoreImportedFortress } from "./fortress-restore.js";
 import { drain, runSteps } from "./steps.js";
+import { ExitPrewarm } from "./exit-prewarm.js";
 import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf, actualHeight, portalCooldown, readPlayerPortalState } from "./dimensions.js";
 import { EntityPortals, placeAfterTravel, POS_Y, mobYawToMc, mcToMobYaw } from "./entity-portal.js";
 import { ringEntityActive } from "./streaming-ticks.js";
@@ -88,12 +89,14 @@ class FinitePeek extends LivePeek {
 export const gameYaw = (mcDegrees) => Math.PI - (mcDegrees * Math.PI) / 180;
 export const mcYaw = (yaw) => ((Math.PI - yaw) * 180) / Math.PI;
 
+const PREWARM_TICKS = 5; // a brush against a portal does not start workers; the standing countdown is 80 ticks (4 s)
+
 export class DimensionLive {
   // host: { active(), world(), worlds(), save(), openWorld(record), sound(name, opts) }
   constructor(host) {
     this.host = host; this.state = new PortalState(); this.busy = false; this.overlayAmount = 0; this.writes = [];
     this.portals = new EntityPortals(); this.peeks = new Map(); this.queue = Promise.resolve(); this.flights = 0;
-    this.readEdits = readChunkEdits; this.readColumns = readChunkColumns; this.writeColumns = writeChunkColumns; this.away = null; this.awayLog = null; this.makeAwayWorker = () => new Worker(new URL("./away-worker.js", import.meta.url), { type: "module" }); this.listBases = listBaseColumns; this.readBases = readBaseColumns; this.storedIndexes = new Map(); this.onDragonSpawn = () => {}; this.quiet = false; this.overlay = null; this.trigger = false;
+    this.readEdits = readChunkEdits; this.readColumns = readChunkColumns; this.writeColumns = writeChunkColumns; this.away = null; this.awayLog = null; this.makeAwayWorker = () => new Worker(new URL("./away-worker.js", import.meta.url), { type: "module" }); this.listBases = listBaseColumns; this.readBases = readBaseColumns; this.storedIndexes = new Map(); this.onDragonSpawn = () => {}; this.exitWarm = new ExitPrewarm(); this.prewarmEnabled = true; this.quiet = false; this.overlay = null; this.trigger = false;
   }
   // main.js openWorld hooks ------------------------------------------------------------
   // A record saved while the player was in a dimension opens as that dimension's view.
@@ -127,6 +130,7 @@ export class DimensionLive {
     world.dimension = to; world.actualHeight = actualHeight(to);
     world.seed = javaSeed(record.seed);
     if (prepared.streaming && (record.wholeSave || record.rootId)) world.stored = await this.warmStored(record.rootId ? this.host.worlds?.().find((w) => w.id === record.rootId) ?? record : record, to);
+    if (warm) await this.exitWarm.adopt(prepared, "start"); // cells the portal wait built for this world (exit-prewarm.js)
     const e = { x: tt.x, y: tt.y, z: tt.z, vx: 0, vy: 0, vz: 0, yaw: tt.yaw, pitch: 0, teleportDirection: t.dir ?? 0 };
     const teleporter = new Teleporter(world, { isSolid: solidId, random: new JavaRandom(world.seed) });
     if (warm && !prepared.noPrefetch) { // (Nether/End peeks read cheap terrain, and their window is built after the arrival) the columns the search and the portal-site scan will read: the window round the target and every saved portal in reach
@@ -145,6 +149,7 @@ export class DimensionLive {
     if (pause) await runSteps(steps, pause); else drain(steps);
     this.writes = world.writes;
     record.position = { x: e.x, y: e.y, z: e.z, yaw: gameYaw(e.yaw), pitch: 0 };
+    if (warm) await this.exitWarm.adopt(prepared, "end"); // Nether columns the portal wait built (the arrival window takes them)
   }
   restorePlayer(record) {
     this.state.restore(readPlayerPortalState(record.portalState));
@@ -379,7 +384,13 @@ export class DimensionLive {
     const shown = this.state.inPortal;
     const go = this.state.tick(d, { creative, riding });
     if (go !== null) this.travel(go);
+    else if (shown && !creative && !riding && this.prewarmEnabled && d !== END && this.state.portalCounter >= PREWARM_TICKS) this.warmExit(d, pos);
     return shown;
+  }
+  // The player has stood in a portal for PREWARM_TICKS of its countdown: build the terrain round the exit now (exit-prewarm.js). The trip ends the request.
+  warmExit(from, pos, yaw = 0) {
+    const to = from === NETHER ? OVERWORLD : NETHER;
+    try { this.exitWarm.start(this.rootRecord(), to, transferTarget(from, to, pos.x, pos.y, pos.z, yaw)); } catch (e) { console.warn(`exit prewarm: ${e.message}`); }
   }
   // EntityPlayerSP.onLivingUpdate: the first tick in a portal plays portal.trigger (volume 0.25, pitch 0.8-1.2); the overlay follows timeInPortal.
   portalFrame(timer, inPortal) {

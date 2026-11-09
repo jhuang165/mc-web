@@ -183,6 +183,9 @@ export const spawnKey = (seed, generationVersion, worldType, generatorOptions) =
 // The resident 8 x 8 window is population cell (0, 0) (CELL = 8, streaming-population.js). It is built in the same worker after the spawn (its origin follows
 // from the spawn) and adopted by generateJavaWorld, which then finds the cell instead of generating it on the page thread (spawn-presolve.js).
 export const presolvedCells = new Map();
+// The window origin each Overworld got (spawnKey -> [originX, originZ]), kept after the world is gone so a trip back from the Nether can build
+// cells for the right origin before the new World exists (exit-prewarm.js).
+export const spawnOrigins = new Map();
 export function solveResidentCell({ seed, generationVersion, worldType, generatorOptions }, spawn) {
   const s = javaSeed(seed), originX = ((spawn.x >> 4) - 4) * 16, originZ = ((spawn.z >> 4) - 4) * 16;
   const source = streamedSource({ seed: s, generationVersion, originX, originZ, worldType, generatorOptions });
@@ -226,6 +229,7 @@ export function generateJavaWorld(world) {
   }
   world.originX = ((spawn ? spawn[0] >> 4 : 0) - 4) * 16;
   world.originZ = ((spawn ? spawn[2] >> 4 : 0) - 4) * 16;
+  if (key) spawnOrigins.set(key, [world.originX, world.originZ]);
   world.javaSeed = seed;
   world.javaGenerator = gen;
   world.biomeIds = new Uint8Array(128 * 128);
