@@ -155,3 +155,19 @@ test('a failed generation batch leaves the current resident set and bounds intac
   assert.equal(w.chunks,chunks);assert.deepEqual([w.minX,w.minZ,w.maxX,w.maxZ],[0,0,128,128]);
   assert.equal(w.isLoaded(64,64),true);
 });
+
+test('ring biome arrays are kept across a window shift and warmBiomes fills them ahead of the ice rolls',()=>{
+  const w=world(); w.streamAround(64,64);
+  const ring=[]; for(let cx=-2;cx<=14;cx++)for(let cz=-2;cz<=14;cz++)ring.push([cx,cz]);
+  const cold=new World('17','javaStreamed',12).javaGenerator.manager;
+  let first=0; while(first<ring.length){ const n=w.warmBiomes(ring,1e9); if(!n)break; first+=n; }
+  assert.ok(first>200&&first<=ring.length,'the ring chunks the window had not cached were computed once');
+  assert.equal(w.warmBiomes(ring,1e9),0,'nothing left to do');
+  const before=w.javaGenerator.manager.cache.size;
+  w.streamAround(64+16*2,64); // the window moves two chunks east
+  assert.equal(w.javaGenerator.manager.cache.size,before,'ring-radius arrays survive the shift (no recompute by the ice rolls)');
+  for(const [cx,cz] of [[3,3],[12,5],[-2,-2]]){ // same values as a cold lookup
+    const x=cx*16+5,z=cz*16+9;
+    assert.equal(w.biomeAt(x,z).name,cold.biomeAt(x+w.originX,z+w.originZ).name);
+  }
+});
