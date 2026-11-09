@@ -198,7 +198,11 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
     });
   });
   const tickTimer = setInterval(() => {
-    try { broadcast(simulation.tick()); }
+    try {
+      broadcast(simulation.tick());
+      // C08 build-height refusal text goes to that player only (NetHandlerPlayServer sends a chat packet to the clicker).
+      for (const [pid, player] of simulation.players) if (player.refusal) { const ws = sockets.get(pid); if (ws) send(ws, { type: 'chat', name: '', text: player.refusal }); player.refusal = null; }
+    }
     catch (error) { console.error('Dedicated tick failed:', error.stack); void close().catch(error => console.error(error.message)).finally(() => { process.exitCode = 1; }); }
   }, tickMs);
   const saveTimer = setInterval(() => { void save().catch(() => {}); }, saveMs);

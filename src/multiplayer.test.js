@@ -88,6 +88,27 @@ test('dedicated authority moves players, validates edits against its own ray, st
   assert.equal(s.time, time + 20);
   const rejoined = s.addPlayer('new-id', 'Alice', key(1)); assert.equal(rejoined.position.x, p.position.x);
 });
+test('dedicated edits follow the C07 / C08 gates: no placing before the first position, build height 256 refuses with a message', () => {
+  const s = fixture(), p = s.addPlayer('alice', 'Alice', key(1));
+  p.position.copy({ x: 64.5, y: 10, z: 64.5 });
+  s.world.set(64, 11, 61, 3);
+  assert.equal(s.edit(p, true), false, 'a player who has not sent a position places nothing');
+  assert.equal(s.world.get(64, 11, 62), 0);
+  s.input('alice', input());
+  assert.equal(s.edit(p, true), true);
+  assert.equal(s.world.get(64, 11, 62), 3);
+  // Standing above the world, looking straight down at a block on the build limit: placing on its top face (y 255 + 1) is refused.
+  p.position.copy({ x: 64.5, y: 257, z: 64.5 }); p.pitch = -Math.PI / 2;
+  s.world.height = 256; // a Java landscape world (256 high); the fixture's legacy world is 64 high
+  s.world.put(64, 255, 64, 3, 0, false);
+  assert.equal(s.world.get(64, 255, 64), 3);
+  assert.equal(s.edit(p, true), false);
+  assert.equal(p.refusal, 'Height limit for building is 256 blocks');
+  assert.equal(s.world.get(64, 256, 64), 0);
+  // The same block can still be dug (status 0 only needs y < 256 and the 6 block eye offset).
+  assert.equal(s.edit(p, false), true);
+  assert.equal(s.world.get(64, 255, 64), 0);
+});
 test('two WebSocket clients share authority, chat and departure; saves survive closing every tab and a restart', async t => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'mc-web-dedicated-')), dataFile = path.join(dir, 'world.json');
   const app = await createDedicatedServer({ port: 0, token, dataFile, simulation: fixture(), tickMs: 10, saveMs: 60000 });
