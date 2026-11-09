@@ -2,6 +2,28 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 31
+
+Batch 31 covered these areas:
+- **Server click checks.** The integrated server's C08 placement (under 8 blocks from the feet), C07 dig (6 from the eye) and C02 use-entity (under 6) checks run in play behind the client reach, replayed against the batch 30 NetHandlerPlayServer records; a refused click resends both cells and a click above the build limit prints the native message. Creative survival-tab drops go through the drop limiter; the dedicated server applies the chat spam gate.
+- **Away entities.** For the first 1200 away ticks (re-read from WorldServer's idle counter, bytecode-read) items, xp orbs, primed TNT, minecarts on rails and boats tick in the away run; dispensers and droppers fire through them; weather timers and the clock advance for every trip's loading ticks.
+- **Import, round 8.** TileTicks the port cannot run (air, unknown ids, y outside 0..255, blocks without a handler, the low border outside an area) are kept raw and written back aged against world time instead of being dropped; ThisTick tails of mid-tick saves are replayed; float `getInteger` wraps like `floor_double`.
+- **Village fights, round 3.** 19 new native records (three bow skeletons, three zombies at Normal and Hard, Hard door breaking and conversion, a player fighting back, an equipment swap, a hit on a Peaceful-removed mob); all 26 records replay exactly. WatchClosest, kept combat tasks, per-mob loot pickup and converted-villager removal were fixed.
+- **Ring light, round 3.** An executed rim probe (chunk-by-chunk loading through the unchanged light code, 5 records) shows the outermost loaded chunks hold vertical-only sky and no block light; the port now does the same (Overworld rim cells off by 4-29 sky, 2-24 block per chunk, down from 66-164 and 13-240).
+- **Generation neighbour callbacks, round 2.** Powered doors, door falls and every power provider run in the population callbacks (pinned by 80 native door records); the quiet fallback fired 0 times over 12 seeds. Level.dat imports generate at 22/23 (16/17 plus the callbacks). The default-world jungle difference was the pre-16 biome map; the whole jungle temple area replays.
+- **Walking frames.** The biome halo reaches the ring's tick radius and ring biomes are warmed ahead of ice rolls: frames over 50 ms per 120 blocks walked went from 5-7 to 0-4 at similar load. A Teleporter return to a saved portal no longer pays a second window fetch (0.8-1.35 s before).
+- **Structure data export.** Generation 20 worlds (new since batch 30) and 22 imports write `data/*.dat` again.
+
+Still open from batch 31:
+- While away, mobs do not move, fall, despawn or take explosion damage; arrows, thrown projectiles, rockets and hanging entities are not ticked; dispenses that need a projectile keep their stack; command blocks do not run; hopper, spawner and command carts and ridden vehicles stay frozen; entities in columns not resident at departure do not tick. No probe confirms the 1200-tick counter.
+- The second rim ring and deeper stay at the fixed point, where native block light is darker by load-order dependent amounts. A 64-change chunk resend leaves spilled light dark on the native client (3,983 cells in the probe); the port renders the server light. Population spill and the Nether/End client relight reset are not probed.
+- Ring-light `search` from weather and cave-ambience sky reads still gives 25-35 ms spikes while walking; a 16-block window shift relights for 30-54 ms; a Teleporter exit with no saved portal still pays a second fetch of about 1.1 s on some seeds; the worker cap needs an idle-machine measurement.
+- Foreign TileTicks are never run in the live world; ticks beyond the low border outside an area are dropped at import; the 1000-per-tick cap of `tickUpdates` is not modelled.
+- Village fights are probed on a flat open arena only (no terrain steps, water, closed doors or block-type arrow hits); Hard reinforcements are not compared; a converted villager zombie's own ticks are not probed; arrow start headings come from the records.
+- Paintings, item frames, minecarts and boats skip the server use-entity gate; the 3-block no-line-of-sight rule is not modelled; the dedicated server's edit path uses its own ray.
+- A fallen button and powered TNT still retry quietly in the population callbacks (no area reaches them); no native population area exercises a powered door. Saves imported at 16/17 keep the quiet callbacks.
+- Atlas canvases still convert through 2D canvas premultiplied alpha, so translucent pixels can be 1 off; tint multipliers are rounded to bytes; lazily created textures use the canvas path. Pack icons and the profile screen were not exercised live.
+
 ## Done in batch 30
 
 Batch 30 covered these areas:
@@ -14,15 +36,7 @@ Batch 30 covered these areas:
 - **Generation neighbour callbacks.** New streamed worlds are generation 20. Population runs the door, redstone, tripwire, button, plate and dispenser neighbour callbacks call-for-call against the unchanged areas: 44 flat, 6 temple and 9 default-world areas, village door chains included. Generation 15-19 saves are unchanged ([superflat.md](superflat.md), [scattered-features.md](scattered-features.md)).
 - **Server handlers.** An executed NetHandlerPlayServer probe covered MC|BEdit and MC|BSign (41 cases, already matching), the Creative drop limiter (+20, refused at 200, now ported), the chat spam kick (single-player owner without cheats is not exempt, now ported, along with the 100-character cut and illegal-character kick), and the held-slot, sign, placement, digging and use-entity checks. Creative reach was swapped; it is now 5 for blocks and 6 for entities ([books.md](books.md)).
 
-Still open from batch 30:
-- Village fights with several skeletons shooting arrows, three or more zombies, Hard difficulty or a bow skeleton are unprobed. A hit on an already-removed mob cannot be replayed. A same-tick equipment swap changes the combat task a tick late.
-- While away, mobs, items, projectiles, carts, boats and TNT do not move. Dispensers, droppers, note blocks and command blocks do not run. Spawn-area columns outside the departure window do not advance. Weather timers miss the loading-screen ticks. The away run adds latency to the return trip, and imported whole saves are skipped.
-- Ring rim light is a bounded model: native rim chunks are darker still, with vertical-only light. Rendered light is the server volume; population spill, 64-change resends and Nether/End relight resets are not in the client-light probe.
-- About 40 frames over 50 ms per 120 blocks walked (streaming, light, entities). A Teleporter exit in another population cell still costs a second window fetch (1.9 s once in three returns). The worker cap is unmeasured on an idle machine.
-- TileTicks on air, unknown ids or y outside 0..255 are dropped; the ThisTick list of a mid-tick save is not modelled; ticks outside a 1x1 save are dropped at import rather than at their due time.
-- Atlas canvases still convert through 2D canvas premultiplied alpha, so translucent pixels can be 1 off; tint multipliers are rounded to bytes; lazily created textures use the canvas path. Pack icons and the profile screen were not exercised live.
-- Generation 20 falls back to quiet callbacks for unported power states (powered doors). Imported saves (16/17) keep quiet callbacks. Default-world jungle decoration outside temples still differs.
-- Server placement, digging and use-entity distance checks are not enforced in play. Creative survival-tab drops skip the limiter. Multiplayer chat is not gated.
+Still open from batch 30: carried into the batch 31 list above, except the items batch 31 closed.
 
 ## Done in batch 29
 
