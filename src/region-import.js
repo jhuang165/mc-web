@@ -399,8 +399,11 @@ export async function importJavaRegionArea(regions, options = {}) {
   const chests = {}, furnaces = {}, dispensers = {}, hoppers = {}, brewing = {}, pistons = [], drops = [], mobs = []; let chainCount = 0;
   const projectileLists = { projectiles: [], thrownPotions: [], arrows: [], fireballs: [], eyes: [], rockets: [] };
   const hanging = [], carts = [], boats = [];
-  const tickList = { fluid: [], fire: [], falling: [], redstone: [] }, tickSeen = new Set(), tickDropped = new Map(), litRepeaters = [], comparatorSignals = [];
+  const tickList = { fluid: [], fire: [], falling: [], redstone: [], foreign: [] }, tickSeen = new Set(), tickDropped = new Map(), litRepeaters = [], comparatorSignals = [];
   let tickDuplicates = 0, tickOutside = 0;
+  // A tick outside the area that a native save of an area chunk would still write (the 2 columns or rows below the low edge, WorldServer.getPendingBlockUpdates box
+  // [c*16-2, c*16+16)) waits in the foreign list until its due time; a whole-save chunk leaves those to the neighbour that owns them.
+  const reachAt3 = (x, y, z) => !options.wholeSave && x >= destination.chunkX * 16 - 2 && x < (destination.chunkX + area.width) * 16 && z >= destination.chunkZ * 16 - 2 && z < (destination.chunkZ + area.depth) * 16;
   const inAreaAt3 = (x, y, z) => x >= destination.chunkX * 16 && x < (destination.chunkX + area.width) * 16 && z >= destination.chunkZ * 16 && z < (destination.chunkZ + area.depth) * 16;
   let edits = 0;
   const write = (x, y, z, block, meta, original) => {
@@ -659,7 +662,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     report.scheduledTicks += tileTicks?.length ?? 0;
     // TileTicks (tile-ticks.js): ticks of the area go to the port's scheduled-tick lists, delay = saved t.
     if (tileTicks?.length) {
-      const got = importTileTicks(tileTicks, { shiftX, shiftZ, seen: tickSeen, inside: inAreaAt3 });
+      const got = importTileTicks(tileTicks, { shiftX, shiftZ, seen: tickSeen, inside: inAreaAt3, reach: reachAt3 });
       for (const k of Object.keys(tickList)) tickList[k].push(...got[k]);
       for (const [id, n] of got.dropped) tickDropped.set(id, (tickDropped.get(id) ?? 0) + n);
       tickDuplicates += got.duplicates; tickOutside += got.outside;
@@ -675,7 +678,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     const m = mapOriginalState(key);
     return { id: key >> 4, meta: key & 15, cells, to: [m.id, m.meta], exact: m.exact, ...(m.state ? { state: Object.keys(m.state) } : {}) };
   });
-  report.ticks = { fluid: tickList.fluid.length, fire: tickList.fire.length, falling: tickList.falling.length, redstone: tickList.redstone.length, litRepeaters: litRepeaters.length, comparators: comparatorSignals.length, duplicates: tickDuplicates, outsideArea: tickOutside,
+  report.ticks = { fluid: tickList.fluid.length, fire: tickList.fire.length, falling: tickList.falling.length, redstone: tickList.redstone.length, litRepeaters: litRepeaters.length, comparators: comparatorSignals.length, duplicates: tickDuplicates, outsideArea: tickOutside, foreign: tickList.foreign.length,
     dropped: [...tickDropped].sort(([a], [b]) => a - b).map(([id, count]) => ({ id, count })) };
   report.tileEntities.converted = Object.fromEntries(tileConverted);
   report.tileEntities.lost = sortedCounts(tileLost);
@@ -742,7 +745,7 @@ export async function importJavaRegionArea(regions, options = {}) {
     player: { chests, furnaces, dispensers, hoppers, brewing },
     pistons, commandBlocks, ...(musicTiles.length ? { musicTiles } : {}), ...(signs.length ? { signs } : {}), ...(skulls.length ? { skulls } : {}), ...(beacons.length ? { beacons } : {}),
     drops,
-    ...tickRecordFields(tickList, litRepeaters, comparatorSignals),
+    ...tickRecordFields(tickList, litRepeaters, comparatorSignals, Number.isSafeInteger(level?.time) && level.time >= 0 ? level.time : 0),
     ...(spawners.length ? { spawners } : {}),
     ...(mobs.length ? { entities: mobs } : {}),
     ...Object.fromEntries(Object.entries(projectileLists).filter(([, list]) => list.length).map(([name, list]) => [name, name === 'eyes' ? { eyes: list } : name === 'rockets' ? { rockets: list } : list])),

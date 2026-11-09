@@ -30,7 +30,7 @@ import { structureDataFiles, fortressDataFile } from './structure-data.js';
 import { villageDocument } from './village.js';
 import { mapDataFiles } from './maps-nbt.js';
 import { decodeBaseColumn } from './whole-save-columns.js';
-import { spreadTicks, tileTickRows } from './tile-ticks.js';
+import { spreadTicks, tileTickRows, placeForeignTicks } from './tile-ticks.js';
 import { javaProjectileToNbt } from './java-projectiles.js';
 import { statsExportFile } from './stats.js';
 import { DEFAULT_RULES } from './game-rules.js';
@@ -264,6 +264,8 @@ function regionSource(record, w) {
   (runtime.get(k).comparatorTiles??=[]).push({order:i,value:{x,y,z,signal:e[1]}});}
  // A tick in the last 2 columns or rows of a chunk is saved in the next higher chunk too (WorldServer.getPendingBlockUpdates box [c*16-2, c*16+16)).
  spreadTicks(runtime,owned,['fluidTicks','fireTicks','fallingTicks','redstoneTicks']);
+ // Ticks the port does not run (air, unknown ids, y outside 0..255, blocks without a tick handler, a 2-column border outside the imported area), aged to the record's world time.
+ if(record.foreignTicks)placeForeignTicks(runtime,owned,record.foreignTicks,record.totalTime);
  return {record,w,owned,runtime,baseId:record.id};
 }
 

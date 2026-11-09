@@ -6,7 +6,7 @@ import { Weather } from "./weather.js";
 // world/player fields are built by the caller rather than copied from the file.
 const RUNTIME_FIELDS = [
   "position", "drops", "entities", "farms", "experience", "xpOrbs", "falling",
-  "weather", "worldRandom", "simulation", "projectiles", "thrownPotions", "fireballs", "eyes", "rockets", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "inhabited",
+  "weather", "worldRandom", "simulation", "projectiles", "thrownPotions", "fireballs", "eyes", "rockets", "arrows", "tnt", "fluidTicks", "fireTicks", "fallingTicks", "foreignTicks", "inhabited",
   "spawners", "pistons", "boats", "minecarts", "populatedColumns",
   "portalState", "worldSpawn",
   // Tile entities and hanging entities (each loader validates its records), villages, map items, generated-structure starts.
@@ -51,7 +51,15 @@ const triple = (v) => Array.isArray(v) && v.length === 3 && v.every(int);
 export const LIST_CAP = 1 << 20;
 // A saved World.rand/updateLCG stream (Weather.saveSimulation): kept only when Weather.restoreSimulation would accept it.
 const simulationStream = (v) => (v && typeof v === "object" && JSON.stringify(new Weather().restoreSimulation(v).saveSimulation()) === JSON.stringify(v) ? v : undefined);
+// tile-ticks.js foreignTicks: raw saved ticks the port does not run, {i, x, y, z, p} plus t (or air: true), aged against `time` on export.
+function sanitizeForeignTicks(v) {
+  if (!v || typeof v !== "object" || v.version !== 1 || !Array.isArray(v.entries)) return undefined;
+  const entries = v.entries.filter((e) => e && [e.i, e.x, e.y, e.z].every(int) && (e.air === true || int(e.t))).slice(0, LIST_CAP)
+    .map((e) => (e.air === true ? { i: 0, x: e.x, y: e.y, z: e.z, p: int(e.p) ? e.p : 0, air: true } : { i: e.i, x: e.x, y: e.y, z: e.z, t: e.t, p: int(e.p) ? e.p : 0 }));
+  return entries.length ? { version: 1, time: int(v.time) && v.time >= 0 ? v.time : 0, entries } : undefined;
+}
 const SANITIZE = {
+  foreignTicks: sanitizeForeignTicks,
   worldRandom: simulationStream, simulation: simulationStream,
   redstone: (v) => sanitizeRedstone(v),
   hanging: (v) => list(v, LIST_CAP), signs: (v) => list(v, LIST_CAP), skulls: (v) => list(v, LIST_CAP), beacons: (v) => list(v, LIST_CAP),
