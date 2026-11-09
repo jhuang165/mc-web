@@ -34,7 +34,8 @@ for (const rec of reference.records) {
 
 test('versions 8-13 write nothing and chunk order does not change the bytes', async () => {
   const rec = reference.records[0], chunks = chunksOf(rec.range);
-  for (const v of [9, 11, 12, 13]) assert.equal(hasStructureData(v), false);
+  for (const v of [9, 11, 12, 13, 17, 19, 21, 23]) assert.equal(hasStructureData(v), false);
+  for (const v of [16, 18, 20, 22]) assert.equal(hasStructureData(v), true);
   assert.equal((await structureDataFiles({ record: { biome: 'java' }, seed: rec.seed, chunks, generationVersion: 13 })).files.size, 0);
   const shuffled = [...chunks].reverse(), a = await structureDataFiles({ record: { biome: 'java' }, seed: rec.seed, chunks: shuffled, generationVersion: 14 });
   assert.equal(raw(a.files.get('data/Village.dat')).toString('base64'), rec.files.Village.rawBase64);
@@ -125,4 +126,14 @@ test('exportJavaSave writes data/Fortress.dat from the exported Nether columns (
   // Re-export with the imported file: v12 writes it back unchanged, v15 keeps the imported starts for equal keys.
   const again = await exportJavaSave({ ...base, generationVersion: 12, structureData: parsed.structureData }, { world: w });
   assert.equal(b64(raw(again.files.get('data/Fortress.dat'))), b64(raw(fresh.files.get('data/Fortress.dat'))));
+});
+
+test('generations 20 and 22 export the same data/*.dat as 18 and 16 (the neighbour callbacks do not move structure starts)', async () => {
+  const rec = reference.records[0], chunks = chunksOf(rec.range), record = { biome: 'javaStreamed', worldType: 'default' };
+  for (const [a, b] of [[20, 18], [22, 16]]) {
+    const x = await structureDataFiles({ record, seed: rec.seed, chunks, generationVersion: a }), y = await structureDataFiles({ record, seed: rec.seed, chunks, generationVersion: b });
+    assert.ok(x.files.size > 0);
+    assert.deepEqual([...x.files.keys()].sort(), [...y.files.keys()].sort());
+    for (const [k, v] of y.files) assert.equal(raw(x.files.get(k)).toString('base64'), raw(v).toString('base64'), `${k} ${a} vs ${b}`);
+  }
 });

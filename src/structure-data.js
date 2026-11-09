@@ -17,7 +17,8 @@ import { FlatStructureCache, flatStructurePopulation } from "./flat-structures.j
 import { NBT } from "./nbt.js";
 import { encodeCompressedNbt, decodeCompressedNbt } from "./nbt-compression.js";
 
-export const STRUCTURE_DATA_VERSIONS = Object.freeze([14, 15, 16, 18]);
+// MapFeatures-on streamed generations: 16, 18, 20 (18 plus neighbour callbacks) and 22 (16 plus them, level.dat imports). 17, 19, 21 and 23 have none.
+export const STRUCTURE_DATA_VERSIONS = Object.freeze([14, 15, 16, 18, 20, 22]);
 export const STRUCTURE_FILE_NAMES = Object.freeze(Object.values(STRUCTURE_DATA_NAMES).map((n) => `data/${n}.dat`));
 export const hasStructureData = (generationVersion) => STRUCTURE_DATA_VERSIONS.includes(generationVersion);
 
