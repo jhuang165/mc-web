@@ -179,6 +179,7 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
         else if (m.type === 'close') simulation.closeWindow(id, m.window);
         else if (m.type === 'drop') simulation.drop(id, m.all === true);
         else if (m.type === 'creative') simulation.creative(id, m);
+        else if (m.type === 'gun') { if (!simulation.gun(id, m)) ws.close(1008, 'Invalid gun action'); }
         else if (m.type === 'chat' && typeof m.text === 'string') {
           const text = cleanText(m.text);
           if (text.startsWith('/')) command(id, text.slice(1));

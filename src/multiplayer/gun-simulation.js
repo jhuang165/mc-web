@@ -15,8 +15,15 @@ import { movePlayer } from '../player-physics.js';
 import { drainKnockback } from '../player-knockback.js';
 import { finishPlayerMovement } from '../player-environment.js';
 import { GUNS, AMMO, P320, AKM, M870 } from '../mods/guns/catalog.js';
-import { MELEE } from '../mods/guns/install.js';
+import { MELEE, gunSmithRecipes } from '../mods/guns/install.js';
+import { ATTACHMENTS, GUN_SMITH } from '../mods/guns/catalog.js';
+import { ATTACHMENT_TYPES } from '../mods/guns/fit.js';
+import { fitFromInventory } from '../mods/guns/attachment-screen.js';
+import { smithCraft } from '../mods/guns/smith-screen.js';
+import { isAmmoBox, fillBox, emptyBox } from '../mods/guns/ammo-box.js';
 import { ServerPlay } from './server-play.js';
+import { ServerMobs } from './server-mobs.js';
+import { trackerMessage } from '../death-messages.js';
 
 export const STEAK = 205, IRON_ARMOR = [411, 410, 409, 408]; // armor[0] boots ... armor[3] helmet
 export const JOIN_PROTECTION = 60; // EntityPlayerMP.field_147101_bU: ticks of invulnerability after a join or respawn
@@ -57,6 +64,9 @@ export class GunSimulation extends DedicatedSimulation {
     this.rules = { keepInventory: false, ...(saved.rules ?? {}) }; // /gamerule (GameRules defaults)
     this.play = new ServerPlay(this, saved.play ?? {}); // windows, mining, block use and dropped items (server-play.js)
   }
+  // A streamed world has mobs (server-mobs.js); the finite test arenas stay empty. Runs inside super(): config, random and play
+  // are read later, when the mobs tick.
+  createMobs(saved) { return this.world.streaming ? new ServerMobs(this, saved.mobs ?? {}) : null; }
   // A website account joins; its saved state (inventory, health, position) is restored, or it gets the kit.
   addPlayer(id, name, account, { skin = null } = {}) {
     if ([...this.players.values()].some(p => p.account === account)) throw new Error('That player is already connected.');
@@ -168,6 +178,42 @@ export class GunSimulation extends DedicatedSimulation {
   click(id, message) { const p = this.players.get(id); return !!p && this.play.click(p, message); }
   closeWindow(id, window) { const p = this.players.get(id); if (p && Number.isInteger(window)) this.play.close(p, window); }
   drop(id, all) { const p = this.players.get(id); return !!p && this.play.dropHeld(p, !!all); }
+  // The guns mod's own inventory actions, run on the server's copy as the single-player screens run them (main.js), on hotbar slot
+  // `slot`: `fit` puts an attachment in that gun's part slot (or takes it off), `smith` crafts a gun smith recipe (by its index in gunSmithRecipes, which
+  // the client's weapon-rules fingerprint matches) while a gun smith table is in that slot, and `box` fills or empties that ammo box.
+  // What does not fit in the inventory is thrown. `seq` acknowledges the client's prediction, as for clicks. False: a malformed message.
+  gun(id, message) {
+    const p = this.players.get(id), m = message ?? {};
+    if (!p || !Number.isInteger(m.seq) || !Number.isInteger(m.slot) || m.slot < 0 || m.slot > 8) return false;
+    p.clickAck = Math.max(p.clickAck, m.seq);
+    if (p.dead || p.window) return true; // a screen opened on the way: the action is dropped, as a stale click is
+    // The hotbar slot the tab acted on: its own selection may be ahead of the last input this server read.
+    const s = p.survival, inv = s.inventory, slot = m.slot, held = inv.main[slot], give = [];
+    if (m.op === 'fit') {
+      if (!ATTACHMENT_TYPES.includes(m.part) || !(m.attachment === null || Number.isInteger(m.attachment))) return false;
+      const attachment = m.attachment === null ? null : ATTACHMENTS[m.attachment];
+      if (m.attachment !== null && attachment?.type !== m.part) return false;
+      const out = fitFromInventory(inv.main, slot, m.part, attachment, { creative: s.creative });
+      if (out.ok) give.push(...out.give);
+    } else if (m.op === 'smith') {
+      const recipe = Number.isInteger(m.recipe) ? gunSmithRecipes()[m.recipe] : null;
+      if (!recipe) return false;
+      if (held?.id !== GUN_SMITH) return true;
+      const out = smithCraft(inv.main, recipe);
+      if (out) give.push(out);
+    } else if (m.op === 'box') {
+      if (!isAmmoBox(held?.id)) return true;
+      if (m.empty === true) give.push(...emptyBox(inv.main, slot)); else fillBox(inv.main, slot);
+    } else return false;
+    for (const stack of give) {
+      const rest = makeStack(stack.id, stack.count, stack.damage ?? 0);
+      if (stack.modTag) rest.modTag = structuredClone(stack.modTag);
+      inv.add(rest);
+      if (rest.count > 0) this.play.items.dropPlayer(rest, p.position, p.yaw, p.pitch);
+    }
+    p.idleSince = this.ticks;
+    return true;
+  }
   // C10PacketCreativeInventoryAction: a Creative player sets a slot of window 0 (5-8 armour, 9-44 the inventory) or throws a stack (-1).
   creative(id, message) {
     const p = this.players.get(id);
@@ -228,6 +274,7 @@ export class GunSimulation extends DedicatedSimulation {
       send: (p, e) => this.send(p, e), near: (p, e, self) => this.near(p, e, self),
       use: (p, down) => this.use(p, down),
       mine: (p, down) => this.mine(p, down),
+      mobs: this.mobs,
     };
     // Weapons act first, against where everyone stood when the shooter last saw them (tick - 1 is the newest recorded tick).
     for (const p of players) { deps.canBreak = block => this.canBreak(p, block); tickCombat(p, deps); }
@@ -256,7 +303,7 @@ export class GunSimulation extends DedicatedSimulation {
       p.dead = true;
       const hit = p.lastHit && this.ticks - p.lastHit.tick < 100 ? p.lastHit : null;
       const reason = p.survival.lastDamage;
-      this.chatOut.push(describe(p.name, hit) ?? (reason === 'a fall' ? `${p.name} hit the ground too hard` : reason === 'void' ? `${p.name} fell out of the world` : `${p.name} died`));
+      this.chatOut.push(describe(p.name, hit) ?? (reason === 'a fall' ? `${p.name} hit the ground too hard` : reason === 'void' ? `${p.name} fell out of the world` : reason && reason !== 'player' ? this.trackerLine(p) : `${p.name} died`));
       if (hit) { const killer = this.players.get(hit.by); if (killer) this.send(killer, { type: 'kill', target: p.id, name: p.name }); }
       p.combat.reset(); p.eating = null;
       if (!this.rules.keepInventory) this.play.dropAll(p); else { this.play.closeWindow(p); this.play.close(p, 0); }
@@ -264,8 +311,15 @@ export class GunSimulation extends DedicatedSimulation {
     }
     this.history.record(this.ticks, this.players.values());
   }
-  // TileEntityFurnace.updateEntity once for the world, then EntityItem; then the shared world systems (simulation.js).
+  // CombatTracker's line (death-messages.js) for a death no player caused: a mob, an arrow, a blast, lava, drowning.
+  trackerLine(p) {
+    try { const line = trackerMessage(p.survival.combat, p.name); if (line) return line; } catch { /* fall back below */ }
+    return `${p.name} died`;
+  }
+  // The mobs (WorldServer.tick: spawning, then the entities), TileEntityFurnace.updateEntity once for the world, then EntityItem;
+  // then the shared world systems (simulation.js).
   tickWorld(beforeLit) {
+    this.mobs?.tick();
     this.tiles.tickFurnaces();
     this.play.tickItems();
     return super.tickWorld(beforeLit);
@@ -288,6 +342,7 @@ export class GunSimulation extends DedicatedSimulation {
     out.ack = p.clickAck;
     out.mining = p.mining ? { block: [...p.mining.block], progress: Math.min(1, p.mining.progress) } : null; // raycast cells may be typed arrays
     out.items = this.play.itemsNear(p);
+    if (this.mobs) out.mobs = this.mobs.rows(p);
     return out;
   }
   drainEvents(p) { const e = this.outbox.get(p.id) ?? []; this.outbox.delete(p.id); return e; }
@@ -295,6 +350,6 @@ export class GunSimulation extends DedicatedSimulation {
     for (const p of this.players.values()) this.accounts.set(p.account, this.savePlayer(p));
     const base = super.save();
     delete base.players;
-    return { ...base, version: 2, accounts: [...this.accounts], rules: this.rules, play: this.play.save() };
+    return { ...base, version: 2, accounts: [...this.accounts], rules: this.rules, play: this.play.save(), ...(this.mobs ? { mobs: this.mobs.save() } : {}) };
   }
 }

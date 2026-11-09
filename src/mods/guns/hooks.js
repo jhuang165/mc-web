@@ -195,7 +195,7 @@ export function createGunHooks(deps) {
     if (d) deps.fx?.("flame", x + d[0] * 0.7, y + d[1] * 0.7 - 0.15, z + d[2] * 0.7, d[0] * 0.02, d[1] * 0.02, d[2] * 0.02);
     for (const hit of Array.isArray(e.impacts) ? e.impacts : []) {
       if (!Array.isArray(hit.point)) continue;
-      if (hit.player != null) { for (let i = 0; i < 3; i++) deps.fx?.("crit", ...hit.point, random() - 0.5, random() * 0.5, random() - 0.5); continue; }
+      if (hit.player != null || hit.mob != null) { for (let i = 0; i < 3; i++) deps.fx?.("crit", ...hit.point, random() - 0.5, random() * 0.5, random() - 0.5); continue; }
       if (Array.isArray(hit.block)) for (let i = 0; i < (gun.pellets > 1 ? 1 : 3); i++) deps.blockHit?.(hit.block, hit.side);
       deps.fx?.("smoke", ...hit.point, 0, 0.01, 0);
     }

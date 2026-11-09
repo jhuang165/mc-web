@@ -1840,6 +1840,8 @@ export class EntityWorld {
     for (const e of ridingOrder(this.entities.slice())) {
       if (farMark >= 0) { this.dropFarEvents(farMark); farMark = -1; }
       if (!this.isActive(e)) continue;
+      // A host with several players (multiplayer/server-mobs.js) points the AI's one player at this mob's nearest one.
+      this.beforeMob?.(e);
       if (this.ring && !this.world.isTicking(e.x, e.z)) farMark = this.events.length;
       if (e.ridingEntity) { riders.push(e); beginRidden(e); }
       // World.updateEntityWithOptionalForce and EntityLivingBase.onEntityUpdate
@@ -2149,7 +2151,8 @@ export class EntityWorld {
     s.env.time = survival.time ?? 0;
     s.sub = skylightSubtracted(celestialAngle(s.env.time));
     s.player = player;
-    ctx.capChunks = ELIGIBLE_CHUNKS; // eligibleChunksForSpawning.size(): always the 17x17 window of the one player
+    // eligibleChunksForSpawning.size(): the 17x17 window of the one player, or a multiplayer host's union of its players' windows.
+    ctx.capChunks = this.spawnCapChunks ?? ELIGIBLE_CHUNKS;
     ctx.rand = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)));
     ctx.spawn = this.spawnPoint ? this.spawnPoint() : null;
     if (!this.spawnPoint && !world.dimension && world.spawn) {
@@ -2159,7 +2162,8 @@ export class EntityWorld {
     // Headless columns: the spawn pass reads blocks through the ring's view (resident column first), as natively every chunk is loaded.
     const real = this.world;
     if (this.ring) this.world = this.ring.view;
-    try { return findChunksForSpawning(ctx, this.difficulty !== PEACEFUL, true, animals); } finally { this.world = real; }
+    // A multiplayer host's server.properties spawn-monsters / spawn-animals (MinecraftServer.getCanSpawnAnimals and friends) can turn a kind off.
+    try { return findChunksForSpawning(ctx, this.difficulty !== PEACEFUL && this.spawnMonsters !== false, this.spawnAnimals !== false, animals && this.spawnAnimals !== false); } finally { this.world = real; }
   }
   // The reusable SpawnerAnimals context for this EntityWorld (its world and dimension are fixed).
   spawnerState() {

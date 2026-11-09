@@ -128,7 +128,7 @@ export class ServerPlay {
   state(p, target) {
     const sim = this.sim;
     return { screen: 'playing', heldTool: p.survival.held?.id ?? 0, world: sim.world, survival: p.survival, position: p.position, velocity: p.velocity,
-      motion: { ...p.motion, sneaking: !!p.input.sneak }, mobs: null, farming: sim.farming, trees: sim.trees, fire: sim.fire, fluids: sim.fluids,
+      motion: { ...p.motion, sneaking: !!p.input.sneak }, mobs: sim.mobs?.ew ?? null, farming: sim.farming, trees: sim.trees, fire: sim.fire, fluids: sim.fluids,
       items: this.items, xpOrbs: { spawn: noop }, grounded: p.grounded, fallDistance: p.fallDistance, wasInWater: p.inWater, yaw: p.yaw, pitch: p.pitch,
       eating: p.eating, mining: p.mining, mineCooldown: p.mineCooldown, mineHeld: p.mineHeld, flowers: null, boneRandom: sim.random, itemRand: sim.random,
       signs: null, difficulty: p.survival.difficulty, target };
@@ -151,7 +151,8 @@ export class ServerPlay {
     if (target && !sim.canBreak(p, target.block)) return false;
     if (place) {
       const id = p.survival.held?.id ?? 0;
-      if (unsupportedUse(id) || id === WATER || id === LAVA) return false;
+      // A world with server mobs (server-mobs.js) hatches spawn eggs; the other projectile and entity items wait for their entities.
+      if ((unsupportedUse(id) && !(id === ITEM_SPAWN_EGG && sim.mobs)) || id === WATER || id === LAVA) return false;
       // Levers, buttons and the other switches reach the live redstone network, as they do on the single-player server.
       if (target && !p.input.sneak && [108, 111, 112, 124, 126, 127].includes(sim.world.get(...target.block))) { sim.redstone.use(...target.block); p.swing = 6; return true; }
     }

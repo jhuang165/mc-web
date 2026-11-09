@@ -60,6 +60,15 @@ export class RemoteInventory {
     for (const stack of drops) if (stack?.count) this.send({ type: 'creative', slot: -1, stack: copyStack(stack), seq: this.seq });
     this.snapshot = now;
   }
+  // A guns-mod action on the inventory (gun-simulation.js gun: fit, smith, box): `apply(inv)` runs it on this tab's copy now and
+  // again over every server inventory until the server has seen it.
+  gun(message, apply, inv) {
+    this.flush();
+    const op = { kind: 'gun', apply, seq: ++this.seq };
+    this.pending.push(op);
+    this.send({ ...message, type: 'gun', seq: op.seq });
+    return apply(inv);
+  }
   // The server's acknowledgement: predictions it has seen are now part of its own state.
   acked(ack) {
     const before = this.pending.length;
@@ -81,6 +90,7 @@ export class RemoteInventory {
     }
     for (const op of this.pending) {
       if (op.kind === 'creative') inv.setStack(op.index, copyStack(op.stack));
+      else if (op.kind === 'gun') op.apply(inv);
       else if (!creative && w && op.window === w.id) for (const c of op.clicks) w.container.localClick(...c);
     }
     if (this.queue && w) for (const c of this.queue.clicks) if (this.queue.window === w.id) w.container.localClick(...c);

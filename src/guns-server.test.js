@@ -341,7 +341,7 @@ function inbox(ws) {
     const index = messages.findIndex(predicate);
     if (index >= 0) return Promise.resolve(messages.splice(index, 1)[0]);
     return new Promise((resolve, reject) => {
-      const w = { predicate, resolve, timer: setTimeout(() => reject(new Error('Timed out waiting for server packet')), 5000) };
+      const w = { predicate, resolve, timer: setTimeout(() => reject(new Error('Timed out waiting for server packet: ' + predicate)), 5000) };
       waiting.push(w);
     });
   };

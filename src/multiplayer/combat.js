@@ -67,9 +67,11 @@ export function gunContext(survival) {
 }
 
 const round = v => Math.round(v * 1000) / 1000;
+const HEAD_MARGIN = 0.25; // hooks.js
+const mobId = e => Number(String(e.id).replace('mob-', ''));
 
 // deps: { world, players() -> iterable, history, tick, random, pvp(), canBreak([x,y,z]), breakGlass([x,y,z]), damage(target, amount, source),
-//   send(recipient, event), near(p, event) }
+//   send(recipient, event), near(p, event), mobs (server-mobs.js ServerMobs, or null: targets(at, range) and hurt(mob, amount, attacker, from)) }
 export function tickCombat(p, deps) {
   const c = p.combat, s = p.survival, ctx = gunContext(s);
   // Presses taken this tick, in order; a release that follows a press in the same batch waits until the trigger has been seen.
@@ -110,6 +112,8 @@ export function tickCombat(p, deps) {
 function shoot(p, gun, deps) {
   const origin = eyeOf(p), dir = lookDir(p.yaw, p.pitch), view = p.combat.view;
   const targets = [...deps.players()].filter(o => o !== p && !o.dead).map(o => ({ player: o, box: playerBox(deps.history.at(o, view, deps.tick)) }));
+  // The server's mobs, where they stand now (their own tick runs after the players', so this is what the shooter last saw).
+  for (const t of deps.mobs?.targets(p.position) ?? []) targets.push(t);
   const moving = p.input.forward !== 0 || p.input.strafe !== 0;
   const result = fireShot(gun, {
     origin, dir, random: deps.random, sneaking: p.input.sneak, moving, aiming: p.combat.aim.progress,
@@ -120,10 +124,15 @@ function shoot(p, gun, deps) {
       return best;
     },
     breakGlass(block) { if (GLASS_BLOCKS.has(deps.world.get(...block)) && deps.canBreak(block)) deps.breakGlass(block); },
-    isHead: (t, point) => point[1] >= t.box.min[1] + HEAD_FROM_FEET,
+    // A mob's head is its top 15% (hooks.js isHead: 0.85 of its height, less the same margin).
+    isHead: (t, point) => point[1] >= t.box.min[1] + (t.mob ? (t.box.max[1] - t.box.min[1]) * 0.85 - HEAD_MARGIN : HEAD_FROM_FEET),
   });
   const hits = [];
   for (const { entity: t, amount, head } of result.hits) {
+    if (t.mob) {
+      if (deps.mobs.hurt(t.mob, amount, p, { gun: true, knockback: gun.knockback > 0 })) hits.push({ mob: t.mob, head, kill: t.mob.health <= 0 });
+      continue;
+    }
     const target = t.player;
     if (!deps.pvp() || target.dead || target.survival.health <= 0) continue;
     // Every bullet is a fresh hit: TaCZ skips the hurt-resistance window (hooks.js).
@@ -131,11 +140,11 @@ function shoot(p, gun, deps) {
     const dealt = deps.damage(target, amount, { attacker: p, kind: 'gun', weapon: gun, knockback: gun.knockback > 0 });
     if (dealt) hits.push({ target, head, kill: target.survival.health <= 0 });
   }
-  for (const h of hits) deps.send(p, { type: 'hit', target: h.target.id, head: h.head, kill: h.kill });
+  for (const h of hits) deps.send(p, h.mob ? { type: 'hit', mob: mobId(h.mob), head: h.head, kill: h.kill } : { type: 'hit', target: h.target.id, head: h.head, kill: h.kill });
   deps.near(p, {
     type: 'shot', id: p.id, gun: gun.id, silenced: !!gun.silenced, origin: origin.map(round),
     paths: result.paths.map(({ dir: d, distance }) => [...d.map(round), round(distance)]),
-    impacts: result.impacts.map(i => i.entity ? { point: i.point.map(round), player: i.entity.player.id } : { point: i.point.map(round), block: i.block, side: i.side ?? null }),
+    impacts: result.impacts.map(i => i.entity ? { point: i.point.map(round), ...(i.entity.mob ? { mob: mobId(i.entity.mob) } : { player: i.entity.player.id }) } : { point: i.point.map(round), block: i.block, side: i.side ?? null }),
   }, false);
   return hits;
 }
@@ -153,6 +162,11 @@ function strike(p, event, deps) {
     boxes.set(entity, playerBox(at));
     return entity;
   });
+  for (const t of deps.mobs?.targets(p.position, attack.hitbox.range + 4) ?? []) {
+    const e = t.mob, entity = { mob: e, x: e.x, y: e.y, z: e.z, health: e.health };
+    boxes.set(entity, t.box);
+    others.push(entity);
+  }
   const visible = (e, b) => {
     const clear = point => !rayTraceBlocks(deps.world, origin, point);
     if (clear([e.x, e.y, e.z])) return true;
@@ -163,6 +177,19 @@ function strike(p, event, deps) {
   for (const { entity: e } of coneTargets(others, origin, dir, attack.hitbox, entity => boxes.get(entity), visible)) {
     // MeleeItem validates the target against the attacker's position (melee-hooks.js).
     if (Math.hypot(e.x - p.position.x, e.y - p.position.y, e.z - p.position.z) > attack.hitbox.range) continue;
+    if (e.mob) {
+      // melee-hooks.js: the same fresh-hit threshold, then LivingEntity.knockback along the swing.
+      const m = e.mob;
+      if ((m.hurt ?? 0) < 10) m.hurt = 0;
+      if (!deps.mobs.hurt(m, amount, p, { melee: true })) continue;
+      const k = attack.knockback * (1 - (m.knockbackResistance ?? 0)), len = Math.hypot(dir[0], dir[2]);
+      if (k > 0 && len > 1e-6) {
+        m.vx = (m.vx ?? 0) / 2 + dir[0] / len * k; m.vz = (m.vz ?? 0) / 2 + dir[2] / len * k;
+        if (m.onGround) m.vy = Math.min(0.4, (m.vy ?? 0) / 2 + k);
+      }
+      hits.push({ mob: m, head: false, kill: m.health <= 0 });
+      continue;
+    }
     const target = e.player;
     if (!deps.pvp()) continue;
     // LR Tactical's threshold: after the first tick of a fresh hit, another full strike lands (melee-hooks.js).
@@ -176,7 +203,7 @@ function strike(p, event, deps) {
     }
     hits.push({ target, head: false, kill: target.survival.health <= 0 });
   }
-  for (const h of hits) deps.send(p, { type: 'hit', target: h.target.id, head: false, kill: h.kill, melee: true });
+  for (const h of hits) deps.send(p, h.mob ? { type: 'hit', mob: mobId(h.mob), head: false, kill: h.kill, melee: true } : { type: 'hit', target: h.target.id, head: false, kill: h.kill, melee: true });
   return hits;
 }
 

@@ -145,6 +145,7 @@ import { setPlayerName } from './player-name.js';
 import { IDLE_INPUT, MULTIPLAYER_URL } from "./multiplayer/protocol.js";
 import { gunContext } from "./multiplayer/combat.js";
 import { RemoteInventory, RemoteItems, remoteContainer } from "./multiplayer/remote-inventory.js";
+import { RemoteMobs } from "./multiplayer/remote-mobs.js";
 import { roundsLeft } from "./mods/guns/catalog.js";
 import { setLoadedRounds } from "./mods/guns/ammo.js";
 import { createCommandHost, ruleOn } from "./command-host.js";
@@ -449,12 +450,17 @@ const guns = createGunHooks({
   // TaCZ grenades and rockets: Explosion with the pack's radius; `destroy_block` false keeps the blocks (isSmoking off).
   explode: (x, y, z, radius, { destroy }) => explodeAt(x, y, z, radius, { exploder: null, attacker: "player", smoking: !!destroy }),
   meleeCritical: () => fallDistance > 0 && !grounded && !flying && !rider.vehicle && !wasInWater && !isOnLadder(world, position.x, position.y, position.z) && !survival.effects?.has?.(15),
-  attachments: () => (multiplayer ? toast(SERVER_INVENTORY) : openGunAttachments()), // Z
+  attachments: () => openGunAttachments(), // Z
   // A gun server (multiplayer/combat.js) owns damage and ammo: buttons go to it with the look and the tick on screen (lag compensation).
   remote: () => !!multiplayer,
   action: (action, down) => multiplayer?.send({ type: "action", action, down, yaw, pitch, view: multiplayer.lastTick }),
   predictedShot: () => { if (multiplayer) predictedShots.push({ slot: survival.inventory.current, at: performance.now() }); },
-  pickPlayer: (origin, dir, max) => remotePlayers?.pick(origin, dir, max) ?? null,
+  // The predicted shot stops at the nearest other player or server mob (remote-mobs.js records), as the server's will.
+  pickPlayer: (origin, dir, max) => {
+    const p = remotePlayers?.pick(origin, dir, max) ?? null, v = (a) => ({ x: a[0], y: a[1], z: a[2] });
+    const m = mobs?.entities.length ? mobs.pick(v(origin), v(dir), max, max) : null;
+    return m && (!p || m.distance < p.distance) ? m : p;
+  },
 });
 const gunHud = createAmmoHud(bitmapHtml);
 let gunTracers = null; // the tracer boxes in the world scene, made at the first tracer round
@@ -672,6 +678,13 @@ const predictedShots = []; // { slot, at }, oldest first
 const PREDICTION_TIMEOUT = 1000; // ms: a shot the server never fired (the two controllers disagreed) stops counting
 // Inventory windows (clicks predicted here, replayed over the server's answer) and the dropped items the server reports.
 const remoteInv = new RemoteInventory(m => multiplayer?.send(m)), remoteItems = new RemoteItems();
+// The gun server's mobs near this tab (server-mobs.js rows), drawn from the tab's own (never ticked) EntityWorld list.
+let remoteMobs = null;
+function syncRemoteMobs(rows) {
+  if (!mobs || !Array.isArray(rows)) return;
+  if (remoteMobs?.list !== mobs.entities) remoteMobs = new RemoteMobs(mobs.entities, (type, x, y, z) => { try { return mobs.create(type, x, y, z); } catch { return null; } });
+  remoteMobs.apply(rows);
+}
 const sendMine = down => multiplayer?.send({ type: 'action', action: 'mine', down, yaw, pitch, view: multiplayer.lastTick });
 function rebuildServerInventory() {
   const inv = survival.inventory;
@@ -688,6 +701,7 @@ function rebuildServerInventory() {
   if (view?.kind === 'furnace' && state?.bars && remoteInv.window?.id === state.id) Object.assign(survival.furnace(view.key), state.bars);
   remoteInv.restore(inv, state, { creative: view?.kind === 'creative' });
   if (view) refreshContainer();
+  if (gui.screen?.id === "gun-attachments" || gui.screen?.id === "gun-smith") gui.show(gui.screen); // their counts and fitted parts
 }
 // A window the server opened by a block (you.open), or its close (reach, the block broken, death).
 function applyServerWindow(open) {
@@ -790,9 +804,17 @@ function applyMultiplayerTick(message) {
       if (!item) continue;
       sounds?.play("random.pop", { volume: 0.2, pitch: ((Math.random() - Math.random()) * 0.7 + 1) * 2, position: { x: item.x, y: item.y, z: item.z } });
       if (by) scene.drops.pickup(item, by);
+    } else if (event?.type === 'sound' && typeof event.sound === 'string') {
+      // A server mob's (or arrow's) positioned sound (server-mobs.js sound).
+      sounds?.play(event.sound, { position: { x: event.x, y: event.y, z: event.z }, volume: event.volume, pitch: event.pitch });
+    } else if (event?.type === 'explosion') {
+      // A creeper's blast on the server: the burst and random.explode here; the blocks arrive with the tick's changes.
+      scene.explosionParticles.burst(event.x, event.y, event.z, event.size, [], { viewer: [position.x, position.y + PHYSICS.eye, position.z] });
+      sounds?.play("random.explode", { volume: 4, pitch: (1 + (Math.random() - Math.random()) * 0.2) * 0.7, position: { x: event.x, y: event.y, z: event.z } });
     } else if (gunsEnabled()) guns.serverEvent(event);
   }
   if (message.you) { remoteItems.sync(message.you.items); scene.setDrops(remoteItems.items); }
+  if (message.you?.mobs) syncRemoteMobs(message.you.mobs);
 }
 // A streamed gun-server world's window moved: the server's new columns replace the ones this tab let go (client.js ReplicaWorld).
 function applyMultiplayerColumns(message) {
@@ -2128,8 +2150,7 @@ function leaveToTitle(keep) {
   gui.show(menus.mainMenu());
 }
 function openHorse(e) { openContainer(new HorseContainer(survival.inventory, mobs.horseGear(e), () => { saved = false; }, e.customName), "horse", String(e.id)); containerView.horseMob = e; }
-// On a gun server the inventory is the server's (gun-simulation.js, server-play.js): clicks are predicted here and sent; gun attachments are not.
-const SERVER_INVENTORY = "Gun attachments are not connected to the server yet.";
+// On a gun server the inventory is the server's (gun-simulation.js, server-play.js): clicks and gun actions are predicted here and sent.
 function inventory(station = false) {
   // On a gun server window 0 (the inventory) opens here without a message, as in Java; its clicks go to the server.
   if (multiplayer) {
@@ -2217,6 +2238,19 @@ function openGunSmith() {
     recipes: gunSmithRecipes(), slots: () => survival.inventory.main, icon,
     name: (id) => ITEMS[id]?.name ?? String(id),
     craft: (recipe) => {
+      if (multiplayer) {
+        // The server crafts too (gun-simulation.js gun); what does not fit there is thrown there.
+        const slot = survival.inventory.current, index = gunSmithRecipes().indexOf(recipe);
+        if (index < 0) return false;
+        const made = remoteInv.gun({ op: "smith", slot, recipe: index }, (inv) => {
+          if (inv.main[slot]?.id !== GUN_SMITH) return false;
+          const out = smithCraft(inv.main, recipe);
+          if (out) inv.add(out);
+          return !!out;
+        }, survival.inventory);
+        renderHotbar();
+        return made;
+      }
       const out = smithCraft(survival.inventory.main, recipe);
       if (!out) return false;
       // Preserve the pack recipe's factory attachments along with the crafted stack.
@@ -2236,6 +2270,20 @@ function gunsUse() {
   const inv = survival.inventory, held = inv.held;
   if (held?.id === GUN_SMITH) { openGunSmith(); return true; }
   if (!isAmmoBox(held?.id)) return false;
+  if (multiplayer) {
+    const slot = inv.current, empty = binds.isDown("key.sneak");
+    const moved = remoteInv.gun({ op: "box", slot, empty }, (copy) => {
+      if (!isAmmoBox(copy.main[slot]?.id)) return false;
+      if (!empty) return fillBox(copy.main, slot) > 0;
+      const out = emptyBox(copy.main, slot);
+      for (const s of out) copy.add(s);
+      return out.length > 0;
+    }, inv);
+    if (moved) sounds?.play("random.pop", { volume: 0.2, pitch: empty ? 0.8 : 1.2 });
+    toast(boxLabel(inv.held));
+    renderHotbar();
+    return true;
+  }
   if (binds.isDown("key.sneak")) {
     const out = emptyBox(inv.main, inv.current);
     for (const s of out) { const stored = survival.add(s.id, s.count, s.damage); if (stored < s.count) throwStacks([{ ...s, count: s.count - stored }]); }
@@ -2256,6 +2304,20 @@ function openGunAttachments() {
   gui.show(attachmentScreen({
     slots: () => inv.main, index: () => inv.current, creative: survival.creative, icon,
     fit: (type, attachment) => {
+      if (multiplayer) {
+        // The server fits it too (gun-simulation.js gun); parts it cannot give back are thrown there.
+        const slot = inv.current, creative = survival.creative;
+        let sound = null;
+        const ok = remoteInv.gun({ op: "fit", slot, part: type, attachment: attachment?.id ?? null }, (copy) => {
+          const out = fitFromInventory(copy.main, slot, type, attachment, { creative });
+          if (out.ok) for (const s of out.give) copy.add(s);
+          sound ??= out.sound;
+          return out.ok;
+        }, inv);
+        if (ok && sound) playGunSound(sounds, gunSoundEvent(sound));
+        renderHotbar();
+        return ok;
+      }
       const out = fitFromInventory(inv.main, inv.current, type, attachment, { creative: survival.creative });
       if (!out.ok) return false;
       for (const s of out.give) { const stored = survival.add(s.id, s.count, s.damage); if (stored < s.count) throwStacks([{ ...s, count: s.count - stored }]); }

@@ -102,15 +102,21 @@ export class DedicatedSimulation {
       // WorldServer's chunk loop over every ticking column of every player, not one 10-chunk square (Weather.activeChunks).
       const tickChunks = this.weather.tickChunks.bind(this.weather);
       this.weather.tickChunks = world => tickChunks(world, [...this.columns.ticking].map(k => k.split(',').map(Number)));
+    }
+    this.mobs = this.createMobs(saved); // before the first columns' population is handed over
+    if (this.columns) {
+      this.mobs?.columns({ added: [...this.world.chunks.values()], removed: [] });
       this.materialize();
     }
   }
   // Streamed worlds: the population records (dungeon and temple loot, flower pots, liquid ticks) of columns resident for the first time.
-  materialize() { return this.columns?.materialize({ tiles: this.tiles, fluids: this.fluids }) ?? null; }
+  materialize() { return this.columns?.materialize({ tiles: this.tiles, fluids: this.fluids, ...(this.mobs ? { mobs: this.mobs.ew, spawners: this.mobs.spawners } : {}) }) ?? null; }
+  // The gun server's mobs (server-mobs.js); this base simulation has none.
+  createMobs() { return null; }
   // Streamed worlds: makes the columns of these windows resident (and the spawn window); new columns are lit and handed over.
   reside(windows) {
     const change = this.columns.reside(windows);
-    if (change.added.length || change.removed.length) { this.light.columns(change); this.materialize(); }
+    if (change.added.length || change.removed.length) { this.light.columns(change); this.mobs?.columns(change); this.materialize(); }
     return change;
   }
   get darkness() { return skylightSubtracted(celestialAngle(this.time, 1), this.weather.rainStrength(), this.weather.weightedThunder()); }
