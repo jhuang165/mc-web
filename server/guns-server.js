@@ -41,11 +41,12 @@ export function buildId(root = ROOT) {
 }
 const banText = ban => `You are banned from this server.\nReason: ${ban.reason}${ban.expires ? `\nYour ban will be removed on ${new Date(ban.expires).toISOString().slice(0, 16).replace('T', ' ')} UTC` : ''}`;
 
-// stateDir holds server.properties, the admin lists and `<level-name>.json`. build 'any' accepts every client build.
-export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateDir = path.join(ROOT, 'guns-data'), packDir = path.join(ROOT, 'public/mods'),
+// configDir (default: stateDir) holds server.properties and the admin lists; stateDir holds `<level-name>.json`.
+// build 'any' accepts every client build.
+export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateDir = path.join(ROOT, 'guns-data'), configDir = stateDir, packDir = path.join(ROOT, 'public/mods'),
   profiles = 'http://127.0.0.1:8090', verifier = null, origins = DEFAULT_ORIGINS, build = buildId(), tickMs = 50, saveMs = 30000,
   rules = null, simulation = null, now = () => Date.now(), log = console.log, writeDefaults = true } = {}) {
-  const { config, report, admin } = await loadServerFiles(stateDir, { writeDefaults, now });
+  const { config, report, admin } = await loadServerFiles(configDir, { writeDefaults, now });
   for (const line of formatReport(report)) log(`[config] ${line}`);
   rules ??= await installGunRules({ packDir });
   if (!rules.installed) log('[packs] No gun pack found; only the built-in guns are available.');
@@ -291,8 +292,11 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const env = process.env;
   const app = await createGunsServer({ port: +(env.MC_GUNS_PORT ?? 8091), bind: env.MC_GUNS_BIND ?? '127.0.0.1',
-    stateDir: env.MC_GUNS_STATE ?? path.join(ROOT, 'guns-data'), packDir: env.MC_GUNS_PACKS ?? path.join(ROOT, 'public/mods'),
-    profiles: env.MC_PROFILE_URL ?? 'http://127.0.0.1:8090',
+    // deploy-guns.sh names: MC_GUNS_STATE_DIR, MC_GUNS_CONFIG_DIR, MC_GUNS_PACK_DIR, MC_GUNS_PROFILE_API (the short names still work).
+    stateDir: env.MC_GUNS_STATE_DIR ?? env.MC_GUNS_STATE ?? path.join(ROOT, 'guns-data'),
+    configDir: env.MC_GUNS_CONFIG_DIR ?? env.MC_GUNS_STATE_DIR ?? env.MC_GUNS_STATE ?? path.join(ROOT, 'guns-data'),
+    packDir: env.MC_GUNS_PACK_DIR ?? env.MC_GUNS_PACKS ?? path.join(ROOT, 'public/mods'),
+    profiles: env.MC_GUNS_PROFILE_API ?? env.MC_PROFILE_URL ?? 'http://127.0.0.1:8090',
     origins: [...DEFAULT_ORIGINS, ...(env.MC_GUNS_ORIGINS ?? '').split(',').filter(Boolean)] });
   console.log(`Gun server on ${env.MC_GUNS_BIND ?? '127.0.0.1'}:${app.port}, build ${app.build}, packs ${app.rules.pack.slice(0, 12)}, protocol ${PROTOCOL}`);
   for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => { void app.close().then(() => process.exit(0), error => { console.error(error.message); process.exit(1); }); });

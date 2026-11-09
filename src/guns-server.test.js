@@ -312,3 +312,14 @@ test('the profile verifier asks the profile service and maps its answers', async
   assert.equal(calls.length, 2, 'malformed sessions are never sent');
   await assert.rejects(new ProfileVerifier({ request: async () => ({ status: 502, body: '' }) }).verify('good'), /502/);
 });
+
+test('a separate config directory holds server.properties and the admin lists; the world saves in the state directory', async t => {
+  const state = await mkdtemp(path.join(os.tmpdir(), 'mc-web-guns-state-')), config = await mkdtemp(path.join(os.tmpdir(), 'mc-web-guns-config-'));
+  t.after(() => Promise.all([rm(state, { recursive: true, force: true }), rm(config, { recursive: true, force: true })]));
+  await writeFile(path.join(config, 'server.properties'), 'motd=From config\nlevel-name=arena\n');
+  const app = await createGunsServer({ port: 0, stateDir: state, configDir: config, verifier: fakeVerifier, build: 'test-build', rules, simulation: arena(), tickMs: 10, saveMs: 60000, log: () => {} });
+  assert.equal(app.config.motd, 'From config');
+  await app.close();
+  assert.ok(JSON.parse(await readFile(path.join(state, 'arena.json'), 'utf8')));
+  await assert.rejects(readFile(path.join(state, 'server.properties')), { code: 'ENOENT' });
+});
