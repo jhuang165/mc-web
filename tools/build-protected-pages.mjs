@@ -26,7 +26,17 @@ export async function seal(bytes, key, label) {
   return Buffer.concat([iv, Buffer.from(data)]);
 }
 
-export async function buildProtectedPages({ input, output, base = "/", version, passcode, iterations = 600000 }) {
+// The salt (and iteration count) of an earlier publication's worker, so the same passcode gives the same key: a browser that
+// unlocked the previous build stays unlocked, and its still-running old worker can open the new manifest.
+export async function previousSalt(workerFile, base) {
+  const m = (await readFile(workerFile, "utf8")).match(/^const CONFIG = (\{.*\});$/m);
+  const config = m && JSON.parse(m[1]);
+  if (!config || config.base !== base || typeof config.salt !== "string" || Buffer.from(config.salt, "base64").length !== 16 || !Number.isInteger(config.iterations))
+    throw new Error("The previous worker has no usable salt for this base path.");
+  return { salt: Buffer.from(config.salt, "base64"), iterations: config.iterations };
+}
+
+export async function buildProtectedPages({ input, output, base = "/", version, passcode, iterations = 600000, saltFrom = null }) {
   if (!passcode) throw new Error("Set PAGES_PASSCODE in the environment.");
   input = path.resolve(input); output = path.resolve(output); base = normalizeBase(base);
   if (!/^\/[a-zA-Z0-9/_-]*\/$/.test(base) && base !== "/") throw new Error("Invalid base path.");
@@ -35,7 +45,9 @@ export async function buildProtectedPages({ input, output, base = "/", version, 
   await mkdir(output, { recursive: true });
   if ((await readdir(output)).length) throw new Error("Output directory must be empty.");
   await mkdir(path.join(output, "sealed"));
-  const salt = randomBytes(16), key = await deriveKey(passcode, salt, iterations), files = {};
+  let salt = randomBytes(16);
+  if (saltFrom) ({ salt, iterations } = await previousSalt(saltFrom, base));
+  const key = await deriveKey(passcode, salt, iterations), files = {};
   let plainBytes = 0, sealedBytes = 0;
   async function walk(dir, prefix = "") {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -69,6 +81,6 @@ export async function buildProtectedPages({ input, output, base = "/", version, 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = Object.fromEntries(process.argv.slice(2).reduce((all, v, i, a) => i % 2 ? all : [...all, [v.replace(/^--/, ""), a[i + 1]]], []));
   const result = await buildProtectedPages({ input: args.input ?? "dist", output: args.output, base: args.base,
-    version: args.version, passcode: process.env.PAGES_PASSCODE });
+    version: args.version, passcode: process.env.PAGES_PASSCODE, saltFrom: args["keep-salt-from"] ?? null });
   console.log(JSON.stringify(result));
 }

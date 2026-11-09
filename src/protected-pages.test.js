@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { webcrypto } from "node:crypto";
 import { gunzipSync } from "node:zlib";
-import { buildProtectedPages, deriveKey } from "../tools/build-protected-pages.mjs";
+import { buildProtectedPages, deriveKey, previousSalt } from "../tools/build-protected-pages.mjs";
 
 test("protected publication encrypts every app file, authenticates the passcode and rejects tampering", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "protected-pages-test-")), input = path.join(dir, "input"), output = path.join(dir, "output");
@@ -44,5 +44,26 @@ test("protected publication encrypts every app file, authenticates the passcode 
     await assert.rejects(open(sealed, key, "different/path.json"), { name: "OperationError" });
     await assert.rejects(buildProtectedPages({ input, output, passcode }), /must be empty/);
     await assert.rejects(buildProtectedPages({ input, output: path.join(input, "nested"), passcode }), /outside the input/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("a republication can keep the previous salt, so an unlocked browser's key still opens the new manifest", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "protected-pages-salt-")), input = path.join(dir, "input"), a = path.join(dir, "a"), b = path.join(dir, "b");
+  try {
+    await mkdir(input, { recursive: true });
+    await writeFile(path.join(input, "index.html"), "<h1>build</h1>");
+    const passcode = "synthetic-test-password", config = async out => JSON.parse((await readFile(path.join(out, "resource-pack-sw.js"), "utf8")).match(/const CONFIG = (.+);/)[1]);
+    await buildProtectedPages({ input, output: a, base: "/mc-web/", version: "a", passcode, iterations: 1000 });
+    await buildProtectedPages({ input, output: b, base: "/mc-web/", version: "b", passcode, saltFrom: path.join(a, "resource-pack-sw.js") });
+    const [ca, cb] = [await config(a), await config(b)];
+    assert.equal(cb.salt, ca.salt); assert.equal(cb.iterations, 1000, "the previous iteration count too");
+    const key = await deriveKey(passcode, Buffer.from(ca.salt, "base64"), ca.iterations), data = await readFile(path.join(b, "sealed", "manifest.bin"));
+    const plain = await webcrypto.subtle.decrypt({ name: "AES-GCM", iv: data.subarray(0, 12), additionalData: new TextEncoder().encode("manifest") }, key, data.subarray(12));
+    assert.equal(JSON.parse(gunzipSync(Buffer.from(plain))).version, "b");
+    // A fresh build without it still picks a new random salt; a worker for another base path is refused.
+    const c = path.join(dir, "c");
+    await buildProtectedPages({ input, output: c, base: "/mc-web/", version: "c", passcode, iterations: 1000 });
+    assert.notEqual((await config(c)).salt, ca.salt);
+    await assert.rejects(previousSalt(path.join(a, "resource-pack-sw.js"), "/other/"), /no usable salt/);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
