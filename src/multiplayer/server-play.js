@@ -36,6 +36,7 @@ import { useVehicle } from './server-riding.js';
 import { useRod } from './server-fishing.js';
 import { HorseContainer, canInteract as horseReach } from '../horse-gear.js';
 import { PAINTING_ITEM, FRAME_ITEM } from '../hanging.js';
+import { ServerStations, STATION_KINDS } from './server-stations.js';
 
 const noop = () => {};
 const mobId = e => Number(String(e.id).replace('mob-', ''));
@@ -46,7 +47,7 @@ const UNSUPPORTED_USE = new Set();
 const MOB_USE = new Set([ITEM_EMPTY_MAP, FISHING_ROD, ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, ITEM_FIRE_CHARGE, ITEM_EYE_OF_ENDER, ITEM_FIREWORK_ROCKET, BOW, BOAT_ITEM]);
 export const unsupportedUse = (id, mobs = false) => UNSUPPORTED_USE.has(id) || (!mobs && (MOB_USE.has(id) || isThrowable(id) || isBook(id)));
 // The windows a block can open here; the client builds the same container around its own copy (main.js remoteWindow).
-export const WINDOW_KINDS = new Set(['workbench', 'furnace', 'chest', 'dispenser', 'hopper']);
+export const WINDOW_KINDS = new Set(['workbench', 'furnace', 'chest', 'dispenser', 'hopper', ...STATION_KINDS]);
 
 const lookDir = p => ({ x: -Math.sin(p.yaw) * Math.cos(p.pitch), y: Math.sin(p.pitch), z: -Math.cos(p.yaw) * Math.cos(p.pitch) });
 export const playerEye = p => ({ x: p.position.x, y: p.position.y + PHYSICS.eye - (p.motion?.ySize ?? 0), z: p.position.z });
@@ -70,8 +71,9 @@ export class ServerPlay {
     this.nextEntity = 1;
     this.itemRand = new JavaRandom(Math.floor(sim.random() * 2 ** 48)); // Item.itemRand (the eye's sound, an eye in a frame)
     this.windowCounter = 0;
+    this.stations = new ServerStations(sim, saved.stations ?? null); // brewing stands, enchanting tables, anvils, beacons
   }
-  save() { return { items: this.items.serialize() }; }
+  save() { return { items: this.items.serialize(), stations: this.stations.save() }; }
   // A joining (or respawned, or mode-changed) player: the always-open inventory window 0, nothing being mined.
   reset(p) {
     p.inventoryWindow = watchCrafting(p, p.survival.openInventory());
@@ -293,6 +295,7 @@ export class ServerPlay {
         openChest: (chest, key, at) => this.open(p, 'chest', chest, { key, at, block: sim.world.get(...at), title: chest.title, rows: chest.rows }),
         openDispenser: (tile, key, at, title) => this.open(p, 'dispenser', new DispenserContainer(p.survival.inventory, tile, noop), { key, at, block: sim.world.get(...at), title }),
         openHopper: (tile, key, at) => this.open(p, 'hopper', new HopperContainer(p.survival.inventory, tile, noop), { key, at, block: sim.world.get(...at) }),
+        ...this.stations.hooks(this, p),
         touchRedstoneOre: noop,
         updateBlock: noop, updateBlocks: noop, // the world's own change log reaches the tabs
         particle: (name, x, y, z, vx, vy, vz) => sim.near(p, { type: 'fx', kind: 'particle', name, x, y, z, vx, vy, vz }, true),
@@ -381,6 +384,7 @@ export class ServerPlay {
     const out = { id: w ? w.id : 0, cursor: copyStack(inv.cursor), slots: windowSlots(container, inv) };
     if (w?.kind === 'furnace') { const f = p.survival.furnace(w.key); out.bars = { burn: f.burn, burnTotal: f.burnTotal, cook: f.cook }; }
     if (w?.kind === 'merchant') { out.offers = w.container.offers.map(r => ({ ...r })); out.recipe = w.container.currentRecipeIndex; }
+    if (w) Object.assign(out, this.stations.state(w));
     return out;
   }
   openState(p) {

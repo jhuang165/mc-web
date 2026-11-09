@@ -252,6 +252,10 @@ ITEMS[2100]={id:2100,name:"Carrot on a Stick",texture:"carrot_on_a_stick",stack:
 installBookItems(ITEMS); // Book and Quill 2110, Written Book 2111 (books.js)
 installCartItems(ITEMS); // furnace, TNT, hopper and command block carts 2090-2093 (cart-variants.js)
 installSpawnEggItems(ITEMS); // spawn egg 1950, Bottle o' Enchanting 1951, fire charge 1952 (spawn-eggs.js)
+// Items whose damage is data rather than wear or a named subtype: the potion's effect bits (ItemPotion), the spawn egg's entity id
+// (ItemMonsterPlacer) and the filled map's map_N (ItemMap). PlayerInventory.read keeps any damage up to the short limit for them,
+// as region-import.js itemFromOriginal does; otherwise a saved or server-synced potion read back as a Water Bottle.
+for (const id of [385, 1950, 2081]) if (ITEMS[id]) ITEMS[id].damageRange = 32767;
 // Every item name and damage subtype is the 1.7.10 en_US display name (item-names.js); internal-only items get Title Case.
 applyNativeNames(ITEMS);
 export const MATERIALS = {

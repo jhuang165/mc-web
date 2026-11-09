@@ -7,6 +7,11 @@ import { DispenserContainer } from '../dispenser-container.js';
 import { HopperContainer } from '../hopper.js';
 import { MerchantContainer } from '../merchant-ui.js';
 import { HorseContainer } from '../horse-gear.js';
+import { BrewingContainer } from '../brewing-container.js';
+import { brewingView, newBrewingTile } from '../brewing.js';
+import { EnchantingContainer } from '../enchanting-container.js';
+import { AnvilContainer } from '../anvil-container.js';
+import { BeaconContainer } from '../pyramid-container.js';
 
 export const MAX_CLICKS = 64;
 const noop = () => {};
@@ -15,7 +20,7 @@ export const creativeSlot = i => i < 9 ? 36 + i : i < 36 ? i : 8 - (i - 36);
 
 export class RemoteInventory {
   constructor(send) {
-    Object.assign(this, { send, seq: 0, pending: [], queue: null, window: null, snapshot: null });
+    Object.assign(this, { send, seq: 0, pending: [], queue: null, window: null, snapshot: null, replaying: false });
   }
   reset() { this.pending.length = 0; this.queue = null; this.window = null; this.snapshot = null; }
   // A container this tab shows for server window `id` (0: the player's own inventory); its clicks are forwarded.
@@ -27,6 +32,18 @@ export class RemoteInventory {
     if (container instanceof MerchantContainer) {
       const select = container.select.bind(container);
       container.select = index => { this.flush(); this.send({ type: 'trade', window: id, index }); return select(index); };
+    }
+    // The station buttons (server-stations.js message): the enchantment is rolled on the server only (this tab's table is remote and
+    // keeps the server's levels); a typed anvil name and a beacon's picks apply here too, as predictions.
+    if (container instanceof EnchantingContainer)
+      container.enchant = option => { if (!container.canEnchant(option)) return false; this.flush(); this.send({ type: 'enchant', window: id, option }); return true; };
+    if (container instanceof AnvilContainer) {
+      const setName = container.setName.bind(container);
+      container.setName = name => { if (!this.replaying) { this.flush(); this.send({ type: 'anvil', window: id, name: name == null ? '' : String(name) }); } return setName(name); };
+    }
+    if (container instanceof BeaconContainer) {
+      const confirm = container.confirm.bind(container);
+      container.confirm = (primary, secondary) => { this.flush(); this.send({ type: 'beacon', window: id, primary, secondary }); return confirm(primary, secondary); };
     }
     this.window = { id, container };
     return container;
@@ -97,22 +114,35 @@ export class RemoteInventory {
         // The crafting result last: setting the grid recomputes it, and the server's word wins.
         const first = (state.slots ?? []).find(([i]) => i === 0);
         if (first && slots[0]) slots[0].inventory.setStack(slots[0].index, inv.read(first[1], true));
+        stationState(w.container, state);
       }
     }
+    this.replaying = true;
     for (const op of this.pending) {
       if (op.kind === 'creative') inv.setStack(op.index, copyStack(op.stack));
       else if (op.kind === 'gun') op.apply(inv);
       else if (!creative && w && op.window === w.id) for (const c of op.clicks) w.container.localClick(...c);
     }
     if (this.queue && w) for (const c of this.queue.clicks) if (this.queue.window === w.id) w.container.localClick(...c);
+    this.replaying = false;
     if (w) w.container.drops.length = 0; // the server throws the items; this tab only sees them land
     if (creative) this.snapshot = [...inv.main, ...inv.armor].map(s => JSON.stringify(s ?? null));
   }
 }
 
+// What a station window shows besides its slots (ServerStations.state): the brew's progress, the enchanting levels, the anvil's
+// cost (the result is worked out here from the inputs and the typed name) and the beacon's pyramid and picks.
+function stationState(c, state) {
+  if (c instanceof BrewingContainer && Number.isInteger(state.brew)) c.stand.brewTime = state.brew;
+  if (c instanceof EnchantingContainer && Array.isArray(state.levels)) c.table.enchantLevels = [0, 1, 2].map(i => Number.isInteger(state.levels[i]) ? state.levels[i] : 0);
+  if (c instanceof AnvilContainer) { c.updateRepairOutput(); if (Number.isInteger(state.cost)) c.maximumCost = state.cost; }
+  if (c instanceof BeaconContainer && state.beacon) for (const k of ['levels', 'primary', 'secondary']) if (Number.isInteger(state.beacon[k])) c.tile[k] = state.beacon[k];
+}
+
 // The container this tab builds around its copy for a window the server opened (ServerPlay.open): the same slots, empty
-// until the server's slots arrive. `survival` supplies the player's own inventory and the workbench/furnace containers.
-export function remoteContainer(survival, open) {
+// until the server's slots arrive. `survival` supplies the player's own inventory and the workbench/furnace containers; `env` the
+// station windows' world, beacon tiles, experience level and anvil hooks (main.js).
+export function remoteContainer(survival, open, env = {}) {
   const inv = survival.inventory;
   if (open.kind === 'workbench') return survival.openWorkbench();
   if (open.kind === 'furnace') {
@@ -135,6 +165,18 @@ export function remoteContainer(survival, open) {
     const h = { chested: !!open.horse?.chested, type: Number.isInteger(open.horse?.type) ? open.horse.type : 0, items: [] };
     return new HorseContainer(inv, h, noop, open.title ?? '');
   }
+  const at = typeof open.key === 'string' ? open.key.split(',').map(Number) : null, level = env.experienceLevel ?? (() => 0);
+  if (!at || at.length !== 3 || !at.every(Number.isInteger)) return null;
+  if (open.kind === 'brewing') return new BrewingContainer(inv, brewingView(newBrewingTile()), noop, open.title ?? undefined);
+  if (open.kind === 'enchanting' && env.world)
+    return new EnchantingContainer({ inventory: inv, world: env.world, x: at[0], y: at[1], z: at[2], creative: () => survival.creative, experienceLevel: level, remote: true });
+  if (open.kind === 'anvil') {
+    let c;
+    c = new AnvilContainer({ inventory: inv, creative: () => survival.creative, experienceLevel: level, itemName: env.itemName ?? (() => ''),
+      onInputChanged: change => env.anvilInput?.(c, change) });
+    return c;
+  }
+  if (open.kind === 'beacon' && env.beacons) return new BeaconContainer({ inventory: inv, tile: env.beacons.ensure(...at) });
   return null;
 }
 

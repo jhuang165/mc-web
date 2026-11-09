@@ -226,6 +226,7 @@ export class GunSimulation extends DedicatedSimulation {
   click(id, message) { const p = this.players.get(id); return !!p && this.play.click(p, message); }
   closeWindow(id, window) { const p = this.players.get(id); if (p && Number.isInteger(window)) this.play.close(p, window); }
   trade(id, message) { const p = this.players.get(id); return !!p && this.play.trade(p, message); }
+  station(id, message) { const p = this.players.get(id); return !!p && this.play.stations.message(p, message); } // enchant, anvil name, beacon
   drop(id, all) { const p = this.players.get(id); return !!p && this.play.dropHeld(p, !!all); }
   // The guns mod's own inventory actions, run on the server's copy as the single-player screens run them (main.js), on hotbar slot
   // `slot`: `fit` puts an attachment in that gun's part slot (or takes it off), `smith` crafts a gun smith recipe (by its index in gunSmithRecipes, which
@@ -397,6 +398,7 @@ export class GunSimulation extends DedicatedSimulation {
     this.hanging.tick(); // EntityHanging.onUpdate: the wall check (server-hanging.js)
     this.maps?.tick(); // ItemMap.onUpdate for the carried and framed maps (server-maps.js)
     this.tiles.tickFurnaces();
+    this.play.stations.tick(this.changes.values()); // brewing stands and beacons (server-stations.js)
     this.play.tickItems();
     return super.tickWorld(beforeLit);
   }

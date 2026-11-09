@@ -725,11 +725,13 @@ function rebuildServerInventory() {
 // A window the server opened by a block (you.open), or its close (reach, the block broken, death).
 function applyServerWindow(open) {
   if (open && open.id !== remoteInv.window?.id) {
-    const container = remoteContainer(survival, open);
+    const container = remoteContainer(survival, open, { world, beacons, experienceLevel: () => experience.level, itemName: anvilItemName, anvilInput: anvilInputChanged });
     if (!container) return;
     if (containerView) { remoteInv.forget(); closeModal(); }
     remoteInv.attach(container, open.id);
     openContainer(container, open.kind, open.key);
+    if (open.kind === 'anvil') wireAnvilName(container);
+    if (open.kind === 'beacon') { containerView.pick = { primary: container.tile.primary, secondary: container.tile.secondary }; refreshBeacon(containerView); }
     if (open.kind === 'horse') containerView.horseMob = mobs?.entities.find(e => e.id === open.key) ?? null; // the GUI's horse preview
   } else if (!open && remoteInv.window?.id > 0 && containerView?.container === remoteInv.window.container) {
     remoteInv.forget(); resume();
@@ -2876,19 +2878,25 @@ function renderMerchantView(view) {
   }
   handleEntityEvents();
 }
+const anvilItemName=native=>{const stack=nativeStackToLive(native);return stack?stackName(stack,ITEMS):'';};
+// GuiRepair.sendSlotContents: a new left item fills the name field with its name; only a custom name is kept as the rename.
+function anvilInputChanged(container,{current,currentNative}){
+  const name=current?anvilName(current.displayName??anvilItemName(currentNative)):'';
+  const field=$('#anvil-name');if(field)field.value=name;
+  container.setName(current&&typeof current.displayName==='string'?name:'');
+}
+function wireAnvilName(container){
+  const field=$('#anvil-name');
+  field.oninput=()=>{field.value=anvilName(field.value);container.setName(field.value);refreshContainer();};
+}
 function useAnvil(key){
   const [x,y,z]=key.split(',').map(Number);
-  const itemName=native=>{const stack=nativeStackToLive(native);return stack?stackName(stack,ITEMS):'';};
   let container;
   container=new AnvilContainer({inventory:survival.inventory,creative:()=>survival.creative,
     experienceLevel:()=>experience.level,
     payExperienceLevels:cost=>{experience.addLevels(-cost);renderVitals();saved=false;},
-    itemName,
-    onInputChanged:({current,currentNative})=>{
-      const name=current?anvilName(current.displayName??itemName(currentNative)):'';
-      const field=$('#anvil-name');if(field)field.value=name;
-      container.setName(current&&typeof current.displayName==='string'?name:'');
-    },
+    itemName:anvilItemName,
+    onInputChanged:change=>anvilInputChanged(container,change),
     onUse:({creative})=>{
       let broken=false;
       if(!creative&&world.get(x,y,z)===ANVIL&&survival.inventory.random.nextFloat()<ANVIL_DAMAGE_CHANCE){
@@ -2900,8 +2908,7 @@ function useAnvil(key){
     },
   });
   openContainer(container,'anvil',key);
-  const field=$('#anvil-name');
-  field.oninput=()=>{field.value=anvilName(field.value);container.setName(field.value);refreshContainer();};
+  wireAnvilName(container);
 }
 // BlockBeacon.onBlockActivated: ContainerBeacon over the tile; picks are local until Confirm (MC|Beacon, pyramid-gui.js).
 function useBeacon(key) {

@@ -182,6 +182,7 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
         else if (m.type === 'close') simulation.closeWindow(id, m.window);
         else if (m.type === 'book') { if (!simulation.book(id, m)) ws.close(1008, 'Invalid book'); }
         else if (m.type === 'trade') { if (!simulation.trade(id, m)) ws.close(1008, 'Invalid trade'); }
+        else if (m.type === 'enchant' || m.type === 'anvil' || m.type === 'beacon') { if (!simulation.station(id, m)) ws.close(1008, 'Invalid station'); }
         else if (m.type === 'drop') simulation.drop(id, m.all === true);
         else if (m.type === 'creative') simulation.creative(id, m);
         else if (m.type === 'gun') { if (!simulation.gun(id, m)) ws.close(1008, 'Invalid gun action'); }

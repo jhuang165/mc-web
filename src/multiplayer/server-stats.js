@@ -3,8 +3,9 @@
 // for movement, jumps, damage, deaths, drops, harvests, crafting, item use and fishing, and the EntityPlayer.triggerAchievement call
 // sites (achievements-live.js) for crafting, smelting, pickups, mob kills, breeding, biomes and minecart rides. A tab asks for
 // its numbers when it opens the Statistics screen (C16PacketClientStatus REQUEST_STATS -> S37PacketStatistics); an unlock reaches
-// every tab as one event (the chat.type.achievement line) and its own player's tab draws the toast. Not covered: the beacon,
-// potion, enchanting, portal and dimension achievements, whose systems the gun server does not run.
+// every tab as one event (the chat.type.achievement line) and its own player's tab draws the toast; a potion taken from a brewing
+// stand counts (server-stations.js). Not covered: the beacon, portal and dimension achievements, whose systems the gun server does
+// not run.
 import { Stats, STAT } from '../stats.js';
 import { StatsLive, addFallStat, damageTenths, toolUses, originalItem } from '../stats-live.js';
 import { Achievements, BY_ID, OVERKILL_DAMAGE, SNIPE_DISTANCE_SQUARED } from '../achievements.js';
