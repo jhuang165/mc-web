@@ -4,10 +4,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  SpamCounter, SPAM, creativeDrop, chatPacket, heldSlot, placementOutcome, digAllowed, useEntityAllowed, blockReach, entityReach, normalizeChat, faceOf, serverClick, BUILD_HEIGHT_MESSAGE,
+  SpamCounter, SPAM, creativeDrop, chatPacket, heldSlot, placementOutcome, digAllowed, useEntityAllowed, blockReach, entityReach, normalizeChat, faceOf, serverClick, BUILD_HEIGHT_MESSAGE, useEntityOutcome, canEntityBeSeen,
 } from './server-handlers.js';
 import { applyBookEdit, applyBookSign, ITEM_WRITABLE_BOOK as WRITABLE, ITEM_WRITTEN_BOOK as WRITTEN } from './books.js';
 import { acceptLine } from './signs.js';
+import { rayTraceBlocks } from './buckets.js';
+import { pickMinecart } from './structure-simulation.js';
 import { CreativeScreen, SURVIVAL_TAB } from './creative.js';
 import { Survival } from './survival.js';
 import { splitLayout } from './book-ui.js';
@@ -105,9 +107,51 @@ test('placement, digging and use-entity distances', () => {
     assert.equal(digAllowed({ player: c.player, pos: c.pos }), c.events.some((e) => e.dig), c.name);
   }
   for (const c of ref.useEntity[0].cases) {
-    if (c.type !== 'mob') continue;
-    assert.equal(useEntityAllowed([0, 64, 0], c.entity, c.visible), c.events.some((e) => e.entity), c.action + ' ' + c.name);
+    const kind = { item: 'item', arrow: 'arrow', xporb: 'xporb', self: 'self' }[c.type] ?? 'mob';
+    // A "real" case runs the player's native canEntityBeSeen over the recorded stone cells; the others force the answer.
+    const solid = new Set((c.solid ?? []).map((p) => p.join()));
+    const world = { get: (x, y, z) => (solid.has([x, y, z].join()) ? 1 : 0), getMeta: () => 0 };
+    const real = c.visible === 'real';
+    const out = useEntityOutcome({ player: [0, 64, 0], entity: c.entity, visible: real ? canEntityBeSeen((a, b) => rayTraceBlocks(world, a, b, false, false) !== null, [0, 64, 0], c.entity) : c.visible,
+      action: c.action === 'ATTACK' ? 'attack' : 'interact', kind });
+    const native = c.events.some((e) => e.packet === 'gs') ? 'kick' : c.events.some((e) => e.entity) ? 'accept' : 'refuse';
+    assert.equal(out, native, c.action + ' ' + c.type + ' ' + c.name);
+    // serverClick (the call in play) agrees, tracing sight only when it matters.
+    const r = serverClick({ kind: 'entity', player: [0, 64, 0], entity: c.entity, visible: real ? true : c.visible, action: c.action === 'ATTACK' ? 'attack' : 'interact', entityKind: kind,
+      lineBlocked: real ? (a, b) => rayTraceBlocks(world, a, b, false, false) !== null : null });
+    assert.equal(r.accept, native === 'accept', c.name);
+    assert.equal(r.kick, native === 'kick', c.name);
   }
+});
+
+test('no line of sight: a crosshair pick over a wall corner is refused beyond 3 blocks, and the native cases include it', () => {
+  // Creative reach is 6 for entities; a one-block wall at x 1 clips the eye (feet + 1.62) to target ray, so the server sees nothing.
+  const wall = new Set(['1,64,0']), world = { get: (x, y, z) => (wall.has([x, y, z].join()) ? 1 : 0), getMeta: () => 0 };
+  const blocked = (a, b) => rayTraceBlocks(world, a, b, false, false) !== null;
+  const entity = [3.5, 64.5, 0];
+  // the client pick: the ray from the eye through the box's upper half clears the wall (no block is hit first), so the click goes out
+  assert.equal(rayTraceBlocks(world, [0, 64 + 1.62, 0], [3.5, 64 + 1.62, 0], false, false), null);
+  assert.equal(canEntityBeSeen(blocked, [0, 64, 0], entity), false);
+  assert.equal(serverClick({ kind: 'entity', player: [0, 64, 0], entity, lineBlocked: blocked }).accept, false);
+  assert.equal(serverClick({ kind: 'entity', player: [0, 64, 0], entity: [2.9, 64.5, 0], lineBlocked: blocked }).accept, true);
+  assert.equal(serverClick({ kind: 'entity', player: [0, 64, 0], entity, lineBlocked: () => false }).accept, true);
+  assert.ok(ref.useEntity[0].cases.some((c) => c.visible === 'real' && c.events.length === 0 && Math.hypot(c.entity[0], c.entity[2]) < 6), 'native refusal by sight is recorded');
+});
+
+test('a real pick in play: the crosshair reaches a cart over a wall corner, the server has no sight and refuses (survival reach too)', () => {
+  const wall = new Set(['1,64,0']), world = { get: (x, y, z) => (wall.has([x, y, z].join()) ? 1 : 0), getMeta: () => 0 };
+  const cart = { x: 3.5, posY: 64.5, z: 0, bb: [2.75, 64.2, -0.35, 4.25, 64.9, 0.35] };
+  const eye = { x: 0, y: 64 + 1.62, z: 0 }, aim = [3.5, 64.8, 0], len = Math.hypot(aim[0], aim[1] - eye.y);
+  const dir = { x: aim[0] / len, y: (aim[1] - eye.y) / len, z: 0 };
+  const blockHit = rayTraceBlocks(world, [eye.x, eye.y, eye.z], [eye.x + dir.x * 6, eye.y + dir.y * 6, eye.z], false, false);
+  assert.equal(blockHit, null, 'no block is under the crosshair');
+  const pick = pickMinecart({ pickable: () => [cart] }, eye, dir, 6, 6);
+  assert.ok(pick, 'the client pick finds the cart');
+  const r = serverClick({ kind: 'entity', player: [0, 64, 0], entity: [cart.x, cart.posY, cart.z], action: 'attack', lineBlocked: (a, b) => rayTraceBlocks(world, a, b, false, false) !== null });
+  assert.equal(r.accept, false);
+  // survival reach 3 picks it as well (2.72 to the box), so an ordinary survival player hits the 3-block limit; the open-ground twin is accepted
+  assert.ok(pickMinecart({ pickable: () => [cart] }, eye, dir, 3, 3));
+  assert.equal(serverClick({ kind: 'entity', player: [0, 64, 0], entity: [cart.x, cart.posY, cart.z], lineBlocked: () => false }).accept, true);
 });
 
 test('reach: creative 5 blocks and 6 entities, survival 4.5 and 3', () => {

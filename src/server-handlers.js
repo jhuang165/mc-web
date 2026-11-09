@@ -64,6 +64,19 @@ export function digAllowed({ player, pos }) {
 }
 // nh.a(ja): feet-to-feet squared distance under 36 with line of sight, under 9 without.
 export const useEntityAllowed = (player, entity, visible) => sq(player, entity) < (visible ? 36 : 9);
+// EntityPlayerMP.getEyeHeight (mw.g, bytecode-read) is 1.62 on the server (EntityPlayer's own 0.12 is overridden), and posY is the feet:
+// canEntityBeSeen (sv.p) traces a block ray from (x, feet + 1.62, z) to (entity x, entity posY + entity getEyeHeight, z). Entities that do not
+// override getEyeHeight (paintings, frames, carts, boats, arrows, orbs) have 0, living mobs height * 0.85. `lineBlocked(from, to)` is
+// World.rayTraceBlocks(from, to) !== null (buckets.js rayTraceBlocks with no liquid stop and no box skipping).
+export const SERVER_EYE_HEIGHT = Math.fround(1.62);
+export const canEntityBeSeen = (lineBlocked, player, entity, eyeHeight = 0) =>
+  !lineBlocked([player[0], player[1] + SERVER_EYE_HEIGHT, player[2]], [entity[0], entity[1] + eyeHeight, entity[2]]);
+// nh.a(ja) in full: the entity must exist; the distance test comes first (36 seen, 9 unseen); then an attack on an item entity, arrow,
+// experience orb or the player itself kicks ("Attempting to attack an invalid entity") instead of attacking. Returns 'refuse', 'kick' or 'accept'.
+export function useEntityOutcome({ player, entity, visible, action = 'interact', kind = 'mob' }) {
+  if (!useEntityAllowed(player, entity, visible)) return 'refuse';
+  return action === 'attack' && (kind === 'item' || kind === 'arrow' || kind === 'xporb' || kind === 'self') ? 'kick' : 'accept';
+}
 // PlayerControllerMP.getBlockReachDistance and EntityRenderer.getMouseOver: blocks 5 creative / 4.5 survival, entities 6 / 3.
 export const blockReach = (creative) => (creative ? 5 : 4.5);
 export const entityReach = (creative) => (creative ? 6 : 3);
@@ -79,12 +92,18 @@ export const BUILD_HEIGHT_MESSAGE = 'Height limit for building is 256 blocks';
 // What the integrated server does with one block click or entity click. The single-player owner has no spawn protection: the integrated
 // server keeps MinecraftServer.isBlockProtected (always false, the probe's Srv double returns it unchanged). `player` is the feet [x, y, z].
 // Returns { accept } plus `message` (chat line the server sends) when the click is refused for height; a refused click resends the block.
-export function serverClick({ kind, player, pos, adjacent = null, entity = null, visible = true, hasMoved = true }) {
+// An entity click may pass `lineBlocked` (and `eyeHeight`) instead of `visible`; sight is then traced only when the answer can change (36 > d^2 >= 9).
+export function serverClick({ kind, player, pos, adjacent = null, entity = null, visible = true, hasMoved = true, lineBlocked = null, eyeHeight = 0, action = 'interact', entityKind = 'mob' }) {
   if (kind === 'place') {
     const out = placementOutcome({ player, pos, face: faceOf(pos, adjacent) ?? 0, hasMoved });
     return out === 'place' ? { accept: true } : { accept: false, message: out === 'tooHigh' ? BUILD_HEIGHT_MESSAGE : null };
   }
   if (kind === 'dig') return { accept: digAllowed({ player, pos }) };
-  if (kind === 'entity') return { accept: useEntityAllowed(player, entity, visible) };
+  if (kind === 'entity') {
+    const d = sq(player, entity);
+    const seen = lineBlocked && d >= 9 && d < 36 ? canEntityBeSeen(lineBlocked, player, entity, eyeHeight) : visible;
+    const out = useEntityOutcome({ player, entity, visible: seen, action, kind: entityKind });
+    return { accept: out === 'accept', kick: out === 'kick' };
+  }
   return { accept: true };
 }

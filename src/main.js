@@ -190,7 +190,7 @@ import { DimensionLive, storedRecord, dimensionOf, rootIdOf, viewId, bedExplosio
 import { PortalTimer, splashBreak, NIGHT_VISION, BLINDNESS, NAUSEA, INVISIBILITY } from "./potion-fx.js";
 import { primeTnt, TNT_SIZE, TNT_Y_OFFSET } from "./explosion.js";
 import { TntRenderer } from "./tnt-renderer.js";
-import { finishDrinking as finishBucketDrinking } from "./buckets.js";
+import { finishDrinking as finishBucketDrinking, rayTraceBlocks } from "./buckets.js";
 import { finishDrinkingItem } from "./potion-use.js";
 import { potionColor as damageColor, POTION_TYPES, durationString } from "./potions.js";
 import { BREWING_STAND, brewingView, bubbleHeight } from "./brewing.js";
@@ -2855,8 +2855,13 @@ function spawnHangingDrops() {
 function serverAcceptsClick(place) {
   const feet = [position.x, position.y, position.z];
   const resend = (b, a) => { for (const c of [b, a]) if (c) scene.updateBlock(c[0], c[2], c[1]); };
-  if (aimedEntity) return serverClick({ kind: 'entity', player: feet, entity: [aimedEntity.x, aimedEntity.y, aimedEntity.z] }).accept;
-  if (!target || aimedCart || aimedHanging) return true;
+  // C02 for every aimed entity (mob, cart, boat, painting, frame): posY and getEyeHeight as the native entity has them, sight by a block ray.
+  const aimed = aimedEntity ? { pos: [aimedEntity.entity.x, aimedEntity.entity.y, aimedEntity.entity.z], eye: mobs.ai.brain(aimedEntity.entity).eyeHeight }
+    : aimedCart ? { pos: [aimedCart.cart.x, aimedCart.cart.posY, aimedCart.cart.z], eye: 0 }
+    : aimedHanging ? { pos: [aimedHanging.entity.x, aimedHanging.entity.y, aimedHanging.entity.z], eye: 0 } : null;
+  if (aimed) return serverClick({ kind: 'entity', player: feet, entity: aimed.pos, eyeHeight: aimed.eye, action: place ? 'interact' : 'attack',
+    lineBlocked: (a, b) => rayTraceBlocks(world, a, b, false, false) !== null }).accept;
+  if (!target) return true;
   const r = serverClick({ kind: place ? 'place' : 'dig', player: feet, pos: target.block, adjacent: target.adjacent });
   if (r.accept) return true;
   resend(target.block, target.adjacent);
