@@ -171,3 +171,15 @@ test("in-flight fireballs and wither skulls are kept per dimension", () => {
   // main.js saves only the open dimension's balls into `active.fireballs`; the key must be dimension-scoped so the other dimension's survive.
   assert.ok(DIM_KEYS.includes("fireballs"));
 });
+
+test("arrival fetches the window round the nearest saved portal (the exit), or the target's window where one is built", async () => {
+  const { World } = await import("./world.js"), run = async (edits) => {
+    const live = new DimensionLive({ sound() {} }); live.readEdits = async () => edits;
+    const calls = [], warm = { window: async (x, z) => { calls.push(["window", Math.round(x), Math.round(z)]); }, columns: async (points) => { calls.push(["columns", points.length]); } };
+    await live.arrive(new World("5", "javaStreamed", 12, "default"), { id: "w", seed: "5", chunked: true, transit: { from: -1, x: 50, y: 60, z: 20, yaw: 0, dir: 2 } }, { warm });
+    return calls;
+  };
+  assert.deepEqual(await run([]), [["window", 400, 160]]); // the target; a portal is built beside it
+  const portal = (x, z) => [[`${x},70,${z}`, GAME_IDS.portal], [`${x},71,${z}`, GAME_IDS.portal]];
+  assert.deepEqual(await run([...portal(330, 120), ...portal(470, 190)]), [["window", 471, 191], ["columns", 2]]); // (470, 190) is nearer to (400, 160)
+});
