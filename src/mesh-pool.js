@@ -11,7 +11,14 @@ export function meshWorkersEnabled() {
   } catch {}
   return typeof Worker === "function";
 }
-export const defaultMeshWorkers = () => Math.max(1, Math.min(3, (globalThis.navigator?.hardwareConcurrency ?? 4) - 2));
+// `?meshWorkers=N` (N >= 1) sets the pool size, for measuring it (batch 31); the default is min(3, cores - 2).
+export const defaultMeshWorkers = () => {
+  try {
+    const n = Number(new URLSearchParams(globalThis.location?.search ?? "").get("meshWorkers") ?? globalThis.localStorage?.getItem("blockworld.meshWorkers"));
+    if (Number.isInteger(n) && n >= 1 && n <= 16) return n;
+  } catch {}
+  return Math.max(1, Math.min(3, (globalThis.navigator?.hardwareConcurrency ?? 4) - 2));
+};
 
 export class MeshPool {
   constructor({ size = defaultMeshWorkers(), createWorker } = {}) {
