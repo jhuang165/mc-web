@@ -1035,7 +1035,7 @@ export class EntityWorld {
       },
     });
     if (!spot) return null;
-    const z = this.spawnNatural("zombie", spot.x, spot.y, spot.z);
+    const z = this.spawnNatural("zombie", spot.x, spot.y, spot.z, "reinforce");
     this.ai.brain(z).attackTarget = target;
     e.reinforcement = reinforcementChance(e.reinforcement + REINFORCEMENT_CHARGE);
     z.reinforcement = reinforcementChance(z.reinforcement + REINFORCEMENT_CHARGE);
@@ -1045,8 +1045,9 @@ export class EntityWorld {
   // (difficulty.js): the spider's Hard potion effect; the zombie's knockback, follow range and
   // leader bonus, and the equipment of zombies, pigmen and skeletons (mob-equipment.md). Rolls this build has no use for (jockeys,
   // door breaking, the leader's health) are drawn and dropped.
-  spawnNatural(type, x, y, z) {
+  spawnNatural(type, x, y, z, kind = "spawn") {
     const e = this.create(type, x, y, z);
+    this.entitySeed?.(e, kind); // replay hook (village-fight-replay.js): the new mob's Entity.rand
     this.onSpawnWithEgg(e);
     this.entities.push(e);
     return e;
@@ -1624,6 +1625,7 @@ export class EntityWorld {
   zombieKilledVillager(zombie, villager) {
     if (!killConverts(this.difficulty, entityRandom(zombie))) return;
     const z = this.create("zombie", villager.x, villager.y, villager.z);
+    this.entitySeed?.(z, "convert"); // replay hook (village-fight-replay.js): the new zombie's Entity.rand
     for (const k of ["yaw", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch"]) if (villager[k] !== undefined) z[k] = villager[k];
     this.onSpawnWithEgg(z);
     z.villager = true;

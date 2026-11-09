@@ -24,15 +24,17 @@ public class MobMoveProbe {
     public aji a(int x, int y, int z) { return y < 0 || (step > 0 && z >= 2 && y < step) ? aji.e(1) : aji.e(0); }
     public boolean d(int x, int y, int z) { return true; }
     public boolean b(int x0, int y0, int z0, int x1, int y1, int z1) { return true; } // checkChunksExist
-    public boolean a(azt box, awt material) { return false; }
-    public boolean a(azt box, awt material, sa entity) { return false; } // handleMaterialAcceleration: no water
+    static boolean water = false; // batch 32: VillageFightProbe's pool scenarios use the real World.handleMaterialAcceleration and isMaterialInBB
+    public boolean a(azt box, awt material) { return water ? super.a(box, material) : false; }
+    public boolean a(azt box, awt material, sa entity) { return water ? super.a(box, material, entity) : false; } // handleMaterialAcceleration: no water
     public void a(sa entity, String sound, float volume, float pitch) {}
+    boolean floor(int x, int y, int z) { return y < 0 || (step > 0 && z >= 2 && y < step); }
     public List a(sa entity, azt box) {
       List<azt> out = new ArrayList<>();
       for (int x = (int) Math.floor(box.a); x < (int) Math.floor(box.d + 1); x++)
         for (int y = (int) Math.floor(box.b) - 1; y < (int) Math.floor(box.e + 1); y++)
           for (int z = (int) Math.floor(box.c); z < (int) Math.floor(box.f + 1); z++)
-            if (y < 0 || (step > 0 && z >= 2 && y < step)) out.add(azt.a(x, y, z, x + 1, y + 1, z + 1));
+            if (floor(x, y, z)) out.add(azt.a(x, y, z, x + 1, y + 1, z + 1));
       return out;
     }
   }

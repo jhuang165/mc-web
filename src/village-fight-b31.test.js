@@ -19,9 +19,11 @@ function firstDivergence(r, got) {
       if (JSON.stringify(w[6]) !== JSON.stringify(g[6])) return [t, i, "draws", w[6], g[6]];
     }
     if (JSON.stringify(r.rows[t][3]) !== JSON.stringify(got.states[t].arrows)) return [t, "arrows"];
+    if (JSON.stringify(r.rows[t][4]) !== JSON.stringify(got.states[t].extras)) return [t, "extra zombies", r.rows[t][4], got.states[t].extras];
     const before = t ? r.rows[t - 1][0][n][3] : 1000;
     if (!near(before - want[n][3], got.playerDamage[t])) return [t, "player damage", before - want[n][3], got.playerDamage[t]];
   }
+  for (const a of got.shots) if (a.headingDiff.length) return ["arrow start state", a.id, a.headingDiff];
   return null;
 }
 
