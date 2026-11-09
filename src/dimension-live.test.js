@@ -183,3 +183,25 @@ test("arrival fetches the window round the nearest saved portal (the exit), or t
   const portal = (x, z) => [[`${x},70,${z}`, GAME_IDS.portal], [`${x},71,${z}`, GAME_IDS.portal]];
   assert.deepEqual(await run([...portal(330, 120), ...portal(470, 190)]), [["window", 471, 191], ["columns", 2]]); // (470, 190) is nearer to (400, 160)
 });
+test("standing in a portal for a few ticks asks the exit prewarm for the target of the trip, not in creative", () => {
+  const live = new DimensionLive({ active: () => ({ id: "w1" }), worlds: () => [root()] });
+  const asked = [];
+  live.travel = () => {};
+  live.exitWarm = { start: (r, to, tt) => asked.push([r?.id, to, tt.x, tt.z]) };
+  const pos = { x: 80.5, y: 70, z: 160.5 }, nether = { dimension: -1, get: () => GAME_IDS.portal }, over = { dimension: 0, get: () => GAME_IDS.portal };
+  for (let i = 0; i < 4; i++) live.tick(over, pos, pos);
+  assert.equal(asked.length, 0, "a brush against the portal asks nothing");
+  for (let i = 0; i < 3; i++) live.tick(over, pos, pos);
+  assert.ok(asked.length >= 1);
+  assert.deepEqual(asked[0], ["w1", -1, 10, 20], "Overworld to Nether divides by 8 (whole blocks)");
+  const n = asked.length; live.state.restore({}); asked.length = 0;
+  for (let i = 0; i < 8; i++) live.tick(nether, pos, pos);
+  assert.deepEqual(asked[0], ["w1", 0, 644, 1284], "Nether to Overworld multiplies by 8");
+  asked.length = 0; live.state.restore({});
+  for (let i = 0; i < 8; i++) live.tick(over, pos, pos, { creative: true });
+  assert.equal(asked.length, 0, "creative travels at once");
+  live.prewarmEnabled = false; live.state.restore({});
+  for (let i = 0; i < 8; i++) live.tick(over, pos, pos);
+  assert.equal(asked.length, 0, "switched off");
+  assert.ok(n >= 1);
+});
