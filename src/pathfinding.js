@@ -2,7 +2,9 @@
 // (aye), Path (ayd, the binary heap), PathEntity (ayf), PathFinder (ayg) and
 // PathNavigate (vv). See public/research/pathfinding.md for the obfuscated names,
 // what is ported and the deliberate deviations (a node cap and a search budget).
-import { isPlant, WEB, LADDER, REEDS } from "./world.js";
+import { isPlant, WEB, LADDER, REEDS, FENCE } from "./world.js";
+import { FENCE_GATE, TRAPDOOR, COBBLE_WALL } from "./shaped-blocks.js";
+import { NETHER_FENCE } from "./nether-blocks.js";
 import { isDoor, doorPassable } from "./doors-panes.js";
 const f = Math.fround;
 const WATER = 10, LAVA = 42;
@@ -183,8 +185,17 @@ export function defaultClassify(id) {
 }
 const classifyCache = new Map();
 // BlockDoor.getBlocksMovement reads the metadata (an open door lets mobs through), so doors are classified per cell.
+// Batch 33: the other blocks whose PathFinder answer is not the default solid one (all bytecode-read, then confirmed by the b33 village fight records):
+// BlockTrapDoor.getBlocksMovement (aoe.b) is "not open" (metadata bit 2), so a closed trapdoor is clear with a trapdoor in the way and an open one is -4;
+// BlockFenceGate.getBlocksMovement (ala.b) is the open bit; fences (renderType 11, also the nether fence) and cobblestone walls (renderType 32) and a closed
+// gate answer -3, which also forbids the jump over them in getSafePoint.
+const FENCE_LIKE = { passable: false, renderType: 11 }, WALL_LIKE = { passable: false, renderType: 32 };
 const cachedClassify = (id, world, x, y, z) => {
   if (isDoor(id)) return { door: true, passable: !!world && doorPassable(world, x, y, z) };
+  if (id === TRAPDOOR) return { trapdoor: true, passable: !((world?.getMeta?.(x, y, z) ?? 0) & 4) };
+  if (id === FENCE_GATE) return { fenceGate: true, passable: ((world?.getMeta?.(x, y, z) ?? 0) & 4) !== 0 };
+  if (id === FENCE || id === NETHER_FENCE) return FENCE_LIKE;
+  if (id === COBBLE_WALL) return WALL_LIKE;
   let c = classifyCache.get(id);
   if (!c) classifyCache.set(id, (c = defaultClassify(id)));
   return c;
@@ -364,8 +375,12 @@ export class PathFinder {
   }
 }
 
-// The live port caps a search at 1500 expanded points (the original has no cap); a native replay lifts the cap for the navigators it builds.
-let nodeCap = 1500;
+// The live port caps a search at 6000 expanded points (the original has no cap); a native replay lifts the cap for the navigators it builds.
+// Batch 33 benchmark (tools in artifacts, Node on the dev laptop): an open flat arena with the target sealed away expands 3196 points at range 32 (1.3 ms), 5004 at the zombie's
+// range 40 (1.9 ms), 12042 at range 64 (5 ms); terraced hills reach 12462 / 11 ms at 64 and 29894 / 21 ms at 100. About 0.4-0.7 ms per 1000 points, so 6000 keeps the worst
+// sealed-target search for a 40-block range complete (a capped search returns the closest partial path, which differs from the original) at about 3-4 ms. The search cannot be
+// split over ticks with identical results: the original runs it to completion inside one call, and a mob's next goal check depends on the path it returns.
+let nodeCap = 6000;
 export const setPathNodeCap = (n) => { const was = nodeCap; nodeCap = n; return was; };
 // --- PathNavigate (vv) ---
 // The navigator reads its entity through a small interface (all in Java units):
@@ -487,10 +502,11 @@ export class PathNavigate {
     const v = this.currentPath.getPosition(this.entity);
     this.entity.moveHelper.setMoveTo(v.x, v.y, v.z, this.speed);
   }
-  // vv.j / k: the entity's y for path purposes; a swimmer rides up through water blocks.
+  // vv.j / k (getEntityPosition / getPathableYPos): the entity's y for path purposes; a swimmer rides up through water blocks. The dry case is
+  // `(int)(boundingBox.minY + 0.5)`, a d2i cast that truncates towards zero (bytecode-read): below y 0 it differs from createEntityPathTo's floor.
   getPathableYPos() {
     const e = this.entity;
-    if (!(e.inWater && this.canSwim)) return floor(e.y + 0.5);
+    if (!(e.inWater && this.canSwim)) return Math.trunc(e.y + 0.5);
     let y = Math.trunc(e.y), id = this.world.get(floor(e.x), y, floor(e.z)), n = 0;
     while (id === WATER) {
       y++;

@@ -110,7 +110,7 @@ export const entityRandom = (e) => {
 };
 // Seeds Entity.rand (the combat replay in combat.test.js).
 export const setEntityRandom = (e, rand) => RANDOMS.set(e, rand);
-const TRANSIENT = [...ENDERMAN_TRANSIENT, "inWeb", "onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "fire", "idle", "revenge", "recentlyHit"];
+const TRANSIENT = [...ENDERMAN_TRANSIENT, "inWeb", "onGround", "collidedH", "inWater", "fallDistance", "moveForward", "aiMoveSpeed", "jumping", "jumpTicks", "lastDamage", "inLava", "anchorBox", "fire", "idle", "revenge", "recentlyHit"];
 const INTERPOLATED = [...TRANSIENT, "eggTimer", "wingRotation", "destPos", "oFlapSpeed", "oFlap", "wingRotDelta", "px", "py", "pz", "rotationYaw", "prevRotationYaw", "renderYawOffset", "prevRenderYawOffset", "rotationYawHead", "prevRotationYawHead", "rotationPitch", "prevRotationPitch", "limbSwing", "limbSwingAmount", "prevLimbSwingAmount", "bodyTicks", "bodyHeadYaw", "gait"];
 // Entity.rotationYaw is Java degrees (0 faces +z, increasing toward -x); e.yaw
 // is the radian bearing used by the movement code, which turns toward +x.
@@ -435,6 +435,14 @@ function keptBox(e, w, h) {
   const b = k[0];
   return e.x === (b[0] + b[3]) / 2 && e.y === b[1] && e.z === (b[2] + b[5]) / 2 ? b.slice() : null;
 }
+// A baby zombie's setSize (EntityZombie.setChild in onSpawnWithEgg) keeps the box's minimum corner, so the first Entity.moveEntity (posX = box centre) moves the
+// entity half the size difference towards -x and -z (found in the batch 33 villagefight5 conversion records: a villager converted to a baby zombie moved -0.15 on both axes).
+function takeAnchorBox(e) {
+  const b = e.anchorBox;
+  if (!b) return null;
+  delete e.anchorBox;
+  return b.slice();
+}
 export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks) {
   // Entity.width/height are floats (setSize), so the box edges use their float values.
   w = f(w);
@@ -453,7 +461,7 @@ export function moveEntity(world, e, w, h, dx, dy, dz, step = STEP_HEIGHT, hooks
   const odx = dx, ody = dy, odz = dz, half = w / 2,
     // An entity that keeps its bounding box (`e.bb`, as Entity.boundingBox) moves that
     // box itself, so its centre carries the same rounding as the original.
-    bb = e.bb ? e.bb.slice() : keptBox(e, w, h) ?? [e.x - half, e.y, e.z - half, e.x + half, e.y + h, e.z + half],
+    bb = e.bb ? e.bb.slice() : takeAnchorBox(e) ?? keptBox(e, w, h) ?? [e.x - half, e.y, e.z - half, e.x + half, e.y + h, e.z + half],
     start = bb.slice(),
     grow = (box, gx, gy, gz) => [gx < 0 ? box[0] + gx : box[0], gy < 0 ? box[1] + gy : box[1], gz < 0 ? box[2] + gz : box[2], gx > 0 ? box[3] + gx : box[3], gy > 0 ? box[4] + gy : box[4], gz > 0 ? box[5] + gz : box[5]];
   let list = collisionBoxes(world, grow(bb, dx, dy, dz), e);
@@ -1108,7 +1116,7 @@ export class EntityWorld {
       // (yh.a) runs EntityZombie's rolls with bC giving only the golden sword, then setVillager(false): a pigman can be a child (and so a
       // chicken jockey), never a villager (tools/probes/PigmanJockeyProbe.java, pigman-jockey-reference.json).
       if (r.child) e.growingAge = -1;
-      if (r.child) { const t = ENTITY_TYPES[type], k = mobScale(e); e.spawnBox = anchoredShrunkBox(e, t.width, t.height, t.width * k, t.height * k); e.spawnBoxTick = this.worldTicks; }
+      if (r.child) { const t = ENTITY_TYPES[type], k = mobScale(e); e.spawnBox = anchoredShrunkBox(e, t.width, t.height, t.width * k, t.height * k); e.spawnBoxTick = this.worldTicks; e.anchorBox = e.spawnBox.slice(); }
       if (type === "zombie" && r.villager) e.villager = true;
       this.applyGear(e, r);
       e.knockbackResistance = r.knockback;
