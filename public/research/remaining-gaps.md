@@ -2,6 +2,24 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 32
+
+Batch 32 covered these areas:
+- **Away mobs.** For the first 1200 away ticks the away run also ticks mobs (with no player, despawnEntity does nothing, bytecode-read), arrows, thrown projectiles and potions, rockets, fireballs, hanging entities and spawner and hopper carts; dispensers shoot every projectile kind there. In play, dispensed fire charges and fireworks reached no host and now do.
+- **Server click checks, round 2.** Every aimed entity goes through C02 with the native sight ray from the feet + 1.62 (36 seen, 9 unseen) and the attack kick; mob clicks, refused in batch 31 by a NaN position, work again. The dedicated server edit path applies C07/C08 and sends the refusal as chat. Fallen buttons drop and powered TNT primes in population callbacks (262 native records).
+- **Import, round 9.** An executed `WorldServer.tickUpdates` probe: at most 1000 entries per call in time, priority, creation order; falling blocks are capped too. Foreign TileTicks age in the live world and run when the port ticks their block. Fluid, fire and falling priorities are saved. Horse chest stacks keep an unmapped `Damage`.
+- **Village fights, round 4.** 22 new native records on steps, a terrace, a pool, a walled house with doors, arrow hits on stone, fence, glass and slab, and Hard reinforcements in a dark world; all 48 records replay exactly. Fixed: fdlibm `StrictMath.log` in `nextGaussian`, skeleton damage rounding, sight by `rayTraceBlocks`, long-memory attacks, path start cell, splash timing, mobs created mid-pass ticking in that pass. Arrow start headings are derived, not recorded.
+- **Walking and travel.** A window shift relights in about 14 ms (21 before) with the same light; ring-light searches skip work they can prove useless (same answers); a Teleporter exit with no saved portal no longer pays a second window fetch.
+
+Still open from batch 32:
+- While away, command blocks do not run, ender pearls and ridden or leashed mobs stay frozen, natural spawning and spawners do not run, the light mobs read is open sky only (no block light), and entities in columns not resident at departure do not tick. No probe confirms the 1200-tick counter.
+- Mob eye heights are height x 0.85 with no per-type overrides; `ai.js` and `enderman.js` still use 0.12 for the server player's eye (native 1.62). The cart-behind-wall refusal is unit-tested only. Primed TNT from generation callbacks is not saved with chunks. The dedicated server's refusal chat is untested over a live WebSocket.
+- The 1000-per-tick cap is per port list, not one shared tree; order between kinds at equal time and priority is per list. Ticks beyond the low border of an area import are dropped.
+- Village fights are not probed on stairs, ladders, trapdoors, gates, lava, ice or multi-chunk terrain; reinforcements are compared in a dark world only; the live reinforcement zombie rolls its own yaw; the live path search keeps a 1500-node cap (native has none).
+- Ring-light bulk column light and mob-brightness reads cost about 0.3 ms per frame while walking; a Teleporter exit with no saved portal still waits about 1.2 s for its population cell; Nether arrival windows build on the page thread in 0.55-1.1 s; the worker cap has no idle-machine measurement.
+- The second rim ring and deeper stay at the fixed point (native block light darker by load-order dependent amounts); the 64-change chunk resend is not ported; population spill and the Nether/End client relight reset are not probed.
+- Atlas canvases still convert through 2D canvas premultiplied alpha (translucent pixels can be 1 off); tint multipliers are rounded to bytes. Saves imported at 16/17 keep the quiet neighbour callbacks.
+
 ## Done in batch 31
 
 Batch 31 covered these areas:
@@ -14,15 +32,7 @@ Batch 31 covered these areas:
 - **Walking frames.** The biome halo reaches the ring's tick radius and ring biomes are warmed ahead of ice rolls: frames over 50 ms per 120 blocks walked went from 5-7 to 0-4 at similar load. A Teleporter return to a saved portal no longer pays a second window fetch (0.8-1.35 s before).
 - **Structure data export.** Generation 20 worlds (new since batch 30) and 22 imports write `data/*.dat` again.
 
-Still open from batch 31:
-- While away, mobs do not move, fall, despawn or take explosion damage; arrows, thrown projectiles, rockets and hanging entities are not ticked; dispenses that need a projectile keep their stack; command blocks do not run; hopper, spawner and command carts and ridden vehicles stay frozen; entities in columns not resident at departure do not tick. No probe confirms the 1200-tick counter.
-- The second rim ring and deeper stay at the fixed point, where native block light is darker by load-order dependent amounts. A 64-change chunk resend leaves spilled light dark on the native client (3,983 cells in the probe); the port renders the server light. Population spill and the Nether/End client relight reset are not probed.
-- Ring-light `search` from weather and cave-ambience sky reads still gives 25-35 ms spikes while walking; a 16-block window shift relights for 30-54 ms; a Teleporter exit with no saved portal still pays a second fetch of about 1.1 s on some seeds; the worker cap needs an idle-machine measurement.
-- Foreign TileTicks are never run in the live world; ticks beyond the low border outside an area are dropped at import; the 1000-per-tick cap of `tickUpdates` is not modelled.
-- Village fights are probed on a flat open arena only (no terrain steps, water, closed doors or block-type arrow hits); Hard reinforcements are not compared; a converted villager zombie's own ticks are not probed; arrow start headings come from the records.
-- Paintings, item frames, minecarts and boats skip the server use-entity gate; the 3-block no-line-of-sight rule is not modelled; the dedicated server's edit path uses its own ray.
-- A fallen button and powered TNT still retry quietly in the population callbacks (no area reaches them); no native population area exercises a powered door. Saves imported at 16/17 keep the quiet callbacks.
-- Atlas canvases still convert through 2D canvas premultiplied alpha, so translucent pixels can be 1 off; tint multipliers are rounded to bytes; lazily created textures use the canvas path. Pack icons and the profile screen were not exercised live.
+Still open from batch 31: carried into the batch 32 list above, except the items batch 32 closed.
 
 ## Done in batch 30
 
