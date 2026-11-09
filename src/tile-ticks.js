@@ -166,7 +166,42 @@ export class ForeignTicks {
     this.minDue = null; // smallest elapsed at which something is due (air: 1); null = recompute
   }
   get size() { return this.env?.entries.length ?? 0; }
+  // The pieces of tick(now) the shared TickTree drives (it takes due foreign entries in one tree with the other kinds, under one 1000 cap): `beginTick`
+  // lists the due entries in tree order, `take` removes the head, `run` is the cell check and hand-over, `endTick` drops the taken ones from the envelope.
+  beginTick(now) {
+    const env = this.env;
+    this.dueList = [];
+    this.di = 0;
+    this.gone = new Set();
+    this.elapsed = Number.isInteger(now) && env ? now - (Number.isInteger(env.time) ? env.time : 0) : 0;
+    if (!env || !env.entries.length || this.elapsed < 1) return;
+    const dueAt = (e) => (e.air ? 1 : e.t);
+    if (this.minDue === null) { let m = Infinity; for (const e of env.entries) { const d = dueAt(e); if (d < m) m = d; } this.minDue = m; }
+    if (this.elapsed < this.minDue) return;
+    this.dueList = env.entries.filter((e) => dueAt(e) <= this.elapsed);
+    this.dueList.sort((a, b) => this.delay(a) - this.delay(b) || (a.p | 0) - (b.p | 0));
+  }
+  head() { return this.dueList?.[this.di]; }
+  delay(e) { return e.air ? -1e15 : e.t - this.elapsed; }
+  take() {
+    const e = this.dueList[this.di++];
+    this.gone.add(e);
+    return e;
+  }
+  run(e) {
+    if (e.air || e.y < 0 || e.y > 255) return 0;
+    const { internal, redstone } = tables();
+    const kind = internal.get(e.i)?.kind ?? (redstone.has(e.i) ? 'redstone' : null), want = fromOriginal(e.i, 0)?.id;
+    if (!kind || want === undefined || this.blockAt(e.x, e.y, e.z) !== want) return 0;
+    this.schedule[kind]?.(e.x, e.y, e.z, e);
+    return 1;
+  }
+  endTick() {
+    if (this.gone?.size && this.env) { this.env.entries = this.env.entries.filter((e) => !this.gone.has(e)); this.minDue = null; }
+    this.gone = null;
+  }
   tick(now) {
+    if (this.tree) return 0; // the TickTree takes the foreign entries
     const env = this.env;
     if (!env || !env.entries.length || !Number.isInteger(now)) return 0;
     const elapsed = now - (Number.isInteger(env.time) ? env.time : 0);
@@ -190,6 +225,129 @@ export class ForeignTicks {
     }
     return ran;
   }
+}
+
+/**
+ * The one pending-tick tree of WorldServer, over the port's separate lists. Natively every scheduled block update of every kind sits in a single
+ * TreeSet (NextTickListEntry order: time, priority, creation id) and WorldServer.tickUpdates takes at most 1000 of them per tick, whatever their
+ * block (probed: tile-ticks-reference.json "tick" scenarios mix fluids 8, falling 12, fire 51 and a redstone block 93 in one tree). The port keeps
+ * fluids, fire, falling blocks, redstone and the foreign (unported-kind) ticks in their own lists; `attach` gives them one creation counter (`nextId`)
+ * and `tick` takes the due entries across all of them in tree order under one cap, as the native first loop does, then runs the taken entries in
+ * that order, as the second loop does (an entry taken but not yet run no longer blocks a new request for its cell).
+ *
+ * A source is {name, begin(), head(), delay(e), p(e), id(e), take(), run(e), flush?(), afterTake?(), end?(clock)}: `head` is its smallest entry in its own
+ * order, `delay` the ticks until due (<= 0 is due; each list counts its own clock), `take` removes and returns the head.
+ * Lists saved with their creation id (`n` on the envelope entries) keep cross-kind order at equal time and priority across a save and reload; an older
+ * save numbers its entries by (due time, priority, kind) when the tree attaches.
+ */
+export class TickTree {
+  constructor(cap = TICK_UPDATES_CAP) {
+    this.n = 0;
+    this.cap = cap;
+    this.sources = [];
+    this.lastTaken = 0;
+  }
+  nextId() { return this.n++; }
+  /** Numbers the entries every source holds in tree order and hands each its creation ids from now on. */
+  attach(sources, renumber) {
+    this.sources = sources.filter(Boolean);
+    renumber?.(this);
+    return this;
+  }
+  /** Which entries one tickUpdates call takes: [{s, e}] in tree order, at most `cap`, stopping at the first entry not due (`all` ignores the due time). */
+  takeDue(all = false) {
+    const out = [], sources = this.sources;
+    while (out.length < this.cap) {
+      let best = null, bd = 0, bp = 0, bi = 0;
+      for (const s of sources) {
+        const h = s.head();
+        if (!h) continue;
+        const d = s.delay(h), p = s.p(h), i = s.id(h);
+        if (!best || d < bd || (d === bd && (p < bp || (p === bp && i < bi)))) { best = s; bd = d; bp = p; bi = i; }
+      }
+      if (!best || (!all && bd > 0)) break;
+      out.push({ s: best, e: best.take() });
+    }
+    this.lastTaken = out.length;
+    return out;
+  }
+  /**
+   * One WorldServer.tickUpdates(false): every source advances its clock, the due entries are taken across all kinds, then run in tree order.
+   * `observers[name](changes)` gets the cells a fluid or fire run changed whenever the kind of the running entry switches and at the end; each source's
+   * `end` (fire's random ticks) runs last.
+   */
+  tick(clock = {}, observers = {}) {
+    for (const s of this.sources) s.begin(clock);
+    const taken = this.takeDue();
+    for (const s of this.sources) s.afterTake?.();
+    let last = null;
+    const flush = () => { if (last?.flush) { const changes = last.flush(); if (changes.length) observers[last.name]?.(changes); } };
+    for (const { s, e } of taken) {
+      if (last && last !== s) flush();
+      last = s;
+      s.run(e);
+    }
+    flush();
+    for (const s of this.sources) {
+      const changes = s.end?.(clock);
+      if (changes) observers[s.name]?.(changes);
+    }
+    return taken.length;
+  }
+}
+
+const sourceOf = (name, sys, o) => ({ name, sys, p: (e) => e.p | 0, id: (e) => e.id, take: () => sys.take(), run: (e) => sys.run(e), ...o });
+
+/**
+ * Builds the TickTree over a live world's systems: `fluids` (fluids.js), `fire` (fire.js), `falling` (falling.js), `redstone` (the runtime of
+ * redstone-runtime.js, whose `redstone` is the LiveRedstone) and `foreign` (ForeignTicks) with `now()` its world time. Any of them may be missing.
+ * Order of the sources only breaks exact ties (it matches the export's kind order: fluid, fire, falling, redstone, foreign).
+ */
+export function attachTickTree({ fluids, fire, falling, redstone, foreign, now = () => 0 }) {
+  const tree = new TickTree();
+  const live = redstone?.redstone;
+  const sources = [
+    fluids && sourceOf('fluids', fluids, { begin: () => fluids.beginTick(), head: () => fluids.heap[0], delay: (e) => e.time - fluids.time, flush: () => fluids.drain(), end: () => fluids.drain() }),
+    fire && sourceOf('fire', fire, { begin: () => fire.beginTick(), head: () => fire.queue.heap[0], delay: (e) => e.time - fire.time, flush: () => fire.drain(), end: ({ x, z }) => fire.endTick(x, z) }),
+    falling && sourceOf('falling', falling, { begin: () => falling.beginTick(), head: () => falling.head(), delay: (e) => e.time - falling.time }),
+    live && sourceOf('redstone', live, {
+      begin: () => redstone.tickBegin(), head: () => live.tree[0], delay: (e) => e.time - live.time, p: (e) => e.priority | 0, id: (e) => e.serial,
+      take: () => { const e = live.tree.shift(); live.accept(e); return e; }, run: (e) => live.runTaken(e), afterTake: () => live.retryDeferred(),
+    }),
+    foreign?.env && sourceOf('foreign', foreign, {
+      begin: () => foreign.beginTick(now()), head: () => foreign.head(), delay: (e) => foreign.delay(e), id: (e) => { if (!foreignIds.has(e)) foreignIds.set(e, tree.nextId()); return foreignIds.get(e); }, end: () => { foreign.endTick(); },
+    }),
+  ];
+  const foreignIds = new WeakMap();
+  const present = sources.filter(Boolean);
+  return tree.attach(present, () => {
+    // One numbering for everything pending now: (due time, priority, saved creation id or the old id, kind). Entries keep their order within a list.
+    const rows = [];
+    const add = (kind, rank, e, delay, p, own) => rows.push({ kind, rank, e, delay, p, key: Number.isSafeInteger(e.n) ? e.n : own });
+    if (fluids) for (const e of fluids.pending.values()) add('fluids', 0, e, e.time - fluids.time, e.p | 0, e.id);
+    if (fire) for (const e of fire.queue.pending.values()) add('fire', 1, e, e.time - fire.time, e.p | 0, e.id);
+    if (falling) for (const e of falling.pending.values()) add('falling', 2, e, e.time - falling.time, e.p | 0, e.id);
+    if (live) for (const e of [...live.tree, ...live.thisTick, ...live.deferred]) add('redstone', 3, e, e.time - live.time, e.priority | 0, e.serial);
+    const env = foreign?.env;
+    if (env) {
+      const elapsed = Math.max(0, now() - (Number.isInteger(env.time) ? env.time : 0));
+      env.entries.forEach((e, i) => add('foreign', 4, e, e.air ? -1e15 : e.t - elapsed, e.p | 0, i));
+    }
+    rows.sort((a, b) => a.delay - b.delay || a.p - b.p || a.key - b.key || a.rank - b.rank);
+    for (const r of rows) {
+      const id = tree.nextId();
+      if (r.kind === 'redstone') r.e.serial = id;
+      else if (r.kind === 'foreign') foreignIds.set(r.e, id);
+      else r.e.id = id;
+    }
+    if (fluids) fluids.ids = tree;
+    if (fire) fire.ids = tree;
+    if (falling) falling.ids = tree;
+    if (live) live.ids = tree;
+    if (foreign) {
+      foreign.tree = tree;
+    }
+  });
 }
 
 /** Record fields for an import result: {fluidTicks, fireTicks, fallingTicks} envelopes and a `redstone` save carrying pending ticks, lit repeaters and comparator output signals (["x,y,z", OutputSignal]). */
@@ -290,9 +448,10 @@ export function tileTickRows(state, toOriginalId = toOriginal, ox = 0, oz = 0) {
       const red = name === 'redstoneTicks';
       const o = name === 'foreignTicks' ? [e.i, 0] : red ? [e.id, 0] : e.orig !== undefined ? [e.orig, 0] : toOriginalId(e.block, 0, { flowing: name === 'fluidTicks' });
       if (!o) continue;
-      rows.push({ t: clamp(e.delay), p: red ? (e.priority | 0) : (e.p | 0), sys, order: order ?? 0, i: o[0], x: e.x + ox, y: e.y, z: e.z + oz });
+      rows.push({ t: clamp(e.delay), p: red ? (e.priority | 0) : (e.p | 0), n: Number.isSafeInteger(e.n) ? e.n : Infinity, sys, order: order ?? 0, i: o[0], x: e.x + ox, y: e.y, z: e.z + oz });
     }
   });
-  rows.sort((a, b) => a.t - b.t || a.p - b.p || a.sys - b.sys || a.order - b.order);
+  // A shared creation id (`n`, saved while the TickTree runs) orders equal time and priority across kinds as the one native TreeSet does; entries without it keep list order.
+  rows.sort((a, b) => a.t - b.t || a.p - b.p || (a.n === b.n ? 0 : a.n < b.n ? -1 : 1) || a.sys - b.sys || a.order - b.order);
   return rows.map(({ t, p, i, x, y, z }) => ({ i, x, y, z, t, p }));
 }

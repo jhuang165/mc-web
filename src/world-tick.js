@@ -1,8 +1,11 @@
 // The block-system segment of the live tick. The caller owns time, daylight and
 // player position; each observer runs before the next system, as in main.js.
 // This is not yet the complete authoritative world tick.
-export function tickBlockSystems({ farming, fluids, fire }, { time, daylight, x, z }, observers) {
+export function tickBlockSystems({ farming, fluids, fire, tickTree }, { time, daylight, x, z }, observers) {
   observers.farming(farming.tick(time, daylight));
+  // One shared tree (tile-ticks.js TickTree): fluid, fire, falling, redstone and foreign entries are taken together under one cap, so the redstone
+  // update and the falling/foreign systems run inside it; hoppers and brewing stay after it.
+  if (tickTree) { tickTree.tick({ x, z }, observers.tree ?? observers); return; }
   if (fluids) observers.fluids(fluids.tick());
   if (fire) observers.fire(fire.tick(x, z));
 }
@@ -13,5 +16,5 @@ export function tickWorldSystems(systems, clock, observers) {
   tickBlockSystems(systems, clock, observers);
   systems.hoppers?.tick();
   systems.brewing?.();
-  systems.redstone?.tick();
+  if (!systems.tickTree) systems.redstone?.tick();
 }

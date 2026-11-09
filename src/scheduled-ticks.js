@@ -5,9 +5,10 @@ export function saveTicks(entries, time, block) {
     version: 1,
     time,
     // NextTickListEntry.compareTo: time, priority, creation. `p` (always 0 for fluid, fire and falling ticks a vanilla world schedules, but a
-    // save may carry another value) is written only when it is not 0, so a record without priorities is unchanged.
+    // save may carry another value) is written only when it is not 0, so a record without priorities is unchanged. `n` (the shared creation id of
+    // tile-ticks.js TickTree, only written while the live game runs one tree) orders entries of different kinds at equal time and priority.
     entries: [...entries].sort((a, b) => a.time - b.time || (a.p | 0) - (b.p | 0) || a.id - b.id)
-      .map((e) => ({ x: e.x, y: e.y, z: e.z, block: e.block ?? block, delay: e.time - time, ...(e.p ? { p: e.p } : {}) })),
+      .map((e) => ({ x: e.x, y: e.y, z: e.z, block: e.block ?? block, delay: e.time - time, ...(e.p ? { p: e.p } : {}), ...(Number.isSafeInteger(e.n) ? { n: e.n } : {}) })),
   };
 }
 

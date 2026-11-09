@@ -210,6 +210,7 @@ export class Fluids {
     this.random = random;
     this.time = 0;
     this.serial = 0;
+    this.ids = null; // the shared TickTree (tile-ticks.js) once the live game attaches one: creation ids then come from it
     this.heap = [];
     this.pending = new Map();
     this.changes = [];
@@ -221,7 +222,7 @@ export class Fluids {
     };
   }
   save() {
-    return saveTicks(this.pending.values(), this.time);
+    return saveTicks(this.ids ? [...this.pending.values()].map((e) => ({ ...e, n: e.id })) : this.pending.values(), this.time);
   }
   load(data) {
     const state = readTicks(data, this.world, isLiquid);
@@ -232,7 +233,7 @@ export class Fluids {
     this.pending.clear();
     // Keep the scheduled block even if the cell has since changed. Until its
     // due tick, that entry must still suppress duplicates of the same block.
-    for (const e of state.entries) this.enqueue(e.x, e.y, e.z, e.block, e.delay, e.p | 0);
+    for (const e of state.entries) this.enqueue(e.x, e.y, e.z, e.block, e.delay, e.p | 0, e.n);
   }
   // Legacy saves have no TileTicks equivalent. Wake liquids next to edits only
   // for those saves; an explicitly saved empty queue means settled liquids.
@@ -261,10 +262,11 @@ export class Fluids {
     if (!this.world.inside(x, y, z) || !isLiquid(block)) return;
     this.enqueue(x, y, z, block, delay ?? tickRate(block, this.skyless), p);
   }
-  enqueue(x, y, z, block, delay, p = 0) {
+  enqueue(x, y, z, block, delay, p = 0, n) {
     const key = this.key(x, y, z, block);
     if (this.pending.has(key)) return;
-    const entry = { x, y, z, key, block, time: this.time + delay, p, id: this.serial++ };
+    const entry = { x, y, z, key, block, time: this.time + delay, p, id: this.ids ? this.ids.nextId() : this.serial++ };
+    if (Number.isSafeInteger(n)) entry.n = n; // saved shared creation id: the order key when a TickTree attaches
     this.pending.set(key, entry);
     // Binary heap ordered like NextTickListEntry.compareTo: time, priority, then creation order.
     const h = this.heap, less = (a, b) => a.time < b.time || (a.time === b.time && (a.p < b.p || (a.p === b.p && a.id < b.id)));
@@ -337,14 +339,26 @@ export class Fluids {
   // is no longer the one that was scheduled. Returns the cells changed as [x,
   // y, z, oldBlock, newBlock] (equal blocks mean only the level changed).
   tick() {
+    this.beginTick();
+    for (let n = Math.min(this.heap.length, MAX_TICKS); n > 0 && this.heap[0].time <= this.time; n--) this.run(this.take());
+    return this.drain();
+  }
+  // The pieces of tick() the shared tick tree (tile-ticks.js TickTree) drives: the clock and ring pause, the head entry, taking it out of the
+  // pending set, running a taken entry, and the cells changed so far.
+  beginTick() {
     this.time++;
     // Entries in held ring columns run too (natural-spawning.md "Round 7"); their writes go to the ring (World.ringSink).
     pauseUnloadedTicks(this.world, this.heap, (x, z) => ringBlockTickActive(this.world, x, z, 5)); // the flow search is 4 deep
-    for (let n = Math.min(this.heap.length, MAX_TICKS); n > 0 && this.heap[0].time <= this.time; n--) {
-      const { x, y, z, key, block } = this.pop();
-      this.pending.delete(key);
-      if (this.world.get(x, y, z) === block) this.updateTick(x, y, z);
-    }
+  }
+  take() {
+    const e = this.pop();
+    this.pending.delete(e.key);
+    return e;
+  }
+  run({ x, y, z, block }) {
+    if (this.world.get(x, y, z) === block) this.updateTick(x, y, z);
+  }
+  drain() {
     const changes = this.changes;
     this.changes = [];
     return changes;

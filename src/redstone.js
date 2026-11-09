@@ -194,6 +194,7 @@ export class RedstoneWorld {
     this.tree = []; // pendingTickListEntriesTreeSet, sorted
     this.thisTick = []; // pendingTickListEntriesThisTick
     this.serial = 0; // NextTickListEntry.nextTickEntryID
+    this.ids = null; // the shared TickTree (tile-ticks.js) once attached: creation ids come from it (one counter for every block kind, as WorldServer has)
     this.wireUpdates = new ChunkPositionSet(); // BlockRedstoneWire.blocksNeedingUpdate
     this.wiresProvidePower = true; // BlockRedstoneWire.wiresProvidePower
     this.torchToggles = null; // BlockRedstoneTorch.toggles.get(world)
@@ -368,7 +369,7 @@ export class RedstoneWorld {
   // WorldServer.scheduleBlockUpdateWithPriority (scheduleBlockUpdate uses priority 0).
   scheduleBlockUpdate(x, y, z, id, delay, priority = 0) {
     this.record(`t,${x},${y},${z},${id},${delay},${priority}`);
-    const entry = { x, y, z, id, time: 0, priority: 0, serial: this.serial++ };
+    const entry = { x, y, z, id, time: 0, priority: 0, serial: this.ids ? this.ids.nextId() : this.serial++ };
     if (id !== AIR) {
       entry.time = delay + this.time;
       entry.priority = priority;
