@@ -1,0 +1,20 @@
+# Batch 33 lead (claude, 2026-11-09)
+
+Five Sonnet tracks ran in `../wt33-<name>` on `batch33-<name>`, cut from 7569263c (0.61.0, equal to github/main). The lead reviewed each one and merged it --no-ff on `batch33-lead`. Per-track notes are `<name>-b33-track.md`. The gun side runs separately (`wt-guns`, `guns-prototype`) and was not touched; its uncommitted PROJECT.md paragraph in `game/` was kept out of these commits. Another session's `vanilla-use-fixes` branch (`wt33-usefixes`) was not merged.
+
+## Merges
+- **eyeheights**: an executed `EyeHeightProbe` gives the server player's eye as the feet + 1.62 and mob eyes as height x 0.85 (wolf 0.8). `ai.js` (`PLAYER_EYE_HEIGHT`, `livingEyeHeight`) and `enderman.js` no longer use 0.12. Breathing, suffocation, the witch drink check, the rider water check and explosions use the per-type eye. Enderman and b32 village fight records regenerated; the probe player overrides `g()` = 1.62. A cart behind a wall is refused in the browser.
+- **awayrun3**: `away-commands.js` runs command blocks and command carts in the away run through `createCommandHost`; world-restricted selectors give the silent zero, commands on the player are skipped and counted. Ender pearls tick and die on impact; leash knots tick; `away-light.js` gives away mobs block light. Time, weather, rules and chat from away commands apply on return (`awayResult` host hook in `main.js`).
+- **gentnt**: `TickTree`/`attachTickTree` in `tile-ticks.js` takes fluid, fire, falling, redstone and foreign ticks from one tree under one 1000 cap (the six batch 32 `tick` scenarios replay through it); redstone runs inside it, before hoppers and brewing. Shared creation ids `n` are saved; older saves are renumbered. Powered TNT from population callbacks becomes live, saved primed TNT.
+- **villagefight5**: 31 new native fight records (stairs, ladders, trapdoors, gates, lava, ice, packed ice, soul sand, cobweb, lit reinforcements at light 9/10/15). Fixes: path Y truncation, trapdoor/gate/fence/wall path classes, baby zombie box anchor, shaped ray bounds. Live path cap 1500 -> 6000 (replays lift it).
+- **travelperf3**: `exit-prewarm.js` builds the exit window in the stream workers after 5 ticks standing in a portal and the trip adopts it. Overworld returns 1.6-2.9 s -> 0.55-0.65 s wall time, Nether trips 0.94-1.26 s -> 0.43-0.86 s (shared machine); terrain identical with and without.
+- **Conflicts**: one, `tools/probes/VillageFightProbe.java`: both eyeheights and villagefight5 added the same `g()` 1.62 override (the lead had passed the eyeheights merge note to villagefight5); kept the commented line. All 31 b33 records replay with the merged eye.
+
+## Verification (batch33-lead plus the release commit)
+- `npm test`: 4961 pass, 0 fail (run once). `npm run build`: ok. Bridge unittest: OK. `git diff --check main`: clean.
+- Muted headless Chrome (vite :5339, `artifacts/b33-lead/`): a new world loads in 1.01 s, one 61 ms task in the 20 s after load. Torch light 14/13 in the Overworld, 14/13 in the Nether and the End; End arrival tasks 72 and 97 ms. nether-torch: 0 mismatches over 12 Nether and 2 End spots. Inventory and anaglyph flags work. The only console error is the known static-asset 404.
+- Away trip (three runs): 621-622 ticks over 56 columns in about 420 ms with about 100 mobs; block light flooded 1-3 times (28-78 ms total, 2382-9248 emitters, mostly cave lava). Zombies at noon burned to death in two runs (both, then one); in the first both survived at full health (seeds differ per new world; cover blocks the sky). No duplicate ids.
+
+## Remaining gaps
+- In "Done in batch 33" and "Still open from batch 33" of `public/research/remaining-gaps.md`.
+- Batch 34 candidates: queue away commands on the player for return; away natural spawning and spawners; the shared tree in the away run; save redstone `n`; multi-chunk village fights and unloaded spawn chunks; exit prewarm for far saved portals and the Nether second fetch; the `main.js` weather mood eye comment; the live "Player not found" text for no-match selectors.

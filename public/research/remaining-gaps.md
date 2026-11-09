@@ -2,6 +2,24 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 33
+
+Batch 33 covered these areas:
+- **Away run, round 4.** Command blocks and command minecarts run while away through the live command host. A selector the original resolves to nobody (rm, r, x, y or z) gives the silent zero, and SuccessCount and LastOutput are kept (CommandHandler and PlayerSelector, bytecode-read). Ender pearls tick and land with nobody teleported. Leash knots tick. Away mobs read block light from a lazy flood. Time, weather, game rules and chat from those commands apply on return.
+- **Eye heights.** The server player's eye is the feet + 1.62 in `ai.js` and `enderman.js` (was 0.12), and mobs use height x 0.85, wolf 0.8. These come from an executed `EyeHeightProbe`. Breathing, suffocation, the witch drink check, rider water and explosions use them. Enderman and village fight records are regenerated, and a cart behind a wall is refused in the browser.
+- **Shared tick tree.** Fluid, fire, falling, redstone and foreign ticks are taken from one tree in time, priority, creation order under one 1000 cap. The batch 32 `tickUpdates` records replay through it. Shared creation ids are saved, and older saves are renumbered on load. Redstone now runs inside the tree, before hoppers and brewing. Powered TNT from population callbacks becomes live primed TNT, saved and exported (tested on synthetic areas; its motion is `Math.random`).
+- **Village fights, round 5.** 31 new native records on stairs, ladders, trapdoors, fence gates, lava, ice, packed ice, soul sand, cobweb and Hard reinforcements at light 9, 10 and 15. All replay. Fixed: path Y truncation, trapdoor, gate, fence and wall path classes, the converted baby zombie's box anchor, and shaped ray bounds for slabs, gates, trapdoors and walls. The live path cap is 6000 nodes, up from 1500.
+- **Portal exits.** After 5 ticks in a portal (survival), the exit's window is built in the stream workers during the countdown and adopted by the trip. Overworld returns went from 1.6-2.9 s to about 0.55-0.65 s of wall time; Nether trips from 0.94-1.26 s to 0.43-0.86 s. Terrain is identical with and without the prewarm. Nether arrival windows were already on a worker.
+
+Still open from batch 33:
+- While away, commands that act on the player are skipped (not queued), worldspawn changes do not move the run's area, sky light is open sky only, lit furnaces do not emit, natural spawning and spawners do not run, entities in columns not resident at departure do not tick, and the away run ticks each list on its own rather than through the shared tree. No probe confirms the 1200-tick counter. The live game prints "Player not found" for a no-match selector where the original is silent.
+- Horse, player and particle eye heights are formula-only. Boats, paintings and frames on C02 are unit-tested only. The weather mood comment in `main.js` still calls the server player's posY its eye. The dedicated server's refusal chat is untested over a live WebSocket.
+- Redstone ticks are not saved with the shared creation id, so export order across kinds uses it only for fluid, fire and falling. No generated structure was shown to prime TNT. A world with over 1000 due ticks was not checked in the browser. Ticks beyond the low border of an area import are dropped.
+- Village fights are not probed on multi-chunk terrain or with unloaded spawn chunks; cobweb only for walking mobs; walls and nether fences have no record. A sealed target past about range 45 still gets a partial path. The live reinforcement zombie rolls its own yaw.
+- The exit prewarm does not read saved portals (a far saved portal still builds after the countdown), a Nether portal a chunk off the target waits about 250 ms for a second fetch, and Creative travel has no countdown. Ring-light bulk reads cost about 0.3 ms per frame while walking; the worker cap has no idle-machine measurement.
+- The second rim ring and deeper stay at the fixed point; the 64-change chunk resend is not ported; population spill and the Nether/End client relight reset are not probed.
+- Atlas canvases still convert through 2D canvas premultiplied alpha (translucent pixels can be 1 off); tint multipliers are rounded to bytes. Saves imported at 16/17 keep the quiet neighbour callbacks.
+
 ## Done in batch 32
 
 Batch 32 covered these areas:
@@ -11,14 +29,7 @@ Batch 32 covered these areas:
 - **Village fights, round 4.** 22 new native records on steps, a terrace, a pool, a walled house with doors, arrow hits on stone, fence, glass and slab, and Hard reinforcements in a dark world; all 48 records replay exactly. Fixed: fdlibm `StrictMath.log` in `nextGaussian`, skeleton damage rounding, sight by `rayTraceBlocks`, long-memory attacks, path start cell, splash timing, mobs created mid-pass ticking in that pass. Arrow start headings are derived, not recorded.
 - **Walking and travel.** A window shift relights in about 14 ms (21 before) with the same light; ring-light searches skip work they can prove useless (same answers); a Teleporter exit with no saved portal no longer pays a second window fetch.
 
-Still open from batch 32:
-- While away, command blocks do not run, ender pearls and ridden or leashed mobs stay frozen, natural spawning and spawners do not run, the light mobs read is open sky only (no block light), and entities in columns not resident at departure do not tick. No probe confirms the 1200-tick counter.
-- Mob eye heights are height x 0.85 with no per-type overrides; `ai.js` and `enderman.js` still use 0.12 for the server player's eye (native 1.62). The cart-behind-wall refusal is unit-tested only. Primed TNT from generation callbacks is not saved with chunks. The dedicated server's refusal chat is untested over a live WebSocket.
-- The 1000-per-tick cap is per port list, not one shared tree; order between kinds at equal time and priority is per list. Ticks beyond the low border of an area import are dropped.
-- Village fights are not probed on stairs, ladders, trapdoors, gates, lava, ice or multi-chunk terrain; reinforcements are compared in a dark world only; the live reinforcement zombie rolls its own yaw; the live path search keeps a 1500-node cap (native has none).
-- Ring-light bulk column light and mob-brightness reads cost about 0.3 ms per frame while walking; a Teleporter exit with no saved portal still waits about 1.2 s for its population cell; Nether arrival windows build on the page thread in 0.55-1.1 s; the worker cap has no idle-machine measurement.
-- The second rim ring and deeper stay at the fixed point (native block light darker by load-order dependent amounts); the 64-change chunk resend is not ported; population spill and the Nether/End client relight reset are not probed.
-- Atlas canvases still convert through 2D canvas premultiplied alpha (translucent pixels can be 1 off); tint multipliers are rounded to bytes. Saves imported at 16/17 keep the quiet neighbour callbacks.
+Still open from batch 32: carried into the batch 33 list above, except the items batch 33 closed.
 
 ## Done in batch 31
 
