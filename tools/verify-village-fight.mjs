@@ -20,14 +20,20 @@ const classes=path.join(out,'classes');await rm(classes,{recursive:true,force:tr
 await exec('unzip',['-q','-o',jar,'*.class','-d',classes],{maxBuffer:1<<24});
 const probe=path.join(out,'probe');await rm(probe,{recursive:true,force:true});await mkdir(probe,{recursive:true});
 const cp=[probe,classes,...libs].join(path.delimiter);
-await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','VillagerProbe','ModelProbe','VillageLiveProbe','VillageFightProbe'].map(n=>path.join(root,`probes/${n}.java`))],{maxBuffer:1<<24});
+await exec('javac',['-nowarn','-cp',cp,'-d',probe,...['MobMoveProbe','VillagerProbe','ModelProbe','VillageLiveProbe','ArmorEnchantmentProbe','VillageFightProbe'].map(n=>path.join(root,`probes/${n}.java`))],{maxBuffer:1<<24});
 const {stdout}=await exec('java',['-cp',cp,'VillageFightProbe'],{maxBuffer:1<<29});
 const records=stdout.trim().split('\n').filter(l=>l.startsWith('{')).map(l=>JSON.parse(l));
-assert.equal(records.length,7);
+const b31=records.filter(r=>r.name.startsWith('b31-')),base=records.filter(r=>!r.name.startsWith('b31-'));
+assert.equal(base.length,7);assert.equal(b31.length,19);
 const digest=async name=>createHash('sha256').update((await exec('unzip',['-p',jar,name+'.class'],{encoding:'buffer',maxBuffer:1<<24})).stdout).digest('hex');
 const names={vz:'Village',wa:'VillageAggressor',vm:'EntityAIDefendVillage',yv:'EntityVillager',wt:'EntityIronGolem',yq:'EntityZombie',yl:'EntitySkeleton',tw:'EntityAIAvoidEntity',sv:'EntityLivingBase'};
-const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}]))),
+const classes_=Object.fromEntries(await Promise.all(Object.entries(names).map(async([c,n])=>[c,{name:n,sha256:await digest(c)}])));
+const reference={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:classes_,
  method:'Unchanged classes in the VillageLiveProbe double with every mob ticked by Entity.onUpdate after the VillageCollection: entities 0,1 villagers, 2,3 zombies, 4 iron golem, 5,6 skeletons (ticked, never targeting), 7 a real EntityPlayer that is moved and whose hits are scripted. A row per tick is [[x,y,z,health,attackTarget,revengeTarget,randomDraws] per mob, [x,y,z,health] for the player],[[aggressorIndex,tick]...],reputation of the player name. Hits are [tick,accepted,victimHealthAfter]. Night; difficulty 2 (record field `difficulty`; the peaceful record runs on 0). Batch 30: World.rayTraceBlocks is the real one (sight rays), and the villagers-flee-two-zombies and peaceful records were added.',
- records};
+ records:base};
+const reference31={target:'Minecraft Java 1.7.10',clientSha1:'e80d9b3bf5085002218d4be59e668bac718abbc6',classes:{...classes_,zc:{name:'EntityArrow',sha256:await digest('zc')},uq:{name:'EntityAIAttackOnCollide',sha256:await digest('uq')},vd:{name:'EntityAIArrowAttack',sha256:await digest('vd')},tz:{name:'EntityAIBreakDoor',sha256:await digest('tz')}},
+ method:'Batch 31. Same double and row layout as village-fight-reference.json with the mob list set by the record field `types` (V villager, Z zombie, z zombie with CanBreakDoors, G iron golem, K skeleton with an empty hand, B skeleton holding a bow; the player has the index types.length). Mobs tick in list order and then the arrows in spawn order, an arrow spawned during the pass ticks in the same pass, and a setDead entity leaves the list after its own update. Rows carry a 4th element: the arrows whose state changed this tick, [shotIndex, x, y, z, mx, my, mz, dead]. `shots` is each arrow spawned: [tick, shooterIndex, x, y, z, mx, my, mz, yaw, pitch, damage, punch, fire] (the heading Random of an arrow cannot be seeded natively, so the replay starts each arrow from this state). `conversions` is each zombie that EntityZombie.onKillEntity spawned for a killed villager: [tick, x, y, z]; it is never ticked. Script ops added: equip idx item (setCurrentItemOrArmor(0), item 0 = empty hand) and equipmid k idx item (the same, right after entity k updates). Difficulty is the record field `difficulty`; the double fixes World.getBlockLightValue at 15 (the reinforcement site search of a Hard zombie site search finds no dark spot, its Random draws still happen).',
+ records:b31};
 await writeFile(path.join(root,'../public/research/village-fight-reference.json'),JSON.stringify(reference)+'\n');
-console.log('Fight records:',records.length,'bytes:',JSON.stringify(reference).length);
+await writeFile(path.join(root,'../public/research/village-fight-b31-reference.json'),JSON.stringify(reference31)+'\n');
+console.log('Fight records:',base.length,'+',b31.length,'bytes:',JSON.stringify(reference).length,JSON.stringify(reference31).length);

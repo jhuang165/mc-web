@@ -41,6 +41,9 @@ public class VillagerProbe {
     public void c(int x0, int y0, int z0, int x1, int y1, int z1) {}
     public void a(yz player, int event, int x, int y, int z, int data) { aux.add(event + "|" + x + "," + y + "," + z); }
     public float n(int x, int y, int z) { return 1.0f; }
+    public java.util.Calendar V() { java.util.Calendar c = java.util.Calendar.getInstance(); c.setTimeInMillis(1592200000000L); return c; } // batch 31: World.getCurrentDate (EntityZombie.onSpawnWithEgg's Halloween pumpkin check), a fixed mid-June date
+    public float B(int x, int y, int z) { return 0.0f; } // batch 31: World.func_147462_b (regional difficulty) reads a chunk; EntityZombie.onSpawnWithEgg of a converted villager asks, and its result is not observed
+    public int k(int x, int y, int z) { return 15; } // batch 31: World.getBlockLightValue (a Hard zombie's reinforcement site search reads it; fully lit, so none is ever spawned)
     public ahu a(int x, int z) { return ahu.d(1); } // plains: MoveIndoors reads its biome
     // Batch 30: World.rayTraceBlocks is the real one (EntitySenses.canSee, doors in the way) only when VillageFightProbe asks; every other probe keeps the stub its reference was recorded with.
     static boolean realRays = false;

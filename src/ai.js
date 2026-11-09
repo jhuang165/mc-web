@@ -499,9 +499,9 @@ class WatchClosest extends Task {
   shouldExecute() {
     const m = this.m;
     if (m.rand.nextFloat() >= this.chance) return false;
-    // un.a(): an attack target is watched as it is; else the closest player, or World.findNearestEntityWithinAABB(class, box.expand(range, 3, range), self)
-    if (m.attackTarget) this.target = m.attackTarget;
-    else if (this.watched === "player") this.target = m.ai.closestPlayer(m, this.range);
+    // un.a(): the attack target is stored first but then overwritten by the lookup (batch 31, village-fight-b31-reference.json: a bow-less skeleton with a
+    // player target and no player within 8 blocks does not start watching): the closest player, or World.findNearestEntityWithinAABB(class, box.expand(range, 3, range), self)
+    if (this.watched === "player") this.target = m.ai.closestPlayer(m, this.range);
     else {
       let best = null, bd = Infinity;
       for (const b of m.nearby(this.range, 3, this.range, (o) => (this.watched === "villager" ? o.e.type === "villager" : o.e.type !== "ender_crystal"), 0, true)) {
@@ -1127,7 +1127,10 @@ export class Brain {
     if (this.combatTask && this.combatBow === bow) return;
     if (this.combatTask) this.tasks.remove(this.combatTask);
     this.combatBow = bow;
-    this.combatTask = bow ? new ArrowAttack(this, 1, 20, 60, 15) : new AttackOnCollide(this, 1.2, "player", false);
+    // EntitySkeleton keeps its aiArrowAttack and aiAttackOnCollide as fields built once: a swap back reuses the old object with its timers and last target position
+    // (village-fight-b31-reference.json: the re-added AttackOnCollide still rolls its 5 % nextFloat on the stale position).
+    const kept = (this.combatTasks ??= {});
+    this.combatTask = bow ? (kept.bow ??= new ArrowAttack(this, 1, 20, 60, 15)) : (kept.melee ??= new AttackOnCollide(this, 1.2, "player", false));
     this.tasks.add(4, this.combatTask);
   }
   // EntitySenses.canSee (vw.a): a line from eye to eye with no block in the way,

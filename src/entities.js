@@ -1053,17 +1053,19 @@ export class EntityWorld {
   }
   // EntityLiving.onLivingUpdate's pickup loop (gamerule mobGriefing) for each live equipment mob with canPickUpLoot:
   // `lootItems` is the world's ItemEntities (living-simulation.js sets it). A replaced stack leaves as a drop event.
-  lootPickup() {
+  // EntityLiving.onLivingUpdate (sw.e): the pickup loop runs per mob after EntityLivingBase.onLivingUpdate (AI, movement, push), so a picked-up bow changes
+  // the combat task (setCurrentItemOrArmor -> setCombatTask, at once) for the mob's next tick, not the same one.
+  lootPickup() { for (const e of this.entities) this.lootPickupOne(e); }
+  lootPickupOne(e) {
     const items = this.lootItems;
     if (!items?.items?.length || !gameRule("mobGriefing")) return;
-    for (const e of this.entities) {
-      if (!e.canPickUpLoot || !(e.health > 0) || !GEAR_TYPES.has(e.type)) continue;
-      const [w, h] = this.size(e), box = [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2];
-      for (const stack of pickUpLoot(e, items.items, box, (item) => items.box(item), entityRandom(e))) {
-        const live = toLiveStack(stack);
-        if (live) this.events.push({ drop: live.id, count: 1, ...(live.damage ? { damage: live.damage } : {}), ...(live.enchantments ? { enchantments: live.enchantments } : {}), position: { x: e.x, y: e.y, z: e.z } });
-      }
+    if (!e.canPickUpLoot || !(e.health > 0) || !GEAR_TYPES.has(e.type)) return;
+    const [w, h] = this.size(e), box = [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2];
+    for (const stack of pickUpLoot(e, items.items, box, (item) => items.box(item), entityRandom(e))) {
+      const live = toLiveStack(stack);
+      if (live) this.events.push({ drop: live.id, count: 1, ...(live.damage ? { damage: live.damage } : {}), ...(live.enchantments ? { enchantments: live.enchantments } : {}), position: { x: e.x, y: e.y, z: e.z } });
     }
+    this.ai.brains?.get?.(e)?.syncCombatTask?.();
   }
   // The rolled equipment, drop chances and pickup flag of a spawn (mob-equipment.js); the stacks are native.
   applyGear(e, r) {
@@ -1630,6 +1632,10 @@ export class EntityWorld {
     // The villager is removed at once (World.removeEntity), without a death animation or experience.
     villager.death = 20;
     villager.recentlyHit = 0;
+    // World.removeEntity is setDead at once: the villager leaves the list now (a hit before the tick must not tick the corpse once more).
+    villager.removedNow = true;
+    const at = this.entities.indexOf(villager);
+    if (at >= 0) this.entities.splice(at, 1);
     this.events.push(auxSound(AUX_INFECT, { nextFloat: () => f(this.random()) }, z));
   }
   // EntityZombie.interact (yq.a(yz)) with a golden apple: returns whether the item was used. The stack shrinks outside
@@ -1819,7 +1825,6 @@ export class EntityWorld {
     // World.isDaytime (skylightSubtracted < 4); main.js hooks the real light level in.
     this.day = this.isDaytime ? this.isDaytime() : !night;
     this.ai.beginTick(player, survival, heldItem);
-    this.lootPickup();
     // World.tick: villageCollectionObj.tick() before the entities.
     this.villages.tick();
     this.knotTick(); // horse-gear-live.js: EntityLeashKnot.onUpdate (fence check every 101st tick)
@@ -1839,7 +1844,7 @@ export class EntityWorld {
     let farMark = -1; // index of the first event of the unticked-window mob being updated
     for (const e of ridingOrder(this.entities.slice())) {
       if (farMark >= 0) { this.dropFarEvents(farMark); farMark = -1; }
-      if (!this.isActive(e)) continue;
+      if (e.removedNow || !this.isActive(e)) continue;
       if (this.ring && !this.world.isTicking(e.x, e.z)) farMark = this.events.length;
       if (e.ridingEntity) { riders.push(e); beginRidden(e); }
       // World.updateEntityWithOptionalForce and EntityLivingBase.onEntityUpdate
@@ -1938,6 +1943,7 @@ export class EntityWorld {
         this.walk(e, t, 0, () => e.type === "horse" && e.rider ? horseRideThink(this, e) : isSpider(e.type) ? this.spiderThink(e) : e.type === "pigman" ? pigmanThink(this, e) : e.type === "silverfish" ? this.silverfishThink(e) : e.type === "giant" ? this.giantThink(e) : this.ai.think(e));
       }
       this.push(e, t);
+      this.lootPickupOne(e);
       if (isSpider(e.type)) {
         e.climbing = e.collidedH;
       }

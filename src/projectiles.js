@@ -182,7 +182,7 @@ export const rayBounds = (world, x, y, z, id) =>
 // blocks with a collision box count, which leaves out torches and plants.
 export function rayTraceBlocks(world, start, end, hasBox = false) {
   if (start.some(Number.isNaN) || end.some(Number.isNaN)) return null;
-  const id = (x, y, z) => (y < 0 ? 0 : world.get(x, y, z)),
+  const id = (x, y, z) => (y < 0 && !world.floorBelow ? 0 : world.get(x, y, z)), // floorBelow: a test world whose floor lies at y < 0 (the fight probes)
     // BlockFire.isCollidable is false, so canCollideCheck skips fire like air.
     solid = (b) => b !== 0 && b !== 10 && b !== 42 && b !== FIRE,
     test = (x, y, z, a) => {

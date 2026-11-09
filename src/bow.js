@@ -136,7 +136,7 @@ function collisionBox(world, x, y, z) {
   if (id === 0 || id === 10 || id === 42 || !world.solid(x, y, z)) return null;
   return id === 29 || id === 30 ? [0, 0, 0, 1, 1, 1] : blockBounds(world, x, y, z);
 }
-const blockAt = (world, x, y, z) => (y < 0 || y >= (world.height ?? HEIGHT) ? 0 : world.get(x, y, z));
+const blockAt = (world, x, y, z) => ((y < 0 && !world.floorBelow) || y >= (world.height ?? HEIGHT) ? 0 : world.get(x, y, z));
 const strictInside = (b, x, y, z, v) => v[0] > x + b[0] && v[0] < x + b[3] && v[1] > y + b[1] && v[1] < y + b[4] && v[2] > z + b[2] && v[2] < z + b[5];
 const dist2 = (a, b) => (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2 + (b[2] - a[2]) ** 2;
 const box = (a) => [a.x - HALF, a.y, a.z - HALF, a.x + HALF, a.y + HEIGHT_ARROW, a.z + HALF];
@@ -271,7 +271,7 @@ export class Arrows {
     }
     if (a.shake > 0) a.shake--;
     if (a.inGround) {
-      if (blockAt(world, px, py, pz) === a.inTile && (py < 0 ? 0 : world.getMeta(px, py, pz)) === a.inData) {
+      if (blockAt(world, px, py, pz) === a.inTile && (py < 0 && !world.floorBelow ? 0 : world.getMeta(px, py, pz)) === a.inData) {
         // 1200 ticks and it is gone.
         if (++a.ticksInGround === DESPAWN) a.dead = true;
       } else {
