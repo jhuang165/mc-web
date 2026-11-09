@@ -118,6 +118,8 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
   const kick = (id, text) => { const s = sessions.get(id); if (s) s.ws.close(1008, reason(text)); };
   const byName = name => [...sessions.entries()].find(([, s]) => s.name.toLowerCase() === String(name).toLowerCase());
   const level = id => admin.opLevel(sessions.get(id)?.account) ?? 0;
+  // S05PacketSpawnPosition: the world spawn as integers (the tab's compass and the compasses in its item frames point at it).
+  const spawnPosition = () => { const s = simulation.worldSpawn(); return [Math.floor(s.x), Math.floor(s.y), Math.floor(s.z)]; };
 
   async function join(ws, m) {
     if (m.type !== 'join' || m.protocol !== PROTOCOL || (build !== 'any' && m.build !== build)) return ws.close(1008, MESSAGES.version);
@@ -149,7 +151,7 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
     const p = simulation.players.get(id);
     p.sendColumns = null; // the welcome carries its whole window
     sendTerrain(ws, { type: 'welcome', protocol: PROTOCOL, build, pack: rules.pack, id, world: simulation.snapshot(p.view ?? null), self: simulation.savePlayer(p),
-      you: simulation.you(p), motd: config.motd, pvp: config.pvp !== false, op: level(id) });
+      you: simulation.you(p), spawn: spawnPosition(), motd: config.motd, pvp: config.pvp !== false, op: level(id) });
     if (!previous) system(`${profile.name} joined the game`);
     log(`[join] ${profile.name} (${profile.id})`);
   }
@@ -183,6 +185,8 @@ export async function createGunsServer({ port = 8091, bind = '127.0.0.1', stateD
         else if (m.type === 'drop') simulation.drop(id, m.all === true);
         else if (m.type === 'creative') simulation.creative(id, m);
         else if (m.type === 'gun') { if (!simulation.gun(id, m)) ws.close(1008, 'Invalid gun action'); }
+        else if (m.type === 'stats') simulation.requestStats(id); // C16PacketClientStatus REQUEST_STATS
+        else if (m.type === 'status') simulation.clientStatus(id, m.status); // C16PacketClientStatus OPEN_INVENTORY_ACHIEVEMENT
         else if (m.type === 'chat' && typeof m.text === 'string') {
           const text = cleanText(m.text);
           if (text.startsWith('/')) command(id, text.slice(1));

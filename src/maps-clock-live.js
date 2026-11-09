@@ -74,7 +74,8 @@ export class MapsClock {
     return { data, stored: left };
   }
   // ItemMap.onUpdate for every filled map in the inventory, updateMapData for the selected slot (20 Hz).
-  tick({ survival, position, yaw, world, time, name = "Player", frames = null }) {
+  // `mapsOff`: a gun server's tab, whose maps the server draws and marks (server-maps.js); only the sprites move here.
+  tick({ survival, position, yaw, world, time, name = "Player", frames = null, mapsOff = false }) {
     const surface = (world?.dimension ?? 0) === 0; // TextureClock: !worldProvider.isSurfaceWorld spins (dimensions track)
     if (epochSeen !== spriteEpoch()) { epochSeen = spriteEpoch(); Object.assign(clockState, createClock()); } // new sprite after a pack with another strip
     tickClock(clockState, clockAngle(time, surface), clockFrameCount());
@@ -88,6 +89,7 @@ export class MapsClock {
       // Freshly drawn slots point at the raw 16x1024 strip; swap in the current frame once it has loaded.
       if (urlSet.has(url)) for (const img of document.querySelectorAll("img.vanilla-item-icon")) if (rawImgSrc(img) === "/media/1.7.10/items/clock.png") img.setAttribute("src", url);
     }
+    if (mapsOff) return;
     mapStore.spawn = mapStore.spawn ?? { x: 0, z: 0 };
     const player = { name, x: position.x, z: position.z, yaw, dimension: world?.dimension ?? 0 };
     const held = survival.held;

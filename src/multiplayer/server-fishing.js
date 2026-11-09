@@ -37,7 +37,8 @@ function flush(sim, p, particles) {
 }
 // ItemFishingRod.onItemRightClick (the edit's useFishingRod hook): 'cast', 'reel' or null.
 export function useRod(sim, p) {
-  const particles = [], used = fishingOf(p).use(fishingHost(sim, p, particles));
+  const particles = [], f = fishingOf(p), used = f.use(fishingHost(sim, p, particles));
+  fishingStats(p, f);
   flush(sim, p, particles);
   return used;
 }
@@ -49,10 +50,12 @@ export function tickFishing(sim) {
     if (p.dead) { f.clear(); continue; }
     const particles = [];
     f.tick(fishingHost(sim, p, particles));
-    f.events.length = 0; // the single-player statistics; this server keeps none
+    fishingStats(p, f);
     flush(sim, p, particles);
   }
 }
+// EntityFishHook.func_146034_e: the catch's fishCaught, junkFished or treasureFished stat (server-stats.js).
+function fishingStats(p, f) { if (p.statsLive) p.statsLive.fishing(f); else f.events.length = 0; }
 // The hook gone without a catch (a respawn, a teleport, leaving).
 export function dropHook(p) { p.fishing?.clear(); }
 // Player p's bobber for the presence ([x, y, z]), or null.

@@ -2,6 +2,7 @@
 // mining, block use and placement, and the dropped items players throw, break loose and pick up. The server runs the same
 // single-player code (Container.click, tickPlayerMining, applyPlayerEdit, ItemEntities) on its own state; a client sends
 // only button presses and slot clicks, and shows its own prediction until the server's answer arrives.
+import { watchCrafting, furnaceTaken, pickedUp } from './server-stats.js';
 import { raycast, PHYSICS, WATER, LAVA, collides } from '../world.js';
 import { ITEMS } from '../survival.js';
 import { OUTSIDE, StackArray, ChestContainer, copyStack } from '../inventory.js';
@@ -34,6 +35,7 @@ import { horseSeatsFor } from '../horse-live.js';
 import { useVehicle } from './server-riding.js';
 import { useRod } from './server-fishing.js';
 import { HorseContainer, canInteract as horseReach } from '../horse-gear.js';
+import { PAINTING_ITEM, FRAME_ITEM } from '../hanging.js';
 
 const noop = () => {};
 const mobId = e => Number(String(e.id).replace('mob-', ''));
@@ -72,7 +74,7 @@ export class ServerPlay {
   save() { return { items: this.items.serialize() }; }
   // A joining (or respawned, or mode-changed) player: the always-open inventory window 0, nothing being mined.
   reset(p) {
-    p.inventoryWindow = p.survival.openInventory();
+    p.inventoryWindow = watchCrafting(p, p.survival.openInventory());
     p.window = null; p.mining = null; p.mineCooldown = 0; p.mineHeld = false; p.clickAck = p.clickAck ?? 0;
     p.sentWindow = null; p.sentOpen = null;
   }
@@ -193,14 +195,15 @@ export class ServerPlay {
     const sim = this.sim, [x, y, z] = block, id = sim.world.get(x, y, z), meta = sim.world.getMeta(x, y, z);
     if (!sim.canBreak(p, block)) return false;
     const done = breakPlayerBlock({ world: sim.world, survival: p.survival, items: this.items, xpOrbs: sim.mobs?.orbs ?? { spawn: noop }, farming: sim.farming, trees: sim.trees,
-      heldTool: p.survival.held?.id ?? 0 }, block, { creative, random: sim.random });
+      heldTool: p.survival.held?.id ?? 0 }, block, { creative, random: sim.random, harvested: info => p.statsLive?.harvested(info) });
     if (sim.world.get(x, y, z) !== id) sim.near(p, { type: 'broke', block: [x, y, z], id, meta }, true);
     return done;
   }
   // A right or left click (Minecraft.clickMouse) with the server's own aim: block activation, item use or placement, or the
   // start of mining. `place` is the use button.
-  // EntityRenderer.getMouseOver for player p: the nearest mob or other player whose box the look crosses within reach (3, 6 in
-  // Creative) and before the block it aims at; { entity, distance } for a mob, { player, distance } for a player, or null.
+  // EntityRenderer.getMouseOver for player p: the nearest mob, cart, painting or frame, or other player whose box the look crosses
+  // within reach (3, 6 in Creative) and before the block it aims at; { entity, distance } for a mob, { cart, distance },
+  // { hanging, distance } or { player, distance }, or null.
   aimed(p, target = serverTarget(this.sim.world, p)) {
     const sim = this.sim, eye = playerEye(p), dir = lookDir(p), reach = p.survival.creative ? 6 : 3, wall = Math.min(reach, target?.distance ?? reach);
     let best = sim.mobs?.ew.pick(eye, dir, reach, wall) ?? null;
@@ -211,6 +214,9 @@ export class ServerPlay {
       const hit = pickMinecart(system, eye, dir, reach, wall, own);
       if (hit && (!best || hit.distance < best.distance)) best = { cart: hit.cart, distance: hit.distance };
     }
+    // A painting or item frame (pickHanging), unless a mob or cart is nearer.
+    const hung = sim.hanging?.pick(eye, dir, reach, wall);
+    if (hung && (!best || hung.distance < best.distance)) best = hung;
     const o = [eye.x, eye.y, eye.z], d = [dir.x, dir.y, dir.z];
     for (const q of sim.players.values()) {
       if (q === p || q.dead) continue;
@@ -252,6 +258,7 @@ export class ServerPlay {
     aim ??= this.aimed(p, target);
     if (aim?.player) { if (!place) { p.swing = 6; return this.hitPlayer(p, aim.player); } aim = null; } // EntityPlayer.interactWith another player does nothing
     if (aim?.cart) return this.useCart(p, aim.cart, place);
+    if (aim?.hanging) return !!sim.hanging.edit(p, place, target, aim.hanging); // EntityItemFrame.interactFirst / attackEntityFrom
     const aimedEntity = aim?.entity ? aim : null;
     // MinecraftServer.isBlockProtected: near the spawn only operators dig, use or place against blocks (mobs are not protected).
     if (!aimedEntity && target && !sim.canBreak(p, target.block)) return false;
@@ -265,8 +272,10 @@ export class ServerPlay {
       // ItemMinecart.onItemUse on a rail (player-actions.js runs it before the edit, as here).
       if (target && sim.mobs && ITEMS[id]?.minecartType !== undefined && sim.mobs.minecarts.railKind(sim.world, ...target.block))
         return !!placeHeldMinecart(this.state(p, target), { target }, { swing: () => { p.swing = 6; } }).handled;
+      // ItemHangingEntity.onItemUse: a painting or frame on the clicked wall (main.js runs it before the edit too).
+      if ((id === PAINTING_ITEM || id === FRAME_ITEM) && sim.hanging) return !!sim.hanging.edit(p, true, target);
     }
-    const state = this.state(p, target), made = sim.mobs?.mark();
+    const state = this.state(p, target), made = sim.mobs?.mark(), heldTool = p.survival.held?.id ?? 0;
     let result = null;
     try {
       result = applyPlayerEdit(state, { place, target, aimedEntity, bucket: null }, {
@@ -279,8 +288,8 @@ export class ServerPlay {
         openHorse: e => this.openHorse(p, e),
         breakBlock: (block, creative) => this.breakBlock(p, block, creative),
         clientEyeInWater: () => eyeInWater(sim.world, ...Object.values(playerEye(p))),
-        openInventory: station => { if (station && target) this.open(p, 'workbench', p.survival.openWorkbench(), { at: target.block, block: sim.world.get(...target.block) }); },
-        useFurnace: key => this.open(p, 'furnace', p.survival.openFurnace(key), { key, at: target.block, block: sim.world.get(...target.block) }),
+        openInventory: station => { if (station && target) this.open(p, 'workbench', watchCrafting(p, p.survival.openWorkbench()), { at: target.block, block: sim.world.get(...target.block) }); },
+        useFurnace: key => this.open(p, 'furnace', p.survival.openFurnace(key, furnaceTaken(sim, p)), { key, at: target.block, block: sim.world.get(...target.block) }),
         openChest: (chest, key, at) => this.open(p, 'chest', chest, { key, at, block: sim.world.get(...at), title: chest.title, rows: chest.rows }),
         openDispenser: (tile, key, at, title) => this.open(p, 'dispenser', new DispenserContainer(p.survival.inventory, tile, noop), { key, at, block: sim.world.get(...at), title }),
         openHopper: (tile, key, at) => this.open(p, 'hopper', new HopperContainer(p.survival.inventory, tile, noop), { key, at, block: sim.world.get(...at) }),
@@ -299,6 +308,7 @@ export class ServerPlay {
       if (made) sim.mobs.claim(made, p);
     }
     p.eating = state.eating; p.mining = state.mining; p.mineCooldown = state.mineCooldown; p.motion.sprinting = state.motion.sprinting;
+    p.statsLive?.placed(result, heldTool); // ItemStack.tryPlaceItemIntoWorld: the placed or applied item's use stat
     return !!result?.handled;
   }
   // A minecart or boat under the crosshair (server-riding.js useVehicle): the use button boards an empty cart or a boat and opens a
@@ -351,7 +361,7 @@ export class ServerPlay {
     for (const p of sim.players.values()) {
       if (p.dead) continue;
       const picked = this.items.collect(p.position, PHYSICS.width, PHYSICS.height, s => p.survival.inventory.add(s));
-      for (const { item, count } of picked) sim.near(p, { type: 'pickup', by: p.id, entity: this.entityId(item), count }, true);
+      for (const { item, count } of picked) { pickedUp(p, item.stack); sim.near(p, { type: 'pickup', by: p.id, entity: this.entityId(item), count }, true); }
     }
     this.items.sounds.length = 0;
   }

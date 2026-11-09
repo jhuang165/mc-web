@@ -280,7 +280,7 @@ import { BoatRenderer } from "./boat-renderer.js";
 import { Boats, BOAT_ITEM } from "./boats.js";
 import { boatBoxProvider } from "./entity-collision.js";
 import { linkVehicleRiders } from "./vehicle-riders.js";
-import { Hanging, pickHanging, hangingArrowTargets } from "./hanging.js";
+import { Hanging, pickHanging, hangingArrowTargets, ARTS } from "./hanging.js";
 import { HangingRenderer } from "./hanging-renderer.js";
 import { SKULL, SKULLS, Skulls } from "./skull.js";
 import { SkullRenderer } from "./skull-renderer.js";
@@ -601,6 +601,20 @@ const achievements = new Achievements({
     saved = false;
   },
 });
+// On the gun server the server keeps this player's StatisticsFile (multiplayer/server-stats.js): the local counters stay still,
+// the achievements arrive as you.achievements and unlock events, the stats when the Statistics screen asks for them
+// (C16PacketClientStatus REQUEST_STATS -> S37PacketStatistics), and an opened inventory is the one achievement reported.
+let remoteStatsLoading = false;
+{
+  const increment = stats.increment.bind(stats), trigger = achievements.trigger.bind(achievements);
+  stats.increment = (id, n) => { if (!active?.remote) increment(id, n); };
+  achievements.trigger = (id) => {
+    if (!active?.remote) return trigger(id);
+    if (id === "openInventory" && !achievements.has(id)) multiplayer?.send({ type: "status", status: "openInventory" });
+    return false;
+  };
+}
+function requestRemoteStats() { if (!active?.remote || !multiplayer) return; remoteStatsLoading = true; multiplayer.send({ type: "stats" }); }
 // The world scoreboard (scoreboard.js, data/scoreboard.dat), its criteria hooks and the sidebar (scoreboard-live.js).
 const scoreboard = new Scoreboard(), scoreboardLive = new ScoreboardLive({ scoreboard, stats, achievements, name: () => PLAYER_NAME }), sidebar = new SidebarUi(document);
 scoreboard.onChange = () => { saved = false; };
@@ -743,10 +757,31 @@ function applyServerMaps(list) {
     data.revision++; mapStore.revision++;
   }
 }
+// The gun server's paintings and item frames near this player (server-hanging.js rows), when that list changed: the same records
+// the single-player HangingRenderer and crosshair read. A record keeps its object while its kind, wall and art stay, so the
+// renderer keeps its meshes; a frame's item and turn are updated in place.
+function applyServerHanging(rows) {
+  const old = new Map(hanging.entities.map(e => [e.id, e])), next = [];
+  for (const r of rows.slice(0, 256)) {
+    if (!Array.isArray(r)) continue;
+    const [id, kind, dir, tx, ty, tz, art, item, rotation] = r;
+    if (![id, dir, tx, ty, tz, art, rotation].every(Number.isInteger) || (kind !== 0 && kind !== 1) || art < 0 || art >= ARTS.length) continue;
+    const name = kind ? "frame" : "painting", stack = item && Number.isInteger(item.id) && ITEMS[item.id] ? { ...item, count: 1 } : null;
+    let e = old.get(id);
+    if (!e || e.kind !== name || e.dir !== dir || e.tx !== tx || e.ty !== ty || e.tz !== tz || e.art !== art) e = hanging.make(name, dir, tx, ty, tz, { id, art });
+    e.item = kind ? stack : null; e.rotation = ((rotation % 4) + 4) % 4;
+    next.push(e);
+  }
+  hanging.entities = next;
+  if (aimedHanging && !next.includes(aimedHanging.entity)) aimedHanging = null;
+}
 // What the gun server tells only this player (gun-simulation.js you()): health, food, mode, death and, when changed, the inventory.
 function applyServerPlayer(you) {
   if (!you) return;
   if (Array.isArray(you.maps)) applyServerMaps(you.maps);
+  if (Array.isArray(you.hanging)) applyServerHanging(you.hanging);
+  if (Array.isArray(you.achievements)) achievements.unlocked = new Set(you.achievements.filter(id => BY_ACHIEVEMENT[id])); // the server's list
+  if (achievementToast.toast?.hint && achievements.has("openInventory")) achievementToast.clear(); // "Taking Inventory" earned here before
   const s = survival, before = s.health;
   if (you.mode && you.mode !== s.mode) {
     s.mode = you.mode; s.inventory.creative = s.creative; active.mode = you.mode;
@@ -863,6 +898,18 @@ function applyMultiplayerTick(message) {
       // A server rocket's burst (EntityFireworkRocket.handleHealthUpdate 17 -> EntityFireworkStarterFX).
       fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
       fireworkFx.spawnStarter(event.x, event.y, event.z, num0(event.vx), num0(event.vy), num0(event.vz), event.fireworks ?? null);
+    } else if (event?.type === 'achievement' && BY_ACHIEVEMENT[event.id]) {
+      // StatisticsFile.func_150873_a on the server: everyone gets the chat line, the player who earned it the toast.
+      const a = BY_ACHIEVEMENT[event.id];
+      if (event.self) { achievements.unlocked.add(a.id); achievementToast.show(a); }
+      printChat(translation("chat.type.achievement", scoreboard.formatName(String(event.by ?? "")), statComponent(lookupStat("achievement." + a.id))));
+    } else if (event?.type === 'stats' && event.stats && typeof event.stats === 'object') {
+      stats.load(event.stats); remoteStatsLoading = false; // S37PacketStatistics: the open Statistics screen rebuilds with them
+    } else if (event?.type === 'crumbs' && ITEMS[event.id]) {
+      // EntityLivingBase.renderBrokenItemStack: 5 pieces of the worn-out item from the player's eye (the sound came as a sound event).
+      const q = event.by === multiplayer.id ? null : message.players.find(p => p.id === event.by);
+      const eye = q ? { x: q.x, y: q.y + Math.fround(PHYSICS.eye) + Math.fround(0.12), z: q.z, yaw: Math.fround(180 - (num0(q.yaw) * 180) / Math.PI), pitch: Math.fround((-num0(q.pitch) * 180) / Math.PI) } : playerEye();
+      if (q || event.by === multiplayer.id) itemCrumbs(scene.fx, 5, "iconcrack_" + event.id, eye, playerRandom);
     } else if (event?.type === 'book') {
       // ItemWritableBook / ItemEditableBook.onItemRightClick on the server: the book screen here; its MC|BEdit and MC|BSign go back.
       openHeldBook(survival.held, (channel, packet) => multiplayer?.send({ type: 'book', channel, packet }), message.players.find(p => p.id === multiplayer.id)?.name ?? PLAYER_NAME);
@@ -973,7 +1020,8 @@ async function joinMultiplayer(settings) {
     const record = { id: 'remote-' + client.id, remote: true, name: 'Gun server', seed: snapshot.seed,
       biome: snapshot.biome, generationVersion: snapshot.generationVersion, mode, difficulty: 2, mods: { guns: true },
       position: { ...self, yaw: welcome.self.yaw, pitch: welcome.self.pitch }, player: { ...welcome.self.player, time: snapshot.time },
-      entities: [], weather: snapshot.weather, allowCommands: false, edits: [] };
+      entities: [], weather: snapshot.weather, allowCommands: false, edits: [],
+      worldSpawn: Array.isArray(welcome.spawn) && welcome.spawn.length === 3 && welcome.spawn.every(Number.isFinite) ? welcome.spawn : null }; // S05PacketSpawnPosition
     gui.show(downloadTerrainScreen()); await nextPaint();
     await launch(record, prepared, { slice: true });
     if (multiplayer !== client || client.socket.readyState !== WebSocket.OPEN) throw new Error('Disconnected while loading terrain.');
@@ -1010,6 +1058,8 @@ const menuContext = {
   authenticated: () => profiles.authenticated,
   profileName: () => profiles.authenticated ? 'Signed in: ' + profiles.account.name : profiles.checking ? 'Checking sign-in…' : 'Sign-in required',
   isRemote: () => !!multiplayer,
+  requestStats: requestRemoteStats,
+  statsLoading: () => !!active?.remote && remoteStatsLoading,
   canSingleplayer: () => worldWriterAvailable,
   exportWorld: chooseExport,
   importWorld: () => $("#file-input").click(),
@@ -2257,6 +2307,7 @@ function inventory(station = false) {
   // On a gun server window 0 (the inventory) opens here without a message, as in Java; its clicks go to the server.
   if (multiplayer) {
     if (survival.creative) { openCreative(); remoteInv.window = null; remoteInv.snapshot = [...survival.inventory.main, ...survival.inventory.armor].map(st => JSON.stringify(st ?? null)); return; }
+    achievements.trigger("openInventory"); // remote: sends C16PacketClientStatus OPEN_INVENTORY_ACHIEVEMENT, the server unlocks it
     openContainer(remoteInv.attach(survival.openInventory(), 0), "inventory");
     return;
   }
@@ -3120,6 +3171,22 @@ function playerLanding() {
     landingDust: (x, y, z, count) => scene.particles.landingDust(world, x, y, z, count, [position.x, position.y + PHYSICS.eye, position.z]),
   };
 }
+// TextureClock and TextureCompass each tick, and in a single-player world ItemMap.onUpdate for the carried and framed maps. On a
+// gun server the maps are the server's (applyServerMaps); the clock and compass sprites still turn here, as they do in a 1.7.10 client.
+function tickItemSprites(remote = false) {
+  const facing = mcYaw(yaw);
+  maps.tick({ survival, position, yaw: facing, world, time: survival.time, frames: hanging.entities, mapsOff: remote });
+  if (compassEpoch !== spriteEpoch()) { compassEpoch = spriteEpoch(); Object.assign(compass, createCompass()); } // new sprite after a pack with another strip
+  const previousCompassFrame = compass.frame, compassFrames = compassFrameCount();
+  setCompassWorld(active.worldSpawn, !world.dimension); // item frames read it (hanging-renderer.js)
+  const frame = tickCompass(compass, compassAngle(position, Math.fround(facing), active.worldSpawn, !world.dimension), compassFrames);
+  if (frame !== previousCompassFrame || compassFrames !== compassShownFrames) {
+    compassShownFrames = compassFrames;
+    setCompassTextureFrame(frame);
+    document.documentElement.style.setProperty("--compass-frames", String(compassFrames));
+    document.documentElement.style.setProperty("--compass-position", `${frame * 100 / Math.max(1, compassFrames - 1)}%`);
+  }
+}
 function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // Game rules the Survival object reads (gamerule naturalRegeneration / doDaylightCycle).
   survival.naturalRegeneration = ruleOn(active, "naturalRegeneration");
@@ -3173,18 +3240,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   fireworkFx.viewer = [position.x, position.y + PHYSICS.eye, position.z];
   rockets.tick(world, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), spark: (...a) => fireworkFx.spawnSpark(...a), explode: (...a) => fireworkFx.spawnStarter(...a) });
   eyes.tick({ particle: (name, x, y, z, vx, vy, vz) => scene.fx.spawn(name, x, y, z, vx, vy, vz), drop: (stack, x, y, z) => items.spawn(stack, x, y, z) });
-  const facing = mcYaw(yaw);
-  maps.tick({ survival, position, yaw: facing, world, time: survival.time, frames: hanging.entities });
-  if (compassEpoch !== spriteEpoch()) { compassEpoch = spriteEpoch(); Object.assign(compass, createCompass()); } // new sprite after a pack with another strip
-  const previousCompassFrame = compass.frame, compassFrames = compassFrameCount();
-  setCompassWorld(active.worldSpawn, !world.dimension); // item frames read it (hanging-renderer.js)
-  const frame = tickCompass(compass, compassAngle(position, Math.fround(facing), active.worldSpawn, !world.dimension), compassFrames);
-  if (frame !== previousCompassFrame || compassFrames !== compassShownFrames) {
-    compassShownFrames = compassFrames;
-    setCompassTextureFrame(frame);
-    document.documentElement.style.setProperty("--compass-frames", String(compassFrames));
-    document.documentElement.style.setProperty("--compass-position", `${frame * 100 / Math.max(1, compassFrames - 1)}%`);
-  }
+  tickItemSprites();
   tickEntitySimulation({ world, items, primed, projectiles, arrows, mobs, survival, position, sneaking: !!motion.sneaking,
     width: PHYSICS.width, height: PHYSICS.height }, {
     maxStack: st => survival.inventory.maxStack(st),
@@ -3658,6 +3714,7 @@ function movementTick(controls) {
   if (multiplayer) {
     sendMultiplayerInput(screen === 'playing' ? controls : IDLE_INPUT);
     if (gunsEnabled() && screen !== 'dead') guns.tick(); // the client's prediction: the server fires, strikes and reloads for itself
+    tickItemSprites(true);
     // Eating as predicted here: crumbs, chewing and the burp; the food and the item come from the server.
     const eat = id => { predictedFood = { food: Math.min(20, survival.food + (ITEMS[id]?.food ?? 0)), at: performance.now() }; return true; };
     if (eating?.bow) eating = heldId() === BOW ? { ...eating, ticks: eating.ticks + 1 } : null;

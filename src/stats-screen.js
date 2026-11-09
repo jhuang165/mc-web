@@ -3,6 +3,7 @@
 import { GENERAL, BLOCK_LIST, ITEM_LIST, EGGS, formatStat, mineStat, craftStat, useStat, breakStat, lang, nextSort, sortRows } from "./stats.js";
 import { ORIGINAL_ITEMS } from "./original-items.js";
 import { nativeName } from "./item-names.js";
+import { EN_US } from "./lang-en-us.js";
 
 const SPRITE = "/media/1.7.10/gui/container/stats_icons.png";
 const px = (n) => `calc(${n}*var(--u))`;
@@ -29,14 +30,31 @@ const COLUMNS = {
 };
 const DX = [115, 165, 215], ARROW = [79, 129, 179], CLICK = [[79, 115], [129, 165], [179, 215]];
 
+// GuiStats.drawScreen before the stats arrive: drawDefaultBackground, multiplayer.downloadingStats centred at h / 2 and
+// LOADING_FRAMES[(getSystemTime() / 150) % 7] a line and a half lower (h / 2 + fontHeight * 2), both white. No buttons yet.
+export const LOADING_FRAMES = Object.freeze(["oooooo", "Oooooo", "oOoooo", "ooOooo", "oooOoo", "ooooOo", "oooooO"]);
+export const loadingFrame = (ms) => LOADING_FRAMES[Math.floor(ms / 150) % LOADING_FRAMES.length];
+function drawLoading(g, w, h, rebuild, loading) {
+  const c = Math.trunc(w / 2), y = Math.trunc(h / 2), fh = 9;
+  g.text(EN_US["multiplayer.downloadingStats"], c, y, { center: true, color: 0xffffff });
+  const spin = g.text(loadingFrame(Date.now()), c, y + fh * 2, { center: true, color: 0xffffff });
+  const timer = setInterval(() => {
+    if (!spin.el.isConnected) { clearInterval(timer); return; }
+    if (!loading()) { clearInterval(timer); rebuild(); return; }
+    spin.set(loadingFrame(Date.now()));
+  }, 50);
+}
 // ctx: { stats, icon(id, damage), back, show, tab }. The tab is kept across the re-init a tab button causes.
-export function statsScreen({ stats, icon, back, show, tab = "general" }) {
+// `loading()` (a multiplayer tab): true until the server's numbers arrived (bej.field_146543_v, set by
+// func_146509_g on S37PacketStatistics); the screen then shows only the download line and spinner and rebuilds once they are in.
+export function statsScreen({ stats, icon, back, show, tab = "general", loading = () => false }) {
   let sort = { column: -1, direction: 0 }, scroll = 0;
   const self = {
     id: "stats",
     escape: back,
     init(g, w, h) {
       ensureStyle();
+      if (loading()) { drawLoading(g, w, h, () => show(self), loading); return; }
       const c = Math.trunc(w / 2), top = 32, bottom = h - 64, spec = { top, bottom, width: 220, scrollbarX: c + 124 };
       const rowsOf = {
         blocks: () => stats.blocks(), items: () => stats.items(), mobs: () => stats.mobs(),

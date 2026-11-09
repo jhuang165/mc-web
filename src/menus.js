@@ -396,7 +396,7 @@ export function createMenus(gui, ctx) {
           achievements: ctx.achievements, icon: ctx.icon, hash: javaHash(PLAYER_NAME), back: ingameMenu, close, show,
           keyName: () => keyName(keyOf("key.inventory")), inventoryKey: () => keyOf("key.inventory"),
         })));
-        g.button(b.stats, t("gui.stats"), () => show(statsScreen({ stats: ctx.stats, icon: ctx.icon, back: ingameMenu, show })));
+        g.button(b.stats, t("gui.stats"), () => { ctx.requestStats?.(); show(statsScreen({ stats: ctx.stats, icon: ctx.icon, back: ingameMenu, show, loading: () => !!ctx.statsLoading?.() })); });
         // Browser addition in the row vanilla leaves empty: download the world.
         g.button(b.export, "Export World", () => ctx.exportWorld(), { enabled: !ctx.isRemote?.() });
       },

@@ -194,20 +194,23 @@ export class ServerMobs {
   tickArrows(players) {
     const world = this.sim.world, ew = this.ew;
     if (!this.arrows.list.length) return;
+    // EntityHanging.canBeCollidedWith: an arrow breaks a painting or frame (or knocks out a frame's item), as bow.js does.
+    const hanging = this.sim.hanging?.hanging ?? null, hangs = this.sim.hanging?.arrowTargets() ?? [];
     for (const a of this.arrows.list) {
       if (a.dead || !world.isTicking(a.x, a.z)) continue;
       if (a.by == null) {
         const p = this.nearest(players, a);
-        this.arrows.step(world, a, { targets: arrowTargets(mobTargets(ew.entities, p.position, PHYSICS.width, PHYSICS.height), p.survival.creative), mobs: ew, survival: p.survival, player: p.position });
+        this.arrows.step(world, a, { targets: [...arrowTargets(mobTargets(ew.entities, p.position, PHYSICS.width, PHYSICS.height), p.survival.creative), ...hangs], hanging, mobs: ew, survival: p.survival, player: p.position });
         continue;
       }
       const shooter = this.owner(a), q = shooter ? this.nearest(this.others(players, shooter), a) : null;
       if (shooter) this.see(shooter);
       const survival = q ? this.shotBy(q, shooter) : null;
-      this.arrows.step(world, a, { targets: arrowTargets(mobTargets(ew.entities, q?.position ?? null, PHYSICS.width, PHYSICS.height), !!q?.survival.creative),
-        mobs: ew, survival, player: shooter?.position ?? null });
+      this.arrows.step(world, a, { targets: [...arrowTargets(mobTargets(ew.entities, q?.position ?? null, PHYSICS.width, PHYSICS.height), !!q?.survival.creative), ...hangs],
+        hanging, mobs: ew, survival, player: shooter?.position ?? null });
     }
     this.arrows.list = this.arrows.list.filter(a => !a.dead);
+    this.sim.hanging?.drops();
     for (const p of players) if (p.survival.health > 0 && this.arrows.collect(boxOf(p.position), p.survival)) p.survival.inventory.changed?.(); // EntityArrow.onCollideWithPlayer
     for (const s of this.arrows.drain?.() ?? []) if (s?.sound) this.sound(s);
   }
@@ -400,8 +403,9 @@ export class ServerMobs {
   explode(players, x, y, z, size, { exploder = null, attacker = null, smoking = true, by = null } = {}) {
     const sim = this.sim, tiles = Object.create(sim.tiles, { health: { value: 0 } });
     applyExplosion({ world: sim.world, weather: sim.weather, mobs: this.ew, items: sim.play.items, xpOrbs: this.orbs, arrows: this.arrows, projectiles: this.projectiles,
-      falling: null, primed: [], hanging: null, survival: tiles, position: { x: 0, y: -1e6, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, farming: sim.farming },
+      falling: null, primed: [], hanging: sim.hanging?.hanging ?? null, survival: tiles, position: { x: 0, y: -1e6, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, farming: sim.farming },
     { x, y, z, size, exploder, attacker, smoking });
+    sim.hanging?.drops(); // the paintings and frames it broke (hanging.js explode)
     for (const p of players) {
       if (by && p !== by && sim.config?.pvp === false) continue;
       const at = p.position, hit = explosionImpact(sim.world, x, y, z, size, at.x, at.y, at.z, at.y + PHYSICS.eye, entityBox(at, PHYSICS.width, PHYSICS.height));

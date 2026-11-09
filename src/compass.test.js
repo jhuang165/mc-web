@@ -34,3 +34,7 @@ test("a moving, turning player matches 80 frames from the original TextureCompas
     assert.equal(tickCompass(compass, compassAngle(position, 183 - 6 * i, [-12, 64, 18], true)), frame, `tick ${i}`);
   }
 });
+
+test("without a spawn yet (a gun server tab before its spawn arrives) the needle spins instead of throwing", () => {
+  assert.equal(compassAngle({ x: 1, z: 2 }, 0, null, true, () => 0.5), 0.5 * Math.fround(Math.PI) * 2);
+});

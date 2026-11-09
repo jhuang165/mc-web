@@ -385,6 +385,7 @@ test('the handshake checks protocol, build, packs, session, bans, whitelist and 
   const welcome = await alice.next(m => m.type === 'welcome');
   assert.equal(welcome.pack, rules.pack); assert.equal(welcome.you.mode, 'survival'); assert.ok(welcome.you.inv.slots[0]);
   assert.equal(welcome.op, 4);
+  assert.ok(Array.isArray(welcome.spawn) && welcome.spawn.length === 3 && welcome.spawn.every(Number.isInteger), 'S05PacketSpawnPosition');
   const tick = await alice.next(m => m.type === 'tick' && m.you);
   assert.equal(tick.you.health, 20); assert.ok(Array.isArray(tick.events));
   const again = await connect('alice-session');

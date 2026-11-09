@@ -9,7 +9,7 @@ export const createCompass = () => ({ angle: 0, velocity: 0, frame: 0 });
 
 // Spawn is the world's integer spawn coordinate, independent of the player's bed.
 export function compassAngle(position, yaw, spawn, surface, random = Math.random) {
-  if (!surface) return random() * Math.fround(Math.PI) * 2;
+  if (!surface || !spawn) return random() * Math.fround(Math.PI) * 2; // no spawn yet (a gun server's tab before S05PacketSpawnPosition): it spins
   return Math.atan2(spawn[2] - position.z, spawn[0] - position.x) - ((yaw % 360) - 90) * Math.PI / 180;
 }
 
