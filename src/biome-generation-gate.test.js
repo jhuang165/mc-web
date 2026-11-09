@@ -20,7 +20,7 @@ test('generation 15 and older worlds keep the earlier biome map', () => {
   assert.equal(new WorldChunkManager(671n, 'default', { legacyMutated: true }).biomeAt(-224, 16).id, 23);
 });
 
-test('level.dat imports with MapFeatures generate at 16; MapFeatures off is generation 17', () => {
-  assert.equal(levelGenerator({ seed: 1n, worldType: 'default', mapFeatures: true }).generationVersion, 16);
-  assert.equal(levelGenerator({ seed: 1n, worldType: 'default', mapFeatures: false }).generationVersion, 17);
+test('level.dat imports with MapFeatures generate at 22; MapFeatures off is generation 23', () => {
+  assert.equal(levelGenerator({ seed: 1n, worldType: 'default', mapFeatures: true }).generationVersion, 22);
+  assert.equal(levelGenerator({ seed: 1n, worldType: 'default', mapFeatures: false }).generationVersion, 23);
 });

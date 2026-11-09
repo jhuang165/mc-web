@@ -175,3 +175,19 @@ test('the Node CLI whole-save mode populates through its JSON store', async () =
   const off = await wholeSaveRecord(files, { populate: false });
   assert.equal(off.record.bases[0].filter((c) => c.t).length, 1);
 });
+
+// Native Chunk.populateChunk runs the same ChunkProviderGenerate.populate with its block callbacks, so an imported unpopulated jungle temple
+// (seed 671, structure-area-reference.json) gets the neighbour-callback writes (tripwire hooks, wire, repeater, piston): generation 22 (level.dat
+// imports) replays them, generation 16 keeps the quiet result. The chain is the one `structure-live-neighbors.test.js` compares call by call.
+test('imported unpopulated jungle temple populates with the neighbour callbacks at generation 22 and not at 16', async () => {
+  const hashes = {};
+  for (const version of [16, 22]) {
+    const s = storedArea(671, version, 'default', 6, () => false, [0, 13]);
+    const out = await populateImportedColumns({ population: s.pop, origin: { chunkX: 0, chunkZ: 13 }, worldKey: 'w', coords: s.coords, unpopulated: s.unpopulated, read: s.read, write: s.write });
+    assert.equal(out.populated, 25);
+    assert.equal(out.skipped.failed, 0);
+    assert.equal(out.skipped.unmapped, 0);
+    hashes[version] = JSON.stringify([...s.store.keys()].sort().map((k) => { const d = decodeBaseColumn(s.store.get(k)); return [d.blocks.join(','), d.metadata.join(',')]; }));
+  }
+  assert.notEqual(hashes[22], hashes[16]);
+});

@@ -15,12 +15,12 @@ const census = (w, R) => {
   return counts;
 };
 
-test('MapFeatures off imports generate at 17 for default and Superflat worlds; with MapFeatures stays 16', () => {
+test('MapFeatures off imports generate at 23 for default and Superflat worlds; with MapFeatures 22', () => {
   assert.equal(NO_MAP_FEATURES_GENERATION, 17);
   for (const worldType of ['default', 'flat', 'largeBiomes']) {
     const mk = (mapFeatures) => levelGenerator({ seed: 1n, worldType, generatorOptions: '2;7,3x1;1;village', mapFeatures });
-    assert.equal(mk(true).generationVersion, 16);
-    assert.equal(mk(false).generationVersion, 17);
+    assert.equal(mk(true).generationVersion, 22);
+    assert.equal(mk(false).generationVersion, 23);
     assert.deepEqual(mk(false).approximate, []);
   }
   assert.deepEqual(biomeLayerOptions(17), { legacyMutated: false });
