@@ -29,6 +29,8 @@ export function stateColumns(root) {
   all(xyz(r.pending)); all(xyz(r.deferred)); all(xyz(r.torches)); all(xyz(r.pistons));
   for (const list of r.events ?? []) all(xyz(list));
   all(xyz(root.pistons));
+  // Entities (away-entities.js): the columns they stand in take part in the run, with the halo.
+  all(xyz(root.drops)); all(xyz(root.xpOrbs)); all(xyz(root.tnt)); all(xyz(root.minecarts?.carts)); all(xyz(root.boats));
   for (const name of TILE_SIM) all(tileCols(root.player?.[name]));
   if (!work.size) return [];
   const out = new Map();
@@ -48,5 +50,8 @@ export function awayPlan(root, columns, ticks) {
     spawn: spawnOf(root), columns, ticks: Math.min(ticks | 0, MAX_AWAY_TICKS), editSequence: root.editSequence | 0,
     fluidTicks: root.fluidTicks, fireTicks: root.fireTicks, fallingTicks: root.fallingTicks, falling: root.falling ?? [],
     redstone: root.redstone, pistons: root.pistons, tiles, weather: root.weather,
+    // The saved entity lists (the run returns them whole); mob riders keep their vehicles out of the run.
+    entities: structuredClone({ drops: root.drops ?? [], xpOrbs: root.xpOrbs ?? [], tnt: root.tnt ?? [], minecarts: root.minecarts ?? null, boats: root.boats ?? [] }),
+    ridden: (root.entities ?? []).map((m) => m?.riding).filter((r) => typeof r === "string"),
   };
 }
