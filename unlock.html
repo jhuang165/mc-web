@@ -10,12 +10,18 @@ input,button{font:inherit;width:100%;border-radius:0;padding:13px}input{border:1
 <form><label for="passcode">Passcode</label><input id="passcode" type="password" inputmode="numeric" autocomplete="current-password" required autofocus maxlength="128"><button type="submit" disabled>Unlock</button></form><p id="status" role="status" aria-live="polite">Preparing unlock…</p><footer>Guns preview</footer></main>
 <script>
 const BASE="/mc-web/", form=document.querySelector('form'), input=document.querySelector('input'), button=document.querySelector('button'), status=document.querySelector('#status');
-let worker;
-function ask(type, passcode) { return new Promise((resolve,reject)=>{const channel=new MessageChannel(), timer=setTimeout(()=>reject(Error('Unlock timed out. Please try again.')),30000);channel.port1.onmessage=e=>{clearTimeout(timer);channel.port1.close();resolve(e.data)};worker.postMessage({type,passcode},[channel.port2])}) }
+let registration;
+// A new publication installs a new worker while the old one still answers; every message waits for the newest worker to be
+// active and goes to it (a message to the replaced one would never be answered).
+const until=(w,ms)=>new Promise(r=>{const t=setTimeout(r,ms);w.addEventListener('statechange',()=>{if(w.state==='activated'||w.state==='redundant'){clearTimeout(t);r()}})});
+async function newest(){for(let i=0;i<20;i++){const w=registration.installing||registration.waiting;if(!w)break;await until(w,1500)}return registration.active}
+async function send(type, passcode) { const worker=await newest(); if(!worker)throw Error('Unlock is not ready. Reload the page.'); return new Promise((resolve,reject)=>{const channel=new MessageChannel(), done=()=>{clearTimeout(timer);worker.removeEventListener('statechange',gone);channel.port1.close()}, timer=setTimeout(()=>{done();reject(Error('Unlock timed out. Please try again.'))},30000), gone=()=>{if(worker.state==='redundant'){done();reject(Object.assign(Error('replaced'),{replaced:true}))}};worker.addEventListener('statechange',gone);channel.port1.onmessage=e=>{done();resolve(e.data)};worker.postMessage({type,passcode},[channel.port2])}) }
+// Once more if the worker was replaced while it was asked (it never answers, or it held the previous publication's salt).
+async function ask(type, passcode) { const before=registration.active; try{const r=await send(type,passcode);if(r.ok||registration.active===before)return r}catch(e){if(!e.replaced)throw e} return send(type,passcode) }
 (async()=>{try{
   if(!window.isSecureContext||!navigator.serviceWorker||!crypto.subtle)throw Error('Please open this page in a current browser over HTTPS.');
-  await navigator.serviceWorker.register(BASE+'resource-pack-sw.js',{scope:BASE,updateViaCache:'none'});
-  const registration=await navigator.serviceWorker.ready;worker=registration.active;
+  registration=await navigator.serviceWorker.register(BASE+'resource-pack-sw.js',{scope:BASE,updateViaCache:'none'});
+  await registration.update().catch(()=>{});await navigator.serviceWorker.ready;
   if(new URL(location.href).searchParams.has('lock'))await ask('lock');
   else if((await ask('status')).ok){location.replace(BASE);return}
   button.disabled=false;status.textContent='';

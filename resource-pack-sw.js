@@ -32,9 +32,12 @@ async function restore() {
   if (!saved || saved.salt !== CONFIG.salt || saved.expires <= Date.now()) return null;
   return { ...saved, manifest: await manifest(saved.key) };
 }
+// A failed restore is not kept: another worker of this registration (the one being replaced by a new publication) may have
+// stored the key since, and IndexedDB is read again on the next request.
 async function current() {
-  const s = await (session ??= restore().catch(() => null));
+  const pending = session ??= restore().catch(() => null), s = await pending;
   if (s && s.expires > Date.now()) return s;
+  if (session === pending) session = null;
   return null;
 }
 async function unlock(passcode) {
@@ -82,6 +85,9 @@ async function serve(request, url) {
   let rel;
   try { rel = decodeURIComponent(url.pathname.slice(CONFIG.base.length)); } catch { return new Response(null, { status: 400 }); }
   if (!rel) rel = "index.html";
+  // A page load reads the manifest again, so a worker still running from before a republication (same salt, so the same
+  // key) serves the newest build rather than the one it started with.
+  if (request.mode === "navigate") s.manifest = await manifest(s.key).catch(() => s.manifest);
   if (rel.startsWith("media/1.7.10/") || rel.startsWith("audio/1.7.10")) {
     const hit = (await packOverrides()).get(decodeURIComponent(url.pathname));
     if (hit?.missing) return new Response(null, { status: 404 });
