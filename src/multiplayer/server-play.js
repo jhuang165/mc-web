@@ -28,17 +28,20 @@ import { isBook } from '../books.js';
 import { MerchantContainer } from '../merchant-ui.js';
 import { villagerInteract, villagerClearCustomer, villagerOffers, villagerUseRecipe, villagerHover } from '../villager.js';
 import { JavaRandom } from '../java-random.js';
-import { pickMinecart, useMinecart } from '../structure-simulation.js';
+import { pickMinecart } from '../structure-simulation.js';
+import { placeHeldMinecart } from '../vehicle-simulation.js';
+import { horseSeatsFor } from '../horse-live.js';
+import { useVehicle } from './server-riding.js';
 import { HorseContainer, canInteract as horseReach } from '../horse-gear.js';
 
 const noop = () => {};
 const mobId = e => Number(String(e.id).replace('mob-', ''));
 export const MAX_CLICKS = 64; // per message: a drag is start + one per slot + end
-// Right-click uses that need an entity or screen this server does not have yet: boats (riding), maps (one map store per world)
-// and the fishing hook. The bow, thrown items, exp bottles, fire charges, eyes, rockets, eggs and books need the server mobs
-// (server-mobs.js: its arrows, projectiles, rockets, eyes and orbs), which every streamed gun world has.
-const UNSUPPORTED_USE = new Set([ITEM_EMPTY_MAP, FISHING_ROD, BOAT_ITEM]);
-const MOB_USE = new Set([ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, ITEM_FIRE_CHARGE, ITEM_EYE_OF_ENDER, ITEM_FIREWORK_ROCKET, BOW]);
+// Right-click uses that need an entity or screen this server does not have yet: maps (one map store per world) and the fishing
+// hook. The bow, thrown items, exp bottles, fire charges, eyes, rockets, eggs, books and boats need the server mobs
+// (server-mobs.js: its arrows, projectiles, rockets, eyes, orbs and boats), which every streamed gun world has.
+const UNSUPPORTED_USE = new Set([ITEM_EMPTY_MAP, FISHING_ROD]);
+const MOB_USE = new Set([ITEM_SPAWN_EGG, ITEM_EXP_BOTTLE, ITEM_FIRE_CHARGE, ITEM_EYE_OF_ENDER, ITEM_FIREWORK_ROCKET, BOW, BOAT_ITEM]);
 export const unsupportedUse = (id, mobs = false) => UNSUPPORTED_USE.has(id) || (!mobs && (MOB_USE.has(id) || isThrowable(id) || isBook(id)));
 // The windows a block can open here; the client builds the same container around its own copy (main.js remoteWindow).
 export const WINDOW_KINDS = new Set(['workbench', 'furnace', 'chest', 'dispenser', 'hopper']);
@@ -176,7 +179,9 @@ export class ServerPlay {
   }
   state(p, target) {
     const sim = this.sim;
+    if (sim.mobs) horseSeatsFor(sim.mobs.ew, p.rider); // a horse or pig this click mounts seats player p
     return { screen: 'playing', heldTool: p.survival.held?.id ?? 0, world: sim.world, survival: p.survival, position: p.position, velocity: p.velocity,
+      rider: p.rider ?? null, minecarts: sim.mobs?.minecarts ?? null, boats: sim.mobs?.boats ?? null,
       motion: { ...p.motion, sneaking: !!p.input.sneak }, mobs: sim.mobs?.ew ?? null, farming: sim.farming, trees: sim.trees, fire: sim.fire, fluids: sim.fluids,
       items: this.items, xpOrbs: sim.mobs?.orbs ?? { spawn: noop }, arrows: sim.mobs?.arrows ?? null, projectiles: sim.mobs?.projectiles ?? null,
       rockets: sim.mobs?.rockets ?? null, eyes: sim.mobs?.eyes ?? null, grounded: p.grounded, fallDistance: p.fallDistance, wasInWater: p.inWater, yaw: p.yaw, pitch: p.pitch,
@@ -199,8 +204,13 @@ export class ServerPlay {
   aimed(p, target = serverTarget(this.sim.world, p)) {
     const sim = this.sim, eye = playerEye(p), dir = lookDir(p), reach = p.survival.creative ? 6 : 3, wall = Math.min(reach, target?.distance ?? reach);
     let best = sim.mobs?.ew.pick(eye, dir, reach, wall) ?? null;
-    const cart = sim.mobs ? pickMinecart(sim.mobs.minecarts, eye, dir, reach, wall) : null;
-    if (cart && (!best || cart.distance < best.distance)) best = { cart: cart.cart, distance: cart.distance };
+    // The vehicle p sits in is not under its own crosshair (EntityRenderer.getMouseOver skips the ridden entity).
+    const own = p.rider?.vehicle ?? null;
+    if (best && own?.horse && best.entity === own.entity) best = null;
+    for (const system of sim.mobs ? [sim.mobs.minecarts, sim.mobs.boats] : []) {
+      const hit = pickMinecart(system, eye, dir, reach, wall, own);
+      if (hit && (!best || hit.distance < best.distance)) best = { cart: hit.cart, distance: hit.distance };
+    }
     const o = [eye.x, eye.y, eye.z], d = [dir.x, dir.y, dir.z];
     for (const q of sim.players.values()) {
       if (q === p || q.dead) continue;
@@ -217,7 +227,7 @@ export class ServerPlay {
     const s = p.survival, tool = s.held?.id ?? 0, item = ITEMS[tool];
     let amount = heldAttackDamage(tool, s);
     if (!(amount > 0)) return false;
-    const critical = isCritical({ fallDistance: p.fallDistance, onGround: p.grounded, inWater: p.inWater, riding: !!p.vehicle });
+    const critical = isCritical({ fallDistance: p.fallDistance, onGround: p.grounded, inWater: p.inWater, riding: !!p.rider?.vehicle });
     if (critical) amount = criticalDamage(amount);
     if (!sim.damage(q, amount, { attacker: p, kind: 'melee', weapon: null, knockback: true })) return false;
     if (!s.creative && ['sword', 'axe', 'pickaxe', 'shovel'].includes(item?.kind)) s.wear(tool, item.kind === 'sword' ? 1 : 2);
@@ -252,6 +262,9 @@ export class ServerPlay {
       if (unsupportedUse(id, !!sim.mobs) || id === WATER || id === LAVA) return false;
       // Levers, buttons and the other switches reach the live redstone network, as they do on the single-player server.
       if (target && !p.input.sneak && [108, 111, 112, 124, 126, 127].includes(sim.world.get(...target.block))) { sim.redstone.use(...target.block); p.swing = 6; return true; }
+      // ItemMinecart.onItemUse on a rail (player-actions.js runs it before the edit, as here).
+      if (target && sim.mobs && ITEMS[id]?.minecartType !== undefined && sim.mobs.minecarts.railKind(sim.world, ...target.block))
+        return !!placeHeldMinecart(this.state(p, target), { target }, { swing: () => { p.swing = 6; } }).handled;
     }
     const state = this.state(p, target), made = sim.mobs?.mark();
     let result = null;
@@ -276,6 +289,7 @@ export class ServerPlay {
         particle: (name, x, y, z, vx, vy, vz) => sim.near(p, { type: 'fx', kind: 'particle', name, x, y, z, vx, vy, vz }, true),
         openBook: stack => { if (stack) sim.send(p, { type: 'book' }); },
         collides: w => [...sim.players.values()].some(o => !o.dead && collides(w, o.position.x, o.position.y, o.position.z)),
+        placeBoat: () => this.placeBoat(p),
       });
     } catch (error) {
       console.error('[gun-server] edit failed', error?.message ?? error);
@@ -286,18 +300,31 @@ export class ServerPlay {
     p.eating = state.eating; p.mining = state.mining; p.mineCooldown = state.mineCooldown; p.motion.sprinting = state.motion.sprinting;
     return !!result?.handled;
   }
-  // A chest minecart under the crosshair (structure-simulation.js useMinecart): the attack hits it (it breaks after enough hits,
-  // spilling its chest), the use button opens its 27 slots as a chest window.
+  // A minecart or boat under the crosshair (server-riding.js useVehicle): the use button boards an empty cart or a boat and opens a
+  // chest cart's 27 slots as a chest window; the attack hits it (it breaks after enough hits, spilling a chest cart's contents).
   useCart(p, cart, place) {
-    const s = p.survival, minecarts = this.sim.mobs.minecarts, state = { minecarts, survival: s, position: p.position, velocity: p.velocity,
-      motion: { ...p.motion }, yaw: p.yaw };
-    const done = useMinecart(state, { place, cart }, {
+    const s = p.survival;
+    const done = useVehicle(this.sim, p, cart, place, {
       swing: () => { p.swing = 6; },
       damage: () => heldAttackDamage(s.held?.id ?? 0, s),
       openContainer: container => this.open(p, 'chest', container, { cart, key: 'cart-' + cart.id, title: container.title, rows: 3 }),
     });
-    p.motion.sprinting = state.motion.sprinting;
-    return !!done.handled;
+    return !!done.handled && !done.skipped;
+  }
+  // ItemBoat.onItemRightClick (boats.js place): along player p's look, refused where the boat would meet a block, a mob, a cart,
+  // a boat or a player. Returns whether a boat was placed.
+  placeBoat(p) {
+    const sim = this.sim, mobs = sim.mobs;
+    if (!mobs) return false;
+    const box = at => [at.x - PHYSICS.width / 2, at.y, at.z - PHYSICS.width / 2, at.x + PHYSICS.width / 2, at.y + PHYSICS.height, at.z + PHYSICS.width / 2];
+    const alive = mobs.ew.entities.filter(e => e.health > 0).map(e => { const [w, h] = mobs.ew.size(e); return { bb: [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2] }; });
+    const solid = [...mobs.boats.carts, ...mobs.minecarts.carts].filter(c => !c.dead && c.bb).map(c => ({ bb: c.bb }));
+    const others = [...sim.players.values()].filter(o => o !== p && !o.dead).map(o => ({ bb: box(o.position) }));
+    const sight = [...alive, ...solid, ...others], own = box(p.position), eye = playerEye(p), dir = lookDir(p);
+    if (!mobs.boats.place(sim.world, { eye: [eye.x, eye.y, eye.z], dir: [dir.x, dir.y, dir.z], yaw: Math.fround(180 - p.yaw * 180 / Math.PI), box: own }, [{ bb: own }, ...sight], sight)) return false;
+    if (!p.survival.creative) p.survival.take(BOAT_ITEM, 1);
+    p.swing = 6;
+    return true;
   }
   // PlayerControllerMP.onPlayerDamageBlock, run by the server each tick for a held attack button.
   tickMining(p) {

@@ -53,7 +53,7 @@ export class RemotePlayers {
       }
       this.applySkin(entry.renderer, p.skin);
       if (entry.name !== p.name) { entry.name = p.name; this.drawLabel(entry); }
-      entry.body.tick({ position: { ...p, y: p.y - (p.ySize ?? 0) }, previous: entry.last, yaw: p.yaw, pitch: p.pitch, swinging: p.swing > 0 });
+      entry.body.tick({ position: { ...p, y: p.y - (p.ySize ?? 0) }, previous: entry.last, yaw: p.yaw, pitch: p.pitch, swinging: p.swing > 0, riding: !!p.riding });
       entry.last = { ...p, y: p.y - (p.ySize ?? 0) }; entry.state = p;
     }
     for (const [id, entry] of this.entries) if (!seen.has(id)) { this.dispose(entry); this.entries.delete(id); }
@@ -63,7 +63,7 @@ export class RemotePlayers {
     for (const entry of this.entries.values()) {
       const p = entry.state;
       entry.renderer.update(entry.body, t, { held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sneak: p.sneak, swing: p.swing > 0 ? (6 - p.swing) / 6 : 0,
-        heldGun: gunsEnabled() && p.held ? gunOf(p.held) ?? null : null, hurt: (p.hurt ?? 0) > 0, deathTime: p.dead ? 20 : 0 }); // a gun server's presence
+        heldGun: gunsEnabled() && p.held ? gunOf(p.held) ?? null : null, hurt: (p.hurt ?? 0) > 0, deathTime: p.dead ? 20 : 0, riding: !!p.riding }); // a gun server's presence; `riding`: RenderPlayer's sitting pose
       entry.label.visible = !p.sneak && !p.dead;
     }
   }

@@ -2,6 +2,7 @@
 // records the single-player renderers draw: ArrowRenderer and ProjectileRenderer key their meshes by the record, so a row's
 // id keeps the same object; each record keeps last tick's position (px/py/pz, prevYaw/prevPitch) for the partial-tick lerp.
 import { CART_WIDTH, CART_HEIGHT } from '../minecarts.js';
+import { BOAT_WIDTH, BOAT_HEIGHT, BOAT_Y_OFFSET } from '../boats.js';
 
 const num = v => (Number.isFinite(v) ? v : 0);
 
@@ -29,6 +30,7 @@ export class RemoteThrown {
     this.arrowMap = new Map(); this.ballMap = new Map(); this.orbMap = new Map();
     this.arrows = []; this.balls = []; this.orbs = [];
     this.cartMap = new Map(); this.carts = [];
+    this.boatMap = new Map(); this.boats = [];
   }
   // rows: { arrows: [[id, x, y, z, yaw, pitch, shake, crit]], balls: [[id, kind, x, y, z, potion, look]], orbs: [[id, x, y, z, value]] }.
   apply(rows) {
@@ -66,5 +68,24 @@ export class RemoteThrown {
         r.yaw = num(yaw); r.pitch = num(pitch); r.rolling = num(rolling); r.rollingDir = dir === -1 ? -1 : 1; r.damage = num(damage);
       });
   }
-  clear() { this.arrowMap.clear(); this.ballMap.clear(); this.orbMap.clear(); this.cartMap.clear(); this.arrows = []; this.balls = []; this.orbs = []; this.carts = []; }
+  // The boats (server-mobs.js boatRows: [id, x, posY, z, yaw, timeSinceHit, damage, forwardDir]) as the records Boats.renderPose
+  // and pickMinecart read: the box from the position, as Boats.setPosition builds it.
+  applyBoats(rows) {
+    this.boats = follow(this.boatMap, rows, ([id]) => ({ id, boat: true, type: 0, dead: false, height: BOAT_HEIGHT }),
+      (r, [, x, y, z, yaw, hit, damage, dir], fresh) => {
+        x = num(x); y = num(y); z = num(z); yaw = num(yaw);
+        if (fresh) { r.px = x; r.py = y; r.pz = z; r.prevYaw = yaw; } else { r.px = r.x; r.py = r.posY; r.pz = r.z; r.prevYaw = r.yaw; }
+        // Boats.renderPose lerps prevYaw to yaw directly: keep it the short way round.
+        while (yaw - r.prevYaw < -180) r.prevYaw -= 360;
+        while (yaw - r.prevYaw >= 180) r.prevYaw += 360;
+        r.x = x; r.posY = y; r.z = z; r.y = y - BOAT_Y_OFFSET; r.yaw = yaw;
+        const half = BOAT_WIDTH / 2;
+        r.bb = [x - half, r.y, z - half, x + half, r.y + BOAT_HEIGHT, z + half];
+        r.timeSinceHit = num(hit); r.damage = num(damage); r.forwardDir = dir === -1 ? -1 : 1;
+      });
+  }
+  clear() {
+    this.arrowMap.clear(); this.ballMap.clear(); this.orbMap.clear(); this.cartMap.clear(); this.boatMap.clear();
+    this.arrows = []; this.balls = []; this.orbs = []; this.carts = []; this.boats = [];
+  }
 }

@@ -21,12 +21,13 @@ import { applyExplosion } from '../explosion-simulation.js';
 import { explosionImpact } from '../explosion.js';
 import { blastKnockback } from '../armor-enchantments.js';
 import { entityBox } from '../weather.js'; // the player's box
-import { PHYSICS } from '../world.js';
+import { PHYSICS, LILY_PAD } from '../world.js';
 import { gameRule } from '../game-rules.js';
 import { drainKnockback } from '../player-knockback.js';
 import { Minecarts } from '../minecarts.js';
+import { Boats } from '../boats.js';
 import { mobBox } from '../mob-spawner.js';
-import { copyStack } from '../inventory.js';
+import { copyStack, makeStack } from '../inventory.js';
 
 const MOB_SPAWNER = 52;
 export const MOB_RANGE = 48; // blocks: the mobs a tab is told about (EntityTracker tracks most living entities to 80; 48 keeps a tick message small)
@@ -67,6 +68,9 @@ export class ServerMobs {
     this.thrownIds = new WeakMap(); this.nextThrown = 1;
     // Mineshaft chest minecarts (EntityMinecartChest), handed over with their columns' population (server-world.js materialize).
     this.minecarts = Minecarts.fromJSON(saved.minecarts ?? null);
+    // Boats (EntityBoat) the players placed. A saved rider is not seated again: a player comes back on foot.
+    this.boats = Boats.fromJSON(saved.boats ?? null);
+    for (const c of [...this.minecarts.carts, ...this.boats.carts]) c.restorePlayer = false;
     this.stored = new Map(Array.isArray(saved.stored) ? saved.stored.filter(([k, list]) => typeof k === 'string' && Array.isArray(list)) : []);
     const light = () => sim.light;
     ew.lightAt = (x, y, z) => light().level(x, y, z, sim.darkness);
@@ -117,6 +121,7 @@ export class ServerMobs {
       for (const record of list) {
         const m = ew.restore(record);
         if (!m) continue;
+        delete m.playerRides; // a player it carried when saved is not seated again
         ew.entities.push(m); ew.nextId = Math.max(ew.nextId + 1, mobNumber(m) + 1);
       }
     }
@@ -161,13 +166,15 @@ export class ServerMobs {
     ew.naturalSpawning = false;
     this.current = null;
     const first = players[0];
-    ew.beforeMob = e => this.see(this.nearest(players, e));
+    // A ridden pig or horse follows its rider (EntityAIControlledByPlayer reads the rider's held item), others their nearest player.
+    ew.beforeMob = e => { const o = e.rider?.owner; this.see(o && players.includes(o) ? o : this.nearest(players, e)); };
     try { ew.tick(first.position, first.survival, first.survival.inventory.held?.id ?? 0); } finally { ew.beforeMob = null; }
     this.current = null; // beginTick showed the first player whatever was seen last
     this.tickArrows(players);
     this.tickThrown(players);
     this.tickOrbs(players);
     this.tickCarts(players);
+    this.tickBoats(players);
     this.tickSpawners(players);
     this.drain(players);
   }
@@ -256,8 +263,9 @@ export class ServerMobs {
   pearl(pearl, hit, thrower) {
     const sim = this.sim;
     if (!thrower) { pearl.dead = true; return; }
-    const state = { world: sim.world, position: thrower.position, previous: thrower.previous, survival: thrower.survival, rider: null,
-      minecarts: { dismount: noop }, fallDistance: thrower.fallDistance, landedFall: thrower.landedFall };
+    // A riding thrower gets off first (EntityEnderPearl.onImpact: mountEntity(null)).
+    const state = { world: sim.world, position: thrower.position, previous: thrower.previous, survival: thrower.survival, rider: thrower.rider ?? null,
+      minecarts: { dismount: () => sim.dismount?.(thrower) }, fallDistance: thrower.fallDistance, landedFall: thrower.landedFall };
     const result = impactPlayerPearl(state, pearl, hit && typeof hit === 'object' && !hit.survival ? hit : null, {
       hit: (e, source) => this.ew.attackEntityFrom(e, source.amount, { name: 'thrown', player: true, attacker: 'projectile', from: { x: thrower.position.x, z: thrower.position.z } }),
     });
@@ -304,18 +312,64 @@ export class ServerMobs {
   tickCarts(players) {
     const m = this.minecarts;
     if (!m.carts.length) return;
+    this.tickVehicles(m, players, system => system.tick(this.sim.world, { entities: this.blockers, host: this.cartHost(players) }));
+  }
+  // EntityBoat.onUpdate: buoyancy, the rider's input, breakage; its splash (sound and particles near it) and the snow layers and
+  // lily pads it runs over (World.func_147480_a drops a lily pad).
+  tickBoats(players) {
+    const b = this.boats, sim = this.sim;
+    if (!b.carts.length) return;
+    const near = (x, z, range = 64) => [...sim.players.values()].filter(p => Math.abs(p.position.x - x) <= range && Math.abs(p.position.z - z) <= range);
+    const particles = [];
+    const hooks = {
+      particle: q => { if (particles.length < 128) particles.push(q.map(v => (typeof v === 'number' ? r3(v) : v))); },
+      splash: (boat, volume, pitch) => this.sound({ sound: 'game.neutral.swim.splash', volume, pitch, position: { x: boat.x, y: boat.posY, z: boat.z } }),
+      clear: (x, y, z, block) => {
+        const meta = sim.world.getMeta(x, y, z);
+        sim.world.put(x, y, z, 0);
+        if (block === LILY_PAD) {
+          sim.play.items.spawn(makeStack(LILY_PAD, 1), x + 0.5, y + 0.5, z + 0.5);
+          for (const p of near(x, z)) sim.send(p, { type: 'broke', block: [x, y, z], id: block, meta });
+        }
+      },
+    };
+    this.tickVehicles(b, players, system => system.tick(sim.world, { entities: this.blockers, hooks }));
+    if (particles.length) for (const p of near(particles[0][1], particles[0][3])) sim.send(p, { type: 'fx', kind: 'particles', list: particles });
+  }
+  // A vehicle system's tick between the players and mobs as blockers (structure-simulation.js tickMinecartSimulation): each
+  // player is its own rider record, so the cart or boat it rides neither blocks nor pushes it; then the pushes, then the drops.
+  tickVehicles(system, players, tick) {
     const ew = this.ew, living = ew.entities.filter(e => e.health > 0), sized = e => { const [w, h] = ew.size(e); return mobBox(e.x, e.y, e.z, w, h); };
-    const bodies = players.map(p => ({ p, ref: { x: p.position.x, y: p.position.y, z: p.position.z, bb: boxOf(p.position) } }));
-    m.tick(this.sim.world, { entities: [...bodies.map(b => b.ref), ...living.map(e => ({ bb: sized(e), ref: e }))], host: null });
-    for (const { p, ref } of bodies) { const [vx, vz] = m.pushEntity(ref, ref.bb); p.velocity.x += vx; p.velocity.z += vz; }
-    for (const e of living) { const [vx, vz] = m.pushEntity(e, sized(e)); e.vx += vx; e.vz += vz; }
-    for (const d of m.drain()) if (d.stack) this.sim.play.items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion });
+    const bodies = players.map(p => {
+      const bb = boxOf(p.position), at = { x: p.position.x, y: p.position.y, z: p.position.z, dead: false, bb };
+      return { p, ref: p.rider ? Object.assign(p.rider, at) : at };
+    });
+    this.blockers = [...bodies.map(b => b.ref), ...living.map(e => ({ bb: sized(e), ref: e }))];
+    try { tick(system); } finally { this.blockers = null; }
+    for (const { p, ref } of bodies) { if (p.rider?.vehicle) continue; const [vx, vz] = system.pushEntity(ref, ref.bb); p.velocity.x += vx; p.velocity.z += vz; }
+    for (const e of living) { const [vx, vz] = system.pushEntity(e, sized(e)); e.vx += vx; e.vz += vz; }
+    for (const d of system.drain()) if (d.stack) this.sim.play.items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay, motion: d.motion });
+  }
+  // The carts' side effects (minecarts.js host): a TNT cart's blast, a furnace cart's smoke, the cart sounds near it.
+  cartHost(players) {
+    return this._cartHost ??= {
+      explode: (cart, x, y, z, power) => this.explode(this.living(), x, y, z, power, { exploder: null, smoking: true }),
+      particle: (name, x, y, z, vx, vy, vz) => { for (const p of this.sim.players.values()) if (Math.hypot(p.position.x - x, p.position.z - z) <= 64) this.sim.send(p, { type: 'fx', kind: 'particle', name, x: r3(x), y: r3(y), z: r3(z), vx, vy, vz }); },
+      sound: (sound, cart) => this.sound({ sound, position: { x: cart.x, y: cart.posY, z: cart.z } }),
+      changed: noop,
+    };
   }
   // The carts near player p for the tab's MinecartRenderer: [id, type, x, posY, z, yaw, pitch, rolling, rollingDir, damage].
   cartRows(p) {
     const at = p.position;
     return this.minecarts.carts.filter(c => !c.dead && Math.abs(c.x - at.x) <= THROWN_RANGE && Math.abs(c.z - at.z) <= THROWN_RANGE && Math.abs(c.posY - at.y) <= THROWN_RANGE)
       .slice(0, 32).map(c => [c.id, c.type, r3(c.x), r3(c.posY), r3(c.z), r2(c.yaw), r2(c.pitch), c.rolling | 0, c.rollingDir, r2(c.damage)]);
+  }
+  // The boats near player p for the tab's BoatRenderer: [id, x, posY, z, yaw, timeSinceHit, damage, forwardDir].
+  boatRows(p) {
+    const at = p.position;
+    return this.boats.carts.filter(c => !c.dead && Math.abs(c.x - at.x) <= THROWN_RANGE && Math.abs(c.z - at.z) <= THROWN_RANGE && Math.abs(c.posY - at.y) <= THROWN_RANGE)
+      .slice(0, 32).map(c => [c.id, r3(c.x), r3(c.posY), r3(c.z), r2(c.yaw), c.timeSinceHit | 0, r2(c.damage), c.forwardDir === -1 ? -1 : 1]);
   }
   // TileEntityMobSpawner.updateEntity: a spawner works while a player is within 16 blocks; one whose block is gone is removed.
   tickSpawners(players) {
@@ -415,7 +469,7 @@ export class ServerMobs {
       stored.set(key, list);
     }
     return { stored: [...stored].map(([k, list]) => [k, list.map(r => JSON.parse(JSON.stringify(r, (key, v) => (typeof v === 'function' ? undefined : v))))]),
-      spawners: this.spawners.toJSON(), totalTime: this.ew.saveTotalTime(), nextId: this.ew.nextId, xpOrbs: this.orbs.serialize(), minecarts: this.minecarts.toJSON() };
+      spawners: this.spawners.toJSON(), totalTime: this.ew.saveTotalTime(), nextId: this.ew.nextId, xpOrbs: this.orbs.serialize(), minecarts: this.minecarts.toJSON(), boats: this.boats.toJSON() };
   }
 }
 export { ENTITY_TYPES };

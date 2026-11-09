@@ -666,6 +666,7 @@ function leaveMultiplayer() {
   multiplayer?.close(); multiplayer = null;
   serverInv = null; serverShots = null; predictedFood = null; predictedShots.length = 0;
   remoteInv.reset(); remoteItems.clear(); remoteThrown.clear();
+  rider.vehicle = null; rider.jumpPower = 0; remoteVehicle = null; onboardVehicle = null;
   remotePlayers?.resetSkin(playerRenderer); remotePlayers?.clear(); remotePlayers = null;
 }
 // Protocol v3: movement, look, the selected hotbar slot and the newest server tick on screen; never item stacks.
@@ -791,8 +792,8 @@ function applyMultiplayerTick(message) {
     motion.sneaking = self.sneak;
     motion.sprinting = self.sprinting;
     walkFrozen = self.sneak && self.grounded;
-    $("#movement-label").textContent = flying ? 'FLYING' : 'WALKING';
-    playerBody.tick({ position, previous, yaw, pitch, swinging: self.swing > 0 });
+    $("#movement-label").textContent = self.riding ? 'RIDING' : flying ? 'FLYING' : 'WALKING';
+    playerBody.tick({ position, previous, yaw, pitch, swinging: self.swing > 0, riding: !!self.riding });
     if (playerRenderer) remotePlayers?.applySkin(playerRenderer, self.skin); // seen in F5
   }
   survival.time = message.time; syncServerWeather(message.weather); scene.setTime(message.time);
@@ -824,6 +825,9 @@ function applyMultiplayerTick(message) {
       const other = Number.isInteger(event.player) || typeof event.player === 'string' ? message.players.find(p => p.id === event.player) : null;
       const target = mob ? () => mobs.fxTarget(mob) : other ? () => ({ x: other.x, z: other.z, minY: other.y, width: PHYSICS.width, height: PHYSICS.height, mx: 0, my: 0, mz: 0 }) : null;
       if (target) scene.fx.crit2(target, event.kind === 'magicCrit');
+    } else if (event?.type === 'fx' && event.kind === 'particles' && Array.isArray(event.list)) {
+      // A server boat's splashes and bubbles (EntityBoat.onUpdate, Entity.handleWaterMovement).
+      for (const q of event.list.slice(0, 128)) if (Array.isArray(q) && typeof q[0] === 'string' && q.slice(1, 7).every(Number.isFinite)) scene.fx.spawn(q[0], q[1], q[2], q[3], q[4], q[5], q[6]);
     } else if (event?.type === 'fx' && event.kind === 'particle' && typeof event.name === 'string') {
       scene.fx.spawn(event.name, event.x, event.y, event.z, event.vx, event.vy, event.vz); // an eye set in a portal frame
     } else if (event?.type === 'firework' && [event.x, event.y, event.z].every(Number.isFinite)) {
@@ -841,8 +845,34 @@ function applyMultiplayerTick(message) {
     scene.setProjectiles(remoteThrown.balls, []);
   }
   if (message.you?.carts && minecarts) { remoteThrown.applyCarts(message.you.carts); minecarts.carts = remoteThrown.carts; } // drawn by minecartRenderer
+  if (message.you?.boats) { remoteThrown.applyBoats(message.you.boats); boats.carts = remoteThrown.boats; } // drawn by boatRenderer
   if (message.you) { remoteItems.sync(message.you.items); scene.setDrops(remoteItems.items); }
   if (message.you?.mobs) syncRemoteMobs(message.you.mobs);
+  if (message.you && 'riding' in message.you) applyRemoteRiding(message.you.riding);
+}
+// What this player rides on the gun server (gun-simulation.js you.riding): the rider's vehicle as the HUD, the renderer and the
+// aim read it. A cart or boat is its drawn record (so the crosshair passes through it); a pig or horse a stand-in that carries the
+// mount's health for its hearts (GuiIngame) and the horse jump bar's charge (GuiIngame.renderJumpBar).
+let remoteVehicle = null;
+function applyRemoteRiding(r) {
+  const before = rider.vehicle;
+  if (!r || typeof r !== 'object' || !Number.isInteger(r.id)) { rider.vehicle = null; rider.jumpPower = 0; remoteVehicle = null; }
+  else if (r.kind === 'boat' || r.kind === 'cart') {
+    const list = r.kind === 'boat' ? boats.carts : minecarts?.carts ?? [];
+    const key = r.kind + r.id, record = list.find(c => c.id === r.id) ?? null;
+    if (remoteVehicle?.key !== key || (record && remoteVehicle.vehicle !== record)) remoteVehicle = { key, vehicle: record ?? { id: r.id, boat: r.kind === 'boat', dead: false } };
+    rider.vehicle = remoteVehicle.vehicle; rider.jumpPower = 0;
+  } else {
+    const key = 'mob' + r.id;
+    if (remoteVehicle?.key !== key) remoteVehicle = { key, vehicle: { horse: true, entity: { type: String(r.type ?? r.kind), health: 0, horse: null } } };
+    const e = remoteVehicle.vehicle.entity;
+    e.health = num0(r.health); e.horse = Number.isFinite(r.max) ? { maxHealth: r.max } : null;
+    rider.vehicle = remoteVehicle.vehicle; rider.jumpPower = Math.max(0, Math.min(1, num0(r.jump)));
+  }
+  // NetHandlerPlayClient.handleEntityAttach: boarding shows mount.onboard above the hotbar.
+  if (rider.vehicle && rider.vehicle !== onboardVehicle) recordHud.message(translate("mount.onboard", "Press %1$s to dismount").replace("%1$s", keyDisplayString(binds.code("key.sneak")) ?? "null"));
+  onboardVehicle = rider.vehicle ?? null;
+  if (rider.vehicle !== before || rider.vehicle?.horse) renderVitals(); // the food row becomes the mount's hearts, and back
 }
 // The gun server's weather each tick (simulation.js weatherState): its timers and live strengths. The previous tick's strengths
 // become prev*, so the sky and the rain fade between ticks as World.getRainStrength(partial) does, and the client's own tick count
