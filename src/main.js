@@ -2567,6 +2567,8 @@ const dims = new DimensionLive({
   difficulty: () => worldDifficulty(active, options.difficulty),
   chunks: (cols) => cols.flatMap(([x, z]) => { const c = world.chunks?.get(`${x},${z}`); return c ? [{ x, z, blocks: c.blocks.slice(), meta: c.meta.slice() }] : []; }),
   advanceTicks: (n) => { if (n > 0) { weather.advance(n); if (!survival.timeFrozen) { survival.time += n; scene.setTime?.(survival.time); } } },
+  // Command blocks that ran while away (away-commands.js): /time shifts the clock, /weather the Overworld's timers, rules, and the chat lines they printed.
+  awayResult: (r) => { if (r.timeShift && !survival.timeFrozen) survival.time += r.timeShift; if (r.weather) weather.overworld?.restore(r.weather); if (r.world) Object.assign(active, r.world); for (const l of r.chat ?? []) printChat(l); },
   player: () => ({ x: position.x, y: position.y, z: position.z, yaw }),
   sound: (n, o) => sounds.play(n, o),
   showCredits: async () => {

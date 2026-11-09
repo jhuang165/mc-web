@@ -60,6 +60,9 @@ export function awayPlan(root, columns, ticks, difficulty) {
       fireballs: root.fireballs ?? [], hanging: root.hanging ?? [], villages: root.villages ?? null,
     }),
     ridden: (root.entities ?? []).map((m) => m?.riding).filter((r) => typeof r === "string"),
+    // Command blocks (away-commands.js): the saved tiles, the rules the commands read, and what a selector filter reads of the player in the other dimension.
+    commandBlocks: structuredClone(root.commandBlocks ?? []), gameRules: root.gameRules ? { ...root.gameRules } : undefined, defaultGameMode: root.defaultGameMode,
+    player: { mode: root.mode === "creative" ? 1 : root.mode === "adventure" ? 2 : 0, level: Number.isInteger(root.experience?.level) ? root.experience.level : 0 },
     time: Number.isFinite(root.player?.time) ? root.player.time : 0, difficulty: Number.isInteger(difficulty) ? difficulty : undefined,
   };
 }

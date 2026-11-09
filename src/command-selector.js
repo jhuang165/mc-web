@@ -74,6 +74,12 @@ export function selectLocalPlayer(text, host) {
   const origin = chunkCoordinates(host.position());
   for (const axis of ['x', 'y', 'z']) if (args.has(axis)) origin[axis] = parseIntWithDefault(args.get(axis), origin[axis]);
   if (token === 'r' && count < 0) throw new RangeError(`toIndex = ${count}`);
+  // Away run (away-commands.js): the player is in another dimension. oi.a skips players whose world differs from the sender's, and ad.c passes the
+  // sender's world only when rm, r, x, y or z is given: those selectors find nobody, the others still find the player. Scoreboard filters cannot be read there.
+  if (host.playerElsewhere) {
+    if (['rm', 'r', 'x', 'y', 'z'].some(k => args.has(k))) return null;
+    if (args.has('team') || scores.size) host.awaySkip();
+  }
   const name = host.playerName ?? host.name ?? 'Player';
   const player = host.playerPosition ?? host.position;
   const board = host.scoreboard;
