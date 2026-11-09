@@ -152,7 +152,7 @@ export class HeadlessColumns {
   // light covers the 5 x 5 chunks round a change in what is held.
   invalidateLight(cx, cz) {
     const own = this.lstate.get(ringKey(cx, cz));
-    if (own) { own.hm = null; own.pm = null; }
+    if (own) { own.hm = null; own.pm = null; own.info = null; }
     for (let a = cx - 2; a <= cx + 2; a++) for (let b = cz - 2; b <= cz + 2; b++) {
       const st = this.lstate.get(ringKey(a, b));
       if (st) { st.light = null; st.asked = 0; }
@@ -433,7 +433,7 @@ export class HeadlessColumns {
 // missing read as air, so a cell within 15 blocks of the headless area's rim can read brighter than natively.
 import { OPACITY, EMISSION, COST, computeColumnLight, isRim } from "./ring-light.js";
 const R = 14, W = 2 * R + 1, HOT = 6; // a column asked about `hot` times by the search is lit whole (ring-light.js)
-const SEARCH_N = W * W * W;
+const SEARCH_N = W * W * W, ANY = { minHm: 0, emitter: true };
 export class RingLight {
   constructor(ring) {
     this.ring = ring;
@@ -447,6 +447,7 @@ export class RingLight {
     this.emits = new Uint8Array(9);
     this.buckets = Array.from({ length: R + 1 }, () => []);
     this.hot = HOT;
+    this.fast = true; // false: the plain search with no shortcuts (the reference the tests compare with)
     this.queries = 0; this.bulk = 0; this.bulkMs = 0;
   }
   get world() { return this.ring.view; } // LightVolume.packed reads blocks through world.get
@@ -457,14 +458,7 @@ export class RingLight {
     if (!ring.resident(x, z)) {
       const col = ring.column(x >> 4, z >> 4);
       if (!col) return 0; // a missing column reads as air
-      const st = ring.state(x >> 4, z >> 4);
-      let hm = st.hm;
-      if (!hm || st.hmStamp !== (col.stamp | 0)) {
-        hm = st.hm = new Uint16Array(256); st.hmStamp = col.stamp | 0;
-        const blocks = col.blocks, h = col.h;
-        for (let c = 0; c < 256; c++) { let y = h - 1; const base = c * h; while (y >= 0 && OPACITY[blocks[base + y]] === 0) y--; hm[c] = y + 1; }
-      }
-      return hm[(x & 15) * 16 + (z & 15)];
+      return this.heldHm(ring.state(x >> 4, z >> 4), col)[(x & 15) * 16 + (z & 15)];
     }
     const k = x * 2147483648 + z, hit = this.heights.get(k);
     if (hit !== undefined) return hit;
@@ -472,6 +466,32 @@ export class RingLight {
     while (y >= 0 && OPACITY[ring.get(x, y, z)] === 0) y--;
     this.heights.set(k, y + 1);
     return y + 1;
+  }
+  // The height map of a held column (kept on its state, rebuilt when the column's stamp moves).
+  heldHm(st, col) {
+    let hm = st.hm;
+    if (!hm || st.hmStamp !== (col.stamp | 0)) {
+      hm = st.hm = new Uint16Array(256); st.hmStamp = col.stamp | 0;
+      const blocks = col.blocks, h = col.h;
+      for (let c = 0; c < 256; c++) { let y = h - 1; const base = c * h; while (y >= 0 && OPACITY[blocks[base + y]] === 0) y--; hm[c] = y + 1; }
+    }
+    return hm;
+  }
+  // What a chunk can give a search that starts nearby: the lowest height-map value (no cell below it sees the sky) and whether it holds any
+  // emitting block. A resident chunk is not scanned: it answers "may have both". Kept per held column and stamp (search, batch 32).
+  info(cx, cz) {
+    const ring = this.ring;
+    if (ring.resident(cx * 16, cz * 16)) return ANY;
+    const col = ring.column(cx, cz);
+    if (!col) return ANY;
+    const st = ring.state(cx, cz), stamp = col.stamp | 0;
+    if (st.info && st.infoStamp === stamp) return st.info;
+    const hm = this.heldHm(st, col), blocks = col.blocks;
+    let minHm = 65535, emitter = false;
+    for (let c = 0; c < 256; c++) if (hm[c] < minHm) minHm = hm[c];
+    for (let i = 0, n = blocks.length; i < n; i++) if (EMISSION[blocks[i]]) { emitter = true; break; }
+    st.infoStamp = stamp;
+    return (st.info = { minHm, emitter });
   }
   // [sky << 4 | block] of a cell.
   at(x, y, z) {
@@ -520,15 +540,23 @@ export class RingLight {
     // Chunks around the query that are neither resident nor held are unloaded: no light comes from or passes through them (ring-light.js).
     const pcx = qx >> 4, pcz = qz >> 4, present = this.present;
     const emits = this.emits; // a rim chunk's emitters are unlit (ring-light.js isRim)
+    // Shortcuts (same answer): no cell within reach sees the sky when every height map in the 3 x 3 chunks is above qy + R, and no block light
+    // arrives when none of the chunks that emit holds an emitter; the search then stops as soon as neither channel can still improve.
+    const fast = this.fast;
+    let minHm = 65535, needBlock = !fast;
     for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
       const here = ring.holds((pcx + a - 1) * 16, (pcz + b - 1) * 16);
       present[a * 3 + b] = here ? 1 : 0;
       emits[a * 3 + b] = here && (ring.resident((pcx + a - 1) * 16, (pcz + b - 1) * 16) || !isRim(ring, pcx + a - 1, pcz + b - 1)) ? 1 : 0;
+      if (fast && here) { const inf = this.info(pcx + a - 1, pcz + b - 1); if (inf.minHm < minHm) minHm = inf.minHm; if (emits[a * 3 + b] && inf.emitter) needBlock = true; }
     }
+    const needSky = !fast || (!noSky && sky < 15 && qy + R >= minHm);
+    if (!needSky && !needBlock) return sky << 4 | block;
     const mid = (R * W + R) * W + R;
     grid[mid] = 0; seen[mid] = gen;
     buckets[0].push(0, 0, 0);
     for (let acc = 0; acc <= R; acc++) {
+      if (fast && (!needSky || 15 - acc <= sky) && (!needBlock || 15 - acc <= block)) { for (let j = acc; j <= R; j++) buckets[j].length = 0; break; } // nothing later can beat what was found
       const list = buckets[acc];
       for (let q = 0; q < list.length; q += 3) {
         const dx = list[q], dy = list[q + 1], dz = list[q + 2], i0 = ((dx + R) * W + dy + R) * W + dz + R;
