@@ -29,6 +29,7 @@ export class Effects {
       duration: Math.min(2147483647, Math.floor(effect.duration)),
       amplifier: Number.isFinite(effect.amplifier) ? Math.max(0, Math.min(255, Math.floor(effect.amplifier))) : 0,
     }, old = this.active.get(next.id);
+    if (effect.ambient === true) next.ambient = true; // PotionEffect.isAmbient: a beacon's effect (fainter particles, DataWatcher 8)
     // PotionEffect.combine: stronger replaces; equal strength only extends.
     // A weaker effect never extends or resumes behind a stronger effect.
     if (!old || next.amplifier > old.amplifier) {
@@ -93,6 +94,25 @@ export class Effects {
     if (st) d *= 1 + modifierAmount(POTION_TYPES[PT.STRENGTH], st.amplifier);
     return Math.max(0, d); // RangedAttribute(attackDamage) has minimum 0 (probe: Weakness II or more on an empty hand is 0, not negative)
   }
+  // EntityLivingBase.updatePotionEffects' DataWatcher 8: every active effect is ambient (only beacon effects), so the particles are fainter.
+  allAmbient() { return this.active.size > 0 && [...this.active.values()].every((e) => e.ambient === true); }
   clear() { this.active.clear(); }
   serialize() { return Array.from(this.active.values(), (effect) => ({ ...effect })); }
+}
+
+// The gun server's copy of S1DPacketEntityEffect / S1EPacketRemoveEntityEffect (not 1.7.10 networking): a player's effects as
+// [id, amplifier, duration, ambient] rows (gun-simulation.js you().effects), and the tab's Effects rebuilt from them. Rows replace the
+// list without Effects.add's Absorption bookkeeping: the server sends the absorption amount itself. Without rows (`list` not an array)
+// the tab counts the durations down, as the client's PotionEffect.onUpdate does between packets.
+export function effectRows(effects) {
+  return [...effects.active.values()].sort((a, b) => a.id - b.id).map((e) => [e.id, e.amplifier, e.duration, e.ambient ? 1 : 0]);
+}
+export function applyEffectRows(effects, list) {
+  if (!Array.isArray(list)) { for (const e of [...effects.active.values()]) if (--e.duration <= 0) effects.active.delete(e.id); return; }
+  effects.active.clear();
+  for (const row of list) {
+    if (!Array.isArray(row) || !row.slice(0, 3).every(Number.isInteger)) continue;
+    const [id, amplifier, duration, ambient] = row;
+    if (POTION_TYPES[id] && duration > 0) effects.active.set(id, { id, amplifier: Math.max(0, Math.min(255, amplifier)), duration, ...(ambient ? { ambient: true } : {}) });
+  }
 }

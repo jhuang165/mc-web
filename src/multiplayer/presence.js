@@ -4,12 +4,15 @@ import { skinCanvas } from '../skin.js';
 import { gunOf } from '../mods/guns/catalog.js';
 import { gunsEnabled } from '../mods/guns/install.js';
 import { playerBox, rayBox } from './combat.js';
+import { potionParticles } from '../fx.js';
+import { JavaRandom } from '../lighting.js';
 
 export class RemotePlayers {
   // `skinUrl(hash)`: where the account server serves a skin PNG.
   constructor(scene, { skinUrl = () => null } = {}) {
     this.scene = scene; this.entries = new Map(); this.at = performance.now();
     this.skinUrl = skinUrl; this.skins = new Map(); // hash → Promise<texture | null>
+    this.random = new JavaRandom(Math.floor(Math.random() * 2 ** 48)); // the other players' potion swirls
   }
   // Skins are re-normalized here even though the server checked them: the PNG
   // is decoded by the browser as untrusted data and only ever becomes pixels.
@@ -58,6 +61,9 @@ export class RemotePlayers {
       // Its bobber (gun-simulation.js presence hook): last tick's place for the lerp, none when the line was just cast.
       const hook = Array.isArray(p.hook) && p.hook.length === 3 && p.hook.every(Number.isFinite) ? p.hook : null;
       entry.hookPrev = hook && entry.hook ? entry.hook : hook; entry.hook = hook;
+      // EntityLivingBase.updatePotionEffects for an EntityOtherPlayerMP (yOffset 0): the swirls in its DataWatcher 7 colour, once a tick.
+      if (Number.isInteger(p.fx) && p.fx > 0 && !p.dead && this.scene.fx)
+        potionParticles(this.scene.fx, { x: p.x, y: p.y, z: p.z, yOffset: 0, width: 0.6, height: 1.8 }, p.fx & 0xffffff, this.random, { ambient: p.ambient === true, invisible: p.invisible === true });
     }
     for (const [id, entry] of this.entries) if (!seen.has(id)) { this.dispose(entry); this.entries.delete(id); }
   }
@@ -71,8 +77,9 @@ export class RemotePlayers {
         fishing.push({ id, hook: { px, py, pz, x, y, z }, yaw: p.yaw, pitch: p.pitch, sneaking: !!p.sneak, eye: { x: l(a.x, b.x), y: l(a.y, b.y) + 1.62, z: l(a.z, b.z) } });
       }
       entry.renderer.update(entry.body, t, { held: p.held?.id ?? 0, heldDamage: p.held?.damage ?? 0, sneak: p.sneak, swing: p.swing > 0 ? (6 - p.swing) / 6 : 0,
-        heldGun: gunsEnabled() && p.held ? gunOf(p.held) ?? null : null, hurt: (p.hurt ?? 0) > 0, deathTime: p.dead ? 20 : 0, riding: !!p.riding, rodCast: !!entry.hook }); // a gun server's presence; `riding`: RenderPlayer's sitting pose
-      entry.label.visible = !p.sneak && !p.dead;
+        heldGun: gunsEnabled() && p.held ? gunOf(p.held) ?? null : null, hurt: (p.hurt ?? 0) > 0, deathTime: p.dead ? 20 : 0, riding: !!p.riding, rodCast: !!entry.hook,
+        invisible: p.invisible === true }); // a gun server's presence; `riding`: RenderPlayer's sitting pose
+      entry.label.visible = !p.sneak && !p.dead && p.invisible !== true; // RendererLivingEntity.func_110813_b: no name over an invisible player
     }
     this.scene.setRemoteFishing?.(fishing);
   }

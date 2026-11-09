@@ -7,6 +7,8 @@ import { IDLE_INPUT, cleanInput, cleanLook, cleanAction, cleanSlot } from './pro
 import { PlayerCombat, PositionHistory, tickCombat, withinEvents } from './combat.js';
 import { Survival, ITEMS } from '../survival.js';
 import { tickPlayerItemUse } from '../player-item-use.js';
+import { finishDrinkingItem } from '../potion-use.js';
+import { finishDrinking as finishMilk } from '../buckets.js';
 import { ITEM_REGISTRY } from '../command-data.js';
 import { itemFromOriginal } from '../region-import.js';
 const MOD_ITEMS = 4000; // gun-mod item ids start here (mods/guns/catalog.js)
@@ -34,6 +36,9 @@ import { riderFor, rideTick, seatTick, dismount, ridingOf, ridingKind } from './
 import { tickFishing, dropHook, hookOf } from './server-fishing.js';
 import { ServerMaps } from './server-maps.js';
 import { ServerHanging } from './server-hanging.js';
+import { potionColor } from '../fx.js';
+import { effectRows } from '../status-effects.js';
+import { INVISIBILITY } from '../potion-fx.js';
 
 export const STEAK = 205, IRON_ARMOR = [411, 410, 409, 408]; // armor[0] boots ... armor[3] helmet
 export const JOIN_PROTECTION = 60; // EntityPlayerMP.field_147101_bU: ticks of invulnerability after a join or respawn
@@ -63,6 +68,7 @@ const describe = (victim, hit) => {
   return null;
 };
 
+const finishDrinking = player => finishDrinkingItem(player, finishMilk);
 export class GunSimulation extends DedicatedSimulation {
   // config: the server.properties values (properties.js readServerConfig), canEdit(p) -> op check for spawn protection.
   constructor(saved = {}, { world = null, port = null, config = {}, random = Math.random, isOp = () => false } = {}) {
@@ -356,7 +362,8 @@ export class GunSimulation extends DedicatedSimulation {
       }
       p.survival.time = this.time;
       // EntityPlayer.updateItemUse: 32 ticks of eating, then ItemFood.onEaten. The client only shows its own prediction.
-      if (p.eating) p.eating = tickPlayerItemUse(p.eating, p.survival.inventory.held?.id ?? 0, p.survival, { random: this.random }).use;
+      // ItemPotion.onEaten / ItemBucketMilk.onEaten when a drink ends: the potion's effects and its glass bottle, or milk's cure.
+      if (p.eating) p.eating = tickPlayerItemUse(p.eating, p.survival.inventory.held?.id ?? 0, p.survival, { random: this.random, finishDrinking }).use;
       p.survival.tick({ inWater: moved.inWater, inLava: moved.inLavaNow });
       p.inWater = moved.inWater;
       tickPlayerStats(this, p, from);
@@ -417,7 +424,10 @@ export class GunSimulation extends DedicatedSimulation {
     return super.presence().map(entry => {
       const p = this.players.get(entry.id);
       const riding = ridingKind(p), hook = hookOf(p);
-      return { ...entry, hurt: p.survival.hurtTime, dead: p.dead, mode: p.survival.mode, ...(riding ? { riding } : {}), ...(hook ? { hook } : {}) };
+      // EntityLivingBase's DataWatcher 7 and 8 and Entity flag 5: the potion particle colour, whether every effect is a beacon's, invisibility.
+      const fx = p.dead ? 0 : potionColor(p.survival.effects.active.values()), shown = fx ? { fx, ...(p.survival.effects.allAmbient() ? { ambient: true } : {}) } : {};
+      return { ...entry, hurt: p.survival.hurtTime, dead: p.dead, mode: p.survival.mode, ...(riding ? { riding } : {}), ...(hook ? { hook } : {}), ...shown,
+        ...(p.survival.effects.has(INVISIBILITY) ? { invisible: true } : {}) };
     });
   }
   // What only player `p` sees each tick: its health, food and, when changed, its inventory.
@@ -440,6 +450,11 @@ export class GunSimulation extends DedicatedSimulation {
     if (key !== p.sentAchievements) { p.sentAchievements = key; out.achievements = unlocked; } // the tab's achievement screen
     const maps = this.maps?.rows(p);
     if (maps?.length) out.maps = maps;
+    // S1DPacketEntityEffect / S1EPacketRemoveEntityEffect for the player's own effects: [id, amplifier, duration, ambient] when one starts,
+    // changes or ends, and once a second for the remaining time (the tab counts down in between).
+    const effects = effectRows(s.effects);
+    const effectKey = effects.map(e => `${e[0]}:${e[1]}:${e[3]}`).join();
+    if (effectKey !== p.sentEffects || (effects.length && this.ticks % 20 === 0)) { p.sentEffects = effectKey; out.effects = effects; }
     const x = p.experience, xp = x ? `${x.level},${x.progress},${x.points}` : '';
     if (x && xp !== p.sentXp) { p.sentXp = xp; out.xp = [x.level, x.progress, x.points, x.total]; }
     return out;

@@ -220,7 +220,7 @@ import { BREWING_STAND, brewingView, bubbleHeight } from "./brewing.js";
 import { BrewingContainer } from "./brewing-container.js";
 const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinking);
 import { captureBucketTarget } from "./buckets-simulation.js";
-import { HUNGER, POISON } from "./status-effects.js";
+import { HUNGER, POISON, applyEffectRows } from "./status-effects.js";
 import { PlayerMotion, fovMultiplier } from "./player-movement.js";
 import { drainKnockback } from "./player-knockback.js";
 import { spawnRunningParticles, freshRandom } from "./particles.js";
@@ -793,6 +793,7 @@ function applyServerPlayer(you) {
   }
   for (const key of ['health', 'food', 'saturation', 'absorption', 'protection']) if (Number.isFinite(you[key])) s[key] = you[key];
   if (Number.isFinite(you.hurt)) s.hurtTime = you.hurt;
+  applyEffectRows(survival.effects, you.effects); // the HUD, the effect list, the view and the swirls read survival.effects
   // The server's EntityPlayer experience (S1FPacketSetExperience): the bar and level the HUD shows.
   if (Array.isArray(you.xp) && you.xp.every(Number.isFinite)) [experience.level, experience.progress, experience.points, experience.total] = you.xp;
   if (s.health < before && !you.dead) sounds?.play('game.player.hurt', { volume: 1, pitch: (Math.random() - Math.random()) * 0.2 + 1 });
@@ -3194,6 +3195,12 @@ function tickItemSprites(remote = false) {
     document.documentElement.style.setProperty("--compass-position", `${frame * 100 / Math.max(1, compassFrames - 1)}%`);
   }
 }
+// EntityLivingBase.updatePotionEffects on this player: the swirls in the effects' colour, fainter for beacon-only effects or invisible.
+function ownPotionParticles() {
+  const fx = survival.effects;
+  potionParticles(scene.fx, { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z, yOffset: Math.fround(PHYSICS.eye), width: PHYSICS.width, height: PHYSICS.height },
+    potionColor(fx.active.values()), playerRandom, { ambient: fx.allAmbient(), invisible: fx.has(INVISIBILITY) });
+}
 function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // Game rules the Survival object reads (gamerule naturalRegeneration / doDaylightCycle).
   survival.naturalRegeneration = ruleOn(active, "naturalRegeneration");
@@ -3212,7 +3219,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
         survival.drowned = false;
         drownBubbles(scene.fx, { x: position.x, y: posY, z: position.z, mx: velocity.x, my: velocity.y, mz: velocity.z }, playerRandom);
       }
-      potionParticles(scene.fx, { x: position.x, y: posY, z: position.z, yOffset: Math.fround(PHYSICS.eye), width: PHYSICS.width, height: PHYSICS.height }, potionColor(survival.effects.active.values()), playerRandom, { invisible: survival.effects.has(INVISIBILITY) });
+      ownPotionParticles();
     },
     fizz: playerFizz,
   });
@@ -3727,7 +3734,9 @@ function movementTick(controls) {
     if (eating?.bow) eating = heldId() === BOW ? { ...eating, ticks: eating.ticks + 1 } : null;
     else if (eating) eating = tickPlayerItemUse(eating, heldId(), { eat }, { foodEffects: eatEffects, sound: (name, options) => sounds.play(name, options) }).use;
     if (screen === 'playing' && useHold.tick(binds.isDown("key.use"), !!eating, !survival.creative && !!ITEMS[heldId()]?.food)) edit(true);
-    easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: gunsEnabled() ? guns.speed() : 1, bow: eating?.bow ? bowFov(eating.ticks) : gunsEnabled() ? guns.fov() : 1 }));
+    // The server's effects on this player (applyEffectRows): Speed and Slowness in the view, the swirls and the Nausea warp.
+    if (screen !== 'dead') { ownPotionParticles(); portalTimer.tick(survival.effects.get(NAUSEA)?.duration ?? 0, false); }
+    easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: survival.effects.moveSpeedMultiplier() * (gunsEnabled() ? guns.speed() : 1), bow: eating?.bow ? bowFov(eating.ticks) : gunsEnabled() ? guns.fov() : 1 }));
     return;
   }
   if(containerResidency) {
