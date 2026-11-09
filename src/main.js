@@ -214,6 +214,7 @@ import { collectBases, basesFromJson } from "./whole-save-json.js";
 import { tickWorldSystems } from "./world-tick.js";
 import { captureMovementInput } from "./player-input.js";
 import { movePlayer } from "./player-physics.js";
+import { UseHold } from "./use-hold.js";
 import { tickPlayerEnvironment, finishPlayerMovement, landPlayer, playerMoveTail } from "./player-environment.js";
 import { tickEntitySimulation } from "./entity-simulation.js";
 import { tickPlayerItemUse } from "./player-item-use.js";
@@ -404,6 +405,7 @@ let screen = "home",
   lockFallback = false,
   saved = true;
 const editActionLog = []; // Development-only bounded edit/release action trace; never part of a save.
+const useHold = new UseHold(); // Minecraft.rightClickDelayTimer: a held use button repeats eating every 4 ticks
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer,playerTicks=0;
 let weather = new Weather(), trees, plants, falling, foreignTicks;
@@ -3234,6 +3236,7 @@ function movementTick(controls) {
     markUnsaved: () => { saved = false; },
     random: Math.random,
   }).use;
+  if (useHold.tick(binds.isDown("key.use"), !!eating, !survival.creative && !!ITEMS[heldId()]?.food)) edit(true);
   if (survival.health <= 0) die();
   // EntityRenderer.updateFovModifierHand: once a tick, toward getFOVMultiplier (flight, sprint, bow).
   easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: survival.effects?.moveSpeedMultiplier?.() ?? 1, bow: eating?.bow ? bowFov(eating.ticks) : 1 }));
@@ -3410,7 +3413,7 @@ function bindingPressed(d, ctrl) {
   else if (d === "key.chat") openChat("");
   else if (d === "key.command") openChat("/");
   else if (d === "key.attack") { mineHeld = true; edit(false); }
-  else if (d === "key.use") edit(true);
+  else if (d === "key.use") { useHold.press(); edit(true); }
   else if (d === "key.pickItem") pickBlock();
   else if (d === "key.playerlist") showPlayerList();
   else if (HOTBAR.includes(d)) selectSlot(HOTBAR.indexOf(d));
@@ -3419,7 +3422,7 @@ function bindingPressed(d, ctrl) {
 function bindingReleased(d) {
   if (d === "key.playerlist") playerList.hide();
   else if (d === "key.attack") { mineHeld = false; if (mining && !mining.auto) mining = null; }
-  else if (d === "key.use") releaseBowUse();
+  else if (d === "key.use") { releaseBowUse(); eating = null; } // PlayerControllerMP.onStoppedUsingItem
 }
 // Minecraft.runTick keyboard loop, run on every screen (no currentScreen test): Keyboard.isKeyDown for the F3 combinations and the F3+C crash timer.
 // bytecode-read: F1 hideGUI and F3 (showDebugInfo, Shift = profiler chart) toggle on their press; with F3 down, B toggles RenderManager.debugBoundingBox,
@@ -3572,6 +3575,7 @@ function setupPointer() {
     // Mouse buttons reach their KeyBinding through the hash as -100 + button (Mouse.getEventButton).
     const d = binds.set(mouseCode(e.button), true);
     if (d === "key.use") {
+      useHold.press();
       edit(true);
       return;
     }
@@ -3594,16 +3598,24 @@ function setupPointer() {
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener("pointerup", (e) => {
-    bindingReleased(binds.set(mouseCode(e.button), false));
+    const binding = binds.set(mouseCode(e.button), false);
+    bindingReleased(binding);
+    if (binding === "key.use") return; // a released use button is not a left click
     if (dragging && dragDistance < 5 && e.pointerType !== "touch") edit(false);
     dragging = false;
     mineHeld = false;
     if (mining && !mining.auto) mining = null;
   });
   canvas.addEventListener("pointercancel", () => {
+    bindingReleased(binds.set(mouseCode(2), false));
     dragging = false;
     mineHeld = false;
     mining = null;
+  });
+  // A use button released outside the canvas still stops eating.
+  window.addEventListener("pointerup", (e) => {
+    const code = mouseCode(e.button);
+    if (binds.binding(code) === "key.use" && binds.isDown("key.use")) bindingReleased(binds.set(code, false));
   });
   window.addEventListener("pointermove", (e) => {
     if (screen !== "playing") return;
