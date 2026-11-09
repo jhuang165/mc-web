@@ -272,7 +272,7 @@ export function fireVertices(get, x, y, z, icons = [UNIT, UNIT]) {
 
 // A binary heap of scheduled ticks ordered like NextTickListEntry.compareTo: time, then
 // creation order (fluids.js keeps its own copy of the same thing).
-const before = (a, b) => a.time < b.time || (a.time === b.time && a.id < b.id);
+const before = (a, b) => a.time < b.time || (a.time === b.time && (a.p < b.p || (a.p === b.p && a.id < b.id)));
 class TickQueue {
   constructor() {
     this.heap = [];
@@ -369,8 +369,8 @@ export class Fire {
   key(x, y, z) {
     return this.world.index(x, y, z);
   }
-  schedule(x, y, z, delay = 30) {
-    if (this.world.inside(x, y, z)) this.queue.add(this.key(x, y, z), { x, y, z, time: this.time + delay });
+  schedule(x, y, z, delay = 30, p = 0) {
+    if (this.world.inside(x, y, z)) this.queue.add(this.key(x, y, z), { x, y, z, time: this.time + delay, p });
   }
   // Wraps world.onChange (fluids.js installed it first, like watchFlowers in main.js):
   // World.setBlock's onBlockAdded for a new fire, then onNeighborBlockChange for the
@@ -394,7 +394,7 @@ export class Fire {
     if (!state) { this.wake(); return; }
     this.time = state.time;
     this.queue = new TickQueue();
-    for (const e of state.entries) this.schedule(e.x, e.y, e.z, e.delay);
+    for (const e of state.entries) this.schedule(e.x, e.y, e.z, e.delay, e.p | 0);
   }
   // Legacy saves have no TileTicks equivalent: reschedule each saved fire.
   wake() {

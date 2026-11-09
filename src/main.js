@@ -79,6 +79,7 @@ import {
 } from "./world.js";
 import { Plants, REEDS_ITEM, REED_BOUNDS, CACTUS_SELECTION } from "./plants.js";
 import { FallingBlocks } from "./falling.js";
+import { ForeignTicks } from "./tile-ticks.js";
 import { ladderBounds, ladderSupported, countsVertical } from "./ladders.js";
 import { snowFalls } from "./snow.js";
 import { flowerCanStay, JRandom } from "./flowers.js";
@@ -405,7 +406,7 @@ let screen = "home",
 const editActionLog = []; // Development-only bounded edit/release action trace; never part of a save.
 let eyeRay = null; // the view ray of the last frame, for the bucket's liquid trace
 let fire,fluids,farming,experience=new Experience(),xpOrbs=new ExperienceOrbs(),xpRenderer,playerTicks=0;
-let weather = new Weather(), trees, plants, falling;
+let weather = new Weather(), trees, plants, falling, foreignTicks;
 const bedSleep = new BedSleep(); // EntityPlayer's sleeping state and bed spawn point (bed.js)
 // EntityTNTPrimed entities (explosion.js primeTnt). Explosions draw ray lengths,
 // drops, chained fuses and sound pitch from the saved weather.random World.rand.
@@ -1277,6 +1278,11 @@ async function launch(record, prepared, { slice = false } = {}) {
       },
     }, record.falling).watch();
     falling.load(record.fallingTicks);
+    // Saved ticks the lists above cannot hold (tile-ticks.js): taken at their due time, run only if the cell still holds a block the port ticks.
+    foreignTicks = new ForeignTicks(record.foreignTicks, (x, y, z) => (world.inside(x, y, z) ? world.get(x, y, z) : -1), {
+      fluid: (x, y, z, e) => fluids.schedule(x, y, z, 0, e.p | 0), fire: (x, y, z, e) => fire.schedule(x, y, z, 0, e.p | 0), falling: (x, y, z) => falling.schedule(x, y, z),
+      redstone: (x, y, z, e) => redstoneRuntime?.redstone?.scheduleBlockUpdate(x, y, z, e.i, 0, e.p | 0),
+    });
     farming=new Farming(world,record.farms);
     farming.lightLevel=(x,y,z)=>scene.light?scene.light.level(x,y,z,scene.subtracted):15; // World.getBlockLightValue for crop and stem growth
     restorePots(world,record.pots);
@@ -2618,6 +2624,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   });
   // Scheduled sand and gravel updates and the falling-block entities (WorldServer.tick).
   if (falling) {
+    foreignTicks?.tick(mobs?.saveTotalTime());
     falling.tick();
     world.redstoneBlocks?.tick();
     scene.setFalling?.(falling.entities);

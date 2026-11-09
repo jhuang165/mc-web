@@ -232,7 +232,7 @@ export class Fluids {
     this.pending.clear();
     // Keep the scheduled block even if the cell has since changed. Until its
     // due tick, that entry must still suppress duplicates of the same block.
-    for (const e of state.entries) this.enqueue(e.x, e.y, e.z, e.block, e.delay);
+    for (const e of state.entries) this.enqueue(e.x, e.y, e.z, e.block, e.delay, e.p | 0);
   }
   // Legacy saves have no TileTicks equivalent. Wake liquids next to edits only
   // for those saves; an explicitly saved empty queue means settled liquids.
@@ -256,18 +256,18 @@ export class Fluids {
   // World.scheduleBlockUpdate (mt.a(IIILaji;II)): one entry per position and
   // block; a second request keeps the first one's time. The block is the liquid
   // at the position, the delay its tick rate unless given.
-  schedule(x, y, z, delay) {
+  schedule(x, y, z, delay, p = 0) {
     const block = this.world.get(x, y, z);
     if (!this.world.inside(x, y, z) || !isLiquid(block)) return;
-    this.enqueue(x, y, z, block, delay ?? tickRate(block, this.skyless));
+    this.enqueue(x, y, z, block, delay ?? tickRate(block, this.skyless), p);
   }
-  enqueue(x, y, z, block, delay) {
+  enqueue(x, y, z, block, delay, p = 0) {
     const key = this.key(x, y, z, block);
     if (this.pending.has(key)) return;
-    const entry = { x, y, z, key, block, time: this.time + delay, id: this.serial++ };
+    const entry = { x, y, z, key, block, time: this.time + delay, p, id: this.serial++ };
     this.pending.set(key, entry);
-    // Binary heap ordered like NextTickListEntry.compareTo: time, then creation order.
-    const h = this.heap, less = (a, b) => a.time < b.time || (a.time === b.time && a.id < b.id);
+    // Binary heap ordered like NextTickListEntry.compareTo: time, priority, then creation order.
+    const h = this.heap, less = (a, b) => a.time < b.time || (a.time === b.time && (a.p < b.p || (a.p === b.p && a.id < b.id)));
     let i = h.push(entry) - 1;
     while (i > 0 && less(h[i], h[(i - 1) >> 1])) {
       [h[i], h[(i - 1) >> 1]] = [h[(i - 1) >> 1], h[i]];
@@ -275,7 +275,7 @@ export class Fluids {
     }
   }
   pop() {
-    const h = this.heap, top = h[0], last = h.pop(), less = (a, b) => a.time < b.time || (a.time === b.time && a.id < b.id);
+    const h = this.heap, top = h[0], last = h.pop(), less = (a, b) => a.time < b.time || (a.time === b.time && (a.p < b.p || (a.p === b.p && a.id < b.id)));
     if (h.length) {
       h[0] = last;
       for (let i = 0; ; ) {

@@ -66,7 +66,15 @@ export function horseNbtFields(tag, convertItem = () => null) {
       // (horse-items-nbt-reference.json). A negative Damage reads 0 (convertItem).
       const slot = tagValue(c, 'Slot', NBT.BYTE, -1) & 255;
       if (slot < 2 || slot >= 17) continue;
-      const stack = convertItem(c, { allowEmpty: true });
+      let stack = convertItem(c, { allowEmpty: true });
+      // A registered item keeps whatever Damage the save holds (ItemStack.loadItemStackFromNBT -> setItemDamage; stone with Damage 5, wool above 15): the port
+      // has no such variant, so the stack loads as the item at damage 0 and `rawDamage` writes the saved value back on export.
+      const raw = tagValue(c, 'Damage', NBT.SHORT, 0);
+      if (!stack && raw > 0) {
+        const plain = new Map(c); plain.set('Damage', { type: NBT.SHORT, value: 0 });
+        stack = convertItem(plain, { allowEmpty: true });
+        if (stack) stack.rawDamage = raw;
+      }
       items[slot] = stack ? { ...stack, count: Math.min(stack.count, 64) } : null;
     }
     if (items.length) rest.items = Array.from({ length: 17 }, (_, i) => items[i] ?? null);

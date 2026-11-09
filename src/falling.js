@@ -23,6 +23,7 @@ export function gravelDrop(random, fortune = 0) {
 }
 // Block.tickRate for BlockFalling.
 export const FALL_DELAY = 2;
+export const MAX_TICKS = 1000;
 // EntityFallingBlock: setSize(0.98F, 0.98F), yOffset = height / 2.
 export const FALLING_SIZE = 0.98, FALLING_Y_OFFSET = f(0.49);
 
@@ -50,9 +51,9 @@ export class FallingBlocks {
   schedule(x, y, z, b = this.world.get(x, y, z)) {
     this.enqueue(x, y, z, b, b === DRAGON_EGG ? EGG_TICK_RATE : FALL_DELAY); // egg tickRate 5, sand 2
   }
-  enqueue(x, y, z, b, delay) {
+  enqueue(x, y, z, b, delay, p = 0) {
     const k = key(x, y, z) + ":" + b;
-    if (!this.pending.has(k)) this.pending.set(k, { x, y, z, block: b, time: this.time + delay });
+    if (!this.pending.has(k)) this.pending.set(k, { x, y, z, block: b, time: this.time + delay, p });
   }
   // Keep scheduled work separate from the existing falling-entity save array.
   save() {
@@ -64,9 +65,9 @@ export class FallingBlocks {
     this.time = state.time;
     this.pending.clear();
     // Preserve the first entry per block/position, even when it is now stale.
-    for (const e of state.entries) this.enqueue(e.x, e.y, e.z, e.block, e.delay);
+    for (const e of state.entries) this.enqueue(e.x, e.y, e.z, e.block, e.delay, e.p | 0);
     // Stable sort also handles imported entries that are not already time-ordered.
-    this.pending = new Map([...this.pending].sort((a, b) => a[1].time - b[1].time));
+    this.pending = new Map([...this.pending].sort((a, b) => a[1].time - b[1].time || a[1].p - b[1].p));
   }
   watch() {
     const next = this.world.onChange;
@@ -115,9 +116,12 @@ export class FallingBlocks {
   // then the entities, the new ones included, as World.updateEntities runs after it.
   tick() {
     this.time++;
+    // WorldServer.tickUpdates takes at most 1000 due entries per tick (mt.a: the cap is on the entries leaving the set, probed in tile-ticks-reference.json).
+    let left = MAX_TICKS;
     for (const [k, u] of this.pending) {
       if (!ringTickActive(this.world, u.x, u.z)) { u.time++; continue; }
       if (u.time > this.time) continue;
+      if (left-- <= 0) continue;
       this.pending.delete(k);
       if (this.world.get(u.x, u.y, u.z) === u.block) this.fall(u.x, u.y, u.z);
     }

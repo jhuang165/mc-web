@@ -49,7 +49,7 @@ for(const [k,id] of Object.entries(ORIGINAL_ITEMS)) {const [o,damage]=k.split(':
 function stackNbt(s,slot,report,original=false) {
  if(!s)return null;const o=original?s:reverse.get(s.id);
  if(!o){report.unmappedItems++;return null;}
- const entry={id:short(o.id),Count:byte(s.count),Damage:short(o.damage??s.damage??0)};
+ const entry={id:short(o.id),Count:byte(s.count),Damage:short(Number.isInteger(s.rawDamage)&&s.rawDamage>0?s.rawDamage:o.damage??s.damage??0)};
  if(slot!==undefined)entry.Slot=byte(slot>127?slot-256:slot);
  const enchantList=values=>list(NBT.COMPOUND,values.map(e=>new Map([['id',short(e.id)],['lvl',short(e.lvl)]])));
  const tagEntries={};
