@@ -182,7 +182,7 @@ export function blockTile(id,face,lit=false,meta=0,snowy=false){
  if(id===47)return tile('ice');
  if(id===4)return tile(face===2||face===3?'log_oak_top':'log_oak');
  if(id===13)return tile(face===2?'crafting_table_top':face===3?'planks_oak':face===4||face===5?'crafting_table_front':'crafting_table_side');
- if(id===14)return tile(face===2||face===3?'furnace_top':face===4?(lit?'furnace_front_on':'furnace_front_off'):'furnace_side');
+ if(id===14){const front=({2:5,3:4,4:1,5:0})[meta]??4;return tile(face===2||face===3?'furnace_top':face===front?(lit?'furnace_front_on':'furnace_front_off'):'furnace_side');}
  if(id===41||id===162)return tile(face===2||face===3?'chest_top':face===4?'chest_front':'chest_side');
  if(id===21)return tile(face===2||face===3?'planks_oak':'bookshelf');
  if(id===29||id===30)return tile(face===2?(id===30?'farmland_wet':'farmland_dry'):'dirt');
