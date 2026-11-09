@@ -173,6 +173,8 @@ export class CreativeScreen extends ContainerScreen {
     if (t === SURVIVAL_TAB) {
       this.player ??= this.playerContainer();
       this.player.drops = c.drops;
+      // The survival tab's own container click drops (shift/number modes it forwards) are the same C10 packet: they pass the limiter too.
+      this.player.drop = (stack) => { if (stack && stack.count !== 0) this.drop(stack); };
       if (!this.saved) this.saved = c.slots;
       c.slots = this.player.slots.map((base, i) => {
         const slot = new CreativeSlot(base, i);

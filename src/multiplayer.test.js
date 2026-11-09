@@ -109,6 +109,13 @@ test('two WebSocket clients share authority, chat and departure; saves survive c
   assert.equal(a.world.columns.length, 64); assert.equal(b.world.players.length, 2);
   alice.ws.send(JSON.stringify({ type: 'chat', text: 'hello Bob' }));
   assert.equal((await bob.next(m => m.type === 'chat' && m.text === 'hello Bob')).name, 'Alice');
+  // Chat spam gate (NetHandlerPlayServer): the 11th quick message is delivered, then the sender is kicked.
+  for (let i = 0; i < 11; i++) bob.ws.send(JSON.stringify({ type: 'chat', text: 'spam ' + i }));
+  await alice.next(m => m.type === 'chat' && m.text === 'spam 10');
+  const [spamCode, spamReason] = await once(bob.ws, 'close');
+  assert.deepEqual([spamCode, String(spamReason)], [1008, 'Kicked for spamming']);
+  const bob2 = await connect('Bob'); await bob2.next(m => m.type === 'welcome');
+  Object.assign(bob, bob2);
   app.simulation.world.set(64, 11, 61, 3);
   alice.ws.send(JSON.stringify(input())); alice.ws.send(JSON.stringify({ type: 'edit', place: true }));
   const update = await bob.next(m => m.type === 'tick' && m.changes.some(c => c[0] === 64 && c[1] === 11 && c[2] === 62 && c[3] === 3));

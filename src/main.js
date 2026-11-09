@@ -226,7 +226,7 @@ import { horseSeatsFor as seatsFor } from "./horse-live.js";
 import { HorseContainer, canInteract as horseReach, canWearArmor as horseWearsArmor } from "./horse-gear.js";
 import { riddenHorse, jumpBar } from "./horse-gear-live.js";
 import { HorseGearRenderer } from "./horse-gear-renderer.js";
-import { SpamCounter, chatPacket } from "./server-handlers.js";
+import { SpamCounter, chatPacket, serverClick } from "./server-handlers.js";
 import { capturePlayerAction, dispatchPlayerAction as dispatchPlayerActionRaw, captureReleaseAction, dispatchReleaseAction } from "./player-actions.js";
 import { fromOriginal, toOriginal } from "./block-registry.js";
 import { normalizeFlatOptions } from "./flat-world.js";
@@ -2850,9 +2850,23 @@ function applyVehicleState(state) {
 function spawnHangingDrops() {
   for (const d of hanging.drain()) { items.spawn(copyStack(d.stack), d.x, d.posY, d.z, { delay: d.delay }); saved = false; }
 }
+// NetHandlerPlayServer C08 / C07 / C02 acceptance on the integrated server (server-handlers.js): the second gate behind the client reach.
+// A refused block click is resent as it is (the client changes nothing); a click above the build limit also prints the server's message.
+function serverAcceptsClick(place) {
+  const feet = [position.x, position.y, position.z];
+  const resend = (b, a) => { for (const c of [b, a]) if (c) scene.updateBlock(c[0], c[2], c[1]); };
+  if (aimedEntity) return serverClick({ kind: 'entity', player: feet, entity: [aimedEntity.x, aimedEntity.y, aimedEntity.z] }).accept;
+  if (!target || aimedCart || aimedHanging) return true;
+  const r = serverClick({ kind: place ? 'place' : 'dig', player: feet, pos: target.block, adjacent: target.adjacent });
+  if (r.accept) return true;
+  resend(target.block, target.adjacent);
+  if (r.message) printChat(r.message);
+  return false;
+}
 function edit(place = false) {
   if (screen !== "playing") return;
   if (multiplayer) { sendMultiplayerInput(captureMovementInput(d => binds.isDown(d))); multiplayer.send({ type: 'edit', place }); animation.swing(); return; }
+  if (!serverAcceptsClick(place)) { mining = null; return; }
   // A painting or item frame under the crosshair, or a held painting/frame item on a wall (hanging-interaction.js).
   if (applyHangingEdit({ hanging, world, survival, heldId: heldId(), place, target, aimed: aimedHanging }, {
     swing: () => animation.swing(),
@@ -3062,7 +3076,8 @@ function tickMining() {
       const s = hitSound(type);
       sounds.play(s.name, { volume: s.volume, pitch: s.pitch, position: cell && { x: cell[0] + 0.5, y: cell[1] + 0.5, z: cell[2] + 0.5 } });
     },
-    breakBlock,
+    // C07 status 2 (finished digging): refused past 6 blocks from the eye or at y >= 256; the block is resent unchanged.
+    breakBlock: (p, c) => serverClick({ kind: 'dig', player: [position.x, position.y, position.z], pos: p }).accept ? breakBlock(p, c) : scene.updateBlock(p[0], p[2], p[1]),
     hitParticles: (x, y, z, side) => scene.particles.hitBlock(world, x, y, z, side),
     mayHit: (x, y, z) => mayHitBlock(survival, world.get(x, y, z), world.getMeta(x, y, z), heldId()),
   });
